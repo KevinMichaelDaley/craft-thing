@@ -202,29 +202,13 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         .pushConstantRangeCount = 1, .pPushConstantRanges = &range };
     if (vkCreatePipelineLayout(gpu->device, &pipeline_layout_info, NULL, &gpu->pipeline_layout) != VK_SUCCESS)
         return error(err, cap, "Cannot create compute pipeline layout");
-    FILE *file = fopen(path, "rb");
-    if (!file) return error(err, cap, "Cannot open SPIR-V shader; run make shaders");
-    if (fseek(file, 0, SEEK_END) != 0) { fclose(file); return error(err, cap, "Cannot size SPIR-V shader"); }
-    long length = ftell(file);
-    if (length < 4 || (length & 3) || fseek(file, 0, SEEK_SET) != 0) {
-        fclose(file); return error(err, cap, "Invalid SPIR-V shader size");
-    }
-    uint32_t *words = malloc((size_t)length);
-    if (!words) { fclose(file); return error(err, cap, "Out of memory reading shader"); }
-    bool read_ok = fread(words, 1, (size_t)length, file) == (size_t)length;
-    fclose(file);
-    if (!read_ok) { free(words); return error(err, cap, "Cannot read SPIR-V shader"); }
-    VkShaderModuleCreateInfo shader_info = { .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = (size_t)length, .pCode = words };
     VkShaderModule shader = VK_NULL_HANDLE;
-    VkResult result = vkCreateShaderModule(gpu->device, &shader_info, NULL, &shader);
-    free(words);
-    if (result != VK_SUCCESS) return error(err, cap, "Cannot create SPIR-V shader module");
+    if (!dc_gpu_load_shader_module(gpu, path, &shader, err, cap)) return false;
     VkComputePipelineCreateInfo pipeline_info = { .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = shader, .pName = "main" },
         .layout = gpu->pipeline_layout };
-    result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &gpu->pipeline);
+    VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &gpu->pipeline);
     vkDestroyShaderModule(gpu->device, shader, NULL);
     if (result != VK_SUCCESS) return error(err, cap, "Cannot create compute pipeline");
     return true;

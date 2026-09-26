@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "gpu_internal.h"
@@ -25,29 +24,13 @@ bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
 
 bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *path,
                                 char *err, uint32_t cap) {
-    FILE *file = fopen(path, "rb");
-    if (!file) return error(err, cap, "Cannot open rigid SPIR-V shader; run make shaders");
-    if (fseek(file, 0, SEEK_END) != 0) { fclose(file); return error(err, cap, "Cannot size rigid shader"); }
-    long length = ftell(file);
-    if (length < 4 || (length & 3) || fseek(file, 0, SEEK_SET) != 0) {
-        fclose(file); return error(err, cap, "Invalid rigid SPIR-V shader size");
-    }
-    uint32_t *words = malloc((size_t)length);
-    if (!words) { fclose(file); return error(err, cap, "Out of memory reading rigid shader"); }
-    bool okay = fread(words, 1, (size_t)length, file) == (size_t)length;
-    fclose(file);
-    if (!okay) { free(words); return error(err, cap, "Cannot read rigid shader"); }
-    VkShaderModuleCreateInfo shader_info = { .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = (size_t)length, .pCode = words };
     VkShaderModule shader = VK_NULL_HANDLE;
-    VkResult result = vkCreateShaderModule(gpu->device, &shader_info, NULL, &shader);
-    free(words);
-    if (result != VK_SUCCESS) return error(err, cap, "Cannot create rigid shader module");
+    if (!dc_gpu_load_shader_module(gpu, path, &shader, err, cap)) return false;
     VkComputePipelineCreateInfo info = { .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = shader, .pName = "main" },
         .layout = gpu->pipeline_layout };
-    result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1,
+    VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1,
         &info, NULL, &gpu->rigid_pipeline);
     vkDestroyShaderModule(gpu->device, shader, NULL);
     if (result != VK_SUCCESS) return error(err, cap, "Cannot create rigid pipeline");

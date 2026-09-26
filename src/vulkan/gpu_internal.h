@@ -57,6 +57,8 @@ struct dc_gpu {
 };
 
 bool dc_gpu_pick_device(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t cap);
+bool dc_gpu_load_shader_module(dc_gpu_t *gpu, const char *path,
+                               VkShaderModule *module, char *err, uint32_t cap);
 bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_chunks_destroy(dc_gpu_t *gpu);
 bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,

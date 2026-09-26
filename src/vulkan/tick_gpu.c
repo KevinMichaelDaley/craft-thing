@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "gpu_internal.h"
 
@@ -10,38 +9,16 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 }
 
 static bool make_probe_pipeline(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    FILE *file = fopen("build/shaders/tick_probe.comp.spv", "rb");
-    if (!file) return error(err, cap, "Cannot open tick probe SPIR-V; run make shaders");
-    if (fseek(file, 0, SEEK_END) != 0) {
-        fclose(file); return error(err, cap, "Cannot size tick probe shader");
-    }
-    long length = ftell(file);
-    if (length < 4 || (length & 3) || fseek(file, 0, SEEK_SET) != 0) {
-        fclose(file); return error(err, cap, "Invalid tick probe SPIR-V size");
-    }
-    uint32_t *words = malloc((size_t)length);
-    if (!words) {
-        fclose(file); return error(err, cap, "Out of memory reading tick probe");
-    }
-    bool read_ok = fread(words, 1, (size_t)length, file) == (size_t)length;
-    fclose(file);
-    if (!read_ok) {
-        free(words); return error(err, cap, "Cannot read tick probe SPIR-V");
-    }
-    VkShaderModuleCreateInfo module_info = {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = (size_t)length, .pCode = words };
     VkShaderModule module = VK_NULL_HANDLE;
-    VkResult result = vkCreateShaderModule(gpu->device, &module_info, NULL, &module);
-    free(words);
-    if (result != VK_SUCCESS) return error(err, cap, "Cannot create tick probe module");
+    if (!dc_gpu_load_shader_module(gpu, "build/shaders/tick_probe.comp.spv",
+                                   &module, err, cap)) return false;
     VkComputePipelineCreateInfo pipeline_info = {
         .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = module, .pName = "main" },
         .layout = gpu->pipeline_layout };
-    result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1,
-                                      &pipeline_info, NULL, &gpu->probe_pipeline);
+    VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1,
+                                               &pipeline_info, NULL, &gpu->probe_pipeline);
     vkDestroyShaderModule(gpu->device, module, NULL);
     if (result != VK_SUCCESS) return error(err, cap, "Cannot create tick probe pipeline");
     return true;
