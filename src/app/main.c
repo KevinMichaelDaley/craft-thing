@@ -374,7 +374,12 @@ static int smoke_display(void) {
         dc_level_view_set_overlay(view, DC_GPU_OVERLAY_STAGES) &&
         dc_level_view_tick(view, err, sizeof(err)) &&
         dc_level_view_pixel(view, 2, 2, &stage, err, sizeof(err)) &&
-        stage == 0xff30c040u;
+        stage == 0xff30c040u &&
+        dc_level_view_paint(view, 40, 5, 0, DC_MATERIAL_WATER,
+                            err, sizeof(err)) &&
+        dc_level_view_tick(view, err, sizeof(err)) &&
+        dc_level_view_pixel(view, 40, 5, &stage, err, sizeof(err)) &&
+        stage == 0xffd08030u;
     if (okay) okay = dc_level_view_move(view, -1, 0) &&
                      dc_level_view_wait_visible(view, 5000, err, sizeof(err)) &&
                      dc_level_view_set_zoom(view, 1) &&

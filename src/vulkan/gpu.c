@@ -353,7 +353,10 @@ bool dc_gpu_create_window(dc_gpu_t **out, uint32_t width, uint32_t height,
 bool dc_gpu_set_viewport(dc_gpu_t *gpu, uint32_t x, uint32_t y,
                          uint32_t width, uint32_t height) {
     if (!gpu || !width || !height || x >= gpu->width || y >= gpu->height ||
-        width > gpu->width - x || height > gpu->height - y) return false;
+        width > gpu->width - x || height > gpu->height - y ||
+        (gpu->swapchain &&
+         ((uint64_t)width * gpu->display_zoom > gpu->swap_extent.width ||
+          (uint64_t)height * gpu->display_zoom > gpu->swap_extent.height))) return false;
     gpu->view_x = x;
     gpu->view_y = y;
     gpu->view_width = width;
@@ -384,7 +387,8 @@ bool dc_gpu_screen_cell(dc_gpu_t *gpu, uint32_t screen_x, uint32_t screen_y,
 }
 
 bool dc_gpu_set_overlay(dc_gpu_t *gpu, dc_gpu_overlay_t overlay) {
-    if (!gpu || overlay > DC_GPU_OVERLAY_STAGES) return false;
+    if (!gpu || overlay < DC_GPU_OVERLAY_NONE ||
+        overlay > DC_GPU_OVERLAY_STAGES) return false;
     gpu->overlay = overlay;
     return true;
 }
