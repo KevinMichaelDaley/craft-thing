@@ -280,6 +280,21 @@ bool dc_level_view_move(dc_level_view_t *view, int32_t dx, int32_t dy) {
     return true;
 }
 
+bool dc_level_view_pan_pixels(dc_level_view_t *view, int32_t dx, int32_t dy) {
+    (void)view; (void)dx; (void)dy;
+    return false;
+}
+
+bool dc_level_view_reset_camera(dc_level_view_t *view) {
+    (void)view;
+    return false;
+}
+
+bool dc_level_view_status(dc_level_view_t *view, dc_level_view_status_t *status) {
+    (void)view; (void)status;
+    return false;
+}
+
 bool dc_level_view_toggle_marker_overlay(dc_level_view_t *view) {
     if (!view) return false;
     view->marker_overlay = !view->marker_overlay;

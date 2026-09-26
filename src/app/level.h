@@ -9,6 +9,12 @@
 
 typedef struct dc_level_view dc_level_view_t;
 
+typedef struct {
+    dc_chunk_coord_t origin;
+    uint32_t offset_x, offset_y;
+    uint32_t ready_chunks, total_chunks;
+} dc_level_view_status_t;
+
 dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
                                       char *err, uint32_t err_cap);
 bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t err_cap);
@@ -18,6 +24,9 @@ bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,
 bool dc_level_view_wait_visible(dc_level_view_t *view, uint32_t timeout_ms,
                                 char *err, uint32_t err_cap);
 bool dc_level_view_move(dc_level_view_t *view, int32_t dx, int32_t dy);
+bool dc_level_view_pan_pixels(dc_level_view_t *view, int32_t dx, int32_t dy);
+bool dc_level_view_reset_camera(dc_level_view_t *view);
+bool dc_level_view_status(dc_level_view_t *view, dc_level_view_status_t *status);
 bool dc_level_view_toggle_marker_overlay(dc_level_view_t *view);
 bool dc_level_view_set_zoom(dc_level_view_t *view, uint32_t zoom);
 bool dc_level_view_screen_cell(dc_level_view_t *view, uint32_t screen_x,

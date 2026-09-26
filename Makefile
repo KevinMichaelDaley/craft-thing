@@ -128,6 +128,9 @@ build/stream_tests: tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENE
 build/dungeoncraft: src/app/main.c src/app/level.c src/app/level.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/main.c src/app/level.c $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 
+build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/controls_tests.c src/app/level.c $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
+
 test: build/gpu_tests build/halo_tests build/fluid_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/gpu_tests
 	./build/halo_tests
@@ -136,7 +139,8 @@ test: build/gpu_tests build/halo_tests build/fluid_tests build/chunk_tests build
 	./build/generate_tests
 	./build/stream_tests
 
-test_ui: build/dungeoncraft
+test_ui: build/dungeoncraft build/controls_tests
+	./build/controls_tests
 	./build/dungeoncraft --smoke-stream
 	./build/dungeoncraft --smoke-world-transfer
 	./build/dungeoncraft --smoke-display

@@ -1,0 +1,126 @@
+#define _POSIX_C_SOURCE 200809L
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "../../src/app/level.h"
+
+static int g_pass, g_fail;
+#define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); printf("OK   %s\n", #fn); } while (0)
+#define ASSERT_TRUE(expr) do { if (!(expr)) { \
+    printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #expr); g_fail++; return; \
+} } while (0)
+#define ASSERT_EQ(a, b) ASSERT_TRUE((a) == (b))
+#define ASSERT_INT_EQ(a, b) ASSERT_TRUE((int)(a) == (int)(b))
+#define PASS() g_pass++
+
+static void test_camera_crosses_chunk_boundary_cell_by_cell(void) {
+    char directory[] = "build/ui_pan_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    dc_level_view_status_t status = {0};
+    ASSERT_TRUE(dc_level_view_status(view, &status));
+    ASSERT_EQ(status.ready_chunks, status.total_chunks);
+    ASSERT_EQ(status.total_chunks, 24u);
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 63, 0));
+    ASSERT_TRUE(dc_level_view_status(view, &status));
+    ASSERT_INT_EQ(status.origin.x, 0);
+    ASSERT_EQ(status.offset_x, 63u);
+    ASSERT_TRUE(dc_level_view_paint(view, 0, 5, 0, DC_MATERIAL_STONE,
+                                    err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 1, 0));
+    ASSERT_TRUE(dc_level_view_status(view, &status));
+    ASSERT_INT_EQ(status.origin.x, 1);
+    ASSERT_EQ(status.offset_x, 0u);
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 0, 5, 0, DC_MATERIAL_SAND,
+                                    err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
+                                    chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->cells[5 * DC_CHUNK_SIDE + 63].material, DC_MATERIAL_STONE);
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
+                                    chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->cells[5 * DC_CHUNK_SIDE].material, DC_MATERIAL_SAND);
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, -65, 0));
+    ASSERT_TRUE(dc_level_view_status(view, &status));
+    ASSERT_INT_EQ(status.origin.x, -1);
+    ASSERT_EQ(status.offset_x, 63u);
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 0, 5, 0, DC_MATERIAL_STONE,
+                                    err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){-1, 0},
+                                    chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->cells[5 * DC_CHUNK_SIDE + 63].material, DC_MATERIAL_STONE);
+    free(chunk);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    PASS();
+}
+
+static void test_loading_status_and_camera_reset(void) {
+    char directory[] = "build/ui_loading_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (int i = 0; i < 7; ++i) ASSERT_TRUE(dc_level_view_move(view, 1, 0));
+    dc_level_view_status_t status = {0};
+    ASSERT_TRUE(dc_level_view_status(view, &status));
+    ASSERT_TRUE(status.ready_chunks < status.total_chunks);
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_status(view, &status));
+    ASSERT_EQ(status.ready_chunks, status.total_chunks);
+    ASSERT_TRUE(dc_level_view_reset_camera(view));
+    ASSERT_TRUE(dc_level_view_status(view, &status));
+    ASSERT_INT_EQ(status.origin.x, 0);
+    ASSERT_EQ(status.offset_x, 0u);
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    PASS();
+}
+
+static void test_single_step_moves_water_once(void) {
+    char directory[] = "build/ui_step_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 80, 5, 3, DC_MATERIAL_WATER,
+                                    err, sizeof(err)));
+    dc_chunk_t *before = calloc(1, sizeof(*before));
+    dc_chunk_t *after = calloc(1, sizeof(*after));
+    ASSERT_TRUE(before && after);
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
+                                    before, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
+                                    after, err, sizeof(err)));
+    ASSERT_EQ(memcmp(before->cells, after->cells, sizeof(before->cells)), 0);
+    ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)) &&
+                dc_level_view_tick(view, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
+                                    after, err, sizeof(err)));
+    ASSERT_TRUE(memcmp(before->cells, after->cells, sizeof(before->cells)) != 0);
+    memcpy(before->cells, after->cells, sizeof(before->cells));
+    ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
+                                    after, err, sizeof(err)));
+    ASSERT_EQ(memcmp(before->cells, after->cells, sizeof(before->cells)), 0);
+    free(before); free(after);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    PASS();
+}
+
+int main(void) {
+    RUN(test_camera_crosses_chunk_boundary_cell_by_cell);
+    RUN(test_loading_status_and_camera_reset);
+    RUN(test_single_step_moves_water_once);
+    printf("%d passed, %d failed\n", g_pass, g_fail);
+    return g_fail ? 1 : 0;
+}
