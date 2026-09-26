@@ -39,6 +39,8 @@ static void test_worker_generates_saves_and_reloads_chunk(void) {
     ASSERT_TRUE(result.chunk != NULL);
     ASSERT_EQ(result.chunk->coord.x, -1);
     result.chunk->cells[10 * DC_CHUNK_SIDE + 63].material = 42;
+    result.chunk->face_velocity[10 * DC_CHUNK_SIDE + 63] =
+        (dc_face_velocity_t){ .x = 1.25f, .y = -0.5f };
     result.chunk->marker_count = 1;
     result.chunk->markers[0] = (dc_marker_t){ .x_fp = 63 << 16,
         .y_fp = 10 << 16, .id = 123, .kind = DC_MARKER_INSIDE };
@@ -52,6 +54,8 @@ static void test_worker_generates_saves_and_reloads_chunk(void) {
     ASSERT_EQ(result.kind, DC_STREAM_LOADED);
     ASSERT_EQ(result.generation, 9u);
     ASSERT_EQ(result.chunk->cells[10 * DC_CHUNK_SIDE + 63].material, 42);
+    ASSERT_TRUE(result.chunk->face_velocity[10 * DC_CHUNK_SIDE + 63].x == 1.25f);
+    ASSERT_TRUE(result.chunk->face_velocity[10 * DC_CHUNK_SIDE + 63].y == -0.5f);
     ASSERT_EQ(result.chunk->marker_count, 1u);
     ASSERT_EQ(result.chunk->markers[0].id, 123u);
     dc_stream_result_release(&result);
