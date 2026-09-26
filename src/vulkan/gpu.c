@@ -393,6 +393,12 @@ bool dc_gpu_set_overlay(dc_gpu_t *gpu, dc_gpu_overlay_t overlay) {
     return true;
 }
 
+bool dc_gpu_set_window_title(dc_gpu_t *gpu, const char *title) {
+    if (!gpu || !gpu->window || !title) return false;
+    SDL_SetWindowTitle(gpu->window, title);
+    return true;
+}
+
 static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7], char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)

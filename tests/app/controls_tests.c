@@ -33,6 +33,10 @@ static void test_camera_crosses_chunk_boundary_cell_by_cell(void) {
     ASSERT_EQ(status.offset_x, 63u);
     ASSERT_TRUE(dc_level_view_paint(view, 0, 5, 0, DC_MATERIAL_STONE,
                                     err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    uint32_t color = 0;
+    ASSERT_TRUE(dc_level_view_pixel(view, 0, 5, &color, err, sizeof(err)));
+    ASSERT_EQ(color, 0xff707070u);
     ASSERT_TRUE(dc_level_view_pan_pixels(view, 1, 0));
     ASSERT_TRUE(dc_level_view_status(view, &status));
     ASSERT_INT_EQ(status.origin.x, 1);
@@ -40,6 +44,9 @@ static void test_camera_crosses_chunk_boundary_cell_by_cell(void) {
     ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_paint(view, 0, 5, 0, DC_MATERIAL_SAND,
                                     err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pixel(view, 0, 5, &color, err, sizeof(err)));
+    ASSERT_EQ(color, 0xff40c8e0u);
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     ASSERT_TRUE(chunk != NULL);
     ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},

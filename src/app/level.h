@@ -27,6 +27,7 @@ bool dc_level_view_move(dc_level_view_t *view, int32_t dx, int32_t dy);
 bool dc_level_view_pan_pixels(dc_level_view_t *view, int32_t dx, int32_t dy);
 bool dc_level_view_reset_camera(dc_level_view_t *view);
 bool dc_level_view_status(dc_level_view_t *view, dc_level_view_status_t *status);
+bool dc_level_view_set_title(dc_level_view_t *view, const char *title);
 bool dc_level_view_toggle_marker_overlay(dc_level_view_t *view);
 bool dc_level_view_set_zoom(dc_level_view_t *view, uint32_t zoom);
 bool dc_level_view_screen_cell(dc_level_view_t *view, uint32_t screen_x,

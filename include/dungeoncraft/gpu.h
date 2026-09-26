@@ -82,6 +82,8 @@ bool dc_gpu_screen_cell(dc_gpu_t *gpu, uint32_t screen_x, uint32_t screen_y,
                         uint32_t *cell_x, uint32_t *cell_y);
 /** Choose a GPU-rendered debugging overlay. */
 bool dc_gpu_set_overlay(dc_gpu_t *gpu, dc_gpu_overlay_t overlay);
+/** Set the interactive Vulkan window caption. */
+bool dc_gpu_set_window_title(dc_gpu_t *gpu, const char *title);
 /** Rebase face velocities by whole chunks on the GPU after camera movement. */
 bool dc_gpu_shift_velocity(dc_gpu_t *gpu, int32_t chunk_dx, int32_t chunk_dy,
                            char *err_buf, uint32_t err_cap);

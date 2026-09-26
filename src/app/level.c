@@ -352,6 +352,10 @@ bool dc_level_view_status(dc_level_view_t *view, dc_level_view_status_t *status)
     return true;
 }
 
+bool dc_level_view_set_title(dc_level_view_t *view, const char *title) {
+    return view && dc_gpu_set_window_title(view->gpu, title);
+}
+
 bool dc_level_view_toggle_marker_overlay(dc_level_view_t *view) {
     if (!view) return false;
     view->marker_overlay = !view->marker_overlay;

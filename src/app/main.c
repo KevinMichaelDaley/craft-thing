@@ -1,4 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
+#include <errno.h>
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -10,6 +12,7 @@
 
 #include "dungeoncraft/chunk.h"
 #include "level.h"
+#include "session.h"
 
 enum { VIEW_WIDTH = 256, VIEW_HEIGHT = 128, WINDOW_SCALE = 4 };
 
@@ -480,6 +483,66 @@ static int smoke_camera_velocity(void) {
     return 0;
 }
 
+static bool restart_demo(dc_level_view_t **view, const char *base_directory,
+                         uint64_t seed, uint32_t *run, uint32_t zoom,
+                         dc_gpu_overlay_t overlay, bool spring_enabled,
+                         bool marker_overlay, char *err, uint32_t cap) {
+    if (*run == UINT32_MAX) {
+        snprintf(err, cap, "Too many world restarts");
+        return false;
+    }
+    ++*run;
+    if (!dc_app_restart_view(view, base_directory, seed, *run, err, cap))
+        return false;
+    if (!dc_level_view_set_zoom(*view, zoom) ||
+        !dc_level_view_set_overlay(*view, overlay) ||
+        !dc_level_view_set_spring_enabled(*view, spring_enabled) ||
+        (marker_overlay && !dc_level_view_toggle_marker_overlay(*view))) {
+        snprintf(err, cap, "Cannot restore world display settings");
+        return false;
+    }
+    return true;
+}
+
+static bool update_demo_title(dc_level_view_t *view, uint64_t seed,
+                              uint32_t zoom, bool paused, bool entering_seed,
+                              bool seed_error, const char *seed_text,
+                              char previous[192]) {
+    dc_level_view_status_t status;
+    if (!dc_level_view_status(view, &status)) return false;
+    char title[192];
+    if (entering_seed)
+        snprintf(title, sizeof(title), "%sSeed: %s  |  Enter to load, Esc to cancel",
+                 seed_error ? "Invalid seed  |  " : "", seed_text);
+    else
+        snprintf(title, sizeof(title),
+                 "Dungeoncraft  |  seed %" PRIu64 "  |  chunk (%" PRId64 ",%" PRId64
+                 ") + (%u,%u)  |  loaded %u/%u  |  %ux%s",
+                 seed, status.origin.x, status.origin.y, status.offset_x,
+                 status.offset_y, status.ready_chunks, status.total_chunks,
+                 zoom, paused ? "  |  paused" : "");
+    if (strcmp(previous, title) == 0) return true;
+    if (!dc_level_view_set_title(view, title)) return false;
+    memcpy(previous, title, strlen(title) + 1);
+    return true;
+}
+
+static bool pan_held_keys(dc_level_view_t *view, double elapsed,
+                          double *carry_x, double *carry_y) {
+    const uint8_t *keys = SDL_GetKeyboardState(NULL);
+    int32_t horizontal = (keys[SDL_SCANCODE_RIGHT] || keys[SDL_SCANCODE_D]) -
+                         (keys[SDL_SCANCODE_LEFT] || keys[SDL_SCANCODE_A]);
+    int32_t vertical = (keys[SDL_SCANCODE_DOWN] || keys[SDL_SCANCODE_S]) -
+                       (keys[SDL_SCANCODE_UP] || keys[SDL_SCANCODE_W]);
+    double speed = horizontal && vertical ? 169.705627 : 240.0;
+    *carry_x += (double)horizontal * speed * elapsed;
+    *carry_y += (double)vertical * speed * elapsed;
+    int32_t dx = (int32_t)*carry_x, dy = (int32_t)*carry_y;
+    *carry_x -= dx;
+    *carry_y -= dy;
+    return !dx && !dy ? true : dc_level_view_pan_pixels(view, dx, dy);
+}
+
 int main(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "--smoke-camera-velocity") == 0)
         return smoke_camera_velocity();
@@ -495,9 +558,17 @@ int main(int argc, char **argv) {
         return smoke_moving_water();
     if (argc > 1 && strcmp(argv[1], "--smoke-motion-long") == 0)
         return smoke_moving_water_long();
+    bool scripted_input = argc > 1 && strcmp(argv[1], "--smoke-controls-ui") == 0;
+    char scripted_directory[] = "build/ui_input_XXXXXX";
+    if (scripted_input && !mkdtemp(scripted_directory)) {
+        perror("mkdtemp");
+        return 1;
+    }
     uint64_t seed = 314;
-    const char *directory = "world_chunks";
+    const char *directory = scripted_input ? scripted_directory : "world_chunks";
     for (int i = 1; i < argc; ++i) {
+        if (scripted_input && strcmp(argv[i], "--smoke-controls-ui") == 0)
+            continue;
         if (strcmp(argv[i], "--seed") == 0 && i + 1 < argc)
             seed = strtoull(argv[++i], NULL, 10);
         else if (strcmp(argv[i], "--world-dir") == 0 && i + 1 < argc)
@@ -515,17 +586,76 @@ int main(int argc, char **argv) {
     bool failed = false;
     bool paused = false;
     bool spring_enabled = true;
+    bool marker_overlay = false;
     bool single_step = false;
     uint32_t zoom = WINDOW_SCALE;
+    uint32_t run = 0;
     dc_gpu_overlay_t overlay = DC_GPU_OVERLAY_NONE;
+    bool entering_seed = false, seed_error = false;
+    char seed_text[21] = {0}, previous_title[192] = {0};
+    size_t seed_length = 0;
+    double pan_carry_x = 0.0, pan_carry_y = 0.0;
     uint64_t previous = SDL_GetPerformanceCounter();
     double accumulator = 0.0;
     const double tick_seconds = 1.0 / 60.0;
+    uint32_t scripted_frame = 0;
     while (running) {
+        if (scripted_input && scripted_frame == 0) {
+            SDL_Event key = { .type = SDL_KEYDOWN };
+            key.key.keysym.sym = SDLK_F2;
+            SDL_PushEvent(&key);
+            SDL_Event text_event = { .type = SDL_TEXTINPUT };
+            snprintf(text_event.text.text, sizeof(text_event.text.text), "2718");
+            SDL_PushEvent(&text_event);
+            key.key.keysym.sym = SDLK_RETURN;
+            SDL_PushEvent(&key);
+        } else if (scripted_input && scripted_frame == 1) {
+            SDL_Event key = { .type = SDL_KEYDOWN };
+            key.key.keysym.sym = SDLK_r;
+            SDL_PushEvent(&key);
+        } else if (scripted_input && scripted_frame == 2) {
+            break;
+        }
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) running = false;
+            if (entering_seed && event.type == SDL_TEXTINPUT) {
+                for (const char *p = event.text.text; *p; ++p)
+                    if (*p >= '0' && *p <= '9' && seed_length < 20u)
+                        seed_text[seed_length++] = *p;
+                seed_text[seed_length] = '\0';
+                seed_error = false;
+                continue;
+            }
             if (event.type == SDL_KEYDOWN) {
+                if (entering_seed) {
+                    if (event.key.keysym.sym == SDLK_ESCAPE) {
+                        entering_seed = false;
+                        SDL_StopTextInput();
+                    } else if (event.key.keysym.sym == SDLK_BACKSPACE && seed_length) {
+                        seed_text[--seed_length] = '\0';
+                        seed_error = false;
+                    } else if (event.key.keysym.sym == SDLK_RETURN && seed_length) {
+                        errno = 0;
+                        char *end = NULL;
+                        unsigned long long parsed = strtoull(seed_text, &end, 10);
+                        if (errno == ERANGE || !end || *end) {
+                            seed_error = true;
+                        } else if (!restart_demo(&view, directory, (uint64_t)parsed,
+                                                 &run, zoom, overlay, spring_enabled,
+                                                 marker_overlay, err, sizeof(err))) {
+                            failed = true; running = false;
+                        } else {
+                            seed = (uint64_t)parsed;
+                            entering_seed = false;
+                            SDL_StopTextInput();
+                            accumulator = 0.0;
+                            previous = SDL_GetPerformanceCounter();
+                            previous_title[0] = '\0';
+                        }
+                    }
+                    continue;
+                }
                 switch (event.key.keysym.sym) {
                 case SDLK_ESCAPE: running = false; break;
                 case SDLK_0: material = DC_MATERIAL_AIR; break;
@@ -534,7 +664,32 @@ int main(int argc, char **argv) {
                 case SDLK_3: material = DC_MATERIAL_WATER; break;
                 case SDLK_p: paused = !paused; break;
                 case SDLK_n: single_step = true; break;
-                case SDLK_m: dc_level_view_toggle_marker_overlay(view); break;
+                case SDLK_m:
+                    marker_overlay = !marker_overlay;
+                    dc_level_view_toggle_marker_overlay(view);
+                    break;
+                case SDLK_F2:
+                    if (!event.key.repeat) {
+                        entering_seed = true;
+                        seed_error = false;
+                        seed_length = 0;
+                        seed_text[0] = '\0';
+                        SDL_StartTextInput();
+                    }
+                    break;
+                case SDLK_r:
+                    if (!event.key.repeat) {
+                        if (!restart_demo(&view, directory, seed, &run, zoom,
+                                          overlay, spring_enabled, marker_overlay,
+                                          err, sizeof(err))) {
+                            failed = true; running = false;
+                        }
+                        accumulator = 0.0;
+                        single_step = false;
+                        previous = SDL_GetPerformanceCounter();
+                        previous_title[0] = '\0';
+                    }
+                    break;
                 case SDLK_MINUS:
                     if (zoom > 1u) zoom /= 2u;
                     dc_level_view_set_zoom(view, zoom);
@@ -569,10 +724,6 @@ int main(int argc, char **argv) {
                     }
                     break;
                 }
-                case SDLK_LEFT: case SDLK_a: dc_level_view_move(view, -1, 0); break;
-                case SDLK_RIGHT: case SDLK_d: dc_level_view_move(view, 1, 0); break;
-                case SDLK_UP: case SDLK_w: dc_level_view_move(view, 0, -1); break;
-                case SDLK_DOWN: case SDLK_s: dc_level_view_move(view, 0, 1); break;
                 default: break;
                 }
             }
@@ -581,6 +732,11 @@ int main(int argc, char **argv) {
         double elapsed = (double)(now - previous) / (double)SDL_GetPerformanceFrequency();
         previous = now;
         if (elapsed > 0.25) elapsed = 0.25;
+        if (running && !entering_seed &&
+            !pan_held_keys(view, elapsed, &pan_carry_x, &pan_carry_y)) {
+            snprintf(err, sizeof(err), "Cannot pan camera");
+            failed = true; running = false;
+        }
         if (!paused) accumulator += elapsed;
         else accumulator = 0.0;
         uint32_t steps = 0;
@@ -600,9 +756,27 @@ int main(int argc, char **argv) {
         if (running && !dc_level_view_tick(view, err, sizeof(err))) {
             failed = true; running = false;
         }
+        if (running && !update_demo_title(view, seed, zoom, paused, entering_seed,
+                                          seed_error, seed_text, previous_title)) {
+            snprintf(err, sizeof(err), "Cannot update world status");
+            failed = true; running = false;
+        }
         SDL_Delay(1);
+        ++scripted_frame;
     }
+    if (scripted_input && !failed) {
+        dc_level_view_status_t status = {0};
+        if (run != 2u || seed != 2718u ||
+            !dc_level_view_wait_visible(view, 5000, err, sizeof(err)) ||
+            !dc_level_view_status(view, &status) ||
+            status.ready_chunks != status.total_chunks) {
+            snprintf(err, sizeof(err), "Scripted seed/reset controls failed");
+            failed = true;
+        }
+    }
+    if (entering_seed) SDL_StopTextInput();
     if (!dc_level_view_destroy(view, err, sizeof(err))) failed = true;
     if (failed) fprintf(stderr, "Dungeoncraft: %s\n", err);
+    else if (scripted_input) printf("Interactive seed and reset controls passed\n");
     return failed ? 1 : 0;
 }
