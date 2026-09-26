@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "../../src/app/level.h"
+#include "../../src/app/session.h"
 
 static int g_pass, g_fail;
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); printf("OK   %s\n", #fn); } while (0)
@@ -117,10 +118,39 @@ static void test_single_step_moves_water_once(void) {
     PASS();
 }
 
+static void test_fresh_run_preserves_previous_saved_world(void) {
+    char directory[] = "build/ui_reset_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 40, 5, 0, DC_MATERIAL_STONE,
+                                    err, sizeof(err)));
+    ASSERT_TRUE(dc_app_restart_view(&view, directory, 314, 1,
+                                    err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
+                                    chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->cells[5 * DC_CHUNK_SIDE + 40].material, DC_MATERIAL_AIR);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
+                                    chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->cells[5 * DC_CHUNK_SIDE + 40].material, DC_MATERIAL_STONE);
+    free(chunk);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    PASS();
+}
+
 int main(void) {
     RUN(test_camera_crosses_chunk_boundary_cell_by_cell);
     RUN(test_loading_status_and_camera_reset);
     RUN(test_single_step_moves_water_once);
+    RUN(test_fresh_run_preserves_previous_saved_world);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
