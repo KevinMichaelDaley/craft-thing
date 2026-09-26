@@ -7,15 +7,21 @@ GLSLANG ?= glslangValidator
 GPU_OBJ = build/gpu.o
 SHADER = build/shaders/pattern.comp.spv
 
-.PHONY: all test clean
+.PHONY: all test clean shaders
 all: build/gpu_tests
+
+shaders: $(SHADER)
+
+$(SHADER): shaders/sim/pattern.comp
+	@mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
 
 build/gpu.o: src/vulkan/gpu.c include/dungeoncraft/gpu.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-build/gpu_tests: tests/vulkan/gpu_tests.c $(GPU_OBJ)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ $(LDLIBS)
+build/gpu_tests: tests/vulkan/gpu_tests.c $(GPU_OBJ) $(SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/gpu_tests.c $(GPU_OBJ) -o $@ $(LDLIBS)
 
 test: build/gpu_tests
 	./build/gpu_tests
