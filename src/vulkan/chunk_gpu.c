@@ -84,3 +84,11 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
     pages[tile_y * gpu->page_width + tile_x] = slot == UINT32_MAX ? 0u : slot + 1u;
     return true;
 }
+
+bool dc_gpu_readback(dc_gpu_t *gpu, uint32_t *cells, uint32_t cell_count,
+                     char *err, uint32_t cap) {
+    if (!gpu || !cells || cell_count < (uint64_t)gpu->width * gpu->height)
+        return error(err, cap, "Readback buffer is too small");
+    memcpy(cells, gpu->mapped, (size_t)gpu->width * gpu->height * sizeof(uint32_t));
+    return true;
+}

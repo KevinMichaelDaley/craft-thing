@@ -267,13 +267,13 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
         uint32_t layer_count = 0;
         vkEnumerateInstanceLayerProperties(&layer_count, NULL);
         VkLayerProperties *layers = calloc(layer_count, sizeof(*layers));
-        if (!layers) { error(err, cap, "Cannot list Vulkan validation layers"); goto fail; }
+        if (!layers) { free(extensions); error(err, cap, "Cannot list Vulkan validation layers"); goto fail; }
         vkEnumerateInstanceLayerProperties(&layer_count, layers);
         bool present = false;
         for (uint32_t i = 0; i < layer_count; ++i)
             if (strcmp(layers[i].layerName, layer) == 0) present = true;
         free(layers);
-        if (!present) { error(err, cap, "VK_LAYER_KHRONOS_validation is not installed"); goto fail; }
+        if (!present) { free(extensions); error(err, cap, "VK_LAYER_KHRONOS_validation is not installed"); goto fail; }
         instance_info.enabledLayerCount = 1;
         instance_info.ppEnabledLayerNames = &layer;
     }
@@ -384,14 +384,6 @@ bool dc_gpu_pattern(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     uint32_t push[7] = { gpu->width, gpu->height, 0, 0, 0, 0, 0 };
     return dispatch_cells(gpu, push, err, cap);
-}
-
-bool dc_gpu_readback(dc_gpu_t *gpu, uint32_t *cells, uint32_t cell_count,
-                     char *err, uint32_t cap) {
-    if (!gpu || !cells || cell_count < (uint64_t)gpu->width * gpu->height)
-        return error(err, cap, "Readback buffer is too small");
-    memcpy(cells, gpu->mapped, (size_t)gpu->width * gpu->height * sizeof(uint32_t));
-    return true;
 }
 
 bool dc_gpu_paint(dc_gpu_t *gpu, uint32_t x, uint32_t y, uint32_t radius,
