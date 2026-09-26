@@ -31,6 +31,23 @@ static bool save_level_bmp(const char *path, const uint32_t *pixels) {
     return okay;
 }
 
+static bool paint_held(dc_level_view_t *view, uint16_t material,
+                       char *err, uint32_t cap) {
+    int mx, my;
+    uint32_t buttons = SDL_GetMouseState(&mx, &my);
+    if (mx < 0 || my < 0 || mx >= VIEW_WIDTH * WINDOW_SCALE ||
+        my >= VIEW_HEIGHT * WINDOW_SCALE) return true;
+    if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT))
+        return dc_level_view_paint(view, (uint32_t)mx / WINDOW_SCALE,
+                                   (uint32_t)my / WINDOW_SCALE, 3,
+                                   material, err, cap);
+    if (buttons & SDL_BUTTON(SDL_BUTTON_RIGHT))
+        return dc_level_view_paint(view, (uint32_t)mx / WINDOW_SCALE,
+                                   (uint32_t)my / WINDOW_SCALE, 3,
+                                   DC_MATERIAL_AIR, err, cap);
+    return true;
+}
+
 static int smoke_moving_water(void) {
     char directory[] = "build/ui_motion_XXXXXX";
     if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
@@ -75,6 +92,8 @@ static int smoke_moving_water(void) {
 }
 
 static int smoke_moving_water_long(void) {
+    enum { FIVE_SECONDS = 300, TEN_SECONDS = 600, PAINT_TICK = 361,
+           FRAME_DELAY_MS = 16 };
     char directory[] = "build/ui_motion_long_XXXXXX";
     if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
     char err[256] = {0};
@@ -84,44 +103,74 @@ static int smoke_moving_water_long(void) {
     uint32_t *at_ten = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*at_ten));
     bool okay = at_five && at_ten &&
         dc_level_view_wait_visible(view, 5000, err, sizeof(err));
+    uint16_t material = DC_MATERIAL_WATER;
     mkdir("build/screenshots", 0777);
-    for (uint32_t tick = 1; tick <= 600 && okay; ++tick) {
-        SDL_PumpEvents();
-        if (tick == 361)
+    for (uint32_t tick = 1; tick <= TEN_SECONDS && okay; ++tick) {
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            if (event.type != SDL_KEYDOWN) continue;
+            switch (event.key.keysym.sym) {
+            case SDLK_0: material = DC_MATERIAL_AIR; break;
+            case SDLK_1: material = DC_MATERIAL_STONE; break;
+            case SDLK_2: material = DC_MATERIAL_SAND; break;
+            case SDLK_3: material = DC_MATERIAL_WATER; break;
+            case SDLK_m: dc_level_view_toggle_marker_overlay(view); break;
+            default: break;
+            }
+        }
+        okay = paint_held(view, material, err, sizeof(err));
+        if (tick == PAINT_TICK)
             okay = dc_level_view_paint(view, 190, 12, 5, DC_MATERIAL_WATER,
                                        err, sizeof(err));
         if (okay) okay = dc_level_view_step(view, err, sizeof(err)) &&
                          dc_level_view_tick(view, err, sizeof(err));
-        if (okay && tick == 300)
+        if (okay && tick == FIVE_SECONDS)
             okay = dc_level_view_pixels(view, at_five, VIEW_WIDTH * VIEW_HEIGHT,
                                         err, sizeof(err)) &&
                    save_level_bmp("build/screenshots/after_5s.bmp", at_five);
-        if (okay && tick == 600)
+        if (okay && tick == TEN_SECONDS)
             okay = dc_level_view_pixels(view, at_ten, VIEW_WIDTH * VIEW_HEIGHT,
                                         err, sizeof(err)) &&
                    save_level_bmp("build/screenshots/after_10s.bmp", at_ten);
-        SDL_Delay(16);
+        SDL_Delay(FRAME_DELAY_MS);
     }
-    uint32_t changed = 0, edit_changed = 0;
+    uint32_t flow_changed = 0, edit_changed = 0;
+    uint32_t overfull = 0, maximum_mass = 0;
+    uint64_t total_mass = 0;
+    for (uint32_t cy = 0; cy < 2 && okay; ++cy)
+        for (uint32_t cx = 0; cx < 4 && okay; ++cx) {
+            dc_chunk_t chunk = {0};
+            okay = dc_level_view_chunk(view, (dc_chunk_coord_t){cx, cy},
+                                       &chunk, err, sizeof(err));
+            for (uint32_t i = 0; i < DC_CHUNK_CELLS && okay; ++i) {
+                uint32_t mass = chunk.cells[i].fluid_mass;
+                total_mass += mass;
+                if (mass > maximum_mass) maximum_mass = mass;
+                if (mass > DC_FLUID_FULL) ++overfull;
+            }
+        }
+    printf("fluid volume cells=%llu overfull=%u maximum=%u\n",
+           (unsigned long long)(total_mass / DC_FLUID_FULL), overfull, maximum_mass);
+    if (overfull != 0) okay = false;
     if (okay) {
         for (uint32_t y = 0; y < VIEW_HEIGHT; ++y)
             for (uint32_t x = 0; x < VIEW_WIDTH; ++x)
                 if (at_five[y * VIEW_WIDTH + x] != at_ten[y * VIEW_WIDTH + x]) {
-                    ++changed;
                     if (x >= 180 && x <= 200 && y <= 40) ++edit_changed;
+                    else ++flow_changed;
                 }
-        okay = changed >= 50 && edit_changed >= 10;
+        okay = flow_changed >= 50 && edit_changed >= 10;
     }
     if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
     free(at_five);
     free(at_ten);
     if (!okay) {
-        fprintf(stderr, "Long fluid smoke failed (%u changed, %u near brush): %s\n",
-                changed, edit_changed, err);
+        fprintf(stderr, "Long fluid smoke failed (%u flow, %u near brush): %s\n",
+                flow_changed, edit_changed, err);
         return 1;
     }
     printf("Long fluid screenshots: after_5s.bmp and after_10s.bmp "
-           "(%u changed, %u near brush)\n", changed, edit_changed);
+           "(%u flow, %u near brush)\n", flow_changed, edit_changed);
     return 0;
 }
 
@@ -287,26 +336,13 @@ int main(int argc, char **argv) {
             ++steps;
         }
         if (accumulator > 4.0 * tick_seconds) accumulator = 4.0 * tick_seconds;
-        int mx, my;
-        uint32_t buttons = SDL_GetMouseState(&mx, &my);
-        if (mx >= 0 && my >= 0 && mx < VIEW_WIDTH * WINDOW_SCALE &&
-            my < VIEW_HEIGHT * WINDOW_SCALE) {
-            if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-                if (!dc_level_view_paint(view, (uint32_t)mx / WINDOW_SCALE,
-                        (uint32_t)my / WINDOW_SCALE, 3, material, err, sizeof(err))) {
-                    failed = true; running = false;
-                }
-            } else if (buttons & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
-                if (!dc_level_view_paint(view, (uint32_t)mx / WINDOW_SCALE,
-                        (uint32_t)my / WINDOW_SCALE, 3, DC_MATERIAL_AIR, err, sizeof(err))) {
-                    failed = true; running = false;
-                }
-            }
+        if (!paint_held(view, material, err, sizeof(err))) {
+            failed = true; running = false;
         }
         if (running && !dc_level_view_tick(view, err, sizeof(err))) {
             failed = true; running = false;
         }
-        SDL_Delay(16);
+        SDL_Delay(1);
     }
     if (!dc_level_view_destroy(view, err, sizeof(err))) failed = true;
     if (failed) fprintf(stderr, "Dungeoncraft: %s\n", err);
