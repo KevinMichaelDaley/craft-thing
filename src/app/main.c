@@ -182,6 +182,13 @@ static int smoke_streamed_level(void) {
     if (!view) { fprintf(stderr, "Level create: %s\n", err); return 1; }
     const char *stage = "initial load";
     bool okay = dc_level_view_wait_visible(view, 5000, err, sizeof(err));
+    if (okay) stage = "offscreen halo residency";
+    if (okay) {
+        bool top_left = dc_level_view_has_chunk(view, (dc_chunk_coord_t){-1, -1});
+        bool bottom_right = dc_level_view_has_chunk(view, (dc_chunk_coord_t){4, 2});
+        printf("offscreen halo corners resident=%d,%d\n", top_left, bottom_right);
+        okay = top_left && bottom_right;
+    }
     const char *rigid_stage = "rigid spawn";
     if (okay) okay = dc_level_view_spawn_body(view, 63, 2, err, sizeof(err));
     rigid_stage = "rigid cross-chunk step";
