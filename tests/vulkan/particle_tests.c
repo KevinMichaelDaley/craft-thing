@@ -181,6 +181,81 @@ static void test_upload_rejects_inconsistent_particle_count(void) {
     PASS();
 }
 
+static void test_granular_tick_falls_and_reports_gpu_time(void) {
+    char err[256] = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x)
+        chunk->cells[48 * DC_CHUNK_SIDE + x].material = DC_MATERIAL_STONE;
+    chunk->cells[8 * DC_CHUNK_SIDE + 20].material = DC_MATERIAL_SAND;
+    dc_chunk_seed_particles(chunk);
+    dc_mpm_particle_t original = chunk->particles[8 * DC_CHUNK_SIDE + 20];
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    dc_gpu_tick_capture_t capture = {0};
+    for (uint32_t i = 0; i < 24; ++i)
+        ASSERT_TRUE(dc_gpu_tick_capture(gpu, &capture, err, sizeof(err)));
+    ASSERT_EQ(capture.stages[2].id, DC_GPU_STAGE_SAND);
+    ASSERT_TRUE(capture.stages[2].gpu_ns > 0u);
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->particle_count, 1u);
+    uint32_t found = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (chunk->particles[i].mass_fp) {
+            ASSERT_EQ(chunk->particles[i].id_lo, original.id_lo);
+            ASSERT_EQ(chunk->particles[i].mass_fp, original.mass_fp);
+            ASSERT_TRUE(chunk->particles[i].y_fp > original.y_fp + 2 * (int32_t)DC_FLUID_FULL);
+            ASSERT_TRUE(chunk->particles[i].y_fp < 48 * (int32_t)DC_FLUID_FULL);
+            ++found;
+        }
+    ASSERT_EQ(found, 1u);
+    printf("granular GPU stage: %llu ns\n",
+           (unsigned long long)capture.stages[2].gpu_ns);
+    dc_gpu_destroy(gpu);
+    free(chunk);
+    PASS();
+}
+
+static void test_granular_motion_crosses_seam_with_stable_mass(void) {
+    char err[256] = {0};
+    dc_chunk_t *left = calloc(1, sizeof(*left));
+    dc_chunk_t *right = calloc(1, sizeof(*right));
+    ASSERT_TRUE(left && right);
+    right->coord.x = 1;
+    left->cells[12 * DC_CHUNK_SIDE + 63].material = DC_MATERIAL_GRAVEL;
+    dc_chunk_seed_particles(left);
+    dc_mpm_particle_t original = left->particles[12 * DC_CHUNK_SIDE + 63];
+    left->particles[12 * DC_CHUNK_SIDE + 63].vx_fp = 2 * (int32_t)DC_FLUID_FULL;
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 128, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 1, right, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 0, 1, err, sizeof(err)));
+    for (uint32_t i = 0; i < 8; ++i)
+        ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, right, err, sizeof(err)));
+    ASSERT_EQ(left->particle_count + right->particle_count, 1u);
+    ASSERT_EQ(right->particle_count, 1u);
+    uint32_t found = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (right->particles[i].mass_fp) {
+            ASSERT_EQ(right->particles[i].id_lo, original.id_lo);
+            ASSERT_EQ(right->particles[i].id_hi, original.id_hi);
+            ASSERT_EQ(right->particles[i].mass_fp, original.mass_fp);
+            ++found;
+        }
+    ASSERT_EQ(found, 1u);
+    dc_gpu_destroy(gpu);
+    free(left); free(right);
+    PASS();
+}
+
 int main(void) {
     printf("GPU particle capacity: %u records per chunk, %u primary cell slots\n",
            DC_MPM_PARTICLES_PER_CHUNK, DC_CHUNK_CELLS);
@@ -188,6 +263,8 @@ int main(void) {
     RUN(test_painted_particle_crosses_seam_and_streams_once);
     RUN(test_granular_paint_reuses_and_erases_primary_slot);
     RUN(test_upload_rejects_inconsistent_particle_count);
+    RUN(test_granular_tick_falls_and_reports_gpu_time);
+    RUN(test_granular_motion_crosses_seam_with_stable_mass);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

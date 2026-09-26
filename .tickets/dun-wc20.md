@@ -1,6 +1,6 @@
 ---
 id: dun-wc20
-status: open
+status: in_progress
 deps: [dun-hxhe]
 links: [dun-u68k]
 created: 2026-09-26T07:43:17Z
