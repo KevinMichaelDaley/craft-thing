@@ -6,10 +6,11 @@ GLSLANG ?= glslangValidator
 
 GPU_OBJ = build/gpu.o
 CHUNK_OBJ = build/chunk.o
+STREAM_OBJ = build/stream.o
 SHADER = build/shaders/pattern.comp.spv
 
 .PHONY: all test test_ui clean shaders
-all: build/gpu_tests build/chunk_tests build/dungeoncraft
+all: build/gpu_tests build/chunk_tests build/stream_tests build/dungeoncraft
 
 shaders: $(SHADER)
 
@@ -25,18 +26,26 @@ build/chunk.o: src/world/chunk.c include/dungeoncraft/chunk.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
+build/stream.o: src/world/stream.c include/dungeoncraft/stream.h include/dungeoncraft/chunk.h
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
 build/gpu_tests: tests/vulkan/gpu_tests.c $(GPU_OBJ) $(SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/gpu_tests.c $(GPU_OBJ) -o $@ $(LDLIBS)
 
 build/chunk_tests: tests/world/chunk_tests.c $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/chunk_tests.c $(CHUNK_OBJ) -o $@
 
+build/stream_tests: tests/world/stream_tests.c $(STREAM_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/stream_tests.c $(STREAM_OBJ) -o $@
+
 build/dungeoncraft: src/app/main.c $(GPU_OBJ) $(SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/main.c $(GPU_OBJ) -o $@ $(LDLIBS)
 
-test: build/gpu_tests build/chunk_tests
+test: build/gpu_tests build/chunk_tests build/stream_tests
 	./build/gpu_tests
 	./build/chunk_tests
+	./build/stream_tests
 
 test_ui: build/dungeoncraft
 	./build/dungeoncraft --smoke
