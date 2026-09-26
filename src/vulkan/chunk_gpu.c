@@ -92,3 +92,27 @@ bool dc_gpu_readback(dc_gpu_t *gpu, uint32_t *cells, uint32_t cell_count,
     memcpy(cells, gpu->mapped, (size_t)gpu->width * gpu->height * sizeof(uint32_t));
     return true;
 }
+
+bool dc_gpu_refresh_halos(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    (void)gpu;
+    return error(err, cap, "GPU halo refresh is not implemented");
+}
+
+bool dc_gpu_read_halo(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
+                      int32_t local_x, int32_t local_y, dc_gpu_halo_cell_t *cell,
+                      char *err, uint32_t cap) {
+    (void)gpu; (void)tile_x; (void)tile_y; (void)local_x; (void)local_y; (void)cell;
+    return error(err, cap, "GPU halo readback is not implemented");
+}
+
+bool dc_gpu_queue_transfer(dc_gpu_t *gpu, dc_gpu_transfer_t transfer,
+                           char *err, uint32_t cap) {
+    (void)gpu; (void)transfer;
+    return error(err, cap, "GPU transfer queue is not implemented");
+}
+
+bool dc_gpu_try_transfer(dc_gpu_t *gpu, dc_gpu_transfer_state_t *state,
+                         char *err, uint32_t cap) {
+    (void)gpu; (void)state;
+    return error(err, cap, "GPU transfer resolver is not implemented");
+}

@@ -33,6 +33,30 @@ typedef struct {
     dc_gpu_stage_capture_t stages[3];
 } dc_gpu_tick_capture_t;
 
+typedef struct {
+    dc_cell_t cell;
+    uint32_t resident;
+    uint32_t slot;
+} dc_gpu_halo_cell_t;
+
+typedef enum {
+    DC_GPU_TRANSFER_SCALAR = 1,
+    DC_GPU_TRANSFER_PARTICLE = 2
+} dc_gpu_transfer_kind_t;
+
+typedef enum {
+    DC_GPU_TRANSFER_PENDING = 0,
+    DC_GPU_TRANSFER_APPLIED = 1,
+    DC_GPU_TRANSFER_BLOCKED = 2
+} dc_gpu_transfer_state_t;
+
+typedef struct {
+    uint32_t from_x, from_y, to_x, to_y;
+    uint32_t amount;
+    uint32_t kind;
+    uint32_t state;
+} dc_gpu_transfer_t;
+
 /** Create a headless Vulkan compute context and a width-by-height cell buffer. */
 bool dc_gpu_create(dc_gpu_t **out, uint32_t width, uint32_t height,
                    const char *shader_path, char *err_buf, uint32_t err_cap);
@@ -60,6 +84,22 @@ bool dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chunk,
 /** Map a viewport chunk tile to a GPU slot; UINT32_MAX means unloaded. */
 bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
                      uint32_t slot, char *err_buf, uint32_t err_cap);
+
+/** Refresh one-cell halos from the current GPU page table. */
+bool dc_gpu_refresh_halos(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
+
+/** Read a refreshed halo cell at local coordinates -1 through 64. */
+bool dc_gpu_read_halo(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
+                      int32_t local_x, int32_t local_y, dc_gpu_halo_cell_t *cell,
+                      char *err_buf, uint32_t err_cap);
+
+/** Queue one adjacent scalar or particle transfer between resident cells. */
+bool dc_gpu_queue_transfer(dc_gpu_t *gpu, dc_gpu_transfer_t transfer,
+                           char *err_buf, uint32_t err_cap);
+
+/** Refresh halos and retry the queued transfer; absent destinations stay pending. */
+bool dc_gpu_try_transfer(dc_gpu_t *gpu, dc_gpu_transfer_state_t *state,
+                         char *err_buf, uint32_t err_cap);
 
 /** Render resident chunks through the GPU page table. */
 bool dc_gpu_render_chunks(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);

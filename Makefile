@@ -14,7 +14,7 @@ RIGID_SHADER = build/shaders/rigid.comp.spv
 PROBE_SHADER = build/shaders/tick_probe.comp.spv
 
 .PHONY: all test test_ui clean shaders
-all: build/gpu_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
+all: build/gpu_tests build/halo_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
 
 shaders: $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER)
 
@@ -69,6 +69,9 @@ build/generate.o: src/world/generate.c include/dungeoncraft/generate.h include/d
 build/gpu_tests: tests/vulkan/gpu_tests.c $(GPU_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/gpu_tests.c $(GPU_OBJ) -o $@ $(LDLIBS)
 
+build/halo_tests: tests/vulkan/halo_tests.c $(GPU_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/halo_tests.c $(GPU_OBJ) -o $@ $(LDLIBS)
+
 build/chunk_tests: tests/world/chunk_tests.c $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/chunk_tests.c $(CHUNK_OBJ) -o $@
 
@@ -81,8 +84,9 @@ build/stream_tests: tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENE
 build/dungeoncraft: src/app/main.c src/app/level.c src/app/level.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/main.c src/app/level.c $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 
-test: build/gpu_tests build/chunk_tests build/generate_tests build/stream_tests
+test: build/gpu_tests build/halo_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/gpu_tests
+	./build/halo_tests
 	./build/chunk_tests
 	./build/generate_tests
 	./build/stream_tests
