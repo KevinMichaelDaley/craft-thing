@@ -76,7 +76,8 @@ bool dc_gpu_spawn_body(dc_gpu_t *gpu, dc_gpu_body_t body,
 /** Run GPU body integration, terrain contact, and occupancy raster passes. */
 bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
 
-/** Submit rigid, fluid, then sand stages and capture GPU timings and handoffs. */
+/** Submit rigid then fluid/sand probes and capture GPU timings and handoffs.
+ * Fluid and sand probes verify ordering until their simulation shaders land. */
 bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
                          char *err_buf, uint32_t err_cap);
 

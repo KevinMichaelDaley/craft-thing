@@ -2,6 +2,8 @@
 
 Dungeoncraft is an early C11/Vulkan prototype for a per-pixel material world. The current vertical slice streams procedural chunks on a worker thread, maps a bounded chunk atlas through a GPU page table, draws it with a SPIR-V compute shader, and presents it through a Vulkan swapchain. The window accepts material painting and can run one GPU rigid box; Eulerian fluid and falling-sand simulation passes remain to be implemented.
 
+The fixed-tick GPU graph now records rigid, fluid, and sand dispatch groups in one command buffer, with synchronization2 barriers and timestamp queries. The latter two groups currently run probe shaders: the fluid probe reads rigid occupancy, and the sand probe reads the fluid probe's output. Their captures prove stage order and report GPU duration, while the fluid and sand simulation tickets supply the actual cell updates.
+
 ## Build and run
 
 Install development packages for Vulkan, SDL2, `pkg-config`, and `glslangValidator` (Ubuntu packages: `libvulkan-dev`, `libsdl2-dev`, `glslang-tools`). Then run:

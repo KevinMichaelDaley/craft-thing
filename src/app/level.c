@@ -26,7 +26,8 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 
 bool dc_level_view_step(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return error(err, cap, "Level view is null");
-    return dc_gpu_rigid_step(view->gpu, err, cap);
+    dc_gpu_tick_capture_t capture = {0};
+    return dc_gpu_tick_capture(view->gpu, &capture, err, cap);
 }
 
 bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,

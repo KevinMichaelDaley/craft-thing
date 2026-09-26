@@ -46,6 +46,13 @@ struct dc_gpu {
     VkDeviceMemory occupancy_memory;
     void *occupancy_mapped;
     VkPipeline rigid_pipeline;
+    VkBuffer trace_buffer;
+    VkDeviceMemory trace_memory;
+    void *trace_mapped;
+    VkPipeline probe_pipeline;
+    VkQueryPool timestamp_pool;
+    float timestamp_period;
+    uint32_t timestamp_bits;
     uint32_t width, height;
 };
 
@@ -59,5 +66,8 @@ bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *shader_path,
                                 char *err, uint32_t cap);
 void dc_gpu_rigid_destroy(dc_gpu_t *gpu);
+void dc_gpu_record_rigid(dc_gpu_t *gpu);
+bool dc_gpu_tick_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+void dc_gpu_tick_destroy(dc_gpu_t *gpu);
 
 #endif

@@ -17,7 +17,10 @@ bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
            dc_gpu_make_mapped_buffer(gpu,
                (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t),
                &gpu->occupancy_buffer, &gpu->occupancy_memory,
-               &gpu->occupancy_mapped, err, cap);
+               &gpu->occupancy_mapped, err, cap) &&
+           dc_gpu_make_mapped_buffer(gpu, 3 * sizeof(uint32_t),
+               &gpu->trace_buffer, &gpu->trace_memory,
+               &gpu->trace_mapped, err, cap);
 }
 
 bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *path,
@@ -52,6 +55,7 @@ bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *path,
 }
 
 void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
+    dc_gpu_tick_destroy(gpu);
     if (gpu->rigid_pipeline) vkDestroyPipeline(gpu->device, gpu->rigid_pipeline, NULL);
     if (gpu->body_mapped) vkUnmapMemory(gpu->device, gpu->body_memory);
     if (gpu->occupancy_mapped) vkUnmapMemory(gpu->device, gpu->occupancy_memory);
@@ -84,6 +88,18 @@ bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkCommandBufferBeginInfo begin = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
     if (vkBeginCommandBuffer(gpu->command, &begin) != VK_SUCCESS)
         return error(err, cap, "Cannot begin rigid command buffer");
+    dc_gpu_record_rigid(gpu);
+    if (vkEndCommandBuffer(gpu->command) != VK_SUCCESS)
+        return error(err, cap, "Cannot end rigid command buffer");
+    VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1, .pCommandBuffers = &gpu->command };
+    if (vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
+        vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
+        return error(err, cap, "GPU rigid submission failed");
+    return true;
+}
+
+void dc_gpu_record_rigid(dc_gpu_t *gpu) {
     VkMemoryBarrier2 upload = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
         .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
@@ -118,19 +134,4 @@ bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
         .dstAccessMask = VK_ACCESS_2_HOST_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_READ_BIT };
     dep.pMemoryBarriers = &finish;
     vkCmdPipelineBarrier2(gpu->command, &dep);
-    if (vkEndCommandBuffer(gpu->command) != VK_SUCCESS)
-        return error(err, cap, "Cannot end rigid command buffer");
-    VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .commandBufferCount = 1, .pCommandBuffers = &gpu->command };
-    if (vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
-        vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
-        return error(err, cap, "GPU rigid submission failed");
-    return true;
-}
-
-bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
-                         char *err, uint32_t cap) {
-    (void)gpu;
-    (void)capture;
-    return error(err, cap, "GPU tick graph is not implemented");
 }

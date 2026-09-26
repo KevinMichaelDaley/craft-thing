@@ -1,0 +1,41 @@
+#version 450
+layout(local_size_x = 1, local_size_y = 1) in;
+
+layout(set = 0, binding = 3, std430) readonly buffer Occupancy { uint occupancy[]; };
+layout(set = 0, binding = 5, std430) buffer Trace { uint trace_values[]; };
+
+struct Body {
+    int x_fp;
+    int y_fp;
+    int vx_fp;
+    int vy_fp;
+    uint width;
+    uint height;
+    uint id;
+    uint enabled;
+};
+layout(set = 0, binding = 4, std430) readonly buffer Bodies { Body body; };
+layout(push_constant) uniform Params {
+    uint width;
+    uint height;
+    uint mode;
+    uint unused0;
+    uint unused1;
+    uint unused2;
+    uint unused3;
+} params;
+
+void main() {
+    if (params.mode == 0u) {
+        int x = body.x_fp >> 16;
+        int y = body.y_fp >> 16;
+        uint seen = 0u;
+        if (body.enabled != 0u && x >= 0 && y >= 0 &&
+            x < int(params.width) && y < int(params.height))
+            seen = occupancy[uint(y) * params.width + uint(x)];
+        trace_values[0] = seen;
+        trace_values[1] = seen + 1u;
+    } else {
+        trace_values[2] = trace_values[1] + 1u;
+    }
+}
