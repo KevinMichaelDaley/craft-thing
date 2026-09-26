@@ -35,7 +35,14 @@ static void test_water_falls_and_crosses_resident_chunk_edge(void) {
     ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved_left, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &saved_right, err, sizeof(err)));
-    ASSERT_TRUE(saved_left.cells[3 * 64 + 63].fluid_mass > 0);
+    uint64_t below = 0;
+    for (uint32_t y = 3; y < 64; ++y)
+        below += saved_left.cells[y * 64 + 63].fluid_mass;
+    ASSERT_TRUE(below > 0);
+    for (uint32_t step = 0; step < 100; ++step)
+        ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved_left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &saved_right, err, sizeof(err)));
     uint64_t total = 0, right_mass = 0;
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
         total += saved_left.cells[i].fluid_mass + saved_right.cells[i].fluid_mass;

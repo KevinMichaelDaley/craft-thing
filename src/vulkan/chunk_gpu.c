@@ -46,11 +46,13 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                &gpu->chunk_memory, &gpu->chunk_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, page_bytes, &gpu->page_buffer,
                &gpu->page_memory, &gpu->page_mapped, err, cap) &&
-           dc_gpu_halo_buffers_init(gpu, err, cap);
+           dc_gpu_halo_buffers_init(gpu, err, cap) &&
+           dc_gpu_fluid_buffers_init(gpu, err, cap);
 }
 
 void dc_gpu_chunks_destroy(dc_gpu_t *gpu) {
     dc_gpu_halo_destroy(gpu);
+    dc_gpu_fluid_destroy(gpu);
     if (gpu->chunk_mapped) vkUnmapMemory(gpu->device, gpu->chunk_memory);
     if (gpu->page_mapped) vkUnmapMemory(gpu->device, gpu->page_memory);
     if (gpu->chunk_buffer) vkDestroyBuffer(gpu->device, gpu->chunk_buffer, NULL);

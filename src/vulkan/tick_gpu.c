@@ -42,7 +42,8 @@ bool dc_gpu_tick_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         .queryType = VK_QUERY_TYPE_TIMESTAMP, .queryCount = 4 };
     if (vkCreateQueryPool(gpu->device, &query_info, NULL, &gpu->timestamp_pool) != VK_SUCCESS)
         return error(err, cap, "Cannot create GPU timestamp pool");
-    return make_probe_pipeline(gpu, err, cap);
+    return make_probe_pipeline(gpu, err, cap) &&
+           dc_gpu_fluid_pipeline_init(gpu, err, cap);
 }
 
 void dc_gpu_tick_destroy(dc_gpu_t *gpu) {
@@ -96,6 +97,7 @@ bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
     vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
                          gpu->timestamp_pool, 1);
     record_probe(gpu, 0);
+    dc_gpu_record_fluid(gpu);
     vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
                          gpu->timestamp_pool, 2);
     stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
@@ -123,9 +125,4 @@ bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
         capture->stages[i].handoff = trace[i];
     }
     return true;
-}
-
-bool dc_gpu_fluid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    (void)gpu;
-    return error(err, cap, "Eulerian GPU fluid pass is not implemented");
 }

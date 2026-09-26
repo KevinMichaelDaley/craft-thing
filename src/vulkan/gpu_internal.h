@@ -67,6 +67,14 @@ struct dc_gpu {
     void *transfer_mapped;
     VkPipeline halo_pipeline;
     bool has_transfer;
+    VkBuffer fluid_a_buffer;
+    VkDeviceMemory fluid_a_memory;
+    void *fluid_a_mapped;
+    VkBuffer fluid_b_buffer;
+    VkDeviceMemory fluid_b_memory;
+    void *fluid_b_mapped;
+    VkPipeline fluid_pipeline;
+    uint32_t fluid_tick;
     uint32_t width, height;
 };
 
@@ -88,5 +96,9 @@ void dc_gpu_tick_destroy(dc_gpu_t *gpu);
 bool dc_gpu_halo_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 bool dc_gpu_halo_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_halo_destroy(dc_gpu_t *gpu);
+bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+bool dc_gpu_fluid_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+void dc_gpu_fluid_destroy(dc_gpu_t *gpu);
+void dc_gpu_record_fluid(dc_gpu_t *gpu);
 
 #endif

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include <SDL.h>
 
@@ -11,6 +12,67 @@
 #include "level.h"
 
 enum { VIEW_WIDTH = 256, VIEW_HEIGHT = 128, WINDOW_SCALE = 4 };
+
+static bool save_level_bmp(const char *path, const uint32_t *pixels) {
+    const uint32_t width = VIEW_WIDTH * WINDOW_SCALE;
+    const uint32_t height = VIEW_HEIGHT * WINDOW_SCALE;
+    uint32_t *scaled = malloc((size_t)width * height * sizeof(*scaled));
+    if (!scaled) return false;
+    for (uint32_t y = 0; y < height; ++y)
+        for (uint32_t x = 0; x < width; ++x)
+            scaled[y * width + x] =
+                pixels[(y / WINDOW_SCALE) * VIEW_WIDTH + x / WINDOW_SCALE];
+    SDL_Surface *surface = SDL_CreateRGBSurfaceWithFormatFrom(scaled,
+        (int)width, (int)height, 32, (int)(width * sizeof(*scaled)),
+        SDL_PIXELFORMAT_ABGR8888);
+    bool okay = surface && SDL_SaveBMP(surface, path) == 0;
+    if (surface) SDL_FreeSurface(surface);
+    free(scaled);
+    return okay;
+}
+
+static int smoke_moving_water(void) {
+    char directory[] = "build/ui_motion_XXXXXX";
+    if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
+    char err[256] = {0};
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    if (!view) { fprintf(stderr, "Motion level create: %s\n", err); return 1; }
+    uint32_t *before = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*before));
+    uint32_t *after = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*after));
+    bool okay = before && after &&
+        dc_level_view_wait_visible(view, 5000, err, sizeof(err)) &&
+        dc_level_view_pixels(view, before, VIEW_WIDTH * VIEW_HEIGHT, err, sizeof(err));
+    mkdir("build/screenshots", 0777);
+    if (okay) okay = save_level_bmp("build/screenshots/before.bmp", before);
+    for (uint32_t i = 0; i < 60 && okay; ++i)
+        okay = dc_level_view_step(view, err, sizeof(err));
+    if (okay) okay = dc_level_view_tick(view, err, sizeof(err)) &&
+                     dc_level_view_pixels(view, after, VIEW_WIDTH * VIEW_HEIGHT,
+                                          err, sizeof(err)) &&
+                     save_level_bmp("build/screenshots/after_1s.bmp", after);
+    uint32_t changed = 0, deep_changed = 0;
+    if (okay) {
+        for (uint32_t y = 4; y < 35; ++y)
+            for (uint32_t x = 120; x < 138; ++x)
+                if (before[y * VIEW_WIDTH + x] != after[y * VIEW_WIDTH + x]) ++changed;
+        for (uint32_t y = 20; y < 31; ++y)
+            for (uint32_t x = 126; x < 131; ++x)
+                if (before[y * VIEW_WIDTH + x] != after[y * VIEW_WIDTH + x])
+                    ++deep_changed;
+        okay = changed >= 50 && deep_changed >= 10;
+    }
+    if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
+    free(before);
+    free(after);
+    if (!okay) {
+        fprintf(stderr, "Falling-water screenshot smoke failed (%u changed, %u below source): %s\n",
+                changed, deep_changed, err);
+        return 1;
+    }
+    printf("Falling-water screenshots: build/screenshots/before.bmp and after_1s.bmp (%u changed, %u below source)\n",
+           changed, deep_changed);
+    return 0;
+}
 
 static int smoke_streamed_level(void) {
     char directory[] = "build/ui_stream_XXXXXX";
@@ -93,6 +155,8 @@ static int smoke_streamed_level(void) {
 int main(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "--smoke-stream") == 0)
         return smoke_streamed_level();
+    if (argc > 1 && strcmp(argv[1], "--smoke-motion") == 0)
+        return smoke_moving_water();
     uint64_t seed = 314;
     if (argc == 3 && strcmp(argv[1], "--seed") == 0)
         seed = strtoull(argv[2], NULL, 10);
@@ -117,7 +181,7 @@ int main(int argc, char **argv) {
                 case SDLK_0: material = DC_MATERIAL_AIR; break;
                 case SDLK_1: material = DC_MATERIAL_STONE; break;
                 case SDLK_2: material = DC_MATERIAL_SAND; break;
-                case SDLK_3: material = 3; break;
+                case SDLK_3: material = DC_MATERIAL_WATER; break;
                 case SDLK_p: paused = !paused; break;
                 case SDLK_n: single_step = true; break;
                 case SDLK_b: {

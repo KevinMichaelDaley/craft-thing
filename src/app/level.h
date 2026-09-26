@@ -22,6 +22,8 @@ bool dc_level_view_paint(dc_level_view_t *view, uint32_t x, uint32_t y,
                          char *err, uint32_t err_cap);
 bool dc_level_view_pixel(dc_level_view_t *view, uint32_t x, uint32_t y,
                          uint32_t *color, char *err, uint32_t err_cap);
+bool dc_level_view_pixels(dc_level_view_t *view, uint32_t *colors,
+                          uint32_t count, char *err, uint32_t err_cap);
 bool dc_level_view_chunk(dc_level_view_t *view, dc_chunk_coord_t coord,
                          dc_chunk_t *chunk, char *err, uint32_t err_cap);
 bool dc_level_view_has_chunk(dc_level_view_t *view, dc_chunk_coord_t coord);

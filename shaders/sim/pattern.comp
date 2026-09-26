@@ -50,7 +50,13 @@ void main() {
         uint color = 0xff181818u;
         if (material == 1u) color = 0xff707070u;
         else if (material == 2u) color = 0xff40c8e0u;
-        if (cell.y > 0u) color = 0xffd07030u;
+        if (cell.y > 0u) {
+            uint fill = min(cell.y, 65536u) / 256u;
+            uint red = 16u + 32u * fill / 256u;
+            uint green = 32u + 80u * fill / 256u;
+            uint blue = 64u + 144u * fill / 256u;
+            color = 0xff000000u | (blue << 16) | (green << 8) | red;
+        }
         if (occupancy[p.y * params.width + p.x] != 0u) color = 0xff30c040u;
         cells[p.y * params.width + p.x] = color;
     }

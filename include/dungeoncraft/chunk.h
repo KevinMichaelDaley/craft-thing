@@ -11,7 +11,8 @@
 enum {
     DC_MATERIAL_AIR = 0,
     DC_MATERIAL_STONE = 1,
-    DC_MATERIAL_SAND = 2
+    DC_MATERIAL_SAND = 2,
+    DC_MATERIAL_WATER = 3
 };
 
 typedef struct { int64_t x, y; } dc_chunk_coord_t;

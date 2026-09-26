@@ -1,0 +1,110 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set = 0, binding = 1, std430) buffer ChunkCells { uvec2 chunk_cells[]; };
+layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
+layout(set = 0, binding = 8, std430) buffer FluidA { uint fluid_a[]; };
+layout(set = 0, binding = 9, std430) buffer FluidB { uint fluid_b[]; };
+layout(push_constant) uniform Params {
+    uint width;
+    uint height;
+    uint mode;
+    uint tick_parity;
+    uint unused1;
+    uint unused2;
+    uint unused3;
+} params;
+
+const uint SIDE = 64u;
+const uint CELLS_PER_CHUNK = 4096u;
+const uint FULL = 65536u;
+const uint MAX_DOWN_FLUX = 32768u;
+const uint MAX_SIDE_FLUX = 8192u;
+
+uint page_at(ivec2 p) {
+    if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
+        p.y >= int(params.height)) return 0u;
+    uint page_width = (params.width + SIDE - 1u) / SIDE;
+    return pages[(uint(p.y) / SIDE) * page_width + uint(p.x) / SIDE];
+}
+
+uint atlas_index(ivec2 p, uint page) {
+    return (page - 1u) * CELLS_PER_CHUNK +
+           (uint(p.y) % SIDE) * SIDE + uint(p.x) % SIDE;
+}
+
+uint source_mass(uint index) {
+    return params.mode == 1u || params.mode == 3u ?
+           fluid_a[index] : fluid_b[index];
+}
+
+void write_mass(uint index, uint mass) {
+    if (params.mode == 1u || params.mode == 3u) fluid_b[index] = mass;
+    else fluid_a[index] = mass;
+}
+
+bool can_fall(ivec2 p, uint mass) {
+    if (mass == 0u) return false;
+    ivec2 below = p + ivec2(0, 1);
+    uint page = page_at(below);
+    if (page == 0u ||
+        (chunk_cells[atlas_index(below, page)].x & 0xffffu) != 0u) return false;
+    uint below_index = uint(below.y) * params.width + uint(below.x);
+    return source_mass(below_index) < FULL;
+}
+
+void pair_step(ivec2 p) {
+    uint index = uint(p.y) * params.width + uint(p.x);
+    uint own = source_mass(index);
+    bool vertical = params.mode <= 2u;
+    int parity = int(((params.mode - 1u) & 1u) ^ params.tick_parity);
+    int coordinate = vertical ? p.y : p.x;
+    int delta = (coordinate & 1) == parity ? 1 : -1;
+    ivec2 neighbor = p + (vertical ? ivec2(0, delta) : ivec2(delta, 0));
+    uint own_page = page_at(p);
+    uint other_page = page_at(neighbor);
+    if (own_page == 0u || other_page == 0u ||
+        (chunk_cells[atlas_index(p, own_page)].x & 0xffffu) != 0u ||
+        (chunk_cells[atlas_index(neighbor, other_page)].x & 0xffffu) != 0u) {
+        write_mass(index, own);
+        return;
+    }
+    uint other_index = uint(neighbor.y) * params.width + uint(neighbor.x);
+    uint other = source_mass(other_index);
+    uint flux = 0u;
+    bool sender = false;
+    if (vertical) {
+        sender = p.y < neighbor.y;
+        uint upper = sender ? own : other;
+        uint lower = sender ? other : own;
+        uint capacity = lower < FULL ? FULL - lower : 0u;
+        flux = min(min(upper, capacity), MAX_DOWN_FLUX);
+    } else if (own != other) {
+        if (can_fall(p, own) || can_fall(neighbor, other)) {
+            write_mass(index, own);
+            return;
+        }
+        sender = own > other;
+        uint high = sender ? own : other;
+        uint low = sender ? other : own;
+        uint capacity = low < FULL ? FULL - low : 0u;
+        flux = min(min((high - low) / 4u, capacity), MAX_SIDE_FLUX);
+    }
+    write_mass(index, sender ? own - flux : own + flux);
+}
+
+void main() {
+    uvec2 p = gl_GlobalInvocationID.xy;
+    if (p.x >= params.width || p.y >= params.height) return;
+    uint index = p.y * params.width + p.x;
+    ivec2 position = ivec2(p);
+    uint page = page_at(position);
+    if (params.mode == 0u) {
+        fluid_a[index] = page == 0u ? 0u :
+                         chunk_cells[atlas_index(position, page)].y;
+    } else if (params.mode == 5u) {
+        if (page != 0u) chunk_cells[atlas_index(position, page)].y = fluid_a[index];
+    } else {
+        pair_step(position);
+    }
+}
