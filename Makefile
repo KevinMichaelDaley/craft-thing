@@ -66,7 +66,7 @@ test: build/gpu_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/stream_tests
 
 test_ui: build/dungeoncraft
-	./build/dungeoncraft --smoke
+	./build/dungeoncraft --smoke-stream
 
 clean:
 	rm -rf build

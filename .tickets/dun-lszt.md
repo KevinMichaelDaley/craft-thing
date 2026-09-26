@@ -1,6 +1,6 @@
 ---
 id: dun-lszt
-status: open
+status: in_progress
 deps: [dun-nycg, dun-t743, dun-f6oh]
 links: []
 created: 2026-09-26T05:25:21Z

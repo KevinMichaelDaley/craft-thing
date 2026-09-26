@@ -10,6 +10,10 @@
 enum { GRID_WIDTH = 256, GRID_HEIGHT = 144, WINDOW_SCALE = 4 };
 
 int main(int argc, char **argv) {
+    if (argc > 1 && strcmp(argv[1], "--smoke-stream") == 0) {
+        fprintf(stderr, "Streamed Vulkan level smoke is not implemented\n");
+        return 1;
+    }
     bool smoke = argc > 1 && strcmp(argv[1], "--smoke") == 0;
     char err[256] = {0};
     dc_gpu_t *gpu = NULL;
