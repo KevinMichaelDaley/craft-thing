@@ -86,7 +86,7 @@ The first playable demonstration is a small map where a rigid box falls into san
 
 ## Design decisions to settle before implementation expands
 
-- Whether the Eulerian fluid solver should use a simple volume/flux model or add pressure/velocity projection for more detailed flow. Both keep fluid state at fixed world cells; the latter costs more passes and memory bandwidth.
+- The first projected velocity solver uses red-black SOR on GPU. Benchmark its residual and cost in large liquid regions and adjust the GPU solver while keeping cell volume authoritative.
 - Whether rigid bodies may consist of destructible material cells. The first implementation treats them as persistent shapes; breakage/fracture can be a later conversion from body pixels into free material cells.
 - Whether unloaded chunks should continue evolving offscreen. The initial policy pauses their simulation and preserves exact saved state; continuous evolution requires an explicit bounded approximation or background simulation budget.
 - Target platforms and minimum GPU. The Vulkan 1.3 baseline currently assumes desktop hardware; mobile and older GPUs would require a feature and format fallback plan.

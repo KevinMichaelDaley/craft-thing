@@ -17,6 +17,7 @@ struct dc_level_view {
     dc_streamer_t *stream;
     dc_chunk_table_t table;
     dc_chunk_coord_t origin;
+    uint32_t pending_steps;
 };
 
 static bool error(char *buf, uint32_t cap, const char *message) {
@@ -26,15 +27,9 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 
 bool dc_level_view_step(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return error(err, cap, "Level view is null");
-    if (view->origin.x <= 2 && view->origin.x + VIEW_CHUNKS_X > 2 &&
-        view->origin.y <= 0 && view->origin.y + VIEW_CHUNKS_Y > 0) {
-        uint32_t x = (uint32_t)(2 - view->origin.x) * DC_CHUNK_SIDE;
-        uint32_t y = (uint32_t)(-view->origin.y) * DC_CHUNK_SIDE + 4u;
-        if (!dc_gpu_paint_material(view->gpu, x, y, 1, DC_MATERIAL_WATER,
-                                   err, cap)) return false;
-    }
-    dc_gpu_tick_capture_t capture = {0};
-    if (!dc_gpu_tick_capture(view->gpu, &capture, err, cap)) return false;
+    if (view->pending_steps == UINT32_MAX)
+        return error(err, cap, "Too many pending level steps");
+    ++view->pending_steps;
     for (uint32_t i = 0; i < view->table.capacity; ++i)
         if (view->table.slots[i].state == DC_SLOT_ACTIVE)
             dc_chunk_table_mark_dirty(&view->table, i);
@@ -150,7 +145,15 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
             if (!dc_gpu_set_page(view->gpu, x, y, page, err, cap)) return false;
         }
     }
-    return dc_gpu_render_chunks(view->gpu, err, cap) && dc_gpu_present(view->gpu, err, cap);
+    if (view->origin.x <= 2 && view->origin.x + VIEW_CHUNKS_X > 2 &&
+        view->origin.y <= 0 && view->origin.y + VIEW_CHUNKS_Y > 0) {
+        uint32_t x = (uint32_t)(2 - view->origin.x) * DC_CHUNK_SIDE;
+        uint32_t y = (uint32_t)(-view->origin.y) * DC_CHUNK_SIDE + 4u;
+        dc_gpu_set_tick_water_source(view->gpu, true, x, y);
+    } else dc_gpu_set_tick_water_source(view->gpu, false, 0, 0);
+    if (!dc_gpu_present_chunks_steps(view->gpu, view->pending_steps, err, cap)) return false;
+    view->pending_steps = 0;
+    return true;
 }
 
 bool dc_level_view_wait_visible(dc_level_view_t *view, uint32_t timeout_ms,

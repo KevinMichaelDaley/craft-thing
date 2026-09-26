@@ -109,6 +109,10 @@ bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
                            uint32_t radius, uint16_t material,
                            char *err_buf, uint32_t err_cap);
 
+/** Set an optional GPU water source applied inside each physics submission. */
+bool dc_gpu_set_tick_water_source(dc_gpu_t *gpu, bool enabled,
+                                  uint32_t x, uint32_t y);
+
 /** Spawn one box body in viewport-local 16.16 fixed-point coordinates. */
 bool dc_gpu_spawn_body(dc_gpu_t *gpu, dc_gpu_body_t body,
                        char *err_buf, uint32_t err_cap);
@@ -128,12 +132,22 @@ bool dc_gpu_fluid_max_divergence(dc_gpu_t *gpu, float *divergence,
 bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
                          char *err_buf, uint32_t err_cap);
 
+/** Run the same GPU physics stages without reading diagnostics back. */
+bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
+
 /** Read the completed body state for tests or persistence. */
 bool dc_gpu_read_body(dc_gpu_t *gpu, dc_gpu_body_t *body,
                       char *err_buf, uint32_t err_cap);
 
 /** Present the current cell buffer to the Vulkan window. */
 bool dc_gpu_present(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
+
+/** Render resident chunks and present them in one GPU submission. */
+bool dc_gpu_present_chunks(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
+
+/** Execute pending physics ticks, render chunks, and present in one submission. */
+bool dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
+                                 char *err_buf, uint32_t err_cap);
 
 /** Copy completed GPU cell values into caller-owned memory. */
 bool dc_gpu_readback(dc_gpu_t *gpu, uint32_t *cells, uint32_t cell_count,

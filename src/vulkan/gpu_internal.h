@@ -74,7 +74,17 @@ struct dc_gpu {
     VkDeviceMemory fluid_b_memory;
     void *fluid_b_mapped;
     VkPipeline fluid_pipeline;
+    VkBuffer velocity_buffer;
+    VkDeviceMemory velocity_memory;
+    void *velocity_mapped;
+    VkBuffer pressure_a_buffer;
+    VkDeviceMemory pressure_a_memory;
+    void *pressure_a_mapped;
+    VkPipeline projection_pipeline;
     uint32_t fluid_tick;
+    bool fluid_reset_velocity;
+    bool tick_water_source;
+    uint32_t tick_water_x, tick_water_y;
     uint32_t width, height;
 };
 
@@ -100,5 +110,7 @@ bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 bool dc_gpu_fluid_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_fluid_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_fluid(dc_gpu_t *gpu);
+void dc_gpu_record_tick_water_source(dc_gpu_t *gpu);
+void dc_gpu_record_tick_step(dc_gpu_t *gpu);
 
 #endif

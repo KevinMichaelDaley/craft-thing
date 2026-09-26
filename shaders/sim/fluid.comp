@@ -3,8 +3,10 @@ layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(set = 0, binding = 1, std430) buffer ChunkCells { uvec2 chunk_cells[]; };
 layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
+layout(set = 0, binding = 3, std430) readonly buffer Occupancy { uint occupancy[]; };
 layout(set = 0, binding = 8, std430) buffer FluidA { uint fluid_a[]; };
 layout(set = 0, binding = 9, std430) buffer FluidB { uint fluid_b[]; };
+layout(set = 0, binding = 10, std430) readonly buffer FaceVelocity { vec2 face_velocity[]; };
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -18,8 +20,7 @@ layout(push_constant) uniform Params {
 const uint SIDE = 64u;
 const uint CELLS_PER_CHUNK = 4096u;
 const uint FULL = 65536u;
-const uint MAX_DOWN_FLUX = 32768u;
-const uint MAX_SIDE_FLUX = 8192u;
+const uint MAX_FACE_FLUX = 32768u;
 
 uint page_at(ivec2 p) {
     if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
@@ -48,7 +49,8 @@ bool can_fall(ivec2 p, uint mass) {
     ivec2 below = p + ivec2(0, 1);
     uint page = page_at(below);
     if (page == 0u ||
-        (chunk_cells[atlas_index(below, page)].x & 0xffffu) != 0u) return false;
+        (chunk_cells[atlas_index(below, page)].x & 0xffffu) != 0u ||
+        occupancy[uint(below.y) * params.width + uint(below.x)] != 0u) return false;
     uint below_index = uint(below.y) * params.width + uint(below.x);
     return source_mass(below_index) < FULL;
 }
@@ -65,31 +67,29 @@ void pair_step(ivec2 p) {
     uint other_page = page_at(neighbor);
     if (own_page == 0u || other_page == 0u ||
         (chunk_cells[atlas_index(p, own_page)].x & 0xffffu) != 0u ||
-        (chunk_cells[atlas_index(neighbor, other_page)].x & 0xffffu) != 0u) {
+        (chunk_cells[atlas_index(neighbor, other_page)].x & 0xffffu) != 0u ||
+        occupancy[index] != 0u ||
+        occupancy[uint(neighbor.y) * params.width + uint(neighbor.x)] != 0u) {
         write_mass(index, own);
         return;
     }
     uint other_index = uint(neighbor.y) * params.width + uint(neighbor.x);
     uint other = source_mass(other_index);
-    uint flux = 0u;
-    bool sender = false;
-    if (vertical) {
-        sender = p.y < neighbor.y;
-        uint upper = sender ? own : other;
-        uint lower = sender ? other : own;
-        uint capacity = lower < FULL ? FULL - lower : 0u;
-        flux = min(min(upper, capacity), MAX_DOWN_FLUX);
-    } else if (own != other) {
-        if (can_fall(p, own) || can_fall(neighbor, other)) {
-            write_mass(index, own);
-            return;
-        }
-        sender = own > other;
-        uint high = sender ? own : other;
-        uint low = sender ? other : own;
-        uint capacity = low < FULL ? FULL - low : 0u;
-        flux = min(min((high - low) / 4u, capacity), MAX_SIDE_FLUX);
+    ivec2 first = vertical ? (p.y < neighbor.y ? p : neighbor) :
+                              (p.x < neighbor.x ? p : neighbor);
+    vec2 velocity = face_velocity[uint(first.y) * params.width + uint(first.x)];
+    float component = vertical ? velocity.y : velocity.x;
+    bool sender = (p == first) == (component > 0.0);
+    if (component == 0.0 || (!vertical &&
+        (can_fall(p, own) || can_fall(neighbor, other)))) {
+        write_mass(index, own);
+        return;
     }
+    uint requested = min(uint(abs(component) * float(FULL)), MAX_FACE_FLUX);
+    uint available = sender ? own : other;
+    uint receiving = sender ? other : own;
+    uint capacity = receiving < FULL ? FULL - receiving : 0u;
+    uint flux = min(min(requested, available), capacity);
     write_mass(index, sender ? own - flux : own + flux);
 }
 

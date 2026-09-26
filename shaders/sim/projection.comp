@@ -1,0 +1,101 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 cells[]; };
+layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
+layout(set = 0, binding = 3, std430) readonly buffer Occupancy { uint occupancy[]; };
+layout(set = 0, binding = 10, std430) buffer FaceVelocity { vec2 face_velocity[]; };
+layout(set = 0, binding = 11, std430) buffer PressureA { float pressure_a[]; };
+layout(push_constant) uniform Params {
+    uint width;
+    uint height;
+    uint mode;
+    uint reset_velocity;
+    uint unused1;
+    uint unused2;
+    uint unused3;
+} params;
+
+uint index_of(ivec2 p) { return uint(p.y) * params.width + uint(p.x); }
+
+uint atlas_of(ivec2 p) {
+    if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
+        p.y >= int(params.height)) return 0xffffffffu;
+    uint stride = (params.width + 63u) / 64u;
+    uint page = pages[(uint(p.y) / 64u) * stride + uint(p.x) / 64u];
+    if (page == 0u) return 0xffffffffu;
+    return (page - 1u) * 4096u + (uint(p.y) % 64u) * 64u + uint(p.x) % 64u;
+}
+
+bool open_cell(ivec2 p) {
+    uint atlas = atlas_of(p);
+    return atlas != 0xffffffffu &&
+           (cells[atlas].x & 0xffffu) == 0u && occupancy[index_of(p)] == 0u;
+}
+
+bool wet(ivec2 p) {
+    return open_cell(p) && cells[atlas_of(p)].y != 0u;
+}
+
+float pressure_at(ivec2 p) {
+    if (!wet(p)) return 0.0;
+    return pressure_a[index_of(p)];
+}
+
+vec2 velocity_at(ivec2 p) {
+    if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
+        p.y >= int(params.height)) return vec2(0.0);
+    return face_velocity[index_of(p)];
+}
+
+float divergence(ivec2 p) {
+    vec2 own = velocity_at(p);
+    return own.x - velocity_at(p + ivec2(-1, 0)).x +
+           own.y - velocity_at(p + ivec2(0, -1)).y;
+}
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= int(params.width) || p.y >= int(params.height)) return;
+    uint index = index_of(p);
+    if (params.mode == 0u) {
+        vec2 old_velocity = params.reset_velocity != 0u ? vec2(0.0) : face_velocity[index];
+        ivec2 right = p + ivec2(1, 0);
+        ivec2 below = p + ivec2(0, 1);
+        vec2 predicted = vec2(0.0);
+        if (open_cell(p) && open_cell(right) && (wet(p) || wet(right)))
+            predicted.x = clamp(old_velocity.x * 0.90, -0.5, 0.5);
+        if (open_cell(p) && open_cell(below) && (wet(p) || wet(below)))
+            predicted.y = clamp(old_velocity.y * 0.90 + 0.5, -0.5, 0.5);
+        face_velocity[index] = predicted;
+        pressure_a[index] = 0.0;
+    } else if (params.mode == 1u || params.mode == 2u) {
+        if (((p.x + p.y) & 1) != int(params.mode - 1u)) return;
+        float value = 0.0;
+        if (wet(p)) {
+            float sum = 0.0;
+            float count = 0.0;
+            for (int axis = 0; axis < 4; ++axis) {
+                ivec2 delta = axis == 0 ? ivec2(-1, 0) :
+                              axis == 1 ? ivec2(1, 0) :
+                              axis == 2 ? ivec2(0, -1) : ivec2(0, 1);
+                ivec2 next = p + delta;
+                if (open_cell(next)) {
+                    sum += pressure_at(next);
+                    count += 1.0;
+                }
+            }
+            if (count > 0.0) value = (sum - divergence(p)) / count;
+        }
+        pressure_a[index] = mix(pressure_a[index], value, 1.5);
+    } else {
+        vec2 result = face_velocity[index];
+        ivec2 right = p + ivec2(1, 0);
+        ivec2 below = p + ivec2(0, 1);
+        if (open_cell(p) && open_cell(right) && (wet(p) || wet(right)))
+            result.x -= pressure_a[index_of(right)] - pressure_a[index];
+        if (open_cell(p) && open_cell(below) && (wet(p) || wet(below)))
+            result.y -= pressure_a[index_of(below)] - pressure_a[index];
+        face_velocity[index] = clamp(result, vec2(-0.5), vec2(0.5));
+    }
+}

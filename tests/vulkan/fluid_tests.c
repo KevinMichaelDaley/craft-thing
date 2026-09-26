@@ -126,7 +126,41 @@ static void test_closed_liquid_velocity_is_projected(void) {
     ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
     float divergence = -1.0f;
     ASSERT_TRUE(dc_gpu_fluid_max_divergence(gpu, &divergence, err, sizeof(err)));
+    printf("projected maximum divergence: %.6f\n", divergence);
     ASSERT_TRUE(divergence >= 0.0f && divergence < 0.03f);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
+static void test_chunk_seam_matches_interior_flow(void) {
+    char err[256] = {0};
+    dc_chunk_t left = {0}, right = {0}, saved_left = {0}, saved_right = {0};
+    left.cells[5 * 64 + 31].fluid_mass = DC_FLUID_FULL;
+    left.cells[5 * 64 + 63].fluid_mass = DC_FLUID_FULL;
+    for (uint32_t x = 20; x < 64; ++x)
+        left.cells[12 * 64 + x].material = DC_MATERIAL_STONE;
+    for (uint32_t x = 0; x <= 12; ++x)
+        right.cells[12 * 64 + x].material = DC_MATERIAL_STONE;
+    dc_gpu_t *gpu = make_grid(&left, &right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    for (uint32_t i = 0; i < 20; ++i)
+        ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved_left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &saved_right, err, sizeof(err)));
+    uint32_t crossed = 0;
+    for (uint32_t y = 5; y < 12; ++y) {
+        for (int32_t offset = -8; offset <= 8; ++offset) {
+            uint32_t interior_x = (uint32_t)(31 + offset);
+            uint32_t seam_x = (uint32_t)(63 + offset);
+            uint32_t interior = saved_left.cells[y * 64 + interior_x].fluid_mass;
+            uint32_t seam = seam_x < 64 ?
+                saved_left.cells[y * 64 + seam_x].fluid_mass :
+                saved_right.cells[y * 64 + seam_x - 64].fluid_mass;
+            ASSERT_EQ(interior, seam);
+            if (seam_x >= 64) crossed += seam;
+        }
+    }
+    ASSERT_TRUE(crossed > 0);
     dc_gpu_destroy(gpu);
     PASS();
 }
@@ -136,6 +170,7 @@ int main(void) {
     RUN(test_closed_basin_conserves_mass_for_long_run);
     RUN(test_unloaded_neighbor_keeps_mass_in_source);
     RUN(test_closed_liquid_velocity_is_projected);
+    RUN(test_chunk_seam_matches_interior_flow);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

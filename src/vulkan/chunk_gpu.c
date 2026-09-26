@@ -90,6 +90,8 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
         gpu->slot_page[slot] != tile)
         pages[gpu->slot_page[slot]] = 0u;
     uint32_t old_page = pages[tile];
+    if (old_page != (slot == UINT32_MAX ? 0u : slot + 1u))
+        gpu->fluid_reset_velocity = true;
     if (old_page && (slot == UINT32_MAX || old_page != slot + 1u))
         gpu->slot_page[old_page - 1u] = UINT32_MAX;
     pages[tile] = slot == UINT32_MAX ? 0u : slot + 1u;

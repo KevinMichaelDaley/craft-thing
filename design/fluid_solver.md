@@ -8,19 +8,32 @@ volume, or directly add or delete cell volume. Summing cell fill values is the
 authoritative mass check. This keeps saves, chunk streaming, and interactions
 with sand and rigid occupancy on the chunk grid.
 
-The first solver is a conservative, pairwise finite-volume flux method. Two GPU
+The grid solver uses a conservative, pairwise finite-volume flux method. Two GPU
 mass layers ping-pong for each active resident cell. Each of four substeps pairs
 disjoint neighbors: vertical even, vertical odd, horizontal even, horizontal
 odd. Both cells read the same old layer, choose one bounded face flux, and write
 their own new values to the other layer. The sender loses exactly the amount
 the receiver gains. No atomics or in-place write races are needed. The maximum
-flux per pair is a fixed fraction of one cell per substep; later velocity work
-will choose substep count from a CFL bound. The accepted face flux becomes the
-Eulerian velocity estimate used for marker advection.
+flux per pair is capped at half a cell per substep. A persistent grid face
+velocity supplies the requested flux, while source volume and destination
+capacity determine the accepted amount.
+
+Before transport, a GPU predictor damps old face velocity and adds gravity on
+open downward faces. A cell-centered pressure field then solves the discrete
+Poisson equation using 20 red-black SOR sweeps with relaxation 1.5; each color
+is a separate dispatch and a Vulkan barrier separates colors. Liquid cells
+carry pressure, air at the free surface has zero pressure, and solid, occupied,
+or unloaded neighbors close the face. Subtracting the pressure gradient from
+predicted face velocity reduces divergence. Q16.16 cell fill remains the
+conserved volume field; liquid density is constant, so there is no separate
+density solve. The current fixed sweep count is validated for a small closed
+basin, but a measured residual or multilevel method is needed for larger
+liquid regions.
 
 Solid material and final rigid occupancy close a face. A missing neighbor page
-also closes the face for this substep and requests residency; mass remains in
-the source cell. Halo data is refreshed before each substep. At the end of the
+also closes the face for this substep; mass remains in the source cell. The
+current solver reads resident neighbors through the page table rather than a
+separate halo refresh. At the end of the
 fluid stage, the final mass layer is written to the chunk atlas and dirty slots
 are recorded for persistence. The sand stage reads only this finalized state.
 
@@ -41,8 +54,8 @@ violate the volume budget. Render markers only in a debug overlay.
 
 Sparse markers target visible interface smearing. They do not, by themselves,
 guarantee mass conservation or preserve bulk kinetic energy. Integer flux
-accounting guarantees volume; a later velocity solver and benchmark must
-address damping separately. This follows the distinction between conservative
+accounting guarantees volume; the pressure solve does not prevent numerical
+damping, which must be measured in benchmarks. This follows the distinction between conservative
 volume-of-fluid tracking and massless particle-level-set interface correction.
 
 ## Verification and staged delivery
