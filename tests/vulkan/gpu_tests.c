@@ -39,9 +39,25 @@ static void test_rejects_invalid_dimensions(void) {
     PASS();
 }
 
+static void test_gpu_brush_updates_only_covered_cells(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    uint32_t cells[16] = {0};
+    ASSERT_TRUE(dc_gpu_create(&gpu, 4, 4, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_pattern(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint(gpu, 1, 1, 0, 0xff00ff00u, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_readback(gpu, cells, 16, err, sizeof(err)));
+    ASSERT_EQ(cells[5], 0xff00ff00u);
+    ASSERT_EQ(cells[4], 0xff4040c0u);
+    ASSERT_EQ(cells[6], 0xff4040c0u);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 int main(void) {
     RUN(test_gpu_pattern_readback);
     RUN(test_rejects_invalid_dimensions);
+    RUN(test_gpu_brush_updates_only_covered_cells);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

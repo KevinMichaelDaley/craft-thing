@@ -13,6 +13,10 @@ bool dc_gpu_create(dc_gpu_t **out, uint32_t width, uint32_t height,
 /** Fill cells with a GPU-generated diagnostic pattern. */
 bool dc_gpu_pattern(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
 
+/** Paint a solid disc of one RGBA8 color using a compute dispatch. */
+bool dc_gpu_paint(dc_gpu_t *gpu, uint32_t x, uint32_t y, uint32_t radius,
+                  uint32_t rgba, char *err_buf, uint32_t err_cap);
+
 /** Copy completed GPU cell values into caller-owned memory. */
 bool dc_gpu_readback(dc_gpu_t *gpu, uint32_t *cells, uint32_t cell_count,
                      char *err_buf, uint32_t err_cap);
