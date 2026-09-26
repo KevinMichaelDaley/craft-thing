@@ -1,0 +1,191 @@
+#version 450
+layout(local_size_x = 256) in;
+
+struct Marker { int x_fp; int y_fp; uint id; uint kind; };
+layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 cells[]; };
+layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
+layout(set = 0, binding = 3, std430) readonly buffer Occupancy { uint occupancy[]; };
+layout(set = 0, binding = 10, std430) readonly buffer FaceVelocity { vec2 velocity[]; };
+layout(set = 0, binding = 12, std430) buffer MarkerA { Marker marker_a[]; };
+layout(set = 0, binding = 13, std430) buffer MarkerB { Marker marker_b[]; };
+layout(set = 0, binding = 14, std430) buffer CountA { uint count_a[]; };
+layout(set = 0, binding = 15, std430) buffer CountB { uint count_b[]; };
+layout(set = 0, binding = 16, std430) buffer MarkerGrid { uint marker_grid[]; };
+layout(set = 0, binding = 17, std430) readonly buffer SlotPage { uint slot_page[]; };
+layout(set = 0, binding = 18, std430) readonly buffer SlotSeed { uint slot_seed[]; };
+layout(push_constant) uniform Params {
+    uint width;
+    uint height;
+    uint mode;
+    uint source_ping;
+    uint tick;
+    uint unused1;
+    uint unused2;
+} params;
+
+const uint CAPACITY = 2048u;
+const uint CHUNK_CELLS = 4096u;
+const uint INVALID = 0xffffffffu;
+
+uint page_at(ivec2 p) {
+    if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
+        p.y >= int(params.height)) return 0u;
+    uint stride = (params.width + 63u) / 64u;
+    return pages[(uint(p.y) / 64u) * stride + uint(p.x) / 64u];
+}
+
+uint atlas_at(ivec2 p, uint page) {
+    return (page - 1u) * CHUNK_CELLS +
+           (uint(p.y) % 64u) * 64u + uint(p.x) % 64u;
+}
+
+bool open_at(ivec2 p) {
+    uint page = page_at(p);
+    return page != 0u &&
+        (cells[atlas_at(p, page)].x & 0xffffu) == 0u &&
+        occupancy[uint(p.y) * params.width + uint(p.x)] == 0u;
+}
+
+uint mass_at(ivec2 p) {
+    uint page = page_at(p);
+    return page == 0u ? 0u : cells[atlas_at(p, page)].y;
+}
+
+Marker source_marker(uint index) {
+    return params.source_ping == 0u ? marker_a[index] : marker_b[index];
+}
+
+uint source_count(uint slot) {
+    return params.source_ping == 0u ? count_a[slot] : count_b[slot];
+}
+
+void set_destination_count(uint slot, uint value) {
+    if (params.source_ping == 0u) count_b[slot] = value;
+    else count_a[slot] = value;
+}
+
+uint destination_count(uint slot) {
+    return params.source_ping == 0u ? count_b[slot] : count_a[slot];
+}
+
+void store_destination(uint index, Marker marker) {
+    if (params.source_ping == 0u) marker_b[index] = marker;
+    else marker_a[index] = marker;
+}
+
+uint reserve_destination(uint slot) {
+    return params.source_ping == 0u ?
+        atomicAdd(count_b[slot], 1u) : atomicAdd(count_a[slot], 1u);
+}
+
+vec2 velocity_at(ivec2 p) {
+    if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
+        p.y >= int(params.height)) return vec2(0.0);
+    return velocity[uint(p.y) * params.width + uint(p.x)];
+}
+
+vec2 sample_velocity(vec2 position) {
+    vec2 shifted = position - vec2(0.5);
+    ivec2 base = ivec2(floor(shifted));
+    vec2 fraction = fract(shifted);
+    vec2 top = mix(velocity_at(base), velocity_at(base + ivec2(1, 0)), fraction.x);
+    vec2 bottom = mix(velocity_at(base + ivec2(0, 1)),
+                      velocity_at(base + ivec2(1, 1)), fraction.x);
+    return mix(top, bottom, fraction.y);
+}
+
+uint hash_id(uint value) {
+    value ^= value >> 16;
+    value *= 0x7feb352du;
+    value ^= value >> 15;
+    value *= 0x846ca68bu;
+    value ^= value >> 16;
+    return value | 1u;
+}
+
+void append_marker(Marker marker, vec2 position) {
+    ivec2 cell = ivec2(floor(position));
+    uint page = page_at(cell);
+    if (page == 0u || !open_at(cell)) return;
+    uint slot = page - 1u;
+    uint tile = slot_page[slot];
+    uint stride = (params.width + 63u) / 64u;
+    vec2 origin = vec2(float(tile % stride) * 64.0,
+                       float(tile / stride) * 64.0);
+    vec2 local = (position - origin) * 65536.0;
+    marker.x_fp = int(round(local.x));
+    marker.y_fp = int(round(local.y));
+    uint index = reserve_destination(slot);
+    if (index >= CAPACITY) return;
+    store_destination(slot * CAPACITY + index, marker);
+    atomicOr(marker_grid[atlas_at(cell, page)], marker.kind);
+}
+
+void reset_and_copy(uint linear) {
+    if (linear >= 64u * CAPACITY) return;
+    uint slot = linear / CAPACITY;
+    uint local = linear % CAPACITY;
+    marker_grid[slot * CHUNK_CELLS + 2u * local] = 0u;
+    marker_grid[slot * CHUNK_CELLS + 2u * local + 1u] = 0u;
+    if (local == 0u)
+        set_destination_count(slot, slot_page[slot] == INVALID ?
+                              min(source_count(slot), CAPACITY) : 0u);
+    if (slot_page[slot] == INVALID && local < min(source_count(slot), CAPACITY))
+        store_destination(slot * CAPACITY + local,
+                          source_marker(slot * CAPACITY + local));
+}
+
+void advect(uint linear) {
+    if (linear >= 64u * CAPACITY) return;
+    uint slot = linear / CAPACITY;
+    uint local = linear % CAPACITY;
+    uint tile = slot_page[slot];
+    if (tile == INVALID || local >= min(source_count(slot), CAPACITY)) return;
+    Marker marker = source_marker(linear);
+    uint stride = (params.width + 63u) / 64u;
+    vec2 origin = vec2(float(tile % stride) * 64.0,
+                       float(tile / stride) * 64.0);
+    vec2 old_position = origin + vec2(marker.x_fp, marker.y_fp) / 65536.0;
+    vec2 next_position = old_position + clamp(sample_velocity(old_position),
+                                               vec2(-0.5), vec2(0.5));
+    if (!open_at(ivec2(floor(next_position)))) next_position = old_position;
+    append_marker(marker, next_position);
+}
+
+void seed(uint linear) {
+    if (linear >= params.width * params.height) return;
+    ivec2 p = ivec2(int(linear % params.width), int(linear / params.width));
+    uint page = page_at(p);
+    if (page == 0u || !open_at(p)) return;
+    uint mass = mass_at(p);
+    if (mass < 32768u) return;
+    uint atlas = atlas_at(p, page);
+    if ((marker_grid[atlas] & 1u) != 0u) return;
+    int left = int(mass_at(p + ivec2(-1, 0)));
+    int right = int(mass_at(p + ivec2(1, 0)));
+    int up = int(mass_at(p + ivec2(0, -1)));
+    int down = int(mass_at(p + ivec2(0, 1)));
+    int gx = left - right;
+    int gy = up - down;
+    if (mass == 65536u && gx == 0 && gy == 0 &&
+        left != 0 && right != 0 && up != 0 && down != 0) return;
+    vec2 normal = abs(gx) > abs(gy) ? vec2(gx >= 0 ? 1.0 : -1.0, 0.0) :
+                  (gy != 0 ? vec2(0.0, gy >= 0 ? 1.0 : -1.0) : vec2(0.0, -1.0));
+    uint slot = page - 1u;
+    uint local_cell = (uint(p.y) % 64u) * 64u + uint(p.x) % 64u;
+    uint base_id = slot_seed[slot] ^ (local_cell * 2u);
+    vec2 center = vec2(p) + vec2(0.5);
+    Marker inside = Marker(0, 0, hash_id(base_id), 1u);
+    Marker outside = Marker(0, 0, hash_id(base_id + 1u), 2u);
+    append_marker(inside, center - normal * 0.2);
+    append_marker(outside, center + normal * 0.6);
+}
+
+void main() {
+    uint linear = gl_GlobalInvocationID.x;
+    if (params.mode == 0u) reset_and_copy(linear);
+    else if (params.mode == 1u) advect(linear);
+    else if (params.mode == 2u) seed(linear);
+    else if (linear < 64u)
+        set_destination_count(linear, min(destination_count(linear), CAPACITY));
+}

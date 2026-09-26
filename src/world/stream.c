@@ -55,10 +55,13 @@ static bool save_chunk(const dc_streamer_t *stream, const dc_chunk_t *chunk) {
         !chunk_path(stream, chunk->coord, final, sizeof(final), false)) return false;
     FILE *file = fopen(temporary, "wb");
     if (!file) return false;
-    chunk_header_t header = { .magic = {'D', 'C', 'C', '1'}, .version = 1,
+    chunk_header_t header = { .magic = {'D', 'C', 'C', '1'}, .version = 2,
         .x = chunk->coord.x, .y = chunk->coord.y, .seed = stream->seed };
     bool okay = fwrite(&header, sizeof(header), 1, file) == 1 &&
-        fwrite(chunk->cells, sizeof(chunk->cells), 1, file) == 1;
+        fwrite(chunk->cells, sizeof(chunk->cells), 1, file) == 1 &&
+        chunk->marker_count <= DC_MARKERS_PER_CHUNK &&
+        fwrite(&chunk->marker_count, sizeof(chunk->marker_count), 1, file) == 1 &&
+        fwrite(chunk->markers, sizeof(dc_marker_t), chunk->marker_count, file) == chunk->marker_count;
     if (fclose(file) != 0) okay = false;
     if (okay) okay = rename(temporary, final) == 0;
     if (!okay) remove(temporary);
@@ -66,7 +69,7 @@ static bool save_chunk(const dc_streamer_t *stream, const dc_chunk_t *chunk) {
 }
 
 static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coord) {
-    dc_chunk_t *chunk = malloc(sizeof(*chunk));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     if (!chunk) return NULL;
     char path[1024];
     if (!chunk_path(stream, coord, path, sizeof(path), false)) { free(chunk); return NULL; }
@@ -78,9 +81,15 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coor
     if (!file) { free(chunk); return NULL; }
     chunk_header_t header;
     bool okay = fread(&header, sizeof(header), 1, file) == 1 &&
-        memcmp(header.magic, "DCC1", 4) == 0 && header.version == 1 &&
+        memcmp(header.magic, "DCC1", 4) == 0 &&
+        (header.version == 1 || header.version == 2) &&
         header.x == coord.x && header.y == coord.y && header.seed == stream->seed &&
         fread(chunk->cells, sizeof(chunk->cells), 1, file) == 1;
+    if (okay && header.version == 2)
+        okay = fread(&chunk->marker_count, sizeof(chunk->marker_count), 1, file) == 1 &&
+            chunk->marker_count <= DC_MARKERS_PER_CHUNK &&
+            fread(chunk->markers, sizeof(dc_marker_t), chunk->marker_count, file) ==
+                chunk->marker_count;
     if (fclose(file) != 0) okay = false;
     if (!okay) { free(chunk); return NULL; }
     chunk->coord = coord;

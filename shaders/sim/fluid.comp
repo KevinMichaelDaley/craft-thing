@@ -7,6 +7,7 @@ layout(set = 0, binding = 3, std430) readonly buffer Occupancy { uint occupancy[
 layout(set = 0, binding = 8, std430) buffer FluidA { uint fluid_a[]; };
 layout(set = 0, binding = 9, std430) buffer FluidB { uint fluid_b[]; };
 layout(set = 0, binding = 10, std430) readonly buffer FaceVelocity { vec2 face_velocity[]; };
+layout(set = 0, binding = 16, std430) readonly buffer MarkerGrid { uint marker_grid[]; };
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -35,12 +36,14 @@ uint atlas_index(ivec2 p, uint page) {
 }
 
 uint source_mass(uint index) {
-    return params.mode == 1u || params.mode == 3u ?
+    return params.mode == 1u || params.mode == 3u ||
+           params.mode == 6u || params.mode == 8u ?
            fluid_a[index] : fluid_b[index];
 }
 
 void write_mass(uint index, uint mass) {
-    if (params.mode == 1u || params.mode == 3u) fluid_b[index] = mass;
+    if (params.mode == 1u || params.mode == 3u ||
+        params.mode == 6u || params.mode == 8u) fluid_b[index] = mass;
     else fluid_a[index] = mass;
 }
 
@@ -79,17 +82,75 @@ void pair_step(ivec2 p) {
                               (p.x < neighbor.x ? p : neighbor);
     vec2 velocity = face_velocity[uint(first.y) * params.width + uint(first.x)];
     float component = vertical ? velocity.y : velocity.x;
-    bool sender = (p == first) == (component > 0.0);
-    if (component == 0.0 || (!vertical &&
-        (can_fall(p, own) || can_fall(neighbor, other)))) {
+    int requested = int(round(component * float(FULL)));
+    if (!vertical && (can_fall(p, own) || can_fall(neighbor, other)))
+        requested = 0;
+    requested = clamp(requested, -int(MAX_FACE_FLUX), int(MAX_FACE_FLUX));
+    if (requested == 0) {
         write_mass(index, own);
         return;
     }
-    uint requested = min(uint(abs(component) * float(FULL)), MAX_FACE_FLUX);
+    bool sender = (p == first) == (requested > 0);
     uint available = sender ? own : other;
     uint receiving = sender ? other : own;
     uint capacity = receiving < FULL ? FULL - receiving : 0u;
-    uint flux = min(min(requested, available), capacity);
+    uint flux = min(min(uint(abs(requested)), available), capacity);
+    write_mass(index, sender ? own - flux : own + flux);
+}
+
+void correct_pair(ivec2 p) {
+    uint index = uint(p.y) * params.width + uint(p.x);
+    uint own = source_mass(index);
+    bool vertical = params.mode <= 7u;
+    int parity = int(((params.mode - 6u) & 1u) ^ params.tick_parity);
+    int coordinate = vertical ? p.y : p.x;
+    int delta = (coordinate & 1) == parity ? 1 : -1;
+    ivec2 neighbor = p + (vertical ? ivec2(0, delta) : ivec2(delta, 0));
+    uint own_page = page_at(p);
+    uint other_page = page_at(neighbor);
+    if (own_page == 0u || other_page == 0u ||
+        (chunk_cells[atlas_index(p, own_page)].x & 0xffffu) != 0u ||
+        (chunk_cells[atlas_index(neighbor, other_page)].x & 0xffffu) != 0u ||
+        occupancy[index] != 0u ||
+        occupancy[uint(neighbor.y) * params.width + uint(neighbor.x)] != 0u) {
+        write_mass(index, own);
+        return;
+    }
+    uint other_index = uint(neighbor.y) * params.width + uint(neighbor.x);
+    uint other = source_mass(other_index);
+    if (can_fall(p, own) || can_fall(neighbor, other)) {
+        write_mass(index, own);
+        return;
+    }
+    ivec2 first = vertical ? (p.y < neighbor.y ? p : neighbor) :
+                              (p.x < neighbor.x ? p : neighbor);
+    ivec2 second = first == p ? neighbor : p;
+    if (vertical && abs(face_velocity[uint(first.y) * params.width +
+                                      uint(first.x)].y) >= 0.1) {
+        write_mass(index, own);
+        return;
+    }
+    uint first_page = page_at(first);
+    uint second_page = page_at(second);
+    uint first_guide = marker_grid[atlas_index(first, first_page)];
+    uint second_guide = marker_grid[atlas_index(second, second_page)];
+    uint first_mass = first == p ? own : other;
+    uint second_mass = first == p ? other : own;
+    int request = 0;
+    if ((first_guide & 1u) != 0u && (second_guide & 1u) == 0u &&
+        (second_guide & 2u) != 0u &&
+        first_mass >= second_mass) request = -8192;
+    else if ((first_guide & 1u) == 0u && (first_guide & 2u) != 0u &&
+             (second_guide & 1u) != 0u &&
+             second_mass >= first_mass) request = 8192;
+    if (request == 0) {
+        write_mass(index, own);
+        return;
+    }
+    bool sender = (p == first) == (request > 0);
+    uint available = sender ? own : other;
+    uint receiving = sender ? other : own;
+    uint flux = min(min(uint(abs(request)), available), FULL - receiving);
     write_mass(index, sender ? own - flux : own + flux);
 }
 
@@ -104,6 +165,8 @@ void main() {
                          chunk_cells[atlas_index(position, page)].y;
     } else if (params.mode == 5u) {
         if (page != 0u) chunk_cells[atlas_index(position, page)].y = fluid_a[index];
+    } else if (params.mode >= 6u && params.mode <= 9u) {
+        correct_pair(position);
     } else {
         pair_step(position);
     }

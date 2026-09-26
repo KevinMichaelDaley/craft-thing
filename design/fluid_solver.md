@@ -39,18 +39,27 @@ are recorded for persistence. The sand stage reads only this finalized state.
 
 ## Sparse markers
 
-Once conservative grid motion works, seed two massless 16.16 fixed-point
-markers per surface cell, one just inside and one just outside the water
-interface. Add at most two more where curvature or stretching warrants it.
-Markers exist only in a narrow band around the free surface and use a bounded
-GPU pool keyed by world chunk, with stable IDs and deterministic seeding.
-Advect them with interpolated grid face velocities, clip against solid/rigid
-boundaries, transfer ownership across resident chunks, and freeze or serialize
-them when a chunk sleeps. Reconstruct an interface guide from markers and grid
-fill. Escaped markers may request a local anti-diffusive transfer between
-neighboring cells, but the same paired, equal-and-opposite flux resolver must
-accept that request. Markers can sharpen an under-resolved surface; they cannot
-violate the volume budget. Render markers only in a debug overlay.
+The first marker pass seeds two massless 16.16 fixed-point markers per eligible
+surface cell, one just inside and one just outside. Cells below half fill are
+not seeded, avoiding a new inside marker in every diffuse fringe. Markers live
+in two bounded 2048-entry GPU buffers per world chunk; GPU compaction moves
+them between resident chunk slots, and sleeping slots retain their state.
+Each marker has a stable hash ID derived from its original chunk and local
+cell. Bilinear grid-velocity sampling advects markers, and blocked destinations
+clip them to their old position. A GPU per-cell guide records inside/outside
+presence. Separate disjoint vertical and horizontal pair passes can move at
+most 8192 Q16.16 units from an outside-only cell into a neighboring
+inside-marked cell with at least as much water. Gravity-active and fast
+vertical faces skip correction. Each pair applies equal-and-opposite updates,
+so markers cannot add water mass. The `M` overlay displays marker guides.
+
+Chunk files persist the active marker count and records alongside grid cells;
+version 1 files load with an empty marker pool. The fixed pool is deliberately
+bounded: dense pathological interfaces can saturate it, so the marker pass
+caps counts and preserves the authoritative grid volume. The current tests
+show sharpening on controlled thin-sheet and two-lobe splash edges. Broader
+free-surface reconstruction remains a benchmark target, not a claim that all
+thin features survive arbitrary flow.
 
 Sparse markers target visible interface smearing. They do not, by themselves,
 guarantee mass conservation or preserve bulk kinetic energy. Integer flux
@@ -63,13 +72,11 @@ volume-of-fluid tracking and massless particle-level-set interface correction.
 1. Make painted water visibly fall and spread through the fixed-cell flux
 solver. Check exact volume over 100+ ticks in a closed basin, no flow through
 stone or unloaded pages, and equal results across a resident chunk seam.
-2. Add GPU-generated interface markers and a readback/debug overlay. Check
-bounded count, deterministic replay, advection with the accepted face flux,
-and marker ownership across chunk edges.
-3. Add marker-guided conservative interface correction. Compare a thin-sheet
-and splash scene with markers enabled/disabled; require a sharper interface
-without any change in total water volume. Save/reload moving water and marker
-state after chunk eviction.
+2. GPU-generated interface markers have a bounded count, deterministic
+single-step replay, a debug overlay, and resident chunk-edge ownership.
+3. Marker-guided conservative correction has on/off thin-sheet and splash
+captures with higher measured concentration at equal total water volume.
+The window smoke verifies marker save/reload after chunk eviction.
 4. Benchmark dense fluid and sparse splash scenes at the planned internal and
 native resolutions. Report per-pass GPU timestamps, active slots, marker
 count, volume error, and frame pacing before changing the default scale.

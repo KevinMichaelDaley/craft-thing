@@ -43,7 +43,8 @@ bool dc_gpu_tick_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if (vkCreateQueryPool(gpu->device, &query_info, NULL, &gpu->timestamp_pool) != VK_SUCCESS)
         return error(err, cap, "Cannot create GPU timestamp pool");
     return make_probe_pipeline(gpu, err, cap) &&
-           dc_gpu_fluid_pipeline_init(gpu, err, cap);
+           dc_gpu_fluid_pipeline_init(gpu, err, cap) &&
+           dc_gpu_marker_pipeline_init(gpu, err, cap);
 }
 
 void dc_gpu_tick_destroy(dc_gpu_t *gpu) {

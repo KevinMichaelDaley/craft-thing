@@ -83,6 +83,18 @@ struct dc_gpu {
     VkPipeline projection_pipeline;
     uint32_t fluid_tick;
     bool fluid_reset_velocity;
+    VkBuffer marker_a_buffer, marker_b_buffer;
+    VkDeviceMemory marker_a_memory, marker_b_memory;
+    void *marker_a_mapped, *marker_b_mapped;
+    VkBuffer marker_count_a_buffer, marker_count_b_buffer;
+    VkDeviceMemory marker_count_a_memory, marker_count_b_memory;
+    void *marker_count_a_mapped, *marker_count_b_mapped;
+    VkBuffer marker_grid_buffer, slot_page_buffer, slot_seed_buffer;
+    VkDeviceMemory marker_grid_memory, slot_page_memory, slot_seed_memory;
+    void *marker_grid_mapped, *slot_page_mapped, *slot_seed_mapped;
+    VkPipeline marker_pipeline;
+    uint32_t marker_ping;
+    bool marker_correction, marker_overlay;
     bool tick_water_source;
     uint32_t tick_water_x, tick_water_y;
     uint32_t width, height;
@@ -112,5 +124,9 @@ void dc_gpu_fluid_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_fluid(dc_gpu_t *gpu);
 void dc_gpu_record_tick_water_source(dc_gpu_t *gpu);
 void dc_gpu_record_tick_step(dc_gpu_t *gpu);
+bool dc_gpu_marker_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+bool dc_gpu_marker_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+void dc_gpu_marker_destroy(dc_gpu_t *gpu);
+void dc_gpu_record_markers(dc_gpu_t *gpu);
 
 #endif

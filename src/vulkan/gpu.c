@@ -157,18 +157,18 @@ static bool make_presentation(dc_gpu_t *gpu, uint32_t requested_width,
 
 static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
                           char *err, uint32_t cap) {
-    VkDescriptorSetLayoutBinding bindings[12] = {0};
-    for (uint32_t i = 0; i < 12; ++i) {
+    VkDescriptorSetLayoutBinding bindings[19] = {0};
+    for (uint32_t i = 0; i < 19; ++i) {
         bindings[i].binding = i;
         bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         bindings[i].descriptorCount = 1;
         bindings[i].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
     }
     VkDescriptorSetLayoutCreateInfo layout_info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 12, .pBindings = bindings };
+        .bindingCount = 19, .pBindings = bindings };
     if (vkCreateDescriptorSetLayout(gpu->device, &layout_info, NULL, &gpu->set_layout) != VK_SUCCESS)
         return error(err, cap, "Cannot create descriptor layout");
-    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 12 };
+    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 19 };
     VkDescriptorPoolCreateInfo pool_info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .maxSets = 1, .poolSizeCount = 1, .pPoolSizes = &size };
     if (vkCreateDescriptorPool(gpu->device, &pool_info, NULL, &gpu->descriptor_pool) != VK_SUCCESS)
@@ -178,7 +178,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         .pSetLayouts = &gpu->set_layout };
     if (vkAllocateDescriptorSets(gpu->device, &set_info, &gpu->descriptor) != VK_SUCCESS)
         return error(err, cap, "Cannot allocate descriptor set");
-    VkDescriptorBufferInfo buffers[12] = {
+    VkDescriptorBufferInfo buffers[19] = {
         { gpu->cells, 0, bytes },
         { gpu->chunk_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t) },
         { gpu->page_buffer, 0, (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t) },
@@ -190,10 +190,17 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         { gpu->fluid_a_buffer, 0, bytes },
         { gpu->fluid_b_buffer, 0, bytes },
         { gpu->velocity_buffer, 0, bytes * 2 },
-        { gpu->pressure_a_buffer, 0, bytes }
+        { gpu->pressure_a_buffer, 0, bytes },
+        { gpu->marker_a_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MARKERS_PER_CHUNK * sizeof(dc_marker_t) },
+        { gpu->marker_b_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MARKERS_PER_CHUNK * sizeof(dc_marker_t) },
+        { gpu->marker_count_a_buffer, 0, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t) },
+        { gpu->marker_count_b_buffer, 0, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t) },
+        { gpu->marker_grid_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(uint32_t) },
+        { gpu->slot_page_buffer, 0, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t) },
+        { gpu->slot_seed_buffer, 0, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t) }
     };
-    VkWriteDescriptorSet writes[12] = {0};
-    for (uint32_t i = 0; i < 12; ++i) {
+    VkWriteDescriptorSet writes[19] = {0};
+    for (uint32_t i = 0; i < 19; ++i) {
         writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes[i].dstSet = gpu->descriptor;
         writes[i].dstBinding = i;
@@ -201,7 +208,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         writes[i].pBufferInfo = &buffers[i];
     }
-    vkUpdateDescriptorSets(gpu->device, 12, writes, 0, NULL);
+    vkUpdateDescriptorSets(gpu->device, 19, writes, 0, NULL);
     VkPushConstantRange range = { .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .size = 28 };
     VkPipelineLayoutCreateInfo pipeline_layout_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1, .pSetLayouts = &gpu->set_layout,
@@ -394,7 +401,8 @@ bool dc_gpu_paint(dc_gpu_t *gpu, uint32_t x, uint32_t y, uint32_t radius,
 
 bool dc_gpu_render_chunks(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
-    uint32_t push[7] = { gpu->width, gpu->height, 2, 0, 0, 0, 0 };
+    uint32_t push[7] = { gpu->width, gpu->height, 2,
+                         gpu->marker_overlay ? 1u : 0u, 0, 0, 0 };
     return dispatch_cells(gpu, push, err, cap);
 }
 

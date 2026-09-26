@@ -111,6 +111,15 @@ static int smoke_streamed_level(void) {
     if (okay) okay = dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
                                          &chunk, err, sizeof(err)) &&
                      chunk.cells[5 * DC_CHUNK_SIDE].material == DC_MATERIAL_SAND;
+    if (okay) stage = "marker paint";
+    if (okay) okay = dc_level_view_paint(view, 74, 5, 1, DC_MATERIAL_WATER,
+                                         err, sizeof(err)) &&
+                     dc_level_view_step(view, err, sizeof(err)) &&
+                     dc_level_view_tick(view, err, sizeof(err)) &&
+                     dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
+                                         &chunk, err, sizeof(err)) &&
+                     chunk.marker_count > 0;
+    uint32_t saved_marker_count = chunk.marker_count;
     stage = "negative load";
     if (okay) okay = dc_level_view_move(view, -1, 0) &&
                      dc_level_view_wait_visible(view, 5000, err, sizeof(err));
@@ -142,7 +151,8 @@ static int smoke_streamed_level(void) {
                      dc_level_view_wait_visible(view, 5000, err, sizeof(err));
     if (okay) okay = dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
                                          &chunk, err, sizeof(err)) &&
-                     chunk.cells[5 * DC_CHUNK_SIDE].material == DC_MATERIAL_SAND;
+                     chunk.cells[5 * DC_CHUNK_SIDE].material == DC_MATERIAL_SAND &&
+                     chunk.marker_count == saved_marker_count;
     bool closed = dc_level_view_destroy(view, err, sizeof(err));
     if (!okay || !closed) {
         fprintf(stderr, "Streamed level smoke failed at %s: %s\n", stage, err);
@@ -184,6 +194,7 @@ int main(int argc, char **argv) {
                 case SDLK_3: material = DC_MATERIAL_WATER; break;
                 case SDLK_p: paused = !paused; break;
                 case SDLK_n: single_step = true; break;
+                case SDLK_m: dc_level_view_toggle_marker_overlay(view); break;
                 case SDLK_b: {
                     int mx, my;
                     SDL_GetMouseState(&mx, &my);

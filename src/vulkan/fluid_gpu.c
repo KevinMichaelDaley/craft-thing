@@ -104,6 +104,24 @@ void dc_gpu_record_fluid(dc_gpu_t *gpu) {
                 VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                 VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     }
+    dc_gpu_record_markers(gpu);
+    if (gpu->marker_correction) {
+        vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->fluid_pipeline);
+        const uint32_t correction_modes[6] = { 0u, 6u, 7u, 8u, 9u, 5u };
+        for (uint32_t i = 0; i < 6; ++i) {
+            push[2] = correction_modes[i];
+            vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+                VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+            vkCmdDispatch(gpu->command, (gpu->width + 15u) / 16u,
+                          (gpu->height + 15u) / 16u, 1);
+            if (i < 5)
+                fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                    VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                    VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                    VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+        }
+    }
     ++gpu->fluid_tick;
 }
 

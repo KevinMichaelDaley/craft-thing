@@ -18,6 +18,7 @@ struct dc_level_view {
     dc_chunk_table_t table;
     dc_chunk_coord_t origin;
     uint32_t pending_steps;
+    bool marker_overlay;
 };
 
 static bool error(char *buf, uint32_t cap, const char *message) {
@@ -185,6 +186,12 @@ bool dc_level_view_move(dc_level_view_t *view, int32_t dx, int32_t dy) {
     view->origin.x += dx;
     view->origin.y += dy;
     return true;
+}
+
+bool dc_level_view_toggle_marker_overlay(dc_level_view_t *view) {
+    if (!view) return false;
+    view->marker_overlay = !view->marker_overlay;
+    return dc_gpu_set_marker_overlay(view->gpu, view->marker_overlay);
 }
 
 bool dc_level_view_paint(dc_level_view_t *view, uint32_t x, uint32_t y,
