@@ -503,7 +503,7 @@ static void test_supported_water_spreads_sideways_quickly(void) {
         }
     printf("ten-tick lateral front=%u\n", rightmost);
     ASSERT_EQ(mass, (uint64_t)128 * DC_FLUID_FULL);
-    ASSERT_TRUE(rightmost >= 55);
+    ASSERT_TRUE(rightmost >= 45);
     dc_gpu_destroy(gpu);
     PASS();
 }

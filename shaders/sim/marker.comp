@@ -26,6 +26,8 @@ layout(push_constant) uniform Params {
 const uint CAPACITY = 2048u;
 const uint CHUNK_CELLS = 4096u;
 const uint INVALID = 0xffffffffu;
+const float STEP_SECONDS = 1.0;
+const float TRANSPORT_FUDGE = 1.001;
 
 uint page_at(ivec2 p) {
     if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
@@ -146,9 +148,16 @@ void advect(uint linear) {
     vec2 origin = vec2(float(tile % stride) * 64.0,
                        float(tile / stride) * 64.0);
     vec2 old_position = origin + vec2(marker.x_fp, marker.y_fp) / 65536.0;
-    vec2 next_position = old_position + clamp(sample_velocity(old_position),
-                                               vec2(-0.5), vec2(0.5));
-    if (!open_at(ivec2(floor(next_position)))) next_position = old_position;
+    vec2 displacement = sample_velocity(old_position) * STEP_SECONDS * TRANSPORT_FUDGE;
+    vec2 next_position = old_position + displacement;
+    uint steps = uint(ceil(max(abs(displacement.x), abs(displacement.y)) * 2.0));
+    for (uint step = 1u; step <= steps; ++step) {
+        vec2 candidate = old_position + displacement * (float(step) / float(steps));
+        if (!open_at(ivec2(floor(candidate)))) {
+            next_position = old_position + displacement * (float(step - 1u) / float(steps));
+            break;
+        }
+    }
     append_marker(marker, next_position);
 }
 
@@ -156,7 +165,7 @@ bool surface_candidate(ivec2 p) {
     uint page = page_at(p);
     if (page == 0u || !open_at(p)) return false;
     uint mass = mass_at(p);
-    if (mass < 32768u) return false;
+    if (mass < 8192u) return false;
     int left = int(mass_at(p + ivec2(-1, 0)));
     int right = int(mass_at(p + ivec2(1, 0)));
     int up = int(mass_at(p + ivec2(0, -1)));

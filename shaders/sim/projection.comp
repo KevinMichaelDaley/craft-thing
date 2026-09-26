@@ -6,6 +6,8 @@ layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; }
 layout(set = 0, binding = 3, std430) readonly buffer Occupancy { uint occupancy[]; };
 layout(set = 0, binding = 10, std430) buffer FaceVelocity { vec2 face_velocity[]; };
 layout(set = 0, binding = 11, std430) buffer PressureA { float pressure_a[]; };
+layout(set = 0, binding = 9, std430) buffer HydroHead { uint hydro_head[]; };
+layout(set = 0, binding = 8, std430) buffer PreviousVerticalVelocity { uint previous_vertical_velocity[]; };
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -58,15 +60,32 @@ void main() {
     ivec2 p = ivec2(gl_GlobalInvocationID.xy);
     if (p.x >= int(params.width) || p.y >= int(params.height)) return;
     uint index = index_of(p);
-    if (params.mode == 0u) {
+    if (params.mode == 5u) {
+        previous_vertical_velocity[index] = floatBitsToUint(face_velocity[index].y);
+    } else if (params.mode == 4u) {
+        if (p.y != 0) return;
+        uint head = 0u;
+        for (uint y = 0u; y < params.height; ++y) {
+            ivec2 cell = ivec2(p.x, int(y));
+            head = wet(cell) ? min(head + cells[atlas_of(cell)].y, 64u * 65536u) : 0u;
+            hydro_head[index_of(cell)] = head;
+        }
+    } else if (params.mode == 0u) {
         vec2 old_velocity = params.reset_velocity != 0u ? vec2(0.0) : face_velocity[index];
         ivec2 right = p + ivec2(1, 0);
         ivec2 below = p + ivec2(0, 1);
         vec2 predicted = vec2(0.0);
         if (open_cell(p) && open_cell(right) && (wet(p) || wet(right)))
-            predicted.x = clamp(old_velocity.x * 0.90, -0.5, 0.5);
-        if (open_cell(p) && open_cell(below) && (wet(p) || wet(below)))
-            predicted.y = clamp(old_velocity.y * 0.90 + 0.5, -0.5, 0.5);
+            predicted.x = old_velocity.x * 0.99 +
+                0.05 * (float(int(hydro_head[index]) - int(hydro_head[index_of(right)])) /
+                        65536.0);
+        if (open_cell(p) && open_cell(below) && (wet(p) || wet(below))) {
+            float carried = old_velocity.y;
+            if (p.y > 0 && wet(p))
+                carried = max(carried,
+                    uintBitsToFloat(previous_vertical_velocity[index_of(p + ivec2(0, -1))]));
+            predicted.y = carried * 0.99 + 0.5;
+        }
         face_velocity[index] = predicted;
         pressure_a[index] = 0.0;
     } else if (params.mode == 1u || params.mode == 2u) {
@@ -96,6 +115,6 @@ void main() {
             result.x -= pressure_a[index_of(right)] - pressure_a[index];
         if (open_cell(p) && open_cell(below) && (wet(p) || wet(below)))
             result.y -= pressure_a[index_of(below)] - pressure_a[index];
-        face_velocity[index] = clamp(result, vec2(-0.5), vec2(0.5));
+        face_velocity[index] = result;
     }
 }
