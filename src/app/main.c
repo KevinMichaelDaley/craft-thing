@@ -341,6 +341,9 @@ static int smoke_world_transfer(void) {
                      dc_level_view_chunk(view, (dc_chunk_coord_t){5, 0}, destination,
                                          err, sizeof(err)) &&
                      destination->cells[5 * DC_CHUNK_SIDE].material == DC_MATERIAL_SAND;
+    if (okay) okay = dc_level_view_queue_transfer(view, 320, 5, 319, 5, 0,
+                                                  DC_GPU_TRANSFER_PARTICLE,
+                                                  err, sizeof(err));
     free(source); free(destination);
     if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
     if (!okay) fprintf(stderr, "World transfer smoke failed: %s\n", err);

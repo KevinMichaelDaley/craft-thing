@@ -402,6 +402,12 @@ bool dc_level_view_transfer_result(dc_level_view_t *view,
 bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return true;
     bool okay = true;
+    if (view->transfer_pending) {
+        view->table.slots[view->from_slot].pinned = false;
+        if (view->destination_bound)
+            view->table.slots[view->to_slot].pinned = false;
+        view->transfer_pending = false;
+    }
     for (uint32_t i = 0; i < view->table.capacity; ++i)
         if (view->table.slots[i].state == DC_SLOT_ACTIVE)
             dc_chunk_table_set_active(&view->table, i, false);

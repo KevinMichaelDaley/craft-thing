@@ -122,50 +122,49 @@ bool dc_gpu_read_halo(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
     return true;
 }
 
-bool dc_gpu_queue_transfer(dc_gpu_t *gpu, dc_gpu_transfer_t transfer,
-                           char *err, uint32_t cap) {
-    if (!gpu || transfer.from_x >= gpu->width || transfer.to_x >= gpu->width ||
-        transfer.from_y >= gpu->height || transfer.to_y >= gpu->height ||
+static bool queue_transfer(dc_gpu_t *gpu, dc_gpu_transfer_t transfer,
+                           bool direct_slots, char *err, uint32_t cap) {
+    if (!gpu ||
         (transfer.kind != DC_GPU_TRANSFER_SCALAR &&
          transfer.kind != DC_GPU_TRANSFER_PARTICLE) ||
         (transfer.kind == DC_GPU_TRANSFER_SCALAR &&
          (!transfer.amount || transfer.amount > DC_FLUID_FULL)))
         return error(err, cap, "Invalid GPU transfer");
-    uint32_t dx = transfer.from_x > transfer.to_x ?
-        transfer.from_x - transfer.to_x : transfer.to_x - transfer.from_x;
-    uint32_t dy = transfer.from_y > transfer.to_y ?
-        transfer.from_y - transfer.to_y : transfer.to_y - transfer.from_y;
-    if (dx + dy != 1)
-        return error(err, cap, "GPU transfer cells must be adjacent");
+    if (direct_slots) {
+        if (transfer.from_slot >= DC_GPU_CHUNK_SLOTS ||
+            transfer.to_slot >= DC_GPU_CHUNK_SLOTS ||
+            transfer.from_x >= DC_CHUNK_SIDE || transfer.from_y >= DC_CHUNK_SIDE ||
+            transfer.to_x >= DC_CHUNK_SIDE || transfer.to_y >= DC_CHUNK_SIDE)
+            return error(err, cap, "Invalid slot transfer");
+    } else {
+        if (transfer.from_x >= gpu->width || transfer.to_x >= gpu->width ||
+            transfer.from_y >= gpu->height || transfer.to_y >= gpu->height)
+            return error(err, cap, "Invalid GPU transfer");
+        uint32_t dx = transfer.from_x > transfer.to_x ?
+            transfer.from_x - transfer.to_x : transfer.to_x - transfer.from_x;
+        uint32_t dy = transfer.from_y > transfer.to_y ?
+            transfer.from_y - transfer.to_y : transfer.to_y - transfer.from_y;
+        if (dx + dy != 1)
+            return error(err, cap, "GPU transfer cells must be adjacent");
+    }
     dc_gpu_transfer_t *queued = gpu->transfer_mapped;
     if (gpu->has_transfer && queued->state == DC_GPU_TRANSFER_PENDING)
         return error(err, cap, "Previous GPU transfer is still pending");
     transfer.state = DC_GPU_TRANSFER_PENDING;
-    transfer.direct_slots = 0;
+    transfer.direct_slots = direct_slots ? 1u : 0u;
     memcpy(queued, &transfer, sizeof(transfer));
     gpu->has_transfer = true;
     return true;
 }
 
+bool dc_gpu_queue_transfer(dc_gpu_t *gpu, dc_gpu_transfer_t transfer,
+                           char *err, uint32_t cap) {
+    return queue_transfer(gpu, transfer, false, err, cap);
+}
+
 bool dc_gpu_queue_slot_transfer(dc_gpu_t *gpu, dc_gpu_transfer_t transfer,
                                 char *err, uint32_t cap) {
-    if (!gpu || transfer.from_slot >= DC_GPU_CHUNK_SLOTS ||
-        transfer.to_slot >= DC_GPU_CHUNK_SLOTS ||
-        transfer.from_x >= DC_CHUNK_SIDE || transfer.from_y >= DC_CHUNK_SIDE ||
-        transfer.to_x >= DC_CHUNK_SIDE || transfer.to_y >= DC_CHUNK_SIDE ||
-        (transfer.kind != DC_GPU_TRANSFER_SCALAR &&
-         transfer.kind != DC_GPU_TRANSFER_PARTICLE) ||
-        (transfer.kind == DC_GPU_TRANSFER_SCALAR &&
-         (!transfer.amount || transfer.amount > DC_FLUID_FULL)))
-        return error(err, cap, "Invalid slot transfer");
-    dc_gpu_transfer_t *queued = gpu->transfer_mapped;
-    if (gpu->has_transfer && queued->state == DC_GPU_TRANSFER_PENDING)
-        return error(err, cap, "Previous GPU transfer is still pending");
-    transfer.state = DC_GPU_TRANSFER_PENDING;
-    transfer.direct_slots = 1;
-    memcpy(queued, &transfer, sizeof(transfer));
-    gpu->has_transfer = true;
-    return true;
+    return queue_transfer(gpu, transfer, true, err, cap);
 }
 
 bool dc_gpu_try_transfer(dc_gpu_t *gpu, dc_gpu_transfer_state_t *state,
