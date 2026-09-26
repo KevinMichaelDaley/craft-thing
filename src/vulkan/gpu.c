@@ -124,7 +124,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         .dstSet = gpu->descriptor, .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &buffer_info };
     vkUpdateDescriptorSets(gpu->device, 1, &write, 0, NULL);
-    VkPushConstantRange range = { .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .size = 8 };
+    VkPushConstantRange range = { .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .size = 28 };
     VkPipelineLayoutCreateInfo pipeline_layout_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1, .pSetLayouts = &gpu->set_layout,
         .pushConstantRangeCount = 1, .pPushConstantRanges = &range };
@@ -226,7 +226,7 @@ fail:
     return false;
 }
 
-bool dc_gpu_pattern(dc_gpu_t *gpu, char *err, uint32_t cap) {
+static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7], char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
         return error(err, cap, "Cannot reset compute command buffer");
@@ -236,8 +236,7 @@ bool dc_gpu_pattern(dc_gpu_t *gpu, char *err, uint32_t cap) {
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->pipeline);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
-    uint32_t push[2] = { gpu->width, gpu->height };
-    vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 8, push);
+    vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 28, push);
     vkCmdDispatch(gpu->command, (gpu->width + 15u) / 16u, (gpu->height + 15u) / 16u, 1);
     VkMemoryBarrier2 barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
@@ -257,6 +256,12 @@ bool dc_gpu_pattern(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return true;
 }
 
+bool dc_gpu_pattern(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    if (!gpu) return error(err, cap, "GPU context is null");
+    uint32_t push[7] = { gpu->width, gpu->height, 0, 0, 0, 0, 0 };
+    return dispatch_cells(gpu, push, err, cap);
+}
+
 bool dc_gpu_readback(dc_gpu_t *gpu, uint32_t *cells, uint32_t cell_count,
                      char *err, uint32_t cap) {
     if (!gpu || !cells || cell_count < (uint64_t)gpu->width * gpu->height)
@@ -267,6 +272,7 @@ bool dc_gpu_readback(dc_gpu_t *gpu, uint32_t *cells, uint32_t cell_count,
 
 bool dc_gpu_paint(dc_gpu_t *gpu, uint32_t x, uint32_t y, uint32_t radius,
                   uint32_t rgba, char *err, uint32_t cap) {
-    (void)gpu; (void)x; (void)y; (void)radius; (void)rgba;
-    return error(err, cap, "GPU brush is not implemented");
+    if (!gpu) return error(err, cap, "GPU context is null");
+    uint32_t push[7] = { gpu->width, gpu->height, 1, x, y, radius, rgba };
+    return dispatch_cells(gpu, push, err, cap);
 }
