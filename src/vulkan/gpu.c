@@ -6,36 +6,7 @@
 #include <SDL_vulkan.h>
 #include <vulkan/vulkan.h>
 
-#include "dungeoncraft/gpu.h"
-
-struct dc_gpu {
-    VkInstance instance;
-    VkPhysicalDevice physical;
-    VkDevice device;
-    VkQueue queue;
-    uint32_t family;
-    VkBuffer cells;
-    VkDeviceMemory memory;
-    void *mapped;
-    VkDescriptorSetLayout set_layout;
-    VkDescriptorPool descriptor_pool;
-    VkDescriptorSet descriptor;
-    VkPipelineLayout pipeline_layout;
-    VkPipeline pipeline;
-    VkCommandPool command_pool;
-    VkCommandBuffer command;
-    SDL_Window *window;
-    VkSurfaceKHR surface;
-    VkSwapchainKHR swapchain;
-    VkImage *swap_images;
-    uint32_t swap_count;
-    VkExtent2D swap_extent;
-    VkImage frame_image;
-    VkDeviceMemory frame_memory;
-    VkSemaphore acquire_sem;
-    VkSemaphore present_sem;
-    uint32_t width, height;
-};
+#include "gpu_internal.h"
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -64,38 +35,6 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu->instance) vkDestroyInstance(gpu->instance, NULL);
     if (gpu->window) { SDL_DestroyWindow(gpu->window); SDL_QuitSubSystem(SDL_INIT_VIDEO); }
     free(gpu);
-}
-
-static bool pick_device(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t cap) {
-    uint32_t count = 0;
-    if (vkEnumeratePhysicalDevices(gpu->instance, &count, NULL) != VK_SUCCESS || !count)
-        return error(err, cap, "No Vulkan device found");
-    VkPhysicalDevice *devices = calloc(count, sizeof(*devices));
-    if (!devices) return error(err, cap, "Out of memory listing Vulkan devices");
-    VkResult result = vkEnumeratePhysicalDevices(gpu->instance, &count, devices);
-    for (uint32_t d = 0; d < count && result == VK_SUCCESS && !gpu->physical; ++d) {
-        VkPhysicalDeviceProperties props;
-        vkGetPhysicalDeviceProperties(devices[d], &props);
-        if (props.apiVersion < VK_API_VERSION_1_3 || props.limits.maxStorageBufferRange < bytes) continue;
-        uint32_t n = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(devices[d], &n, NULL);
-        VkQueueFamilyProperties *families = calloc(n, sizeof(*families));
-        if (!families) continue;
-        vkGetPhysicalDeviceQueueFamilyProperties(devices[d], &n, families);
-        for (uint32_t i = 0; i < n; ++i) {
-            VkBool32 can_present = VK_FALSE;
-            if (gpu->surface) vkGetPhysicalDeviceSurfaceSupportKHR(devices[d], i, gpu->surface, &can_present);
-            if (families[i].queueCount && (families[i].queueFlags & VK_QUEUE_COMPUTE_BIT) &&
-                (families[i].queueFlags & VK_QUEUE_TRANSFER_BIT) &&
-                (!gpu->surface || can_present)) {
-                gpu->physical = devices[d]; gpu->family = i; break;
-            }
-        }
-        free(families);
-    }
-    free(devices);
-    if (!gpu->physical) return error(err, cap, "No Vulkan 1.3 compute device supports this grid");
-    return true;
 }
 
 static bool make_cells(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t cap) {
@@ -332,7 +271,7 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
         error(err, cap, SDL_GetError()); goto fail;
     }
     VkDeviceSize bytes = (VkDeviceSize)width * height * 4;
-    if (!pick_device(gpu, bytes, err, cap)) goto fail;
+    if (!dc_gpu_pick_device(gpu, bytes, err, cap)) goto fail;
     VkPhysicalDeviceSynchronization2Features sync = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES };
     VkPhysicalDeviceFeatures2 features = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,

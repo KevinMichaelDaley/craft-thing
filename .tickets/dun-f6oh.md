@@ -18,3 +18,9 @@ Build bounded request/completion queues and a CPU worker for generation, disk lo
 
 Camera movement never waits on disk I/O in the render thread; no Vulkan call occurs on the worker; dirty data is saved before slot reuse; shutdown drains or cancels jobs safely.
 
+
+## Notes
+
+**2026-09-26T05:46:05Z**
+
+C11 worker with bounded queues, procedural load, atomic-file save, shutdown flush, and save/evict/reload end-to-end test implemented. Main-thread Vulkan staging and camera-driven residency integration remain open.

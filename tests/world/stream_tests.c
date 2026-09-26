@@ -78,9 +78,57 @@ static void test_shutdown_flushes_queued_saves(void) {
     PASS();
 }
 
+static void test_resident_slot_round_trip_through_worker(void) {
+    char directory[] = "build/stream_residency_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_streamer_t *stream = dc_stream_create(directory, 98, 2);
+    ASSERT_TRUE(stream != NULL);
+    dc_chunk_table_t table = {0};
+    ASSERT_TRUE(dc_chunk_table_init(&table, 1));
+    dc_chunk_coord_t a = {-2, 0}, b = {3, 0};
+    uint32_t slot = 0;
+    uint64_t generation = 0;
+    dc_stream_result_t result = {0};
+    ASSERT_TRUE(dc_chunk_table_begin_load(&table, a, &slot, &generation));
+    ASSERT_TRUE(dc_stream_request_load(stream, a, generation));
+    ASSERT_TRUE(wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_LOADED);
+    ASSERT_TRUE(dc_chunk_table_finish_load(&table, slot, result.generation));
+    result.chunk->cells[1].material = 77;
+    ASSERT_TRUE(dc_chunk_table_mark_dirty(&table, slot));
+    ASSERT_TRUE(dc_chunk_table_set_active(&table, slot, false));
+    ASSERT_TRUE(dc_chunk_table_begin_save(&table, slot, &generation));
+    ASSERT_TRUE(dc_stream_request_save(stream, result.chunk, generation));
+    dc_stream_result_release(&result);
+    ASSERT_TRUE(wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_SAVED);
+    ASSERT_TRUE(dc_chunk_table_finish_save(&table, slot, result.generation));
+    ASSERT_TRUE(dc_chunk_table_evict(&table, slot, 0));
+    dc_stream_result_release(&result);
+    ASSERT_TRUE(dc_chunk_table_begin_load(&table, b, &slot, &generation));
+    ASSERT_TRUE(dc_stream_request_load(stream, b, generation));
+    ASSERT_TRUE(wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_LOADED);
+    ASSERT_TRUE(dc_chunk_table_finish_load(&table, slot, result.generation));
+    ASSERT_TRUE(dc_chunk_table_set_active(&table, slot, false));
+    ASSERT_TRUE(dc_chunk_table_evict(&table, slot, 0));
+    dc_stream_result_release(&result);
+    ASSERT_TRUE(dc_chunk_table_begin_load(&table, a, &slot, &generation));
+    ASSERT_TRUE(dc_stream_request_load(stream, a, generation));
+    ASSERT_TRUE(wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_LOADED);
+    ASSERT_EQ(result.chunk->cells[1].material, 77);
+    ASSERT_TRUE(dc_chunk_table_finish_load(&table, slot, result.generation));
+    dc_stream_result_release(&result);
+    dc_chunk_table_destroy(&table);
+    dc_stream_destroy(stream);
+    PASS();
+}
+
 int main(void) {
     RUN(test_worker_generates_saves_and_reloads_chunk);
     RUN(test_shutdown_flushes_queued_saves);
+    RUN(test_resident_slot_round_trip_through_worker);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

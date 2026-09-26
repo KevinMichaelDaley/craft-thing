@@ -5,7 +5,7 @@ CPPFLAGS += -Iinclude $(shell pkg-config --cflags sdl2)
 LDLIBS += -lvulkan $(shell pkg-config --libs sdl2) -pthread
 GLSLANG ?= glslangValidator
 
-GPU_OBJ = build/gpu.o
+GPU_OBJ = build/gpu.o build/device.o
 CHUNK_OBJ = build/chunk.o
 STREAM_OBJ = build/stream.o
 SHADER = build/shaders/pattern.comp.spv
@@ -19,7 +19,11 @@ $(SHADER): shaders/sim/pattern.comp
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
 
-build/gpu.o: src/vulkan/gpu.c include/dungeoncraft/gpu.h
+build/gpu.o: src/vulkan/gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+build/device.o: src/vulkan/device.c src/vulkan/gpu_internal.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
@@ -37,8 +41,8 @@ build/gpu_tests: tests/vulkan/gpu_tests.c $(GPU_OBJ) $(SHADER)
 build/chunk_tests: tests/world/chunk_tests.c $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/chunk_tests.c $(CHUNK_OBJ) -o $@
 
-build/stream_tests: tests/world/stream_tests.c $(STREAM_OBJ)
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/stream_tests.c $(STREAM_OBJ) -o $@ -pthread
+build/stream_tests: tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) -o $@ -pthread
 
 build/dungeoncraft: src/app/main.c $(GPU_OBJ) $(SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/main.c $(GPU_OBJ) -o $@ $(LDLIBS)

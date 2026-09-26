@@ -18,3 +18,9 @@ Define signed 64-bit world coordinates, 64x64 chunk indexing, stable material ID
 
 Negative coordinates and boundaries map correctly; CPU serialization and shader layouts agree; resident slot reuse cannot alias an in-flight chunk.
 
+
+## Notes
+
+**2026-09-26T05:46:05Z**
+
+Signed coordinate mapping, 8-byte cell layout, and generation-guarded slot transitions implemented and tested. GPU page-table/slot ABI integration remains open.
