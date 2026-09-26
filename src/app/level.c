@@ -285,6 +285,23 @@ bool dc_level_view_toggle_marker_overlay(dc_level_view_t *view) {
     return dc_gpu_set_marker_overlay(view->gpu, view->marker_overlay);
 }
 
+bool dc_level_view_set_zoom(dc_level_view_t *view, uint32_t zoom) {
+    (void)view; (void)zoom;
+    return false;
+}
+
+bool dc_level_view_screen_cell(dc_level_view_t *view, uint32_t screen_x,
+                               uint32_t screen_y, uint32_t *cell_x,
+                               uint32_t *cell_y) {
+    (void)view; (void)screen_x; (void)screen_y; (void)cell_x; (void)cell_y;
+    return false;
+}
+
+bool dc_level_view_set_overlay(dc_level_view_t *view, dc_gpu_overlay_t overlay) {
+    (void)view; (void)overlay;
+    return false;
+}
+
 bool dc_level_view_set_spring_enabled(dc_level_view_t *view, bool enabled) {
     if (!view) return false;
     view->spring_enabled = enabled;

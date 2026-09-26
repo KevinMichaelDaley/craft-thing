@@ -351,6 +351,35 @@ static int smoke_world_transfer(void) {
     return okay ? 0 : 1;
 }
 
+static int smoke_display(void) {
+    char directory[] = "build/ui_display_XXXXXX";
+    if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
+    char err[256] = {0};
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    if (!view) { fprintf(stderr, "%s\n", err); return 1; }
+    uint32_t x = UINT32_MAX, y = UINT32_MAX, natural = 0, border = 0, stage = 0;
+    bool okay = dc_level_view_wait_visible(view, 5000, err, sizeof(err)) &&
+        dc_level_view_set_zoom(view, 1) &&
+        dc_level_view_screen_cell(view, 384, 192, &x, &y) && x == 0 && y == 0 &&
+        dc_level_view_screen_cell(view, 639, 319, &x, &y) && x == 255 && y == 127 &&
+        !dc_level_view_screen_cell(view, 383, 192, &x, &y) &&
+        dc_level_view_set_zoom(view, 4) &&
+        dc_level_view_screen_cell(view, 1023, 511, &x, &y) && x == 255 && y == 127 &&
+        dc_level_view_pixel(view, 0, 0, &natural, err, sizeof(err)) &&
+        dc_level_view_set_overlay(view, DC_GPU_OVERLAY_RESIDENCY) &&
+        dc_level_view_tick(view, err, sizeof(err)) &&
+        dc_level_view_pixel(view, 0, 0, &border, err, sizeof(err)) &&
+        border == 0xff30d030u && border != natural &&
+        dc_level_view_set_overlay(view, DC_GPU_OVERLAY_STAGES) &&
+        dc_level_view_tick(view, err, sizeof(err)) &&
+        dc_level_view_pixel(view, 2, 2, &stage, err, sizeof(err)) &&
+        stage == 0xff30c040u;
+    if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
+    if (!okay) fprintf(stderr, "Display smoke failed: %s\n", err);
+    else printf("Vulkan zoom and GPU overlays smoke passed\n");
+    return okay ? 0 : 1;
+}
+
 static int smoke_halo_flow(void) {
     char directory[] = "build/ui_halo_flow_XXXXXX";
     if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
@@ -442,6 +471,8 @@ int main(int argc, char **argv) {
         return smoke_streamed_level();
     if (argc > 1 && strcmp(argv[1], "--smoke-world-transfer") == 0)
         return smoke_world_transfer();
+    if (argc > 1 && strcmp(argv[1], "--smoke-display") == 0)
+        return smoke_display();
     if (argc > 1 && strcmp(argv[1], "--smoke-motion") == 0)
         return smoke_moving_water();
     if (argc > 1 && strcmp(argv[1], "--smoke-motion-long") == 0)

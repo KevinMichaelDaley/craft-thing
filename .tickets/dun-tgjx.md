@@ -18,3 +18,9 @@ The world-anchored transfer API now resolves diagnostic transfers to pinned GPU 
 
 Long-run fluid and particle scenes cross a temporarily absent chunk boundary without lost mass or duplicate updates; camera moves and slot reuse cannot redirect proposals; a benchmark compares batch throughput to resident interior flux.
 
+
+## Notes
+
+**2026-09-26T22:01:20Z**
+
+Audit: Eulerian fluid currently uses projected face velocities and a fixed 6x4 page grid; no GPU sand/MPM movement producer exists (the sand stage remains a probe). Boundary batching must be designed with MPM particle ownership, not a second pixel sand solver. No implementation started.

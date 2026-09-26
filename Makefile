@@ -139,6 +139,7 @@ test: build/gpu_tests build/halo_tests build/fluid_tests build/chunk_tests build
 test_ui: build/dungeoncraft
 	./build/dungeoncraft --smoke-stream
 	./build/dungeoncraft --smoke-world-transfer
+	./build/dungeoncraft --smoke-display
 	./build/dungeoncraft --smoke-halo-flow
 	./build/dungeoncraft --smoke-camera-velocity
 	./build/dungeoncraft --smoke-motion

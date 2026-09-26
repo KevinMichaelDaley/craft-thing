@@ -18,6 +18,12 @@ typedef struct {
 typedef struct dc_gpu dc_gpu_t;
 
 typedef enum {
+    DC_GPU_OVERLAY_NONE,
+    DC_GPU_OVERLAY_RESIDENCY,
+    DC_GPU_OVERLAY_STAGES
+} dc_gpu_overlay_t;
+
+typedef enum {
     DC_GPU_STAGE_RIGID = 1,
     DC_GPU_STAGE_FLUID = 2,
     DC_GPU_STAGE_SAND = 3
@@ -69,6 +75,13 @@ bool dc_gpu_create_window(dc_gpu_t **out, uint32_t width, uint32_t height,
 /** Select a camera crop inside the simulated grid for rendering and readback. */
 bool dc_gpu_set_viewport(dc_gpu_t *gpu, uint32_t x, uint32_t y,
                          uint32_t width, uint32_t height);
+/** Set integer nearest-neighbor display scale within the Vulkan window. */
+bool dc_gpu_set_display_zoom(dc_gpu_t *gpu, uint32_t zoom);
+/** Convert a window pixel to a visible simulation cell; false in the letterbox. */
+bool dc_gpu_screen_cell(dc_gpu_t *gpu, uint32_t screen_x, uint32_t screen_y,
+                        uint32_t *cell_x, uint32_t *cell_y);
+/** Choose a GPU-rendered debugging overlay. */
+bool dc_gpu_set_overlay(dc_gpu_t *gpu, dc_gpu_overlay_t overlay);
 /** Rebase face velocities by whole chunks on the GPU after camera movement. */
 bool dc_gpu_shift_velocity(dc_gpu_t *gpu, int32_t chunk_dx, int32_t chunk_dy,
                            char *err_buf, uint32_t err_cap);
