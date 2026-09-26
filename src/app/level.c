@@ -22,6 +22,8 @@ struct dc_level_view {
     dc_streamer_t *stream;
     dc_chunk_table_t table;
     dc_chunk_coord_t origin;
+    dc_chunk_coord_t mapped_origin;
+    uint32_t camera_offset_x, camera_offset_y;
     int32_t pending_chunk_dx, pending_chunk_dy;
     uint32_t pending_steps;
     bool marker_overlay;
@@ -55,8 +57,10 @@ bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,
                               char *err, uint32_t cap) {
     if (!view || x > VIEW_WIDTH - 4 || y > VIEW_HEIGHT - 4)
         return error(err, cap, "Invalid rigid body spawn position");
-    dc_gpu_body_t body = { .x_fp = (int32_t)(x + DC_CHUNK_SIDE) << 16,
-        .y_fp = (int32_t)(y + DC_CHUNK_SIDE) << 16, .vx_fp = 1 << 16,
+    dc_gpu_body_t body = { .x_fp = (int32_t)(x + DC_CHUNK_SIDE +
+                                           view->camera_offset_x) << 16,
+        .y_fp = (int32_t)(y + DC_CHUNK_SIDE +
+                          view->camera_offset_y) << 16, .vx_fp = 1 << 16,
         .width = 4, .height = 4, .id = 1, .active = 1 };
     return dc_gpu_spawn_body(view->gpu, body, err, cap);
 }
@@ -230,6 +234,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     }
     view->pending_chunk_dx = 0;
     view->pending_chunk_dy = 0;
+    view->mapped_origin = view->origin;
     if (!resolve_world_transfer(view, err, cap)) return false;
     if (view->spring_enabled && view->origin.x - HALO_CHUNKS <= 2 &&
         view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS > 2 &&
@@ -281,18 +286,70 @@ bool dc_level_view_move(dc_level_view_t *view, int32_t dx, int32_t dy) {
 }
 
 bool dc_level_view_pan_pixels(dc_level_view_t *view, int32_t dx, int32_t dy) {
-    (void)view; (void)dx; (void)dy;
-    return false;
+    if (!view || dx < -1024 || dx > 1024 || dy < -1024 || dy > 1024)
+        return false;
+    dc_chunk_coord_t shift;
+    uint32_t offset_x, offset_y;
+    dc_cell_address((int64_t)view->camera_offset_x + dx,
+                    (int64_t)view->camera_offset_y + dy,
+                    &shift, &offset_x, &offset_y);
+    const int64_t min_origin = INT64_MIN + HALO_CHUNKS;
+    const int64_t max_x = INT64_MAX - VIEW_CHUNKS_X - HALO_CHUNKS;
+    const int64_t max_y = INT64_MAX - VIEW_CHUNKS_Y - HALO_CHUNKS;
+    if ((shift.x < 0 && view->origin.x < min_origin - shift.x) ||
+        (shift.x > 0 && view->origin.x > max_x - shift.x) ||
+        (shift.y < 0 && view->origin.y < min_origin - shift.y) ||
+        (shift.y > 0 && view->origin.y > max_y - shift.y) ||
+        (shift.x > 0 && view->pending_chunk_dx > INT32_MAX - shift.x) ||
+        (shift.x < 0 && view->pending_chunk_dx < INT32_MIN - shift.x) ||
+        (shift.y > 0 && view->pending_chunk_dy > INT32_MAX - shift.y) ||
+        (shift.y < 0 && view->pending_chunk_dy < INT32_MIN - shift.y))
+        return false;
+    if (!dc_gpu_set_viewport(view->gpu, DC_CHUNK_SIDE + offset_x,
+                             DC_CHUNK_SIDE + offset_y,
+                             VIEW_WIDTH, VIEW_HEIGHT)) return false;
+    view->origin.x += shift.x;
+    view->origin.y += shift.y;
+    view->camera_offset_x = offset_x;
+    view->camera_offset_y = offset_y;
+    view->pending_chunk_dx += (int32_t)shift.x;
+    view->pending_chunk_dy += (int32_t)shift.y;
+    return true;
 }
 
 bool dc_level_view_reset_camera(dc_level_view_t *view) {
-    (void)view;
-    return false;
+    if (!view || !dc_gpu_set_viewport(view->gpu, DC_CHUNK_SIDE,
+                                       DC_CHUNK_SIDE, VIEW_WIDTH,
+                                       VIEW_HEIGHT)) return false;
+    view->pending_chunk_dx = view->mapped_origin.x > SIM_CHUNKS_X ?
+        -SIM_CHUNKS_X : view->mapped_origin.x < -SIM_CHUNKS_X ?
+        SIM_CHUNKS_X : (int32_t)-view->mapped_origin.x;
+    view->pending_chunk_dy = view->mapped_origin.y > SIM_CHUNKS_Y ?
+        -SIM_CHUNKS_Y : view->mapped_origin.y < -SIM_CHUNKS_Y ?
+        SIM_CHUNKS_Y : (int32_t)-view->mapped_origin.y;
+    view->origin = (dc_chunk_coord_t){0, 0};
+    view->camera_offset_x = 0;
+    view->camera_offset_y = 0;
+    return true;
 }
 
 bool dc_level_view_status(dc_level_view_t *view, dc_level_view_status_t *status) {
-    (void)view; (void)status;
-    return false;
+    if (!view || !status) return false;
+    *status = (dc_level_view_status_t){ .origin = view->origin,
+        .offset_x = view->camera_offset_x,
+        .offset_y = view->camera_offset_y,
+        .total_chunks = SIM_CHUNKS_X * SIM_CHUNKS_Y };
+    for (uint32_t y = 0; y < SIM_CHUNKS_Y; ++y)
+        for (uint32_t x = 0; x < SIM_CHUNKS_X; ++x) {
+            dc_chunk_coord_t coord = {
+                view->origin.x + (int64_t)x - HALO_CHUNKS,
+                view->origin.y + (int64_t)y - HALO_CHUNKS };
+            uint32_t index;
+            if (dc_chunk_table_find(&view->table, coord, &index) &&
+                view->table.slots[index].state == DC_SLOT_ACTIVE)
+                ++status->ready_chunks;
+        }
+    return true;
 }
 
 bool dc_level_view_toggle_marker_overlay(dc_level_view_t *view) {
@@ -331,12 +388,17 @@ bool dc_level_view_paint(dc_level_view_t *view, uint32_t x, uint32_t y,
                          uint32_t radius, uint16_t material, char *err, uint32_t cap) {
     if (!view || x >= VIEW_WIDTH || y >= VIEW_HEIGHT || radius > 16)
         return error(err, cap, "Invalid material brush coordinates");
-    if (!dc_gpu_paint_material(view->gpu, x + DC_CHUNK_SIDE,
-                               y + DC_CHUNK_SIDE, radius, material, err, cap)) return false;
-    int32_t first_x = cell_chunk_offset((int32_t)x - (int32_t)radius);
-    int32_t first_y = cell_chunk_offset((int32_t)y - (int32_t)radius);
-    int32_t last_x = cell_chunk_offset((int32_t)x + (int32_t)radius);
-    int32_t last_y = cell_chunk_offset((int32_t)y + (int32_t)radius);
+    if (!dc_gpu_paint_material(view->gpu, x + DC_CHUNK_SIDE + view->camera_offset_x,
+                               y + DC_CHUNK_SIDE + view->camera_offset_y,
+                               radius, material, err, cap)) return false;
+    int32_t first_x = cell_chunk_offset((int32_t)x +
+        (int32_t)view->camera_offset_x - (int32_t)radius);
+    int32_t first_y = cell_chunk_offset((int32_t)y +
+        (int32_t)view->camera_offset_y - (int32_t)radius);
+    int32_t last_x = cell_chunk_offset((int32_t)x +
+        (int32_t)view->camera_offset_x + (int32_t)radius);
+    int32_t last_y = cell_chunk_offset((int32_t)y +
+        (int32_t)view->camera_offset_y + (int32_t)radius);
     for (int32_t ty = first_y; ty <= last_y; ++ty) {
         for (int32_t tx = first_x; tx <= last_x; ++tx) {
             dc_chunk_coord_t coord = { view->origin.x + tx, view->origin.y + ty };
