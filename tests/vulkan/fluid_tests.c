@@ -387,6 +387,42 @@ static void test_markers_sharpen_splash_lobes_without_changing_volume(void) {
     PASS();
 }
 
+static void test_markers_correct_a_moving_free_surface(void) {
+    char err[256] = {0};
+    dc_chunk_t left = {0}, right = {0}, warmed = {0}, result = {0};
+    for (uint32_t x = 24; x < 40; ++x)
+        left.cells[8 * 64 + x].fluid_mass = 5u * DC_FLUID_FULL / 8u;
+    left.cells[8 * 64 + 23].fluid_mass = 3u * DC_FLUID_FULL / 8u;
+    left.cells[8 * 64 + 40].fluid_mass = 3u * DC_FLUID_FULL / 8u;
+    dc_gpu_t *seed_gpu = make_grid(&left, &right, err, sizeof(err));
+    ASSERT_TRUE(seed_gpu != NULL);
+    ASSERT_TRUE(dc_gpu_set_marker_correction(seed_gpu, false));
+    ASSERT_TRUE(dc_gpu_fluid_step(seed_gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(seed_gpu, 0, &warmed, err, sizeof(err)));
+    ASSERT_TRUE(warmed.marker_count > 0);
+    dc_gpu_destroy(seed_gpu);
+    uint64_t total[2] = {0}, concentration[2] = {0};
+    for (uint32_t variant = 0; variant < 2; ++variant) {
+        dc_gpu_t *gpu = make_grid(&warmed, &right, err, sizeof(err));
+        ASSERT_TRUE(gpu != NULL);
+        ASSERT_TRUE(dc_gpu_set_marker_correction(gpu, variant == 1));
+        ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &result, err, sizeof(err)));
+        for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+            uint64_t mass = result.cells[i].fluid_mass;
+            total[variant] += mass;
+            concentration[variant] += mass * mass;
+        }
+        dc_gpu_destroy(gpu);
+    }
+    printf("moving-surface concentration off=%llu on=%llu\n",
+           (unsigned long long)concentration[0],
+           (unsigned long long)concentration[1]);
+    ASSERT_EQ(total[0], total[1]);
+    ASSERT_TRUE(concentration[1] > concentration[0]);
+    PASS();
+}
+
 static void test_marker_overlay_is_opt_in(void) {
     char err[256] = {0};
     dc_chunk_t left = {0}, right = {0};
@@ -555,6 +591,42 @@ static void test_water_crosses_vertical_chunk_seam(void) {
     PASS();
 }
 
+static void test_erased_floor_drains_into_lower_chunk(void) {
+    char err[256] = {0};
+    dc_chunk_t top = {0}, bottom = {0}, before = {0}, after_top = {0},
+               after_bottom = {0};
+    for (uint32_t x = 0; x < 64; ++x)
+        top.cells[63 * 64 + x].material = DC_MATERIAL_STONE;
+    for (uint32_t y = 56; y < 63; ++y)
+        for (uint32_t x = 24; x < 40; ++x)
+            top.cells[y * 64 + x].fluid_mass = DC_FLUID_FULL;
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 128, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, &top, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 1, &bottom, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 1, 1, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(gpu, 32, 63, 2, DC_MATERIAL_AIR,
+                                      err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &before, err, sizeof(err)));
+    uint64_t initial = 0, remaining = 0, drained = 0;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
+        initial += before.cells[i].fluid_mass;
+    for (uint32_t tick = 0; tick < 20; ++tick)
+        ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &after_top, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &after_bottom, err, sizeof(err)));
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        remaining += after_top.cells[i].fluid_mass;
+        drained += after_bottom.cells[i].fluid_mass;
+    }
+    ASSERT_EQ(remaining + drained, initial);
+    ASSERT_TRUE(drained > (uint64_t)8 * DC_FLUID_FULL);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 static void test_still_pool_does_not_spray_above_surface(void) {
     char err[256] = {0};
     dc_chunk_t left = {0}, right = {0}, saved = {0};
@@ -595,12 +667,14 @@ int main(void) {
     RUN(test_marker_advects_with_gpu_face_velocity);
     RUN(test_markers_sharpen_thin_sheet_without_changing_volume);
     RUN(test_markers_sharpen_splash_lobes_without_changing_volume);
+    RUN(test_markers_correct_a_moving_free_surface);
     RUN(test_marker_overlay_is_opt_in);
     RUN(test_marker_pool_stays_bounded_on_dense_interface);
     RUN(test_visible_spring_supplies_fast_flow_in_one_second);
     RUN(test_supported_water_spreads_sideways_quickly);
     RUN(test_falling_water_is_not_limited_to_one_cell_per_tick);
     RUN(test_water_crosses_vertical_chunk_seam);
+    RUN(test_erased_floor_drains_into_lower_chunk);
     RUN(test_still_pool_does_not_spray_above_surface);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
