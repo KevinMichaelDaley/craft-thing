@@ -1,6 +1,6 @@
 ---
 id: dun-nycg
-status: in_progress
+status: closed
 deps: [dun-zbeg, dun-f6oh]
 links: []
 created: 2026-09-26T05:25:21Z
