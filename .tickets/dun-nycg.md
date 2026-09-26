@@ -18,3 +18,9 @@ Provide material selection, paint/erase brush, pan/zoom, pause, single-step, res
 
 Brush edits affect correct world cells across negative and positive chunk coordinates; pausing and stepping advance exactly one fixed tick; camera crosses chunk boundaries smoothly.
 
+
+## Notes
+
+**2026-09-26T06:09:14Z**
+
+Interactive testbed now has P pause/resume, N one fixed simulation tick, B spawn rigid box at pointer, and 60 Hz accumulator with catch-up cap. Remaining acceptance includes zoom, reset, visible loading/debug state, and smooth camera movement.
