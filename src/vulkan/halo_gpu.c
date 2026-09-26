@@ -4,7 +4,7 @@
 #include "gpu_internal.h"
 
 _Static_assert(sizeof(dc_gpu_halo_cell_t) == 16, "GPU halo layout must match SPIR-V");
-_Static_assert(sizeof(dc_gpu_transfer_t) == 28, "GPU transfer layout must match SPIR-V");
+_Static_assert(sizeof(dc_gpu_transfer_t) == 40, "GPU transfer layout must match SPIR-V");
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -72,9 +72,11 @@ static bool submit_halos(dc_gpu_t *gpu, bool resolve, char *err, uint32_t cap) {
     uint32_t push[7] = { gpu->width, gpu->height, 0, 0, 0, 0, 0 };
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    vkCmdDispatch(gpu->command, (DC_GPU_HALO_SIDE + 7) / 8,
-                  (DC_GPU_HALO_SIDE + 7) / 8,
-                  gpu->page_width * gpu->page_height);
+    const dc_gpu_transfer_t *queued = gpu->transfer_mapped;
+    if (!resolve || !queued->direct_slots)
+        vkCmdDispatch(gpu->command, (DC_GPU_HALO_SIDE + 7) / 8,
+                      (DC_GPU_HALO_SIDE + 7) / 8,
+                      gpu->page_width * gpu->page_height);
     if (resolve) {
         barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                 VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
@@ -139,6 +141,28 @@ bool dc_gpu_queue_transfer(dc_gpu_t *gpu, dc_gpu_transfer_t transfer,
     if (gpu->has_transfer && queued->state == DC_GPU_TRANSFER_PENDING)
         return error(err, cap, "Previous GPU transfer is still pending");
     transfer.state = DC_GPU_TRANSFER_PENDING;
+    transfer.direct_slots = 0;
+    memcpy(queued, &transfer, sizeof(transfer));
+    gpu->has_transfer = true;
+    return true;
+}
+
+bool dc_gpu_queue_slot_transfer(dc_gpu_t *gpu, dc_gpu_transfer_t transfer,
+                                char *err, uint32_t cap) {
+    if (!gpu || transfer.from_slot >= DC_GPU_CHUNK_SLOTS ||
+        transfer.to_slot >= DC_GPU_CHUNK_SLOTS ||
+        transfer.from_x >= DC_CHUNK_SIDE || transfer.from_y >= DC_CHUNK_SIDE ||
+        transfer.to_x >= DC_CHUNK_SIDE || transfer.to_y >= DC_CHUNK_SIDE ||
+        (transfer.kind != DC_GPU_TRANSFER_SCALAR &&
+         transfer.kind != DC_GPU_TRANSFER_PARTICLE) ||
+        (transfer.kind == DC_GPU_TRANSFER_SCALAR &&
+         (!transfer.amount || transfer.amount > DC_FLUID_FULL)))
+        return error(err, cap, "Invalid slot transfer");
+    dc_gpu_transfer_t *queued = gpu->transfer_mapped;
+    if (gpu->has_transfer && queued->state == DC_GPU_TRANSFER_PENDING)
+        return error(err, cap, "Previous GPU transfer is still pending");
+    transfer.state = DC_GPU_TRANSFER_PENDING;
+    transfer.direct_slots = 1;
     memcpy(queued, &transfer, sizeof(transfer));
     gpu->has_transfer = true;
     return true;

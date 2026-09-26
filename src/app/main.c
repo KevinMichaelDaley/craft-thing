@@ -321,12 +321,15 @@ static int smoke_world_transfer(void) {
         dc_level_view_queue_transfer(view, 319, 5, 320, 5, 0,
                                      DC_GPU_TRANSFER_PARTICLE, err, sizeof(err));
     dc_gpu_transfer_state_t state = DC_GPU_TRANSFER_PENDING;
-    if (okay) okay = dc_level_view_tick(view, err, sizeof(err)) &&
-                     !dc_level_view_transfer_result(view, &state) &&
-                     dc_level_view_move(view, 1, 0) &&
-                     dc_level_view_wait_visible(view, 5000, err, sizeof(err));
+    if (okay) okay = !dc_level_view_transfer_result(view, &state);
+    for (int i = 0; okay && i < 7; ++i)
+        okay = dc_level_view_move(view, 1, 0);
+    if (okay) okay = dc_level_view_wait_visible(view, 5000, err, sizeof(err));
     for (int i = 0; okay && i < 100 && !dc_level_view_transfer_result(view, &state); ++i)
         okay = dc_level_view_tick(view, err, sizeof(err));
+    for (int i = 0; okay && i < 6; ++i)
+        okay = dc_level_view_move(view, -1, 0);
+    if (okay) okay = dc_level_view_wait_visible(view, 5000, err, sizeof(err));
     if (okay) okay = state == DC_GPU_TRANSFER_APPLIED &&
                      dc_level_view_chunk(view, (dc_chunk_coord_t){4, 0}, source,
                                          err, sizeof(err)) &&

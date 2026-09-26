@@ -55,6 +55,7 @@ typedef struct {
     uint32_t amount;
     uint32_t kind;
     uint32_t state;
+    uint32_t from_slot, to_slot, direct_slots;
 } dc_gpu_transfer_t;
 
 /** Create a headless Vulkan compute context and a width-by-height cell buffer. */
@@ -102,6 +103,9 @@ bool dc_gpu_read_halo(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
 /** Queue one adjacent scalar or particle transfer between resident cells. */
 bool dc_gpu_queue_transfer(dc_gpu_t *gpu, dc_gpu_transfer_t transfer,
                            char *err_buf, uint32_t err_cap);
+/** Queue a transfer addressed by pinned chunk slots and local cells. */
+bool dc_gpu_queue_slot_transfer(dc_gpu_t *gpu, dc_gpu_transfer_t transfer,
+                                char *err_buf, uint32_t err_cap);
 
 /** Refresh halos and retry the queued transfer; absent destinations stay pending. */
 bool dc_gpu_try_transfer(dc_gpu_t *gpu, dc_gpu_transfer_state_t *state,

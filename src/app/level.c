@@ -26,6 +26,13 @@ struct dc_level_view {
     uint32_t pending_steps;
     bool marker_overlay;
     bool spring_enabled;
+    bool transfer_pending, transfer_complete;
+    dc_gpu_transfer_state_t transfer_state;
+    dc_chunk_coord_t transfer_from, transfer_to;
+    uint32_t from_x, from_y, to_x, to_y, transfer_amount, transfer_kind;
+    uint32_t from_slot, to_slot;
+    uint64_t from_generation, to_generation;
+    bool destination_bound;
 };
 
 static bool error(char *buf, uint32_t cap, const char *message) {
@@ -92,7 +99,7 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
 static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         dc_chunk_slot_t *slot = &view->table.slots[i];
-        if (slot->state != DC_SLOT_SLEEPING || !slot->dirty) continue;
+        if (slot->state != DC_SLOT_SLEEPING || !slot->dirty || slot->pinned) continue;
         dc_chunk_t chunk = { .coord = slot->coord };
         uint64_t generation;
         if (!dc_gpu_download_chunk(view->gpu, i, &chunk, err, cap) ||
@@ -100,6 +107,62 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
             !dc_stream_request_save(view->stream, &chunk, generation))
             return error(err, cap, "Cannot queue dirty chunk save");
     }
+    return true;
+}
+
+static bool transfer_slot_matches(const dc_level_view_t *view, uint32_t index,
+                                  uint64_t generation, dc_chunk_coord_t coord) {
+    const dc_chunk_slot_t *slot = &view->table.slots[index];
+    return slot->state != DC_SLOT_EMPTY && slot->generation == generation &&
+           slot->coord.x == coord.x && slot->coord.y == coord.y;
+}
+
+static bool bind_transfer_destination(dc_level_view_t *view, char *err, uint32_t cap) {
+    if (!view->transfer_pending || view->destination_bound) return true;
+    uint32_t index;
+    if (!dc_chunk_table_find(&view->table, view->transfer_to, &index)) {
+        uint64_t generation;
+        if (!dc_chunk_table_begin_load(&view->table, view->transfer_to,
+                                       &index, &generation)) return true;
+        if (!dc_stream_request_load(view->stream, view->transfer_to, generation))
+            return error(err, cap, "Cannot load transfer destination");
+    }
+    view->to_slot = index;
+    view->to_generation = view->table.slots[index].generation;
+    view->table.slots[index].pinned = true;
+    view->destination_bound = true;
+    return true;
+}
+
+static bool resolve_world_transfer(dc_level_view_t *view, char *err, uint32_t cap) {
+    if (!view->transfer_pending || !view->destination_bound) return true;
+    if (!transfer_slot_matches(view, view->from_slot, view->from_generation,
+                               view->transfer_from) ||
+        !transfer_slot_matches(view, view->to_slot, view->to_generation,
+                               view->transfer_to))
+        return error(err, cap, "Pinned transfer chunk was reused");
+    dc_chunk_slot_t *source = &view->table.slots[view->from_slot];
+    dc_chunk_slot_t *destination = &view->table.slots[view->to_slot];
+    if ((source->state != DC_SLOT_ACTIVE && source->state != DC_SLOT_SLEEPING) ||
+        (destination->state != DC_SLOT_ACTIVE &&
+         destination->state != DC_SLOT_SLEEPING)) return true;
+    dc_gpu_transfer_t command = { .from_x = view->from_x, .from_y = view->from_y,
+        .to_x = view->to_x, .to_y = view->to_y, .amount = view->transfer_amount,
+        .kind = view->transfer_kind, .from_slot = view->from_slot,
+        .to_slot = view->to_slot };
+    dc_gpu_transfer_state_t state;
+    if (!dc_gpu_queue_slot_transfer(view->gpu, command, err, cap) ||
+        !dc_gpu_try_transfer(view->gpu, &state, err, cap)) return false;
+    if (state == DC_GPU_TRANSFER_PENDING) return true;
+    if (state == DC_GPU_TRANSFER_APPLIED &&
+        (!dc_chunk_table_mark_dirty(&view->table, view->from_slot) ||
+         !dc_chunk_table_mark_dirty(&view->table, view->to_slot)))
+        return error(err, cap, "Cannot mark transferred chunks dirty");
+    source->pinned = false;
+    destination->pinned = false;
+    view->transfer_pending = false;
+    view->transfer_complete = true;
+    view->transfer_state = state;
     return true;
 }
 
@@ -128,6 +191,7 @@ fail:
 bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return error(err, cap, "Level view is null");
     if (!process_results(view, err, cap)) return false;
+    if (!bind_transfer_destination(view, err, cap)) return false;
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         dc_chunk_slot_t *slot = &view->table.slots[i];
         if (slot->state == DC_SLOT_ACTIVE || slot->state == DC_SLOT_SLEEPING)
@@ -165,6 +229,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     }
     view->pending_chunk_dx = 0;
     view->pending_chunk_dy = 0;
+    if (!resolve_world_transfer(view, err, cap)) return false;
     if (view->spring_enabled && view->origin.x - HALO_CHUNKS <= 2 &&
         view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS > 2 &&
         view->origin.y - HALO_CHUNKS <= 0 &&
@@ -288,15 +353,50 @@ bool dc_level_view_has_chunk(dc_level_view_t *view, dc_chunk_coord_t coord) {
 bool dc_level_view_queue_transfer(dc_level_view_t *view, int64_t from_x, int64_t from_y,
                                   int64_t to_x, int64_t to_y, uint32_t amount,
                                   dc_gpu_transfer_kind_t kind, char *err, uint32_t cap) {
-    (void)view; (void)from_x; (void)from_y; (void)to_x; (void)to_y;
-    (void)amount; (void)kind;
-    return error(err, cap, "World transfer is not implemented");
+    if (!view || view->transfer_pending ||
+        (kind != DC_GPU_TRANSFER_SCALAR && kind != DC_GPU_TRANSFER_PARTICLE) ||
+        (kind == DC_GPU_TRANSFER_SCALAR && (!amount || amount > DC_FLUID_FULL)))
+        return error(err, cap, "Invalid world transfer");
+    bool adjacent =
+        (from_y == to_y &&
+         ((from_x < INT64_MAX && to_x == from_x + 1) ||
+          (from_x > INT64_MIN && to_x == from_x - 1))) ||
+        (from_x == to_x &&
+         ((from_y < INT64_MAX && to_y == from_y + 1) ||
+          (from_y > INT64_MIN && to_y == from_y - 1)));
+    if (!adjacent) return error(err, cap, "World transfer cells must be adjacent");
+    dc_chunk_coord_t from, to;
+    uint32_t from_local_x, from_local_y, to_local_x, to_local_y;
+    dc_cell_address(from_x, from_y, &from, &from_local_x, &from_local_y);
+    dc_cell_address(to_x, to_y, &to, &to_local_x, &to_local_y);
+    uint32_t index;
+    if (!dc_chunk_table_find(&view->table, from, &index) ||
+        (view->table.slots[index].state != DC_SLOT_ACTIVE &&
+         view->table.slots[index].state != DC_SLOT_SLEEPING) ||
+        view->table.slots[index].pinned)
+        return error(err, cap, "Transfer source is not available");
+    view->from_slot = index;
+    view->from_generation = view->table.slots[index].generation;
+    view->table.slots[index].pinned = true;
+    view->transfer_from = from;
+    view->transfer_to = to;
+    view->from_x = from_local_x;
+    view->from_y = from_local_y;
+    view->to_x = to_local_x;
+    view->to_y = to_local_y;
+    view->transfer_amount = amount;
+    view->transfer_kind = kind;
+    view->destination_bound = false;
+    view->transfer_complete = false;
+    view->transfer_pending = true;
+    return bind_transfer_destination(view, err, cap);
 }
 
 bool dc_level_view_transfer_result(dc_level_view_t *view,
                                    dc_gpu_transfer_state_t *state) {
-    (void)view; (void)state;
-    return false;
+    if (!view || !state || !view->transfer_complete) return false;
+    *state = view->transfer_state;
+    return true;
 }
 
 bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {

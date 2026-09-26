@@ -12,6 +12,9 @@ layout(set = 0, binding = 7, std430) buffer TransferCommand {
     uint amount;
     uint kind;
     uint state;
+    uint from_slot;
+    uint to_slot;
+    uint direct_slots;
 } command;
 layout(push_constant) uniform Params {
     uint width;
@@ -58,20 +61,28 @@ void refresh_halo() {
 
 void resolve_transfer() {
     if (command.state != 0u) return;
-    uint page_width = (params.width + SIDE - 1u) / SIDE;
-    uint source_tile_x = command.from_x / SIDE;
-    uint source_tile_y = command.from_y / SIDE;
-    uint source_tile = source_tile_y * page_width + source_tile_x;
-    uint source_page = pages[source_tile];
-    if (source_page == 0u) return;
-    uint hx = command.to_x - source_tile_x * SIDE + 1u;
-    uint hy = command.to_y - source_tile_y * SIDE + 1u;
-    uvec4 destination = halo_cells[(source_page - 1u) * CELLS_PER_HALO +
-                                   hy * HALO_SIDE + hx];
-    if (destination.z == 0u) return;
-    uint source_index = (source_page - 1u) * CELLS_PER_CHUNK +
+    uint source_slot, destination_slot;
+    if (command.direct_slots != 0u) {
+        source_slot = command.from_slot;
+        destination_slot = command.to_slot;
+    } else {
+        uint page_width = (params.width + SIDE - 1u) / SIDE;
+        uint source_tile_x = command.from_x / SIDE;
+        uint source_tile_y = command.from_y / SIDE;
+        uint source_tile = source_tile_y * page_width + source_tile_x;
+        uint source_page = pages[source_tile];
+        if (source_page == 0u) return;
+        uint hx = command.to_x - source_tile_x * SIDE + 1u;
+        uint hy = command.to_y - source_tile_y * SIDE + 1u;
+        uvec4 destination = halo_cells[(source_page - 1u) * CELLS_PER_HALO +
+                                       hy * HALO_SIDE + hx];
+        if (destination.z == 0u) return;
+        source_slot = source_page - 1u;
+        destination_slot = destination.w;
+    }
+    uint source_index = source_slot * CELLS_PER_CHUNK +
                         (command.from_y % SIDE) * SIDE + command.from_x % SIDE;
-    uint destination_index = destination.w * CELLS_PER_CHUNK +
+    uint destination_index = destination_slot * CELLS_PER_CHUNK +
                              (command.to_y % SIDE) * SIDE + command.to_x % SIDE;
     uvec2 source_cell = chunk_cells[source_index];
     uvec2 destination_cell = chunk_cells[destination_index];

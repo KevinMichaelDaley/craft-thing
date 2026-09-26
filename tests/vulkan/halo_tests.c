@@ -137,10 +137,34 @@ static void test_particle_transfer_crosses_chunk_edge_without_duplication(void) 
     PASS();
 }
 
+static void test_slot_transfer_ignores_reused_view_pages(void) {
+    char err[256] = {0};
+    dc_chunk_t left = {0}, right = {0}, saved_left = {0}, saved_right = {0};
+    left.cells[5 * DC_CHUNK_SIDE + 63].fluid_mass = 100;
+    dc_gpu_t *gpu = two_chunk_gpu(&left, &right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, UINT32_MAX, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 0, UINT32_MAX, err, sizeof(err)));
+    dc_gpu_transfer_t transfer = { .from_x = 63, .from_y = 5,
+        .to_x = 0, .to_y = 5, .from_slot = 0, .to_slot = 1,
+        .amount = 30, .kind = DC_GPU_TRANSFER_SCALAR };
+    ASSERT_TRUE(dc_gpu_queue_slot_transfer(gpu, transfer, err, sizeof(err)));
+    dc_gpu_transfer_state_t state;
+    ASSERT_TRUE(dc_gpu_try_transfer(gpu, &state, err, sizeof(err)));
+    ASSERT_EQ(state, DC_GPU_TRANSFER_APPLIED);
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved_left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &saved_right, err, sizeof(err)));
+    ASSERT_EQ(saved_left.cells[5 * DC_CHUNK_SIDE + 63].fluid_mass, 70u);
+    ASSERT_EQ(saved_right.cells[5 * DC_CHUNK_SIDE].fluid_mass, 30u);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 int main(void) {
     RUN(test_halo_reads_neighbor_and_marks_missing_chunk);
     RUN(test_scalar_transfer_waits_for_chunk_and_matches_unsplit_grid);
     RUN(test_particle_transfer_crosses_chunk_edge_without_duplication);
+    RUN(test_slot_transfer_ignores_reused_view_pages);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

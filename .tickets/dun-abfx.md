@@ -24,3 +24,7 @@ A transfer queued toward an absent world chunk remains associated with that chun
 **2026-09-26T09:13:38Z**
 
 The camera now has a one-chunk simulated halo; integrate deferred GPU water transfers at the outer resident edge so motion exceeding the halo distance is not stopped by missing pages.
+
+**2026-09-26T17:10:38Z**
+
+World-cell transfer now binds source/destination slot generations and pins them; direct-slot SPIR-V resolver operates independently of page table after camera movement. Streamed test moves seven chunks away before resolving and checks exactly-once persistence.
