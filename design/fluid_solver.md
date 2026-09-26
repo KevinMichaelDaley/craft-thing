@@ -18,8 +18,10 @@ flux per pair is capped at half a cell per substep. A persistent grid face
 velocity supplies the requested flux, while source volume and destination
 capacity determine the accepted amount.
 
-Before transport, a GPU predictor damps old face velocity and adds gravity on
-open downward faces. A cell-centered pressure field then solves the discrete
+Before transport, a GPU predictor backtraces vertical face velocity through the
+previous velocity field and adds gravity on open downward faces. It initializes
+pressure from the local hydrostatic water-column head. A cell-centered pressure
+field then solves the discrete
 Poisson equation using 20 red-black SOR sweeps with relaxation 1.5; each color
 is a separate dispatch and a Vulkan barrier separates colors. Liquid cells
 carry pressure, air at the free surface has zero pressure, and solid, occupied,
@@ -40,7 +42,7 @@ are recorded for persistence. The sand stage reads only this finalized state.
 ## Sparse markers
 
 The first marker pass seeds two massless 16.16 fixed-point markers at each
-selected surface site, one just inside and one just outside. Cells below half
+selected surface site, one just inside and one just outside. Cells below one-eighth
 fill are not seeded, avoiding a new inside marker in every diffuse fringe.
 Selection keeps the first eligible site in each 2 × 2 cell block, so a dense
 interface cannot request more than the 2048-entry chunk pool at seeding time.
@@ -48,12 +50,12 @@ Markers live
 in two bounded 2048-entry GPU buffers per world chunk; GPU compaction moves
 them between resident chunk slots, and sleeping slots retain their state.
 Each marker has a stable hash ID derived from its original chunk and local
-cell. Bilinear grid-velocity sampling advects markers, and blocked destinations
+cell. Face-aligned bilinear velocity sampling advects markers, and blocked destinations
 clip them to their old position. A GPU per-cell guide records inside/outside
 presence. Separate disjoint vertical and horizontal pair passes can move at
 most 8192 Q16.16 units from an outside-only cell into a neighboring
-inside-marked cell with at least as much water. Gravity-active and fast
-vertical faces skip correction. Each pair applies equal-and-opposite updates,
+inside-marked cell with at least as much water. Correction also runs at moving
+interfaces. Each pair applies equal-and-opposite updates,
 so markers cannot add water mass. The `M` overlay displays marker guides.
 
 Chunk files persist the active marker count and records alongside grid cells;

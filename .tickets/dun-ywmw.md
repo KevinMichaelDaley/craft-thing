@@ -2,7 +2,7 @@
 id: dun-ywmw
 status: in_progress
 deps: []
-links: []
+links: [dun-6qqa]
 created: 2026-09-26T07:46:17Z
 type: bug
 priority: 1
@@ -28,3 +28,7 @@ A tall water column spreads materially farther after one simulated second, the i
 **2026-09-26T08:27:35Z**
 
 Removed half-cell velocity and one-face transport ceilings. Transport distance is face velocity times one fixed tick times 1.001; solid cells and resident-page edges remain physical boundaries. Full suite and 600-tick UI capture pass, but visible surface speckling and projection quality still need work.
+
+**2026-09-26T08:47:16Z**
+
+Hydrostatic pressure now initializes from 0.5 times water-column depth, matching gravity. Marker velocity uses staggered-face interpolation; correction runs at moving interfaces and a test verifies equal-volume concentration. Vertical seam and erased-floor drain tests pass. Visible grid edge remains a boundary until offscreen halo chunks are simulated.
