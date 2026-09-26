@@ -5,7 +5,7 @@ CPPFLAGS += -Iinclude $(shell pkg-config --cflags sdl2)
 LDLIBS += -lvulkan $(shell pkg-config --libs sdl2) -pthread
 GLSLANG ?= glslangValidator
 
-GPU_OBJ = build/gpu.o build/device.o
+GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o
 CHUNK_OBJ = build/chunk.o
 STREAM_OBJ = build/stream.o
 GENERATE_OBJ = build/generate.o
@@ -25,6 +25,10 @@ build/gpu.o: src/vulkan/gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 build/device.o: src/vulkan/device.c src/vulkan/gpu_internal.h
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+build/chunk_gpu.o: src/vulkan/chunk_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/chunk.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 

@@ -23,6 +23,7 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu->swapchain) vkDestroySwapchainKHR(gpu->device, gpu->swapchain, NULL);
     free(gpu->swap_images);
     if (gpu->mapped) vkUnmapMemory(gpu->device, gpu->memory);
+    if (gpu->device) dc_gpu_chunks_destroy(gpu);
     if (gpu->command_pool) vkDestroyCommandPool(gpu->device, gpu->command_pool, NULL);
     if (gpu->pipeline) vkDestroyPipeline(gpu->device, gpu->pipeline, NULL);
     if (gpu->pipeline_layout) vkDestroyPipelineLayout(gpu->device, gpu->pipeline_layout, NULL);
@@ -155,14 +156,18 @@ static bool make_presentation(dc_gpu_t *gpu, uint32_t requested_width,
 
 static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
                           char *err, uint32_t cap) {
-    VkDescriptorSetLayoutBinding binding = { .binding = 0,
-        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1,
-        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT };
+    VkDescriptorSetLayoutBinding bindings[3] = {0};
+    for (uint32_t i = 0; i < 3; ++i) {
+        bindings[i].binding = i;
+        bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        bindings[i].descriptorCount = 1;
+        bindings[i].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    }
     VkDescriptorSetLayoutCreateInfo layout_info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 1, .pBindings = &binding };
+        .bindingCount = 3, .pBindings = bindings };
     if (vkCreateDescriptorSetLayout(gpu->device, &layout_info, NULL, &gpu->set_layout) != VK_SUCCESS)
         return error(err, cap, "Cannot create descriptor layout");
-    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 };
+    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 };
     VkDescriptorPoolCreateInfo pool_info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .maxSets = 1, .poolSizeCount = 1, .pPoolSizes = &size };
     if (vkCreateDescriptorPool(gpu->device, &pool_info, NULL, &gpu->descriptor_pool) != VK_SUCCESS)
@@ -172,11 +177,21 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         .pSetLayouts = &gpu->set_layout };
     if (vkAllocateDescriptorSets(gpu->device, &set_info, &gpu->descriptor) != VK_SUCCESS)
         return error(err, cap, "Cannot allocate descriptor set");
-    VkDescriptorBufferInfo buffer_info = { .buffer = gpu->cells, .offset = 0, .range = bytes };
-    VkWriteDescriptorSet write = { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = gpu->descriptor, .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &buffer_info };
-    vkUpdateDescriptorSets(gpu->device, 1, &write, 0, NULL);
+    VkDescriptorBufferInfo buffers[3] = {
+        { gpu->cells, 0, bytes },
+        { gpu->chunk_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t) },
+        { gpu->page_buffer, 0, (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t) }
+    };
+    VkWriteDescriptorSet writes[3] = {0};
+    for (uint32_t i = 0; i < 3; ++i) {
+        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[i].dstSet = gpu->descriptor;
+        writes[i].dstBinding = i;
+        writes[i].descriptorCount = 1;
+        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writes[i].pBufferInfo = &buffers[i];
+    }
+    vkUpdateDescriptorSets(gpu->device, 3, writes, 0, NULL);
     VkPushConstantRange range = { .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .size = 28 };
     VkPipelineLayoutCreateInfo pipeline_layout_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1, .pSetLayouts = &gpu->set_layout,
@@ -271,7 +286,8 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
         error(err, cap, SDL_GetError()); goto fail;
     }
     VkDeviceSize bytes = (VkDeviceSize)width * height * 4;
-    if (!dc_gpu_pick_device(gpu, bytes, err, cap)) goto fail;
+    VkDeviceSize atlas_bytes = (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t);
+    if (!dc_gpu_pick_device(gpu, bytes > atlas_bytes ? bytes : atlas_bytes, err, cap)) goto fail;
     VkPhysicalDeviceSynchronization2Features sync = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES };
     VkPhysicalDeviceFeatures2 features = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
@@ -292,7 +308,8 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
         error(err, cap, "Cannot create Vulkan compute device"); goto fail;
     }
     vkGetDeviceQueue(gpu->device, gpu->family, 0, &gpu->queue);
-    if (!make_cells(gpu, bytes, err, cap) || !make_pipeline(gpu, shader_path, bytes, err, cap)) goto fail;
+    if (!make_cells(gpu, bytes, err, cap) || !dc_gpu_chunks_init(gpu, err, cap) ||
+        !make_pipeline(gpu, shader_path, bytes, err, cap)) goto fail;
     VkCommandPoolCreateInfo pool_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, .queueFamilyIndex = gpu->family };
     if (vkCreateCommandPool(gpu->device, &pool_info, NULL, &gpu->command_pool) != VK_SUCCESS) {
@@ -332,6 +349,14 @@ static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7], char *err, uin
     VkCommandBufferBeginInfo begin = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
     if (vkBeginCommandBuffer(gpu->command, &begin) != VK_SUCCESS)
         return error(err, cap, "Cannot begin compute command buffer");
+    VkMemoryBarrier2 upload_barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
+        .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT };
+    VkDependencyInfo upload_dependency = { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .memoryBarrierCount = 1, .pMemoryBarriers = &upload_barrier };
+    vkCmdPipelineBarrier2(gpu->command, &upload_dependency);
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->pipeline);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
@@ -376,34 +401,18 @@ bool dc_gpu_paint(dc_gpu_t *gpu, uint32_t x, uint32_t y, uint32_t radius,
     return dispatch_cells(gpu, push, err, cap);
 }
 
-bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
-                         char *err, uint32_t cap) {
-    (void)gpu; (void)slot; (void)chunk;
-    return error(err, cap, "Chunk atlas upload is not implemented");
-}
-
-bool dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chunk,
-                           char *err, uint32_t cap) {
-    (void)gpu; (void)slot; (void)chunk;
-    return error(err, cap, "Chunk atlas download is not implemented");
-}
-
-bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
-                     uint32_t slot, char *err, uint32_t cap) {
-    (void)gpu; (void)tile_x; (void)tile_y; (void)slot;
-    return error(err, cap, "GPU page table is not implemented");
-}
-
 bool dc_gpu_render_chunks(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    (void)gpu;
-    return error(err, cap, "GPU chunk rendering is not implemented");
+    if (!gpu) return error(err, cap, "GPU context is null");
+    uint32_t push[7] = { gpu->width, gpu->height, 2, 0, 0, 0, 0 };
+    return dispatch_cells(gpu, push, err, cap);
 }
 
 bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
                            uint32_t radius, uint16_t material,
                            char *err, uint32_t cap) {
-    (void)gpu; (void)x; (void)y; (void)radius; (void)material;
-    return error(err, cap, "GPU material painting is not implemented");
+    if (!gpu) return error(err, cap, "GPU context is null");
+    uint32_t push[7] = { gpu->width, gpu->height, 3, x, y, radius, material };
+    return dispatch_cells(gpu, push, err, cap);
 }
 
 static void image_barrier(VkCommandBuffer command, VkImage image,

@@ -32,9 +32,18 @@ struct dc_gpu {
     VkDeviceMemory frame_memory;
     VkSemaphore acquire_sem;
     VkSemaphore present_sem;
+    VkBuffer chunk_buffer;
+    VkDeviceMemory chunk_memory;
+    void *chunk_mapped;
+    VkBuffer page_buffer;
+    VkDeviceMemory page_memory;
+    void *page_mapped;
+    uint32_t page_width, page_height;
     uint32_t width, height;
 };
 
 bool dc_gpu_pick_device(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t cap);
+bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+void dc_gpu_chunks_destroy(dc_gpu_t *gpu);
 
 #endif

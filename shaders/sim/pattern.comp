@@ -1,6 +1,8 @@
 #version 450
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(set = 0, binding = 0, std430) buffer Cells { uint cells[]; };
+layout(set = 0, binding = 1, std430) buffer ChunkCells { uvec2 chunk_cells[]; };
+layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -17,11 +19,37 @@ void main() {
     if (params.mode == 0u) {
         cells[p.y * params.width + p.x] = ((p.x + p.y) & 1u) == 0u
             ? 0xff202020u : 0xff4040c0u;
-    } else {
+    } else if (params.mode == 1u) {
         int dx = int(p.x) - int(params.brush_x);
         int dy = int(p.y) - int(params.brush_y);
         int r = int(params.radius);
         if (dx * dx + dy * dy <= r * r)
             cells[p.y * params.width + p.x] = params.color;
+    } else {
+        uint page_width = (params.width + 63u) / 64u;
+        uint page = pages[(p.y / 64u) * page_width + p.x / 64u];
+        if (page == 0u) {
+            cells[p.y * params.width + p.x] = 0xffff00ffu;
+            return;
+        }
+        uint index = (page - 1u) * 4096u + (p.y % 64u) * 64u + p.x % 64u;
+        uvec2 cell = chunk_cells[index];
+        uint material = cell.x & 0xffffu;
+        if (params.mode == 3u) {
+            int dx = int(p.x) - int(params.brush_x);
+            int dy = int(p.y) - int(params.brush_y);
+            int r = int(params.radius);
+            if (dx * dx + dy * dy <= r * r) {
+                material = params.color == 3u ? 0u : params.color;
+                cell.x = (cell.x & 0xffff0000u) | material;
+                cell.y = params.color == 3u ? 65536u : 0u;
+                chunk_cells[index] = cell;
+            }
+        }
+        uint color = 0xff181818u;
+        if (material == 1u) color = 0xff707070u;
+        else if (material == 2u) color = 0xff40c8e0u;
+        if (cell.y > 0u) color = 0xffd07030u;
+        cells[p.y * params.width + p.x] = color;
     }
 }
