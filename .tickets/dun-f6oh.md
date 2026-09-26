@@ -1,6 +1,6 @@
 ---
 id: dun-f6oh
-status: in_progress
+status: closed
 deps: [dun-d8gb]
 links: []
 created: 2026-09-26T05:25:20Z
@@ -24,3 +24,7 @@ Camera movement never waits on disk I/O in the render thread; no Vulkan call occ
 **2026-09-26T05:46:05Z**
 
 C11 worker with bounded queues, procedural load, atomic-file save, shutdown flush, and save/evict/reload end-to-end test implemented. Main-thread Vulkan staging and camera-driven residency integration remain open.
+
+**2026-09-26T06:01:31Z**
+
+Camera-driven worker load/save now feeds the GPU atlas from the main thread. Completion generation tokens reject stale jobs; dirty chunks are downloaded and persisted before slot reuse. Interactive smoke pans away and reloads edits at positive and negative world coordinates.
