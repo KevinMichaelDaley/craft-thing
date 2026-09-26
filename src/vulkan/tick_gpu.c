@@ -124,3 +124,8 @@ bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
     }
     return true;
 }
+
+bool dc_gpu_fluid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    (void)gpu;
+    return error(err, cap, "Eulerian GPU fluid pass is not implemented");
+}
