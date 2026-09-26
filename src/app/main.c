@@ -74,6 +74,57 @@ static int smoke_moving_water(void) {
     return 0;
 }
 
+static int smoke_moving_water_long(void) {
+    char directory[] = "build/ui_motion_long_XXXXXX";
+    if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
+    char err[256] = {0};
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    if (!view) { fprintf(stderr, "Long motion level create: %s\n", err); return 1; }
+    uint32_t *at_five = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*at_five));
+    uint32_t *at_ten = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*at_ten));
+    bool okay = at_five && at_ten &&
+        dc_level_view_wait_visible(view, 5000, err, sizeof(err));
+    mkdir("build/screenshots", 0777);
+    for (uint32_t tick = 1; tick <= 600 && okay; ++tick) {
+        SDL_PumpEvents();
+        if (tick == 361)
+            okay = dc_level_view_paint(view, 190, 12, 5, DC_MATERIAL_WATER,
+                                       err, sizeof(err));
+        if (okay) okay = dc_level_view_step(view, err, sizeof(err)) &&
+                         dc_level_view_tick(view, err, sizeof(err));
+        if (okay && tick == 300)
+            okay = dc_level_view_pixels(view, at_five, VIEW_WIDTH * VIEW_HEIGHT,
+                                        err, sizeof(err)) &&
+                   save_level_bmp("build/screenshots/after_5s.bmp", at_five);
+        if (okay && tick == 600)
+            okay = dc_level_view_pixels(view, at_ten, VIEW_WIDTH * VIEW_HEIGHT,
+                                        err, sizeof(err)) &&
+                   save_level_bmp("build/screenshots/after_10s.bmp", at_ten);
+        SDL_Delay(16);
+    }
+    uint32_t changed = 0, edit_changed = 0;
+    if (okay) {
+        for (uint32_t y = 0; y < VIEW_HEIGHT; ++y)
+            for (uint32_t x = 0; x < VIEW_WIDTH; ++x)
+                if (at_five[y * VIEW_WIDTH + x] != at_ten[y * VIEW_WIDTH + x]) {
+                    ++changed;
+                    if (x >= 180 && x <= 200 && y <= 40) ++edit_changed;
+                }
+        okay = changed >= 50 && edit_changed >= 10;
+    }
+    if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
+    free(at_five);
+    free(at_ten);
+    if (!okay) {
+        fprintf(stderr, "Long fluid smoke failed (%u changed, %u near brush): %s\n",
+                changed, edit_changed, err);
+        return 1;
+    }
+    printf("Long fluid screenshots: after_5s.bmp and after_10s.bmp "
+           "(%u changed, %u near brush)\n", changed, edit_changed);
+    return 0;
+}
+
 static int smoke_streamed_level(void) {
     char directory[] = "build/ui_stream_XXXXXX";
     if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
@@ -167,6 +218,8 @@ int main(int argc, char **argv) {
         return smoke_streamed_level();
     if (argc > 1 && strcmp(argv[1], "--smoke-motion") == 0)
         return smoke_moving_water();
+    if (argc > 1 && strcmp(argv[1], "--smoke-motion-long") == 0)
+        return smoke_moving_water_long();
     uint64_t seed = 314;
     if (argc == 3 && strcmp(argv[1], "--seed") == 0)
         seed = strtoull(argv[2], NULL, 10);

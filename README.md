@@ -14,10 +14,13 @@ Install development packages for Vulkan, SDL2, `pkg-config`, and `glslangValidat
 make all
 make test
 make test_ui
+make test_ui_long
 ./build/dungeoncraft
 ```
 
 `make test` runs headless Vulkan compute readback, rigid motion/contact, Eulerian water conservation, deterministic marker ownership and reload, and chunk/worker persistence tests. It saves marker-on/off thin-sheet and splash captures under `build/screenshots/`. `make test_ui` checks the streamed window and saves rendered screenshots at `build/screenshots/before.bmp` and `build/screenshots/after_1s.bmp`, separated by 60 fixed simulation ticks. It asserts that falling water reaches well below its source and that markers survive GPU chunk eviction and worker reload. It needs a graphical display. Set `DC_VK_VALIDATE=1` to request `VK_LAYER_KHRONOS_validation`; the app reports a clear error if that optional layer is not installed. Set `GLSLANG=/path/to/glslangValidator` when the compiler is outside `PATH`.
+
+`make test_ui_long` runs the windowed fluid scene for 600 presented ticks, paints water at tick 361, and saves `build/screenshots/after_5s.bmp` and `after_10s.bmp`. It checks that the images differ, including near the painted area. The window remains visible while the test runs; use `./build/dungeoncraft` for an open-ended interactive session.
 
 In the window, a world-anchored spring above the center basin emits water so there is always falling motion to inspect. Drag the left mouse button to paint and the right button to erase. Keys `1`, `2`, and `3` select stone, sand, and water; `0` selects erasing. Press `B` to spawn the current rigid test box at the pointer, `P` to pause or resume, `N` to advance one tick, and `M` to toggle the colored inside/outside marker overlay. The box moves right and falls onto solid terrain. Arrow keys or WASD pan by one chunk; Escape closes the window. Use `./build/dungeoncraft --seed 1234` to start a different procedural world. Edits are stored under `world_chunks/`.
 
