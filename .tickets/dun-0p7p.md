@@ -18,3 +18,9 @@ Store stable body IDs and transforms in GPU buffers, integrate fixed-step motion
 
 A falling body moves predictably and occupancy follows its transform across chunk edges.
 
+
+## Notes
+
+**2026-09-26T06:08:47Z**
+
+Prototype GREEN: one GPU-owned box integrates at fixed 60 Hz, crosses resident chunk edge, settles on terrain, and rasterizes current viewport occupancy. Headless and streamed-window end-to-end tests pass with validation. Remaining acceptance: swept occupancy and multiple stable body IDs; world-space persistence tracked by dun-rwls.

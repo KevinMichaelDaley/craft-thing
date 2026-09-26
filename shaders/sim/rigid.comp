@@ -1,0 +1,86 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 chunk_cells[]; };
+layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
+layout(set = 0, binding = 3, std430) buffer Occupancy { uint occupancy[]; };
+
+struct Body {
+    int x_fp;
+    int y_fp;
+    int vx_fp;
+    int vy_fp;
+    uint width;
+    uint height;
+    uint id;
+    uint enabled;
+};
+layout(set = 0, binding = 4, std430) buffer Bodies { Body body; };
+layout(push_constant) uniform Params {
+    uint width;
+    uint height;
+    uint mode;
+    uint unused0;
+    uint unused1;
+    uint unused2;
+    uint unused3;
+} params;
+
+bool solid_at(int x, int y) {
+    if (x < 0 || x >= int(params.width) || y >= int(params.height)) return true;
+    if (y < 0) return false;
+    uint page_width = (params.width + 63u) / 64u;
+    uint page = pages[(uint(y) / 64u) * page_width + uint(x) / 64u];
+    if (page == 0u) return true;
+    uint index = (page - 1u) * 4096u + (uint(y) % 64u) * 64u + uint(x) % 64u;
+    return (chunk_cells[index].x & 0xffffu) != 0u;
+}
+
+void integrate_body() {
+    if (body.enabled == 0u) return;
+    int vx = clamp(body.vx_fp, -(4 << 16), 4 << 16);
+    int next_x = body.x_fp + vx;
+    next_x = clamp(next_x, 0, max(0, (int(params.width) - int(body.width)) << 16));
+    int x = next_x >> 16;
+    int top = body.y_fp >> 16;
+    bool supported = false;
+    for (uint col = 0u; col < body.width; ++col)
+        supported = supported || solid_at(x + int(col), top + int(body.height));
+    int vy = body.vy_fp;
+    int next_y = body.y_fp;
+    if (supported && vy >= 0) {
+        next_y = top << 16;
+        vy = 0;
+    } else {
+        vy = min(vy + 16384, 4 << 16);
+        next_y += vy;
+        int old_bottom = top + int(body.height) - 1;
+        int new_bottom = (next_y >> 16) + int(body.height) - 1;
+        bool hit = false;
+        for (int row = old_bottom + 1; row <= new_bottom && !hit; ++row) {
+            for (uint col = 0u; col < body.width; ++col) {
+                if (solid_at(x + int(col), row)) { hit = true; break; }
+            }
+            if (hit) { next_y = (row - int(body.height)) << 16; vy = 0; }
+        }
+    }
+    body.x_fp = next_x;
+    body.y_fp = next_y;
+    body.vx_fp = vx;
+    body.vy_fp = vy;
+}
+
+void main() {
+    uvec2 p = gl_GlobalInvocationID.xy;
+    if (params.mode == 0u) {
+        if (p.x == 0u && p.y == 0u) integrate_body();
+        return;
+    }
+    if (p.x >= params.width || p.y >= params.height) return;
+    int left = body.x_fp >> 16;
+    int top = body.y_fp >> 16;
+    bool inside = body.enabled != 0u && int(p.x) >= left &&
+        int(p.x) < left + int(body.width) && int(p.y) >= top &&
+        int(p.y) < top + int(body.height);
+    occupancy[p.y * params.width + p.x] = inside ? body.id : 0u;
+}

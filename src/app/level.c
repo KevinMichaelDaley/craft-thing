@@ -25,14 +25,18 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 }
 
 bool dc_level_view_step(dc_level_view_t *view, char *err, uint32_t cap) {
-    (void)view;
-    return error(err, cap, "Rigid level step is not implemented");
+    if (!view) return error(err, cap, "Level view is null");
+    return dc_gpu_rigid_step(view->gpu, err, cap);
 }
 
 bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,
                               char *err, uint32_t cap) {
-    (void)view; (void)x; (void)y;
-    return error(err, cap, "Rigid body spawn is not implemented");
+    if (!view || x > VIEW_WIDTH - 4 || y > VIEW_HEIGHT - 4)
+        return error(err, cap, "Invalid rigid body spawn position");
+    dc_gpu_body_t body = { .x_fp = (int32_t)x << 16,
+        .y_fp = (int32_t)y << 16, .vx_fp = 1 << 16,
+        .width = 4, .height = 4, .id = 1, .active = 1 };
+    return dc_gpu_spawn_body(view->gpu, body, err, cap);
 }
 
 static bool visible(const dc_level_view_t *view, dc_chunk_coord_t coord) {

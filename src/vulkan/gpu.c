@@ -23,6 +23,7 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu->swapchain) vkDestroySwapchainKHR(gpu->device, gpu->swapchain, NULL);
     free(gpu->swap_images);
     if (gpu->mapped) vkUnmapMemory(gpu->device, gpu->memory);
+    if (gpu->device) dc_gpu_rigid_destroy(gpu);
     if (gpu->device) dc_gpu_chunks_destroy(gpu);
     if (gpu->command_pool) vkDestroyCommandPool(gpu->device, gpu->command_pool, NULL);
     if (gpu->pipeline) vkDestroyPipeline(gpu->device, gpu->pipeline, NULL);
@@ -156,18 +157,18 @@ static bool make_presentation(dc_gpu_t *gpu, uint32_t requested_width,
 
 static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
                           char *err, uint32_t cap) {
-    VkDescriptorSetLayoutBinding bindings[3] = {0};
-    for (uint32_t i = 0; i < 3; ++i) {
+    VkDescriptorSetLayoutBinding bindings[5] = {0};
+    for (uint32_t i = 0; i < 5; ++i) {
         bindings[i].binding = i;
         bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         bindings[i].descriptorCount = 1;
         bindings[i].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
     }
     VkDescriptorSetLayoutCreateInfo layout_info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 3, .pBindings = bindings };
+        .bindingCount = 5, .pBindings = bindings };
     if (vkCreateDescriptorSetLayout(gpu->device, &layout_info, NULL, &gpu->set_layout) != VK_SUCCESS)
         return error(err, cap, "Cannot create descriptor layout");
-    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 };
+    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 5 };
     VkDescriptorPoolCreateInfo pool_info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .maxSets = 1, .poolSizeCount = 1, .pPoolSizes = &size };
     if (vkCreateDescriptorPool(gpu->device, &pool_info, NULL, &gpu->descriptor_pool) != VK_SUCCESS)
@@ -177,13 +178,15 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         .pSetLayouts = &gpu->set_layout };
     if (vkAllocateDescriptorSets(gpu->device, &set_info, &gpu->descriptor) != VK_SUCCESS)
         return error(err, cap, "Cannot allocate descriptor set");
-    VkDescriptorBufferInfo buffers[3] = {
+    VkDescriptorBufferInfo buffers[5] = {
         { gpu->cells, 0, bytes },
         { gpu->chunk_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t) },
-        { gpu->page_buffer, 0, (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t) }
+        { gpu->page_buffer, 0, (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t) },
+        { gpu->occupancy_buffer, 0, bytes },
+        { gpu->body_buffer, 0, sizeof(dc_gpu_body_t) }
     };
-    VkWriteDescriptorSet writes[3] = {0};
-    for (uint32_t i = 0; i < 3; ++i) {
+    VkWriteDescriptorSet writes[5] = {0};
+    for (uint32_t i = 0; i < 5; ++i) {
         writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes[i].dstSet = gpu->descriptor;
         writes[i].dstBinding = i;
@@ -191,7 +194,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         writes[i].pBufferInfo = &buffers[i];
     }
-    vkUpdateDescriptorSets(gpu->device, 3, writes, 0, NULL);
+    vkUpdateDescriptorSets(gpu->device, 5, writes, 0, NULL);
     VkPushConstantRange range = { .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .size = 28 };
     VkPipelineLayoutCreateInfo pipeline_layout_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1, .pSetLayouts = &gpu->set_layout,
@@ -309,7 +312,9 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     }
     vkGetDeviceQueue(gpu->device, gpu->family, 0, &gpu->queue);
     if (!make_cells(gpu, bytes, err, cap) || !dc_gpu_chunks_init(gpu, err, cap) ||
+        !dc_gpu_rigid_buffers_init(gpu, err, cap) ||
         !make_pipeline(gpu, shader_path, bytes, err, cap)) goto fail;
+    if (!dc_gpu_rigid_pipeline_init(gpu, "build/shaders/rigid.comp.spv", err, cap)) goto fail;
     VkCommandPoolCreateInfo pool_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, .queueFamilyIndex = gpu->family };
     if (vkCreateCommandPool(gpu->device, &pool_info, NULL, &gpu->command_pool) != VK_SUCCESS) {

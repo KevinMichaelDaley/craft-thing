@@ -39,11 +39,25 @@ struct dc_gpu {
     VkDeviceMemory page_memory;
     void *page_mapped;
     uint32_t page_width, page_height;
+    VkBuffer body_buffer;
+    VkDeviceMemory body_memory;
+    void *body_mapped;
+    VkBuffer occupancy_buffer;
+    VkDeviceMemory occupancy_memory;
+    void *occupancy_mapped;
+    VkPipeline rigid_pipeline;
     uint32_t width, height;
 };
 
 bool dc_gpu_pick_device(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t cap);
 bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_chunks_destroy(dc_gpu_t *gpu);
+bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
+                               VkDeviceMemory *memory, void **mapped,
+                               char *err, uint32_t cap);
+bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *shader_path,
+                                char *err, uint32_t cap);
+void dc_gpu_rigid_destroy(dc_gpu_t *gpu);
 
 #endif

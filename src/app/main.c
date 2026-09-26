@@ -93,6 +93,11 @@ int main(int argc, char **argv) {
     uint16_t material = DC_MATERIAL_SAND;
     bool running = true;
     bool failed = false;
+    bool paused = false;
+    bool single_step = false;
+    uint64_t previous = SDL_GetPerformanceCounter();
+    double accumulator = 0.0;
+    const double tick_seconds = 1.0 / 60.0;
     while (running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -104,6 +109,22 @@ int main(int argc, char **argv) {
                 case SDLK_1: material = DC_MATERIAL_STONE; break;
                 case SDLK_2: material = DC_MATERIAL_SAND; break;
                 case SDLK_3: material = 3; break;
+                case SDLK_p: paused = !paused; break;
+                case SDLK_n: single_step = true; break;
+                case SDLK_b: {
+                    int mx, my;
+                    SDL_GetMouseState(&mx, &my);
+                    uint32_t x = mx >= 0 && mx < VIEW_WIDTH * WINDOW_SCALE ?
+                        (uint32_t)mx / WINDOW_SCALE : VIEW_WIDTH / 2;
+                    uint32_t y = my >= 0 && my < VIEW_HEIGHT * WINDOW_SCALE ?
+                        (uint32_t)my / WINDOW_SCALE : 4;
+                    if (x > VIEW_WIDTH - 4) x = VIEW_WIDTH - 4;
+                    if (y > VIEW_HEIGHT - 4) y = VIEW_HEIGHT - 4;
+                    if (!dc_level_view_spawn_body(view, x, y, err, sizeof(err))) {
+                        failed = true; running = false;
+                    }
+                    break;
+                }
                 case SDLK_LEFT: case SDLK_a: dc_level_view_move(view, -1, 0); break;
                 case SDLK_RIGHT: case SDLK_d: dc_level_view_move(view, 1, 0); break;
                 case SDLK_UP: case SDLK_w: dc_level_view_move(view, 0, -1); break;
@@ -112,6 +133,23 @@ int main(int argc, char **argv) {
                 }
             }
         }
+        uint64_t now = SDL_GetPerformanceCounter();
+        double elapsed = (double)(now - previous) / (double)SDL_GetPerformanceFrequency();
+        previous = now;
+        if (elapsed > 0.25) elapsed = 0.25;
+        if (!paused) accumulator += elapsed;
+        else accumulator = 0.0;
+        uint32_t steps = 0;
+        while (running && (single_step || (!paused && accumulator >= tick_seconds)) && steps < 4) {
+            if (!dc_level_view_step(view, err, sizeof(err))) {
+                failed = true; running = false;
+                break;
+            }
+            single_step = false;
+            if (accumulator >= tick_seconds) accumulator -= tick_seconds;
+            ++steps;
+        }
+        if (accumulator > 4.0 * tick_seconds) accumulator = 4.0 * tick_seconds;
         int mx, my;
         uint32_t buttons = SDL_GetMouseState(&mx, &my);
         if (mx >= 0 && my >= 0 && mx < VIEW_WIDTH * WINDOW_SCALE &&

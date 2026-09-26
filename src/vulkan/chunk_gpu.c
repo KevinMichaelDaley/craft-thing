@@ -8,7 +8,7 @@ static bool error(char *buf, uint32_t cap, const char *message) {
     return false;
 }
 
-static bool make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
+bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                VkDeviceMemory *memory, void **mapped,
                                char *err, uint32_t cap) {
     VkBufferCreateInfo info = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -42,9 +42,9 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     gpu->page_height = (gpu->height + DC_CHUNK_SIDE - 1u) / DC_CHUNK_SIDE;
     VkDeviceSize chunk_bytes = (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t);
     VkDeviceSize page_bytes = (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t);
-    return make_mapped_buffer(gpu, chunk_bytes, &gpu->chunk_buffer,
+    return dc_gpu_make_mapped_buffer(gpu, chunk_bytes, &gpu->chunk_buffer,
                &gpu->chunk_memory, &gpu->chunk_mapped, err, cap) &&
-           make_mapped_buffer(gpu, page_bytes, &gpu->page_buffer,
+           dc_gpu_make_mapped_buffer(gpu, page_bytes, &gpu->page_buffer,
                &gpu->page_memory, &gpu->page_mapped, err, cap);
 }
 
@@ -91,21 +91,4 @@ bool dc_gpu_readback(dc_gpu_t *gpu, uint32_t *cells, uint32_t cell_count,
         return error(err, cap, "Readback buffer is too small");
     memcpy(cells, gpu->mapped, (size_t)gpu->width * gpu->height * sizeof(uint32_t));
     return true;
-}
-
-bool dc_gpu_spawn_body(dc_gpu_t *gpu, dc_gpu_body_t body,
-                       char *err, uint32_t cap) {
-    (void)gpu; (void)body;
-    return error(err, cap, "GPU rigid body is not implemented");
-}
-
-bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    (void)gpu;
-    return error(err, cap, "GPU rigid pass is not implemented");
-}
-
-bool dc_gpu_read_body(dc_gpu_t *gpu, dc_gpu_body_t *body,
-                      char *err, uint32_t cap) {
-    (void)gpu; (void)body;
-    return error(err, cap, "GPU rigid readback is not implemented");
 }
