@@ -270,10 +270,19 @@ int main(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "--smoke-motion-long") == 0)
         return smoke_moving_water_long();
     uint64_t seed = 314;
-    if (argc == 3 && strcmp(argv[1], "--seed") == 0)
-        seed = strtoull(argv[2], NULL, 10);
+    const char *directory = "world_chunks";
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--seed") == 0 && i + 1 < argc)
+            seed = strtoull(argv[++i], NULL, 10);
+        else if (strcmp(argv[i], "--world-dir") == 0 && i + 1 < argc)
+            directory = argv[++i];
+        else {
+            fprintf(stderr, "Usage: %s [--seed number] [--world-dir path]\n", argv[0]);
+            return 1;
+        }
+    }
     char err[256] = {0};
-    dc_level_view_t *view = dc_level_view_create("world_chunks", seed, err, sizeof(err));
+    dc_level_view_t *view = dc_level_view_create(directory, seed, err, sizeof(err));
     if (!view) { fprintf(stderr, "Level create: %s\n", err); return 1; }
     uint16_t material = DC_MATERIAL_SAND;
     bool running = true;

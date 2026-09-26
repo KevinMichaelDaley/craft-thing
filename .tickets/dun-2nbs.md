@@ -2,7 +2,7 @@
 id: dun-2nbs
 status: open
 deps: [dun-u68k, dun-jo5i]
-links: []
+links: [dun-9gxs]
 created: 2026-09-26T05:25:21Z
 type: task
 priority: 2

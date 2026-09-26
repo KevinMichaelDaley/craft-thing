@@ -8,6 +8,9 @@ Initial target: one desktop Vulkan 1.3 device, one graphics/compute queue, and a
 
 ## Simulation representation
 
+The extended granular, wood, and multi-body design is in
+[the GPU materials and rigid plan](design/materials_and_rigid_plan.md).
+
 - Divide the unbounded world into 64 x 64 cell chunks addressed by signed 64-bit chunk coordinates. The GPU keeps only a bounded pool of resident chunks. A CPU chunk directory maps world coordinates to persisted or procedural data; a GPU page table maps resident coordinates to pool slots. Track active, sleeping, loading, and dirty chunks separately. Neighbor stencils use halo cells or direct neighbor-slot lookup, refreshed at each substep that crosses chunk edges.
 - Store solid/powder identity and state in ping-pong integer cell layers within the resident chunk pool. Keep Eulerian fluid volume and velocity/flux in separate ping-pong layers: values live at fixed world cells and fluid moves by conservative flux between cells, never by tracking fluid particles. One cell may contain a solid or powder plus fluid volume only where the material rules permit it. Define that rule in the material table, not in pass-specific code.
 - Use a small, bounded pool of **massless virtual markers near water interfaces** to guide free-surface reconstruction and reduce visible smearing. Water volume remains authoritative in Eulerian cells; marker corrections may only request equal-and-opposite cell transfers. The detailed solver and verification plan is in [design/fluid_solver.md](design/fluid_solver.md).
