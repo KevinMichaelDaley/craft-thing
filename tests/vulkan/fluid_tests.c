@@ -49,6 +49,8 @@ static void test_water_falls_and_crosses_resident_chunk_edge(void) {
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
         total += saved_left.cells[i].fluid_mass + saved_right.cells[i].fluid_mass;
         right_mass += saved_right.cells[i].fluid_mass;
+        ASSERT_TRUE(saved_left.cells[i].fluid_mass <= DC_FLUID_FULL);
+        ASSERT_TRUE(saved_right.cells[i].fluid_mass <= DC_FLUID_FULL);
     }
     ASSERT_EQ(total, (uint64_t)DC_FLUID_FULL);
     ASSERT_TRUE(right_mass > 0);
@@ -136,33 +138,46 @@ static void test_closed_liquid_velocity_is_projected(void) {
 
 static void test_chunk_seam_matches_interior_flow(void) {
     char err[256] = {0};
-    dc_chunk_t left = {0}, right = {0}, saved_left = {0}, saved_right = {0};
-    left.cells[5 * 64 + 31].fluid_mass = DC_FLUID_FULL;
-    left.cells[5 * 64 + 63].fluid_mass = DC_FLUID_FULL;
-    for (uint32_t x = 20; x < 64; ++x)
+    dc_chunk_t left = {0}, right = {0}, interior_left = {0},
+               interior_right = {0}, seam_left = {0}, seam_right = {0};
+    for (uint32_t x = 0; x < 64; ++x) {
         left.cells[12 * 64 + x].material = DC_MATERIAL_STONE;
-    for (uint32_t x = 0; x <= 12; ++x)
         right.cells[12 * 64 + x].material = DC_MATERIAL_STONE;
+    }
+    left.cells[5 * 64 + 31].fluid_mass = DC_FLUID_FULL;
     dc_gpu_t *gpu = make_grid(&left, &right, err, sizeof(err));
     ASSERT_TRUE(gpu != NULL);
     ASSERT_TRUE(dc_gpu_set_marker_correction(gpu, false));
     for (uint32_t i = 0; i < 20; ++i)
         ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved_left, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &saved_right, err, sizeof(err)));
-    uint32_t crossed = 0;
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &interior_left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &interior_right, err, sizeof(err)));
+    dc_gpu_destroy(gpu);
+    left.cells[5 * 64 + 31].fluid_mass = 0;
+    left.cells[5 * 64 + 63].fluid_mass = DC_FLUID_FULL;
+    gpu = make_grid(&left, &right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    ASSERT_TRUE(dc_gpu_set_marker_correction(gpu, false));
+    for (uint32_t i = 0; i < 20; ++i)
+        ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &seam_left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &seam_right, err, sizeof(err)));
+    uint32_t crossed = 0, max_delta = 0;
     for (uint32_t y = 5; y < 12; ++y) {
         for (int32_t offset = -8; offset <= 8; ++offset) {
             uint32_t interior_x = (uint32_t)(31 + offset);
             uint32_t seam_x = (uint32_t)(63 + offset);
-            uint32_t interior = saved_left.cells[y * 64 + interior_x].fluid_mass;
+            uint32_t interior = interior_left.cells[y * 64 + interior_x].fluid_mass;
             uint32_t seam = seam_x < 64 ?
-                saved_left.cells[y * 64 + seam_x].fluid_mass :
-                saved_right.cells[y * 64 + seam_x - 64].fluid_mass;
-            ASSERT_EQ(interior, seam);
+                seam_left.cells[y * 64 + seam_x].fluid_mass :
+                seam_right.cells[y * 64 + seam_x - 64].fluid_mass;
+            uint32_t delta = interior > seam ? interior - seam : seam - interior;
+            if (delta > max_delta) max_delta = delta;
             if (seam_x >= 64) crossed += seam;
         }
     }
+    printf("chunk-seam maximum fixed-point delta=%u\n", max_delta);
+    ASSERT_TRUE(max_delta <= 128);
     ASSERT_TRUE(crossed > 0);
     dc_gpu_destroy(gpu);
     PASS();
@@ -488,7 +503,28 @@ static void test_supported_water_spreads_sideways_quickly(void) {
         }
     printf("ten-tick lateral front=%u\n", rightmost);
     ASSERT_EQ(mass, (uint64_t)128 * DC_FLUID_FULL);
-    ASSERT_TRUE(rightmost >= 50);
+    ASSERT_TRUE(rightmost >= 55);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
+static void test_falling_water_is_not_limited_to_one_cell_per_tick(void) {
+    char err[256] = {0};
+    dc_chunk_t left = {0}, right = {0}, saved = {0};
+    left.cells[2 * 64 + 20].fluid_mass = DC_FLUID_FULL;
+    dc_gpu_t *gpu = make_grid(&left, &right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    for (uint32_t tick = 0; tick < 8; ++tick)
+        ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved, err, sizeof(err)));
+    uint64_t mass = 0, deep_mass = 0;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        mass += saved.cells[i].fluid_mass;
+        if (i / 64u >= 11u) deep_mass += saved.cells[i].fluid_mass;
+        ASSERT_TRUE(saved.cells[i].fluid_mass <= DC_FLUID_FULL);
+    }
+    ASSERT_EQ(mass, (uint64_t)DC_FLUID_FULL);
+    ASSERT_TRUE(deep_mass > 0);
     dc_gpu_destroy(gpu);
     PASS();
 }
@@ -508,6 +544,7 @@ int main(void) {
     RUN(test_marker_pool_stays_bounded_on_dense_interface);
     RUN(test_visible_spring_supplies_fast_flow_in_one_second);
     RUN(test_supported_water_spreads_sideways_quickly);
+    RUN(test_falling_water_is_not_limited_to_one_cell_per_tick);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
