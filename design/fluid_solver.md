@@ -58,8 +58,9 @@ inside-marked cell with at least as much water. Correction also runs at moving
 interfaces. Each pair applies equal-and-opposite updates,
 so markers cannot add water mass. The `M` overlay displays marker guides.
 
-Chunk files persist the active marker count and records alongside grid cells;
-version 1 files load with an empty marker pool. The fixed pool is deliberately
+Chunk files persist the active marker count, records, and per-cell face velocity
+alongside grid cells; version 1 files load with an empty marker pool, and
+versions 1 and 2 load with zero saved velocity. The fixed pool is deliberately
 bounded: excessive advected markers crossing into one chunk can still saturate
 it, so the marker pass caps counts and preserves the authoritative grid volume.
 The current tests

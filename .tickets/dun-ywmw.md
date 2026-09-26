@@ -1,6 +1,6 @@
 ---
 id: dun-ywmw
-status: in_progress
+status: closed
 deps: []
 links: [dun-6qqa]
 created: 2026-09-26T07:46:17Z

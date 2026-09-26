@@ -22,6 +22,13 @@ The extended granular, wood, and multi-body design is in
 
 Streaming is part of the first architecture, even if the first demo loads only a few chunks. Maintain a fixed GPU slot budget and a world-to-slot lookup; never allocate a Vulkan image per world chunk. The resident set covers the camera viewport, a safety margin for motion and fluid propagation, and chunks around active bodies/events. Empty untouched chunks can be generated from a world seed on demand. Modified chunks are persisted with material state, fluid state, version, and stable IDs. The CPU uses signed 64-bit world coordinates; shaders operate on resident slot IDs and coordinates relative to a rebased local origin so a device-wide 64-bit integer shader requirement is unnecessary.
 
+The current testbed simulates one 64-cell chunk margin on every side of the
+256 × 128 camera and presents only the central crop. It waits for all 24 pages
+before advancing a tick, shifts face velocity on the GPU when the camera moves,
+and saves per-cell face velocity with volume and markers in version 3 chunk
+files. Edge brush strokes mark affected halo chunks dirty. Loaded older chunk
+versions start with zero saved velocity.
+
 A separate CPU worker thread handles chunk generation, disk loads, and saves through bounded request/completion queues. The main thread owns Vulkan staging and submission; it processes completed worker jobs without waiting for disk I/O. A slot becomes visible to simulation only after upload completes. Dirty chunks are copied back asynchronously and saved before their slots are reused; GPU timeline values or fences guard both upload visibility and safe eviction. Pin chunks touched by the current tick and their stencil neighbors. When the resident budget is exhausted, evict clean sleeping chunks first, then saved dirty chunks; expose a budget-pressure counter rather than silently discarding state.
 
 Chunk-edge rules must conserve mass and particles. If a destination chunk is absent, request it and defer transfer until it is resident; do not treat an unloaded edge as empty or delete outgoing material. Rebuild halos after neighbor changes and before each stencil substep. The initial offscreen policy is that sleeping or unloaded chunks preserve their state and do not advance time. A later design decision can add coarse offscreen simulation if continuous world evolution is required.
