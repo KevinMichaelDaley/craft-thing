@@ -125,10 +125,26 @@ static void test_resident_slot_round_trip_through_worker(void) {
     PASS();
 }
 
+static void test_worker_loads_procedural_basin(void) {
+    char directory[] = "build/stream_basin_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_streamer_t *stream = dc_stream_create(directory, 314, 2);
+    ASSERT_TRUE(stream != NULL);
+    dc_stream_result_t result = {0};
+    ASSERT_TRUE(dc_stream_request_load(stream, (dc_chunk_coord_t){2, 0}, 1));
+    ASSERT_TRUE(wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_LOADED);
+    ASSERT_EQ(result.chunk->cells[40 * DC_CHUNK_SIDE].fluid_mass, DC_FLUID_FULL);
+    dc_stream_result_release(&result);
+    dc_stream_destroy(stream);
+    PASS();
+}
+
 int main(void) {
     RUN(test_worker_generates_saves_and_reloads_chunk);
     RUN(test_shutdown_flushes_queued_saves);
     RUN(test_resident_slot_round_trip_through_worker);
+    RUN(test_worker_loads_procedural_basin);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

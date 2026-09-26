@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <threads.h>
 
+#include "dungeoncraft/generate.h"
 #include "dungeoncraft/stream.h"
 
 typedef enum { JOB_LOAD, JOB_SAVE } job_kind_t;
@@ -38,30 +39,6 @@ struct dc_streamer {
     bool stop;
 };
 
-static uint64_t mix64(uint64_t value) {
-    value ^= value >> 30;
-    value *= UINT64_C(0xbf58476d1ce4e5b9);
-    value ^= value >> 27;
-    value *= UINT64_C(0x94d049bb133111eb);
-    return value ^ (value >> 31);
-}
-
-static void generate_chunk(dc_chunk_t *chunk, uint64_t seed, dc_chunk_coord_t coord) {
-    memset(chunk, 0, sizeof(*chunk));
-    chunk->coord = coord;
-    for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x) {
-        uint64_t anchor = (uint64_t)coord.x * 2u + x / 32u;
-        uint32_t offset = x % 32u;
-        uint32_t left = 24u + (uint32_t)(mix64(seed ^ anchor) % 17u);
-        uint32_t right = 24u + (uint32_t)(mix64(seed ^ (anchor + 1u)) % 17u);
-        uint32_t height = (left * (32u - offset) + right * offset + 16u) / 32u;
-        for (uint32_t y = 0; y < DC_CHUNK_SIDE; ++y) {
-            bool solid = coord.y > 0 || (coord.y == 0 && y >= height);
-            chunk->cells[y * DC_CHUNK_SIDE + x].material = solid ? 1u : 0u;
-        }
-    }
-}
-
 static bool chunk_path(const dc_streamer_t *stream, dc_chunk_coord_t coord,
                        char *path, size_t cap, bool temporary) {
     int count = snprintf(path, cap, "%s/chunk_%016" PRIx64 "_%016" PRIx64 ".bin%s",
@@ -93,7 +70,7 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coor
     if (!chunk_path(stream, coord, path, sizeof(path), false)) { free(chunk); return NULL; }
     FILE *file = fopen(path, "rb");
     if (!file && errno == ENOENT) {
-        generate_chunk(chunk, stream->seed, coord);
+        dc_generate_chunk(stream->seed, coord, chunk);
         return chunk;
     }
     if (!file) { free(chunk); return NULL; }
