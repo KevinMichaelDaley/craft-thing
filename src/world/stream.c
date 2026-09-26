@@ -24,6 +24,8 @@ typedef struct {
     uint64_t seed;
 } chunk_header_t;
 
+_Static_assert(sizeof(chunk_header_t) == 32, "Chunk file header layout changed");
+
 struct dc_streamer {
     char *directory;
     uint64_t seed;

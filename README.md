@@ -17,4 +17,4 @@ make test_ui
 
 In the window, drag the left mouse button to paint. Keys `1`, `2`, and `3` select colors; `C` resets the diagnostic pattern; Escape closes the window.
 
-The world code already defines signed 64-bit chunk coordinates, 64 x 64 cell chunks, bounded resident-slot state, and a separate C11 worker thread for procedural generation and disk load/save. Its end-to-end test verifies that edits survive save, eviction, and reload. The [engine plan](ENGINE_PLAN.md) and `.tickets/` track the remaining GPU page table, simulation stages, and interactive procedural level work.
+The world code already defines signed 64-bit chunk coordinates, 64 x 64 cell chunks, bounded resident-slot state, and a separate C11 worker thread for procedural generation and disk load/save. Seeded generation produces continuous terrain, caves, and a fluid basin across chunk borders. End-to-end tests verify that generated cells arrive through the worker and edits survive save, eviction, and reload. The [engine plan](ENGINE_PLAN.md) and `.tickets/` track the remaining GPU page table, simulation stages, and interactive procedural level work.
