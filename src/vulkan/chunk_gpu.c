@@ -45,10 +45,12 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return dc_gpu_make_mapped_buffer(gpu, chunk_bytes, &gpu->chunk_buffer,
                &gpu->chunk_memory, &gpu->chunk_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, page_bytes, &gpu->page_buffer,
-               &gpu->page_memory, &gpu->page_mapped, err, cap);
+               &gpu->page_memory, &gpu->page_mapped, err, cap) &&
+           dc_gpu_halo_buffers_init(gpu, err, cap);
 }
 
 void dc_gpu_chunks_destroy(dc_gpu_t *gpu) {
+    dc_gpu_halo_destroy(gpu);
     if (gpu->chunk_mapped) vkUnmapMemory(gpu->device, gpu->chunk_memory);
     if (gpu->page_mapped) vkUnmapMemory(gpu->device, gpu->page_memory);
     if (gpu->chunk_buffer) vkDestroyBuffer(gpu->device, gpu->chunk_buffer, NULL);
@@ -81,7 +83,15 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
         (slot != UINT32_MAX && slot >= DC_GPU_CHUNK_SLOTS))
         return error(err, cap, "Invalid GPU page mapping");
     uint32_t *pages = gpu->page_mapped;
-    pages[tile_y * gpu->page_width + tile_x] = slot == UINT32_MAX ? 0u : slot + 1u;
+    uint32_t tile = tile_y * gpu->page_width + tile_x;
+    if (slot != UINT32_MAX && gpu->slot_page[slot] != UINT32_MAX &&
+        gpu->slot_page[slot] != tile)
+        pages[gpu->slot_page[slot]] = 0u;
+    uint32_t old_page = pages[tile];
+    if (old_page && (slot == UINT32_MAX || old_page != slot + 1u))
+        gpu->slot_page[old_page - 1u] = UINT32_MAX;
+    pages[tile] = slot == UINT32_MAX ? 0u : slot + 1u;
+    if (slot != UINT32_MAX) gpu->slot_page[slot] = tile;
     return true;
 }
 
@@ -91,28 +101,4 @@ bool dc_gpu_readback(dc_gpu_t *gpu, uint32_t *cells, uint32_t cell_count,
         return error(err, cap, "Readback buffer is too small");
     memcpy(cells, gpu->mapped, (size_t)gpu->width * gpu->height * sizeof(uint32_t));
     return true;
-}
-
-bool dc_gpu_refresh_halos(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    (void)gpu;
-    return error(err, cap, "GPU halo refresh is not implemented");
-}
-
-bool dc_gpu_read_halo(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
-                      int32_t local_x, int32_t local_y, dc_gpu_halo_cell_t *cell,
-                      char *err, uint32_t cap) {
-    (void)gpu; (void)tile_x; (void)tile_y; (void)local_x; (void)local_y; (void)cell;
-    return error(err, cap, "GPU halo readback is not implemented");
-}
-
-bool dc_gpu_queue_transfer(dc_gpu_t *gpu, dc_gpu_transfer_t transfer,
-                           char *err, uint32_t cap) {
-    (void)gpu; (void)transfer;
-    return error(err, cap, "GPU transfer queue is not implemented");
-}
-
-bool dc_gpu_try_transfer(dc_gpu_t *gpu, dc_gpu_transfer_state_t *state,
-                         char *err, uint32_t cap) {
-    (void)gpu; (void)state;
-    return error(err, cap, "GPU transfer resolver is not implemented");
 }

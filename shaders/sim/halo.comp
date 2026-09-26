@@ -1,0 +1,109 @@
+#version 450
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 1, std430) buffer ChunkCells { uvec2 chunk_cells[]; };
+layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
+layout(set = 0, binding = 6, std430) buffer Halos { uvec4 halo_cells[]; };
+layout(set = 0, binding = 7, std430) buffer TransferCommand {
+    uint from_x;
+    uint from_y;
+    uint to_x;
+    uint to_y;
+    uint amount;
+    uint kind;
+    uint state;
+} command;
+layout(push_constant) uniform Params {
+    uint width;
+    uint height;
+    uint mode;
+    uint unused0;
+    uint unused1;
+    uint unused2;
+    uint unused3;
+} params;
+
+const uint SIDE = 64u;
+const uint HALO_SIDE = 66u;
+const uint CELLS_PER_CHUNK = 4096u;
+const uint CELLS_PER_HALO = 4356u;
+const uint FLUID_FULL = 65536u;
+
+void refresh_halo() {
+    uint hx = gl_GlobalInvocationID.x;
+    uint hy = gl_GlobalInvocationID.y;
+    uint tile = gl_GlobalInvocationID.z;
+    uint page_width = (params.width + SIDE - 1u) / SIDE;
+    uint page_height = (params.height + SIDE - 1u) / SIDE;
+    if (hx >= HALO_SIDE || hy >= HALO_SIDE || tile >= page_width * page_height) return;
+    uint owner_page = pages[tile];
+    if (owner_page == 0u) return;
+    int x = int((tile % page_width) * SIDE + hx) - 1;
+    int y = int((tile / page_width) * SIDE + hy) - 1;
+    uint halo_index = (owner_page - 1u) * CELLS_PER_HALO + hy * HALO_SIDE + hx;
+    if (x < 0 || y < 0 || x >= int(params.width) || y >= int(params.height)) {
+        halo_cells[halo_index] = uvec4(0u);
+        return;
+    }
+    uint page = pages[(uint(y) / SIDE) * page_width + uint(x) / SIDE];
+    if (page == 0u) {
+        halo_cells[halo_index] = uvec4(0u);
+        return;
+    }
+    uint index = (page - 1u) * CELLS_PER_CHUNK +
+                 (uint(y) % SIDE) * SIDE + uint(x) % SIDE;
+    uvec2 cell = chunk_cells[index];
+    halo_cells[halo_index] = uvec4(cell.x, cell.y, 1u, page - 1u);
+}
+
+void resolve_transfer() {
+    if (command.state != 0u) return;
+    uint page_width = (params.width + SIDE - 1u) / SIDE;
+    uint source_tile_x = command.from_x / SIDE;
+    uint source_tile_y = command.from_y / SIDE;
+    uint source_tile = source_tile_y * page_width + source_tile_x;
+    uint source_page = pages[source_tile];
+    if (source_page == 0u) return;
+    uint hx = command.to_x - source_tile_x * SIDE + 1u;
+    uint hy = command.to_y - source_tile_y * SIDE + 1u;
+    uvec4 destination = halo_cells[(source_page - 1u) * CELLS_PER_HALO +
+                                   hy * HALO_SIDE + hx];
+    if (destination.z == 0u) return;
+    uint source_index = (source_page - 1u) * CELLS_PER_CHUNK +
+                        (command.from_y % SIDE) * SIDE + command.from_x % SIDE;
+    uint destination_index = destination.w * CELLS_PER_CHUNK +
+                             (command.to_y % SIDE) * SIDE + command.to_x % SIDE;
+    uvec2 source_cell = chunk_cells[source_index];
+    uvec2 destination_cell = chunk_cells[destination_index];
+    if (command.kind == 1u) {
+        if ((source_cell.x & 0xffffu) != 0u ||
+            (destination_cell.x & 0xffffu) != 0u ||
+            source_cell.y < command.amount ||
+            destination_cell.y > FLUID_FULL - command.amount) {
+            command.state = 2u;
+            return;
+        }
+        source_cell.y -= command.amount;
+        destination_cell.y += command.amount;
+    } else if (command.kind == 2u) {
+        if ((source_cell.x & 0xffffu) == 0u ||
+            (destination_cell.x & 0xffffu) != 0u || destination_cell.y != 0u) {
+            command.state = 2u;
+            return;
+        }
+        destination_cell.x = source_cell.x;
+        source_cell.x = 0u;
+    } else {
+        command.state = 2u;
+        return;
+    }
+    chunk_cells[source_index] = source_cell;
+    chunk_cells[destination_index] = destination_cell;
+    command.state = 1u;
+}
+
+void main() {
+    if (params.mode == 0u) refresh_halo();
+    else if (gl_GlobalInvocationID.x == 0u && gl_GlobalInvocationID.y == 0u &&
+             gl_GlobalInvocationID.z == 0u) resolve_transfer();
+}

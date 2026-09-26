@@ -39,6 +39,7 @@ struct dc_gpu {
     VkDeviceMemory page_memory;
     void *page_mapped;
     uint32_t page_width, page_height;
+    uint32_t slot_page[DC_GPU_CHUNK_SLOTS];
     VkBuffer body_buffer;
     VkDeviceMemory body_memory;
     void *body_mapped;
@@ -53,6 +54,14 @@ struct dc_gpu {
     VkQueryPool timestamp_pool;
     float timestamp_period;
     uint32_t timestamp_bits;
+    VkBuffer halo_buffer;
+    VkDeviceMemory halo_memory;
+    void *halo_mapped;
+    VkBuffer transfer_buffer;
+    VkDeviceMemory transfer_memory;
+    void *transfer_mapped;
+    VkPipeline halo_pipeline;
+    bool has_transfer;
     uint32_t width, height;
 };
 
@@ -71,5 +80,8 @@ void dc_gpu_rigid_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_rigid(dc_gpu_t *gpu);
 bool dc_gpu_tick_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_tick_destroy(dc_gpu_t *gpu);
+bool dc_gpu_halo_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+bool dc_gpu_halo_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+void dc_gpu_halo_destroy(dc_gpu_t *gpu);
 
 #endif

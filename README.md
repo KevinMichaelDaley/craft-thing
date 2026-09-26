@@ -4,6 +4,8 @@ Dungeoncraft is an early C11/Vulkan prototype for a per-pixel material world. Th
 
 The fixed-tick GPU graph now records rigid, fluid, and sand dispatch groups in one command buffer, with synchronization2 barriers and timestamp queries. The latter two groups currently run probe shaders: the fluid probe reads rigid occupancy, and the sand probe reads the fluid probe's output. Their captures prove stage order and report GPU duration, while the fluid and sand simulation tickets supply the actual cell updates.
 
+GPU chunk halos are bounded by the 64 resident slots and refreshed from the page table before a stencil transfer. A diagnostic transfer resolver moves one scalar amount or material particle between adjacent cells. It preserves the command and source state if the destination page is absent, then applies it after that page is mapped. The fluid and sand solvers will use this boundary policy for their parallel updates; the current resolver is a single-command correctness primitive.
+
 ## Build and run
 
 Install development packages for Vulkan, SDL2, `pkg-config`, and `glslangValidator` (Ubuntu packages: `libvulkan-dev`, `libsdl2-dev`, `glslang-tools`). Then run:
