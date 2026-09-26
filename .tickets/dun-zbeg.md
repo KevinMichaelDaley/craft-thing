@@ -1,6 +1,6 @@
 ---
 id: dun-zbeg
-status: open
+status: in_progress
 deps: [dun-kjp9, dun-d8gb]
 links: []
 created: 2026-09-26T05:25:20Z

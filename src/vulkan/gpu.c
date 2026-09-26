@@ -376,6 +376,36 @@ bool dc_gpu_paint(dc_gpu_t *gpu, uint32_t x, uint32_t y, uint32_t radius,
     return dispatch_cells(gpu, push, err, cap);
 }
 
+bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
+                         char *err, uint32_t cap) {
+    (void)gpu; (void)slot; (void)chunk;
+    return error(err, cap, "Chunk atlas upload is not implemented");
+}
+
+bool dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chunk,
+                           char *err, uint32_t cap) {
+    (void)gpu; (void)slot; (void)chunk;
+    return error(err, cap, "Chunk atlas download is not implemented");
+}
+
+bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
+                     uint32_t slot, char *err, uint32_t cap) {
+    (void)gpu; (void)tile_x; (void)tile_y; (void)slot;
+    return error(err, cap, "GPU page table is not implemented");
+}
+
+bool dc_gpu_render_chunks(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    (void)gpu;
+    return error(err, cap, "GPU chunk rendering is not implemented");
+}
+
+bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
+                           uint32_t radius, uint16_t material,
+                           char *err, uint32_t cap) {
+    (void)gpu; (void)x; (void)y; (void)radius; (void)material;
+    return error(err, cap, "GPU material painting is not implemented");
+}
+
 static void image_barrier(VkCommandBuffer command, VkImage image,
                           VkImageLayout old_layout, VkImageLayout new_layout,
                           VkPipelineStageFlags2 src_stage, VkAccessFlags2 src_access,

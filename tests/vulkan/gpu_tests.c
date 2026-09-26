@@ -54,10 +54,40 @@ static void test_gpu_brush_updates_only_covered_cells(void) {
     PASS();
 }
 
+static void test_chunk_page_mapping_and_gpu_material_edit(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t left = {0}, right = {0}, saved = {0};
+    uint32_t pixels[128 * 64] = {0};
+    left.coord = (dc_chunk_coord_t){-1, 0};
+    right.coord = (dc_chunk_coord_t){0, 0};
+    left.cells[5 * DC_CHUNK_SIDE + 63].material = DC_MATERIAL_STONE;
+    right.cells[5 * DC_CHUNK_SIDE].fluid_mass = DC_FLUID_FULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 128, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, &left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 1, &right, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 0, 1, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_render_chunks(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_readback(gpu, pixels, 128 * 64, err, sizeof(err)));
+    ASSERT_EQ(pixels[5 * 128 + 63], 0xff707070u);
+    ASSERT_EQ(pixels[5 * 128 + 64], 0xffd07030u);
+    ASSERT_TRUE(dc_gpu_paint_material(gpu, 64, 5, 0, DC_MATERIAL_SAND, err, sizeof(err)));
+    saved.coord = right.coord;
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &saved, err, sizeof(err)));
+    ASSERT_EQ(saved.cells[5 * DC_CHUNK_SIDE].material, DC_MATERIAL_SAND);
+    ASSERT_EQ(saved.cells[5 * DC_CHUNK_SIDE].fluid_mass, 0u);
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved, err, sizeof(err)));
+    ASSERT_EQ(saved.cells[5 * DC_CHUNK_SIDE + 63].material, DC_MATERIAL_STONE);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 int main(void) {
     RUN(test_gpu_pattern_readback);
     RUN(test_rejects_invalid_dimensions);
     RUN(test_gpu_brush_updates_only_covered_cells);
+    RUN(test_chunk_page_mapping_and_gpu_material_edit);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
