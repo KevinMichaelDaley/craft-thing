@@ -302,6 +302,49 @@ static int smoke_streamed_level(void) {
     return 0;
 }
 
+static int smoke_world_transfer(void) {
+    char directory[] = "build/ui_transfer_XXXXXX";
+    if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
+    char err[256] = {0};
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    if (!view) { fprintf(stderr, "%s\n", err); return 1; }
+    dc_chunk_t *source = calloc(1, sizeof(*source));
+    dc_chunk_t *destination = calloc(1, sizeof(*destination));
+    bool okay = source && destination &&
+        dc_level_view_set_spring_enabled(view, false) &&
+        dc_level_view_wait_visible(view, 5000, err, sizeof(err)) &&
+        dc_level_view_move(view, 1, 0) &&
+        dc_level_view_wait_visible(view, 5000, err, sizeof(err)) &&
+        dc_level_view_paint(view, 255, 5, 0, DC_MATERIAL_SAND, err, sizeof(err)) &&
+        dc_level_view_move(view, -1, 0) &&
+        dc_level_view_wait_visible(view, 5000, err, sizeof(err)) &&
+        dc_level_view_queue_transfer(view, 319, 5, 320, 5, 0,
+                                     DC_GPU_TRANSFER_PARTICLE, err, sizeof(err));
+    dc_gpu_transfer_state_t state = DC_GPU_TRANSFER_PENDING;
+    if (okay) okay = dc_level_view_tick(view, err, sizeof(err)) &&
+                     !dc_level_view_transfer_result(view, &state) &&
+                     dc_level_view_move(view, 1, 0) &&
+                     dc_level_view_wait_visible(view, 5000, err, sizeof(err));
+    for (int i = 0; okay && i < 100 && !dc_level_view_transfer_result(view, &state); ++i)
+        okay = dc_level_view_tick(view, err, sizeof(err));
+    if (okay) okay = state == DC_GPU_TRANSFER_APPLIED &&
+                     dc_level_view_chunk(view, (dc_chunk_coord_t){4, 0}, source,
+                                         err, sizeof(err)) &&
+                     dc_level_view_chunk(view, (dc_chunk_coord_t){5, 0}, destination,
+                                         err, sizeof(err)) &&
+                     source->cells[5 * DC_CHUNK_SIDE + 63].material == DC_MATERIAL_AIR &&
+                     destination->cells[5 * DC_CHUNK_SIDE].material == DC_MATERIAL_SAND;
+    if (okay) okay = dc_level_view_tick(view, err, sizeof(err)) &&
+                     dc_level_view_chunk(view, (dc_chunk_coord_t){5, 0}, destination,
+                                         err, sizeof(err)) &&
+                     destination->cells[5 * DC_CHUNK_SIDE].material == DC_MATERIAL_SAND;
+    free(source); free(destination);
+    if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
+    if (!okay) fprintf(stderr, "World transfer smoke failed: %s\n", err);
+    else printf("World-anchored streamed transfer smoke passed\n");
+    return okay ? 0 : 1;
+}
+
 static int smoke_halo_flow(void) {
     char directory[] = "build/ui_halo_flow_XXXXXX";
     if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
@@ -391,6 +434,8 @@ int main(int argc, char **argv) {
         return smoke_halo_flow();
     if (argc > 1 && strcmp(argv[1], "--smoke-stream") == 0)
         return smoke_streamed_level();
+    if (argc > 1 && strcmp(argv[1], "--smoke-world-transfer") == 0)
+        return smoke_world_transfer();
     if (argc > 1 && strcmp(argv[1], "--smoke-motion") == 0)
         return smoke_moving_water();
     if (argc > 1 && strcmp(argv[1], "--smoke-motion-long") == 0)

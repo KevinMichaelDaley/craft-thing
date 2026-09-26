@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "dungeoncraft/chunk.h"
+#include "dungeoncraft/gpu.h"
 
 typedef struct dc_level_view dc_level_view_t;
 
@@ -29,6 +30,13 @@ bool dc_level_view_pixels(dc_level_view_t *view, uint32_t *colors,
 bool dc_level_view_chunk(dc_level_view_t *view, dc_chunk_coord_t coord,
                          dc_chunk_t *chunk, char *err, uint32_t err_cap);
 bool dc_level_view_has_chunk(dc_level_view_t *view, dc_chunk_coord_t coord);
+/** Queue an adjacent world-cell transfer across streamed chunks. */
+bool dc_level_view_queue_transfer(dc_level_view_t *view, int64_t from_x, int64_t from_y,
+                                  int64_t to_x, int64_t to_y, uint32_t amount,
+                                  dc_gpu_transfer_kind_t kind, char *err, uint32_t cap);
+/** Return true once the queued transfer was applied or rejected by cell contents. */
+bool dc_level_view_transfer_result(dc_level_view_t *view,
+                                   dc_gpu_transfer_state_t *state);
 bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t err_cap);
 
 #endif

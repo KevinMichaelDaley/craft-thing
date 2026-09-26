@@ -285,6 +285,20 @@ bool dc_level_view_has_chunk(dc_level_view_t *view, dc_chunk_coord_t coord) {
     return view && dc_chunk_table_find(&view->table, coord, NULL);
 }
 
+bool dc_level_view_queue_transfer(dc_level_view_t *view, int64_t from_x, int64_t from_y,
+                                  int64_t to_x, int64_t to_y, uint32_t amount,
+                                  dc_gpu_transfer_kind_t kind, char *err, uint32_t cap) {
+    (void)view; (void)from_x; (void)from_y; (void)to_x; (void)to_y;
+    (void)amount; (void)kind;
+    return error(err, cap, "World transfer is not implemented");
+}
+
+bool dc_level_view_transfer_result(dc_level_view_t *view,
+                                   dc_gpu_transfer_state_t *state) {
+    (void)view; (void)state;
+    return false;
+}
+
 bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return true;
     bool okay = true;
