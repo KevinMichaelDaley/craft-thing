@@ -1,0 +1,23 @@
+#ifndef DUNGEONCRAFT_GPU_H
+#define DUNGEONCRAFT_GPU_H
+
+#include <stdbool.h>
+#include <stdint.h>
+
+typedef struct dc_gpu dc_gpu_t;
+
+/** Create a headless Vulkan compute context and a width-by-height cell buffer. */
+bool dc_gpu_create(dc_gpu_t **out, uint32_t width, uint32_t height,
+                   const char *shader_path, char *err_buf, uint32_t err_cap);
+
+/** Fill cells with a GPU-generated diagnostic pattern. */
+bool dc_gpu_pattern(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
+
+/** Copy completed GPU cell values into caller-owned memory. */
+bool dc_gpu_readback(dc_gpu_t *gpu, uint32_t *cells, uint32_t cell_count,
+                     char *err_buf, uint32_t err_cap);
+
+/** Destroy the context and its Vulkan resources. */
+void dc_gpu_destroy(dc_gpu_t *gpu);
+
+#endif

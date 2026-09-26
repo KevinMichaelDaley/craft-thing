@@ -70,7 +70,7 @@ tests/                headless GPU behavior and conservation tests
 tools/                shader build and capture helpers
 ```
 
-Use a small CMake build with C11 and `-Wall -Wextra`; keep runtime dependencies limited to a window library and the Vulkan loader. Shader compiler and validation layers are development dependencies. The public API should initially expose create/destroy, load/save, queue command, tick, render, and readback/capture operations.
+Use a Makefile with C11 and `-Wall -Wextra`; keep runtime dependencies limited to a window library and the Vulkan loader. Shader compiler and validation layers are development dependencies. The public API should initially expose create/destroy, load/save, queue command, tick, render, and readback/capture operations.
 
 ## Delivery sequence and acceptance checks
 
