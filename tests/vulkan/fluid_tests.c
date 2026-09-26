@@ -131,7 +131,7 @@ static void test_closed_liquid_velocity_is_projected(void) {
     float divergence = -1.0f;
     ASSERT_TRUE(dc_gpu_fluid_max_divergence(gpu, &divergence, err, sizeof(err)));
     printf("projected maximum divergence: %.6f\n", divergence);
-    ASSERT_TRUE(divergence >= 0.0f && divergence < 0.03f);
+    ASSERT_TRUE(divergence >= 0.0f && divergence < 0.005f);
     dc_gpu_destroy(gpu);
     PASS();
 }
@@ -529,6 +529,61 @@ static void test_falling_water_is_not_limited_to_one_cell_per_tick(void) {
     PASS();
 }
 
+static void test_water_crosses_vertical_chunk_seam(void) {
+    char err[256] = {0};
+    dc_chunk_t top = {0}, bottom = {0}, saved_top = {0}, saved_bottom = {0};
+    top.cells[63 * 64 + 32].fluid_mass = DC_FLUID_FULL;
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 128, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, &top, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 1, &bottom, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 1, 1, err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 5; ++tick)
+        ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved_top, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &saved_bottom, err, sizeof(err)));
+    uint64_t top_mass = 0, bottom_mass = 0;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        top_mass += saved_top.cells[i].fluid_mass;
+        bottom_mass += saved_bottom.cells[i].fluid_mass;
+    }
+    ASSERT_EQ(top_mass + bottom_mass, (uint64_t)DC_FLUID_FULL);
+    ASSERT_TRUE(bottom_mass > 0);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
+static void test_still_pool_does_not_spray_above_surface(void) {
+    char err[256] = {0};
+    dc_chunk_t left = {0}, right = {0}, saved = {0};
+    for (uint32_t x = 15; x <= 48; ++x)
+        left.cells[48 * 64 + x].material = DC_MATERIAL_STONE;
+    for (uint32_t y = 36; y < 48; ++y) {
+        left.cells[y * 64 + 15].material = DC_MATERIAL_STONE;
+        left.cells[y * 64 + 48].material = DC_MATERIAL_STONE;
+    }
+    for (uint32_t y = 40; y < 48; ++y)
+        for (uint32_t x = 16; x < 48; ++x)
+            left.cells[y * 64 + x].fluid_mass = DC_FLUID_FULL;
+    dc_gpu_t *gpu = make_grid(&left, &right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    for (uint32_t tick = 0; tick < 100; ++tick)
+        ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved, err, sizeof(err)));
+    uint64_t spray = 0, mass = 0;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        mass += saved.cells[i].fluid_mass;
+        if (i / 64u < 38u) spray += saved.cells[i].fluid_mass;
+    }
+    printf("still-pool high spray=%llu\n", (unsigned long long)spray);
+    ASSERT_EQ(mass, (uint64_t)256 * DC_FLUID_FULL);
+    ASSERT_EQ(spray, 0u);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 int main(void) {
     RUN(test_water_falls_and_crosses_resident_chunk_edge);
     RUN(test_closed_basin_conserves_mass_for_long_run);
@@ -545,6 +600,8 @@ int main(void) {
     RUN(test_visible_spring_supplies_fast_flow_in_one_second);
     RUN(test_supported_water_spreads_sideways_quickly);
     RUN(test_falling_water_is_not_limited_to_one_cell_per_tick);
+    RUN(test_water_crosses_vertical_chunk_seam);
+    RUN(test_still_pool_does_not_spray_above_surface);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
