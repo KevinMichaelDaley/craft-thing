@@ -1,6 +1,6 @@
 ---
 id: dun-0p7p
-status: open
+status: in_progress
 deps: [dun-o1go, dun-d8gb]
 links: []
 created: 2026-09-26T05:25:20Z

@@ -8,6 +8,13 @@
 
 #define DC_GPU_CHUNK_SLOTS 64u
 
+typedef struct {
+    int32_t x_fp, y_fp;
+    int32_t vx_fp, vy_fp;
+    uint32_t width, height;
+    uint32_t id, active;
+} dc_gpu_body_t;
+
 typedef struct dc_gpu dc_gpu_t;
 
 /** Create a headless Vulkan compute context and a width-by-height cell buffer. */
@@ -45,6 +52,17 @@ bool dc_gpu_render_chunks(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
 bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
                            uint32_t radius, uint16_t material,
                            char *err_buf, uint32_t err_cap);
+
+/** Spawn one box body in viewport-local 16.16 fixed-point coordinates. */
+bool dc_gpu_spawn_body(dc_gpu_t *gpu, dc_gpu_body_t body,
+                       char *err_buf, uint32_t err_cap);
+
+/** Run GPU body integration, terrain contact, and occupancy raster passes. */
+bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
+
+/** Read the completed body state for tests or persistence. */
+bool dc_gpu_read_body(dc_gpu_t *gpu, dc_gpu_body_t *body,
+                      char *err_buf, uint32_t err_cap);
 
 /** Present the current cell buffer to the Vulkan window. */
 bool dc_gpu_present(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);

@@ -92,3 +92,20 @@ bool dc_gpu_readback(dc_gpu_t *gpu, uint32_t *cells, uint32_t cell_count,
     memcpy(cells, gpu->mapped, (size_t)gpu->width * gpu->height * sizeof(uint32_t));
     return true;
 }
+
+bool dc_gpu_spawn_body(dc_gpu_t *gpu, dc_gpu_body_t body,
+                       char *err, uint32_t cap) {
+    (void)gpu; (void)body;
+    return error(err, cap, "GPU rigid body is not implemented");
+}
+
+bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    (void)gpu;
+    return error(err, cap, "GPU rigid pass is not implemented");
+}
+
+bool dc_gpu_read_body(dc_gpu_t *gpu, dc_gpu_body_t *body,
+                      char *err, uint32_t cap) {
+    (void)gpu; (void)body;
+    return error(err, cap, "GPU rigid readback is not implemented");
+}
