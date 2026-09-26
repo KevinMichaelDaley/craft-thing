@@ -3,6 +3,8 @@
 
 #include "gpu_internal.h"
 
+_Static_assert(sizeof(dc_marker_t) == 16, "GPU marker layout must match GLSL");
+
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
     return false;

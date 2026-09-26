@@ -39,9 +39,12 @@ are recorded for persistence. The sand stage reads only this finalized state.
 
 ## Sparse markers
 
-The first marker pass seeds two massless 16.16 fixed-point markers per eligible
-surface cell, one just inside and one just outside. Cells below half fill are
-not seeded, avoiding a new inside marker in every diffuse fringe. Markers live
+The first marker pass seeds two massless 16.16 fixed-point markers at each
+selected surface site, one just inside and one just outside. Cells below half
+fill are not seeded, avoiding a new inside marker in every diffuse fringe.
+Selection keeps the first eligible site in each 2 × 2 cell block, so a dense
+interface cannot request more than the 2048-entry chunk pool at seeding time.
+Markers live
 in two bounded 2048-entry GPU buffers per world chunk; GPU compaction moves
 them between resident chunk slots, and sleeping slots retain their state.
 Each marker has a stable hash ID derived from its original chunk and local
@@ -55,8 +58,9 @@ so markers cannot add water mass. The `M` overlay displays marker guides.
 
 Chunk files persist the active marker count and records alongside grid cells;
 version 1 files load with an empty marker pool. The fixed pool is deliberately
-bounded: dense pathological interfaces can saturate it, so the marker pass
-caps counts and preserves the authoritative grid volume. The current tests
+bounded: excessive advected markers crossing into one chunk can still saturate
+it, so the marker pass caps counts and preserves the authoritative grid volume.
+The current tests
 show sharpening on controlled thin-sheet and two-lobe splash edges. Broader
 free-surface reconstruction remains a benchmark target, not a claim that all
 thin features survive arbitrary flow.

@@ -152,15 +152,11 @@ void advect(uint linear) {
     append_marker(marker, next_position);
 }
 
-void seed(uint linear) {
-    if (linear >= params.width * params.height) return;
-    ivec2 p = ivec2(int(linear % params.width), int(linear / params.width));
+bool surface_candidate(ivec2 p) {
     uint page = page_at(p);
-    if (page == 0u || !open_at(p)) return;
+    if (page == 0u || !open_at(p)) return false;
     uint mass = mass_at(p);
-    if (mass < 32768u) return;
-    uint atlas = atlas_at(p, page);
-    if ((marker_grid[atlas] & 1u) != 0u) return;
+    if (mass < 32768u) return false;
     int left = int(mass_at(p + ivec2(-1, 0)));
     int right = int(mass_at(p + ivec2(1, 0)));
     int up = int(mass_at(p + ivec2(0, -1)));
@@ -168,7 +164,25 @@ void seed(uint linear) {
     int gx = left - right;
     int gy = up - down;
     if (mass == 65536u && gx == 0 && gy == 0 &&
-        left != 0 && right != 0 && up != 0 && down != 0) return;
+        left != 0 && right != 0 && up != 0 && down != 0) return false;
+    return true;
+}
+
+void seed(uint linear) {
+    if (linear >= params.width * params.height) return;
+    ivec2 p = ivec2(int(linear % params.width), int(linear / params.width));
+    if (!surface_candidate(p)) return;
+    ivec2 block = (p / 2) * 2;
+    for (int y = block.y; y <= p.y; ++y)
+        for (int x = block.x; x < block.x + 2; ++x)
+            if ((y < p.y || x < p.x) && surface_candidate(ivec2(x, y))) return;
+    uint page = page_at(p);
+    uint atlas = atlas_at(p, page);
+    if ((marker_grid[atlas] & 1u) != 0u) return;
+    int gx = int(mass_at(p + ivec2(-1, 0))) -
+             int(mass_at(p + ivec2(1, 0)));
+    int gy = int(mass_at(p + ivec2(0, -1))) -
+             int(mass_at(p + ivec2(0, 1)));
     vec2 normal = abs(gx) > abs(gy) ? vec2(gx >= 0 ? 1.0 : -1.0, 0.0) :
                   (gy != 0 ? vec2(0.0, gy >= 0 ? 1.0 : -1.0) : vec2(0.0, -1.0));
     uint slot = page - 1u;

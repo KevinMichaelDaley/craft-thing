@@ -218,8 +218,12 @@ static bool save_water_capture(dc_gpu_t *gpu, const char *path,
 static void test_marker_ownership_crosses_chunk_and_replays(void) {
     char err[256] = {0};
     dc_chunk_t left = {0}, right = {0}, saved_a = {0}, saved_b = {0};
-    left.cells[10 * 64 + 62].fluid_mass = DC_FLUID_FULL;
+    left.cells[10 * 64 + 62].fluid_mass = DC_FLUID_FULL / 4u;
     left.cells[10 * 64 + 63].fluid_mass = DC_FLUID_FULL;
+    left.marker_count = 1;
+    left.markers[0] = (dc_marker_t){ .x_fp = (64 << 16) + 6554,
+        .y_fp = (10 << 16) + 32768, .id = 4242,
+        .kind = DC_MARKER_OUTSIDE };
     for (uint32_t x = 60; x < 64; ++x)
         left.cells[11 * 64 + x].material = DC_MATERIAL_STONE;
     for (uint32_t x = 0; x < 4; ++x)
@@ -231,7 +235,8 @@ static void test_marker_ownership_crosses_chunk_and_replays(void) {
     ASSERT_TRUE(saved_a.marker_count > 0);
     bool outside = false;
     for (uint32_t i = 0; i < saved_a.marker_count; ++i)
-        if (saved_a.markers[i].kind == DC_MARKER_OUTSIDE) outside = true;
+        if (saved_a.markers[i].kind == DC_MARKER_OUTSIDE &&
+            saved_a.markers[i].id == 4242u) outside = true;
     ASSERT_TRUE(outside);
     dc_gpu_destroy(gpu);
     gpu = make_grid(&left, &right, err, sizeof(err));
@@ -246,6 +251,29 @@ static void test_marker_ownership_crosses_chunk_and_replays(void) {
         ASSERT_EQ(saved_a.markers[i].x_fp, saved_b.markers[i].x_fp);
         ASSERT_EQ(saved_a.markers[i].y_fp, saved_b.markers[i].y_fp);
     }
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
+static void test_marker_advects_with_gpu_face_velocity(void) {
+    char err[256] = {0};
+    dc_chunk_t left = {0}, right = {0}, saved = {0};
+    left.cells[5 * 64 + 30].fluid_mass = DC_FLUID_FULL;
+    left.marker_count = 1;
+    left.markers[0] = (dc_marker_t){ .x_fp = (30 << 16) + 32768,
+        .y_fp = (5 << 16) + 32768, .id = 42, .kind = DC_MARKER_INSIDE };
+    dc_gpu_t *gpu = make_grid(&left, &right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved, err, sizeof(err)));
+    bool found = false;
+    for (uint32_t i = 0; i < saved.marker_count; ++i) {
+        if (saved.markers[i].id != 42u) continue;
+        found = true;
+        ASSERT_TRUE(saved.markers[i].y_fp > left.markers[0].y_fp);
+        break;
+    }
+    ASSERT_TRUE(found);
     dc_gpu_destroy(gpu);
     PASS();
 }
@@ -367,7 +395,8 @@ static void test_marker_overlay_is_opt_in(void) {
 
 static void test_marker_pool_stays_bounded_on_dense_interface(void) {
     char err[256] = {0};
-    dc_chunk_t left = {0}, right = {0}, saved_left = {0}, saved_right = {0};
+    dc_chunk_t left = {0}, right = {0}, saved_left = {0},
+               saved_right = {0}, replay = {0};
     for (uint32_t y = 0; y < 64; ++y)
         for (uint32_t x = 0; x < 64; ++x)
             if (((x + y) & 1u) == 0u)
@@ -384,6 +413,18 @@ static void test_marker_pool_stays_bounded_on_dense_interface(void) {
         mass += saved_left.cells[i].fluid_mass + saved_right.cells[i].fluid_mass;
     ASSERT_EQ(mass, (uint64_t)2048 * DC_FLUID_FULL);
     dc_gpu_destroy(gpu);
+    gpu = make_grid(&left, &right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &replay, err, sizeof(err)));
+    ASSERT_EQ(replay.marker_count, saved_left.marker_count);
+    qsort(saved_left.markers, saved_left.marker_count,
+          sizeof(dc_marker_t), marker_compare);
+    qsort(replay.markers, replay.marker_count,
+          sizeof(dc_marker_t), marker_compare);
+    for (uint32_t i = 0; i < replay.marker_count; ++i)
+        ASSERT_EQ(replay.markers[i].id, saved_left.markers[i].id);
+    dc_gpu_destroy(gpu);
     PASS();
 }
 
@@ -395,6 +436,7 @@ int main(void) {
     RUN(test_chunk_seam_matches_interior_flow);
     RUN(test_sparse_markers_seed_and_survive_chunk_round_trip);
     RUN(test_marker_ownership_crosses_chunk_and_replays);
+    RUN(test_marker_advects_with_gpu_face_velocity);
     RUN(test_markers_sharpen_thin_sheet_without_changing_volume);
     RUN(test_markers_sharpen_splash_lobes_without_changing_volume);
     RUN(test_marker_overlay_is_opt_in);
