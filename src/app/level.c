@@ -19,6 +19,7 @@ struct dc_level_view {
     dc_chunk_coord_t origin;
     uint32_t pending_steps;
     bool marker_overlay;
+    bool spring_enabled;
 };
 
 static bool error(char *buf, uint32_t cap, const char *message) {
@@ -104,6 +105,7 @@ dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
         !dc_gpu_create_window(&view->gpu, VIEW_WIDTH, VIEW_HEIGHT,
             VIEW_WIDTH * WINDOW_SCALE, VIEW_HEIGHT * WINDOW_SCALE,
             "build/shaders/pattern.comp.spv", err, cap)) goto fail;
+    view->spring_enabled = true;
     view->stream = dc_stream_create(directory, seed, 128);
     if (!view->stream) { error(err, cap, "Cannot start chunk streaming worker"); goto fail; }
     return view;
@@ -146,7 +148,8 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
             if (!dc_gpu_set_page(view->gpu, x, y, page, err, cap)) return false;
         }
     }
-    if (view->origin.x <= 2 && view->origin.x + VIEW_CHUNKS_X > 2 &&
+    if (view->spring_enabled && view->origin.x <= 2 &&
+        view->origin.x + VIEW_CHUNKS_X > 2 &&
         view->origin.y <= 0 && view->origin.y + VIEW_CHUNKS_Y > 0) {
         uint32_t x = (uint32_t)(2 - view->origin.x) * DC_CHUNK_SIDE;
         uint32_t y = (uint32_t)(-view->origin.y) * DC_CHUNK_SIDE + 4u;
@@ -192,6 +195,12 @@ bool dc_level_view_toggle_marker_overlay(dc_level_view_t *view) {
     if (!view) return false;
     view->marker_overlay = !view->marker_overlay;
     return dc_gpu_set_marker_overlay(view->gpu, view->marker_overlay);
+}
+
+bool dc_level_view_set_spring_enabled(dc_level_view_t *view, bool enabled) {
+    if (!view) return false;
+    view->spring_enabled = enabled;
+    return true;
 }
 
 bool dc_level_view_paint(dc_level_view_t *view, uint32_t x, uint32_t y,

@@ -87,13 +87,22 @@ vec2 velocity_at(ivec2 p) {
 }
 
 vec2 sample_velocity(vec2 position) {
-    vec2 shifted = position - vec2(0.5);
-    ivec2 base = ivec2(floor(shifted));
-    vec2 fraction = fract(shifted);
-    vec2 top = mix(velocity_at(base), velocity_at(base + ivec2(1, 0)), fraction.x);
-    vec2 bottom = mix(velocity_at(base + ivec2(0, 1)),
-                      velocity_at(base + ivec2(1, 1)), fraction.x);
-    return mix(top, bottom, fraction.y);
+    vec2 x_position = position - vec2(1.0, 0.5);
+    ivec2 x_base = ivec2(floor(x_position));
+    vec2 x_fraction = fract(x_position);
+    float x_top = mix(velocity_at(x_base).x,
+                      velocity_at(x_base + ivec2(1, 0)).x, x_fraction.x);
+    float x_bottom = mix(velocity_at(x_base + ivec2(0, 1)).x,
+                         velocity_at(x_base + ivec2(1, 1)).x, x_fraction.x);
+    vec2 y_position = position - vec2(0.5, 1.0);
+    ivec2 y_base = ivec2(floor(y_position));
+    vec2 y_fraction = fract(y_position);
+    float y_top = mix(velocity_at(y_base).y,
+                      velocity_at(y_base + ivec2(1, 0)).y, y_fraction.x);
+    float y_bottom = mix(velocity_at(y_base + ivec2(0, 1)).y,
+                         velocity_at(y_base + ivec2(1, 1)).y, y_fraction.x);
+    return vec2(mix(x_top, x_bottom, x_fraction.y),
+                mix(y_top, y_bottom, y_fraction.y));
 }
 
 uint hash_id(uint value) {

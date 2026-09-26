@@ -288,6 +288,7 @@ int main(int argc, char **argv) {
     bool running = true;
     bool failed = false;
     bool paused = false;
+    bool spring_enabled = true;
     bool single_step = false;
     uint64_t previous = SDL_GetPerformanceCounter();
     double accumulator = 0.0;
@@ -306,6 +307,11 @@ int main(int argc, char **argv) {
                 case SDLK_p: paused = !paused; break;
                 case SDLK_n: single_step = true; break;
                 case SDLK_m: dc_level_view_toggle_marker_overlay(view); break;
+                case SDLK_f:
+                    spring_enabled = !spring_enabled;
+                    dc_level_view_set_spring_enabled(view, spring_enabled);
+                    printf("Spring %s\n", spring_enabled ? "on" : "off");
+                    break;
                 case SDLK_b: {
                     int mx, my;
                     SDL_GetMouseState(&mx, &my);

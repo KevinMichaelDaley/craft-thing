@@ -56,6 +56,23 @@ float divergence(ivec2 p) {
            own.y - velocity_at(p + ivec2(0, -1)).y;
 }
 
+float previous_vertical_at(ivec2 p) {
+    if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
+        p.y >= int(params.height)) return 0.0;
+    return uintBitsToFloat(previous_vertical_velocity[index_of(p)]);
+}
+
+float advected_vertical(ivec2 p) {
+    float transport = 0.5 * (previous_vertical_at(p + ivec2(0, -1)) +
+                             previous_vertical_at(p + ivec2(0, 1)));
+    float sample_y = clamp(float(p.y) - transport, 0.0,
+                           float(params.height - 1u));
+    int first_y = int(floor(sample_y));
+    float fraction = sample_y - float(first_y);
+    return mix(previous_vertical_at(ivec2(p.x, first_y)),
+               previous_vertical_at(ivec2(p.x, first_y + 1)), fraction);
+}
+
 void main() {
     ivec2 p = ivec2(gl_GlobalInvocationID.xy);
     if (p.x >= int(params.width) || p.y >= int(params.height)) return;
@@ -80,14 +97,11 @@ void main() {
                 0.05 * (float(int(hydro_head[index]) - int(hydro_head[index_of(right)])) /
                         65536.0);
         if (open_cell(p) && open_cell(below) && (wet(p) || wet(below))) {
-            float carried = old_velocity.y;
-            if (p.y > 0 && wet(p))
-                carried = max(carried,
-                    uintBitsToFloat(previous_vertical_velocity[index_of(p + ivec2(0, -1))]));
-            predicted.y = carried * 0.99 + 0.5;
+            predicted.y = advected_vertical(p) * 0.99 + 0.5;
         }
         face_velocity[index] = predicted;
-        pressure_a[index] = 0.0;
+        pressure_a[index] = wet(p) ?
+            0.5 * float(hydro_head[index]) / 65536.0 : 0.0;
     } else if (params.mode == 1u || params.mode == 2u) {
         if (((p.x + p.y) & 1) != int(params.mode - 1u)) return;
         float value = 0.0;

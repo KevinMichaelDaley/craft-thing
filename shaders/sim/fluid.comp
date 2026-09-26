@@ -46,17 +46,6 @@ void write_mass(uint index, uint mass) {
     else fluid_a[index] = mass;
 }
 
-bool can_fall(ivec2 p, uint mass) {
-    if (mass == 0u) return false;
-    ivec2 below = p + ivec2(0, 1);
-    uint page = page_at(below);
-    if (page == 0u ||
-        (chunk_cells[atlas_index(below, page)].x & 0xffffu) != 0u ||
-        occupancy[uint(below.y) * params.width + uint(below.x)] != 0u) return false;
-    uint below_index = uint(below.y) * params.width + uint(below.x);
-    return source_mass(below_index) < FULL;
-}
-
 bool open_cell(ivec2 p) {
     uint page = page_at(p);
     if (page == 0u) return false;
@@ -143,18 +132,9 @@ void correct_pair(ivec2 p) {
     }
     uint other_index = uint(neighbor.y) * params.width + uint(neighbor.x);
     uint other = source_mass(other_index);
-    if (can_fall(p, own) || can_fall(neighbor, other)) {
-        write_mass(index, own);
-        return;
-    }
     ivec2 first = vertical ? (p.y < neighbor.y ? p : neighbor) :
                               (p.x < neighbor.x ? p : neighbor);
     ivec2 second = first == p ? neighbor : p;
-    if (vertical && abs(face_velocity[uint(first.y) * params.width +
-                                      uint(first.x)].y) >= 0.1) {
-        write_mass(index, own);
-        return;
-    }
     uint first_page = page_at(first);
     uint second_page = page_at(second);
     uint first_guide = marker_grid[atlas_index(first, first_page)];

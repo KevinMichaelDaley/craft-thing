@@ -18,6 +18,7 @@ bool dc_level_view_wait_visible(dc_level_view_t *view, uint32_t timeout_ms,
                                 char *err, uint32_t err_cap);
 bool dc_level_view_move(dc_level_view_t *view, int32_t dx, int32_t dy);
 bool dc_level_view_toggle_marker_overlay(dc_level_view_t *view);
+bool dc_level_view_set_spring_enabled(dc_level_view_t *view, bool enabled);
 bool dc_level_view_paint(dc_level_view_t *view, uint32_t x, uint32_t y,
                          uint32_t radius, uint16_t material,
                          char *err, uint32_t err_cap);

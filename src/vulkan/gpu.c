@@ -437,7 +437,7 @@ void dc_gpu_record_tick_water_source(dc_gpu_t *gpu) {
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     uint32_t push[7] = { gpu->width, gpu->height, 3,
-                         gpu->tick_water_x, gpu->tick_water_y, 3, DC_MATERIAL_WATER };
+                         gpu->tick_water_x, gpu->tick_water_y, 2, DC_MATERIAL_WATER };
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     vkCmdDispatch(gpu->command, (gpu->width + 15u) / 16u,
