@@ -175,7 +175,8 @@ dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
             VIEW_WIDTH * WINDOW_SCALE, VIEW_HEIGHT * WINDOW_SCALE,
             "build/shaders/pattern.comp.spv", err, cap) ||
         !dc_gpu_set_viewport(view->gpu, DC_CHUNK_SIDE, DC_CHUNK_SIDE,
-                             VIEW_WIDTH, VIEW_HEIGHT)) goto fail;
+                             VIEW_WIDTH, VIEW_HEIGHT) ||
+        !dc_gpu_set_display_zoom(view->gpu, WINDOW_SCALE)) goto fail;
     view->spring_enabled = true;
     view->stream = dc_stream_create(directory, seed, 128);
     if (!view->stream) { error(err, cap, "Cannot start chunk streaming worker"); goto fail; }
@@ -286,20 +287,18 @@ bool dc_level_view_toggle_marker_overlay(dc_level_view_t *view) {
 }
 
 bool dc_level_view_set_zoom(dc_level_view_t *view, uint32_t zoom) {
-    (void)view; (void)zoom;
-    return false;
+    return view && dc_gpu_set_display_zoom(view->gpu, zoom);
 }
 
 bool dc_level_view_screen_cell(dc_level_view_t *view, uint32_t screen_x,
                                uint32_t screen_y, uint32_t *cell_x,
                                uint32_t *cell_y) {
-    (void)view; (void)screen_x; (void)screen_y; (void)cell_x; (void)cell_y;
-    return false;
+    return view && dc_gpu_screen_cell(view->gpu, screen_x, screen_y,
+                                      cell_x, cell_y);
 }
 
 bool dc_level_view_set_overlay(dc_level_view_t *view, dc_gpu_overlay_t overlay) {
-    (void)view; (void)overlay;
-    return false;
+    return view && dc_gpu_set_overlay(view->gpu, overlay);
 }
 
 bool dc_level_view_set_spring_enabled(dc_level_view_t *view, bool enabled) {

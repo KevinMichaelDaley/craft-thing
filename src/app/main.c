@@ -35,16 +35,14 @@ static bool paint_held(dc_level_view_t *view, uint16_t material,
                        char *err, uint32_t cap) {
     int mx, my;
     uint32_t buttons = SDL_GetMouseState(&mx, &my);
-    if (mx < 0 || my < 0 || mx >= VIEW_WIDTH * WINDOW_SCALE ||
-        my >= VIEW_HEIGHT * WINDOW_SCALE) return true;
+    uint32_t x, y;
+    if (mx < 0 || my < 0 ||
+        !dc_level_view_screen_cell(view, (uint32_t)mx, (uint32_t)my, &x, &y))
+        return true;
     if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT))
-        return dc_level_view_paint(view, (uint32_t)mx / WINDOW_SCALE,
-                                   (uint32_t)my / WINDOW_SCALE, 3,
-                                   material, err, cap);
+        return dc_level_view_paint(view, x, y, 3, material, err, cap);
     if (buttons & SDL_BUTTON(SDL_BUTTON_RIGHT))
-        return dc_level_view_paint(view, (uint32_t)mx / WINDOW_SCALE,
-                                   (uint32_t)my / WINDOW_SCALE, 3,
-                                   DC_MATERIAL_AIR, err, cap);
+        return dc_level_view_paint(view, x, y, 3, DC_MATERIAL_AIR, err, cap);
     return true;
 }
 
@@ -360,9 +358,12 @@ static int smoke_display(void) {
     uint32_t x = UINT32_MAX, y = UINT32_MAX, natural = 0, border = 0, stage = 0;
     bool okay = dc_level_view_wait_visible(view, 5000, err, sizeof(err)) &&
         dc_level_view_set_zoom(view, 1) &&
+        !dc_level_view_set_zoom(view, 3) &&
         dc_level_view_screen_cell(view, 384, 192, &x, &y) && x == 0 && y == 0 &&
         dc_level_view_screen_cell(view, 639, 319, &x, &y) && x == 255 && y == 127 &&
         !dc_level_view_screen_cell(view, 383, 192, &x, &y) &&
+        dc_level_view_set_zoom(view, 2) &&
+        dc_level_view_screen_cell(view, 767, 383, &x, &y) && x == 255 && y == 127 &&
         dc_level_view_set_zoom(view, 4) &&
         dc_level_view_screen_cell(view, 1023, 511, &x, &y) && x == 255 && y == 127 &&
         dc_level_view_pixel(view, 0, 0, &natural, err, sizeof(err)) &&
@@ -374,6 +375,18 @@ static int smoke_display(void) {
         dc_level_view_tick(view, err, sizeof(err)) &&
         dc_level_view_pixel(view, 2, 2, &stage, err, sizeof(err)) &&
         stage == 0xff30c040u;
+    if (okay) okay = dc_level_view_move(view, -1, 0) &&
+                     dc_level_view_wait_visible(view, 5000, err, sizeof(err)) &&
+                     dc_level_view_set_zoom(view, 1) &&
+                     dc_level_view_screen_cell(view, 384, 197, &x, &y) &&
+                     x == 0 && y == 5 &&
+                     dc_level_view_paint(view, x, y, 0, DC_MATERIAL_STONE,
+                                         err, sizeof(err));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    if (okay) okay = chunk && dc_level_view_chunk(view,
+        (dc_chunk_coord_t){-1, 0}, chunk, err, sizeof(err)) &&
+        chunk->cells[5 * DC_CHUNK_SIDE].material == DC_MATERIAL_STONE;
+    free(chunk);
     if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
     if (!okay) fprintf(stderr, "Display smoke failed: %s\n", err);
     else printf("Vulkan zoom and GPU overlays smoke passed\n");
@@ -498,6 +511,8 @@ int main(int argc, char **argv) {
     bool paused = false;
     bool spring_enabled = true;
     bool single_step = false;
+    uint32_t zoom = WINDOW_SCALE;
+    dc_gpu_overlay_t overlay = DC_GPU_OVERLAY_NONE;
     uint64_t previous = SDL_GetPerformanceCounter();
     double accumulator = 0.0;
     const double tick_seconds = 1.0 / 60.0;
@@ -515,6 +530,21 @@ int main(int argc, char **argv) {
                 case SDLK_p: paused = !paused; break;
                 case SDLK_n: single_step = true; break;
                 case SDLK_m: dc_level_view_toggle_marker_overlay(view); break;
+                case SDLK_MINUS:
+                    if (zoom > 1u) zoom /= 2u;
+                    dc_level_view_set_zoom(view, zoom);
+                    printf("Zoom %ux\n", zoom);
+                    break;
+                case SDLK_EQUALS: case SDLK_PLUS:
+                    if (zoom < WINDOW_SCALE) zoom *= 2u;
+                    dc_level_view_set_zoom(view, zoom);
+                    printf("Zoom %ux\n", zoom);
+                    break;
+                case SDLK_v:
+                    overlay = (dc_gpu_overlay_t)((overlay + 1u) % 3u);
+                    dc_level_view_set_overlay(view, overlay);
+                    printf("Overlay %u\n", (unsigned)overlay);
+                    break;
                 case SDLK_f:
                     spring_enabled = !spring_enabled;
                     dc_level_view_set_spring_enabled(view, spring_enabled);
@@ -523,10 +553,10 @@ int main(int argc, char **argv) {
                 case SDLK_b: {
                     int mx, my;
                     SDL_GetMouseState(&mx, &my);
-                    uint32_t x = mx >= 0 && mx < VIEW_WIDTH * WINDOW_SCALE ?
-                        (uint32_t)mx / WINDOW_SCALE : VIEW_WIDTH / 2;
-                    uint32_t y = my >= 0 && my < VIEW_HEIGHT * WINDOW_SCALE ?
-                        (uint32_t)my / WINDOW_SCALE : 4;
+                    uint32_t x = VIEW_WIDTH / 2, y = 4;
+                    if (mx >= 0 && my >= 0)
+                        dc_level_view_screen_cell(view, (uint32_t)mx,
+                                                  (uint32_t)my, &x, &y);
                     if (x > VIEW_WIDTH - 4) x = VIEW_WIDTH - 4;
                     if (y > VIEW_HEIGHT - 4) y = VIEW_HEIGHT - 4;
                     if (!dc_level_view_spawn_body(view, x, y, err, sizeof(err))) {

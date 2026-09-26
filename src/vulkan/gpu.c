@@ -238,6 +238,7 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     if (!gpu) return error(err, cap, "Out of memory creating GPU context");
     gpu->width = width; gpu->height = height;
     gpu->view_width = width; gpu->view_height = height;
+    gpu->display_zoom = 1;
     for (uint32_t i = 0; i < DC_GPU_CHUNK_SLOTS; ++i) gpu->slot_page[i] = UINT32_MAX;
     if (window_width && window_height) {
         if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
@@ -360,6 +361,34 @@ bool dc_gpu_set_viewport(dc_gpu_t *gpu, uint32_t x, uint32_t y,
     return true;
 }
 
+bool dc_gpu_set_display_zoom(dc_gpu_t *gpu, uint32_t zoom) {
+    if (!gpu || !gpu->swapchain || (zoom != 1u && zoom != 2u && zoom != 4u) ||
+        (uint64_t)gpu->view_width * zoom > gpu->swap_extent.width ||
+        (uint64_t)gpu->view_height * zoom > gpu->swap_extent.height) return false;
+    gpu->display_zoom = zoom;
+    return true;
+}
+
+bool dc_gpu_screen_cell(dc_gpu_t *gpu, uint32_t screen_x, uint32_t screen_y,
+                        uint32_t *cell_x, uint32_t *cell_y) {
+    if (!gpu || !gpu->swapchain || !cell_x || !cell_y) return false;
+    uint32_t image_width = gpu->view_width * gpu->display_zoom;
+    uint32_t image_height = gpu->view_height * gpu->display_zoom;
+    uint32_t left = (gpu->swap_extent.width - image_width) / 2u;
+    uint32_t top = (gpu->swap_extent.height - image_height) / 2u;
+    if (screen_x < left || screen_y < top || screen_x - left >= image_width ||
+        screen_y - top >= image_height) return false;
+    *cell_x = (screen_x - left) / gpu->display_zoom;
+    *cell_y = (screen_y - top) / gpu->display_zoom;
+    return true;
+}
+
+bool dc_gpu_set_overlay(dc_gpu_t *gpu, dc_gpu_overlay_t overlay) {
+    if (!gpu || overlay > DC_GPU_OVERLAY_STAGES) return false;
+    gpu->overlay = overlay;
+    return true;
+}
+
 static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7], char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
@@ -417,7 +446,8 @@ bool dc_gpu_paint(dc_gpu_t *gpu, uint32_t x, uint32_t y, uint32_t radius,
 bool dc_gpu_render_chunks(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     uint32_t push[7] = { gpu->width, gpu->height, 2,
-                         gpu->marker_overlay ? 1u : 0u, 0, gpu->view_x, gpu->view_y };
+                         gpu->marker_overlay ? 1u : 0u, (uint32_t)gpu->overlay,
+                         gpu->view_x, gpu->view_y };
     return dispatch_cells(gpu, push, err, cap);
 }
 

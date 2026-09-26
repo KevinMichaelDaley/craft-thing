@@ -101,6 +101,8 @@ struct dc_gpu {
     uint32_t tick_water_x, tick_water_y;
     uint32_t width, height;
     uint32_t view_x, view_y, view_width, view_height;
+    uint32_t display_zoom;
+    dc_gpu_overlay_t overlay;
 };
 
 bool dc_gpu_pick_device(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t cap);

@@ -51,7 +51,7 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
         vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
             gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
         uint32_t push[7] = { gpu->width, gpu->height, 2,
-                             gpu->marker_overlay ? 1u : 0u, 0,
+                             gpu->marker_overlay ? 1u : 0u, (uint32_t)gpu->overlay,
                              gpu->view_x, gpu->view_y };
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
@@ -87,12 +87,29 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
     image_barrier(gpu->command, gpu->swap_images[index], VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, 0,
         VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+    uint32_t scaled_width = gpu->view_width * gpu->display_zoom;
+    uint32_t scaled_height = gpu->view_height * gpu->display_zoom;
+    uint32_t left = (gpu->swap_extent.width - scaled_width) / 2u;
+    uint32_t top = (gpu->swap_extent.height - scaled_height) / 2u;
+    if (scaled_width != gpu->swap_extent.width ||
+        scaled_height != gpu->swap_extent.height) {
+        VkClearColorValue background = { .float32 = {0.02f, 0.02f, 0.02f, 1.0f} };
+        VkImageSubresourceRange color_range = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+        vkCmdClearColorImage(gpu->command, gpu->swap_images[index],
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &background, 1, &color_range);
+        image_barrier(gpu->command, gpu->swap_images[index],
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+    }
     VkImageBlit blit = { .srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
         .srcOffsets = { {(int32_t)gpu->view_x, (int32_t)gpu->view_y, 0},
                         {(int32_t)(gpu->view_x + gpu->view_width),
                          (int32_t)(gpu->view_y + gpu->view_height), 1} },
         .dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-        .dstOffsets = { {0, 0, 0}, {(int32_t)gpu->swap_extent.width, (int32_t)gpu->swap_extent.height, 1} } };
+        .dstOffsets = { {(int32_t)left, (int32_t)top, 0},
+                        {(int32_t)(left + scaled_width),
+                         (int32_t)(top + scaled_height), 1} } };
     vkCmdBlitImage(gpu->command, gpu->frame_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         gpu->swap_images[index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST);
     image_barrier(gpu->command, gpu->swap_images[index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,

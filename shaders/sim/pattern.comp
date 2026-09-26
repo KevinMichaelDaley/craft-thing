@@ -16,7 +16,8 @@ layout(push_constant) uniform Params {
 } params;
 
 void main() {
-    uvec2 p = gl_GlobalInvocationID.xy;
+    uvec2 display_cell = gl_GlobalInvocationID.xy;
+    uvec2 p = display_cell;
     if (params.mode == 2u) p += uvec2(params.radius, params.color);
     if (p.x >= params.width || p.y >= params.height) return;
     if (params.mode == 0u) {
@@ -64,6 +65,23 @@ void main() {
             uint guide = marker_grid[index];
             if ((guide & 1u) != 0u) color = 0xffd040e0u;
             else if ((guide & 2u) != 0u) color = 0xff40e0d0u;
+        }
+        if (params.mode == 2u && params.brush_y == 1u &&
+            ((p.x % 64u) == 0u || (p.y % 64u) == 0u))
+            color = 0xff30d030u;
+        if (params.mode == 2u && params.brush_y == 2u) {
+            color = 0xff181818u;
+            if (material == 1u) color = 0xff303030u;
+            if (material == 2u) color = 0xff40c8e0u;
+            if (cell.y > 0u) color = 0xffd08030u;
+            if (occupancy[p.y * params.width + p.x] != 0u)
+                color = 0xff30c040u;
+            if (display_cell.y < 8u && display_cell.x < 8u)
+                color = 0xff30c040u;
+            else if (display_cell.y < 8u && display_cell.x < 16u)
+                color = 0xffd08030u;
+            else if (display_cell.y < 8u && display_cell.x < 24u)
+                color = 0xff40c8e0u;
         }
         cells[p.y * params.width + p.x] = color;
     }
