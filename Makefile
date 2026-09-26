@@ -1,7 +1,8 @@
 CC ?= cc
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror
+CFLAGS += -pthread
 CPPFLAGS += -Iinclude $(shell pkg-config --cflags sdl2)
-LDLIBS += -lvulkan $(shell pkg-config --libs sdl2)
+LDLIBS += -lvulkan $(shell pkg-config --libs sdl2) -pthread
 GLSLANG ?= glslangValidator
 
 GPU_OBJ = build/gpu.o
@@ -37,7 +38,7 @@ build/chunk_tests: tests/world/chunk_tests.c $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/chunk_tests.c $(CHUNK_OBJ) -o $@
 
 build/stream_tests: tests/world/stream_tests.c $(STREAM_OBJ)
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/stream_tests.c $(STREAM_OBJ) -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/stream_tests.c $(STREAM_OBJ) -o $@ -pthread
 
 build/dungeoncraft: src/app/main.c $(GPU_OBJ) $(SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/main.c $(GPU_OBJ) -o $@ $(LDLIBS)

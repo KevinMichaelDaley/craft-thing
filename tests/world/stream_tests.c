@@ -54,8 +54,33 @@ static void test_worker_generates_saves_and_reloads_chunk(void) {
     PASS();
 }
 
+static void test_shutdown_flushes_queued_saves(void) {
+    char directory[] = "build/stream_shutdown_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_streamer_t *stream = dc_stream_create(directory, 55, 16);
+    ASSERT_TRUE(stream != NULL);
+    dc_chunk_t chunk = {0};
+    for (int i = 0; i < 16; ++i) {
+        chunk.coord.x = i;
+        chunk.cells[0].material = (uint16_t)(100 + i);
+        ASSERT_TRUE(dc_stream_request_save(stream, &chunk, (uint64_t)(i + 1)));
+    }
+    dc_stream_destroy(stream);
+    stream = dc_stream_create(directory, 55, 2);
+    ASSERT_TRUE(stream != NULL);
+    dc_stream_result_t result = {0};
+    ASSERT_TRUE(dc_stream_request_load(stream, (dc_chunk_coord_t){15, 0}, 99));
+    ASSERT_TRUE(wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_LOADED);
+    ASSERT_EQ(result.chunk->cells[0].material, 115);
+    dc_stream_result_release(&result);
+    dc_stream_destroy(stream);
+    PASS();
+}
+
 int main(void) {
     RUN(test_worker_generates_saves_and_reloads_chunk);
+    RUN(test_shutdown_flushes_queued_saves);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
