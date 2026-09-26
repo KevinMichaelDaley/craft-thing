@@ -29,6 +29,15 @@ static int smoke_streamed_level(void) {
     if (okay) okay = dc_level_view_pixel(view, 64, 2, &rigid_color, err, sizeof(err)) &&
                      rigid_color == 0xff30c040u;
     if (!okay) stage = rigid_stage;
+    if (okay) stage = "falling spring";
+    dc_chunk_t falling = {0};
+    if (okay) okay = dc_level_view_chunk(view, (dc_chunk_coord_t){2, 0},
+                                         &falling, err, sizeof(err));
+    uint64_t falling_mass = 0;
+    for (uint32_t y = 5; y <= 8; ++y)
+        for (uint32_t x = 0; x <= 2; ++x)
+            falling_mass += falling.cells[y * DC_CHUNK_SIDE + x].fluid_mass;
+    if (okay) okay = falling_mass > 0;
     uint32_t color = 0;
     if (okay) stage = "basin pixel";
     if (okay) okay = dc_level_view_pixel(view, 128, 40, &color, err, sizeof(err)) &&
