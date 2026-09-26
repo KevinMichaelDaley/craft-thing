@@ -17,7 +17,7 @@ FLUID_SHADER = build/shaders/fluid.comp.spv
 PROJECTION_SHADER = build/shaders/projection.comp.spv
 MARKER_SHADER = build/shaders/marker.comp.spv
 
-.PHONY: all test test_ui clean shaders
+.PHONY: all test test_ui test_ui_long clean shaders
 all: build/gpu_tests build/halo_tests build/fluid_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
 
 shaders: $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER)
@@ -134,6 +134,9 @@ test: build/gpu_tests build/halo_tests build/fluid_tests build/chunk_tests build
 test_ui: build/dungeoncraft
 	./build/dungeoncraft --smoke-stream
 	./build/dungeoncraft --smoke-motion
+
+test_ui_long: build/dungeoncraft
+	sh tests/app/long_fluid.sh
 
 clean:
 	rm -rf build
