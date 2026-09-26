@@ -7,6 +7,14 @@
 #define DC_CHUNK_SIDE 64u
 #define DC_CHUNK_CELLS (DC_CHUNK_SIDE * DC_CHUNK_SIDE)
 #define DC_FLUID_FULL 65536u
+#define DC_MARKERS_PER_CHUNK 2048u
+
+enum { DC_MARKER_INSIDE = 1u, DC_MARKER_OUTSIDE = 2u };
+
+typedef struct {
+    int32_t x_fp, y_fp;
+    uint32_t id, kind;
+} dc_marker_t;
 
 enum {
     DC_MATERIAL_AIR = 0,
@@ -26,6 +34,8 @@ typedef struct {
 typedef struct {
     dc_chunk_coord_t coord;
     dc_cell_t cells[DC_CHUNK_CELLS];
+    uint32_t marker_count;
+    dc_marker_t markers[DC_MARKERS_PER_CHUNK];
 } dc_chunk_t;
 
 typedef enum {

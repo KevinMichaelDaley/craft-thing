@@ -165,12 +165,38 @@ static void test_chunk_seam_matches_interior_flow(void) {
     PASS();
 }
 
+static void test_sparse_markers_seed_and_survive_chunk_round_trip(void) {
+    char err[256] = {0};
+    dc_chunk_t left = {0}, right = {0}, saved = {0};
+    for (uint32_t x = 20; x < 30; ++x)
+        left.cells[10 * 64 + x].fluid_mass = DC_FLUID_FULL;
+    dc_gpu_t *gpu = make_grid(&left, &right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    uint32_t count = 0;
+    ASSERT_TRUE(dc_gpu_marker_count(gpu, 0, &count));
+    ASSERT_TRUE(count > 0 && count <= DC_MARKERS_PER_CHUNK);
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved, err, sizeof(err)));
+    ASSERT_EQ(saved.marker_count, count);
+    ASSERT_TRUE(saved.markers[0].kind == DC_MARKER_INSIDE ||
+                saved.markers[0].kind == DC_MARKER_OUTSIDE);
+    dc_gpu_destroy(gpu);
+    gpu = make_grid(&saved, &right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    uint32_t restored = 0;
+    ASSERT_TRUE(dc_gpu_marker_count(gpu, 0, &restored));
+    ASSERT_EQ(restored, count);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 int main(void) {
     RUN(test_water_falls_and_crosses_resident_chunk_edge);
     RUN(test_closed_basin_conserves_mass_for_long_run);
     RUN(test_unloaded_neighbor_keeps_mass_in_source);
     RUN(test_closed_liquid_velocity_is_projected);
     RUN(test_chunk_seam_matches_interior_flow);
+    RUN(test_sparse_markers_seed_and_survive_chunk_round_trip);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
