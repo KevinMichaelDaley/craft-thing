@@ -65,6 +65,14 @@ static void test_camera_crosses_chunk_boundary_cell_by_cell(void) {
     ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){-1, 0},
                                     chunk, err, sizeof(err)));
     ASSERT_EQ(chunk->cells[5 * DC_CHUNK_SIDE + 63].material, DC_MATERIAL_STONE);
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 0, -1));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 0, 0, 0, DC_MATERIAL_SAND,
+                                    err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){-1, -1},
+                                    chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->cells[63 * DC_CHUNK_SIDE + 63].material,
+              DC_MATERIAL_SAND);
     free(chunk);
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
     PASS();
@@ -83,10 +91,12 @@ static void test_loading_status_and_camera_reset(void) {
     ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_status(view, &status));
     ASSERT_EQ(status.ready_chunks, status.total_chunks);
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 17, 19));
     ASSERT_TRUE(dc_level_view_reset_camera(view));
     ASSERT_TRUE(dc_level_view_status(view, &status));
     ASSERT_INT_EQ(status.origin.x, 0);
     ASSERT_EQ(status.offset_x, 0u);
+    ASSERT_EQ(status.offset_y, 0u);
     ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
     PASS();

@@ -28,3 +28,7 @@ Interactive testbed now has P pause/resume, N one fixed simulation tick, B spawn
 **2026-09-26T23:08:50Z**
 
 Pixel camera moves within the one-chunk simulation halo and rebases GPU velocity only at 64-cell crossings. GUI holds WASD/arrows for cell pan; title reports 24-chunk load progress. R and F2 create a fresh seeded run in a unique directory and preserve the previous saved world. SDL-event smoke exercises seed and reset.
+
+**2026-09-26T23:11:22Z**
+
+Final validation: make test test_ui test_ui_long passed; Vulkan validation layer passed controls and scripted SDL input. Exact 1-step test and rendered camera crop tests cover negative X/Y seam crossings.
