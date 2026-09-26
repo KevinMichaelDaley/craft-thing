@@ -22,3 +22,9 @@ Use bounded particle-to-grid and grid-to-particle compute passes, a stated stres
 
 A pile settles without particle loss or explosions; falling mixtures cross chunk seams and collide with stone and bodies; headless replay and an interactive paint/fall scene pass with Vulkan validation and measured GPU timings.
 
+
+## Notes
+
+**2026-09-26T23:38:13Z**
+
+Storage now has 4096 fixed primary cell slots plus 4096 reserved records per chunk. Implement deterministic allocation/compaction for reserved records, GPU MPM P2G/grid/G2P, and GPU timestamp reporting in this ticket. Current storage tests report synchronous wall times only.

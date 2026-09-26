@@ -87,6 +87,19 @@ bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
         chunk->marker_count > DC_MARKERS_PER_CHUNK ||
         chunk->particle_count > DC_MPM_PARTICLES_PER_CHUNK)
         return error(err, cap, "Invalid GPU chunk upload slot");
+    uint32_t particle_count = 0, missing_primary = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        particle_count += chunk->particles[i].mass_fp != 0u;
+    if (particle_count != chunk->particle_count)
+        return error(err, cap, "Chunk particle count does not match active records");
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        uint32_t material = chunk->cells[i].material;
+        if ((material == DC_MATERIAL_SAND || material == DC_MATERIAL_DIRT ||
+             material == DC_MATERIAL_GRAVEL) && chunk->particles[i].mass_fp == 0u)
+            ++missing_primary;
+    }
+    if (missing_primary > DC_MPM_PARTICLES_PER_CHUNK - particle_count)
+        return error(err, cap, "GPU particle pool is full");
     dc_cell_t *cells = gpu->chunk_mapped;
     memcpy(cells + (size_t)slot * DC_CHUNK_CELLS, chunk->cells, sizeof(chunk->cells));
     memcpy(gpu->chunk_velocity + (size_t)slot * DC_CHUNK_CELLS,
@@ -106,17 +119,10 @@ bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
     dc_mpm_particle_t *particles = (dc_mpm_particle_t *)gpu->particle_mapped +
         (size_t)slot * DC_MPM_PARTICLES_PER_CHUNK;
     memcpy(particles, chunk->particles, sizeof(chunk->particles));
-    uint32_t particle_count = 0;
-    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
-        particle_count += particles[i].mass_fp != 0u;
-    if (particle_count != chunk->particle_count)
-        return error(err, cap, "Chunk particle count does not match active records");
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
         uint32_t material = chunk->cells[i].material;
         if ((material == DC_MATERIAL_SAND || material == DC_MATERIAL_DIRT ||
              material == DC_MATERIAL_GRAVEL) && particles[i].mass_fp == 0u) {
-            if (particle_count == DC_MPM_PARTICLES_PER_CHUNK)
-                return error(err, cap, "GPU particle pool is full");
             dc_chunk_particle_init(&particles[i], chunk->coord, i, material);
             ++particle_count;
         }

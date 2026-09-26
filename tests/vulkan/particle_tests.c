@@ -163,12 +163,31 @@ static void test_granular_paint_reuses_and_erases_primary_slot(void) {
     PASS();
 }
 
+static void test_upload_rejects_inconsistent_particle_count(void) {
+    char err[256] = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    for (uint32_t i = 1; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        chunk->particles[i].mass_fp = DC_FLUID_FULL;
+    chunk->particle_count = DC_MPM_PARTICLES_PER_CHUNK;
+    chunk->cells[0].material = DC_MATERIAL_SAND;
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(!dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(strstr(err, "does not match") != NULL);
+    dc_gpu_destroy(gpu);
+    free(chunk);
+    PASS();
+}
+
 int main(void) {
     printf("GPU particle capacity: %u records per chunk, %u primary cell slots\n",
            DC_MPM_PARTICLES_PER_CHUNK, DC_CHUNK_CELLS);
     RUN(test_generated_sand_has_stable_gpu_particles);
     RUN(test_painted_particle_crosses_seam_and_streams_once);
     RUN(test_granular_paint_reuses_and_erases_primary_slot);
+    RUN(test_upload_rejects_inconsistent_particle_count);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
