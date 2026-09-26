@@ -1,6 +1,6 @@
 ---
 id: dun-d8gb
-status: in_progress
+status: closed
 deps: [dun-kjp9]
 links: []
 created: 2026-09-26T05:25:20Z
@@ -24,3 +24,7 @@ Negative coordinates and boundaries map correctly; CPU serialization and shader 
 **2026-09-26T05:46:05Z**
 
 Signed coordinate mapping, 8-byte cell layout, and generation-guarded slot transitions implemented and tested. GPU page-table/slot ABI integration remains open.
+
+**2026-09-26T05:55:09Z**
+
+CPU cell ABI now crosses a GPU storage buffer into the SPIR-V page-table renderer; headless test paints and downloads the correct neighboring chunk. Slot transitions remain guarded by generation and GPU-use checks.
