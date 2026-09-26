@@ -5,10 +5,11 @@ LDLIBS += -lvulkan $(shell pkg-config --libs sdl2)
 GLSLANG ?= glslangValidator
 
 GPU_OBJ = build/gpu.o
+CHUNK_OBJ = build/chunk.o
 SHADER = build/shaders/pattern.comp.spv
 
 .PHONY: all test test_ui clean shaders
-all: build/gpu_tests build/dungeoncraft
+all: build/gpu_tests build/chunk_tests build/dungeoncraft
 
 shaders: $(SHADER)
 
@@ -20,14 +21,22 @@ build/gpu.o: src/vulkan/gpu.c include/dungeoncraft/gpu.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
+build/chunk.o: src/world/chunk.c include/dungeoncraft/chunk.h
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
 build/gpu_tests: tests/vulkan/gpu_tests.c $(GPU_OBJ) $(SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/gpu_tests.c $(GPU_OBJ) -o $@ $(LDLIBS)
+
+build/chunk_tests: tests/world/chunk_tests.c $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/chunk_tests.c $(CHUNK_OBJ) -o $@
 
 build/dungeoncraft: src/app/main.c $(GPU_OBJ) $(SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/main.c $(GPU_OBJ) -o $@ $(LDLIBS)
 
-test: build/gpu_tests
+test: build/gpu_tests build/chunk_tests
 	./build/gpu_tests
+	./build/chunk_tests
 
 test_ui: build/dungeoncraft
 	./build/dungeoncraft --smoke

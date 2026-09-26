@@ -1,6 +1,6 @@
 ---
 id: dun-kjp9
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-09-26T05:25:20Z
@@ -17,3 +17,9 @@ Create a C11 Makefile build, device/feature checks, shader compilation, validati
 ## Acceptance Criteria
 
 Shader writes a known cell pattern; GPU readback matches expected values; missing Vulkan requirements produce specific errors.
+
+## Notes
+
+**2026-09-26T05:37:44Z**
+
+End-to-end compute readback and interactive Vulkan swapchain smoke pass; validation layer reports no errors. Make is used throughout.
