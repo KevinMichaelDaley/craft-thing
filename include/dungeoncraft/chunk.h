@@ -31,9 +31,12 @@ typedef struct {
     uint32_t fluid_mass;
 } dc_cell_t;
 
+typedef struct { float x, y; } dc_face_velocity_t;
+
 typedef struct {
     dc_chunk_coord_t coord;
     dc_cell_t cells[DC_CHUNK_CELLS];
+    dc_face_velocity_t face_velocity[DC_CHUNK_CELLS];
     uint32_t marker_count;
     dc_marker_t markers[DC_MARKERS_PER_CHUNK];
 } dc_chunk_t;

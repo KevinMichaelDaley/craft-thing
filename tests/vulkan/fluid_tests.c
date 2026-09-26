@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 
 #include "dungeoncraft/gpu.h"
+#include "../../src/vulkan/gpu_internal.h"
 
 static int g_pass, g_fail;
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); printf("OK   %s\n", #fn); } while (0)
@@ -656,6 +657,107 @@ static void test_still_pool_does_not_spray_above_surface(void) {
     PASS();
 }
 
+static void test_camera_shift_rebases_velocity_on_gpu(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 128, 128, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    float *faces = gpu->velocity_mapped;
+    uint32_t old_index = 70u * 128u + 70u;
+    faces[2u * old_index] = 3.25f;
+    faces[2u * old_index + 1u] = -1.5f;
+    ASSERT_TRUE(dc_gpu_shift_velocity(gpu, 1, 0, err, sizeof(err)));
+    uint32_t shifted_index = 70u * 128u + 6u;
+    ASSERT_TRUE(faces[2u * shifted_index] == 3.25f);
+    ASSERT_TRUE(faces[2u * shifted_index + 1u] == -1.5f);
+    ASSERT_TRUE(faces[2u * old_index] == 0.0f);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
+static void test_chunk_velocity_survives_gpu_round_trip(void) {
+    char err[256] = {0};
+    dc_chunk_t left = {0}, right = {0}, saved = {0};
+    dc_gpu_t *gpu = make_grid(&left, &right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    float *faces = gpu->velocity_mapped;
+    uint32_t face = 10u * 128u + 20u;
+    faces[2u * face] = 2.25f;
+    faces[2u * face + 1u] = -0.75f;
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved, err, sizeof(err)));
+    ASSERT_TRUE(saved.face_velocity[10u * 64u + 20u].x == 2.25f);
+    ASSERT_TRUE(saved.face_velocity[10u * 64u + 20u].y == -0.75f);
+    dc_gpu_destroy(gpu);
+    gpu = make_grid(&saved, &right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    faces = gpu->velocity_mapped;
+    ASSERT_TRUE(faces[2u * face] == 2.25f);
+    ASSERT_TRUE(faces[2u * face + 1u] == -0.75f);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
+static void test_cropped_viewport_edges_are_internal_fluid_faces(void) {
+    char err[256] = {0};
+    dc_chunk_t *chunks = calloc(24, sizeof(*chunks));
+    ASSERT_TRUE(chunks != NULL);
+    for (uint32_t x = 58; x <= 82; ++x)
+        chunks[(146u / 64u) * 6u + x / 64u]
+            .cells[(146u % 64u) * 64u + x % 64u].material = DC_MATERIAL_STONE;
+    for (uint32_t x = 300; x <= 326; ++x)
+        chunks[(146u / 64u) * 6u + x / 64u]
+            .cells[(146u % 64u) * 64u + x % 64u].material = DC_MATERIAL_STONE;
+    for (uint32_t y = 140; y < 146; ++y)
+        for (uint32_t x = 64; x < 80; ++x)
+            chunks[(y / 64u) * 6u + x / 64u]
+                .cells[(y % 64u) * 64u + x % 64u].fluid_mass = DC_FLUID_FULL;
+    for (uint32_t y = 140; y < 146; ++y)
+        for (uint32_t x = 304; x < 320; ++x)
+            chunks[(y / 64u) * 6u + x / 64u]
+                .cells[(y % 64u) * 64u + x % 64u].fluid_mass = DC_FLUID_FULL;
+    chunks[(63u / 64u) * 6u + 128u / 64u]
+        .cells[(63u % 64u) * 64u + 128u % 64u].fluid_mass = DC_FLUID_FULL;
+    chunks[(191u / 64u) * 6u + 150u / 64u]
+        .cells[(191u % 64u) * 64u + 150u % 64u].fluid_mass = DC_FLUID_FULL;
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 384, 256, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_viewport(gpu, 64, 64, 256, 128));
+    for (uint32_t slot = 0; slot < 24; ++slot) {
+        ASSERT_TRUE(dc_gpu_upload_chunk(gpu, slot, &chunks[slot], err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_page(gpu, slot % 6u, slot / 6u, slot,
+                                    err, sizeof(err)));
+    }
+    for (uint32_t tick = 0; tick < 20; ++tick)
+        ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    uint64_t total = 0, left_halo = 0, right_halo = 0,
+             visible_top = 0, bottom_halo = 0;
+    for (uint32_t slot = 0; slot < 24; ++slot) {
+        ASSERT_TRUE(dc_gpu_download_chunk(gpu, slot, &chunks[slot], err, sizeof(err)));
+        for (uint32_t local = 0; local < DC_CHUNK_CELLS; ++local) {
+            uint32_t x = (slot % 6u) * 64u + local % 64u;
+            uint32_t y = (slot / 6u) * 64u + local / 64u;
+            uint32_t mass = chunks[slot].cells[local].fluid_mass;
+            total += mass;
+            if (x < 64u && y >= 135u && y < 146u) left_halo += mass;
+            if (x >= 320u && y >= 135u && y < 146u) right_halo += mass;
+            if (x >= 120u && x < 140u && y >= 64u && y < 100u)
+                visible_top += mass;
+            if (x >= 140u && x < 160u && y >= 192u)
+                bottom_halo += mass;
+        }
+    }
+    printf("viewport edge transfers: left=%llu right=%llu top=%llu bottom=%llu\n",
+           (unsigned long long)left_halo, (unsigned long long)right_halo,
+           (unsigned long long)visible_top, (unsigned long long)bottom_halo);
+    ASSERT_EQ(total, (uint64_t)194 * DC_FLUID_FULL);
+    ASSERT_TRUE(left_halo > 0 && right_halo > 0 &&
+                visible_top > 0 && bottom_halo > 0);
+    dc_gpu_destroy(gpu);
+    free(chunks);
+    PASS();
+}
+
 int main(void) {
     RUN(test_water_falls_and_crosses_resident_chunk_edge);
     RUN(test_closed_basin_conserves_mass_for_long_run);
@@ -676,6 +778,9 @@ int main(void) {
     RUN(test_water_crosses_vertical_chunk_seam);
     RUN(test_erased_floor_drains_into_lower_chunk);
     RUN(test_still_pool_does_not_spray_above_surface);
+    RUN(test_camera_shift_rebases_velocity_on_gpu);
+    RUN(test_chunk_velocity_survives_gpu_round_trip);
+    RUN(test_cropped_viewport_edges_are_internal_fluid_faces);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
