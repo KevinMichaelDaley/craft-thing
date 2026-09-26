@@ -16,6 +16,14 @@ layout(set = 0, binding = 7, std430) buffer TransferCommand {
     uint to_slot;
     uint direct_slots;
 } command;
+struct Particle {
+    int x_fp, y_fp, vx_fp, vy_fp;
+    float f00, f01, f10, f11;
+    uint id_lo, id_hi, mass_fp, grain_fp;
+    uint material, flags;
+};
+layout(set = 0, binding = 19, std430) buffer Particles { Particle particles[]; };
+layout(set = 0, binding = 20, std430) buffer ParticleCounts { uint particle_counts[]; };
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -98,10 +106,21 @@ void resolve_transfer() {
         destination_cell.y += command.amount;
     } else if (command.kind == 2u) {
         if ((source_cell.x & 0xffffu) == 0u ||
-            (destination_cell.x & 0xffffu) != 0u || destination_cell.y != 0u) {
+            (destination_cell.x & 0xffffu) != 0u || destination_cell.y != 0u ||
+            particles[source_slot * 8192u + source_index % CELLS_PER_CHUNK].mass_fp == 0u ||
+            particles[destination_slot * 8192u + destination_index % CELLS_PER_CHUNK].mass_fp != 0u) {
             command.state = 2u;
             return;
         }
+        uint source_particle = source_slot * 8192u + source_index % CELLS_PER_CHUNK;
+        uint destination_particle = destination_slot * 8192u + destination_index % CELLS_PER_CHUNK;
+        Particle moving = particles[source_particle];
+        moving.x_fp = int((command.to_x % SIDE) * FLUID_FULL + FLUID_FULL / 2u);
+        moving.y_fp = int((command.to_y % SIDE) * FLUID_FULL + FLUID_FULL / 2u);
+        particles[destination_particle] = moving;
+        particles[source_particle].mass_fp = 0u;
+        atomicAdd(particle_counts[source_slot], uint(-1));
+        atomicAdd(particle_counts[destination_slot], 1u);
         destination_cell.x = source_cell.x;
         source_cell.x = 0u;
     } else {

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "dungeoncraft/generate.h"
 #include "dungeoncraft/gpu.h"
@@ -16,6 +17,12 @@ static int g_pass, g_fail;
 #define ASSERT_EQ(a, b) ASSERT_TRUE((a) == (b))
 #define ASSERT_INT_EQ(a, b) ASSERT_TRUE((int)(a) == (int)(b))
 #define PASS() g_pass++
+
+static uint64_t now_us(void) {
+    struct timespec time;
+    clock_gettime(CLOCK_MONOTONIC, &time);
+    return (uint64_t)time.tv_sec * 1000000u + (uint64_t)time.tv_nsec / 1000u;
+}
 
 static void test_generated_sand_has_stable_gpu_particles(void) {
     dc_chunk_t *generated = calloc(1, sizeof(*generated));
@@ -38,6 +45,15 @@ static void test_generated_sand_has_stable_gpu_particles(void) {
                               err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, generated, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_render_chunks(gpu, err, sizeof(err)));
+    uint32_t *pixels = calloc(DC_CHUNK_CELLS, sizeof(*pixels));
+    ASSERT_TRUE(pixels != NULL);
+    ASSERT_TRUE(dc_gpu_readback(gpu, pixels, DC_CHUNK_CELLS, err, sizeof(err)));
+    uint32_t rendered = 0;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
+        if (generated->particles[i].mass_fp && pixels[i] == 0xff40c8e0u) ++rendered;
+    ASSERT_EQ(rendered, generated->particle_count);
+    free(pixels);
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, replayed, err, sizeof(err)));
     ASSERT_EQ(replayed->particle_count, generated->particle_count);
     ASSERT_EQ(memcmp(generated->particles, replayed->particles,
@@ -52,16 +68,19 @@ static void test_painted_particle_crosses_seam_and_streams_once(void) {
     ASSERT_TRUE(mkdtemp(directory) != NULL);
     dc_chunk_t *left = calloc(1, sizeof(*left));
     dc_chunk_t *right = calloc(1, sizeof(*right));
-    dc_chunk_t *saved = calloc(1, sizeof(*saved));
-    ASSERT_TRUE(left && right && saved);
+    ASSERT_TRUE(left && right);
     right->coord.x = 1;
     dc_gpu_t *gpu = NULL;
     ASSERT_TRUE(dc_gpu_create(&gpu, 128, 64, "build/shaders/pattern.comp.spv",
                               err, sizeof(err)));
+    uint64_t upload_start = now_us();
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, left, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 1, right, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 0, 1, err, sizeof(err)));
+    uint64_t paint_start = now_us();
+    ASSERT_TRUE(dc_gpu_paint_material(gpu, 63, 5, 0, DC_MATERIAL_SAND,
+                                      err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_paint_material(gpu, 63, 5, 0, DC_MATERIAL_SAND,
                                       err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, left, err, sizeof(err)));
@@ -70,12 +89,18 @@ static void test_painted_particle_crosses_seam_and_streams_once(void) {
     ASSERT_EQ(original.mass_fp, DC_FLUID_FULL);
     ASSERT_EQ(original.material, DC_MATERIAL_SAND);
     ASSERT_TRUE(original.id_lo || original.id_hi);
+    uint64_t transfer_start = now_us();
     dc_gpu_transfer_t transfer = { .from_x = 63, .from_y = 5,
         .to_x = 64, .to_y = 5, .kind = DC_GPU_TRANSFER_PARTICLE };
     ASSERT_TRUE(dc_gpu_queue_transfer(gpu, transfer, err, sizeof(err)));
     dc_gpu_transfer_state_t state;
     ASSERT_TRUE(dc_gpu_try_transfer(gpu, &state, err, sizeof(err)));
     ASSERT_EQ(state, DC_GPU_TRANSFER_APPLIED);
+    uint64_t transfer_end = now_us();
+    printf("particle stages (sync wall us): upload=%llu paint+readback=%llu transfer=%llu\n",
+           (unsigned long long)(paint_start - upload_start),
+           (unsigned long long)(transfer_start - paint_start),
+           (unsigned long long)(transfer_end - transfer_start));
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, left, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, right, err, sizeof(err)));
     ASSERT_EQ(left->particle_count, 0u);
@@ -105,14 +130,45 @@ static void test_painted_particle_crosses_seam_and_streams_once(void) {
     dc_stream_result_release(&result);
     dc_stream_destroy(stream);
     dc_gpu_destroy(gpu);
-    free(left); free(right); free(saved);
+    free(left); free(right);
+    PASS();
+}
+
+static void test_granular_paint_reuses_and_erases_primary_slot(void) {
+    char err[256] = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    const uint16_t materials[] = { DC_MATERIAL_SAND, DC_MATERIAL_DIRT,
+                                   DC_MATERIAL_GRAVEL };
+    for (uint32_t i = 0; i < 3; ++i) {
+        ASSERT_TRUE(dc_gpu_paint_material(gpu, 10, 10, 0, materials[i],
+                                          err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
+        ASSERT_EQ(chunk->particle_count, 1u);
+        ASSERT_EQ(chunk->particles[10 * DC_CHUNK_SIDE + 10].material, materials[i]);
+        ASSERT_EQ(chunk->particles[10 * DC_CHUNK_SIDE + 10].mass_fp, DC_FLUID_FULL);
+    }
+    ASSERT_TRUE(dc_gpu_paint_material(gpu, 10, 10, 0, DC_MATERIAL_AIR,
+                                      err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->particle_count, 0u);
+    ASSERT_EQ(chunk->particles[10 * DC_CHUNK_SIDE + 10].mass_fp, 0u);
+    dc_gpu_destroy(gpu);
+    free(chunk);
     PASS();
 }
 
 int main(void) {
-    printf("GPU particle capacity: %u per chunk\n", DC_MPM_PARTICLES_PER_CHUNK);
+    printf("GPU particle capacity: %u records per chunk, %u primary cell slots\n",
+           DC_MPM_PARTICLES_PER_CHUNK, DC_CHUNK_CELLS);
     RUN(test_generated_sand_has_stable_gpu_particles);
     RUN(test_painted_particle_crosses_seam_and_streams_once);
+    RUN(test_granular_paint_reuses_and_erases_primary_slot);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

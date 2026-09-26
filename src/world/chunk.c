@@ -4,6 +4,41 @@
 #include "dungeoncraft/chunk.h"
 
 _Static_assert(sizeof(dc_cell_t) == 8, "Cell layout must match the GPU ABI");
+_Static_assert(sizeof(dc_mpm_particle_t) == 56, "Particle layout must match the GPU ABI");
+
+uint32_t dc_chunk_particle_seed(dc_chunk_coord_t coord) {
+    uint64_t key = (uint64_t)coord.x * UINT64_C(0x9e3779b97f4a7c15) ^
+                   (uint64_t)coord.y * UINT64_C(0xbf58476d1ce4e5b9);
+    key ^= key >> 30;
+    key *= UINT64_C(0xbf58476d1ce4e5b9);
+    key ^= key >> 27;
+    return (uint32_t)(key ^ (key >> 32));
+}
+
+void dc_chunk_seed_particles(dc_chunk_t *chunk) {
+    if (!chunk) return;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        uint32_t material = chunk->cells[i].material;
+        if ((material != DC_MATERIAL_SAND && material != DC_MATERIAL_DIRT &&
+             material != DC_MATERIAL_GRAVEL) || chunk->particles[i].mass_fp) continue;
+        dc_chunk_particle_init(&chunk->particles[i], chunk->coord, i, material);
+        ++chunk->particle_count;
+    }
+}
+
+void dc_chunk_particle_init(dc_mpm_particle_t *particle,
+                            dc_chunk_coord_t coord, uint32_t cell_index,
+                            uint32_t material) {
+    memset(particle, 0, sizeof(*particle));
+    particle->x_fp = (int32_t)((cell_index % DC_CHUNK_SIDE) * DC_FLUID_FULL + DC_FLUID_FULL / 2);
+    particle->y_fp = (int32_t)((cell_index / DC_CHUNK_SIDE) * DC_FLUID_FULL + DC_FLUID_FULL / 2);
+    particle->deformation[0] = particle->deformation[3] = 1.0f;
+    particle->id_lo = cell_index + 1u;
+    particle->id_hi = dc_chunk_particle_seed(coord);
+    particle->mass_fp = DC_FLUID_FULL;
+    particle->grain_fp = DC_FLUID_FULL / 2;
+    particle->material = material;
+}
 
 static int64_t floor_chunk(int64_t cell, uint32_t *local) {
     int64_t quotient = cell / (int64_t)DC_CHUNK_SIDE;

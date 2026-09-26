@@ -44,6 +44,10 @@ void dc_generate_chunk(uint64_t seed, dc_chunk_coord_t coord, dc_chunk_t *chunk)
                 if (dx * dx + dy * dy < 18 * 18) solid = false;
             }
             cell->material = solid ? DC_MATERIAL_STONE : DC_MATERIAL_AIR;
+            if (solid && coord.y == 0 && y < height + 2u &&
+                (mix64(seed ^ (uint64_t)coord.x * 19u ^ (uint64_t)x / 12u) & 3u) == 0u)
+                cell->material = DC_MATERIAL_SAND;
         }
     }
+    dc_chunk_seed_particles(chunk);
 }

@@ -163,11 +163,47 @@ static void test_fresh_run_preserves_previous_saved_world(void) {
     PASS();
 }
 
+static void test_granular_particle_survives_window_eviction(void) {
+    char directory[] = "build/ui_particle_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 40, 5, 0, DC_MATERIAL_SAND,
+                                    err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
+                                    chunk, err, sizeof(err)));
+    uint32_t count = chunk->particle_count;
+    dc_mpm_particle_t original = chunk->particles[5 * DC_CHUNK_SIDE + 40];
+    ASSERT_EQ(original.mass_fp, DC_FLUID_FULL);
+    for (int i = 0; i < 8; ++i) {
+        ASSERT_TRUE(dc_level_view_move(view, 1, 0));
+        ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    }
+    ASSERT_TRUE(!dc_level_view_has_chunk(view, (dc_chunk_coord_t){0, 0}));
+    for (int i = 0; i < 8; ++i) {
+        ASSERT_TRUE(dc_level_view_move(view, -1, 0));
+        ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
+                                    chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->particle_count, count);
+    ASSERT_EQ(memcmp(&chunk->particles[5 * DC_CHUNK_SIDE + 40], &original,
+                     sizeof(original)), 0);
+    free(chunk);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    PASS();
+}
+
 int main(void) {
     RUN(test_camera_crosses_chunk_boundary_cell_by_cell);
     RUN(test_loading_status_and_camera_reset);
     RUN(test_single_step_moves_water_once);
     RUN(test_fresh_run_preserves_previous_saved_world);
+    RUN(test_granular_particle_survives_window_eviction);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

@@ -40,6 +40,9 @@ struct dc_gpu {
     VkBuffer chunk_buffer;
     VkDeviceMemory chunk_memory;
     void *chunk_mapped;
+    VkBuffer particle_buffer, particle_count_buffer;
+    VkDeviceMemory particle_memory, particle_count_memory;
+    void *particle_mapped, *particle_count_mapped;
     VkBuffer page_buffer;
     VkDeviceMemory page_memory;
     void *page_mapped;

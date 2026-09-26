@@ -115,6 +115,8 @@ static int smoke_moving_water_long(void) {
             case SDLK_1: material = DC_MATERIAL_STONE; break;
             case SDLK_2: material = DC_MATERIAL_SAND; break;
             case SDLK_3: material = DC_MATERIAL_WATER; break;
+            case SDLK_4: material = DC_MATERIAL_DIRT; break;
+            case SDLK_5: material = DC_MATERIAL_GRAVEL; break;
             case SDLK_m: dc_level_view_toggle_marker_overlay(view); break;
             default: break;
             }
@@ -662,6 +664,8 @@ int main(int argc, char **argv) {
                 case SDLK_1: material = DC_MATERIAL_STONE; break;
                 case SDLK_2: material = DC_MATERIAL_SAND; break;
                 case SDLK_3: material = DC_MATERIAL_WATER; break;
+                case SDLK_4: material = DC_MATERIAL_DIRT; break;
+                case SDLK_5: material = DC_MATERIAL_GRAVEL; break;
                 case SDLK_p: paused = !paused; break;
                 case SDLK_n: single_step = true; break;
                 case SDLK_m:

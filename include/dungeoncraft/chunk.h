@@ -54,6 +54,17 @@ typedef struct {
     dc_mpm_particle_t particles[DC_MPM_PARTICLES_PER_CHUNK];
 } dc_chunk_t;
 
+/** Stable namespace for particle IDs in this chunk. */
+uint32_t dc_chunk_particle_seed(dc_chunk_coord_t coord);
+
+/** Initialize a primary material particle with a stable cell-derived ID. */
+void dc_chunk_particle_init(dc_mpm_particle_t *particle,
+                            dc_chunk_coord_t coord, uint32_t cell_index,
+                            uint32_t material);
+
+/** Seed one primary particle for each granular material cell lacking one. */
+void dc_chunk_seed_particles(dc_chunk_t *chunk);
+
 typedef enum {
     DC_SLOT_EMPTY,
     DC_SLOT_LOADING,

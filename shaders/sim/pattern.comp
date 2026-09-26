@@ -5,6 +5,15 @@ layout(set = 0, binding = 1, std430) buffer ChunkCells { uvec2 chunk_cells[]; };
 layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
 layout(set = 0, binding = 3, std430) readonly buffer Occupancy { uint occupancy[]; };
 layout(set = 0, binding = 16, std430) readonly buffer MarkerGrid { uint marker_grid[]; };
+struct Particle {
+    int x_fp, y_fp, vx_fp, vy_fp;
+    float f00, f01, f10, f11;
+    uint id_lo, id_hi, mass_fp, grain_fp;
+    uint material, flags;
+};
+layout(set = 0, binding = 18, std430) readonly buffer SlotSeeds { uint seeds[]; };
+layout(set = 0, binding = 19, std430) buffer Particles { Particle particles[]; };
+layout(set = 0, binding = 20, std430) buffer ParticleCounts { uint particle_counts[]; };
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -39,20 +48,51 @@ void main() {
         uint index = (page - 1u) * 4096u + (p.y % 64u) * 64u + p.x % 64u;
         uvec2 cell = chunk_cells[index];
         uint material = cell.x & 0xffffu;
+        uint slot = page - 1u;
+        uint local_index = index % 4096u;
+        uint particle_index = slot * 8192u + local_index;
         if (params.mode == 3u) {
             int dx = int(p.x) - int(params.brush_x);
             int dy = int(p.y) - int(params.brush_y);
             int r = int(params.radius);
             if (dx * dx + dy * dy <= r * r) {
+                uint old_material = material;
                 material = params.color == 3u ? 0u : params.color;
+                bool old_grain = old_material == 2u || old_material == 4u || old_material == 5u;
+                bool new_grain = material == 2u || material == 4u || material == 5u;
+                if (old_grain && !new_grain && particles[particle_index].mass_fp != 0u) {
+                    particles[particle_index].mass_fp = 0u;
+                    atomicAdd(particle_counts[slot], uint(-1));
+                } else if (new_grain) {
+                    if (particles[particle_index].mass_fp == 0u) {
+                        Particle particle;
+                        particle.x_fp = int((p.x % 64u) * 65536u + 32768u);
+                        particle.y_fp = int((p.y % 64u) * 65536u + 32768u);
+                        particle.vx_fp = particle.vy_fp = 0;
+                        particle.f00 = particle.f11 = 1.0;
+                        particle.f01 = particle.f10 = 0.0;
+                        particle.id_lo = local_index + 1u;
+                        particle.id_hi = seeds[slot];
+                        particle.mass_fp = 65536u;
+                        particle.grain_fp = 32768u;
+                        particle.material = material;
+                        particle.flags = 0u;
+                        particles[particle_index] = particle;
+                        atomicAdd(particle_counts[slot], 1u);
+                    } else particles[particle_index].material = material;
+                }
                 cell.x = (cell.x & 0xffff0000u) | material;
                 cell.y = params.color == 3u ? 65536u : 0u;
                 chunk_cells[index] = cell;
             }
         }
+        if (params.mode == 2u && particles[particle_index].mass_fp != 0u)
+            material = particles[particle_index].material;
         uint color = 0xff181818u;
         if (material == 1u) color = 0xff707070u;
         else if (material == 2u) color = 0xff40c8e0u;
+        else if (material == 4u) color = 0xff326495u;
+        else if (material == 5u) color = 0xff808090u;
         if (cell.y > 0u) {
             uint fill = min(cell.y, 65536u) / 256u;
             uint red = 16u + 32u * fill / 256u;

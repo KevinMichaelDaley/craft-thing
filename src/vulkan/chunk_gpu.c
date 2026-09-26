@@ -9,15 +9,6 @@ static bool error(char *buf, uint32_t cap, const char *message) {
     return false;
 }
 
-static uint32_t chunk_marker_seed(dc_chunk_coord_t coord) {
-    uint64_t key = (uint64_t)coord.x * UINT64_C(0x9e3779b97f4a7c15) ^
-                   (uint64_t)coord.y * UINT64_C(0xbf58476d1ce4e5b9);
-    key ^= key >> 30;
-    key *= UINT64_C(0xbf58476d1ce4e5b9);
-    key ^= key >> 27;
-    return (uint32_t)(key ^ (key >> 32));
-}
-
 bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                VkDeviceMemory *memory, void **mapped,
                                char *err, uint32_t cap) {
@@ -58,6 +49,12 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkDeviceSize page_bytes = (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t);
     return dc_gpu_make_mapped_buffer(gpu, chunk_bytes, &gpu->chunk_buffer,
                &gpu->chunk_memory, &gpu->chunk_mapped, err, cap) &&
+           dc_gpu_make_mapped_buffer(gpu,
+               (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t),
+               &gpu->particle_buffer, &gpu->particle_memory, &gpu->particle_mapped, err, cap) &&
+           dc_gpu_make_mapped_buffer(gpu, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t),
+               &gpu->particle_count_buffer, &gpu->particle_count_memory,
+               &gpu->particle_count_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, page_bytes, &gpu->page_buffer,
                &gpu->page_memory, &gpu->page_mapped, err, cap) &&
            dc_gpu_halo_buffers_init(gpu, err, cap) &&
@@ -71,17 +68,24 @@ void dc_gpu_chunks_destroy(dc_gpu_t *gpu) {
     dc_gpu_fluid_destroy(gpu);
     dc_gpu_marker_destroy(gpu);
     if (gpu->chunk_mapped) vkUnmapMemory(gpu->device, gpu->chunk_memory);
+    if (gpu->particle_mapped) vkUnmapMemory(gpu->device, gpu->particle_memory);
+    if (gpu->particle_count_mapped) vkUnmapMemory(gpu->device, gpu->particle_count_memory);
     if (gpu->page_mapped) vkUnmapMemory(gpu->device, gpu->page_memory);
     if (gpu->chunk_buffer) vkDestroyBuffer(gpu->device, gpu->chunk_buffer, NULL);
+    if (gpu->particle_buffer) vkDestroyBuffer(gpu->device, gpu->particle_buffer, NULL);
+    if (gpu->particle_count_buffer) vkDestroyBuffer(gpu->device, gpu->particle_count_buffer, NULL);
     if (gpu->page_buffer) vkDestroyBuffer(gpu->device, gpu->page_buffer, NULL);
     if (gpu->chunk_memory) vkFreeMemory(gpu->device, gpu->chunk_memory, NULL);
+    if (gpu->particle_memory) vkFreeMemory(gpu->device, gpu->particle_memory, NULL);
+    if (gpu->particle_count_memory) vkFreeMemory(gpu->device, gpu->particle_count_memory, NULL);
     if (gpu->page_memory) vkFreeMemory(gpu->device, gpu->page_memory, NULL);
 }
 
 bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
                          char *err, uint32_t cap) {
     if (!gpu || !chunk || slot >= DC_GPU_CHUNK_SLOTS ||
-        chunk->marker_count > DC_MARKERS_PER_CHUNK)
+        chunk->marker_count > DC_MARKERS_PER_CHUNK ||
+        chunk->particle_count > DC_MPM_PARTICLES_PER_CHUNK)
         return error(err, cap, "Invalid GPU chunk upload slot");
     dc_cell_t *cells = gpu->chunk_mapped;
     memcpy(cells + (size_t)slot * DC_CHUNK_CELLS, chunk->cells, sizeof(chunk->cells));
@@ -99,7 +103,26 @@ bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
     ((uint32_t *)gpu->marker_count_b_mapped)[slot] = chunk->marker_count;
     memset((uint32_t *)gpu->marker_grid_mapped + (size_t)slot * DC_CHUNK_CELLS,
            0, DC_CHUNK_CELLS * sizeof(uint32_t));
-    ((uint32_t *)gpu->slot_seed_mapped)[slot] = chunk_marker_seed(chunk->coord);
+    dc_mpm_particle_t *particles = (dc_mpm_particle_t *)gpu->particle_mapped +
+        (size_t)slot * DC_MPM_PARTICLES_PER_CHUNK;
+    memcpy(particles, chunk->particles, sizeof(chunk->particles));
+    uint32_t particle_count = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        particle_count += particles[i].mass_fp != 0u;
+    if (particle_count != chunk->particle_count)
+        return error(err, cap, "Chunk particle count does not match active records");
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        uint32_t material = chunk->cells[i].material;
+        if ((material == DC_MATERIAL_SAND || material == DC_MATERIAL_DIRT ||
+             material == DC_MATERIAL_GRAVEL) && particles[i].mass_fp == 0u) {
+            if (particle_count == DC_MPM_PARTICLES_PER_CHUNK)
+                return error(err, cap, "GPU particle pool is full");
+            dc_chunk_particle_init(&particles[i], chunk->coord, i, material);
+            ++particle_count;
+        }
+    }
+    ((uint32_t *)gpu->particle_count_mapped)[slot] = particle_count;
+    ((uint32_t *)gpu->slot_seed_mapped)[slot] = dc_chunk_particle_seed(chunk->coord);
     return true;
 }
 
@@ -133,6 +156,13 @@ bool dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chunk,
         return error(err, cap, "GPU marker count exceeds chunk capacity");
     memcpy(chunk->markers, markers + (size_t)slot * DC_MARKERS_PER_CHUNK,
            (size_t)chunk->marker_count * sizeof(dc_marker_t));
+    chunk->particle_count = ((uint32_t *)gpu->particle_count_mapped)[slot];
+    if (chunk->particle_count > DC_MPM_PARTICLES_PER_CHUNK)
+        return error(err, cap, "GPU particle count exceeds chunk capacity");
+    memcpy(chunk->particles,
+           (dc_mpm_particle_t *)gpu->particle_mapped +
+               (size_t)slot * DC_MPM_PARTICLES_PER_CHUNK,
+           sizeof(chunk->particles));
     return true;
 }
 

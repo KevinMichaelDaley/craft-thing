@@ -55,15 +55,25 @@ static bool save_chunk(const dc_streamer_t *stream, const dc_chunk_t *chunk) {
         !chunk_path(stream, chunk->coord, final, sizeof(final), false)) return false;
     FILE *file = fopen(temporary, "wb");
     if (!file) return false;
-    chunk_header_t header = { .magic = {'D', 'C', 'C', '1'}, .version = 3,
+    chunk_header_t header = { .magic = {'D', 'C', 'C', '1'}, .version = 4,
         .x = chunk->coord.x, .y = chunk->coord.y, .seed = stream->seed };
     bool okay = fwrite(&header, sizeof(header), 1, file) == 1 &&
         fwrite(chunk->cells, sizeof(chunk->cells), 1, file) == 1 &&
         chunk->marker_count <= DC_MARKERS_PER_CHUNK &&
+        chunk->particle_count <= DC_MPM_PARTICLES_PER_CHUNK &&
         fwrite(&chunk->marker_count, sizeof(chunk->marker_count), 1, file) == 1 &&
         fwrite(chunk->markers, sizeof(dc_marker_t), chunk->marker_count, file) ==
             chunk->marker_count &&
-        fwrite(chunk->face_velocity, sizeof(chunk->face_velocity), 1, file) == 1;
+        fwrite(chunk->face_velocity, sizeof(chunk->face_velocity), 1, file) == 1 &&
+        fwrite(&chunk->particle_count, sizeof(chunk->particle_count), 1, file) == 1;
+    uint32_t written = 0;
+    for (uint32_t i = 0; okay && i < DC_MPM_PARTICLES_PER_CHUNK; ++i) {
+        if (!chunk->particles[i].mass_fp) continue;
+        okay = fwrite(&i, sizeof(i), 1, file) == 1 &&
+            fwrite(&chunk->particles[i], sizeof(dc_mpm_particle_t), 1, file) == 1;
+        ++written;
+    }
+    okay = okay && written == chunk->particle_count;
     if (fclose(file) != 0) okay = false;
     if (okay) okay = rename(temporary, final) == 0;
     if (!okay) remove(temporary);
@@ -84,7 +94,7 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coor
     chunk_header_t header;
     bool okay = fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCC1", 4) == 0 &&
-        (header.version >= 1 && header.version <= 3) &&
+        (header.version >= 1 && header.version <= 4) &&
         header.x == coord.x && header.y == coord.y && header.seed == stream->seed &&
         fread(chunk->cells, sizeof(chunk->cells), 1, file) == 1;
     if (okay && header.version >= 2)
@@ -92,11 +102,25 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coor
             chunk->marker_count <= DC_MARKERS_PER_CHUNK &&
             fread(chunk->markers, sizeof(dc_marker_t), chunk->marker_count, file) ==
                 chunk->marker_count;
-    if (okay && header.version == 3)
+    if (okay && header.version >= 3)
         okay = fread(chunk->face_velocity, sizeof(chunk->face_velocity), 1, file) == 1;
+    if (okay && header.version == 4) {
+        okay = fread(&chunk->particle_count, sizeof(chunk->particle_count), 1, file) == 1 &&
+            chunk->particle_count <= DC_MPM_PARTICLES_PER_CHUNK;
+        for (uint32_t n = 0; okay && n < chunk->particle_count; ++n) {
+            uint32_t index;
+            dc_mpm_particle_t particle;
+            okay = fread(&index, sizeof(index), 1, file) == 1 &&
+                fread(&particle, sizeof(particle), 1, file) == 1 &&
+                index < DC_MPM_PARTICLES_PER_CHUNK && particle.mass_fp != 0;
+            if (okay && chunk->particles[index].mass_fp) okay = false;
+            if (okay) chunk->particles[index] = particle;
+        }
+    }
     if (fclose(file) != 0) okay = false;
     if (!okay) { free(chunk); return NULL; }
     chunk->coord = coord;
+    if (header.version < 4) dc_chunk_seed_particles(chunk);
     return chunk;
 }
 
