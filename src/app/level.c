@@ -24,6 +24,17 @@ static bool error(char *buf, uint32_t cap, const char *message) {
     return false;
 }
 
+bool dc_level_view_step(dc_level_view_t *view, char *err, uint32_t cap) {
+    (void)view;
+    return error(err, cap, "Rigid level step is not implemented");
+}
+
+bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,
+                              char *err, uint32_t cap) {
+    (void)view; (void)x; (void)y;
+    return error(err, cap, "Rigid body spawn is not implemented");
+}
+
 static bool visible(const dc_level_view_t *view, dc_chunk_coord_t coord) {
     return coord.x >= view->origin.x &&
            coord.x <= view->origin.x + VIEW_CHUNKS_X - 1 &&

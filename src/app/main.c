@@ -20,8 +20,17 @@ static int smoke_streamed_level(void) {
     if (!view) { fprintf(stderr, "Level create: %s\n", err); return 1; }
     const char *stage = "initial load";
     bool okay = dc_level_view_wait_visible(view, 5000, err, sizeof(err));
+    const char *rigid_stage = "rigid spawn";
+    if (okay) okay = dc_level_view_spawn_body(view, 63, 2, err, sizeof(err));
+    rigid_stage = "rigid cross-chunk step";
+    if (okay) okay = dc_level_view_step(view, err, sizeof(err)) &&
+                     dc_level_view_tick(view, err, sizeof(err));
+    uint32_t rigid_color = 0;
+    if (okay) okay = dc_level_view_pixel(view, 64, 2, &rigid_color, err, sizeof(err)) &&
+                     rigid_color == 0xff30c040u;
+    if (!okay) stage = rigid_stage;
     uint32_t color = 0;
-    stage = "basin pixel";
+    if (okay) stage = "basin pixel";
     if (okay) okay = dc_level_view_pixel(view, 128, 40, &color, err, sizeof(err)) &&
                      color == 0xffd07030u;
     stage = "positive paint";

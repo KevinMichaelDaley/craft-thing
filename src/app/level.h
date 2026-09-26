@@ -11,6 +11,9 @@ typedef struct dc_level_view dc_level_view_t;
 dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
                                       char *err, uint32_t err_cap);
 bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t err_cap);
+bool dc_level_view_step(dc_level_view_t *view, char *err, uint32_t err_cap);
+bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,
+                              char *err, uint32_t err_cap);
 bool dc_level_view_wait_visible(dc_level_view_t *view, uint32_t timeout_ms,
                                 char *err, uint32_t err_cap);
 bool dc_level_view_move(dc_level_view_t *view, int32_t dx, int32_t dy);
