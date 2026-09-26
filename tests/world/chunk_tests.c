@@ -44,6 +44,8 @@ static void test_slot_reuse_waits_for_save_and_gpu(void) {
     ASSERT_TRUE(dc_chunk_table_set_active(&table, index, false));
     table.slots[index].last_gpu_use = 10;
     ASSERT_TRUE(!dc_chunk_table_evict(&table, index, 10));
+    ASSERT_TRUE(dc_chunk_table_begin_save(&table, index, &token));
+    ASSERT_TRUE(!dc_chunk_table_set_active(&table, index, true));
     ASSERT_TRUE(dc_chunk_table_finish_save(&table, index, token));
     ASSERT_TRUE(!dc_chunk_table_evict(&table, index, 9));
     table.slots[index].pinned = true;

@@ -71,6 +71,10 @@ bool dc_chunk_table_set_active(dc_chunk_table_t *table, uint32_t index, bool act
 /** Mark a chunk modified; dirty chunks require saving before eviction. */
 bool dc_chunk_table_mark_dirty(dc_chunk_table_t *table, uint32_t index);
 
+/** Freeze a sleeping dirty slot for an asynchronous save. */
+bool dc_chunk_table_begin_save(dc_chunk_table_t *table, uint32_t index,
+                               uint64_t *generation);
+
 /** Clear dirty state after the matching asynchronous save completes. */
 bool dc_chunk_table_finish_save(dc_chunk_table_t *table, uint32_t index,
                                 uint64_t generation);
