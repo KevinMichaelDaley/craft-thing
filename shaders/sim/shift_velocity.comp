@@ -1,0 +1,35 @@
+#version 450
+layout(local_size_x = 256) in;
+
+layout(set = 0, binding = 8, std430) buffer SnapshotX { uint snapshot_x[]; };
+layout(set = 0, binding = 9, std430) buffer SnapshotY { uint snapshot_y[]; };
+layout(set = 0, binding = 10, std430) buffer Velocity { vec2 velocity[]; };
+layout(push_constant) uniform Params {
+    uint width;
+    uint height;
+    uint mode;
+    int chunk_dx;
+    int chunk_dy;
+    uint unused1;
+    uint unused2;
+} params;
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    if (index >= params.width * params.height) return;
+    if (params.mode == 0u) {
+        snapshot_x[index] = floatBitsToUint(velocity[index].x);
+        snapshot_y[index] = floatBitsToUint(velocity[index].y);
+        return;
+    }
+    ivec2 p = ivec2(int(index % params.width), int(index / params.width));
+    ivec2 old = p + ivec2(params.chunk_dx, params.chunk_dy) * 64;
+    if (old.x < 0 || old.y < 0 || old.x >= int(params.width) ||
+        old.y >= int(params.height)) {
+        velocity[index] = vec2(0.0);
+        return;
+    }
+    uint old_index = uint(old.y) * params.width + uint(old.x);
+    velocity[index] = vec2(uintBitsToFloat(snapshot_x[old_index]),
+                           uintBitsToFloat(snapshot_y[old_index]));
+}

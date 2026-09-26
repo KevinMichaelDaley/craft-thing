@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 
 #include "dungeoncraft/gpu.h"
@@ -401,6 +402,7 @@ static void test_markers_correct_a_moving_free_surface(void) {
     ASSERT_TRUE(dc_gpu_fluid_step(seed_gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_download_chunk(seed_gpu, 0, &warmed, err, sizeof(err)));
     ASSERT_TRUE(warmed.marker_count > 0);
+    memset(warmed.face_velocity, 0, sizeof(warmed.face_velocity));
     dc_gpu_destroy(seed_gpu);
     uint64_t total[2] = {0}, concentration[2] = {0};
     for (uint32_t variant = 0; variant < 2; ++variant) {

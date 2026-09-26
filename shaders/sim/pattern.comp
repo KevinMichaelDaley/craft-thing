@@ -17,6 +17,7 @@ layout(push_constant) uniform Params {
 
 void main() {
     uvec2 p = gl_GlobalInvocationID.xy;
+    if (params.mode == 2u) p += uvec2(params.radius, params.color);
     if (p.x >= params.width || p.y >= params.height) return;
     if (params.mode == 0u) {
         cells[p.y * params.width + p.x] = ((p.x + p.y) & 1u) == 0u

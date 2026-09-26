@@ -189,6 +189,14 @@ static int smoke_streamed_level(void) {
         printf("offscreen halo corners resident=%d,%d\n", top_left, bottom_right);
         okay = top_left && bottom_right;
     }
+    if (okay) stage = "paint and persist halo edge";
+    if (okay) okay = dc_level_view_paint(view, 0, 5, 3, DC_MATERIAL_STONE,
+                                         err, sizeof(err));
+    dc_chunk_t halo_painted = {0};
+    if (okay) okay = dc_level_view_chunk(view, (dc_chunk_coord_t){-1, 0},
+                                         &halo_painted, err, sizeof(err)) &&
+                     halo_painted.cells[5 * DC_CHUNK_SIDE + 63].material ==
+                         DC_MATERIAL_STONE;
     const char *rigid_stage = "rigid spawn";
     if (okay) okay = dc_level_view_spawn_body(view, 63, 2, err, sizeof(err));
     rigid_stage = "rigid cross-chunk step";
@@ -211,7 +219,7 @@ static int smoke_streamed_level(void) {
     if (okay) stage = "basin pixel";
     if (okay) okay = dc_level_view_pixel(view, 128, 40, &color, err, sizeof(err)) &&
                      color == 0xffd07030u;
-    stage = "positive paint";
+    if (okay) stage = "positive paint";
     if (okay) okay = dc_level_view_paint(view, 64, 5, 0, DC_MATERIAL_SAND,
                                          err, sizeof(err));
     dc_chunk_t chunk = {0};
@@ -227,24 +235,31 @@ static int smoke_streamed_level(void) {
                                          &chunk, err, sizeof(err)) &&
                      chunk.marker_count > 0;
     uint32_t saved_marker_count = chunk.marker_count;
-    stage = "negative load";
+    dc_face_velocity_t saved_faces[DC_CHUNK_CELLS];
+    memcpy(saved_faces, chunk.face_velocity, sizeof(saved_faces));
+    bool moving_face = false;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
+        if (saved_faces[i].x != 0.0f || saved_faces[i].y != 0.0f)
+            moving_face = true;
+    if (okay) okay = moving_face;
+    if (okay) stage = "negative load";
     if (okay) okay = dc_level_view_move(view, -1, 0) &&
                      dc_level_view_wait_visible(view, 5000, err, sizeof(err));
-    stage = "negative paint";
+    if (okay) stage = "negative paint";
     if (okay) okay = dc_level_view_paint(view, 63, 5, 0, DC_MATERIAL_STONE,
                                          err, sizeof(err));
-    stage = "negative eviction";
+    if (okay) stage = "negative eviction";
     if (okay) okay = dc_level_view_move(view, 1, 0) &&
                      dc_level_view_wait_visible(view, 5000, err, sizeof(err));
-    stage = "negative reload";
+    if (okay) stage = "negative reload";
     if (okay) okay = dc_level_view_move(view, -1, 0) &&
                      dc_level_view_wait_visible(view, 5000, err, sizeof(err));
     if (okay) okay = dc_level_view_chunk(view, (dc_chunk_coord_t){-1, 0},
                                          &chunk, err, sizeof(err)) &&
                      chunk.cells[5 * DC_CHUNK_SIDE + 63].material == DC_MATERIAL_STONE;
-    stage = "positive eviction";
+    if (okay) stage = "positive eviction";
     if (okay) okay = dc_level_view_move(view, 1, 0) && dc_level_view_move(view, 1, 0) &&
-                     dc_level_view_move(view, 1, 0) &&
+                     dc_level_view_move(view, 1, 0) && dc_level_view_move(view, 1, 0) &&
                      dc_level_view_wait_visible(view, 5000, err, sizeof(err));
     uint64_t deadline = SDL_GetTicks64() + 5000;
     while (okay && dc_level_view_has_chunk(view, (dc_chunk_coord_t){1, 0}) &&
@@ -253,14 +268,32 @@ static int smoke_streamed_level(void) {
         SDL_Delay(1);
     }
     if (okay) okay = !dc_level_view_has_chunk(view, (dc_chunk_coord_t){1, 0});
-    stage = "positive reload";
+    if (okay) stage = "positive reload";
     if (okay) okay = dc_level_view_move(view, -1, 0) && dc_level_view_move(view, -1, 0) &&
+                     dc_level_view_move(view, -1, 0) &&
                      dc_level_view_wait_visible(view, 5000, err, sizeof(err));
     if (okay) okay = dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
                                          &chunk, err, sizeof(err)) &&
                      chunk.cells[5 * DC_CHUNK_SIDE].material == DC_MATERIAL_SAND &&
-                     chunk.marker_count == saved_marker_count;
+                     chunk.marker_count == saved_marker_count &&
+                     memcmp(saved_faces, chunk.face_velocity,
+                            sizeof(saved_faces)) == 0;
+    if (okay) stage = "halo edge reload";
+    if (okay) okay = dc_level_view_chunk(view, (dc_chunk_coord_t){-1, 0},
+                                         &halo_painted, err, sizeof(err)) &&
+                     halo_painted.cells[5 * DC_CHUNK_SIDE + 63].material ==
+                         DC_MATERIAL_STONE;
     bool closed = dc_level_view_destroy(view, err, sizeof(err));
+    if (okay && closed) {
+        stage = "process restart velocity reload";
+        view = dc_level_view_create(directory, 314, err, sizeof(err));
+        okay = view && dc_level_view_wait_visible(view, 5000, err, sizeof(err)) &&
+               dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
+                                   &chunk, err, sizeof(err)) &&
+               memcmp(saved_faces, chunk.face_velocity,
+                      sizeof(saved_faces)) == 0;
+        if (view && !dc_level_view_destroy(view, err, sizeof(err))) closed = false;
+    }
     if (!okay || !closed) {
         fprintf(stderr, "Streamed level smoke failed at %s: %s\n", stage, err);
         return 1;
@@ -269,7 +302,93 @@ static int smoke_streamed_level(void) {
     return 0;
 }
 
+static int smoke_halo_flow(void) {
+    char directory[] = "build/ui_halo_flow_XXXXXX";
+    if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
+    char err[256] = {0};
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    if (!view) { fprintf(stderr, "Halo level create: %s\n", err); return 1; }
+    bool okay = dc_level_view_set_spring_enabled(view, false) &&
+                dc_level_view_wait_visible(view, 5000, err, sizeof(err)) &&
+                dc_level_view_move(view, 0, -1) &&
+                dc_level_view_wait_visible(view, 5000, err, sizeof(err)) &&
+                dc_level_view_paint(view, 80, 61, 0, DC_MATERIAL_WATER,
+                                    err, sizeof(err)) &&
+                dc_level_view_move(view, 0, 1) &&
+                dc_level_view_wait_visible(view, 5000, err, sizeof(err));
+    for (uint32_t tick = 0; tick < 12 && okay; ++tick)
+        okay = dc_level_view_step(view, err, sizeof(err)) &&
+               dc_level_view_tick(view, err, sizeof(err));
+    dc_chunk_t upper = {0}, lower = {0};
+    if (okay) okay = dc_level_view_chunk(view, (dc_chunk_coord_t){1, -1},
+                                         &upper, err, sizeof(err)) &&
+                     dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
+                                         &lower, err, sizeof(err));
+    uint64_t above = 0, visible = 0;
+    for (uint32_t y = 0; y < DC_CHUNK_SIDE && okay; ++y)
+        for (uint32_t x = 0; x < 32; ++x) {
+            above += upper.cells[y * DC_CHUNK_SIDE + x].fluid_mass;
+            visible += lower.cells[y * DC_CHUNK_SIDE + x].fluid_mass;
+        }
+    okay = okay && above + visible == DC_FLUID_FULL && visible > 0;
+    if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
+    if (!okay) {
+        fprintf(stderr, "Halo flow failed (upper=%llu visible=%llu): %s\n",
+                (unsigned long long)above, (unsigned long long)visible, err);
+        return 1;
+    }
+    printf("Offscreen water entered camera with exact mass\n");
+    return 0;
+}
+
+static bool camera_velocity_variant(bool pan, dc_chunk_t *result,
+                                    char *err, uint32_t cap) {
+    char directory[] = "build/ui_camera_velocity_XXXXXX";
+    if (!mkdtemp(directory)) return false;
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, cap);
+    if (!view) return false;
+    bool okay = dc_level_view_set_spring_enabled(view, false) &&
+                dc_level_view_wait_visible(view, 5000, err, cap) &&
+                dc_level_view_paint(view, 80, 5, 3, DC_MATERIAL_WATER, err, cap);
+    for (uint32_t tick = 0; tick < 8 && okay; ++tick)
+        okay = dc_level_view_step(view, err, cap) &&
+               dc_level_view_tick(view, err, cap);
+    if (pan && okay)
+        okay = dc_level_view_move(view, 1, 0) &&
+               dc_level_view_wait_visible(view, 5000, err, cap);
+    for (uint32_t tick = 0; tick < 12 && okay; ++tick)
+        okay = dc_level_view_step(view, err, cap) &&
+               dc_level_view_tick(view, err, cap);
+    if (pan && okay)
+        okay = dc_level_view_move(view, -1, 0) &&
+               dc_level_view_wait_visible(view, 5000, err, cap);
+    if (okay) okay = dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
+                                         result, err, cap);
+    return dc_level_view_destroy(view, err, cap) && okay;
+}
+
+static int smoke_camera_velocity(void) {
+    char err[256] = {0};
+    dc_chunk_t stable = {0}, panned = {0};
+    bool okay = camera_velocity_variant(false, &stable, err, sizeof(err)) &&
+                camera_velocity_variant(true, &panned, err, sizeof(err));
+    uint32_t different = 0;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS && okay; ++i)
+        if (stable.cells[i].fluid_mass != panned.cells[i].fluid_mass) ++different;
+    if (!okay || different != 0) {
+        fprintf(stderr, "Camera velocity replay failed (%u different cells): %s\n",
+                different, err);
+        return 1;
+    }
+    printf("Camera move preserved fluid evolution cell-for-cell\n");
+    return 0;
+}
+
 int main(int argc, char **argv) {
+    if (argc > 1 && strcmp(argv[1], "--smoke-camera-velocity") == 0)
+        return smoke_camera_velocity();
+    if (argc > 1 && strcmp(argv[1], "--smoke-halo-flow") == 0)
+        return smoke_halo_flow();
     if (argc > 1 && strcmp(argv[1], "--smoke-stream") == 0)
         return smoke_streamed_level();
     if (argc > 1 && strcmp(argv[1], "--smoke-motion") == 0)

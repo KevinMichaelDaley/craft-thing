@@ -237,6 +237,7 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     dc_gpu_t *gpu = calloc(1, sizeof(*gpu));
     if (!gpu) return error(err, cap, "Out of memory creating GPU context");
     gpu->width = width; gpu->height = height;
+    gpu->view_width = width; gpu->view_height = height;
     for (uint32_t i = 0; i < DC_GPU_CHUNK_SLOTS; ++i) gpu->slot_page[i] = UINT32_MAX;
     if (window_width && window_height) {
         if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
@@ -348,6 +349,17 @@ bool dc_gpu_create_window(dc_gpu_t **out, uint32_t width, uint32_t height,
     return create_gpu(out, width, height, window_width, window_height, shader_path, err, cap);
 }
 
+bool dc_gpu_set_viewport(dc_gpu_t *gpu, uint32_t x, uint32_t y,
+                         uint32_t width, uint32_t height) {
+    if (!gpu || !width || !height || x >= gpu->width || y >= gpu->height ||
+        width > gpu->width - x || height > gpu->height - y) return false;
+    gpu->view_x = x;
+    gpu->view_y = y;
+    gpu->view_width = width;
+    gpu->view_height = height;
+    return true;
+}
+
 static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7], char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
@@ -367,7 +379,10 @@ static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7], char *err, uin
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 28, push);
-    vkCmdDispatch(gpu->command, (gpu->width + 15u) / 16u, (gpu->height + 15u) / 16u, 1);
+    uint32_t dispatch_width = push[2] == 2u ? gpu->view_width : gpu->width;
+    uint32_t dispatch_height = push[2] == 2u ? gpu->view_height : gpu->height;
+    vkCmdDispatch(gpu->command, (dispatch_width + 15u) / 16u,
+                  (dispatch_height + 15u) / 16u, 1);
     VkMemoryBarrier2 barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
@@ -402,7 +417,7 @@ bool dc_gpu_paint(dc_gpu_t *gpu, uint32_t x, uint32_t y, uint32_t radius,
 bool dc_gpu_render_chunks(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     uint32_t push[7] = { gpu->width, gpu->height, 2,
-                         gpu->marker_overlay ? 1u : 0u, 0, 0, 0 };
+                         gpu->marker_overlay ? 1u : 0u, 0, gpu->view_x, gpu->view_y };
     return dispatch_cells(gpu, push, err, cap);
 }
 

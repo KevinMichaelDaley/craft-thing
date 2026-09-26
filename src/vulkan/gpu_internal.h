@@ -77,12 +77,14 @@ struct dc_gpu {
     VkBuffer velocity_buffer;
     VkDeviceMemory velocity_memory;
     void *velocity_mapped;
+    dc_face_velocity_t *chunk_velocity;
+    bool preserve_shifted_slot[DC_GPU_CHUNK_SLOTS];
     VkBuffer pressure_a_buffer;
     VkDeviceMemory pressure_a_memory;
     void *pressure_a_mapped;
     VkPipeline projection_pipeline;
+    VkPipeline velocity_shift_pipeline;
     uint32_t fluid_tick;
-    bool fluid_reset_velocity;
     VkBuffer marker_a_buffer, marker_b_buffer;
     VkDeviceMemory marker_a_memory, marker_b_memory;
     void *marker_a_mapped, *marker_b_mapped;
@@ -98,6 +100,7 @@ struct dc_gpu {
     bool tick_water_source;
     uint32_t tick_water_x, tick_water_y;
     uint32_t width, height;
+    uint32_t view_x, view_y, view_width, view_height;
 };
 
 bool dc_gpu_pick_device(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t cap);

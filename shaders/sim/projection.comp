@@ -12,7 +12,7 @@ layout(push_constant) uniform Params {
     uint width;
     uint height;
     uint mode;
-    uint reset_velocity;
+    uint unused0;
     uint unused1;
     uint unused2;
     uint unused3;
@@ -88,7 +88,7 @@ void main() {
             hydro_head[index_of(cell)] = head;
         }
     } else if (params.mode == 0u) {
-        vec2 old_velocity = params.reset_velocity != 0u ? vec2(0.0) : face_velocity[index];
+        vec2 old_velocity = face_velocity[index];
         ivec2 right = p + ivec2(1, 0);
         ivec2 below = p + ivec2(0, 1);
         vec2 predicted = vec2(0.0);

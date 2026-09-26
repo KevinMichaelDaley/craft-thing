@@ -149,11 +149,52 @@ static void test_worker_loads_procedural_basin(void) {
     PASS();
 }
 
+static void test_legacy_chunk_loads_with_zero_velocity(void) {
+    char directory[] = "build/stream_legacy_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    char path[256];
+    ASSERT_TRUE(snprintf(path, sizeof(path),
+        "%s/chunk_0000000000000000_0000000000000000.bin", directory) > 0);
+    FILE *file = fopen(path, "wb");
+    ASSERT_TRUE(file != NULL);
+    struct {
+        char magic[4];
+        uint32_t version;
+        int64_t x, y;
+        uint64_t seed;
+    } header = { .magic = {'D', 'C', 'C', '1'}, .version = 2, .seed = 98 };
+    dc_chunk_t *old = calloc(1, sizeof(*old));
+    ASSERT_TRUE(old != NULL);
+    old->cells[10].fluid_mass = DC_FLUID_FULL;
+    old->marker_count = 1;
+    old->markers[0].id = 42;
+    ASSERT_TRUE(fwrite(&header, sizeof(header), 1, file) == 1);
+    ASSERT_TRUE(fwrite(old->cells, sizeof(old->cells), 1, file) == 1);
+    ASSERT_TRUE(fwrite(&old->marker_count, sizeof(old->marker_count), 1, file) == 1);
+    ASSERT_TRUE(fwrite(old->markers, sizeof(dc_marker_t), 1, file) == 1);
+    ASSERT_TRUE(fclose(file) == 0);
+    free(old);
+    dc_streamer_t *stream = dc_stream_create(directory, 98, 2);
+    ASSERT_TRUE(stream != NULL);
+    dc_stream_result_t result = {0};
+    ASSERT_TRUE(dc_stream_request_load(stream, (dc_chunk_coord_t){0, 0}, 1));
+    ASSERT_TRUE(wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_LOADED);
+    ASSERT_EQ(result.chunk->cells[10].fluid_mass, DC_FLUID_FULL);
+    ASSERT_EQ(result.chunk->markers[0].id, 42u);
+    ASSERT_TRUE(result.chunk->face_velocity[10].x == 0.0f);
+    ASSERT_TRUE(result.chunk->face_velocity[10].y == 0.0f);
+    dc_stream_result_release(&result);
+    dc_stream_destroy(stream);
+    PASS();
+}
+
 int main(void) {
     RUN(test_worker_generates_saves_and_reloads_chunk);
     RUN(test_shutdown_flushes_queued_saves);
     RUN(test_resident_slot_round_trip_through_worker);
     RUN(test_worker_loads_procedural_basin);
+    RUN(test_legacy_chunk_loads_with_zero_velocity);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

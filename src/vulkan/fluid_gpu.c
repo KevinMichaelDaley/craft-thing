@@ -40,12 +40,16 @@ bool dc_gpu_fluid_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return make_pipeline(gpu, "build/shaders/fluid.comp.spv",
                          &gpu->fluid_pipeline, err, cap) &&
            make_pipeline(gpu, "build/shaders/projection.comp.spv",
-                         &gpu->projection_pipeline, err, cap);
+                         &gpu->projection_pipeline, err, cap) &&
+           make_pipeline(gpu, "build/shaders/shift_velocity.comp.spv",
+                         &gpu->velocity_shift_pipeline, err, cap);
 }
 
 void dc_gpu_fluid_destroy(dc_gpu_t *gpu) {
     if (gpu->fluid_pipeline) vkDestroyPipeline(gpu->device, gpu->fluid_pipeline, NULL);
     if (gpu->projection_pipeline) vkDestroyPipeline(gpu->device, gpu->projection_pipeline, NULL);
+    if (gpu->velocity_shift_pipeline)
+        vkDestroyPipeline(gpu->device, gpu->velocity_shift_pipeline, NULL);
     if (gpu->fluid_a_mapped) vkUnmapMemory(gpu->device, gpu->fluid_a_memory);
     if (gpu->fluid_b_mapped) vkUnmapMemory(gpu->device, gpu->fluid_b_memory);
     if (gpu->velocity_mapped) vkUnmapMemory(gpu->device, gpu->velocity_memory);
@@ -71,11 +75,50 @@ static void fluid_barrier(dc_gpu_t *gpu, VkPipelineStageFlags2 source_stage,
     vkCmdPipelineBarrier2(gpu->command, &dependency);
 }
 
+bool dc_gpu_shift_velocity(dc_gpu_t *gpu, int32_t chunk_dx, int32_t chunk_dy,
+                           char *err, uint32_t cap) {
+    if (!gpu) return error(err, cap, "Invalid GPU velocity shift");
+    if (!chunk_dx && !chunk_dy) {
+        return true;
+    }
+    for (uint32_t slot = 0; slot < DC_GPU_CHUNK_SLOTS; ++slot)
+        gpu->preserve_shifted_slot[slot] = gpu->slot_page[slot] != UINT32_MAX;
+    if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
+        return error(err, cap, "Cannot reset velocity shift command buffer");
+    VkCommandBufferBeginInfo begin = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+    if (vkBeginCommandBuffer(gpu->command, &begin) != VK_SUCCESS)
+        return error(err, cap, "Cannot begin velocity shift command buffer");
+    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                      gpu->velocity_shift_pipeline);
+    vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
+        gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
+    uint32_t push[7] = { gpu->width, gpu->height, 0u,
+                         (uint32_t)chunk_dx, (uint32_t)chunk_dy, 0u, 0u };
+    for (uint32_t mode = 0; mode < 2u; ++mode) {
+        push[2] = mode;
+        vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+        vkCmdDispatch(gpu->command,
+            (gpu->width * gpu->height + 255u) / 256u, 1u, 1u);
+        fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    }
+    if (vkEndCommandBuffer(gpu->command) != VK_SUCCESS)
+        return error(err, cap, "Cannot end velocity shift command buffer");
+    VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1, .pCommandBuffers = &gpu->command };
+    if (vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
+        vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
+        return error(err, cap, "GPU velocity shift failed");
+    return true;
+}
+
 void dc_gpu_record_fluid(dc_gpu_t *gpu) {
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
-    uint32_t push[7] = { gpu->width, gpu->height, 0,
-                         gpu->fluid_reset_velocity ? 1u : 0u, 0, 0, 0 };
+    uint32_t push[7] = { gpu->width, gpu->height, 0, 0, 0, 0, 0 };
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->projection_pipeline);
     push[2] = 5u;
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
@@ -106,7 +149,6 @@ void dc_gpu_record_fluid(dc_gpu_t *gpu) {
             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     }
-    gpu->fluid_reset_velocity = false;
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->fluid_pipeline);
     push[3] = gpu->fluid_tick & 1u;
     for (uint32_t mode = 0; mode <= 4u; ++mode) {

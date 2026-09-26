@@ -10,13 +10,19 @@
 
 enum { VIEW_WIDTH = 256, VIEW_HEIGHT = 128, WINDOW_SCALE = 4,
        VIEW_CHUNKS_X = VIEW_WIDTH / DC_CHUNK_SIDE,
-       VIEW_CHUNKS_Y = VIEW_HEIGHT / DC_CHUNK_SIDE };
+       VIEW_CHUNKS_Y = VIEW_HEIGHT / DC_CHUNK_SIDE,
+       HALO_CHUNKS = 1,
+       SIM_CHUNKS_X = VIEW_CHUNKS_X + 2 * HALO_CHUNKS,
+       SIM_CHUNKS_Y = VIEW_CHUNKS_Y + 2 * HALO_CHUNKS,
+       SIM_WIDTH = SIM_CHUNKS_X * DC_CHUNK_SIDE,
+       SIM_HEIGHT = SIM_CHUNKS_Y * DC_CHUNK_SIDE };
 
 struct dc_level_view {
     dc_gpu_t *gpu;
     dc_streamer_t *stream;
     dc_chunk_table_t table;
     dc_chunk_coord_t origin;
+    int32_t pending_chunk_dx, pending_chunk_dy;
     uint32_t pending_steps;
     bool marker_overlay;
     bool spring_enabled;
@@ -42,17 +48,17 @@ bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,
                               char *err, uint32_t cap) {
     if (!view || x > VIEW_WIDTH - 4 || y > VIEW_HEIGHT - 4)
         return error(err, cap, "Invalid rigid body spawn position");
-    dc_gpu_body_t body = { .x_fp = (int32_t)x << 16,
-        .y_fp = (int32_t)y << 16, .vx_fp = 1 << 16,
+    dc_gpu_body_t body = { .x_fp = (int32_t)(x + DC_CHUNK_SIDE) << 16,
+        .y_fp = (int32_t)(y + DC_CHUNK_SIDE) << 16, .vx_fp = 1 << 16,
         .width = 4, .height = 4, .id = 1, .active = 1 };
     return dc_gpu_spawn_body(view->gpu, body, err, cap);
 }
 
 static bool visible(const dc_level_view_t *view, dc_chunk_coord_t coord) {
-    return coord.x >= view->origin.x &&
-           coord.x <= view->origin.x + VIEW_CHUNKS_X - 1 &&
-           coord.y >= view->origin.y &&
-           coord.y <= view->origin.y + VIEW_CHUNKS_Y - 1;
+    return coord.x >= view->origin.x - HALO_CHUNKS &&
+           coord.x < view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS &&
+           coord.y >= view->origin.y - HALO_CHUNKS &&
+           coord.y < view->origin.y + VIEW_CHUNKS_Y + HALO_CHUNKS;
 }
 
 static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
@@ -102,9 +108,11 @@ dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
     dc_level_view_t *view = calloc(1, sizeof(*view));
     if (!view) { error(err, cap, "Out of memory creating level view"); return NULL; }
     if (!dc_chunk_table_init(&view->table, DC_GPU_CHUNK_SLOTS) ||
-        !dc_gpu_create_window(&view->gpu, VIEW_WIDTH, VIEW_HEIGHT,
+        !dc_gpu_create_window(&view->gpu, SIM_WIDTH, SIM_HEIGHT,
             VIEW_WIDTH * WINDOW_SCALE, VIEW_HEIGHT * WINDOW_SCALE,
-            "build/shaders/pattern.comp.spv", err, cap)) goto fail;
+            "build/shaders/pattern.comp.spv", err, cap) ||
+        !dc_gpu_set_viewport(view->gpu, DC_CHUNK_SIDE, DC_CHUNK_SIDE,
+                             VIEW_WIDTH, VIEW_HEIGHT)) goto fail;
     view->spring_enabled = true;
     view->stream = dc_stream_create(directory, seed, 128);
     if (!view->stream) { error(err, cap, "Cannot start chunk streaming worker"); goto fail; }
@@ -132,9 +140,15 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
             !dc_chunk_table_evict(&view->table, i, UINT64_MAX))
             return error(err, cap, "Cannot evict clean sleeping chunk");
     }
-    for (uint32_t y = 0; y < VIEW_CHUNKS_Y; ++y) {
-        for (uint32_t x = 0; x < VIEW_CHUNKS_X; ++x) {
-            dc_chunk_coord_t coord = { view->origin.x + x, view->origin.y + y };
+    if ((view->pending_chunk_dx || view->pending_chunk_dy) &&
+        !dc_gpu_shift_velocity(view->gpu, view->pending_chunk_dx,
+                                view->pending_chunk_dy, err, cap)) return false;
+    bool all_resident = true;
+    for (uint32_t y = 0; y < SIM_CHUNKS_Y; ++y) {
+        for (uint32_t x = 0; x < SIM_CHUNKS_X; ++x) {
+            dc_chunk_coord_t coord = {
+                view->origin.x + (int64_t)x - HALO_CHUNKS,
+                view->origin.y + (int64_t)y - HALO_CHUNKS };
             uint32_t index;
             if (!dc_chunk_table_find(&view->table, coord, &index)) {
                 uint64_t generation;
@@ -145,17 +159,22 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
             uint32_t page = UINT32_MAX;
             if (dc_chunk_table_find(&view->table, coord, &index) &&
                 view->table.slots[index].state == DC_SLOT_ACTIVE) page = index;
+            if (page == UINT32_MAX) all_resident = false;
             if (!dc_gpu_set_page(view->gpu, x, y, page, err, cap)) return false;
         }
     }
-    if (view->spring_enabled && view->origin.x <= 2 &&
-        view->origin.x + VIEW_CHUNKS_X > 2 &&
-        view->origin.y <= 0 && view->origin.y + VIEW_CHUNKS_Y > 0) {
-        uint32_t x = (uint32_t)(2 - view->origin.x) * DC_CHUNK_SIDE;
-        uint32_t y = (uint32_t)(-view->origin.y) * DC_CHUNK_SIDE + 4u;
+    view->pending_chunk_dx = 0;
+    view->pending_chunk_dy = 0;
+    if (view->spring_enabled && view->origin.x - HALO_CHUNKS <= 2 &&
+        view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS > 2 &&
+        view->origin.y - HALO_CHUNKS <= 0 &&
+        view->origin.y + VIEW_CHUNKS_Y + HALO_CHUNKS > 0) {
+        uint32_t x = (uint32_t)(2 - view->origin.x + HALO_CHUNKS) * DC_CHUNK_SIDE;
+        uint32_t y = (uint32_t)(-view->origin.y + HALO_CHUNKS) * DC_CHUNK_SIDE + 4u;
         dc_gpu_set_tick_water_source(view->gpu, true, x, y);
     } else dc_gpu_set_tick_water_source(view->gpu, false, 0, 0);
-    if (!dc_gpu_present_chunks_steps(view->gpu, view->pending_steps, err, cap)) return false;
+    uint32_t ready_steps = all_resident ? view->pending_steps : 0u;
+    if (!dc_gpu_present_chunks_steps(view->gpu, ready_steps, err, cap)) return false;
     view->pending_steps = 0;
     return true;
 }
@@ -166,9 +185,11 @@ bool dc_level_view_wait_visible(dc_level_view_t *view, uint32_t timeout_ms,
     do {
         if (!dc_level_view_tick(view, err, cap)) return false;
         bool ready = true;
-        for (uint32_t y = 0; y < VIEW_CHUNKS_Y; ++y) {
-            for (uint32_t x = 0; x < VIEW_CHUNKS_X; ++x) {
-                dc_chunk_coord_t coord = { view->origin.x + x, view->origin.y + y };
+        for (uint32_t y = 0; y < SIM_CHUNKS_Y; ++y) {
+            for (uint32_t x = 0; x < SIM_CHUNKS_X; ++x) {
+                dc_chunk_coord_t coord = {
+                    view->origin.x + (int64_t)x - HALO_CHUNKS,
+                    view->origin.y + (int64_t)y - HALO_CHUNKS };
                 uint32_t index;
                 if (!dc_chunk_table_find(&view->table, coord, &index) ||
                     view->table.slots[index].state != DC_SLOT_ACTIVE) ready = false;
@@ -182,12 +203,14 @@ bool dc_level_view_wait_visible(dc_level_view_t *view, uint32_t timeout_ms,
 
 bool dc_level_view_move(dc_level_view_t *view, int32_t dx, int32_t dy) {
     if (!view || dx < -1 || dx > 1 || dy < -1 || dy > 1) return false;
-    if ((dx < 0 && view->origin.x == INT64_MIN) ||
-        (dy < 0 && view->origin.y == INT64_MIN) ||
-        (dx > 0 && view->origin.x >= INT64_MAX - VIEW_CHUNKS_X) ||
-        (dy > 0 && view->origin.y >= INT64_MAX - VIEW_CHUNKS_Y)) return false;
+    if ((dx < 0 && view->origin.x <= INT64_MIN + HALO_CHUNKS) ||
+        (dy < 0 && view->origin.y <= INT64_MIN + HALO_CHUNKS) ||
+        (dx > 0 && view->origin.x >= INT64_MAX - VIEW_CHUNKS_X - HALO_CHUNKS) ||
+        (dy > 0 && view->origin.y >= INT64_MAX - VIEW_CHUNKS_Y - HALO_CHUNKS)) return false;
     view->origin.x += dx;
     view->origin.y += dy;
+    view->pending_chunk_dx += dx;
+    view->pending_chunk_dy += dy;
     return true;
 }
 
@@ -203,17 +226,23 @@ bool dc_level_view_set_spring_enabled(dc_level_view_t *view, bool enabled) {
     return true;
 }
 
+static int32_t cell_chunk_offset(int32_t coordinate) {
+    return coordinate >= 0 ? coordinate / DC_CHUNK_SIDE :
+           -((-coordinate + DC_CHUNK_SIDE - 1) / DC_CHUNK_SIDE);
+}
+
 bool dc_level_view_paint(dc_level_view_t *view, uint32_t x, uint32_t y,
                          uint32_t radius, uint16_t material, char *err, uint32_t cap) {
     if (!view || x >= VIEW_WIDTH || y >= VIEW_HEIGHT || radius > 16)
         return error(err, cap, "Invalid material brush coordinates");
-    if (!dc_gpu_paint_material(view->gpu, x, y, radius, material, err, cap)) return false;
-    uint32_t min_x = x > radius ? x - radius : 0;
-    uint32_t min_y = y > radius ? y - radius : 0;
-    uint32_t max_x = x + radius < VIEW_WIDTH ? x + radius : VIEW_WIDTH - 1;
-    uint32_t max_y = y + radius < VIEW_HEIGHT ? y + radius : VIEW_HEIGHT - 1;
-    for (uint32_t ty = min_y / DC_CHUNK_SIDE; ty <= max_y / DC_CHUNK_SIDE; ++ty) {
-        for (uint32_t tx = min_x / DC_CHUNK_SIDE; tx <= max_x / DC_CHUNK_SIDE; ++tx) {
+    if (!dc_gpu_paint_material(view->gpu, x + DC_CHUNK_SIDE,
+                               y + DC_CHUNK_SIDE, radius, material, err, cap)) return false;
+    int32_t first_x = cell_chunk_offset((int32_t)x - (int32_t)radius);
+    int32_t first_y = cell_chunk_offset((int32_t)y - (int32_t)radius);
+    int32_t last_x = cell_chunk_offset((int32_t)x + (int32_t)radius);
+    int32_t last_y = cell_chunk_offset((int32_t)y + (int32_t)radius);
+    for (int32_t ty = first_y; ty <= last_y; ++ty) {
+        for (int32_t tx = first_x; tx <= last_x; ++tx) {
             dc_chunk_coord_t coord = { view->origin.x + tx, view->origin.y + ty };
             uint32_t index;
             if (dc_chunk_table_find(&view->table, coord, &index) &&

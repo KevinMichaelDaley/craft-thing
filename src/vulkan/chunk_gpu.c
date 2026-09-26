@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "gpu_internal.h"
@@ -47,6 +48,10 @@ bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
 }
 
 bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    gpu->chunk_velocity = calloc((size_t)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS,
+                                  sizeof(*gpu->chunk_velocity));
+    if (!gpu->chunk_velocity)
+        return error(err, cap, "Cannot allocate streamed chunk velocity staging");
     gpu->page_width = (gpu->width + DC_CHUNK_SIDE - 1u) / DC_CHUNK_SIDE;
     gpu->page_height = (gpu->height + DC_CHUNK_SIDE - 1u) / DC_CHUNK_SIDE;
     VkDeviceSize chunk_bytes = (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t);
@@ -61,6 +66,7 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
 }
 
 void dc_gpu_chunks_destroy(dc_gpu_t *gpu) {
+    free(gpu->chunk_velocity);
     dc_gpu_halo_destroy(gpu);
     dc_gpu_fluid_destroy(gpu);
     dc_gpu_marker_destroy(gpu);
@@ -79,6 +85,9 @@ bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
         return error(err, cap, "Invalid GPU chunk upload slot");
     dc_cell_t *cells = gpu->chunk_mapped;
     memcpy(cells + (size_t)slot * DC_CHUNK_CELLS, chunk->cells, sizeof(chunk->cells));
+    memcpy(gpu->chunk_velocity + (size_t)slot * DC_CHUNK_CELLS,
+           chunk->face_velocity, sizeof(chunk->face_velocity));
+    gpu->preserve_shifted_slot[slot] = false;
     dc_marker_t *markers_a = gpu->marker_a_mapped;
     dc_marker_t *markers_b = gpu->marker_b_mapped;
     size_t offset = (size_t)slot * DC_MARKERS_PER_CHUNK;
@@ -100,6 +109,21 @@ bool dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chunk,
         return error(err, cap, "Invalid GPU chunk download slot");
     const dc_cell_t *cells = gpu->chunk_mapped;
     memcpy(chunk->cells, cells + (size_t)slot * DC_CHUNK_CELLS, sizeof(chunk->cells));
+    uint32_t tile = gpu->slot_page[slot];
+    if (tile != UINT32_MAX) {
+        const dc_face_velocity_t *faces = gpu->velocity_mapped;
+        uint32_t tile_x = tile % gpu->page_width;
+        uint32_t tile_y = tile / gpu->page_width;
+        for (uint32_t y = 0; y < DC_CHUNK_SIDE; ++y)
+            memcpy(chunk->face_velocity + (size_t)y * DC_CHUNK_SIDE,
+                   faces + ((size_t)(tile_y * DC_CHUNK_SIDE + y) * gpu->width +
+                            tile_x * DC_CHUNK_SIDE),
+                   DC_CHUNK_SIDE * sizeof(dc_face_velocity_t));
+    } else {
+        memcpy(chunk->face_velocity,
+               gpu->chunk_velocity + (size_t)slot * DC_CHUNK_CELLS,
+               sizeof(chunk->face_velocity));
+    }
     const uint32_t *counts = gpu->marker_ping ?
         gpu->marker_count_b_mapped : gpu->marker_count_a_mapped;
     const dc_marker_t *markers = gpu->marker_ping ?
@@ -123,20 +147,36 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
         gpu->slot_page[slot] != tile)
         pages[gpu->slot_page[slot]] = 0u;
     uint32_t old_page = pages[tile];
-    if (old_page != (slot == UINT32_MAX ? 0u : slot + 1u))
-        gpu->fluid_reset_velocity = true;
+    bool changed_mapping = old_page != (slot == UINT32_MAX ? 0u : slot + 1u);
     if (old_page && (slot == UINT32_MAX || old_page != slot + 1u))
         gpu->slot_page[old_page - 1u] = UINT32_MAX;
     pages[tile] = slot == UINT32_MAX ? 0u : slot + 1u;
-    if (slot != UINT32_MAX) gpu->slot_page[slot] = tile;
+    if (slot != UINT32_MAX) {
+        gpu->slot_page[slot] = tile;
+        if (changed_mapping && !gpu->preserve_shifted_slot[slot]) {
+            dc_face_velocity_t *faces = gpu->velocity_mapped;
+            const dc_face_velocity_t *source =
+                gpu->chunk_velocity + (size_t)slot * DC_CHUNK_CELLS;
+            for (uint32_t y = 0; y < DC_CHUNK_SIDE; ++y)
+                memcpy(faces + ((size_t)(tile_y * DC_CHUNK_SIDE + y) * gpu->width +
+                                tile_x * DC_CHUNK_SIDE),
+                       source + (size_t)y * DC_CHUNK_SIDE,
+                       DC_CHUNK_SIDE * sizeof(dc_face_velocity_t));
+        }
+        gpu->preserve_shifted_slot[slot] = false;
+    }
     memcpy(gpu->slot_page_mapped, gpu->slot_page, sizeof(gpu->slot_page));
     return true;
 }
 
 bool dc_gpu_readback(dc_gpu_t *gpu, uint32_t *cells, uint32_t cell_count,
                      char *err, uint32_t cap) {
-    if (!gpu || !cells || cell_count < (uint64_t)gpu->width * gpu->height)
+    if (!gpu || !cells || cell_count < (uint64_t)gpu->view_width * gpu->view_height)
         return error(err, cap, "Readback buffer is too small");
-    memcpy(cells, gpu->mapped, (size_t)gpu->width * gpu->height * sizeof(uint32_t));
+    const uint32_t *source = gpu->mapped;
+    for (uint32_t y = 0; y < gpu->view_height; ++y)
+        memcpy(cells + (size_t)y * gpu->view_width,
+               source + (size_t)(y + gpu->view_y) * gpu->width + gpu->view_x,
+               (size_t)gpu->view_width * sizeof(uint32_t));
     return true;
 }

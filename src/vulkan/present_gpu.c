@@ -51,11 +51,12 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
         vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
             gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
         uint32_t push[7] = { gpu->width, gpu->height, 2,
-                             gpu->marker_overlay ? 1u : 0u, 0, 0, 0 };
+                             gpu->marker_overlay ? 1u : 0u, 0,
+                             gpu->view_x, gpu->view_y };
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-        vkCmdDispatch(gpu->command, (gpu->width + 15u) / 16u,
-                      (gpu->height + 15u) / 16u, 1);
+        vkCmdDispatch(gpu->command, (gpu->view_width + 15u) / 16u,
+                      (gpu->view_height + 15u) / 16u, 1);
     }
     VkBufferMemoryBarrier2 buffer_barrier = { .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
@@ -71,9 +72,12 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
     image_barrier(gpu->command, gpu->frame_image, VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, 0,
         VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-    VkBufferImageCopy copy = { .bufferOffset = 0,
+    VkBufferImageCopy copy = {
+        .bufferOffset = ((VkDeviceSize)gpu->view_y * gpu->width + gpu->view_x) * 4u,
+        .bufferRowLength = gpu->width,
         .imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-        .imageExtent = { gpu->width, gpu->height, 1 } };
+        .imageOffset = { (int32_t)gpu->view_x, (int32_t)gpu->view_y, 0 },
+        .imageExtent = { gpu->view_width, gpu->view_height, 1 } };
     vkCmdCopyBufferToImage(gpu->command, gpu->cells, gpu->frame_image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
     image_barrier(gpu->command, gpu->frame_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -84,7 +88,9 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, 0,
         VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
     VkImageBlit blit = { .srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-        .srcOffsets = { {0, 0, 0}, {(int32_t)gpu->width, (int32_t)gpu->height, 1} },
+        .srcOffsets = { {(int32_t)gpu->view_x, (int32_t)gpu->view_y, 0},
+                        {(int32_t)(gpu->view_x + gpu->view_width),
+                         (int32_t)(gpu->view_y + gpu->view_height), 1} },
         .dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
         .dstOffsets = { {0, 0, 0}, {(int32_t)gpu->swap_extent.width, (int32_t)gpu->swap_extent.height, 1} } };
     vkCmdBlitImage(gpu->command, gpu->frame_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
