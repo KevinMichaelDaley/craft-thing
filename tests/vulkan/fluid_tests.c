@@ -428,6 +428,39 @@ static void test_marker_pool_stays_bounded_on_dense_interface(void) {
     PASS();
 }
 
+static void test_tall_water_column_spreads_in_one_second(void) {
+    char err[256] = {0};
+    dc_chunk_t left = {0}, right = {0}, saved_left = {0}, saved_right = {0};
+    for (uint32_t x = 0; x < 64; ++x) {
+        left.cells[48 * 64 + x].material = DC_MATERIAL_STONE;
+        right.cells[48 * 64 + x].material = DC_MATERIAL_STONE;
+    }
+    for (uint32_t y = 16; y < 32; ++y)
+        for (uint32_t x = 16; x < 32; ++x)
+            left.cells[y * 64 + x].fluid_mass = DC_FLUID_FULL;
+    dc_gpu_t *gpu = make_grid(&left, &right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    for (uint32_t tick = 0; tick < 60; ++tick)
+        ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved_left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &saved_right, err, sizeof(err)));
+    uint64_t mass = 0;
+    uint32_t rightmost = 0;
+    for (uint32_t y = 0; y < 48; ++y)
+        for (uint32_t x = 0; x < 128; ++x) {
+            uint32_t cell_mass = x < 64 ?
+                saved_left.cells[y * 64 + x].fluid_mass :
+                saved_right.cells[y * 64 + x - 64].fluid_mass;
+            mass += cell_mass;
+            if (cell_mass >= DC_FLUID_FULL / 4u && x > rightmost) rightmost = x;
+        }
+    printf("one-second column rightmost=%u\n", rightmost);
+    ASSERT_EQ(mass, (uint64_t)256 * DC_FLUID_FULL);
+    ASSERT_TRUE(rightmost >= 90);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 int main(void) {
     RUN(test_water_falls_and_crosses_resident_chunk_edge);
     RUN(test_closed_basin_conserves_mass_for_long_run);
@@ -441,6 +474,7 @@ int main(void) {
     RUN(test_markers_sharpen_splash_lobes_without_changing_volume);
     RUN(test_marker_overlay_is_opt_in);
     RUN(test_marker_pool_stays_bounded_on_dense_interface);
+    RUN(test_tall_water_column_spreads_in_one_second);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
