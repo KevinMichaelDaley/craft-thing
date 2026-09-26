@@ -107,10 +107,35 @@ static void test_unloaded_neighbor_keeps_mass_in_source(void) {
     PASS();
 }
 
+static void test_closed_liquid_velocity_is_projected(void) {
+    char err[256] = {0};
+    dc_chunk_t left = {0}, right = {0};
+    for (uint32_t y = 10; y < 20; ++y)
+        for (uint32_t x = 10; x < 20; ++x)
+            left.cells[y * 64 + x].fluid_mass = DC_FLUID_FULL;
+    for (uint32_t y = 9; y <= 20; ++y) {
+        left.cells[y * 64 + 9].material = DC_MATERIAL_STONE;
+        left.cells[y * 64 + 20].material = DC_MATERIAL_STONE;
+    }
+    for (uint32_t x = 9; x <= 20; ++x) {
+        left.cells[9 * 64 + x].material = DC_MATERIAL_STONE;
+        left.cells[20 * 64 + x].material = DC_MATERIAL_STONE;
+    }
+    dc_gpu_t *gpu = make_grid(&left, &right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    float divergence = -1.0f;
+    ASSERT_TRUE(dc_gpu_fluid_max_divergence(gpu, &divergence, err, sizeof(err)));
+    ASSERT_TRUE(divergence >= 0.0f && divergence < 0.03f);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 int main(void) {
     RUN(test_water_falls_and_crosses_resident_chunk_edge);
     RUN(test_closed_basin_conserves_mass_for_long_run);
     RUN(test_unloaded_neighbor_keeps_mass_in_source);
+    RUN(test_closed_liquid_velocity_is_projected);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
