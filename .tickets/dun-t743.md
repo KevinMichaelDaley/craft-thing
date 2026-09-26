@@ -1,6 +1,6 @@
 ---
 id: dun-t743
-status: in_progress
+status: closed
 deps: [dun-d8gb]
 links: []
 created: 2026-09-26T05:25:20Z
@@ -18,3 +18,9 @@ Implement CPU procedural chunk generation using world seed plus chunk coordinate
 
 Generation is order-independent; same seed and coordinates reproduce exact cells; adjacent chunks meet without seams.
 
+
+## Notes
+
+**2026-09-26T05:49:48Z**
+
+Procedural chunks are deterministic by seed and signed coordinate; terrain, cave, and basin cross chunk boundaries. Unit and worker end-to-end tests pass.
