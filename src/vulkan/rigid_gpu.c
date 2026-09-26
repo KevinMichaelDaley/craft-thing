@@ -127,3 +127,10 @@ bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
         return error(err, cap, "GPU rigid submission failed");
     return true;
 }
+
+bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
+                         char *err, uint32_t cap) {
+    (void)gpu;
+    (void)capture;
+    return error(err, cap, "GPU tick graph is not implemented");
+}

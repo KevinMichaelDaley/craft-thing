@@ -114,12 +114,41 @@ static void test_gpu_box_crosses_chunk_edge_and_rests_on_terrain(void) {
     PASS();
 }
 
+static void test_tick_capture_orders_gpu_stages_and_handoffs(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t left = {0}, right = {0};
+    ASSERT_TRUE(dc_gpu_create(&gpu, 128, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, &left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 1, &right, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 0, 1, err, sizeof(err)));
+    dc_gpu_body_t body = { .x_fp = 63 << 16, .y_fp = 2 << 16,
+        .vx_fp = 1 << 16, .width = 2, .height = 2, .id = 7, .active = 1 };
+    ASSERT_TRUE(dc_gpu_spawn_body(gpu, body, err, sizeof(err)));
+    dc_gpu_tick_capture_t capture = {0};
+    ASSERT_TRUE(dc_gpu_tick_capture(gpu, &capture, err, sizeof(err)));
+    ASSERT_EQ(capture.stages[0].id, DC_GPU_STAGE_RIGID);
+    ASSERT_EQ(capture.stages[1].id, DC_GPU_STAGE_FLUID);
+    ASSERT_EQ(capture.stages[2].id, DC_GPU_STAGE_SAND);
+    ASSERT_EQ(capture.stages[0].handoff, 7u);
+    ASSERT_EQ(capture.stages[1].handoff, 8u);
+    ASSERT_EQ(capture.stages[2].handoff, 9u);
+    ASSERT_TRUE(capture.stages[0].gpu_ns + capture.stages[1].gpu_ns +
+                capture.stages[2].gpu_ns > 0);
+    ASSERT_TRUE(dc_gpu_read_body(gpu, &body, err, sizeof(err)));
+    ASSERT_EQ(body.x_fp, 64 << 16);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 int main(void) {
     RUN(test_gpu_pattern_readback);
     RUN(test_rejects_invalid_dimensions);
     RUN(test_gpu_brush_updates_only_covered_cells);
     RUN(test_chunk_page_mapping_and_gpu_material_edit);
     RUN(test_gpu_box_crosses_chunk_edge_and_rests_on_terrain);
+    RUN(test_tick_capture_orders_gpu_stages_and_handoffs);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

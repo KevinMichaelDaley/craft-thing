@@ -17,6 +17,22 @@ typedef struct {
 
 typedef struct dc_gpu dc_gpu_t;
 
+typedef enum {
+    DC_GPU_STAGE_RIGID = 1,
+    DC_GPU_STAGE_FLUID = 2,
+    DC_GPU_STAGE_SAND = 3
+} dc_gpu_stage_id_t;
+
+typedef struct {
+    dc_gpu_stage_id_t id;
+    uint64_t gpu_ns;
+    uint32_t handoff;
+} dc_gpu_stage_capture_t;
+
+typedef struct {
+    dc_gpu_stage_capture_t stages[3];
+} dc_gpu_tick_capture_t;
+
 /** Create a headless Vulkan compute context and a width-by-height cell buffer. */
 bool dc_gpu_create(dc_gpu_t **out, uint32_t width, uint32_t height,
                    const char *shader_path, char *err_buf, uint32_t err_cap);
@@ -59,6 +75,10 @@ bool dc_gpu_spawn_body(dc_gpu_t *gpu, dc_gpu_body_t body,
 
 /** Run GPU body integration, terrain contact, and occupancy raster passes. */
 bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
+
+/** Submit rigid, fluid, then sand stages and capture GPU timings and handoffs. */
+bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
+                         char *err_buf, uint32_t err_cap);
 
 /** Read the completed body state for tests or persistence. */
 bool dc_gpu_read_body(dc_gpu_t *gpu, dc_gpu_body_t *body,
