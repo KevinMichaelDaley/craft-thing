@@ -185,7 +185,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         { gpu->occupancy_buffer, 0, bytes },
         { gpu->body_buffer, 0, sizeof(dc_gpu_body_t) },
         { gpu->trace_buffer, 0, 3 * sizeof(uint32_t) },
-        { gpu->halo_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * 66 * 66 * sizeof(dc_gpu_halo_cell_t) },
+        { gpu->halo_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_GPU_HALO_CELLS * sizeof(dc_gpu_halo_cell_t) },
         { gpu->transfer_buffer, 0, sizeof(dc_gpu_transfer_t) }
     };
     VkWriteDescriptorSet writes[8] = {0};

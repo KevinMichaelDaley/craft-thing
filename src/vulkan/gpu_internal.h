@@ -6,6 +6,11 @@
 
 #include "dungeoncraft/gpu.h"
 
+enum {
+    DC_GPU_HALO_SIDE = DC_CHUNK_SIDE + 2,
+    DC_GPU_HALO_CELLS = DC_GPU_HALO_SIDE * DC_GPU_HALO_SIDE
+};
+
 struct dc_gpu {
     VkInstance instance;
     VkPhysicalDevice physical;

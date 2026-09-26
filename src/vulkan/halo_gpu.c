@@ -3,8 +3,6 @@
 
 #include "gpu_internal.h"
 
-enum { HALO_SIDE = DC_CHUNK_SIDE + 2, HALO_CELLS = HALO_SIDE * HALO_SIDE };
-
 _Static_assert(sizeof(dc_gpu_halo_cell_t) == 16, "GPU halo layout must match SPIR-V");
 _Static_assert(sizeof(dc_gpu_transfer_t) == 28, "GPU transfer layout must match SPIR-V");
 
@@ -14,7 +12,7 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 }
 
 bool dc_gpu_halo_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    VkDeviceSize bytes = (VkDeviceSize)DC_GPU_CHUNK_SLOTS * HALO_CELLS *
+    VkDeviceSize bytes = (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_GPU_HALO_CELLS *
                          sizeof(dc_gpu_halo_cell_t);
     return dc_gpu_make_mapped_buffer(gpu, bytes, &gpu->halo_buffer,
                &gpu->halo_memory, &gpu->halo_mapped, err, cap) &&
@@ -74,7 +72,8 @@ static bool submit_halos(dc_gpu_t *gpu, bool resolve, char *err, uint32_t cap) {
     uint32_t push[7] = { gpu->width, gpu->height, 0, 0, 0, 0, 0 };
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    vkCmdDispatch(gpu->command, (HALO_SIDE + 7) / 8, (HALO_SIDE + 7) / 8,
+    vkCmdDispatch(gpu->command, (DC_GPU_HALO_SIDE + 7) / 8,
+                  (DC_GPU_HALO_SIDE + 7) / 8,
                   gpu->page_width * gpu->page_height);
     if (resolve) {
         barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
@@ -114,8 +113,8 @@ bool dc_gpu_read_halo(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
     const uint32_t *pages = gpu->page_mapped;
     uint32_t page = pages[tile_y * gpu->page_width + tile_x];
     if (!page) return error(err, cap, "GPU halo tile is not resident");
-    size_t offset = (size_t)(page - 1u) * HALO_CELLS +
-                    (size_t)(local_y + 1) * HALO_SIDE + (size_t)(local_x + 1);
+    size_t offset = (size_t)(page - 1u) * DC_GPU_HALO_CELLS +
+                    (size_t)(local_y + 1) * DC_GPU_HALO_SIDE + (size_t)(local_x + 1);
     const dc_gpu_halo_cell_t *halos = gpu->halo_mapped;
     *cell = halos[offset];
     return true;
