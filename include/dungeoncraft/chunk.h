@@ -8,6 +8,7 @@
 #define DC_CHUNK_CELLS (DC_CHUNK_SIDE * DC_CHUNK_SIDE)
 #define DC_FLUID_FULL 65536u
 #define DC_MARKERS_PER_CHUNK 2048u
+#define DC_MPM_PARTICLES_PER_CHUNK 8192u
 
 enum { DC_MARKER_INSIDE = 1u, DC_MARKER_OUTSIDE = 2u };
 
@@ -20,7 +21,9 @@ enum {
     DC_MATERIAL_AIR = 0,
     DC_MATERIAL_STONE = 1,
     DC_MATERIAL_SAND = 2,
-    DC_MATERIAL_WATER = 3
+    DC_MATERIAL_WATER = 3,
+    DC_MATERIAL_DIRT = 4,
+    DC_MATERIAL_GRAVEL = 5
 };
 
 typedef struct { int64_t x, y; } dc_chunk_coord_t;
@@ -34,11 +37,21 @@ typedef struct {
 typedef struct { float x, y; } dc_face_velocity_t;
 
 typedef struct {
+    int32_t x_fp, y_fp, vx_fp, vy_fp;
+    float deformation[4];
+    uint32_t id_lo, id_hi;
+    uint32_t mass_fp, grain_fp;
+    uint32_t material, flags;
+} dc_mpm_particle_t;
+
+typedef struct {
     dc_chunk_coord_t coord;
     dc_cell_t cells[DC_CHUNK_CELLS];
     dc_face_velocity_t face_velocity[DC_CHUNK_CELLS];
     uint32_t marker_count;
     dc_marker_t markers[DC_MARKERS_PER_CHUNK];
+    uint32_t particle_count;
+    dc_mpm_particle_t particles[DC_MPM_PARTICLES_PER_CHUNK];
 } dc_chunk_t;
 
 typedef enum {

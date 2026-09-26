@@ -19,7 +19,7 @@ MARKER_SHADER = build/shaders/marker.comp.spv
 SHIFT_SHADER = build/shaders/shift_velocity.comp.spv
 
 .PHONY: all test test_ui test_ui_long clean shaders
-all: build/gpu_tests build/halo_tests build/fluid_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
+all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
 
 shaders: $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER)
 
@@ -116,6 +116,9 @@ build/halo_tests: tests/vulkan/halo_tests.c $(GPU_OBJ) $(SHADER) $(RIGID_SHADER)
 build/fluid_tests: tests/vulkan/fluid_tests.c $(GPU_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/fluid_tests.c $(GPU_OBJ) -o $@ $(LDLIBS)
 
+build/particle_tests: tests/vulkan/particle_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(STREAM_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/particle_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(STREAM_OBJ) -o $@ $(LDLIBS)
+
 build/chunk_tests: tests/world/chunk_tests.c $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/chunk_tests.c $(CHUNK_OBJ) -o $@
 
@@ -131,10 +134,11 @@ build/dungeoncraft: src/app/main.c src/app/level.c src/app/level.h src/app/sessi
 build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/controls_tests.c src/app/level.c src/app/session.c $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 
-test: build/gpu_tests build/halo_tests build/fluid_tests build/chunk_tests build/generate_tests build/stream_tests
+test: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/gpu_tests
 	./build/halo_tests
 	./build/fluid_tests
+	./build/particle_tests
 	./build/chunk_tests
 	./build/generate_tests
 	./build/stream_tests
