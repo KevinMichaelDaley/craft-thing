@@ -50,6 +50,7 @@ static bool paint_held(dc_level_view_t *view, uint16_t material,
 
 #if defined(DC_NATIVE_VIEW) || defined(DC_HALF_NATIVE_VIEW)
 static int smoke_native_view(void) {
+    enum { BENCH_FRAMES = 12 };
     char directory[] = "build/ui_native_XXXXXX", err[256] = {0};
     if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
     dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
@@ -86,7 +87,7 @@ static int smoke_native_view(void) {
 #endif
     uint64_t start = SDL_GetPerformanceCounter();
     double fastest = 1e9, slowest = 0.0;
-    for (uint32_t i = 0; i < 12u && okay; ++i)
+    for (uint32_t i = 0; i < BENCH_FRAMES && okay; ++i)
     {
         uint64_t tick_start = SDL_GetPerformanceCounter();
         okay = dc_level_view_step(view, err, sizeof(err)) &&
@@ -114,7 +115,7 @@ static int smoke_native_view(void) {
     uint64_t adaptive_start = SDL_GetPerformanceCounter();
     uint64_t adaptive_previous = adaptive_start;
     double adaptive_seconds = 0.0;
-    for (uint32_t i = 0; i < 12u && okay; ++i) {
+    for (uint32_t i = 0; i < BENCH_FRAMES && okay; ++i) {
         uint64_t now = SDL_GetPerformanceCounter();
         float seconds = i == 0u ? 1.0f / 60.0f :
             (float)((double)(now - adaptive_previous) /
@@ -133,18 +134,20 @@ static int smoke_native_view(void) {
     free(pixels);
     if (!okay) { fprintf(stderr, "Native smoke failed: %s\n", err); return 1; }
     printf("Native viewport %ux%u, simulated cells %u, resident chunks %u, "
-           "12 presented physics ticks %.3f s (%.2f ticks/s), "
-           "fastest %.1f ms, slowest %.1f ms, fluid updates 2; "
+           "%u presented physics ticks %.3f s (%.2f ticks/s), "
+           "fastest %.1f ms, slowest %.1f ms, fluid interval 6; "
             "GPU stage ms/tick rigid %.1f fluid %.1f (peak %.1f) granular %.1f\n",
            VIEW_WIDTH, VIEW_HEIGHT, VIEW_WIDTH * VIEW_HEIGHT,
-           status.ready_chunks, elapsed, 12.0 / elapsed,
+           status.ready_chunks, BENCH_FRAMES, elapsed,
+           (double)BENCH_FRAMES / elapsed,
            fastest * 1000.0, slowest * 1000.0,
             rigid_ms / 6.0, fluid_ms / 6.0, fluid_peak_ms, granular_ms / 6.0);
     printf("Fluid phase GPU ms: %.1f %.1f %.1f %.1f %.1f %.1f\n",
            fluid_phase_ms[0], fluid_phase_ms[1], fluid_phase_ms[2],
            fluid_phase_ms[3], fluid_phase_ms[4], fluid_phase_ms[5]);
-    printf("Adaptive 12 frames %.3f s wall (%.1f frames/s), %.3f s simulated\n",
-           adaptive_wall, 12.0 / adaptive_wall, adaptive_seconds);
+    printf("Adaptive %u frames %.3f s wall (%.1f frames/s), %.3f s simulated\n",
+           BENCH_FRAMES, adaptive_wall,
+           (double)BENCH_FRAMES / adaptive_wall, adaptive_seconds);
     printf("GPU buffers: %.1f MiB mapped VRAM, %.1f MiB mapped system, "
            "%.1f MiB device-only VRAM\n",
            memory_stats.mapped_local_bytes / 1048576.0,

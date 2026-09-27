@@ -108,9 +108,10 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
         if (slot->state != DC_SLOT_SLEEPING || !slot->dirty || slot->pinned) continue;
         dc_chunk_t chunk = { .coord = slot->coord };
         uint64_t generation;
-        if (!dc_gpu_download_chunk(view->gpu, i, &chunk, err, cap) ||
-            !dc_chunk_table_begin_save(&view->table, i, &generation) ||
-            !dc_stream_request_save(view->stream, &chunk, generation))
+        if (!dc_gpu_download_chunk(view->gpu, i, &chunk, err, cap)) return false;
+        if (!dc_chunk_table_begin_save(&view->table, i, &generation))
+            return error(err, cap, "Cannot begin dirty chunk save");
+        if (!dc_stream_request_save(view->stream, &chunk, generation))
             return error(err, cap, "Cannot queue dirty chunk save");
     }
     return true;

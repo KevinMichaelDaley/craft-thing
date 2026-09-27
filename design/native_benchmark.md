@@ -38,10 +38,23 @@ the sixth. Rigid and granular work still runs every tick. No cell-buffer
 copyback occurs during normal frames; modified chunks are downloaded for
 persistence when streamed or when the game closes.
 
-`make test_native` generated and loaded all 608 chunks, verified the last
-screen pixel maps to the last simulated cell, painted at the far edge, and
-presented twelve physics ticks. On the same RTX A2000, those twelve ticks took
-about 1.4 s: **about 8.4 ticks/s**, with roughly 76 ms fastest and 141 ms slowest
-frame. They contained two complete fluid updates. Before splitting the fluid
-work across ticks, a twelve-tick run reached 6.25 ticks/s and varied from
-37.3 to 509.7 ms per frame. Native gameplay is still below the 60 Hz target.
+`make test_native` and `make test_half_native` generate and load the resident
+chunks, paint at the far edge, and present twelve physics ticks plus twelve
+adaptive-time frames. The half-native mode uses 960×540 simulated cells,
+187 resident chunks, and a 2× upscale to the 1920×1080 window. Procedural
+features have the same apparent screen size as the native mode. Each mode
+uses a six-tick fluid interval and keeps normal simulation and rendering on
+the GPU. Their screenshots are written under `build/screenshots/`.
+
+On the RTX A2000, a paired run on 2026-09-27 measured:
+
+| Interactive mode | Presented ticks/s | Adaptive frames/s | GPU fluid / granular ms per profiled tick |
+| --- | ---: | ---: | ---: |
+| Native 1920×1080 | 38.9 | 39.4 | 9.2 / 7.3 |
+| Half-native 960×540, 2× display | 67.6 | 71.1 | 1.6 / 4.3 |
+
+These are short smoke samples, so the rates include frame-to-frame variation.
+A longer 60-frame half-native sample measured 62.3 adaptive frames/s. The
+matching native sample exposed a marker-count overflow during chunk save;
+`dun-mt9o` tracks that defect. Earlier native runs before VRAM placement and
+GPU-only normal frames measured about 8.4 ticks/s.
