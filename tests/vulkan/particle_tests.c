@@ -256,6 +256,152 @@ static void test_granular_motion_crosses_seam_with_stable_mass(void) {
     PASS();
 }
 
+static bool run_granular_pile(const dc_chunk_t *initial, dc_chunk_t *result,
+                             char *err, uint32_t cap) {
+    dc_gpu_t *gpu = NULL;
+    if (!dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv", err, cap))
+        return false;
+    bool okay = dc_gpu_upload_chunk(gpu, 0, initial, err, cap) &&
+                dc_gpu_set_page(gpu, 0, 0, 0, err, cap);
+    for (uint32_t tick = 0; tick < 80 && okay; ++tick)
+        okay = dc_gpu_tick_step(gpu, err, cap);
+    if (okay) okay = dc_gpu_download_chunk(gpu, 0, result, err, cap);
+    dc_gpu_destroy(gpu);
+    return okay;
+}
+
+static void test_mixed_pile_conserves_mass_and_replays(void) {
+    char err[256] = {0};
+    dc_chunk_t *initial = calloc(1, sizeof(*initial));
+    dc_chunk_t *first = calloc(1, sizeof(*first));
+    dc_chunk_t *second = calloc(1, sizeof(*second));
+    ASSERT_TRUE(initial && first && second);
+    for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x)
+        initial->cells[45 * DC_CHUNK_SIDE + x].material = DC_MATERIAL_STONE;
+    const uint16_t kinds[3] = { DC_MATERIAL_SAND, DC_MATERIAL_DIRT,
+                                DC_MATERIAL_GRAVEL };
+    for (uint32_t y = 8; y < 11; ++y)
+        for (uint32_t x = 20; x < 23; ++x)
+            initial->cells[y * DC_CHUNK_SIDE + x].material = kinds[(x + y) % 3u];
+    dc_chunk_seed_particles(initial);
+    ASSERT_EQ(initial->particle_count, 9u);
+    ASSERT_TRUE(run_granular_pile(initial, first, err, sizeof(err)));
+    ASSERT_TRUE(run_granular_pile(initial, second, err, sizeof(err)));
+    ASSERT_EQ(first->particle_count, 9u);
+    ASSERT_EQ(second->particle_count, 9u);
+    uint64_t mass = 0;
+    uint32_t moved = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i) {
+        const dc_mpm_particle_t *particle = &first->particles[i];
+        mass += particle->mass_fp;
+        if (!particle->mass_fp) continue;
+        ASSERT_TRUE(particle->y_fp < 45 * (int32_t)DC_FLUID_FULL);
+        if (particle->y_fp > 20 * (int32_t)DC_FLUID_FULL) ++moved;
+    }
+    ASSERT_EQ(mass, 9u * (uint64_t)DC_FLUID_FULL);
+    ASSERT_TRUE(moved > 0);
+    ASSERT_EQ(memcmp(first->particles, second->particles,
+                     sizeof(first->particles)), 0);
+    free(initial); free(first); free(second);
+    PASS();
+}
+
+static void test_grain_collides_with_gpu_body(void) {
+    char err[256] = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x)
+        chunk->cells[35 * DC_CHUNK_SIDE + x].material = DC_MATERIAL_STONE;
+    chunk->cells[12 * DC_CHUNK_SIDE + 30].material = DC_MATERIAL_SAND;
+    dc_chunk_seed_particles(chunk);
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    dc_gpu_body_t body = { .x_fp = 28 << 16, .y_fp = 31 << 16,
+        .width = 5, .height = 4, .id = 7, .active = 1 };
+    ASSERT_TRUE(dc_gpu_spawn_body(gpu, body, err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 40; ++tick)
+        ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->particle_count, 1u);
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (chunk->particles[i].mass_fp)
+            ASSERT_TRUE(chunk->particles[i].y_fp < 31 * (int32_t)DC_FLUID_FULL);
+    dc_gpu_destroy(gpu);
+    free(chunk);
+    PASS();
+}
+
+static void test_two_slot_collision_resolves_by_stable_id(void) {
+    char err[256] = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    uint32_t row = 15u * DC_CHUNK_SIDE;
+    for (uint32_t x = 20; x <= 22; ++x)
+        chunk->cells[row + x].material = DC_MATERIAL_SAND;
+    dc_chunk_seed_particles(chunk);
+    chunk->particles[row + 20].vx_fp = 2 * (int32_t)DC_FLUID_FULL;
+    chunk->particles[row + 22].vx_fp = -2 * (int32_t)DC_FLUID_FULL;
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->particle_count, 3u);
+    uint32_t active = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        active += chunk->particles[i].mass_fp != 0u;
+    ASSERT_EQ(active, 3u);
+    uint32_t secondary = 0;
+    uint32_t occupied_cell = UINT32_MAX;
+    for (uint32_t i = DC_CHUNK_CELLS; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (chunk->particles[i].mass_fp) {
+            ++secondary;
+            occupied_cell = i - DC_CHUNK_CELLS;
+        }
+    ASSERT_TRUE(secondary > 0u);
+    ASSERT_TRUE(dc_gpu_paint_material(gpu, occupied_cell % DC_CHUNK_SIDE,
+                                     occupied_cell / DC_CHUNK_SIDE, 0,
+                                     DC_MATERIAL_AIR, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->particle_count, 1u);
+    ASSERT_EQ(chunk->particles[occupied_cell].mass_fp, 0u);
+    ASSERT_EQ(chunk->particles[occupied_cell + DC_CHUNK_CELLS].mass_fp, 0u);
+    dc_gpu_destroy(gpu);
+    free(chunk);
+    PASS();
+}
+
+static void test_resident_window_reports_mpm_gpu_time(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    ASSERT_TRUE(dc_gpu_create(&gpu, 384, 256, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    for (uint32_t y = 0; y < 4; ++y) {
+        for (uint32_t x = 0; x < 6; ++x) {
+            uint32_t slot = y * 6u + x;
+            dc_generate_chunk(314, (dc_chunk_coord_t){(int64_t)x - 1,
+                                                       (int64_t)y - 1}, chunk);
+            ASSERT_TRUE(dc_gpu_upload_chunk(gpu, slot, chunk, err, sizeof(err)));
+            ASSERT_TRUE(dc_gpu_set_page(gpu, x, y, slot, err, sizeof(err)));
+        }
+    }
+    dc_gpu_tick_capture_t capture = {0};
+    ASSERT_TRUE(dc_gpu_tick_capture(gpu, &capture, err, sizeof(err)));
+    ASSERT_TRUE(capture.stages[2].gpu_ns > 0u);
+    printf("resident 384x256 granular GPU stage: %llu ns\n",
+           (unsigned long long)capture.stages[2].gpu_ns);
+    dc_gpu_destroy(gpu);
+    free(chunk);
+    PASS();
+}
+
 int main(void) {
     printf("GPU particle capacity: %u records per chunk, %u primary cell slots\n",
            DC_MPM_PARTICLES_PER_CHUNK, DC_CHUNK_CELLS);
@@ -265,6 +411,10 @@ int main(void) {
     RUN(test_upload_rejects_inconsistent_particle_count);
     RUN(test_granular_tick_falls_and_reports_gpu_time);
     RUN(test_granular_motion_crosses_seam_with_stable_mass);
+    RUN(test_mixed_pile_conserves_mass_and_replays);
+    RUN(test_grain_collides_with_gpu_body);
+    RUN(test_two_slot_collision_resolves_by_stable_id);
+    RUN(test_resident_window_reports_mpm_gpu_time);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

@@ -1,0 +1,341 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+struct Particle {
+    int x_fp, y_fp, vx_fp, vy_fp;
+    float f00, f01, f10, f11;
+    uint id_lo, id_hi, mass_fp, grain_fp;
+    uint material, flags;
+};
+
+layout(set = 0, binding = 1, std430) buffer ChunkCells { uvec2 chunk_cells[]; };
+layout(set = 0, binding = 2, std430) readonly buffer Pages { uint pages[]; };
+layout(set = 0, binding = 3, std430) readonly buffer Occupancy { uint occupancy[]; };
+layout(set = 0, binding = 19, std430) buffer Particles { Particle particles[]; };
+layout(set = 0, binding = 20, std430) buffer ParticleCounts { uint particle_counts[]; };
+layout(set = 0, binding = 21, std430) buffer Proposals { Particle proposals[]; };
+layout(set = 0, binding = 22, std430) buffer OutputParticles { Particle output_particles[]; };
+layout(set = 0, binding = 23, std430) buffer Grid { vec4 grid[]; };
+layout(set = 0, binding = 24, std430) buffer GridForce { vec4 grid_force[]; };
+layout(set = 0, binding = 25, std430) buffer GridVelocity { vec2 grid_velocity[]; };
+layout(set = 0, binding = 26, std430) buffer Accept { uint accepted[]; };
+layout(set = 0, binding = 27, std430) readonly buffer Activity { uint activity[]; };
+layout(push_constant) uniform Params {
+    uint width;
+    uint height;
+    uint mode;
+    uint unused0;
+    uint unused1;
+    uint unused2;
+    uint unused3;
+} params;
+
+const uint SIDE = 64u;
+const uint CELLS = 4096u;
+const uint PARTICLES = 8192u;
+const float DT = 0.5;
+const float GRAVITY = 0.25;
+const float MAX_VELOCITY = 2.0;
+
+bool in_grid(ivec2 cell) {
+    return cell.x >= 0 && cell.y >= 0 &&
+           cell.x < int(params.width) && cell.y < int(params.height);
+}
+
+uint page_at(ivec2 cell) {
+    if (!in_grid(cell)) return 0u;
+    uint page_width = (params.width + SIDE - 1u) / SIDE;
+    return pages[(uint(cell.y) / SIDE) * page_width + uint(cell.x) / SIDE];
+}
+
+uint local_cell(ivec2 cell) {
+    return (uint(cell.y) % SIDE) * SIDE + uint(cell.x) % SIDE;
+}
+
+uint particle_index(ivec2 cell, uint layer) {
+    return (page_at(cell) - 1u) * PARTICLES + layer * CELLS + local_cell(cell);
+}
+
+bool grain_at(ivec2 cell) {
+    uint page = page_at(cell);
+    if (page == 0u) return false;
+    uint material = chunk_cells[(page - 1u) * CELLS + local_cell(cell)].x & 0xffffu;
+    return material == 2u || material == 4u || material == 5u;
+}
+
+bool load_particle(ivec2 cell, uint layer, out Particle particle) {
+    if (!grain_at(cell)) return false;
+    particle = particles[particle_index(cell, layer)];
+    return particle.mass_fp != 0u;
+}
+
+bool load_proposal(ivec2 cell, uint layer, out Particle particle) {
+    if (!grain_at(cell)) return false;
+    particle = proposals[particle_index(cell, layer)];
+    return particle.mass_fp != 0u;
+}
+
+ivec2 tile_origin(ivec2 cell) {
+    return (cell / int(SIDE)) * int(SIDE);
+}
+
+vec2 position_of(Particle particle, ivec2 owner) {
+    return vec2(tile_origin(owner)) + vec2(particle.x_fp, particle.y_fp) / 65536.0;
+}
+
+ivec2 target_of(Particle particle, ivec2 owner) {
+    return ivec2(floor(position_of(particle, owner)));
+}
+
+bool solid_at(ivec2 cell) {
+    if (page_at(cell) == 0u) return true;
+    uint index = (page_at(cell) - 1u) * CELLS + local_cell(cell);
+    uint material = chunk_cells[index].x & 0xffffu;
+    return (material == 1u || (material != 0u && material != 2u &&
+            material != 4u && material != 5u)) ||
+           occupancy[uint(cell.y) * params.width + uint(cell.x)] != 0u;
+}
+
+bool blocked_destination(ivec2 cell) {
+    if (solid_at(cell)) return true;
+    uint index = (page_at(cell) - 1u) * CELLS + local_cell(cell);
+    return chunk_cells[index].y != 0u;
+}
+
+float kernel(vec2 delta) {
+    vec2 w = max(vec2(0.0), vec2(1.0) - abs(delta));
+    return w.x * w.y;
+}
+
+vec2 kernel_gradient(vec2 delta) {
+    vec2 w = max(vec2(0.0), vec2(1.0) - abs(delta));
+    return vec2(sign(delta.x) * w.y, sign(delta.y) * w.x);
+}
+
+void p2g(ivec2 node) {
+    uint index = uint(node.y) * params.width + uint(node.x);
+    vec4 total = vec4(0.0);
+    vec2 force = vec2(0.0);
+    vec2 node_position = vec2(node) + vec2(0.5);
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            ivec2 owner = node + ivec2(dx, dy);
+            for (uint layer = 0u; layer < 2u; ++layer) {
+                Particle particle;
+                if (!load_particle(owner, layer, particle)) continue;
+                vec2 delta = node_position - position_of(particle, owner);
+                float weight = kernel(delta);
+                if (weight <= 0.0) continue;
+                float mass = float(particle.mass_fp) / 65536.0;
+                vec2 velocity = vec2(particle.vx_fp, particle.vy_fp) / 65536.0;
+                total.x += weight * mass;
+                total.yz += weight * mass * velocity;
+                float jacobian = clamp(particle.f00 * particle.f11 -
+                                       particle.f01 * particle.f10, 0.5, 1.5);
+                float bulk = particle.material == 5u ? 8.0 :
+                             particle.material == 4u ? 3.0 : 5.0;
+                float pressure = bulk * max(0.0, 1.0 - jacobian);
+                float shear = clamp(particle.f01 + particle.f10, -0.2, 0.2);
+                vec2 gradient = kernel_gradient(delta);
+                force += mass * vec2(pressure * gradient.x - shear * gradient.y,
+                                     pressure * gradient.y - shear * gradient.x);
+            }
+        }
+    }
+    grid[index] = total;
+    grid_force[index] = vec4(force, 0.0, 0.0);
+}
+
+void solve_grid(ivec2 node) {
+    uint index = uint(node.y) * params.width + uint(node.x);
+    float mass = grid[index].x;
+    vec2 velocity = vec2(0.0);
+    if (mass > 0.000001) {
+        velocity = grid[index].yz / mass + DT * grid_force[index].xy / mass;
+        velocity.y += GRAVITY * DT;
+        velocity = clamp(velocity, vec2(-MAX_VELOCITY), vec2(MAX_VELOCITY));
+        if (solid_at(node)) velocity = vec2(0.0);
+        else {
+            if (velocity.y > 0.0 && solid_at(node + ivec2(0, 1))) {
+                velocity.y = 0.0;
+                velocity.x *= 0.55;
+            }
+            if (velocity.x > 0.0 && solid_at(node + ivec2(1, 0))) velocity.x = 0.0;
+            if (velocity.x < 0.0 && solid_at(node + ivec2(-1, 0))) velocity.x = 0.0;
+        }
+    }
+    grid_velocity[index] = velocity;
+}
+
+void g2p_one(ivec2 owner, uint layer) {
+    uint index = particle_index(owner, layer);
+    Particle particle = particles[index];
+    if (particle.mass_fp == 0u) {
+        proposals[index] = particle;
+        return;
+    }
+    vec2 position = position_of(particle, owner);
+    ivec2 base = ivec2(floor(position));
+    vec2 velocity = vec2(0.0);
+    mat2 gradient = mat2(0.0);
+    float weights = 0.0;
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            ivec2 node = base + ivec2(dx, dy);
+            if (!in_grid(node)) continue;
+            uint grid_index = uint(node.y) * params.width + uint(node.x);
+            if (grid[grid_index].x <= 0.000001) continue;
+            vec2 delta = vec2(node) + vec2(0.5) - position;
+            float weight = kernel(delta);
+            if (weight <= 0.0) continue;
+            vec2 node_velocity = grid_velocity[grid_index];
+            velocity += weight * node_velocity;
+            gradient += outerProduct(node_velocity, kernel_gradient(delta));
+            weights += weight;
+        }
+    }
+    if (weights > 0.0) velocity /= weights;
+    velocity = clamp(velocity, vec2(-MAX_VELOCITY), vec2(MAX_VELOCITY));
+    mat2 deformation = mat2(particle.f00, particle.f10,
+                             particle.f01, particle.f11);
+    deformation = (mat2(1.0) + DT * gradient) * deformation;
+    particle.f00 = clamp(deformation[0][0], 0.75, 1.25);
+    particle.f11 = clamp(deformation[1][1], 0.75, 1.25);
+    particle.f01 = clamp(deformation[1][0], -0.15, 0.15);
+    particle.f10 = clamp(deformation[0][1], -0.15, 0.15);
+    vec2 next_position = position + DT * velocity;
+    ivec2 target = ivec2(floor(next_position));
+    if (blocked_destination(target)) {
+        next_position = position;
+        velocity = vec2(0.0);
+    }
+    vec2 local_position = next_position - vec2(tile_origin(owner));
+    particle.x_fp = int(round(local_position.x * 65536.0));
+    particle.y_fp = int(round(local_position.y * 65536.0));
+    particle.vx_fp = int(round(velocity.x * 65536.0));
+    particle.vy_fp = int(round(velocity.y * 65536.0));
+    proposals[index] = particle;
+}
+
+bool id_less(Particle left, uint left_index, Particle right, uint right_index) {
+    if (left.id_hi != right.id_hi) return left.id_hi < right.id_hi;
+    if (left.id_lo != right.id_lo) return left.id_lo < right.id_lo;
+    return left_index < right_index;
+}
+
+void accept_one(ivec2 owner, uint layer) {
+    uint index = particle_index(owner, layer);
+    Particle particle = proposals[index];
+    if (particle.mass_fp == 0u) { accepted[index] = 0u; return; }
+    ivec2 target = target_of(particle, owner);
+    if (all(equal(target, owner))) { accepted[index] = 1u; return; }
+    if (page_at(target) == 0u) { accepted[index] = 0u; return; }
+    uint occupied = 0u;
+    for (uint other_layer = 0u; other_layer < 2u; ++other_layer) {
+        Particle old;
+        if (load_particle(target, other_layer, old)) ++occupied;
+    }
+    uint rank = 0u;
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            ivec2 source = target + ivec2(dx, dy);
+            if (all(equal(source, target))) continue;
+            for (uint other_layer = 0u; other_layer < 2u; ++other_layer) {
+                Particle rival;
+                if (!load_proposal(source, other_layer, rival) ||
+                    !all(equal(target_of(rival, source), target))) continue;
+                uint rival_index = particle_index(source, other_layer);
+                if (id_less(rival, rival_index, particle, index)) ++rank;
+            }
+        }
+    }
+    accepted[index] = occupied < 2u && rank < 2u - occupied ? 1u : 0u;
+}
+
+Particle zero_particle() {
+    return Particle(0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0,
+                    0u, 0u, 0u, 0u, 0u, 0u);
+}
+
+void gather(ivec2 target) {
+    uint base = particle_index(target, 0u);
+    Particle first = zero_particle(), second = zero_particle();
+    uint first_index = 0u, second_index = 0u;
+    bool has_first = false, has_second = false;
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            ivec2 source = target + ivec2(dx, dy);
+            if (page_at(source) == 0u) continue;
+            for (uint layer = 0u; layer < 2u; ++layer) {
+                uint source_index = particle_index(source, layer);
+                Particle old = particles[source_index];
+                if (old.mass_fp == 0u) continue;
+                Particle candidate = proposals[source_index];
+                ivec2 proposed_target = target_of(candidate, source);
+                bool source_here = all(equal(source, target));
+                bool accepted_move = accepted[source_index] != 0u;
+                bool include = (accepted_move && all(equal(proposed_target, target))) ||
+                               (source_here && !accepted_move);
+                if (!include) continue;
+                if (!accepted_move) {
+                    candidate.x_fp = old.x_fp;
+                    candidate.y_fp = old.y_fp;
+                    candidate.vx_fp = 0;
+                    candidate.vy_fp = 0;
+                } else {
+                    ivec2 shift = tile_origin(source) - tile_origin(target);
+                    candidate.x_fp += shift.x * 65536;
+                    candidate.y_fp += shift.y * 65536;
+                }
+                if (!has_first || id_less(candidate, source_index, first, first_index)) {
+                    if (has_first) { second = first; second_index = first_index; has_second = true; }
+                    first = candidate; first_index = source_index; has_first = true;
+                } else if (!has_second || id_less(candidate, source_index, second, second_index)) {
+                    second = candidate; second_index = source_index; has_second = true;
+                }
+            }
+        }
+    }
+    output_particles[base] = has_first ? first : zero_particle();
+    output_particles[base + CELLS] = has_second ? second : zero_particle();
+}
+
+void commit_cell(ivec2 cell) {
+    uint primary = particle_index(cell, 0u);
+    uint secondary = primary + CELLS;
+    uint old_count = uint(particles[primary].mass_fp != 0u) +
+                     uint(particles[secondary].mass_fp != 0u);
+    Particle first = output_particles[primary];
+    Particle second = output_particles[secondary];
+    uint new_count = uint(first.mass_fp != 0u) + uint(second.mass_fp != 0u);
+    particles[primary] = first;
+    particles[secondary] = second;
+    if (new_count != old_count)
+        atomicAdd(particle_counts[page_at(cell) - 1u], uint(int(new_count) - int(old_count)));
+    uint cell_index = (page_at(cell) - 1u) * CELLS + local_cell(cell);
+    uint material = chunk_cells[cell_index].x & 0xffffu;
+    if (new_count != 0u) material = first.material;
+    else if (material == 2u || material == 4u || material == 5u) material = 0u;
+    chunk_cells[cell_index].x = (chunk_cells[cell_index].x & 0xffff0000u) | material;
+}
+
+void main() {
+    uint tiles_x = (params.width + 15u) / 16u;
+    uint tile = activity[3u + gl_WorkGroupID.x];
+    ivec2 cell = ivec2(int((tile % tiles_x) * 16u + gl_LocalInvocationID.x),
+                       int((tile / tiles_x) * 16u + gl_LocalInvocationID.y));
+    if (!in_grid(cell)) return;
+    if (params.mode == 0u) { p2g(cell); return; }
+    if (params.mode == 1u) { solve_grid(cell); return; }
+    if (page_at(cell) == 0u) return;
+    if (params.mode == 2u) {
+        if (particle_counts[page_at(cell) - 1u] == 0u || !grain_at(cell)) return;
+        g2p_one(cell, 0u);
+        g2p_one(cell, 1u);
+    } else if (params.mode == 3u) {
+        if (particle_counts[page_at(cell) - 1u] == 0u || !grain_at(cell)) return;
+        accept_one(cell, 0u);
+        accept_one(cell, 1u);
+    } else if (params.mode == 4u) gather(cell);
+    else if (params.mode == 5u) commit_cell(cell);
+}

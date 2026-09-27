@@ -92,6 +92,59 @@ static int smoke_moving_water(void) {
     return 0;
 }
 
+static int smoke_granular_fall(void) {
+    char directory[] = "build/ui_granular_XXXXXX", err[256] = {0};
+    if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    if (!view) { fprintf(stderr, "Granular level create: %s\n", err); return 1; }
+    uint32_t *before = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*before));
+    uint32_t *after = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*after));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    bool okay = before && after && chunk &&
+        dc_level_view_set_spring_enabled(view, false) &&
+        dc_level_view_wait_visible(view, 5000, err, sizeof(err)) &&
+        dc_level_view_paint(view, 40, 5, 2, DC_MATERIAL_SAND, err, sizeof(err)) &&
+        dc_level_view_tick(view, err, sizeof(err)) &&
+        dc_level_view_pixels(view, before, VIEW_WIDTH * VIEW_HEIGHT, err, sizeof(err)) &&
+        dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0}, chunk, err, sizeof(err));
+    dc_mpm_particle_t original = {0};
+    if (okay) original = chunk->particles[5 * DC_CHUNK_SIDE + 40];
+    mkdir("build/screenshots", 0777);
+    if (okay) okay = original.mass_fp != 0u &&
+                     save_level_bmp("build/screenshots/granular_before.bmp", before);
+    for (uint32_t i = 0; i < 60 && okay; ++i)
+        okay = dc_level_view_step(view, err, sizeof(err));
+    if (okay) okay = dc_level_view_tick(view, err, sizeof(err)) &&
+                     dc_level_view_pixels(view, after, VIEW_WIDTH * VIEW_HEIGHT,
+                                          err, sizeof(err)) &&
+                     save_level_bmp("build/screenshots/granular_after_1s.bmp", after) &&
+                     dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
+                                         chunk, err, sizeof(err));
+    uint32_t changed = 0, moved = 0;
+    if (okay) {
+        for (uint32_t y = 2; y < 40; ++y)
+            for (uint32_t x = 35; x < 46; ++x)
+                changed += before[y * VIEW_WIDTH + x] != after[y * VIEW_WIDTH + x];
+        for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+            if (chunk->particles[i].mass_fp &&
+                chunk->particles[i].id_lo == original.id_lo &&
+                chunk->particles[i].id_hi == original.id_hi &&
+                chunk->particles[i].y_fp > original.y_fp + 2 * (int32_t)DC_FLUID_FULL)
+                ++moved;
+        okay = changed >= 10 && moved == 1u;
+    }
+    if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
+    free(before); free(after); free(chunk);
+    if (!okay) {
+        fprintf(stderr, "Granular screenshot smoke failed (%u changed, %u moved): %s\n",
+                changed, moved, err);
+        return 1;
+    }
+    printf("Granular screenshots: granular_before.bmp and granular_after_1s.bmp (%u changed)\n",
+           changed);
+    return 0;
+}
+
 static int smoke_moving_water_long(void) {
     enum { FIVE_SECONDS = 300, TEN_SECONDS = 600, PAINT_TICK = 361,
            FRAME_DELAY_MS = 16 };
@@ -558,6 +611,8 @@ int main(int argc, char **argv) {
         return smoke_display();
     if (argc > 1 && strcmp(argv[1], "--smoke-motion") == 0)
         return smoke_moving_water();
+    if (argc > 1 && strcmp(argv[1], "--smoke-granular") == 0)
+        return smoke_granular_fall();
     if (argc > 1 && strcmp(argv[1], "--smoke-motion-long") == 0)
         return smoke_moving_water_long();
     bool scripted_input = argc > 1 && strcmp(argv[1], "--smoke-controls-ui") == 0;

@@ -51,19 +51,29 @@ void main() {
         uint slot = page - 1u;
         uint local_index = index % 4096u;
         uint particle_index = slot * 8192u + local_index;
+        uint secondary_index = particle_index + 4096u;
         if (params.mode == 3u) {
             int dx = int(p.x) - int(params.brush_x);
             int dy = int(p.y) - int(params.brush_y);
             int r = int(params.radius);
             if (dx * dx + dy * dy <= r * r) {
-                uint old_material = material;
                 material = params.color == 3u ? 0u : params.color;
-                bool old_grain = old_material == 2u || old_material == 4u || old_material == 5u;
                 bool new_grain = material == 2u || material == 4u || material == 5u;
-                if (old_grain && !new_grain && particles[particle_index].mass_fp != 0u) {
-                    particles[particle_index].mass_fp = 0u;
-                    atomicAdd(particle_counts[slot], uint(-1));
-                } else if (new_grain) {
+                if (!new_grain) {
+                    if (particles[particle_index].mass_fp != 0u) {
+                        particles[particle_index].mass_fp = 0u;
+                        atomicAdd(particle_counts[slot], uint(-1));
+                    }
+                    if (particles[secondary_index].mass_fp != 0u) {
+                        particles[secondary_index].mass_fp = 0u;
+                        atomicAdd(particle_counts[slot], uint(-1));
+                    }
+                } else {
+                    if (particles[particle_index].mass_fp == 0u &&
+                        particles[secondary_index].mass_fp != 0u) {
+                        particles[particle_index] = particles[secondary_index];
+                        particles[secondary_index].mass_fp = 0u;
+                    }
                     if (particles[particle_index].mass_fp == 0u) {
                         Particle particle;
                         particle.x_fp = int((p.x % 64u) * 65536u + 32768u);
@@ -80,14 +90,20 @@ void main() {
                         particles[particle_index] = particle;
                         atomicAdd(particle_counts[slot], 1u);
                     } else particles[particle_index].material = material;
+                    if (particles[secondary_index].mass_fp != 0u)
+                        particles[secondary_index].material = material;
                 }
                 cell.x = (cell.x & 0xffff0000u) | material;
                 cell.y = params.color == 3u ? 65536u : 0u;
                 chunk_cells[index] = cell;
             }
         }
-        if (params.mode == 2u && particles[particle_index].mass_fp != 0u)
-            material = particles[particle_index].material;
+        if (params.mode == 2u) {
+            if (particles[particle_index].mass_fp != 0u)
+                material = particles[particle_index].material;
+            else if (particles[secondary_index].mass_fp != 0u)
+                material = particles[secondary_index].material;
+        }
         uint color = 0xff181818u;
         if (material == 1u) color = 0xff707070u;
         else if (material == 2u) color = 0xff40c8e0u;

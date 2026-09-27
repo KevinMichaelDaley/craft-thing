@@ -172,13 +172,22 @@ static void test_granular_particle_survives_window_eviction(void) {
     ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_paint(view, 40, 5, 0, DC_MATERIAL_SAND,
                                     err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 12; ++tick) {
+        ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    }
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     ASSERT_TRUE(chunk != NULL);
     ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
                                     chunk, err, sizeof(err)));
     uint32_t count = chunk->particle_count;
-    dc_mpm_particle_t original = chunk->particles[5 * DC_CHUNK_SIDE + 40];
+    dc_mpm_particle_t original = {0};
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (chunk->particles[i].mass_fp &&
+            chunk->particles[i].id_lo == 5 * DC_CHUNK_SIDE + 41)
+            original = chunk->particles[i];
     ASSERT_EQ(original.mass_fp, DC_FLUID_FULL);
+    ASSERT_TRUE(original.y_fp > 5 * (int32_t)DC_FLUID_FULL);
     for (int i = 0; i < 8; ++i) {
         ASSERT_TRUE(dc_level_view_move(view, 1, 0));
         ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
@@ -191,8 +200,14 @@ static void test_granular_particle_survives_window_eviction(void) {
     ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
                                     chunk, err, sizeof(err)));
     ASSERT_EQ(chunk->particle_count, count);
-    ASSERT_EQ(memcmp(&chunk->particles[5 * DC_CHUNK_SIDE + 40], &original,
-                     sizeof(original)), 0);
+    uint32_t preserved = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (chunk->particles[i].mass_fp &&
+            chunk->particles[i].id_lo == original.id_lo &&
+            chunk->particles[i].id_hi == original.id_hi &&
+            memcmp(&chunk->particles[i], &original, sizeof(original)) == 0)
+            ++preserved;
+    ASSERT_EQ(preserved, 1u);
     free(chunk);
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
     PASS();

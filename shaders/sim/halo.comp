@@ -108,7 +108,9 @@ void resolve_transfer() {
         if ((source_cell.x & 0xffffu) == 0u ||
             (destination_cell.x & 0xffffu) != 0u || destination_cell.y != 0u ||
             particles[source_slot * 8192u + source_index % CELLS_PER_CHUNK].mass_fp == 0u ||
-            particles[destination_slot * 8192u + destination_index % CELLS_PER_CHUNK].mass_fp != 0u) {
+            particles[destination_slot * 8192u + destination_index % CELLS_PER_CHUNK].mass_fp != 0u ||
+            particles[destination_slot * 8192u + CELLS_PER_CHUNK +
+                      destination_index % CELLS_PER_CHUNK].mass_fp != 0u) {
             command.state = 2u;
             return;
         }
@@ -118,11 +120,19 @@ void resolve_transfer() {
         moving.x_fp = int((command.to_x % SIDE) * FLUID_FULL + FLUID_FULL / 2u);
         moving.y_fp = int((command.to_y % SIDE) * FLUID_FULL + FLUID_FULL / 2u);
         particles[destination_particle] = moving;
-        particles[source_particle].mass_fp = 0u;
+        uint source_second = source_particle + CELLS_PER_CHUNK;
+        if (particles[source_second].mass_fp != 0u) {
+            particles[source_particle] = particles[source_second];
+            particles[source_second].mass_fp = 0u;
+            source_cell.x = (source_cell.x & 0xffff0000u) |
+                            particles[source_particle].material;
+        } else {
+            particles[source_particle].mass_fp = 0u;
+            source_cell.x = 0u;
+        }
         atomicAdd(particle_counts[source_slot], uint(-1));
         atomicAdd(particle_counts[destination_slot], 1u);
-        destination_cell.x = source_cell.x;
-        source_cell.x = 0u;
+        destination_cell.x = (destination_cell.x & 0xffff0000u) | moving.material;
     } else {
         command.state = 2u;
         return;

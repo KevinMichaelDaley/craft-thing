@@ -44,11 +44,13 @@ bool dc_gpu_tick_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         return error(err, cap, "Cannot create GPU timestamp pool");
     return make_probe_pipeline(gpu, err, cap) &&
            dc_gpu_fluid_pipeline_init(gpu, err, cap) &&
-           dc_gpu_marker_pipeline_init(gpu, err, cap);
+           dc_gpu_marker_pipeline_init(gpu, err, cap) &&
+           dc_gpu_mpm_pipeline_init(gpu, err, cap);
 }
 
 void dc_gpu_tick_destroy(dc_gpu_t *gpu) {
     if (gpu->probe_pipeline) vkDestroyPipeline(gpu->device, gpu->probe_pipeline, NULL);
+    dc_gpu_mpm_pipeline_destroy(gpu);
     if (gpu->timestamp_pool) vkDestroyQueryPool(gpu->device, gpu->timestamp_pool, NULL);
     if (gpu->trace_mapped) vkUnmapMemory(gpu->device, gpu->trace_memory);
     if (gpu->trace_buffer) vkDestroyBuffer(gpu->device, gpu->trace_buffer, NULL);
@@ -72,6 +74,9 @@ void dc_gpu_record_tick_step(dc_gpu_t *gpu) {
     dc_gpu_record_tick_water_source(gpu);
     dc_gpu_record_rigid(gpu);
     dc_gpu_record_fluid(gpu);
+    stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                  VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    dc_gpu_record_mpm(gpu);
 }
 
 static void record_probe(dc_gpu_t *gpu, uint32_t mode) {
@@ -115,8 +120,11 @@ static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
     if (capture) {
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
                              gpu->timestamp_pool, 2);
-        stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                      VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+    }
+    stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                  VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    dc_gpu_record_mpm(gpu);
+    if (capture) {
         record_probe(gpu, 1);
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
                              gpu->timestamp_pool, 3);

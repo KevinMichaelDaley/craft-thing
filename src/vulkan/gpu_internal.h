@@ -43,6 +43,17 @@ struct dc_gpu {
     VkBuffer particle_buffer, particle_count_buffer;
     VkDeviceMemory particle_memory, particle_count_memory;
     void *particle_mapped, *particle_count_mapped;
+    VkBuffer mpm_proposal_buffer, mpm_output_buffer, mpm_grid_buffer;
+    VkBuffer mpm_force_buffer, mpm_velocity_buffer, mpm_accept_buffer;
+    VkDeviceMemory mpm_proposal_memory, mpm_output_memory, mpm_grid_memory;
+    VkDeviceMemory mpm_force_memory, mpm_velocity_memory, mpm_accept_memory;
+    void *mpm_proposal_mapped, *mpm_output_mapped, *mpm_grid_mapped;
+    void *mpm_force_mapped, *mpm_velocity_mapped, *mpm_accept_mapped;
+    VkPipeline mpm_pipeline;
+    VkBuffer mpm_activity_buffer;
+    VkDeviceMemory mpm_activity_memory;
+    void *mpm_activity_mapped;
+    VkPipeline mpm_activity_pipeline;
     VkBuffer page_buffer;
     VkDeviceMemory page_memory;
     void *page_mapped;
@@ -136,5 +147,10 @@ bool dc_gpu_marker_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 bool dc_gpu_marker_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_marker_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_markers(dc_gpu_t *gpu);
+bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+void dc_gpu_mpm_buffers_destroy(dc_gpu_t *gpu);
+void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu);
+void dc_gpu_record_mpm(dc_gpu_t *gpu);
 
 #endif

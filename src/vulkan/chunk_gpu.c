@@ -13,7 +13,8 @@ bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
                                VkDeviceMemory *memory, void **mapped,
                                char *err, uint32_t cap) {
     VkBufferCreateInfo info = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = bytes, .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        .size = bytes, .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE };
     if (vkCreateBuffer(gpu->device, &info, NULL, buffer) != VK_SUCCESS)
         return error(err, cap, "Cannot create GPU chunk buffer");
@@ -59,7 +60,8 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                &gpu->page_memory, &gpu->page_mapped, err, cap) &&
            dc_gpu_halo_buffers_init(gpu, err, cap) &&
            dc_gpu_fluid_buffers_init(gpu, err, cap) &&
-           dc_gpu_marker_buffers_init(gpu, err, cap);
+           dc_gpu_marker_buffers_init(gpu, err, cap) &&
+           dc_gpu_mpm_buffers_init(gpu, err, cap);
 }
 
 void dc_gpu_chunks_destroy(dc_gpu_t *gpu) {
@@ -67,6 +69,7 @@ void dc_gpu_chunks_destroy(dc_gpu_t *gpu) {
     dc_gpu_halo_destroy(gpu);
     dc_gpu_fluid_destroy(gpu);
     dc_gpu_marker_destroy(gpu);
+    dc_gpu_mpm_buffers_destroy(gpu);
     if (gpu->chunk_mapped) vkUnmapMemory(gpu->device, gpu->chunk_memory);
     if (gpu->particle_mapped) vkUnmapMemory(gpu->device, gpu->particle_memory);
     if (gpu->particle_count_mapped) vkUnmapMemory(gpu->device, gpu->particle_count_memory);
@@ -95,7 +98,8 @@ bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
         uint32_t material = chunk->cells[i].material;
         if ((material == DC_MATERIAL_SAND || material == DC_MATERIAL_DIRT ||
-             material == DC_MATERIAL_GRAVEL) && chunk->particles[i].mass_fp == 0u)
+             material == DC_MATERIAL_GRAVEL) && chunk->particles[i].mass_fp == 0u &&
+            chunk->particles[i + DC_CHUNK_CELLS].mass_fp == 0u)
             ++missing_primary;
     }
     if (missing_primary > DC_MPM_PARTICLES_PER_CHUNK - particle_count)
@@ -121,6 +125,10 @@ bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
     memcpy(particles, chunk->particles, sizeof(chunk->particles));
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
         uint32_t material = chunk->cells[i].material;
+        if (particles[i].mass_fp == 0u && particles[i + DC_CHUNK_CELLS].mass_fp != 0u) {
+            particles[i] = particles[i + DC_CHUNK_CELLS];
+            memset(&particles[i + DC_CHUNK_CELLS], 0, sizeof(dc_mpm_particle_t));
+        }
         if ((material == DC_MATERIAL_SAND || material == DC_MATERIAL_DIRT ||
              material == DC_MATERIAL_GRAVEL) && particles[i].mass_fp == 0u) {
             dc_chunk_particle_init(&particles[i], chunk->coord, i, material);

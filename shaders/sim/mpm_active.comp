@@ -1,0 +1,74 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 chunk_cells[]; };
+layout(set = 0, binding = 2, std430) readonly buffer Pages { uint pages[]; };
+layout(set = 0, binding = 20, std430) readonly buffer ParticleCounts { uint particle_counts[]; };
+layout(set = 0, binding = 27, std430) buffer Activity { uint activity[]; };
+layout(push_constant) uniform Params {
+    uint width;
+    uint height;
+    uint mode;
+    uint unused0;
+    uint unused1;
+    uint unused2;
+    uint unused3;
+} params;
+
+shared uint has_grain;
+
+void scan_tile() {
+    uint tiles_x = (params.width + 15u) / 16u;
+    uint tiles_y = (params.height + 15u) / 16u;
+    uint tile = gl_WorkGroupID.y * tiles_x + gl_WorkGroupID.x;
+    if (gl_LocalInvocationIndex == 0u) has_grain = 0u;
+    barrier();
+    uvec2 cell = gl_GlobalInvocationID.xy;
+    if (cell.x < params.width && cell.y < params.height) {
+        uint page_width = (params.width + 63u) / 64u;
+        uint page = pages[(cell.y / 64u) * page_width + cell.x / 64u];
+        if (page != 0u && particle_counts[page - 1u] != 0u) {
+            uint index = (page - 1u) * 4096u + (cell.y % 64u) * 64u + cell.x % 64u;
+            uint material = chunk_cells[index].x & 0xffffu;
+            if (material == 2u || material == 4u || material == 5u)
+                atomicOr(has_grain, 1u);
+        }
+    }
+    barrier();
+    if (gl_LocalInvocationIndex == 0u)
+        activity[3u + tiles_x * tiles_y + tile] = has_grain;
+}
+
+void compact_tiles() {
+    if (gl_LocalInvocationIndex != 0u) return;
+    uint tiles_x = (params.width + 15u) / 16u;
+    uint tiles_y = (params.height + 15u) / 16u;
+    uint tile_count = tiles_x * tiles_y;
+    uint list_count = 0u;
+    for (uint y = 0u; y < tiles_y; ++y) {
+        for (uint x = 0u; x < tiles_x; ++x) {
+            bool selected = false;
+            for (int dy = -1; dy <= 1 && !selected; ++dy) {
+                for (int dx = -1; dx <= 1; ++dx) {
+                    ivec2 neighbor = ivec2(int(x) + dx, int(y) + dy);
+                    if (neighbor.x < 0 || neighbor.y < 0 ||
+                        neighbor.x >= int(tiles_x) || neighbor.y >= int(tiles_y)) continue;
+                    uint index = uint(neighbor.y) * tiles_x + uint(neighbor.x);
+                    if (activity[3u + tile_count + index] != 0u) {
+                        selected = true;
+                        break;
+                    }
+                }
+            }
+            if (selected) activity[3u + list_count++] = y * tiles_x + x;
+        }
+    }
+    activity[0] = list_count;
+    activity[1] = 1u;
+    activity[2] = 1u;
+}
+
+void main() {
+    if (params.mode == 0u) scan_tile();
+    else compact_tiles();
+}
