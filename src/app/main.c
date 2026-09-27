@@ -50,7 +50,7 @@ static bool paint_held(dc_level_view_t *view, uint16_t material,
 
 #if defined(DC_NATIVE_VIEW) || defined(DC_HALF_NATIVE_VIEW)
 static int smoke_native_view(void) {
-    enum { BENCH_FRAMES = 12 };
+    enum { BENCH_FRAMES = 60 };
     char directory[] = "build/ui_native_XXXXXX", err[256] = {0};
     if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
     dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
@@ -139,8 +139,11 @@ static int smoke_native_view(void) {
                      save_level_bmp(
                          "build/screenshots/half_native_after_spring_off.bmp",
                          pixels);
+    if (okay) okay = dc_level_view_pan_pixels(view, 32, 0) &&
+                     dc_level_view_wait_visible(view, 120000, err, sizeof(err)) &&
+                     dc_level_view_tick(view, err, sizeof(err));
     for (uint32_t i = 0; i < 3u && okay; ++i)
-        okay = dc_level_view_move(view, 1, 0) &&
+        okay = dc_level_view_pan_pixels(view, DC_CHUNK_SIDE, 0) &&
                dc_level_view_wait_visible(view, 120000, err, sizeof(err)) &&
                dc_level_view_step(view, err, sizeof(err)) &&
                dc_level_view_tick(view, err, sizeof(err));

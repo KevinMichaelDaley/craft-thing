@@ -54,7 +54,8 @@ in two bounded 2048-entry GPU buffers per world chunk; GPU compaction moves
 them between resident chunk slots, and sleeping slots retain their state.
 Each marker has a stable hash ID derived from its original chunk and local
 cell. Face-aligned bilinear velocity sampling advects markers, and blocked destinations
-clip them to their old position. A GPU per-cell guide records inside/outside
+clip them to their old position. Every resident slot is reset and compacted each
+update, and markers beyond the wet/dry interface are discarded. A GPU per-cell guide records inside/outside
 presence. Separate disjoint vertical and horizontal pair passes can move at
 most 8192 Q16.16 units from an outside-only cell into a neighboring
 inside-marked cell with at least as much water. Correction also runs at moving
