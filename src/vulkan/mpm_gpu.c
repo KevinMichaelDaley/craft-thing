@@ -3,8 +3,17 @@
 #include "gpu_internal.h"
 
 enum { DC_MPM_SUBSTEPS = 2, DC_MPM_MODES = 6,
-       DC_MPM_WATER_FEEDBACK_MODE = 6, DC_MPM_MOISTURE_MODE = 7,
-       DC_COMPONENT_ROUNDS = 18 };
+       DC_MPM_WATER_FEEDBACK_MODE = 6, DC_MPM_MOISTURE_MODE = 7 };
+
+static uint32_t component_round_limit(uint32_t width, uint32_t height) {
+    uint64_t cells = (uint64_t)width * height;
+    uint32_t rounds = 1u;
+    while (cells > 1u) {
+        cells = (cells + 1u) / 2u;
+        ++rounds;
+    }
+    return rounds;
+}
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -134,11 +143,12 @@ void dc_gpu_record_mpm(dc_gpu_t *gpu) {
                       gpu->mpm_component_pipeline);
     VkDeviceSize component_indirect = (VkDeviceSize)(4u + 2u *
         ((gpu->width + 15u) / 16u) * ((gpu->height + 15u) / 16u)) * sizeof(uint32_t);
-    for (uint32_t round = 0; round < DC_COMPONENT_ROUNDS + 2u; ++round) {
+    uint32_t rounds = component_round_limit(gpu->width, gpu->height);
+    for (uint32_t round = 0; round < rounds + 2u; ++round) {
         uint32_t first = round == 0u ? 0u :
-                         round == DC_COMPONENT_ROUNDS + 1u ? 4u : 1u;
+                         round == rounds + 1u ? 4u : 1u;
         uint32_t last = round == 0u ? 0u :
-                        round == DC_COMPONENT_ROUNDS + 1u ? 4u : 3u;
+                        round == rounds + 1u ? 4u : 3u;
         for (uint32_t mode = first; mode <= last; ++mode) {
             push[2] = mode;
             vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
@@ -149,7 +159,7 @@ void dc_gpu_record_mpm(dc_gpu_t *gpu) {
                         VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
                         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
         }
-        if (round > 0u && round <= DC_COMPONENT_ROUNDS) {
+        if (round > 0u && round <= rounds) {
             push[2] = 5u;
             vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                 VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);

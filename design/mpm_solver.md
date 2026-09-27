@@ -14,8 +14,22 @@ dispatch list. Every MPM substep dispatches only those tiles. The list is
 rebuilt each tick from GPU-owned cells and counts; there is no CPU decision or
 copyback. The neighbor band covers grid interpolation and the maximum two-cell
 motion over both substeps. On the 384×256 resident-window test this reduced
-the measured MPM stage from roughly 100–120 ms to roughly 5–8 ms on the test
-device; actual timing varies with content and GPU load.
+the measured MPM stage from roughly 100–120 ms to single-digit milliseconds
+before component labeling on the test device. With labeling, the 384×256
+resident-window test currently measures about 10–15 ms under test load; actual
+timing varies with content and GPU load.
+
+The same active-tile list drives a 4-connected component pass for dirt. A cell
+starts with its global viewport index as a label; adjacent component roots
+hook toward the smaller root with an atomic minimum, then path compression
+rewrites labels. A GPU-written indirect dispatch command stops further rounds
+when a hook round makes no change. The count pass records each component's
+size at its root, including dirt across resident chunk seams. There is no
+per-frame readback. The label and size buffers can serve future rigid-body
+extraction, though that feature needs a separate material selector and body
+construction pass. The maximum round count grows with the viewport cell
+count; the 384×256 window allows eighteen rounds, although converged scenes
+stop dispatching the hook and compression work sooner.
 
 The first pass gathers particle contributions onto grid nodes through the
 linear tent kernel `w = max(0, 1-|dx|) max(0, 1-|dy|)`. It sums fixed-record
@@ -41,17 +55,22 @@ owned face pass after a compute barrier. Zero-water faces produce no drag or
 feedback. The second MPM substep samples the updated water velocity; the next
 fluid prediction and pressure projection consume it as well. The drag
 coefficient is bounded below one and the reduced-mass form prevents an
-explicit overshoot for the two half-tick substeps. This uses no atomics,
-per-frame CPU readback, or new persistent buffer.
+explicit overshoot for the two half-tick substeps. This feedback exchange
+uses no atomics or per-frame CPU readback. Granular volume and local water fraction also
+produce a buoyancy force on the grains, with the opposite impulse written to
+the water feedback field; dense sand and gravel still sink.
 
 Before the two MPM substeps, a GPU cell-owner pass exchanges free Eulerian
-water with dirt-particle moisture. Each dirt particle can bind at most 0.25
-cell of water; one tick absorbs at most 0.0625 cell, debiting the cell by
+water with granular-particle moisture. Each dirt particle can bind at most
+0.25 cell of water and each sand particle 0.0625 cell. One tick absorbs at
+most 0.0625 cell for dirt or 0.015625 cell for sand, debiting the cell by
 exactly the credited 16.16 amount. With no free water in its cell, a particle
 returns up to 64 fixed-point units per tick to the Eulerian cell. Both particle
 slots are processed in stable order by one invocation, avoiding competing
-writes. Mud enters at 2048 bound units and returns to dry dirt only at or
-below 1024, so a small fluctuation cannot switch the material each tick.
+writes. A dirt component of at least eight connected cells becomes mud at
+2048 bound units and returns to dry dirt at or below 1024; smaller dirt
+components have low shear resistance and wet pressure that separates them.
+Sand retains pore water and gets a wet color when uncovered.
 Bound moisture travels with the particle ID through movement, chunk seams,
 and save/reload; it is never counted as a second free-water cell or marker.
 Wet dirt has lower compressive bulk and shear resistance and wider plastic
@@ -82,7 +101,8 @@ UI smoke produces
 `build/screenshots/granular_before.bmp` and
 `build/screenshots/granular_after_1s.bmp`.
 The coupled one-second UI smoke paints a supported dirt surface over the
-generated stone, then water, dirt, sand, and gravel. It checks the visible
-floor, a wet dirt particle, and moving grains, and saves
+generated stone, then water, dirt, sand, gravel, an isolated fragment, and an
+enclosed nine-cell mud component. It checks the visible floor, mud and
+fragment classifications, and moving grains, and saves
 `build/screenshots/coupled_before.bmp` and
 `build/screenshots/coupled_after_1s.bmp`.

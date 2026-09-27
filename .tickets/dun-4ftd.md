@@ -2,7 +2,7 @@
 id: dun-4ftd
 status: open
 deps: [dun-0p7p, dun-rwls]
-links: []
+links: [dun-spbq]
 created: 2026-09-26T07:43:35Z
 type: task
 priority: 2
