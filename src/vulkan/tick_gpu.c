@@ -176,3 +176,7 @@ bool dc_gpu_set_fluid_interval(dc_gpu_t *gpu, uint32_t interval) {
     gpu->fluid_phase = 0u;
     return true;
 }
+
+bool dc_gpu_set_tick_seconds(dc_gpu_t *gpu, float seconds) {
+    return gpu && seconds > 0.0f;
+}
