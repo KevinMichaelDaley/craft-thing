@@ -114,6 +114,70 @@ static void test_gpu_box_crosses_chunk_edge_and_rests_on_terrain(void) {
     PASS();
 }
 
+static uint32_t red_channel(uint32_t pixel) { return pixel & 255u; }
+static uint32_t blue_channel(uint32_t pixel) { return (pixel >> 16) & 255u; }
+
+static void test_density_antialiases_every_material(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t left = {0}, right = {0}, saved = {0};
+    uint32_t pixels[128 * 64] = {0};
+    const uint16_t kinds[] = {DC_MATERIAL_STONE, DC_MATERIAL_SAND,
+                              DC_MATERIAL_DIRT, DC_MATERIAL_GRAVEL};
+    for (uint32_t kind = 0; kind < 4; ++kind)
+        for (uint32_t y = 8; y <= 12; ++y)
+            for (uint32_t x = 8 + 10 * kind; x <= 12 + 10 * kind; ++x)
+                left.cells[y * DC_CHUNK_SIDE + x].material = kinds[kind];
+    left.cells[10 * DC_CHUNK_SIDE + 50].fluid_mass = DC_FLUID_FULL / 2u;
+    left.cells[10 * DC_CHUNK_SIDE + 54].fluid_mass = DC_FLUID_FULL;
+    for (uint32_t y = 30; y <= 34; ++y) {
+        for (uint32_t x = 25; x <= 27; ++x)
+            left.cells[y * DC_CHUNK_SIDE + x].material = DC_MATERIAL_STONE;
+        for (uint32_t x = 61; x <= 63; ++x)
+            left.cells[y * DC_CHUNK_SIDE + x].material = DC_MATERIAL_STONE;
+    }
+    for (uint32_t y = 24; y <= 26; ++y)
+        for (uint32_t x = 6; x <= 8; ++x)
+            right.cells[y * DC_CHUNK_SIDE + x].material = DC_MATERIAL_SAND;
+    right.coord.x = 1;
+    dc_chunk_seed_particles(&left);
+    dc_chunk_seed_particles(&right);
+    for (uint32_t y = 24; y <= 26; ++y)
+        for (uint32_t x = 6; x <= 8; ++x) {
+            uint32_t index = y * DC_CHUNK_SIDE + x;
+            dc_chunk_particle_init(&right.particles[index + DC_CHUNK_CELLS],
+                                   right.coord, index, DC_MATERIAL_GRAVEL);
+            right.particles[index + DC_CHUNK_CELLS].id_lo += DC_CHUNK_CELLS;
+            ++right.particle_count;
+        }
+    ASSERT_TRUE(dc_gpu_create(&gpu, 128, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, &left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 1, &right, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 0, 1, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_render_chunks(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_readback(gpu, pixels, 128 * 64, err, sizeof(err)));
+    for (uint32_t kind = 0; kind < 4; ++kind) {
+        uint32_t center = 10u + 10u * kind;
+        ASSERT_TRUE(pixels[10 * 128 + center - 3u] != 0xff181818u);
+        ASSERT_TRUE(pixels[10 * 128 + center] != 0xff181818u);
+    }
+    ASSERT_TRUE(blue_channel(pixels[10 * 128 + 49]) > 24u);
+    ASSERT_TRUE(blue_channel(pixels[10 * 128 + 50]) <
+                blue_channel(pixels[10 * 128 + 54]));
+    ASSERT_TRUE(red_channel(pixels[25 * 128 + 71]) > 144u);
+    ASSERT_TRUE(red_channel(pixels[25 * 128 + 71]) < 224u);
+    ASSERT_EQ(pixels[32 * 128 + 27], pixels[32 * 128 + 63]);
+    ASSERT_EQ(pixels[32 * 128 + 28], pixels[32 * 128 + 64]);
+    ASSERT_TRUE(pixels[32 * 128 + 64] != 0xff181818u);
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved, err, sizeof(err)));
+    ASSERT_EQ(saved.cells[10 * DC_CHUNK_SIDE + 50].fluid_mass,
+              DC_FLUID_FULL / 2u);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 static void test_tick_capture_orders_gpu_stages_and_handoffs(void) {
     char err[256] = {0};
     dc_gpu_t *gpu = NULL;
@@ -148,6 +212,7 @@ int main(void) {
     RUN(test_gpu_brush_updates_only_covered_cells);
     RUN(test_chunk_page_mapping_and_gpu_material_edit);
     RUN(test_gpu_box_crosses_chunk_edge_and_rests_on_terrain);
+    RUN(test_density_antialiases_every_material);
     RUN(test_tick_capture_orders_gpu_stages_and_handoffs);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
