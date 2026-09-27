@@ -794,11 +794,15 @@ static void test_fluid_interval_counts_only_scheduled_updates(void) {
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_fluid_interval(gpu, 6));
-    for (uint32_t i = 0; i < 5; ++i)
+    ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    ASSERT_EQ(gpu->fluid_phase, 1u);
+    for (uint32_t i = 1; i < 5; ++i)
         ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    ASSERT_EQ(gpu->fluid_phase, 5u);
     ASSERT_EQ(gpu->fluid_tick, 0u);
     ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
     ASSERT_EQ(gpu->fluid_tick, 1u);
+    ASSERT_EQ(gpu->fluid_phase, 0u);
     for (uint32_t i = 0; i < 6; ++i)
         ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
     ASSERT_EQ(gpu->fluid_tick, 2u);

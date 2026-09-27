@@ -103,6 +103,9 @@ struct dc_gpu {
     VkPipeline projection_pipeline;
     VkPipeline velocity_shift_pipeline;
     uint32_t fluid_tick;
+    uint32_t physics_tick;
+    uint32_t fluid_interval;
+    uint32_t fluid_phase;
     VkBuffer marker_a_buffer, marker_b_buffer;
     VkDeviceMemory marker_a_memory, marker_b_memory;
     void *marker_a_mapped, *marker_b_mapped;
