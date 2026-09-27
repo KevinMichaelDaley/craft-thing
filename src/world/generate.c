@@ -51,3 +51,10 @@ void dc_generate_chunk(uint64_t seed, dc_chunk_coord_t coord, dc_chunk_t *chunk)
     }
     dc_chunk_seed_particles(chunk);
 }
+
+bool dc_generate_chunk_scaled(uint64_t seed, dc_chunk_coord_t coord,
+                              uint32_t scale, dc_chunk_t *chunk) {
+    if (!scale || !chunk) return false;
+    dc_generate_chunk(seed, coord, chunk);
+    return true;
+}
