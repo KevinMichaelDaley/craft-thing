@@ -61,10 +61,32 @@ static void test_scaled_surface_uses_four_times_as_many_simulated_rows(void) {
     PASS();
 }
 
+static void test_scaled_basin_and_cave_cross_fine_chunk_edges(void) {
+    dc_chunk_t basin_left, basin_right, cave_left, cave_right;
+    ASSERT_TRUE(dc_generate_chunk_scaled(314, (dc_chunk_coord_t){7, 2},
+                                         4u, &basin_left));
+    ASSERT_TRUE(dc_generate_chunk_scaled(314, (dc_chunk_coord_t){8, 2},
+                                         4u, &basin_right));
+    ASSERT_TRUE(dc_generate_chunk_scaled(314, (dc_chunk_coord_t){7, 4},
+                                         4u, &cave_left));
+    ASSERT_TRUE(dc_generate_chunk_scaled(314, (dc_chunk_coord_t){8, 4},
+                                         4u, &cave_right));
+    ASSERT_EQ(basin_left.cells[32 * DC_CHUNK_SIDE + 63].fluid_mass,
+              DC_FLUID_FULL);
+    ASSERT_EQ(basin_right.cells[32 * DC_CHUNK_SIDE].fluid_mass,
+              DC_FLUID_FULL);
+    ASSERT_EQ(cave_left.cells[24 * DC_CHUNK_SIDE + 63].material,
+              DC_MATERIAL_AIR);
+    ASSERT_EQ(cave_right.cells[24 * DC_CHUNK_SIDE].material,
+              DC_MATERIAL_AIR);
+    PASS();
+}
+
 int main(void) {
     RUN(test_generation_is_reproducible_and_border_is_smooth);
     RUN(test_cave_and_basin_span_chunk_boundaries);
     RUN(test_scaled_surface_uses_four_times_as_many_simulated_rows);
+    RUN(test_scaled_basin_and_cave_cross_fine_chunk_edges);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

@@ -251,13 +251,18 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     gpu->width = width; gpu->height = height;
     gpu->view_width = width; gpu->view_height = height;
     gpu->display_zoom = 1;
+    gpu->fluid_interval = 1;
     for (uint32_t i = 0; i < DC_GPU_CHUNK_SLOTS; ++i) gpu->slot_page[i] = UINT32_MAX;
     if (window_width && window_height) {
         if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
             error(err, cap, SDL_GetError()); goto fail;
         }
+        uint32_t flags = SDL_WINDOW_VULKAN;
+#ifdef DC_NATIVE_VIEW
+        flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+#endif
         gpu->window = SDL_CreateWindow("Dungeoncraft GPU testbed", SDL_WINDOWPOS_CENTERED,
-            SDL_WINDOWPOS_CENTERED, (int)window_width, (int)window_height, SDL_WINDOW_VULKAN);
+            SDL_WINDOWPOS_CENTERED, (int)window_width, (int)window_height, flags);
         if (!gpu->window) { error(err, cap, SDL_GetError()); SDL_QuitSubSystem(SDL_INIT_VIDEO); goto fail; }
     }
     VkApplicationInfo app = { .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,

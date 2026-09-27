@@ -73,7 +73,11 @@ void dc_gpu_record_tick_step(dc_gpu_t *gpu) {
                   VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     dc_gpu_record_tick_water_source(gpu);
     dc_gpu_record_rigid(gpu);
-    dc_gpu_record_fluid(gpu);
+    if (gpu->fluid_interval == 1u) dc_gpu_record_fluid(gpu);
+    else {
+        dc_gpu_record_fluid_phase(gpu, gpu->fluid_phase);
+        gpu->fluid_phase = (gpu->fluid_phase + 1u) % 6u;
+    }
     stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                   VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     dc_gpu_record_mpm(gpu);
@@ -116,7 +120,11 @@ static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
                              gpu->timestamp_pool, 1);
         record_probe(gpu, 0);
     }
-    dc_gpu_record_fluid(gpu);
+    if (gpu->fluid_interval == 1u) dc_gpu_record_fluid(gpu);
+    else {
+        dc_gpu_record_fluid_phase(gpu, gpu->fluid_phase);
+        gpu->fluid_phase = (gpu->fluid_phase + 1u) % 6u;
+    }
     if (capture) {
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
                              gpu->timestamp_pool, 2);
@@ -163,7 +171,8 @@ bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
 }
 
 bool dc_gpu_set_fluid_interval(dc_gpu_t *gpu, uint32_t interval) {
-    (void)gpu;
-    (void)interval;
-    return false;
+    if (!gpu || (interval != 1u && interval != 6u)) return false;
+    gpu->fluid_interval = interval;
+    gpu->fluid_phase = 0u;
+    return true;
 }

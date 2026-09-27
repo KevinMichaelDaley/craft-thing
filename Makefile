@@ -24,6 +24,17 @@ MPM_COMPONENT_SHADER = build/shaders/mpm_component.comp.spv
 .PHONY: all test test_ui test_ui_long clean shaders
 all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
 
+NATIVE_SRC = src/app/main.c src/app/level.c src/app/session.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c src/world/stream.c src/world/generate.c
+.PHONY: native
+native: build/dungeoncraft_native
+
+.PHONY: test_native
+test_native: build/dungeoncraft_native
+	./build/dungeoncraft_native --smoke-native
+
+build/dungeoncraft_native: $(NATIVE_SRC) src/app/level.h include/dungeoncraft/gpu.h $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=608u $(NATIVE_SRC) -o $@ $(LDLIBS)
+
 shaders: $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 
 $(MPM_COMPONENT_SHADER): shaders/sim/mpm_component.comp

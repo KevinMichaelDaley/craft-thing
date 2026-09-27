@@ -103,7 +103,6 @@ struct dc_gpu {
     VkPipeline projection_pipeline;
     VkPipeline velocity_shift_pipeline;
     uint32_t fluid_tick;
-    uint32_t physics_tick;
     uint32_t fluid_interval;
     uint32_t fluid_phase;
     VkBuffer marker_a_buffer, marker_b_buffer;
@@ -148,6 +147,7 @@ bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 bool dc_gpu_fluid_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_fluid_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_fluid(dc_gpu_t *gpu);
+void dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase);
 void dc_gpu_record_tick_water_source(dc_gpu_t *gpu);
 void dc_gpu_record_tick_step(dc_gpu_t *gpu);
 bool dc_gpu_marker_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);

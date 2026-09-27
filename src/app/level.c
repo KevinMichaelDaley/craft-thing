@@ -8,14 +8,25 @@
 #include "dungeoncraft/stream.h"
 #include "level.h"
 
+#ifdef DC_NATIVE_VIEW
+enum { VIEW_WIDTH = 1920, VIEW_HEIGHT = 1080, WINDOW_SCALE = 1,
+       FLUID_INTERVAL = 6, INITIAL_CHUNK_Y = -8,
+       WORLD_SCALE = 4,
+#else
 enum { VIEW_WIDTH = 256, VIEW_HEIGHT = 128, WINDOW_SCALE = 4,
-       VIEW_CHUNKS_X = VIEW_WIDTH / DC_CHUNK_SIDE,
-       VIEW_CHUNKS_Y = VIEW_HEIGHT / DC_CHUNK_SIDE,
+       FLUID_INTERVAL = 1, INITIAL_CHUNK_Y = 0,
+       WORLD_SCALE = 1,
+#endif
+       VIEW_CHUNKS_X = (VIEW_WIDTH + DC_CHUNK_SIDE - 1) / DC_CHUNK_SIDE,
+       VIEW_CHUNKS_Y = (VIEW_HEIGHT + DC_CHUNK_SIDE - 1) / DC_CHUNK_SIDE,
        HALO_CHUNKS = 1,
        SIM_CHUNKS_X = VIEW_CHUNKS_X + 2 * HALO_CHUNKS,
        SIM_CHUNKS_Y = VIEW_CHUNKS_Y + 2 * HALO_CHUNKS,
        SIM_WIDTH = SIM_CHUNKS_X * DC_CHUNK_SIDE,
        SIM_HEIGHT = SIM_CHUNKS_Y * DC_CHUNK_SIDE };
+
+_Static_assert(DC_GPU_CHUNK_SLOTS >= SIM_CHUNKS_X * SIM_CHUNKS_Y,
+               "GPU chunk pool must cover viewport and halo");
 
 struct dc_level_view {
     dc_gpu_t *gpu;
@@ -174,15 +185,19 @@ dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
                                       char *err, uint32_t cap) {
     dc_level_view_t *view = calloc(1, sizeof(*view));
     if (!view) { error(err, cap, "Out of memory creating level view"); return NULL; }
+    view->origin.y = INITIAL_CHUNK_Y;
+    view->mapped_origin.y = INITIAL_CHUNK_Y;
     if (!dc_chunk_table_init(&view->table, DC_GPU_CHUNK_SLOTS) ||
         !dc_gpu_create_window(&view->gpu, SIM_WIDTH, SIM_HEIGHT,
             VIEW_WIDTH * WINDOW_SCALE, VIEW_HEIGHT * WINDOW_SCALE,
             "build/shaders/pattern.comp.spv", err, cap) ||
         !dc_gpu_set_viewport(view->gpu, DC_CHUNK_SIDE, DC_CHUNK_SIDE,
                              VIEW_WIDTH, VIEW_HEIGHT) ||
-        !dc_gpu_set_display_zoom(view->gpu, WINDOW_SCALE)) goto fail;
+        !dc_gpu_set_display_zoom(view->gpu, WINDOW_SCALE) ||
+        !dc_gpu_set_fluid_interval(view->gpu, FLUID_INTERVAL)) goto fail;
     view->spring_enabled = true;
-    view->stream = dc_stream_create(directory, seed, 128);
+    view->stream = dc_stream_create(directory, seed,
+                                    DC_GPU_CHUNK_SLOTS * 2u);
     if (!view->stream) { error(err, cap, "Cannot start chunk streaming worker"); goto fail; }
     return view;
 fail:
@@ -236,12 +251,13 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     view->pending_chunk_dy = 0;
     view->mapped_origin = view->origin;
     if (!resolve_world_transfer(view, err, cap)) return false;
-    if (view->spring_enabled && view->origin.x - HALO_CHUNKS <= 2 &&
-        view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS > 2 &&
+    if (view->spring_enabled && view->origin.x - HALO_CHUNKS <= 2 * WORLD_SCALE &&
+        view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS > 2 * WORLD_SCALE &&
         view->origin.y - HALO_CHUNKS <= 0 &&
         view->origin.y + VIEW_CHUNKS_Y + HALO_CHUNKS > 0) {
-        uint32_t x = (uint32_t)(2 - view->origin.x + HALO_CHUNKS) * DC_CHUNK_SIDE;
-        uint32_t y = (uint32_t)(-view->origin.y + HALO_CHUNKS) * DC_CHUNK_SIDE + 4u;
+        uint32_t x = (uint32_t)(2 * WORLD_SCALE - view->origin.x + HALO_CHUNKS) * DC_CHUNK_SIDE;
+        uint32_t y = (uint32_t)(-view->origin.y + HALO_CHUNKS) * DC_CHUNK_SIDE +
+                     4u * WORLD_SCALE;
         dc_gpu_set_tick_water_source(view->gpu, true, x, y);
     } else dc_gpu_set_tick_water_source(view->gpu, false, 0, 0);
     uint32_t ready_steps = all_resident ? view->pending_steps : 0u;
@@ -324,10 +340,11 @@ bool dc_level_view_reset_camera(dc_level_view_t *view) {
     view->pending_chunk_dx = view->mapped_origin.x > SIM_CHUNKS_X ?
         -SIM_CHUNKS_X : view->mapped_origin.x < -SIM_CHUNKS_X ?
         SIM_CHUNKS_X : (int32_t)-view->mapped_origin.x;
-    view->pending_chunk_dy = view->mapped_origin.y > SIM_CHUNKS_Y ?
-        -SIM_CHUNKS_Y : view->mapped_origin.y < -SIM_CHUNKS_Y ?
-        SIM_CHUNKS_Y : (int32_t)-view->mapped_origin.y;
-    view->origin = (dc_chunk_coord_t){0, 0};
+    int64_t mapped_offset_y = view->mapped_origin.y - INITIAL_CHUNK_Y;
+    view->pending_chunk_dy = mapped_offset_y > SIM_CHUNKS_Y ?
+        -SIM_CHUNKS_Y : mapped_offset_y < -SIM_CHUNKS_Y ?
+        SIM_CHUNKS_Y : (int32_t)-mapped_offset_y;
+    view->origin = (dc_chunk_coord_t){0, INITIAL_CHUNK_Y};
     view->camera_offset_x = 0;
     view->camera_offset_y = 0;
     return true;
@@ -419,10 +436,13 @@ bool dc_level_view_pixel(dc_level_view_t *view, uint32_t x, uint32_t y,
                          uint32_t *color, char *err, uint32_t cap) {
     if (!view || !color || x >= VIEW_WIDTH || y >= VIEW_HEIGHT)
         return error(err, cap, "Invalid pixel readback");
-    uint32_t pixels[VIEW_WIDTH * VIEW_HEIGHT];
-    if (!dc_gpu_readback(view->gpu, pixels, VIEW_WIDTH * VIEW_HEIGHT, err, cap)) return false;
-    *color = pixels[y * VIEW_WIDTH + x];
-    return true;
+    uint32_t *pixels = malloc((size_t)VIEW_WIDTH * VIEW_HEIGHT * sizeof(*pixels));
+    if (!pixels) return error(err, cap, "Out of memory reading level pixel");
+    bool okay = dc_gpu_readback(view->gpu, pixels,
+                                VIEW_WIDTH * VIEW_HEIGHT, err, cap);
+    if (okay) *color = pixels[y * VIEW_WIDTH + x];
+    free(pixels);
+    return okay;
 }
 
 bool dc_level_view_pixels(dc_level_view_t *view, uint32_t *colors,
@@ -508,7 +528,8 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     for (uint32_t i = 0; i < view->table.capacity; ++i)
         if (view->table.slots[i].state == DC_SLOT_ACTIVE)
             dc_chunk_table_set_active(&view->table, i, false);
-    uint64_t deadline = SDL_GetTicks64() + 5000;
+    uint64_t deadline = SDL_GetTicks64() +
+                        (uint64_t)view->table.capacity * 50u + 5000u;
     for (;;) {
         if (!process_results(view, err, cap) || !schedule_saves(view, err, cap)) { okay = false; break; }
         bool pending = false;

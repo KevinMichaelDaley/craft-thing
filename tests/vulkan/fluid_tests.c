@@ -812,6 +812,41 @@ static void test_fluid_interval_counts_only_scheduled_updates(void) {
     PASS();
 }
 
+static void test_six_fluid_phases_match_one_uncoupled_update(void) {
+    char err[256] = {0};
+    dc_gpu_t *fast = NULL, *staged = NULL;
+    dc_chunk_t *initial = calloc(1, sizeof(*initial));
+    dc_chunk_t *one = calloc(1, sizeof(*one));
+    dc_chunk_t *six = calloc(1, sizeof(*six));
+    ASSERT_TRUE(initial && one && six);
+    for (uint32_t y = 12; y < 20; ++y)
+        for (uint32_t x = 18; x < 32; ++x)
+            initial->cells[y * DC_CHUNK_SIDE + x].fluid_mass = DC_FLUID_FULL;
+    ASSERT_TRUE(dc_gpu_create(&fast, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create(&staged, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(fast, 0, initial, err, sizeof(err)) &&
+                dc_gpu_upload_chunk(staged, 0, initial, err, sizeof(err)) &&
+                dc_gpu_set_page(fast, 0, 0, 0, err, sizeof(err)) &&
+                dc_gpu_set_page(staged, 0, 0, 0, err, sizeof(err)) &&
+                dc_gpu_set_fluid_interval(staged, 6));
+    ASSERT_TRUE(dc_gpu_tick_step(fast, err, sizeof(err)));
+    for (uint32_t i = 0; i < 6u; ++i)
+        ASSERT_TRUE(dc_gpu_tick_step(staged, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(fast, 0, one, err, sizeof(err)) &&
+                dc_gpu_download_chunk(staged, 0, six, err, sizeof(err)));
+    ASSERT_EQ(memcmp(one->cells, six->cells, sizeof(one->cells)), 0);
+    ASSERT_EQ(memcmp(one->face_velocity, six->face_velocity,
+                     sizeof(one->face_velocity)), 0);
+    dc_gpu_destroy(fast);
+    dc_gpu_destroy(staged);
+    free(initial);
+    free(one);
+    free(six);
+    PASS();
+}
+
 int main(void) {
     RUN(test_water_falls_and_crosses_resident_chunk_edge);
     RUN(test_closed_basin_conserves_mass_for_long_run);
@@ -837,6 +872,7 @@ int main(void) {
     RUN(test_cropped_viewport_edges_are_internal_fluid_faces);
     RUN(test_projected_water_velocity_has_tiny_final_decay);
     RUN(test_fluid_interval_counts_only_scheduled_updates);
+    RUN(test_six_fluid_phases_match_one_uncoupled_update);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

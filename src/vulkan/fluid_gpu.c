@@ -115,9 +115,7 @@ bool dc_gpu_shift_velocity(dc_gpu_t *gpu, int32_t chunk_dx, int32_t chunk_dy,
     return true;
 }
 
-void dc_gpu_record_fluid(dc_gpu_t *gpu) {
-    vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
-        gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
+static void record_projection_begin(dc_gpu_t *gpu) {
     uint32_t push[7] = { gpu->width, gpu->height, 0, 0, 0, 0, 0 };
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->projection_pipeline);
     push[2] = 5u;
@@ -138,8 +136,14 @@ void dc_gpu_record_fluid(dc_gpu_t *gpu) {
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    for (uint32_t pass = 0; pass < 2u * DC_PRESSURE_SWEEPS + 2u; ++pass) {
-        push[3] = 1u;
+}
+
+static void record_pressure_passes(dc_gpu_t *gpu, uint32_t first,
+                                   uint32_t stop) {
+    uint32_t push[7] = { gpu->width, gpu->height, 0, 1, 0, 0, 0 };
+    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                      gpu->projection_pipeline);
+    for (uint32_t pass = first; pass < stop; ++pass) {
         push[2] = pass == 0 ? 0u : pass == 2u * DC_PRESSURE_SWEEPS + 1u ? 3u :
                   ((pass & 1u) ? 1u : 2u);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
@@ -150,8 +154,12 @@ void dc_gpu_record_fluid(dc_gpu_t *gpu) {
             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     }
+}
+
+static void record_fluid_transport(dc_gpu_t *gpu) {
+    uint32_t push[7] = { gpu->width, gpu->height, 0,
+                         gpu->fluid_tick & 1u, 0, 0, 0 };
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->fluid_pipeline);
-    push[3] = gpu->fluid_tick & 1u;
     for (uint32_t mode = 0; mode <= 4u; ++mode) {
         push[2] = mode;
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
@@ -169,6 +177,15 @@ void dc_gpu_record_fluid(dc_gpu_t *gpu) {
                 VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     }
     dc_gpu_record_markers(gpu);
+}
+
+static void record_fluid_correction(dc_gpu_t *gpu) {
+    uint32_t push[7] = { gpu->width, gpu->height, 0,
+                         gpu->fluid_tick & 1u, 0, 0, 0 };
+    fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     if (gpu->marker_correction) {
         vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->fluid_pipeline);
         const uint32_t correction_modes[6] = { 4u, 6u, 7u, 8u, 9u, 5u };
@@ -195,6 +212,23 @@ void dc_gpu_record_fluid(dc_gpu_t *gpu) {
                       1u, DC_GPU_CHUNK_SLOTS);
     }
     ++gpu->fluid_tick;
+}
+
+void dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase) {
+    vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
+        gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
+    if (phase == 0u) record_projection_begin(gpu);
+    if (phase < 4u) record_pressure_passes(gpu, phase * 10u,
+                                            phase * 10u + 10u);
+    else if (phase == 4u) {
+        record_pressure_passes(gpu, 40u, 2u * DC_PRESSURE_SWEEPS + 2u);
+        record_fluid_transport(gpu);
+    } else if (phase == 5u) record_fluid_correction(gpu);
+}
+
+void dc_gpu_record_fluid(dc_gpu_t *gpu) {
+    for (uint32_t phase = 0; phase < 6u; ++phase)
+        dc_gpu_record_fluid_phase(gpu, phase);
 }
 
 bool dc_gpu_fluid_max_divergence(dc_gpu_t *gpu, float *divergence,

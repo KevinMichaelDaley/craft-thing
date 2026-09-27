@@ -14,7 +14,13 @@
 #include "level.h"
 #include "session.h"
 
-enum { VIEW_WIDTH = 256, VIEW_HEIGHT = 128, WINDOW_SCALE = 4 };
+#ifdef DC_NATIVE_VIEW
+enum { VIEW_WIDTH = 1920, VIEW_HEIGHT = 1080, WINDOW_SCALE = 1,
+       BRUSH_RADIUS = 12, MAX_STEPS_PER_FRAME = 1 };
+#else
+enum { VIEW_WIDTH = 256, VIEW_HEIGHT = 128, WINDOW_SCALE = 4,
+       BRUSH_RADIUS = 3, MAX_STEPS_PER_FRAME = 4 };
+#endif
 
 static bool save_level_bmp(const char *path, const uint32_t *pixels) {
     const uint32_t width = VIEW_WIDTH * WINDOW_SCALE;
@@ -43,11 +49,67 @@ static bool paint_held(dc_level_view_t *view, uint16_t material,
         !dc_level_view_screen_cell(view, (uint32_t)mx, (uint32_t)my, &x, &y))
         return true;
     if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT))
-        return dc_level_view_paint(view, x, y, 3, material, err, cap);
+        return dc_level_view_paint(view, x, y, BRUSH_RADIUS, material, err, cap);
     if (buttons & SDL_BUTTON(SDL_BUTTON_RIGHT))
-        return dc_level_view_paint(view, x, y, 3, DC_MATERIAL_AIR, err, cap);
+        return dc_level_view_paint(view, x, y, BRUSH_RADIUS, DC_MATERIAL_AIR, err, cap);
     return true;
 }
+
+#ifdef DC_NATIVE_VIEW
+static int smoke_native_view(void) {
+    char directory[] = "build/ui_native_XXXXXX", err[256] = {0};
+    if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    if (!view) { fprintf(stderr, "Native create: %s\n", err); return 1; }
+    dc_level_view_status_t status = {0};
+    uint32_t x = 0, y = 0, painted = 0;
+    uint32_t *pixels = malloc((size_t)VIEW_WIDTH * VIEW_HEIGHT * sizeof(*pixels));
+    bool okay = pixels && dc_level_view_wait_visible(view, 120000, err, sizeof(err)) &&
+                dc_level_view_status(view, &status) &&
+                status.total_chunks == DC_GPU_CHUNK_SLOTS &&
+                status.ready_chunks == DC_GPU_CHUNK_SLOTS &&
+                dc_level_view_screen_cell(view, VIEW_WIDTH - 1u, VIEW_HEIGHT - 1u,
+                                          &x, &y) &&
+                x == VIEW_WIDTH - 1u && y == VIEW_HEIGHT - 1u &&
+                dc_level_view_paint(view, VIEW_WIDTH - 20u, VIEW_HEIGHT - 20u,
+                                    2u, DC_MATERIAL_STONE, err, sizeof(err)) &&
+                dc_level_view_tick(view, err, sizeof(err)) &&
+                dc_level_view_pixel(view, VIEW_WIDTH - 20u,
+                                    VIEW_HEIGHT - 20u, &painted,
+                                    err, sizeof(err)) &&
+                painted == 0xff707070u &&
+                dc_level_view_pixels(view, pixels, VIEW_WIDTH * VIEW_HEIGHT,
+                                     err, sizeof(err)) &&
+                pixels[(VIEW_HEIGHT - 20u) * VIEW_WIDTH + VIEW_WIDTH - 20u] ==
+                    0xff707070u;
+    mkdir("build/screenshots", 0777);
+    if (okay) okay = save_level_bmp("build/screenshots/native_1920x1080.bmp", pixels);
+    uint64_t start = SDL_GetPerformanceCounter();
+    double fastest = 1e9, slowest = 0.0;
+    for (uint32_t i = 0; i < 12u && okay; ++i)
+    {
+        uint64_t tick_start = SDL_GetPerformanceCounter();
+        okay = dc_level_view_step(view, err, sizeof(err)) &&
+               dc_level_view_tick(view, err, sizeof(err));
+        double tick_time = (double)(SDL_GetPerformanceCounter() - tick_start) /
+                           (double)SDL_GetPerformanceFrequency();
+        if (tick_time < fastest) fastest = tick_time;
+        if (tick_time > slowest) slowest = tick_time;
+    }
+    double elapsed = (double)(SDL_GetPerformanceCounter() - start) /
+                     (double)SDL_GetPerformanceFrequency();
+    if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
+    free(pixels);
+    if (!okay) { fprintf(stderr, "Native smoke failed: %s\n", err); return 1; }
+    printf("Native viewport %ux%u, simulated cells %u, resident chunks %u, "
+           "12 presented physics ticks %.3f s (%.2f ticks/s), "
+           "fastest %.1f ms, slowest %.1f ms, fluid updates 2\n",
+           VIEW_WIDTH, VIEW_HEIGHT, VIEW_WIDTH * VIEW_HEIGHT,
+           status.ready_chunks, elapsed, 12.0 / elapsed,
+           fastest * 1000.0, slowest * 1000.0);
+    return 0;
+}
+#endif
 
 static int smoke_moving_water(void) {
     char directory[] = "build/ui_motion_XXXXXX";
@@ -809,6 +871,10 @@ static bool pan_held_keys(dc_level_view_t *view, double elapsed,
 }
 
 int main(int argc, char **argv) {
+#ifdef DC_NATIVE_VIEW
+    if (argc > 1 && strcmp(argv[1], "--smoke-native") == 0)
+        return smoke_native_view();
+#endif
     if (argc > 1 && strcmp(argv[1], "--smoke-camera-velocity") == 0)
         return smoke_camera_velocity();
     if (argc > 1 && strcmp(argv[1], "--smoke-halo-flow") == 0)
@@ -837,7 +903,11 @@ int main(int argc, char **argv) {
         return 1;
     }
     uint64_t seed = 314;
+#ifdef DC_NATIVE_VIEW
+    const char *directory = scripted_input ? scripted_directory : "world_chunks_native";
+#else
     const char *directory = scripted_input ? scripted_directory : "world_chunks";
+#endif
     for (int i = 1; i < argc; ++i) {
         if (scripted_input && strcmp(argv[i], "--smoke-controls-ui") == 0)
             continue;
@@ -1036,7 +1106,8 @@ int main(int argc, char **argv) {
         if (!paused) accumulator += elapsed;
         else accumulator = 0.0;
         uint32_t steps = 0;
-        while (running && (single_step || (!paused && accumulator >= tick_seconds)) && steps < 4) {
+        while (running && (single_step || (!paused && accumulator >= tick_seconds)) &&
+               steps < MAX_STEPS_PER_FRAME) {
             if (!dc_level_view_step(view, err, sizeof(err))) {
                 failed = true; running = false;
                 break;
@@ -1045,7 +1116,8 @@ int main(int argc, char **argv) {
             if (accumulator >= tick_seconds) accumulator -= tick_seconds;
             ++steps;
         }
-        if (accumulator > 4.0 * tick_seconds) accumulator = 4.0 * tick_seconds;
+        if (accumulator > MAX_STEPS_PER_FRAME * tick_seconds)
+            accumulator = MAX_STEPS_PER_FRAME * tick_seconds;
         if (!paint_held(view, material, err, sizeof(err))) {
             failed = true; running = false;
         }

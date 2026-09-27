@@ -87,7 +87,14 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coor
     if (!chunk_path(stream, coord, path, sizeof(path), false)) { free(chunk); return NULL; }
     FILE *file = fopen(path, "rb");
     if (!file && errno == ENOENT) {
+#ifdef DC_NATIVE_VIEW
+        if (!dc_generate_chunk_scaled(stream->seed, coord, 4u, chunk)) {
+            free(chunk);
+            return NULL;
+        }
+#else
         dc_generate_chunk(stream->seed, coord, chunk);
+#endif
         return chunk;
     }
     if (!file) { free(chunk); return NULL; }
