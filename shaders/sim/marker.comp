@@ -20,7 +20,7 @@ layout(push_constant) uniform Params {
     uint source_ping;
     uint tick;
     uint step_scale_bits;
-    uint unused2;
+    uint slot_count;
 } params;
 
 const uint CAPACITY = 2048u;
@@ -131,8 +131,21 @@ void append_marker(Marker marker, vec2 position) {
     atomicOr(marker_grid[atlas_at(cell, page)], marker.kind);
 }
 
+bool near_free_surface(ivec2 cell) {
+    bool wet = false, dry = false;
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            ivec2 neighbor = cell + ivec2(dx, dy);
+            if (!open_at(neighbor)) continue;
+            if (mass_at(neighbor) >= 8192u) wet = true;
+            else dry = true;
+        }
+    }
+    return wet && dry;
+}
+
 void reset_and_copy(uint linear) {
-    if (linear >= 64u * CAPACITY) return;
+    if (linear >= params.slot_count * CAPACITY) return;
     uint slot = linear / CAPACITY;
     uint local = linear % CAPACITY;
     marker_grid[slot * CHUNK_CELLS + 2u * local] = 0u;
@@ -146,7 +159,7 @@ void reset_and_copy(uint linear) {
 }
 
 void advect(uint linear) {
-    if (linear >= 64u * CAPACITY) return;
+    if (linear >= params.slot_count * CAPACITY) return;
     uint slot = linear / CAPACITY;
     uint local = linear % CAPACITY;
     uint tile = slot_page[slot];
@@ -167,7 +180,8 @@ void advect(uint linear) {
             break;
         }
     }
-    append_marker(marker, next_position);
+    if (near_free_surface(ivec2(floor(next_position))))
+        append_marker(marker, next_position);
 }
 
 bool surface_candidate(ivec2 p) {
@@ -218,6 +232,6 @@ void main() {
     if (params.mode == 0u) reset_and_copy(linear);
     else if (params.mode == 1u) advect(linear);
     else if (params.mode == 2u) seed(linear);
-    else if (linear < 64u)
+    else if (linear < params.slot_count)
         set_destination_count(linear, min(destination_count(linear), CAPACITY));
 }

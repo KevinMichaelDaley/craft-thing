@@ -128,6 +128,23 @@ static int smoke_native_view(void) {
     }
     double adaptive_wall = (double)(SDL_GetPerformanceCounter() - adaptive_start) /
                            (double)SDL_GetPerformanceFrequency();
+    if (okay) okay = dc_level_view_set_spring_enabled(view, false);
+    for (uint32_t i = 0; i < 120u && okay; ++i)
+        okay = dc_level_view_step(view, err, sizeof(err)) &&
+               dc_level_view_tick(view, err, sizeof(err));
+#ifdef DC_HALF_NATIVE_VIEW
+    if (okay) okay = dc_level_view_pixels(view, pixels,
+                                         VIEW_WIDTH * VIEW_HEIGHT,
+                                         err, sizeof(err)) &&
+                     save_level_bmp(
+                         "build/screenshots/half_native_after_spring_off.bmp",
+                         pixels);
+    for (uint32_t i = 0; i < 3u && okay; ++i)
+        okay = dc_level_view_move(view, 1, 0) &&
+               dc_level_view_wait_visible(view, 120000, err, sizeof(err)) &&
+               dc_level_view_step(view, err, sizeof(err)) &&
+               dc_level_view_tick(view, err, sizeof(err));
+#endif
     dc_gpu_memory_stats_t memory_stats = {0};
     if (!dc_level_view_memory_stats(view, &memory_stats)) okay = false;
     if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
