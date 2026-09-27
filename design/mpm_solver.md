@@ -4,7 +4,8 @@ The tick order is rigid occupancy, Eulerian water, then granular MPM. Every MPM
 tick has two equal substeps with `dt = 0.5` tick. Particle speed is bounded to
 two cells per tick, so a particle moves at most one cell per substep. This is
 the ownership CFL bound used by the 3×3 source search; it also bounds the
-explicit stress update. All six passes of each substep run in the existing
+explicit stress update. The six granular passes and one water feedback pass
+of each substep run in the existing
 Vulkan command buffer, with compute barriers between them.
 
 A GPU activity scan marks 16×16 tiles containing granular material, then a
@@ -25,8 +26,22 @@ provides `J = det(F)`. The compressive pressure is
 for gravel. A capped symmetric shear term supplies limited grain resistance;
 there is no tensile stress. The grid solve divides momentum and stress force
 by mass, adds gravity, and projects velocity against stone cells and the GPU
-rigid occupancy map. Water-filled cells currently exclude grains; momentum
-exchange with water has its own ticket.
+rigid occupancy map. Water and grain can occupy the same cell: granular
+material is permeable to the Eulerian flux and projection passes, while stone
+and rigid occupancy remain solid boundaries.
+
+Each grid node samples the projected water face velocities and the average
+Eulerian mass on each face. For each axis, the drag impulse is
+`0.5 * (grain_mass * water_face_mass / (grain_mass + water_face_mass)) *
+(water_face_velocity - grain_velocity)`. The grid velocity receives the
+impulse divided by grain mass. The opposite velocity change is stored in the
+grid force buffer's unused components and applied by a separate, uniquely
+owned face pass after a compute barrier. Zero-water faces produce no drag or
+feedback. The second MPM substep samples the updated water velocity; the next
+fluid prediction and pressure projection consume it as well. The drag
+coefficient is bounded below one and the reduced-mass form prevents an
+explicit overshoot for the two half-tick substeps. This uses no atomics,
+per-frame CPU readback, or new persistent buffer.
 
 G2P interpolates grid velocity (PIC), updates `F` with the grid velocity
 gradient, caps strain for plastic yielding, and proposes a new position. The
@@ -43,6 +58,9 @@ block transfer until streaming activates them.
 The solver neither downloads particles nor rebuilds its buffers per frame.
 GPU timestamps for the sand stage measure the complete MPM work; the headless
 test also checks exact mass, stable IDs, deterministic replay, collision with
-stone and a rigid body, and seam crossing. The one-second UI smoke produces
+stone and a rigid body, coupled wet-grain motion and seam crossing. A closed
+uniform-flow test checks equal-and-opposite x momentum to within four 16.16
+fixed-point units; still water does not carry grains sideways. The one-second
+UI smoke produces
 `build/screenshots/granular_before.bmp` and
 `build/screenshots/granular_after_1s.bmp`.

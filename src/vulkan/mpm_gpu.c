@@ -2,7 +2,8 @@
 
 #include "gpu_internal.h"
 
-enum { DC_MPM_SUBSTEPS = 2, DC_MPM_MODES = 6 };
+enum { DC_MPM_SUBSTEPS = 2, DC_MPM_MODES = 6,
+       DC_MPM_WATER_FEEDBACK_MODE = 6 };
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -124,7 +125,7 @@ void dc_gpu_record_mpm(dc_gpu_t *gpu) {
                         VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
                         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
             if (mode == 1u) {
-                push[2] = 6u;
+                push[2] = DC_MPM_WATER_FEEDBACK_MODE;
                 vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                     VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
                 vkCmdDispatchIndirect(gpu->command, gpu->mpm_activity_buffer, 0);
