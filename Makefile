@@ -28,6 +28,16 @@ NATIVE_SRC = src/app/main.c src/app/level.c src/app/session.c $(patsubst build/%
 .PHONY: native
 native: build/dungeoncraft_native
 
+.PHONY: half_native test_half_native
+half_native: build/dungeoncraft_half_native
+
+test_half_native: build/half_native_config_tests build/dungeoncraft_half_native
+	./build/half_native_config_tests
+	./build/dungeoncraft_half_native --smoke-native
+
+build/half_native_config_tests: tests/app/half_native_config_tests.c src/app/view_config.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_HALF_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=187u $< -o $@
+
 .PHONY: test_native
 test_native: build/dungeoncraft_native
 	./build/dungeoncraft_native --smoke-native
