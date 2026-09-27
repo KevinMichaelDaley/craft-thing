@@ -51,7 +51,7 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
         vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
             gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
         uint32_t push[7] = { gpu->width, gpu->height, 2,
-                             gpu->marker_overlay ? 1u : 0u, (uint32_t)gpu->overlay,
+                             dc_gpu_render_flags(gpu), (uint32_t)gpu->overlay,
                              gpu->view_x, gpu->view_y };
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);

@@ -9,20 +9,20 @@ layout(set = 0, binding = 9, std430) buffer FluidB { int fluid_b[]; };
 layout(set = 0, binding = 10, std430) buffer FaceVelocity { vec2 face_velocity[]; };
 layout(set = 0, binding = 16, std430) readonly buffer MarkerGrid { uint marker_grid[]; };
 layout(set = 0, binding = 17, std430) readonly buffer SlotPages { uint slot_pages[]; };
+layout(set = 0, binding = 31, std430) buffer FluidPrevious { uint fluid_previous[]; };
 layout(push_constant) uniform Params {
     uint width;
     uint height;
     uint mode;
     uint tick_parity;
     uint unused1;
-    uint unused2;
-    uint unused3;
+    uint step_scale_bits;
+    uint elapsed_time_mode;
 } params;
 
 const uint SIDE = 64u;
 const uint CELLS_PER_CHUNK = 4096u;
 const uint FULL = 65536u;
-const float STEP_SECONDS = 1.0;
 const float TRANSPORT_FUDGE = 1.001;
 const float VELOCITY_DAMPING = 0.999;
 
@@ -63,12 +63,14 @@ void move_line(ivec2 source, ivec2 direction, bool vertical) {
     if (!open_cell(source + direction)) return;
     uint face_index = uint(face.y) * params.width + uint(face.x);
     float speed = vertical ? face_velocity[face_index].y : face_velocity[face_index].x;
+    if (vertical && params.elapsed_time_mode != 0u)
+        speed = 0.5 * (speed + uintBitsToFloat(fluid_a[face_index]));
     if (direction.x < 0 || direction.y < 0) speed = -speed;
     if (speed <= 0.0) return;
     uint source_index = atlas_index(source, page_at(source));
     uint available = chunk_cells[source_index].y;
     if (available == 0u) return;
-    float travel = speed * STEP_SECONDS * TRANSPORT_FUDGE;
+    float travel = speed * uintBitsToFloat(params.step_scale_bits) * TRANSPORT_FUDGE;
     uint edge = vertical ? (direction.y > 0 ? params.height - 1u - uint(source.y) :
                                                 uint(source.y)) :
                            (direction.x > 0 ? params.width - 1u - uint(source.x) :
@@ -174,12 +176,16 @@ void main() {
     if (position.x >= int(params.width) || position.y >= int(params.height)) return;
     uint index = uint(position.y) * params.width + uint(position.x);
     uint page = page_at(position);
-    if (params.mode == 4u) {
+    if (params.mode == 10u) {
+        fluid_previous[index] = page == 0u ? 0u :
+                                chunk_cells[atlas_index(position, page)].y;
+    } else if (params.mode == 4u) {
         fluid_a[index] = page == 0u ? 0u :
                          chunk_cells[atlas_index(position, page)].y;
     } else if (params.mode == 5u) {
         if (page != 0u) chunk_cells[atlas_index(position, page)].y = fluid_a[index];
-        face_velocity[index] *= VELOCITY_DAMPING;
+        face_velocity[index] *= pow(VELOCITY_DAMPING,
+                                    uintBitsToFloat(params.step_scale_bits));
     } else if (params.mode >= 6u && params.mode <= 9u) {
         correct_pair(position);
     }

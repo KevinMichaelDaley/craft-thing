@@ -16,10 +16,10 @@
 
 #ifdef DC_NATIVE_VIEW
 enum { VIEW_WIDTH = 1920, VIEW_HEIGHT = 1080, WINDOW_SCALE = 1,
-       BRUSH_RADIUS = 12, MAX_STEPS_PER_FRAME = 1 };
+       BRUSH_RADIUS = 12 };
 #else
 enum { VIEW_WIDTH = 256, VIEW_HEIGHT = 128, WINDOW_SCALE = 4,
-       BRUSH_RADIUS = 3, MAX_STEPS_PER_FRAME = 4 };
+       BRUSH_RADIUS = 3 };
 #endif
 
 static bool save_level_bmp(const char *path, const uint32_t *pixels) {
@@ -98,15 +98,58 @@ static int smoke_native_view(void) {
     }
     double elapsed = (double)(SDL_GetPerformanceCounter() - start) /
                      (double)SDL_GetPerformanceFrequency();
+    double rigid_ms = 0.0, fluid_ms = 0.0, granular_ms = 0.0;
+    double fluid_peak_ms = 0.0;
+    double fluid_phase_ms[6] = {0};
+    for (uint32_t i = 0; i < 6u && okay; ++i) {
+        dc_gpu_tick_capture_t capture = {0};
+        okay = dc_level_view_capture_tick(view, &capture, err, sizeof(err));
+        rigid_ms += capture.stages[0].gpu_ns / 1e6;
+        fluid_ms += capture.stages[1].gpu_ns / 1e6;
+        fluid_phase_ms[i] = capture.stages[1].gpu_ns / 1e6;
+        if (capture.stages[1].gpu_ns / 1e6 > fluid_peak_ms)
+            fluid_peak_ms = capture.stages[1].gpu_ns / 1e6;
+        granular_ms += capture.stages[2].gpu_ns / 1e6;
+    }
+    uint64_t adaptive_start = SDL_GetPerformanceCounter();
+    uint64_t adaptive_previous = adaptive_start;
+    double adaptive_seconds = 0.0;
+    for (uint32_t i = 0; i < 12u && okay; ++i) {
+        uint64_t now = SDL_GetPerformanceCounter();
+        float seconds = i == 0u ? 1.0f / 60.0f :
+            (float)((double)(now - adaptive_previous) /
+                    (double)SDL_GetPerformanceFrequency());
+        if (seconds > 0.25f) seconds = 0.25f;
+        adaptive_seconds += seconds;
+        adaptive_previous = now;
+        okay = dc_level_view_step_timed(view, seconds, err, sizeof(err)) &&
+               dc_level_view_tick(view, err, sizeof(err));
+    }
+    double adaptive_wall = (double)(SDL_GetPerformanceCounter() - adaptive_start) /
+                           (double)SDL_GetPerformanceFrequency();
+    dc_gpu_memory_stats_t memory_stats = {0};
+    if (!dc_level_view_memory_stats(view, &memory_stats)) okay = false;
     if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
     free(pixels);
     if (!okay) { fprintf(stderr, "Native smoke failed: %s\n", err); return 1; }
     printf("Native viewport %ux%u, simulated cells %u, resident chunks %u, "
            "12 presented physics ticks %.3f s (%.2f ticks/s), "
-           "fastest %.1f ms, slowest %.1f ms, fluid updates 2\n",
+           "fastest %.1f ms, slowest %.1f ms, fluid updates 2; "
+            "GPU stage ms/tick rigid %.1f fluid %.1f (peak %.1f) granular %.1f\n",
            VIEW_WIDTH, VIEW_HEIGHT, VIEW_WIDTH * VIEW_HEIGHT,
            status.ready_chunks, elapsed, 12.0 / elapsed,
-           fastest * 1000.0, slowest * 1000.0);
+           fastest * 1000.0, slowest * 1000.0,
+            rigid_ms / 6.0, fluid_ms / 6.0, fluid_peak_ms, granular_ms / 6.0);
+    printf("Fluid phase GPU ms: %.1f %.1f %.1f %.1f %.1f %.1f\n",
+           fluid_phase_ms[0], fluid_phase_ms[1], fluid_phase_ms[2],
+           fluid_phase_ms[3], fluid_phase_ms[4], fluid_phase_ms[5]);
+    printf("Adaptive 12 frames %.3f s wall (%.1f frames/s), %.3f s simulated\n",
+           adaptive_wall, 12.0 / adaptive_wall, adaptive_seconds);
+    printf("GPU buffers: %.1f MiB mapped VRAM, %.1f MiB mapped system, "
+           "%.1f MiB device-only VRAM\n",
+           memory_stats.mapped_local_bytes / 1048576.0,
+           memory_stats.mapped_system_bytes / 1048576.0,
+           memory_stats.device_only_bytes / 1048576.0);
     return 0;
 }
 #endif
@@ -1105,19 +1148,16 @@ int main(int argc, char **argv) {
         }
         if (!paused) accumulator += elapsed;
         else accumulator = 0.0;
-        uint32_t steps = 0;
-        while (running && (single_step || (!paused && accumulator >= tick_seconds)) &&
-               steps < MAX_STEPS_PER_FRAME) {
-            if (!dc_level_view_step(view, err, sizeof(err))) {
+        if (running && (single_step || (!paused && accumulator >= tick_seconds))) {
+            float step_seconds = single_step ? (float)tick_seconds :
+                                 (float)accumulator;
+            if (step_seconds > 0.25f) step_seconds = 0.25f;
+            if (!dc_level_view_step_timed(view, step_seconds, err, sizeof(err))) {
                 failed = true; running = false;
-                break;
             }
             single_step = false;
-            if (accumulator >= tick_seconds) accumulator -= tick_seconds;
-            ++steps;
+            accumulator = 0.0;
         }
-        if (accumulator > MAX_STEPS_PER_FRAME * tick_seconds)
-            accumulator = MAX_STEPS_PER_FRAME * tick_seconds;
         if (!paint_held(view, material, err, sizeof(err))) {
             failed = true; running = false;
         }

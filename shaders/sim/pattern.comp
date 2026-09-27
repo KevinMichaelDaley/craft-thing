@@ -14,6 +14,7 @@ struct Particle {
 layout(set = 0, binding = 18, std430) readonly buffer SlotSeeds { uint seeds[]; };
 layout(set = 0, binding = 19, std430) buffer Particles { Particle particles[]; };
 layout(set = 0, binding = 20, std430) buffer ParticleCounts { uint particle_counts[]; };
+layout(set = 0, binding = 31, std430) readonly buffer FluidPrevious { uint previous_mass[]; };
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -89,6 +90,11 @@ DensitySample material_density(ivec2 p) {
         solid_color = linear_color(material_color(material, 0u));
     }
     float water = min(float(cell.y) / 65536.0, 1.0);
+    if (params.mode == 2u && (params.brush_x >> 8) < 65535u) {
+        float old_water = min(float(previous_mass[uint(p.y) * params.width +
+                                                 uint(p.x)]) / 65536.0, 1.0);
+        water = mix(old_water, water, float(params.brush_x >> 8) / 65535.0);
+    }
     density_sample.coverage = water + solid * (1.0 - water);
     density_sample.premultiplied = water * linear_color(0xffd07030u) +
                            (1.0 - water) * solid * solid_color;
@@ -109,6 +115,12 @@ void main() {
     uvec2 display_cell = gl_GlobalInvocationID.xy;
     uvec2 p = display_cell;
     if (params.mode == 2u) p += uvec2(params.radius, params.color);
+    if (params.mode == 4u) {
+        ivec2 source = ivec2(display_cell) +
+                       ivec2(params.brush_x, params.brush_y) - ivec2(8);
+        if (source.x < 0 || source.y < 0) return;
+        p = uvec2(source);
+    }
     if (p.x >= params.width || p.y >= params.height) return;
     if (params.mode == 0u) {
         cells[p.y * params.width + p.x] = ((p.x + p.y) & 1u) == 0u
@@ -129,7 +141,7 @@ void main() {
         uint index = (page - 1u) * 4096u + (p.y % 64u) * 64u + p.x % 64u;
         if (params.mode == 2u && params.brush_y != 2u) {
             uint filtered = cell_material_color(ivec2(p));
-            if (params.brush_x != 0u) {
+            if ((params.brush_x & 1u) != 0u) {
                 uint guide = marker_grid[index];
                 if ((guide & 1u) != 0u) filtered = 0xffd040e0u;
                 else if ((guide & 2u) != 0u) filtered = 0xff40e0d0u;
@@ -148,7 +160,7 @@ void main() {
         uint secondary_index = particle_index + 4096u;
         bool mud = false;
         bool wet_sand = false;
-        if (params.mode == 3u) {
+        if (params.mode == 3u || params.mode == 4u) {
             int dx = int(p.x) - int(params.brush_x);
             int dy = int(p.y) - int(params.brush_y);
             int r = int(params.radius);
@@ -201,6 +213,7 @@ void main() {
                 chunk_cells[index] = cell;
             }
         }
+        if (params.mode == 4u) return;
         if (params.mode == 2u) {
             if (particles[particle_index].mass_fp != 0u) {
                 material = particles[particle_index].material;

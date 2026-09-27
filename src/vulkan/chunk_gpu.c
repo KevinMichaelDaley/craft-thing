@@ -61,8 +61,42 @@ bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
         vkBindBufferMemory(gpu->device, *buffer, *memory, 0) != VK_SUCCESS ||
         vkMapMemory(gpu->device, *memory, 0, bytes, 0, mapped) != VK_SUCCESS)
         return error(err, cap, "Cannot allocate or map GPU chunk memory");
+    if (props.memoryTypes[alloc.memoryTypeIndex].propertyFlags &
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+        gpu->mapped_local_bytes += req.size;
+    else gpu->mapped_system_bytes += req.size;
     memset(*mapped, 0, (size_t)bytes);
     return true;
+}
+
+bool dc_gpu_make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
+                               VkDeviceMemory *memory, char *err, uint32_t cap) {
+    VkBufferCreateInfo info = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = bytes, .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
+                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                                VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE };
+    if (vkCreateBuffer(gpu->device, &info, NULL, buffer) != VK_SUCCESS)
+        return error(err, cap, "Cannot create device-local GPU buffer");
+    VkMemoryRequirements req;
+    vkGetBufferMemoryRequirements(gpu->device, *buffer, &req);
+    VkPhysicalDeviceMemoryProperties props;
+    vkGetPhysicalDeviceMemoryProperties(gpu->physical, &props);
+    for (uint32_t i = 0; i < props.memoryTypeCount; ++i) {
+        if (!(req.memoryTypeBits & (1u << i)) ||
+            !(props.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
+            continue;
+        VkMemoryAllocateInfo alloc = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .allocationSize = req.size, .memoryTypeIndex = i };
+        if (vkAllocateMemory(gpu->device, &alloc, NULL, memory) == VK_SUCCESS) {
+            if (vkBindBufferMemory(gpu->device, *buffer, *memory, 0) != VK_SUCCESS)
+                return error(err, cap, "Cannot bind device-local GPU memory");
+            gpu->device_only_bytes += req.size;
+            return true;
+        }
+    }
+    return error(err, cap, "Cannot allocate device-local GPU memory");
 }
 
 bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
@@ -74,11 +108,16 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     gpu->page_height = (gpu->height + DC_CHUNK_SIDE - 1u) / DC_CHUNK_SIDE;
     VkDeviceSize chunk_bytes = (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t);
     VkDeviceSize page_bytes = (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t);
-    return dc_gpu_make_mapped_buffer(gpu, chunk_bytes, &gpu->chunk_buffer,
-               &gpu->chunk_memory, &gpu->chunk_mapped, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu,
-               (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t),
-               &gpu->particle_buffer, &gpu->particle_memory, &gpu->particle_mapped, err, cap) &&
+    VkDeviceSize particle_bytes = (VkDeviceSize)DC_GPU_CHUNK_SLOTS *
+        DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t);
+    return dc_gpu_make_device_buffer(gpu, chunk_bytes, &gpu->chunk_buffer,
+               &gpu->chunk_memory, err, cap) &&
+           dc_gpu_make_mapped_buffer(gpu, chunk_bytes, &gpu->chunk_staging_buffer,
+               &gpu->chunk_staging_memory, &gpu->chunk_mapped, err, cap) &&
+           dc_gpu_make_device_buffer(gpu, particle_bytes, &gpu->particle_buffer,
+               &gpu->particle_memory, err, cap) &&
+           dc_gpu_make_mapped_buffer(gpu, particle_bytes, &gpu->particle_staging_buffer,
+               &gpu->particle_staging_memory, &gpu->particle_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t),
                &gpu->particle_count_buffer, &gpu->particle_count_memory,
                &gpu->particle_count_mapped, err, cap) &&
@@ -96,18 +135,77 @@ void dc_gpu_chunks_destroy(dc_gpu_t *gpu) {
     dc_gpu_fluid_destroy(gpu);
     dc_gpu_marker_destroy(gpu);
     dc_gpu_mpm_buffers_destroy(gpu);
-    if (gpu->chunk_mapped) vkUnmapMemory(gpu->device, gpu->chunk_memory);
-    if (gpu->particle_mapped) vkUnmapMemory(gpu->device, gpu->particle_memory);
+    if (gpu->chunk_mapped) vkUnmapMemory(gpu->device, gpu->chunk_staging_memory);
+    if (gpu->particle_mapped) vkUnmapMemory(gpu->device, gpu->particle_staging_memory);
     if (gpu->particle_count_mapped) vkUnmapMemory(gpu->device, gpu->particle_count_memory);
     if (gpu->page_mapped) vkUnmapMemory(gpu->device, gpu->page_memory);
     if (gpu->chunk_buffer) vkDestroyBuffer(gpu->device, gpu->chunk_buffer, NULL);
+    if (gpu->chunk_staging_buffer) vkDestroyBuffer(gpu->device, gpu->chunk_staging_buffer, NULL);
     if (gpu->particle_buffer) vkDestroyBuffer(gpu->device, gpu->particle_buffer, NULL);
+    if (gpu->particle_staging_buffer) vkDestroyBuffer(gpu->device, gpu->particle_staging_buffer, NULL);
     if (gpu->particle_count_buffer) vkDestroyBuffer(gpu->device, gpu->particle_count_buffer, NULL);
     if (gpu->page_buffer) vkDestroyBuffer(gpu->device, gpu->page_buffer, NULL);
     if (gpu->chunk_memory) vkFreeMemory(gpu->device, gpu->chunk_memory, NULL);
+    if (gpu->chunk_staging_memory) vkFreeMemory(gpu->device, gpu->chunk_staging_memory, NULL);
     if (gpu->particle_memory) vkFreeMemory(gpu->device, gpu->particle_memory, NULL);
+    if (gpu->particle_staging_memory) vkFreeMemory(gpu->device, gpu->particle_staging_memory, NULL);
     if (gpu->particle_count_memory) vkFreeMemory(gpu->device, gpu->particle_count_memory, NULL);
     if (gpu->page_memory) vkFreeMemory(gpu->device, gpu->page_memory, NULL);
+}
+
+bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
+                             bool particles, char *err, uint32_t cap) {
+    if (!gpu || (slot >= DC_GPU_CHUNK_SLOTS && slot != UINT32_MAX))
+        return error(err, cap, "Invalid chunk transfer slot");
+    if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
+        return error(err, cap, "Cannot reset chunk transfer command");
+    VkCommandBufferBeginInfo begin = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+    if (vkBeginCommandBuffer(gpu->command, &begin) != VK_SUCCESS)
+        return error(err, cap, "Cannot begin chunk transfer command");
+    VkMemoryBarrier2 before = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask = upload ? VK_PIPELINE_STAGE_2_HOST_BIT :
+                                 VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .srcAccessMask = upload ? VK_ACCESS_2_HOST_WRITE_BIT :
+                                  VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT |
+                         VK_ACCESS_2_TRANSFER_WRITE_BIT };
+    VkDependencyInfo dependency = { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .memoryBarrierCount = 1, .pMemoryBarriers = &before };
+    vkCmdPipelineBarrier2(gpu->command, &dependency);
+    VkDeviceSize chunk_stride = DC_CHUNK_CELLS * sizeof(dc_cell_t);
+    VkBufferCopy region = { .srcOffset = slot == UINT32_MAX ? 0 : slot * chunk_stride,
+        .dstOffset = slot == UINT32_MAX ? 0 : slot * chunk_stride,
+        .size = slot == UINT32_MAX ? chunk_stride * DC_GPU_CHUNK_SLOTS : chunk_stride };
+    vkCmdCopyBuffer(gpu->command, upload ? gpu->chunk_staging_buffer : gpu->chunk_buffer,
+        upload ? gpu->chunk_buffer : gpu->chunk_staging_buffer, 1, &region);
+    if (particles) {
+        VkDeviceSize particle_stride = DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t);
+        region.srcOffset = slot * particle_stride;
+        region.dstOffset = region.srcOffset;
+        region.size = particle_stride;
+        vkCmdCopyBuffer(gpu->command,
+            upload ? gpu->particle_staging_buffer : gpu->particle_buffer,
+            upload ? gpu->particle_buffer : gpu->particle_staging_buffer, 1, &region);
+    }
+    VkMemoryBarrier2 after = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .dstStageMask = upload ? VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT :
+                                 VK_PIPELINE_STAGE_2_HOST_BIT,
+        .dstAccessMask = upload ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                                  VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT :
+                                  VK_ACCESS_2_HOST_READ_BIT };
+    dependency.pMemoryBarriers = &after;
+    vkCmdPipelineBarrier2(gpu->command, &dependency);
+    if (vkEndCommandBuffer(gpu->command) != VK_SUCCESS)
+        return error(err, cap, "Cannot end chunk transfer command");
+    VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1, .pCommandBuffers = &gpu->command };
+    if (vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
+        vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
+        return error(err, cap, "Chunk transfer submission failed");
+    return true;
 }
 
 bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
@@ -163,13 +261,15 @@ bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
     }
     ((uint32_t *)gpu->particle_count_mapped)[slot] = particle_count;
     ((uint32_t *)gpu->slot_seed_mapped)[slot] = dc_chunk_particle_seed(chunk->coord);
-    return true;
+    gpu->fluid_snapshot_valid = false;
+    return dc_gpu_copy_chunk_state(gpu, slot, true, true, err, cap);
 }
 
 bool dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chunk,
                            char *err, uint32_t cap) {
     if (!gpu || !chunk || slot >= DC_GPU_CHUNK_SLOTS)
         return error(err, cap, "Invalid GPU chunk download slot");
+    if (!dc_gpu_copy_chunk_state(gpu, slot, false, true, err, cap)) return false;
     const dc_cell_t *cells = gpu->chunk_mapped;
     memcpy(chunk->cells, cells + (size_t)slot * DC_CHUNK_CELLS, sizeof(chunk->cells));
     uint32_t tile = gpu->slot_page[slot];
@@ -224,6 +324,7 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
         pages[gpu->slot_page[slot]] = 0u;
     uint32_t old_page = pages[tile];
     bool changed_mapping = old_page != new_page;
+    if (changed_mapping) gpu->fluid_snapshot_valid = false;
     if (old_page && (slot == UINT32_MAX || old_page != slot + 1u))
         gpu->slot_page[old_page - 1u] = UINT32_MAX;
     pages[tile] = new_page;

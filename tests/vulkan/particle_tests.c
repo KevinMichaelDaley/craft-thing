@@ -570,6 +570,7 @@ static void test_closed_wet_grain_momentum_balance(void) {
     ASSERT_TRUE(grain_momentum > 0.0);
     ASSERT_TRUE(grain_momentum + water_delta <= 0.0 &&
                 grain_momentum + water_delta > -0.001);
+    ASSERT_TRUE(dc_gpu_mpm_readback_scratch(gpu, err, sizeof(err)));
     const float *grid = gpu->mpm_grid_mapped;
     const float *force = gpu->mpm_force_mapped;
     const float *grid_velocity = gpu->mpm_velocity_mapped;

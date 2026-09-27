@@ -28,21 +28,24 @@ bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkDeviceSize grid = (VkDeviceSize)gpu->width * gpu->height;
     VkDeviceSize tiles = (VkDeviceSize)((gpu->width + 15u) / 16u) *
                          ((gpu->height + 15u) / 16u);
-    return dc_gpu_make_mapped_buffer(gpu, particles, &gpu->mpm_proposal_buffer,
-               &gpu->mpm_proposal_memory, &gpu->mpm_proposal_mapped, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, particles, &gpu->mpm_output_buffer,
-               &gpu->mpm_output_memory, &gpu->mpm_output_mapped, err, cap) &&
+    return dc_gpu_make_device_buffer(gpu, particles, &gpu->mpm_proposal_buffer,
+               &gpu->mpm_proposal_memory, err, cap) &&
+           dc_gpu_make_device_buffer(gpu, particles, &gpu->mpm_output_buffer,
+               &gpu->mpm_output_memory, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, grid * 16u, &gpu->mpm_grid_buffer,
                &gpu->mpm_grid_memory, &gpu->mpm_grid_mapped, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, grid * 16u, &gpu->mpm_force_buffer,
-               &gpu->mpm_force_memory, &gpu->mpm_force_mapped, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, grid * 8u, &gpu->mpm_velocity_buffer,
-               &gpu->mpm_velocity_memory, &gpu->mpm_velocity_mapped, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, flags, &gpu->mpm_accept_buffer,
-               &gpu->mpm_accept_memory, &gpu->mpm_accept_mapped, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, (7u + 2u * tiles) * sizeof(uint32_t),
-               &gpu->mpm_activity_buffer, &gpu->mpm_activity_memory,
-               &gpu->mpm_activity_mapped, err, cap) &&
+           dc_gpu_make_device_buffer(gpu, grid * 16u, &gpu->mpm_force_buffer,
+               &gpu->mpm_force_memory, err, cap) &&
+           dc_gpu_make_mapped_buffer(gpu, grid * 16u, &gpu->mpm_force_staging_buffer,
+               &gpu->mpm_force_staging_memory, &gpu->mpm_force_mapped, err, cap) &&
+           dc_gpu_make_device_buffer(gpu, grid * 8u, &gpu->mpm_velocity_buffer,
+               &gpu->mpm_velocity_memory, err, cap) &&
+           dc_gpu_make_mapped_buffer(gpu, grid * 8u, &gpu->mpm_velocity_staging_buffer,
+               &gpu->mpm_velocity_staging_memory, &gpu->mpm_velocity_mapped, err, cap) &&
+           dc_gpu_make_device_buffer(gpu, flags, &gpu->mpm_accept_buffer,
+               &gpu->mpm_accept_memory, err, cap) &&
+           dc_gpu_make_device_buffer(gpu, (7u + 2u * tiles) * sizeof(uint32_t),
+               &gpu->mpm_activity_buffer, &gpu->mpm_activity_memory, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, grid * sizeof(uint32_t),
                &gpu->mpm_label_a_buffer, &gpu->mpm_label_a_memory,
                &gpu->mpm_label_a_mapped, err, cap) &&
@@ -97,8 +100,26 @@ void dc_gpu_mpm_buffers_destroy(dc_gpu_t *gpu) {
     DESTROY_MPM_BUFFER(proposal);
     DESTROY_MPM_BUFFER(output);
     DESTROY_MPM_BUFFER(grid);
-    DESTROY_MPM_BUFFER(force);
-    DESTROY_MPM_BUFFER(velocity);
+    if (gpu->mpm_force_mapped)
+        vkUnmapMemory(gpu->device, gpu->mpm_force_staging_memory);
+    if (gpu->mpm_velocity_mapped)
+        vkUnmapMemory(gpu->device, gpu->mpm_velocity_staging_memory);
+    if (gpu->mpm_force_staging_buffer)
+        vkDestroyBuffer(gpu->device, gpu->mpm_force_staging_buffer, NULL);
+    if (gpu->mpm_velocity_staging_buffer)
+        vkDestroyBuffer(gpu->device, gpu->mpm_velocity_staging_buffer, NULL);
+    if (gpu->mpm_force_staging_memory)
+        vkFreeMemory(gpu->device, gpu->mpm_force_staging_memory, NULL);
+    if (gpu->mpm_velocity_staging_memory)
+        vkFreeMemory(gpu->device, gpu->mpm_velocity_staging_memory, NULL);
+    if (gpu->mpm_force_buffer)
+        vkDestroyBuffer(gpu->device, gpu->mpm_force_buffer, NULL);
+    if (gpu->mpm_velocity_buffer)
+        vkDestroyBuffer(gpu->device, gpu->mpm_velocity_buffer, NULL);
+    if (gpu->mpm_force_memory)
+        vkFreeMemory(gpu->device, gpu->mpm_force_memory, NULL);
+    if (gpu->mpm_velocity_memory)
+        vkFreeMemory(gpu->device, gpu->mpm_velocity_memory, NULL);
     DESTROY_MPM_BUFFER(accept);
     DESTROY_MPM_BUFFER(activity);
     DESTROY_MPM_BUFFER(label_a);
@@ -106,6 +127,44 @@ void dc_gpu_mpm_buffers_destroy(dc_gpu_t *gpu) {
     DESTROY_MPM_BUFFER(component_size);
 }
 #undef DESTROY_MPM_BUFFER
+
+bool dc_gpu_mpm_readback_scratch(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    if (!gpu) return error(err, cap, "Invalid MPM diagnostic readback");
+    if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
+        return error(err, cap, "Cannot reset MPM diagnostic command");
+    VkCommandBufferBeginInfo begin = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+    if (vkBeginCommandBuffer(gpu->command, &begin) != VK_SUCCESS)
+        return error(err, cap, "Cannot begin MPM diagnostic command");
+    VkMemoryBarrier2 before = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT };
+    VkDependencyInfo dependency = { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .memoryBarrierCount = 1, .pMemoryBarriers = &before };
+    vkCmdPipelineBarrier2(gpu->command, &dependency);
+    VkBufferCopy force_copy = { .size = (VkDeviceSize)gpu->width * gpu->height * 16u };
+    VkBufferCopy velocity_copy = { .size = (VkDeviceSize)gpu->width * gpu->height * 8u };
+    vkCmdCopyBuffer(gpu->command, gpu->mpm_force_buffer,
+                    gpu->mpm_force_staging_buffer, 1, &force_copy);
+    vkCmdCopyBuffer(gpu->command, gpu->mpm_velocity_buffer,
+                    gpu->mpm_velocity_staging_buffer, 1, &velocity_copy);
+    VkMemoryBarrier2 after = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
+        .dstAccessMask = VK_ACCESS_2_HOST_READ_BIT };
+    dependency.pMemoryBarriers = &after;
+    vkCmdPipelineBarrier2(gpu->command, &dependency);
+    if (vkEndCommandBuffer(gpu->command) != VK_SUCCESS)
+        return error(err, cap, "Cannot end MPM diagnostic command");
+    VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1, .pCommandBuffers = &gpu->command };
+    if (vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
+        vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
+        return error(err, cap, "MPM diagnostic readback failed");
+    return true;
+}
 
 static void mpm_barrier(dc_gpu_t *gpu, VkPipelineStageFlags2 target_stage,
                         VkAccessFlags2 target_access) {

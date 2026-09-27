@@ -37,6 +37,7 @@ struct dc_level_view {
     uint32_t camera_offset_x, camera_offset_y;
     int32_t pending_chunk_dx, pending_chunk_dy;
     uint32_t pending_steps;
+    float pending_seconds;
     bool marker_overlay;
     bool spring_enabled;
     bool transfer_pending, transfer_complete;
@@ -54,10 +55,16 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 }
 
 bool dc_level_view_step(dc_level_view_t *view, char *err, uint32_t cap) {
+    return dc_level_view_step_timed(view, 1.0f / 60.0f, err, cap);
+}
+
+bool dc_level_view_step_timed(dc_level_view_t *view, float seconds,
+                              char *err, uint32_t cap) {
     if (!view) return error(err, cap, "Level view is null");
     if (view->pending_steps == UINT32_MAX)
         return error(err, cap, "Too many pending level steps");
     ++view->pending_steps;
+    view->pending_seconds += seconds;
     for (uint32_t i = 0; i < view->table.capacity; ++i)
         if (view->table.slots[i].state == DC_SLOT_ACTIVE)
             dc_chunk_table_mark_dirty(&view->table, i);
@@ -261,8 +268,12 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
         dc_gpu_set_tick_water_source(view->gpu, true, x, y);
     } else dc_gpu_set_tick_water_source(view->gpu, false, 0, 0);
     uint32_t ready_steps = all_resident ? view->pending_steps : 0u;
+    if (ready_steps && !dc_gpu_set_tick_seconds(view->gpu,
+            view->pending_seconds / (float)ready_steps))
+        return error(err, cap, "Invalid elapsed simulation time");
     if (!dc_gpu_present_chunks_steps(view->gpu, ready_steps, err, cap)) return false;
     view->pending_steps = 0;
+    view->pending_seconds = 0.0f;
     return true;
 }
 
@@ -450,6 +461,17 @@ bool dc_level_view_pixels(dc_level_view_t *view, uint32_t *colors,
     if (!view || !colors || count < VIEW_WIDTH * VIEW_HEIGHT)
         return error(err, cap, "Invalid level image readback");
     return dc_gpu_readback(view->gpu, colors, count, err, cap);
+}
+
+bool dc_level_view_capture_tick(dc_level_view_t *view,
+                                dc_gpu_tick_capture_t *capture,
+                                char *err, uint32_t cap) {
+    return view && dc_gpu_tick_capture(view->gpu, capture, err, cap);
+}
+
+bool dc_level_view_memory_stats(dc_level_view_t *view,
+                                dc_gpu_memory_stats_t *stats) {
+    return view && dc_gpu_memory_stats(view->gpu, stats);
 }
 
 bool dc_level_view_chunk(dc_level_view_t *view, dc_chunk_coord_t coord,

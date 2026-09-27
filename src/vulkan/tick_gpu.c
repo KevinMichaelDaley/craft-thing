@@ -68,16 +68,27 @@ static void stage_barrier(dc_gpu_t *gpu, VkPipelineStageFlags2 dst_stage,
     vkCmdPipelineBarrier2(gpu->command, &dependency);
 }
 
+static void record_scheduled_fluid(dc_gpu_t *gpu) {
+    if (gpu->fluid_interval == 1u) {
+        gpu->fluid_step_scale = gpu->timed_fluid ? gpu->tick_time_scale : 1.0f;
+        dc_gpu_record_fluid(gpu);
+        return;
+    }
+    gpu->fluid_step_scale = gpu->timed_fluid ? 6.0f : 1.0f;
+    gpu->fluid_phase_budget += gpu->timed_fluid ? gpu->tick_time_scale : 1.0f;
+    while (gpu->fluid_phase_budget >= 1.0f) {
+        dc_gpu_record_fluid_phase(gpu, gpu->fluid_phase);
+        gpu->fluid_phase = (gpu->fluid_phase + 1u) % 6u;
+        gpu->fluid_phase_budget -= 1.0f;
+    }
+}
+
 void dc_gpu_record_tick_step(dc_gpu_t *gpu) {
     stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                   VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     dc_gpu_record_tick_water_source(gpu);
     dc_gpu_record_rigid(gpu);
-    if (gpu->fluid_interval == 1u) dc_gpu_record_fluid(gpu);
-    else {
-        dc_gpu_record_fluid_phase(gpu, gpu->fluid_phase);
-        gpu->fluid_phase = (gpu->fluid_phase + 1u) % 6u;
-    }
+    record_scheduled_fluid(gpu);
     stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                   VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     dc_gpu_record_mpm(gpu);
@@ -120,11 +131,7 @@ static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
                              gpu->timestamp_pool, 1);
         record_probe(gpu, 0);
     }
-    if (gpu->fluid_interval == 1u) dc_gpu_record_fluid(gpu);
-    else {
-        dc_gpu_record_fluid_phase(gpu, gpu->fluid_phase);
-        gpu->fluid_phase = (gpu->fluid_phase + 1u) % 6u;
-    }
+    record_scheduled_fluid(gpu);
     if (capture) {
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
                              gpu->timestamp_pool, 2);
@@ -174,9 +181,15 @@ bool dc_gpu_set_fluid_interval(dc_gpu_t *gpu, uint32_t interval) {
     if (!gpu || (interval != 1u && interval != 6u)) return false;
     gpu->fluid_interval = interval;
     gpu->fluid_phase = 0u;
+    gpu->fluid_phase_budget = 0.0f;
+    gpu->fluid_step_scale = 1.0f;
+    gpu->fluid_snapshot_valid = false;
     return true;
 }
 
 bool dc_gpu_set_tick_seconds(dc_gpu_t *gpu, float seconds) {
-    return gpu && seconds > 0.0f;
+    if (!gpu || !(seconds > 0.0f) || seconds > 0.25f) return false;
+    gpu->tick_time_scale = seconds * 60.0f;
+    gpu->timed_fluid = true;
+    return true;
 }

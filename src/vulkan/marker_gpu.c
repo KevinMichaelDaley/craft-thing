@@ -85,7 +85,8 @@ void dc_gpu_record_markers(dc_gpu_t *gpu) {
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     uint32_t push[7] = { gpu->width, gpu->height, 0, gpu->marker_ping,
-                         gpu->fluid_tick, 0, 0 };
+                          gpu->fluid_tick, 0, 0 };
+    push[5] = dc_gpu_float_bits(gpu->fluid_step_scale);
     const uint32_t groups[4] = {
         DC_GPU_CHUNK_SLOTS * DC_MARKERS_PER_CHUNK / 256u,
         DC_GPU_CHUNK_SLOTS * DC_MARKERS_PER_CHUNK / 256u,

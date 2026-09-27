@@ -19,14 +19,13 @@ layout(push_constant) uniform Params {
     uint mode;
     uint source_ping;
     uint tick;
-    uint unused1;
+    uint step_scale_bits;
     uint unused2;
 } params;
 
 const uint CAPACITY = 2048u;
 const uint CHUNK_CELLS = 4096u;
 const uint INVALID = 0xffffffffu;
-const float STEP_SECONDS = 1.0;
 const float TRANSPORT_FUDGE = 1.001;
 
 uint page_at(ivec2 p) {
@@ -157,7 +156,8 @@ void advect(uint linear) {
     vec2 origin = vec2(float(tile % stride) * 64.0,
                        float(tile / stride) * 64.0);
     vec2 old_position = origin + vec2(marker.x_fp, marker.y_fp) / 65536.0;
-    vec2 displacement = sample_velocity(old_position) * STEP_SECONDS * TRANSPORT_FUDGE;
+    vec2 displacement = sample_velocity(old_position) *
+                        uintBitsToFloat(params.step_scale_bits) * TRANSPORT_FUDGE;
     vec2 next_position = old_position + displacement;
     uint steps = uint(ceil(max(abs(displacement.x), abs(displacement.y)) * 2.0));
     for (uint step = 1u; step <= steps; ++step) {

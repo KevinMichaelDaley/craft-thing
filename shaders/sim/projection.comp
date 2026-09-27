@@ -15,7 +15,7 @@ layout(push_constant) uniform Params {
     uint mode;
     uint unused0;
     uint unused1;
-    uint unused2;
+    uint step_scale_bits;
     uint unused3;
 } params;
 
@@ -69,7 +69,7 @@ float previous_vertical_at(ivec2 p) {
 float advected_vertical(ivec2 p) {
     float transport = 0.5 * (previous_vertical_at(p + ivec2(0, -1)) +
                              previous_vertical_at(p + ivec2(0, 1)));
-    float sample_y = clamp(float(p.y) - transport, 0.0,
+    float sample_y = clamp(float(p.y) - transport * uintBitsToFloat(params.step_scale_bits), 0.0,
                            float(params.height - 1u));
     int first_y = int(floor(sample_y));
     float fraction = sample_y - float(first_y);
@@ -104,15 +104,19 @@ void main() {
         ivec2 below = p + ivec2(0, 1);
         vec2 predicted = vec2(0.0);
         if (open_cell(p) && open_cell(right) && (wet(p) || wet(right)))
-            predicted.x = old_velocity.x * 0.99 +
-                0.05 * (float(int(hydro_head[index]) - int(hydro_head[index_of(right)])) /
-                        65536.0);
+            predicted.x = old_velocity.x * pow(0.99, uintBitsToFloat(params.step_scale_bits)) +
+                0.05 * uintBitsToFloat(params.step_scale_bits) *
+                (float(int(hydro_head[index]) - int(hydro_head[index_of(right)])) /
+                         65536.0);
         if (open_cell(p) && open_cell(below) && (wet(p) || wet(below))) {
-            predicted.y = advected_vertical(p) * 0.99 + 0.5;
+            predicted.y = advected_vertical(p) *
+                pow(0.99, uintBitsToFloat(params.step_scale_bits)) +
+                0.5 * uintBitsToFloat(params.step_scale_bits);
         }
         face_velocity[index] = predicted;
         pressure_a[index] = wet(p) ?
-            0.5 * float(hydro_head[index]) / 65536.0 : 0.0;
+            0.5 * uintBitsToFloat(params.step_scale_bits) *
+            float(hydro_head[index]) / 65536.0 : 0.0;
     } else if (params.mode == 1u || params.mode == 2u) {
         if (((p.x + p.y) & 1) != int(params.mode - 1u)) return;
         float value = 0.0;

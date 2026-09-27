@@ -19,6 +19,8 @@ dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
                                       char *err, uint32_t err_cap);
 bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t err_cap);
 bool dc_level_view_step(dc_level_view_t *view, char *err, uint32_t err_cap);
+bool dc_level_view_step_timed(dc_level_view_t *view, float seconds,
+                              char *err, uint32_t err_cap);
 bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,
                               char *err, uint32_t err_cap);
 bool dc_level_view_wait_visible(dc_level_view_t *view, uint32_t timeout_ms,
@@ -42,6 +44,12 @@ bool dc_level_view_pixel(dc_level_view_t *view, uint32_t x, uint32_t y,
                          uint32_t *color, char *err, uint32_t err_cap);
 bool dc_level_view_pixels(dc_level_view_t *view, uint32_t *colors,
                           uint32_t count, char *err, uint32_t err_cap);
+/** Capture one complete GPU physics tick for opt-in profiling. */
+bool dc_level_view_capture_tick(dc_level_view_t *view,
+                                dc_gpu_tick_capture_t *capture,
+                                char *err, uint32_t err_cap);
+bool dc_level_view_memory_stats(dc_level_view_t *view,
+                                dc_gpu_memory_stats_t *stats);
 bool dc_level_view_chunk(dc_level_view_t *view, dc_chunk_coord_t coord,
                          dc_chunk_t *chunk, char *err, uint32_t err_cap);
 bool dc_level_view_has_chunk(dc_level_view_t *view, dc_chunk_coord_t coord);

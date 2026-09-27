@@ -42,6 +42,12 @@ typedef struct {
 } dc_gpu_tick_capture_t;
 
 typedef struct {
+    uint64_t mapped_local_bytes;
+    uint64_t mapped_system_bytes;
+    uint64_t device_only_bytes;
+} dc_gpu_memory_stats_t;
+
+typedef struct {
     dc_cell_t cell;
     uint32_t resident;
     uint32_t slot;
@@ -167,6 +173,9 @@ bool dc_gpu_marker_count(dc_gpu_t *gpu, uint32_t slot, uint32_t *count);
  * Fluid and sand probes verify ordering until their simulation shaders land. */
 bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
                          char *err_buf, uint32_t err_cap);
+bool dc_gpu_memory_stats(const dc_gpu_t *gpu, dc_gpu_memory_stats_t *stats);
+/** Copy granular diagnostic scratch to mapped staging on explicit request. */
+bool dc_gpu_mpm_readback_scratch(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
 
 /** Run the same GPU physics stages without reading diagnostics back. */
 bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);

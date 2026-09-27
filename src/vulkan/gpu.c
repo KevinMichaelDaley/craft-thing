@@ -136,18 +136,18 @@ static bool make_presentation(dc_gpu_t *gpu, uint32_t requested_width,
 
 static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
                           char *err, uint32_t cap) {
-    VkDescriptorSetLayoutBinding bindings[31] = {0};
-    for (uint32_t i = 0; i < 31; ++i) {
+    VkDescriptorSetLayoutBinding bindings[32] = {0};
+    for (uint32_t i = 0; i < 32; ++i) {
         bindings[i].binding = i;
         bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         bindings[i].descriptorCount = 1;
         bindings[i].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
     }
     VkDescriptorSetLayoutCreateInfo layout_info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 31, .pBindings = bindings };
+        .bindingCount = 32, .pBindings = bindings };
     if (vkCreateDescriptorSetLayout(gpu->device, &layout_info, NULL, &gpu->set_layout) != VK_SUCCESS)
         return error(err, cap, "Cannot create descriptor layout");
-    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 31 };
+    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 32 };
     VkDescriptorPoolCreateInfo pool_info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .maxSets = 1, .poolSizeCount = 1, .pPoolSizes = &size };
     if (vkCreateDescriptorPool(gpu->device, &pool_info, NULL, &gpu->descriptor_pool) != VK_SUCCESS)
@@ -157,7 +157,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         .pSetLayouts = &gpu->set_layout };
     if (vkAllocateDescriptorSets(gpu->device, &set_info, &gpu->descriptor) != VK_SUCCESS)
         return error(err, cap, "Cannot allocate descriptor set");
-    VkDescriptorBufferInfo buffers[31] = {
+    VkDescriptorBufferInfo buffers[32] = {
         { gpu->cells, 0, bytes },
         { gpu->chunk_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t) },
         { gpu->page_buffer, 0, (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t) },
@@ -188,10 +188,11 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         { gpu->mpm_activity_buffer, 0, (VkDeviceSize)(7u + 2u * ((gpu->width + 15u) / 16u) * ((gpu->height + 15u) / 16u)) * sizeof(uint32_t) },
         { gpu->mpm_label_a_buffer, 0, bytes },
         { gpu->mpm_label_b_buffer, 0, bytes },
-        { gpu->mpm_component_size_buffer, 0, bytes }
+        { gpu->mpm_component_size_buffer, 0, bytes },
+        { gpu->fluid_previous_buffer, 0, bytes }
     };
-    VkWriteDescriptorSet writes[31] = {0};
-    for (uint32_t i = 0; i < 31; ++i) {
+    VkWriteDescriptorSet writes[32] = {0};
+    for (uint32_t i = 0; i < 32; ++i) {
         writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes[i].dstSet = gpu->descriptor;
         writes[i].dstBinding = i;
@@ -199,7 +200,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         writes[i].pBufferInfo = &buffers[i];
     }
-    vkUpdateDescriptorSets(gpu->device, 31, writes, 0, NULL);
+    vkUpdateDescriptorSets(gpu->device, 32, writes, 0, NULL);
     VkPushConstantRange range = { .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .size = 28 };
     VkPipelineLayoutCreateInfo pipeline_layout_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1, .pSetLayouts = &gpu->set_layout,
@@ -231,6 +232,7 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     gpu->view_width = width; gpu->view_height = height;
     gpu->display_zoom = 1;
     gpu->fluid_interval = 1;
+    gpu->fluid_step_scale = 1.0f;
     for (uint32_t i = 0; i < DC_GPU_CHUNK_SLOTS; ++i) gpu->slot_page[i] = UINT32_MAX;
     if (window_width && window_height) {
         if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
@@ -452,7 +454,7 @@ bool dc_gpu_paint(dc_gpu_t *gpu, uint32_t x, uint32_t y, uint32_t radius,
 bool dc_gpu_render_chunks(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     uint32_t push[7] = { gpu->width, gpu->height, 2,
-                         gpu->marker_overlay ? 1u : 0u, (uint32_t)gpu->overlay,
+                         dc_gpu_render_flags(gpu), (uint32_t)gpu->overlay,
                          gpu->view_x, gpu->view_y };
     return dispatch_cells(gpu, push, err, cap);
 }
@@ -474,6 +476,14 @@ bool dc_gpu_set_tick_water_source(dc_gpu_t *gpu, bool enabled,
     return true;
 }
 
+bool dc_gpu_memory_stats(const dc_gpu_t *gpu, dc_gpu_memory_stats_t *stats) {
+    if (!gpu || !stats) return false;
+    stats->mapped_local_bytes = gpu->mapped_local_bytes;
+    stats->mapped_system_bytes = gpu->mapped_system_bytes;
+    stats->device_only_bytes = gpu->device_only_bytes;
+    return true;
+}
+
 void dc_gpu_record_tick_water_source(dc_gpu_t *gpu) {
     if (!gpu->tick_water_source) return;
     VkMemoryBarrier2 upload = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
@@ -487,12 +497,11 @@ void dc_gpu_record_tick_water_source(dc_gpu_t *gpu) {
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->pipeline);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
-    uint32_t push[7] = { gpu->width, gpu->height, 3,
-                         gpu->tick_water_x, gpu->tick_water_y, 2, DC_MATERIAL_WATER };
+    uint32_t push[7] = { gpu->width, gpu->height, 4,
+                          gpu->tick_water_x, gpu->tick_water_y, 2, DC_MATERIAL_WATER };
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    vkCmdDispatch(gpu->command, (gpu->width + 15u) / 16u,
-                  (gpu->height + 15u) / 16u, 1);
+    vkCmdDispatch(gpu->command, 1u, 1u, 1u);
     VkMemoryBarrier2 finish = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
