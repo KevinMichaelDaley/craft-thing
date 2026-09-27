@@ -1,6 +1,6 @@
 ---
 id: dun-kq6u
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-09-27T21:17:32Z
@@ -22,3 +22,9 @@ Use a compact spatial reconstruction in the existing SPIR-V render compute pass.
 
 All materials show coverage-weighted edges; fractional water and mixed grain slots render proportionally; resident chunk seams match interior filtering; uniform interiors retain their base color; screenshots show the result; GPU-only rendering and normal-frame performance remain intact.
 
+
+## Notes
+
+**2026-09-27T21:27:36Z**
+
+Implemented shared-memory 18x18 GPU density reconstruction for 16x16 render tiles. Stone/rigid use full coverage, water uses Eulerian mass, grains use particle mass and both slots; filtering crosses resident chunk seams. Uniform interiors retain base colors, overlays stay exact, and rendering does not alter simulation buffers. make test, make test_ui, and Vulkan validation pass.
