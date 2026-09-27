@@ -533,7 +533,7 @@ static void test_closed_wet_grain_momentum_balance(void) {
             chunk->face_velocity[index].x = 1.0f;
         }
     uint32_t source = 30 * DC_CHUNK_SIDE + 30;
-    chunk->cells[source].material = DC_MATERIAL_SAND;
+    chunk->cells[source].material = DC_MATERIAL_GRAVEL;
     dc_chunk_seed_particles(chunk);
     memcpy(still, chunk, sizeof(*still));
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
@@ -627,7 +627,7 @@ static void test_dirt_binds_small_water_dose_without_losing_mass(void) {
     for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
         if (chunk->particles[i].mass_fp) {
             moisture = chunk->particles[i].flags & DC_MPM_MOISTURE_MASK;
-            ASSERT_TRUE((chunk->particles[i].flags & DC_MPM_MUD_FLAG) != 0u);
+            ASSERT_TRUE((chunk->particles[i].flags & DC_MPM_FRAGMENT_FLAG) != 0u);
         }
     ASSERT_TRUE(moisture >= DC_FLUID_FULL / 32u);
     ASSERT_EQ(chunk->cells[source].fluid_mass + moisture, DC_FLUID_FULL / 16u);
@@ -699,7 +699,8 @@ static uint64_t combined_water_mass(const dc_chunk_t *chunk) {
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
         mass += chunk->cells[i].fluid_mass;
     for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
-        if (chunk->particles[i].material == DC_MATERIAL_DIRT)
+        if (chunk->particles[i].material == DC_MATERIAL_DIRT ||
+            chunk->particles[i].material == DC_MATERIAL_SAND)
             mass += chunk->particles[i].flags & DC_MPM_MOISTURE_MASK;
     return mass;
 }
@@ -809,7 +810,7 @@ static void test_dry_and_saturated_dirt_yield_differently(void) {
     }
     ASSERT_TRUE(dry_grain && wet_grain);
     ASSERT_EQ(dry_grain->flags & DC_MPM_MUD_FLAG, 0u);
-    ASSERT_TRUE((wet_grain->flags & DC_MPM_MUD_FLAG) != 0u);
+    ASSERT_TRUE((wet_grain->flags & DC_MPM_FRAGMENT_FLAG) != 0u);
     ASSERT_TRUE(dry_grain->deformation[0] != wet_grain->deformation[0] ||
                 dry_grain->deformation[1] != wet_grain->deformation[1] ||
                 dry_grain->vx_fp != wet_grain->vx_fp);
@@ -910,6 +911,132 @@ static void test_small_wet_dirt_patch_does_not_become_mud(void) {
     PASS();
 }
 
+static void test_large_wet_dirt_component_crosses_seam_as_mud(void) {
+    char err[256] = {0};
+    dc_chunk_t *left = calloc(1, sizeof(*left));
+    dc_chunk_t *right = calloc(1, sizeof(*right));
+    ASSERT_TRUE(left && right);
+    right->coord.x = 1;
+    for (uint32_t y = 19; y <= 22; ++y)
+        for (uint32_t x = 61; x <= 66; ++x) {
+            dc_chunk_t *chunk = x < 64 ? left : right;
+            uint32_t index = y * DC_CHUNK_SIDE + x % DC_CHUNK_SIDE;
+            bool interior = x >= 62 && x <= 65 && y >= 20 && y <= 21;
+            chunk->cells[index].material = interior ? DC_MATERIAL_DIRT :
+                                            DC_MATERIAL_STONE;
+            if (interior) chunk->cells[index].fluid_mass = DC_FLUID_FULL / 4u;
+        }
+    dc_chunk_seed_particles(left);
+    dc_chunk_seed_particles(right);
+    ASSERT_EQ(left->particle_count + right->particle_count, 8u);
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 128, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 1, right, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 0, 1, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    uint32_t *labels = gpu->mpm_label_a_mapped;
+    uint32_t *sizes = gpu->mpm_component_size_mapped;
+    uint32_t left_root = labels[20 * 128 + 63];
+    uint32_t right_root = labels[20 * 128 + 64];
+    ASSERT_EQ(left_root, right_root);
+    ASSERT_EQ(sizes[left_root], 8u);
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, right, err, sizeof(err)));
+    ASSERT_EQ(left->particle_count + right->particle_count, 8u);
+    uint32_t muddy = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i) {
+        muddy += left->particles[i].mass_fp &&
+                 (left->particles[i].flags & DC_MPM_MUD_FLAG) != 0u;
+        muddy += right->particles[i].mass_fp &&
+                 (right->particles[i].flags & DC_MPM_MUD_FLAG) != 0u;
+    }
+    ASSERT_EQ(muddy, 8u);
+    dc_gpu_destroy(gpu);
+    free(left); free(right);
+    PASS();
+}
+
+static void test_small_wet_dirt_clump_breaks_apart(void) {
+    char err[256] = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    for (uint32_t y = 12; y < 42; ++y)
+        for (uint32_t x = 16; x < 48; ++x)
+            chunk->cells[y * DC_CHUNK_SIDE + x].fluid_mass = DC_FLUID_FULL;
+    for (uint32_t y = 16; y < 18; ++y)
+        for (uint32_t x = 30; x < 32; ++x)
+            chunk->cells[y * DC_CHUNK_SIDE + x].material = DC_MATERIAL_DIRT;
+    dc_chunk_seed_particles(chunk);
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 24; ++tick)
+        ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->particle_count, 4u);
+    uint32_t adjacent = 0;
+    for (uint32_t y = 1; y < 63; ++y)
+        for (uint32_t x = 1; x < 63; ++x) {
+            uint32_t index = y * DC_CHUNK_SIDE + x;
+            if (chunk->cells[index].material != DC_MATERIAL_DIRT) continue;
+            adjacent += chunk->cells[index + 1].material == DC_MATERIAL_DIRT;
+            adjacent += chunk->cells[index + DC_CHUNK_SIDE].material == DC_MATERIAL_DIRT;
+        }
+    printf("wet four-grain dirt clump adjacent edges after 24 ticks: %u\n", adjacent);
+    ASSERT_TRUE(adjacent < 4u);
+    dc_gpu_destroy(gpu);
+    free(chunk);
+    PASS();
+}
+
+static void test_winding_dirt_component_has_one_gpu_label(void) {
+    char err[256] = {0};
+    dc_chunk_t *left = calloc(1, sizeof(*left));
+    dc_chunk_t *right = calloc(1, sizeof(*right));
+    ASSERT_TRUE(left && right);
+    right->coord.x = 1;
+    uint32_t cells = 0;
+    for (uint32_t row = 0; row < 8; ++row) {
+        uint32_t y = 4 + 2 * row;
+        for (uint32_t x = 4; x <= 123; ++x) {
+            dc_chunk_t *chunk = x < 64 ? left : right;
+            chunk->cells[y * DC_CHUNK_SIDE + x % DC_CHUNK_SIDE].material =
+                DC_MATERIAL_DIRT;
+            ++cells;
+        }
+        if (row < 7) {
+            uint32_t x = (row & 1u) == 0u ? 123u : 4u;
+            dc_chunk_t *chunk = x < 64 ? left : right;
+            chunk->cells[(y + 1) * DC_CHUNK_SIDE + x % DC_CHUNK_SIDE].material =
+                DC_MATERIAL_DIRT;
+            ++cells;
+        }
+    }
+    dc_chunk_seed_particles(left);
+    dc_chunk_seed_particles(right);
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 128, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 1, right, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 0, 1, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    const uint32_t *labels = gpu->mpm_label_a_mapped;
+    const uint32_t *sizes = gpu->mpm_component_size_mapped;
+    uint32_t root = labels[4 * 128 + 4];
+    ASSERT_EQ(labels[18 * 128 + 4], root);
+    ASSERT_EQ(sizes[root], cells);
+    dc_gpu_destroy(gpu);
+    free(left); free(right);
+    PASS();
+}
+
 int main(void) {
     printf("GPU particle capacity: %u records per chunk, %u primary cell slots\n",
            DC_MPM_PARTICLES_PER_CHUNK, DC_CHUNK_CELLS);
@@ -935,6 +1062,9 @@ int main(void) {
     RUN(test_free_sand_horizontal_velocity_has_tiny_decay);
     RUN(test_sand_settles_and_binds_pore_water);
     RUN(test_small_wet_dirt_patch_does_not_become_mud);
+    RUN(test_large_wet_dirt_component_crosses_seam_as_mud);
+    RUN(test_small_wet_dirt_clump_breaks_apart);
+    RUN(test_winding_dirt_component_has_one_gpu_label);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

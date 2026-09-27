@@ -3,7 +3,8 @@
 #include "gpu_internal.h"
 
 enum { DC_MPM_SUBSTEPS = 2, DC_MPM_MODES = 6,
-       DC_MPM_WATER_FEEDBACK_MODE = 6, DC_MPM_MOISTURE_MODE = 7 };
+       DC_MPM_WATER_FEEDBACK_MODE = 6, DC_MPM_MOISTURE_MODE = 7,
+       DC_COMPONENT_ROUNDS = 18 };
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -30,9 +31,18 @@ bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                &gpu->mpm_velocity_memory, &gpu->mpm_velocity_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, flags, &gpu->mpm_accept_buffer,
                &gpu->mpm_accept_memory, &gpu->mpm_accept_mapped, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, (3u + 2u * tiles) * sizeof(uint32_t),
+           dc_gpu_make_mapped_buffer(gpu, (7u + 2u * tiles) * sizeof(uint32_t),
                &gpu->mpm_activity_buffer, &gpu->mpm_activity_memory,
-               &gpu->mpm_activity_mapped, err, cap);
+               &gpu->mpm_activity_mapped, err, cap) &&
+           dc_gpu_make_mapped_buffer(gpu, grid * sizeof(uint32_t),
+               &gpu->mpm_label_a_buffer, &gpu->mpm_label_a_memory,
+               &gpu->mpm_label_a_mapped, err, cap) &&
+           dc_gpu_make_mapped_buffer(gpu, grid * sizeof(uint32_t),
+               &gpu->mpm_label_b_buffer, &gpu->mpm_label_b_memory,
+               &gpu->mpm_label_b_mapped, err, cap) &&
+           dc_gpu_make_mapped_buffer(gpu, grid * sizeof(uint32_t),
+               &gpu->mpm_component_size_buffer, &gpu->mpm_component_size_memory,
+               &gpu->mpm_component_size_mapped, err, cap);
 }
 
 static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkPipeline *pipeline,
@@ -55,13 +65,17 @@ bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return make_pipeline(gpu, "build/shaders/mpm.comp.spv", &gpu->mpm_pipeline,
                          err, cap) &&
            make_pipeline(gpu, "build/shaders/mpm_active.comp.spv",
-                         &gpu->mpm_activity_pipeline, err, cap);
+                         &gpu->mpm_activity_pipeline, err, cap) &&
+           make_pipeline(gpu, "build/shaders/mpm_component.comp.spv",
+                         &gpu->mpm_component_pipeline, err, cap);
 }
 
 void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu) {
     if (gpu->mpm_pipeline) vkDestroyPipeline(gpu->device, gpu->mpm_pipeline, NULL);
     if (gpu->mpm_activity_pipeline)
         vkDestroyPipeline(gpu->device, gpu->mpm_activity_pipeline, NULL);
+    if (gpu->mpm_component_pipeline)
+        vkDestroyPipeline(gpu->device, gpu->mpm_component_pipeline, NULL);
 }
 
 #define DESTROY_MPM_BUFFER(name) do { \
@@ -78,6 +92,9 @@ void dc_gpu_mpm_buffers_destroy(dc_gpu_t *gpu) {
     DESTROY_MPM_BUFFER(velocity);
     DESTROY_MPM_BUFFER(accept);
     DESTROY_MPM_BUFFER(activity);
+    DESTROY_MPM_BUFFER(label_a);
+    DESTROY_MPM_BUFFER(label_b);
+    DESTROY_MPM_BUFFER(component_size);
 }
 #undef DESTROY_MPM_BUFFER
 
@@ -113,6 +130,36 @@ void dc_gpu_record_mpm(dc_gpu_t *gpu) {
                 VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                 VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT |
                 VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                      gpu->mpm_component_pipeline);
+    VkDeviceSize component_indirect = (VkDeviceSize)(4u + 2u *
+        ((gpu->width + 15u) / 16u) * ((gpu->height + 15u) / 16u)) * sizeof(uint32_t);
+    for (uint32_t round = 0; round < DC_COMPONENT_ROUNDS + 2u; ++round) {
+        uint32_t first = round == 0u ? 0u :
+                         round == DC_COMPONENT_ROUNDS + 1u ? 4u : 1u;
+        uint32_t last = round == 0u ? 0u :
+                        round == DC_COMPONENT_ROUNDS + 1u ? 4u : 3u;
+        for (uint32_t mode = first; mode <= last; ++mode) {
+            push[2] = mode;
+            vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+                VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+            vkCmdDispatchIndirect(gpu->command, gpu->mpm_activity_buffer,
+                                  mode >= 1u && mode <= 3u ? component_indirect : 0);
+            mpm_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                        VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+        }
+        if (round > 0u && round <= DC_COMPONENT_ROUNDS) {
+            push[2] = 5u;
+            vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+                VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+            vkCmdDispatch(gpu->command, 1u, 1u, 1u);
+            mpm_barrier(gpu, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT |
+                        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                        VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT |
+                        VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+        }
+    }
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                       gpu->mpm_pipeline);
     push[2] = DC_MPM_MOISTURE_MODE;

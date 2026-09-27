@@ -53,6 +53,7 @@ void main() {
         uint particle_index = slot * 8192u + local_index;
         uint secondary_index = particle_index + 4096u;
         bool mud = false;
+        bool wet_sand = false;
         if (params.mode == 3u) {
             int dx = int(p.x) - int(params.brush_x);
             int dy = int(p.y) - int(params.brush_y);
@@ -105,14 +106,16 @@ void main() {
             if (particles[particle_index].mass_fp != 0u) {
                 material = particles[particle_index].material;
                 mud = (particles[particle_index].flags & 0x80000000u) != 0u;
+                wet_sand = (particles[particle_index].flags & 0x00ffffffu) != 0u;
             } else if (particles[secondary_index].mass_fp != 0u) {
                 material = particles[secondary_index].material;
                 mud = (particles[secondary_index].flags & 0x80000000u) != 0u;
+                wet_sand = (particles[secondary_index].flags & 0x00ffffffu) != 0u;
             }
         }
         uint color = 0xff181818u;
         if (material == 1u) color = 0xff707070u;
-        else if (material == 2u) color = 0xff40c8e0u;
+        else if (material == 2u) color = wet_sand ? 0xff368e9cu : 0xff40c8e0u;
         else if (material == 4u) color = mud ? 0xff29465bu : 0xff326495u;
         else if (material == 5u) color = 0xff808090u;
         if (cell.y > 0u) {

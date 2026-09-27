@@ -1,0 +1,79 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 cells[]; };
+layout(set = 0, binding = 2, std430) readonly buffer Pages { uint pages[]; };
+layout(set = 0, binding = 27, std430) buffer Activity { uint activity[]; };
+layout(set = 0, binding = 28, std430) buffer LabelsA { uint label_a[]; };
+layout(set = 0, binding = 29, std430) buffer LabelsB { uint label_b[]; };
+layout(set = 0, binding = 30, std430) buffer ComponentSizes { uint component_size[]; };
+layout(push_constant) uniform Params {
+    uint width;
+    uint height;
+    uint mode;
+    uint unused0;
+    uint unused1;
+    uint unused2;
+    uint unused3;
+} params;
+
+bool in_grid(ivec2 p) {
+    return p.x >= 0 && p.y >= 0 &&
+           p.x < int(params.width) && p.y < int(params.height);
+}
+
+bool dirt_at(ivec2 p) {
+    if (!in_grid(p)) return false;
+    uint page_width = (params.width + 63u) / 64u;
+    uint page = pages[(uint(p.y) / 64u) * page_width + uint(p.x) / 64u];
+    if (page == 0u) return false;
+    uint atlas = (page - 1u) * 4096u + (uint(p.y) % 64u) * 64u + uint(p.x) % 64u;
+    return (cells[atlas].x & 0xffffu) == 4u;
+}
+
+uint index_of(ivec2 p) { return uint(p.y) * params.width + uint(p.x); }
+
+void main() {
+    uint tiles_x = (params.width + 15u) / 16u;
+    uint control = 3u + 2u * tiles_x * ((params.height + 15u) / 16u);
+    if (params.mode == 5u) {
+        activity[control + 1u] = activity[control] != 0u ? activity[0] : 0u;
+        activity[control] = 0u;
+        return;
+    }
+    uint tile = activity[3u + gl_WorkGroupID.x];
+    ivec2 p = ivec2(int((tile % tiles_x) * 16u + gl_LocalInvocationID.x),
+                    int((tile / tiles_x) * 16u + gl_LocalInvocationID.y));
+    if (!in_grid(p)) return;
+    uint index = index_of(p);
+    bool dirt = dirt_at(p);
+    if (params.mode == 0u) {
+        label_a[index] = dirt ? index : 0xffffffffu;
+        label_b[index] = dirt ? index : 0xffffffffu;
+        component_size[index] = 0u;
+        return;
+    }
+    if (!dirt) return;
+    if (params.mode == 1u) {
+        label_b[index] = label_a[index];
+    } else if (params.mode == 2u) {
+        uint own_root = label_a[index];
+        const ivec2 neighbors[2] = ivec2[2](ivec2(1, 0), ivec2(0, 1));
+        for (uint axis = 0u; axis < 2u; ++axis) {
+            ivec2 other = p + neighbors[axis];
+            if (!dirt_at(other)) continue;
+            uint other_root = label_a[index_of(other)];
+            if (own_root != other_root) {
+                uint old = atomicMin(label_b[max(own_root, other_root)],
+                                     min(own_root, other_root));
+                if (old > min(own_root, other_root)) atomicOr(activity[control], 1u);
+            }
+        }
+    } else if (params.mode == 3u) {
+        uint root = label_b[index];
+        while (label_b[root] != root) root = label_b[root];
+        label_a[index] = root;
+    } else if (params.mode == 4u) {
+        atomicAdd(component_size[label_a[index]], 1u);
+    }
+}

@@ -12,6 +12,7 @@
 /** Particle flags encode bound Eulerian water (16.16 units) and mud hysteresis. */
 #define DC_MPM_MOISTURE_MASK 0x00ffffffu
 #define DC_MPM_MUD_FLAG 0x80000000u
+#define DC_MPM_FRAGMENT_FLAG 0x40000000u
 #define DC_MPM_MOISTURE_CAP (DC_FLUID_FULL / 4u)
 #define DC_MPM_MUD_ENTER (DC_FLUID_FULL / 32u)
 #define DC_MPM_MUD_EXIT (DC_FLUID_FULL / 64u)

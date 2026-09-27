@@ -66,6 +66,11 @@ void compact_tiles() {
     activity[0] = list_count;
     activity[1] = 1u;
     activity[2] = 1u;
+    uint control = 3u + 2u * tile_count;
+    activity[control] = 0u;
+    activity[control + 1u] = list_count;
+    activity[control + 2u] = 1u;
+    activity[control + 3u] = 1u;
 }
 
 void main() {

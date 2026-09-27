@@ -54,6 +54,10 @@ struct dc_gpu {
     VkDeviceMemory mpm_activity_memory;
     void *mpm_activity_mapped;
     VkPipeline mpm_activity_pipeline;
+    VkBuffer mpm_label_a_buffer, mpm_label_b_buffer, mpm_component_size_buffer;
+    VkDeviceMemory mpm_label_a_memory, mpm_label_b_memory, mpm_component_size_memory;
+    void *mpm_label_a_mapped, *mpm_label_b_mapped, *mpm_component_size_mapped;
+    VkPipeline mpm_component_pipeline;
     VkBuffer page_buffer;
     VkDeviceMemory page_memory;
     void *page_mapped;

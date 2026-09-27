@@ -176,7 +176,7 @@ static bool setup_coupled_materials(dc_level_view_t *view, char *err, uint32_t c
     for (uint32_t i = 0; i < 4; ++i)
         if (!dc_level_view_paint(view, wall[i][0], wall[i][1], 0,
                                  DC_MATERIAL_STONE, err, cap)) return false;
-    return dc_level_view_paint(view, 40, 5, 0, DC_MATERIAL_DIRT, err, cap) &&
+    bool painted = dc_level_view_paint(view, 40, 5, 0, DC_MATERIAL_DIRT, err, cap) &&
         dc_level_view_paint(view, 40, 5, 0, DC_MATERIAL_WATER, err, cap) &&
         dc_level_view_paint(view, 50, 5, 1, DC_MATERIAL_SAND, err, cap) &&
         dc_level_view_paint(view, 54, 5, 1, DC_MATERIAL_GRAVEL, err, cap) &&
@@ -185,6 +185,17 @@ static bool setup_coupled_materials(dc_level_view_t *view, char *err, uint32_t c
         dc_level_view_paint(view, 90, 8, 3, DC_MATERIAL_DIRT, err, cap) &&
         dc_level_view_paint(view, 100, 8, 3, DC_MATERIAL_GRAVEL, err, cap) &&
         dc_level_view_paint(view, 90, 5, 3, DC_MATERIAL_WATER, err, cap);
+    if (!painted) return false;
+    for (uint32_t y = 3; y <= 7; ++y)
+        for (uint32_t x = 59; x <= 63; ++x) {
+            bool border = x == 59 || x == 63 || y == 3 || y == 7;
+            if (!dc_level_view_paint(view, x, y, 0,
+                    border ? DC_MATERIAL_STONE : DC_MATERIAL_DIRT, err, cap))
+                return false;
+            if (!border && !dc_level_view_paint(view, x, y, 0,
+                    DC_MATERIAL_WATER, err, cap)) return false;
+        }
+    return true;
 }
 
 static int smoke_coupled_materials(void) {
@@ -226,7 +237,7 @@ static int smoke_coupled_materials(void) {
                      save_level_bmp("build/screenshots/coupled_after_1s.bmp", after) &&
                      dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
                                          chunk, err, sizeof(err));
-    uint32_t moved = 0, muddy = 0, changed = 0;
+    uint32_t moved = 0, muddy = 0, fragmented = 0, changed = 0;
     if (okay) {
         for (uint32_t y = 3; y < 40; ++y)
             for (uint32_t x = 35; x < 108; ++x)
@@ -234,22 +245,25 @@ static int smoke_coupled_materials(void) {
         for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i) {
             dc_mpm_particle_t *particle = &chunk->particles[i];
             if (!particle->mass_fp) continue;
-            if (particle->id_lo == dirt_id && particle->material == DC_MATERIAL_DIRT &&
+            if (particle->material == DC_MATERIAL_DIRT &&
                 (particle->flags & DC_MPM_MUD_FLAG) != 0u) ++muddy;
+            if (particle->id_lo == dirt_id && particle->material == DC_MATERIAL_DIRT &&
+                (particle->flags & DC_MPM_FRAGMENT_FLAG) != 0u) ++fragmented;
             if ((particle->id_lo == sand_id || particle->id_lo == gravel_id) &&
                 particle->y_fp > 7 * (int32_t)DC_FLUID_FULL) ++moved;
         }
-        okay = changed >= 60 && muddy == 1u && moved == 2u;
+        okay = changed >= 60 && muddy >= 8u && fragmented == 1u && moved == 2u;
     }
     if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
     free(before); free(after); free(chunk);
     if (!okay) {
-        fprintf(stderr, "Coupled screenshot smoke failed (%u changed, %u mud, %u moved, %u dirt floor): %s\n",
-                changed, muddy, moved, dirt_floor_samples, err);
+        fprintf(stderr, "Coupled screenshot smoke failed (%u changed, %u mud, %u fragments, %u moved, %u dirt floor): %s\n",
+                changed, muddy, fragmented, moved, dirt_floor_samples, err);
         return 1;
     }
     printf("Coupled screenshots: coupled_before.bmp and coupled_after_1s.bmp "
-           "(%u changed, %u mud, %u moved)\n", changed, muddy, moved);
+           "(%u changed, %u mud, %u fragments, %u moved)\n",
+           changed, muddy, fragmented, moved);
     return 0;
 }
 
