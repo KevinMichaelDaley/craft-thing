@@ -1037,6 +1037,63 @@ static void test_winding_dirt_component_has_one_gpu_label(void) {
     PASS();
 }
 
+static void test_grain_radii_follow_material_size(void) {
+    dc_chunk_coord_t coord = {0, 0};
+    dc_mpm_particle_t sand, dirt, gravel;
+    dc_chunk_particle_init(&sand, coord, 10u, DC_MATERIAL_SAND);
+    dc_chunk_particle_init(&dirt, coord, 11u, DC_MATERIAL_DIRT);
+    dc_chunk_particle_init(&gravel, coord, 12u, DC_MATERIAL_GRAVEL);
+    ASSERT_TRUE(sand.grain_fp < dirt.grain_fp);
+    ASSERT_TRUE(dirt.grain_fp < gravel.grain_fp);
+    ASSERT_TRUE(gravel.grain_fp <= DC_FLUID_FULL / 2u);
+    PASS();
+}
+
+static void test_mixed_column_sifts_small_grains_downward(void) {
+    char err[256] = {0};
+    dc_chunk_t *initial = calloc(1, sizeof(*initial));
+    dc_chunk_t *result = calloc(1, sizeof(*result));
+    ASSERT_TRUE(initial && result);
+    for (uint32_t x = 19; x <= 27; ++x)
+        initial->cells[48u * DC_CHUNK_SIDE + x].material = DC_MATERIAL_STONE;
+    for (uint32_t y = 20; y < 48; ++y) {
+        initial->cells[y * DC_CHUNK_SIDE + 19].material = DC_MATERIAL_STONE;
+        initial->cells[y * DC_CHUNK_SIDE + 27].material = DC_MATERIAL_STONE;
+    }
+    const uint16_t materials[] = {DC_MATERIAL_SAND, DC_MATERIAL_DIRT,
+                                  DC_MATERIAL_GRAVEL};
+    for (uint32_t y = 11; y < 20; ++y)
+        for (uint32_t x = 20; x <= 26; ++x)
+            initial->cells[y * DC_CHUNK_SIDE + x].material =
+                materials[(x + y) % 3u];
+    dc_chunk_seed_particles(initial);
+    ASSERT_EQ(initial->particle_count, 63u);
+    ASSERT_TRUE(run_granular_pile(initial, result, err, sizeof(err)));
+    ASSERT_EQ(result->particle_count, 63u);
+    uint64_t depth[3] = {0}, mass = 0;
+    uint32_t count[3] = {0};
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i) {
+        const dc_mpm_particle_t *p = &result->particles[i];
+        if (!p->mass_fp) continue;
+        uint32_t kind = p->material == DC_MATERIAL_SAND ? 0u :
+                        p->material == DC_MATERIAL_DIRT ? 1u : 2u;
+        ++count[kind];
+        depth[kind] += (uint32_t)p->y_fp;
+        mass += p->mass_fp;
+        ASSERT_TRUE(p->x_fp > 19 * (int32_t)DC_FLUID_FULL);
+        ASSERT_TRUE(p->x_fp < 27 * (int32_t)DC_FLUID_FULL);
+        ASSERT_TRUE(p->y_fp < 48 * (int32_t)DC_FLUID_FULL);
+    }
+    ASSERT_EQ(mass, 63u * (uint64_t)DC_FLUID_FULL);
+    for (uint32_t kind = 0; kind < 3; ++kind) ASSERT_EQ(count[kind], 21u);
+    printf("mixed-column mean depth sand=%llu dirt=%llu gravel=%llu\n",
+           (unsigned long long)(depth[0] / count[0]),
+           (unsigned long long)(depth[1] / count[1]),
+           (unsigned long long)(depth[2] / count[2]));
+    ASSERT_TRUE(depth[0] > depth[2] + count[0] * DC_FLUID_FULL);
+    PASS();
+}
+
 int main(void) {
     printf("GPU particle capacity: %u records per chunk, %u primary cell slots\n",
            DC_MPM_PARTICLES_PER_CHUNK, DC_CHUNK_CELLS);
@@ -1065,6 +1122,8 @@ int main(void) {
     RUN(test_large_wet_dirt_component_crosses_seam_as_mud);
     RUN(test_small_wet_dirt_clump_breaks_apart);
     RUN(test_winding_dirt_component_has_one_gpu_label);
+    RUN(test_grain_radii_follow_material_size);
+    RUN(test_mixed_column_sifts_small_grains_downward);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
