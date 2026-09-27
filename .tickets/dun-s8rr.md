@@ -22,3 +22,9 @@ Sample finalized projected water velocity/depth in MPM grid solve; accumulate eq
 
 A flowing stream transports loose sand while still water does not; grain and water momentum changes balance within measured fixed-point tolerance in a closed scene; the coupled scene crosses chunk seams with no normal-frame readback and reports GPU stage timings.
 
+
+## Notes
+
+**2026-09-27T00:08:44Z**
+
+Current GPU MPM stage treats water-filled cells as excluded from grain movement. Replace this temporary exclusion with projected Eulerian velocity/depth sampling and equal-and-opposite momentum exchange; retain the GPU-only 16x16 indirect active-tile dispatch and fixed-point particle mass.

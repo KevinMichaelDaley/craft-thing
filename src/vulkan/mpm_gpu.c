@@ -78,6 +78,18 @@ void dc_gpu_mpm_buffers_destroy(dc_gpu_t *gpu) {
     DESTROY_MPM_BUFFER(accept);
     DESTROY_MPM_BUFFER(activity);
 }
+#undef DESTROY_MPM_BUFFER
+
+static void mpm_barrier(dc_gpu_t *gpu, VkPipelineStageFlags2 target_stage,
+                        VkAccessFlags2 target_access) {
+    VkMemoryBarrier2 barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        .dstStageMask = target_stage, .dstAccessMask = target_access };
+    VkDependencyInfo dependency = { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .memoryBarrierCount = 1, .pMemoryBarriers = &barrier };
+    vkCmdPipelineBarrier2(gpu->command, &dependency);
+}
 
 void dc_gpu_record_mpm(dc_gpu_t *gpu) {
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -89,24 +101,17 @@ void dc_gpu_record_mpm(dc_gpu_t *gpu) {
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     vkCmdDispatch(gpu->command, (gpu->width + 15u) / 16u,
                   (gpu->height + 15u) / 16u, 1u);
-    VkMemoryBarrier2 barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
-                         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT };
-    VkDependencyInfo dependency = { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .memoryBarrierCount = 1, .pMemoryBarriers = &barrier };
-    vkCmdPipelineBarrier2(gpu->command, &dependency);
+    mpm_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     push[2] = 1u;
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     vkCmdDispatch(gpu->command, 1u, 1u, 1u);
-    barrier.dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT |
-                           VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-    barrier.dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT |
-                            VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
-    vkCmdPipelineBarrier2(gpu->command, &dependency);
+    mpm_barrier(gpu, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT |
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT |
+                VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                       gpu->mpm_pipeline);
     for (uint32_t step = 0; step < DC_MPM_SUBSTEPS; ++step) {
@@ -115,10 +120,9 @@ void dc_gpu_record_mpm(dc_gpu_t *gpu) {
             vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                 VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
             vkCmdDispatchIndirect(gpu->command, gpu->mpm_activity_buffer, 0);
-            barrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-            barrier.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
-                                    VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
-            vkCmdPipelineBarrier2(gpu->command, &dependency);
+            mpm_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                        VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
         }
     }
 }
