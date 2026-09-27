@@ -881,6 +881,75 @@ static void test_elapsed_time_advances_staged_water_further(void) {
     PASS();
 }
 
+static void test_staged_water_renders_from_gpu_snapshots(void) {
+    char err[256] = {0};
+    dc_chunk_t initial = {0};
+    uint32_t before[DC_CHUNK_CELLS], snapshot[DC_CHUNK_CELLS];
+    uint32_t blended[DC_CHUNK_CELLS];
+    for (uint32_t x = 20; x < 36; ++x)
+        initial.cells[8 * DC_CHUNK_SIDE + x].fluid_mass = DC_FLUID_FULL;
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)) &&
+                dc_gpu_upload_chunk(gpu, 0, &initial, err, sizeof(err)) &&
+                dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)) &&
+                dc_gpu_set_fluid_interval(gpu, 6));
+    ASSERT_TRUE(dc_gpu_render_chunks(gpu, err, sizeof(err)) &&
+                dc_gpu_readback(gpu, before, DC_CHUNK_CELLS, err, sizeof(err)));
+    for (uint32_t i = 0; i < 4; ++i)
+        ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_render_chunks(gpu, err, sizeof(err)) &&
+                dc_gpu_readback(gpu, snapshot, DC_CHUNK_CELLS, err, sizeof(err)));
+    ASSERT_EQ(memcmp(before, snapshot, sizeof(before)), 0);
+    ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)) &&
+                dc_gpu_render_chunks(gpu, err, sizeof(err)) &&
+                dc_gpu_readback(gpu, blended, DC_CHUNK_CELLS, err, sizeof(err)));
+    ASSERT_TRUE(memcmp(before, blended, sizeof(before)) != 0);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
+static void test_equal_elapsed_time_tracks_across_frame_cadences(void) {
+    char err[256] = {0};
+    dc_chunk_t initial = {0}, fast = {0}, slow = {0};
+    for (uint32_t x = 20; x < 44; ++x)
+        initial.cells[8 * DC_CHUNK_SIDE + x].fluid_mass = DC_FLUID_FULL;
+    dc_gpu_t *a = NULL, *b = NULL;
+    ASSERT_TRUE(dc_gpu_create(&a, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)) &&
+                dc_gpu_create(&b, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)) &&
+                dc_gpu_upload_chunk(a, 0, &initial, err, sizeof(err)) &&
+                dc_gpu_upload_chunk(b, 0, &initial, err, sizeof(err)) &&
+                dc_gpu_set_page(a, 0, 0, 0, err, sizeof(err)) &&
+                dc_gpu_set_page(b, 0, 0, 0, err, sizeof(err)) &&
+                dc_gpu_set_fluid_interval(a, 6) &&
+                dc_gpu_set_fluid_interval(b, 6) &&
+                dc_gpu_set_tick_seconds(a, 1.0f / 60.0f) &&
+                dc_gpu_set_tick_seconds(b, 2.0f / 60.0f));
+    for (uint32_t i = 0; i < 12; ++i)
+        ASSERT_TRUE(dc_gpu_tick_step(a, err, sizeof(err)));
+    for (uint32_t i = 0; i < 6; ++i)
+        ASSERT_TRUE(dc_gpu_tick_step(b, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(a, 0, &fast, err, sizeof(err)) &&
+                dc_gpu_download_chunk(b, 0, &slow, err, sizeof(err)));
+    uint64_t mass_a = 0, mass_b = 0, depth_a = 0, depth_b = 0;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        mass_a += fast.cells[i].fluid_mass;
+        mass_b += slow.cells[i].fluid_mass;
+        depth_a += (i / DC_CHUNK_SIDE) * (uint64_t)fast.cells[i].fluid_mass;
+        depth_b += (i / DC_CHUNK_SIDE) * (uint64_t)slow.cells[i].fluid_mass;
+    }
+    ASSERT_EQ(mass_a, mass_b);
+    uint64_t difference = depth_a > depth_b ? depth_a - depth_b : depth_b - depth_a;
+    printf("equal-time mean depth 60Hz=%.2f 30Hz=%.2f\n",
+           (double)depth_a / mass_a, (double)depth_b / mass_b);
+    ASSERT_TRUE(difference < mass_a * 3u);
+    dc_gpu_destroy(a);
+    dc_gpu_destroy(b);
+    PASS();
+}
+
 int main(void) {
     RUN(test_water_falls_and_crosses_resident_chunk_edge);
     RUN(test_closed_basin_conserves_mass_for_long_run);
@@ -908,6 +977,8 @@ int main(void) {
     RUN(test_fluid_interval_counts_only_scheduled_updates);
     RUN(test_six_fluid_phases_match_one_uncoupled_update);
     RUN(test_elapsed_time_advances_staged_water_further);
+    RUN(test_staged_water_renders_from_gpu_snapshots);
+    RUN(test_equal_elapsed_time_tracks_across_frame_cadences);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
