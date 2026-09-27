@@ -13,11 +13,15 @@ uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
                                  uint32_t compatible_types) {
     const VkMemoryPropertyFlags needed = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    for (uint32_t i = 0; i < props->memoryTypeCount; ++i)
-        if ((compatible_types & (1u << i)) &&
-            (props->memoryTypes[i].propertyFlags & needed) == needed)
-            return i;
-    return UINT32_MAX;
+    uint32_t fallback = UINT32_MAX;
+    for (uint32_t i = 0; i < props->memoryTypeCount; ++i) {
+        VkMemoryPropertyFlags flags = props->memoryTypes[i].propertyFlags;
+        if (!(compatible_types & (1u << i)) || (flags & needed) != needed)
+            continue;
+        if (flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) return i;
+        if (fallback == UINT32_MAX) fallback = i;
+    }
+    return fallback;
 }
 
 bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
@@ -25,7 +29,9 @@ bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
                                char *err, uint32_t cap) {
     VkBufferCreateInfo info = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = bytes, .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                                VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+                                VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
+                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                                VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE };
     if (vkCreateBuffer(gpu->device, &info, NULL, buffer) != VK_SUCCESS)
         return error(err, cap, "Cannot create GPU chunk buffer");
@@ -33,16 +39,25 @@ bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
     vkGetBufferMemoryRequirements(gpu->device, *buffer, &req);
     VkPhysicalDeviceMemoryProperties props;
     vkGetPhysicalDeviceMemoryProperties(gpu->physical, &props);
-    uint32_t type = UINT32_MAX;
-    VkMemoryPropertyFlags needed = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    for (uint32_t i = 0; i < props.memoryTypeCount; ++i) {
-        if ((req.memoryTypeBits & (1u << i)) &&
-            (props.memoryTypes[i].propertyFlags & needed) == needed) { type = i; break; }
-    }
+    uint32_t type = dc_gpu_host_memory_type(&props, req.memoryTypeBits);
     if (type == UINT32_MAX) return error(err, cap, "No host-coherent GPU chunk memory");
     VkMemoryAllocateInfo alloc = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .allocationSize = req.size, .memoryTypeIndex = type };
-    if (vkAllocateMemory(gpu->device, &alloc, NULL, memory) != VK_SUCCESS ||
+    if (vkAllocateMemory(gpu->device, &alloc, NULL, memory) != VK_SUCCESS) {
+        VkMemoryPropertyFlags needed = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        *memory = VK_NULL_HANDLE;
+        for (uint32_t i = 0; i < props.memoryTypeCount; ++i) {
+            VkMemoryPropertyFlags flags = props.memoryTypes[i].propertyFlags;
+            if (!(req.memoryTypeBits & (1u << i)) || (flags & needed) != needed ||
+                i == type) continue;
+            alloc.memoryTypeIndex = i;
+            if (vkAllocateMemory(gpu->device, &alloc, NULL, memory) == VK_SUCCESS)
+                break;
+        }
+        if (!*memory) return error(err, cap, "Cannot allocate GPU chunk memory");
+    }
+    if (
         vkBindBufferMemory(gpu->device, *buffer, *memory, 0) != VK_SUCCESS ||
         vkMapMemory(gpu->device, *memory, 0, bytes, 0, mapped) != VK_SUCCESS)
         return error(err, cap, "Cannot allocate or map GPU chunk memory");
@@ -198,14 +213,20 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
         return error(err, cap, "Invalid GPU page mapping");
     uint32_t *pages = gpu->page_mapped;
     uint32_t tile = tile_y * gpu->page_width + tile_x;
+    uint32_t new_page = slot == UINT32_MAX ? 0u : slot + 1u;
+    if (pages[tile] == new_page &&
+        (slot == UINT32_MAX || gpu->slot_page[slot] == tile)) {
+        if (slot != UINT32_MAX) gpu->preserve_shifted_slot[slot] = false;
+        return true;
+    }
     if (slot != UINT32_MAX && gpu->slot_page[slot] != UINT32_MAX &&
         gpu->slot_page[slot] != tile)
         pages[gpu->slot_page[slot]] = 0u;
     uint32_t old_page = pages[tile];
-    bool changed_mapping = old_page != (slot == UINT32_MAX ? 0u : slot + 1u);
+    bool changed_mapping = old_page != new_page;
     if (old_page && (slot == UINT32_MAX || old_page != slot + 1u))
         gpu->slot_page[old_page - 1u] = UINT32_MAX;
-    pages[tile] = slot == UINT32_MAX ? 0u : slot + 1u;
+    pages[tile] = new_page;
     if (slot != UINT32_MAX) {
         gpu->slot_page[slot] = tile;
         if (changed_mapping && !gpu->preserve_shifted_slot[slot]) {

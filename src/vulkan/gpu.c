@@ -40,29 +40,8 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
 }
 
 static bool make_cells(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t cap) {
-    VkBufferCreateInfo info = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = bytes, .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        .sharingMode = VK_SHARING_MODE_EXCLUSIVE };
-    if (vkCreateBuffer(gpu->device, &info, NULL, &gpu->cells) != VK_SUCCESS)
-        return error(err, cap, "Cannot create cell buffer");
-    VkMemoryRequirements req;
-    vkGetBufferMemoryRequirements(gpu->device, gpu->cells, &req);
-    VkPhysicalDeviceMemoryProperties props;
-    vkGetPhysicalDeviceMemoryProperties(gpu->physical, &props);
-    uint32_t type = UINT32_MAX;
-    for (uint32_t i = 0; i < props.memoryTypeCount; ++i) {
-        VkMemoryPropertyFlags flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        if ((req.memoryTypeBits & (1u << i)) &&
-            (props.memoryTypes[i].propertyFlags & flags) == flags) { type = i; break; }
-    }
-    if (type == UINT32_MAX) return error(err, cap, "No host-visible coherent cell memory");
-    VkMemoryAllocateInfo alloc = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .allocationSize = req.size, .memoryTypeIndex = type };
-    if (vkAllocateMemory(gpu->device, &alloc, NULL, &gpu->memory) != VK_SUCCESS ||
-        vkBindBufferMemory(gpu->device, gpu->cells, gpu->memory, 0) != VK_SUCCESS ||
-        vkMapMemory(gpu->device, gpu->memory, 0, bytes, 0, &gpu->mapped) != VK_SUCCESS)
-        return error(err, cap, "Cannot allocate cell memory");
-    return true;
+    return dc_gpu_make_mapped_buffer(gpu, bytes, &gpu->cells,
+                                     &gpu->memory, &gpu->mapped, err, cap);
 }
 
 static bool make_presentation(dc_gpu_t *gpu, uint32_t requested_width,
