@@ -777,7 +777,7 @@ static void test_projected_water_velocity_has_tiny_final_decay(void) {
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
     float velocity = chunk->face_velocity[30 * DC_CHUNK_SIDE + 30].x;
     printf("projected wet-face x velocity after one step: %.6f\n", velocity);
-    ASSERT_TRUE(velocity > 0.988f && velocity < 0.9895f);
+    ASSERT_TRUE(velocity > 0.986f && velocity < 0.988f);
     dc_gpu_destroy(gpu);
     free(chunk);
     PASS();

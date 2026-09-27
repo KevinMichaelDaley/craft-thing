@@ -842,7 +842,7 @@ static void test_free_sand_horizontal_velocity_has_tiny_decay(void) {
     for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
         if (chunk->particles[i].mass_fp) vx = chunk->particles[i].vx_fp;
     ASSERT_TRUE(vx > (int32_t)(0.99 * DC_FLUID_FULL));
-    ASSERT_TRUE(vx < (int32_t)(0.9995 * DC_FLUID_FULL));
+    ASSERT_TRUE(vx < (int32_t)(0.997 * DC_FLUID_FULL));
     dc_gpu_destroy(gpu);
     free(chunk);
     PASS();
