@@ -1,6 +1,6 @@
 ---
 id: dun-s8rr
-status: open
+status: closed
 deps: [dun-wc20, dun-3bl8]
 links: []
 created: 2026-09-26T07:44:16Z
@@ -28,3 +28,7 @@ A flowing stream transports loose sand while still water does not; grain and wat
 **2026-09-27T00:08:44Z**
 
 Current GPU MPM stage treats water-filled cells as excluded from grain movement. Replace this temporary exclusion with projected Eulerian velocity/depth sampling and equal-and-opposite momentum exchange; retain the GPU-only 16x16 indirect active-tile dispatch and fixed-point particle mass.
+
+**2026-09-27T00:29:04Z**
+
+GPU-only two-way MPM/Eulerian drag now permits overlapping water and grains. Per-face reduced-mass impulse is applied with equal opposition after a compute barrier in each MPM substep; dry faces skip exchange. Tests cover wet-grain motion, flowing versus still water, seam crossing, stage timing, and closed x-momentum residual -2.8e-6 (<4 fixed-point units). make test, make test_ui, and Vulkan validation pass.
