@@ -54,8 +54,6 @@ struct DensitySample {
     vec3 premultiplied;
     float coverage;
 };
-shared vec4 density_tile[18 * 18];
-
 DensitySample material_density(ivec2 p) {
     DensitySample density_sample = DensitySample(vec3(0.0), 0.0);
     if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
@@ -101,41 +99,16 @@ DensitySample material_density(ivec2 p) {
     return density_sample;
 }
 
-void load_density_tile() {
-    ivec2 origin = ivec2(gl_WorkGroupID.xy * uvec2(16u)) +
-                   ivec2(params.radius, params.color) - ivec2(1);
-    for (uint ty = gl_LocalInvocationID.y; ty < 18u; ty += 16u)
-        for (uint tx = gl_LocalInvocationID.x; tx < 18u; tx += 16u) {
-            DensitySample density_sample = material_density(origin + ivec2(tx, ty));
-            density_tile[ty * 18u + tx] =
-                vec4(density_sample.premultiplied, density_sample.coverage);
-        }
-    barrier();
-}
-
-uint antialiased_material_color() {
-    vec3 premultiplied = vec3(0.0);
-    float coverage = 0.0;
-    int center = int((gl_LocalInvocationID.y + 1u) * 18u +
-                     gl_LocalInvocationID.x + 1u);
-    for (int dy = -1; dy <= 1; ++dy) {
-        float wy = dy == 0 ? 0.75 : 0.125;
-        for (int dx = -1; dx <= 1; ++dx) {
-            float weight = wy * (dx == 0 ? 0.75 : 0.125);
-            vec4 density_sample = density_tile[center + dy * 18 + dx];
-            premultiplied += weight * density_sample.xyz;
-            coverage += weight * density_sample.w;
-        }
-    }
-    return pack_linear_color(premultiplied +
-                             (1.0 - coverage) * linear_color(0xff181818u));
+uint cell_material_color(ivec2 p) {
+    DensitySample density_sample = material_density(p);
+    return pack_linear_color(density_sample.premultiplied +
+                             (1.0 - density_sample.coverage) * linear_color(0xff181818u));
 }
 
 void main() {
     uvec2 display_cell = gl_GlobalInvocationID.xy;
     uvec2 p = display_cell;
     if (params.mode == 2u) p += uvec2(params.radius, params.color);
-    if (params.mode == 2u && params.brush_y != 2u) load_density_tile();
     if (p.x >= params.width || p.y >= params.height) return;
     if (params.mode == 0u) {
         cells[p.y * params.width + p.x] = ((p.x + p.y) & 1u) == 0u
@@ -155,7 +128,7 @@ void main() {
         }
         uint index = (page - 1u) * 4096u + (p.y % 64u) * 64u + p.x % 64u;
         if (params.mode == 2u && params.brush_y != 2u) {
-            uint filtered = antialiased_material_color();
+            uint filtered = cell_material_color(ivec2(p));
             if (params.brush_x != 0u) {
                 uint guide = marker_grid[index];
                 if ((guide & 1u) != 0u) filtered = 0xffd040e0u;

@@ -70,10 +70,8 @@ static void test_chunk_page_mapping_and_gpu_material_edit(void) {
     ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 0, 1, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_render_chunks(gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_readback(gpu, pixels, 128 * 64, err, sizeof(err)));
-    ASSERT_TRUE((pixels[5 * 128 + 63] & 255u) > 24u);
-    ASSERT_TRUE((pixels[5 * 128 + 63] & 255u) < 112u);
-    ASSERT_TRUE(((pixels[5 * 128 + 64] >> 16) & 255u) > 24u);
-    ASSERT_TRUE(((pixels[5 * 128 + 64] >> 16) & 255u) < 208u);
+    ASSERT_EQ(pixels[5 * 128 + 63], 0xff707070u);
+    ASSERT_EQ(pixels[5 * 128 + 64], 0xffd07030u);
     ASSERT_TRUE(dc_gpu_paint_material(gpu, 64, 5, 0, DC_MATERIAL_SAND, err, sizeof(err)));
     saved.coord = right.coord;
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &saved, err, sizeof(err)));
@@ -110,10 +108,8 @@ static void test_gpu_box_crosses_chunk_edge_and_rests_on_terrain(void) {
     ASSERT_EQ(body.vy_fp, 0);
     ASSERT_TRUE(dc_gpu_render_chunks(gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_readback(gpu, pixels, 128 * 64, err, sizeof(err)));
-    ASSERT_TRUE(((pixels[18 * 128 + 83] >> 8) & 255u) > 100u);
-    ASSERT_TRUE(((pixels[18 * 128 + 83] >> 8) & 255u) < 192u);
-    ASSERT_TRUE((pixels[20 * 128 + 83] & 255u) > 24u);
-    ASSERT_TRUE((pixels[20 * 128 + 83] & 255u) < 112u);
+    ASSERT_EQ(pixels[18 * 128 + 83], 0xff30c040u);
+    ASSERT_EQ(pixels[20 * 128 + 83], 0xff707070u);
     dc_gpu_destroy(gpu);
     PASS();
 }
