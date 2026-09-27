@@ -52,12 +52,15 @@ void main() {
         uint local_index = index % 4096u;
         uint particle_index = slot * 8192u + local_index;
         uint secondary_index = particle_index + 4096u;
+        bool mud = false;
         if (params.mode == 3u) {
             int dx = int(p.x) - int(params.brush_x);
             int dy = int(p.y) - int(params.brush_y);
             int r = int(params.radius);
             if (dx * dx + dy * dy <= r * r) {
-                material = params.color == 3u ? 0u : params.color;
+                material = params.color == 3u &&
+                           (material == 2u || material == 4u || material == 5u)
+                           ? material : params.color == 3u ? 0u : params.color;
                 bool new_grain = material == 2u || material == 4u || material == 5u;
                 if (!new_grain) {
                     if (particles[particle_index].mass_fp != 0u) {
@@ -94,20 +97,23 @@ void main() {
                         particles[secondary_index].material = material;
                 }
                 cell.x = (cell.x & 0xffff0000u) | material;
-                cell.y = params.color == 3u ? 65536u : 0u;
+                cell.y = params.color == 3u ? 65536u : new_grain ? cell.y : 0u;
                 chunk_cells[index] = cell;
             }
         }
         if (params.mode == 2u) {
-            if (particles[particle_index].mass_fp != 0u)
+            if (particles[particle_index].mass_fp != 0u) {
                 material = particles[particle_index].material;
-            else if (particles[secondary_index].mass_fp != 0u)
+                mud = (particles[particle_index].flags & 0x80000000u) != 0u;
+            } else if (particles[secondary_index].mass_fp != 0u) {
                 material = particles[secondary_index].material;
+                mud = (particles[secondary_index].flags & 0x80000000u) != 0u;
+            }
         }
         uint color = 0xff181818u;
         if (material == 1u) color = 0xff707070u;
         else if (material == 2u) color = 0xff40c8e0u;
-        else if (material == 4u) color = 0xff326495u;
+        else if (material == 4u) color = mud ? 0xff29465bu : 0xff326495u;
         else if (material == 5u) color = 0xff808090u;
         if (cell.y > 0u) {
             uint fill = min(cell.y, 65536u) / 256u;

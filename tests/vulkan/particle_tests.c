@@ -608,8 +608,8 @@ static void test_dirt_binds_small_water_dose_without_losing_mass(void) {
     uint32_t moisture = 0;
     for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
         if (chunk->particles[i].mass_fp) {
-            moisture = chunk->particles[i].flags & 0x00ffffffu;
-            ASSERT_TRUE((chunk->particles[i].flags & 0x80000000u) != 0u);
+            moisture = chunk->particles[i].flags & DC_MPM_MOISTURE_MASK;
+            ASSERT_TRUE((chunk->particles[i].flags & DC_MPM_MUD_FLAG) != 0u);
         }
     ASSERT_TRUE(moisture >= DC_FLUID_FULL / 32u);
     ASSERT_EQ(chunk->cells[source].fluid_mass + moisture, DC_FLUID_FULL / 16u);
@@ -644,6 +644,130 @@ static void test_water_brush_keeps_dirt_particle(void) {
     PASS();
 }
 
+static uint64_t combined_water_mass(const dc_chunk_t *chunk) {
+    uint64_t mass = 0;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
+        mass += chunk->cells[i].fluid_mass;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (chunk->particles[i].material == DC_MATERIAL_DIRT)
+            mass += chunk->particles[i].flags & DC_MPM_MOISTURE_MASK;
+    return mass;
+}
+
+static void test_coupled_materials_conserve_water_across_seam_and_stream(void) {
+    char directory[] = "build/mud_stream_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_chunk_t *left = calloc(1, sizeof(*left));
+    dc_chunk_t *right = calloc(1, sizeof(*right));
+    ASSERT_TRUE(left && right);
+    right->coord.x = 1;
+    uint32_t dirt = 20 * DC_CHUNK_SIDE + 63;
+    left->cells[dirt].material = DC_MATERIAL_DIRT;
+    for (uint32_t y = 20; y < 27; ++y)
+        for (uint32_t x = 60; x < 64; ++x)
+            left->cells[y * DC_CHUNK_SIDE + x].fluid_mass = DC_FLUID_FULL;
+    for (uint32_t y = 20; y < 27; ++y)
+        for (uint32_t x = 0; x < 8; ++x)
+            right->cells[y * DC_CHUNK_SIDE + x].fluid_mass = DC_FLUID_FULL;
+    right->cells[22 * DC_CHUNK_SIDE + 3].material = DC_MATERIAL_SAND;
+    right->cells[22 * DC_CHUNK_SIDE + 5].material = DC_MATERIAL_GRAVEL;
+    dc_chunk_seed_particles(left);
+    dc_chunk_seed_particles(right);
+    left->particles[dirt].flags = DC_MPM_MUD_FLAG | DC_FLUID_FULL / 16u;
+    left->particles[dirt].vx_fp = 2 * (int32_t)DC_FLUID_FULL;
+    uint32_t dirt_id = left->particles[dirt].id_lo;
+    uint64_t initial_water = combined_water_mass(left) + combined_water_mass(right);
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 128, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 1, right, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 0, 1, err, sizeof(err)));
+    dc_gpu_tick_capture_t capture = {0};
+    for (uint32_t tick = 0; tick < 12; ++tick)
+        ASSERT_TRUE(dc_gpu_tick_capture(gpu, &capture, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, right, err, sizeof(err)));
+    ASSERT_EQ(left->particle_count + right->particle_count, 3u);
+    ASSERT_EQ(combined_water_mass(left) + combined_water_mass(right), initial_water);
+    ASSERT_TRUE(capture.stages[1].gpu_ns > 0u && capture.stages[2].gpu_ns > 0u);
+    uint32_t found = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (right->particles[i].mass_fp && right->particles[i].id_lo == dirt_id) {
+            ASSERT_EQ(right->particles[i].material, DC_MATERIAL_DIRT);
+            ASSERT_TRUE((right->particles[i].flags & DC_MPM_MOISTURE_MASK) != 0u);
+            ++found;
+        }
+    ASSERT_EQ(found, 1u);
+    dc_streamer_t *stream = dc_stream_create(directory, 314, 8);
+    ASSERT_TRUE(stream != NULL);
+    ASSERT_TRUE(dc_stream_request_save(stream, right, 1));
+    dc_stream_result_t result;
+    while (!dc_stream_poll(stream, &result)) { }
+    ASSERT_EQ(result.kind, DC_STREAM_SAVED);
+    dc_stream_result_release(&result);
+    ASSERT_TRUE(dc_stream_request_load(stream, right->coord, 2));
+    while (!dc_stream_poll(stream, &result)) { }
+    ASSERT_EQ(result.kind, DC_STREAM_LOADED);
+    ASSERT_EQ(combined_water_mass(result.chunk), combined_water_mass(right));
+    ASSERT_EQ(memcmp(result.chunk->particles, right->particles,
+                     sizeof(right->particles)), 0);
+    dc_stream_result_release(&result);
+    dc_stream_destroy(stream);
+    dc_gpu_destroy(gpu);
+    free(left); free(right);
+    PASS();
+}
+
+static void test_dry_and_saturated_dirt_yield_differently(void) {
+    char err[256] = {0};
+    dc_chunk_t *dry = calloc(1, sizeof(*dry));
+    dc_chunk_t *wet = calloc(1, sizeof(*wet));
+    ASSERT_TRUE(dry && wet);
+    wet->coord.x = 1;
+    uint32_t source = 20 * DC_CHUNK_SIDE + 30;
+    dry->cells[source].material = DC_MATERIAL_DIRT;
+    wet->cells[source].material = DC_MATERIAL_DIRT;
+    dc_chunk_seed_particles(dry);
+    dc_chunk_seed_particles(wet);
+    dry->particles[source].x_fp += DC_FLUID_FULL / 4;
+    wet->particles[source].x_fp += DC_FLUID_FULL / 4;
+    dry->particles[source].deformation[0] = 0.8f;
+    dry->particles[source].deformation[3] = 0.8f;
+    dry->particles[source].deformation[1] = 0.15f;
+    dry->particles[source].deformation[2] = 0.15f;
+    memcpy(wet->particles[source].deformation, dry->particles[source].deformation,
+           sizeof(dry->particles[source].deformation));
+    wet->particles[source].flags = DC_MPM_MUD_FLAG | DC_MPM_MOISTURE_CAP;
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 128, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, dry, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 1, wet, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 0, 1, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, dry, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, wet, err, sizeof(err)));
+    ASSERT_EQ(dry->particle_count, 1u);
+    ASSERT_EQ(wet->particle_count, 1u);
+    dc_mpm_particle_t *dry_grain = NULL, *wet_grain = NULL;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i) {
+        if (dry->particles[i].mass_fp) dry_grain = &dry->particles[i];
+        if (wet->particles[i].mass_fp) wet_grain = &wet->particles[i];
+    }
+    ASSERT_TRUE(dry_grain && wet_grain);
+    ASSERT_EQ(dry_grain->flags & DC_MPM_MUD_FLAG, 0u);
+    ASSERT_TRUE((wet_grain->flags & DC_MPM_MUD_FLAG) != 0u);
+    ASSERT_TRUE(dry_grain->deformation[0] != wet_grain->deformation[0] ||
+                dry_grain->deformation[1] != wet_grain->deformation[1] ||
+                dry_grain->vx_fp != wet_grain->vx_fp);
+    dc_gpu_destroy(gpu);
+    free(dry); free(wet);
+    PASS();
+}
+
 int main(void) {
     printf("GPU particle capacity: %u records per chunk, %u primary cell slots\n",
            DC_MPM_PARTICLES_PER_CHUNK, DC_CHUNK_CELLS);
@@ -663,6 +787,8 @@ int main(void) {
     RUN(test_closed_wet_grain_momentum_balance);
     RUN(test_dirt_binds_small_water_dose_without_losing_mass);
     RUN(test_water_brush_keeps_dirt_particle);
+    RUN(test_coupled_materials_conserve_water_across_seam_and_stream);
+    RUN(test_dry_and_saturated_dirt_yield_differently);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

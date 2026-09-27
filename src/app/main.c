@@ -145,6 +145,78 @@ static int smoke_granular_fall(void) {
     return 0;
 }
 
+static int smoke_coupled_materials(void) {
+    char directory[] = "build/ui_coupled_XXXXXX", err[256] = {0};
+    if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    if (!view) { fprintf(stderr, "Coupled level create: %s\n", err); return 1; }
+    uint32_t *before = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*before));
+    uint32_t *after = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*after));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    bool okay = before && after && chunk &&
+        dc_level_view_set_spring_enabled(view, false) &&
+        dc_level_view_wait_visible(view, 5000, err, sizeof(err));
+    const uint32_t wall[][2] = {{39, 5}, {41, 5}, {40, 4}, {40, 6}};
+    for (uint32_t i = 0; i < 4 && okay; ++i)
+        okay = dc_level_view_paint(view, wall[i][0], wall[i][1], 0,
+                                   DC_MATERIAL_STONE, err, sizeof(err));
+    if (okay) okay =
+        dc_level_view_paint(view, 40, 5, 0, DC_MATERIAL_DIRT, err, sizeof(err)) &&
+        dc_level_view_paint(view, 40, 5, 0, DC_MATERIAL_WATER, err, sizeof(err)) &&
+        dc_level_view_paint(view, 50, 5, 1, DC_MATERIAL_SAND, err, sizeof(err)) &&
+        dc_level_view_paint(view, 54, 5, 1, DC_MATERIAL_GRAVEL, err, sizeof(err)) &&
+        dc_level_view_paint(view, 50, 4, 0, DC_MATERIAL_WATER, err, sizeof(err)) &&
+        dc_level_view_paint(view, 80, 8, 3, DC_MATERIAL_SAND, err, sizeof(err)) &&
+        dc_level_view_paint(view, 90, 8, 3, DC_MATERIAL_DIRT, err, sizeof(err)) &&
+        dc_level_view_paint(view, 100, 8, 3, DC_MATERIAL_GRAVEL, err, sizeof(err)) &&
+        dc_level_view_paint(view, 90, 5, 3, DC_MATERIAL_WATER, err, sizeof(err)) &&
+        dc_level_view_tick(view, err, sizeof(err)) &&
+        dc_level_view_pixels(view, before, VIEW_WIDTH * VIEW_HEIGHT, err, sizeof(err)) &&
+        dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0}, chunk, err, sizeof(err));
+    uint32_t dirt_id = 0, sand_id = 0, gravel_id = 0;
+    if (okay) {
+        dirt_id = chunk->particles[5 * DC_CHUNK_SIDE + 40].id_lo;
+        sand_id = chunk->particles[5 * DC_CHUNK_SIDE + 50].id_lo;
+        gravel_id = chunk->particles[5 * DC_CHUNK_SIDE + 54].id_lo;
+        okay = dirt_id && sand_id && gravel_id;
+    }
+    mkdir("build/screenshots", 0777);
+    if (okay) okay = save_level_bmp("build/screenshots/coupled_before.bmp", before);
+    for (uint32_t i = 0; i < 60 && okay; ++i)
+        okay = dc_level_view_step(view, err, sizeof(err));
+    if (okay) okay = dc_level_view_tick(view, err, sizeof(err)) &&
+                     dc_level_view_pixels(view, after, VIEW_WIDTH * VIEW_HEIGHT,
+                                          err, sizeof(err)) &&
+                     save_level_bmp("build/screenshots/coupled_after_1s.bmp", after) &&
+                     dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
+                                         chunk, err, sizeof(err));
+    uint32_t moved = 0, muddy = 0, changed = 0;
+    if (okay) {
+        for (uint32_t y = 3; y < 40; ++y)
+            for (uint32_t x = 35; x < 108; ++x)
+                changed += before[y * VIEW_WIDTH + x] != after[y * VIEW_WIDTH + x];
+        for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i) {
+            dc_mpm_particle_t *particle = &chunk->particles[i];
+            if (!particle->mass_fp) continue;
+            if (particle->id_lo == dirt_id && particle->material == DC_MATERIAL_DIRT &&
+                (particle->flags & DC_MPM_MUD_FLAG) != 0u) ++muddy;
+            if ((particle->id_lo == sand_id || particle->id_lo == gravel_id) &&
+                particle->y_fp > 7 * (int32_t)DC_FLUID_FULL) ++moved;
+        }
+        okay = changed >= 60 && muddy == 1u && moved == 2u;
+    }
+    if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
+    free(before); free(after); free(chunk);
+    if (!okay) {
+        fprintf(stderr, "Coupled screenshot smoke failed (%u changed, %u mud, %u moved): %s\n",
+                changed, muddy, moved, err);
+        return 1;
+    }
+    printf("Coupled screenshots: coupled_before.bmp and coupled_after_1s.bmp "
+           "(%u changed, %u mud, %u moved)\n", changed, muddy, moved);
+    return 0;
+}
+
 static int smoke_moving_water_long(void) {
     enum { FIVE_SECONDS = 300, TEN_SECONDS = 600, PAINT_TICK = 361,
            FRAME_DELAY_MS = 16 };
@@ -613,6 +685,8 @@ int main(int argc, char **argv) {
         return smoke_moving_water();
     if (argc > 1 && strcmp(argv[1], "--smoke-granular") == 0)
         return smoke_granular_fall();
+    if (argc > 1 && strcmp(argv[1], "--smoke-coupled") == 0)
+        return smoke_coupled_materials();
     if (argc > 1 && strcmp(argv[1], "--smoke-motion-long") == 0)
         return smoke_moving_water_long();
     bool scripted_input = argc > 1 && strcmp(argv[1], "--smoke-controls-ui") == 0;

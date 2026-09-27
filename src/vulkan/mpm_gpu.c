@@ -3,7 +3,7 @@
 #include "gpu_internal.h"
 
 enum { DC_MPM_SUBSTEPS = 2, DC_MPM_MODES = 6,
-       DC_MPM_WATER_FEEDBACK_MODE = 6 };
+       DC_MPM_WATER_FEEDBACK_MODE = 6, DC_MPM_MOISTURE_MODE = 7 };
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -115,6 +115,13 @@ void dc_gpu_record_mpm(dc_gpu_t *gpu) {
                 VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                       gpu->mpm_pipeline);
+    push[2] = DC_MPM_MOISTURE_MODE;
+    vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+    vkCmdDispatchIndirect(gpu->command, gpu->mpm_activity_buffer, 0);
+    mpm_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     for (uint32_t step = 0; step < DC_MPM_SUBSTEPS; ++step) {
         for (uint32_t mode = 0; mode < DC_MPM_MODES; ++mode) {
             push[2] = mode;

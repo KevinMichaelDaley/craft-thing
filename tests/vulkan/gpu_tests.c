@@ -76,7 +76,7 @@ static void test_chunk_page_mapping_and_gpu_material_edit(void) {
     saved.coord = right.coord;
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &saved, err, sizeof(err)));
     ASSERT_EQ(saved.cells[5 * DC_CHUNK_SIDE].material, DC_MATERIAL_SAND);
-    ASSERT_EQ(saved.cells[5 * DC_CHUNK_SIDE].fluid_mass, 0u);
+    ASSERT_EQ(saved.cells[5 * DC_CHUNK_SIDE].fluid_mass, DC_FLUID_FULL);
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved, err, sizeof(err)));
     ASSERT_EQ(saved.cells[5 * DC_CHUNK_SIDE + 63].material, DC_MATERIAL_STONE);
     dc_gpu_destroy(gpu);

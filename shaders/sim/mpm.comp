@@ -39,6 +39,14 @@ const float GRAVITY = 0.25;
 const float MAX_VELOCITY = 2.0;
 const float WATER_DRAG = 0.5;
 const uint MODE_WATER_FEEDBACK = 6u;
+const uint MODE_MOISTURE = 7u;
+const uint MOISTURE_MASK = 0x00ffffffu;
+const uint MUD_FLAG = 0x80000000u;
+const uint MOISTURE_CAP = 16384u;
+const uint MUD_ENTER = 2048u;
+const uint MUD_EXIT = 1024u;
+const uint ABSORB_PER_TICK = 4096u;
+const uint DRY_PER_TICK = 64u;
 
 bool in_grid(ivec2 cell) {
     return cell.x >= 0 && cell.y >= 0 &&
@@ -103,6 +111,36 @@ bool blocked_destination(ivec2 cell) {
     return solid_at(cell);
 }
 
+void exchange_moisture(ivec2 cell) {
+    if (page_at(cell) == 0u || !grain_at(cell)) return;
+    uint cell_index = (page_at(cell) - 1u) * CELLS + local_cell(cell);
+    uint free_water = chunk_cells[cell_index].y;
+    bool absorb = free_water != 0u;
+    for (uint layer = 0u; layer < 2u; ++layer) {
+        uint index = particle_index(cell, layer);
+        Particle particle = particles[index];
+        if (particle.mass_fp == 0u || particle.material != 4u) continue;
+        uint moisture = particle.flags & MOISTURE_MASK;
+        if (absorb) {
+            uint taken = min(min(free_water, MOISTURE_CAP - min(moisture, MOISTURE_CAP)),
+                             ABSORB_PER_TICK);
+            free_water -= taken;
+            moisture += taken;
+        } else {
+            uint returned = min(moisture, DRY_PER_TICK);
+            returned = min(returned, 65536u - min(free_water, 65536u));
+            free_water += returned;
+            moisture -= returned;
+        }
+        bool mud = (particle.flags & MUD_FLAG) != 0u;
+        mud = mud ? moisture > MUD_EXIT : moisture >= MUD_ENTER;
+        particle.flags = (particle.flags & ~(MOISTURE_MASK | MUD_FLAG)) |
+                         moisture | (mud ? MUD_FLAG : 0u);
+        particles[index] = particle;
+    }
+    chunk_cells[cell_index].y = free_water;
+}
+
 float water_at(ivec2 cell) {
     uint page = page_at(cell);
     if (page == 0u || solid_at(cell)) return 0.0;
@@ -139,10 +177,14 @@ void p2g(ivec2 node) {
                 total.yz += weight * mass * velocity;
                 float jacobian = clamp(particle.f00 * particle.f11 -
                                        particle.f01 * particle.f10, 0.5, 1.5);
-                float bulk = particle.material == 5u ? 8.0 :
+                bool mud = particle.material == 4u &&
+                           (particle.flags & MUD_FLAG) != 0u;
+                float bulk = mud ? 1.2 : particle.material == 5u ? 8.0 :
                              particle.material == 4u ? 3.0 : 5.0;
                 float pressure = bulk * max(0.0, 1.0 - jacobian);
-                float shear = clamp(particle.f01 + particle.f10, -0.2, 0.2);
+                float shear_limit = mud ? 0.05 : 0.2;
+                float shear = clamp(particle.f01 + particle.f10,
+                                    -shear_limit, shear_limit);
                 vec2 gradient = kernel_gradient(delta);
                 force += mass * vec2(pressure * gradient.x - shear * gradient.y,
                                      pressure * gradient.y - shear * gradient.x);
@@ -225,10 +267,15 @@ void g2p_one(ivec2 owner, uint layer) {
     mat2 deformation = mat2(particle.f00, particle.f10,
                              particle.f01, particle.f11);
     deformation = (mat2(1.0) + DT * gradient) * deformation;
-    particle.f00 = clamp(deformation[0][0], 0.75, 1.25);
-    particle.f11 = clamp(deformation[1][1], 0.75, 1.25);
-    particle.f01 = clamp(deformation[1][0], -0.15, 0.15);
-    particle.f10 = clamp(deformation[0][1], -0.15, 0.15);
+    bool mud = particle.material == 4u && (particle.flags & MUD_FLAG) != 0u;
+    particle.f00 = clamp(deformation[0][0], mud ? 0.55 : 0.75,
+                         mud ? 1.45 : 1.25);
+    particle.f11 = clamp(deformation[1][1], mud ? 0.55 : 0.75,
+                         mud ? 1.45 : 1.25);
+    particle.f01 = clamp(deformation[1][0], mud ? -0.3 : -0.15,
+                         mud ? 0.3 : 0.15);
+    particle.f10 = clamp(deformation[0][1], mud ? -0.3 : -0.15,
+                         mud ? 0.3 : 0.15);
     vec2 next_position = position + DT * velocity;
     ivec2 target = ivec2(floor(next_position));
     if (blocked_destination(target)) {
@@ -351,6 +398,7 @@ void main() {
     ivec2 cell = ivec2(int((tile % tiles_x) * 16u + gl_LocalInvocationID.x),
                        int((tile / tiles_x) * 16u + gl_LocalInvocationID.y));
     if (!in_grid(cell)) return;
+    if (params.mode == MODE_MOISTURE) { exchange_moisture(cell); return; }
     if (params.mode == 0u) { p2g(cell); return; }
     if (params.mode == 1u) { solve_grid(cell); return; }
     if (params.mode == MODE_WATER_FEEDBACK) { apply_feedback(cell); return; }

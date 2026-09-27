@@ -167,6 +167,7 @@ test_ui: build/dungeoncraft build/controls_tests
 	./build/dungeoncraft --smoke-camera-velocity
 	./build/dungeoncraft --smoke-motion
 	./build/dungeoncraft --smoke-granular
+	./build/dungeoncraft --smoke-coupled
 
 test_ui_long: build/dungeoncraft
 	sh tests/app/long_fluid.sh
