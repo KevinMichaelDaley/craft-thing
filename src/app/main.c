@@ -174,11 +174,19 @@ static int smoke_coupled_materials(void) {
         dc_level_view_pixels(view, before, VIEW_WIDTH * VIEW_HEIGHT, err, sizeof(err)) &&
         dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0}, chunk, err, sizeof(err));
     uint32_t dirt_id = 0, sand_id = 0, gravel_id = 0;
+    uint32_t dirt_floor_samples = 0;
     if (okay) {
         dirt_id = chunk->particles[5 * DC_CHUNK_SIDE + 40].id_lo;
         sand_id = chunk->particles[5 * DC_CHUNK_SIDE + 50].id_lo;
         gravel_id = chunk->particles[5 * DC_CHUNK_SIDE + 54].id_lo;
-        okay = dirt_id && sand_id && gravel_id;
+        for (uint32_t x = 30; x < 64; x += 8)
+            for (uint32_t y = 16; y < 60; ++y) {
+                uint16_t material = chunk->cells[y * DC_CHUNK_SIDE + x].material;
+                if (material == DC_MATERIAL_AIR) continue;
+                dirt_floor_samples += material == DC_MATERIAL_DIRT;
+                break;
+            }
+        okay = dirt_id && sand_id && gravel_id && dirt_floor_samples >= 4u;
     }
     mkdir("build/screenshots", 0777);
     if (okay) okay = save_level_bmp("build/screenshots/coupled_before.bmp", before);
@@ -208,8 +216,8 @@ static int smoke_coupled_materials(void) {
     if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
     free(before); free(after); free(chunk);
     if (!okay) {
-        fprintf(stderr, "Coupled screenshot smoke failed (%u changed, %u mud, %u moved): %s\n",
-                changed, muddy, moved, err);
+        fprintf(stderr, "Coupled screenshot smoke failed (%u changed, %u mud, %u moved, %u dirt floor): %s\n",
+                changed, muddy, moved, dirt_floor_samples, err);
         return 1;
     }
     printf("Coupled screenshots: coupled_before.bmp and coupled_after_1s.bmp "

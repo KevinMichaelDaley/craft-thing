@@ -760,6 +760,29 @@ static void test_cropped_viewport_edges_are_internal_fluid_faces(void) {
     PASS();
 }
 
+static void test_projected_water_velocity_has_tiny_final_decay(void) {
+    char err[256] = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        chunk->cells[i].fluid_mass = DC_FLUID_FULL;
+        chunk->face_velocity[i].x = 1.0f;
+    }
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
+    float velocity = chunk->face_velocity[30 * DC_CHUNK_SIDE + 30].x;
+    printf("projected wet-face x velocity after one step: %.6f\n", velocity);
+    ASSERT_TRUE(velocity > 0.988f && velocity < 0.9895f);
+    dc_gpu_destroy(gpu);
+    free(chunk);
+    PASS();
+}
+
 int main(void) {
     RUN(test_water_falls_and_crosses_resident_chunk_edge);
     RUN(test_closed_basin_conserves_mass_for_long_run);
@@ -783,6 +806,7 @@ int main(void) {
     RUN(test_camera_shift_rebases_velocity_on_gpu);
     RUN(test_chunk_velocity_survives_gpu_round_trip);
     RUN(test_cropped_viewport_edges_are_internal_fluid_faces);
+    RUN(test_projected_water_velocity_has_tiny_final_decay);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

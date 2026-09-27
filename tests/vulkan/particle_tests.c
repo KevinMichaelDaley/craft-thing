@@ -800,6 +800,32 @@ static void test_dry_and_saturated_dirt_yield_differently(void) {
     PASS();
 }
 
+static void test_free_sand_horizontal_velocity_has_tiny_decay(void) {
+    char err[256] = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    uint32_t source = 12 * DC_CHUNK_SIDE + 30;
+    chunk->cells[source].material = DC_MATERIAL_SAND;
+    dc_chunk_seed_particles(chunk);
+    chunk->particles[source].vx_fp = DC_FLUID_FULL;
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->particle_count, 1u);
+    int32_t vx = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (chunk->particles[i].mass_fp) vx = chunk->particles[i].vx_fp;
+    ASSERT_TRUE(vx > (int32_t)(0.99 * DC_FLUID_FULL));
+    ASSERT_TRUE(vx < (int32_t)(0.9995 * DC_FLUID_FULL));
+    dc_gpu_destroy(gpu);
+    free(chunk);
+    PASS();
+}
+
 int main(void) {
     printf("GPU particle capacity: %u records per chunk, %u primary cell slots\n",
            DC_MPM_PARTICLES_PER_CHUNK, DC_CHUNK_CELLS);
@@ -822,6 +848,7 @@ int main(void) {
     RUN(test_drying_returns_bound_water_to_eulerian_cell);
     RUN(test_coupled_materials_conserve_water_across_seam_and_stream);
     RUN(test_dry_and_saturated_dirt_yield_differently);
+    RUN(test_free_sand_horizontal_velocity_has_tiny_decay);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
