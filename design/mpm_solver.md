@@ -79,8 +79,19 @@ water covers its pixel. Painting water onto granular material retains its
 particle and painting granular material into water retains the Eulerian mass.
 
 G2P interpolates grid velocity (PIC), updates `F` with the grid velocity
-gradient, caps strain for plastic yielding, and proposes a new position. The
-next pass ranks competing arrivals by stable particle ID. Each cell owns two
+gradient, caps strain for plastic yielding, and proposes a new position. Sand,
+dirt, and gravel carry effective 16.16 contact radii of 0.25, 0.375, and 0.5
+cell while each particle still represents one cell of material mass. Each
+particle reads at most eighteen neighboring slots across the page table and
+adds pairwise size-dependent contact and friction impulses to its grid
+velocity. Overlapping grains receive separating impulses; close unlike-size
+grains exchange an equal-and-opposite vertical kinetic-sieving impulse so
+smaller grains percolate into lower gaps while larger grains are displaced
+upward. The pair impulse is weighted by both particle masses, and the
+fixed 3×3 search and velocity cap bound work and motion. Material density
+also enters the buoyancy response, so submerged grains settle according to
+their volume. No screen-cell exchange, CPU particle sort, or copyback is used.
+The next pass ranks competing arrivals by stable particle ID. Each cell owns two
 fixed GPU slots; arrivals can use only vacancies present at the start of the
 substep. Rejected arrivals stay in their source cell with zero velocity. A
 destination-cell gather sorts accepted particles by ID into the two slots,
@@ -89,6 +100,11 @@ policy conserves each particle's fixed-point mass and makes overflow explicit:
 a full cell blocks entry without losing a particle. Page-table neighbor reads
 cross chunk seams directly, serving as a zero-copy halo view. Missing pages
 block transfer until streaming activates them.
+
+Chunk files now use version 5 so grain radius is persistent and can be changed
+per particle. Version 4 particle records are migrated from their former shared
+0.5-cell radius to the material defaults on load; earlier versions still seed
+particles from material cells.
 
 The solver neither downloads particles nor rebuilds its buffers per frame.
 GPU timestamps for the sand stage measure the complete MPM work; the headless
@@ -106,3 +122,9 @@ enclosed nine-cell mud component. It checks the visible floor, mud and
 fragment classifications, and moving grains, and saves
 `build/screenshots/coupled_before.bmp` and
 `build/screenshots/coupled_after_1s.bmp`.
+The sifting demo starts a 63-grain mixed column inside a stone chamber on dry
+generated terrain. `--smoke-sifting` captures
+`build/screenshots/sifting_before.bmp` and
+`build/screenshots/sifting_after_1s.bmp`, then checks material counts, walls,
+and the mean sand/gravel depth gap after 60 GPU ticks. `--demo-sifting` leaves
+the same scene interactive.
