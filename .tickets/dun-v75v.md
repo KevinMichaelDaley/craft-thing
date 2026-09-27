@@ -1,6 +1,6 @@
 ---
 id: dun-v75v
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-09-27T01:59:30Z
@@ -22,3 +22,9 @@ Label 4-connected dirt cells across resident chunk seams on GPU, classify compon
 
 Wet sand retains mass and settles, small wet dirt patches break apart, large wet dirt components form mud, seam-spanning components have one label, and the combined interactive demo shows the behavior with no normal-frame readback.
 
+
+## Notes
+
+**2026-09-27T02:19:53Z**
+
+Implemented GPU root-hooked 4-connected dirt labels with GPU indirect early termination; wet sand conserves pore water and sinks; small wet dirt fragments separate; components >=8 wet grains become mud. All headless, UI smoke, and Vulkan validation tests pass. Future rigid extraction tracked by dun-spbq.
