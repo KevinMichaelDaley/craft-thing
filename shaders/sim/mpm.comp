@@ -86,6 +86,10 @@ bool load_proposal(ivec2 cell, uint layer, out Particle particle) {
     return particle.mass_fp != 0u;
 }
 
+bool particle_is_mud(Particle particle) {
+    return particle.material == 4u && (particle.flags & MUD_FLAG) != 0u;
+}
+
 ivec2 tile_origin(ivec2 cell) {
     return (cell / int(SIDE)) * int(SIDE);
 }
@@ -177,8 +181,7 @@ void p2g(ivec2 node) {
                 total.yz += weight * mass * velocity;
                 float jacobian = clamp(particle.f00 * particle.f11 -
                                        particle.f01 * particle.f10, 0.5, 1.5);
-                bool mud = particle.material == 4u &&
-                           (particle.flags & MUD_FLAG) != 0u;
+                bool mud = particle_is_mud(particle);
                 float bulk = mud ? 1.2 : particle.material == 5u ? 8.0 :
                              particle.material == 4u ? 3.0 : 5.0;
                 float pressure = bulk * max(0.0, 1.0 - jacobian);
@@ -267,7 +270,7 @@ void g2p_one(ivec2 owner, uint layer) {
     mat2 deformation = mat2(particle.f00, particle.f10,
                              particle.f01, particle.f11);
     deformation = (mat2(1.0) + DT * gradient) * deformation;
-    bool mud = particle.material == 4u && (particle.flags & MUD_FLAG) != 0u;
+    bool mud = particle_is_mud(particle);
     particle.f00 = clamp(deformation[0][0], mud ? 0.55 : 0.75,
                          mud ? 1.45 : 1.25);
     particle.f11 = clamp(deformation[1][1], mud ? 0.55 : 0.75,

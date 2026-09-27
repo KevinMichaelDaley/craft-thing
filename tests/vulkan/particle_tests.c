@@ -644,6 +644,38 @@ static void test_water_brush_keeps_dirt_particle(void) {
     PASS();
 }
 
+static void test_drying_returns_bound_water_to_eulerian_cell(void) {
+    char err[256] = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    uint32_t source = 24 * DC_CHUNK_SIDE + 24;
+    chunk->cells[source].material = DC_MATERIAL_DIRT;
+    chunk->cells[source - 1].material = DC_MATERIAL_STONE;
+    chunk->cells[source + 1].material = DC_MATERIAL_STONE;
+    chunk->cells[source - DC_CHUNK_SIDE].material = DC_MATERIAL_STONE;
+    chunk->cells[source + DC_CHUNK_SIDE].material = DC_MATERIAL_STONE;
+    dc_chunk_seed_particles(chunk);
+    chunk->particles[source].flags = DC_MPM_MUD_FLAG | 4096u;
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->particle_count, 1u);
+    uint32_t moisture = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (chunk->particles[i].mass_fp)
+            moisture = chunk->particles[i].flags & DC_MPM_MOISTURE_MASK;
+    ASSERT_EQ(chunk->cells[source].fluid_mass, 64u);
+    ASSERT_EQ(moisture, 4032u);
+    ASSERT_EQ(chunk->cells[source].fluid_mass + moisture, 4096u);
+    dc_gpu_destroy(gpu);
+    free(chunk);
+    PASS();
+}
+
 static uint64_t combined_water_mass(const dc_chunk_t *chunk) {
     uint64_t mass = 0;
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
@@ -787,6 +819,7 @@ int main(void) {
     RUN(test_closed_wet_grain_momentum_balance);
     RUN(test_dirt_binds_small_water_dose_without_losing_mass);
     RUN(test_water_brush_keeps_dirt_particle);
+    RUN(test_drying_returns_bound_water_to_eulerian_cell);
     RUN(test_coupled_materials_conserve_water_across_seam_and_stream);
     RUN(test_dry_and_saturated_dirt_yield_differently);
     printf("%d passed, %d failed\n", g_pass, g_fail);

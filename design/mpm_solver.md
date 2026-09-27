@@ -43,6 +43,21 @@ coefficient is bounded below one and the reduced-mass form prevents an
 explicit overshoot for the two half-tick substeps. This uses no atomics,
 per-frame CPU readback, or new persistent buffer.
 
+Before the two MPM substeps, a GPU cell-owner pass exchanges free Eulerian
+water with dirt-particle moisture. Each dirt particle can bind at most 0.25
+cell of water; one tick absorbs at most 0.0625 cell, debiting the cell by
+exactly the credited 16.16 amount. With no free water in its cell, a particle
+returns up to 64 fixed-point units per tick to the Eulerian cell. Both particle
+slots are processed in stable order by one invocation, avoiding competing
+writes. Mud enters at 2048 bound units and returns to dry dirt only at or
+below 1024, so a small fluctuation cannot switch the material each tick.
+Bound moisture travels with the particle ID through movement, chunk seams,
+and save/reload; it is never counted as a second free-water cell or marker.
+Wet dirt has lower compressive bulk and shear resistance and wider plastic
+strain limits than dry dirt. The renderer colors mud separately when no free
+water covers its pixel. Painting water onto granular material retains its
+particle and painting granular material into water retains the Eulerian mass.
+
 G2P interpolates grid velocity (PIC), updates `F` with the grid velocity
 gradient, caps strain for plastic yielding, and proposes a new position. The
 next pass ranks competing arrivals by stable particle ID. Each cell owns two
@@ -64,3 +79,7 @@ fixed-point units; still water does not carry grains sideways. The one-second
 UI smoke produces
 `build/screenshots/granular_before.bmp` and
 `build/screenshots/granular_after_1s.bmp`.
+The coupled one-second UI smoke paints water, dirt, sand, and gravel in the
+procedural level, checks a wet dirt particle and moving grains, and saves
+`build/screenshots/coupled_before.bmp` and
+`build/screenshots/coupled_after_1s.bmp`.
