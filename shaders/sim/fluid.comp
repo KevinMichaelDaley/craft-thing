@@ -24,7 +24,7 @@ const uint SIDE = 64u;
 const uint CELLS_PER_CHUNK = 4096u;
 const uint FULL = 65536u;
 const float TRANSPORT_FUDGE = 1.001;
-const float VELOCITY_DAMPING = 0.999;
+const float VELOCITY_DAMPING = 0.997;
 
 uint page_at(ivec2 p) {
     if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
