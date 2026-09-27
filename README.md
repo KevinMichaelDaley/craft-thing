@@ -8,6 +8,8 @@ GPU chunk halos are bounded by the 64 resident slots and refreshed from the page
 
 ## Build and run
 
+The falling water in the interactive level comes from an intentional test spring above the center basin. Press `F` to turn that source off or on; existing water remains in the level.
+
 Install development packages for Vulkan, SDL2, `pkg-config`, and `glslangValidator` (Ubuntu packages: `libvulkan-dev`, `libsdl2-dev`, `glslang-tools`). Then run:
 
 ```sh
@@ -22,7 +24,7 @@ make test_ui_long
 
 `make test_ui_long` runs the windowed fluid scene for 600 presented ticks, paints water at tick 361, and saves `build/screenshots/after_5s.bmp` and `after_10s.bmp`. It checks that the images differ, including near the painted area. The window remains visible while the test runs; use `./build/dungeoncraft` for an open-ended interactive session.
 
-Run `./build/dungeoncraft --demo-coupled --world-dir build/my_coupled_world` for an open-ended mud test. It paints a supported dirt layer over the generated floor and places water, dirt, sand, and gravel above it. The water and grain GPU velocities lose 0.1% per solve step to settle residual bouncing. `make test_ui` also saves the combined scene as `build/screenshots/coupled_before.bmp` and `build/screenshots/coupled_after_1s.bmp`.
+Run `./build/dungeoncraft --demo-coupled --world-dir build/my_coupled_world` for an open-ended mud test. It paints a supported dirt layer over the generated floor and places water, dirt, sand, and gravel above it. Water velocity loses 0.3% per unit solve time and grain velocity loses 0.1% per solve step to settle residual bouncing. `make test_ui` also saves the combined scene as `build/screenshots/coupled_before.bmp` and `build/screenshots/coupled_after_1s.bmp`.
 
 Run `./build/dungeoncraft --demo-sifting --world-dir build/my_sifting_world` for an interactive mixed-column drop. Material-specific grain sizes, contacts, and GPU pairwise percolation let sand sift below larger grains. `make test_ui` saves `build/screenshots/sifting_before.bmp` and `build/screenshots/sifting_after_1s.bmp` and verifies the one-second depth separation.
 

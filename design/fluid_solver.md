@@ -38,7 +38,7 @@ current solver reads resident neighbors through the page table rather than a
 separate halo refresh. At the end of the
 fluid stage, the final mass layer is written to the chunk atlas and dirty slots
 are recorded for persistence. The final face-velocity writeback applies a
-0.999 multiplier after flux and marker correction, dissipating a small amount
+0.997 multiplier per unit solve time after flux and marker correction, dissipating a small amount
 of residual kinetic energy without changing the mass budget or the marker
 comparison within that tick. The granular stage reads this finalized state.
 
