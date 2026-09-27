@@ -63,6 +63,10 @@ static void test_chunk_and_particle_state_use_separate_stream_staging(void) {
     ASSERT_TRUE(gpu->particle_staging_buffer != VK_NULL_HANDLE);
     ASSERT_TRUE(gpu->chunk_buffer != gpu->chunk_staging_buffer);
     ASSERT_TRUE(gpu->particle_buffer != gpu->particle_staging_buffer);
+    ASSERT_TRUE(gpu->mpm_force_staging_buffer != VK_NULL_HANDLE);
+    ASSERT_TRUE(gpu->mpm_velocity_staging_buffer != VK_NULL_HANDLE);
+    ASSERT_TRUE(gpu->mpm_force_buffer != gpu->mpm_force_staging_buffer);
+    ASSERT_TRUE(gpu->mpm_velocity_buffer != gpu->mpm_velocity_staging_buffer);
     dc_gpu_destroy(gpu);
     PASS();
 }

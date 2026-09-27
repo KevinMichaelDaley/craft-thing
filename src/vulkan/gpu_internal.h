@@ -49,8 +49,10 @@ struct dc_gpu {
     void *particle_mapped, *particle_count_mapped;
     VkBuffer mpm_proposal_buffer, mpm_output_buffer, mpm_grid_buffer;
     VkBuffer mpm_force_buffer, mpm_velocity_buffer, mpm_accept_buffer;
+    VkBuffer mpm_force_staging_buffer, mpm_velocity_staging_buffer;
     VkDeviceMemory mpm_proposal_memory, mpm_output_memory, mpm_grid_memory;
     VkDeviceMemory mpm_force_memory, mpm_velocity_memory, mpm_accept_memory;
+    VkDeviceMemory mpm_force_staging_memory, mpm_velocity_staging_memory;
     void *mpm_proposal_mapped, *mpm_output_mapped, *mpm_grid_mapped;
     void *mpm_force_mapped, *mpm_velocity_mapped, *mpm_accept_mapped;
     VkPipeline mpm_pipeline;
@@ -112,10 +114,13 @@ struct dc_gpu {
     uint32_t fluid_interval;
     uint32_t fluid_phase;
     float tick_time_scale;
-    float fluid_elapsed_scale;
     float fluid_step_scale;
+    float fluid_phase_budget;
     bool timed_fluid;
     bool fluid_snapshot_valid;
+    VkDeviceSize mapped_local_bytes;
+    VkDeviceSize mapped_system_bytes;
+    VkDeviceSize device_only_bytes;
     VkBuffer marker_a_buffer, marker_b_buffer;
     VkDeviceMemory marker_a_memory, marker_b_memory;
     void *marker_a_mapped, *marker_b_mapped;
@@ -146,7 +151,7 @@ static inline uint32_t dc_gpu_float_bits(float value) {
 
 static inline uint32_t dc_gpu_render_flags(const dc_gpu_t *gpu) {
     uint32_t blend = gpu->fluid_snapshot_valid && gpu->fluid_interval == 6u ?
-                     ((gpu->fluid_phase + 1u) % 6u) * 65535u / 6u : 65535u;
+                     ((gpu->fluid_phase + 2u) % 6u) * 65535u / 6u : 65535u;
     return (blend << 8) | (gpu->marker_overlay ? 1u : 0u);
 }
 
@@ -160,6 +165,8 @@ bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
                                char *err, uint32_t cap);
 bool dc_gpu_make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                VkDeviceMemory *memory, char *err, uint32_t cap);
+bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
+                             bool particles, char *err, uint32_t cap);
 bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *shader_path,
                                 char *err, uint32_t cap);
