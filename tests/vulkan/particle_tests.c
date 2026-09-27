@@ -52,7 +52,7 @@ static void test_generated_sand_has_stable_gpu_particles(void) {
     ASSERT_TRUE(dc_gpu_readback(gpu, pixels, DC_CHUNK_CELLS, err, sizeof(err)));
     uint32_t rendered = 0;
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
-        if (generated->particles[i].mass_fp && pixels[i] == 0xff40c8e0u) ++rendered;
+        if (generated->particles[i].mass_fp && pixels[i] != 0xff181818u) ++rendered;
     ASSERT_EQ(rendered, generated->particle_count);
     free(pixels);
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, replayed, err, sizeof(err)));

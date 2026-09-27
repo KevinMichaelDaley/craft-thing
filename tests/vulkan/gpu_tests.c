@@ -70,8 +70,10 @@ static void test_chunk_page_mapping_and_gpu_material_edit(void) {
     ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 0, 1, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_render_chunks(gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_readback(gpu, pixels, 128 * 64, err, sizeof(err)));
-    ASSERT_EQ(pixels[5 * 128 + 63], 0xff707070u);
-    ASSERT_EQ(pixels[5 * 128 + 64], 0xffd07030u);
+    ASSERT_TRUE((pixels[5 * 128 + 63] & 255u) > 24u);
+    ASSERT_TRUE((pixels[5 * 128 + 63] & 255u) < 112u);
+    ASSERT_TRUE(((pixels[5 * 128 + 64] >> 16) & 255u) > 24u);
+    ASSERT_TRUE(((pixels[5 * 128 + 64] >> 16) & 255u) < 208u);
     ASSERT_TRUE(dc_gpu_paint_material(gpu, 64, 5, 0, DC_MATERIAL_SAND, err, sizeof(err)));
     saved.coord = right.coord;
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &saved, err, sizeof(err)));
@@ -108,8 +110,10 @@ static void test_gpu_box_crosses_chunk_edge_and_rests_on_terrain(void) {
     ASSERT_EQ(body.vy_fp, 0);
     ASSERT_TRUE(dc_gpu_render_chunks(gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_readback(gpu, pixels, 128 * 64, err, sizeof(err)));
-    ASSERT_EQ(pixels[18 * 128 + 83], 0xff30c040u);
-    ASSERT_EQ(pixels[20 * 128 + 83], 0xff707070u);
+    ASSERT_TRUE(((pixels[18 * 128 + 83] >> 8) & 255u) > 100u);
+    ASSERT_TRUE(((pixels[18 * 128 + 83] >> 8) & 255u) < 192u);
+    ASSERT_TRUE((pixels[20 * 128 + 83] & 255u) > 24u);
+    ASSERT_TRUE((pixels[20 * 128 + 83] & 255u) < 112u);
     dc_gpu_destroy(gpu);
     PASS();
 }
@@ -130,6 +134,9 @@ static void test_density_antialiases_every_material(void) {
                 left.cells[y * DC_CHUNK_SIDE + x].material = kinds[kind];
     left.cells[10 * DC_CHUNK_SIDE + 50].fluid_mass = DC_FLUID_FULL / 2u;
     left.cells[10 * DC_CHUNK_SIDE + 54].fluid_mass = DC_FLUID_FULL;
+    for (uint32_t y = 20; y <= 24; ++y)
+        for (uint32_t x = 30; x <= 34; ++x)
+            left.cells[y * DC_CHUNK_SIDE + x].fluid_mass = DC_FLUID_FULL;
     for (uint32_t y = 30; y <= 34; ++y) {
         for (uint32_t x = 25; x <= 27; ++x)
             left.cells[y * DC_CHUNK_SIDE + x].material = DC_MATERIAL_STONE;
@@ -163,6 +170,11 @@ static void test_density_antialiases_every_material(void) {
         ASSERT_TRUE(pixels[10 * 128 + center - 3u] != 0xff181818u);
         ASSERT_TRUE(pixels[10 * 128 + center] != 0xff181818u);
     }
+    ASSERT_EQ(pixels[10 * 128 + 10], 0xff707070u);
+    ASSERT_EQ(pixels[10 * 128 + 20], 0xff40c8e0u);
+    ASSERT_EQ(pixels[10 * 128 + 30], 0xff326495u);
+    ASSERT_EQ(pixels[10 * 128 + 40], 0xff808090u);
+    ASSERT_EQ(pixels[22 * 128 + 32], 0xffd07030u);
     ASSERT_TRUE(blue_channel(pixels[10 * 128 + 49]) > 24u);
     ASSERT_TRUE(blue_channel(pixels[10 * 128 + 50]) <
                 blue_channel(pixels[10 * 128 + 54]));
@@ -174,6 +186,8 @@ static void test_density_antialiases_every_material(void) {
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved, err, sizeof(err)));
     ASSERT_EQ(saved.cells[10 * DC_CHUNK_SIDE + 50].fluid_mass,
               DC_FLUID_FULL / 2u);
+    ASSERT_EQ(saved.particle_count, left.particle_count);
+    ASSERT_EQ(memcmp(saved.particles, left.particles, sizeof(left.particles)), 0);
     dc_gpu_destroy(gpu);
     PASS();
 }

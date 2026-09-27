@@ -469,7 +469,8 @@ static int smoke_streamed_level(void) {
                      dc_level_view_tick(view, err, sizeof(err));
     uint32_t rigid_color = 0;
     if (okay) okay = dc_level_view_pixel(view, 64, 2, &rigid_color, err, sizeof(err)) &&
-                     rigid_color == 0xff30c040u;
+                     ((rigid_color >> 8) & 255u) > 100u &&
+                     ((rigid_color >> 8) & 255u) > (rigid_color & 255u);
     if (!okay) stage = rigid_stage;
     if (okay) stage = "falling spring";
     dc_chunk_t falling = {0};

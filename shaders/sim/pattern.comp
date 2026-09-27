@@ -28,10 +28,114 @@ uint grain_radius_fp(uint material) {
     return material == 2u ? 16384u : material == 4u ? 24576u : 32768u;
 }
 
+vec3 linear_color(uint packed) {
+    vec3 rgb = vec3(float(packed & 255u), float((packed >> 8) & 255u),
+                    float((packed >> 16) & 255u)) / 255.0;
+    return rgb * rgb;
+}
+
+uint pack_linear_color(vec3 linear_rgb) {
+    uvec3 rgb = uvec3(round(255.0 * sqrt(clamp(linear_rgb, vec3(0.0),
+                                               vec3(1.0)))));
+    return 0xff000000u | (rgb.b << 16) | (rgb.g << 8) | rgb.r;
+}
+
+uint material_color(uint material, uint flags) {
+    if (material == 1u) return 0xff707070u;
+    if (material == 2u)
+        return (flags & 0x00ffffffu) != 0u ? 0xff368e9cu : 0xff40c8e0u;
+    if (material == 4u)
+        return (flags & 0x80000000u) != 0u ? 0xff29465bu : 0xff326495u;
+    if (material == 5u) return 0xff808090u;
+    return 0xff707070u;
+}
+
+struct DensitySample {
+    vec3 premultiplied;
+    float coverage;
+};
+shared vec4 density_tile[18 * 18];
+
+DensitySample material_density(ivec2 p) {
+    DensitySample density_sample = DensitySample(vec3(0.0), 0.0);
+    if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
+        p.y >= int(params.height)) return density_sample;
+    uint page_width = (params.width + 63u) / 64u;
+    uint page = pages[(uint(p.y) / 64u) * page_width + uint(p.x) / 64u];
+    if (page == 0u) return density_sample;
+    uint index = (page - 1u) * 4096u + (uint(p.y) % 64u) * 64u + uint(p.x) % 64u;
+    uvec2 cell = chunk_cells[index];
+    uint material = cell.x & 0xffffu;
+    float solid = 0.0;
+    vec3 solid_color = vec3(0.0);
+    if (material == 2u || material == 4u || material == 5u) {
+        uint first = (page - 1u) * 8192u + index % 4096u;
+        float particle_mass = 0.0;
+        for (uint layer = 0u; layer < 2u; ++layer) {
+            Particle particle = particles[first + layer * 4096u];
+            if (particle.mass_fp == 0u) continue;
+            float mass = float(particle.mass_fp) / 65536.0;
+            solid_color += mass * linear_color(material_color(particle.material,
+                                                               particle.flags));
+            particle_mass += mass;
+        }
+        if (particle_mass > 0.0) {
+            solid = min(particle_mass, 1.0);
+            solid_color /= particle_mass;
+        } else {
+            solid = 1.0;
+            solid_color = linear_color(material_color(material, 0u));
+        }
+    } else if (material != 0u && material != 3u) {
+        solid = 1.0;
+        solid_color = linear_color(material_color(material, 0u));
+    }
+    float water = min(float(cell.y) / 65536.0, 1.0);
+    density_sample.coverage = water + solid * (1.0 - water);
+    density_sample.premultiplied = water * linear_color(0xffd07030u) +
+                           (1.0 - water) * solid * solid_color;
+    if (occupancy[uint(p.y) * params.width + uint(p.x)] != 0u) {
+        density_sample.coverage = 1.0;
+        density_sample.premultiplied = linear_color(0xff30c040u);
+    }
+    return density_sample;
+}
+
+void load_density_tile() {
+    ivec2 origin = ivec2(gl_WorkGroupID.xy * uvec2(16u)) +
+                   ivec2(params.radius, params.color) - ivec2(1);
+    for (uint ty = gl_LocalInvocationID.y; ty < 18u; ty += 16u)
+        for (uint tx = gl_LocalInvocationID.x; tx < 18u; tx += 16u) {
+            DensitySample density_sample = material_density(origin + ivec2(tx, ty));
+            density_tile[ty * 18u + tx] =
+                vec4(density_sample.premultiplied, density_sample.coverage);
+        }
+    barrier();
+}
+
+uint antialiased_material_color() {
+    vec3 premultiplied = vec3(0.0);
+    float coverage = 0.0;
+    int center = int((gl_LocalInvocationID.y + 1u) * 18u +
+                     gl_LocalInvocationID.x + 1u);
+    for (int dy = -1; dy <= 1; ++dy) {
+        float wy = dy == 0 ? 0.75 : 0.125;
+        for (int dx = -1; dx <= 1; ++dx) {
+            float weight = wy * (dx == 0 ? 0.75 : 0.125);
+            vec4 density_sample = density_tile[center + dy * 18 + dx];
+            premultiplied += weight * density_sample.xyz;
+            coverage += weight * density_sample.w;
+        }
+    }
+    return pack_linear_color(premultiplied +
+                             (1.0 - coverage) * linear_color(0xff181818u));
+}
+
 void main() {
     uvec2 display_cell = gl_GlobalInvocationID.xy;
     uvec2 p = display_cell;
     if (params.mode == 2u) p += uvec2(params.radius, params.color);
+    if (params.mode == 2u && params.brush_y != 2u) load_density_tile();
     if (p.x >= params.width || p.y >= params.height) return;
     if (params.mode == 0u) {
         cells[p.y * params.width + p.x] = ((p.x + p.y) & 1u) == 0u
@@ -50,6 +154,19 @@ void main() {
             return;
         }
         uint index = (page - 1u) * 4096u + (p.y % 64u) * 64u + p.x % 64u;
+        if (params.mode == 2u && params.brush_y != 2u) {
+            uint filtered = antialiased_material_color();
+            if (params.brush_x != 0u) {
+                uint guide = marker_grid[index];
+                if ((guide & 1u) != 0u) filtered = 0xffd040e0u;
+                else if ((guide & 2u) != 0u) filtered = 0xff40e0d0u;
+            }
+            if (params.brush_y == 1u &&
+                ((p.x % 64u) == 0u || (p.y % 64u) == 0u))
+                filtered = 0xff30d030u;
+            cells[p.y * params.width + p.x] = filtered;
+            return;
+        }
         uvec2 cell = chunk_cells[index];
         uint material = cell.x & 0xffffu;
         uint slot = page - 1u;
@@ -134,15 +251,8 @@ void main() {
             uint blue = 64u + 144u * fill / 256u;
             color = 0xff000000u | (blue << 16) | (green << 8) | red;
         }
-        if (occupancy[p.y * params.width + p.x] != 0u) color = 0xff30c040u;
-        if (params.mode == 2u && params.brush_x != 0u) {
-            uint guide = marker_grid[index];
-            if ((guide & 1u) != 0u) color = 0xffd040e0u;
-            else if ((guide & 2u) != 0u) color = 0xff40e0d0u;
-        }
-        if (params.mode == 2u && params.brush_y == 1u &&
-            ((p.x % 64u) == 0u || (p.y % 64u) == 0u))
-            color = 0xff30d030u;
+        if (params.mode == 3u && occupancy[p.y * params.width + p.x] != 0u)
+            color = 0xff30c040u;
         if (params.mode == 2u && params.brush_y == 2u) {
             color = 0xff181818u;
             if (material == 1u) color = 0xff303030u;
