@@ -31,8 +31,10 @@ uint atlas_of(ivec2 p) {
 
 bool open_cell(ivec2 p) {
     uint atlas = atlas_of(p);
-    return atlas != 0xffffffffu &&
-           (cells[atlas].x & 0xffffu) == 0u && occupancy[index_of(p)] == 0u;
+    if (atlas == 0xffffffffu) return false;
+    uint material = cells[atlas].x & 0xffffu;
+    return (material == 0u || material == 2u || material == 4u ||
+            material == 5u) && occupancy[index_of(p)] == 0u;
 }
 
 bool wet(ivec2 p) {

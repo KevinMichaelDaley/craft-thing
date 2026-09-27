@@ -11,6 +11,7 @@ struct Particle {
 layout(set = 0, binding = 1, std430) buffer ChunkCells { uvec2 chunk_cells[]; };
 layout(set = 0, binding = 2, std430) readonly buffer Pages { uint pages[]; };
 layout(set = 0, binding = 3, std430) readonly buffer Occupancy { uint occupancy[]; };
+layout(set = 0, binding = 10, std430) buffer FaceVelocity { vec2 face_velocity[]; };
 layout(set = 0, binding = 19, std430) buffer Particles { Particle particles[]; };
 layout(set = 0, binding = 20, std430) buffer ParticleCounts { uint particle_counts[]; };
 layout(set = 0, binding = 21, std430) buffer Proposals { Particle proposals[]; };
@@ -36,6 +37,7 @@ const uint PARTICLES = 8192u;
 const float DT = 0.5;
 const float GRAVITY = 0.25;
 const float MAX_VELOCITY = 2.0;
+const float WATER_DRAG = 0.5;
 
 bool in_grid(ivec2 cell) {
     return cell.x >= 0 && cell.y >= 0 &&
@@ -97,9 +99,13 @@ bool solid_at(ivec2 cell) {
 }
 
 bool blocked_destination(ivec2 cell) {
-    if (solid_at(cell)) return true;
-    uint index = (page_at(cell) - 1u) * CELLS + local_cell(cell);
-    return chunk_cells[index].y != 0u;
+    return solid_at(cell);
+}
+
+float water_at(ivec2 cell) {
+    uint page = page_at(cell);
+    if (page == 0u || solid_at(cell)) return 0.0;
+    return float(chunk_cells[(page - 1u) * CELLS + local_cell(cell)].y) / 65536.0;
 }
 
 float kernel(vec2 delta) {
@@ -150,6 +156,7 @@ void solve_grid(ivec2 node) {
     uint index = uint(node.y) * params.width + uint(node.x);
     float mass = grid[index].x;
     vec2 velocity = vec2(0.0);
+    vec2 feedback = vec2(0.0);
     if (mass > 0.000001) {
         velocity = grid[index].yz / mass + DT * grid_force[index].xy / mass;
         velocity.y += GRAVITY * DT;
@@ -163,8 +170,26 @@ void solve_grid(ivec2 node) {
             if (velocity.x > 0.0 && solid_at(node + ivec2(1, 0))) velocity.x = 0.0;
             if (velocity.x < 0.0 && solid_at(node + ivec2(-1, 0))) velocity.x = 0.0;
         }
+        vec2 water_mass = vec2(
+            0.5 * (water_at(node) + water_at(node + ivec2(1, 0))),
+            0.5 * (water_at(node) + water_at(node + ivec2(0, 1))));
+        vec2 water_velocity = face_velocity[index];
+        for (int axis = 0; axis < 2; ++axis) {
+            float wet_mass = water_mass[axis];
+            if (wet_mass <= 0.000001) continue;
+            float impulse = WATER_DRAG * (mass * wet_mass / (mass + wet_mass)) *
+                            (water_velocity[axis] - velocity[axis]);
+            velocity[axis] += impulse / mass;
+            feedback[axis] = -impulse / wet_mass;
+        }
     }
     grid_velocity[index] = velocity;
+    grid_force[index].zw = feedback;
+}
+
+void apply_feedback(ivec2 node) {
+    uint index = uint(node.y) * params.width + uint(node.x);
+    face_velocity[index] += grid_force[index].zw;
 }
 
 void g2p_one(ivec2 owner, uint layer) {
@@ -327,6 +352,7 @@ void main() {
     if (!in_grid(cell)) return;
     if (params.mode == 0u) { p2g(cell); return; }
     if (params.mode == 1u) { solve_grid(cell); return; }
+    if (params.mode == 6u) { apply_feedback(cell); return; }
     if (page_at(cell) == 0u) return;
     if (params.mode == 2u) {
         if (particle_counts[page_at(cell) - 1u] == 0u || !grain_at(cell)) return;

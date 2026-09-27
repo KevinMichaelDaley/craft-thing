@@ -50,8 +50,9 @@ bool open_cell(ivec2 p) {
     uint page = page_at(p);
     if (page == 0u) return false;
     uint index = uint(p.y) * params.width + uint(p.x);
-    return (chunk_cells[atlas_index(p, page)].x & 0xffffu) == 0u &&
-           occupancy[index] == 0u;
+    uint material = chunk_cells[atlas_index(p, page)].x & 0xffffu;
+    return (material == 0u || material == 2u || material == 4u ||
+            material == 5u) && occupancy[index] == 0u;
 }
 
 void move_line(ivec2 source, ivec2 direction, bool vertical) {
@@ -123,10 +124,7 @@ void correct_pair(ivec2 p) {
     uint own_page = page_at(p);
     uint other_page = page_at(neighbor);
     if (own_page == 0u || other_page == 0u ||
-        (chunk_cells[atlas_index(p, own_page)].x & 0xffffu) != 0u ||
-        (chunk_cells[atlas_index(neighbor, other_page)].x & 0xffffu) != 0u ||
-        occupancy[index] != 0u ||
-        occupancy[uint(neighbor.y) * params.width + uint(neighbor.x)] != 0u) {
+        !open_cell(p) || !open_cell(neighbor)) {
         write_mass(index, own);
         return;
     }

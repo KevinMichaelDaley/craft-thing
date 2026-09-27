@@ -8,6 +8,7 @@
 #include "dungeoncraft/generate.h"
 #include "dungeoncraft/gpu.h"
 #include "dungeoncraft/stream.h"
+#include "../../src/vulkan/gpu_internal.h"
 
 static int g_pass, g_fail;
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); printf("OK   %s\n", #fn); } while (0)
@@ -434,6 +435,156 @@ static void test_wet_grain_moves_through_eulerian_water(void) {
     PASS();
 }
 
+static void test_water_drag_exchanges_momentum_with_grain(void) {
+    char err[256] = {0};
+    dc_chunk_t *wet = calloc(1, sizeof(*wet));
+    dc_chunk_t *reference = calloc(1, sizeof(*reference));
+    ASSERT_TRUE(wet && reference);
+    for (uint32_t y = 8; y < 56; ++y)
+        for (uint32_t x = 8; x < 56; ++x) {
+            uint32_t index = y * DC_CHUNK_SIDE + x;
+            wet->cells[index].fluid_mass = DC_FLUID_FULL;
+            wet->face_velocity[index].x = 1.0f;
+        }
+    memcpy(reference, wet, sizeof(*wet));
+    uint32_t source = 30 * DC_CHUNK_SIDE + 30;
+    wet->cells[source].material = DC_MATERIAL_SAND;
+    dc_chunk_seed_particles(wet);
+    dc_gpu_t *gpu = NULL, *reference_gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create(&reference_gpu, 64, 64,
+                              "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, wet, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, wet, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(reference_gpu, 0, reference, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(reference_gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_step(reference_gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(reference_gpu, 0, reference, err, sizeof(err)));
+    ASSERT_TRUE(wet->face_velocity[source].x < reference->face_velocity[source].x - 0.01f);
+    ASSERT_EQ(wet->particle_count, 1u);
+    uint32_t moving = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (wet->particles[i].mass_fp && wet->particles[i].vx_fp > 0) ++moving;
+    ASSERT_EQ(moving, 1u);
+    dc_gpu_destroy(gpu);
+    dc_gpu_destroy(reference_gpu);
+    free(wet); free(reference);
+    PASS();
+}
+
+static void test_coupled_flow_crosses_chunk_seam(void) {
+    char err[256] = {0};
+    dc_chunk_t *left = calloc(1, sizeof(*left));
+    dc_chunk_t *right = calloc(1, sizeof(*right));
+    ASSERT_TRUE(left && right);
+    right->coord.x = 1;
+    for (uint32_t y = 8; y < 56; ++y)
+        for (uint32_t x = 0; x < 64; ++x) {
+            uint32_t index = y * DC_CHUNK_SIDE + x;
+            left->cells[index].fluid_mass = DC_FLUID_FULL;
+            right->cells[index].fluid_mass = DC_FLUID_FULL;
+            left->face_velocity[index].x = 1.5f;
+            right->face_velocity[index].x = 1.5f;
+        }
+    uint32_t source = 30 * DC_CHUNK_SIDE + 63;
+    left->cells[source].material = DC_MATERIAL_SAND;
+    dc_chunk_seed_particles(left);
+    uint32_t id = left->particles[source].id_lo;
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 128, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 1, right, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 0, 1, err, sizeof(err)));
+    dc_gpu_tick_capture_t capture = {0};
+    for (uint32_t tick = 0; tick < 8; ++tick)
+        ASSERT_TRUE(dc_gpu_tick_capture(gpu, &capture, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, right, err, sizeof(err)));
+    ASSERT_EQ(left->particle_count + right->particle_count, 1u);
+    ASSERT_EQ(right->particle_count, 1u);
+    uint32_t found = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (right->particles[i].mass_fp) {
+            ASSERT_EQ(right->particles[i].id_lo, id);
+            ASSERT_EQ(right->particles[i].mass_fp, DC_FLUID_FULL);
+            ++found;
+        }
+    ASSERT_EQ(found, 1u);
+    ASSERT_TRUE(capture.stages[2].gpu_ns > 0u);
+    dc_gpu_destroy(gpu);
+    free(left); free(right);
+    PASS();
+}
+
+static void test_closed_wet_grain_momentum_balance(void) {
+    char err[256] = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    dc_chunk_t *still = calloc(1, sizeof(*still));
+    ASSERT_TRUE(chunk && still);
+    for (uint32_t y = 8; y < 56; ++y)
+        for (uint32_t x = 8; x < 56; ++x) {
+            uint32_t index = y * DC_CHUNK_SIDE + x;
+            chunk->cells[index].fluid_mass = DC_FLUID_FULL;
+            chunk->face_velocity[index].x = 1.0f;
+        }
+    uint32_t source = 30 * DC_CHUNK_SIDE + 30;
+    chunk->cells[source].material = DC_MATERIAL_SAND;
+    dc_chunk_seed_particles(chunk);
+    memcpy(still, chunk, sizeof(*still));
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
+        still->face_velocity[i].x = 0.0f;
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_EQ(vkResetCommandBuffer(gpu->command, 0), VK_SUCCESS);
+    VkCommandBufferBeginInfo begin = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+    ASSERT_EQ(vkBeginCommandBuffer(gpu->command, &begin), VK_SUCCESS);
+    dc_gpu_record_mpm(gpu);
+    ASSERT_EQ(vkEndCommandBuffer(gpu->command), VK_SUCCESS);
+    VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1, .pCommandBuffers = &gpu->command };
+    ASSERT_EQ(vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE), VK_SUCCESS);
+    ASSERT_EQ(vkQueueWaitIdle(gpu->queue), VK_SUCCESS);
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
+    double grain_momentum = 0.0, water_delta = 0.0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (chunk->particles[i].mass_fp)
+            grain_momentum += (double)chunk->particles[i].mass_fp / DC_FLUID_FULL *
+                              (double)chunk->particles[i].vx_fp / DC_FLUID_FULL;
+    for (uint32_t y = 8; y < 56; ++y)
+        for (uint32_t x = 8; x < 56; ++x) {
+            uint32_t index = y * DC_CHUNK_SIDE + x;
+            water_delta += chunk->face_velocity[index].x - 1.0;
+        }
+    printf("closed MPM/water x momentum: grain=%g water=%g residual=%g\n",
+           grain_momentum, water_delta, grain_momentum + water_delta);
+    ASSERT_TRUE(grain_momentum > 0.0);
+    ASSERT_TRUE(grain_momentum + water_delta < 4.0 / DC_FLUID_FULL &&
+                grain_momentum + water_delta > -4.0 / DC_FLUID_FULL);
+    dc_gpu_destroy(gpu);
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, still, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, still, err, sizeof(err)));
+    ASSERT_EQ(still->particle_count, 1u);
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (still->particles[i].mass_fp)
+            ASSERT_TRUE(abs(still->particles[i].vx_fp) < 655);
+    dc_gpu_destroy(gpu);
+    free(chunk);
+    free(still);
+    PASS();
+}
+
 int main(void) {
     printf("GPU particle capacity: %u records per chunk, %u primary cell slots\n",
            DC_MPM_PARTICLES_PER_CHUNK, DC_CHUNK_CELLS);
@@ -448,6 +599,9 @@ int main(void) {
     RUN(test_two_slot_collision_resolves_by_stable_id);
     RUN(test_resident_window_reports_mpm_gpu_time);
     RUN(test_wet_grain_moves_through_eulerian_water);
+    RUN(test_water_drag_exchanges_momentum_with_grain);
+    RUN(test_coupled_flow_crosses_chunk_seam);
+    RUN(test_closed_wet_grain_momentum_balance);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
