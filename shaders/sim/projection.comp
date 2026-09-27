@@ -6,6 +6,7 @@ layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; }
 layout(set = 0, binding = 3, std430) readonly buffer Occupancy { uint occupancy[]; };
 layout(set = 0, binding = 10, std430) buffer FaceVelocity { vec2 face_velocity[]; };
 layout(set = 0, binding = 11, std430) buffer PressureA { float pressure_a[]; };
+layout(set = 0, binding = 17, std430) readonly buffer SlotPages { uint slot_pages[]; };
 layout(set = 0, binding = 9, std430) buffer HydroHead { uint hydro_head[]; };
 layout(set = 0, binding = 8, std430) buffer PreviousVerticalVelocity { uint previous_vertical_velocity[]; };
 layout(push_constant) uniform Params {
@@ -78,6 +79,13 @@ float advected_vertical(ivec2 p) {
 
 void main() {
     ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (params.unused0 != 0u) {
+        uint tile = slot_pages[gl_WorkGroupID.z];
+        if (tile == 0xffffffffu) return;
+        uint stride = (params.width + 63u) / 64u;
+        p += ivec2(int((tile % stride) * 64u),
+                   int((tile / stride) * 64u));
+    }
     if (p.x >= int(params.width) || p.y >= int(params.height)) return;
     uint index = index_of(p);
     if (params.mode == 5u) {

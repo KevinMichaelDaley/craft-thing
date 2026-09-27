@@ -8,6 +8,7 @@ layout(set = 0, binding = 8, std430) buffer FluidA { uint fluid_a[]; };
 layout(set = 0, binding = 9, std430) buffer FluidB { int fluid_b[]; };
 layout(set = 0, binding = 10, std430) buffer FaceVelocity { vec2 face_velocity[]; };
 layout(set = 0, binding = 16, std430) readonly buffer MarkerGrid { uint marker_grid[]; };
+layout(set = 0, binding = 17, std430) readonly buffer SlotPages { uint slot_pages[]; };
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -165,9 +166,13 @@ void main() {
         scan_line(linear);
         return;
     }
-    if (linear >= params.width * params.height) return;
-    uint index = linear;
-    ivec2 position = ivec2(int(linear % params.width), int(linear / params.width));
+    uint tile = slot_pages[gl_WorkGroupID.z];
+    if (tile == 0xffffffffu) return;
+    uint stride = (params.width + SIDE - 1u) / SIDE;
+    ivec2 position = ivec2(int((tile % stride) * SIDE + linear % SIDE),
+                           int((tile / stride) * SIDE + linear / SIDE));
+    if (position.x >= int(params.width) || position.y >= int(params.height)) return;
+    uint index = uint(position.y) * params.width + uint(position.x);
     uint page = page_at(position);
     if (params.mode == 4u) {
         fluid_a[index] = page == 0u ? 0u :
