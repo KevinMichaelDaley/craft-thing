@@ -54,6 +54,19 @@ static void test_host_visible_vram_is_preferred_for_mapped_buffers(void) {
     PASS();
 }
 
+static void test_chunk_and_particle_state_use_separate_stream_staging(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(gpu->chunk_staging_buffer != VK_NULL_HANDLE);
+    ASSERT_TRUE(gpu->particle_staging_buffer != VK_NULL_HANDLE);
+    ASSERT_TRUE(gpu->chunk_buffer != gpu->chunk_staging_buffer);
+    ASSERT_TRUE(gpu->particle_buffer != gpu->particle_staging_buffer);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 static void test_gpu_brush_updates_only_covered_cells(void) {
     char err[256] = {0};
     dc_gpu_t *gpu = NULL;
@@ -235,6 +248,7 @@ int main(void) {
     RUN(test_gpu_pattern_readback);
     RUN(test_rejects_invalid_dimensions);
     RUN(test_host_visible_vram_is_preferred_for_mapped_buffers);
+    RUN(test_chunk_and_particle_state_use_separate_stream_staging);
     RUN(test_gpu_brush_updates_only_covered_cells);
     RUN(test_chunk_page_mapping_and_gpu_material_edit);
     RUN(test_gpu_box_crosses_chunk_edge_and_rests_on_terrain);

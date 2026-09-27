@@ -38,10 +38,14 @@ struct dc_gpu {
     VkSemaphore acquire_sem;
     VkSemaphore present_sem;
     VkBuffer chunk_buffer;
+    VkBuffer chunk_staging_buffer;
     VkDeviceMemory chunk_memory;
+    VkDeviceMemory chunk_staging_memory;
     void *chunk_mapped;
     VkBuffer particle_buffer, particle_count_buffer;
+    VkBuffer particle_staging_buffer;
     VkDeviceMemory particle_memory, particle_count_memory;
+    VkDeviceMemory particle_staging_memory;
     void *particle_mapped, *particle_count_mapped;
     VkBuffer mpm_proposal_buffer, mpm_output_buffer, mpm_grid_buffer;
     VkBuffer mpm_force_buffer, mpm_velocity_buffer, mpm_accept_buffer;
@@ -86,6 +90,8 @@ struct dc_gpu {
     VkPipeline halo_pipeline;
     bool has_transfer;
     VkBuffer fluid_a_buffer;
+    VkBuffer fluid_previous_buffer;
+    VkDeviceMemory fluid_previous_memory;
     VkDeviceMemory fluid_a_memory;
     void *fluid_a_mapped;
     VkBuffer fluid_b_buffer;
@@ -105,6 +111,11 @@ struct dc_gpu {
     uint32_t fluid_tick;
     uint32_t fluid_interval;
     uint32_t fluid_phase;
+    float tick_time_scale;
+    float fluid_elapsed_scale;
+    float fluid_step_scale;
+    bool timed_fluid;
+    bool fluid_snapshot_valid;
     VkBuffer marker_a_buffer, marker_b_buffer;
     VkDeviceMemory marker_a_memory, marker_b_memory;
     void *marker_a_mapped, *marker_b_mapped;
@@ -128,6 +139,17 @@ struct dc_gpu {
 uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
                                  uint32_t compatible_types);
 
+static inline uint32_t dc_gpu_float_bits(float value) {
+    union { float f; uint32_t u; } bits = { .f = value };
+    return bits.u;
+}
+
+static inline uint32_t dc_gpu_render_flags(const dc_gpu_t *gpu) {
+    uint32_t blend = gpu->fluid_snapshot_valid && gpu->fluid_interval == 6u ?
+                     ((gpu->fluid_phase + 1u) % 6u) * 65535u / 6u : 65535u;
+    return (blend << 8) | (gpu->marker_overlay ? 1u : 0u);
+}
+
 bool dc_gpu_pick_device(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t cap);
 bool dc_gpu_load_shader_module(dc_gpu_t *gpu, const char *path,
                                VkShaderModule *module, char *err, uint32_t cap);
@@ -136,6 +158,8 @@ void dc_gpu_chunks_destroy(dc_gpu_t *gpu);
 bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                VkDeviceMemory *memory, void **mapped,
                                char *err, uint32_t cap);
+bool dc_gpu_make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
+                               VkDeviceMemory *memory, char *err, uint32_t cap);
 bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *shader_path,
                                 char *err, uint32_t cap);
