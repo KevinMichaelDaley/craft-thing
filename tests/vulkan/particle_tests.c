@@ -402,6 +402,38 @@ static void test_resident_window_reports_mpm_gpu_time(void) {
     PASS();
 }
 
+static void test_wet_grain_moves_through_eulerian_water(void) {
+    char err[256] = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    for (uint32_t y = 12; y < 32; ++y)
+        for (uint32_t x = 12; x < 48; ++x)
+            chunk->cells[y * DC_CHUNK_SIDE + x].fluid_mass = DC_FLUID_FULL;
+    chunk->cells[15 * DC_CHUNK_SIDE + 20].material = DC_MATERIAL_SAND;
+    dc_chunk_seed_particles(chunk);
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    dc_gpu_tick_capture_t capture = {0};
+    for (uint32_t i = 0; i < 8; ++i)
+        ASSERT_TRUE(dc_gpu_tick_capture(gpu, &capture, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->particle_count, 1u);
+    uint32_t found = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (chunk->particles[i].mass_fp) {
+            ASSERT_TRUE(chunk->particles[i].y_fp > 16 * (int32_t)DC_FLUID_FULL);
+            ++found;
+        }
+    ASSERT_EQ(found, 1u);
+    ASSERT_TRUE(capture.stages[2].gpu_ns > 0u);
+    dc_gpu_destroy(gpu);
+    free(chunk);
+    PASS();
+}
+
 int main(void) {
     printf("GPU particle capacity: %u records per chunk, %u primary cell slots\n",
            DC_MPM_PARTICLES_PER_CHUNK, DC_CHUNK_CELLS);
@@ -415,6 +447,7 @@ int main(void) {
     RUN(test_grain_collides_with_gpu_body);
     RUN(test_two_slot_collision_resolves_by_stable_id);
     RUN(test_resident_window_reports_mpm_gpu_time);
+    RUN(test_wet_grain_moves_through_eulerian_water);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
