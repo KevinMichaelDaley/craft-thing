@@ -121,7 +121,7 @@ static void test_gpu_box_crosses_chunk_edge_and_rests_on_terrain(void) {
 static uint32_t red_channel(uint32_t pixel) { return pixel & 255u; }
 static uint32_t blue_channel(uint32_t pixel) { return (pixel >> 16) & 255u; }
 
-static void test_density_antialiases_every_material(void) {
+static void test_density_mixes_only_within_each_cell(void) {
     char err[256] = {0};
     dc_gpu_t *gpu = NULL;
     dc_chunk_t left = {0}, right = {0}, saved = {0};
@@ -167,7 +167,7 @@ static void test_density_antialiases_every_material(void) {
     ASSERT_TRUE(dc_gpu_readback(gpu, pixels, 128 * 64, err, sizeof(err)));
     for (uint32_t kind = 0; kind < 4; ++kind) {
         uint32_t center = 10u + 10u * kind;
-        ASSERT_TRUE(pixels[10 * 128 + center - 3u] != 0xff181818u);
+        ASSERT_EQ(pixels[10 * 128 + center - 3u], 0xff181818u);
         ASSERT_TRUE(pixels[10 * 128 + center] != 0xff181818u);
     }
     ASSERT_EQ(pixels[10 * 128 + 10], 0xff707070u);
@@ -175,14 +175,14 @@ static void test_density_antialiases_every_material(void) {
     ASSERT_EQ(pixels[10 * 128 + 30], 0xff326495u);
     ASSERT_EQ(pixels[10 * 128 + 40], 0xff808090u);
     ASSERT_EQ(pixels[22 * 128 + 32], 0xffd07030u);
-    ASSERT_TRUE(blue_channel(pixels[10 * 128 + 49]) > 24u);
+    ASSERT_EQ(pixels[10 * 128 + 49], 0xff181818u);
     ASSERT_TRUE(blue_channel(pixels[10 * 128 + 50]) <
                 blue_channel(pixels[10 * 128 + 54]));
     ASSERT_TRUE(red_channel(pixels[25 * 128 + 71]) > 144u);
     ASSERT_TRUE(red_channel(pixels[25 * 128 + 71]) < 224u);
     ASSERT_EQ(pixels[32 * 128 + 27], pixels[32 * 128 + 63]);
     ASSERT_EQ(pixels[32 * 128 + 28], pixels[32 * 128 + 64]);
-    ASSERT_TRUE(pixels[32 * 128 + 64] != 0xff181818u);
+    ASSERT_EQ(pixels[32 * 128 + 64], 0xff181818u);
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved, err, sizeof(err)));
     ASSERT_EQ(saved.cells[10 * DC_CHUNK_SIDE + 50].fluid_mass,
               DC_FLUID_FULL / 2u);
@@ -226,7 +226,7 @@ int main(void) {
     RUN(test_gpu_brush_updates_only_covered_cells);
     RUN(test_chunk_page_mapping_and_gpu_material_edit);
     RUN(test_gpu_box_crosses_chunk_edge_and_rests_on_terrain);
-    RUN(test_density_antialiases_every_material);
+    RUN(test_density_mixes_only_within_each_cell);
     RUN(test_tick_capture_orders_gpu_stages_and_handoffs);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
