@@ -9,18 +9,15 @@ before mixing. Eulerian water uses its fixed-point cell mass as coverage and
 composites over granular material. Rendering reads these buffers without
 changing their simulation state or downloading them to the CPU.
 
-A separable three-tap filter with weights 1/8, 3/4, 1/8 on each axis blends
-these material densities across pixel edges. Every 16×16 workgroup loads one
-18×18 neighborhood into shared memory, including cells in adjacent resident
-chunks through the GPU page table. Missing pages and the viewport exterior
-contribute empty coverage. The filtered result is composited over the dark
-background in approximate linear light, then converted back to display RGB.
-Uniform material interiors keep their original colors; fractional water,
-single-cell features, and material boundaries receive partial coverage.
+Each output pixel reads only its corresponding simulation cell. It composites
+that cell's granular and water coverage over the dark background in approximate
+linear light, then converts back to display RGB. Fully covered cells keep their
+exact material color. Fractional water and multiple granular particles mix
+within one cell; adjacent cells cannot tint each other. This preserves sharp
+pixel-scale material borders at native display resolution.
 
-The brush write mode retains direct cell rendering because neighboring cells
-can be edited concurrently during that dispatch. The following normal render
-uses the filtered path. Marker, resident-chunk, and diagnostic overlays remain
+The brush write mode retains direct cell rendering. The following normal render
+uses within-cell coverage. Marker, resident-chunk, and diagnostic overlays remain
 exact colors so their meaning does not change. This is visual reconstruction
 at the simulation's cell resolution; it does not alter water projection,
 particle mass, material IDs, or chunk streaming.

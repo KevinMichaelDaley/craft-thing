@@ -1,6 +1,6 @@
 ---
 id: dun-4i7z
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-09-27T21:33:07Z
