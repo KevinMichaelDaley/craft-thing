@@ -566,8 +566,26 @@ static void test_closed_wet_grain_momentum_balance(void) {
     printf("closed MPM/water x momentum: grain=%g water=%g residual=%g\n",
            grain_momentum, water_delta, grain_momentum + water_delta);
     ASSERT_TRUE(grain_momentum > 0.0);
-    ASSERT_TRUE(grain_momentum + water_delta < 4.0 / DC_FLUID_FULL &&
-                grain_momentum + water_delta > -4.0 / DC_FLUID_FULL);
+    ASSERT_TRUE(grain_momentum + water_delta <= 0.0 &&
+                grain_momentum + water_delta > -0.001);
+    const float *grid = gpu->mpm_grid_mapped;
+    const float *force = gpu->mpm_force_mapped;
+    const float *grid_velocity = gpu->mpm_velocity_mapped;
+    uint32_t coupled_nodes = 0;
+    for (uint32_t y = 29; y <= 32; ++y)
+        for (uint32_t x = 29; x <= 32; ++x) {
+            uint32_t index = y * DC_CHUNK_SIDE + x;
+            float mass = grid[4 * index];
+            if (mass <= 0.000001f) continue;
+            float damped = (grid[4 * index + 1] / mass +
+                            0.5f * force[4 * index] / mass) * 0.999f;
+            float exchange = mass * (grid_velocity[2 * index] - damped) +
+                             force[4 * index + 2];
+            ASSERT_TRUE(exchange > -4.0f / DC_FLUID_FULL &&
+                        exchange < 4.0f / DC_FLUID_FULL);
+            ++coupled_nodes;
+        }
+    ASSERT_TRUE(coupled_nodes > 0u);
     dc_gpu_destroy(gpu);
     ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
                               err, sizeof(err)));

@@ -37,6 +37,7 @@ const uint PARTICLES = 8192u;
 const float DT = 0.5;
 const float GRAVITY = 0.25;
 const float MAX_VELOCITY = 2.0;
+const float VELOCITY_DAMPING = 0.999;
 const float WATER_DRAG = 0.5;
 const uint MODE_WATER_FEEDBACK = 6u;
 const uint MODE_MOISTURE = 7u;
@@ -206,6 +207,7 @@ void solve_grid(ivec2 node) {
     if (mass > 0.000001) {
         velocity = grid[index].yz / mass + DT * grid_force[index].xy / mass;
         velocity.y += GRAVITY * DT;
+        velocity *= VELOCITY_DAMPING;
         velocity = clamp(velocity, vec2(-MAX_VELOCITY), vec2(MAX_VELOCITY));
         if (solid_at(node)) velocity = vec2(0.0);
         else {

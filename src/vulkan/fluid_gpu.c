@@ -181,6 +181,14 @@ void dc_gpu_record_fluid(dc_gpu_t *gpu) {
                     VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
                     VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
         }
+    } else {
+        vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                          gpu->fluid_pipeline);
+        push[2] = 5u;
+        vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+        vkCmdDispatch(gpu->command,
+                      (gpu->width * gpu->height + 63u) / 64u, 1u, 1u);
     }
     ++gpu->fluid_tick;
 }

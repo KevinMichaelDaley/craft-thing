@@ -145,6 +145,48 @@ static int smoke_granular_fall(void) {
     return 0;
 }
 
+static bool paint_dirt_floor(dc_level_view_t *view, char *err, uint32_t cap) {
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    if (!chunk) return false;
+    bool okay = true;
+    uint32_t loaded_chunk = UINT32_MAX;
+    for (uint32_t x = 24; x <= 108 && okay; ++x) {
+        uint32_t chunk_x = x / DC_CHUNK_SIDE;
+        if (chunk_x != loaded_chunk) {
+            okay = dc_level_view_chunk(view, (dc_chunk_coord_t){chunk_x, 0},
+                                       chunk, err, cap);
+            loaded_chunk = chunk_x;
+        }
+        for (uint32_t y = 16; y < 60 && okay; ++y) {
+            if (chunk->cells[y * DC_CHUNK_SIDE + x % DC_CHUNK_SIDE].material !=
+                DC_MATERIAL_STONE) continue;
+            okay = dc_level_view_paint(view, x, y, 0, DC_MATERIAL_DIRT,
+                                       err, cap);
+            break;
+        }
+    }
+    free(chunk);
+    return okay;
+}
+
+static bool setup_coupled_materials(dc_level_view_t *view, char *err, uint32_t cap) {
+    if (!dc_level_view_wait_visible(view, 5000, err, cap) ||
+        !paint_dirt_floor(view, err, cap)) return false;
+    const uint32_t wall[][2] = {{39, 5}, {41, 5}, {40, 4}, {40, 6}};
+    for (uint32_t i = 0; i < 4; ++i)
+        if (!dc_level_view_paint(view, wall[i][0], wall[i][1], 0,
+                                 DC_MATERIAL_STONE, err, cap)) return false;
+    return dc_level_view_paint(view, 40, 5, 0, DC_MATERIAL_DIRT, err, cap) &&
+        dc_level_view_paint(view, 40, 5, 0, DC_MATERIAL_WATER, err, cap) &&
+        dc_level_view_paint(view, 50, 5, 1, DC_MATERIAL_SAND, err, cap) &&
+        dc_level_view_paint(view, 54, 5, 1, DC_MATERIAL_GRAVEL, err, cap) &&
+        dc_level_view_paint(view, 50, 4, 0, DC_MATERIAL_WATER, err, cap) &&
+        dc_level_view_paint(view, 80, 8, 3, DC_MATERIAL_SAND, err, cap) &&
+        dc_level_view_paint(view, 90, 8, 3, DC_MATERIAL_DIRT, err, cap) &&
+        dc_level_view_paint(view, 100, 8, 3, DC_MATERIAL_GRAVEL, err, cap) &&
+        dc_level_view_paint(view, 90, 5, 3, DC_MATERIAL_WATER, err, cap);
+}
+
 static int smoke_coupled_materials(void) {
     char directory[] = "build/ui_coupled_XXXXXX", err[256] = {0};
     if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
@@ -155,21 +197,7 @@ static int smoke_coupled_materials(void) {
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     bool okay = before && after && chunk &&
         dc_level_view_set_spring_enabled(view, false) &&
-        dc_level_view_wait_visible(view, 5000, err, sizeof(err));
-    const uint32_t wall[][2] = {{39, 5}, {41, 5}, {40, 4}, {40, 6}};
-    for (uint32_t i = 0; i < 4 && okay; ++i)
-        okay = dc_level_view_paint(view, wall[i][0], wall[i][1], 0,
-                                   DC_MATERIAL_STONE, err, sizeof(err));
-    if (okay) okay =
-        dc_level_view_paint(view, 40, 5, 0, DC_MATERIAL_DIRT, err, sizeof(err)) &&
-        dc_level_view_paint(view, 40, 5, 0, DC_MATERIAL_WATER, err, sizeof(err)) &&
-        dc_level_view_paint(view, 50, 5, 1, DC_MATERIAL_SAND, err, sizeof(err)) &&
-        dc_level_view_paint(view, 54, 5, 1, DC_MATERIAL_GRAVEL, err, sizeof(err)) &&
-        dc_level_view_paint(view, 50, 4, 0, DC_MATERIAL_WATER, err, sizeof(err)) &&
-        dc_level_view_paint(view, 80, 8, 3, DC_MATERIAL_SAND, err, sizeof(err)) &&
-        dc_level_view_paint(view, 90, 8, 3, DC_MATERIAL_DIRT, err, sizeof(err)) &&
-        dc_level_view_paint(view, 100, 8, 3, DC_MATERIAL_GRAVEL, err, sizeof(err)) &&
-        dc_level_view_paint(view, 90, 5, 3, DC_MATERIAL_WATER, err, sizeof(err)) &&
+        setup_coupled_materials(view, err, sizeof(err)) &&
         dc_level_view_tick(view, err, sizeof(err)) &&
         dc_level_view_pixels(view, before, VIEW_WIDTH * VIEW_HEIGHT, err, sizeof(err)) &&
         dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0}, chunk, err, sizeof(err));
@@ -698,6 +726,7 @@ int main(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "--smoke-motion-long") == 0)
         return smoke_moving_water_long();
     bool scripted_input = argc > 1 && strcmp(argv[1], "--smoke-controls-ui") == 0;
+    bool demo_coupled = false;
     char scripted_directory[] = "build/ui_input_XXXXXX";
     if (scripted_input && !mkdtemp(scripted_directory)) {
         perror("mkdtemp");
@@ -708,23 +737,34 @@ int main(int argc, char **argv) {
     for (int i = 1; i < argc; ++i) {
         if (scripted_input && strcmp(argv[i], "--smoke-controls-ui") == 0)
             continue;
+        if (strcmp(argv[i], "--demo-coupled") == 0) {
+            demo_coupled = true;
+            continue;
+        }
         if (strcmp(argv[i], "--seed") == 0 && i + 1 < argc)
             seed = strtoull(argv[++i], NULL, 10);
         else if (strcmp(argv[i], "--world-dir") == 0 && i + 1 < argc)
             directory = argv[++i];
         else {
-            fprintf(stderr, "Usage: %s [--seed number] [--world-dir path]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [--seed number] [--world-dir path] [--demo-coupled]\n", argv[0]);
             return 1;
         }
     }
     char err[256] = {0};
     dc_level_view_t *view = dc_level_view_create(directory, seed, err, sizeof(err));
     if (!view) { fprintf(stderr, "Level create: %s\n", err); return 1; }
+    if (demo_coupled &&
+        (!dc_level_view_set_spring_enabled(view, false) ||
+         !setup_coupled_materials(view, err, sizeof(err)))) {
+        fprintf(stderr, "Coupled demo setup: %s\n", err);
+        dc_level_view_destroy(view, err, sizeof(err));
+        return 1;
+    }
     uint16_t material = DC_MATERIAL_SAND;
     bool running = true;
     bool failed = false;
     bool paused = false;
-    bool spring_enabled = true;
+    bool spring_enabled = !demo_coupled;
     bool marker_overlay = false;
     bool single_step = false;
     uint32_t zoom = WINDOW_SCALE;

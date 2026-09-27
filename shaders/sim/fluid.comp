@@ -6,7 +6,7 @@ layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; }
 layout(set = 0, binding = 3, std430) readonly buffer Occupancy { uint occupancy[]; };
 layout(set = 0, binding = 8, std430) buffer FluidA { uint fluid_a[]; };
 layout(set = 0, binding = 9, std430) buffer FluidB { int fluid_b[]; };
-layout(set = 0, binding = 10, std430) readonly buffer FaceVelocity { vec2 face_velocity[]; };
+layout(set = 0, binding = 10, std430) buffer FaceVelocity { vec2 face_velocity[]; };
 layout(set = 0, binding = 16, std430) readonly buffer MarkerGrid { uint marker_grid[]; };
 layout(push_constant) uniform Params {
     uint width;
@@ -23,6 +23,7 @@ const uint CELLS_PER_CHUNK = 4096u;
 const uint FULL = 65536u;
 const float STEP_SECONDS = 1.0;
 const float TRANSPORT_FUDGE = 1.001;
+const float VELOCITY_DAMPING = 0.999;
 
 uint page_at(ivec2 p) {
     if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
@@ -173,6 +174,7 @@ void main() {
                          chunk_cells[atlas_index(position, page)].y;
     } else if (params.mode == 5u) {
         if (page != 0u) chunk_cells[atlas_index(position, page)].y = fluid_a[index];
+        face_velocity[index] *= VELOCITY_DAMPING;
     } else if (params.mode >= 6u && params.mode <= 9u) {
         correct_pair(position);
     }

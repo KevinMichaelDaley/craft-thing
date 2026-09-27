@@ -18,6 +18,7 @@ layout(push_constant) uniform Params {
     uint unused3;
 } params;
 
+
 uint index_of(ivec2 p) { return uint(p.y) * params.width + uint(p.x); }
 
 uint atlas_of(ivec2 p) {
@@ -123,7 +124,7 @@ void main() {
             if (count > 0.0) value = (sum - divergence(p)) / count;
         }
         pressure_a[index] = mix(pressure_a[index], value, 1.5);
-    } else {
+    } else if (params.mode == 3u) {
         vec2 result = face_velocity[index];
         ivec2 right = p + ivec2(1, 0);
         ivec2 below = p + ivec2(0, 1);
