@@ -189,12 +189,56 @@ static void test_legacy_chunk_loads_with_zero_velocity(void) {
     PASS();
 }
 
+static void test_version_four_grain_radius_migrates(void) {
+    char directory[] = "build/stream_grain_v4_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    char path[256];
+    ASSERT_TRUE(snprintf(path, sizeof(path),
+        "%s/chunk_0000000000000000_0000000000000000.bin", directory) > 0);
+    FILE *file = fopen(path, "wb");
+    ASSERT_TRUE(file != NULL);
+    struct {
+        char magic[4];
+        uint32_t version;
+        int64_t x, y;
+        uint64_t seed;
+    } header = { .magic = {'D', 'C', 'C', '1'}, .version = 4, .seed = 73 };
+    dc_chunk_t *old = calloc(1, sizeof(*old));
+    ASSERT_TRUE(old != NULL);
+    old->cells[10].material = DC_MATERIAL_SAND;
+    dc_chunk_particle_init(&old->particles[10], (dc_chunk_coord_t){0, 0},
+                           10u, DC_MATERIAL_SAND);
+    old->particles[10].grain_fp = DC_FLUID_FULL / 2u;
+    old->particle_count = 1u;
+    uint32_t index = 10u;
+    ASSERT_TRUE(fwrite(&header, sizeof(header), 1, file) == 1);
+    ASSERT_TRUE(fwrite(old->cells, sizeof(old->cells), 1, file) == 1);
+    ASSERT_TRUE(fwrite(&old->marker_count, sizeof(old->marker_count), 1, file) == 1);
+    ASSERT_TRUE(fwrite(old->face_velocity, sizeof(old->face_velocity), 1, file) == 1);
+    ASSERT_TRUE(fwrite(&old->particle_count, sizeof(old->particle_count), 1, file) == 1);
+    ASSERT_TRUE(fwrite(&index, sizeof(index), 1, file) == 1);
+    ASSERT_TRUE(fwrite(&old->particles[index], sizeof(dc_mpm_particle_t), 1, file) == 1);
+    ASSERT_TRUE(fclose(file) == 0);
+    free(old);
+    dc_streamer_t *stream = dc_stream_create(directory, 73, 2);
+    ASSERT_TRUE(stream != NULL);
+    dc_stream_result_t result = {0};
+    ASSERT_TRUE(dc_stream_request_load(stream, (dc_chunk_coord_t){0, 0}, 1));
+    ASSERT_TRUE(wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_LOADED);
+    ASSERT_EQ(result.chunk->particles[index].grain_fp, DC_SAND_GRAIN_RADIUS_FP);
+    dc_stream_result_release(&result);
+    dc_stream_destroy(stream);
+    PASS();
+}
+
 int main(void) {
     RUN(test_worker_generates_saves_and_reloads_chunk);
     RUN(test_shutdown_flushes_queued_saves);
     RUN(test_resident_slot_round_trip_through_worker);
     RUN(test_worker_loads_procedural_basin);
     RUN(test_legacy_chunk_loads_with_zero_velocity);
+    RUN(test_version_four_grain_radius_migrates);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
