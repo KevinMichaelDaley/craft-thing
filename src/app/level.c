@@ -7,23 +7,7 @@
 #include "dungeoncraft/gpu.h"
 #include "dungeoncraft/stream.h"
 #include "level.h"
-
-#ifdef DC_NATIVE_VIEW
-enum { VIEW_WIDTH = 1920, VIEW_HEIGHT = 1080, WINDOW_SCALE = 1,
-       FLUID_INTERVAL = 6, INITIAL_CHUNK_Y = -8,
-       WORLD_SCALE = 4,
-#else
-enum { VIEW_WIDTH = 256, VIEW_HEIGHT = 128, WINDOW_SCALE = 4,
-       FLUID_INTERVAL = 1, INITIAL_CHUNK_Y = 0,
-       WORLD_SCALE = 1,
-#endif
-       VIEW_CHUNKS_X = (VIEW_WIDTH + DC_CHUNK_SIDE - 1) / DC_CHUNK_SIDE,
-       VIEW_CHUNKS_Y = (VIEW_HEIGHT + DC_CHUNK_SIDE - 1) / DC_CHUNK_SIDE,
-       HALO_CHUNKS = 1,
-       SIM_CHUNKS_X = VIEW_CHUNKS_X + 2 * HALO_CHUNKS,
-       SIM_CHUNKS_Y = VIEW_CHUNKS_Y + 2 * HALO_CHUNKS,
-       SIM_WIDTH = SIM_CHUNKS_X * DC_CHUNK_SIDE,
-       SIM_HEIGHT = SIM_CHUNKS_Y * DC_CHUNK_SIDE };
+#include "view_config.h"
 
 _Static_assert(DC_GPU_CHUNK_SLOTS >= SIM_CHUNKS_X * SIM_CHUNKS_Y,
                "GPU chunk pool must cover viewport and halo");

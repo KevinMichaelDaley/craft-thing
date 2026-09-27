@@ -13,14 +13,7 @@
 #include "dungeoncraft/chunk.h"
 #include "level.h"
 #include "session.h"
-
-#ifdef DC_NATIVE_VIEW
-enum { VIEW_WIDTH = 1920, VIEW_HEIGHT = 1080, WINDOW_SCALE = 1,
-       BRUSH_RADIUS = 12 };
-#else
-enum { VIEW_WIDTH = 256, VIEW_HEIGHT = 128, WINDOW_SCALE = 4,
-       BRUSH_RADIUS = 3 };
-#endif
+#include "view_config.h"
 
 static bool save_level_bmp(const char *path, const uint32_t *pixels) {
     const uint32_t width = VIEW_WIDTH * WINDOW_SCALE;
@@ -55,7 +48,7 @@ static bool paint_held(dc_level_view_t *view, uint16_t material,
     return true;
 }
 
-#ifdef DC_NATIVE_VIEW
+#if defined(DC_NATIVE_VIEW) || defined(DC_HALF_NATIVE_VIEW)
 static int smoke_native_view(void) {
     char directory[] = "build/ui_native_XXXXXX", err[256] = {0};
     if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
@@ -68,7 +61,9 @@ static int smoke_native_view(void) {
                 dc_level_view_status(view, &status) &&
                 status.total_chunks == DC_GPU_CHUNK_SLOTS &&
                 status.ready_chunks == DC_GPU_CHUNK_SLOTS &&
-                dc_level_view_screen_cell(view, VIEW_WIDTH - 1u, VIEW_HEIGHT - 1u,
+                dc_level_view_screen_cell(view,
+                                          VIEW_WIDTH * WINDOW_SCALE - 1u,
+                                          VIEW_HEIGHT * WINDOW_SCALE - 1u,
                                           &x, &y) &&
                 x == VIEW_WIDTH - 1u && y == VIEW_HEIGHT - 1u &&
                 dc_level_view_paint(view, VIEW_WIDTH - 20u, VIEW_HEIGHT - 20u,
@@ -83,7 +78,12 @@ static int smoke_native_view(void) {
                 pixels[(VIEW_HEIGHT - 20u) * VIEW_WIDTH + VIEW_WIDTH - 20u] ==
                     0xff707070u;
     mkdir("build/screenshots", 0777);
+#ifdef DC_HALF_NATIVE_VIEW
+    if (okay) okay = save_level_bmp(
+        "build/screenshots/half_native_960x540_upscaled.bmp", pixels);
+#else
     if (okay) okay = save_level_bmp("build/screenshots/native_1920x1080.bmp", pixels);
+#endif
     uint64_t start = SDL_GetPerformanceCounter();
     double fastest = 1e9, slowest = 0.0;
     for (uint32_t i = 0; i < 12u && okay; ++i)
@@ -914,7 +914,7 @@ static bool pan_held_keys(dc_level_view_t *view, double elapsed,
 }
 
 int main(int argc, char **argv) {
-#ifdef DC_NATIVE_VIEW
+#if defined(DC_NATIVE_VIEW) || defined(DC_HALF_NATIVE_VIEW)
     if (argc > 1 && strcmp(argv[1], "--smoke-native") == 0)
         return smoke_native_view();
 #endif
@@ -946,7 +946,9 @@ int main(int argc, char **argv) {
         return 1;
     }
     uint64_t seed = 314;
-#ifdef DC_NATIVE_VIEW
+#ifdef DC_HALF_NATIVE_VIEW
+    const char *directory = scripted_input ? scripted_directory : "world_chunks_half_native";
+#elif defined(DC_NATIVE_VIEW)
     const char *directory = scripted_input ? scripted_directory : "world_chunks_native";
 #else
     const char *directory = scripted_input ? scripted_directory : "world_chunks";
