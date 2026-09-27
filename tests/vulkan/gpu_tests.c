@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "dungeoncraft/gpu.h"
+#include "../../src/vulkan/gpu_internal.h"
 
 static int g_pass = 0;
 static int g_fail = 0;
@@ -36,6 +37,20 @@ static void test_rejects_invalid_dimensions(void) {
     ASSERT_TRUE(!dc_gpu_create(&gpu, 0, 4, "build/shaders/pattern.comp.spv", err, sizeof(err)));
     ASSERT_TRUE(gpu == NULL);
     ASSERT_TRUE(strlen(err) > 0);
+    PASS();
+}
+
+static void test_host_visible_vram_is_preferred_for_mapped_buffers(void) {
+    VkPhysicalDeviceMemoryProperties props = {0};
+    props.memoryTypeCount = 3;
+    props.memoryTypes[0].propertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                         VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    props.memoryTypes[1].propertyFlags = props.memoryTypes[0].propertyFlags |
+                                         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    props.memoryTypes[2].propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    ASSERT_EQ(dc_gpu_host_memory_type(&props, 7u), 1u);
+    ASSERT_EQ(dc_gpu_host_memory_type(&props, 5u), 0u);
+    ASSERT_EQ(dc_gpu_host_memory_type(&props, 4u), UINT32_MAX);
     PASS();
 }
 
@@ -219,6 +234,7 @@ static void test_tick_capture_orders_gpu_stages_and_handoffs(void) {
 int main(void) {
     RUN(test_gpu_pattern_readback);
     RUN(test_rejects_invalid_dimensions);
+    RUN(test_host_visible_vram_is_preferred_for_mapped_buffers);
     RUN(test_gpu_brush_updates_only_covered_cells);
     RUN(test_chunk_page_mapping_and_gpu_material_edit);
     RUN(test_gpu_box_crosses_chunk_edge_and_rests_on_terrain);

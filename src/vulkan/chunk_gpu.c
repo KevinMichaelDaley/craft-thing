@@ -9,6 +9,17 @@ static bool error(char *buf, uint32_t cap, const char *message) {
     return false;
 }
 
+uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
+                                 uint32_t compatible_types) {
+    const VkMemoryPropertyFlags needed = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                         VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    for (uint32_t i = 0; i < props->memoryTypeCount; ++i)
+        if ((compatible_types & (1u << i)) &&
+            (props->memoryTypes[i].propertyFlags & needed) == needed)
+            return i;
+    return UINT32_MAX;
+}
+
 bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                VkDeviceMemory *memory, void **mapped,
                                char *err, uint32_t cap) {

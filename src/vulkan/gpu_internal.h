@@ -125,6 +125,9 @@ struct dc_gpu {
     dc_gpu_overlay_t overlay;
 };
 
+uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
+                                 uint32_t compatible_types);
+
 bool dc_gpu_pick_device(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t cap);
 bool dc_gpu_load_shader_module(dc_gpu_t *gpu, const char *path,
                                VkShaderModule *module, char *err, uint32_t cap);
