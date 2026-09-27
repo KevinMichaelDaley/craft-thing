@@ -25,7 +25,8 @@ provides `J = det(F)`. The compressive pressure is
 `k max(0, 1-clamp(J, 0.5, 1.5))`, with `k = 5` for sand, `3` for dirt, and `8`
 for gravel. A capped symmetric shear term supplies limited grain resistance;
 there is no tensile stress. The grid solve divides momentum and stress force
-by mass, adds gravity, and projects velocity against stone cells and the GPU
+by mass, adds gravity, scales velocity by 0.999 per half-tick substep, and
+projects velocity against stone cells and the GPU
 rigid occupancy map. Water and grain can occupy the same cell: granular
 material is permeable to the Eulerian flux and projection passes, while stone
 and rigid occupancy remain solid boundaries.
@@ -74,12 +75,14 @@ The solver neither downloads particles nor rebuilds its buffers per frame.
 GPU timestamps for the sand stage measure the complete MPM work; the headless
 test also checks exact mass, stable IDs, deterministic replay, collision with
 stone and a rigid body, coupled wet-grain motion and seam crossing. A closed
-uniform-flow test checks equal-and-opposite x momentum to within four 16.16
-fixed-point units; still water does not carry grains sideways. The one-second
+uniform-flow test checks each water/grain drag exchange to within four 16.16
+fixed-point units after accounting for intentional velocity damping; still
+water does not carry grains sideways. The one-second
 UI smoke produces
 `build/screenshots/granular_before.bmp` and
 `build/screenshots/granular_after_1s.bmp`.
-The coupled one-second UI smoke paints water, dirt, sand, and gravel in the
-procedural level, checks a wet dirt particle and moving grains, and saves
+The coupled one-second UI smoke paints a supported dirt surface over the
+generated stone, then water, dirt, sand, and gravel. It checks the visible
+floor, a wet dirt particle, and moving grains, and saves
 `build/screenshots/coupled_before.bmp` and
 `build/screenshots/coupled_after_1s.bmp`.
