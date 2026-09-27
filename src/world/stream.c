@@ -55,7 +55,7 @@ static bool save_chunk(const dc_streamer_t *stream, const dc_chunk_t *chunk) {
         !chunk_path(stream, chunk->coord, final, sizeof(final), false)) return false;
     FILE *file = fopen(temporary, "wb");
     if (!file) return false;
-    chunk_header_t header = { .magic = {'D', 'C', 'C', '1'}, .version = 4,
+    chunk_header_t header = { .magic = {'D', 'C', 'C', '1'}, .version = 5,
         .x = chunk->coord.x, .y = chunk->coord.y, .seed = stream->seed };
     bool okay = fwrite(&header, sizeof(header), 1, file) == 1 &&
         fwrite(chunk->cells, sizeof(chunk->cells), 1, file) == 1 &&
@@ -94,7 +94,7 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coor
     chunk_header_t header;
     bool okay = fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCC1", 4) == 0 &&
-        (header.version >= 1 && header.version <= 4) &&
+        (header.version >= 1 && header.version <= 5) &&
         header.x == coord.x && header.y == coord.y && header.seed == stream->seed &&
         fread(chunk->cells, sizeof(chunk->cells), 1, file) == 1;
     if (okay && header.version >= 2)
@@ -104,7 +104,7 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coor
                 chunk->marker_count;
     if (okay && header.version >= 3)
         okay = fread(chunk->face_velocity, sizeof(chunk->face_velocity), 1, file) == 1;
-    if (okay && header.version == 4) {
+    if (okay && header.version >= 4) {
         okay = fread(&chunk->particle_count, sizeof(chunk->particle_count), 1, file) == 1 &&
             chunk->particle_count <= DC_MPM_PARTICLES_PER_CHUNK;
         for (uint32_t n = 0; okay && n < chunk->particle_count; ++n) {
@@ -114,7 +114,11 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coor
                 fread(&particle, sizeof(particle), 1, file) == 1 &&
                 index < DC_MPM_PARTICLES_PER_CHUNK && particle.mass_fp != 0;
             if (okay && chunk->particles[index].mass_fp) okay = false;
-            if (okay) chunk->particles[index] = particle;
+            if (okay) {
+                if (header.version == 4)
+                    particle.grain_fp = dc_chunk_grain_radius_fp(particle.material);
+                chunk->particles[index] = particle;
+            }
         }
     }
     if (fclose(file) != 0) okay = false;

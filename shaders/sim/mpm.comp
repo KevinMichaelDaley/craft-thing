@@ -97,6 +97,14 @@ bool particle_is_mud(Particle particle) {
     return particle.material == 4u && (particle.flags & MUD_FLAG) != 0u;
 }
 
+float grain_density(uint material) {
+    return material == 2u ? 2.65 : material == 5u ? 2.7 : 1.2;
+}
+
+float grain_friction(uint material) {
+    return material == 2u ? 0.08 : material == 5u ? 0.22 : 0.12;
+}
+
 ivec2 tile_origin(ivec2 cell) {
     return (cell / int(SIDE)) * int(SIDE);
 }
@@ -194,9 +202,7 @@ void p2g(ivec2 node) {
                 vec2 velocity = vec2(particle.vx_fp, particle.vy_fp) / 65536.0;
                 total.x += weight * mass;
                 total.yz += weight * mass * velocity;
-                float density = particle.material == 2u ? 2.65 :
-                                particle.material == 5u ? 2.7 : 1.2;
-                total.w += weight * mass / density;
+                total.w += weight * mass / grain_density(particle.material);
                 float jacobian = clamp(particle.f00 * particle.f11 -
                                        particle.f01 * particle.f10, 0.5, 1.5);
                 bool mud = particle_is_mud(particle);
@@ -265,6 +271,48 @@ void apply_feedback(ivec2 node) {
     face_velocity[index] += grid_force[index].zw;
 }
 
+vec2 granular_contact_velocity(Particle particle, uint index, ivec2 owner,
+                               vec2 position) {
+    vec2 correction = vec2(0.0);
+    float radius = float(particle.grain_fp) / 65536.0;
+    float self_mass = float(particle.mass_fp) / 65536.0;
+    vec2 self_velocity = vec2(particle.vx_fp, particle.vy_fp) / 65536.0;
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            ivec2 neighbor = owner + ivec2(dx, dy);
+            for (uint layer = 0u; layer < 2u; ++layer) {
+                Particle other;
+                if (!load_particle(neighbor, layer, other)) continue;
+                uint other_index = particle_index(neighbor, layer);
+                if (other_index == index) continue;
+                vec2 separation = position - position_of(other, neighbor);
+                float distance = length(separation);
+                if (distance >= 1.5) continue;
+                float other_radius = float(other.grain_fp) / 65536.0;
+                float other_mass = float(other.mass_fp) / 65536.0;
+                float impulse_scale = 2.0 * other_mass / (self_mass + other_mass);
+                float overlap = radius + other_radius - distance;
+                if (overlap > 0.0) {
+                    vec2 normal = distance > 0.0001 ? separation / distance :
+                                  vec2(index < other_index ? -1.0 : 1.0, 0.0);
+                    correction += impulse_scale * 0.18 * overlap * normal;
+                    vec2 relative = self_velocity -
+                                    vec2(other.vx_fp, other.vy_fp) / 65536.0;
+                    vec2 tangent = relative - dot(relative, normal) * normal;
+                    correction -= impulse_scale *
+                                  min(grain_friction(particle.material),
+                                      grain_friction(other.material)) *
+                                  min(overlap / max(radius + other_radius, 0.001), 1.0) *
+                                  tangent;
+                }
+                correction.y += impulse_scale * 0.35 *
+                                (other_radius - radius) * (1.5 - distance);
+            }
+        }
+    }
+    return correction;
+}
+
 void g2p_one(ivec2 owner, uint layer) {
     uint index = particle_index(owner, layer);
     Particle particle = particles[index];
@@ -293,6 +341,7 @@ void g2p_one(ivec2 owner, uint layer) {
         }
     }
     if (weights > 0.0) velocity /= weights;
+    velocity += granular_contact_velocity(particle, index, owner, position);
     velocity = clamp(velocity, vec2(-MAX_VELOCITY), vec2(MAX_VELOCITY));
     mat2 deformation = mat2(particle.f00, particle.f10,
                              particle.f01, particle.f11);

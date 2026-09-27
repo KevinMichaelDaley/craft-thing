@@ -32,6 +32,13 @@ enum {
     DC_MATERIAL_DIRT = 4,
     DC_MATERIAL_GRAVEL = 5
 };
+enum {
+    DC_SAND_GRAIN_RADIUS_FP = DC_FLUID_FULL / 4,
+    DC_DIRT_GRAIN_RADIUS_FP = 3 * DC_FLUID_FULL / 8,
+    DC_GRAVEL_GRAIN_RADIUS_FP = DC_FLUID_FULL / 2
+};
+/** Default physical grain radius in 16.16 cell units. */
+uint32_t dc_chunk_grain_radius_fp(uint32_t material);
 
 typedef struct { int64_t x, y; } dc_chunk_coord_t;
 

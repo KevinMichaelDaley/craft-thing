@@ -1055,7 +1055,8 @@ static void test_mixed_column_sifts_small_grains_downward(void) {
     char err[256] = {0};
     dc_chunk_t *initial = calloc(1, sizeof(*initial));
     dc_chunk_t *result = calloc(1, sizeof(*result));
-    ASSERT_TRUE(initial && result);
+    dc_chunk_t *settled = calloc(1, sizeof(*settled));
+    ASSERT_TRUE(initial && result && settled);
     for (uint32_t x = 19; x <= 27; ++x)
         initial->cells[48u * DC_CHUNK_SIDE + x].material = DC_MATERIAL_STONE;
     for (uint32_t y = 20; y < 48; ++y) {
@@ -1093,6 +1094,19 @@ static void test_mixed_column_sifts_small_grains_downward(void) {
            (unsigned long long)(depth[1] / count[1]),
            (unsigned long long)(depth[2] / count[2]));
     ASSERT_TRUE(depth[0] > depth[2] + count[0] * DC_FLUID_FULL);
+    ASSERT_TRUE(run_granular_pile(result, settled, err, sizeof(err)));
+    ASSERT_EQ(settled->particle_count, 63u);
+    uint64_t late_depth[3] = {0};
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i) {
+        const dc_mpm_particle_t *p = &settled->particles[i];
+        if (!p->mass_fp) continue;
+        uint32_t kind = p->material == DC_MATERIAL_SAND ? 0u :
+                        p->material == DC_MATERIAL_DIRT ? 1u : 2u;
+        late_depth[kind] += (uint32_t)p->y_fp;
+        ASSERT_TRUE(p->y_fp < 48 * (int32_t)DC_FLUID_FULL);
+    }
+    ASSERT_TRUE(late_depth[0] > late_depth[2] + count[0] * DC_FLUID_FULL);
+    free(initial); free(result); free(settled);
     PASS();
 }
 

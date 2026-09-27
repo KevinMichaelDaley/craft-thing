@@ -198,6 +198,93 @@ static bool setup_coupled_materials(dc_level_view_t *view, char *err, uint32_t c
     return true;
 }
 
+enum { SIFT_LEFT = 72, SIFT_RIGHT = 80, SIFT_FIRST = 73, SIFT_LAST = 79,
+       SIFT_TOP = 8, SIFT_BOTTOM = 17, SIFT_FLOOR = 45 };
+
+static bool setup_sifting_materials(dc_level_view_t *view, char *err, uint32_t cap) {
+    if (!dc_level_view_wait_visible(view, 5000, err, cap)) return false;
+    for (uint32_t x = SIFT_LEFT; x <= SIFT_RIGHT; ++x)
+        if (!dc_level_view_paint(view, x, SIFT_FLOOR, 0, DC_MATERIAL_STONE, err, cap))
+            return false;
+    for (uint32_t y = SIFT_BOTTOM; y < SIFT_FLOOR; ++y)
+        if (!dc_level_view_paint(view, SIFT_LEFT, y, 0, DC_MATERIAL_STONE, err, cap) ||
+            !dc_level_view_paint(view, SIFT_RIGHT, y, 0, DC_MATERIAL_STONE, err, cap))
+            return false;
+    const uint16_t kinds[] = {DC_MATERIAL_SAND, DC_MATERIAL_DIRT,
+                              DC_MATERIAL_GRAVEL};
+    for (uint32_t y = SIFT_TOP; y < SIFT_BOTTOM; ++y)
+        for (uint32_t x = SIFT_FIRST; x <= SIFT_LAST; ++x)
+            if (!dc_level_view_paint(view, x, y, 0, kinds[(x + y) % 3u],
+                                     err, cap)) return false;
+    return true;
+}
+
+static int smoke_sifting_materials(void) {
+    char directory[] = "build/ui_sifting_XXXXXX", err[256] = {0};
+    if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    if (!view) { fprintf(stderr, "Sifting level create: %s\n", err); return 1; }
+    uint32_t *before = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*before));
+    uint32_t *after = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*after));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    bool okay = before && after && chunk &&
+        dc_level_view_set_spring_enabled(view, false) &&
+        setup_sifting_materials(view, err, sizeof(err)) &&
+        dc_level_view_tick(view, err, sizeof(err)) &&
+        dc_level_view_pixels(view, before, VIEW_WIDTH * VIEW_HEIGHT, err, sizeof(err));
+    mkdir("build/screenshots", 0777);
+    if (okay) okay = save_level_bmp("build/screenshots/sifting_before.bmp", before);
+    for (uint32_t tick = 0; tick < 60 && okay; ++tick)
+        okay = dc_level_view_step(view, err, sizeof(err));
+    if (okay) okay = dc_level_view_tick(view, err, sizeof(err)) &&
+                     dc_level_view_pixels(view, after, VIEW_WIDTH * VIEW_HEIGHT,
+                                          err, sizeof(err)) &&
+                     save_level_bmp("build/screenshots/sifting_after_1s.bmp", after) &&
+                     dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
+                                         chunk, err, sizeof(err));
+    uint64_t depth[3] = {0};
+    uint32_t count[3] = {0}, changed = 0;
+    if (okay) {
+        for (uint32_t y = SIFT_TOP; y < SIFT_FLOOR; ++y)
+            for (uint32_t x = SIFT_LEFT; x <= SIFT_RIGHT; ++x)
+                changed += before[y * VIEW_WIDTH + x] != after[y * VIEW_WIDTH + x];
+        uint32_t seed = dc_chunk_particle_seed((dc_chunk_coord_t){1, 0});
+        for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i) {
+            const dc_mpm_particle_t *p = &chunk->particles[i];
+            if (!p->mass_fp || p->id_hi != seed) continue;
+            uint32_t source = p->id_lo - 1u;
+            if (source / DC_CHUNK_SIDE < SIFT_TOP ||
+                source / DC_CHUNK_SIDE >= SIFT_BOTTOM ||
+                source % DC_CHUNK_SIDE < SIFT_FIRST - DC_CHUNK_SIDE ||
+                source % DC_CHUNK_SIDE > SIFT_LAST - DC_CHUNK_SIDE)
+                continue;
+            uint32_t kind = p->material == DC_MATERIAL_SAND ? 0u :
+                            p->material == DC_MATERIAL_DIRT ? 1u : 2u;
+            ++count[kind];
+            depth[kind] += (uint32_t)p->y_fp;
+            if (p->x_fp <= (int32_t)(SIFT_LEFT - DC_CHUNK_SIDE) * (int32_t)DC_FLUID_FULL ||
+                p->x_fp >= (int32_t)(SIFT_RIGHT - DC_CHUNK_SIDE) * (int32_t)DC_FLUID_FULL ||
+                p->y_fp >= SIFT_FLOOR * (int32_t)DC_FLUID_FULL) okay = false;
+        }
+        okay = okay && changed >= 60u && count[0] == 21u &&
+               count[1] == 21u && count[2] == 21u &&
+               depth[0] > depth[2] + count[0] * (DC_FLUID_FULL / 2u);
+    }
+    if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
+    free(before); free(after); free(chunk);
+    if (!okay) {
+        fprintf(stderr, "Sifting screenshot smoke failed (%u changed, counts %u/%u/%u, depths %llu/%llu/%llu): %s\n",
+                changed, count[0], count[1], count[2],
+                (unsigned long long)depth[0], (unsigned long long)depth[1],
+                (unsigned long long)depth[2], err);
+        return 1;
+    }
+    printf("Sifting screenshots: sifting_before.bmp and sifting_after_1s.bmp "
+           "(%u changed, sand/gravel depth gap %.2f cells)\n", changed,
+           (double)(depth[0] - depth[2]) / (21.0 * DC_FLUID_FULL));
+    return 0;
+}
+
 static int smoke_coupled_materials(void) {
     char directory[] = "build/ui_coupled_XXXXXX", err[256] = {0};
     if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
@@ -737,10 +824,12 @@ int main(int argc, char **argv) {
         return smoke_granular_fall();
     if (argc > 1 && strcmp(argv[1], "--smoke-coupled") == 0)
         return smoke_coupled_materials();
+    if (argc > 1 && strcmp(argv[1], "--smoke-sifting") == 0)
+        return smoke_sifting_materials();
     if (argc > 1 && strcmp(argv[1], "--smoke-motion-long") == 0)
         return smoke_moving_water_long();
     bool scripted_input = argc > 1 && strcmp(argv[1], "--smoke-controls-ui") == 0;
-    bool demo_coupled = false;
+    bool demo_coupled = false, demo_sifting = false;
     char scripted_directory[] = "build/ui_input_XXXXXX";
     if (scripted_input && !mkdtemp(scripted_directory)) {
         perror("mkdtemp");
@@ -755,12 +844,16 @@ int main(int argc, char **argv) {
             demo_coupled = true;
             continue;
         }
+        if (strcmp(argv[i], "--demo-sifting") == 0) {
+            demo_sifting = true;
+            continue;
+        }
         if (strcmp(argv[i], "--seed") == 0 && i + 1 < argc)
             seed = strtoull(argv[++i], NULL, 10);
         else if (strcmp(argv[i], "--world-dir") == 0 && i + 1 < argc)
             directory = argv[++i];
         else {
-            fprintf(stderr, "Usage: %s [--seed number] [--world-dir path] [--demo-coupled]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [--seed number] [--world-dir path] [--demo-coupled|--demo-sifting]\n", argv[0]);
             return 1;
         }
     }
@@ -774,11 +867,18 @@ int main(int argc, char **argv) {
         dc_level_view_destroy(view, err, sizeof(err));
         return 1;
     }
+    if (demo_sifting &&
+        (!dc_level_view_set_spring_enabled(view, false) ||
+         !setup_sifting_materials(view, err, sizeof(err)))) {
+        fprintf(stderr, "Sifting demo setup: %s\n", err);
+        dc_level_view_destroy(view, err, sizeof(err));
+        return 1;
+    }
     uint16_t material = DC_MATERIAL_SAND;
     bool running = true;
     bool failed = false;
     bool paused = false;
-    bool spring_enabled = !demo_coupled;
+    bool spring_enabled = !(demo_coupled || demo_sifting);
     bool marker_overlay = false;
     bool single_step = false;
     uint32_t zoom = WINDOW_SCALE;

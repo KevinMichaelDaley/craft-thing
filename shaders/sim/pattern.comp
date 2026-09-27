@@ -24,6 +24,10 @@ layout(push_constant) uniform Params {
     uint color;
 } params;
 
+uint grain_radius_fp(uint material) {
+    return material == 2u ? 16384u : material == 4u ? 24576u : 32768u;
+}
+
 void main() {
     uvec2 display_cell = gl_GlobalInvocationID.xy;
     uvec2 p = display_cell;
@@ -88,14 +92,19 @@ void main() {
                         particle.id_lo = local_index + 1u;
                         particle.id_hi = seeds[slot];
                         particle.mass_fp = 65536u;
-                        particle.grain_fp = 32768u;
+                        particle.grain_fp = grain_radius_fp(material);
                         particle.material = material;
                         particle.flags = 0u;
                         particles[particle_index] = particle;
                         atomicAdd(particle_counts[slot], 1u);
-                    } else particles[particle_index].material = material;
-                    if (particles[secondary_index].mass_fp != 0u)
+                    } else {
+                        particles[particle_index].material = material;
+                        particles[particle_index].grain_fp = grain_radius_fp(material);
+                    }
+                    if (particles[secondary_index].mass_fp != 0u) {
                         particles[secondary_index].material = material;
+                        particles[secondary_index].grain_fp = grain_radius_fp(material);
+                    }
                 }
                 cell.x = (cell.x & 0xffff0000u) | material;
                 cell.y = params.color == 3u ? 65536u : new_grain ? cell.y : 0u;
