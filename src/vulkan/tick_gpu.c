@@ -161,3 +161,9 @@ bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
 bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return tick_submit(gpu, NULL, err, cap);
 }
+
+bool dc_gpu_set_fluid_interval(dc_gpu_t *gpu, uint32_t interval) {
+    (void)gpu;
+    (void)interval;
+    return false;
+}

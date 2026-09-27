@@ -169,6 +169,9 @@ bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
 /** Run the same GPU physics stages without reading diagnostics back. */
 bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
 
+/** Run Eulerian fluid and marker passes once per interval physics ticks. */
+bool dc_gpu_set_fluid_interval(dc_gpu_t *gpu, uint32_t interval);
+
 /** Read the completed body state for tests or persistence. */
 bool dc_gpu_read_body(dc_gpu_t *gpu, dc_gpu_body_t *body,
                       char *err_buf, uint32_t err_cap);
