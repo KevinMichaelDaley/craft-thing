@@ -57,8 +57,7 @@ bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
         }
         if (!*memory) return error(err, cap, "Cannot allocate GPU chunk memory");
     }
-    if (
-        vkBindBufferMemory(gpu->device, *buffer, *memory, 0) != VK_SUCCESS ||
+    if (vkBindBufferMemory(gpu->device, *buffer, *memory, 0) != VK_SUCCESS ||
         vkMapMemory(gpu->device, *memory, 0, bytes, 0, mapped) != VK_SUCCESS)
         return error(err, cap, "Cannot allocate or map GPU chunk memory");
     if (props.memoryTypes[alloc.memoryTypeIndex].propertyFlags &
@@ -155,7 +154,8 @@ void dc_gpu_chunks_destroy(dc_gpu_t *gpu) {
 
 bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
                              bool particles, char *err, uint32_t cap) {
-    if (!gpu || (slot >= DC_GPU_CHUNK_SLOTS && slot != UINT32_MAX))
+    if (!gpu || (slot >= DC_GPU_CHUNK_SLOTS && slot != UINT32_MAX) ||
+        (particles && slot == UINT32_MAX))
         return error(err, cap, "Invalid chunk transfer slot");
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
         return error(err, cap, "Cannot reset chunk transfer command");

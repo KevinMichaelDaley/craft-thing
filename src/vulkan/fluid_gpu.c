@@ -52,10 +52,7 @@ void dc_gpu_fluid_destroy(dc_gpu_t *gpu) {
     if (gpu->projection_pipeline) vkDestroyPipeline(gpu->device, gpu->projection_pipeline, NULL);
     if (gpu->velocity_shift_pipeline)
         vkDestroyPipeline(gpu->device, gpu->velocity_shift_pipeline, NULL);
-    if (gpu->fluid_a_mapped) vkUnmapMemory(gpu->device, gpu->fluid_a_memory);
-    if (gpu->fluid_b_mapped) vkUnmapMemory(gpu->device, gpu->fluid_b_memory);
     if (gpu->velocity_mapped) vkUnmapMemory(gpu->device, gpu->velocity_memory);
-    if (gpu->pressure_a_mapped) vkUnmapMemory(gpu->device, gpu->pressure_a_memory);
     if (gpu->fluid_a_buffer) vkDestroyBuffer(gpu->device, gpu->fluid_a_buffer, NULL);
     if (gpu->fluid_b_buffer) vkDestroyBuffer(gpu->device, gpu->fluid_b_buffer, NULL);
     if (gpu->velocity_buffer) vkDestroyBuffer(gpu->device, gpu->velocity_buffer, NULL);

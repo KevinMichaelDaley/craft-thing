@@ -53,12 +53,11 @@ struct dc_gpu {
     VkDeviceMemory mpm_proposal_memory, mpm_output_memory, mpm_grid_memory;
     VkDeviceMemory mpm_force_memory, mpm_velocity_memory, mpm_accept_memory;
     VkDeviceMemory mpm_force_staging_memory, mpm_velocity_staging_memory;
-    void *mpm_proposal_mapped, *mpm_output_mapped, *mpm_grid_mapped;
-    void *mpm_force_mapped, *mpm_velocity_mapped, *mpm_accept_mapped;
+    void *mpm_grid_mapped;
+    void *mpm_force_mapped, *mpm_velocity_mapped;
     VkPipeline mpm_pipeline;
     VkBuffer mpm_activity_buffer;
     VkDeviceMemory mpm_activity_memory;
-    void *mpm_activity_mapped;
     VkPipeline mpm_activity_pipeline;
     VkBuffer mpm_label_a_buffer, mpm_label_b_buffer, mpm_component_size_buffer;
     VkDeviceMemory mpm_label_a_memory, mpm_label_b_memory, mpm_component_size_memory;
@@ -95,10 +94,8 @@ struct dc_gpu {
     VkBuffer fluid_previous_buffer;
     VkDeviceMemory fluid_previous_memory;
     VkDeviceMemory fluid_a_memory;
-    void *fluid_a_mapped;
     VkBuffer fluid_b_buffer;
     VkDeviceMemory fluid_b_memory;
-    void *fluid_b_mapped;
     VkPipeline fluid_pipeline;
     VkBuffer velocity_buffer;
     VkDeviceMemory velocity_memory;
@@ -107,7 +104,6 @@ struct dc_gpu {
     bool preserve_shifted_slot[DC_GPU_CHUNK_SLOTS];
     VkBuffer pressure_a_buffer;
     VkDeviceMemory pressure_a_memory;
-    void *pressure_a_mapped;
     VkPipeline projection_pipeline;
     VkPipeline velocity_shift_pipeline;
     uint32_t fluid_tick;

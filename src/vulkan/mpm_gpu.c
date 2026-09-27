@@ -91,12 +91,16 @@ void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu) {
 }
 
 #define DESTROY_MPM_BUFFER(name) do { \
-    if (gpu->mpm_##name##_mapped) vkUnmapMemory(gpu->device, gpu->mpm_##name##_memory); \
     if (gpu->mpm_##name##_buffer) vkDestroyBuffer(gpu->device, gpu->mpm_##name##_buffer, NULL); \
     if (gpu->mpm_##name##_memory) vkFreeMemory(gpu->device, gpu->mpm_##name##_memory, NULL); \
 } while (0)
 
 void dc_gpu_mpm_buffers_destroy(dc_gpu_t *gpu) {
+    if (gpu->mpm_grid_mapped) vkUnmapMemory(gpu->device, gpu->mpm_grid_memory);
+    if (gpu->mpm_label_a_mapped) vkUnmapMemory(gpu->device, gpu->mpm_label_a_memory);
+    if (gpu->mpm_label_b_mapped) vkUnmapMemory(gpu->device, gpu->mpm_label_b_memory);
+    if (gpu->mpm_component_size_mapped)
+        vkUnmapMemory(gpu->device, gpu->mpm_component_size_memory);
     DESTROY_MPM_BUFFER(proposal);
     DESTROY_MPM_BUFFER(output);
     DESTROY_MPM_BUFFER(grid);
