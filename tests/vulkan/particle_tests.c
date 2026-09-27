@@ -153,6 +153,8 @@ static void test_granular_paint_reuses_and_erases_primary_slot(void) {
         ASSERT_EQ(chunk->particle_count, 1u);
         ASSERT_EQ(chunk->particles[10 * DC_CHUNK_SIDE + 10].material, materials[i]);
         ASSERT_EQ(chunk->particles[10 * DC_CHUNK_SIDE + 10].mass_fp, DC_FLUID_FULL);
+        ASSERT_EQ(chunk->particles[10 * DC_CHUNK_SIDE + 10].grain_fp,
+                  dc_chunk_grain_radius_fp(materials[i]));
     }
     ASSERT_TRUE(dc_gpu_paint_material(gpu, 10, 10, 0, DC_MATERIAL_AIR,
                                       err, sizeof(err)));
