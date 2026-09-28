@@ -7,7 +7,9 @@ static bool error(char *buf, uint32_t cap, const char *message) {
     return false;
 }
 
-enum { DC_PRESSURE_SWEEPS = 20 };
+#ifndef DC_PRESSURE_SWEEPS
+#define DC_PRESSURE_SWEEPS 20u
+#endif
 
 bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkDeviceSize bytes = (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t);
@@ -236,11 +238,15 @@ void dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase) {
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     if (phase == 0u) record_projection_begin(gpu);
-    if (phase == 0u) record_pressure_passes(gpu, 0u, 10u);
-    else if (phase == 1u) record_pressure_passes(gpu, 10u, 25u);
-    else if (phase == 2u) record_pressure_passes(gpu, 25u, 40u);
+    const uint32_t pressure_stop = 2u * DC_PRESSURE_SWEEPS + 2u;
+    if (phase == 0u) record_pressure_passes(gpu, 0u,
+        pressure_stop < 10u ? pressure_stop : 10u);
+    else if (phase == 1u) record_pressure_passes(gpu, 10u,
+        pressure_stop < 25u ? pressure_stop : 25u);
+    else if (phase == 2u) record_pressure_passes(gpu, 25u,
+        pressure_stop < 40u ? pressure_stop : 40u);
     else if (phase == 3u) {
-        record_pressure_passes(gpu, 40u, 2u * DC_PRESSURE_SWEEPS + 2u);
+        record_pressure_passes(gpu, 40u, pressure_stop);
         record_fluid_transport(gpu, 0u, 3u);
     } else if (phase == 4u) record_fluid_transport(gpu, 3u, 5u);
     else if (phase == 5u) record_fluid_correction(gpu);

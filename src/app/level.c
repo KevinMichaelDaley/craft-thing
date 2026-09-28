@@ -400,6 +400,10 @@ bool dc_level_view_set_marker_correction(dc_level_view_t *view, bool enabled) {
     return view && dc_gpu_set_marker_correction(view->gpu, enabled);
 }
 
+bool dc_level_view_set_fluid_interval(dc_level_view_t *view, uint32_t interval) {
+    return view && dc_gpu_set_fluid_interval(view->gpu, interval);
+}
+
 static int32_t cell_chunk_offset(int32_t coordinate) {
     return coordinate >= 0 ? coordinate / DC_CHUNK_SIDE :
            -((-coordinate + DC_CHUNK_SIDE - 1) / DC_CHUNK_SIDE);

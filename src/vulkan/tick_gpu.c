@@ -74,8 +74,9 @@ static void record_scheduled_fluid(dc_gpu_t *gpu) {
         dc_gpu_record_fluid(gpu);
         return;
     }
-    gpu->fluid_step_scale = gpu->timed_fluid ? 6.0f : 1.0f;
-    gpu->fluid_phase_budget += gpu->timed_fluid ? gpu->tick_time_scale : 1.0f;
+    gpu->fluid_step_scale = gpu->timed_fluid ? (float)gpu->fluid_interval : 1.0f;
+    gpu->fluid_phase_budget += (gpu->timed_fluid ? gpu->tick_time_scale : 1.0f) *
+                               (6.0f / (float)gpu->fluid_interval);
     while (gpu->fluid_phase_budget >= 1.0f) {
         dc_gpu_record_fluid_phase(gpu, gpu->fluid_phase);
         gpu->fluid_phase = (gpu->fluid_phase + 1u) % 6u;
@@ -178,7 +179,8 @@ bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
 }
 
 bool dc_gpu_set_fluid_interval(dc_gpu_t *gpu, uint32_t interval) {
-    if (!gpu || (interval != 1u && interval != 6u)) return false;
+    if (!gpu || (interval != 1u && interval != 2u &&
+                 interval != 3u && interval != 6u)) return false;
     gpu->fluid_interval = interval;
     gpu->fluid_phase = 0u;
     gpu->fluid_phase_budget = 0.0f;

@@ -26,7 +26,7 @@ static void test_half_native_resident_chunk_grid_and_fluid_cadence(void) {
     ASSERT_EQ(SIM_HEIGHT, 704);
     ASSERT_EQ(SIM_CHUNKS_X * SIM_CHUNKS_Y, 187);
     ASSERT_EQ(DC_GPU_CHUNK_SLOTS, 187u);
-    ASSERT_EQ(FLUID_INTERVAL, 6);
+    ASSERT_EQ(FLUID_INTERVAL, 3);
     ASSERT_INT_EQ(INITIAL_CHUNK_Y, -4);
     PASS();
 }

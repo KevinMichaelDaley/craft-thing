@@ -156,12 +156,12 @@ static int smoke_native_view(void) {
     if (!okay) { fprintf(stderr, "Native smoke failed: %s\n", err); return 1; }
     printf("Native viewport %ux%u, simulated cells %u, resident chunks %u, "
            "%u presented physics ticks %.3f s (%.2f ticks/s), "
-           "fastest %.1f ms, slowest %.1f ms, fluid interval 6; "
+           "fastest %.1f ms, slowest %.1f ms, fluid interval %u; "
             "GPU stage ms/tick rigid %.1f fluid %.1f (peak %.1f) granular %.1f\n",
            VIEW_WIDTH, VIEW_HEIGHT, VIEW_WIDTH * VIEW_HEIGHT,
            status.ready_chunks, BENCH_FRAMES, elapsed,
            (double)BENCH_FRAMES / elapsed,
-           fastest * 1000.0, slowest * 1000.0,
+           fastest * 1000.0, slowest * 1000.0, FLUID_INTERVAL,
             rigid_ms / 6.0, fluid_ms / 6.0, fluid_peak_ms, granular_ms / 6.0);
     printf("Fluid phase GPU ms: %.1f %.1f %.1f %.1f %.1f %.1f\n",
            fluid_phase_ms[0], fluid_phase_ms[1], fluid_phase_ms[2],
@@ -179,42 +179,57 @@ static int smoke_native_view(void) {
 #endif
 
 #ifdef DC_HALF_NATIVE_VIEW
-static int smoke_spray(bool correction) {
+static uint32_t count_high_water_pixels(const uint32_t *pixels) {
+    uint32_t count = 0u;
+    for (uint32_t y = 0; y < 275u; ++y)
+        for (uint32_t x = 0; x < VIEW_WIDTH; ++x) {
+            if (x >= 90u && x <= 150u) continue;
+            uint32_t color = pixels[y * VIEW_WIDTH + x];
+            if (((color >> 16u) & 255u) > (color & 255u) + 20u)
+                ++count;
+        }
+    return count;
+}
+
+static int smoke_spray(bool correction, uint32_t interval) {
     char directory[] = "build/ui_spray_XXXXXX", err[256] = {0};
     if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
     dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
     if (!view) { fprintf(stderr, "Spray create: %s\n", err); return 1; }
     uint32_t *pixels = malloc((size_t)VIEW_WIDTH * VIEW_HEIGHT * sizeof(*pixels));
     bool okay = pixels && dc_level_view_wait_visible(view, 120000, err, sizeof(err)) &&
-                dc_level_view_set_marker_correction(view, correction);
+                dc_level_view_set_marker_correction(view, correction) &&
+                dc_level_view_set_fluid_interval(view, interval);
     for (uint32_t i = 0; i < 1200u && okay; ++i)
         okay = dc_level_view_step(view, err, sizeof(err)) &&
                dc_level_view_tick(view, err, sizeof(err));
     if (okay) okay = dc_level_view_set_spring_enabled(view, false);
-    for (uint32_t i = 0; i < 120u && okay; ++i)
+    uint32_t airborne_total = 0u, airborne_peak = 0u;
+    for (uint32_t i = 0; i < 120u && okay; ++i) {
         okay = dc_level_view_step(view, err, sizeof(err)) &&
                dc_level_view_tick(view, err, sizeof(err));
-    if (okay) okay = dc_level_view_pixels(view, pixels,
-                                         VIEW_WIDTH * VIEW_HEIGHT, err, sizeof(err));
-    uint32_t airborne = 0u;
-    if (okay) {
-        for (uint32_t y = 0; y < 275u; ++y)
-            for (uint32_t x = 0; x < VIEW_WIDTH; ++x) {
-                if (x >= 90u && x <= 150u) continue;
-                uint32_t color = pixels[y * VIEW_WIDTH + x];
-                if (((color >> 16u) & 255u) > (color & 255u) + 20u)
-                    ++airborne;
+        if (okay && i % 10u == 9u) {
+            okay = dc_level_view_pixels(view, pixels,
+                                        VIEW_WIDTH * VIEW_HEIGHT,
+                                        err, sizeof(err));
+            if (okay) {
+                uint32_t airborne = count_high_water_pixels(pixels);
+                airborne_total += airborne;
+                if (airborne > airborne_peak) airborne_peak = airborne;
             }
+        }
+    }
+    if (okay)
         okay = save_level_bmp(correction ?
             "build/screenshots/spray_marker_on.bmp" :
             "build/screenshots/spray_marker_off.bmp", pixels);
-    }
     if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
     free(pixels);
     if (!okay) { fprintf(stderr, "Spray smoke failed: %s\n", err); return 1; }
-    printf("spray marker %s airborne pixels=%u\n",
-           correction ? "on" : "off", airborne);
-    return airborne <= 8u ? 0 : 1;
+    printf("spray marker %s interval %u airborne mean=%.1f peak=%u\n",
+           correction ? "on" : "off", interval,
+           airborne_total / 12.0, airborne_peak);
+    return airborne_total <= 120u ? 0 : 1;
 }
 #endif
 
@@ -980,9 +995,15 @@ static bool pan_held_keys(dc_level_view_t *view, double elapsed,
 int main(int argc, char **argv) {
 #ifdef DC_HALF_NATIVE_VIEW
     if (argc > 1 && strcmp(argv[1], "--smoke-spray-on") == 0)
-        return smoke_spray(true);
+        return smoke_spray(true, FLUID_INTERVAL);
     if (argc > 1 && strcmp(argv[1], "--smoke-spray-off") == 0)
-        return smoke_spray(false);
+        return smoke_spray(false, FLUID_INTERVAL);
+    if (argc > 1 && strcmp(argv[1], "--smoke-spray-single") == 0)
+        return smoke_spray(false, 1u);
+    if (argc > 1 && strcmp(argv[1], "--smoke-spray-two") == 0)
+        return smoke_spray(false, 2u);
+    if (argc > 1 && strcmp(argv[1], "--smoke-spray-three") == 0)
+        return smoke_spray(false, 3u);
 #endif
 #if defined(DC_NATIVE_VIEW) || defined(DC_HALF_NATIVE_VIEW)
     if (argc > 1 && strcmp(argv[1], "--smoke-native") == 0)
