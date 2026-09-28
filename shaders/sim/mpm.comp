@@ -55,6 +55,10 @@ const uint SAND_ABSORB_PER_TICK = 1024u;
 const uint DRY_PER_TICK = 64u;
 const uint MUD_COMPONENT_MIN = 8u;
 
+float time_scale() {
+    return uintBitsToFloat(params.unused2);
+}
+
 bool in_grid(ivec2 cell) {
     return cell.x >= 0 && cell.y >= 0 &&
            cell.x < int(params.width) && cell.y < int(params.height);
@@ -146,12 +150,14 @@ void exchange_moisture(ivec2 cell) {
         uint moisture = particle.flags & MOISTURE_MASK;
         uint cap = particle.material == 2u ? SAND_MOISTURE_CAP : MOISTURE_CAP;
         uint rate = particle.material == 2u ? SAND_ABSORB_PER_TICK : ABSORB_PER_TICK;
+        rate = uint(round(float(rate) * time_scale()));
         if (absorb) {
             uint taken = min(min(free_water, cap - min(moisture, cap)), rate);
             free_water -= taken;
             moisture += taken;
         } else {
-            uint returned = min(moisture, DRY_PER_TICK);
+            uint returned = min(moisture,
+                                uint(round(float(DRY_PER_TICK) * time_scale())));
             returned = min(returned, 65536u - min(free_water, 65536u));
             free_water += returned;
             moisture -= returned;
@@ -231,17 +237,20 @@ void solve_grid(ivec2 node) {
     float mass = grid[index].x;
     vec2 velocity = vec2(0.0);
     vec2 feedback = vec2(0.0);
+    float dt = DT * time_scale();
     if (mass > 0.000001) {
         vec2 water_mass = vec2(
             0.5 * (water_at(node) + water_at(node + ivec2(1, 0))),
             0.5 * (water_at(node) + water_at(node + ivec2(0, 1))));
-        float buoyancy = GRAVITY * DT * min(water_at(node), 1.0) *
+        float buoyancy = GRAVITY * dt * min(water_at(node), 1.0) *
                          grid[index].w / mass;
-        velocity = grid[index].yz / mass + DT * grid_force[index].xy / mass;
-        velocity.y += GRAVITY * DT - buoyancy;
+        velocity = grid[index].yz / mass + dt * grid_force[index].xy / mass;
+        velocity.y += GRAVITY * dt - buoyancy;
         if (water_mass.y > 0.000001)
             feedback.y += mass * buoyancy / water_mass.y;
-        velocity *= VELOCITY_DAMPING;
+        float damping = time_scale() == 1.0 ? VELOCITY_DAMPING :
+                        pow(VELOCITY_DAMPING, time_scale());
+        velocity *= damping;
         velocity = clamp(velocity, vec2(-MAX_VELOCITY), vec2(MAX_VELOCITY));
         if (solid_at(node)) velocity = vec2(0.0);
         else {
@@ -256,7 +265,9 @@ void solve_grid(ivec2 node) {
         for (int axis = 0; axis < 2; ++axis) {
             float wet_mass = water_mass[axis];
             if (wet_mass <= 0.000001) continue;
-            float impulse = WATER_DRAG * (mass * wet_mass / (mass + wet_mass)) *
+            float drag = time_scale() == 1.0 ? WATER_DRAG :
+                         1.0 - pow(1.0 - WATER_DRAG, time_scale());
+            float impulse = drag * (mass * wet_mass / (mass + wet_mass)) *
                             (water_velocity[axis] - velocity[axis]);
             velocity[axis] += impulse / mass;
             feedback[axis] += -impulse / wet_mass;
@@ -345,7 +356,8 @@ void g2p_one(ivec2 owner, uint layer) {
     velocity = clamp(velocity, vec2(-MAX_VELOCITY), vec2(MAX_VELOCITY));
     mat2 deformation = mat2(particle.f00, particle.f10,
                              particle.f01, particle.f11);
-    deformation = (mat2(1.0) + DT * gradient) * deformation;
+    float dt = DT * time_scale();
+    deformation = (mat2(1.0) + dt * gradient) * deformation;
     bool mud = particle_is_mud(particle);
     particle.f00 = clamp(deformation[0][0], mud ? 0.55 : 0.75,
                          mud ? 1.45 : 1.25);
@@ -355,7 +367,7 @@ void g2p_one(ivec2 owner, uint layer) {
                          mud ? 0.3 : 0.15);
     particle.f10 = clamp(deformation[0][1], mud ? -0.3 : -0.15,
                          mud ? 0.3 : 0.15);
-    vec2 next_position = position + DT * velocity;
+    vec2 next_position = position + dt * velocity;
     ivec2 target = ivec2(floor(next_position));
     if (blocked_destination(target)) {
         next_position = position;

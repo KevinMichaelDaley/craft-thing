@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 
 #include "gpu_internal.h"
@@ -182,11 +183,16 @@ static void mpm_barrier(dc_gpu_t *gpu, VkPipelineStageFlags2 target_stage,
 }
 
 void dc_gpu_record_mpm(dc_gpu_t *gpu) {
+    float time_scale = gpu->timed_fluid ? gpu->tick_time_scale : 1.0f;
+    float whole_ticks = (float)(uint32_t)(time_scale + 0.5f);
+    float drift = time_scale - whole_ticks;
+    if (drift > -0.0001f && drift < 0.0001f) time_scale = whole_ticks;
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                       gpu->mpm_activity_pipeline);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
-    uint32_t push[7] = { gpu->width, gpu->height, 0u, 0u, 0u, 0u, 0u };
+    uint32_t push[7] = { gpu->width, gpu->height, 0u, 0u, 0u,
+                         dc_gpu_float_bits(time_scale), 0u };
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     vkCmdDispatch(gpu->command, (gpu->width + 15u) / 16u,
@@ -242,7 +248,11 @@ void dc_gpu_record_mpm(dc_gpu_t *gpu) {
     mpm_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                 VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
                 VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    for (uint32_t step = 0; step < DC_MPM_SUBSTEPS; ++step) {
+    uint32_t substeps = (uint32_t)ceilf(time_scale * DC_MPM_SUBSTEPS);
+    if (substeps < DC_MPM_SUBSTEPS) substeps = DC_MPM_SUBSTEPS;
+    push[5] = dc_gpu_float_bits(time_scale * DC_MPM_SUBSTEPS /
+                                (float)substeps);
+    for (uint32_t step = 0; step < substeps; ++step) {
         for (uint32_t mode = 0; mode < DC_MPM_MODES; ++mode) {
             push[2] = mode;
             vkCmdPushConstants(gpu->command, gpu->pipeline_layout,

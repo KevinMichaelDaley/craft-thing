@@ -252,6 +252,7 @@ static void test_granular_step_uses_elapsed_world_time(void) {
         if (normal->particles[i].mass_fp) normal_y = normal->particles[i].y_fp;
         if (long_step->particles[i].mass_fp) long_y = long_step->particles[i].y_fp;
     }
+    printf("granular elapsed step y: normal=%d long=%d\n", normal_y, long_y);
     ASSERT_TRUE(long_y > normal_y + 1000);
     dc_gpu_destroy(normal_gpu);
     dc_gpu_destroy(long_gpu);
