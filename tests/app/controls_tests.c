@@ -307,6 +307,42 @@ static void test_saved_water_resumes_before_returning_to_view(void) {
     PASS();
 }
 
+static void test_water_crosses_visible_offscreen_boundary(void) {
+    char directory[] = "build/ui_boundary_flow_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (uint32_t x = 54; x <= 75; ++x)
+        ASSERT_TRUE(dc_level_view_paint(view, x, 10, 0, DC_MATERIAL_STONE,
+                                        err, sizeof(err)));
+    for (uint32_t x = 58; x <= 63; ++x)
+        ASSERT_TRUE(dc_level_view_paint(view, x, 9, 0, DC_MATERIAL_WATER,
+                                        err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
+                                    chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->cells[9 * DC_CHUNK_SIDE].fluid_mass, 0u);
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 128, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 120; ++tick) {
+        ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
+                                    chunk, err, sizeof(err)));
+    uint64_t crossed = 0;
+    for (uint32_t y = 7; y < 10; ++y)
+        for (uint32_t x = 0; x < 6; ++x)
+            crossed += chunk->cells[y * DC_CHUNK_SIDE + x].fluid_mass;
+    ASSERT_TRUE(crossed > 0u);
+    free(chunk);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    PASS();
+}
+
 static void test_sand_keeps_falling_offscreen_without_particle_loss(void) {
     char directory[] = "build/ui_offscreen_sand_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory) != NULL);
@@ -361,6 +397,7 @@ int main(void) {
     RUN(test_water_keeps_falling_one_screen_offscreen);
     RUN(test_water_keeps_falling_two_screens_offscreen);
     RUN(test_saved_water_resumes_before_returning_to_view);
+    RUN(test_water_crosses_visible_offscreen_boundary);
     RUN(test_sand_keeps_falling_offscreen_without_particle_loss);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;

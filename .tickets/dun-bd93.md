@@ -17,3 +17,9 @@ Different-distance chunks have different due times. Add GPU equal-and-opposite f
 
 Mass, particle IDs and momentum remain stable across active/offscreen boundaries and camera promotion; no artificial boundary pool or missing pixels in long pan regression.
 
+
+## Notes
+
+**2026-09-28T16:31:34Z**
+
+RED integration test proves supported water on an offscreen chunk cannot cross into an adjacent visible chunk after 120 GPU ticks; boundary remains a false wall. GPU-only cross-context handoff required.
