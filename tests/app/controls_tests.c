@@ -272,6 +272,51 @@ static void test_water_keeps_falling_two_screens_offscreen(void) {
     PASS();
 }
 
+static void test_sand_keeps_falling_offscreen_without_particle_loss(void) {
+    char directory[] = "build/ui_offscreen_sand_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 10, 5, 0, DC_MATERIAL_SAND,
+                                    err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
+                                    chunk, err, sizeof(err)));
+    uint32_t initial_count = chunk->particle_count;
+    ASSERT_TRUE(initial_count > 0u);
+    dc_mpm_particle_t painted = chunk->particles[5 * DC_CHUNK_SIDE + 10];
+    ASSERT_TRUE(painted.mass_fp != 0u);
+    int32_t initial_y = painted.y_fp;
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 300, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 60; ++tick) {
+        ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, -300, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
+                                    chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->particle_count, initial_count);
+    int32_t final_y = 0;
+    uint32_t found = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (chunk->particles[i].mass_fp &&
+            chunk->particles[i].id_lo == painted.id_lo &&
+            chunk->particles[i].id_hi == painted.id_hi) {
+            final_y = chunk->particles[i].y_fp;
+            ++found;
+        }
+    ASSERT_EQ(found, 1u);
+    ASSERT_TRUE(final_y > initial_y);
+    free(chunk);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    PASS();
+}
+
 int main(void) {
     RUN(test_camera_crosses_chunk_boundary_cell_by_cell);
     RUN(test_loading_status_and_camera_reset);
@@ -280,6 +325,7 @@ int main(void) {
     RUN(test_granular_particle_survives_window_eviction);
     RUN(test_water_keeps_falling_one_screen_offscreen);
     RUN(test_water_keeps_falling_two_screens_offscreen);
+    RUN(test_sand_keeps_falling_offscreen_without_particle_loss);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

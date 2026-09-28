@@ -148,7 +148,7 @@ static bool cache_departed_chunk(dc_level_view_t *view, const dc_chunk_t *chunk,
     if (view->shutting_down || !chunk_needs_physics(chunk)) return true;
     for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i) {
         dc_offscreen_t *offscreen = view->offscreen[i];
-        if (!dc_offscreen_contains(offscreen, chunk->coord)) continue;
+        if (!dc_offscreen_can_capture(offscreen, chunk->coord)) continue;
         dc_offscreen_set_spring(offscreen, view->spring_enabled);
         if (!dc_offscreen_update(offscreen, view->origin, 0.0, true, err, cap) ||
             !dc_offscreen_capture(offscreen, chunk, err, cap)) return false;
@@ -219,7 +219,8 @@ static bool restore_offscreen_chunk(dc_level_view_t *view, dc_chunk_coord_t coor
         if (!chunk) return error(err, cap, "Cannot allocate offscreen promotion chunk");
         bool okay = dc_offscreen_take(offscreen, coord, chunk, err, cap) &&
                     dc_gpu_upload_chunk(view->gpu, index, chunk, err, cap) &&
-                    dc_chunk_table_finish_load(&view->table, index, generation);
+                    dc_chunk_table_finish_load(&view->table, index, generation) &&
+                    dc_chunk_table_mark_dirty(&view->table, index);
         free(chunk);
         if (!okay) return false;
         *restored = true;
@@ -375,7 +376,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
             view->pending_seconds / (float)ready_steps))
         return error(err, cap, "Invalid elapsed simulation time");
     if (!dc_gpu_present_chunks_steps(view->gpu, ready_steps, err, cap)) return false;
-    if (view->pending_steps) {
+    if (ready_steps) {
         for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i) {
             dc_offscreen_t *offscreen = view->offscreen[i];
             if (!offscreen) continue;
@@ -384,9 +385,9 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
                                      view->pending_seconds, false,
                                      err, cap)) return false;
         }
+        view->pending_steps = 0;
+        view->pending_seconds = 0.0f;
     }
-    view->pending_steps = 0;
-    view->pending_seconds = 0.0f;
     return true;
 }
 

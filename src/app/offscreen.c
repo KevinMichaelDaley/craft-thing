@@ -56,6 +56,13 @@ bool dc_offscreen_contains(const dc_offscreen_t *offscreen, dc_chunk_coord_t coo
            coord.y < offscreen->origin.y + VIEW_CHUNKS_Y + HALO_CHUNKS;
 }
 
+bool dc_offscreen_can_capture(const dc_offscreen_t *offscreen,
+                              dc_chunk_coord_t coord) {
+    return dc_offscreen_contains(offscreen, coord) &&
+           offscreen->count < DC_GPU_CHUNK_SLOTS &&
+           !dc_offscreen_has(offscreen, coord);
+}
+
 bool dc_offscreen_has(const dc_offscreen_t *offscreen, dc_chunk_coord_t coord) {
     if (!offscreen) return false;
     for (uint32_t i = 0; i < DC_GPU_CHUNK_SLOTS; ++i)
@@ -126,13 +133,13 @@ uint32_t dc_offscreen_band(const dc_offscreen_t *offscreen,
         if (!offscreen->slots[i].occupied) continue;
         dc_chunk_coord_t coord = offscreen->slots[i].coord;
         uint64_t dx = coord.x < camera_origin.x ?
-            (uint64_t)(camera_origin.x - coord.x) :
+            (uint64_t)camera_origin.x - (uint64_t)coord.x :
             coord.x >= camera_origin.x + VIEW_CHUNKS_X ?
-            (uint64_t)(coord.x - camera_origin.x - VIEW_CHUNKS_X + 1) : 0u;
+            (uint64_t)coord.x - (uint64_t)camera_origin.x - VIEW_CHUNKS_X + 1u : 0u;
         uint64_t dy = coord.y < camera_origin.y ?
-            (uint64_t)(camera_origin.y - coord.y) :
+            (uint64_t)camera_origin.y - (uint64_t)coord.y :
             coord.y >= camera_origin.y + VIEW_CHUNKS_Y ?
-            (uint64_t)(coord.y - camera_origin.y - VIEW_CHUNKS_Y + 1) : 0u;
+            (uint64_t)coord.y - (uint64_t)camera_origin.y - VIEW_CHUNKS_Y + 1u : 0u;
         uint32_t band = 5u;
         if (dx <= VIEW_CHUNKS_X && dy <= VIEW_CHUNKS_Y) band = 1u;
         else if (dx <= 2u * VIEW_CHUNKS_X && dy <= 2u * VIEW_CHUNKS_Y) band = 2u;

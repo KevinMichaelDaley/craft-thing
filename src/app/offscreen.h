@@ -14,6 +14,8 @@ dc_offscreen_t *dc_offscreen_create(dc_chunk_coord_t origin,
                                     char *err, uint32_t cap);
 void dc_offscreen_destroy(dc_offscreen_t *offscreen);
 bool dc_offscreen_contains(const dc_offscreen_t *offscreen, dc_chunk_coord_t coord);
+bool dc_offscreen_can_capture(const dc_offscreen_t *offscreen,
+                              dc_chunk_coord_t coord);
 bool dc_offscreen_capture(dc_offscreen_t *offscreen, const dc_chunk_t *chunk,
                           char *err, uint32_t cap);
 bool dc_offscreen_take(dc_offscreen_t *offscreen, dc_chunk_coord_t coord,

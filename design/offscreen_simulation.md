@@ -1,5 +1,25 @@
 # Distance-based offscreen simulation
 
+## Current implementation
+
+Departing dynamic chunks move to one of four bounded headless Vulkan workspaces.
+The workspaces keep material, Eulerian mass and velocity, markers, and MPM grains
+on the GPU. They advance on the same elapsed clock at 4-, 12-, or 24-tick
+cadences, using up to three nominal ticks per fluid solve, two MPM substeps
+per nominal tick, and eight pressure sweeps. A workspace farther than four
+screen widths is saved through the chunk worker and released. GPU readback and
+upload happen on eviction, promotion, and final save, not on ordinary frames.
+The interactive pan tests cover falling water at one and two screens, particle
+identity, and velocity persistence across a process restart.
+When foreground chunks are still loading, their pending ticks remain queued;
+offscreen work advances with them once the visible set is ready.
+
+Conservative transfer across independently scheduled visible and offscreen
+workspaces is still tracked by `dun-bd93`. A chunk that was saved beyond the
+four-screen band is not yet prefetched when the camera approaches it again, and
+the four-workspace pool can saturate on widely scattered active chunks. Those
+limits are tracked by `dun-wwcl` and `dun-3xqx`.
+
 ## Problem and invariant
 
 The current page table is exactly the rendered view plus one 64-cell chunk on
