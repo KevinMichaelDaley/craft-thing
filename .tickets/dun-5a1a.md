@@ -23,3 +23,7 @@ A chunk saved beyond four screens resumes GPU physics upon re-entry to the two-s
 **2026-09-28T17:10:32Z**
 
 Deep-sleep dynamic chunks prefetch into GPU cache before visible return; returning water pan test passes. Offscreen context now 80 slots in a 10x8 chunk workspace: 192.8 MiB at half/native, with 0.2 seconds of GPU simulation in 20-23 ms. Four-cache memory bound is 1.22 GiB half native / 2.24 GiB native including foreground. Saturated multi-directional fairness remains to verify.
+
+**2026-09-28T17:11:11Z**
+
+Remaining acceptance work: saturated multi-directional cache fairness and live near-band budget under camera motion; conservative GPU seam handoff is now closed in dun-bd93. Shared workspaces use 80 slots and no per-frame readback.
