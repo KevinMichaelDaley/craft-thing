@@ -861,10 +861,18 @@ static void test_pressure_budget_can_change_per_gpu_context(void) {
     dc_gpu_t *gpu = NULL;
     ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
                               err, sizeof(err)));
+    ASSERT_EQ(gpu->pressure_sweeps, 20u);
     ASSERT_TRUE(!dc_gpu_set_pressure_sweeps(NULL, 8u));
     ASSERT_TRUE(!dc_gpu_set_pressure_sweeps(gpu, 0u));
+    ASSERT_TRUE(!dc_gpu_set_pressure_sweeps(gpu, 33u));
     ASSERT_TRUE(dc_gpu_set_pressure_sweeps(gpu, 8u));
+    ASSERT_EQ(gpu->pressure_sweeps, 8u);
     ASSERT_TRUE(dc_gpu_set_pressure_sweeps(gpu, 20u));
+    ASSERT_EQ(gpu->pressure_sweeps, 20u);
+    ASSERT_TRUE(dc_gpu_set_fluid_interval(gpu, 6u));
+    ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(!dc_gpu_set_pressure_sweeps(gpu, 8u));
+    ASSERT_EQ(gpu->pressure_sweeps, 20u);
     dc_gpu_destroy(gpu);
     PASS();
 }

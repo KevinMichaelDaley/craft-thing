@@ -12,12 +12,14 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 #endif
 
 bool dc_gpu_set_pressure_sweeps(dc_gpu_t *gpu, uint32_t sweeps) {
-    (void)gpu;
-    (void)sweeps;
-    return false;
+    if (!gpu || sweeps < 4u || sweeps > 32u || gpu->fluid_phase != 0u)
+        return false;
+    gpu->pressure_sweeps = sweeps;
+    return true;
 }
 
 bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    gpu->pressure_sweeps = DC_PRESSURE_SWEEPS;
     VkDeviceSize bytes = (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t);
     return dc_gpu_make_device_buffer(gpu, bytes, &gpu->fluid_a_buffer,
                &gpu->fluid_a_memory, err, cap) &&
@@ -155,7 +157,7 @@ static void record_pressure_passes(dc_gpu_t *gpu, uint32_t first,
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                       gpu->projection_pipeline);
     for (uint32_t pass = first; pass < stop; ++pass) {
-        push[2] = pass == 0 ? 0u : pass == 2u * DC_PRESSURE_SWEEPS + 1u ? 3u :
+        push[2] = pass == 0 ? 0u : pass == 2u * gpu->pressure_sweeps + 1u ? 3u :
                   ((pass & 1u) ? 1u : 2u);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
@@ -244,7 +246,7 @@ void dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase) {
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     if (phase == 0u) record_projection_begin(gpu);
-    const uint32_t pressure_stop = 2u * DC_PRESSURE_SWEEPS + 2u;
+    const uint32_t pressure_stop = 2u * gpu->pressure_sweeps + 2u;
     if (phase == 0u) record_pressure_passes(gpu, 0u,
         pressure_stop < 10u ? pressure_stop : 10u);
     else if (phase == 1u) record_pressure_passes(gpu, 10u,

@@ -109,6 +109,7 @@ struct dc_gpu {
     uint32_t fluid_tick;
     uint32_t fluid_interval;
     uint32_t fluid_phase;
+    uint32_t pressure_sweeps;
     float tick_time_scale;
     float fluid_step_scale;
     float fluid_phase_budget;
