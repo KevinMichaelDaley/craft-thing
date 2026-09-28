@@ -396,6 +396,10 @@ bool dc_level_view_set_spring_enabled(dc_level_view_t *view, bool enabled) {
     return true;
 }
 
+bool dc_level_view_set_marker_correction(dc_level_view_t *view, bool enabled) {
+    return view && dc_gpu_set_marker_correction(view->gpu, enabled);
+}
+
 static int32_t cell_chunk_offset(int32_t coordinate) {
     return coordinate >= 0 ? coordinate / DC_CHUNK_SIDE :
            -((-coordinate + DC_CHUNK_SIDE - 1) / DC_CHUNK_SIDE);

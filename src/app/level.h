@@ -37,6 +37,7 @@ bool dc_level_view_screen_cell(dc_level_view_t *view, uint32_t screen_x,
                                uint32_t *cell_y);
 bool dc_level_view_set_overlay(dc_level_view_t *view, dc_gpu_overlay_t overlay);
 bool dc_level_view_set_spring_enabled(dc_level_view_t *view, bool enabled);
+bool dc_level_view_set_marker_correction(dc_level_view_t *view, bool enabled);
 bool dc_level_view_paint(dc_level_view_t *view, uint32_t x, uint32_t y,
                          uint32_t radius, uint16_t material,
                          char *err, uint32_t err_cap);

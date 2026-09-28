@@ -85,6 +85,7 @@ static int smoke_native_view(void) {
 #else
     if (okay) okay = save_level_bmp("build/screenshots/native_1920x1080.bmp", pixels);
 #endif
+
     uint64_t start = SDL_GetPerformanceCounter();
     double fastest = 1e9, slowest = 0.0;
     for (uint32_t i = 0; i < BENCH_FRAMES && okay; ++i)
@@ -174,6 +175,46 @@ static int smoke_native_view(void) {
            memory_stats.mapped_system_bytes / 1048576.0,
            memory_stats.device_only_bytes / 1048576.0);
     return 0;
+}
+#endif
+
+#ifdef DC_HALF_NATIVE_VIEW
+static int smoke_spray(bool correction) {
+    char directory[] = "build/ui_spray_XXXXXX", err[256] = {0};
+    if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    if (!view) { fprintf(stderr, "Spray create: %s\n", err); return 1; }
+    uint32_t *pixels = malloc((size_t)VIEW_WIDTH * VIEW_HEIGHT * sizeof(*pixels));
+    bool okay = pixels && dc_level_view_wait_visible(view, 120000, err, sizeof(err)) &&
+                dc_level_view_set_marker_correction(view, correction);
+    for (uint32_t i = 0; i < 1200u && okay; ++i)
+        okay = dc_level_view_step(view, err, sizeof(err)) &&
+               dc_level_view_tick(view, err, sizeof(err));
+    if (okay) okay = dc_level_view_set_spring_enabled(view, false);
+    for (uint32_t i = 0; i < 120u && okay; ++i)
+        okay = dc_level_view_step(view, err, sizeof(err)) &&
+               dc_level_view_tick(view, err, sizeof(err));
+    if (okay) okay = dc_level_view_pixels(view, pixels,
+                                         VIEW_WIDTH * VIEW_HEIGHT, err, sizeof(err));
+    uint32_t airborne = 0u;
+    if (okay) {
+        for (uint32_t y = 0; y < 275u; ++y)
+            for (uint32_t x = 0; x < VIEW_WIDTH; ++x) {
+                if (x >= 90u && x <= 150u) continue;
+                uint32_t color = pixels[y * VIEW_WIDTH + x];
+                if (((color >> 16u) & 255u) > (color & 255u) + 20u)
+                    ++airborne;
+            }
+        okay = save_level_bmp(correction ?
+            "build/screenshots/spray_marker_on.bmp" :
+            "build/screenshots/spray_marker_off.bmp", pixels);
+    }
+    if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
+    free(pixels);
+    if (!okay) { fprintf(stderr, "Spray smoke failed: %s\n", err); return 1; }
+    printf("spray marker %s airborne pixels=%u\n",
+           correction ? "on" : "off", airborne);
+    return airborne <= 8u ? 0 : 1;
 }
 #endif
 
@@ -937,6 +978,12 @@ static bool pan_held_keys(dc_level_view_t *view, double elapsed,
 }
 
 int main(int argc, char **argv) {
+#ifdef DC_HALF_NATIVE_VIEW
+    if (argc > 1 && strcmp(argv[1], "--smoke-spray-on") == 0)
+        return smoke_spray(true);
+    if (argc > 1 && strcmp(argv[1], "--smoke-spray-off") == 0)
+        return smoke_spray(false);
+#endif
 #if defined(DC_NATIVE_VIEW) || defined(DC_HALF_NATIVE_VIEW)
     if (argc > 1 && strcmp(argv[1], "--smoke-native") == 0)
         return smoke_native_view();

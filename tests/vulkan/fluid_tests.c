@@ -514,6 +514,41 @@ static void test_visible_spring_supplies_fast_flow_in_one_second(void) {
     PASS();
 }
 
+static void test_deep_spring_pool_does_not_spray_across_surface(void) {
+    char err[256] = {0};
+    dc_chunk_t left = {0}, right = {0}, saved_left = {0}, saved_right = {0};
+    for (uint32_t x = 0; x < 64; ++x) {
+        left.cells[48u * 64u + x].material = DC_MATERIAL_STONE;
+        right.cells[48u * 64u + x].material = DC_MATERIAL_STONE;
+    }
+    uint32_t airborne[2] = {0};
+    for (uint32_t variant = 0; variant < 2; ++variant) {
+        dc_gpu_t *gpu = make_grid(&left, &right, err, sizeof(err));
+        ASSERT_TRUE(gpu != NULL);
+        ASSERT_TRUE(dc_gpu_set_marker_correction(gpu, variant != 0u));
+        ASSERT_TRUE(dc_gpu_set_tick_water_source(gpu, true, 31u, 8u));
+        for (uint32_t tick = 0; tick < 300u; ++tick)
+            ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_tick_water_source(gpu, false, 0u, 0u));
+        for (uint32_t tick = 0; tick < 120u; ++tick)
+            ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0u, &saved_left, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1u, &saved_right, err, sizeof(err)));
+        for (uint32_t y = 0; y < 32u; ++y)
+            for (uint32_t x = 0; x < 128u; ++x) {
+                if (x >= 26u && x <= 36u) continue;
+                const dc_chunk_t *chunk = x < 64u ? &saved_left : &saved_right;
+                if (chunk->cells[y * 64u + x % 64u].fluid_mass >=
+                    DC_FLUID_FULL / 16u) ++airborne[variant];
+            }
+        dc_gpu_destroy(gpu);
+    }
+    printf("deep-pool airborne cells marker off=%u on=%u\n",
+           airborne[0], airborne[1]);
+    ASSERT_TRUE(airborne[1] <= 8u);
+    PASS();
+}
+
 static void test_supported_water_spreads_sideways_quickly(void) {
     char err[256] = {0};
     dc_chunk_t left = {0}, right = {0}, saved_left = {0}, saved_right = {0};
@@ -965,6 +1000,7 @@ int main(void) {
     RUN(test_marker_overlay_is_opt_in);
     RUN(test_marker_pool_stays_bounded_on_dense_interface);
     RUN(test_visible_spring_supplies_fast_flow_in_one_second);
+    RUN(test_deep_spring_pool_does_not_spray_across_surface);
     RUN(test_supported_water_spreads_sideways_quickly);
     RUN(test_falling_water_is_not_limited_to_one_cell_per_tick);
     RUN(test_water_crosses_vertical_chunk_seam);

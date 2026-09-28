@@ -35,6 +35,11 @@ test_half_native: build/half_native_config_tests build/dungeoncraft_half_native
 	./build/half_native_config_tests
 	./build/dungeoncraft_half_native --smoke-native
 
+.PHONY: test_half_native_spray
+test_half_native_spray: build/dungeoncraft_half_native
+	./build/dungeoncraft_half_native --smoke-spray-off
+	./build/dungeoncraft_half_native --smoke-spray-on
+
 build/half_native_config_tests: tests/app/half_native_config_tests.c src/app/view_config.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_HALF_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=187u $< -o $@
 
