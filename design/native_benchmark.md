@@ -39,12 +39,13 @@ copyback occurs during normal frames; modified chunks are downloaded for
 persistence when streamed or when the game closes.
 
 `make test_native` and `make test_half_native` generate and load the resident
-chunks, paint at the far edge, and present twelve physics ticks plus twelve
+chunks, paint at the far edge, and present sixty physics ticks plus sixty
 adaptive-time frames. The half-native mode uses 960×540 simulated cells,
 187 resident chunks, and a 2× upscale to the 1920×1080 window. Procedural
-features have the same apparent screen size as the native mode. Each mode
-uses a six-tick fluid interval and keeps normal simulation and rendering on
-the GPU. Their screenshots are written under `build/screenshots/`.
+features have the same apparent screen size as the native mode. Native mode
+uses a six-tick fluid interval; half-native uses three ticks after the longer
+step was found to eject spurious free-surface droplets. Normal simulation and
+rendering stay on the GPU. Their screenshots are written under `build/screenshots/`.
 
 On the RTX A2000, a paired run on 2026-09-27 measured:
 
@@ -53,8 +54,12 @@ On the RTX A2000, a paired run on 2026-09-27 measured:
 | Native 1920×1080 | 38.9 | 39.4 | 9.2 / 7.3 |
 | Half-native 960×540, 2× display | 67.6 | 71.1 | 1.6 / 4.3 |
 
-These are short smoke samples, so the rates include frame-to-frame variation.
-A longer 60-frame half-native sample measured 62.3 adaptive frames/s. The
-matching native sample exposed a marker-count overflow during chunk save;
-`dun-mt9o` tracks that defect. Earlier native runs before VRAM placement and
-GPU-only normal frames measured about 8.4 ticks/s.
+Those paired rates used the older six-tick cadence. With the three-tick
+half-native cadence and 16 red-black pressure sweeps, a 60-frame sample reached
+60.4 adaptive frames/s; another run while the older live demo shared the GPU
+measured 47.8 frames/s. In a 1,200-tick spring scene followed by 120 ticks
+with the spring off, the average count of high airborne water pixels fell from
+about 42 at a six-tick fluid interval to 1.5 with marker correction enabled.
+The marker-count overflow found during earlier long native runs was fixed in
+`dun-mt9o`. Native 1920×1080 still uses six-tick staging; its time-step
+stability and 60 Hz performance remain active work in `dun-vd9a`.
