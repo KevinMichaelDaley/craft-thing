@@ -254,12 +254,18 @@ void solve_grid(ivec2 node) {
         velocity = clamp(velocity, vec2(-MAX_VELOCITY), vec2(MAX_VELOCITY));
         if (solid_at(node)) velocity = vec2(0.0);
         else {
-            if (velocity.y > 0.0 && solid_at(node + ivec2(0, 1))) {
+            if (velocity.y > 0.0 &&
+                page_at(node + ivec2(0, 1)) != 0u &&
+                solid_at(node + ivec2(0, 1))) {
                 velocity.y = 0.0;
                 velocity.x *= 0.55;
             }
-            if (velocity.x > 0.0 && solid_at(node + ivec2(1, 0))) velocity.x = 0.0;
-            if (velocity.x < 0.0 && solid_at(node + ivec2(-1, 0))) velocity.x = 0.0;
+            if (velocity.x > 0.0 &&
+                page_at(node + ivec2(1, 0)) != 0u &&
+                solid_at(node + ivec2(1, 0))) velocity.x = 0.0;
+            if (velocity.x < 0.0 &&
+                page_at(node + ivec2(-1, 0)) != 0u &&
+                solid_at(node + ivec2(-1, 0))) velocity.x = 0.0;
         }
         vec2 water_velocity = face_velocity[index];
         for (int axis = 0; axis < 2; ++axis) {
@@ -371,7 +377,7 @@ void g2p_one(ivec2 owner, uint layer) {
     ivec2 target = ivec2(floor(next_position));
     if (blocked_destination(target)) {
         next_position = position;
-        velocity = vec2(0.0);
+        if (page_at(target) != 0u) velocity = vec2(0.0);
     }
     vec2 local_position = next_position - vec2(tile_origin(owner));
     particle.x_fp = int(round(local_position.x * 65536.0));

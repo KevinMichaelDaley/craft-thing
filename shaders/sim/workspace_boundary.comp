@@ -1,0 +1,316 @@
+#version 450
+layout(local_size_x = 64) in;
+layout(set = 0, binding = 0, std430) buffer MainCells { uvec2 main_cells[]; };
+layout(set = 0, binding = 1, std430) buffer OtherCells { uvec2 other_cells[]; };
+layout(set = 0, binding = 2, std430) buffer MainVelocity { vec2 main_velocity[]; };
+layout(set = 0, binding = 3, std430) buffer OtherVelocity { vec2 other_velocity[]; };
+layout(set = 0, binding = 4, std430) readonly buffer MainPressure { float main_pressure[]; };
+layout(set = 0, binding = 5, std430) readonly buffer OtherPressure { float other_pressure[]; };
+layout(set = 0, binding = 6, std430) readonly buffer MainHead { uint main_head[]; };
+layout(set = 0, binding = 7, std430) readonly buffer OtherHead { uint other_head[]; };
+layout(set = 0, binding = 8, std430) readonly buffer MainOccupancy { uint main_occupancy[]; };
+layout(set = 0, binding = 9, std430) readonly buffer OtherOccupancy { uint other_occupancy[]; };
+struct Particle {
+    int x_fp, y_fp, vx_fp, vy_fp;
+    float f00, f01, f10, f11;
+    uint id_lo, id_hi, mass_fp, grain_fp, material, flags;
+};
+layout(set = 0, binding = 10, std430) buffer MainParticles { Particle main_particles[]; };
+layout(set = 0, binding = 11, std430) buffer OtherParticles { Particle other_particles[]; };
+layout(set = 0, binding = 12, std430) buffer MainCounts { uint main_counts[]; };
+layout(set = 0, binding = 13, std430) buffer OtherCounts { uint other_counts[]; };
+struct Marker { int x_fp, y_fp; uint id, kind; };
+layout(set = 0, binding = 14, std430) buffer MainMarkers { Marker main_markers[]; };
+layout(set = 0, binding = 15, std430) buffer OtherMarkers { Marker other_markers[]; };
+layout(set = 0, binding = 16, std430) buffer MainMarkerCounts { uint main_marker_counts[]; };
+layout(set = 0, binding = 17, std430) buffer OtherMarkerCounts { uint other_marker_counts[]; };
+layout(push_constant) uniform Params {
+    uint main_slot;
+    uint other_slot;
+    uint main_x;
+    uint main_y;
+    uint other_x;
+    uint other_y;
+    uint other_side;
+    uint tick_bits;
+    uint main_width;
+    uint other_width;
+} params;
+
+const uint SIDE = 64u;
+const uint FULL = 65536u;
+
+bool open_material(uvec2 cell) {
+    uint kind = cell.x & 0xffffu;
+    return kind == 0u || kind == 2u || kind == 4u || kind == 5u;
+}
+
+void transfer_grains(uint mc, uint oc) {
+    bool main_first = params.other_side == 1u || params.other_side == 3u;
+    bool horizontal = params.other_side < 2u;
+    uint first_slot = main_first ? params.main_slot : params.other_slot;
+    uint second_slot = main_first ? params.other_slot : params.main_slot;
+    uint first_cell = main_first ? mc : oc;
+    uint second_cell = main_first ? oc : mc;
+    uint first_base = first_slot * 8192u + (first_cell % 4096u);
+    uint second_base = second_slot * 8192u + (second_cell % 4096u);
+    float ticks = uintBitsToFloat(params.tick_bits);
+    for (uint layer = 0u; layer < 2u; ++layer) {
+        uint fi = first_base + layer * 4096u;
+        Particle first = main_first ? main_particles[fi] : other_particles[fi];
+        if (first.mass_fp != 0u) {
+            float velocity = float(horizontal ? first.vx_fp : first.vy_fp) / 65536.0;
+            float position = float(horizontal ? first.x_fp : first.y_fp) / 65536.0;
+            if (velocity > 0.0 && position + velocity * ticks >= 64.0) {
+                for (uint dest_layer = 0u; dest_layer < 2u; ++dest_layer) {
+                    uint si = second_base + dest_layer * 4096u;
+                    Particle occupied = main_first ? other_particles[si] : main_particles[si];
+                    if (occupied.mass_fp != 0u) continue;
+                    int moved = int(round(clamp(position + velocity * ticks - 64.0,
+                                                 0.001, 0.999) * 65536.0));
+                    if (horizontal) first.x_fp = moved;
+                    else first.y_fp = moved;
+                    if (main_first) {
+                        other_particles[si] = first;
+                        main_particles[fi].mass_fp = 0u;
+                        atomicAdd(main_counts[params.main_slot], 0xffffffffu);
+                        atomicAdd(other_counts[params.other_slot], 1u);
+                    } else {
+                        main_particles[si] = first;
+                        other_particles[fi].mass_fp = 0u;
+                        atomicAdd(other_counts[params.other_slot], 0xffffffffu);
+                        atomicAdd(main_counts[params.main_slot], 1u);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    for (uint layer = 0u; layer < 2u; ++layer) {
+        uint si = second_base + layer * 4096u;
+        Particle second = main_first ? other_particles[si] : main_particles[si];
+        if (second.mass_fp == 0u) continue;
+        float velocity = float(horizontal ? second.vx_fp : second.vy_fp) / 65536.0;
+        float position = float(horizontal ? second.x_fp : second.y_fp) / 65536.0;
+        if (velocity >= 0.0 || position + velocity * ticks >= 0.0) continue;
+        for (uint dest_layer = 0u; dest_layer < 2u; ++dest_layer) {
+            uint fi = first_base + dest_layer * 4096u;
+            Particle occupied = main_first ? main_particles[fi] : other_particles[fi];
+            if (occupied.mass_fp != 0u) continue;
+            int moved = int(round(clamp(64.0 + position + velocity * ticks,
+                                         63.001, 63.999) * 65536.0));
+            if (horizontal) second.x_fp = moved;
+            else second.y_fp = moved;
+            if (main_first) {
+                main_particles[fi] = second;
+                other_particles[si].mass_fp = 0u;
+                atomicAdd(other_counts[params.other_slot], 0xffffffffu);
+                atomicAdd(main_counts[params.main_slot], 1u);
+            } else {
+                other_particles[fi] = second;
+                main_particles[si].mass_fp = 0u;
+                atomicAdd(main_counts[params.main_slot], 0xffffffffu);
+                atomicAdd(other_counts[params.other_slot], 1u);
+            }
+            break;
+        }
+    }
+    uint main_base = params.main_slot * 8192u + mc % 4096u;
+    uint other_base = params.other_slot * 8192u + oc % 4096u;
+    Particle mp = main_particles[main_base];
+    Particle ms = main_particles[main_base + 4096u];
+    Particle op = other_particles[other_base];
+    Particle os = other_particles[other_base + 4096u];
+    uint main_material = main_cells[mc].x & 0xffffu;
+    uint other_material = other_cells[oc].x & 0xffffu;
+    if (mp.mass_fp != 0u) main_material = mp.material;
+    else if (ms.mass_fp != 0u) main_material = ms.material;
+    else if (main_material == 2u || main_material == 4u || main_material == 5u)
+        main_material = 0u;
+    if (op.mass_fp != 0u) other_material = op.material;
+    else if (os.mass_fp != 0u) other_material = os.material;
+    else if (other_material == 2u || other_material == 4u || other_material == 5u)
+        other_material = 0u;
+    main_cells[mc].x = (main_cells[mc].x & 0xffff0000u) | main_material;
+    other_cells[oc].x = (other_cells[oc].x & 0xffff0000u) | other_material;
+}
+
+void transfer_markers(bool main_first, bool forward, float ticks) {
+    bool source_main = forward ? main_first : !main_first;
+    uint source_slot = source_main ? params.main_slot : params.other_slot;
+    uint dest_slot = source_main ? params.other_slot : params.main_slot;
+    uint source_count = min(source_main ? main_marker_counts[source_slot] :
+                                         other_marker_counts[source_slot], 2048u);
+    uint dest_count = min(source_main ? other_marker_counts[dest_slot] :
+                                       main_marker_counts[dest_slot], 2048u);
+    uint first_x = main_first ? params.main_x : params.other_x;
+    uint first_y = main_first ? params.main_y : params.other_y;
+    uint dest_x = source_main ? params.other_x : params.main_x;
+    uint dest_y = source_main ? params.other_y : params.main_y;
+    bool horizontal = params.other_side < 2u;
+    for (uint i = 0u; i < source_count && dest_count < 2048u;) {
+        uint source_index = source_slot * 2048u + i;
+        Marker marker = source_main ? main_markers[source_index] :
+                                      other_markers[source_index];
+        float position = float(horizontal ? marker.x_fp : marker.y_fp) / 65536.0;
+        float perpendicular = float(horizontal ? marker.y_fp : marker.x_fp) /
+                              65536.0;
+        uint lane = uint(clamp(floor(perpendicular), 0.0, 63.0));
+        uint first_width = main_first ? params.main_width : params.other_width;
+        uint second_width = main_first ? params.other_width : params.main_width;
+        uint dest_width = source_main ? params.other_width : params.main_width;
+        uint face = horizontal ? (first_y + lane) * first_width + first_x + 63u :
+                                 (first_y + 63u) * first_width + first_x + lane;
+        uint second_x = main_first ? params.other_x : params.main_x;
+        uint second_y = main_first ? params.other_y : params.main_y;
+        uint first_cell = (main_first ? params.main_slot : params.other_slot) *
+                          4096u + (horizontal ? lane * 64u + 63u :
+                                               63u * 64u + lane);
+        uint second_cell = (main_first ? params.other_slot : params.main_slot) *
+                           4096u + (horizontal ? lane * 64u : lane);
+        uint second_grid = horizontal ? (second_y + lane) * second_width + second_x :
+                                         second_y * second_width + second_x + lane;
+        uvec2 first_state = main_first ? main_cells[first_cell] : other_cells[first_cell];
+        uvec2 second_state = main_first ? other_cells[second_cell] : main_cells[second_cell];
+        uint first_occupied = main_first ? main_occupancy[face] :
+                                           other_occupancy[face];
+        uint second_occupied = main_first ? other_occupancy[second_grid] :
+                                            main_occupancy[second_grid];
+        vec2 edge_velocity = main_first ? main_velocity[face] : other_velocity[face];
+        float speed = horizontal ? edge_velocity.x : edge_velocity.y;
+        float next = position + speed * ticks * 1.001;
+        bool crossing = marker.kind != 0u && open_material(first_state) &&
+            open_material(second_state) && first_occupied == 0u &&
+            second_occupied == 0u &&
+            (forward ? speed > 0.0 && next >= 64.0 :
+                       speed < 0.0 && next < 0.0);
+        float local = forward ? next - 64.0 : next + 64.0;
+        uint along = uint(clamp(floor(local), 0.0, 63.0));
+        uint x = horizontal ? along : lane;
+        uint y = horizontal ? lane : along;
+        uint dest_index = dest_slot * 4096u + y * 64u + x;
+        uint dest_grid = (dest_y + y) * dest_width + dest_x + x;
+        uvec2 cell = source_main ? other_cells[dest_index] : main_cells[dest_index];
+        uint occupied = source_main ? other_occupancy[dest_grid] :
+                                      main_occupancy[dest_grid];
+        if (!crossing || !open_material(cell) || occupied != 0u ||
+            (marker.kind == 1u && cell.y == 0u)) { ++i; continue; }
+        int moved = int(round(clamp(local, 0.001, 63.999) * 65536.0));
+        if (horizontal) marker.x_fp = moved;
+        else marker.y_fp = moved;
+        uint new_index = dest_slot * 2048u + dest_count;
+        uint last_index = source_slot * 2048u + source_count - 1u;
+        if (source_main) {
+            other_markers[new_index] = marker;
+            main_markers[source_index] = main_markers[last_index];
+        } else {
+            main_markers[new_index] = marker;
+            other_markers[source_index] = other_markers[last_index];
+        }
+        --source_count;
+        ++dest_count;
+    }
+    if (source_main) {
+        main_marker_counts[source_slot] = source_count;
+        other_marker_counts[dest_slot] = dest_count;
+    } else {
+        other_marker_counts[source_slot] = source_count;
+        main_marker_counts[dest_slot] = dest_count;
+    }
+}
+
+void main() {
+    uint lane = gl_GlobalInvocationID.x;
+    if (lane >= SIDE) return;
+    uint mx = params.main_x + (params.other_side == 1u ? SIDE - 1u :
+                                params.other_side == 0u ? 0u : lane);
+    uint my = params.main_y + (params.other_side == 3u ? SIDE - 1u :
+                                params.other_side == 2u ? 0u : lane);
+    uint ox = params.other_x + (params.other_side == 0u ? SIDE - 1u :
+                                 params.other_side == 1u ? 0u : lane);
+    uint oy = params.other_y + (params.other_side == 2u ? SIDE - 1u :
+                                 params.other_side == 3u ? 0u : lane);
+    uint mc = params.main_slot * SIDE * SIDE + (my - params.main_y) * SIDE +
+              mx - params.main_x;
+    uint oc = params.other_slot * SIDE * SIDE + (oy - params.other_y) * SIDE +
+              ox - params.other_x;
+    uint mi = my * params.main_width + mx;
+    uint oi = oy * params.other_width + ox;
+    uvec2 m = main_cells[mc], o = other_cells[oc];
+    bool open_face = open_material(m) && open_material(o) &&
+        main_occupancy[mi] == 0u && other_occupancy[oi] == 0u;
+    if (open_face) {
+    transfer_grains(mc, oc);
+    m = main_cells[mc];
+    o = other_cells[oc];
+    bool main_first = params.other_side == 1u || params.other_side == 3u;
+    uint first_mass = main_first ? m.y : o.y;
+    uint second_mass = main_first ? o.y : m.y;
+    float first_head = float(main_first ? main_head[mi] : other_head[oi]) /
+                       float(FULL);
+    float second_head = float(main_first ? other_head[oi] : main_head[mi]) /
+                        float(FULL);
+    float first_pressure = main_first ? main_pressure[mi] : other_pressure[oi];
+    float second_pressure = main_first ? other_pressure[oi] : main_pressure[mi];
+    float ticks = uintBitsToFloat(params.tick_bits);
+    float velocity = (params.other_side >= 2u ? 0.5 : 0.0) * ticks +
+                     0.05 * ticks * (first_head - second_head) -
+                     (second_pressure - first_pressure);
+    velocity = clamp(velocity, -4.0, 4.0);
+    bool forward = velocity >= 0.0;
+    bool dest_is_main = forward ? !main_first : main_first;
+    uint available = forward ? first_mass : second_mass;
+    float travel = abs(velocity) * ticks * 1.001;
+    uint reach = min(uint(ceil(travel)), SIDE);
+    uint tile_x = dest_is_main ? params.main_x : params.other_x;
+    uint tile_y = dest_is_main ? params.main_y : params.other_y;
+    uint dest_width = dest_is_main ? params.main_width : params.other_width;
+    uint tile_slot = dest_is_main ? params.main_slot : params.other_slot;
+    for (uint offset = 1u; offset <= reach; ++offset) {
+        uint along = forward ? offset - 1u : SIDE - offset;
+        uint x = params.other_side < 2u ? along : lane;
+        uint y = params.other_side < 2u ? lane : along;
+        uint index = tile_slot * SIDE * SIDE + y * SIDE + x;
+        uint grid_index = (tile_y + y) * dest_width + tile_x + x;
+        uvec2 cell = dest_is_main ? main_cells[index] : other_cells[index];
+        uint occupied = dest_is_main ? main_occupancy[grid_index] :
+                                       other_occupancy[grid_index];
+        if (!open_material(cell) || occupied != 0u) {
+            reach = offset - 1u;
+            break;
+        }
+    }
+    for (uint offset = reach; offset > 0u && available > 0u; --offset) {
+        uint along = forward ? offset - 1u : SIDE - offset;
+        uint x = params.other_side < 2u ? along : lane;
+        uint y = params.other_side < 2u ? lane : along;
+        uint index = tile_slot * SIDE * SIDE + y * SIDE + x;
+        uint receiving = dest_is_main ? main_cells[index].y : other_cells[index].y;
+        uint allowance = uint(floor(clamp(travel - float(offset - 1u),
+                                          0.0, 1.0) * float(FULL)));
+        uint flux = min(min(allowance, available), FULL - min(receiving, FULL));
+        available -= flux;
+        if (dest_is_main) main_cells[index].y = receiving + flux;
+        else other_cells[index].y = receiving + flux;
+    }
+    if (forward) {
+        if (main_first) main_cells[mc].y = available;
+        else other_cells[oc].y = available;
+    } else {
+        if (main_first) other_cells[oc].y = available;
+        else main_cells[mc].y = available;
+    }
+    if (params.other_side == 0u) other_velocity[oi].x = velocity;
+    else if (params.other_side == 1u) main_velocity[mi].x = velocity;
+    else if (params.other_side == 2u) other_velocity[oi].y = velocity;
+    else main_velocity[mi].y = velocity;
+    }
+    memoryBarrierBuffer();
+    barrier();
+    if (lane == 0u) {
+        bool main_first = params.other_side == 1u || params.other_side == 3u;
+        float ticks = uintBitsToFloat(params.tick_bits);
+        transfer_markers(main_first, true, ticks);
+        transfer_markers(main_first, false, ticks);
+    }
+}

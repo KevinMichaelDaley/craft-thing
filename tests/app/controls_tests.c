@@ -327,7 +327,7 @@ static void test_water_crosses_visible_offscreen_boundary(void) {
     ASSERT_EQ(chunk->cells[9 * DC_CHUNK_SIDE].fluid_mass, 0u);
     ASSERT_TRUE(dc_level_view_pan_pixels(view, 128, 0));
     ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
-    for (uint32_t tick = 0; tick < 120; ++tick) {
+    for (uint32_t tick = 0; tick < 12; ++tick) {
         ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
         ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
     }
@@ -388,6 +388,53 @@ static void test_sand_keeps_falling_offscreen_without_particle_loss(void) {
     PASS();
 }
 
+static void test_sand_crosses_offscreen_visible_boundary_with_same_id(void) {
+    char directory[] = "build/ui_boundary_grain_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_level_view_t *view = dc_level_view_create(directory, 713, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (uint32_t y = 60; y < 96; ++y)
+        ASSERT_TRUE(dc_level_view_paint(view, 33, y, 0, DC_MATERIAL_AIR,
+                                        err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 33, 63, 0, DC_MATERIAL_SAND,
+                                    err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
+                                    chunk, err, sizeof(err)));
+    dc_mpm_particle_t source = chunk->particles[63 * DC_CHUNK_SIDE + 33];
+    ASSERT_TRUE(source.mass_fp != 0u);
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 0, 128));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 30u; ++tick) {
+        ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 1},
+                                    chunk, err, sizeof(err)));
+    uint32_t found = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (chunk->particles[i].mass_fp &&
+            chunk->particles[i].id_lo == source.id_lo &&
+            chunk->particles[i].id_hi == source.id_hi) {
+            ++found;
+        }
+    ASSERT_EQ(found, 1u);
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 0, -128));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
+                                    chunk, err, sizeof(err)));
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        ASSERT_TRUE(!chunk->particles[i].mass_fp ||
+                    chunk->particles[i].id_lo != source.id_lo ||
+                    chunk->particles[i].id_hi != source.id_hi);
+    free(chunk);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    PASS();
+}
+
 int main(void) {
     RUN(test_camera_crosses_chunk_boundary_cell_by_cell);
     RUN(test_loading_status_and_camera_reset);
@@ -399,6 +446,7 @@ int main(void) {
     RUN(test_saved_water_resumes_before_returning_to_view);
     RUN(test_water_crosses_visible_offscreen_boundary);
     RUN(test_sand_keeps_falling_offscreen_without_particle_loss);
+    RUN(test_sand_crosses_offscreen_visible_boundary_with_same_id);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

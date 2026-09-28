@@ -12,7 +12,7 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 }
 
 bool dc_gpu_halo_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    VkDeviceSize bytes = (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_GPU_HALO_CELLS *
+    VkDeviceSize bytes = (VkDeviceSize)gpu->slot_capacity * DC_GPU_HALO_CELLS *
                          sizeof(dc_gpu_halo_cell_t);
     return dc_gpu_make_mapped_buffer(gpu, bytes, &gpu->halo_buffer,
                &gpu->halo_memory, &gpu->halo_mapped, err, cap) &&
@@ -131,8 +131,8 @@ static bool queue_transfer(dc_gpu_t *gpu, dc_gpu_transfer_t transfer,
          (!transfer.amount || transfer.amount > DC_FLUID_FULL)))
         return error(err, cap, "Invalid GPU transfer");
     if (direct_slots) {
-        if (transfer.from_slot >= DC_GPU_CHUNK_SLOTS ||
-            transfer.to_slot >= DC_GPU_CHUNK_SLOTS ||
+        if (transfer.from_slot >= gpu->slot_capacity ||
+            transfer.to_slot >= gpu->slot_capacity ||
             transfer.from_x >= DC_CHUNK_SIDE || transfer.from_y >= DC_CHUNK_SIDE ||
             transfer.to_x >= DC_CHUNK_SIDE || transfer.to_y >= DC_CHUNK_SIDE)
             return error(err, cap, "Invalid slot transfer");

@@ -27,14 +27,18 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu->device) dc_gpu_chunks_destroy(gpu);
     if (gpu->command_pool) vkDestroyCommandPool(gpu->device, gpu->command_pool, NULL);
     if (gpu->pipeline) vkDestroyPipeline(gpu->device, gpu->pipeline, NULL);
+    if (gpu->boundary_pipeline) vkDestroyPipeline(gpu->device, gpu->boundary_pipeline, NULL);
+    if (gpu->boundary_layout) vkDestroyPipelineLayout(gpu->device, gpu->boundary_layout, NULL);
+    if (gpu->boundary_pool) vkDestroyDescriptorPool(gpu->device, gpu->boundary_pool, NULL);
+    if (gpu->boundary_set_layout) vkDestroyDescriptorSetLayout(gpu->device, gpu->boundary_set_layout, NULL);
     if (gpu->pipeline_layout) vkDestroyPipelineLayout(gpu->device, gpu->pipeline_layout, NULL);
     if (gpu->descriptor_pool) vkDestroyDescriptorPool(gpu->device, gpu->descriptor_pool, NULL);
     if (gpu->set_layout) vkDestroyDescriptorSetLayout(gpu->device, gpu->set_layout, NULL);
     if (gpu->cells) vkDestroyBuffer(gpu->device, gpu->cells, NULL);
     if (gpu->memory) vkFreeMemory(gpu->device, gpu->memory, NULL);
-    if (gpu->device) vkDestroyDevice(gpu->device, NULL);
+    if (gpu->device && gpu->owns_device) vkDestroyDevice(gpu->device, NULL);
     if (gpu->surface) vkDestroySurfaceKHR(gpu->instance, gpu->surface, NULL);
-    if (gpu->instance) vkDestroyInstance(gpu->instance, NULL);
+    if (gpu->instance && gpu->owns_device) vkDestroyInstance(gpu->instance, NULL);
     if (gpu->window) { SDL_DestroyWindow(gpu->window); SDL_QuitSubSystem(SDL_INIT_VIDEO); }
     free(gpu);
 }
@@ -159,32 +163,32 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         return error(err, cap, "Cannot allocate descriptor set");
     VkDescriptorBufferInfo buffers[32] = {
         { gpu->cells, 0, bytes },
-        { gpu->chunk_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t) },
+        { gpu->chunk_buffer, 0, (VkDeviceSize)gpu->slot_capacity * DC_CHUNK_CELLS * sizeof(dc_cell_t) },
         { gpu->page_buffer, 0, (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t) },
         { gpu->occupancy_buffer, 0, bytes },
         { gpu->body_buffer, 0, sizeof(dc_gpu_body_t) },
         { gpu->trace_buffer, 0, 3 * sizeof(uint32_t) },
-        { gpu->halo_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_GPU_HALO_CELLS * sizeof(dc_gpu_halo_cell_t) },
+        { gpu->halo_buffer, 0, (VkDeviceSize)gpu->slot_capacity * DC_GPU_HALO_CELLS * sizeof(dc_gpu_halo_cell_t) },
         { gpu->transfer_buffer, 0, sizeof(dc_gpu_transfer_t) },
         { gpu->fluid_a_buffer, 0, bytes },
         { gpu->fluid_b_buffer, 0, bytes },
         { gpu->velocity_buffer, 0, bytes * 2 },
         { gpu->pressure_a_buffer, 0, bytes },
-        { gpu->marker_a_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MARKERS_PER_CHUNK * sizeof(dc_marker_t) },
-        { gpu->marker_b_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MARKERS_PER_CHUNK * sizeof(dc_marker_t) },
-        { gpu->marker_count_a_buffer, 0, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t) },
-        { gpu->marker_count_b_buffer, 0, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t) },
-        { gpu->marker_grid_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(uint32_t) },
-        { gpu->slot_page_buffer, 0, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t) },
-        { gpu->slot_seed_buffer, 0, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t) },
-        { gpu->particle_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t) },
-        { gpu->particle_count_buffer, 0, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t) },
-        { gpu->mpm_proposal_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t) },
-        { gpu->mpm_output_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t) },
+        { gpu->marker_a_buffer, 0, (VkDeviceSize)gpu->slot_capacity * DC_MARKERS_PER_CHUNK * sizeof(dc_marker_t) },
+        { gpu->marker_b_buffer, 0, (VkDeviceSize)gpu->slot_capacity * DC_MARKERS_PER_CHUNK * sizeof(dc_marker_t) },
+        { gpu->marker_count_a_buffer, 0, gpu->slot_capacity * sizeof(uint32_t) },
+        { gpu->marker_count_b_buffer, 0, gpu->slot_capacity * sizeof(uint32_t) },
+        { gpu->marker_grid_buffer, 0, (VkDeviceSize)gpu->slot_capacity * DC_CHUNK_CELLS * sizeof(uint32_t) },
+        { gpu->slot_page_buffer, 0, gpu->slot_capacity * sizeof(uint32_t) },
+        { gpu->slot_seed_buffer, 0, gpu->slot_capacity * sizeof(uint32_t) },
+        { gpu->particle_buffer, 0, (VkDeviceSize)gpu->slot_capacity * DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t) },
+        { gpu->particle_count_buffer, 0, gpu->slot_capacity * sizeof(uint32_t) },
+        { gpu->mpm_proposal_buffer, 0, (VkDeviceSize)gpu->slot_capacity * DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t) },
+        { gpu->mpm_output_buffer, 0, (VkDeviceSize)gpu->slot_capacity * DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t) },
         { gpu->mpm_grid_buffer, 0, bytes * 4 },
         { gpu->mpm_force_buffer, 0, bytes * 4 },
         { gpu->mpm_velocity_buffer, 0, bytes * 2 },
-        { gpu->mpm_accept_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MPM_PARTICLES_PER_CHUNK * sizeof(uint32_t) },
+        { gpu->mpm_accept_buffer, 0, (VkDeviceSize)gpu->slot_capacity * DC_MPM_PARTICLES_PER_CHUNK * sizeof(uint32_t) },
         { gpu->mpm_activity_buffer, 0, (VkDeviceSize)(7u + 2u * ((gpu->width + 15u) / 16u) * ((gpu->height + 15u) / 16u)) * sizeof(uint32_t) },
         { gpu->mpm_label_a_buffer, 0, bytes },
         { gpu->mpm_label_b_buffer, 0, bytes },
@@ -219,9 +223,17 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
     return true;
 }
 
+static uint32_t workspace_slots(uint32_t width, uint32_t height, bool shared) {
+    if (!shared) return DC_GPU_CHUNK_SLOTS;
+    uint64_t tiles = (uint64_t)(width / DC_CHUNK_SIDE) *
+                     (height / DC_CHUNK_SIDE);
+    return tiles < DC_GPU_CHUNK_SLOTS ? (uint32_t)tiles : DC_GPU_CHUNK_SLOTS;
+}
+
 static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
                        uint32_t window_width, uint32_t window_height,
-                       const char *shader_path, char *err, uint32_t cap) {
+                       dc_gpu_t *parent, const char *shader_path,
+                       char *err, uint32_t cap) {
     if (out) *out = NULL;
     if (!out || !width || !height || !shader_path ||
         (uint64_t)width * height > UINT32_MAX / sizeof(uint32_t))
@@ -229,11 +241,24 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     dc_gpu_t *gpu = calloc(1, sizeof(*gpu));
     if (!gpu) return error(err, cap, "Out of memory creating GPU context");
     gpu->width = width; gpu->height = height;
+    gpu->slot_capacity = workspace_slots(width, height, parent != NULL);
+    if (!gpu->slot_capacity) {
+        free(gpu);
+        return error(err, cap, "Shared GPU workspace has no chunk slots");
+    }
     gpu->view_width = width; gpu->view_height = height;
     gpu->display_zoom = 1;
     gpu->fluid_interval = 1;
     gpu->fluid_step_scale = 1.0f;
-    for (uint32_t i = 0; i < DC_GPU_CHUNK_SLOTS; ++i) gpu->slot_page[i] = UINT32_MAX;
+    VkDeviceSize bytes = (VkDeviceSize)width * height * 4;
+    for (uint32_t i = 0; i < gpu->slot_capacity; ++i) gpu->slot_page[i] = UINT32_MAX;
+    if (parent) {
+        gpu->instance = parent->instance;
+        gpu->physical = parent->physical;
+        gpu->device = parent->device;
+        gpu->queue = parent->queue;
+        gpu->family = parent->family;
+    }
     if (window_width && window_height) {
         if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
             error(err, cap, SDL_GetError()); goto fail;
@@ -246,6 +271,8 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
             SDL_WINDOWPOS_CENTERED, (int)window_width, (int)window_height, flags);
         if (!gpu->window) { error(err, cap, SDL_GetError()); SDL_QuitSubSystem(SDL_INIT_VIDEO); goto fail; }
     }
+    if (!parent) {
+    gpu->owns_device = true;
     VkApplicationInfo app = { .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pApplicationName = "dungeoncraft", .apiVersion = VK_API_VERSION_1_3 };
     VkInstanceCreateInfo instance_info = { .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -287,8 +314,7 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     if (gpu->window && !SDL_Vulkan_CreateSurface(gpu->window, gpu->instance, &gpu->surface)) {
         error(err, cap, SDL_GetError()); goto fail;
     }
-    VkDeviceSize bytes = (VkDeviceSize)width * height * 4;
-    VkDeviceSize atlas_bytes = (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t);
+    VkDeviceSize atlas_bytes = (VkDeviceSize)gpu->slot_capacity * DC_CHUNK_CELLS * sizeof(dc_cell_t);
     if (!dc_gpu_pick_device(gpu, bytes > atlas_bytes ? bytes : atlas_bytes, err, cap)) goto fail;
     VkPhysicalDeviceSynchronization2Features sync = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES };
@@ -310,6 +336,7 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
         error(err, cap, "Cannot create Vulkan compute device"); goto fail;
     }
     vkGetDeviceQueue(gpu->device, gpu->family, 0, &gpu->queue);
+    }
     if (!make_cells(gpu, bytes, err, cap) || !dc_gpu_chunks_init(gpu, err, cap) ||
         !dc_gpu_rigid_buffers_init(gpu, err, cap) ||
         !make_pipeline(gpu, shader_path, bytes, err, cap)) goto fail;
@@ -337,7 +364,17 @@ fail:
 
 bool dc_gpu_create(dc_gpu_t **out, uint32_t width, uint32_t height,
                    const char *shader_path, char *err, uint32_t cap) {
-    return create_gpu(out, width, height, 0, 0, shader_path, err, cap);
+    return create_gpu(out, width, height, 0, 0, NULL,
+                      shader_path, err, cap);
+}
+
+bool dc_gpu_create_shared(dc_gpu_t **out, dc_gpu_t *parent,
+                          uint32_t width, uint32_t height,
+                          const char *shader_path, char *err, uint32_t cap) {
+    if (!parent || !parent->device)
+        return error(err, cap, "Invalid shared Vulkan parent");
+    return create_gpu(out, width, height, 0, 0, parent,
+                      shader_path, err, cap);
 }
 
 bool dc_gpu_create_window(dc_gpu_t **out, uint32_t width, uint32_t height,
@@ -345,7 +382,8 @@ bool dc_gpu_create_window(dc_gpu_t **out, uint32_t width, uint32_t height,
                           const char *shader_path, char *err, uint32_t cap) {
     if (!window_width || !window_height)
         return error(err, cap, "Invalid Vulkan window dimensions");
-    return create_gpu(out, width, height, window_width, window_height, shader_path, err, cap);
+    return create_gpu(out, width, height, window_width, window_height,
+                      NULL, shader_path, err, cap);
 }
 
 bool dc_gpu_set_viewport(dc_gpu_t *gpu, uint32_t x, uint32_t y,

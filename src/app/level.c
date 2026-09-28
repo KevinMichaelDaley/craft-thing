@@ -86,10 +86,16 @@ bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,
 }
 
 static bool visible(const dc_level_view_t *view, dc_chunk_coord_t coord) {
-    return coord.x >= view->origin.x - HALO_CHUNKS &&
-           coord.x < view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS &&
-           coord.y >= view->origin.y - HALO_CHUNKS &&
-           coord.y < view->origin.y + VIEW_CHUNKS_Y + HALO_CHUNKS;
+    uint64_t dx = coord.x >= view->origin.x ?
+        (uint64_t)coord.x - (uint64_t)view->origin.x :
+        (uint64_t)view->origin.x - (uint64_t)coord.x;
+    uint64_t dy = coord.y >= view->origin.y ?
+        (uint64_t)coord.y - (uint64_t)view->origin.y :
+        (uint64_t)view->origin.y - (uint64_t)coord.y;
+    return (coord.x >= view->origin.x ?
+            dx < VIEW_CHUNKS_X + HALO_CHUNKS : dx <= HALO_CHUNKS) &&
+           (coord.y >= view->origin.y ?
+            dy < VIEW_CHUNKS_Y + HALO_CHUNKS : dy <= HALO_CHUNKS);
 }
 
 static bool same_coord(dc_chunk_coord_t a, dc_chunk_coord_t b) {
@@ -130,7 +136,7 @@ static bool remember_sleeping(dc_level_view_t *view, dc_chunk_coord_t coord,
 
 static bool capture_offscreen_chunk(dc_level_view_t *view,
                                     const dc_chunk_t *chunk,
-                                    dc_chunk_coord_t new_origin, bool *cached,
+                                    bool *cached,
                                     char *err, uint32_t cap) {
     *cached = false;
     for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i) {
@@ -144,7 +150,8 @@ static bool capture_offscreen_chunk(dc_level_view_t *view,
     }
     for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i) {
         if (view->offscreen[i]) continue;
-        dc_offscreen_t *offscreen = dc_offscreen_create(new_origin, err, cap);
+        dc_offscreen_t *offscreen = dc_offscreen_create(view->gpu,
+                                                       chunk->coord, err, cap);
         if (!offscreen) return false;
         view->offscreen[i] = offscreen;
         if (!dc_offscreen_capture(offscreen, chunk, err, cap)) return false;
@@ -207,7 +214,7 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
                     } else if (dc_offscreen_coord_band(result.coord,
                                                        view->origin) < 5u)
                         okay = capture_offscreen_chunk(view, result.chunk,
-                            result.coord, &cached, err, cap);
+                            &cached, err, cap);
                     if (okay && cached) forget_sleeping(view, index);
                     else if (okay) view->sleeping[index].state = SLEEP_READY;
                 }
@@ -288,8 +295,7 @@ static bool cache_departed_chunk(dc_level_view_t *view, const dc_chunk_t *chunk,
                                  bool *cached, char *err, uint32_t cap) {
     *cached = false;
     if (view->shutting_down || !chunk_needs_physics(chunk)) return true;
-    return capture_offscreen_chunk(view, chunk, view->mapped_origin,
-                                   cached, err, cap);
+    return capture_offscreen_chunk(view, chunk, cached, err, cap);
 }
 
 static bool retire_far_offscreen(dc_level_view_t *view, char *err, uint32_t cap) {
@@ -352,6 +358,50 @@ static bool restore_offscreen_chunk(dc_level_view_t *view, dc_chunk_coord_t coor
         return true;
     }
     return true;
+}
+
+static bool exchange_visible_boundary(dc_level_view_t *view,
+                                      dc_offscreen_t *offscreen,
+                                      float elapsed_ticks,
+                                      char *err, uint32_t cap) {
+    if (!(elapsed_ticks > 0.0f)) return true;
+    dc_gpu_boundary_t boundaries[DC_GPU_CHUNK_SLOTS * 4u];
+    uint32_t count = 0;
+    for (uint32_t slot = 0; slot < dc_offscreen_slot_capacity(offscreen); ++slot) {
+        dc_chunk_coord_t coord;
+        uint32_t off_x, off_y;
+        if (!dc_offscreen_slot(offscreen, slot, &coord, &off_x, &off_y)) continue;
+        for (uint32_t side = 0; side < 4u; ++side) {
+            if ((side == 0u && coord.x == INT64_MAX) ||
+                (side == 1u && coord.x == INT64_MIN) ||
+                (side == 2u && coord.y == INT64_MAX) ||
+                (side == 3u && coord.y == INT64_MIN)) continue;
+            dc_chunk_coord_t neighbor = coord;
+            if (side == 0u) ++neighbor.x;
+            else if (side == 1u) --neighbor.x;
+            else if (side == 2u) ++neighbor.y;
+            else --neighbor.y;
+            uint32_t main_slot;
+            if (!visible(view, neighbor) ||
+                !dc_chunk_table_find(&view->table, neighbor, &main_slot) ||
+                view->table.slots[main_slot].state != DC_SLOT_ACTIVE) continue;
+            uint32_t main_x = (uint32_t)(neighbor.x - view->origin.x +
+                                          HALO_CHUNKS);
+            uint32_t main_y = (uint32_t)(neighbor.y - view->origin.y +
+                                          HALO_CHUNKS);
+            boundaries[count++] = (dc_gpu_boundary_t){
+                .main_slot = main_slot, .other_slot = slot,
+                .main_x = main_x * DC_CHUNK_SIDE,
+                .main_y = main_y * DC_CHUNK_SIDE,
+                .other_x = off_x * DC_CHUNK_SIDE,
+                .other_y = off_y * DC_CHUNK_SIDE,
+                .other_side = side };
+            dc_chunk_table_mark_dirty(&view->table, main_slot);
+        }
+    }
+    return dc_gpu_boundary_exchange(view->gpu, dc_offscreen_gpu(offscreen),
+                                    boundaries, count, elapsed_ticks,
+                                    err, cap);
 }
 
 static bool transfer_slot_matches(const dc_level_view_t *view, uint32_t index,
@@ -501,7 +551,6 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     if (ready_steps && !dc_gpu_set_tick_seconds(view->gpu,
             view->pending_seconds / (float)ready_steps))
         return error(err, cap, "Invalid elapsed simulation time");
-    if (!dc_gpu_present_chunks_steps(view->gpu, ready_steps, err, cap)) return false;
     if (ready_steps) {
         for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i) {
             dc_offscreen_t *offscreen = view->offscreen[i];
@@ -510,7 +559,13 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
             if (!dc_offscreen_update(offscreen, view->origin,
                                      view->pending_seconds, false,
                                      err, cap)) return false;
+            if (!exchange_visible_boundary(view, offscreen,
+                    dc_offscreen_last_advance_ticks(offscreen),
+                    err, cap)) return false;
         }
+    }
+    if (!dc_gpu_present_chunks_steps(view->gpu, ready_steps, err, cap)) return false;
+    if (ready_steps) {
         view->pending_steps = 0;
         view->pending_seconds = 0.0f;
     }

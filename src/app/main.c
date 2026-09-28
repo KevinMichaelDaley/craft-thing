@@ -11,7 +11,9 @@
 #include <SDL.h>
 
 #include "dungeoncraft/chunk.h"
+#include "dungeoncraft/gpu.h"
 #include "level.h"
+#include "offscreen.h"
 #include "session.h"
 #include "view_config.h"
 
@@ -992,6 +994,58 @@ static bool pan_held_keys(dc_level_view_t *view, double elapsed,
     return !dx && !dy ? true : dc_level_view_pan_pixels(view, dx, dy);
 }
 
+static int smoke_offscreen_budget(void) {
+    char err[256] = {0};
+    dc_gpu_t *main_gpu = NULL;
+    if (!dc_gpu_create(&main_gpu, SIM_WIDTH, SIM_HEIGHT,
+                       "build/shaders/pattern.comp.spv", err, sizeof(err))) {
+        fprintf(stderr, "Offscreen budget: %s\n", err);
+        return 1;
+    }
+    dc_offscreen_t *offscreen = dc_offscreen_create(main_gpu,
+        (dc_chunk_coord_t){0, 0}, err, sizeof(err));
+    if (!offscreen) {
+        fprintf(stderr, "Offscreen budget: %s\n", err);
+        dc_gpu_destroy(main_gpu);
+        return 1;
+    }
+    dc_gpu_memory_stats_t foreground_stats = {0}, offscreen_stats = {0};
+    bool okay = dc_gpu_memory_stats(main_gpu, &foreground_stats) &&
+                dc_gpu_memory_stats(dc_offscreen_gpu(offscreen), &offscreen_stats);
+    double foreground_mib = (double)(foreground_stats.mapped_local_bytes +
+        foreground_stats.mapped_system_bytes + foreground_stats.device_only_bytes) /
+        1048576.0;
+    double offscreen_mib = (double)(offscreen_stats.mapped_local_bytes +
+        offscreen_stats.mapped_system_bytes + offscreen_stats.device_only_bytes) /
+        1048576.0;
+    printf("GPU workspace memory: foreground %.1f MiB, offscreen %.1f MiB "
+           "(%.1f%%), four-cache bound %.1f MiB\n", foreground_mib,
+           offscreen_mib, 100.0 * offscreen_mib / foreground_mib,
+           foreground_mib + 4.0 * offscreen_mib);
+    dc_chunk_t *sample = calloc(1, sizeof(*sample));
+    if (!sample) okay = false;
+    if (okay) {
+        sample->coord = (dc_chunk_coord_t){0, 0};
+        sample->cells[5 * DC_CHUNK_SIDE + 32].fluid_mass = DC_FLUID_FULL;
+        okay = dc_offscreen_capture(offscreen, sample, err, sizeof(err));
+    }
+    uint64_t start = SDL_GetPerformanceCounter();
+    if (okay) okay = dc_offscreen_update(offscreen,
+        (dc_chunk_coord_t){1, 0}, 0.2, true, err, sizeof(err));
+    double step_ms = 1000.0 * (double)(SDL_GetPerformanceCounter() - start) /
+                     (double)SDL_GetPerformanceFrequency();
+    if (okay) okay = dc_offscreen_take(offscreen, (dc_chunk_coord_t){0, 0},
+                                      sample, err, sizeof(err)) &&
+                     sample->cells[5 * DC_CHUNK_SIDE + 32].fluid_mass <
+                         DC_FLUID_FULL;
+    printf("Offscreen GPU 0.2 s simulation: %.2f ms wall\n", step_ms);
+    if (!okay) fprintf(stderr, "Offscreen budget smoke: %s\n", err);
+    free(sample);
+    dc_offscreen_destroy(offscreen);
+    dc_gpu_destroy(main_gpu);
+    return okay && offscreen_mib < foreground_mib ? 0 : 1;
+}
+
 int main(int argc, char **argv) {
 #ifdef DC_HALF_NATIVE_VIEW
     if (argc > 1 && strcmp(argv[1], "--smoke-spray-on") == 0)
@@ -1009,6 +1063,8 @@ int main(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "--smoke-native") == 0)
         return smoke_native_view();
 #endif
+    if (argc > 1 && strcmp(argv[1], "--smoke-offscreen-budget") == 0)
+        return smoke_offscreen_budget();
     if (argc > 1 && strcmp(argv[1], "--smoke-camera-velocity") == 0)
         return smoke_camera_velocity();
     if (argc > 1 && strcmp(argv[1], "--smoke-halo-flow") == 0)

@@ -11,10 +11,10 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 }
 
 bool dc_gpu_marker_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    VkDeviceSize markers = (VkDeviceSize)DC_GPU_CHUNK_SLOTS *
+    VkDeviceSize markers = (VkDeviceSize)gpu->slot_capacity *
                            DC_MARKERS_PER_CHUNK * sizeof(dc_marker_t);
-    VkDeviceSize counts = DC_GPU_CHUNK_SLOTS * sizeof(uint32_t);
-    VkDeviceSize grid = (VkDeviceSize)DC_GPU_CHUNK_SLOTS *
+    VkDeviceSize counts = gpu->slot_capacity * sizeof(uint32_t);
+    VkDeviceSize grid = (VkDeviceSize)gpu->slot_capacity *
                         DC_CHUNK_CELLS * sizeof(uint32_t);
     gpu->marker_correction = true;
     bool okay = dc_gpu_make_mapped_buffer(gpu, markers, &gpu->marker_a_buffer,
@@ -85,13 +85,13 @@ void dc_gpu_record_markers(dc_gpu_t *gpu) {
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     uint32_t push[7] = { gpu->width, gpu->height, 0, gpu->marker_ping,
-                          gpu->fluid_tick, 0, DC_GPU_CHUNK_SLOTS };
+                          gpu->fluid_tick, 0, gpu->slot_capacity };
     push[5] = dc_gpu_float_bits(gpu->fluid_step_scale);
     const uint32_t groups[4] = {
-        (DC_GPU_CHUNK_SLOTS * DC_MARKERS_PER_CHUNK + 255u) / 256u,
-        (DC_GPU_CHUNK_SLOTS * DC_MARKERS_PER_CHUNK + 255u) / 256u,
+        (gpu->slot_capacity * DC_MARKERS_PER_CHUNK + 255u) / 256u,
+        (gpu->slot_capacity * DC_MARKERS_PER_CHUNK + 255u) / 256u,
         (gpu->width * gpu->height + 255u) / 256u,
-        (DC_GPU_CHUNK_SLOTS + 255u) / 256u
+        (gpu->slot_capacity + 255u) / 256u
     };
     for (uint32_t mode = 0; mode < 4; ++mode) {
         push[2] = mode;
@@ -116,7 +116,7 @@ bool dc_gpu_set_marker_overlay(dc_gpu_t *gpu, bool enabled) {
 }
 
 bool dc_gpu_marker_count(dc_gpu_t *gpu, uint32_t slot, uint32_t *count) {
-    if (!gpu || !count || slot >= DC_GPU_CHUNK_SLOTS) return false;
+    if (!gpu || !count || slot >= gpu->slot_capacity) return false;
     const uint32_t *counts = gpu->marker_ping ?
         gpu->marker_count_b_mapped : gpu->marker_count_a_mapped;
     *count = counts[slot];

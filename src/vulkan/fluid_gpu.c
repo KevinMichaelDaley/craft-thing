@@ -92,7 +92,7 @@ bool dc_gpu_shift_velocity(dc_gpu_t *gpu, int32_t chunk_dx, int32_t chunk_dy,
     if (!chunk_dx && !chunk_dy) {
         return true;
     }
-    for (uint32_t slot = 0; slot < DC_GPU_CHUNK_SLOTS; ++slot)
+    for (uint32_t slot = 0; slot < gpu->slot_capacity; ++slot)
         gpu->preserve_shifted_slot[slot] = gpu->slot_page[slot] != UINT32_MAX;
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
         return error(err, cap, "Cannot reset velocity shift command buffer");
@@ -134,7 +134,7 @@ static void record_projection_begin(dc_gpu_t *gpu) {
     push[3] = 1u;
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    vkCmdDispatch(gpu->command, 4u, 4u, DC_GPU_CHUNK_SLOTS);
+    vkCmdDispatch(gpu->command, 4u, 4u, gpu->slot_capacity);
     fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
@@ -161,7 +161,7 @@ static void record_pressure_passes(dc_gpu_t *gpu, uint32_t first,
                   ((pass & 1u) ? 1u : 2u);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-        vkCmdDispatch(gpu->command, 4u, 4u, DC_GPU_CHUNK_SLOTS);
+        vkCmdDispatch(gpu->command, 4u, 4u, gpu->slot_capacity);
         fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
@@ -180,7 +180,7 @@ static void record_fluid_transport(dc_gpu_t *gpu, uint32_t first,
         push[2] = 10u;
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-        vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u, 1u, DC_GPU_CHUNK_SLOTS);
+        vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u, 1u, gpu->slot_capacity);
         gpu->fluid_snapshot_valid = true;
         fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
@@ -196,7 +196,7 @@ static void record_fluid_transport(dc_gpu_t *gpu, uint32_t first,
             vkCmdDispatch(gpu->command, (work + 63u) / 64u, 1u, 1u);
         else
             vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u,
-                          1u, DC_GPU_CHUNK_SLOTS);
+                          1u, gpu->slot_capacity);
         if (mode < 4u)
             fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                 VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
@@ -222,7 +222,7 @@ static void record_fluid_correction(dc_gpu_t *gpu) {
             vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                 VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
             vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u,
-                          1u, DC_GPU_CHUNK_SLOTS);
+                          1u, gpu->slot_capacity);
             if (i < 5)
                 fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                     VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
@@ -237,7 +237,7 @@ static void record_fluid_correction(dc_gpu_t *gpu) {
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
         vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u,
-                      1u, DC_GPU_CHUNK_SLOTS);
+                      1u, gpu->slot_capacity);
     }
     ++gpu->fluid_tick;
 }

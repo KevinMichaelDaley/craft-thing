@@ -75,6 +75,23 @@ typedef struct {
 /** Create a headless Vulkan compute context and a width-by-height cell buffer. */
 bool dc_gpu_create(dc_gpu_t **out, uint32_t width, uint32_t height,
                    const char *shader_path, char *err_buf, uint32_t err_cap);
+/** Create a headless context on an existing Vulkan device for GPU-only transfers. */
+bool dc_gpu_create_shared(dc_gpu_t **out, dc_gpu_t *parent,
+                          uint32_t width, uint32_t height,
+                          const char *shader_path, char *err_buf,
+                          uint32_t err_cap);
+
+typedef struct {
+    uint32_t main_slot, other_slot;
+    uint32_t main_x, main_y, other_x, other_y;
+    uint32_t other_side;
+} dc_gpu_boundary_t;
+
+/** Exchange conservative mass and face momentum across two GPU workspaces. */
+bool dc_gpu_boundary_exchange(dc_gpu_t *main_gpu, dc_gpu_t *other_gpu,
+                              const dc_gpu_boundary_t *boundaries,
+                              uint32_t count, float elapsed_ticks,
+                              char *err_buf, uint32_t err_cap);
 
 /** Create the same compute context with an SDL Vulkan window for presentation. */
 bool dc_gpu_create_window(dc_gpu_t **out, uint32_t width, uint32_t height,

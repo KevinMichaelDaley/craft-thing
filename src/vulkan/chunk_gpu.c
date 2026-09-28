@@ -99,15 +99,15 @@ bool dc_gpu_make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
 }
 
 bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    gpu->chunk_velocity = calloc((size_t)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS,
+    gpu->chunk_velocity = calloc((size_t)gpu->slot_capacity * DC_CHUNK_CELLS,
                                   sizeof(*gpu->chunk_velocity));
     if (!gpu->chunk_velocity)
         return error(err, cap, "Cannot allocate streamed chunk velocity staging");
     gpu->page_width = (gpu->width + DC_CHUNK_SIDE - 1u) / DC_CHUNK_SIDE;
     gpu->page_height = (gpu->height + DC_CHUNK_SIDE - 1u) / DC_CHUNK_SIDE;
-    VkDeviceSize chunk_bytes = (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t);
+    VkDeviceSize chunk_bytes = (VkDeviceSize)gpu->slot_capacity * DC_CHUNK_CELLS * sizeof(dc_cell_t);
     VkDeviceSize page_bytes = (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t);
-    VkDeviceSize particle_bytes = (VkDeviceSize)DC_GPU_CHUNK_SLOTS *
+    VkDeviceSize particle_bytes = (VkDeviceSize)gpu->slot_capacity *
         DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t);
     return dc_gpu_make_device_buffer(gpu, chunk_bytes, &gpu->chunk_buffer,
                &gpu->chunk_memory, err, cap) &&
@@ -117,7 +117,7 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                &gpu->particle_memory, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, particle_bytes, &gpu->particle_staging_buffer,
                &gpu->particle_staging_memory, &gpu->particle_mapped, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t),
+           dc_gpu_make_mapped_buffer(gpu, gpu->slot_capacity * sizeof(uint32_t),
                &gpu->particle_count_buffer, &gpu->particle_count_memory,
                &gpu->particle_count_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, page_bytes, &gpu->page_buffer,
@@ -154,7 +154,7 @@ void dc_gpu_chunks_destroy(dc_gpu_t *gpu) {
 
 bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
                              bool particles, char *err, uint32_t cap) {
-    if (!gpu || (slot >= DC_GPU_CHUNK_SLOTS && slot != UINT32_MAX) ||
+    if (!gpu || (slot >= gpu->slot_capacity && slot != UINT32_MAX) ||
         (particles && slot == UINT32_MAX))
         return error(err, cap, "Invalid chunk transfer slot");
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
@@ -176,7 +176,7 @@ bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
     VkDeviceSize chunk_stride = DC_CHUNK_CELLS * sizeof(dc_cell_t);
     VkBufferCopy region = { .srcOffset = slot == UINT32_MAX ? 0 : slot * chunk_stride,
         .dstOffset = slot == UINT32_MAX ? 0 : slot * chunk_stride,
-        .size = slot == UINT32_MAX ? chunk_stride * DC_GPU_CHUNK_SLOTS : chunk_stride };
+        .size = slot == UINT32_MAX ? chunk_stride * gpu->slot_capacity : chunk_stride };
     vkCmdCopyBuffer(gpu->command, upload ? gpu->chunk_staging_buffer : gpu->chunk_buffer,
         upload ? gpu->chunk_buffer : gpu->chunk_staging_buffer, 1, &region);
     if (particles) {
@@ -210,7 +210,7 @@ bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
 
 bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
                          char *err, uint32_t cap) {
-    if (!gpu || !chunk || slot >= DC_GPU_CHUNK_SLOTS ||
+    if (!gpu || !chunk || slot >= gpu->slot_capacity ||
         chunk->marker_count > DC_MARKERS_PER_CHUNK ||
         chunk->particle_count > DC_MPM_PARTICLES_PER_CHUNK)
         return error(err, cap, "Invalid GPU chunk upload slot");
@@ -267,7 +267,7 @@ bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
 
 bool dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chunk,
                            char *err, uint32_t cap) {
-    if (!gpu || !chunk || slot >= DC_GPU_CHUNK_SLOTS)
+    if (!gpu || !chunk || slot >= gpu->slot_capacity)
         return error(err, cap, "Invalid GPU chunk download slot");
     if (!dc_gpu_copy_chunk_state(gpu, slot, false, true, err, cap)) return false;
     const dc_cell_t *cells = gpu->chunk_mapped;
@@ -309,7 +309,7 @@ bool dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chunk,
 bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
                      uint32_t slot, char *err, uint32_t cap) {
     if (!gpu || tile_x >= gpu->page_width || tile_y >= gpu->page_height ||
-        (slot != UINT32_MAX && slot >= DC_GPU_CHUNK_SLOTS))
+        (slot != UINT32_MAX && slot >= gpu->slot_capacity))
         return error(err, cap, "Invalid GPU page mapping");
     uint32_t *pages = gpu->page_mapped;
     uint32_t tile = tile_y * gpu->page_width + tile_x;

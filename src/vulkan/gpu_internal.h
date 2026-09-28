@@ -12,6 +12,13 @@ enum {
 };
 
 struct dc_gpu {
+    bool owns_device;
+    uint32_t slot_capacity;
+    VkDescriptorSetLayout boundary_set_layout;
+    VkDescriptorPool boundary_pool;
+    VkDescriptorSet boundary_set;
+    VkPipelineLayout boundary_layout;
+    VkPipeline boundary_pipeline;
     VkInstance instance;
     VkPhysicalDevice physical;
     VkDevice device;

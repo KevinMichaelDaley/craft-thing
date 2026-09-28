@@ -22,9 +22,9 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 }
 
 bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    VkDeviceSize particles = (VkDeviceSize)DC_GPU_CHUNK_SLOTS *
+    VkDeviceSize particles = (VkDeviceSize)gpu->slot_capacity *
         DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t);
-    VkDeviceSize flags = (VkDeviceSize)DC_GPU_CHUNK_SLOTS *
+    VkDeviceSize flags = (VkDeviceSize)gpu->slot_capacity *
         DC_MPM_PARTICLES_PER_CHUNK * sizeof(uint32_t);
     VkDeviceSize grid = (VkDeviceSize)gpu->width * gpu->height;
     VkDeviceSize tiles = (VkDeviceSize)((gpu->width + 15u) / 16u) *

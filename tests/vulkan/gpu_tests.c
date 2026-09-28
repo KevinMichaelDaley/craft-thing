@@ -82,6 +82,12 @@ static void test_shared_workspace_boundary_conserves_water_and_grain(void) {
                               "build/shaders/pattern.comp.spv", err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_create_shared(&lower, upper, 64, 128,
                                      "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_EQ(lower->slot_capacity, 2u);
+    ASSERT_EQ(upper->slot_capacity, DC_GPU_CHUNK_SLOTS);
+    dc_gpu_memory_stats_t parent_stats = {0}, child_stats = {0};
+    ASSERT_TRUE(dc_gpu_memory_stats(upper, &parent_stats));
+    ASSERT_TRUE(dc_gpu_memory_stats(lower, &child_stats));
+    ASSERT_TRUE(child_stats.device_only_bytes < parent_stats.device_only_bytes);
     source->cells[63 * DC_CHUNK_SIDE + 32].fluid_mass = DC_FLUID_FULL;
     source->cells[63 * DC_CHUNK_SIDE + 33].material = DC_MATERIAL_SAND;
     dc_chunk_particle_init(&source->particles[63 * DC_CHUNK_SIDE + 33],
@@ -123,15 +129,15 @@ static void test_workspace_water_reaches_cells_allowed_by_velocity(void) {
     dc_chunk_t *source = calloc(1, sizeof(*source));
     dc_chunk_t *destination = calloc(1, sizeof(*destination));
     ASSERT_TRUE(source && destination);
-    ASSERT_TRUE(dc_gpu_create(&upper, 64, 128,
+    ASSERT_TRUE(dc_gpu_create(&lower, 128, 128,
                               "build/shaders/pattern.comp.spv", err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_create_shared(&lower, upper, 64, 128,
+    ASSERT_TRUE(dc_gpu_create_shared(&upper, lower, 64, 64,
                                      "build/shaders/pattern.comp.spv", err, sizeof(err)));
     source->cells[63 * DC_CHUNK_SIDE + 32].fluid_mass = DC_FLUID_FULL;
     ASSERT_TRUE(dc_gpu_upload_chunk(upper, 0, source, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(lower, 0, destination, err, sizeof(err)));
     dc_gpu_boundary_t boundary = { .main_slot = 0, .other_slot = 0,
-        .main_x = 0, .main_y = 64, .other_x = 0, .other_y = 0,
+        .main_x = 64, .main_y = 64, .other_x = 0, .other_y = 0,
         .other_side = 2 };
     ASSERT_TRUE(dc_gpu_boundary_exchange(lower, upper, &boundary, 1, 4.0f,
                                          err, sizeof(err)));
@@ -147,8 +153,8 @@ static void test_workspace_water_reaches_cells_allowed_by_velocity(void) {
     ASSERT_TRUE(beyond_seam > 0);
     for (uint32_t y = 9; y < DC_CHUNK_SIDE; ++y)
         ASSERT_EQ(destination->cells[y * DC_CHUNK_SIDE + 32].fluid_mass, 0u);
-    dc_gpu_destroy(lower);
     dc_gpu_destroy(upper);
+    dc_gpu_destroy(lower);
     free(source);
     free(destination);
     PASS();
@@ -182,6 +188,13 @@ static void test_workspace_surface_marker_follows_crossing_water(void) {
     ASSERT_EQ(destination->marker_count, 1u);
     ASSERT_EQ(destination->markers[0].id, 71u);
     ASSERT_EQ(destination->markers[0].kind, DC_MARKER_INSIDE);
+    uint64_t start = SDL_GetPerformanceCounter();
+    for (uint32_t i = 0; i < 60u; ++i)
+        ASSERT_TRUE(dc_gpu_boundary_exchange(lower, upper, &boundary, 1, 4.0f,
+                                             err, sizeof(err)));
+    uint64_t elapsed = SDL_GetPerformanceCounter() - start;
+    printf("shared GPU boundary pass: %.3f ms/dispatch\n",
+           1000.0 * (double)elapsed / (double)SDL_GetPerformanceFrequency() / 60.0);
     dc_gpu_destroy(lower);
     dc_gpu_destroy(upper);
     free(source);
