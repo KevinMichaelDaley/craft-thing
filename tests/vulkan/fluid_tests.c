@@ -856,6 +856,19 @@ static void test_fluid_interval_counts_only_scheduled_updates(void) {
     PASS();
 }
 
+static void test_pressure_budget_can_change_per_gpu_context(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(!dc_gpu_set_pressure_sweeps(NULL, 8u));
+    ASSERT_TRUE(!dc_gpu_set_pressure_sweeps(gpu, 0u));
+    ASSERT_TRUE(dc_gpu_set_pressure_sweeps(gpu, 8u));
+    ASSERT_TRUE(dc_gpu_set_pressure_sweeps(gpu, 20u));
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 static void test_six_fluid_phases_match_one_uncoupled_update(void) {
     char err[256] = {0};
     dc_gpu_t *fast = NULL, *staged = NULL;
@@ -1020,6 +1033,7 @@ int main(void) {
     RUN(test_cropped_viewport_edges_are_internal_fluid_faces);
     RUN(test_projected_water_velocity_has_tiny_final_decay);
     RUN(test_fluid_interval_counts_only_scheduled_updates);
+    RUN(test_pressure_budget_can_change_per_gpu_context);
     RUN(test_six_fluid_phases_match_one_uncoupled_update);
     RUN(test_elapsed_time_advances_staged_water_further);
     RUN(test_staged_water_renders_from_gpu_snapshots);

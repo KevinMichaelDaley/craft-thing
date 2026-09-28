@@ -182,6 +182,8 @@ bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
 
 /** Spread one Eulerian update across six ticks, or run it every tick (1). */
 bool dc_gpu_set_fluid_interval(dc_gpu_t *gpu, uint32_t interval);
+/** Set the bounded red-black pressure iteration budget for this GPU context. */
+bool dc_gpu_set_pressure_sweeps(dc_gpu_t *gpu, uint32_t sweeps);
 bool dc_gpu_set_tick_seconds(dc_gpu_t *gpu, float seconds);
 
 /** Read the completed body state for tests or persistence. */

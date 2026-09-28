@@ -11,6 +11,12 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 #define DC_PRESSURE_SWEEPS 20u
 #endif
 
+bool dc_gpu_set_pressure_sweeps(dc_gpu_t *gpu, uint32_t sweeps) {
+    (void)gpu;
+    (void)sweeps;
+    return false;
+}
+
 bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkDeviceSize bytes = (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t);
     return dc_gpu_make_device_buffer(gpu, bytes, &gpu->fluid_a_buffer,
