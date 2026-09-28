@@ -24,6 +24,8 @@ bool dc_offscreen_has(const dc_offscreen_t *offscreen, dc_chunk_coord_t coord);
 void dc_offscreen_set_spring(dc_offscreen_t *offscreen, bool enabled);
 uint32_t dc_offscreen_band(const dc_offscreen_t *offscreen,
                            dc_chunk_coord_t camera_origin);
+uint32_t dc_offscreen_coord_band(dc_chunk_coord_t coord,
+                                 dc_chunk_coord_t camera_origin);
 bool dc_offscreen_update(dc_offscreen_t *offscreen, dc_chunk_coord_t camera_origin,
                          double elapsed_seconds, bool catch_up,
                          char *err, uint32_t cap);

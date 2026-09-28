@@ -15,6 +15,14 @@ _Static_assert(DC_GPU_CHUNK_SLOTS >= SIM_CHUNKS_X * SIM_CHUNKS_Y,
 
 enum { OFFSCREEN_CLUSTERS = 4 };
 #define OFFSCREEN_SAVE_GENERATION (UINT64_C(1) << 63)
+#define OFFSCREEN_LOAD_GENERATION (UINT64_C(1) << 62)
+
+typedef enum { SLEEP_SAVING, SLEEP_READY, SLEEP_LOADING } sleep_state_t;
+typedef struct {
+    dc_chunk_coord_t coord;
+    uint64_t generation;
+    sleep_state_t state;
+} sleeping_chunk_t;
 
 struct dc_level_view {
     dc_gpu_t *gpu;
@@ -39,6 +47,8 @@ struct dc_level_view {
     bool shutting_down;
     uint64_t background_generation;
     uint32_t background_pending_saves;
+    sleeping_chunk_t *sleeping;
+    uint32_t sleeping_count, sleeping_capacity;
 };
 
 static bool error(char *buf, uint32_t cap, const char *message) {
@@ -82,13 +92,135 @@ static bool visible(const dc_level_view_t *view, dc_chunk_coord_t coord) {
            coord.y < view->origin.y + VIEW_CHUNKS_Y + HALO_CHUNKS;
 }
 
+static bool same_coord(dc_chunk_coord_t a, dc_chunk_coord_t b) {
+    return a.x == b.x && a.y == b.y;
+}
+
+static uint32_t sleeping_index(const dc_level_view_t *view,
+                               dc_chunk_coord_t coord) {
+    for (uint32_t i = 0; i < view->sleeping_count; ++i)
+        if (same_coord(view->sleeping[i].coord, coord)) return i;
+    return UINT32_MAX;
+}
+
+static void forget_sleeping(dc_level_view_t *view, uint32_t index) {
+    if (index >= view->sleeping_count) return;
+    view->sleeping[index] = view->sleeping[--view->sleeping_count];
+}
+
+static bool remember_sleeping(dc_level_view_t *view, dc_chunk_coord_t coord,
+                              uint64_t generation, char *err, uint32_t cap) {
+    uint32_t index = sleeping_index(view, coord);
+    if (index == UINT32_MAX) {
+        if (view->sleeping_count == view->sleeping_capacity) {
+            uint32_t capacity = view->sleeping_capacity ?
+                                view->sleeping_capacity * 2u : 32u;
+            sleeping_chunk_t *sleeping = realloc(view->sleeping,
+                (size_t)capacity * sizeof(*sleeping));
+            if (!sleeping) return error(err, cap, "Cannot track sleeping chunk");
+            view->sleeping = sleeping;
+            view->sleeping_capacity = capacity;
+        }
+        index = view->sleeping_count++;
+    }
+    view->sleeping[index] = (sleeping_chunk_t){ .coord = coord,
+        .generation = generation, .state = SLEEP_SAVING };
+    return true;
+}
+
+static bool capture_offscreen_chunk(dc_level_view_t *view,
+                                    const dc_chunk_t *chunk,
+                                    dc_chunk_coord_t new_origin, bool *cached,
+                                    char *err, uint32_t cap) {
+    *cached = false;
+    for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i) {
+        dc_offscreen_t *offscreen = view->offscreen[i];
+        if (!dc_offscreen_can_capture(offscreen, chunk->coord)) continue;
+        dc_offscreen_set_spring(offscreen, view->spring_enabled);
+        if (!dc_offscreen_update(offscreen, view->origin, 0.0, true, err, cap) ||
+            !dc_offscreen_capture(offscreen, chunk, err, cap)) return false;
+        *cached = true;
+        return true;
+    }
+    for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i) {
+        if (view->offscreen[i]) continue;
+        dc_offscreen_t *offscreen = dc_offscreen_create(new_origin, err, cap);
+        if (!offscreen) return false;
+        view->offscreen[i] = offscreen;
+        if (!dc_offscreen_capture(offscreen, chunk, err, cap)) return false;
+        *cached = true;
+        return true;
+    }
+    return true;
+}
+
+static bool has_offscreen_capacity(dc_level_view_t *view,
+                                   dc_chunk_coord_t coord) {
+    for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i)
+        if (!view->offscreen[i] ||
+            dc_offscreen_can_capture(view->offscreen[i], coord)) return true;
+    return false;
+}
+
+static bool schedule_prefetch(dc_level_view_t *view, char *err, uint32_t cap) {
+    uint32_t queued = 0;
+    for (uint32_t i = 0; i < view->sleeping_count && queued < 4u; ++i) {
+        sleeping_chunk_t *entry = &view->sleeping[i];
+        if (entry->state != SLEEP_READY ||
+            dc_offscreen_coord_band(entry->coord, view->origin) == 5u ||
+            (!visible(view, entry->coord) &&
+             !has_offscreen_capacity(view, entry->coord))) continue;
+        if (view->background_generation == OFFSCREEN_LOAD_GENERATION - 1u)
+            return error(err, cap, "Offscreen load generation exhausted");
+        uint64_t generation = OFFSCREEN_SAVE_GENERATION |
+            OFFSCREEN_LOAD_GENERATION | ++view->background_generation;
+        if (!dc_stream_request_load(view->stream, entry->coord, generation)) break;
+        entry->generation = generation;
+        entry->state = SLEEP_LOADING;
+        ++queued;
+    }
+    return true;
+}
+
 static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
     dc_stream_result_t result;
     while (dc_stream_poll(view->stream, &result)) {
         if (result.generation & OFFSCREEN_SAVE_GENERATION) {
+            uint32_t index = sleeping_index(view, result.coord);
+            bool matching = index != UINT32_MAX &&
+                view->sleeping[index].generation == result.generation;
+            if (result.generation & OFFSCREEN_LOAD_GENERATION) {
+                bool okay = result.kind == DC_STREAM_LOADED;
+                if (okay && matching && !view->shutting_down) {
+                    bool cached = false;
+                    if (visible(view, result.coord)) {
+                        uint32_t slot;
+                        uint64_t generation;
+                        if (dc_chunk_table_begin_load(&view->table, result.coord,
+                                                       &slot, &generation)) {
+                            okay = dc_gpu_upload_chunk(view->gpu, slot,
+                                result.chunk, err, cap) &&
+                                dc_chunk_table_finish_load(&view->table, slot,
+                                                            generation);
+                            cached = okay;
+                        }
+                    } else if (dc_offscreen_coord_band(result.coord,
+                                                       view->origin) < 5u)
+                        okay = capture_offscreen_chunk(view, result.chunk,
+                            result.coord, &cached, err, cap);
+                    if (okay && cached) forget_sleeping(view, index);
+                    else if (okay) view->sleeping[index].state = SLEEP_READY;
+                }
+                dc_stream_result_release(&result);
+                if (!okay) return error(err, cap, "Offscreen chunk prefetch failed");
+                continue;
+            }
             bool okay = result.kind == DC_STREAM_SAVED &&
                         view->background_pending_saves > 0u;
-            if (okay) --view->background_pending_saves;
+            if (okay) {
+                --view->background_pending_saves;
+                if (matching) view->sleeping[index].state = SLEEP_READY;
+            }
             dc_stream_result_release(&result);
             if (!okay) return error(err, cap, "Offscreen chunk save failed");
             continue;
@@ -121,15 +253,25 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
 static bool save_offscreen_chunk(void *context, const dc_chunk_t *chunk,
                                  char *err, uint32_t cap) {
     dc_level_view_t *view = context;
-    if (view->background_generation == OFFSCREEN_SAVE_GENERATION - 1u)
+    if (view->background_generation == OFFSCREEN_LOAD_GENERATION - 1u)
         return error(err, cap, "Offscreen save generation exhausted");
     uint64_t generation = OFFSCREEN_SAVE_GENERATION | ++view->background_generation;
+    if (!remember_sleeping(view, chunk->coord, generation, err, cap)) return false;
     uint64_t deadline = SDL_GetTicks64() + 5000u;
-    while (!dc_stream_request_save(view->stream, chunk, generation)) {
-        if (!process_results(view, err, cap)) return false;
+    bool queued = dc_stream_request_save(view->stream, chunk, generation);
+    while (!queued) {
+        if (!process_results(view, err, cap)) {
+            forget_sleeping(view, sleeping_index(view, chunk->coord));
+            return false;
+        }
         if (SDL_GetTicks64() >= deadline)
-            return error(err, cap, "Timed out queueing offscreen chunk save");
+            break;
         SDL_Delay(1);
+        queued = dc_stream_request_save(view->stream, chunk, generation);
+    }
+    if (!queued) {
+        forget_sleeping(view, sleeping_index(view, chunk->coord));
+        return error(err, cap, "Timed out queueing offscreen chunk save");
     }
     ++view->background_pending_saves;
     return true;
@@ -146,25 +288,8 @@ static bool cache_departed_chunk(dc_level_view_t *view, const dc_chunk_t *chunk,
                                  bool *cached, char *err, uint32_t cap) {
     *cached = false;
     if (view->shutting_down || !chunk_needs_physics(chunk)) return true;
-    for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i) {
-        dc_offscreen_t *offscreen = view->offscreen[i];
-        if (!dc_offscreen_can_capture(offscreen, chunk->coord)) continue;
-        dc_offscreen_set_spring(offscreen, view->spring_enabled);
-        if (!dc_offscreen_update(offscreen, view->origin, 0.0, true, err, cap) ||
-            !dc_offscreen_capture(offscreen, chunk, err, cap)) return false;
-        *cached = true;
-        return true;
-    }
-    for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i) {
-        if (view->offscreen[i]) continue;
-        dc_offscreen_t *offscreen = dc_offscreen_create(view->mapped_origin, err, cap);
-        if (!offscreen) return false;
-        view->offscreen[i] = offscreen;
-        if (!dc_offscreen_capture(offscreen, chunk, err, cap)) return false;
-        *cached = true;
-        return true;
-    }
-    return true;
+    return capture_offscreen_chunk(view, chunk, view->mapped_origin,
+                                   cached, err, cap);
 }
 
 static bool retire_far_offscreen(dc_level_view_t *view, char *err, uint32_t cap) {
@@ -317,6 +442,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!process_results(view, err, cap)) return false;
     if (!bind_transfer_destination(view, err, cap)) return false;
     if (!retire_far_offscreen(view, err, cap)) return false;
+    if (!schedule_prefetch(view, err, cap)) return false;
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         dc_chunk_slot_t *slot = &view->table.slots[i];
         if (slot->state == DC_SLOT_ACTIVE || slot->state == DC_SLOT_SLEEPING)
@@ -343,7 +469,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
                 bool restored;
                 if (!restore_offscreen_chunk(view, coord, &restored, err, cap))
                     return false;
-                if (!restored) {
+                if (!restored && sleeping_index(view, coord) == UINT32_MAX) {
                     uint64_t generation;
                     if (dc_chunk_table_begin_load(&view->table, coord, &index,
                                                   &generation) &&
@@ -700,6 +826,7 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
         dc_offscreen_destroy(view->offscreen[i]);
     dc_gpu_destroy(view->gpu);
     dc_chunk_table_destroy(&view->table);
+    free(view->sleeping);
     free(view);
     return okay;
 }

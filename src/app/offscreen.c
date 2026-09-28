@@ -125,25 +125,30 @@ bool dc_offscreen_take(dc_offscreen_t *offscreen, dc_chunk_coord_t coord,
     return error(err, cap, "Offscreen chunk is not cached");
 }
 
+uint32_t dc_offscreen_coord_band(dc_chunk_coord_t coord,
+                                 dc_chunk_coord_t camera_origin) {
+    uint64_t dx = coord.x < camera_origin.x ?
+        (uint64_t)camera_origin.x - (uint64_t)coord.x :
+        coord.x >= camera_origin.x + VIEW_CHUNKS_X ?
+        (uint64_t)coord.x - (uint64_t)camera_origin.x - VIEW_CHUNKS_X + 1u : 0u;
+    uint64_t dy = coord.y < camera_origin.y ?
+        (uint64_t)camera_origin.y - (uint64_t)coord.y :
+        coord.y >= camera_origin.y + VIEW_CHUNKS_Y ?
+        (uint64_t)coord.y - (uint64_t)camera_origin.y - VIEW_CHUNKS_Y + 1u : 0u;
+    if (dx <= VIEW_CHUNKS_X && dy <= VIEW_CHUNKS_Y) return 1u;
+    if (dx <= 2u * VIEW_CHUNKS_X && dy <= 2u * VIEW_CHUNKS_Y) return 2u;
+    if (dx <= 4u * VIEW_CHUNKS_X && dy <= 4u * VIEW_CHUNKS_Y) return 3u;
+    return 5u;
+}
+
 uint32_t dc_offscreen_band(const dc_offscreen_t *offscreen,
                            dc_chunk_coord_t camera_origin) {
     if (!offscreen || !offscreen->count) return 5u;
     uint32_t closest = 5u;
     for (uint32_t i = 0; i < DC_GPU_CHUNK_SLOTS; ++i) {
         if (!offscreen->slots[i].occupied) continue;
-        dc_chunk_coord_t coord = offscreen->slots[i].coord;
-        uint64_t dx = coord.x < camera_origin.x ?
-            (uint64_t)camera_origin.x - (uint64_t)coord.x :
-            coord.x >= camera_origin.x + VIEW_CHUNKS_X ?
-            (uint64_t)coord.x - (uint64_t)camera_origin.x - VIEW_CHUNKS_X + 1u : 0u;
-        uint64_t dy = coord.y < camera_origin.y ?
-            (uint64_t)camera_origin.y - (uint64_t)coord.y :
-            coord.y >= camera_origin.y + VIEW_CHUNKS_Y ?
-            (uint64_t)coord.y - (uint64_t)camera_origin.y - VIEW_CHUNKS_Y + 1u : 0u;
-        uint32_t band = 5u;
-        if (dx <= VIEW_CHUNKS_X && dy <= VIEW_CHUNKS_Y) band = 1u;
-        else if (dx <= 2u * VIEW_CHUNKS_X && dy <= 2u * VIEW_CHUNKS_Y) band = 2u;
-        else if (dx <= 4u * VIEW_CHUNKS_X && dy <= 4u * VIEW_CHUNKS_Y) band = 3u;
+        uint32_t band = dc_offscreen_coord_band(offscreen->slots[i].coord,
+                                                  camera_origin);
         if (band < closest) closest = band;
     }
     return closest;
