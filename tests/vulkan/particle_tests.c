@@ -222,6 +222,43 @@ static void test_granular_tick_falls_and_reports_gpu_time(void) {
     PASS();
 }
 
+static void test_granular_step_uses_elapsed_world_time(void) {
+    char err[256] = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    dc_chunk_t *normal = calloc(1, sizeof(*normal));
+    dc_chunk_t *long_step = calloc(1, sizeof(*long_step));
+    ASSERT_TRUE(chunk && normal && long_step);
+    chunk->coord = (dc_chunk_coord_t){0, 0};
+    chunk->cells[10 * DC_CHUNK_SIDE + 10].material = DC_MATERIAL_SAND;
+    dc_chunk_seed_particles(chunk);
+    chunk->particles[10 * DC_CHUNK_SIDE + 10].vy_fp = DC_FLUID_FULL;
+    dc_gpu_t *normal_gpu = NULL, *long_gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&normal_gpu, 64, 64,
+                              "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create(&long_gpu, 64, 64,
+                              "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(normal_gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(long_gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(normal_gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(long_gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_tick_seconds(normal_gpu, 1.0f / 60.0f));
+    ASSERT_TRUE(dc_gpu_set_tick_seconds(long_gpu, 2.0f / 60.0f));
+    ASSERT_TRUE(dc_gpu_tick_step(normal_gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_step(long_gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(normal_gpu, 0, normal, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(long_gpu, 0, long_step, err, sizeof(err)));
+    int32_t normal_y = 0, long_y = 0;
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i) {
+        if (normal->particles[i].mass_fp) normal_y = normal->particles[i].y_fp;
+        if (long_step->particles[i].mass_fp) long_y = long_step->particles[i].y_fp;
+    }
+    ASSERT_TRUE(long_y > normal_y + 1000);
+    dc_gpu_destroy(normal_gpu);
+    dc_gpu_destroy(long_gpu);
+    free(chunk); free(normal); free(long_step);
+    PASS();
+}
+
 static void test_granular_motion_crosses_seam_with_stable_mass(void) {
     char err[256] = {0};
     dc_chunk_t *left = calloc(1, sizeof(*left));
@@ -1119,6 +1156,7 @@ int main(void) {
     RUN(test_granular_paint_reuses_and_erases_primary_slot);
     RUN(test_upload_rejects_inconsistent_particle_count);
     RUN(test_granular_tick_falls_and_reports_gpu_time);
+    RUN(test_granular_step_uses_elapsed_world_time);
     RUN(test_granular_motion_crosses_seam_with_stable_mass);
     RUN(test_mixed_pile_conserves_mass_and_replays);
     RUN(test_grain_collides_with_gpu_body);
