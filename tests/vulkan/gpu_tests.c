@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "dungeoncraft/gpu.h"
@@ -68,6 +69,45 @@ static void test_chunk_and_particle_state_use_separate_stream_staging(void) {
     ASSERT_TRUE(gpu->mpm_force_buffer != gpu->mpm_force_staging_buffer);
     ASSERT_TRUE(gpu->mpm_velocity_buffer != gpu->mpm_velocity_staging_buffer);
     dc_gpu_destroy(gpu);
+    PASS();
+}
+
+static void test_shared_workspace_boundary_conserves_water_and_grain(void) {
+    char err[256] = {0};
+    dc_gpu_t *upper = NULL, *lower = NULL;
+    dc_chunk_t *source = calloc(1, sizeof(*source));
+    dc_chunk_t *destination = calloc(1, sizeof(*destination));
+    ASSERT_TRUE(source && destination);
+    ASSERT_TRUE(dc_gpu_create(&upper, 64, 128,
+                              "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create_shared(&lower, upper, 64, 128,
+                                     "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    source->cells[63 * DC_CHUNK_SIDE + 32].fluid_mass = DC_FLUID_FULL;
+    dc_chunk_particle_init(&source->particles[63 * DC_CHUNK_SIDE + 33],
+                           (dc_chunk_coord_t){0, 0},
+                           63 * DC_CHUNK_SIDE + 33, DC_MATERIAL_SAND);
+    source->particles[63 * DC_CHUNK_SIDE + 33].vy_fp = DC_FLUID_FULL;
+    source->particle_count = 1;
+    uint32_t grain_id = source->particles[63 * DC_CHUNK_SIDE + 33].id_lo;
+    ASSERT_TRUE(dc_gpu_upload_chunk(upper, 0, source, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(lower, 0, destination, err, sizeof(err)));
+    dc_gpu_boundary_t boundary = { .main_slot = 0, .other_slot = 0,
+        .main_x = 0, .main_y = 64, .other_x = 0, .other_y = 0,
+        .other_side = 2 };
+    ASSERT_TRUE(dc_gpu_boundary_exchange(lower, upper, &boundary, 1, 4.0f,
+                                         err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(upper, 0, source, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(lower, 0, destination, err, sizeof(err)));
+    ASSERT_EQ(source->cells[63 * DC_CHUNK_SIDE + 32].fluid_mass +
+              destination->cells[32].fluid_mass, DC_FLUID_FULL);
+    ASSERT_TRUE(destination->cells[32].fluid_mass > 0);
+    ASSERT_EQ(source->particle_count + destination->particle_count, 1u);
+    ASSERT_EQ(destination->particles[33].id_lo, grain_id);
+    ASSERT_EQ(destination->particles[33].vy_fp, DC_FLUID_FULL);
+    dc_gpu_destroy(lower);
+    dc_gpu_destroy(upper);
+    free(source);
+    free(destination);
     PASS();
 }
 
@@ -253,6 +293,7 @@ int main(void) {
     RUN(test_rejects_invalid_dimensions);
     RUN(test_host_visible_vram_is_preferred_for_mapped_buffers);
     RUN(test_chunk_and_particle_state_use_separate_stream_staging);
+    RUN(test_shared_workspace_boundary_conserves_water_and_grain);
     RUN(test_gpu_brush_updates_only_covered_cells);
     RUN(test_chunk_page_mapping_and_gpu_material_edit);
     RUN(test_gpu_box_crosses_chunk_edge_and_rests_on_terrain);
