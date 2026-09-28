@@ -245,6 +245,33 @@ static void test_water_keeps_falling_one_screen_offscreen(void) {
     PASS();
 }
 
+static void test_water_keeps_falling_two_screens_offscreen(void) {
+    char directory[] = "build/ui_far_water_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 10, 5, 0, DC_MATERIAL_WATER,
+                                    err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 600, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 120; ++tick) {
+        ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, -600, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
+                                    chunk, err, sizeof(err)));
+    ASSERT_TRUE(chunk->cells[5 * DC_CHUNK_SIDE + 10].fluid_mass < DC_FLUID_FULL);
+    free(chunk);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    PASS();
+}
+
 int main(void) {
     RUN(test_camera_crosses_chunk_boundary_cell_by_cell);
     RUN(test_loading_status_and_camera_reset);
@@ -252,6 +279,7 @@ int main(void) {
     RUN(test_fresh_run_preserves_previous_saved_world);
     RUN(test_granular_particle_survives_window_eviction);
     RUN(test_water_keeps_falling_one_screen_offscreen);
+    RUN(test_water_keeps_falling_two_screens_offscreen);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
