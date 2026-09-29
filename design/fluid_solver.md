@@ -29,7 +29,11 @@ solid also adds 0.05 wall friction per world tick. A missing workspace page
 uses zero shear rather than masquerading as a stone wall. The explicit viscosity
 coefficient is capped at 0.12 for longer offscreen steps. Viscosity precedes
 the pressure solve so its divergence is projected out. The predictor initializes
-pressure from the local hydrostatic water-column head. A cell-centered pressure
+pressure from the local hydrostatic water-column head. Fast unsupported water
+more than 16 cells above solid terrain has no hydrostatic head; its motion is
+still handled by the velocity predictor and Poisson projection. This avoids
+applying standing-water pressure to a falling stream while preserving pressure
+near a floor and across workspace seams. A cell-centered pressure
 field then solves the discrete
 Poisson equation using 20 red-black SOR sweeps. Columns shallower than 13 cells
 use relaxation 1.5. Deeper columns in chunks without MPM particles use 1.9 to
