@@ -29,6 +29,10 @@ uint grain_radius_fp(uint material) {
     return material == 2u ? 16384u : material == 4u ? 24576u : 32768u;
 }
 
+float grain_density(uint material) {
+    return material == 2u ? 2.65 : material == 5u ? 2.7 : 1.2;
+}
+
 vec3 linear_color(uint packed) {
     vec3 rgb = vec3(float(packed & 255u), float((packed >> 8) & 255u),
                     float((packed >> 16) & 255u)) / 255.0;
@@ -76,12 +80,10 @@ DensitySample material_density(ivec2 p) {
             Particle particle = particles[first + layer * 4096u];
             if (particle.mass_fp == 0u) continue;
             float mass = float(particle.mass_fp) / 65536.0;
-            float density = particle.material == 2u ? 2.65 :
-                            particle.material == 5u ? 2.7 : 1.2;
             solid_color += mass * linear_color(material_color(particle.material,
                                                                particle.flags));
             particle_mass += mass;
-            particle_volume += mass / density;
+            particle_volume += mass / grain_density(particle.material);
         }
         if (particle_mass > 0.0) {
             solid = min(particle_mass, 1.0);

@@ -288,9 +288,14 @@ static void test_submerged_sand_blends_continuously_with_water(void) {
     ASSERT_TRUE(chunk != NULL);
     for (uint32_t x = 10; x <= 12; ++x)
         chunk->cells[10 * DC_CHUNK_SIDE + x].material = DC_MATERIAL_SAND;
+    chunk->cells[10 * DC_CHUNK_SIDE + 14].material = DC_MATERIAL_SAND;
+    chunk->cells[10 * DC_CHUNK_SIDE + 15].material = DC_MATERIAL_SAND;
     chunk->cells[10 * DC_CHUNK_SIDE + 11].fluid_mass = DC_FLUID_FULL / 2u;
     chunk->cells[10 * DC_CHUNK_SIDE + 12].fluid_mass = DC_FLUID_FULL;
     chunk->cells[10 * DC_CHUNK_SIDE + 13].fluid_mass = DC_FLUID_FULL;
+    chunk->cells[10 * DC_CHUNK_SIDE + 14].fluid_mass = DC_FLUID_FULL / 4u;
+    chunk->cells[10 * DC_CHUNK_SIDE + 15].fluid_mass =
+        3u * DC_FLUID_FULL / 4u;
     dc_chunk_seed_particles(chunk);
     ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64,
                               "build/shaders/pattern.comp.spv", err, sizeof(err)));
@@ -302,11 +307,17 @@ static void test_submerged_sand_blends_continuously_with_water(void) {
     uint32_t half = pixels[10 * DC_CHUNK_SIDE + 11];
     uint32_t submerged = pixels[10 * DC_CHUNK_SIDE + 12];
     uint32_t water = pixels[10 * DC_CHUNK_SIDE + 13];
-    ASSERT_TRUE(red_channel(dry) > red_channel(half));
-    ASSERT_TRUE(red_channel(half) > red_channel(submerged));
+    uint32_t quarter = pixels[10 * DC_CHUNK_SIDE + 14];
+    uint32_t three_quarters = pixels[10 * DC_CHUNK_SIDE + 15];
+    ASSERT_TRUE(red_channel(dry) > red_channel(quarter));
+    ASSERT_TRUE(red_channel(quarter) > red_channel(half));
+    ASSERT_TRUE(red_channel(half) > red_channel(three_quarters));
+    ASSERT_TRUE(red_channel(three_quarters) > red_channel(submerged));
     ASSERT_TRUE(red_channel(submerged) > red_channel(water));
-    ASSERT_TRUE(blue_channel(dry) < blue_channel(half));
-    ASSERT_TRUE(blue_channel(half) < blue_channel(submerged));
+    ASSERT_TRUE(blue_channel(dry) < blue_channel(quarter));
+    ASSERT_TRUE(blue_channel(quarter) < blue_channel(half));
+    ASSERT_TRUE(blue_channel(half) < blue_channel(three_quarters));
+    ASSERT_TRUE(blue_channel(three_quarters) < blue_channel(submerged));
     ASSERT_TRUE(blue_channel(submerged) < blue_channel(water));
     ASSERT_EQ(pixels[10 * DC_CHUNK_SIDE + 9], 0xff181818u);
     dc_gpu_destroy(gpu);
