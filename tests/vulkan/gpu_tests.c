@@ -308,7 +308,56 @@ static void test_gpu_box_crosses_chunk_edge_and_rests_on_terrain(void) {
 }
 
 static uint32_t red_channel(uint32_t pixel) { return pixel & 255u; }
+static uint32_t green_channel(uint32_t pixel) { return (pixel >> 8) & 255u; }
 static uint32_t blue_channel(uint32_t pixel) { return (pixel >> 16) & 255u; }
+
+static uint32_t channel_distance(uint32_t left, uint32_t right) {
+    uint32_t a = red_channel(left), b = red_channel(right);
+    uint32_t distance = a > b ? a - b : b - a;
+    a = green_channel(left); b = green_channel(right);
+    distance += a > b ? a - b : b - a;
+    a = blue_channel(left); b = blue_channel(right);
+    return distance + (a > b ? a - b : b - a);
+}
+
+static void test_mud_water_palette_tracks_local_dirt_concentration(void) {
+    char err[256] = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    uint32_t pixels[DC_CHUNK_CELLS] = {0};
+    ASSERT_TRUE(chunk != NULL);
+    for (uint32_t x = 20; x <= 24; ++x) {
+        uint32_t index = 10 * DC_CHUNK_SIDE + x;
+        if (x != 20u) chunk->cells[index].material = DC_MATERIAL_DIRT;
+        if (x != 24u) chunk->cells[index].fluid_mass = DC_FLUID_FULL;
+    }
+    chunk->cells[10 * DC_CHUNK_SIDE + 25].fluid_mass = DC_FLUID_FULL;
+    dc_chunk_seed_particles(chunk);
+    for (uint32_t x = 21; x <= 23; ++x)
+        chunk->particles[10 * DC_CHUNK_SIDE + x].flags =
+            DC_MPM_MUD_FLAG | DC_MPM_MUD_ENTER;
+    chunk->particles[10 * DC_CHUNK_SIDE + 22].mass_fp = DC_FLUID_FULL / 4u;
+    chunk->particles[10 * DC_CHUNK_SIDE + 23].mass_fp = DC_FLUID_FULL / 128u;
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64,
+                              "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_render_chunks(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_readback(gpu, pixels, DC_CHUNK_CELLS, err, sizeof(err)));
+    uint32_t water = pixels[10 * DC_CHUNK_SIDE + 20];
+    uint32_t dense = pixels[10 * DC_CHUNK_SIDE + 21];
+    uint32_t quarter = pixels[10 * DC_CHUNK_SIDE + 22];
+    uint32_t dilute = pixels[10 * DC_CHUNK_SIDE + 23];
+    ASSERT_TRUE(red_channel(dense) >= red_channel(water) + 55u);
+    ASSERT_TRUE(red_channel(quarter) > red_channel(water));
+    ASSERT_TRUE(red_channel(quarter) < red_channel(dense));
+    ASSERT_TRUE(channel_distance(dilute, water) <= 12u);
+    ASSERT_EQ(pixels[10 * DC_CHUNK_SIDE + 25], water);
+    ASSERT_EQ(pixels[10 * DC_CHUNK_SIDE + 26], 0xff181818u);
+    dc_gpu_destroy(gpu);
+    free(chunk);
+    PASS();
+}
 
 static void test_submerged_sand_blends_continuously_with_water(void) {
     char err[256] = {0};
@@ -468,6 +517,7 @@ int main(void) {
     RUN(test_gpu_box_crosses_chunk_edge_and_rests_on_terrain);
     RUN(test_density_mixes_only_within_each_cell);
     RUN(test_submerged_sand_blends_continuously_with_water);
+    RUN(test_mud_water_palette_tracks_local_dirt_concentration);
     RUN(test_tick_capture_orders_gpu_stages_and_handoffs);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
