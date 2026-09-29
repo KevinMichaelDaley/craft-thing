@@ -272,6 +272,17 @@ static void test_deep_water_keeps_advecting_across_workspace_seam(void) {
     }
     printf("deep seam divergence split %.4f mono %.4f\n",
            split_divergence, monolithic_divergence);
+    double split_level[2] = {0.0, 0.0}, mono_level[2] = {0.0, 0.0};
+    for (uint32_t y = 0; y < 47; ++y) {
+        split_level[0] += (double)left->cells[y * 64u + 63u].fluid_mass / DC_FLUID_FULL;
+        split_level[1] += (double)right->cells[y * 64u].fluid_mass / DC_FLUID_FULL;
+        mono_level[0] += (double)mono_left->cells[y * 64u + 63u].fluid_mass / DC_FLUID_FULL;
+        mono_level[1] += (double)mono_right->cells[y * 64u].fluid_mass / DC_FLUID_FULL;
+    }
+    printf("deep seam level split %.3f/%.3f mono %.3f/%.3f\n",
+           split_level[0], split_level[1], mono_level[0], mono_level[1]);
+    ASSERT_TRUE(fabs(split_level[0] - mono_level[0]) < 0.5);
+    ASSERT_TRUE(fabs(split_level[1] - mono_level[1]) < 0.5);
     ASSERT_TRUE(split_divergence <= monolithic_divergence * 2.0 + 0.1);
     ASSERT_EQ(total, initial_mass);
     ASSERT_TRUE(beyond >= 12u * (uint64_t)DC_FLUID_FULL);
