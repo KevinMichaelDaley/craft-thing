@@ -289,8 +289,8 @@ static void test_high_painted_water_falls_as_continuous_column(void) {
         const dc_chunk_t *chunk = y < 64u ? saved_top : saved_bottom;
         for (uint32_t x = 27u; x <= 37u; ++x)
             row_mass += chunk->cells[(y % 64u) * 64u + x].fluid_mass;
-        if (y >= 20u && y < 55u)
-            if (row_mass < 2u * DC_FLUID_FULL) ++thin_rows;
+        if (y >= 20u && y < 55u && row_mass < 2u * DC_FLUID_FULL)
+            ++thin_rows;
         if (row_mass >= DC_FLUID_FULL / 4u) {
             if (first_wet < 0) first_wet = (int)y;
             last_wet = (int)y;

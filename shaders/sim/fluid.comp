@@ -24,6 +24,9 @@ const uint SIDE = 64u;
 const uint CELLS_PER_CHUNK = 4096u;
 const uint FULL = 65536u;
 const float TRANSPORT_FUDGE = 1.001;
+const float FAST_FALL_SPEED = 2.0;
+const int VERTICAL_MARKER_CORRECTION = 1024;
+const int HORIZONTAL_MARKER_CORRECTION = 8192;
 
 uint page_at(ivec2 p) {
     if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
@@ -142,7 +145,10 @@ void correct_pair(ivec2 p) {
     uint second_guide = marker_grid[atlas_index(second, second_page)];
     uint first_mass = first == p ? own : other;
     uint second_mass = first == p ? other : own;
-    int correction = vertical ? 1024 : 8192;
+    uint face_index = uint(first.y) * params.width + uint(first.x);
+    bool fast_fall = vertical && face_velocity[face_index].y > FAST_FALL_SPEED;
+    int correction = fast_fall ? VERTICAL_MARKER_CORRECTION :
+                                 HORIZONTAL_MARKER_CORRECTION;
     int request = 0;
     if ((first_guide & 1u) != 0u && (second_guide & 1u) == 0u &&
         (second_guide & 2u) != 0u &&
