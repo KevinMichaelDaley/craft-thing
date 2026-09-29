@@ -303,6 +303,41 @@ static void test_high_painted_water_falls_as_continuous_column(void) {
     ASSERT_TRUE(first_wet >= 0 && last_wet >= first_wet + 20);
     ASSERT_TRUE(max_gap <= 1);
     ASSERT_TRUE(thin_rows <= 3);
+    bool wet[64u * 64u] = {0};
+    bool visited[64u * 64u] = {0};
+    uint32_t queue[64u * 64u];
+    uint32_t wet_cells = 0u, largest_component = 0u;
+    for (uint32_t y = 16u; y < 56u; ++y)
+        for (uint32_t x = 24u; x <= 40u; ++x) {
+            uint32_t index = y * 64u + x;
+            wet[index] = saved_top->cells[index].fluid_mass >= DC_FLUID_FULL / 4u;
+            wet_cells += wet[index];
+        }
+    for (uint32_t y = 16u; y < 56u; ++y)
+        for (uint32_t x = 24u; x <= 40u; ++x) {
+            uint32_t start = y * 64u + x;
+            if (!wet[start] || visited[start]) continue;
+            uint32_t head = 0u, tail = 0u;
+            queue[tail++] = start;
+            visited[start] = true;
+            while (head < tail) {
+                uint32_t index = queue[head++];
+                uint32_t neighbors[4] = {index - 1u, index + 1u,
+                                         index - 64u, index + 64u};
+                for (uint32_t i = 0u; i < 4u; ++i) {
+                    uint32_t next = neighbors[i];
+                    uint32_t nx = next % 64u, ny = next / 64u;
+                    if (nx < 24u || nx > 40u || ny < 16u || ny >= 56u ||
+                        !wet[next] || visited[next]) continue;
+                    visited[next] = true;
+                    queue[tail++] = next;
+                }
+            }
+            if (tail > largest_component) largest_component = tail;
+        }
+    printf("falling stream connected %u of %u wet cells\n",
+           largest_component, wet_cells);
+    ASSERT_TRUE(wet_cells > 100u && largest_component * 4u >= wet_cells * 3u);
     dc_gpu_destroy(gpu);
     free(top); free(bottom); free(saved_top); free(saved_bottom);
     PASS();
