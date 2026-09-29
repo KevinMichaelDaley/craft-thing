@@ -142,13 +142,14 @@ void correct_pair(ivec2 p) {
     uint second_guide = marker_grid[atlas_index(second, second_page)];
     uint first_mass = first == p ? own : other;
     uint second_mass = first == p ? other : own;
+    int correction = vertical ? 1024 : 8192;
     int request = 0;
     if ((first_guide & 1u) != 0u && (second_guide & 1u) == 0u &&
         (second_guide & 2u) != 0u &&
-        first_mass >= second_mass) request = -8192;
+        first_mass >= second_mass) request = -correction;
     else if ((first_guide & 1u) == 0u && (first_guide & 2u) != 0u &&
              (second_guide & 1u) != 0u &&
-             second_mass >= first_mass) request = 8192;
+             second_mass >= first_mass) request = correction;
     if (request == 0) {
         write_mass(index, own);
         return;
