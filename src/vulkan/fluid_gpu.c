@@ -209,6 +209,7 @@ static void record_fluid_correction(dc_gpu_t *gpu) {
     dc_gpu_record_markers(gpu);
     uint32_t push[7] = { gpu->width, gpu->height, 0,
                          gpu->fluid_tick & 1u, 0, 0, 0 };
+    push[4] = dc_gpu_float_bits(gpu->fluid_velocity_retained);
     push[5] = dc_gpu_float_bits(gpu->fluid_step_scale);
     fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,

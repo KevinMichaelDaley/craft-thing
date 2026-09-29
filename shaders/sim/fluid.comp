@@ -15,7 +15,7 @@ layout(push_constant) uniform Params {
     uint height;
     uint mode;
     uint tick_parity;
-    uint unused1;
+    uint velocity_retained_bits;
     uint step_scale_bits;
     uint elapsed_time_mode;
 } params;
@@ -24,7 +24,6 @@ const uint SIDE = 64u;
 const uint CELLS_PER_CHUNK = 4096u;
 const uint FULL = 65536u;
 const float TRANSPORT_FUDGE = 1.001;
-const float VELOCITY_DAMPING = 0.997;
 
 uint page_at(ivec2 p) {
     if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
@@ -184,7 +183,7 @@ void main() {
                          chunk_cells[atlas_index(position, page)].y;
     } else if (params.mode == 5u) {
         if (page != 0u) chunk_cells[atlas_index(position, page)].y = fluid_a[index];
-        face_velocity[index] *= pow(VELOCITY_DAMPING,
+        face_velocity[index] *= pow(uintBitsToFloat(params.velocity_retained_bits),
                                     uintBitsToFloat(params.step_scale_bits));
     } else if (params.mode >= 6u && params.mode <= 9u) {
         correct_pair(position);

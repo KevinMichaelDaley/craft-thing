@@ -58,6 +58,7 @@ dc_offscreen_t *dc_offscreen_create(dc_gpu_t *parent, dc_chunk_coord_t origin,
                        OFFSCREEN_TILES_Y * DC_CHUNK_SIDE,
                        "build/shaders/pattern.comp.spv", err, cap) ||
         !dc_gpu_set_fluid_interval(offscreen->gpu, 1u) ||
+        !dc_gpu_set_fluid_velocity_damping(offscreen->gpu, 0.92f) ||
         !dc_gpu_set_pressure_sweeps(offscreen->gpu, 8u)) {
         dc_offscreen_destroy(offscreen);
         return NULL;

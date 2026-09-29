@@ -127,6 +127,7 @@ struct dc_gpu {
     uint32_t pressure_sweeps;
     float tick_time_scale;
     float fluid_step_scale;
+    float fluid_velocity_retained;
     float fluid_phase_budget;
     bool timed_fluid;
     bool fluid_snapshot_valid;

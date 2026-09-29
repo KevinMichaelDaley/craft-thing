@@ -197,7 +197,7 @@ bool dc_gpu_set_tick_seconds(dc_gpu_t *gpu, float seconds) {
 }
 
 bool dc_gpu_set_fluid_velocity_damping(dc_gpu_t *gpu, float retained) {
-    (void)gpu;
-    (void)retained;
-    return false;
+    if (!gpu || !(retained > 0.0f) || retained > 1.0f) return false;
+    gpu->fluid_velocity_retained = retained;
+    return true;
 }
