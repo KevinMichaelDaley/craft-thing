@@ -11,6 +11,8 @@ enum {
     OFFSCREEN_SLOTS = OFFSCREEN_TILES_X * OFFSCREEN_TILES_Y
 };
 
+static const float OFFSCREEN_FLUID_RETAINED_PER_TICK = 0.92f;
+
 _Static_assert(OFFSCREEN_SLOTS <= DC_GPU_CHUNK_SLOTS,
                "Offscreen workspace exceeds GPU chunk capacity");
 
@@ -58,7 +60,8 @@ dc_offscreen_t *dc_offscreen_create(dc_gpu_t *parent, dc_chunk_coord_t origin,
                        OFFSCREEN_TILES_Y * DC_CHUNK_SIDE,
                        "build/shaders/pattern.comp.spv", err, cap) ||
         !dc_gpu_set_fluid_interval(offscreen->gpu, 1u) ||
-        !dc_gpu_set_fluid_velocity_damping(offscreen->gpu, 0.92f) ||
+        !dc_gpu_set_fluid_velocity_damping(offscreen->gpu,
+                                           OFFSCREEN_FLUID_RETAINED_PER_TICK) ||
         !dc_gpu_set_pressure_sweeps(offscreen->gpu, 8u)) {
         dc_offscreen_destroy(offscreen);
         return NULL;

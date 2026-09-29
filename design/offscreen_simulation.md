@@ -92,6 +92,14 @@ the destination volume after 120 ticks, while the UI smoke sends a large water
 patch past the visible/offscreen seam and checks that it travels eight cells
 into the destination chunk.
 
+Offscreen workspaces retain 92% of face velocity per 1/60-second world tick,
+compared with 99.7% in the visible workspace. The GPU fluid correction raises
+that factor to the elapsed-tick power, so a low-cadence offscreen update damps
+the same amount of momentum as its equivalent sequence of short ticks. This
+attenuates edge oscillation without changing cell mass or adding a readback.
+The GPU regression compares equal-time visible and offscreen steps, verifies
+faster offscreen velocity decay, and checks exact water mass.
+
 ## Validation
 
 An end-to-end camera test paints water in a chunk, pans a screen away, runs
