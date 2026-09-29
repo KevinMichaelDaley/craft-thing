@@ -1000,6 +1000,104 @@ static void test_large_wet_dirt_component_crosses_seam_as_mud(void) {
     PASS();
 }
 
+static void test_mud_mound_flows_farther_than_dry_dirt(void) {
+    char err[256] = {0};
+    dc_chunk_t *dry = calloc(1, sizeof(*dry));
+    dc_chunk_t *wet = calloc(1, sizeof(*wet));
+    ASSERT_TRUE(dry && wet);
+    wet->coord.x = 1;
+    for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x) {
+        dry->cells[47 * DC_CHUNK_SIDE + x].material = DC_MATERIAL_STONE;
+        wet->cells[47 * DC_CHUNK_SIDE + x].material = DC_MATERIAL_STONE;
+    }
+    for (uint32_t y = 39; y < 47; ++y)
+        for (uint32_t x = 28; x < 36; ++x) {
+            dry->cells[y * DC_CHUNK_SIDE + x].material = DC_MATERIAL_DIRT;
+            wet->cells[y * DC_CHUNK_SIDE + x].material = DC_MATERIAL_DIRT;
+        }
+    dc_chunk_seed_particles(dry);
+    dc_chunk_seed_particles(wet);
+    for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        if (wet->particles[i].mass_fp)
+            wet->particles[i].flags = DC_MPM_MUD_FLAG | DC_MPM_MOISTURE_CAP;
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 128, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, dry, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 1, wet, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 0, 1, err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 120; ++tick)
+        ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, dry, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, wet, err, sizeof(err)));
+    printf("mud mound particle counts after 120 ticks: dry page %u, wet page %u\n",
+           dry->particle_count, wet->particle_count);
+    ASSERT_EQ(dry->particle_count + wet->particle_count, 128u);
+    int32_t min_x[2] = {INT32_MAX, INT32_MAX};
+    int32_t max_x[2] = {INT32_MIN, INT32_MIN};
+    dc_chunk_t *chunks[2] = {dry, wet};
+    uint32_t seeds[2] = {dc_chunk_particle_seed(dry->coord),
+                         dc_chunk_particle_seed(wet->coord)};
+    uint32_t counts[2] = {0};
+    uint32_t wet_left = 0, wet_right = 0;
+    uint8_t wet_occupied[128 * 64] = {0};
+    for (uint32_t c = 0; c < 2; ++c)
+        for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i) {
+            const dc_mpm_particle_t *p = &chunks[c]->particles[i];
+            if (!p->mass_fp) continue;
+            uint32_t source = p->id_hi == seeds[0] ? 0u : 1u;
+            ASSERT_EQ(p->id_hi, seeds[source]);
+            int32_t x = p->x_fp + (int32_t)(c * DC_CHUNK_SIDE * DC_FLUID_FULL);
+            if (x < min_x[source]) min_x[source] = x;
+            if (x > max_x[source]) max_x[source] = x;
+            ++counts[source];
+            if (source == 1u && x < 88 * (int32_t)DC_FLUID_FULL) ++wet_left;
+            if (source == 1u && x > 103 * (int32_t)DC_FLUID_FULL) ++wet_right;
+            if (source == 1u) {
+                int32_t cx = x / (int32_t)DC_FLUID_FULL;
+                int32_t cy = p->y_fp / (int32_t)DC_FLUID_FULL;
+                ASSERT_TRUE(cx >= 0 && cx < 128 && cy >= 0 && cy < 64);
+                wet_occupied[cy * 128 + cx] = 1;
+            }
+        }
+    ASSERT_EQ(counts[0], 64u);
+    ASSERT_EQ(counts[1], 64u);
+    int32_t dry_span = (max_x[0] - min_x[0]) / (int32_t)DC_FLUID_FULL;
+    int32_t wet_span = (max_x[1] - min_x[1]) / (int32_t)DC_FLUID_FULL;
+    printf("mud spread after 120 GPU ticks: dry %d, wet %d cells, wet min/max %d/%d, tails %u/%u\n",
+           dry_span, wet_span, min_x[1]/(int32_t)DC_FLUID_FULL,
+           max_x[1]/(int32_t)DC_FLUID_FULL, wet_left, wet_right);
+    uint32_t largest = 0;
+    int32_t queue[128 * 64];
+    for (int32_t start = 0; start < 128 * 64; ++start) {
+        if (wet_occupied[start] != 1u) continue;
+        uint32_t head = 0, tail = 0;
+        queue[tail++] = start;
+        wet_occupied[start] = 2;
+        while (head < tail) {
+            int32_t current = queue[head++];
+            int32_t x = current % 128, y = current / 128;
+            for (int32_t dy = -1; dy <= 1; ++dy)
+                for (int32_t dx = -1; dx <= 1; ++dx) {
+                    int32_t nx = x + dx, ny = y + dy;
+                    if (nx < 0 || nx >= 128 || ny < 0 || ny >= 64) continue;
+                    int32_t neighbor = ny * 128 + nx;
+                    if (wet_occupied[neighbor] != 1u) continue;
+                    wet_occupied[neighbor] = 2;
+                    queue[tail++] = neighbor;
+                }
+        }
+        if (tail > largest) largest = tail;
+    }
+    printf("mud largest connected body: %u occupied cells\n", largest);
+    ASSERT_TRUE(wet_span >= dry_span + 3);
+    ASSERT_TRUE(largest >= 40u);
+    dc_gpu_destroy(gpu);
+    free(dry); free(wet);
+    PASS();
+}
+
 static void test_small_wet_dirt_clump_breaks_apart(void) {
     char err[256] = {0};
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
@@ -1176,6 +1274,7 @@ int main(void) {
     RUN(test_sand_settles_and_binds_pore_water);
     RUN(test_small_wet_dirt_patch_does_not_become_mud);
     RUN(test_large_wet_dirt_component_crosses_seam_as_mud);
+    RUN(test_mud_mound_flows_farther_than_dry_dirt);
     RUN(test_small_wet_dirt_clump_breaks_apart);
     RUN(test_winding_dirt_component_has_one_gpu_label);
     RUN(test_grain_radii_follow_material_size);
