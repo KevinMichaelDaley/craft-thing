@@ -73,10 +73,18 @@ float previous_horizontal_at(ivec2 p) {
     return uintBitsToFloat(previous_horizontal_velocity[index_of(p)]);
 }
 
-float viscous_neighbor(ivec2 p, ivec2 axis, float own) {
-    bool open_face = open_cell(p) && open_cell(p + axis);
-    if (!open_face) return -own;
-    if (!wet(p) && !wet(p + axis)) return own;
+float viscous_neighbor(ivec2 p, ivec2 axis, float own, out float wall) {
+    wall = 0.0;
+    uint first = atlas_of(p);
+    uint second = atlas_of(p + axis);
+    // A missing workspace page is an unknown neighbor, not a solid wall.
+    if (first == 0xffffffffu || second == 0xffffffffu) return own;
+    if (!open_cell(p) || !open_cell(p + axis)) {
+        wall = 1.0;
+        // Odd reflection puts zero tangential velocity at the solid boundary.
+        return -own;
+    }
+    if (cells[first].y == 0u && cells[second].y == 0u) return own;
     return axis.x != 0 ? previous_horizontal_at(p) : previous_vertical_at(p);
 }
 
@@ -84,9 +92,15 @@ float viscous_delta(ivec2 p, ivec2 axis, float own) {
     const ivec2 neighbors[4] = ivec2[4](ivec2(-1, 0), ivec2(1, 0),
                                           ivec2(0, -1), ivec2(0, 1));
     float sum = 0.0;
-    for (uint i = 0u; i < 4u; ++i)
-        sum += viscous_neighbor(p + neighbors[i], axis, own) - own;
-    return min(0.075 * uintBitsToFloat(params.step_scale_bits), 0.24) * sum;
+    float wall_contacts = 0.0;
+    for (uint i = 0u; i < 4u; ++i) {
+        float wall = 0.0;
+        sum += viscous_neighbor(p + neighbors[i], axis, own, wall) - own;
+        wall_contacts += wall;
+    }
+    float ticks = uintBitsToFloat(params.step_scale_bits);
+    return min(0.03 * ticks, 0.12) * sum -
+           min(0.05 * ticks, 0.2) * wall_contacts * own;
 }
 
 float advected_vertical(ivec2 p) {

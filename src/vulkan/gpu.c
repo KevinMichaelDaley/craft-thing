@@ -250,7 +250,7 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     gpu->display_zoom = 1;
     gpu->fluid_interval = 1;
     gpu->fluid_step_scale = 1.0f;
-    gpu->fluid_velocity_retained = 0.99f;
+    gpu->fluid_velocity_retained = 0.997f;
     VkDeviceSize bytes = (VkDeviceSize)width * height * 4;
     for (uint32_t i = 0; i < gpu->slot_capacity; ++i) gpu->slot_page[i] = UINT32_MAX;
     if (parent) {

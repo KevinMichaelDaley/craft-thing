@@ -795,7 +795,7 @@ static void test_cropped_viewport_edges_are_internal_fluid_faces(void) {
     PASS();
 }
 
-static void test_projected_water_velocity_has_global_decay(void) {
+static void test_projected_water_velocity_has_tiny_final_decay(void) {
     char err[256] = {0};
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     ASSERT_TRUE(chunk != NULL);
@@ -812,7 +812,7 @@ static void test_projected_water_velocity_has_global_decay(void) {
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
     float velocity = chunk->face_velocity[30 * DC_CHUNK_SIDE + 30].x;
     printf("projected wet-face x velocity after one step: %.6f\n", velocity);
-    ASSERT_TRUE(velocity > 0.979f && velocity < 0.981f);
+    ASSERT_TRUE(velocity > 0.986f && velocity < 0.988f);
     dc_gpu_destroy(gpu);
     free(chunk);
     PASS();
@@ -1074,7 +1074,7 @@ int main(void) {
     RUN(test_camera_shift_rebases_velocity_on_gpu);
     RUN(test_chunk_velocity_survives_gpu_round_trip);
     RUN(test_cropped_viewport_edges_are_internal_fluid_faces);
-    RUN(test_projected_water_velocity_has_global_decay);
+    RUN(test_projected_water_velocity_has_tiny_final_decay);
     RUN(test_no_slip_wall_damps_tangential_water_more_than_interior);
     RUN(test_fluid_interval_counts_only_scheduled_updates);
     RUN(test_pressure_budget_can_change_per_gpu_context);

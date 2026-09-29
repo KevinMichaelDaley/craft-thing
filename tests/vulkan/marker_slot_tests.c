@@ -36,7 +36,7 @@ static void test_marker_pool_in_slot_above_sixty_four_stays_bounded(void) {
     printf("slot 64 marker count first=%u final=%u\n", first_count, final_count);
     ASSERT_TRUE(first_count > 0u);
     ASSERT_TRUE(final_count <= DC_MARKERS_PER_CHUNK);
-    ASSERT_TRUE(final_count < first_count * 2u);
+    ASSERT_TRUE(final_count < DC_MARKERS_PER_CHUNK / 2u);
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 64u, chunk, err, sizeof(err)));
     ASSERT_TRUE(chunk->marker_count <= DC_MARKERS_PER_CHUNK);
     uint32_t saved_count = chunk->marker_count;

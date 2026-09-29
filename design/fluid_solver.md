@@ -19,7 +19,16 @@ velocity supplies the requested flux, while source volume and destination
 capacity determine the accepted amount.
 
 Before transport, a GPU predictor backtraces vertical face velocity through the
-previous velocity field and adds gravity on open downward faces. It initializes
+previous velocity field, adds gravity on open downward faces, and diffuses both
+face-velocity components with a kinematic-viscosity coefficient of 0.03 cell²
+per world tick. A snapshot of the previous face field makes the four-neighbor
+Laplacian race-free without another GPU dispatch. At a solid wall, the missing
+neighbor uses the opposite tangential velocity as a no-slip ghost value; at a
+dry open face it uses the same value for a zero-shear free surface. An adjacent
+solid also adds 0.05 wall friction per world tick. A missing workspace page
+uses zero shear rather than masquerading as a stone wall. The explicit viscosity
+coefficient is capped at 0.12 for longer offscreen steps. Viscosity precedes
+the pressure solve so its divergence is projected out. The predictor initializes
 pressure from the local hydrostatic water-column head. A cell-centered pressure
 field then solves the discrete
 Poisson equation using 20 red-black SOR sweeps with relaxation 1.5; each color
@@ -37,10 +46,10 @@ also closes the face for this substep; mass remains in the source cell. The
 current solver reads resident neighbors through the page table rather than a
 separate halo refresh. At the end of the
 fluid stage, the final mass layer is written to the chunk atlas and dirty slots
-are recorded for persistence. The final face-velocity writeback applies a
-0.997 multiplier per unit solve time after flux and marker correction, dissipating a small amount
-of residual kinetic energy without changing the mass budget or the marker
-comparison within that tick. The granular stage reads this finalized state.
+are recorded for persistence. The final face-velocity writeback retains 0.997
+of velocity per world tick in visible workspaces and 0.92 offscreen, without
+changing the mass budget or the marker comparison within that tick. The
+granular stage reads this finalized state.
 
 ## Sparse markers
 
