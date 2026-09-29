@@ -795,7 +795,7 @@ static void test_cropped_viewport_edges_are_internal_fluid_faces(void) {
     PASS();
 }
 
-static void test_projected_water_velocity_has_tiny_final_decay(void) {
+static void test_projected_water_velocity_has_global_decay(void) {
     char err[256] = {0};
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     ASSERT_TRUE(chunk != NULL);
@@ -812,7 +812,42 @@ static void test_projected_water_velocity_has_tiny_final_decay(void) {
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
     float velocity = chunk->face_velocity[30 * DC_CHUNK_SIDE + 30].x;
     printf("projected wet-face x velocity after one step: %.6f\n", velocity);
-    ASSERT_TRUE(velocity > 0.986f && velocity < 0.988f);
+    ASSERT_TRUE(velocity > 0.979f && velocity < 0.981f);
+    dc_gpu_destroy(gpu);
+    free(chunk);
+    PASS();
+}
+
+static void test_no_slip_wall_damps_tangential_water_more_than_interior(void) {
+    char err[256] = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    for (uint32_t y = 0; y < DC_CHUNK_SIDE - 1u; ++y)
+        for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x) {
+            uint32_t i = y * DC_CHUNK_SIDE + x;
+            chunk->cells[i].fluid_mass = DC_FLUID_FULL;
+            chunk->face_velocity[i].x = 1.0f;
+        }
+    for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x)
+        chunk->cells[(DC_CHUNK_SIDE - 1u) * DC_CHUNK_SIDE + x].material =
+            DC_MATERIAL_STONE;
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
+    float interior = chunk->face_velocity[30 * DC_CHUNK_SIDE + 30].x;
+    float wall = chunk->face_velocity[62 * DC_CHUNK_SIDE + 30].x;
+    printf("no-slip tangential velocity: interior %.4f, wall %.4f\n",
+           interior, wall);
+    ASSERT_TRUE(interior > 0.8f);
+    ASSERT_TRUE(wall >= 0.0f && wall < interior * 0.9f);
+    uint64_t mass = 0;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
+        mass += chunk->cells[i].fluid_mass;
+    ASSERT_EQ(mass, (uint64_t)63u * 64u * DC_FLUID_FULL);
     dc_gpu_destroy(gpu);
     free(chunk);
     PASS();
@@ -1039,7 +1074,8 @@ int main(void) {
     RUN(test_camera_shift_rebases_velocity_on_gpu);
     RUN(test_chunk_velocity_survives_gpu_round_trip);
     RUN(test_cropped_viewport_edges_are_internal_fluid_faces);
-    RUN(test_projected_water_velocity_has_tiny_final_decay);
+    RUN(test_projected_water_velocity_has_global_decay);
+    RUN(test_no_slip_wall_damps_tangential_water_more_than_interior);
     RUN(test_fluid_interval_counts_only_scheduled_updates);
     RUN(test_pressure_budget_can_change_per_gpu_context);
     RUN(test_six_fluid_phases_match_one_uncoupled_update);
