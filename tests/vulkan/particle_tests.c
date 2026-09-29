@@ -1103,7 +1103,7 @@ static void test_mud_mound_flows_farther_than_dry_dirt(void) {
     printf("mud largest connected body: %u particles, %u flagged mud\n",
            largest, muddy_count);
     ASSERT_TRUE(wet_span >= dry_span + 3);
-    ASSERT_TRUE(largest >= 40u);
+    ASSERT_TRUE(largest >= 56u);
     dc_gpu_destroy(gpu);
     free(dry); free(wet);
     PASS();
