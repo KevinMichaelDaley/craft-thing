@@ -43,6 +43,7 @@ const float VELOCITY_DAMPING = 0.999;
 const float WATER_DRAG = 0.5;
 const uint MODE_WATER_FEEDBACK = 6u;
 const uint MODE_MOISTURE = 7u;
+const uint MODE_VISCOSITY = 8u;
 const uint MOISTURE_MASK = 0x00ffffffu;
 const uint MUD_FLAG = 0x80000000u;
 const uint FRAGMENT_FLAG = 0x40000000u;
@@ -212,6 +213,7 @@ void p2g(ivec2 node) {
                 Particle particle;
                 if (!load_particle(owner, layer, particle)) continue;
                 bool mud = particle_is_mud(particle);
+                // Mud at cell centers must share grid nodes with adjacent mud.
                 vec2 node_position = vec2(node) + vec2(mud ? 0.0 : 0.5);
                 vec2 delta = node_position - position_of(particle, owner);
                 float weight = kernel(delta);
@@ -276,6 +278,7 @@ void mud_viscosity(ivec2 node) {
                 MUD_VISCOSITY_CONSISTENCY *
                 inversesqrt(shear_rate + MUD_VISCOSITY_REGULARIZER);
             float mud_fraction = min(mud_mass / mass, other_mud / other_mass);
+            // The symmetric face coefficient conserves grid momentum.
             float stable = min(mass, other_mass) / (4.0 * dt);
             force += min(viscosity, stable) * mud_fraction * difference;
         }
@@ -561,7 +564,7 @@ void main() {
     if (!in_grid(cell)) return;
     if (params.mode == MODE_MOISTURE) { exchange_moisture(cell); return; }
     if (params.mode == 0u) { p2g(cell); return; }
-    if (params.mode == 8u) { mud_viscosity(cell); return; }
+    if (params.mode == MODE_VISCOSITY) { mud_viscosity(cell); return; }
     if (params.mode == 1u) { solve_grid(cell); return; }
     if (params.mode == MODE_WATER_FEEDBACK) { apply_feedback(cell); return; }
     if (page_at(cell) == 0u) return;

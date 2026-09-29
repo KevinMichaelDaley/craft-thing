@@ -144,3 +144,17 @@ and chunk crossings; a separate one-tick test checks drying hysteresis.
 `--demo-mud` leaves a wet mound and water on a shelf for interactive painting;
 `--smoke-mud` captures the initial and two-second states and reports the MPM
 GPU timestamp. The half-native test target runs the same smoke at 960×540.
+
+Mud now shares grid nodes with neighboring mud even when particles sit exactly
+at cell centers. A GPU viscosity pass before the grid solve transfers momentum
+between neighboring mud-loaded nodes through equal-and-opposite face forces.
+Its regularized shear-thinning viscosity is
+`yield / sqrt(rate² + epsilon²) + consistency / sqrt(rate + epsilon)`,
+inspired by the [Herschel–Bulkley yield and power-law terms](https://www.hec.usace.army.mil/confluence/rasdocs/rasmuddebris/non-newtonian-user-manual/user-inputs-and-model-parameters/hershel-bulkley-parameters).
+Each face coefficient is bounded by the explicit timestep stability limit;
+fast-shearing mud slides while slow-shearing mud resists separation. The
+component pass treats diagonally touching dirt cells as connected, so a
+one-pixel diagonal turn does not immediately turn mud into individual grains.
+The 120-tick test now requires at least 56 of 64 wet particles in one connected
+body while checking spread and exact mass. The interactive two-second smoke
+requires at least 52 particles still classified as mud at both viewport scales.

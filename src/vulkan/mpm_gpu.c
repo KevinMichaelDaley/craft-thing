@@ -4,7 +4,8 @@
 #include "gpu_internal.h"
 
 enum { DC_MPM_SUBSTEPS = 2, DC_MPM_MODES = 6,
-       DC_MPM_WATER_FEEDBACK_MODE = 6, DC_MPM_MOISTURE_MODE = 7 };
+       DC_MPM_WATER_FEEDBACK_MODE = 6, DC_MPM_MOISTURE_MODE = 7,
+       DC_MPM_VISCOSITY_MODE = 8 };
 
 static uint32_t component_round_limit(uint32_t width, uint32_t height) {
     uint64_t cells = (uint64_t)width * height;
@@ -262,7 +263,7 @@ void dc_gpu_record_mpm(dc_gpu_t *gpu) {
                         VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
                         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
             if (mode == 0u) {
-                push[2] = 8u;
+                push[2] = DC_MPM_VISCOSITY_MODE;
                 vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                     VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
                 vkCmdDispatchIndirect(gpu->command, gpu->mpm_activity_buffer, 0);

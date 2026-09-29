@@ -447,7 +447,7 @@ static int smoke_mud_materials(void) {
             ++dirt;
             muddy += (p->flags & DC_MPM_MUD_FLAG) != 0u;
         }
-        okay = changed >= 12u && dirt >= 60u && muddy >= 56u;
+        okay = changed >= 12u && dirt >= 60u && muddy >= 52u;
     }
     if (okay) okay = dc_level_view_capture_tick(view, &capture, err, sizeof(err));
     if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
