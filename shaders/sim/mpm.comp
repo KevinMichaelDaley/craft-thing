@@ -54,13 +54,16 @@ const uint ABSORB_PER_TICK = 4096u;
 const uint SAND_ABSORB_PER_TICK = 1024u;
 const uint DRY_PER_TICK = 64u;
 const uint MUD_COMPONENT_MIN = 8u;
-const float MUD_BULK_MODULUS = 1.2;
+const float MUD_BULK_MODULUS = 0.6;
 const float MUD_TENSION_MODULUS = 3.0;
 const float MUD_DRY_SHEAR_YIELD = 0.3;
 const float MUD_WET_SHEAR_YIELD = 0.18;
 const float MUD_DRY_ELASTIC_SHEAR = 0.2;
 const float MUD_WET_ELASTIC_SHEAR = 0.12;
 const float MUD_PLASTIC_RELAXATION = 0.2;
+const float MUD_VISCOSITY_YIELD = 0.12;
+const float MUD_VISCOSITY_CONSISTENCY = 0.14;
+const float MUD_VISCOSITY_REGULARIZER = 0.02;
 
 float time_scale() {
     return uintBitsToFloat(params.unused2);
@@ -201,13 +204,15 @@ void p2g(ivec2 node) {
     uint index = uint(node.y) * params.width + uint(node.x);
     vec4 total = vec4(0.0);
     vec2 force = vec2(0.0);
-    vec2 node_position = vec2(node) + vec2(0.5);
+    float mud_mass = 0.0;
     for (int dy = -1; dy <= 1; ++dy) {
         for (int dx = -1; dx <= 1; ++dx) {
             ivec2 owner = node + ivec2(dx, dy);
             for (uint layer = 0u; layer < 2u; ++layer) {
                 Particle particle;
                 if (!load_particle(owner, layer, particle)) continue;
+                bool mud = particle_is_mud(particle);
+                vec2 node_position = vec2(node) + vec2(mud ? 0.0 : 0.5);
                 vec2 delta = node_position - position_of(particle, owner);
                 float weight = kernel(delta);
                 if (weight <= 0.0) continue;
@@ -216,9 +221,9 @@ void p2g(ivec2 node) {
                 total.x += weight * mass;
                 total.yz += weight * mass * velocity;
                 total.w += weight * mass / grain_density(particle.material);
+                if (mud) mud_mass += weight * mass;
                 float jacobian = clamp(particle.f00 * particle.f11 -
                                        particle.f01 * particle.f10, 0.5, 1.5);
-                bool mud = particle_is_mud(particle);
                 bool fragment = particle.material == 4u &&
                                 (particle.flags & FRAGMENT_FLAG) != 0u;
                 float bulk = mud ? MUD_BULK_MODULUS : particle.material == 5u ? 8.0 :
@@ -243,7 +248,39 @@ void p2g(ivec2 node) {
         }
     }
     grid[index] = total;
-    grid_force[index] = vec4(force, 0.0, 0.0);
+    grid_force[index] = vec4(force, 0.0, mud_mass);
+}
+
+void mud_viscosity(ivec2 node) {
+    uint index = uint(node.y) * params.width + uint(node.x);
+    float mass = grid[index].x;
+    float mud_mass = grid_force[index].w;
+    vec2 force = vec2(0.0);
+    if (mass > 0.000001 && mud_mass > 0.000001) {
+        vec2 velocity = grid[index].yz / mass;
+        const ivec2 directions[4] = ivec2[4](ivec2(-1, 0), ivec2(1, 0),
+                                             ivec2(0, -1), ivec2(0, 1));
+        float dt = DT * time_scale();
+        for (uint side = 0u; side < 4u; ++side) {
+            ivec2 neighbor = node + directions[side];
+            if (!in_grid(neighbor)) continue;
+            uint other = uint(neighbor.y) * params.width + uint(neighbor.x);
+            float other_mass = grid[other].x;
+            float other_mud = grid_force[other].w;
+            if (other_mass <= 0.000001 || other_mud <= 0.000001) continue;
+            vec2 difference = grid[other].yz / other_mass - velocity;
+            float shear_rate = length(difference);
+            float viscosity = MUD_VISCOSITY_YIELD /
+                sqrt(shear_rate * shear_rate +
+                     MUD_VISCOSITY_REGULARIZER * MUD_VISCOSITY_REGULARIZER) +
+                MUD_VISCOSITY_CONSISTENCY *
+                inversesqrt(shear_rate + MUD_VISCOSITY_REGULARIZER);
+            float mud_fraction = min(mud_mass / mass, other_mud / other_mass);
+            float stable = min(mass, other_mass) / (4.0 * dt);
+            force += min(viscosity, stable) * mud_fraction * difference;
+        }
+    }
+    grid_velocity[index] = force;
 }
 
 void solve_grid(ivec2 node) {
@@ -258,7 +295,8 @@ void solve_grid(ivec2 node) {
             0.5 * (water_at(node) + water_at(node + ivec2(0, 1))));
         float buoyancy = GRAVITY * dt * min(water_at(node), 1.0) *
                          grid[index].w / mass;
-        velocity = grid[index].yz / mass + dt * grid_force[index].xy / mass;
+        velocity = grid[index].yz / mass +
+                   dt * (grid_force[index].xy + grid_velocity[index]) / mass;
         velocity.y += GRAVITY * dt - buoyancy;
         if (water_mass.y > 0.000001)
             feedback.y += mass * buoyancy / water_mass.y;
@@ -353,6 +391,7 @@ void g2p_one(ivec2 owner, uint layer) {
         return;
     }
     vec2 position = position_of(particle, owner);
+    bool mud = particle_is_mud(particle);
     ivec2 base = ivec2(floor(position));
     vec2 velocity = vec2(0.0);
     mat2 gradient = mat2(0.0);
@@ -363,7 +402,7 @@ void g2p_one(ivec2 owner, uint layer) {
             if (!in_grid(node)) continue;
             uint grid_index = uint(node.y) * params.width + uint(node.x);
             if (grid[grid_index].x <= 0.000001) continue;
-            vec2 delta = vec2(node) + vec2(0.5) - position;
+            vec2 delta = vec2(node) + vec2(mud ? 0.0 : 0.5) - position;
             float weight = kernel(delta);
             if (weight <= 0.0) continue;
             vec2 node_velocity = grid_velocity[grid_index];
@@ -379,7 +418,6 @@ void g2p_one(ivec2 owner, uint layer) {
                              particle.f01, particle.f11);
     float dt = DT * time_scale();
     deformation = (mat2(1.0) + dt * gradient) * deformation;
-    bool mud = particle_is_mud(particle);
     if (mud) {
         float wetness = clamp(float(particle.flags & MOISTURE_MASK) /
                               float(MOISTURE_CAP), 0.0, 1.0);
@@ -523,6 +561,7 @@ void main() {
     if (!in_grid(cell)) return;
     if (params.mode == MODE_MOISTURE) { exchange_moisture(cell); return; }
     if (params.mode == 0u) { p2g(cell); return; }
+    if (params.mode == 8u) { mud_viscosity(cell); return; }
     if (params.mode == 1u) { solve_grid(cell); return; }
     if (params.mode == MODE_WATER_FEEDBACK) { apply_feedback(cell); return; }
     if (page_at(cell) == 0u) return;

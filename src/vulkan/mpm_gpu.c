@@ -261,6 +261,15 @@ void dc_gpu_record_mpm(dc_gpu_t *gpu) {
             mpm_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                         VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
                         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+            if (mode == 0u) {
+                push[2] = 8u;
+                vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+                    VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+                vkCmdDispatchIndirect(gpu->command, gpu->mpm_activity_buffer, 0);
+                mpm_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                            VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+            }
             if (mode == 1u) {
                 push[2] = DC_MPM_WATER_FEEDBACK_MODE;
                 vkCmdPushConstants(gpu->command, gpu->pipeline_layout,

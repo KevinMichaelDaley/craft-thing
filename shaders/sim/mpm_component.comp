@@ -58,8 +58,9 @@ void main() {
         label_b[index] = label_a[index];
     } else if (params.mode == 2u) {
         uint own_root = label_a[index];
-        const ivec2 neighbors[2] = ivec2[2](ivec2(1, 0), ivec2(0, 1));
-        for (uint axis = 0u; axis < 2u; ++axis) {
+        const ivec2 neighbors[4] = ivec2[4](ivec2(1, 0), ivec2(0, 1),
+                                             ivec2(1, 1), ivec2(-1, 1));
+        for (uint axis = 0u; axis < 4u; ++axis) {
             ivec2 other = p + neighbors[axis];
             if (!dirt_at(other)) continue;
             uint other_root = label_a[index_of(other)];
