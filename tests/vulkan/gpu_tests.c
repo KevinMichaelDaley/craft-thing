@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -366,6 +367,51 @@ static void test_reverse_face_momentum_crosses_gpu_workspace_seam(void) {
     PASS();
 }
 
+static void test_offscreen_fluid_damping_reduces_velocity_without_losing_water(void) {
+    char err[256] = {0};
+    dc_gpu_t *visible = NULL, *offscreen = NULL;
+    dc_chunk_t *initial = calloc(1, sizeof(*initial));
+    dc_chunk_t *visible_out = calloc(1, sizeof(*visible_out));
+    dc_chunk_t *offscreen_out = calloc(1, sizeof(*offscreen_out));
+    ASSERT_TRUE(initial && visible_out && offscreen_out);
+    for (uint32_t y = 16; y < 32; ++y)
+        for (uint32_t x = 16; x < 32; ++x)
+            initial->cells[y * DC_CHUNK_SIDE + x].fluid_mass = DC_FLUID_FULL;
+    initial->face_velocity[20 * DC_CHUNK_SIDE + 20].x = 3.0f;
+    ASSERT_TRUE(dc_gpu_create(&visible, 64, 64,
+                              "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create(&offscreen, 64, 64,
+                              "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(visible, 0, initial, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(offscreen, 0, initial, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(visible, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(offscreen, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_fluid_velocity_damping(offscreen, 0.92f));
+    ASSERT_TRUE(dc_gpu_set_tick_seconds(visible, 0.05f));
+    ASSERT_TRUE(dc_gpu_set_tick_seconds(offscreen, 0.05f));
+    ASSERT_TRUE(dc_gpu_tick_step(visible, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_step(offscreen, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(visible, 0, visible_out, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(offscreen, 0, offscreen_out, err, sizeof(err)));
+    double visible_speed = 0.0, offscreen_speed = 0.0;
+    uint64_t visible_mass = 0, offscreen_mass = 0;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        visible_speed += fabsf(visible_out->face_velocity[i].x) +
+                         fabsf(visible_out->face_velocity[i].y);
+        offscreen_speed += fabsf(offscreen_out->face_velocity[i].x) +
+                           fabsf(offscreen_out->face_velocity[i].y);
+        visible_mass += visible_out->cells[i].fluid_mass;
+        offscreen_mass += offscreen_out->cells[i].fluid_mass;
+    }
+    ASSERT_EQ(visible_mass, 256u * (uint64_t)DC_FLUID_FULL);
+    ASSERT_EQ(offscreen_mass, visible_mass);
+    ASSERT_TRUE(visible_speed > 1.0);
+    ASSERT_TRUE(offscreen_speed < visible_speed * 0.8);
+    dc_gpu_destroy(visible); dc_gpu_destroy(offscreen);
+    free(initial); free(visible_out); free(offscreen_out);
+    PASS();
+}
+
 static void test_workspace_surface_marker_follows_crossing_water(void) {
     char err[256] = {0};
     dc_gpu_t *upper = NULL, *lower = NULL;
@@ -690,6 +736,7 @@ int main(void) {
     RUN(test_deep_water_keeps_advecting_across_workspace_seam);
     RUN(test_vertical_deep_water_matches_monolithic_basin);
     RUN(test_reverse_face_momentum_crosses_gpu_workspace_seam);
+    RUN(test_offscreen_fluid_damping_reduces_velocity_without_losing_water);
     RUN(test_workspace_surface_marker_follows_crossing_water);
     RUN(test_gpu_brush_updates_only_covered_cells);
     RUN(test_chunk_page_mapping_and_gpu_material_edit);

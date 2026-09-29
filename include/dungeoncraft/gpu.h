@@ -205,6 +205,8 @@ bool dc_gpu_set_fluid_interval(dc_gpu_t *gpu, uint32_t interval);
 /** Set 4–32 red-black pressure sweeps between completed fluid solves. */
 bool dc_gpu_set_pressure_sweeps(dc_gpu_t *gpu, uint32_t sweeps);
 bool dc_gpu_set_tick_seconds(dc_gpu_t *gpu, float seconds);
+/** Set the fraction of fluid velocity retained per 1/60-second world tick. */
+bool dc_gpu_set_fluid_velocity_damping(dc_gpu_t *gpu, float retained);
 
 /** Read the completed body state for tests or persistence. */
 bool dc_gpu_read_body(dc_gpu_t *gpu, dc_gpu_body_t *body,
