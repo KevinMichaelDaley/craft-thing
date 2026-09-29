@@ -9,6 +9,7 @@ layout(set = 0, binding = 11, std430) buffer PressureA { float pressure_a[]; };
 layout(set = 0, binding = 17, std430) readonly buffer SlotPages { uint slot_pages[]; };
 layout(set = 0, binding = 9, std430) buffer HydroHead { uint hydro_head[]; };
 layout(set = 0, binding = 8, std430) buffer PreviousVerticalVelocity { uint previous_vertical_velocity[]; };
+layout(set = 0, binding = 31, std430) buffer PreviousHorizontalVelocity { uint previous_horizontal_velocity[]; };
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -66,6 +67,28 @@ float previous_vertical_at(ivec2 p) {
     return uintBitsToFloat(previous_vertical_velocity[index_of(p)]);
 }
 
+float previous_horizontal_at(ivec2 p) {
+    if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
+        p.y >= int(params.height)) return 0.0;
+    return uintBitsToFloat(previous_horizontal_velocity[index_of(p)]);
+}
+
+float viscous_neighbor(ivec2 p, ivec2 axis, float own) {
+    bool open_face = open_cell(p) && open_cell(p + axis);
+    if (!open_face) return -own;
+    if (!wet(p) && !wet(p + axis)) return own;
+    return axis.x != 0 ? previous_horizontal_at(p) : previous_vertical_at(p);
+}
+
+float viscous_delta(ivec2 p, ivec2 axis, float own) {
+    const ivec2 neighbors[4] = ivec2[4](ivec2(-1, 0), ivec2(1, 0),
+                                          ivec2(0, -1), ivec2(0, 1));
+    float sum = 0.0;
+    for (uint i = 0u; i < 4u; ++i)
+        sum += viscous_neighbor(p + neighbors[i], axis, own) - own;
+    return min(0.075 * uintBitsToFloat(params.step_scale_bits), 0.24) * sum;
+}
+
 float advected_vertical(ivec2 p) {
     float transport = 0.5 * (previous_vertical_at(p + ivec2(0, -1)) +
                              previous_vertical_at(p + ivec2(0, 1)));
@@ -90,6 +113,7 @@ void main() {
     uint index = index_of(p);
     if (params.mode == 5u) {
         previous_vertical_velocity[index] = floatBitsToUint(face_velocity[index].y);
+        previous_horizontal_velocity[index] = floatBitsToUint(face_velocity[index].x);
     } else if (params.mode == 4u) {
         if (p.y != 0) return;
         uint head = 0u;
@@ -107,11 +131,13 @@ void main() {
             predicted.x = old_velocity.x * pow(0.99, uintBitsToFloat(params.step_scale_bits)) +
                 0.05 * uintBitsToFloat(params.step_scale_bits) *
                 (float(int(hydro_head[index]) - int(hydro_head[index_of(right)])) /
-                         65536.0);
+                         65536.0) +
+                viscous_delta(p, ivec2(1, 0), previous_horizontal_at(p));
         if (open_cell(p) && open_cell(below) && (wet(p) || wet(below))) {
             predicted.y = advected_vertical(p) *
                 pow(0.99, uintBitsToFloat(params.step_scale_bits)) +
-                0.5 * uintBitsToFloat(params.step_scale_bits);
+                0.5 * uintBitsToFloat(params.step_scale_bits) +
+                viscous_delta(p, ivec2(0, 1), previous_vertical_at(p));
         }
         face_velocity[index] = predicted;
         pressure_a[index] = wet(p) ?
