@@ -128,3 +128,19 @@ generated terrain. `--smoke-sifting` captures
 `build/screenshots/sifting_after_1s.bmp`, then checks material counts, walls,
 and the mean sand/gravel depth gap after 60 GPU ticks. `--demo-sifting` leaves
 the same scene interactive.
+
+Sufficiently wet connected dirt uses a viscoplastic MPM response. The particle
+Jacobian supplies a signed pressure: compression pushes outward, and modest
+tension holds the mud together as it stretches. Shear stress has a
+moisture-dependent yield limit; the deformation gradient relaxes toward that
+limit after each grid-to-particle transfer, allowing plastic flow under
+sustained load. Mud particles exchange momentum through grid stress instead of
+mud-to-mud grain repulsion; contacts with sand and gravel remain. The moisture
+and component-label passes still decide when dirt enters or exits the mud
+state, including separate entry and exit thresholds. All constitutive and
+transition work stays on the GPU. The 120-tick mound test checks spread against
+dry dirt, connected particle count, exact dirt and bound-plus-free water mass,
+and chunk crossings; a separate one-tick test checks drying hysteresis.
+`--demo-mud` leaves a wet mound and water on a shelf for interactive painting;
+`--smoke-mud` captures the initial and two-second states and reports the MPM
+GPU timestamp. The half-native test target runs the same smoke at 960×540.

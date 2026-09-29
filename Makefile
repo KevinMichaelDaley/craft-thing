@@ -36,6 +36,7 @@ half_native: build/dungeoncraft_half_native
 test_half_native: build/half_native_config_tests build/dungeoncraft_half_native
 	./build/half_native_config_tests
 	./build/dungeoncraft_half_native --smoke-native
+	./build/dungeoncraft_half_native --smoke-mud
 
 .PHONY: test_half_native_spray
 test_half_native_spray: build/dungeoncraft_half_native

@@ -411,9 +411,11 @@ static int smoke_mud_materials(void) {
     uint32_t *before = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*before));
     uint32_t *after = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*after));
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    dc_level_view_status_t status = {0};
     bool okay = before && after && chunk &&
         dc_level_view_set_spring_enabled(view, false) &&
         setup_mud_materials(view, err, sizeof(err)) &&
+        dc_level_view_status(view, &status) &&
         dc_level_view_tick(view, err, sizeof(err)) &&
         dc_level_view_pixels(view, before, VIEW_WIDTH * VIEW_HEIGHT, err, sizeof(err));
     mkdir("build/screenshots", 0777);
@@ -428,9 +430,12 @@ static int smoke_mud_materials(void) {
                      dc_level_view_pixels(view, after, VIEW_WIDTH * VIEW_HEIGHT,
                                           err, sizeof(err)) &&
                      save_level_bmp("build/screenshots/mud_after_2s.bmp", after) &&
-                     dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
+                     dc_level_view_chunk(view,
+                                         (dc_chunk_coord_t){status.origin.x + 1,
+                                                            status.origin.y},
                                          chunk, err, sizeof(err));
     uint32_t changed = 0, muddy = 0, dirt = 0;
+    dc_gpu_tick_capture_t capture = {0};
     if (okay) {
         for (uint32_t y = 36; y < 48; ++y)
             for (uint32_t x = 72; x < 124; ++x)
@@ -444,6 +449,7 @@ static int smoke_mud_materials(void) {
         }
         okay = changed >= 12u && dirt >= 60u && muddy >= 8u;
     }
+    if (okay) okay = dc_level_view_capture_tick(view, &capture, err, sizeof(err));
     if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
     free(before); free(after); free(chunk);
     if (!okay) {
@@ -452,7 +458,8 @@ static int smoke_mud_materials(void) {
         return 1;
     }
     printf("Mud screenshots: mud_before.bmp and mud_after_2s.bmp "
-           "(%u changed, %u mud, %.2f ticks/s)\n", changed, muddy, tick_rate);
+           "(%u changed, %u mud, %.2f ticks/s, GPU MPM %.3f ms)\n",
+           changed, muddy, tick_rate, capture.stages[2].gpu_ns / 1e6);
     return 0;
 }
 
@@ -551,18 +558,21 @@ static int smoke_coupled_materials(void) {
     uint32_t *before = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*before));
     uint32_t *after = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*after));
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
-    bool okay = before && after && chunk &&
+    dc_chunk_t *right = calloc(1, sizeof(*right));
+    bool okay = before && after && chunk && right &&
         dc_level_view_set_spring_enabled(view, false) &&
         setup_coupled_materials(view, err, sizeof(err)) &&
         dc_level_view_tick(view, err, sizeof(err)) &&
         dc_level_view_pixels(view, before, VIEW_WIDTH * VIEW_HEIGHT, err, sizeof(err)) &&
         dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0}, chunk, err, sizeof(err));
     uint32_t dirt_id = 0, sand_id = 0, gravel_id = 0;
+    uint32_t source_seed = 0;
     uint32_t dirt_floor_samples = 0;
     if (okay) {
         dirt_id = chunk->particles[5 * DC_CHUNK_SIDE + 40].id_lo;
         sand_id = chunk->particles[5 * DC_CHUNK_SIDE + 50].id_lo;
         gravel_id = chunk->particles[5 * DC_CHUNK_SIDE + 54].id_lo;
+        source_seed = chunk->particles[5 * DC_CHUNK_SIDE + 50].id_hi;
         for (uint32_t x = 30; x < 64; x += 8)
             for (uint32_t y = 16; y < 60; ++y) {
                 uint16_t material = chunk->cells[y * DC_CHUNK_SIDE + x].material;
@@ -581,26 +591,31 @@ static int smoke_coupled_materials(void) {
                                           err, sizeof(err)) &&
                      save_level_bmp("build/screenshots/coupled_after_1s.bmp", after) &&
                      dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
-                                         chunk, err, sizeof(err));
+                                         chunk, err, sizeof(err)) &&
+                     dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
+                                         right, err, sizeof(err));
     uint32_t moved = 0, muddy = 0, fragmented = 0, changed = 0;
     if (okay) {
         for (uint32_t y = 3; y < 40; ++y)
             for (uint32_t x = 35; x < 108; ++x)
                 changed += before[y * VIEW_WIDTH + x] != after[y * VIEW_WIDTH + x];
-        for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i) {
-            dc_mpm_particle_t *particle = &chunk->particles[i];
+        for (uint32_t i = 0; i < 2u * DC_MPM_PARTICLES_PER_CHUNK; ++i) {
+            dc_mpm_particle_t *particle = i < DC_MPM_PARTICLES_PER_CHUNK ?
+                &chunk->particles[i] : &right->particles[i - DC_MPM_PARTICLES_PER_CHUNK];
             if (!particle->mass_fp) continue;
             if (particle->material == DC_MATERIAL_DIRT &&
                 (particle->flags & DC_MPM_MUD_FLAG) != 0u) ++muddy;
-            if (particle->id_lo == dirt_id && particle->material == DC_MATERIAL_DIRT &&
+            if (particle->id_hi == source_seed && particle->id_lo == dirt_id &&
+                particle->material == DC_MATERIAL_DIRT &&
                 (particle->flags & DC_MPM_FRAGMENT_FLAG) != 0u) ++fragmented;
-            if ((particle->id_lo == sand_id || particle->id_lo == gravel_id) &&
+            if (particle->id_hi == source_seed &&
+                (particle->id_lo == sand_id || particle->id_lo == gravel_id) &&
                 particle->y_fp > 7 * (int32_t)DC_FLUID_FULL) ++moved;
         }
         okay = changed >= 60 && muddy >= 8u && fragmented == 1u && moved == 2u;
     }
     if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
-    free(before); free(after); free(chunk);
+    free(before); free(after); free(chunk); free(right);
     if (!okay) {
         fprintf(stderr, "Coupled screenshot smoke failed (%u changed, %u mud, %u fragments, %u moved, %u dirt floor): %s\n",
                 changed, muddy, fragmented, moved, dirt_floor_samples, err);
