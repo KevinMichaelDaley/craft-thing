@@ -253,6 +253,26 @@ static void test_deep_water_keeps_advecting_across_workspace_seam(void) {
            (double)right_mass / DC_FLUID_FULL,
            (double)mono_right_mass / DC_FLUID_FULL,
            (double)beyond / DC_FLUID_FULL);
+    double split_divergence = 0.0, monolithic_divergence = 0.0;
+    for (uint32_t y = 36; y < 47; ++y) {
+        uint32_t first = y * DC_CHUNK_SIDE + 63u;
+        uint32_t second = y * DC_CHUNK_SIDE;
+        float split_face = left->face_velocity[first].x;
+        float mono_face = mono_left->face_velocity[first].x;
+        float split_left = split_face - left->face_velocity[first - 1u].x +
+            left->face_velocity[first].y - left->face_velocity[first - 64u].y;
+        float split_right = right->face_velocity[second].x - split_face +
+            right->face_velocity[second].y - right->face_velocity[second - 64u].y;
+        float mono_left_div = mono_face - mono_left->face_velocity[first - 1u].x +
+            mono_left->face_velocity[first].y - mono_left->face_velocity[first - 64u].y;
+        float mono_right_div = mono_right->face_velocity[second].x - mono_face +
+            mono_right->face_velocity[second].y - mono_right->face_velocity[second - 64u].y;
+        split_divergence += fabsf(split_left) + fabsf(split_right);
+        monolithic_divergence += fabsf(mono_left_div) + fabsf(mono_right_div);
+    }
+    printf("deep seam divergence split %.4f mono %.4f\n",
+           split_divergence, monolithic_divergence);
+    ASSERT_TRUE(split_divergence <= monolithic_divergence * 2.0 + 0.1);
     ASSERT_EQ(total, initial_mass);
     ASSERT_TRUE(beyond >= 12u * (uint64_t)DC_FLUID_FULL);
     uint64_t distribution_error = right_mass > mono_right_mass ?
