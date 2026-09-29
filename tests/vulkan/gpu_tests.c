@@ -190,6 +190,80 @@ static void test_workspace_water_reaches_cells_allowed_by_velocity(void) {
     PASS();
 }
 
+static void test_deep_water_keeps_advecting_across_workspace_seam(void) {
+    char err[256] = {0};
+    dc_gpu_t *left_gpu = NULL, *right_gpu = NULL, *mono_gpu = NULL;
+    dc_chunk_t *left = calloc(1, sizeof(*left));
+    dc_chunk_t *right = calloc(1, sizeof(*right));
+    dc_chunk_t *mono_left = calloc(1, sizeof(*mono_left));
+    dc_chunk_t *mono_right = calloc(1, sizeof(*mono_right));
+    ASSERT_TRUE(left && right && mono_left && mono_right);
+    right->coord.x = 1;
+    for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x) {
+        left->cells[47 * DC_CHUNK_SIDE + x].material = DC_MATERIAL_STONE;
+        right->cells[47 * DC_CHUNK_SIDE + x].material = DC_MATERIAL_STONE;
+    }
+    for (uint32_t y = 35; y < 47; ++y) {
+        for (uint32_t x = 44; x < DC_CHUNK_SIDE; ++x)
+            left->cells[y * DC_CHUNK_SIDE + x].fluid_mass = DC_FLUID_FULL;
+        for (uint32_t x = 0; x < 4; ++x)
+            right->cells[y * DC_CHUNK_SIDE + x].fluid_mass = DC_FLUID_FULL;
+    }
+    memcpy(mono_left, left, sizeof(*left));
+    memcpy(mono_right, right, sizeof(*right));
+    const uint64_t initial_mass = 288u * (uint64_t)DC_FLUID_FULL;
+    ASSERT_TRUE(dc_gpu_create(&left_gpu, 64, 64,
+                              "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create_shared(&right_gpu, left_gpu, 64, 64,
+                                     "build/shaders/pattern.comp.spv",
+                                     err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(left_gpu, 0, left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(right_gpu, 0, right, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(left_gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(right_gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create(&mono_gpu, 128, 64,
+                              "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(mono_gpu, 0, mono_left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(mono_gpu, 1, mono_right, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(mono_gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(mono_gpu, 1, 0, 1, err, sizeof(err)));
+    dc_gpu_boundary_t boundary = {.main_slot = 0, .other_slot = 0,
+        .main_x = 0, .main_y = 0, .other_x = 0, .other_y = 0,
+        .other_side = 1};
+    for (uint32_t tick = 0; tick < 120; ++tick) {
+        ASSERT_TRUE(dc_gpu_tick_step(left_gpu, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_tick_step(right_gpu, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_tick_step(mono_gpu, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_boundary_exchange(left_gpu, right_gpu, &boundary,
+                                             1, 1.0f, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_gpu_download_chunk(left_gpu, 0, left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(right_gpu, 0, right, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(mono_gpu, 0, mono_left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(mono_gpu, 1, mono_right, err, sizeof(err)));
+    uint64_t total = 0, beyond = 0, right_mass = 0, mono_right_mass = 0;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        total += left->cells[i].fluid_mass + right->cells[i].fluid_mass;
+        right_mass += right->cells[i].fluid_mass;
+        mono_right_mass += mono_right->cells[i].fluid_mass;
+        if (i % DC_CHUNK_SIDE >= 12u) beyond += right->cells[i].fluid_mass;
+    }
+    printf("deep water across seam: split right %.2f, monolithic right %.2f, beyond twelve %.2f cells\n",
+           (double)right_mass / DC_FLUID_FULL,
+           (double)mono_right_mass / DC_FLUID_FULL,
+           (double)beyond / DC_FLUID_FULL);
+    ASSERT_EQ(total, initial_mass);
+    ASSERT_TRUE(beyond >= 12u * (uint64_t)DC_FLUID_FULL);
+    uint64_t distribution_error = right_mass > mono_right_mass ?
+        right_mass - mono_right_mass : mono_right_mass - right_mass;
+    ASSERT_TRUE(distribution_error <= 4u * (uint64_t)DC_FLUID_FULL);
+    dc_gpu_destroy(right_gpu);
+    dc_gpu_destroy(left_gpu);
+    dc_gpu_destroy(mono_gpu);
+    free(left); free(right); free(mono_left); free(mono_right);
+    PASS();
+}
+
 static void test_workspace_surface_marker_follows_crossing_water(void) {
     char err[256] = {0};
     dc_gpu_t *upper = NULL, *lower = NULL;
@@ -511,6 +585,7 @@ int main(void) {
     RUN(test_gpu_wet_edge_masks_are_sparse_and_refresh);
     RUN(test_shared_workspace_boundary_conserves_water_and_grain);
     RUN(test_workspace_water_reaches_cells_allowed_by_velocity);
+    RUN(test_deep_water_keeps_advecting_across_workspace_seam);
     RUN(test_workspace_surface_marker_follows_crossing_water);
     RUN(test_gpu_brush_updates_only_covered_cells);
     RUN(test_chunk_page_mapping_and_gpu_material_edit);
