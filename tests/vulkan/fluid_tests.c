@@ -233,6 +233,81 @@ static bool save_water_capture(dc_gpu_t *gpu, const char *path,
     return okay;
 }
 
+static bool save_tall_water_capture(dc_gpu_t *gpu, const char *path,
+                                    char *err, uint32_t cap) {
+    uint32_t pixels[64u * 128u];
+    if (!dc_gpu_render_chunks(gpu, err, cap) ||
+        !dc_gpu_readback(gpu, pixels, 64u * 128u, err, cap)) return false;
+    FILE *file = fopen(path, "wb");
+    if (!file) return false;
+    bool okay = fprintf(file, "P6\n64 128\n255\n") > 0;
+    for (uint32_t i = 0; i < 64u * 128u && okay; ++i) {
+        uint8_t rgb[3] = { (uint8_t)pixels[i],
+            (uint8_t)(pixels[i] >> 8), (uint8_t)(pixels[i] >> 16) };
+        okay = fwrite(rgb, sizeof(rgb), 1, file) == 1;
+    }
+    if (fclose(file) != 0) okay = false;
+    return okay;
+}
+
+static void test_high_painted_water_falls_as_continuous_column(void) {
+    char err[256] = {0};
+    dc_chunk_t *top = calloc(1, sizeof(*top));
+    dc_chunk_t *bottom = calloc(1, sizeof(*bottom));
+    dc_chunk_t *saved_top = calloc(1, sizeof(*saved_top));
+    dc_chunk_t *saved_bottom = calloc(1, sizeof(*saved_bottom));
+    ASSERT_TRUE(top && bottom && saved_top && saved_bottom);
+    bottom->coord.y = 1;
+    for (uint32_t x = 0; x < 64u; ++x)
+        bottom->cells[46u * 64u + x].material = DC_MATERIAL_STONE;
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 128,
+                              "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, top, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 1, bottom, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 1, 1, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_fluid_interval(gpu, 3u));
+    ASSERT_TRUE(dc_gpu_set_tick_seconds(gpu, 1.0f / 60.0f));
+    mkdir("build/screenshots", 0777);
+    ASSERT_TRUE(save_tall_water_capture(gpu,
+        "build/screenshots/high_painted_water_before.ppm", err, sizeof(err)));
+    for (uint32_t frame = 0; frame < 45u; ++frame) {
+        ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_paint_material(gpu, 32u, 8u, 6u,
+                                          DC_MATERIAL_WATER, err, sizeof(err)));
+    }
+    ASSERT_TRUE(save_tall_water_capture(gpu,
+        "build/screenshots/high_painted_water_after_45_frames.ppm",
+        err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, saved_top, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, saved_bottom, err, sizeof(err)));
+    int first_wet = -1, last_wet = -1, gap = 0, max_gap = 0;
+    int thin_rows = 0;
+    for (uint32_t y = 16u; y < 105u; ++y) {
+        uint64_t row_mass = 0u;
+        const dc_chunk_t *chunk = y < 64u ? saved_top : saved_bottom;
+        for (uint32_t x = 27u; x <= 37u; ++x)
+            row_mass += chunk->cells[(y % 64u) * 64u + x].fluid_mass;
+        if (y >= 20u && y < 55u)
+            if (row_mass < 2u * DC_FLUID_FULL) ++thin_rows;
+        if (row_mass >= DC_FLUID_FULL / 4u) {
+            if (first_wet < 0) first_wet = (int)y;
+            last_wet = (int)y;
+            if (gap > max_gap) max_gap = gap;
+            gap = 0;
+        } else if (first_wet >= 0) ++gap;
+    }
+    printf("high painted water stream rows %d..%d, maximum dry band %d, thin rows %d\n",
+           first_wet, last_wet, max_gap, thin_rows);
+    ASSERT_TRUE(first_wet >= 0 && last_wet >= first_wet + 20);
+    ASSERT_TRUE(max_gap <= 1);
+    ASSERT_TRUE(thin_rows <= 3);
+    dc_gpu_destroy(gpu);
+    free(top); free(bottom); free(saved_top); free(saved_bottom);
+    PASS();
+}
+
 static void test_32_cell_high_river_settles_after_surface_displacement(void) {
     char err[256] = {0};
     dc_chunk_t *left = calloc(1, sizeof(*left));
@@ -1147,6 +1222,7 @@ int main(void) {
     RUN(test_deep_spring_pool_does_not_spray_across_surface);
     RUN(test_supported_water_spreads_sideways_quickly);
     RUN(test_falling_water_is_not_limited_to_one_cell_per_tick);
+    RUN(test_high_painted_water_falls_as_continuous_column);
     RUN(test_water_crosses_vertical_chunk_seam);
     RUN(test_erased_floor_drains_into_lower_chunk);
     RUN(test_still_pool_does_not_spray_above_surface);
