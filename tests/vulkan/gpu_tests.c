@@ -288,6 +288,28 @@ static void test_deep_water_keeps_advecting_across_workspace_seam(void) {
     uint64_t distribution_error = right_mass > mono_right_mass ?
         right_mass - mono_right_mass : mono_right_mass - right_mass;
     ASSERT_TRUE(distribution_error <= 4u * (uint64_t)DC_FLUID_FULL);
+    for (uint32_t tick = 120; tick < 240; ++tick) {
+        ASSERT_TRUE(dc_gpu_tick_step(left_gpu, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_tick_step(right_gpu, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_boundary_exchange(left_gpu, right_gpu, &boundary,
+                                             1, 1.0f, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_gpu_download_chunk(left_gpu, 0, left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(right_gpu, 0, right, err, sizeof(err)));
+    uint64_t late_mass = 0u;
+    double late_left_level = 0.0, late_right_level = 0.0;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
+        late_mass += left->cells[i].fluid_mass + right->cells[i].fluid_mass;
+    for (uint32_t y = 0; y < 47; ++y) {
+        late_left_level += (double)left->cells[y * 64u + 63u].fluid_mass /
+                           DC_FLUID_FULL;
+        late_right_level += (double)right->cells[y * 64u].fluid_mass /
+                            DC_FLUID_FULL;
+    }
+    printf("deep seam levels after 240 ticks: %.3f/%.3f\n",
+           late_left_level, late_right_level);
+    ASSERT_EQ(late_mass, initial_mass);
+    ASSERT_TRUE(fabs(late_left_level - late_right_level) < 1.0);
     dc_gpu_destroy(right_gpu);
     dc_gpu_destroy(left_gpu);
     dc_gpu_destroy(mono_gpu);

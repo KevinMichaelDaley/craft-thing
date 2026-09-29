@@ -57,6 +57,22 @@ of velocity per world tick in visible workspaces and 0.92 offscreen, without
 changing the mass budget or the marker comparison within that tick. The
 granular stage reads this finalized state.
 
+Adjacent GPU workspaces project their own interiors, then the shared boundary
+dispatch joins their predicted face momentum. A 64-lane workgroup solves the
+pressure correction on an eight-cell-wide strip crossing the seam with 32
+red-black SOR sweeps in workgroup memory. Closed faces are excluded from the
+discrete Laplacian; the outer strip edge has zero pressure correction. The
+resulting pressure differences correct normal and tangential face velocities
+on both workspaces before the conservative cross-seam volume transfer. The
+buffers stay on the GPU; readback occurs only in diagnostic tests. In the
+120-tick split basin, seam divergence fell from 3.70 to 0.81 versus 0.42 in
+the monolithic basin, while destination volume differs by 0.04 cells. A damped,
+32-cell-high river settles within 0.2 cells of the monolithic surface on each
+side, preserves exact mass, and has no dry holes in the deep seam region.
+The displaced basin's transient seam surface differs by 1.52 cells at 120
+ticks, then narrows to 0.18 cells at 240 ticks; the camera-pan regression runs
+for 300 ticks and checks that water continues into the offscreen destination.
+
 ## Sparse markers
 
 The first marker pass seeds two massless 16.16 fixed-point markers at each
