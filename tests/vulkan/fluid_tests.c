@@ -848,6 +848,17 @@ static void test_no_slip_wall_damps_tangential_water_more_than_interior(void) {
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
         mass += chunk->cells[i].fluid_mass;
     ASSERT_EQ(mass, (uint64_t)63u * 64u * DC_FLUID_FULL);
+    for (uint32_t tick = 0; tick < 60u; ++tick)
+        ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
+    float settled_wall = chunk->face_velocity[62 * DC_CHUNK_SIDE + 30].x;
+    printf("no-slip wall velocity after one second: %.4f\n", settled_wall);
+    ASSERT_TRUE(settled_wall > -wall * 0.1f &&
+                settled_wall < wall * 0.1f);
+    mass = 0;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
+        mass += chunk->cells[i].fluid_mass;
+    ASSERT_EQ(mass, (uint64_t)63u * 64u * DC_FLUID_FULL);
     dc_gpu_destroy(gpu);
     free(chunk);
     PASS();
