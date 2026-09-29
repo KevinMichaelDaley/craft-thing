@@ -66,27 +66,35 @@ DensitySample material_density(ivec2 p) {
     uvec2 cell = chunk_cells[index];
     uint material = cell.x & 0xffffu;
     float solid = 0.0;
+    float solid_volume = 0.0;
     vec3 solid_color = vec3(0.0);
     if (material == 2u || material == 4u || material == 5u) {
         uint first = (page - 1u) * 8192u + index % 4096u;
         float particle_mass = 0.0;
+        float particle_volume = 0.0;
         for (uint layer = 0u; layer < 2u; ++layer) {
             Particle particle = particles[first + layer * 4096u];
             if (particle.mass_fp == 0u) continue;
             float mass = float(particle.mass_fp) / 65536.0;
+            float density = particle.material == 2u ? 2.65 :
+                            particle.material == 5u ? 2.7 : 1.2;
             solid_color += mass * linear_color(material_color(particle.material,
                                                                particle.flags));
             particle_mass += mass;
+            particle_volume += mass / density;
         }
         if (particle_mass > 0.0) {
             solid = min(particle_mass, 1.0);
+            solid_volume = min(particle_volume, 1.0);
             solid_color /= particle_mass;
         } else {
             solid = 1.0;
+            solid_volume = 1.0;
             solid_color = linear_color(material_color(material, 0u));
         }
     } else if (material != 0u && material != 3u) {
         solid = 1.0;
+        solid_volume = 1.0;
         solid_color = linear_color(material_color(material, 0u));
     }
     float water = min(float(cell.y) / 65536.0, 1.0);
@@ -95,9 +103,11 @@ DensitySample material_density(ivec2 p) {
                                                  uint(p.x)]) / 65536.0, 1.0);
         water = mix(old_water, water, float(params.brush_x >> 8) / 65535.0);
     }
-    density_sample.coverage = water + solid * (1.0 - water);
-    density_sample.premultiplied = water * linear_color(0xffd07030u) +
-                           (1.0 - water) * solid * solid_color;
+    float solid_weight = mix(solid, solid_volume, water);
+    float water_weight = water * (1.0 - solid_volume);
+    density_sample.coverage = solid_weight + water_weight;
+    density_sample.premultiplied = water_weight * linear_color(0xffd07030u) +
+                                   solid_weight * solid_color;
     if (occupancy[uint(p.y) * params.width + uint(p.x)] != 0u) {
         density_sample.coverage = 1.0;
         density_sample.premultiplied = linear_color(0xff30c040u);
