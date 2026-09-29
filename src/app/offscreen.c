@@ -39,10 +39,12 @@ static bool same_coord(dc_chunk_coord_t a, dc_chunk_coord_t b) {
 
 dc_chunk_coord_t dc_offscreen_frontier_origin(dc_chunk_coord_t coord,
                                               dc_chunk_coord_t camera_origin) {
-    if (coord.x < camera_origin.x)
-        coord.x -= OFFSCREEN_TILES_X - HALO_CHUNKS - 1u;
-    if (coord.y < camera_origin.y)
-        coord.y -= OFFSCREEN_TILES_Y - HALO_CHUNKS - 1u;
+    const int64_t left_span = OFFSCREEN_TILES_X - HALO_CHUNKS - 1u;
+    const int64_t top_span = OFFSCREEN_TILES_Y - HALO_CHUNKS - 1u;
+    if (coord.x < camera_origin.x && coord.x >= INT64_MIN + left_span)
+        coord.x -= left_span;
+    if (coord.y < camera_origin.y && coord.y >= INT64_MIN + top_span)
+        coord.y -= top_span;
     return coord;
 }
 

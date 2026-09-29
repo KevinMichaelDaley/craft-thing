@@ -13,7 +13,8 @@
 _Static_assert(DC_GPU_CHUNK_SLOTS >= SIM_CHUNKS_X * SIM_CHUNKS_Y,
                "GPU chunk pool must cover viewport and halo");
 
-enum { OFFSCREEN_CLUSTERS = 4 };
+enum { OFFSCREEN_CLUSTERS = 4, FRONTIER_LOADS_PER_TICK = 4,
+       FRONTIER_CHUNKS = 4 * VIEW_CHUNKS_X };
 #define OFFSCREEN_SAVE_GENERATION (UINT64_C(1) << 63)
 #define OFFSCREEN_LOAD_GENERATION (UINT64_C(1) << 62)
 
@@ -219,12 +220,15 @@ static bool request_cold_offscreen_chunk(dc_level_view_t *view,
 
 static bool schedule_water_frontier(dc_level_view_t *view,
                                     char *err, uint32_t cap) {
-    if (!view->water_frontier_active) return true;
+    if (!view->water_frontier_active ||
+        view->water_frontier_y < view->origin.y - HALO_CHUNKS ||
+        view->water_frontier_y >= view->origin.y + VIEW_CHUNKS_Y + HALO_CHUNKS)
+        return true;
     uint32_t queued = 0;
     int64_t right = view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS;
     int64_t left = view->origin.x - HALO_CHUNKS - 1;
-    for (uint32_t distance = 0; distance < 4u * VIEW_CHUNKS_X &&
-                                queued < 4u; ++distance) {
+    for (uint32_t distance = 0; distance < FRONTIER_CHUNKS &&
+                                queued < FRONTIER_LOADS_PER_TICK; ++distance) {
         dc_chunk_coord_t a = { right + (int64_t)distance,
                                view->water_frontier_y };
         dc_chunk_coord_t b = { left - (int64_t)distance,

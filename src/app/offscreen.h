@@ -13,6 +13,7 @@ typedef bool (*dc_offscreen_save_fn)(void *context, const dc_chunk_t *chunk,
 
 dc_offscreen_t *dc_offscreen_create(dc_gpu_t *parent, dc_chunk_coord_t origin,
                                     char *err, uint32_t cap);
+/** Anchor a new workspace so outward chunks use its full tile span. */
 dc_chunk_coord_t dc_offscreen_frontier_origin(dc_chunk_coord_t coord,
                                               dc_chunk_coord_t camera_origin);
 void dc_offscreen_destroy(dc_offscreen_t *offscreen);
