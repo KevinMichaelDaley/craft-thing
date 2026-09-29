@@ -292,8 +292,8 @@ static void test_32_cell_high_river_settles_after_surface_displacement(void) {
            (double)high_mass[0] / DC_FLUID_FULL,
            (double)high_mass[1] / DC_FLUID_FULL);
     ASSERT_TRUE(mean_vertical[0] > 0.02);
-    ASSERT_TRUE(mean_vertical[1] < 0.08 &&
-                mean_vertical[1] < mean_vertical[0] * 0.35);
+    ASSERT_TRUE(mean_vertical[1] < 0.025 &&
+                mean_vertical[1] < mean_vertical[0] * 0.75);
     ASSERT_TRUE(high_mass[1] < 4u * (uint64_t)DC_FLUID_FULL);
     dc_gpu_destroy(gpu);
     free(left); free(right);

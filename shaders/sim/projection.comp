@@ -175,7 +175,8 @@ void main() {
             }
             if (count > 0.0) value = (sum - divergence(p)) / count;
         }
-        pressure_a[index] = mix(pressure_a[index], value, 1.5);
+        float relaxation = hydro_head[index] >= 13u * 65536u ? 1.9 : 1.5;
+        pressure_a[index] = mix(pressure_a[index], value, relaxation);
     } else if (params.mode == 3u) {
         vec2 result = face_velocity[index];
         ivec2 right = p + ivec2(1, 0);
