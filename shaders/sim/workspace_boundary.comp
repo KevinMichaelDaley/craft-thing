@@ -261,6 +261,7 @@ void main() {
                                   other_velocity[inner_index];
     vec2 outgoing = main_first ? other_velocity[second_index] :
                                   main_velocity[second_index];
+    // Join the one-sided projected face momenta before applying seam pressure.
     float advective_velocity = params.other_side < 2u ?
         incoming.x + outgoing.x : incoming.y + outgoing.y;
     float ticks = uintBitsToFloat(params.tick_bits);

@@ -330,6 +330,42 @@ static void test_vertical_deep_water_matches_monolithic_basin(void) {
     PASS();
 }
 
+static void test_reverse_face_momentum_crosses_gpu_workspace_seam(void) {
+    char err[256] = {0};
+    dc_gpu_t *left_gpu = NULL, *right_gpu = NULL;
+    dc_chunk_t *left = calloc(1, sizeof(*left));
+    dc_chunk_t *right = calloc(1, sizeof(*right));
+    ASSERT_TRUE(left && right);
+    right->cells[20 * DC_CHUNK_SIDE].fluid_mass = DC_FLUID_FULL;
+    right->face_velocity[20 * DC_CHUNK_SIDE].x = -2.0f;
+    ASSERT_TRUE(dc_gpu_create(&left_gpu, 64, 64,
+                              "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create_shared(&right_gpu, left_gpu, 64, 64,
+                                     "build/shaders/pattern.comp.spv",
+                                     err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(left_gpu, 0, left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(right_gpu, 0, right, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(left_gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(right_gpu, 0, 0, 0, err, sizeof(err)));
+    dc_gpu_boundary_t boundary = {.main_slot = 0, .other_slot = 0,
+        .main_x = 0, .main_y = 0, .other_x = 0, .other_y = 0,
+        .other_side = 1};
+    ASSERT_TRUE(dc_gpu_boundary_exchange(left_gpu, right_gpu, &boundary,
+                                         1, 1.0f, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(left_gpu, 0, left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(right_gpu, 0, right, err, sizeof(err)));
+    uint64_t moved = 0, remaining = 0;
+    for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x) {
+        moved += left->cells[20 * DC_CHUNK_SIDE + x].fluid_mass;
+        remaining += right->cells[20 * DC_CHUNK_SIDE + x].fluid_mass;
+    }
+    ASSERT_EQ(moved + remaining, DC_FLUID_FULL);
+    ASSERT_TRUE(moved > 0u);
+    dc_gpu_destroy(right_gpu); dc_gpu_destroy(left_gpu);
+    free(left); free(right);
+    PASS();
+}
+
 static void test_workspace_surface_marker_follows_crossing_water(void) {
     char err[256] = {0};
     dc_gpu_t *upper = NULL, *lower = NULL;
@@ -653,6 +689,7 @@ int main(void) {
     RUN(test_workspace_water_reaches_cells_allowed_by_velocity);
     RUN(test_deep_water_keeps_advecting_across_workspace_seam);
     RUN(test_vertical_deep_water_matches_monolithic_basin);
+    RUN(test_reverse_face_momentum_crosses_gpu_workspace_seam);
     RUN(test_workspace_surface_marker_follows_crossing_water);
     RUN(test_gpu_brush_updates_only_covered_cells);
     RUN(test_chunk_page_mapping_and_gpu_material_edit);

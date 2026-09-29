@@ -80,6 +80,18 @@ to durable state. When the camera moves, newly visible chunks and their seam
 guards are promoted together, then their accumulated flux is applied before
 rendering or accepting input.
 
+The GPU seam pass joins the projected interior face momentum from both
+workspaces before applying the head and pressure difference at the shared
+face. This preserves horizontal advection for deep water when the source and
+destination seam cells are both full; relying on a local head difference alone
+left part of that volume against a false boundary. The same symmetric
+calculation handles reverse and vertical flow. Flux still removes exactly the
+volume added on the other side and reaches only cells allowed by face velocity
+times elapsed world time. Split-versus-monolithic deep-basin tests compare
+the destination volume after 120 ticks, while the UI smoke sends a large water
+patch past the visible/offscreen seam and checks that it travels eight cells
+into the destination chunk.
+
 ## Validation
 
 An end-to-end camera test paints water in a chunk, pans a screen away, runs

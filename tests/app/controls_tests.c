@@ -460,14 +460,14 @@ static bool deep_water_offscreen(uint64_t *right_mass, uint64_t *far_mass,
                                          right, err, cap);
     *right_mass = 0;
     *far_mass = 0;
-    if (okay)
+    if (okay) {
         for (uint32_t y = 0; y < 14; ++y)
-            for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x)
-                {
-                    uint32_t mass = right->cells[y * DC_CHUNK_SIDE + x].fluid_mass;
-                    *right_mass += mass;
-                    if (x >= 8u) *far_mass += mass;
-                }
+            for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x) {
+                uint32_t mass = right->cells[y * DC_CHUNK_SIDE + x].fluid_mass;
+                *right_mass += mass;
+                if (x >= 8u) *far_mass += mass;
+            }
+    }
     free(right);
     return dc_level_view_destroy(view, err, cap) && okay;
 }
