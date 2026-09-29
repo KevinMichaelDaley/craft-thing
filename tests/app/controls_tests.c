@@ -445,6 +445,9 @@ static void test_two_water_elevations_cross_cold_right_chunks(void) {
                                         err, sizeof(err)));
         ASSERT_TRUE(dc_level_view_paint(view, x, 76, 0, DC_MATERIAL_STONE,
                                         err, sizeof(err)));
+        for (uint32_t y = 70; y < 76; ++y)
+            ASSERT_TRUE(dc_level_view_paint(view, x, y, 0, DC_MATERIAL_AIR,
+                                            err, sizeof(err)));
     }
     ASSERT_TRUE(dc_level_view_pan_pixels(view, -128, 0));
     ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
@@ -487,14 +490,26 @@ static void test_falling_water_activates_cold_lower_chunk(void) {
     ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_pan_pixels(view, 0, 128));
     ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
-    for (uint32_t y = 0; y < 128; ++y)
-        ASSERT_TRUE(dc_level_view_paint(view, 32, y, 0, DC_MATERIAL_AIR,
+    for (uint32_t y = 0; y < 128; ++y) {
+        for (uint32_t x = 30; x <= 34; ++x)
+            ASSERT_TRUE(dc_level_view_paint(view, x, y, 0, DC_MATERIAL_AIR,
+                                            err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_paint(view, 29, y, 0, DC_MATERIAL_STONE,
                                         err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_paint(view, 35, y, 0, DC_MATERIAL_STONE,
+                                        err, sizeof(err)));
+    }
     ASSERT_TRUE(dc_level_view_pan_pixels(view, 0, -128));
     ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
-    for (uint32_t y = 120; y < 128; ++y)
-        ASSERT_TRUE(dc_level_view_paint(view, 32, y, 0, DC_MATERIAL_AIR,
+    for (uint32_t y = 120; y < 128; ++y) {
+        for (uint32_t x = 30; x <= 34; ++x)
+            ASSERT_TRUE(dc_level_view_paint(view, x, y, 0, DC_MATERIAL_AIR,
+                                            err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_paint(view, 29, y, 0, DC_MATERIAL_STONE,
                                         err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_paint(view, 35, y, 0, DC_MATERIAL_STONE,
+                                        err, sizeof(err)));
+    }
     ASSERT_TRUE(dc_level_view_paint(view, 32, 120, 0, DC_MATERIAL_WATER,
                                     err, sizeof(err)));
     for (uint32_t tick = 0; tick < 180; ++tick) {
@@ -509,7 +524,8 @@ static void test_falling_water_activates_cold_lower_chunk(void) {
                                     chunk, err, sizeof(err)));
     uint64_t mass = 0;
     for (uint32_t y = 0; y < DC_CHUNK_SIDE; ++y)
-        mass += chunk->cells[y * DC_CHUNK_SIDE + 32].fluid_mass;
+        for (uint32_t x = 30; x <= 34; ++x)
+            mass += chunk->cells[y * DC_CHUNK_SIDE + x].fluid_mass;
     ASSERT_TRUE(mass > 0);
     free(chunk);
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));

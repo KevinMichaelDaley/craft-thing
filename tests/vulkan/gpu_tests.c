@@ -72,6 +72,36 @@ static void test_chunk_and_particle_state_use_separate_stream_staging(void) {
     PASS();
 }
 
+static void test_gpu_wet_edge_masks_are_sparse_and_refresh(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 128,
+                              "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    chunk->cells[20 * DC_CHUNK_SIDE + 63].fluid_mass = DC_FLUID_FULL;
+    chunk->cells[20 * DC_CHUNK_SIDE].fluid_mass = DC_FLUID_FULL;
+    chunk->cells[20].fluid_mass = DC_FLUID_FULL;
+    chunk->cells[63 * DC_CHUNK_SIDE + 20].fluid_mass = DC_FLUID_FULL;
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    memset(chunk->cells, 0, sizeof(chunk->cells));
+    chunk->cells[20 * DC_CHUNK_SIDE + 20].fluid_mass = DC_FLUID_FULL;
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 1, chunk, err, sizeof(err)));
+    uint32_t masks[DC_GPU_CHUNK_SLOTS] = {0};
+    ASSERT_TRUE(dc_gpu_wet_edge_masks(gpu, masks, DC_GPU_CHUNK_SLOTS,
+                                       err, sizeof(err)));
+    ASSERT_EQ(masks[0], 15u);
+    ASSERT_EQ(masks[1], 0u);
+    memset(chunk->cells, 0, sizeof(chunk->cells));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_wet_edge_masks(gpu, masks, DC_GPU_CHUNK_SLOTS,
+                                       err, sizeof(err)));
+    ASSERT_EQ(masks[0], 0u);
+    dc_gpu_destroy(gpu);
+    free(chunk);
+    PASS();
+}
+
 static void test_shared_workspace_boundary_conserves_water_and_grain(void) {
     char err[256] = {0};
     dc_gpu_t *upper = NULL, *lower = NULL;
@@ -429,6 +459,7 @@ int main(void) {
     RUN(test_rejects_invalid_dimensions);
     RUN(test_host_visible_vram_is_preferred_for_mapped_buffers);
     RUN(test_chunk_and_particle_state_use_separate_stream_staging);
+    RUN(test_gpu_wet_edge_masks_are_sparse_and_refresh);
     RUN(test_shared_workspace_boundary_conserves_water_and_grain);
     RUN(test_workspace_water_reaches_cells_allowed_by_velocity);
     RUN(test_workspace_surface_marker_follows_crossing_water);

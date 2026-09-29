@@ -5,7 +5,7 @@ CPPFLAGS += -Iinclude $(shell pkg-config --cflags sdl2)
 LDLIBS += -lvulkan $(shell pkg-config --libs sdl2) -pthread
 GLSLANG ?= glslangValidator
 
-GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/interface_gpu.o build/present_gpu.o
+GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/interface_gpu.o build/frontier_gpu.o build/present_gpu.o
 CHUNK_OBJ = build/chunk.o
 STREAM_OBJ = build/stream.o
 GENERATE_OBJ = build/generate.o
@@ -21,6 +21,7 @@ MPM_SHADER = build/shaders/mpm.comp.spv
 MPM_ACTIVITY_SHADER = build/shaders/mpm_active.comp.spv
 MPM_COMPONENT_SHADER = build/shaders/mpm_component.comp.spv
 BOUNDARY_SHADER = build/shaders/workspace_boundary.comp.spv
+FRONTIER_SHADER = build/shaders/wet_frontier.comp.spv
 
 .PHONY: all test test_ui test_ui_long clean shaders
 all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
@@ -57,7 +58,14 @@ build/dungeoncraft_native: $(NATIVE_SRC) src/app/level.h src/app/view_config.h i
 build/dungeoncraft_half_native: $(NATIVE_SRC) src/app/level.h src/app/view_config.h include/dungeoncraft/gpu.h $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(BOUNDARY_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_HALF_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=187u -DDC_PRESSURE_SWEEPS=16u $(NATIVE_SRC) -o $@ $(LDLIBS)
 
-shaders: $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(BOUNDARY_SHADER)
+shaders: $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(BOUNDARY_SHADER) $(FRONTIER_SHADER)
+
+$(FRONTIER_SHADER): shaders/sim/wet_frontier.comp
+	@mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
+
+build/frontier_gpu.o: src/vulkan/frontier_gpu.c src/vulkan/gpu_internal.h $(FRONTIER_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 $(BOUNDARY_SHADER): shaders/sim/workspace_boundary.comp
 	@mkdir -p build/shaders

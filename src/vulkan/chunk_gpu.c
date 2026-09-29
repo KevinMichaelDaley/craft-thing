@@ -122,6 +122,7 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                &gpu->particle_count_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, page_bytes, &gpu->page_buffer,
                &gpu->page_memory, &gpu->page_mapped, err, cap) &&
+           dc_gpu_frontier_init(gpu, err, cap) &&
            dc_gpu_halo_buffers_init(gpu, err, cap) &&
            dc_gpu_fluid_buffers_init(gpu, err, cap) &&
            dc_gpu_marker_buffers_init(gpu, err, cap) &&
@@ -130,6 +131,7 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
 
 void dc_gpu_chunks_destroy(dc_gpu_t *gpu) {
     free(gpu->chunk_velocity);
+    dc_gpu_frontier_destroy(gpu);
     dc_gpu_halo_destroy(gpu);
     dc_gpu_fluid_destroy(gpu);
     dc_gpu_marker_destroy(gpu);

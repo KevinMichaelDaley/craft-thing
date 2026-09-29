@@ -13,8 +13,8 @@
 _Static_assert(DC_GPU_CHUNK_SLOTS >= SIM_CHUNKS_X * SIM_CHUNKS_Y,
                "GPU chunk pool must cover viewport and halo");
 
-enum { OFFSCREEN_CLUSTERS = 4, FRONTIER_LOADS_PER_TICK = 4,
-       FRONTIER_CHUNKS = 4 * VIEW_CHUNKS_X };
+enum { OFFSCREEN_CLUSTERS = 16, FRONTIER_LOADS_PER_TICK = 4,
+       FRONTIER_SCAN_CADENCE = 4 };
 #define OFFSCREEN_SAVE_GENERATION (UINT64_C(1) << 63)
 #define OFFSCREEN_LOAD_GENERATION (UINT64_C(1) << 62)
 
@@ -48,8 +48,7 @@ struct dc_level_view {
     bool shutting_down;
     uint64_t background_generation;
     uint32_t background_pending_saves;
-    bool water_frontier_active;
-    int64_t water_frontier_y;
+    uint32_t frontier_scan_ticks;
     sleeping_chunk_t *sleeping;
     uint32_t sleeping_count, sleeping_capacity;
 };
@@ -198,7 +197,9 @@ static bool request_cold_offscreen_chunk(dc_level_view_t *view,
                                          dc_chunk_coord_t coord,
                                          uint32_t *queued,
                                          char *err, uint32_t cap) {
-    if (visible(view, coord) || sleeping_index(view, coord) != UINT32_MAX ||
+    if (*queued >= FRONTIER_LOADS_PER_TICK ||
+        dc_offscreen_coord_band(coord, view->origin) == 5u ||
+        visible(view, coord) || sleeping_index(view, coord) != UINT32_MAX ||
         dc_chunk_table_find(&view->table, coord, NULL)) return true;
     for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i)
         if (dc_offscreen_has(view->offscreen[i], coord)) return true;
@@ -218,23 +219,52 @@ static bool request_cold_offscreen_chunk(dc_level_view_t *view,
     return true;
 }
 
-static bool schedule_water_frontier(dc_level_view_t *view,
-                                    char *err, uint32_t cap) {
-    if (!view->water_frontier_active ||
-        view->water_frontier_y < view->origin.y - HALO_CHUNKS ||
-        view->water_frontier_y >= view->origin.y + VIEW_CHUNKS_Y + HALO_CHUNKS)
-        return true;
+static bool schedule_wet_neighbors(dc_level_view_t *view,
+                                   dc_chunk_coord_t coord, uint32_t mask,
+                                   uint32_t *queued, char *err, uint32_t cap) {
+    for (uint32_t side = 0; side < 4u; ++side) {
+        if (!(mask & (1u << side))) continue;
+        if ((side == 0u && coord.x == INT64_MAX) ||
+            (side == 1u && coord.x == INT64_MIN) ||
+            (side == 2u && coord.y == INT64_MIN) ||
+            (side == 3u && coord.y == INT64_MAX)) continue;
+        dc_chunk_coord_t neighbor = coord;
+        if (side == 0u) ++neighbor.x;
+        else if (side == 1u) --neighbor.x;
+        else if (side == 2u) --neighbor.y;
+        else ++neighbor.y;
+        if (!request_cold_offscreen_chunk(view, neighbor, queued, err, cap))
+            return false;
+    }
+    return true;
+}
+
+static bool schedule_wet_frontier(dc_level_view_t *view,
+                                  char *err, uint32_t cap) {
+    uint32_t masks[DC_GPU_CHUNK_SLOTS];
     uint32_t queued = 0;
-    int64_t right = view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS;
-    int64_t left = view->origin.x - HALO_CHUNKS - 1;
-    for (uint32_t distance = 0; distance < FRONTIER_CHUNKS &&
-                                queued < FRONTIER_LOADS_PER_TICK; ++distance) {
-        dc_chunk_coord_t a = { right + (int64_t)distance,
-                               view->water_frontier_y };
-        dc_chunk_coord_t b = { left - (int64_t)distance,
-                               view->water_frontier_y };
-        if (!request_cold_offscreen_chunk(view, a, &queued, err, cap) ||
-            !request_cold_offscreen_chunk(view, b, &queued, err, cap)) return false;
+    if (!dc_gpu_wet_edge_masks(view->gpu, masks, DC_GPU_CHUNK_SLOTS,
+                                err, cap)) return false;
+    for (uint32_t slot = 0; slot < view->table.capacity; ++slot) {
+        const dc_chunk_slot_t *chunk = &view->table.slots[slot];
+        if (chunk->state != DC_SLOT_ACTIVE || !masks[slot]) continue;
+        if (!schedule_wet_neighbors(view, chunk->coord, masks[slot],
+                                    &queued, err, cap)) return false;
+    }
+    for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i) {
+        dc_offscreen_t *offscreen = view->offscreen[i];
+        if (!offscreen || dc_offscreen_last_advance_ticks(offscreen) <= 0.0f)
+            continue;
+        if (!dc_gpu_wet_edge_masks(dc_offscreen_gpu(offscreen), masks,
+                                    DC_GPU_CHUNK_SLOTS, err, cap)) return false;
+        for (uint32_t slot = 0; slot < dc_offscreen_slot_capacity(offscreen); ++slot) {
+            dc_chunk_coord_t coord;
+            uint32_t tile_x, tile_y;
+            if (!masks[slot] || !dc_offscreen_slot(offscreen, slot, &coord,
+                                                   &tile_x, &tile_y)) continue;
+            if (!schedule_wet_neighbors(view, coord, masks[slot],
+                                        &queued, err, cap)) return false;
+        }
     }
     return true;
 }
@@ -589,7 +619,6 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!bind_transfer_destination(view, err, cap)) return false;
     if (!retire_far_offscreen(view, err, cap)) return false;
     if (!schedule_prefetch(view, err, cap)) return false;
-    if (!schedule_water_frontier(view, err, cap)) return false;
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         dc_chunk_slot_t *slot = &view->table.slots[i];
         if (slot->state == DC_SLOT_ACTIVE || slot->state == DC_SLOT_SLEEPING)
@@ -675,6 +704,11 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     }
     if (!dc_gpu_present_chunks_steps(view->gpu, ready_steps, err, cap)) return false;
     if (ready_steps) {
+        view->frontier_scan_ticks += ready_steps;
+        if (view->frontier_scan_ticks >= FRONTIER_SCAN_CADENCE) {
+            view->frontier_scan_ticks %= FRONTIER_SCAN_CADENCE;
+            if (!schedule_wet_frontier(view, err, cap)) return false;
+        }
         view->pending_steps = 0;
         view->pending_seconds = 0.0f;
     }
@@ -835,11 +869,6 @@ bool dc_level_view_paint(dc_level_view_t *view, uint32_t x, uint32_t y,
     if (!dc_gpu_paint_material(view->gpu, x + DC_CHUNK_SIDE + view->camera_offset_x,
                                y + DC_CHUNK_SIDE + view->camera_offset_y,
                                radius, material, err, cap)) return false;
-    if (material == DC_MATERIAL_WATER) {
-        view->water_frontier_active = true;
-        view->water_frontier_y = view->origin.y +
-            cell_chunk_offset((int32_t)y + (int32_t)view->camera_offset_y);
-    }
     int32_t first_x = cell_chunk_offset((int32_t)x +
         (int32_t)view->camera_offset_x - (int32_t)radius);
     int32_t first_y = cell_chunk_offset((int32_t)y +

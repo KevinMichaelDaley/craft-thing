@@ -19,6 +19,14 @@ struct dc_gpu {
     VkDescriptorSet boundary_set;
     VkPipelineLayout boundary_layout;
     VkPipeline boundary_pipeline;
+    VkBuffer frontier_mask_buffer;
+    VkDeviceMemory frontier_mask_memory;
+    uint32_t *frontier_mask_mapped;
+    VkDescriptorSetLayout frontier_set_layout;
+    VkDescriptorPool frontier_pool;
+    VkDescriptorSet frontier_set;
+    VkPipelineLayout frontier_layout;
+    VkPipeline frontier_pipeline;
     VkInstance instance;
     VkPhysicalDevice physical;
     VkDevice device;
@@ -164,6 +172,8 @@ bool dc_gpu_load_shader_module(dc_gpu_t *gpu, const char *path,
                                VkShaderModule *module, char *err, uint32_t cap);
 bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_chunks_destroy(dc_gpu_t *gpu);
+bool dc_gpu_frontier_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+void dc_gpu_frontier_destroy(dc_gpu_t *gpu);
 bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                VkDeviceMemory *memory, void **mapped,
                                char *err, uint32_t cap);

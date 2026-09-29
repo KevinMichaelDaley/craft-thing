@@ -1,0 +1,16 @@
+#version 450
+layout(local_size_x = 64) in;
+layout(set = 0, binding = 0, std430) readonly buffer Cells { uvec2 cells[]; };
+layout(set = 0, binding = 1, std430) buffer Masks { uint masks[]; };
+
+void main() {
+    uint slot = gl_WorkGroupID.x;
+    uint lane = gl_LocalInvocationID.x;
+    uint base = slot * 4096u;
+    uint mask = 0u;
+    if (cells[base + lane].y != 0u) mask |= 4u;
+    if (cells[base + 63u * 64u + lane].y != 0u) mask |= 8u;
+    if (cells[base + lane * 64u].y != 0u) mask |= 2u;
+    if (cells[base + lane * 64u + 63u].y != 0u) mask |= 1u;
+    if (mask != 0u) atomicOr(masks[slot], mask);
+}
