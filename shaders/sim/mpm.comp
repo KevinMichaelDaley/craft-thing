@@ -217,10 +217,15 @@ void p2g(ivec2 node) {
                 float bulk = mud ? 1.2 : particle.material == 5u ? 8.0 :
                              fragment ? 0.4 : particle.material == 4u ? 3.0 : 5.0;
                 float wetness = float(particle.flags & MOISTURE_MASK) / float(MOISTURE_CAP);
-                float pressure = bulk * max(0.0, 1.0 - jacobian) +
+                float pressure = mud ? (jacobian < 1.0 ?
+                                       bulk * (1.0 - jacobian) :
+                                       -3.0 * (jacobian - 1.0)) :
+                                 bulk * max(0.0, 1.0 - jacobian) +
                                  (fragment ? 0.8 * min(wetness, 1.0) : 0.0);
-                float shear_limit = mud ? 0.05 : fragment ? 0.0 : 0.2;
-                float shear = clamp(particle.f01 + particle.f10,
+                float shear_limit = mud ? mix(0.3, 0.18, clamp(wetness, 0.0, 1.0)) :
+                                    fragment ? 0.0 : 0.2;
+                float shear = clamp((mud ? 1.5 : 1.0) *
+                                    (particle.f01 + particle.f10),
                                     -shear_limit, shear_limit);
                 vec2 gradient = kernel_gradient(delta);
                 force += mass * vec2(pressure * gradient.x - shear * gradient.y,
@@ -302,6 +307,7 @@ vec2 granular_contact_velocity(Particle particle, uint index, ivec2 owner,
                 if (!load_particle(neighbor, layer, other)) continue;
                 uint other_index = particle_index(neighbor, layer);
                 if (other_index == index) continue;
+                if (particle_is_mud(particle) && particle_is_mud(other)) continue;
                 vec2 separation = position - position_of(other, neighbor);
                 float distance = length(separation);
                 if (distance >= 1.5) continue;
@@ -365,6 +371,16 @@ void g2p_one(ivec2 owner, uint layer) {
     float dt = DT * time_scale();
     deformation = (mat2(1.0) + dt * gradient) * deformation;
     bool mud = particle_is_mud(particle);
+    if (mud) {
+        float wetness = clamp(float(particle.flags & MOISTURE_MASK) /
+                              float(MOISTURE_CAP), 0.0, 1.0);
+        float elastic_shear = mix(0.2, 0.12, wetness);
+        float shear = 0.5 * (deformation[0][1] + deformation[1][0]);
+        float plastic_shear = clamp(shear, -elastic_shear, elastic_shear);
+        float relaxed_shear = mix(shear, plastic_shear, 0.2);
+        deformation[0][1] += relaxed_shear - shear;
+        deformation[1][0] += relaxed_shear - shear;
+    }
     particle.f00 = clamp(deformation[0][0], mud ? 0.55 : 0.75,
                          mud ? 1.45 : 1.25);
     particle.f11 = clamp(deformation[1][1], mud ? 0.55 : 0.75,

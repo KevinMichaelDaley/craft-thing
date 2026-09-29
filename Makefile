@@ -229,6 +229,7 @@ test_ui: build/dungeoncraft build/controls_tests
 	./build/dungeoncraft --smoke-motion
 	./build/dungeoncraft --smoke-granular
 	./build/dungeoncraft --smoke-coupled
+	./build/dungeoncraft --smoke-mud
 	./build/dungeoncraft --smoke-sifting
 
 test_ui_long: build/dungeoncraft

@@ -384,6 +384,78 @@ static bool setup_coupled_materials(dc_level_view_t *view, char *err, uint32_t c
     return true;
 }
 
+static bool setup_mud_materials(dc_level_view_t *view, char *err, uint32_t cap) {
+    if (!dc_level_view_wait_visible(view, 5000, err, cap)) return false;
+    for (uint32_t y = 23; y <= 48; y += 5)
+        for (uint32_t x = 72; x <= 124; x += 5)
+            if (!dc_level_view_paint(view, x, y, 4, DC_MATERIAL_AIR, err, cap))
+                return false;
+    for (uint32_t x = 72; x < 124; ++x)
+        if (!dc_level_view_paint(view, x, 47, 0, DC_MATERIAL_STONE, err, cap))
+            return false;
+    for (uint32_t y = 39; y < 47; ++y)
+        for (uint32_t x = 92; x < 100; ++x)
+            if (!dc_level_view_paint(view, x, y, 0, DC_MATERIAL_DIRT, err, cap))
+                return false;
+    for (uint32_t x = 92; x < 100; ++x)
+        if (!dc_level_view_paint(view, x, 39, 0, DC_MATERIAL_WATER, err, cap))
+            return false;
+    return true;
+}
+
+static int smoke_mud_materials(void) {
+    char directory[] = "build/ui_mud_XXXXXX", err[256] = {0};
+    if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    if (!view) { fprintf(stderr, "Mud level create: %s\n", err); return 1; }
+    uint32_t *before = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*before));
+    uint32_t *after = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*after));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    bool okay = before && after && chunk &&
+        dc_level_view_set_spring_enabled(view, false) &&
+        setup_mud_materials(view, err, sizeof(err)) &&
+        dc_level_view_tick(view, err, sizeof(err)) &&
+        dc_level_view_pixels(view, before, VIEW_WIDTH * VIEW_HEIGHT, err, sizeof(err));
+    mkdir("build/screenshots", 0777);
+    if (okay) okay = save_level_bmp("build/screenshots/mud_before.bmp", before);
+    uint64_t start = SDL_GetPerformanceCounter();
+    for (uint32_t tick = 0; tick < 120 && okay; ++tick)
+        okay = dc_level_view_step(view, err, sizeof(err)) &&
+               dc_level_view_tick(view, err, sizeof(err));
+    double tick_rate = 120.0 * (double)SDL_GetPerformanceFrequency() /
+                       (double)(SDL_GetPerformanceCounter() - start);
+    if (okay) okay = dc_level_view_tick(view, err, sizeof(err)) &&
+                     dc_level_view_pixels(view, after, VIEW_WIDTH * VIEW_HEIGHT,
+                                          err, sizeof(err)) &&
+                     save_level_bmp("build/screenshots/mud_after_2s.bmp", after) &&
+                     dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
+                                         chunk, err, sizeof(err));
+    uint32_t changed = 0, muddy = 0, dirt = 0;
+    if (okay) {
+        for (uint32_t y = 36; y < 48; ++y)
+            for (uint32_t x = 72; x < 124; ++x)
+                changed += before[y * VIEW_WIDTH + x] !=
+                           after[y * VIEW_WIDTH + x];
+        for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i) {
+            const dc_mpm_particle_t *p = &chunk->particles[i];
+            if (!p->mass_fp || p->material != DC_MATERIAL_DIRT) continue;
+            ++dirt;
+            muddy += (p->flags & DC_MPM_MUD_FLAG) != 0u;
+        }
+        okay = changed >= 12u && dirt >= 60u && muddy >= 8u;
+    }
+    if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
+    free(before); free(after); free(chunk);
+    if (!okay) {
+        fprintf(stderr, "Mud screenshot smoke failed (%u changed, %u dirt, %u mud): %s\n",
+                changed, dirt, muddy, err);
+        return 1;
+    }
+    printf("Mud screenshots: mud_before.bmp and mud_after_2s.bmp "
+           "(%u changed, %u mud, %.2f ticks/s)\n", changed, muddy, tick_rate);
+    return 0;
+}
+
 enum { SIFT_LEFT = 72, SIFT_RIGHT = 80, SIFT_FIRST = 73, SIFT_LAST = 79,
        SIFT_TOP = 8, SIFT_BOTTOM = 17, SIFT_FLOOR = 45 };
 
@@ -1081,12 +1153,14 @@ int main(int argc, char **argv) {
         return smoke_granular_fall();
     if (argc > 1 && strcmp(argv[1], "--smoke-coupled") == 0)
         return smoke_coupled_materials();
+    if (argc > 1 && strcmp(argv[1], "--smoke-mud") == 0)
+        return smoke_mud_materials();
     if (argc > 1 && strcmp(argv[1], "--smoke-sifting") == 0)
         return smoke_sifting_materials();
     if (argc > 1 && strcmp(argv[1], "--smoke-motion-long") == 0)
         return smoke_moving_water_long();
     bool scripted_input = argc > 1 && strcmp(argv[1], "--smoke-controls-ui") == 0;
-    bool demo_coupled = false, demo_sifting = false;
+    bool demo_coupled = false, demo_sifting = false, demo_mud = false;
     char scripted_directory[] = "build/ui_input_XXXXXX";
     if (scripted_input && !mkdtemp(scripted_directory)) {
         perror("mkdtemp");
@@ -1111,12 +1185,16 @@ int main(int argc, char **argv) {
             demo_sifting = true;
             continue;
         }
+        if (strcmp(argv[i], "--demo-mud") == 0) {
+            demo_mud = true;
+            continue;
+        }
         if (strcmp(argv[i], "--seed") == 0 && i + 1 < argc)
             seed = strtoull(argv[++i], NULL, 10);
         else if (strcmp(argv[i], "--world-dir") == 0 && i + 1 < argc)
             directory = argv[++i];
         else {
-            fprintf(stderr, "Usage: %s [--seed number] [--world-dir path] [--demo-coupled|--demo-sifting]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [--seed number] [--world-dir path] [--demo-coupled|--demo-sifting|--demo-mud]\n", argv[0]);
             return 1;
         }
     }
@@ -1137,11 +1215,18 @@ int main(int argc, char **argv) {
         dc_level_view_destroy(view, err, sizeof(err));
         return 1;
     }
+    if (demo_mud &&
+        (!dc_level_view_set_spring_enabled(view, false) ||
+         !setup_mud_materials(view, err, sizeof(err)))) {
+        fprintf(stderr, "Mud demo setup: %s\n", err);
+        dc_level_view_destroy(view, err, sizeof(err));
+        return 1;
+    }
     uint16_t material = DC_MATERIAL_SAND;
     bool running = true;
     bool failed = false;
     bool paused = false;
-    bool spring_enabled = !(demo_coupled || demo_sifting);
+    bool spring_enabled = !(demo_coupled || demo_sifting || demo_mud);
     bool marker_overlay = false;
     bool single_step = false;
     uint32_t zoom = WINDOW_SCALE;
