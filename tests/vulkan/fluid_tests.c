@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -230,6 +231,73 @@ static bool save_water_capture(dc_gpu_t *gpu, const char *path,
     }
     if (fclose(file) != 0) okay = false;
     return okay;
+}
+
+static void test_32_cell_high_river_settles_after_surface_displacement(void) {
+    char err[256] = {0};
+    dc_chunk_t *left = calloc(1, sizeof(*left));
+    dc_chunk_t *right = calloc(1, sizeof(*right));
+    ASSERT_TRUE(left && right);
+    for (uint32_t x = 4; x <= 123; ++x) {
+        dc_chunk_t *chunk = x < 64 ? left : right;
+        uint32_t local = x % 64u;
+        chunk->cells[60u * 64u + local].material = DC_MATERIAL_STONE;
+    }
+    for (uint32_t y = 20; y < 60; ++y) {
+        left->cells[y * 64u + 4u].material = DC_MATERIAL_STONE;
+        right->cells[y * 64u + 59u].material = DC_MATERIAL_STONE;
+    }
+    for (uint32_t y = 24; y < 60; ++y)
+        for (uint32_t x = 5; x <= 122; ++x) {
+            if (y < 28u && x >= 64u) continue;
+            dc_chunk_t *chunk = x < 64 ? left : right;
+            chunk->cells[y * 64u + x % 64u].fluid_mass = DC_FLUID_FULL;
+        }
+    dc_gpu_t *gpu = make_grid(left, right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    mkdir("build/screenshots", 0777);
+    ASSERT_TRUE(save_water_capture(gpu, "build/screenshots/river_32_before.ppm",
+                                   err, sizeof(err)));
+    double mean_vertical[2] = {0.0, 0.0};
+    uint64_t high_mass[2] = {0u, 0u};
+    for (uint32_t tick = 0; tick < 240u; ++tick) {
+        ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+        if (tick != 59u && tick != 239u) continue;
+        uint32_t sample = tick == 59u ? 0u : 1u;
+        ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, left, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, right, err, sizeof(err)));
+        uint64_t mass = 0u, wet = 0u;
+        for (uint32_t y = 0; y < 60u; ++y)
+            for (uint32_t x = 5; x <= 122u; ++x) {
+                const dc_chunk_t *chunk = x < 64u ? left : right;
+                uint32_t local = y * 64u + x % 64u;
+                uint32_t fill = chunk->cells[local].fluid_mass;
+                mass += fill;
+                if (y < 22u) high_mass[sample] += fill;
+                if (fill >= DC_FLUID_FULL / 2u) {
+                    mean_vertical[sample] += fabsf(chunk->face_velocity[local].y);
+                    ++wet;
+                }
+            }
+        ASSERT_EQ(mass, (uint64_t)4012u * DC_FLUID_FULL);
+        ASSERT_TRUE(wet > 3000u);
+        mean_vertical[sample] /= (double)wet;
+        ASSERT_TRUE(save_water_capture(gpu,
+            sample == 0u ? "build/screenshots/river_32_after_1s.ppm" :
+                           "build/screenshots/river_32_after_4s.ppm",
+            err, sizeof(err)));
+    }
+    printf("32-cell river mean |vy|: 1s %.4f, 4s %.4f; high mass %.2f/%.2f cells\n",
+           mean_vertical[0], mean_vertical[1],
+           (double)high_mass[0] / DC_FLUID_FULL,
+           (double)high_mass[1] / DC_FLUID_FULL);
+    ASSERT_TRUE(mean_vertical[0] > 0.02);
+    ASSERT_TRUE(mean_vertical[1] < 0.08 &&
+                mean_vertical[1] < mean_vertical[0] * 0.35);
+    ASSERT_TRUE(high_mass[1] < 4u * (uint64_t)DC_FLUID_FULL);
+    dc_gpu_destroy(gpu);
+    free(left); free(right);
+    PASS();
 }
 
 static void test_marker_ownership_crosses_chunk_and_replays(void) {
@@ -1082,6 +1150,7 @@ int main(void) {
     RUN(test_water_crosses_vertical_chunk_seam);
     RUN(test_erased_floor_drains_into_lower_chunk);
     RUN(test_still_pool_does_not_spray_above_surface);
+    RUN(test_32_cell_high_river_settles_after_surface_displacement);
     RUN(test_camera_shift_rebases_velocity_on_gpu);
     RUN(test_chunk_velocity_survives_gpu_round_trip);
     RUN(test_cropped_viewport_edges_are_internal_fluid_faces);
