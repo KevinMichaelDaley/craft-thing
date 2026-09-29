@@ -253,6 +253,7 @@ static bool schedule_wet_frontier(dc_level_view_t *view,
     }
     for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i) {
         dc_offscreen_t *offscreen = view->offscreen[i];
+        if (queued >= FRONTIER_LOADS_PER_TICK) break;
         if (!offscreen || dc_offscreen_last_advance_ticks(offscreen) <= 0.0f)
             continue;
         if (!dc_gpu_wet_edge_masks(dc_offscreen_gpu(offscreen), masks,
@@ -815,6 +816,8 @@ bool dc_level_view_status(dc_level_view_t *view, dc_level_view_status_t *status)
                 view->table.slots[index].state == DC_SLOT_ACTIVE)
                 ++status->ready_chunks;
         }
+    for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i)
+        if (view->offscreen[i]) ++status->offscreen_workspaces;
     return true;
 }
 

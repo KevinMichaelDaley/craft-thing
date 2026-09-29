@@ -13,6 +13,7 @@ typedef struct {
     dc_chunk_coord_t origin;
     uint32_t offset_x, offset_y;
     uint32_t ready_chunks, total_chunks;
+    uint32_t offscreen_workspaces;
 } dc_level_view_status_t;
 
 dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,

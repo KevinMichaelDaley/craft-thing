@@ -576,6 +576,35 @@ static void test_wet_frontier_uses_more_than_four_workspaces(void) {
     PASS();
 }
 
+static void test_five_distant_wet_regions_stay_gpu_resident(void) {
+    char directory[] = "build/ui_five_wet_regions_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    const struct { int32_t pan_x, pan_y; uint32_t paint_x, paint_y; } sites[] = {
+        {320, 0, 30, 10}, {-192, 0, 62, 10}, {0, 256, 10, 4},
+        {0, -192, 10, 62}, {640, 0, 10, 10}
+    };
+    for (uint32_t i = 0; i < sizeof(sites) / sizeof(sites[0]); ++i) {
+        ASSERT_TRUE(dc_level_view_pan_pixels(view, sites[i].pan_x, sites[i].pan_y));
+        ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_paint(view, sites[i].paint_x, sites[i].paint_y,
+                                        0, DC_MATERIAL_WATER, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_pan_pixels(view, -sites[i].pan_x,
+                                             -sites[i].pan_y));
+        ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    }
+    for (uint32_t tick = 0; tick < 100; ++tick)
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    dc_level_view_status_t status = {0};
+    ASSERT_TRUE(dc_level_view_status(view, &status));
+    ASSERT_TRUE(status.offscreen_workspaces > 4u);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    PASS();
+}
+
 static void test_sand_keeps_falling_offscreen_without_particle_loss(void) {
     char directory[] = "build/ui_offscreen_sand_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory) != NULL);
@@ -683,6 +712,7 @@ int main(void) {
     RUN(test_two_water_elevations_cross_cold_right_chunks);
     RUN(test_falling_water_activates_cold_lower_chunk);
     RUN(test_wet_frontier_uses_more_than_four_workspaces);
+    RUN(test_five_distant_wet_regions_stay_gpu_resident);
     RUN(test_sand_keeps_falling_offscreen_without_particle_loss);
     RUN(test_sand_crosses_offscreen_visible_boundary_with_same_id);
     printf("%d passed, %d failed\n", g_pass, g_fail);
