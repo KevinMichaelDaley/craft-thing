@@ -75,11 +75,11 @@ static int smoke_native_view(void) {
                 dc_level_view_pixel(view, VIEW_WIDTH - 20u,
                                     VIEW_HEIGHT - 20u, &painted,
                                     err, sizeof(err)) &&
-                painted == 0xff707070u &&
+                painted == 0xff767067u &&
                 dc_level_view_pixels(view, pixels, VIEW_WIDTH * VIEW_HEIGHT,
                                      err, sizeof(err)) &&
                 pixels[(VIEW_HEIGHT - 20u) * VIEW_WIDTH + VIEW_WIDTH - 20u] ==
-                    0xff707070u;
+                    0xff767067u;
     mkdir("build/screenshots", 0777);
 #ifdef DC_HALF_NATIVE_VIEW
     if (okay) okay = save_level_bmp(
@@ -757,7 +757,7 @@ static int smoke_streamed_level(void) {
     uint32_t color = 0;
     if (okay) stage = "basin pixel";
     if (okay) okay = dc_level_view_pixel(view, 128, 40, &color, err, sizeof(err)) &&
-                     color == 0xffd07030u;
+                     color == 0xffc0a069u;
     if (okay) stage = "positive paint";
     if (okay) okay = dc_level_view_paint(view, 64, 5, 0, DC_MATERIAL_SAND,
                                          err, sizeof(err));

@@ -1,4 +1,6 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#include "material_palette.glsl"
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(set = 0, binding = 0, std430) buffer Cells { uint cells[]; };
 layout(set = 0, binding = 1, std430) buffer ChunkCells { uvec2 chunk_cells[]; };
@@ -46,13 +48,13 @@ uint pack_linear_color(vec3 linear_rgb) {
 }
 
 uint material_color(uint material, uint flags) {
-    if (material == 1u) return 0xff707070u;
+    if (material == 1u) return COLOR_STONE;
     if (material == 2u)
-        return (flags & 0x00ffffffu) != 0u ? 0xff368e9cu : 0xff40c8e0u;
+        return (flags & 0x00ffffffu) != 0u ? COLOR_WET_SAND : COLOR_SAND;
     if (material == 4u)
-        return (flags & 0x80000000u) != 0u ? 0xff29465bu : 0xff326495u;
-    if (material == 5u) return 0xff808090u;
-    return 0xff707070u;
+        return (flags & 0x80000000u) != 0u ? COLOR_MUD : COLOR_DIRT;
+    if (material == 5u) return COLOR_GRAVEL;
+    return COLOR_STONE;
 }
 
 struct DensitySample {
@@ -108,7 +110,7 @@ DensitySample material_density(ivec2 p) {
     float solid_weight = mix(solid, solid_volume, water);
     float water_weight = water * (1.0 - solid_volume);
     density_sample.coverage = solid_weight + water_weight;
-    density_sample.premultiplied = water_weight * linear_color(0xffd07030u) +
+    density_sample.premultiplied = water_weight * linear_color(COLOR_WATER) +
                                    solid_weight * solid_color;
     if (occupancy[uint(p.y) * params.width + uint(p.x)] != 0u) {
         density_sample.coverage = 1.0;
@@ -238,10 +240,10 @@ void main() {
             }
         }
         uint color = 0xff181818u;
-        if (material == 1u) color = 0xff707070u;
-        else if (material == 2u) color = wet_sand ? 0xff368e9cu : 0xff40c8e0u;
-        else if (material == 4u) color = mud ? 0xff29465bu : 0xff326495u;
-        else if (material == 5u) color = 0xff808090u;
+        if (material == 1u) color = COLOR_STONE;
+        else if (material == 2u) color = wet_sand ? COLOR_WET_SAND : COLOR_SAND;
+        else if (material == 4u) color = mud ? COLOR_MUD : COLOR_DIRT;
+        else if (material == 5u) color = COLOR_GRAVEL;
         if (cell.y > 0u) {
             uint fill = min(cell.y, 65536u) / 256u;
             uint red = 16u + 32u * fill / 256u;

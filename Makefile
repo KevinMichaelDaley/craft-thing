@@ -99,9 +99,9 @@ $(PROJECTION_SHADER): shaders/sim/projection.comp
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
 
-$(SHADER): shaders/sim/pattern.comp
+$(SHADER): shaders/sim/pattern.comp shaders/sim/material_palette.glsl
 	@mkdir -p build/shaders
-	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -Ishaders/sim -o $@ $<
 
 $(RIGID_SHADER): shaders/sim/rigid.comp
 	@mkdir -p build/shaders

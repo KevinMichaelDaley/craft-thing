@@ -263,8 +263,8 @@ static void test_chunk_page_mapping_and_gpu_material_edit(void) {
     ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 0, 1, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_render_chunks(gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_readback(gpu, pixels, 128 * 64, err, sizeof(err)));
-    ASSERT_EQ(pixels[5 * 128 + 63], 0xff707070u);
-    ASSERT_EQ(pixels[5 * 128 + 64], 0xffd07030u);
+    ASSERT_EQ(pixels[5 * 128 + 63], 0xff767067u);
+    ASSERT_EQ(pixels[5 * 128 + 64], 0xffc0a069u);
     ASSERT_TRUE(dc_gpu_paint_material(gpu, 64, 5, 0, DC_MATERIAL_SAND, err, sizeof(err)));
     saved.coord = right.coord;
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &saved, err, sizeof(err)));
@@ -302,7 +302,7 @@ static void test_gpu_box_crosses_chunk_edge_and_rests_on_terrain(void) {
     ASSERT_TRUE(dc_gpu_render_chunks(gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_readback(gpu, pixels, 128 * 64, err, sizeof(err)));
     ASSERT_EQ(pixels[18 * 128 + 83], 0xff30c040u);
-    ASSERT_EQ(pixels[20 * 128 + 83], 0xff707070u);
+    ASSERT_EQ(pixels[20 * 128 + 83], 0xff767067u);
     dc_gpu_destroy(gpu);
     PASS();
 }
@@ -453,11 +453,11 @@ static void test_density_mixes_only_within_each_cell(void) {
         ASSERT_EQ(pixels[10 * 128 + center - 3u], 0xff181818u);
         ASSERT_TRUE(pixels[10 * 128 + center] != 0xff181818u);
     }
-    ASSERT_EQ(pixels[10 * 128 + 10], 0xff707070u);
-    ASSERT_EQ(pixels[10 * 128 + 20], 0xff40c8e0u);
-    ASSERT_EQ(pixels[10 * 128 + 30], 0xff326495u);
-    ASSERT_EQ(pixels[10 * 128 + 40], 0xff808090u);
-    ASSERT_EQ(pixels[22 * 128 + 32], 0xffd07030u);
+    ASSERT_EQ(pixels[10 * 128 + 10], 0xff767067u);
+    ASSERT_EQ(pixels[10 * 128 + 20], 0xff73bedcu);
+    ASSERT_EQ(pixels[10 * 128 + 30], 0xff5192c8u);
+    ASSERT_EQ(pixels[10 * 128 + 40], 0xff867e77u);
+    ASSERT_EQ(pixels[22 * 128 + 32], 0xffc0a069u);
     ASSERT_EQ(pixels[10 * 128 + 49], 0xff181818u);
     ASSERT_TRUE(blue_channel(pixels[10 * 128 + 50]) <
                 blue_channel(pixels[10 * 128 + 54]));
