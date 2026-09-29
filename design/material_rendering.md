@@ -21,3 +21,15 @@ uses within-cell coverage. Marker, resident-chunk, and diagnostic overlays remai
 exact colors so their meaning does not change. This is visual reconstruction
 at the simulation's cell resolution; it does not alter water projection,
 particle mass, material IDs, or chunk streaming.
+
+The material swatches in `shaders/sim/material_palette.glsl` come from
+`python3 tools/generate_material_palette.py`. The generator specifies stone,
+soil, sand, gravel, and water in OKLCH, converts with the public-domain
+[Oklab transform](https://bottosson.github.io/posts/oklab/), and writes a
+1024-sample, 16-bit-per-channel preview to
+`build/material_palette_16.ppm`. The shader uses the generated display colors
+and its existing linear-light per-cell coverage blend. A full mud cell stays
+warm brown; a trace of dirt in a water-filled cell approaches the water color
+continuously. No neighboring pixel contributes color. Brush painting now uses
+the same reconstruction as the normal view, while diagnostic overlays retain
+their fixed colors.

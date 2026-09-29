@@ -48,6 +48,7 @@ uint pack_linear_color(vec3 linear_rgb) {
 }
 
 uint material_color(uint material, uint flags) {
+    if (material == 0u || material == 3u) return 0xff181818u;
     if (material == 1u) return COLOR_STONE;
     if (material == 2u)
         return (flags & 0x00ffffffu) != 0u ? COLOR_WET_SAND : COLOR_SAND;
@@ -172,8 +173,6 @@ void main() {
         uint local_index = index % 4096u;
         uint particle_index = slot * 8192u + local_index;
         uint secondary_index = particle_index + 4096u;
-        bool mud = false;
-        bool wet_sand = false;
         if (params.mode == 3u || params.mode == 4u) {
             int dx = int(p.x) - int(params.brush_x);
             int dy = int(p.y) - int(params.brush_y);
@@ -228,29 +227,7 @@ void main() {
             }
         }
         if (params.mode == 4u) return;
-        if (params.mode == 2u) {
-            if (particles[particle_index].mass_fp != 0u) {
-                material = particles[particle_index].material;
-                mud = (particles[particle_index].flags & 0x80000000u) != 0u;
-                wet_sand = (particles[particle_index].flags & 0x00ffffffu) != 0u;
-            } else if (particles[secondary_index].mass_fp != 0u) {
-                material = particles[secondary_index].material;
-                mud = (particles[secondary_index].flags & 0x80000000u) != 0u;
-                wet_sand = (particles[secondary_index].flags & 0x00ffffffu) != 0u;
-            }
-        }
-        uint color = 0xff181818u;
-        if (material == 1u) color = COLOR_STONE;
-        else if (material == 2u) color = wet_sand ? COLOR_WET_SAND : COLOR_SAND;
-        else if (material == 4u) color = mud ? COLOR_MUD : COLOR_DIRT;
-        else if (material == 5u) color = COLOR_GRAVEL;
-        if (cell.y > 0u) {
-            uint fill = min(cell.y, 65536u) / 256u;
-            uint red = 16u + 32u * fill / 256u;
-            uint green = 32u + 80u * fill / 256u;
-            uint blue = 64u + 144u * fill / 256u;
-            color = 0xff000000u | (blue << 16) | (green << 8) | red;
-        }
+        uint color = cell_material_color(ivec2(p));
         if (params.mode == 3u && occupancy[p.y * params.width + p.x] != 0u)
             color = 0xff30c040u;
         if (params.mode == 2u && params.brush_y == 2u) {
