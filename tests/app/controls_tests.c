@@ -431,6 +431,135 @@ static void test_water_crosses_two_offscreen_workspaces(void) {
     PASS();
 }
 
+static void test_two_water_elevations_cross_cold_right_chunks(void) {
+    char directory[] = "build/ui_two_wet_rows_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 128, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (uint32_t x = 100; x < 255; ++x) {
+        ASSERT_TRUE(dc_level_view_paint(view, x, 12, 0, DC_MATERIAL_STONE,
+                                        err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_paint(view, x, 76, 0, DC_MATERIAL_STONE,
+                                        err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, -128, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (uint32_t y = 6; y < 12; ++y)
+        for (uint32_t x = 242; x < 256; ++x)
+            ASSERT_TRUE(dc_level_view_paint(view, x, y, 0, DC_MATERIAL_WATER,
+                                            err, sizeof(err)));
+    for (uint32_t y = 70; y < 76; ++y)
+        for (uint32_t x = 242; x < 256; ++x)
+            ASSERT_TRUE(dc_level_view_paint(view, x, y, 0, DC_MATERIAL_WATER,
+                                            err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 120; ++tick) {
+        ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 128, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    for (int64_t row = 0; row <= 1; ++row) {
+        ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){5, row},
+                                        chunk, err, sizeof(err)));
+        uint64_t mass = 0;
+        for (uint32_t y = 0; y < 12; ++y)
+            for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x)
+                mass += chunk->cells[y * DC_CHUNK_SIDE + x].fluid_mass;
+        ASSERT_TRUE(mass > 0);
+    }
+    free(chunk);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    PASS();
+}
+
+static void test_falling_water_activates_cold_lower_chunk(void) {
+    char directory[] = "build/ui_cold_lower_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 0, 128));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (uint32_t y = 0; y < 128; ++y)
+        ASSERT_TRUE(dc_level_view_paint(view, 32, y, 0, DC_MATERIAL_AIR,
+                                        err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 0, -128));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (uint32_t y = 120; y < 128; ++y)
+        ASSERT_TRUE(dc_level_view_paint(view, 32, y, 0, DC_MATERIAL_AIR,
+                                        err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 32, 120, 0, DC_MATERIAL_WATER,
+                                    err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 180; ++tick) {
+        ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 0, 128));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 3},
+                                    chunk, err, sizeof(err)));
+    uint64_t mass = 0;
+    for (uint32_t y = 0; y < DC_CHUNK_SIDE; ++y)
+        mass += chunk->cells[y * DC_CHUNK_SIDE + 32].fluid_mass;
+    ASSERT_TRUE(mass > 0);
+    free(chunk);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    PASS();
+}
+
+static void test_wet_frontier_uses_more_than_four_workspaces(void) {
+    char directory[] = "build/ui_deep_frontier_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 250, 8, 0, DC_MATERIAL_WATER,
+                                    err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 24; ++tick) {
+        ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 896, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (uint32_t x = 0; x < 160; ++x)
+        ASSERT_TRUE(dc_level_view_paint(view, x, 12, 0, DC_MATERIAL_STONE,
+                                        err, sizeof(err)));
+    for (uint32_t y = 6; y < 12; ++y)
+        for (uint32_t x = 44; x < 64; ++x)
+            ASSERT_TRUE(dc_level_view_paint(view, x, y, 0, DC_MATERIAL_WATER,
+                                            err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, -896, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 120; ++tick) {
+        ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 960, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){15, 0},
+                                    chunk, err, sizeof(err)));
+    uint64_t mass = 0;
+    for (uint32_t y = 0; y < 12; ++y)
+        for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x)
+            mass += chunk->cells[y * DC_CHUNK_SIDE + x].fluid_mass;
+    ASSERT_TRUE(mass > 0);
+    free(chunk);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    PASS();
+}
+
 static void test_sand_keeps_falling_offscreen_without_particle_loss(void) {
     char directory[] = "build/ui_offscreen_sand_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory) != NULL);
@@ -535,6 +664,9 @@ int main(void) {
     RUN(test_water_crosses_visible_offscreen_boundary);
     RUN(test_stationary_water_reaches_cold_chunk);
     RUN(test_water_crosses_two_offscreen_workspaces);
+    RUN(test_two_water_elevations_cross_cold_right_chunks);
+    RUN(test_falling_water_activates_cold_lower_chunk);
+    RUN(test_wet_frontier_uses_more_than_four_workspaces);
     RUN(test_sand_keeps_falling_offscreen_without_particle_loss);
     RUN(test_sand_crosses_offscreen_visible_boundary_with_same_id);
     printf("%d passed, %d failed\n", g_pass, g_fail);
