@@ -10,6 +10,7 @@ layout(set = 0, binding = 17, std430) readonly buffer SlotPages { uint slot_page
 layout(set = 0, binding = 9, std430) buffer HydroHead { uint hydro_head[]; };
 layout(set = 0, binding = 8, std430) buffer PreviousVerticalVelocity { uint previous_vertical_velocity[]; };
 layout(set = 0, binding = 31, std430) buffer PreviousHorizontalVelocity { uint previous_horizontal_velocity[]; };
+layout(set = 0, binding = 20, std430) readonly buffer ParticleCounts { uint particle_counts[]; };
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -19,6 +20,10 @@ layout(push_constant) uniform Params {
     uint step_scale_bits;
     uint unused3;
 } params;
+
+const uint DEEP_COLUMN_HEAD = 13u * 65536u;
+const float SHALLOW_PRESSURE_RELAXATION = 1.5;
+const float DEEP_PRESSURE_RELAXATION = 1.9;
 
 
 uint index_of(ivec2 p) { return uint(p.y) * params.width + uint(p.x); }
@@ -175,7 +180,12 @@ void main() {
             }
             if (count > 0.0) value = (sum - divergence(p)) / count;
         }
-        float relaxation = hydro_head[index] >= 13u * 65536u ? 1.9 : 1.5;
+        float relaxation = SHALLOW_PRESSURE_RELAXATION;
+        if (hydro_head[index] >= DEEP_COLUMN_HEAD) {
+            uint atlas = atlas_of(p);
+            if (atlas != 0xffffffffu && particle_counts[atlas / 4096u] == 0u)
+                relaxation = DEEP_PRESSURE_RELAXATION;
+        }
         pressure_a[index] = mix(pressure_a[index], value, relaxation);
     } else if (params.mode == 3u) {
         vec2 result = face_velocity[index];

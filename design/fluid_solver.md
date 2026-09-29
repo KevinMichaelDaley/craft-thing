@@ -31,7 +31,9 @@ coefficient is capped at 0.12 for longer offscreen steps. Viscosity precedes
 the pressure solve so its divergence is projected out. The predictor initializes
 pressure from the local hydrostatic water-column head. A cell-centered pressure
 field then solves the discrete
-Poisson equation using 20 red-black SOR sweeps with relaxation 1.5; each color
+Poisson equation using 20 red-black SOR sweeps. Columns shallower than 13 cells
+use relaxation 1.5. Deeper columns in chunks without MPM particles use 1.9 to
+converge long-wavelength pressure modes without additional dispatches; each color
 is a separate dispatch and a Vulkan barrier separates colors. Liquid cells
 carry pressure, air at the free surface has zero pressure, and solid, occupied,
 or unloaded neighbors close the face. Subtracting the pressure gradient from
@@ -39,7 +41,11 @@ predicted face velocity reduces divergence. Q16.16 cell fill remains the
 conserved volume field; liquid density is constant, so there is no separate
 density solve. The current fixed sweep count is validated for a small closed
 basin, but a measured residual or multilevel method is needed for larger
-liquid regions.
+liquid regions. A two-chunk, 32-cell-high river regression displaces the
+surface, saves rendered frames before and after one and four seconds, and
+checks exact mass, high spray, and late vertical speed. The deep-column rule
+reduced mean absolute vertical speed after four seconds from 0.0518 to 0.0218
+cells per tick while retaining the split-versus-monolithic seam result.
 
 Solid material and final rigid occupancy close a face. A missing neighbor page
 also closes the face for this substep; mass remains in the source cell. The
