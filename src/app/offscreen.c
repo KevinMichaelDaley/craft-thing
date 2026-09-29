@@ -37,6 +37,15 @@ static bool same_coord(dc_chunk_coord_t a, dc_chunk_coord_t b) {
     return a.x == b.x && a.y == b.y;
 }
 
+dc_chunk_coord_t dc_offscreen_frontier_origin(dc_chunk_coord_t coord,
+                                              dc_chunk_coord_t camera_origin) {
+    if (coord.x < camera_origin.x)
+        coord.x -= OFFSCREEN_TILES_X - HALO_CHUNKS - 1u;
+    if (coord.y < camera_origin.y)
+        coord.y -= OFFSCREEN_TILES_Y - HALO_CHUNKS - 1u;
+    return coord;
+}
+
 dc_offscreen_t *dc_offscreen_create(dc_gpu_t *parent, dc_chunk_coord_t origin,
                                     char *err, uint32_t cap) {
     dc_offscreen_t *offscreen = calloc(1, sizeof(*offscreen));

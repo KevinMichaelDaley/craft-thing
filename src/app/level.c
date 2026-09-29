@@ -47,6 +47,8 @@ struct dc_level_view {
     bool shutting_down;
     uint64_t background_generation;
     uint32_t background_pending_saves;
+    bool water_frontier_active;
+    int64_t water_frontier_y;
     sleeping_chunk_t *sleeping;
     uint32_t sleeping_count, sleeping_capacity;
 };
@@ -150,8 +152,10 @@ static bool capture_offscreen_chunk(dc_level_view_t *view,
     }
     for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i) {
         if (view->offscreen[i]) continue;
+        dc_chunk_coord_t origin = dc_offscreen_frontier_origin(chunk->coord,
+                                                                view->origin);
         dc_offscreen_t *offscreen = dc_offscreen_create(view->gpu,
-                                                       chunk->coord, err, cap);
+                                                       origin, err, cap);
         if (!offscreen) return false;
         view->offscreen[i] = offscreen;
         if (!dc_offscreen_capture(offscreen, chunk, err, cap)) return false;
@@ -185,6 +189,48 @@ static bool schedule_prefetch(dc_level_view_t *view, char *err, uint32_t cap) {
         entry->generation = generation;
         entry->state = SLEEP_LOADING;
         ++queued;
+    }
+    return true;
+}
+
+static bool request_cold_offscreen_chunk(dc_level_view_t *view,
+                                         dc_chunk_coord_t coord,
+                                         uint32_t *queued,
+                                         char *err, uint32_t cap) {
+    if (visible(view, coord) || sleeping_index(view, coord) != UINT32_MAX ||
+        dc_chunk_table_find(&view->table, coord, NULL)) return true;
+    for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i)
+        if (dc_offscreen_has(view->offscreen[i], coord)) return true;
+    if (!has_offscreen_capacity(view, coord)) return true;
+    if (view->background_generation == OFFSCREEN_LOAD_GENERATION - 1u)
+        return error(err, cap, "Offscreen load generation exhausted");
+    uint64_t generation = OFFSCREEN_SAVE_GENERATION |
+        OFFSCREEN_LOAD_GENERATION | ++view->background_generation;
+    if (!remember_sleeping(view, coord, generation, err, cap)) return false;
+    uint32_t index = sleeping_index(view, coord);
+    view->sleeping[index].state = SLEEP_LOADING;
+    if (!dc_stream_request_load(view->stream, coord, generation)) {
+        forget_sleeping(view, index);
+        return true;
+    }
+    ++*queued;
+    return true;
+}
+
+static bool schedule_water_frontier(dc_level_view_t *view,
+                                    char *err, uint32_t cap) {
+    if (!view->water_frontier_active) return true;
+    uint32_t queued = 0;
+    int64_t right = view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS;
+    int64_t left = view->origin.x - HALO_CHUNKS - 1;
+    for (uint32_t distance = 0; distance < 4u * VIEW_CHUNKS_X &&
+                                queued < 4u; ++distance) {
+        dc_chunk_coord_t a = { right + (int64_t)distance,
+                               view->water_frontier_y };
+        dc_chunk_coord_t b = { left - (int64_t)distance,
+                               view->water_frontier_y };
+        if (!request_cold_offscreen_chunk(view, a, &queued, err, cap) ||
+            !request_cold_offscreen_chunk(view, b, &queued, err, cap)) return false;
     }
     return true;
 }
@@ -404,6 +450,52 @@ static bool exchange_visible_boundary(dc_level_view_t *view,
                                     err, cap);
 }
 
+static bool exchange_offscreen_boundary(dc_offscreen_t *main,
+                                        dc_offscreen_t *other,
+                                        float elapsed_ticks,
+                                        char *err, uint32_t cap) {
+    if (!(elapsed_ticks > 0.0f)) return true;
+    dc_gpu_boundary_t boundaries[DC_GPU_CHUNK_SLOTS * 4u];
+    uint32_t count = 0;
+    for (uint32_t slot = 0; slot < dc_offscreen_slot_capacity(other); ++slot) {
+        dc_chunk_coord_t coord;
+        uint32_t other_x, other_y;
+        if (!dc_offscreen_slot(other, slot, &coord, &other_x, &other_y)) continue;
+        for (uint32_t side = 0; side < 4u; ++side) {
+            if ((side == 0u && coord.x == INT64_MAX) ||
+                (side == 1u && coord.x == INT64_MIN) ||
+                (side == 2u && coord.y == INT64_MAX) ||
+                (side == 3u && coord.y == INT64_MIN)) continue;
+            dc_chunk_coord_t neighbor = coord;
+            if (side == 0u) ++neighbor.x;
+            else if (side == 1u) --neighbor.x;
+            else if (side == 2u) ++neighbor.y;
+            else --neighbor.y;
+            if (!dc_offscreen_has(main, neighbor)) continue;
+            uint32_t main_slot = UINT32_MAX, main_x = 0, main_y = 0;
+            for (uint32_t candidate = 0;
+                 candidate < dc_offscreen_slot_capacity(main); ++candidate) {
+                dc_chunk_coord_t stored;
+                if (dc_offscreen_slot(main, candidate, &stored, &main_x, &main_y) &&
+                    same_coord(stored, neighbor)) {
+                    main_slot = candidate;
+                    break;
+                }
+            }
+            if (main_slot == UINT32_MAX) continue;
+            boundaries[count++] = (dc_gpu_boundary_t){
+                .main_slot = main_slot, .other_slot = slot,
+                .main_x = main_x * DC_CHUNK_SIDE,
+                .main_y = main_y * DC_CHUNK_SIDE,
+                .other_x = other_x * DC_CHUNK_SIDE,
+                .other_y = other_y * DC_CHUNK_SIDE,
+                .other_side = side };
+        }
+    }
+    return dc_gpu_boundary_exchange(dc_offscreen_gpu(main), dc_offscreen_gpu(other),
+                                    boundaries, count, elapsed_ticks, err, cap);
+}
+
 static bool transfer_slot_matches(const dc_level_view_t *view, uint32_t index,
                                   uint64_t generation, dc_chunk_coord_t coord) {
     const dc_chunk_slot_t *slot = &view->table.slots[index];
@@ -493,6 +585,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!bind_transfer_destination(view, err, cap)) return false;
     if (!retire_far_offscreen(view, err, cap)) return false;
     if (!schedule_prefetch(view, err, cap)) return false;
+    if (!schedule_water_frontier(view, err, cap)) return false;
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         dc_chunk_slot_t *slot = &view->table.slots[i];
         if (slot->state == DC_SLOT_ACTIVE || slot->state == DC_SLOT_SLEEPING)
@@ -562,6 +655,18 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
             if (!exchange_visible_boundary(view, offscreen,
                     dc_offscreen_last_advance_ticks(offscreen),
                     err, cap)) return false;
+        }
+        for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i) {
+            if (!view->offscreen[i]) continue;
+            for (uint32_t j = i + 1u; j < OFFSCREEN_CLUSTERS; ++j) {
+                if (!view->offscreen[j]) continue;
+                float elapsed = dc_offscreen_last_advance_ticks(view->offscreen[i]);
+                float other_elapsed = dc_offscreen_last_advance_ticks(view->offscreen[j]);
+                if (other_elapsed > elapsed) elapsed = other_elapsed;
+                if (!exchange_offscreen_boundary(view->offscreen[i],
+                                                 view->offscreen[j], elapsed,
+                                                 err, cap)) return false;
+            }
         }
     }
     if (!dc_gpu_present_chunks_steps(view->gpu, ready_steps, err, cap)) return false;
@@ -726,6 +831,11 @@ bool dc_level_view_paint(dc_level_view_t *view, uint32_t x, uint32_t y,
     if (!dc_gpu_paint_material(view->gpu, x + DC_CHUNK_SIDE + view->camera_offset_x,
                                y + DC_CHUNK_SIDE + view->camera_offset_y,
                                radius, material, err, cap)) return false;
+    if (material == DC_MATERIAL_WATER) {
+        view->water_frontier_active = true;
+        view->water_frontier_y = view->origin.y +
+            cell_chunk_offset((int32_t)y + (int32_t)view->camera_offset_y);
+    }
     int32_t first_x = cell_chunk_offset((int32_t)x +
         (int32_t)view->camera_offset_x - (int32_t)radius);
     int32_t first_y = cell_chunk_offset((int32_t)y +

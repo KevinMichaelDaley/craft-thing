@@ -8,7 +8,12 @@
 #include "../../src/app/session.h"
 
 static int g_pass, g_fail;
-#define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); printf("OK   %s\n", #fn); } while (0)
+#define RUN(fn) do { \
+    const char *filter = getenv("DC_TEST_FILTER"); \
+    if (!filter || strcmp(filter, #fn) == 0) { \
+        printf("RUN  %s\n", #fn); fn(); printf("OK   %s\n", #fn); \
+    } \
+} while (0)
 #define ASSERT_TRUE(expr) do { if (!(expr)) { \
     printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #expr); g_fail++; return; \
 } } while (0)
@@ -382,6 +387,50 @@ static void test_stationary_water_reaches_cold_chunk(void) {
     PASS();
 }
 
+static void test_water_crosses_two_offscreen_workspaces(void) {
+    char directory[] = "build/ui_workspace_front_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 250, 8, 0, DC_MATERIAL_WATER,
+                                    err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 24; ++tick) {
+        ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 512, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (uint32_t x = 0; x < 220; ++x)
+        ASSERT_TRUE(dc_level_view_paint(view, x, 12, 0, DC_MATERIAL_STONE,
+                                        err, sizeof(err)));
+    for (uint32_t y = 6; y < 12; ++y)
+        for (uint32_t x = 108; x < 128; ++x)
+            ASSERT_TRUE(dc_level_view_paint(view, x, y, 0, DC_MATERIAL_WATER,
+                                            err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, -512, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 120; ++tick) {
+        ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 640, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){10, 0},
+                                    chunk, err, sizeof(err)));
+    uint64_t mass = 0;
+    for (uint32_t y = 0; y < 12; ++y)
+        for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x)
+            mass += chunk->cells[y * DC_CHUNK_SIDE + x].fluid_mass;
+    ASSERT_TRUE(mass > 0);
+    free(chunk);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    PASS();
+}
+
 static void test_sand_keeps_falling_offscreen_without_particle_loss(void) {
     char directory[] = "build/ui_offscreen_sand_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory) != NULL);
@@ -485,6 +534,7 @@ int main(void) {
     RUN(test_saved_water_resumes_before_returning_to_view);
     RUN(test_water_crosses_visible_offscreen_boundary);
     RUN(test_stationary_water_reaches_cold_chunk);
+    RUN(test_water_crosses_two_offscreen_workspaces);
     RUN(test_sand_keeps_falling_offscreen_without_particle_loss);
     RUN(test_sand_crosses_offscreen_visible_boundary_with_same_id);
     printf("%d passed, %d failed\n", g_pass, g_fail);
