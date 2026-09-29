@@ -431,6 +431,58 @@ static void test_water_crosses_two_offscreen_workspaces(void) {
     PASS();
 }
 
+static bool deep_water_offscreen(uint64_t *right_mass, uint64_t *far_mass,
+                               char *err, uint32_t cap) {
+    char directory[] = "build/ui_deep_boundary_XXXXXX";
+    if (!mkdtemp(directory)) return false;
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, cap);
+    if (!view) return false;
+    bool okay = dc_level_view_set_spring_enabled(view, false) &&
+                dc_level_view_wait_visible(view, 5000, err, cap) &&
+                dc_level_view_pan_pixels(view, 128, 0) &&
+                dc_level_view_wait_visible(view, 5000, err, cap);
+    for (uint32_t x = 108; x <= 128 && okay; x += 10)
+        okay = dc_level_view_paint(view, x, 6, 7, DC_MATERIAL_WATER, err, cap);
+    for (uint32_t x = 96; x < 192 && okay; ++x)
+        okay = dc_level_view_paint(view, x, 14, 0, DC_MATERIAL_STONE, err, cap);
+    if (okay)
+        okay = dc_level_view_pan_pixels(view, -128, 0) &&
+               dc_level_view_wait_visible(view, 5000, err, cap);
+    for (uint32_t tick = 0; tick < 120 && okay; ++tick)
+        okay = dc_level_view_step(view, err, cap) &&
+               dc_level_view_tick(view, err, cap);
+    if (okay)
+        okay = dc_level_view_pan_pixels(view, 128, 0) &&
+               dc_level_view_wait_visible(view, 5000, err, cap);
+    dc_chunk_t *right = calloc(1, sizeof(*right));
+    if (!right) okay = false;
+    if (okay) okay = dc_level_view_chunk(view, (dc_chunk_coord_t){4, 0},
+                                         right, err, cap);
+    *right_mass = 0;
+    *far_mass = 0;
+    if (okay)
+        for (uint32_t y = 0; y < 14; ++y)
+            for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x)
+                {
+                    uint32_t mass = right->cells[y * DC_CHUNK_SIDE + x].fluid_mass;
+                    *right_mass += mass;
+                    if (x >= 8u) *far_mass += mass;
+                }
+    free(right);
+    return dc_level_view_destroy(view, err, cap) && okay;
+}
+
+static void test_deep_water_crosses_offscreen_boundary_like_visible_water(void) {
+    char err[256] = {0};
+    uint64_t split = 0, far = 0;
+    ASSERT_TRUE(deep_water_offscreen(&split, &far, err, sizeof(err)));
+    printf("deep offscreen water after 120 ticks: destination %.2f, eight cells in %.2f\n",
+           (double)split / DC_FLUID_FULL, (double)far / DC_FLUID_FULL);
+    ASSERT_TRUE(split >= 20u * (uint64_t)DC_FLUID_FULL);
+    ASSERT_TRUE(far >= 5u * (uint64_t)DC_FLUID_FULL);
+    PASS();
+}
+
 static void test_two_water_elevations_cross_cold_right_chunks(void) {
     char directory[] = "build/ui_two_wet_rows_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory) != NULL);
@@ -709,6 +761,7 @@ int main(void) {
     RUN(test_water_crosses_visible_offscreen_boundary);
     RUN(test_stationary_water_reaches_cold_chunk);
     RUN(test_water_crosses_two_offscreen_workspaces);
+    RUN(test_deep_water_crosses_offscreen_boundary_like_visible_water);
     RUN(test_two_water_elevations_cross_cold_right_chunks);
     RUN(test_falling_water_activates_cold_lower_chunk);
     RUN(test_wet_frontier_uses_more_than_four_workspaces);

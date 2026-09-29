@@ -264,6 +264,72 @@ static void test_deep_water_keeps_advecting_across_workspace_seam(void) {
     PASS();
 }
 
+static void test_vertical_deep_water_matches_monolithic_basin(void) {
+    char err[256] = {0};
+    dc_gpu_t *lower_gpu = NULL, *upper_gpu = NULL, *mono_gpu = NULL;
+    dc_chunk_t *upper = calloc(1, sizeof(*upper));
+    dc_chunk_t *lower = calloc(1, sizeof(*lower));
+    dc_chunk_t *mono_upper = calloc(1, sizeof(*mono_upper));
+    dc_chunk_t *mono_lower = calloc(1, sizeof(*mono_lower));
+    ASSERT_TRUE(upper && lower && mono_upper && mono_lower);
+    lower->coord.y = 1;
+    for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x)
+        lower->cells[47 * DC_CHUNK_SIDE + x].material = DC_MATERIAL_STONE;
+    for (uint32_t y = 40; y < DC_CHUNK_SIDE; ++y)
+        for (uint32_t x = 20; x < 44; ++x)
+            upper->cells[y * DC_CHUNK_SIDE + x].fluid_mass = DC_FLUID_FULL;
+    for (uint32_t y = 0; y < 17; ++y)
+        for (uint32_t x = 20; x < 44; ++x)
+            lower->cells[y * DC_CHUNK_SIDE + x].fluid_mass = DC_FLUID_FULL;
+    memcpy(mono_upper, upper, sizeof(*upper));
+    memcpy(mono_lower, lower, sizeof(*lower));
+    ASSERT_TRUE(dc_gpu_create(&lower_gpu, 64, 64,
+                              "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create_shared(&upper_gpu, lower_gpu, 64, 64,
+                                     "build/shaders/pattern.comp.spv",
+                                     err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create(&mono_gpu, 64, 128,
+                              "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(lower_gpu, 0, lower, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(upper_gpu, 0, upper, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(mono_gpu, 0, mono_upper, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(mono_gpu, 1, mono_lower, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(lower_gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(upper_gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(mono_gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(mono_gpu, 0, 1, 1, err, sizeof(err)));
+    dc_gpu_boundary_t boundary = {.main_slot = 0, .other_slot = 0,
+        .main_x = 0, .main_y = 0, .other_x = 0, .other_y = 0,
+        .other_side = 2};
+    for (uint32_t tick = 0; tick < 120; ++tick) {
+        ASSERT_TRUE(dc_gpu_tick_step(lower_gpu, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_tick_step(upper_gpu, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_tick_step(mono_gpu, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_boundary_exchange(lower_gpu, upper_gpu, &boundary,
+                                             1, 1.0f, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_gpu_download_chunk(lower_gpu, 0, lower, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(upper_gpu, 0, upper, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(mono_gpu, 0, mono_upper, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(mono_gpu, 1, mono_lower, err, sizeof(err)));
+    uint64_t total = 0, lower_mass = 0, mono_lower_mass = 0;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        total += upper->cells[i].fluid_mass + lower->cells[i].fluid_mass;
+        lower_mass += lower->cells[i].fluid_mass;
+        mono_lower_mass += mono_lower->cells[i].fluid_mass;
+    }
+    printf("vertical deep water: split lower %.2f, monolithic lower %.2f cells\n",
+           (double)lower_mass / DC_FLUID_FULL,
+           (double)mono_lower_mass / DC_FLUID_FULL);
+    ASSERT_EQ(total, 984u * (uint64_t)DC_FLUID_FULL);
+    uint64_t error = lower_mass > mono_lower_mass ?
+        lower_mass - mono_lower_mass : mono_lower_mass - lower_mass;
+    ASSERT_TRUE(error <= 8u * (uint64_t)DC_FLUID_FULL);
+    dc_gpu_destroy(upper_gpu); dc_gpu_destroy(lower_gpu); dc_gpu_destroy(mono_gpu);
+    free(upper); free(lower); free(mono_upper); free(mono_lower);
+    PASS();
+}
+
 static void test_workspace_surface_marker_follows_crossing_water(void) {
     char err[256] = {0};
     dc_gpu_t *upper = NULL, *lower = NULL;
@@ -586,6 +652,7 @@ int main(void) {
     RUN(test_shared_workspace_boundary_conserves_water_and_grain);
     RUN(test_workspace_water_reaches_cells_allowed_by_velocity);
     RUN(test_deep_water_keeps_advecting_across_workspace_seam);
+    RUN(test_vertical_deep_water_matches_monolithic_basin);
     RUN(test_workspace_surface_marker_follows_crossing_water);
     RUN(test_gpu_brush_updates_only_covered_cells);
     RUN(test_chunk_page_mapping_and_gpu_material_edit);
