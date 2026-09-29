@@ -24,6 +24,7 @@ layout(push_constant) uniform Params {
 const uint DEEP_COLUMN_HEAD = 13u * 65536u;
 const float SHALLOW_PRESSURE_RELAXATION = 1.5;
 const float DEEP_PRESSURE_RELAXATION = 1.9;
+const float FAST_FALL_SPEED = 2.0;
 
 
 uint index_of(ivec2 p) { return uint(p.y) * params.width + uint(p.x); }
@@ -140,6 +141,22 @@ void main() {
             ivec2 cell = ivec2(p.x, int(y));
             head = wet(cell) ? min(head + cells[atlas_of(cell)].y, 64u * 65536u) : 0u;
             hydro_head[index_of(cell)] = head;
+        }
+        bool supported = false;
+        for (int y = int(params.height) - 1; y >= 0; --y) {
+            ivec2 cell = ivec2(p.x, y);
+            if (!wet(cell)) {
+                supported = false;
+                continue;
+            }
+            ivec2 below = cell + ivec2(0, 1);
+            bool solid_below = atlas_of(below) != 0xffffffffu &&
+                               !open_cell(below);
+            supported = supported || solid_below;
+            uint cell_index = index_of(cell);
+            // A fast unsupported column is in free fall, not hydrostatic balance.
+            if (!supported && face_velocity[cell_index].y > FAST_FALL_SPEED)
+                hydro_head[cell_index] = 0u;
         }
     } else if (params.mode == 0u) {
         vec2 old_velocity = face_velocity[index];

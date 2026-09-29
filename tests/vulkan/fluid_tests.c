@@ -337,7 +337,7 @@ static void test_high_painted_water_falls_as_continuous_column(void) {
         }
     printf("falling stream connected %u of %u wet cells\n",
            largest_component, wet_cells);
-    ASSERT_TRUE(wet_cells > 100u && largest_component * 4u >= wet_cells * 3u);
+    ASSERT_TRUE(wet_cells > 100u && largest_component * 5u >= wet_cells * 4u);
     dc_gpu_destroy(gpu);
     free(top); free(bottom); free(saved_top); free(saved_bottom);
     PASS();
