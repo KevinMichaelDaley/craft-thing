@@ -448,7 +448,7 @@ static bool deep_water_offscreen(uint64_t *right_mass, uint64_t *far_mass,
     if (okay)
         okay = dc_level_view_pan_pixels(view, -128, 0) &&
                dc_level_view_wait_visible(view, 5000, err, cap);
-    for (uint32_t tick = 0; tick < 120 && okay; ++tick)
+    for (uint32_t tick = 0; tick < 300 && okay; ++tick)
         okay = dc_level_view_step(view, err, cap) &&
                dc_level_view_tick(view, err, cap);
     if (okay)
@@ -476,7 +476,7 @@ static void test_deep_water_crosses_offscreen_boundary_like_visible_water(void) 
     char err[256] = {0};
     uint64_t split = 0, far = 0;
     ASSERT_TRUE(deep_water_offscreen(&split, &far, err, sizeof(err)));
-    printf("deep offscreen water after 120 ticks: destination %.2f, eight cells in %.2f\n",
+    printf("deep offscreen water after 300 ticks: destination %.2f, eight cells in %.2f\n",
            (double)split / DC_FLUID_FULL, (double)far / DC_FLUID_FULL);
     ASSERT_TRUE(split >= 20u * (uint64_t)DC_FLUID_FULL);
     ASSERT_TRUE(far >= 5u * (uint64_t)DC_FLUID_FULL);

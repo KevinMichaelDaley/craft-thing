@@ -4,8 +4,8 @@ layout(set = 0, binding = 0, std430) buffer MainCells { uvec2 main_cells[]; };
 layout(set = 0, binding = 1, std430) buffer OtherCells { uvec2 other_cells[]; };
 layout(set = 0, binding = 2, std430) buffer MainVelocity { vec2 main_velocity[]; };
 layout(set = 0, binding = 3, std430) buffer OtherVelocity { vec2 other_velocity[]; };
-layout(set = 0, binding = 4, std430) readonly buffer MainPressure { float main_pressure[]; };
-layout(set = 0, binding = 5, std430) readonly buffer OtherPressure { float other_pressure[]; };
+layout(set = 0, binding = 4, std430) buffer MainPressure { float main_pressure[]; };
+layout(set = 0, binding = 5, std430) buffer OtherPressure { float other_pressure[]; };
 layout(set = 0, binding = 6, std430) readonly buffer MainHead { uint main_head[]; };
 layout(set = 0, binding = 7, std430) readonly buffer OtherHead { uint other_head[]; };
 layout(set = 0, binding = 8, std430) readonly buffer MainOccupancy { uint main_occupancy[]; };
@@ -39,10 +39,151 @@ layout(push_constant) uniform Params {
 
 const uint SIDE = 64u;
 const uint FULL = 65536u;
+const uint PRESSURE_BAND = 8u;
+const uint PRESSURE_SWEEPS = 32u;
+const uint SEAM_FIRST = PRESSURE_BAND / 2u - 1u;
+const uint SEAM_SECOND = PRESSURE_BAND / 2u;
+shared float pressure_correction[PRESSURE_BAND][SIDE];
 
 bool open_material(uvec2 cell) {
     uint kind = cell.x & 0xffffu;
     return kind == 0u || kind == 2u || kind == 4u || kind == 5u;
+}
+
+bool open_side(bool use_main, uint cell_index, uint grid_index) {
+    return use_main ? open_material(main_cells[cell_index]) &&
+                      main_occupancy[grid_index] == 0u :
+                      open_material(other_cells[cell_index]) &&
+                      other_occupancy[grid_index] == 0u;
+}
+
+uvec2 cell_side(bool use_main, uint index) {
+    return use_main ? main_cells[index] : other_cells[index];
+}
+
+vec2 velocity_side(bool use_main, uint index) {
+    return use_main ? main_velocity[index] : other_velocity[index];
+}
+
+void store_velocity_side(bool use_main, uint index, vec2 velocity) {
+    if (use_main) main_velocity[index] = velocity;
+    else other_velocity[index] = velocity;
+}
+
+float project_boundary_band(uint lane, bool main_first, bool horizontal,
+                            uint first_cell, uint second_cell,
+                            uint first_index, uint second_index,
+                            uint first_width, uint second_width,
+                            float proposed) {
+    uint cell_index[PRESSURE_BAND], grid_index[PRESSURE_BAND];
+    uint width[PRESSURE_BAND];
+    bool use_main[PRESSURE_BAND], open[PRESSURE_BAND], wet_band[PRESSURE_BAND];
+    float normal[PRESSURE_BAND], residual[PRESSURE_BAND], degree[PRESSURE_BAND];
+    uint cell_axis = horizontal ? 1u : SIDE;
+    uint transverse_cell = horizontal ? SIDE : 1u;
+    for (uint band = 0u; band < PRESSURE_BAND; ++band) {
+        bool first = band < SEAM_SECOND;
+        int offset = first ? int(band) - int(SEAM_FIRST) :
+                             int(band) - int(SEAM_SECOND);
+        uint base_cell = first ? first_cell : second_cell;
+        uint base_grid = first ? first_index : second_index;
+        width[band] = first ? first_width : second_width;
+        uint grid_axis = horizontal ? 1u : width[band];
+        cell_index[band] = uint(int(base_cell) + offset * int(cell_axis));
+        grid_index[band] = uint(int(base_grid) + offset * int(grid_axis));
+        use_main[band] = first == main_first;
+        open[band] = open_side(use_main[band], cell_index[band], grid_index[band]);
+        wet_band[band] = open[band] && cell_side(use_main[band], cell_index[band]).y != 0u &&
+                       lane > 0u && lane + 1u < SIDE;
+        vec2 face = velocity_side(use_main[band], grid_index[band]);
+        normal[band] = band == SEAM_FIRST ? proposed :
+                       (horizontal ? face.x : face.y);
+        pressure_correction[band][lane] = 0.0;
+    }
+    barrier();
+    for (uint band = 0u; band < PRESSURE_BAND; ++band) {
+        residual[band] = 0.0;
+        degree[band] = 1.0;
+        if (!wet_band[band]) continue;
+        uint grid_axis = horizontal ? 1u : width[band];
+        uint transverse_grid = horizontal ? width[band] : 1u;
+        uint before_grid = grid_index[band] - transverse_grid;
+        vec2 transverse_before = velocity_side(use_main[band], before_grid);
+        vec2 transverse_here = velocity_side(use_main[band], grid_index[band]);
+        float incoming = band == 0u ?
+            (horizontal ? velocity_side(use_main[band], grid_index[band] - grid_axis).x :
+                          velocity_side(use_main[band], grid_index[band] - grid_axis).y) :
+            normal[band - 1u];
+        residual[band] = normal[band] - incoming +
+            (horizontal ? transverse_here.y - transverse_before.y :
+                          transverse_here.x - transverse_before.x);
+        bool previous_open = band == 0u ? open_side(use_main[band],
+            cell_index[band] - cell_axis, grid_index[band] - grid_axis) :
+            open[band - 1u];
+        bool next_open = band + 1u == PRESSURE_BAND ? open_side(use_main[band],
+            cell_index[band] + cell_axis, grid_index[band] + grid_axis) :
+            open[band + 1u];
+        degree[band] = float(previous_open) + float(next_open) +
+            float(open_side(use_main[band], cell_index[band] - transverse_cell,
+                            grid_index[band] - transverse_grid)) +
+            float(open_side(use_main[band], cell_index[band] + transverse_cell,
+                            grid_index[band] + transverse_grid));
+        degree[band] = max(degree[band], 1.0);
+    }
+    // Solve L(q) = -div(u) in the shared strip, with zero correction outside it.
+    for (uint sweep = 0u; sweep < PRESSURE_SWEEPS; ++sweep)
+        for (uint color = 0u; color < 2u; ++color) {
+            for (uint band = 0u; band < PRESSURE_BAND; ++band) {
+                if (!wet_band[band] || ((band + lane) & 1u) != color) continue;
+                float sum = 0.0;
+                if (band > 0u) sum += pressure_correction[band - 1u][lane];
+                if (band + 1u < PRESSURE_BAND)
+                    sum += pressure_correction[band + 1u][lane];
+                if (lane > 0u) sum += pressure_correction[band][lane - 1u];
+                if (lane + 1u < SIDE)
+                    sum += pressure_correction[band][lane + 1u];
+                float target = (sum - residual[band]) / degree[band];
+                pressure_correction[band][lane] =
+                    mix(pressure_correction[band][lane], target, 1.5);
+            }
+            barrier();
+        }
+    float seam_velocity = proposed + pressure_correction[SEAM_FIRST][lane] -
+                                     pressure_correction[SEAM_SECOND][lane];
+    for (uint band = 0u; band < PRESSURE_BAND; ++band) {
+        float own = pressure_correction[band][lane];
+        float next = band + 1u < PRESSURE_BAND ?
+            pressure_correction[band + 1u][lane] : 0.0;
+        if (wet_band[band]) {
+            if (use_main[band]) main_pressure[grid_index[band]] += own;
+            else other_pressure[grid_index[band]] += own;
+        }
+        bool open_next = band + 1u < PRESSURE_BAND ? open[band + 1u] :
+            open_side(use_main[band], cell_index[band] + cell_axis,
+                      grid_index[band] + (horizontal ? 1u : width[band]));
+        vec2 face = velocity_side(use_main[band], grid_index[band]);
+        if (open[band] && open_next) {
+            float corrected = normal[band] + own - next;
+            if (horizontal) face.x = corrected;
+            else face.y = corrected;
+        }
+        if (lane + 1u < SIDE && open[band] &&
+            open_side(use_main[band], cell_index[band] + transverse_cell,
+                      grid_index[band] + (horizontal ? width[band] : 1u))) {
+            float next_lane = pressure_correction[band][lane + 1u];
+            if (horizontal) face.y += own - next_lane;
+            else face.x += own - next_lane;
+        }
+        store_velocity_side(use_main[band], grid_index[band], face);
+    }
+    if (wet_band[0u]) {
+        uint before = grid_index[0u] - (horizontal ? 1u : width[0u]);
+        vec2 face = velocity_side(use_main[0u], before);
+        if (horizontal) face.x -= pressure_correction[0u][lane];
+        else face.y -= pressure_correction[0u][lane];
+        store_velocity_side(use_main[0u], before, face);
+    }
+    return seam_velocity;
 }
 
 void transfer_grains(uint mc, uint oc) {
@@ -239,36 +380,44 @@ void main() {
     uvec2 m = main_cells[mc], o = other_cells[oc];
     bool open_face = open_material(m) && open_material(o) &&
         main_occupancy[mi] == 0u && other_occupancy[oi] == 0u;
+    bool main_first = params.other_side == 1u || params.other_side == 3u;
+    bool horizontal = params.other_side < 2u;
+    uint first_cell = main_first ? mc : oc;
+    uint second_cell = main_first ? oc : mc;
+    uint first_index = main_first ? mi : oi;
+    uint second_index = main_first ? oi : mi;
+    uint first_width = main_first ? params.main_width : params.other_width;
+    uint second_width = main_first ? params.other_width : params.main_width;
+    uint first_inner = horizontal ? first_index - 1u : first_index - first_width;
+    vec2 incoming = main_first ? main_velocity[first_inner] :
+                                  other_velocity[first_inner];
+    vec2 outgoing = main_first ? other_velocity[second_index] :
+                                  main_velocity[second_index];
+    float ticks = uintBitsToFloat(params.tick_bits);
+    float velocity = 0.0;
+    if (open_face) {
+        float first_head = float(main_first ? main_head[mi] : other_head[oi]) /
+                           float(FULL);
+        float second_head = float(main_first ? other_head[oi] : main_head[mi]) /
+                            float(FULL);
+        float first_pressure = main_first ? main_pressure[mi] : other_pressure[oi];
+        float second_pressure = main_first ? other_pressure[oi] : main_pressure[mi];
+        float advective_velocity = horizontal ? incoming.x + outgoing.x :
+                                               incoming.y + outgoing.y;
+        velocity = advective_velocity + (horizontal ? 0.0 : 0.5) * ticks +
+                   0.05 * ticks * (first_head - second_head) -
+                   (second_pressure - first_pressure);
+        velocity = clamp(velocity, -4.0, 4.0);
+    }
+    velocity = project_boundary_band(lane, main_first, horizontal,
+        first_cell, second_cell, first_index, second_index,
+        first_width, second_width, velocity);
     if (open_face) {
     transfer_grains(mc, oc);
     m = main_cells[mc];
     o = other_cells[oc];
-    bool main_first = params.other_side == 1u || params.other_side == 3u;
     uint first_mass = main_first ? m.y : o.y;
     uint second_mass = main_first ? o.y : m.y;
-    float first_head = float(main_first ? main_head[mi] : other_head[oi]) /
-                       float(FULL);
-    float second_head = float(main_first ? other_head[oi] : main_head[mi]) /
-                        float(FULL);
-    float first_pressure = main_first ? main_pressure[mi] : other_pressure[oi];
-    float second_pressure = main_first ? other_pressure[oi] : main_pressure[mi];
-    uint first_index = main_first ? mi : oi;
-    uint second_index = main_first ? oi : mi;
-    uint first_width = main_first ? params.main_width : params.other_width;
-    uint inner_index = params.other_side < 2u ? first_index - 1u :
-                       first_index - first_width;
-    vec2 incoming = main_first ? main_velocity[inner_index] :
-                                  other_velocity[inner_index];
-    vec2 outgoing = main_first ? other_velocity[second_index] :
-                                  main_velocity[second_index];
-    // Join the one-sided projected face momenta before applying seam pressure.
-    float advective_velocity = params.other_side < 2u ?
-        incoming.x + outgoing.x : incoming.y + outgoing.y;
-    float ticks = uintBitsToFloat(params.tick_bits);
-    float velocity = advective_velocity +
-                     (params.other_side >= 2u ? 0.5 : 0.0) * ticks +
-                     0.05 * ticks * (first_head - second_head) -
-                     (second_pressure - first_pressure);
     velocity = clamp(velocity, -4.0, 4.0);
     bool forward = velocity >= 0.0;
     bool dest_is_main = forward ? !main_first : main_first;
