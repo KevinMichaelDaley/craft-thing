@@ -8,6 +8,7 @@
 #include "../../src/app/level.h"
 #include "../../src/app/offscreen.h"
 #include "../../src/app/session.h"
+#include "../../src/vulkan/gpu_internal.h"
 
 static int g_pass, g_fail;
 #define RUN(fn) do { \
@@ -65,6 +66,40 @@ static void test_offscreen_catchup_has_bounded_submission_cost(void) {
     printf("fastest offscreen 0.2 s catch-up %.2f ms\n", fastest_ms);
     ASSERT_EQ(dc_gpu_tick_submission_count(dc_offscreen_gpu(offscreen)) -
               first_submission, 3u);
+    free(chunk);
+    dc_offscreen_destroy(offscreen);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
+static void test_offscreen_pressure_work_tracks_distance_band(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 256u, 256u,
+        "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    dc_offscreen_t *offscreen = dc_offscreen_create(gpu,
+        (dc_chunk_coord_t){0, 0}, err, sizeof(err));
+    ASSERT_TRUE(offscreen != NULL);
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    chunk->cells[8u * DC_CHUNK_SIDE + 32u].fluid_mass = DC_FLUID_FULL;
+    ASSERT_TRUE(dc_offscreen_capture(offscreen, chunk, err, sizeof(err)));
+    dc_gpu_t *work_gpu = dc_offscreen_gpu(offscreen);
+    ASSERT_TRUE(dc_offscreen_update(offscreen, (dc_chunk_coord_t){1, 0},
+                                    4.0 / 60.0, true, err, sizeof(err)));
+    ASSERT_EQ(work_gpu->pressure_sweeps, 8u);
+    ASSERT_TRUE(dc_offscreen_update(offscreen, (dc_chunk_coord_t){5, 0},
+                                    12.0 / 60.0, true, err, sizeof(err)));
+    ASSERT_EQ(work_gpu->pressure_sweeps, 6u);
+    ASSERT_TRUE(dc_offscreen_update(offscreen, (dc_chunk_coord_t){9, 0},
+                                    24.0 / 60.0, true, err, sizeof(err)));
+    ASSERT_EQ(work_gpu->pressure_sweeps, 4u);
+    ASSERT_TRUE(dc_offscreen_take(offscreen, (dc_chunk_coord_t){0, 0},
+                                  chunk, err, sizeof(err)));
+    uint64_t mass = 0u;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
+        mass += chunk->cells[i].fluid_mass;
+    ASSERT_EQ(mass, DC_FLUID_FULL);
     free(chunk);
     dc_offscreen_destroy(offscreen);
     dc_gpu_destroy(gpu);
@@ -875,6 +910,7 @@ static void test_painted_gas_crosses_visible_offscreen_boundary_after_pan(void) 
 int main(void) {
     RUN(test_offscreen_cache_uses_compact_gpu_tiles);
     RUN(test_offscreen_catchup_has_bounded_submission_cost);
+    RUN(test_offscreen_pressure_work_tracks_distance_band);
     RUN(test_camera_crosses_chunk_boundary_cell_by_cell);
     RUN(test_loading_status_and_camera_reset);
     RUN(test_single_step_moves_water_once);
