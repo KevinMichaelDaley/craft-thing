@@ -63,11 +63,8 @@ dc_offscreen_t *dc_offscreen_create(dc_gpu_t *parent, dc_chunk_coord_t origin,
         !dc_gpu_set_fluid_interval(offscreen->gpu, 1u) ||
         !dc_gpu_set_fluid_velocity_damping(offscreen->gpu,
                                            OFFSCREEN_FLUID_RETAINED_PER_TICK) ||
-        !dc_gpu_set_pressure_sweeps(offscreen->gpu, 8u)) {
-        dc_offscreen_destroy(offscreen);
-        return NULL;
-    }
-    if (!dc_gpu_set_tick_water_source_radius(offscreen->gpu, SPRING_RADIUS)) {
+        !dc_gpu_set_pressure_sweeps(offscreen->gpu, 8u) ||
+        !dc_gpu_set_tick_water_source_radius(offscreen->gpu, SPRING_RADIUS)) {
         dc_offscreen_destroy(offscreen);
         return NULL;
     }

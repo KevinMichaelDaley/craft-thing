@@ -2,23 +2,22 @@
 
 ## Current implementation
 
-Departing dynamic chunks move to one of four bounded headless Vulkan workspaces.
-The workspaces keep material, Eulerian mass and velocity, markers, and MPM grains
-on the GPU. They advance on the same elapsed clock at 4-, 12-, or 24-tick
-cadences, using up to three nominal ticks per fluid solve, two MPM substeps
-per nominal tick, and eight pressure sweeps. A workspace farther than four
-screen widths is saved through the chunk worker and released. GPU readback and
-upload happen on eviction, promotion, and final save, not on ordinary frames.
-The interactive pan tests cover falling water at one and two screens, particle
-identity, and velocity persistence across a process restart.
-When foreground chunks are still loading, their pending ticks remain queued;
-offscreen work advances with them once the visible set is ready.
+Dynamic chunks beyond the camera view live in a bounded background GPU cache.
+Each cache grid covers up to 3×3 chunks and retains their material, Eulerian
+mass and velocity, markers, and MPM grains on the GPU. The runtime can hold at
+most 16 grids; empty terrain needs no cache slot. Nearby grids advance every
+4 ticks, middle grids every 12, and farther grids every 24. Multiple physics
+substeps with the same timestep share one GPU submission, including the barriers
+between steps. A grid beyond four screen widths is saved through the worker and
+released. Readback and upload occur at chunk eviction, promotion, and save,
+not on ordinary frames.
 
-Conservative transfer across independently scheduled visible and offscreen
-workspaces is still tracked by `dun-bd93`. A chunk that was saved beyond the
-four-screen band is not yet prefetched when the camera approaches it again, and
-the four-workspace pool can saturate on widely scattered active chunks. Those
-limits are tracked by `dun-wwcl` and `dun-3xqx`.
+The cache prefetches saved dynamic chunks as the camera approaches. Water,
+grain identity, velocity, and conservative transfers across adjacent grids
+have camera-pan regressions. Under a saturated multi-directional load, the
+cache can still exhaust its 16-grid capacity; recycling and fairness remain
+tracked by `dun-5a1a`. Same-world-clock scheduling and full-ring cost remain
+tracked by `dun-3xqx`.
 
 ## Problem and invariant
 
