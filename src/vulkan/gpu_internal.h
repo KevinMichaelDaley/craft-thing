@@ -123,6 +123,7 @@ struct dc_gpu {
     VkPipeline velocity_shift_pipeline;
     VkPipeline gas_pipeline;
     uint32_t gas_tick;
+    float gas_phase_budget;
     bool gas_active;
     uint32_t fluid_tick;
     uint32_t fluid_interval;

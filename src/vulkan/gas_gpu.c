@@ -31,25 +31,31 @@ void dc_gpu_gas_pipeline_destroy(dc_gpu_t *gpu) {
 
 void dc_gpu_record_gas(dc_gpu_t *gpu) {
     if (!gpu->gas_active) return;
+    gpu->gas_phase_budget += gpu->timed_fluid ? gpu->tick_time_scale : 1.0f;
+    uint32_t steps = (uint32_t)(gpu->gas_phase_budget + 0.00001f);
+    gpu->gas_phase_budget -= (float)steps;
+    if (!steps) return;
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                       gpu->gas_pipeline);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0u, 1u, &gpu->descriptor, 0u, NULL);
-    uint32_t push[7] = { gpu->width, gpu->height, 0u,
-                         gpu->gas_tick++ & 1u, 0u, 0u, 0u };
-    for (uint32_t mode = 0u; mode < 3u; ++mode) {
-        push[2] = mode;
-        vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
-            VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(push), push);
-        vkCmdDispatch(gpu->command, 4u, 4u, gpu->slot_capacity);
-        VkMemoryBarrier2 barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-            .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
-                             VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT };
-        VkDependencyInfo dependency = { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-            .memoryBarrierCount = 1u, .pMemoryBarriers = &barrier };
-        vkCmdPipelineBarrier2(gpu->command, &dependency);
+    uint32_t push[7] = { gpu->width, gpu->height, 0u, 0u, 0u, 0u, 0u };
+    VkMemoryBarrier2 barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT };
+    VkDependencyInfo dependency = { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .memoryBarrierCount = 1u, .pMemoryBarriers = &barrier };
+    for (uint32_t step = 0u; step < steps; ++step) {
+        push[3] = gpu->gas_tick++ & 1u;
+        for (uint32_t mode = 0u; mode < 3u; ++mode) {
+            push[2] = mode;
+            vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+                VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(push), push);
+            vkCmdDispatch(gpu->command, 4u, 4u, gpu->slot_capacity);
+            vkCmdPipelineBarrier2(gpu->command, &dependency);
+        }
     }
 }
