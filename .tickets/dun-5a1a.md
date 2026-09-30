@@ -31,3 +31,11 @@ Remaining acceptance work: saturated multi-directional cache fairness and live n
 **2026-09-30T03:50:16Z**
 
 Quarter-native profile after resolution switch: foreground 168.7 MiB, one 4x4 offscreen workspace 38.6 MiB, 0.2 s offscreen simulation 18.78 ms wall. Current runtime permits 16 offscreen workspaces (src/app/level.c) with 16 slots each (src/app/offscreen.c); prior ticket note about 80-slot contexts is stale. Saturated multi-directional frame budget and fairness remain open; need a representative quarter-native stress regression before closing.
+
+**2026-09-30T04:22:28Z**
+
+Reduced each background cache grid from 4x4 to 3x3 chunks; quarter-native allocation 38.6 -> 21.7 MiB. Batched equal-timestep GPU substeps into one submission per catch-up period (six submissions -> one for 0.2 s near-band advance); representative 0.2 s wall time 18.78 -> 10.46 ms. Existing 20 UI camera/transfer tests pass. Saturated multi-directional fairness and full-ring frame budget remain open.
+
+**2026-09-30T04:23:42Z**
+
+Single cached water chunk, quarter-native diagnostic tick after catch-up: GPU rigid 0.023 ms, fluid 0.619 ms, granular 0.231 ms; 6 GPU substeps cost ~5.2 ms GPU but ~10-12 ms wall including command recording/sync. A fully saturated 16-grid ring would still exceed 60 Hz; next step should pack active background chunks into shared cadence atlases rather than schedule 16 independent command streams. No per-frame copyback.
