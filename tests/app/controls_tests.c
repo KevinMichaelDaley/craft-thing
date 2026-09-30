@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "../../src/app/level.h"
 #include "../../src/app/offscreen.h"
@@ -31,6 +32,38 @@ static void test_offscreen_cache_uses_compact_gpu_tiles(void) {
         (dc_chunk_coord_t){0, 0}, err, sizeof(err));
     ASSERT_TRUE(offscreen != NULL);
     ASSERT_EQ(dc_offscreen_slot_capacity(offscreen), 9u);
+    dc_offscreen_destroy(offscreen);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
+static void test_offscreen_catchup_has_bounded_submission_cost(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 256u, 256u,
+        "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    dc_offscreen_t *offscreen = dc_offscreen_create(gpu,
+        (dc_chunk_coord_t){0, 0}, err, sizeof(err));
+    ASSERT_TRUE(offscreen != NULL);
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    chunk->cells[5u * DC_CHUNK_SIDE + 32u].fluid_mass = DC_FLUID_FULL;
+    ASSERT_TRUE(dc_offscreen_capture(offscreen, chunk, err, sizeof(err)));
+    double fastest_ms = 1e9;
+    for (uint32_t repeat = 0u; repeat < 3u; ++repeat) {
+        struct timespec start, stop;
+        ASSERT_TRUE(clock_gettime(CLOCK_MONOTONIC, &start) == 0);
+        ASSERT_TRUE(dc_offscreen_update(offscreen, (dc_chunk_coord_t){1, 0},
+                                        0.2, true, err, sizeof(err)));
+        ASSERT_TRUE(clock_gettime(CLOCK_MONOTONIC, &stop) == 0);
+        double elapsed_ms = (stop.tv_sec - start.tv_sec) * 1000.0 +
+                            (stop.tv_nsec - start.tv_nsec) / 1e6;
+        if (elapsed_ms < fastest_ms) fastest_ms = elapsed_ms;
+        ASSERT_TRUE(dc_offscreen_last_advance_ticks(offscreen) > 11.9f);
+    }
+    printf("fastest offscreen 0.2 s catch-up %.2f ms\n", fastest_ms);
+    ASSERT_TRUE(fastest_ms < 12.0);
+    free(chunk);
     dc_offscreen_destroy(offscreen);
     dc_gpu_destroy(gpu);
     PASS();
@@ -766,6 +799,7 @@ static void test_sand_crosses_offscreen_visible_boundary_with_same_id(void) {
 
 int main(void) {
     RUN(test_offscreen_cache_uses_compact_gpu_tiles);
+    RUN(test_offscreen_catchup_has_bounded_submission_cost);
     RUN(test_camera_crosses_chunk_boundary_cell_by_cell);
     RUN(test_loading_status_and_camera_reset);
     RUN(test_single_step_moves_water_once);
