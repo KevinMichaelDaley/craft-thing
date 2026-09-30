@@ -41,6 +41,7 @@ const uint SIDE = 64u;
 const uint FULL = 65536u;
 const uint PRESSURE_BAND = 8u;
 const uint PRESSURE_SWEEPS = 64u;
+const float HYDROSTATIC_HEAD_SCALE = 0.04;
 const uint SEAM_FIRST = PRESSURE_BAND / 2u - 1u;
 const uint SEAM_SECOND = PRESSURE_BAND / 2u;
 shared float pressure_correction[PRESSURE_BAND][SIDE];
@@ -405,7 +406,8 @@ void main() {
         float advective_velocity = horizontal ? incoming.x + outgoing.x :
                                                incoming.y + outgoing.y;
         velocity = advective_velocity + (horizontal ? 0.0 : 0.5) * ticks +
-                   0.04 * ticks * (first_head - second_head) -
+                   HYDROSTATIC_HEAD_SCALE * ticks *
+                   (first_head - second_head) -
                    (second_pressure - first_pressure);
     }
     velocity = project_boundary_band(lane, main_first, horizontal,
