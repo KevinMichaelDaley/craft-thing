@@ -618,9 +618,12 @@ static int smoke_gas_material(void) {
         initial += chunk->cells[i].material == DC_MATERIAL_GAS;
     mkdir("build/screenshots", 0777);
     if (okay) okay = save_level_bmp("build/screenshots/gas_before.bmp", before);
+    uint64_t start = SDL_GetPerformanceCounter();
     for (uint32_t tick = 0u; tick < 60u && okay; ++tick)
         okay = dc_level_view_step(view, err, sizeof(err)) &&
                dc_level_view_tick(view, err, sizeof(err));
+    double tick_rate = 60.0 * (double)SDL_GetPerformanceFrequency() /
+                       (double)(SDL_GetPerformanceCounter() - start);
     if (okay) okay = dc_level_view_pixels(view, after,
                                          VIEW_WIDTH * VIEW_HEIGHT, err, sizeof(err)) &&
                      save_level_bmp("build/screenshots/gas_after_1s.bmp", after) &&
@@ -635,6 +638,9 @@ static int smoke_gas_material(void) {
     if (okay) for (uint32_t i = 0u; i < VIEW_WIDTH * VIEW_HEIGHT; ++i)
         changed += before[i] != after[i];
     okay = okay && initial > 0u && final == initial && high > 0u && changed > 10u;
+    dc_gpu_tick_capture_t capture = {0};
+    if (okay) okay = dc_level_view_capture_tick(view, &capture,
+                                                err, sizeof(err));
     if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
     free(before); free(after); free(chunk);
     if (!okay) {
@@ -642,8 +648,8 @@ static int smoke_gas_material(void) {
                 initial, final, high, changed, err);
         return 1;
     }
-    printf("Gas screenshots: gas_before.bmp and gas_after_1s.bmp (%u cells conserved, %u high)\n",
-           final, high);
+    printf("Gas screenshots: gas_before.bmp and gas_after_1s.bmp (%u cells conserved, %u high, %.1f ticks/s, granular+gas GPU %.3f ms)\n",
+           final, high, tick_rate, capture.stages[2].gpu_ns / 1e6);
     return 0;
 }
 

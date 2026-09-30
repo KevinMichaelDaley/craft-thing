@@ -23,12 +23,13 @@ MPM_COMPONENT_SHADER = build/shaders/mpm_component.comp.spv
 GAS_SHADER = build/shaders/gas.comp.spv
 BOUNDARY_SHADER = build/shaders/workspace_boundary.comp.spv
 FRONTIER_SHADER = build/shaders/wet_frontier.comp.spv
+GPU_SHADERS = $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(GAS_SHADER) $(BOUNDARY_SHADER) $(FRONTIER_SHADER)
 
 .PHONY: all test test_ui test_ui_long clean shaders
 all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
 
 NATIVE_SRC = src/app/main.c src/app/level.c src/app/offscreen.c src/app/session.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c src/world/stream.c src/world/generate.c
-NATIVE_DEPS = $(NATIVE_SRC) src/app/level.h src/app/offscreen.h src/app/view_config.h include/dungeoncraft/gpu.h $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(GAS_SHADER) $(BOUNDARY_SHADER) $(FRONTIER_SHADER)
+NATIVE_DEPS = $(NATIVE_SRC) src/app/level.h src/app/offscreen.h src/app/view_config.h include/dungeoncraft/gpu.h $(GPU_SHADERS)
 .PHONY: native
 native: build/dungeoncraft_native
 
@@ -63,7 +64,7 @@ build/quarter_native_config_tests: tests/app/quarter_native_config_tests.c src/a
 build/quarter_native_water_tests: tests/app/quarter_native_water_tests.c $(filter-out src/app/main.c,$(NATIVE_DEPS))
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u tests/app/quarter_native_water_tests.c $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
 
-build/marker_slot_tests: tests/vulkan/marker_slot_tests.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(GAS_SHADER) $(FRONTIER_SHADER)
+build/marker_slot_tests: tests/vulkan/marker_slot_tests.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c $(GPU_SHADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GPU_CHUNK_SLOTS=65u tests/vulkan/marker_slot_tests.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS)
 
 .PHONY: test_native
@@ -79,7 +80,7 @@ build/dungeoncraft_half_native: $(NATIVE_DEPS)
 build/dungeoncraft_quarter_native: $(NATIVE_DEPS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u $(NATIVE_SRC) -o $@ $(LDLIBS)
 
-shaders: $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(GAS_SHADER) $(BOUNDARY_SHADER) $(FRONTIER_SHADER)
+shaders: $(GPU_SHADERS)
 
 $(GAS_SHADER): shaders/sim/gas.comp
 	@mkdir -p build/shaders
@@ -203,29 +204,29 @@ build/generate.o: src/world/generate.c include/dungeoncraft/generate.h include/d
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-build/gpu_tests: tests/vulkan/gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(GAS_SHADER)
+build/gpu_tests: tests/vulkan/gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(GPU_SHADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/pressure_domain_tests: tests/vulkan/pressure_domain_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(GAS_SHADER)
+build/pressure_domain_tests: tests/vulkan/pressure_domain_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(GPU_SHADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/pressure_domain_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/native_bench: tests/vulkan/native_bench.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(GAS_SHADER)
+build/native_bench: tests/vulkan/native_bench.c $(GPU_OBJ) $(CHUNK_OBJ) $(GPU_SHADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/native_bench.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
 .PHONY: bench_native
 bench_native: build/native_bench
 	./build/native_bench
 
-build/halo_tests: tests/vulkan/halo_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(GAS_SHADER)
+build/halo_tests: tests/vulkan/halo_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(GPU_SHADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/halo_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/fluid_tests: tests/vulkan/fluid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(GAS_SHADER)
+build/fluid_tests: tests/vulkan/fluid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(GPU_SHADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/fluid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/gas_tests: tests/vulkan/gas_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(GAS_SHADER)
+build/gas_tests: tests/vulkan/gas_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(GPU_SHADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/gas_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/particle_tests: tests/vulkan/particle_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(STREAM_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(GAS_SHADER)
+build/particle_tests: tests/vulkan/particle_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(STREAM_OBJ) $(GPU_SHADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/particle_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(STREAM_OBJ) -o $@ $(LDLIBS)
 
 build/chunk_tests: tests/world/chunk_tests.c $(CHUNK_OBJ)
@@ -237,10 +238,10 @@ build/generate_tests: tests/world/generate_tests.c $(GENERATE_OBJ) $(CHUNK_OBJ)
 build/stream_tests: tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) -o $@ -pthread
 
-build/dungeoncraft: src/app/main.c src/app/level.c src/app/offscreen.c src/app/offscreen.h src/app/level.h src/app/view_config.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(GAS_SHADER)
+build/dungeoncraft: src/app/main.c src/app/level.c src/app/offscreen.c src/app/offscreen.h src/app/level.h src/app/view_config.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(GPU_SHADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/main.c src/app/level.c src/app/offscreen.c src/app/session.c $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 
-build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/offscreen.c src/app/offscreen.h src/app/level.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(GAS_SHADER)
+build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/offscreen.c src/app/offscreen.h src/app/level.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(GPU_SHADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/controls_tests.c src/app/level.c src/app/offscreen.c src/app/session.c $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 
 test: build/gpu_tests build/pressure_domain_tests build/halo_tests build/fluid_tests build/gas_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
