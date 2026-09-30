@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "../../src/app/level.h"
+#include "../../src/app/offscreen.h"
 #include "../../src/app/session.h"
 
 static int g_pass, g_fail;
@@ -20,6 +21,20 @@ static int g_pass, g_fail;
 #define ASSERT_EQ(a, b) ASSERT_TRUE((a) == (b))
 #define ASSERT_INT_EQ(a, b) ASSERT_TRUE((int)(a) == (int)(b))
 #define PASS() g_pass++
+
+static void test_offscreen_cache_uses_compact_gpu_tiles(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 256u, 256u,
+        "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    dc_offscreen_t *offscreen = dc_offscreen_create(gpu,
+        (dc_chunk_coord_t){0, 0}, err, sizeof(err));
+    ASSERT_TRUE(offscreen != NULL);
+    ASSERT_EQ(dc_offscreen_slot_capacity(offscreen), 9u);
+    dc_offscreen_destroy(offscreen);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
 
 static void test_camera_crosses_chunk_boundary_cell_by_cell(void) {
     char directory[] = "build/ui_pan_XXXXXX", err[256] = {0};
@@ -750,6 +765,7 @@ static void test_sand_crosses_offscreen_visible_boundary_with_same_id(void) {
 }
 
 int main(void) {
+    RUN(test_offscreen_cache_uses_compact_gpu_tiles);
     RUN(test_camera_crosses_chunk_boundary_cell_by_cell);
     RUN(test_loading_status_and_camera_reset);
     RUN(test_single_step_moves_water_once);
