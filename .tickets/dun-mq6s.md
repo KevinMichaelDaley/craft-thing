@@ -1,6 +1,6 @@
 ---
 id: dun-mq6s
-status: open
+status: in_progress
 deps: []
 links: [dun-r1a0]
 created: 2026-09-29T09:45:24Z
