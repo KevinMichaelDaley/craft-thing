@@ -81,7 +81,7 @@ static void test_three_workspace_deep_basin_pressure(void) {
     dc_gpu_boundary_t boundary = { .main_slot = 0u, .other_slot = 0u,
         .main_x = 0u, .main_y = 0u, .other_x = 0u, .other_y = 0u,
         .other_side = 1u };
-    for (uint32_t tick = 0u; tick < 120u; ++tick) {
+    for (uint32_t tick = 0u; tick < 480u; ++tick) {
         for (uint32_t part = 0u; part < 3u; ++part)
             ASSERT_TRUE(dc_gpu_tick_step(split[part], err, sizeof(err)));
         ASSERT_TRUE(dc_gpu_tick_step(monolithic, err, sizeof(err)));
@@ -109,6 +109,8 @@ static void test_three_workspace_deep_basin_pressure(void) {
         double split_right = column_level(split_result[seam + 1u], 0u);
         double mono_left = column_level(mono_result[seam], 63u);
         double mono_right = column_level(mono_result[seam + 1u], 0u);
+        printf("seam %u split %.3f %.3f mono %.3f %.3f\n", seam,
+               split_left, split_right, mono_left, mono_right);
         split_level_error += fabs(split_left - split_right);
         mono_level_error += fabs(mono_left - mono_right);
         for (uint32_t y = 25u; y < 63u; ++y) {

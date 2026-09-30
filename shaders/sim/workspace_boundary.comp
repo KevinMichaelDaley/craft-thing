@@ -40,7 +40,7 @@ layout(push_constant) uniform Params {
 const uint SIDE = 64u;
 const uint FULL = 65536u;
 const uint PRESSURE_BAND = 8u;
-const uint PRESSURE_SWEEPS = 32u;
+const uint PRESSURE_SWEEPS = 64u;
 const uint SEAM_FIRST = PRESSURE_BAND / 2u - 1u;
 const uint SEAM_SECOND = PRESSURE_BAND / 2u;
 shared float pressure_correction[PRESSURE_BAND][SIDE];
@@ -405,9 +405,8 @@ void main() {
         float advective_velocity = horizontal ? incoming.x + outgoing.x :
                                                incoming.y + outgoing.y;
         velocity = advective_velocity + (horizontal ? 0.0 : 0.5) * ticks +
-                   0.05 * ticks * (first_head - second_head) -
+                   0.04 * ticks * (first_head - second_head) -
                    (second_pressure - first_pressure);
-        velocity = clamp(velocity, -4.0, 4.0);
     }
     velocity = project_boundary_band(lane, main_first, horizontal,
         first_cell, second_cell, first_index, second_index,
@@ -418,7 +417,6 @@ void main() {
     o = other_cells[oc];
     uint first_mass = main_first ? m.y : o.y;
     uint second_mass = main_first ? o.y : m.y;
-    velocity = clamp(velocity, -4.0, 4.0);
     bool forward = velocity >= 0.0;
     bool dest_is_main = forward ? !main_first : main_first;
     uint available = forward ? first_mass : second_mass;
