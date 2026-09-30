@@ -27,3 +27,7 @@ Deep-sleep dynamic chunks prefetch into GPU cache before visible return; returni
 **2026-09-28T17:11:11Z**
 
 Remaining acceptance work: saturated multi-directional cache fairness and live near-band budget under camera motion; conservative GPU seam handoff is now closed in dun-bd93. Shared workspaces use 80 slots and no per-frame readback.
+
+**2026-09-30T03:50:16Z**
+
+Quarter-native profile after resolution switch: foreground 168.7 MiB, one 4x4 offscreen workspace 38.6 MiB, 0.2 s offscreen simulation 18.78 ms wall. Current runtime permits 16 offscreen workspaces (src/app/level.c) with 16 slots each (src/app/offscreen.c); prior ticket note about 80-slot contexts is stale. Saturated multi-directional frame budget and fairness remain open; need a representative quarter-native stress regression before closing.
