@@ -113,8 +113,10 @@ static uint64_t elapsed_ns(const dc_gpu_t *gpu, uint64_t start, uint64_t stop) {
 }
 
 static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
+                        uint32_t steps,
                         char *err, uint32_t cap) {
-    if (!gpu) return error(err, cap, "Invalid GPU tick");
+    if (!gpu || !steps || (capture && steps != 1u))
+        return error(err, cap, "Invalid GPU tick");
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
         return error(err, cap, "Cannot reset tick command buffer");
     VkCommandBufferBeginInfo begin = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
@@ -125,22 +127,22 @@ static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                              gpu->timestamp_pool, 0);
     }
-    dc_gpu_record_tick_water_source(gpu);
-    dc_gpu_record_rigid(gpu);
-    if (capture) {
+    if (!capture) {
+        for (uint32_t step = 0u; step < steps; ++step)
+            dc_gpu_record_tick_step(gpu);
+    } else {
+        dc_gpu_record_tick_water_source(gpu);
+        dc_gpu_record_rigid(gpu);
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
                              gpu->timestamp_pool, 1);
         record_probe(gpu, 0);
-    }
-    record_scheduled_fluid(gpu);
-    if (capture) {
+        record_scheduled_fluid(gpu);
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
                              gpu->timestamp_pool, 2);
-    }
-    stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                  VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    dc_gpu_record_mpm(gpu);
-    if (capture) {
+        stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                      VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                      VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+        dc_gpu_record_mpm(gpu);
         record_probe(gpu, 1);
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
                              gpu->timestamp_pool, 3);
@@ -153,6 +155,7 @@ static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
     if (vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
         vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
         return error(err, cap, "GPU tick submission failed");
+    ++gpu->tick_submission_count;
     if (!capture) return true;
     uint64_t timestamps[4] = {0};
     if (vkGetQueryPoolResults(gpu->device, gpu->timestamp_pool, 0, 4,
@@ -171,11 +174,20 @@ static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
 bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
                          char *err, uint32_t cap) {
     if (!capture) return error(err, cap, "Invalid GPU tick capture");
-    return tick_submit(gpu, capture, err, cap);
+    return tick_submit(gpu, capture, 1u, err, cap);
 }
 
 bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    return tick_submit(gpu, NULL, err, cap);
+    return tick_submit(gpu, NULL, 1u, err, cap);
+}
+
+bool dc_gpu_tick_steps(dc_gpu_t *gpu, uint32_t steps,
+                       char *err, uint32_t cap) {
+    return tick_submit(gpu, NULL, steps, err, cap);
+}
+
+uint64_t dc_gpu_tick_submission_count(const dc_gpu_t *gpu) {
+    return gpu ? gpu->tick_submission_count : 0u;
 }
 
 bool dc_gpu_set_fluid_interval(dc_gpu_t *gpu, uint32_t interval) {

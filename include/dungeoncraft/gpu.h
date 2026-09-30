@@ -200,6 +200,16 @@ bool dc_gpu_mpm_readback_scratch(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap)
 /** Run the same GPU physics stages without reading diagnostics back. */
 bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
 
+/** Run several ordered physics ticks in one GPU submission. */
+bool dc_gpu_tick_steps(dc_gpu_t *gpu, uint32_t steps,
+                       char *err_buf, uint32_t err_cap);
+
+/** Return CPU-recorded GPU tick submission count for scheduling diagnostics. */
+uint64_t dc_gpu_tick_submission_count(const dc_gpu_t *gpu);
+
+/** Set the radius of the finite spring injection disk in simulated cells. */
+bool dc_gpu_set_tick_water_source_radius(dc_gpu_t *gpu, uint32_t radius);
+
 /** Spread one Eulerian update across six ticks, or run it every tick (1). */
 bool dc_gpu_set_fluid_interval(dc_gpu_t *gpu, uint32_t interval);
 /** Set 4–32 red-black pressure sweeps between completed fluid solves. */

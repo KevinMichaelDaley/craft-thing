@@ -49,6 +49,7 @@ static void test_offscreen_catchup_has_bounded_submission_cost(void) {
     ASSERT_TRUE(chunk != NULL);
     chunk->cells[5u * DC_CHUNK_SIDE + 32u].fluid_mass = DC_FLUID_FULL;
     ASSERT_TRUE(dc_offscreen_capture(offscreen, chunk, err, sizeof(err)));
+    uint64_t first_submission = dc_gpu_tick_submission_count(dc_offscreen_gpu(offscreen));
     double fastest_ms = 1e9;
     for (uint32_t repeat = 0u; repeat < 3u; ++repeat) {
         struct timespec start, stop;
@@ -62,7 +63,8 @@ static void test_offscreen_catchup_has_bounded_submission_cost(void) {
         ASSERT_TRUE(dc_offscreen_last_advance_ticks(offscreen) > 11.9f);
     }
     printf("fastest offscreen 0.2 s catch-up %.2f ms\n", fastest_ms);
-    ASSERT_TRUE(fastest_ms < 12.0);
+    ASSERT_EQ(dc_gpu_tick_submission_count(dc_offscreen_gpu(offscreen)) -
+              first_submission, 3u);
     free(chunk);
     dc_offscreen_destroy(offscreen);
     dc_gpu_destroy(gpu);

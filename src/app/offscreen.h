@@ -8,6 +8,7 @@
 #include "dungeoncraft/gpu.h"
 
 typedef struct dc_offscreen dc_offscreen_t;
+enum { DC_OFFSCREEN_MAX_CLUSTERS = 16u };
 typedef bool (*dc_offscreen_save_fn)(void *context, const dc_chunk_t *chunk,
                                      char *err, uint32_t cap);
 

@@ -17,6 +17,7 @@ static void test_quarter_native_uses_four_screen_pixels_per_cell(void) {
     ASSERT_EQ(VIEW_HEIGHT, 270);
     ASSERT_EQ(WINDOW_SCALE, 4);
     ASSERT_EQ(BRUSH_RADIUS, 3);
+    ASSERT_EQ(SPRING_RADIUS, 1);
     ASSERT_EQ(WORLD_SCALE * WINDOW_SCALE, 4);
     PASS();
 }

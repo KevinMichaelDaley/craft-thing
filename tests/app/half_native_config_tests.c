@@ -17,6 +17,7 @@ static void test_half_native_view_uses_one_simulated_cell_per_two_screen_pixels(
     ASSERT_EQ(VIEW_HEIGHT, 540);
     ASSERT_EQ(WINDOW_SCALE, 2);
     ASSERT_EQ(BRUSH_RADIUS, 6);
+    ASSERT_EQ(SPRING_RADIUS, 2);
     ASSERT_EQ(WORLD_SCALE * WINDOW_SCALE, 4);
     PASS();
 }

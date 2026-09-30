@@ -6,9 +6,10 @@
 #include "view_config.h"
 
 enum {
-    OFFSCREEN_TILES_X = SIM_CHUNKS_X < 4u ? SIM_CHUNKS_X : 4u,
-    OFFSCREEN_TILES_Y = SIM_CHUNKS_Y < 4u ? SIM_CHUNKS_Y : 4u,
-    OFFSCREEN_SLOTS = OFFSCREEN_TILES_X * OFFSCREEN_TILES_Y
+    OFFSCREEN_TILES_X = SIM_CHUNKS_X < 3u ? SIM_CHUNKS_X : 3u,
+    OFFSCREEN_TILES_Y = SIM_CHUNKS_Y < 3u ? SIM_CHUNKS_Y : 3u,
+    OFFSCREEN_SLOTS = OFFSCREEN_TILES_X * OFFSCREEN_TILES_Y,
+    OFFSCREEN_MAX_BATCH_STEPS = 16u
 };
 
 static const float OFFSCREEN_FLUID_RETAINED_PER_TICK = 0.92f;
@@ -63,6 +64,10 @@ dc_offscreen_t *dc_offscreen_create(dc_gpu_t *parent, dc_chunk_coord_t origin,
         !dc_gpu_set_fluid_velocity_damping(offscreen->gpu,
                                            OFFSCREEN_FLUID_RETAINED_PER_TICK) ||
         !dc_gpu_set_pressure_sweeps(offscreen->gpu, 8u)) {
+        dc_offscreen_destroy(offscreen);
+        return NULL;
+    }
+    if (!dc_gpu_set_tick_water_source_radius(offscreen->gpu, SPRING_RADIUS)) {
         dc_offscreen_destroy(offscreen);
         return NULL;
     }
@@ -221,18 +226,30 @@ bool dc_offscreen_update(dc_offscreen_t *offscreen, dc_chunk_coord_t camera_orig
     offscreen->pending_seconds += elapsed_seconds;
     const uint32_t cadence = band == 1u ? 4u : band == 2u ? 12u : 24u;
     const double period = (double)cadence / 60.0;
-    while (offscreen->pending_seconds + 1e-7 >= period ||
-           (catch_up && offscreen->pending_seconds > 1e-7)) {
-        double advance = offscreen->pending_seconds < period ?
-                         offscreen->pending_seconds : period;
-        uint32_t substeps = (uint32_t)(advance * 20.0 + 0.999999);
-        if (!substeps) substeps = 1u;
-        float substep_seconds = (float)(advance / substeps);
-        for (uint32_t step = 0; step < substeps; ++step)
-            if (!dc_gpu_set_tick_seconds(offscreen->gpu, substep_seconds) ||
-                !dc_gpu_tick_step(offscreen->gpu, err, cap)) return false;
+    uint32_t substeps = (uint32_t)(period * 20.0 + 0.999999);
+    if (!substeps) substeps = 1u;
+    while (offscreen->pending_seconds + 1e-7 >= period) {
+        uint32_t due = (uint32_t)((offscreen->pending_seconds + 1e-7) / period);
+        uint32_t batch = OFFSCREEN_MAX_BATCH_STEPS / substeps;
+        if (due < batch) batch = due;
+        if (!dc_gpu_set_tick_seconds(offscreen->gpu,
+                                     (float)(period / substeps)) ||
+            !dc_gpu_tick_steps(offscreen->gpu, batch * substeps,
+                               err, cap)) return false;
+        double advance = period * batch;
         offscreen->last_advance_ticks += (float)(advance * 60.0);
         offscreen->pending_seconds -= advance;
+    }
+    if (catch_up && offscreen->pending_seconds > 1e-7) {
+        double advance = offscreen->pending_seconds;
+        uint32_t remainder_steps = (uint32_t)(advance * 20.0 + 0.999999);
+        if (!remainder_steps) remainder_steps = 1u;
+        if (!dc_gpu_set_tick_seconds(offscreen->gpu,
+                                     (float)(advance / remainder_steps)) ||
+            !dc_gpu_tick_steps(offscreen->gpu, remainder_steps,
+                               err, cap)) return false;
+        offscreen->last_advance_ticks += (float)(advance * 60.0);
+        offscreen->pending_seconds = 0.0;
     }
     return true;
 }

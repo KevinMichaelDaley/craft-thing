@@ -13,7 +13,8 @@
 _Static_assert(DC_GPU_CHUNK_SLOTS >= SIM_CHUNKS_X * SIM_CHUNKS_Y,
                "GPU chunk pool must cover viewport and halo");
 
-enum { OFFSCREEN_CLUSTERS = 16, FRONTIER_LOADS_PER_TICK = 4,
+enum { OFFSCREEN_CLUSTERS = DC_OFFSCREEN_MAX_CLUSTERS,
+       FRONTIER_LOADS_PER_TICK = 4,
        FRONTIER_SCAN_CADENCE = 4 };
 #define OFFSCREEN_SAVE_GENERATION (UINT64_C(1) << 63)
 #define OFFSCREEN_LOAD_GENERATION (UINT64_C(1) << 62)
@@ -600,7 +601,8 @@ dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
         !dc_gpu_set_viewport(view->gpu, DC_CHUNK_SIDE, DC_CHUNK_SIDE,
                              VIEW_WIDTH, VIEW_HEIGHT) ||
         !dc_gpu_set_display_zoom(view->gpu, WINDOW_SCALE) ||
-        !dc_gpu_set_fluid_interval(view->gpu, FLUID_INTERVAL)) goto fail;
+        !dc_gpu_set_fluid_interval(view->gpu, FLUID_INTERVAL) ||
+        !dc_gpu_set_tick_water_source_radius(view->gpu, SPRING_RADIUS)) goto fail;
     view->spring_enabled = true;
     view->stream = dc_stream_create(directory, seed,
                                     DC_GPU_CHUNK_SLOTS * 2u);

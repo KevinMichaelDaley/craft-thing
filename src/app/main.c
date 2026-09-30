@@ -106,6 +106,14 @@ static int smoke_native_view(void) {
     }
     double elapsed = (double)(SDL_GetPerformanceCounter() - start) /
                      (double)SDL_GetPerformanceFrequency();
+#ifdef DC_QUARTER_NATIVE_VIEW
+    if (okay) okay = dc_level_view_pixels(view, pixels,
+                                         VIEW_WIDTH * VIEW_HEIGHT,
+                                         err, sizeof(err)) &&
+                     save_level_bmp(
+                         "build/screenshots/quarter_native_after_1s.bmp",
+                         pixels);
+#endif
     double rigid_ms = 0.0, fluid_ms = 0.0, granular_ms = 0.0;
     double fluid_peak_ms = 0.0;
     double fluid_phase_ms[6] = {0};
@@ -135,6 +143,17 @@ static int smoke_native_view(void) {
     }
     double adaptive_wall = (double)(SDL_GetPerformanceCounter() - adaptive_start) /
                            (double)SDL_GetPerformanceFrequency();
+#ifdef DC_QUARTER_NATIVE_VIEW
+    for (uint32_t i = 0u; i < 114u && okay; ++i)
+        okay = dc_level_view_step(view, err, sizeof(err)) &&
+               dc_level_view_tick(view, err, sizeof(err));
+    if (okay) okay = dc_level_view_pixels(view, pixels,
+                                         VIEW_WIDTH * VIEW_HEIGHT,
+                                         err, sizeof(err)) &&
+                     save_level_bmp(
+                         "build/screenshots/quarter_native_after_4s_spring_on.bmp",
+                         pixels);
+#endif
     if (okay) okay = dc_level_view_set_spring_enabled(view, false);
     for (uint32_t i = 0; i < 120u && okay; ++i)
         okay = dc_level_view_step(view, err, sizeof(err)) &&
@@ -1114,10 +1133,11 @@ static int smoke_offscreen_budget(void) {
     double offscreen_mib = (double)(offscreen_stats.mapped_local_bytes +
         offscreen_stats.mapped_system_bytes + offscreen_stats.device_only_bytes) /
         1048576.0;
-    printf("GPU workspace memory: foreground %.1f MiB, offscreen %.1f MiB "
-           "(%.1f%%), four-cache bound %.1f MiB\n", foreground_mib,
+    printf("GPU memory: visible chunks %.1f MiB, background chunk cache %.1f MiB "
+           "(%.1f%%), %u-cache bound %.1f MiB\n", foreground_mib,
            offscreen_mib, 100.0 * offscreen_mib / foreground_mib,
-           foreground_mib + 4.0 * offscreen_mib);
+           DC_OFFSCREEN_MAX_CLUSTERS,
+           foreground_mib + DC_OFFSCREEN_MAX_CLUSTERS * offscreen_mib);
     dc_chunk_t *sample = calloc(1, sizeof(*sample));
     if (!sample) okay = false;
     if (okay) {

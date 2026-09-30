@@ -251,6 +251,7 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     gpu->fluid_interval = 1;
     gpu->fluid_step_scale = 1.0f;
     gpu->fluid_velocity_retained = 0.997f;
+    gpu->tick_water_radius = 2u;
     VkDeviceSize bytes = (VkDeviceSize)width * height * 4;
     for (uint32_t i = 0; i < gpu->slot_capacity; ++i) gpu->slot_page[i] = UINT32_MAX;
     if (parent) {
@@ -515,6 +516,12 @@ bool dc_gpu_set_tick_water_source(dc_gpu_t *gpu, bool enabled,
     return true;
 }
 
+bool dc_gpu_set_tick_water_source_radius(dc_gpu_t *gpu, uint32_t radius) {
+    if (!gpu || radius > 7u) return false;
+    gpu->tick_water_radius = radius;
+    return true;
+}
+
 bool dc_gpu_memory_stats(const dc_gpu_t *gpu, dc_gpu_memory_stats_t *stats) {
     if (!gpu || !stats) return false;
     stats->mapped_local_bytes = gpu->mapped_local_bytes;
@@ -537,7 +544,9 @@ void dc_gpu_record_tick_water_source(dc_gpu_t *gpu) {
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     uint32_t push[7] = { gpu->width, gpu->height, 4,
-                          gpu->tick_water_x, gpu->tick_water_y, 2, DC_MATERIAL_WATER };
+                          gpu->tick_water_x, gpu->tick_water_y,
+                          gpu->tick_water_radius,
+                          DC_MATERIAL_WATER };
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     vkCmdDispatch(gpu->command, 1u, 1u, 1u);
