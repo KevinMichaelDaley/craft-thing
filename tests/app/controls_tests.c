@@ -88,12 +88,27 @@ static void test_offscreen_pressure_work_tracks_distance_band(void) {
     ASSERT_TRUE(dc_offscreen_update(offscreen, (dc_chunk_coord_t){1, 0},
                                     4.0 / 60.0, true, err, sizeof(err)));
     ASSERT_EQ(work_gpu->pressure_sweeps, 8u);
+    dc_gpu_tick_capture_t near_capture = {0}, mid_capture = {0}, far_capture = {0};
+    ASSERT_TRUE(dc_gpu_tick_capture(work_gpu, &near_capture, err, sizeof(err)));
     ASSERT_TRUE(dc_offscreen_update(offscreen, (dc_chunk_coord_t){5, 0},
                                     12.0 / 60.0, true, err, sizeof(err)));
     ASSERT_EQ(work_gpu->pressure_sweeps, 6u);
+    ASSERT_TRUE(dc_gpu_tick_capture(work_gpu, &mid_capture, err, sizeof(err)));
     ASSERT_TRUE(dc_offscreen_update(offscreen, (dc_chunk_coord_t){9, 0},
                                     24.0 / 60.0, true, err, sizeof(err)));
     ASSERT_EQ(work_gpu->pressure_sweeps, 4u);
+    ASSERT_TRUE(dc_gpu_tick_capture(work_gpu, &far_capture, err, sizeof(err)));
+    printf("offscreen fluid GPU work: near %.3f ms, mid %.3f ms, far %.3f ms; "
+           "near rigid %.3f ms, granular %.3f ms\n",
+           near_capture.stages[1].gpu_ns / 1e6,
+           mid_capture.stages[1].gpu_ns / 1e6,
+           far_capture.stages[1].gpu_ns / 1e6,
+           near_capture.stages[0].gpu_ns / 1e6,
+           near_capture.stages[2].gpu_ns / 1e6);
+    ASSERT_TRUE(near_capture.stages[1].gpu_ns > 0u);
+    ASSERT_TRUE(mid_capture.stages[1].gpu_ns > 0u);
+    ASSERT_TRUE(far_capture.stages[1].gpu_ns > 0u);
+    ASSERT_TRUE(near_capture.stages[2].gpu_ns < 100000u);
     ASSERT_TRUE(dc_offscreen_take(offscreen, (dc_chunk_coord_t){0, 0},
                                   chunk, err, sizeof(err)));
     uint64_t mass = 0u;
@@ -103,6 +118,183 @@ static void test_offscreen_pressure_work_tracks_distance_band(void) {
     free(chunk);
     dc_offscreen_destroy(offscreen);
     dc_gpu_destroy(gpu);
+    PASS();
+}
+
+static void test_sparse_offscreen_workspace_skips_empty_chunk_slots(void) {
+    char err[256] = {0};
+    dc_gpu_t *parent = NULL;
+    ASSERT_TRUE(dc_gpu_create(&parent, 256u, 256u,
+        "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    dc_offscreen_t *offscreen = dc_offscreen_create(parent,
+        (dc_chunk_coord_t){0, 0}, err, sizeof(err));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(offscreen && chunk);
+    chunk->cells[40u * DC_CHUNK_SIDE + 30u].fluid_mass = DC_FLUID_FULL;
+    ASSERT_TRUE(dc_offscreen_capture(offscreen, chunk, err, sizeof(err)));
+    uint64_t sparse_ns = UINT64_MAX, full_ns = UINT64_MAX;
+    for (uint32_t repeat = 0; repeat < 4u; ++repeat) {
+        dc_gpu_tick_capture_t capture = {0};
+        ASSERT_TRUE(dc_gpu_tick_capture(dc_offscreen_gpu(offscreen),
+                                        &capture, err, sizeof(err)));
+        if (repeat && capture.stages[1].gpu_ns < sparse_ns)
+            sparse_ns = capture.stages[1].gpu_ns;
+    }
+    memset(chunk, 0, sizeof(*chunk));
+    for (int64_t y = -1; y <= 1; ++y)
+        for (int64_t x = -1; x <= 1; ++x) {
+            if (x == 0 && y == 0) continue;
+            chunk->coord = (dc_chunk_coord_t){x, y};
+            ASSERT_TRUE(dc_offscreen_capture(offscreen, chunk, err, sizeof(err)));
+        }
+    for (uint32_t repeat = 0; repeat < 4u; ++repeat) {
+        dc_gpu_tick_capture_t capture = {0};
+        ASSERT_TRUE(dc_gpu_tick_capture(dc_offscreen_gpu(offscreen),
+                                        &capture, err, sizeof(err)));
+        if (repeat && capture.stages[1].gpu_ns < full_ns)
+            full_ns = capture.stages[1].gpu_ns;
+    }
+    printf("offscreen sparse/full fluid GPU work: %.3f/%.3f ms\n",
+           sparse_ns / 1e6, full_ns / 1e6);
+    ASSERT_TRUE(sparse_ns * 5u < full_ns * 4u);
+    free(chunk);
+    dc_offscreen_destroy(offscreen);
+    dc_gpu_destroy(parent);
+    PASS();
+}
+
+static void test_offscreen_equal_world_time_across_frame_cadences(void) {
+    char err[256] = {0};
+    dc_gpu_t *parent = NULL;
+    ASSERT_TRUE(dc_gpu_create(&parent, 256u, 256u,
+        "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    dc_offscreen_t *sixty = dc_offscreen_create(parent,
+        (dc_chunk_coord_t){0, 0}, err, sizeof(err));
+    dc_offscreen_t *thirty = dc_offscreen_create(parent,
+        (dc_chunk_coord_t){0, 0}, err, sizeof(err));
+    dc_chunk_t *a = calloc(1, sizeof(*a));
+    dc_chunk_t *b = calloc(1, sizeof(*b));
+    ASSERT_TRUE(sixty && thirty && a && b);
+    a->cells[50u * DC_CHUNK_SIDE + 12u].material = DC_MATERIAL_GAS;
+    a->cells[10u * DC_CHUNK_SIDE + 40u].fluid_mass = DC_FLUID_FULL;
+    ASSERT_TRUE(dc_offscreen_capture(sixty, a, err, sizeof(err)));
+    ASSERT_TRUE(dc_offscreen_capture(thirty, a, err, sizeof(err)));
+    dc_chunk_coord_t camera = {5, 0};
+    float ticks_sixty = 0.0f, ticks_thirty = 0.0f;
+    for (uint32_t frame = 0; frame < 24u; ++frame) {
+        ASSERT_TRUE(dc_offscreen_update(sixty, camera, 1.0 / 60.0,
+                                        false, err, sizeof(err)));
+        ticks_sixty += dc_offscreen_last_advance_ticks(sixty);
+    }
+    for (uint32_t frame = 0; frame < 12u; ++frame) {
+        ASSERT_TRUE(dc_offscreen_update(thirty, camera, 1.0 / 30.0,
+                                        false, err, sizeof(err)));
+        ticks_thirty += dc_offscreen_last_advance_ticks(thirty);
+    }
+    ASSERT_EQ((uint32_t)ticks_sixty, 24u);
+    ASSERT_EQ((uint32_t)ticks_thirty, 24u);
+    ASSERT_TRUE(dc_offscreen_take(sixty, (dc_chunk_coord_t){0, 0},
+                                  a, err, sizeof(err)));
+    ASSERT_TRUE(dc_offscreen_take(thirty, (dc_chunk_coord_t){0, 0},
+                                  b, err, sizeof(err)));
+    ASSERT_EQ(memcmp(a->cells, b->cells, sizeof(a->cells)), 0);
+    ASSERT_EQ(a->cells[26u * DC_CHUNK_SIDE + 12u].material, DC_MATERIAL_GAS);
+    free(a);
+    free(b);
+    dc_offscreen_destroy(thirty);
+    dc_offscreen_destroy(sixty);
+    dc_gpu_destroy(parent);
+    PASS();
+}
+
+static void test_offscreen_band_edges_and_transition_debt(void) {
+    dc_chunk_coord_t camera = {0, 0};
+    ASSERT_EQ(dc_offscreen_coord_band((dc_chunk_coord_t){-4, 0}, camera), 1u);
+    ASSERT_EQ(dc_offscreen_coord_band((dc_chunk_coord_t){-5, 0}, camera), 2u);
+    ASSERT_EQ(dc_offscreen_coord_band((dc_chunk_coord_t){-8, 0}, camera), 2u);
+    ASSERT_EQ(dc_offscreen_coord_band((dc_chunk_coord_t){-9, 0}, camera), 3u);
+    ASSERT_EQ(dc_offscreen_coord_band((dc_chunk_coord_t){-16, 0}, camera), 3u);
+    ASSERT_EQ(dc_offscreen_coord_band((dc_chunk_coord_t){-17, 0}, camera), 5u);
+    char err[256] = {0};
+    dc_gpu_t *parent = NULL;
+    ASSERT_TRUE(dc_gpu_create(&parent, 256u, 256u,
+        "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    dc_offscreen_t *offscreen = dc_offscreen_create(parent,
+        (dc_chunk_coord_t){0, 0}, err, sizeof(err));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(offscreen && chunk);
+    chunk->cells[50u * DC_CHUNK_SIDE + 12u].material = DC_MATERIAL_GAS;
+    ASSERT_TRUE(dc_offscreen_capture(offscreen, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_offscreen_update(offscreen, (dc_chunk_coord_t){1, 0},
+                                    3.0 / 60.0, false, err, sizeof(err)));
+    ASSERT_EQ(dc_offscreen_last_advance_ticks(offscreen), 0.0f);
+    ASSERT_TRUE(dc_offscreen_update(offscreen, (dc_chunk_coord_t){5, 0},
+                                    9.0 / 60.0, false, err, sizeof(err)));
+    ASSERT_EQ((uint32_t)dc_offscreen_last_advance_ticks(offscreen), 12u);
+    ASSERT_TRUE(dc_offscreen_take(offscreen, (dc_chunk_coord_t){0, 0},
+                                  chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->cells[38u * DC_CHUNK_SIDE + 12u].material, DC_MATERIAL_GAS);
+    free(chunk);
+    dc_offscreen_destroy(offscreen);
+    dc_gpu_destroy(parent);
+    PASS();
+}
+
+static void test_near_mid_offscreen_seam_conserves_water(void) {
+    char err[256] = {0};
+    dc_gpu_t *parent = NULL;
+    ASSERT_TRUE(dc_gpu_create(&parent, 256u, 256u,
+        "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    dc_offscreen_t *near = dc_offscreen_create(parent,
+        (dc_chunk_coord_t){-4, 0}, err, sizeof(err));
+    dc_offscreen_t *mid = dc_offscreen_create(parent,
+        (dc_chunk_coord_t){-5, 0}, err, sizeof(err));
+    dc_chunk_t *near_chunk = calloc(1, sizeof(*near_chunk));
+    dc_chunk_t *mid_chunk = calloc(1, sizeof(*mid_chunk));
+    ASSERT_TRUE(near && mid && near_chunk && mid_chunk);
+    near_chunk->coord = (dc_chunk_coord_t){-4, 0};
+    mid_chunk->coord = (dc_chunk_coord_t){-5, 0};
+    for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x) {
+        near_chunk->cells[47u * DC_CHUNK_SIDE + x].material = DC_MATERIAL_STONE;
+        mid_chunk->cells[47u * DC_CHUNK_SIDE + x].material = DC_MATERIAL_STONE;
+    }
+    for (uint32_t y = 35u; y < 47u; ++y)
+        for (uint32_t x = 44u; x < 64u; ++x)
+            mid_chunk->cells[y * DC_CHUNK_SIDE + x].fluid_mass = DC_FLUID_FULL;
+    ASSERT_TRUE(dc_offscreen_capture(near, near_chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_offscreen_capture(mid, mid_chunk, err, sizeof(err)));
+    dc_gpu_boundary_t boundary = { .main_slot = 0, .other_slot = 0,
+        .main_x = 64u, .main_y = 64u, .other_x = 64u, .other_y = 64u,
+        .other_side = 1u };
+    for (uint32_t tick = 0; tick < 48u; ++tick) {
+        ASSERT_TRUE(dc_offscreen_update(near, (dc_chunk_coord_t){0, 0},
+                                        1.0 / 60.0, false, err, sizeof(err)));
+        ASSERT_TRUE(dc_offscreen_update(mid, (dc_chunk_coord_t){0, 0},
+                                        1.0 / 60.0, false, err, sizeof(err)));
+        float elapsed = dc_offscreen_last_advance_ticks(near);
+        float other_elapsed = dc_offscreen_last_advance_ticks(mid);
+        if (other_elapsed > elapsed) elapsed = other_elapsed;
+        if (elapsed > 0.0f)
+            ASSERT_TRUE(dc_gpu_boundary_exchange(dc_offscreen_gpu(near),
+                dc_offscreen_gpu(mid), &boundary, 1u, elapsed,
+                err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_offscreen_take(near, near_chunk->coord,
+                                  near_chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_offscreen_take(mid, mid_chunk->coord,
+                                  mid_chunk, err, sizeof(err)));
+    uint64_t total = 0u, crossed = 0u;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        crossed += near_chunk->cells[i].fluid_mass;
+        total += near_chunk->cells[i].fluid_mass + mid_chunk->cells[i].fluid_mass;
+    }
+    ASSERT_EQ(total, 240u * DC_FLUID_FULL);
+    ASSERT_TRUE(crossed > 0u);
+    free(mid_chunk);
+    free(near_chunk);
+    dc_offscreen_destroy(mid);
+    dc_offscreen_destroy(near);
+    dc_gpu_destroy(parent);
     PASS();
 }
 
@@ -911,6 +1103,10 @@ int main(void) {
     RUN(test_offscreen_cache_uses_compact_gpu_tiles);
     RUN(test_offscreen_catchup_has_bounded_submission_cost);
     RUN(test_offscreen_pressure_work_tracks_distance_band);
+    RUN(test_sparse_offscreen_workspace_skips_empty_chunk_slots);
+    RUN(test_offscreen_equal_world_time_across_frame_cadences);
+    RUN(test_offscreen_band_edges_and_transition_debt);
+    RUN(test_near_mid_offscreen_seam_conserves_water);
     RUN(test_camera_crosses_chunk_boundary_cell_by_cell);
     RUN(test_loading_status_and_camera_reset);
     RUN(test_single_step_moves_water_once);
