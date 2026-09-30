@@ -37,8 +37,9 @@ half_native: build/dungeoncraft_half_native
 .PHONY: quarter_native test_quarter_native
 quarter_native: build/dungeoncraft_quarter_native
 
-test_quarter_native: build/quarter_native_config_tests build/dungeoncraft_quarter_native
+test_quarter_native: build/quarter_native_config_tests build/quarter_native_water_tests build/dungeoncraft_quarter_native
 	./build/quarter_native_config_tests
+	./build/quarter_native_water_tests
 	./build/dungeoncraft_quarter_native --smoke-native
 	./build/dungeoncraft_quarter_native --smoke-mud
 
@@ -57,6 +58,9 @@ build/half_native_config_tests: tests/app/half_native_config_tests.c src/app/vie
 
 build/quarter_native_config_tests: tests/app/quarter_native_config_tests.c src/app/view_config.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u $< -o $@
+
+build/quarter_native_water_tests: tests/app/quarter_native_water_tests.c $(filter-out src/app/main.c,$(NATIVE_DEPS))
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u tests/app/quarter_native_water_tests.c $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
 
 build/marker_slot_tests: tests/vulkan/marker_slot_tests.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(FRONTIER_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GPU_CHUNK_SLOTS=65u tests/vulkan/marker_slot_tests.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS)
