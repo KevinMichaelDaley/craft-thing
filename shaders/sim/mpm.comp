@@ -137,7 +137,7 @@ bool solid_at(ivec2 cell) {
     uint index = (page_at(cell) - 1u) * CELLS + local_cell(cell);
     uint material = chunk_cells[index].x & 0xffffu;
     return (material == 1u || (material != 0u && material != 2u &&
-            material != 4u && material != 5u)) ||
+            material != 4u && material != 5u && material != 6u)) ||
            occupancy[uint(cell.y) * params.width + uint(cell.x)] != 0u;
 }
 

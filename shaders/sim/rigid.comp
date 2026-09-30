@@ -33,7 +33,8 @@ bool solid_at(int x, int y) {
     uint page = pages[(uint(y) / 64u) * page_width + uint(x) / 64u];
     if (page == 0u) return true;
     uint index = (page - 1u) * 4096u + (uint(y) % 64u) * 64u + uint(x) % 64u;
-    return (chunk_cells[index].x & 0xffffu) != 0u;
+    uint material = chunk_cells[index].x & 0xffffu;
+    return material != 0u && material != 6u;
 }
 
 void integrate_body() {

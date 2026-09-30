@@ -55,6 +55,7 @@ uint material_color(uint material, uint flags) {
     if (material == 4u)
         return (flags & 0x80000000u) != 0u ? COLOR_MUD : COLOR_DIRT;
     if (material == 5u) return COLOR_GRAVEL;
+    if (material == 6u) return COLOR_GAS;
     return COLOR_STONE;
 }
 
@@ -97,6 +98,9 @@ DensitySample material_density(ivec2 p) {
             solid_volume = 1.0;
             solid_color = linear_color(material_color(material, 0u));
         }
+    } else if (material == 6u) {
+        solid = 0.35;
+        solid_color = linear_color(COLOR_GAS);
     } else if (material != 0u && material != 3u) {
         solid = 1.0;
         solid_volume = 1.0;

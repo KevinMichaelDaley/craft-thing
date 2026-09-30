@@ -19,6 +19,7 @@ COLORS = {
     "MUD": (0.64, 0.10, 60),
     "GRAVEL": (0.59, 0.015, 250),
     "WATER": (0.68, 0.075, 235),
+    "GAS": (0.78, 0.025, 245),
 }
 
 
@@ -55,7 +56,7 @@ def write_shader_palette():
 
 def write_preview():
     samples = [linear_rgb(*lab) for lab in COLORS.values()]
-    water = samples[-1]
+    water = linear_rgb(*COLORS["WATER"])
     mud = samples[4]
     width, height = 1024, 96
     path = ROOT / "build/material_palette_16.ppm"

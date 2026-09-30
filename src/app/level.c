@@ -369,7 +369,8 @@ static bool save_offscreen_chunk(void *context, const dc_chunk_t *chunk,
 static bool chunk_needs_physics(const dc_chunk_t *chunk) {
     if (chunk->particle_count || chunk->marker_count) return true;
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
-        if (chunk->cells[i].fluid_mass) return true;
+        if (chunk->cells[i].fluid_mass ||
+            chunk->cells[i].material == DC_MATERIAL_GAS) return true;
     return false;
 }
 

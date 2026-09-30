@@ -56,7 +56,7 @@ bool open_cell(ivec2 p) {
     uint index = uint(p.y) * params.width + uint(p.x);
     uint material = chunk_cells[atlas_index(p, page)].x & 0xffffu;
     return (material == 0u || material == 2u || material == 4u ||
-            material == 5u) && occupancy[index] == 0u;
+            material == 5u || material == 6u) && occupancy[index] == 0u;
 }
 
 void move_line(ivec2 source, ivec2 direction, bool vertical) {

@@ -587,6 +587,66 @@ static int smoke_sifting_materials(void) {
     return 0;
 }
 
+static int smoke_gas_material(void) {
+    char directory[] = "build/ui_gas_smoke_XXXXXX", err[256] = {0};
+    if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    if (!view) { fprintf(stderr, "Gas level create: %s\n", err); return 1; }
+    uint32_t *before = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*before));
+    uint32_t *after = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*after));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    bool okay = before && after && chunk &&
+        dc_level_view_set_spring_enabled(view, false) &&
+        dc_level_view_wait_visible(view, 5000, err, sizeof(err));
+    for (uint32_t x = 20u; x <= 44u && okay; ++x)
+        okay = dc_level_view_paint(view, x, 4u, 0u,
+                                   DC_MATERIAL_STONE, err, sizeof(err));
+    for (uint32_t y = 5u; y <= 24u && okay; ++y)
+        okay = dc_level_view_paint(view, 20u, y, 0u,
+                                   DC_MATERIAL_STONE, err, sizeof(err)) &&
+               dc_level_view_paint(view, 44u, y, 0u,
+                                   DC_MATERIAL_STONE, err, sizeof(err));
+    if (okay) okay = dc_level_view_paint(view, 32u, 20u, 2u,
+                                         DC_MATERIAL_GAS, err, sizeof(err)) &&
+                     dc_level_view_tick(view, err, sizeof(err)) &&
+                     dc_level_view_pixels(view, before,
+                                          VIEW_WIDTH * VIEW_HEIGHT, err, sizeof(err)) &&
+                     dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
+                                         chunk, err, sizeof(err));
+    uint32_t initial = 0u, final = 0u, high = 0u;
+    if (okay) for (uint32_t i = 0u; i < DC_CHUNK_CELLS; ++i)
+        initial += chunk->cells[i].material == DC_MATERIAL_GAS;
+    mkdir("build/screenshots", 0777);
+    if (okay) okay = save_level_bmp("build/screenshots/gas_before.bmp", before);
+    for (uint32_t tick = 0u; tick < 60u && okay; ++tick)
+        okay = dc_level_view_step(view, err, sizeof(err)) &&
+               dc_level_view_tick(view, err, sizeof(err));
+    if (okay) okay = dc_level_view_pixels(view, after,
+                                         VIEW_WIDTH * VIEW_HEIGHT, err, sizeof(err)) &&
+                     save_level_bmp("build/screenshots/gas_after_1s.bmp", after) &&
+                     dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
+                                         chunk, err, sizeof(err));
+    if (okay) for (uint32_t i = 0u; i < DC_CHUNK_CELLS; ++i) {
+        if (chunk->cells[i].material != DC_MATERIAL_GAS) continue;
+        ++final;
+        high += i / DC_CHUNK_SIDE < 12u;
+    }
+    uint32_t changed = 0u;
+    if (okay) for (uint32_t i = 0u; i < VIEW_WIDTH * VIEW_HEIGHT; ++i)
+        changed += before[i] != after[i];
+    okay = okay && initial > 0u && final == initial && high > 0u && changed > 10u;
+    if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
+    free(before); free(after); free(chunk);
+    if (!okay) {
+        fprintf(stderr, "Gas screenshot smoke failed (initial %u, final %u, high %u, changed %u): %s\n",
+                initial, final, high, changed, err);
+        return 1;
+    }
+    printf("Gas screenshots: gas_before.bmp and gas_after_1s.bmp (%u cells conserved, %u high)\n",
+           final, high);
+    return 0;
+}
+
 static int smoke_coupled_materials(void) {
     char directory[] = "build/ui_coupled_XXXXXX", err[256] = {0};
     if (!mkdtemp(directory)) { perror("mkdtemp"); return 1; }
@@ -689,6 +749,7 @@ static int smoke_moving_water_long(void) {
             case SDLK_3: material = DC_MATERIAL_WATER; break;
             case SDLK_4: material = DC_MATERIAL_DIRT; break;
             case SDLK_5: material = DC_MATERIAL_GRAVEL; break;
+            case SDLK_6: material = DC_MATERIAL_GAS; break;
             case SDLK_m: dc_level_view_toggle_marker_overlay(view); break;
             default: break;
             }
@@ -1211,6 +1272,8 @@ int main(int argc, char **argv) {
         return smoke_mud_materials();
     if (argc > 1 && strcmp(argv[1], "--smoke-sifting") == 0)
         return smoke_sifting_materials();
+    if (argc > 1 && strcmp(argv[1], "--smoke-gas") == 0)
+        return smoke_gas_material();
     if (argc > 1 && strcmp(argv[1], "--smoke-motion-long") == 0)
         return smoke_moving_water_long();
     bool scripted_input = argc > 1 && strcmp(argv[1], "--smoke-controls-ui") == 0;
@@ -1362,6 +1425,7 @@ int main(int argc, char **argv) {
                 case SDLK_3: material = DC_MATERIAL_WATER; break;
                 case SDLK_4: material = DC_MATERIAL_DIRT; break;
                 case SDLK_5: material = DC_MATERIAL_GRAVEL; break;
+                case SDLK_6: material = DC_MATERIAL_GAS; break;
                 case SDLK_p: paused = !paused; break;
                 case SDLK_n: single_step = true; break;
                 case SDLK_m:

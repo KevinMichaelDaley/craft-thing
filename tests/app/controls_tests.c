@@ -799,6 +799,35 @@ static void test_sand_crosses_offscreen_visible_boundary_with_same_id(void) {
     PASS();
 }
 
+static void test_painted_gas_rises_in_interactive_level(void) {
+    char directory[] = "build/ui_gas_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 20u, 10u, 0u,
+                                    DC_MATERIAL_GAS, err, sizeof(err)));
+    for (uint32_t tick = 0u; tick < 8u; ++tick) {
+        ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    }
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk != NULL);
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
+                                    chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->cells[2u * DC_CHUNK_SIDE + 20u].material,
+              DC_MATERIAL_GAS);
+    ASSERT_EQ(chunk->cells[10u * DC_CHUNK_SIDE + 20u].material,
+              DC_MATERIAL_AIR);
+    uint32_t color = 0u;
+    ASSERT_TRUE(dc_level_view_pixel(view, 20u, 2u, &color, err, sizeof(err)));
+    ASSERT_TRUE(color != 0xff181818u);
+    free(chunk);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    PASS();
+}
+
 int main(void) {
     RUN(test_offscreen_cache_uses_compact_gpu_tiles);
     RUN(test_offscreen_catchup_has_bounded_submission_cost);
@@ -820,6 +849,7 @@ int main(void) {
     RUN(test_five_distant_wet_regions_stay_gpu_resident);
     RUN(test_sand_keeps_falling_offscreen_without_particle_loss);
     RUN(test_sand_crosses_offscreen_visible_boundary_with_same_id);
+    RUN(test_painted_gas_rises_in_interactive_level);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

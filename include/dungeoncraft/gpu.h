@@ -191,7 +191,7 @@ bool dc_gpu_marker_count(dc_gpu_t *gpu, uint32_t slot, uint32_t *count);
 bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
                          char *err_buf, uint32_t err_cap);
 bool dc_gpu_memory_stats(const dc_gpu_t *gpu, dc_gpu_memory_stats_t *stats);
-/** Sample one four-side wet-edge mask per GPU chunk slot for sparse streaming. */
+/** Sample one four-side fluid/gas edge mask per GPU chunk slot for sparse streaming. */
 bool dc_gpu_wet_edge_masks(dc_gpu_t *gpu, uint32_t *masks, uint32_t mask_capacity,
                            char *err_buf, uint32_t err_cap);
 /** Copy granular diagnostic scratch to mapped staging on explicit request. */

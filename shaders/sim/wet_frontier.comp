@@ -8,9 +8,13 @@ void main() {
     uint lane = gl_LocalInvocationID.x;
     uint base = slot * 4096u;
     uint mask = 0u;
-    if (cells[base + lane].y != 0u) mask |= 4u;
-    if (cells[base + 63u * 64u + lane].y != 0u) mask |= 8u;
-    if (cells[base + lane * 64u].y != 0u) mask |= 2u;
-    if (cells[base + lane * 64u + 63u].y != 0u) mask |= 1u;
+    uvec2 top = cells[base + lane];
+    uvec2 bottom = cells[base + 63u * 64u + lane];
+    uvec2 left = cells[base + lane * 64u];
+    uvec2 right = cells[base + lane * 64u + 63u];
+    if (top.y != 0u || (top.x & 0xffffu) == 6u) mask |= 4u;
+    if (bottom.y != 0u || (bottom.x & 0xffffu) == 6u) mask |= 8u;
+    if (left.y != 0u || (left.x & 0xffffu) == 6u) mask |= 2u;
+    if (right.y != 0u || (right.x & 0xffffu) == 6u) mask |= 1u;
     if (mask != 0u) atomicOr(masks[slot], mask);
 }

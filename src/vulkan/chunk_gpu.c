@@ -223,6 +223,7 @@ bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
         return error(err, cap, "Chunk particle count does not match active records");
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
         uint32_t material = chunk->cells[i].material;
+        if (material == DC_MATERIAL_GAS) gpu->gas_active = true;
         if ((material == DC_MATERIAL_SAND || material == DC_MATERIAL_DIRT ||
              material == DC_MATERIAL_GRAVEL) && chunk->particles[i].mass_fp == 0u &&
             chunk->particles[i + DC_CHUNK_CELLS].mass_fp == 0u)

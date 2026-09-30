@@ -505,7 +505,9 @@ bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
                            char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     uint32_t push[7] = { gpu->width, gpu->height, 3, x, y, radius, material };
-    return dispatch_cells(gpu, push, err, cap);
+    if (!dispatch_cells(gpu, push, err, cap)) return false;
+    if (material == DC_MATERIAL_GAS) gpu->gas_active = true;
+    return true;
 }
 
 bool dc_gpu_set_tick_water_source(dc_gpu_t *gpu, bool enabled,

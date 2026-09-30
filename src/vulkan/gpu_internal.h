@@ -121,6 +121,9 @@ struct dc_gpu {
     VkDeviceMemory pressure_a_memory;
     VkPipeline projection_pipeline;
     VkPipeline velocity_shift_pipeline;
+    VkPipeline gas_pipeline;
+    uint32_t gas_tick;
+    bool gas_active;
     uint32_t fluid_tick;
     uint32_t fluid_interval;
     uint32_t fluid_phase;
@@ -209,5 +212,8 @@ bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_mpm_buffers_destroy(dc_gpu_t *gpu);
 void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_mpm(dc_gpu_t *gpu);
+bool dc_gpu_gas_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+void dc_gpu_gas_pipeline_destroy(dc_gpu_t *gpu);
+void dc_gpu_record_gas(dc_gpu_t *gpu);
 
 #endif

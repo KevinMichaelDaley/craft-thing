@@ -1,0 +1,84 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set = 0, binding = 1, std430) buffer ChunkCells { uvec2 cells[]; };
+layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
+layout(set = 0, binding = 3, std430) readonly buffer Occupancy { uint occupancy[]; };
+layout(set = 0, binding = 17, std430) readonly buffer SlotPages { uint slot_pages[]; };
+layout(set = 0, binding = 28, std430) buffer Winners { uint winners[]; };
+layout(set = 0, binding = 29, std430) buffer Intents { uint intents[]; };
+layout(push_constant) uniform Params {
+    uint width;
+    uint height;
+    uint mode;
+    uint tick_parity;
+    uint unused0;
+    uint unused1;
+    uint unused2;
+} params;
+
+const uint SIDE = 64u;
+const uint NO_INTENT = 0xffffffffu;
+const uint AIR = 0u;
+const uint GAS = 6u;
+
+uint atlas_at(ivec2 p) {
+    if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
+        p.y >= int(params.height)) return NO_INTENT;
+    uint stride = (params.width + SIDE - 1u) / SIDE;
+    uint page = pages[(uint(p.y) / SIDE) * stride + uint(p.x) / SIDE];
+    if (page == 0u) return NO_INTENT;
+    return (page - 1u) * SIDE * SIDE +
+           (uint(p.y) % SIDE) * SIDE + uint(p.x) % SIDE;
+}
+
+bool empty_at(ivec2 p) {
+    uint atlas = atlas_at(p);
+    if (atlas == NO_INTENT) return false;
+    uint linear = uint(p.y) * params.width + uint(p.x);
+    return (cells[atlas].x & 0xffffu) == AIR &&
+           cells[atlas].y == 0u && occupancy[linear] == 0u;
+}
+
+uint destination(ivec2 p) {
+    ivec2 above = p + ivec2(0, -1);
+    if (empty_at(above)) return uint(above.y) * params.width + uint(above.x);
+    int first = params.tick_parity == 0u ? -1 : 1;
+    for (int side = 0; side < 2; ++side) {
+        ivec2 diagonal = p + ivec2(side == 0 ? first : -first, -1);
+        if (empty_at(diagonal))
+            return uint(diagonal.y) * params.width + uint(diagonal.x);
+    }
+    for (int side = 0; side < 2; ++side) {
+        ivec2 lateral = p + ivec2(side == 0 ? first : -first, 0);
+        if (empty_at(lateral))
+            return uint(lateral.y) * params.width + uint(lateral.x);
+    }
+    return NO_INTENT;
+}
+
+void main() {
+    uint tile = slot_pages[gl_WorkGroupID.z];
+    if (tile == NO_INTENT) return;
+    uint stride = (params.width + SIDE - 1u) / SIDE;
+    ivec2 p = ivec2(int((tile % stride) * SIDE + gl_GlobalInvocationID.x),
+                    int((tile / stride) * SIDE + gl_GlobalInvocationID.y));
+    if (p.x >= int(params.width) || p.y >= int(params.height)) return;
+    uint index = uint(p.y) * params.width + uint(p.x);
+    uint atlas = atlas_at(p);
+    if (params.mode == 0u) {
+        winners[index] = NO_INTENT;
+        intents[index] = NO_INTENT;
+    } else if (params.mode == 1u) {
+        if ((cells[atlas].x & 0xffffu) != GAS) return;
+        uint target = destination(p);
+        intents[index] = target;
+        if (target != NO_INTENT) atomicMin(winners[target], index);
+    } else {
+        uint target = intents[index];
+        if (target != NO_INTENT && winners[target] == index)
+            cells[atlas].x = (cells[atlas].x & 0xffff0000u) | AIR;
+        else if (winners[index] != NO_INTENT)
+            cells[atlas].x = (cells[atlas].x & 0xffff0000u) | GAS;
+    }
+}

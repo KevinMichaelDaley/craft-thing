@@ -6,3 +6,4 @@ const uint COLOR_DIRT = 0xff5192c8u;
 const uint COLOR_MUD = 0xff4a7db9u;
 const uint COLOR_GRAVEL = 0xff867e77u;
 const uint COLOR_WATER = 0xffc0a069u;
+const uint COLOR_GAS = 0xffc7b9abu;

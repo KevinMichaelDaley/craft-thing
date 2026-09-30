@@ -44,7 +44,7 @@ bool open_cell(ivec2 p) {
     if (atlas == 0xffffffffu) return false;
     uint material = cells[atlas].x & 0xffffu;
     return (material == 0u || material == 2u || material == 4u ||
-            material == 5u) && occupancy[index_of(p)] == 0u;
+            material == 5u || material == 6u) && occupancy[index_of(p)] == 0u;
 }
 
 bool wet(ivec2 p) {
