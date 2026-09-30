@@ -48,7 +48,62 @@ shared float pressure_correction[PRESSURE_BAND][SIDE];
 
 bool open_material(uvec2 cell) {
     uint kind = cell.x & 0xffffu;
-    return kind == 0u || kind == 2u || kind == 4u || kind == 5u;
+    return kind == 0u || kind == 2u || kind == 4u || kind == 5u ||
+           kind == 6u;
+}
+
+void transfer_gas(uint lane, uint mc, uint oc, uint mi, uint oi) {
+    uvec2 m = main_cells[mc], o = other_cells[oc];
+    bool main_gas = (m.x & 0xffffu) == 6u;
+    bool other_gas = (o.x & 0xffffu) == 6u;
+    if (main_gas == other_gas || m.y != 0u || o.y != 0u ||
+        main_occupancy[mi] != 0u || other_occupancy[oi] != 0u)
+        return;
+    bool source_main = main_gas;
+    if (params.other_side == 2u && !source_main) return;
+    if (params.other_side == 3u && source_main) return;
+    if (params.other_side < 2u) {
+        uint source_cell = source_main ? mc : oc;
+        uint destination_cell = source_main ? oc : mc;
+        uint source_x = source_main ? params.main_x : params.other_x;
+        uint source_y = source_main ? params.main_y : params.other_y;
+        uint destination_x = source_main ? params.other_x : params.main_x;
+        uint destination_y = source_main ? params.other_y : params.main_y;
+        uint source_width = source_main ? params.main_width : params.other_width;
+        uint destination_width = source_main ? params.other_width : params.main_width;
+        if (lane == 0u) return;
+        uint source_above = source_cell - SIDE;
+        uint destination_above = destination_cell - SIDE;
+        uvec2 above_source = source_main ? main_cells[source_above] :
+                                         other_cells[source_above];
+        uvec2 above_destination = source_main ? other_cells[destination_above] :
+                                              main_cells[destination_above];
+        uint source_grid_above = (source_y + lane - 1u) * source_width +
+                                 source_x + (source_main ?
+                                     (params.other_side == 0u ? 0u : SIDE - 1u) :
+                                     (params.other_side == 0u ? SIDE - 1u : 0u));
+        uint destination_grid_above = (destination_y + lane - 1u) * destination_width +
+                                      destination_x + (source_main ?
+                                          (params.other_side == 0u ? SIDE - 1u : 0u) :
+                                          (params.other_side == 0u ? 0u : SIDE - 1u));
+        if ((above_source.x & 0xffffu) == 0u && above_source.y == 0u &&
+            (source_main ? main_occupancy[source_grid_above] :
+                           other_occupancy[source_grid_above]) == 0u)
+            return;
+        if ((above_destination.x & 0xffffu) != 0u ||
+            above_destination.y != 0u ||
+            (source_main ? other_occupancy[destination_grid_above] :
+                           main_occupancy[destination_grid_above]) != 0u)
+            return;
+    }
+    if ((source_main ? o.x : m.x) != 0u) return;
+    if (source_main) {
+        other_cells[oc].x = m.x;
+        main_cells[mc].x = 0u;
+    } else {
+        main_cells[mc].x = o.x;
+        other_cells[oc].x = 0u;
+    }
 }
 
 bool open_side(bool use_main, uint cell_index, uint grid_index) {
@@ -467,6 +522,7 @@ void main() {
     else if (params.other_side == 2u) other_velocity[oi].y = velocity;
     else main_velocity[mi].y = velocity;
     }
+    transfer_gas(lane, mc, oc, mi, oi);
     memoryBarrierBuffer();
     barrier();
     if (lane == 0u) {

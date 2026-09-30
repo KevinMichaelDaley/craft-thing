@@ -180,5 +180,9 @@ bool dc_gpu_boundary_exchange(dc_gpu_t *main_gpu, dc_gpu_t *other_gpu,
         return error(err, cap, "GPU boundary exchange failed");
     main_gpu->fluid_snapshot_valid = false;
     other_gpu->fluid_snapshot_valid = false;
+    if (main_gpu->gas_active || other_gpu->gas_active) {
+        main_gpu->gas_active = true;
+        other_gpu->gas_active = true;
+    }
     return true;
 }
