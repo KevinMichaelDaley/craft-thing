@@ -16,8 +16,11 @@ The cache prefetches saved dynamic chunks as the camera approaches. Water,
 grain identity, velocity, and conservative transfers across adjacent grids
 have camera-pan regressions. Under a saturated multi-directional load, the
 cache can still exhaust its 16-grid capacity; recycling and fairness remain
-tracked by `dun-5a1a`. Same-world-clock scheduling and full-ring cost remain
-tracked by `dun-3xqx`.
+tracked by `dun-5a1a`. Due grids record GPU ticks into separate command
+buffers and submit them together. Water-only grids skip MPM entirely; gas and
+grain activation propagates when a GPU boundary exchange transfers either
+material into another grid. Near, middle, and far grids use 8, 6, and 4
+pressure sweeps respectively.
 
 ## Problem and invariant
 
@@ -58,14 +61,14 @@ diagonal chunk does not receive an unjustifiably high update rate.
 | Far | 2–4 screens | 24 ticks | minimum stable work |
 | Dormant | more than 4 screens | none | none |
 
-The periods are scheduling targets, not larger unconditional fluid steps. Every
-chunk advances on the same world clock. The elapsed interval is divided into
-GPU substeps that respect the maximum face displacement and the tested
-free-surface step limit. Pressure iterations can fall with distance only while
-the projected divergence remains bounded. If a flow needs more substeps or
-iterations, the scheduler budgets them over following frames and never drops
-elapsed world time. Promotion to the visible band drains that debt before the
-chunk is shown.
+The periods are scheduling targets, not slower simulated time. Every chunk
+advances on the same world clock. The elapsed interval is divided into GPU
+substeps of at most 1/20 second for the tested free-surface limit. Conservative
+fluid transport traverses the velocity-times-timestep distance, including
+multiple cells at high speed, and stops at real cell boundaries. A regression
+starts water at eight cells per tick in the far band and verifies downward
+travel, exact volume, and no high spray. Any pending fraction is carried to
+the next update; promotion to the visible band drains that debt first.
 
 ## Band interfaces
 
@@ -98,6 +101,13 @@ the same amount of momentum as its equivalent sequence of short ticks. This
 attenuates edge oscillation without changing cell mass or adding a readback.
 The GPU regression compares equal-time visible and offscreen steps, verifies
 faster offscreen velocity decay, and checks exact water mass.
+
+A synthetic saturated-ring benchmark (`make bench_offscreen`) allocates 16
+active 3×3 workspaces sharing a 1920×1080 parent GPU. With one deep-water chunk
+per workspace, near-band work fell from about 15 ms to 9–10 ms per world tick
+after idle MPM skipping and batched submission; middle and far work measured
+about 4–5 ms per tick. The foreground and offscreen budgets are additive, so
+native-resolution throughput remains tracked by `dun-vd9a`.
 
 ## Validation
 

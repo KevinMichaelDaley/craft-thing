@@ -244,6 +244,13 @@ build/dungeoncraft: src/app/main.c src/app/level.c src/app/offscreen.c src/app/o
 build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/offscreen.c src/app/offscreen.h src/app/level.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(GPU_SHADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/controls_tests.c src/app/level.c src/app/offscreen.c src/app/session.c $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 
+build/offscreen_bench: tests/app/offscreen_bench.c src/app/offscreen.c src/app/offscreen.h $(GPU_OBJ) $(CHUNK_OBJ) $(GPU_SHADERS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/offscreen_bench.c src/app/offscreen.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+.PHONY: bench_offscreen
+bench_offscreen: build/offscreen_bench
+	./build/offscreen_bench
+
 test: build/gpu_tests build/pressure_domain_tests build/halo_tests build/fluid_tests build/gas_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/gpu_tests
 	./build/pressure_domain_tests

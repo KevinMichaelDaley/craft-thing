@@ -134,6 +134,7 @@ static void test_shared_workspace_boundary_conserves_water_and_grain(void) {
         .other_side = 2 };
     ASSERT_TRUE(dc_gpu_boundary_exchange(lower, upper, &boundary, 1, 4.0f,
                                          err, sizeof(err)));
+    ASSERT_TRUE(lower->mpm_active);
     ASSERT_TRUE(dc_gpu_download_chunk(upper, 0, source, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_download_chunk(lower, 0, destination, err, sizeof(err)));
     uint64_t water_mass = source->cells[63 * DC_CHUNK_SIDE + 32].fluid_mass;

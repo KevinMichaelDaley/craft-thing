@@ -29,3 +29,7 @@ Native 1920x1080/608 chunks improved from 8.5 to about 39-43 presented ticks/s. 
 **2026-09-27T23:23:37Z**
 
 Added 960x540 simulated half-native mode with 2x display and 187 resident chunks. Paired 12-frame smoke: half 67.6 ticks/s, 71.1 adaptive frames/s; native 38.9 ticks/s, 39.4 adaptive frames/s. Half 60-frame adaptive sample 62.3 fps. Native 60-frame run exposes marker-count overflow, tracked by dun-mt9o. Native 60 Hz remains open.
+
+**2026-09-30T07:07:41Z**
+
+2026-09-30: Synthetic saturated offscreen ring benchmark on a 1920x1080 parent with 16 one-chunk water workspaces: after batched submissions and idle-MPM skip, near band adds about 9-10 ms/world tick; middle/far about 4-5 ms. This is additive to foreground GPU work and matters for native 60 Hz. Run make bench_offscreen to reproduce.

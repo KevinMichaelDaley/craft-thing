@@ -1,6 +1,6 @@
 ---
 id: dun-3xqx
-status: open
+status: closed
 deps: [dun-bd93]
 links: []
 created: 2026-09-28T02:43:17Z
@@ -27,3 +27,7 @@ Elapsed-time GPU MPM timestep scaling is implemented; dynamic MPM substeps prese
 **2026-09-28T03:13:53Z**
 
 Half/native smoke benchmark confirms offscreen GPU work budget is critical: foreground alone ~16.7/9.5 ticks per second. The 4/12/24 cadence uses fewer pressure sweeps but still dispatches full context; profile saturated ring before closure.
+
+**2026-09-30T07:04:33Z**
+
+2026-09-30: Near/mid/far pressure sweeps now 8/6/4; due offscreen contexts share one GPU submission; water-only contexts skip MPM with conservative activation on upload/paint/boundary. Equal-world-time 60/30 Hz, band-transition debt, near/mid exact mass, fast far-band water, pan regressions pass. Synthetic 16-workspace 1920x1080-parent benchmark improved near from ~15 to ~9-10 ms/world tick; native foreground budget remains tracked by dun-vd9a.
