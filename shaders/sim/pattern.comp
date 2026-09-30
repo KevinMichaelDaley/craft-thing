@@ -174,13 +174,14 @@ void main() {
         uint particle_index = slot * 8192u + local_index;
         uint secondary_index = particle_index + 4096u;
         if (params.mode == 3u || params.mode == 4u) {
+            uint paint_material = params.mode == 4u ? 3u : params.color;
             int dx = int(p.x) - int(params.brush_x);
             int dy = int(p.y) - int(params.brush_y);
             int r = int(params.radius);
             if (dx * dx + dy * dy <= r * r) {
-                material = params.color == 3u &&
+                material = paint_material == 3u &&
                            (material == 2u || material == 4u || material == 5u)
-                           ? material : params.color == 3u ? 0u : params.color;
+                           ? material : paint_material == 3u ? 0u : paint_material;
                 bool new_grain = material == 2u || material == 4u || material == 5u;
                 if (!new_grain) {
                     if (particles[particle_index].mass_fp != 0u) {
@@ -222,11 +223,11 @@ void main() {
                     }
                 }
                 cell.x = (cell.x & 0xffff0000u) | material;
-                if (params.mode == 4u && params.color == 3u) {
-                    uint source_rate = params.radius == 1u ? 16384u : 65536u;
+                if (params.mode == 4u) {
+                    uint source_rate = (params.color >> 16) * (65536u / 4u);
                     cell.y = min(65536u, cell.y + source_rate);
                 } else {
-                    cell.y = params.color == 3u ? 65536u : new_grain ? cell.y : 0u;
+                    cell.y = paint_material == 3u ? 65536u : new_grain ? cell.y : 0u;
                 }
                 chunk_cells[index] = cell;
             }

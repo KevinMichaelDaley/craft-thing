@@ -147,7 +147,7 @@ struct dc_gpu {
     uint32_t marker_ping;
     bool marker_correction, marker_overlay;
     bool tick_water_source;
-    uint32_t tick_water_x, tick_water_y, tick_water_radius;
+    uint32_t tick_water_x, tick_water_y, tick_water_radius, tick_water_rate_quarters;
     uint64_t tick_submission_count;
     uint32_t width, height;
     uint32_t view_x, view_y, view_width, view_height;

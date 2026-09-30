@@ -153,6 +153,15 @@ static int smoke_native_view(void) {
                      save_level_bmp(
                          "build/screenshots/quarter_native_after_4s_spring_on.bmp",
                          pixels);
+    for (uint32_t i = 0u; i < 240u && okay; ++i)
+        okay = dc_level_view_step(view, err, sizeof(err)) &&
+               dc_level_view_tick(view, err, sizeof(err));
+    if (okay) okay = dc_level_view_pixels(view, pixels,
+                                         VIEW_WIDTH * VIEW_HEIGHT,
+                                         err, sizeof(err)) &&
+                     save_level_bmp(
+                         "build/screenshots/quarter_native_after_8s_spring_on.bmp",
+                         pixels);
 #endif
     if (okay) okay = dc_level_view_set_spring_enabled(view, false);
     for (uint32_t i = 0; i < 120u && okay; ++i)

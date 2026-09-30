@@ -602,7 +602,8 @@ dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
                              VIEW_WIDTH, VIEW_HEIGHT) ||
         !dc_gpu_set_display_zoom(view->gpu, WINDOW_SCALE) ||
         !dc_gpu_set_fluid_interval(view->gpu, FLUID_INTERVAL) ||
-        !dc_gpu_set_tick_water_source_radius(view->gpu, SPRING_RADIUS)) goto fail;
+        !dc_gpu_set_tick_water_source_radius(view->gpu, SPRING_RADIUS) ||
+        !dc_gpu_set_tick_water_source_rate(view->gpu, SPRING_RATE_QUARTERS)) goto fail;
     view->spring_enabled = true;
     view->stream = dc_stream_create(directory, seed,
                                     DC_GPU_CHUNK_SLOTS * 2u);
