@@ -507,6 +507,8 @@ bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
     uint32_t push[7] = { gpu->width, gpu->height, 3, x, y, radius, material };
     if (!dispatch_cells(gpu, push, err, cap)) return false;
     if (material == DC_MATERIAL_GAS) gpu->gas_active = true;
+    if (material == DC_MATERIAL_SAND || material == DC_MATERIAL_DIRT ||
+        material == DC_MATERIAL_GRAVEL) gpu->mpm_active = true;
     return true;
 }
 

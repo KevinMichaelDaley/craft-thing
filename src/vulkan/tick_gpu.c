@@ -115,9 +115,8 @@ static uint64_t elapsed_ns(const dc_gpu_t *gpu, uint64_t start, uint64_t stop) {
     return (uint64_t)((double)ticks * gpu->timestamp_period);
 }
 
-static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
-                        uint32_t steps,
-                        char *err, uint32_t cap) {
+static bool tick_record(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
+                        uint32_t steps, char *err, uint32_t cap) {
     if (!gpu || !steps || (capture && steps != 1u))
         return error(err, cap, "Invalid GPU tick");
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
@@ -154,6 +153,12 @@ static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
     stage_barrier(gpu, VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
     if (vkEndCommandBuffer(gpu->command) != VK_SUCCESS)
         return error(err, cap, "Cannot end tick command buffer");
+    return true;
+}
+
+static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
+                        uint32_t steps, char *err, uint32_t cap) {
+    if (!tick_record(gpu, capture, steps, err, cap)) return false;
     VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .commandBufferCount = 1, .pCommandBuffers = &gpu->command };
     if (vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
@@ -188,6 +193,35 @@ bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
 bool dc_gpu_tick_steps(dc_gpu_t *gpu, uint32_t steps,
                        char *err, uint32_t cap) {
     return tick_submit(gpu, NULL, steps, err, cap);
+}
+
+bool dc_gpu_tick_batch(const dc_gpu_tick_batch_item_t *items, uint32_t count,
+                       char *err, uint32_t cap) {
+    if (!items || !count || count > DC_GPU_TICK_BATCH_MAX ||
+        !items[0].gpu || !items[0].steps)
+        return error(err, cap, "Invalid GPU tick batch");
+    VkQueue queue = items[0].gpu->queue;
+    VkDevice device = items[0].gpu->device;
+    VkCommandBuffer commands[DC_GPU_TICK_BATCH_MAX];
+    for (uint32_t i = 0u; i < count; ++i) {
+        dc_gpu_t *gpu = items[i].gpu;
+        if (!gpu || !items[i].steps || gpu->queue != queue ||
+            gpu->device != device)
+            return error(err, cap, "GPU batch workspaces must share a queue");
+        for (uint32_t j = 0u; j < i; ++j)
+            if (items[j].gpu == gpu)
+                return error(err, cap, "Duplicate GPU batch workspace");
+        if (!tick_record(gpu, NULL, items[i].steps, err, cap)) return false;
+        commands[i] = gpu->command;
+    }
+    VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = count, .pCommandBuffers = commands };
+    if (vkQueueSubmit(queue, 1u, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
+        vkQueueWaitIdle(queue) != VK_SUCCESS)
+        return error(err, cap, "GPU tick batch submission failed");
+    for (uint32_t i = 0u; i < count; ++i)
+        ++items[i].gpu->tick_submission_count;
+    return true;
 }
 
 uint64_t dc_gpu_tick_submission_count(const dc_gpu_t *gpu) {

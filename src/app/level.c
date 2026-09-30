@@ -687,9 +687,13 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
             dc_offscreen_t *offscreen = view->offscreen[i];
             if (!offscreen) continue;
             dc_offscreen_set_spring(offscreen, view->spring_enabled);
-            if (!dc_offscreen_update(offscreen, view->origin,
-                                     view->pending_seconds, false,
-                                     err, cap)) return false;
+        }
+        if (!dc_offscreen_update_batch(view->offscreen, OFFSCREEN_CLUSTERS,
+                                       view->origin, view->pending_seconds,
+                                       false, err, cap)) return false;
+        for (uint32_t i = 0; i < OFFSCREEN_CLUSTERS; ++i) {
+            dc_offscreen_t *offscreen = view->offscreen[i];
+            if (!offscreen) continue;
             if (!exchange_visible_boundary(view, offscreen,
                     dc_offscreen_last_advance_ticks(offscreen),
                     err, cap)) return false;

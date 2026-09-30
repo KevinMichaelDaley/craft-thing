@@ -40,6 +40,11 @@ uint32_t dc_offscreen_coord_band(dc_chunk_coord_t coord,
 bool dc_offscreen_update(dc_offscreen_t *offscreen, dc_chunk_coord_t camera_origin,
                          double elapsed_seconds, bool catch_up,
                          char *err, uint32_t cap);
+/** Advance due workspaces in shared GPU submissions on one world clock. */
+bool dc_offscreen_update_batch(dc_offscreen_t *const *workspaces, uint32_t count,
+                               dc_chunk_coord_t camera_origin,
+                               double elapsed_seconds, bool catch_up,
+                               char *err, uint32_t cap);
 bool dc_offscreen_flush(dc_offscreen_t *offscreen, dc_offscreen_save_fn save,
                         void *context, char *err, uint32_t cap);
 

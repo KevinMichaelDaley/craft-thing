@@ -125,6 +125,7 @@ struct dc_gpu {
     uint32_t gas_tick;
     float gas_phase_budget;
     bool gas_active;
+    bool mpm_active;
     uint32_t fluid_tick;
     uint32_t fluid_interval;
     uint32_t fluid_phase;

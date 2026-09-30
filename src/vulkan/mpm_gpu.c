@@ -184,6 +184,7 @@ static void mpm_barrier(dc_gpu_t *gpu, VkPipelineStageFlags2 target_stage,
 }
 
 void dc_gpu_record_mpm(dc_gpu_t *gpu) {
+    if (!gpu->mpm_active) return;
     float time_scale = gpu->timed_fluid ? gpu->tick_time_scale : 1.0f;
     float whole_ticks = (float)(uint32_t)(time_scale + 0.5f);
     float drift = time_scale - whole_ticks;

@@ -204,6 +204,16 @@ bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
 bool dc_gpu_tick_steps(dc_gpu_t *gpu, uint32_t steps,
                        char *err_buf, uint32_t err_cap);
 
+enum { DC_GPU_TICK_BATCH_MAX = 16u };
+typedef struct {
+    dc_gpu_t *gpu;
+    uint32_t steps;
+} dc_gpu_tick_batch_item_t;
+
+/** Run independent GPU workspaces in one queue submission without readback. */
+bool dc_gpu_tick_batch(const dc_gpu_tick_batch_item_t *items, uint32_t count,
+                       char *err_buf, uint32_t err_cap);
+
 /** Return CPU-recorded GPU tick submission count for scheduling diagnostics. */
 uint64_t dc_gpu_tick_submission_count(const dc_gpu_t *gpu);
 

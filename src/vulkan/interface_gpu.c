@@ -184,5 +184,9 @@ bool dc_gpu_boundary_exchange(dc_gpu_t *main_gpu, dc_gpu_t *other_gpu,
         main_gpu->gas_active = true;
         other_gpu->gas_active = true;
     }
+    if (main_gpu->mpm_active || other_gpu->mpm_active) {
+        main_gpu->mpm_active = true;
+        other_gpu->mpm_active = true;
+    }
     return true;
 }

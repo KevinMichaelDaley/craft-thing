@@ -263,6 +263,7 @@ bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
         }
     }
     ((uint32_t *)gpu->particle_count_mapped)[slot] = particle_count;
+    if (particle_count) gpu->mpm_active = true;
     ((uint32_t *)gpu->slot_seed_mapped)[slot] = dc_chunk_particle_seed(chunk->coord);
     gpu->fluid_snapshot_valid = false;
     return dc_gpu_copy_chunk_state(gpu, slot, true, true, err, cap);

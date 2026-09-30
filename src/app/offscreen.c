@@ -218,42 +218,73 @@ uint32_t dc_offscreen_band(const dc_offscreen_t *offscreen,
 bool dc_offscreen_update(dc_offscreen_t *offscreen, dc_chunk_coord_t camera_origin,
                          double elapsed_seconds, bool catch_up,
                          char *err, uint32_t cap) {
-    if (!offscreen) return true;
-    offscreen->last_advance_ticks = 0.0f;
-    uint32_t band = dc_offscreen_band(offscreen, camera_origin);
-    if (band == 5u) { offscreen->pending_seconds = 0.0; return true; }
-    offscreen->pending_seconds += elapsed_seconds;
-    const uint32_t cadence = band == 1u ? 4u : band == 2u ? 12u : 24u;
-    const uint32_t pressure_sweeps = band == 1u ? 8u : band == 2u ? 6u : 4u;
-    if (!dc_gpu_set_pressure_sweeps(offscreen->gpu, pressure_sweeps))
-        return error(err, cap, "Cannot set offscreen pressure work");
-    const double period = (double)cadence / 60.0;
-    uint32_t substeps = (uint32_t)(period * 20.0 + 0.999999);
-    if (!substeps) substeps = 1u;
-    while (offscreen->pending_seconds + 1e-7 >= period) {
-        uint32_t due = (uint32_t)((offscreen->pending_seconds + 1e-7) / period);
-        uint32_t batch = OFFSCREEN_MAX_BATCH_STEPS / substeps;
-        if (due < batch) batch = due;
-        if (!dc_gpu_set_tick_seconds(offscreen->gpu,
-                                     (float)(period / substeps)) ||
-            !dc_gpu_tick_steps(offscreen->gpu, batch * substeps,
-                               err, cap)) return false;
-        double advance = period * batch;
-        offscreen->last_advance_ticks += (float)(advance * 60.0);
-        offscreen->pending_seconds -= advance;
+    return dc_offscreen_update_batch(&offscreen, 1u, camera_origin,
+                                     elapsed_seconds, catch_up, err, cap);
+}
+
+bool dc_offscreen_update_batch(dc_offscreen_t *const *workspaces, uint32_t count,
+                               dc_chunk_coord_t camera_origin,
+                               double elapsed_seconds, bool catch_up,
+                               char *err, uint32_t cap) {
+    if (!workspaces || !count || count > DC_OFFSCREEN_MAX_CLUSTERS ||
+        !(elapsed_seconds >= 0.0))
+        return error(err, cap, "Invalid offscreen update batch");
+    uint32_t bands[DC_OFFSCREEN_MAX_CLUSTERS] = {0};
+    for (uint32_t i = 0u; i < count; ++i) {
+        dc_offscreen_t *offscreen = workspaces[i];
+        if (!offscreen) continue;
+        offscreen->last_advance_ticks = 0.0f;
+        bands[i] = dc_offscreen_band(offscreen, camera_origin);
+        if (bands[i] == 5u) { offscreen->pending_seconds = 0.0; continue; }
+        offscreen->pending_seconds += elapsed_seconds;
+        uint32_t sweeps = bands[i] == 1u ? 8u : bands[i] == 2u ? 6u : 4u;
+        if (!dc_gpu_set_pressure_sweeps(offscreen->gpu, sweeps))
+            return error(err, cap, "Cannot set offscreen pressure work");
     }
-    if (catch_up && offscreen->pending_seconds > 1e-7) {
-        double advance = offscreen->pending_seconds;
-        uint32_t remainder_steps = (uint32_t)(advance * 20.0 + 0.999999);
-        if (!remainder_steps) remainder_steps = 1u;
-        if (!dc_gpu_set_tick_seconds(offscreen->gpu,
-                                     (float)(advance / remainder_steps)) ||
-            !dc_gpu_tick_steps(offscreen->gpu, remainder_steps,
-                               err, cap)) return false;
-        offscreen->last_advance_ticks += (float)(advance * 60.0);
-        offscreen->pending_seconds = 0.0;
+    for (;;) {
+        dc_gpu_tick_batch_item_t items[DC_OFFSCREEN_MAX_CLUSTERS];
+        dc_offscreen_t *planned[DC_OFFSCREEN_MAX_CLUSTERS];
+        double advances[DC_OFFSCREEN_MAX_CLUSTERS];
+        uint32_t used = 0u;
+        for (uint32_t i = 0u; i < count; ++i) {
+            dc_offscreen_t *offscreen = workspaces[i];
+            if (!offscreen || bands[i] == 5u) continue;
+            uint32_t cadence = bands[i] == 1u ? 4u : bands[i] == 2u ? 12u : 24u;
+            double period = (double)cadence / 60.0;
+            uint32_t substeps = (uint32_t)(period * 20.0 + 0.999999);
+            if (!substeps) substeps = 1u;
+            uint32_t steps = 0u;
+            double advance = 0.0;
+            if (offscreen->pending_seconds + 1e-7 >= period) {
+                uint32_t due = (uint32_t)((offscreen->pending_seconds + 1e-7) /
+                                           period);
+                uint32_t batch = OFFSCREEN_MAX_BATCH_STEPS / substeps;
+                if (due < batch) batch = due;
+                steps = batch * substeps;
+                advance = period * batch;
+            } else if (catch_up && offscreen->pending_seconds > 1e-7) {
+                advance = offscreen->pending_seconds;
+                steps = (uint32_t)(advance * 20.0 + 0.999999);
+                if (!steps) steps = 1u;
+            }
+            if (!steps) continue;
+            if (!dc_gpu_set_tick_seconds(offscreen->gpu,
+                                         (float)(advance / steps)))
+                return error(err, cap, "Invalid offscreen tick duration");
+            items[used] = (dc_gpu_tick_batch_item_t){offscreen->gpu, steps};
+            planned[used] = offscreen;
+            advances[used] = advance;
+            ++used;
+        }
+        if (!used) return true;
+        if (!dc_gpu_tick_batch(items, used, err, cap)) return false;
+        for (uint32_t i = 0u; i < used; ++i) {
+            planned[i]->pending_seconds -= advances[i];
+            if (planned[i]->pending_seconds < 1e-7)
+                planned[i]->pending_seconds = 0.0;
+            planned[i]->last_advance_ticks += (float)(advances[i] * 60.0);
+        }
     }
-    return true;
 }
 
 bool dc_offscreen_flush(dc_offscreen_t *offscreen, dc_offscreen_save_fn save,
