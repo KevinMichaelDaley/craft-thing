@@ -224,6 +224,9 @@ bool dc_offscreen_update(dc_offscreen_t *offscreen, dc_chunk_coord_t camera_orig
     if (band == 5u) { offscreen->pending_seconds = 0.0; return true; }
     offscreen->pending_seconds += elapsed_seconds;
     const uint32_t cadence = band == 1u ? 4u : band == 2u ? 12u : 24u;
+    const uint32_t pressure_sweeps = band == 1u ? 8u : band == 2u ? 6u : 4u;
+    if (!dc_gpu_set_pressure_sweeps(offscreen->gpu, pressure_sweeps))
+        return error(err, cap, "Cannot set offscreen pressure work");
     const double period = (double)cadence / 60.0;
     uint32_t substeps = (uint32_t)(period * 20.0 + 0.999999);
     if (!substeps) substeps = 1u;
