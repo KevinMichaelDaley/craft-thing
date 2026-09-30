@@ -184,10 +184,90 @@ static void test_gas_rises_across_gpu_workspace_boundary(void) {
         gas_count += upper->cells[i].material == DC_MATERIAL_GAS;
     }
     ASSERT_EQ(gas_count, 1u);
+    ASSERT_TRUE(dc_gpu_set_page(upper_gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_step(upper_gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(upper_gpu, 0, upper, err, sizeof(err)));
+    ASSERT_EQ(upper->cells[62 * DC_CHUNK_SIDE + 32].material, DC_MATERIAL_GAS);
     dc_gpu_destroy(upper_gpu);
     dc_gpu_destroy(lower_gpu);
     free(lower);
     free(upper);
+    PASS();
+}
+
+static void test_gas_crosses_two_offscreen_gpu_workspaces(void) {
+    char err[256] = {0};
+    dc_gpu_t *lower_gpu = NULL, *middle_gpu = NULL, *upper_gpu = NULL;
+    dc_chunk_t *lower = calloc(1, sizeof(*lower));
+    dc_chunk_t *middle = calloc(1, sizeof(*middle));
+    dc_chunk_t *upper = calloc(1, sizeof(*upper));
+    ASSERT_TRUE(lower && middle && upper);
+    lower->cells[31].material = DC_MATERIAL_GAS;
+    ASSERT_TRUE(dc_gpu_create(&lower_gpu, 64, 64,
+                              "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create_shared(&middle_gpu, lower_gpu, 64, 64,
+                                     "build/shaders/pattern.comp.spv",
+                                     err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create_shared(&upper_gpu, lower_gpu, 64, 64,
+                                     "build/shaders/pattern.comp.spv",
+                                     err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(lower_gpu, 0, lower, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(middle_gpu, 0, middle, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(upper_gpu, 0, upper, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(middle_gpu, 0, 0, 0, err, sizeof(err)));
+    dc_gpu_boundary_t boundary = { .main_slot = 0, .other_slot = 0,
+        .main_x = 0, .main_y = 0, .other_x = 0, .other_y = 0,
+        .other_side = 2 };
+    ASSERT_TRUE(dc_gpu_boundary_exchange(lower_gpu, middle_gpu, &boundary, 1,
+                                         1.0f, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_steps(middle_gpu, 63, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_boundary_exchange(middle_gpu, upper_gpu, &boundary, 1,
+                                         1.0f, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(lower_gpu, 0, lower, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(middle_gpu, 0, middle, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(upper_gpu, 0, upper, err, sizeof(err)));
+    uint32_t gas_count = 0u;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        gas_count += lower->cells[i].material == DC_MATERIAL_GAS;
+        gas_count += middle->cells[i].material == DC_MATERIAL_GAS;
+        gas_count += upper->cells[i].material == DC_MATERIAL_GAS;
+    }
+    ASSERT_EQ(gas_count, 1u);
+    ASSERT_EQ(upper->cells[63u * DC_CHUNK_SIDE + 31u].material, DC_MATERIAL_GAS);
+    dc_gpu_destroy(upper_gpu);
+    dc_gpu_destroy(middle_gpu);
+    dc_gpu_destroy(lower_gpu);
+    free(lower); free(middle); free(upper);
+    PASS();
+}
+
+static void test_gas_escapes_sideways_across_gpu_workspace_boundary(void) {
+    char err[256] = {0};
+    dc_gpu_t *left_gpu = NULL, *right_gpu = NULL;
+    dc_chunk_t *left = calloc(1, sizeof(*left));
+    dc_chunk_t *right = calloc(1, sizeof(*right));
+    ASSERT_TRUE(left && right);
+    left->cells[30u * DC_CHUNK_SIDE + 63u].material = DC_MATERIAL_GAS;
+    left->cells[29u * DC_CHUNK_SIDE + 63u].material = DC_MATERIAL_STONE;
+    ASSERT_TRUE(dc_gpu_create(&left_gpu, 64, 64,
+                              "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create_shared(&right_gpu, left_gpu, 64, 64,
+                                     "build/shaders/pattern.comp.spv",
+                                     err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(left_gpu, 0, left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(right_gpu, 0, right, err, sizeof(err)));
+    dc_gpu_boundary_t boundary = { .main_slot = 0, .other_slot = 0,
+        .main_x = 0, .main_y = 0, .other_x = 0, .other_y = 0,
+        .other_side = 1 };
+    ASSERT_TRUE(dc_gpu_boundary_exchange(left_gpu, right_gpu, &boundary, 1,
+                                         1.0f, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(left_gpu, 0, left, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(right_gpu, 0, right, err, sizeof(err)));
+    ASSERT_EQ(left->cells[30u * DC_CHUNK_SIDE + 63u].material, DC_MATERIAL_AIR);
+    ASSERT_EQ(right->cells[30u * DC_CHUNK_SIDE].material, DC_MATERIAL_GAS);
+    dc_gpu_destroy(right_gpu);
+    dc_gpu_destroy(left_gpu);
+    free(left); free(right);
     PASS();
 }
 
@@ -916,6 +996,8 @@ int main(void) {
     RUN(test_gpu_wet_edge_masks_are_sparse_and_refresh);
     RUN(test_shared_workspace_boundary_conserves_water_and_grain);
     RUN(test_gas_rises_across_gpu_workspace_boundary);
+    RUN(test_gas_crosses_two_offscreen_gpu_workspaces);
+    RUN(test_gas_escapes_sideways_across_gpu_workspace_boundary);
     RUN(test_workspace_water_reaches_cells_allowed_by_velocity);
     RUN(test_deep_water_keeps_advecting_across_workspace_seam);
     RUN(test_split_river_recovers_hydrostatic_surface);

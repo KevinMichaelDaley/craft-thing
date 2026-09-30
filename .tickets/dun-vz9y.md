@@ -1,6 +1,6 @@
 ---
 id: dun-vz9y
-status: open
+status: closed
 deps: []
 links: [dun-u68k]
 created: 2026-09-30T05:12:57Z

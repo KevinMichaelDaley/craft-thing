@@ -71,6 +71,27 @@ static void test_timed_gas_rises_at_world_tick_rate(void) {
     PASS();
 }
 
+static void test_fractional_gas_steps_accumulate_without_extra_motion(void) {
+    char err[256] = {0};
+    dc_chunk_t *left = calloc(1, sizeof(*left));
+    dc_chunk_t *right = calloc(1, sizeof(*right));
+    ASSERT_TRUE(left && right);
+    left->cells[40u * 64u + 10u].material = DC_MATERIAL_GAS;
+    dc_gpu_t *gpu = grid(left, right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    ASSERT_TRUE(dc_gpu_set_tick_seconds(gpu, 1.0f / 120.0f));
+    ASSERT_TRUE(dc_gpu_tick_steps(gpu, 1u, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0u, left, err, sizeof(err)));
+    ASSERT_EQ(left->cells[40u * 64u + 10u].material, DC_MATERIAL_GAS);
+    ASSERT_TRUE(dc_gpu_tick_steps(gpu, 1u, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0u, left, err, sizeof(err)));
+    ASSERT_EQ(gas_count(left), 1u);
+    ASSERT_EQ(left->cells[39u * 64u + 10u].material, DC_MATERIAL_GAS);
+    dc_gpu_destroy(gpu);
+    free(left); free(right);
+    PASS();
+}
+
 static void test_gas_crosses_chunk_edge_around_lid(void) {
     char err[256] = {0};
     dc_chunk_t *left = calloc(1, sizeof(*left));
@@ -190,6 +211,7 @@ static void test_gas_pass_has_bounded_gpu_cost(void) {
 int main(void) {
     RUN(test_gas_rises_through_air_on_gpu);
     RUN(test_timed_gas_rises_at_world_tick_rate);
+    RUN(test_fractional_gas_steps_accumulate_without_extra_motion);
     RUN(test_gas_crosses_chunk_edge_around_lid);
     RUN(test_competing_gas_moves_have_one_winner);
     RUN(test_lateral_preference_rotates_without_losing_gas);

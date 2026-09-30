@@ -828,6 +828,50 @@ static void test_painted_gas_rises_in_interactive_level(void) {
     PASS();
 }
 
+static void test_painted_gas_crosses_visible_offscreen_boundary_after_pan(void) {
+    char directory[] = "build/ui_gas_boundary_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory) != NULL);
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view != NULL);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (uint32_t y = 48u; y <= 63u; ++y)
+        for (uint32_t x = 19u; x <= 21u; ++x)
+            ASSERT_TRUE(dc_level_view_paint(view, x, y, 0u,
+                                            DC_MATERIAL_AIR, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 20u, 64u, 0u,
+                                    DC_MATERIAL_GAS, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 0, 128));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 40u; ++tick) {
+        ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    }
+    dc_chunk_t *lower = calloc(1, sizeof(*lower));
+    dc_chunk_t *upper = calloc(1, sizeof(*upper));
+    ASSERT_TRUE(lower && upper);
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 1},
+                                    lower, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 0, -128));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 5000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_chunk(view, (dc_chunk_coord_t){0, 0},
+                                    upper, err, sizeof(err)));
+    uint32_t gas_count = 0u, upper_count = 0u, risen_count = 0u;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        gas_count += lower->cells[i].material == DC_MATERIAL_GAS;
+        upper_count += upper->cells[i].material == DC_MATERIAL_GAS;
+        risen_count += i / DC_CHUNK_SIDE < 63u &&
+                       upper->cells[i].material == DC_MATERIAL_GAS;
+    }
+    ASSERT_EQ(gas_count + upper_count, 1u);
+    ASSERT_EQ(upper_count, 1u);
+    ASSERT_EQ(risen_count, 1u);
+    free(lower);
+    free(upper);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    PASS();
+}
+
 int main(void) {
     RUN(test_offscreen_cache_uses_compact_gpu_tiles);
     RUN(test_offscreen_catchup_has_bounded_submission_cost);
@@ -850,6 +894,7 @@ int main(void) {
     RUN(test_sand_keeps_falling_offscreen_without_particle_loss);
     RUN(test_sand_crosses_offscreen_visible_boundary_with_same_id);
     RUN(test_painted_gas_rises_in_interactive_level);
+    RUN(test_painted_gas_crosses_visible_offscreen_boundary_after_pan);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
