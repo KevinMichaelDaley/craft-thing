@@ -338,6 +338,21 @@ static void test_high_painted_water_falls_as_continuous_column(void) {
     printf("falling stream connected %u of %u wet cells\n",
            largest_component, wet_cells);
     ASSERT_TRUE(wet_cells > 100u && largest_component * 5u >= wet_cells * 4u);
+    uint32_t widest_air_row = 0u;
+    for (uint32_t y = 32u; y < 90u; ++y) {
+        const dc_chunk_t *chunk = y < 64u ? saved_top : saved_bottom;
+        int left = -1, right = -1;
+        for (uint32_t x = 0u; x < 64u; ++x)
+            if (chunk->cells[(y % 64u) * 64u + x].fluid_mass >=
+                DC_FLUID_FULL / 4u) {
+                if (left < 0) left = (int)x;
+                right = (int)x;
+            }
+        if (left >= 0 && (uint32_t)(right - left + 1) > widest_air_row)
+            widest_air_row = (uint32_t)(right - left + 1);
+    }
+    printf("falling stream widest unsupported row %u cells\n", widest_air_row);
+    ASSERT_TRUE(widest_air_row <= 24u);
     dc_gpu_destroy(gpu);
     free(top); free(bottom); free(saved_top); free(saved_bottom);
     PASS();
