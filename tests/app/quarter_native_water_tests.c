@@ -98,11 +98,11 @@ static void test_quarter_native_basin_settles_after_spring_stops(void) {
         ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
         ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
     }
-    double early_speed = 0.0, steady_speed = 0.0, late_speed = 0.0;
-    double early_up = 0.0, steady_up = 0.0, late_up = 0.0;
-    float early_max = 0.0f, steady_max = 0.0f, late_max = 0.0f;
-    uint64_t early_high = 0u, steady_high = 0u, late_high = 0u;
-    uint64_t early_spray = 0u, steady_spray = 0u, late_spray = 0u;
+    double early_speed = 0.0, steady_speed = 0.0, deep_speed = 0.0, late_speed = 0.0;
+    double early_up = 0.0, steady_up = 0.0, deep_up = 0.0, late_up = 0.0;
+    float early_max = 0.0f, steady_max = 0.0f, deep_max = 0.0f, late_max = 0.0f;
+    uint64_t early_high = 0u, steady_high = 0u, deep_high = 0u, late_high = 0u;
+    uint64_t early_spray = 0u, steady_spray = 0u, deep_spray = 0u, late_spray = 0u;
     ASSERT_TRUE(basin_motion(view, &early_speed, &early_high, &early_up,
                              &early_spray, &early_max, err, sizeof(err)));
     for (uint32_t tick = 0u; tick < 180u; ++tick) {
@@ -111,6 +111,12 @@ static void test_quarter_native_basin_settles_after_spring_stops(void) {
     }
     ASSERT_TRUE(basin_motion(view, &steady_speed, &steady_high, &steady_up,
                              &steady_spray, &steady_max, err, sizeof(err)));
+    for (uint32_t tick = 0u; tick < 240u; ++tick) {
+        ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    }
+    ASSERT_TRUE(basin_motion(view, &deep_speed, &deep_high, &deep_up,
+                             &deep_spray, &deep_max, err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
     for (uint32_t tick = 0u; tick < 120u; ++tick) {
         ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
@@ -130,9 +136,12 @@ static void test_quarter_native_basin_settles_after_spring_stops(void) {
            (double)late_spray / DC_FLUID_FULL);
     printf("max upward face speed %.2f -> %.2f -> %.2f\n",
            early_max, steady_max, late_max);
+    printf("eight-second spring: speed %.3f, upward %.2f, max %.2f, spray %.2f cells\n",
+           deep_speed, deep_up, deep_max, (double)deep_spray / DC_FLUID_FULL);
     ASSERT_TRUE(steady_speed < 0.5);
     ASSERT_TRUE(steady_high < 30u * (uint64_t)DC_FLUID_FULL);
     ASSERT_TRUE(steady_max < 0.5f);
+    ASSERT_TRUE(deep_max < 0.5f);
     ASSERT_TRUE(late_speed < steady_speed * 0.5);
     ASSERT_TRUE(late_high < 2u * (uint64_t)DC_FLUID_FULL);
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));

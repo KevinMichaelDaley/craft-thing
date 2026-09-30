@@ -222,7 +222,12 @@ void main() {
                     }
                 }
                 cell.x = (cell.x & 0xffff0000u) | material;
-                cell.y = params.color == 3u ? 65536u : new_grain ? cell.y : 0u;
+                if (params.mode == 4u && params.color == 3u) {
+                    uint source_rate = params.radius == 1u ? 16384u : 65536u;
+                    cell.y = min(65536u, cell.y + source_rate);
+                } else {
+                    cell.y = params.color == 3u ? 65536u : new_grain ? cell.y : 0u;
+                }
                 chunk_cells[index] = cell;
             }
         }
