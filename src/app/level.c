@@ -60,6 +60,8 @@ bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,
                               char *err, uint32_t cap) {
     if (!view || x > VIEW_WIDTH - 4 || y > VIEW_HEIGHT - 4)
         return error(err, cap, "Invalid rigid body spawn position");
+    if (!dc_gpu_set_body_origin(view->gpu, (dc_chunk_coord_t){
+            view->origin.x - HALO_CHUNKS, view->origin.y - HALO_CHUNKS }, err, cap)) return false;
     dc_gpu_body_t body = { .x_fp = (int32_t)(x + DC_CHUNK_SIDE +
                                            view->camera_offset_x) << 16,
         .y_fp = (int32_t)(y + DC_CHUNK_SIDE +

@@ -8,7 +8,7 @@ diagnostics, screenshots, and chunk eviction saves.
 
 ## Implemented rigid baseline (`dun-0p7p`)
 
-The viewport-local GPU pool holds 64 stable-ID boxes. Fixed-step integration
+The GPU pool holds 64 stable-ID boxes. Fixed-step integration
 updates each transform independently, and terrain supports falling boxes.
 Spawning an existing ID updates only that body; removal permits slot reuse.
 Each raster pass writes current occupancy and a separate conservative swept
@@ -21,8 +21,31 @@ on the next tick. Normal frames do not read transforms back to the CPU.
 Seven Vulkan regressions cover capacity, updates, removal, deterministic masks,
 independent falling, and horizontal/vertical chunk seams. The quarter-native
 window test verifies that successive `B` spawns retain both visible boxes.
-World-coordinate streaming remains `dun-rwls`; broadphase and body contacts
-remain `dun-4ftd` and `dun-x9ei`. Swept occupancy does not yet resolve contacts.
+Broadphase and body contacts remain `dun-4ftd` and `dun-x9ei`. Swept occupancy
+does not yet resolve contacts.
+
+## World ownership and persistence (`dun-rwls`)
+
+Each body owns a signed 64-bit chunk anchor and canonical local 16.16 position.
+The shader carries movement across chunk seams and derives a viewport transform
+from the current simulation origin. Chunk coordinates use pairs of 32-bit words
+with checked carry/subtraction, so the runtime does not require shaderInt64.
+Camera rebasing refreshes masks without advancing physical time. GPU body slots
+remain independent of terrain atlas slots and their generations: chunk eviction,
+slot reuse, and reload cannot change body identity or redirect its position.
+Bodies outside the resident viewport sleep with their world pose and velocity
+preserved; masks clip to resident cells. The bounded pool holds 64 bodies across
+the whole loaded world, including sleepers.
+
+Closing a world saves all active and sleeping bodies to `rigid_bodies.bin` via a
+temporary file and rename. Reopening restores IDs, anchors, local poses, sizes,
+and velocities before rendering. Version 1 uses a 16-byte header and 48-byte
+native-endian records, consistent with the existing native-endian chunk files.
+The loader validates capacity, canonical positions, IDs, duplicate IDs, version,
+and complete length before replacing the pool. Snapshot reads occur only during
+world save and explicit tests; ordinary physics, seam ownership changes, and
+camera transforms stay on GPU. These rectangular bodies still use the baseline
+downward terrain contact rather than the upcoming world broadphase/XPBD solver.
 
 ## State ownership and tick order
 
