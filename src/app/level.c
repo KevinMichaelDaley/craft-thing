@@ -74,8 +74,20 @@ bool dc_level_view_spawn_convex_body(dc_level_view_t *view, uint32_t x, uint32_t
                                      uint32_t width, uint32_t height,
                                      const dc_gpu_body_shape_t *shape,
                                      char *err, uint32_t cap) {
-    (void)view; (void)x; (void)y; (void)width; (void)height; (void)shape;
-    return error(err, cap, "Convex window spawn not implemented");
+    if (!view || !width || !height || width > 16 || height > 16 ||
+        x > VIEW_WIDTH - width || y > VIEW_HEIGHT - height)
+        return error(err, cap, "Invalid convex spawn position");
+    if (!dc_gpu_set_body_origin(view->gpu, (dc_chunk_coord_t){
+            view->origin.x - HALO_CHUNKS, view->origin.y - HALO_CHUNKS }, err, cap)) return false;
+    uint32_t local_x = x + view->camera_offset_x, local_y = y + view->camera_offset_y;
+    dc_gpu_world_body_t body = { .chunk = {
+        view->origin.x + local_x / DC_CHUNK_SIDE,
+        view->origin.y + local_y / DC_CHUNK_SIDE },
+        .body = { .x_fp = (int32_t)(local_x % DC_CHUNK_SIDE) << 16,
+            .y_fp = (int32_t)(local_y % DC_CHUNK_SIDE) << 16,
+            .width = width, .height = height,
+            .id = dc_gpu_next_body_id(view->gpu), .active = 1 } };
+    return dc_gpu_spawn_convex_body(view->gpu, body, shape, err, cap);
 }
 
 bool dc_level_view_broadphase(dc_level_view_t *view, dc_gpu_broadphase_stats_t *stats,
