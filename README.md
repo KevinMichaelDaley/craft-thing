@@ -4,9 +4,23 @@ Dungeoncraft is an early C11/Vulkan prototype for a per-pixel material world. Th
 
 The live frame records rigid simulation, a GPU red-black pressure projection, conservative four-phase water transport, sparse interface-marker advection and correction, granular MPM, and rendering in Vulkan submissions. Water volume stays in fixed grid cells; GPU face velocities move it. Massless inside/outside markers guide bounded equal-and-opposite transfers near settled interfaces. The renderer mixes fractional water and granular slots only within each cell, leaving material boundaries sharp; see [material rendering](design/material_rendering.md). Timestamp and buffer readback are opt-in diagnostics, while chunk state is downloaded only for streaming saves or tests. `make native` builds the 1920×1080 interactive view with 608 resident chunks and six-tick fluid staging; `make half_native` builds a 960×540 simulated view displayed at 1920×1080 with 187 resident chunks and a three-tick fluid cadence. See [native benchmark](design/native_benchmark.md), [the fluid solver plan](design/fluid_solver.md), and [the granular solver](design/mpm_solver.md).
 
-GPU chunk halos are bounded by the 64 resident slots and refreshed from the page table before a stencil transfer. A diagnostic transfer resolver moves one scalar amount or material particle between adjacent cells. It preserves the command and source state if the destination page is absent, then applies it after that page is mapped. Fluid uses conservative face transport; MPM gathers across resident page-table neighbors and blocks moves into missing pages. The resolver remains a single-command correctness primitive.
+GPU chunk halos use the fixed resident pool (70 slots in quarter-native mode) and are refreshed from the page table before a stencil transfer. A diagnostic transfer resolver moves one scalar amount or material particle between adjacent cells. It preserves the command and source state if the destination page is absent, then applies it after that page is mapped. Fluid uses conservative face transport; MPM gathers across resident page-table neighbors and blocks moves into missing pages. The resolver remains a single-command correctness primitive.
 
 ## Build and run
+
+The current performance target is quarter-native: `make quarter_native` builds
+`build/dungeoncraft_quarter_native`, with 480×270 physics cells displayed at
+1920×1080, 70 resident chunks including the halo, two-tick fluid staging, and
+16 pressure sweeps. Run `./build/dungeoncraft_quarter_native` for the interactive
+view; its world is saved under `world_chunks_quarter_native/`. On a Wayland
+session whose X11 display lacks DRI3, use
+`SDL_VIDEODRIVER=wayland ./build/dungeoncraft_quarter_native` for GPU presentation.
+`make bench_quarter_native` measures dense water/grain physics on the complete
+640×448 simulation grid. `make test_quarter_native_perf` checks the 60 Hz
+physics budget on the current machine; run it without other GPU workloads.
+`make test_quarter_native` checks fluid correctness, elapsed-time scheduling,
+streaming, scaling, and window presentation. `make test_quarter_native_spray`
+runs the longer marker-on/off free-surface checks.
 
 The falling water in the interactive level comes from an intentional test spring above the center basin. Press `F` to turn that source off or on; existing water remains in the level.
 
