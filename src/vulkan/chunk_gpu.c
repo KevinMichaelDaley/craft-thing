@@ -273,19 +273,22 @@ bool dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chunk,
     const dc_cell_t *cells = gpu->chunk_mapped;
     memcpy(chunk->cells, cells + (size_t)slot * DC_CHUNK_CELLS, sizeof(chunk->cells));
     uint32_t tile = gpu->slot_page[slot];
+    memcpy(chunk->face_velocity,
+           gpu->chunk_velocity + (size_t)slot * DC_CHUNK_CELLS,
+           sizeof(chunk->face_velocity));
     if (tile != UINT32_MAX) {
         const dc_face_velocity_t *faces = gpu->velocity_mapped;
         uint32_t tile_x = tile % gpu->page_width;
         uint32_t tile_y = tile / gpu->page_width;
-        for (uint32_t y = 0; y < DC_CHUNK_SIDE; ++y)
+        uint32_t columns = gpu->width - tile_x * DC_CHUNK_SIDE;
+        if (columns > DC_CHUNK_SIDE) columns = DC_CHUNK_SIDE;
+        uint32_t rows = gpu->height - tile_y * DC_CHUNK_SIDE;
+        if (rows > DC_CHUNK_SIDE) rows = DC_CHUNK_SIDE;
+        for (uint32_t y = 0; y < rows; ++y)
             memcpy(chunk->face_velocity + (size_t)y * DC_CHUNK_SIDE,
                    faces + ((size_t)(tile_y * DC_CHUNK_SIDE + y) * gpu->width +
                             tile_x * DC_CHUNK_SIDE),
-                   DC_CHUNK_SIDE * sizeof(dc_face_velocity_t));
-    } else {
-        memcpy(chunk->face_velocity,
-               gpu->chunk_velocity + (size_t)slot * DC_CHUNK_CELLS,
-               sizeof(chunk->face_velocity));
+                   columns * sizeof(dc_face_velocity_t));
     }
     const uint32_t *counts = gpu->marker_ping ?
         gpu->marker_count_b_mapped : gpu->marker_count_a_mapped;
@@ -334,11 +337,15 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
             dc_face_velocity_t *faces = gpu->velocity_mapped;
             const dc_face_velocity_t *source =
                 gpu->chunk_velocity + (size_t)slot * DC_CHUNK_CELLS;
-            for (uint32_t y = 0; y < DC_CHUNK_SIDE; ++y)
+            uint32_t columns = gpu->width - tile_x * DC_CHUNK_SIDE;
+            if (columns > DC_CHUNK_SIDE) columns = DC_CHUNK_SIDE;
+            uint32_t rows = gpu->height - tile_y * DC_CHUNK_SIDE;
+            if (rows > DC_CHUNK_SIDE) rows = DC_CHUNK_SIDE;
+            for (uint32_t y = 0; y < rows; ++y)
                 memcpy(faces + ((size_t)(tile_y * DC_CHUNK_SIDE + y) * gpu->width +
                                 tile_x * DC_CHUNK_SIDE),
                        source + (size_t)y * DC_CHUNK_SIDE,
-                       DC_CHUNK_SIDE * sizeof(dc_face_velocity_t));
+                       columns * sizeof(dc_face_velocity_t));
         }
         gpu->preserve_shifted_slot[slot] = false;
     }
