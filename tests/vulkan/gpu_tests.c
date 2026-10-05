@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "dungeoncraft/gpu.h"
@@ -146,6 +147,46 @@ static void test_gpu_box_crosses_chunk_edge_and_rests_on_terrain(void) {
     PASS();
 }
 
+static void test_partial_page_velocity_copies_stay_inside_viewport(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t chunk = {0}, saved = {0};
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
+        chunk.face_velocity[i] = (dc_face_velocity_t){7.0f, 9.0f};
+    ASSERT_TRUE(dc_gpu_create(&gpu, 65, 65, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, &chunk, err, sizeof(err)));
+    const uint32_t visible = 65u * 65u;
+    const uint32_t padded = 129u * 65u + 64u;
+    dc_face_velocity_t *mirror = malloc(padded * sizeof(*mirror));
+    ASSERT_TRUE(mirror != NULL);
+    for (uint32_t i = 0; i < padded; ++i)
+        mirror[i] = (dc_face_velocity_t){-123.0f, -456.0f};
+    void *mapped = gpu->velocity_mapped;
+    gpu->velocity_mapped = mirror;
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 1, 0, err, sizeof(err)));
+    ASSERT_EQ(mirror[visible - 1u].x, 7.0f);
+    ASSERT_EQ(mirror[visible - 1u].y, 9.0f);
+    for (uint32_t i = 0; i + 1u < visible; ++i)
+        ASSERT_EQ(mirror[i].x, -123.0f);
+    for (uint32_t i = visible; i < padded; ++i) {
+        ASSERT_EQ(mirror[i].x, -123.0f);
+        ASSERT_EQ(mirror[i].y, -456.0f);
+    }
+    mirror[visible - 1u] = (dc_face_velocity_t){11.0f, 13.0f};
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved, err, sizeof(err)));
+    ASSERT_EQ(saved.face_velocity[0].x, 11.0f);
+    ASSERT_EQ(saved.face_velocity[0].y, 13.0f);
+    for (uint32_t i = 1; i < DC_CHUNK_CELLS; ++i) {
+        ASSERT_EQ(saved.face_velocity[i].x, 7.0f);
+        ASSERT_EQ(saved.face_velocity[i].y, 9.0f);
+    }
+    gpu->velocity_mapped = mapped;
+    free(mirror);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 static uint32_t red_channel(uint32_t pixel) { return pixel & 255u; }
 static uint32_t blue_channel(uint32_t pixel) { return (pixel >> 16) & 255u; }
 
@@ -256,6 +297,7 @@ int main(void) {
     RUN(test_gpu_brush_updates_only_covered_cells);
     RUN(test_chunk_page_mapping_and_gpu_material_edit);
     RUN(test_gpu_box_crosses_chunk_edge_and_rests_on_terrain);
+    RUN(test_partial_page_velocity_copies_stay_inside_viewport);
     RUN(test_density_mixes_only_within_each_cell);
     RUN(test_tick_capture_orders_gpu_stages_and_handoffs);
     printf("%d passed, %d failed\n", g_pass, g_fail);
