@@ -85,6 +85,7 @@ bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if (okay) {
         dc_gpu_broadphase_data(gpu)[DC_GPU_BROADPHASE_CAPACITY_WORD] = DC_GPU_BROADPHASE_PAIR_CAPACITY;
         dc_gpu_broadphase_data(gpu)[DC_GPU_BROADPHASE_BUCKETS_WORD] = dc_gpu_broadphase_buckets(gpu);
+        dc_gpu_contact_data(gpu)[3] = DC_GPU_CONTACT_CAPACITY;
     }
     return okay;
 }
@@ -106,6 +107,7 @@ bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *path,
 
 void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
     dc_gpu_tick_destroy(gpu);
+    if (gpu->contact_pipeline) vkDestroyPipeline(gpu->device, gpu->contact_pipeline, NULL);
     if (gpu->broadphase_pipeline) vkDestroyPipeline(gpu->device, gpu->broadphase_pipeline, NULL);
     if (gpu->rigid_pipeline) vkDestroyPipeline(gpu->device, gpu->rigid_pipeline, NULL);
     if (gpu->body_mapped) vkUnmapMemory(gpu->device, gpu->body_memory);
@@ -302,6 +304,7 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
     dep.pMemoryBarriers = &finish;
     vkCmdPipelineBarrier2(gpu->command, &dep);
     dc_gpu_record_broadphase(gpu);
+    dc_gpu_record_contacts(gpu);
     gpu->rigid_occupancy_present = gpu->body_count != 0;
     gpu->body_refresh_pending = false;
 }

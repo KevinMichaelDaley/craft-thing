@@ -1,0 +1,156 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "rigid_body.glsl"
+#include "contact_geometry.glsl"
+layout(local_size_x = 64) in;
+
+struct Particle {
+    int x_fp, y_fp, vx_fp, vy_fp;
+    float f00, f01, f10, f11;
+    uint id_lo, id_hi, mass_fp, grain_fp, material, flags;
+};
+layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 chunk_cells[]; };
+layout(set = 0, binding = 2, std430) readonly buffer Pages { uint pages[]; };
+layout(set = 0, binding = 19, std430) readonly buffer Particles { Particle particles[]; };
+layout(set = 0, binding = 4, std430) buffer Bodies { Body bodies[BODY_CAPACITY]; uint data[]; };
+layout(push_constant) uniform Params {
+    uint width, height, mode, body_count;
+    uvec2 origin_x, origin_y;
+} params;
+
+const uint HEADER_WORDS = 8u, PAIR_WORDS = 8u, PAIR_CAPACITY = 4096u;
+const uint CONTACT_WORDS = 32u;
+const uint BODY_CONTACT = 0u, TERRAIN_CONTACT = 1u, BOUNDARY_CONTACT = 2u, MPM_CONTACT = 3u;
+
+uvec2 page_extent() { return uvec2((params.width + 63u) / 64u, (params.height + 63u) / 64u); }
+uint pair_base() { uvec2 size = page_extent() + 2u; return HEADER_WORDS + 2u * size.x * size.y; }
+uint contact_base() { return pair_base() + PAIR_CAPACITY * PAIR_WORDS; }
+
+uint body_slot(uint id) {
+    for (uint i = 0u; i < params.body_count; ++i)
+        if (bodies[i].enabled != 0u && bodies[i].id == id) return i;
+    return BODY_CAPACITY;
+}
+
+bool relative_body(Body a, Body b, out vec2 offset) {
+    int x, y;
+    if (!relative_chunk(b.chunk_x, a.chunk_x, x) || !relative_chunk(b.chunk_y, a.chunk_y, y)) return false;
+    ivec2 fixed_offset = ivec2(x, y) * (64 << 16) + b.local_fp - a.local_fp;
+    offset = vec2(fixed_offset) / 65536.0;
+    return true;
+}
+
+bool world_point(Body body, vec2 point, out uvec2 chunk_x, out uvec2 chunk_y, out ivec2 local_fp) {
+    ivec2 fixed_point = body.local_fp + ivec2(round(point * 65536.0));
+    if (!shifted_chunk(body.chunk_x, fixed_point.x >> 22, chunk_x) ||
+        !shifted_chunk(body.chunk_y, fixed_point.y >> 22, chunk_y)) return false;
+    local_fp = fixed_point & ivec2((64 << 16) - 1);
+    return true;
+}
+
+float body_friction(uint material) { return material == 2u ? 0.6 : 0.7; }
+float cell_friction(uint material) { return material == 4u ? 0.8 : material == 2u ? 0.6 : 0.7; }
+
+bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_feature,
+                  uvec2 feature_x, uvec2 feature_y, Polygon pa, Polygon pb) {
+    vec2 normal; float depth;
+    if (!polygon_contact(pa, pb, normal, depth)) return false;
+    vec2 point_a, point_b; uint feature_a, feature_b;
+    contact_witnesses(pa, pb, normal, point_a, point_b, feature_a, feature_b);
+    uvec2 ax, ay, bx, by; ivec2 alocal, blocal;
+    uint base = contact_base();
+    if (!world_point(a, point_a, ax, ay, alocal) || !world_point(a, point_b, bx, by, blocal)) {
+        atomicOr(data[base + 2u], 2u);
+        return true;
+    }
+    uint index = atomicAdd(data[base + 1u], 1u);
+    if (index >= data[base + 3u]) { atomicOr(data[base + 2u], 1u); return true; }
+    uint offset = base + HEADER_WORDS + index * CONTACT_WORDS;
+    uint material_a = a.vertex_count == 0u ? 1u : a.material;
+    float fa = body_friction(material_a);
+    float fb = kind == BODY_CONTACT ? body_friction(material_b) : cell_friction(material_b);
+    float restitution_a = material_a == 2u ? 0.1 : 0.05;
+    float restitution_b = kind == BODY_CONTACT && material_b == 2u ? 0.1 : 0.05;
+    float compliance = kind == MPM_CONTACT ? 0.0001 :
+        (material_a == 2u || (kind == BODY_CONTACT && material_b == 2u) ? 0.00002 : 0.0);
+    data[offset] = a.id; data[offset + 1u] = body_b; data[offset + 2u] = kind;
+    data[offset + 3u] = feature_a;
+    data[offset + 4u] = kind == BODY_CONTACT ? feature_b : cell_feature;
+    data[offset + 5u] = material_a; data[offset + 6u] = material_b; data[offset + 7u] = 0u;
+    data[offset + 8u] = floatBitsToUint(normal.x); data[offset + 9u] = floatBitsToUint(normal.y);
+    data[offset + 10u] = floatBitsToUint(depth); data[offset + 11u] = floatBitsToUint(sqrt(fa * fb));
+    data[offset + 12u] = floatBitsToUint(min(restitution_a, restitution_b));
+    data[offset + 13u] = floatBitsToUint(compliance); data[offset + 14u] = 0u; data[offset + 15u] = 0u;
+    data[offset + 16u] = ax.x; data[offset + 17u] = ax.y;
+    data[offset + 18u] = ay.x; data[offset + 19u] = ay.y;
+    data[offset + 20u] = uint(alocal.x); data[offset + 21u] = uint(alocal.y);
+    data[offset + 22u] = bx.x; data[offset + 23u] = bx.y;
+    data[offset + 24u] = by.x; data[offset + 25u] = by.y;
+    data[offset + 26u] = uint(blocal.x); data[offset + 27u] = uint(blocal.y);
+    data[offset + 28u] = feature_x.x; data[offset + 29u] = feature_x.y;
+    data[offset + 30u] = feature_y.x; data[offset + 31u] = feature_y.y;
+    atomicAdd(data[base], 1u);
+    return true;
+}
+
+bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygon polygon) {
+    int cx, cy;
+    if (!relative_chunk(chunk_x, params.origin_x, cx) || !relative_chunk(chunk_y, params.origin_y, cy)) return false;
+    ivec2 tile = ivec2(cx, cy), tile_low = tile * 64;
+    ivec2 current = ivec2(body.x_fp, body.y_fp);
+    ivec2 low = max((current >> 16) - 1, tile_low);
+    ivec2 high = min(((current + (ivec2(body.width, body.height) << 16) + ivec2(65535)) >> 16) + 1,
+                    tile_low + 64);
+    uint page = 0u;
+    if (kind != BOUNDARY_CONTACT && all(greaterThanEqual(tile, ivec2(0))) &&
+        all(lessThan(tile, ivec2(page_extent())))) page = pages[uint(cy) * page_extent().x + uint(cx)];
+    bool found = false;
+    for (int y = low.y; y < high.y; ++y) for (int x = low.x; x < high.x; ++x) {
+        uint cell_feature = uint(y - tile_low.y) * 64u + uint(x - tile_low.x);
+        uint contact_kind = kind, material = 0xffffffffu;
+        if (page != 0u) {
+            material = chunk_cells[(page - 1u) * 4096u + cell_feature].x & 0xffffu;
+            if (material == 0u || material == 3u) continue;
+            if (material == 2u || material == 4u || material == 5u) {
+                uint pi = (page - 1u) * 8192u + cell_feature;
+                if (particles[pi].mass_fp == 0u && particles[pi + 4096u].mass_fp == 0u) continue;
+                contact_kind = MPM_CONTACT;
+            }
+        } else contact_kind = BOUNDARY_CONTACT;
+        vec2 offset = vec2((ivec2(x, y) << 16) - current) / 65536.0;
+        bool emitted = emit_contact(body, 0u, contact_kind, material, cell_feature,
+            chunk_x, chunk_y, polygon, cell_polygon(offset));
+        found = found || emitted;
+    }
+    return found;
+}
+
+void main() {
+    uint index = gl_GlobalInvocationID.x, base = contact_base();
+    if (params.mode == 0u) {
+        if (index != 0u) return;
+        data[base] = 0u; data[base + 1u] = 0u;
+        data[base + 2u] = data[2] == 0u ? 0u : 4u;
+        data[base + 4u] = data[0]; data[base + 5u] = 0u;
+        data[base + 6u] = 0u; data[base + 7u] = 0u;
+        return;
+    }
+    if (data[2] != 0u || index >= data[0]) return;
+    uint offset = pair_base() + index * PAIR_WORDS;
+    uint slot = body_slot(data[offset]);
+    if (slot == BODY_CAPACITY) { atomicAdd(data[base + 5u], 1u); return; }
+    Body a = bodies[slot]; Polygon pa = body_polygon(a, vec2(0));
+    uint kind = data[offset + 2u]; bool found = false;
+    if (kind == BODY_CONTACT) {
+        uint other = body_slot(data[offset + 1u]); vec2 delta;
+        if (other != BODY_CAPACITY && relative_body(a, bodies[other], delta)) {
+            Body b = bodies[other];
+            found = emit_contact(a, b.id, BODY_CONTACT, b.vertex_count == 0u ? 1u : b.material,
+                0u, uvec2(0), uvec2(0), pa, body_polygon(b, delta));
+        }
+    } else {
+        found = terrain_contacts(a, kind, uvec2(data[offset + 4u], data[offset + 5u]),
+            uvec2(data[offset + 6u], data[offset + 7u]), pa);
+    }
+    if (!found) atomicAdd(data[base + 5u], 1u);
+}

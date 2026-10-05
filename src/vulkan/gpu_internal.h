@@ -91,6 +91,7 @@ struct dc_gpu {
     void *occupancy_mapped;
     VkPipeline rigid_pipeline;
     VkPipeline broadphase_pipeline;
+    VkPipeline contact_pipeline;
     VkBuffer trace_buffer;
     VkDeviceMemory trace_memory;
     void *trace_mapped;
@@ -169,11 +170,18 @@ static inline uint32_t *dc_gpu_broadphase_data(const dc_gpu_t *gpu) {
     return (uint32_t *)((dc_gpu_body_record_t *)gpu->body_mapped + DC_GPU_BODY_CAPACITY);
 }
 
+static inline uint32_t *dc_gpu_contact_data(const dc_gpu_t *gpu) {
+    return dc_gpu_broadphase_data(gpu) + DC_GPU_BROADPHASE_HEADER_WORDS +
+        DC_GPU_BROADPHASE_BUCKET_WORDS * dc_gpu_broadphase_buckets(gpu) +
+        DC_GPU_BROADPHASE_PAIR_CAPACITY * (sizeof(dc_gpu_broadphase_pair_t) / sizeof(uint32_t));
+}
+
 static inline VkDeviceSize dc_gpu_body_storage_bytes(const dc_gpu_t *gpu) {
     return sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
         (VkDeviceSize)(DC_GPU_BROADPHASE_HEADER_WORDS +
             DC_GPU_BROADPHASE_BUCKET_WORDS * dc_gpu_broadphase_buckets(gpu)) * sizeof(uint32_t) +
-        (VkDeviceSize)DC_GPU_BROADPHASE_PAIR_CAPACITY * sizeof(dc_gpu_broadphase_pair_t);
+        (VkDeviceSize)DC_GPU_BROADPHASE_PAIR_CAPACITY * sizeof(dc_gpu_broadphase_pair_t) +
+        8u * sizeof(uint32_t) + (VkDeviceSize)DC_GPU_CONTACT_CAPACITY * sizeof(dc_gpu_contact_t);
 }
 
 uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
@@ -210,6 +218,8 @@ void dc_gpu_rigid_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_rigid(dc_gpu_t *gpu);
 bool dc_gpu_broadphase_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_broadphase(dc_gpu_t *gpu);
+bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+void dc_gpu_record_contacts(dc_gpu_t *gpu);
 bool dc_gpu_tick_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_tick_destroy(dc_gpu_t *gpu);
 bool dc_gpu_halo_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);

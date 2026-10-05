@@ -12,6 +12,7 @@ GENERATE_OBJ = build/generate.o
 SHADER = build/shaders/pattern.comp.spv
 RIGID_SHADER = build/shaders/rigid.comp.spv
 BROADPHASE_SHADER = build/shaders/broadphase.comp.spv
+CONTACT_SHADER = build/shaders/contacts.comp.spv
 PROBE_SHADER = build/shaders/tick_probe.comp.spv
 HALO_SHADER = build/shaders/halo.comp.spv
 FLUID_SHADER = build/shaders/fluid.comp.spv
@@ -26,11 +27,15 @@ MPM_COMPONENT_SHADER = build/shaders/mpm_component.comp.spv
 all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
 
 NATIVE_SRC = src/app/main.c src/app/level.c src/app/session.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c src/world/stream.c src/world/generate.c
-$(GPU_OBJ): $(BROADPHASE_SHADER)
+$(GPU_OBJ): $(BROADPHASE_SHADER) $(CONTACT_SHADER)
 $(RIGID_SHADER) $(PROBE_SHADER) $(BROADPHASE_SHADER): shaders/sim/rigid_body.glsl
 $(RIGID_SHADER): shaders/sim/rigid_shape.glsl
 build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_bench build/dungeoncraft_quarter_native build/marker_slot_tests: $(BROADPHASE_SHADER)
 build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench: $(BROADPHASE_SHADER) src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
+build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_bench build/dungeoncraft_quarter_native build/marker_slot_tests build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench: $(CONTACT_SHADER)
+$(CONTACT_SHADER): shaders/sim/contacts.comp shaders/sim/rigid_body.glsl shaders/sim/contact_geometry.glsl
+	@mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
 $(BROADPHASE_SHADER): shaders/sim/broadphase.comp
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
@@ -126,7 +131,7 @@ build/dungeoncraft_native: $(NATIVE_SRC) src/app/level.h src/app/view_config.h i
 build/dungeoncraft_half_native: $(NATIVE_SRC) src/app/level.h src/app/view_config.h include/dungeoncraft/gpu.h $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_HALF_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=187u -DDC_PRESSURE_SWEEPS=16u $(NATIVE_SRC) -o $@ $(LDLIBS)
 
-shaders: $(BROADPHASE_SHADER) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+shaders: $(CONTACT_SHADER) $(BROADPHASE_SHADER) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 
 $(MPM_COMPONENT_SHADER): shaders/sim/mpm_component.comp
 	@mkdir -p build/shaders
