@@ -28,7 +28,7 @@ static void test_quarter_native_pool_covers_view_and_halo(void) {
     ASSERT_EQ(SIM_HEIGHT, 448);
     ASSERT_EQ(SIM_CHUNKS_X * SIM_CHUNKS_Y, 70);
     ASSERT_EQ(DC_GPU_CHUNK_SLOTS, 70u);
-    ASSERT_EQ(FLUID_INTERVAL, 1);
+    ASSERT_EQ(FLUID_INTERVAL, 2);
     ASSERT_INT_EQ(INITIAL_CHUNK_Y, -2);
     PASS();
 }
