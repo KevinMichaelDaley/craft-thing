@@ -1,6 +1,6 @@
 ---
 id: dun-vd9a
-status: in_progress
+status: closed
 deps: []
 links: [dun-tw2z]
 created: 2026-09-27T21:41:36Z
@@ -37,3 +37,7 @@ Continued on Intel Iris Xe (TGL GT2), Mesa 26.0.2 through native Vulkan. Correct
 **2026-10-05T01:05:02Z**
 
 User changed active scope: native-resolution physics is no longer required. Focus is now quarter-native: 480x270 physics at 4x display scaling, 640x448 with resident halo (70 chunks), Vulkan on the local Intel Iris Xe. Historical native measurements retained for context.
+
+**2026-10-05T01:24:02Z**
+
+Quarter-native scope achieved on Intel Iris Xe Vulkan. 480x270 viewport is displayed at 1920x1080 with 70 fully resident chunks; dense water/grain physics budget check passed at 60.99-61.27 Hz, and the actual Wayland view measured 61.7 adaptive FPS. Fluid phases profiled and optimized; two-tick cadence retains wall-clock advance and conservation, validated by exact 30/60 FPS state equivalence. All headless/quarter solver/window/long spray tests pass with validation. Native-resolution-specific child requirement superseded per user scope change. Quarter-native configuration and optimization delivered in ct-rp2f and ct-vnsh; next work can proceed to other ready GPU/material tickets.

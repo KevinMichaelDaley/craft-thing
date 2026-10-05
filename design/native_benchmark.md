@@ -1,4 +1,62 @@
-# Native-resolution simulation trial
+# Quarter-native Vulkan performance and historical native trials
+
+The active target is 480×270 physics displayed at 1920×1080. `make quarter_native`
+builds `build/dungeoncraft_quarter_native`; the complete simulation is 640×448
+including a one-chunk halo, backed by exactly 70 resident chunks. World scale
+and brush sizes retain the same displayed proportions as native mode.
+
+`make bench_quarter_native` builds the same 70-slot Vulkan runtime with the
+quarter-native solver settings. Its dense stress scene starts with 5,120 sand
+grains and 142,274 cells of water. `make test_quarter_native_perf` checks that
+60 measured physics ticks average at most 16.67 ms on the current GPU. This
+machine-dependent performance check is separate from `make test`; ordinary
+headless tests include the quarter-native configuration and elapsed-time tests.
+
+On 2026-10-04, Intel Iris Xe (TGL GT2), Mesa 26.0.2:
+
+| Dense 640×448 configuration | Physics ms/tick | Physics Hz | Physics + render ms | GPU fluid / granular ms |
+| --- | ---: | ---: | ---: | ---: |
+| Full fluid update, 20 pressure sweeps | 27.127 | 36.86 | 28.369 | 20.829 / 4.537 |
+| Two-tick fluid, 20 pressure sweeps | 19.044 | 52.51 | 20.209 | 12.359 / 4.539 |
+| Two-tick fluid, 16 sweeps, transport fast paths | 16.322 | 61.27 | 16.923 | 10.430 / 4.441 |
+
+All rows use 60 measured ticks, with separate diagnostic, physics, and
+physics-plus-render loops; the measured physics loops do not copy simulation
+state back to the CPU. The final configuration keeps all simulation stages,
+including rigid and granular updates every tick. Fluid advances every two ticks
+with a 2/60-second solve duration, with phase scheduling driven by elapsed time.
+Regression tests verify exact volume conservation and identical fluid cells and
+velocities after equal elapsed time at 30 and 60 frame updates per second.
+
+Transport now skips empty sources, caches source state, directly transfers a
+one-cell reach, avoids a redundant neighbor check, and skips unchanged source
+writes. Pressure uses the 16 sweeps already employed by half-native mode; the
+full fluid correctness suite also runs with the quarter-native build settings.
+The six diagnostic phase times expose preparation/pressure, more pressure,
+remaining pressure, vertical/right transport, left transport, and marker
+correction. They sample one warmed fluid update; stage times in the table are
+averages over 60 later ticks of the evolving scene.
+The headless render loop covers the full simulation grid, including the halo;
+the actual window presents only the 480×270 viewport. A second 60-sample check
+confirmed 16.396 ms per physics tick (60.99 Hz) and 17.061 ms including full-grid
+rendering (58.61 Hz).
+
+Use `SDL_VIDEODRIVER=wayland` for native GPU presentation on this machine: the
+X11 display has no DRI3. The unoptimized quarter-native procedural scene already
+presented 60 physics ticks/s and 60.8 adaptive frames/s; the dense headless
+benchmark above is the optimization target rather than that lighter scene.
+
+The optimized Wayland smoke presented 61.49 physics ticks/s and 61.7 adaptive
+frames/s; 0.973 seconds of simulated time matched 0.972 seconds of wall time.
+It also verified full residency, painting at the viewport corner, and panning
+through chunk boundaries. All 90 headless tests passed with Vulkan validation,
+plus the 29-test fluid suite built with quarter-native solver settings. Separate
+marker-on and marker-off spring tests each ran 1,200 ticks with the spring on
+and 120 after switching it off; both measured zero high airborne water pixels.
+The [actual quarter-native capture](quarter_native_480x270.png) shows the
+480×270 simulation displayed at 1920×1080 after that longer run.
+
+## Historical native measurements
 
 Run `make bench_native GLSLANG=/tmp/dungeoncraft-tools/usr/bin/glslangValidator`
 for a 1920×1080 pixel grid. The benchmark creates a headless Vulkan context

@@ -185,12 +185,15 @@ static int smoke_native_view(void) {
 }
 #endif
 
-#ifdef DC_HALF_NATIVE_VIEW
+#if defined(DC_HALF_NATIVE_VIEW) || defined(DC_QUARTER_NATIVE_VIEW)
 static uint32_t count_high_water_pixels(const uint32_t *pixels) {
     uint32_t count = 0u;
-    for (uint32_t y = 0; y < 275u; ++y)
+    const uint32_t sample_height = 275u * WORLD_SCALE / 2u;
+    const uint32_t excluded_left = 90u * WORLD_SCALE / 2u;
+    const uint32_t excluded_right = 150u * WORLD_SCALE / 2u;
+    for (uint32_t y = 0; y < sample_height && y < VIEW_HEIGHT; ++y)
         for (uint32_t x = 0; x < VIEW_WIDTH; ++x) {
-            if (x >= 90u && x <= 150u) continue;
+            if (x >= excluded_left && x <= excluded_right) continue;
             uint32_t color = pixels[y * VIEW_WIDTH + x];
             if (((color >> 16u) & 255u) > (color & 255u) + 20u)
                 ++count;
@@ -226,10 +229,16 @@ static int smoke_spray(bool correction, uint32_t interval) {
             }
         }
     }
+    mkdir("build/screenshots", 0777);
     if (okay)
         okay = save_level_bmp(correction ?
+#ifdef DC_QUARTER_NATIVE_VIEW
+            "build/screenshots/quarter_spray_marker_on.bmp" :
+            "build/screenshots/quarter_spray_marker_off.bmp", pixels);
+#else
             "build/screenshots/spray_marker_on.bmp" :
             "build/screenshots/spray_marker_off.bmp", pixels);
+#endif
     if (!dc_level_view_destroy(view, err, sizeof(err))) okay = false;
     free(pixels);
     if (!okay) { fprintf(stderr, "Spray smoke failed: %s\n", err); return 1; }
@@ -1000,7 +1009,7 @@ static bool pan_held_keys(dc_level_view_t *view, double elapsed,
 }
 
 int main(int argc, char **argv) {
-#ifdef DC_HALF_NATIVE_VIEW
+#if defined(DC_HALF_NATIVE_VIEW) || defined(DC_QUARTER_NATIVE_VIEW)
     if (argc > 1 && strcmp(argv[1], "--smoke-spray-on") == 0)
         return smoke_spray(true, FLUID_INTERVAL);
     if (argc > 1 && strcmp(argv[1], "--smoke-spray-off") == 0)
