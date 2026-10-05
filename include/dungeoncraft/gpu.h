@@ -222,6 +222,7 @@ bool dc_gpu_read_broadphase(dc_gpu_t *gpu, dc_gpu_broadphase_stats_t *stats,
                             char *err_buf, uint32_t err_cap);
 
 #define DC_GPU_CONTACT_CAPACITY 8192u
+#define DC_GPU_CONTACT_FEATURE_EDGE 0x80000000u
 enum { DC_GPU_CONTACT_BODY = 0u, DC_GPU_CONTACT_TERRAIN = 1u,
        DC_GPU_CONTACT_BOUNDARY = 2u, DC_GPU_CONTACT_MPM = 3u };
 enum { DC_GPU_CONTACT_OVERFLOW_CAPACITY = 1u, DC_GPU_CONTACT_OVERFLOW_WORLD = 2u,

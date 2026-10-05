@@ -109,6 +109,75 @@ the pending contact and XPBD tickets. Runtime angular state and convex-piece
 decomposition also remain part of that subsequent solver work. This prerequisite
 does not implement contact buffers, normals, penetration depths, or friction.
 
+## Convex-to-cell narrowphase (`dun-ci2x`)
+
+After broadphase, the GPU compares convex polygons using separating axes from
+both sets of edges. Legacy boxes use four vertices and the stone body material.
+Terrain and MPM contacts compare the body against occupied one-cell squares,
+including thin overlaps that do not cover a cell center. Air and Eulerian water
+do not produce solid contacts. Granular cells produce the MPM contact kind only
+when at least one of their two particle layers has nonzero mass. Missing pages,
+the outer chunk ring, and cells beyond a partial viewport tile produce blocking
+boundary contacts. Terrain work clips the scan to the body's bounds and candidate
+chunk instead of scanning every cell in every chunk.
+
+One body-pair contact uses the minimum translation direction and support faces
+of the two polygons. Containment uses directional translation distances rather
+than only interval-intersection width. The normal points from B to A; applying
+a positive correction to A along the normal separates it from B. Touching pairs
+can have zero depth; the tolerance is one 16.16 unit. Contact generation is
+discrete at the completed pose. Swept broadphase is conservative, but continuous
+collision detection and bounded solver substeps remain subsequent work.
+
+Each 128-byte contact contains sorted body IDs for body pairs, contact kind,
+feature IDs, material IDs, normal, depth, friction, restitution, compliance, and
+two world witness anchors. Each anchor uses a signed 64-bit chunk pair plus
+canonical local 16.16 coordinates. Support-face witnesses use a shared tangent
+coordinate when their face spans overlap. Body features encode vertex indices
+or an edge index with the high bit set. Cell features use the local cell index
+and a separate signed world feature chunk; a witness point crossing a chunk edge
+does not change the cell's identity. Body and cell material IDs use separate
+namespaces, selected by contact kind. Coefficients are current prototype values;
+the later solver consumes them along with mass and inertia.
+
+The bounded contact region follows all 4,096 broadphase records in storage
+binding 4. A 12-word header holds six diagnostic counters and a GPU-generated
+indirect dispatch command. Up to 8,192 contacts add 1 MiB of storage. GPU-produced
+candidate counts select the workgroup count, with no host count readback. Empty
+body scenes continue to skip rigid dispatches. The rigid timestamp includes
+contact generation and no additional storage descriptor is required.
+
+Contact overflow flags are capacity `0x1`, unrepresentable world anchor `0x2`,
+and incomplete broadphase `0x4`. An incomplete broadphase clears the contact
+count and prevents generation from its truncated candidates. Any nonzero contact
+overflow must gate the forthcoming XPBD solver; capacity overflow retains only
+the diagnostic prefix. Required counts describe representable contacts before
+the output limit. Output order is unspecified; stable feature keys identify
+contacts. Explicit diagnostic readback validates caller capacity before touching
+the outputs. Normal frames leave counters and contacts on the GPU.
+
+Nine headless Vulkan regressions cover rotated stone/wood on stepped/sloped
+single-cell terrain, thin edge overlap, false contacts in empty polygon corners
+and water, all three MPM materials, body-pair symmetry, world anchors after camera
+and slot changes, bounded overflow and broadphase gating, cold pages, and partial
+viewport tiles. The quarter-native window scene preserves a rotated stone/wood
+pair's complete contact record across camera eviction and session reopen.
+Contact generation is complete; collision response remains `dun-9qub`.
+
+## Automatic component gravity and buoyancy follow-up (`dun-spbq`)
+
+The existing extraction ticket now covers isolated connected components of all
+rigid materials, including stone and wood. Detaching a supported component must
+start gravity automatically, with missing pages handled conservatively. Mass
+and density must be derived from component material composition, including
+volume-weighted density for mixed-material assemblies. Buoyancy follows displaced
+water volume, while drag and torque use submerged shape and fluid motion. Stone
+and low-density wood therefore sink or float according to their physical density,
+without a manually selected sink/float flag. The ticket links the existing stone,
+wood, and Eulerian coupling tasks and requires mass and identity preservation
+through chunk seams, storage saturation, and saves. That behavior remains pending;
+the current contact implementation does not extract components or apply buoyancy.
+
 ## State ownership and tick order
 
 - Water volume stays in fixed Eulerian cells. Pressure, face velocity, and

@@ -19,6 +19,7 @@ layout(push_constant) uniform Params {
 } params;
 
 const uint HEADER_WORDS = 8u, PAIR_WORDS = 8u, PAIR_CAPACITY = 4096u;
+const uint CONTACT_HEADER_WORDS = 12u, CONTACT_GROUP_SIZE = 64u;
 const uint CONTACT_WORDS = 32u;
 const uint BODY_CONTACT = 0u, TERRAIN_CONTACT = 1u, BOUNDARY_CONTACT = 2u, MPM_CONTACT = 3u;
 
@@ -65,7 +66,7 @@ bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_fea
     }
     uint index = atomicAdd(data[base + 1u], 1u);
     if (index >= data[base + 3u]) { atomicOr(data[base + 2u], 1u); return true; }
-    uint offset = base + HEADER_WORDS + index * CONTACT_WORDS;
+    uint offset = base + CONTACT_HEADER_WORDS + index * CONTACT_WORDS;
     uint material_a = a.vertex_count == 0u ? 1u : a.material;
     float fa = body_friction(material_a);
     float fb = kind == BODY_CONTACT ? body_friction(material_b) : cell_friction(material_b);
@@ -132,7 +133,9 @@ void main() {
         data[base] = 0u; data[base + 1u] = 0u;
         data[base + 2u] = data[2] == 0u ? 0u : 4u;
         data[base + 4u] = data[0]; data[base + 5u] = 0u;
-        data[base + 6u] = 0u; data[base + 7u] = 0u;
+        data[base + 6u] = data[2] == 0u ? (data[0] + CONTACT_GROUP_SIZE - 1u) / CONTACT_GROUP_SIZE : 0u;
+        data[base + 7u] = 1u; data[base + 8u] = 1u;
+        data[base + 9u] = 0u; data[base + 10u] = 0u; data[base + 11u] = 0u;
         return;
     }
     if (data[2] != 0u || index >= data[0]) return;

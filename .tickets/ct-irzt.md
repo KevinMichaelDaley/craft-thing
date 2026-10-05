@@ -17,3 +17,9 @@ The dense 640x448 quarter-native benchmark previously passed at 60.82 Hz, but cu
 
 Repeated baseline/current Iris Xe measurements explain the variance and establish a reproducible 60 Hz quarter-native physics budget without reducing simulation correctness; record CPU/GPU load and power/frequency evidence and retain the strict performance assertion.
 
+
+## Notes
+
+**2026-10-05T05:13:34Z**
+
+After dun-ci2x, the unchanged strict dense quarter-native gate passed on Iris Xe: 16.101 ms/tick (62.11 Hz), 16.566 ms including rendering (60.37 Hz), fluid 10.334 ms and granular 4.411 ms. Run was serial after correctness/UI checks with Vulkan validation disabled. This fixture has no rigid bodies (rigid stage 0.000 ms); the new contact stage is skipped there. Retaining this ticket because prior runtime variability was not diagnosed by one passing run.

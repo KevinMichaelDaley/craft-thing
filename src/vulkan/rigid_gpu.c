@@ -85,7 +85,7 @@ bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if (okay) {
         dc_gpu_broadphase_data(gpu)[DC_GPU_BROADPHASE_CAPACITY_WORD] = DC_GPU_BROADPHASE_PAIR_CAPACITY;
         dc_gpu_broadphase_data(gpu)[DC_GPU_BROADPHASE_BUCKETS_WORD] = dc_gpu_broadphase_buckets(gpu);
-        dc_gpu_contact_data(gpu)[3] = DC_GPU_CONTACT_CAPACITY;
+        dc_gpu_contact_data(gpu)[DC_GPU_CONTACT_CAPACITY_WORD] = DC_GPU_CONTACT_CAPACITY;
     }
     return okay;
 }

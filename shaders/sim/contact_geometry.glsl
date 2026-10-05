@@ -4,7 +4,7 @@
 const float CONTACT_SKIN = 1.0 / 65536.0;
 const float FEATURE_EPSILON = 0.0001;
 
-struct Polygon { vec2 vertices[8]; uint count; };
+struct Polygon { vec2 vertices[BODY_VERTEX_CAPACITY]; uint count; };
 
 Polygon body_polygon(Body body, vec2 offset) {
     Polygon polygon;

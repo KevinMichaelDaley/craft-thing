@@ -162,6 +162,12 @@ enum {
     DC_GPU_BROADPHASE_BUCKETS_WORD = 5
 };
 
+enum {
+    DC_GPU_CONTACT_HEADER_WORDS = 12,
+    DC_GPU_CONTACT_CAPACITY_WORD = 3,
+    DC_GPU_CONTACT_DISPATCH_WORD = 6
+};
+
 static inline uint32_t dc_gpu_broadphase_buckets(const dc_gpu_t *gpu) {
     return (gpu->page_width + 2u) * (gpu->page_height + 2u);
 }
@@ -170,18 +176,20 @@ static inline uint32_t *dc_gpu_broadphase_data(const dc_gpu_t *gpu) {
     return (uint32_t *)((dc_gpu_body_record_t *)gpu->body_mapped + DC_GPU_BODY_CAPACITY);
 }
 
-static inline uint32_t *dc_gpu_contact_data(const dc_gpu_t *gpu) {
-    return dc_gpu_broadphase_data(gpu) + DC_GPU_BROADPHASE_HEADER_WORDS +
+static inline uint32_t dc_gpu_contact_word_offset(const dc_gpu_t *gpu) {
+    return DC_GPU_BROADPHASE_HEADER_WORDS +
         DC_GPU_BROADPHASE_BUCKET_WORDS * dc_gpu_broadphase_buckets(gpu) +
         DC_GPU_BROADPHASE_PAIR_CAPACITY * (sizeof(dc_gpu_broadphase_pair_t) / sizeof(uint32_t));
 }
 
+static inline uint32_t *dc_gpu_contact_data(const dc_gpu_t *gpu) {
+    return dc_gpu_broadphase_data(gpu) + dc_gpu_contact_word_offset(gpu);
+}
+
 static inline VkDeviceSize dc_gpu_body_storage_bytes(const dc_gpu_t *gpu) {
     return sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
-        (VkDeviceSize)(DC_GPU_BROADPHASE_HEADER_WORDS +
-            DC_GPU_BROADPHASE_BUCKET_WORDS * dc_gpu_broadphase_buckets(gpu)) * sizeof(uint32_t) +
-        (VkDeviceSize)DC_GPU_BROADPHASE_PAIR_CAPACITY * sizeof(dc_gpu_broadphase_pair_t) +
-        8u * sizeof(uint32_t) + (VkDeviceSize)DC_GPU_CONTACT_CAPACITY * sizeof(dc_gpu_contact_t);
+        (VkDeviceSize)(dc_gpu_contact_word_offset(gpu) + DC_GPU_CONTACT_HEADER_WORDS) * sizeof(uint32_t) +
+        (VkDeviceSize)DC_GPU_CONTACT_CAPACITY * sizeof(dc_gpu_contact_t);
 }
 
 uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,

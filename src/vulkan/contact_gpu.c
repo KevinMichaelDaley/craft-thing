@@ -7,6 +7,8 @@
 _Static_assert(sizeof(dc_gpu_contact_t) == 128, "GPU contact layout must match SPIR-V");
 _Static_assert(offsetof(dc_gpu_contact_t, anchor_a) == 64, "GPU contact anchor offset changed");
 _Static_assert(sizeof(dc_gpu_contact_stats_t) == 24, "GPU contact counters must match SPIR-V");
+_Static_assert(sizeof(dc_gpu_contact_anchor_t) == 24, "GPU world anchor layout must match SPIR-V");
+_Static_assert(offsetof(dc_gpu_contact_t, feature_chunk) == 112, "GPU contact feature offset changed");
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -16,7 +18,7 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 bool dc_gpu_set_contact_capacity(dc_gpu_t *gpu, uint32_t capacity, char *err, uint32_t cap) {
     if (!gpu || capacity > DC_GPU_CONTACT_CAPACITY)
         return error(err, cap, "Invalid contact capacity");
-    dc_gpu_contact_data(gpu)[3] = capacity;
+    dc_gpu_contact_data(gpu)[DC_GPU_CONTACT_CAPACITY_WORD] = capacity;
     gpu->body_refresh_pending = true;
     return true;
 }
@@ -31,7 +33,8 @@ bool dc_gpu_read_contacts(dc_gpu_t *gpu, dc_gpu_contact_stats_t *stats,
     memcpy(&completed, data, sizeof(completed));
     if (completed.count > DC_GPU_CONTACT_CAPACITY || (contacts && contact_cap < completed.count))
         return error(err, cap, "Contact readback buffer is too small");
-    if (contacts) memcpy(contacts, data + 8, (size_t)completed.count * sizeof(*contacts));
+    if (contacts) memcpy(contacts, data + DC_GPU_CONTACT_HEADER_WORDS,
+                         (size_t)completed.count * sizeof(*contacts));
     *stats = completed;
     return true;
 }
@@ -60,13 +63,18 @@ void dc_gpu_record_contacts(dc_gpu_t *gpu) {
         push[2] = mode;
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-        vkCmdDispatch(gpu->command, mode ? DC_GPU_BROADPHASE_PAIR_CAPACITY / 64u : 1u, 1, 1);
+        if (mode) {
+            VkDeviceSize indirect = sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
+                (VkDeviceSize)(dc_gpu_contact_word_offset(gpu) + DC_GPU_CONTACT_DISPATCH_WORD) * sizeof(uint32_t);
+            vkCmdDispatchIndirect(gpu->command, gpu->body_buffer, indirect);
+        } else vkCmdDispatch(gpu->command, 1, 1, 1);
         VkMemoryBarrier2 memory = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
             .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | (mode ? VK_PIPELINE_STAGE_2_HOST_BIT : 0),
+            .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT |
+                            (mode ? VK_PIPELINE_STAGE_2_HOST_BIT : VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT),
             .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
-                             (mode ? VK_ACCESS_2_HOST_READ_BIT : 0) };
+                             (mode ? VK_ACCESS_2_HOST_READ_BIT : VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT) };
         VkDependencyInfo dependency = { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
             .memoryBarrierCount = 1, .pMemoryBarriers = &memory };
         vkCmdPipelineBarrier2(gpu->command, &dependency);

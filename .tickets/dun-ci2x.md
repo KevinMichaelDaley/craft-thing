@@ -1,6 +1,6 @@
 ---
 id: dun-ci2x
-status: in_progress
+status: closed
 deps: [dun-4ftd, ct-l35t]
 links: []
 created: 2026-09-26T07:43:35Z
@@ -32,3 +32,7 @@ Broadphase prerequisite is complete. binding 4 now contains 64 80-byte body reco
 **2026-10-05T04:17:25Z**
 
 Convex geometry prerequisite ct-l35t implements body-local pre-rotated polygons (3..8 fixed-point vertices, stone/wood metadata), Vulkan polygon-cell occupancy and version 2 persistence with legacy version 1 loading. Shared Body stride is now 152 bytes: original 80-byte prefix plus count/material and 8 ivec2 vertices; broadphase data starts after 64 such records. Candidate ABI remains unchanged. rigid_shape.glsl provides positive-area polygon-versus-cell separation tests. Narrowphase still must emit normal/depth/features/materials/world anchors, gate broadphase overflow, and cover terrain, MPM and body pairs. Custom polygons bypass the legacy box support approximation until contact response lands.
+
+**2026-10-05T05:13:34Z**
+
+Implemented bounded Vulkan SAT narrowphase for convex/legacy-box body pairs, one-cell stone terrain, occupied MPM sand/dirt/gravel cells, and cold/partial viewport boundaries. Emits 128-byte contacts with normal B-to-A, depth, stable vertex/edge or world-cell features, material friction/restitution/compliance, two signed-64-chunk canonical world anchors, and separate cell feature chunk. Binding 4 stores 12 header words plus 8192 contacts after the unchanged broadphase candidate region. GPU-generated indirect dispatch uses actual candidate counts, no normal-frame CPU readback, no additional descriptor. Broadphase overflow gates all generation; contact capacity/world overflow flags gate the future solver. Nine headless contact tests plus actual quarter-native contact eviction/reopen scene pass. Full suite: 123 headless, 38 quarter-native, 5 controls, viewport and 10 UI scenes passed with Vulkan validation; SPIR-V validation clean. Strict dense quarter-native performance: 16.101 ms/tick (62.11 Hz), 16.566 ms with rendering (60.37 Hz). Contacts are discrete at the completed pose; solver response and bounded substeps remain dun-9qub.
