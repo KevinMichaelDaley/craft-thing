@@ -48,17 +48,27 @@ void write_mass(uint index, uint mass) {
     else fluid_a[index] = mass;
 }
 
+bool permeable_material(uint material) {
+    return material == 0u || material == 2u || material == 4u || material == 5u;
+}
+
 bool open_cell(ivec2 p) {
     uint page = page_at(p);
     if (page == 0u) return false;
     uint index = uint(p.y) * params.width + uint(p.x);
     uint material = chunk_cells[atlas_index(p, page)].x & 0xffffu;
-    return (material == 0u || material == 2u || material == 4u ||
-            material == 5u) && occupancy[index] == 0u;
+    return permeable_material(material) && occupancy[index] == 0u;
 }
 
 void move_line(ivec2 source, ivec2 direction, bool vertical) {
-    if (!open_cell(source)) return;
+    uint source_page = page_at(source);
+    if (source_page == 0u) return;
+    uint source_index = atlas_index(source, source_page);
+    uvec2 source_cell = chunk_cells[source_index];
+    uint available = source_cell.y;
+    if (available == 0u) return;
+    if (!permeable_material(source_cell.x & 0xffffu) ||
+        occupancy[uint(source.y) * params.width + uint(source.x)] != 0u) return;
     ivec2 face = source + min(direction, ivec2(0));
     if (!open_cell(source + direction)) return;
     uint face_index = uint(face.y) * params.width + uint(face.x);
@@ -67,16 +77,25 @@ void move_line(ivec2 source, ivec2 direction, bool vertical) {
         speed = 0.5 * (speed + uintBitsToFloat(fluid_a[face_index]));
     if (direction.x < 0 || direction.y < 0) speed = -speed;
     if (speed <= 0.0) return;
-    uint source_index = atlas_index(source, page_at(source));
-    uint available = chunk_cells[source_index].y;
-    if (available == 0u) return;
     float travel = speed * uintBitsToFloat(params.step_scale_bits) * TRANSPORT_FUDGE;
     uint edge = vertical ? (direction.y > 0 ? params.height - 1u - uint(source.y) :
                                                 uint(source.y)) :
                            (direction.x > 0 ? params.width - 1u - uint(source.x) :
                                                 uint(source.x));
     uint reach = min(uint(ceil(travel)), edge);
-    for (uint offset = 1u; offset <= reach; ++offset)
+    if (reach == 1u) {
+        ivec2 destination = source + direction;
+        uint destination_index = atlas_index(destination, page_at(destination));
+        uint receiving = chunk_cells[destination_index].y;
+        uint allowance = uint(floor(clamp(travel, 0.0, 1.0) * float(FULL)));
+        uint flux = min(min(allowance, available), receiving < FULL ? FULL - receiving : 0u);
+        if (flux != 0u) {
+            chunk_cells[destination_index].y = receiving + flux;
+            chunk_cells[source_index].y = available - flux;
+        }
+        return;
+    }
+    for (uint offset = 2u; offset <= reach; ++offset)
         if (!open_cell(source + direction * int(offset))) {
             reach = offset - 1u;
             break;
@@ -92,7 +111,7 @@ void move_line(ivec2 source, ivec2 direction, bool vertical) {
         available -= flux;
         chunk_cells[destination_index].y = receiving + flux;
     }
-    chunk_cells[source_index].y = available;
+    if (available != source_cell.y) chunk_cells[source_index].y = available;
 }
 
 void scan_line(uint line) {

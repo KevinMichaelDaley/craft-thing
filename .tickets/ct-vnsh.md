@@ -16,3 +16,9 @@ Quarter-native full fluid update baseline on Intel Iris Xe: 25.615 ms/tick (39.0
 
 Quarter-native 70-slot dense water/grain benchmark averages below 16.67 ms per physics tick on local Vulkan device; fluid simulation preserves mass, advances at wall-clock speed and remains stable with two-tick scheduling; actual GPU presentation smoke passes.
 
+
+## Notes
+
+**2026-10-05T01:16:10Z**
+
+RED dense benchmark: 27.127 ms/tick (36.86 Hz). Two-tick elapsed-time cadence passed exact state equivalence at 60/30 FPS and mass conservation, but still missed budget. Fluid-phase timestamps identify pressure and transport costs. With 16 pressure sweeps and cached/empty/single-neighbor transport fast paths, 60-sample dense benchmark passed at 16.322 ms/tick (61.27 Hz), render included 16.923 ms (59.09 Hz). Final correctness/validation and optimized Wayland smoke pending.
