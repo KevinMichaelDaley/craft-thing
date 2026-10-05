@@ -99,7 +99,7 @@ static void record_probe(dc_gpu_t *gpu, uint32_t mode) {
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->probe_pipeline);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
-    uint32_t push[7] = { gpu->width, gpu->height, mode, 0, 0, 0, 0 };
+    uint32_t push[7] = { gpu->width, gpu->height, mode, gpu->body_count, 0, 0, 0 };
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     vkCmdDispatch(gpu->command, 1, 1, 1);

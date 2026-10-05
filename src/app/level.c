@@ -21,6 +21,7 @@ struct dc_level_view {
     uint32_t camera_offset_x, camera_offset_y;
     int32_t pending_chunk_dx, pending_chunk_dy;
     uint32_t pending_steps;
+    uint32_t spawned_body_count;
     float pending_seconds;
     bool marker_overlay;
     bool spring_enabled;
@@ -63,8 +64,10 @@ bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,
                                            view->camera_offset_x) << 16,
         .y_fp = (int32_t)(y + DC_CHUNK_SIDE +
                           view->camera_offset_y) << 16, .vx_fp = 1 << 16,
-        .width = 4, .height = 4, .id = 1, .active = 1 };
-    return dc_gpu_spawn_body(view->gpu, body, err, cap);
+        .width = 4, .height = 4, .id = view->spawned_body_count + 1, .active = 1 };
+    if (!dc_gpu_spawn_body(view->gpu, body, err, cap)) return false;
+    ++view->spawned_body_count;
+    return true;
 }
 
 static bool visible(const dc_level_view_t *view, dc_chunk_coord_t coord) {

@@ -4,6 +4,7 @@
 #include "gpu_internal.h"
 
 _Static_assert(sizeof(dc_gpu_body_t) == 32, "GPU body layout must match SPIR-V");
+_Static_assert(sizeof(dc_gpu_body_record_t) == 48, "GPU body record must match SPIR-V");
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -11,10 +12,10 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 }
 
 bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    return dc_gpu_make_mapped_buffer(gpu, sizeof(dc_gpu_body_t),
+    return dc_gpu_make_mapped_buffer(gpu, sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY,
                &gpu->body_buffer, &gpu->body_memory, &gpu->body_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu,
-               (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t),
+               (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t) * 2,
                &gpu->occupancy_buffer, &gpu->occupancy_memory,
                &gpu->occupancy_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, 3 * sizeof(uint32_t),
@@ -51,34 +52,61 @@ void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
 bool dc_gpu_spawn_body(dc_gpu_t *gpu, dc_gpu_body_t body,
                        char *err, uint32_t cap) {
     if (!gpu || !body.active || !body.id || !body.width || !body.height ||
-        body.width > 16 || body.height > 16)
+        body.width > 16 || body.height > 16 || body.width > gpu->width ||
+        body.height > gpu->height || body.x_fp < 0 || body.y_fp < 0 ||
+        (uint32_t)(body.x_fp >> 16) > gpu->width - body.width ||
+        (uint32_t)(body.y_fp >> 16) > gpu->height - body.height)
         return error(err, cap, "Invalid GPU rigid body");
-    memcpy(gpu->body_mapped, &body, sizeof(body));
+    uint32_t slot = DC_GPU_BODY_CAPACITY;
+    for (uint32_t i = 0; i < DC_GPU_BODY_CAPACITY; ++i) {
+        if (gpu->body_ids[i] == body.id) { slot = i; break; }
+        if (!gpu->body_ids[i] && slot == DC_GPU_BODY_CAPACITY) slot = i;
+    }
+    if (slot == DC_GPU_BODY_CAPACITY) return error(err, cap, "GPU body pool is full");
+    dc_gpu_body_record_t *records = gpu->body_mapped;
+    records[slot] = (dc_gpu_body_record_t){ .body = body,
+        .previous_x_fp = body.x_fp, .previous_y_fp = body.y_fp };
+    gpu->body_ids[slot] = body.id;
+    if (gpu->body_count <= slot) gpu->body_count = slot + 1;
     return true;
 }
 
 bool dc_gpu_read_body(dc_gpu_t *gpu, dc_gpu_body_t *body,
                       char *err, uint32_t cap) {
     if (!gpu || !body) return error(err, cap, "Invalid GPU rigid readback");
-    memcpy(body, gpu->body_mapped, sizeof(*body));
+    memset(body, 0, sizeof(*body));
+    for (uint32_t i = 0; i < gpu->body_count; ++i) {
+        if (gpu->body_ids[i]) {
+            *body = ((dc_gpu_body_record_t *)gpu->body_mapped)[i].body;
+            break;
+        }
+    }
     return true;
 }
 
 bool dc_gpu_read_body_id(dc_gpu_t *gpu, uint32_t id, dc_gpu_body_t *body,
                          char *err, uint32_t cap) {
-    dc_gpu_body_t existing;
-    if (!body || !id || !dc_gpu_read_body(gpu, &existing, err, cap))
+    if (!gpu || !body || !id)
         return error(err, cap, "Invalid GPU body ID readback");
-    if (!existing.active || existing.id != id)
-        return error(err, cap, "GPU body ID not found");
-    *body = existing;
-    return true;
+    for (uint32_t i = 0; i < gpu->body_count; ++i)
+        if (gpu->body_ids[i] == id) {
+            *body = ((dc_gpu_body_record_t *)gpu->body_mapped)[i].body;
+            return true;
+        }
+    return error(err, cap, "GPU body ID not found");
 }
 
 bool dc_gpu_remove_body(dc_gpu_t *gpu, uint32_t id, char *err, uint32_t cap) {
     dc_gpu_body_t existing;
     if (!dc_gpu_read_body_id(gpu, id, &existing, err, cap)) return false;
-    memset(gpu->body_mapped, 0, sizeof(existing));
+    for (uint32_t i = 0; i < gpu->body_count; ++i)
+        if (gpu->body_ids[i] == id) {
+            memset(&((dc_gpu_body_record_t *)gpu->body_mapped)[i], 0,
+                   sizeof(dc_gpu_body_record_t));
+            gpu->body_ids[i] = 0;
+            break;
+        }
+    while (gpu->body_count && !gpu->body_ids[gpu->body_count - 1]) --gpu->body_count;
     return true;
 }
 
@@ -90,7 +118,7 @@ bool dc_gpu_read_occupancy(dc_gpu_t *gpu, uint32_t x, uint32_t y,
     const uint32_t *cells = gpu->occupancy_mapped;
     uint32_t value = cells[(size_t)y * gpu->width + x];
     if (current) *current = value;
-    if (swept) *swept = value;
+    if (swept) *swept = cells[(size_t)gpu->width * gpu->height + (size_t)y * gpu->width + x];
     return true;
 }
 
@@ -113,6 +141,7 @@ bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
 }
 
 void dc_gpu_record_rigid(dc_gpu_t *gpu) {
+    if (!gpu->body_count && !gpu->rigid_occupancy_present) return;
     VkMemoryBarrier2 upload = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
         .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
@@ -124,10 +153,10 @@ void dc_gpu_record_rigid(dc_gpu_t *gpu) {
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_pipeline);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
-    uint32_t push[7] = { gpu->width, gpu->height, 0, 0, 0, 0, 0 };
+    uint32_t push[7] = { gpu->width, gpu->height, 0, gpu->body_count, 0, 0, 0 };
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    vkCmdDispatch(gpu->command, 1, 1, 1);
+    if (gpu->body_count) vkCmdDispatch(gpu->command, 1, 1, 1);
     VkMemoryBarrier2 between = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
@@ -147,4 +176,5 @@ void dc_gpu_record_rigid(dc_gpu_t *gpu) {
         .dstAccessMask = VK_ACCESS_2_HOST_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_READ_BIT };
     dep.pMemoryBarriers = &finish;
     vkCmdPipelineBarrier2(gpu->command, &dep);
+    gpu->rigid_occupancy_present = gpu->body_count != 0;
 }

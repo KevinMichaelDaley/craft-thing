@@ -11,6 +11,12 @@ enum {
     DC_GPU_HALO_CELLS = DC_GPU_HALO_SIDE * DC_GPU_HALO_SIDE
 };
 
+typedef struct {
+    dc_gpu_body_t body;
+    int32_t previous_x_fp, previous_y_fp;
+    uint32_t reserved[2];
+} dc_gpu_body_record_t;
+
 struct dc_gpu {
     VkInstance instance;
     VkPhysicalDevice physical;
@@ -71,6 +77,9 @@ struct dc_gpu {
     VkBuffer body_buffer;
     VkDeviceMemory body_memory;
     void *body_mapped;
+    uint32_t body_ids[DC_GPU_BODY_CAPACITY];
+    uint32_t body_count;
+    bool rigid_occupancy_present;
     VkBuffer occupancy_buffer;
     VkDeviceMemory occupancy_memory;
     void *occupancy_mapped;

@@ -13,13 +13,17 @@ struct Body {
     uint height;
     uint id;
     uint enabled;
+    int previous_x_fp;
+    int previous_y_fp;
+    uint reserved0;
+    uint reserved1;
 };
-layout(set = 0, binding = 4, std430) readonly buffer Bodies { Body body; };
+layout(set = 0, binding = 4, std430) readonly buffer Bodies { Body bodies[]; };
 layout(push_constant) uniform Params {
     uint width;
     uint height;
     uint mode;
-    uint unused0;
+    uint body_count;
     uint unused1;
     uint unused2;
     uint unused3;
@@ -27,12 +31,16 @@ layout(push_constant) uniform Params {
 
 void main() {
     if (params.mode == 0u) {
-        int x = body.x_fp >> 16;
-        int y = body.y_fp >> 16;
         uint seen = 0u;
-        if (body.enabled != 0u && x >= 0 && y >= 0 &&
-            x < int(params.width) && y < int(params.height))
-            seen = occupancy[uint(y) * params.width + uint(x)];
+        for (uint i = 0u; i < params.body_count; ++i) {
+            Body body = bodies[i];
+            if (body.enabled == 0u) continue;
+            int x = body.x_fp >> 16;
+            int y = body.y_fp >> 16;
+            if (x >= 0 && y >= 0 && x < int(params.width) && y < int(params.height))
+                seen = occupancy[uint(y) * params.width + uint(x)];
+            break;
+        }
         trace_values[0] = seen;
         trace_values[1] = seen + 1u;
     } else {
