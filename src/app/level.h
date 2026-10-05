@@ -32,6 +32,10 @@ bool dc_level_view_spawn_convex_body(dc_level_view_t *view, uint32_t x, uint32_t
 bool dc_level_view_broadphase(dc_level_view_t *view, dc_gpu_broadphase_stats_t *stats,
                               dc_gpu_broadphase_pair_t *pairs, uint32_t pair_cap,
                               char *err, uint32_t err_cap);
+/** Opt-in completed narrowphase diagnostics for streamed-window tests. */
+bool dc_level_view_contacts(dc_level_view_t *view, dc_gpu_contact_stats_t *stats,
+                            dc_gpu_contact_t *contacts, uint32_t contact_cap,
+                            char *err, uint32_t err_cap);
 bool dc_level_view_wait_visible(dc_level_view_t *view, uint32_t timeout_ms,
                                 char *err, uint32_t err_cap);
 bool dc_level_view_move(dc_level_view_t *view, int32_t dx, int32_t dy);

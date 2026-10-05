@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "../../src/app/level.h"
 #include "../../src/app/view_config.h"
@@ -159,7 +160,46 @@ static void test_convex_window_shapes_survive_eviction_and_reload(void) {
     ASSERT_TRUE(correct); PASS();
 }
 
+static void test_world_contacts_survive_camera_eviction_and_session_reload(void) {
+    char directory[] = "build/ui_contacts_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err)); ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 120000, err, sizeof(err)));
+    dc_gpu_body_shape_t shape = { .count = 4, .material = DC_GPU_BODY_STONE,
+        .vertices = {{2 << 16, 0}, {4 << 16, 2 << 16}, {2 << 16, 4 << 16}, {0, 2 << 16}} };
+    ASSERT_TRUE(dc_level_view_spawn_convex_body(view, 63, 2, 4, 4, &shape, err, sizeof(err)));
+    shape.material = DC_GPU_BODY_WOOD;
+    ASSERT_TRUE(dc_level_view_spawn_convex_body(view, 64, 2, 4, 4, &shape, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    dc_gpu_contact_stats_t stats; dc_gpu_contact_t before[16], after[16];
+    ASSERT_TRUE(dc_level_view_contacts(view, &stats, before, 16, err, sizeof(err)));
+    ASSERT_EQ(stats.count, 1u); ASSERT_EQ(stats.overflow, 0u);
+    ASSERT_EQ(before[0].kind, DC_GPU_CONTACT_BODY);
+    ASSERT_EQ(before[0].material_a, DC_GPU_BODY_STONE); ASSERT_EQ(before[0].material_b, DC_GPU_BODY_WOOD);
+    ASSERT_TRUE(before[0].depth > 0);
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 16 * DC_CHUNK_SIDE, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 120000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_contacts(view, &stats, after, 16, err, sizeof(err)));
+    ASSERT_EQ(stats.count, 0u);
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, -16 * (int32_t)DC_CHUNK_SIDE, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 120000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_contacts(view, &stats, after, 16, err, sizeof(err)));
+    ASSERT_EQ(stats.count, 1u); ASSERT_EQ(memcmp(before, after, sizeof(*before)), 0);
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    view = dc_level_view_create(directory, 314, err, sizeof(err)); ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 120000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_contacts(view, &stats, after, 16, err, sizeof(err)));
+    ASSERT_EQ(stats.count, 1u); ASSERT_EQ(memcmp(before, after, sizeof(*before)), 0);
+    uint32_t pixel;
+    ASSERT_TRUE(dc_level_view_pixel(view, 65, 3, &pixel, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    ASSERT_EQ(pixel, 0xff30c040u); PASS();
+}
+
 int main(void) {
+    RUN(test_world_contacts_survive_camera_eviction_and_session_reload);
     RUN(test_convex_window_shapes_survive_eviction_and_reload);
     RUN(test_quarter_native_window_keeps_both_spawned_boxes_visible);
     RUN(test_world_boxes_survive_camera_eviction_and_session_reload);

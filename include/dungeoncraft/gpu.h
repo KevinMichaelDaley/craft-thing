@@ -221,6 +221,39 @@ bool dc_gpu_read_broadphase(dc_gpu_t *gpu, dc_gpu_broadphase_stats_t *stats,
                             dc_gpu_broadphase_pair_t *pairs, uint32_t pair_cap,
                             char *err_buf, uint32_t err_cap);
 
+#define DC_GPU_CONTACT_CAPACITY 8192u
+enum { DC_GPU_CONTACT_BODY = 0u, DC_GPU_CONTACT_TERRAIN = 1u,
+       DC_GPU_CONTACT_BOUNDARY = 2u, DC_GPU_CONTACT_MPM = 3u };
+enum { DC_GPU_CONTACT_OVERFLOW_CAPACITY = 1u, DC_GPU_CONTACT_OVERFLOW_WORLD = 2u,
+       DC_GPU_CONTACT_OVERFLOW_BROADPHASE = 4u };
+/** Canonical world point, with local 16.16 coordinates in [0,64). */
+typedef struct {
+    dc_chunk_coord_t chunk;
+    int32_t x_fp, y_fp;
+} dc_gpu_contact_anchor_t;
+/** Normal points from B to A; depth is nonnegative. Terrain feature_b is a
+ * cell index within feature_chunk; body features encode vertices/edges.
+ * Body material IDs and cell material IDs use their respective namespaces.
+ */
+typedef struct {
+    uint32_t body_a, body_b, kind, feature_a, feature_b, material_a, material_b, reserved;
+    float normal_x, normal_y, depth, friction, restitution, compliance;
+    uint32_t flags, reserved2;
+    dc_gpu_contact_anchor_t anchor_a, anchor_b;
+    dc_chunk_coord_t feature_chunk;
+} dc_gpu_contact_t;
+/** Any overflow makes contacts incomplete and must gate the later solver. */
+typedef struct {
+    uint32_t count, required, overflow, capacity, candidates, rejected;
+} dc_gpu_contact_stats_t;
+/** Bound contact output for diagnostics; 0 is allowed to test saturation. */
+bool dc_gpu_set_contact_capacity(dc_gpu_t *gpu, uint32_t capacity,
+                                 char *err_buf, uint32_t err_cap);
+/** Opt-in completed GPU contacts; ordering is unspecified, keys are stable. */
+bool dc_gpu_read_contacts(dc_gpu_t *gpu, dc_gpu_contact_stats_t *stats,
+                          dc_gpu_contact_t *contacts, uint32_t contact_cap,
+                          char *err_buf, uint32_t err_cap);
+
 /** Read current and conservative swept-AABB IDs for one completed cell.
  * Overlapping masks select the lowest nonzero ID. Fluid uses current occupancy.
  */

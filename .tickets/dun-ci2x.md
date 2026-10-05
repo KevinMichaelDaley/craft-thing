@@ -1,6 +1,6 @@
 ---
 id: dun-ci2x
-status: open
+status: in_progress
 deps: [dun-4ftd, ct-l35t]
 links: []
 created: 2026-09-26T07:43:35Z
