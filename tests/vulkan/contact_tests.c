@@ -226,7 +226,45 @@ static void test_missing_chunk_boundary_produces_world_contacts(void) {
     dc_gpu_destroy(gpu); PASS();
 }
 
+static void test_thin_polygon_edge_finds_one_cell_obstacle(void) {
+    char err[256]; dc_gpu_t *gpu = grid(); ASSERT_TRUE(gpu);
+    ASSERT_TRUE(dc_gpu_paint_material(gpu, 65, 10, 0, DC_MATERIAL_STONE, err, sizeof(err)));
+    dc_gpu_body_shape_t shape = { .count = 3, .material = DC_GPU_BODY_STONE,
+        .vertices = {{0, 0}, {4 << 16, 0}, {0, 1 << 14}} };
+    ASSERT_TRUE(dc_gpu_spawn_convex_body(gpu, box(43, 62, 10, 4), &shape, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(gpu, (dc_chunk_coord_t){0, 0}, err, sizeof(err)));
+    dc_gpu_contact_stats_t stats; dc_gpu_contact_t contacts[16];
+    ASSERT_TRUE(dc_gpu_read_contacts(gpu, &stats, contacts, 16, err, sizeof(err)));
+    ASSERT_EQ(stats.count, 1u); ASSERT_TRUE(valid(&contacts[0]));
+    ASSERT_EQ(contacts[0].feature_chunk.x, 1); ASSERT_EQ(contacts[0].feature_b, 10u * 64u + 1u);
+    ASSERT_TRUE(contacts[0].depth > 0 && contacts[0].depth < 0.25f);
+    dc_gpu_destroy(gpu); PASS();
+}
+
+static void test_partial_resident_tile_has_blocking_viewport_boundary(void) {
+    char err[256]; dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 65, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk)); ASSERT_TRUE(chunk);
+    for (uint32_t slot = 0; slot < 2; ++slot) {
+        ASSERT_TRUE(dc_gpu_upload_chunk(gpu, slot, chunk, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_page(gpu, slot, 0, slot, err, sizeof(err)));
+    }
+    free(chunk);
+    ASSERT_TRUE(dc_gpu_spawn_world_body(gpu, box(47, 64, 10, 2), err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(gpu, (dc_chunk_coord_t){0, 0}, err, sizeof(err)));
+    dc_gpu_contact_stats_t stats; dc_gpu_contact_t contacts[32];
+    ASSERT_TRUE(dc_gpu_read_contacts(gpu, &stats, contacts, 32, err, sizeof(err)));
+    ASSERT_TRUE(stats.count > 0); ASSERT_EQ(stats.overflow, 0u);
+    for (uint32_t i = 0; i < stats.count; ++i) {
+        ASSERT_TRUE(valid(&contacts[i])); ASSERT_EQ(contacts[i].kind, DC_GPU_CONTACT_BOUNDARY);
+        ASSERT_EQ(contacts[i].feature_chunk.x, 1); ASSERT_TRUE(contacts[i].feature_b % 64u >= 1);
+    }
+    dc_gpu_destroy(gpu); PASS();
+}
+
 int main(void) {
+    RUN(test_partial_resident_tile_has_blocking_viewport_boundary);
+    RUN(test_thin_polygon_edge_finds_one_cell_obstacle);
     RUN(test_rotated_stone_and_wood_find_single_cell_steps_and_slopes);
     RUN(test_empty_polygon_corners_and_water_produce_no_solid_contacts);
     RUN(test_mpm_material_contacts_use_occupied_cells_and_distinct_kind);
