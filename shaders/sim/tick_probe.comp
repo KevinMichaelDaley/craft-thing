@@ -17,6 +17,11 @@ struct Body {
     int previous_y_fp;
     uint reserved0;
     uint reserved1;
+    uvec2 chunk_x;
+    uvec2 chunk_y;
+    ivec2 local_fp;
+    uint visible;
+    uint reserved_world;
 };
 layout(set = 0, binding = 4, std430) readonly buffer Bodies { Body bodies[]; };
 layout(push_constant) uniform Params {
@@ -34,7 +39,7 @@ void main() {
         uint seen = 0u;
         for (uint i = 0u; i < params.body_count; ++i) {
             Body body = bodies[i];
-            if (body.enabled == 0u) continue;
+            if (body.enabled == 0u || body.visible == 0u) continue;
             int x = body.x_fp >> 16;
             int y = body.y_fp >> 16;
             if (x >= 0 && y >= 0 && x < int(params.width) && y < int(params.height))

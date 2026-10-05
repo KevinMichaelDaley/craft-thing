@@ -325,6 +325,7 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
         if (slot != UINT32_MAX) gpu->preserve_shifted_slot[slot] = false;
         return true;
     }
+    gpu->body_refresh_pending = true;
     if (slot != UINT32_MAX && gpu->slot_page[slot] != UINT32_MAX &&
         gpu->slot_page[slot] != tile)
         pages[gpu->slot_page[slot]] = 0u;

@@ -21,7 +21,7 @@ struct dc_level_view {
     uint32_t camera_offset_x, camera_offset_y;
     int32_t pending_chunk_dx, pending_chunk_dy;
     uint32_t pending_steps;
-    uint32_t spawned_body_count;
+    char body_path[1024];
     float pending_seconds;
     bool marker_overlay;
     bool spring_enabled;
@@ -64,10 +64,8 @@ bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,
                                            view->camera_offset_x) << 16,
         .y_fp = (int32_t)(y + DC_CHUNK_SIDE +
                           view->camera_offset_y) << 16, .vx_fp = 1 << 16,
-        .width = 4, .height = 4, .id = view->spawned_body_count + 1, .active = 1 };
-    if (!dc_gpu_spawn_body(view->gpu, body, err, cap)) return false;
-    ++view->spawned_body_count;
-    return true;
+        .width = 4, .height = 4, .id = dc_gpu_next_body_id(view->gpu), .active = 1 };
+    return dc_gpu_spawn_body(view->gpu, body, err, cap);
 }
 
 static bool visible(const dc_level_view_t *view, dc_chunk_coord_t coord) {
@@ -194,6 +192,13 @@ dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
     view->stream = dc_stream_create(directory, seed,
                                     DC_GPU_CHUNK_SLOTS * 2u);
     if (!view->stream) { error(err, cap, "Cannot start chunk streaming worker"); goto fail; }
+    int length = snprintf(view->body_path, sizeof(view->body_path), "%s/rigid_bodies.bin", directory);
+    if (length < 0 || (size_t)length >= sizeof(view->body_path)) {
+        error(err, cap, "World directory path is too long"); goto fail;
+    }
+    if (!dc_gpu_set_body_origin(view->gpu, (dc_chunk_coord_t){
+            view->origin.x - HALO_CHUNKS, view->origin.y - HALO_CHUNKS }, err, cap) ||
+        !dc_gpu_load_bodies(view->gpu, view->body_path, err, cap)) goto fail;
     return view;
 fail:
     dc_stream_destroy(view->stream);
@@ -245,6 +250,8 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     view->pending_chunk_dx = 0;
     view->pending_chunk_dy = 0;
     view->mapped_origin = view->origin;
+    if (!dc_gpu_set_body_origin(view->gpu, (dc_chunk_coord_t){
+            view->origin.x - HALO_CHUNKS, view->origin.y - HALO_CHUNKS }, err, cap)) return false;
     if (!resolve_world_transfer(view, err, cap)) return false;
     if (view->spring_enabled && view->origin.x - HALO_CHUNKS <= 2 * WORLD_SCALE &&
         view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS > 2 * WORLD_SCALE &&
@@ -537,6 +544,7 @@ bool dc_level_view_transfer_result(dc_level_view_t *view,
 bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return true;
     bool okay = true;
+    if (!dc_gpu_save_bodies(view->gpu, view->body_path, err, cap)) okay = false;
     if (view->transfer_pending) {
         view->table.slots[view->from_slot].pinned = false;
         if (view->destination_bound)

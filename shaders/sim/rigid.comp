@@ -18,6 +18,11 @@ struct Body {
     int previous_y_fp;
     uint reserved0;
     uint reserved1;
+    uvec2 chunk_x;
+    uvec2 chunk_y;
+    ivec2 local_fp;
+    uint visible;
+    uint reserved_world;
 };
 layout(set = 0, binding = 4, std430) buffer Bodies { Body bodies[]; };
 layout(push_constant) uniform Params {
@@ -25,10 +30,48 @@ layout(push_constant) uniform Params {
     uint height;
     uint mode;
     uint body_count;
-    uint unused1;
-    uint unused2;
-    uint unused3;
+    uvec2 origin_x;
+    uvec2 origin_y;
 } params;
+
+bool relative_chunk(uvec2 anchor, uvec2 origin, out int offset) {
+    uvec2 delta = uvec2(anchor.x - origin.x,
+        anchor.y - origin.y - uint(anchor.x < origin.x));
+    uint sign_a = anchor.y >> 31, sign_b = origin.y >> 31, sign_d = delta.y >> 31;
+    offset = int(delta.x);
+    return !(sign_a != sign_b && sign_a != sign_d) &&
+        delta.y == (offset < 0 ? 0xffffffffu : 0u);
+}
+
+bool shifted_chunk(uvec2 origin, int offset, out uvec2 anchor) {
+    uint low = origin.x + uint(offset);
+    anchor = uvec2(low, origin.y + (offset < 0 ? 0xffffffffu : 0u) +
+                   uint(low < origin.x));
+    uint sign_o = origin.y >> 31, sign_a = anchor.y >> 31;
+    return !((offset < 0 ? 1u : 0u) == sign_o && sign_a != sign_o);
+}
+
+bool locate_body(inout Body body) {
+    int x = 0, y = 0;
+    bool nearby = relative_chunk(body.chunk_x, params.origin_x, x) &&
+                  relative_chunk(body.chunk_y, params.origin_y, y);
+    nearby = nearby && x >= -1 && y >= -1 &&
+        x < int((params.width + 63u) / 64u) && y < int((params.height + 63u) / 64u);
+    body.x_fp = nearby ? x * (64 << 16) + body.local_fp.x : -(16 << 16);
+    body.y_fp = nearby ? y * (64 << 16) + body.local_fp.y : -(16 << 16);
+    int left = body.x_fp >> 16, top = body.y_fp >> 16;
+    body.visible = uint(nearby && left < int(params.width) && top < int(params.height) &&
+        left + int(body.width) > 0 && top + int(body.height) > 0);
+    body.previous_x_fp = body.x_fp;
+    body.previous_y_fp = body.y_fp;
+    return body.visible != 0u;
+}
+
+bool resident_at(int x, int y) {
+    if (x < 0 || y < 0 || x >= int(params.width) || y >= int(params.height)) return false;
+    uint page_width = (params.width + 63u) / 64u;
+    return pages[(uint(y) / 64u) * page_width + uint(x) / 64u] != 0u;
+}
 
 bool solid_at(int x, int y) {
     if (x < 0 || x >= int(params.width) || y >= int(params.height)) return true;
@@ -43,11 +86,15 @@ bool solid_at(int x, int y) {
 void integrate_body(uint index) {
     Body body = bodies[index];
     if (body.enabled == 0u) return;
-    body.previous_x_fp = body.x_fp;
-    body.previous_y_fp = body.y_fp;
+    bool visible = locate_body(body);
+    if (!visible || params.mode == 2u ||
+        !resident_at(clamp(body.x_fp >> 16, 0, int(params.width) - 1),
+                     clamp(body.y_fp >> 16, 0, int(params.height) - 1))) {
+        bodies[index] = body;
+        return;
+    }
     int vx = clamp(body.vx_fp, -(4 << 16), 4 << 16);
     int next_x = body.x_fp + vx;
-    next_x = clamp(next_x, 0, max(0, (int(params.width) - int(body.width)) << 16));
     int x = next_x >> 16;
     int top = body.y_fp >> 16;
     bool supported = false;
@@ -71,6 +118,16 @@ void integrate_body(uint index) {
             if (hit) { next_y = (row - int(body.height)) << 16; vy = 0; }
         }
     }
+    uvec2 anchor_x, anchor_y;
+    if (!shifted_chunk(params.origin_x, next_x >> 22, anchor_x)) {
+        next_x = body.x_fp; vx = 0; anchor_x = body.chunk_x;
+    }
+    if (!shifted_chunk(params.origin_y, next_y >> 22, anchor_y)) {
+        next_y = body.y_fp; vy = 0; anchor_y = body.chunk_y;
+    }
+    body.chunk_x = anchor_x;
+    body.chunk_y = anchor_y;
+    body.local_fp = ivec2(next_x, next_y) & ivec2((64 << 16) - 1);
     body.x_fp = next_x;
     body.y_fp = next_y;
     body.vx_fp = vx;
@@ -80,7 +137,7 @@ void integrate_body(uint index) {
 
 void main() {
     uvec2 p = gl_GlobalInvocationID.xy;
-    if (params.mode == 0u) {
+    if (params.mode != 1u) {
         uint index = gl_LocalInvocationIndex;
         if (index < params.body_count) integrate_body(index);
         return;
@@ -89,7 +146,7 @@ void main() {
     uint current = 0u, swept = 0u;
     for (uint i = 0u; i < params.body_count; ++i) {
         Body body = bodies[i];
-        if (body.enabled == 0u) continue;
+        if (body.enabled == 0u || body.visible == 0u) continue;
         ivec2 origin = ivec2(body.x_fp, body.y_fp) >> 16;
         ivec2 previous = ivec2(body.previous_x_fp, body.previous_y_fp) >> 16;
         ivec2 extent = ivec2(body.width, body.height);
@@ -102,6 +159,7 @@ void main() {
         if (crossed && (swept == 0u || body.id < swept)) swept = body.id;
     }
     uint index = p.y * params.width + p.x;
+    if (!resident_at(int(p.x), int(p.y))) { current = 0u; swept = 0u; }
     occupancy[index] = current;
     occupancy[params.width * params.height + index] = swept;
 }

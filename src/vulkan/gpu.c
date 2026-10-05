@@ -201,7 +201,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         writes[i].pBufferInfo = &buffers[i];
     }
     vkUpdateDescriptorSets(gpu->device, 32, writes, 0, NULL);
-    VkPushConstantRange range = { .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .size = 28 };
+    VkPushConstantRange range = { .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .size = 32 };
     VkPipelineLayoutCreateInfo pipeline_layout_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1, .pSetLayouts = &gpu->set_layout,
         .pushConstantRangeCount = 1, .pPushConstantRanges = &range };

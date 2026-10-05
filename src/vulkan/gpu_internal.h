@@ -15,6 +15,9 @@ typedef struct {
     dc_gpu_body_t body;
     int32_t previous_x_fp, previous_y_fp;
     uint32_t reserved[2];
+    uint32_t chunk_x[2], chunk_y[2];
+    int32_t local_x_fp, local_y_fp;
+    uint32_t visible, reserved_world;
 } dc_gpu_body_record_t;
 
 struct dc_gpu {
@@ -80,6 +83,8 @@ struct dc_gpu {
     uint32_t body_ids[DC_GPU_BODY_CAPACITY];
     uint32_t body_count;
     bool rigid_occupancy_present;
+    dc_chunk_coord_t body_origin;
+    bool body_refresh_pending;
     VkBuffer occupancy_buffer;
     VkDeviceMemory occupancy_memory;
     void *occupancy_mapped;

@@ -181,6 +181,8 @@ bool dc_gpu_read_world_body(dc_gpu_t *gpu, uint32_t id, dc_gpu_world_body_t *bod
 bool dc_gpu_save_bodies(dc_gpu_t *gpu, const char *path, char *err_buf, uint32_t err_cap);
 /** Load a validated snapshot; a missing file leaves the initial pool unchanged. */
 bool dc_gpu_load_bodies(dc_gpu_t *gpu, const char *path, char *err_buf, uint32_t err_cap);
+/** Return an unused nonzero body ID without reading GPU transforms. */
+uint32_t dc_gpu_next_body_id(const dc_gpu_t *gpu);
 
 /** Read current and conservative swept-AABB IDs for one completed cell.
  * Overlapping masks select the lowest nonzero ID. Fluid uses current occupancy.

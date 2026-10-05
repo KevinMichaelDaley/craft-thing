@@ -5,7 +5,7 @@ CPPFLAGS += -Iinclude $(shell pkg-config --cflags sdl2)
 LDLIBS += -lvulkan $(shell pkg-config --libs sdl2) -pthread
 GLSLANG ?= glslangValidator
 
-GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
+GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
 CHUNK_OBJ = build/chunk.o
 STREAM_OBJ = build/stream.o
 GENERATE_OBJ = build/generate.o
@@ -25,6 +25,8 @@ MPM_COMPONENT_SHADER = build/shaders/mpm_component.comp.spv
 all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
 
 NATIVE_SRC = src/app/main.c src/app/level.c src/app/session.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c src/world/stream.c src/world/generate.c
+build/body_store_gpu.o: src/vulkan/body_store_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/world_body_tests: tests/vulkan/world_body_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 QUARTER_FLAGS = -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u -DDC_PRESSURE_SWEEPS=16u
