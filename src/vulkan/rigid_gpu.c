@@ -28,7 +28,7 @@ uint32_t dc_gpu_next_body_id(const dc_gpu_t *gpu) {
 }
 
 bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    return dc_gpu_make_mapped_buffer(gpu, sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY,
+    bool okay = dc_gpu_make_mapped_buffer(gpu, dc_gpu_body_storage_bytes(gpu),
                &gpu->body_buffer, &gpu->body_memory, &gpu->body_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu,
                (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t) * 2,
@@ -37,6 +37,11 @@ bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
            dc_gpu_make_mapped_buffer(gpu, 3 * sizeof(uint32_t),
                &gpu->trace_buffer, &gpu->trace_memory,
                &gpu->trace_mapped, err, cap);
+    if (okay) {
+        dc_gpu_broadphase_data(gpu)[3] = DC_GPU_BROADPHASE_PAIR_CAPACITY;
+        dc_gpu_broadphase_data(gpu)[5] = dc_gpu_broadphase_buckets(gpu);
+    }
+    return okay;
 }
 
 bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *path,
@@ -56,6 +61,7 @@ bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *path,
 
 void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
     dc_gpu_tick_destroy(gpu);
+    if (gpu->broadphase_pipeline) vkDestroyPipeline(gpu->device, gpu->broadphase_pipeline, NULL);
     if (gpu->rigid_pipeline) vkDestroyPipeline(gpu->device, gpu->rigid_pipeline, NULL);
     if (gpu->body_mapped) vkUnmapMemory(gpu->device, gpu->body_memory);
     if (gpu->occupancy_mapped) vkUnmapMemory(gpu->device, gpu->occupancy_memory);
@@ -189,22 +195,6 @@ bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return submit_rigid(gpu, true, err, cap);
 }
 
-bool dc_gpu_set_broadphase_capacity(dc_gpu_t *gpu, uint32_t capacity,
-                                    char *err, uint32_t cap) {
-    if (!gpu || capacity > DC_GPU_BROADPHASE_PAIR_CAPACITY)
-        return error(err, cap, "Invalid broadphase capacity");
-    return true;
-}
-
-bool dc_gpu_read_broadphase(dc_gpu_t *gpu, dc_gpu_broadphase_stats_t *stats,
-                            dc_gpu_broadphase_pair_t *pairs, uint32_t pair_cap,
-                            char *err, uint32_t cap) {
-    (void)pairs; (void)pair_cap;
-    if (!gpu || !stats) return error(err, cap, "Invalid broadphase readback");
-    *stats = (dc_gpu_broadphase_stats_t){ .capacity = DC_GPU_BROADPHASE_PAIR_CAPACITY };
-    return true;
-}
-
 static bool submit_rigid(dc_gpu_t *gpu, bool advance, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
@@ -265,6 +255,7 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
         .dstAccessMask = VK_ACCESS_2_HOST_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_READ_BIT };
     dep.pMemoryBarriers = &finish;
     vkCmdPipelineBarrier2(gpu->command, &dep);
+    dc_gpu_record_broadphase(gpu);
     gpu->rigid_occupancy_present = gpu->body_count != 0;
     gpu->body_refresh_pending = false;
 }

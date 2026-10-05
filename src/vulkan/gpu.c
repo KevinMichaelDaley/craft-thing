@@ -162,7 +162,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         { gpu->chunk_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t) },
         { gpu->page_buffer, 0, (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t) },
         { gpu->occupancy_buffer, 0, bytes * 2 },
-        { gpu->body_buffer, 0, sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY },
+        { gpu->body_buffer, 0, dc_gpu_body_storage_bytes(gpu) },
         { gpu->trace_buffer, 0, 3 * sizeof(uint32_t) },
         { gpu->halo_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_GPU_HALO_CELLS * sizeof(dc_gpu_halo_cell_t) },
         { gpu->transfer_buffer, 0, sizeof(dc_gpu_transfer_t) },
@@ -314,6 +314,7 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
         !dc_gpu_rigid_buffers_init(gpu, err, cap) ||
         !make_pipeline(gpu, shader_path, bytes, err, cap)) goto fail;
     if (!dc_gpu_rigid_pipeline_init(gpu, "build/shaders/rigid.comp.spv", err, cap) ||
+        !dc_gpu_broadphase_pipeline_init(gpu, err, cap) ||
         !dc_gpu_tick_init(gpu, err, cap) ||
         !dc_gpu_halo_pipeline_init(gpu, err, cap)) goto fail;
     VkCommandPoolCreateInfo pool_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,

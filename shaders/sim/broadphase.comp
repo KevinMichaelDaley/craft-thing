@@ -1,0 +1,125 @@
+#version 450
+layout(local_size_x = 64) in;
+
+struct Body {
+    int x_fp, y_fp, vx_fp, vy_fp;
+    uint width, height, id, enabled;
+    int previous_x_fp, previous_y_fp;
+    uint reserved0, reserved1;
+    uvec2 chunk_x, chunk_y;
+    ivec2 local_fp;
+    uint visible, reserved_world;
+};
+layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
+layout(set = 0, binding = 4, std430) buffer Bodies {
+    Body bodies[64];
+    uint data[];
+};
+layout(push_constant) uniform Params {
+    uint width, height, mode, body_count;
+    uvec2 origin_x, origin_y;
+} params;
+
+const uint HEADER_WORDS = 8u;
+const uint PAIR_WORDS = 8u;
+const uint PAIR_BODY = 0u, PAIR_TERRAIN = 1u, PAIR_BOUNDARY = 2u;
+
+uvec2 page_extent() { return uvec2((params.width + 63u) / 64u, (params.height + 63u) / 64u); }
+uint bucket_count() { uvec2 size = page_extent() + 2u; return size.x * size.y; }
+
+void bounds(Body body, out ivec2 low, out ivec2 high) {
+    ivec2 current = ivec2(body.x_fp, body.y_fp);
+    ivec2 previous = ivec2(body.previous_x_fp, body.previous_y_fp);
+    low = (min(current, previous) >> 16) - 1;
+    high = ((max(current, previous) + (ivec2(body.width, body.height) << 16) + 65535) >> 16) + 1;
+}
+
+void bucket_bounds(Body body, out ivec2 low, out ivec2 high) {
+    bounds(body, low, high);
+    low = clamp(low >> 6, ivec2(-1), ivec2(page_extent()));
+    high = clamp((high - 1) >> 6, ivec2(-1), ivec2(page_extent()));
+}
+
+bool shifted_chunk(uvec2 origin, int offset, out uvec2 anchor) {
+    uint low = origin.x + uint(offset);
+    anchor = uvec2(low, origin.y + (offset < 0 ? 0xffffffffu : 0u) + uint(low < origin.x));
+    uint sign_o = origin.y >> 31, sign_a = anchor.y >> 31;
+    return !((offset < 0 ? 1u : 0u) == sign_o && sign_a != sign_o);
+}
+
+void emit_pair(uint a, uint b, uint kind, ivec2 chunk) {
+    uvec2 x, y;
+    if (!shifted_chunk(params.origin_x, chunk.x, x) ||
+        !shifted_chunk(params.origin_y, chunk.y, y)) {
+        atomicOr(data[2], 2u);
+        return;
+    }
+    uint index = atomicAdd(data[1], 1u);
+    if (index >= data[3]) { atomicOr(data[2], 1u); return; }
+    uint offset = HEADER_WORDS + 2u * bucket_count() + index * PAIR_WORDS;
+    data[offset] = a; data[offset + 1u] = b;
+    data[offset + 2u] = kind; data[offset + 3u] = 0u;
+    data[offset + 4u] = x.x; data[offset + 5u] = x.y;
+    data[offset + 6u] = y.x; data[offset + 7u] = y.y;
+    atomicAdd(data[0], 1u);
+}
+
+bool member(uvec2 bits, uint slot) {
+    return (bits[slot / 32u] & (1u << (slot % 32u))) != 0u;
+}
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    if (params.mode == 0u) {
+        if (index == 0u) {
+            data[0] = 0u; data[1] = 0u; data[2] = 0u; data[4] = 0u;
+            data[5] = bucket_count(); data[6] = 0u; data[7] = 0u;
+        }
+        if (index < 2u * bucket_count()) data[HEADER_WORDS + index] = 0u;
+        return;
+    }
+    uvec2 extent = page_extent() + 2u;
+    if (params.mode == 1u) {
+        if (index >= params.body_count) return;
+        Body body = bodies[index];
+        if (body.enabled == 0u || body.visible == 0u) return;
+        atomicAdd(data[4], 1u);
+        ivec2 low, high;
+        bucket_bounds(body, low, high);
+        for (int y = low.y; y <= high.y; ++y)
+            for (int x = low.x; x <= high.x; ++x) {
+                uint bucket = uint(y + 1) * extent.x + uint(x + 1);
+                atomicOr(data[HEADER_WORDS + 2u * bucket + index / 32u],
+                         1u << (index % 32u));
+            }
+        return;
+    }
+    if (index >= bucket_count()) return;
+    ivec2 chunk = ivec2(int(index % extent.x) - 1, int(index / extent.x) - 1);
+    uvec2 bits = uvec2(data[HEADER_WORDS + 2u * index], data[HEADER_WORDS + 2u * index + 1u]);
+    if (all(equal(bits, uvec2(0)))) return;
+    uint kind = PAIR_BOUNDARY;
+    uvec2 pages_extent = page_extent();
+    if (all(greaterThanEqual(chunk, ivec2(0))) && all(lessThan(chunk, ivec2(pages_extent))))
+        if (pages[uint(chunk.y) * pages_extent.x + uint(chunk.x)] != 0u) kind = PAIR_TERRAIN;
+    for (uint a = 0u; a < params.body_count; ++a) {
+        if (!member(bits, a)) continue;
+        Body first = bodies[a];
+        emit_pair(first.id, 0u, kind, chunk);
+        ivec2 first_low, first_high, first_bucket_low, first_bucket_high;
+        bounds(first, first_low, first_high);
+        bucket_bounds(first, first_bucket_low, first_bucket_high);
+        for (uint b = a + 1u; b < params.body_count; ++b) {
+            if (!member(bits, b)) continue;
+            Body second = bodies[b];
+            ivec2 second_low, second_high, second_bucket_low, second_bucket_high;
+            bounds(second, second_low, second_high);
+            if (!all(lessThan(first_low, second_high)) ||
+                !all(lessThan(second_low, first_high))) continue;
+            bucket_bounds(second, second_bucket_low, second_bucket_high);
+            ivec2 owner = max(first_bucket_low, second_bucket_low);
+            if (all(equal(chunk, owner)))
+                emit_pair(min(first.id, second.id), max(first.id, second.id), PAIR_BODY, owner);
+        }
+    }
+}
