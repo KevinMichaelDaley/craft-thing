@@ -48,7 +48,7 @@ static bool paint_held(dc_level_view_t *view, uint16_t material,
     return true;
 }
 
-#if defined(DC_NATIVE_VIEW) || defined(DC_HALF_NATIVE_VIEW)
+#if defined(DC_NATIVE_VIEW) || defined(DC_HALF_NATIVE_VIEW) || defined(DC_QUARTER_NATIVE_VIEW)
 static int smoke_native_view(void) {
     enum { BENCH_FRAMES = 60 };
     char directory[] = "build/ui_native_XXXXXX", err[256] = {0};
@@ -79,7 +79,10 @@ static int smoke_native_view(void) {
                 pixels[(VIEW_HEIGHT - 20u) * VIEW_WIDTH + VIEW_WIDTH - 20u] ==
                     0xff707070u;
     mkdir("build/screenshots", 0777);
-#ifdef DC_HALF_NATIVE_VIEW
+#if defined(DC_QUARTER_NATIVE_VIEW)
+    if (okay) okay = save_level_bmp(
+        "build/screenshots/quarter_native_480x270_upscaled.bmp", pixels);
+#elif defined(DC_HALF_NATIVE_VIEW)
     if (okay) okay = save_level_bmp(
         "build/screenshots/half_native_960x540_upscaled.bmp", pixels);
 #else
@@ -133,12 +136,16 @@ static int smoke_native_view(void) {
     for (uint32_t i = 0; i < 120u && okay; ++i)
         okay = dc_level_view_step(view, err, sizeof(err)) &&
                dc_level_view_tick(view, err, sizeof(err));
-#ifdef DC_HALF_NATIVE_VIEW
+#if defined(DC_HALF_NATIVE_VIEW) || defined(DC_QUARTER_NATIVE_VIEW)
     if (okay) okay = dc_level_view_pixels(view, pixels,
                                          VIEW_WIDTH * VIEW_HEIGHT,
                                          err, sizeof(err)) &&
                      save_level_bmp(
+#ifdef DC_QUARTER_NATIVE_VIEW
+                         "build/screenshots/quarter_native_after_spring_off.bmp",
+#else
                          "build/screenshots/half_native_after_spring_off.bmp",
+#endif
                          pixels);
     if (okay) okay = dc_level_view_pan_pixels(view, 32, 0) &&
                      dc_level_view_wait_visible(view, 120000, err, sizeof(err)) &&
@@ -1005,7 +1012,7 @@ int main(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "--smoke-spray-three") == 0)
         return smoke_spray(false, 3u);
 #endif
-#if defined(DC_NATIVE_VIEW) || defined(DC_HALF_NATIVE_VIEW)
+#if defined(DC_NATIVE_VIEW) || defined(DC_HALF_NATIVE_VIEW) || defined(DC_QUARTER_NATIVE_VIEW)
     if (argc > 1 && strcmp(argv[1], "--smoke-native") == 0)
         return smoke_native_view();
 #endif
@@ -1037,7 +1044,9 @@ int main(int argc, char **argv) {
         return 1;
     }
     uint64_t seed = 314;
-#ifdef DC_HALF_NATIVE_VIEW
+#if defined(DC_QUARTER_NATIVE_VIEW)
+    const char *directory = scripted_input ? scripted_directory : "world_chunks_quarter_native";
+#elif defined(DC_HALF_NATIVE_VIEW)
     const char *directory = scripted_input ? scripted_directory : "world_chunks_half_native";
 #elif defined(DC_NATIVE_VIEW)
     const char *directory = scripted_input ? scripted_directory : "world_chunks_native";

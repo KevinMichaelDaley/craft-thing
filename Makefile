@@ -25,12 +25,29 @@ MPM_COMPONENT_SHADER = build/shaders/mpm_component.comp.spv
 all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
 
 NATIVE_SRC = src/app/main.c src/app/level.c src/app/session.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c src/world/stream.c src/world/generate.c
+QUARTER_FLAGS = -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u
+.PHONY: quarter_native test_quarter_native bench_quarter_native
+quarter_native: build/dungeoncraft_quarter_native
+
+test_quarter_native: build/quarter_native_config_tests build/dungeoncraft_quarter_native
+	./build/quarter_native_config_tests
+	./build/dungeoncraft_quarter_native --smoke-native
+
+bench_quarter_native: build/quarter_native_bench
+	./build/quarter_native_bench
+
+build/dungeoncraft_quarter_native: $(NATIVE_SRC) src/app/level.h src/app/view_config.h include/dungeoncraft/gpu.h $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $(NATIVE_SRC) -o $@ $(LDLIBS)
+
+build/quarter_native_bench: tests/vulkan/native_bench.c tests/vulkan/native_scene.h src/app/view_config.h $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) tests/vulkan/native_bench.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS)
+
 .PHONY: native
 native: build/dungeoncraft_native
 
 .PHONY: half_native test_half_native
 build/quarter_native_config_tests: tests/app/quarter_native_config_tests.c src/app/view_config.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< -o $@
 
 half_native: build/dungeoncraft_half_native
 
@@ -198,7 +215,8 @@ build/dungeoncraft: src/app/main.c src/app/level.c src/app/level.h src/app/view_
 build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/controls_tests.c src/app/level.c src/app/session.c $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 
-test: build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
+test: build/quarter_native_config_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
+	./build/quarter_native_config_tests
 	./build/native_scene_tests
 	./build/gpu_tests
 	./build/halo_tests

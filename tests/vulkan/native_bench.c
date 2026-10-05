@@ -5,6 +5,9 @@
 #include <time.h>
 
 #include "dungeoncraft/gpu.h"
+#ifdef DC_QUARTER_NATIVE_VIEW
+#include "../../src/app/view_config.h"
+#endif
 #include "native_scene.h"
 
 static double seconds(void) {
@@ -14,7 +17,11 @@ static double seconds(void) {
 }
 
 int main(int argc, char **argv) {
+#ifdef DC_QUARTER_NATIVE_VIEW
+    uint32_t width = SIM_WIDTH, height = SIM_HEIGHT;
+#else
     uint32_t width = 1920, height = 1080;
+#endif
     uint32_t samples = 12;
     if (argc == 3 || argc == 4) {
         width = (uint32_t)strtoul(argv[1], NULL, 10);
@@ -24,8 +31,8 @@ int main(int argc, char **argv) {
         fprintf(stderr, "usage: %s [width height [samples]]\n", argv[0]);
         return 2;
     }
-    if (width < 512 || height < 512 || width > 4096 || height > 2160) {
-        fprintf(stderr, "dimensions must be 512..4096 x 512..2160\n");
+    if (width < 256 || height < 128 || width > 4096 || height > 2160) {
+        fprintf(stderr, "dimensions must be 256..4096 x 128..2160\n");
         return 2;
     }
     uint32_t resident = native_scene_count(width, height);
