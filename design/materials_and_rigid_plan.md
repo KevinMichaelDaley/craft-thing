@@ -47,6 +47,35 @@ world save and explicit tests; ordinary physics, seam ownership changes, and
 camera transforms stay on GPU. These rectangular bodies still use the baseline
 downward terrain contact rather than the upcoming world broadphase/XPBD solver.
 
+## GPU broadphase (`dun-4ftd`)
+
+After integration and occupancy, the rigid stage clears bounded chunk buckets,
+bins conservative swept AABBs with a one-cell contact margin, and emits body/body
+and body/terrain candidates. Each bucket holds a 64-body bitset; the lowest
+shared bucket owns a body pair, so overlaps spanning several chunks emit once.
+Body IDs are sorted in body-pair keys. Terrain keys use body ID and signed world
+chunk coordinate, with a boundary classification for missing or outer-neighbor
+pages. Terrain candidates deliberately include empty chunks; narrowphase will
+inspect actual cells and resolve blocking boundaries.
+
+The data follows the 64 body records in storage binding 4, preserving the
+32-buffer descriptor limit on this machine. It uses an eight-word header,
+two words per bucket (including one outer chunk ring), and 4,096 bounded 32-byte
+candidate records. Quarter-native adds about 129 KiB of storage. GPU counters
+report stored and required counts; overflow flag `0x1` means candidate capacity
+was exceeded and `0x2` means a world chunk key exceeded the signed coordinate range.
+Any nonzero overflow makes the candidate set incomplete and must gate later
+contact solving. Candidate ordering is unspecified; stable keys define identity.
+
+No normal frame downloads candidates or counters. The existing opt-in rigid
+timestamp includes broadphase dispatches, and explicit readback exposes keys and
+counts for tests. Eight Vulkan regressions cover 2,016 dense body pairs, supported
+motion, crossing trajectories, stale-pair clearing, world keys after camera and
+slot changes, cold boundaries, bounded overflow, and signed outer-neighbor keys.
+The quarter-native window test preserves all 28 pairs in an eight-body overlap
+after camera eviction and reload. Contact generation remains `dun-ci2x` and the
+solver remains `dun-x9ei`; broadphase candidates alone do not resolve collisions.
+
 ## State ownership and tick order
 
 - Water volume stays in fixed Eulerian cells. Pressure, face velocity, and

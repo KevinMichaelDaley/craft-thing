@@ -1,18 +1,11 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#include "rigid_body.glsl"
 layout(local_size_x = 64) in;
 
-struct Body {
-    int x_fp, y_fp, vx_fp, vy_fp;
-    uint width, height, id, enabled;
-    int previous_x_fp, previous_y_fp;
-    uint reserved0, reserved1;
-    uvec2 chunk_x, chunk_y;
-    ivec2 local_fp;
-    uint visible, reserved_world;
-};
 layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
 layout(set = 0, binding = 4, std430) buffer Bodies {
-    Body bodies[64];
+    Body bodies[BODY_CAPACITY];
     uint data[];
 };
 layout(push_constant) uniform Params {
@@ -23,6 +16,8 @@ layout(push_constant) uniform Params {
 const uint HEADER_WORDS = 8u;
 const uint PAIR_WORDS = 8u;
 const uint PAIR_BODY = 0u, PAIR_TERRAIN = 1u, PAIR_BOUNDARY = 2u;
+const int FP_ONE = 1 << 16;
+const int CONTACT_SKIN = 1;
 
 uvec2 page_extent() { return uvec2((params.width + 63u) / 64u, (params.height + 63u) / 64u); }
 uint bucket_count() { uvec2 size = page_extent() + 2u; return size.x * size.y; }
@@ -30,21 +25,15 @@ uint bucket_count() { uvec2 size = page_extent() + 2u; return size.x * size.y; }
 void bounds(Body body, out ivec2 low, out ivec2 high) {
     ivec2 current = ivec2(body.x_fp, body.y_fp);
     ivec2 previous = ivec2(body.previous_x_fp, body.previous_y_fp);
-    low = (min(current, previous) >> 16) - 1;
-    high = ((max(current, previous) + (ivec2(body.width, body.height) << 16) + 65535) >> 16) + 1;
+    low = (min(current, previous) >> 16) - CONTACT_SKIN;
+    high = ((max(current, previous) + (ivec2(body.width, body.height) << 16) +
+             (FP_ONE - 1)) >> 16) + CONTACT_SKIN;
 }
 
 void bucket_bounds(Body body, out ivec2 low, out ivec2 high) {
     bounds(body, low, high);
     low = clamp(low >> 6, ivec2(-1), ivec2(page_extent()));
     high = clamp((high - 1) >> 6, ivec2(-1), ivec2(page_extent()));
-}
-
-bool shifted_chunk(uvec2 origin, int offset, out uvec2 anchor) {
-    uint low = origin.x + uint(offset);
-    anchor = uvec2(low, origin.y + (offset < 0 ? 0xffffffffu : 0u) + uint(low < origin.x));
-    uint sign_o = origin.y >> 31, sign_a = anchor.y >> 31;
-    return !((offset < 0 ? 1u : 0u) == sign_o && sign_a != sign_o);
 }
 
 void emit_pair(uint a, uint b, uint kind, ivec2 chunk) {

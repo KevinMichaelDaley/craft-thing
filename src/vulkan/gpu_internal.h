@@ -152,7 +152,13 @@ struct dc_gpu {
     dc_gpu_overlay_t overlay;
 };
 
-enum { DC_GPU_BROADPHASE_HEADER_WORDS = 8, DC_GPU_BROADPHASE_BUCKET_WORDS = 2 };
+enum {
+    DC_GPU_BROADPHASE_HEADER_WORDS = 8,
+    DC_GPU_BROADPHASE_BUCKET_WORDS = 2,
+    DC_GPU_BROADPHASE_GROUP_SIZE = 64,
+    DC_GPU_BROADPHASE_CAPACITY_WORD = 3,
+    DC_GPU_BROADPHASE_BUCKETS_WORD = 5
+};
 
 static inline uint32_t dc_gpu_broadphase_buckets(const dc_gpu_t *gpu) {
     return (gpu->page_width + 2u) * (gpu->page_height + 2u);

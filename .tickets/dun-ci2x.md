@@ -22,3 +22,9 @@ Use convex support/edge tests against occupied one-cell terrain and convex pairs
 
 Rotated convex stones and wood contact sloped and stepped terrain without missed one-cell obstacles; body-body contacts are symmetric and reproducible across chunk seams.
 
+
+## Notes
+
+**2026-10-05T02:50:07Z**
+
+Broadphase prerequisite is complete. binding 4 now contains 64 80-byte body records followed by 8 header words, two membership words per (page_width+2)*(page_height+2) chunk bucket, and 4096 32-byte candidate records. Header is dc_gpu_broadphase_stats_t plus two reserved words. Candidate keys use sorted body IDs, or body ID + signed world chunk for terrain/boundary. Ordering is unspecified, deduplication is GPU-owned. Overflow flags 0x1 (capacity) or 0x2 (world coordinate range) make the set incomplete and must gate narrowphase/solving. Shared rigid_body.glsl provides ABI and checked signed chunk arithmetic. Data and counters remain GPU-owned unless explicit diagnostics are requested.

@@ -30,7 +30,7 @@ bool dc_gpu_set_broadphase_capacity(dc_gpu_t *gpu, uint32_t capacity,
                                     char *err, uint32_t cap) {
     if (!gpu || capacity > DC_GPU_BROADPHASE_PAIR_CAPACITY)
         return error(err, cap, "Invalid broadphase capacity");
-    dc_gpu_broadphase_data(gpu)[3] = capacity;
+    dc_gpu_broadphase_data(gpu)[DC_GPU_BROADPHASE_CAPACITY_WORD] = capacity;
     gpu->body_refresh_pending = true;
     return true;
 }
@@ -81,8 +81,10 @@ void dc_gpu_record_broadphase(dc_gpu_t *gpu) {
         push[2] = mode;
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-        uint32_t work = mode == 0 ? 2u * buckets : mode == 1 ? DC_GPU_BODY_CAPACITY : buckets;
-        vkCmdDispatch(gpu->command, (work + 63u) / 64u, 1, 1);
+        uint32_t work = mode == 0 ? DC_GPU_BROADPHASE_BUCKET_WORDS * buckets :
+                        mode == 1 ? DC_GPU_BODY_CAPACITY : buckets;
+        vkCmdDispatch(gpu->command,
+            (work + DC_GPU_BROADPHASE_GROUP_SIZE - 1u) / DC_GPU_BROADPHASE_GROUP_SIZE, 1, 1);
         barrier(gpu, mode == 2);
     }
 }
