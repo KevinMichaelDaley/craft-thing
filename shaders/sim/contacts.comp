@@ -108,7 +108,7 @@ bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygo
     for (int y = low.y; y < high.y; ++y) for (int x = low.x; x < high.x; ++x) {
         uint cell_feature = uint(y - tile_low.y) * 64u + uint(x - tile_low.x);
         uint contact_kind = kind, material = 0xffffffffu;
-        if (page != 0u) {
+        if (page != 0u && x >= 0 && y >= 0 && x < int(params.width) && y < int(params.height)) {
             material = chunk_cells[(page - 1u) * 4096u + cell_feature].x & 0xffffu;
             if (material == 0u || material == 3u) continue;
             if (material == 2u || material == 4u || material == 5u) {
