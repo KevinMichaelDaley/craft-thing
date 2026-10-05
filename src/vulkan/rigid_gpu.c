@@ -9,6 +9,18 @@ _Static_assert(sizeof(dc_gpu_body_record_t) == 80, "GPU body record must match S
 static bool submit_rigid(dc_gpu_t *gpu, bool advance, char *err, uint32_t cap);
 static void record_rigid(dc_gpu_t *gpu, bool advance);
 
+bool dc_gpu_spawn_convex_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
+                              const dc_gpu_body_shape_t *shape, char *err, uint32_t cap) {
+    (void)gpu; (void)body; (void)shape; (void)err; (void)cap;
+    return false;
+}
+
+bool dc_gpu_read_body_shape(dc_gpu_t *gpu, uint32_t id, dc_gpu_body_shape_t *shape,
+                             char *err, uint32_t cap) {
+    (void)gpu; (void)id; (void)shape; (void)err; (void)cap;
+    return false;
+}
+
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
     return false;

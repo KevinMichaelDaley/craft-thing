@@ -1,7 +1,7 @@
 ---
 id: dun-ci2x
 status: open
-deps: [dun-4ftd]
+deps: [dun-4ftd, ct-l35t]
 links: []
 created: 2026-09-26T07:43:35Z
 type: task

@@ -168,6 +168,23 @@ typedef struct {
     dc_gpu_body_t body;
 } dc_gpu_world_body_t;
 
+#define DC_GPU_CONVEX_VERTICES 8u
+enum { DC_GPU_BODY_STONE = 1u, DC_GPU_BODY_WOOD = 2u };
+/** Strictly convex counterclockwise body-local 16.16 vertices within box bounds.
+ * Rotation is baked into the vertices. count=0 denotes the legacy box.
+ */
+typedef struct {
+    uint32_t count, material;
+    struct { int32_t x_fp, y_fp; } vertices[DC_GPU_CONVEX_VERTICES];
+} dc_gpu_body_shape_t;
+/** Spawn/update a world body with a validated convex shape, atomically on error. */
+bool dc_gpu_spawn_convex_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
+                              const dc_gpu_body_shape_t *shape,
+                              char *err_buf, uint32_t err_cap);
+/** Read a completed body's shape by stable ID; unknown IDs leave output unchanged. */
+bool dc_gpu_read_body_shape(dc_gpu_t *gpu, uint32_t id, dc_gpu_body_shape_t *shape,
+                             char *err_buf, uint32_t err_cap);
+
 /** Set the world chunk represented by simulation cell (0,0), without advancing time. */
 bool dc_gpu_set_body_origin(dc_gpu_t *gpu, dc_chunk_coord_t origin,
                              char *err_buf, uint32_t err_cap);
