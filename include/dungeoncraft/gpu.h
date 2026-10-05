@@ -11,6 +11,7 @@
 #endif
 
 #define DC_GPU_BODY_CAPACITY 64u
+#define DC_GPU_BODY_MAX_SIDE 16u
 
 typedef struct {
     int32_t x_fp, y_fp;

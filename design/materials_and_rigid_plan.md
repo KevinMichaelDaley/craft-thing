@@ -21,8 +21,8 @@ on the next tick. Normal frames do not read transforms back to the CPU.
 Seven Vulkan regressions cover capacity, updates, removal, deterministic masks,
 independent falling, and horizontal/vertical chunk seams. The quarter-native
 window test verifies that successive `B` spawns retain both visible boxes.
-Broadphase and body contacts remain `dun-4ftd` and `dun-x9ei`. Swept occupancy
-does not yet resolve contacts.
+Broadphase is implemented below; body contact generation and solving remain
+`dun-ci2x` and `dun-9qub`. Swept occupancy does not yet resolve contacts.
 
 ## World ownership and persistence (`dun-rwls`)
 
@@ -41,6 +41,8 @@ Closing a world saves all active and sleeping bodies to `rigid_bodies.bin` via a
 temporary file and rename. Reopening restores IDs, anchors, local poses, sizes,
 and velocities before rendering. Version 1 uses a 16-byte header and 48-byte
 native-endian records, consistent with the existing native-endian chunk files.
+Version 2 adds 72 bytes of convex geometry and material to each record, for
+120 bytes total; the loader still accepts version 1 box snapshots.
 The loader validates capacity, canonical positions, IDs, duplicate IDs, version,
 and complete length before replacing the pool. Snapshot reads occur only during
 world save and explicit tests; ordinary physics, seam ownership changes, and
@@ -74,7 +76,38 @@ motion, crossing trajectories, stale-pair clearing, world keys after camera and
 slot changes, cold boundaries, bounded overflow, and signed outer-neighbor keys.
 The quarter-native window test preserves all 28 pairs in an eight-body overlap
 after camera eviction and reload. Contact generation remains `dun-ci2x` and the
-solver remains `dun-x9ei`; broadphase candidates alone do not resolve collisions.
+solver remains `dun-9qub`; broadphase candidates alone do not resolve collisions.
+
+## Convex shape storage and occupancy (`ct-l35t`)
+
+Each GPU body record now occupies 152 bytes: the original 80-byte transform
+prefix followed by a 72-byte shape. Shape vertices use body-local 16.16
+coordinates, with rotation baked into the vertices. Three through eight
+counterclockwise vertices must form a strictly convex polygon within the body's
+at-most-16-by-16 bounds. Material identifies stone or wood independently of
+terrain cell material IDs. Invalid geometry leaves the pool unchanged. The box
+spawn API clears custom geometry, including when reusing an existing ID or slot.
+
+The Vulkan raster tests each polygon edge and the cell's two axes for positive
+area overlap. A polygon can occupy a cell without covering its center; exact
+edge-only touching does not occupy that cell. Fixed-point subtraction occurs
+before conversion to local floating-point coordinates. Swept occupancy and
+broadphase retain conservative box bounds, including fractional edge cells.
+Only cells within the bounding box run polygon edge tests. The extra storage
+is 4.5 KiB for all 64 shapes and consumes no additional descriptor.
+
+World rebases and snapshot reloads retain geometry and material. Six headless
+Vulkan tests cover rotated stone/wood shapes across a seam, thin one-cell
+overlaps, atomic validation, far-world rebasing, version 1/2 persistence, and
+slot reuse. The quarter-native window test renders both polygons, evicts and
+reloads their terrain chunks, and reopens the saved session. Rendering still
+uses the existing green body diagnostic color for both materials.
+
+Custom polygons currently undergo free translation and gravity. They bypass
+the box-only downward support approximation; terrain and body response require
+the pending contact and XPBD tickets. Runtime angular state and convex-piece
+decomposition also remain part of that subsequent solver work. This prerequisite
+does not implement contact buffers, normals, penetration depths, or friction.
 
 ## State ownership and tick order
 

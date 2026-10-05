@@ -2,6 +2,8 @@
 #define DC_RIGID_BODY_GLSL
 
 const uint BODY_CAPACITY = 64u;
+const uint BODY_VERTEX_CAPACITY = 8u;
+const uint BODY_MAX_SIDE = 16u;
 
 struct Body {
     int x_fp, y_fp, vx_fp, vy_fp;
@@ -12,7 +14,7 @@ struct Body {
     ivec2 local_fp;
     uint visible, reserved_world;
     uint vertex_count, material;
-    ivec2 vertices[8];
+    ivec2 vertices[BODY_VERTEX_CAPACITY];
 };
 
 bool relative_chunk(uvec2 anchor, uvec2 origin, out int offset) {

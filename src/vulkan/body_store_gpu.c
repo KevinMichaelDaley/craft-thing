@@ -69,7 +69,8 @@ bool dc_gpu_load_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap
     for (uint32_t i = 0; okay && i < header.count; ++i) {
         dc_gpu_body_t body = bodies[i].world.body;
         okay = body.id && body.active && body.width && body.height &&
-            body.width <= 16 && body.height <= 16 && body.x_fp >= 0 && body.y_fp >= 0 &&
+            body.width <= DC_GPU_BODY_MAX_SIDE && body.height <= DC_GPU_BODY_MAX_SIDE &&
+            body.x_fp >= 0 && body.y_fp >= 0 &&
             body.x_fp < (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL) &&
             body.y_fp < (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL);
         if (okay && bodies[i].shape.count)

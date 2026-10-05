@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -5,6 +6,7 @@
 
 _Static_assert(sizeof(dc_gpu_body_t) == 32, "GPU body layout must match SPIR-V");
 _Static_assert(sizeof(dc_gpu_body_record_t) == 152, "GPU body record must match SPIR-V");
+_Static_assert(offsetof(dc_gpu_body_record_t, shape) == 80, "GPU shape offset must match SPIR-V");
 
 static bool submit_rigid(dc_gpu_t *gpu, bool advance, char *err, uint32_t cap);
 static void record_rigid(dc_gpu_t *gpu, bool advance);
@@ -23,7 +25,8 @@ static uint32_t body_slot(const dc_gpu_t *gpu, uint32_t id) {
 bool dc_gpu_valid_body_shape(const dc_gpu_body_t *body, const dc_gpu_body_shape_t *shape) {
     if (!body || !shape || shape->count < 3 || shape->count > DC_GPU_CONVEX_VERTICES ||
         (shape->material != DC_GPU_BODY_STONE && shape->material != DC_GPU_BODY_WOOD) ||
-        !body->width || !body->height || body->width > 16 || body->height > 16) return false;
+        !body->width || !body->height || body->width > DC_GPU_BODY_MAX_SIDE ||
+        body->height > DC_GPU_BODY_MAX_SIDE) return false;
     for (uint32_t i = 0; i < shape->count; ++i) {
         int64_t x = shape->vertices[i].x_fp, y = shape->vertices[i].y_fp;
         if (x < 0 || y < 0 || x > (int64_t)body->width * DC_FLUID_FULL ||
@@ -116,7 +119,7 @@ void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
 bool dc_gpu_spawn_body(dc_gpu_t *gpu, dc_gpu_body_t body,
                        char *err, uint32_t cap) {
     if (!gpu || !body.active || !body.id || !body.width || !body.height ||
-        body.width > 16 || body.height > 16 || body.width > gpu->width ||
+        body.width > DC_GPU_BODY_MAX_SIDE || body.height > DC_GPU_BODY_MAX_SIDE || body.width > gpu->width ||
         body.height > gpu->height || body.x_fp < 0 || body.y_fp < 0 ||
         (uint32_t)(body.x_fp >> 16) > gpu->width - body.width ||
         (uint32_t)(body.y_fp >> 16) > gpu->height - body.height)
@@ -195,7 +198,8 @@ bool dc_gpu_set_body_origin(dc_gpu_t *gpu, dc_chunk_coord_t origin,
 bool dc_gpu_spawn_world_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
                               char *err, uint32_t cap) {
     if (!gpu || !body.body.id || !body.body.active || !body.body.width ||
-        !body.body.height || body.body.width > 16 || body.body.height > 16 ||
+        !body.body.height || body.body.width > DC_GPU_BODY_MAX_SIDE ||
+        body.body.height > DC_GPU_BODY_MAX_SIDE ||
         body.body.x_fp < 0 || body.body.y_fp < 0 ||
         body.body.x_fp >= (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL) ||
         body.body.y_fp >= (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL))

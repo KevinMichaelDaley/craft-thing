@@ -74,7 +74,7 @@ bool dc_level_view_spawn_convex_body(dc_level_view_t *view, uint32_t x, uint32_t
                                      uint32_t width, uint32_t height,
                                      const dc_gpu_body_shape_t *shape,
                                      char *err, uint32_t cap) {
-    if (!view || !width || !height || width > 16 || height > 16 ||
+    if (!view || !width || !height || width > DC_GPU_BODY_MAX_SIDE || height > DC_GPU_BODY_MAX_SIDE ||
         x > VIEW_WIDTH - width || y > VIEW_HEIGHT - height)
         return error(err, cap, "Invalid convex spawn position");
     if (!dc_gpu_set_body_origin(view->gpu, (dc_chunk_coord_t){

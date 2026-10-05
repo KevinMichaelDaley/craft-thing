@@ -1,6 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 #include "rigid_body.glsl"
+#include "rigid_shape.glsl"
 layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 chunk_cells[]; };
@@ -64,7 +65,7 @@ void integrate_body(uint index) {
     int x = next_x >> 16;
     int top = body.y_fp >> 16;
     bool supported = false;
-    for (uint col = 0u; col < body.width; ++col)
+    for (uint col = 0u; body.vertex_count == 0u && col < body.width; ++col)
         supported = supported || solid_at(x + int(col), top + int(body.height));
     int vy = clamp(body.vy_fp, -(4 << 16), 4 << 16);
     int next_y = body.y_fp;
@@ -101,21 +102,6 @@ void integrate_body(uint index) {
     bodies[index] = body;
 }
 
-bool convex_cell(Body body, ivec2 cell) {
-    vec2 low = vec2(cell) - vec2(body.x_fp, body.y_fp) / 65536.0;
-    vec2 high = low + vec2(1.0);
-    vec2 bounds_low = vec2(16.0), bounds_high = vec2(0.0);
-    for (uint i = 0u; i < body.vertex_count; ++i) {
-        vec2 a = vec2(body.vertices[i]) / 65536.0;
-        vec2 b = vec2(body.vertices[(i + 1u) % body.vertex_count]) / 65536.0;
-        bounds_low = min(bounds_low, a); bounds_high = max(bounds_high, a);
-        vec2 edge = b - a, inward = vec2(-edge.y, edge.x);
-        vec2 support = mix(low, high, greaterThanEqual(inward, vec2(0.0)));
-        if (dot(inward, support - a) <= 0.0) return false;
-    }
-    return all(greaterThan(high, bounds_low)) && all(lessThan(low, bounds_high));
-}
-
 void main() {
     uvec2 p = gl_GlobalInvocationID.xy;
     if (params.mode != 1u) {
@@ -137,7 +123,7 @@ void main() {
         if (body.vertex_count != 0u) {
             ivec2 high = (ivec2(body.x_fp, body.y_fp) + (extent << 16) + ivec2(65535)) >> 16;
             inside = all(greaterThanEqual(cell, origin)) && all(lessThan(cell, high));
-            if (inside) inside = convex_cell(body, cell);
+            if (inside) inside = convex_cell_overlap(body, cell);
         }
         bool crossed = all(greaterThanEqual(cell, min(origin, previous))) &&
                        all(lessThan(cell, max(origin, previous) + extent));
