@@ -162,6 +162,26 @@ bool dc_gpu_read_body_id(dc_gpu_t *gpu, uint32_t id, dc_gpu_body_t *body,
 bool dc_gpu_remove_body(dc_gpu_t *gpu, uint32_t id,
                         char *err_buf, uint32_t err_cap);
 
+/** World position is a signed chunk anchor plus body.x_fp/y_fp within that chunk. */
+typedef struct {
+    dc_chunk_coord_t chunk;
+    dc_gpu_body_t body;
+} dc_gpu_world_body_t;
+
+/** Set the world chunk represented by simulation cell (0,0), without advancing time. */
+bool dc_gpu_set_body_origin(dc_gpu_t *gpu, dc_chunk_coord_t origin,
+                             char *err_buf, uint32_t err_cap);
+/** Spawn or update a world-anchored body, including bodies outside the viewport. */
+bool dc_gpu_spawn_world_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
+                              char *err_buf, uint32_t err_cap);
+/** Read completed world position and velocity for diagnostics or persistence. */
+bool dc_gpu_read_world_body(dc_gpu_t *gpu, uint32_t id, dc_gpu_world_body_t *body,
+                             char *err_buf, uint32_t err_cap);
+/** Atomically save the world body pool at a completed GPU boundary. */
+bool dc_gpu_save_bodies(dc_gpu_t *gpu, const char *path, char *err_buf, uint32_t err_cap);
+/** Load a validated snapshot; a missing file leaves the initial pool unchanged. */
+bool dc_gpu_load_bodies(dc_gpu_t *gpu, const char *path, char *err_buf, uint32_t err_cap);
+
 /** Read current and conservative swept-AABB IDs for one completed cell.
  * Overlapping masks select the lowest nonzero ID. Fluid uses current occupancy.
  */

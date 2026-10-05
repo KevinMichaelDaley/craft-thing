@@ -123,6 +123,36 @@ bool dc_gpu_read_occupancy(dc_gpu_t *gpu, uint32_t x, uint32_t y,
     return true;
 }
 
+bool dc_gpu_set_body_origin(dc_gpu_t *gpu, dc_chunk_coord_t origin,
+                             char *err, uint32_t cap) {
+    (void)origin;
+    return gpu ? true : error(err, cap, "Invalid body origin");
+}
+
+bool dc_gpu_spawn_world_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
+                              char *err, uint32_t cap) {
+    return dc_gpu_spawn_body(gpu, body.body, err, cap);
+}
+
+bool dc_gpu_read_world_body(dc_gpu_t *gpu, uint32_t id, dc_gpu_world_body_t *body,
+                             char *err, uint32_t cap) {
+    if (!body) return error(err, cap, "Invalid world body readback");
+    dc_gpu_body_t local;
+    if (!dc_gpu_read_body_id(gpu, id, &local, err, cap)) return false;
+    *body = (dc_gpu_world_body_t){ .body = local };
+    return true;
+}
+
+bool dc_gpu_save_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap) {
+    (void)gpu; (void)path;
+    return error(err, cap, "World body snapshots are not implemented");
+}
+
+bool dc_gpu_load_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap) {
+    (void)gpu; (void)path;
+    return error(err, cap, "World body snapshots are not implemented");
+}
+
 bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
