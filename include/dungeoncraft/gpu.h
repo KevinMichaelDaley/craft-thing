@@ -148,7 +148,9 @@ bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
 bool dc_gpu_set_tick_water_source(dc_gpu_t *gpu, bool enabled,
                                   uint32_t x, uint32_t y);
 
-/** Spawn one box body in viewport-local 16.16 fixed-point coordinates. */
+/** Spawn or replace a stable-ID box in viewport-local 16.16 coordinates.
+ * Up to DC_GPU_BODY_CAPACITY boxes may be active; new IDs fail when full.
+ */
 bool dc_gpu_spawn_body(dc_gpu_t *gpu, dc_gpu_body_t body,
                        char *err_buf, uint32_t err_cap);
 
@@ -160,7 +162,9 @@ bool dc_gpu_read_body_id(dc_gpu_t *gpu, uint32_t id, dc_gpu_body_t *body,
 bool dc_gpu_remove_body(dc_gpu_t *gpu, uint32_t id,
                         char *err_buf, uint32_t err_cap);
 
-/** Read current and conservative swept occupancy IDs for one completed cell. */
+/** Read current and conservative swept-AABB IDs for one completed cell.
+ * Overlapping masks select the lowest nonzero ID. Fluid uses current occupancy.
+ */
 bool dc_gpu_read_occupancy(dc_gpu_t *gpu, uint32_t x, uint32_t y,
                            uint32_t *current, uint32_t *swept,
                            char *err_buf, uint32_t err_cap);
@@ -199,7 +203,7 @@ bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
 bool dc_gpu_set_fluid_interval(dc_gpu_t *gpu, uint32_t interval);
 bool dc_gpu_set_tick_seconds(dc_gpu_t *gpu, float seconds);
 
-/** Read the completed body state for tests or persistence. */
+/** Read the first active completed body, or a zero body when the pool is empty. */
 bool dc_gpu_read_body(dc_gpu_t *gpu, dc_gpu_body_t *body,
                       char *err_buf, uint32_t err_cap);
 

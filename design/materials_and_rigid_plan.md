@@ -6,6 +6,24 @@ rigid -> Eulerian water -> material-stage tick graph. All physical state and
 normal-frame updates stay on GPU; readback remains opt-in for tests,
 diagnostics, screenshots, and chunk eviction saves.
 
+## Implemented rigid baseline (`dun-0p7p`)
+
+The viewport-local GPU pool holds 64 stable-ID boxes. Fixed-step integration
+updates each transform independently, and terrain supports falling boxes.
+Spawning an existing ID updates only that body; removal permits slot reuse.
+Each raster pass writes current occupancy and a separate conservative swept
+AABB spanning the previous and current transforms. The lowest nonzero ID wins
+mask overlaps. Fluid and rendering consume current occupancy; the swept mask
+is available for contact diagnostics without blocking water along old trails.
+Empty scenes skip rigid dispatches, and removing the last body clears its masks
+on the next tick. Normal frames do not read transforms back to the CPU.
+
+Seven Vulkan regressions cover capacity, updates, removal, deterministic masks,
+independent falling, and horizontal/vertical chunk seams. The quarter-native
+window test verifies that successive `B` spawns retain both visible boxes.
+World-coordinate streaming remains `dun-rwls`; broadphase and body contacts
+remain `dun-4ftd` and `dun-x9ei`. Swept occupancy does not yet resolve contacts.
+
 ## State ownership and tick order
 
 - Water volume stays in fixed Eulerian cells. Pressure, face velocity, and

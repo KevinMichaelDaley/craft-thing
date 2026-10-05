@@ -11,6 +11,12 @@ static bool error(char *buf, uint32_t cap, const char *message) {
     return false;
 }
 
+static uint32_t body_slot(const dc_gpu_t *gpu, uint32_t id) {
+    for (uint32_t i = 0; i < gpu->body_count; ++i)
+        if (gpu->body_ids[i] == id) return i;
+    return DC_GPU_BODY_CAPACITY;
+}
+
 bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return dc_gpu_make_mapped_buffer(gpu, sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY,
                &gpu->body_buffer, &gpu->body_memory, &gpu->body_mapped, err, cap) &&
@@ -88,24 +94,19 @@ bool dc_gpu_read_body_id(dc_gpu_t *gpu, uint32_t id, dc_gpu_body_t *body,
                          char *err, uint32_t cap) {
     if (!gpu || !body || !id)
         return error(err, cap, "Invalid GPU body ID readback");
-    for (uint32_t i = 0; i < gpu->body_count; ++i)
-        if (gpu->body_ids[i] == id) {
-            *body = ((dc_gpu_body_record_t *)gpu->body_mapped)[i].body;
-            return true;
-        }
-    return error(err, cap, "GPU body ID not found");
+    uint32_t slot = body_slot(gpu, id);
+    if (slot == DC_GPU_BODY_CAPACITY) return error(err, cap, "GPU body ID not found");
+    *body = ((dc_gpu_body_record_t *)gpu->body_mapped)[slot].body;
+    return true;
 }
 
 bool dc_gpu_remove_body(dc_gpu_t *gpu, uint32_t id, char *err, uint32_t cap) {
-    dc_gpu_body_t existing;
-    if (!dc_gpu_read_body_id(gpu, id, &existing, err, cap)) return false;
-    for (uint32_t i = 0; i < gpu->body_count; ++i)
-        if (gpu->body_ids[i] == id) {
-            memset(&((dc_gpu_body_record_t *)gpu->body_mapped)[i], 0,
-                   sizeof(dc_gpu_body_record_t));
-            gpu->body_ids[i] = 0;
-            break;
-        }
+    if (!gpu || !id) return error(err, cap, "Invalid GPU body removal");
+    uint32_t slot = body_slot(gpu, id);
+    if (slot == DC_GPU_BODY_CAPACITY) return error(err, cap, "GPU body ID not found");
+    memset(&((dc_gpu_body_record_t *)gpu->body_mapped)[slot], 0,
+           sizeof(dc_gpu_body_record_t));
+    gpu->body_ids[slot] = 0;
     while (gpu->body_count && !gpu->body_ids[gpu->body_count - 1]) --gpu->body_count;
     return true;
 }
