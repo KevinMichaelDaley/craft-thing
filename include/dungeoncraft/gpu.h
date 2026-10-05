@@ -184,6 +184,25 @@ bool dc_gpu_load_bodies(dc_gpu_t *gpu, const char *path, char *err_buf, uint32_t
 /** Return an unused nonzero body ID without reading GPU transforms. */
 uint32_t dc_gpu_next_body_id(const dc_gpu_t *gpu);
 
+#define DC_GPU_BROADPHASE_PAIR_CAPACITY 4096u
+enum { DC_GPU_PAIR_BODY = 0u, DC_GPU_PAIR_TERRAIN = 1u, DC_GPU_PAIR_BOUNDARY = 2u };
+/** Stable candidate key; terrain/boundary pairs have body_b=0 and a world chunk. */
+typedef struct {
+    uint32_t body_a, body_b, kind, reserved;
+    dc_chunk_coord_t chunk;
+} dc_gpu_broadphase_pair_t;
+/** Overflow flags are nonzero if the candidate set is incomplete. */
+typedef struct {
+    uint32_t count, required, overflow, capacity, active_bodies, buckets;
+} dc_gpu_broadphase_stats_t;
+/** Set a bounded candidate limit for diagnostics; overflow must gate contact solving. */
+bool dc_gpu_set_broadphase_capacity(dc_gpu_t *gpu, uint32_t capacity,
+                                    char *err_buf, uint32_t err_cap);
+/** Opt-in completed candidate readback; output ordering is unspecified. */
+bool dc_gpu_read_broadphase(dc_gpu_t *gpu, dc_gpu_broadphase_stats_t *stats,
+                            dc_gpu_broadphase_pair_t *pairs, uint32_t pair_cap,
+                            char *err_buf, uint32_t err_cap);
+
 /** Read current and conservative swept-AABB IDs for one completed cell.
  * Overlapping masks select the lowest nonzero ID. Fluid uses current occupancy.
  */

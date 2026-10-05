@@ -189,6 +189,22 @@ bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return submit_rigid(gpu, true, err, cap);
 }
 
+bool dc_gpu_set_broadphase_capacity(dc_gpu_t *gpu, uint32_t capacity,
+                                    char *err, uint32_t cap) {
+    if (!gpu || capacity > DC_GPU_BROADPHASE_PAIR_CAPACITY)
+        return error(err, cap, "Invalid broadphase capacity");
+    return true;
+}
+
+bool dc_gpu_read_broadphase(dc_gpu_t *gpu, dc_gpu_broadphase_stats_t *stats,
+                            dc_gpu_broadphase_pair_t *pairs, uint32_t pair_cap,
+                            char *err, uint32_t cap) {
+    (void)pairs; (void)pair_cap;
+    if (!gpu || !stats) return error(err, cap, "Invalid broadphase readback");
+    *stats = (dc_gpu_broadphase_stats_t){ .capacity = DC_GPU_BROADPHASE_PAIR_CAPACITY };
+    return true;
+}
+
 static bool submit_rigid(dc_gpu_t *gpu, bool advance, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)

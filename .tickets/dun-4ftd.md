@@ -1,6 +1,6 @@
 ---
 id: dun-4ftd
-status: open
+status: in_progress
 deps: [dun-0p7p, dun-rwls]
 links: [dun-spbq]
 created: 2026-09-26T07:43:35Z

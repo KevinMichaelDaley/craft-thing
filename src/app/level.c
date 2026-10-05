@@ -70,6 +70,12 @@ bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,
     return dc_gpu_spawn_body(view->gpu, body, err, cap);
 }
 
+bool dc_level_view_broadphase(dc_level_view_t *view, dc_gpu_broadphase_stats_t *stats,
+                              dc_gpu_broadphase_pair_t *pairs, uint32_t pair_cap,
+                              char *err, uint32_t cap) {
+    return view && dc_gpu_read_broadphase(view->gpu, stats, pairs, pair_cap, err, cap);
+}
+
 static bool visible(const dc_level_view_t *view, dc_chunk_coord_t coord) {
     return coord.x >= view->origin.x - HALO_CHUNKS &&
            coord.x < view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS &&
