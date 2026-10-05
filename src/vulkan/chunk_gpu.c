@@ -9,6 +9,11 @@ static bool error(char *buf, uint32_t cap, const char *message) {
     return false;
 }
 
+static uint32_t visible_page_extent(uint32_t size, uint32_t tile) {
+    uint32_t remaining = size - tile * DC_CHUNK_SIDE;
+    return remaining < DC_CHUNK_SIDE ? remaining : DC_CHUNK_SIDE;
+}
+
 uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
                                  uint32_t compatible_types) {
     const VkMemoryPropertyFlags needed = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
@@ -280,10 +285,8 @@ bool dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chunk,
         const dc_face_velocity_t *faces = gpu->velocity_mapped;
         uint32_t tile_x = tile % gpu->page_width;
         uint32_t tile_y = tile / gpu->page_width;
-        uint32_t columns = gpu->width - tile_x * DC_CHUNK_SIDE;
-        if (columns > DC_CHUNK_SIDE) columns = DC_CHUNK_SIDE;
-        uint32_t rows = gpu->height - tile_y * DC_CHUNK_SIDE;
-        if (rows > DC_CHUNK_SIDE) rows = DC_CHUNK_SIDE;
+        uint32_t columns = visible_page_extent(gpu->width, tile_x);
+        uint32_t rows = visible_page_extent(gpu->height, tile_y);
         for (uint32_t y = 0; y < rows; ++y)
             memcpy(chunk->face_velocity + (size_t)y * DC_CHUNK_SIDE,
                    faces + ((size_t)(tile_y * DC_CHUNK_SIDE + y) * gpu->width +
@@ -337,10 +340,8 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
             dc_face_velocity_t *faces = gpu->velocity_mapped;
             const dc_face_velocity_t *source =
                 gpu->chunk_velocity + (size_t)slot * DC_CHUNK_CELLS;
-            uint32_t columns = gpu->width - tile_x * DC_CHUNK_SIDE;
-            if (columns > DC_CHUNK_SIDE) columns = DC_CHUNK_SIDE;
-            uint32_t rows = gpu->height - tile_y * DC_CHUNK_SIDE;
-            if (rows > DC_CHUNK_SIDE) rows = DC_CHUNK_SIDE;
+            uint32_t columns = visible_page_extent(gpu->width, tile_x);
+            uint32_t rows = visible_page_extent(gpu->height, tile_y);
             for (uint32_t y = 0; y < rows; ++y)
                 memcpy(faces + ((size_t)(tile_y * DC_CHUNK_SIDE + y) * gpu->width +
                                 tile_x * DC_CHUNK_SIDE),
