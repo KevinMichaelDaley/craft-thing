@@ -122,7 +122,45 @@ static void test_streamed_window_broadphase_preserves_dense_pair_ids(void) {
     PASS();
 }
 
+static void test_convex_window_shapes_survive_eviction_and_reload(void) {
+    char directory[] = "build/ui_convex_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view = dc_level_view_create(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 120000, err, sizeof(err)));
+    dc_gpu_body_shape_t shape = { .count = 4, .material = DC_GPU_BODY_STONE,
+        .vertices = {{2 << 16, 0}, {4 << 16, 2 << 16}, {2 << 16, 4 << 16}, {0, 2 << 16}} };
+    ASSERT_TRUE(dc_level_view_spawn_convex_body(view, 63, 2, 4, 4, &shape, err, sizeof(err)));
+    shape.material = DC_GPU_BODY_WOOD;
+    ASSERT_TRUE(dc_level_view_spawn_convex_body(view, 123, 2, 4, 4, &shape, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    uint32_t corner, edge, wood;
+    ASSERT_TRUE(dc_level_view_pixel(view, 63, 2, &corner, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pixel(view, 64, 2, &edge, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pixel(view, 124, 2, &wood, err, sizeof(err)));
+    bool correct = corner != 0xff30c040u && edge == 0xff30c040u && wood == 0xff30c040u;
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 16 * DC_CHUNK_SIDE, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 120000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, -16 * (int32_t)DC_CHUNK_SIDE, 0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 120000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pixel(view, 63, 2, &corner, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pixel(view, 64, 2, &edge, err, sizeof(err)));
+    correct = correct && corner != 0xff30c040u && edge == 0xff30c040u;
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    view = dc_level_view_create(directory, 314, err, sizeof(err)); ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view, false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 120000, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pixel(view, 63, 2, &corner, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pixel(view, 64, 2, &edge, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pixel(view, 124, 2, &wood, err, sizeof(err)));
+    correct = correct && corner != 0xff30c040u && edge == 0xff30c040u && wood == 0xff30c040u;
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    ASSERT_TRUE(correct); PASS();
+}
+
 int main(void) {
+    RUN(test_convex_window_shapes_survive_eviction_and_reload);
     RUN(test_quarter_native_window_keeps_both_spawned_boxes_visible);
     RUN(test_world_boxes_survive_camera_eviction_and_session_reload);
     RUN(test_streamed_window_broadphase_preserves_dense_pair_ids);

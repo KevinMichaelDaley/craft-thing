@@ -70,6 +70,14 @@ bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,
     return dc_gpu_spawn_body(view->gpu, body, err, cap);
 }
 
+bool dc_level_view_spawn_convex_body(dc_level_view_t *view, uint32_t x, uint32_t y,
+                                     uint32_t width, uint32_t height,
+                                     const dc_gpu_body_shape_t *shape,
+                                     char *err, uint32_t cap) {
+    (void)view; (void)x; (void)y; (void)width; (void)height; (void)shape;
+    return error(err, cap, "Convex window spawn not implemented");
+}
+
 bool dc_level_view_broadphase(dc_level_view_t *view, dc_gpu_broadphase_stats_t *stats,
                               dc_gpu_broadphase_pair_t *pairs, uint32_t pair_cap,
                               char *err, uint32_t cap) {

@@ -23,6 +23,11 @@ bool dc_level_view_step_timed(dc_level_view_t *view, float seconds,
                               char *err, uint32_t err_cap);
 bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,
                               char *err, uint32_t err_cap);
+/** Spawn a stationary convex piece at a visible cell, allocating a stable ID. */
+bool dc_level_view_spawn_convex_body(dc_level_view_t *view, uint32_t x, uint32_t y,
+                                     uint32_t width, uint32_t height,
+                                     const dc_gpu_body_shape_t *shape,
+                                     char *err, uint32_t err_cap);
 /** Opt-in completed broadphase diagnostics for streamed-window tests. */
 bool dc_level_view_broadphase(dc_level_view_t *view, dc_gpu_broadphase_stats_t *stats,
                               dc_gpu_broadphase_pair_t *pairs, uint32_t pair_cap,
