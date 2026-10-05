@@ -27,7 +27,7 @@ static void test_scene_has_water_and_stable_grains_without_seam_walls(void) {
     ASSERT_INT_EQ(chunk->coord.y, 8);
     ASSERT_EQ(chunk->cells[63u * DC_CHUNK_SIDE].material, DC_MATERIAL_AIR);
     ASSERT_EQ(chunk->cells[63u * DC_CHUNK_SIDE].fluid_mass, DC_FLUID_FULL);
-    native_scene_chunk(chunk, 14u * 30u + 15u, 1920, 1080);
+    native_scene_chunk(chunk, 13u * 30u + 15u, 1920, 1080);
     ASSERT_TRUE(chunk->particle_count > 0u);
     uint32_t count = chunk->particle_count;
     uint32_t seed = dc_chunk_particle_seed(chunk->coord);
@@ -38,7 +38,7 @@ static void test_scene_has_water_and_stable_grains_without_seam_walls(void) {
             found = true;
         }
     ASSERT_TRUE(found);
-    native_scene_chunk(chunk, 14u * 30u + 15u, 1920, 1080);
+    native_scene_chunk(chunk, 13u * 30u + 15u, 1920, 1080);
     ASSERT_EQ(chunk->particle_count, count);
     free(chunk);
     PASS();
