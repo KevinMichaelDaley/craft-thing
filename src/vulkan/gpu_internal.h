@@ -18,6 +18,7 @@ typedef struct {
     uint32_t chunk_x[2], chunk_y[2];
     int32_t local_x_fp, local_y_fp;
     uint32_t visible, reserved_world;
+    dc_gpu_body_shape_t shape;
 } dc_gpu_body_record_t;
 
 struct dc_gpu {
@@ -202,6 +203,7 @@ bool dc_gpu_make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
 bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
                              bool particles, char *err, uint32_t cap);
 bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+bool dc_gpu_valid_body_shape(const dc_gpu_body_t *body, const dc_gpu_body_shape_t *shape);
 bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *shader_path,
                                 char *err, uint32_t cap);
 void dc_gpu_rigid_destroy(dc_gpu_t *gpu);

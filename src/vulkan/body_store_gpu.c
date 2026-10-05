@@ -11,6 +11,14 @@ typedef struct {
 
 _Static_assert(sizeof(body_header_t) == 16, "Body snapshot header layout changed");
 _Static_assert(sizeof(dc_gpu_world_body_t) == 48, "Body snapshot record layout changed");
+_Static_assert(sizeof(dc_gpu_body_shape_t) == 72, "Body shape snapshot layout changed");
+
+typedef struct {
+    dc_gpu_world_body_t world;
+    dc_gpu_body_shape_t shape;
+} shaped_body_t;
+
+_Static_assert(sizeof(shaped_body_t) == 120, "Shaped body snapshot layout changed");
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -23,11 +31,12 @@ bool dc_gpu_save_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap
     int length = snprintf(temporary, sizeof(temporary), "%s.tmp", path);
     if (length < 0 || (size_t)length >= sizeof(temporary))
         return error(err, cap, "Body snapshot path is too long");
-    dc_gpu_world_body_t bodies[DC_GPU_BODY_CAPACITY];
-    body_header_t header = { .magic = {'D', 'C', 'B', '1'}, .version = 1 };
+    shaped_body_t bodies[DC_GPU_BODY_CAPACITY];
+    body_header_t header = { .magic = {'D', 'C', 'B', '1'}, .version = 2 };
     for (uint32_t i = 0; i < gpu->body_count; ++i) {
         if (!gpu->body_ids[i]) continue;
-        if (!dc_gpu_read_world_body(gpu, gpu->body_ids[i], &bodies[header.count], err, cap))
+        if (!dc_gpu_read_world_body(gpu, gpu->body_ids[i], &bodies[header.count].world, err, cap) ||
+            !dc_gpu_read_body_shape(gpu, gpu->body_ids[i], &bodies[header.count].shape, err, cap))
             return false;
         ++header.count;
     }
@@ -45,28 +54,42 @@ bool dc_gpu_load_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap
     if (!gpu || !path || !*path) return error(err, cap, "Invalid body snapshot path");
     FILE *file = fopen(path, "rb");
     if (!file) return errno == ENOENT ? true : error(err, cap, "Cannot open body snapshot");
-    body_header_t header;
-    dc_gpu_world_body_t bodies[DC_GPU_BODY_CAPACITY];
+    body_header_t header = {0};
+    shaped_body_t bodies[DC_GPU_BODY_CAPACITY] = {0};
     bool okay = fread(&header, sizeof(header), 1, file) == 1 &&
-        memcmp(header.magic, "DCB1", 4) == 0 && header.version == 1 && !header.reserved &&
+        memcmp(header.magic, "DCB1", 4) == 0 && (header.version == 1 || header.version == 2) && !header.reserved &&
         header.count <= DC_GPU_BODY_CAPACITY;
-    if (okay) okay = fread(bodies, sizeof(*bodies), header.count, file) == header.count &&
-                     fgetc(file) == EOF && !ferror(file);
+    for (uint32_t i = 0; okay && i < header.count; ++i) {
+        okay = fread(&bodies[i].world, sizeof(bodies[i].world), 1, file) == 1;
+        if (okay && header.version == 2)
+            okay = fread(&bodies[i].shape, sizeof(bodies[i].shape), 1, file) == 1;
+    }
+    if (okay) okay = fgetc(file) == EOF && !ferror(file);
     if (fclose(file) != 0) okay = false;
     for (uint32_t i = 0; okay && i < header.count; ++i) {
-        dc_gpu_body_t body = bodies[i].body;
+        dc_gpu_body_t body = bodies[i].world.body;
         okay = body.id && body.active && body.width && body.height &&
             body.width <= 16 && body.height <= 16 && body.x_fp >= 0 && body.y_fp >= 0 &&
             body.x_fp < (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL) &&
             body.y_fp < (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL);
-        for (uint32_t j = 0; okay && j < i; ++j) okay = bodies[j].body.id != body.id;
+        if (okay && bodies[i].shape.count)
+            okay = dc_gpu_valid_body_shape(&body, &bodies[i].shape);
+        else if (okay) {
+            dc_gpu_body_shape_t empty = {0};
+            okay = memcmp(&bodies[i].shape, &empty, sizeof(empty)) == 0;
+        }
+        for (uint32_t j = 0; okay && j < i; ++j) okay = bodies[j].world.body.id != body.id;
     }
     if (!okay) return error(err, cap, "Invalid or truncated body snapshot");
     memset(gpu->body_mapped, 0, sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY);
     memset(gpu->body_ids, 0, sizeof(gpu->body_ids));
     gpu->body_count = 0;
     gpu->body_refresh_pending = true;
-    for (uint32_t i = 0; i < header.count; ++i)
-        if (!dc_gpu_spawn_world_body(gpu, bodies[i], err, cap)) return false;
+    for (uint32_t i = 0; i < header.count; ++i) {
+        bool spawned = bodies[i].shape.count ?
+            dc_gpu_spawn_convex_body(gpu, bodies[i].world, &bodies[i].shape, err, cap) :
+            dc_gpu_spawn_world_body(gpu, bodies[i].world, err, cap);
+        if (!spawned) return false;
+    }
     return dc_gpu_set_body_origin(gpu, gpu->body_origin, err, cap);
 }

@@ -11,6 +11,8 @@ struct Body {
     uvec2 chunk_x, chunk_y;
     ivec2 local_fp;
     uint visible, reserved_world;
+    uint vertex_count, material;
+    ivec2 vertices[8];
 };
 
 bool relative_chunk(uvec2 anchor, uvec2 origin, out int offset) {

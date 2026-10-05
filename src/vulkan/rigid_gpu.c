@@ -4,22 +4,10 @@
 #include "gpu_internal.h"
 
 _Static_assert(sizeof(dc_gpu_body_t) == 32, "GPU body layout must match SPIR-V");
-_Static_assert(sizeof(dc_gpu_body_record_t) == 80, "GPU body record must match SPIR-V");
+_Static_assert(sizeof(dc_gpu_body_record_t) == 152, "GPU body record must match SPIR-V");
 
 static bool submit_rigid(dc_gpu_t *gpu, bool advance, char *err, uint32_t cap);
 static void record_rigid(dc_gpu_t *gpu, bool advance);
-
-bool dc_gpu_spawn_convex_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
-                              const dc_gpu_body_shape_t *shape, char *err, uint32_t cap) {
-    (void)gpu; (void)body; (void)shape; (void)err; (void)cap;
-    return false;
-}
-
-bool dc_gpu_read_body_shape(dc_gpu_t *gpu, uint32_t id, dc_gpu_body_shape_t *shape,
-                             char *err, uint32_t cap) {
-    (void)gpu; (void)id; (void)shape; (void)err; (void)cap;
-    return false;
-}
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -30,6 +18,48 @@ static uint32_t body_slot(const dc_gpu_t *gpu, uint32_t id) {
     for (uint32_t i = 0; i < gpu->body_count; ++i)
         if (gpu->body_ids[i] == id) return i;
     return DC_GPU_BODY_CAPACITY;
+}
+
+bool dc_gpu_valid_body_shape(const dc_gpu_body_t *body, const dc_gpu_body_shape_t *shape) {
+    if (!body || !shape || shape->count < 3 || shape->count > DC_GPU_CONVEX_VERTICES ||
+        (shape->material != DC_GPU_BODY_STONE && shape->material != DC_GPU_BODY_WOOD) ||
+        !body->width || !body->height || body->width > 16 || body->height > 16) return false;
+    for (uint32_t i = 0; i < shape->count; ++i) {
+        int64_t x = shape->vertices[i].x_fp, y = shape->vertices[i].y_fp;
+        if (x < 0 || y < 0 || x > (int64_t)body->width * DC_FLUID_FULL ||
+            y > (int64_t)body->height * DC_FLUID_FULL) return false;
+    }
+    for (uint32_t i = 0; i < shape->count; ++i) {
+        uint32_t next = (i + 1) % shape->count;
+        int64_t x = shape->vertices[i].x_fp, y = shape->vertices[i].y_fp;
+        int64_t dx = shape->vertices[next].x_fp - x, dy = shape->vertices[next].y_fp - y;
+        for (uint32_t j = 0; j < shape->count; ++j) {
+            if (j == i || j == next) continue;
+            int64_t px = shape->vertices[j].x_fp - x, py = shape->vertices[j].y_fp - y;
+            if (dx * py - dy * px <= 0) return false;
+        }
+    }
+    return true;
+}
+
+bool dc_gpu_spawn_convex_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
+                              const dc_gpu_body_shape_t *shape, char *err, uint32_t cap) {
+    if (!dc_gpu_valid_body_shape(&body.body, shape))
+        return error(err, cap, "Invalid convex body shape");
+    dc_gpu_body_shape_t copy = { .count = shape->count, .material = shape->material };
+    memcpy(copy.vertices, shape->vertices, shape->count * sizeof(shape->vertices[0]));
+    if (!dc_gpu_spawn_world_body(gpu, body, err, cap)) return false;
+    ((dc_gpu_body_record_t *)gpu->body_mapped)[body_slot(gpu, body.body.id)].shape = copy;
+    return true;
+}
+
+bool dc_gpu_read_body_shape(dc_gpu_t *gpu, uint32_t id, dc_gpu_body_shape_t *shape,
+                             char *err, uint32_t cap) {
+    if (!gpu || !shape || !id) return error(err, cap, "Invalid body shape readback");
+    uint32_t slot = body_slot(gpu, id);
+    if (slot == DC_GPU_BODY_CAPACITY) return error(err, cap, "GPU body ID not found");
+    *shape = ((dc_gpu_body_record_t *)gpu->body_mapped)[slot].shape;
+    return true;
 }
 
 uint32_t dc_gpu_next_body_id(const dc_gpu_t *gpu) {

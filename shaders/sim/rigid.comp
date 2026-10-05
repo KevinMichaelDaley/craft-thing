@@ -68,7 +68,7 @@ void integrate_body(uint index) {
         supported = supported || solid_at(x + int(col), top + int(body.height));
     int vy = clamp(body.vy_fp, -(4 << 16), 4 << 16);
     int next_y = body.y_fp;
-    if (supported && vy >= 0) {
+    if (supported && vy >= 0 && body.vertex_count == 0u) {
         next_y = top << 16;
         vy = 0;
     } else {
@@ -77,7 +77,7 @@ void integrate_body(uint index) {
         int old_bottom = top + int(body.height) - 1;
         int new_bottom = (next_y >> 16) + int(body.height) - 1;
         bool hit = false;
-        for (int row = old_bottom + 1; row <= new_bottom && !hit; ++row) {
+        for (int row = old_bottom + 1; body.vertex_count == 0u && row <= new_bottom && !hit; ++row) {
             for (uint col = 0u; col < body.width; ++col) {
                 if (solid_at(x + int(col), row)) { hit = true; break; }
             }
@@ -101,6 +101,21 @@ void integrate_body(uint index) {
     bodies[index] = body;
 }
 
+bool convex_cell(Body body, ivec2 cell) {
+    vec2 low = vec2(cell) - vec2(body.x_fp, body.y_fp) / 65536.0;
+    vec2 high = low + vec2(1.0);
+    vec2 bounds_low = vec2(16.0), bounds_high = vec2(0.0);
+    for (uint i = 0u; i < body.vertex_count; ++i) {
+        vec2 a = vec2(body.vertices[i]) / 65536.0;
+        vec2 b = vec2(body.vertices[(i + 1u) % body.vertex_count]) / 65536.0;
+        bounds_low = min(bounds_low, a); bounds_high = max(bounds_high, a);
+        vec2 edge = b - a, inward = vec2(-edge.y, edge.x);
+        vec2 support = mix(low, high, greaterThanEqual(inward, vec2(0.0)));
+        if (dot(inward, support - a) <= 0.0) return false;
+    }
+    return all(greaterThan(high, bounds_low)) && all(lessThan(low, bounds_high));
+}
+
 void main() {
     uvec2 p = gl_GlobalInvocationID.xy;
     if (params.mode != 1u) {
@@ -119,8 +134,18 @@ void main() {
         ivec2 cell = ivec2(p);
         bool inside = all(greaterThanEqual(cell, origin)) &&
                       all(lessThan(cell, origin + extent));
+        if (body.vertex_count != 0u) {
+            ivec2 high = (ivec2(body.x_fp, body.y_fp) + (extent << 16) + ivec2(65535)) >> 16;
+            inside = all(greaterThanEqual(cell, origin)) && all(lessThan(cell, high));
+            if (inside) inside = convex_cell(body, cell);
+        }
         bool crossed = all(greaterThanEqual(cell, min(origin, previous))) &&
                        all(lessThan(cell, max(origin, previous) + extent));
+        if (body.vertex_count != 0u) {
+            ivec2 high = (max(ivec2(body.x_fp, body.y_fp),
+                ivec2(body.previous_x_fp, body.previous_y_fp)) + (extent << 16) + ivec2(65535)) >> 16;
+            crossed = all(greaterThanEqual(cell, min(origin, previous))) && all(lessThan(cell, high));
+        }
         if (inside && (current == 0u || body.id < current)) current = body.id;
         if (crossed && (swept == 0u || body.id < swept)) swept = body.id;
     }
