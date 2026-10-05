@@ -10,6 +10,8 @@
 #define DC_GPU_CHUNK_SLOTS 64u
 #endif
 
+#define DC_GPU_BODY_CAPACITY 64u
+
 typedef struct {
     int32_t x_fp, y_fp;
     int32_t vx_fp, vy_fp;
@@ -149,6 +151,19 @@ bool dc_gpu_set_tick_water_source(dc_gpu_t *gpu, bool enabled,
 /** Spawn one box body in viewport-local 16.16 fixed-point coordinates. */
 bool dc_gpu_spawn_body(dc_gpu_t *gpu, dc_gpu_body_t body,
                        char *err_buf, uint32_t err_cap);
+
+/** Read a completed body by stable nonzero ID; unknown IDs leave output unchanged. */
+bool dc_gpu_read_body_id(dc_gpu_t *gpu, uint32_t id, dc_gpu_body_t *body,
+                         char *err_buf, uint32_t err_cap);
+
+/** Remove a body by ID; its occupancy clears on the next rigid step. */
+bool dc_gpu_remove_body(dc_gpu_t *gpu, uint32_t id,
+                        char *err_buf, uint32_t err_cap);
+
+/** Read current and conservative swept occupancy IDs for one completed cell. */
+bool dc_gpu_read_occupancy(dc_gpu_t *gpu, uint32_t x, uint32_t y,
+                           uint32_t *current, uint32_t *swept,
+                           char *err_buf, uint32_t err_cap);
 
 /** Run GPU body integration, terrain contact, and occupancy raster passes. */
 bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);

@@ -64,6 +64,36 @@ bool dc_gpu_read_body(dc_gpu_t *gpu, dc_gpu_body_t *body,
     return true;
 }
 
+bool dc_gpu_read_body_id(dc_gpu_t *gpu, uint32_t id, dc_gpu_body_t *body,
+                         char *err, uint32_t cap) {
+    dc_gpu_body_t existing;
+    if (!body || !id || !dc_gpu_read_body(gpu, &existing, err, cap))
+        return error(err, cap, "Invalid GPU body ID readback");
+    if (!existing.active || existing.id != id)
+        return error(err, cap, "GPU body ID not found");
+    *body = existing;
+    return true;
+}
+
+bool dc_gpu_remove_body(dc_gpu_t *gpu, uint32_t id, char *err, uint32_t cap) {
+    dc_gpu_body_t existing;
+    if (!dc_gpu_read_body_id(gpu, id, &existing, err, cap)) return false;
+    memset(gpu->body_mapped, 0, sizeof(existing));
+    return true;
+}
+
+bool dc_gpu_read_occupancy(dc_gpu_t *gpu, uint32_t x, uint32_t y,
+                           uint32_t *current, uint32_t *swept,
+                           char *err, uint32_t cap) {
+    if (!gpu || x >= gpu->width || y >= gpu->height || (!current && !swept))
+        return error(err, cap, "Invalid GPU occupancy readback");
+    const uint32_t *cells = gpu->occupancy_mapped;
+    uint32_t value = cells[(size_t)y * gpu->width + x];
+    if (current) *current = value;
+    if (swept) *swept = value;
+    return true;
+}
+
 bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
