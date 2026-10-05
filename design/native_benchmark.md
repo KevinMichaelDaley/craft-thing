@@ -1,12 +1,39 @@
 # Native-resolution simulation trial
 
 Run `make bench_native GLSLANG=/tmp/dungeoncraft-tools/usr/bin/glslangValidator`
-for the current display's 1920×1080 pixel grid. The benchmark creates a headless
-Vulkan context, maps 64 distinct 64×64 chunks, fills a water band in each chunk,
-warms up three ticks, then times twelve synchronous GPU ticks and twelve ticks
-with a GPU render. It reads timestamps once for rigid, fluid, and granular
-stages. Neither loop downloads cell buffers. The benchmark accepts optional
-`width height` arguments for other display sizes.
+for a 1920×1080 pixel grid. The benchmark creates a headless Vulkan context
+with a 608-slot pool and maps every viewport page: 510 chunks for 1920×1080,
+or 608 for the interactive simulation's 2048×1216 grid including its halo.
+The deterministic scene contains a continuous basin, a half-height water fill,
+and a submerged 16-cell sand band across the middle half of the viewport.
+Partial edge chunks contain no out-of-view water or grains. The output reports
+actual mapped residency and initial water and particle counts.
+
+After three warm-up ticks, it averages rigid, fluid, and granular timestamps
+over twelve diagnostic ticks. Separate loops time twelve synchronous GPU ticks
+without diagnostic readback and twelve ticks with GPU rendering. Neither timed
+loop downloads simulation buffers. This headless benchmark runs a complete
+fluid update every tick; it does not use the interactive six-tick fluid cadence.
+Use `./build/native_bench width height [samples]` for other sizes or sample
+counts, for example `./build/native_bench 2048 1216 12`. Scenes needing more
+than 608 slots are rejected rather than measured with incomplete residency.
+
+On 2026-10-04, the corrected fully resident benchmark ran through Vulkan on
+Intel Iris Xe (TGL GT2), Mesa 26.0.2. Each measurement below uses twelve
+samples after three warm-up ticks, with separate diagnostic, physics, and
+physics-plus-render loops:
+
+| Grid | Mapped chunks | Initial grains | Tick wall time | Tick rate | Tick + render | GPU rigid / fluid / granular |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1920×1080 | 510 | 15,360 | 166.95 ms | 5.99 Hz | 171.10 ms | 0.41 / 132.26 / 27.64 ms |
+| 2048×1216 | 608 | 16,384 | 191.28 ms | 5.23 Hz | 196.57 ms | 0.47 / 151.51 / 32.26 ms |
+
+These use full fluid updates on an integrated GPU and cannot be compared
+directly with the earlier staged interactive RTX rates. Fluid dominates this
+scene; profiling individual hydrostatic, pressure, transport, and marker
+passes remains part of `dun-vd9a`. This trial also exposed an out-of-bounds
+host velocity copy at partial viewport pages, fixed with regression coverage
+in `ct-qk58`. All 86 headless tests passed with Vulkan validation enabled.
 
 On 2026-09-27, DP-1 was 1920×1080 at 60 Hz and the GPU was an NVIDIA RTX
 A2000 12GB. With the current 64-slot resident-chunk cap:

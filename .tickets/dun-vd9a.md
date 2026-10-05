@@ -29,3 +29,7 @@ Native 1920x1080/608 chunks improved from 8.5 to about 39-43 presented ticks/s. 
 **2026-09-27T23:23:37Z**
 
 Added 960x540 simulated half-native mode with 2x display and 187 resident chunks. Paired 12-frame smoke: half 67.6 ticks/s, 71.1 adaptive frames/s; native 38.9 ticks/s, 39.4 adaptive frames/s. Half 60-frame adaptive sample 62.3 fps. Native 60-frame run exposes marker-count overflow, tracked by dun-mt9o. Native 60 Hz remains open.
+
+**2026-10-05T01:00:54Z**
+
+Continued on Intel Iris Xe (TGL GT2), Mesa 26.0.2 through native Vulkan. Corrected benchmark now maps all 510 viewport chunks at 1920x1080 or 608 simulation chunks at 2048x1216, with 15360/16384 sand grains. Twelve-sample complete-fluid-update runs: 166.95/191.28 ms per physics tick (5.99/5.23 Hz); GPU fluid averages 132.26/151.51 ms and granular 27.64/32.26 ms. Separate timed loops have no simulation copyback; diagnostic stage averages are sampled separately. Fixed partial-edge host velocity overflow in ct-qk58. All 86 tests pass under Vulkan validation. Next: instrument per-fluid-pass timestamps to isolate hydrostatic/pressure/transport/marker costs, then optimize; 60 Hz acceptance remains unmet.

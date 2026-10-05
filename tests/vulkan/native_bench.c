@@ -24,14 +24,14 @@ int main(int argc, char **argv) {
         fprintf(stderr, "usage: %s [width height [samples]]\n", argv[0]);
         return 2;
     }
+    if (width < 512 || height < 512 || width > 4096 || height > 2160) {
+        fprintf(stderr, "dimensions must be 512..4096 x 512..2160\n");
+        return 2;
+    }
     uint32_t resident = native_scene_count(width, height);
     if (resident > DC_GPU_CHUNK_SLOTS || !samples || samples > 10000u) {
         fprintf(stderr, "scene exceeds %u chunk slots or samples outside 1..10000\n",
                 DC_GPU_CHUNK_SLOTS);
-        return 2;
-    }
-    if (width < 512 || height < 512 || width > 4096 || height > 2160) {
-        fprintf(stderr, "dimensions must be 512..4096 x 512..2160\n");
         return 2;
     }
     char err[256] = {0};
@@ -55,12 +55,14 @@ int main(int argc, char **argv) {
         if (!dc_gpu_tick_step(gpu, err, sizeof(err))) goto fail;
     dc_gpu_tick_capture_t capture = {0};
     uint64_t stage_ns[3] = {0};
-    double start = seconds();
     for (uint32_t i = 0; i < samples; ++i) {
         if (!dc_gpu_tick_capture(gpu, &capture, err, sizeof(err))) goto fail;
         for (uint32_t stage = 0; stage < 3; ++stage)
             stage_ns[stage] += capture.stages[stage].gpu_ns;
     }
+    double start = seconds();
+    for (uint32_t i = 0; i < samples; ++i)
+        if (!dc_gpu_tick_step(gpu, err, sizeof(err))) goto fail;
     double tick_elapsed = seconds() - start;
     start = seconds();
     for (uint32_t i = 0; i < samples; ++i) {

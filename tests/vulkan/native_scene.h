@@ -5,18 +5,24 @@
 
 #include "dungeoncraft/chunk.h"
 
+enum { NATIVE_SCENE_GRAIN_BAND_HEIGHT = 16u };
+
+/** Number of chunk columns covering the complete benchmark viewport. */
 static inline uint32_t native_scene_columns(uint32_t width) {
     return (width + DC_CHUNK_SIDE - 1u) / DC_CHUNK_SIDE;
 }
 
+/** Number of chunk rows, including a partial bottom row. */
 static inline uint32_t native_scene_rows(uint32_t height) {
     return (height + DC_CHUNK_SIDE - 1u) / DC_CHUNK_SIDE;
 }
 
+/** Required resident slots; the benchmark rejects scenes exceeding its pool. */
 static inline uint32_t native_scene_count(uint32_t width, uint32_t height) {
     return native_scene_columns(width) * native_scene_rows(height);
 }
 
+/** Build a deterministic basin with water and submerged grains in world cells. */
 static inline void native_scene_chunk(dc_chunk_t *chunk, uint32_t slot,
                                       uint32_t width, uint32_t height) {
     memset(chunk, 0, sizeof(*chunk));
@@ -30,7 +36,8 @@ static inline void native_scene_chunk(dc_chunk_t *chunk, uint32_t slot,
             if (world_x >= width || world_y >= height) continue;
             if (world_y == height - 1u || world_x == 0u || world_x == width - 1u)
                 cell->material = DC_MATERIAL_STONE;
-            else if (world_y >= height * 4u / 5u && world_y < height * 4u / 5u + 16u &&
+            else if (world_y >= height * 4u / 5u &&
+                     world_y < height * 4u / 5u + NATIVE_SCENE_GRAIN_BAND_HEIGHT &&
                      world_x >= width / 4u && world_x < width * 3u / 4u)
                 cell->material = DC_MATERIAL_SAND;
             if (cell->material != DC_MATERIAL_STONE && world_y >= height / 2u)
