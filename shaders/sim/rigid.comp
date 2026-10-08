@@ -3,6 +3,7 @@
 #include "rigid_body.glsl"
 #include "rigid_shape.glsl"
 layout(local_size_x = 16, local_size_y = 16) in;
+const uint RASTER_MODE=1u, PREPARE_MODE=2u, PHYSICAL_MASK=128u, MODE_MASK=127u;
 
 layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 chunk_cells[]; };
 layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
@@ -58,7 +59,7 @@ void integrate_body(uint index) {
     body_properties(body);
     bool visible = locate_body(body);
     body_cache_bounds(body);
-    if (!visible || params.mode == 2u ||
+    if (!visible || params.mode == PREPARE_MODE ||
         !resident_at(clamp(body.x_fp >> 16, 0, int(params.width) - 1),
                      clamp(body.y_fp >> 16, 0, int(params.height) - 1))) {
         bodies[index] = body;
@@ -109,7 +110,7 @@ void integrate_body(uint index) {
 
 void main() {
     uvec2 p = gl_GlobalInvocationID.xy;
-    if ((params.mode & 127u) != 1u) {
+    if ((params.mode & MODE_MASK) != RASTER_MODE) {
         uint index = gl_LocalInvocationIndex;
         if (index < params.body_count) integrate_body(index);
         return;
@@ -129,9 +130,9 @@ void main() {
         ivec2 extent = ivec2(body.width, body.height);
         bool inside = all(greaterThanEqual(cell, origin)) &&
                       all(lessThan(cell, origin + extent));
-        if (body.vertex_count != 0u || body.angle != 0.0 || (params.mode & 128u) != 0u)
+        if (body.vertex_count != 0u || body.angle != 0.0 || (params.mode & PHYSICAL_MASK) != 0u)
             inside = potential && convex_cell_overlap(body,cell);
-        if ((params.mode & 128u) != 0u) crossed = crossed || potential;
+        if ((params.mode & PHYSICAL_MASK) != 0u) crossed = crossed || potential;
         if (inside && (current == 0u || body.id < current)) current = body.id;
         if (crossed && (swept == 0u || body.id < swept)) swept = body.id;
     }

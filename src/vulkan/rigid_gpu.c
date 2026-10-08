@@ -11,6 +11,8 @@ _Static_assert(offsetof(dc_gpu_body_record_t, angle) == 152, "GPU angular state 
 _Static_assert(offsetof(dc_gpu_body_record_t, center) == 168, "GPU centroid offset changed");
 _Static_assert(offsetof(dc_gpu_body_record_t, bounds_low) == 200, "GPU cached bounds offset changed");
 
+enum { RIGID_RASTER = 1u, RIGID_PREPARE = 2u, RIGID_PHYSICAL_MASK = 128u };
+
 static bool submit_rigid(dc_gpu_t *gpu, bool advance, char *err, uint32_t cap);
 static void record_rigid(dc_gpu_t *gpu, bool advance);
 
@@ -284,7 +286,7 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
-    uint32_t push[8] = { gpu->width, gpu->height, advance && !gpu->rigid_solver_enabled ? 0u : 2u, gpu->body_count,
+    uint32_t push[8] = { gpu->width, gpu->height, advance && !gpu->rigid_solver_enabled ? 0u : RIGID_PREPARE, gpu->body_count,
         (uint32_t)x, (uint32_t)(x >> 32), (uint32_t)y, (uint32_t)(y >> 32) };
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
@@ -300,7 +302,7 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
         dc_gpu_record_solver(gpu);
         vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_pipeline);
     }
-    push[2] = gpu->rigid_solver_enabled ? 129u : 1u;
+    push[2] = RIGID_RASTER | (gpu->rigid_solver_enabled ? RIGID_PHYSICAL_MASK : 0u);
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     vkCmdDispatch(gpu->command, (gpu->width + 15u) / 16u,
