@@ -57,6 +57,7 @@ void integrate_body(uint index) {
     if (body.enabled == 0u) return;
     body_properties(body);
     bool visible = locate_body(body);
+    body_cache_bounds(body);
     if (!visible || params.mode == 2u ||
         !resident_at(clamp(body.x_fp >> 16, 0, int(params.width) - 1),
                      clamp(body.y_fp >> 16, 0, int(params.height) - 1))) {
@@ -102,12 +103,13 @@ void integrate_body(uint index) {
     body.y_fp = next_y;
     body.vx_fp = vx;
     body.vy_fp = vy;
+    body_cache_bounds(body);
     bodies[index] = body;
 }
 
 void main() {
     uvec2 p = gl_GlobalInvocationID.xy;
-    if (params.mode != 1u) {
+    if ((params.mode & 127u) != 1u) {
         uint index = gl_LocalInvocationIndex;
         if (index < params.body_count) integrate_body(index);
         return;
@@ -115,30 +117,21 @@ void main() {
     if (p.x >= params.width || p.y >= params.height) return;
     uint current = 0u, swept = 0u;
     for (uint i = 0u; i < params.body_count; ++i) {
-        Body body = bodies[i];
-        if (body.enabled == 0u || body.visible == 0u) continue;
-        ivec2 origin = ivec2(body.x_fp, body.y_fp) >> 16;
-        ivec2 previous = ivec2(body.previous_x_fp, body.previous_y_fp) >> 16;
-        ivec2 extent = ivec2(body.width, body.height);
+        if (bodies[i].enabled == 0u || bodies[i].visible == 0u) continue;
         ivec2 cell = ivec2(p);
+        bool potential = all(greaterThanEqual(cell,bodies[i].bounds_low)) &&
+                         all(lessThan(cell,bodies[i].bounds_high));
+        bool crossed = all(greaterThanEqual(cell,bodies[i].swept_low)) &&
+                       all(lessThan(cell,bodies[i].swept_high));
+        if (!potential && !crossed) continue;
+        Body body = bodies[i];
+        ivec2 origin = ivec2(body.x_fp, body.y_fp) >> 16;
+        ivec2 extent = ivec2(body.width, body.height);
         bool inside = all(greaterThanEqual(cell, origin)) &&
                       all(lessThan(cell, origin + extent));
-        if (body.vertex_count != 0u || body.angle != 0.0) inside = convex_cell_overlap(body,cell);
-        bool crossed = all(greaterThanEqual(cell, min(origin, previous))) &&
-                       all(lessThan(cell, max(origin, previous) + extent));
-        if (body.vertex_count != 0u) {
-            ivec2 high = (max(ivec2(body.x_fp, body.y_fp),
-                ivec2(body.previous_x_fp, body.previous_y_fp)) + (extent << 16) + ivec2(65535)) >> 16;
-            crossed = all(greaterThanEqual(cell, min(origin, previous))) && all(lessThan(cell, high));
-        }
-        if (body.angle != 0.0 || body.previous_angle != 0.0) {
-            float radius = 0.0;
-            for(uint v=0u;v<body_vertices(body);++v)
-                radius=max(radius,length(body_rest_vertex(body,v)-body.center));
-            vec2 lo=min(vec2(body.x_fp,body.y_fp),vec2(body.previous_x_fp,body.previous_y_fp))/65536.0+body.center-radius;
-            vec2 hi=max(vec2(body.x_fp,body.y_fp),vec2(body.previous_x_fp,body.previous_y_fp))/65536.0+body.center+radius;
-            crossed=all(greaterThanEqual(vec2(cell),floor(lo))) && all(lessThan(vec2(cell),ceil(hi)));
-        }
+        if (body.vertex_count != 0u || body.angle != 0.0 || (params.mode & 128u) != 0u)
+            inside = potential && convex_cell_overlap(body,cell);
+        if ((params.mode & 128u) != 0u) crossed = crossed || potential;
         if (inside && (current == 0u || body.id < current)) current = body.id;
         if (crossed && (swept == 0u || body.id < swept)) swept = body.id;
     }

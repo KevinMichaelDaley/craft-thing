@@ -4,7 +4,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "dungeoncraft/chunk.h"
+
 enum { DC_GPU_BODY_KINEMATIC = 1u, DC_GPU_BODY_LOCK_ROTATION = 2u };
+/** Completed angular state and material-derived properties. Density is relative
+ * to water (1); mass and inertia use cell area with unit out-of-plane thickness. */
 typedef struct {
     float angle, angular_velocity, mass, inertia, density, center_x, center_y;
     uint32_t flags;
@@ -12,8 +16,6 @@ typedef struct {
 typedef struct {
     uint32_t enabled, iterations, substeps, overflow, solved_contacts, active_bodies;
 } dc_gpu_rigid_solver_stats_t;
-
-#include "dungeoncraft/chunk.h"
 
 #ifndef DC_GPU_CHUNK_SLOTS
 #define DC_GPU_CHUNK_SLOTS 64u
@@ -33,7 +35,9 @@ typedef struct dc_gpu dc_gpu_t;
 
 /** Enable the GPU contact solver; disabled contexts retain legacy diagnostic motion. */
 bool dc_gpu_set_rigid_solver(dc_gpu_t *gpu, bool enabled);
-/** Set angular state and kinematic/rotation-lock flags. Density comes from material. */
+/** Set angular state and kinematic/rotation-lock flags. Density comes from material.
+ * Linear components are bounded to four cells/tick. Eight substeps and a
+ * radius-dependent angular limit keep predicted vertex motion below one cell. */
 bool dc_gpu_set_body_motion(dc_gpu_t *gpu, uint32_t id, float angle, float angular_velocity,
                             uint32_t flags, char *err_buf, uint32_t err_cap);
 /** Explicit diagnostic readback of GPU-owned motion and derived physical properties. */

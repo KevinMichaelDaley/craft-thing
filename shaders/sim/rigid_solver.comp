@@ -1,201 +1,306 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 #include "rigid_body.glsl"
-layout(local_size_x=64) in;
-layout(set=0,binding=2,std430) readonly buffer Pages { uint pages[]; };
-layout(set=0,binding=4,std430) buffer Bodies { Body bodies[BODY_CAPACITY]; uint data[]; };
+layout(local_size_x = 64) in;
+/* Specializing each phase removes unrelated branches and their register pressure. */
+layout(constant_id = 0) const uint PHASE = 0u;
+layout(set = 0, binding = 2, std430) readonly buffer Pages { uint pages[]; };
+layout(set = 0, binding = 4, std430) buffer Bodies {
+    Body bodies[BODY_CAPACITY];
+    uint data[];
+};
 layout(push_constant) uniform Params {
-    uint width,height,mode,body_count;
-    uvec2 origin_x,origin_y;
-} params;
-
-const float DT=0.25, SUM_SCALE=65536.0;
-const uint CONTACT_CAPACITY=8192u;
-uint cb() {
-    uvec2 size=uvec2((params.width+63u)/64u,(params.height+63u)/64u)+2u;
-    return 8u+2u*size.x*size.y+4096u*8u;
+    uint width, height, mode, body_count;
+    uvec2 origin_x, origin_y;
 }
-uint sb() { return cb()+12u+CONTACT_CAPACITY*32u; }
-uint bs(uint i) { return sb()+16u+i*32u; }
-uint cs(uint i) { return sb()+16u+BODY_CAPACITY*32u+i*16u; }
+params;
+
+const float DT = 0.125, SUM_SCALE = 65536.0;
+const uint CONTACT_CAPACITY = 8192u;
+const uint RESET = 0u, BEGIN_FRAME = 1u, PREDICT = 2u, PREPARE = 3u, INIT_CONTACTS = 4u;
+const uint CLEAR = 5u, SOLVE = 6u, APPLY = 7u, DERIVE_VELOCITY = 8u, IMPULSE = 9u,
+           APPLY_VELOCITY = 10u, FINISH = 11u;
+/* Header: enabled, iterations, substeps, sticky overflow, contact sum, awake count,
+   indirect contact groups (3 words), speculative-contact mode, and padding.
+   Body scratch (32 words): frame pose/velocity, substep pose/velocity, degree,
+   awake flag, and signed fixed-point Jacobi sums.
+   Contact scratch (16 words): normal/tangent multipliers, stable body slots,
+   rest-space COM-relative anchors, pre-impact speed, static witness, padding. */
+uint cb() {
+    uvec2 size = uvec2((params.width + 63u) / 64u, (params.height + 63u) / 64u) + 2u;
+    return 8u + 2u * size.x * size.y + 4096u * 8u;
+}
+uint sb() { return cb() + 12u + CONTACT_CAPACITY * 32u; }
+uint bs(uint i) { return sb() + 16u + i * 32u; }
+uint cs(uint i) { return sb() + 16u + BODY_CAPACITY * 32u + i * 16u; }
 float getf(uint p) { return uintBitsToFloat(data[p]); }
-void putf(uint p,float f) { data[p]=floatBitsToUint(f); }
-vec2 getv(uint p) { return vec2(getf(p),getf(p+1u)); }
-void putv(uint p,vec2 v) { putf(p,v.x); putf(p+1u,v.y); }
-vec2 position(Body b) { return vec2(b.x_fp,b.y_fp)/65536.0; }
-vec2 velocity(Body b) { return vec2(b.vx_fp,b.vy_fp)/65536.0; }
-float wrap(float a) { return mod(a+3.141592653589793,6.283185307179586)-3.141592653589793; }
-bool publish(inout Body b,vec2 p) {
-    ivec2 fp=ivec2(round(p*65536.0)); uvec2 x,y;
-    if(!shifted_chunk(params.origin_x,fp.x>>22,x) ||
-       !shifted_chunk(params.origin_y,fp.y>>22,y)) { atomicOr(data[sb()+3u],2u); return false; }
-    b.x_fp=fp.x; b.y_fp=fp.y; b.chunk_x=x; b.chunk_y=y;
-    b.local_fp=fp & ivec2((64<<16)-1);
+void putf(uint p, float f) { data[p] = floatBitsToUint(f); }
+vec2 getv(uint p) { return vec2(getf(p), getf(p + 1u)); }
+void putv(uint p, vec2 v) {
+    putf(p, v.x);
+    putf(p + 1u, v.y);
+}
+vec2 position(Body b) { return vec2(b.x_fp, b.y_fp) / 65536.0; }
+vec2 velocity(Body b) { return vec2(b.vx_fp, b.vy_fp) / 65536.0; }
+float wrap(float a) { return mod(a + 3.141592653589793, 6.283185307179586) - 3.141592653589793; }
+float angular_limit(Body b) {
+    float radius = b.radius;
+    /* Translation contributes at most sqrt(2)*4 cells/tick and rotation at most
+       two. Eight substeps therefore move every vertex less than one cell. */
+    return min(0.5, 2.0 / max(radius, 0.0001));
+}
+bool publish(inout Body b, vec2 p) {
+    ivec2 fp = ivec2(round(p * 65536.0));
+    uvec2 x, y;
+    if (!shifted_chunk(params.origin_x, fp.x >> 22, x) ||
+        !shifted_chunk(params.origin_y, fp.y >> 22, y)) {
+        atomicOr(data[sb() + 3u], 2u);
+        return false;
+    }
+    b.x_fp = fp.x;
+    b.y_fp = fp.y;
+    b.chunk_x = x;
+    b.chunk_y = y;
+    b.local_fp = fp & ivec2((64 << 16) - 1);
     return true;
 }
 bool awake(Body b) {
-    if(b.enabled==0u || b.visible==0u) return false;
-    ivec2 p=clamp(ivec2(b.x_fp,b.y_fp)>>16,ivec2(0),ivec2(params.width,params.height)-1);
-    return pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)]!=0u;
+    if (b.enabled == 0u || b.visible == 0u)
+        return false;
+    ivec2 p = clamp(ivec2(b.x_fp, b.y_fp) >> 16, ivec2(0), ivec2(params.width, params.height) - 1);
+    return pages[uint(p.y / 64) * ((params.width + 63u) / 64u) + uint(p.x / 64)] != 0u;
 }
 uint slot(uint id) {
-    if(id==0u) return BODY_CAPACITY;
-    for(uint i=0u;i<params.body_count;++i) if(bodies[i].enabled!=0u && bodies[i].id==id) return i;
+    if (id == 0u)
+        return BODY_CAPACITY;
+    for (uint i = 0u; i < params.body_count; ++i)
+        if (bodies[i].enabled != 0u && bodies[i].id == id)
+            return i;
     return BODY_CAPACITY;
 }
 vec2 anchor(uint p) {
-    int x,y;
-    if(!relative_chunk(uvec2(data[p],data[p+1u]),params.origin_x,x) ||
-       !relative_chunk(uvec2(data[p+2u],data[p+3u]),params.origin_y,y)) {
-        atomicOr(data[sb()+3u],2u); return vec2(0);
+    int x, y;
+    if (!relative_chunk(uvec2(data[p], data[p + 1u]), params.origin_x, x) ||
+        !relative_chunk(uvec2(data[p + 2u], data[p + 3u]), params.origin_y, y)) {
+        atomicOr(data[sb() + 3u], 2u);
+        return vec2(0);
     }
-    return vec2(x,y)*64.0+vec2(int(data[p+4u]),int(data[p+5u]))/65536.0;
+    return vec2(x, y) * 64.0 + vec2(int(data[p + 4u]), int(data[p + 5u])) / 65536.0;
 }
-void add_correction(uint i,vec2 linear,float angular) {
-    if(i==BODY_CAPACITY) return;
-    uint p=bs(i)+16u;
+void add_correction(uint i, vec2 linear, float angular) {
+    if (i == BODY_CAPACITY)
+        return;
+    uint p = bs(i) + 16u;
     /* Integer reduction is independent of emission order; the proposal bound
        keeps all 8192 contributions inside signed 32-bit range. */
-    ivec3 v=ivec3(round(clamp(vec3(linear,angular),vec3(-2),vec3(2))*SUM_SCALE));
-    atomicAdd(data[p],uint(v.x)); atomicAdd(data[p+1u],uint(v.y)); atomicAdd(data[p+2u],uint(v.z));
+    ivec3 v = ivec3(round(clamp(vec3(linear, angular), vec3(-2), vec3(2)) * SUM_SCALE));
+    atomicAdd(data[p], uint(v.x));
+    atomicAdd(data[p + 1u], uint(v.y));
+    atomicAdd(data[p + 2u], uint(v.z));
 }
 vec3 correction(uint i) {
-    uint p=bs(i)+16u; return vec3(int(data[p]),int(data[p+1u]),int(data[p+2u]))/SUM_SCALE;
+    uint p = bs(i) + 16u;
+    return vec3(int(data[p]), int(data[p + 1u]), int(data[p + 2u])) / SUM_SCALE;
 }
-float weight(uint a,uint b) {
-    uint degree=data[bs(a)+12u];
-    if(b!=BODY_CAPACITY) degree=max(degree,data[bs(b)+12u]);
-    return 0.8/float(max(degree,1u));
+float weight(uint a, uint b) {
+    uint degree = data[bs(a) + 12u];
+    if (b != BODY_CAPACITY)
+        degree = max(degree, data[bs(b) + 12u]);
+    return 0.8 / float(max(degree, 1u));
 }
-void solve_contact(uint i,bool impulse) {
-    uint c=cb()+12u+i*32u,s=cs(i),a=data[s+2u],b=data[s+3u];
-    if(a==BODY_CAPACITY) return;
-    Body ba=bodies[a];
-    vec2 ra=body_rotate(getv(s+4u),ba.angle), rb=getv(s+6u);
-    vec2 pa=position(ba)+ba.center+ra,pb=getv(s+9u);
-    vec2 va=velocity(ba)+ba.angular_velocity*vec2(-ra.y,ra.x),vb=vec2(0);
-    float mb=0.0,ib=0.0;
-    if(b!=BODY_CAPACITY) {
-        Body bb=bodies[b]; rb=body_rotate(rb,bb.angle);
-        pb=position(bb)+bb.center+rb;
-        vb=velocity(bb)+bb.angular_velocity*vec2(-rb.y,rb.x);
-        mb=bb.inverse_mass; ib=bb.inverse_inertia;
+void solve_contact(uint i, bool impulse) {
+    uint c = cb() + 12u + i * 32u, s = cs(i), a = data[s + 2u], b = data[s + 3u];
+    if (a == BODY_CAPACITY)
+        return;
+    Body ba = bodies[a];
+    vec2 ra = body_rotate(getv(s + 4u), ba.angle), rb = getv(s + 6u);
+    vec2 pa = position(ba) + ba.center + ra, pb = getv(s + 9u);
+    vec2 va = velocity(ba) + ba.angular_velocity * vec2(-ra.y, ra.x), vb = vec2(0);
+    float mb = 0.0, ib = 0.0;
+    if (b != BODY_CAPACITY) {
+        Body bb = bodies[b];
+        rb = body_rotate(rb, bb.angle);
+        pb = position(bb) + bb.center + rb;
+        vb = velocity(bb) + bb.angular_velocity * vec2(-rb.y, rb.x);
+        mb = bb.inverse_mass;
+        ib = bb.inverse_inertia;
     }
-    vec2 n=getv(c+8u),t=vec2(-n.y,n.x);
-    float an=body_cross(ra,n),bn=body_cross(rb,n),at=body_cross(ra,t),bt=body_cross(rb,t);
-    float wn=ba.inverse_mass+mb+ba.inverse_inertia*an*an+ib*bn*bn;
-    float wt=ba.inverse_mass+mb+ba.inverse_inertia*at*at+ib*bt*bt;
-    if(wn<=0.0) return;
-    float scale=weight(a,b),dn=0.0,dt=0.0;
-    if(impulse) {
-        if(dot(pa-pb,n)>1.0/65536.0 && getf(s)==0.0) return;
-        float pre=getf(s+8u),target=pre < -0.5 ? -getf(c+12u)*pre : 0.0;
-        dn=max(0.0,(target-dot(va-vb,n))/wn)*scale;
-        float limit=getf(c+11u)*(getf(s)/DT+dn);
-        if(wt>0.0) dt=clamp(-dot(va-vb,t)/wt,-limit,limit)*scale;
+    vec2 n = getv(c + 8u), t = vec2(-n.y, n.x);
+    float an = body_cross(ra, n), bn = body_cross(rb, n), at = body_cross(ra, t),
+          bt = body_cross(rb, t);
+    float wn = ba.inverse_mass + mb + ba.inverse_inertia * an * an + ib * bn * bn;
+    float wt = ba.inverse_mass + mb + ba.inverse_inertia * at * at + ib * bt * bt;
+    if (wn <= 0.0)
+        return;
+    float scale = weight(a, b), dn = 0.0, dt = 0.0;
+    if (impulse) {
+        if (dot(pa - pb, n) > 1.0 / 65536.0 && getf(s) == 0.0)
+            return;
+        float pre = getf(s + 8u), target = pre < -0.5 ? -getf(c + 12u) * pre : 0.0;
+        dn = max(0.0, (target - dot(va - vb, n)) / wn) * scale;
+        float limit = getf(c + 11u) * (getf(s) / DT + dn);
+        if (wt > 0.0)
+            dt = clamp(-dot(va - vb, t) / wt, -limit, limit) * scale;
     } else {
-        float alpha=getf(c+13u)/(DT*DT),lambda=getf(s);
-        dn=(max(0.0,lambda+(-dot(pa-pb,n)-alpha*lambda)/(wn+alpha))-lambda)*scale;
-        putf(s,lambda+dn);
-        vec2 start_a=getv(bs(a)+6u)+ba.center+body_rotate(getv(s+4u),getf(bs(a)+8u));
-        vec2 start_b=getv(s+9u);
-        if(b!=BODY_CAPACITY) start_b=getv(bs(b)+6u)+bodies[b].center+body_rotate(getv(s+6u),getf(bs(b)+8u));
-        float tangent_error=dot((pa-start_a)-(pb-start_b),t);
-        float lt=getf(s+1u),limit=getf(c+11u)*max(0.0,lambda+dn);
-        if(wt>0.0) dt=(clamp(lt-tangent_error/wt,-limit,limit)-lt)*scale;
-        putf(s+1u,lt+dt);
+        float alpha = getf(c + 13u) / (DT * DT), lambda = getf(s);
+        dn = (max(0.0, lambda + (-dot(pa - pb, n) - alpha * lambda) / (wn + alpha)) - lambda) *
+             scale;
+        putf(s, lambda + dn);
+        vec2 start_a = getv(bs(a) + 6u) + ba.center + body_rotate(getv(s + 4u), getf(bs(a) + 8u));
+        vec2 start_b = getv(s + 9u);
+        if (b != BODY_CAPACITY)
+            start_b =
+                getv(bs(b) + 6u) + bodies[b].center + body_rotate(getv(s + 6u), getf(bs(b) + 8u));
+        float tangent_error = dot((pa - start_a) - (pb - start_b), t);
+        float lt = getf(s + 1u), limit = getf(c + 11u) * max(0.0, lambda + dn);
+        if (wt > 0.0)
+            dt = (clamp(lt - tangent_error / wt, -limit, limit) - lt) * scale;
+        putf(s + 1u, lt + dt);
     }
-    vec2 force=dn*n+dt*t;
-    add_correction(a,ba.inverse_mass*force,ba.inverse_inertia*(an*dn+at*dt));
-    add_correction(b,-mb*force,-ib*(bn*dn+bt*dt));
+    vec2 force = dn * n + dt * t;
+    add_correction(a, ba.inverse_mass * force, ba.inverse_inertia * (an * dn + at * dt));
+    add_correction(b, -mb * force, -ib * (bn * dn + bt * dt));
 }
 void main() {
-    uint i=gl_GlobalInvocationID.x,h=sb();
-    if(params.mode==0u) {
-        if(i==0u) { data[h+3u]=0u;data[h+4u]=0u;data[h+5u]=0u;data[h+9u]=1u; }
-        return;
-    }
-    if(params.mode==4u || params.mode==6u || params.mode==9u) {
-        if(data[h+3u]!=0u || i>=data[cb()]) return;
-        if(params.mode!=4u) { solve_contact(i,params.mode==9u); return; }
-        uint c=cb()+12u+i*32u,s=cs(i),a=slot(data[c]),b=slot(data[c+1u]);
-        for(uint k=0u;k<16u;++k) data[s+k]=0u;
-        data[s+2u]=a;data[s+3u]=b;
-        if(a==BODY_CAPACITY) return;
-        Body ba=bodies[a]; vec2 pa=anchor(c+16u),pb=anchor(c+22u);
-        vec2 ra=pa-position(ba)-ba.center;
-        putv(s+4u,body_rotate(ra,-ba.angle)); putv(s+9u,pb);
-        vec2 va=velocity(ba)+ba.angular_velocity*vec2(-ra.y,ra.x),vb=vec2(0);
-        atomicAdd(data[bs(a)+12u],1u);
-        if(b!=BODY_CAPACITY) {
-            Body bb=bodies[b];vec2 rb=pb-position(bb)-bb.center;
-            putv(s+6u,body_rotate(rb,-bb.angle));
-            vb=velocity(bb)+bb.angular_velocity*vec2(-rb.y,rb.x);
-            atomicAdd(data[bs(b)+12u],1u);
-        }
-        putf(s+8u,dot(va-vb,getv(c+8u)));
-        return;
-    }
-    if(i>=params.body_count) return;
-    Body body=bodies[i]; uint s=bs(i);
-    if(params.mode==1u) {
-        for(uint k=0u;k<32u;++k) data[s+k]=0u;
-        data[s+13u]=uint(awake(body));
-        putv(s,position(body));putf(s+2u,body.angle);
-        data[s+3u]=uint(body.vx_fp);data[s+4u]=uint(body.vy_fp);putf(s+5u,body.angular_velocity);
-        if(data[s+13u]!=0u) {
-            atomicAdd(data[h+5u],1u);
-            body.vx_fp=clamp(body.vx_fp,-(4<<16),4<<16);
-            body.vy_fp=clamp(clamp(body.vy_fp,-(4<<16),4<<16)+
-                ((body.motion_flags&1u)==0u ? 16384 : 0),-(4<<16),4<<16);
-            bodies[i]=body;
+    uint i = gl_GlobalInvocationID.x, h = sb();
+    if (PHASE == RESET) {
+        if (i == 0u) {
+            data[h + 3u] = 0u;
+            data[h + 4u] = 0u;
+            data[h + 5u] = 0u;
+            data[h + 9u] = 1u;
         }
         return;
     }
-    if(params.mode==3u) {
-        data[s+12u]=0u;
-        if(i==0u) {
-            atomicOr(data[h+3u],data[cb()+2u]);
-            data[h+6u]=data[h+3u]==0u ? (data[cb()]+63u)/64u : 0u;
-            data[h+7u]=1u;data[h+8u]=1u;
-            if(data[h+3u]==0u) data[h+4u]+=data[cb()];
+    if (PHASE == INIT_CONTACTS || PHASE == SOLVE || PHASE == IMPULSE) {
+        if (data[h + 3u] != 0u || i >= data[cb()])
+            return;
+        if (PHASE != INIT_CONTACTS) {
+            solve_contact(i, PHASE == IMPULSE);
+            return;
+        }
+        uint c = cb() + 12u + i * 32u, s = cs(i), a = slot(data[c]), b = slot(data[c + 1u]);
+        /* Cold start each regenerated manifold; retain multipliers within its iterations. */
+        for (uint k = 0u; k < 16u; ++k)
+            data[s + k] = 0u;
+        data[s + 2u] = a;
+        data[s + 3u] = b;
+        if (a == BODY_CAPACITY)
+            return;
+        Body ba = bodies[a];
+        vec2 pa = anchor(c + 16u), pb = anchor(c + 22u);
+        vec2 ra = pa - position(ba) - ba.center;
+        putv(s + 4u, body_rotate(ra, -ba.angle));
+        putv(s + 9u, pb);
+        vec2 va = velocity(ba) + ba.angular_velocity * vec2(-ra.y, ra.x), vb = vec2(0);
+        atomicAdd(data[bs(a) + 12u], 1u);
+        if (b != BODY_CAPACITY) {
+            Body bb = bodies[b];
+            vec2 rb = pb - position(bb) - bb.center;
+            putv(s + 6u, body_rotate(rb, -bb.angle));
+            vb = velocity(bb) + bb.angular_velocity * vec2(-rb.y, rb.x);
+            atomicAdd(data[bs(b) + 12u], 1u);
+        }
+        putf(s + 8u, dot(va - vb, getv(c + 8u)));
+        return;
+    }
+    if (i >= params.body_count)
+        return;
+    Body body = bodies[i];
+    uint s = bs(i);
+    if (PHASE == BEGIN_FRAME) {
+        for (uint k = 0u; k < 32u; ++k)
+            data[s + k] = 0u;
+        data[s + 13u] = uint(awake(body));
+        putv(s, position(body));
+        putf(s + 2u, body.angle);
+        data[s + 3u] = uint(body.vx_fp);
+        data[s + 4u] = uint(body.vy_fp);
+        putf(s + 5u, body.angular_velocity);
+        if (data[s + 13u] != 0u) {
+            atomicAdd(data[h + 5u], 1u);
+            body.vx_fp = clamp(body.vx_fp, -(4 << 16), 4 << 16);
+            body.vy_fp = clamp(clamp(body.vy_fp, -(4 << 16), 4 << 16) +
+                                   ((body.motion_flags & 1u) == 0u ? 16384 : 0),
+                               -(4 << 16), 4 << 16);
+            bodies[i] = body;
         }
         return;
     }
-    if(params.mode==5u) {
-        data[s+16u]=0u;data[s+17u]=0u;data[s+18u]=0u;return;
-    }
-    if(params.mode==11u && i==0u) {
-        data[h+9u]=0u;
-        if(data[h+3u]!=0u) data[h+4u]=0u;
-    }
-    if(data[s+13u]==0u) return;
-    if(params.mode==11u) {
-        if(data[h+3u]!=0u) {
-            publish(body,getv(s));body.angle=getf(s+2u);
-            body.vx_fp=int(data[s+3u]);body.vy_fp=int(data[s+4u]);body.angular_velocity=getf(s+5u);
+    if (PHASE == PREPARE) {
+        data[s + 12u] = 0u;
+        if (i == 0u) {
+            atomicOr(data[h + 3u], data[cb() + 2u]);
+            data[h + 6u] = data[h + 3u] == 0u ? (data[cb()] + 63u) / 64u : 0u;
+            data[h + 7u] = 1u;
+            data[h + 8u] = 1u;
+            if (data[h + 3u] == 0u)
+                data[h + 4u] += data[cb()];
         }
-        bodies[i]=body;return;
+        return;
     }
-    if(data[h+3u]!=0u) return;
-    if(params.mode==2u) {
-        putv(s+6u,position(body));putf(s+8u,body.angle);
-        putv(s+9u,velocity(body));putf(s+11u,body.angular_velocity);
-        publish(body,position(body)+velocity(body)*DT);
-        if((body.motion_flags&2u)==0u) body.angle=wrap(body.angle+body.angular_velocity*DT);
-    } else if(params.mode==7u) {
-        vec3 change=correction(i);
-        publish(body,position(body)+change.xy);
-        body.angle=wrap(body.angle+clamp(change.z,-0.25,0.25));
-    } else if(params.mode==8u && (body.motion_flags&1u)==0u) {
-        vec2 v=(position(body)-getv(s+6u))/DT;
-        body.vx_fp=int(round(clamp(v.x,-4.0,4.0)*65536.0));
-        body.vy_fp=int(round(clamp(v.y,-4.0,4.0)*65536.0));
-        body.angular_velocity=clamp(wrap(body.angle-getf(s+8u))/DT,-0.5,0.5);
-    } else if(params.mode==10u && (body.motion_flags&1u)==0u) {
-        vec3 change=correction(i);vec2 v=clamp(velocity(body)+change.xy,vec2(-4),vec2(4));
-        body.vx_fp=int(round(v.x*65536.0));body.vy_fp=int(round(v.y*65536.0));
-        body.angular_velocity=clamp(body.angular_velocity+change.z,-0.5,0.5);
+    if (PHASE == CLEAR) {
+        data[s + 16u] = 0u;
+        data[s + 17u] = 0u;
+        data[s + 18u] = 0u;
+        return;
     }
-    bodies[i]=body;
+    if (PHASE == FINISH && i == 0u) {
+        data[h + 9u] = 0u;
+        if (data[h + 3u] != 0u)
+            data[h + 4u] = 0u;
+    }
+    if (data[s + 13u] == 0u)
+        return;
+    if (PHASE == FINISH) {
+        if (data[h + 3u] != 0u) {
+            publish(body, getv(s));
+            body.angle = getf(s + 2u);
+            body.vx_fp = int(data[s + 3u]);
+            body.vy_fp = int(data[s + 4u]);
+            body.angular_velocity = getf(s + 5u);
+        }
+        body_cache_bounds(body);
+        /* Physical boxes include fractional edge coverage in the swept mask. */
+        if (body.vertex_count == 0u && body.angle == 0.0 && body.previous_angle == 0.0)
+            body.swept_high = (max(ivec2(body.x_fp,body.y_fp),
+                ivec2(body.previous_x_fp,body.previous_y_fp)) +
+                (ivec2(body.width,body.height)<<16) + 65535)>>16;
+        bodies[i] = body;
+        return;
+    }
+    if (data[h + 3u] != 0u)
+        return;
+    if (PHASE == PREDICT) {
+        putv(s + 6u, position(body));
+        putf(s + 8u, body.angle);
+        putv(s + 9u, velocity(body));
+        putf(s + 11u, body.angular_velocity);
+        publish(body, position(body) + velocity(body) * DT);
+        body.angular_velocity =
+            clamp(body.angular_velocity, -angular_limit(body), angular_limit(body));
+        if ((body.motion_flags & 2u) == 0u)
+            body.angle = wrap(body.angle + body.angular_velocity * DT);
+    } else if (PHASE == APPLY) {
+        vec3 change = correction(i);
+        publish(body, position(body) + change.xy);
+        body.angle = wrap(body.angle + clamp(change.z, -0.25, 0.25));
+        data[s + 16u] = 0u;
+        data[s + 17u] = 0u;
+        data[s + 18u] = 0u;
+    } else if (PHASE == DERIVE_VELOCITY && (body.motion_flags & 1u) == 0u) {
+        vec2 v = (position(body) - getv(s + 6u)) / DT;
+        body.vx_fp = int(round(clamp(v.x, -4.0, 4.0) * 65536.0));
+        body.vy_fp = int(round(clamp(v.y, -4.0, 4.0) * 65536.0));
+        body.angular_velocity =
+            clamp(wrap(body.angle - getf(s + 8u)) / DT, -angular_limit(body), angular_limit(body));
+    } else if (PHASE == APPLY_VELOCITY && (body.motion_flags & 1u) == 0u) {
+        vec3 change = correction(i);
+        vec2 v = clamp(velocity(body) + change.xy, vec2(-4), vec2(4));
+        body.vx_fp = int(round(v.x * 65536.0));
+        body.vy_fp = int(round(v.y * 65536.0));
+        body.angular_velocity =
+            clamp(body.angular_velocity + change.z, -angular_limit(body), angular_limit(body));
+    }
+    bodies[i] = body;
 }

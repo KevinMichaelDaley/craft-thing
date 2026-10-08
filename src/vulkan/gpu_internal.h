@@ -8,7 +8,11 @@
 
 enum {
     DC_GPU_HALO_SIDE = DC_CHUNK_SIDE + 2,
-    DC_GPU_HALO_CELLS = DC_GPU_HALO_SIDE * DC_GPU_HALO_SIDE
+    DC_GPU_HALO_CELLS = DC_GPU_HALO_SIDE * DC_GPU_HALO_SIDE,
+    DC_GPU_SOLVER_HEADER_WORDS = 16,
+    DC_GPU_SOLVER_BODY_WORDS = 32,
+    DC_GPU_SOLVER_CONTACT_WORDS = 16,
+    DC_GPU_SOLVER_PHASE_COUNT = 12
 };
 
 typedef struct {
@@ -17,12 +21,14 @@ typedef struct {
     uint32_t reserved[2];
     uint32_t chunk_x[2], chunk_y[2];
     int32_t local_x_fp, local_y_fp;
-    uint32_t visible, reserved_world;
+    uint32_t visible;
+    float radius;
     dc_gpu_body_shape_t shape;
     float angle, angular_velocity;
     uint32_t motion_flags, motion_ready;
     float center[2], inverse_mass, inverse_inertia;
     float mass, inertia, density, previous_angle;
+    int32_t bounds_low[2], bounds_high[2], swept_low[2], swept_high[2];
 } dc_gpu_body_record_t;
 
 struct dc_gpu {
@@ -96,7 +102,7 @@ struct dc_gpu {
     VkPipeline rigid_pipeline;
     VkPipeline broadphase_pipeline;
     VkPipeline contact_pipeline;
-    VkPipeline solver_pipeline;
+    VkPipeline solver_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
     bool rigid_solver_enabled;
     VkBuffer trace_buffer;
     VkDeviceMemory trace_memory;
@@ -196,7 +202,8 @@ static inline VkDeviceSize dc_gpu_body_storage_bytes(const dc_gpu_t *gpu) {
     return sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
         (VkDeviceSize)(dc_gpu_contact_word_offset(gpu) + DC_GPU_CONTACT_HEADER_WORDS) * sizeof(uint32_t) +
         (VkDeviceSize)DC_GPU_CONTACT_CAPACITY * sizeof(dc_gpu_contact_t) +
-        (16u + DC_GPU_BODY_CAPACITY * 32u + DC_GPU_CONTACT_CAPACITY * 16u) * sizeof(uint32_t);
+        (DC_GPU_SOLVER_HEADER_WORDS + DC_GPU_BODY_CAPACITY * DC_GPU_SOLVER_BODY_WORDS +
+         DC_GPU_CONTACT_CAPACITY * DC_GPU_SOLVER_CONTACT_WORDS) * sizeof(uint32_t);
 }
 
 static inline uint32_t dc_gpu_solver_word_offset(const dc_gpu_t *gpu) {

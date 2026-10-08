@@ -29,9 +29,7 @@ void bounds(Body body, out ivec2 low, out ivec2 high) {
     high = ((max(current, previous) + (ivec2(body.width, body.height) << 16) +
              (FP_ONE - 1)) >> 16) + CONTACT_SKIN;
     if (body.angle != 0.0 || body.previous_angle != 0.0) {
-        float radius = 0.0;
-        for(uint v=0u;v<body_vertices(body);++v)
-            radius=max(radius,length(body_rest_vertex(body,v)-body.center));
+        float radius = body.radius;
         low=ivec2(floor(vec2(min(current,previous))/65536.0+body.center-radius))-1;
         high=ivec2(ceil(vec2(max(current,previous))/65536.0+body.center+radius))+1;
     }

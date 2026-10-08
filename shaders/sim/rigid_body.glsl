@@ -12,13 +12,15 @@ struct Body {
     uint reserved0, reserved1;
     uvec2 chunk_x, chunk_y;
     ivec2 local_fp;
-    uint visible, reserved_world;
+    uint visible;
+    float radius;
     uint vertex_count, material;
     ivec2 vertices[BODY_VERTEX_CAPACITY];
     float angle, angular_velocity;
     uint motion_flags, motion_ready;
     vec2 center;
     float inverse_mass, inverse_inertia, mass, inertia, density, previous_angle;
+    ivec2 bounds_low, bounds_high, swept_low, swept_high;
 };
 
 vec2 body_rotate(vec2 p, float angle) {
@@ -57,7 +59,26 @@ void body_properties(inout Body b) {
     b.inertia = max(b.density*moment-b.mass*dot(relative_center,relative_center),1e-24);
     b.inverse_mass = (b.motion_flags & 1u) == 0u ? 1.0/b.mass : 0.0;
     b.inverse_inertia = (b.motion_flags & 3u) == 0u ? 1.0/b.inertia : 0.0;
+    float radius=0.0;
+    for(uint i=0u;i<body_vertices(b);++i)
+        radius=max(radius,length(body_rest_vertex(b,i)-b.center));
+    b.radius=radius;
     b.motion_ready = 1u;
+}
+
+void body_cache_bounds(inout Body b) {
+    vec2 low,high;body_bounds(b,low,high);
+    ivec2 current=ivec2(b.x_fp,b.y_fp),previous=ivec2(b.previous_x_fp,b.previous_y_fp);
+    b.bounds_low=(current+ivec2(floor(low*65536.0)))>>16;
+    b.bounds_high=(current+ivec2(ceil(high*65536.0))+65535)>>16;
+    b.swept_low=min(current,previous)>>16;
+    b.swept_high=(max(current,previous)+(ivec2(b.width,b.height)<<16)+
+        (b.vertex_count!=0u ? 65535 : 0))>>16;
+    if(b.angle!=0.0 || b.previous_angle!=0.0) {
+        float radius=b.radius;
+        b.swept_low=(min(current,previous)+ivec2(floor((b.center-radius)*65536.0)))>>16;
+        b.swept_high=(max(current,previous)+ivec2(ceil((b.center+radius)*65536.0))+65535)>>16;
+    }
 }
 
 bool relative_chunk(uvec2 anchor, uvec2 origin, out int offset) {

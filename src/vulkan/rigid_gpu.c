@@ -5,8 +5,11 @@
 #include "gpu_internal.h"
 
 _Static_assert(sizeof(dc_gpu_body_t) == 32, "GPU body layout must match SPIR-V");
-_Static_assert(sizeof(dc_gpu_body_record_t) == 200, "GPU body record must match SPIR-V");
+_Static_assert(sizeof(dc_gpu_body_record_t) == 232, "GPU body record must match SPIR-V");
 _Static_assert(offsetof(dc_gpu_body_record_t, shape) == 80, "GPU shape offset must match SPIR-V");
+_Static_assert(offsetof(dc_gpu_body_record_t, angle) == 152, "GPU angular state offset changed");
+_Static_assert(offsetof(dc_gpu_body_record_t, center) == 168, "GPU centroid offset changed");
+_Static_assert(offsetof(dc_gpu_body_record_t, bounds_low) == 200, "GPU cached bounds offset changed");
 
 static bool submit_rigid(dc_gpu_t *gpu, bool advance, char *err, uint32_t cap);
 static void record_rigid(dc_gpu_t *gpu, bool advance);
@@ -108,7 +111,8 @@ bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *path,
 void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
     dc_gpu_tick_destroy(gpu);
     if (gpu->contact_pipeline) vkDestroyPipeline(gpu->device, gpu->contact_pipeline, NULL);
-    if (gpu->solver_pipeline) vkDestroyPipeline(gpu->device, gpu->solver_pipeline, NULL);
+    for (uint32_t i=0;i<DC_GPU_SOLVER_PHASE_COUNT;++i)
+        if (gpu->solver_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->solver_pipelines[i],NULL);
     if (gpu->broadphase_pipeline) vkDestroyPipeline(gpu->device, gpu->broadphase_pipeline, NULL);
     if (gpu->rigid_pipeline) vkDestroyPipeline(gpu->device, gpu->rigid_pipeline, NULL);
     if (gpu->body_mapped) vkUnmapMemory(gpu->device, gpu->body_memory);
@@ -296,7 +300,7 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
         dc_gpu_record_solver(gpu);
         vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_pipeline);
     }
-    push[2] = 1;
+    push[2] = gpu->rigid_solver_enabled ? 129u : 1u;
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     vkCmdDispatch(gpu->command, (gpu->width + 15u) / 16u,
