@@ -5,7 +5,7 @@
 #include "gpu_internal.h"
 
 _Static_assert(sizeof(dc_gpu_body_t) == 32, "GPU body layout must match SPIR-V");
-_Static_assert(sizeof(dc_gpu_body_record_t) == 152, "GPU body record must match SPIR-V");
+_Static_assert(sizeof(dc_gpu_body_record_t) == 200, "GPU body record must match SPIR-V");
 _Static_assert(offsetof(dc_gpu_body_record_t, shape) == 80, "GPU shape offset must match SPIR-V");
 
 static bool submit_rigid(dc_gpu_t *gpu, bool advance, char *err, uint32_t cap);
@@ -108,6 +108,7 @@ bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *path,
 void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
     dc_gpu_tick_destroy(gpu);
     if (gpu->contact_pipeline) vkDestroyPipeline(gpu->device, gpu->contact_pipeline, NULL);
+    if (gpu->solver_pipeline) vkDestroyPipeline(gpu->device, gpu->solver_pipeline, NULL);
     if (gpu->broadphase_pipeline) vkDestroyPipeline(gpu->device, gpu->broadphase_pipeline, NULL);
     if (gpu->rigid_pipeline) vkDestroyPipeline(gpu->device, gpu->rigid_pipeline, NULL);
     if (gpu->body_mapped) vkUnmapMemory(gpu->device, gpu->body_memory);
@@ -279,7 +280,7 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
-    uint32_t push[8] = { gpu->width, gpu->height, advance ? 0u : 2u, gpu->body_count,
+    uint32_t push[8] = { gpu->width, gpu->height, advance && !gpu->rigid_solver_enabled ? 0u : 2u, gpu->body_count,
         (uint32_t)x, (uint32_t)(x >> 32), (uint32_t)y, (uint32_t)(y >> 32) };
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
@@ -291,6 +292,10 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
         .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT };
     dep.pMemoryBarriers = &between;
     vkCmdPipelineBarrier2(gpu->command, &dep);
+    if (advance && gpu->rigid_solver_enabled && gpu->body_count) {
+        dc_gpu_record_solver(gpu);
+        vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_pipeline);
+    }
     push[2] = 1;
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);

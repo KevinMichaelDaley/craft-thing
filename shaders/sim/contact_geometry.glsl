@@ -2,22 +2,16 @@
 #define DC_CONTACT_GEOMETRY_GLSL
 
 const float CONTACT_SKIN = 1.0 / 65536.0;
+float contact_skin = CONTACT_SKIN;
 const float FEATURE_EPSILON = 0.0001;
 
 struct Polygon { vec2 vertices[BODY_VERTEX_CAPACITY]; uint count; };
 
 Polygon body_polygon(Body body, vec2 offset) {
     Polygon polygon;
-    polygon.count = body.vertex_count == 0u ? 4u : body.vertex_count;
-    if (body.vertex_count == 0u) {
-        polygon.vertices[0] = offset;
-        polygon.vertices[1] = offset + vec2(body.width, 0);
-        polygon.vertices[2] = offset + vec2(body.width, body.height);
-        polygon.vertices[3] = offset + vec2(0, body.height);
-    } else {
-        for (uint i = 0u; i < body.vertex_count; ++i)
-            polygon.vertices[i] = offset + vec2(body.vertices[i]) / 65536.0;
-    }
+    polygon.count = body_vertices(body);
+    for (uint i = 0u; i < polygon.count; ++i)
+        polygon.vertices[i] = offset + body_vertex(body,i);
     return polygon;
 }
 
@@ -44,7 +38,7 @@ bool contact_axis(Polygon a, Polygon b, vec2 edge, inout vec2 normal, inout floa
     vec2 axis = normalize(vec2(-edge.y, edge.x));
     vec2 pa = project_polygon(a, axis), pb = project_polygon(b, axis);
     float positive = pb.y - pa.x, negative = pa.y - pb.x;
-    if (positive < -CONTACT_SKIN || negative < -CONTACT_SKIN) return false;
+    if (positive < -contact_skin || negative < -contact_skin) return false;
     float candidate = max(0.0, min(positive, negative));
     if (candidate < depth) {
         depth = candidate;

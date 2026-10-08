@@ -221,7 +221,8 @@ dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
         !dc_gpu_set_viewport(view->gpu, DC_CHUNK_SIDE, DC_CHUNK_SIDE,
                              VIEW_WIDTH, VIEW_HEIGHT) ||
         !dc_gpu_set_display_zoom(view->gpu, WINDOW_SCALE) ||
-        !dc_gpu_set_fluid_interval(view->gpu, FLUID_INTERVAL)) goto fail;
+        !dc_gpu_set_fluid_interval(view->gpu, FLUID_INTERVAL) ||
+        !dc_gpu_set_rigid_solver(view->gpu, true)) goto fail;
     view->spring_enabled = true;
     view->stream = dc_stream_create(directory, seed,
                                     DC_GPU_CHUNK_SLOTS * 2u);

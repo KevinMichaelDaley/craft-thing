@@ -1,4 +1,5 @@
 CC ?= cc
+.DEFAULT_GOAL := all
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror
 CFLAGS += -pthread
 CPPFLAGS += -Iinclude $(shell pkg-config --cflags sdl2)
@@ -7,12 +8,16 @@ GLSLANG ?= glslangValidator
 
 GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/broadphase_gpu.o build/contact_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
 GPU_OBJ += build/solver_gpu.o
+SOLVER_SHADER = build/shaders/rigid_solver.comp.spv
+$(GPU_OBJ): $(SOLVER_SHADER)
+$(SOLVER_SHADER): shaders/sim/rigid_solver.comp shaders/sim/rigid_body.glsl
+	mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_bench build/dungeoncraft_quarter_native build/marker_slot_tests build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench: $(SOLVER_SHADER)
 
 build/solver_gpu.o: src/vulkan/solver_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-build/rigid_solver_tests: tests/vulkan/rigid_solver_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -lm
 CHUNK_OBJ = build/chunk.o
 STREAM_OBJ = build/stream.o
 GENERATE_OBJ = build/generate.o
@@ -29,6 +34,9 @@ SHIFT_SHADER = build/shaders/shift_velocity.comp.spv
 MPM_SHADER = build/shaders/mpm.comp.spv
 MPM_ACTIVITY_SHADER = build/shaders/mpm_active.comp.spv
 MPM_COMPONENT_SHADER = build/shaders/mpm_component.comp.spv
+
+build/rigid_solver_tests: tests/vulkan/rigid_solver_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -lm
 
 .PHONY: all test test_ui test_ui_long clean shaders
 all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft

@@ -15,7 +15,50 @@ struct Body {
     uint visible, reserved_world;
     uint vertex_count, material;
     ivec2 vertices[BODY_VERTEX_CAPACITY];
+    float angle, angular_velocity;
+    uint motion_flags, motion_ready;
+    vec2 center;
+    float inverse_mass, inverse_inertia, mass, inertia, density, previous_angle;
 };
+
+vec2 body_rotate(vec2 p, float angle) {
+    float c = cos(angle), s = sin(angle);
+    return vec2(c * p.x - s * p.y, s * p.x + c * p.y);
+}
+float body_cross(vec2 a, vec2 b) { return a.x * b.y - a.y * b.x; }
+uint body_vertices(Body b) { return b.vertex_count == 0u ? 4u : b.vertex_count; }
+vec2 body_rest_vertex(Body b, uint i) {
+    if (b.vertex_count != 0u) return vec2(b.vertices[i]) / 65536.0;
+    return vec2((i == 1u || i == 2u) ? b.width : 0u, i >= 2u ? b.height : 0u);
+}
+vec2 body_vertex(Body b, uint i) {
+    return b.center + body_rotate(body_rest_vertex(b, i) - b.center, b.angle);
+}
+void body_bounds(Body b, out vec2 low, out vec2 high) {
+    low = vec2(1e20); high = vec2(-1e20);
+    for (uint i = 0u; i < body_vertices(b); ++i) {
+        vec2 p = body_vertex(b,i); low = min(low,p); high = max(high,p);
+    }
+}
+void body_properties(inout Body b) {
+    if (b.motion_ready != 0u) return;
+    b.density = b.material == 2u ? 0.6 : 2.7;
+    vec2 first = body_rest_vertex(b,0u), weighted = vec2(0);
+    float area = 0.0, moment = 0.0;
+    for (uint i=1u; i+1u<body_vertices(b); ++i) {
+        vec2 p = body_rest_vertex(b,i)-first, q = body_rest_vertex(b,i+1u)-first;
+        float a = body_cross(p,q)*0.5;
+        area += a; weighted += a*(p+q)/3.0;
+        moment += a*(dot(p,p)+dot(p,q)+dot(q,q))/6.0;
+    }
+    vec2 relative_center = weighted / max(area,1e-12);
+    b.center = first + relative_center;
+    b.mass = max(area*b.density,1e-12);
+    b.inertia = max(b.density*moment-b.mass*dot(relative_center,relative_center),1e-24);
+    b.inverse_mass = (b.motion_flags & 1u) == 0u ? 1.0/b.mass : 0.0;
+    b.inverse_inertia = (b.motion_flags & 3u) == 0u ? 1.0/b.inertia : 0.0;
+    b.motion_ready = 1u;
+}
 
 bool relative_chunk(uvec2 anchor, uvec2 origin, out int offset) {
     uvec2 delta = uvec2(anchor.x - origin.x,

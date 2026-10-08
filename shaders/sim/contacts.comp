@@ -99,9 +99,9 @@ bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygo
     if (!relative_chunk(chunk_x, params.origin_x, cx) || !relative_chunk(chunk_y, params.origin_y, cy)) return false;
     ivec2 tile = ivec2(cx, cy), tile_low = tile * 64;
     ivec2 current = ivec2(body.x_fp, body.y_fp);
-    ivec2 low = max((current >> 16) - 1, tile_low);
-    ivec2 high = min(((current + (ivec2(body.width, body.height) << 16) + ivec2(65535)) >> 16) + 1,
-                    tile_low + 64);
+    vec2 shape_low,shape_high; body_bounds(body,shape_low,shape_high);
+    ivec2 low = max(ivec2(floor(vec2(current)/65536.0+shape_low))-1,tile_low);
+    ivec2 high = min(ivec2(ceil(vec2(current)/65536.0+shape_high))+1,tile_low+64);
     uint page = 0u;
     if (kind != BOUNDARY_CONTACT && all(greaterThanEqual(tile, ivec2(0))) &&
         all(lessThan(tile, ivec2(page_extent())))) page = pages[uint(cy) * page_extent().x + uint(cx)];
@@ -128,6 +128,10 @@ bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygo
 
 void main() {
     uint index = gl_GlobalInvocationID.x, base = contact_base();
+    /* Keep nearby constraints available when another Jacobi correction closes
+       a gap within this substep. Diagnostics retain the exact overlap skin. */
+    uint solver = base + CONTACT_HEADER_WORDS + 8192u * CONTACT_WORDS;
+    contact_skin = data[solver + 9u] != 0u ? 0.25 : CONTACT_SKIN;
     if (params.mode == 0u) {
         if (index != 0u) return;
         data[base] = 0u; data[base + 1u] = 0u;

@@ -316,6 +316,7 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     if (!dc_gpu_rigid_pipeline_init(gpu, "build/shaders/rigid.comp.spv", err, cap) ||
         !dc_gpu_broadphase_pipeline_init(gpu, err, cap) ||
         !dc_gpu_contact_pipeline_init(gpu, err, cap) ||
+        !dc_gpu_solver_pipeline_init(gpu, err, cap) ||
         !dc_gpu_tick_init(gpu, err, cap) ||
         !dc_gpu_halo_pipeline_init(gpu, err, cap)) goto fail;
     VkCommandPoolCreateInfo pool_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,

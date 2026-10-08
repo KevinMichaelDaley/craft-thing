@@ -19,6 +19,10 @@ typedef struct {
     int32_t local_x_fp, local_y_fp;
     uint32_t visible, reserved_world;
     dc_gpu_body_shape_t shape;
+    float angle, angular_velocity;
+    uint32_t motion_flags, motion_ready;
+    float center[2], inverse_mass, inverse_inertia;
+    float mass, inertia, density, previous_angle;
 } dc_gpu_body_record_t;
 
 struct dc_gpu {
@@ -92,6 +96,8 @@ struct dc_gpu {
     VkPipeline rigid_pipeline;
     VkPipeline broadphase_pipeline;
     VkPipeline contact_pipeline;
+    VkPipeline solver_pipeline;
+    bool rigid_solver_enabled;
     VkBuffer trace_buffer;
     VkDeviceMemory trace_memory;
     void *trace_mapped;
@@ -189,7 +195,16 @@ static inline uint32_t *dc_gpu_contact_data(const dc_gpu_t *gpu) {
 static inline VkDeviceSize dc_gpu_body_storage_bytes(const dc_gpu_t *gpu) {
     return sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
         (VkDeviceSize)(dc_gpu_contact_word_offset(gpu) + DC_GPU_CONTACT_HEADER_WORDS) * sizeof(uint32_t) +
-        (VkDeviceSize)DC_GPU_CONTACT_CAPACITY * sizeof(dc_gpu_contact_t);
+        (VkDeviceSize)DC_GPU_CONTACT_CAPACITY * sizeof(dc_gpu_contact_t) +
+        (16u + DC_GPU_BODY_CAPACITY * 32u + DC_GPU_CONTACT_CAPACITY * 16u) * sizeof(uint32_t);
+}
+
+static inline uint32_t dc_gpu_solver_word_offset(const dc_gpu_t *gpu) {
+    return dc_gpu_contact_word_offset(gpu) + DC_GPU_CONTACT_HEADER_WORDS +
+        DC_GPU_CONTACT_CAPACITY * (sizeof(dc_gpu_contact_t) / sizeof(uint32_t));
+}
+static inline uint32_t *dc_gpu_solver_data(const dc_gpu_t *gpu) {
+    return dc_gpu_broadphase_data(gpu) + dc_gpu_solver_word_offset(gpu);
 }
 
 uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
@@ -228,6 +243,8 @@ bool dc_gpu_broadphase_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_broadphase(dc_gpu_t *gpu);
 bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_contacts(dc_gpu_t *gpu);
+bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+void dc_gpu_record_solver(dc_gpu_t *gpu);
 bool dc_gpu_tick_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_tick_destroy(dc_gpu_t *gpu);
 bool dc_gpu_halo_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
