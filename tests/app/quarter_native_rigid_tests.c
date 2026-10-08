@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -91,7 +92,7 @@ static void test_streamed_window_broadphase_preserves_dense_pair_ids(void) {
     ASSERT_TRUE(dc_level_view_wait_visible(view, 120000, err, sizeof(err)));
     for (uint32_t i = 0; i < 8; ++i)
         ASSERT_TRUE(dc_level_view_spawn_body(view, 63, 2, err, sizeof(err)));
-    ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)));
+    /* This tests streamed candidate identity while the overlapping fixture is paused. */
     ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
     dc_gpu_broadphase_stats_t stats;
     dc_gpu_broadphase_pair_t pairs[256];
@@ -198,7 +199,63 @@ static void test_world_contacts_survive_camera_eviction_and_session_reload(void)
     ASSERT_EQ(pixel, 0xff30c040u); PASS();
 }
 
-int main(void) {
+static void test_quarter_native_gpu_stack_settles_and_persists(void) {
+    char directory[]="build/ui_xpbd_XXXXXX",err[256]={0};
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view=dc_level_view_create(directory,314,err,sizeof(err));ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view,false));
+    dc_gpu_rigid_solver_stats_t stats;
+    bool enabled=dc_level_view_rigid_solver_stats(view,&stats) && stats.enabled;
+    if (!enabled) { dc_level_view_destroy(view,err,sizeof(err)); ASSERT_TRUE(enabled); }
+    ASSERT_TRUE(dc_level_view_wait_visible(view,120000,err,sizeof(err)));
+    for(uint32_t x=40;x<90;++x)
+        ASSERT_TRUE(dc_level_view_paint(view,x,80,0,DC_MATERIAL_STONE,err,sizeof(err)));
+    dc_gpu_body_shape_t shape={.count=4,.material=DC_GPU_BODY_STONE,
+        .vertices={{0,0},{4<<16,0},{4<<16,4<<16},{0,4<<16}}};
+    ASSERT_TRUE(dc_level_view_spawn_convex_body(view,63,76,4,4,&shape,err,sizeof(err)));
+    shape.material=DC_GPU_BODY_WOOD;
+    ASSERT_TRUE(dc_level_view_spawn_convex_body(view,63,72,4,4,&shape,err,sizeof(err)));
+    for(uint32_t tick=0;tick<90;++tick) {
+        ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
+    }
+    dc_gpu_world_body_t before[2],after;
+    dc_gpu_body_motion_t motions[2],motion;
+    for(uint32_t id=1;id<=2;++id) {
+        ASSERT_TRUE(dc_level_view_body_state(view,id,&before[id-1],&motions[id-1],err,sizeof(err)));
+        double y=(double)before[id-1].chunk.y*64+before[id-1].body.y_fp/65536.0;
+        ASSERT_TRUE(fabs(y-(INITIAL_CHUNK_Y*64+80-4*id))<.1);
+        ASSERT_TRUE(abs(before[id-1].body.vy_fp)<6554);
+        ASSERT_TRUE(fabsf(motions[id-1].angle)<.05f);
+        ASSERT_TRUE(fabsf(motions[id-1].density-(id==1 ? 2.7f : .6f))<.0001f);
+    }
+    ASSERT_TRUE(dc_level_view_rigid_solver_stats(view,&stats));
+    ASSERT_EQ(stats.active_bodies,2u);ASSERT_EQ(stats.overflow,0u);
+    uint32_t color;
+    ASSERT_TRUE(dc_level_view_pixel(view,64,74,&color,err,sizeof(err)));ASSERT_EQ(color,0xff30c040u);
+    ASSERT_TRUE(dc_level_view_pixel(view,64,78,&color,err,sizeof(err)));ASSERT_EQ(color,0xff30c040u);
+    ASSERT_TRUE(dc_level_view_pan_pixels(view,16*DC_CHUNK_SIDE,0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view,120000,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pan_pixels(view,-16*(int32_t)DC_CHUNK_SIDE,0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view,120000,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));
+    view=dc_level_view_create(directory,314,err,sizeof(err));ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_set_spring_enabled(view,false));
+    ASSERT_TRUE(dc_level_view_wait_visible(view,120000,err,sizeof(err)));
+    for(uint32_t id=1;id<=2;++id) {
+        ASSERT_TRUE(dc_level_view_body_state(view,id,&after,&motion,err,sizeof(err)));
+        ASSERT_EQ(memcmp(&before[id-1],&after,sizeof(after)),0);
+        ASSERT_EQ(memcmp(&motions[id-1],&motion,sizeof(motion)),0);
+    }
+    ASSERT_TRUE(dc_level_view_pixel(view,64,74,&color,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));
+    ASSERT_EQ(color,0xff30c040u);PASS();
+}
+int main(int argc, char **argv) {
+    RUN(test_quarter_native_gpu_stack_settles_and_persists);
+    if (argc==2 && strcmp(argv[1],"--solver-only")==0) {
+        printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail ? 1 : 0;
+    }
     RUN(test_world_contacts_survive_camera_eviction_and_session_reload);
     RUN(test_convex_window_shapes_survive_eviction_and_reload);
     RUN(test_quarter_native_window_keeps_both_spawned_boxes_visible);
