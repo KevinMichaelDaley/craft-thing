@@ -4,6 +4,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+enum { DC_GPU_BODY_KINEMATIC = 1u, DC_GPU_BODY_LOCK_ROTATION = 2u };
+typedef struct {
+    float angle, angular_velocity, mass, inertia, density, center_x, center_y;
+    uint32_t flags;
+} dc_gpu_body_motion_t;
+typedef struct {
+    uint32_t enabled, iterations, substeps, overflow, solved_contacts, active_bodies;
+} dc_gpu_rigid_solver_stats_t;
+
 #include "dungeoncraft/chunk.h"
 
 #ifndef DC_GPU_CHUNK_SLOTS
@@ -21,6 +30,17 @@ typedef struct {
 } dc_gpu_body_t;
 
 typedef struct dc_gpu dc_gpu_t;
+
+/** Enable the GPU contact solver; disabled contexts retain legacy diagnostic motion. */
+bool dc_gpu_set_rigid_solver(dc_gpu_t *gpu, bool enabled);
+/** Set angular state and kinematic/rotation-lock flags. Density comes from material. */
+bool dc_gpu_set_body_motion(dc_gpu_t *gpu, uint32_t id, float angle, float angular_velocity,
+                            uint32_t flags, char *err_buf, uint32_t err_cap);
+/** Explicit diagnostic readback of GPU-owned motion and derived physical properties. */
+bool dc_gpu_read_body_motion(dc_gpu_t *gpu, uint32_t id, dc_gpu_body_motion_t *motion,
+                             char *err_buf, uint32_t err_cap);
+/** Explicit diagnostic readback; the ordinary solve never reads GPU counters. */
+bool dc_gpu_read_rigid_solver_stats(dc_gpu_t *gpu, dc_gpu_rigid_solver_stats_t *stats);
 
 typedef enum {
     DC_GPU_OVERLAY_NONE,
