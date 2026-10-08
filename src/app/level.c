@@ -208,16 +208,14 @@ static bool resolve_world_transfer(dc_level_view_t *view, char *err, uint32_t ca
     return true;
 }
 
-dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
-/* Window diagnostic API stubs are exercised by the RED integration tests. */
-                              char *err, uint32_t cap);
 bool dc_level_view_body_state(dc_level_view_t *view, uint32_t id,
                               dc_gpu_world_body_t *body, dc_gpu_body_motion_t *motion,
                               char *err, uint32_t cap) {
-    (void)view;(void)id;(void)body;(void)motion;(void)err;(void)cap;return false;
+    return view && dc_gpu_read_world_body(view->gpu,id,body,err,cap) &&
+        dc_gpu_read_body_motion(view->gpu,id,motion,err,cap);
 }
 bool dc_level_view_rigid_solver_stats(dc_level_view_t *view,dc_gpu_rigid_solver_stats_t *stats) {
-    (void)view;(void)stats;return false;
+    return view && dc_gpu_read_rigid_solver_stats(view->gpu,stats);
 }
 
 dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
