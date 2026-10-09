@@ -27,6 +27,17 @@ static uint32_t body_slot(const dc_gpu_t *gpu, uint32_t id) {
     return DC_GPU_BODY_CAPACITY;
 }
 
+bool dc_gpu_spawn_compound_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
+                                const dc_gpu_compound_shape_t *shape, char *err, uint32_t cap) {
+    (void)gpu; (void)body; (void)shape;
+    return error(err, cap, "Compound bodies not implemented");
+}
+bool dc_gpu_read_compound_shape(dc_gpu_t *gpu, uint32_t id, dc_gpu_compound_shape_t *shape,
+                                char *err, uint32_t cap) {
+    (void)gpu; (void)id; (void)shape;
+    return error(err, cap, "Compound bodies not implemented");
+}
+
 bool dc_gpu_valid_body_shape(const dc_gpu_body_t *body, const dc_gpu_body_shape_t *shape) {
     if (!body || !shape || shape->count < 3 || shape->count > DC_GPU_CONVEX_VERTICES ||
         (shape->material != DC_GPU_BODY_STONE && shape->material != DC_GPU_BODY_WOOD) ||

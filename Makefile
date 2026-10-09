@@ -35,6 +35,9 @@ MPM_SHADER = build/shaders/mpm.comp.spv
 MPM_ACTIVITY_SHADER = build/shaders/mpm_active.comp.spv
 MPM_COMPONENT_SHADER = build/shaders/mpm_component.comp.spv
 
+build/compound_body_tests: tests/vulkan/compound_body_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(BROADPHASE_SHADER) $(CONTACT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -lm
+
 build/rigid_solver_tests: tests/vulkan/rigid_solver_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -lm
 
@@ -42,6 +45,8 @@ build/rigid_solver_tests: tests/vulkan/rigid_solver_tests.c $(GPU_OBJ) $(CHUNK_O
 all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
 
 NATIVE_SRC = src/app/main.c src/app/level.c src/app/session.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c src/world/stream.c src/world/generate.c
+build/rigid_dynamics_visual_tests: tests/app/rigid_dynamics_visual_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u $< $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS) -lm
 $(GPU_OBJ): $(BROADPHASE_SHADER) $(CONTACT_SHADER)
 $(RIGID_SHADER) $(PROBE_SHADER) $(BROADPHASE_SHADER): shaders/sim/rigid_body.glsl
 $(RIGID_SHADER): shaders/sim/rigid_shape.glsl

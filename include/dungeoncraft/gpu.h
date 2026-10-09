@@ -202,6 +202,19 @@ typedef struct {
     uint32_t count, material;
     struct { int32_t x_fp, y_fp; } vertices[DC_GPU_CONVEX_VERTICES];
 } dc_gpu_body_shape_t;
+#define DC_GPU_BODY_PIECES 4u
+/** Connected, non-overlapping convex pieces sharing one rigid pose and material. */
+typedef struct {
+    uint32_t count;
+    dc_gpu_body_shape_t pieces[DC_GPU_BODY_PIECES];
+} dc_gpu_compound_shape_t;
+/** Spawn a compound body; invalid/disconnected/overlapping pieces leave state unchanged. */
+bool dc_gpu_spawn_compound_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
+                                const dc_gpu_compound_shape_t *shape,
+                                char *err_buf, uint32_t err_cap);
+/** Read compound pieces by stable ID; legacy convex bodies have count zero. */
+bool dc_gpu_read_compound_shape(dc_gpu_t *gpu, uint32_t id, dc_gpu_compound_shape_t *shape,
+                                char *err_buf, uint32_t err_cap);
 /** Spawn/update a world body with a validated convex shape, atomically on error. */
 bool dc_gpu_spawn_convex_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
                               const dc_gpu_body_shape_t *shape,
