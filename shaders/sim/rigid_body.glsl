@@ -4,6 +4,8 @@
 const uint BODY_CAPACITY = 64u;
 const uint BODY_VERTEX_CAPACITY = 8u;
 const uint BODY_MAX_SIDE = 16u;
+const uint BODY_PIECES = 4u;
+struct Shape { uint count, material; ivec2 vertices[BODY_VERTEX_CAPACITY]; };
 
 struct Body {
     int x_fp, y_fp, vx_fp, vy_fp;
@@ -21,6 +23,8 @@ struct Body {
     vec2 center;
     float inverse_mass, inverse_inertia, mass, inertia, density, previous_angle;
     ivec2 bounds_low, bounds_high, swept_low, swept_high;
+    uint piece_count, compound_reserved;
+    Shape pieces[BODY_PIECES];
 };
 
 vec2 body_rotate(vec2 p, float angle) {
@@ -36,32 +40,57 @@ vec2 body_rest_vertex(Body b, uint i) {
 vec2 body_vertex(Body b, uint i) {
     return b.center + body_rotate(body_rest_vertex(b, i) - b.center, b.angle);
 }
+uint body_pieces(Body b) { return max(1u,b.piece_count); }
+uint piece_vertices(Body b,uint p) { return b.piece_count==0u ? body_vertices(b) : b.pieces[p].count; }
+vec2 piece_rest_vertex(Body b,uint p,uint i) {
+    return b.piece_count==0u ? body_rest_vertex(b,i) : vec2(b.pieces[p].vertices[i])/65536.0;
+}
+vec2 piece_vertex(Body b,uint p,uint i) {
+    return b.center+body_rotate(piece_rest_vertex(b,p,i)-b.center,b.angle);
+}
 void body_bounds(Body b, out vec2 low, out vec2 high) {
     low = vec2(1e20); high = vec2(-1e20);
-    for (uint i = 0u; i < body_vertices(b); ++i) {
-        vec2 p = body_vertex(b,i); low = min(low,p); high = max(high,p);
+    for(uint piece=0u;piece<body_pieces(b);++piece)
+        for (uint i = 0u; i < piece_vertices(b,piece); ++i) {
+            vec2 p = piece_vertex(b,piece,i); low = min(low,p); high = max(high,p);
+        }
+}
+void piece_properties(Body b,uint piece,out float area,out vec2 center,out float inertia) {
+    vec2 first=piece_rest_vertex(b,piece,0u),weighted=vec2(0);
+    float moment=0.0;area=0.0;
+    for(uint i=1u;i+1u<piece_vertices(b,piece);++i) {
+        vec2 p=piece_rest_vertex(b,piece,i)-first,q=piece_rest_vertex(b,piece,i+1u)-first;
+        float a=body_cross(p,q)*0.5;
+        area+=a;weighted+=a*(p+q)/3.0;
+        moment+=a*(dot(p,p)+dot(p,q)+dot(q,q))/6.0;
     }
+    vec2 local_center=weighted/max(area,1e-12);
+    center=first+local_center;
+    inertia=max(moment-area*dot(local_center,local_center),1e-24);
 }
 void body_properties(inout Body b) {
     if (b.motion_ready != 0u) return;
     b.density = b.material == 2u ? 0.6 : 2.7;
-    vec2 first = body_rest_vertex(b,0u), weighted = vec2(0);
-    float area = 0.0, moment = 0.0;
-    for (uint i=1u; i+1u<body_vertices(b); ++i) {
-        vec2 p = body_rest_vertex(b,i)-first, q = body_rest_vertex(b,i+1u)-first;
-        float a = body_cross(p,q)*0.5;
-        area += a; weighted += a*(p+q)/3.0;
-        moment += a*(dot(p,p)+dot(p,q)+dot(q,q))/6.0;
+    vec2 weighted=vec2(0);float area=0.0;
+    float areas[BODY_PIECES],inertias[BODY_PIECES];vec2 centers[BODY_PIECES];
+    for(uint piece=0u;piece<body_pieces(b);++piece) {
+        piece_properties(b,piece,areas[piece],centers[piece],inertias[piece]);
+        area+=areas[piece];weighted+=areas[piece]*centers[piece];
     }
-    vec2 relative_center = weighted / max(area,1e-12);
-    b.center = first + relative_center;
+    b.center=weighted/max(area,1e-12);
     b.mass = max(area*b.density,1e-12);
-    b.inertia = max(b.density*moment-b.mass*dot(relative_center,relative_center),1e-24);
+    float inertia=0.0;
+    for(uint piece=0u;piece<body_pieces(b);++piece) {
+        vec2 delta=centers[piece]-b.center;
+        inertia+=inertias[piece]+areas[piece]*dot(delta,delta);
+    }
+    b.inertia=max(b.density*inertia,1e-24);
     b.inverse_mass = (b.motion_flags & 1u) == 0u ? 1.0/b.mass : 0.0;
     b.inverse_inertia = (b.motion_flags & 3u) == 0u ? 1.0/b.inertia : 0.0;
     float radius=0.0;
-    for(uint i=0u;i<body_vertices(b);++i)
-        radius=max(radius,length(body_rest_vertex(b,i)-b.center));
+    for(uint piece=0u;piece<body_pieces(b);++piece)
+        for(uint i=0u;i<piece_vertices(b,piece);++i)
+            radius=max(radius,length(piece_rest_vertex(b,piece,i)-b.center));
     b.radius=radius;
     b.motion_ready = 1u;
 }

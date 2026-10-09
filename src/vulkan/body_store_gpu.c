@@ -24,9 +24,11 @@ typedef struct {
     dc_gpu_world_body_t world;
     dc_gpu_body_shape_t shape;
     saved_motion_t motion;
+    dc_gpu_compound_shape_t compound;
+    uint32_t compound_reserved;
 } moving_body_t;
 
-_Static_assert(sizeof(moving_body_t) == 136, "Moving body snapshot layout changed");
+_Static_assert(sizeof(moving_body_t) == 432, "Compound body snapshot layout changed");
 
 _Static_assert(sizeof(shaped_body_t) == 120, "Shaped body snapshot layout changed");
 
@@ -42,11 +44,12 @@ bool dc_gpu_save_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap
     if (length < 0 || (size_t)length >= sizeof(temporary))
         return error(err, cap, "Body snapshot path is too long");
     moving_body_t bodies[DC_GPU_BODY_CAPACITY] = {0};
-    body_header_t header = { .magic = {'D', 'C', 'B', '1'}, .version = 3 };
+    body_header_t header = { .magic = {'D', 'C', 'B', '1'}, .version = 4 };
     for (uint32_t i = 0; i < gpu->body_count; ++i) {
         if (!gpu->body_ids[i]) continue;
         if (!dc_gpu_read_world_body(gpu, gpu->body_ids[i], &bodies[header.count].world, err, cap) ||
-            !dc_gpu_read_body_shape(gpu, gpu->body_ids[i], &bodies[header.count].shape, err, cap))
+            !dc_gpu_read_body_shape(gpu, gpu->body_ids[i], &bodies[header.count].shape, err, cap) ||
+            !dc_gpu_read_compound_shape(gpu,gpu->body_ids[i],&bodies[header.count].compound,err,cap))
             return false;
         dc_gpu_body_motion_t motion;
         if (!dc_gpu_read_body_motion(gpu,gpu->body_ids[i],&motion,err,cap)) return false;
@@ -70,14 +73,17 @@ bool dc_gpu_load_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap
     body_header_t header = {0};
     moving_body_t bodies[DC_GPU_BODY_CAPACITY] = {0};
     bool okay = fread(&header, sizeof(header), 1, file) == 1 &&
-        memcmp(header.magic, "DCB1", 4) == 0 && header.version >= 1 && header.version <= 3 && !header.reserved &&
+        memcmp(header.magic, "DCB1", 4) == 0 && header.version >= 1 && header.version <= 4 && !header.reserved &&
         header.count <= DC_GPU_BODY_CAPACITY;
     for (uint32_t i = 0; okay && i < header.count; ++i) {
         okay = fread(&bodies[i].world, sizeof(bodies[i].world), 1, file) == 1;
         if (okay && header.version >= 2)
             okay = fread(&bodies[i].shape, sizeof(bodies[i].shape), 1, file) == 1;
-        if (okay && header.version == 3)
+        if (okay && header.version >= 3)
             okay = fread(&bodies[i].motion, sizeof(bodies[i].motion), 1, file) == 1;
+        if (okay && header.version >= 4)
+            okay = fread(&bodies[i].compound,sizeof(bodies[i].compound),1,file)==1 &&
+                fread(&bodies[i].compound_reserved,sizeof(uint32_t),1,file)==1;
     }
     if (okay) okay = fgetc(file) == EOF && !ferror(file);
     if (fclose(file) != 0) okay = false;
@@ -95,6 +101,14 @@ bool dc_gpu_load_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap
             okay = memcmp(&bodies[i].shape, &empty, sizeof(empty)) == 0;
         }
         for (uint32_t j = 0; okay && j < i; ++j) okay = bodies[j].world.body.id != body.id;
+        if(okay && bodies[i].compound.count)
+            okay=dc_gpu_valid_compound_shape(&body,&bodies[i].compound) &&
+                memcmp(&bodies[i].shape,&bodies[i].compound.pieces[0],sizeof(bodies[i].shape))==0;
+        else if(okay) {
+            dc_gpu_compound_shape_t empty={0};
+            okay=memcmp(&empty,&bodies[i].compound,sizeof(empty))==0;
+        }
+        okay=okay && !bodies[i].compound_reserved;
         saved_motion_t motion=bodies[i].motion;
         okay = okay && isfinite(motion.angle) && fabsf(motion.angle)<=3.141593f &&
             isfinite(motion.angular_velocity) && fabsf(motion.angular_velocity)<=.5f &&
@@ -106,7 +120,8 @@ bool dc_gpu_load_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap
     gpu->body_count = 0;
     gpu->body_refresh_pending = true;
     for (uint32_t i = 0; i < header.count; ++i) {
-        bool spawned = bodies[i].shape.count ?
+        bool spawned = bodies[i].compound.count ?
+            dc_gpu_spawn_compound_body(gpu,bodies[i].world,&bodies[i].compound,err,cap) : bodies[i].shape.count ?
             dc_gpu_spawn_convex_body(gpu, bodies[i].world, &bodies[i].shape, err, cap) :
             dc_gpu_spawn_world_body(gpu, bodies[i].world, err, cap);
         if (!spawned) return false;

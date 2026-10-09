@@ -17,6 +17,7 @@ params;
 
 const float DT = 0.125, SUM_SCALE = 65536.0;
 const uint CONTACT_CAPACITY = 8192u;
+const uint BODY_AWAKE_WORD = 13u;
 const uint RESET = 0u, BEGIN_FRAME = 1u, PREDICT = 2u, PREPARE = 3u, INIT_CONTACTS = 4u;
 const uint CLEAR = 5u, SOLVE = 6u, APPLY = 7u, DERIVE_VELOCITY = 8u, IMPULSE = 9u,
            APPLY_VELOCITY = 10u, FINISH = 11u;
@@ -80,7 +81,9 @@ uint slot(uint id) {
 }
 Body contact_body(uint i) {
     Body b = bodies[i];
-    if (data[bs(i) + 13u] == 0u) {
+    /* A streamed-out reference page freezes this slot; keep its saved motion
+       intact while treating its visible geometry as stationary support. */
+    if (data[bs(i) + BODY_AWAKE_WORD] == 0u) {
         b.inverse_mass = 0.0;
         b.inverse_inertia = 0.0;
         b.vx_fp = 0;
@@ -222,13 +225,13 @@ void main() {
     if (PHASE == BEGIN_FRAME) {
         for (uint k = 0u; k < 32u; ++k)
             data[s + k] = 0u;
-        data[s + 13u] = uint(awake(body));
+        data[s + BODY_AWAKE_WORD] = uint(awake(body));
         putv(s, position(body));
         putf(s + 2u, body.angle);
         data[s + 3u] = uint(body.vx_fp);
         data[s + 4u] = uint(body.vy_fp);
         putf(s + 5u, body.angular_velocity);
-        if (data[s + 13u] != 0u) {
+        if (data[s + BODY_AWAKE_WORD] != 0u) {
             atomicAdd(data[h + 5u], 1u);
             body.vx_fp = clamp(body.vx_fp, -(4 << 16), 4 << 16);
             body.vy_fp = clamp(clamp(body.vy_fp, -(4 << 16), 4 << 16) +
@@ -267,7 +270,7 @@ void main() {
         putv(s + 9u, velocity(body));
         putf(s + 11u, body.angular_velocity);
     }
-    if (data[s + 13u] == 0u)
+    if (data[s + BODY_AWAKE_WORD] == 0u)
         return;
     if (PHASE == FINISH) {
         if (data[h + 3u] != 0u) {

@@ -8,6 +8,9 @@ GLSLANG ?= glslangValidator
 
 GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/broadphase_gpu.o build/contact_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
 GPU_OBJ += build/solver_gpu.o
+GPU_OBJ += build/compound_gpu.o
+build/compound_gpu.o: src/vulkan/compound_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 SOLVER_SHADER = build/shaders/rigid_solver.comp.spv
 $(GPU_OBJ): $(SOLVER_SHADER)
 $(SOLVER_SHADER): shaders/sim/rigid_solver.comp shaders/sim/rigid_body.glsl

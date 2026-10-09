@@ -146,18 +146,24 @@ void main() {
     uint offset = pair_base() + index * PAIR_WORDS;
     uint slot = body_slot(data[offset]);
     if (slot == BODY_CAPACITY) { atomicAdd(data[base + 5u], 1u); return; }
-    Body a = bodies[slot]; Polygon pa = body_polygon(a, vec2(0));
+    Body a = bodies[slot];
     uint kind = data[offset + 2u]; bool found = false;
     if (kind == BODY_CONTACT) {
         uint other = body_slot(data[offset + 1u]); vec2 delta;
         if (other != BODY_CAPACITY && relative_body(a, bodies[other], delta)) {
             Body b = bodies[other];
-            found = emit_contact(a, b.id, BODY_CONTACT, b.vertex_count == 0u ? 1u : b.material,
-                0u, uvec2(0), uvec2(0), pa, body_polygon(b, delta));
+            for(uint ap=0u;ap<body_pieces(a);++ap) for(uint bp=0u;bp<body_pieces(b);++bp) {
+                bool emitted=emit_contact(a, b.id, BODY_CONTACT, b.vertex_count == 0u ? 1u : b.material,
+                    0u, uvec2(0), uvec2(0), body_polygon(a,ap,vec2(0)), body_polygon(b,bp,delta));
+                found=found || emitted;
+            }
         }
     } else {
-        found = terrain_contacts(a, kind, uvec2(data[offset + 4u], data[offset + 5u]),
-            uvec2(data[offset + 6u], data[offset + 7u]), pa);
+        for(uint ap=0u;ap<body_pieces(a);++ap) {
+            bool emitted=terrain_contacts(a, kind, uvec2(data[offset + 4u], data[offset + 5u]),
+                uvec2(data[offset + 6u], data[offset + 7u]), body_polygon(a,ap,vec2(0)));
+            found=found || emitted;
+        }
     }
     if (!found) atomicAdd(data[base + 5u], 1u);
 }

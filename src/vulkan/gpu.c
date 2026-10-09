@@ -366,7 +366,7 @@ bool dc_gpu_set_viewport(dc_gpu_t *gpu, uint32_t x, uint32_t y,
 }
 
 bool dc_gpu_set_display_zoom(dc_gpu_t *gpu, uint32_t zoom) {
-    if (!gpu || !gpu->swapchain || (zoom != 1u && zoom != 2u && zoom != 4u) ||
+    if (!gpu || !gpu->swapchain || (zoom != 1u && zoom != 2u && zoom != 4u && zoom != 8u) ||
         (uint64_t)gpu->view_width * zoom > gpu->swap_extent.width ||
         (uint64_t)gpu->view_height * zoom > gpu->swap_extent.height) return false;
     gpu->display_zoom = zoom;
@@ -389,7 +389,7 @@ bool dc_gpu_screen_cell(dc_gpu_t *gpu, uint32_t screen_x, uint32_t screen_y,
 
 bool dc_gpu_set_overlay(dc_gpu_t *gpu, dc_gpu_overlay_t overlay) {
     if (!gpu || overlay < DC_GPU_OVERLAY_NONE ||
-        overlay > DC_GPU_OVERLAY_STAGES) return false;
+        overlay > DC_GPU_OVERLAY_RIGID_IDS) return false;
     gpu->overlay = overlay;
     return true;
 }
@@ -467,7 +467,9 @@ bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
                            char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     uint32_t push[7] = { gpu->width, gpu->height, 3, x, y, radius, material };
-    return dispatch_cells(gpu, push, err, cap);
+    bool okay=dispatch_cells(gpu, push, err, cap);
+    if(okay) gpu->body_refresh_pending=true;
+    return okay;
 }
 
 bool dc_gpu_set_tick_water_source(dc_gpu_t *gpu, bool enabled,

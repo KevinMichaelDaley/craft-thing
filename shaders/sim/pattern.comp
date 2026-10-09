@@ -141,6 +141,9 @@ void main() {
         uint index = (page - 1u) * 4096u + (p.y % 64u) * 64u + p.x % 64u;
         if (params.mode == 2u && params.brush_y != 2u) {
             uint filtered = cell_material_color(ivec2(p));
+            uint body_id=occupancy[p.y*params.width+p.x];
+            if(params.brush_y==3u && body_id!=0u)
+                filtered=(body_id&1u)!=0u ? 0xff30c040u : 0xffe09040u;
             if ((params.brush_x & 1u) != 0u) {
                 uint guide = marker_grid[index];
                 if ((guide & 1u) != 0u) filtered = 0xffd040e0u;

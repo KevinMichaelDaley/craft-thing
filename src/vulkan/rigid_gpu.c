@@ -5,7 +5,8 @@
 #include "gpu_internal.h"
 
 _Static_assert(sizeof(dc_gpu_body_t) == 32, "GPU body layout must match SPIR-V");
-_Static_assert(sizeof(dc_gpu_body_record_t) == 232, "GPU body record must match SPIR-V");
+_Static_assert(sizeof(dc_gpu_body_record_t) == 528, "GPU body record must match SPIR-V");
+_Static_assert(offsetof(dc_gpu_body_record_t, pieces) == 240, "GPU compound offset changed");
 _Static_assert(offsetof(dc_gpu_body_record_t, shape) == 80, "GPU shape offset must match SPIR-V");
 _Static_assert(offsetof(dc_gpu_body_record_t, angle) == 152, "GPU angular state offset changed");
 _Static_assert(offsetof(dc_gpu_body_record_t, center) == 168, "GPU centroid offset changed");
@@ -27,16 +28,6 @@ static uint32_t body_slot(const dc_gpu_t *gpu, uint32_t id) {
     return DC_GPU_BODY_CAPACITY;
 }
 
-bool dc_gpu_spawn_compound_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
-                                const dc_gpu_compound_shape_t *shape, char *err, uint32_t cap) {
-    (void)gpu; (void)body; (void)shape;
-    return error(err, cap, "Compound bodies not implemented");
-}
-bool dc_gpu_read_compound_shape(dc_gpu_t *gpu, uint32_t id, dc_gpu_compound_shape_t *shape,
-                                char *err, uint32_t cap) {
-    (void)gpu; (void)id; (void)shape;
-    return error(err, cap, "Compound bodies not implemented");
-}
 
 bool dc_gpu_valid_body_shape(const dc_gpu_body_t *body, const dc_gpu_body_shape_t *shape) {
     if (!body || !shape || shape->count < 3 || shape->count > DC_GPU_CONVEX_VERTICES ||

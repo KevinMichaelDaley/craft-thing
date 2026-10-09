@@ -7,11 +7,11 @@ const float FEATURE_EPSILON = 0.0001;
 
 struct Polygon { vec2 vertices[BODY_VERTEX_CAPACITY]; uint count; };
 
-Polygon body_polygon(Body body, vec2 offset) {
+Polygon body_polygon(Body body,uint piece, vec2 offset) {
     Polygon polygon;
-    polygon.count = body_vertices(body);
+    polygon.count = piece_vertices(body,piece);
     for (uint i = 0u; i < polygon.count; ++i)
-        polygon.vertices[i] = offset + body_vertex(body,i);
+        polygon.vertices[i] = offset + piece_vertex(body,piece,i);
     return polygon;
 }
 

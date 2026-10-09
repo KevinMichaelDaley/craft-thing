@@ -49,8 +49,8 @@ bool dc_gpu_read_rigid_solver_stats(dc_gpu_t *gpu, dc_gpu_rigid_solver_stats_t *
 typedef enum {
     DC_GPU_OVERLAY_NONE,
     DC_GPU_OVERLAY_RESIDENCY,
-    DC_GPU_OVERLAY_STAGES
-    ,DC_GPU_OVERLAY_RIGID_IDS
+    DC_GPU_OVERLAY_STAGES,
+    DC_GPU_OVERLAY_RIGID_IDS
 } dc_gpu_overlay_t;
 
 typedef enum {

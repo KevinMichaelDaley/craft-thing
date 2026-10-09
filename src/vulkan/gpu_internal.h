@@ -29,6 +29,8 @@ typedef struct {
     float center[2], inverse_mass, inverse_inertia;
     float mass, inertia, density, previous_angle;
     int32_t bounds_low[2], bounds_high[2], swept_low[2], swept_high[2];
+    uint32_t piece_count, compound_reserved;
+    dc_gpu_body_shape_t pieces[DC_GPU_BODY_PIECES];
 } dc_gpu_body_record_t;
 
 struct dc_gpu {
@@ -242,6 +244,7 @@ bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
                              bool particles, char *err, uint32_t cap);
 bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 bool dc_gpu_valid_body_shape(const dc_gpu_body_t *body, const dc_gpu_body_shape_t *shape);
+bool dc_gpu_valid_compound_shape(const dc_gpu_body_t *body, const dc_gpu_compound_shape_t *shape);
 bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *shader_path,
                                 char *err, uint32_t cap);
 void dc_gpu_rigid_destroy(dc_gpu_t *gpu);
