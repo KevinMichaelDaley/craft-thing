@@ -224,7 +224,9 @@ static void test_quarter_native_gpu_stack_settles_and_persists(void) {
     for(uint32_t id=1;id<=2;++id) {
         ASSERT_TRUE(dc_level_view_body_state(view,id,&before[id-1],&motions[id-1],err,sizeof(err)));
         double y=(double)before[id-1].chunk.y*64+before[id-1].body.y_fp/65536.0;
-        ASSERT_TRUE(fabs(y-(INITIAL_CHUNK_Y*64+80-4*id))<.1);
+        printf("stack body %u: y=%.6f vy=%.6f angle=%.6f\n",id,y,
+               before[id-1].body.vy_fp/65536.0,motions[id-1].angle);
+        ASSERT_TRUE(fabs(y-(INITIAL_CHUNK_Y*64+80-4*(int32_t)id))<.1);
         ASSERT_TRUE(abs(before[id-1].body.vy_fp)<6554);
         ASSERT_TRUE(fabsf(motions[id-1].angle)<.05f);
         ASSERT_TRUE(fabsf(motions[id-1].density-(id==1 ? 2.7f : .6f))<.0001f);
