@@ -47,6 +47,13 @@ static void test_cavity_excludes_terrain_and_body_contacts(void) {
     ASSERT_TRUE(dc_gpu_read_contacts(g,&stats,contacts,32,err,sizeof(err)));
     printf("compound wall contacts: %u\n",stats.count);
     ASSERT_EQ(stats.count,1u);ASSERT_EQ(contacts[0].body_a,2u);ASSERT_EQ(stats.overflow,0u);
+    ASSERT_TRUE(dc_gpu_paint_material(g,73,24,0,DC_MATERIAL_STONE,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_contacts(g,&stats,contacts,32,err,sizeof(err)));
+    ASSERT_EQ(stats.count,2u);
+    uint32_t piece_mask=0;
+    for(uint32_t i=0;i<stats.count;++i) piece_mask|=1u<<((contacts[i].feature_a>>28)&3u);
+    ASSERT_EQ(piece_mask,3u);
     dc_gpu_destroy(g);PASS();
 }
 static void test_invalid_compounds_leave_existing_body_unchanged(void) {
