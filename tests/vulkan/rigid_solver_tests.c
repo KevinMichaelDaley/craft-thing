@@ -305,7 +305,129 @@ static void test_fractional_boxes_publish_the_full_corrected_footprint(void) {
     ASSERT_EQ(current,0u); ASSERT_EQ(swept,0u);
     dc_gpu_destroy(g); PASS();
 }
+static void test_removed_terrain_support_releases_body_next_tick(void) {
+    char err[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g && dc_gpu_set_rigid_solver(g, true));
+    ASSERT_TRUE(dc_gpu_spawn_world_body(g, box(43, 30, 92, 4, 4), err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(g, 43, 0, 0, DC_GPU_BODY_LOCK_ROTATION, err, sizeof(err)));
+    for (uint32_t i = 0; i < 20; ++i)
+        ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+    dc_gpu_world_body_t before, after;
+    ASSERT_TRUE(dc_gpu_read_world_body(g, 43, &before, err, sizeof(err)));
+    ASSERT_TRUE(fabsf(yof(before) - 92) < .1f);
+    for (uint32_t x = 28; x < 36; ++x)
+        ASSERT_TRUE(dc_gpu_paint_material(g, x, 96, 0, DC_MATERIAL_AIR, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(g, 43, &after, err, sizeof(err)));
+    ASSERT_TRUE(yof(after) > yof(before) + .2f);
+    ASSERT_TRUE(after.body.vy_fp > 13107);
+    dc_gpu_destroy(g);
+    PASS();
+}
+
+static void test_initial_body_overlap_separates_without_terrain_penetration(void) {
+    char err[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g && dc_gpu_set_rigid_solver(g, true));
+    ASSERT_TRUE(dc_gpu_spawn_world_body(g, box(45, 30, 92, 4, 4), err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_spawn_world_body(g, box(46, 33, 92, 4, 4), err, sizeof(err)));
+    for (uint32_t id = 45; id <= 46; ++id)
+        ASSERT_TRUE(dc_gpu_set_body_motion(g, id, 0, 0, DC_GPU_BODY_LOCK_ROTATION, err, sizeof(err)));
+    dc_gpu_world_body_t a, b;
+    for (uint32_t i = 0; i < 30; ++i) {
+        ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_read_world_body(g, 45, &a, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_read_world_body(g, 46, &b, err, sizeof(err)));
+        ASSERT_TRUE(yof(a) <= 92.1f && yof(b) <= 92.1f);
+    }
+    ASSERT_TRUE(xof(b) - xof(a) >= 3.99f);
+    ASSERT_TRUE(fabsf(yof(a) - 92) < .1f && fabsf(yof(b) - 92) < .1f);
+    dc_gpu_destroy(g);
+    PASS();
+}
+
+static bool streamed_contact(bool frozen_dynamic, bool reverse, dc_gpu_world_body_t *out) {
+    char err[256];
+    dc_gpu_t *g = grid();
+    if (!g) return false;
+    uint32_t frozen_id = reverse ? 48 : 47, awake_id = reverse ? 47 : 48;
+    dc_gpu_world_body_t frozen = box(frozen_id, 62, 40, 4, 4), after;
+    if (frozen_dynamic) {
+        frozen.body.vx_fp = -(4 << 16);
+        frozen.body.vy_fp = 3 << 16;
+    }
+    dc_gpu_world_body_t moving = box(awake_id, 65, 40, 4, 4);
+    moving.body.vx_fp = -32768;
+    bool okay = dc_gpu_set_rigid_solver(g, true) &&
+        dc_gpu_spawn_world_body(g, frozen, err, sizeof(err)) &&
+        dc_gpu_set_body_motion(g, frozen_id, 0, frozen_dynamic ? .2f : 0,
+            frozen_dynamic ? 0 : DC_GPU_BODY_KINEMATIC | DC_GPU_BODY_LOCK_ROTATION, err, sizeof(err)) &&
+        dc_gpu_spawn_world_body(g, moving, err, sizeof(err)) &&
+        dc_gpu_set_body_motion(g, awake_id, 0, 0, DC_GPU_BODY_LOCK_ROTATION, err, sizeof(err)) &&
+        dc_gpu_set_page(g, 0, 0, UINT32_MAX, err, sizeof(err)) &&
+        dc_gpu_rigid_step(g, err, sizeof(err)) &&
+        dc_gpu_read_world_body(g, frozen_id, &after, err, sizeof(err)) &&
+        memcmp(&frozen, &after, sizeof(frozen)) == 0 &&
+        dc_gpu_read_world_body(g, awake_id, out, err, sizeof(err));
+    dc_gpu_rigid_solver_stats_t stats;
+    okay = okay && dc_gpu_read_rigid_solver_stats(g, &stats) &&
+        stats.active_bodies == 1 && stats.solved_contacts > 0 && stats.overflow == 0;
+    if (okay && frozen_dynamic) {
+        dc_gpu_body_motion_t motion;
+        okay = dc_gpu_read_body_motion(g, frozen_id, &motion, err, sizeof(err)) &&
+            motion.angle == 0 && motion.angular_velocity == .2f &&
+            dc_gpu_remove_body(g, awake_id, err, sizeof(err)) &&
+            dc_gpu_set_page(g, 0, 0, 0, err, sizeof(err)) &&
+            dc_gpu_rigid_step(g, err, sizeof(err)) &&
+            dc_gpu_read_world_body(g, frozen_id, &after, err, sizeof(err)) &&
+            xof(after) < 62 && yof(after) > 40 &&
+            dc_gpu_read_body_motion(g, frozen_id, &motion, err, sizeof(err)) && motion.angle > .1f;
+    }
+    dc_gpu_destroy(g);
+    return okay;
+}
+
+static void test_streamed_asleep_body_contacts_match_stationary_support(void) {
+    for (uint32_t reverse = 0; reverse < 2; ++reverse) {
+        dc_gpu_world_body_t frozen, stationary;
+        ASSERT_TRUE(streamed_contact(true, reverse != 0, &frozen));
+        ASSERT_TRUE(streamed_contact(false, reverse != 0, &stationary));
+        printf("streamed contact: dynamic x=%.6f y=%.6f, static x=%.6f y=%.6f\n",
+            xof(frozen), yof(frozen), xof(stationary), yof(stationary));
+        ASSERT_EQ(memcmp(&frozen, &stationary, sizeof(frozen)), 0);
+        ASSERT_TRUE(yof(stationary) >= 40 && yof(stationary) <= 40.251f);
+    }
+    PASS();
+}
+
+static void test_prediction_enforces_linear_and_radius_based_angular_limits(void) {
+    char err[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g && dc_gpu_set_rigid_solver(g, true));
+    dc_gpu_world_body_t body = box(49, 20, 10, 16, 16);
+    body.body.vx_fp = 20 << 16;
+    body.body.vy_fp = 20 << 16;
+    ASSERT_TRUE(dc_gpu_spawn_world_body(g, body, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(g, 49, 0, .5f, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(g, 49, &body, err, sizeof(err)));
+    dc_gpu_body_motion_t motion;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, 49, &motion, err, sizeof(err)));
+    ASSERT_TRUE(fabsf(xof(body) - 24) < .001f && fabsf(yof(body) - 14) < .001f);
+    float radius = hypotf(8, 8), angular_limit = 2 / radius;
+    ASSERT_TRUE(fabsf(motion.angle - angular_limit) < .001f);
+    ASSERT_TRUE(fabsf(motion.angular_velocity) <= angular_limit + .0001f);
+    ASSERT_TRUE((hypotf(4, 4) + radius * angular_limit) / 8 < 1);
+    dc_gpu_destroy(g);
+    PASS();
+}
+
 int main(void) {
+    RUN(test_removed_terrain_support_releases_body_next_tick);
+    RUN(test_initial_body_overlap_separates_without_terrain_penetration);
+    RUN(test_streamed_asleep_body_contacts_match_stationary_support);
+    RUN(test_prediction_enforces_linear_and_radius_based_angular_limits);
     RUN(test_fractional_boxes_publish_the_full_corrected_footprint);
     RUN(test_material_mass_inertia_and_invalid_motion);
     RUN(test_stack_settles_and_slot_order_is_reproducible);

@@ -250,8 +250,25 @@ static void test_quarter_native_gpu_stack_settles_and_persists(void) {
         ASSERT_EQ(memcmp(&motions[id-1],&motion,sizeof(motion)),0);
     }
     ASSERT_TRUE(dc_level_view_pixel(view,64,74,&color,err,sizeof(err)));
+    ASSERT_EQ(color,0xff30c040u);
+    for(uint32_t x=40;x<90;++x)
+        ASSERT_TRUE(dc_level_view_paint(view,x,80,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_body_state(view,1,&after,&motion,err,sizeof(err)));
+    double released_y=(double)after.chunk.y*64+after.body.y_fp/65536.0;
+    ASSERT_TRUE(released_y>INITIAL_CHUNK_Y*64+76+.2);
+    ASSERT_TRUE(after.body.vy_fp>13107);
+    for(uint32_t tick=0;tick<4;++tick) {
+        ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
+    }
+    ASSERT_TRUE(dc_level_view_pixel(view,64,82,&color,err,sizeof(err)));
+    ASSERT_EQ(color,0xff30c040u);
+    ASSERT_TRUE(dc_level_view_pixel(view,64,74,&color,err,sizeof(err)));
+    ASSERT_TRUE(color!=0xff30c040u);
     ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));
-    ASSERT_EQ(color,0xff30c040u);PASS();
+    PASS();
 }
 int main(int argc, char **argv) {
     RUN(test_quarter_native_gpu_stack_settles_and_persists);
