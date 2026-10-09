@@ -78,6 +78,17 @@ uint slot(uint id) {
             return i;
     return BODY_CAPACITY;
 }
+Body contact_body(uint i) {
+    Body b = bodies[i];
+    if (data[bs(i) + 13u] == 0u) {
+        b.inverse_mass = 0.0;
+        b.inverse_inertia = 0.0;
+        b.vx_fp = 0;
+        b.vy_fp = 0;
+        b.angular_velocity = 0.0;
+    }
+    return b;
+}
 vec2 anchor(uint p) {
     int x, y;
     if (!relative_chunk(uvec2(data[p], data[p + 1u]), params.origin_x, x) ||
@@ -112,13 +123,13 @@ void solve_contact(uint i, bool impulse) {
     uint c = cb() + 12u + i * 32u, s = cs(i), a = data[s + 2u], b = data[s + 3u];
     if (a == BODY_CAPACITY)
         return;
-    Body ba = bodies[a];
+    Body ba = contact_body(a);
     vec2 ra = body_rotate(getv(s + 4u), ba.angle), rb = getv(s + 6u);
     vec2 pa = position(ba) + ba.center + ra, pb = getv(s + 9u);
     vec2 va = velocity(ba) + ba.angular_velocity * vec2(-ra.y, ra.x), vb = vec2(0);
     float mb = 0.0, ib = 0.0;
     if (b != BODY_CAPACITY) {
-        Body bb = bodies[b];
+        Body bb = contact_body(b);
         rb = body_rotate(rb, bb.angle);
         pb = position(bb) + bb.center + rb;
         vb = velocity(bb) + bb.angular_velocity * vec2(-rb.y, rb.x);
@@ -187,7 +198,7 @@ void main() {
         data[s + 3u] = b;
         if (a == BODY_CAPACITY)
             return;
-        Body ba = bodies[a];
+        Body ba = contact_body(a);
         vec2 pa = anchor(c + 16u), pb = anchor(c + 22u);
         vec2 ra = pa - position(ba) - ba.center;
         putv(s + 4u, body_rotate(ra, -ba.angle));
@@ -195,7 +206,7 @@ void main() {
         vec2 va = velocity(ba) + ba.angular_velocity * vec2(-ra.y, ra.x), vb = vec2(0);
         atomicAdd(data[bs(a) + 12u], 1u);
         if (b != BODY_CAPACITY) {
-            Body bb = bodies[b];
+            Body bb = contact_body(b);
             vec2 rb = pb - position(bb) - bb.center;
             putv(s + 6u, body_rotate(rb, -bb.angle));
             vb = velocity(bb) + bb.angular_velocity * vec2(-rb.y, rb.x);
@@ -250,6 +261,12 @@ void main() {
         if (data[h + 3u] != 0u)
             data[h + 4u] = 0u;
     }
+    if (PHASE == PREDICT) {
+        putv(s + 6u, position(body));
+        putf(s + 8u, body.angle);
+        putv(s + 9u, velocity(body));
+        putf(s + 11u, body.angular_velocity);
+    }
     if (data[s + 13u] == 0u)
         return;
     if (PHASE == FINISH) {
@@ -272,10 +289,6 @@ void main() {
     if (data[h + 3u] != 0u)
         return;
     if (PHASE == PREDICT) {
-        putv(s + 6u, position(body));
-        putf(s + 8u, body.angle);
-        putv(s + 9u, velocity(body));
-        putf(s + 11u, body.angular_velocity);
         publish(body, position(body) + velocity(body) * DT);
         body.angular_velocity =
             clamp(body.angular_velocity, -angular_limit(body), angular_limit(body));
