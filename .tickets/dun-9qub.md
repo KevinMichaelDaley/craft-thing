@@ -1,6 +1,6 @@
 ---
 id: dun-9qub
-status: in_progress
+status: closed
 deps: [dun-ci2x]
 links: [dun-mi1e]
 created: 2026-09-26T07:43:36Z
@@ -40,3 +40,7 @@ Do not close yet: the added quarter-native rendered stone/wood stack, its camera
 **2026-10-09T02:41:46Z**
 
 Unlocked-desktop GREEN validation: the rendered quarter-native stone/wood stack passes settling, runtime material density, camera eviction, and exact snapshot reload. Corrected a signed/unsigned expected-coordinate calculation in the test (negative world Y was converted to unsigned); the physical state already settled correctly. make test_quarter_native passed config 2, cadence 2, fluid 29, window 6, full-grid rigid solver 9, and native presentation smoke. On Intel Vulkan with validation, presentation measured 60.23 physics ticks/s and adaptive 61.3 frames/s. UI and final headless checks remain before closure.
+
+**2026-10-09T02:43:56Z**
+
+Final unlocked-display validation completed: make test passed all 132 headless cases, make test_quarter_native passed all config/cadence/fluid/window/full-grid rigid cases and native smoke, and make test_ui passed 5 controls cases plus all 10 smoke scenes. Intel Vulkan validation produced no errors. New rendered stack and persistence checks are GREEN; ticket acceptance is complete. Follow-up asleep-slot contact semantics and support-removal/initial-overlap regressions are recorded in dun-x9ei; active rigid plus dense fluid profiling remains in dun-2b08. Automatic isolated component gravity and material-density buoyancy remain explicitly specified in dun-spbq.

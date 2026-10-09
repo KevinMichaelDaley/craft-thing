@@ -27,3 +27,7 @@ During ct-l35t validation, quarter-native --smoke-native stalled for over 90 sec
 **2026-10-08T06:54:15Z**
 
 During dun-9qub validation, Wayland window runs stalled after attaching/committing the first Vulkan image and requesting a wl_surface frame callback. org.gnome.ScreenSaver.GetActive returned true on every check: the desktop is locked. X11 cannot present on this machine because DRI3 is unavailable. Owned test processes were bounded and killed by timeout; no compositor or lock settings were changed. An unlocked desktop is required to retry the new quarter-native stack scene, existing window regressions, and UI smoke checks. This evidence explains these runs, but does not establish that every earlier intermittent stall had the same cause.
+
+**2026-10-09T02:42:20Z**
+
+With ScreenSaver.GetActive=false, the previously stalled dun-9qub window scene completed. The full quarter-native suite (six window scenes including successive recreation) and make test_ui (five controls tests plus ten smoke scenes) now pass under Intel Vulkan validation. No compositor settings or presentation code changes were needed for these runs. Leave this ticket open for its broader intermittent-stall diagnostics and repeated bounded-run acceptance.
