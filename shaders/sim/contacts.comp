@@ -53,7 +53,7 @@ float body_friction(uint material) { return material == 2u ? 0.6 : 0.7; }
 float cell_friction(uint material) { return material == 4u ? 0.8 : material == 2u ? 0.6 : 0.7; }
 
 bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_feature,
-                  uvec2 feature_x, uvec2 feature_y, Polygon pa, Polygon pb) {
+                  uvec2 feature_x, uvec2 feature_y, Polygon pa, Polygon pb,uint piece_a,uint piece_b) {
     vec2 normal; float depth;
     if (!polygon_contact(pa, pb, normal, depth)) return false;
     vec2 point_a, point_b; uint feature_a, feature_b;
@@ -75,8 +75,8 @@ bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_fea
     float compliance = kind == MPM_CONTACT ? 0.0001 :
         (material_a == 2u || (kind == BODY_CONTACT && material_b == 2u) ? 0.00002 : 0.0);
     data[offset] = a.id; data[offset + 1u] = body_b; data[offset + 2u] = kind;
-    data[offset + 3u] = feature_a;
-    data[offset + 4u] = kind == BODY_CONTACT ? feature_b : cell_feature;
+    data[offset + 3u] = feature_a | (piece_a<<28);
+    data[offset + 4u] = kind == BODY_CONTACT ? feature_b | (piece_b<<28) : cell_feature;
     data[offset + 5u] = material_a; data[offset + 6u] = material_b; data[offset + 7u] = 0u;
     data[offset + 8u] = floatBitsToUint(normal.x); data[offset + 9u] = floatBitsToUint(normal.y);
     data[offset + 10u] = floatBitsToUint(depth); data[offset + 11u] = floatBitsToUint(sqrt(fa * fb));
@@ -94,7 +94,7 @@ bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_fea
     return true;
 }
 
-bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygon polygon) {
+bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygon polygon,uint piece) {
     int cx, cy;
     if (!relative_chunk(chunk_x, params.origin_x, cx) || !relative_chunk(chunk_y, params.origin_y, cy)) return false;
     ivec2 tile = ivec2(cx, cy), tile_low = tile * 64;
@@ -120,7 +120,7 @@ bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygo
         } else contact_kind = BOUNDARY_CONTACT;
         vec2 offset = vec2((ivec2(x, y) << 16) - current) / 65536.0;
         bool emitted = emit_contact(body, 0u, contact_kind, material, cell_feature,
-            chunk_x, chunk_y, polygon, cell_polygon(offset));
+            chunk_x, chunk_y, polygon, cell_polygon(offset),piece,0u);
         found = found || emitted;
     }
     return found;
@@ -154,14 +154,14 @@ void main() {
             Body b = bodies[other];
             for(uint ap=0u;ap<body_pieces(a);++ap) for(uint bp=0u;bp<body_pieces(b);++bp) {
                 bool emitted=emit_contact(a, b.id, BODY_CONTACT, b.vertex_count == 0u ? 1u : b.material,
-                    0u, uvec2(0), uvec2(0), body_polygon(a,ap,vec2(0)), body_polygon(b,bp,delta));
+                    0u, uvec2(0), uvec2(0), body_polygon(a,ap,vec2(0)), body_polygon(b,bp,delta),ap,bp);
                 found=found || emitted;
             }
         }
     } else {
         for(uint ap=0u;ap<body_pieces(a);++ap) {
             bool emitted=terrain_contacts(a, kind, uvec2(data[offset + 4u], data[offset + 5u]),
-                uvec2(data[offset + 6u], data[offset + 7u]), body_polygon(a,ap,vec2(0)));
+                uvec2(data[offset + 6u], data[offset + 7u]), body_polygon(a,ap,vec2(0)),ap);
             found=found || emitted;
         }
     }
