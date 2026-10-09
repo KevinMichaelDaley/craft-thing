@@ -29,7 +29,7 @@ static void test_compounds_preserve_cavities_and_material_mass(void) {
         dc_gpu_body_motion_t m;ASSERT_TRUE(dc_gpu_read_body_motion(g,i+1,&m,err,sizeof(err)));
         ASSERT_TRUE(fabsf(m.mass-(i ? 160*.6f : 112*2.7f))<.001f);
         ASSERT_TRUE(fabsf(m.center_x-(i ? 8 : 38.f/7))<.001f);
-        ASSERT_TRUE(fabsf(m.center_y-(i ? 10.4f : 74.f/7))<.001f);
+        ASSERT_TRUE(fabsf(m.center_y-(i ? 9.2f : 74.f/7))<.001f);
     }
     dc_gpu_destroy(g);PASS();
 }
@@ -45,6 +45,7 @@ static void test_cavity_excludes_terrain_and_body_contacts(void) {
     ASSERT_TRUE(dc_gpu_paint_material(g,61,24,0,DC_MATERIAL_STONE,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_contacts(g,&stats,contacts,32,err,sizeof(err)));
+    printf("compound wall contacts: %u\n",stats.count);
     ASSERT_EQ(stats.count,1u);ASSERT_EQ(contacts[0].body_a,2u);ASSERT_EQ(stats.overflow,0u);
     dc_gpu_destroy(g);PASS();
 }

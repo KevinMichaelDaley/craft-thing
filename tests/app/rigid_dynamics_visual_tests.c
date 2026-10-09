@@ -45,13 +45,17 @@ static void test_two_concave_bodies_fall_rotate_collide_and_settle_visibly(void)
     ASSERT_TRUE(dc_gpu_spawn_compound_body(g,second,&u,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_motion(g,1,0,.12f,0,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_motion(g,2,0,-.06f,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_viewport(g,0,0,VIS_WIDTH,VIS_HEIGHT));
     ASSERT_TRUE(dc_gpu_set_display_zoom(g,8));
-    ASSERT_TRUE(dc_gpu_set_window_title(g,"Rigid dynamics: concave stone L + wood U — gravity, rotation, contacts"));
+    ASSERT_TRUE(dc_gpu_set_overlay(g,DC_GPU_OVERLAY_RIGID_IDS));
+    ASSERT_TRUE(dc_gpu_set_window_title(g,"Rigid dynamics: green stone L + blue wood U — concave contacts"));
     ASSERT_TRUE(dc_gpu_present_chunks(g,err,sizeof(err)));
     uint32_t *pixels=malloc(VIS_WIDTH*VIS_HEIGHT*sizeof(*pixels));ASSERT_TRUE(pixels);
     mkdir("build/screenshots",0777);
     ASSERT_TRUE(snapshot(g,"build/screenshots/rigid_concave_before.bmp",pixels,err));
+    ASSERT_EQ(pixels[21*VIS_WIDTH+51],0xff30c040u);
+    ASSERT_EQ(pixels[46*VIS_WIDTH+60],0xffe09040u);
     FILE *frames=fopen("build/screenshots/rigid_concave.rgba","wb");ASSERT_TRUE(frames);
     SDL_Delay(1000);
     bool body_contact=false,terrain_contact=false,rotated=false;

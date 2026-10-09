@@ -50,6 +50,7 @@ typedef enum {
     DC_GPU_OVERLAY_NONE,
     DC_GPU_OVERLAY_RESIDENCY,
     DC_GPU_OVERLAY_STAGES
+    ,DC_GPU_OVERLAY_RIGID_IDS
 } dc_gpu_overlay_t;
 
 typedef enum {
