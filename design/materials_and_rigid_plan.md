@@ -42,12 +42,13 @@ temporary file and rename. Reopening restores IDs, anchors, local poses, sizes,
 and velocities before rendering. Version 1 uses a 16-byte header and 48-byte
 native-endian records, consistent with the existing native-endian chunk files.
 Version 2 adds 72 bytes of convex geometry and material to each record, for
-120 bytes total; the loader still accepts version 1 box snapshots.
+120 bytes total. Version 3 adds angular state and flags (136 bytes); version 4
+adds compound pieces (432 bytes). The loader accepts all four versions.
 The loader validates capacity, canonical positions, IDs, duplicate IDs, version,
 and complete length before replacing the pool. Snapshot reads occur only during
 world save and explicit tests; ordinary physics, seam ownership changes, and
-camera transforms stay on GPU. These rectangular bodies still use the baseline
-downward terrain contact rather than the upcoming world broadphase/XPBD solver.
+camera transforms stay on GPU. App contexts enable the GPU XPBD solver; the
+box-only support approximation remains for legacy diagnostic contexts.
 
 ## GPU broadphase (`dun-4ftd`)
 
@@ -80,9 +81,11 @@ solver remains `dun-9qub`; broadphase candidates alone do not resolve collisions
 
 ## Convex shape storage and occupancy (`ct-l35t`)
 
-Each GPU body record now occupies 152 bytes: the original 80-byte transform
-prefix followed by a 72-byte shape. Shape vertices use body-local 16.16
-coordinates, with rotation baked into the vertices. Three through eight
+The original convex shape storage added a 72-byte shape to the 80-byte transform
+prefix. Current GPU records occupy 528 bytes including angular state, cached
+bounds, and compound pieces. Shape vertices use body-local 16.16 coordinates;
+authored rotation may be baked into vertices, and runtime rotation is about
+the derived center of mass. Three through eight
 counterclockwise vertices must form a strictly convex polygon within the body's
 at-most-16-by-16 bounds. Material identifies stone or wood independently of
 terrain cell material IDs. Invalid geometry leaves the pool unchanged. The box
@@ -103,11 +106,9 @@ slot reuse. The quarter-native window test renders both polygons, evicts and
 reloads their terrain chunks, and reopens the saved session. Rendering still
 uses the existing green body diagnostic color for both materials.
 
-Custom polygons currently undergo free translation and gravity. They bypass
-the box-only downward support approximation; terrain and body response require
-the pending contact and XPBD tickets. Runtime angular state and convex-piece
-decomposition also remain part of that subsequent solver work. This prerequisite
-does not implement contact buffers, normals, penetration depths, or friction.
+With the solver enabled, polygons and compound pieces use terrain/body contacts,
+angular response, mass/inertia, compliance, friction, and restitution. The
+convex storage prerequisite itself remains separate from the later solver work.
 
 ## Convex-to-cell narrowphase (`dun-ci2x`)
 
@@ -121,24 +122,25 @@ the outer chunk ring, and cells beyond a partial viewport tile produce blocking
 boundary contacts. Terrain work clips the scan to the body's bounds and candidate
 chunk instead of scanning every cell in every chunk.
 
-One body-pair contact uses the minimum translation direction and support faces
+Each convex piece-pair contact uses the minimum translation direction and support faces
 of the two polygons. Containment uses directional translation distances rather
 than only interval-intersection width. The normal points from B to A; applying
 a positive correction to A along the normal separates it from B. Touching pairs
 can have zero depth; the tolerance is one 16.16 unit. Contact generation is
-discrete at the completed pose. Swept broadphase is conservative, but continuous
-collision detection and bounded solver substeps remain subsequent work.
+discrete at each of eight solver substeps. Swept broadphase is conservative;
+continuous time-of-impact collision detection is not implemented.
 
 Each 128-byte contact contains sorted body IDs for body pairs, contact kind,
 feature IDs, material IDs, normal, depth, friction, restitution, compliance, and
 two world witness anchors. Each anchor uses a signed 64-bit chunk pair plus
 canonical local 16.16 coordinates. Support-face witnesses use a shared tangent
 coordinate when their face spans overlap. Body features encode vertex indices
-or an edge index with the high bit set. Cell features use the local cell index
+or an edge index with the high bit set; bits 28–29 identify the compound piece
+(zero for legacy shapes). Cell features use the local cell index
 and a separate signed world feature chunk; a witness point crossing a chunk edge
 does not change the cell's identity. Body and cell material IDs use separate
 namespaces, selected by contact kind. Coefficients are current prototype values;
-the later solver consumes them along with mass and inertia.
+the solver consumes them along with material-derived mass and inertia.
 
 The bounded contact region follows all 4,096 broadphase records in storage
 binding 4. A 12-word header holds six diagnostic counters and a GPU-generated
@@ -150,7 +152,7 @@ contact generation and no additional storage descriptor is required.
 Contact overflow flags are capacity `0x1`, unrepresentable world anchor `0x2`,
 and incomplete broadphase `0x4`. An incomplete broadphase clears the contact
 count and prevents generation from its truncated candidates. Any nonzero contact
-overflow must gate the forthcoming XPBD solver; capacity overflow retains only
+overflow gates the XPBD solver and rolls back its tick; capacity overflow retains only
 the diagnostic prefix. Required counts describe representable contacts before
 the output limit. Output order is unspecified; stable feature keys identify
 contacts. Explicit diagnostic readback validates caller capacity before touching
@@ -215,6 +217,59 @@ Parallel Jacobi XPBD accumulates corrections per body in separate buffers and
 applies them together each iteration. Contact work and fracture thresholds
 feed stone breakup; newborn gravel enters the particle pool, while larger
 fragments become new rigid bodies.
+
+### Implemented GPU contact bounds and streaming behavior
+
+The enabled rigid solver uses eight substeps per tick, each with eight Jacobi
+position iterations. Linear velocity components are clamped to four cells per
+tick; dynamic bodies receive a downward 0.25-cell/tick velocity increment once
+per tick. Angular velocity is bounded to the smaller of 0.5 radians/tick and
+two divided by the body's maximum vertex distance from its material-derived
+center of mass. Thus predicted vertex displacement per substep is at most
+`(sqrt(2) * 4 + 2) / 8 < 1` cell. Contacts are regenerated each substep with a
+0.25-cell speculative skin. This is discrete collision detection, not swept
+time-of-impact CCD; the displacement bound does not guarantee collision with
+arbitrarily thin subcell features or arbitrarily thin moving body pairs.
+One-cell terrain hard drops, four-cell body overlap resolution, stable stacks,
+and moving supports are covered by the Vulkan regressions.
+
+Terrain edits are sampled on the next rigid tick. Removing the final support
+therefore releases a resting body immediately without cached contact impulses
+holding it in place. Initial overlap is corrected by the same position solve;
+corrections determine the bounded dynamic velocities afterward. An incomplete
+contact set rolls back the entire tick instead of applying partial corrections.
+
+A body whose reference page is missing retains its world pose, linear velocity,
+angle, and angular velocity. Any part still overlapping resident geometry acts
+as stationary support with zero contact velocity and zero inverse mass/inertia.
+Every slot records its actual substep starting pose, including frozen slots,
+so friction measures displacement from that pose rather than from zero. These
+effective contact properties are temporary shader values; reloading the
+reference page reactivates the stored dynamic state. Awake kinematic bodies
+retain their prescribed contact velocity so moving supports still carry bodies.
+All of this runs on GPU; state reads in regression tests are explicit diagnostics.
+
+Concave bodies use two to four authored convex pieces under one stable body ID,
+pose, velocity, and angular state. Pieces must share one material, have disjoint
+interiors, and form a connected shared-edge graph; invalid updates are rejected
+before modifying the body pool. GPU mass, centroid, and inertia sum the piece
+integrals with the parallel-axis theorem. Bounds and angular speed limits cover
+every piece. Occupancy rasterizes their union and narrowphase tests individual
+piece pairs, so a concavity remains empty for both rendering and contacts.
+Binding 4 uses 528-byte body records with piece storage at byte 240; broadphase,
+contact, and solver sections still follow the 64-record prefix. Snapshot V4
+stores 432-byte body records including compound pieces; V1–V3 remain readable.
+
+`make test_rigid_dynamics` runs cavity/mass/persistence regressions and a paced
+quarter-native Vulkan window scene. A green stone L and blue wood U fall with
+initial angular velocity, collide, and settle. The window uses an eight-times
+nearest-neighbor crop of the full 640×448 simulation with 70 resident chunks,
+fluid interval two, and 16 pressure sweeps. The scene checks body/body and
+terrain contacts, visible rotation, bounded final velocities, and two active
+rigid IDs. It writes before/impact/settled BMPs and a 30-frame/s RGBA replay
+stream under `build/screenshots/rigid_concave*`. Both `test_ui` and
+`test_quarter_native` include this visual scene; `make test` includes the
+headless compound regressions.
 
 ## End-to-end gates
 

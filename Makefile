@@ -38,18 +38,25 @@ MPM_SHADER = build/shaders/mpm.comp.spv
 MPM_ACTIVITY_SHADER = build/shaders/mpm_active.comp.spv
 MPM_COMPONENT_SHADER = build/shaders/mpm_component.comp.spv
 
-build/compound_body_tests: tests/vulkan/compound_body_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(BROADPHASE_SHADER) $(CONTACT_SHADER)
+build/compound_body_tests: tests/vulkan/compound_body_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(BROADPHASE_SHADER) $(CONTACT_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -lm
 
 build/rigid_solver_tests: tests/vulkan/rigid_solver_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -lm
 
-.PHONY: all test test_ui test_ui_long clean shaders
+.PHONY: all test test_ui test_ui_long test_rigid_dynamics clean shaders
 all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
 
 NATIVE_SRC = src/app/main.c src/app/level.c src/app/session.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c src/world/stream.c src/world/generate.c
 build/rigid_dynamics_visual_tests: tests/app/rigid_dynamics_visual_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u $< $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS) -lm
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u -DDC_PRESSURE_SWEEPS=16u $< $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS) -lm
+
+test_rigid_dynamics: build/compound_body_tests build/rigid_dynamics_visual_tests
+	./build/compound_body_tests
+	./build/rigid_dynamics_visual_tests
+
+test: build/compound_body_tests
+test_ui test_quarter_native: build/rigid_dynamics_visual_tests
 $(GPU_OBJ): $(BROADPHASE_SHADER) $(CONTACT_SHADER)
 $(RIGID_SHADER) $(PROBE_SHADER) $(BROADPHASE_SHADER): shaders/sim/rigid_body.glsl
 $(RIGID_SHADER): shaders/sim/rigid_shape.glsl
@@ -109,6 +116,7 @@ test_quarter_native: build/quarter_native_config_tests build/quarter_native_flui
 	./build/quarter_native_solver_tests
 	./build/quarter_native_rigid_tests
 	./build/quarter_native_rigid_solver_tests
+	./build/rigid_dynamics_visual_tests
 	./build/dungeoncraft_quarter_native --smoke-native
 
 test_quarter_native_spray: build/dungeoncraft_quarter_native
@@ -302,6 +310,7 @@ build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h
 
 test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/rigid_solver_tests
+	./build/compound_body_tests
 	./build/contact_tests
 	./build/convex_body_tests
 	./build/broadphase_tests
@@ -321,6 +330,7 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 
 test_ui: build/dungeoncraft build/controls_tests
 	./build/controls_tests
+	./build/rigid_dynamics_visual_tests
 	./build/dungeoncraft --smoke-controls-ui
 	./build/dungeoncraft --smoke-stream
 	./build/dungeoncraft --smoke-world-transfer

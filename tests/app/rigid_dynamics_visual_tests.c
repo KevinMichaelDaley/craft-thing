@@ -38,6 +38,7 @@ static void test_two_concave_bodies_fall_rotate_collide_and_settle_visibly(void)
     }
     free(chunk);
     ASSERT_TRUE(dc_gpu_set_rigid_solver(g,true));
+    ASSERT_TRUE(dc_gpu_set_fluid_interval(g,FLUID_INTERVAL));
     dc_gpu_compound_shape_t l=fixture_l(),u=fixture_u();
     dc_gpu_world_body_t first=fixture_body(1,50,20),second=fixture_body(2,59,45);
     first.body.vx_fp=32768;
