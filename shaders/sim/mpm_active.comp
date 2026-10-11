@@ -30,7 +30,7 @@ void scan_tile() {
         if (page != 0u && particle_counts[page - 1u] != 0u) {
             uint index = (page - 1u) * 4096u + (cell.y % 64u) * 64u + cell.x % 64u;
             uint material = chunk_cells[index].x & 0xffffu;
-            if (material == 2u || material == 4u || material == 5u)
+            if (material == 2u || material == 4u || material == 5u || material == 6u)
                 atomicOr(has_grain, 1u);
         }
     }

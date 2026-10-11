@@ -1,0 +1,88 @@
+struct StructuralParticle {
+    int x_fp,y_fp,vx_fp,vy_fp;
+    float f00,f01,f10,f11;
+    uint id_lo,id_hi,mass_fp,grain_fp,material,flags;
+};
+layout(set=0,binding=3,std430) buffer DebrisOccupancy { uint debris_occupancy[]; };
+layout(set=0,binding=19,std430) buffer DebrisParticles { StructuralParticle debris_particles[]; };
+layout(set=0,binding=20,std430) buffer DebrisCounts { uint debris_counts[]; };
+
+/* Cell clipping creates quadrature volumes, not raster-box approximations.
+ * The two passes reserve every exact overlap before changing either owner. */
+float debris_cell(Body b,ivec2 cell,out vec2 center) {
+    vec2 polygon[8],next[8];uint count=4u;
+    vec2 origin=vec2(b.x_fp,b.y_fp)/65536.0;
+    for(uint i=0u;i<4u;i++) polygon[i]=origin+body_vertex(b,i);
+    for(uint plane=0u;plane<4u;plane++) {
+        uint axis=plane/2u,n=0u;bool upper=(plane&1u)!=0u;
+        float boundary=float(cell[axis])+float(upper);
+        for(uint i=0u;i<count;i++) {
+            vec2 a=polygon[i],z=polygon[(i+1u)%count];
+            float da=upper?boundary-a[axis]:a[axis]-boundary;
+            float dz=upper?boundary-z[axis]:z[axis]-boundary;
+            if(da>=0) next[n++]=a;
+            if((da>=0)!=(dz>=0)) next[n++]=mix(a,z,da/(da-dz));
+        }
+        count=n;for(uint i=0u;i<count;i++) polygon[i]=next[i];
+        if(count<3u) {center=vec2(0);return 0;}
+    }
+    float twice=0;vec2 moment=vec2(0);
+    for(uint i=0u;i<count;i++) {
+        vec2 a=polygon[i]-vec2(cell),z=polygon[(i+1u)%count]-vec2(cell);
+        float cross=body_cross(a,z);twice+=cross;moment+=(a+z)*cross;
+    }
+    center=vec2(cell)+moment/max(3*twice,1e-20);
+    return max(twice*.5,0);
+}
+bool crumble_member(uint member) {
+    uint g=graph(),m=g+MEMBERS+member*8u,st=member_state(member);
+    Body b=bodies[data[m+7u]];
+    vec2 low,high;body_bounds(b,low,high);
+    vec2 origin=vec2(b.x_fp,b.y_fp)/65536.0;
+    ivec2 begin=ivec2(floor(origin+low)),end=ivec2(ceil(origin+high));
+    float area=0;
+    uint profile=g+29000u+data[m+4u]*12u;
+    float work=eq_get(profile+6u)*float(data[m+5u])/65536.0;
+    if(eq_get(st+9u)+1e-4<work) return false;
+    for(int y=begin.y;y<end.y;y++) for(int x=begin.x;x<end.x;x++) {
+        ivec2 cell=ivec2(x,y);vec2 center;float volume=debris_cell(b,cell,center);
+        if(volume<1e-7) continue;
+        uint c;if(!cell_ref(cell,c)) return false;
+        uint material=cells[c].x&65535u;
+        if(material!=0u&&material!=3u&&material!=6u) return false;
+        uint p=(c/4096u)*8192u+c%4096u;
+        if(debris_particles[p].mass_fp!=0u&&debris_particles[p+4096u].mass_fp!=0u) return false;
+        area+=volume;
+    }
+    if(area<=0) return false;
+    uint total=uint(round(b.mass*65536.0)),written=0u;float accumulated=0;
+    for(int y=begin.y;y<end.y;y++) for(int x=begin.x;x<end.x;x++) {
+        ivec2 cell=ivec2(x,y);vec2 center;float volume=debris_cell(b,cell,center);
+        if(volume<1e-7) continue;
+        uint c;cell_ref(cell,c);uint p=(c/4096u)*8192u+c%4096u;
+        if(debris_particles[p].mass_fp!=0u) p+=4096u;
+        accumulated+=volume;
+        uint cumulative=uint(round(float(total)*min(accumulated/area,1.0)));
+        StructuralParticle particle;
+        particle.x_fp=int(round((float(x%64)+center.x-float(x))*65536.0));
+        particle.y_fp=int(round((float(y%64)+center.y-float(y))*65536.0));
+        particle.vx_fp=0;particle.vy_fp=0;
+        particle.f00=1;particle.f01=0;particle.f10=0;particle.f11=1;
+        particle.id_lo=(c%4096u)+1u;
+        particle.id_hi=0x80000000u^b.id^data[m+1u];
+        particle.mass_fp=cumulative-written;written=cumulative;
+        particle.grain_fp=uint(round(min(.35,sqrt(volume/3.14159265))*65536.0));
+        particle.material=6u;particle.flags=0u;
+        debris_particles[p]=particle;debris_counts[c/4096u]++;
+        cells[c].x=(cells[c].x&0xffff0000u)|6u;
+        uint view=uint(y)*params.width+uint(x);
+        if(debris_occupancy[view]==b.id) debris_occupancy[view]=0u;
+        if(debris_occupancy[params.width*params.height+view]==b.id)
+            debris_occupancy[params.width*params.height+view]=0u;
+    }
+    b.enabled=0u;b.reserved0=0x53545232u;b.reserved1=data[m+1u];
+    bodies[data[m+7u]]=b;
+    data[m+6u]|=STRUCTURAL_RETIRED;data[st+3u]=5u;
+    eq_put(st+11u,work);
+    return true;
+}

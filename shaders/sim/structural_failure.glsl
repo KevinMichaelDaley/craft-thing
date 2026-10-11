@@ -51,6 +51,7 @@ void release_member(uint member) {
     data[m+6u]|=STRUCTURAL_RETIRED;
     data[g+24000u+member*16u+3u]=5u;
 }
+#include "structural_debris.glsl"
 void damage_members() {
     uint g=graph();bool cut=false;
     for(uint member=0u;member<data[g+1u];member++) if(member_active(member)) {
@@ -66,7 +67,10 @@ void damage_members() {
            bodies[slot].reserved1!=member+1u||bodies[slot].enabled==0u) {
             data[st+3u]=4u;continue;
         }
-        release_member(member);cut=true;
+        if(data[m+4u]==2u) {
+            if(!crumble_member(member)) {data[st+3u]=4u;continue;}
+        } else release_member(member);
+        cut=true;
     }
     if(!cut) return;
     for(uint node=0u;node<data[g];node++) {

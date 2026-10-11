@@ -112,7 +112,7 @@ bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygo
         if (page != 0u && x >= 0 && y >= 0 && x < int(params.width) && y < int(params.height)) {
             material = chunk_cells[(page - 1u) * 4096u + cell_feature].x & 0xffffu;
             if (material == 0u || material == 3u) continue;
-            if (material == 2u || material == 4u || material == 5u) {
+            if (material == 2u || material == 4u || material == 5u || material == 6u) {
                 uint pi = (page - 1u) * 8192u + cell_feature;
                 if (particles[pi].mass_fp == 0u && particles[pi + 4096u].mass_fp == 0u) continue;
                 contact_kind = MPM_CONTACT;

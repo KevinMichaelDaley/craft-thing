@@ -26,7 +26,7 @@ void dc_chunk_seed_particles(dc_chunk_t *chunk) {
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
         uint32_t material = chunk->cells[i].material;
         if ((material != DC_MATERIAL_SAND && material != DC_MATERIAL_DIRT &&
-             material != DC_MATERIAL_GRAVEL) || chunk->particles[i].mass_fp) continue;
+             material != DC_MATERIAL_GRAVEL && material != DC_MATERIAL_MORTAR_DEBRIS) || chunk->particles[i].mass_fp) continue;
         dc_chunk_particle_init(&chunk->particles[i], chunk->coord, i, material);
         ++chunk->particle_count;
     }
@@ -41,7 +41,8 @@ void dc_chunk_particle_init(dc_mpm_particle_t *particle,
     particle->deformation[0] = particle->deformation[3] = 1.0f;
     particle->id_lo = cell_index + 1u;
     particle->id_hi = dc_chunk_particle_seed(coord);
-    particle->mass_fp = DC_FLUID_FULL;
+    particle->mass_fp = material == DC_MATERIAL_MORTAR_DEBRIS ?
+                        (DC_FLUID_FULL * 8u + 2u) / 5u : DC_FLUID_FULL;
     particle->grain_fp = dc_chunk_grain_radius_fp(material);
     particle->material = material;
 }

@@ -43,7 +43,7 @@ static void test_overloaded_mortar_crumble_preserves_mass_without_launch(void) {
     for (unsigned i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; i++) {
         const dc_mpm_particle_t *p = &chunk->particles[i];
         if (!p->mass_fp) continue;
-        ASSERT_INT_EQ(p->material, 6);
+        ASSERT_INT_EQ(p->material, DC_MATERIAL_MORTAR_DEBRIS);
         mass += p->mass_fp;
         momentum_x += (int64_t)p->mass_fp * p->vx_fp;
         momentum_y += (int64_t)p->mass_fp * p->vy_fp;
