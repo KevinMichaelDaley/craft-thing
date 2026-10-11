@@ -134,7 +134,7 @@ vec2 eq_physical(uint dof);
 #include "structural_refine.glsl"
 void equilibrium() {
     uint g=graph(),owner=gl_WorkGroupID.x,lane=gl_LocalInvocationID.x;
-    if(owner>=data[g]||data[g+NODES+owner*12u]!=data[state(owner)+1u]||
+    if(owner>=data[g]||data[g+NODES+owner*12u+8u]!=0u||data[g+NODES+owner*12u]!=data[state(owner)+1u]||
        data[state(owner)+4u]!=0u||data[state(owner)+3u]==0u) return;
     uint component_mask=0u,invalid=0u;
     for(uint n=0u;n<data[g];n++) if(data[state(n)+1u]==data[state(owner)+1u]) {

@@ -272,6 +272,7 @@ void dc_gpu_record_structural(dc_gpu_t *gpu) {
     if (gpu->structural_enabled) {
         dispatch(gpu, 1);
         dispatch(gpu, 3);
+        dispatch(gpu, 4);
     }
 }
 static bool commit(dc_gpu_t *gpu, char *err, uint32_t cap) {

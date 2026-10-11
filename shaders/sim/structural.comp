@@ -90,13 +90,15 @@ void transaction() {
         b.enabled=1u;bodies[slot]=b;data[m+6u]=0u;
     }
     for(uint i=0u;i<GRAPH_WORDS;i++) data[graph()+i]=data[st+i];
+    for(uint i=0u;i<32u*4u;i++) data[graph()+28000u+i]=0u;
     data[s]=uint(data[st+1u]!=0u);data[s+2u]=1u;data[s+3u]++;
 }
 void topology() {
     uint g=graph(),i=gl_LocalInvocationID.x,ns=g+NODES+i*12u,unused;
     bool dirty=data[base()+4u]!=data[base()+3u];
-    label[i]=i<data[g]?(dirty?data[ns]:data[state(i)+1u]):0xffffffffu;cold[i]=0u;roots[i]=0u;
-    if(i<data[g]) {
+    bool live=i<data[g]&&data[ns+8u]==0u;
+    label[i]=live?(dirty?data[ns]:data[state(i)+1u]):0xffffffffu;cold[i]=0u;roots[i]=0u;
+    if(live) {
         ivec2 p;bool resident=view_point(pair(ns+2u),pair(ns+4u),ivec2(int(data[ns+6u])>>16,int(data[ns+7u])>>16),p)&&cell_ref(p,unused);
         cold[i]=resident?0u:1u;
         for(uint a=0u;a<data[g+3u];a++) {
@@ -116,6 +118,7 @@ void topology() {
         if(i<data[g]) {
             for(uint e=0u;e<data[g+1u]+data[g+2u];e++) {
                 uint r=e<data[g+1u]?g+MEMBERS+e*8u:g+JOINTS+(e-data[g+1u])*16u;
+                if(e<data[g+1u]&&(data[r+6u]&2u)!=0u) continue;
                 int a=node_index(g,data[r+2u]),b=node_index(g,data[r+3u]);
                 if(a==int(i) && b>=0) best=min(best,label[b]);if(b==int(i)&&a>=0) best=min(best,label[a]);
             }
@@ -123,7 +126,7 @@ void topology() {
         next_label[i]=best;barrier();label[i]=next_label[i];barrier();
     }
     if(i==0u) data[base()+4u]=data[base()+3u];
-    if(i<data[g]) {
+    if(live) {
         uint all_cold=0u,all_roots=0u;
         for(uint n=0u;n<data[g];n++) if(label[n]==label[i]) {all_cold+=cold[n];all_roots+=roots[n];}
         uint st=state(i);data[st]=data[ns];data[st+1u]=label[i];
@@ -139,7 +142,7 @@ void topology() {
             data[cs+3u]=all_cold!=0u?1u:all_roots==0u?16u:0u;
         }
     }
-    if(i<data[g+1u]) {
+    if(i<data[g+1u]&&(data[g+MEMBERS+i*8u+6u]&2u)==0u) {
         uint m=g+MEMBERS+i*8u,st=g+24000u+i*16u;
         int a=node_index(g,data[m+2u]);uint component=label[a],all_cold=0u,all_roots=0u;
         for(uint n=0u;n<data[g];n++) if(label[n]==component) {all_cold+=cold[n];all_roots+=roots[n];}
@@ -148,6 +151,7 @@ void topology() {
     }
 }
 #include "structural_equilibrium.glsl"
+#include "structural_failure.glsl"
 void main() {
     if(params.mode==0u) {if(gl_LocalInvocationID.x==0u) transaction();return;}
     if(params.mode==2u) {
@@ -160,5 +164,6 @@ void main() {
         for(uint p=lane;p<16u*17u*3u;p+=32u) data[structural_bins()+p]=0u;
         return;
     }
-    if(params.mode==3u) equilibrium();else topology();
+    if(params.mode==4u) failure();
+    else if(params.mode==3u) equilibrium();else topology();
 }
