@@ -3,6 +3,7 @@
 const uint EQ_DOFS=96u,EQ_MATRIX=9216u;
 shared uint eq_map[96],eq_count,eq_status;
 shared float eq_rhs[96],eq_scale[96],eq_solution[96];
+shared float eq_minimum;
 shared int eq_a[16],eq_b[16],eq_anchor[32];
 shared vec2 eq_direction[16];
 shared vec3 eq_k[16],eq_ak[32];
@@ -95,6 +96,7 @@ bool eq_eliminate(bool geometry) {
     uint lane=gl_LocalInvocationID.x;
     for(uint p=0u;p<eq_count;p++) {
         uint pivot=eq_map[p];float diagonal=eq_get(eq_address(eq_work(),pivot,pivot));
+        if(lane==0u&&!geometry) eq_minimum=min(eq_minimum,diagonal);
         if(lane==0u&&(!isnan(diagonal)&&!isinf(diagonal))) {
             if(diagonal<(geometry?1e-6:1e-7)) eq_status=geometry?2u:3u;
         }
@@ -117,6 +119,7 @@ bool eq_eliminate(bool geometry) {
     }
     barrier();return true;
 }
+#include "structural_stress.glsl"
 void equilibrium() {
     uint g=graph(),owner=gl_WorkGroupID.x,lane=gl_LocalInvocationID.x;
     if(owner>=data[g]||data[g+NODES+owner*12u]!=data[state(owner)+1u]||
@@ -130,7 +133,7 @@ void equilibrium() {
     invalid=invalid||data[base()-16u-64u*32u-8192u*16u+3u]!=0u;
     if(invalid) return;
     if(lane==0u) {
-        eq_count=0u;eq_status=0u;
+        eq_count=0u;eq_status=0u;eq_minimum=1;
         for(uint n=0u;n<data[g];n++) if(data[state(n)+1u]==data[state(owner)+1u])
             for(uint d=0u;d<3u;d++) eq_map[eq_count++]=n*3u+d;
     }
@@ -166,10 +169,23 @@ void equilibrium() {
         }
         barrier();
     }
+    bool solved=eq_status==0u;
+    barrier();
+    if(solved) {
+        for(uint e=lane;e<data[g+1u];e+=32u)
+            if(data[state(uint(eq_a[e]))+1u]==data[state(owner)+1u]) member_stress(e);
+        for(uint a=lane;a<data[g+3u];a+=32u) if(eq_anchor[a]>=0&&
+            data[state(uint(eq_anchor[a]))+1u]==data[state(owner)+1u]) {
+            vec3 demand=vec3(eq_q(uint(eq_anchor[a])*3u),eq_q(uint(eq_anchor[a])*3u+1u),eq_q(uint(eq_anchor[a])*3u+2u))*eq_ak[a];
+            if(attachment_ratio(demand,g+ANCHORS+a*24u+16u)>1) atomicMax(eq_status,1u);
+        }
+    }
+    barrier();
+    if(lane==0u&&eq_status<=1u) component_budget(owner);
     for(uint r=lane;r<eq_count;r+=32u) {
         uint dof=eq_map[r],st=state(dof/3u),axis=dof%3u;
         if(axis==0u) data[st+2u]=eq_status;
-        float q=eq_status==0u?eq_solution[r]:0;
+        float q=eq_status<=1u?eq_solution[r]:0;
         eq_put(st+6u+axis,q);float reaction=0;
         for(uint a=0u;a<data[g+3u];a++) if(eq_anchor[a]==int(dof/3u)) reaction-=eq_ak[a][axis]*q;
         eq_put(st+9u+axis,reaction);

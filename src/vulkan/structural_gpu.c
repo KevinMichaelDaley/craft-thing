@@ -409,9 +409,20 @@ bool fr_gpu_read_structure_node(dc_gpu_t *gpu, uint32_t id,
 }
 bool fr_gpu_read_structure_member(dc_gpu_t *gpu, uint32_t id,
                                   fr_structural_gpu_member_state_t *state) {
-    (void)gpu; (void)id; (void)state; return false;
+    if (!gpu || !id || !state) return false;
+    uint32_t *data=dc_gpu_structural_data(gpu)+dc_gpu_structural_graph_offset();
+    const fr_structural_gpu_graph_t *graph=(void *)data;
+    for(uint32_t m=0;m<graph->member_count;m++) if(graph->members[m].id==id) {
+        memcpy(state,data+24000u+m*16u,sizeof(*state));return true;
+    }
+    return false;
 }
 bool fr_gpu_read_structure_component(dc_gpu_t *gpu, uint32_t id,
                                      fr_structural_gpu_component_state_t *state) {
-    (void)gpu; (void)id; (void)state; return false;
+    if(!gpu||!id||!state) return false;
+    uint32_t *data=dc_gpu_structural_data(gpu)+dc_gpu_structural_graph_offset();
+    const fr_structural_gpu_graph_t *graph=(void *)data;
+    int node=node_index(graph,id);
+    if(node<0) return false;
+    memcpy(state,data+24400u+(uint32_t)node*16u,sizeof(*state));return true;
 }
