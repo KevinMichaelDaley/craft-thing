@@ -281,6 +281,39 @@ static void test_converted_bond_ownership_survives_graph_replacement(void) {
     dc_gpu_destroy(g);
     PASS();
 }
+static void test_converted_bearing_opens_without_tension_or_friction(void) {
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = two_members();
+    s.node_count = 4;
+    s.nodes[3] = s.nodes[2];
+    s.nodes[3].id = 4;
+    s.nodes[3].x_fp = 33 << 16;
+    s.nodes[2].x_fp = 27 << 16;
+    s.members[1].a = 3;
+    s.members[1].b = 4;
+    s.joint_count = 1;
+    s.joints[0] = (fr_structural_gpu_joint_t){
+        .id=1,.generation=1,.a=2,.b=3,.kind=FR_JOINT_BEARING,
+        .normal_stiffness=1e8,.shear_stiffness=1e8,
+        .bearing_capacity=1e8,.pullout_capacity=0,.shear_capacity=0,
+        .moment_capacity=0,.friction=.5,.normal_angle=3.14159265358979323846f};
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    steps(g, 90);
+    uint32_t a = FR_STRUCTURAL_BODY_ID_BASE + 1;
+    uint32_t b = FR_STRUCTURAL_BODY_ID_BASE + 2;
+    ASSERT_TRUE(dc_gpu_set_body_motion(g, a, 0, .05f, 0, e, sizeof(e)));
+    steps(g, 6);
+    dc_gpu_body_motion_t ma,mb;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,a,&ma,e,sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,b,&mb,e,sizeof(e)));
+    ASSERT_TRUE(fabs(ma.angle-.3) < .003);
+    ASSERT_TRUE(fabs(mb.angle) < .0001);
+    ASSERT_TRUE(fabs(mb.angular_velocity) < .0001);
+    dc_gpu_destroy(g);
+    PASS();
+}
 int main(void) {
     RUN(test_support_loss_grace_then_conservative_fall);
     RUN(test_unknown_does_not_age_support_loss);
@@ -291,6 +324,7 @@ int main(void) {
     RUN(test_finite_anchor_damage_cuts_after_sustained_overload);
     RUN(test_overflow_freezes_an_unrooted_island_clock);
     RUN(test_converted_bond_ownership_survives_graph_replacement);
+    RUN(test_converted_bearing_opens_without_tension_or_friction);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
