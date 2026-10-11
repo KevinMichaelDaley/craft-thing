@@ -187,12 +187,110 @@ static void test_overstress_ages_damage_but_unknown_freezes_it(void) {
     dc_gpu_destroy(g);
     PASS();
 }
+static void test_restored_support_resets_the_grace_clock(void) {
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_AIR, e, sizeof(e)));
+    steps(g, 60);
+    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    steps(g, 1);
+    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_AIR, e, sizeof(e)));
+    steps(g, 89);
+    dc_gpu_body_motion_t m;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m, e, sizeof(e)));
+    ASSERT_TRUE(m.flags & DC_GPU_BODY_KINEMATIC);
+    steps(g, 1);
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m, e, sizeof(e)));
+    ASSERT_TRUE(!(m.flags & DC_GPU_BODY_KINEMATIC));
+    dc_gpu_destroy(g);
+    PASS();
+}
+static void test_finite_anchor_damage_cuts_after_sustained_overload(void) {
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.anchors[0].moment_capacity = 25920;
+    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    steps(g, 44);
+    fr_structural_gpu_node_state_t state;
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &state));
+    ASSERT_EQ(state.state, FR_STRUCTURAL_OVERLOADED);
+    steps(g, 2);
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &state));
+    ASSERT_EQ(state.state, FR_STRUCTURAL_UNSUPPORTED);
+    steps(g, 89);
+    dc_gpu_body_motion_t m;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m, e, sizeof(e)));
+    ASSERT_TRUE(!(m.flags & DC_GPU_BODY_KINEMATIC));
+    dc_gpu_destroy(g);
+    PASS();
+}
+static void test_overflow_freezes_an_unrooted_island_clock(void) {
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.anchor_count = 0;
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    steps(g, 60);
+    dc_gpu_world_body_t load = {.chunk = {0,0},
+        .body = {.id=1,.x_fp=24<<16,.y_fp=35<<16,.width=4,.height=4,.active=1}};
+    ASSERT_TRUE(dc_gpu_spawn_world_body(g, load, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_set_contact_capacity(g, 0, e, sizeof(e)));
+    steps(g, 35);
+    fr_structural_gpu_node_state_t state;
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &state));
+    ASSERT_EQ(state.state, FR_STRUCTURAL_UNKNOWN);
+    ASSERT_TRUE(dc_gpu_set_contact_capacity(g, 8192, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_remove_body(g, 1, e, sizeof(e)));
+    steps(g, 29);
+    dc_gpu_body_motion_t m;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m, e, sizeof(e)));
+    ASSERT_TRUE(m.flags & DC_GPU_BODY_KINEMATIC);
+    steps(g, 1);
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m, e, sizeof(e)));
+    ASSERT_TRUE(!(m.flags & DC_GPU_BODY_KINEMATIC));
+    dc_gpu_destroy(g);
+    PASS();
+}
+static void test_converted_bond_ownership_survives_graph_replacement(void) {
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = two_members(), empty = {0};
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    steps(g, 90);
+    dc_gpu_world_body_t replacement = {.chunk={0,0},
+        .body={.id=FR_STRUCTURAL_BODY_ID_BASE+1,.x_fp=20<<16,.y_fp=39<<16,
+               .width=1,.height=1,.active=1}};
+    ASSERT_TRUE(!dc_gpu_spawn_world_body(g, replacement, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &empty, e, sizeof(e)));
+    ASSERT_TRUE(!dc_gpu_save_bodies(g, "build/converted_body_only.bin", e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(g, replacement.body.id, 0, .05f, 0, e, sizeof(e)));
+    steps(g, 4);
+    dc_gpu_body_motion_t a,b;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, replacement.body.id, &a, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE+2, &b, e, sizeof(e)));
+    ASSERT_TRUE(fabs(a.angle-b.angle)<.01);
+    dc_gpu_destroy(g);
+    PASS();
+}
 int main(void) {
     RUN(test_support_loss_grace_then_conservative_fall);
     RUN(test_unknown_does_not_age_support_loss);
     RUN(test_sound_mixed_assembly_retains_its_bond);
     RUN(test_full_bond_pool_rolls_back_the_whole_island);
     RUN(test_overstress_ages_damage_but_unknown_freezes_it);
+    RUN(test_restored_support_resets_the_grace_clock);
+    RUN(test_finite_anchor_damage_cuts_after_sustained_overload);
+    RUN(test_overflow_freezes_an_unrooted_island_clock);
+    RUN(test_converted_bond_ownership_survives_graph_replacement);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
