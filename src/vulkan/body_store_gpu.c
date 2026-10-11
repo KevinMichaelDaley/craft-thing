@@ -39,6 +39,8 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 
 bool dc_gpu_save_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap) {
     if (!gpu || !path || !*path) return error(err, cap, "Invalid body snapshot path");
+    if (gpu->structural_enabled)
+        return error(err, cap, "Structural sources require a graph-aware snapshot transaction");
     char temporary[1024];
     int length = snprintf(temporary, sizeof(temporary), "%s.tmp", path);
     if (length < 0 || (size_t)length >= sizeof(temporary))
@@ -68,6 +70,8 @@ bool dc_gpu_save_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap
 
 bool dc_gpu_load_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap) {
     if (!gpu || !path || !*path) return error(err, cap, "Invalid body snapshot path");
+    if (gpu->structural_enabled)
+        return error(err, cap, "Body-only loading cannot replace structural ownership");
     FILE *file = fopen(path, "rb");
     if (!file) return errno == ENOENT ? true : error(err, cap, "Cannot open body snapshot");
     body_header_t header = {0};
