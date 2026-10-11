@@ -21,7 +21,7 @@ float debris_cell(Body b,ivec2 cell,out vec2 center) {
             float da=upper?boundary-a[axis]:a[axis]-boundary;
             float dz=upper?boundary-z[axis]:z[axis]-boundary;
             if(da>=0) next[n++]=a;
-            if((da>=0)!=(dz>=0)) next[n++]=mix(a,z,da/(da-dz));
+            if((da>0&&dz<0)||(da<0&&dz>0)) next[n++]=mix(a,z,da/(da-dz));
         }
         count=n;for(uint i=0u;i<count;i++) polygon[i]=next[i];
         if(count<3u) {center=vec2(0);return 0;}
@@ -84,5 +84,6 @@ bool crumble_member(uint member) {
     bodies[data[m+7u]]=b;
     data[m+6u]|=STRUCTURAL_RETIRED;data[st+3u]=5u;
     eq_put(st+11u,work);
+    eq_put(st+12u,max(eq_get(st+9u)-work,0));
     return true;
 }

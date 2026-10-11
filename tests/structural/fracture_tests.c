@@ -120,6 +120,18 @@ static void test_rotated_crumble_across_chunk_seam_preserves_centroid(void) {
         ASSERT_EQ(actual, chunk->particle_count);
         count += actual;
     }
+    fr_structural_gpu_member_state_t state;
+    ASSERT_TRUE(fr_gpu_read_structure_member(g, 1, &state));
+    printf("rotated crumble: state %u damage %.6f energy %.6f work %.6f count %u mass %.6f\n",
+           state.state, state.damage, state.strain_energy, state.fracture_work,
+           count, mass);
+    fr_structural_gpu_component_state_t component;
+    fr_structural_gpu_node_state_t node;
+    ASSERT_TRUE(fr_gpu_read_structure_component(g, 1, &component));
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &node));
+    printf("rotated equilibrium: flags %u residual %.9g pivot %.9g geometry %.9g roots %u cold %u\n",
+           component.flags, component.relative_residual, component.minimum_pivot,
+           component.geometry_minimum, node.valid_anchors, node.unknown_anchors);
     ASSERT_TRUE(count > 24);
     ASSERT_TRUE(fabs(mass - 38.4) < .002);
     ASSERT_TRUE(fabs(x / mass - (58 + 6 * cos(angle))) < .002);

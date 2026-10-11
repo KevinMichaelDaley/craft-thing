@@ -17,13 +17,16 @@ void eq_physical_prepare() {
 vec2 eq_physical(uint dof) {
     float sum=0,scale=0;uint g=graph();
     for(uint e=0u;e<data[g+1u];e++) {
-        float force=dot(eq_vector(e,dof),eq_member_force[e]);sum+=force;scale+=abs(force);
+        vec3 terms=eq_vector(e,dof)*eq_member_force[e];
+        sum+=dot(terms,vec3(1));scale+=dot(abs(terms),vec3(1));
     }
     for(uint a=0u;a<data[g+3u];a++) {
-        float force=dot(anchor_vector(a,dof),eq_anchor_force[a]);sum+=force;scale+=abs(force);
+        vec3 terms=anchor_vector(a,dof)*eq_anchor_force[a];
+        sum+=dot(terms,vec3(1));scale+=dot(abs(terms),vec3(1));
     }
     for(uint j=0u;j<data[g+2u];j++) {
-        float force=dot(joint_vector(j,dof),eq_joint_force[j]);sum+=force;scale+=abs(force);
+        vec3 terms=joint_vector(j,dof)*eq_joint_force[j];
+        sum+=dot(terms,vec3(1));scale+=dot(abs(terms),vec3(1));
     }
     return vec2(sum,scale);
 }
