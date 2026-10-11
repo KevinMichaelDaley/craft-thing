@@ -58,7 +58,8 @@ float eq_entry(uint row,uint col,bool geometry) {
     return k;
 }
 float eq_load(uint dof) {
-    float f=0;uint node=dof/3u,axis=dof%3u;
+    float f=float(int(data[structural_loads()+dof]))*3600.0/STRUCTURAL_LOAD_SCALE;
+    uint node=dof/3u,axis=dof%3u;
     for(uint e=0u;e<data[graph()+1u];e++) {
         if(int(node)!=eq_a[e]&&int(node)!=eq_b[e]) continue;
         float l=eq_length[e],w=eq_weight[e];
@@ -120,6 +121,14 @@ void equilibrium() {
     uint g=graph(),owner=gl_WorkGroupID.x,lane=gl_LocalInvocationID.x;
     if(owner>=data[g]||data[g+NODES+owner*12u]!=data[state(owner)+1u]||
        data[state(owner)+4u]!=0u||data[state(owner)+3u]==0u) return;
+    uint component_mask=0u;bool invalid=false;
+    for(uint n=0u;n<data[g];n++) if(data[state(n)+1u]==data[state(owner)+1u]) {
+        component_mask|=1u<<n;invalid=invalid||data[structural_bad()+n]!=0u;
+    }
+    for(uint b=0u;b<params.body_count;b++)
+        if((data[structural_dependencies()+b]&component_mask)!=0u&&data[structural_clipped()+b]!=0u) invalid=true;
+    invalid=invalid||data[base()-16u-64u*32u-8192u*16u+3u]!=0u;
+    if(invalid) return;
     if(lane==0u) {
         eq_count=0u;eq_status=0u;
         for(uint n=0u;n<data[g];n++) if(data[state(n)+1u]==data[state(owner)+1u])

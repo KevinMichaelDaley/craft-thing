@@ -8,6 +8,7 @@ layout(set=0,binding=2,std430) readonly buffer Pages { uint pages[]; };
 layout(set=0,binding=4,std430) buffer Storage { Body bodies[BODY_CAPACITY]; uint data[]; };
 layout(push_constant) uniform Params { uint width,height,mode,body_count; uvec2 origin_x,origin_y; } params;
 const uint GRAPH_WORDS=2320u,NODES=16u,MEMBERS=400u,JOINTS=528u,ANCHORS=1552u;
+#include "structural_load.glsl"
 shared uint label[32],next_label[32],cold[32],roots[32];
 uint base() {
     uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
@@ -135,5 +136,15 @@ void topology() {
 #include "structural_equilibrium.glsl"
 void main() {
     if(params.mode==0u) {if(gl_LocalInvocationID.x==0u) transaction();return;}
+    if(params.mode==2u) {
+        uint lane=gl_LocalInvocationID.x;
+        for(uint p=lane;p<96u;p+=32u) data[structural_loads()+p]=0u;
+        data[structural_bad()+lane]=0u;
+        for(uint p=lane;p<64u;p+=32u) {
+            data[structural_dependencies()+p]=0u;data[structural_clipped()+p]=0u;
+        }
+        for(uint p=lane;p<16u*17u*3u;p+=32u) data[structural_bins()+p]=0u;
+        return;
+    }
     if(params.mode==3u) equilibrium();else topology();
 }

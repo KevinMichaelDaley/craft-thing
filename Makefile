@@ -25,7 +25,7 @@ build/structural_material.o: src/structural/material.c include/ferrum/structural
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/structural_gpu.o: src/vulkan/structural_gpu.c src/vulkan/gpu_internal.h include/ferrum/structural/gpu.h build/shaders/structural.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-build/shaders/structural.comp.spv: shaders/sim/structural.comp shaders/sim/structural_equilibrium.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl
+build/shaders/structural.comp.spv: shaders/sim/structural.comp shaders/sim/structural_equilibrium.glsl shaders/sim/structural_load.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 $(GPU_OBJ): build/shaders/structural.comp.spv
@@ -36,7 +36,7 @@ build/compound_gpu.o: src/vulkan/compound_gpu.c src/vulkan/gpu_internal.h includ
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 SOLVER_SHADER = build/shaders/rigid_solver.comp.spv
 $(GPU_OBJ): $(SOLVER_SHADER)
-$(SOLVER_SHADER): shaders/sim/rigid_solver.comp shaders/sim/rigid_body.glsl
+$(SOLVER_SHADER): shaders/sim/rigid_solver.comp shaders/sim/rigid_body.glsl shaders/sim/structural_load.glsl
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_bench build/dungeoncraft_quarter_native build/marker_slot_tests build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench: $(SOLVER_SHADER)

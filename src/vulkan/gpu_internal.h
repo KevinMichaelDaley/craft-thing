@@ -242,6 +242,7 @@ static inline uint32_t dc_gpu_structural_graph_offset(void) {
 }
 bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu,char *err,uint32_t cap);
 void dc_gpu_record_structural(dc_gpu_t *gpu);
+void dc_gpu_record_structural_begin(dc_gpu_t *gpu);
 void dc_gpu_structural_track_chunk(dc_gpu_t *gpu,uint32_t slot,dc_chunk_coord_t coord);
 
 uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
