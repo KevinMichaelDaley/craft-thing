@@ -1,6 +1,6 @@
 ---
 id: ct-0iq3
-status: open
+status: in_progress
 deps: [ct-il9b, ct-i5a4]
 links: [dun-spbq]
 created: 2026-10-11T05:44:09Z
