@@ -20,6 +20,7 @@ layout(push_constant) uniform Params {
 } params;
 
 bool locate_body(inout Body body) {
+    ivec2 old_position=ivec2(body.x_fp,body.y_fp);
     int x = 0, y = 0;
     bool nearby = relative_chunk(body.chunk_x, params.origin_x, x) &&
                   relative_chunk(body.chunk_y, params.origin_y, y);
@@ -27,6 +28,11 @@ bool locate_body(inout Body body) {
         x < int((params.width + 63u) / 64u) && y < int((params.height + 63u) / 64u);
     body.x_fp = nearby ? x * (64 << 16) + body.local_fp.x : -(16 << 16);
     body.y_fp = nearby ? y * (64 << 16) + body.local_fp.y : -(16 << 16);
+    if(body.rest_ticks!=0u) {
+        if(nearby && body.visible!=0u)
+            body.rest_position+=ivec2(body.x_fp,body.y_fp)-old_position;
+        else body.rest_ticks=0u;
+    }
     vec2 low,high; body_bounds(body,low,high);
     vec2 position = vec2(body.x_fp,body.y_fp)/65536.0;
     body.visible = uint(nearby && all(lessThan(position+low,vec2(params.width,params.height))) &&

@@ -25,6 +25,9 @@ struct Body {
     ivec2 bounds_low, bounds_high, swept_low, swept_high;
     uint piece_count, compound_reserved;
     Shape pieces[BODY_PIECES];
+    ivec2 rest_position;
+    float rest_angle;
+    uint rest_ticks;
 };
 
 vec2 body_rotate(vec2 p, float angle) {

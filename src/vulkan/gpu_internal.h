@@ -31,6 +31,9 @@ typedef struct {
     int32_t bounds_low[2], bounds_high[2], swept_low[2], swept_high[2];
     uint32_t piece_count, compound_reserved;
     dc_gpu_body_shape_t pieces[DC_GPU_BODY_PIECES];
+    int32_t rest_position[2];
+    float rest_angle;
+    uint32_t rest_ticks;
 } dc_gpu_body_record_t;
 
 struct dc_gpu {

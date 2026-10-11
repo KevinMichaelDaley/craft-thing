@@ -18,6 +18,9 @@ params;
 const float DT = 0.125, SUM_SCALE = 65536.0;
 const uint CONTACT_CAPACITY = 8192u;
 const uint BODY_AWAKE_WORD = 13u;
+const uint REST_FLAGS_WORD = 19u, REST_SUPPORTED = 1u, REST_MOVING_CONTACT = 2u;
+const uint REST_TICKS = 30u;
+const float REST_CONTACT_DISTANCE = 0.05, REST_DISPLACEMENT = 0.1, REST_SPEED = 0.1;
 const uint RESET = 0u, BEGIN_FRAME = 1u, PREDICT = 2u, PREPARE = 3u, INIT_CONTACTS = 4u;
 const uint CLEAR = 5u, SOLVE = 6u, APPLY = 7u, DERIVE_VELOCITY = 8u, IMPULSE = 9u,
            APPLY_VELOCITY = 10u, FINISH = 11u;
@@ -207,13 +210,26 @@ void main() {
         putv(s + 4u, body_rotate(ra, -ba.angle));
         putv(s + 9u, pb);
         vec2 va = velocity(ba) + ba.angular_velocity * vec2(-ra.y, ra.x), vb = vec2(0);
+        vec2 normal=getv(c+8u);
+        if(dot(pa-pb,normal)<=REST_CONTACT_DISTANCE && normal.y<-.5)
+            atomicOr(data[bs(a)+REST_FLAGS_WORD],REST_SUPPORTED);
+        bool moving=data[c+2u]==3u;
         atomicAdd(data[bs(a) + 12u], 1u);
         if (b != BODY_CAPACITY) {
             Body bb = contact_body(b);
             vec2 rb = pb - position(bb) - bb.center;
             putv(s + 6u, body_rotate(rb, -bb.angle));
             vb = velocity(bb) + bb.angular_velocity * vec2(-rb.y, rb.x);
+            if(dot(pa-pb,normal)<=REST_CONTACT_DISTANCE && normal.y>.5)
+                atomicOr(data[bs(b)+REST_FLAGS_WORD],REST_SUPPORTED);
+            float limit_a=(ba.motion_flags&1u)!=0u ? 1.0/65536.0 : REST_SPEED;
+            float limit_b=(bb.motion_flags&1u)!=0u ? 1.0/65536.0 : REST_SPEED;
+            moving=moving || length(va)>limit_a || length(vb)>limit_b;
             atomicAdd(data[bs(b) + 12u], 1u);
+        }
+        if(moving) {
+            atomicOr(data[bs(a)+REST_FLAGS_WORD],REST_MOVING_CONTACT);
+            if(b!=BODY_CAPACITY) atomicOr(data[bs(b)+REST_FLAGS_WORD],REST_MOVING_CONTACT);
         }
         putf(s + 8u, dot(va - vb, getv(c + 8u)));
         return;
@@ -243,6 +259,7 @@ void main() {
     }
     if (PHASE == PREPARE) {
         data[s + 12u] = 0u;
+        data[s + REST_FLAGS_WORD] = 0u;
         if (i == 0u) {
             atomicOr(data[h + 3u], data[cb() + 2u]);
             data[h + 6u] = data[h + 3u] == 0u ? (data[cb()] + 63u) / 64u : 0u;
@@ -279,6 +296,25 @@ void main() {
             body.vx_fp = int(data[s + 3u]);
             body.vy_fp = int(data[s + 4u]);
             body.angular_velocity = getf(s + 5u);
+        } else if((body.motion_flags&1u)==0u) {
+            float angular_motion=abs(wrap(body.angle-getf(s+2u)))*body.radius;
+            bool quiet=data[s+REST_FLAGS_WORD]==REST_SUPPORTED &&
+                length(position(body)-getv(s))+angular_motion<REST_DISPLACEMENT &&
+                length(velocity(body))<REST_SPEED &&
+                abs(body.angular_velocity)*body.radius<REST_SPEED;
+            if(body.rest_ticks==0u) {
+                body.rest_position=ivec2(body.previous_x_fp,body.previous_y_fp);
+                body.rest_angle=body.previous_angle;
+            }
+            float drift=length(position(body)-vec2(body.rest_position)/65536.0)+
+                abs(wrap(body.angle-body.rest_angle))*body.radius;
+            quiet=quiet && drift<REST_DISPLACEMENT;
+            body.rest_ticks=quiet ? min(body.rest_ticks+1u,REST_TICKS) : 0u;
+            if(body.rest_ticks==REST_TICKS) {
+                publish(body,getv(s));
+                body.angle=getf(s+2u);
+                body.vx_fp=0;body.vy_fp=0;body.angular_velocity=0.0;
+            }
         }
         body_cache_bounds(body);
         /* Physical boxes include fractional edge coverage in the swept mask. */
