@@ -356,6 +356,62 @@ static void test_closed_bearing_creates_no_angular_momentum_or_energy(void) {
     dc_gpu_destroy(g);
     PASS();
 }
+static void test_failed_member_does_not_remove_its_sound_rooted_neighbor(void) {
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = two_members();
+    s.anchor_count = 1;
+    s.members[1].depth_fp = 1 << 15;
+    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
+    steps(g,20);
+    fr_structural_gpu_member_state_t wood,stone;
+    fr_structural_gpu_node_state_t root;
+    ASSERT_TRUE(fr_gpu_read_structure_member(g,1,&wood));
+    ASSERT_TRUE(fr_gpu_read_structure_member(g,2,&stone));
+    ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&root));
+    printf("rooted survivor: wood %u stone %u utilization %.6f damage %.6f reaction %.6f\n",
+           wood.state,stone.state,stone.utilization,stone.damage,root.reaction[1]);
+    ASSERT_EQ(wood.state,FR_STRUCTURAL_SUPPORTED);
+    ASSERT_EQ(stone.state,FR_STRUCTURAL_CONVERTED);
+    ASSERT_TRUE(fabs(root.reaction[1]+6480)<15);
+    dc_gpu_body_motion_t a,b;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,FR_STRUCTURAL_BODY_ID_BASE+1,&a,e,sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,FR_STRUCTURAL_BODY_ID_BASE+2,&b,e,sizeof(e)));
+    ASSERT_TRUE(a.flags&DC_GPU_BODY_KINEMATIC);
+    ASSERT_TRUE(!(b.flags&DC_GPU_BODY_KINEMATIC));
+    ASSERT_TRUE(fabs(a.mass-7.2)<.001&&fabs(b.mass-8.1)<.001);
+    dc_gpu_destroy(g);
+    PASS();
+}
+static void test_full_body_pool_reuses_owned_records_without_mass_loss(void) {
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s=two_members();
+    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
+    for(unsigned i=0;i<62;i++) {
+        dc_gpu_world_body_t b={.chunk={1,1},.body={.id=i+1,
+            .x_fp=(16+2*(i%8))<<16,.y_fp=(16+2*(i/8))<<16,
+            .width=1,.height=1,.active=1}};
+        ASSERT_TRUE(dc_gpu_spawn_world_body(g,b,e,sizeof(e)));
+    }
+    steps(g,90);
+    dc_gpu_body_motion_t a,b;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,FR_STRUCTURAL_BODY_ID_BASE+1,&a,e,sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,FR_STRUCTURAL_BODY_ID_BASE+2,&b,e,sizeof(e)));
+    ASSERT_TRUE(!(a.flags&DC_GPU_BODY_KINEMATIC));
+    ASSERT_TRUE(!(b.flags&DC_GPU_BODY_KINEMATIC));
+    ASSERT_TRUE(fabs(a.mass+b.mass-39.6)<.001);
+    for(unsigned i=0;i<62;i++) {
+        dc_gpu_body_t ordinary;
+        ASSERT_TRUE(dc_gpu_read_body_id(g,i+1,&ordinary,e,sizeof(e)));
+        ASSERT_EQ(ordinary.active,1u);
+    }
+    dc_gpu_destroy(g);
+    PASS();
+}
 int main(void) {
     RUN(test_support_loss_grace_then_conservative_fall);
     RUN(test_unknown_does_not_age_support_loss);
@@ -368,6 +424,8 @@ int main(void) {
     RUN(test_converted_bond_ownership_survives_graph_replacement);
     RUN(test_converted_bearing_opens_without_tension_or_friction);
     RUN(test_closed_bearing_creates_no_angular_momentum_or_energy);
+    RUN(test_failed_member_does_not_remove_its_sound_rooted_neighbor);
+    RUN(test_full_body_pool_reuses_owned_records_without_mass_loss);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
