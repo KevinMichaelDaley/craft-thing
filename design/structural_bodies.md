@@ -1,6 +1,7 @@
 # Anchored structural bodies
 
-Status: mechanical reference implemented; runtime behavior remains planned.
+Status: mechanical reference and GPU placement/topology implemented; equilibrium,
+damage, conversion, persistence and gameplay integration remain planned.
 Epic: `ct-fx1b`. The user selected explicitly placed/marked structures and requested
 design and tickets first. Ordinary terrain remains terrain. Implementation follows
 RED–GREEN–REFACTOR; runtime placement starts with `ct-i5a4` after `ct-touk`.
@@ -28,6 +29,48 @@ game parameters, not measured SI properties. The existing fluid-only variable
 duration API does not change rigid tick duration. Numerical member subdivision
 preserves summed area-times-length volume and mass, and strength checks accept the
 physical unbraced span rather than using the numerical edge length.
+
+### Initial GPU authoring API
+
+`fr_gpu_place_structure` accepts an explicitly authored graph through
+`include/ferrum/structural/gpu.h`. Nodes, members, joints and anchors have stable IDs
+and generations. Editing rest geometry requires a new generation. Initial placement
+accepts rectangular stone/wood members up to 16 cells, with exact rectangular area
+and material-derived rigid mass. Initial terrain marking accepts whole horizontal
+stone rectangles; sand, irregular regions, water-bearing cells and unavailable
+source pages are rejected. Terrain anchor footprints initially accept stone and
+carry finite authored stiffness/force/moment capacities; placement validates their
+physical proximity to the associated member. Bearing/pinned/bonded/moment types
+are stored explicitly; equilibrium and unilateral activation belong to `ct-il9b`.
+
+Placement reserves body slots, validates every source on GPU, then transfers terrain
+ownership and activates stationary structural collision proxies. Failure retains
+the previous source and graph. Ordinary rigid spawning/removal/motion APIs cannot
+overwrite structural ownership. Placement enables the rigid GPU solver. Explicit
+authoring commands may synchronously acknowledge validation; ordinary frames update
+topology and anchor residency on GPU without CPU graph traversal or readback.
+Body-only save/load APIs reject active structural ownership until `ct-1n9n` adds
+the graph-aware snapshot transaction; they cannot silently erase graph identity.
+Component labels are cached by topology epoch, while anchor material and residency
+are checked each frame. Editing joints invalidates the cached labels.
+
+Initial bounds are 32 nodes, 16 members, 64 joints and 32 anchors. One graph stores
+each authored joint/anchor once; GPU component labels use the minimum node ID and
+cycles do not duplicate roots. The storage shares binding 4 with rigid records,
+broadphase, contacts and solver scratch, preserving the 32-descriptor budget.
+The extra logical allocation is 122,176 bytes for 64 resident slots or 122,368 bytes
+for the 70-slot quarter-native configuration, including reserved solver workspace.
+Exact world coordinates are recorded for every uploaded page slot, so recycled
+slots cannot become unrelated terrain roots. A cold node or anchor footprint marks
+its connected component UNKNOWN. A rooted graph also remains UNKNOWN until the
+mechanical solver certifies equilibrium; connectivity never substitutes for strength.
+
+A warm 640 by 448, 70-slot Intel Iris Xe Vulkan diagnostic with all 16 members
+and 32 nodes measured 4.545 ms for rigid plus topology work and 14.303 ms for the
+whole tick, with validation disabled for timing. The mapped allocation was 64.407
+MiB and device allocation 107.196 MiB. This dry benchmark includes no equilibrium
+solve; later milestones must measure the additional cost rather than treating
+these placement timings as the final structural budget.
 
 ## Behavior and ownership
 

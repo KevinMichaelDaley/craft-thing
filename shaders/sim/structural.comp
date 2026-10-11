@@ -93,7 +93,8 @@ void transaction() {
 }
 void topology() {
     uint g=graph(),i=gl_LocalInvocationID.x,ns=g+NODES+i*12u,unused;
-    label[i]=i<data[g]?data[ns]:0xffffffffu;cold[i]=0u;roots[i]=0u;
+    bool dirty=data[base()+4u]!=data[base()+3u];
+    label[i]=i<data[g]?(dirty?data[ns]:data[state(i)+1u]):0xffffffffu;cold[i]=0u;roots[i]=0u;
     if(i<data[g]) {
         ivec2 p;bool resident=view_point(pair(ns+2u),pair(ns+4u),ivec2(int(data[ns+6u])>>16,int(data[ns+7u])>>16),p)&&cell_ref(p,unused);
         cold[i]=resident?0u:1u;
@@ -109,7 +110,7 @@ void topology() {
         }
     }
     barrier();
-    for(uint iteration=0u;iteration<32u;iteration++) {
+    for(uint iteration=0u;dirty && iteration<32u;iteration++) {
         uint best=label[i];
         if(i<data[g]) {
             for(uint e=0u;e<data[g+1u]+data[g+2u];e++) {
@@ -120,6 +121,7 @@ void topology() {
         }
         next_label[i]=best;barrier();label[i]=next_label[i];barrier();
     }
+    if(i==0u) data[base()+4u]=data[base()+3u];
     if(i<data[g]) {
         uint all_cold=0u,all_roots=0u;
         for(uint n=0u;n<data[g];n++) if(label[n]==label[i]) {all_cold+=cold[n];all_roots+=roots[n];}

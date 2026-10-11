@@ -273,6 +273,14 @@ static void test_explicit_joint_graph_does_not_multiply_roots(void) {
     ASSERT_TRUE(!fr_gpu_place_structure(g, &s, e, sizeof(e)));
     ASSERT_TRUE(fr_gpu_read_structure_node(g, 4, &n));
     ASSERT_EQ(n.valid_anchors, 1u);
+    s.joints[0].normal_stiffness=1e7;
+    s.joint_count=0;
+    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
+    ASSERT_TRUE(fr_gpu_read_structure_node(g,4,&n));
+    ASSERT_EQ(n.component,3u);
+    ASSERT_EQ(n.valid_anchors,0u);
+    ASSERT_EQ(n.state,FR_STRUCTURAL_UNSUPPORTED);
     dc_gpu_destroy(g);
     PASS();
 }

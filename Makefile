@@ -1,17 +1,16 @@
 CC ?= cc
 .DEFAULT_GOAL := all
 STRUCTURAL_REFERENCE = tests/structural/reference_solver.c src/structural/material.c
-STRUCTURAL_PLACEMENT =
-build/structural_placement_tests: tests/structural/placement_tests.c $(STRUCTURAL_PLACEMENT) build/compound_body_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(STRUCTURAL_PLACEMENT) $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -lm
+build/structural_placement_tests: tests/structural/placement_tests.c include/ferrum/structural/gpu.h build/compound_body_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/structural_mechanics_tests: tests/structural/mechanics_tests.c $(STRUCTURAL_REFERENCE) include/ferrum/structural/mechanics.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/structural/mechanics_tests.c $(STRUCTURAL_REFERENCE) -o $@ -lm
-test: build/structural_mechanics_tests
+test: build/structural_mechanics_tests build/structural_placement_tests
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror
 CFLAGS += -pthread
 CPPFLAGS += -Iinclude $(shell pkg-config --cflags sdl2)
-LDLIBS += -lvulkan $(shell pkg-config --libs sdl2) -pthread
+LDLIBS += -lvulkan $(shell pkg-config --libs sdl2) -pthread -lm
 GLSLANG ?= glslangValidator
 
 GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/broadphase_gpu.o build/contact_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
@@ -21,10 +20,11 @@ GPU_OBJ += build/window_gpu.o
 GPU_OBJ += build/structural_gpu.o
 build/structural_gpu.o: src/vulkan/structural_gpu.c src/vulkan/gpu_internal.h include/ferrum/structural/gpu.h build/shaders/structural.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-build/shaders/structural.comp.spv: shaders/sim/structural.comp shaders/sim/rigid_body.glsl
+build/shaders/structural.comp.spv: shaders/sim/structural.comp shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 $(GPU_OBJ): build/shaders/structural.comp.spv
+build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench build/marker_slot_tests build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_solver_tests build/quarter_native_bench build/dungeoncraft_quarter_native: build/shaders/structural.comp.spv
 build/window_gpu.o: src/vulkan/window_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/compound_gpu.o: src/vulkan/compound_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
@@ -113,6 +113,9 @@ build/broadphase_tests: tests/vulkan/broadphase_tests.c $(GPU_OBJ) $(CHUNK_OBJ) 
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_bench build/dungeoncraft_quarter_native: src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
 .PHONY: quarter_native test_quarter_native bench_quarter_native test_quarter_native_spray
+build/quarter_native_structural_placement_tests: tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c build/compound_body_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS)
+test_quarter_native: build/quarter_native_structural_placement_tests
 .PHONY: test_quarter_native_perf
 test_quarter_native_perf: build/quarter_native_perf_tests build/quarter_native_bench
 	./build/quarter_native_perf_tests
@@ -135,6 +138,7 @@ build/quarter_native_rigid_solver_tests: tests/vulkan/rigid_solver_tests.c Makef
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS) -lm
 
 test_quarter_native: build/quarter_native_config_tests build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_rigid_solver_tests build/dungeoncraft_quarter_native
+	./build/quarter_native_structural_placement_tests
 	./build/presentation_tests
 	./build/quarter_native_config_tests
 	./build/quarter_native_fluid_tests
@@ -335,6 +339,7 @@ build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h
 
 test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/structural_mechanics_tests
+	./build/structural_placement_tests
 	./build/rigid_solver_tests
 	./build/compound_body_tests
 	./build/contact_tests
