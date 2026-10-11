@@ -35,6 +35,8 @@ static dc_gpu_body_record_t *find_body(dc_gpu_t *gpu, uint32_t id) {
 bool dc_gpu_set_rigid_solver(dc_gpu_t *gpu, bool enabled) {
     if (!gpu)
         return false;
+    if (!enabled && gpu->structural_enabled)
+        return false;
     gpu->rigid_solver_enabled = enabled;
     uint32_t *data = dc_gpu_solver_data(gpu);
     data[0] = enabled;

@@ -65,6 +65,14 @@ static bool validate(const fr_structural_gpu_graph_t *g) {
         if(!a->id || !a->generation || node_index(g,a->node)<0 || a->kind>FR_JOINT_MOMENT ||
            !a->width || !a->height || a->width>8 || a->height>8 || a->x>=64 || a->y>=64 ||
            a->terrain_material!=DC_MATERIAL_STONE || !finite_values(&a->normal_stiffness,8)) return false;
+        const fr_structural_gpu_node_t *n=&g->nodes[node_index(g,a->node)];
+        fr_structural_gpu_node_t p={.chunk=a->chunk,.x_fp=(int32_t)a->x<<16,.y_fp=(int32_t)a->y<<16};
+        double d[2],radius=0;
+        if(!delta(&p,n,d)) return false;
+        for(uint32_t m=0;m<g->member_count;m++) if(g->members[m].a==n->id || g->members[m].b==n->id)
+            radius=fmax(radius,(double)g->members[m].depth_fp/131072);
+        double gapx=fmax(fmax(-d[0],d[0]-a->width),0),gapy=fmax(fmax(-d[1],d[1]-a->height),0);
+        if(hypot(gapx,gapy)>radius+1.0/65536) return false;
         for(unsigned k=0;k<3;k++) if(a->reserved[k]) return false;
         for(uint32_t j=0;j<i;j++) if(g->anchors[j].id==a->id) return false;
     }
@@ -162,6 +170,7 @@ bool fr_gpu_place_structure(dc_gpu_t *gpu,const fr_structural_gpu_graph_t *g,cha
         return error(err,cap,"Structural transaction rejected; ownership unchanged");
     }
     gpu->structural_enabled=g->member_count!=0;
+    if(gpu->structural_enabled) dc_gpu_set_rigid_solver(gpu,true);
     gpu->body_refresh_pending=true;
     return dc_gpu_set_body_origin(gpu,gpu->body_origin,err,cap);
 }
