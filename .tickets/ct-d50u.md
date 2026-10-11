@@ -31,3 +31,11 @@ During dun-9qub validation, Wayland window runs stalled after attaching/committi
 **2026-10-09T02:42:20Z**
 
 With ScreenSaver.GetActive=false, the previously stalled dun-9qub window scene completed. The full quarter-native suite (six window scenes including successive recreation) and make test_ui (five controls tests plus ten smoke scenes) now pass under Intel Vulkan validation. No compositor settings or presentation code changes were needed for these runs. Leave this ticket open for its broader intermittent-stall diagnostics and repeated bounded-run acceptance.
+
+**2026-10-11T02:33:42Z**
+
+During ct-cnsq verification, Wayland visual scene repeatedly stalled in poll_schedule_timeout with ScreenSaver.GetActive=false. Some runs stalled after producing partial replay frames, so this is not solely initial window creation or a locked desktop. Owned test processes were bounded and retried; an earlier unchanged scene completed all 120 exact settled-frame comparisons. No compositor settings or presentation assertions changed.
+
+**2026-10-11T02:35:37Z**
+
+Final trace again stops after wl_surface.frame + attach/damage/commit, with no subsequent frame callback; org.gnome.Mutter.DisplayConfig.PowerSaveMode is 0 and ScreenSaver.GetActive is false. Disabling SDL libdecor preference did not resolve it. Normal GPU headless tests complete; this remains a separate presentation diagnostic issue.
