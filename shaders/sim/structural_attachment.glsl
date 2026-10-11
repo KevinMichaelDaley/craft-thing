@@ -79,7 +79,7 @@ void update_bearings(uint owner) {
     for(uint j=lane;j<data[g+2u];j+=32u) if(
         data[state(uint(eq_joint_nodes[j].x))+1u]==data[state(owner)+1u]) {
         uint p=g+JOINTS+j*16u;
-        if(data[p+4u]!=0u) continue;
+        if(data[p+4u]!=0u||data[p+14u]!=0u) continue;
         vec3 gap=joint_gap(j);
         bool open=gap.x>1e-9,closed=gap.x<-1e-9;
         vec3 original=vec3(eq_get(p+5u),eq_get(p+6u),0);

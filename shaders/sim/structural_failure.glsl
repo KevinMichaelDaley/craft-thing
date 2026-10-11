@@ -39,9 +39,55 @@ void create_bond(uint a,uint b,vec2 point,uint kind,vec3 stiffness,float normal)
     data[p+11u]=floatBitsToUint(normal-ba.angle);
     for(uint axis=0u;axis<3u;axis++) data[p+12u+axis]=floatBitsToUint(stiffness[axis]);
 }
+void release_member(uint member) {
+    uint g=graph(),m=g+MEMBERS+member*8u,slot=data[m+7u];
+    Body b=bodies[slot];
+    b.motion_flags=0u;b.motion_ready=0u;b.reserved0=0u;b.reserved1=0u;
+    b.vx_fp=0;b.vy_fp=0;b.angular_velocity=0;
+    b.rest_ticks=0u;body_properties(b);bodies[slot]=b;
+    data[m+6u]|=STRUCTURAL_RETIRED;
+    data[g+24000u+member*16u+3u]=5u;
+}
+void damage_members() {
+    uint g=graph();bool cut=false;
+    for(uint member=0u;member<data[g+1u];member++) if(member_active(member)) {
+        uint m=g+MEMBERS+member*8u,st=member_state(member);
+        if(data[st+3u]>=2u) continue;
+        float excess=max(eq_get(st+7u)-1.0,0);
+        uint profile=g+29000u+data[m+4u]*12u;
+        float damage=min(1.0,eq_get(st+10u)+excess*excess/(60.0*eq_get(profile+8u)));
+        eq_put(st+10u,damage);
+        if(damage<1.0) continue;
+        uint slot=data[m+7u];
+        if(slot>=BODY_CAPACITY||bodies[slot].reserved0!=STRUCTURAL_SOURCE||
+           bodies[slot].reserved1!=member+1u||bodies[slot].enabled==0u) {
+            data[st+3u]=4u;continue;
+        }
+        release_member(member);cut=true;
+    }
+    if(!cut) return;
+    for(uint node=0u;node<data[g];node++) {
+        bool incident=false;uint id=data[g+NODES+node*12u];
+        for(uint m=0u;m<data[g+1u];m++) if(member_active(m)) {
+            uint p=g+MEMBERS+m*8u;
+            incident=incident||data[p+2u]==id||data[p+3u]==id;
+        }
+        if(!incident) {
+            data[g+NODES+node*12u+8u]=1u;data[state(node)+2u]=5u;
+            if(data[component_state(node)]==id) data[component_state(node)+1u]=5u;
+        }
+    }
+    for(uint j=0u;j<data[g+2u];j++) {
+        uint p=g+JOINTS+j*16u;
+        int a=node_index(g,data[p+2u]),b=node_index(g,data[p+3u]);
+        if(data[g+NODES+uint(a)*12u+8u]!=0u||data[g+NODES+uint(b)*12u+8u]!=0u) data[p+14u]=1u;
+    }
+    data[base()+3u]++;
+}
 void failure() {
     if(gl_LocalInvocationID.x!=0u) return;
     uint g=graph();
+    damage_members();
     for(uint owner=0u;owner<data[g];owner++) {
         uint node=g+NODES+owner*12u;
         if(data[node+8u]!=0u||data[node]!=data[state(owner)+1u]) continue;
@@ -70,7 +116,7 @@ void failure() {
             if(data[p+14u]==0u&&a>=0&&b>=0&&a!=b) needed++;
         }
         uint free=0u;
-        for(uint slot=0u;slot<STRUCTURAL_BOND_CAPACITY;slot++) free+=uint(!bond_live(bond_record(slot)));
+        for(uint slot=0u;slot<data[base()+6u];slot++) free+=uint(!bond_live(bond_record(slot)));
         bool valid=members!=0u;
         for(uint m=0u;m<data[g+1u];m++) if(component_member(m,data[node])) {
             uint slot=data[g+MEMBERS+m*8u+7u];
@@ -102,12 +148,7 @@ void failure() {
             data[p+14u]=1u;
         }
         for(uint member=0u;member<data[g+1u];member++) if(component_member(member,data[node])) {
-            uint m=g+MEMBERS+member*8u,slot=data[m+7u];Body b=bodies[slot];
-            b.motion_flags=0u;b.motion_ready=0u;b.reserved0=0u;b.reserved1=0u;
-            b.vx_fp=0;b.vy_fp=0;b.angular_velocity=0;
-            b.rest_ticks=0u;body_properties(b);bodies[slot]=b;
-            data[m+6u]|=STRUCTURAL_RETIRED;
-            data[g+24000u+member*16u+3u]=5u;
+            release_member(member);
         }
         for(uint n=0u;n<data[g];n++) if(data[state(n)+1u]==data[node]) {
             data[g+NODES+n*12u+8u]=1u;data[state(n)+2u]=5u;

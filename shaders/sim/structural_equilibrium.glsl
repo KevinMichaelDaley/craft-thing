@@ -41,6 +41,7 @@ vec3 eq_vector(uint element,uint dof) {
 float eq_entry(uint row,uint col,bool geometry) {
     uint g=graph();float k=0;
     for(uint e=0u;e<data[g+1u];e++) {
+        if((data[g+MEMBERS+e*8u+6u]&2u)!=0u) continue;
         vec3 r=eq_vector(e,row),c=eq_vector(e,col);
         vec3 stiffness=geometry?vec3(.5,1.0/(2.0+eq_length[e]*eq_length[e]/2.0),.5):eq_k[e];
         k+=dot(r*c,stiffness);
@@ -62,6 +63,7 @@ float eq_load(uint dof) {
     float f=float(int(data[structural_loads()+dof]))*3600.0/STRUCTURAL_LOAD_SCALE;
     uint node=dof/3u,axis=dof%3u;
     for(uint e=0u;e<data[graph()+1u];e++) {
+        if((data[graph()+MEMBERS+e*8u+6u]&2u)!=0u) continue;
         if(int(node)!=eq_a[e]&&int(node)!=eq_b[e]) continue;
         float l=eq_length[e],w=eq_weight[e];
         if(axis==1u) f+=w*l/2.0;
@@ -179,6 +181,7 @@ void equilibrium() {
         eq_joint_v[j][3]=vec3(-n.x,-t.x,0);eq_joint_v[j][4]=vec3(-n.y,-t.y,0);
         eq_joint_v[j][5]=vec3(body_cross(arm,n),body_cross(arm,t),-1);
         eq_joint_k[j]=vec3(eq_get(p+5u),eq_get(p+6u),data[p+4u]>=2u?eq_get(p+7u):0);
+        if(data[p+14u]!=0u) eq_joint_k[j]=vec3(0);
         eq_joint_slide[j]=vec2(0);
         if(data[p+4u]==0u&&eq_get(p+10u)==0&&eq_get(p+12u)==0) eq_joint_k[j].y=0;
     }

@@ -10,6 +10,7 @@ bool eq_mechanism_proven(uint owner) {
     uint g=graph(),cluster[32],clusters=0u,upper=0u;
     for(uint n=0u;n<data[g];n++) cluster[n]=data[state(n)+1u]==data[state(owner)+1u]?n:0xffffffffu;
     for(uint iteration=0u;iteration<32u;iteration++) for(uint e=0u;e<data[g+1u];e++) {
+        if((data[g+MEMBERS+e*8u+6u]&2u)!=0u) continue;
         uint a=uint(eq_a[e]),b=uint(eq_b[e]);
         if(cluster[a]!=0xffffffffu) {uint label=min(cluster[a],cluster[b]);cluster[a]=label;cluster[b]=label;}
     }

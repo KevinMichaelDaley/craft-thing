@@ -8,7 +8,7 @@ void eq_physical_prepare() {
             uint a=uint(eq_a[e])*3u+axis,b=uint(eq_b[e])*3u+axis;
             strain+=eq_vector(e,a)*eq_q(a)+eq_vector(e,b)*eq_q(b);
         }
-        eq_member_force[e]=eq_k[e]*strain;
+        eq_member_force[e]=(data[g+MEMBERS+e*8u+6u]&2u)==0u?eq_k[e]*strain:vec3(0);
     }
     for(uint a=lane;a<data[g+3u];a+=32u) eq_anchor_force[a]=anchor_demand(a);
     for(uint j=lane;j<data[g+2u];j+=32u) eq_joint_force[j]=joint_demand(j);
