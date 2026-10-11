@@ -1,8 +1,8 @@
 # Anchored structural bodies
 
-Status: mechanical reference, GPU placement/topology and GPU equilibrium/contact
-coupling implemented; damage, conversion, persistence and gameplay integration
-remain planned.
+Status: mechanical reference, GPU placement/topology, GPU equilibrium/contact
+coupling and timed conservative detachment implemented. Localized material
+fracture, persistence and gameplay integration remain planned.
 Epic: `ct-fx1b`. The user selected explicitly placed/marked structures and requested
 design and tickets first. Ordinary terrain remains terrain. Implementation follows
 RED–GREEN–REFACTOR; runtime placement starts with `ct-i5a4` after `ct-touk`.
@@ -108,6 +108,45 @@ The 32-node, 16-member chain sweep safely returns UNKNOWN when float conditionin
 is insufficient, rather than inventing a mechanism. Current Euler checks use the
 conservative per-member span twice its length; complete physical unbraced-span
 and material grain evolution remain part of the later failure milestones.
+
+### Timed failure and conservative detachment
+
+`ct-0iq3` counts confirmed support loss in fixed physics ticks. Material grace is
+converted from seconds to ticks; restoring support resets that clock. UNKNOWN,
+including cold pages and invalid contact capture, freezes grace and damage.
+Permanent overload damage advances by `max(utilization - 1, 0)^2 / (60 * duration)`;
+finite anchor and joint failures cut their interfaces and invalidate topology.
+Failed members retire independently, leaving sound rooted neighbors structural.
+Localized fracture and crumble outputs belong to `ct-gf6q`.
+
+Unsupported sound islands reserve all required dynamic bonds before conversion.
+The bounded pool holds 192 bonds. Exhaustion leaves the complete island stationary
+and PENDING_CONVERSION, with ownership and mass intact. Conversion reuses owned
+rigid records even when all 64 body slots are occupied. Rest geometry, empty space,
+material mass and inertia are preserved; virtual equilibrium displacement and
+strain energy never become an artificial launch. Converted ownership prevents
+ordinary spawning from replacing the assembly. Body-only snapshots still reject
+that ownership pending the graph-aware persistence milestone.
+
+Dynamic bonds retain finite pins, oriented unilateral bearings and sound welds.
+Their objective angular Jacobian includes interface-axis rotation. A GPU momentum
+ledger corrects isolated assemblies' common translation/rotation after projection;
+externally contacted, prescribed, clipped and cold groups are excluded. Cold groups
+freeze together. A closed-bearing regression preserves angular momentum within
+0.2 percent and reduces relative kinetic energy; the mixed welded regression uses
+an explicit 2.5 percent angular tolerance. No runtime CPU solve or readback is used.
+
+Thirteen failure regressions cover grace, UNKNOWN freezing, permanent damage,
+interface failure, rooted survivors, bond/body pool exhaustion and conservative
+bearing behavior. The full headless battery passes 194 tests. A real Wayland
+quarter-native cadence test compares one tick
+plus idle frames with five-tick batches: both convert at tick 90, or 1.5 simulated
+seconds. GPU-owned indirect dispatch suppresses empty dynamic-bond launches.
+A warm static 16-member quarter-native diagnostic measured 8.337 ms for
+rigid/structure work and 17.643 ms for the whole tick, without validation. Maximum
+relative residual was 1.13e-7. Current mapped allocation is 64.445 MiB, device
+allocation 107.196 MiB, and the 70-slot structural reserve is 162,368 bytes.
+These measurements do not certify the final loaded gameplay budget.
 
 ## Behavior and ownership
 

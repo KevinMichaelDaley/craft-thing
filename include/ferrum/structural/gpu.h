@@ -94,7 +94,8 @@ bool fr_gpu_read_structure_member(dc_gpu_t *gpu, uint32_t id,
                                   fr_structural_gpu_member_state_t *state);
 /** Explicit component diagnostic. Pass the component's minimum node ID;
  * moments are about that node's rest position. Inspect state before using
- * equilibrium quantities, which are undefined for UNKNOWN/UNSUPPORTED.
+ * equilibrium quantities, which are current only for SUPPORTED/OVERLOADED.
+ * Converted records retain historical diagnostics rather than current equilibrium.
  */
 bool fr_gpu_read_structure_component(
     dc_gpu_t *gpu, uint32_t id, fr_structural_gpu_component_state_t *state);
