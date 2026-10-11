@@ -103,6 +103,7 @@ bool eq_eliminate(bool geometry) {
                 uint col=eq_map[c],address=eq_address(eq_work(),row,col);
                 eq_put(address,eq_get(address)-ratio*eq_get(eq_address(eq_work(),pivot,col)));
             }
+            eq_put(eq_address(eq_work(),row,pivot),ratio);
             eq_rhs[r]-=ratio*eq_rhs[p];
         }
         memoryBarrierBuffer();barrier();
@@ -114,7 +115,9 @@ bool eq_eliminate(bool geometry) {
     }
     barrier();return true;
 }
+vec2 eq_physical(uint dof);
 #include "structural_stress.glsl"
+#include "structural_refine.glsl"
 void equilibrium() {
     uint g=graph(),owner=gl_WorkGroupID.x,lane=gl_LocalInvocationID.x;
     if(owner>=data[g]||data[g+NODES+owner*12u]!=data[state(owner)+1u]||
@@ -146,6 +149,7 @@ void equilibrium() {
     for(uint a=lane;a<data[g+3u];a+=32u) {
         uint an=g+ANCHORS+a*24u;eq_anchor[a]=eq_anchor_valid(a)?node_index(g,data[an+2u]):-1;
         eq_ak[a]=vec3(eq_get(an+13u),eq_get(an+14u),data[an+3u]>=2u?eq_get(an+15u):0);
+        if(data[an+3u]==0u&&eq_get(an+18u)==0&&eq_get(an+20u)==0) eq_ak[a].y=0;
         float angle=eq_get(an+21u);eq_normal[a]=vec2(cos(angle),sin(angle));
     }
     for(uint j=lane;j<data[g+2u];j+=32u) {
@@ -159,6 +163,7 @@ void equilibrium() {
         eq_joint_v[j][3]=vec3(-n.x,-t.x,0);eq_joint_v[j][4]=vec3(-n.y,-t.y,0);
         eq_joint_v[j][5]=vec3(body_cross(arm,n),body_cross(arm,t),-1);
         eq_joint_k[j]=vec3(eq_get(p+5u),eq_get(p+6u),data[p+4u]>=2u?eq_get(p+7u):0);
+        if(data[p+4u]==0u&&eq_get(p+10u)==0&&eq_get(p+12u)==0) eq_joint_k[j].y=0;
     }
     barrier();
     for(uint iteration=0u;iteration<8u;iteration++) {
@@ -167,19 +172,15 @@ void equilibrium() {
         if(eq_status!=0u) break;
         for(uint r=lane;r<eq_count;r+=32u) eq_solution[r]*=eq_scale[r];
         if(lane==0u) eq_iterations+=2u*eq_count;
-        barrier();update_bearings(owner);
+        barrier();eq_refine();update_bearings(owner);
         if(eq_changed==0u) break;
         if(iteration==7u&&lane==0u) eq_status=3u;
         barrier();
     }
     if(eq_status==0u) {
         for(uint r=lane;r<eq_count;r+=32u) {
-            uint row=eq_map[r];float sum=0,scale=abs(eq_load(row));
-            for(uint c=0u;c<eq_count;c++) {
-                float term=eq_get(eq_address(eq_original(),row,eq_map[c]))*eq_solution[c];
-                sum+=term;scale+=abs(term);
-            }
-            float residual=abs(sum-eq_load(row))/max(scale,1.0);
+            uint row=eq_map[r];vec2 physical=eq_physical(row);
+            float residual=abs(physical.x-eq_load(row))/max(physical.y+abs(eq_load(row)),1.0);
             if(isnan(residual)||isinf(residual)||residual>1e-4) atomicMax(eq_status,3u);
         }
         barrier();
@@ -199,6 +200,9 @@ void equilibrium() {
     }
     barrier();
     if(lane==0u&&eq_status<=1u) component_budget(owner);
+    if(lane==0u&&eq_status>=2u) data[component_state(owner)+1u]=eq_status;
+    for(uint e=lane;e<data[g+1u];e+=32u) if(eq_status>=2u&&
+        data[state(uint(eq_a[e]))+1u]==data[state(owner)+1u]) data[member_state(e)+3u]=eq_status;
     for(uint r=lane;r<eq_count;r+=32u) {
         uint dof=eq_map[r],st=state(dof/3u),axis=dof%3u;
         if(axis==0u) data[st+2u]=eq_status;

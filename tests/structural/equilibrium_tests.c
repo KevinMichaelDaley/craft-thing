@@ -197,6 +197,7 @@ static void test_angled_brace_closes_force_and_moment_balance(void) {
     ASSERT_TRUE(fr_gpu_read_structure_node(g,4,&anchor));ASSERT_TRUE(fabs(anchor.reaction[0])>100);
     fr_structural_gpu_component_state_t budget;
     ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&budget));
+    printf("brace balance: %.6f %.6f %.6f\n",budget.external[0]+budget.reaction[0],budget.external[1]+budget.reaction[1],budget.external[2]+budget.reaction[2]);
     for(unsigned axis=0;axis<3;axis++) ASSERT_TRUE(near(budget.external[axis]+budget.reaction[axis],0,.2));
     dc_gpu_destroy(g);PASS();
 }

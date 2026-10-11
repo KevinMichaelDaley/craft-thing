@@ -131,6 +131,20 @@ void topology() {
         data[st+2u]=all_cold!=0u||all_roots!=0u?3u:2u;
         data[st+3u]=all_roots;data[st+4u]=all_cold;data[st+5u]=data[ns+1u];
         for(uint v=6u;v<12u;v++) data[st+v]=0u;
+        if(data[ns]==label[i]) {
+            uint cs=g+24400u+i*16u;
+            for(uint word=0u;word<16u;word++) data[cs+word]=0u;
+            data[cs]=data[ns];data[cs+1u]=data[st+2u];
+            for(uint n=0u;n<data[g];n++) data[cs+2u]+=uint(label[n]==label[i]);
+            data[cs+3u]=uint(all_cold!=0u);
+        }
+    }
+    if(i<data[g+1u]) {
+        uint m=g+MEMBERS+i*8u,st=g+24000u+i*16u;
+        int a=node_index(g,data[m+2u]);uint component=label[a],all_cold=0u,all_roots=0u;
+        for(uint n=0u;n<data[g];n++) if(label[n]==component) {all_cold+=cold[n];all_roots+=roots[n];}
+        data[st]=data[m];data[st+1u]=data[m+1u];data[st+2u]=component;
+        data[st+3u]=all_cold!=0u||all_roots!=0u?3u:2u;
     }
 }
 #include "structural_equilibrium.glsl"

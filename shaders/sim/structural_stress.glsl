@@ -100,12 +100,8 @@ void component_budget(uint owner) {
             float lever=axis==0u?-arm.y:arm.x;
             applied.z+=lever*f;reaction.z+=lever*support;
         }
-        float sum=0,scale=abs(f);
-        for(uint c=0u;c<eq_count;c++) {
-            float term=eq_get(eq_address(eq_original(),dof,eq_map[c]))*eq_solution[c];
-            sum+=term;scale+=abs(term);
-        }
-        maximum_residual=max(maximum_residual,abs(sum-f)/max(scale,1));
+        vec2 physical=eq_physical(dof);
+        maximum_residual=max(maximum_residual,abs(physical.x-f)/max(physical.y+abs(f),1));
     }
     data[st]=data[g+NODES+owner*12u];data[st+1u]=eq_status;data[st+2u]=eq_count/3u;
     for(uint axis=0u;axis<3u;axis++) {eq_put(st+4u+axis,applied[axis]);eq_put(st+7u+axis,reaction[axis]);}

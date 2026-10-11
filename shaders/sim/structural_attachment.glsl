@@ -48,6 +48,7 @@ void update_bearings(uint owner) {
         float gap=anchor_gap(a).x;
         bool open=gap>1e-7,closed=gap<-1e-7;
         vec3 original=vec3(eq_get(an+13u),eq_get(an+14u),0);
+        if(eq_get(an+18u)==0&&eq_get(an+20u)==0) original.y=0;
         vec3 next=open?vec3(0):closed?original:eq_ak[a];
         if(any(notEqual(next,eq_ak[a]))) {eq_ak[a]=next;atomicOr(eq_changed,1u);}
     }
@@ -58,6 +59,7 @@ void update_bearings(uint owner) {
         float gap=joint_gap(j).x;
         bool open=gap>1e-7,closed=gap<-1e-7;
         vec3 original=vec3(eq_get(p+5u),eq_get(p+6u),0);
+        if(eq_get(p+10u)==0&&eq_get(p+12u)==0) original.y=0;
         vec3 next=open?vec3(0):closed?original:eq_joint_k[j];
         if(any(notEqual(next,eq_joint_k[j]))) {eq_joint_k[j]=next;atomicOr(eq_changed,1u);}
     }
