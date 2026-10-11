@@ -24,7 +24,8 @@ int member_at(uint node,uint component) {
     }
     return -1;
 }
-void create_bond(uint a,uint b,vec2 point,uint kind,vec3 stiffness,float normal) {
+void create_bond(uint a,uint b,vec2 point,uint kind,vec3 stiffness,float normal,
+                 float cohesion,float friction) {
     uint slot=0u;
     while(slot<STRUCTURAL_BOND_CAPACITY&&bond_live(bond_record(slot))) slot++;
     uint p=bond_record(slot);Body ba=bodies[a],bb=bodies[b];
@@ -38,6 +39,7 @@ void create_bond(uint a,uint b,vec2 point,uint kind,vec3 stiffness,float normal)
     data[p+10u]=floatBitsToUint(bb.angle-ba.angle);
     data[p+11u]=floatBitsToUint(normal-ba.angle);
     for(uint axis=0u;axis<3u;axis++) data[p+12u+axis]=floatBitsToUint(stiffness[axis]);
+    data[p+18u]=floatBitsToUint(cohesion);data[p+19u]=floatBitsToUint(friction);
 }
 void release_member(uint member) {
     uint g=graph(),m=g+MEMBERS+member*8u,slot=data[m+7u];
@@ -158,7 +160,7 @@ void failure() {
             for(uint b=a+1u;b<data[g+1u];b++) if(component_member(b,data[node])) {
                 uint shared_index;
                 if(shared_node(a,b,shared_index)) create_bond(data[g+MEMBERS+a*8u+7u],
-                    data[g+MEMBERS+b*8u+7u],eq_position(shared_index),2u,vec3(1e8),0);
+                    data[g+MEMBERS+b*8u+7u],eq_position(shared_index),2u,vec3(1e8),0,0,0);
             }
         for(uint j=0u;j<data[g+2u];j++) {
             uint p=g+JOINTS+j*16u;
@@ -168,7 +170,8 @@ void failure() {
                         eq_position(uint(node_index(g,data[p+3u]))))/2.0;
             create_bond(data[g+MEMBERS+uint(a)*8u+7u],data[g+MEMBERS+uint(b)*8u+7u],
                         point,data[p+4u],vec3(eq_get(p+5u),eq_get(p+6u),
-                        data[p+4u]>=2u?eq_get(p+7u):0),eq_get(p+13u));
+                        data[p+4u]>=2u?eq_get(p+7u):0),eq_get(p+13u),
+                        eq_get(p+10u),eq_get(p+12u));
             data[p+14u]=1u;
         }
         for(uint member=0u;member<data[g+1u];member++) if(component_member(member,data[node])) {

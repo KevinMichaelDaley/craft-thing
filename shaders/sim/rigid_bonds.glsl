@@ -1,6 +1,8 @@
 #include "structural_bonds.glsl"
+#include "rigid_bond_budget.glsl"
 void solve_bonds(uint phase) {
     if(gl_GlobalInvocationID.x!=0u||data[sb()+3u]!=0u) return;
+    if(phase==14u) prepare_bond_budgets();
     for(uint i=0u;i<STRUCTURAL_BOND_CAPACITY;i++) {
         uint p=bond_record(i);
         if(!bond_live(p)) continue;
@@ -10,14 +12,15 @@ void solve_bonds(uint phase) {
         }
         uint ai=data[p+1u],bi=data[p+2u];
         if(data[bs(ai)+BODY_AWAKE_WORD]==0u||data[bs(bi)+BODY_AWAKE_WORD]==0u) continue;
-        Body a=bodies[ai],b=bodies[bi];
+        Body a=bodies[ai],b=bodies[bi];float normal_impulse=0;
         for(uint axis=0u;axis<3u;axis++) {
             float stiffness=getf(p+12u+axis);
             if(stiffness<=0) continue;
             vec2 ra=body_rotate(getv(p+6u),a.angle),rb=body_rotate(getv(p+8u),b.angle);
             float angle=a.angle+getf(p+11u)+float(axis)*1.5707963267948966;
             vec2 n=vec2(cos(angle),sin(angle));
-            float ja=axis==2u?-1.0:-body_cross(ra,n);
+            vec2 delta=position(b)+b.center+rb-position(a)-a.center-ra;
+            float ja=axis==2u?-1.0:body_cross(n,delta)-body_cross(ra,n);
             float jb=axis==2u?1.0:body_cross(rb,n);
             float mass=a.inverse_inertia*ja*ja+b.inverse_inertia*jb*jb;
             if(axis<2u) mass+=a.inverse_mass+b.inverse_mass;
@@ -31,6 +34,26 @@ void solve_bonds(uint phase) {
             float compliance=phase==13u?0:3600.0/(stiffness*DT*DT);
             float previous=getf(p+15u+axis);
             float lambda=-(c+compliance*previous)/(mass+compliance);
+            if(data[p+5u]==0u&&axis<2u) {
+                vec2 normal=vec2(cos(a.angle+getf(p+11u)),sin(a.angle+getf(p+11u)));
+                float gap=dot(normal,position(b)+b.center+rb-position(a)-a.center-ra);
+                if(phase==13u) {
+                    if(gap<-0.0001) lambda=0;
+                    else if(axis==0u) lambda=min(lambda,0);
+                    else {
+                        float already=getf(p+16u)/DT;
+                        float limit=getf(p+18u)*DT/3600.0+getf(p+19u)*
+                            (max(-normal_impulse,0)+max(-getf(p+15u)/DT,0));
+                        lambda=clamp(already+lambda,-limit,limit)-already;
+                    }
+                    if(axis==0u) normal_impulse=lambda;
+                } else if(axis==0u) lambda=(gap<0?0:min(previous+lambda,0))-previous;
+                else {
+                    float limit=gap<0?0:getf(p+18u)*DT*DT/3600.0+
+                        getf(p+19u)*max(-getf(p+15u),0);
+                    lambda=clamp(previous+lambda,-limit,limit)-previous;
+                }
+            }
             if(phase!=13u) putf(p+15u+axis,previous+lambda);
             if(phase==13u) {
                 vec2 va=velocity(a),vb=velocity(b);
@@ -50,4 +73,5 @@ void solve_bonds(uint phase) {
         }
         bodies[ai]=a;bodies[bi]=b;
     }
+    if(phase==13u) conserve_isolated_bonds();
 }

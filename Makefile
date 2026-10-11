@@ -38,7 +38,7 @@ build/compound_gpu.o: src/vulkan/compound_gpu.c src/vulkan/gpu_internal.h includ
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 SOLVER_SHADER = build/shaders/rigid_solver.comp.spv
 $(GPU_OBJ): $(SOLVER_SHADER)
-$(SOLVER_SHADER): shaders/sim/rigid_solver.comp shaders/sim/rigid_body.glsl shaders/sim/structural_load.glsl shaders/sim/rigid_bonds.glsl shaders/sim/structural_bonds.glsl
+$(SOLVER_SHADER): shaders/sim/rigid_solver.comp shaders/sim/rigid_body.glsl shaders/sim/structural_load.glsl shaders/sim/rigid_bonds.glsl shaders/sim/structural_bonds.glsl shaders/sim/rigid_bond_budget.glsl
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_bench build/dungeoncraft_quarter_native build/marker_slot_tests build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench: $(SOLVER_SHADER)
