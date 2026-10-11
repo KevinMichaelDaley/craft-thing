@@ -1,0 +1,136 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "rigid_body.glsl"
+#include "rigid_shape.glsl"
+layout(local_size_x=32) in;
+layout(set=0,binding=1,std430) buffer Cells { uvec2 cells[]; };
+layout(set=0,binding=2,std430) readonly buffer Pages { uint pages[]; };
+layout(set=0,binding=4,std430) buffer Storage { Body bodies[BODY_CAPACITY]; uint data[]; };
+layout(push_constant) uniform Params { uint width,height,mode,body_count; uvec2 origin_x,origin_y; } params;
+const uint GRAPH_WORDS=2320u,NODES=16u,MEMBERS=400u,JOINTS=528u,ANCHORS=1552u;
+shared uint label[32],next_label[32],cold[32],roots[32];
+uint base() {
+    uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
+    return 8u+2u*w*h+4096u*8u+12u+8192u*32u+16u+64u*32u+8192u*16u;
+}
+uint graph() { uint s=base();return s+32u+data[s+1u]*8u; }
+uint state(uint i) { return graph()+2u*GRAPH_WORDS+i*12u; }
+uvec2 pair(uint p) { return uvec2(data[p],data[p+1u]); }
+int node_index(uint g,uint id) {
+    for(uint i=0u;i<data[g];i++) if(data[g+NODES+i*12u]==id) return int(i);
+    return -1;
+}
+bool view_point(uvec2 cx,uvec2 cy,ivec2 local,out ivec2 p) {
+    int x,y;
+    if(!relative_chunk(cx,params.origin_x,x)||!relative_chunk(cy,params.origin_y,y)) return false;
+    if(abs(x)>32767 || abs(y)>32767) return false;
+    p=ivec2(x,y)*64+local;return true;
+}
+bool cell_ref(ivec2 p,out uint index) {
+    if(any(lessThan(p,ivec2(0))) || any(greaterThanEqual(p,ivec2(params.width,params.height)))) return false;
+    uint page=pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
+    if(page==0u || page>data[base()+1u]) return false;
+    uint slot=base()+32u+(page-1u)*8u;uvec2 x,y;
+    if(!shifted_chunk(params.origin_x,p.x/64,x)||!shifted_chunk(params.origin_y,p.y/64,y)) return false;
+    if(data[slot+5u]==0u || any(notEqual(pair(slot),x)) || any(notEqual(pair(slot+2u),y))) return false;
+    index=(page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);return true;
+}
+bool place_pose(inout Body b) {
+    int x,y;
+    if(!relative_chunk(b.chunk_x,params.origin_x,x)||!relative_chunk(b.chunk_y,params.origin_y,y) || abs(x)>1000 || abs(y)>1000) return false;
+    b.x_fp=x*(64<<16)+b.local_fp.x;b.y_fp=y*(64<<16)+b.local_fp.y;
+    body_properties(b);return true;
+}
+bool separated(Body a,Body b) {
+    vec2 pa=vec2(a.x_fp,a.y_fp)/65536.0,pb=vec2(b.x_fp,b.y_fp)/65536.0;
+    for(uint p=0u;p<body_pieces(a);p++) for(uint q=0u;q<body_pieces(b);q++) {
+        bool apart=false;
+        for(uint side=0u;side<2u;side++) {
+            Body c=side==0u?a:b;uint piece=side==0u?p:q;
+            for(uint i=0u;i<piece_vertices(c,piece);i++) {
+                vec2 edge=piece_vertex(c,piece,(i+1u)%piece_vertices(c,piece))-piece_vertex(c,piece,i);
+                vec2 n=vec2(-edge.y,edge.x);float amin=1e30,amax=-1e30,bmin=1e30,bmax=-1e30;
+                for(uint v=0u;v<piece_vertices(a,p);v++) {float t=dot(n,pa+piece_vertex(a,p,v));amin=min(amin,t);amax=max(amax,t);}
+                for(uint v=0u;v<piece_vertices(b,q);v++) {float t=dot(n,pb+piece_vertex(b,q,v));bmin=min(bmin,t);bmax=max(bmax,t);}
+                if(amax<=bmin+0.00001 || bmax<=amin+0.00001) apart=true;
+            }
+        }
+        if(!apart) return false;
+    }
+    return true;
+}
+void transaction() {
+    uint s=base(),st=graph()+GRAPH_WORDS;data[s+2u]=0u;
+    for(uint i=0u;i<data[st+1u];i++) {
+        uint m=st+MEMBERS+i*8u,slot=data[m+7u];Body b=bodies[slot];
+        if(!place_pose(b)) return;
+        vec2 lo,hi;body_bounds(b,lo,hi);vec2 pos=vec2(b.x_fp,b.y_fp)/65536.0;
+        ivec2 low=ivec2(floor(pos+lo)),high=ivec2(ceil(pos+hi));
+        for(int y=low.y;y<high.y;y++) for(int x=low.x;x<high.x;x++) if(convex_cell_overlap(b,ivec2(x,y))) {
+            uint c;if(!cell_ref(ivec2(x,y),c)) return;
+            uint expected=(data[m+6u]&1u)!=0u?1u:0u;
+            if((cells[c].x&65535u)!=expected || cells[c].y!=0u) return;
+        }
+        for(uint j=0u;j<params.body_count;j++) {
+            if(j==slot || (bodies[j].enabled==0u && bodies[j].reserved0!=0x53545231u)) continue;
+            Body other=bodies[j];if(!place_pose(other)) continue;
+            if(!separated(b,other)) return;
+        }
+    }
+    /* Every source cell and every output slot is validated before ownership transfer. */
+    for(uint i=0u;i<data[st+1u];i++) {
+        uint m=st+MEMBERS+i*8u,slot=data[m+7u];Body b=bodies[slot];place_pose(b);
+        if((data[m+6u]&1u)!=0u) {
+            ivec2 low=ivec2(b.x_fp,b.y_fp)>>16;
+            for(uint y=0u;y<b.height;y++) for(uint x=0u;x<b.width;x++) {
+                uint c;cell_ref(low+ivec2(x,y),c);cells[c].x=0u;
+            }
+        }
+        b.enabled=1u;bodies[slot]=b;data[m+6u]=0u;
+    }
+    for(uint i=0u;i<GRAPH_WORDS;i++) data[graph()+i]=data[st+i];
+    data[s]=uint(data[st+1u]!=0u);data[s+2u]=1u;data[s+3u]++;
+}
+void topology() {
+    uint g=graph(),i=gl_LocalInvocationID.x,ns=g+NODES+i*12u,unused;
+    label[i]=i<data[g]?data[ns]:0xffffffffu;cold[i]=0u;roots[i]=0u;
+    if(i<data[g]) {
+        ivec2 p;bool resident=view_point(pair(ns+2u),pair(ns+4u),ivec2(int(data[ns+6u])>>16,int(data[ns+7u])>>16),p)&&cell_ref(p,unused);
+        cold[i]=resident?0u:1u;
+        for(uint a=0u;a<data[g+3u];a++) {
+            uint an=g+ANCHORS+a*24u;if(data[an+2u]!=data[ns]) continue;
+            bool unknown=false,valid=true;
+            for(uint y=0u;y<data[an+11u];y++) for(uint x=0u;x<data[an+10u];x++) {
+                ivec2 ap;uint c;
+                if(!view_point(pair(an+4u),pair(an+6u),ivec2(data[an+8u]+x,data[an+9u]+y),ap)||!cell_ref(ap,c)) unknown=true;
+                else if((cells[c].x&65535u)!=data[an+12u]) valid=false;
+            }
+            cold[i]+=uint(unknown);roots[i]+=uint(valid&&!unknown);
+        }
+    }
+    barrier();
+    for(uint iteration=0u;iteration<32u;iteration++) {
+        uint best=label[i];
+        if(i<data[g]) {
+            for(uint e=0u;e<data[g+1u]+data[g+2u];e++) {
+                uint r=e<data[g+1u]?g+MEMBERS+e*8u:g+JOINTS+(e-data[g+1u])*16u;
+                int a=node_index(g,data[r+2u]),b=node_index(g,data[r+3u]);
+                if(a==int(i) && b>=0) best=min(best,label[b]);if(b==int(i)&&a>=0) best=min(best,label[a]);
+            }
+        }
+        next_label[i]=best;barrier();label[i]=next_label[i];barrier();
+    }
+    if(i<data[g]) {
+        uint all_cold=0u,all_roots=0u;
+        for(uint n=0u;n<data[g];n++) if(label[n]==label[i]) {all_cold+=cold[n];all_roots+=roots[n];}
+        uint st=state(i);data[st]=data[ns];data[st+1u]=label[i];
+        /* Connectivity alone does not establish mechanical equilibrium. */
+        data[st+2u]=all_cold!=0u||all_roots!=0u?3u:2u;
+        data[st+3u]=all_roots;data[st+4u]=all_cold;data[st+5u]=data[ns+1u];
+        for(uint v=6u;v<12u;v++) data[st+v]=0u;
+    }
+}
+void main() {
+    if(params.mode==0u) {if(gl_LocalInvocationID.x==0u) transaction();return;}
+    topology();
+}

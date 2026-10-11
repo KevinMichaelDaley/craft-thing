@@ -5,8 +5,10 @@
 #include <vulkan/vulkan.h>
 
 #include "dungeoncraft/gpu.h"
+#include "ferrum/structural/gpu.h"
 
 enum {
+    DC_GPU_STRUCTURAL_TAG = 0x53545231u,
     DC_GPU_HALO_SIDE = DC_CHUNK_SIDE + 2,
     DC_GPU_HALO_CELLS = DC_GPU_HALO_SIDE * DC_GPU_HALO_SIDE,
     DC_GPU_SOLVER_HEADER_WORDS = 16,
@@ -109,6 +111,8 @@ struct dc_gpu {
     VkPipeline broadphase_pipeline;
     VkPipeline contact_pipeline;
     VkPipeline solver_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
+    VkPipeline structural_pipeline;
+    bool structural_enabled;
     bool rigid_solver_enabled;
     VkBuffer trace_buffer;
     VkDeviceMemory trace_memory;
@@ -209,7 +213,8 @@ static inline VkDeviceSize dc_gpu_body_storage_bytes(const dc_gpu_t *gpu) {
         (VkDeviceSize)(dc_gpu_contact_word_offset(gpu) + DC_GPU_CONTACT_HEADER_WORDS) * sizeof(uint32_t) +
         (VkDeviceSize)DC_GPU_CONTACT_CAPACITY * sizeof(dc_gpu_contact_t) +
         (DC_GPU_SOLVER_HEADER_WORDS + DC_GPU_BODY_CAPACITY * DC_GPU_SOLVER_BODY_WORDS +
-         DC_GPU_CONTACT_CAPACITY * DC_GPU_SOLVER_CONTACT_WORDS) * sizeof(uint32_t);
+         DC_GPU_CONTACT_CAPACITY * DC_GPU_SOLVER_CONTACT_WORDS) * sizeof(uint32_t) +
+        (32u + DC_GPU_CHUNK_SLOTS*8u + 30000u)*sizeof(uint32_t);
 }
 
 static inline uint32_t dc_gpu_solver_word_offset(const dc_gpu_t *gpu) {
@@ -219,6 +224,23 @@ static inline uint32_t dc_gpu_solver_word_offset(const dc_gpu_t *gpu) {
 static inline uint32_t *dc_gpu_solver_data(const dc_gpu_t *gpu) {
     return dc_gpu_broadphase_data(gpu) + dc_gpu_solver_word_offset(gpu);
 }
+
+enum { DC_STRUCTURAL_HEADER_WORDS = 32, DC_STRUCTURAL_GRAPH_WORDS = 2320,
+       DC_STRUCTURAL_RESERVE_WORDS = 30000, DC_STRUCTURAL_NODE_STATE_WORDS = 12 };
+static inline uint32_t dc_gpu_structural_word_offset(const dc_gpu_t *gpu) {
+    return dc_gpu_solver_word_offset(gpu) + DC_GPU_SOLVER_HEADER_WORDS +
+        DC_GPU_BODY_CAPACITY*DC_GPU_SOLVER_BODY_WORDS +
+        DC_GPU_CONTACT_CAPACITY*DC_GPU_SOLVER_CONTACT_WORDS;
+}
+static inline uint32_t *dc_gpu_structural_data(const dc_gpu_t *gpu) {
+    return dc_gpu_broadphase_data(gpu)+dc_gpu_structural_word_offset(gpu);
+}
+static inline uint32_t dc_gpu_structural_graph_offset(void) {
+    return DC_STRUCTURAL_HEADER_WORDS+DC_GPU_CHUNK_SLOTS*8u;
+}
+bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu,char *err,uint32_t cap);
+void dc_gpu_record_structural(dc_gpu_t *gpu);
+void dc_gpu_structural_track_chunk(dc_gpu_t *gpu,uint32_t slot,dc_chunk_coord_t coord);
 
 uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
                                  uint32_t compatible_types);

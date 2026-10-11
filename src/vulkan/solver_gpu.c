@@ -50,6 +50,8 @@ bool dc_gpu_set_body_motion(dc_gpu_t *gpu, uint32_t id, float angle, float omega
     dc_gpu_body_record_t *b = find_body(gpu, id);
     if (!b)
         return error(err, cap, "GPU body ID not found");
+    if (b->reserved[0] == DC_GPU_STRUCTURAL_TAG)
+        return error(err, cap, "Structural motion is owned by its graph");
     const float pi = 3.14159265358979323846f, turn = 2.f * pi;
     angle -= (float)(int)(angle / turn) * turn;
     if (angle > pi)

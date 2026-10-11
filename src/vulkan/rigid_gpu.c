@@ -94,6 +94,7 @@ bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         dc_gpu_broadphase_data(gpu)[DC_GPU_BROADPHASE_CAPACITY_WORD] = DC_GPU_BROADPHASE_PAIR_CAPACITY;
         dc_gpu_broadphase_data(gpu)[DC_GPU_BROADPHASE_BUCKETS_WORD] = dc_gpu_broadphase_buckets(gpu);
         dc_gpu_contact_data(gpu)[DC_GPU_CONTACT_CAPACITY_WORD] = DC_GPU_CONTACT_CAPACITY;
+        dc_gpu_structural_data(gpu)[1] = DC_GPU_CHUNK_SLOTS;
     }
     return okay;
 }
@@ -120,6 +121,7 @@ void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
         if (gpu->solver_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->solver_pipelines[i],NULL);
     if (gpu->broadphase_pipeline) vkDestroyPipeline(gpu->device, gpu->broadphase_pipeline, NULL);
     if (gpu->rigid_pipeline) vkDestroyPipeline(gpu->device, gpu->rigid_pipeline, NULL);
+    if (gpu->structural_pipeline) vkDestroyPipeline(gpu->device, gpu->structural_pipeline, NULL);
     if (gpu->body_mapped) vkUnmapMemory(gpu->device, gpu->body_memory);
     if (gpu->occupancy_mapped) vkUnmapMemory(gpu->device, gpu->occupancy_memory);
     if (gpu->body_buffer) vkDestroyBuffer(gpu->device, gpu->body_buffer, NULL);
@@ -177,6 +179,8 @@ bool dc_gpu_remove_body(dc_gpu_t *gpu, uint32_t id, char *err, uint32_t cap) {
     if (!gpu || !id) return error(err, cap, "Invalid GPU body removal");
     uint32_t slot = body_slot(gpu, id);
     if (slot == DC_GPU_BODY_CAPACITY) return error(err, cap, "GPU body ID not found");
+    if (((dc_gpu_body_record_t *)gpu->body_mapped)[slot].reserved[0] == DC_GPU_STRUCTURAL_TAG)
+        return error(err, cap, "Structural removal is owned by its graph");
     memset(&((dc_gpu_body_record_t *)gpu->body_mapped)[slot], 0,
            sizeof(dc_gpu_body_record_t));
     gpu->body_ids[slot] = 0;
@@ -217,6 +221,9 @@ bool dc_gpu_spawn_world_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
         body.body.y_fp >= (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL))
         return error(err, cap, "Invalid world body");
     uint32_t slot = body_slot(gpu, body.body.id);
+    if (slot != DC_GPU_BODY_CAPACITY &&
+        ((dc_gpu_body_record_t *)gpu->body_mapped)[slot].reserved[0] == DC_GPU_STRUCTURAL_TAG)
+        return error(err, cap, "Structural placement is owned by its graph");
     if (slot == DC_GPU_BODY_CAPACITY)
         for (uint32_t i = 0; i < DC_GPU_BODY_CAPACITY; ++i)
             if (!gpu->body_ids[i]) { slot = i; break; }
@@ -319,6 +326,7 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
     vkCmdPipelineBarrier2(gpu->command, &dep);
     dc_gpu_record_broadphase(gpu);
     dc_gpu_record_contacts(gpu);
+    if (advance) dc_gpu_record_structural(gpu);
     gpu->rigid_occupancy_present = gpu->body_count != 0;
     gpu->body_refresh_pending = false;
 }

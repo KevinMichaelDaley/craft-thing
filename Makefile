@@ -1,7 +1,7 @@
 CC ?= cc
 .DEFAULT_GOAL := all
 STRUCTURAL_REFERENCE = tests/structural/reference_solver.c src/structural/material.c
-STRUCTURAL_PLACEMENT = tests/structural/placement_stub.c
+STRUCTURAL_PLACEMENT =
 build/structural_placement_tests: tests/structural/placement_tests.c $(STRUCTURAL_PLACEMENT) build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(STRUCTURAL_PLACEMENT) $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -lm
 build/structural_mechanics_tests: tests/structural/mechanics_tests.c $(STRUCTURAL_REFERENCE) include/ferrum/structural/mechanics.h
@@ -18,6 +18,13 @@ GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/b
 GPU_OBJ += build/solver_gpu.o
 GPU_OBJ += build/compound_gpu.o
 GPU_OBJ += build/window_gpu.o
+GPU_OBJ += build/structural_gpu.o
+build/structural_gpu.o: src/vulkan/structural_gpu.c src/vulkan/gpu_internal.h include/ferrum/structural/gpu.h build/shaders/structural.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/shaders/structural.comp.spv: shaders/sim/structural.comp shaders/sim/rigid_body.glsl
+	mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+$(GPU_OBJ): build/shaders/structural.comp.spv
 build/window_gpu.o: src/vulkan/window_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/compound_gpu.o: src/vulkan/compound_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
