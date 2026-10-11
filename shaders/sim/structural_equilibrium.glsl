@@ -218,7 +218,8 @@ void equilibrium() {
     barrier();
     if(solved) {
         for(uint e=lane;e<data[g+1u];e+=32u)
-            if(data[state(uint(eq_a[e]))+1u]==data[state(owner)+1u]) member_stress(e);
+            if((data[g+MEMBERS+e*8u+6u]&2u)==0u&&
+               data[state(uint(eq_a[e]))+1u]==data[state(owner)+1u]) member_stress(e);
         for(uint a=lane;a<data[g+3u];a+=32u) if(eq_anchor[a]>=0&&
             data[state(uint(eq_anchor[a]))+1u]==data[state(owner)+1u]) {
             vec3 demand=anchor_demand(a);
@@ -241,7 +242,7 @@ void equilibrium() {
         data[diagnostic+13u]=eq_active_iterations;data[diagnostic+14u]=eq_refinement_iterations;
         eq_put(diagnostic+15u,eq_geometry_minimum);
     }
-    for(uint e=lane;e<data[g+1u];e+=32u) if(eq_status>=2u&&
+    for(uint e=lane;e<data[g+1u];e+=32u) if(eq_status>=2u&&(data[g+MEMBERS+e*8u+6u]&2u)==0u&&
         data[state(uint(eq_a[e]))+1u]==data[state(owner)+1u]) data[member_state(e)+3u]=eq_status;
     for(uint r=lane;r<eq_count;r+=32u) {
         uint dof=eq_map[r],st=state(dof/3u),axis=dof%3u;
