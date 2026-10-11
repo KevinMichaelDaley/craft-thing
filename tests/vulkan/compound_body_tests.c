@@ -134,7 +134,27 @@ static void test_slow_kinematic_support_does_not_freeze_passenger(void) {
     ASSERT_TRUE(fabs(passenger.body.y_fp/65536.0-56)<.1);
     dc_gpu_destroy(g);PASS();
 }
+static void test_stationary_kinematic_support_stops_passenger_drift(void) {
+    char err[256];dc_gpu_t *g=grid();ASSERT_TRUE(g && dc_gpu_set_rigid_solver(g,true));
+    dc_gpu_world_body_t support=fixture_body(1,20,60),passenger=fixture_body(2,20,44),before;
+    support.body.height=4;
+    ASSERT_TRUE(dc_gpu_spawn_world_body(g,support,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(g,1,0,0,DC_GPU_BODY_KINEMATIC|DC_GPU_BODY_LOCK_ROTATION,err,sizeof(err)));
+    dc_gpu_compound_shape_t l=fixture_l();
+    ASSERT_TRUE(dc_gpu_spawn_compound_body(g,passenger,&l,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(g,2,0,0,0,err,sizeof(err)));
+    for(uint32_t i=0;i<120;++i) ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(g,2,&before,err,sizeof(err)));
+    ASSERT_EQ(before.body.vx_fp,0);ASSERT_EQ(before.body.vy_fp,0);
+    for(uint32_t i=0;i<30;++i) {
+        ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_read_world_body(g,2,&passenger,err,sizeof(err)));
+        ASSERT_EQ(memcmp(&before,&passenger,sizeof(before)),0);
+    }
+    dc_gpu_destroy(g);PASS();
+}
 int main(void) {
+    RUN(test_stationary_kinematic_support_stops_passenger_drift);
     RUN(test_supported_compounds_stop_changing_pose);
     RUN(test_slow_kinematic_support_does_not_freeze_passenger);
     RUN(test_compounds_preserve_cavities_and_material_mass);
