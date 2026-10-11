@@ -1,6 +1,7 @@
 shared vec2 eq_normal[32],eq_joint_normal[64];
 shared ivec2 eq_joint_nodes[64];
 shared vec3 eq_joint_k[64],eq_joint_v[64][6];
+shared vec2 eq_anchor_slide[32],eq_joint_slide[64];
 shared uint eq_changed,eq_iterations;
 float eq_q(uint dof);
 vec3 anchor_vector(uint a,uint dof) {
@@ -34,8 +35,18 @@ vec3 joint_gap(uint j) {
     }
     return gap;
 }
+vec3 anchor_demand(uint a) {
+    vec3 demand=eq_ak[a]*anchor_gap(a);
+    demand.y+=eq_anchor_slide[a].x*demand.x+eq_anchor_slide[a].y;
+    return demand;
+}
+vec3 joint_demand(uint j) {
+    vec3 demand=eq_joint_k[j]*joint_gap(j);
+    demand.y+=eq_joint_slide[j].x*demand.x+eq_joint_slide[j].y;
+    return demand;
+}
 float anchor_reaction(uint a,uint dof) {
-    return -dot(anchor_vector(a,dof),eq_ak[a]*anchor_gap(a));
+    return -dot(anchor_vector(a,dof),anchor_demand(a));
 }
 void update_bearings(uint owner) {
     uint g=graph(),lane=gl_LocalInvocationID.x;
@@ -45,23 +56,47 @@ void update_bearings(uint owner) {
         data[state(uint(eq_anchor[a]))+1u]==data[state(owner)+1u]) {
         uint an=g+ANCHORS+a*24u;
         if(data[an+3u]!=0u) continue;
-        float gap=anchor_gap(a).x;
-        bool open=gap>1e-7,closed=gap<-1e-7;
+        vec3 gap=anchor_gap(a);
+        bool open=gap.x>1e-9,closed=gap.x<-1e-9;
         vec3 original=vec3(eq_get(an+13u),eq_get(an+14u),0);
         if(eq_get(an+18u)==0&&eq_get(an+20u)==0) original.y=0;
         vec3 next=open?vec3(0):closed?original:eq_ak[a];
-        if(any(notEqual(next,eq_ak[a]))) {eq_ak[a]=next;atomicOr(eq_changed,1u);}
+        vec2 slide=vec2(0);
+        if(!open) {
+            next=original;float normal=next.x*gap.x,trial=next.y*gap.y;
+            float cohesion=eq_get(an+18u),mu=eq_get(an+20u);
+            float limit=cohesion+mu*max(-normal,0);
+            if(limit==0) next.y=0;
+            else if(abs(trial)>limit) {
+                next.y=0;slide=vec2(normal<0?-sign(trial)*mu:0,sign(trial)*cohesion);
+            }
+        }
+        if(any(notEqual(next,eq_ak[a]))||any(notEqual(slide,eq_anchor_slide[a]))) {
+            eq_ak[a]=next;eq_anchor_slide[a]=slide;atomicOr(eq_changed,1u);
+        }
     }
     for(uint j=lane;j<data[g+2u];j+=32u) if(
         data[state(uint(eq_joint_nodes[j].x))+1u]==data[state(owner)+1u]) {
         uint p=g+JOINTS+j*16u;
         if(data[p+4u]!=0u) continue;
-        float gap=joint_gap(j).x;
-        bool open=gap>1e-7,closed=gap<-1e-7;
+        vec3 gap=joint_gap(j);
+        bool open=gap.x>1e-9,closed=gap.x<-1e-9;
         vec3 original=vec3(eq_get(p+5u),eq_get(p+6u),0);
         if(eq_get(p+10u)==0&&eq_get(p+12u)==0) original.y=0;
         vec3 next=open?vec3(0):closed?original:eq_joint_k[j];
-        if(any(notEqual(next,eq_joint_k[j]))) {eq_joint_k[j]=next;atomicOr(eq_changed,1u);}
+        vec2 slide=vec2(0);
+        if(!open) {
+            next=original;float normal=next.x*gap.x,trial=next.y*gap.y;
+            float cohesion=eq_get(p+10u),mu=eq_get(p+12u);
+            float limit=cohesion+mu*max(-normal,0);
+            if(limit==0) next.y=0;
+            else if(abs(trial)>limit) {
+                next.y=0;slide=vec2(normal<0?-sign(trial)*mu:0,sign(trial)*cohesion);
+            }
+        }
+        if(any(notEqual(next,eq_joint_k[j]))||any(notEqual(slide,eq_joint_slide[j]))) {
+            eq_joint_k[j]=next;eq_joint_slide[j]=slide;atomicOr(eq_changed,1u);
+        }
     }
     barrier();
 }

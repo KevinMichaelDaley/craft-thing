@@ -46,10 +46,14 @@ float eq_entry(uint row,uint col,bool geometry) {
     }
     for(uint a=0u;a<data[g+3u];a++) {
         vec3 stiffness=geometry?vec3(greaterThan(eq_ak[a],vec3(0))):eq_ak[a];
-        k+=dot(anchor_vector(a,row)*anchor_vector(a,col),stiffness);
+        vec3 r=anchor_vector(a,row),c=anchor_vector(a,col);
+        k+=dot(r*c,stiffness);
+        if(!geometry) k+=r.y*eq_anchor_slide[a].x*eq_ak[a].x*c.x;
     }
     for(uint j=0u;j<data[g+2u];j++) {
-        k+=dot(joint_vector(j,row)*joint_vector(j,col),geometry?joint_geometry(j):eq_joint_k[j]);
+        vec3 r=joint_vector(j,row),c=joint_vector(j,col);
+        k+=dot(r*c,geometry?joint_geometry(j):eq_joint_k[j]);
+        if(!geometry) k+=r.y*eq_joint_slide[j].x*eq_joint_k[j].x*c.x;
     }
     return k;
 }
@@ -74,7 +78,10 @@ void eq_assemble(bool geometry) {
         }
         float diagonal=eq_entry(row,row,geometry);
         eq_scale[r]=diagonal>0?inversesqrt(diagonal):1;
-        eq_rhs[r]=geometry?0:eq_load(row);
+        float bias=0;
+        for(uint a=0u;a<data[graph()+3u];a++) bias+=anchor_vector(a,row).y*eq_anchor_slide[a].y;
+        for(uint j=0u;j<data[graph()+2u];j++) bias+=joint_vector(j,row).y*eq_joint_slide[j].y;
+        eq_rhs[r]=geometry?0:eq_load(row)-bias;
     }
     memoryBarrierBuffer();barrier();
     for(uint r=lane;r<eq_count;r+=32u) {
@@ -149,6 +156,7 @@ void equilibrium() {
     for(uint a=lane;a<data[g+3u];a+=32u) {
         uint an=g+ANCHORS+a*24u;eq_anchor[a]=eq_anchor_valid(a)?node_index(g,data[an+2u]):-1;
         eq_ak[a]=vec3(eq_get(an+13u),eq_get(an+14u),data[an+3u]>=2u?eq_get(an+15u):0);
+        eq_anchor_slide[a]=vec2(0);
         if(data[an+3u]==0u&&eq_get(an+18u)==0&&eq_get(an+20u)==0) eq_ak[a].y=0;
         float angle=eq_get(an+21u);eq_normal[a]=vec2(cos(angle),sin(angle));
     }
@@ -163,6 +171,7 @@ void equilibrium() {
         eq_joint_v[j][3]=vec3(-n.x,-t.x,0);eq_joint_v[j][4]=vec3(-n.y,-t.y,0);
         eq_joint_v[j][5]=vec3(body_cross(arm,n),body_cross(arm,t),-1);
         eq_joint_k[j]=vec3(eq_get(p+5u),eq_get(p+6u),data[p+4u]>=2u?eq_get(p+7u):0);
+        eq_joint_slide[j]=vec2(0);
         if(data[p+4u]==0u&&eq_get(p+10u)==0&&eq_get(p+12u)==0) eq_joint_k[j].y=0;
     }
     barrier();
@@ -192,11 +201,11 @@ void equilibrium() {
             if(data[state(uint(eq_a[e]))+1u]==data[state(owner)+1u]) member_stress(e);
         for(uint a=lane;a<data[g+3u];a+=32u) if(eq_anchor[a]>=0&&
             data[state(uint(eq_anchor[a]))+1u]==data[state(owner)+1u]) {
-            vec3 demand=anchor_gap(a)*eq_ak[a];
+            vec3 demand=anchor_demand(a);
             if(attachment_ratio(demand,g+ANCHORS+a*24u+16u)>1) atomicMax(eq_status,1u);
         }
         for(uint j=lane;j<data[g+2u];j+=32u) if(data[state(uint(eq_joint_nodes[j].x))+1u]==data[state(owner)+1u])
-            if(attachment_ratio(joint_gap(j)*eq_joint_k[j],g+JOINTS+j*16u+8u)>1) atomicMax(eq_status,1u);
+            if(attachment_ratio(joint_demand(j),g+JOINTS+j*16u+8u)>1.00001) atomicMax(eq_status,1u);
     }
     barrier();
     if(lane==0u&&eq_status<=1u) component_budget(owner);

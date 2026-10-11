@@ -10,8 +10,8 @@ void eq_physical_prepare() {
         }
         eq_member_force[e]=eq_k[e]*strain;
     }
-    for(uint a=lane;a<data[g+3u];a+=32u) eq_anchor_force[a]=eq_ak[a]*anchor_gap(a);
-    for(uint j=lane;j<data[g+2u];j+=32u) eq_joint_force[j]=eq_joint_k[j]*joint_gap(j);
+    for(uint a=lane;a<data[g+3u];a+=32u) eq_anchor_force[a]=anchor_demand(a);
+    for(uint j=lane;j<data[g+2u];j+=32u) eq_joint_force[j]=joint_demand(j);
     barrier();
 }
 vec2 eq_physical(uint dof) {
