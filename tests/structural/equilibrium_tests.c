@@ -125,6 +125,37 @@ static void test_weak_numerical_system_is_unknown(void) {
     ASSERT_EQ(node.state,FR_STRUCTURAL_UNKNOWN);
     dc_gpu_destroy(g);PASS();
 }
+static void test_oriented_bearing_opens_in_tension(void) {
+    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s=beam(20);s.anchor_count=2;
+    s.anchors[0].kind=FR_JOINT_BEARING;s.anchors[0].normal_angle=1.57079632679f;
+    s.anchors[1]=s.anchors[0];s.anchors[1].id=2;s.anchors[1].node=2;s.anchors[1].x=32;
+    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,32,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
+    fr_structural_gpu_node_state_t node;
+    ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&node));
+    ASSERT_EQ(node.state,FR_STRUCTURAL_UNSUPPORTED);
+    dc_gpu_destroy(g);PASS();
+}
+static void test_joint_capacity_is_finite(void) {
+    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s=beam(20);s.node_count=4;s.member_count=2;s.joint_count=1;
+    s.nodes[1].x_fp=26<<16;s.nodes[2]=s.nodes[1];s.nodes[2].id=3;
+    s.nodes[3]=s.nodes[1];s.nodes[3].id=4;s.nodes[3].x_fp=32<<16;
+    s.members[1]=s.members[0];s.members[1].id=2;s.members[1].a=3;s.members[1].b=4;
+    s.joints[0]=(fr_structural_gpu_joint_t){.id=1,.generation=1,.a=2,.b=3,.kind=FR_JOINT_BONDED,
+        .normal_stiffness=1e8,.shear_stiffness=1e8,.rotational_stiffness=1e8,
+        .bearing_capacity=1e7,.pullout_capacity=1e7,.shear_capacity=1e7,.moment_capacity=100};
+    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
+    fr_structural_gpu_node_state_t node;
+    ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&node));
+    ASSERT_EQ(node.state,FR_STRUCTURAL_OVERLOADED);
+    dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     RUN(test_self_weight_cantilever_equilibrium);
     RUN(test_released_root_is_a_mechanism);
@@ -133,6 +164,8 @@ int main(void) {
     RUN(test_eccentric_rigid_reactions);
     RUN(test_material_stress_drives_overload);
     RUN(test_weak_numerical_system_is_unknown);
+    RUN(test_oriented_bearing_opens_in_tension);
+    RUN(test_joint_capacity_is_finite);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail?1:0;
 }

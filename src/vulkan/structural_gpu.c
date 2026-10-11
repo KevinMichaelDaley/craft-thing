@@ -143,9 +143,10 @@ static bool validate(const fr_structural_gpu_graph_t *g) {
         int a = node_index(g, j->a), b = node_index(g, j->b);
         if (!j->id || !j->generation || j->kind > FR_JOINT_MOMENT || a < 0 ||
             b < 0 || a == b || !finite_values(&j->normal_stiffness, 8) ||
+            !isfinite(j->normal_angle) ||
             !delta(&g->nodes[a], &g->nodes[b], d) || hypot(d[0], d[1]) > 2)
             return false;
-        for (unsigned k = 0; k < 3; k++)
+        for (unsigned k = 0; k < 2; k++)
             if (j->reserved[k])
                 return false;
         for (uint32_t k = 0; k < i; k++)
@@ -158,7 +159,7 @@ static bool validate(const fr_structural_gpu_graph_t *g) {
             a->kind > FR_JOINT_MOMENT || !a->width || !a->height ||
             a->width > 8 || a->height > 8 || a->x >= 64 || a->y >= 64 ||
             a->terrain_material != DC_MATERIAL_STONE ||
-            !finite_values(&a->normal_stiffness, 8))
+            !finite_values(&a->normal_stiffness, 8) || !isfinite(a->normal_angle))
             return false;
         const fr_structural_gpu_node_t *n = &g->nodes[node_index(g, a->node)];
         fr_structural_gpu_node_t p = {.chunk = a->chunk,
@@ -174,7 +175,7 @@ static bool validate(const fr_structural_gpu_graph_t *g) {
                gapy = fmax(fmax(-d[1], d[1] - a->height), 0);
         if (hypot(gapx, gapy) > radius + 1.0 / 65536)
             return false;
-        for (unsigned k = 0; k < 3; k++)
+        for (unsigned k = 0; k < 2; k++)
             if (a->reserved[k])
                 return false;
         for (uint32_t j = 0; j < i; j++)

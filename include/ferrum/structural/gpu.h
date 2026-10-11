@@ -30,7 +30,8 @@ typedef struct {
     float normal_stiffness, shear_stiffness, rotational_stiffness;
     float bearing_capacity, pullout_capacity, shear_capacity, moment_capacity;
     float friction;
-    uint32_t reserved[3];
+    float normal_angle;
+    uint32_t reserved[2];
 } fr_structural_gpu_joint_t;
 typedef struct {
     uint32_t id, generation, node, kind;
@@ -39,7 +40,8 @@ typedef struct {
     float normal_stiffness, shear_stiffness, rotational_stiffness;
     float bearing_capacity, pullout_capacity, shear_capacity, moment_capacity,
         friction;
-    uint32_t reserved[3];
+    float normal_angle;
+    uint32_t reserved[2];
 } fr_structural_gpu_anchor_t;
 typedef struct {
     uint32_t node_count, member_count, joint_count, anchor_count;
