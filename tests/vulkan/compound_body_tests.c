@@ -151,6 +151,12 @@ static void test_stationary_kinematic_support_stops_passenger_drift(void) {
         ASSERT_TRUE(dc_gpu_read_world_body(g,2,&passenger,err,sizeof(err)));
         ASSERT_EQ(memcmp(&before,&passenger,sizeof(before)),0);
     }
+    ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){-1,0},err,sizeof(err)));
+    for(uint32_t i=0;i<10;++i) {
+        ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_read_world_body(g,2,&passenger,err,sizeof(err)));
+        ASSERT_EQ(memcmp(&before,&passenger,sizeof(before)),0);
+    }
     dc_gpu_destroy(g);PASS();
 }
 int main(void) {
