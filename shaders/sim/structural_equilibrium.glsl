@@ -18,6 +18,7 @@ vec2 eq_position(uint node) {
     ivec2 p;view_point(pair(n+2u),pair(n+4u),ivec2(0),p);
     return vec2(p)+vec2(int(data[n+6u]),int(data[n+7u]))/65536.0;
 }
+#include "structural_attachment.glsl"
 bool eq_anchor_valid(uint a) {
     uint an=graph()+ANCHORS+a*24u;
     for(uint y=0u;y<data[an+11u];y++) for(uint x=0u;x<data[an+10u];x++) {
@@ -43,18 +44,12 @@ float eq_entry(uint row,uint col,bool geometry) {
         vec3 stiffness=geometry?vec3(.5,1.0/(2.0+eq_length[e]*eq_length[e]/2.0),.5):eq_k[e];
         k+=dot(r*c,stiffness);
     }
-    for(uint a=0u;a<data[g+3u];a++) if(eq_anchor[a]>=0&&row/3u==uint(eq_anchor[a])&&row==col) {
-        float value=eq_ak[a][row%3u];k+=geometry?float(value>0):value;
+    for(uint a=0u;a<data[g+3u];a++) {
+        vec3 stiffness=geometry?vec3(greaterThan(eq_ak[a],vec3(0))):eq_ak[a];
+        k+=dot(anchor_vector(a,row)*anchor_vector(a,col),stiffness);
     }
-    /* Initial bilateral typed joint tangent: pins release relative rotation. */
     for(uint j=0u;j<data[g+2u];j++) {
-        uint p=g+JOINTS+j*16u;int a=node_index(g,data[p+2u]),b=node_index(g,data[p+3u]);
-        if(row%3u!=col%3u) continue;
-        float rs=row/3u==uint(a)?1.0:row/3u==uint(b)?-1.0:0.0;
-        float cs=col/3u==uint(a)?1.0:col/3u==uint(b)?-1.0:0.0;
-        float stiffness=eq_get(p+5u+row%3u);
-        if(row%3u==2u&&data[p+4u]<2u) stiffness=0;
-        k+=rs*cs*(geometry?float(stiffness>0):stiffness);
+        k+=dot(joint_vector(j,row)*joint_vector(j,col),geometry?joint_geometry(j):eq_joint_k[j]);
     }
     return k;
 }
@@ -133,7 +128,7 @@ void equilibrium() {
     invalid=invalid||data[base()-16u-64u*32u-8192u*16u+3u]!=0u;
     if(invalid) return;
     if(lane==0u) {
-        eq_count=0u;eq_status=0u;eq_minimum=1;
+        eq_count=0u;eq_status=0u;eq_minimum=1;eq_iterations=0u;
         for(uint n=0u;n<data[g];n++) if(data[state(n)+1u]==data[state(owner)+1u])
             for(uint d=0u;d<3u;d++) eq_map[eq_count++]=n*3u+d;
     }
@@ -151,13 +146,33 @@ void equilibrium() {
     for(uint a=lane;a<data[g+3u];a+=32u) {
         uint an=g+ANCHORS+a*24u;eq_anchor[a]=eq_anchor_valid(a)?node_index(g,data[an+2u]):-1;
         eq_ak[a]=vec3(eq_get(an+13u),eq_get(an+14u),data[an+3u]>=2u?eq_get(an+15u):0);
+        float angle=eq_get(an+21u);eq_normal[a]=vec2(cos(angle),sin(angle));
     }
-    barrier();eq_assemble(true);
-    bool ranked=eq_eliminate(true);
-    if(ranked) {eq_assemble(false);eq_eliminate(false);}
-    if(eq_status==0u) {
+    for(uint j=lane;j<data[g+2u];j+=32u) {
+        uint p=g+JOINTS+j*16u;int a=node_index(g,data[p+2u]),b=node_index(g,data[p+3u]);
+        eq_joint_nodes[j]=ivec2(a,b);
+        float angle=eq_get(p+13u);vec2 n=vec2(cos(angle),sin(angle)),t=vec2(-n.y,n.x);
+        vec2 arm=(eq_position(uint(b))-eq_position(uint(a)))/2.0;
+        eq_joint_normal[j]=n;
+        eq_joint_v[j][0]=vec3(n.x,t.x,0);eq_joint_v[j][1]=vec3(n.y,t.y,0);
+        eq_joint_v[j][2]=vec3(body_cross(arm,n),body_cross(arm,t),1);
+        eq_joint_v[j][3]=vec3(-n.x,-t.x,0);eq_joint_v[j][4]=vec3(-n.y,-t.y,0);
+        eq_joint_v[j][5]=vec3(body_cross(arm,n),body_cross(arm,t),-1);
+        eq_joint_k[j]=vec3(eq_get(p+5u),eq_get(p+6u),data[p+4u]>=2u?eq_get(p+7u):0);
+    }
+    barrier();
+    for(uint iteration=0u;iteration<8u;iteration++) {
+        eq_assemble(true);bool ranked=eq_eliminate(true);
+        if(ranked) {eq_assemble(false);eq_eliminate(false);}
+        if(eq_status!=0u) break;
         for(uint r=lane;r<eq_count;r+=32u) eq_solution[r]*=eq_scale[r];
+        if(lane==0u) eq_iterations+=2u*eq_count;
+        barrier();update_bearings(owner);
+        if(eq_changed==0u) break;
+        if(iteration==7u&&lane==0u) eq_status=3u;
         barrier();
+    }
+    if(eq_status==0u) {
         for(uint r=lane;r<eq_count;r+=32u) {
             uint row=eq_map[r];float sum=0,scale=abs(eq_load(row));
             for(uint c=0u;c<eq_count;c++) {
@@ -176,9 +191,11 @@ void equilibrium() {
             if(data[state(uint(eq_a[e]))+1u]==data[state(owner)+1u]) member_stress(e);
         for(uint a=lane;a<data[g+3u];a+=32u) if(eq_anchor[a]>=0&&
             data[state(uint(eq_anchor[a]))+1u]==data[state(owner)+1u]) {
-            vec3 demand=vec3(eq_q(uint(eq_anchor[a])*3u),eq_q(uint(eq_anchor[a])*3u+1u),eq_q(uint(eq_anchor[a])*3u+2u))*eq_ak[a];
+            vec3 demand=anchor_gap(a)*eq_ak[a];
             if(attachment_ratio(demand,g+ANCHORS+a*24u+16u)>1) atomicMax(eq_status,1u);
         }
+        for(uint j=lane;j<data[g+2u];j+=32u) if(data[state(uint(eq_joint_nodes[j].x))+1u]==data[state(owner)+1u])
+            if(attachment_ratio(joint_gap(j)*eq_joint_k[j],g+JOINTS+j*16u+8u)>1) atomicMax(eq_status,1u);
     }
     barrier();
     if(lane==0u&&eq_status<=1u) component_budget(owner);
@@ -187,7 +204,7 @@ void equilibrium() {
         if(axis==0u) data[st+2u]=eq_status;
         float q=eq_status<=1u?eq_solution[r]:0;
         eq_put(st+6u+axis,q);float reaction=0;
-        for(uint a=0u;a<data[g+3u];a++) if(eq_anchor[a]==int(dof/3u)) reaction-=eq_ak[a][axis]*q;
+        if(eq_status<=1u) for(uint a=0u;a<data[g+3u];a++) reaction+=anchor_reaction(a,dof);
         eq_put(st+9u+axis,reaction);
     }
 }

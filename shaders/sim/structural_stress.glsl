@@ -93,7 +93,7 @@ void component_budget(uint owner) {
     vec2 origin=eq_position(owner);float maximum_residual=0;
     for(uint r=0u;r<eq_count;r++) {
         uint dof=eq_map[r],node=dof/3u,axis=dof%3u;float f=eq_load(dof),support=0;
-        for(uint a=0u;a<data[g+3u];a++) if(eq_anchor[a]==int(node)) support-=eq_ak[a][axis]*eq_solution[r];
+        for(uint a=0u;a<data[g+3u];a++) support+=anchor_reaction(a,dof);
         applied[axis]+=f;reaction[axis]+=support;
         vec2 arm=eq_position(node)-origin;
         if(axis<2u) {
@@ -109,5 +109,5 @@ void component_budget(uint owner) {
     }
     data[st]=data[g+NODES+owner*12u];data[st+1u]=eq_status;data[st+2u]=eq_count/3u;
     for(uint axis=0u;axis<3u;axis++) {eq_put(st+4u+axis,applied[axis]);eq_put(st+7u+axis,reaction[axis]);}
-    eq_put(st+10u,maximum_residual);eq_put(st+11u,eq_minimum);data[st+12u]=2u*eq_count;
+    eq_put(st+10u,maximum_residual);eq_put(st+11u,eq_minimum);data[st+12u]=eq_iterations;
 }
