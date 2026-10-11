@@ -27,3 +27,7 @@ Material identity and initial GPU mortar crumble implemented: distinct density 1
 **2026-10-11T23:37:20Z**
 
 Four material regressions now pass headless and quarter-native; full battery 198/198. Rotated seam crumble: 41 particles, mass 38.399994 and original centroid; E=20494.142578 accounted as fracture work14400 plus remaining dissipation. Corrected physical backward-error scale to retain absolute modal terms before cancellation; same tolerance/rank thresholds, all 17 equilibrium tests including UNKNOWN safeguards pass. Remaining work includes pool rollback/retry, actual MPM evolution, wood/stone GPU-born fragments and shared impact behavior.
+
+**2026-10-11T23:45:45Z**
+
+Seven material cases pass in normal and quarter-native configurations; full battery 201/201. Saturated destinations preserve the stationary source, mass and particle pool, then retry exactly once after freeing slots. Eight actual MPM ticks keep mass 38.399994 and move mean y to 47.77. Material density constants now shared across C profiles, bodies, MPM and paint. Warm static quarter budget passes: 8.760 ms rigid/structure, 18.071 ms whole, allocations 64.445/107.196 MiB. Wood/stone rigid fragments, shared impact path and persistent output identity remain unfinished.

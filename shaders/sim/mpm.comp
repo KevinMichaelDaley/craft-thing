@@ -1,4 +1,6 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#include "../../include/dungeoncraft/material_density.h"
 layout(local_size_x = 16, local_size_y = 16) in;
 
 struct Particle {
@@ -98,7 +100,8 @@ bool particle_is_mud(Particle particle) {
 }
 
 float grain_density(uint material) {
-    return material == 2u ? 2.65 : material == 5u ? 2.7 : material == 6u ? 1.6 : 1.2;
+    return material == 2u ? 2.65 : material == 5u ? DC_DENSITY_STONE :
+           material == 6u ? DC_DENSITY_MORTAR : 1.2;
 }
 
 float grain_friction(uint material) {

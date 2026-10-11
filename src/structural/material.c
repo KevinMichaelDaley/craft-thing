@@ -1,15 +1,16 @@
 #include <math.h>
 #include <stddef.h>
+#include "dungeoncraft/material_density.h"
 #include "ferrum/structural/mechanics.h"
 
 /* Synthetic gameplay coefficients in seconds: tick-normalized stresses scale by
  * 60^2. */
 static const fr_structural_profile_t profiles[FR_STRUCTURAL_MATERIAL_COUNT] = {
-    {2.7, 72000000, 28800000, 144000, 2880000, 360000, 43200, 1, 2, 1,
-     FR_FAILURE_FRACTURE},
-    {.6, 21600000, 3600000, 720000, 864000, 288000, 108000, 1.5, 3, .15,
-     FR_FAILURE_SPLIT},
-    {1.6, 3600000, 1440000, 28800, 144000, 36000, 7200, .75, 1, 1,
+    {DC_DENSITY_STONE, 72000000, 28800000, 144000, 2880000, 360000, 43200, 1, 2,
+     1, FR_FAILURE_FRACTURE},
+    {DC_DENSITY_WOOD, 21600000, 3600000, 720000, 864000, 288000, 108000, 1.5, 3,
+     .15, FR_FAILURE_SPLIT},
+    {DC_DENSITY_MORTAR, 3600000, 1440000, 28800, 144000, 36000, 7200, .75, 1, 1,
      FR_FAILURE_CRUMBLE}};
 
 const fr_structural_profile_t *

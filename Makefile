@@ -25,6 +25,8 @@ GPU_OBJ += build/structural_gpu.o build/structural_material.o
 GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o,$(GPU_OBJ))) src/structural/material.c
 build/structural_material.o: src/structural/material.c include/ferrum/structural/mechanics.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+$(GPU_OBJ) build/chunk.o build/structural_mechanics_tests: include/dungeoncraft/material_density.h
+build/shaders/pattern.comp.spv build/shaders/mpm.comp.spv build/shaders/rigid.comp.spv build/shaders/rigid_solver.comp.spv build/shaders/structural.comp.spv build/shaders/broadphase.comp.spv build/shaders/contacts.comp.spv: include/dungeoncraft/material_density.h
 build/structural_gpu.o: src/vulkan/structural_gpu.c src/vulkan/gpu_internal.h include/ferrum/structural/gpu.h build/shaders/structural.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/shaders/structural.comp.spv: shaders/sim/structural.comp shaders/sim/structural_equilibrium.glsl shaders/sim/structural_attachment.glsl shaders/sim/structural_load.glsl shaders/sim/structural_stress.glsl shaders/sim/structural_refine.glsl shaders/sim/structural_rank.glsl shaders/sim/structural_failure.glsl shaders/sim/structural_debris.glsl shaders/sim/structural_bonds.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl

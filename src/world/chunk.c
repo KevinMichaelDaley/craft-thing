@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "dungeoncraft/chunk.h"
+#include "dungeoncraft/material_density.h"
 
 _Static_assert(sizeof(dc_cell_t) == 8, "Cell layout must match the GPU ABI");
 _Static_assert(sizeof(dc_mpm_particle_t) == 56, "Particle layout must match the GPU ABI");
@@ -42,7 +43,7 @@ void dc_chunk_particle_init(dc_mpm_particle_t *particle,
     particle->id_lo = cell_index + 1u;
     particle->id_hi = dc_chunk_particle_seed(coord);
     particle->mass_fp = material == DC_MATERIAL_MORTAR_DEBRIS ?
-                        (DC_FLUID_FULL * 8u + 2u) / 5u : DC_FLUID_FULL;
+                        (uint32_t)(DC_FLUID_FULL * DC_DENSITY_MORTAR + .5) : DC_FLUID_FULL;
     particle->grain_fp = dc_chunk_grain_radius_fp(material);
     particle->material = material;
 }

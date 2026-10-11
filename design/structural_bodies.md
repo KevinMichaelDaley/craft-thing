@@ -164,9 +164,13 @@ the regression produces 41 particles, mass 38.399994, and residual 9.40e-7.
 Backward-error normalization sums absolute modal contributions before cancellation,
 without changing the residual tolerance or rank certificates. Member diagnostics
 expose fracture work and remaining dissipation, whose sum equals recovered strain
-energy. Four material tests pass in headless and quarter-native configurations;
-the full headless battery passes 198 tests. Wood/stone fragmentation, saturation
-retry, actual debris evolution and streamed snapshots remain unfinished.
+energy. Seven material tests pass in headless and quarter-native configurations;
+the full headless battery passes 201 tests. Saturated destinations retain the
+stationary owner and retry exactly once after capacity returns. Eight actual MPM
+ticks retain mass 38.399994 while the debris descends to mean y 47.77. C profiles,
+body mass, MPM and paint initialization share material-density constants. A warm
+static quarter-native check passes at 8.760 ms rigid/structure and 18.071 ms whole
+tick. Wood/stone fragmentation and streamed snapshots remain unfinished.
 
 ## Behavior and ownership
 
