@@ -281,10 +281,7 @@ static void test_converted_bond_ownership_survives_graph_replacement(void) {
     dc_gpu_destroy(g);
     PASS();
 }
-static void test_converted_bearing_opens_without_tension_or_friction(void) {
-    char e[256];
-    dc_gpu_t *g = grid();
-    ASSERT_TRUE(g);
+static fr_structural_gpu_graph_t bearing_pair(void) {
     fr_structural_gpu_graph_t s = two_members();
     s.node_count = 4;
     s.nodes[3] = s.nodes[2];
@@ -299,18 +296,63 @@ static void test_converted_bearing_opens_without_tension_or_friction(void) {
         .normal_stiffness=1e8,.shear_stiffness=1e8,
         .bearing_capacity=1e8,.pullout_capacity=0,.shear_capacity=0,
         .moment_capacity=0,.friction=.5,.normal_angle=3.14159265358979323846f};
+    return s;
+}
+static void test_converted_bearing_opens_without_tension_or_friction(void) {
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = bearing_pair();
     ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
     steps(g, 90);
     uint32_t a = FR_STRUCTURAL_BODY_ID_BASE + 1;
     uint32_t b = FR_STRUCTURAL_BODY_ID_BASE + 2;
+    ASSERT_TRUE(dc_gpu_set_body_motion(g, b, .3f, 0, 0, e, sizeof(e)));
     ASSERT_TRUE(dc_gpu_set_body_motion(g, a, 0, .05f, 0, e, sizeof(e)));
-    steps(g, 6);
+    steps(g, 1);
     dc_gpu_body_motion_t ma,mb;
     ASSERT_TRUE(dc_gpu_read_body_motion(g,a,&ma,e,sizeof(e)));
     ASSERT_TRUE(dc_gpu_read_body_motion(g,b,&mb,e,sizeof(e)));
-    ASSERT_TRUE(fabs(ma.angle-.3) < .003);
-    ASSERT_TRUE(fabs(mb.angle) < .0001);
+    printf("open bearing: angles %.9f %.9f omega %.9f %.9f\n",ma.angle,mb.angle,
+           ma.angular_velocity,mb.angular_velocity);
+    ASSERT_TRUE(fabs(ma.angle-.05) < .001);
+    ASSERT_TRUE(fabs(mb.angle-.3) < .0001);
     ASSERT_TRUE(fabs(mb.angular_velocity) < .0001);
+    dc_gpu_destroy(g);
+    PASS();
+}
+static void test_closed_bearing_creates_no_angular_momentum_or_energy(void) {
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = bearing_pair();
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    steps(g, 90);
+    uint32_t a=FR_STRUCTURAL_BODY_ID_BASE+1,b=FR_STRUCTURAL_BODY_ID_BASE+2;
+    ASSERT_TRUE(dc_gpu_set_body_motion(g,a,0,.05f,0,e,sizeof(e)));
+    steps(g,6);
+    dc_gpu_body_t ba,bb;
+    dc_gpu_body_motion_t ma,mb;
+    ASSERT_TRUE(dc_gpu_read_body_id(g,a,&ba,e,sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_id(g,b,&bb,e,sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,a,&ma,e,sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,b,&mb,e,sizeof(e)));
+    double mass=ma.mass+mb.mass;
+    double ax=ba.x_fp/65536.+ma.center_x,ay=ba.y_fp/65536.+ma.center_y;
+    double bx=bb.x_fp/65536.+mb.center_x,by=bb.y_fp/65536.+mb.center_y;
+    double cx=(ma.mass*ax+mb.mass*bx)/mass,cy=(ma.mass*ay+mb.mass*by)/mass;
+    double avx=ba.vx_fp/65536.,avy=ba.vy_fp/65536.;
+    double bvx=bb.vx_fp/65536.,bvy=bb.vy_fp/65536.;
+    double vx=(ma.mass*avx+mb.mass*bvx)/mass,vy=(ma.mass*avy+mb.mass*bvy)/mass;
+    double momentum=ma.inertia*ma.angular_velocity+mb.inertia*mb.angular_velocity;
+    momentum+=ma.mass*((ax-cx)*avy-(ay-cy)*avx)+mb.mass*((bx-cx)*bvy-(by-cy)*bvx);
+    double energy=.5*ma.inertia*ma.angular_velocity*ma.angular_velocity+
+                  .5*mb.inertia*mb.angular_velocity*mb.angular_velocity;
+    energy+=.5*ma.mass*((avx-vx)*(avx-vx)+(avy-vy)*(avy-vy))+
+            .5*mb.mass*((bvx-vx)*(bvx-vx)+(bvy-vy)*(bvy-vy));
+    printf("closed bearing: angular %.6f expected 1.200000, relative energy %.6f <= .030750\n",momentum,energy);
+    ASSERT_TRUE(fabs(momentum-1.2)<.03);
+    ASSERT_TRUE(energy<=.03075);
     dc_gpu_destroy(g);
     PASS();
 }
@@ -325,6 +367,7 @@ int main(void) {
     RUN(test_overflow_freezes_an_unrooted_island_clock);
     RUN(test_converted_bond_ownership_survives_graph_replacement);
     RUN(test_converted_bearing_opens_without_tension_or_friction);
+    RUN(test_closed_bearing_creates_no_angular_momentum_or_energy);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
