@@ -23,3 +23,7 @@ Same graph/load with distinct material profiles gives distinct failure mode/time
 **2026-10-11T23:26:00Z**
 
 Material identity and initial GPU mortar crumble implemented: distinct density 1.6, exact clipped cell volume/centroid, cumulative fixed-point mass, all-destination preflight, rigid ownership disabled only on commit, fracture-work budget check, no virtual launch. Two targeted tests pass; full headless 196/196. Wood/stone fragmentation, saturation retry, rotated/seam cases, full energy accounting and actual MPM evolution remain unfinished; ticket remains in progress.
+
+**2026-10-11T23:37:20Z**
+
+Four material regressions now pass headless and quarter-native; full battery 198/198. Rotated seam crumble: 41 particles, mass 38.399994 and original centroid; E=20494.142578 accounted as fracture work14400 plus remaining dissipation. Corrected physical backward-error scale to retain absolute modal terms before cancellation; same tolerance/rank thresholds, all 17 equilibrium tests including UNKNOWN safeguards pass. Remaining work includes pool rollback/retry, actual MPM evolution, wood/stone GPU-born fragments and shared impact behavior.

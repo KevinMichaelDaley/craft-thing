@@ -126,6 +126,8 @@ build/quarter_native_structural_equilibrium_tests: tests/structural/equilibrium_
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 build/quarter_native_structural_failure_tests: tests/structural/failure_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+build/quarter_native_structural_fracture_tests: tests/structural/fracture_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 build/structural_cadence_tests: tests/structural/cadence_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 build/structural_fracture_tests: tests/structural/fracture_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
@@ -139,7 +141,7 @@ bench_structural: build/structural_bench
 test_structural_budget: build/structural_bench
 	./build/structural_bench --check-budget
 test_ui test_quarter_native: build/structural_cadence_tests
-test_quarter_native: build/quarter_native_structural_placement_tests build/quarter_native_structural_equilibrium_tests build/quarter_native_structural_failure_tests
+test_quarter_native: build/quarter_native_structural_placement_tests build/quarter_native_structural_equilibrium_tests build/quarter_native_structural_failure_tests build/quarter_native_structural_fracture_tests
 .PHONY: test_quarter_native_perf
 test_quarter_native_perf: build/quarter_native_perf_tests build/quarter_native_bench
 	./build/quarter_native_perf_tests
@@ -165,6 +167,7 @@ test_quarter_native: build/quarter_native_config_tests build/quarter_native_flui
 	./build/quarter_native_structural_placement_tests
 	./build/quarter_native_structural_equilibrium_tests
 	./build/quarter_native_structural_failure_tests
+	./build/quarter_native_structural_fracture_tests
 	./build/structural_cadence_tests
 	./build/presentation_tests
 	./build/quarter_native_config_tests

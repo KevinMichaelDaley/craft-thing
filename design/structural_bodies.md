@@ -159,8 +159,14 @@ rigid owner is disabled only after all outputs commit. Existing Eulerian water
 stays owned by its cells. No virtual displacement becomes debris velocity.
 Fracture work must fit the recovered strain-energy budget. The dedicated overload
 regression produces 24 particles with total mass 38.4 and zero launch momentum.
-The full headless battery passes 196 tests. Wood/stone fragmentation, saturation,
-rotated/streamed output and complete energy diagnostics remain unfinished.
+Rotated member clipping across two resident chunks preserves mass and centroid;
+the regression produces 41 particles, mass 38.399994, and residual 9.40e-7.
+Backward-error normalization sums absolute modal contributions before cancellation,
+without changing the residual tolerance or rank certificates. Member diagnostics
+expose fracture work and remaining dissipation, whose sum equals recovered strain
+energy. Four material tests pass in headless and quarter-native configurations;
+the full headless battery passes 198 tests. Wood/stone fragmentation, saturation
+retry, actual debris evolution and streamed snapshots remain unfinished.
 
 ## Behavior and ownership
 

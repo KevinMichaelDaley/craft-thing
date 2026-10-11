@@ -2,7 +2,8 @@
 #include "placement_tests.c"
 #undef main
 
-static void test_explicit_mortar_has_its_own_density_and_material_identity(void) {
+static void
+test_explicit_mortar_has_its_own_density_and_material_identity(void) {
     char err[256];
     dc_gpu_t *g = grid();
     ASSERT_TRUE(g);
@@ -31,8 +32,8 @@ static void test_overloaded_mortar_crumble_preserves_mass_without_launch(void) {
     ASSERT_TRUE(g);
     fr_structural_gpu_graph_t s = beam(20);
     s.members[0].material = FR_STRUCTURAL_MORTAR;
-    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE,
-                                      err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, err,
+                                      sizeof(err)));
     ASSERT_TRUE(fr_gpu_place_structure(g, &s, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
@@ -42,7 +43,8 @@ static void test_overloaded_mortar_crumble_preserves_mass_without_launch(void) {
     int64_t momentum_x = 0, momentum_y = 0;
     for (unsigned i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; i++) {
         const dc_mpm_particle_t *p = &chunk->particles[i];
-        if (!p->mass_fp) continue;
+        if (!p->mass_fp)
+            continue;
         ASSERT_INT_EQ(p->material, DC_MATERIAL_MORTAR_DEBRIS);
         mass += p->mass_fp;
         momentum_x += (int64_t)p->mass_fp * p->vx_fp;
@@ -53,22 +55,23 @@ static void test_overloaded_mortar_crumble_preserves_mass_without_launch(void) {
     ASSERT_EQ(momentum_x, 0);
     ASSERT_EQ(momentum_y, 0);
     dc_gpu_body_t body;
-    ASSERT_TRUE(dc_gpu_read_body_id(g, FR_STRUCTURAL_BODY_ID_BASE + 1,
-                                   &body, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_id(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &body,
+                                    err, sizeof(err)));
     ASSERT_TRUE(!body.active);
     free(chunk);
     dc_gpu_destroy(g);
     PASS();
 }
 
-static void test_crumble_accounts_fracture_work_and_remaining_dissipation(void) {
+static void
+test_crumble_accounts_fracture_work_and_remaining_dissipation(void) {
     char err[256];
     dc_gpu_t *g = grid();
     ASSERT_TRUE(g);
     fr_structural_gpu_graph_t s = beam(20);
     s.members[0].material = FR_STRUCTURAL_MORTAR;
-    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE,
-                                      err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, err,
+                                      sizeof(err)));
     ASSERT_TRUE(fr_gpu_place_structure(g, &s, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
     fr_structural_gpu_member_state_t state;
@@ -95,8 +98,8 @@ static void test_rotated_crumble_across_chunk_seam_preserves_centroid(void) {
     s.nodes[1].y_fp = (int32_t)llround((40 + 12 * sin(angle)) * 65536);
     s.anchors[0].x = 57;
     s.anchors[0].y = 39;
-    ASSERT_TRUE(dc_gpu_paint_material(g, 57, 39, 0, DC_MATERIAL_STONE,
-                                      err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g, 57, 39, 0, DC_MATERIAL_STONE, err,
+                                      sizeof(err)));
     ASSERT_TRUE(fr_gpu_place_structure(g, &s, err, sizeof(err)));
     for (unsigned i = 0; i < 3; i++)
         ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
@@ -109,7 +112,8 @@ static void test_rotated_crumble_across_chunk_seam_preserves_centroid(void) {
         unsigned actual = 0;
         for (unsigned i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; i++) {
             const dc_mpm_particle_t *p = &chunk->particles[i];
-            if (!p->mass_fp) continue;
+            if (!p->mass_fp)
+                continue;
             ASSERT_INT_EQ(p->material, DC_MATERIAL_MORTAR_DEBRIS);
             double m = (double)p->mass_fp / 65536;
             mass += m;
@@ -122,16 +126,19 @@ static void test_rotated_crumble_across_chunk_seam_preserves_centroid(void) {
     }
     fr_structural_gpu_member_state_t state;
     ASSERT_TRUE(fr_gpu_read_structure_member(g, 1, &state));
-    printf("rotated crumble: state %u damage %.6f energy %.6f work %.6f count %u mass %.6f\n",
+    printf("rotated crumble: state %u damage %.6f energy %.6f work %.6f count "
+           "%u mass %.6f\n",
            state.state, state.damage, state.strain_energy, state.fracture_work,
            count, mass);
     fr_structural_gpu_component_state_t component;
     fr_structural_gpu_node_state_t node;
     ASSERT_TRUE(fr_gpu_read_structure_component(g, 1, &component));
     ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &node));
-    printf("rotated equilibrium: flags %u residual %.9g pivot %.9g geometry %.9g roots %u cold %u\n",
-           component.flags, component.relative_residual, component.minimum_pivot,
-           component.geometry_minimum, node.valid_anchors, node.unknown_anchors);
+    printf("rotated equilibrium: flags %u residual %.9g pivot %.9g geometry "
+           "%.9g roots %u cold %u\n",
+           component.flags, component.relative_residual,
+           component.minimum_pivot, component.geometry_minimum,
+           node.valid_anchors, node.unknown_anchors);
     ASSERT_TRUE(count > 24);
     ASSERT_TRUE(fabs(mass - 38.4) < .002);
     ASSERT_TRUE(fabs(x / mass - (58 + 6 * cos(angle))) < .002);
