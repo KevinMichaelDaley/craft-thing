@@ -200,6 +200,7 @@ void dc_gpu_structural_track_chunk(dc_gpu_t *gpu, uint32_t slot,
     p[5] = 1;
 }
 bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    dc_gpu_structural_data(gpu)[6] = 192u;
     float *packed = (float *)(dc_gpu_structural_data(gpu) +
                               dc_gpu_structural_graph_offset() + 29000u);
     for (unsigned m = 0; m < FR_STRUCTURAL_MATERIAL_COUNT; m++) {
@@ -440,5 +441,11 @@ bool fr_gpu_read_structure_component(
     if (node < 0)
         return false;
     memcpy(state, data + 24400u + (uint32_t)node * 16u, sizeof(*state));
+    return true;
+}
+bool fr_gpu_set_structure_bond_capacity(dc_gpu_t *gpu, uint32_t capacity) {
+    if (!gpu || capacity > 192u)
+        return false;
+    dc_gpu_structural_data(gpu)[6] = capacity;
     return true;
 }

@@ -82,6 +82,9 @@ typedef struct {
 bool fr_gpu_place_structure(dc_gpu_t *gpu,
                             const fr_structural_gpu_graph_t *graph,
                             char *err_buf, uint32_t err_cap);
+/** Bound future conversion bond reservations (0..192), preserving existing
+ * bonds. Explicit authoring configuration; no frame-time readback. */
+bool fr_gpu_set_structure_bond_capacity(dc_gpu_t *gpu, uint32_t capacity);
 /** Explicit diagnostic GPU readback; ordinary frames do not traverse/read the
  * graph. */
 bool fr_gpu_read_structure_node(dc_gpu_t *gpu, uint32_t id,
