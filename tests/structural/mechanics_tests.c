@@ -167,6 +167,14 @@ static void test_invalid_input_is_atomic(void) {
     ASSERT_TRUE(!fr_structural_material_map(true, 4, NULL));
     PASS();
 }
+static void test_fracture_work_matches_strength_for_a_unit_process_zone(void) {
+    for (unsigned material = 0; material < FR_STRUCTURAL_MATERIAL_COUNT; material++) {
+        const fr_structural_profile_t *p = fr_structural_profile(material);
+        double work = p->tension * p->tension / (2 * p->young);
+        ASSERT_TRUE(fabs(p->fracture_energy - work) < work * 1e-6);
+    }
+    PASS();
+}
 int main(void) {
     RUN(test_cantilever);
     RUN(test_rotation_refinement);
@@ -178,6 +186,7 @@ int main(void) {
     RUN(test_shear_and_mass);
     RUN(test_triangle_truss);
     RUN(test_invalid_input_is_atomic);
+    RUN(test_fracture_work_matches_strength_for_a_unit_process_zone);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }

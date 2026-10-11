@@ -259,6 +259,88 @@ static void test_mortar_debris_paint_uses_material_density(void) {
     PASS();
 }
 
+static void test_overstressed_stone_creates_owned_falling_rigid_fragments(void) {
+    char err[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.members[0].material = FR_STRUCTURAL_STONE;
+    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE,
+                                      err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, err, sizeof(err)));
+    uint32_t parent = FR_STRUCTURAL_BODY_ID_BASE + 1;
+    uint32_t child = FR_STRUCTURAL_OUTPUT_ID_BASE + 1;
+    dc_gpu_body_motion_t original, a, b;
+    dc_gpu_body_t ba, bb;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, parent, &original, err, sizeof(err)));
+    for (unsigned i = 0; i < 18; i++)
+        ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+    dc_gpu_body_t ordinary = {.x_fp = 90 << 16, .y_fp = 90 << 16,
+                             .width = 1, .height = 1, .id = 7, .active = 1};
+    ASSERT_TRUE(dc_gpu_spawn_body(g, ordinary, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, parent, &a, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, child, &b, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_id(g, parent, &ba, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_id(g, child, &bb, err, sizeof(err)));
+    ASSERT_TRUE(a.mass > 0 && b.mass > 0);
+    ASSERT_TRUE(fabs(a.mass + b.mass - original.mass) < .001);
+    double dx = (double)(bb.x_fp - ba.x_fp) / 65536 + b.center_x - a.center_x;
+    double dy = (double)(bb.y_fp - ba.y_fp) / 65536 + b.center_y - a.center_y;
+    double inertia = a.inertia + b.inertia + a.mass * b.mass /
+                     (a.mass + b.mass) * (dx * dx + dy * dy);
+    ASSERT_TRUE(fabs(inertia - original.inertia) < .02);
+    ASSERT_TRUE(!(a.flags & DC_GPU_BODY_KINEMATIC));
+    ASSERT_TRUE(!(b.flags & DC_GPU_BODY_KINEMATIC));
+    ASSERT_EQ(ba.vx_fp, 0);
+    ASSERT_EQ(bb.vy_fp, 0);
+    ASSERT_EQ(a.angular_velocity, 0);
+    ASSERT_EQ(b.angular_velocity, 0);
+    ASSERT_TRUE(!dc_gpu_spawn_body(g, bb, err, sizeof(err)));
+    int y = bb.y_fp;
+    for (unsigned i = 0; i < 4; i++)
+        ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_id(g, child, &bb, err, sizeof(err)));
+    ASSERT_TRUE(bb.y_fp > y);
+    dc_gpu_destroy(g);
+    PASS();
+}
+
+static void test_stone_fragment_pool_is_atomic_and_retry_does_not_skip_ids(void) {
+    char err[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.members[0].material = FR_STRUCTURAL_STONE;
+    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE,
+                                      err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, err, sizeof(err)));
+    for (unsigned i = 0; i < 63; i++) {
+        dc_gpu_body_t ordinary = {.x_fp = (70 + i % 8 * 3) << 16,
+                                  .y_fp = (70 + i / 8 * 3) << 16,
+                                  .width = 1, .height = 1, .id = i + 1, .active = 1};
+        ASSERT_TRUE(dc_gpu_spawn_body(g, ordinary, err, sizeof(err)));
+    }
+    for (unsigned i = 0; i < 18; i++)
+        ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+    fr_structural_gpu_member_state_t state;
+    dc_gpu_body_motion_t motion;
+    ASSERT_TRUE(fr_gpu_read_structure_member(g, 1, &state));
+    ASSERT_EQ(state.state, FR_STRUCTURAL_PENDING_CONVERSION);
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1,
+                                        &motion, err, sizeof(err)));
+    ASSERT_TRUE(motion.flags & DC_GPU_BODY_KINEMATIC);
+    ASSERT_TRUE(fabs(motion.mass - 64.8) < .001);
+    ASSERT_TRUE(dc_gpu_remove_body(g, 63, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_OUTPUT_ID_BASE + 1,
+                                        &motion, err, sizeof(err)));
+    ASSERT_TRUE(motion.mass > 0);
+    ASSERT_TRUE(fr_gpu_read_structure_member(g, 1, &state));
+    ASSERT_EQ(state.state, FR_STRUCTURAL_CONVERTED);
+    dc_gpu_destroy(g);
+    PASS();
+}
+
 int main(void) {
     RUN(test_explicit_mortar_has_its_own_density_and_material_identity);
     RUN(test_overloaded_mortar_crumble_preserves_mass_without_launch);
@@ -267,6 +349,8 @@ int main(void) {
     RUN(test_crumble_pool_saturation_keeps_owner_then_retries_once);
     RUN(test_committed_mortar_debris_moves_in_actual_mpm_simulation);
     RUN(test_mortar_debris_paint_uses_material_density);
+    RUN(test_overstressed_stone_creates_owned_falling_rigid_fragments);
+    RUN(test_stone_fragment_pool_is_atomic_and_retry_does_not_skip_ids);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
