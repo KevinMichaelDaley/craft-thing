@@ -73,7 +73,7 @@ void piece_properties(Body b,uint piece,out float area,out vec2 center,out float
 }
 void body_properties(inout Body b) {
     if (b.motion_ready != 0u) return;
-    b.density = b.material == 2u ? 0.6 : 2.7;
+    b.density = b.material == 2u ? 0.6 : b.material == 3u ? 1.6 : 2.7;
     vec2 weighted=vec2(0);float area=0.0;
     float areas[BODY_PIECES],inertias[BODY_PIECES];vec2 centers[BODY_PIECES];
     for(uint piece=0u;piece<body_pieces(b);++piece) {

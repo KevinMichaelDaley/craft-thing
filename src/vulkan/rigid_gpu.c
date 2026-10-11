@@ -32,7 +32,8 @@ static uint32_t body_slot(const dc_gpu_t *gpu, uint32_t id) {
 
 bool dc_gpu_valid_body_shape(const dc_gpu_body_t *body, const dc_gpu_body_shape_t *shape) {
     if (!body || !shape || shape->count < 3 || shape->count > DC_GPU_CONVEX_VERTICES ||
-        (shape->material != DC_GPU_BODY_STONE && shape->material != DC_GPU_BODY_WOOD) ||
+        (shape->material != DC_GPU_BODY_STONE && shape->material != DC_GPU_BODY_WOOD &&
+         shape->material != DC_GPU_BODY_MORTAR) ||
         !body->width || !body->height || body->width > DC_GPU_BODY_MAX_SIDE ||
         body->height > DC_GPU_BODY_MAX_SIDE) return false;
     for (uint32_t i = 0; i < shape->count; ++i) {

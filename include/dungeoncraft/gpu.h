@@ -195,7 +195,7 @@ typedef struct {
 } dc_gpu_world_body_t;
 
 #define DC_GPU_CONVEX_VERTICES 8u
-enum { DC_GPU_BODY_STONE = 1u, DC_GPU_BODY_WOOD = 2u };
+enum { DC_GPU_BODY_STONE = 1u, DC_GPU_BODY_WOOD = 2u, DC_GPU_BODY_MORTAR = 3u };
 /** Strictly convex counterclockwise body-local 16.16 vertices within box bounds.
  * Rotation is baked into the vertices. count=0 denotes the legacy box.
  */

@@ -31,6 +31,10 @@ bool fr_structural_material_map(bool terrain, uint32_t id,
         *out = FR_STRUCTURAL_WOOD;
         return true;
     }
+    if (!terrain && id == 3) {
+        *out = FR_STRUCTURAL_MORTAR;
+        return true;
+    }
     return false;
 }
 

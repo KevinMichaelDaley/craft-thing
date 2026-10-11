@@ -123,7 +123,7 @@ static bool validate(const fr_structural_gpu_graph_t *g) {
         int a = node_index(g, m->a), b = node_index(g, m->b);
         double d[2];
         if (!m->id || m->id >= FR_STRUCTURAL_BODY_ID_BASE || !m->generation ||
-            a < 0 || b < 0 || a == b || m->material > FR_STRUCTURAL_WOOD ||
+            a < 0 || b < 0 || a == b || m->material >= FR_STRUCTURAL_MATERIAL_COUNT ||
             !m->depth_fp || m->depth_fp > 16u << 16 || m->flags & ~1u ||
             m->reserved || !delta(&g->nodes[a], &g->nodes[b], d))
             return false;
@@ -328,7 +328,8 @@ static bool spawn_member(dc_gpu_t *gpu, const fr_structural_gpu_graph_t *g,
     dc_gpu_body_shape_t shape = {
         .count = 4,
         .material = m->material == FR_STRUCTURAL_WOOD ? DC_GPU_BODY_WOOD
-                                                      : DC_GPU_BODY_STONE,
+                    : m->material == FR_STRUCTURAL_MORTAR ? DC_GPU_BODY_MORTAR
+                                                          : DC_GPU_BODY_STONE,
         .vertices = {{0, 0}, {lf, 0}, {lf, df}, {0, df}}};
     if (!dc_gpu_spawn_convex_body(gpu, w, &shape, err, cap) ||
         !dc_gpu_set_body_motion(gpu, w.body.id, (float)atan2(d[1], d[0]), 0,
