@@ -1,6 +1,6 @@
 CC ?= cc
 .DEFAULT_GOAL := all
-STRUCTURAL_REFERENCE = tests/structural/reference_stub.c
+STRUCTURAL_REFERENCE = tests/structural/reference_solver.c src/structural/material.c
 build/structural_mechanics_tests: tests/structural/mechanics_tests.c $(STRUCTURAL_REFERENCE) include/ferrum/structural/mechanics.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/structural/mechanics_tests.c $(STRUCTURAL_REFERENCE) -o $@ -lm
