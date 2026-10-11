@@ -52,12 +52,12 @@ static void test_unknown_does_not_age_support_loss(void) {
     ASSERT_TRUE(dc_gpu_set_page(g, 0, 0, 0, e, sizeof(e)));
     steps(g, 29);
     dc_gpu_body_motion_t m;
-    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1,
-                                        &m, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m,
+                                        e, sizeof(e)));
     ASSERT_TRUE(m.flags & DC_GPU_BODY_KINEMATIC);
     steps(g, 1);
-    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1,
-                                        &m, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m,
+                                        e, sizeof(e)));
     ASSERT_TRUE(!(m.flags & DC_GPU_BODY_KINEMATIC));
     dc_gpu_destroy(g);
     PASS();
@@ -119,11 +119,12 @@ static void test_sound_mixed_assembly_retains_its_bond(void) {
     double bvx = bb.vx_fp / 65536., bvy = bb.vy_fp / 65536.;
     double px = ma.mass * avx + mb.mass * bvx;
     double py = ma.mass * avy + mb.mass * bvy;
-    double angular = ma.inertia * ma.angular_velocity + mb.inertia * mb.angular_velocity;
+    double angular =
+        ma.inertia * ma.angular_velocity + mb.inertia * mb.angular_velocity;
     angular += ma.mass * ((acx - cx) * avy - (acy - cy) * avx);
     angular += mb.mass * ((bcx - cx) * bvy - (bcy - cy) * bvx);
-    printf("assembly momentum: %.6f %.6f angular %.6f expected %.6f\n",
-           px, py, angular, initial_angular_momentum);
+    printf("assembly momentum: %.6f %.6f angular %.6f expected %.6f\n", px, py,
+           angular, initial_angular_momentum);
     ASSERT_TRUE(fabs(px) < .02);
     ASSERT_TRUE(fabs(py - total * 6 * .25) < .02);
     ASSERT_TRUE(fabs(angular - initial_angular_momentum) < .03);
@@ -139,10 +140,10 @@ static void test_full_bond_pool_rolls_back_the_whole_island(void) {
     ASSERT_TRUE(fr_gpu_set_structure_bond_capacity(g, 0));
     steps(g, 90);
     dc_gpu_body_motion_t a, b;
-    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1,
-                                        &a, e, sizeof(e)));
-    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 2,
-                                        &b, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &a,
+                                        e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 2, &b,
+                                        e, sizeof(e)));
     ASSERT_TRUE(a.flags & DC_GPU_BODY_KINEMATIC);
     ASSERT_TRUE(b.flags & DC_GPU_BODY_KINEMATIC);
     ASSERT_TRUE(fabs(a.mass + b.mass - 39.6) < .001);
@@ -151,10 +152,10 @@ static void test_full_bond_pool_rolls_back_the_whole_island(void) {
     ASSERT_EQ(state.state, FR_STRUCTURAL_PENDING_CONVERSION);
     ASSERT_TRUE(fr_gpu_set_structure_bond_capacity(g, 1));
     steps(g, 1);
-    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1,
-                                        &a, e, sizeof(e)));
-    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 2,
-                                        &b, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &a,
+                                        e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 2, &b,
+                                        e, sizeof(e)));
     ASSERT_TRUE(!(a.flags & DC_GPU_BODY_KINEMATIC));
     ASSERT_TRUE(!(b.flags & DC_GPU_BODY_KINEMATIC));
     dc_gpu_destroy(g);
@@ -166,7 +167,8 @@ static void test_overstress_ages_damage_but_unknown_freezes_it(void) {
     ASSERT_TRUE(g);
     fr_structural_gpu_graph_t s = beam(20);
     s.members[0].material = FR_STRUCTURAL_STONE;
-    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
     ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
     steps(g, 10);
     fr_structural_gpu_member_state_t before, after;
