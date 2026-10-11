@@ -86,16 +86,53 @@ static void rigid_load_case(int center, double expected_a, double expected_b) {
     ASSERT_TRUE(near(b.reaction[1],expected_b,.025));
     ASSERT_TRUE(near(a.reaction[1]+b.reaction[1],-22680,.025));
     ASSERT_TRUE(near(b.reaction[1]*12,-12960*6-9720*(center-20),.025));
+    fr_structural_gpu_component_state_t budget;
+    ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&budget));
+    ASSERT_TRUE(budget.relative_residual<1e-4);
+    for(unsigned axis=0;axis<3;axis++)
+        ASSERT_TRUE(near(budget.external[axis]+budget.reaction[axis],0,.1));
     dc_gpu_destroy(g); PASS();
 }
 static void test_centered_rigid_reactions(void) {rigid_load_case(26,-11340,-11340);}
 static void test_eccentric_rigid_reactions(void) {rigid_load_case(23,-13770,-8910);}
+static void test_material_stress_drives_overload(void) {
+    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s=beam(20);s.members[0].material=FR_STRUCTURAL_STONE;
+    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
+    fr_structural_gpu_member_state_t member;
+    ASSERT_TRUE(fr_gpu_read_structure_member(g,1,&member));
+    ASSERT_EQ(member.state,FR_STRUCTURAL_OVERLOADED);
+    ASSERT_TRUE(near(member.shear,58320,.003));
+    ASSERT_TRUE(near(fabs(member.moment),349920,.003));
+    ASSERT_TRUE(near(member.utilization,3.645,.003));
+    ASSERT_TRUE(member.utilization_location<.01);
+    ASSERT_TRUE(member.strain_energy>0);
+    dc_gpu_destroy(g);PASS();
+}
+static void test_weak_numerical_system_is_unknown(void) {
+    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s=beam(20);
+    s.anchors[0].normal_stiffness=1e-20;
+    s.anchors[0].shear_stiffness=1e-20;
+    s.anchors[0].rotational_stiffness=1e-20;
+    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
+    fr_structural_gpu_node_state_t node;
+    ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&node));
+    ASSERT_EQ(node.state,FR_STRUCTURAL_UNKNOWN);
+    dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     RUN(test_self_weight_cantilever_equilibrium);
     RUN(test_released_root_is_a_mechanism);
     RUN(test_two_pins_split_bridge_weight);
     RUN(test_centered_rigid_reactions);
     RUN(test_eccentric_rigid_reactions);
+    RUN(test_material_stress_drives_overload);
+    RUN(test_weak_numerical_system_is_unknown);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail?1:0;
 }

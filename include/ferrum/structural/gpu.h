@@ -53,6 +53,17 @@ typedef struct {
     uint32_t id, component, state, valid_anchors, unknown_anchors, generation;
     float displacement[3], reaction[3];
 } fr_structural_gpu_node_state_t;
+typedef struct {
+    uint32_t id, generation, component, state;
+    float axial, shear, moment, utilization, utilization_location;
+    float strain_energy, damage;
+    uint32_t reserved[5];
+} fr_structural_gpu_member_state_t;
+typedef struct {
+    uint32_t id, state, node_count, flags;
+    float external[3], reaction[3], relative_residual, minimum_pivot;
+    uint32_t iterations, reserved[3];
+} fr_structural_gpu_component_state_t;
 /** Atomically place/replace an explicitly authored graph. IDs/generations are
  * stable. Initial geometry accepts unit-thickness rectangular members up to 16
  * cells. Marking accepts whole horizontal stone rectangles; unsupported shapes
@@ -64,4 +75,10 @@ bool fr_gpu_place_structure(dc_gpu_t *gpu,
  * graph. */
 bool fr_gpu_read_structure_node(dc_gpu_t *gpu, uint32_t id,
                                 fr_structural_gpu_node_state_t *state);
+/** Explicit diagnostic of recovered member stress and material utilization. */
+bool fr_gpu_read_structure_member(dc_gpu_t *gpu, uint32_t id,
+                                  fr_structural_gpu_member_state_t *state);
+/** Explicit component diagnostic; moments are about its minimum-ID rest node. */
+bool fr_gpu_read_structure_component(dc_gpu_t *gpu, uint32_t id,
+                                     fr_structural_gpu_component_state_t *state);
 #endif

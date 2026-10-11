@@ -407,3 +407,11 @@ bool fr_gpu_read_structure_node(dc_gpu_t *gpu, uint32_t id,
            sizeof(*out));
     return true;
 }
+bool fr_gpu_read_structure_member(dc_gpu_t *gpu, uint32_t id,
+                                  fr_structural_gpu_member_state_t *state) {
+    (void)gpu; (void)id; (void)state; return false;
+}
+bool fr_gpu_read_structure_component(dc_gpu_t *gpu, uint32_t id,
+                                     fr_structural_gpu_component_state_t *state) {
+    (void)gpu; (void)id; (void)state; return false;
+}
