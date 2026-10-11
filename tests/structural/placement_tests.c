@@ -36,7 +36,6 @@ static dc_gpu_t *grid(void) {
         dc_gpu_destroy(g);
         return NULL;
     }
-    dc_gpu_set_rigid_solver(g, true);
     return g;
 }
 static fr_structural_gpu_graph_t beam(int x) {
@@ -85,6 +84,7 @@ static void test_explicit_proxy_and_atomic_validation(void) {
     ASSERT_TRUE(
         dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
     ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    ASSERT_TRUE(!dc_gpu_set_rigid_solver(g,false));
     fr_structural_gpu_node_state_t n;
     ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &n));
     ASSERT_EQ(n.valid_anchors, 1u);
@@ -181,6 +181,13 @@ static void test_structural_ownership_cannot_be_overwritten(void) {
     ASSERT_TRUE(!dc_gpu_spawn_world_body(g,w,e,sizeof(e)));
     dc_gpu_destroy(g);PASS();
 }
+static void test_anchor_must_attach_to_the_member(void) {
+    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);fr_structural_gpu_graph_t s=beam(20);
+    s.anchors[0].chunk.x=1000;
+    ASSERT_TRUE(!fr_gpu_place_structure(g,&s,e,sizeof(e)));
+    fr_structural_gpu_node_state_t n;ASSERT_TRUE(!fr_gpu_read_structure_node(g,1,&n));
+    dc_gpu_destroy(g);PASS();
+}
 static void test_capacity_failure_keeps_sources(void) {
     char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
     for(uint32_t i=0;i<DC_GPU_BODY_CAPACITY;i++) {
@@ -216,6 +223,7 @@ int main(void) {
     RUN(test_marking_ownership_and_rejection);
     RUN(test_structural_ownership_cannot_be_overwritten);
     RUN(test_capacity_failure_keeps_sources);
+    RUN(test_anchor_must_attach_to_the_member);
     RUN(test_explicit_joint_graph_does_not_multiply_roots);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
