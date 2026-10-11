@@ -67,7 +67,8 @@ typedef struct {
     uint32_t id, generation, component, state;
     float axial, shear, moment, utilization, utilization_location;
     float strain_energy, damage;
-    uint32_t reserved[5];
+    float fracture_work, dissipated_energy;
+    uint32_t reserved[3];
 } fr_structural_gpu_member_state_t;
 typedef struct {
     uint32_t id, state, node_count, flags;
