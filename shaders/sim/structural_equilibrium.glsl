@@ -4,6 +4,7 @@ const uint EQ_DOFS=96u,EQ_MATRIX=9216u;
 shared uint eq_map[96],eq_count,eq_status;
 shared float eq_rhs[96],eq_scale[96],eq_solution[96];
 shared float eq_minimum;
+shared float eq_geometry_minimum;
 shared int eq_a[16],eq_b[16],eq_anchor[32];
 shared vec2 eq_direction[16];
 shared vec3 eq_k[16],eq_ak[32];
@@ -94,13 +95,19 @@ void eq_assemble(bool geometry) {
     }
     memoryBarrierBuffer();barrier();
 }
+#include "structural_rank.glsl"
 bool eq_eliminate(bool geometry) {
     uint lane=gl_LocalInvocationID.x;
     for(uint p=0u;p<eq_count;p++) {
         uint pivot=eq_map[p];float diagonal=eq_get(eq_address(eq_work(),pivot,pivot));
-        if(lane==0u&&!geometry) eq_minimum=min(eq_minimum,diagonal);
+        if(lane==0u) {
+            eq_iterations++;
+            if(geometry) eq_geometry_minimum=min(eq_geometry_minimum,diagonal);
+            else eq_minimum=min(eq_minimum,diagonal);
+        }
         if(lane==0u&&(!isnan(diagonal)&&!isinf(diagonal))) {
-            if(diagonal<(geometry?1e-6:1e-7)) eq_status=geometry?2u:3u;
+            if(diagonal<(geometry?1e-6:1e-7))
+                eq_status=geometry&&eq_mechanism_proven(gl_WorkGroupID.x)?2u:3u;
         }
         if(lane==0u&&(isnan(diagonal)||isinf(diagonal))) eq_status=3u;
         barrier();if(eq_status!=0u) return false;
@@ -129,16 +136,17 @@ void equilibrium() {
     uint g=graph(),owner=gl_WorkGroupID.x,lane=gl_LocalInvocationID.x;
     if(owner>=data[g]||data[g+NODES+owner*12u]!=data[state(owner)+1u]||
        data[state(owner)+4u]!=0u||data[state(owner)+3u]==0u) return;
-    uint component_mask=0u;bool invalid=false;
+    uint component_mask=0u,invalid=0u;
     for(uint n=0u;n<data[g];n++) if(data[state(n)+1u]==data[state(owner)+1u]) {
-        component_mask|=1u<<n;invalid=invalid||data[structural_bad()+n]!=0u;
+        component_mask|=1u<<n;if(data[structural_bad()+n]!=0u) invalid|=2u;
     }
     for(uint b=0u;b<params.body_count;b++)
-        if((data[structural_dependencies()+b]&component_mask)!=0u&&data[structural_clipped()+b]!=0u) invalid=true;
-    invalid=invalid||data[base()-16u-64u*32u-8192u*16u+3u]!=0u;
-    if(invalid) return;
+        if((data[structural_dependencies()+b]&component_mask)!=0u&&data[structural_clipped()+b]!=0u) invalid|=4u;
+    if(data[base()-16u-64u*32u-8192u*16u+3u]!=0u) invalid|=2u;
+    if(invalid!=0u) {if(lane==0u) data[component_state(owner)+3u]=invalid;return;}
     if(lane==0u) {
-        eq_count=0u;eq_status=0u;eq_minimum=1;eq_iterations=0u;
+        eq_count=0u;eq_status=0u;eq_minimum=1;eq_geometry_minimum=1;
+        eq_iterations=0u;eq_active_iterations=0u;eq_refinement_iterations=0u;
         for(uint n=0u;n<data[g];n++) if(data[state(n)+1u]==data[state(owner)+1u])
             for(uint d=0u;d<3u;d++) eq_map[eq_count++]=n*3u+d;
     }
@@ -176,11 +184,11 @@ void equilibrium() {
     }
     barrier();
     for(uint iteration=0u;iteration<8u;iteration++) {
+        if(lane==0u) eq_active_iterations++;
         eq_assemble(true);bool ranked=eq_eliminate(true);
         if(ranked) {eq_assemble(false);eq_eliminate(false);}
         if(eq_status!=0u) break;
         for(uint r=lane;r<eq_count;r+=32u) eq_solution[r]*=eq_scale[r];
-        if(lane==0u) eq_iterations+=2u*eq_count;
         barrier();eq_refine();update_bearings(owner);
         if(eq_changed==0u) break;
         if(iteration==7u&&lane==0u) eq_status=3u;
@@ -209,7 +217,13 @@ void equilibrium() {
     }
     barrier();
     if(lane==0u&&eq_status<=1u) component_budget(owner);
-    if(lane==0u&&eq_status>=2u) data[component_state(owner)+1u]=eq_status;
+    if(lane==0u&&eq_status>=2u) {
+        uint diagnostic=component_state(owner);
+        data[diagnostic+1u]=eq_status;data[diagnostic+3u]=eq_status==2u?16u:8u;
+        eq_put(diagnostic+11u,eq_minimum);data[diagnostic+12u]=eq_iterations;
+        data[diagnostic+13u]=eq_active_iterations;data[diagnostic+14u]=eq_refinement_iterations;
+        eq_put(diagnostic+15u,eq_geometry_minimum);
+    }
     for(uint e=lane;e<data[g+1u];e+=32u) if(eq_status>=2u&&
         data[state(uint(eq_a[e]))+1u]==data[state(owner)+1u]) data[member_state(e)+3u]=eq_status;
     for(uint r=lane;r<eq_count;r+=32u) {

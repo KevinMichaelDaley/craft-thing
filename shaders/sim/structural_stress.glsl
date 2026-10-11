@@ -106,4 +106,6 @@ void component_budget(uint owner) {
     data[st]=data[g+NODES+owner*12u];data[st+1u]=eq_status;data[st+2u]=eq_count/3u;
     for(uint axis=0u;axis<3u;axis++) {eq_put(st+4u+axis,applied[axis]);eq_put(st+7u+axis,reaction[axis]);}
     eq_put(st+10u,maximum_residual);eq_put(st+11u,eq_minimum);data[st+12u]=eq_iterations;
+    data[st+13u]=eq_active_iterations;data[st+14u]=eq_refinement_iterations;
+    eq_put(st+15u,eq_geometry_minimum);
 }

@@ -30,6 +30,7 @@ vec2 eq_physical(uint dof) {
 void eq_refine() {
     uint lane=gl_LocalInvocationID.x;
     for(uint iteration=0u;iteration<3u;iteration++) {
+        if(lane==0u) eq_refinement_iterations++;
         eq_physical_prepare();
         for(uint r=lane;r<eq_count;r+=32u)
             eq_rhs[r]=(eq_load(eq_map[r])-eq_physical(eq_map[r]).x)*eq_scale[r];

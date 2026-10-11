@@ -3,6 +3,7 @@ shared ivec2 eq_joint_nodes[64];
 shared vec3 eq_joint_k[64],eq_joint_v[64][6];
 shared vec2 eq_anchor_slide[32],eq_joint_slide[64];
 shared uint eq_changed,eq_iterations;
+shared uint eq_active_iterations,eq_refinement_iterations;
 float eq_q(uint dof);
 vec3 anchor_vector(uint a,uint dof) {
     if(eq_anchor[a]<0||dof/3u!=uint(eq_anchor[a])) return vec3(0);

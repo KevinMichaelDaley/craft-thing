@@ -136,7 +136,7 @@ void topology() {
             for(uint word=0u;word<16u;word++) data[cs+word]=0u;
             data[cs]=data[ns];data[cs+1u]=data[st+2u];
             for(uint n=0u;n<data[g];n++) data[cs+2u]+=uint(label[n]==label[i]);
-            data[cs+3u]=uint(all_cold!=0u);
+            data[cs+3u]=all_cold!=0u?1u:all_roots==0u?16u:0u;
         }
     }
     if(i<data[g+1u]) {
