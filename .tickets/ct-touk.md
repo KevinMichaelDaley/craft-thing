@@ -1,6 +1,6 @@
 ---
 id: ct-touk
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-11T05:44:08Z
@@ -23,3 +23,7 @@ Cantilever displacement FL^3/(3EI), root shear F and moment FL; rotated frame eq
 **2026-10-11T05:47:24Z**
 
 Define explicit terrain/rigid/structural material ID mappings. Current rigid-body WOOD and terrain SAND share a numeric value in distinct namespaces; marking or conversion must not reinterpret IDs. Placed wood may use its body profile before wood terrain cells exist. Mechanical refinement must preserve volume, mass, buckling length and fracture energy.
+
+**2026-10-11T05:58:17Z**
+
+Implemented shared structural profiles/units, explicit terrain/body ID mapping, rectangular geometry sections/mass, finite bearing/pinned/bonded/moment tangent modes and capacity checks. Test-only dense rotated Timoshenko/truss oracle rejects mechanisms; 10 analytic tests cover cantilever force/moment/displacement, rotation/refinement, brace stability, shear deformation, compression/tension asymmetry, physical-span buckling and atomic invalid-input rejection. All 143 pre-existing headless cases and 10 new cases pass under Intel Vulkan validation. Reference solve is never linked into runtime; GPU active sets and coupling remain ct-il9b.

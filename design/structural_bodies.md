@@ -1,9 +1,33 @@
 # Anchored structural bodies
 
-Status: proposed design and implementation roadmap, not implemented runtime behavior.
+Status: mechanical reference implemented; runtime behavior remains planned.
 Epic: `ct-fx1b`. The user selected explicitly placed/marked structures and requested
 design and tickets first. Ordinary terrain remains terrain. Implementation follows
-RED–GREEN–REFACTOR; the first ready ticket is `ct-touk`.
+RED–GREEN–REFACTOR; runtime placement starts with `ct-i5a4` after `ct-touk`.
+
+### Mechanical reference implementation
+
+`include/ferrum/structural/mechanics.h` defines shared synthetic material profiles,
+geometry-derived rectangular sections, finite joint tangent modes and capacity
+checks. The dense reference solver lives only in `tests/structural/`; runtime
+targets never link it. It assembles rotated Timoshenko frame and axial truss
+elements, computes support force/moment reactions and rejects rank-deficient
+mechanisms. Truss-only nodes omit physically nonexistent rotational variables.
+The reference is a linear bilateral oracle; the GPU milestone must add the bearing
+active set, finite attachment evolution, rank classification and work-conjugate
+contact coupling before runtime support is implemented.
+
+One rigid physics tick is `1/60` simulated seconds; a substep is `1/480` seconds.
+The existing rigid velocities and impulses are per tick. Multiply velocities and
+impulses by 60 to obtain cell/second and mass-cell/second; divide physical impulse
+by the actual structural accumulation interval to obtain force. Tick acceleration
+and stress/modulus values multiply by `60^2`. The profiles use mass per unit cell
+volume (stone 2.7, wood 0.6, cohesive mortar 1.6) and second-based moduli, strengths
+and fracture energies; their tick-equivalent moduli are 20000/6000/1000. These are
+game parameters, not measured SI properties. The existing fluid-only variable
+duration API does not change rigid tick duration. Numerical member subdivision
+preserves summed area-times-length volume and mass, and strength checks accept the
+physical unbraced span rather than using the numerical edge length.
 
 ## Behavior and ownership
 
