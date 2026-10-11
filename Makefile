@@ -2,7 +2,7 @@ CC ?= cc
 .DEFAULT_GOAL := all
 STRUCTURAL_REFERENCE = tests/structural/reference_solver.c src/structural/material.c
 build/structural_equilibrium_tests: tests/structural/equilibrium_tests.c tests/structural/placement_tests.c build/compound_body_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/structural/material.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/structural_placement_tests: tests/structural/placement_tests.c include/ferrum/structural/gpu.h build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/structural_mechanics_tests: tests/structural/mechanics_tests.c $(STRUCTURAL_REFERENCE) include/ferrum/structural/mechanics.h
@@ -19,10 +19,13 @@ GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/b
 GPU_OBJ += build/solver_gpu.o
 GPU_OBJ += build/compound_gpu.o
 GPU_OBJ += build/window_gpu.o
-GPU_OBJ += build/structural_gpu.o
+GPU_OBJ += build/structural_gpu.o build/structural_material.o
+GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o,$(GPU_OBJ))) src/structural/material.c
+build/structural_material.o: src/structural/material.c include/ferrum/structural/mechanics.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/structural_gpu.o: src/vulkan/structural_gpu.c src/vulkan/gpu_internal.h include/ferrum/structural/gpu.h build/shaders/structural.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-build/shaders/structural.comp.spv: shaders/sim/structural.comp shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl
+build/shaders/structural.comp.spv: shaders/sim/structural.comp shaders/sim/structural_equilibrium.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 $(GPU_OBJ): build/shaders/structural.comp.spv
@@ -67,9 +70,9 @@ build/rigid_solver_tests: tests/vulkan/rigid_solver_tests.c $(GPU_OBJ) $(CHUNK_O
 .PHONY: all test test_ui test_ui_long test_rigid_dynamics test_presentation clean shaders
 all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
 
-NATIVE_SRC = src/app/main.c src/app/level.c src/app/session.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c src/world/stream.c src/world/generate.c
+NATIVE_SRC = src/app/main.c src/app/level.c src/app/session.c $(GPU_SRC) src/world/chunk.c src/world/stream.c src/world/generate.c
 build/rigid_dynamics_visual_tests: tests/app/rigid_dynamics_visual_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u -DDC_PRESSURE_SWEEPS=16u $< $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS) -lm
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u -DDC_PRESSURE_SWEEPS=16u $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -lm
 
 test_rigid_dynamics: build/compound_body_tests build/rigid_dynamics_visual_tests
 	./build/compound_body_tests
@@ -115,8 +118,8 @@ build/broadphase_tests: tests/vulkan/broadphase_tests.c $(GPU_OBJ) $(CHUNK_OBJ) 
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_bench build/dungeoncraft_quarter_native: src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
 .PHONY: quarter_native test_quarter_native bench_quarter_native test_quarter_native_spray
-build/quarter_native_structural_placement_tests: tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c build/compound_body_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS)
+build/quarter_native_structural_placement_tests: tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 test_quarter_native: build/quarter_native_structural_placement_tests
 .PHONY: test_quarter_native_perf
 test_quarter_native_perf: build/quarter_native_perf_tests build/quarter_native_bench
@@ -125,19 +128,19 @@ test_quarter_native_perf: build/quarter_native_perf_tests build/quarter_native_b
 build/quarter_native_perf_tests: tests/vulkan/quarter_native_perf_tests.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
 
-build/quarter_native_fluid_tests: tests/vulkan/quarter_native_fluid_tests.c Makefile src/app/view_config.h $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROJECTION_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS)
+build/quarter_native_fluid_tests: tests/vulkan/quarter_native_fluid_tests.c Makefile src/app/view_config.h $(GPU_SRC) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROJECTION_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 
-build/quarter_native_solver_tests: tests/vulkan/fluid_tests.c Makefile $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS)
+build/quarter_native_solver_tests: tests/vulkan/fluid_tests.c Makefile $(GPU_SRC) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 
 quarter_native: build/dungeoncraft_quarter_native
 
 build/quarter_native_rigid_tests: tests/app/quarter_native_rigid_tests.c Makefile src/app/level.h src/app/view_config.h $(filter-out src/app/main.c,$(NATIVE_SRC)) include/dungeoncraft/gpu.h src/vulkan/gpu_internal.h $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
 
-build/quarter_native_rigid_solver_tests: tests/vulkan/rigid_solver_tests.c Makefile src/app/view_config.h $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(SOLVER_SHADER) $(BROADPHASE_SHADER) $(CONTACT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS) -lm
+build/quarter_native_rigid_solver_tests: tests/vulkan/rigid_solver_tests.c Makefile src/app/view_config.h $(GPU_SRC) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(SOLVER_SHADER) $(BROADPHASE_SHADER) $(CONTACT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -lm
 
 test_quarter_native: build/quarter_native_config_tests build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_rigid_solver_tests build/dungeoncraft_quarter_native
 	./build/quarter_native_structural_placement_tests
@@ -160,8 +163,8 @@ bench_quarter_native: build/quarter_native_bench
 build/dungeoncraft_quarter_native: Makefile $(NATIVE_SRC) src/app/level.h src/app/view_config.h include/dungeoncraft/gpu.h $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $(NATIVE_SRC) -o $@ $(LDLIBS)
 
-build/quarter_native_bench: tests/vulkan/native_bench.c Makefile tests/vulkan/native_scene.h src/app/view_config.h $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) tests/vulkan/native_bench.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS)
+build/quarter_native_bench: tests/vulkan/native_bench.c Makefile tests/vulkan/native_scene.h src/app/view_config.h $(GPU_SRC) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) tests/vulkan/native_bench.c $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 
 .PHONY: native
 native: build/dungeoncraft_native
@@ -184,8 +187,8 @@ test_half_native_spray: build/dungeoncraft_half_native
 build/half_native_config_tests: tests/app/half_native_config_tests.c src/app/view_config.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_HALF_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=187u $< -o $@
 
-build/marker_slot_tests: tests/vulkan/marker_slot_tests.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GPU_CHUNK_SLOTS=65u tests/vulkan/marker_slot_tests.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS)
+build/marker_slot_tests: tests/vulkan/marker_slot_tests.c $(GPU_SRC) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GPU_CHUNK_SLOTS=65u tests/vulkan/marker_slot_tests.c $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 
 .PHONY: test_native
 test_native: build/dungeoncraft_native
@@ -305,8 +308,8 @@ build/gpu_tests: tests/vulkan/gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RI
 build/rigid_tests: tests/vulkan/rigid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/native_bench: tests/vulkan/native_bench.c tests/vulkan/native_scene.h $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GPU_CHUNK_SLOTS=608u tests/vulkan/native_bench.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS)
+build/native_bench: tests/vulkan/native_bench.c tests/vulkan/native_scene.h $(GPU_SRC) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GPU_CHUNK_SLOTS=608u tests/vulkan/native_bench.c $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 
 build/native_scene_tests: tests/vulkan/native_scene_tests.c tests/vulkan/native_scene.h $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(CHUNK_OBJ) -o $@

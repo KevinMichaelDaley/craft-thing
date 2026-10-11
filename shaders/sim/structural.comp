@@ -132,7 +132,8 @@ void topology() {
         for(uint v=6u;v<12u;v++) data[st+v]=0u;
     }
 }
+#include "structural_equilibrium.glsl"
 void main() {
     if(params.mode==0u) {if(gl_LocalInvocationID.x==0u) transaction();return;}
-    topology();
+    if(params.mode==3u) equilibrium();else topology();
 }

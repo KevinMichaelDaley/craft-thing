@@ -194,6 +194,17 @@ void dc_gpu_structural_track_chunk(dc_gpu_t *gpu, uint32_t slot,
     p[5] = 1;
 }
 bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    float *packed = (float *)(dc_gpu_structural_data(gpu) +
+                              dc_gpu_structural_graph_offset() + 29000u);
+    for (unsigned m = 0; m < FR_STRUCTURAL_MATERIAL_COUNT; m++) {
+        const fr_structural_profile_t *p = fr_structural_profile(m);
+        const double values[] = {p->density, p->young, p->shear, p->tension,
+                                 p->compression, p->shear_strength,
+                                 p->fracture_energy, p->grace_seconds,
+                                 p->overload_seconds, p->grain_ratio};
+        for (unsigned v = 0; v < 10; v++)
+            packed[m * 12u + v] = (float)values[v];
+    }
     VkShaderModule shader;
     if (!dc_gpu_load_shader_module(gpu, "build/shaders/structural.comp.spv",
                                    &shader, err, cap))
@@ -236,7 +247,7 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode) {
         (uint32_t)x, (uint32_t)(x >> 32), (uint32_t)y, (uint32_t)(y >> 32)};
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    vkCmdDispatch(gpu->command, 1, 1, 1);
+    vkCmdDispatch(gpu->command, mode == 3 ? 32 : 1, 1, 1);
     b.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
     b.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
     b.dstStageMask =
@@ -247,8 +258,10 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode) {
     vkCmdPipelineBarrier2(gpu->command, &dep);
 }
 void dc_gpu_record_structural(dc_gpu_t *gpu) {
-    if (gpu->structural_enabled)
+    if (gpu->structural_enabled) {
         dispatch(gpu, 1);
+        dispatch(gpu, 3);
+    }
 }
 static bool commit(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
