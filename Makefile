@@ -1,6 +1,9 @@
 CC ?= cc
 .DEFAULT_GOAL := all
 STRUCTURAL_REFERENCE = tests/structural/reference_solver.c src/structural/material.c
+STRUCTURAL_PLACEMENT = tests/structural/placement_stub.c
+build/structural_placement_tests: tests/structural/placement_tests.c $(STRUCTURAL_PLACEMENT) build/compound_body_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(STRUCTURAL_PLACEMENT) $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -lm
 build/structural_mechanics_tests: tests/structural/mechanics_tests.c $(STRUCTURAL_REFERENCE) include/ferrum/structural/mechanics.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/structural/mechanics_tests.c $(STRUCTURAL_REFERENCE) -o $@ -lm
