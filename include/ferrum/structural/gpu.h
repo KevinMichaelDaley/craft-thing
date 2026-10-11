@@ -16,6 +16,13 @@ typedef enum {
     FR_STRUCTURAL_PENDING_CONVERSION
 } fr_structural_state_t;
 enum { FR_STRUCTURAL_MARK_TERRAIN = 1u };
+enum {
+    FR_STRUCTURAL_DIAG_COLD = 1u,
+    FR_STRUCTURAL_DIAG_LOAD_OVERFLOW = 2u,
+    FR_STRUCTURAL_DIAG_LOAD_CLIPPED = 4u,
+    FR_STRUCTURAL_DIAG_NUMERICAL = 8u,
+    FR_STRUCTURAL_DIAG_MECHANISM = 16u
+};
 typedef struct {
     uint32_t id, generation;
     dc_chunk_coord_t chunk;
@@ -64,7 +71,8 @@ typedef struct {
 typedef struct {
     uint32_t id, state, node_count, flags;
     float external[3], reaction[3], relative_residual, minimum_pivot;
-    uint32_t iterations, reserved[3];
+    uint32_t iterations, active_iterations, refinement_iterations;
+    float geometry_minimum;
 } fr_structural_gpu_component_state_t;
 /** Atomically place/replace an explicitly authored graph. IDs/generations are
  * stable. Initial geometry accepts unit-thickness rectangular members up to 16
