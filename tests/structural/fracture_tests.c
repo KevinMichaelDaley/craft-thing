@@ -14,7 +14,7 @@ static void test_explicit_mortar_has_its_own_density_and_material_identity(void)
     uint32_t id = FR_STRUCTURAL_BODY_ID_BASE + 1;
     ASSERT_TRUE(dc_gpu_read_body_motion(g, id, &motion, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_body_shape(g, id, &shape, err, sizeof(err)));
-    ASSERT_INT_EQ(shape.material, 3);
+    ASSERT_INT_EQ(shape.material, DC_GPU_BODY_MORTAR);
     ASSERT_TRUE(fabs(motion.mass - 38.4) < .001);
     fr_structural_material_t material;
     ASSERT_TRUE(fr_structural_material_map(false, shape.material, &material));
