@@ -1,5 +1,10 @@
 CC ?= cc
 .DEFAULT_GOAL := all
+STRUCTURAL_REFERENCE = tests/structural/reference_stub.c
+build/structural_mechanics_tests: tests/structural/mechanics_tests.c $(STRUCTURAL_REFERENCE) include/ferrum/structural/mechanics.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/structural/mechanics_tests.c $(STRUCTURAL_REFERENCE) -o $@ -lm
+test: build/structural_mechanics_tests
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror
 CFLAGS += -pthread
 CPPFLAGS += -Iinclude $(shell pkg-config --cflags sdl2)
@@ -319,6 +324,7 @@ build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/controls_tests.c src/app/level.c src/app/session.c $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 
 test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
+	./build/structural_mechanics_tests
 	./build/rigid_solver_tests
 	./build/compound_body_tests
 	./build/contact_tests
