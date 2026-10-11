@@ -24,12 +24,19 @@ static dc_gpu_t *grid(void) {
     dc_gpu_t *g = NULL;
     char err[256];
     dc_chunk_t *c = calloc(1, sizeof(*c));
-    bool ok = c && dc_gpu_create(&g, 128, 128, "build/shaders/pattern.comp.spv",
-                                 err, sizeof(err));
-    for (uint32_t i = 0; ok && i < 4; i++) {
-        c->coord = (dc_chunk_coord_t){i % 2, i / 2};
+#ifdef DC_QUARTER_NATIVE_VIEW
+    const uint32_t width = 640, height = 448;
+#else
+    const uint32_t width = 128, height = 128;
+#endif
+    bool ok =
+        c && dc_gpu_create(&g, width, height, "build/shaders/pattern.comp.spv",
+                           err, sizeof(err));
+    uint32_t pages_x = width / 64, pages_y = height / 64;
+    for (uint32_t i = 0; ok && i < pages_x * pages_y; i++) {
+        c->coord = (dc_chunk_coord_t){i % pages_x, i / pages_x};
         ok = dc_gpu_upload_chunk(g, i, c, err, sizeof(err)) &&
-             dc_gpu_set_page(g, i % 2, i / 2, i, err, sizeof(err));
+             dc_gpu_set_page(g, i % pages_x, i / pages_x, i, err, sizeof(err));
     }
     free(c);
     if (!ok) {
@@ -270,25 +277,61 @@ static void test_explicit_joint_graph_does_not_multiply_roots(void) {
     PASS();
 }
 static void test_body_identity_collision_is_atomic(void) {
-    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
-    dc_gpu_body_t original={.x_fp=70<<16,.y_fp=80<<16,.width=1,.height=1,.id=FR_STRUCTURAL_BODY_ID_BASE+1,.active=1};
-    ASSERT_TRUE(dc_gpu_spawn_body(g,original,e,sizeof(e)));
-    fr_structural_gpu_graph_t s=beam(20);s.anchor_count=0;
-    ASSERT_TRUE(!fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    dc_gpu_body_t after;ASSERT_TRUE(dc_gpu_read_body_id(g,original.id,&after,e,sizeof(e)));
-    ASSERT_EQ(memcmp(&after,&original,sizeof(after)),0);
-    dc_gpu_destroy(g);PASS();
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    dc_gpu_body_t original = {.x_fp = 70 << 16,
+                              .y_fp = 80 << 16,
+                              .width = 1,
+                              .height = 1,
+                              .id = FR_STRUCTURAL_BODY_ID_BASE + 1,
+                              .active = 1};
+    ASSERT_TRUE(dc_gpu_spawn_body(g, original, e, sizeof(e)));
+    fr_structural_gpu_graph_t s = beam(20);
+    s.anchor_count = 0;
+    ASSERT_TRUE(!fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    dc_gpu_body_t after;
+    ASSERT_TRUE(dc_gpu_read_body_id(g, original.id, &after, e, sizeof(e)));
+    ASSERT_EQ(memcmp(&after, &original, sizeof(after)), 0);
+    dc_gpu_destroy(g);
+    PASS();
 }
 static void test_rest_geometry_requires_new_generation(void) {
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.anchor_count = 0;
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    s.nodes[0].x_fp += 1 << 16;
+    s.nodes[1].x_fp += 1 << 16;
+    ASSERT_TRUE(!fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    s.nodes[0].generation++;
+    s.nodes[1].generation++;
+    s.members[0].generation++;
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    dc_gpu_world_body_t w;
+    ASSERT_TRUE(dc_gpu_read_world_body(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &w, e,
+                                       sizeof(e)));
+    ASSERT_EQ(w.body.x_fp, 21 << 16);
+    dc_gpu_destroy(g);
+    PASS();
+}
+static void test_body_only_snapshot_cannot_drop_structural_identity(void) {
     char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);fr_structural_gpu_graph_t s=beam(20);
     s.anchor_count=0;ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    s.nodes[0].x_fp+=1<<16;s.nodes[1].x_fp+=1<<16;
-    ASSERT_TRUE(!fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    s.nodes[0].generation++;s.nodes[1].generation++;s.members[0].generation++;
+    ASSERT_TRUE(!dc_gpu_save_bodies(g,"build/structural_body_only.bin",e,sizeof(e)));
+    fr_structural_gpu_node_state_t n;ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&n));
+    dc_gpu_destroy(g);remove("build/structural_body_only.bin");PASS();
+}
+static void test_body_only_load_cannot_delete_structural_sources(void) {
+    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
+    ASSERT_TRUE(dc_gpu_save_bodies(g,"build/structural_empty_body_only.bin",e,sizeof(e)));
+    fr_structural_gpu_graph_t s=beam(20);s.anchor_count=0;
     ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    dc_gpu_world_body_t w;ASSERT_TRUE(dc_gpu_read_world_body(g,FR_STRUCTURAL_BODY_ID_BASE+1,&w,e,sizeof(e)));
-    ASSERT_EQ(w.body.x_fp,21<<16);
-    dc_gpu_destroy(g);PASS();
+    ASSERT_TRUE(!dc_gpu_load_bodies(g,"build/structural_empty_body_only.bin",e,sizeof(e)));
+    dc_gpu_body_t b;ASSERT_TRUE(dc_gpu_read_body_id(g,FR_STRUCTURAL_BODY_ID_BASE+1,&b,e,sizeof(e)));
+    ASSERT_EQ(b.active,1u);dc_gpu_destroy(g);remove("build/structural_empty_body_only.bin");PASS();
 }
 int main(void) {
     RUN(test_explicit_proxy_and_atomic_validation);
@@ -300,6 +343,8 @@ int main(void) {
     RUN(test_explicit_joint_graph_does_not_multiply_roots);
     RUN(test_body_identity_collision_is_atomic);
     RUN(test_rest_geometry_requires_new_generation);
+    RUN(test_body_only_snapshot_cannot_drop_structural_identity);
+    RUN(test_body_only_load_cannot_delete_structural_sources);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
