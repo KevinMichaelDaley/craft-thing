@@ -217,6 +217,21 @@ static void test_cold_component_diagnostics_are_unknown(void) {
     ASSERT_EQ(member.state,FR_STRUCTURAL_UNKNOWN);
     dc_gpu_destroy(g);PASS();
 }
+static void test_friction_needs_compressive_bearing_force(void) {
+    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s=beam(20);s.anchor_count=2;
+    s.nodes[0].y_fp=20<<16;s.nodes[1].x_fp=20<<16;s.nodes[1].y_fp=32<<16;
+    s.anchors[0].kind=FR_JOINT_BEARING;s.anchors[0].x=18;s.anchors[0].y=20;
+    s.anchors[0].shear_capacity=0;s.anchors[0].friction=.5;
+    s.anchors[1]=s.anchors[0];s.anchors[1].id=2;s.anchors[1].node=2;s.anchors[1].y=32;
+    ASSERT_TRUE(dc_gpu_paint_material(g,18,20,0,DC_MATERIAL_STONE,e,sizeof(e)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,18,32,0,DC_MATERIAL_STONE,e,sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
+    fr_structural_gpu_node_state_t n;ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&n));
+    ASSERT_EQ(n.state,FR_STRUCTURAL_UNSUPPORTED);
+    dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     RUN(test_self_weight_cantilever_equilibrium);
     RUN(test_released_root_is_a_mechanism);
@@ -230,6 +245,7 @@ int main(void) {
     RUN(test_frictionless_bearings_have_no_sideways_restraint);
     RUN(test_angled_brace_closes_force_and_moment_balance);
     RUN(test_cold_component_diagnostics_are_unknown);
+    RUN(test_friction_needs_compressive_bearing_force);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail?1:0;
 }

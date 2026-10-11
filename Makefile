@@ -8,7 +8,7 @@ build/structural_placement_tests: tests/structural/placement_tests.c include/fer
 build/structural_mechanics_tests: tests/structural/mechanics_tests.c $(STRUCTURAL_REFERENCE) include/ferrum/structural/mechanics.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/structural/mechanics_tests.c $(STRUCTURAL_REFERENCE) -o $@ -lm
-test: build/structural_mechanics_tests build/structural_placement_tests
+test: build/structural_mechanics_tests build/structural_placement_tests build/structural_equilibrium_tests
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror
 CFLAGS += -pthread
 CPPFLAGS += -Iinclude $(shell pkg-config --cflags sdl2)
@@ -120,7 +120,9 @@ build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter
 .PHONY: quarter_native test_quarter_native bench_quarter_native test_quarter_native_spray
 build/quarter_native_structural_placement_tests: tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
-test_quarter_native: build/quarter_native_structural_placement_tests
+build/quarter_native_structural_equilibrium_tests: tests/structural/equilibrium_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+test_quarter_native: build/quarter_native_structural_placement_tests build/quarter_native_structural_equilibrium_tests
 .PHONY: test_quarter_native_perf
 test_quarter_native_perf: build/quarter_native_perf_tests build/quarter_native_bench
 	./build/quarter_native_perf_tests
@@ -144,6 +146,7 @@ build/quarter_native_rigid_solver_tests: tests/vulkan/rigid_solver_tests.c Makef
 
 test_quarter_native: build/quarter_native_config_tests build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_rigid_solver_tests build/dungeoncraft_quarter_native
 	./build/quarter_native_structural_placement_tests
+	./build/quarter_native_structural_equilibrium_tests
 	./build/presentation_tests
 	./build/quarter_native_config_tests
 	./build/quarter_native_fluid_tests
@@ -345,6 +348,7 @@ build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h
 test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/structural_mechanics_tests
 	./build/structural_placement_tests
+	./build/structural_equilibrium_tests
 	./build/rigid_solver_tests
 	./build/compound_body_tests
 	./build/contact_tests
