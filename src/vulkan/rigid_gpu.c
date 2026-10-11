@@ -181,6 +181,12 @@ bool dc_gpu_remove_body(dc_gpu_t *gpu, uint32_t id, char *err, uint32_t cap) {
     if (slot == DC_GPU_BODY_CAPACITY) return error(err, cap, "GPU body ID not found");
     if (((dc_gpu_body_record_t *)gpu->body_mapped)[slot].reserved[0] == DC_GPU_STRUCTURAL_TAG)
         return error(err, cap, "Structural removal is owned by its graph");
+    uint32_t *graph = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset();
+    for (uint32_t i = 0; i < 192u; i++) {
+        uint32_t *bond = graph + 30000u + i * 20u;
+        if (bond[3] == id || bond[4] == id)
+            bond[0] = 0;
+    }
     memset(&((dc_gpu_body_record_t *)gpu->body_mapped)[slot], 0,
            sizeof(dc_gpu_body_record_t));
     gpu->body_ids[slot] = 0;
@@ -221,9 +227,11 @@ bool dc_gpu_spawn_world_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
         body.body.y_fp >= (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL))
         return error(err, cap, "Invalid world body");
     uint32_t slot = body_slot(gpu, body.body.id);
-    if (slot != DC_GPU_BODY_CAPACITY &&
-        ((dc_gpu_body_record_t *)gpu->body_mapped)[slot].reserved[0] == DC_GPU_STRUCTURAL_TAG)
-        return error(err, cap, "Structural placement is owned by its graph");
+    if (slot != DC_GPU_BODY_CAPACITY) {
+        uint32_t tag = ((dc_gpu_body_record_t *)gpu->body_mapped)[slot].reserved[0];
+        if (tag == DC_GPU_STRUCTURAL_TAG || tag == DC_GPU_STRUCTURAL_CONVERTED_TAG)
+            return error(err, cap, "Structural or converted placement retains its ownership");
+    }
     if (slot == DC_GPU_BODY_CAPACITY)
         for (uint32_t i = 0; i < DC_GPU_BODY_CAPACITY; ++i)
             if (!gpu->body_ids[i]) { slot = i; break; }

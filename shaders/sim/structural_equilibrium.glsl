@@ -22,6 +22,7 @@ vec2 eq_position(uint node) {
 #include "structural_attachment.glsl"
 bool eq_anchor_valid(uint a) {
     uint an=graph()+ANCHORS+a*24u;
+    if(data[an+22u]!=0u) return false;
     for(uint y=0u;y<data[an+11u];y++) for(uint x=0u;x<data[an+10u];x++) {
         ivec2 p;uint c;
         if(!view_point(pair(an+4u),pair(an+6u),ivec2(data[an+8u]+x,data[an+9u]+y),p)||
@@ -137,7 +138,7 @@ vec2 eq_physical(uint dof);
 void equilibrium() {
     uint g=graph(),owner=gl_WorkGroupID.x,lane=gl_LocalInvocationID.x;
     if(owner>=data[g]||data[g+NODES+owner*12u+8u]!=0u||data[g+NODES+owner*12u]!=data[state(owner)+1u]||
-       data[state(owner)+4u]!=0u||data[state(owner)+3u]==0u) return;
+       data[state(owner)+4u]!=0u) return;
     uint component_mask=0u,invalid=0u;
     for(uint n=0u;n<data[g];n++) if(data[state(n)+1u]==data[state(owner)+1u]) {
         component_mask|=1u<<n;if(data[structural_bad()+n]!=0u) invalid|=2u;
@@ -145,7 +146,15 @@ void equilibrium() {
     for(uint b=0u;b<params.body_count;b++)
         if((data[structural_dependencies()+b]&component_mask)!=0u&&data[structural_clipped()+b]!=0u) invalid|=4u;
     if(data[base()-16u-64u*32u-8192u*16u+3u]!=0u) invalid|=2u;
-    if(invalid!=0u) {if(lane==0u) data[component_state(owner)+3u]=invalid;return;}
+    if(invalid!=0u) {
+        if(lane==0u) {
+            data[component_state(owner)+1u]=3u;data[component_state(owner)+3u]=invalid;
+            for(uint n=0u;n<data[g];n++) if((component_mask&(1u<<n))!=0u) data[state(n)+2u]=3u;
+            for(uint m=0u;m<data[g+1u];m++) if(data[member_state(m)+2u]==data[state(owner)+1u]) data[member_state(m)+3u]=3u;
+        }
+        return;
+    }
+    if(data[state(owner)+3u]==0u) return;
     if(lane==0u) {
         eq_count=0u;eq_status=0u;eq_minimum=1;eq_geometry_minimum=1;
         eq_iterations=0u;eq_active_iterations=0u;eq_refinement_iterations=0u;
@@ -213,10 +222,15 @@ void equilibrium() {
         for(uint a=lane;a<data[g+3u];a+=32u) if(eq_anchor[a]>=0&&
             data[state(uint(eq_anchor[a]))+1u]==data[state(owner)+1u]) {
             vec3 demand=anchor_demand(a);
-            if(attachment_ratio(demand,g+ANCHORS+a*24u+16u)>1) atomicMax(eq_status,1u);
+            float ratio=attachment_ratio(demand,g+ANCHORS+a*24u+16u);
+            eq_put(g+28200u+a,ratio);
+            if(ratio>1) atomicMax(eq_status,1u);
         }
-        for(uint j=lane;j<data[g+2u];j+=32u) if(data[state(uint(eq_joint_nodes[j].x))+1u]==data[state(owner)+1u])
-            if(attachment_ratio(joint_demand(j),g+JOINTS+j*16u+8u)>1.00001) atomicMax(eq_status,1u);
+        for(uint j=lane;j<data[g+2u];j+=32u) if(data[state(uint(eq_joint_nodes[j].x))+1u]==data[state(owner)+1u]) {
+            float ratio=attachment_ratio(joint_demand(j),g+JOINTS+j*16u+8u);
+            eq_put(g+28232u+j,ratio);
+            if(ratio>1.00001) atomicMax(eq_status,1u);
+        }
     }
     barrier();
     if(lane==0u&&eq_status<=1u) component_budget(owner);

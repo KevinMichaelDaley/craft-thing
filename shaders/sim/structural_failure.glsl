@@ -42,7 +42,7 @@ void create_bond(uint a,uint b,vec2 point,uint kind,vec3 stiffness,float normal)
 void release_member(uint member) {
     uint g=graph(),m=g+MEMBERS+member*8u,slot=data[m+7u];
     Body b=bodies[slot];
-    b.motion_flags=0u;b.motion_ready=0u;b.reserved0=0u;b.reserved1=0u;
+    b.motion_flags=0u;b.motion_ready=0u;b.reserved0=0x53545232u;b.reserved1=data[m+1u];
     b.vx_fp=0;b.vy_fp=0;b.angular_velocity=0;
     b.rest_ticks=0u;body_properties(b);bodies[slot]=b;
     data[m+6u]|=STRUCTURAL_RETIRED;
@@ -84,10 +84,34 @@ void damage_members() {
     }
     data[base()+3u]++;
 }
+void damage_interfaces() {
+    uint g=graph();bool cut=false;
+    for(uint i=0u;i<data[g+3u]+data[g+2u];i++) {
+        bool anchor=i<data[g+3u];uint index=anchor?i:i-data[g+3u];
+        uint p=anchor?g+ANCHORS+index*24u:g+JOINTS+index*16u;
+        uint flag=p+(anchor?22u:14u),a=data[p+2u],b=anchor?a:data[p+3u];
+        if(data[flag]!=0u) continue;
+        int node=node_index(g,a);
+        if(data[state(uint(node))+2u]>1u) continue;
+        float duration=1e20;
+        for(uint m=0u;m<data[g+1u];m++) if(member_active(m)) {
+            uint entry=g+MEMBERS+m*8u;
+            if(data[entry+2u]==a||data[entry+3u]==a||data[entry+2u]==b||data[entry+3u]==b)
+                duration=min(duration,eq_get(g+29000u+data[entry+4u]*12u+8u));
+        }
+        uint slot=anchor?index:32u+index;
+        float excess=max(eq_get(g+28200u+slot)-1.0,0);
+        float damage=min(1.0,eq_get(g+28300u+slot)+excess*excess/(60.0*duration));
+        if(damage>=1.0-1e-6) {damage=1.0;data[flag]=1u;cut=true;}
+        eq_put(g+28300u+slot,damage);
+    }
+    if(cut) data[base()+3u]++;
+}
 void failure() {
     if(gl_LocalInvocationID.x!=0u) return;
     uint g=graph();
     damage_members();
+    damage_interfaces();
     for(uint owner=0u;owner<data[g];owner++) {
         uint node=g+NODES+owner*12u;
         if(data[node+8u]!=0u||data[node]!=data[state(owner)+1u]) continue;
@@ -102,7 +126,7 @@ void failure() {
             float grace=uintBitsToFloat(data[g+29000u+data[entry+4u]*12u+7u]);
             ticks=max(ticks,uint(ceil(grace*60.0)));
         }
-        if(status==0u) {data[clock]=0u;continue;}
+        if(status<=1u) {data[clock]=0u;continue;}
         if(status!=2u) continue;
         data[clock]=min(data[clock]+1u,ticks);
         if(data[clock]<ticks) continue;

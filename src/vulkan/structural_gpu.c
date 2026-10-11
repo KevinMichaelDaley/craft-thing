@@ -395,6 +395,10 @@ bool fr_gpu_place_structure(dc_gpu_t *gpu, const fr_structural_gpu_graph_t *g,
                      "Structural transaction rejected; ownership unchanged");
     }
     gpu->structural_enabled = g->member_count != 0;
+    for (unsigned i = 0; i < gpu->body_count; i++)
+        if (((dc_gpu_body_record_t *)gpu->body_mapped)[i].reserved[0] ==
+            DC_GPU_STRUCTURAL_CONVERTED_TAG)
+            gpu->structural_enabled = true;
     if (gpu->structural_enabled)
         dc_gpu_set_rigid_solver(gpu, true);
     gpu->body_refresh_pending = true;
