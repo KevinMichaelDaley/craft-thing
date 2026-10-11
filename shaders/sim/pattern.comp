@@ -197,7 +197,7 @@ void main() {
                         particle.f01 = particle.f10 = 0.0;
                         particle.id_lo = local_index + 1u;
                         particle.id_hi = seeds[slot];
-                        particle.mass_fp = 65536u;
+                        particle.mass_fp = material == 6u ? 104858u : 65536u;
                         particle.grain_fp = grain_radius_fp(material);
                         particle.material = material;
                         particle.flags = 0u;
