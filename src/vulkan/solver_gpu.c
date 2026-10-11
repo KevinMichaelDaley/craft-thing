@@ -130,7 +130,11 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
         (uint32_t)x, (uint32_t)(x >> 32), (uint32_t)y, (uint32_t)(y >> 32)};
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    if (indirect) {
+    if (mode >= SOLVER_BOND_POSITION) {
+        VkDeviceSize offset = sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
+            (VkDeviceSize)(dc_gpu_structural_word_offset(gpu) + 9u) * sizeof(uint32_t);
+        vkCmdDispatchIndirect(gpu->command, gpu->body_buffer, offset);
+    } else if (indirect) {
         VkDeviceSize offset =
             sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
             (VkDeviceSize)(dc_gpu_solver_word_offset(gpu) +

@@ -40,6 +40,7 @@ void create_bond(uint a,uint b,vec2 point,uint kind,vec3 stiffness,float normal,
     data[p+11u]=floatBitsToUint(normal-ba.angle);
     for(uint axis=0u;axis<3u;axis++) data[p+12u+axis]=floatBitsToUint(stiffness[axis]);
     data[p+18u]=floatBitsToUint(cohesion);data[p+19u]=floatBitsToUint(friction);
+    data[base()+9u]=1u;data[base()+10u]=1u;data[base()+11u]=1u;
 }
 void release_member(uint member) {
     uint g=graph(),m=g+MEMBERS+member*8u,slot=data[m+7u];

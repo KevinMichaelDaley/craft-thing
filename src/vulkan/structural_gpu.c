@@ -201,6 +201,8 @@ void dc_gpu_structural_track_chunk(dc_gpu_t *gpu, uint32_t slot,
 }
 bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     dc_gpu_structural_data(gpu)[6] = 192u;
+    dc_gpu_structural_data(gpu)[10] = 1u;
+    dc_gpu_structural_data(gpu)[11] = 1u;
     float *packed = (float *)(dc_gpu_structural_data(gpu) +
                               dc_gpu_structural_graph_offset() + 29000u);
     for (unsigned m = 0; m < FR_STRUCTURAL_MATERIAL_COUNT; m++) {
@@ -237,9 +239,11 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode) {
                         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         .srcAccessMask =
             VK_ACCESS_2_HOST_WRITE_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT |
+                        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
         .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
-                         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT};
+                         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
+                         VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT};
     VkDependencyInfo dep = {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
                             .memoryBarrierCount = 1,
                             .pMemoryBarriers = &b};
@@ -258,11 +262,13 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode) {
     vkCmdDispatch(gpu->command, mode == 3 ? 32 : 1, 1, 1);
     b.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
     b.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
-    b.dstStageMask =
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_HOST_BIT;
+    b.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT |
+                     VK_PIPELINE_STAGE_2_HOST_BIT |
+                     VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
     b.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
                       VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
-                      VK_ACCESS_2_HOST_READ_BIT;
+                      VK_ACCESS_2_HOST_READ_BIT |
+                      VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
     vkCmdPipelineBarrier2(gpu->command, &dep);
 }
 void dc_gpu_record_structural_begin(dc_gpu_t *gpu) {

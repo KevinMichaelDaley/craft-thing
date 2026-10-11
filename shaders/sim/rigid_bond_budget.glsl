@@ -7,9 +7,14 @@ void prepare_bond_budgets() {
     for(uint i=0u;i<BODY_CAPACITY;i++) {
         uint p=bond_budget(i);data[p]=i;data[p+1u]=0u;data[p+8u]=0u;
     }
+    bool any_bond=false;
     for(uint i=0u;i<STRUCTURAL_BOND_CAPACITY;i++) if(bond_live(bond_record(i))) {
+        any_bond=true;
         uint p=bond_record(i);data[bond_budget(data[p+1u])+1u]=1u;data[bond_budget(data[p+2u])+1u]=1u;
     }
+    data[structural_base()+9u]=uint(any_bond);
+    data[structural_base()+10u]=1u;data[structural_base()+11u]=1u;
+    if(!any_bond) return;
     for(uint iteration=0u;iteration<BODY_CAPACITY;iteration++) {
         bool changed=false;
         for(uint i=0u;i<STRUCTURAL_BOND_CAPACITY;i++) if(bond_live(bond_record(i))) {
