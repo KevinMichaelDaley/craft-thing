@@ -82,8 +82,8 @@ solver remains `dun-9qub`; broadphase candidates alone do not resolve collisions
 ## Convex shape storage and occupancy (`ct-l35t`)
 
 The original convex shape storage added a 72-byte shape to the 80-byte transform
-prefix. Current GPU records occupy 528 bytes including angular state, cached
-bounds, and compound pieces. Shape vertices use body-local 16.16 coordinates;
+prefix. Current GPU records occupy 544 bytes including angular state, cached
+bounds, compound pieces, and transient rest state. Shape vertices use body-local 16.16 coordinates;
 authored rotation may be baked into vertices, and runtime rotation is about
 the derived center of mass. Three through eight
 counterclockwise vertices must form a strictly convex polygon within the body's
@@ -256,7 +256,7 @@ before modifying the body pool. GPU mass, centroid, and inertia sum the piece
 integrals with the parallel-axis theorem. Bounds and angular speed limits cover
 every piece. Occupancy rasterizes their union and narrowphase tests individual
 piece pairs, so a concavity remains empty for both rendering and contacts.
-Binding 4 uses 528-byte body records with piece storage at byte 240; broadphase,
+Binding 4 uses 544-byte body records with piece storage at byte 240; broadphase,
 contact, and solver sections still follow the 64-record prefix. Snapshot V4
 stores 432-byte body records including compound pieces; V1–V3 remain readable.
 
@@ -270,6 +270,19 @@ rigid IDs. It writes before/impact/settled BMPs and a 30-frame/s RGBA replay
 stream under `build/screenshots/rigid_concave*`. Both `test_ui` and
 `test_quarter_native` include this visual scene; `make test` includes the
 headless compound regressions.
+
+Supported bodies stabilize after 30 quiet ticks to prevent residual solver
+motion from flickering binary occupancy edges. Linear speed, angular edge
+speed, per-tick vertex displacement, and total drift from the quiet interval's
+anchor must stay below 0.1 cell (per tick for speeds). Support must be within
+0.05 cell with an upward normal. Moving contacts and MPM contacts inhibit rest.
+Stabilization restores the tick's starting pose and zeros velocity; gravity and
+contacts still run every tick, so removing support releases the body immediately.
+Explicit motion updates reset the counter, and visible camera rebases translate
+the anchor. Rest state is transient and does not change snapshot V4.
+Regressions require exact stationary world poses, preserved poses after a camera
+rebase, slow conveyor transport, support-removal wake-up, and 120 byte-identical
+presented frames after the two concave bodies settle.
 
 ## End-to-end gates
 

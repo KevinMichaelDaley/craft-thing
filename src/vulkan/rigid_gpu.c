@@ -7,6 +7,7 @@
 _Static_assert(sizeof(dc_gpu_body_t) == 32, "GPU body layout must match SPIR-V");
 _Static_assert(sizeof(dc_gpu_body_record_t) == 544, "GPU body record must match SPIR-V");
 _Static_assert(offsetof(dc_gpu_body_record_t, pieces) == 240, "GPU compound offset changed");
+_Static_assert(offsetof(dc_gpu_body_record_t, rest_position) == 528, "GPU rest state offset changed");
 _Static_assert(offsetof(dc_gpu_body_record_t, shape) == 80, "GPU shape offset must match SPIR-V");
 _Static_assert(offsetof(dc_gpu_body_record_t, angle) == 152, "GPU angular state offset changed");
 _Static_assert(offsetof(dc_gpu_body_record_t, center) == 168, "GPU centroid offset changed");
