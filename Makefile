@@ -9,6 +9,9 @@ GLSLANG ?= glslangValidator
 GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/broadphase_gpu.o build/contact_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
 GPU_OBJ += build/solver_gpu.o
 GPU_OBJ += build/compound_gpu.o
+GPU_OBJ += build/window_gpu.o
+build/window_gpu.o: src/vulkan/window_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/compound_gpu.o: src/vulkan/compound_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 SOLVER_SHADER = build/shaders/rigid_solver.comp.spv
@@ -44,7 +47,7 @@ build/compound_body_tests: tests/vulkan/compound_body_tests.c tests/vulkan/compo
 build/rigid_solver_tests: tests/vulkan/rigid_solver_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -lm
 
-.PHONY: all test test_ui test_ui_long test_rigid_dynamics clean shaders
+.PHONY: all test test_ui test_ui_long test_rigid_dynamics test_presentation clean shaders
 all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
 
 NATIVE_SRC = src/app/main.c src/app/level.c src/app/session.c $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c src/world/stream.c src/world/generate.c
@@ -57,12 +60,12 @@ test_rigid_dynamics: build/compound_body_tests build/rigid_dynamics_visual_tests
 
 test: build/compound_body_tests
 build/presentation_tests: tests/app/presentation_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/rigid_dynamics_visual_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -lm -Wl,--wrap=vkCreateSwapchainKHR -Wl,--wrap=vkAcquireNextImageKHR -Wl,--wrap=vkQueueWaitIdle
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -lm -Wl,--wrap=vkCreateSwapchainKHR -Wl,--wrap=vkAcquireNextImageKHR -Wl,--wrap=vkQueueWaitIdle -Wl,--wrap=vkQueuePresentKHR -Wl,--wrap=vkWaitForFences
 
 test_presentation: build/presentation_tests
 	./build/presentation_tests
 
-test_ui test_quarter_native: build/rigid_dynamics_visual_tests
+test_ui test_quarter_native: build/rigid_dynamics_visual_tests build/presentation_tests
 $(GPU_OBJ): $(BROADPHASE_SHADER) $(CONTACT_SHADER)
 $(RIGID_SHADER) $(PROBE_SHADER) $(BROADPHASE_SHADER): shaders/sim/rigid_body.glsl
 $(RIGID_SHADER): shaders/sim/rigid_shape.glsl
@@ -117,6 +120,7 @@ build/quarter_native_rigid_solver_tests: tests/vulkan/rigid_solver_tests.c Makef
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(patsubst build/%.o,src/vulkan/%.c,$(GPU_OBJ)) src/world/chunk.c -o $@ $(LDLIBS) -lm
 
 test_quarter_native: build/quarter_native_config_tests build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_rigid_solver_tests build/dungeoncraft_quarter_native
+	./build/presentation_tests
 	./build/quarter_native_config_tests
 	./build/quarter_native_fluid_tests
 	./build/quarter_native_solver_tests
@@ -335,6 +339,7 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/stream_tests
 
 test_ui: build/dungeoncraft build/controls_tests
+	./build/presentation_tests
 	./build/controls_tests
 	./build/rigid_dynamics_visual_tests
 	./build/dungeoncraft --smoke-controls-ui

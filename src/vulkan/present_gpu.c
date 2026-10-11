@@ -2,6 +2,8 @@
 
 #include "gpu_internal.h"
 
+static const uint64_t ACQUIRE_TIMEOUT_NS = 1000000000ull;
+
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
     return false;
@@ -29,8 +31,10 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
     if (!gpu || !gpu->swapchain) return error(err, cap, "GPU window is not initialized");
     SDL_PumpEvents();
     uint32_t index = 0;
-    VkResult result = vkAcquireNextImageKHR(gpu->device, gpu->swapchain, 1000000000ull,
+    VkResult result = vkAcquireNextImageKHR(gpu->device, gpu->swapchain, ACQUIRE_TIMEOUT_NS,
         gpu->acquire_sem, VK_NULL_HANDLE, &index);
+    if (result == VK_TIMEOUT || result == VK_NOT_READY)
+        return error(err, cap, "Vulkan window image acquisition timed out");
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         return error(err, cap, "Cannot acquire Vulkan window image");
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
@@ -134,6 +138,7 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
     result = vkQueuePresentKHR(gpu->queue, &present);
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         return error(err, cap, "Vulkan swapchain presentation failed");
+    /* Wait for command and host-visible physics completion, not compositor display. */
     if (vkWaitForFences(gpu->device, 1, &gpu->render_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
         return error(err, cap, "Vulkan present wait failed");
     return true;

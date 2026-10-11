@@ -11,6 +11,9 @@ static int g_pass, g_fail;
 static VkPresentModeKHR mode;
 static bool presenting, finite_acquire;
 static unsigned idle_calls;
+static double acquire_ms, enqueue_ms, render_wait_ms;
+static VkSemaphore image_sems[32];
+static bool image_sems_safe;
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); printf("OK   %s\n", #fn); } while (0)
 #define ASSERT_TRUE(e) do { if (!(e)) { printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #e); ++g_fail; return; } } while (0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -25,7 +28,31 @@ VkResult __wrap_vkCreateSwapchainKHR(VkDevice d, const VkSwapchainCreateInfoKHR 
 VkResult __real_vkAcquireNextImageKHR(VkDevice, VkSwapchainKHR, uint64_t, VkSemaphore, VkFence, uint32_t *);
 VkResult __wrap_vkAcquireNextImageKHR(VkDevice d,VkSwapchainKHR s,uint64_t t,VkSemaphore sem,VkFence f,uint32_t *i) {
     finite_acquire=finite_acquire && t!=UINT64_MAX;
-    return __real_vkAcquireNextImageKHR(d,s,t,sem,f,i);
+    uint64_t start=SDL_GetPerformanceCounter();
+    VkResult result=__real_vkAcquireNextImageKHR(d,s,t,sem,f,i);
+    acquire_ms+=(SDL_GetPerformanceCounter()-start)*1000.0/SDL_GetPerformanceFrequency();
+    return result;
+}
+VkResult __real_vkQueuePresentKHR(VkQueue, const VkPresentInfoKHR *);
+VkResult __wrap_vkQueuePresentKHR(VkQueue q,const VkPresentInfoKHR *p) {
+    uint32_t image=p->pImageIndices[0]; VkSemaphore sem=p->pWaitSemaphores[0];
+    if(image>=32) image_sems_safe=false;
+    else {
+        if(image_sems[image] && image_sems[image]!=sem) image_sems_safe=false;
+        for(uint32_t i=0;i<32;++i) if(i!=image && image_sems[i]==sem) image_sems_safe=false;
+        image_sems[image]=sem;
+    }
+    uint64_t start=SDL_GetPerformanceCounter();
+    VkResult result=__real_vkQueuePresentKHR(q,p);
+    enqueue_ms+=(SDL_GetPerformanceCounter()-start)*1000.0/SDL_GetPerformanceFrequency();
+    return result;
+}
+VkResult __real_vkWaitForFences(VkDevice,uint32_t,const VkFence *,VkBool32,uint64_t);
+VkResult __wrap_vkWaitForFences(VkDevice d,uint32_t n,const VkFence *f,VkBool32 all,uint64_t timeout) {
+    uint64_t start=SDL_GetPerformanceCounter();
+    VkResult result=__real_vkWaitForFences(d,n,f,all,timeout);
+    render_wait_ms+=(SDL_GetPerformanceCounter()-start)*1000.0/SDL_GetPerformanceFrequency();
+    return result;
 }
 VkResult __real_vkQueueWaitIdle(VkQueue);
 VkResult __wrap_vkQueueWaitIdle(VkQueue q) {
@@ -48,7 +75,16 @@ static int window_cycle(void) {
     if(mailbox && mode!=VK_PRESENT_MODE_MAILBOX_KHR) {
         fprintf(stderr,"MAILBOX available but blocking FIFO selected\n"); dc_gpu_destroy(g); return 5;
     }
-    finite_acquire=true;idle_calls=0;
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk)); if(!chunk) return 8;
+    bool uploaded=dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)); free(chunk);
+    dc_gpu_body_t body={.id=1,.active=1,.x_fp=10*65536,.y_fp=10*65536,
+        .vx_fp=4096,.width=4,.height=4};
+    if(!uploaded || !dc_gpu_set_page(g,0,0,0,err,sizeof(err)) ||
+       !dc_gpu_set_rigid_solver(g,true) || !dc_gpu_spawn_body(g,body,err,sizeof(err)) ||
+       !dc_gpu_set_body_motion(g,1,0,0,DC_GPU_BODY_KINEMATIC|DC_GPU_BODY_LOCK_ROTATION,err,sizeof(err))) return 9;
+    finite_acquire=true;idle_calls=0;image_sems_safe=true;
+    acquire_ms=enqueue_ms=render_wait_ms=0;
+    for(uint32_t i=0;i<32;++i) image_sems[i]=VK_NULL_HANDLE;
     for(unsigned frame=0;frame<90;++frame) {
         if(frame==30) SDL_HideWindow(g->window);
         if(frame==60) SDL_ShowWindow(g->window);
@@ -58,27 +94,30 @@ static int window_cycle(void) {
         if(!okay) { fprintf(stderr,"%s\n",err); return 6; }
         SDL_Delay(2);
     }
-    bool okay=finite_acquire && idle_calls==0;
+    bool okay=finite_acquire && idle_calls==0 && image_sems_safe;
+    okay=okay && dc_gpu_read_body_id(g,1,&body,err,sizeof(err)) && body.x_fp==10*65536+90*4096;
     fprintf(stdout,"mode=%d finite acquire=%d presentation queue-idle calls=%u\n",mode,finite_acquire,idle_calls);
+    fprintf(stdout,"90-frame waits: acquire=%.3fms enqueue=%.3fms render=%.3fms image semaphores safe=%d\n",
+        acquire_ms,enqueue_ms,render_wait_ms,image_sems_safe);
     dc_gpu_destroy(g);
     return okay ? 0 : 7;
 }
 
 static void test_recreated_hidden_windows_keep_presenting_within_deadline(void) {
-    pid_t child=fork(); ASSERT_TRUE(child>=0);
+    fflush(stdout); pid_t child=fork(); ASSERT_TRUE(child>=0);
     if(child==0) {
         for(unsigned cycle=0;cycle<3;++cycle) { int result=window_cycle(); if(result) exit(result); }
         exit(0);
     }
-    uint64_t start=SDL_GetTicks64(); int status=0;
-    while(waitpid(child,&status,WNOHANG)==0) {
+    uint64_t start=SDL_GetTicks64(); int status=0; pid_t waited;
+    while((waited=waitpid(child,&status,WNOHANG))==0) {
         if(SDL_GetTicks64()-start>15000) {
             kill(child,SIGKILL); waitpid(child,&status,0);
             ASSERT_TRUE(!"presentation exceeded 15-second watchdog");
         }
         SDL_Delay(10);
     }
-    ASSERT_TRUE(WIFEXITED(status)); ASSERT_INT_EQ(WEXITSTATUS(status),0); PASS();
+    ASSERT_EQ(waited,child); ASSERT_TRUE(WIFEXITED(status)); ASSERT_INT_EQ(WEXITSTATUS(status),0); PASS();
 }
 int main(void) {
     RUN(test_recreated_hidden_windows_keep_presenting_within_deadline);

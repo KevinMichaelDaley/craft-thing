@@ -280,5 +280,8 @@ bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_mpm_buffers_destroy(dc_gpu_t *gpu);
 void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_mpm(dc_gpu_t *gpu);
+/** Initialize the window swapchain and its image-owned synchronization. */
+bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t width, uint32_t height,
+                        char *err, uint32_t cap);
 
 #endif

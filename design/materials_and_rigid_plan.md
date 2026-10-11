@@ -286,6 +286,20 @@ presented frames after the two concave bodies settle.
 
 ## End-to-end gates
 
+Window presentation prefers MAILBOX when the surface supports it, retaining
+FIFO as the portable fallback. This prevents the observed Intel/Mesa Wayland
+FIFO frame-callback stall when a window is hidden or occluded. Mailbox keeps
+the most recent image queued without tearing; application pacing still controls
+physics ticks. Image acquisition has a one-second deadline and an explicit
+timeout error. SDL events are pumped before acquisition. One semaphore belongs
+to each swapchain image, and a submission fence protects the shared command
+buffer and completed physics/readback state independently of compositor display.
+`make test_presentation` checks three create/hide/restore/destroy cycles under a
+15-second watchdog, finite acquisition, semaphore ownership, continued kinematic
+motion, and absence of queue-idle waits during presentation. It reports acquisition,
+presentation enqueue, and rendering-fence waits separately. Both UI and
+quarter-native batteries include this regression.
+
 Each implementation ticket requires a headless state/budget test and a
 windowed scene once the behavior is visible. Test sequences include chunk
 seams and save/reload, mixed material painting, dry and wet controls, gentle
