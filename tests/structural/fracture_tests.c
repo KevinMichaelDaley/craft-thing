@@ -148,11 +148,121 @@ static void test_rotated_crumble_across_chunk_seam_preserves_centroid(void) {
     PASS();
 }
 
+static void test_crumble_pool_saturation_keeps_owner_then_retries_once(void) {
+    char err[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.members[0].material = FR_STRUCTURAL_MORTAR;
+    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE,
+                                      err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    ASSERT_TRUE(dc_gpu_download_chunk(g, 0, chunk, err, sizeof(err)));
+    for (unsigned y = 39; y < 41; y++) for (unsigned x = 20; x < 32; x++) {
+        unsigned cell = y * 64 + x;
+        chunk->cells[cell].material = DC_MATERIAL_MORTAR_DEBRIS;
+        dc_chunk_particle_init(&chunk->particles[cell], chunk->coord, cell,
+                               DC_MATERIAL_MORTAR_DEBRIS);
+        chunk->particles[cell].mass_fp = DC_FLUID_FULL;
+        chunk->particles[cell + DC_CHUNK_CELLS] = chunk->particles[cell];
+        chunk->particles[cell + DC_CHUNK_CELLS].id_lo += DC_CHUNK_CELLS;
+    }
+    chunk->particle_count = 48;
+    ASSERT_TRUE(dc_gpu_upload_chunk(g, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+    fr_structural_gpu_member_state_t state;
+    dc_gpu_body_motion_t motion;
+    uint32_t id = FR_STRUCTURAL_BODY_ID_BASE + 1;
+    ASSERT_TRUE(fr_gpu_read_structure_member(g, 1, &state));
+    ASSERT_EQ(state.state, FR_STRUCTURAL_PENDING_CONVERSION);
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, id, &motion, err, sizeof(err)));
+    ASSERT_TRUE(motion.flags & DC_GPU_BODY_KINEMATIC);
+    ASSERT_TRUE(fabs(motion.mass - 38.4) < .002);
+    ASSERT_TRUE(dc_gpu_download_chunk(g, 0, chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->particle_count, 48);
+    for (unsigned y = 39; y < 41; y++) for (unsigned x = 20; x < 32; x++)
+        memset(&chunk->particles[y * 64 + x + DC_CHUNK_CELLS], 0,
+               sizeof(dc_mpm_particle_t));
+    chunk->particle_count = 24;
+    ASSERT_TRUE(dc_gpu_upload_chunk(g, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(g, 0, chunk, err, sizeof(err)));
+    uint64_t mass = 0;
+    for (unsigned i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; i++)
+        mass += chunk->particles[i].mass_fp;
+    ASSERT_EQ(chunk->particle_count, 48);
+    ASSERT_TRUE(fabs((double)mass / DC_FLUID_FULL - 62.4) < .002);
+    ASSERT_TRUE(fr_gpu_read_structure_member(g, 1, &state));
+    ASSERT_EQ(state.state, FR_STRUCTURAL_CONVERTED);
+    free(chunk);
+    dc_gpu_destroy(g);
+    PASS();
+}
+
+static void test_committed_mortar_debris_moves_in_actual_mpm_simulation(void) {
+    char err[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.members[0].material = FR_STRUCTURAL_MORTAR;
+    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE,
+                                      err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+    for (unsigned i = 0; i < 8; i++)
+        ASSERT_TRUE(dc_gpu_tick_step(g, err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    ASSERT_TRUE(dc_gpu_download_chunk(g, 0, chunk, err, sizeof(err)));
+    uint64_t mass = 0;
+    double mean_y = 0;
+    unsigned count = 0;
+    for (unsigned i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; i++) {
+        const dc_mpm_particle_t *p = &chunk->particles[i];
+        if (!p->mass_fp) continue;
+        ASSERT_EQ(p->material, DC_MATERIAL_MORTAR_DEBRIS);
+        mass += p->mass_fp;
+        mean_y += (double)p->mass_fp * p->y_fp / DC_FLUID_FULL;
+        count++;
+    }
+    ASSERT_TRUE(fabs((double)mass / DC_FLUID_FULL - 38.4) < .002);
+    ASSERT_EQ(count, chunk->particle_count);
+    printf("mortar MPM: mass %.6f count %u mean y %.6f\n",
+           (double)mass / DC_FLUID_FULL, count, mean_y / mass);
+    ASSERT_TRUE(mean_y / mass > 40.5);
+    free(chunk);
+    dc_gpu_destroy(g);
+    PASS();
+}
+
+static void test_mortar_debris_paint_uses_material_density(void) {
+    char err[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 20, 0, DC_MATERIAL_MORTAR_DEBRIS,
+                                      err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    ASSERT_TRUE(dc_gpu_download_chunk(g, 0, chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->particle_count, 1);
+    ASSERT_TRUE(fabs((double)chunk->particles[20 * 64 + 20].mass_fp /
+                     DC_FLUID_FULL - 1.6) < .0001);
+    free(chunk);
+    dc_gpu_destroy(g);
+    PASS();
+}
+
 int main(void) {
     RUN(test_explicit_mortar_has_its_own_density_and_material_identity);
     RUN(test_overloaded_mortar_crumble_preserves_mass_without_launch);
     RUN(test_crumble_accounts_fracture_work_and_remaining_dissipation);
     RUN(test_rotated_crumble_across_chunk_seam_preserves_centroid);
+    RUN(test_crumble_pool_saturation_keeps_owner_then_retries_once);
+    RUN(test_committed_mortar_debris_moves_in_actual_mpm_simulation);
+    RUN(test_mortar_debris_paint_uses_material_density);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
