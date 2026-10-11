@@ -7,6 +7,12 @@
 #define FR_STRUCTURAL_MAX_ELEMENTS 64u
 typedef enum { FR_STRUCTURAL_STONE, FR_STRUCTURAL_WOOD, FR_STRUCTURAL_MORTAR, FR_STRUCTURAL_MATERIAL_COUNT } fr_structural_material_t;
 typedef enum { FR_FAILURE_FRACTURE, FR_FAILURE_SPLIT, FR_FAILURE_CRUMBLE } fr_structural_failure_t;
+typedef enum { FR_JOINT_BEARING, FR_JOINT_PINNED, FR_JOINT_BONDED, FR_JOINT_MOMENT } fr_structural_joint_kind_t;
+typedef struct {
+    fr_structural_joint_kind_t kind;
+    double normal_stiffness, shear_stiffness, rotational_stiffness;
+    double bearing_capacity, pullout_capacity, shear_capacity, moment_capacity, friction;
+} fr_structural_joint_t;
 typedef struct {
     double density, young, shear, tension, compression, shear_strength;
     double fracture_energy, grace_seconds, overload_seconds, grain_ratio;
@@ -27,6 +33,10 @@ const fr_structural_profile_t *fr_structural_profile(fr_structural_material_t ma
 bool fr_structural_material_map(bool terrain, uint32_t id, fr_structural_material_t *out);
 /** Unit-thickness rectangular section derived from authored beam depth. */
 bool fr_structural_rectangle(double depth, fr_structural_section_t *out);
+/** Mass preserves geometry volume through numerical subdivision. */
+double fr_structural_mass(const fr_structural_profile_t *profile, fr_structural_section_t section, double length);
+/** Finite joint tangent stiffness; bearing opens in tension and pins release rotation. */
+bool fr_structural_joint_stiffness(fr_structural_joint_t joint, double normal_displacement, double out[3]);
 /** Test-only bounded dense oracle; returns false for invalid input or a mechanism. */
 bool fr_structural_reference_solve(const fr_structural_frame_t *frame, fr_structural_solution_t *out);
 /** Combined axial/bending, shear and Euler instability utilization. */
