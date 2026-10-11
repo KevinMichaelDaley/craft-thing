@@ -17,7 +17,12 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (!gpu) return;
     if (gpu->device) vkDeviceWaitIdle(gpu->device);
     if (gpu->acquire_sem) vkDestroySemaphore(gpu->device, gpu->acquire_sem, NULL);
-    if (gpu->present_sem) vkDestroySemaphore(gpu->device, gpu->present_sem, NULL);
+    if (gpu->present_sems) {
+        for (uint32_t i = 0; i < gpu->swap_count; ++i)
+            if (gpu->present_sems[i]) vkDestroySemaphore(gpu->device, gpu->present_sems[i], NULL);
+        free(gpu->present_sems);
+    }
+    if (gpu->render_fence) vkDestroyFence(gpu->device, gpu->render_fence, NULL);
     if (gpu->frame_image) vkDestroyImage(gpu->device, gpu->frame_image, NULL);
     if (gpu->frame_memory) vkFreeMemory(gpu->device, gpu->frame_memory, NULL);
     if (gpu->swapchain) vkDestroySwapchainKHR(gpu->device, gpu->swapchain, NULL);
@@ -81,6 +86,17 @@ static bool make_presentation(dc_gpu_t *gpu, uint32_t requested_width,
     gpu->swap_extent = extent;
     uint32_t image_count = caps.minImageCount + 1;
     if (caps.maxImageCount && image_count > caps.maxImageCount) image_count = caps.maxImageCount;
+    uint32_t mode_count = 0;
+    if (vkGetPhysicalDeviceSurfacePresentModesKHR(gpu->physical, gpu->surface, &mode_count, NULL) != VK_SUCCESS || !mode_count)
+        return error(err, cap, "Cannot query Vulkan presentation modes");
+    VkPresentModeKHR *modes = calloc(mode_count, sizeof(*modes));
+    if (!modes) return error(err, cap, "Out of memory listing presentation modes");
+    VkResult mode_result = vkGetPhysicalDeviceSurfacePresentModesKHR(gpu->physical, gpu->surface, &mode_count, modes);
+    VkPresentModeKHR mode = VK_PRESENT_MODE_FIFO_KHR;
+    for (uint32_t i = 0; mode_result == VK_SUCCESS && i < mode_count; ++i)
+        if (modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) mode = VK_PRESENT_MODE_MAILBOX_KHR;
+    free(modes);
+    if (mode_result != VK_SUCCESS) return error(err, cap, "Cannot list Vulkan presentation modes");
     VkSwapchainCreateInfoKHR swap_info = { .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .surface = gpu->surface, .minImageCount = image_count,
         .imageFormat = chosen.format, .imageColorSpace = chosen.colorSpace,
@@ -89,7 +105,7 @@ static bool make_presentation(dc_gpu_t *gpu, uint32_t requested_width,
         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .preTransform = caps.currentTransform,
         .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        .presentMode = VK_PRESENT_MODE_FIFO_KHR, .clipped = VK_TRUE };
+        .presentMode = mode, .clipped = VK_TRUE };
     if (!(caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR)) {
         for (uint32_t bit = 0; bit < 4; ++bit) {
             VkCompositeAlphaFlagBitsKHR alpha = (VkCompositeAlphaFlagBitsKHR)(1u << bit);
@@ -128,9 +144,16 @@ static bool make_presentation(dc_gpu_t *gpu, uint32_t requested_width,
         vkBindImageMemory(gpu->device, gpu->frame_image, gpu->frame_memory, 0) != VK_SUCCESS)
         return error(err, cap, "Cannot allocate presentation image memory");
     VkSemaphoreCreateInfo semaphore_info = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
-    if (vkCreateSemaphore(gpu->device, &semaphore_info, NULL, &gpu->acquire_sem) != VK_SUCCESS ||
-        vkCreateSemaphore(gpu->device, &semaphore_info, NULL, &gpu->present_sem) != VK_SUCCESS)
+    if (vkCreateSemaphore(gpu->device, &semaphore_info, NULL, &gpu->acquire_sem) != VK_SUCCESS)
         return error(err, cap, "Cannot create present semaphores");
+    gpu->present_sems = calloc(gpu->swap_count, sizeof(*gpu->present_sems));
+    if (!gpu->present_sems) return error(err, cap, "Out of memory allocating presentation semaphores");
+    for (uint32_t i = 0; i < gpu->swap_count; ++i)
+        if (vkCreateSemaphore(gpu->device, &semaphore_info, NULL, &gpu->present_sems[i]) != VK_SUCCESS)
+            return error(err, cap, "Cannot create image presentation semaphore");
+    VkFenceCreateInfo fence_info = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+    if (vkCreateFence(gpu->device, &fence_info, NULL, &gpu->render_fence) != VK_SUCCESS)
+        return error(err, cap, "Cannot create presentation rendering fence");
     return true;
 }
 

@@ -27,8 +27,9 @@ static void image_barrier(VkCommandBuffer command, VkImage image,
 static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
                           char *err, uint32_t cap) {
     if (!gpu || !gpu->swapchain) return error(err, cap, "GPU window is not initialized");
+    SDL_PumpEvents();
     uint32_t index = 0;
-    VkResult result = vkAcquireNextImageKHR(gpu->device, gpu->swapchain, UINT64_MAX,
+    VkResult result = vkAcquireNextImageKHR(gpu->device, gpu->swapchain, 1000000000ull,
         gpu->acquire_sem, VK_NULL_HANDLE, &index);
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         return error(err, cap, "Cannot acquire Vulkan window image");
@@ -122,16 +123,18 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
         .waitSemaphoreCount = 1, .pWaitSemaphores = &gpu->acquire_sem,
         .pWaitDstStageMask = &wait_stage,
         .commandBufferCount = 1, .pCommandBuffers = &gpu->command,
-        .signalSemaphoreCount = 1, .pSignalSemaphores = &gpu->present_sem };
-    if (vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS)
+        .signalSemaphoreCount = 1, .pSignalSemaphores = &gpu->present_sems[index] };
+    if (vkResetFences(gpu->device, 1, &gpu->render_fence) != VK_SUCCESS)
+        return error(err, cap, "Cannot reset presentation rendering fence");
+    if (vkQueueSubmit(gpu->queue, 1, &submit, gpu->render_fence) != VK_SUCCESS)
         return error(err, cap, "Vulkan present submission failed");
     VkPresentInfoKHR present = { .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-        .waitSemaphoreCount = 1, .pWaitSemaphores = &gpu->present_sem,
+        .waitSemaphoreCount = 1, .pWaitSemaphores = &gpu->present_sems[index],
         .swapchainCount = 1, .pSwapchains = &gpu->swapchain, .pImageIndices = &index };
     result = vkQueuePresentKHR(gpu->queue, &present);
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         return error(err, cap, "Vulkan swapchain presentation failed");
-    if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
+    if (vkWaitForFences(gpu->device, 1, &gpu->render_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
         return error(err, cap, "Vulkan present wait failed");
     return true;
 }
