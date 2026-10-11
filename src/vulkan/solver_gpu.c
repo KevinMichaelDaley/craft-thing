@@ -16,9 +16,12 @@ typedef enum {
     SOLVER_DERIVE_VELOCITY,
     SOLVER_IMPULSE,
     SOLVER_APPLY_VELOCITY,
-    SOLVER_FINISH
+    SOLVER_FINISH,
+    SOLVER_BOND_POSITION,
+    SOLVER_BOND_VELOCITY,
+    SOLVER_BOND_RESET
 } solver_phase_t;
-_Static_assert(SOLVER_FINISH + 1 == DC_GPU_SOLVER_PHASE_COUNT, "GPU solver phase count changed");
+_Static_assert(SOLVER_BOND_RESET + 1 == DC_GPU_SOLVER_PHASE_COUNT, "GPU solver phase count changed");
 static bool error(char *err, uint32_t cap, const char *message) {
     if (err && cap)
         snprintf(err, cap, "%s", message);
@@ -141,6 +144,7 @@ void dc_gpu_record_solver(dc_gpu_t *gpu) {
     dispatch(gpu, SOLVER_BEGIN_FRAME, false);
     for (uint32_t step = 0; step < SOLVER_SUBSTEPS; ++step) {
         dispatch(gpu, SOLVER_PREDICT, false);
+        if(gpu->structural_enabled) dispatch(gpu, SOLVER_BOND_RESET, false);
         dc_gpu_record_broadphase(gpu);
         dc_gpu_record_contacts(gpu);
         dispatch(gpu, SOLVER_PREPARE, false);
@@ -149,10 +153,12 @@ void dc_gpu_record_solver(dc_gpu_t *gpu) {
         for (uint32_t iteration = 0; iteration < SOLVER_ITERATIONS; ++iteration) {
             dispatch(gpu, SOLVER_SOLVE, true);
             dispatch(gpu, SOLVER_APPLY, false);
+            if(gpu->structural_enabled) dispatch(gpu, SOLVER_BOND_POSITION, false);
         }
         dispatch(gpu, SOLVER_DERIVE_VELOCITY, false);
         dispatch(gpu, SOLVER_IMPULSE, true);
         dispatch(gpu, SOLVER_APPLY_VELOCITY, false);
+        if(gpu->structural_enabled) dispatch(gpu, SOLVER_BOND_VELOCITY, false);
     }
     dispatch(gpu, SOLVER_FINISH, false);
 }

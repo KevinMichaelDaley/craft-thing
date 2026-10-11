@@ -119,6 +119,7 @@ void topology() {
             for(uint e=0u;e<data[g+1u]+data[g+2u];e++) {
                 uint r=e<data[g+1u]?g+MEMBERS+e*8u:g+JOINTS+(e-data[g+1u])*16u;
                 if(e<data[g+1u]&&(data[r+6u]&2u)!=0u) continue;
+                if(e>=data[g+1u]&&data[r+14u]!=0u) continue;
                 int a=node_index(g,data[r+2u]),b=node_index(g,data[r+3u]);
                 if(a==int(i) && b>=0) best=min(best,label[b]);if(b==int(i)&&a>=0) best=min(best,label[a]);
             }
