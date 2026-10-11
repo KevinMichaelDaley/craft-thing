@@ -10,6 +10,10 @@ _Static_assert(sizeof(fr_structural_gpu_graph_t) ==
 _Static_assert(sizeof(fr_structural_gpu_node_state_t) ==
                    DC_STRUCTURAL_NODE_STATE_WORDS * 4u,
                "Structural node ABI");
+_Static_assert(sizeof(fr_structural_gpu_member_state_t) == 64u,
+               "Structural member diagnostic ABI");
+_Static_assert(sizeof(fr_structural_gpu_component_state_t) == 64u,
+               "Structural component diagnostic ABI");
 _Static_assert(offsetof(fr_structural_gpu_graph_t, nodes) == 16u * 4u,
                "Structural nodes offset");
 _Static_assert(offsetof(fr_structural_gpu_graph_t, members) == 400u * 4u,
@@ -159,7 +163,8 @@ static bool validate(const fr_structural_gpu_graph_t *g) {
             a->kind > FR_JOINT_MOMENT || !a->width || !a->height ||
             a->width > 8 || a->height > 8 || a->x >= 64 || a->y >= 64 ||
             a->terrain_material != DC_MATERIAL_STONE ||
-            !finite_values(&a->normal_stiffness, 8) || !isfinite(a->normal_angle))
+            !finite_values(&a->normal_stiffness, 8) ||
+            !isfinite(a->normal_angle))
             return false;
         const fr_structural_gpu_node_t *n = &g->nodes[node_index(g, a->node)];
         fr_structural_gpu_node_t p = {.chunk = a->chunk,
@@ -199,10 +204,11 @@ bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                               dc_gpu_structural_graph_offset() + 29000u);
     for (unsigned m = 0; m < FR_STRUCTURAL_MATERIAL_COUNT; m++) {
         const fr_structural_profile_t *p = fr_structural_profile(m);
-        const double values[] = {p->density, p->young, p->shear, p->tension,
-                                 p->compression, p->shear_strength,
-                                 p->fracture_energy, p->grace_seconds,
-                                 p->overload_seconds, p->grain_ratio};
+        const double values[] = {
+            p->density,         p->young,         p->shear,
+            p->tension,         p->compression,   p->shear_strength,
+            p->fracture_energy, p->grace_seconds, p->overload_seconds,
+            p->grain_ratio};
         for (unsigned v = 0; v < 10; v++)
             packed[m * 12u + v] = (float)values[v];
     }
@@ -410,20 +416,28 @@ bool fr_gpu_read_structure_node(dc_gpu_t *gpu, uint32_t id,
 }
 bool fr_gpu_read_structure_member(dc_gpu_t *gpu, uint32_t id,
                                   fr_structural_gpu_member_state_t *state) {
-    if (!gpu || !id || !state) return false;
-    uint32_t *data=dc_gpu_structural_data(gpu)+dc_gpu_structural_graph_offset();
-    const fr_structural_gpu_graph_t *graph=(void *)data;
-    for(uint32_t m=0;m<graph->member_count;m++) if(graph->members[m].id==id) {
-        memcpy(state,data+24000u+m*16u,sizeof(*state));return true;
-    }
+    if (!gpu || !id || !state)
+        return false;
+    uint32_t *data =
+        dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset();
+    const fr_structural_gpu_graph_t *graph = (void *)data;
+    for (uint32_t m = 0; m < graph->member_count; m++)
+        if (graph->members[m].id == id) {
+            memcpy(state, data + 24000u + m * 16u, sizeof(*state));
+            return true;
+        }
     return false;
 }
-bool fr_gpu_read_structure_component(dc_gpu_t *gpu, uint32_t id,
-                                     fr_structural_gpu_component_state_t *state) {
-    if(!gpu||!id||!state) return false;
-    uint32_t *data=dc_gpu_structural_data(gpu)+dc_gpu_structural_graph_offset();
-    const fr_structural_gpu_graph_t *graph=(void *)data;
-    int node=node_index(graph,id);
-    if(node<0) return false;
-    memcpy(state,data+24400u+(uint32_t)node*16u,sizeof(*state));return true;
+bool fr_gpu_read_structure_component(
+    dc_gpu_t *gpu, uint32_t id, fr_structural_gpu_component_state_t *state) {
+    if (!gpu || !id || !state)
+        return false;
+    uint32_t *data =
+        dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset();
+    const fr_structural_gpu_graph_t *graph = (void *)data;
+    int node = node_index(graph, id);
+    if (node < 0)
+        return false;
+    memcpy(state, data + 24400u + (uint32_t)node * 16u, sizeof(*state));
+    return true;
 }

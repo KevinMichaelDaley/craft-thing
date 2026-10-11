@@ -1,7 +1,7 @@
 CC ?= cc
 .DEFAULT_GOAL := all
 STRUCTURAL_REFERENCE = tests/structural/reference_solver.c src/structural/material.c
-build/structural_equilibrium_tests: tests/structural/equilibrium_tests.c tests/structural/placement_tests.c build/compound_body_tests
+build/structural_equilibrium_tests: tests/structural/equilibrium_tests.c tests/structural/equilibrium_limits_cases.h tests/structural/placement_tests.c build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/structural_placement_tests: tests/structural/placement_tests.c include/ferrum/structural/gpu.h build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
@@ -120,7 +120,7 @@ build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter
 .PHONY: quarter_native test_quarter_native bench_quarter_native test_quarter_native_spray
 build/quarter_native_structural_placement_tests: tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
-build/quarter_native_structural_equilibrium_tests: tests/structural/equilibrium_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
+build/quarter_native_structural_equilibrium_tests: tests/structural/equilibrium_tests.c tests/structural/equilibrium_limits_cases.h tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 test_quarter_native: build/quarter_native_structural_placement_tests build/quarter_native_structural_equilibrium_tests
 .PHONY: test_quarter_native_perf

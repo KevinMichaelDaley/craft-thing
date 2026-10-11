@@ -1,7 +1,8 @@
 # Anchored structural bodies
 
-Status: mechanical reference and GPU placement/topology implemented; equilibrium,
-damage, conversion, persistence and gameplay integration remain planned.
+Status: mechanical reference, GPU placement/topology and GPU equilibrium/contact
+coupling implemented; damage, conversion, persistence and gameplay integration
+remain planned.
 Epic: `ct-fx1b`. The user selected explicitly placed/marked structures and requested
 design and tickets first. Ordinary terrain remains terrain. Implementation follows
 RED–GREEN–REFACTOR; runtime placement starts with `ct-i5a4` after `ct-touk`.
@@ -71,6 +72,42 @@ whole tick, with validation disabled for timing. The mapped allocation was 64.40
 MiB and device allocation 107.196 MiB. This dry benchmark includes no equilibrium
 solve; later milestones must measure the additional cost rather than treating
 these placement timings as the final structural budget.
+
+### GPU equilibrium and contact coupling
+
+`ct-il9b` adds bounded component-local Timoshenko solves entirely on Vulkan. Each
+component uses at most 96 displacement variables, eight unilateral/friction active
+passes and three physical-residual refinement sweeps per pass. Finite oriented
+anchor and joint interfaces transmit forces and lever-arm moments. Bearings open
+in tension; sliding traction obeys Coulomb friction and requires compression.
+Rigid position and velocity corrections accumulate work-conjugate loads at their
+actual contact points, once per applied increment, over the fixed physics tick.
+Self-weight uses the shared material density. Structural proxies remain stationary;
+the solved displacement is an internal diagnostic, not an animated pose.
+
+Explicit node/member/component readbacks expose stress, utilization location,
+reactions, force/moment budgets, convergence counters and reason flags. Ordinary
+frames perform no CPU solve or graph readback. Cold boundaries, clipped/overflowed
+contact loads and numerical nonconvergence produce UNKNOWN. A rank failure becomes
+UNSUPPORTED only when a separate geometric mechanism certificate succeeds.
+Independent components retain their own classifications.
+
+Seventeen equilibrium tests cover symmetric/eccentric passengers, angled braces,
+finite interfaces, unilateral and sliding bearings, stress overload, cold pages,
+contact overflow and weak numerical pivots. The full headless battery has 181
+passing tests; quarter-native and UI batteries pass with Vulkan validation. One
+earlier quarter-native run crashed in the existing concave-body visual executable;
+the full retry, standalone, debugger and ASAN/UBSAN runs passed without reproducing
+it. This is an unresolved intermittent observation, not a claimed crash fix.
+
+A warm dry 640 by 448, 70-slot diagnostic with 16 independent members measured
+6.979 ms for rigid/topology/equilibrium and 17.335 ms for the whole tick, with
+validation disabled. Allocations remain 64.407 MiB mapped and 107.196 MiB device
+storage. These are stage measurements, not the final loaded gameplay budget.
+The 32-node, 16-member chain sweep safely returns UNKNOWN when float conditioning
+is insufficient, rather than inventing a mechanism. Current Euler checks use the
+conservative per-member span twice its length; complete physical unbraced-span
+and material grain evolution remain part of the later failure milestones.
 
 ## Behavior and ownership
 

@@ -3,326 +3,423 @@
 #undef main
 
 static bool near(double a, double b, double tolerance) {
-    return fabs(a-b) <= tolerance * fmax(1, fabs(b));
+    return fabs(a - b) <= tolerance * fmax(1, fabs(b));
 }
 static void test_self_weight_cantilever_equilibrium(void) {
     char e[256];
-    dc_gpu_t *g=grid(); ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=beam(20);
-    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
-    fr_structural_gpu_node_state_t root,tip;
-    ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&root));
-    ASSERT_TRUE(fr_gpu_read_structure_node(g,2,&tip));
-    const fr_structural_profile_t *p=fr_structural_profile(FR_STRUCTURAL_WOOD);
-    double l=12,a=2,inertia=8.0/12,weight=p->density*a*900;
-    double force=weight*l,moment=force*l/2;
-    double expected=weight*pow(l,4)/(8*p->young*inertia)+
-        weight*l*l/(2*(5.0/6)*p->shear*a)+force/1e8+l*moment/1e8;
-    ASSERT_EQ(root.state,FR_STRUCTURAL_SUPPORTED);
-    ASSERT_EQ(tip.state,FR_STRUCTURAL_SUPPORTED);
-    ASSERT_TRUE(near(root.reaction[0],0,.02));
-    ASSERT_TRUE(near(root.reaction[1],-force,.002));
-    ASSERT_TRUE(near(root.reaction[2],-moment,.002));
-    ASSERT_TRUE(near(tip.displacement[1],expected,.002));
-    dc_gpu_destroy(g); PASS();
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, e, sizeof(e)));
+    fr_structural_gpu_node_state_t root, tip;
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &root));
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 2, &tip));
+    const fr_structural_profile_t *p =
+        fr_structural_profile(FR_STRUCTURAL_WOOD);
+    double l = 12, a = 2, inertia = 8.0 / 12, weight = p->density * a * 900;
+    double force = weight * l, moment = force * l / 2;
+    double expected = weight * pow(l, 4) / (8 * p->young * inertia) +
+                      weight * l * l / (2 * (5.0 / 6) * p->shear * a) +
+                      force / 1e8 + l * moment / 1e8;
+    ASSERT_EQ(root.state, FR_STRUCTURAL_SUPPORTED);
+    ASSERT_EQ(tip.state, FR_STRUCTURAL_SUPPORTED);
+    ASSERT_TRUE(near(root.reaction[0], 0, .02));
+    ASSERT_TRUE(near(root.reaction[1], -force, .002));
+    ASSERT_TRUE(near(root.reaction[2], -moment, .002));
+    ASSERT_TRUE(near(tip.displacement[1], expected, .002));
+    dc_gpu_destroy(g);
+    PASS();
 }
 static void test_released_root_is_a_mechanism(void) {
-    char e[256]; dc_gpu_t *g=grid(); ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=beam(20);
-    s.anchors[0].kind=FR_JOINT_PINNED;
-    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.anchors[0].kind = FR_JOINT_PINNED;
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, e, sizeof(e)));
     fr_structural_gpu_node_state_t root;
-    ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&root));
-    ASSERT_EQ(root.state,FR_STRUCTURAL_UNSUPPORTED);
-    dc_gpu_destroy(g); PASS();
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &root));
+    ASSERT_EQ(root.state, FR_STRUCTURAL_UNSUPPORTED);
+    dc_gpu_destroy(g);
+    PASS();
 }
 static void test_two_pins_split_bridge_weight(void) {
-    char e[256]; dc_gpu_t *g=grid(); ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=beam(20);
-    s.anchor_count=2;
-    s.anchors[0].kind=FR_JOINT_PINNED;
-    s.anchors[1]=s.anchors[0];
-    s.anchors[1].id=2;s.anchors[1].node=2;s.anchors[1].x=32;
-    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_paint_material(g,32,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
-    fr_structural_gpu_node_state_t a,b;
-    ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&a));
-    ASSERT_TRUE(fr_gpu_read_structure_node(g,2,&b));
-    ASSERT_EQ(a.state,FR_STRUCTURAL_SUPPORTED);
-    ASSERT_EQ(b.state,FR_STRUCTURAL_SUPPORTED);
-    ASSERT_TRUE(near(a.reaction[1],-6480,.002));
-    ASSERT_TRUE(near(b.reaction[1],-6480,.002));
-    ASSERT_TRUE(near(a.reaction[2],0,.002));
-    ASSERT_TRUE(near(b.reaction[2],0,.002));
-    dc_gpu_destroy(g);PASS();
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.anchor_count = 2;
+    s.anchors[0].kind = FR_JOINT_PINNED;
+    s.anchors[1] = s.anchors[0];
+    s.anchors[1].id = 2;
+    s.anchors[1].node = 2;
+    s.anchors[1].x = 32;
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 32, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, e, sizeof(e)));
+    fr_structural_gpu_node_state_t a, b;
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &a));
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 2, &b));
+    ASSERT_EQ(a.state, FR_STRUCTURAL_SUPPORTED);
+    ASSERT_EQ(b.state, FR_STRUCTURAL_SUPPORTED);
+    ASSERT_TRUE(near(a.reaction[1], -6480, .002));
+    ASSERT_TRUE(near(b.reaction[1], -6480, .002));
+    ASSERT_TRUE(near(a.reaction[2], 0, .002));
+    ASSERT_TRUE(near(b.reaction[2], 0, .002));
+    dc_gpu_destroy(g);
+    PASS();
 }
 static void rigid_load_case(int center, double expected_a, double expected_b) {
-    char e[256]; dc_gpu_t *g=grid(); ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=beam(20);s.anchor_count=2;
-    s.anchors[0].kind=FR_JOINT_PINNED;
-    s.anchors[1]=s.anchors[0];s.anchors[1].id=2;
-    s.anchors[1].node=2;s.anchors[1].x=32;
-    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_paint_material(g,32,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    dc_gpu_body_t load={.id=17,.x_fp=(center-1)<<16,.y_fp=37<<16,
-        .width=2,.height=2,.active=1};
-    ASSERT_TRUE(dc_gpu_spawn_body(g,load,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_set_body_motion(g,17,0,0,DC_GPU_BODY_LOCK_ROTATION,e,sizeof(e)));
-    for(unsigned t=0;t<40;t++) ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
-    fr_structural_gpu_node_state_t a,b;
-    ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&a));
-    ASSERT_TRUE(fr_gpu_read_structure_node(g,2,&b));
-    printf("bridge reactions %.3f %.3f\n",a.reaction[1],b.reaction[1]);
-    ASSERT_EQ(a.state,FR_STRUCTURAL_SUPPORTED);
-    ASSERT_EQ(b.state,FR_STRUCTURAL_SUPPORTED);
-    ASSERT_TRUE(near(a.reaction[1],expected_a,.025));
-    ASSERT_TRUE(near(b.reaction[1],expected_b,.025));
-    ASSERT_TRUE(near(a.reaction[1]+b.reaction[1],-22680,.025));
-    ASSERT_TRUE(near(b.reaction[1]*12,-12960*6-9720*(center-20),.025));
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.anchor_count = 2;
+    s.anchors[0].kind = FR_JOINT_PINNED;
+    s.anchors[1] = s.anchors[0];
+    s.anchors[1].id = 2;
+    s.anchors[1].node = 2;
+    s.anchors[1].x = 32;
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 32, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    dc_gpu_body_t load = {.id = 17,
+                          .x_fp = (center - 1) << 16,
+                          .y_fp = 37 << 16,
+                          .width = 2,
+                          .height = 2,
+                          .active = 1};
+    ASSERT_TRUE(dc_gpu_spawn_body(g, load, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(g, 17, 0, 0, DC_GPU_BODY_LOCK_ROTATION,
+                                       e, sizeof(e)));
+    for (unsigned t = 0; t < 40; t++)
+        ASSERT_TRUE(dc_gpu_rigid_step(g, e, sizeof(e)));
+    fr_structural_gpu_node_state_t a, b;
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &a));
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 2, &b));
+    printf("bridge reactions %.3f %.3f\n", a.reaction[1], b.reaction[1]);
+    ASSERT_EQ(a.state, FR_STRUCTURAL_SUPPORTED);
+    ASSERT_EQ(b.state, FR_STRUCTURAL_SUPPORTED);
+    ASSERT_TRUE(near(a.reaction[1], expected_a, .025));
+    ASSERT_TRUE(near(b.reaction[1], expected_b, .025));
+    ASSERT_TRUE(near(a.reaction[1] + b.reaction[1], -22680, .025));
+    ASSERT_TRUE(
+        near(b.reaction[1] * 12, -12960 * 6 - 9720 * (center - 20), .025));
     fr_structural_gpu_component_state_t budget;
-    ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&budget));
-    ASSERT_TRUE(budget.relative_residual<1e-4);
-    for(unsigned axis=0;axis<3;axis++)
-        ASSERT_TRUE(near(budget.external[axis]+budget.reaction[axis],0,.1));
-    dc_gpu_destroy(g); PASS();
+    ASSERT_TRUE(fr_gpu_read_structure_component(g, 1, &budget));
+    ASSERT_TRUE(budget.relative_residual < 1e-4);
+    for (unsigned axis = 0; axis < 3; axis++)
+        ASSERT_TRUE(near(budget.external[axis] + budget.reaction[axis], 0, .1));
+    dc_gpu_destroy(g);
+    PASS();
 }
-static void test_centered_rigid_reactions(void) {rigid_load_case(26,-11340,-11340);}
-static void test_eccentric_rigid_reactions(void) {rigid_load_case(23,-13770,-8910);}
+static void test_centered_rigid_reactions(void) {
+    rigid_load_case(26, -11340, -11340);
+}
+static void test_eccentric_rigid_reactions(void) {
+    rigid_load_case(23, -13770, -8910);
+}
 static void test_material_stress_drives_overload(void) {
-    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=beam(20);s.members[0].material=FR_STRUCTURAL_STONE;
-    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.members[0].material = FR_STRUCTURAL_STONE;
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, e, sizeof(e)));
     fr_structural_gpu_member_state_t member;
-    ASSERT_TRUE(fr_gpu_read_structure_member(g,1,&member));
-    ASSERT_EQ(member.state,FR_STRUCTURAL_OVERLOADED);
-    ASSERT_TRUE(near(member.shear,58320,.003));
-    ASSERT_TRUE(near(fabs(member.moment),349920,.003));
-    ASSERT_TRUE(near(member.utilization,3.645,.003));
-    ASSERT_TRUE(member.utilization_location<.01);
-    ASSERT_TRUE(member.strain_energy>0);
-    dc_gpu_destroy(g);PASS();
+    ASSERT_TRUE(fr_gpu_read_structure_member(g, 1, &member));
+    ASSERT_EQ(member.state, FR_STRUCTURAL_OVERLOADED);
+    ASSERT_TRUE(near(member.shear, 58320, .003));
+    ASSERT_TRUE(near(fabs(member.moment), 349920, .003));
+    ASSERT_TRUE(near(member.utilization, 3.645, .003));
+    ASSERT_TRUE(member.utilization_location < .01);
+    ASSERT_TRUE(member.strain_energy > 0);
+    dc_gpu_destroy(g);
+    PASS();
 }
 static void test_weak_numerical_system_is_unknown(void) {
-    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=beam(20);
-    s.anchors[0].normal_stiffness=1e-20;
-    s.anchors[0].shear_stiffness=1e-20;
-    s.anchors[0].rotational_stiffness=1e-20;
-    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.anchors[0].normal_stiffness = 1e-20;
+    s.anchors[0].shear_stiffness = 1e-20;
+    s.anchors[0].rotational_stiffness = 1e-20;
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, e, sizeof(e)));
     fr_structural_gpu_node_state_t node;
-    ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&node));
-    ASSERT_EQ(node.state,FR_STRUCTURAL_UNKNOWN);
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &node));
+    ASSERT_EQ(node.state, FR_STRUCTURAL_UNKNOWN);
     fr_structural_gpu_component_state_t diagnostic;
-    ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&diagnostic));
-    ASSERT_TRUE(diagnostic.flags&FR_STRUCTURAL_DIAG_NUMERICAL);
-    ASSERT_TRUE(diagnostic.minimum_pivot<1e-7);
-    ASSERT_TRUE(diagnostic.iterations>0);
-    dc_gpu_destroy(g);PASS();
+    ASSERT_TRUE(fr_gpu_read_structure_component(g, 1, &diagnostic));
+    ASSERT_TRUE(diagnostic.flags & FR_STRUCTURAL_DIAG_NUMERICAL);
+    ASSERT_TRUE(diagnostic.minimum_pivot < 1e-7);
+    ASSERT_TRUE(diagnostic.iterations > 0);
+    dc_gpu_destroy(g);
+    PASS();
 }
 static void test_oriented_bearing_opens_in_tension(void) {
-    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=beam(20);s.anchor_count=2;
-    s.anchors[0].kind=FR_JOINT_BEARING;s.anchors[0].normal_angle=1.57079632679f;
-    s.anchors[1]=s.anchors[0];s.anchors[1].id=2;s.anchors[1].node=2;s.anchors[1].x=32;
-    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_paint_material(g,32,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.anchor_count = 2;
+    s.anchors[0].kind = FR_JOINT_BEARING;
+    s.anchors[0].normal_angle = 1.57079632679f;
+    s.anchors[1] = s.anchors[0];
+    s.anchors[1].id = 2;
+    s.anchors[1].node = 2;
+    s.anchors[1].x = 32;
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 32, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, e, sizeof(e)));
     fr_structural_gpu_node_state_t node;
-    ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&node));
-    ASSERT_EQ(node.state,FR_STRUCTURAL_UNSUPPORTED);
-    dc_gpu_destroy(g);PASS();
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &node));
+    ASSERT_EQ(node.state, FR_STRUCTURAL_UNSUPPORTED);
+    dc_gpu_destroy(g);
+    PASS();
 }
 static void test_joint_capacity_is_finite(void) {
-    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=beam(20);s.node_count=4;s.member_count=2;s.joint_count=1;
-    s.nodes[1].x_fp=26<<16;s.nodes[2]=s.nodes[1];s.nodes[2].id=3;
-    s.nodes[3]=s.nodes[1];s.nodes[3].id=4;s.nodes[3].x_fp=32<<16;
-    s.members[1]=s.members[0];s.members[1].id=2;s.members[1].a=3;s.members[1].b=4;
-    s.joints[0]=(fr_structural_gpu_joint_t){.id=1,.generation=1,.a=2,.b=3,.kind=FR_JOINT_BONDED,
-        .normal_stiffness=1e8,.shear_stiffness=1e8,.rotational_stiffness=1e8,
-        .bearing_capacity=1e7,.pullout_capacity=1e7,.shear_capacity=1e7,.moment_capacity=100};
-    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.node_count = 4;
+    s.member_count = 2;
+    s.joint_count = 1;
+    s.nodes[1].x_fp = 26 << 16;
+    s.nodes[2] = s.nodes[1];
+    s.nodes[2].id = 3;
+    s.nodes[3] = s.nodes[1];
+    s.nodes[3].id = 4;
+    s.nodes[3].x_fp = 32 << 16;
+    s.members[1] = s.members[0];
+    s.members[1].id = 2;
+    s.members[1].a = 3;
+    s.members[1].b = 4;
+    s.joints[0] = (fr_structural_gpu_joint_t){.id = 1,
+                                              .generation = 1,
+                                              .a = 2,
+                                              .b = 3,
+                                              .kind = FR_JOINT_BONDED,
+                                              .normal_stiffness = 1e8,
+                                              .shear_stiffness = 1e8,
+                                              .rotational_stiffness = 1e8,
+                                              .bearing_capacity = 1e7,
+                                              .pullout_capacity = 1e7,
+                                              .shear_capacity = 1e7,
+                                              .moment_capacity = 100};
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, e, sizeof(e)));
     fr_structural_gpu_node_state_t node;
-    ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&node));
-    ASSERT_EQ(node.state,FR_STRUCTURAL_OVERLOADED);
-    dc_gpu_destroy(g);PASS();
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &node));
+    ASSERT_EQ(node.state, FR_STRUCTURAL_OVERLOADED);
+    dc_gpu_destroy(g);
+    PASS();
 }
 static void test_frictionless_bearings_have_no_sideways_restraint(void) {
-    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=beam(20);s.anchor_count=2;
-    s.anchors[0].kind=FR_JOINT_BEARING;s.anchors[0].normal_angle=-1.57079632679f;
-    s.anchors[0].shear_capacity=0;s.anchors[0].friction=0;
-    s.anchors[1]=s.anchors[0];s.anchors[1].id=2;s.anchors[1].node=2;s.anchors[1].x=32;
-    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_paint_material(g,32,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
-    fr_structural_gpu_node_state_t n;ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&n));
-    ASSERT_EQ(n.state,FR_STRUCTURAL_UNSUPPORTED);
-    dc_gpu_destroy(g);PASS();
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.anchor_count = 2;
+    s.anchors[0].kind = FR_JOINT_BEARING;
+    s.anchors[0].normal_angle = -1.57079632679f;
+    s.anchors[0].shear_capacity = 0;
+    s.anchors[0].friction = 0;
+    s.anchors[1] = s.anchors[0];
+    s.anchors[1].id = 2;
+    s.anchors[1].node = 2;
+    s.anchors[1].x = 32;
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 32, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, e, sizeof(e)));
+    fr_structural_gpu_node_state_t n;
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &n));
+    ASSERT_EQ(n.state, FR_STRUCTURAL_UNSUPPORTED);
+    dc_gpu_destroy(g);
+    PASS();
 }
 static void test_angled_brace_closes_force_and_moment_balance(void) {
-    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=beam(20);
-    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, e, sizeof(e)));
     fr_structural_gpu_node_state_t tip;
-    ASSERT_TRUE(fr_gpu_read_structure_node(g,2,&tip));float unbraced=tip.displacement[1];
-    s.node_count=4;s.member_count=2;s.joint_count=1;s.anchor_count=2;
-    s.nodes[2]=s.nodes[1];s.nodes[2].id=3;s.nodes[2].y_fp=42<<16;
-    s.nodes[3]=s.nodes[2];s.nodes[3].id=4;s.nodes[3].x_fp=38<<16;s.nodes[3].y_fp=50<<16;
-    s.members[1]=s.members[0];s.members[1].id=2;s.members[1].a=3;s.members[1].b=4;
-    s.joints[0]=(fr_structural_gpu_joint_t){.id=1,.generation=1,.a=2,.b=3,.kind=FR_JOINT_PINNED,
-        .normal_stiffness=1e8,.shear_stiffness=1e8,.rotational_stiffness=1e8,
-        .bearing_capacity=1e7,.pullout_capacity=1e7,.shear_capacity=1e7,.moment_capacity=1e7};
-    s.anchors[1]=s.anchors[0];s.anchors[1].id=2;s.anchors[1].node=4;
-    s.anchors[1].kind=FR_JOINT_PINNED;s.anchors[1].x=38;s.anchors[1].y=51;
-    ASSERT_TRUE(dc_gpu_paint_material(g,38,51,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_read_structure_node(g,2,&tip));
-    ASSERT_EQ(tip.state,FR_STRUCTURAL_SUPPORTED);
-    ASSERT_TRUE(fabs(tip.displacement[1])<unbraced*.5);
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 2, &tip));
+    float unbraced = tip.displacement[1];
+    s.node_count = 4;
+    s.member_count = 2;
+    s.joint_count = 1;
+    s.anchor_count = 2;
+    s.nodes[2] = s.nodes[1];
+    s.nodes[2].id = 3;
+    s.nodes[2].y_fp = 42 << 16;
+    s.nodes[3] = s.nodes[2];
+    s.nodes[3].id = 4;
+    s.nodes[3].x_fp = 38 << 16;
+    s.nodes[3].y_fp = 50 << 16;
+    s.members[1] = s.members[0];
+    s.members[1].id = 2;
+    s.members[1].a = 3;
+    s.members[1].b = 4;
+    s.joints[0] = (fr_structural_gpu_joint_t){.id = 1,
+                                              .generation = 1,
+                                              .a = 2,
+                                              .b = 3,
+                                              .kind = FR_JOINT_PINNED,
+                                              .normal_stiffness = 1e8,
+                                              .shear_stiffness = 1e8,
+                                              .rotational_stiffness = 1e8,
+                                              .bearing_capacity = 1e7,
+                                              .pullout_capacity = 1e7,
+                                              .shear_capacity = 1e7,
+                                              .moment_capacity = 1e7};
+    s.anchors[1] = s.anchors[0];
+    s.anchors[1].id = 2;
+    s.anchors[1].node = 4;
+    s.anchors[1].kind = FR_JOINT_PINNED;
+    s.anchors[1].x = 38;
+    s.anchors[1].y = 51;
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 38, 51, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 2, &tip));
+    ASSERT_EQ(tip.state, FR_STRUCTURAL_SUPPORTED);
+    ASSERT_TRUE(fabs(tip.displacement[1]) < unbraced * .5);
     fr_structural_gpu_node_state_t anchor;
-    ASSERT_TRUE(fr_gpu_read_structure_node(g,4,&anchor));ASSERT_TRUE(fabs(anchor.reaction[0])>100);
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 4, &anchor));
+    ASSERT_TRUE(fabs(anchor.reaction[0]) > 100);
     fr_structural_gpu_component_state_t budget;
-    ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&budget));
-    printf("brace balance: %.6f %.6f %.6f\n",budget.external[0]+budget.reaction[0],budget.external[1]+budget.reaction[1],budget.external[2]+budget.reaction[2]);
-    for(unsigned axis=0;axis<3;axis++) ASSERT_TRUE(near(budget.external[axis]+budget.reaction[axis],0,.2));
-    dc_gpu_destroy(g);PASS();
+    ASSERT_TRUE(fr_gpu_read_structure_component(g, 1, &budget));
+    printf("brace balance: %.6f %.6f %.6f\n",
+           budget.external[0] + budget.reaction[0],
+           budget.external[1] + budget.reaction[1],
+           budget.external[2] + budget.reaction[2]);
+    for (unsigned axis = 0; axis < 3; axis++)
+        ASSERT_TRUE(near(budget.external[axis] + budget.reaction[axis], 0, .2));
+    dc_gpu_destroy(g);
+    PASS();
 }
 static void test_cold_component_diagnostics_are_unknown(void) {
-    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=beam(63);
-    ASSERT_TRUE(dc_gpu_paint_material(g,63,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_set_page(g,1,0,UINT32_MAX,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(63);
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 63, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_set_page(g, 1, 0, UINT32_MAX, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, e, sizeof(e)));
     fr_structural_gpu_component_state_t component;
     fr_structural_gpu_member_state_t member;
-    ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&component));
-    ASSERT_TRUE(fr_gpu_read_structure_member(g,1,&member));
-    ASSERT_EQ(component.state,FR_STRUCTURAL_UNKNOWN);
-    ASSERT_EQ(member.state,FR_STRUCTURAL_UNKNOWN);
-    dc_gpu_destroy(g);PASS();
+    ASSERT_TRUE(fr_gpu_read_structure_component(g, 1, &component));
+    ASSERT_TRUE(fr_gpu_read_structure_member(g, 1, &member));
+    ASSERT_EQ(component.state, FR_STRUCTURAL_UNKNOWN);
+    ASSERT_EQ(member.state, FR_STRUCTURAL_UNKNOWN);
+    dc_gpu_destroy(g);
+    PASS();
 }
 static void test_friction_needs_compressive_bearing_force(void) {
-    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=beam(20);s.anchor_count=2;
-    s.nodes[0].y_fp=20<<16;s.nodes[1].x_fp=20<<16;s.nodes[1].y_fp=32<<16;
-    s.anchors[0].kind=FR_JOINT_BEARING;s.anchors[0].x=18;s.anchors[0].y=20;
-    s.anchors[0].shear_capacity=0;s.anchors[0].friction=.5;
-    s.anchors[1]=s.anchors[0];s.anchors[1].id=2;s.anchors[1].node=2;s.anchors[1].y=32;
-    ASSERT_TRUE(dc_gpu_paint_material(g,18,20,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_paint_material(g,18,32,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
-    fr_structural_gpu_node_state_t n;ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&n));
-    ASSERT_EQ(n.state,FR_STRUCTURAL_UNSUPPORTED);
-    dc_gpu_destroy(g);PASS();
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.anchor_count = 2;
+    s.nodes[0].y_fp = 20 << 16;
+    s.nodes[1].x_fp = 20 << 16;
+    s.nodes[1].y_fp = 32 << 16;
+    s.anchors[0].kind = FR_JOINT_BEARING;
+    s.anchors[0].x = 18;
+    s.anchors[0].y = 20;
+    s.anchors[0].shear_capacity = 0;
+    s.anchors[0].friction = .5;
+    s.anchors[1] = s.anchors[0];
+    s.anchors[1].id = 2;
+    s.anchors[1].node = 2;
+    s.anchors[1].y = 32;
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 18, 20, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 18, 32, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, e, sizeof(e)));
+    fr_structural_gpu_node_state_t n;
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &n));
+    ASSERT_EQ(n.state, FR_STRUCTURAL_UNSUPPORTED);
+    dc_gpu_destroy(g);
+    PASS();
 }
 static void test_sliding_bearing_caps_tangent_force(void) {
-    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=beam(20);s.anchor_count=2;
-    s.nodes[0].y_fp=20<<16;s.nodes[1].x_fp=26<<16;s.nodes[1].y_fp=28<<16;
-    s.anchors[0].x=18;s.anchors[0].y=20;
-    s.anchors[1]=s.anchors[0];s.anchors[1].id=2;s.anchors[1].node=2;
-    s.anchors[1].kind=FR_JOINT_BEARING;s.anchors[1].x=26;s.anchors[1].y=29;
-    s.anchors[1].normal_angle=-1.57079632679f;
-    s.anchors[1].shear_capacity=0;s.anchors[1].friction=.05;
-    ASSERT_TRUE(dc_gpu_paint_material(g,18,20,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_paint_material(g,26,29,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    bool placed=fr_gpu_place_structure(g,&s,e,sizeof(e));
-    if(!placed) printf("slip placement: %s\n",e);
+    char e[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.anchor_count = 2;
+    s.nodes[0].y_fp = 20 << 16;
+    s.nodes[1].x_fp = 26 << 16;
+    s.nodes[1].y_fp = 28 << 16;
+    s.anchors[0].x = 18;
+    s.anchors[0].y = 20;
+    s.anchors[1] = s.anchors[0];
+    s.anchors[1].id = 2;
+    s.anchors[1].node = 2;
+    s.anchors[1].kind = FR_JOINT_BEARING;
+    s.anchors[1].x = 26;
+    s.anchors[1].y = 29;
+    s.anchors[1].normal_angle = -1.57079632679f;
+    s.anchors[1].shear_capacity = 0;
+    s.anchors[1].friction = .05;
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 18, 20, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 26, 29, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    bool placed = fr_gpu_place_structure(g, &s, e, sizeof(e));
+    if (!placed)
+        printf("slip placement: %s\n", e);
     ASSERT_TRUE(placed);
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
-    fr_structural_gpu_node_state_t n;ASSERT_TRUE(fr_gpu_read_structure_node(g,2,&n));
-    printf("sliding bearing %.6f %.6f state %u\n",n.reaction[0],n.reaction[1],n.state);
-    ASSERT_EQ(n.state,FR_STRUCTURAL_SUPPORTED);
-    ASSERT_TRUE(n.reaction[1]<-1);
-    ASSERT_TRUE(near(fabs(n.reaction[0]),.05*fabs(n.reaction[1]),.002));
-    dc_gpu_destroy(g);PASS();
+    ASSERT_TRUE(dc_gpu_rigid_step(g, e, sizeof(e)));
+    fr_structural_gpu_node_state_t n;
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 2, &n));
+    printf("sliding bearing %.6f %.6f state %u\n", n.reaction[0], n.reaction[1],
+           n.state);
+    ASSERT_EQ(n.state, FR_STRUCTURAL_SUPPORTED);
+    ASSERT_TRUE(n.reaction[1] < -1);
+    ASSERT_TRUE(near(fabs(n.reaction[0]), .05 * fabs(n.reaction[1]), .002));
+    dc_gpu_destroy(g);
+    PASS();
 }
-static void test_long_bonded_chain_is_not_a_hinge_mechanism(void) {
-    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=beam(20);s.node_count=32;s.member_count=16;s.joint_count=15;
-#ifdef DC_QUARTER_NATIVE_VIEW
-    const unsigned segment=16;
-#else
-    const unsigned segment=6;
-#endif
-    for(unsigned m=0;m<16;m++) {
-        for(unsigned end=0;end<2;end++) {
-            unsigned x=20+segment*(m+end),n=2*m+end;
-            s.nodes[n]=(fr_structural_gpu_node_t){.id=n+1,.generation=1,.chunk={x/64,0},
-                .x_fp=(int32_t)(x%64)<<16,.y_fp=40<<16};
-        }
-        s.members[m]=(fr_structural_gpu_member_t){m+1,1,2*m+1,2*m+2,FR_STRUCTURAL_WOOD,2<<16,0,0};
-        if(m<15) s.joints[m]=(fr_structural_gpu_joint_t){.id=m+1,.generation=1,.a=2*m+2,.b=2*m+3,
-            .kind=FR_JOINT_MOMENT,.normal_stiffness=1e8,.shear_stiffness=1e8,.rotational_stiffness=1e8,
-            .bearing_capacity=1e7,.pullout_capacity=1e7,.shear_capacity=1e7,.moment_capacity=1e7};
-    }
-    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
-    fr_structural_gpu_node_state_t n;ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&n));
-    printf("long bonded chain state %u\n",n.state);
-    ASSERT_TRUE(n.state!=FR_STRUCTURAL_UNSUPPORTED);
-    dc_gpu_destroy(g);PASS();
-}
-static void test_numerical_failure_does_not_poison_another_component(void) {
-    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=beam(20);s.node_count=4;s.member_count=2;s.anchor_count=2;
-    s.nodes[2]=s.nodes[0];s.nodes[2].id=3;s.nodes[2].y_fp=60<<16;
-    s.nodes[3]=s.nodes[1];s.nodes[3].id=4;s.nodes[3].y_fp=60<<16;
-    s.members[1]=s.members[0];s.members[1].id=2;s.members[1].a=3;s.members[1].b=4;
-    s.anchors[1]=s.anchors[0];s.anchors[1].id=2;s.anchors[1].node=3;s.anchors[1].y=61;
-    s.anchors[0].normal_stiffness=s.anchors[0].shear_stiffness=s.anchors[0].rotational_stiffness=1e-20;
-    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_paint_material(g,20,61,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
-    fr_structural_gpu_node_state_t weak,good;
-    ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&weak));ASSERT_TRUE(fr_gpu_read_structure_node(g,3,&good));
-    ASSERT_EQ(weak.state,FR_STRUCTURAL_UNKNOWN);ASSERT_EQ(good.state,FR_STRUCTURAL_SUPPORTED);
-    ASSERT_TRUE(near(good.reaction[1],-12960,.002));
-    dc_gpu_destroy(g);PASS();
-}
-static void test_contact_overflow_is_unknown_until_contacts_recover(void) {
-    char e[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=beam(20);
-    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    dc_gpu_body_t load={.id=17,.x_fp=25<<16,.y_fp=37<<16,.width=2,.height=2,.active=1};
-    ASSERT_TRUE(dc_gpu_spawn_body(g,load,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_set_contact_capacity(g,0,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
-    fr_structural_gpu_component_state_t component;
-    ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&component));
-    ASSERT_EQ(component.state,FR_STRUCTURAL_UNKNOWN);
-    ASSERT_TRUE(component.flags&FR_STRUCTURAL_DIAG_LOAD_OVERFLOW);
-    ASSERT_TRUE(dc_gpu_set_contact_capacity(g,DC_GPU_CONTACT_CAPACITY,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&component));
-    ASSERT_EQ(component.state,FR_STRUCTURAL_SUPPORTED);
-    dc_gpu_destroy(g);PASS();
-}
+#include "equilibrium_limits_cases.h"
 int main(void) {
     RUN(test_self_weight_cantilever_equilibrium);
     RUN(test_released_root_is_a_mechanism);
@@ -341,6 +438,6 @@ int main(void) {
     RUN(test_long_bonded_chain_is_not_a_hinge_mechanism);
     RUN(test_numerical_failure_does_not_poison_another_component);
     RUN(test_contact_overflow_is_unknown_until_contacts_recover);
-    printf("%d passed, %d failed\n",g_pass,g_fail);
-    return g_fail?1:0;
+    printf("%d passed, %d failed\n", g_pass, g_fail);
+    return g_fail ? 1 : 0;
 }
