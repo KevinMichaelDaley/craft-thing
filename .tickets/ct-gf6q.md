@@ -17,3 +17,9 @@ Use tensile/compressive/shear stress, buckling, accumulated damage and fracture 
 
 Same graph/load with distinct material profiles gives distinct failure mode/time. Detached sound wood does not automatically turn to gravel; stone in tension cracks before equivalent compression; weak cohesive material crumbles; broken bracing can cascade after load redistribution. A dirt/mortar profile does not silently redefine ordinary dirt terrain. Mass, composition, water carried by debris and momentum are accounted; fracture dissipates bounded energy and creates no unexplained launch impulses. Every rigid/MPM allocation failure is transactional.
 
+
+## Notes
+
+**2026-10-11T23:26:00Z**
+
+Material identity and initial GPU mortar crumble implemented: distinct density 1.6, exact clipped cell volume/centroid, cumulative fixed-point mass, all-destination preflight, rigid ownership disabled only on commit, fracture-work budget check, no virtual launch. Two targeted tests pass; full headless 196/196. Wood/stone fragmentation, saturation retry, rotated/seam cases, full energy accounting and actual MPM evolution remain unfinished; ticket remains in progress.

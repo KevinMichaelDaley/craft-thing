@@ -148,6 +148,20 @@ relative residual was 1.13e-7. Current mapped allocation is 64.445 MiB, device
 allocation 107.196 MiB, and the 70-slot structural reserve is 162,368 bytes.
 These measurements do not certify the final loaded gameplay budget.
 
+### Material-output implementation in progress
+
+Explicit cohesive mortar has its own body material and density 1.6; ordinary dirt
+and sand keep their existing behavior. On confirmed section overload, the GPU
+clips the member against resident cells and preflights every destination before
+creating MPM mortar-debris particles. Fixed-point cumulative allocation preserves
+the complete member mass; centroids come from clipped polygons. The original
+rigid owner is disabled only after all outputs commit. Existing Eulerian water
+stays owned by its cells. No virtual displacement becomes debris velocity.
+Fracture work must fit the recovered strain-energy budget. The dedicated overload
+regression produces 24 particles with total mass 38.4 and zero launch momentum.
+The full headless battery passes 196 tests. Wood/stone fragmentation, saturation,
+rotated/streamed output and complete energy diagnostics remain unfinished.
+
 ## Behavior and ownership
 
 Introduce a structural body kind alongside terrain and freely moving rigid bodies.
