@@ -56,6 +56,12 @@ test_rigid_dynamics: build/compound_body_tests build/rigid_dynamics_visual_tests
 	./build/rigid_dynamics_visual_tests
 
 test: build/compound_body_tests
+build/presentation_tests: tests/app/presentation_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/rigid_dynamics_visual_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -lm -Wl,--wrap=vkCreateSwapchainKHR -Wl,--wrap=vkAcquireNextImageKHR -Wl,--wrap=vkQueueWaitIdle
+
+test_presentation: build/presentation_tests
+	./build/presentation_tests
+
 test_ui test_quarter_native: build/rigid_dynamics_visual_tests
 $(GPU_OBJ): $(BROADPHASE_SHADER) $(CONTACT_SHADER)
 $(RIGID_SHADER) $(PROBE_SHADER) $(BROADPHASE_SHADER): shaders/sim/rigid_body.glsl
