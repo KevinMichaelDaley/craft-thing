@@ -124,7 +124,9 @@ build/quarter_native_structural_placement_tests: tests/structural/placement_test
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 build/quarter_native_structural_equilibrium_tests: tests/structural/equilibrium_tests.c tests/structural/equilibrium_limits_cases.h tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
-test_quarter_native: build/quarter_native_structural_placement_tests build/quarter_native_structural_equilibrium_tests
+build/quarter_native_structural_failure_tests: tests/structural/failure_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+test_quarter_native: build/quarter_native_structural_placement_tests build/quarter_native_structural_equilibrium_tests build/quarter_native_structural_failure_tests
 .PHONY: test_quarter_native_perf
 test_quarter_native_perf: build/quarter_native_perf_tests build/quarter_native_bench
 	./build/quarter_native_perf_tests
@@ -149,6 +151,7 @@ build/quarter_native_rigid_solver_tests: tests/vulkan/rigid_solver_tests.c Makef
 test_quarter_native: build/quarter_native_config_tests build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_rigid_solver_tests build/dungeoncraft_quarter_native
 	./build/quarter_native_structural_placement_tests
 	./build/quarter_native_structural_equilibrium_tests
+	./build/quarter_native_structural_failure_tests
 	./build/presentation_tests
 	./build/quarter_native_config_tests
 	./build/quarter_native_fluid_tests
