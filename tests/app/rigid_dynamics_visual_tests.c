@@ -101,6 +101,15 @@ static void test_two_concave_bodies_fall_rotate_collide_and_settle_visibly(void)
     }
     dc_gpu_rigid_solver_stats_t solver;ASSERT_TRUE(dc_gpu_read_rigid_solver_stats(g,&solver));
     ASSERT_EQ(solver.active_bodies,2u);ASSERT_EQ(solver.overflow,0u);
+    uint32_t *settled=malloc(VIS_WIDTH*VIS_HEIGHT*sizeof(*settled));ASSERT_TRUE(settled);
+    memcpy(settled,pixels,VIS_WIDTH*VIS_HEIGHT*sizeof(*settled));
+    for(uint32_t tick=0;tick<120;++tick) {
+        ASSERT_TRUE(dc_gpu_present_chunks_steps(g,1,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_readback(g,pixels,VIS_WIDTH*VIS_HEIGHT,err,sizeof(err)));
+        ASSERT_EQ(memcmp(settled,pixels,VIS_WIDTH*VIS_HEIGHT*sizeof(*pixels)),0);
+        SDL_Delay(17);
+    }
+    free(settled);
     SDL_Delay(2000);free(pixels);dc_gpu_destroy(g);PASS();
 }
 int main(void) {
