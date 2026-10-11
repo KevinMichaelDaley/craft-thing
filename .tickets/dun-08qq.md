@@ -2,7 +2,7 @@
 id: dun-08qq
 status: open
 deps: [dun-9qub, dun-c459]
-links: [dun-spbq]
+links: [dun-spbq, ct-ha8q]
 created: 2026-09-26T07:43:18Z
 type: task
 priority: 2

@@ -2,7 +2,7 @@
 id: dun-c459
 status: open
 deps: [dun-jo5i, dun-x9ei]
-links: [dun-spbq, dun-sbk9]
+links: [dun-spbq, dun-sbk9, ct-ha8q]
 created: 2026-09-26T05:25:21Z
 type: task
 priority: 2

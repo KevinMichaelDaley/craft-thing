@@ -286,6 +286,13 @@ presented frames after the two concave bodies settle.
 
 ## End-to-end gates
 
+Explicitly placed/marked anchored structural bodies are planned separately in
+[structural_bodies.md](structural_bodies.md), epic `ct-fx1b`. Their mechanical graph
+carries force and moment, including sideways beams and angled braces. Confirmed
+support loss and overstress cause timed, material-dependent detachment/fracture;
+rigid/debris outputs preserve material-derived density and buoyancy. This is a
+design roadmap, not implemented structural runtime behavior.
+
 Window presentation prefers MAILBOX when the surface supports it, retaining
 FIFO as the portable fallback. This prevents the observed Intel/Mesa Wayland
 FIFO frame-callback stall when a window is hidden or occluded. Mailbox keeps
