@@ -1,6 +1,6 @@
 ---
 id: ct-d50u
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-10-05T02:14:49Z
@@ -39,3 +39,11 @@ During ct-cnsq verification, Wayland visual scene repeatedly stalled in poll_sch
 **2026-10-11T02:35:37Z**
 
 Final trace again stops after wl_surface.frame + attach/damage/commit, with no subsequent frame callback; org.gnome.Mutter.DisplayConfig.PowerSaveMode is 0 and ScreenSaver.GetActive is false. Disabling SDL libdecor preference did not resolve it. Normal GPU headless tests complete; this remains a separate presentation diagnostic issue.
+
+**2026-10-11T02:56:16Z**
+
+RED regression confirmed MAILBOX is available on this Intel Wayland surface but renderer forced FIFO. GREEN now selects supported MAILBOX (FIFO fallback), pumps SDL events, limits acquisition to one second, allocates a presentation semaphore per swapchain image, and fences rendering completion independently of display. Initial three hide/restore/recreate cycles pass without presentation queue-idle waits. Previously stalled paced concave-body scene now completes, including all 120 exact settled frames. Full post-refactor suites running.
+
+**2026-10-11T03:01:31Z**
+
+Final verification on Intel Iris Xe Wayland with Vulkan validation: make test passes all 143 headless cases; full make test_quarter_native and make test_ui pass, including all six rigid-window cases, two paced concave visual runs with 120 identical settled frames each, six new hidden/recreated-window cycles with exact kinematic movement, controls 5/5, and all ten UI smoke scenes. No stalled retries or Vulkan validation errors in these batteries. Three 90-frame regression cycles measured acquire totals 6.682–7.662ms and presentation enqueue totals 9.733–10.168ms separately from render-fence waits 731.030–808.544ms. Physics stage graph is unchanged. MAILBOX is selected only when supported; FIFO remains the portable fallback. Refreshed the stable rigid_concave.gif replay.
