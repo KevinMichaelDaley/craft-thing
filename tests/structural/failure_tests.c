@@ -192,19 +192,25 @@ static void test_restored_support_resets_the_grace_clock(void) {
     dc_gpu_t *g = grid();
     ASSERT_TRUE(g);
     fr_structural_gpu_graph_t s = beam(20);
-    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
     ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
-    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_AIR, e, sizeof(e)));
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_AIR, e, sizeof(e)));
     steps(g, 60);
-    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
     steps(g, 1);
-    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_AIR, e, sizeof(e)));
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_AIR, e, sizeof(e)));
     steps(g, 89);
     dc_gpu_body_motion_t m;
-    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m,
+                                        e, sizeof(e)));
     ASSERT_TRUE(m.flags & DC_GPU_BODY_KINEMATIC);
     steps(g, 1);
-    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m,
+                                        e, sizeof(e)));
     ASSERT_TRUE(!(m.flags & DC_GPU_BODY_KINEMATIC));
     dc_gpu_destroy(g);
     PASS();
@@ -215,7 +221,8 @@ static void test_finite_anchor_damage_cuts_after_sustained_overload(void) {
     ASSERT_TRUE(g);
     fr_structural_gpu_graph_t s = beam(20);
     s.anchors[0].moment_capacity = 25920;
-    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
     ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
     steps(g, 44);
     fr_structural_gpu_node_state_t state;
@@ -226,7 +233,8 @@ static void test_finite_anchor_damage_cuts_after_sustained_overload(void) {
     ASSERT_EQ(state.state, FR_STRUCTURAL_UNSUPPORTED);
     steps(g, 89);
     dc_gpu_body_motion_t m;
-    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m,
+                                        e, sizeof(e)));
     ASSERT_TRUE(!(m.flags & DC_GPU_BODY_KINEMATIC));
     dc_gpu_destroy(g);
     PASS();
@@ -239,8 +247,13 @@ static void test_overflow_freezes_an_unrooted_island_clock(void) {
     s.anchor_count = 0;
     ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
     steps(g, 60);
-    dc_gpu_world_body_t load = {.chunk = {0,0},
-        .body = {.id=1,.x_fp=24<<16,.y_fp=35<<16,.width=4,.height=4,.active=1}};
+    dc_gpu_world_body_t load = {.chunk = {0, 0},
+                                .body = {.id = 1,
+                                         .x_fp = 24 << 16,
+                                         .y_fp = 35 << 16,
+                                         .width = 4,
+                                         .height = 4,
+                                         .active = 1}};
     ASSERT_TRUE(dc_gpu_spawn_world_body(g, load, e, sizeof(e)));
     ASSERT_TRUE(dc_gpu_set_contact_capacity(g, 0, e, sizeof(e)));
     steps(g, 35);
@@ -251,10 +264,12 @@ static void test_overflow_freezes_an_unrooted_island_clock(void) {
     ASSERT_TRUE(dc_gpu_remove_body(g, 1, e, sizeof(e)));
     steps(g, 29);
     dc_gpu_body_motion_t m;
-    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m,
+                                        e, sizeof(e)));
     ASSERT_TRUE(m.flags & DC_GPU_BODY_KINEMATIC);
     steps(g, 1);
-    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &m,
+                                        e, sizeof(e)));
     ASSERT_TRUE(!(m.flags & DC_GPU_BODY_KINEMATIC));
     dc_gpu_destroy(g);
     PASS();
@@ -266,18 +281,27 @@ static void test_converted_bond_ownership_survives_graph_replacement(void) {
     fr_structural_gpu_graph_t s = two_members(), empty = {0};
     ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
     steps(g, 90);
-    dc_gpu_world_body_t replacement = {.chunk={0,0},
-        .body={.id=FR_STRUCTURAL_BODY_ID_BASE+1,.x_fp=20<<16,.y_fp=39<<16,
-               .width=1,.height=1,.active=1}};
+    dc_gpu_world_body_t replacement = {
+        .chunk = {0, 0},
+        .body = {.id = FR_STRUCTURAL_BODY_ID_BASE + 1,
+                 .x_fp = 20 << 16,
+                 .y_fp = 39 << 16,
+                 .width = 1,
+                 .height = 1,
+                 .active = 1}};
     ASSERT_TRUE(!dc_gpu_spawn_world_body(g, replacement, e, sizeof(e)));
     ASSERT_TRUE(fr_gpu_place_structure(g, &empty, e, sizeof(e)));
-    ASSERT_TRUE(!dc_gpu_save_bodies(g, "build/converted_body_only.bin", e, sizeof(e)));
-    ASSERT_TRUE(dc_gpu_set_body_motion(g, replacement.body.id, 0, .05f, 0, e, sizeof(e)));
+    ASSERT_TRUE(
+        !dc_gpu_save_bodies(g, "build/converted_body_only.bin", e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(g, replacement.body.id, 0, .05f, 0, e,
+                                       sizeof(e)));
     steps(g, 4);
-    dc_gpu_body_motion_t a,b;
-    ASSERT_TRUE(dc_gpu_read_body_motion(g, replacement.body.id, &a, e, sizeof(e)));
-    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE+2, &b, e, sizeof(e)));
-    ASSERT_TRUE(fabs(a.angle-b.angle)<.01);
+    dc_gpu_body_motion_t a, b;
+    ASSERT_TRUE(
+        dc_gpu_read_body_motion(g, replacement.body.id, &a, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 2, &b,
+                                        e, sizeof(e)));
+    ASSERT_TRUE(fabs(a.angle - b.angle) < .01);
     dc_gpu_destroy(g);
     PASS();
 }
@@ -291,11 +315,20 @@ static fr_structural_gpu_graph_t bearing_pair(void) {
     s.members[1].a = 3;
     s.members[1].b = 4;
     s.joint_count = 1;
-    s.joints[0] = (fr_structural_gpu_joint_t){
-        .id=1,.generation=1,.a=2,.b=3,.kind=FR_JOINT_BEARING,
-        .normal_stiffness=1e8,.shear_stiffness=1e8,
-        .bearing_capacity=1e8,.pullout_capacity=0,.shear_capacity=0,
-        .moment_capacity=0,.friction=.5,.normal_angle=3.14159265358979323846f};
+    s.joints[0] =
+        (fr_structural_gpu_joint_t){.id = 1,
+                                    .generation = 1,
+                                    .a = 2,
+                                    .b = 3,
+                                    .kind = FR_JOINT_BEARING,
+                                    .normal_stiffness = 1e8,
+                                    .shear_stiffness = 1e8,
+                                    .bearing_capacity = 1e8,
+                                    .pullout_capacity = 0,
+                                    .shear_capacity = 0,
+                                    .moment_capacity = 0,
+                                    .friction = .5,
+                                    .normal_angle = 3.14159265358979323846f};
     return s;
 }
 static void test_converted_bearing_opens_without_tension_or_friction(void) {
@@ -310,13 +343,13 @@ static void test_converted_bearing_opens_without_tension_or_friction(void) {
     ASSERT_TRUE(dc_gpu_set_body_motion(g, b, .3f, 0, 0, e, sizeof(e)));
     ASSERT_TRUE(dc_gpu_set_body_motion(g, a, 0, .05f, 0, e, sizeof(e)));
     steps(g, 1);
-    dc_gpu_body_motion_t ma,mb;
-    ASSERT_TRUE(dc_gpu_read_body_motion(g,a,&ma,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_read_body_motion(g,b,&mb,e,sizeof(e)));
-    printf("open bearing: angles %.9f %.9f omega %.9f %.9f\n",ma.angle,mb.angle,
-           ma.angular_velocity,mb.angular_velocity);
-    ASSERT_TRUE(fabs(ma.angle-.05) < .001);
-    ASSERT_TRUE(fabs(mb.angle-.3) < .0001);
+    dc_gpu_body_motion_t ma, mb;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, a, &ma, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, b, &mb, e, sizeof(e)));
+    printf("open bearing: angles %.9f %.9f omega %.9f %.9f\n", ma.angle,
+           mb.angle, ma.angular_velocity, mb.angular_velocity);
+    ASSERT_TRUE(fabs(ma.angle - .05) < .001);
+    ASSERT_TRUE(fabs(mb.angle - .3) < .0001);
     ASSERT_TRUE(fabs(mb.angular_velocity) < .0001);
     dc_gpu_destroy(g);
     PASS();
@@ -328,31 +361,42 @@ static void test_closed_bearing_creates_no_angular_momentum_or_energy(void) {
     fr_structural_gpu_graph_t s = bearing_pair();
     ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
     steps(g, 90);
-    uint32_t a=FR_STRUCTURAL_BODY_ID_BASE+1,b=FR_STRUCTURAL_BODY_ID_BASE+2;
-    ASSERT_TRUE(dc_gpu_set_body_motion(g,a,0,.05f,0,e,sizeof(e)));
-    steps(g,6);
-    dc_gpu_body_t ba,bb;
-    dc_gpu_body_motion_t ma,mb;
-    ASSERT_TRUE(dc_gpu_read_body_id(g,a,&ba,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_read_body_id(g,b,&bb,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_read_body_motion(g,a,&ma,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_read_body_motion(g,b,&mb,e,sizeof(e)));
-    double mass=ma.mass+mb.mass;
-    double ax=ba.x_fp/65536.+ma.center_x,ay=ba.y_fp/65536.+ma.center_y;
-    double bx=bb.x_fp/65536.+mb.center_x,by=bb.y_fp/65536.+mb.center_y;
-    double cx=(ma.mass*ax+mb.mass*bx)/mass,cy=(ma.mass*ay+mb.mass*by)/mass;
-    double avx=ba.vx_fp/65536.,avy=ba.vy_fp/65536.;
-    double bvx=bb.vx_fp/65536.,bvy=bb.vy_fp/65536.;
-    double vx=(ma.mass*avx+mb.mass*bvx)/mass,vy=(ma.mass*avy+mb.mass*bvy)/mass;
-    double momentum=ma.inertia*ma.angular_velocity+mb.inertia*mb.angular_velocity;
-    momentum+=ma.mass*((ax-cx)*avy-(ay-cy)*avx)+mb.mass*((bx-cx)*bvy-(by-cy)*bvx);
-    double energy=.5*ma.inertia*ma.angular_velocity*ma.angular_velocity+
-                  .5*mb.inertia*mb.angular_velocity*mb.angular_velocity;
-    energy+=.5*ma.mass*((avx-vx)*(avx-vx)+(avy-vy)*(avy-vy))+
-            .5*mb.mass*((bvx-vx)*(bvx-vx)+(bvy-vy)*(bvy-vy));
-    printf("closed bearing: angular %.6f expected 1.200000, relative energy %.6f <= .030750\n",momentum,energy);
-    ASSERT_TRUE(fabs(momentum-1.2)<.03);
-    ASSERT_TRUE(energy<=.03075);
+    uint32_t a = FR_STRUCTURAL_BODY_ID_BASE + 1,
+             b = FR_STRUCTURAL_BODY_ID_BASE + 2;
+    ASSERT_TRUE(dc_gpu_set_body_motion(g, a, 0, .05f, 0, e, sizeof(e)));
+    steps(g, 6);
+    dc_gpu_body_t ba, bb;
+    dc_gpu_body_motion_t ma, mb;
+    ASSERT_TRUE(dc_gpu_read_body_id(g, a, &ba, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_id(g, b, &bb, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, a, &ma, e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, b, &mb, e, sizeof(e)));
+    double mass = ma.mass + mb.mass;
+    double ax = ba.x_fp / 65536. + ma.center_x,
+           ay = ba.y_fp / 65536. + ma.center_y;
+    double bx = bb.x_fp / 65536. + mb.center_x,
+           by = bb.y_fp / 65536. + mb.center_y;
+    double cx = (ma.mass * ax + mb.mass * bx) / mass,
+           cy = (ma.mass * ay + mb.mass * by) / mass;
+    double avx = ba.vx_fp / 65536., avy = ba.vy_fp / 65536.;
+    double bvx = bb.vx_fp / 65536., bvy = bb.vy_fp / 65536.;
+    double vx = (ma.mass * avx + mb.mass * bvx) / mass,
+           vy = (ma.mass * avy + mb.mass * bvy) / mass;
+    double momentum =
+        ma.inertia * ma.angular_velocity + mb.inertia * mb.angular_velocity;
+    momentum += ma.mass * ((ax - cx) * avy - (ay - cy) * avx) +
+                mb.mass * ((bx - cx) * bvy - (by - cy) * bvx);
+    double energy =
+        .5 * ma.inertia * ma.angular_velocity * ma.angular_velocity +
+        .5 * mb.inertia * mb.angular_velocity * mb.angular_velocity;
+    energy +=
+        .5 * ma.mass * ((avx - vx) * (avx - vx) + (avy - vy) * (avy - vy)) +
+        .5 * mb.mass * ((bvx - vx) * (bvx - vx) + (bvy - vy) * (bvy - vy));
+    printf("closed bearing: angular %.6f expected 1.200000, relative energy "
+           "%.6f <= .030750\n",
+           momentum, energy);
+    ASSERT_TRUE(fabs(momentum - 1.2) < .03);
+    ASSERT_TRUE(energy <= .03075);
     dc_gpu_destroy(g);
     PASS();
 }
@@ -363,25 +407,31 @@ static void test_failed_member_does_not_remove_its_sound_rooted_neighbor(void) {
     fr_structural_gpu_graph_t s = two_members();
     s.anchor_count = 1;
     s.members[1].depth_fp = 1 << 15;
-    ASSERT_TRUE(dc_gpu_paint_material(g,20,41,0,DC_MATERIAL_STONE,e,sizeof(e)));
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    steps(g,20);
-    fr_structural_gpu_member_state_t wood,stone;
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    steps(g, 20);
+    fr_structural_gpu_member_state_t wood, stone;
     fr_structural_gpu_node_state_t root;
-    ASSERT_TRUE(fr_gpu_read_structure_member(g,1,&wood));
-    ASSERT_TRUE(fr_gpu_read_structure_member(g,2,&stone));
-    ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&root));
-    printf("rooted survivor: wood %u stone %u utilization %.6f damage %.6f reaction %.6f\n",
-           wood.state,stone.state,stone.utilization,stone.damage,root.reaction[1]);
-    ASSERT_EQ(wood.state,FR_STRUCTURAL_SUPPORTED);
-    ASSERT_EQ(stone.state,FR_STRUCTURAL_CONVERTED);
-    ASSERT_TRUE(fabs(root.reaction[1]+6480)<15);
-    dc_gpu_body_motion_t a,b;
-    ASSERT_TRUE(dc_gpu_read_body_motion(g,FR_STRUCTURAL_BODY_ID_BASE+1,&a,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_read_body_motion(g,FR_STRUCTURAL_BODY_ID_BASE+2,&b,e,sizeof(e)));
-    ASSERT_TRUE(a.flags&DC_GPU_BODY_KINEMATIC);
-    ASSERT_TRUE(!(b.flags&DC_GPU_BODY_KINEMATIC));
-    ASSERT_TRUE(fabs(a.mass-7.2)<.001&&fabs(b.mass-8.1)<.001);
+    ASSERT_TRUE(fr_gpu_read_structure_member(g, 1, &wood));
+    ASSERT_TRUE(fr_gpu_read_structure_member(g, 2, &stone));
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &root));
+    printf("rooted survivor: wood %u stone %u utilization %.6f damage %.6f "
+           "reaction %.6f\n",
+           wood.state, stone.state, stone.utilization, stone.damage,
+           root.reaction[1]);
+    ASSERT_EQ(wood.state, FR_STRUCTURAL_SUPPORTED);
+    ASSERT_EQ(stone.state, FR_STRUCTURAL_CONVERTED);
+    ASSERT_EQ(root.state, FR_STRUCTURAL_SUPPORTED);
+    ASSERT_TRUE(fabs(root.reaction[1] + 6480) < 15);
+    dc_gpu_body_motion_t a, b;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &a,
+                                        e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 2, &b,
+                                        e, sizeof(e)));
+    ASSERT_TRUE(a.flags & DC_GPU_BODY_KINEMATIC);
+    ASSERT_TRUE(!(b.flags & DC_GPU_BODY_KINEMATIC));
+    ASSERT_TRUE(fabs(a.mass - 7.2) < .001 && fabs(b.mass - 8.1) < .001);
     dc_gpu_destroy(g);
     PASS();
 }
@@ -389,25 +439,31 @@ static void test_full_body_pool_reuses_owned_records_without_mass_loss(void) {
     char e[256];
     dc_gpu_t *g = grid();
     ASSERT_TRUE(g);
-    fr_structural_gpu_graph_t s=two_members();
-    ASSERT_TRUE(fr_gpu_place_structure(g,&s,e,sizeof(e)));
-    for(unsigned i=0;i<62;i++) {
-        dc_gpu_world_body_t b={.chunk={1,1},.body={.id=i+1,
-            .x_fp=(16+2*(i%8))<<16,.y_fp=(16+2*(i/8))<<16,
-            .width=1,.height=1,.active=1}};
-        ASSERT_TRUE(dc_gpu_spawn_world_body(g,b,e,sizeof(e)));
+    fr_structural_gpu_graph_t s = two_members();
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    for (unsigned i = 0; i < 62; i++) {
+        dc_gpu_world_body_t b = {.chunk = {1, 1},
+                                 .body = {.id = i + 1,
+                                          .x_fp = (16 + 2 * (i % 8)) << 16,
+                                          .y_fp = (16 + 2 * (i / 8)) << 16,
+                                          .width = 1,
+                                          .height = 1,
+                                          .active = 1}};
+        ASSERT_TRUE(dc_gpu_spawn_world_body(g, b, e, sizeof(e)));
     }
-    steps(g,90);
-    dc_gpu_body_motion_t a,b;
-    ASSERT_TRUE(dc_gpu_read_body_motion(g,FR_STRUCTURAL_BODY_ID_BASE+1,&a,e,sizeof(e)));
-    ASSERT_TRUE(dc_gpu_read_body_motion(g,FR_STRUCTURAL_BODY_ID_BASE+2,&b,e,sizeof(e)));
-    ASSERT_TRUE(!(a.flags&DC_GPU_BODY_KINEMATIC));
-    ASSERT_TRUE(!(b.flags&DC_GPU_BODY_KINEMATIC));
-    ASSERT_TRUE(fabs(a.mass+b.mass-39.6)<.001);
-    for(unsigned i=0;i<62;i++) {
+    steps(g, 90);
+    dc_gpu_body_motion_t a, b;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1, &a,
+                                        e, sizeof(e)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 2, &b,
+                                        e, sizeof(e)));
+    ASSERT_TRUE(!(a.flags & DC_GPU_BODY_KINEMATIC));
+    ASSERT_TRUE(!(b.flags & DC_GPU_BODY_KINEMATIC));
+    ASSERT_TRUE(fabs(a.mass + b.mass - 39.6) < .001);
+    for (unsigned i = 0; i < 62; i++) {
         dc_gpu_body_t ordinary;
-        ASSERT_TRUE(dc_gpu_read_body_id(g,i+1,&ordinary,e,sizeof(e)));
-        ASSERT_EQ(ordinary.active,1u);
+        ASSERT_TRUE(dc_gpu_read_body_id(g, i + 1, &ordinary, e, sizeof(e)));
+        ASSERT_EQ(ordinary.active, 1u);
     }
     dc_gpu_destroy(g);
     PASS();

@@ -29,9 +29,15 @@ static dc_gpu_t *grid(void) {
 #else
     const uint32_t width = 128, height = 128;
 #endif
-    bool ok =
-        c && dc_gpu_create(&g, width, height, "build/shaders/pattern.comp.spv",
-                           err, sizeof(err));
+#ifdef DC_STRUCTURAL_PRESENTATION_TEST
+    bool ok = c && dc_gpu_create_window(&g, width, height, 640, 448,
+                                        "build/shaders/pattern.comp.spv", err, sizeof(err));
+    if (ok)
+        ok = dc_gpu_set_viewport(g, 0, 0, 160, 112) && dc_gpu_set_display_zoom(g, 4);
+#else
+    bool ok = c && dc_gpu_create(&g, width, height, "build/shaders/pattern.comp.spv",
+                                err, sizeof(err));
+#endif
     uint32_t pages_x = width / 64, pages_y = height / 64;
     for (uint32_t i = 0; ok && i < pages_x * pages_y; i++) {
         c->coord = (dc_chunk_coord_t){i % pages_x, i / pages_x};
