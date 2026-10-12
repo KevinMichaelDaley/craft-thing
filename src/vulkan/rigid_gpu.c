@@ -24,6 +24,11 @@ bool dc_gpu_enable_impact_fracture(dc_gpu_t *gpu) {
     gpu->structural_enabled = true;
     return dc_gpu_set_rigid_solver(gpu, true);
 }
+bool dc_gpu_read_impact_fracture(dc_gpu_t *gpu, uint32_t source_id,
+                                dc_gpu_impact_fracture_state_t *state) {
+    (void)gpu; (void)source_id; (void)state;
+    return false;
+}
 static void record_rigid(dc_gpu_t *gpu, bool advance);
 
 static bool error(char *buf, uint32_t cap, const char *message) {
