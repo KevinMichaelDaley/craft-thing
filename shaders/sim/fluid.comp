@@ -23,6 +23,7 @@ layout(push_constant) uniform Params {
 const uint SIDE = 64u;
 const uint CELLS_PER_CHUNK = 4096u;
 const uint FULL = 65536u;
+const uint DISPLACEMENT_MODE = 11u;
 const float TRANSPORT_FUDGE = 1.001;
 const float VELOCITY_DAMPING = 0.997;
 
@@ -210,7 +211,7 @@ void correct_pair(ivec2 p) {
 
 void main() {
     uint linear = gl_GlobalInvocationID.x;
-    if (params.mode == 11u) {
+    if (params.mode == DISPLACEMENT_MODE) {
         displace_column(linear);
         return;
     }

@@ -30,6 +30,8 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 #define DC_PRESSURE_SWEEPS 20u
 #endif
 
+enum { FLUID_DISPLACEMENT_MODE = 11u };
+
 bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkDeviceSize bytes = (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t);
     return dc_gpu_make_device_buffer(gpu, bytes, &gpu->fluid_a_buffer,
@@ -140,14 +142,16 @@ bool dc_gpu_shift_velocity(dc_gpu_t *gpu, int32_t chunk_dx, int32_t chunk_dy,
 static void record_projection_begin(dc_gpu_t *gpu) {
     uint32_t push[7] = { gpu->width, gpu->height, 0, 0, 0, 0, 0 };
     push[5] = dc_gpu_float_bits(gpu->fluid_step_scale);
-    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->fluid_pipeline);
-    push[2] = 11u;
-    vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
-        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    vkCmdDispatch(gpu->command, (gpu->width + 63u) / 64u, 1u, 1u);
-    fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    if (gpu->rigid_occupancy_present) {
+        vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->fluid_pipeline);
+        push[2] = FLUID_DISPLACEMENT_MODE;
+        vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+        vkCmdDispatch(gpu->command, (gpu->width + 63u) / 64u, 1u, 1u);
+        fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    }
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->projection_pipeline);
     push[2] = 5u;
     push[3] = 1u;
