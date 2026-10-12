@@ -41,3 +41,7 @@ User explicitly requested automatic gravity on isolated connected components of 
 **2026-10-12T20:59:58Z**
 
 Prepared compiling RED for the composition prerequisite: mixed connected convex pieces must derive mass, COM, inertia and effective density from their materials; buoyancy must turn the heavy side down and graph checkpoints must retain composition and exact next-tick motion. GPU terrain labeling/extraction remains unimplemented.
+
+**2026-10-12T21:18:11Z**
+
+Mixed-material composition prerequisite passes all three Vulkan cases and full headless249/249: GPU mass-weighted COM/inertia and density, immersed torque, exact next-tick graph checkpoint. Automatic terrain extraction is not implemented yet; compiling RED now covers isolated fall, conservative cold boundaries and last-support removal.

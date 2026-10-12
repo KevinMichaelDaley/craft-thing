@@ -42,3 +42,10 @@ tick; partial immersion is weaker. Anchored structural sources transfer the same
 hydrodynamic loads to their force/moment graph. Fluid changes affect the next
 rigid tick without ordinary-frame copyback. Long floating tests check mean draft
 and bounded waves, and sinking tests check terrain settling and conserved mass.
+
+Compound bodies may contain connected pieces of different rigid materials.
+The GPU sums each piece volume times its material density, computes the mass-weighted
+center and parallel-axis inertia, and caches effective density as total mass divided
+by total volume. Buoyancy acts at the immersed volume centroid, so uneven material
+composition produces a physical restoring or overturning moment. Checkpoint validation
+recomputes composition density without changing the runtime GPU solve.
