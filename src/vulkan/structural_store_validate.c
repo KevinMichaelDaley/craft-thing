@@ -38,7 +38,7 @@ static bool body_valid(const dc_gpu_body_record_t *b) {
     if (!b->reserved[0] && b->reserved[1])
         return false;
     if (b->shape.count > DC_GPU_CONVEX_VERTICES ||
-        b->shape.material > DC_GPU_BODY_MORTAR)
+        b->shape.material > DC_GPU_BODY_DENSE_WOOD)
         return false;
     if (b->piece_count) {
         dc_gpu_compound_shape_t shape = {.count = b->piece_count};
@@ -51,7 +51,8 @@ static bool body_valid(const dc_gpu_body_record_t *b) {
         b->inertia < 0)
         return false;
     if (b->motion_ready) {
-        float density = b->shape.material == DC_GPU_BODY_WOOD ? DC_DENSITY_WOOD
+        float density = b->shape.material == DC_GPU_BODY_DENSE_WOOD ? DC_DENSITY_DENSE_WOOD
+                        : b->shape.material == DC_GPU_BODY_WOOD ? DC_DENSITY_WOOD
                         : b->shape.material == DC_GPU_BODY_MORTAR
                             ? DC_DENSITY_MORTAR
                             : DC_DENSITY_STONE;

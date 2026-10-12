@@ -97,11 +97,17 @@ static void test_dense_wood_sinks_from_its_material_properties(void) {
 static void test_asymmetric_immersion_applies_buoyancy_torque(void) {
     char err[256]; dc_gpu_t *gpu=make_water_body(DC_GPU_BODY_WOOD,18,true);
     ASSERT_TRUE(gpu);
+    dc_gpu_world_body_t wide={.body={.x_fp=20<<16,.y_fp=18<<16,
+        .width=8,.height=4,.id=100,.active=1}};
+    dc_gpu_body_shape_t shape={.count=4,.material=DC_GPU_BODY_WOOD,
+        .vertices={{0,0},{8<<16,0},{8<<16,4<<16},{0,4<<16}}};
+    ASSERT_TRUE(dc_gpu_spawn_convex_body(gpu,wide,&shape,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_motion(gpu,100,.3f,0,0,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_origin(gpu,(dc_chunk_coord_t){0,0},err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu,err,sizeof(err)));
     dc_gpu_body_motion_t motion;
     ASSERT_TRUE(dc_gpu_read_body_motion(gpu,100,&motion,err,sizeof(err)));
+    printf("wide waterline restoring omega %f\n",motion.angular_velocity);
     ASSERT_TRUE(motion.angular_velocity < -.001f);
     dc_gpu_destroy(gpu); PASS();
 }
