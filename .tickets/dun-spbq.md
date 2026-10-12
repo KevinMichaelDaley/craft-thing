@@ -1,6 +1,6 @@
 ---
 id: dun-spbq
-status: open
+status: in_progress
 deps: [dun-v75v, dun-9qub, dun-c459]
 links: [dun-4ftd, dun-08qq, dun-c459, dun-sbk9, ct-0iq3]
 created: 2026-09-27T02:16:24Z
@@ -37,3 +37,7 @@ Apply buoyancy from displaced water volume and gravity from the derived mass, wi
 **2026-10-05T04:51:19Z**
 
 User explicitly requested automatic gravity on isolated connected components of rigid materials and material-derived density/buoyancy. Expanded this existing ticket rather than implementing that follow-up in this session, per user clarification. GPU contact generation dun-ci2x remains the current implementation task.
+
+**2026-10-12T20:59:58Z**
+
+Prepared compiling RED for the composition prerequisite: mixed connected convex pieces must derive mass, COM, inertia and effective density from their materials; buoyancy must turn the heavy side down and graph checkpoints must retain composition and exact next-tick motion. GPU terrain labeling/extraction remains unimplemented.

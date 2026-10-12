@@ -487,3 +487,6 @@ test: build/buoyancy_tests
 test_quarter_native: build/quarter_native_buoyancy_tests
 build/quarter_native_buoyancy_tests: tests/vulkan/buoyancy_tests.c Makefile build/quarter_native_solver_tests $(GPU_SRC) src/world/chunk.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+
+build/component_material_tests: tests/vulkan/component_material_tests.c build/fluid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)

@@ -1,6 +1,6 @@
 ---
 id: dun-c459
-status: in_progress
+status: closed
 deps: [dun-jo5i, dun-x9ei]
 links: [dun-spbq, dun-sbk9, ct-ha8q]
 created: 2026-09-26T05:25:21Z
@@ -36,3 +36,7 @@ Reopened while buoyancy integration extends the boundary from whole-cell masks t
 **2026-10-12T20:56:43Z**
 
 Exact cell-volume and face-aperture GREEN plus row-first displacement now pass all246 headless cases and14 quarter-capacity water cases. Quiescent immersed boundaries produce zero adjacent vertical flow; fully covered faces block transport even in partial cells. Warm quarter structural budget11.843ms rigid/structure,22.243ms full captured tick,67.726MiB mapped and107.196MiB device-only. UI/complete quarter battery pending.
+
+**2026-10-12T21:08:04Z**
+
+Complete UI and quarter-native batteries now pass, including settled concave dynamics, native world checkpoints and Wayland presentation checks. Native quarter smoke60 ticks completes0.633s; no Vulkan validation errors. Displacement acceptance complete.
