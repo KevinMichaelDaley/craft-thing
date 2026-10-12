@@ -12,18 +12,21 @@ static fr_structural_gpu_node_t scene_node(uint32_t id, int x, int y) {
                                       .y_fp = (y % 64) << 16};
 }
 static fr_structural_gpu_graph_t supported_frame(void) {
-    fr_structural_gpu_graph_t graph = {
-        .node_count = 4, .member_count = 3, .anchor_count = 2};
+    fr_structural_gpu_graph_t graph = {.node_count = 5,
+                                       .member_count = 3,
+                                       .joint_count = 1,
+                                       .anchor_count = 2};
     graph.nodes[0] = scene_node(1, 120, 80);
     graph.nodes[1] = scene_node(2, 136, 80);
     graph.nodes[2] = scene_node(3, 152, 80);
-    graph.nodes[3] = scene_node(4, 140, 90);
+    graph.nodes[3] = scene_node(4, 160, 94);
+    graph.nodes[4] = scene_node(5, 154, 80);
     graph.members[0] = (fr_structural_gpu_member_t){
         1, 1, 1, 2, FR_STRUCTURAL_WOOD, 5 << 16, 0, 0};
     graph.members[1] = (fr_structural_gpu_member_t){
         2, 1, 2, 3, FR_STRUCTURAL_WOOD, 5 << 16, 0, 0};
     graph.members[2] = (fr_structural_gpu_member_t){
-        3, 1, 4, 3, FR_STRUCTURAL_WOOD, 4 << 16, 0, 0};
+        3, 1, 4, 5, FR_STRUCTURAL_WOOD, 4 << 16, 0, 0};
     graph.anchors[0] = beam(20).anchors[0];
     graph.anchors[0].chunk = (dc_chunk_coord_t){1, 1};
     graph.anchors[0].x = 55;
@@ -32,8 +35,21 @@ static fr_structural_gpu_graph_t supported_frame(void) {
     graph.anchors[1].id = 2;
     graph.anchors[1].node = 4;
     graph.anchors[1].chunk.x = 2;
-    graph.anchors[1].x = 10;
-    graph.anchors[1].y = 25;
+    graph.anchors[1].x = 33;
+    graph.anchors[1].y = 30;
+    graph.joints[0] = (fr_structural_gpu_joint_t){.id = 1,
+                                                  .generation = 1,
+                                                  .a = 3,
+                                                  .b = 5,
+                                                  .kind = FR_JOINT_MOMENT,
+                                                  .normal_stiffness = 1e8,
+                                                  .shear_stiffness = 1e8,
+                                                  .rotational_stiffness = 1e8,
+                                                  .bearing_capacity = 1e7,
+                                                  .pullout_capacity = 1e7,
+                                                  .shear_capacity = 1e7,
+                                                  .moment_capacity = 1e7,
+                                                  .friction = .5};
     return graph;
 }
 static bool scene_terrain(dc_gpu_t *gpu, char *err) {
@@ -48,7 +64,7 @@ static bool scene_terrain(dc_gpu_t *gpu, char *err) {
             for (unsigned x = 0; x < 64; x++) {
                 unsigned wx = slot % 10 * 64 + x, wy = slot / 10 * 64 + y;
                 if (wy >= 100 || (wx == 119 && wy >= 80) ||
-                    (wx == 138 && wy >= 89))
+                    (wx == 161 && wy >= 94))
                     chunk->cells[y * 64 + x].material = DC_MATERIAL_STONE;
             }
         okay = dc_gpu_upload_chunk(gpu, slot, chunk, err, 256) &&
@@ -57,21 +73,26 @@ static bool scene_terrain(dc_gpu_t *gpu, char *err) {
     free(chunk);
     return okay;
 }
+static bool scene_tick(dc_gpu_t *gpu, char *err) {
+    uint64_t start = SDL_GetPerformanceCounter(),
+             frequency = SDL_GetPerformanceFrequency();
+    bool okay = dc_gpu_present_chunks_steps(gpu, 1, err, 256);
+    uint64_t elapsed = SDL_GetPerformanceCounter() - start,
+             interval = frequency / 60;
+    if (okay && elapsed < interval)
+        SDL_Delay((uint32_t)((interval - elapsed) * 1000 / frequency));
+    return okay;
+}
 static bool scene_snapshot(dc_gpu_t *gpu, const char *path, char *err) {
-    uint32_t *pixels = malloc(640 * 448 * sizeof(*pixels)),
-             *crop = malloc(160 * 112 * sizeof(*crop));
-    bool okay =
-        pixels && crop && dc_gpu_readback(gpu, pixels, 640 * 448, err, 256);
+    uint32_t *pixels = malloc(160 * 112 * sizeof(*pixels));
+    bool okay = pixels && dc_gpu_readback(gpu, pixels, 160 * 112, err, 256);
     if (okay) {
-        for (unsigned y = 0; y < 112; y++)
-            memcpy(crop + y * 160, pixels + y * 640, 160 * sizeof(*crop));
         SDL_Surface *surface = SDL_CreateRGBSurfaceWithFormatFrom(
-            crop, 160, 112, 32, 160 * 4, SDL_PIXELFORMAT_ABGR8888);
+            pixels, 160, 112, 32, 160 * 4, SDL_PIXELFORMAT_ABGR8888);
         okay = surface && SDL_SaveBMP(surface, path) == 0;
         if (surface)
             SDL_FreeSurface(surface);
     }
-    free(crop);
     free(pixels);
     return okay;
 }
@@ -85,6 +106,7 @@ test_two_concave_bodies_on_sideways_beam_and_angled_brace_collapse_visibly(
     if (!overlay)
         dc_gpu_destroy(gpu);
     ASSERT_TRUE(overlay);
+    ASSERT_TRUE(dc_gpu_set_viewport(gpu, 80, 0, 160, 112));
     ASSERT_TRUE(scene_terrain(gpu, err));
     ASSERT_TRUE(dc_gpu_set_rigid_solver(gpu, true));
     fr_structural_gpu_graph_t graph = supported_frame();
@@ -105,7 +127,7 @@ test_two_concave_bodies_on_sideways_beam_and_angled_brace_collapse_visibly(
     ASSERT_TRUE(dc_gpu_spawn_compound_body(gpu, left, &l, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_spawn_compound_body(gpu, right, &u, err, sizeof(err)));
     for (unsigned tick = 0; tick < 60; tick++)
-        ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
+        ASSERT_TRUE(scene_tick(gpu, err));
     dc_gpu_world_body_t held_l, held_u;
     dc_gpu_body_motion_t motion;
     ASSERT_TRUE(dc_gpu_read_world_body(gpu, 1, &held_l, err, sizeof(err)));
@@ -117,24 +139,50 @@ test_two_concave_bodies_on_sideways_beam_and_angled_brace_collapse_visibly(
     printf("braced utilization %.6f damage %.6f\n", supported.utilization,
            supported.damage);
     ASSERT_TRUE(supported.utilization < 1 && supported.damage == 0);
+    uint32_t pixels[160 * 112];
+    ASSERT_TRUE(dc_gpu_readback(gpu, pixels, 160 * 112, err, sizeof(err)));
+    ASSERT_TRUE((pixels[65 * 160 + 41] & 255u) > 120u);
+    ASSERT_TRUE((pixels[65 * 160 + 45] & 255u) < 40u);
+    ASSERT_TRUE((pixels[65 * 160 + 57] & 255u) > 120u);
+    ASSERT_TRUE((pixels[65 * 160 + 61] & 255u) < 40u);
     ASSERT_TRUE(scene_snapshot(gpu, "build/structure_braced.bmp", err));
     graph.node_count = 3;
     graph.member_count = 2;
     graph.anchor_count = 1;
+    graph.joint_count = 0;
     ASSERT_TRUE(fr_gpu_place_structure(gpu, &graph, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
+    ASSERT_TRUE(scene_tick(gpu, err));
     fr_structural_gpu_member_state_t overloaded;
     ASSERT_TRUE(fr_gpu_read_structure_member(gpu, 1, &overloaded));
     printf("unbraced utilization %.6f damage %.6f\n", overloaded.utilization,
            overloaded.damage);
     ASSERT_TRUE(overloaded.utilization > 1 && overloaded.damage < 1);
+    ASSERT_TRUE(dc_gpu_readback(gpu, pixels, 160 * 112, err, sizeof(err)));
+    ASSERT_TRUE((pixels[80 * 160 + 44] & 255u) > 200u);
+    ASSERT_TRUE(((pixels[80 * 160 + 44] >> 8) & 255u) < 80u);
     ASSERT_TRUE(scene_snapshot(gpu, "build/structure_unbraced.bmp", err));
-    for (unsigned tick = 0; tick < 120; tick++)
-        ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
+    for (unsigned tick = 0; tick < 180; tick++)
+        ASSERT_TRUE(scene_tick(gpu, err));
     ASSERT_TRUE(dc_gpu_read_world_body(gpu, 1, &left, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_world_body(gpu, 2, &right, err, sizeof(err)));
-    ASSERT_TRUE(left.body.y_fp > held_l.body.y_fp + 6 * 65536);
-    ASSERT_TRUE(right.body.y_fp > held_u.body.y_fp + 6 * 65536);
+    printf("held/final body y: L %.6f -> %.6f x %.6f; U %.6f -> %.6f x %.6f\n",
+           64. * held_l.chunk.y + held_l.body.y_fp / 65536.,
+           64. * left.chunk.y + left.body.y_fp / 65536.,
+           64. * left.chunk.x + left.body.x_fp / 65536.,
+           64. * held_u.chunk.y + held_u.body.y_fp / 65536.,
+           64. * right.chunk.y + right.body.y_fp / 65536.,
+           64. * right.chunk.x + right.body.x_fp / 65536.);
+    for (unsigned id = 1; id <= 2; id++) {
+        fr_structural_gpu_member_state_t state;
+        if (fr_gpu_read_structure_member(gpu, id, &state))
+            printf("member %u state %u util %.6f damage %.6f\n", id,
+                   state.state, state.utilization, state.damage);
+    }
+    ASSERT_TRUE(scene_snapshot(gpu, "build/structure_collapsed.bmp", err));
+    ASSERT_TRUE(64. * left.chunk.y + left.body.y_fp / 65536. >
+                64. * held_l.chunk.y + held_l.body.y_fp / 65536. + 6.);
+    ASSERT_TRUE(64. * right.chunk.y + right.body.y_fp / 65536. >
+                64. * held_u.chunk.y + held_u.body.y_fp / 65536. + 6.);
     ASSERT_TRUE(dc_gpu_read_body_motion(gpu, 1, &motion, err, sizeof(err)));
     ASSERT_TRUE(fabsf(motion.mass - 234.9f) < .001f);
     ASSERT_TRUE(dc_gpu_read_body_motion(gpu, 2, &motion, err, sizeof(err)));

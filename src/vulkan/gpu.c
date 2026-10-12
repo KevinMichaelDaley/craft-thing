@@ -306,7 +306,7 @@ bool dc_gpu_screen_cell(dc_gpu_t *gpu, uint32_t screen_x, uint32_t screen_y,
 
 bool dc_gpu_set_overlay(dc_gpu_t *gpu, dc_gpu_overlay_t overlay) {
     if (!gpu || overlay < DC_GPU_OVERLAY_NONE ||
-        overlay > DC_GPU_OVERLAY_RIGID_IDS) return false;
+        overlay > DC_GPU_OVERLAY_STRUCTURAL_STRESS) return false;
     gpu->overlay = overlay;
     return true;
 }

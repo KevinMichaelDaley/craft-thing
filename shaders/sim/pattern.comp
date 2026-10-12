@@ -1,11 +1,13 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
-#include "../../include/dungeoncraft/material_density.h"
+#include "rigid_body.glsl"
+#include "rigid_shape.glsl"
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(set = 0, binding = 0, std430) buffer Cells { uint cells[]; };
 layout(set = 0, binding = 1, std430) buffer ChunkCells { uvec2 chunk_cells[]; };
 layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
 layout(set = 0, binding = 3, std430) readonly buffer Occupancy { uint occupancy[]; };
+layout(set = 0, binding = 4, std430) readonly buffer Bodies { Body bodies[64]; uint body_data[]; };
 layout(set = 0, binding = 16, std430) readonly buffer MarkerGrid { uint marker_grid[]; };
 struct Particle {
     int x_fp, y_fp, vx_fp, vy_fp;
@@ -52,6 +54,43 @@ uint material_color(uint material, uint flags) {
     if (material == 5u) return 0xff808090u;
     if (material == 6u) return 0xffa0a8b0u;
     return 0xff707070u;
+}
+
+uint packed_color(vec3 color) {
+    uvec3 rgb=uvec3(round(clamp(color,vec3(0),vec3(255))));
+    return 0xff000000u|(rgb.z<<16)|(rgb.y<<8)|rgb.x;
+}
+vec3 unpacked_color(uint color) {return vec3(color&255u,(color>>8)&255u,(color>>16)&255u);}
+uint structure_color(Body body) {
+    uint material=body.material;
+    uint color=material==2u?0xff287aaau:material==4u?0xff205f85u:material==3u?0xffb0b8c0u:0xff909090u;
+    if(body.reserved0!=0x53545231u||body.reserved1==0u||body.reserved1>16u) return color;
+    uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
+    uint base=8u+2u*w*h+4096u*8u+12u+8192u*32u+16u+64u*32u+8192u*16u;
+    uint graph=base+32u+body_data[base+1u]*8u;
+    uint state=graph+24000u+(body.reserved1-1u)*16u;
+    float utilization=uintBitsToFloat(body_data[state+7u]);
+    if(body_data[state+3u]==3u||isnan(utilization)||isinf(utilization)) return 0xffd040d0u;
+    vec3 green=vec3(48,192,64),yellow=vec3(240,208,32),red=vec3(240,48,32);
+    vec3 stress=utilization<.5?mix(green,yellow,clamp(utilization*2.,0.,1.)):
+        mix(yellow,red,clamp((utilization-.5)*2.,0.,1.));
+    return packed_color(stress);
+}
+uint structural_pixel(ivec2 cell,uint id,uint background) {
+    for(uint slot=0u;slot<64u;slot++) {
+        Body body=bodies[slot];if(body.enabled==0u||body.id!=id) continue;
+        uint foreground=structure_color(body);
+        if(body.reserved0!=0x53545231u&&body.piece_count!=0u)
+            for(uint piece=0u;piece<body.piece_count;piece++) if(piece_cell_overlap(body,piece,cell)) {
+                uint material=body.pieces[piece].material;
+                foreground=material==2u?0xff287aaau:material==4u?0xff205f85u:material==3u?0xffb0b8c0u:0xff909090u;
+                break;
+            }
+        uint index=uint(cell.y)*params.width+uint(cell.x);
+        float coverage=min(float(occupancy[2u*params.width*params.height+index])/65536.,1.);
+        return packed_color(mix(unpacked_color(background),unpacked_color(foreground),coverage));
+    }
+    return background;
 }
 
 struct DensitySample {
@@ -101,7 +140,7 @@ DensitySample material_density(ivec2 p) {
     density_sample.coverage = water + solid * (1.0 - water);
     density_sample.premultiplied = water * linear_color(0xffd07030u) +
                            (1.0 - water) * solid * solid_color;
-    if (occupancy[uint(p.y) * params.width + uint(p.x)] != 0u) {
+    if (params.brush_y != 4u && occupancy[uint(p.y) * params.width + uint(p.x)] != 0u) {
         density_sample.coverage = 1.0;
         density_sample.premultiplied = linear_color(0xff30c040u);
     }
@@ -145,6 +184,8 @@ void main() {
         if (params.mode == 2u && params.brush_y != 2u) {
             uint filtered = cell_material_color(ivec2(p));
             uint body_id=occupancy[p.y*params.width+p.x];
+            if(params.brush_y==4u && body_id!=0u)
+                filtered=structural_pixel(ivec2(p),body_id,filtered);
             if(params.brush_y==3u && body_id!=0u)
                 filtered=(body_id&1u)!=0u ? 0xff30c040u : 0xffe09040u;
             if ((params.brush_x & 1u) != 0u) {
