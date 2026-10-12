@@ -16,6 +16,11 @@ _Static_assert(offsetof(dc_gpu_body_record_t, bounds_low) == 200, "GPU cached bo
 enum { RIGID_RASTER = 1u, RIGID_PREPARE = 2u, RIGID_PHYSICAL_MASK = 128u };
 
 static bool submit_rigid(dc_gpu_t *gpu, bool advance, char *err, uint32_t cap);
+
+bool dc_gpu_enable_impact_fracture(dc_gpu_t *gpu) {
+    (void)gpu;
+    return false;
+}
 static void record_rigid(dc_gpu_t *gpu, bool advance);
 
 static bool error(char *buf, uint32_t cap, const char *message) {
