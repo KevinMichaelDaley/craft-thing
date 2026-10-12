@@ -100,10 +100,53 @@ static void test_removing_last_support_triggers_automatic_fall(void) {
     ASSERT_TRUE(extracted);
     PASS();
 }
+static void test_checkpoint_restores_automatic_extraction_and_cold_wood(void) {
+    dc_gpu_t *gpu = NULL, *restored = NULL;
+    char err[256];
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    for (unsigned y = 20; y < 24; y++)
+        for (unsigned x = 0; x < 4; x++)
+            chunk->cells[y * 64 + x].material = DC_MATERIAL_WOOD;
+    bool okay = dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)) &&
+                dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)) &&
+                dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)) &&
+                dc_gpu_enable_automatic_components(gpu) &&
+                dc_gpu_rigid_step(gpu, err, sizeof(err)) &&
+                fr_gpu_save_structure(gpu, "/tmp/component-extraction.dcs", err,
+                                      sizeof(err));
+    if (!okay) {
+        dc_gpu_destroy(gpu);
+        free(chunk);
+    }
+    ASSERT_TRUE(okay);
+    ASSERT_TRUE(dc_gpu_create(
+        &restored, 64, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(restored, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(restored, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_load_structure(restored, "/tmp/component-extraction.dcs",
+                                      err, sizeof(err)));
+    for (unsigned y = 20; y < 24; y++)
+        for (unsigned x = 20; x < 24; x++)
+            chunk->cells[y * 64 + x].material = DC_MATERIAL_STONE;
+    ASSERT_TRUE(dc_gpu_upload_chunk(restored, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(restored, err, sizeof(err)));
+    dc_gpu_body_t body = {0};
+    bool extracted =
+        dc_gpu_read_body_id(restored, 0x80000001u, &body, err, sizeof(err));
+    dc_gpu_destroy(restored);
+    dc_gpu_destroy(gpu);
+    free(chunk);
+    remove("/tmp/component-extraction.dcs");
+    ASSERT_TRUE(extracted);
+    PASS();
+}
 int main(void) {
     RUN(test_isolated_stone_automatically_becomes_a_falling_body);
     RUN(test_component_touching_cold_boundary_remains_terrain);
     RUN(test_removing_last_support_triggers_automatic_fall);
+    RUN(test_checkpoint_restores_automatic_extraction_and_cold_wood);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
