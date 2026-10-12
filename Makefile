@@ -155,6 +155,8 @@ build/structural_store_tests: tests/structural/store_tests.c tests/structural/pl
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/structural_root_identity_tests: tests/structural/root_identity_tests.c tests/structural/placement_tests.c include/ferrum/structural/gpu.h $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/structural_particle_identity_tests: tests/structural/particle_identity_tests.c tests/structural/placement_tests.c include/ferrum/structural/gpu.h $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/quarter_native_structural_root_identity_tests: tests/structural/root_identity_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 build/quarter_native_structural_store_tests: tests/structural/store_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
