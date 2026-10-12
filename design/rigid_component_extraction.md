@@ -18,6 +18,7 @@ world cells for the existing conservative displacement pass. Pool saturation lea
 the source untouched for a later retry. No runtime CPU component solve or copyback
 is involved.
 
-Native activation, snapshot activation, saturated retries, streamed ownership and
-wet seam composition are acceptance work in progress. The initial three cases prove
-isolated gravity, conservative cold boundaries and removal of the final support.
+Graph checkpoints preserve automatic-extraction activation and cold wood material.
+Native activation, saturated retries, streamed ownership and wet seam composition
+remain acceptance work in progress. Four cases prove isolated gravity, conservative
+cold boundaries, removal of the final support and checkpoint continuation.

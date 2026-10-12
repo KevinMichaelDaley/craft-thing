@@ -49,3 +49,7 @@ Mixed-material composition prerequisite passes all three Vulkan cases and full h
 **2026-10-12T21:22:11Z**
 
 Initial extraction GREEN passes3/3 on Intel Vulkan: isolated first-tick fall, conservative cold-boundary retention, and last-support removal. Reuses selectable GPU root hooking and exact non-overlapping material rectangles; unsupported geometry and full body pools remain unchanged. Full regressions running. Native enable, snapshot activation, seams, composition/wet and saturation acceptance remain pending.
+
+**2026-10-12T21:33:38Z**
+
+Checkpoint activation and cold wood GREEN passes full253/253 headless and4/4 quarter-capacity extraction tests; zero Vulkan validation errors. Native automatic RED plus warm mixed seam/saturated retry acceptance are queued; no native/complete-ticket claim yet.
