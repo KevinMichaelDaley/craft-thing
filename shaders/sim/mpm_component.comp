@@ -28,7 +28,8 @@ bool dirt_at(ivec2 p) {
     uint page = pages[(uint(p.y) / 64u) * page_width + uint(p.x) / 64u];
     if (page == 0u) return false;
     uint atlas = (page - 1u) * 4096u + (uint(p.y) % 64u) * 64u + uint(p.x) % 64u;
-    return (cells[atlas].x & 0xffffu) == 4u;
+    uint material=cells[atlas].x & 0xffffu;
+    return params.unused0 != 0u ? (material==1u || material==7u || material==8u) : material==4u;
 }
 
 uint index_of(ivec2 p) { return uint(p.y) * params.width + uint(p.x); }

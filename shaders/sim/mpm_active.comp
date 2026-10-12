@@ -27,10 +27,11 @@ void scan_tile() {
     if (cell.x < params.width && cell.y < params.height) {
         uint page_width = (params.width + 63u) / 64u;
         uint page = pages[(cell.y / 64u) * page_width + cell.x / 64u];
-        if (page != 0u && particle_counts[page - 1u] != 0u) {
+        if (page != 0u && (params.unused0 != 0u || particle_counts[page - 1u] != 0u)) {
             uint index = (page - 1u) * 4096u + (cell.y % 64u) * 64u + cell.x % 64u;
             uint material = chunk_cells[index].x & 0xffffu;
-            if (material == 2u || material == 4u || material == 5u || material == 6u)
+            if (params.unused0 != 0u ? (material==1u || material==7u || material==8u) :
+                (material == 2u || material == 4u || material == 5u || material == 6u))
                 atomicOr(has_grain, 1u);
         }
     }

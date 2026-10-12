@@ -370,4 +370,7 @@ bool dc_gpu_readback(dc_gpu_t *gpu, uint32_t *cells, uint32_t cell_count,
 /** Destroy the context and its Vulkan resources. */
 void dc_gpu_destroy(dc_gpu_t *gpu);
 
+/** Enable GPU extraction of isolated resident rigid-material components. */
+bool dc_gpu_enable_automatic_components(dc_gpu_t *gpu);
+
 #endif

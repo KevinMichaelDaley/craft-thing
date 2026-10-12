@@ -19,7 +19,7 @@ GLSLANG ?= glslangValidator
 
 GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/broadphase_gpu.o build/contact_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
 GPU_OBJ += build/solver_gpu.o
-GPU_OBJ += build/compound_gpu.o
+GPU_OBJ += build/compound_gpu.o build/component_gpu.o
 GPU_OBJ += build/structural_store_gpu.o
 GPU_OBJ += build/structural_store_validate.o
 GPU_OBJ += build/structural_store_chunk.o
@@ -500,3 +500,11 @@ build/quarter_native_component_material_tests: tests/vulkan/component_material_t
 
 build/component_extraction_tests: tests/vulkan/component_extraction_tests.c build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+build/shaders/component_extract.comp.spv: shaders/sim/component_extract.comp shaders/sim/rigid_body.glsl
+	mkdir -p build/shaders
+	glslangValidator -V --target-env vulkan1.3 $< -o $@
+build/fluid_tests: build/shaders/component_extract.comp.spv
+
+build/component_gpu.o: src/vulkan/component_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@

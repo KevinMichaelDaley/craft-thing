@@ -35,7 +35,7 @@ static void test_isolated_stone_automatically_becomes_a_falling_body(void) {
                               err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_enable_impact_fracture(gpu));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
     dc_gpu_body_t body = {0};
     bool extracted =
@@ -61,7 +61,7 @@ static void test_component_touching_cold_boundary_remains_terrain(void) {
                               err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_enable_impact_fracture(gpu));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
     bool retained = chunk->cells[20 * 64].material == DC_MATERIAL_STONE;
@@ -84,7 +84,7 @@ static void test_removing_last_support_triggers_automatic_fall(void) {
                               err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_enable_impact_fracture(gpu));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
     bool supported = chunk->cells[20 * 64 + 20].material == DC_MATERIAL_STONE;

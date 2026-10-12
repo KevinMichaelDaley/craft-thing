@@ -96,7 +96,8 @@ struct dc_gpu {
     VkBuffer mpm_label_a_buffer, mpm_label_b_buffer, mpm_component_size_buffer;
     VkDeviceMemory mpm_label_a_memory, mpm_label_b_memory, mpm_component_size_memory;
     void *mpm_label_a_mapped, *mpm_label_b_mapped, *mpm_component_size_mapped;
-    VkPipeline mpm_component_pipeline;
+    VkPipeline mpm_component_pipeline, component_extract_pipeline;
+    bool automatic_components_enabled;
     VkBuffer page_buffer;
     VkDeviceMemory page_memory;
     void *page_mapped;
@@ -326,5 +327,8 @@ void dc_gpu_record_mpm(dc_gpu_t *gpu);
 /** Initialize the window swapchain and its image-owned synchronization. */
 bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t width, uint32_t height,
                         char *err, uint32_t cap);
+
+void dc_gpu_record_components(dc_gpu_t *gpu, bool rigid);
+void dc_gpu_record_component_extraction(dc_gpu_t *gpu);
 
 #endif

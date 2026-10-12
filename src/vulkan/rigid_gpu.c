@@ -353,6 +353,7 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
     VkDependencyInfo dep = { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
         .memoryBarrierCount = 1, .pMemoryBarriers = &upload };
     vkCmdPipelineBarrier2(gpu->command, &dep);
+    if (advance && gpu->automatic_components_enabled) dc_gpu_record_component_extraction(gpu);
     if (advance) dc_gpu_record_structural_begin(gpu);
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_pipeline);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,

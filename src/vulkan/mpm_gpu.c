@@ -79,10 +79,14 @@ bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
            make_pipeline(gpu, "build/shaders/mpm_active.comp.spv",
                          &gpu->mpm_activity_pipeline, err, cap) &&
            make_pipeline(gpu, "build/shaders/mpm_component.comp.spv",
-                         &gpu->mpm_component_pipeline, err, cap);
+                         &gpu->mpm_component_pipeline, err, cap) &&
+           make_pipeline(gpu, "build/shaders/component_extract.comp.spv",
+                         &gpu->component_extract_pipeline, err, cap);
 }
 
 void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu) {
+    if (gpu->component_extract_pipeline)
+        vkDestroyPipeline(gpu->device, gpu->component_extract_pipeline, NULL);
     if (gpu->mpm_pipeline) vkDestroyPipeline(gpu->device, gpu->mpm_pipeline, NULL);
     if (gpu->mpm_activity_pipeline)
         vkDestroyPipeline(gpu->device, gpu->mpm_activity_pipeline, NULL);
@@ -181,12 +185,12 @@ static void mpm_barrier(dc_gpu_t *gpu, VkPipelineStageFlags2 target_stage,
     vkCmdPipelineBarrier2(gpu->command, &dependency);
 }
 
-void dc_gpu_record_mpm(dc_gpu_t *gpu) {
+void dc_gpu_record_components(dc_gpu_t *gpu, bool rigid) {
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                       gpu->mpm_activity_pipeline);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
-    uint32_t push[7] = { gpu->width, gpu->height, 0u, 0u, 0u, 0u, 0u };
+    uint32_t push[7] = { gpu->width, gpu->height, 0u, rigid ? 1u : 0u, 0u, 0u, 0u };
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     vkCmdDispatch(gpu->command, (gpu->width + 15u) / 16u,
@@ -233,6 +237,11 @@ void dc_gpu_record_mpm(dc_gpu_t *gpu) {
                         VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
         }
     }
+}
+
+void dc_gpu_record_mpm(dc_gpu_t *gpu) {
+    dc_gpu_record_components(gpu, false);
+    uint32_t push[7] = {gpu->width, gpu->height, 0u, 0u, 0u, 0u, 0u};
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                       gpu->mpm_pipeline);
     push[2] = DC_MPM_MOISTURE_MODE;
