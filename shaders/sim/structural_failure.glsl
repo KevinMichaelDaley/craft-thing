@@ -68,7 +68,9 @@ void damage_members() {
            bodies[slot].reserved1!=member+1u||bodies[slot].enabled==0u) {
             data[st+3u]=4u;continue;
         }
-        if(data[m+4u]==2u) {
+        float compression=max(-eq_get(st+4u),0)/(float(data[m+5u])/65536.0);
+        bool crushed=data[m+4u]==0u&&compression>eq_get(profile+4u);
+        if(data[m+4u]==2u||crushed) {
             if(!crumble_member(member)) {data[st+3u]=4u;continue;}
         } else {
             Body b=bodies[slot];float length=float(b.vertices[1].x)/65536.0;

@@ -37,6 +37,7 @@ float debris_cell(Body b,ivec2 cell,out vec2 center) {
 bool crumble_member(uint member) {
     uint g=graph(),m=g+MEMBERS+member*8u,st=member_state(member);
     Body b=bodies[data[m+7u]];
+    uint debris_material=data[m+4u]==0u?5u:6u;
     vec2 low,high;body_bounds(b,low,high);
     vec2 origin=vec2(b.x_fp,b.y_fp)/65536.0;
     ivec2 begin=ivec2(floor(origin+low)),end=ivec2(ceil(origin+high));
@@ -49,7 +50,7 @@ bool crumble_member(uint member) {
         if(volume<1e-7) continue;
         uint c;if(!cell_ref(cell,c)) return false;
         uint material=cells[c].x&65535u;
-        if(material!=0u&&material!=3u&&material!=6u) return false;
+        if(material!=0u&&material!=3u&&material!=debris_material) return false;
         uint p=(c/4096u)*8192u+c%4096u;
         if(debris_particles[p].mass_fp!=0u&&debris_particles[p+4096u].mass_fp!=0u) return false;
         area+=volume;
@@ -72,9 +73,9 @@ bool crumble_member(uint member) {
         particle.id_hi=0x80000000u^b.id^data[m+1u];
         particle.mass_fp=cumulative-written;written=cumulative;
         particle.grain_fp=uint(round(min(.35,sqrt(volume/3.14159265))*65536.0));
-        particle.material=6u;particle.flags=0u;
+        particle.material=debris_material;particle.flags=0u;
         debris_particles[p]=particle;debris_counts[c/4096u]++;
-        cells[c].x=(cells[c].x&0xffff0000u)|6u;
+        cells[c].x=(cells[c].x&0xffff0000u)|debris_material;
         uint view=uint(y)*params.width+uint(x);
         if(debris_occupancy[view]==b.id) debris_occupancy[view]=0u;
         if(debris_occupancy[params.width*params.height+view]==b.id)
