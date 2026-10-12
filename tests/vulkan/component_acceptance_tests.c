@@ -60,6 +60,43 @@ static void test_wet_mixed_component_crosses_a_warm_chunk_seam(void) {
             water += chunks[slot].cells[cell].fluid_mass;
         }
     }
+    ASSERT_TRUE(fr_gpu_save_structure(gpu, "build/extracted_seam.dcs", err,
+                                      sizeof(err)));
+    dc_gpu_t *copy = NULL;
+    ASSERT_TRUE(dc_gpu_create(&copy, 128, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_load_structure(copy, "build/extracted_seam.dcs", err,
+                                      sizeof(err)));
+    dc_gpu_compound_shape_t shape;
+    ASSERT_TRUE(
+        dc_gpu_read_compound_shape(copy, body.id, &shape, err, sizeof(err)));
+    ASSERT_EQ(shape.pieces[0].material, DC_GPU_BODY_WOOD);
+    ASSERT_EQ(shape.pieces[1].material, DC_GPU_BODY_STONE);
+    ASSERT_TRUE(dc_gpu_set_page(copy, 0, 0, UINT32_MAX, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(copy, 1, 0, UINT32_MAX, err, sizeof(err)));
+    dc_gpu_body_t cold;
+    ASSERT_TRUE(dc_gpu_rigid_step(copy, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_id(copy, body.id, &cold, err, sizeof(err)));
+    ASSERT_EQ(cold.x_fp, body.x_fp);
+    ASSERT_EQ(cold.y_fp, body.y_fp);
+    ASSERT_TRUE(dc_gpu_set_page(copy, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(copy, 1, 0, 1, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)) &&
+                dc_gpu_rigid_step(copy, err, sizeof(err)));
+    dc_gpu_body_t continued, resumed;
+    dc_gpu_body_motion_t continued_motion, resumed_motion;
+    ASSERT_TRUE(
+        dc_gpu_read_body_id(gpu, body.id, &continued, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_id(copy, body.id, &resumed, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(gpu, body.id, &continued_motion, err,
+                                        sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(copy, body.id, &resumed_motion, err,
+                                        sizeof(err)));
+    ASSERT_EQ(continued.x_fp, resumed.x_fp);
+    ASSERT_EQ(continued.y_fp, resumed.y_fp);
+    ASSERT_EQ(continued_motion.angle, resumed_motion.angle);
+    ASSERT_EQ(continued_motion.mass, resumed_motion.mass);
+    dc_gpu_destroy(copy);
     dc_gpu_destroy(gpu);
     free(chunks);
     ASSERT_TRUE(extracted);
