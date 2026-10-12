@@ -2,6 +2,12 @@
 
 #include "gpu_internal.h"
 
+bool dc_gpu_fluid_displacement_overflow(dc_gpu_t *gpu, uint64_t *mass,
+                                      char *err, uint32_t cap) {
+    (void)gpu; (void)mass; (void)err; (void)cap;
+    return false;
+}
+
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
     return false;

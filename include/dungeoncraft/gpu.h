@@ -315,6 +315,11 @@ bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
 /** Advance one conservative Eulerian fluid substep on resident cells. */
 bool dc_gpu_fluid_step(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
 
+/** Diagnostic readback of water retained under rigid occupancy when displacement
+ * has no resident receiving capacity. This volume remains in chunk snapshots. */
+bool dc_gpu_fluid_displacement_overflow(dc_gpu_t *gpu, uint64_t *mass,
+                                      char *err_buf, uint32_t err_cap);
+
 /** Read the largest absolute discrete divergence in fully submerged cells. */
 bool dc_gpu_fluid_max_divergence(dc_gpu_t *gpu, float *divergence,
                                  char *err_buf, uint32_t err_cap);

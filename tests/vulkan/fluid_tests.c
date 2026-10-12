@@ -994,7 +994,66 @@ static void test_equal_elapsed_time_tracks_across_frame_cadences(void) {
     PASS();
 }
 
+static void test_rigid_displacement_raises_water_without_losing_volume(void) {
+    char err[256] = {0};
+    dc_chunk_t left = {0}, right = {0}, saved = {0};
+    for (uint32_t y = 0; y < 64; ++y) {
+        left.cells[y * 64 + 19].material = DC_MATERIAL_STONE;
+        left.cells[y * 64 + 21].material = DC_MATERIAL_STONE;
+    }
+    left.cells[31 * 64 + 20].material = DC_MATERIAL_STONE;
+    left.cells[30 * 64 + 20].fluid_mass = DC_FLUID_FULL;
+    dc_gpu_t *gpu = make_grid(&left, &right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    ASSERT_TRUE(dc_gpu_set_rigid_solver(gpu, true));
+    dc_gpu_body_t body = {.x_fp=20 * (int32_t)DC_FLUID_FULL,
+        .y_fp=30 * (int32_t)DC_FLUID_FULL, .width=1, .height=1,
+        .id=100, .active=1};
+    ASSERT_TRUE(dc_gpu_spawn_body(gpu, body, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(gpu, 100, 0, 0,
+        DC_GPU_BODY_KINEMATIC, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved, err, sizeof(err)));
+    ASSERT_EQ(saved.cells[30 * 64 + 20].fluid_mass, 0u);
+    ASSERT_EQ(saved.cells[29 * 64 + 20].fluid_mass, DC_FLUID_FULL);
+    uint64_t overflow = 999;
+    ASSERT_TRUE(dc_gpu_fluid_displacement_overflow(gpu, &overflow, err, sizeof(err)));
+    ASSERT_EQ(overflow, 0u);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
+static void test_closed_displacement_retains_and_reports_overflow(void) {
+    char err[256] = {0};
+    dc_chunk_t left = {0}, right = {0}, saved = {0};
+    left.cells[30 * 64 + 20].fluid_mass = DC_FLUID_FULL;
+    left.cells[29 * 64 + 20].material = DC_MATERIAL_STONE;
+    dc_gpu_t *gpu = make_grid(&left, &right, err, sizeof(err));
+    ASSERT_TRUE(gpu != NULL);
+    ASSERT_TRUE(dc_gpu_set_rigid_solver(gpu, true));
+    dc_gpu_body_t body = {.x_fp=20 * (int32_t)DC_FLUID_FULL,
+        .y_fp=30 * (int32_t)DC_FLUID_FULL, .width=1, .height=1,
+        .id=100, .active=1};
+    ASSERT_TRUE(dc_gpu_spawn_body(gpu, body, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(gpu, 100, 0, 0,
+        DC_GPU_BODY_KINEMATIC, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_fluid_step(gpu, err, sizeof(err)));
+    uint64_t overflow = 0;
+    ASSERT_TRUE(dc_gpu_fluid_displacement_overflow(gpu, &overflow, err, sizeof(err)));
+    ASSERT_EQ(overflow, DC_FLUID_FULL);
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved, err, sizeof(err)));
+    uint64_t total = 0;
+    for (uint32_t i=0; i<DC_CHUNK_CELLS; ++i) total += saved.cells[i].fluid_mass;
+    ASSERT_EQ(total, DC_FLUID_FULL);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 int main(void) {
+    RUN(test_rigid_displacement_raises_water_without_losing_volume);
+    RUN(test_closed_displacement_retains_and_reports_overflow);
     RUN(test_water_falls_and_crosses_resident_chunk_edge);
     RUN(test_closed_basin_conserves_mass_for_long_run);
     RUN(test_unloaded_neighbor_keeps_mass_in_source);
