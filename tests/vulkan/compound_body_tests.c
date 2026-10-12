@@ -63,7 +63,7 @@ static void test_invalid_compounds_leave_existing_body_unchanged(void) {
     ASSERT_TRUE(!dc_gpu_spawn_compound_body(g,fixture_body(1,40,40),&bad,err,sizeof(err)));
     bad=l;bad.pieces[1]=fixture_rectangle(DC_GPU_BODY_STONE,8,12,8,4);
     ASSERT_TRUE(!dc_gpu_spawn_compound_body(g,fixture_body(1,40,40),&bad,err,sizeof(err)));
-    bad=l;bad.pieces[1].material=DC_GPU_BODY_WOOD;
+    bad=l;bad.pieces[1].material=99u;
     ASSERT_TRUE(!dc_gpu_spawn_compound_body(g,fixture_body(1,40,40),&bad,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_compound_shape(g,1,&after,err,sizeof(err)));ASSERT_EQ(memcmp(&l,&after,sizeof(l)),0);
     dc_gpu_world_body_t body;ASSERT_TRUE(dc_gpu_read_world_body(g,1,&body,err,sizeof(err)));

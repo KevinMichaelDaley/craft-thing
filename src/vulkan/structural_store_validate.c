@@ -18,6 +18,33 @@ static int node_index(const fr_structural_gpu_graph_t *g, uint32_t id) {
     return -1;
 }
 
+static float material_density(uint32_t material) {
+    return material == DC_GPU_BODY_DENSE_WOOD ? DC_DENSITY_DENSE_WOOD
+           : material == DC_GPU_BODY_WOOD     ? DC_DENSITY_WOOD
+           : material == DC_GPU_BODY_MORTAR   ? DC_DENSITY_MORTAR
+                                              : DC_DENSITY_STONE;
+}
+
+static float composition_density(const dc_gpu_body_record_t *body) {
+    if (!body->piece_count)
+        return material_density(body->shape.material);
+    double volume = 0, mass = 0;
+    for (unsigned p = 0; p < body->piece_count; p++) {
+        const dc_gpu_body_shape_t *shape = &body->pieces[p];
+        double twice_area = 0;
+        for (unsigned i = 0; i < shape->count; i++) {
+            unsigned j = (i + 1) % shape->count;
+            twice_area +=
+                (double)shape->vertices[i].x_fp * shape->vertices[j].y_fp -
+                (double)shape->vertices[i].y_fp * shape->vertices[j].x_fp;
+        }
+        double area = fabs(twice_area);
+        volume += area;
+        mass += area * material_density(shape->material);
+    }
+    return (float)(mass / volume);
+}
+
 static bool body_valid(const dc_gpu_body_record_t *b) {
     if (!b->body.active && !b->reserved[0])
         return true;
@@ -51,11 +78,7 @@ static bool body_valid(const dc_gpu_body_record_t *b) {
         b->inertia < 0)
         return false;
     if (b->motion_ready) {
-        float density = b->shape.material == DC_GPU_BODY_DENSE_WOOD ? DC_DENSITY_DENSE_WOOD
-                        : b->shape.material == DC_GPU_BODY_WOOD ? DC_DENSITY_WOOD
-                        : b->shape.material == DC_GPU_BODY_MORTAR
-                            ? DC_DENSITY_MORTAR
-                            : DC_DENSITY_STONE;
+        float density = composition_density(b);
         if (b->mass <= 0 || b->inertia <= 0 || !isfinite(b->density) ||
             fabsf(b->density - density) > 1e-6f ||
             !floats_valid(&b->inverse_mass, 2) || !isfinite(b->center[0]) ||
@@ -175,12 +198,13 @@ bool dc_gpu_structure_payload_valid(const dc_gpu_t *gpu,
                     p->bodies[j].body.id == b->body.id)
                     return false;
         const uint32_t *output = p->graph + 36000u + i * 4u;
-        if (output[0] &&
-            (!output[1] || output[2] > p->control[3] ||
-             (output[3] != 1 && output[3] != 2)))
+        if (output[0] && (!output[1] || output[2] > p->control[3] ||
+                          (output[3] != 1 && output[3] != 2)))
             return false;
-        if (output[3] == 2 && (b->body.active || b->reserved[0] != DC_GPU_STRUCTURAL_CONVERTED_TAG ||
-                              output[0] != b->body.id || output[1] != b->reserved[1]))
+        if (output[3] == 2 &&
+            (b->body.active ||
+             b->reserved[0] != DC_GPU_STRUCTURAL_CONVERTED_TAG ||
+             output[0] != b->body.id || output[1] != b->reserved[1]))
             return false;
         const uint32_t *pending = p->graph + 38000u + i * 4u;
         if (pending[0] > 1000000 || pending[1] > 1000000 || pending[2] > 2)

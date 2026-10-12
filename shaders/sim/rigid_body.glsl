@@ -74,22 +74,26 @@ void piece_properties(Body b,uint piece,out float area,out vec2 center,out float
 }
 void body_properties(inout Body b) {
     if (b.motion_ready != 0u) return;
-    b.density = b.material == 4u ? DC_DENSITY_DENSE_WOOD : b.material == 2u ? DC_DENSITY_WOOD :
-                b.material == 3u ? DC_DENSITY_MORTAR : DC_DENSITY_STONE;
-    vec2 weighted=vec2(0);float area=0.0;
-    float areas[BODY_PIECES],inertias[BODY_PIECES];vec2 centers[BODY_PIECES];
+    vec2 weighted=vec2(0);float area=0.0,total_mass=0.0;
+    float areas[BODY_PIECES],inertias[BODY_PIECES],densities[BODY_PIECES];
+    vec2 centers[BODY_PIECES];
     for(uint piece=0u;piece<body_pieces(b);++piece) {
+        uint material=b.piece_count==0u ? b.material : b.pieces[piece].material;
+        densities[piece]=material==4u ? DC_DENSITY_DENSE_WOOD :
+            material==2u ? DC_DENSITY_WOOD : material==3u ? DC_DENSITY_MORTAR : DC_DENSITY_STONE;
         piece_properties(b,piece,areas[piece],centers[piece],inertias[piece]);
-        area+=areas[piece];weighted+=areas[piece]*centers[piece];
+        float mass=areas[piece]*densities[piece];
+        area+=areas[piece];total_mass+=mass;weighted+=mass*centers[piece];
     }
-    b.center=weighted/max(area,1e-12);
-    b.mass = max(area*b.density,1e-12);
+    b.center=weighted/max(total_mass,1e-12);
+    b.mass=max(total_mass,1e-12);
+    b.density=b.mass/max(area,1e-12);
     float inertia=0.0;
     for(uint piece=0u;piece<body_pieces(b);++piece) {
         vec2 delta=centers[piece]-b.center;
-        inertia+=inertias[piece]+areas[piece]*dot(delta,delta);
+        inertia+=densities[piece]*(inertias[piece]+areas[piece]*dot(delta,delta));
     }
-    b.inertia=max(b.density*inertia,1e-24);
+    b.inertia=max(inertia,1e-24);
     b.inverse_mass = (b.motion_flags & 1u) == 0u ? 1.0/b.mass : 0.0;
     b.inverse_inertia = (b.motion_flags & 3u) == 0u ? 1.0/b.inertia : 0.0;
     float radius=0.0;

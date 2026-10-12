@@ -46,8 +46,7 @@ bool dc_gpu_valid_compound_shape(const dc_gpu_body_t *body,const dc_gpu_compound
     if(!shape || shape->count<2 || shape->count>DC_GPU_BODY_PIECES) return false;
     bool linked[DC_GPU_BODY_PIECES][DC_GPU_BODY_PIECES]={{false}};
     for(uint32_t i=0;i<shape->count;++i) {
-        if(!dc_gpu_valid_body_shape(body,&shape->pieces[i]) ||
-            shape->pieces[i].material!=shape->pieces[0].material) return false;
+        if(!dc_gpu_valid_body_shape(body,&shape->pieces[i])) return false;
         for(uint32_t j=0;j<i;++j) {
             if(!separated(shape->pieces[i],shape->pieces[j]) &&
                 !separated(shape->pieces[j],shape->pieces[i])) return false;

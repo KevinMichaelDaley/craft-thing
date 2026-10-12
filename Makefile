@@ -227,6 +227,7 @@ test_quarter_native: build/quarter_native_config_tests build/quarter_native_flui
 	./build/quarter_native_fluid_tests
 	./build/quarter_native_solver_tests
 	./build/quarter_native_buoyancy_tests
+	./build/quarter_native_component_material_tests
 	./build/quarter_native_rigid_tests
 	./build/structural_world_tests
 	./build/quarter_native_rigid_solver_tests
@@ -448,6 +449,7 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/halo_tests
 	./build/fluid_tests
 	./build/buoyancy_tests
+	./build/component_material_tests
 	./build/particle_tests
 	./build/marker_slot_tests
 	./build/chunk_tests
@@ -490,3 +492,8 @@ build/quarter_native_buoyancy_tests: tests/vulkan/buoyancy_tests.c Makefile buil
 
 build/component_material_tests: tests/vulkan/component_material_tests.c build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+test: build/component_material_tests
+test_quarter_native: build/quarter_native_component_material_tests
+build/quarter_native_component_material_tests: tests/vulkan/component_material_tests.c Makefile build/quarter_native_solver_tests $(GPU_SRC) src/world/chunk.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)

@@ -219,7 +219,7 @@ typedef struct {
     uint32_t count;
     dc_gpu_body_shape_t pieces[DC_GPU_BODY_PIECES];
 } dc_gpu_compound_shape_t;
-/** Spawn a compound body; invalid/disconnected/overlapping pieces leave state unchanged. */
+/** Spawn connected non-overlapping pieces; mass properties derive from each piece material. */
 bool dc_gpu_spawn_compound_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
                                 const dc_gpu_compound_shape_t *shape,
                                 char *err_buf, uint32_t err_cap);
