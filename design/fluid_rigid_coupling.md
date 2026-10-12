@@ -1,26 +1,44 @@
 # Moving rigid boundaries and water volume
 
-The fluid boundary uses the final rigid occupancy raster. At the beginning of a
-fluid update, one GPU invocation owns each viewport column and transfers water
-from occupied cells upward into resident, permeable capacity. Transfers use
-integer 16.16 water units and a fixed traversal order. No two invocations write
-the same column, so this displacement is reproducible without atomic allocation
-or a CPU solve.
+The final GPU rigid raster retains stable occupancy IDs and swept IDs, plus three
+16.16 planes for exact solid cell area and covered horizontal/vertical faces.
+Convex pieces share polygon clipping with submerged-volume integration. Fluid
+receiving capacity is the cell area left by the solid, and pressure/transport use
+the open face aperture. A partial cell cannot pass water through a covered face.
 
-Solid terrain, missing pages and the viewport boundary stop the search. Occupied
-cells can be crossed within a column, but cannot receive water. When upward
-capacity is unavailable, the unresolved volume stays at its original world cell;
-it is retained overflow rather than deleted water. Ordinary fluid transport
-cannot move that volume until the occupancy clears or a subsequent displacement
-update finds capacity. Lateral redistribution around a blocked column is not
-implemented; callers can explicitly inspect the retained overflow with
-`dc_gpu_fluid_displacement_overflow`. This diagnostic waits for GPU state and is
-not used by the ordinary frame loop.
+At the beginning of a fluid update, one invocation owns each viewport row and
+fills nearby resident capacity with displaced water, searching at most 64 cells
+to either side. A barrier precedes the column pass, which lifts remaining excess
+into upward capacity. This fills vacancies left by sideways motion before
+raising water into the free surface. Integer transfers and fixed traversal order
+make both passes reproducible without atomic allocation or a CPU solve. Solid
+terrain, missing pages and viewport boundaries stop each search.
 
-The authoritative chunk water fields include both mobile water and retained
-overflow. Their existing streaming and checkpoint transactions therefore preserve
-the total without a separate reservoir or a changed file format. Removing a body
-reopens its cells and permits normal water transport on the next fluid update.
+Unplaceable volume remains at its original world cell as retained overflow.
+`dc_gpu_fluid_displacement_overflow` explicitly reports water exceeding the cell's
+available area; ordinary frames do not call this diagnostic readback. Chunk
+water fields preserve mobile water and overflow through streaming and checkpoints.
+No extra reservoir or file format is required. Removing a body reopens capacity
+and faces for subsequent fluid updates.
 
-Buoyancy, drag and submerged-shape torque remain separate work in `dun-sbk9` and
-`dun-08qq`; the displacement pass alone does not exert forces on bodies.
+# Buoyancy and viscous drag
+
+The GPU solver clips each rigid piece against immersed cell volume, integrates
+water gravity at the displaced-volume centroid, and applies velocity-relative
+drag and torque. Mass/inertia derive from material density; water density is one,
+ordinary wood is 0.6, dense wood 1.2, mortar 1.6 and stone 2.7. No body-specific
+sink/float flag or density override exists. Dry bodies skip hydrostatic work.
+
+For terrain-bounded pools, up to 16 clear columns on either side reconstruct the
+ambient hydrostatic surface from their water volume. Solid/cold barriers stop
+sampling. This excludes temporary films and wake gaps produced by geometric
+rezoning. Unbounded/open-flow cases use local wet-cell sampling. The projection
+initializer carries hydrostatic head through submerged rigid regions so a static
+immersed body does not generate artificial circulation.
+
+Viscous grid-volume relaxation has rate 0.03 per tick. With the minimum material
+density 0.6, full immersion damps relative motion by at most one twentieth per
+tick; partial immersion is weaker. Anchored structural sources transfer the same
+hydrodynamic loads to their force/moment graph. Fluid changes affect the next
+rigid tick without ordinary-frame copyback. Long floating tests check mean draft
+and bounded waves, and sinking tests check terrain settling and conserved mass.

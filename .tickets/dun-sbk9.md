@@ -22,3 +22,9 @@ Sample Eulerian water volume against rasterized convex occupancy, compute displa
 
 Dry wood falls; low-density wood floats at a repeatable draft and follows flow; denser wood sinks. A water-level change changes force on the next tick, while water volume remains accounted for.
 
+
+## Notes
+
+**2026-10-12T20:56:43Z**
+
+GPU buoyancy/drag acceptance now passes14 cases normal and quarter-native: dry fall, exact full/partial volume, dense wood sinking, restoring torque, water-level next-tick response, triangle area, material-scaled flow relaxation, and10-second floating conservation/mean draft with bounded waves. Pool reconstruction and passive viscosity avoid rezoning films/wakes. Full headless246/246; native visible/extraction integration remains.

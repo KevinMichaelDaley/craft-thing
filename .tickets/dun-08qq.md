@@ -22,3 +22,9 @@ Transfer stone cell mass into one or more stable-ID convex bodies on GPU; use fi
 
 A dropped stone sinks through water and settles on terrain without lost water or stone mass; crossings and saves preserve body state, and the visible scene has no per-frame copyback.
 
+
+## Notes
+
+**2026-10-12T20:56:43Z**
+
+Stone and density1.2 wood sink and settle on terrain in GPU tests while preserving material mass and every water unit. Buoyancy uses exact submerged shape volume and density-derived mass. Normal/quarter14-case water suites and full246-case headless battery pass. Automatic extraction and final visible/streaming integration remain with dun-spbq/ct-ha8q.

@@ -32,3 +32,7 @@ GPU final-occupancy displacement now conservatively raises water into resident c
 **2026-10-12T20:33:59Z**
 
 Reopened while buoyancy integration extends the boundary from whole-cell masks to exact solid cell volumes and face apertures. Added RED for partial-cell flow through a fully covered face; GREEN adds weighted projection/transport and row-first rezoning into vacated capacity. Full regressions pending before reclosure.
+
+**2026-10-12T20:56:43Z**
+
+Exact cell-volume and face-aperture GREEN plus row-first displacement now pass all246 headless cases and14 quarter-capacity water cases. Quiescent immersed boundaries produce zero adjacent vertical flow; fully covered faces block transport even in partial cells. Warm quarter structural budget11.843ms rigid/structure,22.243ms full captured tick,67.726MiB mapped and107.196MiB device-only. UI/complete quarter battery pending.
