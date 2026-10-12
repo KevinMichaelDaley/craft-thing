@@ -154,6 +154,7 @@ build/quarter_native_structural_impact_tests: tests/structural/impact_tests.c te
 test_quarter_native: build/quarter_native_structural_impact_tests
 $(SOLVER_SHADER): shaders/sim/rigid_impact.glsl
 build/shaders/structural.comp.spv: shaders/sim/structural_impact.glsl
+build/shaders/structural.comp.spv: shaders/sim/structural_identity.glsl
 build/structural_bench: tests/structural/benchmark.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 .PHONY: bench_structural

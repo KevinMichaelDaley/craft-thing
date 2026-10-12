@@ -57,6 +57,8 @@ static bool immutable_identity(const fr_structural_gpu_graph_t *old,
                                const fr_structural_gpu_graph_t *next) {
     for (uint32_t i = 0; i < next->node_count; i++) {
         int previous = node_index(old, next->nodes[i].id);
+        if (previous >= 0 && next->nodes[i].generation < old->nodes[previous].generation)
+            return false;
         if (previous >= 0 &&
             old->nodes[previous].generation == next->nodes[i].generation &&
             memcmp(&old->nodes[previous], &next->nodes[i],
@@ -67,8 +69,10 @@ static bool immutable_identity(const fr_structural_gpu_graph_t *old,
         for (uint32_t j = 0; j < old->member_count; j++) {
             const fr_structural_gpu_member_t *a = &old->members[j],
                                              *b = &next->members[i];
-            if (a->id != b->id || a->generation != b->generation)
+            if (a->id != b->id)
                 continue;
+            if (b->generation < a->generation) return false;
+            if (a->generation != b->generation) continue;
             if (memcmp(a, b, offsetof(fr_structural_gpu_member_t, reserved)) !=
                 0)
                 return false;
@@ -82,19 +86,25 @@ static bool immutable_identity(const fr_structural_gpu_graph_t *old,
                 return false;
         }
     for (uint32_t i = 0; i < next->joint_count; i++)
-        for (uint32_t j = 0; j < old->joint_count; j++)
+        for (uint32_t j = 0; j < old->joint_count; j++) {
+            if (next->joints[i].id == old->joints[j].id &&
+                next->joints[i].generation < old->joints[j].generation) return false;
             if (next->joints[i].id == old->joints[j].id &&
                 next->joints[i].generation == old->joints[j].generation &&
                 memcmp(&next->joints[i], &old->joints[j],
                        sizeof(next->joints[i])) != 0)
                 return false;
+        }
     for (uint32_t i = 0; i < next->anchor_count; i++)
-        for (uint32_t j = 0; j < old->anchor_count; j++)
+        for (uint32_t j = 0; j < old->anchor_count; j++) {
+            if (next->anchors[i].id == old->anchors[j].id &&
+                next->anchors[i].generation < old->anchors[j].generation) return false;
             if (next->anchors[i].id == old->anchors[j].id &&
                 next->anchors[i].generation == old->anchors[j].generation &&
                 memcmp(&next->anchors[i], &old->anchors[j],
                        sizeof(next->anchors[i])) != 0)
                 return false;
+        }
     return true;
 }
 static bool validate(const fr_structural_gpu_graph_t *g) {

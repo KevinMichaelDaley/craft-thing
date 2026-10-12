@@ -61,6 +61,7 @@ bool separated(Body a,Body b) {
     }
     return true;
 }
+#include "structural_identity.glsl"
 void transaction() {
     uint s=base(),st=graph()+GRAPH_WORDS;data[s+2u]=0u;
     for(uint i=0u;i<data[st+1u];i++) {
@@ -79,6 +80,7 @@ void transaction() {
             if(!separated(b,other)) return;
         }
     }
+    identity_stage(st);
     /* Every source cell and every output slot is validated before ownership transfer. */
     for(uint i=0u;i<data[st+1u];i++) {
         uint m=st+MEMBERS+i*8u,slot=data[m+7u];Body b=bodies[slot];place_pose(b);
@@ -91,7 +93,7 @@ void transaction() {
         b.enabled=1u;bodies[slot]=b;data[m+6u]=0u;
     }
     for(uint i=0u;i<GRAPH_WORDS;i++) data[graph()+i]=data[st+i];
-    for(uint i=0u;i<32u*4u;i++) data[graph()+28000u+i]=0u;
+    identity_commit();
     data[s]=uint(data[st+1u]!=0u);data[s+2u]=1u;data[s+3u]++;
 }
 bool member_footprint_resident(uint member) {

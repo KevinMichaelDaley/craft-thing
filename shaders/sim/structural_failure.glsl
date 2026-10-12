@@ -147,9 +147,15 @@ void failure() {
             float grace=uintBitsToFloat(data[g+29000u+data[entry+4u]*12u+7u]);
             ticks=max(ticks,uint(ceil(grace*60.0)));
         }
-        if(status<=1u) {data[clock]=0u;continue;}
+        if(status<=1u) {
+            for(uint n=0u;n<data[g];n++) if(data[state(n)+1u]==data[node]) data[failure_clock(n)]=0u;
+            continue;
+        }
         if(status!=2u) continue;
-        data[clock]=min(data[clock]+1u,ticks);
+        uint confirmed=0u;
+        for(uint n=0u;n<data[g];n++) if(data[state(n)+1u]==data[node]) confirmed=max(confirmed,data[failure_clock(n)]);
+        confirmed=min(confirmed+1u,ticks);
+        for(uint n=0u;n<data[g];n++) if(data[state(n)+1u]==data[node]) data[failure_clock(n)]=confirmed;
         if(data[clock]<ticks) continue;
         for(uint a=0u;a<data[g+1u];a++) if(component_member(a,data[node]))
             for(uint b=a+1u;b<data[g+1u];b++) if(component_member(b,data[node])) {
