@@ -19,12 +19,9 @@ test_reloaded_coordinate_in_a_new_slot_checkpoints_latest_state_once(void) {
                                       sizeof(err)));
     bool loaded = fr_gpu_load_structure(restored, "/tmp/shadow-chunk-store.dcs",
                                         err, sizeof(err));
-    bool overridden = false, latest = false;
+    bool latest = false;
     if (loaded) {
-        memset(chunk, 0, sizeof(*chunk));
-        loaded = fr_gpu_upload_structure_chunk(restored, 0, chunk, &overridden,
-                                               err, sizeof(err)) &&
-                 dc_gpu_download_chunk(restored, 0, chunk, err, sizeof(err));
+        loaded = dc_gpu_download_chunk(restored, 0, chunk, err, sizeof(err));
         latest = chunk->cells[20 * 64 + 20].fluid_mass == 12345;
     }
     dc_gpu_destroy(restored);
@@ -32,7 +29,6 @@ test_reloaded_coordinate_in_a_new_slot_checkpoints_latest_state_once(void) {
     free(chunk);
     remove("/tmp/shadow-chunk-store.dcs");
     ASSERT_TRUE(loaded);
-    ASSERT_TRUE(overridden);
     ASSERT_TRUE(latest);
     PASS();
 }

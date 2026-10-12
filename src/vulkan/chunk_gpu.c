@@ -391,3 +391,21 @@ bool dc_gpu_readback(dc_gpu_t *gpu, uint32_t *cells, uint32_t cell_count,
                (size_t)gpu->view_width * sizeof(uint32_t));
     return true;
 }
+
+void dc_gpu_structural_track_chunk(dc_gpu_t *gpu, uint32_t slot,
+                                   dc_chunk_coord_t coord) {
+    if (!gpu || !gpu->body_mapped || slot >= DC_GPU_CHUNK_SLOTS)
+        return;
+    uint32_t *p =
+        dc_gpu_structural_data(gpu) + DC_STRUCTURAL_HEADER_WORDS + slot * 8u;
+    for (unsigned other = 0; other < DC_GPU_CHUNK_SLOTS; other++) {
+        uint32_t *previous = dc_gpu_structural_data(gpu) +
+                             DC_STRUCTURAL_HEADER_WORDS + other * 8u;
+        if (other != slot && previous[5] &&
+            memcmp(previous, &coord, sizeof(coord)) == 0)
+            previous[5] = 0;
+    }
+    memcpy(p, &coord, sizeof(coord));
+    ++p[4];
+    p[5] = 1;
+}

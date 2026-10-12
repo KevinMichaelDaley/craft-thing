@@ -1,6 +1,6 @@
 const uint FRAGMENT_CAPACITY=8u,FRAGMENT_ID_BASE=0x80000000u;
 bool fragment_clip(Body source,uint piece,uint axis,float cut,bool lower,out Shape shape) {
-    shape.count=0u;shape.material=source.material;
+    shape.count=0u;shape.material=source.piece_count==0u ? source.material : source.pieces[piece].material;
     for(uint i=0u;i<BODY_VERTEX_CAPACITY;i++) shape.vertices[i]=ivec2(0);
     for(uint i=0u;i<piece_vertices(source,piece);i++) {
         vec2 a=piece_rest_vertex(source,piece,i);
@@ -40,6 +40,7 @@ Body fragment_build(Body source,Shape pieces[8],uint labels[8],uint owner,uint g
     Body b=source;b.piece_count=0u;
     for(uint i=0u;i<FRAGMENT_CAPACITY;i++) if(pieces[i].count!=0u&&labels[i]==owner)
         b.pieces[b.piece_count++]=pieces[i];
+    b.material=b.pieces[0].material;
     if(b.piece_count==1u) {
         b.vertex_count=b.pieces[0].count;
         for(uint i=0u;i<b.vertex_count;i++) b.vertices[i]=b.pieces[0].vertices[i];

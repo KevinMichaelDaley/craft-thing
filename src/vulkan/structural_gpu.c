@@ -199,16 +199,6 @@ static bool validate(const fr_structural_gpu_graph_t *g) {
     }
     return true;
 }
-void dc_gpu_structural_track_chunk(dc_gpu_t *gpu, uint32_t slot,
-                                   dc_chunk_coord_t coord) {
-    if (!gpu || !gpu->body_mapped || slot >= DC_GPU_CHUNK_SLOTS)
-        return;
-    uint32_t *p =
-        dc_gpu_structural_data(gpu) + DC_STRUCTURAL_HEADER_WORDS + slot * 8u;
-    memcpy(p, &coord, sizeof(coord));
-    ++p[4];
-    p[5] = 1;
-}
 bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     dc_gpu_structural_data(gpu)[6] = 192u;
     dc_gpu_structural_data(gpu)[10] = 1u;
