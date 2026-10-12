@@ -23,3 +23,7 @@ Visual scenes show two concave rigid bodies held by a sideways beam with an angl
 **2026-10-12T21:47:16Z**
 
 Compiling RED for actual quarter-native L/U concave loads on a sideways beam plus angled brace: require GPU stress display, intact support, stress rise after brace removal, delayed cascade and visible BMP artifacts. Initial RED fails missing structural overlay, before scene placement; remaining dependencies and visual acceptance stay incomplete.
+
+**2026-10-12T22:22:29Z**
+
+Actual Wayland quarter-native scripted demo now passes placed/marked structure creation, brace removal, delayed two-concave collapse, overlay cycling and reset. Submerged anchored wood transfers density-derived net buoyancy (-8640 external / +8640 reaction) into GPU support graph. Existing coupled-material visual fixture now has real connected bedrock supports rather than floating fixed-wall assumptions; mud/fracture/movement smoke passes.
