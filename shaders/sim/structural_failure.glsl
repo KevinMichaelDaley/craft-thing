@@ -70,16 +70,18 @@ void damage_members() {
         }
         if(data[m+4u]==2u) {
             if(!crumble_member(member)) {data[st+3u]=4u;continue;}
-        } else if(data[m+4u]==0u) {
+        } else {
             Body b=bodies[slot];float length=float(b.vertices[1].x)/65536.0;
-            float depth=float(data[m+5u])/65536.0,work=eq_get(profile+6u)*depth;
-            if(work>eq_get(st+9u)||!fragment_body(slot,0u,
-                clamp(eq_get(st+8u)*length,depth*.25,length-depth*.25),data[m+1u])) {
+            float depth=float(data[m+5u])/65536.0;
+            bool grain=data[m+4u]==1u;
+            float work=eq_get(profile+6u)*(grain?eq_get(profile+9u)*length:depth);
+            float plane=grain?depth*.5:clamp(eq_get(st+8u)*length,depth*.25,length-depth*.25);
+            if(work>eq_get(st+9u)||!fragment_body(slot,grain?1u:0u,plane,data[m+1u])) {
                 data[st+3u]=4u;continue;
             }
             data[m+6u]|=STRUCTURAL_RETIRED;data[st+3u]=5u;
             eq_put(st+11u,work);eq_put(st+12u,max(eq_get(st+9u)-work,0));
-        } else release_member(member);
+        }
         cut=true;
     }
     if(!cut) return;
