@@ -6,6 +6,7 @@
 
 #include "dungeoncraft/chunk.h"
 #include "dungeoncraft/gpu.h"
+#include "ferrum/structural/gpu.h"
 
 typedef struct dc_level_view dc_level_view_t;
 
@@ -19,6 +20,10 @@ dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
                                       char *err, uint32_t err_cap);
 bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t err_cap);
 bool dc_level_view_step(dc_level_view_t *view, char *err, uint32_t err_cap);
+/** Author explicitly placed structural members in the streamed world. */
+bool dc_level_view_place_structure(dc_level_view_t *view,
+                                   const fr_structural_gpu_graph_t *graph,
+                                   char *err, uint32_t err_cap);
 bool dc_level_view_step_timed(dc_level_view_t *view, float seconds,
                               char *err, uint32_t err_cap);
 bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,

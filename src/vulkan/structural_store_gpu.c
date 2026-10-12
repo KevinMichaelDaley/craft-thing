@@ -14,6 +14,13 @@ enum {
         DC_GPU_BODY_CAPACITY * sizeof(dc_gpu_body_record_t) / sizeof(uint32_t)
 };
 
+bool fr_gpu_upload_structure_chunk(dc_gpu_t *gpu, uint32_t slot,
+                                   const dc_chunk_t *chunk, bool *restored,
+                                   char *err, uint32_t cap) {
+    if (restored) *restored = false;
+    return dc_gpu_upload_chunk(gpu, slot, chunk, err, cap);
+}
+
 static bool error(char *err, uint32_t cap, const char *message) {
     if (err && cap)
         snprintf(err, cap, "%s", message);

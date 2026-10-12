@@ -93,6 +93,10 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path,
 /** Validate and restore a graph-aware snapshot; accept older body-only worlds. */
 bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path,
                            char *err_buf, uint32_t err_cap);
+/** Upload authoritative streamed physics, preferring pending checkpoint records. */
+bool fr_gpu_upload_structure_chunk(dc_gpu_t *gpu, uint32_t slot,
+                                   const dc_chunk_t *chunk, bool *restored,
+                                   char *err_buf, uint32_t err_cap);
 /** Explicit diagnostic GPU readback; ordinary frames do not traverse/read the
  * graph. */
 bool fr_gpu_read_structure_node(dc_gpu_t *gpu, uint32_t id,

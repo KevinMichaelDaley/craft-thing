@@ -43,6 +43,13 @@ bool dc_level_view_step(dc_level_view_t *view, char *err, uint32_t cap) {
     return dc_level_view_step_timed(view, 1.0f / 60.0f, err, cap);
 }
 
+bool dc_level_view_place_structure(dc_level_view_t *view,
+                                   const fr_structural_gpu_graph_t *graph,
+                                   char *err, uint32_t cap) {
+    (void)view; (void)graph;
+    return error(err, cap, "Native structural world transaction is not implemented");
+}
+
 bool dc_level_view_step_timed(dc_level_view_t *view, float seconds,
                               char *err, uint32_t cap) {
     if (!view) return error(err, cap, "Level view is null");
