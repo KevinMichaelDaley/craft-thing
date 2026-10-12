@@ -17,3 +17,9 @@ Persist structure/member/joint IDs, world anchors and footprint cells, rest geom
 
 Camera rebases leave forces, stress and countdowns invariant. Cold neighbor constraints remain UNKNOWN until loaded. Save/reopen mid-overload and across a cut preserves exact authoritative state; no duplicated descendants, lost joints or reset timers. Page-slot reuse cannot anchor to unrelated terrain. Saturated pending conversions survive restart and later commit exactly once. Older worlds without structural records load unchanged.
 
+
+## Notes
+
+**2026-10-12T16:43:21Z**
+
+Complete GPU footprint residency now detects cold diagonal corner pages even with resident endpoints. The regression freezes100 UNKNOWN ticks, then resumes original10/90 grace count and converts exactly at90 confirmed ticks. Normal/quarter case passes; full headless212/212. Snapshot/identity remapping and world-save integration remain unfinished.

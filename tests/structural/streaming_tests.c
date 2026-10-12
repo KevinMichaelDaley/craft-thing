@@ -13,15 +13,15 @@ static void test_cold_diagonal_footprint_freezes_support_loss_clock(void) {
     s.nodes[1].y_fp = 3 << 16;
     s.anchors[0].x = 62;
     s.anchors[0].y = 58;
-    ASSERT_TRUE(dc_gpu_paint_material(g, 62, 58, 0, DC_MATERIAL_STONE,
-                                      err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g, 62, 58, 0, DC_MATERIAL_STONE, err,
+                                      sizeof(err)));
     ASSERT_TRUE(fr_gpu_place_structure(g, &s, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
     fr_structural_gpu_node_state_t state;
     ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &state));
     ASSERT_EQ(state.state, FR_STRUCTURAL_SUPPORTED);
-    ASSERT_TRUE(dc_gpu_paint_material(g, 62, 58, 0, DC_MATERIAL_AIR,
-                                      err, sizeof(err)));
+    ASSERT_TRUE(
+        dc_gpu_paint_material(g, 62, 58, 0, DC_MATERIAL_AIR, err, sizeof(err)));
     for (unsigned i = 0; i < 10; i++)
         ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(g, 1, 0, UINT32_MAX, err, sizeof(err)));
