@@ -4,8 +4,21 @@
 
 bool dc_gpu_fluid_displacement_overflow(dc_gpu_t *gpu, uint64_t *mass,
                                       char *err, uint32_t cap) {
-    (void)gpu; (void)mass; (void)err; (void)cap;
-    return false;
+    if (!gpu || !mass) return false;
+    if (!dc_gpu_copy_chunk_state(gpu, UINT32_MAX, false, false, err, cap)) return false;
+    const uint32_t *pages = gpu->page_mapped;
+    const uint32_t *occupancy = gpu->occupancy_mapped;
+    const dc_cell_t *cells = gpu->chunk_mapped;
+    uint64_t total = 0;
+    for (uint32_t y = 0; y < gpu->height; ++y)
+        for (uint32_t x = 0; x < gpu->width; ++x) {
+            uint32_t page = pages[(y / 64u) * gpu->page_width + x / 64u];
+            if (page && occupancy[y * gpu->width + x])
+                total += cells[(page - 1u) * DC_CHUNK_CELLS +
+                    (y % 64u) * 64u + x % 64u].fluid_mass;
+        }
+    *mass = total;
+    return true;
 }
 
 static bool error(char *buf, uint32_t cap, const char *message) {
@@ -127,6 +140,14 @@ bool dc_gpu_shift_velocity(dc_gpu_t *gpu, int32_t chunk_dx, int32_t chunk_dy,
 static void record_projection_begin(dc_gpu_t *gpu) {
     uint32_t push[7] = { gpu->width, gpu->height, 0, 0, 0, 0, 0 };
     push[5] = dc_gpu_float_bits(gpu->fluid_step_scale);
+    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->fluid_pipeline);
+    push[2] = 11u;
+    vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+    vkCmdDispatch(gpu->command, (gpu->width + 63u) / 64u, 1u, 1u);
+    fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->projection_pipeline);
     push[2] = 5u;
     push[3] = 1u;

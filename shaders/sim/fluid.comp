@@ -136,6 +136,33 @@ void scan_line(uint line) {
     }
 }
 
+void displace_column(uint x) {
+    if (x >= params.width) return;
+    for (int y = int(params.height) - 1; y >= 0; --y) {
+        ivec2 source = ivec2(int(x), y);
+        uint page = page_at(source);
+        if (page == 0u || occupancy[uint(y) * params.width + x] == 0u) continue;
+        uint source_index = atlas_index(source, page);
+        uint remaining = chunk_cells[source_index].y;
+        if (remaining == 0u) continue;
+        for (int above = y - 1; above >= 0 && remaining != 0u; --above) {
+            ivec2 destination = ivec2(int(x), above);
+            uint destination_page = page_at(destination);
+            if (destination_page == 0u) break;
+            uint destination_index = atlas_index(destination, destination_page);
+            if (!permeable_material(chunk_cells[destination_index].x & 0xffffu)) break;
+            if (occupancy[uint(above) * params.width + x] != 0u) continue;
+            uint receiving = chunk_cells[destination_index].y;
+            uint flux = min(remaining, receiving < FULL ? FULL - receiving : 0u);
+            chunk_cells[destination_index].y = receiving + flux;
+            remaining -= flux;
+        }
+        /* Retain unresolved water at its original world cell. It is explicitly
+           reported as overflow and remains authoritative through streaming. */
+        chunk_cells[source_index].y = remaining;
+    }
+}
+
 void correct_pair(ivec2 p) {
     uint index = uint(p.y) * params.width + uint(p.x);
     uint own = source_mass(index);
@@ -183,6 +210,10 @@ void correct_pair(ivec2 p) {
 
 void main() {
     uint linear = gl_GlobalInvocationID.x;
+    if (params.mode == 11u) {
+        displace_column(linear);
+        return;
+    }
     if (params.mode <= 3u) {
         scan_line(linear);
         return;
