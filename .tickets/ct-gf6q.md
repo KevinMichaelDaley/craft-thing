@@ -47,3 +47,7 @@ Severe axial stone compression now selects the atomic clipped gravel transaction
 **2026-10-12T16:33:47Z**
 
 GPU continuous-column buckling fixed: shared-node collinear members aggregate full physical span and minimum bending stiffness, so subdivision no longer strengthens a column. One/two-member critical loads match; quarter regression and full headless211/211 pass. Warm quarter budget9.168 ms rigid/structure,18.377 ms whole; allocations64.445/107.196 MiB. Eleven material and four shared-impact cases pass. Streamed ownership, bound-water/composition integration and final cascade/visual acceptance remain with ct-1n9n/ct-ha8q and existing dependencies; material ticket remains in progress until that acceptance is settled.
+
+**2026-10-12T19:47:59Z**
+
+MPM births now use committed transaction serials with a separate particle namespace; clipped zero-mass records are omitted. Consumed source roots retain ownership while MPM descendants exist. Normal and quarter-native regression cases pass, including checkpoint lineage and two previously colliding roots.

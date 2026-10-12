@@ -1,6 +1,6 @@
 ---
 id: ct-1n9n
-status: in_progress
+status: closed
 deps: [ct-0iq3]
 links: []
 created: 2026-10-11T05:44:09Z
@@ -39,3 +39,7 @@ Native GREEN f196e9e passes full headless/UI/quarter-native batteries:361 counte
 **2026-10-12T18:39:40Z**
 
 Root lifetime GREEN93d55f4 passes3 cases normal and quarter-native; native world2 cases still pass, and full headless227/227. Live converted rigid descendants retain their source-body ID and generation across graph clearing and checkpoints: aliases at equal/stale generation are rejected, fresh generations remain permitted. Attachment damage/cuts persist across two reloads and rebased page mapping preserves force/stress. Crumble particle transaction identity is the remaining cross-ticket verification before closure.
+
+**2026-10-12T19:47:59Z**
+
+Persistence acceptance verified: exact graph/damage/countdown, converted history, saturated transactions, corrupt-file atomic rejection, legacy body files, cold chunks, native world restart, rebase/cut continuity and retained rigid/MPM root generations. All 230 headless cases pass; normal/quarter snapshot and identity suites pass.
