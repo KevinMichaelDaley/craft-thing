@@ -84,6 +84,7 @@ bool dc_gpu_spawn_compound_body(dc_gpu_t *gpu,dc_gpu_world_body_t body,
 }
 bool dc_gpu_read_compound_shape(dc_gpu_t *gpu,uint32_t id,dc_gpu_compound_shape_t *shape,
     char *err,uint32_t cap) {
+    dc_gpu_refresh_body_registry(gpu);
     if(gpu && shape && id) for(uint32_t i=0;i<gpu->body_count;++i) if(gpu->body_ids[i]==id) {
         const dc_gpu_body_record_t *record=(dc_gpu_body_record_t *)gpu->body_mapped+i;
         *shape=(dc_gpu_compound_shape_t){.count=record->piece_count};

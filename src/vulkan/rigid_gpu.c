@@ -24,9 +24,21 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 }
 
 static uint32_t body_slot(const dc_gpu_t *gpu, uint32_t id) {
-    for (uint32_t i = 0; i < gpu->body_count; ++i)
-        if (gpu->body_ids[i] == id) return i;
+    const dc_gpu_body_record_t *records = gpu->body_mapped;
+    for (uint32_t i = 0; i < DC_GPU_BODY_CAPACITY; ++i)
+        if (records[i].body.id == id &&
+            (records[i].body.active || records[i].reserved[0])) return i;
     return DC_GPU_BODY_CAPACITY;
+}
+void dc_gpu_refresh_body_registry(dc_gpu_t *gpu) {
+    if (!gpu) return;
+    const dc_gpu_body_record_t *records = gpu->body_mapped;
+    gpu->body_count = 0;
+    for (uint32_t i = 0; i < DC_GPU_BODY_CAPACITY; ++i) {
+        gpu->body_ids[i] = records[i].body.active || records[i].reserved[0] ?
+                          records[i].body.id : 0;
+        if (gpu->body_ids[i]) gpu->body_count = i + 1;
+    }
 }
 
 
@@ -122,7 +134,9 @@ void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
         if (gpu->solver_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->solver_pipelines[i],NULL);
     if (gpu->broadphase_pipeline) vkDestroyPipeline(gpu->device, gpu->broadphase_pipeline, NULL);
     if (gpu->rigid_pipeline) vkDestroyPipeline(gpu->device, gpu->rigid_pipeline, NULL);
-    if (gpu->structural_pipeline) vkDestroyPipeline(gpu->device, gpu->structural_pipeline, NULL);
+    for (unsigned phase = 0; phase < 5; phase++)
+        if (gpu->structural_pipelines[phase])
+            vkDestroyPipeline(gpu->device, gpu->structural_pipelines[phase], NULL);
     if (gpu->body_mapped) vkUnmapMemory(gpu->device, gpu->body_memory);
     if (gpu->occupancy_mapped) vkUnmapMemory(gpu->device, gpu->occupancy_memory);
     if (gpu->body_buffer) vkDestroyBuffer(gpu->device, gpu->body_buffer, NULL);
@@ -178,6 +192,7 @@ bool dc_gpu_read_body_id(dc_gpu_t *gpu, uint32_t id, dc_gpu_body_t *body,
 
 bool dc_gpu_remove_body(dc_gpu_t *gpu, uint32_t id, char *err, uint32_t cap) {
     if (!gpu || !id) return error(err, cap, "Invalid GPU body removal");
+    dc_gpu_refresh_body_registry(gpu);
     uint32_t slot = body_slot(gpu, id);
     if (slot == DC_GPU_BODY_CAPACITY) return error(err, cap, "GPU body ID not found");
     if (((dc_gpu_body_record_t *)gpu->body_mapped)[slot].reserved[0] == DC_GPU_STRUCTURAL_TAG)
@@ -190,6 +205,7 @@ bool dc_gpu_remove_body(dc_gpu_t *gpu, uint32_t id, char *err, uint32_t cap) {
     }
     memset(&((dc_gpu_body_record_t *)gpu->body_mapped)[slot], 0,
            sizeof(dc_gpu_body_record_t));
+    memset(graph + 36000u + slot * 4u, 0, 4u * sizeof(uint32_t));
     gpu->body_ids[slot] = 0;
     gpu->body_refresh_pending = true;
     while (gpu->body_count && !gpu->body_ids[gpu->body_count - 1]) --gpu->body_count;
@@ -227,6 +243,7 @@ bool dc_gpu_spawn_world_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
         body.body.x_fp >= (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL) ||
         body.body.y_fp >= (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL))
         return error(err, cap, "Invalid world body");
+    dc_gpu_refresh_body_registry(gpu);
     uint32_t slot = body_slot(gpu, body.body.id);
     if (slot != DC_GPU_BODY_CAPACITY) {
         uint32_t tag = ((dc_gpu_body_record_t *)gpu->body_mapped)[slot].reserved[0];
@@ -281,9 +298,12 @@ static bool submit_rigid(dc_gpu_t *gpu, bool advance, char *err, uint32_t cap) {
         return error(err, cap, "Cannot end rigid command buffer");
     VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .commandBufferCount = 1, .pCommandBuffers = &gpu->command };
-    if (vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
-        vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
-        return error(err, cap, "GPU rigid submission failed");
+    VkResult result = vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE);
+    if (result == VK_SUCCESS) result = vkQueueWaitIdle(gpu->queue);
+    if (result != VK_SUCCESS) {
+        if (err && cap) snprintf(err, cap, "GPU rigid submission failed (%d)", result);
+        return false;
+    }
     return true;
 }
 
@@ -292,7 +312,7 @@ void dc_gpu_record_rigid(dc_gpu_t *gpu) {
 }
 
 static void record_rigid(dc_gpu_t *gpu, bool advance) {
-    if (!gpu->body_count && !gpu->rigid_occupancy_present) return;
+    if (!gpu->body_count && !gpu->rigid_occupancy_present && !gpu->structural_enabled) return;
     VkMemoryBarrier2 upload = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
         .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
@@ -306,11 +326,12 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
-    uint32_t push[8] = { gpu->width, gpu->height, advance && !gpu->rigid_solver_enabled ? 0u : RIGID_PREPARE, gpu->body_count,
+    uint32_t count = dc_gpu_runtime_body_count(gpu);
+    uint32_t push[8] = { gpu->width, gpu->height, advance && !gpu->rigid_solver_enabled ? 0u : RIGID_PREPARE, count,
         (uint32_t)x, (uint32_t)(x >> 32), (uint32_t)y, (uint32_t)(y >> 32) };
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    if (gpu->body_count) vkCmdDispatch(gpu->command, 1, 1, 1);
+    if (count) vkCmdDispatch(gpu->command, 1, 1, 1);
     VkMemoryBarrier2 between = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
@@ -318,7 +339,7 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
         .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT };
     dep.pMemoryBarriers = &between;
     vkCmdPipelineBarrier2(gpu->command, &dep);
-    if (advance && gpu->rigid_solver_enabled && gpu->body_count) {
+    if (advance && gpu->rigid_solver_enabled && count) {
         dc_gpu_record_solver(gpu);
         vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_pipeline);
     }
@@ -337,6 +358,16 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
     dc_gpu_record_broadphase(gpu);
     dc_gpu_record_contacts(gpu);
     if (advance) dc_gpu_record_structural(gpu);
-    gpu->rigid_occupancy_present = gpu->body_count != 0;
+    if (advance && gpu->structural_enabled) {
+        vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_pipeline);
+        push[2] = RIGID_RASTER | RIGID_PHYSICAL_MASK;
+        vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+        VkDeviceSize indirect = sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
+            (VkDeviceSize)(dc_gpu_structural_word_offset(gpu) + 16u) * sizeof(uint32_t);
+        vkCmdDispatchIndirect(gpu->command, gpu->body_buffer, indirect);
+        vkCmdPipelineBarrier2(gpu->command, &dep);
+    }
+    gpu->rigid_occupancy_present = count != 0;
     gpu->body_refresh_pending = false;
 }

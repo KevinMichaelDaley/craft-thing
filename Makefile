@@ -32,6 +32,7 @@ build/structural_gpu.o: src/vulkan/structural_gpu.c src/vulkan/gpu_internal.h in
 build/shaders/structural.comp.spv: shaders/sim/structural.comp shaders/sim/structural_equilibrium.glsl shaders/sim/structural_attachment.glsl shaders/sim/structural_load.glsl shaders/sim/structural_stress.glsl shaders/sim/structural_refine.glsl shaders/sim/structural_rank.glsl shaders/sim/structural_failure.glsl shaders/sim/structural_debris.glsl shaders/sim/structural_bonds.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/shaders/structural.comp.spv: shaders/sim/rigid_fragment.glsl
 $(GPU_OBJ): build/shaders/structural.comp.spv
 build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench build/marker_slot_tests build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_solver_tests build/quarter_native_bench build/dungeoncraft_quarter_native: build/shaders/structural.comp.spv
 build/window_gpu.o: src/vulkan/window_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h

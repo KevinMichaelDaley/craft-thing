@@ -57,7 +57,7 @@ void dc_gpu_record_contacts(dc_gpu_t *gpu) {
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
-    uint32_t push[8] = {gpu->width, gpu->height, 0, gpu->body_count,
+    uint32_t push[8] = {gpu->width, gpu->height, 0, dc_gpu_runtime_body_count(gpu),
         (uint32_t)x, (uint32_t)(x >> 32), (uint32_t)y, (uint32_t)(y >> 32)};
     for (uint32_t mode = 0; mode < 2; ++mode) {
         push[2] = mode;

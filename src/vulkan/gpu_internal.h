@@ -116,7 +116,7 @@ struct dc_gpu {
     VkPipeline broadphase_pipeline;
     VkPipeline contact_pipeline;
     VkPipeline solver_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
-    VkPipeline structural_pipeline;
+    VkPipeline structural_pipelines[5];
     bool structural_enabled;
     bool rigid_solver_enabled;
     VkBuffer trace_buffer;
@@ -281,6 +281,12 @@ void dc_gpu_rigid_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_rigid(dc_gpu_t *gpu);
 bool dc_gpu_broadphase_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_broadphase(dc_gpu_t *gpu);
+/** Reconcile GPU-born owners only at explicit authoring/diagnostic checkpoints. */
+void dc_gpu_refresh_body_registry(dc_gpu_t *gpu);
+/** Fixed GPU bound lets new descendants participate without frame-time readback. */
+static inline uint32_t dc_gpu_runtime_body_count(const dc_gpu_t *gpu) {
+    return gpu->structural_enabled ? DC_GPU_BODY_CAPACITY : gpu->body_count;
+}
 bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_contacts(dc_gpu_t *gpu);
 bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);

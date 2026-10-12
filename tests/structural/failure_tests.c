@@ -431,7 +431,11 @@ static void test_failed_member_does_not_remove_its_sound_rooted_neighbor(void) {
                                         e, sizeof(e)));
     ASSERT_TRUE(a.flags & DC_GPU_BODY_KINEMATIC);
     ASSERT_TRUE(!(b.flags & DC_GPU_BODY_KINEMATIC));
-    ASSERT_TRUE(fabs(a.mass - 7.2) < .001 && fabs(b.mass - 8.1) < .001);
+    dc_gpu_body_motion_t fragment;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_OUTPUT_ID_BASE + 1,
+                                        &fragment, e, sizeof(e)));
+    ASSERT_TRUE(fabs(a.mass - 7.2) < .001);
+    ASSERT_TRUE(fabs(b.mass + fragment.mass - 8.1) < .001);
     dc_gpu_destroy(g);
     PASS();
 }

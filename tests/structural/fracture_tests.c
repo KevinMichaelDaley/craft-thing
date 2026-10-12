@@ -35,7 +35,9 @@ static void test_overloaded_mortar_crumble_preserves_mass_without_launch(void) {
     ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, err,
                                       sizeof(err)));
     ASSERT_TRUE(fr_gpu_place_structure(g, &s, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+    bool advanced = dc_gpu_rigid_step(g, err, sizeof(err));
+    if (!advanced) printf("rigid step: %s\n", err);
+    ASSERT_TRUE(advanced);
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     ASSERT_TRUE(chunk);
     ASSERT_TRUE(dc_gpu_download_chunk(g, 0, chunk, err, sizeof(err)));
@@ -341,7 +343,11 @@ static void test_stone_fragment_pool_is_atomic_and_retry_does_not_skip_ids(void)
     PASS();
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    if (argc > 1 && strcmp(argv[1], "--mortar-probe") == 0) {
+        RUN(test_overloaded_mortar_crumble_preserves_mass_without_launch);
+        return g_fail != 0;
+    }
     RUN(test_explicit_mortar_has_its_own_density_and_material_identity);
     RUN(test_overloaded_mortar_crumble_preserves_mass_without_launch);
     RUN(test_crumble_accounts_fracture_work_and_remaining_dissipation);

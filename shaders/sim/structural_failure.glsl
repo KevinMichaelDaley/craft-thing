@@ -52,6 +52,7 @@ void release_member(uint member) {
     data[g+24000u+member*16u+3u]=5u;
 }
 #include "structural_debris.glsl"
+#include "rigid_fragment.glsl"
 void damage_members() {
     uint g=graph();bool cut=false;
     for(uint member=0u;member<data[g+1u];member++) if(member_active(member)) {
@@ -69,6 +70,15 @@ void damage_members() {
         }
         if(data[m+4u]==2u) {
             if(!crumble_member(member)) {data[st+3u]=4u;continue;}
+        } else if(data[m+4u]==0u) {
+            Body b=bodies[slot];float length=float(b.vertices[1].x)/65536.0;
+            float depth=float(data[m+5u])/65536.0,work=eq_get(profile+6u)*depth;
+            if(work>eq_get(st+9u)||!fragment_body(slot,0u,
+                clamp(eq_get(st+8u)*length,depth*.25,length-depth*.25),data[m+1u])) {
+                data[st+3u]=4u;continue;
+            }
+            data[m+6u]|=STRUCTURAL_RETIRED;data[st+3u]=5u;
+            eq_put(st+11u,work);eq_put(st+12u,max(eq_get(st+9u)-work,0));
         } else release_member(member);
         cut=true;
     }

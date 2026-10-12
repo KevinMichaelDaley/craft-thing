@@ -203,6 +203,8 @@ bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     dc_gpu_structural_data(gpu)[6] = 192u;
     dc_gpu_structural_data(gpu)[10] = 1u;
     dc_gpu_structural_data(gpu)[11] = 1u;
+    dc_gpu_structural_data(gpu)[17] = (gpu->height + 15u) / 16u;
+    dc_gpu_structural_data(gpu)[18] = 1u;
     float *packed = (float *)(dc_gpu_structural_data(gpu) +
                               dc_gpu_structural_graph_offset() + 29000u);
     for (unsigned m = 0; m < FR_STRUCTURAL_MATERIAL_COUNT; m++) {
@@ -226,8 +228,17 @@ bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                   .module = shader,
                   .pName = "main"},
         .layout = gpu->pipeline_layout};
-    VkResult r = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1, &info,
-                                          NULL, &gpu->structural_pipeline);
+    VkSpecializationMapEntry entry = {.constantID = 0, .offset = 0,
+                                      .size = sizeof(uint32_t)};
+    VkResult r = VK_SUCCESS;
+    for (uint32_t phase = 0; phase < 5 && r == VK_SUCCESS; phase++) {
+        VkSpecializationInfo specialization = {
+            .mapEntryCount = 1, .pMapEntries = &entry,
+            .dataSize = sizeof(phase), .pData = &phase};
+        info.stage.pSpecializationInfo = &specialization;
+        r = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1, &info,
+                                     NULL, &gpu->structural_pipelines[phase]);
+    }
     vkDestroyShaderModule(gpu->device, shader, NULL);
     return r == VK_SUCCESS ||
            error(err, cap, "Cannot create structural pipeline");
@@ -249,13 +260,13 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode) {
                             .pMemoryBarriers = &b};
     vkCmdPipelineBarrier2(gpu->command, &dep);
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
-                      gpu->structural_pipeline);
+                      gpu->structural_pipelines[mode]);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                             gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0,
                             NULL);
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
     uint32_t push[8] = {
-        gpu->width,  gpu->height,         mode,        gpu->body_count,
+        gpu->width,  gpu->height,         mode,        dc_gpu_runtime_body_count(gpu),
         (uint32_t)x, (uint32_t)(x >> 32), (uint32_t)y, (uint32_t)(y >> 32)};
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
@@ -356,6 +367,7 @@ bool fr_gpu_place_structure(dc_gpu_t *gpu, const fr_structural_gpu_graph_t *g,
     if (!gpu || !validate(g))
         return error(err, cap,
                      "Invalid structural graph or unsupported geometry");
+    dc_gpu_refresh_body_registry(gpu);
     const fr_structural_gpu_graph_t *old =
         (void *)(dc_gpu_structural_data(gpu) +
                  dc_gpu_structural_graph_offset());

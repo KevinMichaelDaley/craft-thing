@@ -31,6 +31,7 @@ static bool error(char *err, uint32_t cap, const char *message) {
 static dc_gpu_body_record_t *find_body(dc_gpu_t *gpu, uint32_t id) {
     if (!gpu || !id)
         return NULL;
+    dc_gpu_refresh_body_registry(gpu);
     for (uint32_t i = 0; i < gpu->body_count; ++i)
         if (gpu->body_ids[i] == id)
             return &((dc_gpu_body_record_t *)gpu->body_mapped)[i];
@@ -126,7 +127,7 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
                       gpu->solver_pipelines[mode]);
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
     uint32_t push[8] = {
-        gpu->width,  gpu->height,         mode,        gpu->body_count,
+        gpu->width,  gpu->height,         mode,        dc_gpu_runtime_body_count(gpu),
         (uint32_t)x, (uint32_t)(x >> 32), (uint32_t)y, (uint32_t)(y >> 32)};
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);

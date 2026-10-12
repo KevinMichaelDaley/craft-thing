@@ -3,6 +3,7 @@
 #include "rigid_body.glsl"
 #include "rigid_shape.glsl"
 layout(local_size_x=32) in;
+layout(constant_id=0) const uint STRUCTURAL_PHASE=0u;
 layout(set=0,binding=1,std430) buffer Cells { uvec2 cells[]; };
 layout(set=0,binding=2,std430) readonly buffer Pages { uint pages[]; };
 layout(set=0,binding=4,std430) buffer Storage { Body bodies[BODY_CAPACITY]; uint data[]; };
@@ -158,9 +159,10 @@ void topology() {
 #include "structural_equilibrium.glsl"
 #include "structural_failure.glsl"
 void main() {
-    if(params.mode==0u) {if(gl_LocalInvocationID.x==0u) transaction();return;}
-    if(params.mode==2u) {
+    if(STRUCTURAL_PHASE==0u) {if(gl_LocalInvocationID.x==0u) transaction();return;}
+    if(STRUCTURAL_PHASE==2u) {
         uint lane=gl_LocalInvocationID.x;
+        if(lane==0u) {data[base()+16u]=0u;data[base()+17u]=(params.height+15u)/16u;data[base()+18u]=1u;}
         for(uint p=lane;p<96u;p+=32u) data[structural_loads()+p]=0u;
         data[structural_bad()+lane]=0u;
         for(uint p=lane;p<64u;p+=32u) {
@@ -169,6 +171,6 @@ void main() {
         for(uint p=lane;p<16u*17u*3u;p+=32u) data[structural_bins()+p]=0u;
         return;
     }
-    if(params.mode==4u) failure();
-    else if(params.mode==3u) equilibrium();else topology();
+    if(STRUCTURAL_PHASE==4u) failure();
+    else if(STRUCTURAL_PHASE==3u) equilibrium();else topology();
 }

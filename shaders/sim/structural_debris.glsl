@@ -85,5 +85,7 @@ bool crumble_member(uint member) {
     data[m+6u]|=STRUCTURAL_RETIRED;data[st+3u]=5u;
     eq_put(st+11u,work);
     eq_put(st+12u,max(eq_get(st+9u)-work,0));
+    data[base()+16u]=(params.width+15u)/16u;
+    data[base()+17u]=(params.height+15u)/16u;data[base()+18u]=1u;
     return true;
 }
