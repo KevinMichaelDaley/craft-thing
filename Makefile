@@ -555,3 +555,6 @@ build/structural_composition_energy_tests: tests/structural/composition_fracture
 
 test: build/structural_shadow_chunk_store_tests build/structural_composition_fracture_tests build/structural_composition_energy_tests
 test_ui test_quarter_native: build/structural_visual_scene_tests
+
+build/structural_demo_controls_tests: tests/app/structural_demo_controls_tests.c Makefile build/dungeoncraft_quarter_native
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
