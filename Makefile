@@ -517,3 +517,9 @@ test: build/component_extraction_tests
 test_quarter_native: build/quarter_native_component_extraction_tests
 build/quarter_native_component_extraction_tests: tests/vulkan/component_extraction_tests.c Makefile build/quarter_native_solver_tests $(GPU_SRC) src/world/chunk.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+
+build/component_world_tests: tests/app/component_world_tests.c Makefile src/app/level.h src/app/view_config.h $(filter-out src/app/main.c,$(NATIVE_SRC)) build/quarter_native_rigid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
+
+build/component_acceptance_tests: tests/vulkan/component_acceptance_tests.c build/fluid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
