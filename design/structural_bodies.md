@@ -184,6 +184,14 @@ snapshots and water/load integration remain unfinished.
 
 ## Behavior and ownership
 
+Author transactions preserve member/interface damage and confirmed support-loss
+ticks by ID and generation. Reordering or republishing an unchanged graph does
+not reset history; a fresh generation starts with fresh damage, and stale
+generations are rejected. Every live member's complete rotated footprint must
+resolve to the exact resident world pages. A cold corner freezes the component's
+damage and grace even when both endpoints are loaded. File snapshots and atomic
+world-save integration are still in progress.
+
 Introduce a structural body kind alongside terrain and freely moving rigid bodies.
 A player can place a structural member or explicitly mark eligible existing solid
 geometry as structural. Marking is an atomic transfer of ownership, not a second
