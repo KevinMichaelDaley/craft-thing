@@ -379,7 +379,64 @@ static void test_overloaded_wood_splits_along_grain_without_gravel(void) {
     PASS();
 }
 
+static void test_severely_compressed_stone_crushes_to_stone_debris(void) {
+    char err[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(50);
+    s.members[0].material = FR_STRUCTURAL_STONE;
+    s.members[0].depth_fp = 1 << 16;
+    s.nodes[0].chunk.y = s.nodes[1].chunk.y = 1;
+    s.nodes[0].y_fp = 36 << 16;
+    s.nodes[1].x_fp = s.nodes[0].x_fp;
+    s.nodes[1].y_fp = 34 << 16;
+    s.anchors[0].chunk.y = 1;
+    s.anchors[0].y = 36;
+    ASSERT_TRUE(dc_gpu_paint_material(g, 50, 100, 0, DC_MATERIAL_STONE,
+                                      err, sizeof(err)));
+    bool placed = fr_gpu_place_structure(g, &s, err, sizeof(err));
+    if (!placed) printf("crush placement: %s\n", err);
+    ASSERT_TRUE(placed);
+    dc_gpu_body_t load = {.x_fp = (42 << 16) + 32768, .y_fp = 80 << 16,
+                         .width = 16, .height = 16, .vy_fp = 4 << 16,
+                         .id = 1, .active = 1};
+    ASSERT_TRUE(dc_gpu_spawn_body(g, load, err, sizeof(err)));
+    fr_structural_gpu_member_state_t state;
+    for (unsigned i = 0; i < 12; i++) {
+        ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+        ASSERT_TRUE(fr_gpu_read_structure_member(g, 1, &state));
+        if (state.state == FR_STRUCTURAL_CONVERTED) break;
+    }
+    ASSERT_EQ(state.state, FR_STRUCTURAL_CONVERTED);
+    dc_gpu_body_t body;
+    ASSERT_TRUE(dc_gpu_read_body_id(g, FR_STRUCTURAL_BODY_ID_BASE + 1,
+                                    &body, err, sizeof(err)));
+    ASSERT_TRUE(!body.active);
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+#ifdef DC_QUARTER_NATIVE_VIEW
+    const uint32_t slot = 10;
+#else
+    const uint32_t slot = 2;
+#endif
+    ASSERT_TRUE(dc_gpu_download_chunk(g, slot, chunk, err, sizeof(err)));
+    uint64_t mass = 0;
+    for (unsigned i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; i++) {
+        if (!chunk->particles[i].mass_fp) continue;
+        ASSERT_EQ(chunk->particles[i].material, DC_MATERIAL_GRAVEL);
+        mass += chunk->particles[i].mass_fp;
+    }
+    ASSERT_TRUE(fabs((double)mass / DC_FLUID_FULL - 5.4) < .002);
+    free(chunk);
+    dc_gpu_destroy(g);
+    PASS();
+}
+
 int main(int argc, char **argv) {
+    if (argc > 1 && strcmp(argv[1], "--crush-probe") == 0) {
+        RUN(test_severely_compressed_stone_crushes_to_stone_debris);
+        return g_fail != 0;
+    }
     if (argc > 1 && strcmp(argv[1], "--mortar-probe") == 0) {
         RUN(test_overloaded_mortar_crumble_preserves_mass_without_launch);
         return g_fail != 0;
@@ -394,6 +451,7 @@ int main(int argc, char **argv) {
     RUN(test_overstressed_stone_creates_owned_falling_rigid_fragments);
     RUN(test_stone_fragment_pool_is_atomic_and_retry_does_not_skip_ids);
     RUN(test_overloaded_wood_splits_along_grain_without_gravel);
+    RUN(test_severely_compressed_stone_crushes_to_stone_debris);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
