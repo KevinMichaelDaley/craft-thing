@@ -264,7 +264,8 @@ dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
     }
     if (!dc_gpu_set_body_origin(view->gpu, (dc_chunk_coord_t){
             view->origin.x - HALO_CHUNKS, view->origin.y - HALO_CHUNKS }, err, cap) ||
-        !fr_gpu_load_structure(view->gpu, view->body_path, err, cap)) goto fail;
+        !fr_gpu_load_structure(view->gpu, view->body_path, err, cap) ||
+        !dc_gpu_enable_automatic_components(view->gpu)) goto fail;
     return view;
 fail:
     dc_stream_destroy(view->stream);

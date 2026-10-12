@@ -229,6 +229,8 @@ test_quarter_native: build/quarter_native_config_tests build/quarter_native_flui
 	./build/quarter_native_buoyancy_tests
 	./build/quarter_native_component_material_tests
 	./build/quarter_native_component_extraction_tests
+	./build/quarter_native_component_acceptance_tests
+	./build/component_world_tests
 	./build/quarter_native_rigid_tests
 	./build/structural_world_tests
 	./build/quarter_native_rigid_solver_tests
@@ -452,6 +454,7 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/buoyancy_tests
 	./build/component_material_tests
 	./build/component_extraction_tests
+	./build/component_acceptance_tests
 	./build/particle_tests
 	./build/marker_slot_tests
 	./build/chunk_tests
@@ -462,6 +465,7 @@ test_ui: build/dungeoncraft build/controls_tests build/structural_world_tests
 	./build/structural_cadence_tests
 	./build/presentation_tests
 	./build/controls_tests
+	./build/component_world_tests
 	./build/structural_world_tests
 	./build/rigid_dynamics_visual_tests
 	./build/dungeoncraft --smoke-controls-ui
@@ -523,3 +527,9 @@ build/component_world_tests: tests/app/component_world_tests.c Makefile src/app/
 
 build/component_acceptance_tests: tests/vulkan/component_acceptance_tests.c build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+test: build/component_acceptance_tests
+test_ui: build/component_world_tests
+test_quarter_native: build/component_world_tests build/quarter_native_component_acceptance_tests
+build/quarter_native_component_acceptance_tests: tests/vulkan/component_acceptance_tests.c Makefile build/quarter_native_solver_tests $(GPU_SRC) src/world/chunk.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
