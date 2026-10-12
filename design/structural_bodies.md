@@ -205,8 +205,12 @@ save batches, and at shutdown. Authoritative streaming uploads never reseed or
 rearrange saved particles, and checkpoint-overridden chunks become dirty so their
 restored state reaches the ordinary chunk store. Native save/reopen preserves
 30 confirmed unsupported wood ticks, then converts exactly60 confirmed ticks
-later. Remaining lifetime/rebase acceptance and water/gameplay integration are
-still in progress.
+later. Live rigid descendants retain their source-body ID and generation even
+after the retired graph is cleared; reusing the same or a stale generation is
+rejected across checkpoints, while a fresh generation is allowed. Attachment
+damage and cuts survive reloads, and force/stress remain invariant after world
+page rebases. Crumble particle transaction identity and water/gameplay integration
+are still in progress.
 
 Introduce a structural body kind alongside terrain and freely moving rigid bodies.
 A player can place a structural member or explicitly mark eligible existing solid

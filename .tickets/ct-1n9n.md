@@ -35,3 +35,7 @@ Graph-aware checkpoint GREEN 3f3a3ad passes eight normal and quarter-native Vulk
 **2026-10-12T18:24:34Z**
 
 Native GREEN f196e9e passes full headless/UI/quarter-native batteries:361 counted cases, zero failures, all smoke commands successful, no Vulkan validation errors. Explicit native placement, pre-dirty-save graph/physics checkpoints, graph-aware shutdown/load, and authoritative streamed particles now work; fragment reload retains exact mass and grace30+60 survives a real window session restart. Lifetime/rebase and cut-checkpoint acceptance still under verification; ticket remains in progress.
+
+**2026-10-12T18:39:40Z**
+
+Root lifetime GREEN93d55f4 passes3 cases normal and quarter-native; native world2 cases still pass, and full headless227/227. Live converted rigid descendants retain their source-body ID and generation across graph clearing and checkpoints: aliases at equal/stale generation are rejected, fresh generations remain permitted. Attachment damage/cuts persist across two reloads and rebased page mapping preserves force/stress. Crumble particle transaction identity is the remaining cross-ticket verification before closure.
