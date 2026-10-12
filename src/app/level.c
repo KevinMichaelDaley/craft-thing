@@ -46,8 +46,12 @@ bool dc_level_view_step(dc_level_view_t *view, char *err, uint32_t cap) {
 bool dc_level_view_place_structure(dc_level_view_t *view,
                                    const fr_structural_gpu_graph_t *graph,
                                    char *err, uint32_t cap) {
-    (void)view; (void)graph;
-    return error(err, cap, "Native structural world transaction is not implemented");
+    if (!view || !fr_gpu_place_structure(view->gpu, graph, err, cap)) return false;
+    for (unsigned i = 0; i < view->table.capacity; i++)
+        if (view->table.slots[i].state == DC_SLOT_ACTIVE ||
+            view->table.slots[i].state == DC_SLOT_SLEEPING)
+            dc_chunk_table_mark_dirty(&view->table, i);
+    return fr_gpu_save_structure(view->gpu, view->body_path, err, cap);
 }
 
 bool dc_level_view_step_timed(dc_level_view_t *view, float seconds,
@@ -130,11 +134,13 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
             return error(err, cap, "Chunk worker load or save failed");
         }
         if (result.kind == DC_STREAM_LOADED) {
-            if (!dc_gpu_upload_chunk(view->gpu, index, result.chunk, err, cap) ||
+            bool restored = false;
+            if (!fr_gpu_upload_structure_chunk(view->gpu, index, result.chunk, &restored, err, cap) ||
                 !dc_chunk_table_finish_load(&view->table, index, result.generation)) {
                 dc_stream_result_release(&result);
                 return error(err, cap, "Cannot publish loaded GPU chunk");
             }
+            if (restored) dc_chunk_table_mark_dirty(&view->table, index);
         } else if (!dc_chunk_table_finish_save(&view->table, index, result.generation)) {
             dc_stream_result_release(&result);
             return error(err, cap, "Cannot complete chunk save");
@@ -145,6 +151,14 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
 }
 
 static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
+    if (fr_gpu_structure_checkpoint_required(view->gpu)) {
+        bool pending = false;
+        for (unsigned i = 0; i < view->table.capacity; i++) {
+            const dc_chunk_slot_t *slot = &view->table.slots[i];
+            pending |= slot->state == DC_SLOT_SLEEPING && slot->dirty && !slot->pinned;
+        }
+        if (pending && !fr_gpu_save_structure(view->gpu, view->body_path, err, cap)) return false;
+    }
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         dc_chunk_slot_t *slot = &view->table.slots[i];
         if (slot->state != DC_SLOT_SLEEPING || !slot->dirty || slot->pinned) continue;
@@ -250,7 +264,7 @@ dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
     }
     if (!dc_gpu_set_body_origin(view->gpu, (dc_chunk_coord_t){
             view->origin.x - HALO_CHUNKS, view->origin.y - HALO_CHUNKS }, err, cap) ||
-        !dc_gpu_load_bodies(view->gpu, view->body_path, err, cap)) goto fail;
+        !fr_gpu_load_structure(view->gpu, view->body_path, err, cap)) goto fail;
     return view;
 fail:
     dc_stream_destroy(view->stream);
@@ -596,7 +610,7 @@ bool dc_level_view_transfer_result(dc_level_view_t *view,
 bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return true;
     bool okay = true;
-    if (!dc_gpu_save_bodies(view->gpu, view->body_path, err, cap)) okay = false;
+    if (!fr_gpu_save_structure(view->gpu, view->body_path, err, cap)) okay = false;
     if (view->transfer_pending) {
         view->table.slots[view->from_slot].pinned = false;
         if (view->destination_bound)

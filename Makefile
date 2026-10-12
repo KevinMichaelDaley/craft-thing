@@ -202,7 +202,7 @@ build/structural_world_tests: tests/app/structural_world_tests.c Makefile src/ap
 build/quarter_native_rigid_solver_tests: tests/vulkan/rigid_solver_tests.c Makefile src/app/view_config.h $(GPU_SRC) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(SOLVER_SHADER) $(BROADPHASE_SHADER) $(CONTACT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -lm
 
-test_quarter_native: build/quarter_native_config_tests build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_rigid_solver_tests build/dungeoncraft_quarter_native
+test_quarter_native: build/quarter_native_config_tests build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_rigid_solver_tests build/dungeoncraft_quarter_native build/structural_world_tests
 	./build/quarter_native_structural_placement_tests
 	./build/quarter_native_structural_equilibrium_tests
 	./build/quarter_native_structural_failure_tests
@@ -217,6 +217,7 @@ test_quarter_native: build/quarter_native_config_tests build/quarter_native_flui
 	./build/quarter_native_fluid_tests
 	./build/quarter_native_solver_tests
 	./build/quarter_native_rigid_tests
+	./build/structural_world_tests
 	./build/quarter_native_rigid_solver_tests
 	./build/rigid_dynamics_visual_tests
 	./build/dungeoncraft_quarter_native --smoke-native
@@ -439,10 +440,11 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/generate_tests
 	./build/stream_tests
 
-test_ui: build/dungeoncraft build/controls_tests
+test_ui: build/dungeoncraft build/controls_tests build/structural_world_tests
 	./build/structural_cadence_tests
 	./build/presentation_tests
 	./build/controls_tests
+	./build/structural_world_tests
 	./build/rigid_dynamics_visual_tests
 	./build/dungeoncraft --smoke-controls-ui
 	./build/dungeoncraft --smoke-stream

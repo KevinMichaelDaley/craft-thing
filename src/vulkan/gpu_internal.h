@@ -253,6 +253,9 @@ void dc_gpu_record_structural_topology(dc_gpu_t *gpu);
 void dc_gpu_structural_track_chunk(dc_gpu_t *gpu,uint32_t slot,dc_chunk_coord_t coord);
 bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
                               bool seed, char *err, uint32_t cap);
+bool dc_gpu_upload_chunk_checkpoint(dc_gpu_t *gpu, uint32_t slot,
+                                    const dc_chunk_t *chunk, bool seed,
+                                    bool *restored, char *err, uint32_t cap);
 
 uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
                                  uint32_t compatible_types);

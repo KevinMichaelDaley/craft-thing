@@ -17,8 +17,11 @@ enum {
 bool fr_gpu_upload_structure_chunk(dc_gpu_t *gpu, uint32_t slot,
                                    const dc_chunk_t *chunk, bool *restored,
                                    char *err, uint32_t cap) {
-    if (restored) *restored = false;
-    return dc_gpu_upload_chunk(gpu, slot, chunk, err, cap);
+    return dc_gpu_upload_chunk_checkpoint(gpu, slot, chunk, false, restored, err, cap);
+}
+
+bool fr_gpu_structure_checkpoint_required(const dc_gpu_t *gpu) {
+    return gpu && gpu->structural_enabled;
 }
 
 static bool error(char *err, uint32_t cap, const char *message) {

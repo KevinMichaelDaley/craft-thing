@@ -97,6 +97,8 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path,
 bool fr_gpu_upload_structure_chunk(dc_gpu_t *gpu, uint32_t slot,
                                    const dc_chunk_t *chunk, bool *restored,
                                    char *err_buf, uint32_t err_cap);
+/** Query authored ownership configuration without reading GPU runtime state. */
+bool fr_gpu_structure_checkpoint_required(const dc_gpu_t *gpu);
 /** Explicit diagnostic GPU readback; ordinary frames do not traverse/read the
  * graph. */
 bool fr_gpu_read_structure_node(dc_gpu_t *gpu, uint32_t id,

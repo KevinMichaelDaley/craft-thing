@@ -271,8 +271,10 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
     return dc_gpu_copy_chunk_state(gpu, slot, true, true, err, cap);
 }
 
-bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
-                         char *err, uint32_t cap) {
+bool dc_gpu_upload_chunk_checkpoint(dc_gpu_t *gpu, uint32_t slot,
+                                    const dc_chunk_t *chunk, bool seed,
+                                    bool *restored, char *err, uint32_t cap) {
+    if (restored) *restored = false;
     if (gpu && chunk) {
         for (uint32_t i = 0; i < gpu->checkpoint_chunk_count; i++) {
             const dc_chunk_t *saved = gpu->checkpoint_chunks + i;
@@ -280,11 +282,17 @@ bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
                 bool okay = dc_gpu_upload_chunk_exact(gpu, slot, saved, false, err, cap);
                 if (okay) gpu->checkpoint_chunks[i] =
                     gpu->checkpoint_chunks[--gpu->checkpoint_chunk_count];
+                if (restored) *restored = okay;
                 return okay;
             }
         }
     }
-    return dc_gpu_upload_chunk_exact(gpu, slot, chunk, true, err, cap);
+    return dc_gpu_upload_chunk_exact(gpu, slot, chunk, seed, err, cap);
+}
+
+bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
+                         char *err, uint32_t cap) {
+    return dc_gpu_upload_chunk_checkpoint(gpu, slot, chunk, true, NULL, err, cap);
 }
 
 bool dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chunk,
