@@ -26,7 +26,24 @@ bool dc_gpu_enable_impact_fracture(dc_gpu_t *gpu) {
 }
 bool dc_gpu_read_impact_fracture(dc_gpu_t *gpu, uint32_t source_id,
                                 dc_gpu_impact_fracture_state_t *state) {
-    (void)gpu; (void)source_id; (void)state;
+    if (!gpu || !source_id || !state) return false;
+    uint32_t *graph = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset();
+    const dc_gpu_body_record_t *bodies = gpu->body_mapped;
+    for (unsigned slot = 0; slot < DC_GPU_BODY_CAPACITY; slot++) {
+        uint32_t *pending = graph + 38000u + slot * 4u;
+        if (bodies[slot].body.id == source_id && pending[3] == source_id && pending[2]) {
+            *state = (dc_gpu_impact_fracture_state_t){
+                .available_work = (float)(pending[0] < pending[1] ? pending[0] : pending[1]) * 16,
+                .pending = true};
+            return true;
+        }
+        uint32_t *ledger = graph + 38500u + slot * 4u;
+        if (ledger[3] == source_id) {
+            memcpy(&state->available_work, ledger, 3 * sizeof(float));
+            state->pending = false;
+            return true;
+        }
+    }
     return false;
 }
 static void record_rigid(dc_gpu_t *gpu, bool advance);
