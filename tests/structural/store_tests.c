@@ -4,6 +4,28 @@
 
 static const char *snapshot = "build/structural_snapshot.bin";
 
+static void test_snapshot_preserves_crumble_particles_and_world_cells(void) {
+    char err[256]; dc_gpu_t *g = grid(); ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.members[0].material = FR_STRUCTURAL_MORTAR;
+    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE, err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+    dc_chunk_t *before = calloc(1, sizeof(*before));
+    dc_chunk_t *after = calloc(1, sizeof(*after));
+    ASSERT_TRUE(before && after);
+    ASSERT_TRUE(dc_gpu_download_chunk(g, 0, before, err, sizeof(err)));
+    ASSERT_TRUE(before->particle_count > 0);
+    ASSERT_TRUE(fr_gpu_save_structure(g, snapshot, err, sizeof(err)));
+    dc_gpu_destroy(g); g = grid(); ASSERT_TRUE(g);
+    ASSERT_TRUE(fr_gpu_load_structure(g, snapshot, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(g, 0, after, err, sizeof(err)));
+    ASSERT_EQ(after->particle_count, before->particle_count);
+    ASSERT_TRUE(memcmp(after->particles, before->particles, sizeof(after->particles)) == 0);
+    ASSERT_TRUE(memcmp(after->cells, before->cells, sizeof(after->cells)) == 0);
+    free(before); free(after); remove(snapshot); dc_gpu_destroy(g); PASS();
+}
+
 static void test_snapshot_resumes_exact_overload_damage(void) {
     char err[256]; dc_gpu_t *g = grid(); ASSERT_TRUE(g);
     fr_structural_gpu_graph_t s = beam(20);
@@ -146,6 +168,7 @@ static void test_legacy_body_world_still_loads_without_a_graph(void) {
 }
 
 int main(void) {
+    RUN(test_snapshot_preserves_crumble_particles_and_world_cells);
     RUN(test_snapshot_resumes_exact_overload_damage);
     RUN(test_snapshot_resumes_confirmed_support_loss_ticks);
     RUN(test_snapshot_preserves_descendants_and_output_serial);
