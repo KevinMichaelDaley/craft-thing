@@ -199,8 +199,14 @@ ownership before mutation, rebuilds topology on GPU without advancing clocks,
 and restores particles at exact pool indices without reseeding. Cold chunk records
 remain pending until their coordinates are uploaded; another checkpoint retains
 them. Blank chunk records occupy about 64 KiB on disk. The current checkpoint
-stages at most two resident pools of records and rejects larger saves; native
-world transaction/streaming integration remains in progress.
+stages at most two resident pools of records and rejects larger saves. Native
+levels checkpoint graph and physics on explicit placement, before dirty chunk
+save batches, and at shutdown. Authoritative streaming uploads never reseed or
+rearrange saved particles, and checkpoint-overridden chunks become dirty so their
+restored state reaches the ordinary chunk store. Native save/reopen preserves
+30 confirmed unsupported wood ticks, then converts exactly60 confirmed ticks
+later. Remaining lifetime/rebase acceptance and water/gameplay integration are
+still in progress.
 
 Introduce a structural body kind alongside terrain and freely moving rigid bodies.
 A player can place a structural member or explicitly mark eligible existing solid
