@@ -497,3 +497,6 @@ test: build/component_material_tests
 test_quarter_native: build/quarter_native_component_material_tests
 build/quarter_native_component_material_tests: tests/vulkan/component_material_tests.c Makefile build/quarter_native_solver_tests $(GPU_SRC) src/world/chunk.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+
+build/component_extraction_tests: tests/vulkan/component_extraction_tests.c build/fluid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
