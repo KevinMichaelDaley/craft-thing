@@ -119,6 +119,8 @@ struct dc_gpu {
     VkPipeline solver_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
     VkPipeline structural_pipelines[DC_GPU_STRUCTURAL_PHASE_COUNT];
     bool structural_enabled;
+    dc_chunk_t *checkpoint_chunks;
+    uint32_t checkpoint_chunk_count;
     bool impact_fracture_enabled;
     bool rigid_solver_enabled;
     VkBuffer trace_buffer;
@@ -246,7 +248,11 @@ static inline uint32_t dc_gpu_structural_graph_offset(void) {
 bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu,char *err,uint32_t cap);
 void dc_gpu_record_structural(dc_gpu_t *gpu);
 void dc_gpu_record_structural_begin(dc_gpu_t *gpu);
+/** Record topology reconstruction at an explicit restore boundary. */
+void dc_gpu_record_structural_topology(dc_gpu_t *gpu);
 void dc_gpu_structural_track_chunk(dc_gpu_t *gpu,uint32_t slot,dc_chunk_coord_t coord);
+bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
+                              bool seed, char *err, uint32_t cap);
 
 uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
                                  uint32_t compatible_types);

@@ -213,8 +213,8 @@ bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
     return true;
 }
 
-bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
-                         char *err, uint32_t cap) {
+bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
+                              bool seed, char *err, uint32_t cap) {
     if (!gpu || !chunk || slot >= DC_GPU_CHUNK_SLOTS ||
         chunk->marker_count > DC_MARKERS_PER_CHUNK ||
         chunk->particle_count > DC_MPM_PARTICLES_PER_CHUNK)
@@ -226,7 +226,7 @@ bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
         return error(err, cap, "Chunk particle count does not match active records");
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
         uint32_t material = chunk->cells[i].material;
-        if ((material == DC_MATERIAL_SAND || material == DC_MATERIAL_DIRT ||
+        if (seed && (material == DC_MATERIAL_SAND || material == DC_MATERIAL_DIRT ||
              material == DC_MATERIAL_GRAVEL || material == DC_MATERIAL_MORTAR_DEBRIS) && chunk->particles[i].mass_fp == 0u &&
             chunk->particles[i + DC_CHUNK_CELLS].mass_fp == 0u)
             ++missing_primary;
@@ -254,11 +254,11 @@ bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
     memcpy(particles, chunk->particles, sizeof(chunk->particles));
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
         uint32_t material = chunk->cells[i].material;
-        if (particles[i].mass_fp == 0u && particles[i + DC_CHUNK_CELLS].mass_fp != 0u) {
+        if (seed && particles[i].mass_fp == 0u && particles[i + DC_CHUNK_CELLS].mass_fp != 0u) {
             particles[i] = particles[i + DC_CHUNK_CELLS];
             memset(&particles[i + DC_CHUNK_CELLS], 0, sizeof(dc_mpm_particle_t));
         }
-        if ((material == DC_MATERIAL_SAND || material == DC_MATERIAL_DIRT ||
+        if (seed && (material == DC_MATERIAL_SAND || material == DC_MATERIAL_DIRT ||
              material == DC_MATERIAL_GRAVEL || material == DC_MATERIAL_MORTAR_DEBRIS) && particles[i].mass_fp == 0u) {
             dc_chunk_particle_init(&particles[i], chunk->coord, i, material);
             ++particle_count;
@@ -269,6 +269,22 @@ bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
     dc_gpu_structural_track_chunk(gpu, slot, chunk->coord);
     gpu->fluid_snapshot_valid = false;
     return dc_gpu_copy_chunk_state(gpu, slot, true, true, err, cap);
+}
+
+bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
+                         char *err, uint32_t cap) {
+    if (gpu && chunk) {
+        for (uint32_t i = 0; i < gpu->checkpoint_chunk_count; i++) {
+            const dc_chunk_t *saved = gpu->checkpoint_chunks + i;
+            if (saved->coord.x == chunk->coord.x && saved->coord.y == chunk->coord.y) {
+                bool okay = dc_gpu_upload_chunk_exact(gpu, slot, saved, false, err, cap);
+                if (okay) gpu->checkpoint_chunks[i] =
+                    gpu->checkpoint_chunks[--gpu->checkpoint_chunk_count];
+                return okay;
+            }
+        }
+    }
+    return dc_gpu_upload_chunk_exact(gpu, slot, chunk, true, err, cap);
 }
 
 bool dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chunk,

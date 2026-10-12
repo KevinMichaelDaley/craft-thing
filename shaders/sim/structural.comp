@@ -113,7 +113,12 @@ void topology() {
     bool dirty=data[base()+4u]!=data[base()+3u];
     bool live=i<data[g]&&data[ns+8u]==0u;
     label[i]=live?(dirty?data[ns]:data[state(i)+1u]):0xffffffffu;cold[i]=0u;roots[i]=0u;
-    if(!live&&i<data[g]) data[state(i)+1u]=0xffffffffu;
+    if(!live&&i<data[g]) {
+        uint st=state(i);data[st]=data[ns];data[st+1u]=0xffffffffu;
+        data[st+2u]=5u;data[st+5u]=data[ns+1u];
+        data[st+3u]=0u;data[st+4u]=0u;
+        for(uint word=6u;word<12u;word++) data[st+word]=0u;
+    }
     if(live) {
         ivec2 p;bool resident=view_point(pair(ns+2u),pair(ns+4u),ivec2(int(data[ns+6u])>>16,int(data[ns+7u])>>16),p)&&cell_ref(p,unused);
         cold[i]=resident?0u:1u;

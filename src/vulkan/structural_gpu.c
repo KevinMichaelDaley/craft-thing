@@ -296,6 +296,7 @@ void dc_gpu_record_structural_begin(dc_gpu_t *gpu) {
     if (gpu->structural_enabled)
         dispatch(gpu, 2);
 }
+void dc_gpu_record_structural_topology(dc_gpu_t *gpu) { dispatch(gpu, 1); }
 void dc_gpu_record_structural(dc_gpu_t *gpu) {
     if (gpu->structural_enabled) {
         dispatch(gpu, 1);

@@ -14,6 +14,7 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 }
 
 void dc_gpu_destroy(dc_gpu_t *gpu) {
+    if (gpu) free(gpu->checkpoint_chunks);
     if (!gpu) return;
     if (gpu->device) vkDeviceWaitIdle(gpu->device);
     if (gpu->acquire_sem) vkDestroySemaphore(gpu->device, gpu->acquire_sem, NULL);
