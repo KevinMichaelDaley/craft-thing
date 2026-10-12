@@ -1,6 +1,6 @@
 ---
 id: ct-1n9n
-status: in_progress
+status: closed
 deps: [ct-0iq3]
 links: []
 created: 2026-10-11T05:44:09Z
@@ -47,3 +47,7 @@ Persistence acceptance verified: exact graph/damage/countdown, converted history
 **2026-10-12T21:47:16Z**
 
 Reopened after automatic native extraction makes all native saves graph-aware: UI stream restart rejects duplicate coordinates retained in stale GPU slot metadata. Focused compiling RED reproduces latest-state shadow-slot snapshot failure. Fix must preserve one authoritative coordinate and actual streamed state.
+
+**2026-10-12T23:01:09Z**
+
+Authoritative coordinate tracking now invalidates stale duplicate GPU slots before save; focused latest-state shadow-slot regression and actual native stream restart pass. Full native/UI/quarter battery includes graph/body/MPM identity, exact rendered seam restart and converted wet-body continuation. No remaining persistence acceptance failure observed; final normal rerun precedes closure.

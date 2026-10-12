@@ -1,6 +1,6 @@
 ---
 id: dun-sbk9
-status: in_progress
+status: closed
 deps: [dun-9qub, dun-c459]
 links: [dun-spbq, dun-c459, ct-ha8q]
 created: 2026-09-26T07:43:36Z
@@ -28,3 +28,7 @@ Dry wood falls; low-density wood floats at a repeatable draft and follows flow; 
 **2026-10-12T20:56:43Z**
 
 GPU buoyancy/drag acceptance now passes14 cases normal and quarter-native: dry fall, exact full/partial volume, dense wood sinking, restoring torque, water-level next-tick response, triangle area, material-scaled flow relaxation, and10-second floating conservation/mean draft with bounded waves. Pool reconstruction and passive viscosity avoid rezoning films/wakes. Full headless246/246; native visible/extraction integration remains.
+
+**2026-10-12T23:07:46Z**
+
+Completed GPU buoyancy/drag acceptance: 14 analytic/long-duration cases pass normal and quarter-native, actual float/sink display and exact water accounting pass, and converted structural wood floats after 90 tick support grace with mass 7.2. Density and immersed geometry determine force; no sink/float toggle or runtime CPU physics copyback. Final normal: 261/261 and full UI/quarter: 442 reported cases pass.

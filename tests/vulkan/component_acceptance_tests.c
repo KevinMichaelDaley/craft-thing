@@ -66,7 +66,8 @@ static void test_wet_mixed_component_crosses_a_warm_chunk_seam(void) {
     ASSERT_TRUE(dc_gpu_create(&copy, 128, 64, "build/shaders/pattern.comp.spv",
                               err, sizeof(err)));
     for (unsigned slot = 0; slot < 2; slot++) {
-        ASSERT_TRUE(dc_gpu_upload_chunk(copy, slot, &chunks[slot], err, sizeof(err)));
+        ASSERT_TRUE(
+            dc_gpu_upload_chunk(copy, slot, &chunks[slot], err, sizeof(err)));
         ASSERT_TRUE(dc_gpu_set_page(copy, slot, 0, slot, err, sizeof(err)));
     }
     ASSERT_TRUE(fr_gpu_load_structure(copy, "build/extracted_seam.dcs", err,
@@ -96,7 +97,11 @@ static void test_wet_mixed_component_crosses_a_warm_chunk_seam(void) {
                                         sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_body_motion(copy, body.id, &resumed_motion, err,
                                         sizeof(err)));
-    printf("seam resume: y %d/%d vy %d/%d angle %.9f/%.9f cold vy %d original %d\n", continued.y_fp,resumed.y_fp,continued.vy_fp,resumed.vy_fp,continued_motion.angle,resumed_motion.angle,cold.vy_fp,body.vy_fp);
+    printf("seam resume: y %d/%d vy %d/%d angle %.9f/%.9f cold vy %d original "
+           "%d\n",
+           continued.y_fp, resumed.y_fp, continued.vy_fp, resumed.vy_fp,
+           continued_motion.angle, resumed_motion.angle, cold.vy_fp,
+           body.vy_fp);
     ASSERT_EQ(continued.x_fp, resumed.x_fp);
     ASSERT_EQ(continued.y_fp, resumed.y_fp);
     ASSERT_EQ(continued_motion.angle, resumed_motion.angle);
@@ -155,9 +160,47 @@ static void test_saturated_pool_retains_terrain_then_births_exactly_once(void) {
     ASSERT_TRUE(fabsf(motion.mass - 43.2f) < .0001f);
     PASS();
 }
+static void
+test_parallel_candidate_masks_preserve_world_ordered_birth_ids(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    for (unsigned y = 20; y < 24; y++)
+        for (unsigned x = 31; x < 44; x++) {
+            if (x < 35)
+                chunk->cells[y * 64 + x].material = DC_MATERIAL_STONE;
+            if (x >= 40)
+                chunk->cells[y * 64 + x].material = DC_MATERIAL_WOOD;
+        }
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    dc_gpu_body_t first, second;
+    dc_gpu_body_motion_t stone, wood;
+    ASSERT_TRUE(
+        dc_gpu_read_body_id(gpu, 0x80000001u, &first, err, sizeof(err)));
+    ASSERT_TRUE(
+        dc_gpu_read_body_id(gpu, 0x80000002u, &second, err, sizeof(err)));
+    ASSERT_TRUE(
+        dc_gpu_read_body_motion(gpu, first.id, &stone, err, sizeof(err)));
+    ASSERT_TRUE(
+        dc_gpu_read_body_motion(gpu, second.id, &wood, err, sizeof(err)));
+    ASSERT_EQ(first.x_fp, 31 << 16);
+    ASSERT_EQ(second.x_fp, 40 << 16);
+    ASSERT_TRUE(fabsf(stone.mass - 43.2f) < .0001f);
+    ASSERT_TRUE(fabsf(wood.mass - 9.6f) < .0001f);
+    free(chunk);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
 int main(void) {
     RUN(test_wet_mixed_component_crosses_a_warm_chunk_seam);
     RUN(test_saturated_pool_retains_terrain_then_births_exactly_once);
+    RUN(test_parallel_candidate_masks_preserve_world_ordered_birth_ids);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }

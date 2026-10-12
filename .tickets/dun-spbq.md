@@ -1,8 +1,8 @@
 ---
 id: dun-spbq
-status: in_progress
+status: closed
 deps: [dun-v75v, dun-9qub, dun-c459]
-links: [dun-4ftd, dun-08qq, dun-c459, dun-sbk9, ct-0iq3]
+links: [dun-4ftd, dun-08qq, dun-c459, dun-sbk9, ct-0iq3, ct-wuci]
 created: 2026-09-27T02:16:24Z
 type: task
 priority: 2
@@ -53,3 +53,7 @@ Initial extraction GREEN passes3/3 on Intel Vulkan: isolated first-tick fall, co
 **2026-10-12T21:33:38Z**
 
 Checkpoint activation and cold wood GREEN passes full253/253 headless and4/4 quarter-capacity extraction tests; zero Vulkan validation errors. Native automatic RED plus warm mixed seam/saturated retry acceptance are queued; no native/complete-ticket claim yet.
+
+**2026-10-12T23:01:09Z**
+
+Native activation, exact wet mixed-material seam extraction, saturation retry, deterministic bit31 candidate birth order, composition checkpoint and exact cold eviction/remap motion now pass normal/quarter and native visible batteries. GPU parallel candidate masks and dirty/pending invalidation reduce 16-component automatic extraction budget from 90.593 to 12.981 ms, without allocation or CPU physics copyback. Documented representation/cold bounds conservatively retain source terrain. Final normal wiring rerun pending.

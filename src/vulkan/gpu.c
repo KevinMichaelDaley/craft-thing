@@ -387,7 +387,7 @@ bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
     bool okay=dispatch_cells(gpu, push, err, cap);
     if(okay) {
         gpu->body_refresh_pending=true;
-        if (material != DC_MATERIAL_WATER) dc_gpu_structural_data(gpu)[20] = 1;
+        if (material != DC_MATERIAL_WATER) dc_gpu_structural_data(gpu)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD] = 1;
     }
     return okay;
 }

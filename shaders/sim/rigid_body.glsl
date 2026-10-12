@@ -3,6 +3,7 @@
 #include "../../include/dungeoncraft/material_density.h"
 
 const uint BODY_CAPACITY = 64u;
+const uint STRUCTURAL_COMPONENT_DIRTY_WORD = 20u;
 const uint BODY_VERTEX_CAPACITY = 8u;
 const uint BODY_MAX_SIDE = 16u;
 const uint BODY_PIECES = 4u;

@@ -6,7 +6,7 @@ bool dc_gpu_enable_automatic_components(dc_gpu_t *gpu) {
     gpu->automatic_components_enabled = true;
     gpu->structural_enabled = true;
     dc_gpu_structural_data(gpu)[19] = 1;
-    dc_gpu_structural_data(gpu)[20] = 1;
+    dc_gpu_structural_data(gpu)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD] = 1;
     return dc_gpu_set_rigid_solver(gpu, true);
 }
 

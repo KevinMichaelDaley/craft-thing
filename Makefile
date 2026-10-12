@@ -433,6 +433,7 @@ build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h
 test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/structural_mechanics_tests
 	./build/structural_placement_tests
+	./build/structural_submerged_load_tests
 	./build/structural_equilibrium_tests
 	./build/structural_failure_tests
 	./build/structural_fracture_tests
@@ -577,3 +578,5 @@ test_ui test_quarter_native: build/structural_material_visual_tests
 test_quarter_native: build/quarter_native_structural_submerged_load_tests
 build/quarter_native_structural_submerged_load_tests: tests/structural/submerged_load_tests.c tests/structural/placement_tests.c Makefile $(GPU_SRC) src/world/chunk.c build/quarter_native_solver_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+
+build/shaders/mpm_active.comp.spv: shaders/sim/rigid_body.glsl include/dungeoncraft/material_density.h

@@ -66,7 +66,7 @@ void extract(uint root) {
         for(int yy=y;yy<bottom;yy++) for(int xx=x;xx<right;xx++) occupied[uint(yy*16+xx)]=0u;
     }
     uint slot=64u;for(uint i=0u;i<64u;i++) if(bodies[i].enabled==0u&&bodies[i].reserved0==0u) {slot=i;break;}
-    if(slot==64u) {data[base()+20u]=1u;return;}
+    if(slot==64u) {data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]=1u;return;}
     if(data[base()+14u]>=0x7fffffffu) return;
     uint serial=data[base()+14u]+1u,id=0x80000000u+serial;
     for(uint i=0u;i<64u;i++) if(bodies[i].id==id&&(bodies[i].enabled!=0u||bodies[i].reserved0!=0u)) return;
@@ -92,7 +92,7 @@ void extract(uint root) {
     }
 }
 void main() {
-    if(data[base()+20u]==0u) return;
+    if(data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]==0u) return;
     uint total=params.width*params.height, words=(total+31u)/32u;
     if(params.mode==1u) {
         uint word=gl_GlobalInvocationID.x;if(word>=words) return;
@@ -104,7 +104,7 @@ void main() {
         candidates[word]=mask;return;
     }
     if(gl_GlobalInvocationID.x!=0u) return;
-    data[base()+20u]=0u;
+    data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]=0u;
     for(uint word=0u;word<words;word++) {
         uint mask=candidates[word];
         while(mask!=0u) {uint bit=uint(findLSB(mask));extract(word*32u+bit);mask&=mask-1u;}

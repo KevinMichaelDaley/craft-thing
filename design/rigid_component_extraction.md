@@ -26,3 +26,14 @@ and exact motion after cold eviction/remap. Snapshot slots retain one authoritat
 record per world coordinate, including when streaming relocates that coordinate.
 The body pool preserves source ownership until its rigid/MPM descendants disappear;
 known MPM lifetime reclamation work is tracked by ct-3srq.
+
+Parallel root masks reuse the label-hooking scratch buffer after convergence. A
+single ordered commit scans those masks, preserving deterministic birth IDs without
+serially visiting every cell. A GPU dirty/pending word skips unchanged terrain;
+explicit material edits, uploads, page changes, origin changes and restore invalidate
+it. A representable component blocked by full storage keeps the word pending for
+retry. Ordinary fluid evolution still updates body forces every tick. This adds no
+allocation and performs no runtime CPU physics copyback.
+
+Larger or more complex exact extraction is tracked by ct-wuci; those deferred
+roots remain terrain until a supported representation is available.

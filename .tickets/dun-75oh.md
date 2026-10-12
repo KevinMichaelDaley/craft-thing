@@ -1,6 +1,6 @@
 ---
 id: dun-75oh
-status: in_progress
+status: closed
 deps: [dun-08qq, dun-wc20]
 links: [ct-gf6q]
 created: 2026-09-26T07:43:18Z
@@ -36,3 +36,7 @@ Initial shared GPU impact path passes gentle/hard stone contact tests normal and
 **2026-10-12T16:24:12Z**
 
 Four impact cases pass normal and quarter-native; full headless210/210. Full64-body saturation retains parent mass172.8 and pending work then retries once; simultaneous L/U impacts produce2/3 connected descendants preserving302.4/432 mass. Explicit ledger bounds fracture plus dissipation by available contact work; restitution-retained energy excluded and body/body work shared. SPIR-V validation passes. Chunk/save ownership and final visual/water integration remain pending.
+
+**2026-10-12T23:07:46Z**
+
+Gentle/hard, saturated retry, simultaneous L/U concave and mixed-composition impact regressions pass normal and quarter-native. Actual stone crack display, root/descendant streaming/checkpoints and energy budgets pass; mixed cut work 7776 preserves per-piece materials. Final normal: 261/261 and full UI/quarter: 442 reported cases pass, zero validation errors.

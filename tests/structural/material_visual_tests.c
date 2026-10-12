@@ -42,6 +42,12 @@ test_material_profiles_produce_visible_splitting_cracking_and_crumble(void) {
         ASSERT_TRUE(gpu);
         ASSERT_TRUE(dc_gpu_set_overlay(gpu, DC_GPU_OVERLAY_STRUCTURAL_STRESS));
         ASSERT_TRUE(dc_gpu_set_rigid_solver(gpu, true));
+        dc_chunk_t *terrain = calloc(1, sizeof(*terrain));
+        ASSERT_TRUE(terrain);
+        for (unsigned x = 0; x < 64; x++)
+            terrain->cells[62 * 64 + x].material = DC_MATERIAL_STONE;
+        ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, terrain, err, 256));
+        free(terrain);
         fr_structural_gpu_graph_t graph = beam(20);
         graph.members[0].material = materials[material];
         ASSERT_TRUE(
@@ -79,7 +85,7 @@ test_material_profiles_produce_visible_splitting_cracking_and_crumble(void) {
             ASSERT_EQ(chunk->particle_count, 24);
             free(chunk);
         }
-        for (unsigned frame = 0; frame < 8; frame++)
+        for (unsigned frame = 0; frame < 48; frame++)
             ASSERT_TRUE(tick(gpu, err));
         ASSERT_TRUE(snapshot(gpu, paths[material], err));
         dc_gpu_destroy(gpu);

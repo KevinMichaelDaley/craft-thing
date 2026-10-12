@@ -1,6 +1,6 @@
 ---
 id: ct-gf6q
-status: in_progress
+status: closed
 deps: [ct-0iq3]
 links: [dun-75oh]
 created: 2026-10-11T05:44:09Z
@@ -55,3 +55,7 @@ MPM births now use committed transaction serials with a separate particle namesp
 **2026-10-12T21:47:16Z**
 
 Added compiling RED for mixed stone/wood impact fracture: current clipping overwrites per-piece materials with primary material, so conservative preflight refuses the split. RED fails absent child birth; fix must preserve composition, aggregate mass and ownership.
+
+**2026-10-12T23:07:46Z**
+
+Final acceptance passes normal and quarter-native material/impact cases plus actual wood split, stone crack and mortar crumble display scenes, two-concave brace cascade, composition-preserving cut work (7776 mixed case), lineage/streamed ownership, saturated rollback and wet intact detachment. Strong unsupported wood/stone retain coherent mass and reach material-derived float/sink outcomes after their 90/60 tick grace. Full UI/quarter run: 442 reported passes; final make test: 261/261, zero validation errors.
