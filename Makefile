@@ -474,3 +474,6 @@ test_ui_long: build/dungeoncraft
 
 clean:
 	rm -rf build
+
+build/buoyancy_tests: tests/vulkan/buoyancy_tests.c build/fluid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)

@@ -1,6 +1,6 @@
 ---
 id: dun-sbk9
-status: open
+status: in_progress
 deps: [dun-9qub, dun-c459]
 links: [dun-spbq, dun-c459, ct-ha8q]
 created: 2026-09-26T07:43:36Z
