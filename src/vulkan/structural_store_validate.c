@@ -175,7 +175,11 @@ bool dc_gpu_structure_payload_valid(const dc_gpu_t *gpu,
                     return false;
         const uint32_t *output = p->graph + 36000u + i * 4u;
         if (output[0] &&
-            (!output[1] || output[2] > p->control[3] || output[3] != 1))
+            (!output[1] || output[2] > p->control[3] ||
+             (output[3] != 1 && output[3] != 2)))
+            return false;
+        if (output[3] == 2 && (b->body.active || b->reserved[0] != DC_GPU_STRUCTURAL_CONVERTED_TAG ||
+                              output[0] != b->body.id || output[1] != b->reserved[1]))
             return false;
         const uint32_t *pending = p->graph + 38000u + i * 4u;
         if (pending[0] > 1000000 || pending[1] > 1000000 || pending[2] > 2)

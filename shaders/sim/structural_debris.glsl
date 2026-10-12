@@ -36,6 +36,8 @@ float debris_cell(Body b,ivec2 cell,out vec2 center) {
 }
 bool crumble_member(uint member) {
     uint g=graph(),m=g+MEMBERS+member*8u,st=member_state(member);
+    uint serial=data[base()+14u]+1u;
+    if(serial==0u||serial>0x1fffffffu) return false;
     Body b=bodies[data[m+7u]];
     uint debris_material=data[m+4u]==0u?5u:6u;
     vec2 low,high;body_bounds(b,low,high);
@@ -57,6 +59,7 @@ bool crumble_member(uint member) {
     }
     if(area<=0) return false;
     uint total=uint(round(b.mass*65536.0)),written=0u;float accumulated=0;
+    if(total==0u) return false;
     for(int y=begin.y;y<end.y;y++) for(int x=begin.x;x<end.x;x++) {
         ivec2 cell=ivec2(x,y);vec2 center;float volume=debris_cell(b,cell,center);
         if(volume<1e-7) continue;
@@ -64,14 +67,16 @@ bool crumble_member(uint member) {
         if(debris_particles[p].mass_fp!=0u) p+=4096u;
         accumulated+=volume;
         uint cumulative=uint(round(float(total)*min(accumulated/area,1.0)));
+        uint mass=cumulative-written;written=cumulative;
+        if(mass==0u) continue;
         StructuralParticle particle;
         particle.x_fp=int(round((float(x%64)+center.x-float(x))*65536.0));
         particle.y_fp=int(round((float(y%64)+center.y-float(y))*65536.0));
         particle.vx_fp=0;particle.vy_fp=0;
         particle.f00=1;particle.f01=0;particle.f10=0;particle.f11=1;
-        particle.id_lo=(c%4096u)+1u;
-        particle.id_hi=0x80000000u^b.id^data[m+1u];
-        particle.mass_fp=cumulative-written;written=cumulative;
+        particle.id_lo=0x80000000u|((c%4096u)+1u);
+        particle.id_hi=serial;
+        particle.mass_fp=mass;
         particle.grain_fp=uint(round(min(.35,sqrt(volume/3.14159265))*65536.0));
         particle.material=debris_material;particle.flags=0u;
         debris_particles[p]=particle;debris_counts[c/4096u]++;
@@ -83,6 +88,10 @@ bool crumble_member(uint member) {
     }
     b.enabled=0u;b.reserved0=0x53545232u;b.reserved1=data[m+1u];
     bodies[data[m+7u]]=b;
+    uint record=g+36000u+data[m+7u]*4u;
+    data[record]=b.id;data[record+1u]=data[m+1u];
+    data[record+2u]=serial;data[record+3u]=2u;
+    data[base()+14u]=serial;
     data[m+6u]|=STRUCTURAL_RETIRED;data[st+3u]=5u;
     eq_put(st+11u,work);
     eq_put(st+12u,max(eq_get(st+9u)-work,0));

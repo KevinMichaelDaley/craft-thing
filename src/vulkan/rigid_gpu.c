@@ -228,6 +228,8 @@ bool dc_gpu_remove_body(dc_gpu_t *gpu, uint32_t id, char *err, uint32_t cap) {
     if (((dc_gpu_body_record_t *)gpu->body_mapped)[slot].reserved[0] == DC_GPU_STRUCTURAL_TAG)
         return error(err, cap, "Structural removal is owned by its graph");
     uint32_t *graph = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset();
+    if (graph[36000u + slot * 4u + 3u] == 2u)
+        return error(err, cap, "MPM descendants retain this source identity");
     for (uint32_t i = 0; i < 192u; i++) {
         uint32_t *bond = graph + 30000u + i * 20u;
         if (bond[3] == id || bond[4] == id)
