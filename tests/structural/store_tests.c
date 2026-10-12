@@ -65,6 +65,10 @@ static void test_snapshot_preserves_descendants_and_output_serial(void) {
     ASSERT_EQ(history.id, 1);
     ASSERT_EQ(history.generation, 1);
     ASSERT_EQ(history.state, FR_STRUCTURAL_CONVERTED);
+    fr_structural_gpu_component_state_t component;
+    ASSERT_TRUE(fr_gpu_read_structure_component(g, 1, &component));
+    ASSERT_EQ(component.id, 1);
+    ASSERT_EQ(component.state, FR_STRUCTURAL_CONVERTED);
     ASSERT_TRUE(dc_gpu_remove_body(g, FR_STRUCTURAL_OUTPUT_ID_BASE + 1, err, sizeof(err)));
     s = beam(70); s.nodes[0].id = 3; s.nodes[1].id = 4;
     s.members[0].id = 2; s.members[0].a = 3; s.members[0].b = 4;
