@@ -231,7 +231,7 @@ bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkSpecializationMapEntry entry = {.constantID = 0, .offset = 0,
                                       .size = sizeof(uint32_t)};
     VkResult r = VK_SUCCESS;
-    for (uint32_t phase = 0; phase < 6 && r == VK_SUCCESS; phase++) {
+    for (uint32_t phase = 0; phase < DC_GPU_STRUCTURAL_PHASE_COUNT && r == VK_SUCCESS; phase++) {
         VkSpecializationInfo specialization = {
             .mapEntryCount = 1, .pMapEntries = &entry,
             .dataSize = sizeof(phase), .pData = &phase};

@@ -32,3 +32,7 @@ Implementing the shared GPU fragment transaction for ct-gf6q. RED gentle/hard-co
 **2026-10-12T16:15:35Z**
 
 Initial shared GPU impact path passes gentle/hard stone contact tests normal and quarter-native; full headless208/208 and SPIR-V validation pass. Trigger uses material wave impedance and compressive strength. Fragment transaction preserves mass/inertia and actual post-contact momentum with no virtual launch. Opt-in authored configuration uses fixed64 GPU slots and sixth specialized phase; no frame CPU solve/readback. Saturated retry, concave output and explicit energy diagnostic coverage remain unfinished.
+
+**2026-10-12T16:24:12Z**
+
+Four impact cases pass normal and quarter-native; full headless210/210. Full64-body saturation retains parent mass172.8 and pending work then retries once; simultaneous L/U impacts produce2/3 connected descendants preserving302.4/432 mass. Explicit ledger bounds fracture plus dissipation by available contact work; restitution-retained energy excluded and body/body work shared. SPIR-V validation passes. Chunk/save ownership and final visual/water integration remain pending.

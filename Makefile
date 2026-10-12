@@ -139,6 +139,7 @@ build/structural_impact_tests: tests/structural/impact_tests.c tests/structural/
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/quarter_native_structural_impact_tests: tests/structural/impact_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+test_quarter_native: build/quarter_native_structural_impact_tests
 $(SOLVER_SHADER): shaders/sim/rigid_impact.glsl
 build/shaders/structural.comp.spv: shaders/sim/structural_impact.glsl
 build/structural_bench: tests/structural/benchmark.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
@@ -177,6 +178,7 @@ test_quarter_native: build/quarter_native_config_tests build/quarter_native_flui
 	./build/quarter_native_structural_equilibrium_tests
 	./build/quarter_native_structural_failure_tests
 	./build/quarter_native_structural_fracture_tests
+	./build/quarter_native_structural_impact_tests
 	./build/structural_cadence_tests
 	./build/presentation_tests
 	./build/quarter_native_config_tests

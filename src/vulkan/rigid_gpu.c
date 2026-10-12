@@ -164,7 +164,7 @@ void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
         if (gpu->solver_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->solver_pipelines[i],NULL);
     if (gpu->broadphase_pipeline) vkDestroyPipeline(gpu->device, gpu->broadphase_pipeline, NULL);
     if (gpu->rigid_pipeline) vkDestroyPipeline(gpu->device, gpu->rigid_pipeline, NULL);
-    for (unsigned phase = 0; phase < 6; phase++)
+    for (unsigned phase = 0; phase < DC_GPU_STRUCTURAL_PHASE_COUNT; phase++)
         if (gpu->structural_pipelines[phase])
             vkDestroyPipeline(gpu->device, gpu->structural_pipelines[phase], NULL);
     if (gpu->body_mapped) vkUnmapMemory(gpu->device, gpu->body_memory);

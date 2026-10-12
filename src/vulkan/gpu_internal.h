@@ -19,7 +19,8 @@ enum {
     DC_GPU_SOLVER_HEADER_WORDS = 16,
     DC_GPU_SOLVER_BODY_WORDS = 32,
     DC_GPU_SOLVER_CONTACT_WORDS = 16,
-    DC_GPU_SOLVER_PHASE_COUNT = 15
+    DC_GPU_SOLVER_PHASE_COUNT = 15,
+    DC_GPU_STRUCTURAL_PHASE_COUNT = 6
 };
 
 typedef struct {
@@ -116,7 +117,7 @@ struct dc_gpu {
     VkPipeline broadphase_pipeline;
     VkPipeline contact_pipeline;
     VkPipeline solver_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
-    VkPipeline structural_pipelines[6];
+    VkPipeline structural_pipelines[DC_GPU_STRUCTURAL_PHASE_COUNT];
     bool structural_enabled;
     bool impact_fracture_enabled;
     bool rigid_solver_enabled;
