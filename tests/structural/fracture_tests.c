@@ -343,6 +343,42 @@ static void test_stone_fragment_pool_is_atomic_and_retry_does_not_skip_ids(void)
     PASS();
 }
 
+static void test_overloaded_wood_splits_along_grain_without_gravel(void) {
+    char err[256];
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    s.members[0].material = FR_STRUCTURAL_WOOD;
+    ASSERT_TRUE(dc_gpu_paint_material(g, 20, 41, 0, DC_MATERIAL_STONE,
+                                      err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, err, sizeof(err)));
+    dc_gpu_body_t load = {.x_fp = 24 << 16, .y_fp = 23 << 16,
+                         .width = 14, .height = 16, .id = 1, .active = 1};
+    ASSERT_TRUE(dc_gpu_spawn_body(g, load, err, sizeof(err)));
+    fr_structural_gpu_member_state_t state;
+    for (unsigned i = 0; i < 12; i++) {
+        ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+        ASSERT_TRUE(fr_gpu_read_structure_member(g, 1, &state));
+        if (state.state == FR_STRUCTURAL_CONVERTED) break;
+    }
+    ASSERT_EQ(state.state, FR_STRUCTURAL_CONVERTED);
+    dc_gpu_body_motion_t a, b;
+    dc_gpu_body_shape_t shape;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1,
+                                        &a, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_OUTPUT_ID_BASE + 1,
+                                        &b, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_shape(g, FR_STRUCTURAL_OUTPUT_ID_BASE + 1,
+                                       &shape, err, sizeof(err)));
+    ASSERT_EQ(shape.material, DC_GPU_BODY_WOOD);
+    ASSERT_TRUE(fabs(a.mass + b.mass - 14.4) < .001);
+    ASSERT_TRUE(fabs(a.mass - b.mass) < .001);
+    ASSERT_TRUE(state.fracture_work > 0);
+    ASSERT_TRUE(state.fracture_work <= state.strain_energy);
+    dc_gpu_destroy(g);
+    PASS();
+}
+
 int main(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "--mortar-probe") == 0) {
         RUN(test_overloaded_mortar_crumble_preserves_mass_without_launch);
@@ -357,6 +393,7 @@ int main(int argc, char **argv) {
     RUN(test_mortar_debris_paint_uses_material_density);
     RUN(test_overstressed_stone_creates_owned_falling_rigid_fragments);
     RUN(test_stone_fragment_pool_is_atomic_and_retry_does_not_skip_ids);
+    RUN(test_overloaded_wood_splits_along_grain_without_gravel);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
