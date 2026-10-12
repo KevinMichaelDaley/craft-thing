@@ -233,6 +233,7 @@ test_quarter_native: build/quarter_native_config_tests build/quarter_native_flui
 	./build/component_world_tests
 	./build/quarter_native_rigid_tests
 	./build/structural_world_tests
+	./build/structural_visual_scene_tests
 	./build/quarter_native_rigid_solver_tests
 	./build/rigid_dynamics_visual_tests
 	./build/dungeoncraft_quarter_native --smoke-native
@@ -436,6 +437,9 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/structural_buckling_tests
 	./build/structural_streaming_tests
 	./build/structural_store_tests
+	./build/structural_shadow_chunk_store_tests
+	./build/structural_composition_fracture_tests
+	./build/structural_composition_energy_tests
 	./build/structural_root_identity_tests
 	./build/structural_particle_identity_tests
 	./build/rigid_solver_tests
@@ -467,6 +471,7 @@ test_ui: build/dungeoncraft build/controls_tests build/structural_world_tests
 	./build/controls_tests
 	./build/component_world_tests
 	./build/structural_world_tests
+	./build/structural_visual_scene_tests
 	./build/rigid_dynamics_visual_tests
 	./build/dungeoncraft --smoke-controls-ui
 	./build/dungeoncraft --smoke-stream
@@ -547,3 +552,6 @@ build/shaders/pattern.comp.spv: shaders/sim/rigid_body.glsl shaders/sim/rigid_sh
 
 build/structural_composition_energy_tests: tests/structural/composition_fracture_energy_tests.c tests/structural/placement_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+test: build/structural_shadow_chunk_store_tests build/structural_composition_fracture_tests build/structural_composition_energy_tests
+test_ui test_quarter_native: build/structural_visual_scene_tests
