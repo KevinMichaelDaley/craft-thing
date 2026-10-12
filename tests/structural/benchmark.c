@@ -8,6 +8,7 @@ static void test_static_structural_graph_stays_within_gpu_budget(void) {
     PASS();
 }
 int main(int argc, char **argv) {
+    bool automatic = argc > 2 && strcmp(argv[2], "--automatic") == 0;
     char err[256];
     dc_gpu_t *g = grid();
     if (!g)
@@ -32,14 +33,17 @@ int main(int argc, char **argv) {
         one.anchors[0].chunk.y = (y + 1) / 64;
         one.anchors[0].y = (y + 1) % 64;
         s.anchors[i] = one.anchors[0];
-        if (!dc_gpu_paint_material(g, x, y + 1, 0, DC_MATERIAL_STONE, err,
-                                   sizeof(err)))
-            return 2;
+        for (int support_x = automatic ? 0 : x; support_x <= x; support_x++)
+            if (!dc_gpu_paint_material(g, support_x, y + 1, 0,
+                                       DC_MATERIAL_STONE, err, sizeof(err)))
+                return 2;
     }
     if (!fr_gpu_place_structure(g, &s, err, sizeof(err))) {
         puts(err);
         return 2;
     }
+    if (automatic && !dc_gpu_enable_automatic_components(g))
+        return 2;
     for (unsigned i = 0; i < 8; i++)
         if (!dc_gpu_rigid_step(g, err, sizeof(err)))
             return 3;
