@@ -39,3 +39,7 @@ Stone rigid birth checkpoint: nine material tests pass normal and quarter-native
 **2026-10-12T16:01:08Z**
 
 Wood grain split implemented and validated under actual rigid-body contact load. Coherent children retain wood material and combined mass14.4; grain-direction fracture work is bounded by recovered energy. Ten material cases pass normal and quarter-native; full headless205/205. Severe stone crushing and impact/persistence remain unfinished.
+
+**2026-10-12T16:08:35Z**
+
+Severe axial stone compression now selects the atomic clipped gravel transaction (material5, density2.7) instead of tensile rigid splitting. Hard-contact column regression preserves all5.4 mass; eleven material cases pass normal and quarter-native, full headless206/206. Impact sharing, composition/water and persistence still remain.
