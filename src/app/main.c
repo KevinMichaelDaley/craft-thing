@@ -13,6 +13,7 @@
 #include "dungeoncraft/chunk.h"
 #include "level.h"
 #include "session.h"
+#include "structural_demo.h"
 #include "view_config.h"
 
 static bool save_level_bmp(const char *path, const uint32_t *pixels) {
@@ -372,8 +373,9 @@ static bool paint_dirt_floor(dc_level_view_t *view, char *err, uint32_t cap) {
 static bool setup_coupled_materials(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!dc_level_view_wait_visible(view, 5000, err, cap) ||
         !paint_dirt_floor(view, err, cap)) return false;
-    const uint32_t wall[][2] = {{39, 5}, {41, 5}, {40, 4}, {40, 6}};
-    for (uint32_t i = 0; i < 4; ++i)
+    const uint32_t wall[][2] = {{39, 5}, {41, 5}, {40, 4}, {40, 6},
+        {39, 4}, {41, 4}, {39, 6}, {41, 6}};
+    for (uint32_t i = 0; i < 8; ++i)
         if (!dc_level_view_paint(view, wall[i][0], wall[i][1], 0,
                                  DC_MATERIAL_STONE, err, cap)) return false;
     bool painted = dc_level_view_paint(view, 40, 5, 0, DC_MATERIAL_DIRT, err, cap) &&
@@ -395,6 +397,10 @@ static bool setup_coupled_materials(dc_level_view_t *view, char *err, uint32_t c
             if (!border && !dc_level_view_paint(view, x, y, 0,
                     DC_MATERIAL_WATER, err, cap)) return false;
         }
+    for (uint32_t y = 7; y < 64; ++y)
+        if (!dc_level_view_paint(view, 39, y, 0, DC_MATERIAL_STONE, err, cap) ||
+            !dc_level_view_paint(view, 59, y, 0, DC_MATERIAL_STONE, err, cap))
+            return false;
     return true;
 }
 
@@ -1009,6 +1015,10 @@ static bool pan_held_keys(dc_level_view_t *view, double elapsed,
 }
 
 int main(int argc, char **argv) {
+    if (argc > 1 && strcmp(argv[1], "--structural-demo") == 0)
+        return dc_structural_demo_run(false);
+    if (argc > 1 && strcmp(argv[1], "--smoke-structural-demo") == 0)
+        return dc_structural_demo_run(true);
 #if defined(DC_HALF_NATIVE_VIEW) || defined(DC_QUARTER_NATIVE_VIEW)
     if (argc > 1 && strcmp(argv[1], "--smoke-spray-on") == 0)
         return smoke_spray(true, FLUID_INTERVAL);
