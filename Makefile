@@ -566,3 +566,6 @@ build/structural_submerged_load_tests: tests/structural/submerged_load_tests.c t
 
 test_ui test_quarter_native: build/structural_demo_controls_tests
 test: build/structural_submerged_load_tests
+
+build/structural_material_visual_tests: tests/structural/material_visual_tests.c tests/structural/placement_tests.c Makefile $(GPU_SRC) src/world/chunk.c build/quarter_native_solver_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DDC_STRUCTURAL_PRESENTATION_TEST $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
