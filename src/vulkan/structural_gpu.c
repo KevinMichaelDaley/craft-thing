@@ -379,7 +379,17 @@ bool fr_gpu_place_structure(dc_gpu_t *gpu, const fr_structural_gpu_graph_t *g,
     if (!gpu || !validate(g))
         return error(err, cap,
                      "Invalid structural graph or unsupported geometry");
+    if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
+        return error(err, cap, "Cannot reach structural authoring boundary");
     dc_gpu_refresh_body_registry(gpu);
+    const uint32_t *outputs = dc_gpu_structural_data(gpu) +
+                              dc_gpu_structural_graph_offset() + 36000u;
+    for (unsigned m = 0; m < g->member_count; m++)
+        for (unsigned i = 0; i < DC_GPU_BODY_CAPACITY; i++)
+            if (gpu->body_ids[i] &&
+                outputs[i * 4u] == FR_STRUCTURAL_BODY_ID_BASE + g->members[m].id &&
+                g->members[m].generation <= outputs[i * 4u + 1u])
+                return error(err, cap, "A live descendant retains this root generation");
     const fr_structural_gpu_graph_t *old =
         (void *)(dc_gpu_structural_data(gpu) +
                  dc_gpu_structural_graph_offset());
