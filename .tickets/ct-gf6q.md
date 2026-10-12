@@ -35,3 +35,7 @@ Seven material cases pass in normal and quarter-native configurations; full batt
 **2026-10-12T15:55:48Z**
 
 Stone rigid birth checkpoint: nine material tests pass normal and quarter-native; full headless 204/204. GPU clipping reserves body slots and output identities atomically, preserves mass/inertia and actual momentum without virtual launch, and rerasterizes through GPU indirect dispatch. Five specialized structural shader phases avoid reproduced device loss from the combined shader. Warm quarter budget 9.110 ms rigid/structure, 18.337 ms whole. Wood splitting, shared impact path and persistence remain unfinished.
+
+**2026-10-12T16:01:08Z**
+
+Wood grain split implemented and validated under actual rigid-body contact load. Coherent children retain wood material and combined mass14.4; grain-direction fracture work is bounded by recovered energy. Ten material cases pass normal and quarter-native; full headless205/205. Severe stone crushing and impact/persistence remain unfinished.
