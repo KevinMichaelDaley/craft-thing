@@ -27,3 +27,7 @@ Complete GPU footprint residency now detects cold diagonal corner pages even wit
 **2026-10-12T16:55:39Z**
 
 Five streaming/identity regressions pass normal and quarter-native; full headless216/216. GPU author transactions remap member/interface damage and confirmed-loss history by ID+generation, preserve history across reorder/unchanged republish, reset fresh member generations, reject stale generations. Component-node clocks preserve history across topology changes; UNKNOWN remains frozen. File snapshots, atomic world checkpoint integration and converted/pending reload acceptance remain unfinished.
+
+**2026-10-12T18:07:14Z**
+
+Graph-aware checkpoint GREEN 3f3a3ad passes eight normal and quarter-native Vulkan regressions: exact damage/grace continuation, converted identities, serial preservation, saturated retry, corruption nonmutation, legacy worlds, conservative crumble particle/cell restore, and repeated cold snapshots. First full run224/224; sparse refactor full validation underway. Native world transaction/streaming integration remains unfinished; ticket stays in progress.

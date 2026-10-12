@@ -2,6 +2,7 @@
 #define DUNGEONCRAFT_STRUCTURAL_STORE_INTERNAL_H
 
 #include "gpu_internal.h"
+#include <stdio.h>
 
 typedef struct {
     char magic[4];
@@ -17,8 +18,12 @@ typedef struct {
 } dc_structural_store_payload_t;
 
 /** Validate bounds, material geometry, ownership and authoritative state. */
-bool dc_gpu_structure_payload_valid(const dc_gpu_t *gpu,
-                                    const dc_structural_store_payload_t *payload);
+bool dc_gpu_structure_payload_valid(
+    const dc_gpu_t *gpu, const dc_structural_store_payload_t *payload);
 bool dc_gpu_checkpoint_chunk_valid(const dc_chunk_t *chunk);
+bool dc_gpu_checkpoint_write_chunks(FILE *file, const dc_chunk_t *chunks,
+                                    unsigned count);
+bool dc_gpu_checkpoint_read_chunks(FILE *file, dc_chunk_t *chunks,
+                                   unsigned count);
 
 #endif

@@ -17,7 +17,12 @@ static void test_cold_checkpoint_survives_another_checkpoint(void) {
     dc_gpu_destroy(g); g = grid(); ASSERT_TRUE(g);
     ASSERT_TRUE(fr_gpu_load_structure(g, snapshot, err, sizeof(err)));
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk)); ASSERT_TRUE(chunk);
-    ASSERT_TRUE(dc_gpu_download_chunk(g, 3, chunk, err, sizeof(err)));
+#ifdef DC_QUARTER_NATIVE_VIEW
+    const unsigned slot = 11;
+#else
+    const unsigned slot = 3;
+#endif
+    ASSERT_TRUE(dc_gpu_download_chunk(g, slot, chunk, err, sizeof(err)));
     ASSERT_EQ(chunk->cells[(90 % 64) * 64 + 85 % 64].material, DC_MATERIAL_STONE);
     free(chunk); remove(snapshot); dc_gpu_destroy(g); PASS();
 }

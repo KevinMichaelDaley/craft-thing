@@ -3,7 +3,9 @@
 Status: mechanical reference, GPU placement/topology, GPU equilibrium/contact
 coupling and timed conservative detachment implemented. Mortar crumbling,
 stone rigid splitting, severe stone crushing and wood grain splitting are
-implemented; impact fracture, persistence and gameplay integration remain in progress.
+implemented. Impact fracture shares conservative GPU birth transactions. Graph-aware
+physics checkpoints are implemented; native world transactions, water and gameplay
+integration remain in progress.
 Epic: `ct-fx1b`. The user selected explicitly placed/marked structures and requested
 design and tickets first. Ordinary terrain remains terrain. Implementation follows
 RED–GREEN–REFACTOR; runtime placement starts with `ct-i5a4` after `ct-touk`.
@@ -189,8 +191,16 @@ ticks by ID and generation. Reordering or republishing an unchanged graph does
 not reset history; a fresh generation starts with fresh damage, and stale
 generations are rejected. Every live member's complete rotated footprint must
 resolve to the exact resident world pages. A cold corner freezes the component's
-damage and grace even when both endpoints are loaded. File snapshots and atomic
-world-save integration are still in progress.
+damage and grace even when both endpoints are loaded. Explicit graph-aware snapshots
+retain member/interface damage, confirmed clocks, retired and converted identities,
+pending conversions, output serials, bodies, chunk cells/face velocities, markers
+and live MPM particles. Restore validates framing, checksum and authoritative
+ownership before mutation, rebuilds topology on GPU without advancing clocks,
+and restores particles at exact pool indices without reseeding. Cold chunk records
+remain pending until their coordinates are uploaded; another checkpoint retains
+them. Blank chunk records occupy about 64 KiB on disk. The current checkpoint
+stages at most two resident pools of records and rejects larger saves; native
+world transaction/streaming integration remains in progress.
 
 Introduce a structural body kind alongside terrain and freely moving rigid bodies.
 A player can place a structural member or explicitly mark eligible existing solid
