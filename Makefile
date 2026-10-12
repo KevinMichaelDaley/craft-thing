@@ -20,6 +20,7 @@ GLSLANG ?= glslangValidator
 GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/broadphase_gpu.o build/contact_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
 GPU_OBJ += build/solver_gpu.o
 GPU_OBJ += build/compound_gpu.o
+GPU_OBJ += build/structural_store_gpu.o
 GPU_OBJ += build/window_gpu.o
 GPU_OBJ += build/structural_gpu.o build/structural_material.o
 GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o,$(GPU_OBJ))) src/structural/material.c
@@ -28,6 +29,8 @@ build/structural_material.o: src/structural/material.c include/ferrum/structural
 $(GPU_OBJ) build/chunk.o build/structural_mechanics_tests: include/dungeoncraft/material_density.h
 build/shaders/pattern.comp.spv build/shaders/mpm.comp.spv build/shaders/rigid.comp.spv build/shaders/rigid_solver.comp.spv build/shaders/structural.comp.spv build/shaders/broadphase.comp.spv build/shaders/contacts.comp.spv: include/dungeoncraft/material_density.h
 build/structural_gpu.o: src/vulkan/structural_gpu.c src/vulkan/gpu_internal.h include/ferrum/structural/gpu.h build/shaders/structural.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/structural_store_gpu.o: src/vulkan/structural_store_gpu.c src/vulkan/gpu_internal.h include/ferrum/structural/gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/shaders/structural.comp.spv: shaders/sim/structural.comp shaders/sim/structural_equilibrium.glsl shaders/sim/structural_attachment.glsl shaders/sim/structural_load.glsl shaders/sim/structural_stress.glsl shaders/sim/structural_refine.glsl shaders/sim/structural_rank.glsl shaders/sim/structural_failure.glsl shaders/sim/structural_debris.glsl shaders/sim/structural_bonds.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl
 	mkdir -p build/shaders
@@ -140,6 +143,8 @@ build/structural_impact_tests: tests/structural/impact_tests.c tests/structural/
 build/structural_buckling_tests: tests/structural/buckling_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/structural_streaming_tests: tests/structural/streaming_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/structural_store_tests: tests/structural/store_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/quarter_native_structural_streaming_tests: tests/structural/streaming_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)

@@ -87,6 +87,12 @@ bool fr_gpu_place_structure(dc_gpu_t *gpu,
 /** Bound future conversion bond reservations (0..192), preserving existing
  * bonds. Explicit authoring configuration; no frame-time readback. */
 bool fr_gpu_set_structure_bond_capacity(dc_gpu_t *gpu, uint32_t capacity);
+/** Atomically save authoritative graph, body and output ownership at a boundary. */
+bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path,
+                           char *err_buf, uint32_t err_cap);
+/** Validate and restore a graph-aware snapshot; accept older body-only worlds. */
+bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path,
+                           char *err_buf, uint32_t err_cap);
 /** Explicit diagnostic GPU readback; ordinary frames do not traverse/read the
  * graph. */
 bool fr_gpu_read_structure_node(dc_gpu_t *gpu, uint32_t id,
