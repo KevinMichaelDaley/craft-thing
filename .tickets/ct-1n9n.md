@@ -1,6 +1,6 @@
 ---
 id: ct-1n9n
-status: open
+status: in_progress
 deps: [ct-0iq3]
 links: []
 created: 2026-10-11T05:44:09Z

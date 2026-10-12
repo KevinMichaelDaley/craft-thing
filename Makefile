@@ -139,6 +139,8 @@ build/structural_impact_tests: tests/structural/impact_tests.c tests/structural/
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/structural_buckling_tests: tests/structural/buckling_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/structural_streaming_tests: tests/structural/streaming_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/quarter_native_structural_buckling_tests: tests/structural/buckling_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 test: build/structural_buckling_tests
