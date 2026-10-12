@@ -158,6 +158,7 @@ void topology() {
 }
 #include "structural_equilibrium.glsl"
 #include "structural_failure.glsl"
+#include "structural_impact.glsl"
 void main() {
     if(STRUCTURAL_PHASE==0u) {if(gl_LocalInvocationID.x==0u) transaction();return;}
     if(STRUCTURAL_PHASE==2u) {
@@ -167,10 +168,16 @@ void main() {
         data[structural_bad()+lane]=0u;
         for(uint p=lane;p<64u;p+=32u) {
             data[structural_dependencies()+p]=0u;data[structural_clipped()+p]=0u;
+            uint impact=graph()+38000u+p*4u;
+            if(data[impact+3u]!=bodies[p].id) {
+                data[impact]=0u;data[impact+1u]=0u;data[impact+2u]=0u;
+                data[impact+3u]=bodies[p].id;
+            }
         }
         for(uint p=lane;p<16u*17u*3u;p+=32u) data[structural_bins()+p]=0u;
         return;
     }
-    if(STRUCTURAL_PHASE==4u) failure();
+    if(STRUCTURAL_PHASE==5u) fracture_impacts();
+    else if(STRUCTURAL_PHASE==4u) failure();
     else if(STRUCTURAL_PHASE==3u) equilibrium();else topology();
 }

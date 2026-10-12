@@ -18,8 +18,11 @@ enum { RIGID_RASTER = 1u, RIGID_PREPARE = 2u, RIGID_PHYSICAL_MASK = 128u };
 static bool submit_rigid(dc_gpu_t *gpu, bool advance, char *err, uint32_t cap);
 
 bool dc_gpu_enable_impact_fracture(dc_gpu_t *gpu) {
-    (void)gpu;
-    return false;
+    if (!gpu) return false;
+    dc_gpu_structural_data(gpu)[15] = 1;
+    gpu->impact_fracture_enabled = true;
+    gpu->structural_enabled = true;
+    return dc_gpu_set_rigid_solver(gpu, true);
 }
 static void record_rigid(dc_gpu_t *gpu, bool advance);
 
@@ -139,7 +142,7 @@ void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
         if (gpu->solver_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->solver_pipelines[i],NULL);
     if (gpu->broadphase_pipeline) vkDestroyPipeline(gpu->device, gpu->broadphase_pipeline, NULL);
     if (gpu->rigid_pipeline) vkDestroyPipeline(gpu->device, gpu->rigid_pipeline, NULL);
-    for (unsigned phase = 0; phase < 5; phase++)
+    for (unsigned phase = 0; phase < 6; phase++)
         if (gpu->structural_pipelines[phase])
             vkDestroyPipeline(gpu->device, gpu->structural_pipelines[phase], NULL);
     if (gpu->body_mapped) vkUnmapMemory(gpu->device, gpu->body_memory);

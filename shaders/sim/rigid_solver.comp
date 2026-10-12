@@ -16,6 +16,7 @@ layout(push_constant) uniform Params {
 params;
 
 #include "structural_load.glsl"
+#include "rigid_impact.glsl"
 
 const float DT = 0.125, SUM_SCALE = 65536.0;
 const uint CONTACT_CAPACITY = 8192u;
@@ -178,6 +179,9 @@ void solve_contact(uint i, bool impulse) {
     }
     vec2 force = dn * n + dt * t;
     vec2 applied_impulse=force/(impulse?1.0:DT);
+    float incoming=getf(s+8u),normal_impulse=max(dn,0)/(impulse?1.0:DT);
+    impact_capture(a,n,incoming,normal_impulse,wn);
+    impact_capture(b,-n,incoming,normal_impulse,wn);
     structural_capture(a,b,pa,applied_impulse);
     structural_capture(b,a,pb,-applied_impulse);
     if(any(greaterThan(abs(vec3(ba.inverse_mass*force,ba.inverse_inertia*(an*dn+at*dt))),vec3(2))))

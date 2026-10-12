@@ -56,6 +56,7 @@ Body fragment_build(Body source,Shape pieces[8],uint labels[8],uint owner,uint g
 }
 bool fragment_body(uint slot,uint axis,float cut,uint generation) {
     Body source=bodies[slot];Shape pieces[8];uint labels[8],owners[8],slots[8],ids[8];
+    if(source.material==0u) source.material=1u;
     for(uint i=0u;i<FRAGMENT_CAPACITY;i++) {pieces[i].count=0u;labels[i]=i;}
     cut=round(cut*65536.0)/65536.0;
     for(uint section=0u;section<2u;section++) for(uint p=0u;p<body_pieces(source);p++)

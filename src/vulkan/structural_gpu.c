@@ -231,7 +231,7 @@ bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkSpecializationMapEntry entry = {.constantID = 0, .offset = 0,
                                       .size = sizeof(uint32_t)};
     VkResult r = VK_SUCCESS;
-    for (uint32_t phase = 0; phase < 5 && r == VK_SUCCESS; phase++) {
+    for (uint32_t phase = 0; phase < 6 && r == VK_SUCCESS; phase++) {
         VkSpecializationInfo specialization = {
             .mapEntryCount = 1, .pMapEntries = &entry,
             .dataSize = sizeof(phase), .pData = &phase};
@@ -291,6 +291,7 @@ void dc_gpu_record_structural(dc_gpu_t *gpu) {
         dispatch(gpu, 1);
         dispatch(gpu, 3);
         dispatch(gpu, 4);
+        if (gpu->impact_fracture_enabled) dispatch(gpu, 5);
     }
 }
 static bool commit(dc_gpu_t *gpu, char *err, uint32_t cap) {
@@ -413,7 +414,7 @@ bool fr_gpu_place_structure(dc_gpu_t *gpu, const fr_structural_gpu_graph_t *g,
         return error(err, cap,
                      "Structural transaction rejected; ownership unchanged");
     }
-    gpu->structural_enabled = g->member_count != 0;
+    gpu->structural_enabled = g->member_count != 0 || gpu->impact_fracture_enabled;
     for (unsigned i = 0; i < gpu->body_count; i++)
         if (((dc_gpu_body_record_t *)gpu->body_mapped)[i].reserved[0] ==
             DC_GPU_STRUCTURAL_CONVERTED_TAG)

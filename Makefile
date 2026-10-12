@@ -10,7 +10,7 @@ build/structural_placement_tests: tests/structural/placement_tests.c include/fer
 build/structural_mechanics_tests: tests/structural/mechanics_tests.c $(STRUCTURAL_REFERENCE) include/ferrum/structural/mechanics.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/structural/mechanics_tests.c $(STRUCTURAL_REFERENCE) -o $@ -lm
-test: build/structural_mechanics_tests build/structural_placement_tests build/structural_equilibrium_tests build/structural_failure_tests build/structural_fracture_tests
+test: build/structural_mechanics_tests build/structural_placement_tests build/structural_equilibrium_tests build/structural_failure_tests build/structural_fracture_tests build/structural_impact_tests
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror
 CFLAGS += -pthread
 CPPFLAGS += -Iinclude $(shell pkg-config --cflags sdl2)
@@ -137,6 +137,10 @@ build/structural_fracture_tests: tests/structural/fracture_tests.c tests/structu
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/structural_impact_tests: tests/structural/impact_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/quarter_native_structural_impact_tests: tests/structural/impact_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+$(SOLVER_SHADER): shaders/sim/rigid_impact.glsl
+build/shaders/structural.comp.spv: shaders/sim/structural_impact.glsl
 build/structural_bench: tests/structural/benchmark.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 .PHONY: bench_structural
@@ -378,6 +382,7 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/structural_equilibrium_tests
 	./build/structural_failure_tests
 	./build/structural_fracture_tests
+	./build/structural_impact_tests
 	./build/rigid_solver_tests
 	./build/compound_body_tests
 	./build/contact_tests

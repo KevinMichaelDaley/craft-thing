@@ -116,8 +116,9 @@ struct dc_gpu {
     VkPipeline broadphase_pipeline;
     VkPipeline contact_pipeline;
     VkPipeline solver_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
-    VkPipeline structural_pipelines[5];
+    VkPipeline structural_pipelines[6];
     bool structural_enabled;
+    bool impact_fracture_enabled;
     bool rigid_solver_enabled;
     VkBuffer trace_buffer;
     VkDeviceMemory trace_memory;

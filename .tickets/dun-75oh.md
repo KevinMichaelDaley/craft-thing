@@ -1,6 +1,6 @@
 ---
 id: dun-75oh
-status: open
+status: in_progress
 deps: [dun-08qq, dun-wc20]
 links: [ct-gf6q]
 created: 2026-09-26T07:43:18Z
@@ -22,3 +22,9 @@ Use contact impulse or XPBD constraint work with a material toughness threshold;
 
 A gentle drop remains intact; a hard drop fractures into visible pieces, with deterministic counts and mass/momentum budget, no duplicate fragments, and chunk-safe ownership.
 
+
+## Notes
+
+**2026-10-12T16:09:06Z**
+
+Implementing the shared GPU fragment transaction for ct-gf6q. RED gentle/hard-contact regressions compile and fail. Water/extraction dependencies remain open; ticket will not close before complete chunk-safe visual/conservation acceptance.
