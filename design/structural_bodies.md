@@ -106,9 +106,10 @@ A warm dry 640 by 448, 70-slot diagnostic with 16 independent members measured
 validation disabled. Allocations remain 64.407 MiB mapped and 107.196 MiB device
 storage. These are stage measurements, not the final loaded gameplay budget.
 The 32-node, 16-member chain sweep safely returns UNKNOWN when float conditioning
-is insufficient, rather than inventing a mechanism. Current Euler checks use the
-conservative per-member span twice its length; complete physical unbraced-span
-and material grain evolution remain part of the later failure milestones.
+is insufficient, rather than inventing a mechanism. Euler checks aggregate
+continuous shared-node collinear members, using twice the whole span and minimum
+bending stiffness. Subdivision cannot increase the critical load. Additional
+restraints are conservatively uncredited by this buckling bound.
 
 ### Timed failure and conservative detachment
 
@@ -165,13 +166,21 @@ the regression produces 41 particles, mass 38.399994, and residual 9.40e-7.
 Backward-error normalization sums absolute modal contributions before cancellation,
 without changing the residual tolerance or rank certificates. Member diagnostics
 expose fracture work and remaining dissipation, whose sum equals recovered strain
-energy. Seven material tests pass in headless and quarter-native configurations;
-the full headless battery passes 206 tests. Saturated destinations retain the
+energy. Eleven material tests, four ordinary-impact tests and a physical-span
+buckling regression pass headless and quarter-native; the full headless battery
+passes 211 tests. Saturated destinations retain the
 stationary owner and retry exactly once after capacity returns. Eight actual MPM
 ticks retain mass 38.399994 while the debris descends to mean y 47.77. C profiles,
 body mass, MPM and paint initialization share material-density constants. A warm
 static quarter-native check passes at 8.760 ms rigid/structure and 18.071 ms whole
-tick. Wood/stone fragmentation and streamed snapshots remain unfinished.
+tick. Wood splits along its member-local grain, tension-overloaded stone creates
+conservative rigid children, and severely compressed stone becomes density-2.7
+gravel. Ordinary hard stone contacts share the same rigid transaction; gentle
+contacts remain intact. Connected L/U fragments preserve material volume without
+filling their concavities. Contact-work accounting excludes restitution-retained
+energy and shares work between eligible body/body participants. GPU-born outputs
+use reserved serial identities and an indirect ownership reraster. Streamed
+snapshots and water/load integration remain unfinished.
 
 ## Behavior and ownership
 

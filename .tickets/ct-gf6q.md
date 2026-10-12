@@ -43,3 +43,7 @@ Wood grain split implemented and validated under actual rigid-body contact load.
 **2026-10-12T16:08:35Z**
 
 Severe axial stone compression now selects the atomic clipped gravel transaction (material5, density2.7) instead of tensile rigid splitting. Hard-contact column regression preserves all5.4 mass; eleven material cases pass normal and quarter-native, full headless206/206. Impact sharing, composition/water and persistence still remain.
+
+**2026-10-12T16:33:47Z**
+
+GPU continuous-column buckling fixed: shared-node collinear members aggregate full physical span and minimum bending stiffness, so subdivision no longer strengthens a column. One/two-member critical loads match; quarter regression and full headless211/211 pass. Warm quarter budget9.168 ms rigid/structure,18.377 ms whole; allocations64.445/107.196 MiB. Eleven material and four shared-impact cases pass. Streamed ownership, bound-water/composition integration and final cascade/visual acceptance remain with ct-1n9n/ct-ha8q and existing dependencies; material ticket remains in progress until that acceptance is settled.
