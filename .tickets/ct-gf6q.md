@@ -31,3 +31,7 @@ Four material regressions now pass headless and quarter-native; full battery 198
 **2026-10-11T23:45:45Z**
 
 Seven material cases pass in normal and quarter-native configurations; full battery 201/201. Saturated destinations preserve the stationary source, mass and particle pool, then retry exactly once after freeing slots. Eight actual MPM ticks keep mass 38.399994 and move mean y to 47.77. Material density constants now shared across C profiles, bodies, MPM and paint. Warm static quarter budget passes: 8.760 ms rigid/structure, 18.071 ms whole, allocations 64.445/107.196 MiB. Wood/stone rigid fragments, shared impact path and persistent output identity remain unfinished.
+
+**2026-10-12T15:55:48Z**
+
+Stone rigid birth checkpoint: nine material tests pass normal and quarter-native; full headless 204/204. GPU clipping reserves body slots and output identities atomically, preserves mass/inertia and actual momentum without virtual launch, and rerasterizes through GPU indirect dispatch. Five specialized structural shader phases avoid reproduced device loss from the combined shader. Warm quarter budget 9.110 ms rigid/structure, 18.337 ms whole. Wood splitting, shared impact path and persistence remain unfinished.

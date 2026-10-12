@@ -165,7 +165,7 @@ Backward-error normalization sums absolute modal contributions before cancellati
 without changing the residual tolerance or rank certificates. Member diagnostics
 expose fracture work and remaining dissipation, whose sum equals recovered strain
 energy. Seven material tests pass in headless and quarter-native configurations;
-the full headless battery passes 201 tests. Saturated destinations retain the
+the full headless battery passes 204 tests. Saturated destinations retain the
 stationary owner and retry exactly once after capacity returns. Eight actual MPM
 ticks retain mass 38.399994 while the debris descends to mean y 47.77. C profiles,
 body mass, MPM and paint initialization share material-density constants. A warm
