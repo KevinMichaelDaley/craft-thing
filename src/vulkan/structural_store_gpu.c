@@ -91,7 +91,8 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
         .version = 3,
         .body_words = STORE_BODY_WORDS,
         .graph_words = DC_STRUCTURAL_RESERVE_WORDS,
-        .flags = 1u | (gpu->impact_fracture_enabled ? 2u : 0u),
+        .flags = 1u | (gpu->impact_fracture_enabled ? 2u : 0u) |
+                 (gpu->automatic_components_enabled ? 4u : 0u),
         .origin = gpu->body_origin};
     bool okay = dc_gpu_structure_payload_valid(gpu, payload);
     dc_chunk_t *chunks = calloc(
@@ -182,11 +183,13 @@ static void install(dc_gpu_t *gpu, const dc_structural_store_header_t *header,
         data[9] |=
             (data[dc_gpu_structural_graph_offset() + 30000u + i * 20u] != 0);
     data[15] = (header->flags & 2u) != 0;
+    data[19] = (header->flags & 4u) != 0;
     data[16] = 0;
     data[17] = (gpu->height + 15u) / 16u;
     data[18] = 1;
     gpu->structural_enabled = true;
     gpu->impact_fracture_enabled = (header->flags & 2u) != 0;
+    gpu->automatic_components_enabled = (header->flags & 4u) != 0;
     gpu->body_origin = header->origin;
     gpu->body_refresh_pending = true;
     dc_gpu_refresh_body_registry(gpu);
@@ -214,7 +217,7 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
         memcmp(header.magic, "DCS1", 4) == 0 && header.version >= 1 &&
         header.version <= 3 && header.body_words == STORE_BODY_WORDS &&
         header.graph_words == DC_STRUCTURAL_RESERVE_WORDS &&
-        (header.flags == 1 || header.flags == 3) &&
+        (header.flags & 1u) && !(header.flags & ~7u) &&
         header.reserved[0] <= DC_GPU_CHUNK_SLOTS * 2u &&
         (header.version >= 2 || !header.reserved[0]) && !header.reserved[1] &&
         !header.reserved[2] && fread(payload, sizeof(*payload), 1, file) == 1;
