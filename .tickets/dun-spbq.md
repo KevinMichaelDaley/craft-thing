@@ -45,3 +45,7 @@ Prepared compiling RED for the composition prerequisite: mixed connected convex 
 **2026-10-12T21:18:11Z**
 
 Mixed-material composition prerequisite passes all three Vulkan cases and full headless249/249: GPU mass-weighted COM/inertia and density, immersed torque, exact next-tick graph checkpoint. Automatic terrain extraction is not implemented yet; compiling RED now covers isolated fall, conservative cold boundaries and last-support removal.
+
+**2026-10-12T21:22:11Z**
+
+Initial extraction GREEN passes3/3 on Intel Vulkan: isolated first-tick fall, conservative cold-boundary retention, and last-support removal. Reuses selectable GPU root hooking and exact non-overlapping material rectangles; unsupported geometry and full body pools remain unchanged. Full regressions running. Native enable, snapshot activation, seams, composition/wet and saturation acceptance remain pending.
