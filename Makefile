@@ -533,3 +533,12 @@ test_ui: build/component_world_tests
 test_quarter_native: build/component_world_tests build/quarter_native_component_acceptance_tests
 build/quarter_native_component_acceptance_tests: tests/vulkan/component_acceptance_tests.c Makefile build/quarter_native_solver_tests $(GPU_SRC) src/world/chunk.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+
+build/structural_visual_scene_tests: tests/structural/visual_scene_tests.c tests/structural/placement_tests.c Makefile $(GPU_SRC) src/world/chunk.c build/quarter_native_solver_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DDC_STRUCTURAL_PRESENTATION_TEST $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+
+build/structural_composition_fracture_tests: tests/structural/composition_fracture_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+build/structural_shadow_chunk_store_tests: tests/structural/shadow_chunk_store_tests.c tests/structural/placement_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)

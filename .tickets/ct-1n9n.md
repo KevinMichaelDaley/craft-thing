@@ -1,6 +1,6 @@
 ---
 id: ct-1n9n
-status: closed
+status: in_progress
 deps: [ct-0iq3]
 links: []
 created: 2026-10-11T05:44:09Z
@@ -43,3 +43,7 @@ Root lifetime GREEN93d55f4 passes3 cases normal and quarter-native; native world
 **2026-10-12T19:47:59Z**
 
 Persistence acceptance verified: exact graph/damage/countdown, converted history, saturated transactions, corrupt-file atomic rejection, legacy body files, cold chunks, native world restart, rebase/cut continuity and retained rigid/MPM root generations. All 230 headless cases pass; normal/quarter snapshot and identity suites pass.
+
+**2026-10-12T21:47:16Z**
+
+Reopened after automatic native extraction makes all native saves graph-aware: UI stream restart rejects duplicate coordinates retained in stale GPU slot metadata. Focused compiling RED reproduces latest-state shadow-slot snapshot failure. Fix must preserve one authoritative coordinate and actual streamed state.

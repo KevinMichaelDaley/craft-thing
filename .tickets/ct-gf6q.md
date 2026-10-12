@@ -51,3 +51,7 @@ GPU continuous-column buckling fixed: shared-node collinear members aggregate fu
 **2026-10-12T19:47:59Z**
 
 MPM births now use committed transaction serials with a separate particle namespace; clipped zero-mass records are omitted. Consumed source roots retain ownership while MPM descendants exist. Normal and quarter-native regression cases pass, including checkpoint lineage and two previously colliding roots.
+
+**2026-10-12T21:47:16Z**
+
+Added compiling RED for mixed stone/wood impact fracture: current clipping overwrites per-piece materials with primary material, so conservative preflight refuses the split. RED fails absent child birth; fix must preserve composition, aggregate mass and ownership.
