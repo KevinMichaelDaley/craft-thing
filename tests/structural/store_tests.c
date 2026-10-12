@@ -60,6 +60,11 @@ static void test_snapshot_preserves_descendants_and_output_serial(void) {
     ASSERT_TRUE(fr_gpu_load_structure(g, snapshot, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_OUTPUT_ID_BASE + 1, &after, err, sizeof(err)));
     ASSERT_EQ(before.mass, after.mass);
+    fr_structural_gpu_node_state_t history;
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &history));
+    ASSERT_EQ(history.id, 1);
+    ASSERT_EQ(history.generation, 1);
+    ASSERT_EQ(history.state, FR_STRUCTURAL_CONVERTED);
     ASSERT_TRUE(dc_gpu_remove_body(g, FR_STRUCTURAL_OUTPUT_ID_BASE + 1, err, sizeof(err)));
     s = beam(70); s.nodes[0].id = 3; s.nodes[1].id = 4;
     s.members[0].id = 2; s.members[0].a = 3; s.members[0].b = 4;
