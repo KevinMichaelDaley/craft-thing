@@ -65,6 +65,10 @@ static void test_wet_mixed_component_crosses_a_warm_chunk_seam(void) {
     dc_gpu_t *copy = NULL;
     ASSERT_TRUE(dc_gpu_create(&copy, 128, 64, "build/shaders/pattern.comp.spv",
                               err, sizeof(err)));
+    for (unsigned slot = 0; slot < 2; slot++) {
+        ASSERT_TRUE(dc_gpu_upload_chunk(copy, slot, &chunks[slot], err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_page(copy, slot, 0, slot, err, sizeof(err)));
+    }
     ASSERT_TRUE(fr_gpu_load_structure(copy, "build/extracted_seam.dcs", err,
                                       sizeof(err)));
     dc_gpu_compound_shape_t shape;
@@ -92,6 +96,7 @@ static void test_wet_mixed_component_crosses_a_warm_chunk_seam(void) {
                                         sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_body_motion(copy, body.id, &resumed_motion, err,
                                         sizeof(err)));
+    printf("seam resume: y %d/%d vy %d/%d angle %.9f/%.9f cold vy %d original %d\n", continued.y_fp,resumed.y_fp,continued.vy_fp,resumed.vy_fp,continued_motion.angle,resumed_motion.angle,cold.vy_fp,body.vy_fp);
     ASSERT_EQ(continued.x_fp, resumed.x_fp);
     ASSERT_EQ(continued.y_fp, resumed.y_fp);
     ASSERT_EQ(continued_motion.angle, resumed_motion.angle);

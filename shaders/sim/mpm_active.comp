@@ -1,8 +1,11 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#include "rigid_body.glsl"
 layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 chunk_cells[]; };
 layout(set = 0, binding = 2, std430) readonly buffer Pages { uint pages[]; };
+layout(set=0,binding=4,std430) readonly buffer Storage { Body bodies[BODY_CAPACITY]; uint data[]; };
 layout(set = 0, binding = 20, std430) readonly buffer ParticleCounts { uint particle_counts[]; };
 layout(set = 0, binding = 27, std430) buffer Activity { uint activity[]; };
 layout(push_constant) uniform Params {
@@ -15,9 +18,15 @@ layout(push_constant) uniform Params {
     uint unused3;
 } params;
 
+bool rigid_clean() {
+    uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
+    uint base=8u+2u*w*h+4096u*8u+12u+8192u*32u+16u+64u*32u+8192u*16u;
+    return params.unused0!=0u && data[base+20u]==0u;
+}
 shared uint has_grain;
 
 void scan_tile() {
+    if(rigid_clean()) return;
     uint tiles_x = (params.width + 15u) / 16u;
     uint tiles_y = (params.height + 15u) / 16u;
     uint tile = gl_WorkGroupID.y * tiles_x + gl_WorkGroupID.x;
@@ -46,7 +55,7 @@ void compact_tiles() {
     uint tiles_y = (params.height + 15u) / 16u;
     uint tile_count = tiles_x * tiles_y;
     uint list_count = 0u;
-    for (uint y = 0u; y < tiles_y; ++y) {
+    for (uint y = 0u; !rigid_clean() && y < tiles_y; ++y) {
         for (uint x = 0u; x < tiles_x; ++x) {
             bool selected = false;
             for (int dy = -1; dy <= 1 && !selected; ++dy) {
@@ -64,6 +73,7 @@ void compact_tiles() {
             if (selected) activity[3u + list_count++] = y * tiles_x + x;
         }
     }
+    if(rigid_clean()) list_count=0u;
     activity[0] = list_count;
     activity[1] = 1u;
     activity[2] = 1u;

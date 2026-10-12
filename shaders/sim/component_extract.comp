@@ -1,11 +1,12 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 #include "rigid_body.glsl"
-layout(local_size_x=1) in;
+layout(local_size_x=128) in;
 layout(set=0,binding=1,std430) buffer Cells { uvec2 cells[]; };
 layout(set=0,binding=2,std430) readonly buffer Pages { uint pages[]; };
 layout(set=0,binding=4,std430) buffer Storage { Body bodies[BODY_CAPACITY]; uint data[]; };
 layout(set=0,binding=28,std430) readonly buffer Labels { uint labels[]; };
+layout(set=0,binding=29,std430) buffer Candidates { uint candidates[]; };
 layout(set=0,binding=30,std430) readonly buffer Sizes { uint sizes[]; };
 layout(push_constant) uniform Params { uint width,height,mode,count; uvec2 origin_x,origin_y; } params;
 uint base() {
@@ -65,7 +66,8 @@ void extract(uint root) {
         for(int yy=y;yy<bottom;yy++) for(int xx=x;xx<right;xx++) occupied[uint(yy*16+xx)]=0u;
     }
     uint slot=64u;for(uint i=0u;i<64u;i++) if(bodies[i].enabled==0u&&bodies[i].reserved0==0u) {slot=i;break;}
-    if(slot==64u||data[base()+14u]>=0x7fffffffu) return;
+    if(slot==64u) {data[base()+20u]=1u;return;}
+    if(data[base()+14u]>=0x7fffffffu) return;
     uint serial=data[base()+14u]+1u,id=0x80000000u+serial;
     for(uint i=0u;i<64u;i++) if(bodies[i].id==id&&(bodies[i].enabled!=0u||bodies[i].reserved0!=0u)) return;
     Body body=bodies[slot];
@@ -89,4 +91,22 @@ void extract(uint root) {
         if(cell_ref(p,atlas)&&label_at(p)==root) cells[atlas].x=0u;
     }
 }
-void main() {for(uint root=0u;root<params.width*params.height;root++) extract(root);}
+void main() {
+    if(data[base()+20u]==0u) return;
+    uint total=params.width*params.height, words=(total+31u)/32u;
+    if(params.mode==1u) {
+        uint word=gl_GlobalInvocationID.x;if(word>=words) return;
+        uint mask=0u;
+        for(uint bit=0u;bit<32u;bit++) {
+            uint root=word*32u+bit;if(root>=total) break;
+            if(sizes[root]!=0u&&sizes[root]<=256u&&labels[root]==root) mask|=1u<<bit;
+        }
+        candidates[word]=mask;return;
+    }
+    if(gl_GlobalInvocationID.x!=0u) return;
+    data[base()+20u]=0u;
+    for(uint word=0u;word<words;word++) {
+        uint mask=candidates[word];
+        while(mask!=0u) {uint bit=uint(findLSB(mask));extract(word*32u+bit);mask&=mask-1u;}
+    }
+}

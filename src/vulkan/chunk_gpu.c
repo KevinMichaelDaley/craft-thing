@@ -356,6 +356,7 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
         pages[gpu->slot_page[slot]] = 0u;
     uint32_t old_page = pages[tile];
     bool changed_mapping = old_page != new_page;
+    if (changed_mapping) dc_gpu_structural_data(gpu)[20] = 1;
     if (changed_mapping) gpu->fluid_snapshot_valid = false;
     if (old_page && (slot == UINT32_MAX || old_page != slot + 1u))
         gpu->slot_page[old_page - 1u] = UINT32_MAX;
@@ -405,6 +406,7 @@ void dc_gpu_structural_track_chunk(dc_gpu_t *gpu, uint32_t slot,
             memcmp(previous, &coord, sizeof(coord)) == 0)
             previous[5] = 0;
     }
+    dc_gpu_structural_data(gpu)[20] = 1;
     memcpy(p, &coord, sizeof(coord));
     ++p[4];
     p[5] = 1;

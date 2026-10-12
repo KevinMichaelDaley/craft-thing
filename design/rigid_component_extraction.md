@@ -19,6 +19,10 @@ the source untouched for a later retry. No runtime CPU component solve or copyba
 is involved.
 
 Graph checkpoints preserve automatic-extraction activation and cold wood material.
-Native activation, saturated retries, streamed ownership and wet seam composition
-remain acceptance work in progress. Four cases prove isolated gravity, conservative
-cold boundaries, removal of the final support and checkpoint continuation.
+Native level creation enables the pipeline, including for earlier saved worlds.
+Acceptance cases cover isolated gravity, conservative cold boundaries, final-support
+removal, wet mixed-material warm seams, saturated retry, composition checkpoints
+and exact motion after cold eviction/remap. Snapshot slots retain one authoritative
+record per world coordinate, including when streaming relocates that coordinate.
+The body pool preserves source ownership until its rigid/MPM descendants disappear;
+known MPM lifetime reclamation work is tracked by ct-3srq.

@@ -184,6 +184,7 @@ static void install(dc_gpu_t *gpu, const dc_structural_store_header_t *header,
             (data[dc_gpu_structural_graph_offset() + 30000u + i * 20u] != 0);
     data[15] = (header->flags & 2u) != 0;
     data[19] = (header->flags & 4u) != 0;
+    data[20] = data[19];
     data[16] = 0;
     data[17] = (gpu->height + 15u) / 16u;
     data[18] = 1;

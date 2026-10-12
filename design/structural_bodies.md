@@ -483,3 +483,26 @@ mid-countdown, saturated output pools, transient impacts, equal simulated time a
 different FPS and submerged wood/stone outcomes. Integrate it into `test_ui` and
 `test_quarter_native`; retain exact settled-frame checks and Wayland hide/restore
 tests. Record GPU timestamps, memory/capacity, conservation and validation results.
+
+## Interactive structural preview
+
+Run `build/dungeoncraft_quarter_native --structural-demo` on the Vulkan display.
+The preview authors a sideways beam and an angled brace, with distinct L/U concave
+stone loads. `B` removes the brace; overload damage and disconnected-component
+grace advance in fixed simulated time before the supported bodies fall. `O`
+cycles the ordinary, residency, stage, rigid-ID and structural-stress views.
+`1`/`2`/`3` rebuild the frame in wood/stone/mortar; `M` marks an explicit stone
+terrain strip into graph members; `R` resets the current preset; Escape quits.
+
+The preview is in memory and uses the public authoring transaction. Its ordinary
+frames submit GPU simulation and presentation without physics copyback. Interactive
+timing accumulates 1/60-second steps and handles zero/multiple steps per display
+frame. `--smoke-structural-demo` drives the same SDL key handlers with fixed ticks
+and explicit test-only diagnostic reads. Stress colors follow solved utilization;
+UNKNOWN support is magenta, and converted bodies retain their material colors.
+
+The display battery also captures material splitting/cracking/crumble, centered
+and eccentric seam bridges, exact rendered checkpoint restore, material-derived
+wood floating/stone sinking, conserved water, fixed-allocation sizes, GPU timestamps
+and identical paused frames. Analytical and transactional cases remain in the
+headless/quarter tests rather than relying solely on screenshot interpretation.

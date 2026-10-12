@@ -227,6 +227,7 @@ test_quarter_native: build/quarter_native_config_tests build/quarter_native_flui
 	./build/quarter_native_fluid_tests
 	./build/quarter_native_solver_tests
 	./build/quarter_native_buoyancy_tests
+	./build/quarter_native_structural_submerged_load_tests
 	./build/quarter_native_component_material_tests
 	./build/quarter_native_component_extraction_tests
 	./build/quarter_native_component_acceptance_tests
@@ -234,6 +235,7 @@ test_quarter_native: build/quarter_native_config_tests build/quarter_native_flui
 	./build/quarter_native_rigid_tests
 	./build/structural_world_tests
 	./build/structural_visual_scene_tests
+	./build/structural_material_visual_tests
 	./build/structural_demo_controls_tests
 	./build/quarter_native_rigid_solver_tests
 	./build/rigid_dynamics_visual_tests
@@ -473,6 +475,7 @@ test_ui: build/dungeoncraft build/controls_tests build/structural_world_tests
 	./build/component_world_tests
 	./build/structural_world_tests
 	./build/structural_visual_scene_tests
+	./build/structural_material_visual_tests
 	./build/structural_demo_controls_tests
 	./build/rigid_dynamics_visual_tests
 	./build/dungeoncraft --smoke-controls-ui
@@ -569,3 +572,8 @@ test: build/structural_submerged_load_tests
 
 build/structural_material_visual_tests: tests/structural/material_visual_tests.c tests/structural/placement_tests.c Makefile $(GPU_SRC) src/world/chunk.c build/quarter_native_solver_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DDC_STRUCTURAL_PRESENTATION_TEST $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+
+test_ui test_quarter_native: build/structural_material_visual_tests
+test_quarter_native: build/quarter_native_structural_submerged_load_tests
+build/quarter_native_structural_submerged_load_tests: tests/structural/submerged_load_tests.c tests/structural/placement_tests.c Makefile $(GPU_SRC) src/world/chunk.c build/quarter_native_solver_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)

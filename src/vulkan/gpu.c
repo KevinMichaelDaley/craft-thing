@@ -385,7 +385,10 @@ bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
     if (!gpu) return error(err, cap, "GPU context is null");
     uint32_t push[7] = { gpu->width, gpu->height, 3, x, y, radius, material };
     bool okay=dispatch_cells(gpu, push, err, cap);
-    if(okay) gpu->body_refresh_pending=true;
+    if(okay) {
+        gpu->body_refresh_pending=true;
+        if (material != DC_MATERIAL_WATER) dc_gpu_structural_data(gpu)[20] = 1;
+    }
     return okay;
 }
 
