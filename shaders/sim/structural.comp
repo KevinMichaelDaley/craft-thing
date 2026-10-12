@@ -94,6 +94,18 @@ void transaction() {
     for(uint i=0u;i<32u*4u;i++) data[graph()+28000u+i]=0u;
     data[s]=uint(data[st+1u]!=0u);data[s+2u]=1u;data[s+3u]++;
 }
+bool member_footprint_resident(uint member) {
+    uint m=graph()+MEMBERS+member*8u,slot=data[m+7u];
+    if(slot>=BODY_CAPACITY) return false;
+    Body b=bodies[slot];if(!place_pose(b)) return false;
+    vec2 lo,hi;body_bounds(b,lo,hi);vec2 origin=vec2(b.x_fp,b.y_fp)/65536.0;
+    ivec2 begin=ivec2(floor(origin+lo)),end=ivec2(ceil(origin+hi));
+    for(int y=begin.y;y<end.y;y++) for(int x=begin.x;x<end.x;x++) {
+        uint cell;
+        if(convex_cell_overlap(b,ivec2(x,y))&&!cell_ref(ivec2(x,y),cell)) return false;
+    }
+    return true;
+}
 void topology() {
     uint g=graph(),i=gl_LocalInvocationID.x,ns=g+NODES+i*12u,unused;
     bool dirty=data[base()+4u]!=data[base()+3u];
@@ -114,6 +126,12 @@ void topology() {
             }
             cold[i]+=uint(unknown);roots[i]+=uint(valid&&!unknown);
         }
+    }
+    barrier();
+    if(i<data[g+1u]&&(data[g+MEMBERS+i*8u+6u]&2u)==0u&&!member_footprint_resident(i)) {
+        uint m=g+MEMBERS+i*8u;
+        atomicOr(cold[uint(node_index(g,data[m+2u]))],1u);
+        atomicOr(cold[uint(node_index(g,data[m+3u]))],1u);
     }
     barrier();
     for(uint iteration=0u;dirty && iteration<32u;iteration++) {
