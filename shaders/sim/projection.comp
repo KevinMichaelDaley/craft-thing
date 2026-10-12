@@ -36,11 +36,19 @@ bool open_cell(ivec2 p) {
     if (atlas == 0xffffffffu) return false;
     uint material = cells[atlas].x & 0xffffu;
     return (material == 0u || material == 2u || material == 4u ||
-            material == 5u || material == 6u) && occupancy[index_of(p)] == 0u;
+            material == 5u || material == 6u) &&
+            occupancy[2u*params.width*params.height+index_of(p)] < 65536u;
 }
 
 bool wet(ivec2 p) {
     return open_cell(p) && cells[atlas_of(p)].y != 0u;
+}
+
+float face_aperture(ivec2 p,ivec2 direction) {
+    ivec2 face=p+min(direction,ivec2(0));
+    if(atlas_of(face)==0xffffffffu) return 0;
+    uint axis=direction.x!=0?3u:4u;
+    return float(65536u-min(65536u,occupancy[axis*params.width*params.height+index_of(face)]))/65536.0;
 }
 
 float pressure_at(ivec2 p) {
@@ -56,8 +64,10 @@ vec2 velocity_at(ivec2 p) {
 
 float divergence(ivec2 p) {
     vec2 own = velocity_at(p);
-    return own.x - velocity_at(p + ivec2(-1, 0)).x +
-           own.y - velocity_at(p + ivec2(0, -1)).y;
+    return own.x*face_aperture(p,ivec2(1,0)) -
+           velocity_at(p+ivec2(-1,0)).x*face_aperture(p,ivec2(-1,0)) +
+           own.y*face_aperture(p,ivec2(0,1)) -
+           velocity_at(p+ivec2(0,-1)).y*face_aperture(p,ivec2(0,-1));
 }
 
 float previous_vertical_at(ivec2 p) {
@@ -75,6 +85,26 @@ float advected_vertical(ivec2 p) {
     float fraction = sample_y - float(first_y);
     return mix(previous_vertical_at(ivec2(p.x, first_y)),
                previous_vertical_at(ivec2(p.x, first_y + 1)), fraction);
+}
+
+uint neighboring_head(ivec2 p) {
+    uint result=0u;
+    for(int side=-1;side<=1;side+=2)
+        for(int distance=1;distance<=32;distance++) {
+            ivec2 q=p+ivec2(side*distance,0);uint atlas=atlas_of(q);
+            if(atlas==0xffffffffu) break;
+            uint material=cells[atlas].x&0xffffu;
+            if(material!=0u&&material!=2u&&material!=4u&&material!=5u&&material!=6u) break;
+            if(occupancy[index_of(q)]!=0u) continue;
+            uint head=0u;
+            for(int y=q.y;y>=0;y--) {
+                ivec2 above=ivec2(q.x,y);
+                if(!wet(above)) break;
+                head=min(head+cells[atlas_of(above)].y,64u*65536u);
+            }
+            result=max(result,head);break;
+        }
+    return result;
 }
 
 void main() {
@@ -95,7 +125,11 @@ void main() {
         uint head = 0u;
         for (uint y = 0u; y < params.height; ++y) {
             ivec2 cell = ivec2(p.x, int(y));
-            head = wet(cell) ? min(head + cells[atlas_of(cell)].y, 64u * 65536u) : 0u;
+            uint covered=occupancy[2u*params.width*params.height+index_of(cell)];
+            if(covered!=0u) {
+                if(head==0u) head=neighboring_head(cell);
+                else head=min(head+min(65536u,cells[atlas_of(cell)].y+covered),64u*65536u);
+            } else head = wet(cell) ? min(head + cells[atlas_of(cell)].y, 64u * 65536u) : 0u;
             hydro_head[index_of(cell)] = head;
         }
     } else if (params.mode == 0u) {
@@ -103,12 +137,12 @@ void main() {
         ivec2 right = p + ivec2(1, 0);
         ivec2 below = p + ivec2(0, 1);
         vec2 predicted = vec2(0.0);
-        if (open_cell(p) && open_cell(right) && (wet(p) || wet(right)))
+        if (open_cell(p) && open_cell(right) && face_aperture(p,ivec2(1,0))>0 && (wet(p) || wet(right)))
             predicted.x = old_velocity.x * pow(0.99, uintBitsToFloat(params.step_scale_bits)) +
                 0.05 * uintBitsToFloat(params.step_scale_bits) *
                 (float(int(hydro_head[index]) - int(hydro_head[index_of(right)])) /
                          65536.0);
-        if (open_cell(p) && open_cell(below) && (wet(p) || wet(below))) {
+        if (open_cell(p) && open_cell(below) && face_aperture(p,ivec2(0,1))>0 && (wet(p) || wet(below))) {
             predicted.y = advected_vertical(p) *
                 pow(0.99, uintBitsToFloat(params.step_scale_bits)) +
                 0.5 * uintBitsToFloat(params.step_scale_bits);
@@ -129,8 +163,9 @@ void main() {
                               axis == 2 ? ivec2(0, -1) : ivec2(0, 1);
                 ivec2 next = p + delta;
                 if (open_cell(next)) {
-                    sum += pressure_at(next);
-                    count += 1.0;
+                    float aperture=face_aperture(p,delta);
+                    sum += aperture*pressure_at(next);
+                    count += aperture;
                 }
             }
             if (count > 0.0) value = (sum - divergence(p)) / count;
@@ -140,9 +175,9 @@ void main() {
         vec2 result = face_velocity[index];
         ivec2 right = p + ivec2(1, 0);
         ivec2 below = p + ivec2(0, 1);
-        if (open_cell(p) && open_cell(right) && (wet(p) || wet(right)))
+        if (open_cell(p) && open_cell(right) && face_aperture(p,ivec2(1,0))>0 && (wet(p) || wet(right)))
             result.x -= pressure_a[index_of(right)] - pressure_a[index];
-        if (open_cell(p) && open_cell(below) && (wet(p) || wet(below)))
+        if (open_cell(p) && open_cell(below) && face_aperture(p,ivec2(0,1))>0 && (wet(p) || wet(below)))
             result.y -= pressure_a[index_of(below)] - pressure_a[index];
         face_velocity[index] = result;
     }

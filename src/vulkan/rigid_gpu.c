@@ -127,7 +127,7 @@ bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     bool okay = dc_gpu_make_mapped_buffer(gpu, dc_gpu_body_storage_bytes(gpu),
                &gpu->body_buffer, &gpu->body_memory, &gpu->body_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu,
-               (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t) * 2,
+               (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t) * 5,
                &gpu->occupancy_buffer, &gpu->occupancy_memory,
                &gpu->occupancy_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, 3 * sizeof(uint32_t),

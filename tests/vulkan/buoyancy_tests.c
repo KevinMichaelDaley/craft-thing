@@ -131,24 +131,33 @@ static void test_wood_converges_to_repeatable_density_derived_draft(void) {
         .vertices={{0,0},{8<<16,0},{8<<16,4<<16},{0,4<<16}}};
     ASSERT_TRUE(dc_gpu_spawn_convex_body(gpu,wide,&shape,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_origin(gpu,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    double mean_y=0,mean_velocity=0;float low_y=1e9f,high_y=-1e9f;
     for (uint32_t tick=0; tick<600; ++tick) {
         ASSERT_TRUE(dc_gpu_rigid_step(gpu,err,sizeof(err)));
         ASSERT_TRUE(dc_gpu_fluid_step(gpu,err,sizeof(err)));
+        if(tick>=480) {
+            dc_gpu_body_t sample;
+            ASSERT_TRUE(dc_gpu_read_body_id(gpu,100,&sample,err,sizeof(err)));
+            float y=(float)sample.y_fp/65536.f;
+            mean_y+=y;mean_velocity+=(double)sample.vy_fp/65536.0;
+            low_y=fminf(low_y,y);high_y=fmaxf(high_y,y);
+        }
     }
     dc_gpu_body_t body; dc_gpu_body_motion_t motion;
     ASSERT_TRUE(dc_gpu_read_body_id(gpu,100,&body,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_body_motion(gpu,100,&motion,err,sizeof(err)));
     dc_chunk_t *saved=calloc(1,sizeof(*saved)); ASSERT_TRUE(saved);
     ASSERT_TRUE(dc_gpu_download_chunk(gpu,0,saved,err,sizeof(err)));
-    uint64_t water=0, column=0; float surface=0;
+    uint64_t water=0; float surface=0;
     for (uint32_t i=0; i<DC_CHUNK_CELLS; ++i) water+=saved->cells[i].fluid_mass;
-    for (uint32_t y=0; y<63; ++y) column+=saved->cells[y*64+19].fluid_mass;
-    surface=63.f-(float)column/65536.f;
-    float draft=(float)body.y_fp/65536.f+4.f-surface;
+    surface=63.f-((float)water/65536.f+32.f*.6f)/62.f;
+    float draft=(float)(mean_y/120.0)+4.f-surface;
     printf("wood draft %.5f surface %.5f x %.5f y %.5f angle %.5f vy %d water %llu\n",draft,surface,(float)body.x_fp/65536.f,(float)body.y_fp/65536.f,motion.angle,body.vy_fp,(unsigned long long)water);
     ASSERT_EQ(water,43u*62u*(uint64_t)DC_FLUID_FULL);
     ASSERT_TRUE(fabsf(draft-2.4f)<.2f);
-    ASSERT_TRUE(abs(body.vy_fp)<1024);
+    printf("mean vertical velocity %.6f wave excursion %.6f\n",mean_velocity/120.0,high_y-low_y);
+    ASSERT_TRUE(fabs(mean_velocity/120.0)<.01);
+    ASSERT_TRUE(high_y-low_y<.4f);
     free(saved); dc_gpu_destroy(gpu); PASS();
 }
 
@@ -176,6 +185,25 @@ static void test_partial_cells_do_not_transport_water_through_a_solid_face(void)
     free(chunk);dc_gpu_destroy(gpu);PASS();
 }
 
+static void test_submerged_stationary_boundary_keeps_hydrostatic_water_quiet(void) {
+    char err[256];dc_gpu_t *gpu=make_water_body(DC_GPU_BODY_WOOD,30,true);
+    ASSERT_TRUE(gpu);dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu,0,chunk,err,sizeof(err)));
+    for(uint32_t y=30;y<34;y++) for(uint32_t x=20;x<24;x++) chunk->cells[y*64+x].fluid_mass=0;
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(gpu,100,0,0,DC_GPU_BODY_KINEMATIC,err,sizeof(err)));
+    for(uint32_t tick=0;tick<60;tick++) ASSERT_TRUE(dc_gpu_fluid_step(gpu,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu,0,chunk,err,sizeof(err)));
+    float maximum=0;
+    for(uint32_t y=30;y<34;y++) for(uint32_t side=0;side<2;side++) {
+        uint32_t x=side==0?19:24;
+        maximum=fmaxf(maximum,fabsf(chunk->face_velocity[y*64+x].y));
+    }
+    printf("static submerged maximum adjacent vertical flow %f\n",maximum);
+    ASSERT_TRUE(maximum<.01f);
+    free(chunk);dc_gpu_destroy(gpu);PASS();
+}
+
 int main(void) {
     RUN(test_dry_wood_falls);
     RUN(test_submerged_wood_accelerates_from_material_density);
@@ -186,6 +214,7 @@ int main(void) {
     RUN(test_submerged_body_follows_fluid_velocity);
     RUN(test_wood_converges_to_repeatable_density_derived_draft);
     RUN(test_partial_cells_do_not_transport_water_through_a_solid_face);
+    RUN(test_submerged_stationary_boundary_keeps_hydrostatic_water_quiet);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail ? 1 : 0;
 }

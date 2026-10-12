@@ -479,3 +479,4 @@ build/buoyancy_tests: tests/vulkan/buoyancy_tests.c build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
 build/shaders/rigid_solver.comp.spv: shaders/sim/rigid_hydro.glsl
+build/shaders/rigid.comp.spv build/shaders/rigid_solver.comp.spv: shaders/sim/rigid_clip.glsl

@@ -13,9 +13,13 @@ bool dc_gpu_fluid_displacement_overflow(dc_gpu_t *gpu, uint64_t *mass,
     for (uint32_t y = 0; y < gpu->height; ++y)
         for (uint32_t x = 0; x < gpu->width; ++x) {
             uint32_t page = pages[(y / 64u) * gpu->page_width + x / 64u];
-            if (page && occupancy[y * gpu->width + x])
-                total += cells[(page - 1u) * DC_CHUNK_CELLS +
+            if (page && occupancy[y * gpu->width + x]) {
+                uint32_t water=cells[(page - 1u) * DC_CHUNK_CELLS +
                     (y % 64u) * 64u + x % 64u].fluid_mass;
+                uint32_t covered=occupancy[2u*gpu->width*gpu->height+y*gpu->width+x];
+                uint32_t capacity=DC_FLUID_FULL-(covered<DC_FLUID_FULL?covered:DC_FLUID_FULL);
+                if(water>capacity) total+=water-capacity;
+            }
         }
     *mass = total;
     return true;
@@ -30,7 +34,7 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 #define DC_PRESSURE_SWEEPS 20u
 #endif
 
-enum { FLUID_DISPLACEMENT_MODE = 11u };
+enum { FLUID_DISPLACEMENT_MODE = 11u, FLUID_LATERAL_DISPLACEMENT_MODE = 12u };
 
 bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkDeviceSize bytes = (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t);
@@ -144,6 +148,13 @@ static void record_projection_begin(dc_gpu_t *gpu) {
     push[5] = dc_gpu_float_bits(gpu->fluid_step_scale);
     if (gpu->rigid_occupancy_present) {
         vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->fluid_pipeline);
+        push[2]=FLUID_LATERAL_DISPLACEMENT_MODE;
+        vkCmdPushConstants(gpu->command,gpu->pipeline_layout,
+            VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
+        vkCmdDispatch(gpu->command,(gpu->height+63u)/64u,1u,1u);
+        fluid_barrier(gpu,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
         push[2] = FLUID_DISPLACEMENT_MODE;
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);

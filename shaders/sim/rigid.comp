@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "rigid_body.glsl"
 #include "rigid_shape.glsl"
+#include "rigid_clip.glsl"
 layout(local_size_x = 16, local_size_y = 16) in;
 const uint RASTER_MODE=1u, PREPARE_MODE=2u, PHYSICAL_MASK=128u, MODE_MASK=127u;
 
@@ -122,15 +123,17 @@ void main() {
         return;
     }
     if (p.x >= params.width || p.y >= params.height) return;
-    uint current = 0u, swept = 0u;
+    uint current = 0u, swept = 0u;float volume=0;vec2 face_covered=vec2(0);
     for (uint i = 0u; i < params.body_count; ++i) {
         if (bodies[i].enabled == 0u || bodies[i].visible == 0u) continue;
         ivec2 cell = ivec2(p);
         bool potential = all(greaterThanEqual(cell,bodies[i].bounds_low)) &&
                          all(lessThan(cell,bodies[i].bounds_high));
+        bool face_potential=all(greaterThanEqual(cell+ivec2(1),bodies[i].bounds_low)) &&
+                            all(lessThan(cell,bodies[i].bounds_high));
         bool crossed = all(greaterThanEqual(cell,bodies[i].swept_low)) &&
                        all(lessThan(cell,bodies[i].swept_high));
-        if (!potential && !crossed) continue;
+        if (!potential && !crossed && !face_potential) continue;
         Body body = bodies[i];
         ivec2 origin = ivec2(body.x_fp, body.y_fp) >> 16;
         ivec2 extent = ivec2(body.width, body.height);
@@ -140,10 +143,20 @@ void main() {
             inside = potential && convex_cell_overlap(body,cell);
         if ((params.mode & PHYSICAL_MASK) != 0u) crossed = crossed || potential;
         if (inside && (current == 0u || body.id < current)) current = body.id;
+        if (inside) for(uint piece=0u;piece<body_pieces(body);piece++) {
+            vec2 center_point;volume+=body_cell_volume(body,piece,cell,1,center_point);
+        }
+        if(face_potential) for(uint piece=0u;piece<body_pieces(body);piece++) {
+            face_covered.x+=body_face_coverage(body,piece,vec2(cell)+vec2(1,0),vec2(cell)+1);
+            face_covered.y+=body_face_coverage(body,piece,vec2(cell)+vec2(0,1),vec2(cell)+1);
+        }
         if (crossed && (swept == 0u || body.id < swept)) swept = body.id;
     }
     uint index = p.y * params.width + p.x;
-    if (!resident_at(int(p.x), int(p.y))) { current = 0u; swept = 0u; }
+    if (!resident_at(int(p.x), int(p.y))) { current = 0u; swept = 0u; volume=0; face_covered=vec2(0); }
     occupancy[index] = current;
     occupancy[params.width * params.height + index] = swept;
+    occupancy[2u * params.width * params.height + index] = uint(round(clamp(volume,0,1)*65536.0));
+    occupancy[3u * params.width * params.height + index] = uint(round(clamp(face_covered.x,0,1)*65536.0));
+    occupancy[4u * params.width * params.height + index] = uint(round(clamp(face_covered.y,0,1)*65536.0));
 }

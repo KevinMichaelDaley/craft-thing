@@ -1029,6 +1029,9 @@ static void test_closed_displacement_retains_and_reports_overflow(void) {
     dc_chunk_t left = {0}, right = {0}, saved = {0};
     left.cells[30 * 64 + 20].fluid_mass = DC_FLUID_FULL;
     left.cells[29 * 64 + 20].material = DC_MATERIAL_STONE;
+    left.cells[31 * 64 + 20].material = DC_MATERIAL_STONE;
+    left.cells[30 * 64 + 19].material = DC_MATERIAL_STONE;
+    left.cells[30 * 64 + 21].material = DC_MATERIAL_STONE;
     dc_gpu_t *gpu = make_grid(&left, &right, err, sizeof(err));
     ASSERT_TRUE(gpu != NULL);
     ASSERT_TRUE(dc_gpu_set_rigid_solver(gpu, true));

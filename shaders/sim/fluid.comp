@@ -24,6 +24,8 @@ const uint SIDE = 64u;
 const uint CELLS_PER_CHUNK = 4096u;
 const uint FULL = 65536u;
 const uint DISPLACEMENT_MODE = 11u;
+const uint LATERAL_DISPLACEMENT_MODE = 12u;
+const int DISPLACEMENT_REACH = 64;
 const float TRANSPORT_FUDGE = 1.001;
 const float VELOCITY_DAMPING = 0.997;
 
@@ -58,7 +60,20 @@ bool open_cell(ivec2 p) {
     if (page == 0u) return false;
     uint index = uint(p.y) * params.width + uint(p.x);
     uint material = chunk_cells[atlas_index(p, page)].x & 0xffffu;
-    return permeable_material(material) && occupancy[index] == 0u;
+    return permeable_material(material) && occupancy[2u*params.width*params.height+index] < FULL;
+}
+
+uint receiving_capacity(ivec2 p) {
+    uint index=uint(p.y)*params.width+uint(p.x);
+    return FULL-min(FULL,occupancy[2u*params.width*params.height+index]);
+}
+
+float face_aperture(ivec2 p,ivec2 direction) {
+    ivec2 face=p+min(direction,ivec2(0));
+    if(page_at(face)==0u) return 0;
+    uint index=uint(face.y)*params.width+uint(face.x);
+    uint axis=direction.x!=0?3u:4u;
+    return float(FULL-min(FULL,occupancy[axis*params.width*params.height+index]))/float(FULL);
 }
 
 void move_line(ivec2 source, ivec2 direction, bool vertical) {
@@ -69,9 +84,11 @@ void move_line(ivec2 source, ivec2 direction, bool vertical) {
     uint available = source_cell.y;
     if (available == 0u) return;
     if (!permeable_material(source_cell.x & 0xffffu) ||
-        occupancy[uint(source.y) * params.width + uint(source.x)] != 0u) return;
+        receiving_capacity(source)==0u) return;
     ivec2 face = source + min(direction, ivec2(0));
     if (!open_cell(source + direction)) return;
+    float aperture=face_aperture(source,direction);
+    if(aperture<=0) return;
     uint face_index = uint(face.y) * params.width + uint(face.x);
     float speed = vertical ? face_velocity[face_index].y : face_velocity[face_index].x;
     if (vertical && params.elapsed_time_mode != 0u)
@@ -88,8 +105,9 @@ void move_line(ivec2 source, ivec2 direction, bool vertical) {
         ivec2 destination = source + direction;
         uint destination_index = atlas_index(destination, page_at(destination));
         uint receiving = chunk_cells[destination_index].y;
-        uint allowance = uint(floor(clamp(travel, 0.0, 1.0) * float(FULL)));
-        uint flux = min(min(allowance, available), receiving < FULL ? FULL - receiving : 0u);
+        uint allowance = uint(floor(clamp(travel, 0.0, 1.0) * float(FULL)*aperture));
+        uint capacity=receiving_capacity(destination);
+        uint flux = min(min(allowance, available), receiving < capacity ? capacity - receiving : 0u);
         if (flux != 0u) {
             chunk_cells[destination_index].y = receiving + flux;
             chunk_cells[source_index].y = available - flux;
@@ -97,7 +115,8 @@ void move_line(ivec2 source, ivec2 direction, bool vertical) {
         return;
     }
     for (uint offset = 2u; offset <= reach; ++offset)
-        if (!open_cell(source + direction * int(offset))) {
+        if (!open_cell(source + direction * int(offset)) ||
+            face_aperture(source+direction*int(offset-1u),direction)<=0) {
             reach = offset - 1u;
             break;
         }
@@ -105,10 +124,14 @@ void move_line(ivec2 source, ivec2 direction, bool vertical) {
         ivec2 destination = source + direction * int(offset);
         uint destination_index = atlas_index(destination, page_at(destination));
         uint receiving = chunk_cells[destination_index].y;
-        if (receiving >= FULL) continue;
+        uint capacity=receiving_capacity(destination);
+        if (receiving >= capacity) continue;
         float fraction = clamp(travel - float(offset - 1u), 0.0, 1.0);
-        uint allowance = uint(floor(fraction * float(FULL)));
-        uint flux = min(min(allowance, available), FULL - receiving);
+        float path_aperture=aperture;
+        for(uint edge=1u;edge<offset;edge++)
+            path_aperture=min(path_aperture,face_aperture(source+direction*int(edge),direction));
+        uint allowance = uint(floor(fraction * float(FULL)*path_aperture));
+        uint flux = min(min(allowance, available), capacity - receiving);
         available -= flux;
         chunk_cells[destination_index].y = receiving + flux;
     }
@@ -144,7 +167,8 @@ void displace_column(uint x) {
         uint page = page_at(source);
         if (page == 0u || occupancy[uint(y) * params.width + x] == 0u) continue;
         uint source_index = atlas_index(source, page);
-        uint remaining = chunk_cells[source_index].y;
+        uint retained=min(chunk_cells[source_index].y,receiving_capacity(source));
+        uint remaining = chunk_cells[source_index].y-retained;
         if (remaining == 0u) continue;
         for (int above = y - 1; above >= 0 && remaining != 0u; --above) {
             ivec2 destination = ivec2(int(x), above);
@@ -152,15 +176,43 @@ void displace_column(uint x) {
             if (destination_page == 0u) break;
             uint destination_index = atlas_index(destination, destination_page);
             if (!permeable_material(chunk_cells[destination_index].x & 0xffffu)) break;
-            if (occupancy[uint(above) * params.width + x] != 0u) continue;
             uint receiving = chunk_cells[destination_index].y;
-            uint flux = min(remaining, receiving < FULL ? FULL - receiving : 0u);
+            uint capacity=receiving_capacity(destination);
+            uint flux = min(remaining, receiving < capacity ? capacity - receiving : 0u);
             chunk_cells[destination_index].y = receiving + flux;
             remaining -= flux;
         }
         /* Retain unresolved water at its original world cell. It is explicitly
            reported as overflow and remains authoritative through streaming. */
-        chunk_cells[source_index].y = remaining;
+        chunk_cells[source_index].y = retained+remaining;
+    }
+}
+
+void displace_row(uint y) {
+    if(y>=params.height) return;
+    for(uint x=0u;x<params.width;x++) {
+        ivec2 source=ivec2(int(x),int(y));uint page=page_at(source);
+        if(page==0u||occupancy[y*params.width+x]==0u) continue;
+        uint source_index=atlas_index(source,page),water=chunk_cells[source_index].y;
+        uint retained=min(water,receiving_capacity(source)),remaining=water-retained;
+        if(remaining==0u) continue;
+        bool left_open=true,right_open=true;
+        for(int distance=1;distance<=DISPLACEMENT_REACH&&remaining!=0u;distance++) {
+            for(int side=-1;side<=1;side+=2) {
+                if((side<0&&!left_open)||(side>0&&!right_open)) continue;
+                ivec2 destination=source+ivec2(side*distance,0);uint target_page=page_at(destination);
+                if(target_page==0u) {if(side<0) left_open=false;else right_open=false;continue;}
+                uint target=atlas_index(destination,target_page);
+                if(!permeable_material(chunk_cells[target].x&0xffffu)) {
+                    if(side<0) left_open=false;else right_open=false;continue;
+                }
+                uint capacity=receiving_capacity(destination),receiving=chunk_cells[target].y;
+                uint flux=min(remaining,receiving<capacity?capacity-receiving:0u);
+                chunk_cells[target].y=receiving+flux;remaining-=flux;
+            }
+            if(!left_open&&!right_open) break;
+        }
+        chunk_cells[source_index].y=retained+remaining;
     }
 }
 
@@ -204,13 +256,19 @@ void correct_pair(ivec2 p) {
     bool sender = (p == first) == (request > 0);
     uint available = sender ? own : other;
     uint receiving = sender ? other : own;
-    uint flux = min(min(uint(abs(request)), available),
-                    receiving < FULL ? FULL - receiving : 0u);
+    uint capacity=receiving_capacity(sender?neighbor:p);
+    float aperture=face_aperture(p,neighbor-p);
+    uint flux = min(min(min(uint(abs(request)),uint(aperture*float(FULL))), available),
+                    receiving < capacity ? capacity - receiving : 0u);
     write_mass(index, sender ? own - flux : own + flux);
 }
 
 void main() {
     uint linear = gl_GlobalInvocationID.x;
+    if (params.mode == LATERAL_DISPLACEMENT_MODE) {
+        displace_row(linear);
+        return;
+    }
     if (params.mode == DISPLACEMENT_MODE) {
         displace_column(linear);
         return;
