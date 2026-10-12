@@ -28,3 +28,7 @@ A gentle drop remains intact; a hard drop fractures into visible pieces, with de
 **2026-10-12T16:09:06Z**
 
 Implementing the shared GPU fragment transaction for ct-gf6q. RED gentle/hard-contact regressions compile and fail. Water/extraction dependencies remain open; ticket will not close before complete chunk-safe visual/conservation acceptance.
+
+**2026-10-12T16:15:35Z**
+
+Initial shared GPU impact path passes gentle/hard stone contact tests normal and quarter-native; full headless208/208 and SPIR-V validation pass. Trigger uses material wave impedance and compressive strength. Fragment transaction preserves mass/inertia and actual post-contact momentum with no virtual launch. Opt-in authored configuration uses fixed64 GPU slots and sixth specialized phase; no frame CPU solve/readback. Saturated retry, concave output and explicit energy diagnostic coverage remain unfinished.
