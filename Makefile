@@ -139,6 +139,10 @@ build/structural_impact_tests: tests/structural/impact_tests.c tests/structural/
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/structural_buckling_tests: tests/structural/buckling_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/quarter_native_structural_buckling_tests: tests/structural/buckling_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+test: build/structural_buckling_tests
+test_quarter_native: build/quarter_native_structural_buckling_tests
 build/quarter_native_structural_impact_tests: tests/structural/impact_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_SRC) src/world/chunk.c build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 test_quarter_native: build/quarter_native_structural_impact_tests
@@ -181,6 +185,7 @@ test_quarter_native: build/quarter_native_config_tests build/quarter_native_flui
 	./build/quarter_native_structural_failure_tests
 	./build/quarter_native_structural_fracture_tests
 	./build/quarter_native_structural_impact_tests
+	./build/quarter_native_structural_buckling_tests
 	./build/structural_cadence_tests
 	./build/presentation_tests
 	./build/quarter_native_config_tests
@@ -387,6 +392,7 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/structural_failure_tests
 	./build/structural_fracture_tests
 	./build/structural_impact_tests
+	./build/structural_buckling_tests
 	./build/rigid_solver_tests
 	./build/compound_body_tests
 	./build/contact_tests

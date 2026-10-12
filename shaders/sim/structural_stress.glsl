@@ -29,13 +29,35 @@ vec3 member_resultant(float x,float l,vec3 end,vec2 distributed,uint e,bool righ
     }
     return result;
 }
-float member_utilization(vec3 force,float depth,uint profile,float unbraced) {
+/* Shared-node collinear members form one continuous physical column. Additional
+ * restraints can improve this fixed-free bound, but subdivision cannot. */
+float continuous_buckling(uint member) {
+    uint g=graph(),mask=1u<<member;
+    for(uint pass=0u;pass<16u;pass++) {
+        uint previous=mask;
+        for(uint candidate=0u;candidate<data[g+1u];candidate++) {
+            uint m=g+MEMBERS+candidate*8u;
+            if((data[m+6u]&2u)!=0u||abs(body_cross(eq_direction[member],eq_direction[candidate]))>1e-6) continue;
+            for(uint connected=0u;connected<data[g+1u];connected++)
+                if((mask&(1u<<connected))!=0u&&
+                   (eq_a[candidate]==eq_a[connected]||eq_a[candidate]==eq_b[connected]||
+                    eq_b[candidate]==eq_a[connected]||eq_b[candidate]==eq_b[connected]))
+                    mask|=1u<<candidate;
+        }
+        if(mask==previous) break;
+    }
+    float span=0,minimum=1e30;
+    for(uint e=0u;e<data[g+1u];e++) if((mask&(1u<<e))!=0u) {
+        span+=eq_length[e];minimum=min(minimum,eq_k[e].z*eq_length[e]);
+    }
+    return 9.869604401*minimum/(4.0*span*span);
+}
+float member_utilization(vec3 force,float depth,uint profile,float buckling) {
     float area=depth,inertia=depth*depth*depth/12.0;
     float bending=abs(force.z)*depth/2.0/inertia;
     float tension=max(force.x/area+bending,0),compression=max(-force.x/area+bending,0);
     float u=max(capacity_ratio(tension,eq_get(profile+3u)),capacity_ratio(compression,eq_get(profile+4u)));
     u=max(u,capacity_ratio(1.5*force.y/area,eq_get(profile+5u)));
-    float buckling=9.869604401*eq_get(profile+1u)*inertia/(unbraced*unbraced);
     return max(u,capacity_ratio(max(-force.x,0),buckling));
 }
 void member_stress(uint e) {
@@ -59,18 +81,16 @@ void member_stress(uint e) {
         end-=vec3((1-r)*point.x,h.x*point.y+rotation.x*point.z,h.y*point.y+rotation.y*point.z);
     }
     float peak=0,location=0,energy=0;vec3 peak_force=vec3(0);
-    /* Until a restraint analysis establishes both ends, use the conservative
-     * fixed-free span rather than a numerical edge-length strength shortcut. */
-    float unbraced=2*l;
+    float buckling=continuous_buckling(e);
     for(uint b=0u;b<17u;b++) for(uint side=0u;side<2u;side++) {
         float x=l*float(b)/16.0;vec3 result=member_resultant(x,l,end,distributed,e,side!=0u);
-        float utilization=member_utilization(result,depth,profile,unbraced);
+        float utilization=member_utilization(result,depth,profile,buckling);
         if(utilization>peak) {peak=utilization;location=x/l;peak_force=result;}
         if(b<16u&&side==1u&&abs(distributed.y)>1e-8) {
             float stationary=x+result.y/distributed.y;
             if(stationary>x&&stationary<x+l/16.0) {
                 vec3 interior=member_resultant(stationary,l,end,distributed,e,true);
-                float u=member_utilization(interior,depth,profile,unbraced);
+                float u=member_utilization(interior,depth,profile,buckling);
                 if(u>peak) {peak=u;location=stationary/l;peak_force=interior;}
             }
         }
