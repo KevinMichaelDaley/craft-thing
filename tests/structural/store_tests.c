@@ -4,6 +4,24 @@
 
 static const char *snapshot = "build/structural_snapshot.bin";
 
+static void test_cold_checkpoint_survives_another_checkpoint(void) {
+    char err[256]; dc_gpu_t *g = grid(); ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t s = beam(20);
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g, 85, 90, 0, DC_MATERIAL_STONE, err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_save_structure(g, snapshot, err, sizeof(err)));
+    dc_gpu_destroy(g); g = NULL;
+    ASSERT_TRUE(dc_gpu_create(&g, 128, 128, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_load_structure(g, snapshot, err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_save_structure(g, snapshot, err, sizeof(err)));
+    dc_gpu_destroy(g); g = grid(); ASSERT_TRUE(g);
+    ASSERT_TRUE(fr_gpu_load_structure(g, snapshot, err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk)); ASSERT_TRUE(chunk);
+    ASSERT_TRUE(dc_gpu_download_chunk(g, 3, chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->cells[(90 % 64) * 64 + 85 % 64].material, DC_MATERIAL_STONE);
+    free(chunk); remove(snapshot); dc_gpu_destroy(g); PASS();
+}
+
 static void test_snapshot_preserves_crumble_particles_and_world_cells(void) {
     char err[256]; dc_gpu_t *g = grid(); ASSERT_TRUE(g);
     fr_structural_gpu_graph_t s = beam(20);
@@ -168,6 +186,7 @@ static void test_legacy_body_world_still_loads_without_a_graph(void) {
 }
 
 int main(void) {
+    RUN(test_cold_checkpoint_survives_another_checkpoint);
     RUN(test_snapshot_preserves_crumble_particles_and_world_cells);
     RUN(test_snapshot_resumes_exact_overload_damage);
     RUN(test_snapshot_resumes_confirmed_support_loss_ticks);
