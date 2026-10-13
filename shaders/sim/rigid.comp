@@ -5,6 +5,7 @@
 #include "rigid_clip.glsl"
 layout(local_size_x = 16, local_size_y = 16) in;
 const uint RASTER_MODE=1u, PREPARE_MODE=2u, PHYSICAL_MASK=128u, MODE_MASK=127u;
+shared uint raster_active[2];
 
 layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 chunk_cells[]; };
 layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
@@ -123,10 +124,19 @@ void main() {
         if (index < params.body_count) integrate_body(index);
         return;
     }
+    if (gl_LocalInvocationIndex < 2u) raster_active[gl_LocalInvocationIndex] = 0u;
+    barrier();
+    uint slot = gl_LocalInvocationIndex;
+    if (slot < params.body_count && bodies[slot].enabled != 0u && bodies[slot].visible != 0u)
+        atomicOr(raster_active[slot / 32u], 1u << (slot % 32u));
+    barrier();
     if (p.x >= params.width || p.y >= params.height) return;
     uint current = 0u, swept = 0u;float volume=0;vec2 face_covered=vec2(0);
-    for (uint i = 0u; i < params.body_count; ++i) {
-        if (bodies[i].enabled == 0u || bodies[i].visible == 0u) continue;
+    uvec2 remaining = uvec2(raster_active[0], raster_active[1]);
+    while (any(notEqual(remaining, uvec2(0)))) {
+        uint word = remaining.x != 0u ? 0u : 1u;
+        uint i = word * 32u + uint(findLSB(remaining[word]));
+        remaining[word] &= remaining[word] - 1u;
         ivec2 cell = ivec2(p);
         bool potential = all(greaterThanEqual(cell,bodies[i].bounds_low)) &&
                          all(lessThan(cell,bodies[i].bounds_high));

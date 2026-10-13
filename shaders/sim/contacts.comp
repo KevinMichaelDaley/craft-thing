@@ -23,6 +23,7 @@ const uint HEADER_WORDS = 8u, PAIR_WORDS = 8u, PAIR_CAPACITY = 4096u;
 const uint CONTACT_HEADER_WORDS = 12u, CONTACT_GROUP_SIZE = 64u;
 const uint CONTACT_WORDS = 32u;
 const uint BODY_CONTACT = 0u, TERRAIN_CONTACT = 1u, BOUNDARY_CONTACT = 2u, MPM_CONTACT = 3u;
+shared uint group_found;
 
 uvec2 page_extent() { return uvec2((params.width + 63u) / 64u, (params.height + 63u) / 64u); }
 uint pair_base() { uvec2 size = page_extent() + 2u; return HEADER_WORDS + 2u * size.x * size.y; }
@@ -150,7 +151,8 @@ bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygo
 }
 
 void main() {
-    uint index = gl_GlobalInvocationID.x, base = contact_base();
+    uint index = params.mode == 0u ? gl_GlobalInvocationID.x : gl_WorkGroupID.x;
+    uint lane = gl_LocalInvocationID.x, base = contact_base();
     /* Keep nearby constraints available when another Jacobi correction closes
        a gap within this substep. Diagnostics retain the exact overlap skin. */
     uint solver = base + CONTACT_HEADER_WORDS + 8192u * CONTACT_WORDS;
@@ -160,7 +162,7 @@ void main() {
         data[base] = 0u; data[base + 1u] = 0u;
         data[base + 2u] = data[2] == 0u ? 0u : 4u;
         data[base + 4u] = data[0]; data[base + 5u] = 0u;
-        data[base + 6u] = data[2] == 0u ? (data[0] + CONTACT_GROUP_SIZE - 1u) / CONTACT_GROUP_SIZE : 0u;
+        data[base + 6u] = data[2] == 0u ? data[0] : 0u;
         data[base + 7u] = 1u; data[base + 8u] = 1u;
         data[base + 9u] = 0u; data[base + 10u] = 0u; data[base + 11u] = 0u;
         return;
@@ -168,15 +170,43 @@ void main() {
     if (data[2] != 0u || index >= data[0]) return;
     uint offset = pair_base() + index * PAIR_WORDS;
     uint slot = body_slot(data[offset]);
-    if (slot == BODY_CAPACITY) { atomicAdd(data[base + 5u], 1u); return; }
+    if (slot == BODY_CAPACITY) { if (lane == 0u) atomicAdd(data[base + 5u], 1u); return; }
     Body a = bodies[slot];
     uint kind = data[offset + 2u]; bool found = false;
+    if (lane == 0u) group_found = 0u;
+    barrier();
+    if (kind == TERRAIN_CONTACT) {
+        int cx, cy;
+        if (relative_chunk(uvec2(data[offset+4u],data[offset+5u]),params.origin_x,cx) &&
+            relative_chunk(uvec2(data[offset+6u],data[offset+7u]),params.origin_y,cy) &&
+            cx >= 0 && cy >= 0 && (cx+1)*64 <= int(params.width) && (cy+1)*64 <= int(params.height)) {
+            uint page = pages[uint(cy)*page_extent().x+uint(cx)];
+            if (page != 0u) {
+                for (uint cell=lane; cell<4096u; cell+=CONTACT_GROUP_SIZE) {
+                    uint material=chunk_cells[(page-1u)*4096u+cell].x&0xffffu;
+                    if (material==0u || material==3u) continue;
+                    if (material==2u || material==4u || material==5u || material==6u) {
+                        uint pi=(page-1u)*8192u+cell;
+                        if (particles[pi].mass_fp==0u && particles[pi+4096u].mass_fp==0u) continue;
+                    }
+                    atomicOr(group_found,1u);
+                }
+                barrier();
+                if (group_found==0u) {
+                    if (lane==0u) atomicAdd(data[base+5u],1u);
+                    return;
+                }
+                if (lane==0u) group_found=0u;
+                barrier();
+            }
+        }
+    }
     if (kind == BODY_CONTACT) {
         uint other = body_slot(data[offset + 1u]); vec2 delta;
         if (other != BODY_CAPACITY && relative_body(a, bodies[other], delta)) {
             Body b = bodies[other];
-            if(pixel_body(a)) atomicAdd(data[base+9u],body_pieces(a));
-            for(uint ap=0u;ap<body_pieces(a);++ap) {
+            if(pixel_body(a) && lane == 0u) atomicAdd(data[base+9u],body_pieces(a));
+            for(uint ap=lane;ap<body_pieces(a);ap+=CONTACT_GROUP_SIZE) {
                 if(!pixel_boundary(a,ap)) continue;
                 Polygon pa=body_polygon(a,ap,vec2(0));vec2 lo=vec2(1e20),hi=vec2(-1e20);
                 for(uint vertex=0u;vertex<pa.count;vertex++) {lo=min(lo,pa.vertices[vertex]-delta);hi=max(hi,pa.vertices[vertex]-delta);}
@@ -198,9 +228,9 @@ void main() {
                !relative_chunk(uvec2(data[offset+6u],data[offset+7u]),a.chunk_y,y)) return;
             vec2 low=vec2(x,y)*64.-vec2(a.local_fp)/65536.;
             query=body_piece_query(a,low-vec2(contact_skin),low+64.+vec2(contact_skin));
-            atomicAdd(data[base+9u],query.z*query.w);
+            if (lane == 0u) atomicAdd(data[base+9u],query.z*query.w);
         }
-        for(uint ordinal=0u;ordinal<query.z*query.w;++ordinal) {
+        for(uint ordinal=lane;ordinal<query.z*query.w;ordinal+=CONTACT_GROUP_SIZE) {
             uint ap=query_piece(a,query,ordinal);
             if(!pixel_boundary(a,ap)) continue;
             bool emitted=terrain_contacts(a, kind, uvec2(data[offset + 4u], data[offset + 5u]),
@@ -208,5 +238,7 @@ void main() {
             found=found || emitted;
         }
     }
-    if (!found) atomicAdd(data[base + 5u], 1u);
+    if (found) atomicOr(group_found, 1u);
+    barrier();
+    if (lane == 0u && group_found == 0u) atomicAdd(data[base + 5u], 1u);
 }
