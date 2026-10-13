@@ -147,11 +147,54 @@ static void test_pixel_contact_features_identify_the_full_cell_ordinal(void) {
     dc_gpu_destroy(gpu);
     PASS();
 }
+static void test_partial_grid_fracture_uses_all_tile_cells_conservatively(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunks = calloc(4, sizeof(*chunks));
+    ASSERT_TRUE(chunks);
+    for (unsigned slot = 0; slot < 4; slot++) {
+        chunks[slot].coord.x = slot % 2;
+        chunks[slot].coord.y = slot / 2;
+    }
+    for (unsigned y = 1; y < 66; y++)
+        for (unsigned x = 1; x < 66; x++)
+            chunks[y / 64 * 2 + x / 64].cells[y % 64 * 64 + x % 64].material = DC_MATERIAL_STONE;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 67, 67, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    for (unsigned slot = 0; slot < 4; slot++) {
+        ASSERT_TRUE(dc_gpu_upload_chunk(gpu, slot, chunks + slot, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_page(gpu, slot % 2, slot / 2, slot, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(gpu, 0x80000001u, .02f, .001f, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_impact_fracture(gpu));
+    uint32_t *pending = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset() + 38000u;
+    pending[0] = pending[1] = 1000000;
+    pending[2] = 1;
+    pending[3] = 0x80000001u;
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    double mass = 0;
+    uint32_t count = 0;
+    for (unsigned child = 0; child < 2; child++) {
+        dc_gpu_body_motion_t motion;
+        uint32_t n, id = 0x80000001u + child;
+        ASSERT_TRUE(dc_gpu_read_body_motion(gpu, id, &motion, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, id, NULL, 0, &n, err, sizeof(err)));
+        mass += motion.mass;
+        count += n;
+    }
+    ASSERT_EQ(count, 4225u);
+    ASSERT_TRUE(fabs(mass - 11407.5) < .002);
+    free(chunks);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
 int main(void) {
     RUN(test_hollow_wood_component_floats_with_exact_holes_and_streaming);
     RUN(test_hollow_dense_wood_component_sinks_from_material_density);
     RUN(test_mixed_hollow_component_preserves_composition_across_warm_seams);
     RUN(test_pixel_contact_features_identify_the_full_cell_ordinal);
+    RUN(test_partial_grid_fracture_uses_all_tile_cells_conservatively);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }

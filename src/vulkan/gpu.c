@@ -102,8 +102,8 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         { gpu->mpm_velocity_buffer, 0, bytes * 2 },
         { gpu->mpm_accept_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MPM_PARTICLES_PER_CHUNK * sizeof(uint32_t) },
         { gpu->mpm_activity_buffer, 0, (VkDeviceSize)(7u + 2u * ((gpu->width + 15u) / 16u) * ((gpu->height + 15u) / 16u)) * sizeof(uint32_t) },
-        { gpu->mpm_label_a_buffer, 0, bytes },
-        { gpu->mpm_label_b_buffer, 0, bytes },
+        { gpu->mpm_label_a_buffer, 0, (VkDeviceSize)dc_gpu_pixel_pool_capacity(gpu) * 8u * sizeof(uint32_t) },
+        { gpu->mpm_label_b_buffer, 0, (VkDeviceSize)dc_gpu_pixel_pool_capacity(gpu) * 8u * sizeof(uint32_t) },
         { gpu->mpm_component_size_buffer, 0, bytes },
         { gpu->fluid_previous_buffer, 0, bytes }
     };
