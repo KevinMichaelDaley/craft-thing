@@ -30,3 +30,7 @@ Preserve the current 4-connected pixel definition, unless a separately documente
 **2026-10-13T02:44:59Z**
 
 User confirmed scope: any shape of rigid-capable solid pixels (including mixed materials), not granular sand/dirt/gravel extraction. Resuming the existing implementation agent to implement this ticket with exact variable-size geometry rather than a larger hard-coded shape cap. Epic ct-fx1b remains historically complete; this is the new extraction extension.
+
+**2026-10-13T03:23:04Z**
+
+Initial exact pixel geometry GREEN checkpoint 29ffb4c passes 400-pixel, 40-wide and >4-rectangle concave cases. Version-four checkpoint geometry relocation GREEN f8511ff passes their save/load and diagnostic checks plus all three existing extraction acceptance cases. Full normal regression running. Pixel fracture and fair/scalable extraction, broader consumers/visual and budget validation remain in progress; ticket is not complete.

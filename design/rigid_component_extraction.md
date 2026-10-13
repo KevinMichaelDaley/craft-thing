@@ -7,9 +7,12 @@ stone, wood and dense wood. The default headless context remains author controll
 Four-connected resident material cells share a root across warm page seams. Each
 candidate verifies resident page world coordinates. A component touching a missing
 page or viewport boundary remains terrain: cold space cannot prove detachment.
-Roots exceeding 256 cells or a 16-cell side, or requiring more than four exact
-non-overlapping material rectangles, remain unchanged. These bounds match the
-existing body representation and do not approximate unsupported geometry.
+Small roots retain the existing exact rectangle representation when possible.
+Other roots use variable geometry in a GPU-owned double-bank arena appended to
+the body storage. A pixel body keeps one stable body ID and stores a four-bit
+material for every local bounding-grid cell; zero denotes a hole. Its flagged
+piece count records the occupied volume, and its geometry pointer addresses the
+packed arena. Size, concavity and rectangle count no longer reject extraction.
 
 A single GPU commit orders candidates deterministically, reserves a free body slot
 and a unique persisted birth serial, computes material-derived properties, publishes
@@ -35,5 +38,14 @@ it. A representable component blocked by full storage keeps the word pending for
 retry. Ordinary fluid evolution still updates body forces every tick. This adds no
 allocation and performs no runtime CPU physics copyback.
 
-Larger or more complex exact extraction is tracked by ct-wuci; those deferred
-roots remain terrain until a supported representation is available.
+Version-four graph checkpoints serialize occupied bodies' geometry as a canonical
+blob with relative offsets, validate material codes and occupied counts before
+installation, then relocate pointers into the destination arena. Older graph
+checkpoints retain their previous checksum and load path. Explicit diagnostics
+enumerate occupied pixels with their local coordinates and material codes; fixed
+convex/compound diagnostics reject pixel bodies instead of truncating them.
+
+The ct-wuci implementation is in progress. Pixel occupancy, rendering, clipping,
+hydrodynamics, bounds and contact queries consume the packed geometry. Remaining
+acceptance work includes pixel fracture, fair/scalable extraction, complex visual
+regression and the measured quarter-native capacity/complexity sweep.
