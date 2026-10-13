@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "dungeoncraft/gpu.h"
+#include "ferrum/structural/gpu.h"
 static int g_pass, g_fail;
 #define RUN(fn)                                                                \
     do {                                                                       \
@@ -52,6 +53,25 @@ static void scenario(unsigned kind) {
         dc_gpu_read_body_motion(gpu, body.id, &motion, err, sizeof(err)));
     ASSERT_TRUE(fabs(motion.mass - cells * 2.7) < .002);
     ASSERT_TRUE(body.vy_fp > 0);
+    dc_gpu_body_pixel_t pixels[400];
+    uint32_t count = 0;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, body.id, pixels, 400, &count,
+                                       err, sizeof(err)));
+    ASSERT_EQ(count, cells);
+    for (unsigned i = 0; i < count; i++)
+        ASSERT_EQ(pixels[i].material, DC_GPU_BODY_STONE);
+    ASSERT_TRUE(fr_gpu_save_structure(gpu, "/tmp/ct-wuci-pixels.dcs", err,
+                                      sizeof(err)));
+    ASSERT_TRUE(fr_gpu_load_structure(gpu, "/tmp/ct-wuci-pixels.dcs", err,
+                                      sizeof(err)));
+    dc_gpu_body_pixel_t restored[400];
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, body.id, restored, 400, &count,
+                                       err, sizeof(err)));
+    for (unsigned i = 0; i < count; i++) {
+        ASSERT_EQ(restored[i].x, pixels[i].x);
+        ASSERT_EQ(restored[i].y, pixels[i].y);
+        ASSERT_EQ(restored[i].material, pixels[i].material);
+    }
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
     for (unsigned i = 0; i < 4096; i++)
         ASSERT_EQ(chunk->cells[i].material, DC_MATERIAL_AIR);
