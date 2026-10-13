@@ -580,3 +580,6 @@ build/quarter_native_structural_submerged_load_tests: tests/structural/submerged
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 
 build/shaders/mpm_active.comp.spv: shaders/sim/rigid_body.glsl include/dungeoncraft/material_density.h
+
+build/pixel_component_tests: tests/vulkan/pixel_component_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ) build/component_extraction_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
