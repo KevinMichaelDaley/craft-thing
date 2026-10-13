@@ -106,10 +106,52 @@ static void ring_world(unsigned composition) {
 static void test_hollow_wood_component_floats_with_exact_holes_and_streaming(void) { ring_world(0); }
 static void test_hollow_dense_wood_component_sinks_from_material_density(void) { ring_world(1); }
 static void test_mixed_hollow_component_preserves_composition_across_warm_seams(void) { ring_world(2); }
+static void test_pixel_contact_features_identify_the_full_cell_ordinal(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    for (unsigned y = 10; y < 30; y++)
+        for (unsigned x = 10; x < 30; x++)
+            chunk->cells[y * 64 + x].material = DC_MATERIAL_STONE;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    dc_gpu_body_record_t *body = gpu->body_mapped;
+    body[0].body.y_fp = body[0].local_y_fp = 12 * 65536;
+    body[0].body.vy_fp = 0;
+    for (unsigned x = 0; x < 64; x++)
+        ASSERT_TRUE(dc_gpu_paint_material(gpu, x, 32, 0, DC_MATERIAL_STONE, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    dc_gpu_contact_stats_t stats;
+    dc_gpu_contact_t *contacts = calloc(8192, sizeof(*contacts));
+    ASSERT_TRUE(contacts);
+    ASSERT_TRUE(dc_gpu_read_contacts(gpu, &stats, contacts, 8192, err, sizeof(err)));
+    ASSERT_EQ(stats.overflow, 0u);
+    const uint32_t *geometry = (uint32_t *)gpu->body_mapped + body[0].compound_reserved;
+    unsigned found = 0;
+    for (unsigned i = 0; i < stats.count; i++) {
+        if (contacts[i].body_a != 0x80000001u || contacts[i].kind != DC_GPU_CONTACT_TERRAIN)
+            continue;
+        found++;
+        uint32_t ordinal = (contacts[i].feature_a & 0x7fffffffu) >> 3;
+        ASSERT_TRUE(ordinal < geometry[1] * 256);
+        uint32_t coord = geometry[8 + geometry[2] * geometry[3] + ordinal / 256 * 33];
+        ASSERT_EQ((coord >> 16) * 16 + (ordinal % 256) / 16, 19u);
+    }
+    ASSERT_TRUE(found > 0);
+    free(contacts);
+    free(chunk);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
 int main(void) {
     RUN(test_hollow_wood_component_floats_with_exact_holes_and_streaming);
     RUN(test_hollow_dense_wood_component_sinks_from_material_density);
     RUN(test_mixed_hollow_component_preserves_composition_across_warm_seams);
+    RUN(test_pixel_contact_features_identify_the_full_cell_ordinal);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
