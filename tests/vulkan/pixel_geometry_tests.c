@@ -6,6 +6,20 @@
 #include "../../src/vulkan/gpu_internal.h"
 
 static int g_pass, g_fail;
+static VkDeviceSize label_ranges[2];
+void __real_vkUpdateDescriptorSets(VkDevice device, uint32_t write_count,
+                                   const VkWriteDescriptorSet *writes,
+                                   uint32_t copy_count,
+                                   const VkCopyDescriptorSet *copies);
+void __wrap_vkUpdateDescriptorSets(VkDevice device, uint32_t write_count,
+                                   const VkWriteDescriptorSet *writes,
+                                   uint32_t copy_count,
+                                   const VkCopyDescriptorSet *copies) {
+    for (unsigned i = 0; i < write_count; i++)
+        if (writes[i].dstBinding == 28 || writes[i].dstBinding == 29)
+            label_ranges[writes[i].dstBinding - 28] = writes[i].pBufferInfo->range;
+    __real_vkUpdateDescriptorSets(device, write_count, writes, copy_count, copies);
+}
 #define RUN(fn) do { printf("RUN %s\n", #fn); fn(); } while (0)
 #define ASSERT_TRUE(e) do { if (!(e)) { printf("FAIL %d: %s\n", __LINE__, #e); g_fail++; return; } } while (0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -98,12 +112,23 @@ static void test_empty_tile_cannot_alias_an_occupied_tile(void) {
     ASSERT_TRUE(!dc_gpu_pixel_geometry_valid(&body, geometry, 43, &density));
     PASS();
 }
+static void test_fracture_descriptors_cover_the_full_preallocated_tile_scratch(void) {
+    dc_gpu_t *gpu = NULL;
+    char err[256] = {0};
+    ASSERT_TRUE(dc_gpu_create(&gpu, 67, 67, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    VkDeviceSize required = (VkDeviceSize)dc_gpu_pixel_pool_capacity(gpu) * 8 * sizeof(uint32_t);
+    ASSERT_TRUE(label_ranges[0] >= required);
+    ASSERT_TRUE(label_ranges[1] >= required);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
 
 int main(void) {
     RUN(test_version_four_upgrade_preserves_materials_and_empty_cells);
     RUN(test_corrupt_tiled_geometry_is_rejected);
     RUN(test_truncated_dense_upgrade_keeps_input_allocation);
     RUN(test_empty_tile_cannot_alias_an_occupied_tile);
+    RUN(test_fracture_descriptors_cover_the_full_preallocated_tile_scratch);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
