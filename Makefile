@@ -592,3 +592,13 @@ build/pixel_geometry_tests: tests/vulkan/pixel_geometry_tests.c Makefile $(GPU_O
 
 build/pixel_world_tests: tests/vulkan/pixel_world_tests.c tests/vulkan/pixel_component_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+build/pixel_dynamics_visual_tests: tests/app/pixel_dynamics_visual_tests.c tests/vulkan/pixel_component_tests.c Makefile $(GPU_SRC) src/world/chunk.c build/quarter_native_solver_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+
+build/pixel_performance_tests: tests/vulkan/pixel_performance_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ) build/pixel_component_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+.PHONY: test_pixel_performance
+test_pixel_performance: build/pixel_performance_tests
+	./build/pixel_performance_tests

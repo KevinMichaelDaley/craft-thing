@@ -2,7 +2,7 @@
 id: ct-wuci
 status: in_progress
 deps: []
-links: [dun-spbq]
+links: [dun-spbq, ct-alp7]
 created: 2026-10-12T23:07:46Z
 type: task
 priority: 2
