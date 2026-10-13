@@ -88,11 +88,22 @@ static void test_truncated_dense_upgrade_keeps_input_allocation(void) {
     free(pixels);
     PASS();
 }
+static void test_empty_tile_cannot_alias_an_occupied_tile(void) {
+    dc_gpu_body_record_t body = {.body = {.width = 32, .height = 1},
+                                 .piece_count = DC_GPU_PIXEL_BODY_FLAG | 1u};
+    uint32_t geometry[43] = {43, 1, 2, 1, 0, 0, 32, 1, 10, 0, 0, 1};
+    float density;
+    ASSERT_TRUE(dc_gpu_pixel_geometry_valid(&body, geometry, 43, &density));
+    geometry[9] = geometry[8];
+    ASSERT_TRUE(!dc_gpu_pixel_geometry_valid(&body, geometry, 43, &density));
+    PASS();
+}
 
 int main(void) {
     RUN(test_version_four_upgrade_preserves_materials_and_empty_cells);
     RUN(test_corrupt_tiled_geometry_is_rejected);
     RUN(test_truncated_dense_upgrade_keeps_input_allocation);
+    RUN(test_empty_tile_cannot_alias_an_occupied_tile);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
