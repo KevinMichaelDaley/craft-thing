@@ -53,6 +53,7 @@ void release_member(uint member) {
 }
 #include "structural_debris.glsl"
 #include "rigid_fragment.glsl"
+#include "pixel_fragment.glsl"
 void damage_members() {
     uint g=graph();bool cut=false;
     for(uint member=0u;member<data[g+1u];member++) if(member_active(member)) {

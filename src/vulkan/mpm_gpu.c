@@ -26,6 +26,8 @@ bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkDeviceSize flags = (VkDeviceSize)DC_GPU_CHUNK_SLOTS *
         DC_MPM_PARTICLES_PER_CHUNK * sizeof(uint32_t);
     VkDeviceSize grid = (VkDeviceSize)gpu->width * gpu->height;
+    VkDeviceSize component_cells = grid > (VkDeviceSize)DC_GPU_CHUNK_SLOTS * 4096u
+                                     ? grid : (VkDeviceSize)DC_GPU_CHUNK_SLOTS * 4096u;
     VkDeviceSize tiles = (VkDeviceSize)((gpu->width + 15u) / 16u) *
                          ((gpu->height + 15u) / 16u);
     return dc_gpu_make_device_buffer(gpu, particles, &gpu->mpm_proposal_buffer,
@@ -46,10 +48,10 @@ bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                &gpu->mpm_accept_memory, err, cap) &&
            dc_gpu_make_device_buffer(gpu, (7u + 2u * tiles) * sizeof(uint32_t),
                &gpu->mpm_activity_buffer, &gpu->mpm_activity_memory, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, grid * sizeof(uint32_t),
+           dc_gpu_make_mapped_buffer(gpu, component_cells * sizeof(uint32_t),
                &gpu->mpm_label_a_buffer, &gpu->mpm_label_a_memory,
                &gpu->mpm_label_a_mapped, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, grid * sizeof(uint32_t),
+           dc_gpu_make_mapped_buffer(gpu, component_cells * sizeof(uint32_t),
                &gpu->mpm_label_b_buffer, &gpu->mpm_label_b_memory,
                &gpu->mpm_label_b_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, grid * sizeof(uint32_t),

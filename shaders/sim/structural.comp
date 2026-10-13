@@ -7,6 +7,8 @@ layout(constant_id=0) const uint STRUCTURAL_PHASE=0u;
 layout(set=0,binding=1,std430) buffer Cells { uvec2 cells[]; };
 layout(set=0,binding=2,std430) readonly buffer Pages { uint pages[]; };
 layout(set=0,binding=4,std430) buffer Storage { Body bodies[BODY_CAPACITY]; uint data[]; };
+layout(set=0,binding=28,std430) buffer FractureLabels {uint fracture_labels[];};
+layout(set=0,binding=29,std430) buffer FractureQueue {uint fracture_queue[];};
 uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
 layout(push_constant) uniform Params { uint width,height,mode,body_count; uvec2 origin_x,origin_y; } params;
 const uint GRAPH_WORDS=2320u,NODES=16u,MEMBERS=400u,JOINTS=528u,ANCHORS=1552u;

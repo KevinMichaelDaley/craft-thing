@@ -1,4 +1,5 @@
 float impact_cut_work(Body body,uint axis,float cut) {
+    if(pixel_body(body)) return pixel_cut_work(body,axis,cut);
     float low[4],high[4],toughness[4];uint side[4];float work=0;
     uint count=body_pieces(body),g=graph();
     for(uint piece=0u;piece<count;piece++) {
@@ -39,13 +40,13 @@ void fracture_impacts() {
                 vec2 v=piece_rest_vertex(b,part,vertex);low=min(low,v);high=max(high,v);
             }
         if(high[axis]-low[axis]<2.0) continue;
-        float cut=round((low[axis]+high[axis])*.5*65536.)/65536.;
+        float cut=pixel_body(b)?round((low[axis]+high[axis])*.5):round((low[axis]+high[axis])*.5*65536.)/65536.;
         float work=impact_cut_work(b,axis,cut);
         if(work<=0) continue;
         float available=float(min(data[p],data[p+1u]))*16.0;
         if(available<work) continue;
         uint generation=b.reserved1==0u?1u:b.reserved1;
-        if(!fragment_body(slot,axis,cut,generation)) continue;
+        if(pixel_body(b)?!pixel_fragment_body(slot,axis,cut,generation):!fragment_body(slot,axis,cut,generation)) continue;
         uint ledger=g+38500u+slot*4u;
         data[ledger]=floatBitsToUint(available);
         data[ledger+1u]=floatBitsToUint(work);
