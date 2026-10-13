@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "dungeoncraft/gpu.h"
 #include "ferrum/structural/gpu.h"
+#include "../../src/vulkan/gpu_internal.h"
 static int g_pass, g_fail;
 #define RUN(fn)                                                                \
     do {                                                                       \
@@ -89,10 +90,46 @@ static void
 test_branching_component_above_four_rectangles_is_not_disqualified(void) {
     scenario(2);
 }
+static void test_pixel_fracture_preserves_material_volume(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    for (unsigned y = 10; y < 30; y++)
+        for (unsigned x = 10; x < 30; x++)
+            chunk->cells[y * 64 + x].material = DC_MATERIAL_STONE;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_impact_fracture(gpu));
+    uint32_t *pending = dc_gpu_structural_data(gpu) +
+                        dc_gpu_structural_graph_offset() + 38000u;
+    pending[0] = pending[1] = 1000000u;
+    pending[2] = 1u;
+    pending[3] = 0x80000001u;
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    dc_gpu_body_motion_t a, b;
+    ASSERT_TRUE(dc_gpu_read_body_motion(gpu, 0x80000001u, &a, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(gpu, 0x80000002u, &b, err, sizeof(err)));
+    ASSERT_TRUE(fabs(a.mass + b.mass - 1080) < .002);
+    uint32_t ca, cb;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, 0x80000001u, NULL, 0, &ca,
+                                       err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, 0x80000002u, NULL, 0, &cb,
+                                       err, sizeof(err)));
+    ASSERT_EQ(ca + cb, 400u);
+    free(chunk);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
 int main(void) {
     RUN(test_component_above_256_pixels_is_not_disqualified);
     RUN(test_long_thin_component_above_16_cells_is_not_disqualified);
     RUN(test_branching_component_above_four_rectangles_is_not_disqualified);
+    RUN(test_pixel_fracture_preserves_material_volume);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
