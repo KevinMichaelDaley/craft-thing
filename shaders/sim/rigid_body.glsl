@@ -117,16 +117,28 @@ void piece_properties(Body b,uint piece,out float area,out vec2 center,out float
 void body_properties(inout Body b) {
     if (b.motion_ready != 0u) return;
     if(pixel_body(b)) {
-        uint mass10=0u,count=0u;vec2 first=vec2(0);float moment=0;
+        uint mass10=0u,count=0u;uvec2 first_x=uvec2(0),first_y=uvec2(0);
         for(uint p=0u;p<b.width*b.height;p++) {
             uint material=piece_material(b,p);if(material==0u) continue;
             uint w=material==2u?6u:material==4u?12u:material==3u?16u:27u;
-            vec2 c=vec2(p%b.width,p/b.width)+.5;
-            mass10+=w;count++;first+=float(w)*c;
-            moment+=float(w)*(dot(c,c)+1./6.);
+            uint x=(p%b.width*2u+1u)*w,y=(p/b.width*2u+1u)*w;
+            uint old_x=first_x.x,old_y=first_y.x;
+            first_x.x+=x;first_y.x+=y;
+            first_x.y+=uint(first_x.x<old_x);first_y.y+=uint(first_y.x<old_y);
+            mass10+=w;count++;
         }
-        b.mass=float(mass10)*.1;b.center=first/float(mass10);
-        b.inertia=max(moment*.1-b.mass*dot(b.center,b.center),1e-12);
+        vec2 first=vec2(float(first_x.y)*4294967296.+float(first_x.x),
+                        float(first_y.y)*4294967296.+float(first_y.x));
+        b.mass=float(mass10)*.1;b.center=first/(2.*float(mass10));
+        precise float moment=0,correction=0;
+        for(uint p=0u;p<b.width*b.height;p++) {
+            uint material=piece_material(b,p);if(material==0u) continue;
+            float w=material==2u?.6:material==4u?1.2:material==3u?1.6:2.7;
+            vec2 delta=vec2(p%b.width,p/b.width)+.5-b.center;
+            float term=w*(dot(delta,delta)+1./6.)-correction;
+            float next=moment+term;correction=(next-moment)-term;moment=next;
+        }
+        b.inertia=max(moment,1e-12);
         b.density=b.mass/float(count);
         b.inverse_mass=(b.motion_flags&1u)==0u?1./b.mass:0.;
         b.inverse_inertia=(b.motion_flags&3u)==0u?1./b.inertia:0.;
