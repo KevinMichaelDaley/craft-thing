@@ -32,7 +32,8 @@ void fracture_impacts() {
     uint g=graph();
     for(uint slot=0u;slot<BODY_CAPACITY;slot++) {
         uint p=g+38000u+slot*4u;Body b=bodies[slot];
-        if(data[p+3u]!=b.id||b.enabled==0u||b.inverse_mass==0||b.material>1u||data[p+2u]==0u) continue;
+        if(data[p+3u]!=b.id||b.enabled==0u||b.inverse_mass==0||
+           (!pixel_body(b)&&b.material>1u)||data[p+2u]==0u) continue;
         uint axis=data[p+2u]-1u;
         vec2 low=vec2(1e20),high=vec2(-1e20);
         for(uint part=0u;part<body_pieces(b);part++)

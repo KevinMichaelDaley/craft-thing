@@ -182,8 +182,8 @@ void solve_contact(uint i, bool impulse) {
     vec2 force = dn * n + dt * t;
     vec2 applied_impulse=force/(impulse?1.0:DT);
     float incoming=getf(s+8u),normal_impulse=max(dn,0)/(impulse?1.0:DT);
-    impact_capture(a,b,n,incoming,normal_impulse,wn,getf(c+12u));
-    impact_capture(b,a,-n,incoming,normal_impulse,wn,getf(c+12u));
+    impact_capture(a,b,data[c+5u],data[c+6u],n,incoming,normal_impulse,wn,getf(c+12u));
+    impact_capture(b,a,data[c+6u],data[c+5u],-n,incoming,normal_impulse,wn,getf(c+12u));
     structural_capture(a,b,pa,applied_impulse);
     structural_capture(b,a,pb,-applied_impulse);
     if(any(greaterThan(abs(vec3(ba.inverse_mass*force,ba.inverse_inertia*(an*dn+at*dt))),vec3(2))))
