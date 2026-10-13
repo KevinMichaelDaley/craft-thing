@@ -32,7 +32,10 @@ static void test_two_complex_pixel_bodies_meet_real_time_gpu_budget(void) {
     free(chunk);
     ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
     ASSERT_TRUE(dc_gpu_set_fluid_interval(g,2));
-    for(unsigned i=0;i<8;i++) ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(g,0x80000001u,0,.005f,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(g,0x80000002u,0,-.003f,0,err,sizeof(err)));
+    for(unsigned i=0;i<7;i++) ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
     uint64_t rigid=0,total=0;
     for(unsigned i=0;i<24;i++) {
         dc_gpu_tick_capture_t capture;

@@ -188,8 +188,9 @@ test_structural_budget: build/structural_bench
 test_ui test_quarter_native: build/structural_cadence_tests
 test_quarter_native: build/quarter_native_structural_placement_tests build/quarter_native_structural_equilibrium_tests build/quarter_native_structural_failure_tests build/quarter_native_structural_fracture_tests
 .PHONY: test_quarter_native_perf
-test_quarter_native_perf: build/quarter_native_perf_tests build/quarter_native_bench
+test_quarter_native_perf: build/quarter_native_perf_tests build/quarter_native_bench build/pixel_performance_tests
 	./build/quarter_native_perf_tests
+	env -u DC_VK_VALIDATE ./build/pixel_performance_tests
 
 build/quarter_native_perf_tests: tests/vulkan/quarter_native_perf_tests.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
@@ -211,6 +212,7 @@ build/quarter_native_rigid_solver_tests: tests/vulkan/rigid_solver_tests.c Makef
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -lm
 
 test_quarter_native: build/quarter_native_config_tests build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_rigid_solver_tests build/dungeoncraft_quarter_native build/structural_world_tests
+	./build/pixel_dynamics_visual_tests
 	./build/quarter_native_structural_placement_tests
 	./build/quarter_native_structural_equilibrium_tests
 	./build/quarter_native_structural_failure_tests
@@ -431,6 +433,9 @@ build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/controls_tests.c src/app/level.c src/app/session.c $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 
 test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
+	./build/pixel_component_tests
+	./build/pixel_world_tests
+	./build/pixel_geometry_tests
 	./build/structural_mechanics_tests
 	./build/structural_placement_tests
 	./build/structural_submerged_load_tests
@@ -470,6 +475,7 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/stream_tests
 
 test_ui: build/dungeoncraft build/controls_tests build/structural_world_tests
+	./build/pixel_dynamics_visual_tests
 	./build/structural_cadence_tests
 	./build/presentation_tests
 	./build/controls_tests
@@ -596,9 +602,12 @@ build/pixel_world_tests: tests/vulkan/pixel_world_tests.c tests/vulkan/pixel_com
 build/pixel_dynamics_visual_tests: tests/app/pixel_dynamics_visual_tests.c tests/vulkan/pixel_component_tests.c Makefile $(GPU_SRC) src/world/chunk.c build/quarter_native_solver_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 
-build/pixel_performance_tests: tests/vulkan/pixel_performance_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ) build/pixel_component_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/pixel_performance_tests: tests/vulkan/pixel_performance_tests.c Makefile $(GPU_SRC) src/world/chunk.c build/pixel_component_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 
 .PHONY: test_pixel_performance
 test_pixel_performance: build/pixel_performance_tests
 	./build/pixel_performance_tests
+
+test: build/pixel_component_tests build/pixel_world_tests build/pixel_geometry_tests
+test_ui test_quarter_native: build/pixel_dynamics_visual_tests

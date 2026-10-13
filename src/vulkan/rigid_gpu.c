@@ -152,8 +152,15 @@ bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *path,
         .stage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = shader, .pName = "main" },
         .layout = gpu->pipeline_layout };
-    VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1,
-        &info, NULL, &gpu->rigid_pipeline);
+    VkResult result = VK_SUCCESS;
+    VkSpecializationMapEntry entry = {.constantID=0, .offset=0, .size=sizeof(uint32_t)};
+    for (uint32_t stage=0; stage<2 && result==VK_SUCCESS; ++stage) {
+        VkSpecializationInfo specialization = {.mapEntryCount=1, .pMapEntries=&entry,
+            .dataSize=sizeof(stage), .pData=&stage};
+        info.stage.pSpecializationInfo=&specialization;
+        VkPipeline *pipeline = stage==0 ? &gpu->rigid_prepare_pipeline : &gpu->rigid_pipeline;
+        result = vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,pipeline);
+    }
     vkDestroyShaderModule(gpu->device, shader, NULL);
     if (result != VK_SUCCESS) return error(err, cap, "Cannot create rigid pipeline");
     return true;
@@ -161,11 +168,13 @@ bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *path,
 
 void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
     dc_gpu_tick_destroy(gpu);
-    if (gpu->contact_pipeline) vkDestroyPipeline(gpu->device, gpu->contact_pipeline, NULL);
+    for (uint32_t phase=0; phase<DC_GPU_CONTACT_PHASE_COUNT; ++phase)
+        if (gpu->contact_pipelines[phase]) vkDestroyPipeline(gpu->device, gpu->contact_pipelines[phase], NULL);
     for (uint32_t i=0;i<DC_GPU_SOLVER_PHASE_COUNT;++i)
         if (gpu->solver_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->solver_pipelines[i],NULL);
     if (gpu->broadphase_pipeline) vkDestroyPipeline(gpu->device, gpu->broadphase_pipeline, NULL);
     if (gpu->rigid_pipeline) vkDestroyPipeline(gpu->device, gpu->rigid_pipeline, NULL);
+    if (gpu->rigid_prepare_pipeline) vkDestroyPipeline(gpu->device,gpu->rigid_prepare_pipeline,NULL);
     for (unsigned phase = 0; phase < DC_GPU_STRUCTURAL_PHASE_COUNT; phase++)
         if (gpu->structural_pipelines[phase])
             vkDestroyPipeline(gpu->device, gpu->structural_pipelines[phase], NULL);
@@ -358,7 +367,7 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
     vkCmdPipelineBarrier2(gpu->command, &dep);
     if (advance && gpu->automatic_components_enabled) dc_gpu_record_component_extraction(gpu);
     if (advance) dc_gpu_record_structural_begin(gpu);
-    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_pipeline);
+    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_prepare_pipeline);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
@@ -377,8 +386,8 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
     vkCmdPipelineBarrier2(gpu->command, &dep);
     if (advance && gpu->rigid_solver_enabled && count) {
         dc_gpu_record_solver(gpu);
-        vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_pipeline);
     }
+    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_pipeline);
     push[2] = RIGID_RASTER | (gpu->rigid_solver_enabled ? RIGID_PHYSICAL_MASK : 0u);
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);

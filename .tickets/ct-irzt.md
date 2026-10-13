@@ -27,3 +27,7 @@ After dun-ci2x, the unchanged strict dense quarter-native gate passed on Iris Xe
 **2026-10-08T06:59:33Z**
 
 After dun-9qub, serial headless dense quarter_native_bench with validation disabled again passed the strict >=60 Hz physics and render gates: 15.660 ms/tick (63.86 Hz), 16.352 ms including rendering (61.15 Hz); rigid 0.000 ms, fluid 9.116 ms, granular 4.572 ms. Retain the variability investigation and do not infer active rigid/fluid performance from this zero-body fixture.
+
+**2026-10-13T06:40:25Z**
+
+2026-10-13 serial comparison after ct-alp7: current dense 640x448/70-slot/16-pressure benchmark 20.274ms physics (49.32Hz), 21.500ms including render; rigid 0, fluid13.993ms, granular4.465ms. Detached pushed baseline232d76b built on same machine/config gives20.240ms physics (49.41Hz),21.299ms including render; rigid0,fluid13.923ms,granular4.465ms. Dense gate remains failing, essentially identical baseline/current, so not caused by pixel contact/raster optimizations. Intel frequency observed1200MHz, max1300,min100 after run; no attribution of variance from this single sample. Strict gate retained.

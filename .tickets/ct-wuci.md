@@ -34,3 +34,11 @@ User confirmed scope: any shape of rigid-capable solid pixels (including mixed m
 **2026-10-13T03:23:04Z**
 
 Initial exact pixel geometry GREEN checkpoint 29ffb4c passes 400-pixel, 40-wide and >4-rectangle concave cases. Version-four checkpoint geometry relocation GREEN f8511ff passes their save/load and diagnostic checks plus all three existing extraction acceptance cases. Full normal regression running. Pixel fracture and fair/scalable extraction, broader consumers/visual and budget validation remain in progress; ticket is not complete.
+
+**2026-10-13T06:12:08Z**
+
+Agent remains stopped at user request. Parent manually repaired the slideshow under ct-alp7; exact quarter-native scene now meets GPU 60Hz budget without shape or resolution reduction, and final regressions are running. Implemented checkpoints include sparse exact tiles, V5 geometry persistence/V4 upgrade, material-preserving fracture, fair cursor retry, regional contacts, occupied residency and invariant fracture poses. Ticket remains in progress: warm cached components outside mapped viewport and final cold-extraction/capacity/complexity sweep acceptance are outstanding.
+
+**2026-10-13T06:35:37Z**
+
+Final quarter battery exposed an obsolete stationary-floor fixture: its 50x1 painted platform is now eligible for automatic extraction. Parent reproduced identical stack failure on pre-optimization abde3d6 (same y=20.156403, angle=-1.524839), so it is not a ct-alp7 runtime regression. Fixture now connects the platform to ordinary terrain, retaining all original settling/motion/density/persistence assertions.

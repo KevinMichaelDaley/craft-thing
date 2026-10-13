@@ -46,26 +46,34 @@ bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         .stage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = module, .pName = "main" },
         .layout = gpu->pipeline_layout };
-    VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1,
-                                               &info, NULL, &gpu->contact_pipeline);
+    VkResult result = VK_SUCCESS;
+    VkSpecializationMapEntry entry = {.constantID=0, .offset=0, .size=sizeof(uint32_t)};
+    for (uint32_t phase=0; phase<DC_GPU_CONTACT_PHASE_COUNT && result==VK_SUCCESS; ++phase) {
+        VkSpecializationInfo specialization = {.mapEntryCount=1, .pMapEntries=&entry,
+            .dataSize=sizeof(phase), .pData=&phase};
+        info.stage.pSpecializationInfo=&specialization;
+        result = vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,&gpu->contact_pipelines[phase]);
+    }
     vkDestroyShaderModule(gpu->device, module, NULL);
     return result == VK_SUCCESS ? true : error(err, cap, "Cannot create GPU contact pipeline");
 }
 
 void dc_gpu_record_contacts(dc_gpu_t *gpu) {
-    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->contact_pipeline);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
     uint32_t push[8] = {gpu->width, gpu->height, 0, dc_gpu_runtime_body_count(gpu),
         (uint32_t)x, (uint32_t)(x >> 32), (uint32_t)y, (uint32_t)(y >> 32)};
-    for (uint32_t mode = 0; mode < 2; ++mode) {
+    for (uint32_t mode = 0; mode < DC_GPU_CONTACT_PHASE_COUNT; ++mode) {
+        vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->contact_pipelines[mode]);
         push[2] = mode;
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
         if (mode) {
+            uint32_t word = mode == 2 ? dc_gpu_solver_word_offset(gpu) + DC_GPU_PIXEL_CONTACT_DISPATCH_WORD :
+                dc_gpu_contact_word_offset(gpu) + DC_GPU_CONTACT_DISPATCH_WORD;
             VkDeviceSize indirect = sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
-                (VkDeviceSize)(dc_gpu_contact_word_offset(gpu) + DC_GPU_CONTACT_DISPATCH_WORD) * sizeof(uint32_t);
+                (VkDeviceSize)word * sizeof(uint32_t);
             vkCmdDispatchIndirect(gpu->command, gpu->body_buffer, indirect);
         } else vkCmdDispatch(gpu->command, 1, 1, 1);
         VkMemoryBarrier2 memory = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,

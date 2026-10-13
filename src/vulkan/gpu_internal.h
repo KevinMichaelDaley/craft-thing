@@ -20,6 +20,8 @@ enum {
     DC_GPU_HALO_SIDE = DC_CHUNK_SIDE + 2,
     DC_GPU_HALO_CELLS = DC_GPU_HALO_SIDE * DC_GPU_HALO_SIDE,
     DC_GPU_SOLVER_HEADER_WORDS = 16,
+    DC_GPU_PIXEL_CONTACT_DISPATCH_WORD = 10,
+    DC_GPU_CONTACT_PHASE_COUNT = 3,
     DC_GPU_SOLVER_BODY_WORDS = 32,
     DC_GPU_SOLVER_CONTACT_WORDS = 16,
     DC_GPU_SOLVER_PHASE_COUNT = 15,
@@ -118,8 +120,9 @@ struct dc_gpu {
     VkDeviceMemory occupancy_memory;
     void *occupancy_mapped;
     VkPipeline rigid_pipeline;
+    VkPipeline rigid_prepare_pipeline;
     VkPipeline broadphase_pipeline;
-    VkPipeline contact_pipeline;
+    VkPipeline contact_pipelines[DC_GPU_CONTACT_PHASE_COUNT];
     VkPipeline solver_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
     VkPipeline structural_pipelines[DC_GPU_STRUCTURAL_PHASE_COUNT];
     bool structural_enabled;

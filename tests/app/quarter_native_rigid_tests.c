@@ -210,6 +210,9 @@ static void test_quarter_native_gpu_stack_settles_and_persists(void) {
     ASSERT_TRUE(dc_level_view_wait_visible(view,120000,err,sizeof(err)));
     for(uint32_t x=40;x<90;++x)
         ASSERT_TRUE(dc_level_view_paint(view,x,80,0,DC_MATERIAL_STONE,err,sizeof(err)));
+    /* Anchor the platform to ordinary terrain; isolated platforms now fall. */
+    for(uint32_t y=80;y<VIEW_HEIGHT;++y)
+        ASSERT_TRUE(dc_level_view_paint(view,40,y,0,DC_MATERIAL_STONE,err,sizeof(err)));
     dc_gpu_body_shape_t shape={.count=4,.material=DC_GPU_BODY_STONE,
         .vertices={{0,0},{4<<16,0},{4<<16,4<<16},{0,4<<16}}};
     ASSERT_TRUE(dc_level_view_spawn_convex_body(view,63,76,4,4,&shape,err,sizeof(err)));

@@ -51,7 +51,7 @@ static void test_two_automatic_concave_pixel_bodies_rotate_collide_and_pause_sta
         }
     free(chunk);
     ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
-    ASSERT_TRUE(dc_gpu_set_fluid_interval(gpu, 6));
+    ASSERT_TRUE(dc_gpu_set_fluid_interval(gpu, 2));
     ASSERT_TRUE(dc_gpu_set_viewport(gpu, 0, 0, PIXEL_VIS_WIDTH, PIXEL_VIS_HEIGHT));
     ASSERT_TRUE(dc_gpu_set_display_zoom(gpu, 4));
     ASSERT_TRUE(dc_gpu_set_overlay(gpu, DC_GPU_OVERLAY_RIGID_IDS));
@@ -83,7 +83,6 @@ static void test_two_automatic_concave_pixel_bodies_rotate_collide_and_pause_sta
         while (SDL_PollEvent(&event))
             ASSERT_TRUE(event.type != SDL_QUIT);
         ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
-        ASSERT_TRUE(vkQueueWaitIdle(gpu->queue) == VK_SUCCESS);
         dc_gpu_contact_stats_t stats;
         ASSERT_TRUE(dc_gpu_read_contacts(gpu, &stats, contacts, 8192, err, sizeof(err)));
         ASSERT_EQ(stats.overflow, 0u);

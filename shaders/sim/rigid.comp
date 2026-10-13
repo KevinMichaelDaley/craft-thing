@@ -4,8 +4,10 @@
 #include "rigid_shape.glsl"
 #include "rigid_clip.glsl"
 layout(local_size_x = 16, local_size_y = 16) in;
+layout(constant_id = 0) const uint RIGID_RASTER_STAGE = 0u;
 const uint RASTER_MODE=1u, PREPARE_MODE=2u, PHYSICAL_MASK=128u, MODE_MASK=127u;
-shared uint raster_active[2];
+shared uint raster_ids[BODY_CAPACITY];
+shared uint raster_count;
 
 layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 chunk_cells[]; };
 layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
@@ -119,24 +121,29 @@ void integrate_body(uint index) {
 
 void main() {
     uvec2 p = gl_GlobalInvocationID.xy;
-    if ((params.mode & MODE_MASK) != RASTER_MODE) {
+    if (RIGID_RASTER_STAGE == 0u) {
         uint index = gl_LocalInvocationIndex;
         if (index < params.body_count) integrate_body(index);
         return;
     }
-    if (gl_LocalInvocationIndex < 2u) raster_active[gl_LocalInvocationIndex] = 0u;
-    barrier();
-    uint slot = gl_LocalInvocationIndex;
-    if (slot < params.body_count && bodies[slot].enabled != 0u && bodies[slot].visible != 0u)
-        atomicOr(raster_active[slot / 32u], 1u << (slot % 32u));
+    if (gl_LocalInvocationIndex == 0u) {
+        /* Preserve slot order and conservatively include swept cells and faces. */
+        raster_count = 0u;
+        ivec2 tile_low = ivec2(gl_WorkGroupID.xy * gl_WorkGroupSize.xy);
+        ivec2 tile_high = tile_low + ivec2(gl_WorkGroupSize.xy);
+        for (uint i = 0u; i < params.body_count; ++i) {
+            if (bodies[i].enabled == 0u || bodies[i].visible == 0u) continue;
+            ivec2 low = min(bodies[i].bounds_low - ivec2(1), bodies[i].swept_low);
+            ivec2 high = max(bodies[i].bounds_high, bodies[i].swept_high);
+            if (all(lessThan(tile_low, high)) && all(greaterThan(tile_high, low)))
+                raster_ids[raster_count++] = i;
+        }
+    }
     barrier();
     if (p.x >= params.width || p.y >= params.height) return;
     uint current = 0u, swept = 0u;float volume=0;vec2 face_covered=vec2(0);
-    uvec2 remaining = uvec2(raster_active[0], raster_active[1]);
-    while (any(notEqual(remaining, uvec2(0)))) {
-        uint word = remaining.x != 0u ? 0u : 1u;
-        uint i = word * 32u + uint(findLSB(remaining[word]));
-        remaining[word] &= remaining[word] - 1u;
+    for (uint ordinal_id = 0u; ordinal_id < raster_count; ++ordinal_id) {
+        uint i = raster_ids[ordinal_id];
         ivec2 cell = ivec2(p);
         bool potential = all(greaterThanEqual(cell,bodies[i].bounds_low)) &&
                          all(lessThan(cell,bodies[i].bounds_high));
