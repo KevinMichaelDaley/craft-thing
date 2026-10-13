@@ -187,6 +187,61 @@ static void test_pending_component_is_not_starved_by_new_lower_roots(void) {
     dc_gpu_destroy(gpu);
     PASS();
 }
+static void test_mixed_concave_cut_preserves_three_connected_material_fragments(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    for (unsigned y = 10; y < 40; y++)
+        for (unsigned x = 10; x < 50; x++)
+            if (x < 14 || x >= 46 || y >= 36)
+                chunk->cells[y * 64 + x].material =
+                    x < 14 ? DC_MATERIAL_WOOD : DC_MATERIAL_STONE;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(gpu, 0x80000001u, .2f, .01f, 0,
+                                       err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_impact_fracture(gpu));
+    uint32_t *pending = dc_gpu_structural_data(gpu) +
+                        dc_gpu_structural_graph_offset() + 38000u;
+    pending[0] = pending[1] = 1000000u;
+    pending[2] = 2u;
+    pending[3] = 0x80000001u;
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    unsigned count = 0, wood = 0, stone = 0;
+    bool seen[1200] = {0};
+    double mass = 0;
+    for (unsigned child = 0; child < 3; child++) {
+        dc_gpu_body_motion_t motion;
+        uint32_t id = 0x80000001u + child, n;
+        dc_gpu_body_pixel_t pixels[368];
+        ASSERT_TRUE(dc_gpu_read_body_motion(gpu, id, &motion, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, id, pixels, 368, &n,
+                                           err, sizeof(err)));
+        mass += motion.mass;
+        count += n;
+        for (unsigned i = 0; i < n; i++) {
+            unsigned index = pixels[i].y * 40 + pixels[i].x;
+            ASSERT_TRUE(index < 1200 && !seen[index]);
+            seen[index] = true;
+            ASSERT_EQ(pixels[i].material,
+                      pixels[i].x < 4 ? DC_GPU_BODY_WOOD : DC_GPU_BODY_STONE);
+            wood += pixels[i].material == DC_GPU_BODY_WOOD;
+            stone += pixels[i].material == DC_GPU_BODY_STONE;
+        }
+    }
+    ASSERT_EQ(count, 368u);
+    ASSERT_EQ(wood, 120u);
+    ASSERT_EQ(stone, 248u);
+    ASSERT_TRUE(fabs(mass - 741.6) < .002);
+    free(chunk);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
 int main(void) {
     RUN(test_component_above_256_pixels_is_not_disqualified);
     RUN(test_long_thin_component_above_16_cells_is_not_disqualified);
@@ -194,6 +249,7 @@ int main(void) {
     RUN(test_pixel_fracture_preserves_material_volume);
     RUN(test_large_pixel_body_has_accurate_mass_center_and_inertia);
     RUN(test_pending_component_is_not_starved_by_new_lower_roots);
+    RUN(test_mixed_concave_cut_preserves_three_connected_material_fragments);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
