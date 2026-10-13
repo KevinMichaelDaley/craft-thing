@@ -36,6 +36,20 @@ bool fragment_connected(Shape a,Shape b) {
     }
     return false;
 }
+bool fragment_pose(Body source,inout Body b) {
+    vec2 delta=b.center-source.center;
+    ivec2 shift=ivec2(round((body_rotate(delta,source.angle)-delta)*65536.));
+    ivec2 local=source.local_fp+shift;uvec2 x,y;
+    if(!shifted_chunk(source.chunk_x,local.x>>22,x)||!shifted_chunk(source.chunk_y,local.y>>22,y)) return false;
+    b.chunk_x=x;b.chunk_y=y;b.local_fp=local&ivec2((64<<16)-1);
+    b.x_fp=source.x_fp+shift.x;b.y_fp=source.y_fp+shift.y;
+    ivec2 previous=ivec2(round((body_rotate(delta,source.previous_angle)-delta)*65536.));
+    b.previous_x_fp=source.previous_x_fp+previous.x;b.previous_y_fp=source.previous_y_fp+previous.y;
+    vec2 offset=vec2(shift)/65536.+delta;
+    vec2 v=vec2(source.vx_fp,source.vy_fp)/65536.+source.angular_velocity*vec2(-offset.y,offset.x);
+    b.vx_fp=int(round(v.x*65536.));b.vy_fp=int(round(v.y*65536.));
+    body_cache_bounds(b);return true;
+}
 Body fragment_build(Body source,Shape pieces[8],uint labels[8],uint owner,uint generation) {
     Body b=source;b.piece_count=0u;
     for(uint i=0u;i<FRAGMENT_CAPACITY;i++) if(pieces[i].count!=0u&&labels[i]==owner)
@@ -49,10 +63,7 @@ Body fragment_build(Body source,Shape pieces[8],uint labels[8],uint owner,uint g
     b.motion_ready=0u;b.motion_flags=0u;b.rest_ticks=0u;
     b.reserved0=0x53545232u;b.reserved1=generation;
     body_properties(b);
-    vec2 offset=body_rotate(b.center-source.center,source.angle);
-    vec2 v=vec2(source.vx_fp,source.vy_fp)/65536.0+
-        source.angular_velocity*vec2(-offset.y,offset.x);
-    b.vx_fp=int(round(v.x*65536.0));b.vy_fp=int(round(v.y*65536.0));
+    if(!fragment_pose(source,b)) b.enabled=0u;
     return b;
 }
 bool fragment_body(uint slot,uint axis,float cut,uint generation) {
@@ -89,7 +100,8 @@ bool fragment_body(uint slot,uint axis,float cut,uint generation) {
     float mass=0,inertia=0,energy=0;vec2 momentum=vec2(0);float angular=0;
     for(uint child=0u;child<count;child++) {
         Body b=fragment_build(source,pieces,labels,owners[child],generation);
-        vec2 r=body_rotate(b.center-source.center,source.angle);
+        if(b.enabled==0u) return false;
+        vec2 r=vec2(b.x_fp-source.x_fp,b.y_fp-source.y_fp)/65536.+b.center-source.center;
         vec2 v=vec2(b.vx_fp,b.vy_fp)/65536.0;
         mass+=b.mass;inertia+=b.inertia+b.mass*dot(r,r);momentum+=b.mass*v;
         angular+=b.inertia*b.angular_velocity+body_cross(r,b.mass*v);

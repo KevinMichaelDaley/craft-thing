@@ -26,6 +26,10 @@ bool cell_ref(ivec2 p,out uint index) {
     index=(page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);return true;
 }
 uint label_at(ivec2 p) {return labels[uint(p.y)*params.width+uint(p.x)];}
+bool rigid_material(uint material) {return material==1u||material==7u||material==8u;}
+bool component_pixel(uint root,ivec2 point,out uint atlas) {
+    return cell_ref(point,atlas)&&label_at(point)==root&&rigid_material(cells[atlas].x&0xffffu);
+}
 void extract_legacy(uint root) {
     uint size=sizes[root];if(size==0u||size>256u||labels[root]!=root) return;
     uint root_atlas;ivec2 root_point=ivec2(root%params.width,root/params.width);
@@ -37,7 +41,7 @@ void extract_legacy(uint root) {
     const ivec2 neighbors[4]=ivec2[4](ivec2(-1,0),ivec2(1,0),ivec2(0,-1),ivec2(0,1));
     for(int y=0;y<16;y++) for(int x=-15;x<=15;x++) {
         ivec2 p=first+ivec2(x,y);uint atlas;
-        if(!cell_ref(p,atlas)||label_at(p)!=root) continue;
+        if(!component_pixel(root,p,atlas)) continue;
         found++;low=min(low,p);high=max(high,p);
         for(uint n=0u;n<4u;n++) {uint other;if(!cell_ref(p+neighbors[n],other)) cold=true;}
     }
@@ -47,7 +51,7 @@ void extract_legacy(uint root) {
     ivec2 extent=high-low+1;
     for(int y=0;y<extent.y;y++) for(int x=0;x<extent.x;x++) {
         ivec2 p=low+ivec2(x,y);uint atlas;
-        if(cell_ref(p,atlas)&&label_at(p)==root) occupied[uint(y*16+x)]=cells[atlas].x&0xffffu;
+        if(component_pixel(root,p,atlas)) occupied[uint(y*16+x)]=cells[atlas].x&0xffffu;
     }
     Shape pieces[4];uint piece_count=0u;
     for(int y=0;y<extent.y;y++) for(int x=0;x<extent.x;x++) {
@@ -89,7 +93,7 @@ void extract_legacy(uint root) {
     uint record=graph()+36000u+slot*4u;data[record]=id;data[record+1u]=1u;data[record+2u]=serial;data[record+3u]=1u;
     for(int y=0;y<extent.y;y++) for(int x=0;x<extent.x;x++) {
         ivec2 p=low+ivec2(x,y);uint atlas;
-        if(cell_ref(p,atlas)&&label_at(p)==root) cells[atlas].x=0u;
+        if(component_pixel(root,p,atlas)) cells[atlas].x=0u;
     }
 }
 uint pool() {return graph()+40000u;}
@@ -109,7 +113,7 @@ bool component_tile(uint root,ivec2 low,ivec2 extent,ivec2 tile) {
     for(int y=0;y<16;y++) for(int x=0;x<16;x++) {
         ivec2 local=tile*16+ivec2(x,y);
         if(any(greaterThanEqual(local,extent))) continue;
-        if(label_at(low+local)==root) return true;
+        uint atlas;if(component_pixel(root,low+local,atlas)) return true;
     }
     return false;
 }
@@ -150,8 +154,8 @@ void extract(uint root,uint bounds) {
         for(uint local=0u;local<256u;local++) {
             ivec2 point=ivec2(x,y)*16+ivec2(local%16u,local/16u);
             if(any(greaterThanEqual(point,extent))) continue;
-            point+=low;if(label_at(point)!=root) continue;
-            cell_ref(point,atlas);material=cells[atlas].x&0xffffu;
+            point+=low;if(!component_pixel(root,point,atlas)) continue;
+            material=cells[atlas].x&0xffffu;
             uint code=material==7u?2u:material==8u?4u:1u;
             data[target+offset+1u+local/8u]|=code<<((local%8u)*4u);
         }
@@ -169,7 +173,7 @@ void extract(uint root,uint bounds) {
     body_properties(b);body_cache_bounds(b);bodies[slot]=b;data[p+1u]+=words;data[base()+14u]=serial;
     uint record=graph()+36000u+slot*4u;data[record]=id;data[record+1u]=1u;data[record+2u]=serial;data[record+3u]=1u;
     for(int y=0;y<extent.y;y++) for(int x=0;x<extent.x;x++) {
-        ivec2 point=low+ivec2(x,y);if(label_at(point)==root&&cell_ref(point,atlas)) cells[atlas].x=0u;
+        ivec2 point=low+ivec2(x,y);if(component_pixel(root,point,atlas)) cells[atlas].x=0u;
     }
 }
 void main() {
@@ -180,7 +184,8 @@ void main() {
         uint mask=0u;
         for(uint bit=0u;bit<32u;bit++) {
             uint root=word*32u+bit;if(root>=total) break;
-            if(sizes[root]!=0u&&labels[root]==root) mask|=1u<<bit;
+            uint atlas;
+            if(sizes[root]!=0u&&labels[root]==root&&component_pixel(root,ivec2(root%params.width,root/params.width),atlas)) mask|=1u<<bit;
         }
         candidates[word]=mask;return;
     }
@@ -219,6 +224,7 @@ void main() {
         uint selected=candidates[root];if(selected>=data[batch]) return;
         uint record=records+selected*8u,atlas;ivec2 point=ivec2(index%params.width,index/params.width);
         if(!cell_ref(point,atlas)) {atomicOr(data[record+6u],1u);return;}
+        if(!rigid_material(cells[atlas].x&0xffffu)) return;
         atomicMin(data[record+1u],uint(point.x));atomicMin(data[record+2u],uint(point.y));
         atomicMax(data[record+3u],uint(point.x));atomicMax(data[record+4u],uint(point.y));
         atomicAdd(data[record+5u],1u);

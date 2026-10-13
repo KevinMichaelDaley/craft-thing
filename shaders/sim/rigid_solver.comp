@@ -77,7 +77,16 @@ bool awake(Body b) {
     if (b.enabled == 0u || b.visible == 0u)
         return false;
     ivec2 p = clamp(ivec2(b.x_fp, b.y_fp) >> 16, ivec2(0), ivec2(params.width, params.height) - 1);
-    return pages[uint(p.y / 64) * ((params.width + 63u) / 64u) + uint(p.x / 64)] != 0u;
+    if(pixel_body(b)) {
+        p=ivec2(floor(vec2(b.x_fp,b.y_fp)/65536.+body_reference_point(b)));
+        if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return false;
+    }
+    uint page=pages[uint(p.y / 64) * ((params.width + 63u) / 64u) + uint(p.x / 64)];
+    if(!pixel_body(b)) return page!=0u;
+    uint base=structural_base();if(page==0u||page>data[base+1u]) return false;
+    uint record=base+32u+(page-1u)*8u;uvec2 x,y;
+    return data[record+5u]!=0u&&shifted_chunk(params.origin_x,p.x/64,x)&&shifted_chunk(params.origin_y,p.y/64,y)&&
+        all(equal(x,uvec2(data[record],data[record+1u])))&&all(equal(y,uvec2(data[record+2u],data[record+3u])));
 }
 uint slot(uint id) {
     if (id == 0u)

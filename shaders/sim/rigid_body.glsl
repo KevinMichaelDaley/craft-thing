@@ -72,6 +72,17 @@ vec2 body_rotate(vec2 p, float angle) {
 vec2 body_local_point(Body b,vec2 world_relative) {
     return b.center+body_rotate(world_relative-b.center,-b.angle);
 }
+vec2 body_reference_point(Body b) {
+    if(!pixel_body(b)) return vec2(0);
+    uint start=b.compound_reserved+pixel_tile_offset(b,0u)+1u;
+    for(uint word=0u;word<32u;word++) {
+        uint packed=pixel_word_at(start+word);if(packed==0u) continue;
+        uint piece=word*8u+uint(findLSB(packed))/4u;
+        vec2 point=vec2(pixel_piece_cell(b,piece))+.5;
+        return b.center+body_rotate(point-b.center,b.angle);
+    }
+    return b.center;
+}
 uvec4 body_piece_query(Body b,vec2 low,vec2 high) {
     if(!pixel_body(b)) return uvec4(0,0,max(1u,b.piece_count),1);
     vec2 lo=vec2(1e20),hi=vec2(-1e20);

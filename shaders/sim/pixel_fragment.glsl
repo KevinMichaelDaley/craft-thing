@@ -5,11 +5,8 @@ Body pixel_fragment_build(Body source,uint count,uint material,uint pointer,uint
     Body b=source;b.piece_count=PIXEL_BODY_FLAG|count;b.compound_reserved=pointer;
     b.material=material;b.motion_ready=0u;b.motion_flags=0u;b.rest_ticks=0u;
     b.reserved0=0x53545232u;b.reserved1=generation;body_properties(b);
-    vec2 offset=body_rotate(b.center-source.center,source.angle);
-    vec2 velocity=vec2(source.vx_fp,source.vy_fp)/65536.0+
-        source.angular_velocity*vec2(-offset.y,offset.x);
-    b.vx_fp=int(round(velocity.x*65536.0));b.vy_fp=int(round(velocity.y*65536.0));
-    body_cache_bounds(b);return b;
+    if(!fragment_pose(source,b)) b.enabled=0u;
+    return b;
 }
 bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
     Body source=bodies[slot];uint area=body_pieces(source);
@@ -107,7 +104,8 @@ bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
     for(uint child=0u;child<count;child++) {
         Body b=pixel_fragment_build(source,counts[child],materials[child],
             BODY_STORAGE_WORDS+target+used+offsets[child],generation);
-        vec2 r=body_rotate(b.center-source.center,source.angle),v=vec2(b.vx_fp,b.vy_fp)/65536.;
+        if(b.enabled==0u) return false;
+        vec2 r=vec2(b.x_fp-source.x_fp,b.y_fp-source.y_fp)/65536.+b.center-source.center,v=vec2(b.vx_fp,b.vy_fp)/65536.;
         mass+=b.mass;inertia+=b.inertia+b.mass*dot(r,r);momentum+=b.mass*v;
         angular+=b.inertia*b.angular_velocity+body_cross(r,b.mass*v);
         energy+=.5*b.mass*dot(v,v)+.5*b.inertia*b.angular_velocity*b.angular_velocity;
