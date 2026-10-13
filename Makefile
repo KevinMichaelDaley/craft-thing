@@ -589,3 +589,6 @@ build/pixel_gpu.o: src/vulkan/pixel_gpu.c src/vulkan/gpu_internal.h include/dung
 
 build/pixel_geometry_tests: tests/vulkan/pixel_geometry_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+build/pixel_world_tests: tests/vulkan/pixel_world_tests.c tests/vulkan/pixel_component_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
