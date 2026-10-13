@@ -45,17 +45,45 @@ static float composition_density(const dc_gpu_body_record_t *body) {
     return (float)(mass / volume);
 }
 
-static bool body_valid(const dc_gpu_body_record_t *b) {
+static bool pixel_valid(const dc_gpu_body_record_t *b, const uint32_t *pixels,
+                        uint32_t words, float *density) {
+    uint64_t area = (uint64_t)b->body.width * b->body.height;
+    uint64_t length = (area + 7u) / 8u;
+    if (!pixels || !area || b->compound_reserved > words ||
+        length > words - b->compound_reserved)
+        return false;
+    uint32_t count = 0;
+    double mass = 0;
+    for (uint64_t i = 0; i < area; i++) {
+        uint32_t material =
+            (pixels[b->compound_reserved + i / 8] >> ((i % 8) * 4)) & 15u;
+        if (material > DC_GPU_BODY_DENSE_WOOD)
+            return false;
+        if (material) {
+            count++;
+            mass += material_density(material);
+        }
+    }
+    if (!count || count != (b->piece_count & ~DC_GPU_PIXEL_BODY_FLAG))
+        return false;
+    *density = (float)(mass / count);
+    return !b->motion_ready || fabs(b->mass - mass) < fmax(.002, mass * 1e-6);
+}
+
+static bool body_valid(const dc_gpu_body_record_t *b, const uint32_t *pixels,
+                       uint32_t words) {
     if (!b->body.active && !b->reserved[0])
         return true;
+    bool pixel = (b->piece_count & DC_GPU_PIXEL_BODY_FLAG) != 0;
+    float density = 0;
     if (!b->body.id || b->body.active > 1 || !b->body.width ||
-        !b->body.height || b->body.width > DC_GPU_BODY_MAX_SIDE ||
-        b->body.height > DC_GPU_BODY_MAX_SIDE || b->local_x_fp < 0 ||
-        b->local_y_fp < 0 || b->local_x_fp >= 64 * 65536 ||
+        !b->body.height || (!pixel && b->body.width > DC_GPU_BODY_MAX_SIDE) ||
+        (!pixel && b->body.height > DC_GPU_BODY_MAX_SIDE) ||
+        b->local_x_fp < 0 || b->local_y_fp < 0 || b->local_x_fp >= 64 * 65536 ||
         b->local_y_fp >= 64 * 65536 || !isfinite(b->angle) ||
         fabsf(b->angle) > 3.141593f || !isfinite(b->angular_velocity) ||
         fabsf(b->angular_velocity) > .5f || (b->motion_flags & ~3u) ||
-        b->motion_ready > 1 || b->piece_count > DC_GPU_BODY_PIECES)
+        b->motion_ready > 1 || (!pixel && b->piece_count > DC_GPU_BODY_PIECES))
         return false;
     if (b->reserved[0] != 0 && b->reserved[0] != DC_GPU_STRUCTURAL_TAG &&
         b->reserved[0] != DC_GPU_STRUCTURAL_CONVERTED_TAG)
@@ -67,7 +95,10 @@ static bool body_valid(const dc_gpu_body_record_t *b) {
     if (b->shape.count > DC_GPU_CONVEX_VERTICES ||
         b->shape.material > DC_GPU_BODY_DENSE_WOOD)
         return false;
-    if (b->piece_count) {
+    if (pixel) {
+        if (!pixel_valid(b, pixels, words, &density))
+            return false;
+    } else if (b->piece_count) {
         dc_gpu_compound_shape_t shape = {.count = b->piece_count};
         memcpy(shape.pieces, b->pieces, sizeof(shape.pieces));
         if (!dc_gpu_valid_compound_shape(&b->body, &shape))
@@ -78,7 +109,8 @@ static bool body_valid(const dc_gpu_body_record_t *b) {
         b->inertia < 0)
         return false;
     if (b->motion_ready) {
-        float density = composition_density(b);
+        if (!pixel)
+            density = composition_density(b);
         if (b->mass <= 0 || b->inertia <= 0 || !isfinite(b->density) ||
             fabsf(b->density - density) > 1e-6f ||
             !floats_valid(&b->inverse_mass, 2) || !isfinite(b->center[0]) ||
@@ -169,7 +201,8 @@ static bool graph_valid(const dc_structural_store_payload_t *p) {
 }
 
 bool dc_gpu_structure_payload_valid(const dc_gpu_t *gpu,
-                                    const dc_structural_store_payload_t *p) {
+                                    const dc_structural_store_payload_t *p,
+                                    const uint32_t *pixels, uint32_t words) {
     if (p->control[0] > 1 || p->control[2] > 192 || p->control[3] > 0x7fffffffu)
         return false;
     for (unsigned i = 4; i < 8; i++)
@@ -184,7 +217,7 @@ bool dc_gpu_structure_payload_valid(const dc_gpu_t *gpu,
         return false;
     for (unsigned i = 0; i < DC_GPU_BODY_CAPACITY; i++) {
         const dc_gpu_body_record_t *b = &p->bodies[i];
-        if (!body_valid(b))
+        if (!body_valid(b, pixels, words))
             return false;
         if (b->reserved[0] == DC_GPU_STRUCTURAL_TAG) {
             unsigned member = b->reserved[1] - 1u;

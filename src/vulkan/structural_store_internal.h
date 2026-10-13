@@ -19,7 +19,8 @@ typedef struct {
 
 /** Validate bounds, material geometry, ownership and authoritative state. */
 bool dc_gpu_structure_payload_valid(
-    const dc_gpu_t *gpu, const dc_structural_store_payload_t *payload);
+    const dc_gpu_t *gpu, const dc_structural_store_payload_t *payload,
+    const uint32_t *pixels, uint32_t pixel_words);
 bool dc_gpu_checkpoint_chunk_valid(const dc_chunk_t *chunk);
 bool dc_gpu_checkpoint_write_chunks(FILE *file, const dc_chunk_t *chunks,
                                     unsigned count);
