@@ -17,13 +17,26 @@ void __wrap_vkUpdateDescriptorSets(VkDevice device, uint32_t write_count,
                                    const VkCopyDescriptorSet *copies) {
     for (unsigned i = 0; i < write_count; i++)
         if (writes[i].dstBinding == 28 || writes[i].dstBinding == 29)
-            label_ranges[writes[i].dstBinding - 28] = writes[i].pBufferInfo->range;
-    __real_vkUpdateDescriptorSets(device, write_count, writes, copy_count, copies);
+            label_ranges[writes[i].dstBinding - 28] =
+                writes[i].pBufferInfo->range;
+    __real_vkUpdateDescriptorSets(device, write_count, writes, copy_count,
+                                  copies);
 }
-#define RUN(fn) do { printf("RUN %s\n", #fn); fn(); } while (0)
-#define ASSERT_TRUE(e) do { if (!(e)) { printf("FAIL %d: %s\n", __LINE__, #e); g_fail++; return; } } while (0)
-#define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
-#define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
+#define RUN(fn)                                                                \
+    do {                                                                       \
+        printf("RUN %s\n", #fn);                                               \
+        fn();                                                                  \
+    } while (0)
+#define ASSERT_TRUE(e)                                                         \
+    do {                                                                       \
+        if (!(e)) {                                                            \
+            printf("FAIL %d: %s\n", __LINE__, #e);                             \
+            g_fail++;                                                          \
+            return;                                                            \
+        }                                                                      \
+    } while (0)
+#define ASSERT_EQ(a, b) ASSERT_TRUE((a) == (b))
+#define ASSERT_INT_EQ(a, b) ASSERT_TRUE((int)(a) == (int)(b))
 #define PASS() g_pass++
 
 static uint32_t *fixture(dc_gpu_body_record_t *b, uint32_t *words) {
@@ -45,7 +58,8 @@ static uint32_t *fixture(dc_gpu_body_record_t *b, uint32_t *words) {
     return dense;
 }
 
-static void test_version_four_upgrade_preserves_materials_and_empty_cells(void) {
+static void
+test_version_four_upgrade_preserves_materials_and_empty_cells(void) {
     dc_gpu_t gpu = {.width = 64, .height = 64};
     dc_gpu_body_record_t bodies[64] = {0};
     uint32_t words;
@@ -59,8 +73,11 @@ static void test_version_four_upgrade_preserves_materials_and_empty_cells(void) 
     for (unsigned y = 0; y < 14; y++)
         for (unsigned x = 0; x < 10; x++) {
             unsigned p = y * 16 + x;
-            uint32_t actual = (pixels[pixels[8] + 1 + p / 8] >> ((p % 8) * 4)) & 15u;
-            uint32_t expected = x == 0 && y == 0 ? 2u : x == 0 || y % 2 == 0 ? 1u : 0u;
+            uint32_t actual =
+                (pixels[pixels[8] + 1 + p / 8] >> ((p % 8) * 4)) & 15u;
+            uint32_t expected = x == 0 && y == 0       ? 2u
+                                : x == 0 || y % 2 == 0 ? 1u
+                                                       : 0u;
             ASSERT_EQ(actual, expected);
         }
     free(pixels);
@@ -75,7 +92,8 @@ static void test_corrupt_tiled_geometry_is_rejected(void) {
     ASSERT_TRUE(pixels);
     ASSERT_TRUE(dc_gpu_upgrade_dense_pixels(&gpu, bodies, &pixels, &words));
     float density;
-    ASSERT_TRUE(!dc_gpu_pixel_geometry_valid(bodies, pixels, words - 1, &density));
+    ASSERT_TRUE(
+        !dc_gpu_pixel_geometry_valid(bodies, pixels, words - 1, &density));
     pixels[8]++;
     ASSERT_TRUE(!dc_gpu_pixel_geometry_valid(bodies, pixels, words, &density));
     pixels[8]--;
@@ -105,18 +123,21 @@ static void test_truncated_dense_upgrade_keeps_input_allocation(void) {
 static void test_empty_tile_cannot_alias_an_occupied_tile(void) {
     dc_gpu_body_record_t body = {.body = {.width = 32, .height = 1},
                                  .piece_count = DC_GPU_PIXEL_BODY_FLAG | 1u};
-    uint32_t geometry[43] = {43, 1, 2, 1, 0, 0, 32, 1, 10, 0, 0, 1};
+    uint32_t geometry[43] = {43, 1, 2, 1, 0, 0, 1, 1, 10, 0, 0, 1};
     float density;
     ASSERT_TRUE(dc_gpu_pixel_geometry_valid(&body, geometry, 43, &density));
     geometry[9] = geometry[8];
     ASSERT_TRUE(!dc_gpu_pixel_geometry_valid(&body, geometry, 43, &density));
     PASS();
 }
-static void test_fracture_descriptors_cover_the_full_preallocated_tile_scratch(void) {
+static void
+test_fracture_descriptors_cover_the_full_preallocated_tile_scratch(void) {
     dc_gpu_t *gpu = NULL;
     char err[256] = {0};
-    ASSERT_TRUE(dc_gpu_create(&gpu, 67, 67, "build/shaders/pattern.comp.spv", err, sizeof(err)));
-    VkDeviceSize required = (VkDeviceSize)dc_gpu_pixel_pool_capacity(gpu) * 8 * sizeof(uint32_t);
+    ASSERT_TRUE(dc_gpu_create(&gpu, 67, 67, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    VkDeviceSize required =
+        (VkDeviceSize)dc_gpu_pixel_pool_capacity(gpu) * 8 * sizeof(uint32_t);
     ASSERT_TRUE(label_ranges[0] >= required);
     ASSERT_TRUE(label_ranges[1] >= required);
     dc_gpu_destroy(gpu);

@@ -25,6 +25,7 @@ bool dc_gpu_pixel_geometry_valid(const dc_gpu_body_record_t *body,
             return false;
     }
     uint32_t count = 0;
+    uint32_t low_x = UINT32_MAX, low_y = UINT32_MAX, high_x = 0, high_y = 0;
     double mass = 0;
     for (uint32_t tile = 0; tile < geometry[1]; tile++) {
         uint64_t offset = 8 + directory + (uint64_t)tile * 33;
@@ -42,6 +43,15 @@ bool dc_gpu_pixel_geometry_valid(const dc_gpu_body_record_t *body,
                 return false;
             if (!material)
                 continue;
+            uint32_t px = x * 16 + p % 16, py = y * 16 + p / 16;
+            if (px < low_x)
+                low_x = px;
+            if (py < low_y)
+                low_y = py;
+            if (px + 1 > high_x)
+                high_x = px + 1;
+            if (py + 1 > high_y)
+                high_y = py + 1;
             occupied++;
             mass += material == DC_GPU_BODY_WOOD         ? DC_DENSITY_WOOD
                     : material == DC_GPU_BODY_DENSE_WOOD ? DC_DENSITY_DENSE_WOOD
@@ -52,7 +62,9 @@ bool dc_gpu_pixel_geometry_valid(const dc_gpu_body_record_t *body,
             return false;
         count += occupied;
     }
-    if (!count || count != (body->piece_count & ~DC_GPU_PIXEL_BODY_FLAG))
+    if (!count || count != (body->piece_count & ~DC_GPU_PIXEL_BODY_FLAG) ||
+        geometry[4] != low_x || geometry[5] != low_y || geometry[6] != high_x ||
+        geometry[7] != high_y)
         return false;
     *density = (float)(mass / count);
     return true;
@@ -85,19 +97,33 @@ bool dc_gpu_upgrade_dense_pixels(dc_gpu_t *gpu, dc_gpu_body_record_t *bodies,
             goto invalid;
         const uint32_t *dense = *pixels + b->compound_reserved;
         uint32_t count = 0;
+        uint32_t low_x = UINT32_MAX, low_y = UINT32_MAX, high_x = 0, high_y = 0;
         for (uint64_t p = 0; p < area; p++) {
             uint32_t material = (dense[p / 8] >> ((p % 8) * 4)) & 15u;
             if (material > DC_GPU_BODY_DENSE_WOOD)
                 goto invalid;
             count += material != 0;
+            if (material) {
+                uint32_t x = p % b->body.width, y = p / b->body.width;
+                if (x < low_x)
+                    low_x = x;
+                if (y < low_y)
+                    low_y = y;
+                if (x + 1 > high_x)
+                    high_x = x + 1;
+                if (y + 1 > high_y)
+                    high_y = y + 1;
+            }
         }
         if (!count || count != (b->piece_count & ~DC_GPU_PIXEL_BODY_FLAG))
             goto invalid;
         uint32_t *shape = converted + used;
         shape[2] = dw;
         shape[3] = dh;
-        shape[6] = b->body.width;
-        shape[7] = b->body.height;
+        shape[4] = low_x;
+        shape[5] = low_y;
+        shape[6] = high_x;
+        shape[7] = high_y;
         uint32_t output = 8 + dw * dh, tiles = 0;
         for (uint32_t ty = 0; ty < dh; ty++)
             for (uint32_t tx = 0; tx < dw; tx++) {

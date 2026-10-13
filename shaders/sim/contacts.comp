@@ -175,11 +175,13 @@ void main() {
         uint other = body_slot(data[offset + 1u]); vec2 delta;
         if (other != BODY_CAPACITY && relative_body(a, bodies[other], delta)) {
             Body b = bodies[other];
+            if(pixel_body(a)) atomicAdd(data[base+9u],body_pieces(a));
             for(uint ap=0u;ap<body_pieces(a);++ap) {
                 if(!pixel_boundary(a,ap)) continue;
                 Polygon pa=body_polygon(a,ap,vec2(0));vec2 lo=vec2(1e20),hi=vec2(-1e20);
                 for(uint vertex=0u;vertex<pa.count;vertex++) {lo=min(lo,pa.vertices[vertex]-delta);hi=max(hi,pa.vertices[vertex]-delta);}
                 uvec4 query=body_piece_query(b,lo-vec2(contact_skin),hi+vec2(contact_skin));
+                if(pixel_body(b)) atomicAdd(data[base+9u],query.z*query.w);
                 for(uint ordinal=0u;ordinal<query.z*query.w;ordinal++) {
                     uint bp=query_piece(b,query,ordinal);if(!pixel_boundary(b,bp)) continue;
                 bool emitted=emit_contact(a, b.id, BODY_CONTACT, piece_material(b,bp),
@@ -189,7 +191,17 @@ void main() {
             }
         }
     } else {
-        for(uint ap=0u;ap<body_pieces(a);++ap) {
+        uvec4 query=uvec4(0,0,body_pieces(a),1);
+        if(pixel_body(a)) {
+            int x,y;
+            if(!relative_chunk(uvec2(data[offset+4u],data[offset+5u]),a.chunk_x,x)||
+               !relative_chunk(uvec2(data[offset+6u],data[offset+7u]),a.chunk_y,y)) return;
+            vec2 low=vec2(x,y)*64.-vec2(a.local_fp)/65536.;
+            query=body_piece_query(a,low-vec2(contact_skin),low+64.+vec2(contact_skin));
+            atomicAdd(data[base+9u],query.z*query.w);
+        }
+        for(uint ordinal=0u;ordinal<query.z*query.w;++ordinal) {
+            uint ap=query_piece(a,query,ordinal);
             if(!pixel_boundary(a,ap)) continue;
             bool emitted=terrain_contacts(a, kind, uvec2(data[offset + 4u], data[offset + 5u]),
                 uvec2(data[offset + 6u], data[offset + 7u]), body_polygon(a,ap,vec2(0)),ap);

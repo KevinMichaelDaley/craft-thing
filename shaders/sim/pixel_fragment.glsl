@@ -14,6 +14,7 @@ Body pixel_fragment_build(Body source,uint count,uint material,uint pointer,uint
 bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
     Body source=bodies[slot];uint area=body_pieces(source);
     uint slots[64],ids[64],counts[64],materials[64],tile_counts[64],offsets[64];
+    ivec2 lows[64],highs[64];
     uint available=1u;slots[0]=slot;ids[0]=source.id;
     for(uint i=0u;i<BODY_CAPACITY;i++)
         if(i!=slot&&bodies[i].enabled==0u&&bodies[i].reserved0==0u) slots[available++]=i;
@@ -25,9 +26,11 @@ bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
         if(material==0u||fracture_labels[seed]!=0u) continue;
         if(count==available) return false;
         uint owner=++count,head=0u,tail=1u;
+        lows[owner-1u]=pixel_piece_cell(source,seed);highs[owner-1u]=lows[owner-1u]+1;
         materials[owner-1u]=material;fracture_labels[seed]=owner;fracture_queue[0]=seed;
         while(head<tail) {
             uint cell=fracture_queue[head++];ivec2 p=pixel_piece_cell(source,cell);
+            lows[owner-1u]=min(lows[owner-1u],p);highs[owner-1u]=max(highs[owner-1u],p+1);
             for(uint n=0u;n<4u;n++) {
                 ivec2 q=p+neighbors[n];
                 if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(source.width,source.height)))||
@@ -78,6 +81,8 @@ bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
         for(uint word=0u;word<length;word++) data[pointer+word]=0u;
         for(uint word=0u;word<8u;word++) data[pointer+word]=pixel_word_at(source.compound_reserved+word);
         data[pointer]=length;data[pointer+1u]=tile_counts[child];
+        data[pointer+4u]=uint(lows[child].x);data[pointer+5u]=uint(lows[child].y);
+        data[pointer+6u]=uint(highs[child].x);data[pointer+7u]=uint(highs[child].y);
         uint tile_output=0u,directory_width=data[pointer+2u];
         for(uint tile=0u;tile<pixel_tile_count(source);tile++) {
             bool occupied=false;
