@@ -185,6 +185,9 @@ static void test_partial_grid_fracture_uses_all_tile_cells_conservatively(void) 
     }
     ASSERT_EQ(count, 4225u);
     ASSERT_TRUE(fabs(mass - 11407.5) < .002);
+    uint32_t visits = dc_gpu_contact_data(gpu)[9];
+    ASSERT_TRUE(visits > 0);
+    ASSERT_TRUE(visits <= 2u * 67u * 67u);
     free(chunks);
     dc_gpu_destroy(gpu);
     PASS();

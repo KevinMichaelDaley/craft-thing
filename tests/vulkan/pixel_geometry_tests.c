@@ -122,6 +122,30 @@ static void test_fracture_descriptors_cover_the_full_preallocated_tile_scratch(v
     dc_gpu_destroy(gpu);
     PASS();
 }
+static void test_dense_fragment_upgrade_records_actual_occupied_bounds(void) {
+    dc_gpu_t gpu = {.width = 64, .height = 64};
+    dc_gpu_body_record_t bodies[64] = {0};
+    bodies[0].body.active = 1;
+    bodies[0].body.width = 40;
+    bodies[0].body.height = 30;
+    bodies[0].piece_count = DC_GPU_PIXEL_BODY_FLAG | 60u;
+    uint32_t words = 150, *pixels = calloc(words, sizeof(*pixels));
+    ASSERT_TRUE(pixels);
+    for (unsigned y = 0; y < 15; y++)
+        for (unsigned x = 36; x < 40; x++) {
+            unsigned p = y * 40 + x;
+            pixels[p / 8] |= 1u << ((p % 8) * 4);
+        }
+    ASSERT_TRUE(dc_gpu_upgrade_dense_pixels(&gpu, bodies, &pixels, &words));
+    ASSERT_EQ(pixels[4], 36u);
+    ASSERT_EQ(pixels[5], 0u);
+    ASSERT_EQ(pixels[6], 40u);
+    ASSERT_EQ(pixels[7], 15u);
+    float density;
+    ASSERT_TRUE(dc_gpu_pixel_geometry_valid(bodies, pixels, words, &density));
+    free(pixels);
+    PASS();
+}
 
 int main(void) {
     RUN(test_version_four_upgrade_preserves_materials_and_empty_cells);
@@ -129,6 +153,7 @@ int main(void) {
     RUN(test_truncated_dense_upgrade_keeps_input_allocation);
     RUN(test_empty_tile_cannot_alias_an_occupied_tile);
     RUN(test_fracture_descriptors_cover_the_full_preallocated_tile_scratch);
+    RUN(test_dense_fragment_upgrade_records_actual_occupied_bounds);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
