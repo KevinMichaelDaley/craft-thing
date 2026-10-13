@@ -233,11 +233,19 @@ static inline VkDeviceSize dc_gpu_legacy_body_storage_bytes(const dc_gpu_t *gpu)
 static inline uint32_t dc_gpu_pixel_pool_capacity(const dc_gpu_t *gpu) {
     uint32_t cells = gpu->width * gpu->height;
     uint32_t resident = DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS;
-    return ((cells > resident ? cells : resident) + 7u) / 8u;
+    return 2u * (((cells > resident ? cells : resident) + 7u) / 8u) +
+           8u * DC_GPU_BODY_CAPACITY;
 }
 static inline uint32_t dc_gpu_pixel_pool_word_offset(const dc_gpu_t *gpu) {
     return (uint32_t)(dc_gpu_legacy_body_storage_bytes(gpu) / sizeof(uint32_t));
 }
+/** Validate a complete tiled pixel shape during explicit diagnostics/checkpoint IO. */
+bool dc_gpu_pixel_geometry_valid(const dc_gpu_body_record_t *body,
+                                 const uint32_t *geometry, uint32_t words,
+                                 float *density);
+/** Upgrade version-four dense geometry at an explicit checkpoint restore boundary. */
+bool dc_gpu_upgrade_dense_pixels(dc_gpu_t *gpu, dc_gpu_body_record_t *bodies,
+                                 uint32_t **pixels, uint32_t *words);
 static inline VkDeviceSize dc_gpu_body_storage_bytes(const dc_gpu_t *gpu) {
     return dc_gpu_legacy_body_storage_bytes(gpu) +
         (DC_GPU_PIXEL_POOL_HEADER_WORDS + 2u * dc_gpu_pixel_pool_capacity(gpu)) * sizeof(uint32_t);

@@ -58,7 +58,7 @@ bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_fea
     vec2 normal; float depth;
     if (!polygon_contact(pa, pb, normal, depth)) return false;
     if(pixel_body(a)) {
-        vec2 outward=body_rotate(-normal,-a.angle);ivec2 p=ivec2(piece_a%a.width,piece_a/a.width);
+        vec2 outward=body_rotate(-normal,-a.angle);ivec2 p=pixel_piece_cell(a,piece_a);
         bool exposed=(abs(outward.x)>1e-5&&pixel_material(a,p+ivec2(outward.x>0?1:-1,0))==0u)||
             (abs(outward.y)>1e-5&&pixel_material(a,p+ivec2(0,outward.y>0?1:-1))==0u);
         if(!exposed) return false;

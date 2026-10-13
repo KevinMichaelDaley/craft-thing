@@ -92,7 +92,7 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
     clear_transients(payload->graph);
     dc_structural_store_header_t header = {
         .magic = {'D', 'C', 'S', '1'},
-        .version = 4,
+        .version = 5,
         .body_words = STORE_BODY_WORDS,
         .graph_words = DC_STRUCTURAL_RESERVE_WORDS,
         .flags = 1u | (gpu->impact_fracture_enabled ? 2u : 0u) |
@@ -106,10 +106,14 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
         if ((!b->body.active && !b->reserved[0]) ||
             !(b->piece_count & DC_GPU_PIXEL_BODY_FLAG))
             continue;
-        uint64_t words = ((uint64_t)b->body.width * b->body.height + 7u) / 8u;
         okay = b->compound_reserved >= dc_gpu_pixel_pool_word_offset(gpu) +
                                            DC_GPU_PIXEL_POOL_HEADER_WORDS &&
-               b->compound_reserved + words <=
+               (uint64_t)b->compound_reserved + 8u <=
+                   dc_gpu_body_storage_bytes(gpu) / 4;
+        if (!okay)
+            break;
+        uint32_t words = ((uint32_t *)gpu->body_mapped)[b->compound_reserved];
+        okay = (uint64_t)b->compound_reserved + words <=
                    dc_gpu_body_storage_bytes(gpu) / 4 &&
                words <= capacity - header.reserved[1];
         if (!okay)
@@ -257,7 +261,7 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
     bool okay =
         payload && framed && fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCS1", 4) == 0 && header.version >= 1 &&
-        header.version <= 4 && header.body_words == STORE_BODY_WORDS &&
+        header.version <= 5 && header.body_words == STORE_BODY_WORDS &&
         header.graph_words == DC_STRUCTURAL_RESERVE_WORDS &&
         (header.flags & 1u) && !(header.flags & ~7u) &&
         header.reserved[0] <= DC_GPU_CHUNK_SLOTS * 2u &&
@@ -287,10 +291,12 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
     }
     if (fclose(file) != 0)
         okay = false;
-    okay = okay &&
-           header.checksum == checksum(header, payload, pixels, chunks) &&
-           dc_gpu_structure_payload_valid(gpu, payload, pixels,
-                                          header.reserved[1]);
+    okay = okay && header.checksum == checksum(header, payload, pixels, chunks);
+    if (okay && header.version == 4)
+        okay = dc_gpu_upgrade_dense_pixels(gpu, payload->bodies, &pixels,
+                                           &header.reserved[1]);
+    okay = okay && dc_gpu_structure_payload_valid(gpu, payload, pixels,
+                                                  header.reserved[1]);
     if (!okay) {
         free(payload);
         free(pixels);

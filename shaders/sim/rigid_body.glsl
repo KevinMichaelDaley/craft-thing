@@ -36,13 +36,31 @@ const uint PIXEL_BODY_FLAG=0x80000000u;
 const uint BODY_STORAGE_WORDS=64u*136u;
 uint pixel_word_at(uint index);
 bool pixel_body(Body b) {return (b.piece_count&PIXEL_BODY_FLAG)!=0u;}
+uint pixel_shape_words(Body b) {return pixel_word_at(b.compound_reserved);}
+uint pixel_tile_count(Body b) {return pixel_word_at(b.compound_reserved+1u);}
+uint pixel_directory_words(Body b) {return pixel_word_at(b.compound_reserved+2u)*pixel_word_at(b.compound_reserved+3u);}
+uint pixel_tile_offset(Body b,uint tile) {return 8u+pixel_directory_words(b)+tile*33u;}
+ivec2 pixel_piece_cell(Body b,uint p) {
+    uint coord=pixel_word_at(b.compound_reserved+pixel_tile_offset(b,p/256u));
+    return ivec2(coord&65535u,coord>>16)*16+ivec2(p%16u,(p%256u)/16u);
+}
+uint pixel_piece_at(Body b,ivec2 p) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(b.width,b.height)))) return 0xffffffffu;
+    uint directory_width=pixel_word_at(b.compound_reserved+2u);
+    uint offset=pixel_word_at(b.compound_reserved+8u+uint(p.y/16)*directory_width+uint(p.x/16));
+    if(offset==0u) return 0xffffffffu;
+    return ((offset-8u-pixel_directory_words(b))/33u)*256u+uint(p.y%16)*16u+uint(p.x%16);
+}
+uint pixel_piece_material(Body b,uint p) {
+    if(p>=pixel_tile_count(b)*256u) return 0u;
+    uint offset=pixel_tile_offset(b,p/256u)+1u+(p%256u)/8u;
+    return (pixel_word_at(b.compound_reserved+offset)>>((p%8u)*4u))&15u;
+}
 uint pixel_material(Body b,ivec2 p) {
-    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(b.width,b.height)))) return 0u;
-    uint index=uint(p.y)*b.width+uint(p.x);
-    return (pixel_word_at(b.compound_reserved+index/8u)>>((index%8u)*4u))&15u;
+    return pixel_piece_material(b,pixel_piece_at(b,p));
 }
 uint piece_material(Body b,uint p) {
-    if(pixel_body(b)) return pixel_material(b,ivec2(p%b.width,p/b.width));
+    if(pixel_body(b)) return pixel_piece_material(b,p);
     return b.piece_count==0u?b.material:b.pieces[p].material;
 }
 vec2 body_rotate(vec2 p, float angle) {
@@ -64,11 +82,12 @@ uvec4 body_piece_query(Body b,vec2 low,vec2 high) {
     return uvec4(a,max(z-a,ivec2(0)));
 }
 uint query_piece(Body b,uvec4 query,uint ordinal) {
-    return pixel_body(b)?query.x+ordinal%query.z+(query.y+ordinal/query.z)*b.width:ordinal;
+    return pixel_body(b)?pixel_piece_at(b,ivec2(query.x+ordinal%query.z,query.y+ordinal/query.z)):ordinal;
 }
 bool pixel_boundary(Body b,uint p) {
     if(!pixel_body(b)) return true;
-    ivec2 cell=ivec2(p%b.width,p/b.width);
+    if(pixel_piece_material(b,p)==0u) return false;
+    ivec2 cell=pixel_piece_cell(b,p);
     return pixel_material(b,cell)!=0u && (pixel_material(b,cell+ivec2(-1,0))==0u ||
         pixel_material(b,cell+ivec2(1,0))==0u || pixel_material(b,cell+ivec2(0,-1))==0u || pixel_material(b,cell+ivec2(0,1))==0u);
 }
@@ -81,10 +100,10 @@ vec2 body_rest_vertex(Body b, uint i) {
 vec2 body_vertex(Body b, uint i) {
     return b.center + body_rotate(body_rest_vertex(b, i) - b.center, b.angle);
 }
-uint body_pieces(Body b) { return pixel_body(b)?b.width*b.height:max(1u,b.piece_count); }
+uint body_pieces(Body b) { return pixel_body(b)?pixel_tile_count(b)*256u:max(1u,b.piece_count); }
 uint piece_vertices(Body b,uint p) { return pixel_body(b)?(piece_material(b,p)!=0u?4u:0u):b.piece_count==0u ? body_vertices(b) : b.pieces[p].count; }
 vec2 piece_rest_vertex(Body b,uint p,uint i) {
-    if(pixel_body(b)) return vec2(p%b.width,p/b.width)+vec2((i==1u||i==2u)?1:0,i>=2u?1:0);
+    if(pixel_body(b)) return vec2(pixel_piece_cell(b,p))+vec2((i==1u||i==2u)?1:0,i>=2u?1:0);
     return b.piece_count==0u ? body_rest_vertex(b,i) : vec2(b.pieces[p].vertices[i])/65536.0;
 }
 vec2 piece_vertex(Body b,uint p,uint i) {
@@ -118,10 +137,11 @@ void body_properties(inout Body b) {
     if (b.motion_ready != 0u) return;
     if(pixel_body(b)) {
         uint mass10=0u,count=0u;uvec2 first_x=uvec2(0),first_y=uvec2(0);
-        for(uint p=0u;p<b.width*b.height;p++) {
+        for(uint p=0u;p<body_pieces(b);p++) {
             uint material=piece_material(b,p);if(material==0u) continue;
             uint w=material==2u?6u:material==4u?12u:material==3u?16u:27u;
-            uint x=(p%b.width*2u+1u)*w,y=(p/b.width*2u+1u)*w;
+            uvec2 cell=uvec2(pixel_piece_cell(b,p));
+            uint x=(cell.x*2u+1u)*w,y=(cell.y*2u+1u)*w;
             uint old_x=first_x.x,old_y=first_y.x;
             first_x.x+=x;first_y.x+=y;
             first_x.y+=uint(first_x.x<old_x);first_y.y+=uint(first_y.x<old_y);
@@ -131,10 +151,10 @@ void body_properties(inout Body b) {
                         float(first_y.y)*4294967296.+float(first_y.x));
         b.mass=float(mass10)*.1;b.center=first/(2.*float(mass10));
         precise float moment=0,correction=0;
-        for(uint p=0u;p<b.width*b.height;p++) {
+        for(uint p=0u;p<body_pieces(b);p++) {
             uint material=piece_material(b,p);if(material==0u) continue;
             float w=material==2u?.6:material==4u?1.2:material==3u?1.6:2.7;
-            vec2 delta=vec2(p%b.width,p/b.width)+.5-b.center;
+            vec2 delta=vec2(pixel_piece_cell(b,p))+.5-b.center;
             float term=w*(dot(delta,delta)+1./6.)-correction;
             float next=moment+term;correction=(next-moment)-term;moment=next;
         }

@@ -47,26 +47,11 @@ static float composition_density(const dc_gpu_body_record_t *body) {
 
 static bool pixel_valid(const dc_gpu_body_record_t *b, const uint32_t *pixels,
                         uint32_t words, float *density) {
-    uint64_t area = (uint64_t)b->body.width * b->body.height;
-    uint64_t length = (area + 7u) / 8u;
-    if (!pixels || !area || b->compound_reserved > words ||
-        length > words - b->compound_reserved)
+    if (!pixels || b->compound_reserved > words ||
+        !dc_gpu_pixel_geometry_valid(b, pixels + b->compound_reserved,
+                                     words - b->compound_reserved, density))
         return false;
-    uint32_t count = 0;
-    double mass = 0;
-    for (uint64_t i = 0; i < area; i++) {
-        uint32_t material =
-            (pixels[b->compound_reserved + i / 8] >> ((i % 8) * 4)) & 15u;
-        if (material > DC_GPU_BODY_DENSE_WOOD)
-            return false;
-        if (material) {
-            count++;
-            mass += material_density(material);
-        }
-    }
-    if (!count || count != (b->piece_count & ~DC_GPU_PIXEL_BODY_FLAG))
-        return false;
-    *density = (float)(mass / count);
+    double mass = *density * (double)(b->piece_count & ~DC_GPU_PIXEL_BODY_FLAG);
     return !b->motion_ready || fabs(b->mass - mass) < fmax(.002, mass * 1e-6);
 }
 

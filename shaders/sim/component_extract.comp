@@ -93,17 +93,25 @@ void extract_legacy(uint root) {
     }
 }
 uint pool() {return graph()+40000u;}
-uint pool_capacity() {return (max(params.width*params.height,data[base()+1u]*4096u)+7u)/8u;}
+uint pool_capacity() {return 2u*((max(params.width*params.height,data[base()+1u]*4096u)+7u)/8u)+64u*8u;}
 void compact_pixels() {
     uint p=pool(),capacity=pool_capacity(),bank=1u-data[p],used=0u;
     for(uint slot=0u;slot<64u;slot++) {
         Body b=bodies[slot];if(!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) continue;
-        uint words=(b.width*b.height+7u)/8u;
+        uint words=pixel_shape_words(b);
         uint target=p+16u+bank*capacity+used;
         for(uint word=0u;word<words;word++) data[target+word]=pixel_word_at(b.compound_reserved+word);
         b.compound_reserved=BODY_STORAGE_WORDS+target;bodies[slot]=b;used+=words;
     }
     data[p]=bank;data[p+1u]=used;data[p+2u]=capacity;
+}
+bool component_tile(uint root,ivec2 low,ivec2 extent,ivec2 tile) {
+    for(int y=0;y<16;y++) for(int x=0;x<16;x++) {
+        ivec2 local=tile*16+ivec2(x,y);
+        if(any(greaterThanEqual(local,extent))) continue;
+        if(label_at(low+local)==root) return true;
+    }
+    return false;
 }
 void extract(uint root,uint bounds) {
     uint size=sizes[root];if(size==0u||labels[root]!=root) return;
@@ -121,18 +129,32 @@ void extract(uint root,uint bounds) {
         if(data[base()+14u]!=serial_before) return;
     }
     uint slot=64u;for(uint i=0u;i<64u;i++) if(bodies[i].enabled==0u&&bodies[i].reserved0==0u) {slot=i;break;}
-    uint p=pool(),words=(uint(extent.x*extent.y)+7u)/8u;
+    uvec2 directory=(uvec2(extent)+15u)/16u;
+    uint tiles=0u;
+    for(uint y=0u;y<directory.y;y++) for(uint x=0u;x<directory.x;x++)
+        if(component_tile(root,low,extent,ivec2(x,y))) tiles++;
+    uint p=pool(),words=8u+directory.x*directory.y+tiles*33u;
     if(slot==64u||words>data[p+2u]-data[p+1u]) {data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]=1u;return;}
     if(data[base()+14u]>=0x7fffffffu) return;
     uint serial=data[base()+14u]+1u,id=0x80000000u+serial;
     for(uint i=0u;i<64u;i++) if(bodies[i].id==id&&(bodies[i].enabled!=0u||bodies[i].reserved0!=0u)) return;
     uint target=p+16u+data[p]*data[p+2u]+data[p+1u];
     for(uint word=0u;word<words;word++) data[target+word]=0u;
-    for(int y=0;y<extent.y;y++) for(int x=0;x<extent.x;x++) {
-        ivec2 point=low+ivec2(x,y);if(label_at(point)!=root) continue;
-        cell_ref(point,atlas);material=cells[atlas].x&0xffffu;
-        uint piece=uint(y*extent.x+x),code=material==7u?2u:material==8u?4u:1u;
-        data[target+piece/8u]|=code<<((piece%8u)*4u);
+    data[target]=words;data[target+1u]=tiles;data[target+2u]=directory.x;data[target+3u]=directory.y;
+    data[target+4u]=0u;data[target+5u]=0u;data[target+6u]=uint(extent.x);data[target+7u]=uint(extent.y);
+    uint tile_index=0u;
+    for(uint y=0u;y<directory.y;y++) for(uint x=0u;x<directory.x;x++) {
+        if(!component_tile(root,low,extent,ivec2(x,y))) continue;
+        uint offset=8u+directory.x*directory.y+tile_index++*33u;
+        data[target+8u+y*directory.x+x]=offset;data[target+offset]=x|(y<<16);
+        for(uint local=0u;local<256u;local++) {
+            ivec2 point=ivec2(x,y)*16+ivec2(local%16u,local/16u);
+            if(any(greaterThanEqual(point,extent))) continue;
+            point+=low;if(label_at(point)!=root) continue;
+            cell_ref(point,atlas);material=cells[atlas].x&0xffffu;
+            uint code=material==7u?2u:material==8u?4u:1u;
+            data[target+offset+1u+local/8u]|=code<<((local%8u)*4u);
+        }
     }
     Body b=bodies[slot];b.x_fp=low.x<<16;b.y_fp=low.y<<16;b.vx_fp=0;b.vy_fp=0;
     b.width=uint(extent.x);b.height=uint(extent.y);b.id=id;b.enabled=1u;

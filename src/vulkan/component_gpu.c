@@ -35,8 +35,9 @@ void dc_gpu_record_component_extraction(dc_gpu_t *gpu) {
     uint32_t cells = gpu->width * gpu->height;
     for (unsigned stage = 0; stage < sizeof(modes) / sizeof(*modes); stage++) {
         push[2] = modes[stage];
-        uint32_t work = push[2] == 1 ? (cells + 31u) / 32u
-                        : push[2] == 3 || push[2] == 4 ? cells : 1;
+        uint32_t work = push[2] == 1                   ? (cells + 31u) / 32u
+                        : push[2] == 3 || push[2] == 4 ? cells
+                                                       : 1;
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
         vkCmdDispatch(gpu->command, (work + 127u) / 128u, 1, 1);

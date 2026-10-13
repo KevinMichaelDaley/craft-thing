@@ -12,9 +12,8 @@ Body pixel_fragment_build(Body source,uint count,uint material,uint pointer,uint
     body_cache_bounds(b);return b;
 }
 bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
-    Body source=bodies[slot];uint area=source.width*source.height;
-    if(area>max(params.width*params.height,data[base()+1u]*4096u)) return false;
-    uint slots[64],ids[64],counts[64],materials[64];
+    Body source=bodies[slot];uint area=body_pieces(source);
+    uint slots[64],ids[64],counts[64],materials[64],tile_counts[64],offsets[64];
     uint available=1u;slots[0]=slot;ids[0]=source.id;
     for(uint i=0u;i<BODY_CAPACITY;i++)
         if(i!=slot&&bodies[i].enabled==0u&&bodies[i].reserved0==0u) slots[available++]=i;
@@ -28,13 +27,13 @@ bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
         uint owner=++count,head=0u,tail=1u;
         materials[owner-1u]=material;fracture_labels[seed]=owner;fracture_queue[0]=seed;
         while(head<tail) {
-            uint cell=fracture_queue[head++];ivec2 p=ivec2(cell%source.width,cell/source.width);
+            uint cell=fracture_queue[head++];ivec2 p=pixel_piece_cell(source,cell);
             for(uint n=0u;n<4u;n++) {
                 ivec2 q=p+neighbors[n];
                 if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(source.width,source.height)))||
                    (p[axis]<plane)!=(q[axis]<plane)) continue;
-                uint next=uint(q.y)*source.width+uint(q.x);
-                if(fracture_labels[next]!=0u||pixel_material(source,q)==0u) continue;
+                uint next=pixel_piece_at(source,q);
+                if(next==0xffffffffu||fracture_labels[next]!=0u||piece_material(source,next)==0u) continue;
                 fracture_labels[next]=owner;fracture_queue[tail++]=next;
             }
         }
@@ -42,11 +41,20 @@ bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
     }
     if(count<2u) return false;
     uint pool=graph()+40000u,capacity=data[pool+2u],bank=1u-data[pool],used=0u;
-    uint words=(area+7u)/8u;
+    uint directory=pixel_directory_words(source),total=0u;
     for(uint i=0u;i<BODY_CAPACITY;i++) if(i!=slot&&pixel_body(bodies[i])&&
         (bodies[i].enabled!=0u||bodies[i].reserved0!=0u))
-        used+=(bodies[i].width*bodies[i].height+7u)/8u;
-    if(used>capacity||count> (capacity-used)/words) return false;
+        used+=pixel_shape_words(bodies[i]);
+    for(uint child=0u;child<count;child++) {
+        tile_counts[child]=0u;
+        for(uint tile=0u;tile<pixel_tile_count(source);tile++) {
+            bool occupied=false;
+            for(uint cell=0u;cell<256u;cell++) if(fracture_labels[tile*256u+cell]==child+1u) {occupied=true;break;}
+            tile_counts[child]+=uint(occupied);
+        }
+        offsets[child]=total;total+=8u+directory+tile_counts[child]*33u;
+    }
+    if(used>capacity||total>capacity-used) return false;
     uint next=data[base()+14u];
     for(uint child=1u;child<count;child++) {
         bool unique=false;
@@ -61,26 +69,39 @@ bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
     uint target=pool+16u+bank*capacity,other_used=0u;
     for(uint i=0u;i<BODY_CAPACITY;i++) {
         Body b=bodies[i];if(i==slot||!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) continue;
-        uint length=(b.width*b.height+7u)/8u;
+        uint length=pixel_shape_words(b);
         for(uint word=0u;word<length;word++) data[target+other_used+word]=pixel_word_at(b.compound_reserved+word);
         other_used+=length;
     }
     for(uint child=0u;child<count;child++) {
-        uint pointer=target+used+child*words;
-        for(uint word=0u;word<words;word++) {
-            uint packed=0u;
-            for(uint nibble=0u;nibble<8u;nibble++) {
-                uint index=word*8u+nibble;
-                if(index<area&&fracture_labels[index]==child+1u)
-                    packed|=piece_material(source,index)<<(nibble*4u);
+        uint pointer=target+used+offsets[child],length=8u+directory+tile_counts[child]*33u;
+        for(uint word=0u;word<length;word++) data[pointer+word]=0u;
+        for(uint word=0u;word<8u;word++) data[pointer+word]=pixel_word_at(source.compound_reserved+word);
+        data[pointer]=length;data[pointer+1u]=tile_counts[child];
+        uint tile_output=0u,directory_width=data[pointer+2u];
+        for(uint tile=0u;tile<pixel_tile_count(source);tile++) {
+            bool occupied=false;
+            for(uint cell=0u;cell<256u;cell++) if(fracture_labels[tile*256u+cell]==child+1u) {occupied=true;break;}
+            if(!occupied) continue;
+            uint offset=8u+directory+tile_output++*33u;
+            uint coord=pixel_word_at(source.compound_reserved+pixel_tile_offset(source,tile));
+            data[pointer+offset]=coord;
+            data[pointer+8u+(coord>>16)*directory_width+(coord&65535u)]=offset;
+            for(uint word=0u;word<32u;word++) {
+                uint packed=0u;
+                for(uint nibble=0u;nibble<8u;nibble++) {
+                    uint index=tile*256u+word*8u+nibble;
+                    if(fracture_labels[index]==child+1u)
+                        packed|=piece_material(source,index)<<(nibble*4u);
+                }
+                data[pointer+offset+1u+word]=packed;
             }
-            data[pointer+word]=packed;
         }
     }
     float mass=0,inertia=0,angular=0,energy=0;vec2 momentum=vec2(0);
     for(uint child=0u;child<count;child++) {
         Body b=pixel_fragment_build(source,counts[child],materials[child],
-            BODY_STORAGE_WORDS+target+used+child*words,generation);
+            BODY_STORAGE_WORDS+target+used+offsets[child],generation);
         vec2 r=body_rotate(b.center-source.center,source.angle),v=vec2(b.vx_fp,b.vy_fp)/65536.;
         mass+=b.mass;inertia+=b.inertia+b.mass*dot(r,r);momentum+=b.mass*v;
         angular+=b.inertia*b.angular_velocity+body_cross(r,b.mass*v);
@@ -97,18 +118,18 @@ bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
     for(uint i=0u;i<BODY_CAPACITY;i++) {
         Body b=bodies[i];if(i==slot||!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) continue;
         b.compound_reserved=BODY_STORAGE_WORDS+target+other_used;
-        other_used+=(b.width*b.height+7u)/8u;bodies[i]=b;
+        other_used+=pixel_shape_words(b);bodies[i]=b;
     }
     uint root=source.id,root_generation=generation,record=graph()+36000u+slot*4u;
     if(data[record]!=0u) {root=data[record];root_generation=data[record+1u];}
     for(uint child=0u;child<count;child++) {
         Body b=pixel_fragment_build(source,counts[child],materials[child],
-            BODY_STORAGE_WORDS+target+used+child*words,generation);
+            BODY_STORAGE_WORDS+target+used+offsets[child],generation);
         b.id=ids[child];bodies[slots[child]]=b;
         record=graph()+36000u+slots[child]*4u;
         data[record]=root;data[record+1u]=root_generation;data[record+2u]=next;data[record+3u]=1u;
     }
-    data[pool]=bank;data[pool+1u]=used+count*words;data[base()+14u]=next;
+    data[pool]=bank;data[pool+1u]=used+total;data[base()+14u]=next;
     data[base()+16u]=(params.width+15u)/16u;data[base()+17u]=(params.height+15u)/16u;data[base()+18u]=1u;
     return true;
 }
