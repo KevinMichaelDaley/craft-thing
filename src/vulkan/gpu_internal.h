@@ -10,6 +10,8 @@
 enum {
     DC_GPU_STRUCTURAL_TAG = 0x53545231u,
     DC_STRUCTURAL_HEADER_WORDS = 32,
+    DC_GPU_PIXEL_BODY_FLAG = 0x80000000u,
+    DC_GPU_PIXEL_POOL_HEADER_WORDS = 16,
     DC_STRUCTURAL_COMPONENT_DIRTY_WORD = 20,
     DC_STRUCTURAL_GRAPH_WORDS = 2320,
     DC_STRUCTURAL_RESERVE_WORDS = 40000,
@@ -219,13 +221,26 @@ static inline uint32_t *dc_gpu_contact_data(const dc_gpu_t *gpu) {
     return dc_gpu_broadphase_data(gpu) + dc_gpu_contact_word_offset(gpu);
 }
 
-static inline VkDeviceSize dc_gpu_body_storage_bytes(const dc_gpu_t *gpu) {
+static inline VkDeviceSize dc_gpu_legacy_body_storage_bytes(const dc_gpu_t *gpu) {
     return sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
         (VkDeviceSize)(dc_gpu_contact_word_offset(gpu) + DC_GPU_CONTACT_HEADER_WORDS) * sizeof(uint32_t) +
         (VkDeviceSize)DC_GPU_CONTACT_CAPACITY * sizeof(dc_gpu_contact_t) +
         (DC_GPU_SOLVER_HEADER_WORDS + DC_GPU_BODY_CAPACITY * DC_GPU_SOLVER_BODY_WORDS +
          DC_GPU_CONTACT_CAPACITY * DC_GPU_SOLVER_CONTACT_WORDS) * sizeof(uint32_t) +
         (DC_STRUCTURAL_HEADER_WORDS + DC_GPU_CHUNK_SLOTS*8u + DC_STRUCTURAL_RESERVE_WORDS)*sizeof(uint32_t);
+}
+
+static inline uint32_t dc_gpu_pixel_pool_capacity(const dc_gpu_t *gpu) {
+    uint32_t cells = gpu->width * gpu->height;
+    uint32_t resident = DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS;
+    return ((cells > resident ? cells : resident) + 7u) / 8u;
+}
+static inline uint32_t dc_gpu_pixel_pool_word_offset(const dc_gpu_t *gpu) {
+    return (uint32_t)(dc_gpu_legacy_body_storage_bytes(gpu) / sizeof(uint32_t));
+}
+static inline VkDeviceSize dc_gpu_body_storage_bytes(const dc_gpu_t *gpu) {
+    return dc_gpu_legacy_body_storage_bytes(gpu) +
+        (DC_GPU_PIXEL_POOL_HEADER_WORDS + 2u * dc_gpu_pixel_pool_capacity(gpu)) * sizeof(uint32_t);
 }
 
 static inline uint32_t dc_gpu_solver_word_offset(const dc_gpu_t *gpu) {

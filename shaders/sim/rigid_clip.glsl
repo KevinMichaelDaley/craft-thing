@@ -2,6 +2,7 @@
 #define DC_RIGID_CLIP_GLSL
 float body_cell_volume(Body b,uint piece,ivec2 cell,float fraction,out vec2 center_point) {
     vec2 polygon[12],next[12];uint count=piece_vertices(b,piece);
+    if(count<3u) {center_point=vec2(0);return 0;}
     vec2 origin=vec2(b.x_fp,b.y_fp)/65536.0;
     for(uint i=0u;i<count;i++) polygon[i]=origin+piece_vertex(b,piece,i);
     vec2 low=vec2(cell)+vec2(0,1-fraction),high=vec2(cell)+1;
@@ -27,6 +28,7 @@ float body_cell_volume(Body b,uint piece,ivec2 cell,float fraction,out vec2 cent
     return max(twice*.5,0);
 }
 float body_face_coverage(Body b,uint piece,vec2 start,vec2 stop) {
+    if(piece_vertices(b,piece)==0u) return 0;
     float low=0,high=1;vec2 origin=vec2(b.x_fp,b.y_fp)/65536.0;
     for(uint i=0u;i<piece_vertices(b,piece);i++) {
         vec2 a=origin+piece_vertex(b,piece,i);

@@ -4,9 +4,10 @@
 const float BODY_FIXED_SCALE = 65536.0;
 
 bool piece_cell_overlap(Body body,uint piece, ivec2 cell) {
+    if(piece_vertices(body,piece)==0u) return false;
     vec2 low = vec2((cell << 16) - ivec2(body.x_fp, body.y_fp)) / BODY_FIXED_SCALE;
     vec2 high = low + vec2(1.0);
-    vec2 bounds_low = vec2(BODY_MAX_SIDE), bounds_high = vec2(0.0);
+    vec2 bounds_low = vec2(1e20), bounds_high = vec2(-1e20);
     for (uint i = 0u; i < piece_vertices(body,piece); ++i) {
         vec2 a = piece_vertex(body,piece,i);
         vec2 b = piece_vertex(body,piece,(i + 1u) % piece_vertices(body,piece));
@@ -18,7 +19,9 @@ bool piece_cell_overlap(Body body,uint piece, ivec2 cell) {
     return all(greaterThan(high, bounds_low)) && all(lessThan(low, bounds_high));
 }
 bool convex_cell_overlap(Body body,ivec2 cell) {
-    for(uint p=0u;p<body_pieces(body);++p) if(piece_cell_overlap(body,p,cell)) return true;
+    vec2 low=vec2(cell)-vec2(body.x_fp,body.y_fp)/65536.;
+    uvec4 query=body_piece_query(body,low,low+1);
+    for(uint i=0u;i<query.z*query.w;++i) if(piece_cell_overlap(body,query_piece(body,query,i),cell)) return true;
     return false;
 }
 

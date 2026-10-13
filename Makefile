@@ -19,7 +19,7 @@ GLSLANG ?= glslangValidator
 
 GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/broadphase_gpu.o build/contact_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
 GPU_OBJ += build/solver_gpu.o
-GPU_OBJ += build/compound_gpu.o build/component_gpu.o
+GPU_OBJ += build/compound_gpu.o build/component_gpu.o build/pixel_gpu.o
 GPU_OBJ += build/structural_store_gpu.o
 GPU_OBJ += build/structural_store_validate.o
 GPU_OBJ += build/structural_store_chunk.o
@@ -583,3 +583,6 @@ build/shaders/mpm_active.comp.spv: shaders/sim/rigid_body.glsl include/dungeoncr
 
 build/pixel_component_tests: tests/vulkan/pixel_component_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ) build/component_extraction_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+build/pixel_gpu.o: src/vulkan/pixel_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@

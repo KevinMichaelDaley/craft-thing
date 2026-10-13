@@ -112,6 +112,8 @@ bool dc_gpu_read_body_shape(dc_gpu_t *gpu, uint32_t id, dc_gpu_body_shape_t *sha
     if (!gpu || !shape || !id) return error(err, cap, "Invalid body shape readback");
     uint32_t slot = body_slot(gpu, id);
     if (slot == DC_GPU_BODY_CAPACITY) return error(err, cap, "GPU body ID not found");
+    if (((dc_gpu_body_record_t *)gpu->body_mapped)[slot].piece_count & DC_GPU_PIXEL_BODY_FLAG)
+        return error(err, cap, "Pixel bodies require the variable-size geometry diagnostic");
     *shape = ((dc_gpu_body_record_t *)gpu->body_mapped)[slot].shape;
     return true;
 }

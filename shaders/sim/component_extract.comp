@@ -8,6 +8,7 @@ layout(set=0,binding=4,std430) buffer Storage { Body bodies[BODY_CAPACITY]; uint
 layout(set=0,binding=28,std430) readonly buffer Labels { uint labels[]; };
 layout(set=0,binding=29,std430) buffer Candidates { uint candidates[]; };
 layout(set=0,binding=30,std430) readonly buffer Sizes { uint sizes[]; };
+uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
 layout(push_constant) uniform Params { uint width,height,mode,count; uvec2 origin_x,origin_y; } params;
 uint base() {
     uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
@@ -25,7 +26,7 @@ bool cell_ref(ivec2 p,out uint index) {
     index=(page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);return true;
 }
 uint label_at(ivec2 p) {return labels[uint(p.y)*params.width+uint(p.x)];}
-void extract(uint root) {
+void extract_legacy(uint root) {
     uint size=sizes[root];if(size==0u||size>256u||labels[root]!=root) return;
     uint root_atlas;ivec2 root_point=ivec2(root%params.width,root/params.width);
     if(!cell_ref(root_point,root_atlas)) return;
@@ -91,6 +92,71 @@ void extract(uint root) {
         if(cell_ref(p,atlas)&&label_at(p)==root) cells[atlas].x=0u;
     }
 }
+uint pool() {return graph()+40000u;}
+uint pool_capacity() {return (max(params.width*params.height,data[base()+1u]*4096u)+7u)/8u;}
+void compact_pixels() {
+    uint p=pool(),capacity=pool_capacity(),bank=1u-data[p],used=0u;
+    for(uint slot=0u;slot<64u;slot++) {
+        Body b=bodies[slot];if(!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) continue;
+        uint words=(b.width*b.height+7u)/8u;
+        uint target=p+16u+bank*capacity+used;
+        for(uint word=0u;word<words;word++) data[target+word]=pixel_word_at(b.compound_reserved+word);
+        b.compound_reserved=BODY_STORAGE_WORDS+target;bodies[slot]=b;used+=words;
+    }
+    data[p]=bank;data[p+1u]=used;data[p+2u]=capacity;
+}
+void extract(uint root) {
+    uint size=sizes[root];if(size==0u||labels[root]!=root) return;
+    uint atlas;ivec2 first=ivec2(root%params.width,root/params.width);
+    if(!cell_ref(first,atlas)) return;
+    uint material=cells[atlas].x&0xffffu;
+    if(material!=1u&&material!=7u&&material!=8u) return;
+    ivec2 low=first,high=first;uint found=0u;bool cold=false;
+    const ivec2 neighbors[4]=ivec2[4](ivec2(-1,0),ivec2(1,0),ivec2(0,-1),ivec2(0,1));
+    for(uint index=0u;index<params.width*params.height;index++) {
+        if(labels[index]!=root) continue;
+        ivec2 point=ivec2(index%params.width,index/params.width);
+        if(!cell_ref(point,atlas)) {cold=true;continue;}
+        found++;low=min(low,point);high=max(high,point);
+        for(uint neighbor=0u;neighbor<4u;neighbor++) {uint other;if(!cell_ref(point+neighbors[neighbor],other)) cold=true;}
+    }
+    if(cold||found!=size) return;
+    ivec2 extent=high-low+1;
+    uint serial_before=data[base()+14u];
+    if(size<=256u&&all(lessThanEqual(extent,ivec2(16)))) {
+        extract_legacy(root);
+        if(data[base()+14u]!=serial_before) return;
+    }
+    uint slot=64u;for(uint i=0u;i<64u;i++) if(bodies[i].enabled==0u&&bodies[i].reserved0==0u) {slot=i;break;}
+    uint p=pool(),words=(uint(extent.x*extent.y)+7u)/8u;
+    if(slot==64u||words>data[p+2u]-data[p+1u]) {data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]=1u;return;}
+    if(data[base()+14u]>=0x7fffffffu) return;
+    uint serial=data[base()+14u]+1u,id=0x80000000u+serial;
+    for(uint i=0u;i<64u;i++) if(bodies[i].id==id&&(bodies[i].enabled!=0u||bodies[i].reserved0!=0u)) return;
+    uint target=p+16u+data[p]*data[p+2u]+data[p+1u];
+    for(uint word=0u;word<words;word++) data[target+word]=0u;
+    for(int y=0;y<extent.y;y++) for(int x=0;x<extent.x;x++) {
+        ivec2 point=low+ivec2(x,y);if(label_at(point)!=root) continue;
+        cell_ref(point,atlas);material=cells[atlas].x&0xffffu;
+        uint piece=uint(y*extent.x+x),code=material==7u?2u:material==8u?4u:1u;
+        data[target+piece/8u]|=code<<((piece%8u)*4u);
+    }
+    Body b=bodies[slot];b.x_fp=low.x<<16;b.y_fp=low.y<<16;b.vx_fp=0;b.vy_fp=0;
+    b.width=uint(extent.x);b.height=uint(extent.y);b.id=id;b.enabled=1u;
+    b.previous_x_fp=b.x_fp;b.previous_y_fp=b.y_fp;b.reserved0=0x53545232u;b.reserved1=1u;
+    shifted_chunk(params.origin_x,low.x/64,b.chunk_x);shifted_chunk(params.origin_y,low.y/64,b.chunk_y);
+    b.local_fp=(low%64)<<16;b.visible=1u;b.angle=0;b.angular_velocity=0;
+    b.motion_flags=0u;b.motion_ready=0u;b.piece_count=PIXEL_BODY_FLAG|size;
+    b.compound_reserved=BODY_STORAGE_WORDS+target;b.vertex_count=0u;b.material=piece_material(b,0u);
+    for(uint vertex=0u;vertex<8u;vertex++) b.vertices[vertex]=ivec2(0);
+    for(uint piece=0u;piece<4u;piece++) {b.pieces[piece].count=0u;b.pieces[piece].material=0u;for(uint vertex=0u;vertex<8u;vertex++) b.pieces[piece].vertices[vertex]=ivec2(0);}
+    b.previous_angle=0;b.rest_position=ivec2(b.x_fp,b.y_fp);b.rest_angle=0;b.rest_ticks=0u;
+    body_properties(b);body_cache_bounds(b);bodies[slot]=b;data[p+1u]+=words;data[base()+14u]=serial;
+    uint record=graph()+36000u+slot*4u;data[record]=id;data[record+1u]=1u;data[record+2u]=serial;data[record+3u]=1u;
+    for(int y=0;y<extent.y;y++) for(int x=0;x<extent.x;x++) {
+        ivec2 point=low+ivec2(x,y);if(label_at(point)==root&&cell_ref(point,atlas)) cells[atlas].x=0u;
+    }
+}
 void main() {
     if(data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]==0u) return;
     uint total=params.width*params.height, words=(total+31u)/32u;
@@ -99,12 +165,13 @@ void main() {
         uint mask=0u;
         for(uint bit=0u;bit<32u;bit++) {
             uint root=word*32u+bit;if(root>=total) break;
-            if(sizes[root]!=0u&&sizes[root]<=256u&&labels[root]==root) mask|=1u<<bit;
+            if(sizes[root]!=0u&&labels[root]==root) mask|=1u<<bit;
         }
         candidates[word]=mask;return;
     }
     if(gl_GlobalInvocationID.x!=0u) return;
     data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]=0u;
+    compact_pixels();
     for(uint word=0u;word<words;word++) {
         uint mask=candidates[word];
         while(mask!=0u) {uint bit=uint(findLSB(mask));extract(word*32u+bit);mask&=mask-1u;}

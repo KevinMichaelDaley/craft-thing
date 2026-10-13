@@ -8,6 +8,7 @@ layout(set = 0, binding = 4, std430) buffer Bodies {
     Body bodies[BODY_CAPACITY];
     uint data[];
 };
+uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
 layout(push_constant) uniform Params {
     uint width, height, mode, body_count;
     uvec2 origin_x, origin_y;

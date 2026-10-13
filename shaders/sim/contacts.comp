@@ -13,6 +13,7 @@ layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 chunk_ce
 layout(set = 0, binding = 2, std430) readonly buffer Pages { uint pages[]; };
 layout(set = 0, binding = 19, std430) readonly buffer Particles { Particle particles[]; };
 layout(set = 0, binding = 4, std430) buffer Bodies { Body bodies[BODY_CAPACITY]; uint data[]; };
+uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
 layout(push_constant) uniform Params {
     uint width, height, mode, body_count;
     uvec2 origin_x, origin_y;
@@ -56,6 +57,12 @@ bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_fea
                   uvec2 feature_x, uvec2 feature_y, Polygon pa, Polygon pb,uint piece_a,uint piece_b) {
     vec2 normal; float depth;
     if (!polygon_contact(pa, pb, normal, depth)) return false;
+    if(pixel_body(a)) {
+        vec2 outward=body_rotate(-normal,-a.angle);ivec2 p=ivec2(piece_a%a.width,piece_a/a.width);
+        bool exposed=(abs(outward.x)>1e-5&&pixel_material(a,p+ivec2(outward.x>0?1:-1,0))==0u)||
+            (abs(outward.y)>1e-5&&pixel_material(a,p+ivec2(0,outward.y>0?1:-1))==0u);
+        if(!exposed) return false;
+    }
     vec2 point_a, point_b; uint feature_a, feature_b;
     contact_witnesses(pa, pb, normal, point_a, point_b, feature_a, feature_b);
     uvec2 ax, ay, bx, by; ivec2 alocal, blocal;
@@ -67,7 +74,8 @@ bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_fea
     uint index = atomicAdd(data[base + 1u], 1u);
     if (index >= data[base + 3u]) { atomicOr(data[base + 2u], 1u); return true; }
     uint offset = base + CONTACT_HEADER_WORDS + index * CONTACT_WORDS;
-    uint material_a = a.vertex_count == 0u ? 1u : a.material;
+    uint material_a = piece_material(a,piece_a);
+    if(material_a==0u) material_a=1u;
     float fa = body_friction(material_a);
     float fb = kind == BODY_CONTACT ? body_friction(material_b) : cell_friction(material_b);
     float restitution_a = material_a == 2u ? 0.1 : 0.05;
@@ -99,7 +107,8 @@ bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygo
     if (!relative_chunk(chunk_x, params.origin_x, cx) || !relative_chunk(chunk_y, params.origin_y, cy)) return false;
     ivec2 tile = ivec2(cx, cy), tile_low = tile * 64;
     ivec2 current = ivec2(body.x_fp, body.y_fp);
-    vec2 shape_low,shape_high; body_bounds(body,shape_low,shape_high);
+    vec2 shape_low=vec2(1e20),shape_high=vec2(-1e20);
+    for(uint vertex=0u;vertex<polygon.count;vertex++) {shape_low=min(shape_low,polygon.vertices[vertex]);shape_high=max(shape_high,polygon.vertices[vertex]);}
     ivec2 low = max(ivec2(floor(vec2(current)/65536.0+shape_low))-1,tile_low);
     ivec2 high = min(ivec2(ceil(vec2(current)/65536.0+shape_high))+1,tile_low+64);
     uint page = 0u;
@@ -152,14 +161,22 @@ void main() {
         uint other = body_slot(data[offset + 1u]); vec2 delta;
         if (other != BODY_CAPACITY && relative_body(a, bodies[other], delta)) {
             Body b = bodies[other];
-            for(uint ap=0u;ap<body_pieces(a);++ap) for(uint bp=0u;bp<body_pieces(b);++bp) {
-                bool emitted=emit_contact(a, b.id, BODY_CONTACT, b.vertex_count == 0u ? 1u : b.material,
+            for(uint ap=0u;ap<body_pieces(a);++ap) {
+                if(!pixel_boundary(a,ap)) continue;
+                Polygon pa=body_polygon(a,ap,vec2(0));vec2 lo=vec2(1e20),hi=vec2(-1e20);
+                for(uint vertex=0u;vertex<pa.count;vertex++) {lo=min(lo,pa.vertices[vertex]-delta);hi=max(hi,pa.vertices[vertex]-delta);}
+                uvec4 query=body_piece_query(b,lo-vec2(contact_skin),hi+vec2(contact_skin));
+                for(uint ordinal=0u;ordinal<query.z*query.w;ordinal++) {
+                    uint bp=query_piece(b,query,ordinal);if(!pixel_boundary(b,bp)) continue;
+                bool emitted=emit_contact(a, b.id, BODY_CONTACT, piece_material(b,bp),
                     0u, uvec2(0), uvec2(0), body_polygon(a,ap,vec2(0)), body_polygon(b,bp,delta),ap,bp);
                 found=found || emitted;
+                }
             }
         }
     } else {
         for(uint ap=0u;ap<body_pieces(a);++ap) {
+            if(!pixel_boundary(a,ap)) continue;
             bool emitted=terrain_contacts(a, kind, uvec2(data[offset + 4u], data[offset + 5u]),
                 uvec2(data[offset + 6u], data[offset + 7u]), body_polygon(a,ap,vec2(0)),ap);
             found=found || emitted;

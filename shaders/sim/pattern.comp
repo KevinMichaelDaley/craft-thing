@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "rigid_body.glsl"
 #include "rigid_shape.glsl"
+#include "rigid_clip.glsl"
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(set = 0, binding = 0, std430) buffer Cells { uint cells[]; };
 layout(set = 0, binding = 1, std430) buffer ChunkCells { uvec2 chunk_cells[]; };
@@ -19,6 +20,7 @@ layout(set = 0, binding = 18, std430) readonly buffer SlotSeeds { uint seeds[]; 
 layout(set = 0, binding = 19, std430) buffer Particles { Particle particles[]; };
 layout(set = 0, binding = 20, std430) buffer ParticleCounts { uint particle_counts[]; };
 layout(set = 0, binding = 31, std430) readonly buffer FluidPrevious { uint previous_mass[]; };
+uint pixel_word_at(uint index) {return body_data[index-BODY_STORAGE_WORDS];}
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -80,12 +82,18 @@ uint structural_pixel(ivec2 cell,uint id,uint background) {
     for(uint slot=0u;slot<64u;slot++) {
         Body body=bodies[slot];if(body.enabled==0u||body.id!=id) continue;
         uint foreground=structure_color(body);
-        if(body.reserved0!=0x53545231u&&body.piece_count!=0u)
-            for(uint piece=0u;piece<body.piece_count;piece++) if(piece_cell_overlap(body,piece,cell)) {
-                uint material=body.pieces[piece].material;
-                foreground=material==2u?0xff287aaau:material==4u?0xff205f85u:material==3u?0xffb0b8c0u:0xff909090u;
-                break;
+        if(body.reserved0!=0x53545231u&&body.piece_count!=0u) {
+            vec2 low=vec2(cell)-vec2(body.x_fp,body.y_fp)/65536.;uvec4 query=body_piece_query(body,low,low+1);
+            vec3 weighted=vec3(0);float total=0;
+            for(uint ordinal=0u;ordinal<query.z*query.w;ordinal++) {
+                uint piece=query_piece(body,query,ordinal);vec2 point;
+                float volume=body_cell_volume(body,piece,cell,1,point);if(volume<=0) continue;
+                uint material=piece_material(body,piece);
+                uint color=material==2u?0xff287aaau:material==4u?0xff205f85u:material==3u?0xffb0b8c0u:0xff909090u;
+                weighted+=volume*unpacked_color(color);total+=volume;
             }
+            if(total>0) foreground=packed_color(weighted/total);
+        }
         uint index=uint(cell.y)*params.width+uint(cell.x);
         float coverage=min(float(occupancy[2u*params.width*params.height+index])/65536.,1.);
         return packed_color(mix(unpacked_color(background),unpacked_color(foreground),coverage));

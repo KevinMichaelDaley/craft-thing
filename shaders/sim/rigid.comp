@@ -10,7 +10,8 @@ layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 chunk_ce
 layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
 layout(set = 0, binding = 3, std430) buffer Occupancy { uint occupancy[]; };
 
-layout(set = 0, binding = 4, std430) buffer Bodies { Body bodies[]; };
+layout(set = 0, binding = 4, std430) buffer Bodies { Body bodies[BODY_CAPACITY]; uint data[]; };
+uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -139,14 +140,18 @@ void main() {
         ivec2 extent = ivec2(body.width, body.height);
         bool inside = all(greaterThanEqual(cell, origin)) &&
                       all(lessThan(cell, origin + extent));
-        if (body.vertex_count != 0u || body.angle != 0.0 || (params.mode & PHYSICAL_MASK) != 0u)
+        if (pixel_body(body) || body.vertex_count != 0u || body.angle != 0.0 || (params.mode & PHYSICAL_MASK) != 0u)
             inside = potential && convex_cell_overlap(body,cell);
         if ((params.mode & PHYSICAL_MASK) != 0u) crossed = crossed || potential;
         if (inside && (current == 0u || body.id < current)) current = body.id;
-        if (inside) for(uint piece=0u;piece<body_pieces(body);piece++) {
+        vec2 query_low=vec2(cell)-vec2(body.x_fp,body.y_fp)/65536.;
+        uvec4 query=body_piece_query(body,query_low,query_low+1);
+        if (inside) for(uint ordinal=0u;ordinal<query.z*query.w;ordinal++) {
+            uint piece=query_piece(body,query,ordinal);
             vec2 center_point;volume+=body_cell_volume(body,piece,cell,1,center_point);
         }
-        if(face_potential) for(uint piece=0u;piece<body_pieces(body);piece++) {
+        if(face_potential) for(uint ordinal=0u;ordinal<query.z*query.w;ordinal++) {
+            uint piece=query_piece(body,query,ordinal);
             face_covered.x+=body_face_coverage(body,piece,vec2(cell)+vec2(1,0),vec2(cell)+1);
             face_covered.y+=body_face_coverage(body,piece,vec2(cell)+vec2(0,1),vec2(cell)+1);
         }

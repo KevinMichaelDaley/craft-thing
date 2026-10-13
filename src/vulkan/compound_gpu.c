@@ -86,6 +86,10 @@ bool dc_gpu_read_compound_shape(dc_gpu_t *gpu,uint32_t id,dc_gpu_compound_shape_
     dc_gpu_refresh_body_registry(gpu);
     if(gpu && shape && id) for(uint32_t i=0;i<gpu->body_count;++i) if(gpu->body_ids[i]==id) {
         const dc_gpu_body_record_t *record=(dc_gpu_body_record_t *)gpu->body_mapped+i;
+        if(record->piece_count&DC_GPU_PIXEL_BODY_FLAG) {
+            if(err&&cap) snprintf(err,cap,"Pixel bodies require the variable-size geometry diagnostic");
+            return false;
+        }
         *shape=(dc_gpu_compound_shape_t){.count=record->piece_count};
         memcpy(shape->pieces,record->pieces,sizeof(shape->pieces));
         return true;

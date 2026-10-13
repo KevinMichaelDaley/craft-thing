@@ -33,6 +33,15 @@ typedef struct {
 
 typedef struct dc_gpu dc_gpu_t;
 
+/** A unit solid pixel in a body's canonical local grid; zero material is a hole. */
+typedef struct { uint32_t x, y, material; } dc_gpu_body_pixel_t;
+/** Explicit diagnostic of exact variable-size geometry. A NULL output returns
+ * the required occupied-pixel count; insufficient output capacity fails safely. */
+bool dc_gpu_read_pixel_shape(dc_gpu_t *gpu, uint32_t id,
+    dc_gpu_body_pixel_t *pixels, uint32_t pixel_capacity, uint32_t *pixel_count,
+    char *err_buf, uint32_t err_cap);
+
+
 /** Enable the GPU contact solver; disabled contexts retain legacy diagnostic motion. */
 bool dc_gpu_set_rigid_solver(dc_gpu_t *gpu, bool enabled);
 /** Set angular state and kinematic/rotation-lock flags. Density comes from material.

@@ -101,7 +101,9 @@ void hydro_impulse(uint slot,inout Body b) {
         ivec2 cell=ivec2(x,y);vec2 flow;float fraction=hydro_sample(cell,flow);
         if(pooled) fraction=clamp(float(y)+1-waterline,0,1);
         if(fraction<=0) continue;
-        for(uint piece=0u;piece<body_pieces(b);piece++) {
+        vec2 query_low=vec2(cell)-origin;uvec4 query=body_piece_query(b,query_low,query_low+1);
+        for(uint ordinal=0u;ordinal<query.z*query.w;ordinal++) {
+            uint piece=query_piece(b,query,ordinal);
             vec2 point;float volume=body_cell_volume(b,piece,cell,fraction,point);
             if(volume<=0) continue;
             vec2 r=point-center,relative=flow-v-b.angular_velocity*vec2(-r.y,r.x);

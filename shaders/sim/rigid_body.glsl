@@ -32,9 +32,45 @@ struct Body {
     uint rest_ticks;
 };
 
+const uint PIXEL_BODY_FLAG=0x80000000u;
+const uint BODY_STORAGE_WORDS=64u*136u;
+uint pixel_word_at(uint index);
+bool pixel_body(Body b) {return (b.piece_count&PIXEL_BODY_FLAG)!=0u;}
+uint pixel_material(Body b,ivec2 p) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(b.width,b.height)))) return 0u;
+    uint index=uint(p.y)*b.width+uint(p.x);
+    return (pixel_word_at(b.compound_reserved+index/8u)>>((index%8u)*4u))&15u;
+}
+uint piece_material(Body b,uint p) {
+    if(pixel_body(b)) return pixel_material(b,ivec2(p%b.width,p/b.width));
+    return b.piece_count==0u?b.material:b.pieces[p].material;
+}
 vec2 body_rotate(vec2 p, float angle) {
     float c = cos(angle), s = sin(angle);
     return vec2(c * p.x - s * p.y, s * p.x + c * p.y);
+}
+vec2 body_local_point(Body b,vec2 world_relative) {
+    return b.center+body_rotate(world_relative-b.center,-b.angle);
+}
+uvec4 body_piece_query(Body b,vec2 low,vec2 high) {
+    if(!pixel_body(b)) return uvec4(0,0,max(1u,b.piece_count),1);
+    vec2 lo=vec2(1e20),hi=vec2(-1e20);
+    for(uint i=0u;i<4u;i++) {
+        vec2 p=body_local_point(b,vec2((i==1u||i==2u)?high.x:low.x,i>=2u?high.y:low.y));
+        lo=min(lo,p);hi=max(hi,p);
+    }
+    ivec2 a=clamp(ivec2(floor(lo-.00002)),ivec2(0),ivec2(b.width,b.height));
+    ivec2 z=clamp(ivec2(ceil(hi+.00002)),ivec2(0),ivec2(b.width,b.height));
+    return uvec4(a,max(z-a,ivec2(0)));
+}
+uint query_piece(Body b,uvec4 query,uint ordinal) {
+    return pixel_body(b)?query.x+ordinal%query.z+(query.y+ordinal/query.z)*b.width:ordinal;
+}
+bool pixel_boundary(Body b,uint p) {
+    if(!pixel_body(b)) return true;
+    ivec2 cell=ivec2(p%b.width,p/b.width);
+    return pixel_material(b,cell)!=0u && (pixel_material(b,cell+ivec2(-1,0))==0u ||
+        pixel_material(b,cell+ivec2(1,0))==0u || pixel_material(b,cell+ivec2(0,-1))==0u || pixel_material(b,cell+ivec2(0,1))==0u);
 }
 float body_cross(vec2 a, vec2 b) { return a.x * b.y - a.y * b.x; }
 uint body_vertices(Body b) { return b.vertex_count == 0u ? 4u : b.vertex_count; }
@@ -45,9 +81,10 @@ vec2 body_rest_vertex(Body b, uint i) {
 vec2 body_vertex(Body b, uint i) {
     return b.center + body_rotate(body_rest_vertex(b, i) - b.center, b.angle);
 }
-uint body_pieces(Body b) { return max(1u,b.piece_count); }
-uint piece_vertices(Body b,uint p) { return b.piece_count==0u ? body_vertices(b) : b.pieces[p].count; }
+uint body_pieces(Body b) { return pixel_body(b)?b.width*b.height:max(1u,b.piece_count); }
+uint piece_vertices(Body b,uint p) { return pixel_body(b)?(piece_material(b,p)!=0u?4u:0u):b.piece_count==0u ? body_vertices(b) : b.pieces[p].count; }
 vec2 piece_rest_vertex(Body b,uint p,uint i) {
+    if(pixel_body(b)) return vec2(p%b.width,p/b.width)+vec2((i==1u||i==2u)?1:0,i>=2u?1:0);
     return b.piece_count==0u ? body_rest_vertex(b,i) : vec2(b.pieces[p].vertices[i])/65536.0;
 }
 vec2 piece_vertex(Body b,uint p,uint i) {
@@ -55,6 +92,10 @@ vec2 piece_vertex(Body b,uint p,uint i) {
 }
 void body_bounds(Body b, out vec2 low, out vec2 high) {
     low = vec2(1e20); high = vec2(-1e20);
+    if(pixel_body(b)) {
+        for(uint i=0u;i<4u;i++) {vec2 p=vec2((i==1u||i==2u)?b.width:0u,i>=2u?b.height:0u);p=b.center+body_rotate(p-b.center,b.angle);low=min(low,p);high=max(high,p);}
+        return;
+    }
     for(uint piece=0u;piece<body_pieces(b);++piece)
         for (uint i = 0u; i < piece_vertices(b,piece); ++i) {
             vec2 p = piece_vertex(b,piece,i); low = min(low,p); high = max(high,p);
@@ -75,6 +116,23 @@ void piece_properties(Body b,uint piece,out float area,out vec2 center,out float
 }
 void body_properties(inout Body b) {
     if (b.motion_ready != 0u) return;
+    if(pixel_body(b)) {
+        uint mass10=0u,count=0u;vec2 first=vec2(0);float moment=0;
+        for(uint p=0u;p<b.width*b.height;p++) {
+            uint material=piece_material(b,p);if(material==0u) continue;
+            uint w=material==2u?6u:material==4u?12u:material==3u?16u:27u;
+            vec2 c=vec2(p%b.width,p/b.width)+.5;
+            mass10+=w;count++;first+=float(w)*c;
+            moment+=float(w)*(dot(c,c)+1./6.);
+        }
+        b.mass=float(mass10)*.1;b.center=first/float(mass10);
+        b.inertia=max(moment*.1-b.mass*dot(b.center,b.center),1e-12);
+        b.density=b.mass/float(count);
+        b.inverse_mass=(b.motion_flags&1u)==0u?1./b.mass:0.;
+        b.inverse_inertia=(b.motion_flags&3u)==0u?1./b.inertia:0.;
+        b.radius=max(max(length(b.center),length(vec2(b.width,0)-b.center)),max(length(vec2(0,b.height)-b.center),length(vec2(b.width,b.height)-b.center)));
+        b.motion_ready=1u;return;
+    }
     vec2 weighted=vec2(0);float area=0.0,total_mass=0.0;
     float areas[BODY_PIECES],inertias[BODY_PIECES],densities[BODY_PIECES];
     vec2 centers[BODY_PIECES];
@@ -112,7 +170,7 @@ void body_cache_bounds(inout Body b) {
     b.bounds_high=(current+ivec2(ceil(high*65536.0))+65535)>>16;
     b.swept_low=min(current,previous)>>16;
     b.swept_high=(max(current,previous)+(ivec2(b.width,b.height)<<16)+
-        (b.vertex_count!=0u ? 65535 : 0))>>16;
+        ((b.vertex_count!=0u || pixel_body(b)) ? 65535 : 0))>>16;
     if(b.angle!=0.0 || b.previous_angle!=0.0) {
         float radius=b.radius;
         b.swept_low=(min(current,previous)+ivec2(floor((b.center-radius)*65536.0)))>>16;
