@@ -125,11 +125,38 @@ static void test_pixel_fracture_preserves_material_volume(void) {
     dc_gpu_destroy(gpu);
     PASS();
 }
+static void test_large_pixel_body_has_accurate_mass_center_and_inertia(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    for (unsigned y = 1; y < 63; y++)
+        for (unsigned x = 1; x < 63; x++)
+            chunk->cells[y * 64 + x].material = DC_MATERIAL_STONE;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    dc_gpu_body_motion_t motion;
+    ASSERT_TRUE(dc_gpu_read_body_motion(gpu, 0x80000001u, &motion, err, sizeof(err)));
+    double mass = 62 * 62 * 2.7, inertia = mass * (62 * 62 + 62 * 62) / 12;
+    printf("large mass %.9g inertia %.9g expected %.9g\n", motion.mass, motion.inertia, inertia);
+    ASSERT_TRUE(fabs(motion.mass - mass) < mass * 1e-6);
+    ASSERT_TRUE(fabs(motion.center_x - 31) < 1e-5);
+    ASSERT_TRUE(fabs(motion.center_y - 31) < 1e-5);
+    ASSERT_TRUE(fabs(motion.inertia - inertia) < inertia * 1e-6);
+    free(chunk);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
 int main(void) {
     RUN(test_component_above_256_pixels_is_not_disqualified);
     RUN(test_long_thin_component_above_16_cells_is_not_disqualified);
     RUN(test_branching_component_above_four_rectangles_is_not_disqualified);
     RUN(test_pixel_fracture_preserves_material_volume);
+    RUN(test_large_pixel_body_has_accurate_mass_center_and_inertia);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
