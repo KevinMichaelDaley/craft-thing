@@ -242,6 +242,32 @@ static void test_mixed_concave_cut_preserves_three_connected_material_fragments(
     dc_gpu_destroy(gpu);
     PASS();
 }
+static void test_sparse_pixel_geometry_does_not_store_the_empty_bounding_area(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    for (unsigned y = 1; y < 63; y++)
+        for (unsigned x = 1; x < 63; x++)
+            if (x == 1 || x == 62 || y == 1 || y == 62)
+                chunk->cells[y * 64 + x].material = DC_MATERIAL_STONE;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    const dc_gpu_body_record_t *body = gpu->body_mapped;
+    uint32_t *pool = (uint32_t *)gpu->body_mapped + dc_gpu_pixel_pool_word_offset(gpu);
+    ASSERT_TRUE(body[0].piece_count & DC_GPU_PIXEL_BODY_FLAG);
+    ASSERT_TRUE(pool[1] < (body[0].body.width * body[0].body.height + 7) / 8);
+    uint32_t count;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, 0x80000001u, NULL, 0, &count, err, sizeof(err)));
+    ASSERT_EQ(count, 244u);
+    free(chunk);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
 int main(void) {
     RUN(test_component_above_256_pixels_is_not_disqualified);
     RUN(test_long_thin_component_above_16_cells_is_not_disqualified);
@@ -250,6 +276,7 @@ int main(void) {
     RUN(test_large_pixel_body_has_accurate_mass_center_and_inertia);
     RUN(test_pending_component_is_not_starved_by_new_lower_roots);
     RUN(test_mixed_concave_cut_preserves_three_connected_material_fragments);
+    RUN(test_sparse_pixel_geometry_does_not_store_the_empty_bounding_area);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
