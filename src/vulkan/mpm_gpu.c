@@ -53,7 +53,7 @@ bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
            dc_gpu_make_mapped_buffer(gpu, component_cells * sizeof(uint32_t),
                &gpu->mpm_label_b_buffer, &gpu->mpm_label_b_memory,
                &gpu->mpm_label_b_mapped, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, grid * sizeof(uint32_t),
+           dc_gpu_make_mapped_buffer(gpu, component_cells * sizeof(uint32_t),
                &gpu->mpm_component_size_buffer, &gpu->mpm_component_size_memory,
                &gpu->mpm_component_size_mapped, err, cap);
 }

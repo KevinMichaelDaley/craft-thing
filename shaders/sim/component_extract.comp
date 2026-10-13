@@ -3,242 +3,237 @@
 #include "rigid_body.glsl"
 layout(local_size_x=128) in;
 layout(set=0,binding=1,std430) buffer Cells { uvec2 cells[]; };
-layout(set=0,binding=2,std430) readonly buffer Pages { uint pages[]; };
 layout(set=0,binding=4,std430) buffer Storage { Body bodies[BODY_CAPACITY]; uint data[]; };
-layout(set=0,binding=28,std430) readonly buffer Labels { uint labels[]; };
+layout(set=0,binding=27,std430) buffer Activity { uint activity[]; };
+layout(set=0,binding=28,std430) buffer Labels { uint labels[]; };
 layout(set=0,binding=29,std430) buffer Candidates { uint candidates[]; };
-layout(set=0,binding=30,std430) readonly buffer Sizes { uint sizes[]; };
-uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
+layout(set=0,binding=30,std430) buffer Sizes { uint sizes[]; };
 layout(push_constant) uniform Params { uint width,height,mode,count; uvec2 origin_x,origin_y; } params;
+uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
 uint base() {
     uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
     return 8u+2u*w*h+4096u*8u+12u+8192u*32u+16u+64u*32u+8192u*16u;
 }
 uint graph() {return base()+32u+data[base()+1u]*8u;}
-bool cell_ref(ivec2 p,out uint index) {
-    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return false;
-    uint page=pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
-    if(page==0u||page>data[base()+1u]) return false;
-    uint slot=base()+32u+(page-1u)*8u;uvec2 x,y;
-    if(!shifted_chunk(params.origin_x,p.x/64,x)||!shifted_chunk(params.origin_y,p.y/64,y)) return false;
-    if(data[slot+5u]==0u||any(notEqual(uvec2(data[slot],data[slot+1u]),x))||
-       any(notEqual(uvec2(data[slot+2u],data[slot+3u]),y))) return false;
-    index=(page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);return true;
-}
-uint label_at(ivec2 p) {return labels[uint(p.y)*params.width+uint(p.x)];}
-bool rigid_material(uint material) {return material==1u||material==7u||material==8u;}
-bool component_pixel(uint root,ivec2 point,out uint atlas) {
-    return cell_ref(point,atlas)&&label_at(point)==root&&rigid_material(cells[atlas].x&0xffffu);
-}
-void extract_legacy(uint root) {
-    uint size=sizes[root];if(size==0u||size>256u||labels[root]!=root) return;
-    uint root_atlas;ivec2 root_point=ivec2(root%params.width,root/params.width);
-    if(!cell_ref(root_point,root_atlas)) return;
-    uint root_material=cells[root_atlas].x&0xffffu;
-    if(root_material!=1u&&root_material!=7u&&root_material!=8u) return;
-    ivec2 first=ivec2(root%params.width,root/params.width),low=first,high=first;
-    uint found=0u;bool cold=false;
-    const ivec2 neighbors[4]=ivec2[4](ivec2(-1,0),ivec2(1,0),ivec2(0,-1),ivec2(0,1));
-    for(int y=0;y<16;y++) for(int x=-15;x<=15;x++) {
-        ivec2 p=first+ivec2(x,y);uint atlas;
-        if(!component_pixel(root,p,atlas)) continue;
-        found++;low=min(low,p);high=max(high,p);
-        for(uint n=0u;n<4u;n++) {uint other;if(!cell_ref(p+neighbors[n],other)) cold=true;}
-    }
-    if(cold||found!=size||any(greaterThan(high-low+1,ivec2(16)))) return;
-    uint occupied[256];
-    for(uint i=0u;i<256u;i++) occupied[i]=0u;
-    ivec2 extent=high-low+1;
-    for(int y=0;y<extent.y;y++) for(int x=0;x<extent.x;x++) {
-        ivec2 p=low+ivec2(x,y);uint atlas;
-        if(component_pixel(root,p,atlas)) occupied[uint(y*16+x)]=cells[atlas].x&0xffffu;
-    }
-    Shape pieces[4];uint piece_count=0u;
-    for(int y=0;y<extent.y;y++) for(int x=0;x<extent.x;x++) {
-        uint material=occupied[uint(y*16+x)];if(material==0u) continue;
-        if(piece_count==4u) return;
-        int right=x+1;while(right<extent.x&&occupied[uint(y*16+right)]==material) right++;
-        int bottom=y+1;
-        while(bottom<extent.y) {
-            bool row=true;for(int xx=x;xx<right;xx++) if(occupied[uint(bottom*16+xx)]!=material) row=false;
-            if(!row) break;bottom++;
-        }
-        Shape shape;shape.count=4u;shape.material=material==7u?2u:material==8u?4u:1u;
-        for(uint v=0u;v<8u;v++) shape.vertices[v]=ivec2(0);
-        shape.vertices[0]=ivec2(x,y)<<16;shape.vertices[1]=ivec2(right,y)<<16;
-        shape.vertices[2]=ivec2(right,bottom)<<16;shape.vertices[3]=ivec2(x,bottom)<<16;
-        pieces[piece_count++]=shape;
-        for(int yy=y;yy<bottom;yy++) for(int xx=x;xx<right;xx++) occupied[uint(yy*16+xx)]=0u;
-    }
-    uint slot=64u;for(uint i=0u;i<64u;i++) if(bodies[i].enabled==0u&&bodies[i].reserved0==0u) {slot=i;break;}
-    if(slot==64u) {data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]=1u;return;}
-    if(data[base()+14u]>=0x7fffffffu) return;
-    uint serial=data[base()+14u]+1u,id=0x80000000u+serial;
-    for(uint i=0u;i<64u;i++) if(bodies[i].id==id&&(bodies[i].enabled!=0u||bodies[i].reserved0!=0u)) return;
-    Body body=bodies[slot];
-    body.x_fp=low.x<<16;body.y_fp=low.y<<16;body.vx_fp=0;body.vy_fp=0;
-    body.width=uint(extent.x);body.height=uint(extent.y);body.id=id;body.enabled=1u;
-    body.previous_x_fp=body.x_fp;body.previous_y_fp=body.y_fp;body.reserved0=0x53545232u;body.reserved1=1u;
-    shifted_chunk(params.origin_x,low.x/64,body.chunk_x);shifted_chunk(params.origin_y,low.y/64,body.chunk_y);
-    body.local_fp=(low%64)<<16;body.visible=1u;body.angle=0;body.angular_velocity=0;
-    body.motion_flags=0u;body.motion_ready=0u;body.piece_count=piece_count==1u?0u:piece_count;
-    body.compound_reserved=0u;body.vertex_count=pieces[0].count;body.material=pieces[0].material;
-    for(uint v=0u;v<8u;v++) body.vertices[v]=pieces[0].vertices[v];
-    for(uint p=0u;p<4u;p++) {body.pieces[p].count=0u;body.pieces[p].material=0u;
-        for(uint v=0u;v<8u;v++) body.pieces[p].vertices[v]=ivec2(0);
-        if(p<piece_count&&piece_count>1u) body.pieces[p]=pieces[p];}
-    body.previous_angle=0;body.rest_position=ivec2(body.x_fp,body.y_fp);body.rest_angle=0;body.rest_ticks=0u;
-    body_properties(body);body_cache_bounds(body);
-    bodies[slot]=body;data[base()+14u]=serial;
-    uint record=graph()+36000u+slot*4u;data[record]=id;data[record+1u]=1u;data[record+2u]=serial;data[record+3u]=1u;
-    for(int y=0;y<extent.y;y++) for(int x=0;x<extent.x;x++) {
-        ivec2 p=low+ivec2(x,y);uint atlas;
-        if(component_pixel(root,p,atlas)) cells[atlas].x=0u;
-    }
-}
+uint total() {return data[base()+1u]*4096u;}
 uint pool() {return graph()+40000u;}
-uint pool_capacity() {return 2u*((max(params.width*params.height,data[base()+1u]*4096u)+7u)/8u)+64u*8u;}
-void compact_pixels() {
-    uint p=pool(),capacity=pool_capacity(),bank=1u-data[p],used=0u;
-    for(uint slot=0u;slot<64u;slot++) {
-        Body b=bodies[slot];if(!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) continue;
-        uint words=pixel_shape_words(b);
-        uint target=p+16u+bank*capacity+used;
-        for(uint word=0u;word<words;word++) data[target+word]=pixel_word_at(b.compound_reserved+word);
-        b.compound_reserved=BODY_STORAGE_WORDS+target;bodies[slot]=b;used+=words;
-    }
-    data[p]=bank;data[p+1u]=used;data[p+2u]=capacity;
+uint capacity() {return 2u*((max(params.width*params.height,total())+7u)/8u)+64u*8u;}
+uint record(uint c) {return graph()+36300u+c*24u;}
+uint registry(uint s) {return base()+32u+s*8u;}
+bool solid(uint i) {uint m=cells[i].x&65535u;return data[registry(i/4096u)+5u]!=0u&&(m==1u||m==7u||m==8u);}
+uint neighbor(uint i,uint axis) {
+    uint p=i%4096u,x=p%64u,y=p/64u;
+    if(axis==0u&&x>0u) return i-1u;
+    if(axis==1u&&x<63u) return i+1u;
+    if(axis==2u&&y>0u) return i-64u;
+    if(axis==3u&&y<63u) return i+64u;
+    uint s=labels[total()+i/4096u*4u+axis];
+    return s==0xffffffffu?s:s*4096u+(axis==0u?y*64u+63u:axis==1u?y*64u:axis==2u?4032u+x:x);
 }
-bool component_tile(uint root,ivec2 low,ivec2 extent,ivec2 tile) {
-    for(int y=0;y<16;y++) for(int x=0;x<16;x++) {
-        ivec2 local=tile*16+ivec2(x,y);
-        if(any(greaterThanEqual(local,extent))) continue;
-        uint atlas;if(component_pixel(root,low+local,atlas)) return true;
-    }
-    return false;
+ivec2 relative_point(uint root,uint i) {
+    uint a=registry(root/4096u),b=registry(i/4096u);
+    return ivec2(data[b]-data[a],data[b+2u]-data[a+2u])*64+ivec2(i%64u,(i%4096u)/64u);
 }
-void extract(uint root,uint bounds) {
-    uint size=sizes[root];if(size==0u||labels[root]!=root) return;
-    uint atlas;ivec2 first=ivec2(root%params.width,root/params.width);
-    if(!cell_ref(first,atlas)) return;
-    uint material=cells[atlas].x&0xffffu;
-    if(material!=1u&&material!=7u&&material!=8u) return;
-    uint root_material=material==7u?2u:material==8u?4u:1u;
-    ivec2 low=ivec2(data[bounds+1u],data[bounds+2u]),high=ivec2(data[bounds+3u],data[bounds+4u]);
-    if(data[bounds+6u]!=0u||data[bounds+5u]!=size) return;
-    ivec2 extent=high-low+1;
-    uint serial_before=data[base()+14u];
-    if(size<=256u&&all(lessThanEqual(extent,ivec2(16)))) {
-        extract_legacy(root);
-        if(data[base()+14u]!=serial_before) return;
+shared uint values[128],slots[128];
+shared uvec2 moments_x[128],moments_y[128];
+shared float moments_i[128];
+uvec2 add_wide(uvec2 a,uvec2 b) {uint lo=a.x+b.x;return uvec2(lo,a.y+b.y+uint(lo<a.x));}
+void scan_values() {
+    barrier();
+    for(uint stride=1u;stride<128u;stride*=2u) {
+        uint lane=gl_LocalInvocationID.x,v=lane>=stride?values[lane-stride]:0u;
+        barrier();values[lane]+=v;barrier();
     }
-    uint slot=64u;for(uint i=0u;i<64u;i++) if(bodies[i].enabled==0u&&bodies[i].reserved0==0u) {slot=i;break;}
-    uvec2 directory=(uvec2(extent)+15u)/16u;
-    uint tiles=0u;
-    for(uint y=0u;y<directory.y;y++) for(uint x=0u;x<directory.x;x++)
-        if(component_tile(root,low,extent,ivec2(x,y))) tiles++;
-    uint p=pool(),words=8u+directory.x*directory.y+tiles*33u;
-    if(slot==64u||words>data[p+2u]-data[p+1u]) {data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]=1u;return;}
-    if(data[base()+14u]>=0x7fffffffu) return;
-    uint serial=data[base()+14u]+1u,id=0x80000000u+serial;
-    for(uint i=0u;i<64u;i++) if(bodies[i].id==id&&(bodies[i].enabled!=0u||bodies[i].reserved0!=0u)) return;
-    uint target=p+16u+data[p]*data[p+2u]+data[p+1u];
-    for(uint word=0u;word<words;word++) data[target+word]=0u;
-    data[target]=words;data[target+1u]=tiles;data[target+2u]=directory.x;data[target+3u]=directory.y;
-    data[target+4u]=0u;data[target+5u]=0u;data[target+6u]=uint(extent.x);data[target+7u]=uint(extent.y);
-    uint tile_index=0u;
-    for(uint y=0u;y<directory.y;y++) for(uint x=0u;x<directory.x;x++) {
-        if(!component_tile(root,low,extent,ivec2(x,y))) continue;
-        uint offset=8u+directory.x*directory.y+tile_index++*33u;
-        data[target+8u+y*directory.x+x]=offset;data[target+offset]=x|(y<<16);
-        for(uint local=0u;local<256u;local++) {
-            ivec2 point=ivec2(x,y)*16+ivec2(local%16u,local/16u);
-            if(any(greaterThanEqual(point,extent))) continue;
-            point+=low;if(!component_pixel(root,point,atlas)) continue;
-            material=cells[atlas].x&0xffffu;
-            uint code=material==7u?2u:material==8u?4u:1u;
-            data[target+offset+1u+local/8u]|=code<<((local%8u)*4u);
-        }
-    }
-    Body b=bodies[slot];b.x_fp=low.x<<16;b.y_fp=low.y<<16;b.vx_fp=0;b.vy_fp=0;
-    b.width=uint(extent.x);b.height=uint(extent.y);b.id=id;b.enabled=1u;
-    b.previous_x_fp=b.x_fp;b.previous_y_fp=b.y_fp;b.reserved0=0x53545232u;b.reserved1=1u;
-    shifted_chunk(params.origin_x,low.x/64,b.chunk_x);shifted_chunk(params.origin_y,low.y/64,b.chunk_y);
-    b.local_fp=(low%64)<<16;b.visible=1u;b.angle=0;b.angular_velocity=0;
-    b.motion_flags=0u;b.motion_ready=0u;b.piece_count=PIXEL_BODY_FLAG|size;
-    b.compound_reserved=BODY_STORAGE_WORDS+target;b.vertex_count=0u;b.material=root_material;
-    for(uint vertex=0u;vertex<8u;vertex++) b.vertices[vertex]=ivec2(0);
-    for(uint piece=0u;piece<4u;piece++) {b.pieces[piece].count=0u;b.pieces[piece].material=0u;for(uint vertex=0u;vertex<8u;vertex++) b.pieces[piece].vertices[vertex]=ivec2(0);}
-    b.previous_angle=0;b.rest_position=ivec2(b.x_fp,b.y_fp);b.rest_angle=0;b.rest_ticks=0u;
-    body_properties(b);body_cache_bounds(b);bodies[slot]=b;data[p+1u]+=words;data[base()+14u]=serial;
-    uint record=graph()+36000u+slot*4u;data[record]=id;data[record+1u]=1u;data[record+2u]=serial;data[record+3u]=1u;
-    for(int y=0;y<extent.y;y++) for(int x=0;x<extent.x;x++) {
-        ivec2 point=low+ivec2(x,y);if(component_pixel(root,point,atlas)) cells[atlas].x=0u;
-    }
+}
+void initialize_body(uint r) {
+    uint slot=data[r+12u],root=data[r],source=registry(root/4096u);
+    ivec2 low=ivec2(data[r+1u],data[r+2u]),extent=ivec2(data[r+3u],data[r+4u])-low+1;
+    Body b=bodies[slot];b.x_fp=0;b.y_fp=0;b.vx_fp=0;b.vy_fp=0;
+    b.width=uint(extent.x);b.height=uint(extent.y);b.id=0x80000000u+data[r+13u];b.enabled=1u;
+    b.previous_x_fp=0;b.previous_y_fp=0;b.reserved0=0x53545232u;b.reserved1=1u;
+    shifted_chunk(uvec2(data[source],data[source+1u]),low.x>>6,b.chunk_x);
+    shifted_chunk(uvec2(data[source+2u],data[source+3u]),low.y>>6,b.chunk_y);
+    b.local_fp=(low&63)<<16;b.visible=0u;b.angle=0.;b.angular_velocity=0.;
+    b.motion_flags=0u;b.motion_ready=1u;b.piece_count=PIXEL_BODY_FLAG|data[r+5u];
+    b.compound_reserved=BODY_STORAGE_WORDS+data[r+11u];b.vertex_count=0u;
+    uint m=cells[root].x&65535u;b.material=m==7u?2u:m==8u?4u:1u;
+    for(uint i=0u;i<8u;i++) b.vertices[i]=ivec2(0);
+    for(uint p=0u;p<4u;p++) {b.pieces[p].count=0u;b.pieces[p].material=0u;for(uint i=0u;i<8u;i++) b.pieces[p].vertices[i]=ivec2(0);}
+    b.previous_angle=0.;b.rest_position=ivec2(0);b.rest_angle=0.;b.rest_ticks=0u;
+    b.mass=float(data[r+15u])*.1;b.center=vec2(uintBitsToFloat(data[r+20u]),uintBitsToFloat(data[r+21u]));
+    b.inertia=max(uintBitsToFloat(data[r+22u]),1e-12);b.density=b.mass/float(data[r+5u]);
+    b.inverse_mass=1./b.mass;b.inverse_inertia=1./b.inertia;
+    vec2 hi=vec2(extent);b.radius=max(max(length(b.center),length(vec2(hi.x,0)-b.center)),max(length(vec2(0,hi.y)-b.center),length(hi-b.center)));
+    body_cache_bounds(b);bodies[slot]=b;
+    uint owner=graph()+36000u+slot*4u;
+    data[owner]=b.id;data[owner+1u]=1u;data[owner+2u]=data[r+13u];data[owner+3u]=1u;
 }
 void main() {
+    if(params.mode==26u) {
+        uint lane=gl_LocalInvocationID.x,enabled=uint(data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]!=0u);
+        if(lane<18u) activity[lane]=lane%3u==0u?enabled*(lane==0u||lane==12u?(total()+127u)/128u:lane==6u?64u:lane==9u?0u:lane==15u?data[base()+1u]*4u:1u):1u;
+        return;
+    }
     if(data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]==0u) return;
-    uint total=params.width*params.height, words=(total+31u)/32u;
+    uint i=gl_GlobalInvocationID.x,lane=gl_LocalInvocationID.x,n=total(),g=graph();
+    if(params.mode==9u) {
+        uint key=gl_WorkGroupID.x;
+        if(key>=data[base()+1u]*4u) return;
+        uint own=registry(key/4u),axis=key%4u,found=0xffffffffu;uvec2 x,y;
+        bool valid=shifted_chunk(uvec2(data[own],data[own+1u]),axis==0u?-1:axis==1u?1:0,x)&&shifted_chunk(uvec2(data[own+2u],data[own+3u]),axis==2u?-1:axis==3u?1:0,y);
+        if(valid&&data[own+5u]!=0u&&lane<data[base()+1u]) {
+            uint other=registry(lane);
+            if(data[other+5u]!=0u&&all(equal(uvec2(data[other],data[other+1u]),x))&&all(equal(uvec2(data[other+2u],data[other+3u]),y))) found=lane;
+        }
+        values[lane]=found;
+        for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) values[lane]=min(values[lane],values[lane+stride]);}
+        barrier();if(lane==0u) labels[n+key]=values[0];return;
+    }
+    if(params.mode>=10u&&params.mode<=14u) {
+        if(i>=n) return;
+        if(params.mode==10u) {labels[i]=solid(i)?i:0xffffffffu;candidates[i]=labels[i];sizes[i]=0u;return;}
+        if(!solid(i)) return;
+        if(params.mode==11u) candidates[i]=labels[i];
+        if(params.mode==12u) for(uint axis=1u;axis<=3u;axis+=2u) {
+            uint other=neighbor(i,axis);if(other==0xffffffffu||!solid(other)) continue;
+            uint a=labels[i],b=labels[other];uint old=atomicMin(candidates[max(a,b)],min(a,b));if(old>min(a,b)) atomicOr(activity[9],1u);
+        }
+        if(params.mode==13u) {uint p=candidates[i],root=candidates[p];if(labels[i]!=root) atomicOr(activity[9],1u);labels[i]=root;}
+        if(params.mode==14u) atomicAdd(sizes[labels[i]],1u);
+        return;
+    }
     if(params.mode==1u) {
-        uint word=gl_GlobalInvocationID.x;if(word>=words) return;
-        uint mask=0u;
-        for(uint bit=0u;bit<32u;bit++) {
-            uint root=word*32u+bit;if(root>=total) break;
-            uint atlas;
-            if(sizes[root]!=0u&&labels[root]==root&&component_pixel(root,ivec2(root%params.width,root/params.width),atlas)) mask|=1u<<bit;
-        }
-        candidates[word]=mask;return;
+        if(i>=n) return;
+        uint root=(data[g+36256u]%n+i)%n;candidates[i]=uint(solid(root)&&labels[root]==root&&sizes[root]!=0u);return;
     }
-    uint g=graph(),batch=g+36257u,records=g+36300u;
-    if(params.mode==2u) {
-        if(gl_GlobalInvocationID.x!=0u) return;
-        uint cursor=data[g+36256u]%total,count=0u,next=cursor;
-        for(uint section=0u;section<2u&&count<64u;section++) {
-            uint begin=section==0u?cursor:0u,end=section==0u?total:cursor;
-            if(begin==end) continue;
-            for(uint word=begin/32u;word<=(end-1u)/32u&&count<64u;word++) {
-                uint mask=candidates[word],lo=word==begin/32u?begin%32u:0u;
-                uint hi=word==(end-1u)/32u?(end-1u)%32u+1u:32u;
-                mask&=0xffffffffu<<lo;mask&=hi==32u?0xffffffffu:(1u<<hi)-1u;
-                while(mask!=0u&&count<64u) {
-                    uint root=word*32u+uint(findLSB(mask)),record=records+count*8u;
-                    data[record]=root;data[record+1u]=params.width;data[record+2u]=params.height;
-                    data[record+3u]=0u;data[record+4u]=0u;data[record+5u]=0u;data[record+6u]=0u;
-                    count++;next=(root+1u)%total;mask&=mask-1u;
-                }
-            }
-        }
-        data[batch]=count;data[batch+1u]=next;data[batch+2u]=uint(count==64u);return;
-    }
+    if(params.mode==2u) {if(i<n) sizes[n+i]=candidates[i]+(i>=params.count?candidates[i-params.count]:0u);return;}
+    if(params.mode==3u) {if(i<n) candidates[i]=sizes[n+i];return;}
     if(params.mode==4u) {
-        uint index=gl_GlobalInvocationID.x;if(index<total) candidates[index]=0xffffffffu;return;
-    }
-    if(params.mode==5u) {
-        uint index=gl_GlobalInvocationID.x;
-        if(index<data[batch]) candidates[data[records+index*8u]]=index;
+        if(i>=n) return;
+        uint rank=candidates[i],previous=i==0u?0u:candidates[i-1u];
+        if(rank>previous&&rank<=64u) {
+            uint r=record(rank-1u);for(uint word=0u;word<24u;word++) data[r+word]=0u;
+            data[r]=(data[g+36256u]%n+i)%n;data[r+1u]=0xffffffffu;data[r+2u]=0xffffffffu;
+        }
+        if(i==n-1u) {data[g+36257u]=min(rank,64u);data[g+36259u]=uint(rank>64u);}
         return;
     }
-    if(params.mode==3u) {
-        uint index=gl_GlobalInvocationID.x;if(index>=total) return;
-        uint root=labels[index];if(root>=total) return;
-        uint selected=candidates[root];if(selected>=data[batch]) return;
-        uint record=records+selected*8u,atlas;ivec2 point=ivec2(index%params.width,index/params.width);
-        if(!cell_ref(point,atlas)) {atomicOr(data[record+6u],1u);return;}
-        if(!rigid_material(cells[atlas].x&0xffffu)) return;
-        atomicMin(data[record+1u],uint(point.x));atomicMin(data[record+2u],uint(point.y));
-        atomicMax(data[record+3u],uint(point.x));atomicMax(data[record+4u],uint(point.y));
-        atomicAdd(data[record+5u],1u);
-        const ivec2 neighbors[4]=ivec2[4](ivec2(-1,0),ivec2(1,0),ivec2(0,-1),ivec2(0,1));
-        for(uint n=0u;n<4u;n++) {uint other;if(!cell_ref(point+neighbors[n],other)) atomicOr(data[record+6u],1u);}
+    if(params.mode==5u) {if(i<n) {candidates[i]=0xffffffffu;candidates[n+i]=0u;}return;}
+    if(params.mode==6u) {if(i<data[g+36257u]) candidates[data[record(i)]]=i;return;}
+    if(params.mode==7u) {
+        if(i>=n||!solid(i)) return;
+        uint c=candidates[labels[i]];if(c>=data[g+36257u]) return;
+        uint r=record(c);ivec2 p=relative_point(data[r],i);
+        atomicMin(data[r+1u],uint(p.x)^0x80000000u);atomicMin(data[r+2u],uint(p.y)^0x80000000u);
+        atomicMax(data[r+3u],uint(p.x)^0x80000000u);atomicMax(data[r+4u],uint(p.y)^0x80000000u);atomicAdd(data[r+5u],1u);
+        for(uint axis=0u;axis<4u;axis++) if(neighbor(i,axis)==0xffffffffu) atomicOr(data[r+6u],1u);
         return;
     }
-    if(gl_GlobalInvocationID.x!=0u) return;
-    data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]=data[batch+2u];
-    data[g+36256u]=data[batch+1u];
-    compact_pixels();
-    for(uint selected=0u;selected<data[batch];selected++) {
-        uint record=records+selected*8u,root=data[record],serial=data[base()+14u];
-        extract(root,record);
-        if(data[base()+14u]!=serial) data[g+36256u]=(root+1u)%total;
+    if(params.mode==8u) {
+        uint count=data[g+36257u];
+        if(lane<count) {
+            uint r=record(lane);for(uint w=1u;w<=4u;w++) data[r+w]^=0x80000000u;
+            ivec2 extent=ivec2(data[r+3u],data[r+4u])-ivec2(data[r+1u],data[r+2u])+1;
+            uint dir=uint((extent.x+15)/16)*uint((extent.y+15)/16);
+            if(data[r+6u]!=0u||data[r+5u]!=sizes[data[r]]||dir>n) dir=0u;
+            data[r+7u]=dir;values[lane]=dir;
+        } else values[lane]=0u;
+        scan_values();
+        if(lane<count) {uint r=record(lane);data[r+9u]=values[lane]-data[r+7u];if(values[lane]>n) data[r+7u]=0u;}
+        if(lane==0u) data[g+36260u]=min(values[127],n);return;
     }
+    if(params.mode==15u) {
+        if(i>=n||!solid(i)) return;
+        uint c=candidates[labels[i]];if(c>=data[g+36257u]) return;
+        uint r=record(c);if(data[r+7u]==0u) return;
+        ivec2 low=ivec2(data[r+1u],data[r+2u]),p=relative_point(data[r],i)-low;
+        uint width=uint((int(data[r+3u])-low.x+16)/16),tile=uint(p.y/16)*width+uint(p.x/16);
+        atomicOr(candidates[n+data[r+9u]+tile],1u);return;
+    }
+    if(params.mode==19u) {if(i<data[g+36260u]) sizes[n+i]=candidates[n+i]+(i>=params.count?candidates[n+i-params.count]:0u);return;}
+    if(params.mode==20u) {if(i<data[g+36260u]) candidates[n+i]=sizes[n+i];return;}
+    if(params.mode==16u) {
+        uint words=lane<64u&&pixel_body(bodies[lane])&&(bodies[lane].enabled!=0u||bodies[lane].reserved0!=0u)?pixel_shape_words(bodies[lane]):0u;
+        values[lane]=words;scan_values();if(lane<64u) sizes[lane]=values[lane]-words;
+        if(lane==0u) {data[g+36261u]=values[127];data[g+36262u]=1u-data[pool()];}return;
+    }
+    if(params.mode==17u) {
+        uint s=gl_WorkGroupID.x;if(s>=64u) return;Body b=bodies[s];if(!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) return;
+        uint target=pool()+16u+data[g+36262u]*capacity()+sizes[s];
+        for(uint w=lane;w<pixel_shape_words(b);w+=128u) data[target+w]=pixel_word_at(b.compound_reserved+w);return;
+    }
+    if(params.mode==18u) {
+        if(i<64u&&pixel_body(bodies[i])&&(bodies[i].enabled!=0u||bodies[i].reserved0!=0u)) bodies[i].compound_reserved=BODY_STORAGE_WORDS+pool()+16u+data[g+36262u]*capacity()+sizes[i];
+        if(i==0u) {data[pool()]=data[g+36262u];data[pool()+1u]=data[g+36261u];data[pool()+2u]=capacity();}return;
+    }
+    if(params.mode==21u) {
+        uint count=data[g+36257u],free=lane<64u?uint(bodies[lane].enabled==0u&&bodies[lane].reserved0==0u):0u;
+        values[lane]=free;scan_values();if(free!=0u) slots[values[lane]-1u]=lane;uint available=values[127];barrier();
+        uint words=0u,eligible=0u;
+        if(lane<count) {
+            uint r=record(lane),dir=data[r+7u],start=data[r+9u],before=start==0u?0u:candidates[n+start-1u];
+            uint tiles=dir==0u?0u:candidates[n+start+dir-1u]-before;data[r+8u]=tiles;words=dir==0u?0u:8u+dir+tiles*33u;
+            eligible=uint(words>0u&&words<=capacity()-data[pool()+1u]);data[r+10u]=words;
+        }
+        values[lane]=eligible*words;scan_values();uint offset=values[lane]-eligible*words;
+        eligible*=uint(values[lane]<=capacity()-data[pool()+1u]);values[lane]=eligible;scan_values();
+        eligible*=uint(values[lane]<=available&&data[base()+14u]<=0x7fffffffu-values[lane]);
+        if(lane<count) {uint r=record(lane);data[r+14u]=eligible;if(eligible!=0u) {data[r+11u]=pool()+16u+data[pool()]*capacity()+data[pool()+1u]+offset;data[r+12u]=slots[values[lane]-1u];data[r+13u]=data[base()+14u]+values[lane];}}
+        barrier();values[lane]=eligible!=0u?lane+1u:0u;
+        for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) values[lane]=max(values[lane],values[lane+stride]);}barrier();
+        if(lane==0u) {
+            uint last=values[0];data[g+36258u]=last;
+            if(last!=0u) {uint r=record(last-1u);data[pool()+1u]=data[r+11u]+data[r+10u]-(pool()+16u+data[pool()]*capacity());data[base()+14u]=data[r+13u];data[g+36256u]=(data[r]+1u)%n;}
+            else if(count!=0u) data[g+36256u]=(data[record(count-1u)]+1u)%n;
+        }
+        barrier();values[lane]=lane<count&&data[record(lane)+7u]!=0u&&data[record(lane)+14u]==0u?1u:0u;
+        for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) values[lane]|=values[lane+stride];}barrier();
+        if(lane==0u) data[g+36259u]|=values[0];return;
+    }
+    if(params.mode==22u) {
+        uint c=gl_WorkGroupID.x;if(c>=data[g+36257u]) return;uint r=record(c);if(data[r+14u]==0u) return;
+        uint target=data[r+11u],dir=data[r+7u],start=data[r+9u],width=uint((int(data[r+3u])-int(data[r+1u])+16)/16);
+        ivec2 low=ivec2(data[r+1u],data[r+2u]);
+        for(uint word=lane;word<data[r+10u];word+=128u) data[target+word]=0u;
+        memoryBarrierBuffer();barrier();
+        if(lane<8u) {uint h[8]=uint[8](data[r+10u],data[r+8u],width,dir/width,0u,0u,uint(int(data[r+3u])-low.x+1),uint(int(data[r+4u])-low.y+1));data[target+lane]=h[lane];}
+        uint before=start==0u?0u:candidates[n+start-1u];
+        for(uint t=lane;t<dir;t+=128u) {
+            uint prefix=candidates[n+start+t],previous=start+t==0u?0u:candidates[n+start+t-1u];bool occupied=prefix>previous;
+            uint offset=8u+dir+(prefix-before-1u)*33u;data[target+8u+t]=occupied?offset:0u;if(!occupied) continue;
+            data[target+offset]=(t%width)|((t/width)<<16);
+        }
+        return;
+    }
+    if(params.mode==28u) {
+        if(i>=n||!solid(i)) return;
+        uint c=candidates[labels[i]];if(c>=data[g+36257u]) return;
+        uint r=record(c);if(data[r+14u]==0u) return;
+        ivec2 low=ivec2(data[r+1u],data[r+2u]),p=relative_point(data[r],i)-low;
+        uint width=uint((int(data[r+3u])-low.x+16)/16),tile=uint(p.y/16)*width+uint(p.x/16);
+        uint target=data[r+11u],offset=data[target+8u+tile],cell=uint(p.y%16)*16u+uint(p.x%16),m=cells[i].x&65535u;
+        atomicOr(data[target+offset+1u+cell/8u],(m==7u?2u:m==8u?4u:1u)<<((cell%8u)*4u));return;
+    }
+    if(params.mode==23u) {
+        uint c=gl_WorkGroupID.x;if(c>=data[g+36257u]) return;uint r=record(c);if(data[r+14u]==0u) return;
+        Body b=bodies[data[r+12u]];b.compound_reserved=BODY_STORAGE_WORDS+data[r+11u];b.piece_count=PIXEL_BODY_FLAG|data[r+5u];
+        uint mass10=0u;uvec2 mx=uvec2(0),my=uvec2(0);
+        for(uint p=lane;p<pixel_tile_count(b)*256u;p+=128u) {
+            uint m=pixel_piece_material(b,p);if(m==0u) continue;uint w=m==1u?27u:m==2u?6u:m==4u?12u:16u;uvec2 xy=uvec2(pixel_piece_cell(b,p))*2u+1u;
+            mass10+=w;mx=add_wide(mx,uvec2(xy.x*w,0));my=add_wide(my,uvec2(xy.y*w,0));
+        }
+        values[lane]=mass10;moments_x[lane]=mx;moments_y[lane]=my;
+        for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) {values[lane]+=values[lane+stride];moments_x[lane]=add_wide(moments_x[lane],moments_x[lane+stride]);moments_y[lane]=add_wide(moments_y[lane],moments_y[lane+stride]);}}barrier();
+        vec2 first=vec2(float(moments_x[0].y)*4294967296.+float(moments_x[0].x),float(moments_y[0].y)*4294967296.+float(moments_y[0].x));
+        vec2 center=first/(2.*float(values[0]));precise float moment=0.,compensation=0.;
+        for(uint p=lane;p<pixel_tile_count(b)*256u;p+=128u) {
+            uint m=pixel_piece_material(b,p);if(m==0u) continue;float density=m==1u?2.7:m==2u?.6:m==4u?1.2:1.6;vec2 delta=vec2(pixel_piece_cell(b,p))+.5-center;
+            precise float value=density*(dot(delta,delta)+1./6.)-compensation;precise float sum=moment+value;compensation=(sum-moment)-value;moment=sum;
+        }
+        moments_i[lane]=moment;for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) moments_i[lane]+=moments_i[lane+stride];}barrier();
+        if(lane==0u) {data[r+15u]=values[0];data[r+20u]=floatBitsToUint(center.x);data[r+21u]=floatBitsToUint(center.y);data[r+22u]=floatBitsToUint(moments_i[0]);initialize_body(r);}return;
+    }
+    if(params.mode==24u) {if(i<n&&solid(i)) {uint c=candidates[labels[i]];if(c<data[g+36257u]&&data[record(c)+14u]!=0u) cells[i].x=0u;}return;}
+    if(params.mode==25u&&i==0u) data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]=data[g+36259u];
+    if(params.mode==27u&&i==0u) {activity[12]=activity[9]!=0u?(n+127u)/128u:0u;activity[9]=0u;}
 }
