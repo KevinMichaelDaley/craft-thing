@@ -268,7 +268,41 @@ static void test_sparse_pixel_geometry_does_not_store_the_empty_bounding_area(vo
     dc_gpu_destroy(gpu);
     PASS();
 }
+static void test_known_cached_component_outside_viewport_is_extracted(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    chunk->coord.x = 2;
+    for (unsigned y = 10; y < 30; ++y)
+        for (unsigned x = 10; x < 30; ++x)
+            chunk->cells[y * 64 + x].material = DC_MATERIAL_WOOD;
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 1, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    dc_gpu_body_t body;
+    ASSERT_TRUE(dc_gpu_read_body_id(gpu, 0x80000001u, &body, err, sizeof(err)));
+    dc_gpu_world_body_t world;
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu, body.id, &world, err, sizeof(err)));
+    ASSERT_EQ(world.chunk.x, 2);
+    ASSERT_EQ(world.chunk.y, 0);
+    uint32_t count;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, body.id, NULL, 0, &count,
+                                       err, sizeof(err)));
+    ASSERT_EQ(count, 400u);
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, chunk, err, sizeof(err)));
+    for (unsigned i = 0; i < 4096; ++i)
+        ASSERT_EQ(chunk->cells[i].material, DC_MATERIAL_AIR);
+    free(chunk);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
 int main(void) {
+    RUN(test_known_cached_component_outside_viewport_is_extracted);
     RUN(test_component_above_256_pixels_is_not_disqualified);
     RUN(test_long_thin_component_above_16_cells_is_not_disqualified);
     RUN(test_branching_component_above_four_rectangles_is_not_disqualified);

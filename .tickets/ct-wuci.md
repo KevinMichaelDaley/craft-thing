@@ -42,3 +42,7 @@ Agent remains stopped at user request. Parent manually repaired the slideshow un
 **2026-10-13T06:35:37Z**
 
 Final quarter battery exposed an obsolete stationary-floor fixture: its 50x1 painted platform is now eligible for automatic extraction. Parent reproduced identical stack failure on pre-optimization abde3d6 (same y=20.156403, angle=-1.524839), so it is not a ct-alp7 runtime regression. Fixture now connects the platform to ordinary terrain, retaining all original settling/motion/density/persistence assertions.
+
+**2026-10-13T19:35:00Z**
+
+Resumed with explicit user requirement: runtime extraction and component-sized/count-sized/arena-sized work must use GPU-parallel passes, cooperative workgroups, reductions/scans and deterministic transactional allocation; no single-lane whole-component packing/mass or whole-arena compaction. GPU benchmark scheduling remains serialized for valid measurements.
