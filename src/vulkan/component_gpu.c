@@ -21,11 +21,6 @@ void dc_gpu_record_component_extraction(dc_gpu_t *gpu) {
     uint32_t push[8] = {gpu->width,  gpu->height,        0,
                         0,           (uint32_t)x,        (uint32_t)(x >> 32),
                         (uint32_t)y, (uint32_t)(y >> 32)};
-    push[2] = 1;
-    vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
-                       VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    vkCmdDispatch(gpu->command,
-                  ((gpu->width * gpu->height + 31u) / 32u + 127u) / 128u, 1, 1);
     VkMemoryBarrier2 barrier = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
@@ -36,10 +31,15 @@ void dc_gpu_record_component_extraction(dc_gpu_t *gpu) {
     VkDependencyInfo dependency = {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
                                    .memoryBarrierCount = 1,
                                    .pMemoryBarriers = &barrier};
-    vkCmdPipelineBarrier2(gpu->command, &dependency);
-    push[2] = 0;
-    vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
-                       VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    vkCmdDispatch(gpu->command, 1, 1, 1);
-    vkCmdPipelineBarrier2(gpu->command, &dependency);
+    const uint32_t modes[] = {1, 2, 4, 5, 3, 0};
+    uint32_t cells = gpu->width * gpu->height;
+    for (unsigned stage = 0; stage < sizeof(modes) / sizeof(*modes); stage++) {
+        push[2] = modes[stage];
+        uint32_t work = push[2] == 1 ? (cells + 31u) / 32u
+                        : push[2] == 3 || push[2] == 4 ? cells : 1;
+        vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+        vkCmdDispatch(gpu->command, (work + 127u) / 128u, 1, 1);
+        vkCmdPipelineBarrier2(gpu->command, &dependency);
+    }
 }

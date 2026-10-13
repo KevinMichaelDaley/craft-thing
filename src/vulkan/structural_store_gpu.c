@@ -60,6 +60,7 @@ static void clear_transients(uint32_t *graph) {
     memset(graph + 24912u, 0, (28000u - 24912u) * sizeof(uint32_t));
     memset(graph + 28128u, 0, (28300u - 28128u) * sizeof(uint32_t));
     memset(graph + 34000u, 0, 1024u * sizeof(uint32_t));
+    memset(graph + 36257u, 0, (38000u - 36257u) * sizeof(uint32_t));
     memset(graph + 39000u, 0, 1000u * sizeof(uint32_t));
     for (unsigned i = 0; i < 192; i++)
         memset(graph + 30000u + i * 20u + 15u, 0, 3 * sizeof(uint32_t));
