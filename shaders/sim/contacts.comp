@@ -52,6 +52,9 @@ bool world_point(Body body, vec2 point, out uvec2 chunk_x, out uvec2 chunk_y, ou
 
 float body_friction(uint material) { return material == 2u ? 0.6 : 0.7; }
 float cell_friction(uint material) { return material == 4u ? 0.8 : material == 2u ? 0.6 : 0.7; }
+uint contact_feature(Body body,uint piece,uint feature) {
+    return pixel_body(body)?(feature&0x80000007u)|(piece<<3u):feature|(piece<<28u);
+}
 
 bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_feature,
                   uvec2 feature_x, uvec2 feature_y, Polygon pa, Polygon pb,uint piece_a,uint piece_b) {
@@ -62,6 +65,17 @@ bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_fea
         bool exposed=(abs(outward.x)>1e-5&&pixel_material(a,p+ivec2(outward.x>0?1:-1,0))==0u)||
             (abs(outward.y)>1e-5&&pixel_material(a,p+ivec2(0,outward.y>0?1:-1))==0u);
         if(!exposed) return false;
+    }
+    uint other_slot=kind==BODY_CONTACT?body_slot(body_b):BODY_CAPACITY;
+    Body other=a;
+    if(other_slot<BODY_CAPACITY) {
+        other=bodies[other_slot];
+        if(pixel_body(other)) {
+            vec2 outward=body_rotate(normal,-other.angle);ivec2 p=pixel_piece_cell(other,piece_b);
+            bool exposed=(abs(outward.x)>1e-5&&pixel_material(other,p+ivec2(outward.x>0?1:-1,0))==0u)||
+                (abs(outward.y)>1e-5&&pixel_material(other,p+ivec2(0,outward.y>0?1:-1))==0u);
+            if(!exposed) return false;
+        }
     }
     vec2 point_a, point_b; uint feature_a, feature_b;
     contact_witnesses(pa, pb, normal, point_a, point_b, feature_a, feature_b);
@@ -83,8 +97,8 @@ bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_fea
     float compliance = kind == MPM_CONTACT ? 0.0001 :
         (material_a == 2u || (kind == BODY_CONTACT && material_b == 2u) ? 0.00002 : 0.0);
     data[offset] = a.id; data[offset + 1u] = body_b; data[offset + 2u] = kind;
-    data[offset + 3u] = feature_a | (piece_a<<28);
-    data[offset + 4u] = kind == BODY_CONTACT ? feature_b | (piece_b<<28) : cell_feature;
+    data[offset + 3u] = contact_feature(a,piece_a,feature_a);
+    data[offset + 4u] = kind == BODY_CONTACT ? contact_feature(other,piece_b,feature_b) : cell_feature;
     data[offset + 5u] = material_a; data[offset + 6u] = material_b; data[offset + 7u] = 0u;
     data[offset + 8u] = floatBitsToUint(normal.x); data[offset + 9u] = floatBitsToUint(normal.y);
     data[offset + 10u] = floatBitsToUint(depth); data[offset + 11u] = floatBitsToUint(sqrt(fa * fb));

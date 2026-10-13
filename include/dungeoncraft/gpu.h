@@ -295,6 +295,8 @@ typedef struct {
  * Body material IDs and cell material IDs use their respective namespaces.
  */
 typedef struct {
+    /* Pixel features preserve the tile-cell ordinal in bits 3..30, the local
+     * vertex in bits 0..2, and the support-edge marker in bit 31. */
     uint32_t body_a, body_b, kind, feature_a, feature_b, material_a, material_b, reserved;
     float normal_x, normal_y, depth, friction, restitution, compliance;
     uint32_t flags, reserved2;
