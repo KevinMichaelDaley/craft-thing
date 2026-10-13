@@ -20,6 +20,9 @@ bool dc_gpu_pixel_geometry_valid(const dc_gpu_body_record_t *body,
         if (offset && (offset < 8 + directory || offset >= length ||
                        (offset - 8 - directory) % 33))
             return false;
+        if (offset && ((geometry[offset] & 65535u) != i % geometry[2] ||
+                       (geometry[offset] >> 16) != i / geometry[2]))
+            return false;
     }
     uint32_t count = 0;
     double mass = 0;
