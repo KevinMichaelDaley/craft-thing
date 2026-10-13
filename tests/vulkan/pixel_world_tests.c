@@ -192,12 +192,143 @@ static void test_partial_grid_fracture_uses_all_tile_cells_conservatively(void) 
     dc_gpu_destroy(gpu);
     PASS();
 }
+static void test_unknown_empty_bounding_corner_does_not_freeze_known_pixels(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunks = calloc(3, sizeof(*chunks));
+    ASSERT_TRUE(chunks);
+    chunks[0].coord.x = 2;
+    chunks[1].coord.x = 1;
+    chunks[1].coord.y = 1;
+    chunks[2].coord.x = 2;
+    chunks[2].coord.y = 1;
+    for (unsigned y = 10; y < 90; y++)
+        for (unsigned x = 70; x < 150; x++)
+            if (x >= 130 || y >= 70) {
+                unsigned slot = y < 64 ? 0 : x < 128 ? 1 : 2;
+                chunks[slot].cells[y % 64 * 64 + x % 64].material = DC_MATERIAL_STONE;
+            }
+    ASSERT_TRUE(dc_gpu_create(&gpu, 192, 128, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    for (unsigned slot = 0; slot < 3; slot++) {
+        ASSERT_TRUE(dc_gpu_upload_chunk(gpu, slot, chunks + slot, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_page(gpu, chunks[slot].coord.x, chunks[slot].coord.y, slot, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    dc_gpu_body_t body;
+    ASSERT_TRUE(dc_gpu_read_body_id(gpu, 0x80000001u, &body, err, sizeof(err)));
+    ASSERT_EQ(body.width, 80u);
+    ASSERT_EQ(body.height, 80u);
+    ASSERT_TRUE(body.vy_fp > 0);
+    free(chunks);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+static void test_rotated_pixel_fracture_preserves_world_pixel_positions(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL, *reference = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    for (unsigned y = 10; y < 40; y++)
+        for (unsigned x = 10; x < 50; x++)
+            if (x < 14 || x >= 46 || y >= 36)
+                chunk->cells[y * 64 + x].material = x < 14 ? DC_MATERIAL_WOOD : DC_MATERIAL_STONE;
+    for (unsigned context = 0; context < 2; context++) {
+        dc_gpu_t **target = context ? &reference : &gpu;
+        ASSERT_TRUE(dc_gpu_create(target, 64, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_upload_chunk(*target, 0, chunk, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_page(*target, 0, 0, 0, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_enable_automatic_components(*target));
+        ASSERT_TRUE(dc_gpu_rigid_step(*target, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_body_motion(*target, 0x80000001u, .2f, .01f, 0, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_gpu_rigid_step(reference, err, sizeof(err)));
+    dc_gpu_body_t parent;
+    dc_gpu_body_motion_t parent_motion;
+    ASSERT_TRUE(dc_gpu_read_body_id(reference, 0x80000001u, &parent, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(reference, parent.id, &parent_motion, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_impact_fracture(gpu));
+    uint32_t *pending = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset() + 38000u;
+    pending[0] = pending[1] = 1000000;
+    pending[2] = 2;
+    pending[3] = 0x80000001u;
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    for (unsigned child = 0; child < 3; child++) {
+        dc_gpu_body_t body;
+        dc_gpu_body_motion_t motion;
+        dc_gpu_body_pixel_t pixels[368];
+        uint32_t count, id = 0x80000001u + child;
+        ASSERT_TRUE(dc_gpu_read_body_id(gpu, id, &body, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_read_body_motion(gpu, id, &motion, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, id, pixels, 368, &count, err, sizeof(err)));
+        for (unsigned p = 0; p < count; p++) {
+            double x = pixels[p].x + .5, y = pixels[p].y + .5;
+            double ex = parent.x_fp / 65536. + parent_motion.center_x + cos(parent_motion.angle) * (x - parent_motion.center_x) - sin(parent_motion.angle) * (y - parent_motion.center_y);
+            double ey = parent.y_fp / 65536. + parent_motion.center_y + sin(parent_motion.angle) * (x - parent_motion.center_x) + cos(parent_motion.angle) * (y - parent_motion.center_y);
+            double ax = body.x_fp / 65536. + motion.center_x + cos(motion.angle) * (x - motion.center_x) - sin(motion.angle) * (y - motion.center_y);
+            double ay = body.y_fp / 65536. + motion.center_y + sin(motion.angle) * (x - motion.center_x) + cos(motion.angle) * (y - motion.center_y);
+            ASSERT_TRUE(fabs(ax - ex) < 3. / 65536);
+            ASSERT_TRUE(fabs(ay - ey) < 3. / 65536);
+        }
+    }
+    free(chunk);
+    dc_gpu_destroy(reference);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+static void test_replacing_a_solid_component_with_a_ring_does_not_reuse_stale_labels(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunks = calloc(9, sizeof(*chunks));
+    ASSERT_TRUE(chunks);
+    for (unsigned slot = 0; slot < 9; slot++) {
+        chunks[slot].coord.x = slot % 3;
+        chunks[slot].coord.y = slot / 3;
+    }
+    for (unsigned y = 10; y < 150; y++)
+        for (unsigned x = 10; x < 150; x++)
+            chunks[y / 64 * 3 + x / 64].cells[y % 64 * 64 + x % 64].material = DC_MATERIAL_STONE;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 192, 192, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    for (unsigned slot = 0; slot < 9; slot++) {
+        ASSERT_TRUE(dc_gpu_upload_chunk(gpu, slot, chunks + slot, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_page(gpu, slot % 3, slot / 3, slot, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_remove_body(gpu, 0x80000001u, err, sizeof(err)));
+    for (unsigned slot = 0; slot < 9; slot++)
+        memset(chunks[slot].cells, 0, sizeof(chunks[slot].cells));
+    for (unsigned y = 10; y < 150; y++)
+        for (unsigned x = 10; x < 150; x++)
+            if (x == 10 || x == 149 || y == 10 || y == 149)
+                chunks[y / 64 * 3 + x / 64].cells[y % 64 * 64 + x % 64].material = DC_MATERIAL_STONE;
+    chunks[4].cells[16 * 64 + 16].material = DC_MATERIAL_SAND;
+    for (unsigned slot = 0; slot < 9; slot++)
+        ASSERT_TRUE(dc_gpu_upload_chunk(gpu, slot, chunks + slot, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    dc_gpu_body_t body;
+    ASSERT_TRUE(dc_gpu_read_body_id(gpu, 0x80000002u, &body, err, sizeof(err)));
+    uint32_t count;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, body.id, NULL, 0, &count, err, sizeof(err)));
+    ASSERT_EQ(count, 556u);
+    uint32_t current, swept;
+    ASSERT_TRUE(dc_gpu_read_occupancy(gpu, 80, 80, &current, &swept, err, sizeof(err)));
+    ASSERT_EQ(current, 0u);
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 4, chunks + 4, err, sizeof(err)));
+    ASSERT_EQ(chunks[4].cells[16 * 64 + 16].material, DC_MATERIAL_SAND);
+    free(chunks);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
 int main(void) {
     RUN(test_hollow_wood_component_floats_with_exact_holes_and_streaming);
     RUN(test_hollow_dense_wood_component_sinks_from_material_density);
     RUN(test_mixed_hollow_component_preserves_composition_across_warm_seams);
     RUN(test_pixel_contact_features_identify_the_full_cell_ordinal);
     RUN(test_partial_grid_fracture_uses_all_tile_cells_conservatively);
+    RUN(test_unknown_empty_bounding_corner_does_not_freeze_known_pixels);
+    RUN(test_rotated_pixel_fracture_preserves_world_pixel_positions);
+    RUN(test_replacing_a_solid_component_with_a_ring_does_not_reuse_stale_labels);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
