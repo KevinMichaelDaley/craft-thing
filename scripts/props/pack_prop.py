@@ -88,7 +88,7 @@ def checked_options(options):
             raise ValueError('v1 supports one-to-one pixels only; no metadata resampling or implicit high-resolution mapping')
     if not isinstance(options['allow_invisible_physics'], bool):
         raise ValueError('Invisible physics flag must be boolean')
-    if len(options['pivot']) != 2 or not all(isinstance(v, int) and -2147483648 <= v <= 2147483647 for v in options['pivot']):
+    if len(options['pivot']) != 2 or not all(type(v) is int and -2147483648 <= v <= 2147483647 for v in options['pivot']):
         raise ValueError('Pivot must be two bounded integer cell coordinates')
     for key in ('emission_multiplier', 'relief_scale'):
         if not isinstance(options[key], (int, float)) or not math.isfinite(options[key]) or not 0 <= options[key] <= 1e6:
@@ -155,7 +155,7 @@ def appearance(channels, count, options):
 def build(document, options=None):
     options = checked_options(options)
     width, height = document['canvas']
-    if not isinstance(width, int) or not isinstance(height, int) or not width or not height or width < 0 or height < 0 or width * height > MAX_PIXELS:
+    if type(width) is not int or type(height) is not int or not width or not height or width < 0 or height < 0 or width * height > MAX_PIXELS:
         raise ValueError('Invalid canvas dimensions')
     frames = document['frames']
     if not 0 < len(frames) <= MAX_FRAMES or width * height * len(frames) > MAX_PIXELS * 16:
@@ -171,7 +171,7 @@ def build(document, options=None):
         if 'markers' in channels and any(channels['markers'][3::4]):
             raise ValueError('v1 marker import unsupported: use manifest pivot, do not silently discard annotations')
         duration = frame['duration_ms']
-        if not isinstance(duration, int) or not 0 < duration <= 65535:
+        if type(duration) is not int or not 0 < duration <= 65535:
             raise ValueError('Frame duration must be integer milliseconds in1..65535')
         maps = physical(channels, count, index, options)
         if physics and maps != physics[0] and options['physics_animation'] == 'visual_only':
