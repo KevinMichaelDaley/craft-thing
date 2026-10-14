@@ -1,0 +1,10 @@
+#version 450
+layout(local_size_x=64) in;
+layout(set=0,binding=0,std430) readonly buffer Owners {uvec4 owners[];};
+struct Appearance {vec4 color_roughness;vec4 normal_relief;};
+layout(set=0,binding=1,std430) buffer Colors {Appearance appearance[];};
+layout(push_constant) uniform Params {uint count;} params;
+void main() {
+    uint i=gl_GlobalInvocationID.x;if(i>=params.count) return;
+    appearance[i]=Appearance(vec4(.2,.2,.2,.85),vec4(0,0,1,0));
+}

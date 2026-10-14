@@ -6,6 +6,11 @@ test: build/appearance_tests
 build/texture_tests: tests/renderer/texture_tests.c src/renderer/appearance.c src/renderer/texture.c include/ferrum/renderer/texture.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/renderer/texture_tests.c src/renderer/appearance.c src/renderer/texture.c -o $@ -lm
+build/shaders/texture.comp.spv: shaders/renderer/texture.comp
+	mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/texture_gpu_tests: tests/renderer/texture_gpu_tests.c src/vulkan/texture_gpu.c src/renderer/appearance.c src/renderer/texture.c build/fluid_tests build/shaders/texture.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/texture_gpu.c src/renderer/appearance.c src/renderer/texture.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 .DEFAULT_GOAL := all
 STRUCTURAL_REFERENCE = tests/structural/reference_solver.c src/structural/material.c
 build/structural_failure_tests: tests/structural/failure_tests.c tests/structural/placement_tests.c build/compound_body_tests
