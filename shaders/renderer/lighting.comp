@@ -7,8 +7,88 @@ struct Light {vec4 position_radius;vec4 color_intensity;};
 layout(set=0,binding=2,std430) readonly buffer Sources {Light sources[];};
 struct Field {vec4 l0;vec4 lx;vec4 ly;vec4 lz;};
 layout(set=0,binding=3,std430) buffer Fields {Field fields[];};
+shared vec4 energy[64];
+shared vec4 moment_x[64];
+shared vec4 moment_y[64];
+shared vec4 moment_z[64];
+
+float cell_exit(vec2 point,vec2 direction,vec2 low,vec2 high) {
+    vec2 distance=vec2(1e30);
+    if(abs(direction.x)>1e-8) distance.x=((direction.x>0.?high.x:low.x)-point.x)/direction.x;
+    if(abs(direction.y)>1e-8) distance.y=((direction.y>0.?high.y:low.y)-point.y)/direction.y;
+    return max(min(distance.x,distance.y),0.);
+}
+uint boundary_bit(vec2 p) {
+    if(p.x<0.) return 1u;if(p.x>=float(metadata[0])) return 2u;
+    if(p.y<0.) return 4u;return 8u;
+}
+float visibility(vec2 receiver,vec2 direction,float limit,bool sun) {
+    uint width=metadata[0],height=metadata[1];
+    uint receiver_index=uint(receiver.y)*width+uint(receiver.x);
+    if(nodes[receiver_index].known==0u) return 0.;
+    if(limit<1e-5) return 1.;
+    if(dot(direction,direction)<1e-10) return sun && metadata[5]==0u?0.:1.;
+    float t=cell_exit(receiver,direction,floor(receiver),floor(receiver)+1.)+.0001;
+    float transmission=1.;
+    for(uint iteration=0u;iteration<metadata[4];iteration++) {
+        if(t>=limit) return transmission;
+        vec2 point=receiver+direction*t;
+        if(point.x<0. || point.y<0. || point.x>=float(width) || point.y>=float(height))
+            return sun && (metadata[5]&boundary_bit(point))!=0u?transmission:0.;
+        float span=1.;Node node;
+        for(int level=int(metadata[2])-1;level>=0;level--) {
+            uint base=8u+uint(level)*4u,scale=1u<<uint(level);
+            uvec2 position=uvec2(point)/scale;
+            node=nodes[metadata[base]+position.y*metadata[base+1u]+position.x];
+            if(node.minimum>=1.) return 0.;
+            if(node.maximum==0. || level==0) {span=float(scale);break;}
+        }
+        if(node.known==0u && span==1.) return 0.;
+        if(span==1.) transmission*=1.-node.maximum;
+        if(transmission<=.00001) return 0.;
+        vec2 low=floor(point/span)*span;
+        vec2 high=min(low+span,vec2(width,height));
+        t+=cell_exit(point,direction,low,high)+.0001;
+        if(t>=limit) return transmission;
+    }
+    return 0.;
+}
+
 void main() {
-    uint i=gl_WorkGroupID.x*8u+gl_LocalInvocationID.y;
-    if(i>=metadata[0]*metadata[1] || gl_LocalInvocationID.x!=0u) return;
-    fields[i]=Field(vec4(0),vec4(0),vec4(0),vec4(0));
+    uint lane=gl_LocalInvocationID.x,row=gl_LocalInvocationID.y;
+    uint local=row*8u+lane,i=gl_WorkGroupID.x*8u+row;
+    vec3 l0=vec3(0),lx=vec3(0),ly=vec3(0),lz=vec3(0);
+    if(i<metadata[0]*metadata[1]) {
+        vec2 receiver=vec2(i%metadata[0],i/metadata[0])+.5;
+        for(uint source=lane;source<=metadata[3];source+=8u) {
+            Light light=sources[source];
+            if(light.color_intensity.a<=0.) continue;
+            bool sun=source==metadata[3];vec3 direction;float attenuation=1.,limit;
+            if(sun) {
+                direction=light.position_radius.xyz;limit=float(metadata[0]+metadata[1])*2.;
+            } else {
+                vec3 delta=vec3(light.position_radius.xy-receiver,light.position_radius.z);
+                float distance_squared=dot(delta,delta),radius_squared=light.position_radius.w*light.position_radius.w;
+                if(distance_squared>=radius_squared) continue;
+                direction=distance_squared>1e-10?delta*inversesqrt(distance_squared):vec3(0,0,1);
+                float falloff=1.-distance_squared/radius_squared;
+                attenuation=falloff*falloff/max(distance_squared,.25);
+                limit=length(delta.xy);
+            }
+            float planar=length(direction.xy);
+            vec2 ray=planar>1e-8?direction.xy/planar:vec2(0);
+            vec3 contribution=light.color_intensity.rgb*light.color_intensity.a*attenuation*visibility(receiver,ray,limit,sun);
+            l0+=contribution;lx+=contribution*direction.x;ly+=contribution*direction.y;lz+=contribution*direction.z;
+        }
+    }
+    energy[local]=vec4(l0,0);moment_x[local]=vec4(lx,0);moment_y[local]=vec4(ly,0);moment_z[local]=vec4(lz,0);
+    barrier();
+    for(uint step=4u;step>0u;step>>=1u) {
+        if(lane<step) {
+            energy[local]+=energy[local+step];moment_x[local]+=moment_x[local+step];
+            moment_y[local]+=moment_y[local+step];moment_z[local]+=moment_z[local+step];
+        }
+        barrier();
+    }
+    if(lane==0u && i<metadata[0]*metadata[1]) fields[i]=Field(energy[local],moment_x[local],moment_y[local],moment_z[local]);
 }
