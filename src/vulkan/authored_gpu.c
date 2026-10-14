@@ -16,6 +16,7 @@ struct dc_gpu_authored_stage {
     VkPipelineLayout layout;
     VkPipeline pipelines[STAGE_PHASES];
     uint32_t pixels;
+    uint64_t local_bytes, system_bytes;
     bool ready;
 };
 
@@ -35,6 +36,8 @@ void dc_gpu_authored_destroy(dc_gpu_t *gpu) {
     if (s->mapped) vkUnmapMemory(gpu->device, s->memory);
     if (s->buffer) vkDestroyBuffer(gpu->device, s->buffer, NULL);
     if (s->memory) vkFreeMemory(gpu->device, s->memory, NULL);
+    gpu->mapped_local_bytes -= s->local_bytes;
+    gpu->mapped_system_bytes -= s->system_bytes;
     free(s);
     gpu->authored_stage = NULL;
 }
@@ -52,7 +55,11 @@ static bool stage_init(dc_gpu_t *gpu, uint32_t count, char *err, uint32_t cap) {
     gpu->authored_stage = s;
     s->pixels = count;
     void *mapped = NULL;
+    uint64_t local_before = gpu->mapped_local_bytes;
+    uint64_t system_before = gpu->mapped_system_bytes;
     if (!dc_gpu_make_mapped_buffer(gpu, bytes, &s->buffer, &s->memory, &mapped, err, cap)) return false;
+    s->local_bytes = gpu->mapped_local_bytes - local_before;
+    s->system_bytes = gpu->mapped_system_bytes - system_before;
     s->mapped = mapped;
     VkDescriptorSetLayoutBinding binding = {
         .binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
