@@ -17,6 +17,7 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu) free(gpu->checkpoint_chunks);
     if (!gpu) return;
     if (gpu->device) vkDeviceWaitIdle(gpu->device);
+    if (gpu->device) dc_gpu_authored_destroy(gpu);
     if (gpu->acquire_sem) vkDestroySemaphore(gpu->device, gpu->acquire_sem, NULL);
     if (gpu->present_sems) {
         for (uint32_t i = 0; i < gpu->swap_count; ++i)

@@ -1,0 +1,79 @@
+#version 450
+layout(local_size_x=128) in;
+layout(constant_id=0) const uint PHASE=0u;
+layout(set=0,binding=0,std430) buffer Staging { uint words[]; };
+layout(push_constant) uniform Params { uint width,height,has_graph,padding; } params;
+const uint INVALID=0xffffffffu;
+uint pixels() {return params.width*params.height;}
+uint physical(uint i) {return 24u+i*2u;}
+uint appearance(uint i) {return 24u+pixels()*2u+i*16u;}
+uint members(uint i) {return 24u+pixels()*18u+i;}
+uint label(uint i) {return 24u+pixels()*19u+i;}
+uint graph() {return 24u+pixels()*20u;}
+void reject(uint i) {atomicOr(words[2],1u);atomicMin(words[20],i);}
+bool terrain_material(uint m) {return m>=1u&&m<=9u&&m!=3u;}
+bool body_material(uint m) {return m>=1u&&m<=4u;}
+bool finite_value(float f) {return !isnan(f)&&!isinf(f);}
+bool appearance_valid(uint index) {
+    uint a=appearance(index);
+    for(uint i=0u;i<15u;i++) if(!finite_value(uintBitsToFloat(words[a+i]))) return false;
+    for(uint i=0u;i<3u;i++) if(uintBitsToFloat(words[a+i])<0.||uintBitsToFloat(words[a+8u+i])<0.) return false;
+    float roughness=uintBitsToFloat(words[a+3u]),relief=uintBitsToFloat(words[a+7u]),alpha=uintBitsToFloat(words[a+12u]);
+    if(roughness<0.||roughness>1.||relief<0.||alpha<0.||alpha>1.||words[a+11u]!=0u||words[a+13u]!=0u||words[a+14u]!=0u||(words[a+15u]&~7u)!=0u) return false;
+    vec3 normal=vec3(uintBitsToFloat(words[a+4u]),uintBitsToFloat(words[a+5u]),uintBitsToFloat(words[a+6u]));
+    return abs(dot(normal,normal)-1.)<=.001;
+}
+bool member_valid(uint index,uint material) {
+    if(params.has_graph==0u) return false;
+    uint owner=words[members(index)],g=graph();
+    if(owner==0u) return false;
+    uint profile=material==1u?0u:material==3u?2u:1u;
+    for(uint m=0u;m<words[g+1u];m++) {
+        uint p=g+400u+m*8u;
+        if(words[p]==owner) return words[p+4u]==profile;
+    }
+    return false;
+}
+uint root(uint index) {
+    uint parent=atomicAdd(words[label(index)],0u);
+    while(parent!=index) {
+        uint ancestor=atomicAdd(words[label(parent)],0u);
+        atomicMin(words[label(index)],ancestor);index=parent;parent=ancestor;
+    }
+    return index;
+}
+void join(uint a,uint b) {
+    if(atomicAdd(words[label(b)],0u)==INVALID||words[physical(a)+1u]!=words[physical(b)+1u]) return;
+    for(;;) {
+        uint ra=root(a),rb=root(b);if(ra==rb) return;
+        uint high=max(ra,rb),low=min(ra,rb);
+        if(atomicCompSwap(words[label(high)],high,low)==high) return;
+    }
+}
+void main() {
+    uint i=gl_GlobalInvocationID.x;if(i>=pixels()) return;
+    if(PHASE==0u) {
+        uint packed=words[physical(i)],material=packed&65535u,role=(packed>>16u)&255u,anchor=packed>>24u;
+        bool valid=material<=9u&&role<=4u&&anchor<=1u&&words[physical(i)+1u]<=0xffffffu&&(anchor==0u||role==2u)&&
+            (material==0u?(role==0u||role==4u):role==1u?terrain_material(material):(role==2u||role==3u)&&body_material(material))&&appearance_valid(i);
+        if(role==2u&&!member_valid(i,material)) valid=false;
+        if(params.has_graph!=0u&&role!=2u&&words[members(i)]!=0u) valid=false;
+        if(!valid) reject(i);
+        words[label(i)]=valid&&role==3u?i:INVALID;
+        if(valid) {
+            if(role==3u) atomicAdd(words[16],1u);
+            if(role==2u) atomicAdd(words[17],1u);
+            if(role==1u) atomicAdd(words[18],1u);
+            if(role==4u) atomicAdd(words[19],1u);
+        }
+        return;
+    }
+    if(atomicAdd(words[label(i)],0u)==INVALID) return;
+    if(PHASE==1u) {
+        if(i%params.width+1u<params.width) join(i,i+1u);
+        if(i/params.width+1u<params.height) join(i,i+params.width);
+        return;
+    }
+    if(PHASE==2u) {uint owner=root(i);atomicMin(words[label(i)],owner);return;}
+    if(i==words[label(i)]) atomicAdd(words[4],1u);
+}

@@ -31,11 +31,14 @@ GPU_OBJ += build/structural_gpu.o build/structural_material.o
 GPU_OBJ += build/authored_gpu.o build/authored_request.o
 build/authored_request.o: src/structural/authoring.c include/ferrum/structural/authoring.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-build/authored_gpu.o: src/vulkan/authored_gpu.c src/vulkan/gpu_internal.h include/ferrum/structural/authoring.h
+build/authored_gpu.o: src/vulkan/authored_gpu.c src/vulkan/gpu_internal.h include/ferrum/structural/authoring.h build/shaders/authored.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o build/authored_request.o,$(GPU_OBJ))) src/structural/material.c src/structural/authoring.c
 build/authored_stage_tests: tests/vulkan/authored_stage_tests.c build/compound_body_tests $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/shaders/authored.comp.spv: shaders/sim/authored.comp
+	mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/structural_material.o: src/structural/material.c include/ferrum/structural/mechanics.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 $(GPU_OBJ) build/chunk.o build/structural_mechanics_tests: include/dungeoncraft/material_density.h
