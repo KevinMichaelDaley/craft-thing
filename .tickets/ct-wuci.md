@@ -54,3 +54,7 @@ Parallel cache-atlas birth GREEN passes11 component and8 pixel-world cases with 
 **2026-10-14T03:55:23Z**
 
 Scope split at user request: optimizer retains performance/parallelization of EXISTING fracture BFS, packing, property reductions and arena copying, preserving current exact geometry/physics and transaction semantics. Separate feature worker on feat/structural-fracture-features from6e723cd owns only demonstrably missing NEW behavior and atomic multi-role authoring/appearance integration. Native1280x720 physics AND display30FPS is a separate optimizer target;480x270 gates remain unchanged.
+
+**2026-10-14T04:42:05Z**
+
+7509bcc verified extraction/hydro/scalability milestone pushed to origin/main. Full make test retry could not complete during device-wide GPU stalls; independent unchanged feature8x8 workload also stalls. Restored verified runtime and removed speculative barrier changes. Exact acceptance fixture default3 andquarter3 passes; all remaining performance/fracture/visual acceptance stays open. Shared128-lane property helper drafted unwired, standalone SPIR-V compiles/validates but GPU verification pending recovery.

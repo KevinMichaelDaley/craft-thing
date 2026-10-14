@@ -72,11 +72,25 @@ static void test_wet_mixed_component_crosses_a_warm_chunk_seam(void) {
     }
     ASSERT_TRUE(fr_gpu_load_structure(copy, "build/extracted_seam.dcs", err,
                                       sizeof(err)));
-    dc_gpu_compound_shape_t shape;
-    ASSERT_TRUE(
-        dc_gpu_read_compound_shape(copy, body.id, &shape, err, sizeof(err)));
-    ASSERT_EQ(shape.pieces[0].material, DC_GPU_BODY_WOOD);
-    ASSERT_EQ(shape.pieces[1].material, DC_GPU_BODY_STONE);
+    dc_gpu_body_pixel_t pixels[16];
+    uint32_t pixel_count;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(copy, body.id, pixels, 16, &pixel_count,
+                                       err, sizeof(err)));
+    ASSERT_EQ(pixel_count, 16u);
+    bool seen[16] = {false};
+    unsigned wood = 0, stone = 0;
+    for (unsigned i = 0; i < pixel_count; ++i) {
+        ASSERT_TRUE(pixels[i].x < 4 && pixels[i].y < 4);
+        unsigned index = pixels[i].y * 4 + pixels[i].x;
+        ASSERT_TRUE(!seen[index]);
+        seen[index] = true;
+        ASSERT_EQ(pixels[i].material, pixels[i].x < 2 ? DC_GPU_BODY_WOOD :
+                                                       DC_GPU_BODY_STONE);
+        wood += pixels[i].material == DC_GPU_BODY_WOOD;
+        stone += pixels[i].material == DC_GPU_BODY_STONE;
+    }
+    ASSERT_EQ(wood, 8u);
+    ASSERT_EQ(stone, 8u);
     ASSERT_TRUE(dc_gpu_set_page(copy, 0, 0, UINT32_MAX, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(copy, 1, 0, UINT32_MAX, err, sizeof(err)));
     dc_gpu_body_t cold;
