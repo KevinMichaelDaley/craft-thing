@@ -333,7 +333,30 @@ static void test_parallel_birth_reservation_skips_live_id_collisions(void) {
     dc_gpu_destroy(gpu);
     PASS();
 }
+static void test_pixel_hydro_uses_bounded_cooperative_area_work(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    for (unsigned y = 1; y < 63; ++y)
+        for (unsigned x = 1; x < 63; ++x)
+            chunk->cells[y * 64 + x].material = DC_MATERIAL_WOOD;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    const uint32_t *work = (const uint32_t *)gpu->mpm_label_b_mapped + 8192 + 80;
+    ASSERT_TRUE(work[0] >= 62u * 62u && work[0] <= 64u * 64u);
+    ASSERT_TRUE(work[1] <= 64u);
+    ASSERT_EQ(work[2], 64u);
+    free(chunk);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
 int main(void) {
+    RUN(test_pixel_hydro_uses_bounded_cooperative_area_work);
     RUN(test_parallel_birth_reservation_skips_live_id_collisions);
     RUN(test_known_cached_component_outside_viewport_is_extracted);
     RUN(test_component_above_256_pixels_is_not_disqualified);
