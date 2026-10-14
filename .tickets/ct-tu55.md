@@ -26,3 +26,7 @@ RED: true1280x720 physics/display with270 cache slots and2 fixed60Hz steps per p
 **2026-10-14T04:19:41Z**
 
 GREEN scalability subset: cooperative strided registry search and correctly sized root-prefix dispatch remove128-slot assumptions. Native270-slot exact400 seam passes Vulkan validation; default11 pixel and default/quarter3 acceptance each pass; SPIR-V valid.30FPS remains RED. Native concave presented run stalled in GPU fence wait and was terminated without valid timing; GPU recovery confirmed by correctness suites. Instrumented stage markers added for diagnosis.
+
+**2026-10-14T04:42:05Z**
+
+Device blocker after native stress: restored7509 runtime64x64 hydro probe timed out60sec; independent feature worktree previously4/4 passing8x8 authored staging also timed out45sec with unchanged shader/runtime. No GPU test process remains. No meaningful behavioral RED from these timeouts; global GPU/device recovery needed. Kernel read requires root; sudo -n read-only journal query denied. Native headless isolation previously rigid9.440/fluid17.153/MPM11.806ms; render-only3.075ms. Full regression incomplete.

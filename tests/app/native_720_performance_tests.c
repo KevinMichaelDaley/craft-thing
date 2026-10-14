@@ -48,9 +48,23 @@ static void native_scene(unsigned load) {
     free(chunk);
     if(load==2) ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
     double loaded=seconds();
+    printf("native720 load%u: submitting cold presented frame\n",load);
+    if(load==2&&getenv("DC_NATIVE_DIAG")) {
+        double trace_start=seconds();
+        ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+        printf("native720 diagnostic rigid-only step %.3fms\n",(seconds()-trace_start)*1000.);
+        dc_gpu_tick_capture_t trace;
+        ASSERT_TRUE(dc_gpu_tick_capture(g,&trace,err,sizeof(err)));
+        printf("native720 diagnostic tick rigid %.3f fluid %.3f MPM %.3fms\n",trace.stages[0].gpu_ns/1e6,trace.stages[1].gpu_ns/1e6,trace.stages[2].gpu_ns/1e6);
+        trace_start=seconds();ASSERT_TRUE(dc_gpu_present_chunks_steps(g,0,err,sizeof(err)));
+        printf("native720 diagnostic render-only %.3fms\n",(seconds()-trace_start)*1000.);
+        ASSERT_TRUE(dc_gpu_tick_capture(g,&trace,err,sizeof(err)));
+        printf("native720 diagnostic second tick rigid %.3f fluid %.3f MPM %.3fms\n",trace.stages[0].gpu_ns/1e6,trace.stages[1].gpu_ns/1e6,trace.stages[2].gpu_ns/1e6);
+    }
     ASSERT_TRUE(dc_gpu_present_chunks_steps(g,PHYSICS_STEPS,err,sizeof(err)));
     ASSERT_EQ(vkQueueWaitIdle(g->queue),VK_SUCCESS);
     double cold_ms=(seconds()-loaded)*1000.;
+    printf("native720 load%u: cold presented frame completed %.3fms\n",load,cold_ms);
     if(load==2) {
         uint32_t a=0,b=0;
         bool exact=dc_gpu_read_pixel_shape(g,0x80000001u,NULL,0,&a,err,sizeof(err))&&
@@ -59,7 +73,7 @@ static void native_scene(unsigned load) {
         ASSERT_TRUE(dc_gpu_set_body_motion(g,0x80000001u,0,.005f,0,err,sizeof(err)));
         ASSERT_TRUE(dc_gpu_set_body_motion(g,0x80000002u,0,-.003f,0,err,sizeof(err)));
     }
-    for(unsigned i=0;i<8;i++) ASSERT_TRUE(dc_gpu_present_chunks_steps(g,PHYSICS_STEPS,err,sizeof(err)));
+    for(unsigned i=0;i<8;i++) {ASSERT_TRUE(dc_gpu_present_chunks_steps(g,PHYSICS_STEPS,err,sizeof(err)));if(load==2) printf("native720 concave warm frame%u complete\n",i);}
     double samples[SAMPLES],start=seconds();
     for(unsigned i=0;i<SAMPLES;i++) {
         SDL_Event event;while(SDL_PollEvent(&event)) ASSERT_TRUE(event.type!=SDL_QUIT);
@@ -87,9 +101,9 @@ static void native_scene(unsigned load) {
 static void test_native_dry_presented_frame_meets_30fps(void) {native_scene(0);}
 static void test_native_water_and_grains_presented_frame_meets_30fps(void) {native_scene(1);}
 static void test_native_exact_concave_bodies_presented_frame_meets_30fps(void) {native_scene(2);}
-int main(void) {
-    RUN(test_native_dry_presented_frame_meets_30fps);
-    RUN(test_native_water_and_grains_presented_frame_meets_30fps);
-    RUN(test_native_exact_concave_bodies_presented_frame_meets_30fps);
+int main(int argc,char **argv) {
+    if(argc==1||strcmp(argv[1],"dry")==0) RUN(test_native_dry_presented_frame_meets_30fps);
+    if(argc==1||strcmp(argv[1],"dense")==0) RUN(test_native_water_and_grains_presented_frame_meets_30fps);
+    if(argc==1||strcmp(argv[1],"concave")==0) RUN(test_native_exact_concave_bodies_presented_frame_meets_30fps);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
