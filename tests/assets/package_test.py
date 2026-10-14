@@ -110,6 +110,22 @@ class PackageTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'schema'):
                 self.packer.validate(output)
 
+    def test_optional_surface_maps_keep_explicit_override_presence(self):
+        import struct
+        data = document()
+        for frame in data['frames']:
+            frame['channels'].update({'normal': bytes((128, 128, 255, 255)) * 6,
+                                      'roughness': bytes((77, 77, 77, 255)) * 6,
+                                      'relief': bytes((64, 64, 64, 255)) * 6})
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'asset'
+            self.packer.export(data, output)
+            compiled = (output / 'asset.cprop').read_bytes()
+            offset, = struct.unpack_from('<I', compiled, 32)
+            mask, = struct.unpack_from('<I', compiled, offset + 6 * 8 + 60)
+            self.assertEqual(mask, 7)
+            self.assertEqual((output / '0000.material.u16').read_bytes(), bytes((2, 0, 0, 0)) * 3)
+
 
 if __name__ == '__main__':
     unittest.main()

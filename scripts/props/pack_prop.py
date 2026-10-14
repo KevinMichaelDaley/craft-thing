@@ -325,7 +325,7 @@ if __name__ == '__main__':
             # Compatibility guard only: pixels/timing always come from active snapshot.
             if request.get('source') and Path(request['source']).is_file():
                 original = Path(request['source']).read_bytes()
-                if len(original) >= 14 and original[12:14] == b'\x08\x00':
+                if len(original) >= 14 and original[4:6] == b'\xe0\xa5' and original[12:14] == b'\x08\x00':
                     read(request['source'])
         elif args.snapshot:
             snapshot, options = args.snapshot, None

@@ -617,6 +617,7 @@ build/prop_tests: tests/assets/prop_tests.c src/assets/prop.c include/ferrum/ass
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/assets/prop_tests.c src/assets/prop.c -o $@ -lm
 .PHONY: test_prop_assets test_libresprite_host
+test: test_prop_assets
 test_prop_assets: build/prop_tests
 	python3 -m unittest discover -s tests/assets -p '*_test.py' -k 'SchemaTests'
 	python3 tests/assets/package_test.py
