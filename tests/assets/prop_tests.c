@@ -56,6 +56,16 @@ static void test_failure_keeps_previous_view(void) {
     ASSERT_TRUE(!fr_prop_asset_open(&asset, g_bytes, 63, NULL, 0));
     PASS();
 }
+static void test_header_geometry_integrity(void) {
+    fr_prop_asset_t asset = {0};
+    ASSERT_TRUE(fr_prop_asset_open(&asset, g_bytes, g_size, NULL, 0));
+    uint8_t width[4]; memcpy(width, g_bytes + 12, sizeof(width));
+    memcpy(g_bytes + 12, g_bytes + 16, 4); memcpy(g_bytes + 16, width, 4);
+    bool accepted = fr_prop_asset_open(&asset, g_bytes, g_size, NULL, 0);
+    memcpy(g_bytes + 16, g_bytes + 12, 4); memcpy(g_bytes + 12, width, 4);
+    ASSERT_TRUE(!accepted);
+    PASS();
+}
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
     FILE *file = fopen(argv[1], "rb"); if (!file) return 2;
@@ -66,6 +76,7 @@ int main(int argc, char **argv) {
     fclose(file);
     RUN(test_namespaces); RUN(test_real_compiler_asset_holes_and_appearance);
     RUN(test_elapsed_frame_timing); RUN(test_failure_keeps_previous_view);
+    RUN(test_header_geometry_integrity);
     free(g_bytes); printf("Results: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
