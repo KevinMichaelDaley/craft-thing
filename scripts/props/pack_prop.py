@@ -295,6 +295,16 @@ def export(document, output, options=None):
             shutil.rmtree(stage)
 
 
+def read_request_snapshot(request):
+    document = read(request['snapshot'])
+    proof = request.get('proof')
+    actual = document['proof']
+    order = lambda cel: (cel['layer'], cel['frame'])
+    if not proof or proof.get('canvas') != actual['canvas'] or sorted(proof.get('cels', []), key=order) != sorted(actual['cels'], key=order):
+        raise ValueError('Active snapshot verification failed; host save did not capture current pixels')
+    return document
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
@@ -322,5 +332,6 @@ if __name__ == '__main__':
             parser.error('--request or --snapshot required')
         if not args.output:
             parser.error('--output required')
-        export(read(snapshot), args.output, options)
+        document = read_request_snapshot(request) if args.request else read(snapshot)
+        export(document, args.output, options)
         print('Validated prop package:', args.output)

@@ -1,5 +1,6 @@
 """Strict lossless ASE snapshot reader for the pinned LibreSprite adapter."""
 from pathlib import Path
+import hashlib
 import struct
 import zlib
 
@@ -43,7 +44,7 @@ def read(path):
         raise ValueError('Only RGBA and indexed documents supported; convert grayscale explicitly')
     transparent = data[28]
     palette = [(0, 0, 0, 255)] * 256
-    layers, frames, tags, history = [], [], [], {}
+    layers, frames, tags, history, proofs = [], [], [], {}, []
     cursor = 128
     for frame_index in range(count):
         frame_size, frame_magic, old_count, duration = unpack('I3H', data, cursor)
@@ -113,6 +114,10 @@ def read(path):
                 else:
                     raise ValueError('Unsupported ASE cel type')
                 history[layer, frame_index] = (cw, ch, pixels)
+                if layers[layer]['name'] in CHANNELS:
+                    proofs.append({'layer': layers[layer]['name'], 'frame': frame_index,
+                                   'xy': [x, y], 'size': [cw, ch],
+                                   'sha256': hashlib.sha256(pixels).hexdigest()})
                 cels.append((layer, x, y, opacity, cw, ch, pixels))
             elif kind == 0x2018:
                 tag_count, = unpack('H', payload)
@@ -164,4 +169,5 @@ def read(path):
     if cursor != length:
         raise ValueError('Trailing ASE frames')
     return {'canvas': [width, height], 'frames': frames, 'tags': tags,
-            'layers': layers, 'mode': 'rgba' if depth == 32 else 'indexed'}
+            'layers': layers, 'mode': 'rgba' if depth == 32 else 'indexed',
+            'proof': {'canvas': [width, height], 'cels': proofs}}

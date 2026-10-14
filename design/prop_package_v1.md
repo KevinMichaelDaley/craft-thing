@@ -12,7 +12,10 @@ Sources: [release](https://github.com/LibreSprite/LibreSprite/releases/tag/v1.3)
 Actual host tests establish `app.activeSprite`, named hidden/locked layers,
 `layer.cel`, linked cel images/offsets, RGBA bytes, indexed palette content and
 `saveAs(path,true)`. SaveFileCopyAs captures unsaved edits without changing the
-original source bytes or active document filename. The pinned API does not expose
+original source bytes or active document filename. A fresh nonce path ensures a
+failed save cannot reuse stale frame duration/tag data. Active per-cel SHA256,
+offsets/frame indices and dimensions are verified against the new snapshot before
+packing. The pinned API does not expose
 frame durations/tags directly or the current upstream `fs` interface. The script
 therefore writes a separate lossless ASE snapshot and a request via verified
 `storage.set(value,key,domain)` / `storage.save(key,domain)` APIs. The offline
@@ -44,7 +47,7 @@ not a claimed ready-to-place runtime scene. Current game placement and emission
 integration remain separate tickets. Metadata mistakes are diagnosed by the
 packer before a previous exported package is replaced.
 
-By default the snapshot is a `.craft-export.aseprite` sibling of the document.
+By default the snapshot is a `.craft-export.<nonce>.aseprite` sibling of the document.
 An unsaved document needs a first save to choose a directory or an explicit
 `CRAFT_PROP_SNAPSHOT` path in the script. Unsaved *edits* are captured in either
 case. The script never flattens, hides, crops, trims or saves over the original.
