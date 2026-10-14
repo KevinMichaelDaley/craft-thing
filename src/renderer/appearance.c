@@ -26,6 +26,11 @@ bool fr_appearance_import(const fr_appearance_source_t *source,
   if (!source || !defaults || !output || source->surface_mask > 7 ||
       !isfinite(source->alpha) || source->alpha < 0 || source->alpha > 1)
     return false;
+  uint32_t reserved_emission;
+  memcpy(&reserved_emission, &source->reserved_emission,
+         sizeof(reserved_emission));
+  if (reserved_emission || source->reserved[0] || source->reserved[1])
+    return false;
   for (uint32_t c = 0; c < 3; c++)
     if (!isfinite(source->emission[c]) || source->emission[c] < 0)
       return false;
