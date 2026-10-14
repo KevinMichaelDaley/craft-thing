@@ -163,6 +163,26 @@ static void test_import_rejects_malformed_without_partial_write(void) {
   ASSERT_TRUE(memcmp(&output, &before, sizeof(output)) == 0);
   PASS();
 }
+static void test_import_reserved_words_are_not_surface_data(void) {
+  fr_appearance_texel_t defaults = {.roughness = .85f, .normal = {0, 0, 1}};
+  fr_appearance_source_t source = {
+      .surface = {.color = {1, 1, 1}}, .alpha = 1};
+  fr_appearance_source_t output, before;
+  memset(&output, 0xa5, sizeof(output));
+  before = output;
+  source.reserved_emission = 1;
+  ASSERT_TRUE(!fr_appearance_import(&source, &defaults, &output));
+  source.reserved_emission = -0.f;
+  ASSERT_TRUE(!fr_appearance_import(&source, &defaults, &output));
+  source.reserved_emission = 0;
+  source.reserved[0] = 1;
+  ASSERT_TRUE(!fr_appearance_import(&source, &defaults, &output));
+  source.reserved[0] = 0;
+  source.reserved[1] = 1;
+  ASSERT_TRUE(!fr_appearance_import(&source, &defaults, &output));
+  ASSERT_TRUE(memcmp(&output, &before, sizeof(output)) == 0);
+  PASS();
+}
 int main(void) {
   RUN(test_mixed_material_holes_and_visual_scale);
   RUN(test_slot_generations);
@@ -173,6 +193,7 @@ int main(void) {
   RUN(test_import_material_defaults_and_independent_emission);
   RUN(test_import_explicit_surfaces_and_alias);
   RUN(test_import_rejects_malformed_without_partial_write);
+  RUN(test_import_reserved_words_are_not_surface_data);
   printf("Results: %d passed, %d failed\n", g_pass, g_fail);
   return g_fail ? 1 : 0;
 }
