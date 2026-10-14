@@ -142,21 +142,37 @@ bool fr_lighting_gpu_generate(fr_lighting_gpu_t *l, char *err, uint32_t cap) {
       VK_ACCESS_2_HOST_WRITE_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
       VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
       VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+  fr_lighting_record(l, VK_NULL_HANDLE, 0);
+  fr_renderer_barrier(g->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                      VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                      VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
+  return fr_renderer_submit(g);
+}
+void fr_lighting_record(fr_lighting_gpu_t *l, VkBuffer indirect,
+                        VkDeviceSize offset) {
+  dc_gpu_t *g = l->gpu;
   vkCmdBindPipeline(g->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                     l->compute.pipeline);
   vkCmdBindDescriptorSets(g->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                           l->compute.pipeline_layout, 0, 1,
                           &l->compute.descriptor, 0, NULL);
-  vkCmdDispatch(g->command, (l->width * l->height + 7) / 8, 1, 1);
-  fr_renderer_barrier(g->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                      VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-                      VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
-  return fr_renderer_submit(g);
+  if (indirect)
+    vkCmdDispatchIndirect(g->command, indirect, offset);
+  else
+    vkCmdDispatch(g->command, (l->width * l->height + 7) / 8, 1, 1);
 }
 bool fr_lighting_gpu_read(fr_lighting_gpu_t *l, uint32_t x, uint32_t y,
                           fr_renderer_light_field_t *field) {
   if (!l || !field || x >= l->width || y >= l->height)
     return false;
   *field = ((fr_renderer_light_field_t *)l->field_mapped)[y * l->width + x];
+  return true;
+}
+bool fr_lighting_field_binding(fr_lighting_gpu_t *l,
+                               VkDescriptorBufferInfo *buffer) {
+  if (!l || !buffer)
+    return false;
+  *buffer = (VkDescriptorBufferInfo){l->field, 0,
+                                     (VkDeviceSize)l->width * l->height * 64};
   return true;
 }

@@ -17,6 +17,7 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu) free(gpu->checkpoint_chunks);
     if (!gpu) return;
     if (gpu->device) vkDeviceWaitIdle(gpu->device);
+    if (gpu->device) fr_renderer_destroy(gpu);
     if (gpu->acquire_sem) vkDestroySemaphore(gpu->device, gpu->acquire_sem, NULL);
     if (gpu->present_sems) {
         for (uint32_t i = 0; i < gpu->swap_count; ++i)
@@ -332,14 +333,18 @@ static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7], char *err, uin
     VkDependencyInfo upload_dependency = { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
         .memoryBarrierCount = 1, .pMemoryBarriers = &upload_barrier };
     vkCmdPipelineBarrier2(gpu->command, &upload_dependency);
-    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->pipeline);
-    vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
-        gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
-    vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 28, push);
-    uint32_t dispatch_width = push[2] == 2u ? gpu->view_width : gpu->width;
-    uint32_t dispatch_height = push[2] == 2u ? gpu->view_height : gpu->height;
-    vkCmdDispatch(gpu->command, (dispatch_width + 15u) / 16u,
-                  (dispatch_height + 15u) / 16u, 1);
+    if (push[2] == 2u && fr_renderer_active(gpu)) {
+        fr_renderer_record(gpu);
+    } else {
+        vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->pipeline);
+        vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
+            gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
+        vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 28, push);
+        uint32_t dispatch_width = push[2] == 2u ? gpu->view_width : gpu->width;
+        uint32_t dispatch_height = push[2] == 2u ? gpu->view_height : gpu->height;
+        vkCmdDispatch(gpu->command, (dispatch_width + 15u) / 16u,
+                      (dispatch_height + 15u) / 16u, 1);
+    }
     VkMemoryBarrier2 barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,

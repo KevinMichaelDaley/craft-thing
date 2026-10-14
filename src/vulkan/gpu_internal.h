@@ -190,7 +190,12 @@ struct dc_gpu {
     uint32_t view_x, view_y, view_width, view_height;
     uint32_t display_zoom;
     dc_gpu_overlay_t overlay;
+    struct fr_scene_gpu *renderer;
 };
+
+bool fr_renderer_active(const dc_gpu_t *gpu);
+void fr_renderer_record(dc_gpu_t *gpu);
+void fr_renderer_destroy(dc_gpu_t *gpu);
 
 enum {
     DC_GPU_BROADPHASE_HEADER_WORDS = 8,

@@ -23,5 +23,9 @@ bool fr_renderer_set_sources(dc_gpu_t *gpu,
 /** Render current physics coverage through the separated channels without
  * advancing it. */
 bool fr_renderer_render(dc_gpu_t *gpu, char *err, uint32_t cap);
+/** Set a cosmetic texture preset for a terrain-namespace material without
+ * changing it. */
+bool fr_renderer_set_material_style(dc_gpu_t *gpu, uint32_t material,
+                                    uint32_t style);
 
 #endif

@@ -52,16 +52,20 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
         VkDependencyInfo dependency = { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
             .memoryBarrierCount = 1, .pMemoryBarriers = &upload };
         vkCmdPipelineBarrier2(gpu->command, &dependency);
-        vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->pipeline);
-        vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
-            gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
-        uint32_t push[7] = { gpu->width, gpu->height, 2,
-                             dc_gpu_render_flags(gpu), (uint32_t)gpu->overlay,
-                             gpu->view_x, gpu->view_y };
-        vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
-            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-        vkCmdDispatch(gpu->command, (gpu->view_width + 15u) / 16u,
-                      (gpu->view_height + 15u) / 16u, 1);
+        if (fr_renderer_active(gpu)) {
+            fr_renderer_record(gpu);
+        } else {
+            vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->pipeline);
+            vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
+            uint32_t push[7] = { gpu->width, gpu->height, 2,
+                                 dc_gpu_render_flags(gpu), (uint32_t)gpu->overlay,
+                                 gpu->view_x, gpu->view_y };
+            vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+                VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+            vkCmdDispatch(gpu->command, (gpu->view_width + 15u) / 16u,
+                          (gpu->view_height + 15u) / 16u, 1);
+        }
     }
     VkBufferMemoryBarrier2 buffer_barrier = { .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,

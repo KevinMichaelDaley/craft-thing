@@ -104,6 +104,15 @@ bool fr_occlusion_gpu_generate(fr_occlusion_gpu_t *c, char *err, uint32_t cap) {
                       VK_ACCESS_2_HOST_WRITE_BIT,
                       VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                       VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+  fr_occlusion_record(c, VK_NULL_HANDLE, 0);
+  fr_renderer_barrier(g->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                      VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                      VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
+  return fr_renderer_submit(g);
+}
+void fr_occlusion_record(fr_occlusion_gpu_t *c, VkBuffer indirect,
+                         VkDeviceSize offset) {
+  dc_gpu_t *g = c->gpu;
   vkCmdBindPipeline(g->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                     c->compute.pipeline);
   vkCmdBindDescriptorSets(g->command, VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -118,16 +127,15 @@ bool fr_occlusion_gpu_generate(fr_occlusion_gpu_t *c, char *err, uint32_t cap) {
                      l ? c->height[l - 1] : 0};
     vkCmdPushConstants(g->command, c->compute.pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(p), p);
-    vkCmdDispatch(g->command, (c->width[l] * c->height[l] + 63) / 64, 1, 1);
+    if (indirect)
+      vkCmdDispatchIndirect(g->command, indirect, offset + l * 12u);
+    else
+      vkCmdDispatch(g->command, (c->width[l] * c->height[l] + 63) / 64, 1, 1);
     fr_renderer_barrier(g->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
                         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                         VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
   }
-  fr_renderer_barrier(g->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                      VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-                      VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
-  return fr_renderer_submit(g);
 }
 bool fr_occlusion_gpu_read(fr_occlusion_gpu_t *c, uint32_t level, uint32_t x,
                            uint32_t y, fr_occlusion_node_t *node) {
@@ -154,5 +162,13 @@ bool fr_occlusion_gpu_layout(fr_occlusion_gpu_t *c,
     layout[10 + 4 * l] = c->height[l];
     layout[11 + 4 * l] = 0;
   }
+  return true;
+}
+bool fr_occlusion_input_binding(fr_occlusion_gpu_t *c,
+                                VkDescriptorBufferInfo *buffer) {
+  if (!c || !buffer)
+    return false;
+  *buffer = (VkDescriptorBufferInfo){
+      c->input, 0, (VkDeviceSize)c->width[0] * c->height[0] * 8};
   return true;
 }

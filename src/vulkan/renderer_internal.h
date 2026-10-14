@@ -1,6 +1,7 @@
 #ifndef FERRUM_RENDERER_INTERNAL_H
 #define FERRUM_RENDERER_INTERNAL_H
 
+#include "ferrum/renderer/lighting_gpu.h"
 #include "ferrum/renderer/occlusion_gpu.h"
 #include "gpu_internal.h"
 
@@ -25,5 +26,14 @@ bool fr_renderer_begin(dc_gpu_t *gpu);
 bool fr_renderer_submit(dc_gpu_t *gpu);
 bool fr_occlusion_gpu_layout(fr_occlusion_gpu_t *occlusion,
                              VkDescriptorBufferInfo *buffer, uint32_t *layout);
+
+bool fr_occlusion_input_binding(fr_occlusion_gpu_t *occlusion,
+                                VkDescriptorBufferInfo *buffer);
+void fr_occlusion_record(fr_occlusion_gpu_t *occlusion, VkBuffer indirect,
+                         VkDeviceSize offset);
+bool fr_lighting_field_binding(fr_lighting_gpu_t *lighting,
+                               VkDescriptorBufferInfo *buffer);
+void fr_lighting_record(fr_lighting_gpu_t *lighting, VkBuffer indirect,
+                        VkDeviceSize offset);
 
 #endif

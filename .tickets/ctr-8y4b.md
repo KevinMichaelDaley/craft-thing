@@ -23,3 +23,7 @@ Visible multi-color/relief variation; exact pixel/material mapping; stable seeds
 **2026-10-14T03:20:50Z**
 
 Preparing deterministic texture reference tests while ctr-9svu full-suite validation awaits fair shared-GPU window. Implementation generation is per texel, no ordinary-frame CPU appearance copyback.
+
+**2026-10-14T04:28:32Z**
+
+Parallel GPU texture reference and actual scene-frame GREEN passed with Vulkan validation. Separate color cache is world-indexed and generation/material protected; coherent grain is now used by frame composition. Explicit imported/source-owned body appearance and persistence remain ctr-ddtf; displayed acceptance/performance still pending.
