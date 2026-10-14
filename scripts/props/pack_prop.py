@@ -19,6 +19,7 @@ MATERIALS = {m['id']: m for m in SCHEMA['materials']}
 MATERIAL_COLORS = {bytes(m['rgba']): m['id'] for m in SCHEMA['materials']}
 ROLE_COLORS = {bytes(r['rgba']): r['id'] for r in SCHEMA['roles']}
 VISUAL = ('color', 'emissive', 'normal', 'roughness', 'relief')
+MAX_COMPILED_BYTES = 256 * 1024 * 1024
 DEFAULTS = {'physics_animation': 'visual_only', 'pivot': [0, 0],
             'physical_scale': [1, 1], 'visual_scale': [1, 1],
             'emission_multiplier': 1, 'relief_scale': 1, 'allow_invisible_physics': False}
@@ -99,6 +100,8 @@ def physical(channels, count, frame, options):
     if not all(name in channels for name in ('physics.material', 'physics.role', 'color')):
         raise ValueError('Required material, role and color channels missing')
     records = bytearray()
+    objects = channels.get('physics.object', bytes(count * 4))
+    anchors = channels.get('physics.anchor', bytes(count * 4))
     for pixel in range(count):
         at = pixel * 4
         location = f'frame {frame} pixel {pixel}'
@@ -110,11 +113,11 @@ def physical(channels, count, frame, options):
             raise ValueError(location + ': physical role has no material')
         if material and not channels['color'][at + 3] and not options['allow_invisible_physics']:
             raise ValueError(location + ': invisible physics requires explicit authoring flag')
-        obj = channels.get('physics.object', bytes(count * 4))[at:at + 4]
+        obj = objects[at:at + 4]
         if obj[3] not in (0, 255):
             raise ValueError(location + ': partial-alpha object ID')
         object_id = int.from_bytes(obj[:3], 'little') if obj[3] else 0
-        anchor = channels.get('physics.anchor', bytes(count * 4))[at:at + 4]
+        anchor = anchors[at:at + 4]
         anchor = label(anchor, {b'\xff\xff\xff\xff': 1}, location)
         if anchor and role != 2:
             raise ValueError(location + ': only structures may carry anchor hints')
@@ -156,6 +159,8 @@ def build(document, options=None):
     frames = document['frames']
     if not 0 < len(frames) <= MAX_FRAMES or width * height * len(frames) > MAX_PIXELS * 16:
         raise ValueError('Frame/pixel budget exceeded')
+    if 64 + len(frames) * (16 + width * height * 72) > MAX_COMPILED_BYTES:
+        raise ValueError('Compiled asset exceeds256MiB preload budget; split scene into packages')
     payloads, descriptors, physics = {}, [], []
     count = width * height
     for index, frame in enumerate(frames):
@@ -189,7 +194,8 @@ def build(document, options=None):
         if not isinstance(tag['name'], str) or tag['name'] in names or not 0 <= tag['from'] <= tag['to'] < len(frames) or tag['direction'] not in ('forward', 'reverse', 'pingpong', 'pingpong_reverse') or not 0 <= tag['repeat'] <= 65535:
             raise ValueError('Invalid/duplicate animation tag')
         names.add(tag['name'])
-    asset_uuid = str(uuid.UUID(options['asset_uuid'])) if 'asset_uuid' in options else str(uuid.uuid5(uuid.NAMESPACE_URL, hashlib.sha256(physics[0]).hexdigest()))
+    identity = struct.pack('<II', width, height) + physics[0]
+    asset_uuid = str(uuid.UUID(options['asset_uuid'])) if 'asset_uuid' in options else str(uuid.uuid5(uuid.NAMESPACE_URL, hashlib.sha256(identity).hexdigest()))
     manifest = {'schema': 'craft.prop', 'version': 1, 'registry': SCHEMA['registry'],
                 'asset_uuid': asset_uuid, 'canvas': [width, height], 'options': options,
                 'materials': SCHEMA['materials'], 'roles': SCHEMA['roles'],
@@ -216,6 +222,8 @@ def validate(directory):
     manifest = json.loads((directory / 'manifest.json').read_text())
     if manifest.get('schema') != 'craft.prop' or manifest.get('version') != 1 or manifest.get('registry') != SCHEMA['registry']:
         raise ValueError('Unsupported prop schema/registry')
+    if manifest.get('materials') != SCHEMA['materials'] or manifest.get('roles') != SCHEMA['roles']:
+        raise ValueError('Canonical material/role registry mismatch')
     width, height = manifest['canvas']
     options = checked_options(manifest['options'])
     checked = {}
@@ -301,6 +309,11 @@ if __name__ == '__main__':
             if request.get('schema') != 'craft.prop-export-request' or request.get('version') != 1:
                 parser.error('Unsupported export request')
             snapshot, options = Path(request['snapshot']), request['options']
+            # Compatibility guard only: pixels/timing always come from active snapshot.
+            if request.get('source') and Path(request['source']).is_file():
+                original = Path(request['source']).read_bytes()
+                if len(original) >= 14 and original[12:14] == b'\x08\x00':
+                    read(request['source'])
         elif args.snapshot:
             snapshot, options = args.snapshot, None
         else:

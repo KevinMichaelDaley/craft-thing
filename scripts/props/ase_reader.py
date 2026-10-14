@@ -72,6 +72,8 @@ def read(path):
                 at = 20
                 for index in range(first, last + 1):
                     flags, r, g, b, a = unpack('H4B', payload, at)
+                    if depth == 8 and a not in (0, 255):
+                        raise ValueError('LibreSprite1.3 drops indexed partial palette alpha; convert to RGBA before export')
                     palette[index] = (r, g, b, a)
                     at += 6
                     if flags & 1:
