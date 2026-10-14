@@ -101,6 +101,68 @@ static void test_explicit_sidecar_ownership_and_recycle(void) {
   ASSERT_TRUE(!fr_appearance_read(&s, 0, 12, 4, &index, &b));
   PASS();
 }
+static void test_import_material_defaults_and_independent_emission(void) {
+  fr_appearance_texel_t defaults = {
+      .color = {.1f, .2f, .3f}, .roughness = .85f,
+      .normal = {.1f, .2f, .97f}, .relief = .4f};
+  fr_appearance_source_t source = {
+      .surface = {.color = {.9f, .05f, .2f}, .roughness = .8f,
+                  .normal = {0, 0, 1}, .relief = 0},
+      .emission = {100, 2, .5f}, .alpha = 0};
+  fr_appearance_source_t output;
+  ASSERT_TRUE(fr_appearance_import(&source, &defaults, &output));
+  ASSERT_EQ(output.surface.color[0], .9f);
+  ASSERT_EQ(output.surface.roughness, defaults.roughness);
+  ASSERT_TRUE(memcmp(output.surface.normal, defaults.normal,
+                     sizeof(defaults.normal)) == 0);
+  ASSERT_EQ(output.surface.relief, defaults.relief);
+  ASSERT_TRUE(memcmp(output.emission, source.emission,
+                     sizeof(source.emission)) == 0);
+  ASSERT_EQ(output.alpha, 0);
+  PASS();
+}
+static void test_import_explicit_surfaces_and_alias(void) {
+  fr_appearance_texel_t defaults = {.roughness = .85f, .normal = {0, 0, 1}};
+  fr_appearance_source_t source = {
+      .surface = {.color = {.9f, .05f, .2f}, .roughness = .25f,
+                  .normal = {.6f, 0, .8f}, .relief = -.2f},
+      .emission = {0, 4, 0}, .alpha = .5f, .surface_mask = 7};
+  fr_appearance_source_t expected = source;
+  ASSERT_TRUE(fr_appearance_import(&source, &defaults, &source));
+  ASSERT_TRUE(memcmp(&source, &expected, sizeof(source)) == 0);
+  source.surface_mask = FR_APPEARANCE_NORMAL;
+  ASSERT_TRUE(fr_appearance_import(&source, &defaults, &source));
+  ASSERT_EQ(source.surface.roughness, defaults.roughness);
+  ASSERT_EQ(source.surface.relief, defaults.relief);
+  ASSERT_EQ(source.surface.normal[0], .6f);
+  PASS();
+}
+static void test_import_rejects_malformed_without_partial_write(void) {
+  fr_appearance_texel_t defaults = {.roughness = .85f, .normal = {0, 0, 1}};
+  fr_appearance_source_t source = {
+      .surface = {.color = {1, 1, 1}, .roughness = .4f,
+                  .normal = {0, 0, 1}}, .alpha = 1, .surface_mask = 7};
+  fr_appearance_source_t output, before;
+  memset(&output, 0xa5, sizeof(output));
+  before = output;
+  source.emission[2] = NAN;
+  ASSERT_TRUE(!fr_appearance_import(&source, &defaults, &output));
+  ASSERT_TRUE(memcmp(&output, &before, sizeof(output)) == 0);
+  source.emission[2] = 0;
+  source.alpha = 2;
+  ASSERT_TRUE(!fr_appearance_import(&source, &defaults, &output));
+  source.alpha = 1;
+  source.surface_mask = 8;
+  ASSERT_TRUE(!fr_appearance_import(&source, &defaults, &output));
+  source.surface_mask = 7;
+  source.surface.normal[2] = 0;
+  ASSERT_TRUE(!fr_appearance_import(&source, &defaults, &output));
+  source.surface.normal[2] = 1;
+  source.surface.roughness = -1;
+  ASSERT_TRUE(!fr_appearance_import(&source, &defaults, &output));
+  ASSERT_TRUE(memcmp(&output, &before, sizeof(output)) == 0);
+  PASS();
+}
 int main(void) {
   RUN(test_mixed_material_holes_and_visual_scale);
   RUN(test_slot_generations);
@@ -108,6 +170,9 @@ int main(void) {
   RUN(test_default_and_explicit_color_independence);
   RUN(test_rest_transform);
   RUN(test_explicit_sidecar_ownership_and_recycle);
+  RUN(test_import_material_defaults_and_independent_emission);
+  RUN(test_import_explicit_surfaces_and_alias);
+  RUN(test_import_rejects_malformed_without_partial_write);
   printf("Results: %d passed, %d failed\n", g_pass, g_fail);
   return g_fail ? 1 : 0;
 }

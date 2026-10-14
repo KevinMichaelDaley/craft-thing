@@ -20,6 +20,28 @@ typedef struct {
   float normal[3], relief;
 } fr_appearance_texel_t;
 
+enum {
+  FR_APPEARANCE_NORMAL = 1,
+  FR_APPEARANCE_ROUGHNESS = 2,
+  FR_APPEARANCE_RELIEF = 4
+};
+
+/** Native GPU view of the compiled prop's 64-byte appearance record. */
+typedef struct {
+  fr_appearance_texel_t surface;
+  float emission[3], reserved_emission;
+  float alpha;
+  uint32_t reserved[2], surface_mask;
+} fr_appearance_source_t;
+
+/** Resolve one imported texel against material defaults, preserving linear HDR
+ * emission and visual alpha. Invalid input leaves output unchanged. This is a
+ * reference conversion; runtime admission converts source texels in parallel.
+ */
+bool fr_appearance_import(const fr_appearance_source_t *source,
+                          const fr_appearance_texel_t *defaults,
+                          fr_appearance_source_t *output);
+
 /** Caller-owned fixed storage; generation changes clear validity, not physics.
  */
 typedef struct {

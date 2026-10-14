@@ -5,6 +5,20 @@
 #include "dungeoncraft/chunk.h"
 #include "ferrum/renderer/appearance.h"
 
+_Static_assert(sizeof(fr_appearance_source_t) == 64, "Prop source ABI");
+_Static_assert(offsetof(fr_appearance_source_t, alpha) == 48, "Prop alpha ABI");
+_Static_assert(offsetof(fr_appearance_source_t, surface_mask) == 60,
+               "Prop surface mask ABI");
+
+bool fr_appearance_import(const fr_appearance_source_t *source,
+                          const fr_appearance_texel_t *defaults,
+                          fr_appearance_source_t *output) {
+  (void)source;
+  (void)defaults;
+  (void)output;
+  return false;
+}
+
 bool fr_appearance_bind(fr_appearance_sidecar_t *s, fr_appearance_owner_t o,
                         fr_appearance_texel_t *t, uint32_t *i, uint8_t *v,
                         uint32_t n) {
