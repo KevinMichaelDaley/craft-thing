@@ -51,11 +51,15 @@ independent of the physical material namespace.
 preserves authored linear color, HDR emission, and alpha without encoding or
 clamping energy, accepts in-place conversion, and never modifies output on
 failure. Non-finite or negative color/emission, alpha outside zero through one,
-invalid effective surface values, and unknown mask bits fail. Only effective
+invalid effective surface values, unknown mask bits, and nonzero reserved
+words fail. Only effective
 surface values are inspected: absent authored channels cannot override their
 renderer defaults. Alpha zero does not remove a physical pixel, and emission
 does not change its density or coverage. The runtime admission shader must
 perform the same bounded conversion independently for each source pixel.
+This renderer resolver accepts finite signed relief and nonzero finite normals;
+canonical package-version validation can apply stricter authored-channel ranges
+before resolution. Reserved words must contain zero bits, including byte44.
 
 The physics feature transaction supplies the shared status, compiled physical
 and appearance buffers, and64-byte source-to-destination records using native
