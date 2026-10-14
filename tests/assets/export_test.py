@@ -34,6 +34,10 @@ class ExportTests(unittest.TestCase):
             reader = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(reader)
             document = reader.read(Path(request['snapshot']))
+            import sys
+            sys.path.insert(0, str(ROOT / 'scripts/props'))
+            import pack_prop
+            pack_prop.read_request_snapshot(request)
             self.assertEqual(document['frames'][0]['duration_ms'], 90)
             self.assertEqual(document['frames'][1]['duration_ms'], 170)
             self.assertEqual(document['frames'][0]['channels']['color'][4 * 11:4 * 11 + 4], bytes((1, 2, 3, 255)))
