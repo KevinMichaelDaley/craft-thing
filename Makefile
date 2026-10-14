@@ -6,7 +6,7 @@ test: build/appearance_tests
 build/texture_tests: tests/renderer/texture_tests.c src/renderer/appearance.c src/renderer/texture.c include/ferrum/renderer/texture.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/renderer/texture_tests.c src/renderer/appearance.c src/renderer/texture.c -o $@ -lm
-build/shaders/texture.comp.spv: shaders/renderer/texture.comp
+build/shaders/texture.comp.spv: shaders/renderer/texture.comp shaders/renderer/texture.glsl
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/texture_gpu_tests: tests/renderer/texture_gpu_tests.c src/vulkan/texture_gpu.c src/renderer/appearance.c src/renderer/texture.c build/fluid_tests build/shaders/texture.comp.spv
