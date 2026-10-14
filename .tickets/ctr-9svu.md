@@ -17,3 +17,9 @@ Add renderer-owned albedo/appearance storage and APIs with explicit terrain-worl
 
 Distinct colors on same material, mixed-material ownership and holes, world/rest transforms, slot-generation protection, deterministic old-world fallback and physics invariance are tested. Document formats, memory and API/storage contracts.
 
+
+## Notes
+
+**2026-10-14T03:19:08Z**
+
+Six observed RED-to-GREEN CPU contract tests pass: mixed material holes, visual-scale mapping, material namespaces, explicit sidecar color overrides, generation recycling and inverse rest transform. Reference/import API uses fixed caller storage; GPU generation/transfer will use renderer buffers. Full headless refactor validation waits for coordinated GPU window; do not mark ticket complete yet.
