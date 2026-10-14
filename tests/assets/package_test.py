@@ -45,9 +45,13 @@ class PackageTests(unittest.TestCase):
 
     def test_physics_frames_invariant_or_explicit_variants(self):
         data = document()
-        data['frames'][1]['channels']['physics.role'] = bytes((0, 255, 0, 255)) * 6
+        data['frames'][1]['channels']['physics.role'] = bytes((0, 255, 0, 255, 0, 0, 0, 0)) * 3
         with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(ValueError, 'frame 1.*pixel'):
             self.packer.export(data, Path(directory) / 'bad')
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'variants'
+            self.packer.export(data, output, {'physics_animation': 'state_variants'})
+            self.assertNotEqual((output / '0000.role.u8').read_bytes(), (output / '0001.role.u8').read_bytes())
 
     def test_atomic_failure_preserves_previous_export(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -78,6 +82,33 @@ class PackageTests(unittest.TestCase):
             output = Path(directory) / 'asset'
             self.packer.export(data, output)
             self.assertEqual((output / '0000.material.u16').read_bytes(), bytes((2, 0, 0, 0)) * 3)
+
+    def test_canonical_registry_tampering_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'asset'
+            self.packer.export(document(), output)
+            manifest = json.loads((output / 'manifest.json').read_text())
+            manifest['materials'][1]['body'] = 7
+            (output / 'manifest.json').write_text(json.dumps(manifest))
+            with self.assertRaisesRegex(ValueError, 'registry'):
+                self.packer.validate(output)
+
+    def test_invalid_duration_scale_and_schema_rejected(self):
+        for duration in (0, -1, 1.5, 65536):
+            data = document()
+            data['frames'][0]['duration_ms'] = duration
+            with tempfile.TemporaryDirectory() as directory, self.assertRaises(ValueError):
+                self.packer.export(data, Path(directory) / 'bad')
+        with tempfile.TemporaryDirectory() as directory, self.assertRaises(ValueError):
+            self.packer.export(document(), Path(directory) / 'bad', {'visual_scale': [2, 1]})
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'asset'
+            self.packer.export(document(), output)
+            manifest = json.loads((output / 'manifest.json').read_text())
+            manifest['version'] = 2
+            (output / 'manifest.json').write_text(json.dumps(manifest))
+            with self.assertRaisesRegex(ValueError, 'schema'):
+                self.packer.validate(output)
 
 
 if __name__ == '__main__':
