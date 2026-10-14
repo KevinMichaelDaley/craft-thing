@@ -1,6 +1,6 @@
 ---
 id: ctpe-2lx4
-status: open
+status: in_progress
 deps: [ctpe-5lmh, ctpe-b1r2]
 links: []
 created: 2026-10-14T03:22:18Z
