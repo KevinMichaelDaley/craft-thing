@@ -138,3 +138,21 @@ bool fr_occlusion_gpu_read(fr_occlusion_gpu_t *c, uint32_t level, uint32_t x,
                c->hierarchy_mapped)[c->offset[level] + y * c->width[level] + x];
   return true;
 }
+
+bool fr_occlusion_gpu_layout(fr_occlusion_gpu_t *c,
+                             VkDescriptorBufferInfo *buffer, uint32_t *layout) {
+  if (!c || !buffer || !layout)
+    return false;
+  *buffer =
+      (VkDescriptorBufferInfo){c->hierarchy, 0, (VkDeviceSize)c->nodes * 16};
+  layout[0] = c->width[0];
+  layout[1] = c->height[0];
+  layout[2] = c->levels;
+  for (uint32_t l = 0; l < 32; l++) {
+    layout[8 + 4 * l] = c->offset[l];
+    layout[9 + 4 * l] = c->width[l];
+    layout[10 + 4 * l] = c->height[l];
+    layout[11 + 4 * l] = 0;
+  }
+  return true;
+}

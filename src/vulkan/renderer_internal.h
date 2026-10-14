@@ -1,6 +1,7 @@
 #ifndef FERRUM_RENDERER_INTERNAL_H
 #define FERRUM_RENDERER_INTERNAL_H
 
+#include "ferrum/renderer/occlusion_gpu.h"
 #include "gpu_internal.h"
 
 typedef struct {
@@ -22,5 +23,7 @@ void fr_renderer_barrier(VkCommandBuffer command, VkPipelineStageFlags2 source,
                          VkAccessFlags2 destination_access);
 bool fr_renderer_begin(dc_gpu_t *gpu);
 bool fr_renderer_submit(dc_gpu_t *gpu);
+bool fr_occlusion_gpu_layout(fr_occlusion_gpu_t *occlusion,
+                             VkDescriptorBufferInfo *buffer, uint32_t *layout);
 
 #endif
