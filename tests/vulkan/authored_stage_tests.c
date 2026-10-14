@@ -94,10 +94,31 @@ static void test_invalid_role_material_and_fabricated_structure_are_diagnosed(vo
     dc_gpu_destroy(gpu); PASS();
 }
 
+static void test_staging_resize_releases_allocation_and_bad_envelope_keeps_prior(void) {
+    fr_authored_request_t r = request(); pixel(1,1,2,3,0);
+    dc_gpu_t *gpu = context(); ASSERT_TRUE(gpu); char err[256];
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu, &r, err, sizeof(err)));
+    dc_gpu_memory_stats_t large, small;
+    ASSERT_TRUE(dc_gpu_memory_stats(gpu, &large));
+    r.width = 1; r.height = 1;
+    r.physical_bytes = 8; r.appearance_bytes = 64;
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu, &r, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_memory_stats(gpu, &small));
+    ASSERT_TRUE(small.mapped_local_bytes + small.mapped_system_bytes <
+                large.mapped_local_bytes + large.mapped_system_bytes);
+    r.width = UINT32_MAX;
+    ASSERT_TRUE(!fr_gpu_prepare_authored(gpu, &r, err, sizeof(err)));
+    fr_authored_stage_diagnostic_t d;
+    ASSERT_TRUE(fr_gpu_read_authored_stage(gpu, &d, NULL, 0, err, sizeof(err)));
+    ASSERT_EQ(d.failures, 0u); ASSERT_EQ(d.rigid_pixels, 0u);
+    dc_gpu_destroy(gpu); PASS();
+}
+
 int main(void) {
     RUN(test_mixed_concavities_keep_exact_role_object_connectivity);
     RUN(test_diagonal_pixels_remain_independent);
     RUN(test_invalid_role_material_and_fabricated_structure_are_diagnosed);
+    RUN(test_staging_resize_releases_allocation_and_bad_envelope_keeps_prior);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
