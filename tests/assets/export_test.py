@@ -39,6 +39,19 @@ class ExportTests(unittest.TestCase):
             self.assertEqual(document['frames'][0]['channels']['color'][4 * 11:4 * 11 + 4], bytes((1, 2, 3, 255)))
             self.assertEqual(source.read_bytes(), original)
 
+    def test_active_snapshot_request_cannot_pack_old_saved_pixels(self):
+        import sys
+        sys.path.insert(0, str(ROOT / 'scripts/props'))
+        import pack_prop
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'old.aseprite'
+            fixture(source)
+            request = {'snapshot': str(source), 'proof': {'canvas': [5, 5], 'cels': [
+                {'layer': 'color', 'frame': 0, 'xy': [1, 2], 'size': [2, 1],
+                 'sha256': '0' * 64}]}}
+            with self.assertRaisesRegex(ValueError, 'snapshot'):
+                pack_prop.read_request_snapshot(request)
+
 
 if __name__ == '__main__':
     unittest.main()
