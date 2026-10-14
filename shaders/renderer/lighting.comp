@@ -1,0 +1,14 @@
+#version 450
+layout(local_size_x=8,local_size_y=8) in;
+struct Node {float minimum;float maximum;uint known;uint reserved;};
+layout(set=0,binding=0,std430) readonly buffer Hierarchy {Node nodes[];};
+layout(set=0,binding=1,std430) readonly buffer Parameters {uint metadata[];};
+struct Light {vec4 position_radius;vec4 color_intensity;};
+layout(set=0,binding=2,std430) readonly buffer Sources {Light sources[];};
+struct Field {vec4 l0;vec4 lx;vec4 ly;vec4 lz;};
+layout(set=0,binding=3,std430) buffer Fields {Field fields[];};
+void main() {
+    uint i=gl_WorkGroupID.x*8u+gl_LocalInvocationID.y;
+    if(i>=metadata[0]*metadata[1] || gl_LocalInvocationID.x!=0u) return;
+    fields[i]=Field(vec4(0),vec4(0),vec4(0),vec4(0));
+}
