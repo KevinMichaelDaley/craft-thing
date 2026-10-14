@@ -7,14 +7,22 @@
 
 bool fr_appearance_bind(fr_appearance_sidecar_t *s,fr_appearance_owner_t o,
                         fr_appearance_texel_t *t,uint32_t *i,uint8_t *v,uint32_t n) {
-    (void)s;(void)o;(void)t;(void)i;(void)v;(void)n;return false;
+    if (!s || !t || !i || !v || !n || !o.visual_scale) return false;
+    *s=(fr_appearance_sidecar_t){o,t,i,v,n};
+    memset(v,0,n);return true;
 }
 bool fr_appearance_write(fr_appearance_sidecar_t *s,uint32_t t,uint32_t i,fr_appearance_texel_t a) {
-    (void)s;(void)t;(void)i;(void)a;return false;
+    if (!s || t>=s->capacity) return false;
+    for(uint32_t c=0;c<3;c++)
+        if(!isfinite(a.color[c]) || a.color[c]<0 || !isfinite(a.normal[c])) return false;
+    if(!isfinite(a.roughness) || a.roughness<0 || a.roughness>1 || !isfinite(a.relief)) return false;
+    s->texels[t]=a;s->owner_indices[t]=i;s->valid[t]=1;return true;
 }
 bool fr_appearance_read(const fr_appearance_sidecar_t *s,uint32_t t,uint64_t i,uint64_t g,
                         uint32_t *p,fr_appearance_texel_t *a) {
-    (void)s;(void)t;(void)i;(void)g;(void)p;(void)a;return false;
+    if(!s || !p || !a || t>=s->capacity || !s->valid[t] ||
+        !fr_appearance_matches(&s->owner,i,g)) return false;
+    *p=s->owner_indices[t];*a=s->texels[t];return true;
 }
 
 bool fr_appearance_resolve(uint32_t w,uint32_t h,uint32_t s,uint32_t x,uint32_t y,
