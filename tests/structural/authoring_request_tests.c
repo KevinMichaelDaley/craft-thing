@@ -57,7 +57,7 @@ static void test_truncated_maps_and_zero_identity_rejected(void) {
 
 static void test_coordinate_overflow_and_ambiguous_member_plane_rejected(void) {
     fr_authored_request_t r = request();
-    r.origin.x = INT64_MIN; r.pivot_x = 1;
+    r.origin.x = INT64_MIN; r.origin_x = 0; r.pivot_x = 1;
     ASSERT_TRUE(!fr_authored_request_valid(&r, NULL, 0));
     r = request(); r.origin_x = 64;
     ASSERT_TRUE(!fr_authored_request_valid(&r, NULL, 0));
