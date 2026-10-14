@@ -36,6 +36,7 @@ bool fr_authored_request_valid(const fr_authored_request_t *request,
     for (unsigned i = 0; i < sizeof(r->asset_uuid); i++)
         identity |= r->asset_uuid[i];
     if (!identity || !r->transaction_id || !r->state_variant_count ||
+        r->state_variant_count > FR_AUTHORED_STATE_LIMIT ||
         r->state_variant >= r->state_variant_count)
         return invalid(err_buf, err_cap, "Invalid authored identity or state variant");
     if (r->origin_x >= DC_CHUNK_SIDE || r->origin_y >= DC_CHUNK_SIDE ||
@@ -46,5 +47,11 @@ bool fr_authored_request_valid(const fr_authored_request_t *request,
         (!r->member_ownership || !r->structure ||
          r->member_ownership_bytes != count * sizeof(uint32_t)))
         return invalid(err_buf, err_cap, "Structural graph and ownership plane required together");
+    if (r->structure &&
+        (r->structure->node_count > FR_STRUCTURAL_NODE_CAPACITY ||
+         r->structure->member_count > FR_STRUCTURAL_MEMBER_CAPACITY ||
+         r->structure->joint_count > FR_STRUCTURAL_JOINT_CAPACITY ||
+         r->structure->anchor_count > FR_STRUCTURAL_ANCHOR_CAPACITY))
+        return invalid(err_buf, err_cap, "Authored graph exceeds metadata capacities");
     return true;
 }
