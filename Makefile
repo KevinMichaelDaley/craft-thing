@@ -11,6 +11,11 @@ build/shaders/texture.comp.spv: shaders/renderer/texture.comp shaders/renderer/t
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/texture_gpu_tests: tests/renderer/texture_gpu_tests.c src/vulkan/texture_gpu.c src/renderer/appearance.c src/renderer/texture.c build/fluid_tests build/shaders/texture.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/texture_gpu.c src/renderer/appearance.c src/renderer/texture.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/shaders/occlusion.comp.spv: shaders/renderer/occlusion.comp
+	mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/occlusion_gpu_tests: tests/renderer/occlusion_gpu_tests.c src/vulkan/occlusion_gpu.c src/vulkan/renderer_resource.c src/vulkan/renderer_internal.h build/fluid_tests build/shaders/occlusion.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/occlusion_gpu.c src/vulkan/renderer_resource.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 .DEFAULT_GOAL := all
 STRUCTURAL_REFERENCE = tests/structural/reference_solver.c src/structural/material.c
 build/structural_failure_tests: tests/structural/failure_tests.c tests/structural/placement_tests.c build/compound_body_tests

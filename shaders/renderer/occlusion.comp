@@ -1,0 +1,10 @@
+#version 450
+layout(local_size_x=64) in;
+layout(set=0,binding=0,std430) readonly buffer Inputs {uvec2 inputs[];};
+struct Node {float minimum;float maximum;uint known;uint reserved;};
+layout(set=0,binding=1,std430) buffer Hierarchy {Node nodes[];};
+layout(push_constant) uniform Params {uint width;uint height;uint destination;uint source;uint source_width;uint source_height;} p;
+void main() {
+    uint i=gl_GlobalInvocationID.x;if(i>=p.width*p.height) return;
+    nodes[p.destination+i]=Node(0,0,1,0);
+}
