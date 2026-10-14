@@ -635,3 +635,10 @@ build/native_720_performance_tests: tests/app/native_720_performance_tests.c tes
 .PHONY: test_native_720_performance
 test_native_720_performance: build/native_720_performance_tests
 	./build/native_720_performance_tests
+
+build/pixel_motion_cache_tests: tests/vulkan/pixel_motion_cache_tests.c $(GPU_OBJ) build/chunk.o
+	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ $(LDLIBS) -lm
+
+.PHONY: test_pixel_motion_cache
+test_pixel_motion_cache: build/pixel_motion_cache_tests
+	./build/pixel_motion_cache_tests
