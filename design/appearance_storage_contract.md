@@ -34,3 +34,36 @@ atlas index and one destination sparse16x16 tile cell per invocation. Transfers
 must preserve explicit values and preflight appearance capacity atomically with
 geometry before publishing the body. No old serial extraction shader is changed
 on the renderer branch.
+
+## Authored appearance input
+
+`fr_appearance_source_t` is the native Vulkan view of the existing compiled
+prop's 64-byte little-endian record, not a second asset format. Its first32
+bytes are exactly `fr_appearance_texel_t`. Linear HDR emission RGB occupies
+bytes32 through43, byte44 is reserved, visual alpha is at byte48, bytes52
+through59 are reserved, and the surface override mask is at byte60. Mask bits
+normal1, roughness2, and relief4 match the exporter. Renderer generation and
+material defaults supply each absent surface channel; the exporter placeholder
+roughness must never override that decision. Imported color always stays
+independent of the physical material namespace.
+
+`fr_appearance_import` is the per-texel CPU reference for this resolution. It
+preserves authored linear color, HDR emission, and alpha without encoding or
+clamping energy, accepts in-place conversion, and never modifies output on
+failure. Non-finite or negative color/emission, alpha outside zero through one,
+invalid effective surface values, and unknown mask bits fail. Only effective
+surface values are inspected: absent authored channels cannot override their
+renderer defaults. Alpha zero does not remove a physical pixel, and emission
+does not change its density or coverage. The runtime admission shader must
+perform the same bounded conversion independently for each source pixel.
+
+The physics feature transaction supplies the shared status, compiled physical
+and appearance buffers, and64-byte source-to-destination records using native
+Vulkan buffer handles plus byte offsets/extents. Its16-byte immutable provenance
+is appearance identity64, source pixel32, and source frame32. Renderer admission
+reserves appearance, provenance, and emission capacity before the shared
+publication gate; transfer writes unpublished data; publication only observes
+the globally successful transaction. Geometry publication cannot proceed if
+the renderer participant fails. These integration callbacks and persistent
+identity/storage tables remain open work under ctr-ddtf; the reference import
+function does not provide GPU admission or persistence by itself.

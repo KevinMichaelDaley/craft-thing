@@ -27,3 +27,7 @@ Preparing deterministic texture reference tests while ctr-9svu full-suite valida
 **2026-10-14T04:28:32Z**
 
 Parallel GPU texture reference and actual scene-frame GREEN passed with Vulkan validation. Separate color cache is world-indexed and generation/material protected; coherent grain is now used by frame composition. Explicit imported/source-owned body appearance and persistence remain ctr-ddtf; displayed acceptance/performance still pending.
+
+**2026-10-14T04:48:20Z**
+
+Pushed fb35ce8 RED and 0e2015b GREEN: exact 64-byte compiled appearance input/reference resolution. Missing optional surface channels use renderer defaults, authored color/emission/alpha remain independent, malformed input has no partial output mutation. CPU appearance9+texture4+shading3 pass; full make all builds. Runtime imported GPU override/admission and displayed/performance acceptance remain open; shared GPU/device failure currently blocks GPU launches.
