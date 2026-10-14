@@ -1,4 +1,7 @@
 CC ?= cc
+build/appearance_tests: tests/renderer/appearance_tests.c src/renderer/appearance.c include/ferrum/renderer/appearance.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/renderer/appearance_tests.c src/renderer/appearance.c -o $@ -lm
 .DEFAULT_GOAL := all
 STRUCTURAL_REFERENCE = tests/structural/reference_solver.c src/structural/material.c
 build/structural_failure_tests: tests/structural/failure_tests.c tests/structural/placement_tests.c build/compound_body_tests
