@@ -21,6 +21,7 @@ typedef struct {
     float color[3], roughness;
     float normal[3], relief;
     float emission[3], alpha;
+    uint32_t surface_mask;
 } fr_prop_appearance_t;
 
 /** Validate a preloaded compiled asset without allocations; leave output unchanged on failure. */

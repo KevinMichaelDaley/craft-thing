@@ -29,10 +29,11 @@ static void test_real_compiler_asset_holes_and_appearance(void) {
     ASSERT_TRUE(fr_prop_pixel(&asset, 0, 1, &hole));
     ASSERT_INT_EQ(solid.material, 2); ASSERT_INT_EQ(solid.role, 3);
     ASSERT_INT_EQ(hole.material, 0);
-    fr_prop_appearance_t app;
+    fr_prop_appearance_t app = {.surface_mask = UINT32_MAX};
     ASSERT_TRUE(fr_prop_appearance(&asset, 0, 0, &app));
     ASSERT_TRUE(app.color[0] > .30f && app.color[0] < .31f);
     ASSERT_EQ(app.emission[0], 1.f);
+    ASSERT_INT_EQ(app.surface_mask, 0);
     ASSERT_TRUE(!fr_prop_pixel(&asset, 3, 0, &hole));
     PASS();
 }
