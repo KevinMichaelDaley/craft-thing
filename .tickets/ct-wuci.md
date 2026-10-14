@@ -2,7 +2,7 @@
 id: ct-wuci
 status: in_progress
 deps: []
-links: [dun-spbq, ct-alp7]
+links: [dun-spbq, ct-alp7, ct-tu55]
 created: 2026-10-12T23:07:46Z
 type: task
 priority: 2
@@ -50,3 +50,7 @@ Resumed with explicit user requirement: runtime extraction and component-sized/c
 **2026-10-14T03:31:58Z**
 
 Parallel cache-atlas birth GREEN passes11 component and8 pixel-world cases with Vulkan validation and SPIR-V validation: cooperative shared-memory local connectivity, parallel seam union/find, hierarchical root/directory scans, deterministic collision-safe ID/body/arena reservation, parallel source packing/clearing, cooperative geometry copy and integer/compensated property reduction. Parent contact/raster optimizations preserved. New cooperative pixel hydrodynamics removes whole-bounding-area single-lane scans and reconstructs hydrostatic columns via parallel reductions; exact two-concave-body quarter GPU rigid7.652ms/whole12.796ms. Cold whole first-active tick remainsRED28.527ms (extraction~9.7ms; first solver12.36ms);14ms assertion unchanged. Pixel fracture still uses serial BFS/packing and remains outstanding; ticket stays in_progress.
+
+**2026-10-14T03:55:23Z**
+
+Scope split at user request: optimizer retains performance/parallelization of EXISTING fracture BFS, packing, property reductions and arena copying, preserving current exact geometry/physics and transaction semantics. Separate feature worker on feat/structural-fracture-features from6e723cd owns only demonstrably missing NEW behavior and atomic multi-role authoring/appearance integration. Native1280x720 physics AND display30FPS is a separate optimizer target;480x270 gates remain unchanged.

@@ -129,6 +129,7 @@ build/world_body_tests: tests/vulkan/world_body_tests.c $(GPU_OBJ) $(CHUNK_OBJ) 
 build/convex_body_tests: tests/vulkan/convex_body_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 QUARTER_FLAGS = -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u -DDC_PRESSURE_SWEEPS=16u
+NATIVE_720_FLAGS = -DDC_GPU_CHUNK_SLOTS=270u
 build/broadphase_tests: tests/vulkan/broadphase_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_bench build/dungeoncraft_quarter_native: src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
@@ -621,3 +622,16 @@ test_pixel_performance: build/pixel_performance_tests
 
 test: build/pixel_component_tests build/pixel_world_tests build/pixel_geometry_tests
 test_ui test_quarter_native: build/pixel_dynamics_visual_tests
+build/native_720_component_tests: tests/vulkan/native_720_component_tests.c tests/vulkan/pixel_component_tests.c Makefile $(GPU_SRC) src/world/chunk.c build/pixel_component_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(NATIVE_720_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -lm
+
+.PHONY: test_native_720_components
+test_native_720_components: build/native_720_component_tests
+	./build/native_720_component_tests
+
+build/native_720_performance_tests: tests/app/native_720_performance_tests.c tests/vulkan/pixel_component_tests.c tests/vulkan/native_scene.h Makefile $(GPU_SRC) src/world/chunk.c build/pixel_component_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(NATIVE_720_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -lm
+
+.PHONY: test_native_720_performance
+test_native_720_performance: build/native_720_performance_tests
+	./build/native_720_performance_tests
