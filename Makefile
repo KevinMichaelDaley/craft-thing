@@ -1,4 +1,7 @@
 CC ?= cc
+build/authoring_request_tests: tests/structural/authoring_request_tests.c src/structural/authoring.c include/ferrum/structural/authoring.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/structural/authoring_request_tests.c src/structural/authoring.c -o $@
 .DEFAULT_GOAL := all
 STRUCTURAL_REFERENCE = tests/structural/reference_solver.c src/structural/material.c
 build/structural_failure_tests: tests/structural/failure_tests.c tests/structural/placement_tests.c build/compound_body_tests
