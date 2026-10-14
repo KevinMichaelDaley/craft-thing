@@ -1,0 +1,8 @@
+GIMP Palette
+Name: Craft role
+Columns: 8
+# Transparent = absent; metadata labels must be opaque
+  0 255   0 terrain
+255   0   0 structure
+  0   0 255 rigid
+255   0 255 decoration

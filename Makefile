@@ -611,3 +611,19 @@ test_pixel_performance: build/pixel_performance_tests
 
 test: build/pixel_component_tests build/pixel_world_tests build/pixel_geometry_tests
 test_ui test_quarter_native: build/pixel_dynamics_visual_tests
+
+# Offline authoring and preloaded prop reader checks (no Vulkan device needed).
+build/prop_tests: tests/assets/prop_tests.c src/assets/prop.c include/ferrum/assets/prop.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/assets/prop_tests.c src/assets/prop.c -o $@ -lm
+.PHONY: test_prop_assets test_libresprite_host
+test_prop_assets: build/prop_tests
+	python3 -m unittest discover -s tests/assets -p '*_test.py' -k 'SchemaTests'
+	python3 tests/assets/package_test.py
+	python3 tests/assets/reader_test.py
+	python3 tests/assets/compiler_fixture.py
+	./build/prop_tests build/prop_fixture/asset.cprop
+test_libresprite_host:
+	python3 tests/assets/host_probe_test.py
+	python3 tests/assets/export_test.py
+	python3 tests/assets/host_example_test.py
