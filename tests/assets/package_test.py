@@ -94,7 +94,7 @@ class PackageTests(unittest.TestCase):
                 self.packer.validate(output)
 
     def test_invalid_duration_scale_and_schema_rejected(self):
-        for duration in (0, -1, 1.5, 65536):
+        for duration in (0, -1, 1.5, 65536, True):
             data = document()
             data['frames'][0]['duration_ms'] = duration
             with tempfile.TemporaryDirectory() as directory, self.assertRaises(ValueError):
