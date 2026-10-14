@@ -1,6 +1,6 @@
 ---
 id: ctpe-b1r2
-status: in_progress
+status: closed
 deps: [ctpe-5lmh, ctpe-iytx]
 links: []
 created: 2026-10-14T03:22:18Z
@@ -17,3 +17,9 @@ Ship menu/script entry point plus verified optional batch adapter. Extract reser
 
 Actual pinned host runs shipped script on RGB and indexed fixtures; all channels remain synchronized, durations/tags/pivot preserved, unknown labels/duplicates/partial-alpha metadata diagnosed. Saved/unsaved behavior explicit; source unchanged; deterministic and atomic output.
 
+
+## Notes
+
+**2026-10-14T03:54:31Z**
+
+Complete: real in-app JavaScript export_prop.js captures unsaved active edits nondestructively via fresh unique SaveFileCopyAs snapshot and request; SHA256 per active raw cel + bounds/frame identity checked against saved snapshot before supported offline packer. Real-host tests verify both RGBA/indexed, hidden/locked metadata, linked offsets, original unchanged. Stock host cannot launch Python; documented two-step script+adapter workflow. Atomic package publication validated; runtime game placement remains separate open tickets.

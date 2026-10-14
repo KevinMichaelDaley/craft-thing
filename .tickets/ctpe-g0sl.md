@@ -17,3 +17,9 @@ Export an actual template animation using shipped LibreSprite script, compile/im
 
 Actual host + actual game end-to-end, RGB/indexed/offset/linked/hidden metadata coverage; materials/roles/colors/phase/emission stable and correct. Invalid data/atomic capacity cases pass; script mocks alone insufficient. Report import/runtime cost and Vulkan/SPIR-V validation; negotiate GPU window.
 
+
+## Notes
+
+**2026-10-14T03:54:31Z**
+
+Actual LibreSprite1.3 host-to-package-to-Creader offline round trip passes on shipped RGBA/indexed examples;25 newchecks + full validated baseline battery pass. Actual Vulkan game import/display, atomic mixed-role capacity rollback, save/reopen phase/emission ownership and visual evidence not yet implemented. Keep open; mocks/package exports alone do not satisfy acceptance.
