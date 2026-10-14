@@ -26,7 +26,7 @@ static void extraction_stage(dc_gpu_t *gpu, uint32_t push[8], uint32_t mode,
                               ? 24u
                           : mode == 9                ? 15u
                           : mode == 10 || mode == 12 ? 21u
-                          : mode == 3 || mode == 30  ? (stride ? 3u : 30u)
+                          : mode == 3 || mode == 30  ? (stride ? 36u : 30u)
                           : mode == 13               ? 12u
                           : mode == 19 || mode == 32 || mode == 34 ? 27u
                           : groups == 1                            ? 3u

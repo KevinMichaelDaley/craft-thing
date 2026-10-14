@@ -82,6 +82,7 @@ void main() {
     if(EXTRACTION_PHASE==26u) {
         uint lane=gl_LocalInvocationID.x,enabled=uint(data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]!=0u);
         if(lane<27u) activity[lane]=lane%3u==0u?enabled*(lane==0u||lane==12u?(total()+127u)/128u:lane==6u?64u:lane==9u?0u:lane==15u?data[base()+1u]*4u:lane==18u?(total()+16383u)/16384u:lane==21u||lane==24u?data[base()+1u]:1u):1u;
+        if(lane==0u) {activity[36]=enabled*((data[base()+1u]+127u)/128u);activity[37]=1u;activity[38]=1u;}
         return;
     }
     if(data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]==0u) return;
@@ -91,9 +92,11 @@ void main() {
         if(key>=data[base()+1u]*4u) return;
         uint own=registry(key/4u),axis=key%4u,found=0xffffffffu;uvec2 x,y;
         bool valid=shifted_chunk(uvec2(data[own],data[own+1u]),axis==0u?-1:axis==1u?1:0,x)&&shifted_chunk(uvec2(data[own+2u],data[own+3u]),axis==2u?-1:axis==3u?1:0,y);
-        if(valid&&data[own+5u]!=0u&&lane<data[base()+1u]) {
-            uint other=registry(lane);
-            if(data[other+5u]!=0u&&all(equal(uvec2(data[other],data[other+1u]),x))&&all(equal(uvec2(data[other+2u],data[other+3u]),y))) found=lane;
+        if(valid&&data[own+5u]!=0u) {
+            for(uint candidate=lane;candidate<data[base()+1u];candidate+=128u) {
+                uint other=registry(candidate);
+                if(data[other+5u]!=0u&&all(equal(uvec2(data[other],data[other+1u]),x))&&all(equal(uvec2(data[other+2u],data[other+3u]),y))) found=min(found,candidate);
+            }
         }
         values[lane]=found;
         for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) values[lane]=min(values[lane],values[lane+stride]);}

@@ -22,3 +22,7 @@ Measure a real displayed1280x720 window backed by1280x720 physics, whole present
 **2026-10-14T04:14:46Z**
 
 RED: true1280x720 physics/display with270 cache slots and2 fixed60Hz steps per presented frame: dry mean32.552ms p9536.450; dense water/grains mean71.427 p95101.299. Exact concave birth fails; validated separate seam case above slot128 fails. Existing cadence6/default pressure preserved. GPU lease released to feature worker.
+
+**2026-10-14T04:19:41Z**
+
+GREEN scalability subset: cooperative strided registry search and correctly sized root-prefix dispatch remove128-slot assumptions. Native270-slot exact400 seam passes Vulkan validation; default11 pixel and default/quarter3 acceptance each pass; SPIR-V valid.30FPS remains RED. Native concave presented run stalled in GPU fence wait and was terminated without valid timing; GPU recovery confirmed by correctness suites. Instrumented stage markers added for diagnosis.

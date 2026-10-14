@@ -58,7 +58,7 @@ bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
            dc_gpu_make_device_buffer(gpu, flags, &gpu->mpm_accept_buffer,
                                      &gpu->mpm_accept_memory, err, cap) &&
            dc_gpu_make_device_buffer(
-               gpu, (tiles < 15u ? 36u : 7u + 2u * tiles) * sizeof(uint32_t),
+               gpu, (tiles < 16u ? 39u : 7u + 2u * tiles) * sizeof(uint32_t),
                &gpu->mpm_activity_buffer, &gpu->mpm_activity_memory, err,
                cap) &&
            dc_gpu_make_mapped_buffer(gpu, component_cells * sizeof(uint32_t),
