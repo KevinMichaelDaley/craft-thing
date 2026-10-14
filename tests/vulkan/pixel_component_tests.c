@@ -301,7 +301,40 @@ static void test_known_cached_component_outside_viewport_is_extracted(void) {
     dc_gpu_destroy(gpu);
     PASS();
 }
+static void test_parallel_birth_reservation_skips_live_id_collisions(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    for (unsigned y = 10; y < 30; ++y)
+        for (unsigned x = 10; x < 30; ++x)
+            chunk->cells[y * 64 + x].material = DC_MATERIAL_WOOD;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    dc_gpu_body_t existing = {.x_fp = 1 << 16, .y_fp = 1 << 16,
+                              .width = 1, .height = 1,
+                              .id = 0x80000001u, .active = 1};
+    ASSERT_TRUE(dc_gpu_spawn_body(gpu, existing, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(gpu, existing.id, 0, 0,
+                                       DC_GPU_BODY_KINEMATIC, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    uint32_t count;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, 0x80000002u, NULL, 0, &count,
+                                       err, sizeof(err)));
+    ASSERT_EQ(count, 400u);
+    dc_gpu_body_t preserved;
+    ASSERT_TRUE(dc_gpu_read_body_id(gpu, existing.id, &preserved, err, sizeof(err)));
+    ASSERT_EQ(preserved.width, 1u);
+    ASSERT_EQ(preserved.height, 1u);
+    free(chunk);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
 int main(void) {
+    RUN(test_parallel_birth_reservation_skips_live_id_collisions);
     RUN(test_known_cached_component_outside_viewport_is_extracted);
     RUN(test_component_above_256_pixels_is_not_disqualified);
     RUN(test_long_thin_component_above_16_cells_is_not_disqualified);
