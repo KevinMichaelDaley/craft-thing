@@ -27,3 +27,11 @@ Authoring admission ABI agreed with renderer and optimizer. Three GPU staging ac
 **2026-10-14T04:21:24Z**
 
 RED dd5de6a compiled and all3cases failed as intended; GREEN dfca788 GPU staging validates canonical physical/appearance bytes and computes exact four-connected role/object labels with parallel lanes and atomic root hooking. Four GPU checks now pass with Vulkan validation, including staging resize/rollback; spirv-val authored shader passes. This milestone is staging only: overlap/body/geometry/graph/appearance joint reservation and actual publication are still required; ticket remains in progress.
+
+**2026-10-14T04:27:32Z**
+
+Additional proven structural-pixel gaps: structural_capture and damage_members assume rectangle vertex lengths/depth; equilibrium self-weight assumes density*rectangular depth. Exact pixel collider insertion alone is insufficient. Existing graph solve must consume rest endpoints, actual composition mass/COM and a validated section model, before arbitrary structural publication is accepted. Added to audit matrix.
+
+**2026-10-14T05:09:22Z**
+
+External GPU recovery blocker: previouslypassing authored staging timed out45sec exit124 on retry after optimizer unchanged hydro timeout; renderer independently localized successful context/pipeline creation then96-texel first-submit stall. No further GPU launches authorized until recovery. New planning and absent-normal tests compile but were NOT behaviorally RED-verified; preserved as pending tests, no new GREEN implementation. Full feature regressions and publication remain required. See design/physics_feature_checkpoint.md.

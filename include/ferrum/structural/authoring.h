@@ -55,8 +55,11 @@ typedef struct {
     uint32_t local_x, local_y, rest_x, rest_y;
 } fr_authored_destination_t;
 
-/** Backend buffer token and byte extent; callbacks record GPU work rather than
- * dereferencing these buffers or reading their status to the CPU.
+/** Native non-dispatchable backend buffer handle bits and byte range, not an
+ * application lookup-table index. Vulkan uses VkBuffer encoded as uint64;
+ * pointer-form handles convert through uintptr_t. The staging owner keeps
+ * buffers live through recorded submission. Callbacks never dereference these
+ * buffers, read their status to CPU, or retain the plan pointer after recording.
  */
 typedef struct { uint64_t token, offset_bytes, bytes; } fr_authored_buffer_view_t;
 
@@ -133,5 +136,22 @@ bool fr_gpu_read_authored_stage(dc_gpu_t *gpu,
                                 fr_authored_stage_diagnostic_t *diagnostic,
                                 uint32_t *labels, uint32_t label_capacity,
                                 char *err_buf, uint32_t err_cap);
+
+/** Unpublished exact rigid component geometry demand and tentative free slot.
+ * This record grants no ownership and contains no density override. Mass and
+ * inertia are derived later through the shared cooperative material reduction.
+ */
+typedef struct {
+    uint32_t source_root, object, occupied;
+    uint32_t low_x, low_y, width, height, tiles, geometry_words, body_slot;
+} fr_authored_component_plan_t;
+
+/** Opt-in component-plan readback; sorted by canonical source root. Saturated
+ * plans remain unpublished and expose shared failure flags through diagnostics.
+ */
+bool fr_gpu_read_authored_components(dc_gpu_t *gpu,
+                                     fr_authored_component_plan_t *components,
+                                     uint32_t capacity, uint32_t *count,
+                                     char *err_buf, uint32_t err_cap);
 
 #endif

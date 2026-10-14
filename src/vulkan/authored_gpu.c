@@ -189,3 +189,11 @@ bool fr_gpu_read_authored_stage(dc_gpu_t *gpu,
     if (labels) memcpy(labels, s->mapped + STAGE_HEADER_WORDS + s->pixels * 19u, s->pixels * sizeof(*labels));
     return true;
 }
+
+bool fr_gpu_read_authored_components(dc_gpu_t *gpu,
+                                     fr_authored_component_plan_t *components,
+                                     uint32_t capacity, uint32_t *count,
+                                     char *err_buf, uint32_t err_cap) {
+    (void)gpu; (void)components; (void)capacity; (void)count;
+    return error(err_buf, err_cap, "Authored component plans are not implemented");
+}

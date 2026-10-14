@@ -62,6 +62,17 @@ static void test_mixed_concavities_keep_exact_role_object_connectivity(void) {
     ASSERT_TRUE(labels[9] != labels[12]);
     ASSERT_TRUE(labels[21] != labels[22]);
     ASSERT_EQ(labels[34], FR_AUTHORED_INVALID_OUTPUT);
+    fr_authored_component_plan_t plans[3];
+    uint32_t count = 0;
+    ASSERT_TRUE(fr_gpu_read_authored_components(gpu, plans, 3, &count, err, sizeof(err)));
+    ASSERT_EQ(count, 3u); ASSERT_EQ(plans[0].source_root, 9u);
+    ASSERT_EQ(plans[0].object, 7u); ASSERT_EQ(plans[0].occupied, 4u);
+    ASSERT_EQ(plans[0].low_x, 1u); ASSERT_EQ(plans[0].low_y, 1u);
+    ASSERT_EQ(plans[0].width, 2u); ASSERT_EQ(plans[0].height, 3u);
+    ASSERT_EQ(plans[0].tiles, 1u); ASSERT_EQ(plans[0].geometry_words, 42u);
+    ASSERT_EQ(plans[1].source_root, 12u); ASSERT_EQ(plans[2].source_root, 22u);
+    ASSERT_EQ(plans[0].body_slot, 0u); ASSERT_EQ(plans[1].body_slot, 1u);
+    ASSERT_EQ(plans[2].body_slot, 2u);
     dc_gpu_body_t body;
     ASSERT_TRUE(dc_gpu_read_body(gpu, &body, err, sizeof(err)));
     ASSERT_EQ(body.active, 0u);
@@ -114,11 +125,28 @@ static void test_staging_resize_releases_allocation_and_bad_envelope_keeps_prior
     dc_gpu_destroy(gpu); PASS();
 }
 
+static void test_absent_normal_uses_renderer_default_not_raw_placeholder(void) {
+    fr_authored_request_t r = request();
+    memset(appearance + 16, 0, 12);
+    dc_gpu_t *gpu = context(); ASSERT_TRUE(gpu); char err[256];
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu, &r, err, sizeof(err)));
+    fr_authored_stage_diagnostic_t d;
+    ASSERT_TRUE(fr_gpu_read_authored_stage(gpu, &d, NULL, 0, err, sizeof(err)));
+    ASSERT_EQ(d.failures, 0u);
+    appearance[60] = 1;
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu, &r, err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_authored_stage(gpu, &d, NULL, 0, err, sizeof(err)));
+    ASSERT_TRUE(d.failures & FR_AUTHORED_FAIL_INPUT);
+    ASSERT_EQ(d.first_invalid_pixel, 0u);
+    dc_gpu_destroy(gpu); PASS();
+}
+
 int main(void) {
     RUN(test_mixed_concavities_keep_exact_role_object_connectivity);
     RUN(test_diagonal_pixels_remain_independent);
     RUN(test_invalid_role_material_and_fabricated_structure_are_diagnosed);
     RUN(test_staging_resize_releases_allocation_and_bad_envelope_keeps_prior);
+    RUN(test_absent_normal_uses_renderer_default_not_raw_placeholder);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
