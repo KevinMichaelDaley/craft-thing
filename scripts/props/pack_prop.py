@@ -210,7 +210,9 @@ def build(document, options=None):
     compiled_payload = bytes(frame_table + body)
     header = struct.pack('<4s11I16s', b'CPRP', 1, 64 + len(compiled_payload), width, height, len(frames),
                          1 if options['physics_animation'] == 'state_variants' else 0,
-                         64, 64 + len(frame_table), 8, 64, zlib.crc32(compiled_payload), uuid.UUID(asset_uuid).bytes)
+                         64, 64 + len(frame_table), 8, 64, 0, uuid.UUID(asset_uuid).bytes)
+    checksum = zlib.crc32(header[:44] + header[48:] + compiled_payload)
+    header = header[:44] + struct.pack('<I', checksum) + header[48:]
     payloads['asset.cprop'] = header + compiled_payload
     manifest['files'] = {name: hashlib.sha256(value).hexdigest() for name, value in sorted(payloads.items())}
     payloads['manifest.json'] = canonical(manifest)

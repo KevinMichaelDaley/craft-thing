@@ -127,7 +127,7 @@ Every integer/f32 is little-endian, no native struct padding. Header64bytes:
 |28|u32 frame table offset64|
 |32|u32 frame-data offset64+16*frames|
 |36,40|u32 physical stride8, appearance stride64|
-|44|u32 IEEE CRC32 of all bytes after header|
+|44|u32 IEEE CRC32 of all file bytes except this4byte checksum field|
 |48|16byte RFC4122 asset UUID|
 
 Frame descriptor16bytes: u32 duration, relative frame-data offset, physical byte

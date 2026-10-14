@@ -18,6 +18,7 @@ static float prop_float(const uint8_t *p) {
 static uint32_t prop_crc(const uint8_t *p, size_t size) {
     uint32_t crc = UINT32_MAX;
     for (size_t i = 0; i < size; ++i) {
+        if (i >= 44 && i < 48) continue;
         crc ^= p[i];
         for (unsigned bit = 0; bit < 8; ++bit)
             crc = (crc >> 1) ^ (0xedb88320u & (0u - (crc & 1u)));
@@ -51,7 +52,7 @@ bool fr_prop_asset_open(fr_prop_asset_t *asset, const void *bytes, size_t size,
         data_offset != table_end || prop_u32(p + 36) != PROP_MAP ||
         prop_u32(p + 40) != PROP_APPEARANCE || expected_size != size)
         return prop_error(err_buf, err_cap, "Invalid compiled prop dimensions/layout");
-    if (prop_crc(p + PROP_HEADER, size - PROP_HEADER) != prop_u32(p + 44))
+    if (prop_crc(p, size) != prop_u32(p + 44))
         return prop_error(err_buf, err_cap, "Compiled prop CRC mismatch");
     for (uint32_t frame = 0; frame < frames; ++frame) {
         const uint8_t *entry = p + PROP_HEADER + frame * PROP_FRAME;
