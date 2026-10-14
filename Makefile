@@ -36,6 +36,7 @@ build/authored_gpu.o: src/vulkan/authored_gpu.c src/vulkan/gpu_internal.h includ
 GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o build/authored_request.o,$(GPU_OBJ))) src/structural/material.c src/structural/authoring.c
 build/authored_stage_tests: tests/vulkan/authored_stage_tests.c build/compound_body_tests $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/authored_stage_tests
 build/shaders/authored.comp.spv: shaders/sim/authored.comp
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
@@ -447,6 +448,7 @@ build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h
 
 test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/authoring_request_tests
+	./build/authored_stage_tests
 	./build/pixel_component_tests
 	./build/pixel_world_tests
 	./build/pixel_geometry_tests

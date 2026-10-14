@@ -23,3 +23,7 @@ Mixed concavities/holes/disconnected components, material-derived mass/inertia/b
 **2026-10-14T04:12:17Z**
 
 Authoring admission ABI agreed with renderer and optimizer. Three GPU staging acceptance cases compile; RED execution queued after renderer regression and optimizer native checks. Implementing canonical channel validation and four-connected role/object labels on a separate GPU staging path before shared all-role reservation/publication. No gameplay placement completion yet.
+
+**2026-10-14T04:21:24Z**
+
+RED dd5de6a compiled and all3cases failed as intended; GREEN dfca788 GPU staging validates canonical physical/appearance bytes and computes exact four-connected role/object labels with parallel lanes and atomic root hooking. Four GPU checks now pass with Vulkan validation, including staging resize/rollback; spirv-val authored shader passes. This milestone is staging only: overlap/body/geometry/graph/appearance joint reservation and actual publication are still required; ticket remains in progress.
