@@ -113,4 +113,25 @@ typedef struct {
 bool fr_authored_request_valid(const fr_authored_request_t *request,
                                char *err_buf, uint32_t err_cap);
 
+/** Stage and GPU-validate channels and role/object four-connectivity, without
+ * changing gameplay ownership. This is the first transaction pass; successful
+ * recording does not mean pools, overlap, roots or renderer admission passed.
+ */
+bool fr_gpu_prepare_authored(dc_gpu_t *gpu, const fr_authored_request_t *request,
+                             char *err_buf, uint32_t err_cap);
+
+typedef struct {
+    uint32_t failures, rigid_components, rigid_pixels, structural_pixels;
+    uint32_t terrain_pixels, decoration_pixels, first_invalid_pixel;
+} fr_authored_stage_diagnostic_t;
+
+/** Opt-in completed staging readback for tests/tools. Labels are source pixel
+ * indices, or FR_AUTHORED_INVALID_OUTPUT outside rigid pixels. Ordinary placement
+ * and frames must not call this diagnostic to derive physics state.
+ */
+bool fr_gpu_read_authored_stage(dc_gpu_t *gpu,
+                                fr_authored_stage_diagnostic_t *diagnostic,
+                                uint32_t *labels, uint32_t label_capacity,
+                                char *err_buf, uint32_t err_cap);
+
 #endif
