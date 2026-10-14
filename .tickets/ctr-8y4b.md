@@ -17,3 +17,9 @@ Populate the separate color channel using coherent deterministic grain/rings, st
 
 Visible multi-color/relief variation; exact pixel/material mapping; stable seeds and rest-space appearance under rotation/camera changes; no cross-material bleeding, fake filled holes or normal-frame CPU physics copyback.
 
+
+## Notes
+
+**2026-10-14T03:20:50Z**
+
+Preparing deterministic texture reference tests while ctr-9svu full-suite validation awaits fair shared-GPU window. Implementation generation is per texel, no ordinary-frame CPU appearance copyback.
