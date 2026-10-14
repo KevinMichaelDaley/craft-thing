@@ -528,6 +528,16 @@ build/shaders/component_extract.comp.spv: shaders/sim/component_extract.comp sha
 	mkdir -p build/shaders
 	glslangValidator -V --target-env vulkan1.3 $< -o $@
 build/fluid_tests: build/shaders/component_extract.comp.spv
+build/shaders/component_local.comp.spv: shaders/sim/component_local.comp shaders/sim/rigid_body.glsl
+	mkdir -p build/shaders
+	glslangValidator -V --target-env vulkan1.3 $< -o $@
+
+$(GPU_OBJ) build/fluid_tests: build/shaders/component_local.comp.spv
+build/shaders/pixel_hydro.comp.spv: shaders/sim/pixel_hydro.comp shaders/sim/rigid_body.glsl shaders/sim/rigid_clip.glsl shaders/sim/rigid_hydro.glsl shaders/sim/structural_load.glsl
+	mkdir -p build/shaders
+	glslangValidator -V --target-env vulkan1.3 $< -o $@
+
+$(GPU_OBJ) build/fluid_tests: build/shaders/pixel_hydro.comp.spv
 
 build/component_gpu.o: src/vulkan/component_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@

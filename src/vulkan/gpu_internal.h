@@ -101,7 +101,7 @@ struct dc_gpu {
     VkBuffer mpm_label_a_buffer, mpm_label_b_buffer, mpm_component_size_buffer;
     VkDeviceMemory mpm_label_a_memory, mpm_label_b_memory, mpm_component_size_memory;
     void *mpm_label_a_mapped, *mpm_label_b_mapped, *mpm_component_size_mapped;
-    VkPipeline mpm_component_pipeline, component_extract_pipeline;
+    VkPipeline mpm_component_pipeline, component_extract_pipelines[35];
     bool automatic_components_enabled;
     VkBuffer page_buffer;
     VkDeviceMemory page_memory;
@@ -124,6 +124,7 @@ struct dc_gpu {
     VkPipeline broadphase_pipeline;
     VkPipeline contact_pipelines[DC_GPU_CONTACT_PHASE_COUNT];
     VkPipeline solver_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
+    VkPipeline pixel_hydro_pipelines[4];
     VkPipeline structural_pipelines[DC_GPU_STRUCTURAL_PHASE_COUNT];
     bool structural_enabled;
     dc_chunk_t *checkpoint_chunks;
@@ -135,6 +136,7 @@ struct dc_gpu {
     void *trace_mapped;
     VkPipeline probe_pipeline;
     VkQueryPool timestamp_pool;
+    bool component_profile;
     float timestamp_period;
     uint32_t timestamp_bits;
     VkBuffer halo_buffer;

@@ -1,0 +1,67 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "rigid_body.glsl"
+layout(local_size_x=128) in;
+layout(constant_id=0) const uint EXTRACTION_PHASE=0u;
+layout(set=0,binding=1,std430) buffer Cells { uvec2 cells[]; };
+layout(set=0,binding=4,std430) buffer Storage { Body bodies[BODY_CAPACITY]; uint data[]; };
+layout(set=0,binding=27,std430) buffer Activity { uint activity[]; };
+layout(set=0,binding=28,std430) buffer Labels { uint labels[]; };
+layout(set=0,binding=29,std430) buffer Candidates { uint candidates[]; };
+layout(set=0,binding=30,std430) buffer Sizes { uint sizes[]; };
+layout(push_constant) uniform Params { uint width,height,mode,count; uvec2 origin_x,origin_y; } params;
+uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
+uint base() {
+    uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
+    return 8u+2u*w*h+4096u*8u+12u+8192u*32u+16u+64u*32u+8192u*16u;
+}
+uint graph() {return base()+32u+data[base()+1u]*8u;}
+uint total() {return data[base()+1u]*4096u;}
+uint pool() {return graph()+40000u;}
+uint capacity() {return 2u*((max(params.width*params.height,total())+7u)/8u)+64u*8u;}
+uint record(uint c) {return graph()+36300u+c*24u;}
+uint registry(uint s) {return base()+32u+s*8u;}
+bool solid(uint i) {uint m=cells[i].x&65535u;return data[registry(i/4096u)+5u]!=0u&&(m==1u||m==7u||m==8u);}
+uint neighbor(uint i,uint axis) {
+    uint p=i%4096u,x=p%64u,y=p/64u;
+    if(axis==0u&&x>0u) return i-1u;
+    if(axis==1u&&x<63u) return i+1u;
+    if(axis==2u&&y>0u) return i-64u;
+    if(axis==3u&&y<63u) return i+64u;
+    uint s=labels[total()+i/4096u*4u+axis];
+    return s==0xffffffffu?s:s*4096u+(axis==0u?y*64u+63u:axis==1u?y*64u:axis==2u?4032u+x:x);
+}
+ivec2 relative_point(uint root,uint i) {
+    uint a=registry(root/4096u),b=registry(i/4096u);
+    return ivec2(data[b]-data[a],data[b+2u]-data[a+2u])*64+ivec2(i%64u,(i%4096u)/64u);
+}
+shared uint values[128],chunk_roots[4096];
+void main() {
+    if(data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]==0u) return;
+    uint lane=gl_LocalInvocationID.x;
+    if(EXTRACTION_PHASE==10u) {
+        uint slot=gl_WorkGroupID.x;if(slot>=data[base()+1u]) return;
+        uint count=0u;
+        for(uint cell=lane;cell<4096u;cell+=128u) {bool occupied=solid(slot*4096u+cell);chunk_roots[cell]=occupied?cell:0xffffffffu;count+=uint(occupied);}
+        values[lane]=count;
+        for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) values[lane]+=values[lane+stride];}barrier();
+        bool any_solid=values[0]!=0u;
+        if(any_solid) do {
+            uint changed=0u;
+            for(uint cell=lane;cell<4096u;cell+=128u) {
+                uint a=atomicAdd(chunk_roots[cell],0u);if(a==0xffffffffu) continue;
+                for(uint axis=0u;axis<2u;axis++) {
+                    if(axis==0u?cell%64u==63u:cell>=4032u) continue;
+                    uint b=atomicAdd(chunk_roots[cell+(axis==0u?1u:64u)],0u);
+                    if(b!=0xffffffffu) {uint old=atomicMin(chunk_roots[max(a,b)],min(a,b));changed|=uint(old>min(a,b));}
+                }
+            }
+            barrier();
+            for(uint cell=lane;cell<4096u;cell+=128u) {uint p=atomicAdd(chunk_roots[cell],0u);if(p!=0xffffffffu) {uint root=atomicAdd(chunk_roots[p],0u),old=atomicMin(chunk_roots[cell],root);changed|=uint(old>root);}}
+            values[lane]=changed;
+            for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) values[lane]|=values[lane+stride];}barrier();
+        } while(values[0]!=0u);
+        for(uint cell=lane;cell<4096u;cell+=128u) {uint index=slot*4096u+cell,root=chunk_roots[cell];labels[index]=root==0xffffffffu?root:slot*4096u+root;candidates[index]=labels[index];sizes[index]=0u;}
+        return;
+    }
+}

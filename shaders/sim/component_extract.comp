@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "rigid_body.glsl"
 layout(local_size_x=128) in;
+layout(constant_id=0) const uint EXTRACTION_PHASE=0u;
 layout(set=0,binding=1,std430) buffer Cells { uvec2 cells[]; };
 layout(set=0,binding=4,std430) buffer Storage { Body bodies[BODY_CAPACITY]; uint data[]; };
 layout(set=0,binding=27,std430) buffer Activity { uint activity[]; };
@@ -35,9 +36,18 @@ ivec2 relative_point(uint root,uint i) {
     return ivec2(data[b]-data[a],data[b+2u]-data[a+2u])*64+ivec2(i%64u,(i%4096u)/64u);
 }
 shared uint values[128],slots[128];
+shared uint birth_count;
 shared uvec2 moments_x[128],moments_y[128];
 shared float moments_i[128];
 uvec2 add_wide(uvec2 a,uvec2 b) {uint lo=a.x+b.x;return uvec2(lo,a.y+b.y+uint(lo<a.x));}
+uint component_root(uint index) {
+    uint parent=atomicAdd(candidates[index],0u);
+    while(parent!=index) {
+        uint ancestor=atomicAdd(candidates[parent],0u);
+        atomicMin(candidates[index],ancestor);index=parent;parent=ancestor;
+    }
+    return index;
+}
 void scan_values() {
     barrier();
     for(uint stride=1u;stride<128u;stride*=2u) {
@@ -69,14 +79,14 @@ void initialize_body(uint r) {
     data[owner]=b.id;data[owner+1u]=1u;data[owner+2u]=data[r+13u];data[owner+3u]=1u;
 }
 void main() {
-    if(params.mode==26u) {
+    if(EXTRACTION_PHASE==26u) {
         uint lane=gl_LocalInvocationID.x,enabled=uint(data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]!=0u);
-        if(lane<18u) activity[lane]=lane%3u==0u?enabled*(lane==0u||lane==12u?(total()+127u)/128u:lane==6u?64u:lane==9u?0u:lane==15u?data[base()+1u]*4u:1u):1u;
+        if(lane<27u) activity[lane]=lane%3u==0u?enabled*(lane==0u||lane==12u?(total()+127u)/128u:lane==6u?64u:lane==9u?0u:lane==15u?data[base()+1u]*4u:lane==18u?(total()+16383u)/16384u:lane==21u||lane==24u?data[base()+1u]:1u):1u;
         return;
     }
     if(data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]==0u) return;
     uint i=gl_GlobalInvocationID.x,lane=gl_LocalInvocationID.x,n=total(),g=graph();
-    if(params.mode==9u) {
+    if(EXTRACTION_PHASE==9u) {
         uint key=gl_WorkGroupID.x;
         if(key>=data[base()+1u]*4u) return;
         uint own=registry(key/4u),axis=key%4u,found=0xffffffffu;uvec2 x,y;
@@ -89,38 +99,70 @@ void main() {
         for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) values[lane]=min(values[lane],values[lane+stride]);}
         barrier();if(lane==0u) labels[n+key]=values[0];return;
     }
-    if(params.mode>=10u&&params.mode<=14u) {
+
+    if(EXTRACTION_PHASE==12u) {
+        uint index=gl_WorkGroupID.x*4096u+(lane<64u?lane*64u+63u:4032u+lane-64u);
+        if(!solid(index)) return;
+        uint other=neighbor(index,lane<64u?1u:3u);if(other==0xffffffffu||!solid(other)) return;
+        for(;;) {
+            uint a=component_root(index),b=component_root(other);if(a==b) break;
+            uint hi=max(a,b),lo=min(a,b);
+            if(atomicCompSwap(candidates[hi],hi,lo)==hi) break;
+        }
+        return;
+    }
+    if(EXTRACTION_PHASE==13u||EXTRACTION_PHASE==14u) {
         if(i>=n) return;
-        if(params.mode==10u) {labels[i]=solid(i)?i:0xffffffffu;candidates[i]=labels[i];sizes[i]=0u;return;}
         if(!solid(i)) return;
-        if(params.mode==11u) candidates[i]=labels[i];
-        if(params.mode==12u) for(uint axis=1u;axis<=3u;axis+=2u) {
-            uint other=neighbor(i,axis);if(other==0xffffffffu||!solid(other)) continue;
-            uint a=labels[i],b=labels[other];uint old=atomicMin(candidates[max(a,b)],min(a,b));if(old>min(a,b)) atomicOr(activity[9],1u);
-        }
-        if(params.mode==13u) {uint p=candidates[i],root=candidates[p];if(labels[i]!=root) atomicOr(activity[9],1u);labels[i]=root;}
-        if(params.mode==14u) atomicAdd(sizes[labels[i]],1u);
+        if(EXTRACTION_PHASE==13u) labels[i]=component_root(i);
+        if(EXTRACTION_PHASE==14u) atomicAdd(sizes[labels[i]],1u);
         return;
     }
-    if(params.mode==1u) {
-        if(i>=n) return;
-        uint root=(data[g+36256u]%n+i)%n;candidates[i]=uint(solid(root)&&labels[root]==root&&sizes[root]!=0u);return;
+    if(EXTRACTION_PHASE==1u) {
+        if(i>=n/32u) return;
+        uint mask=0u;
+        for(uint bit=0u;bit<32u;bit++) {uint root=(data[g+36256u]%n+i*32u+bit)%n;if(solid(root)&&labels[root]==root&&sizes[root]!=0u) mask|=1u<<bit;}
+        candidates[i]=bitCount(mask);candidates[n+i]=mask;return;
     }
-    if(params.mode==2u) {if(i<n) sizes[n+i]=candidates[i]+(i>=params.count?candidates[i-params.count]:0u);return;}
-    if(params.mode==3u) {if(i<n) candidates[i]=sizes[n+i];return;}
-    if(params.mode==4u) {
-        if(i>=n) return;
-        uint rank=candidates[i],previous=i==0u?0u:candidates[i-1u];
-        if(rank>previous&&rank<=64u) {
-            uint r=record(rank-1u);for(uint word=0u;word<24u;word++) data[r+word]=0u;
-            data[r]=(data[g+36256u]%n+i)%n;data[r+1u]=0xffffffffu;data[r+2u]=0xffffffffu;
+    if(EXTRACTION_PHASE==2u||EXTRACTION_PHASE==19u) {
+        uint shift=EXTRACTION_PHASE==19u?n:0u,limit=params.count==0u?data[g+36260u]:params.count;
+        values[lane]=i<limit?candidates[shift+i]:0u;
+        scan_values();if(i<limit) candidates[shift+i]=values[lane];
+        if(lane==127u) sizes[n+gl_WorkGroupID.x]=values[lane];return;
+    }
+    if(EXTRACTION_PHASE==3u) {
+        uint limit=params.count==0u?data[g+36260u]:params.count,blocks=(limit+127u)/128u;if(gl_WorkGroupID.x>=(blocks+127u)/128u) return;
+        values[lane]=i<blocks?sizes[n+i]:0u;scan_values();
+        if(i<blocks) sizes[n+i]=values[lane];
+        if(lane==127u) sizes[n+blocks+gl_WorkGroupID.x]=values[lane];return;
+    }
+    if(EXTRACTION_PHASE==29u) {
+        uint limit=params.count==0u?data[g+36260u]:params.count,blocks=(limit+127u)/128u,higher=(blocks+127u)/128u;
+        values[lane]=lane<higher?sizes[n+blocks+lane]:0u;scan_values();
+        if(lane<higher) sizes[n+blocks+lane]=values[lane];return;
+    }
+    if(EXTRACTION_PHASE==30u) {
+        uint limit=params.count==0u?data[g+36260u]:params.count,blocks=(limit+127u)/128u;if(i<blocks&&i>=128u) sizes[n+i]+=sizes[n+blocks+i/128u-1u];return;
+    }
+    if(EXTRACTION_PHASE==31u||EXTRACTION_PHASE==32u) {
+        uint shift=EXTRACTION_PHASE==32u?n:0u,limit=params.count==0u?data[g+36260u]:params.count;
+        if(i<limit&&i>=128u) candidates[shift+i]+=sizes[n+i/128u-1u];return;
+    }
+    if(EXTRACTION_PHASE==4u) {
+        if(i>=n/32u) return;
+        uint rank=candidates[i],previous=i==0u?0u:candidates[i-1u],mask=candidates[n+i];
+        for(uint bit=0u;bit<32u;bit++) if((mask&(1u<<bit))!=0u) {
+            uint selected=previous+bitCount(mask&((1u<<bit)-1u));if(selected>=64u) continue;
+            uint r=record(selected);for(uint word=0u;word<24u;word++) data[r+word]=0u;
+            data[r]=(data[g+36256u]%n+i*32u+bit)%n;data[r+1u]=0xffffffffu;data[r+2u]=0xffffffffu;
         }
-        if(i==n-1u) {data[g+36257u]=min(rank,64u);data[g+36259u]=uint(rank>64u);}
+        if(i==n/32u-1u) {data[g+36257u]=min(rank,64u);data[g+36259u]=uint(rank>64u);}
         return;
     }
-    if(params.mode==5u) {if(i<n) {candidates[i]=0xffffffffu;candidates[n+i]=0u;}return;}
-    if(params.mode==6u) {if(i<data[g+36257u]) candidates[data[record(i)]]=i;return;}
-    if(params.mode==7u) {
+    if(EXTRACTION_PHASE==5u) {if(i<n) candidates[i]=0xffffffffu;return;}
+    if(EXTRACTION_PHASE==34u) {if(i<data[g+36260u]) candidates[n+i]=0u;return;}
+    if(EXTRACTION_PHASE==6u) {if(i<data[g+36257u]) candidates[data[record(i)]]=i;return;}
+    if(EXTRACTION_PHASE==7u) {
         if(i>=n||!solid(i)) return;
         uint c=candidates[labels[i]];if(c>=data[g+36257u]) return;
         uint r=record(c);ivec2 p=relative_point(data[r],i);
@@ -129,7 +171,7 @@ void main() {
         for(uint axis=0u;axis<4u;axis++) if(neighbor(i,axis)==0xffffffffu) atomicOr(data[r+6u],1u);
         return;
     }
-    if(params.mode==8u) {
+    if(EXTRACTION_PHASE==8u) {
         uint count=data[g+36257u];
         if(lane<count) {
             uint r=record(lane);for(uint w=1u;w<=4u;w++) data[r+w]^=0x80000000u;
@@ -140,9 +182,9 @@ void main() {
         } else values[lane]=0u;
         scan_values();
         if(lane<count) {uint r=record(lane);data[r+9u]=values[lane]-data[r+7u];if(values[lane]>n) data[r+7u]=0u;}
-        if(lane==0u) data[g+36260u]=min(values[127],n);return;
+        if(lane==0u) {uint limit=min(values[127],n);data[g+36260u]=limit;activity[27]=(limit+127u)/128u;activity[28]=1u;activity[29]=1u;activity[30]=(limit+16383u)/16384u;activity[31]=1u;activity[32]=1u;}return;
     }
-    if(params.mode==15u) {
+    if(EXTRACTION_PHASE==15u) {
         if(i>=n||!solid(i)) return;
         uint c=candidates[labels[i]];if(c>=data[g+36257u]) return;
         uint r=record(c);if(data[r+7u]==0u) return;
@@ -150,23 +192,21 @@ void main() {
         uint width=uint((int(data[r+3u])-low.x+16)/16),tile=uint(p.y/16)*width+uint(p.x/16);
         atomicOr(candidates[n+data[r+9u]+tile],1u);return;
     }
-    if(params.mode==19u) {if(i<data[g+36260u]) sizes[n+i]=candidates[n+i]+(i>=params.count?candidates[n+i-params.count]:0u);return;}
-    if(params.mode==20u) {if(i<data[g+36260u]) candidates[n+i]=sizes[n+i];return;}
-    if(params.mode==16u) {
+    if(EXTRACTION_PHASE==16u) {
         uint words=lane<64u&&pixel_body(bodies[lane])&&(bodies[lane].enabled!=0u||bodies[lane].reserved0!=0u)?pixel_shape_words(bodies[lane]):0u;
         values[lane]=words;scan_values();if(lane<64u) sizes[lane]=values[lane]-words;
         if(lane==0u) {data[g+36261u]=values[127];data[g+36262u]=1u-data[pool()];}return;
     }
-    if(params.mode==17u) {
+    if(EXTRACTION_PHASE==17u) {
         uint s=gl_WorkGroupID.x;if(s>=64u) return;Body b=bodies[s];if(!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) return;
         uint target=pool()+16u+data[g+36262u]*capacity()+sizes[s];
         for(uint w=lane;w<pixel_shape_words(b);w+=128u) data[target+w]=pixel_word_at(b.compound_reserved+w);return;
     }
-    if(params.mode==18u) {
+    if(EXTRACTION_PHASE==18u) {
         if(i<64u&&pixel_body(bodies[i])&&(bodies[i].enabled!=0u||bodies[i].reserved0!=0u)) bodies[i].compound_reserved=BODY_STORAGE_WORDS+pool()+16u+data[g+36262u]*capacity()+sizes[i];
         if(i==0u) {data[pool()]=data[g+36262u];data[pool()+1u]=data[g+36261u];data[pool()+2u]=capacity();}return;
     }
-    if(params.mode==21u) {
+    if(EXTRACTION_PHASE==21u) {
         uint count=data[g+36257u],free=lane<64u?uint(bodies[lane].enabled==0u&&bodies[lane].reserved0==0u):0u;
         values[lane]=free;scan_values();if(free!=0u) slots[values[lane]-1u]=lane;uint available=values[127];barrier();
         uint words=0u,eligible=0u;
@@ -177,9 +217,21 @@ void main() {
         }
         values[lane]=eligible*words;scan_values();uint offset=values[lane]-eligible*words;
         eligible*=uint(values[lane]<=capacity()-data[pool()+1u]);values[lane]=eligible;scan_values();
-        eligible*=uint(values[lane]<=available&&data[base()+14u]<=0x7fffffffu-values[lane]);
-        if(lane<count) {uint r=record(lane);data[r+14u]=eligible;if(eligible!=0u) {data[r+11u]=pool()+16u+data[pool()]*capacity()+data[pool()+1u]+offset;data[r+12u]=slots[values[lane]-1u];data[r+13u]=data[base()+14u]+values[lane];}}
-        barrier();values[lane]=eligible!=0u?lane+1u:0u;
+        eligible*=uint(values[lane]<=available);
+        if(lane==0u) birth_count=min(values[127],available);
+        if(lane<count) {uint r=record(lane);data[r+14u]=eligible;data[r+13u]=0u;if(eligible!=0u) {data[r+11u]=pool()+16u+data[pool()]*capacity()+data[pool()+1u]+offset;data[r+12u]=slots[values[lane]-1u];moments_x[values[lane]-1u].x=lane;}}
+        barrier();
+        uint serial=data[base()+14u];slots[lane]=uint(lane+1u<=0x7fffffffu-serial);barrier();
+        if(lane<64u&&(bodies[lane].enabled!=0u||bodies[lane].reserved0!=0u)) {
+            uint id=bodies[lane].id;
+            if(id>0x80000000u+serial&&id-(0x80000000u+serial)<=128u)
+                atomicExchange(slots[id-(0x80000000u+serial)-1u],0u);
+        }
+        barrier();values[lane]=slots[lane];scan_values();
+        if(slots[lane]!=0u&&values[lane]<=birth_count) data[record(moments_x[values[lane]-1u].x)+13u]=serial+lane+1u;
+        barrier();
+        if(lane<count) {uint r=record(lane);data[r+14u]*=uint(data[r+13u]!=0u);eligible=data[r+14u];}
+        values[lane]=eligible!=0u?lane+1u:0u;
         for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) values[lane]=max(values[lane],values[lane+stride]);}barrier();
         if(lane==0u) {
             uint last=values[0];data[g+36258u]=last;
@@ -190,7 +242,7 @@ void main() {
         for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) values[lane]|=values[lane+stride];}barrier();
         if(lane==0u) data[g+36259u]|=values[0];return;
     }
-    if(params.mode==22u) {
+    if(EXTRACTION_PHASE==22u) {
         uint c=gl_WorkGroupID.x;if(c>=data[g+36257u]) return;uint r=record(c);if(data[r+14u]==0u) return;
         uint target=data[r+11u],dir=data[r+7u],start=data[r+9u],width=uint((int(data[r+3u])-int(data[r+1u])+16)/16);
         ivec2 low=ivec2(data[r+1u],data[r+2u]);
@@ -205,7 +257,7 @@ void main() {
         }
         return;
     }
-    if(params.mode==28u) {
+    if(EXTRACTION_PHASE==28u) {
         if(i>=n||!solid(i)) return;
         uint c=candidates[labels[i]];if(c>=data[g+36257u]) return;
         uint r=record(c);if(data[r+14u]==0u) return;
@@ -214,7 +266,7 @@ void main() {
         uint target=data[r+11u],offset=data[target+8u+tile],cell=uint(p.y%16)*16u+uint(p.x%16),m=cells[i].x&65535u;
         atomicOr(data[target+offset+1u+cell/8u],(m==7u?2u:m==8u?4u:1u)<<((cell%8u)*4u));return;
     }
-    if(params.mode==23u) {
+    if(EXTRACTION_PHASE==23u) {
         uint c=gl_WorkGroupID.x;if(c>=data[g+36257u]) return;uint r=record(c);if(data[r+14u]==0u) return;
         Body b=bodies[data[r+12u]];b.compound_reserved=BODY_STORAGE_WORDS+data[r+11u];b.piece_count=PIXEL_BODY_FLAG|data[r+5u];
         uint mass10=0u;uvec2 mx=uvec2(0),my=uvec2(0);
@@ -233,7 +285,7 @@ void main() {
         moments_i[lane]=moment;for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) moments_i[lane]+=moments_i[lane+stride];}barrier();
         if(lane==0u) {data[r+15u]=values[0];data[r+20u]=floatBitsToUint(center.x);data[r+21u]=floatBitsToUint(center.y);data[r+22u]=floatBitsToUint(moments_i[0]);initialize_body(r);}return;
     }
-    if(params.mode==24u) {if(i<n&&solid(i)) {uint c=candidates[labels[i]];if(c<data[g+36257u]&&data[record(c)+14u]!=0u) cells[i].x=0u;}return;}
-    if(params.mode==25u&&i==0u) data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]=data[g+36259u];
-    if(params.mode==27u&&i==0u) {activity[12]=activity[9]!=0u?(n+127u)/128u:0u;activity[9]=0u;}
+    if(EXTRACTION_PHASE==24u) {if(i<n&&solid(i)) {uint c=candidates[labels[i]];if(c<data[g+36257u]&&data[record(c)+14u]!=0u) cells[i].x=0u;}return;}
+    if(EXTRACTION_PHASE==25u&&i==0u) data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]=data[g+36259u];
+    if(EXTRACTION_PHASE==27u&&i==0u) {activity[12]=activity[9]!=0u?(n+127u)/128u:0u;activity[21]=activity[9]!=0u?data[base()+1u]:0u;activity[9]=0u;}
 }

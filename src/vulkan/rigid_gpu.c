@@ -172,6 +172,9 @@ void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
         if (gpu->contact_pipelines[phase]) vkDestroyPipeline(gpu->device, gpu->contact_pipelines[phase], NULL);
     for (uint32_t i=0;i<DC_GPU_SOLVER_PHASE_COUNT;++i)
         if (gpu->solver_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->solver_pipelines[i],NULL);
+    for (unsigned i = 0; i < 4; ++i)
+        if (gpu->pixel_hydro_pipelines[i])
+            vkDestroyPipeline(gpu->device, gpu->pixel_hydro_pipelines[i], NULL);
     if (gpu->broadphase_pipeline) vkDestroyPipeline(gpu->device, gpu->broadphase_pipeline, NULL);
     if (gpu->rigid_pipeline) vkDestroyPipeline(gpu->device, gpu->rigid_pipeline, NULL);
     if (gpu->rigid_prepare_pipeline) vkDestroyPipeline(gpu->device,gpu->rigid_prepare_pipeline,NULL);
@@ -384,9 +387,15 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
         .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT };
     dep.pMemoryBarriers = &between;
     vkCmdPipelineBarrier2(gpu->command, &dep);
+    if (gpu->component_profile)
+        vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                              gpu->timestamp_pool, 13);
     if (advance && gpu->rigid_solver_enabled && count) {
         dc_gpu_record_solver(gpu);
     }
+    if (gpu->component_profile)
+        vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                              gpu->timestamp_pool, 14);
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_pipeline);
     push[2] = RIGID_RASTER | (gpu->rigid_solver_enabled ? RIGID_PHYSICAL_MASK : 0u);
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
@@ -403,6 +412,9 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
     dc_gpu_record_broadphase(gpu);
     dc_gpu_record_contacts(gpu);
     if (advance) dc_gpu_record_structural(gpu);
+    if (gpu->component_profile)
+        vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                              gpu->timestamp_pool, 15);
     if (advance && gpu->structural_enabled) {
         vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_pipeline);
         push[2] = RIGID_RASTER | RIGID_PHYSICAL_MASK;

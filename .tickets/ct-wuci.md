@@ -46,3 +46,7 @@ Final quarter battery exposed an obsolete stationary-floor fixture: its 50x1 pai
 **2026-10-13T19:35:00Z**
 
 Resumed with explicit user requirement: runtime extraction and component-sized/count-sized/arena-sized work must use GPU-parallel passes, cooperative workgroups, reductions/scans and deterministic transactional allocation; no single-lane whole-component packing/mass or whole-arena compaction. GPU benchmark scheduling remains serialized for valid measurements.
+
+**2026-10-14T03:31:58Z**
+
+Parallel cache-atlas birth GREEN passes11 component and8 pixel-world cases with Vulkan validation and SPIR-V validation: cooperative shared-memory local connectivity, parallel seam union/find, hierarchical root/directory scans, deterministic collision-safe ID/body/arena reservation, parallel source packing/clearing, cooperative geometry copy and integer/compensated property reduction. Parent contact/raster optimizations preserved. New cooperative pixel hydrodynamics removes whole-bounding-area single-lane scans and reconstructs hydrostatic columns via parallel reductions; exact two-concave-body quarter GPU rigid7.652ms/whole12.796ms. Cold whole first-active tick remainsRED28.527ms (extraction~9.7ms; first solver12.36ms);14ms assertion unchanged. Pixel fracture still uses serial BFS/packing and remains outstanding; ticket stays in_progress.
