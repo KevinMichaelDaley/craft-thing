@@ -68,10 +68,17 @@ keep that unmet contract visible until explicit graph metadata is available.
 Renderer admission consumes the shared transaction status, canonical appearance
 source buffer and per-source destination map. Proposed provenance is16bytes:
 appearance identity-u64, source pixel-u32, source/reference frame-u32. The persisted
-appearance identity table maps asset UUID+authored object; runtime body IDs and
+appearance identity table maps asset UUID+authored object+placement instance;
+transaction identity retains that instance through replay. Runtime body IDs and
 storage generations remain separate. Signed64 chunk/local source ownership survives
 rebasing. Decoration outside physical occupancy has asset-instance rest ownership;
-it may render/emit without adding collision or mass. Color alpha never changes
+it may render/emit without adding collision or mass. Renderer admission participates
+for decoration/emission-only texels too. The16-word status reserves provenance
+demand8, emission demand9, appearance instance10 and generation11/12. Destination
+records are64bytes; geometry_word is an absolute sparse shape-header word,
+rest_x/y resolve the target tile directory and tile_cell is0..255. Terrain and
+decoration use UINT32_MAX body/shape sentinels. Buffer views carry byte offsets,
+so source planes and status may share one allocation. Color alpha never changes
 physical occupancy.
 
 ## Required follow-on tests
