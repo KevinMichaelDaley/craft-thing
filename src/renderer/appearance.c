@@ -1,8 +1,21 @@
 #include <math.h>
 #include <stddef.h>
+#include <string.h>
 
 #include "dungeoncraft/chunk.h"
 #include "ferrum/renderer/appearance.h"
+
+bool fr_appearance_bind(fr_appearance_sidecar_t *s,fr_appearance_owner_t o,
+                        fr_appearance_texel_t *t,uint32_t *i,uint8_t *v,uint32_t n) {
+    (void)s;(void)o;(void)t;(void)i;(void)v;(void)n;return false;
+}
+bool fr_appearance_write(fr_appearance_sidecar_t *s,uint32_t t,uint32_t i,fr_appearance_texel_t a) {
+    (void)s;(void)t;(void)i;(void)a;return false;
+}
+bool fr_appearance_read(const fr_appearance_sidecar_t *s,uint32_t t,uint64_t i,uint64_t g,
+                        uint32_t *p,fr_appearance_texel_t *a) {
+    (void)s;(void)t;(void)i;(void)g;(void)p;(void)a;return false;
+}
 
 bool fr_appearance_resolve(uint32_t w,uint32_t h,uint32_t s,uint32_t x,uint32_t y,
                            const uint32_t *m,uint32_t *p,uint32_t *a) {

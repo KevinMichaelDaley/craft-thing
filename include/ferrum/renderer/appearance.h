@@ -19,6 +19,30 @@ typedef struct {
     float normal[3], relief;
 } fr_appearance_texel_t;
 
+/** Caller-owned fixed storage; generation changes clear validity, not physics. */
+typedef struct {
+    fr_appearance_owner_t owner;
+    fr_appearance_texel_t *texels;
+    uint32_t *owner_indices;
+    uint8_t *valid;
+    uint32_t capacity;
+} fr_appearance_sidecar_t;
+
+/** Bind fixed sidecar storage and invalidate previous slot contents. */
+bool fr_appearance_bind(fr_appearance_sidecar_t *sidecar,
+                        fr_appearance_owner_t owner,
+                        fr_appearance_texel_t *texels, uint32_t *owner_indices,
+                        uint8_t *valid, uint32_t capacity);
+
+/** Write explicit color/surface override without changing physical ownership. */
+bool fr_appearance_write(fr_appearance_sidecar_t *sidecar, uint32_t texel,
+                         uint32_t owner_index, fr_appearance_texel_t appearance);
+
+/** Fetch an override only when the owning slot generation still matches. */
+bool fr_appearance_read(const fr_appearance_sidecar_t *sidecar, uint32_t texel,
+                        uint64_t identity, uint64_t generation,
+                        uint32_t *owner_index, fr_appearance_texel_t *appearance);
+
 /** Resolve visual coordinates to a physical owner index; holes remain holes. */
 bool fr_appearance_resolve(uint32_t width, uint32_t height, uint32_t scale,
                            uint32_t x, uint32_t y, const uint32_t *materials,

@@ -49,8 +49,26 @@ static void test_rest_transform(void) {
     float x,y;fr_appearance_rest_point(10,23,10,20,1.57079632679f,&x,&y);
     ASSERT_TRUE(fabsf(x-3)<.00001f&&fabsf(y)<.00001f);PASS();
 }
+static void test_explicit_sidecar_ownership_and_recycle(void) {
+    fr_appearance_texel_t colors[4],a={.color={.8f,.1f,.05f},.normal={0,0,1},.roughness=.7f},b;
+    uint32_t mapping[4],index;uint8_t valid[4];
+    fr_appearance_sidecar_t s;
+    fr_appearance_owner_t owner={.identity=12,.generation=3,.visual_scale=2};
+    ASSERT_TRUE(fr_appearance_bind(&s,owner,colors,mapping,valid,4));
+    ASSERT_TRUE(fr_appearance_write(&s,0,9,a));a.color[0]=.2f;
+    ASSERT_TRUE(fr_appearance_write(&s,1,9,a));
+    ASSERT_TRUE(fr_appearance_read(&s,0,12,3,&index,&b));
+    ASSERT_EQ(index,9u);ASSERT_TRUE(b.color[0]==.8f);
+    ASSERT_TRUE(fr_appearance_read(&s,1,12,3,&index,&b));
+    ASSERT_EQ(index,9u);ASSERT_TRUE(b.color[0]==.2f);
+    ASSERT_TRUE(!fr_appearance_read(&s,0,12,4,&index,&b));
+    owner.generation=4;
+    ASSERT_TRUE(fr_appearance_bind(&s,owner,colors,mapping,valid,4));
+    ASSERT_TRUE(!fr_appearance_read(&s,0,12,4,&index,&b));PASS();
+}
 int main(void) {
     RUN(test_mixed_material_holes_and_visual_scale);RUN(test_slot_generations);
     RUN(test_material_namespaces);RUN(test_default_and_explicit_color_independence);RUN(test_rest_transform);
+    RUN(test_explicit_sidecar_ownership_and_recycle);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
