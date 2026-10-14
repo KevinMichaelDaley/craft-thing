@@ -1,6 +1,6 @@
 ---
 id: ctr-6fii
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-14T03:12:55Z

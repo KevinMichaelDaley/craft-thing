@@ -3,6 +3,7 @@ build/appearance_tests: tests/renderer/appearance_tests.c src/renderer/appearanc
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/renderer/appearance_tests.c src/renderer/appearance.c -o $@ -lm
 test: build/appearance_tests
+test: build/texture_tests build/texture_gpu_tests build/occlusion_gpu_tests build/lighting_gpu_tests build/shading_tests
 build/texture_tests: tests/renderer/texture_tests.c src/renderer/appearance.c src/renderer/texture.c include/ferrum/renderer/texture.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/renderer/texture_tests.c src/renderer/appearance.c src/renderer/texture.c -o $@ -lm
@@ -461,6 +462,11 @@ build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h
 
 test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/appearance_tests
+	./build/texture_tests
+	./build/texture_gpu_tests
+	./build/occlusion_gpu_tests
+	./build/lighting_gpu_tests
+	./build/shading_tests
 	./build/pixel_component_tests
 	./build/pixel_world_tests
 	./build/pixel_geometry_tests
