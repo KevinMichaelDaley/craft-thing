@@ -17,6 +17,9 @@ typedef struct {
     uint32_t object;
 } fr_prop_pixel_t;
 
+enum { FR_PROP_SURFACE_NORMAL = 1, FR_PROP_SURFACE_ROUGHNESS = 2,
+       FR_PROP_SURFACE_RELIEF = 4 };
+
 typedef struct {
     float color[3], roughness;
     float normal[3], relief;
@@ -30,7 +33,7 @@ bool fr_prop_asset_open(fr_prop_asset_t *asset, const void *bytes, size_t size,
 /** Read one authoritative physical pixel from a validated asset frame. */
 bool fr_prop_pixel(const fr_prop_asset_t *asset, uint32_t frame, uint32_t pixel,
                    fr_prop_pixel_t *out);
-/** Read independent linear appearance and emission from a validated asset frame. */
+/** Read linear appearance/emission; absent surface_mask bits require renderer material defaults. */
 bool fr_prop_appearance(const fr_prop_asset_t *asset, uint32_t frame, uint32_t pixel,
                         fr_prop_appearance_t *out);
 /** Convert canonical prop material to the explicit terrain registry; unsupported returns zero. */

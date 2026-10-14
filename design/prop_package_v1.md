@@ -97,7 +97,8 @@ authorizes render-frame collider/mass changes.
 Color RGB is sRGB decoded once to linear float32; alpha stays separate.
 Emission is `linear(RGB)*alpha*emission_multiplier`, independently of albedo.
 Normals are signed normalized rest-spaceXYZ; absent defaults [0,0,1]. Roughness
-grayscale red/255 defaults0.8. Relief grayscale red/255 *relief_scale is scene-cell
+grayscale red/255; absent surfaces require renderer material defaults, not a fixed
+imported placeholder. Relief grayscale red/255 *relief_scale is scene-cell
 shading height, not collision deformation. Scalar channels must be grayscale.
 
 A package is a directory containing canonical versioned `manifest.json`, aligned
@@ -138,8 +139,10 @@ length, appearance byte length. Frames are dense and contiguous. Each frame has
 all physical records followed by all appearance records.
 
 Physical record8bytes: canonical materialu16, roleu8, anchoru8, authored objectu32.
-Appearance record64bytes (16floats): colorRGB/roughness, restnormalXYZ/relief,
-emissionRGB/reserved0, alpha/reserved0/reserved0/reserved0. The first32bytes match
+Appearance record64bytes (15floats +1uint32): colorRGB/roughness, restnormalXYZ/relief,
+emissionRGB/reserved0, alpha/reserved0/reserved0/surface_mask. Mask bits are normal1,
+roughness2,relief4; unset bits must resolve renderer material defaults. Placeholder
+values in absent slots are not authored overrides. The first32bytes match
 the renderer's `fr_appearance_texel_t`; upload must preserve the independent
 emission/alpha data as well. Physics maps never use gamma-converted texture paths.
 

@@ -145,9 +145,10 @@ def appearance(channels, count, options):
         roughness = rough[0] / 255 if rough and rough[3] else .8
         height = relief[0] / 255 * options['relief_scale'] if relief and relief[3] else 0
         emission = [linear(v) * emit[3] / 255 * options['emission_multiplier'] for v in emit[:3]]
+        surface_mask = (1 if normal and normal[3] else 0) | (2 if rough and rough[3] else 0) | (4 if relief and relief[3] else 0)
         # First32bytes are the renderer appearance ABI; independent emission/alpha follow.
-        records.extend(struct.pack('<16f', *[linear(v) for v in color[:3]], roughness,
-                                   *n, height, *emission, 0., color[3] / 255, 0., 0., 0.))
+        records.extend(struct.pack('<15fI', *[linear(v) for v in color[:3]], roughness,
+                                   *n, height, *emission, 0., color[3] / 255, 0., 0., surface_mask))
     return bytes(records)
 
 

@@ -74,7 +74,9 @@ bool fr_prop_asset_open(fr_prop_asset_t *asset, const void *bytes, size_t size,
                  !(role == 1 ? fr_prop_terrain_material(material) : fr_prop_body_material(material)))))
                 return prop_error(err_buf, err_cap, "Incompatible compiled material/role/object/anchor");
             const uint8_t *app = map + pixels * PROP_MAP + pixel * PROP_APPEARANCE;
-            for (uint32_t component = 0; component < 16; ++component) {
+            if (prop_u32(app + 60) > 7)
+                return prop_error(err_buf, err_cap, "Unknown surface override flags");
+            for (uint32_t component = 0; component < 15; ++component) {
                 float value = prop_float(app + component * 4);
                 if (!isfinite(value) || ((component <= 3 || component >= 7) && value < 0) ||
                     ((component == 3 || component == 12) && value > 1) ||
@@ -113,6 +115,7 @@ bool fr_prop_appearance(const fr_prop_asset_t *asset, uint32_t frame, uint32_t p
     }
     out->roughness = prop_float(p + 12); out->relief = prop_float(p + 28);
     out->alpha = prop_float(p + 48);
+    out->surface_mask = prop_u32(p + 60);
     return true;
 }
 uint32_t fr_prop_animation_frame(const fr_prop_asset_t *asset, uint64_t elapsed_ms) {
