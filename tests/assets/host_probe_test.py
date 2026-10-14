@@ -25,7 +25,11 @@ class HostProbe(unittest.TestCase):
             script.write_text(code.replace('__PROBE_OUTPUT__', str(directory / 'probe.json')))
             result = subprocess.run([host, '-b', str(source), '--script', str(script)], capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            output = json.loads((directory / 'probe.json').read_text())
+            exported = next(line.split('=', 1)[1] for line in result.stdout.splitlines()
+                            if line.startswith('CRAFT_PROBE_PATH='))
+            output = json.loads(Path(exported).read_text())
+            snapshot = directory / 'probe.json.aseprite'
+            self.assertTrue(snapshot.exists(), result.stdout + result.stderr)
             self.assertEqual(output['canvas'], [5, 5])
             self.assertEqual([layer['name'] for layer in output['layers']], ['physics.material', 'physics.role', 'color'])
             self.assertEqual(output['layers'][0]['cels'][1]['frame'], 1)

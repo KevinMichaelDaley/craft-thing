@@ -2,3 +2,4 @@
 /world_chunks/
 /world_chunks_native/
 /world_chunks_half_native/
+__pycache__/

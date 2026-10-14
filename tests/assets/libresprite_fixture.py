@@ -15,7 +15,7 @@ def fixture(path):
             for name in ('physics.material', 'physics.role', 'color'):
                 encoded = name.encode()
                 flags = 2 if name.startswith('physics.') else 3
-                chunks.append(chunk(0x2004, struct.pack('<7H', flags, 0, 0, 0, 0, 0, 255)
+                chunks.append(chunk(0x2004, struct.pack('<6HB', flags, 0, 0, 0, 0, 0, 255)
                                     + bytes(3) + struct.pack('<H', len(encoded)) + encoded))
         for layer in range(3):
             base = struct.pack('<HhhBH', layer, 1, 2, 255, 1 if frame and layer < 2 else 2) + bytes(7)
