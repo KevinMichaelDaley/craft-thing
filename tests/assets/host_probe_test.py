@@ -35,6 +35,7 @@ class HostProbe(unittest.TestCase):
             self.assertEqual(output['layers'][0]['cels'][1]['frame'], 1)
             self.assertEqual(output['layers'][0]['cels'][0]['xy'], [1, 2])
             self.assertFalse(output['layers'][0]['visible'])
+            self.assertFalse(output['layers'][0]['editable'])
             self.assertEqual(hashlib.sha256(source.read_bytes()).digest(), before)
 
 
