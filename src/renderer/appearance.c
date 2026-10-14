@@ -10,13 +10,36 @@ _Static_assert(offsetof(fr_appearance_source_t, alpha) == 48, "Prop alpha ABI");
 _Static_assert(offsetof(fr_appearance_source_t, surface_mask) == 60,
                "Prop surface mask ABI");
 
+static bool appearance_valid(fr_appearance_texel_t a) {
+  float length = 0;
+  for (uint32_t c = 0; c < 3; c++) {
+    if (!isfinite(a.color[c]) || a.color[c] < 0 || !isfinite(a.normal[c]))
+      return false;
+    length += a.normal[c] * a.normal[c];
+  }
+  return isfinite(length) && length > 0 && isfinite(a.roughness) &&
+         a.roughness >= 0 && a.roughness <= 1 && isfinite(a.relief);
+}
 bool fr_appearance_import(const fr_appearance_source_t *source,
                           const fr_appearance_texel_t *defaults,
                           fr_appearance_source_t *output) {
-  (void)source;
-  (void)defaults;
-  (void)output;
-  return false;
+  if (!source || !defaults || !output || source->surface_mask > 7 ||
+      !isfinite(source->alpha) || source->alpha < 0 || source->alpha > 1)
+    return false;
+  for (uint32_t c = 0; c < 3; c++)
+    if (!isfinite(source->emission[c]) || source->emission[c] < 0)
+      return false;
+  fr_appearance_source_t resolved = *source;
+  if (!(source->surface_mask & FR_APPEARANCE_NORMAL))
+    memcpy(resolved.surface.normal, defaults->normal, sizeof(defaults->normal));
+  if (!(source->surface_mask & FR_APPEARANCE_ROUGHNESS))
+    resolved.surface.roughness = defaults->roughness;
+  if (!(source->surface_mask & FR_APPEARANCE_RELIEF))
+    resolved.surface.relief = defaults->relief;
+  if (!appearance_valid(resolved.surface))
+    return false;
+  *output = resolved;
+  return true;
 }
 
 bool fr_appearance_bind(fr_appearance_sidecar_t *s, fr_appearance_owner_t o,
