@@ -58,3 +58,7 @@ Scope split at user request: optimizer retains performance/parallelization of EX
 **2026-10-14T04:42:05Z**
 
 7509bcc verified extraction/hydro/scalability milestone pushed to origin/main. Full make test retry could not complete during device-wide GPU stalls; independent unchanged feature8x8 workload also stalls. Restored verified runtime and removed speculative barrier changes. Exact acceptance fixture default3 andquarter3 passes; all remaining performance/fracture/visual acceptance stays open. Shared128-lane property helper drafted unwired, standalone SPIR-V compiles/validates but GPU verification pending recovery.
+
+**2026-10-14T04:56:45Z**
+
+CPU-only cache metadata RED committed2a495a9: motion edits invalidated immutable pixel mass/COM/inertia and forced whole-shape scalar recomputation. Minimal setter/cache refresh implementation now passes3 host-contract cases with no Vulkan submission; pending GPU inverse-flag, dormant-source and snapshot validation. No new snapshot ABI state added. Renderer independent unchanged96-texel reference probe localizes device stall after successful context/pipeline creation at texture submission; timed out25sec. No extraction/hydro in that submission; all GPU validation blocked pending recovery.

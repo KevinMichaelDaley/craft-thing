@@ -66,7 +66,12 @@ bool solid_at(int x, int y) {
 
 void integrate_body(uint index) {
     Body body = bodies[index];
-    if (body.enabled == 0u) return;
+    if (body.enabled == 0u) {
+        if(body.reserved0!=0u&&pixel_body(body)&&body.motion_ready!=0u) {
+            body_properties(body);bodies[index]=body;
+        }
+        return;
+    }
     body_properties(body);
     bool visible = locate_body(body);
     body_cache_bounds(body);

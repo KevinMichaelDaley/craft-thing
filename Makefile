@@ -434,6 +434,7 @@ build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/controls_tests.c src/app/level.c src/app/session.c $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 
 test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
+	./build/pixel_motion_cache_tests
 	./build/pixel_component_tests
 	./build/pixel_world_tests
 	./build/pixel_geometry_tests
@@ -642,3 +643,5 @@ build/pixel_motion_cache_tests: tests/vulkan/pixel_motion_cache_tests.c $(GPU_OB
 .PHONY: test_pixel_motion_cache
 test_pixel_motion_cache: build/pixel_motion_cache_tests
 	./build/pixel_motion_cache_tests
+
+test: build/pixel_motion_cache_tests

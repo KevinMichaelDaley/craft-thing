@@ -69,7 +69,8 @@ bool dc_gpu_set_body_motion(dc_gpu_t *gpu, uint32_t id, float angle,
     b->angle = angle;
     b->angular_velocity = omega;
     b->motion_flags = flags;
-    b->motion_ready = 0;
+    if (!(b->piece_count & DC_GPU_PIXEL_BODY_FLAG))
+        b->motion_ready = 0;
     b->rest_ticks = 0;
     gpu->body_refresh_pending = true;
     return true;
