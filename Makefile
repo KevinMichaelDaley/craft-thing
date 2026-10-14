@@ -9,8 +9,8 @@ build/texture_tests: tests/renderer/texture_tests.c src/renderer/appearance.c sr
 build/shaders/texture.comp.spv: shaders/renderer/texture.comp shaders/renderer/texture.glsl
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
-build/texture_gpu_tests: tests/renderer/texture_gpu_tests.c src/vulkan/texture_gpu.c src/renderer/appearance.c src/renderer/texture.c build/fluid_tests build/shaders/texture.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/texture_gpu.c src/renderer/appearance.c src/renderer/texture.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/texture_gpu_tests: tests/renderer/texture_gpu_tests.c src/vulkan/texture_gpu.c src/vulkan/renderer_resource.c src/vulkan/renderer_internal.h src/renderer/appearance.c src/renderer/texture.c build/fluid_tests build/shaders/texture.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/texture_gpu.c src/vulkan/renderer_resource.c src/renderer/appearance.c src/renderer/texture.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/shaders/occlusion.comp.spv: shaders/renderer/occlusion.comp
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
@@ -24,6 +24,8 @@ build/lighting_gpu_tests: tests/renderer/lighting_gpu_tests.c src/vulkan/lightin
 build/shading_tests: tests/renderer/shading_tests.c src/renderer/shading.c include/ferrum/renderer/shading.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/renderer/shading.c -o $@ -lm
+build/scene_gpu_tests: tests/renderer/scene_gpu_tests.c src/vulkan/scene_gpu.c include/ferrum/renderer/gpu.h build/fluid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/scene_gpu.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 .DEFAULT_GOAL := all
 STRUCTURAL_REFERENCE = tests/structural/reference_solver.c src/structural/material.c
 build/structural_failure_tests: tests/structural/failure_tests.c tests/structural/placement_tests.c build/compound_body_tests
