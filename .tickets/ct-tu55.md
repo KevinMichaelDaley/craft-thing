@@ -42,3 +42,7 @@ GREEN bounded phase26 regression: both dirty0/dirty1 now reset tile indirect tri
 **2026-10-16T20:19:43Z**
 
 CPU audit found a terrain-contact shared predicate race: lane0 could clear group_found before later subgroups read the early-return predicate, leaving divergent barrier participation. Safe source-contract RED fails without running potentially deadlocking shader; GREEN captures private predicate then all lanes rendezvous before any reset. Historical crash causality remains unproven. Full64x64 extraction and immediate cached flag snapshot integration passed validation 1/1.
+
+**2026-10-16T20:29:44Z**
+
+Post-recovery finite15sec native1280x720 physics AND display runs complete without device stall/kernel HANG/reset.2fixed60Hz steps/frame/cadence6 unchanged: dry mean33.706ms p9537.830; dense75.780ms p95105.233; exact concave158.726ms p95261.335/max274.142. Concave final offscreen1tick rigid41.978/fluid40.731/MPM11.882 versus initial isolated rigid~10-12/fluid~18/MPM~14ms: growth during scene evolution needs profiling. Diagnostic cold295.410ms includes explicitly enabled stage isolation, not ordinary cold. Full validated make test running serial GPU lease. Preparing exact parallel hydro-head prefix tests; specialization experiment requested for uniform runtime fluid/projection mode branches after prefix correctness. Branch count alone is not divergence or established crash cause.
