@@ -1,0 +1,28 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=64) in;
+layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
+layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
+layout(set=0,binding=28,std430) readonly buffer Prefix {uint aperture_prefix[];};
+layout(set=0,binding=29,std430) readonly buffer Tree {uint aperture_tree[];};
+layout(set=0,binding=30,std430) buffer Results {uint results[];};
+layout(push_constant) uniform Params {uint width,height,axis,unused0,unused1;} params;
+float face_aperture(ivec2 source,ivec2 direction) {
+    ivec2 p=source+min(direction,ivec2(0));
+    uint page=pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
+    if(page==0u) return 0.;
+    uint i=uint(p.y)*params.width+uint(p.x),axis=direction.x!=0?3u:4u;
+    return float(65536u-min(65536u,occupancy[axis*params.width*params.height+i]))/65536.;
+}
+#include "../../shaders/sim/fluid_aperture.glsl"
+void main() {
+    uint index=gl_GlobalInvocationID.x,cells=params.width*params.height;
+    if(index>=cells) return;
+    ivec2 p=ivec2(index%params.width,index/params.width),direction=params.axis!=0u?ivec2(0,1):ivec2(1,0);
+    uint coord=params.axis!=0u?uint(p.y):uint(p.x),length=params.axis!=0u?params.height:params.width;
+    for(uint query=0u;query<4u;query++) {
+        bool positive=query<2u;uint available=positive?length-1u-coord:coord;
+        uint distance=min(available,(query&1u)!=0u?length:7u);
+        results[query*cells+index]=floatBitsToUint(distance==0u?1.:cached_path_aperture(p,positive?direction:-direction,distance));
+    }
+}

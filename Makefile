@@ -710,6 +710,15 @@ build/hydro_head_tests: tests/vulkan/hydro_head_tests.c tools/diagnostics/vulkan
 
 test: build/hydro_head_tests
 
+build/shaders/fluid_aperture.comp.spv: shaders/sim/fluid_aperture.comp
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+
+build/shaders/fluid_aperture_query.comp.spv: tests/vulkan/fluid_aperture_query.comp shaders/sim/fluid_aperture.glsl
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+
+build/fluid_aperture_tests: tests/vulkan/fluid_aperture_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_aperture.comp.spv build/shaders/fluid_aperture_query.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
 build/diagnostics/fluid_case: tools/diagnostics/fluid_case.c tests/vulkan/fluid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
