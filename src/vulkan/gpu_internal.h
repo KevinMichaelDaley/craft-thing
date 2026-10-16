@@ -120,6 +120,7 @@ struct dc_gpu {
     VkDeviceMemory occupancy_memory;
     void *occupancy_mapped;
     VkPipeline rigid_pipeline;
+    VkPipeline rigid_pixel_pipeline,rigid_classify_pipeline;
     VkPipeline rigid_prepare_pipeline;
     VkPipeline broadphase_pipeline;
     VkPipeline contact_pipelines[DC_GPU_CONTACT_PHASE_COUNT];

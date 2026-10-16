@@ -742,6 +742,9 @@ build/fluid_transport_slow_tests: tests/vulkan/fluid_transport_tests.c tools/dia
 build/raster_dispatch_tests: tests/vulkan/raster_dispatch_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) $(RIGID_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
+build/raster_equivalence_tests: tests/vulkan/raster_equivalence_tests.c tests/vulkan/pixel_component_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/pixel_component_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
 test: build/fluid_aperture_tests build/diagnostics/fluid_case
 test: build/fluid_transport_tests build/fluid_transport_long_tests build/fluid_transport_slow_tests
 
