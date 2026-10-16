@@ -15,6 +15,19 @@ class ContactBarrierTests(unittest.TestCase):
             r"\s*barrier\(\);\s*if\s*\(empty_terrain\)", re.S))
         self.assertNotRegex(source, r"if\s*\(group_found\s*==\s*0u\)")
 
+    def test_hydro_floor_is_captured_before_reusing_reduction_scratch(self):
+        source = (pathlib.Path(__file__).resolve().parents[2] /
+                  "shaders/sim/pixel_hydro.comp").read_text()
+        self.assertRegex(source, re.compile(
+            r"uint\s+floor_y\s*=\s*counts\[0\];\s*barrier\(\);", re.S))
+
+    def test_hydro_water_start_is_captured_before_reusing_counts(self):
+        source = (pathlib.Path(__file__).resolve().parents[2] /
+                  "shaders/sim/pixel_hydro.comp").read_text()
+        self.assertRegex(source, re.compile(
+            r"uint\s+water_begin\s*=\s*counts\[0\];\s*barrier\(\);", re.S))
+        self.assertNotRegex(source, r"for\s*\(uint\s+y\s*=\s*counts\[0\]")
+
 
 if __name__ == "__main__":
     unittest.main()
