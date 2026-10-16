@@ -536,7 +536,7 @@ build/quarter_native_component_material_tests: tests/vulkan/component_material_t
 build/component_extraction_tests: tests/vulkan/component_extraction_tests.c build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/shaders/component_extract.comp.spv: shaders/sim/component_extract.comp shaders/sim/rigid_body.glsl
+build/shaders/component_extract.comp.spv: shaders/sim/component_extract.comp shaders/sim/rigid_body.glsl shaders/sim/pixel_properties.glsl
 	mkdir -p build/shaders
 	glslangValidator -V --target-env vulkan1.3 $< -o $@
 build/fluid_tests: build/shaders/component_extract.comp.spv
@@ -656,7 +656,7 @@ test_pixel_motion_cache: build/pixel_motion_cache_tests
 
 test: build/pixel_motion_cache_tests
 
-build/diagnostics/component_extract_probe.spv: shaders/sim/component_extract.comp shaders/sim/rigid_body.glsl
+build/diagnostics/component_extract_probe.spv: shaders/sim/component_extract.comp shaders/sim/rigid_body.glsl shaders/sim/pixel_properties.glsl
 	mkdir -p build/diagnostics
 	$(GLSLANG) -V --target-env vulkan1.1 -S comp -o $@ $<
 

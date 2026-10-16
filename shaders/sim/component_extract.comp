@@ -11,6 +11,7 @@ layout(set=0,binding=29,std430) buffer Candidates { uint candidates[]; };
 layout(set=0,binding=30,std430) buffer Sizes { uint sizes[]; };
 layout(push_constant) uniform Params { uint width,height,mode,count; uvec2 origin_x,origin_y; } params;
 uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
+#include "pixel_properties.glsl"
 uint base() {
     uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
     return 8u+2u*w*h+4096u*8u+12u+8192u*32u+16u+64u*32u+8192u*16u;
@@ -37,9 +38,7 @@ ivec2 relative_point(uint root,uint i) {
 }
 shared uint values[128],slots[128];
 shared uint birth_count;
-shared uvec2 moments_x[128],moments_y[128];
-shared float moments_i[128];
-uvec2 add_wide(uvec2 a,uvec2 b) {uint lo=a.x+b.x;return uvec2(lo,a.y+b.y+uint(lo<a.x));}
+shared uvec2 moments_x[128];
 uint component_root(uint index) {
     uint parent=atomicAdd(candidates[index],0u);
     while(parent!=index) {
@@ -273,21 +272,9 @@ void main() {
     if(EXTRACTION_PHASE==23u) {
         uint c=gl_WorkGroupID.x;if(c>=data[g+36257u]) return;uint r=record(c);if(data[r+14u]==0u) return;
         Body b=bodies[data[r+12u]];b.compound_reserved=BODY_STORAGE_WORDS+data[r+11u];b.piece_count=PIXEL_BODY_FLAG|data[r+5u];
-        uint mass10=0u;uvec2 mx=uvec2(0),my=uvec2(0);
-        for(uint p=lane;p<pixel_tile_count(b)*256u;p+=128u) {
-            uint m=pixel_piece_material(b,p);if(m==0u) continue;uint w=m==1u?27u:m==2u?6u:m==4u?12u:16u;uvec2 xy=uvec2(pixel_piece_cell(b,p))*2u+1u;
-            mass10+=w;mx=add_wide(mx,uvec2(xy.x*w,0));my=add_wide(my,uvec2(xy.y*w,0));
-        }
-        values[lane]=mass10;moments_x[lane]=mx;moments_y[lane]=my;
-        for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) {values[lane]+=values[lane+stride];moments_x[lane]=add_wide(moments_x[lane],moments_x[lane+stride]);moments_y[lane]=add_wide(moments_y[lane],moments_y[lane+stride]);}}barrier();
-        vec2 first=vec2(float(moments_x[0].y)*4294967296.+float(moments_x[0].x),float(moments_y[0].y)*4294967296.+float(moments_y[0].x));
-        vec2 center=first/(2.*float(values[0]));precise float moment=0.,compensation=0.;
-        for(uint p=lane;p<pixel_tile_count(b)*256u;p+=128u) {
-            uint m=pixel_piece_material(b,p);if(m==0u) continue;float density=m==1u?2.7:m==2u?.6:m==4u?1.2:1.6;vec2 delta=vec2(pixel_piece_cell(b,p))+.5-center;
-            precise float value=density*(dot(delta,delta)+1./6.)-compensation;precise float sum=moment+value;compensation=(sum-moment)-value;moment=sum;
-        }
-        moments_i[lane]=moment;for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) moments_i[lane]+=moments_i[lane+stride];}barrier();
-        if(lane==0u) {data[r+15u]=values[0];data[r+20u]=floatBitsToUint(center.x);data[r+21u]=floatBitsToUint(center.y);data[r+22u]=floatBitsToUint(moments_i[0]);initialize_body(r);}return;
+        uint mass10;vec2 center;float inertia;
+        pixel_mass_properties(b,mass10,center,inertia);
+        if(lane==0u) {data[r+15u]=mass10;data[r+20u]=floatBitsToUint(center.x);data[r+21u]=floatBitsToUint(center.y);data[r+22u]=floatBitsToUint(inertia);initialize_body(r);}return;
     }
     if(EXTRACTION_PHASE==24u) {if(i<n&&solid(i)) {uint c=candidates[labels[i]];if(c<data[g+36257u]&&data[record(c)+14u]!=0u) cells[i].x=0u;}return;}
     if(EXTRACTION_PHASE==25u&&i==0u) data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]=data[g+36259u];

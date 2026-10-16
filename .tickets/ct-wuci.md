@@ -66,3 +66,7 @@ CPU-only cache metadata RED committed2a495a9: motion edits invalidated immutable
 **2026-10-16T20:07:47Z**
 
 Oct16 safe GPU acceptance: draft128-lane pixel_properties helper now passes mixed concave L5 closed-form mass/COM/inertia/density for wood+stone+dense wood and mortar.3/3 bounded tests pass with validation; actual production rigid PREPARE shader refreshes all4 flag combinations plus dormant converted-source flags while intrinsic property bits and42 geometry words remain identical. Each submission one workgroup/1sec fence. No kernel HANG/reset entries. Tests use minimal pipeline fixture; runtime helper wiring and end-to-end snapshot/full-suite checks remain pending. CPU-only engine init trace completed after cache warmup with GPU submissions forbidden; first structural phases4/5 compile30.456/26.232seconds, later cached~0.25sec.
+
+**2026-10-16T20:22:52Z**
+
+Recovery ladder GREEN: full64x64 extraction and immediate motion-cache save integration1/1; production birth now reuses GPU-verified128-lane property helper;3844-pixel mass/COM/inertia exact within existing tolerance; standalone properties3/3 and indirect init2/2;128x64 wet mixed seam with save/load resume1/1 all validation clean. Quarter480x270 rotating exact bodies12.925ms wholeGPU tick/7.735ms rigid passes existing gates. Cold32 ring34.056ms remains above14ms gate; unchanged2.666ms. Cold80/160 sweep not reached due first failure. Full regression/native30FPS still pending.
