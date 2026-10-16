@@ -1,0 +1,120 @@
+#define _POSIX_C_SOURCE 200809L
+#define main bounded_probe_main
+#include "vulkan_probe.c"
+#undef main
+#include <time.h>
+
+VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkQueueSubmit(VkQueue queue,
+                                                    uint32_t count,
+                                                    const VkSubmitInfo *info,
+                                                    VkFence fence) {
+    (void)queue;
+    (void)count;
+    (void)info;
+    (void)fence;
+    fputs("ERROR: compiler probe forbids queue submissions\n", stderr);
+    exit(2);
+}
+VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkQueueSubmit2(VkQueue queue,
+                                                     uint32_t count,
+                                                     const VkSubmitInfo2 *info,
+                                                     VkFence fence) {
+    (void)queue;
+    (void)count;
+    (void)info;
+    (void)fence;
+    fputs("ERROR: compiler probe forbids queue submissions\n", stderr);
+    exit(2);
+}
+
+static double seconds(void) {
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return t.tv_sec + t.tv_nsec / 1e9;
+}
+int main(int argc, char **argv) {
+    if (argc != 3) {
+        fprintf(stderr, "usage: %s shader.spv generic|phase\n", argv[0]);
+        return 2;
+    }
+    probe_t p = {0};
+    if (!initialize_device(&p))
+        return 2;
+    FILE *file = fopen(argv[1], "rb");
+    if (!file)
+        return 2;
+    uint32_t code[65536];
+    size_t bytes = fread(code, 1, sizeof(code), file);
+    int extra = fgetc(file);
+    fclose(file);
+    if (bytes == 0 || bytes % 4 || extra != EOF)
+        return 2;
+    VkShaderModuleCreateInfo module = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = bytes,
+        .pCode = code};
+    if (!check(vkCreateShaderModule(p.device, &module, NULL, &p.shader),
+               "shader module"))
+        return 2;
+    VkDescriptorSetLayoutBinding bindings[32] = {0};
+    for (unsigned i = 0; i < 32; i++)
+        bindings[i] = (VkDescriptorSetLayoutBinding){
+            .binding = i,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT};
+    VkDescriptorSetLayoutCreateInfo descriptor = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 32,
+        .pBindings = bindings};
+    if (!check(vkCreateDescriptorSetLayout(p.device, &descriptor, NULL,
+                                           &p.descriptor_layout),
+               "descriptor layout"))
+        return 2;
+    VkPushConstantRange push = {.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                                .size = 32};
+    VkPipelineLayoutCreateInfo layout = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &p.descriptor_layout,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &push};
+    if (!check(vkCreatePipelineLayout(p.device, &layout, NULL, &p.layout),
+               "pipeline layout"))
+        return 2;
+    uint32_t phase = UINT32_MAX;
+    if (strcmp(argv[2], "generic") != 0) {
+        char *end;
+        unsigned long number = strtoul(argv[2], &end, 10);
+        if (*end || number > 12)
+            return 2;
+        phase = (uint32_t)number;
+    }
+    VkSpecializationMapEntry entry = {.constantID = 0, .size = sizeof(phase)};
+    VkSpecializationInfo specialization = {.mapEntryCount = 1,
+                                           .pMapEntries = &entry,
+                                           .dataSize = sizeof(phase),
+                                           .pData = &phase};
+    VkComputePipelineCreateInfo pipeline = {
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .stage = {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+                  .module = p.shader,
+                  .pName = "main",
+                  .pSpecializationInfo =
+                      phase == UINT32_MAX ? NULL : &specialization},
+        .layout = p.layout};
+    double start = seconds();
+    VkResult result = vkCreateComputePipelines(p.device, VK_NULL_HANDLE, 1,
+                                               &pipeline, NULL, &p.pipeline);
+    printf("CPU compile phase%u %.3fms status%d; zero queue submissions\n",
+           phase, (seconds() - start) * 1000., result);
+    if (p.pipeline)
+        vkDestroyPipeline(p.device, p.pipeline, NULL);
+    vkDestroyPipelineLayout(p.device, p.layout, NULL);
+    vkDestroyDescriptorSetLayout(p.device, p.descriptor_layout, NULL);
+    vkDestroyShaderModule(p.device, p.shader, NULL);
+    vkDestroyDevice(p.device, NULL);
+    vkDestroyInstance(p.instance, NULL);
+    return result == VK_SUCCESS ? 0 : 1;
+}

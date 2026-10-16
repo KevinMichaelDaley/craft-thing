@@ -49,7 +49,7 @@ static int submit(probe_t *p, const char *stage, int command) {
     return check(vkResetFences(p->device, 1, &p->fence), "fence reset");
 }
 
-static int initialize(probe_t *p) {
+static int initialize_device(probe_t *p) {
     const char *layer = "VK_LAYER_KHRONOS_validation";
     VkApplicationInfo app = {.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
                              .pApplicationName = "bounded device probe",
@@ -109,6 +109,12 @@ static int initialize(probe_t *p) {
                "device create"))
         return 0;
     vkGetDeviceQueue(p->device, p->family, 0, &p->queue);
+    return 1;
+}
+
+static int initialize(probe_t *p) {
+    if (!initialize_device(p))
+        return 0;
     VkFenceCreateInfo fence = {.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
     if (!check(vkCreateFence(p->device, &fence, NULL, &p->fence),
                "fence create"))

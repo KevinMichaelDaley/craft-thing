@@ -700,3 +700,16 @@ test: build/hydro_head_tests
 build/diagnostics/fluid_case: tools/diagnostics/fluid_case.c tests/vulkan/fluid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
+build/diagnostics/shader_compile_probe: tools/diagnostics/shader_compile_probe.c tools/diagnostics/vulkan_probe.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ -lvulkan -Wl,--wrap=vkQueueSubmit -Wl,--wrap=vkQueueSubmit2
+
+.PHONY: diagnostic_fluid_variants
+diagnostic_fluid_variants: build/diagnostics/shader_compile_probe
+	python3 tools/diagnostics/fluid_variants.py build/diagnostics/fluid-variants
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o build/diagnostics/fluid-variants/fluid.spv build/diagnostics/fluid-variants/fluid_specialized.comp
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o build/diagnostics/fluid-variants/projection.spv build/diagnostics/fluid-variants/projection_specialized.comp
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -Ishaders/sim -o build/diagnostics/fluid-variants/mpm.spv build/diagnostics/fluid-variants/mpm_specialized.comp
+	spirv-val --target-env vulkan1.3 build/diagnostics/fluid-variants/fluid.spv
+	spirv-val --target-env vulkan1.3 build/diagnostics/fluid-variants/projection.spv
+	spirv-val --target-env vulkan1.3 build/diagnostics/fluid-variants/mpm.spv
+
