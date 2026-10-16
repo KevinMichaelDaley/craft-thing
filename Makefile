@@ -681,7 +681,7 @@ build/diagnostics/engine_init_probe: tools/diagnostics/engine_init_probe.c tools
 	$(CC) $(CPPFLAGS) $(CFLAGS) tools/diagnostics/engine_init_probe.c tools/diagnostics/engine_trace.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_load_shader_module -Wl,--wrap=vkCreateComputePipelines -Wl,--wrap=vkQueueSubmit
 
 build/diagnostics/contact_scaling: tools/diagnostics/contact_scaling.c tests/vulkan/pixel_component_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/pixel_component_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) tools/diagnostics/contact_scaling.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tools/diagnostics/contact_scaling.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_load_shader_module
 
 build/diagnostics/pixel_properties_probe.spv: tests/vulkan/pixel_properties_probe.comp shaders/sim/rigid_body.glsl shaders/sim/pixel_properties.glsl
 	mkdir -p build/diagnostics

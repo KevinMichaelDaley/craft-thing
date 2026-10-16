@@ -5,6 +5,14 @@
 static double last_contact_ms;
 static uint32_t last_emitted;
 
+bool __real_dc_gpu_load_shader_module(dc_gpu_t *, const char *, VkShaderModule *, char *, uint32_t);
+bool __wrap_dc_gpu_load_shader_module(dc_gpu_t *gpu, const char *path, VkShaderModule *module,
+                                      char *err, uint32_t cap) {
+    const char *candidate = getenv("DC_CONTACT_SHADER");
+    if (candidate && strcmp(path, "build/shaders/contacts.comp.spv") == 0) path = candidate;
+    return __real_dc_gpu_load_shader_module(gpu, path, module, err, cap);
+}
+
 static bool occupied(unsigned kind, unsigned x, unsigned y, unsigned side) {
     if (kind == 0) return true;
     if (kind == 1) return x == 0 || y == 0 || x + 1 == side || y + 1 == side;

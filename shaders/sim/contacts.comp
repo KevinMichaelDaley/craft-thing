@@ -225,15 +225,16 @@ void main() {
         uint other = body_slot(data[offset + 1u]); vec2 delta;
         if (other != BODY_CAPACITY && relative_body(a, bodies[other], delta)) {
             Body b = bodies[other];
+            bool distribute_b=cooperative&&!pixel_body(a)&&pixel_body(b);
             if(pixel_body(a) && lane == 0u) atomicAdd(data[base+9u],body_pieces(a));
-            for(uint ap=cooperative?lane:0u;ap<body_pieces(a);ap+=cooperative?CONTACT_GROUP_SIZE:1u) {
+            for(uint ap=cooperative&&!distribute_b?lane:0u;ap<body_pieces(a);ap+=cooperative&&!distribute_b?CONTACT_GROUP_SIZE:1u) {
                 if(!pixel_boundary(a,ap)) continue;
-                if((params.mode&256u)!=0u) atomicAdd(data[base+10u],1u);
+                if((params.mode&256u)!=0u&&(!distribute_b||lane==0u)) atomicAdd(data[base+10u],1u);
                 Polygon pa=body_polygon(a,ap,vec2(0));vec2 lo=vec2(1e20),hi=vec2(-1e20);
                 for(uint vertex=0u;vertex<pa.count;vertex++) {lo=min(lo,pa.vertices[vertex]-delta);hi=max(hi,pa.vertices[vertex]-delta);}
                 uvec4 query=body_piece_query(b,lo-vec2(contact_skin),hi+vec2(contact_skin));
-                if(pixel_body(b)) atomicAdd(data[base+9u],query.z*query.w);
-                for(uint ordinal=0u;ordinal<query.z*query.w;ordinal++) {
+                if(pixel_body(b)&&(!distribute_b||lane==0u)) atomicAdd(data[base+9u],query.z*query.w);
+                for(uint ordinal=distribute_b?lane:0u;ordinal<query.z*query.w;ordinal+=distribute_b?CONTACT_GROUP_SIZE:1u) {
                     uint bp=query_piece(b,query,ordinal);if(!pixel_boundary(b,bp)) continue;
                     if((params.mode&256u)!=0u) atomicAdd(data[base+11u],1u);
                 bool emitted=emit_contact(a, b.id, BODY_CONTACT, piece_material(b,bp),

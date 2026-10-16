@@ -70,3 +70,7 @@ Native 640x360 motion-grown scene GPU timing: hydro19.661ms, eight contact passe
 **2026-10-16T22:13:12Z**
 
 Parallel wet force checkpoint99745e1: exact62x62full-immersion test passes16groups, <=4cells/lane, analytic vertical impulse and zero torque under validation. Motion-grown native360 hydro19.661 ->0.763ms, total solver23.199 ->4.339ms; contact2.384 ->2.413ms. Presented mean128.272 ->76.534ms, p95180.439 ->122.451ms,13.066FPS (still fails30FPS). Full validated suite running; no completion claim. Counters are enabled only for diagnostic profile ticks; normal frames unchanged.
+
+**2026-10-16T22:20:55Z**
+
+Contacts-only source/measurement diagnosis: boundaries are filtered before polygon work, but legacy-A/pixel-B formerly ran the whole B query in1lane. REDb64fcd0 records counters-free64x64solid10.235ms versus0.680ms reversed, identical2contacts. Cooperative B-query GREEN candidate0.556ms versus0.675ms, identical counts; validation passes and SPIR-V validates.96comb mixed geometry retains553contacts. Full correctness regression continuing; no FPS acceptance claim.
