@@ -7,9 +7,15 @@
 #include <time.h>
 #include "../vulkan/native_scene.h"
 
+#ifndef NATIVE_PERF_WIDTH
+#define NATIVE_PERF_WIDTH 1280
+#endif
+#ifndef NATIVE_PERF_HEIGHT
+#define NATIVE_PERF_HEIGHT 720
+#endif
 enum {
-    WIDTH = 1280,
-    HEIGHT = 720,
+    WIDTH = NATIVE_PERF_WIDTH,
+    HEIGHT = NATIVE_PERF_HEIGHT,
     SAMPLES = 30,
     PHYSICS_STEPS = 2,
     FLUID_CADENCE = 6
@@ -29,11 +35,11 @@ static void profile_completed_concave_tick(dc_gpu_t *g) {
         g->device, g->timestamp_pool, 4, 12, sizeof(times), times,
         sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
     if (result != VK_SUCCESS) {
-        printf("native720 profile queries status%d\n", result);
+        printf("native profile queries status%d\n", result);
         return;
     }
     double scale = g->timestamp_period / 1e6;
-    printf("native720 final rigid detail: extraction%.3f prepare%.3f "
+    printf("native final rigid detail: extraction%.3f prepare%.3f "
            "solver%.3f raster/contacts/structure%.3fms\n",
            (times[8] - times[0]) * scale, (times[9] - times[8]) * scale,
            (times[10] - times[9]) * scale, (times[11] - times[10]) * scale);
@@ -48,7 +54,7 @@ static void profile_completed_concave_tick(dc_gpu_t *g) {
     }
     const uint32_t *contacts = dc_gpu_contact_data(g),
                    *pairs = dc_gpu_broadphase_data(g);
-    printf("native720 final bodies active%u pixel%u cached%u; candidate "
+    printf("native final bodies active%u pixel%u cached%u; candidate "
            "pairs%u contacts%u overflow%u pixel queries%u\n",
            active, pixel, ready, pairs[0], contacts[0], contacts[2],
            contacts[9]);
@@ -68,11 +74,18 @@ static void native_scene(unsigned load) {
     ASSERT_TRUE(dc_gpu_set_display_zoom(g, 1));
     ASSERT_TRUE(dc_gpu_set_fluid_interval(g, FLUID_CADENCE));
     ASSERT_TRUE(dc_gpu_set_tick_seconds(g, 1.f / 60.f));
-    ASSERT_TRUE(dc_gpu_set_window_title(
-        g, "Native720 benchmark: 1280x720 physics and display, scale1"));
+    char title[160];
+    snprintf(title, sizeof(title),
+             "Native%d benchmark: %dx%d physics and display, scale1", HEIGHT,
+             WIDTH, HEIGHT);
+    ASSERT_TRUE(dc_gpu_set_window_title(g, title));
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     ASSERT_TRUE(chunk);
-    for (unsigned slot = 0; slot < 240; slot++) {
+    unsigned columns = native_scene_columns(WIDTH),
+             chunks = native_scene_count(WIDTH, HEIGHT);
+    ASSERT_TRUE(chunks + 30u <= DC_GPU_CHUNK_SLOTS);
+    const unsigned body_x = WIDTH / 2 - 120, body_y = HEIGHT / 6;
+    for (unsigned slot = 0; slot < chunks; slot++) {
         native_scene_chunk(chunk, slot, WIDTH, HEIGHT);
         for (unsigned y = 0; y < 64; y++)
             for (unsigned x = 0; x < 64; x++) {
@@ -85,41 +98,45 @@ static void native_scene(unsigned load) {
                         cell->material = DC_MATERIAL_AIR;
                 }
                 if (load == 2) {
-                    if (px >= 520 && px < 600 && py >= 120 && py < 184 &&
-                        (px < 526 || px >= 594 || py >= 178))
+                    if (px >= body_x && px < body_x + 80 && py >= body_y &&
+                        py < body_y + 64 &&
+                        (px < body_x + 6 || px >= body_x + 74 ||
+                         py >= body_y + 58))
                         cell->material = DC_MATERIAL_WOOD;
-                    if (px >= 538 && px < 610 && py >= 215 && py < 263 &&
-                        (px < 544 || (py - 215) % 6 < 3))
-                        cell->material = px < 550 ? DC_MATERIAL_STONE
-                                                  : DC_MATERIAL_DENSE_WOOD;
+                    if (px >= body_x + 18 && px < body_x + 90 &&
+                        py >= body_y + 95 && py < body_y + 143 &&
+                        (px < body_x + 24 || (py - body_y - 95) % 6 < 3))
+                        cell->material = px < body_x + 30
+                                             ? DC_MATERIAL_STONE
+                                             : DC_MATERIAL_DENSE_WOOD;
                 }
             }
         dc_chunk_seed_particles(chunk);
         ASSERT_TRUE(dc_gpu_upload_chunk(g, slot, chunk, err, sizeof(err)));
-        ASSERT_TRUE(
-            dc_gpu_set_page(g, slot % 20, slot / 20, slot, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_page(g, slot % columns, slot / columns, slot,
+                                    err, sizeof(err)));
     }
     free(chunk);
     if (load == 2)
         ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
     double loaded = seconds();
-    printf("native720 load%u: submitting cold presented frame\n", load);
+    printf("native load%u: submitting cold presented frame\n", load);
     if (load == 2 && getenv("DC_NATIVE_DIAG")) {
         double trace_start = seconds();
         ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
-        printf("native720 diagnostic rigid-only step %.3fms\n",
+        printf("native diagnostic rigid-only step %.3fms\n",
                (seconds() - trace_start) * 1000.);
         dc_gpu_tick_capture_t trace;
         ASSERT_TRUE(dc_gpu_tick_capture(g, &trace, err, sizeof(err)));
-        printf("native720 diagnostic tick rigid %.3f fluid %.3f MPM %.3fms\n",
+        printf("native diagnostic tick rigid %.3f fluid %.3f MPM %.3fms\n",
                trace.stages[0].gpu_ns / 1e6, trace.stages[1].gpu_ns / 1e6,
                trace.stages[2].gpu_ns / 1e6);
         trace_start = seconds();
         ASSERT_TRUE(dc_gpu_present_chunks_steps(g, 0, err, sizeof(err)));
-        printf("native720 diagnostic render-only %.3fms\n",
+        printf("native diagnostic render-only %.3fms\n",
                (seconds() - trace_start) * 1000.);
         ASSERT_TRUE(dc_gpu_tick_capture(g, &trace, err, sizeof(err)));
-        printf("native720 diagnostic second tick rigid %.3f fluid %.3f MPM "
+        printf("native diagnostic second tick rigid %.3f fluid %.3f MPM "
                "%.3fms\n",
                trace.stages[0].gpu_ns / 1e6, trace.stages[1].gpu_ns / 1e6,
                trace.stages[2].gpu_ns / 1e6);
@@ -128,7 +145,7 @@ static void native_scene(unsigned load) {
         dc_gpu_present_chunks_steps(g, PHYSICS_STEPS, err, sizeof(err)));
     ASSERT_EQ(vkQueueWaitIdle(g->queue), VK_SUCCESS);
     double cold_ms = (seconds() - loaded) * 1000.;
-    printf("native720 load%u: cold presented frame completed %.3fms\n", load,
+    printf("native load%u: cold presented frame completed %.3fms\n", load,
            cold_ms);
     if (load == 2) {
         uint32_t a = 0, b = 0;
@@ -151,7 +168,7 @@ static void native_scene(unsigned load) {
         ASSERT_TRUE(
             dc_gpu_present_chunks_steps(g, PHYSICS_STEPS, err, sizeof(err)));
         if (load == 2)
-            printf("native720 concave warm frame%u complete\n", i);
+            printf("native concave warm frame%u complete\n", i);
     }
     double samples[SAMPLES], start = seconds();
     for (unsigned i = 0; i < SAMPLES; i++) {
@@ -180,7 +197,7 @@ static void native_scene(unsigned load) {
     g->component_profile = false;
     VkPhysicalDeviceProperties device;
     vkGetPhysicalDeviceProperties(g->physical, &device);
-    printf("native720 load%u: physics=%ux%u display=%ux%u scale1 slots%u "
+    printf("native load%u: physics=%ux%u display=%ux%u scale1 slots%u "
            "cadence%u,2fixed60Hzsteps/frame device=%s\n",
            load, g->width, g->height, g->swap_extent.width,
            g->swap_extent.height, DC_GPU_CHUNK_SLOTS, FLUID_CADENCE,
@@ -190,6 +207,9 @@ static void native_scene(unsigned load) {
            loaded - began, cold_ms, wall_ms,
            samples[(SAMPLES * 95 + 99) / 100 - 1], samples[SAMPLES - 1],
            stage_ns[0] / 6e6, stage_ns[1] / 6e6, stage_ns[2] / 6e6);
+    printf("presented FPS %.3f; fluid variants %s\n", 1000. / wall_ms,
+           getenv("DC_FLUID_VARIANTS") ? getenv("DC_FLUID_VARIANTS")
+                                       : "production");
     dc_gpu_destroy(g);
     ASSERT_TRUE(wall_ms <= 1000. / 30.);
     ASSERT_TRUE(samples[(SAMPLES * 95 + 99) / 100 - 1] <= 1000. / 30.);

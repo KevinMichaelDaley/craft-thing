@@ -652,6 +652,13 @@ build/native_720_performance_tests: tests/app/native_720_performance_tests.c tes
 test_native_720_performance: build/native_720_performance_tests
 	./build/native_720_performance_tests
 
+build/native_360_performance_tests: tests/app/native_720_performance_tests.c tests/vulkan/pixel_component_tests.c tests/vulkan/native_scene.h Makefile $(GPU_SRC) src/world/chunk.c build/pixel_component_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GPU_CHUNK_SLOTS=90u -DNATIVE_PERF_WIDTH=640 -DNATIVE_PERF_HEIGHT=360 $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+
+.PHONY: test_native_360_performance
+test_native_360_performance: build/native_360_performance_tests
+	./build/native_360_performance_tests
+
 build/pixel_motion_cache_tests: tests/vulkan/pixel_motion_cache_tests.c $(GPU_OBJ) build/chunk.o
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ $(LDLIBS) -lm
 
@@ -709,7 +716,9 @@ diagnostic_fluid_variants: build/diagnostics/shader_compile_probe
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o build/diagnostics/fluid-variants/fluid.spv build/diagnostics/fluid-variants/fluid_specialized.comp
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o build/diagnostics/fluid-variants/projection.spv build/diagnostics/fluid-variants/projection_specialized.comp
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -Ishaders/sim -o build/diagnostics/fluid-variants/mpm.spv build/diagnostics/fluid-variants/mpm_specialized.comp
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -Ishaders/sim -o build/diagnostics/fluid-variants/rigid_pixel.spv build/diagnostics/fluid-variants/rigid_pixel.comp
 	spirv-val --target-env vulkan1.3 build/diagnostics/fluid-variants/fluid.spv
 	spirv-val --target-env vulkan1.3 build/diagnostics/fluid-variants/projection.spv
 	spirv-val --target-env vulkan1.3 build/diagnostics/fluid-variants/mpm.spv
+	spirv-val --target-env vulkan1.3 build/diagnostics/fluid-variants/rigid_pixel.spv
 

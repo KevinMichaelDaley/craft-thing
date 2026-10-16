@@ -8,13 +8,13 @@ type: task
 priority: 1
 tags: [gpu, vulkan, performance, native720]
 ---
-# Reach 30 FPS with native 1280x720 physics and presentation
+# Reach 30 FPS with native 640x360 physics and presentation
 
-User explicitly requires 1280x720 simulation and display on this Intel Iris Xe machine at30FPS. Optimize existing GPU kernels and presentation without hidden upsampling, physics quality loss, geometry simplification, runtime CPU solves or ordinary-frame readback.
+Current user request (October16) supersedes the earlier720p target: require640x360 simulation AND display on this Intel Iris Xe machine at30FPS. Preserve measured720p results below as historical reference. Optimize existing GPU kernels and presentation without hidden upsampling, physics quality loss, geometry simplification, runtime CPU solves or ordinary-frame readback.
 
 ## Acceptance Criteria
 
-Measure a real displayed1280x720 window backed by1280x720 physics, whole presented frame <=33.333ms, with GPU stage timings and mean/tail/cold/load sweeps. Include exact concave bodies, density-derived fluids, saturation/complexity and unchanged-work cases. Preserve480x270 quarter-native regression/performance gates and their exact fixtures. GPU runtime work must be parallel/cooperative; serialize benchmark/validation windows only. Run headless/UI/quarter-native/Vulkan/SPIR-V checks and commit/push verified work; do not claim target achieved before displayed measurements pass.
+Measure a real displayed640x360 window backed by640x360 physics, whole presented frame <=33.333ms, with GPU stage timings and mean/p95/cold/load sweeps and actual displayFPS. Preserve2 fixed60Hz physics steps per presented frame, existing cadence/pressure/quality and exact1176/1872-pixel concave shapes/materials; reposition fixtures transparently for the smaller world. Include density-derived fluids, saturation/complexity and unchanged-work cases. Preserve480x270 quarter-native regression/performance gates and their exact fixtures. GPU runtime work must be parallel/cooperative; serialize benchmark/validation windows only. Run headless/UI/quarter-native/Vulkan/SPIR-V checks and commit/push verified work; do not claim target achieved before displayed measurements pass. No180p physics upscale substitution. Stop treating720p30FPS as the current target.
 
 
 ## Notes
@@ -54,3 +54,11 @@ Additional safe RED0efbbb3 covers hydro phase1 scratch read/reset handoffs. Floo
 **2026-10-16T20:49:17Z**
 
 Integrated prefix correctness GREEN: production shader is now tested directly by3-case minimal fixture;138432 exact head outputs. Normal runtime head readback matches closed pool, projected divergence0, displacement/conservation, UNKNOWN and six-phase equivalence each1/1 validation pass. Initial wiring RED was Makefile recipe accidentally compiling projection.comp under hydro filename; separate source rules fix it. Temporary serial reference compare removed from C/build targets. Quarter whole12.369ms/rigid8.372ms passes, cold32 ring32.826ms remainsRED. True1280x720 concave mean157.692ms p95262.478: no material gain from prefix alone. Final rigid profile extraction0.042/prepare0.077/solver25.785/raster+contacts+structure10.182ms,2 active pixel bodies both cached,19 pairs/0 contacts/no overflow. Full regression resumed; remove obsolete projection mode4 in REFACTOR after old suite binaries finish, then rerun final suite. Next measured fluid specialization experiment and wider hydro force clipping work distribution.
+
+**2026-10-16T21:55:15Z**
+
+User explicitly changed current target to native640x360 physics AND display30FPS. Benchmark now parameterizes dimensions;360p maps60 chunks with the same30-slot warm reserve (90slots),2fixed60Hz steps/frame,cadence6 and default pressure preserved. Exact two concave shapes retain1176/1872 pixels/materials; positions are x=width/2-120,y=height/6 and relative18/95 offset, matching old720 fixture at1280x720.720 measurements remain reference only. First360 baseline compiling; no new720 stress runs.
+
+**2026-10-16T21:56:46Z**
+
+360p RED baseline, actual640x360 physics/display scale1,90slots,2fixed60Hz steps/frame,cadence6/default pressure unchanged: dry mean9.402ms p9510.775 max11.145 cold24.695 (106.364FPS); dense21.096 p9529.384 max32.459 cold37.542 (47.403FPS), steady gates pass. Exact1176/1872-pixel concave scene mean129.772 p95181.184 max183.255 cold119.440 (7.706FPS),30FPS gate fails. Final1tick rigid31.925/fluid35.526/MPM3.508ms. No diagnostic extra steps in these cold timings. Focus optimization on supported360p concave case;720reference only.
