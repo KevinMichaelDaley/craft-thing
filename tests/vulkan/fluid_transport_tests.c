@@ -167,7 +167,11 @@ static void test_rightward_priority_across_partial_tiles(void) {run_case(2,0);}
 static void test_leftward_priority_across_partial_tiles(void) {run_case(3,0);}
 static void test_unknown_chunks_block_vertical_flow(void) {run_case(1,1);}
 static void test_unknown_chunks_block_horizontal_flow(void) {run_case(3,1);}
+#ifdef FLUID_TRANSPORT_FIXTURE_ONLY
+int transport_fixture_main(void) {
+#else
 int main(void) {
+#endif
     RUN(test_downward_priority_and_fractional_apertures);RUN(test_upward_priority_and_velocity_trapezoid);
     RUN(test_rightward_priority_across_partial_tiles);RUN(test_leftward_priority_across_partial_tiles);
     RUN(test_unknown_chunks_block_vertical_flow);RUN(test_unknown_chunks_block_horizontal_flow);

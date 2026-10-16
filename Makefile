@@ -748,6 +748,19 @@ build/raster_dispatch_tests: tests/vulkan/raster_dispatch_tests.c tools/diagnost
 build/raster_equivalence_tests: tests/vulkan/raster_equivalence_tests.c tests/vulkan/pixel_component_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/pixel_component_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
+build/shaders/fluid_displacement.comp.spv: shaders/sim/fluid_displacement.comp
+	@mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+
+build/fluid_displacement_tests: tests/vulkan/fluid_displacement_tests.c tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_displacement.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+build/fluid_displacement_wide_tests: tests/vulkan/fluid_displacement_tests.c tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_displacement.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DTRANSPORT_TEST_WIDTH=2113 -DTRANSPORT_TEST_HEIGHT=3 $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+build/fluid_displacement_tall_tests: tests/vulkan/fluid_displacement_tests.c tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_displacement.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DTRANSPORT_TEST_WIDTH=3 -DTRANSPORT_TEST_HEIGHT=2113 $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
 test: build/fluid_aperture_tests build/diagnostics/fluid_case
 test: build/fluid_transport_tests build/fluid_transport_long_tests build/fluid_transport_slow_tests
 test: build/raster_dispatch_tests build/raster_equivalence_tests
