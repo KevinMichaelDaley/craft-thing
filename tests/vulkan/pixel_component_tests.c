@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "dungeoncraft/gpu.h"
 #include "ferrum/structural/gpu.h"
 #include "../../src/vulkan/gpu_internal.h"
@@ -56,8 +57,8 @@ static void scenario(unsigned kind) {
     ASSERT_TRUE(body.vy_fp > 0);
     dc_gpu_body_pixel_t pixels[400];
     uint32_t count = 0;
-    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, body.id, pixels, 400, &count,
-                                       err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, body.id, pixels, 400, &count, err,
+                                        sizeof(err)));
     ASSERT_EQ(count, cells);
     for (unsigned i = 0; i < count; i++)
         ASSERT_EQ(pixels[i].material, DC_GPU_BODY_STONE);
@@ -67,7 +68,7 @@ static void scenario(unsigned kind) {
                                       sizeof(err)));
     dc_gpu_body_pixel_t restored[400];
     ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, body.id, restored, 400, &count,
-                                       err, sizeof(err)));
+                                        err, sizeof(err)));
     for (unsigned i = 0; i < count; i++) {
         ASSERT_EQ(restored[i].x, pixels[i].x);
         ASSERT_EQ(restored[i].y, pixels[i].y);
@@ -105,21 +106,23 @@ static void test_pixel_fracture_preserves_material_volume(void) {
     ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_enable_impact_fracture(gpu));
-    uint32_t *pending = dc_gpu_structural_data(gpu) +
-                        dc_gpu_structural_graph_offset() + 38000u;
+    uint32_t *pending =
+        dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset() + 38000u;
     pending[0] = pending[1] = 1000000u;
     pending[2] = 1u;
     pending[3] = 0x80000001u;
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
     dc_gpu_body_motion_t a, b;
-    ASSERT_TRUE(dc_gpu_read_body_motion(gpu, 0x80000001u, &a, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_read_body_motion(gpu, 0x80000002u, &b, err, sizeof(err)));
+    ASSERT_TRUE(
+        dc_gpu_read_body_motion(gpu, 0x80000001u, &a, err, sizeof(err)));
+    ASSERT_TRUE(
+        dc_gpu_read_body_motion(gpu, 0x80000002u, &b, err, sizeof(err)));
     ASSERT_TRUE(fabs(a.mass + b.mass - 1080) < .002);
     uint32_t ca, cb;
-    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, 0x80000001u, NULL, 0, &ca,
-                                       err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, 0x80000002u, NULL, 0, &cb,
-                                       err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, 0x80000001u, NULL, 0, &ca, err,
+                                        sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, 0x80000002u, NULL, 0, &cb, err,
+                                        sizeof(err)));
     ASSERT_EQ(ca + cb, 400u);
     free(chunk);
     dc_gpu_destroy(gpu);
@@ -140,9 +143,11 @@ static void test_large_pixel_body_has_accurate_mass_center_and_inertia(void) {
     ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
     dc_gpu_body_motion_t motion;
-    ASSERT_TRUE(dc_gpu_read_body_motion(gpu, 0x80000001u, &motion, err, sizeof(err)));
+    ASSERT_TRUE(
+        dc_gpu_read_body_motion(gpu, 0x80000001u, &motion, err, sizeof(err)));
     double mass = 62 * 62 * 2.7, inertia = mass * (62 * 62 + 62 * 62) / 12;
-    printf("large mass %.9g inertia %.9g expected %.9g\n", motion.mass, motion.inertia, inertia);
+    printf("large mass %.9g inertia %.9g expected %.9g\n", motion.mass,
+           motion.inertia, inertia);
     ASSERT_TRUE(fabs(motion.mass - mass) < mass * 1e-6);
     ASSERT_TRUE(fabs(motion.center_x - 31) < 1e-5);
     ASSERT_TRUE(fabs(motion.center_y - 31) < 1e-5);
@@ -167,11 +172,13 @@ static void test_pending_component_is_not_starved_by_new_lower_roots(void) {
     for (unsigned i = 0; i < 64; i++) {
         dc_gpu_body_t body = {.x_fp = (int32_t)(1 + i % 8) << 16,
                               .y_fp = (int32_t)(1 + i / 8) << 16,
-                              .width = 1, .height = 1, .id = 1000 + i,
+                              .width = 1,
+                              .height = 1,
+                              .id = 1000 + i,
                               .active = 1};
         ASSERT_TRUE(dc_gpu_spawn_body(gpu, body, err, sizeof(err)));
-        ASSERT_TRUE(dc_gpu_set_body_motion(gpu, body.id, 0, 0,
-                                           DC_GPU_BODY_KINEMATIC, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_body_motion(
+            gpu, body.id, 0, 0, DC_GPU_BODY_KINEMATIC, err, sizeof(err)));
     }
     ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
@@ -187,7 +194,8 @@ static void test_pending_component_is_not_starved_by_new_lower_roots(void) {
     dc_gpu_destroy(gpu);
     PASS();
 }
-static void test_mixed_concave_cut_preserves_three_connected_material_fragments(void) {
+static void
+test_mixed_concave_cut_preserves_three_connected_material_fragments(void) {
     char err[256] = {0};
     dc_gpu_t *gpu = NULL;
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
@@ -203,11 +211,11 @@ static void test_mixed_concave_cut_preserves_three_connected_material_fragments(
     ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_set_body_motion(gpu, 0x80000001u, .2f, .01f, 0,
-                                       err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(gpu, 0x80000001u, .2f, .01f, 0, err,
+                                       sizeof(err)));
     ASSERT_TRUE(dc_gpu_enable_impact_fracture(gpu));
-    uint32_t *pending = dc_gpu_structural_data(gpu) +
-                        dc_gpu_structural_graph_offset() + 38000u;
+    uint32_t *pending =
+        dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset() + 38000u;
     pending[0] = pending[1] = 1000000u;
     pending[2] = 2u;
     pending[3] = 0x80000001u;
@@ -219,9 +227,10 @@ static void test_mixed_concave_cut_preserves_three_connected_material_fragments(
         dc_gpu_body_motion_t motion;
         uint32_t id = 0x80000001u + child, n;
         dc_gpu_body_pixel_t pixels[368];
-        ASSERT_TRUE(dc_gpu_read_body_motion(gpu, id, &motion, err, sizeof(err)));
-        ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, id, pixels, 368, &n,
-                                           err, sizeof(err)));
+        ASSERT_TRUE(
+            dc_gpu_read_body_motion(gpu, id, &motion, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, id, pixels, 368, &n, err,
+                                            sizeof(err)));
         mass += motion.mass;
         count += n;
         for (unsigned i = 0; i < n; i++) {
@@ -242,7 +251,8 @@ static void test_mixed_concave_cut_preserves_three_connected_material_fragments(
     dc_gpu_destroy(gpu);
     PASS();
 }
-static void test_sparse_pixel_geometry_does_not_store_the_empty_bounding_area(void) {
+static void
+test_sparse_pixel_geometry_does_not_store_the_empty_bounding_area(void) {
     char err[256] = {0};
     dc_gpu_t *gpu = NULL;
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
@@ -258,11 +268,13 @@ static void test_sparse_pixel_geometry_does_not_store_the_empty_bounding_area(vo
     ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
     const dc_gpu_body_record_t *body = gpu->body_mapped;
-    uint32_t *pool = (uint32_t *)gpu->body_mapped + dc_gpu_pixel_pool_word_offset(gpu);
+    uint32_t *pool =
+        (uint32_t *)gpu->body_mapped + dc_gpu_pixel_pool_word_offset(gpu);
     ASSERT_TRUE(body[0].piece_count & DC_GPU_PIXEL_BODY_FLAG);
     ASSERT_TRUE(pool[1] < (body[0].body.width * body[0].body.height + 7) / 8);
     uint32_t count;
-    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, 0x80000001u, NULL, 0, &count, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, 0x80000001u, NULL, 0, &count, err,
+                                        sizeof(err)));
     ASSERT_EQ(count, 244u);
     free(chunk);
     dc_gpu_destroy(gpu);
@@ -291,8 +303,8 @@ static void test_known_cached_component_outside_viewport_is_extracted(void) {
     ASSERT_EQ(world.chunk.x, 2);
     ASSERT_EQ(world.chunk.y, 0);
     uint32_t count;
-    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, body.id, NULL, 0, &count,
-                                       err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, body.id, NULL, 0, &count, err,
+                                        sizeof(err)));
     ASSERT_EQ(count, 400u);
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, chunk, err, sizeof(err)));
     for (unsigned i = 0; i < 4096; ++i)
@@ -313,20 +325,24 @@ static void test_parallel_birth_reservation_skips_live_id_collisions(void) {
                               err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
-    dc_gpu_body_t existing = {.x_fp = 1 << 16, .y_fp = 1 << 16,
-                              .width = 1, .height = 1,
-                              .id = 0x80000001u, .active = 1};
+    dc_gpu_body_t existing = {.x_fp = 1 << 16,
+                              .y_fp = 1 << 16,
+                              .width = 1,
+                              .height = 1,
+                              .id = 0x80000001u,
+                              .active = 1};
     ASSERT_TRUE(dc_gpu_spawn_body(gpu, existing, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_set_body_motion(gpu, existing.id, 0, 0,
-                                       DC_GPU_BODY_KINEMATIC, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(
+        gpu, existing.id, 0, 0, DC_GPU_BODY_KINEMATIC, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
     uint32_t count;
-    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, 0x80000002u, NULL, 0, &count,
-                                       err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, 0x80000002u, NULL, 0, &count, err,
+                                        sizeof(err)));
     ASSERT_EQ(count, 400u);
     dc_gpu_body_t preserved;
-    ASSERT_TRUE(dc_gpu_read_body_id(gpu, existing.id, &preserved, err, sizeof(err)));
+    ASSERT_TRUE(
+        dc_gpu_read_body_id(gpu, existing.id, &preserved, err, sizeof(err)));
     ASSERT_EQ(preserved.width, 1u);
     ASSERT_EQ(preserved.height, 1u);
     free(chunk);
@@ -347,7 +363,8 @@ static void test_pixel_hydro_uses_bounded_cooperative_area_work(void) {
     ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
-    const uint32_t *work = (const uint32_t *)gpu->mpm_label_b_mapped + 8192 + 80;
+    const uint32_t *work =
+        (const uint32_t *)gpu->mpm_label_b_mapped + 8192 + 80;
     ASSERT_TRUE(work[0] >= 62u * 62u && work[0] <= 64u * 64u);
     ASSERT_TRUE(work[1] <= 64u);
     ASSERT_EQ(work[2], 64u);
@@ -355,18 +372,91 @@ static void test_pixel_hydro_uses_bounded_cooperative_area_work(void) {
     dc_gpu_destroy(gpu);
     PASS();
 }
-int main(void) {
-    RUN(test_pixel_hydro_uses_bounded_cooperative_area_work);
-    RUN(test_parallel_birth_reservation_skips_live_id_collisions);
-    RUN(test_known_cached_component_outside_viewport_is_extracted);
-    RUN(test_component_above_256_pixels_is_not_disqualified);
-    RUN(test_long_thin_component_above_16_cells_is_not_disqualified);
-    RUN(test_branching_component_above_four_rectangles_is_not_disqualified);
-    RUN(test_pixel_fracture_preserves_material_volume);
-    RUN(test_large_pixel_body_has_accurate_mass_center_and_inertia);
-    RUN(test_pending_component_is_not_starved_by_new_lower_roots);
-    RUN(test_mixed_concave_cut_preserves_three_connected_material_fragments);
-    RUN(test_sparse_pixel_geometry_does_not_store_the_empty_bounding_area);
+static void test_motion_cache_snapshot_refresh_does_not_advance_physics(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    chunk->cells[10 * 64 + 10].material = DC_MATERIAL_WOOD;
+    chunk->cells[10 * 64 + 11].material = DC_MATERIAL_WOOD;
+    chunk->cells[10 * 64 + 12].material = DC_MATERIAL_STONE;
+    chunk->cells[11 * 64 + 12].material = DC_MATERIAL_STONE;
+    chunk->cells[12 * 64 + 12].material = DC_MATERIAL_DENSE_WOOD;
+    printf("snapshot64 context begin\n");
+    fflush(stdout);
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
+                              err, sizeof(err)));
+    printf("snapshot64 context ready\n");
+    fflush(stdout);
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
+    printf("snapshot64 birth submit\n");
+    fflush(stdout);
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    printf("snapshot64 birth completed\n");
+    fflush(stdout);
+    dc_gpu_body_record_t *b = gpu->body_mapped;
+    dc_gpu_body_record_t before = *b;
+    ASSERT_TRUE(fabs(b->mass - 7.8) < 1e-5);
+    const char *path = "build/pixel_motion_cache_snapshot.bin";
+    for (unsigned flags = 1; flags <= 2; flags++) {
+        unsigned desired = flags == 1 ? DC_GPU_BODY_KINEMATIC : 0;
+        ASSERT_TRUE(dc_gpu_set_body_motion(gpu, b->body.id, .25f, .01f, desired,
+                                           err, sizeof(err)));
+        ASSERT_EQ(b->motion_ready, 1u);
+        printf("snapshot64 save flags%u begin\n", desired);
+        fflush(stdout);
+        ASSERT_TRUE(fr_gpu_save_structure(gpu, path, err, sizeof(err)));
+        printf("snapshot64 save flags%u completed\n", desired);
+        fflush(stdout);
+        ASSERT_EQ(b->body.x_fp, before.body.x_fp);
+        ASSERT_EQ(b->body.y_fp, before.body.y_fp);
+        ASSERT_EQ(b->body.vx_fp, before.body.vx_fp);
+        ASSERT_EQ(b->body.vy_fp, before.body.vy_fp);
+        ASSERT_EQ(b->mass, before.mass);
+        ASSERT_EQ(b->inertia, before.inertia);
+        ASSERT_EQ(b->center[0], before.center[0]);
+        ASSERT_EQ(b->center[1], before.center[1]);
+        ASSERT_TRUE(fabs(b->inverse_mass - (desired ? 0. : 1. / b->mass)) <
+                    1e-6);
+        ASSERT_TRUE(
+            fabs(b->inverse_inertia - (desired ? 0. : 1. / b->inertia)) < 1e-6);
+    }
+    remove(path);
+    free(chunk);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+int main(int argc, char **argv) {
+    unsigned selected = 0;
+#define PIXEL_SELECTED(fn)                                                     \
+    do {                                                                       \
+        if (argc == 1 || strcmp(argv[1], #fn) == 0) {                          \
+            RUN(fn);                                                           \
+            selected++;                                                        \
+        }                                                                      \
+    } while (0)
+    PIXEL_SELECTED(test_pixel_hydro_uses_bounded_cooperative_area_work);
+    PIXEL_SELECTED(test_parallel_birth_reservation_skips_live_id_collisions);
+    PIXEL_SELECTED(test_known_cached_component_outside_viewport_is_extracted);
+    PIXEL_SELECTED(test_component_above_256_pixels_is_not_disqualified);
+    PIXEL_SELECTED(test_long_thin_component_above_16_cells_is_not_disqualified);
+    PIXEL_SELECTED(
+        test_branching_component_above_four_rectangles_is_not_disqualified);
+    PIXEL_SELECTED(test_pixel_fracture_preserves_material_volume);
+    PIXEL_SELECTED(test_large_pixel_body_has_accurate_mass_center_and_inertia);
+    PIXEL_SELECTED(test_pending_component_is_not_starved_by_new_lower_roots);
+    PIXEL_SELECTED(
+        test_mixed_concave_cut_preserves_three_connected_material_fragments);
+    PIXEL_SELECTED(
+        test_sparse_pixel_geometry_does_not_store_the_empty_bounding_area);
+    PIXEL_SELECTED(test_motion_cache_snapshot_refresh_does_not_advance_physics);
+#undef PIXEL_SELECTED
+    if (selected == 0 || argc > 2) {
+        fprintf(stderr, "Unknown pixel test selector\n");
+        return 2;
+    }
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
