@@ -76,7 +76,7 @@ BROADPHASE_SHADER = build/shaders/broadphase.comp.spv
 CONTACT_SHADER = build/shaders/contacts.comp.spv
 PROBE_SHADER = build/shaders/tick_probe.comp.spv
 HALO_SHADER = build/shaders/halo.comp.spv
-FLUID_SHADER = build/shaders/fluid.comp.spv build/shaders/fluid_aperture.comp.spv
+FLUID_SHADER = build/shaders/fluid.comp.spv build/shaders/fluid_aperture.comp.spv build/shaders/fluid_transport.comp.spv
 PROJECTION_SHADER = build/shaders/projection.comp.spv build/shaders/hydro_head.comp.spv
 MARKER_SHADER = build/shaders/marker.comp.spv
 SHIFT_SHADER = build/shaders/shift_velocity.comp.spv
@@ -451,7 +451,10 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/pixel_properties_gpu_tests
 	./build/hydro_head_tests
 	./build/fluid_aperture_tests
-	./build/diagnostics/fluid_case aperture-runtime
+	./build/fluid_transport_tests
+	./build/fluid_transport_long_tests
+	./build/fluid_transport_slow_tests
+	./build/diagnostics/fluid_case cooperative-runtime
 	./build/pixel_component_tests
 	./build/pixel_world_tests
 	./build/pixel_geometry_tests
@@ -713,15 +716,18 @@ build/hydro_head_tests: tests/vulkan/hydro_head_tests.c tools/diagnostics/vulkan
 test: build/hydro_head_tests
 
 build/shaders/fluid_aperture.comp.spv: shaders/sim/fluid_aperture.comp
+	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 
 build/shaders/fluid_aperture_query.comp.spv: tests/vulkan/fluid_aperture_query.comp shaders/sim/fluid_aperture.glsl
+	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 
 build/fluid_aperture_tests: tests/vulkan/fluid_aperture_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_aperture.comp.spv build/shaders/fluid_aperture_query.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/shaders/fluid_transport.comp.spv: shaders/sim/fluid_transport.comp
+build/shaders/fluid_transport.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl
+	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 
 build/fluid_transport_tests: tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv
@@ -730,7 +736,11 @@ build/fluid_transport_tests: tests/vulkan/fluid_transport_tests.c tools/diagnost
 build/fluid_transport_long_tests: tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DTRANSPORT_TEST_WIDTH=2113 -DTRANSPORT_TEST_HEIGHT=3 $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
+build/fluid_transport_slow_tests: tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DTRANSPORT_TEST_STEP=0.125f $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
 test: build/fluid_aperture_tests build/diagnostics/fluid_case
+test: build/fluid_transport_tests build/fluid_transport_long_tests build/fluid_transport_slow_tests
 
 build/diagnostics/fluid_case: tools/diagnostics/fluid_case.c tests/vulkan/fluid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch

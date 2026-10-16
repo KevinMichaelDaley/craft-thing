@@ -10,6 +10,9 @@
 #ifndef TRANSPORT_TEST_HEIGHT
 #define TRANSPORT_TEST_HEIGHT 83
 #endif
+#ifndef TRANSPORT_TEST_STEP
+#define TRANSPORT_TEST_STEP 6.f
+#endif
 enum { WIDTH=TRANSPORT_TEST_WIDTH,HEIGHT=TRANSPORT_TEST_HEIGHT,CELLS=WIDTH*HEIGHT,
     CHUNKS_X=(WIDTH+63)/64,CHUNKS=CHUNKS_X*((HEIGHT+63)/64),FULL=65536,TREE_BASE=16448 };
 static int g_pass,g_fail;
@@ -59,7 +62,7 @@ static void reference_move(fixture_t *f,int x,int y,int dx,int dy) {
     if(vertical) speed=.5f*(speed+number(f->words[3][fi]));
     if(dx<0||dy<0) speed=-speed;
     if(speed<=0) return;
-    float travel=speed*6.f*1.001f;
+    float travel=speed*(float)TRANSPORT_TEST_STEP*1.001f;
     uint32_t edge=vertical?(dy>0?HEIGHT-1-(unsigned)y:(unsigned)y):(dx>0?WIDTH-1-(unsigned)x:(unsigned)x);
     uint32_t reach=minimum((uint32_t)ceilf(travel),edge);
     if(reach==1) {
@@ -139,7 +142,7 @@ static void run_case(unsigned mode,unsigned unknown) {
     vkUpdateDescriptorSets(f->p.device,7,writes,0,NULL);ASSERT_TRUE(begin(&f->p));
     vkCmdBindPipeline(f->p.command,VK_PIPELINE_BIND_POINT_COMPUTE,f->p.pipeline);
     vkCmdBindDescriptorSets(f->p.command,VK_PIPELINE_BIND_POINT_COMPUTE,f->p.layout,0,1,&f->p.descriptor,0,NULL);
-    uint32_t push[8]={WIDTH,HEIGHT,mode,0,leaves,bits(6.f),1};
+    uint32_t push[8]={WIDTH,HEIGHT,mode,0,leaves,bits((float)TRANSPORT_TEST_STEP),1};
     vkCmdPushConstants(f->p.command,f->p.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
     vkCmdDispatch(f->p.command,lines,1,1);host_barrier(&f->p,1);ASSERT_EQ(vkEndCommandBuffer(f->p.command),VK_SUCCESS);
     ASSERT_TRUE(submit(&f->p,"cooperative exact transport",1));

@@ -45,7 +45,8 @@ void __wrap_vkCmdPushConstants(VkCommandBuffer command, VkPipelineLayout layout,
 }
 
 static uint32_t label(void) {
-    if (pushed_mode < 13 && (bound_pipeline == trace_gpu->fluid_pipeline ||
+    if (pushed_mode < 13 && ((pushed_mode < 4 && bound_pipeline == trace_gpu->fluid_transport_pipelines[pushed_mode]) ||
+                             bound_pipeline == trace_gpu->fluid_pipeline ||
                              bound_pipeline == trace_gpu->fluid_phase_pipelines[pushed_mode]))
         return pushed_mode;
     if (pushed_mode < 6 && (bound_pipeline == trace_gpu->projection_pipeline ||
