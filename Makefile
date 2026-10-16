@@ -659,7 +659,21 @@ build/diagnostics/component_extract_probe.spv: shaders/sim/component_extract.com
 	mkdir -p build/diagnostics
 	$(GLSLANG) -V --target-env vulkan1.1 -S comp -o $@ $<
 
-build/component_dispatch_tests: tests/vulkan/component_dispatch_tests.c tools/diagnostics/vulkan_probe.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/component_extract_probe.spv
+build/component_dispatch_tests: tests/vulkan/component_dispatch_tests.c tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/component_extract_probe.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
 test: build/component_dispatch_tests
+
+build/diagnostics/engine_init_probe: tools/diagnostics/engine_init_probe.c tools/diagnostics/engine_trace.c $(GPU_OBJ) $(CHUNK_OBJ) build/component_extraction_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) tools/diagnostics/engine_init_probe.c tools/diagnostics/engine_trace.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_load_shader_module -Wl,--wrap=vkCreateComputePipelines -Wl,--wrap=vkQueueSubmit
+
+build/diagnostics/pixel_properties_probe.spv: tests/vulkan/pixel_properties_probe.comp shaders/sim/rigid_body.glsl shaders/sim/pixel_properties.glsl
+	mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.1 -S comp -Ishaders/sim -o $@ $<
+
+build/diagnostics/rigid_prepare_probe.spv: shaders/sim/rigid.comp shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl shaders/sim/rigid_clip.glsl
+	mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.1 -S comp -o $@ $<
+
+build/pixel_properties_gpu_tests: tests/vulkan/pixel_properties_gpu_tests.c tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/pixel_properties_probe.spv build/diagnostics/rigid_prepare_probe.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
