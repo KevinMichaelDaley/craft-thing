@@ -5,8 +5,9 @@
 static dc_gpu_t *dispatch_gpu;
 static VkPipeline dispatch_pipeline;
 static uint32_t dispatch_mode;
-static uint64_t dispatch_jobs[4];
+static uint64_t dispatch_jobs[13];
 static bool require_cooperative;
+static bool require_displacement;
 void __real_vkCmdBindPipeline(VkCommandBuffer,VkPipelineBindPoint,VkPipeline);
 void __real_vkCmdPushConstants(VkCommandBuffer,VkPipelineLayout,VkShaderStageFlags,uint32_t,uint32_t,const void *);
 void __real_vkCmdDispatch(VkCommandBuffer,uint32_t,uint32_t,uint32_t);
@@ -20,9 +21,11 @@ void __wrap_vkCmdPushConstants(VkCommandBuffer command,VkPipelineLayout layout,V
     __real_vkCmdPushConstants(command,layout,flags,offset,size,data);
 }
 void __wrap_vkCmdDispatch(VkCommandBuffer command,uint32_t x,uint32_t y,uint32_t z) {
-    if(dispatch_gpu&&command==dispatch_gpu->command&&dispatch_mode<4&&dispatch_pipeline!=VK_NULL_HANDLE&&
+    if(dispatch_gpu&&command==dispatch_gpu->command&&dispatch_mode<13&&dispatch_pipeline!=VK_NULL_HANDLE&&
        (dispatch_pipeline==dispatch_gpu->fluid_pipeline||dispatch_pipeline==dispatch_gpu->fluid_phase_pipelines[dispatch_mode]||
-        dispatch_pipeline==dispatch_gpu->fluid_transport_pipelines[dispatch_mode])) dispatch_jobs[dispatch_mode]+=(uint64_t)x*y*z;
+        (dispatch_mode<4&&dispatch_pipeline==dispatch_gpu->fluid_transport_pipelines[dispatch_mode])||
+        (dispatch_mode==11&&dispatch_pipeline==dispatch_gpu->fluid_displacement_pipelines[0])||
+        (dispatch_mode==12&&dispatch_pipeline==dispatch_gpu->fluid_displacement_pipelines[1]))) dispatch_jobs[dispatch_mode]+=(uint64_t)x*y*z;
     __real_vkCmdDispatch(command,x,y,z);
 }
 
@@ -208,15 +211,21 @@ static void test_long_transport_uses_exact_runtime_apertures(void) {
         printf(" %llu",(unsigned long long)dispatch_jobs[mode]);
         cooperative=cooperative&&dispatch_jobs[mode]==2u*(mode<2?g->width:g->height);
     }
-    printf("\n");dispatch_gpu=NULL;
+    printf("; displacement %llu %llu\n",(unsigned long long)dispatch_jobs[11],(unsigned long long)dispatch_jobs[12]);
+    bool displaced=dispatch_jobs[11]==2u*g->width&&dispatch_jobs[12]==2u*g->height;
+    dispatch_gpu=NULL;
     dc_gpu_destroy(g);
     if(require_cooperative) ASSERT_TRUE(cooperative);
+    if(require_displacement) ASSERT_TRUE(displaced);
     ASSERT_EQ(mismatches,0u);PASS();
 }
 int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
-    if (strcmp(argv[1], "cooperative-runtime") == 0) {
+    if (strcmp(argv[1], "displacement-runtime") == 0) {
+        require_cooperative=true;require_displacement=true;
+        RUN(test_long_transport_uses_exact_runtime_apertures);
+    } else if (strcmp(argv[1], "cooperative-runtime") == 0) {
         require_cooperative=true;
         RUN(test_long_transport_uses_exact_runtime_apertures);
     } else if (strcmp(argv[1], "aperture-runtime") == 0)

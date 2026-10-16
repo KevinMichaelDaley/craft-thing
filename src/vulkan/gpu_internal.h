@@ -166,6 +166,7 @@ struct dc_gpu {
     VkPipeline hydro_head_pipeline;
     VkPipeline fluid_aperture_pipeline;
     VkPipeline fluid_transport_pipelines[4];
+    VkPipeline fluid_displacement_pipelines[2];
     VkPipeline fluid_phase_pipelines[13];
     VkPipeline projection_phase_pipelines[6];
     VkPipeline velocity_shift_pipeline;
