@@ -2,6 +2,7 @@
 """Install and run the checksum-pinned, repository-local Vulkan developer tools."""
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -123,7 +124,10 @@ def main():
     args = parser.parse_args()
     try:
         if args.action == "bootstrap":
-            bootstrap(args.offline)
+            BASE.mkdir(parents=True, exist_ok=True)
+            with (BASE / "bootstrap.lock").open("a") as guard:
+                fcntl.flock(guard, fcntl.LOCK_EX)
+                bootstrap(args.offline)
             return 0
         root = install_root()
         if not installed(root):
