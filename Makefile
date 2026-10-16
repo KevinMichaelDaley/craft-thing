@@ -77,7 +77,7 @@ CONTACT_SHADER = build/shaders/contacts.comp.spv
 PROBE_SHADER = build/shaders/tick_probe.comp.spv
 HALO_SHADER = build/shaders/halo.comp.spv
 FLUID_SHADER = build/shaders/fluid.comp.spv
-PROJECTION_SHADER = build/shaders/projection.comp.spv
+PROJECTION_SHADER = build/shaders/projection.comp.spv build/shaders/hydro_head.comp.spv
 MARKER_SHADER = build/shaders/marker.comp.spv
 SHIFT_SHADER = build/shaders/shift_velocity.comp.spv
 MPM_SHADER = build/shaders/mpm.comp.spv
@@ -321,7 +321,11 @@ $(MARKER_SHADER): shaders/sim/marker.comp
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
 
-$(PROJECTION_SHADER): shaders/sim/projection.comp
+build/shaders/projection.comp.spv: shaders/sim/projection.comp
+	@mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
+
+build/shaders/hydro_head.comp.spv: shaders/sim/hydro_head.comp
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
 
@@ -445,6 +449,7 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/pixel_motion_cache_tests
 	./build/component_dispatch_tests
 	./build/pixel_properties_gpu_tests
+	./build/hydro_head_tests
 	./build/pixel_component_tests
 	./build/pixel_world_tests
 	./build/pixel_geometry_tests
@@ -687,9 +692,11 @@ test_contact_barrier:
 
 test: test_contact_barrier
 
-build/diagnostics/hydro_head.spv: shaders/sim/hydro_head.comp
-	mkdir -p build/diagnostics
-	$(GLSLANG) -V --target-env vulkan1.1 -S comp -o $@ $<
-
-build/hydro_head_tests: tests/vulkan/hydro_head_tests.c tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/hydro_head.spv
+build/hydro_head_tests: tests/vulkan/hydro_head_tests.c tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/hydro_head.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+test: build/hydro_head_tests
+
+build/diagnostics/fluid_case: tools/diagnostics/fluid_case.c tests/vulkan/fluid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/fluid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+

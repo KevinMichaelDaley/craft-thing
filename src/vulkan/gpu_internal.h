@@ -162,6 +162,7 @@ struct dc_gpu {
     VkBuffer pressure_a_buffer;
     VkDeviceMemory pressure_a_memory;
     VkPipeline projection_pipeline;
+    VkPipeline hydro_head_pipeline;
     VkPipeline velocity_shift_pipeline;
     uint32_t fluid_tick;
     uint32_t fluid_interval;

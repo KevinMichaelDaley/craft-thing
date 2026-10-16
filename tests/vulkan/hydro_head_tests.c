@@ -116,7 +116,7 @@ static bool setup(fixture_t *f, unsigned scenario) {
     f->p.buffer = f->buffers[3];
     f->p.mapped = f->words[3];
     if (!fixture_body_pipeline(&f->p, &f->gpu, VK_NULL_HANDLE,
-                               "build/diagnostics/hydro_head.spv", bindings, 5,
+                               "build/shaders/hydro_head.comp.spv", bindings, 5,
                                UINT32_MAX))
         return false;
     for (unsigned i = 0; i < 5; i++) {

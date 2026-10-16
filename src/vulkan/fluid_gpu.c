@@ -70,6 +70,8 @@ bool dc_gpu_fluid_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                          &gpu->fluid_pipeline, err, cap) &&
            make_pipeline(gpu, "build/shaders/projection.comp.spv",
                          &gpu->projection_pipeline, err, cap) &&
+           make_pipeline(gpu, "build/shaders/hydro_head.comp.spv",
+                         &gpu->hydro_head_pipeline, err, cap) &&
            make_pipeline(gpu, "build/shaders/shift_velocity.comp.spv",
                          &gpu->velocity_shift_pipeline, err, cap);
 }
@@ -77,6 +79,7 @@ bool dc_gpu_fluid_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
 void dc_gpu_fluid_destroy(dc_gpu_t *gpu) {
     if (gpu->fluid_pipeline) vkDestroyPipeline(gpu->device, gpu->fluid_pipeline, NULL);
     if (gpu->projection_pipeline) vkDestroyPipeline(gpu->device, gpu->projection_pipeline, NULL);
+    if (gpu->hydro_head_pipeline) vkDestroyPipeline(gpu->device, gpu->hydro_head_pipeline, NULL);
     if (gpu->velocity_shift_pipeline)
         vkDestroyPipeline(gpu->device, gpu->velocity_shift_pipeline, NULL);
     if (gpu->velocity_mapped) vkUnmapMemory(gpu->device, gpu->velocity_memory);
@@ -173,15 +176,17 @@ static void record_projection_begin(dc_gpu_t *gpu) {
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    push[2] = 4u;
-    push[3] = 0u;
-    vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
-        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    vkCmdDispatch(gpu->command, (gpu->width + 15u) / 16u, 1u, 1u);
-    fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->hydro_head_pipeline);
+    for (uint32_t phase = 0; phase < 2; phase++) {
+        push[2] = phase;
+        vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+        vkCmdDispatch(gpu->command, gpu->width, 1u, 1u);
+        fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    }
 }
 
 static void record_pressure_passes(dc_gpu_t *gpu, uint32_t first,
