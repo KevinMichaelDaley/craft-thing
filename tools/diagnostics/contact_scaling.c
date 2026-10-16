@@ -2,6 +2,8 @@
 #define main pixel_fixture_main
 #include "../../tests/vulkan/pixel_component_tests.c"
 #undef main
+static double last_contact_ms;
+static uint32_t last_emitted;
 
 static bool occupied(unsigned kind, unsigned x, unsigned y, unsigned side) {
     if (kind == 0) return true;
@@ -66,7 +68,6 @@ static void measure(unsigned side, unsigned kind, unsigned pair_kind) {
         bodies[1].local_x_fp += (int32_t)side * 65536 - 16384;
     }
     g->body_count = 2;
-    g->component_profile = true;
     uint32_t *pairs = dc_gpu_broadphase_data(g);
     unsigned pair_base = DC_GPU_BROADPHASE_HEADER_WORDS +
                          2 * dc_gpu_broadphase_buckets(g);
@@ -75,7 +76,8 @@ static void measure(unsigned side, unsigned kind, unsigned pair_kind) {
     pairs[pair_base + 1] = bodies[1].body.id;
     for (unsigned i = 2; i < 8; i++) pairs[pair_base + i] = 0;
     double total_ms = 0;
-    for (unsigned sample = 0; sample < 9; sample++) {
+    for (unsigned sample = 0; sample < 10; sample++) {
+        g->component_profile = sample == 9;
         ASSERT_EQ(vkResetCommandBuffer(g->command, 0), VK_SUCCESS);
         VkCommandBufferBeginInfo begin = {.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
         ASSERT_EQ(vkBeginCommandBuffer(g->command, &begin), VK_SUCCESS);
@@ -91,7 +93,8 @@ static void measure(unsigned side, unsigned kind, unsigned pair_kind) {
         uint64_t times[2];
         ASSERT_EQ(vkGetQueryPoolResults(g->device, g->timestamp_pool, 0, 2, sizeof(times), times,
                                        sizeof(uint64_t), VK_QUERY_RESULT_64_BIT), VK_SUCCESS);
-        if (sample) total_ms += (times[1] - times[0]) * g->timestamp_period / 1e6;
+        if (sample > 0 && sample < 9)
+            total_ms += (times[1] - times[0]) * g->timestamp_period / 1e6;
     }
     const uint32_t *contacts = dc_gpu_contact_data(g);
     printf("contact scaling side%u shape%u pair%u area%u boundary%u perimeter%u "
@@ -99,11 +102,28 @@ static void measure(unsigned side, unsigned kind, unsigned pair_kind) {
            side, kind, pair_kind, area, boundary, perimeter, contacts[9], contacts[10], contacts[11],
            contacts[0], contacts[2], total_ms / 8);
     ASSERT_EQ(contacts[2], 0u);
+    last_contact_ms = total_ms / 8;
+    last_emitted = contacts[0];
     dc_gpu_destroy(g);
     PASS();
 }
 
+static void test_legacy_pixel_order_does_not_serialize_pixel_query(void) {
+    measure(64, 0, 0);
+    double legacy_first = last_contact_ms;
+    uint32_t emitted = last_emitted;
+    measure(64, 0, 1);
+    ASSERT_EQ(emitted, last_emitted);
+    ASSERT_TRUE(legacy_first <= last_contact_ms * 4 + .1);
+    PASS();
+}
+
 int main(int argc, char **argv) {
+    if (argc == 2 && strcmp(argv[1], "balance") == 0) {
+        RUN(test_legacy_pixel_order_does_not_serialize_pixel_query);
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail != 0;
+    }
     if (argc != 4) return 2;
     measure((unsigned)strtoul(argv[1], NULL, 10), (unsigned)strtoul(argv[2], NULL, 10),
             (unsigned)strtoul(argv[3], NULL, 10));
