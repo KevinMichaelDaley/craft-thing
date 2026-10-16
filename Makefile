@@ -112,6 +112,7 @@ test_ui test_quarter_native: build/rigid_dynamics_visual_tests build/presentatio
 $(GPU_OBJ): $(BROADPHASE_SHADER) $(CONTACT_SHADER)
 $(RIGID_SHADER) $(PROBE_SHADER) $(BROADPHASE_SHADER): shaders/sim/rigid_body.glsl
 $(RIGID_SHADER): shaders/sim/rigid_shape.glsl
+$(RIGID_SHADER): shaders/sim/structural_load.glsl
 build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_bench build/dungeoncraft_quarter_native build/marker_slot_tests: $(BROADPHASE_SHADER)
 build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench: $(BROADPHASE_SHADER) src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
 build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_bench build/dungeoncraft_quarter_native build/marker_slot_tests build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench: $(CONTACT_SHADER)
@@ -451,6 +452,8 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/pixel_properties_gpu_tests
 	./build/hydro_head_tests
 	./build/fluid_aperture_tests
+	./build/raster_dispatch_tests
+	./build/raster_equivalence_tests
 	./build/fluid_transport_tests
 	./build/fluid_transport_long_tests
 	./build/fluid_transport_slow_tests
@@ -747,6 +750,7 @@ build/raster_equivalence_tests: tests/vulkan/raster_equivalence_tests.c tests/vu
 
 test: build/fluid_aperture_tests build/diagnostics/fluid_case
 test: build/fluid_transport_tests build/fluid_transport_long_tests build/fluid_transport_slow_tests
+test: build/raster_dispatch_tests build/raster_equivalence_tests
 
 build/diagnostics/fluid_case: tools/diagnostics/fluid_case.c tests/vulkan/fluid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch

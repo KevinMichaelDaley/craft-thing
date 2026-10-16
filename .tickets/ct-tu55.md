@@ -90,3 +90,7 @@ Cooperative transport RED43cee73 -> GREEN: six minimal GPU fixtures match the li
 **2026-10-16T23:07:21Z**
 
 Immutable per-line field cache keeps all 18 recurrence tests and exact coupled fingerprint passing. Cache extent is specialized to actual line length (maximum 2048 cached cells; larger lines retain exact cooperative GPU global accesses). Native 640x360: 48.429 ms mean, 57.373 ms p95, 20.649 FPS; fluid 10.090 ms/tick versus 15.321 before field caching. Updated transport pass costs 6.714/2.564/9.009/10.412 ms per six-tick cycle. Alternate separate shared arrays gave no improvement (49.914 ms mean); retaining simpler shared cell records. Thirty FPS remains unmet; raster/structure ~5.7 ms/tick and displacement ~15.3 ms/cycle remain targets.
+
+**2026-10-16T23:44:19Z**
+
+Raster runtime RED5785631 -> GREEN: GPU-only classifier now routes pixel-only and mixed/legacy raster pipelines through fully reset indirect triplets. Two different rotated mixed-material concave bodies (324/574pixels) on an odd123x117grid produce byte-identical five occupancy/volume/face planes for generic and specialized paths across four paused frames. Validation clean. Skipped structural refresh still executes the bounded classifier to zero both dispatches. No CPU body-type readback and no geometry/resolution change.

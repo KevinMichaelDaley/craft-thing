@@ -13,7 +13,8 @@ _Static_assert(offsetof(dc_gpu_body_record_t, angle) == 152, "GPU angular state 
 _Static_assert(offsetof(dc_gpu_body_record_t, center) == 168, "GPU centroid offset changed");
 _Static_assert(offsetof(dc_gpu_body_record_t, bounds_low) == 200, "GPU cached bounds offset changed");
 
-enum { RIGID_RASTER = 1u, RIGID_PREPARE = 2u, RIGID_PHYSICAL_MASK = 128u };
+enum { RIGID_RASTER = 1u, RIGID_PREPARE = 2u, RIGID_PHYSICAL_MASK = 128u,
+       RIGID_CONDITIONAL_REFRESH = 256u };
 
 static bool submit_rigid(dc_gpu_t *gpu, bool advance, char *err, uint32_t cap);
 
@@ -153,13 +154,17 @@ bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *path,
             .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = shader, .pName = "main" },
         .layout = gpu->pipeline_layout };
     VkResult result = VK_SUCCESS;
-    VkSpecializationMapEntry entry = {.constantID=0, .offset=0, .size=sizeof(uint32_t)};
-    for (uint32_t stage=0; stage<2 && result==VK_SUCCESS; ++stage) {
-        VkSpecializationInfo specialization = {.mapEntryCount=1, .pMapEntries=&entry,
-            .dataSize=sizeof(stage), .pData=&stage};
+    VkSpecializationMapEntry entries[2] = {{.constantID=0, .offset=0, .size=sizeof(uint32_t)},
+        {.constantID=1, .offset=sizeof(uint32_t), .size=sizeof(uint32_t)}};
+    const uint32_t stages[4]={0,1,2,1};
+    VkPipeline *pipelines[4]={&gpu->rigid_prepare_pipeline,&gpu->rigid_pipeline,
+        &gpu->rigid_classify_pipeline,&gpu->rigid_pixel_pipeline};
+    for (uint32_t index=0; index<4 && result==VK_SUCCESS; ++index) {
+        uint32_t values[2]={stages[index],index==3};
+        VkSpecializationInfo specialization = {.mapEntryCount=2, .pMapEntries=entries,
+            .dataSize=sizeof(values), .pData=values};
         info.stage.pSpecializationInfo=&specialization;
-        VkPipeline *pipeline = stage==0 ? &gpu->rigid_prepare_pipeline : &gpu->rigid_pipeline;
-        result = vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,pipeline);
+        result = vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,pipelines[index]);
     }
     vkDestroyShaderModule(gpu->device, shader, NULL);
     if (result != VK_SUCCESS) return error(err, cap, "Cannot create rigid pipeline");
@@ -177,6 +182,8 @@ void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
             vkDestroyPipeline(gpu->device, gpu->pixel_hydro_pipelines[i], NULL);
     if (gpu->broadphase_pipeline) vkDestroyPipeline(gpu->device, gpu->broadphase_pipeline, NULL);
     if (gpu->rigid_pipeline) vkDestroyPipeline(gpu->device, gpu->rigid_pipeline, NULL);
+    if (gpu->rigid_pixel_pipeline) vkDestroyPipeline(gpu->device, gpu->rigid_pixel_pipeline, NULL);
+    if (gpu->rigid_classify_pipeline) vkDestroyPipeline(gpu->device, gpu->rigid_classify_pipeline, NULL);
     if (gpu->rigid_prepare_pipeline) vkDestroyPipeline(gpu->device,gpu->rigid_prepare_pipeline,NULL);
     for (unsigned phase = 0; phase < DC_GPU_STRUCTURAL_PHASE_COUNT; phase++)
         if (gpu->structural_pipelines[phase])
@@ -358,6 +365,25 @@ void dc_gpu_record_rigid(dc_gpu_t *gpu) {
     record_rigid(gpu, true);
 }
 
+static void record_raster(dc_gpu_t *gpu,uint32_t push[8],bool conditional) {
+    push[2]=(push[2]&~RIGID_CONDITIONAL_REFRESH)|(conditional?RIGID_CONDITIONAL_REFRESH:0u);
+    vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->rigid_classify_pipeline);
+    vkCmdPushConstants(gpu->command,gpu->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,8*sizeof(uint32_t),push);
+    vkCmdDispatch(gpu->command,1,1,1);
+    VkMemoryBarrier2 memory={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,.srcAccessMask=VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        .dstStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+        .dstAccessMask=VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT};
+    VkDependencyInfo dependency={.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,.memoryBarrierCount=1,.pMemoryBarriers=&memory};
+    vkCmdPipelineBarrier2(gpu->command,&dependency);
+    const VkPipeline pipelines[2]={gpu->rigid_pipeline,gpu->rigid_pixel_pipeline};
+    for(unsigned path=0;path<2;path++) {
+        vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipelines[path]);
+        vkCmdDispatchIndirect(gpu->command,gpu->mpm_activity_buffer,path*3u*sizeof(uint32_t));
+        if(path==0) vkCmdPipelineBarrier2(gpu->command,&dependency);
+    }
+}
+
 static void record_rigid(dc_gpu_t *gpu, bool advance) {
     if (!gpu->body_count && !gpu->rigid_occupancy_present && !gpu->structural_enabled) return;
     VkMemoryBarrier2 upload = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
@@ -396,12 +422,8 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
     if (gpu->component_profile)
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                               gpu->timestamp_pool, 14);
-    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_pipeline);
     push[2] = RIGID_RASTER | (gpu->rigid_solver_enabled ? RIGID_PHYSICAL_MASK : 0u);
-    vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
-        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    vkCmdDispatch(gpu->command, (gpu->width + 15u) / 16u,
-        (gpu->height + 15u) / 16u, 1);
+    record_raster(gpu,push,false);
     VkMemoryBarrier2 finish = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
@@ -416,13 +438,8 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                               gpu->timestamp_pool, 15);
     if (advance && gpu->structural_enabled) {
-        vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_pipeline);
         push[2] = RIGID_RASTER | RIGID_PHYSICAL_MASK;
-        vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
-            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-        VkDeviceSize indirect = sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
-            (VkDeviceSize)(dc_gpu_structural_word_offset(gpu) + 16u) * sizeof(uint32_t);
-        vkCmdDispatchIndirect(gpu->command, gpu->body_buffer, indirect);
+        record_raster(gpu,push,true);
         vkCmdPipelineBarrier2(gpu->command, &dep);
     }
     gpu->rigid_occupancy_present = count != 0;
