@@ -135,6 +135,8 @@ static bool setup(fixture_t *f, unsigned scenario) {
         f->words[1][p] = p + 1;
     if (scenario == 2)
         f->words[1][3] = 0;
+    for (unsigned i = 0; i < CELLS; i++)
+        f->words[3][i] = UINT32_MAX;
     for (int y = 0; y < HEIGHT; y++)
         for (int x = 0; x < WIDTH; x++) {
             uint32_t a = atlas(f, x, y), i = y * WIDTH + x;
@@ -149,7 +151,6 @@ static bool setup(fixture_t *f, unsigned scenario) {
                 f->words[2][i] = 19;
                 f->words[2][2 * CELLS + i] = y % 3 ? FULL : FULL / 3;
             }
-            f->words[3][i] = UINT32_MAX;
         }
     reference(f);
     return true;

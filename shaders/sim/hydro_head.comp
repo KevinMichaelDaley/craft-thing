@@ -1,3 +1,72 @@
 #version 450
 layout(local_size_x=128) in;
-void main() {}
+layout(set=0,binding=1,std430) readonly buffer Cells {uvec2 cells[];};
+layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
+layout(set=0,binding=3,std430) readonly buffer Occupancy {uint occupancy[];};
+layout(set=0,binding=9,std430) buffer Heads {uint heads[];};
+layout(set=0,binding=11,std430) buffer RawHeads {uint raw_heads[];};
+layout(push_constant) uniform Params {uint width,height,phase,unused0,unused1,unused2,unused3,unused4;} params;
+const uint FULL=65536u,CAP=64u*FULL,LANES=128u;
+shared uvec3 transforms[128];
+
+uint atlas_of(ivec2 p) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0xffffffffu;
+    uint page=pages[(uint(p.y)/64u)*((params.width+63u)/64u)+uint(p.x)/64u];
+    return page==0u?0xffffffffu:(page-1u)*4096u+(uint(p.y)%64u)*64u+uint(p.x)%64u;
+}
+bool permeable(uint material) {return material==0u||material==2u||material==4u||material==5u||material==6u;}
+bool wet(ivec2 p,uint atlas) {
+    return atlas!=0xffffffffu&&permeable(cells[atlas].x&65535u)&&
+        occupancy[2u*params.width*params.height+uint(p.y)*params.width+uint(p.x)]<FULL&&cells[atlas].y!=0u;
+}
+uint neighboring_head(ivec2 p) {
+    uint result=0u;
+    for(int side=-1;side<=1;side+=2) for(int distance=1;distance<=32;distance++) {
+        ivec2 q=p+ivec2(side*distance,0);uint atlas=atlas_of(q);
+        if(atlas==0xffffffffu||!permeable(cells[atlas].x&65535u)) break;
+        uint index=uint(q.y)*params.width+uint(q.x);
+        if(occupancy[index]!=0u) continue;
+        result=max(result,raw_heads[index]);break;
+    }
+    return result;
+}
+/* A transform maps zero to z, and positive h to min(h+b,CAP), unless
+ * constant. This represents dry resets and zero-sensitive covered cells. */
+uint apply_head(uvec3 t,uint head) {return t.z!=0u||head==0u?t.y:min(CAP,head+t.x);}
+uvec3 compose(uvec3 before,uvec3 after) {
+    if(after.z!=0u) return after;
+    uint zero=apply_head(after,before.y);
+    return before.z!=0u?uvec3(0u,zero,1u):uvec3(min(CAP,before.x+after.x),zero,0u);
+}
+uvec3 cell_transform(ivec2 p) {
+    uint atlas=atlas_of(p),index=uint(p.y)*params.width+uint(p.x);
+    if(params.phase!=0u) {
+        uint covered=occupancy[2u*params.width*params.height+index];
+        if(covered!=0u) {
+            uint water=atlas==0xffffffffu?0u:cells[atlas].y;
+            return uvec3(min(FULL,water+covered),neighboring_head(p),0u);
+        }
+    }
+    if(!wet(p,atlas)) return uvec3(0u,0u,1u);
+    uint water=cells[atlas].y;return uvec3(water,water,0u);
+}
+void main() {
+    uint x=gl_WorkGroupID.x,lane=gl_LocalInvocationIndex;
+    if(x>=params.width) return;
+    uint length=(params.height+LANES-1u)/LANES,begin=lane*length,end=min(begin+length,params.height);
+    uvec3 own=uvec3(0);
+    for(uint y=begin;y<end;y++) own=compose(own,cell_transform(ivec2(x,y)));
+    transforms[lane]=own;barrier();
+    for(uint stride=1u;stride<LANES;stride*=2u) {
+        uvec3 previous=lane>=stride?transforms[lane-stride]:uvec3(0),current=transforms[lane];
+        barrier();
+        if(lane>=stride) transforms[lane]=compose(previous,current);
+        barrier();
+    }
+    uint head=lane==0u?0u:transforms[lane-1u].y;
+    for(uint y=begin;y<end;y++) {
+        head=apply_head(cell_transform(ivec2(x,y)),head);
+        uint index=y*params.width+x;
+        if(params.phase==0u) raw_heads[index]=head;else heads[index]=head;
+    }
+}
