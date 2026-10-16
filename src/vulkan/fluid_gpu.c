@@ -56,9 +56,13 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
                           char *err, uint32_t cap) {
     VkShaderModule shader = VK_NULL_HANDLE;
     if (!dc_gpu_load_shader_module(gpu, path, &shader, err, cap)) return false;
-    VkSpecializationMapEntry entry = {.constantID=0,.size=sizeof(phase)};
-    VkSpecializationInfo specialization = {.mapEntryCount=1,.pMapEntries=&entry,
-        .dataSize=sizeof(phase),.pData=&phase};
+    bool transport=strcmp(path,"build/shaders/fluid_transport.comp.spv")==0;
+    uint32_t length=phase<2?gpu->height:gpu->width;
+    uint32_t values[2]={phase,length<2048u?length:2048u};
+    VkSpecializationMapEntry entries[2]={{.constantID=0,.size=sizeof(uint32_t)},
+        {.constantID=1,.offset=sizeof(uint32_t),.size=sizeof(uint32_t)}};
+    VkSpecializationInfo specialization = {.mapEntryCount=transport?2u:1u,.pMapEntries=entries,
+        .dataSize=transport?sizeof(values):sizeof(phase),.pData=values};
     VkComputePipelineCreateInfo info = { .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = shader, .pName = "main",

@@ -86,3 +86,7 @@ Integrated exact cache preserves original coupled fingerprint97a0ea02c0e0a633/ma
 **2026-10-16T22:50:05Z**
 
 Cooperative transport RED43cee73 -> GREEN: six minimal GPU fixtures match the literal original ordered source/destination recurrence with zero cell-water mismatches under Vulkan validation, including four directions, fractional apertures, odd137x83bounds, velocity trapezoid and UNKNOWN pages. One complete subgroup perline uses parallel blocker minima and integer exclusive recipient-prefix allocation;2048-cell shared water cache, GPU global cache-miss path forlongerlines. Not runtime-wired yet; no performance claim. No workgroup barrier behind returned subgroups.
+
+**2026-10-16T23:07:21Z**
+
+Immutable per-line field cache keeps all 18 recurrence tests and exact coupled fingerprint passing. Cache extent is specialized to actual line length (maximum 2048 cached cells; larger lines retain exact cooperative GPU global accesses). Native 640x360: 48.429 ms mean, 57.373 ms p95, 20.649 FPS; fluid 10.090 ms/tick versus 15.321 before field caching. Updated transport pass costs 6.714/2.564/9.009/10.412 ms per six-tick cycle. Alternate separate shared arrays gave no improvement (49.914 ms mean); retaining simpler shared cell records. Thirty FPS remains unmet; raster/structure ~5.7 ms/tick and displacement ~15.3 ms/cycle remain targets.
