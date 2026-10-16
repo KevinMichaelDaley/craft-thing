@@ -82,6 +82,7 @@ void main() {
     if(EXTRACTION_PHASE==26u) {
         uint lane=gl_LocalInvocationID.x,enabled=uint(data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]!=0u);
         if(lane<27u) activity[lane]=lane%3u==0u?enabled*(lane==0u||lane==12u?(total()+127u)/128u:lane==6u?64u:lane==9u?0u:lane==15u?data[base()+1u]*4u:lane==18u?(total()+16383u)/16384u:lane==21u||lane==24u?data[base()+1u]:1u):1u;
+        if(lane>=27u&&lane<33u) activity[lane]=lane%3u==0u?0u:1u;
         if(lane==0u) {activity[36]=enabled*((data[base()+1u]+127u)/128u);activity[37]=1u;activity[38]=1u;}
         return;
     }

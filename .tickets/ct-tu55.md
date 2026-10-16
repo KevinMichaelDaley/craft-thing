@@ -30,3 +30,11 @@ GREEN scalability subset: cooperative strided registry search and correctly size
 **2026-10-14T04:42:05Z**
 
 Device blocker after native stress: restored7509 runtime64x64 hydro probe timed out60sec; independent feature worktree previously4/4 passing8x8 authored staging also timed out45sec with unchanged shader/runtime. No GPU test process remains. No meaningful behavioral RED from these timeouts; global GPU/device recovery needed. Kernel read requires root; sudo -n read-only journal query denied. Native headless isolation previously rigid9.440/fluid17.153/MPM11.806ms; render-only3.075ms. Full regression incomplete.
+
+**2026-10-16T19:48:10Z**
+
+Oct16 recovery: bounded real IrisXe empty/fill/16-invocation compute probe passes with validation; kernel journal has no HANG/reset entries. Safe phase26-only RED ba33ab8 compiles and fails2 cases: dirty0 ANDdirty1 leave indirect triplets27/30 at poisoned grain IDs4369,4369,4369 (about83billion groups each if launched). Test dispatches only one initialization group and never launches poison. Full engine initialization hit15sec process deadline before first submission marker; minimal fixture avoids all-engine pipeline creation. Root cause of historical display crash not established, but stale indirect count defect is directly proven.
+
+**2026-10-16T19:49:15Z**
+
+GREEN bounded phase26 regression: both dirty0/dirty1 now reset tile indirect triplets27 and30 to0,1,1 after arbitrary MPM tile IDs.2/2 pass with validation, each GPU submission one directly dispatched128-lane group and1sec fence bound. Both production Vulkan1.3 and isolated Vulkan1.1 SPIR-V validate. Fix changes only six metadata initialization writes; no geometry, physics, source clearing or quality change. Full engine motion-cache/small-scene validation and timing ladder still pending.
