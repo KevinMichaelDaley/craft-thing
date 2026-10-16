@@ -74,7 +74,7 @@ void main() {
         }
         counts[lane]=boundary;
         for(uint stride=32u;stride>0u;stride/=2u) {barrier();if(lane<stride) counts[lane]=min(counts[lane],counts[lane+stride]);}barrier();
-        uint floor_y=counts[0];
+        uint floor_y=counts[0];barrier();
         if(floor_y==0u||floor_y>=params.height) return;
         ivec2 floor_point=ivec2(x,int(floor_y)),bottom=floor_point-ivec2(0,1);
         uint floor_page=hydro_page(floor_point),bottom_page=hydro_page(bottom);
@@ -83,8 +83,9 @@ void main() {
         for(uint y=lane;y<floor_y;y+=64u) {ivec2 p=ivec2(x,int(y));uint page=hydro_page(p);if(page==0u||!hydro_permeable(hydro_cells[hydro_atlas(p,page)].x&65535u)) barrier_y=max(barrier_y,y+1u);}
         counts[lane]=barrier_y;
         for(uint stride=32u;stride>0u;stride/=2u) {barrier();if(lane<stride) counts[lane]=max(counts[lane],counts[lane+stride]);}barrier();
+        uint water_begin=counts[0];barrier();
         uvec2 volume=uvec2(0);uint occupied=0u;
-        for(uint y=counts[0]+lane;y<floor_y;y+=64u) {
+        for(uint y=water_begin+lane;y<floor_y;y+=64u) {
             ivec2 p=ivec2(x,int(y));uint page=hydro_page(p);volume=add_wide(volume,uvec2(hydro_cells[hydro_atlas(p,page)].y,0));
             occupied|=hydro_occupancy[y*params.width+uint(x)];
         }
