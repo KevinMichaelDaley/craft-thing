@@ -83,10 +83,60 @@ static void test_completed_heads_match_closed_pool(void) {
     ASSERT_EQ(mismatches, 0u);
     PASS();
 }
+static void test_fluid_variant_fingerprint(void) {
+    char err[256];
+    dc_chunk_t left = {0}, right = {0};
+    for (unsigned y = 0; y < 64; y++)
+        for (unsigned x = 0; x < 64; x++) {
+            left.cells[y * 64 + x].material =
+                (x == 0 || y == 63) ? DC_MATERIAL_STONE : DC_MATERIAL_AIR;
+            right.cells[y * 64 + x].material =
+                (x == 63 || y == 63) ? DC_MATERIAL_STONE : DC_MATERIAL_AIR;
+            if (y >= 28 && y < 60) {
+                left.cells[y * 64 + x].fluid_mass =
+                    (x > 3 && x < 63) ? DC_FLUID_FULL - (x * 73 + y * 97) % 8192
+                                      : 0;
+                right.cells[y * 64 + x].fluid_mass =
+                    x < 60 ? DC_FLUID_FULL - (x * 101 + y * 41) % 8192 : 0;
+            }
+        }
+    dc_gpu_t *g = make_grid(&left, &right, err, sizeof(err));
+    ASSERT_TRUE(g);
+    const char *variant = getenv("DC_FLUID_VARIANTS");
+    if (variant && strcmp(variant, "specialized") == 0) {
+        for (unsigned p = 0; p < 13; p++)
+            ASSERT_TRUE(g->fluid_phase_pipelines[p] != VK_NULL_HANDLE);
+        for (unsigned p = 0; p < 6; p++)
+            if (p != 4)
+                ASSERT_TRUE(g->projection_phase_pipelines[p] != VK_NULL_HANDLE);
+    }
+    for (unsigned tick = 0; tick < 3; tick++)
+        ASSERT_TRUE(dc_gpu_fluid_step(g, err, sizeof(err)));
+    uint64_t hash = UINT64_C(14695981039346656037), mass = 0;
+    dc_chunk_t saved;
+    for (unsigned slot = 0; slot < 2; slot++) {
+        ASSERT_TRUE(dc_gpu_download_chunk(g, slot, &saved, err, sizeof(err)));
+        const unsigned char *bytes = (void *)saved.cells;
+        for (size_t i = 0; i < sizeof(saved.cells); i++)
+            hash = (hash ^ bytes[i]) * UINT64_C(1099511628211);
+        bytes = (void *)saved.face_velocity;
+        for (size_t i = 0; i < sizeof(saved.face_velocity); i++)
+            hash = (hash ^ bytes[i]) * UINT64_C(1099511628211);
+        for (unsigned i = 0; i < DC_CHUNK_CELLS; i++)
+            mass += saved.cells[i].fluid_mass;
+    }
+    printf("fluid variant %s fingerprint %016llx mass %llu\n",
+           variant ? variant : "production", (unsigned long long)hash,
+           (unsigned long long)mass);
+    dc_gpu_destroy(g);
+    PASS();
+}
 int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
-    if (strcmp(argv[1], "heads") == 0)
+    if (strcmp(argv[1], "variant") == 0)
+        RUN(test_fluid_variant_fingerprint);
+    else if (strcmp(argv[1], "heads") == 0)
         RUN(test_completed_heads_match_closed_pool);
     else if (strcmp(argv[1], "displacement") == 0)
         RUN(test_rigid_displacement_raises_water_without_losing_volume);

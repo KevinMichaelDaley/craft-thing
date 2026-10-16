@@ -66,7 +66,7 @@ void dc_gpu_record_contacts(dc_gpu_t *gpu) {
         (uint32_t)x, (uint32_t)(x >> 32), (uint32_t)y, (uint32_t)(y >> 32)};
     for (uint32_t mode = 0; mode < DC_GPU_CONTACT_PHASE_COUNT; ++mode) {
         vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->contact_pipelines[mode]);
-        push[2] = mode;
+        push[2] = mode | (gpu->component_profile ? 256u : 0u);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
         if (mode) {

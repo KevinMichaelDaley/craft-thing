@@ -26,6 +26,14 @@ def main():
         path = args.output / (name + "_specialized.comp")
         path.write_text(generate((root / "shaders/sim" / (name + ".comp")).read_text()))
         print(path)
+    body = (root / "shaders/sim/rigid_body.glsl").read_text()
+    predicate = "bool pixel_body(Body b) {return (b.piece_count&PIXEL_BODY_FLAG)!=0u;}"
+    if body.count(predicate) != 1:
+        raise ValueError("pixel-only compiler experiment predicate changed")
+    (args.output / "rigid_body.glsl").write_text(
+        body.replace(predicate, "bool pixel_body(Body b) {return true;}"))
+    (args.output / "rigid_pixel.comp").write_text(
+        (root / "shaders/sim/rigid.comp").read_text())
 
 
 if __name__ == "__main__":

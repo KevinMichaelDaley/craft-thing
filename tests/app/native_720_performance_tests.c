@@ -39,6 +39,19 @@ static void profile_completed_concave_tick(dc_gpu_t *g) {
         return;
     }
     double scale = g->timestamp_period / 1e6;
+    uint64_t solver_times[18];
+    ASSERT_EQ(vkGetQueryPoolResults(g->device, g->timestamp_pool, 16, 18,
+                                   sizeof(solver_times), solver_times,
+                                   sizeof(uint64_t), VK_QUERY_RESULT_64_BIT),
+              VK_SUCCESS);
+    double contacts_ms = 0;
+    for (unsigned step = 0; step < 8; step++)
+        contacts_ms += (solver_times[3 + step * 2] -
+                        solver_times[2 + step * 2]) * scale;
+    printf("native final solver split: hydro%.3f contacts8substeps%.3f "
+           "other%.3fms\n", (solver_times[1] - solver_times[0]) * scale,
+           contacts_ms, (times[10] - times[9]) * scale - contacts_ms -
+                        (solver_times[1] - solver_times[0]) * scale);
     printf("native final rigid detail: extraction%.3f prepare%.3f "
            "solver%.3f raster/contacts/structure%.3fms\n",
            (times[8] - times[0]) * scale, (times[9] - times[8]) * scale,
@@ -55,9 +68,9 @@ static void profile_completed_concave_tick(dc_gpu_t *g) {
     const uint32_t *contacts = dc_gpu_contact_data(g),
                    *pairs = dc_gpu_broadphase_data(g);
     printf("native final bodies active%u pixel%u cached%u; candidate "
-           "pairs%u contacts%u overflow%u pixel queries%u\n",
+           "pairs%u contacts%u overflow%u pixel queries%u boundaryA%u boundaryB%u\n",
            active, pixel, ready, pairs[0], contacts[0], contacts[2],
-           contacts[9]);
+           contacts[9], contacts[10], contacts[11]);
 }
 static void native_scene(unsigned load) {
     char err[256] = {0};

@@ -108,7 +108,7 @@ static bool pixel_hydro_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                   .pName = "main"},
         .layout = gpu->pipeline_layout};
     VkResult result = VK_SUCCESS;
-    for (uint32_t phase = 0; phase < 4 && result == VK_SUCCESS; ++phase) {
+    for (uint32_t phase = 0; phase < 5 && result == VK_SUCCESS; ++phase) {
         VkSpecializationInfo specialization = {.mapEntryCount = 1,
                                                .pMapEntries = &entry,
                                                .dataSize = sizeof(phase),
@@ -159,7 +159,7 @@ static void record_pixel_hydro(dc_gpu_t *gpu) {
                         0,           dc_gpu_runtime_body_count(gpu),
                         (uint32_t)x, (uint32_t)(x >> 32),
                         (uint32_t)y, (uint32_t)(y >> 32)};
-    const uint32_t phases[] = {0, 3, 1, 2};
+    const uint32_t phases[] = {0, 3, 1, 2, 4};
     for (unsigned stage = 0; stage < sizeof(phases) / sizeof(*phases);
          ++stage) {
         uint32_t phase = phases[stage];
@@ -168,9 +168,9 @@ static void record_pixel_hydro(dc_gpu_t *gpu) {
                           gpu->pixel_hydro_pipelines[phase]);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-        if (phase == 1)
+        if (phase == 1 || phase == 2)
             vkCmdDispatchIndirect(gpu->command, gpu->mpm_activity_buffer,
-                                  33u * sizeof(uint32_t));
+                                  (phase == 1 ? 33u : 36u) * sizeof(uint32_t));
         else
             vkCmdDispatch(gpu->command, phase == 3 ? 1 : DC_GPU_BODY_CAPACITY,
                           1, 1);
@@ -234,13 +234,25 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
 void dc_gpu_record_solver(dc_gpu_t *gpu) {
     dispatch(gpu, SOLVER_RESET, false);
     dispatch(gpu, SOLVER_BEGIN_FRAME, false);
+    if (gpu->component_profile)
+        vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                             gpu->timestamp_pool, 16);
     record_pixel_hydro(gpu);
+    if (gpu->component_profile)
+        vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                             gpu->timestamp_pool, 17);
     for (uint32_t step = 0; step < SOLVER_SUBSTEPS; ++step) {
         dispatch(gpu, SOLVER_PREDICT, false);
         if (gpu->structural_enabled)
             dispatch(gpu, SOLVER_BOND_RESET, false);
         dc_gpu_record_broadphase(gpu);
+        if (gpu->component_profile)
+            vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                                 gpu->timestamp_pool, 18 + step * 2);
         dc_gpu_record_contacts(gpu);
+        if (gpu->component_profile)
+            vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                                 gpu->timestamp_pool, 19 + step * 2);
         dispatch(gpu, SOLVER_PREPARE, false);
         dispatch(gpu, SOLVER_INIT_CONTACTS, true);
         dispatch(gpu, SOLVER_CLEAR, false);

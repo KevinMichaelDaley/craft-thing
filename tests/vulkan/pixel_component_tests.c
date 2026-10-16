@@ -393,6 +393,10 @@ static void test_wet_pixel_hydro_distributes_force_integration(void) {
     ASSERT_EQ(work[92], 16u);
     ASSERT_TRUE(work[93] <= 4u);
     ASSERT_EQ(work[94], 62u * 62u);
+    const dc_gpu_body_record_t *body = gpu->body_mapped;
+    ASSERT_TRUE(fabsf(body->body.vy_fp / 65536.f + 1.f / 6.f) < .003f);
+    ASSERT_TRUE(abs(body->body.vx_fp) < 8);
+    ASSERT_TRUE(fabsf(body->angular_velocity) < .0001f);
     free(chunk);
     dc_gpu_destroy(gpu);
     PASS();

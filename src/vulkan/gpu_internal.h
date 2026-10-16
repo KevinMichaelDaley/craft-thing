@@ -124,7 +124,7 @@ struct dc_gpu {
     VkPipeline broadphase_pipeline;
     VkPipeline contact_pipelines[DC_GPU_CONTACT_PHASE_COUNT];
     VkPipeline solver_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
-    VkPipeline pixel_hydro_pipelines[4];
+    VkPipeline pixel_hydro_pipelines[5];
     VkPipeline structural_pipelines[DC_GPU_STRUCTURAL_PHASE_COUNT];
     bool structural_enabled;
     dc_chunk_t *checkpoint_chunks;
@@ -163,6 +163,8 @@ struct dc_gpu {
     VkDeviceMemory pressure_a_memory;
     VkPipeline projection_pipeline;
     VkPipeline hydro_head_pipeline;
+    VkPipeline fluid_phase_pipelines[13];
+    VkPipeline projection_phase_pipelines[6];
     VkPipeline velocity_shift_pipeline;
     uint32_t fluid_tick;
     uint32_t fluid_interval;

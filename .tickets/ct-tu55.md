@@ -62,3 +62,7 @@ User explicitly changed current target to native640x360 physics AND display30FPS
 **2026-10-16T21:56:46Z**
 
 360p RED baseline, actual640x360 physics/display scale1,90slots,2fixed60Hz steps/frame,cadence6/default pressure unchanged: dry mean9.402ms p9510.775 max11.145 cold24.695 (106.364FPS); dense21.096 p9529.384 max32.459 cold37.542 (47.403FPS), steady gates pass. Exact1176/1872-pixel concave scene mean129.772 p95181.184 max183.255 cold119.440 (7.706FPS),30FPS gate fails. Final1tick rigid31.925/fluid35.526/MPM3.508ms. No diagnostic extra steps in these cold timings. Focus optimization on supported360p concave case;720reference only.
+
+**2026-10-16T22:09:34Z**
+
+Native 640x360 motion-grown scene GPU timing: hydro19.661ms, eight contact passes2.384ms, remaining solver1.154ms, raster/structure5.978ms. Interior pixels are rejected before contact polygons; allocated tile traversal remains. Fluid same-blob generic/specialized whole-frame129.484/128.337ms, negligible benefit. RED35e50a8 requires wet62x62 force integration distributed into16workgroups, max4cells/lane. Implementing deterministic GPU prefix reservation and partial reductions; no quality/resolution changes.
