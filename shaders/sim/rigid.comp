@@ -126,6 +126,7 @@ void integrate_body(uint index) {
 
 void main() {
     uvec2 p = gl_GlobalInvocationID.xy;
+    if (RIGID_RASTER_STAGE == 2u) return;
     if (RIGID_RASTER_STAGE == 0u) {
         uint index = gl_LocalInvocationIndex;
         if (index < params.body_count) integrate_body(index);

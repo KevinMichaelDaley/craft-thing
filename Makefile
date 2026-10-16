@@ -739,6 +739,9 @@ build/fluid_transport_long_tests: tests/vulkan/fluid_transport_tests.c tools/dia
 build/fluid_transport_slow_tests: tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DTRANSPORT_TEST_STEP=0.125f $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
+build/raster_dispatch_tests: tests/vulkan/raster_dispatch_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) $(RIGID_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
 test: build/fluid_aperture_tests build/diagnostics/fluid_case
 test: build/fluid_transport_tests build/fluid_transport_long_tests build/fluid_transport_slow_tests
 
