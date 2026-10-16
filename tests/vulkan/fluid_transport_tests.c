@@ -4,7 +4,14 @@
 #include "../../tools/diagnostics/shader_fixture.h"
 #include <math.h>
 
-enum { WIDTH=137,HEIGHT=83,CELLS=WIDTH*HEIGHT,FULL=65536,TREE_BASE=16448 };
+#ifndef TRANSPORT_TEST_WIDTH
+#define TRANSPORT_TEST_WIDTH 137
+#endif
+#ifndef TRANSPORT_TEST_HEIGHT
+#define TRANSPORT_TEST_HEIGHT 83
+#endif
+enum { WIDTH=TRANSPORT_TEST_WIDTH,HEIGHT=TRANSPORT_TEST_HEIGHT,CELLS=WIDTH*HEIGHT,
+    CHUNKS_X=(WIDTH+63)/64,CHUNKS=CHUNKS_X*((HEIGHT+63)/64),FULL=65536,TREE_BASE=16448 };
 static int g_pass,g_fail;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();if(g_fail)return 1;} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
@@ -17,14 +24,14 @@ typedef struct {
     uint32_t expected[CELLS];
 } fixture_t;
 static const uint32_t bindings[]={1,2,3,8,10,28,29};
-static const uint32_t sizes[]={6*4096*2,6,5*CELLS,CELLS,2*CELLS,2*CELLS,TREE_BASE+16384};
+static const uint32_t sizes[]={CHUNKS*4096*2,CHUNKS,5*CELLS,CELLS,2*CELLS,2*CELLS,TREE_BASE+16384};
 static uint32_t minimum(uint32_t a,uint32_t b) {return a<b?a:b;}
 static uint32_t bits(float x) {uint32_t u;memcpy(&u,&x,4);return u;}
 static float number(uint32_t x) {float f;memcpy(&f,&x,4);return f;}
 static unsigned index_of(int x,int y) {return (unsigned)y*WIDTH+(unsigned)x;}
 static uint32_t atlas(const fixture_t *f,int x,int y) {
     if(x<0||y<0||x>=WIDTH||y>=HEIGHT) return UINT32_MAX;
-    uint32_t page=f->words[1][(y/64)*3+x/64];
+    uint32_t page=f->words[1][(y/64)*CHUNKS_X+x/64];
     return page?(page-1)*4096+(unsigned)(y%64)*64+(unsigned)(x%64):UINT32_MAX;
 }
 static bool permeable(uint32_t m) {return m==0||m==2||m==4||m==5||m==6;}
@@ -83,7 +90,7 @@ static void run_case(unsigned mode,unsigned unknown) {
         ASSERT_TRUE(dc_gpu_make_mapped_buffer(&f->gpu,sizes[i]*4,&f->buffers[i],&f->memory[i],(void **)&f->words[i],err,sizeof(err)));
         memset(f->words[i],0,sizes[i]*4);
     }
-    for(unsigned i=0;i<6;i++) f->words[1][i]=unknown&&i==1?0:i+1;
+    for(unsigned i=0;i<CHUNKS;i++) f->words[1][i]=unknown&&i==1?0:i+1;
     bool vertical=mode<2,positive=(mode&1)==0;
     unsigned length=vertical?HEIGHT:WIDTH,lines=vertical?WIDTH:HEIGHT,leaves=1;
     while(leaves<(length+15)/16) leaves*=2;

@@ -2,6 +2,29 @@
 #include "../../tests/vulkan/fluid_tests.c"
 #undef main
 #include <string.h>
+static dc_gpu_t *dispatch_gpu;
+static VkPipeline dispatch_pipeline;
+static uint32_t dispatch_mode;
+static uint64_t dispatch_jobs[4];
+static bool require_cooperative;
+void __real_vkCmdBindPipeline(VkCommandBuffer,VkPipelineBindPoint,VkPipeline);
+void __real_vkCmdPushConstants(VkCommandBuffer,VkPipelineLayout,VkShaderStageFlags,uint32_t,uint32_t,const void *);
+void __real_vkCmdDispatch(VkCommandBuffer,uint32_t,uint32_t,uint32_t);
+void __wrap_vkCmdBindPipeline(VkCommandBuffer command,VkPipelineBindPoint point,VkPipeline pipeline) {
+    if(dispatch_gpu&&command==dispatch_gpu->command&&point==VK_PIPELINE_BIND_POINT_COMPUTE) dispatch_pipeline=pipeline;
+    __real_vkCmdBindPipeline(command,point,pipeline);
+}
+void __wrap_vkCmdPushConstants(VkCommandBuffer command,VkPipelineLayout layout,VkShaderStageFlags flags,
+                               uint32_t offset,uint32_t size,const void *data) {
+    if(dispatch_gpu&&command==dispatch_gpu->command&&offset==0&&size>=12) memcpy(&dispatch_mode,(const char *)data+8,4);
+    __real_vkCmdPushConstants(command,layout,flags,offset,size,data);
+}
+void __wrap_vkCmdDispatch(VkCommandBuffer command,uint32_t x,uint32_t y,uint32_t z) {
+    if(dispatch_gpu&&command==dispatch_gpu->command&&dispatch_mode<4&&dispatch_pipeline!=VK_NULL_HANDLE&&
+       (dispatch_pipeline==dispatch_gpu->fluid_pipeline||dispatch_pipeline==dispatch_gpu->fluid_phase_pipelines[dispatch_mode]||
+        dispatch_pipeline==dispatch_gpu->fluid_transport_pipelines[dispatch_mode])) dispatch_jobs[dispatch_mode]+=(uint64_t)x*y*z;
+    __real_vkCmdDispatch(command,x,y,z);
+}
 
 static void test_completed_heads_match_closed_pool(void) {
     char err[256];
@@ -148,6 +171,7 @@ static void test_long_transport_uses_exact_runtime_apertures(void) {
     ASSERT_TRUE(dc_gpu_spawn_body(g,body,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_motion(g,99,.37f,0,DC_GPU_BODY_KINEMATIC,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    dispatch_gpu=g;memset(dispatch_jobs,0,sizeof(dispatch_jobs));
     memset(g->mpm_label_a_mapped,0xa5,2*128*64*sizeof(uint32_t));
     for(unsigned tick=0;tick<2;tick++) ASSERT_TRUE(dc_gpu_fluid_step(g,err,sizeof(err)));
     uint64_t hash=UINT64_C(14695981039346656037),mass=0;
@@ -178,13 +202,24 @@ static void test_long_transport_uses_exact_runtime_apertures(void) {
     }
     printf("long transport fingerprint %016llx mass%llu runtime aperture mismatches%u\n",
         (unsigned long long)hash,(unsigned long long)mass,mismatches);
+    bool cooperative=true;
+    printf("transport workgroups");
+    for(unsigned mode=0;mode<4;mode++) {
+        printf(" %llu",(unsigned long long)dispatch_jobs[mode]);
+        cooperative=cooperative&&dispatch_jobs[mode]==2u*(mode<2?g->width:g->height);
+    }
+    printf("\n");dispatch_gpu=NULL;
     dc_gpu_destroy(g);
+    if(require_cooperative) ASSERT_TRUE(cooperative);
     ASSERT_EQ(mismatches,0u);PASS();
 }
 int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
-    if (strcmp(argv[1], "aperture-runtime") == 0)
+    if (strcmp(argv[1], "cooperative-runtime") == 0) {
+        require_cooperative=true;
+        RUN(test_long_transport_uses_exact_runtime_apertures);
+    } else if (strcmp(argv[1], "aperture-runtime") == 0)
         RUN(test_long_transport_uses_exact_runtime_apertures);
     else if (strcmp(argv[1], "variant") == 0)
         RUN(test_fluid_variant_fingerprint);

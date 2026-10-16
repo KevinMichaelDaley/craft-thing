@@ -82,3 +82,7 @@ Runtime range-cache integration RED: rotated14x12body plus fast bidirectional128
 **2026-10-16T22:44:37Z**
 
 Integrated exact cache preserves original coupled fingerprint97a0ea02c0e0a633/mass339325648 and body-free993637574fbe0c8f/mass230613072. Five fluid correctness cases pass validation. Native360 clean74.985ms mean/117.995p95 (13.336FPS); diagnostic74.544mean vs prior81.556, not30FPS. Transport20.873/6.473/46.613/51.070ms/cycle; cache builds0.48ms/cycle. Exact ordered line traversal remains dominant; considering cooperative per-line recipient prefix allocation, not claiming fully parallel recurrence. Iris Xe reports subgroup32, arithmetic/basic supported(operations0x6ff).
+
+**2026-10-16T22:50:05Z**
+
+Cooperative transport RED43cee73 -> GREEN: six minimal GPU fixtures match the literal original ordered source/destination recurrence with zero cell-water mismatches under Vulkan validation, including four directions, fractional apertures, odd137x83bounds, velocity trapezoid and UNKNOWN pages. One complete subgroup perline uses parallel blocker minima and integer exclusive recipient-prefix allocation;2048-cell shared water cache, GPU global cache-miss path forlongerlines. Not runtime-wired yet; no performance claim. No workgroup barrier behind returned subgroups.
