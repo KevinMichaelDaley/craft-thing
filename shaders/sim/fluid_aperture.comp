@@ -1,3 +1,45 @@
 #version 450
 layout(local_size_x=64) in;
-void main() {}
+layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
+layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
+layout(set=0,binding=28,std430) buffer Prefix {uint aperture_prefix[];};
+layout(set=0,binding=29,std430) buffer Tree {uint aperture_tree[];};
+layout(push_constant) uniform Params {uint width,height,axis,nodes,leaves;} params;
+const uint FULL=65536u,TREE_BASE=16448u;
+shared uint prefix[64],suffix[64];
+void main() {
+    uint lane=gl_LocalInvocationID.x,group=gl_WorkGroupID.x+gl_WorkGroupID.y*65535u;
+    uint length=params.axis!=0u?params.height:params.width;
+    uint lines=params.axis!=0u?params.width:params.height;
+    if(params.nodes!=0u) {
+        uint index=group*64u+lane;
+        if(index>=lines*params.nodes) return;
+        uint line=index/params.nodes,node=params.nodes+index%params.nodes;
+        uint base=TREE_BASE+line*2u*params.leaves;
+        aperture_tree[base+node]=min(aperture_tree[base+2u*node],aperture_tree[base+2u*node+1u]);
+        return;
+    }
+    uint batches=(params.leaves+3u)/4u;
+    if(group>=lines*batches) return;
+    uint line=group/batches,position=(group%batches)*64u+lane;
+    uvec2 p=params.axis!=0u?uvec2(line,position):uvec2(position,line);
+    uint value=FULL;
+    if(position<length) {
+        uint page=pages[(p.y/64u)*((params.width+63u)/64u)+p.x/64u];
+        uint plane=params.axis!=0u?4u:3u,index=p.y*params.width+p.x;
+        value=page==0u?0u:FULL-min(FULL,occupancy[plane*params.width*params.height+index]);
+    }
+    prefix[lane]=value;suffix[lane]=value;barrier();
+    for(uint stride=1u;stride<16u;stride*=2u) {
+        uint prior=lane%16u>=stride?prefix[lane-stride]:FULL;
+        uint next=lane%16u+stride<16u?suffix[lane+stride]:FULL;
+        barrier();prefix[lane]=min(prefix[lane],prior);suffix[lane]=min(suffix[lane],next);barrier();
+    }
+    if(position<length) {
+        uint index=p.y*params.width+p.x;
+        aperture_prefix[2u*index]=prefix[lane];aperture_prefix[2u*index+1u]=suffix[lane];
+    }
+    uint tile=position/16u;
+    if(lane%16u==15u&&tile<params.leaves)
+        aperture_tree[TREE_BASE+line*2u*params.leaves+params.leaves+tile]=prefix[lane];
+}
