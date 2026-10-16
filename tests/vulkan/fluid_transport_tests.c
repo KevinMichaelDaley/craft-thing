@@ -6,7 +6,7 @@
 
 enum { WIDTH=137,HEIGHT=83,CELLS=WIDTH*HEIGHT,FULL=65536,TREE_BASE=16448 };
 static int g_pass,g_fail;
-#define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
+#define RUN(fn) do {printf("RUN %s\n",#fn);fn();if(g_fail)return 1;} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
