@@ -66,3 +66,7 @@ User explicitly changed current target to native640x360 physics AND display30FPS
 **2026-10-16T22:09:34Z**
 
 Native 640x360 motion-grown scene GPU timing: hydro19.661ms, eight contact passes2.384ms, remaining solver1.154ms, raster/structure5.978ms. Interior pixels are rejected before contact polygons; allocated tile traversal remains. Fluid same-blob generic/specialized whole-frame129.484/128.337ms, negligible benefit. RED35e50a8 requires wet62x62 force integration distributed into16workgroups, max4cells/lane. Implementing deterministic GPU prefix reservation and partial reductions; no quality/resolution changes.
+
+**2026-10-16T22:13:12Z**
+
+Parallel wet force checkpoint99745e1: exact62x62full-immersion test passes16groups, <=4cells/lane, analytic vertical impulse and zero torque under validation. Motion-grown native360 hydro19.661 ->0.763ms, total solver23.199 ->4.339ms; contact2.384 ->2.413ms. Presented mean128.272 ->76.534ms, p95180.439 ->122.451ms,13.066FPS (still fails30FPS). Full validated suite running; no completion claim. Counters are enabled only for diagnostic profile ticks; normal frames unchanged.

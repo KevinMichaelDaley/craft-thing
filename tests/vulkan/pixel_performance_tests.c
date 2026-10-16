@@ -86,6 +86,7 @@ static void test_two_complex_pixel_bodies_meet_real_time_gpu_budget(void) {
 }
 static void test_cold_extraction_and_unchanged_complexity_sweep(void) {
     const unsigned sides[] = {32, 80, 160};
+    int failures_before = g_fail;
     for (unsigned scenario = 0; scenario < 3; ++scenario) {
         char err[256] = {0};
         dc_gpu_t *g = NULL;
@@ -149,10 +150,19 @@ static void test_cold_extraction_and_unchanged_complexity_sweep(void) {
         printf("ring %u pixels %u: cold rigid %.3f ms, unchanged %.3f ms\n",
                side, count, cold_ms, warm_ms);
         dc_gpu_destroy(g);
-        ASSERT_TRUE(cold_ms < 14.0);
-        ASSERT_TRUE(warm_ms < 14.0);
+        if (!(cold_ms < 14.0)) {
+            printf("FAIL cold ring%u: %.3fms must remain below14ms\n", side,
+                   cold_ms);
+            g_fail++;
+        }
+        if (!(warm_ms < 14.0)) {
+            printf("FAIL unchanged ring%u: %.3fms must remain below14ms\n",
+                   side, warm_ms);
+            g_fail++;
+        }
     }
-    PASS();
+    if (g_fail == failures_before)
+        PASS();
 }
 int main(void) {
     RUN(test_cold_extraction_and_unchanged_complexity_sweep);
