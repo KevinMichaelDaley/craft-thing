@@ -444,6 +444,7 @@ build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h
 test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/pixel_motion_cache_tests
 	./build/component_dispatch_tests
+	./build/pixel_properties_gpu_tests
 	./build/pixel_component_tests
 	./build/pixel_world_tests
 	./build/pixel_geometry_tests
@@ -677,3 +678,5 @@ build/diagnostics/rigid_prepare_probe.spv: shaders/sim/rigid.comp shaders/sim/ri
 
 build/pixel_properties_gpu_tests: tests/vulkan/pixel_properties_gpu_tests.c tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/pixel_properties_probe.spv build/diagnostics/rigid_prepare_probe.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+test: build/pixel_properties_gpu_tests

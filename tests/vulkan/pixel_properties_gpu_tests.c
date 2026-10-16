@@ -121,6 +121,7 @@ static void property_case(unsigned tip, double mass, double x, double y,
     ASSERT_TRUE(fabs(b.center[0] - x) < 1e-6);
     ASSERT_TRUE(fabs(b.center[1] - y) < 1e-6);
     ASSERT_TRUE(fabs(b.inertia - inertia) < 1e-5);
+    ASSERT_TRUE(fabs(b.density - mass / 5.) < 1e-6);
     ASSERT_EQ(b.motion_ready, 1u);
     PASS();
 }

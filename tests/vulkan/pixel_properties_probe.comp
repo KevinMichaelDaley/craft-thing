@@ -4,4 +4,18 @@
 layout(local_size_x=128) in;
 layout(set=0,binding=4,std430) buffer Storage {Body bodies[BODY_CAPACITY];uint data[];};
 uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
-void main() {if(gl_LocalInvocationIndex==0u) bodies[0].motion_ready=0u;}
+#include "pixel_properties.glsl"
+void main() {
+    Body body=bodies[0];uint mass10;vec2 center;float inertia;
+    pixel_mass_properties(body,mass10,center,inertia);
+    if(gl_LocalInvocationIndex==0u) {
+        body.mass=float(mass10)*.1;body.center=center;body.inertia=inertia;
+        body.density=body.mass/float(body.piece_count&~PIXEL_BODY_FLAG);
+        body.inverse_mass=(body.motion_flags&1u)==0u?1./body.mass:0.;
+        body.inverse_inertia=(body.motion_flags&3u)==0u?1./body.inertia:0.;
+        vec2 lo=pixel_low(body),hi=pixel_high(body);
+        body.radius=max(max(length(lo-center),length(vec2(hi.x,lo.y)-center)),
+                        max(length(vec2(lo.x,hi.y)-center),length(hi-center)));
+        body.motion_ready=1u;bodies[0]=body;
+    }
+}

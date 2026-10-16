@@ -62,3 +62,7 @@ Scope split at user request: optimizer retains performance/parallelization of EX
 **2026-10-14T04:56:45Z**
 
 CPU-only cache metadata RED committed2a495a9: motion edits invalidated immutable pixel mass/COM/inertia and forced whole-shape scalar recomputation. Minimal setter/cache refresh implementation now passes3 host-contract cases with no Vulkan submission; pending GPU inverse-flag, dormant-source and snapshot validation. No new snapshot ABI state added. Renderer independent unchanged96-texel reference probe localizes device stall after successful context/pipeline creation at texture submission; timed out25sec. No extraction/hydro in that submission; all GPU validation blocked pending recovery.
+
+**2026-10-16T20:07:47Z**
+
+Oct16 safe GPU acceptance: draft128-lane pixel_properties helper now passes mixed concave L5 closed-form mass/COM/inertia/density for wood+stone+dense wood and mortar.3/3 bounded tests pass with validation; actual production rigid PREPARE shader refreshes all4 flag combinations plus dormant converted-source flags while intrinsic property bits and42 geometry words remain identical. Each submission one workgroup/1sec fence. No kernel HANG/reset entries. Tests use minimal pipeline fixture; runtime helper wiring and end-to-end snapshot/full-suite checks remain pending. CPU-only engine init trace completed after cache warmup with GPU submissions forbidden; first structural phases4/5 compile30.456/26.232seconds, later cached~0.25sec.
