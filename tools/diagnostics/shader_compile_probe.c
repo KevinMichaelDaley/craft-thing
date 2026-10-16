@@ -33,8 +33,8 @@ static double seconds(void) {
     return t.tv_sec + t.tv_nsec / 1e9;
 }
 int main(int argc, char **argv) {
-    if (argc != 3) {
-        fprintf(stderr, "usage: %s shader.spv generic|phase\n", argv[0]);
+    if (argc != 3 && argc != 4) {
+        fprintf(stderr, "usage: %s shader.spv generic|phase [constant1]\n", argv[0]);
         return 2;
     }
     probe_t p = {0};
@@ -95,11 +95,19 @@ int main(int argc, char **argv) {
             return 2;
         phase = (uint32_t)number;
     }
-    VkSpecializationMapEntry entry = {.constantID = 0, .size = sizeof(phase)};
-    VkSpecializationInfo specialization = {.mapEntryCount = 1,
-                                           .pMapEntries = &entry,
-                                           .dataSize = sizeof(phase),
-                                           .pData = &phase};
+    uint32_t values[2] = {phase, 0};
+    if (argc == 4) {
+        char *end;
+        unsigned long value = strtoul(argv[3], &end, 10);
+        if (*end || value > UINT32_MAX || phase == UINT32_MAX) return 2;
+        values[1] = (uint32_t)value;
+    }
+    VkSpecializationMapEntry entries[2] = {{.constantID = 0, .size = sizeof(uint32_t)},
+                                          {.constantID = 1, .offset = sizeof(uint32_t), .size = sizeof(uint32_t)}};
+    VkSpecializationInfo specialization = {.mapEntryCount = argc == 4 ? 2u : 1u,
+                                           .pMapEntries = entries,
+                                           .dataSize = argc == 4 ? sizeof(values) : sizeof(phase),
+                                           .pData = values};
     VkComputePipelineCreateInfo pipeline = {
         .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage = {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,

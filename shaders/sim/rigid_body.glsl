@@ -35,7 +35,12 @@ struct Body {
 const uint PIXEL_BODY_FLAG=0x80000000u;
 const uint BODY_STORAGE_WORDS=64u*136u;
 uint pixel_word_at(uint index);
-bool pixel_body(Body b) {return (b.piece_count&PIXEL_BODY_FLAG)!=0u;}
+bool pixel_body(Body b) {
+#ifdef DC_RIGID_PIXEL_ONLY
+    if(DC_RIGID_PIXEL_ONLY) return true;
+#endif
+    return (b.piece_count&PIXEL_BODY_FLAG)!=0u;
+}
 uint pixel_shape_words(Body b) {return pixel_word_at(b.compound_reserved);}
 uint pixel_tile_count(Body b) {return pixel_word_at(b.compound_reserved+1u);}
 uint pixel_directory_words(Body b) {return pixel_word_at(b.compound_reserved+2u)*pixel_word_at(b.compound_reserved+3u);}
