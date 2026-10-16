@@ -721,6 +721,12 @@ build/shaders/fluid_aperture_query.comp.spv: tests/vulkan/fluid_aperture_query.c
 build/fluid_aperture_tests: tests/vulkan/fluid_aperture_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_aperture.comp.spv build/shaders/fluid_aperture_query.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
+build/shaders/fluid_transport.comp.spv: shaders/sim/fluid_transport.comp
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+
+build/fluid_transport_tests: tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
 test: build/fluid_aperture_tests build/diagnostics/fluid_case
 
 build/diagnostics/fluid_case: tools/diagnostics/fluid_case.c tests/vulkan/fluid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/fluid_tests
