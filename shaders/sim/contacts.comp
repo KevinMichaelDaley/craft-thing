@@ -210,7 +210,9 @@ void main() {
                     atomicOr(group_found,1u);
                 }
                 barrier();
-                if (group_found==0u) {
+                bool empty_terrain = group_found == 0u;
+                barrier();
+                if (empty_terrain) {
                     if (lane==0u) atomicAdd(data[base+5u],1u);
                     return;
                 }

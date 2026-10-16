@@ -38,3 +38,7 @@ Oct16 recovery: bounded real IrisXe empty/fill/16-invocation compute probe passe
 **2026-10-16T19:49:15Z**
 
 GREEN bounded phase26 regression: both dirty0/dirty1 now reset tile indirect triplets27 and30 to0,1,1 after arbitrary MPM tile IDs.2/2 pass with validation, each GPU submission one directly dispatched128-lane group and1sec fence bound. Both production Vulkan1.3 and isolated Vulkan1.1 SPIR-V validate. Fix changes only six metadata initialization writes; no geometry, physics, source clearing or quality change. Full engine motion-cache/small-scene validation and timing ladder still pending.
+
+**2026-10-16T20:19:43Z**
+
+CPU audit found a terrain-contact shared predicate race: lane0 could clear group_found before later subgroups read the early-return predicate, leaving divergent barrier participation. Safe source-contract RED fails without running potentially deadlocking shader; GREEN captures private predicate then all lanes rendezvous before any reset. Historical crash causality remains unproven. Full64x64 extraction and immediate cached flag snapshot integration passed validation 1/1.

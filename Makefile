@@ -680,3 +680,9 @@ build/pixel_properties_gpu_tests: tests/vulkan/pixel_properties_gpu_tests.c tool
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
 test: build/pixel_properties_gpu_tests
+
+.PHONY: test_contact_barrier
+test_contact_barrier:
+	python3 tests/vulkan/contact_barrier_tests.py
+
+test: test_contact_barrier
