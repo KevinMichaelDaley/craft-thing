@@ -74,3 +74,7 @@ Parallel wet force checkpoint99745e1: exact62x62full-immersion test passes16grou
 **2026-10-16T22:20:55Z**
 
 Contacts-only source/measurement diagnosis: boundaries are filtered before polygon work, but legacy-A/pixel-B formerly ran the whole B query in1lane. REDb64fcd0 records counters-free64x64solid10.235ms versus0.680ms reversed, identical2contacts. Cooperative B-query GREEN candidate0.556ms versus0.675ms, identical counts; validation passes and SPIR-V validates.96comb mixed geometry retains553contacts. Full correctness regression continuing; no FPS acceptance claim.
+
+**2026-10-16T22:34:45Z**
+
+Runtime range-cache integration RED: rotated14x12body plus fast bidirectional128x64fluid fixture. Original transport fingerprint97a0ea02c0e0a633, mass339325648;8192cache mismatches as expected because cache is not wired. Independent cache/query tests already3/3exact+validation. Preserve this fluid output fingerprint when adopting cached queries; no ordinary-frame readback/CPU solve.
