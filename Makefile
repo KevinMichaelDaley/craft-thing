@@ -443,6 +443,7 @@ build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h
 
 test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/pixel_motion_cache_tests
+	./build/component_dispatch_tests
 	./build/pixel_component_tests
 	./build/pixel_world_tests
 	./build/pixel_geometry_tests
@@ -653,3 +654,12 @@ test_pixel_motion_cache: build/pixel_motion_cache_tests
 	./build/pixel_motion_cache_tests
 
 test: build/pixel_motion_cache_tests
+
+build/diagnostics/component_extract_probe.spv: shaders/sim/component_extract.comp shaders/sim/rigid_body.glsl
+	mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.1 -S comp -o $@ $<
+
+build/component_dispatch_tests: tests/vulkan/component_dispatch_tests.c tools/diagnostics/vulkan_probe.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/component_extract_probe.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+test: build/component_dispatch_tests
