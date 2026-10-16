@@ -8,6 +8,29 @@ GPU chunk halos use the fixed resident pool (70 slots in quarter-native mode) an
 
 ## Build and run
 
+The pinned Vulkan developer tool setup is tracked in `tools/vulkan.lock.json`
+and `tools/bootstrap_vulkan.py`. On Ubuntu 24.04 x86_64, run:
+
+```sh
+make tools
+./tools/with-vulkan make all
+./tools/with-vulkan make test
+```
+
+The bootstrap needs Python 3.11+, `dpkg-deb` and internet access for the first
+download; the C compiler, SDL2 development files and `pkg-config` remain host
+prerequisites. Downloaded packages are SHA256-checked and extracted without root
+under `.tools/vulkan/` inside this checkout. They survive reboot and `make clean`;
+`make tools-offline` reuses that cache. Scripts, exact versions and checksums are
+committed; extracted binaries/cache are ignored. Run `make test_tools` for the
+CPU-only bootstrap contracts. No setup file or installed tool depends on `/tmp`.
+
+Use `./tools/with-vulkan COMMAND...` for builds, shader validation, diagnostics and
+executables; it adds the local compiler, headers, loader and validation layers to
+the command environment without changing the selected system GPU driver. On
+other platforms use the system development packages described below. Keep probe
+sources in the repository and diagnostic output under `build/diagnostics/`.
+
 The current performance target is quarter-native: `make quarter_native` builds
 `build/dungeoncraft_quarter_native`, with 480×270 physics cells displayed at
 1920×1080, 70 resident chunks including the halo, two-tick fluid staging, and

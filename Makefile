@@ -1,5 +1,12 @@
 CC ?= cc
 .DEFAULT_GOAL := all
+.PHONY: tools tools-offline test_tools
+tools:
+	python3 tools/bootstrap_vulkan.py bootstrap
+tools-offline:
+	python3 tools/bootstrap_vulkan.py bootstrap --offline
+test_tools:
+	python3 tests/tools/toolchain_tests.py
 STRUCTURAL_REFERENCE = tests/structural/reference_solver.c src/structural/material.c
 build/structural_failure_tests: tests/structural/failure_tests.c tests/structural/placement_tests.c build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)

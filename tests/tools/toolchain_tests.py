@@ -1,5 +1,6 @@
 import hashlib
 import importlib.util
+import json
 import pathlib
 import tempfile
 import unittest
@@ -49,12 +50,24 @@ class ToolchainTests(unittest.TestCase):
         root = REPO / ".tools/vulkan/install-test/root"
         original = {"PATH": "/usr/bin", "CPATH": "/custom/include",
                     "VK_ICD_FILENAMES": "/custom/driver.json"}
+        saved = dict(original)
         env = BOOTSTRAP.tool_environment(root, original)
         self.assertTrue(env["PATH"].startswith(str(root / "usr/bin") + ":"))
         self.assertIn("/custom/include", env["CPATH"])
         self.assertEqual(env["VK_ICD_FILENAMES"], original["VK_ICD_FILENAMES"])
-        self.assertNotIn("CPATH", {"PATH": original["PATH"]})
-        self.assertEqual(original["CPATH"], "/custom/include")
+        self.assertEqual(original, saved)
+
+    def test_every_locked_tool_has_a_version_and_digest(self):
+        lock = json.loads((REPO / "tools/vulkan.lock.json").read_text())
+        names = set()
+        for package in lock["packages"]:
+            self.assertNotIn(package["name"], names)
+            names.add(package["name"])
+            self.assertTrue(package["version"])
+            self.assertRegex(package["sha256"], r"^[a-f0-9]{64}$")
+            self.assertTrue(package["url"].startswith("https://archive.ubuntu.com/ubuntu/"))
+        self.assertEqual(names, {"glslang-tools", "spirv-tools", "libvulkan-dev",
+                                "libvulkan1", "vulkan-validationlayers", "vulkan-tools"})
 
 
 if __name__ == "__main__":
