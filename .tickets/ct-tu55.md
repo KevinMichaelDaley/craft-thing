@@ -78,3 +78,7 @@ Contacts-only source/measurement diagnosis: boundaries are filtered before polyg
 **2026-10-16T22:34:45Z**
 
 Runtime range-cache integration RED: rotated14x12body plus fast bidirectional128x64fluid fixture. Original transport fingerprint97a0ea02c0e0a633, mass339325648;8192cache mismatches as expected because cache is not wired. Independent cache/query tests already3/3exact+validation. Preserve this fluid output fingerprint when adopting cached queries; no ordinary-frame readback/CPU solve.
+
+**2026-10-16T22:44:37Z**
+
+Integrated exact cache preserves original coupled fingerprint97a0ea02c0e0a633/mass339325648 and body-free993637574fbe0c8f/mass230613072. Five fluid correctness cases pass validation. Native360 clean74.985ms mean/117.995p95 (13.336FPS); diagnostic74.544mean vs prior81.556, not30FPS. Transport20.873/6.473/46.613/51.070ms/cycle; cache builds0.48ms/cycle. Exact ordered line traversal remains dominant; considering cooperative per-line recipient prefix allocation, not claiming fully parallel recurrence. Iris Xe reports subgroup32, arithmetic/basic supported(operations0x6ff).

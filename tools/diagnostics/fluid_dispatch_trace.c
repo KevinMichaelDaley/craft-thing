@@ -4,7 +4,7 @@
 
 #include "../../src/vulkan/gpu_internal.h"
 
-enum { TRACE_DISPATCHES = 256, TRACE_LABELS = 21 };
+enum { TRACE_DISPATCHES = 256, TRACE_LABELS = 23 };
 static dc_gpu_t *trace_gpu;
 static VkQueryPool trace_pool;
 static VkPipeline bound_pipeline;
@@ -53,6 +53,8 @@ static uint32_t label(void) {
         return 13 + pushed_mode;
     if (bound_pipeline == trace_gpu->hydro_head_pipeline && pushed_mode < 2)
         return 19 + pushed_mode;
+    if (bound_pipeline == trace_gpu->fluid_aperture_pipeline && pushed_mode < 2)
+        return 21 + pushed_mode;
     return TRACE_LABELS;
 }
 
@@ -101,8 +103,8 @@ bool __wrap_dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
             }
             printf("fluid dispatch detail phase%u:", phase);
             for (unsigned i = 0; i < TRACE_LABELS; i++)
-                if (count[i]) printf(" %s%u=%.3fms/%u", i < 13 ? "fluid" : i < 19 ? "projection" : "head",
-                                      i < 13 ? i : i < 19 ? i - 13 : i - 19, total[i], count[i]);
+                if (count[i]) printf(" %s%u=%.3fms/%u", i < 13 ? "fluid" : i < 19 ? "projection" : i < 21 ? "head" : "aperture",
+                                      i < 13 ? i : i < 19 ? i - 13 : i < 21 ? i - 19 : i - 21, total[i], count[i]);
             printf("\n");
         }
     }

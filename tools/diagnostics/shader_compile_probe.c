@@ -40,6 +40,11 @@ int main(int argc, char **argv) {
     probe_t p = {0};
     if (!initialize_device(&p))
         return 2;
+    VkPhysicalDeviceSubgroupProperties subgroup = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES};
+    VkPhysicalDeviceProperties2 properties = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &subgroup};
+    vkGetPhysicalDeviceProperties2(p.physical, &properties);
+    printf("subgroup size%u operations0x%x compute%d\n", subgroup.subgroupSize,
+           subgroup.supportedOperations, (subgroup.supportedStages & VK_SHADER_STAGE_COMPUTE_BIT) != 0);
     FILE *file = fopen(argv[1], "rb");
     if (!file)
         return 2;

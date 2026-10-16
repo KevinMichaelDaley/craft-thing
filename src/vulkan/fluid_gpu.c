@@ -89,6 +89,8 @@ bool dc_gpu_fluid_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
               !make_pipeline(gpu,projection,UINT32_MAX,&gpu->projection_pipeline,err,cap)) return false;
     return make_pipeline(gpu, "build/shaders/hydro_head.comp.spv", UINT32_MAX,
                          &gpu->hydro_head_pipeline, err, cap) &&
+           make_pipeline(gpu, "build/shaders/fluid_aperture.comp.spv", UINT32_MAX,
+                         &gpu->fluid_aperture_pipeline, err, cap) &&
            make_pipeline(gpu, "build/shaders/shift_velocity.comp.spv", UINT32_MAX,
                          &gpu->velocity_shift_pipeline, err, cap);
 }
@@ -100,6 +102,7 @@ static void bind_fluid_mode(dc_gpu_t *gpu,uint32_t mode,bool projection) {
 }
 
 void dc_gpu_fluid_destroy(dc_gpu_t *gpu) {
+    if (gpu->fluid_aperture_pipeline) vkDestroyPipeline(gpu->device, gpu->fluid_aperture_pipeline, NULL);
     for(uint32_t i=0;i<13;i++) if(gpu->fluid_phase_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->fluid_phase_pipelines[i],NULL);
     for(uint32_t i=0;i<6;i++) if(gpu->projection_phase_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->projection_phase_pipelines[i],NULL);
     if (gpu->fluid_pipeline) vkDestroyPipeline(gpu->device, gpu->fluid_pipeline, NULL);
@@ -233,6 +236,34 @@ static void record_pressure_passes(dc_gpu_t *gpu, uint32_t first,
     }
 }
 
+static uint32_t aperture_leaves(uint32_t length) {
+    uint32_t leaves = 1;
+    while (leaves < (length + 15u) / 16u) leaves *= 2;
+    return leaves;
+}
+
+static void aperture_dispatch(dc_gpu_t *gpu, uint32_t groups) {
+    vkCmdDispatch(gpu->command, groups < 65535u ? groups : 65535u,
+                   (groups + 65534u) / 65535u, 1);
+    fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                   VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                   VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                   VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+}
+
+static void record_aperture_cache(dc_gpu_t *gpu, bool vertical, uint32_t leaves) {
+    uint32_t lines = vertical ? gpu->width : gpu->height;
+    uint32_t push[8] = {gpu->width, gpu->height, vertical, 0, leaves};
+    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->fluid_aperture_pipeline);
+    vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+    aperture_dispatch(gpu, lines * ((leaves + 3u) / 4u));
+    for (uint32_t nodes = leaves / 2; nodes; nodes /= 2) {
+        push[3] = nodes;
+        vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+        aperture_dispatch(gpu, (lines * nodes + 63u) / 64u);
+    }
+}
+
 static void record_fluid_transport(dc_gpu_t *gpu, uint32_t first,
                                    uint32_t stop) {
     uint32_t push[7] = { gpu->width, gpu->height, 0,
@@ -252,6 +283,11 @@ static void record_fluid_transport(dc_gpu_t *gpu, uint32_t first,
             VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     }
     for (uint32_t mode = first; mode < stop; ++mode) {
+        if (mode < 4u) {
+            bool vertical = mode < 2u;
+            push[4] = gpu->rigid_occupancy_present ? aperture_leaves(vertical ? gpu->height : gpu->width) : 0;
+            if (push[4] && mode != 1u) record_aperture_cache(gpu, vertical, push[4]);
+        }
         push[2] = mode;
         bind_fluid_mode(gpu,push[2],false);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,

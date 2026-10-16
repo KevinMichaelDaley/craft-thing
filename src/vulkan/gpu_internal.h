@@ -163,6 +163,7 @@ struct dc_gpu {
     VkDeviceMemory pressure_a_memory;
     VkPipeline projection_pipeline;
     VkPipeline hydro_head_pipeline;
+    VkPipeline fluid_aperture_pipeline;
     VkPipeline fluid_phase_pipelines[13];
     VkPipeline projection_phase_pipelines[6];
     VkPipeline velocity_shift_pipeline;
