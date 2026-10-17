@@ -150,3 +150,7 @@ Native640x360 physics AND display, scale1,90slots,pressure20,cadence6,2fixed60Hz
 **2026-10-17T04:58:42Z**
 
 Sustained RED: opt-in 180-frame identical native640x360 physics/display fixture, 2 fixed60Hz ticks/frame, original quality and 33.333ms mean/p95 gates. Unprimed run mean30.056ms,p9538.394,max44.466,cold93.702,33.271FPS. Short30-frame pass is not sustained completion. Diagnostic repeat mean31.707,p9546.372; end2exact cached pixel bodies,10pairs,0contacts,6928pixelvisits/928boundaryA,hydro0.692ms,contacts8substeps2.768ms,other1.172ms. RED56e1346. Full headless010ef76 passed389 with0VUID; UI/quarter remain queued.
+
+**2026-10-17T05:03:22Z**
+
+Initialization-only trace isolates presentation watchdog failure to validation overhead:91 pipeline creations5223.643ms withvalidation versus36.796ms without. Unchanged15second three-context/270frame presentation test passes withoutvalidation; full test_ui then exits0. No runtime startup/Wayland change or gate relaxation. Full389 headless correctness remains validation-clean; full quarter functional suite now running. Persistent read-only tools/diagnostics/gpu_frequency.py added with2passing CPU tests; no sysfs writes.
