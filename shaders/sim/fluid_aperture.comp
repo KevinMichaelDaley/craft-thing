@@ -1,5 +1,7 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
 layout(local_size_x=64) in;
+layout(set=0,binding=1,std430) readonly buffer Cells {uvec2 chunk_cells[];};
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
 layout(set=0,binding=28,std430) buffer Prefix {uint aperture_prefix[];};
@@ -7,6 +9,12 @@ layout(set=0,binding=29,std430) buffer Tree {uint aperture_tree[];};
 layout(push_constant) uniform Params {uint width,height,axis,nodes,leaves;} params;
 const uint FULL=65536u,TREE_BASE=16448u;
 shared uint prefix[64],suffix[64];
+uint page_at(ivec2 p) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0u;
+    return pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
+}
+uint atlas_index(ivec2 p,uint page) {return (page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);}
+#include "hydraulic_face.glsl"
 void main() {
     uint lane=gl_LocalInvocationID.x,group=gl_WorkGroupID.x+gl_WorkGroupID.y*65535u;
     uint length=params.axis!=0u?params.height:params.width;
@@ -28,6 +36,7 @@ void main() {
         uint page=pages[(p.y/64u)*((params.width+63u)/64u)+p.x/64u];
         uint plane=params.axis!=0u?4u:3u,index=p.y*params.width+p.x;
         value=page==0u?0u:FULL-min(FULL,occupancy[plane*params.width*params.height+index]);
+        value=hydraulic_aperture(value,ivec2(p),params.axis!=0u?ivec2(0,1):ivec2(1,0));
     }
     prefix[lane]=value;suffix[lane]=value;barrier();
     for(uint stride=1u;stride<16u;stride*=2u) {

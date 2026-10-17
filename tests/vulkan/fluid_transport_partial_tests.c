@@ -34,7 +34,7 @@ static void partial_case(unsigned mode) {
     fixture_t *f=calloc(1,sizeof(*f));ASSERT_TRUE(f&&initialize(&f->p));
     f->gpu=(dc_gpu_t){.device=f->p.device,.physical=f->p.physical};char err[256];
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(f->p.physical,&properties);
-    for(unsigned i=0;i<7;i++)
+    for(unsigned i=0;i<8;i++)
         ASSERT_TRUE(dc_gpu_make_mapped_buffer(&f->gpu,sizes[i]*4,&f->buffers[i],&f->memory[i],(void **)&f->words[i],err,sizeof(err)));
     for(unsigned i=0;i<CHUNKS;i++) f->words[1][i]=i+1;
     uint64_t before=0;
@@ -53,17 +53,17 @@ static void partial_case(unsigned mode) {
             reference_move(f,x,(int)y,mode==2?1:-1,0);
     VkBuffer profile_buffer;VkDeviceMemory profile_memory;uint32_t *profile;
     ASSERT_TRUE(dc_gpu_make_mapped_buffer(&f->gpu,PROFILE_WORDS*4,&profile_buffer,&profile_memory,(void **)&profile,err,sizeof(err)));
-    const uint32_t profile_bindings[]={1,2,3,8,10,28,29,31};
+    const uint32_t profile_bindings[]={1,2,3,8,10,28,29,32,31};
     f->p.buffer=f->buffers[5];f->p.mapped=f->words[5];
     ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,
-        "build/diagnostics/fluid_transport_profile.comp.spv",profile_bindings,8,mode));
-    VkDescriptorBufferInfo buffers[8];VkWriteDescriptorSet writes[8];
-    for(unsigned i=0;i<8;i++) {
-        buffers[i]=(VkDescriptorBufferInfo){i<7?f->buffers[i]:profile_buffer,0,i<7?sizes[i]*4:PROFILE_WORDS*4};
+        "build/diagnostics/fluid_transport_profile.comp.spv",profile_bindings,9,mode));
+    VkDescriptorBufferInfo buffers[9];VkWriteDescriptorSet writes[9];
+    for(unsigned i=0;i<9;i++) {
+        buffers[i]=(VkDescriptorBufferInfo){i<8?f->buffers[i]:profile_buffer,0,i<8?sizes[i]*4:PROFILE_WORDS*4};
         writes[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=f->p.descriptor,
             .dstBinding=profile_bindings[i],.descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&buffers[i]};
     }
-    vkUpdateDescriptorSets(f->p.device,8,writes,0,NULL);
+    vkUpdateDescriptorSets(f->p.device,9,writes,0,NULL);
     VkQueryPool pool;VkQueryPoolCreateInfo query={.sType=VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
         .queryType=VK_QUERY_TYPE_TIMESTAMP,.queryCount=2};
     ASSERT_EQ(vkCreateQueryPool(f->p.device,&query,NULL,&pool),VK_SUCCESS);
@@ -88,7 +88,7 @@ static void partial_case(unsigned mode) {
         mode,counts[0],counts[1],counts[2],counts[3],(times[1]-times[0])*properties.limits.timestampPeriod/1e6,mismatches);
     vkDestroyQueryPool(f->p.device,pool,NULL);fixture_release_pipeline(&f->p);
     vkUnmapMemory(f->p.device,profile_memory);vkDestroyBuffer(f->p.device,profile_buffer,NULL);vkFreeMemory(f->p.device,profile_memory,NULL);
-    for(unsigned i=0;i<7;i++) {vkUnmapMemory(f->p.device,f->memory[i]);vkDestroyBuffer(f->p.device,f->buffers[i],NULL);vkFreeMemory(f->p.device,f->memory[i],NULL);}
+    for(unsigned i=0;i<8;i++) {vkUnmapMemory(f->p.device,f->memory[i]);vkDestroyBuffer(f->p.device,f->buffers[i],NULL);vkFreeMemory(f->p.device,f->memory[i],NULL);}
     vkDestroyFence(f->p.device,f->p.fence,NULL);vkDestroyCommandPool(f->p.device,f->p.pool,NULL);
     vkDestroyDevice(f->p.device,NULL);vkDestroyInstance(f->p.instance,NULL);free(f);
     ASSERT_EQ(mismatches,0u);ASSERT_EQ(after,before);

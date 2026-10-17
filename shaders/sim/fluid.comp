@@ -1,6 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 layout(local_size_x = 64, local_size_y = 1) in;
+layout(constant_id=3) const bool LEGACY_FLUID_PATHS=true;
 
 layout(set = 0, binding = 1, std430) buffer ChunkCells { uvec2 chunk_cells[]; };
 layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
@@ -43,6 +44,8 @@ uint atlas_index(ivec2 p, uint page) {
     return (page - 1u) * CELLS_PER_CHUNK +
            (uint(p.y) % SIDE) * SIDE + uint(p.x) % SIDE;
 }
+#include "hydraulic_face.glsl"
+#include "water_color.glsl"
 
 uint source_mass(uint index) {
     return params.mode == 6u || params.mode == 8u ?
@@ -76,7 +79,7 @@ float face_aperture(ivec2 p,ivec2 direction) {
     if(page_at(face)==0u) return 0;
     uint index=uint(face.y)*params.width+uint(face.x);
     uint axis=direction.x!=0?3u:4u;
-    return float(FULL-min(FULL,occupancy[axis*params.width*params.height+index]))/float(FULL);
+    return float(hydraulic_aperture(FULL-min(FULL,occupancy[axis*params.width*params.height+index]),face,direction))/float(FULL);
 }
 
 #include "fluid_aperture.glsl"
@@ -114,6 +117,8 @@ void move_line(ivec2 source, ivec2 direction, bool vertical) {
         uint capacity=receiving_capacity(destination);
         uint flux = min(min(allowance, available), receiving < capacity ? capacity - receiving : 0u);
         if (flux != 0u) {
+            water_color_move(source_index,destination_index,receiving,flux);
+            water_color_clear(source_index,available-flux);
             chunk_cells[destination_index].y = receiving + flux;
             chunk_cells[source_index].y = available - flux;
         }
@@ -136,9 +141,10 @@ void move_line(ivec2 source, ivec2 direction, bool vertical) {
         uint allowance = uint(floor(fraction * float(FULL)*path_aperture));
         uint flux = min(min(allowance, available), capacity - receiving);
         available -= flux;
+        water_color_move(source_index,destination_index,receiving,flux);
         chunk_cells[destination_index].y = receiving + flux;
     }
-    if (available != source_cell.y) chunk_cells[source_index].y = available;
+    if (available != source_cell.y) {chunk_cells[source_index].y = available;water_color_clear(source_index,available);}
 }
 
 void scan_line(uint line) {
@@ -182,12 +188,14 @@ void displace_column(uint x) {
             uint receiving = chunk_cells[destination_index].y;
             uint capacity=receiving_capacity(destination);
             uint flux = min(remaining, receiving < capacity ? capacity - receiving : 0u);
+            water_color_move(source_index,destination_index,receiving,flux);
             chunk_cells[destination_index].y = receiving + flux;
             remaining -= flux;
         }
         /* Retain unresolved water at its original world cell. It is explicitly
            reported as overflow and remains authoritative through streaming. */
         chunk_cells[source_index].y = retained+remaining;
+        water_color_clear(source_index,retained+remaining);
     }
 }
 
@@ -211,11 +219,13 @@ void displace_row(uint y) {
                 }
                 uint capacity=receiving_capacity(destination),receiving=chunk_cells[target].y;
                 uint flux=min(remaining,receiving<capacity?capacity-receiving:0u);
+                water_color_move(source_index,target,receiving,flux);
                 chunk_cells[target].y=receiving+flux;remaining-=flux;
             }
             if(!left_open&&!right_open) break;
         }
         chunk_cells[source_index].y=retained+remaining;
+        water_color_clear(source_index,retained+remaining);
     }
 }
 
@@ -263,21 +273,26 @@ void correct_pair(ivec2 p) {
     float aperture=face_aperture(p,neighbor-p);
     uint flux = min(min(min(uint(abs(request)),uint(aperture*float(FULL))), available),
                     receiving < capacity ? capacity - receiving : 0u);
+    if(sender) {
+        uint source=atlas_index(p,own_page),target=atlas_index(neighbor,other_page);
+        water_color_move(source,target,receiving,flux);
+        water_color_clear(source,own-flux);
+    }
     write_mass(index, sender ? own - flux : own + flux);
 }
 
 void main() {
     uint linear = gl_GlobalInvocationID.x;
     if (params.mode == LATERAL_DISPLACEMENT_MODE) {
-        displace_row(linear);
+        if(LEGACY_FLUID_PATHS) displace_row(linear);
         return;
     }
     if (params.mode == DISPLACEMENT_MODE) {
-        displace_column(linear);
+        if(LEGACY_FLUID_PATHS) displace_column(linear);
         return;
     }
     if (params.mode <= 3u) {
-        scan_line(linear);
+        if(LEGACY_FLUID_PATHS) scan_line(linear);
         return;
     }
     uint tile = slot_pages[gl_WorkGroupID.z];

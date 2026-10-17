@@ -104,7 +104,7 @@ bool fr_renderer_enable(dc_gpu_t *g, char *err, uint32_t cap) {
   if (!fr_lighting_gpu_set_sources(s->lighting, NULL, 0, (fr_renderer_sun_t){0},
                                    1024))
     goto fail;
-  VkDescriptorBufferInfo buffers[15] = {
+  VkDescriptorBufferInfo buffers[16] = {
       {g->chunk_buffer, 0, (VkDeviceSize)atlas * sizeof(dc_cell_t)},
       {g->page_buffer, 0, (VkDeviceSize)g->page_width * g->page_height * 4},
       {g->occupancy_buffer, 0, (VkDeviceSize)grid * 20},
@@ -121,10 +121,11 @@ bool fr_renderer_enable(dc_gpu_t *g, char *err, uint32_t cap) {
       {g->cells, 0, (VkDeviceSize)grid * 4},
       {g->fluid_previous_buffer, 0, (VkDeviceSize)grid * 4},
       {VK_NULL_HANDLE, 0, 0},
-      {s->buffers[4], 0, sizes[4]}};
+      {s->buffers[4], 0, sizes[4]},
+      {g->water_color_buffer,0,(VkDeviceSize)atlas*16}};
   if (!fr_occlusion_input_binding(s->occlusion, &buffers[8]) ||
       !fr_lighting_field_binding(s->lighting, &buffers[13]) ||
-      !fr_renderer_compute_init(g, &s->compute, buffers, 15, 32,
+      !fr_renderer_compute_init(g, &s->compute, buffers, 16, 32,
                                 "build/shaders/scene.comp.spv", err, cap) ||
       !scene_pipelines(g, err, cap))
     goto fail;

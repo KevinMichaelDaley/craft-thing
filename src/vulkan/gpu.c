@@ -56,18 +56,18 @@ static bool make_cells(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t ca
 
 static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
                           char *err, uint32_t cap) {
-    VkDescriptorSetLayoutBinding bindings[32] = {0};
-    for (uint32_t i = 0; i < 32; ++i) {
+    VkDescriptorSetLayoutBinding bindings[33] = {0};
+    for (uint32_t i = 0; i < 33; ++i) {
         bindings[i].binding = i;
         bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         bindings[i].descriptorCount = 1;
         bindings[i].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
     }
     VkDescriptorSetLayoutCreateInfo layout_info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 32, .pBindings = bindings };
+        .bindingCount = 33, .pBindings = bindings };
     if (vkCreateDescriptorSetLayout(gpu->device, &layout_info, NULL, &gpu->set_layout) != VK_SUCCESS)
         return error(err, cap, "Cannot create descriptor layout");
-    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 32 };
+    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 33 };
     VkDescriptorPoolCreateInfo pool_info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .maxSets = 1, .poolSizeCount = 1, .pPoolSizes = &size };
     if (vkCreateDescriptorPool(gpu->device, &pool_info, NULL, &gpu->descriptor_pool) != VK_SUCCESS)
@@ -77,7 +77,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         .pSetLayouts = &gpu->set_layout };
     if (vkAllocateDescriptorSets(gpu->device, &set_info, &gpu->descriptor) != VK_SUCCESS)
         return error(err, cap, "Cannot allocate descriptor set");
-    VkDescriptorBufferInfo buffers[32] = {
+    VkDescriptorBufferInfo buffers[33] = {
         { gpu->cells, 0, bytes },
         { gpu->chunk_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t) },
         { gpu->page_buffer, 0, (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t) },
@@ -109,10 +109,11 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         { gpu->mpm_label_a_buffer, 0, (VkDeviceSize)dc_gpu_pixel_pool_capacity(gpu) * 8u * sizeof(uint32_t) },
         { gpu->mpm_label_b_buffer, 0, (VkDeviceSize)dc_gpu_pixel_pool_capacity(gpu) * 8u * sizeof(uint32_t) },
         { gpu->mpm_component_size_buffer, 0, (VkDeviceSize)dc_gpu_pixel_pool_capacity(gpu) * 8u * sizeof(uint32_t) },
-        { gpu->fluid_previous_buffer, 0, bytes }
+        { gpu->fluid_previous_buffer, 0, bytes },
+        { gpu->water_color_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS*16 }
     };
-    VkWriteDescriptorSet writes[32] = {0};
-    for (uint32_t i = 0; i < 32; ++i) {
+    VkWriteDescriptorSet writes[33] = {0};
+    for (uint32_t i = 0; i < 33; ++i) {
         writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes[i].dstSet = gpu->descriptor;
         writes[i].dstBinding = i;
@@ -120,7 +121,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         writes[i].pBufferInfo = &buffers[i];
     }
-    vkUpdateDescriptorSets(gpu->device, 32, writes, 0, NULL);
+    vkUpdateDescriptorSets(gpu->device, 33, writes, 0, NULL);
     VkPushConstantRange range = { .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .size = 32 };
     VkPipelineLayoutCreateInfo pipeline_layout_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1, .pSetLayouts = &gpu->set_layout,

@@ -47,21 +47,21 @@ static void test_full_recipient_work_is_close_to_zero_velocity_work(void) {
     f->gpu=(dc_gpu_t){.device=f->p.device,.physical=f->p.physical};char err[256];
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(f->p.physical,&properties);
     f->gpu.timestamp_period=properties.limits.timestampPeriod;
-    for(unsigned i=0;i<7;i++) {
+    for(unsigned i=0;i<8;i++) {
         ASSERT_TRUE(dc_gpu_make_mapped_buffer(&f->gpu,sizes[i]*4,&f->buffers[i],&f->memory[i],(void **)&f->words[i],err,sizeof(err)));
         memset(f->words[i],0,sizes[i]*4);
     }
     for(unsigned i=0;i<CHUNKS;i++) f->words[1][i]=i+1;
     for(unsigned i=0;i<CHUNKS*4096;i++) f->words[0][2*i+1]=FULL;
     f->p.buffer=f->buffers[5];f->p.mapped=f->words[5];
-    ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,"build/shaders/fluid_transport.comp.spv",bindings,7,0));
-    VkDescriptorBufferInfo buffers[7];VkWriteDescriptorSet writes[7];
-    for(unsigned i=0;i<7;i++) {
+    ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,"build/shaders/fluid_transport.comp.spv",bindings,8,0));
+    VkDescriptorBufferInfo buffers[8];VkWriteDescriptorSet writes[8];
+    for(unsigned i=0;i<8;i++) {
         buffers[i]=(VkDescriptorBufferInfo){f->buffers[i],0,sizes[i]*4};
         writes[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=f->p.descriptor,
             .dstBinding=bindings[i],.descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&buffers[i]};
     }
-    vkUpdateDescriptorSets(f->p.device,7,writes,0,NULL);
+    vkUpdateDescriptorSets(f->p.device,8,writes,0,NULL);
     VkQueryPool pool;VkQueryPoolCreateInfo query={.sType=VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
         .queryType=VK_QUERY_TYPE_TIMESTAMP,.queryCount=2*SAMPLES};
     ASSERT_EQ(vkCreateQueryPool(f->p.device,&query,NULL,&pool),VK_SUCCESS);
@@ -95,7 +95,7 @@ static void test_full_recipient_work_is_close_to_zero_velocity_work(void) {
     bool exact=true;
     for(unsigned i=0;i<CHUNKS*4096;i++) exact=exact&&f->words[0][2*i+1]==FULL;
     vkDestroyQueryPool(f->p.device,pool,NULL);fixture_release_pipeline(&f->p);
-    for(unsigned i=0;i<7;i++) {vkUnmapMemory(f->p.device,f->memory[i]);vkDestroyBuffer(f->p.device,f->buffers[i],NULL);vkFreeMemory(f->p.device,f->memory[i],NULL);}
+    for(unsigned i=0;i<8;i++) {vkUnmapMemory(f->p.device,f->memory[i]);vkDestroyBuffer(f->p.device,f->buffers[i],NULL);vkFreeMemory(f->p.device,f->memory[i],NULL);}
     vkDestroyFence(f->p.device,f->p.fence,NULL);vkDestroyCommandPool(f->p.device,f->p.pool,NULL);
     vkDestroyDevice(f->p.device,NULL);vkDestroyInstance(f->p.instance,NULL);free(f);
     ASSERT_TRUE(exact);ASSERT_TRUE(bounded);PASS();

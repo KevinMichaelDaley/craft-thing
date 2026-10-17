@@ -160,6 +160,9 @@ struct dc_gpu {
     bool has_transfer;
     VkBuffer fluid_a_buffer;
     VkBuffer fluid_previous_buffer;
+    VkBuffer water_color_buffer;
+    VkDeviceMemory water_color_memory;
+    void *water_color_mapped;
     VkDeviceMemory fluid_previous_memory;
     VkDeviceMemory fluid_a_memory;
     VkBuffer fluid_b_buffer;

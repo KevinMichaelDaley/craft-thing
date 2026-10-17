@@ -863,9 +863,12 @@ build/shaders/fluid_transport.comp.spv: shaders/sim/fluid_transport.comp shaders
 build/fluid_transport_tests: tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/water_color_tests: tests/vulkan/water_color_tests.c tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv
+build/water_color_tests: tests/vulkan/water_color_tests.c tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv build/shaders/fluid_displacement.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/water_color_tests
+
+$(FLUID_SHADER) build/shaders/fluid_transport.comp.spv build/shaders/fluid_aperture.comp.spv build/diagnostics/fluid_transport_profile.comp.spv: shaders/sim/hydraulic_face.glsl
+$(FLUID_SHADER) build/shaders/fluid_transport.comp.spv build/shaders/fluid_displacement.comp.spv build/diagnostics/fluid_transport_profile.comp.spv: shaders/sim/water_color.glsl
 
 build/fluid_transport_long_tests: tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DTRANSPORT_TEST_WIDTH=2113 -DTRANSPORT_TEST_HEIGHT=3 $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
@@ -1008,7 +1011,7 @@ test_probe_features: build/probe_feature_tests
 test_gpu_tools: build/probe_feature_tests
 
 MINIMAL_VK_TESTS = $(addprefix build/,component_dispatch_tests pixel_properties_gpu_tests \
-    fluid_transport_work_tests raster_dispatch_tests fluid_transport_tests fluid_transport_long_tests \
+    fluid_transport_work_tests raster_dispatch_tests fluid_transport_tests fluid_transport_long_tests water_color_tests \
     fluid_transport_slow_tests fluid_transport_partial_tests mpm_control_tests mpm_compaction_tests fluid_displacement_tests \
     fluid_displacement_wide_tests fluid_displacement_tall_tests hydro_head_tests fluid_aperture_tests \
     contact_dispatch_tests)

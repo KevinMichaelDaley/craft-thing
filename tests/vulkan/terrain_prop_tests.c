@@ -53,6 +53,19 @@ static void test_actual_scene_places_exact_materials_colors_water_and_holes(void
         if (!p.material) continue;
         ASSERT_EQ(cell.material, p.material==6 ? DC_MATERIAL_AIR : fr_prop_terrain_material(p.material));
         ASSERT_EQ(cell.fluid_mass,p.material==6 ? DC_FLUID_FULL : 0u);
+        if(p.material==6) {
+            fr_prop_appearance_t appearance;
+            ASSERT_TRUE(fr_prop_appearance(&g_asset,0,i,&appearance));
+            const float default_color[3]={.035f,.193f,.666f};
+            uint32_t atlas=((y/64)*3+x/64)*4096+(y%64)*64+x%64;
+            const float *pigment=(const float*)g->water_color_mapped+atlas*4;
+            ASSERT_EQ(pigment[3],1.f);
+            for(unsigned channel=0;channel<3;channel++) {
+                float expected=default_color[channel]*(1.f-appearance.alpha)+
+                    appearance.color[channel]*appearance.alpha;
+                ASSERT_TRUE(fabsf(pigment[channel]-expected)<1e-6f);
+            }
+        }
         if (p.material==1 && sample==UINT32_MAX) sample=i;
     }
     ASSERT_EQ(counts[0],7729u); ASSERT_EQ(counts[1],5096u);
