@@ -1,6 +1,6 @@
 ---
 id: ctpf-b819
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-10-14T04:50:49Z
@@ -22,3 +22,7 @@ Malformed reserved words and invalid explicit normals rejected with output uncha
 **2026-10-14T04:55:38Z**
 
 Observed CPU RED independently of GPU: /tmp/craft-prop-channel-contract-tests.c compiled against read-only sibling prop.c. Valid152-byte canonical package passes; correctly checksummed variants with reserved float1.0 at44 and negative-zero bits at52 are wrongly accepted, yielding1pass/2fail. No sibling files changed. Producer owner should move these cases into its reader tests and tighten reserved-bit validation.
+
+**2026-10-17T09:03:35Z**
+
+Observed canonical reader RED on merged branch: reserved positive/negative-zero and explicit zero normal accepted (1pass3fail). GREEN now rejects nonzero reserved bits44/52/56 and enforces unit length only for explicit normal overrides; absent normal retains renderer defaults. Registered integration regression4/4 and full offline prop battery PASS; valid level_piece01 package validates. Implementation563c233.

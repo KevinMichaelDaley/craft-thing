@@ -139,6 +139,15 @@ bool fr_renderer_set_mode(dc_gpu_t *g, fr_renderer_mode_t mode) {
   g->renderer->mode = mode;
   return true;
 }
+bool fr_renderer_authored_bindings(dc_gpu_t *g, VkDescriptorBufferInfo buffers[3]) {
+  if (!g || !g->renderer || !buffers) return false;
+  struct fr_scene_gpu *s = g->renderer;
+  VkDeviceSize atlas = (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS;
+  buffers[0] = (VkDescriptorBufferInfo){s->buffers[0], 0, atlas * 32};
+  buffers[1] = (VkDescriptorBufferInfo){s->buffers[1], 0, atlas * 8};
+  buffers[2] = (VkDescriptorBufferInfo){s->buffers[4], 0, 64};
+  return true;
+}
 bool fr_renderer_set_material_style(dc_gpu_t *g, uint32_t material,
                                     uint32_t style) {
   if (!g || !g->renderer || material > DC_MATERIAL_DENSE_WOOD ||

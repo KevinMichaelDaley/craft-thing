@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "dungeoncraft/chunk.h"
+#include "dungeoncraft/generate.h"
 
 typedef struct dc_streamer dc_streamer_t;
 
@@ -20,6 +21,11 @@ typedef struct {
 /** Start a worker thread for procedural generation and chunk disk I/O. */
 dc_streamer_t *dc_stream_create(const char *directory, uint64_t seed,
                                 uint32_t queue_capacity);
+/** Copy an immutable authored ground profile before starting the worker.
+ * Only missing chunks use it; saved player edits are never overwritten.
+ */
+dc_streamer_t *dc_stream_create_ground(const char *directory, uint64_t seed,
+                                       uint32_t queue_capacity, const dc_ground_profile_t *ground);
 
 /** Queue a nonblocking chunk load or generation. */
 bool dc_stream_request_load(dc_streamer_t *stream, dc_chunk_coord_t coord,

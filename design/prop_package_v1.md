@@ -32,7 +32,8 @@ well as checking the snapshot. Unsupported grayscale/tilemap inputs are errors.
 
 ## Artist workflow
 
-1. Install once: `python3 scripts/libresprite/install_host.py /tmp/craft-libresprite`.
+1. Install once: `python3 scripts/libresprite/install_host.py` (persistent checkout-local
+   `.tools/libresprite`, preserved across builds).
 2. Open `assets/props/template.aseprite` or either editable animated example.
 3. Paint `physics.material` with `material.gpl`, `physics.role` with `role.gpl`,
    and independent `color` / `emissive` layers. Keep metadata hidden if useful.

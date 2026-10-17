@@ -5,3 +5,5 @@ __pycache__/
 /world_chunks_native/
 /world_chunks_half_native/
 /world_chunks_quarter_native/
+/world_chunks_level_piece01/
+/world_chunks_level_piece01_run_*/

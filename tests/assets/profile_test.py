@@ -1,6 +1,8 @@
 """Numbered-layer exports preserve exact labels and leave level holes untouched."""
 from pathlib import Path
 import copy
+import json
+import struct
 import sys
 import tempfile
 import unittest
@@ -9,10 +11,26 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/props'))
 from ase_reader import read
 from make_examples import ase, document
-from pack_prop import export, validate
+from pack_prop import build, export, validate
 
 
 class ProfileTests(unittest.TestCase):
+    def test_ground_companion_matches_actual_scene_surface_and_is_hashed(self):
+        from profile_export import normalize
+        profile_path=ROOT / 'assets/props/profiles/level_piece.json'
+        profile=json.loads(profile_path.read_text())
+        source=read(ROOT / 'assets/props/level_piece01.aseprite',layer_names=profile['layers'])
+        options={'allow_invisible_physics':True,'authoring':{'profile':profile}}
+        payloads=build(normalize(source,profile_path),options)
+        magic,width,height,depth=struct.unpack_from('<4s3I',payloads['ground.bin'])
+        self.assertEqual((magic,width,height,depth),(b'GND1',128,128,12))
+        surface=struct.unpack_from('<128I',payloads['ground.bin'],16)
+        self.assertEqual((surface[0],surface[41],surface[51],surface[-1]),(76,64,65,67))
+        self.assertIn('ground.bin',json.loads(payloads['manifest.json'])['files'])
+        profile['ground_surface_points']=[[1,76],[127,67]]
+        with self.assertRaisesRegex(ValueError,'ground surface'):
+            build(normalize(source,profile_path),options)
+
     def test_numbered_layers_map_without_changing_source(self):
         data = document()
         data['frames'] = data['frames'][:1]

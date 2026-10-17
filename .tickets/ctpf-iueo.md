@@ -35,3 +35,7 @@ Additional proven structural-pixel gaps: structural_capture and damage_members a
 **2026-10-14T05:09:22Z**
 
 External GPU recovery blocker: previouslypassing authored staging timed out45sec exit124 on retry after optimizer unchanged hydro timeout; renderer independently localized successful context/pipeline creation then96-texel first-submit stall. No further GPU launches authorized until recovery. New planning and absent-normal tests compile but were NOT behaviorally RED-verified; preserved as pending tests, no new GREEN implementation. Full feature regressions and publication remain required. See design/physics_feature_checkpoint.md.
+
+**2026-10-17T09:03:35Z**
+
+Renderer checkpoint integration857ec8b now includes actual prop reader/exporter. Exclusive recovered GPU execution with core+sync validation observed3pass2fail in authored_stage_tests (no validation diagnostics): component-plan getter remains a stub and absent-normal default semantics fail. These pending tests are now behaviorally RED, replacing prior unlocalized stall evidence. No claim of publication/reservations or completed feature. Combined all-test run continues past those known failures to check remaining consumers; unchanged tests retained.

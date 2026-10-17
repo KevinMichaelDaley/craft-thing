@@ -69,6 +69,17 @@ void dc_generate_chunk(uint64_t seed, dc_chunk_coord_t coord, dc_chunk_t *chunk)
 
 bool dc_generate_chunk_ground(dc_chunk_coord_t coord, const dc_ground_profile_t *ground,
                                dc_chunk_t *chunk) {
-    (void)ground;
-    return dc_generate_chunk_scaled(314,coord,1,chunk);
+    if (!chunk || !ground || !ground->surface || !ground->width || !ground->soil_depth) return false;
+    memset(chunk,0,sizeof(*chunk));chunk->coord=coord;
+    for (uint32_t x=0;x<DC_CHUNK_SIDE;x++) {
+        long double rest=(long double)coord.x*DC_CHUNK_SIDE+x-ground->origin_x;
+        uint32_t column=rest<=0?0:rest>=ground->width?ground->width-1:(uint32_t)rest;
+        long double surface=(long double)ground->origin_y+ground->surface[column];
+        for (uint32_t y=0;y<DC_CHUNK_SIDE;y++) {
+            long double depth=(long double)coord.y*DC_CHUNK_SIDE+y-surface;
+            chunk->cells[y*DC_CHUNK_SIDE+x].material=depth<0?DC_MATERIAL_AIR:
+                depth<ground->soil_depth?DC_MATERIAL_DIRT:DC_MATERIAL_STONE;
+        }
+    }
+    dc_chunk_seed_particles(chunk);return true;
 }

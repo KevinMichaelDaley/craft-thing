@@ -1,0 +1,67 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "texture.glsl"
+#include "../../include/dungeoncraft/material_density.h"
+layout(local_size_x=128) in;
+layout(set=0,binding=0,std430) buffer Input {uint words[];};
+layout(set=0,binding=1,std430) buffer Cells {uvec2 cells[];};
+layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
+struct Particle {int x_fp,y_fp,vx_fp,vy_fp;float f00,f01,f10,f11;uint id_lo,id_hi,mass_fp,grain_fp,material,flags;};
+layout(set=0,binding=3,std430) buffer Particles {Particle particles[];};
+layout(set=0,binding=4,std430) buffer Counts {uint counts[];};
+layout(set=0,binding=5,std430) readonly buffer Seeds {uint seeds[];};
+layout(set=0,binding=6,std430) buffer Palette {Appearance palette[];};
+layout(set=0,binding=7,std430) buffer Keys {uvec2 keys[];};
+layout(set=0,binding=8,std430) readonly buffer Configuration {uint configuration[];};
+layout(set=0,binding=9,std430) readonly buffer Registry {uint registry[];};
+layout(set=0,binding=10,std430) readonly buffer Occupancy {uint occupancy[];};
+layout(push_constant) uniform Params {uint width,height,x,y,asset_width,asset_height,phase,registry_base;} p;
+uint terrain(uint m) {
+    return m==1u?1u:m==2u?7u:m==4u?8u:m==5u?2u:m==6u?0u:m==7u?4u:m==8u?5u:m==9u?6u:0xffffffffu;
+}
+float scalar(uint i) {return uintBitsToFloat(words[i]);}
+int canonical_cell(uint chunk,uint local) {
+    uint coordinate=((chunk&16383u)*64u+local)&1048575u;
+    return coordinate>=524288u?int(coordinate)-1048576:int(coordinate);
+}
+void main() {
+    uint i=gl_GlobalInvocationID.x,count=p.asset_width*p.asset_height;
+    if(i>=count) return;
+    uint packed=words[8u+i*2u],material=packed&65535u,role=(packed>>16u)&255u;
+    if(material==0u && role==0u) return;
+    uvec2 position=uvec2(p.x+i%p.asset_width,p.y+i/p.asset_width);
+    uint page=pages[(position.y/64u)*((p.width+63u)/64u)+position.x/64u];
+    uint mapped=terrain(material);
+    if(p.phase==0u) {
+        uint failure=role!=1u||mapped==0xffffffffu?1u:page==0u?2u:occupancy[position.y*p.width+position.x]!=0u?4u:0u;
+        if(failure!=0u) atomicOr(words[0],failure);
+        return;
+    }
+    if(words[0]!=0u) return;
+    uint slot=page-1u,local=(position.y%64u)*64u+position.x%64u,atlas=slot*4096u+local;
+    uint first=slot*8192u+local,second=first+4096u;
+    if(particles[first].mass_fp!=0u) atomicAdd(counts[slot],uint(-1));
+    if(particles[second].mass_fp!=0u) atomicAdd(counts[slot],uint(-1));
+    particles[first].mass_fp=0u;particles[second].mass_fp=0u;
+    bool grain=mapped==2u||mapped==4u||mapped==5u||mapped==6u;
+    if(grain) {
+        Particle particle;
+        particle.x_fp=int((position.x%64u)*65536u+32768u);particle.y_fp=int((position.y%64u)*65536u+32768u);
+        particle.vx_fp=0;particle.vy_fp=0;particle.f00=1.;particle.f11=1.;particle.f01=0.;particle.f10=0.;
+        particle.id_lo=local+1u;particle.id_hi=seeds[slot];
+        particle.mass_fp=mapped==6u?uint(round(65536.*DC_DENSITY_MORTAR)):65536u;
+        particle.grain_fp=mapped==2u?16384u:mapped==4u?24576u:32768u;particle.material=mapped;particle.flags=0u;
+        particles[first]=particle;atomicAdd(counts[slot],1u);
+    }
+    cells[atlas]=uvec2(mapped,material==6u?65536u:0u);
+    uint r=p.registry_base+32u+slot*8u,style=configuration[4u+mapped];
+    ivec2 rest=ivec2(canonical_cell(registry[r],position.x%64u),canonical_cell(registry[r+2u],position.y%64u));
+    Appearance a=texture_sample(rest,1u,mapped,style);
+    uint source=8u+count*2u+i*16u,flags=words[source+15u];
+    float alpha=scalar(source+12u);
+    a.color_roughness.rgb=mix(a.color_roughness.rgb,vec3(scalar(source),scalar(source+1u),scalar(source+2u)),alpha);
+    if((flags&2u)!=0u) a.color_roughness.a=scalar(source+3u);
+    if((flags&1u)!=0u) a.normal_relief.xyz=vec3(scalar(source+4u),scalar(source+5u),scalar(source+6u));
+    if((flags&4u)!=0u) a.normal_relief.w=scalar(source+7u);
+    palette[atlas]=a;keys[atlas]=uvec2(0x80000000u|mapped|(style<<16u),registry[r+4u]);
+}

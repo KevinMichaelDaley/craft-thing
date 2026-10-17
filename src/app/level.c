@@ -6,6 +6,7 @@
 
 #include "dungeoncraft/gpu.h"
 #include "dungeoncraft/stream.h"
+#include "ferrum/assets/prop_gpu.h"
 #include "level.h"
 #include "view_config.h"
 
@@ -41,6 +42,24 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 
 bool dc_level_view_step(dc_level_view_t *view, char *err, uint32_t cap) {
     return dc_level_view_step_timed(view, 1.0f / 60.0f, err, cap);
+}
+bool dc_level_view_renderer_mode(dc_level_view_t *view, fr_renderer_mode_t mode) {
+    return view && fr_renderer_set_mode(view->gpu, mode);
+}
+bool dc_level_view_place_prop(dc_level_view_t *view, const fr_prop_asset_t *asset,
+                              dc_chunk_coord_t chunk, uint32_t local_x, uint32_t local_y,
+                              char *err, uint32_t cap) {
+    if (!view || !asset || local_x>=DC_CHUNK_SIDE || local_y>=DC_CHUNK_SIDE)
+        return error(err,cap,"Invalid prop world address");
+    long double x=((long double)chunk.x-view->mapped_origin.x+HALO_CHUNKS)*64+local_x;
+    long double y=((long double)chunk.y-view->mapped_origin.y+HALO_CHUNKS)*64+local_y;
+    if (x<0 || y<0 || x+asset->width>SIM_WIDTH || y+asset->height>SIM_HEIGHT)
+        return error(err,cap,"Prop destination is not resident");
+    if (!fr_gpu_place_terrain_prop(view->gpu,asset,0,(uint32_t)x,(uint32_t)y,err,cap)) return false;
+    for (uint32_t i=0;i<view->table.capacity;i++)
+        if (view->table.slots[i].state==DC_SLOT_ACTIVE || view->table.slots[i].state==DC_SLOT_SLEEPING)
+            dc_chunk_table_mark_dirty(&view->table,i);
+    return true;
 }
 
 bool dc_level_view_place_structure(dc_level_view_t *view,
@@ -241,6 +260,12 @@ bool dc_level_view_rigid_solver_stats(dc_level_view_t *view,dc_gpu_rigid_solver_
 
 dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
                                       char *err, uint32_t cap) {
+    return dc_level_view_create_ground(directory,seed,NULL,err,cap);
+}
+
+dc_level_view_t *dc_level_view_create_ground(const char *directory, uint64_t seed,
+                                            const dc_ground_profile_t *ground,
+                                            char *err, uint32_t cap) {
     dc_level_view_t *view = calloc(1, sizeof(*view));
     if (!view) { error(err, cap, "Out of memory creating level view"); return NULL; }
     view->origin.y = INITIAL_CHUNK_Y;
@@ -255,8 +280,8 @@ dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
         !dc_gpu_set_fluid_interval(view->gpu, FLUID_INTERVAL) ||
         !dc_gpu_set_rigid_solver(view->gpu, true)) goto fail;
     view->spring_enabled = true;
-    view->stream = dc_stream_create(directory, seed,
-                                    DC_GPU_CHUNK_SLOTS * 2u);
+    view->stream = dc_stream_create_ground(directory, seed,
+                                    DC_GPU_CHUNK_SLOTS * 2u, ground);
     if (!view->stream) { error(err, cap, "Cannot start chunk streaming worker"); goto fail; }
     int length = snprintf(view->body_path, sizeof(view->body_path), "%s/rigid_bodies.bin", directory);
     if (length < 0 || (size_t)length >= sizeof(view->body_path)) {

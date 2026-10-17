@@ -30,6 +30,8 @@ struct dc_streamer {
     char *directory;
     uint64_t seed;
     uint32_t capacity;
+    dc_ground_profile_t ground;
+    uint32_t *ground_surface;
     stream_job_t *jobs;
     dc_stream_result_t *results;
     uint32_t job_head, job_tail, job_count;
@@ -87,6 +89,10 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coor
     if (!chunk_path(stream, coord, path, sizeof(path), false)) { free(chunk); return NULL; }
     FILE *file = fopen(path, "rb");
     if (!file && errno == ENOENT) {
+        if (stream->ground_surface) {
+            if (!dc_generate_chunk_ground(coord,&stream->ground,chunk)) {free(chunk);return NULL;}
+            return chunk;
+        }
 #ifdef DC_NATIVE_VIEW
         if (!dc_generate_chunk_scaled(stream->seed, coord, 4u, chunk)) {
             free(chunk);
@@ -175,7 +181,13 @@ static int worker_main(void *arg) {
 
 dc_streamer_t *dc_stream_create(const char *directory, uint64_t seed,
                                 uint32_t queue_capacity) {
+    return dc_stream_create_ground(directory,seed,queue_capacity,NULL);
+}
+
+dc_streamer_t *dc_stream_create_ground(const char *directory, uint64_t seed,
+                                       uint32_t queue_capacity, const dc_ground_profile_t *ground) {
     if (!directory || !directory[0] || strlen(directory) > 900 || !queue_capacity) return NULL;
+    if (ground && (!ground->surface || !ground->width || ground->width>4194304u || !ground->soil_depth)) return NULL;
     if (mkdir(directory, 0755) != 0 && errno != EEXIST) return NULL;
     dc_streamer_t *stream = calloc(1, sizeof(*stream));
     if (!stream) return NULL;
@@ -184,6 +196,12 @@ dc_streamer_t *dc_stream_create(const char *directory, uint64_t seed,
     stream->jobs = calloc(queue_capacity, sizeof(*stream->jobs));
     stream->results = calloc(queue_capacity, sizeof(*stream->results));
     if (!stream->directory || !stream->jobs || !stream->results) goto fail_alloc;
+    if (ground) {
+        stream->ground_surface=malloc((size_t)ground->width*sizeof(uint32_t));
+        if (!stream->ground_surface) goto fail_alloc;
+        memcpy(stream->ground_surface,ground->surface,(size_t)ground->width*sizeof(uint32_t));
+        stream->ground=*ground;stream->ground.surface=stream->ground_surface;
+    }
     memcpy(stream->directory, directory, length);
     stream->seed = seed;
     stream->capacity = queue_capacity;
@@ -199,6 +217,7 @@ fail_jobs:
 fail_mutex:
     mtx_destroy(&stream->mutex);
 fail_alloc:
+    free(stream->ground_surface);
     free(stream->directory); free(stream->jobs); free(stream->results); free(stream);
     return NULL;
 }
@@ -271,5 +290,6 @@ void dc_stream_destroy(dc_streamer_t *stream) {
     cnd_destroy(&stream->results_space);
     cnd_destroy(&stream->jobs_ready);
     mtx_destroy(&stream->mutex);
+    free(stream->ground_surface);
     free(stream->directory); free(stream->jobs); free(stream->results); free(stream);
 }

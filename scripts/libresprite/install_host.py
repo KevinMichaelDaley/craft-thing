@@ -27,5 +27,6 @@ def install(directory):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('directory', nargs='?', default='/tmp/craft-libresprite')
+    parser.add_argument('directory', nargs='?',
+                        default=str(Path(__file__).resolve().parents[2] / '.tools/libresprite'))
     print(install(parser.parse_args().directory))

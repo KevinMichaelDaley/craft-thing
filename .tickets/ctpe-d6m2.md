@@ -23,3 +23,7 @@ Variable cadence yields same frame; pause stable; no per-frame collider/mass rep
 **2026-10-14T03:54:31Z**
 
 Offline prerequisite available: compiled64-byte appearance record first32 matches renderer; emissionRGB bytes32..43, visualalpha48, uint32 surface mask60 (normal1/roughness2/relief4). Absent surface bits resolve renderer defaults, not fixed imported placeholders. SourceUUID/object/frame/texel identity immutable. Full tag policy, GPU instance frame selection, pause/save phase and actual GPU field contribution still unimplemented; no16-userpoint truncation or CPUlight-per-texel fallback. Renderer agent confirmed ABI, runtime contract pending its lighting integration.
+
+**2026-10-17T09:27:19Z**
+
+Actual scene authored albedo is now published with terrain and survives pausedframes/resident camera mappings through generation-keyed atlas entries; dirt and water rendered from separate visual channel. This does not yet preserve authored appearance through rigid extraction, granular advection, fracture, eviction or save/reload. Those remain required; no full renderer/provenance completion claim.

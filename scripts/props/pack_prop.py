@@ -215,6 +215,26 @@ def build(document, options=None):
     checksum = zlib.crc32(header[:44] + header[48:] + compiled_payload)
     header = header[:44] + struct.pack('<I', checksum) + header[48:]
     payloads['asset.cprop'] = header + compiled_payload
+    profile = options.get('authoring', {}).get('profile', {})
+    points = profile.get('ground_surface_points')
+    if points is not None:
+        depth = profile.get('ground_soil_depth')
+        if (not isinstance(points, list) or len(points) < 2 or
+                type(depth) is not int or not 0 < depth <= height or
+                any(not isinstance(p, list) or len(p) != 2 or
+                    any(type(v) is not int for v in p) or
+                    not 0 <= p[0] < width or not 0 <= p[1] < height for p in points) or
+                points[0][0] != 0 or points[-1][0] != width - 1 or
+                any(a[0] >= b[0] for a, b in zip(points, points[1:]))):
+            raise ValueError('Invalid authored ground surface profile')
+        surface, segment = [], 0
+        for x in range(width):
+            while segment + 1 < len(points) - 1 and x > points[segment + 1][0]:
+                segment += 1
+            a, b = points[segment:segment + 2]
+            span = b[0] - a[0]
+            surface.append((a[1] * (b[0] - x) + b[1] * (x - a[0]) + span // 2) // span)
+        payloads['ground.bin'] = struct.pack('<4s3I', b'GND1', width, height, depth) + struct.pack(f'<{width}I', *surface)
     manifest['files'] = {name: hashlib.sha256(value).hexdigest() for name, value in sorted(payloads.items())}
     payloads['manifest.json'] = canonical(manifest)
     return payloads

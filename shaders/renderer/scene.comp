@@ -108,6 +108,10 @@ Surface surface_at(uint i,out float opacity,out uint known) {
         solid=1.;add_surface(surface,palette[atlas],remaining,0.);
     }
     surface.weights.y=(1.-body_coverage)*water;
+    if((keys[atlas].x&0x8000ffffu)==0x80000000u && water>0.) {
+        add_surface(surface,palette[atlas],surface.weights.y,0.);
+        surface.weights.y=0.;
+    }
     surface.weights.z=max(0.,1.-surface.weights.x-surface.weights.y);
     opacity=body_coverage>0. || solid>0.?1.:water*.08;
     return surface;
@@ -139,7 +143,7 @@ void main() {
             if(body_data[registry+5u]!=0u) {
                 uint generation=body_data[registry+4u],material=chunk_cells[i].x&65535u;
                 uint style=material<=8u?configuration[4u+material]:0u,key=material|(style<<16);
-                if(keys[i]!=uvec2(key,generation)) {
+                if(uvec2(keys[i].x&0x7fffffffu,keys[i].y)!=uvec2(key,generation)) {
                     ivec2 rest=ivec2(canonical_cell(body_data[registry],i%64u),canonical_cell(body_data[registry+2u],(i%4096u)/64u));
                     palette[i]=texture_sample(rest,1u,material,style);keys[i]=uvec2(key,generation);
                     generated=material!=0u && material!=3u?1u:0u;

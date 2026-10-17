@@ -33,6 +33,7 @@ void fr_occlusion_record(fr_occlusion_gpu_t *occlusion, VkBuffer indirect,
                          VkDeviceSize offset);
 bool fr_lighting_field_binding(fr_lighting_gpu_t *lighting,
                                VkDescriptorBufferInfo *buffer);
+bool fr_renderer_authored_bindings(dc_gpu_t *gpu, VkDescriptorBufferInfo buffers[3]);
 void fr_lighting_record(fr_lighting_gpu_t *lighting, VkBuffer indirect,
                         VkDeviceSize offset);
 

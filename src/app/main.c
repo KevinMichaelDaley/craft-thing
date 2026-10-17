@@ -12,6 +12,7 @@
 
 #include "dungeoncraft/chunk.h"
 #include "level.h"
+#include "prop_scene.h"
 #include "session.h"
 #include "structural_demo.h"
 #include "view_config.h"
@@ -957,14 +958,23 @@ static int smoke_camera_velocity(void) {
 static bool restart_demo(dc_level_view_t **view, const char *base_directory,
                          uint64_t seed, uint32_t *run, uint32_t zoom,
                          dc_gpu_overlay_t overlay, bool spring_enabled,
-                         bool marker_overlay, char *err, uint32_t cap) {
+                         bool marker_overlay, const char *scene_path, char *err, uint32_t cap) {
     if (*run == UINT32_MAX) {
         snprintf(err, cap, "Too many world restarts");
         return false;
     }
     ++*run;
-    if (!dc_app_restart_view(view, base_directory, seed, *run, err, cap))
-        return false;
+    if (scene_path) {
+        char path[928];
+        int length=snprintf(path,sizeof(path),"%s_run_%u_XXXXXX",base_directory,*run);
+        if (length<0 || (size_t)length>=sizeof(path) || !mkdtemp(path)) {
+            snprintf(err,cap,"Cannot create fresh scene world");return false;
+        }
+        bool saved=dc_level_view_destroy(*view,err,cap);*view=NULL;
+        if (!saved) return false;
+        *view=dc_prop_scene_create(path,seed,scene_path,err,cap);
+        if (!*view || !dc_prop_scene_load(*view,scene_path,err,cap)) return false;
+    } else if (!dc_app_restart_view(view, base_directory, seed, *run, err, cap)) return false;
     if (!dc_level_view_set_zoom(*view, zoom) ||
         !dc_level_view_set_overlay(*view, overlay) ||
         !dc_level_view_set_spring_enabled(*view, spring_enabled) ||
@@ -1015,6 +1025,7 @@ static bool pan_held_keys(dc_level_view_t *view, double elapsed,
 }
 
 int main(int argc, char **argv) {
+    if (argc==3 && strcmp(argv[1],"--smoke-scene")==0) return dc_prop_scene_smoke(argv[2]);
     if (argc > 1 && strcmp(argv[1], "--structural-demo") == 0)
         return dc_structural_demo_run(false);
     if (argc > 1 && strcmp(argv[1], "--smoke-structural-demo") == 0)
@@ -1063,6 +1074,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     uint64_t seed = 314;
+    const char *scene_path = NULL;
 #if defined(DC_QUARTER_NATIVE_VIEW)
     const char *directory = scripted_input ? scripted_directory : "world_chunks_quarter_native";
 #elif defined(DC_HALF_NATIVE_VIEW)
@@ -1087,14 +1099,21 @@ int main(int argc, char **argv) {
             seed = strtoull(argv[++i], NULL, 10);
         else if (strcmp(argv[i], "--world-dir") == 0 && i + 1 < argc)
             directory = argv[++i];
+        else if (strcmp(argv[i], "--scene") == 0 && i + 1 < argc)
+            scene_path = argv[++i];
         else {
-            fprintf(stderr, "Usage: %s [--seed number] [--world-dir path] [--demo-coupled|--demo-sifting]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [--seed number] [--world-dir path] [--scene asset.cprop] [--demo-coupled|--demo-sifting]\n", argv[0]);
             return 1;
         }
     }
     char err[256] = {0};
-    dc_level_view_t *view = dc_level_view_create(directory, seed, err, sizeof(err));
+    dc_level_view_t *view = scene_path ? dc_prop_scene_create(directory,seed,scene_path,err,sizeof(err)) :
+        dc_level_view_create(directory, seed, err, sizeof(err));
     if (!view) { fprintf(stderr, "Level create: %s\n", err); return 1; }
+    if (scene_path && !dc_prop_scene_load(view,scene_path,err,sizeof(err))) {
+        fprintf(stderr,"Scene load: %s\n",err);
+        dc_level_view_destroy(view,err,sizeof(err));return 1;
+    }
     if (demo_coupled &&
         (!dc_level_view_set_spring_enabled(view, false) ||
          !setup_coupled_materials(view, err, sizeof(err)))) {
@@ -1112,8 +1131,8 @@ int main(int argc, char **argv) {
     uint16_t material = DC_MATERIAL_SAND;
     bool running = true;
     bool failed = false;
-    bool paused = false;
-    bool spring_enabled = !(demo_coupled || demo_sifting);
+    bool paused = scene_path != NULL;
+    bool spring_enabled = !(demo_coupled || demo_sifting || scene_path);
     bool marker_overlay = false;
     bool single_step = false;
     uint32_t zoom = WINDOW_SCALE;
@@ -1171,7 +1190,7 @@ int main(int argc, char **argv) {
                             seed_error = true;
                         } else if (!restart_demo(&view, directory, (uint64_t)parsed,
                                                  &run, zoom, overlay, spring_enabled,
-                                                 marker_overlay, err, sizeof(err))) {
+                                                 marker_overlay, scene_path, err, sizeof(err))) {
                             failed = true; running = false;
                         } else {
                             seed = (uint64_t)parsed;
@@ -1192,6 +1211,10 @@ int main(int argc, char **argv) {
                 case SDLK_3: material = DC_MATERIAL_WATER; break;
                 case SDLK_4: material = DC_MATERIAL_DIRT; break;
                 case SDLK_5: material = DC_MATERIAL_GRAVEL; break;
+                case SDLK_6: material = DC_MATERIAL_WOOD; break;
+                case SDLK_F8:
+                    if (scene_path) dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO);
+                    break;
                 case SDLK_p: paused = !paused; break;
                 case SDLK_n: single_step = true; break;
                 case SDLK_m:
@@ -1211,7 +1234,7 @@ int main(int argc, char **argv) {
                     if (!event.key.repeat) {
                         if (!restart_demo(&view, directory, seed, &run, zoom,
                                           overlay, spring_enabled, marker_overlay,
-                                          err, sizeof(err))) {
+                                          scene_path, err, sizeof(err))) {
                             failed = true; running = false;
                         }
                         accumulator = 0.0;

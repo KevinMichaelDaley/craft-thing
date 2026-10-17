@@ -126,6 +126,10 @@ fr_appearance_texel_t fr_appearance_default(fr_appearance_owner_t o) {
     result.color[0] = .35f;
     result.color[1] = .16f;
     result.color[2] = .045f;
+  } else if (m == DC_MATERIAL_DIRT) {
+    result.color[0] = .28f;
+    result.color[1] = .14f;
+    result.color[2] = .05f;
   } else if (m == DC_MATERIAL_MORTAR_DEBRIS) {
     result.color[0] = .42f;
     result.color[1] = .39f;
