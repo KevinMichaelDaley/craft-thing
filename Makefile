@@ -799,6 +799,7 @@ test_gpu_tools: build/contact_shader_contract_tests
 	python3 tests/vulkan/gpu_dependency_tests.py
 	./build/contact_shader_contract_tests
 	./build/fluid_transport_limits_tests
+	./build/contact_recording_tests
 
 build/contact_shader_contract_tests: tests/vulkan/contact_shader_contract_tests.c src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
 	@mkdir -p build/diagnostics
@@ -850,4 +851,7 @@ build/fluid_gpu.o: src/vulkan/fluid_transport_limits.h
 build/fluid_transport_limits_tests: tests/vulkan/fluid_transport_limits_tests.c src/vulkan/fluid_transport_limits.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
 test_gpu_tools: build/fluid_transport_limits_tests
+build/contact_recording_tests: tests/vulkan/contact_recording_tests.c build/contact_gpu.o build/shader.o
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< build/contact_gpu.o build/shader.o -o $@ -lvulkan
+test_gpu_tools: build/contact_recording_tests
 
