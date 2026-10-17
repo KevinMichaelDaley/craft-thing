@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from ase_reader import read
-from pack_prop import SCHEMA, canonical, export, validate
+from pack_prop import SCHEMA, export, validate
 
 
 def normalize(document, profile_path):

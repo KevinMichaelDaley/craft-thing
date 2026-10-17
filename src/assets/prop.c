@@ -76,12 +76,20 @@ bool fr_prop_asset_open(fr_prop_asset_t *asset, const void *bytes, size_t size,
             const uint8_t *app = map + pixels * PROP_MAP + pixel * PROP_APPEARANCE;
             if (prop_u32(app + 60) > 7)
                 return prop_error(err_buf, err_cap, "Unknown surface override flags");
+            if (prop_u32(app + 44) || prop_u32(app + 52) || prop_u32(app + 56))
+                return prop_error(err_buf, err_cap, "Nonzero reserved appearance words");
             for (uint32_t component = 0; component < 15; ++component) {
                 float value = prop_float(app + component * 4);
                 if (!isfinite(value) || ((component <= 3 || component >= 7) && value < 0) ||
                     ((component == 3 || component == 12) && value > 1) ||
                     (component >= 4 && component <= 6 && (value < -1 || value > 1)))
                     return prop_error(err_buf, err_cap, "Invalid compiled appearance value");
+            }
+            if (prop_u32(app + 60) & 1u) {
+                float x = prop_float(app + 16), y = prop_float(app + 20);
+                float z = prop_float(app + 24);
+                if (fabsf(x * x + y * y + z * z - 1.0f) > 0.001f)
+                    return prop_error(err_buf, err_cap, "Explicit normal must have unit length");
             }
         }
     }
