@@ -53,10 +53,11 @@ class ProfileTests(unittest.TestCase):
             output = Path(directory) / 'piece.prop'
             export(converted, output)
             manifest = validate(output)
-            maps = (output / manifest['frames'][0]['physical']).read_bytes()
-            self.assertEqual([int.from_bytes(maps[i:i+2], 'little')
-                              for i in range(0, 40, 8)], [2, 1, 7, 6, 0])
-            self.assertEqual([maps[i+2] for i in range(0, 40, 8)], [1, 1, 1, 1, 0])
+            paths = manifest['frames'][0]['channels']
+            materials = (output / paths['material']).read_bytes()
+            self.assertEqual([int.from_bytes(materials[i:i+2], 'little')
+                              for i in range(0, 10, 2)], [2, 1, 7, 6, 0])
+            self.assertEqual(list((output / paths['role']).read_bytes()), [1, 1, 1, 1, 0])
 
     def test_unknown_or_antialiased_labels_are_rejected(self):
         from profile_export import normalize

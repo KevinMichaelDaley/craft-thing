@@ -33,7 +33,7 @@ def decompress(data, size):
     return raw
 
 
-def read(path):
+def read(path, layer_names=None):
     data = Path(path).read_bytes()
     length, magic, count, width, height, depth = unpack('I5H', data)
     if length != len(data) or magic != 0xa5e0 or len(data) < 128:
@@ -62,6 +62,8 @@ def read(path):
             if kind == 0x2004:
                 flags, layer_type, child, _, _, blend = unpack('6H', payload)
                 name = text(payload, 16)
+                if layer_names is not None:
+                    name = layer_names.get(name, name)
                 if layer_type not in (0, 1):
                     raise ValueError('Tilemap layer unsupported')
                 layers.append({'name': name, 'type': layer_type, 'level': child,
