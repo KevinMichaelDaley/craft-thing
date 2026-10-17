@@ -81,6 +81,16 @@ static void test_full_recipient_work_is_close_to_zero_velocity_work(void) {
         ASSERT_TRUE(measure(f,pool,mode,8.f,&long_full));
         printf("mode%u zero speed %.3f ms, full recipient %.3f ms, long full %.3f ms, ratios %.3f/%.3f\n",mode,quiet,full,long_full,full/quiet,long_full/quiet);
         bounded=bounded&&full<=quiet*1.25+.05&&long_full<=quiet*1.25+.05;
+        for(unsigned i=0;i<CHUNKS*4096;i++) f->words[0][2*i+1]=FULL/2;
+        double partial_quiet,quantized_zero;
+        ASSERT_TRUE(measure(f,pool,mode,0,&partial_quiet));
+        ASSERT_TRUE(measure(f,pool,mode,1e-12f,&quantized_zero));
+        printf("mode%u partial zero %.3f ms, sub-unit travel %.3f ms, ratio %.3f\n",mode,partial_quiet,quantized_zero,quantized_zero/partial_quiet);
+        bounded=bounded&&quantized_zero<=partial_quiet*1.25+.05;
+        for(unsigned i=0;i<CHUNKS*4096;i++) {
+            ASSERT_EQ(f->words[0][2*i+1],FULL/2);
+            f->words[0][2*i+1]=FULL;
+        }
     }
     bool exact=true;
     for(unsigned i=0;i<CHUNKS*4096;i++) exact=exact&&f->words[0][2*i+1]==FULL;
