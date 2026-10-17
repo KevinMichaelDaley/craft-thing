@@ -878,6 +878,7 @@ GPU_SOURCE_BINARIES = $(addprefix build/, \
     component_world_tests diagnostics/native360_fluid_trace diagnostics/native360_frame_trace \
     diagnostics/native360_mpm_variants dungeoncraft_half_native \
     dungeoncraft_native dungeoncraft_quarter_native marker_slot_tests \
+    material_cut_buoyancy_tests dynamic_body_capacity_tests \
     native_360_performance_tests native_720_component_tests \
     native_720_performance_tests native_bench pixel_dynamics_visual_tests \
     pixel_performance_tests structural_bench structural_cadence_tests \
