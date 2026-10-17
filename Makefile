@@ -801,6 +801,7 @@ test_gpu_tools: build/contact_shader_contract_tests
 	./build/contact_shader_contract_tests
 	./build/fluid_transport_limits_tests
 	./build/contact_recording_tests
+	./build/mpm_layout_tests
 
 build/contact_shader_contract_tests: tests/vulkan/contact_shader_contract_tests.c src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
 	@mkdir -p build/diagnostics
@@ -867,4 +868,7 @@ build/mpm_control_tests: tests/vulkan/mpm_control_tests.c tools/diagnostics/shad
 build/diagnostics/particle_case: tools/diagnostics/particle_case.c tests/vulkan/particle_tests.c build/particle_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(STREAM_OBJ) -o $@ $(LDLIBS)
 test: build/mpm_control_tests
+build/mpm_layout_tests: tests/vulkan/mpm_layout_tests.c src/vulkan/mpm_activity_layout.h include/dungeoncraft/mpm_activity_layout.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+test_gpu_tools: build/mpm_layout_tests
 
