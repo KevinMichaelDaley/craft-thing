@@ -763,6 +763,13 @@ build/shaders/fluid_displacement.comp.spv: shaders/sim/fluid_displacement.comp
 build/fluid_displacement_tests: tests/vulkan/fluid_displacement_tests.c tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_displacement.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
+build/fluid_transport_work_tests: tests/vulkan/fluid_transport_work_tests.c tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+.PHONY: test_fluid_transport_work
+test_fluid_transport_work: build/fluid_transport_work_tests
+	./build/fluid_transport_work_tests
+
 build/fluid_displacement_wide_tests: tests/vulkan/fluid_displacement_tests.c tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_displacement.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DTRANSPORT_TEST_WIDTH=2113 -DTRANSPORT_TEST_HEIGHT=3 $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
