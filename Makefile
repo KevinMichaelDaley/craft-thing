@@ -944,6 +944,8 @@ build/material_cut_buoyancy_tests: tests/app/material_cut_buoyancy_tests.c src/a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
 build/extraction_stats_tests: tests/vulkan/extraction_stats_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkQueueWaitIdle
+build/dynamic_body_capacity_tests: tests/app/dynamic_body_capacity_tests.c tests/app/material_cut_buoyancy_tests.c src/app/level.h src/app/view_config.h $(filter-out src/app/main.c,$(NATIVE_SRC))
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
 shaders: $(MPM_COMPACTION_SHADER)
 .PHONY: test_mpm_compaction_work
 test_mpm_compaction_work: build/mpm_compaction_tests

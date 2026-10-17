@@ -26,6 +26,10 @@ one descriptor range or one storage-buffer-size limit does not become another
 body-count constant. Audit/enable the required device features explicitly and
 validate alignment/address bounds before selecting this ABI. Report actual device
 or allocation failure; do not silently choose a fixed-capacity physics fallback.
+The address contract should use `uvec2` and `GL_EXT_buffer_reference_uvec2`, avoiding
+an unnecessary `shaderInt64` requirement; see the
+[Khronos BDA guide](https://docs.vulkan.org/guide/latest/buffer_device_address.html)
+and [GLSL extension](https://docs.vulkan.org/glslext/latest/glslext/ext/GLSL_EXT_buffer_reference_uvec2.html).
 
 Structural graph node/member limits describe authored graph topology only. They
 must not bound automatic bodies, descendants or the global body allocator.
