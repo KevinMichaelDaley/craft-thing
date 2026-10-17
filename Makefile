@@ -611,6 +611,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/stream_tests
 
 test_ui: build/dungeoncraft build/controls_tests build/structural_world_tests
+	./build/level03_support_tests
 	./build/pixel_dynamics_visual_tests
 	./build/structural_cadence_tests
 	./build/presentation_tests
@@ -688,6 +689,9 @@ build/quarter_native_component_extraction_tests: tests/vulkan/component_extracti
 
 build/component_world_tests: tests/app/component_world_tests.c Makefile src/app/level.h src/app/view_config.h $(filter-out src/app/main.c,$(NATIVE_SRC)) build/quarter_native_rigid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
+build/level03_support_tests: tests/app/level03_support_tests.c Makefile src/app/level.h src/app/view_config.h src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h $(CONTACT_SHADER) $(MPM_SHADER) $(SOLVER_SHADER) $(filter-out src/app/main.c,$(NATIVE_SRC)) build/quarter_native_rigid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_read_contacts
+test_ui: build/level03_support_tests
 
 build/component_acceptance_tests: tests/vulkan/component_acceptance_tests.c build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
@@ -1075,7 +1079,7 @@ test: build/body_carve_tests
 build/sequential_detachment_tests: tests/vulkan/sequential_detachment_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/sequential_detachment_tests
-build/dense_support_tests: tests/vulkan/dense_support_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+build/dense_support_tests: tests/vulkan/dense_support_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(MPM_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/dense_support_tests
 build/diagnostics/body_support: tools/diagnostics/body_support.c tools/diagnostics/terrain_support.h Makefile src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h $(CONTACT_SHADER) $(GPU_SRC) $(GPU_OBJ) $(CHUNK_OBJ) src/world/chunk.c $(RENDERER_SHADERS) build/shaders/prop_place.comp.spv

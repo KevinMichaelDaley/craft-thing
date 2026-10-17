@@ -10,6 +10,32 @@ static int g_pass,g_fail;
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() g_pass++
 
+static void test_partial_granular_support_motion_does_not_release_tree_but_cut_does(void) {
+    dc_gpu_t *g=NULL;char err[256];dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    chunk->cells[29*64+30]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
+    chunk->cells[30*64+30]=chunk->cells[29*64+30];
+    chunk->cells[29*64+29].material=DC_MATERIAL_DIRT;
+    chunk->cells[30*64+29].material=DC_MATERIAL_DIRT;
+    chunk->cells[31*64+30].material=DC_MATERIAL_DIRT;
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+    unsigned removed=30*64+29;
+    chunk->cells[removed]=(dc_cell_t){0};chunk->particles[removed]=(dc_mpm_particle_t){0};chunk->particle_count--;
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    dc_gpu_body_t body;
+    ASSERT_TRUE(!dc_gpu_read_body_id(g,0x80000001u,&body,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,30,30,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    dc_gpu_body_pixel_t pixel;unsigned count=0;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,&pixel,1,&count,err,sizeof(err)));
+    ASSERT_EQ(count,1u);dc_gpu_destroy(g);free(chunk);PASS();
+}
+
 static void test_full_soil_and_gravel_remain_packed_after_settling(void) {
     dc_gpu_t *g=NULL;char err[256];dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
@@ -69,6 +95,7 @@ static void test_dense_leaf_contacts_cannot_weaken_stone_floor(void) {
 }
 
 int main(void) {
+    RUN(test_partial_granular_support_motion_does_not_release_tree_but_cut_does);
     RUN(test_full_soil_and_gravel_remain_packed_after_settling);
     RUN(test_dense_leaf_contacts_cannot_weaken_stone_floor);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
