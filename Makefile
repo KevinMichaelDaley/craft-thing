@@ -121,6 +121,7 @@ build/shaders/structural.comp.spv: shaders/sim/structural.comp shaders/sim/struc
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/shaders/structural.comp.spv: shaders/sim/rigid_fragment.glsl shaders/sim/pixel_fragment.glsl
+build/shaders/structural.comp.spv: shaders/sim/body_carve.glsl
 $(GPU_OBJ): build/shaders/structural.comp.spv
 build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench build/marker_slot_tests build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_solver_tests build/quarter_native_bench build/dungeoncraft_quarter_native: build/shaders/structural.comp.spv
 build/window_gpu.o: src/vulkan/window_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
@@ -538,6 +539,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/scene_gpu_tests
 	./build/terrain_prop_tests
 	./build/body_color_tests
+	./build/body_carve_tests
 	./build/pixel_motion_cache_tests
 	./build/component_dispatch_tests
 	./build/pixel_properties_gpu_tests

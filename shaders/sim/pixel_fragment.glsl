@@ -8,14 +8,20 @@ Body pixel_fragment_build(Body source,uint count,uint material,uint pointer,uint
     if(!fragment_pose(source,b)) b.enabled=0u;
     return b;
 }
-bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
-    Body source=bodies[slot];uint area=body_pieces(source);
+bool carve_pixel(Body source,uint pixel) {
+    vec2 rest=vec2(pixel_piece_cell(source,pixel))+.5;
+    vec2 world=vec2(source.x_fp,source.y_fp)/65536.+source.center+body_rotate(rest-source.center,source.angle);
+    vec2 delta=floor(world)-vec2(params.origin_x);
+    return dot(delta,delta)<=float(params.origin_y.x)*float(params.origin_y.x);
+}
+bool pixel_fragment_source(uint slot,Body source,uint axis,float cut,uint generation) {
+    uint area=body_pieces(source);bool carving=axis==2u;
     uint slots[64],ids[64],counts[64],materials[64],tile_counts[64],offsets[64];
     ivec2 lows[64],highs[64];
     uint available=1u;slots[0]=slot;ids[0]=source.id;
     for(uint i=0u;i<BODY_CAPACITY;i++)
         if(i!=slot&&bodies[i].enabled==0u&&bodies[i].reserved0==0u) slots[available++]=i;
-    for(uint i=0u;i<area;i++) fracture_labels[i]=0u;
+    if(!carving) for(uint i=0u;i<area;i++) fracture_labels[i]=0u;
     uint count=0u;int plane=int(round(cut));
     const ivec2 neighbors[4]=ivec2[4](ivec2(-1,0),ivec2(1,0),ivec2(0,-1),ivec2(0,1));
     for(uint seed=0u;seed<area;seed++) {
@@ -31,7 +37,7 @@ bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
             for(uint n=0u;n<4u;n++) {
                 ivec2 q=p+neighbors[n];
                 if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(source.width,source.height)))||
-                   (p[axis]<plane)!=(q[axis]<plane)) continue;
+                   (!carving&&(p[axis]<plane)!=(q[axis]<plane))) continue;
                 uint next=pixel_piece_at(source,q);
                 if(next==0xffffffffu||fracture_labels[next]!=0u||piece_material(source,next)==0u) continue;
                 fracture_labels[next]=owner;fracture_queue[tail++]=next;
@@ -39,7 +45,8 @@ bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
         }
         counts[owner-1u]=tail;
     }
-    if(count<2u) return false;
+    if(carving&&count==0u) {bodies[slot].enabled=0u;bodies[slot].reserved0=0u;return true;}
+    if(!carving&&count<2u) return false;
     uint pool=graph()+40000u,capacity=data[pool+2u],bank=1u-data[pool],used=0u;
     uint directory=pixel_directory_words(source),total=0u;
     for(uint i=0u;i<BODY_CAPACITY;i++) if(i!=slot&&pixel_body(bodies[i])&&
@@ -117,11 +124,11 @@ bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
     }
     vec2 velocity=vec2(source.vx_fp,source.vy_fp)/65536.;
     float initial=.5*source.mass*dot(velocity,velocity)+.5*source.inertia*source.angular_velocity*source.angular_velocity;
-    if(abs(mass-source.mass)>max(.002,source.mass*1e-5)||
+    if(!carving&&(abs(mass-source.mass)>max(.002,source.mass*1e-5)||
        abs(inertia-source.inertia)>max(.002,source.inertia*1e-4)||
        length(momentum-source.mass*velocity)>max(.002,source.mass*length(velocity)*1e-4)||
        abs(angular-source.inertia*source.angular_velocity)>max(.002,abs(source.inertia*source.angular_velocity)*1e-4)||
-       energy>initial+max(.002,initial*1e-4)) return false;
+       energy>initial+max(.002,initial*1e-4))) return false;
     other_used=0u;
     for(uint i=0u;i<BODY_CAPACITY;i++) {
         Body b=bodies[i];if(i==slot||!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) continue;
@@ -133,6 +140,7 @@ bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
     for(uint child=0u;child<count;child++) {
         Body b=pixel_fragment_build(source,counts[child],materials[child],
             BODY_STORAGE_WORDS+target+used+offsets[child],generation);
+        if(carving&&source.reserved0!=0x53545231u) {b.motion_flags=source.motion_flags;body_properties(b);}
         b.id=ids[child];bodies[slots[child]]=b;
         record=graph()+36000u+slots[child]*4u;
         data[record]=root;data[record+1u]=root_generation;data[record+2u]=next;data[record+3u]=1u;
@@ -140,6 +148,9 @@ bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
     data[pool]=bank;data[pool+1u]=used+total;data[base()+14u]=next;
     data[base()+16u]=(params.width+15u)/16u;data[base()+17u]=(params.height+15u)/16u;data[base()+18u]=1u;
     return true;
+}
+bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
+    return pixel_fragment_source(slot,bodies[slot],axis,cut,generation);
 }
 float pixel_cut_work(Body b,uint axis,float cut) {
     int plane=int(round(cut));uint span=axis==0u?b.height:b.width;float work=0;

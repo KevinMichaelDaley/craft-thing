@@ -243,7 +243,7 @@ bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return r == VK_SUCCESS ||
            error(err, cap, "Cannot create structural pipeline");
 }
-static void dispatch(dc_gpu_t *gpu, uint32_t mode) {
+static void dispatch_brush(dc_gpu_t *gpu, uint32_t mode,const uint32_t *brush) {
     VkMemoryBarrier2 b = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT |
@@ -268,6 +268,7 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode) {
     uint32_t push[8] = {
         gpu->width,  gpu->height,         mode,        dc_gpu_runtime_body_count(gpu),
         (uint32_t)x, (uint32_t)(x >> 32), (uint32_t)y, (uint32_t)(y >> 32)};
+    if(brush) {push[4]=brush[0];push[5]=brush[1];push[6]=brush[2];push[7]=0;}
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     vkCmdDispatch(gpu->command, mode == 3 ? 32 : 1, 1, 1);
@@ -281,6 +282,10 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode) {
                       VK_ACCESS_2_HOST_READ_BIT |
                       VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
     vkCmdPipelineBarrier2(gpu->command, &dep);
+}
+static void dispatch(dc_gpu_t *gpu,uint32_t mode) {dispatch_brush(gpu,mode,NULL);}
+void dc_gpu_record_body_carve(dc_gpu_t *gpu,uint32_t x,uint32_t y,uint32_t radius) {
+    const uint32_t brush[3]={x,y,radius};dispatch_brush(gpu,6,brush);
 }
 void dc_gpu_record_structural_begin(dc_gpu_t *gpu) {
     if (gpu->structural_enabled)

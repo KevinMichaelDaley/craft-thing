@@ -29,6 +29,14 @@ static void test_air_carves_colored_body_and_splits_remaining_components(void) {
     dc_gpu_body_record_t *b=g->body_mapped;
     b->body.x_fp=b->local_x_fp=20<<16;b->body.y_fp=b->local_y_fp=20<<16;
     b->body.vx_fp=1<<16;b->body.vy_fp=0;b->angular_velocity=0;
+    for(unsigned slot=1;slot<DC_GPU_BODY_CAPACITY;slot++)
+        ((dc_gpu_body_record_t*)g->body_mapped)[slot].reserved[0]=0x53545232u;
+    ASSERT_TRUE(dc_gpu_paint_material(g,24,21,1,DC_MATERIAL_AIR,err,sizeof(err)));
+    dc_gpu_body_pixel_t unchanged[27];unsigned unchanged_count=0;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,b->body.id,unchanged,27,&unchanged_count,err,sizeof(err)));
+    ASSERT_EQ(unchanged_count,27u);
+    for(unsigned slot=1;slot<DC_GPU_BODY_CAPACITY;slot++)
+        ((dc_gpu_body_record_t*)g->body_mapped)[slot].reserved[0]=0u;
     ASSERT_TRUE(dc_gpu_paint_material(g,24,21,1,DC_MATERIAL_AIR,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
     unsigned total=0,live=0;float mass=0;
@@ -77,8 +85,52 @@ static void test_air_carves_compound_wall_without_filling_its_cavity(void) {
     ASSERT_TRUE(fabsf(motion.mass-159*.6f)<.001f);
     dc_gpu_destroy(g);free(c);PASS();
 }
+static void test_rotated_body_uses_world_brush_coordinates(void) {
+    char err[256];dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    dc_gpu_compound_shape_t shape=fixture_u();
+    ASSERT_TRUE(dc_gpu_spawn_compound_body(g,fixture_body(7,20,20),&shape,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(g,7,1.57079632679f,0,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,33,22,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    dc_gpu_body_motion_t motion;ASSERT_TRUE(dc_gpu_read_body_motion(g,7,&motion,err,sizeof(err)));
+    ASSERT_TRUE(fabsf(motion.mass-159*.6f)<.001f);
+    ASSERT_TRUE(fabsf(motion.angle-1.57079632679f)<1e-6f);
+    dc_gpu_destroy(g);free(c);PASS();
+}
+static void test_air_carves_an_anchored_structural_member(void) {
+    char err[256];dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    c->cells[41*64+20].material=DC_MATERIAL_STONE;
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_structural_gpu_graph_t graph={.node_count=2,.member_count=1,.anchor_count=1};
+    graph.nodes[0]=(fr_structural_gpu_node_t){.id=1,.generation=1,.x_fp=20<<16,.y_fp=40<<16};
+    graph.nodes[1]=graph.nodes[0];graph.nodes[1].id=2;graph.nodes[1].x_fp=32<<16;
+    graph.members[0]=(fr_structural_gpu_member_t){1,1,1,2,FR_STRUCTURAL_WOOD,2<<16,0,0};
+    graph.anchors[0]=(fr_structural_gpu_anchor_t){.id=1,.generation=1,.node=1,
+        .kind=FR_JOINT_MOMENT,.x=20,.y=41,.width=1,.height=1,
+        .terrain_material=DC_MATERIAL_STONE,.normal_stiffness=1e8,.shear_stiffness=1e8,
+        .rotational_stiffness=1e8,.bearing_capacity=1e7,.pullout_capacity=1e7,
+        .shear_capacity=1e7,.moment_capacity=1e7,.friction=.5};
+    ASSERT_TRUE(fr_gpu_place_structure(g,&graph,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,26,40,1,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    unsigned live=0;
+    for(unsigned slot=0;slot<DC_GPU_BODY_CAPACITY;slot++) {
+        dc_gpu_body_record_t *b=(dc_gpu_body_record_t*)g->body_mapped+slot;
+        if(!b->body.active) continue;
+        live++;ASSERT_TRUE(b->piece_count&DC_GPU_PIXEL_BODY_FLAG);ASSERT_TRUE(b->inverse_mass>0);
+    }
+    ASSERT_EQ(live,2u);dc_gpu_destroy(g);free(c);PASS();
+}
 int main(void) {
     RUN(test_air_carves_colored_body_and_splits_remaining_components);
     RUN(test_air_carves_compound_wall_without_filling_its_cavity);
+    RUN(test_rotated_body_uses_world_brush_coordinates);
+    RUN(test_air_carves_an_anchored_structural_member);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

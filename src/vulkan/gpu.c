@@ -345,6 +345,8 @@ static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7], char *err, uin
         .memoryBarrierCount = 1, .pMemoryBarriers = &upload_barrier };
     vkCmdPipelineBarrier2(gpu->command, &upload_dependency);
     dc_gpu_record_component_baseline(gpu);
+    if(push[2]==3u && push[6]==DC_MATERIAL_AIR)
+        dc_gpu_record_body_carve(gpu,push[3],push[4],push[5]);
     if (push[2] == 2u && fr_renderer_active(gpu)) {
         fr_renderer_record(gpu);
     } else if (push[2] == 2u) {

@@ -189,7 +189,9 @@ void topology() {
 #include "structural_equilibrium.glsl"
 #include "structural_failure.glsl"
 #include "structural_impact.glsl"
+#include "body_carve.glsl"
 void main() {
+    if(STRUCTURAL_PHASE==6u) {carve_bodies();return;}
     if(STRUCTURAL_PHASE==0u) {if(gl_LocalInvocationID.x==0u) transaction();return;}
     if(STRUCTURAL_PHASE==2u) {
         uint lane=gl_LocalInvocationID.x;

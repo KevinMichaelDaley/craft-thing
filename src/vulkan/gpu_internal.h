@@ -29,7 +29,7 @@ enum {
     DC_GPU_SOLVER_BODY_WORDS = 32,
     DC_GPU_SOLVER_CONTACT_WORDS = 16,
     DC_GPU_SOLVER_PHASE_COUNT = 15,
-    DC_GPU_STRUCTURAL_PHASE_COUNT = 6
+    DC_GPU_STRUCTURAL_PHASE_COUNT = 7
 };
 
 typedef struct {
@@ -311,6 +311,7 @@ void dc_gpu_record_structural(dc_gpu_t *gpu);
 void dc_gpu_record_structural_begin(dc_gpu_t *gpu);
 /** Record topology reconstruction at an explicit restore boundary. */
 void dc_gpu_record_structural_topology(dc_gpu_t *gpu);
+void dc_gpu_record_body_carve(dc_gpu_t *gpu,uint32_t x,uint32_t y,uint32_t radius);
 void dc_gpu_structural_track_chunk(dc_gpu_t *gpu,uint32_t slot,dc_chunk_coord_t coord);
 bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
                               bool seed, char *err, uint32_t cap);
