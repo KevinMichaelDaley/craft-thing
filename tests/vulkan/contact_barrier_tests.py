@@ -5,7 +5,20 @@ import unittest
 
 
 def unsafe_shared_return(source):
-    return re.search(r"if\s*\(group_found\s*==\s*0u\)", source) is not None
+    source = re.sub(r"//[^\n]*|/\*.*?\*/", "", source, flags=re.S)
+    for predicate in re.finditer(r"if\s*\(group_found\s*==\s*0u\)", source):
+        statement = source[predicate.end():].lstrip()
+        if statement.startswith("{"):
+            depth, end = 1, 1
+            while depth and end < len(statement):
+                depth += (statement[end] == "{") - (statement[end] == "}")
+                end += 1
+            statement = statement[:end]
+        else:
+            statement = statement.split(";", 1)[0]
+        if re.search(r"\breturn\b", statement):
+            return True
+    return False
 
 
 class ContactBarrierTests(unittest.TestCase):
@@ -16,6 +29,8 @@ class ContactBarrierTests(unittest.TestCase):
             "if(group_found==0u) { atomicAdd(skipped,1u); return; }"))
         self.assertTrue(unsafe_shared_return(
             "if (group_found == 0u) return;"))
+        self.assertTrue(unsafe_shared_return(
+            "if(group_found==0u) { /* } */ if(lane==0u) { atomicAdd(x,1u); } return; }"))
 
     def test_terrain_return_predicate_is_captured_before_shared_reset(self):
         source = (pathlib.Path(__file__).resolve().parents[2] /
