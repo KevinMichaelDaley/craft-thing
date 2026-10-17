@@ -57,3 +57,7 @@ Generation release/reuse RED now actually executed: current shader completes bou
 **2026-10-17T09:31:49Z**
 
 Generation-safe release/reuse GPU GREEN verified in 0.457 seconds under explicit synchronization validation: duplicate plus invalid handles release slot 0 exactly once, replay is harmless, stale generation 1 cannot release generation 2, and reuse advances 1 to 2 to 3. All allocation/growth/retry assertions also pass; bounded fences completed without validation errors. Shader phases 5 and 6 use parallel handle ownership CAS plus a separate O(1) count publication. GPU immediately released to parent; no further submissions while parent visual investigation/demo owns it. Production remains legacy 64 bodies; actual-count indirect gates, runtime IDs/live lists and runtime migration are still open. Fresh full main regression remains paused, not reported complete.
+
+**2026-10-17T09:44:18Z**
+
+CPU-only indirect scan recording RED observed 3 pass/1 fail, then GREEN 4/4: all 2L-1 hierarchical passes consume packed GPU-generated dispatch triplets, preserving scan/add order, with compute-write to indirect-command-read synchronization; short, misaligned and overflow ranges reject before any commands. Shared direct/indirect recording avoids duplicate hierarchy logic. No GPU submissions while parent material demo is open. GPU producer/zero-work execution and runtime integration are not implemented or claimed by this CPU contract.
