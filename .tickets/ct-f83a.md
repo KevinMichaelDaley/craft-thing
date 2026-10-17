@@ -33,3 +33,7 @@ GPU prefix RED observed expected wrong-prefix/totals with no-op shader; minimal 
 **2026-10-17T09:05:03Z**
 
 Atomic allocation RED compiled/SPIR-V validated, executed under bounded Vulkan/sync validation and failed expected tentative ready assertion with stub. GREEN candidate now compiles:64-lane/page count/mask/rank, parallel tentative handles, commit-gated owner writes and separate O(1) status/publication dispatches. NOT GPU-verified yet: parent holds merged renderer regression lease. Main fresh full suite92479 paused only after structural_failure13/13 completed. Remaining allocator scope: actual-count indirect zero-work gates, generation-safe release/reuse, live/ID lists and runtime consumer integration. Current gameplay stilllegacy64.
+
+**2026-10-17T09:06:44Z**
+
+Transactional allocator GPU GREEN verified0.328s with explicit synchronization validation, no errors:90tentative handles with commit0 preserve ownership/free masks; commit1 publishes90once, replay is idempotent;40more defer with required_slots132 and no mutation; store growth128→192 retries same queue and publishes130exact generation1handles. GPU lease returned immediately to parent terrain-placement/demo work. Still prototype only: runtime consumers remainlegacy64, release/reuse/indirect/live-ID work and full integration remain open.
