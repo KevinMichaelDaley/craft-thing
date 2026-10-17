@@ -14,6 +14,10 @@ static void test_root_and_page_match_shared_std430_contract(void) {
     ASSERT_EQ(offsetof(dc_body_storage_root_t,data),32u);
     ASSERT_EQ(sizeof(dc_body_storage_page_t),48u);
     ASSERT_EQ(offsetof(dc_body_storage_page_t,free_mask),32u);
-    ASSERT_EQ(offsetof(dc_body_storage_page_t,generation),40u);PASS();
+    ASSERT_EQ(offsetof(dc_body_storage_page_t,generation),40u);
+    ASSERT_EQ(sizeof(dc_body_storage_owner_t),32u);
+    ASSERT_EQ(offsetof(dc_body_storage_owner_t,source_transaction),16u);
+    ASSERT_EQ(sizeof(dc_body_allocation_batch_t),32u);
+    ASSERT_EQ(offsetof(dc_body_allocation_batch_t,transaction),24u);PASS();
 }
 int main(void) {RUN(test_root_and_page_match_shared_std430_contract);printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;}
