@@ -967,6 +967,8 @@ build/body_storage_layout_tests: tests/vulkan/body_storage_layout_tests.c includ
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
 build/body_features_tests: tests/vulkan/body_features_tests.c src/vulkan/body_features_gpu.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ -lvulkan -Wl,--wrap=vkGetPhysicalDeviceFeatures2
+build/body_scan_plan_tests: tests/vulkan/body_scan_plan_tests.c src/vulkan/body_scan_gpu.c src/vulkan/body_scan_gpu.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_scan_gpu.c -o $@
 build/gpu.o: src/vulkan/body_features_gpu.h
 $(GPU_SOURCE_BINARIES): src/vulkan/body_features_gpu.h
 test_gpu_tools: build/body_features_tests
