@@ -31,3 +31,7 @@ User correctly clarified that the entire trunk hangs. Expanded diagnostic confir
 **2026-10-17T20:57:51Z**
 
 Expanded full-trunk replay passed core/sync validation without errors. Full make -j4 -i test completed with only the two pre-existing authored-stage failures; no gameplay source changed. Diagnostic now inventories wood in every body and all rigid-capable wood terrain components, plus fixed-wood overlay. Whole 288-pixel trunk/crown body is confirmed suspended by branch-height contacts. Bug remains open; no fix claimed.
+
+**2026-10-17T20:59:55Z**
+
+User explicitly directs fixing whole-component rigid-state propagation. Proceed with consistent corner-inclusive connectivity and saved-scene bond migration; do not edit artwork or loosen initial-terrain holding policy. Replace previous pending design question with implementation.

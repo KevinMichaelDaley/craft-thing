@@ -9,6 +9,28 @@ static int g_pass,g_fail;
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() g_pass++
 
+static void test_corner_connected_pixels_detach_as_one_component(void) {
+    dc_gpu_t *g=NULL;char err[256];dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    for(unsigned y=30;y<64;y++) chunk->cells[y*64+32]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+    chunk->cells[29*64+31]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
+    chunk->cells[28*64+30]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    dc_gpu_body_t body;
+    ASSERT_TRUE(!dc_gpu_read_body_id(g,0x80000001u,&body,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,32,30,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    dc_gpu_body_pixel_t pixels[4];unsigned count=0;
+    bool extracted=dc_gpu_read_pixel_shape(g,0x80000001u,pixels,4,&count,err,sizeof(err));
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+    bool cleared=chunk->cells[29*64+31].material==DC_MATERIAL_AIR&&chunk->cells[28*64+30].material==DC_MATERIAL_AIR;
+    dc_gpu_destroy(g);free(chunk);
+    ASSERT_TRUE(extracted);ASSERT_EQ(count,2u);ASSERT_TRUE(cleared);PASS();
+}
+
 static void test_settled_tree_falls_again_when_supporting_terrain_detaches(void) {
     dc_gpu_t *g=NULL;char err[256];dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     for(unsigned y=56;y<64;y++) for(unsigned x=0;x<64;x++)
@@ -39,6 +61,7 @@ static void test_settled_tree_falls_again_when_supporting_terrain_detaches(void)
     ASSERT_TRUE(platform.y_fp>35*65536);ASSERT_EQ(stats.overflow,0u);PASS();
 }
 int main(void) {
+    RUN(test_corner_connected_pixels_detach_as_one_component);
     RUN(test_settled_tree_falls_again_when_supporting_terrain_detaches);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
