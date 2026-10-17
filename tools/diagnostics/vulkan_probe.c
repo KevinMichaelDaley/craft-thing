@@ -103,13 +103,27 @@ static int initialize_device(probe_t *p) {
         .queueCount = 1,
         .pQueuePriorities = &priority};
     VkPhysicalDeviceVulkan13Features supported13={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+#ifdef DC_PROBE_BUFFER_DEVICE_ADDRESS
+    VkPhysicalDeviceVulkan12Features supported12={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+    supported13.pNext=&supported12;
+#endif
     VkPhysicalDeviceFeatures2 supported={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,.pNext=&supported13};
     vkGetPhysicalDeviceFeatures2(p->physical,&supported);
     if(!supported13.synchronization2) {
         puts("Device lacks required synchronization2");
         return 0;
     }
+#ifdef DC_PROBE_BUFFER_DEVICE_ADDRESS
+    if(!supported12.bufferDeviceAddress) {
+        puts("Device lacks required bufferDeviceAddress");
+        return 0;
+    }
+#endif
     VkPhysicalDeviceVulkan13Features features13={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,.synchronization2=VK_TRUE};
+#ifdef DC_PROBE_BUFFER_DEVICE_ADDRESS
+    VkPhysicalDeviceVulkan12Features features12={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,.bufferDeviceAddress=VK_TRUE};
+    features13.pNext=&features12;
+#endif
     VkDeviceCreateInfo device = {.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
                                  .pNext=&features13,
                                  .queueCreateInfoCount = 1,
