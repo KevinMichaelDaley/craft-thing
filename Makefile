@@ -852,6 +852,7 @@ test_gpu_tools: build/contact_shader_contract_tests
 	./build/body_storage_layout_tests
 	./build/body_storage_growth_tests
 	./build/body_features_tests
+	./build/body_scan_plan_tests
 
 build/contact_shader_contract_tests: tests/vulkan/contact_shader_contract_tests.c src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
 	@mkdir -p build/diagnostics
@@ -969,6 +970,7 @@ build/body_features_tests: tests/vulkan/body_features_tests.c src/vulkan/body_fe
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ -lvulkan -Wl,--wrap=vkGetPhysicalDeviceFeatures2
 build/body_scan_plan_tests: tests/vulkan/body_scan_plan_tests.c src/vulkan/body_scan_gpu.c src/vulkan/body_scan_gpu.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_scan_gpu.c -o $@
+test_gpu_tools: build/body_scan_plan_tests
 build/gpu.o: src/vulkan/body_features_gpu.h
 $(GPU_SOURCE_BINARIES): src/vulkan/body_features_gpu.h
 test_gpu_tools: build/body_features_tests
