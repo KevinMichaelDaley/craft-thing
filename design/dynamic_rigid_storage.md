@@ -71,6 +71,18 @@ ID lookup metadata in parallel. The current source implements/prepares these
 stages incrementally; ticket status and GPU checks distinguish verified pieces
 from unverified or missing behavior.
 
+Release inputs are generation-bearing handles, not reusable slot numbers. Each
+lane validates the immutable generation, atomically claims the owned state, and
+only the winning lane returns that slot to its slab free mask. Duplicate inputs
+therefore cannot decrement the live count twice. Release retains the generation;
+the next successful allocation increments it, making an old handle invalid even
+if the slot has the same material or shape. After all release lanes finish, a
+constant-size publication pass updates the count and consumes the release gate
+so replay is harmless. Geometry/source/appearance retirement belongs to the joint
+transaction before this storage-level release; releasing a slot alone is not a
+complete physical removal operation. Tests cover reuse across directory growth,
+duplicate and invalid handles, stale generations and repeated generation cycles.
+
 Actual allocation failure produces explicit backpressure and leaves the complete
 transaction pending. Removal/reuse, returned memory or a later successful growth
 retries deterministically without skipped IDs or duplicated source pixels. Tests
