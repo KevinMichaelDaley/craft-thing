@@ -33,6 +33,8 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu->device) dc_gpu_chunks_destroy(gpu);
     if (gpu->command_pool) vkDestroyCommandPool(gpu->device, gpu->command_pool, NULL);
     if (gpu->pipeline) vkDestroyPipeline(gpu->device, gpu->pipeline, NULL);
+    if (gpu->simple_draw_pipeline) vkDestroyPipeline(gpu->device, gpu->simple_draw_pipeline, NULL);
+    if (gpu->pixel_draw_pipeline) vkDestroyPipeline(gpu->device, gpu->pixel_draw_pipeline, NULL);
     if (gpu->pipeline_layout) vkDestroyPipelineLayout(gpu->device, gpu->pipeline_layout, NULL);
     if (gpu->descriptor_pool) vkDestroyDescriptorPool(gpu->device, gpu->descriptor_pool, NULL);
     if (gpu->set_layout) vkDestroyDescriptorSetLayout(gpu->device, gpu->set_layout, NULL);
@@ -130,9 +132,12 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
             .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = shader, .pName = "main" },
         .layout = gpu->pipeline_layout };
     VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &gpu->pipeline);
+    bool draw_ready=true;
+    if(result==VK_SUCCESS&&strcmp(path,"build/shaders/pattern.comp.spv")==0)
+        draw_ready=dc_gpu_draw_pipeline_init(gpu,shader,err,cap);
     vkDestroyShaderModule(gpu->device, shader, NULL);
     if (result != VK_SUCCESS) return error(err, cap, "Cannot create compute pipeline");
-    return true;
+    return draw_ready;
 }
 
 static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
@@ -325,21 +330,21 @@ static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7], char *err, uin
     if (vkBeginCommandBuffer(gpu->command, &begin) != VK_SUCCESS)
         return error(err, cap, "Cannot begin compute command buffer");
     VkMemoryBarrier2 upload_barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-        .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
-        .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
+        .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT };
     VkDependencyInfo upload_dependency = { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
         .memoryBarrierCount = 1, .pMemoryBarriers = &upload_barrier };
     vkCmdPipelineBarrier2(gpu->command, &upload_dependency);
-    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->pipeline);
-    vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
-        gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
-    vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 28, push);
-    uint32_t dispatch_width = push[2] == 2u ? gpu->view_width : gpu->width;
-    uint32_t dispatch_height = push[2] == 2u ? gpu->view_height : gpu->height;
-    vkCmdDispatch(gpu->command, (dispatch_width + 15u) / 16u,
-                  (dispatch_height + 15u) / 16u, 1);
+    if(push[2]==2u) dc_gpu_record_draw(gpu,push);
+    else {
+        vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->pipeline);
+        vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
+            gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
+        vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 28, push);
+        vkCmdDispatch(gpu->command,(gpu->width+15u)/16u,(gpu->height+15u)/16u,1);
+    }
     VkMemoryBarrier2 barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,

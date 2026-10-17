@@ -361,6 +361,10 @@ bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_mpm_buffers_destroy(dc_gpu_t *gpu);
 void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_mpm(dc_gpu_t *gpu);
+/** Create exact render variants sharing the ordinary descriptor interface. */
+bool dc_gpu_draw_pipeline_init(dc_gpu_t *gpu,VkShaderModule module,char *err,uint32_t cap);
+/** Record a draw with GPU body-type selection and the configured viewport. */
+void dc_gpu_record_draw(dc_gpu_t *gpu,const uint32_t push[7]);
 /** Initialize the window swapchain and its image-owned synchronization. */
 bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t width, uint32_t height,
                         char *err, uint32_t cap);

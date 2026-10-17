@@ -28,6 +28,7 @@ GLSLANG ?= glslangValidator
 
 GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/broadphase_gpu.o build/contact_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
 GPU_OBJ += build/solver_gpu.o
+GPU_OBJ += build/draw_gpu.o
 GPU_OBJ += build/compound_gpu.o build/component_gpu.o build/pixel_gpu.o
 GPU_OBJ += build/structural_store_gpu.o
 GPU_OBJ += build/structural_store_validate.o
@@ -66,6 +67,9 @@ $(SOLVER_SHADER): shaders/sim/rigid_solver.comp shaders/sim/rigid_body.glsl shad
 build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_bench build/dungeoncraft_quarter_native build/marker_slot_tests build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench: $(SOLVER_SHADER)
 
 build/solver_gpu.o: src/vulkan/solver_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+build/draw_gpu.o: src/vulkan/draw_gpu.c src/vulkan/gpu_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 CHUNK_OBJ = build/chunk.o

@@ -133,18 +133,22 @@ void main() {
     uvec2 p = gl_GlobalInvocationID.xy;
     if (RIGID_RASTER_STAGE == 2u) {
         uint lane=gl_LocalInvocationIndex;
-        if(lane<6u) raster_dispatch[lane]=lane%3u==0u?0u:1u;
         if(lane<BODY_CAPACITY)
-            raster_legacy[lane]=uint(lane<params.body_count&&bodies[lane].enabled!=0u&&bodies[lane].visible!=0u&&!pixel_body(bodies[lane]));
+            raster_legacy[lane]=uint(lane<params.body_count&&bodies[lane].enabled!=0u&&((params.mode&512u)!=0u||bodies[lane].visible!=0u)&&!pixel_body(bodies[lane]));
         barrier();
         for(uint stride=32u;stride>0u;stride/=2u) {
             if(lane<stride) raster_legacy[lane]|=raster_legacy[lane+stride];
             barrier();
         }
-        if(lane==0u&&((params.mode&256u)==0u||data[structural_base()+16u]!=0u)) {
-            uint selected=raster_legacy[0]!=0u?0u:3u;
-            raster_dispatch[selected]=(params.width+15u)/16u;
-            raster_dispatch[selected+1u]=(params.height+15u)/16u;
+        if(lane<6u) {
+            uint axis=lane%3u,value=axis==0u?0u:1u;
+            bool refresh=(params.mode&256u)==0u||data[structural_base()+16u]!=0u;
+            uint selected=raster_legacy[0]!=0u?0u:1u;
+            if(refresh&&lane/3u==selected&&axis<2u) {
+                uvec2 extent=(params.mode&512u)!=0u?params.origin_x:uvec2(params.width,params.height);
+                value=(extent[axis]+15u)/16u;
+            }
+            raster_dispatch[lane]=value;
         }
         return;
     }

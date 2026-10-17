@@ -114,3 +114,7 @@ Cooperative runtime full validation complete: make test exit0, 341 reported pass
 **2026-10-17T00:47:34Z**
 
 Visible-body native baseline corrected: concave fixture now explicitly selects material/structural rendering. 640x360 physics/display: mean 36.921 ms, p95 45.220 ms, cold 104.098 ms, 27.085 presented FPS; still RED. Earlier native timings used overlay NONE, which omitted body material drawing. MPM same-blob generic/specialized/original controls were 35.961/35.896/36.240 ms with indistinguishable GPU MPM time; no runtime split adopted. Both actual concave visual tests pass validation, contacts/conservation and stable paused images. Typed-draw RED: missing pipeline handles and hidden enabled legacy classification fail as expected; eight-selector and image tests compile.
+
+**2026-10-17T00:55:51Z**
+
+Typed drawing passes eight GPU selector cases plus byte-identical paused images across all five overlays, cropped viewport and hidden enabled legacy fallback. Physical five-plane occupancy/volume/face output remains identical. Visible native640x360 mean35.789ms,p9544.059ms,cold103.990ms,27.941FPS versus36.921ms generic baseline. No30FPS claim. Both draw variants use GPU/configuration selection; no CPU geometry scan. Classifier indirect words now have one final writer each, removing cross-lane reset/overwrite ordering dependence. Full headless341-pass checkpoint predates this draw change; final broad rerun pending.

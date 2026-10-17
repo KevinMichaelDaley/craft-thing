@@ -5,7 +5,7 @@ import re
 
 
 def generate(source, pixel_types=False):
-    if pixel_types:
+    if pixel_types and "#define DC_RIGID_PIXEL_ONLY " not in source:
         declaration = """layout(constant_id=1) const bool DIAGNOSTIC_PIXEL_ONLY=false;
 #define DC_RIGID_PIXEL_ONLY DIAGNOSTIC_PIXEL_ONLY
 """

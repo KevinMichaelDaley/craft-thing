@@ -14,8 +14,8 @@ class ShaderVariantTests(unittest.TestCase):
     def test_pixel_render_flag_precedes_shared_geometry_include(self):
         source = (ROOT / "shaders/sim/pattern.comp").read_text()
         candidate = VARIANTS.generate(source, pixel_types=True)
-        declaration = "layout(constant_id=1) const bool DIAGNOSTIC_PIXEL_ONLY=false;"
-        macro = "#define DC_RIGID_PIXEL_ONLY DIAGNOSTIC_PIXEL_ONLY"
+        declaration = "layout(constant_id=1) const bool DRAW_PIXEL_ONLY=false;"
+        macro = "#define DC_RIGID_PIXEL_ONLY DRAW_PIXEL_ONLY"
         self.assertIn(declaration, candidate)
         self.assertLess(candidate.index(macro),
                         candidate.index('#include "rigid_body.glsl"'))
