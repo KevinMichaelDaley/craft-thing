@@ -54,9 +54,15 @@ converted to physical pixel geometry when first carved. A carved structural
 member leaves the support graph and releases its remaining pieces.
 
 Loaded solid terrain stays fixed even when initially detached. Its original
-four-neighbor solid connections are recorded on the GPU and saved with the cells.
+edge and corner solid connections are recorded on the GPU and saved with the cells.
 Breaking those connections releases resulting isolated components; unrelated
 edits leave existing islands fixed. Newly painted solids retain automatic extraction.
+
+Rigid conversion propagates through the entire connected component, including
+corner connections across chunk seams. Carving and fracture use the same
+connectivity. On reopening an older scene save, missing corner-bond history is
+recovered from the original prop without replacing materials, colors, or player
+edits. This releases tree pixels left behind by the former edge-only conversion.
 
 `make test_scene_placement` verifies central-chunk content, matched physical
 ground at both exterior joins, stable paused frames, real brush editing and

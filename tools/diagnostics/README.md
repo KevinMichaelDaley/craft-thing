@@ -18,6 +18,8 @@ entire moving trunk/crown.
 Optional pairs of world X/Y coordinates erase those cells in the replay before
 stepping. The tool never saves over the input world. This distinguishes actual
 terrain supports from stale sleep flags, cold-page freezing, and solver rollback.
+Set `DC_SUPPORT_PROP=assets/props/level_piece01.prop/asset.cprop` to exercise
+the scene's old-save corner-bond migration before stepping, without saving it.
 
 ## Device health probe
 

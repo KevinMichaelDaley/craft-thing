@@ -47,11 +47,13 @@ anchor-u8/object-u32 map, selected explicit state variant, signed64 world origin
 pivot and stable transaction identity. Visual-only playback never replaces mass
 or collider geometry every frame.
 
-Rigid-role cells are grouped by four-neighbor connectivity within authored object
+Rigid-role cells are grouped by edge-and-corner connectivity within authored object
 identity, preserving all exact mixed-material occupied cells, holes and separate
 disconnected components. Material composition determines mass/COM/inertia and
 buoyancy; no per-object float/sink or density override. Terrain writes ordinary
 material, without an extraction exemption or fabricated root.
+The runtime terrain conversion, carving and fracture paths share this connectivity;
+authored admission must preserve it when its remaining integration work is completed.
 
 Structural-role cells instantiate explicit marked components through the existing
 mechanically principled graph. Define a tested representation mapping authored

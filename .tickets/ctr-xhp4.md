@@ -1,6 +1,6 @@
 ---
 id: ctr-xhp4
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-17T20:31:48Z
@@ -39,3 +39,7 @@ User explicitly directs fixing whole-component rigid-state propagation. Proceed 
 **2026-10-17T21:08:11Z**
 
 Implemented complete edge-and-corner component connectivity in parallel local/seam union, eight original-terrain bonds and consistent fracture/carve connectivity. Added GPU old-save corner-bond recovery from original prop, preserving material/RGB/player edits. Focused core/sync validation clean: propagation 3/3, terrain prop incl migration 5/5, carve 4/4, simultaneous color fracture 1/1, graphical world 3/3. Actual saved-world replay (no erasures) releases all remaining connected tree pixels and moves the full 288-pixel trunk from y181.8096 to y190.8096 in eight ticks; rest30 clears immediately. Full suite next.
+
+**2026-10-17T21:12:45Z**
+
+Completed whole-component propagation including diagonal links and four-chunk seams. Saved 288-pixel tree falls 9 pixels in eight ticks with no manual erasures. Full suite completed; three hollow-world fixtures required moving their intentionally separate seed one pixel away from diagonal contact. Corrected pixel_world suite passes 8/8 under Vulkan core/synchronization validation. Only remaining suite failures are the two existing ctr-ojvy authored-stage REDs. Focused propagation/scene migration/carve/color/world checks all passed. Source artwork and player edits preserved.
