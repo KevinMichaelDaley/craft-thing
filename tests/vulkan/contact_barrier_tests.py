@@ -4,7 +4,19 @@ import re
 import unittest
 
 
+def unsafe_shared_return(source):
+    return re.search(r"if\s*\(group_found\s*==\s*0u\)", source) is not None
+
+
 class ContactBarrierTests(unittest.TestCase):
+    def test_guard_accepts_stats_reads_and_rejects_shared_group_returns(self):
+        self.assertFalse(unsafe_shared_return(
+            "if (lane == 0u) { if(group_found==0u) atomicAdd(skipped,1u); }"))
+        self.assertTrue(unsafe_shared_return(
+            "if(group_found==0u) { atomicAdd(skipped,1u); return; }"))
+        self.assertTrue(unsafe_shared_return(
+            "if (group_found == 0u) return;"))
+
     def test_terrain_return_predicate_is_captured_before_shared_reset(self):
         source = (pathlib.Path(__file__).resolve().parents[2] /
                   "shaders/sim/contacts.comp").read_text()
@@ -13,7 +25,7 @@ class ContactBarrierTests(unittest.TestCase):
         self.assertRegex(source, re.compile(
             r"bool\s+empty_terrain\s*=\s*group_found\s*==\s*0u\s*;"
             r"\s*barrier\(\);\s*if\s*\(empty_terrain\)", re.S))
-        self.assertNotRegex(source, r"if\s*\(group_found\s*==\s*0u\)")
+        self.assertFalse(unsafe_shared_return(source))
 
     def test_hydro_floor_is_captured_before_reusing_reduction_scratch(self):
         source = (pathlib.Path(__file__).resolve().parents[2] /
