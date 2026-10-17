@@ -41,3 +41,7 @@ Prepared device-local owner verification binary/SPIR-V for90→200→1025 bodies
 **2026-10-17T08:22:08Z**
 
 Registered all new GREEN CPU contracts in normal test_gpu_tools. Complete CPU tools regression passes (including shader/dependency contracts and resource tests), log build/diagnostics/body-storage-tools-regression.log. No GPU submissions in this run. Full main GPU suite remains paused and parent renderer suite retains the GPU lease; device-local owner validation remains queued.
+
+**2026-10-17T08:27:14Z**
+
+Required-feature helper RED→GREEN2/2 CPU contracts verifies owned stable pNext chain, precise unsupported errors/output preservation, and enables only synchronization2+BDA (not queried captureReplay/multiDevice extras). Normal engine device creation now calls this helper; gpu.o builds warning-free and regular CPU tools regression passes. Actual engine GPU regression after this feature enablement remains pending lease release; record/shape layout and gameplay fixed64 ABI remain unchanged.

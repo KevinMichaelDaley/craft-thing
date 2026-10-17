@@ -12,13 +12,19 @@ static void test_device_local_store_growth_copies_directory_preserves_records_an
         ASSERT_TRUE(dc_gpu_body_growth_prepare(&gpu,&store,counts[stage],&growth,err,sizeof(err)));
         ASSERT_TRUE(begin(&probe));
         ASSERT_TRUE(dc_gpu_body_growth_record(probe.command,probe.buffer,&store,&growth,stage+1));
+        VkMemoryBarrier overwrite={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER,.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT};
+        vkCmdPipelineBarrier(probe.command,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,0,1,&overwrite,0,NULL,0,NULL);
         vkCmdUpdateBuffer(probe.command,probe.buffer,offsetof(dc_body_storage_root_t,live_count),sizeof(uint32_t),&counts[stage]);
         VkMemoryBarrier upload={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER,.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,
             .dstAccessMask=VK_ACCESS_SHADER_READ_BIT|VK_ACCESS_SHADER_WRITE_BIT};
         vkCmdPipelineBarrier(probe.command,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,0,1,&upload,0,NULL,0,NULL);
         vkCmdBindPipeline(probe.command,VK_PIPELINE_BIND_POINT_COMPUTE,probe.pipeline);
         vkCmdBindDescriptorSets(probe.command,VK_PIPELINE_BIND_POINT_COMPUTE,probe.layout,0,1,&probe.descriptor,0,NULL);
-        vkCmdDispatch(probe.command,(counts[stage]+63u)/64u,1,1);host_barrier(&probe,1);
+        vkCmdDispatch(probe.command,(counts[stage]+63u)/64u,1,1);
+        VkMemoryBarrier readback={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+            .srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT|VK_ACCESS_SHADER_WRITE_BIT,.dstAccessMask=VK_ACCESS_HOST_READ_BIT};
+        vkCmdPipelineBarrier(probe.command,VK_PIPELINE_STAGE_TRANSFER_BIT|VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_PIPELINE_STAGE_HOST_BIT,0,1,&readback,0,NULL,0,NULL);
         ASSERT_EQ(vkEndCommandBuffer(probe.command),VK_SUCCESS);
         if(!submit(&probe,"transactional body store growth",1)) exit(2);
         ASSERT_TRUE(dc_gpu_body_growth_finish(&gpu,&store,&growth,stage+1));
