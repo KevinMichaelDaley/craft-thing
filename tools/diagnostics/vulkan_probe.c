@@ -5,7 +5,10 @@
 
 #include <vulkan/vulkan.h>
 
-enum { PROBE_WORDS = 16 };
+#ifndef DC_PROBE_WORDS
+#define DC_PROBE_WORDS 16
+#endif
+enum { PROBE_WORDS = DC_PROBE_WORDS };
 static const uint64_t fence_deadline_ns = UINT64_C(1000000000);
 
 typedef struct {

@@ -33,3 +33,7 @@ Shared C/GLSL root64/page48 ABI and common typed body/data accessors now GPU ver
 **2026-10-17T08:18:39Z**
 
 Transactional resource-owner RED compiled and failed2tests, then CPU-mocked GREEN2/2: growth65→200→1025, old store immutable until completed submission, submitted preparations cannot be discarded, and each allocation-stage failure releases pending resources without publication. Body blocks retain addresses; GPU transfer copies old directory prefix and initializes new block; host writes resource-address entries only. Runtime consumer migration and actual GPU owner validation remain pending.
+
+**2026-10-17T08:21:05Z**
+
+Prepared device-local owner verification binary/SPIR-V for90→200→1025 bodies using GPU fill/directory copies and record persistence. Build warning-free and SPIR-V validation passes; GPU run deliberately deferred until parent renderer full-suite/display lease ends. Shared bounded-probe fixture extracted and configurable output size prevents diagnostic buffer overrun. CPU ownership/ABI/feature/allocation/diagnostic contracts15/15 pass; current gameplay remains64.
