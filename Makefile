@@ -853,6 +853,7 @@ test_gpu_tools: build/contact_shader_contract_tests
 	./build/body_storage_growth_tests
 	./build/body_features_tests
 	./build/body_scan_plan_tests
+	./build/body_scan_recording_tests
 
 build/contact_shader_contract_tests: tests/vulkan/contact_shader_contract_tests.c src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
 	@mkdir -p build/diagnostics
@@ -972,6 +973,7 @@ build/body_scan_plan_tests: tests/vulkan/body_scan_plan_tests.c src/vulkan/body_
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_scan_gpu.c -o $@
 build/body_scan_recording_tests: tests/vulkan/body_scan_recording_tests.c src/vulkan/body_scan_gpu.c src/vulkan/body_scan_record_gpu.c src/vulkan/body_scan_gpu.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_scan_gpu.c src/vulkan/body_scan_record_gpu.c -o $@ -lvulkan -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdPipelineBarrier2
+test_gpu_tools: build/body_scan_recording_tests
 test_gpu_tools: build/body_scan_plan_tests
 build/gpu.o: src/vulkan/body_features_gpu.h
 $(GPU_SOURCE_BINARIES): src/vulkan/body_features_gpu.h
