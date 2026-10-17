@@ -106,3 +106,7 @@ Full validation RED: pixel_properties_gpu_tests compiles, first two reductions p
 **2026-10-17T00:07:36Z**
 
 Native 640x360 physics and display displacement checkpoint: clean 30-sample concave mean 44.114 ms, p95 56.462 ms, cold 93.263 ms, 22.669 FPS; target remains RED. Diagnostic run 44.150 ms confirms displacement column 1.073 + lateral 3.441 ms per six-tick fluid cycle (~15 ms before), transport 9.763/4.329/8.098/12.565 ms; final hydro 0.758 ms, contacts 3.783 ms, other solver 1.270 ms. MPM CPU compiler experiment: generic SIMD8, 8551 instructions, 440 non-SSA registers, 7.55 s JIT; grid specialization SIMD16, 719 instructions, 61 registers, 0.452 s JIT; zero spills both. GPU A/B pending full regression; not a claimed speedup.
+
+**2026-10-17T00:36:05Z**
+
+Cooperative runtime full validation complete: make test exit0, 341 reported passes, zero failures and zero Vulkan validation errors. Log build/diagnostics/cooperative-fluid-full-test-retry.log. No runtime cleanup change was needed after review; actual displayed concave/UI and quarter performance checks remain queued. Thirty FPS and cold extraction gates remain open.
