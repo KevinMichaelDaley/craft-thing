@@ -17,6 +17,7 @@ enum {
     WIDTH = NATIVE_PERF_WIDTH,
     HEIGHT = NATIVE_PERF_HEIGHT,
     SAMPLES = 30,
+    SUSTAINED_SAMPLES = 180,
     PHYSICS_STEPS = 2,
     FLUID_CADENCE = 6
 };
@@ -185,8 +186,10 @@ static void native_scene(unsigned load) {
         if (load == 2)
             printf("native concave warm frame%u complete\n", i);
     }
-    double samples[SAMPLES], start = seconds();
-    for (unsigned i = 0; i < SAMPLES; i++) {
+    unsigned sample_count = getenv("DC_NATIVE_SUSTAINED")
+                                ? SUSTAINED_SAMPLES : SAMPLES;
+    double samples[SUSTAINED_SAMPLES], start = seconds();
+    for (unsigned i = 0; i < sample_count; i++) {
         SDL_Event event;
         while (SDL_PollEvent(&event))
             ASSERT_TRUE(event.type != SDL_QUIT);
@@ -196,8 +199,8 @@ static void native_scene(unsigned load) {
         samples[i] = (seconds() - tick) * 1000.;
     }
     ASSERT_EQ(vkQueueWaitIdle(g->queue), VK_SUCCESS);
-    double wall_ms = (seconds() - start) * 1000. / SAMPLES;
-    qsort(samples, SAMPLES, sizeof(*samples), compare_sample);
+    double wall_ms = (seconds() - start) * 1000. / sample_count;
+    qsort(samples, sample_count, sizeof(*samples), compare_sample);
     uint64_t stage_ns[3] = {0};
     bool profile = load == 2 && getenv("DC_NATIVE_DIAG");
     g->component_profile = profile;
@@ -217,17 +220,17 @@ static void native_scene(unsigned load) {
            load, g->width, g->height, g->swap_extent.width,
            g->swap_extent.height, DC_GPU_CHUNK_SLOTS, FLUID_CADENCE,
            device.deviceName);
-    printf("setup %.3fs cold %.3fms frame mean %.3fms p95 %.3fms max %.3fms; "
+    printf("samples %u setup %.3fs cold %.3fms frame mean %.3fms p95 %.3fms max %.3fms; "
            "offscreen1tick GPU rigid %.3f fluid %.3f MPM %.3fms\n",
-           loaded - began, cold_ms, wall_ms,
-           samples[(SAMPLES * 95 + 99) / 100 - 1], samples[SAMPLES - 1],
+           sample_count, loaded - began, cold_ms, wall_ms,
+           samples[(sample_count * 95 + 99) / 100 - 1], samples[sample_count - 1],
            stage_ns[0] / 6e6, stage_ns[1] / 6e6, stage_ns[2] / 6e6);
     printf("presented FPS %.3f; fluid variants %s\n", 1000. / wall_ms,
            getenv("DC_FLUID_VARIANTS") ? getenv("DC_FLUID_VARIANTS")
                                        : "production");
     dc_gpu_destroy(g);
     ASSERT_TRUE(wall_ms <= 1000. / 30.);
-    ASSERT_TRUE(samples[(SAMPLES * 95 + 99) / 100 - 1] <= 1000. / 30.);
+    ASSERT_TRUE(samples[(sample_count * 95 + 99) / 100 - 1] <= 1000. / 30.);
     PASS();
 }
 static void test_native_dry_presented_frame_meets_30fps(void) {
