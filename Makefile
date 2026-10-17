@@ -458,6 +458,7 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/fluid_aperture_tests
 	./build/raster_dispatch_tests
 	./build/contact_dispatch_tests
+	./build/mpm_control_tests
 	./build/raster_equivalence_tests
 	./build/fluid_transport_tests
 	./build/fluid_transport_long_tests
@@ -861,6 +862,9 @@ build/diagnostics/mpm_control_schedule.spv: shaders/sim/mpm_component.comp tools
 	python3 tools/diagnostics/mpm_control_schedule.py $< build/diagnostics/mpm_control_schedule.comp
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ build/diagnostics/mpm_control_schedule.comp
 	spirv-val --target-env vulkan1.3 $@
-build/mpm_control_tests: tests/vulkan/mpm_control_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/mpm_control_schedule.spv
+build/mpm_control_tests: tests/vulkan/mpm_control_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) $(MPM_COMPONENT_SHADER) build/diagnostics/mpm_control_schedule.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/diagnostics/particle_case: tools/diagnostics/particle_case.c tests/vulkan/particle_tests.c build/particle_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(STREAM_OBJ) -o $@ $(LDLIBS)
+test: build/mpm_control_tests
 

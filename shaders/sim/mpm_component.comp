@@ -38,8 +38,10 @@ void main() {
     uint tiles_x = (params.width + 15u) / 16u;
     uint control = 3u + 2u * tiles_x * ((params.height + 15u) / 16u);
     if (params.mode == 5u) {
-        activity[control + 1u] = activity[control] != 0u ? activity[0] : 0u;
-        activity[control] = 0u;
+        if (all(equal(gl_GlobalInvocationID,uvec3(0)))) {
+            activity[control + 1u] = activity[control] != 0u ? activity[0] : 0u;
+            activity[control] = 0u;
+        }
         return;
     }
     uint tile = activity[3u + gl_WorkGroupID.x];

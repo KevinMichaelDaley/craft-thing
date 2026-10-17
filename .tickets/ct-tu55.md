@@ -138,3 +138,7 @@ Immutable source bitmap skips only initially ineligible or zero-allowance source
 **2026-10-17T03:12:21Z**
 
 Contact recorder removes intermediate publication barriers between atomic candidate passes, retaining reset-to-indirect and final-to-solver/host dependencies. CPU recording tests2/2 pass; exact44-contact/occupancy/image comparison and9contact cases pass with synchronization validation explicitly enabled (noSYNC/VUID diagnostics). Native run31.120ms mean,p9535.282ms,cold101.789ms,32.134FPS; barrier consolidation has no clear whole-frame timing gain and does not meet p95 target. Full current regression pending.
+
+**2026-10-17T03:48:48Z**
+
+Full checkpoint0766758 regression before MPM control fix exited0:372reportedpasses,0failures,0VUIDs. Subsequent forced-schedule test confirmed ct-fmj6; full rerun after MPM changes remains required.

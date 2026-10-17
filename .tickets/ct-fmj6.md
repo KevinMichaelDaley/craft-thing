@@ -26,3 +26,7 @@ Controlled schedule source generator and GPU test compile and SPIR-V validate. G
 **2026-10-17T03:43:36Z**
 
 Controlled production-source schedule test fails as expected: later lanes overwrite the correct7-item convergence count with0, noVUIDs. Full checkpoint0766758 headless regression separately completed372reportedpasses,0failures,0VUIDs before this fix.
+
+**2026-10-17T03:48:48Z**
+
+Minimal single-global-invocation publisher passes the forced legal schedule (count7 retained,flagcleared,untouchedwords unchanged). Actual production module and instrumented module SPIR-V validate. Existing winding dirt label/count and wet dirt seam/mud integration regressions pass2/2 withVulkanvalidation. Full regression and displayed acceptance remain pending before close.
