@@ -149,7 +149,8 @@ static void test_grounded_powders_bear_rigid_loads(void) {
         ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
         uint64_t mass=0;for(unsigned i=0;i<DC_MPM_PARTICLES_PER_CHUNK;i++) mass+=chunk->particles[i].mass_fp;
         ASSERT_EQ(mass,(uint64_t)2048*(trial%3==0?78643u:trial%3==1?176947u:65536u));
-        held=held&&fastest<.1f&&result.y_fp<(int)(surface-6)*65536;
+        held=held&&fastest<.1f&&(trial==6?result.y_fp>(int)(surface-8)*65536:
+            result.y_fp<(int)(surface-6)*65536);
         dc_gpu_destroy(g);free(chunk);
     }
     ASSERT_TRUE(held);PASS();
@@ -168,15 +169,21 @@ static void test_embedded_tree_starts_in_equilibrium_without_soil_jacking(void) 
     ASSERT_TRUE(dc_gpu_set_rigid_solver(g,true));
     ASSERT_TRUE(dc_gpu_set_body_motion(g,77,0,0,2,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
-    float highest=10.5f,lowest=10.5f;
+    float highest=10.5f,lowest=10.5f,final_speed=0;
     for(unsigned tick=0;tick<180;tick++) {
         ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
         dc_gpu_body_t result;ASSERT_TRUE(dc_gpu_read_body_id(g,77,&result,err,sizeof(err)));
         highest=fminf(highest,result.y_fp/65536.f);lowest=fmaxf(lowest,result.y_fp/65536.f);
+        final_speed=fabsf(result.vy_fp/65536.f);
     }
     printf("embedded trunk equilibrium y10.5 range%.4f..%.4f\n",highest,lowest);
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+    uint64_t mass=0;unsigned refilled=0;
+    for(unsigned i=0;i<DC_MPM_PARTICLES_PER_CHUNK;i++) mass+=chunk->particles[i].mass_fp;
+    for(unsigned y=24;y<26;y++) for(unsigned x=31;x<33;x++) refilled+=chunk->cells[y*64+x].material==DC_MATERIAL_DIRT;
     dc_gpu_destroy(g);free(chunk);
-    ASSERT_TRUE(highest>10.25f);ASSERT_TRUE(lowest<11.25f);PASS();
+    ASSERT_TRUE(highest>10.25f);ASSERT_TRUE(lowest<11.25f);
+    ASSERT_TRUE(final_speed<.01f);ASSERT_EQ(refilled,0u);ASSERT_EQ(mass,(uint64_t)2044*78643u);PASS();
 }
 int main(void) {
     RUN(test_embedded_tree_starts_in_equilibrium_without_soil_jacking);

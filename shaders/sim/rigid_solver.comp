@@ -142,6 +142,7 @@ float weight(uint a, uint b,bool conservative) {
     return 0.8 / max(float(degree)/(conservative?1.0:SUM_SCALE), 1.0);
 }
 #include "rigid_grain.glsl"
+#include "grain_bed.glsl"
 void solve_contact(uint i, bool impulse) {
     uint c = cb() + 12u + i * 32u, s = cs(i), a = data[s + 2u], b = data[s + 3u];
     if (a == BODY_CAPACITY)
@@ -151,12 +152,18 @@ void solve_contact(uint i, bool impulse) {
     vec2 pa = position(ba) + ba.center + ra, pb = getv(s + 9u);
     vec2 va = velocity(ba) + ba.angular_velocity * vec2(-ra.y, ra.x), vb = vec2(0);
     uint grain_ref=grain_reference(c);
+    float creep=getf(s+12u);
     float mb = 0.0, ib = 0.0;
     if(grain_ref!=0u) {
         Particle p=particles[grain_ref-1u];
         pb=grain_position(c,grain_ref-1u)+rb;
         vb=vec2(p.vx_fp,p.vy_fp)/65536.0;
         mb=p.mass_fp!=0u?65536.0/float(p.mass_fp):0.0;
+        if(creep>=0.0) {
+            mb=0.0;
+            pb+=getf(s+13u)*getv(c+8u);
+            pb.y+=creep*DT;vb.y=creep;
+        }
     }
     if (b != BODY_CAPACITY) {
         Body bb = contact_body(b);
@@ -173,7 +180,7 @@ void solve_contact(uint i, bool impulse) {
     float wt = ba.inverse_mass + mb + ba.inverse_inertia * at * at + ib * bt * bt;
     if (wn <= 0.0)
         return;
-    float scale = weight(a, b,grain_ref!=0u||data[s+11u]==0u), dn = 0.0, dt = 0.0;
+    float scale = weight(a, b,(grain_ref!=0u&&creep<0.0)||data[s+11u]==0u), dn = 0.0, dt = 0.0;
     if(grain_ref!=0u) scale=min(scale,0.8/float(max(grain_scratch[(grain_ref-1u)*4u+3u],1u)));
     if (impulse) {
         if (dot(pa - pb, n) > 1.0 / 65536.0 && getf(s) == 0.0)
@@ -217,6 +224,7 @@ void solve_contact(uint i, bool impulse) {
 #include "rigid_bonds.glsl"
 void main() {
     uint i = gl_GlobalInvocationID.x, h = sb();
+    if(PHASE>=GRAIN_BED_INIT) {grain_bed_phase(i);return;}
     if(PHASE>=GRAIN_PREPARE) {grain_phase(i);return;}
     if(PHASE>=12u) {solve_bonds(PHASE);return;}
     if (PHASE == RESET) {
@@ -254,7 +262,16 @@ void main() {
         if(dot(pa-pb,normal)<=REST_CONTACT_DISTANCE && normal.y<-.5)
             atomicOr(data[bs(a)+REST_FLAGS_WORD],REST_SUPPORTED);
         uint grain_ref=grain_reference(c);
-        bool moving=grain_ref!=0u;
+        float creep=grain_ref!=0u&&normal.y<-.5?grain_bed_creep(ba,c,grain_ref):-1.0;
+        putf(s+12u,creep);
+        if(creep>=0.0) {
+            /* Existing granular overlap represents the loaded bed's rest
+               configuration. Resist new compression without lifting the body
+               out of that configuration and letting grains ratchet beneath it. */
+            vec2 start=getv(bs(a)+6u)+ba.center+body_rotate(getv(s+4u),getf(bs(a)+8u));
+            putf(s+13u,min(dot(start-pb,normal),0.0));
+        }
+        bool moving=grain_ref!=0u&&creep<0.0;
         if(grain_ref!=0u) {
             Particle p=particles[grain_ref-1u];
             putv(s+6u,pb-grain_position(c,grain_ref-1u));
@@ -265,7 +282,7 @@ void main() {
            body mobility fraction, and exclude nonbinding speculative rows
            from rigid preconditioning. Those rows retain conservative weights. */
         float degree=1.0;
-        if(grain_ref!=0u) {
+        if(grain_ref!=0u&&creep<0.0) {
             float arm=body_cross(ra,normal);
             float body_weight=ba.inverse_mass+ba.inverse_inertia*arm*arm;
             float grain_weight=65536.0/float(particles[grain_ref-1u].mass_fp);

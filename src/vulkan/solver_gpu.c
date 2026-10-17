@@ -23,9 +23,11 @@ typedef enum {
     SOLVER_BOND_RESET,
     SOLVER_GRAIN_PREPARE,
     SOLVER_GRAIN_POSITION,
-    SOLVER_GRAIN_VELOCITY
+    SOLVER_GRAIN_VELOCITY,
+    SOLVER_GRAIN_BED_INIT,
+    SOLVER_GRAIN_BED_JUMP
 } solver_phase_t;
-_Static_assert(SOLVER_GRAIN_VELOCITY + 1 == DC_GPU_SOLVER_PHASE_COUNT,
+_Static_assert(SOLVER_GRAIN_BED_JUMP + 1 == DC_GPU_SOLVER_PHASE_COUNT,
                "GPU solver phase count changed");
 static bool error(char *err, uint32_t cap, const char *message) {
     if (err && cap)
@@ -205,7 +207,9 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     uint32_t phase = mode & SOLVER_PHASE_MASK;
-    if (phase >= SOLVER_BOND_POSITION && phase <= SOLVER_BOND_RESET) {
+    if (phase >= SOLVER_GRAIN_BED_INIT) {
+        vkCmdDispatch(gpu->command, (gpu->width * gpu->height + 63u) / 64u, 1, 1);
+    } else if (phase >= SOLVER_BOND_POSITION && phase <= SOLVER_BOND_RESET) {
         VkDeviceSize offset =
             sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
             (VkDeviceSize)(dc_gpu_structural_word_offset(gpu) + 9u) *
@@ -238,6 +242,9 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
     vkCmdPipelineBarrier2(gpu->command, &dep);
 }
 void dc_gpu_record_solver(dc_gpu_t *gpu) {
+    dispatch(gpu, SOLVER_GRAIN_BED_INIT, false);
+    for (uint32_t span=1, pass=0; span<gpu->height; span*=2, pass++)
+        dispatch(gpu, SOLVER_GRAIN_BED_JUMP | (pass << 8u), false);
     dispatch(gpu, SOLVER_RESET, false);
     dispatch(gpu, SOLVER_BEGIN_FRAME, false);
     if (gpu->component_profile)
