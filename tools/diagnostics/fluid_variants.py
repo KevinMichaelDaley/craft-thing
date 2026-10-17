@@ -4,7 +4,13 @@ import pathlib
 import re
 
 
-def generate(source):
+def generate(source, pixel_types=False):
+    if pixel_types:
+        declaration = """layout(constant_id=1) const bool DIAGNOSTIC_PIXEL_ONLY=false;
+#define DC_RIGID_PIXEL_ONLY DIAGNOSTIC_PIXEL_ONLY
+"""
+        source = source.replace('#include "rigid_body.glsl"',
+                                declaration + '#include "rigid_body.glsl"', 1)
     candidate = source.replace("params.mode", "dispatch_mode()")
     declaration = re.search(r"}\s*params;", candidate)
     if declaration is None:
@@ -22,9 +28,10 @@ def main():
     args = parser.parse_args()
     root = pathlib.Path(__file__).resolve().parents[2]
     args.output.mkdir(parents=True, exist_ok=True)
-    for name in ("fluid", "projection", "mpm"):
+    for name in ("fluid", "projection", "mpm", "pattern"):
         path = args.output / (name + "_specialized.comp")
-        path.write_text(generate((root / "shaders/sim" / (name + ".comp")).read_text()))
+        path.write_text(generate((root / "shaders/sim" / (name + ".comp")).read_text(),
+                                 pixel_types=name == "pattern"))
         print(path)
     body = (root / "shaders/sim/rigid_body.glsl").read_text()
     (args.output / "rigid_body.glsl").write_text(body)

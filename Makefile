@@ -7,6 +7,7 @@ tools-offline:
 	python3 tools/bootstrap_vulkan.py bootstrap --offline
 test_tools:
 	python3 tests/tools/toolchain_tests.py
+	python3 tests/tools/shader_variant_tests.py
 test: test_tools
 STRUCTURAL_REFERENCE = tests/structural/reference_solver.c src/structural/material.c
 build/structural_failure_tests: tests/structural/failure_tests.c tests/structural/placement_tests.c build/compound_body_tests
@@ -789,9 +790,11 @@ diagnostic_fluid_variants: build/diagnostics/shader_compile_probe
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -Ishaders/sim -o build/diagnostics/fluid-variants/fluid.spv build/diagnostics/fluid-variants/fluid_specialized.comp
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o build/diagnostics/fluid-variants/projection.spv build/diagnostics/fluid-variants/projection_specialized.comp
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -Ishaders/sim -o build/diagnostics/fluid-variants/mpm.spv build/diagnostics/fluid-variants/mpm_specialized.comp
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -Ishaders/sim -o build/diagnostics/fluid-variants/pattern.spv build/diagnostics/fluid-variants/pattern_specialized.comp
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -Ishaders/sim -o build/diagnostics/fluid-variants/rigid_pixel.spv build/diagnostics/fluid-variants/rigid_pixel.comp
 	spirv-val --target-env vulkan1.3 build/diagnostics/fluid-variants/fluid.spv
 	spirv-val --target-env vulkan1.3 build/diagnostics/fluid-variants/projection.spv
 	spirv-val --target-env vulkan1.3 build/diagnostics/fluid-variants/mpm.spv
+	spirv-val --target-env vulkan1.3 build/diagnostics/fluid-variants/pattern.spv
 	spirv-val --target-env vulkan1.3 build/diagnostics/fluid-variants/rigid_pixel.spv
 
