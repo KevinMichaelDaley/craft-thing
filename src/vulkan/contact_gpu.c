@@ -10,6 +10,8 @@ _Static_assert(offsetof(dc_gpu_contact_t, anchor_a) == 64, "GPU contact anchor o
 _Static_assert(sizeof(dc_gpu_contact_stats_t) == 24, "GPU contact counters must match SPIR-V");
 _Static_assert(sizeof(dc_gpu_contact_anchor_t) == 24, "GPU world anchor layout must match SPIR-V");
 _Static_assert(offsetof(dc_gpu_contact_t, feature_chunk) == 112, "GPU contact feature offset changed");
+_Static_assert(DC_CONTACT_FINISH_ACTIVITY_WORD + 3u <= DC_MPM_ACTIVITY_MIN_WORDS,
+               "Contact planning must fit the minimum activity allocation");
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);

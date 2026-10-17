@@ -4,10 +4,10 @@
 #include <SDL.h>
 #include <vulkan/vulkan.h>
 
+#include "dungeoncraft/contact_work_layout.h"
 #include "dungeoncraft/gpu.h"
 #include "ferrum/structural/gpu.h"
 #include "mpm_activity_layout.h"
-#include "dungeoncraft/contact_work_layout.h"
 
 enum {
     DC_GPU_STRUCTURAL_TAG = 0x53545231u,

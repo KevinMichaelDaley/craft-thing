@@ -82,3 +82,11 @@ Parallel MPM activity compaction follow-up ct-lqd8 enables native360 warm frame3
 **2026-10-17T04:58:42Z**
 
 Cold detailed profiling REDac29ae5: ring32/80/160 cold30.366/32.728/35.249ms, unchanged1.917/2.044/2.401ms. Zero contacts; mass properties cached ready1. Cold contacts8substeps3.76-3.87ms vs warm0.31-0.38; other solver7.70-7.94 vs0.69-0.74; raster6.98-8.64 vs0.69-0.83. Hydro0.60/1.38/4.37ms vs0.059/0.152/0.337. Broad first-frame slowdown needs controlled investigation, not a claim of interior collision geometry cause. Original14ms cold gates remain failing. Log build/diagnostics/cold-solver-detail.log.
+
+**2026-10-17T06:04:52Z**
+
+Audit-only next cold-work candidate, not implemented or measured: the empty-contact solver still records 8 clear/solve/apply iterations. APPLY canonicalizes pose and wraps angles, so blindly skipping iterations would change supported behavior. Any fused empty path must preserve all 8 recurrences exactly and conservatively exclude active structural bonds and overflow; retain normal physics scheduling. The current batched-contact checkpoint is frozen while its full explicit-sync regression runs.
+
+**2026-10-17T06:11:38Z**
+
+Correction to earlier outstanding-work wording: automatic birth mass/COM/inertia are already wired through pixel_mass_properties in extraction phase 23 (commit 2ab7f2e), and current cold fixtures show motion_ready=1. Remaining cold work is the whole rigid-frame budget, not missing birth-property wiring. Existing fracture property/BFS/packing/arena-copy parallelization remains pending.

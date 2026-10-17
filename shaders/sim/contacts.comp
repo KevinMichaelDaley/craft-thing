@@ -31,6 +31,7 @@ const uint HEADER_WORDS = 8u, PAIR_WORDS = 8u, PAIR_CAPACITY = 4096u;
 const uint CONTACT_HEADER_WORDS = 12u, CONTACT_GROUP_SIZE = 64u;
 const uint CONTACT_WORDS = 32u;
 const uint BODY_CONTACT = 0u, TERRAIN_CONTACT = 1u, BOUNDARY_CONTACT = 2u, MPM_CONTACT = 3u;
+const uint PAIR_CONTACT_FOUND=1u,PAIR_COLLIDABLE_TERRAIN=2u;
 shared uint group_found;
 shared uint body_kinds[BODY_CAPACITY];
 
@@ -202,7 +203,7 @@ void main() {
     uint offset = pair_base() + index * PAIR_WORDS;
     if(CONTACT_PHASE==3u) {
         if(pixel_dispatch[TYPED_CONTACT_ACTIVITY_WORD]!=0u &&
-           (atomicExchange(data[offset+3u],0u)&1u)==0u) atomicAdd(data[base+5u],1u);
+           (atomicExchange(data[offset+3u],0u)&PAIR_CONTACT_FOUND)==0u) atomicAdd(data[base+5u],1u);
         return;
     }
     if(planner&&lane==0u) data[offset+3u]=0u;
@@ -225,7 +226,7 @@ void main() {
     }
     if (cooperative && kind == TERRAIN_CONTACT) {
         if(CONTACT_PIXEL_ONLY&&!planner) {
-            if((atomicOr(data[offset+3u],0u)&2u)==0u) return;
+            if((atomicOr(data[offset+3u],0u)&PAIR_COLLIDABLE_TERRAIN)==0u) return;
         } else {
         int cx, cy;
         if (relative_chunk(uvec2(data[offset+4u],data[offset+5u]),params.origin_x,cx) &&
@@ -265,7 +266,7 @@ void main() {
         }
         }
     }
-    if(planner) {if(lane==0u) data[offset+3u]=2u;return;}
+    if(planner) {if(lane==0u) data[offset+3u]=PAIR_COLLIDABLE_TERRAIN;return;}
     uint work_lane=lane+(CONTACT_PIXEL_ONLY?gl_WorkGroupID.y*CONTACT_GROUP_SIZE:0u);
     uint work_stride=CONTACT_GROUP_SIZE*(CONTACT_PIXEL_ONLY?DC_CONTACT_PIXEL_GROUPS:1u);
     if (kind == BODY_CONTACT) {
@@ -314,7 +315,7 @@ void main() {
         barrier();
         if (lane == 0u) {
             if(CONTACT_PIXEL_ONLY) {
-                if(group_found!=0u) atomicOr(data[offset+3u],1u);
+                if(group_found!=0u) atomicOr(data[offset+3u],PAIR_CONTACT_FOUND);
             } else if(group_found==0u) atomicAdd(data[base+5u],1u);
         }
     } else if (!found) atomicAdd(data[base + 5u], 1u);

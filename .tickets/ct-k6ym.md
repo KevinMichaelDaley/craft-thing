@@ -26,3 +26,7 @@ Targeted GREEN: acquire transition sourceTRANSFER removes WRITE_AFTER_READ; fina
 **2026-10-17T05:34:56Z**
 
 Corrected acquire and final presentation scopes also validate the180-frame displayed/frozen-pair diagnostic:0VUID and0SYNC hazards,15candidates profiled. This confirms earlier378diagnostics were WSI scope issues, not the diagnostic body/activity snapshot path or evidence of a driver hang. Full combined optimizer regression remains pending.
+
+**2026-10-17T06:19:51Z**
+
+The full combined headless checkpoint passes 395 cases with explicit synchronization validation and zero diagnostics. UI and quarter-native presentation coverage are next; no gate was relaxed.
