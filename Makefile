@@ -123,6 +123,8 @@ build/shaders/structural.comp.spv: shaders/sim/structural.comp shaders/sim/struc
 build/shaders/structural.comp.spv: shaders/sim/rigid_fragment.glsl shaders/sim/pixel_fragment.glsl
 build/shaders/structural.comp.spv: shaders/sim/body_carve.glsl
 build/shaders/structural.comp.spv: shaders/sim/leaf_debris.glsl
+build/shaders/structural.comp.spv build/shaders/scene.comp.spv: shaders/sim/leaf_color.glsl include/dungeoncraft/leaf_material.h
+build/shaders/mpm.comp.spv: shaders/sim/mpm_terrain_support.glsl shaders/sim/rigid_body.glsl include/dungeoncraft/terrain_flags.h
 $(GPU_OBJ): build/shaders/structural.comp.spv
 build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench build/marker_slot_tests build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_solver_tests build/quarter_native_bench build/dungeoncraft_quarter_native: build/shaders/structural.comp.spv
 build/window_gpu.o: src/vulkan/window_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
@@ -638,7 +640,7 @@ clean:
 build/buoyancy_tests: tests/vulkan/buoyancy_tests.c build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/shaders/rigid_solver.comp.spv: shaders/sim/rigid_hydro.glsl
+build/shaders/rigid_solver.comp.spv: shaders/sim/rigid_hydro.glsl shaders/sim/rigid_grain.glsl
 build/shaders/rigid.comp.spv build/shaders/rigid_solver.comp.spv: shaders/sim/rigid_clip.glsl
 
 test: build/buoyancy_tests
@@ -1072,9 +1074,9 @@ test: build/body_carve_tests
 build/sequential_detachment_tests: tests/vulkan/sequential_detachment_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/sequential_detachment_tests
-build/diagnostics/body_support: tools/diagnostics/body_support.c tools/diagnostics/terrain_support.h Makefile $(GPU_OBJ) $(CHUNK_OBJ)
+build/diagnostics/body_support: tools/diagnostics/body_support.c tools/diagnostics/terrain_support.h Makefile $(GPU_SRC) $(GPU_OBJ) $(CHUNK_OBJ) src/world/chunk.c $(RENDERER_SHADERS) build/shaders/prop_place.comp.spv
 	@mkdir -p build/diagnostics
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_record_contacts
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_record_contacts
 build/scene_ground_tests: tests/world/scene_ground_tests.c $(GENERATE_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GENERATE_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/scene_ground_tests

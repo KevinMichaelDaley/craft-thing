@@ -11,7 +11,7 @@
 #define DC_FLUID_FULL 65536u
 #define DC_MARKERS_PER_CHUNK 2048u
 #define DC_MPM_PARTICLES_PER_CHUNK 8192u
-/** Particle flags encode bound Eulerian water (16.16 units) and mud hysteresis. */
+/** Soil/sand flags encode bound water; leaf debris uses leaf_material.h pigment flags. */
 #define DC_MPM_MOISTURE_MASK 0x00ffffffu
 #define DC_MPM_MUD_FLAG 0x80000000u
 #define DC_MPM_FRAGMENT_FLAG 0x40000000u
@@ -41,7 +41,7 @@ enum {
 };
 enum {
     DC_SAND_GRAIN_RADIUS_FP = DC_FLUID_FULL / 4,
-    DC_DIRT_GRAIN_RADIUS_FP = 3 * DC_FLUID_FULL / 8,
+    DC_DIRT_GRAIN_RADIUS_FP = DC_FLUID_FULL / 2,
     DC_GRAVEL_GRAIN_RADIUS_FP = DC_FLUID_FULL / 2
 };
 /** Default physical grain radius in 16.16 cell units. */

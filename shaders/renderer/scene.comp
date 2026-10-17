@@ -4,6 +4,7 @@
 #include "../sim/rigid_shape.glsl"
 #include "../sim/rigid_clip.glsl"
 #include "texture.glsl"
+#include "../sim/leaf_color.glsl"
 
 layout(local_size_x=64) in;
 layout(constant_id=0) const uint SCENE_PHASE=0u;
@@ -100,15 +101,20 @@ Surface surface_at(uint i,out float opacity,out uint known) {
     if((params.flags>>8)<65535u) water=mix(min(float(previous_water[i])/65536.,1.),water,float(params.flags>>8)/65535.);
     float remaining=(1.-body_coverage)*(1.-water),solid=0.;
     if(material==2u || material==4u || material==5u || material==6u || material==10u) {
-        uint first=(page-1u)*8192u+local;float mass=0.;
-        for(uint layer=0u;layer<2u;layer++) mass+=float(particles[first+4096u*layer].mass_fp)/65536.;
-        if(mass>0.) {
-            solid=min(mass,1.);
+        uint first=(page-1u)*8192u+local;float coverage=0.;
+        for(uint layer=0u;layer<2u;layer++) {
+            Particle p=particles[first+4096u*layer];
+            coverage+=float(p.mass_fp)/65536./(p.material==10u?DC_DENSITY_LEAVES:1.);
+        }
+        if(coverage>0.) {
+            solid=min(coverage,1.);
             for(uint layer=0u;layer<2u;layer++) {
                 Particle p=particles[first+4096u*layer];if(p.mass_fp==0u) continue;
                 Appearance a=palette[atlas];
-                if((p.flags&0x80ffffffu)!=0u) a.color_roughness.rgb*=.6;
-                add_surface(surface,a,remaining*solid*float(p.mass_fp)/65536./mass,0.);
+                if(p.material==10u&&(p.flags&DC_LEAF_COLOR_FLAG)!=0u) a.color_roughness.rgb=leaf_color_unpack(p.flags);
+                else if(p.material!=10u&&(p.flags&0x80ffffffu)!=0u) a.color_roughness.rgb*=.6;
+                float volume=float(p.mass_fp)/65536./(p.material==10u?DC_DENSITY_LEAVES:1.);
+                add_surface(surface,a,remaining*solid*volume/coverage,0.);
             }
         } else {solid=1.;add_surface(surface,palette[atlas],remaining,0.);}
     } else if(material!=0u && material!=3u) {

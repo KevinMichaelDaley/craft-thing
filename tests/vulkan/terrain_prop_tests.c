@@ -250,6 +250,33 @@ static void test_legacy_prop_bonds_release_leftover_tree_pixels_without_restampi
     ASSERT_EQ(chunk->cells[at].material,DC_MATERIAL_AIR);
     dc_gpu_destroy(g);free(chunk);free(colors);PASS();
 }
+static void test_old_save_recovers_missing_granular_support_history(void) {
+    dc_gpu_t *g=context();ASSERT_TRUE(g);char err[256];
+    ASSERT_TRUE(dc_gpu_paint_material(g,32,32,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    unsigned source=UINT32_MAX;
+    for(unsigned i=0;i+g_asset.width<g_asset.width*g_asset.height;i++) {
+        fr_prop_pixel_t wood,soil;
+        ASSERT_TRUE(fr_prop_pixel(&g_asset,0,i,&wood));
+        ASSERT_TRUE(fr_prop_pixel(&g_asset,0,i+g_asset.width,&soil));
+        if(wood.material==2&&soil.material==7) {source=i;break;}
+    }
+    ASSERT_TRUE(source!=UINT32_MAX);
+    unsigned x=32+source%g_asset.width,y=32+source/g_asset.width,slot=y/64*3+x/64,at=y%64*64+x%64;
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    chunk->coord=(dc_chunk_coord_t){x/64,y/64};
+    chunk->cells[at]=(dc_cell_t){.material=DC_MATERIAL_WOOD,
+        .flags=DC_CELL_LOADED_TERRAIN|DC_CELL_BONDS_READY|DC_CELL_DIAGONAL_BONDS_READY};
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,slot,chunk,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_restore_terrain_prop_bonds(g,&g_asset,0,32,32,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(g,slot,chunk,err,sizeof(err)));
+    ASSERT_TRUE(chunk->cells[at].flags&DC_CELL_SUPPORT_BONDS_READY);
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    dc_gpu_body_pixel_t pixel;unsigned count;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,&pixel,1,&count,err,sizeof(err)));
+    ASSERT_EQ(count,1u);dc_gpu_destroy(g);free(chunk);PASS();
+}
+
 int main(void) {
     FILE *file=fopen("assets/props/level_piece01.prop/asset.cprop","rb");
     if (!file) return 2;
@@ -259,6 +286,7 @@ int main(void) {
     fclose(file);
     if (!fr_prop_asset_open(&g_asset,g_bytes,(size_t)size,NULL,0)) return 2;
     RUN(test_imported_soil_and_gravel_start_at_full_cell_density);
+    RUN(test_old_save_recovers_missing_granular_support_history);
     RUN(test_actual_scene_places_exact_materials_colors_water_and_holes);
     RUN(test_unknown_occupied_destination_rejects_entire_scene);
     RUN(test_detached_body_keeps_authored_color_map);

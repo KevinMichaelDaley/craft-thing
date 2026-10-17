@@ -138,6 +138,7 @@ static void test_grain_contacts_use_actual_positions_radii_and_both_layers(void)
     chunk->particles[cell+4096].x_fp=20*65536+55706;
     chunk->particles[cell+4096].id_lo+=4096;chunk->particle_count=2;
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(gpu,77,0,0,0,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_origin(gpu,(dc_chunk_coord_t){0,0},err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_contacts(gpu,&stats,contacts,8,err,sizeof(err)));
     ASSERT_EQ(stats.count,1u);
@@ -145,6 +146,7 @@ static void test_grain_contacts_use_actual_positions_radii_and_both_layers(void)
     chunk->particles[cell].x_fp=20*65536+55706;
     chunk->particles[cell].y_fp=20*65536+55706;
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(gpu,77,0,0,0,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_origin(gpu,(dc_chunk_coord_t){0,0},err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_contacts(gpu,&stats,contacts,8,err,sizeof(err)));
     ASSERT_EQ(stats.count,2u);

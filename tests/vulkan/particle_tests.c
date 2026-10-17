@@ -146,13 +146,14 @@ static void test_granular_paint_reuses_and_erases_primary_slot(void) {
     ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
     const uint16_t materials[] = { DC_MATERIAL_SAND, DC_MATERIAL_DIRT,
                                    DC_MATERIAL_GRAVEL };
+    const uint32_t full_cell_masses[] = {65536u,78643u,176947u};
     for (uint32_t i = 0; i < 3; ++i) {
         ASSERT_TRUE(dc_gpu_paint_material(gpu, 10, 10, 0, materials[i],
                                           err, sizeof(err)));
         ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
         ASSERT_EQ(chunk->particle_count, 1u);
         ASSERT_EQ(chunk->particles[10 * DC_CHUNK_SIDE + 10].material, materials[i]);
-        ASSERT_EQ(chunk->particles[10 * DC_CHUNK_SIDE + 10].mass_fp, DC_FLUID_FULL);
+        ASSERT_EQ(chunk->particles[10 * DC_CHUNK_SIDE + 10].mass_fp, full_cell_masses[i]);
         ASSERT_EQ(chunk->particles[10 * DC_CHUNK_SIDE + 10].grain_fp,
                   dc_chunk_grain_radius_fp(materials[i]));
     }
@@ -301,7 +302,7 @@ static void test_mixed_pile_conserves_mass_and_replays(void) {
         ASSERT_TRUE(particle->y_fp < 45 * (int32_t)DC_FLUID_FULL);
         if (particle->y_fp > 20 * (int32_t)DC_FLUID_FULL) ++moved;
     }
-    ASSERT_EQ(mass, 9u * (uint64_t)DC_FLUID_FULL);
+    ASSERT_EQ(mass, 3u * (uint64_t)(65536u+78643u+176947u));
     ASSERT_TRUE(moved > 0);
     ASSERT_EQ(memcmp(first->particles, second->particles,
                      sizeof(first->particles)), 0);
@@ -1047,7 +1048,8 @@ static void test_grain_radii_follow_material_size(void) {
     dc_chunk_particle_init(&dirt, coord, 11u, DC_MATERIAL_DIRT);
     dc_chunk_particle_init(&gravel, coord, 12u, DC_MATERIAL_GRAVEL);
     ASSERT_TRUE(sand.grain_fp < dirt.grain_fp);
-    ASSERT_TRUE(dirt.grain_fp < gravel.grain_fp);
+    ASSERT_EQ(dirt.grain_fp,gravel.grain_fp);
+    ASSERT_EQ(dirt.grain_fp,DC_FLUID_FULL/2u);
     ASSERT_TRUE(gravel.grain_fp <= DC_FLUID_FULL / 2u);
     PASS();
 }
@@ -1088,7 +1090,7 @@ static void test_mixed_column_sifts_small_grains_downward(void) {
         ASSERT_TRUE(p->x_fp < 27 * (int32_t)DC_FLUID_FULL);
         ASSERT_TRUE(p->y_fp < 48 * (int32_t)DC_FLUID_FULL);
     }
-    ASSERT_EQ(mass, 63u * (uint64_t)DC_FLUID_FULL);
+    ASSERT_EQ(mass, 21u * (uint64_t)(65536u+78643u+176947u));
     for (uint32_t kind = 0; kind < 3; ++kind) ASSERT_EQ(count[kind], 21u);
     printf("mixed-column mean depth sand=%llu dirt=%llu gravel=%llu\n",
            (unsigned long long)(depth[0] / count[0]),

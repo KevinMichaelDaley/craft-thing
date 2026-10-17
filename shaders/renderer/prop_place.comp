@@ -28,17 +28,23 @@ void restore_bonds(uint i,uvec2 position,uint page,uint mapped) {
     uint atlas=(page-1u)*4096u+(position.y%64u)*64u+position.x%64u;
     uint flags=cells[atlas].x>>DC_CELL_FLAGS_SHIFT;
     if((cells[atlas].x&65535u)!=mapped||(flags&DC_CELL_LOADED_TERRAIN)==0u||
-       (flags&DC_CELL_DIAGONAL_BONDS_READY)!=0u) return;
-    const ivec2 directions[4]=ivec2[4](ivec2(-1,-1),ivec2(1,-1),ivec2(-1,1),ivec2(1,1));
-    uint bonds=flags&DC_CELL_DIAGONAL_BOND_MASK;
-    for(uint axis=0u;axis<4u;axis++) {
+       (flags&(DC_CELL_DIAGONAL_BONDS_READY|DC_CELL_SUPPORT_BONDS_READY))==
+            (DC_CELL_DIAGONAL_BONDS_READY|DC_CELL_SUPPORT_BONDS_READY)) return;
+    const ivec2 directions[8]=ivec2[8](ivec2(-1,0),ivec2(1,0),ivec2(0,-1),ivec2(0,1),
+        ivec2(-1,-1),ivec2(1,-1),ivec2(-1,1),ivec2(1,1));
+    uint bonds=flags&DC_CELL_ALL_BOND_MASK;
+    for(uint axis=0u;axis<8u;axis++) {
         ivec2 source=ivec2(i%p.asset_width,i/p.asset_width)+directions[axis];
         if(any(lessThan(source,ivec2(0)))||any(greaterThanEqual(source,ivec2(p.asset_width,p.asset_height)))) continue;
         uint packed=words[8u+(uint(source.y)*p.asset_width+uint(source.x))*2u];
-        bool connected=((packed>>16u)&255u)==1u&&rigid_material(terrain(packed&65535u));
-        uint bit=1u<<axis;bonds=connected?bonds|bit:bonds&~bit;
+        uint original=terrain(packed&65535u);
+        bool occupied=((packed>>16u)&255u)==1u&&original!=0u&&original!=0xffffffffu;
+        uint bit=1u<<(axis<4u?10u+axis:axis-4u);
+        if(axis>=4u&&(flags&DC_CELL_DIAGONAL_BONDS_READY)==0u)
+            bonds=occupied?bonds|bit:bonds&~bit;
+        else if((flags&DC_CELL_SUPPORT_BONDS_READY)==0u&&occupied&&!rigid_material(original)) bonds|=bit;
     }
-    flags=(flags&~DC_CELL_DIAGONAL_BOND_MASK)|bonds|DC_CELL_DIAGONAL_BONDS_READY;
+    flags=(flags&~DC_CELL_ALL_BOND_MASK)|bonds|DC_CELL_DIAGONAL_BONDS_READY|DC_CELL_SUPPORT_BONDS_READY;
     cells[atlas].x=(cells[atlas].x&65535u)|(flags<<DC_CELL_FLAGS_SHIFT);
 }
 float scalar(uint i) {return uintBitsToFloat(words[i]);}
@@ -72,8 +78,10 @@ void main() {
         particle.x_fp=int((position.x%64u)*65536u+32768u);particle.y_fp=int((position.y%64u)*65536u+32768u);
         particle.vx_fp=0;particle.vy_fp=0;particle.f00=1.;particle.f11=1.;particle.f01=0.;particle.f10=0.;
         particle.id_lo=local+1u;particle.id_hi=seeds[slot];
-        particle.mass_fp=mapped==6u?uint(round(65536.*DC_DENSITY_MORTAR)):65536u;
-        particle.grain_fp=mapped==2u?16384u:mapped==4u?24576u:32768u;particle.material=mapped;particle.flags=0u;
+        float density=mapped==2u?1.:mapped==4u?DC_DENSITY_DIRT:
+            mapped==5u?DC_DENSITY_STONE:DC_DENSITY_MORTAR;
+        particle.mass_fp=uint(round(65536.*density));
+        particle.grain_fp=mapped==2u?16384u:32768u;particle.material=mapped;particle.flags=0u;
         particles[first]=particle;atomicAdd(counts[slot],1u);
     }
     cells[atlas]=uvec2(mapped|((mapped==1u||mapped==7u||mapped==8u||mapped==9u)?DC_CELL_LOADED_TERRAIN<<DC_CELL_FLAGS_SHIFT:0u),material==6u?65536u:0u);

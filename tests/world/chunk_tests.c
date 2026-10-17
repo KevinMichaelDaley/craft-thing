@@ -61,14 +61,18 @@ static void test_slot_reuse_waits_for_save_and_gpu(void) {
     PASS();
 }
 
-int main(void) {
+static void test_soil_and_gravel_seeds_fill_their_cells(void) {
     dc_mpm_particle_t soil,gravel;
     dc_chunk_particle_init(&soil,(dc_chunk_coord_t){0,0},0,DC_MATERIAL_DIRT);
     dc_chunk_particle_init(&gravel,(dc_chunk_coord_t){0,0},1,DC_MATERIAL_GRAVEL);
-    if(soil.mass_fp!=78643u||gravel.mass_fp!=176947u||soil.grain_fp!=32768u) {
-        printf("FAIL full-density CPU seeds: soil %u gravel %u radius %u\n",soil.mass_fp,gravel.mass_fp,soil.grain_fp);
-        g_fail++;
-    }
+    ASSERT_EQ(soil.mass_fp,78643u);
+    ASSERT_EQ(gravel.mass_fp,176947u);
+    ASSERT_EQ(soil.grain_fp,32768u);
+    PASS();
+}
+
+int main(void) {
+    RUN(test_soil_and_gravel_seeds_fill_their_cells);
     RUN(test_negative_coordinates_and_chunk_edges);
     RUN(test_slot_reuse_waits_for_save_and_gpu);
     printf("%d passed, %d failed\n", g_pass, g_fail);

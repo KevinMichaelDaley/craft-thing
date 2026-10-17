@@ -7,5 +7,7 @@
 #define DC_DENSITY_DENSE_WOOD 1.2
 #define DC_DENSITY_MORTAR 1.6
 #define DC_DENSITY_LEAVES 0.2
+#define DC_DENSITY_DIRT 1.2
+#define DC_DENSITY_SAND 2.65
 
 #endif

@@ -37,7 +37,13 @@ layout(push_constant) uniform Params {
 } params;
 
 uint grain_radius_fp(uint material) {
-    return material == 2u || material == 10u ? 16384u : material == 4u ? 24576u : 32768u;
+    return material == 2u ? 16384u : 32768u;
+}
+
+uint grain_mass_fp(uint material) {
+    float density=material==4u?DC_DENSITY_DIRT:material==5u?DC_DENSITY_STONE:
+        material==6u?DC_DENSITY_MORTAR:material==10u?DC_DENSITY_LEAVES:1.;
+    return uint(round(65536.*density));
 }
 
 vec3 linear_color(uint packed) {
@@ -255,14 +261,23 @@ void main() {
                         particle.f01 = particle.f10 = 0.0;
                         particle.id_lo = local_index + 1u;
                         particle.id_hi = seeds[slot];
-                        particle.mass_fp = material == 10u ? uint(round(65536.0*DC_DENSITY_LEAVES)) : material == 6u ?
-                            uint(round(65536.0*DC_DENSITY_MORTAR)) : 65536u;
+                        particle.mass_fp = grain_mass_fp(material);
                         particle.grain_fp = grain_radius_fp(material);
                         particle.material = material;
                         particle.flags = 0u;
                         particles[particle_index] = particle;
                         atomicAdd(particle_counts[slot], 1u);
                     } else {
+                        bool full_stamp=params.color!=3u&&(particles[particle_index].material!=material||material==4u||material==5u);
+                        if(full_stamp) {
+                            particles[particle_index].mass_fp=grain_mass_fp(material);
+                            particles[particle_index].f00=particles[particle_index].f11=1.;
+                            particles[particle_index].f01=particles[particle_index].f10=0.;
+                            if(particles[secondary_index].mass_fp!=0u) {
+                                particles[secondary_index].mass_fp=0u;
+                                atomicAdd(particle_counts[slot],uint(-1));
+                            }
+                        }
                         particles[particle_index].material = material;
                         particles[particle_index].grain_fp = grain_radius_fp(material);
                     }

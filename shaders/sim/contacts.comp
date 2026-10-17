@@ -68,7 +68,7 @@ uint contact_feature(Body body,uint piece,uint feature) {
 }
 
 bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_feature,
-                  uvec2 feature_x, uvec2 feature_y, Polygon pa, Polygon pb,uint piece_a,uint piece_b) {
+                  uvec2 feature_x, uvec2 feature_y, Polygon pa, Polygon pb,uint piece_a,uint piece_b,uint particle_ref) {
     vec2 normal; float depth;
     if (!polygon_contact(pa, pb, normal, depth)) return false;
     if(pixel_body(a)) {
@@ -110,7 +110,7 @@ bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_fea
     data[offset] = a.id; data[offset + 1u] = body_b; data[offset + 2u] = kind;
     data[offset + 3u] = contact_feature(a,piece_a,feature_a);
     data[offset + 4u] = kind == BODY_CONTACT ? contact_feature(other,piece_b,feature_b) : cell_feature;
-    data[offset + 5u] = material_a; data[offset + 6u] = material_b; data[offset + 7u] = 0u;
+    data[offset + 5u] = material_a; data[offset + 6u] = material_b; data[offset + 7u] = particle_ref;
     data[offset + 8u] = floatBitsToUint(normal.x); data[offset + 9u] = floatBitsToUint(normal.y);
     data[offset + 10u] = floatBitsToUint(depth); data[offset + 11u] = floatBitsToUint(sqrt(fa * fb));
     data[offset + 12u] = floatBitsToUint(min(restitution_a, restitution_b));
@@ -125,6 +125,12 @@ bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_fea
     data[offset + 30u] = feature_y.x; data[offset + 31u] = feature_y.y;
     atomicAdd(data[base], 1u);
     return true;
+}
+
+bool emit_contact(Body a,uint body_b,uint kind,uint material_b,uint cell_feature,
+    uvec2 feature_x,uvec2 feature_y,Polygon pa,Polygon pb,uint piece_a,uint piece_b) {
+    return emit_contact(a,body_b,kind,material_b,cell_feature,feature_x,feature_y,
+        pa,pb,piece_a,piece_b,0u);
 }
 
 bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygon polygon,uint piece) {
@@ -148,8 +154,19 @@ bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygo
             if (material == 0u || material == 3u) continue;
             if (material == 2u || material == 4u || material == 5u || material == 6u || material == 10u) {
                 uint pi = (page - 1u) * 8192u + cell_feature;
-                if (particles[pi].mass_fp == 0u && particles[pi + 4096u].mass_fp == 0u) continue;
-                contact_kind = MPM_CONTACT;
+                for(uint layer=0u;layer<2u;layer++) {
+                    Particle grain=particles[pi+layer*4096u];if(grain.mass_fp==0u) continue;
+                    float radius=float(grain.grain_fp)/65536.;
+                    vec2 center=vec2(tile_low)+vec2(grain.x_fp,grain.y_fp)/65536.-vec2(current)/65536.;
+                    Polygon grain_shape=cell_polygon(center-vec2(radius));
+                    for(uint vertex=0u;vertex<4u;vertex++)
+                        grain_shape.vertices[vertex]=center-vec2(radius)+
+                            (grain_shape.vertices[vertex]-(center-vec2(radius)))*(2.*radius);
+                    bool emitted=emit_contact(body,0u,MPM_CONTACT,grain.material,cell_feature|(layer<<12u),
+                        chunk_x,chunk_y,polygon,grain_shape,piece,0u,pi+layer*4096u+1u);
+                    found=found||emitted;
+                }
+                continue;
             }
         } else contact_kind = BOUNDARY_CONTACT;
         vec2 offset = vec2((ivec2(x, y) << 16) - current) / 65536.0;

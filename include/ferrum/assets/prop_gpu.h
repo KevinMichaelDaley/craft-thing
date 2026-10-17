@@ -14,7 +14,7 @@ bool fr_gpu_place_terrain_prop(dc_gpu_t *gpu, const fr_prop_asset_t *asset,
                                uint32_t frame, uint32_t x, uint32_t y,
                                char *err_buf, uint32_t err_cap);
 
-/** Recover missing corner-bond history in older saves from the original prop.
+/** Recover missing corner/granular support history in older saves from the original prop.
  * Only loaded terrain lacking that history is updated; physical pixels, colors,
  * existing edits and already-versioned bonds are preserved.
  */

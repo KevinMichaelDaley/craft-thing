@@ -1,6 +1,7 @@
 /* Leaf emission cooperates across the workgroup. Particle slots are reserved
  * before remnant publication and released if that transaction cannot commit. */
 const uint LEAF_RESERVATION=0x80000000u;
+#include "leaf_color.glsl"
 shared uint leaf_changed;
 vec2 leaf_position(Body source,uint pixel) {
     vec2 rest=vec2(pixel_piece_cell(source,pixel))+.5;
@@ -90,12 +91,14 @@ void leaf_finish(Body source,bool committed) {
         ivec2 rest=pixel_piece_cell(source,pixel);
         particle.id_lo=0x80000000u|(uint(rest.y)*source.width+uint(rest.x)+1u);particle.id_hi=source.id;
         particle.mass_fp=uint(round(DC_DENSITY_LEAVES*65536.));
-        particle.grain_fp=16384u;particle.material=10u;particle.flags=0u;
+        uint color_word=source.compound_reserved+pixel_tile_offset(source,pixel/256u)+1u+(pixel%256u)/8u;
+        vec4 color=shape_color_get(color_word,pixel%8u);
+        particle.grain_fp=DC_LEAF_GRAIN_RADIUS_FP;particle.material=10u;
+        particle.flags=leaf_color_pack(color.w>0.?color.rgb:vec3(.08,.3,.025));
         debris_particles[p]=particle;atomicAdd(debris_counts[slot],1u);
         atomicExchange(cells[c].x,10u);
         if((p%8192u)<4096u) {
-            uint word=source.compound_reserved+pixel_tile_offset(source,pixel/256u)+1u+(pixel%256u)/8u;
-            terrain_colors[c]=shape_color_get(word,pixel%8u);
+            terrain_colors[c]=vec4(leaf_color_unpack(particle.flags),1.);
         }
         uint view=uint(cell.y)*params.width+uint(cell.x);
         atomicCompSwap(debris_occupancy[view],source.id,0u);

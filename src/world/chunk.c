@@ -17,7 +17,7 @@ uint32_t dc_chunk_particle_seed(dc_chunk_coord_t coord) {
 }
 
 uint32_t dc_chunk_grain_radius_fp(uint32_t material) {
-    return material == DC_MATERIAL_SAND || material == DC_MATERIAL_LEAF_DEBRIS ? DC_SAND_GRAIN_RADIUS_FP :
+    return material == DC_MATERIAL_SAND ? DC_SAND_GRAIN_RADIUS_FP :
            material == DC_MATERIAL_DIRT ? DC_DIRT_GRAIN_RADIUS_FP :
            DC_GRAVEL_GRAIN_RADIUS_FP;
 }
@@ -42,7 +42,10 @@ void dc_chunk_particle_init(dc_mpm_particle_t *particle,
     particle->deformation[0] = particle->deformation[3] = 1.0f;
     particle->id_lo = cell_index + 1u;
     particle->id_hi = dc_chunk_particle_seed(coord);
-    particle->mass_fp = material == DC_MATERIAL_LEAF_DEBRIS ?
+    particle->mass_fp = material == DC_MATERIAL_DIRT ?
+                        (uint32_t)(DC_FLUID_FULL * DC_DENSITY_DIRT + .5) :
+                        material == DC_MATERIAL_GRAVEL ?
+                        (uint32_t)(DC_FLUID_FULL * DC_DENSITY_STONE + .5) : material == DC_MATERIAL_LEAF_DEBRIS ?
                         (uint32_t)(DC_FLUID_FULL * DC_DENSITY_LEAVES + .5) : material == DC_MATERIAL_MORTAR_DEBRIS ?
                         (uint32_t)(DC_FLUID_FULL * DC_DENSITY_MORTAR + .5) : DC_FLUID_FULL;
     particle->grain_fp = dc_chunk_grain_radius_fp(material);

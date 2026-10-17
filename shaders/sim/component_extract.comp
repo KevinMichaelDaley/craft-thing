@@ -50,7 +50,10 @@ uint terrain_bonds(uint i) {
     uint bonds=cells[i].x&BOND_MASK;
     for(uint axis=0u;axis<8u;axis++) {
         uint other=neighbor(i,axis),bit=1u<<(axis<4u?DC_CELL_BOND_SHIFT+axis:DC_CELL_DIAGONAL_BOND_SHIFT+axis-4u);
-        if(other!=0xffffffffu) bonds=solid(other)?bonds|bit:bonds&~bit;
+        if(other!=0xffffffffu) {
+            uint material=cells[other].x&65535u;
+            bonds=material!=0u&&material!=3u?bonds|bit:bonds&~bit;
+        }
     }
     return bonds;
 }
@@ -123,7 +126,8 @@ void main() {
         if(i<n&&solid(i)&&(cells[i].x&(LOADED_TERRAIN|BONDS_READY))==LOADED_TERRAIN) {
             uint missing=((cells[i].x&BONDS_READY)==0u?CARDINAL_BOND_MASK:0u)|
                 ((cells[i].x&DIAGONAL_BONDS_READY)==0u?DIAGONAL_BOND_MASK:0u);
-            cells[i].x=(cells[i].x&~missing)|BONDS_READY|DIAGONAL_BONDS_READY|(candidates[n+i]&missing);
+            cells[i].x=(cells[i].x&~missing)|BONDS_READY|DIAGONAL_BONDS_READY|
+                (DC_CELL_SUPPORT_BONDS_READY<<DC_CELL_FLAGS_SHIFT)|(candidates[n+i]&missing);
         }
         return;
     }

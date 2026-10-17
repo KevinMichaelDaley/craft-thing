@@ -132,6 +132,8 @@ static void test_unanchored_grains_inside_trunk_cannot_suspend_it(void) {
     ASSERT_TRUE(result.y_fp>12*65536);
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
     uint64_t mass=0;for(unsigned i=0;i<DC_MPM_PARTICLES_PER_CHUNK;i++) mass+=chunk->particles[i].mass_fp;
+    printf("loose grain mass %llu (expected %llu)\n",(unsigned long long)mass,
+        (unsigned long long)(20u*(uint64_t)78643u));
     ASSERT_EQ(mass,20u*(uint64_t)78643u);
     dc_gpu_destroy(g);free(chunk);PASS();
 }

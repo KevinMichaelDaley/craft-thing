@@ -196,8 +196,26 @@ static void test_broken_leaf_canopy_crumbles_without_losing_wood(void) {
         for(unsigned i=0;i<n;i++) {ASSERT_EQ(pixels[i].material,DC_GPU_BODY_WOOD);wood++;}
     }
     ASSERT_EQ(wood,7u);
+    unsigned source_particle=UINT32_MAX,destination=10*64+10;
+    for(unsigned i=0;i<DC_MPM_PARTICLES_PER_CHUNK;i++) if(c->particles[i].mass_fp) {source_particle=i;break;}
+    ASSERT_TRUE(source_particle!=UINT32_MAX);
+    uint32_t leaf_rgb=c->particles[source_particle].flags&0x00ffffffu;
+    c->particles[destination]=c->particles[source_particle];
+    c->particles[destination].x_fp=c->particles[destination].y_fp=10*65536+32768;
+    c->particles[source_particle].mass_fp=0;
+    c->cells[source_particle%4096].material=DC_MATERIAL_AIR;
+    c->cells[destination].material=DC_MATERIAL_LEAF_DEBRIS;
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err)));
+    ASSERT_TRUE(fr_renderer_enable(g,err,sizeof(err)));
+    ASSERT_TRUE(fr_renderer_set_mode(g,FR_RENDERER_ALBEDO));
+    ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+    ASSERT_EQ(((uint32_t*)g->mapped)[destination],0xff000000u|leaf_rgb);
     ASSERT_TRUE(fr_gpu_save_structure(g,"build/leaf_canopy.dcs",err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_load_structure(g,"build/leaf_canopy.dcs",err,sizeof(err)));
+    ASSERT_TRUE(fr_renderer_enable(g,err,sizeof(err)));
+    ASSERT_TRUE(fr_renderer_set_mode(g,FR_RENDERER_ALBEDO));
+    ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+    ASSERT_EQ(((uint32_t*)g->mapped)[destination],0xff000000u|leaf_rgb);
     remove("build/leaf_canopy.dcs");dc_gpu_destroy(g);free(c);PASS();
 }
 
