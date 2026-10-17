@@ -1,6 +1,6 @@
 ---
 id: ctr-a9bf
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-17T10:41:55Z
@@ -19,3 +19,7 @@ Initially detached imported terrain remains static through physics steps and unr
 **2026-10-17T10:47:30Z**
 
 RED: loaded island extracted on first step (4 existing tests passed, new test failed). GREEN: per-cell persisted load/bond/release flags, parallel GPU baseline before first brush/physics, candidate eligibility after lost known solid bonds, unknown-neighbor preservation. Fixed import islands, unrelated edits, cut-before-first-tick and checkpoint roundtrip all pass under Vulkan core+sync validation (7/7). Actual scene/tree-cut app tests 2/2 and terrain prop tests 2/2 pass with same validation.
+
+**2026-10-17T10:51:23Z**
+
+Final validation: full make -j4 -i test completed, only the same two known authored_stage_tests failures (ctr-ojvy); no new failures. Shared flag definitions avoid C/GLSL drift. No runtime CPU component solve/readback added. Fresh scene demo rebuilt and launched with physics running; original saved cut preserved.
