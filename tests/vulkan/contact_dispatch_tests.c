@@ -23,7 +23,8 @@ static void selector_case(unsigned kind) {
     records[0].piece_count=kind==3?0:DC_GPU_PIXEL_BODY_FLAG|1u;
     records[63].body=(dc_gpu_body_t){.id=38,.active=kind==1,.width=1,.height=1};
     uint32_t *pairs=dc_gpu_broadphase_data(&gpu),*contacts=dc_gpu_contact_data(&gpu),*solver=dc_gpu_solver_data(&gpu);
-    pairs[0]=19;pairs[2]=kind==5?4:0;contacts[3]=777;
+    uint32_t pair_count=kind==8?4096u:kind==9?0u:19u;
+    pairs[0]=pair_count;pairs[2]=kind==5?4:0;contacts[3]=777;
     for(unsigned i=10;i<16;i++) solver[i]=4369;
     const uint32_t bindings[]={1,2,4,19,27};
     ASSERT_TRUE(fixture_body_pipeline(&p,&gpu,body,"build/shaders/contacts.comp.spv",bindings,5,0));
@@ -36,12 +37,14 @@ static void selector_case(unsigned kind) {
     vkCmdDispatch(p.command,1,1,1);host_barrier(&p,1);
     ASSERT_EQ(vkEndCommandBuffer(p.command),VK_SUCCESS);ASSERT_TRUE(submit(&p,"contact selector",1));
     bool pixels=kind!=3&&kind!=4,typed=pixels&&kind!=1&&kind!=5&&kind!=6&&kind!=7;
-    uint32_t generic=pixels&&!typed&&kind!=5?19u:0u,fast=typed?19u:0u;
+    uint32_t generic=pixels&&!typed&&kind!=5?pair_count:0u,fast=typed?pair_count:0u;
     bool safe=solver[10]==generic&&solver[11]==1&&solver[12]==1&&
-        p.mapped[6]==fast&&p.mapped[7]==1&&p.mapped[8]==1&&contacts[3]==777&&
-        contacts[6]==(kind==5?0u:1u);
+        p.mapped[6]==fast&&p.mapped[7]==(fast?16u:1u)&&p.mapped[8]==1&&contacts[3]==777&&
+        p.mapped[9]==fast&&p.mapped[10]==1&&p.mapped[11]==1&&
+        p.mapped[12]==(fast+63u)/64u&&p.mapped[13]==1&&p.mapped[14]==1&&
+        contacts[6]==(kind==5?0u:(pair_count+63u)/64u);
     for(unsigned i=13;i<16;i++) safe=safe&&solver[i]==4369;
-    for(unsigned i=0;i<39;i++) if(i<6||i>8) safe=safe&&p.mapped[i]==4369;
+    for(unsigned i=0;i<39;i++) if(i<6||i>14) safe=safe&&p.mapped[i]==4369;
     printf("kind%u generic %u,%u,%u typed %u,%u,%u\n",kind,solver[10],solver[11],solver[12],p.mapped[6],p.mapped[7],p.mapped[8]);
     fixture_release_pipeline(&p);
     vkUnmapMemory(p.device,body_memory);vkDestroyBuffer(p.device,body,NULL);vkFreeMemory(p.device,body_memory,NULL);
@@ -57,11 +60,15 @@ static void test_empty_body_set_resets_both_triplets(void) {selector_case(4);}
 static void test_broadphase_overflow_disables_both_triplets(void) {selector_case(5);}
 static void test_generic_reference_can_be_selected_explicitly(void) {selector_case(6);}
 static void test_older_recorders_keep_the_generic_dispatch_contract(void) {selector_case(7);}
+static void test_maximum_pair_count_keeps_each_dispatch_axis_bounded(void) {selector_case(8);}
+static void test_empty_pair_set_resets_all_planning_triplets(void) {selector_case(9);}
 int main(void) {
     RUN(test_pixel_contacts_select_typed_triplet);RUN(test_hidden_legacy_preserves_generic_contacts);
     RUN(test_disabled_legacy_does_not_disable_typed_contacts);RUN(test_ordinary_only_resets_both_pixel_triplets);
     RUN(test_empty_body_set_resets_both_triplets);RUN(test_broadphase_overflow_disables_both_triplets);
     RUN(test_generic_reference_can_be_selected_explicitly);
     RUN(test_older_recorders_keep_the_generic_dispatch_contract);
+    RUN(test_maximum_pair_count_keeps_each_dispatch_axis_bounded);
+    RUN(test_empty_pair_set_resets_all_planning_triplets);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

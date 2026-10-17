@@ -32,17 +32,22 @@ static void recording_case(bool typed) {
     if(typed) gpu.contact_pixel_pipeline=(VkPipeline)(uintptr_t)4;
     dc_gpu_record_contacts(&gpu);
     printf("typed%d dispatches%u barriers%u\n",typed,dispatches,barriers);
-    ASSERT_EQ(dispatches,typed?4u:3u);
-    ASSERT_EQ(barriers,2u);
-    ASSERT_EQ(points[0],1u);ASSERT_EQ(points[1],dispatches);
+    ASSERT_EQ(dispatches,typed?6u:3u);
+    ASSERT_EQ(barriers,typed?4u:2u);
+    ASSERT_EQ(points[0],1u);
+    unsigned final=barriers-1;
+    ASSERT_EQ(points[final],dispatches);
+    if(typed) {ASSERT_EQ(points[1],4u);ASSERT_EQ(points[2],5u);}
     ASSERT_TRUE((memory[0].srcAccessMask&VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)!=0);
     ASSERT_TRUE((memory[0].dstStageMask&VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT)!=0);
     ASSERT_TRUE((memory[0].dstAccessMask&VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)!=0);
-    ASSERT_TRUE((memory[1].srcStageMask&VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT)!=0);
-    ASSERT_TRUE((memory[1].srcAccessMask&VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)!=0);
-    ASSERT_TRUE((memory[1].dstStageMask&VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT)!=0);
-    ASSERT_TRUE((memory[1].dstAccessMask&VK_ACCESS_2_SHADER_STORAGE_READ_BIT)!=0);
-    ASSERT_TRUE((memory[1].dstAccessMask&VK_ACCESS_2_HOST_READ_BIT)!=0);
+    for(unsigned i=1;i<barriers;i++) {
+        ASSERT_TRUE((memory[i].srcStageMask&VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT)!=0);
+        ASSERT_TRUE((memory[i].srcAccessMask&VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)!=0);
+        ASSERT_TRUE((memory[i].dstStageMask&VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT)!=0);
+        ASSERT_TRUE((memory[i].dstAccessMask&VK_ACCESS_2_SHADER_STORAGE_READ_BIT)!=0);
+    }
+    ASSERT_TRUE((memory[final].dstAccessMask&VK_ACCESS_2_HOST_READ_BIT)!=0);
     PASS();
 }
 static void test_atomic_candidate_passes_publish_together(void) {recording_case(true);}
