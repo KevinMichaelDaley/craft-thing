@@ -16,3 +16,9 @@ Explicit synchronization validation on displayed native640x360 frames reports WR
 
 Compiling RED presentation regression proves initial swapchain transfer transition chains from the acquire semaphore transfer wait stage. Preserve mailbox, finite acquire, image semaphores, render fence and unchanged15second watchdog. GREEN displayed synchronization validation has no WSI hazards; full UI/quarter correctness and native timing remain unchanged in quality.
 
+
+## Notes
+
+**2026-10-17T05:32:52Z**
+
+Targeted GREEN: acquire transition sourceTRANSFER removes WRITE_AFTER_READ; final PRESENT transition destinationBOTTOM_OF_PIPE removes PRESENT_AFTER_WRITE. Compiling regressions failed separately before each fix. Unchanged15second three-context/270frame presentation watchdog now passes both scope assertions. Normal displayed native640x360 scene with explicit synchronization validation has0VUID/SYNC diagnostics; its wall-time gate predictablyfails withvalidation enabled and is not used as performance acceptance. Full combined regression pending current optimizer checkpoint.
