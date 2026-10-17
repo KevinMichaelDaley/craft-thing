@@ -27,3 +27,7 @@ Water now uses a separate atlas-indexed linear RGB concentration buffer (global 
 **2026-10-17T19:15:10Z**
 
 ctr-nxdp implements linear RGB persistence for terrain, sparse body rest pixels and advected water in version 6 snapshots/chunks, plus GPU extraction/relocation/fracture transfer. Remaining scope includes full surface channels, emission, stable provenance and bound-particle moisture appearance.
+
+**2026-10-17T21:40:00Z**
+
+New leaf material (ctr-q1ui) transfers source RGB to terrain sidecar on crumble. General MPM particle advection still needs per-particle appearance ownership so leaf/dirt/gravel custom colors travel with particles rather than destination-cell maps; include this in remaining granular appearance work.
