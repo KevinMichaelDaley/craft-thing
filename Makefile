@@ -35,6 +35,8 @@ build/authoring_request_tests: tests/structural/authoring_request_tests.c src/st
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/structural/authoring_request_tests.c src/structural/authoring.c -o $@
 .DEFAULT_GOAL := all
+build/terrain_prop_tests: tests/vulkan/terrain_prop_tests.c src/vulkan/prop_gpu.c src/assets/prop.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/prop_gpu.c src/assets/prop.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 .PHONY: tools tools-offline test_tools
 tools:
 	python3 tools/bootstrap_vulkan.py bootstrap
