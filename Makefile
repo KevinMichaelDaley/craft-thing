@@ -468,6 +468,7 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/fluid_aperture_tests
 	./build/raster_dispatch_tests
 	./build/contact_dispatch_tests
+	./build/contact_terrain_work_tests
 	./build/mpm_control_tests
 	./build/mpm_compaction_tests
 	./build/mpm_descriptor_tests
@@ -714,7 +715,7 @@ build/diagnostics/engine_init_probe: tools/diagnostics/engine_init_probe.c tools
 build/diagnostics/contact_scaling: tools/diagnostics/contact_scaling.c tests/vulkan/pixel_component_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/pixel_component_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) tools/diagnostics/contact_scaling.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_load_shader_module
 
-build/diagnostics/contacts_terrain_scan.comp.spv: shaders/sim/contacts.comp shaders/sim/contact_geometry.glsl shaders/sim/rigid_body.glsl
+build/diagnostics/contacts_terrain_scan.comp.spv: shaders/sim/contacts.comp shaders/sim/contact_geometry.glsl shaders/sim/rigid_body.glsl $(CONTACT_SHADER)
 	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TERRAIN_SCAN_PROFILE=1 -o $@ $<
 
 build/contact_terrain_work_tests: tests/vulkan/contact_terrain_work_tests.c tools/diagnostics/contact_scaling.c tests/vulkan/pixel_component_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/pixel_component_tests build/diagnostics/contacts_terrain_scan.comp.spv
@@ -723,6 +724,8 @@ build/contact_terrain_work_tests: tests/vulkan/contact_terrain_work_tests.c tool
 .PHONY: test_contact_terrain_work
 test_contact_terrain_work: build/contact_terrain_work_tests
 	./build/contact_terrain_work_tests
+
+test: build/contact_terrain_work_tests
 
 build/diagnostics/native360_fluid_trace: tests/app/native_720_performance_tests.c tools/diagnostics/fluid_dispatch_trace.c $(GPU_SRC) src/world/chunk.c build/pixel_component_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GPU_CHUNK_SLOTS=90u -DNATIVE_PERF_WIDTH=640 -DNATIVE_PERF_HEIGHT=360 tests/app/native_720_performance_tests.c tools/diagnostics/fluid_dispatch_trace.c $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_tick_capture -Wl,--wrap=vkBeginCommandBuffer -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch

@@ -9,7 +9,9 @@ struct Polygon { vec2 vertices[BODY_VERTEX_CAPACITY]; uint count; };
 
 Polygon body_polygon(Body body,uint piece, vec2 offset) {
     Polygon polygon;
-    polygon.count = piece_vertices(body,piece);
+    /* Typed contacts call this only after the occupied boundary test. Keeping
+       that proven count constant avoids dynamic polygon loops for pixel cells. */
+    polygon.count = CONTACT_PIXEL_ONLY ? 4u : piece_vertices(body,piece);
     for (uint i = 0u; i < polygon.count; ++i)
         polygon.vertices[i] = offset + piece_vertex(body,piece,i);
     return polygon;

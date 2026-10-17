@@ -227,6 +227,7 @@ void main() {
                         if (particles[pi].mass_fp==0u && particles[pi+4096u].mass_fp==0u) continue;
                     }
                     atomicOr(group_found,1u);
+                    break;
                 }
 #ifdef DC_TERRAIN_SCAN_PROFILE
                 if ((params.mode&256u)!=0u) atomicAdd(data[base+9u],scanned);
