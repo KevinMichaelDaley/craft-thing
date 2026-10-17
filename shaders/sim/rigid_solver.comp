@@ -134,12 +134,12 @@ vec3 correction(uint i) {
     uint p = bs(i) + 16u;
     return vec3(int(data[p]), int(data[p + 1u]), int(data[p + 2u])) / SUM_SCALE;
 }
-float weight(uint a, uint b,bool grain) {
-    uint offset=grain?12u:20u;
+float weight(uint a, uint b,bool conservative) {
+    uint offset=conservative?12u:20u;
     uint degree = data[bs(a) + offset];
     if (b != BODY_CAPACITY)
         degree = max(degree, data[bs(b) + offset]);
-    return 0.8 / max(float(degree)/(grain?1.0:SUM_SCALE), 1.0);
+    return 0.8 / max(float(degree)/(conservative?1.0:SUM_SCALE), 1.0);
 }
 #include "rigid_grain.glsl"
 void solve_contact(uint i, bool impulse) {
@@ -173,7 +173,7 @@ void solve_contact(uint i, bool impulse) {
     float wt = ba.inverse_mass + mb + ba.inverse_inertia * at * at + ib * bt * bt;
     if (wn <= 0.0)
         return;
-    float scale = weight(a, b,grain_ref!=0u), dn = 0.0, dt = 0.0;
+    float scale = weight(a, b,grain_ref!=0u||data[s+11u]==0u), dn = 0.0, dt = 0.0;
     if(grain_ref!=0u) scale=min(scale,0.8/float(max(grain_scratch[(grain_ref-1u)*4u+3u],1u)));
     if (impulse) {
         if (dot(pa - pb, n) > 1.0 / 65536.0 && getf(s) == 0.0)
@@ -250,6 +250,7 @@ void main() {
         putv(s + 9u, pb);
         vec2 va = velocity(ba) + ba.angular_velocity * vec2(-ra.y, ra.x), vb = vec2(0);
         vec2 normal=getv(c+8u);
+        data[s+11u]=uint(dot(pa-pb,normal)<=1.0/65536.0);
         if(dot(pa-pb,normal)<=REST_CONTACT_DISTANCE && normal.y<-.5)
             atomicOr(data[bs(a)+REST_FLAGS_WORD],REST_SUPPORTED);
         uint grain_ref=grain_reference(c);
@@ -268,7 +269,7 @@ void main() {
             float body_weight=ba.inverse_mass+ba.inverse_inertia*arm*arm;
             float grain_weight=65536.0/float(particles[grain_ref-1u].mass_fp);
             degree=body_weight/(body_weight+grain_weight);
-        }
+        } else if(data[s+11u]==0u) degree=0.0;
         atomicAdd(data[bs(a) + 12u],1u);
         atomicAdd(data[bs(a) + 20u],uint(round(degree*SUM_SCALE)));
         if (b != BODY_CAPACITY) {
@@ -282,7 +283,7 @@ void main() {
             float limit_b=(bb.motion_flags&1u)!=0u ? 1.0/65536.0 : REST_SPEED;
             moving=moving || length(va)>limit_a || length(vb)>limit_b;
             atomicAdd(data[bs(b) + 12u],1u);
-            atomicAdd(data[bs(b) + 20u],uint(SUM_SCALE));
+            atomicAdd(data[bs(b) + 20u],uint(round(degree*SUM_SCALE)));
         }
         if(moving) {
             atomicOr(data[bs(a)+REST_FLAGS_WORD],REST_MOVING_CONTACT);

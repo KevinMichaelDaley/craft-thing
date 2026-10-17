@@ -711,7 +711,7 @@ build/structural_composition_fracture_tests: tests/structural/composition_fractu
 build/structural_shadow_chunk_store_tests: tests/structural/shadow_chunk_store_tests.c tests/structural/placement_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/shaders/pattern.comp.spv: shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl
+build/shaders/pattern.comp.spv: shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl include/dungeoncraft/terrain_flags.h
 
 build/structural_composition_energy_tests: tests/structural/composition_fracture_energy_tests.c tests/structural/placement_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)

@@ -57,11 +57,22 @@ uint terrain_bonds(uint i) {
     }
     return bonds;
 }
-bool terrain_released(uint i,uint bonds) {
+const uint RELEASE_EXPLICIT=1u,RELEASE_SUPPORT_CHANGED=2u,RELEASE_GRANULAR_SUPPORT=4u;
+uint terrain_release_state(uint i,uint bonds) {
     uint flags=cells[i].x;
-    return (flags&LOADED_TERRAIN)==0u || (flags&RELEASED_TERRAIN)!=0u ||
+    uint state=(flags&LOADED_TERRAIN)==0u||(flags&RELEASED_TERRAIN)!=0u?RELEASE_EXPLICIT:0u;
+    bool changed=
         ((flags&BONDS_READY)!=0u && ((flags&CARDINAL_BOND_MASK)&~bonds)!=0u)||
         ((flags&DIAGONAL_BONDS_READY)!=0u && ((flags&DIAGONAL_BOND_MASK)&~bonds)!=0u);
+    if(changed) state|=RELEASE_SUPPORT_CHANGED;
+    for(uint axis=0u;axis<8u;axis++) {
+        uint bit=1u<<(axis<4u?DC_CELL_BOND_SHIFT+axis:DC_CELL_DIAGONAL_BOND_SHIFT+axis-4u);
+        if((flags&bonds&bit)==0u) continue;
+        uint other=neighbor(i,axis);if(other==0xffffffffu) continue;
+        uint material=cells[other].x&65535u;
+        if(material==2u||material==4u||material==5u||material==6u||material==10u) state|=RELEASE_GRANULAR_SUPPORT;
+    }
+    return state;
 }
 ivec2 relative_point(uint root,uint i) {
     uint a=registry(root/4096u),b=registry(i/4096u);
@@ -218,7 +229,7 @@ void main() {
         uint r=record(c);ivec2 p=relative_point(data[r],i);
         atomicMin(data[r+1u],uint(p.x)^0x80000000u);atomicMin(data[r+2u],uint(p.y)^0x80000000u);
         atomicMax(data[r+3u],uint(p.x)^0x80000000u);atomicMax(data[r+4u],uint(p.y)^0x80000000u);atomicAdd(data[r+5u],1u);
-        if(terrain_released(i,terrain_bonds(i))) atomicOr(data[r+23u],1u);
+        atomicOr(data[r+23u],terrain_release_state(i,terrain_bonds(i)));
         for(uint axis=0u;axis<8u;axis++) if(neighbor(i,axis)==0xffffffffu) atomicOr(data[r+6u],1u);
         return;
     }
@@ -228,7 +239,10 @@ void main() {
             uint r=record(lane);for(uint w=1u;w<=4u;w++) data[r+w]^=0x80000000u;
             ivec2 extent=ivec2(data[r+3u],data[r+4u])-ivec2(data[r+1u],data[r+2u])+1;
             uint dir=uint((extent.x+15)/16)*uint((extent.y+15)/16);
-            if(data[r+23u]==0u||data[r+6u]!=0u||data[r+5u]!=sizes[data[r]]||dir>n) dir=0u;
+            uint state=data[r+23u];
+            bool released=(state&RELEASE_EXPLICIT)!=0u||
+                ((state&RELEASE_SUPPORT_CHANGED)!=0u&&(state&RELEASE_GRANULAR_SUPPORT)==0u);
+            if(!released||data[r+6u]!=0u||data[r+5u]!=sizes[data[r]]||dir>n) dir=0u;
             data[r+7u]=dir;values[lane]=dir;
         } else values[lane]=0u;
         scan_values();
@@ -337,7 +351,7 @@ void main() {
             uint c=candidates[labels[i]];
             if(c<data[g+36257u]&&data[record(c)+14u]!=0u) {cells[i].x=0u;terrain_colors[i]=vec4(0);}
             else if((cells[i].x&LOADED_TERRAIN)!=0u) {
-                uint bonds=candidates[n+i],released=terrain_released(i,bonds)?RELEASED_TERRAIN:0u;
+                uint bonds=candidates[n+i],released=(terrain_release_state(i,bonds)&RELEASE_EXPLICIT)!=0u?RELEASED_TERRAIN:0u;
                 cells[i].x=(cells[i].x&~BOND_MASK)|BONDS_READY|DIAGONAL_BONDS_READY|bonds|released;
             }
         }

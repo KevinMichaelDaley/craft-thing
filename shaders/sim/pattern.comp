@@ -1,5 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#include "../../include/dungeoncraft/terrain_flags.h"
 layout(constant_id=1) const bool DRAW_PIXEL_ONLY=false;
 layout(constant_id=2) const bool DRAW_SIMPLE=false;
 #define DC_RIGID_PIXEL_ONLY DRAW_PIXEL_ONLY
@@ -35,6 +36,21 @@ layout(push_constant) uniform Params {
     uint radius;
     uint color;
 } params;
+
+bool rigid_material(uint material) {return material==1u||material==7u||material==8u||material==9u;}
+void release_edited_support(ivec2 position) {
+    for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++) {
+        if(x==0&&y==0) continue;
+        ivec2 neighbor=position+ivec2(x,y);
+        if(any(lessThan(neighbor,ivec2(0)))||any(greaterThanEqual(neighbor,ivec2(params.width,params.height)))) continue;
+        uint page=pages[uint(neighbor.y/64)*((params.width+63u)/64u)+uint(neighbor.x/64)];
+        if(page==0u) continue;
+        uint index=(page-1u)*4096u+uint(neighbor.y%64)*64u+uint(neighbor.x%64);
+        uint packed=chunk_cells[index].x;
+        if(rigid_material(packed&65535u)&&(packed&(DC_CELL_LOADED_TERRAIN<<DC_CELL_FLAGS_SHIFT))!=0u)
+            atomicOr(chunk_cells[index].x,DC_CELL_RELEASED_TERRAIN<<DC_CELL_FLAGS_SHIFT);
+    }
+}
 
 uint grain_radius_fp(uint material) {
     return material == 2u ? 16384u : 32768u;
@@ -287,6 +303,10 @@ void main() {
                     }
                 }
                 if((cell.x&65535u)!=material) terrain_colors[index]=vec4(0);
+                uint old_material=cell.x&65535u;
+                if(old_material!=material&&old_material!=0u&&old_material!=3u&&
+                   (material==0u||material==3u||(rigid_material(old_material)&&!rigid_material(material))))
+                    release_edited_support(ivec2(p));
                 cell.x = ((cell.x & 0xffffu)==material ? cell.x & 0xffff0000u : 0u) | material;
                 cell.y = params.color == 3u ? 65536u : new_grain ? cell.y : 0u;
                 chunk_cells[index] = cell;
