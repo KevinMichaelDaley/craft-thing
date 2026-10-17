@@ -22,6 +22,28 @@ static int g_pass, g_fail;
 #define ASSERT_INT_EQ(a, b) ASSERT_TRUE((int)(a) == (int)(b))
 #define PASS() ++g_pass
 
+static bool report_solver_profile(dc_gpu_t *gpu,unsigned side,const char *label) {
+    uint64_t times[18],stages[4];
+    if(vkGetQueryPoolResults(gpu->device,gpu->timestamp_pool,16,18,sizeof(times),times,
+                            sizeof(uint64_t),VK_QUERY_RESULT_64_BIT)!=VK_SUCCESS) return false;
+    if(vkGetQueryPoolResults(gpu->device,gpu->timestamp_pool,12,4,sizeof(stages),stages,
+                            sizeof(uint64_t),VK_QUERY_RESULT_64_BIT)!=VK_SUCCESS) return false;
+    double scale=gpu->timestamp_period/1e6,contacts=0;
+    for(unsigned step=0;step<8;step++) contacts+=(times[3u+2u*step]-times[2u+2u*step])*scale;
+    const uint32_t *pairs=dc_gpu_broadphase_data(gpu),*manifold=dc_gpu_contact_data(gpu);
+    const dc_gpu_body_record_t *body=gpu->body_mapped;
+    double hydro=(times[1]-times[0])*scale,solver=(stages[2]-stages[1])*scale;
+    printf("%s ring%u prepare%.3fms hydro%.3fms contacts8steps%.3fms other-solver%.3fms raster/structure%.3fms "
+           "pairs%u contacts%u visited%u boundary%u/%u "
+           "ready%u mass%.6f inertia%.6f radius%.6f bounds(%d,%d)-(%d,%d) swept(%d,%d)-(%d,%d)\n",
+           label,side,(stages[1]-stages[0])*scale,hydro,contacts,solver-hydro-contacts,(stages[3]-stages[2])*scale,
+           pairs[0],manifold[0],manifold[9],manifold[10],manifold[11],
+           body[0].motion_ready,body[0].mass,body[0].inertia,body[0].radius,
+           body[0].bounds_low[0],body[0].bounds_low[1],body[0].bounds_high[0],body[0].bounds_high[1],
+           body[0].swept_low[0],body[0].swept_low[1],body[0].swept_high[0],body[0].swept_high[1]);
+    return true;
+}
+
 static void test_two_complex_pixel_bodies_meet_real_time_gpu_budget(void) {
     char err[256] = {0};
     dc_gpu_t *g = NULL;
@@ -135,6 +157,7 @@ static void test_cold_extraction_and_unchanged_complexity_sweep(void) {
             printf("extraction stage %u %.3f ms\n", stage,
                    (times[stage + 1] - times[stage]) * g->timestamp_period /
                        1e6);
+        ASSERT_TRUE(report_solver_profile(g,side,"cold"));
         g->component_profile = false;
         uint32_t count;
         ASSERT_TRUE(dc_gpu_read_pixel_shape(g, 0x80000001u, NULL, 0, &count,
@@ -149,6 +172,12 @@ static void test_cold_extraction_and_unchanged_complexity_sweep(void) {
         double warm_ms = unchanged / 8e6;
         printf("ring %u pixels %u: cold rigid %.3f ms, unchanged %.3f ms\n",
                side, count, cold_ms, warm_ms);
+        if(getenv("DC_COLD_DIAG")) {
+            g->component_profile=true;
+            dc_gpu_tick_capture_t diagnostic;
+            ASSERT_TRUE(dc_gpu_tick_capture(g,&diagnostic,err,sizeof(err)));
+            ASSERT_TRUE(report_solver_profile(g,side,"extra warm diagnostic"));
+        }
         dc_gpu_destroy(g);
         if (!(cold_ms < 14.0)) {
             printf("FAIL cold ring%u: %.3fms must remain below14ms\n", side,
