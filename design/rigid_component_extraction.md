@@ -8,8 +8,12 @@ Four-connected known material cells share a root across warm chunk seams. The
 authoritative chunk registry supplies connectivity, including cached chunks outside
 the mapped viewport. A component touching an unknown neighboring chunk remains
 terrain: cold space cannot prove detachment. Cached births retain their world
-anchors; dynamics outside mapped simulation residency follow the existing streaming
-freeze policy. Every birth uses variable geometry in a GPU-owned double-bank arena appended to
+anchors. User requirement (October 17): viewport intersection and render visibility
+must not gate extraction or dynamics. Fully known resident/cached world components
+must advance even partly or wholly offscreen; only genuinely unresolved world
+connectivity may defer work as UNKNOWN. The current solver's visible/reference-page
+awake checks do not yet meet this requirement and are tracked by ct-yd8t; cached
+birth alone is not acceptance of cached dynamics. Every birth uses variable geometry in a GPU-owned double-bank arena appended to
 the body storage. A pixel body keeps one stable body ID and stores a four-bit
 material for every cell in an occupied tile; zero denotes a hole. Its flagged
 piece count records the occupied volume, and its geometry pointer addresses the

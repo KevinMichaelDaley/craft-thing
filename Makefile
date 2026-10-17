@@ -938,6 +938,10 @@ test_gpu_tools: build/fluid_recording_tests
 build/native_demo_controls_tests: tests/app/native_demo_controls_tests.c tests/app/native_demo_controls.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
 test_gpu_tools: build/native_demo_controls_tests
+build/pixel_residency_tests: tests/vulkan/pixel_residency_tests.c tests/vulkan/pixel_component_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/material_cut_buoyancy_tests: tests/app/material_cut_buoyancy_tests.c src/app/level.h src/app/view_config.h $(filter-out src/app/main.c,$(NATIVE_SRC))
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
 shaders: $(MPM_COMPACTION_SHADER)
 .PHONY: test_mpm_compaction_work
 test_mpm_compaction_work: build/mpm_compaction_tests
