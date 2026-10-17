@@ -1,6 +1,6 @@
 ---
 id: ct-lqd8
-status: in_progress
+status: closed
 deps: [ct-fmj6]
 links: []
 created: 2026-10-17T03:43:36Z
@@ -30,3 +30,7 @@ GREEN: removed scalar compact_tiles; cooperative dilation, hierarchical integer 
 **2026-10-17T04:58:42Z**
 
 Full validated headless010ef76 completed exit0:389 reported passes,0failures/VUID/SYNC diagnostics. Log build/diagnostics/parallel-mpm-full-test.log. UI suite running; full quarter functional checks next. Sustained native360 p95 exposed additional ct-tu55 work; compaction exactness remains green.
+
+**2026-10-17T05:06:52Z**
+
+Accepted: full validated headless389pass/0VUID, full UI and full quarter-native functional suites exit0; exact visible concave-body test passes. Compaction budgets and66k metadata correctness pass. Existing quarter cold extraction and sustained native360 p95 remain open under ct-wuci/ct-tu55; not attributed to or hidden by compaction completion.

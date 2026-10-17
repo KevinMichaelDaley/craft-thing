@@ -1,6 +1,6 @@
 ---
 id: ct-fmj6
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-17T03:42:04Z
@@ -34,3 +34,7 @@ Minimal single-global-invocation publisher passes the forced legal schedule (cou
 **2026-10-17T04:26:06Z**
 
 Extended legal-scheduling regression now3/3: changed count retained, unchanged work disabled, balanced2Dextent preserved; all untouched metadata verified. Production single-global-invocation publisher and integration remain valid under synchronizationvalidation. Full combined regression pending before close.
+
+**2026-10-17T05:06:52Z**
+
+Accepted after full validated headless389pass/0VUID plus full UI and quarter-native functional suites exit0. Single-writer convergence and2Ddispatch control tests3/3 pass, winding/mud connectivity and exact coupled state retained. UI wall-clock test requires validationOFF because91pipeline validation alone5.224s/context; unchanged presentation15s gate passes all3cycles without validation. No runtime quality/gates changed.
