@@ -29,3 +29,7 @@ Address-directory GPU GREEN on actual IrisXe completes0.244s:90records/2pages th
 **2026-10-17T08:16:39Z**
 
 Shared C/GLSL root64/page48 ABI and common typed body/data accessors now GPU verified: 90 then200 records, exact544byte stride, page/root generation roundtrip, zero mismatches and validation errors in0.256s. Runtime remains legacy64; this checkpoint provides one common accessor for subsequent consumers and renderer migration, not gameplay growth.
+
+**2026-10-17T08:18:39Z**
+
+Transactional resource-owner RED compiled and failed2tests, then CPU-mocked GREEN2/2: growth65→200→1025, old store immutable until completed submission, submitted preparations cannot be discarded, and each allocation-stage failure releases pending resources without publication. Body blocks retain addresses; GPU transfer copies old directory prefix and initializes new block; host writes resource-address entries only. Runtime consumer migration and actual GPU owner validation remain pending.
