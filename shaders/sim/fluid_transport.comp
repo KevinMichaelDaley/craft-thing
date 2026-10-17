@@ -60,6 +60,10 @@ void put_water(ivec2 p,uint value) {
     if(position<CACHE_CELLS) cached[position].x=value;
     else chunk_cells[atlas_index(p,page_at(p))].y=value;
 }
+float travel_for_speed(float speed) {
+    if((TRANSPORT_MODE&1u)!=0u) speed=-speed;
+    return speed>0.?speed*uintBitsToFloat(params.step_scale_bits)*TRANSPORT_FUDGE:0.;
+}
 uint request_at(ivec2 source,ivec2 direction,uint offset,float travel) {
     ivec2 target=source+direction*int(offset);
     uint receiving=water_at(target),capacity=receiving_capacity(target);
@@ -73,29 +77,33 @@ bool move_source(ivec2 source,ivec2 direction) {
     uint meta=cell_meta(source);
     if((meta&(KNOWN|PERMEABLE))!=(KNOWN|PERMEABLE)||(meta&131071u)==0u) return false;
     uint coordinate=uint(vertical?source.y:source.x),available=water_at(source);
-    if(available==0u||!open_cell(source+direction)) return false;
-    float aperture=face_aperture(source,direction);if(aperture<=0.) return false;
+    if(available==0u) return false;
+    uint next_meta=cell_meta(source+direction),next_capacity=next_meta&131071u;
+    if((next_meta&(KNOWN|PERMEABLE))!=(KNOWN|PERMEABLE)||next_capacity==0u) return false;
     ivec2 face=source+min(direction,ivec2(0));uint face_index=uint(face.y)*params.width+uint(face.x);
     uint face_coordinate=uint(vertical?face.y:face.x);
-    float speed;
-    if(face_coordinate<CACHE_CELLS) speed=uintBitsToFloat(cached[face_coordinate].w);
+    float travel;
+    if(face_coordinate<CACHE_CELLS) travel=uintBitsToFloat(cached[face_coordinate].w);
     else {
-        speed=vertical?face_velocity[face_index].y:face_velocity[face_index].x;
+        float speed=vertical?face_velocity[face_index].y:face_velocity[face_index].x;
         if(vertical&&params.elapsed_time_mode!=0u) speed=.5*(speed+uintBitsToFloat(fluid_a[face_index]));
+        travel=travel_for_speed(speed);
     }
-    if(direction.x<0||direction.y<0) speed=-speed;
-    if(speed<=0.) return false;
-    float travel=speed*uintBitsToFloat(params.step_scale_bits)*TRANSPORT_FUDGE;
+    if(travel<=0.) return false;
+    if(travel<=1.&&water_at(source+direction)>=next_capacity) return false;
+    float aperture=face_aperture(source,direction);if(aperture<=0.) return false;
     uint edge=(direction.x>0||direction.y>0)?length-1u-coordinate:coordinate;
     uint reach=min(uint(ceil(travel)),edge),lane=gl_SubgroupInvocationID;
     if(reach==1u) {
+        ivec2 target=source+direction;
+        uint receiving=water_at(target),capacity=next_capacity;
+        if(receiving>=capacity) return false;
+        uint allowance=uint(floor(clamp(travel,0.,1.)*float(FULL)*aperture));
+        if(allowance==0u) return false;
         subgroupBarrier();
         uint moved=0u;
         if(lane==0u) {
-            ivec2 target=source+direction;
-            uint receiving=water_at(target),capacity=receiving_capacity(target);
-            uint allowance=uint(floor(clamp(travel,0.,1.)*float(FULL)*aperture));
-            moved=min(min(allowance,available),receiving<capacity?capacity-receiving:0u);
+            moved=min(min(allowance,available),capacity-receiving);
             if(moved!=0u) {put_water(target,receiving+moved);put_water(source,available-moved);}
         }
         return subgroupBroadcastFirst(moved)!=0u;
@@ -132,7 +140,8 @@ void main() {
             uint aperture=FULL-min(FULL,occupancy[(vertical?4u:3u)*params.width*params.height+index]);
             float speed=vertical?face_velocity[index].y:face_velocity[index].x;
             if(vertical&&params.elapsed_time_mode!=0u) speed=.5*(speed+uintBitsToFloat(fluid_a[index]));
-            value=uvec4(cell.y,capacity|KNOWN|(permeable_material(cell.x&65535u)?PERMEABLE:0u),aperture,floatBitsToUint(speed));
+            float travel=travel_for_speed(speed);
+            value=uvec4(cell.y,capacity|KNOWN|(permeable_material(cell.x&65535u)?PERMEABLE:0u),aperture,floatBitsToUint(travel));
         }
         cached[position]=value;
     }
