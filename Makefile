@@ -854,4 +854,13 @@ test_gpu_tools: build/fluid_transport_limits_tests
 build/contact_recording_tests: tests/vulkan/contact_recording_tests.c build/contact_gpu.o build/shader.o
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< build/contact_gpu.o build/shader.o -o $@ -lvulkan
 test_gpu_tools: build/contact_recording_tests
+build/mpm_compaction_tests: tests/vulkan/mpm_compaction_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) $(MPM_ACTIVITY_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/diagnostics/mpm_control_schedule.spv: shaders/sim/mpm_component.comp tools/diagnostics/mpm_control_schedule.py
+	mkdir -p build/diagnostics
+	python3 tools/diagnostics/mpm_control_schedule.py $< build/diagnostics/mpm_control_schedule.comp
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ build/diagnostics/mpm_control_schedule.comp
+	spirv-val --target-env vulkan1.3 $@
+build/mpm_control_tests: tests/vulkan/mpm_control_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/mpm_control_schedule.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 

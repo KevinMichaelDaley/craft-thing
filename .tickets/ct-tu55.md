@@ -1,7 +1,7 @@
 ---
 id: ct-tu55
 status: in_progress
-deps: []
+deps: [ct-fmj6, ct-lqd8]
 links: [ct-wuci]
 created: 2026-10-14T03:55:23Z
 type: task
