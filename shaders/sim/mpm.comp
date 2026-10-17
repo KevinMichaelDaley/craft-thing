@@ -44,6 +44,9 @@ const float GRAVITY = 0.25;
 const float MAX_VELOCITY = 2.0;
 const float VELOCITY_DAMPING = 0.999;
 const float WATER_DRAG = 0.5;
+/* Permit transient compression while small grains sift past larger grains,
+   but never place two full-rest-cell grains in one cell. */
+const uint CELL_REST_VOLUME_LIMIT_FP=98304u;
 const uint MODE_WATER_FEEDBACK = 6u;
 const uint MODE_MOISTURE = 7u;
 const uint MOISTURE_MASK = 0x00ffffffu;
@@ -385,6 +388,10 @@ bool id_less(Particle left, uint left_index, Particle right, uint right_index) {
     return left_index < right_index;
 }
 
+uint rest_volume_fp(Particle particle) {
+    return uint(round(float(particle.mass_fp)/grain_density(particle.material)));
+}
+
 void accept_one(ivec2 owner, uint layer) {
     uint index = particle_index(owner, layer);
     Particle particle = proposals[index];
@@ -392,11 +399,16 @@ void accept_one(ivec2 owner, uint layer) {
     ivec2 target = target_of(particle, owner);
     if (all(equal(target, owner))) { accepted[index] = 1u; return; }
     if (page_at(target) == 0u) { accepted[index] = 0u; return; }
-    uint occupied = 0u;
+    uint occupied = 0u,used_volume=0u,volume=rest_volume_fp(particle);
     for (uint other_layer = 0u; other_layer < 2u; ++other_layer) {
         Particle old;
-        if (load_particle(target, other_layer, old)) ++occupied;
+        if (load_particle(target, other_layer, old)) {
+            ++occupied;used_volume+=rest_volume_fp(old);
+        }
     }
+    /* Resident grains reserve their rest volume until they actually leave.
+       A second storage layer is not a second physical cell of capacity. */
+    if(occupied>=2u||used_volume+volume>CELL_REST_VOLUME_LIMIT_FP) {accepted[index]=0u;return;}
     uint rank = 0u;
     for (int dy = -1; dy <= 1; ++dy) {
         for (int dx = -1; dx <= 1; ++dx) {
@@ -407,11 +419,13 @@ void accept_one(ivec2 owner, uint layer) {
                 if (!load_proposal(source, other_layer, rival) ||
                     !all(equal(target_of(rival, source), target))) continue;
                 uint rival_index = particle_index(source, other_layer);
-                if (id_less(rival, rival_index, particle, index)) ++rank;
+                if (id_less(rival, rival_index, particle, index)) {
+                    ++rank;used_volume+=rest_volume_fp(rival);
+                }
             }
         }
     }
-    accepted[index] = occupied < 2u && rank < 2u - occupied ? 1u : 0u;
+    accepted[index] = rank < 2u - occupied && used_volume+volume<=CELL_REST_VOLUME_LIMIT_FP ? 1u : 0u;
 }
 
 Particle zero_particle() {
