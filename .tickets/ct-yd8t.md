@@ -2,7 +2,7 @@
 id: ct-yd8t
 status: in_progress
 deps: []
-links: []
+links: [ct-hhmy, ct-wuci]
 created: 2026-10-17T07:42:34Z
 type: bug
 priority: 1
