@@ -38,11 +38,11 @@ static void selector_case(unsigned kind) {
     bool pixels=kind!=3&&kind!=4,typed=pixels&&kind!=1&&kind!=5&&kind!=6&&kind!=7;
     uint32_t generic=pixels&&!typed&&kind!=5?19u:0u,fast=typed?19u:0u;
     bool safe=solver[10]==generic&&solver[11]==1&&solver[12]==1&&
-        p.mapped[0]==fast&&p.mapped[1]==1&&p.mapped[2]==1&&contacts[3]==777&&
+        p.mapped[6]==fast&&p.mapped[7]==1&&p.mapped[8]==1&&contacts[3]==777&&
         contacts[6]==(kind==5?0u:1u);
     for(unsigned i=13;i<16;i++) safe=safe&&solver[i]==4369;
-    for(unsigned i=3;i<39;i++) safe=safe&&p.mapped[i]==4369;
-    printf("kind%u generic %u,%u,%u typed %u,%u,%u\n",kind,solver[10],solver[11],solver[12],p.mapped[0],p.mapped[1],p.mapped[2]);
+    for(unsigned i=0;i<39;i++) if(i<6||i>8) safe=safe&&p.mapped[i]==4369;
+    printf("kind%u generic %u,%u,%u typed %u,%u,%u\n",kind,solver[10],solver[11],solver[12],p.mapped[6],p.mapped[7],p.mapped[8]);
     fixture_release_pipeline(&p);
     vkUnmapMemory(p.device,body_memory);vkDestroyBuffer(p.device,body,NULL);vkFreeMemory(p.device,body_memory,NULL);
     vkUnmapMemory(p.device,p.memory);vkDestroyBuffer(p.device,p.buffer,NULL);vkFreeMemory(p.device,p.memory,NULL);
