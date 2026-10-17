@@ -72,3 +72,17 @@ storage on the GPU. It never runs a CPU physics solve. Candidate count is bounde
 to 64, and the command still requires its external deadline. This extra work
 perturbs frame timing; use its per-candidate results for attribution, not FPS
 acceptance. Run with synchronization validation before using those timings.
+
+The sustained native 360p regression runs 180 measured frames for each unchanged
+dry, dense-fluid/grain and exact-concave-body workload. Both physics and display
+are 640×360, with two fixed 60 Hz ticks per frame. Run this timing target without
+validation; the original shorter benchmark remains available separately:
+
+```sh
+SDL_VIDEODRIVER=wayland ./tools/with-vulkan make test_native_360_sustained_performance
+```
+
+Set `DC_FLUID_DISPATCH_TRACE=1` on the explicit
+`build/diagnostics/native360_fluid_trace` binary to capture its post-measurement
+fluid dispatches for dry or dense workloads as well as concave bodies. This does
+not enable hooks in the ordinary benchmark or change the measured frame loop.

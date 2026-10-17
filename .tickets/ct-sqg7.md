@@ -1,6 +1,6 @@
 ---
 id: ct-sqg7
-status: in_progress
+status: closed
 deps: [ct-k6ym]
 links: [ct-tu55]
 created: 2026-10-17T05:30:50Z
@@ -30,3 +30,7 @@ Further audit only: typed terrain flag reads are currently atomic per lane to av
 **2026-10-17T06:19:51Z**
 
 Full headless acceptance passed: 395 reported passes, exit 0, with Vulkan validation and explicit synchronization validation enabled; zero VUIDs or synchronization hazards. All 24 runtime SPIR-V modules validate. The source guard now distinguishes unsafe shared-return predicates from safe lane-zero statistics reads, with positive and negative detector regressions. UI is running and quarter-native is queued; ticket remains in progress until those finish.
+
+**2026-10-17T06:29:10Z**
+
+Accepted: full headless 395 passes with explicit synchronization validation and zero diagnostics; full UI 17 passes plus smoke scenarios; full quarter-native 168 passes, both exit 0. All 24 runtime SPIR-V modules validate. Sustained native concave workload passes three 180-frame runs, latest mean 25.889 ms and p95 33.206 ms. Quarter-native exact two-body steady GPU budget passes at rigid 2.815 ms and total 5.526 ms. Independent zero-rigid dense-fluid tail is tracked by ct-79mx, and cold extraction budgets remain open under ct-wuci; overall ct-tu55 is not complete.

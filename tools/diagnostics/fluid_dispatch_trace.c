@@ -1,5 +1,6 @@
 /* Link only into the explicit diagnostic binary. Ordinary frames have no hooks. */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "../../src/vulkan/gpu_internal.h"
@@ -78,7 +79,7 @@ void __wrap_vkCmdDispatch(VkCommandBuffer command, uint32_t x, uint32_t y, uint3
 
 bool __wrap_dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
                                 char *err, uint32_t cap) {
-    if (!gpu->component_profile)
+    if (!gpu->component_profile && !getenv("DC_FLUID_DISPATCH_TRACE"))
         return __real_dc_gpu_tick_capture(gpu, capture, err, cap);
     VkQueryPoolCreateInfo info = {.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
                                   .queryType = VK_QUERY_TYPE_TIMESTAMP,

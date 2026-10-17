@@ -691,6 +691,10 @@ build/native_360_performance_tests: tests/app/native_720_performance_tests.c tes
 test_native_360_performance: build/native_360_performance_tests
 	./build/native_360_performance_tests
 
+.PHONY: test_native_360_sustained_performance
+test_native_360_sustained_performance: build/native_360_performance_tests
+	DC_NATIVE_SUSTAINED=1 ./build/native_360_performance_tests
+
 build/pixel_motion_cache_tests: tests/vulkan/pixel_motion_cache_tests.c $(GPU_OBJ) build/chunk.o
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ $(LDLIBS) -lm
 
@@ -717,6 +721,12 @@ build/diagnostics/contact_scaling: tools/diagnostics/contact_scaling.c tests/vul
 
 build/diagnostics/contacts_terrain_scan.comp.spv: shaders/sim/contacts.comp shaders/sim/contact_geometry.glsl shaders/sim/rigid_body.glsl $(CONTACT_SHADER)
 	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TERRAIN_SCAN_PROFILE=1 -o $@ $<
+
+build/diagnostics/fluid_transport_profile.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl
+	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TRANSPORT_PROFILE=1 -o $@ $<
+
+build/fluid_transport_partial_tests: tests/vulkan/fluid_transport_partial_tests.c tests/vulkan/fluid_transport_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/fluid_transport_profile.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
 build/contact_terrain_work_tests: tests/vulkan/contact_terrain_work_tests.c tools/diagnostics/contact_scaling.c tests/vulkan/pixel_component_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/pixel_component_tests build/diagnostics/contacts_terrain_scan.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_CONTACT_TERRAIN_PROFILE $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_load_shader_module

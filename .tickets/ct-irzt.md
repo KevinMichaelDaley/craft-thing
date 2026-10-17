@@ -2,7 +2,7 @@
 id: ct-irzt
 status: open
 deps: []
-links: []
+links: [ct-79mx, ct-tu55]
 created: 2026-10-05T02:49:02Z
 type: task
 priority: 2

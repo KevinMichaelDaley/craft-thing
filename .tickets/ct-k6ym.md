@@ -1,6 +1,6 @@
 ---
 id: ct-k6ym
-status: in_progress
+status: closed
 deps: []
 links: [ct-tu55]
 created: 2026-10-17T05:25:05Z
@@ -30,3 +30,7 @@ Corrected acquire and final presentation scopes also validate the180-frame displ
 **2026-10-17T06:19:51Z**
 
 The full combined headless checkpoint passes 395 cases with explicit synchronization validation and zero diagnostics. UI and quarter-native presentation coverage are next; no gate was relaxed.
+
+**2026-10-17T06:29:10Z**
+
+Accepted after full UI and quarter-native suites both exit 0, plus the 395-pass explicit-sync headless checkpoint and displayed native/frozen-pair validation with zero VUID/SYNC diagnostics. Original 15-second presentation watchdog, mailbox mode, finite acquire, image semaphores and render fence are preserved. No historical crash-cause claim.
