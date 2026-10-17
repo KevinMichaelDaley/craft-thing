@@ -31,7 +31,7 @@ bool fr_gpu_place_terrain_prop(dc_gpu_t *g, const fr_prop_asset_t *asset,
     memset(mapped,0,32);
     memcpy((uint8_t*)mapped+32,validated.bytes+validated.data_offset+(size_t)frame*count*72,(size_t)count*72);
     VkDeviceSize atlas=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS;
-    VkDescriptorBufferInfo bindings[12]={
+    VkDescriptorBufferInfo bindings[13]={
         {buffer,0,bytes}, {g->chunk_buffer,0,atlas*sizeof(dc_cell_t)},
         {g->page_buffer,0,(VkDeviceSize)g->page_width*g->page_height*4},
         {g->particle_buffer,0,atlas*2*sizeof(dc_mpm_particle_t)},
@@ -40,9 +40,10 @@ bool fr_gpu_place_terrain_prop(dc_gpu_t *g, const fr_prop_asset_t *asset,
         {VK_NULL_HANDLE,0,0},{VK_NULL_HANDLE,0,0},{VK_NULL_HANDLE,0,0},
         {g->body_buffer,0,dc_gpu_body_storage_bytes(g)},
         {g->occupancy_buffer,0,(VkDeviceSize)g->width*g->height*20},
-        {g->water_color_buffer,0,atlas*16}};
+        {g->water_color_buffer,0,atlas*16},
+        {g->shape_color_buffer,0,dc_gpu_color_terrain_bytes()}};
     okay=fr_renderer_authored_bindings(g,bindings+6) &&
-        fr_renderer_compute_init(g,&compute,bindings,12,32,
+        fr_renderer_compute_init(g,&compute,bindings,13,32,
                                  "build/shaders/prop_place.comp.spv",err,cap) && fr_renderer_begin(g);
     if (!okay) goto done;
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,

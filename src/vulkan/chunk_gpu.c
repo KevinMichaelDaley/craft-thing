@@ -236,6 +236,7 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
     dc_cell_t *cells = gpu->chunk_mapped;
     memcpy(cells + (size_t)slot * DC_CHUNK_CELLS, chunk->cells, sizeof(chunk->cells));
     memset((float*)gpu->water_color_mapped+(size_t)slot*DC_CHUNK_CELLS*4,0,DC_CHUNK_CELLS*16);
+    memset((float*)gpu->shape_color_mapped+(size_t)slot*DC_CHUNK_CELLS*4,0,DC_CHUNK_CELLS*16);
     for (uint32_t i=0;i<DC_CHUNK_CELLS;i++)
         if ((chunk->cells[i].flags & (DC_CELL_LOADED_TERRAIN|DC_CELL_BONDS_READY)) == DC_CELL_LOADED_TERRAIN)
             gpu->component_baseline_pending=true;
@@ -284,8 +285,11 @@ bool dc_gpu_upload_chunk_checkpoint(dc_gpu_t *gpu, uint32_t slot,
             const dc_chunk_t *saved = gpu->checkpoint_chunks + i;
             if (saved->coord.x == chunk->coord.x && saved->coord.y == chunk->coord.y) {
                 bool okay = dc_gpu_upload_chunk_exact(gpu, slot, saved, false, err, cap);
-                if (okay) gpu->checkpoint_chunks[i] =
-                    gpu->checkpoint_chunks[--gpu->checkpoint_chunk_count];
+                if (okay) {
+                    if(gpu->checkpoint_colors) dc_gpu_write_chunk_colors(gpu,slot,gpu->checkpoint_colors+i);
+                    gpu->checkpoint_chunks[i]=gpu->checkpoint_chunks[--gpu->checkpoint_chunk_count];
+                    if(gpu->checkpoint_colors) gpu->checkpoint_colors[i]=gpu->checkpoint_colors[gpu->checkpoint_chunk_count];
+                }
                 if (restored) *restored = okay;
                 return okay;
             }

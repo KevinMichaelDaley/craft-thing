@@ -38,6 +38,7 @@ uint group_sum(uint value) {
 }
 
 uint pixel_word_at(uint index) {return body_data[index-BODY_STORAGE_WORDS];}
+#include "../sim/shape_colors.glsl"
 uint map_hash(uint id) {return texture_hash(id)&4095u;}
 uint body_slot(uint id) {
     uint hash=map_hash(id);
@@ -86,6 +87,11 @@ Surface surface_at(uint i,out float opacity,out uint known) {
             ivec2 rest=pixel_body(body)?pixel_piece_cell(body,piece):ivec2(floor(body_local_point(body,center_point-vec2(body.x_fp,body.y_fp)/65536.)));
             uint mapped_material=terrain_material(piece_material(body,piece));
             Appearance a=texture_sample(rest,body.id,mapped_material,configuration[4u+mapped_material]);
+            if(pixel_body(body)) {
+                uint word=body.compound_reserved+pixel_tile_offset(body,piece/256u)+1u+(piece%256u)/8u;
+                vec4 color=shape_color_get(word,piece%8u);
+                if(color.w>0.) a.color_roughness.rgb=color.rgb;
+            }
             add_surface(surface,a,coverage,body.angle);body_coverage+=coverage;
         }
     }
@@ -151,6 +157,7 @@ void main() {
                     palette[i]=texture_sample(rest,1u,material,style);keys[i]=uvec2(key,generation);
                     generated=material!=0u && material!=3u?1u:0u;
                 }
+                if(terrain_colors[i].w>0.) palette[i].color_roughness.rgb=terrain_colors[i].rgb;
             }
         }
         uint count=group_sum(generated);

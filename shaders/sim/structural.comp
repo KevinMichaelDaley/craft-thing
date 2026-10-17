@@ -19,6 +19,7 @@ uint base() {
     return 8u+2u*w*h+4096u*8u+12u+8192u*32u+16u+64u*32u+8192u*16u;
 }
 uint graph() { uint s=base();return s+32u+data[s+1u]*8u; }
+#include "shape_colors.glsl"
 uint state(uint i) { return graph()+2u*GRAPH_WORDS+i*12u; }
 uvec2 pair(uint p) { return uvec2(data[p],data[p+1u]); }
 int node_index(uint g,uint id) {

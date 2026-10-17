@@ -11,6 +11,7 @@ layout(set=0,binding=28,std430) buffer Labels { uint labels[]; };
 layout(set=0,binding=29,std430) buffer Candidates { uint candidates[]; };
 layout(set=0,binding=30,std430) buffer Sizes { uint sizes[]; };
 layout(push_constant) uniform Params { uint width,height,mode,count; uvec2 origin_x,origin_y; } params;
+#include "shape_colors.glsl"
 uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
 #include "pixel_properties.glsl"
 uint base() {
@@ -231,7 +232,10 @@ void main() {
     if(EXTRACTION_PHASE==17u) {
         uint s=gl_WorkGroupID.x;if(s>=64u) return;Body b=bodies[s];if(!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) return;
         uint target=pool()+16u+data[g+36262u]*capacity()+sizes[s];
-        for(uint w=lane;w<pixel_shape_words(b);w+=128u) data[target+w]=pixel_word_at(b.compound_reserved+w);return;
+        for(uint w=lane;w<pixel_shape_words(b);w+=128u) {
+            data[target+w]=pixel_word_at(b.compound_reserved+w);
+            shape_color_copy_word(BODY_STORAGE_WORDS+target+w,b.compound_reserved+w);
+        }return;
     }
     if(EXTRACTION_PHASE==18u) {
         if(i<64u&&pixel_body(bodies[i])&&(bodies[i].enabled!=0u||bodies[i].reserved0!=0u)) bodies[i].compound_reserved=BODY_STORAGE_WORDS+pool()+16u+data[g+36262u]*capacity()+sizes[i];
@@ -277,7 +281,10 @@ void main() {
         uint c=gl_WorkGroupID.x;if(c>=data[g+36257u]) return;uint r=record(c);if(data[r+14u]==0u) return;
         uint target=data[r+11u],dir=data[r+7u],start=data[r+9u],width=uint((int(data[r+3u])-int(data[r+1u])+16)/16);
         ivec2 low=ivec2(data[r+1u],data[r+2u]);
-        for(uint word=lane;word<data[r+10u];word+=128u) data[target+word]=0u;
+        for(uint word=lane;word<data[r+10u];word+=128u) {
+            data[target+word]=0u;
+            for(uint nibble=0u;nibble<8u;nibble++) shape_color_set(BODY_STORAGE_WORDS+target+word,nibble,vec4(0));
+        }
         memoryBarrierBuffer();barrier();
         if(lane<8u) {uint h[8]=uint[8](data[r+10u],data[r+8u],width,dir/width,0u,0u,uint(int(data[r+3u])-low.x+1),uint(int(data[r+4u])-low.y+1));data[target+lane]=h[lane];}
         uint before=start==0u?0u:candidates[n+start-1u];
@@ -295,7 +302,9 @@ void main() {
         ivec2 low=ivec2(data[r+1u],data[r+2u]),p=relative_point(data[r],i)-low;
         uint width=uint((int(data[r+3u])-low.x+16)/16),tile=uint(p.y/16)*width+uint(p.x/16);
         uint target=data[r+11u],offset=data[target+8u+tile],cell=uint(p.y%16)*16u+uint(p.x%16),m=cells[i].x&65535u;
-        atomicOr(data[target+offset+1u+cell/8u],(m==7u?2u:m==8u?4u:1u)<<((cell%8u)*4u));return;
+        uint word=target+offset+1u+cell/8u;
+        shape_color_set(BODY_STORAGE_WORDS+word,cell%8u,terrain_colors[i]);
+        atomicOr(data[word],(m==7u?2u:m==8u?4u:1u)<<((cell%8u)*4u));return;
     }
     if(EXTRACTION_PHASE==23u) {
         uint c=gl_WorkGroupID.x;if(c>=data[g+36257u]) return;uint r=record(c);if(data[r+14u]==0u) return;
@@ -307,7 +316,7 @@ void main() {
     if(EXTRACTION_PHASE==24u) {
         if(i<n&&solid(i)) {
             uint c=candidates[labels[i]];
-            if(c<data[g+36257u]&&data[record(c)+14u]!=0u) cells[i].x=0u;
+            if(c<data[g+36257u]&&data[record(c)+14u]!=0u) {cells[i].x=0u;terrain_colors[i]=vec4(0);}
             else if((cells[i].x&LOADED_TERRAIN)!=0u) {
                 uint bonds=candidates[n+i],released=terrain_released(i,bonds)?RELEASED_TERRAIN:0u;
                 cells[i].x=(cells[i].x&~BOND_MASK)|BONDS_READY|bonds|released;

@@ -12,6 +12,8 @@
 #include "ferrum/renderer/gpu.h"
 
 typedef struct dc_level_view dc_level_view_t;
+/** Whether a persisted world checkpoint was restored at view creation. */
+bool dc_level_view_restored(const dc_level_view_t *view);
 
 typedef struct {
     dc_chunk_coord_t origin;

@@ -70,12 +70,15 @@ bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
     for(uint i=0u;i<BODY_CAPACITY;i++) {
         Body b=bodies[i];if(i==slot||!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) continue;
         uint length=pixel_shape_words(b);
-        for(uint word=0u;word<length;word++) data[target+other_used+word]=pixel_word_at(b.compound_reserved+word);
+        for(uint word=0u;word<length;word++) {
+            data[target+other_used+word]=pixel_word_at(b.compound_reserved+word);
+            shape_color_stage(BODY_STORAGE_WORDS+target+other_used+word,b.compound_reserved+word);
+        }
         other_used+=length;
     }
     for(uint child=0u;child<count;child++) {
         uint pointer=target+used+offsets[child],length=8u+directory+tile_counts[child]*33u;
-        for(uint word=0u;word<length;word++) data[pointer+word]=0u;
+        for(uint word=0u;word<length;word++) {data[pointer+word]=0u;shape_color_stage(BODY_STORAGE_WORDS+pointer+word,0u);}
         for(uint word=0u;word<8u;word++) data[pointer+word]=pixel_word_at(source.compound_reserved+word);
         data[pointer]=length;data[pointer+1u]=tile_counts[child];
         data[pointer+4u]=uint(lows[child].x);data[pointer+5u]=uint(lows[child].y);
@@ -97,6 +100,8 @@ bool pixel_fragment_body(uint slot,uint axis,float cut,uint generation) {
                         packed|=piece_material(source,index)<<(nibble*4u);
                 }
                 data[pointer+offset+1u+word]=packed;
+                shape_color_stage(BODY_STORAGE_WORDS+pointer+offset+1u+word,
+                    source.compound_reserved+pixel_tile_offset(source,tile)+1u+word);
             }
         }
     }

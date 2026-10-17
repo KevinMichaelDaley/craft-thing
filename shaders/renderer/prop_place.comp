@@ -5,6 +5,7 @@
 #include "../../include/dungeoncraft/terrain_flags.h"
 layout(local_size_x=128) in;
 layout(set=0,binding=11,std430) buffer WaterColors {vec4 water_colors[];};
+layout(set=0,binding=12,std430) buffer TerrainColors {vec4 terrain_colors[];};
 layout(set=0,binding=0,std430) buffer Input {uint words[];};
 layout(set=0,binding=1,std430) buffer Cells {uvec2 cells[];};
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
@@ -62,6 +63,7 @@ void main() {
     uint source=8u+count*2u+i*16u,flags=words[source+15u];
     float alpha=scalar(source+12u);
     a.color_roughness.rgb=mix(a.color_roughness.rgb,vec3(scalar(source),scalar(source+1u),scalar(source+2u)),alpha);
+    terrain_colors[atlas]=mapped!=0u&&alpha>0.?vec4(a.color_roughness.rgb,1.):vec4(0);
     water_colors[atlas]=material==6u?vec4(mix(vec3(.035,.193,.666),
         vec3(scalar(source),scalar(source+1u),scalar(source+2u)),alpha),1.):vec4(0);
     if((flags&2u)!=0u) a.color_roughness.a=scalar(source+3u);

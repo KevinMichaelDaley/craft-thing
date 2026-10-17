@@ -67,6 +67,9 @@ GPU_OBJ += build/compound_gpu.o build/component_gpu.o build/pixel_gpu.o
 GPU_OBJ += build/structural_store_gpu.o
 GPU_OBJ += build/structural_store_validate.o
 GPU_OBJ += build/structural_store_chunk.o
+GPU_OBJ += build/color_gpu.o
+build/color_gpu.o: src/vulkan/color_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/color.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/window_gpu.o
 GPU_OBJ += build/structural_gpu.o build/structural_material.o
 GPU_OBJ += build/scene_gpu.o build/renderer_resource.o build/occlusion_gpu.o build/lighting_gpu.o
@@ -534,6 +537,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/shading_tests
 	./build/scene_gpu_tests
 	./build/terrain_prop_tests
+	./build/body_color_tests
 	./build/pixel_motion_cache_tests
 	./build/component_dispatch_tests
 	./build/pixel_properties_gpu_tests
@@ -652,6 +656,7 @@ build/component_extraction_tests: tests/vulkan/component_extraction_tests.c buil
 build/shaders/component_extract.comp.spv: shaders/sim/component_extract.comp shaders/sim/rigid_body.glsl shaders/sim/pixel_properties.glsl include/dungeoncraft/terrain_flags.h
 	mkdir -p build/shaders
 	glslangValidator -V --target-env vulkan1.3 $< -o $@
+build/shaders/component_extract.comp.spv $(STRUCTURAL_SHADER) build/shaders/scene.comp.spv: shaders/sim/shape_colors.glsl
 build/fluid_tests: build/shaders/component_extract.comp.spv
 build/shaders/component_local.comp.spv: shaders/sim/component_local.comp shaders/sim/rigid_body.glsl
 	mkdir -p build/shaders
@@ -977,6 +982,7 @@ GPU_SOURCE_BINARIES += $(addprefix build/quarter_native_structural_, \
 GPU_SOURCE_BINARIES += build/material_cut_buoyancy_tests build/renderer_visual_tests build/renderer_performance_tests
 $(GPU_SOURCE_BINARIES): $(GPU_SRC) src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h src/vulkan/fluid_transport_limits.h src/vulkan/mpm_activity_layout.h include/dungeoncraft/mpm_activity_layout.h $(CONTACT_SHADER) $(MPM_COMPACTION_SHADER) $(MPM_SHADER) $(MPM_COMPONENT_SHADER) $(MPM_ACTIVITY_SHADER)
 $(GPU_SOURCE_BINARIES): $(RENDERER_SHADERS) build/shaders/prop_place.comp.spv build/shaders/authored.comp.spv include/ferrum/assets/prop.h include/ferrum/assets/prop_gpu.h src/vulkan/renderer_internal.h
+$(GPU_SOURCE_BINARIES) $(GPU_OBJ) $(STREAM_OBJ): include/dungeoncraft/color.h
 $(GPU_OBJ): src/vulkan/mpm_activity_layout.h include/dungeoncraft/mpm_activity_layout.h
 build/contact_gpu.o: src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
 build/fluid_gpu.o: src/vulkan/fluid_transport_limits.h
@@ -1053,6 +1059,9 @@ test_terrain_prop: build/terrain_prop_tests
 test_scene_placement: build/dungeoncraft_quarter_native
 	./build/dungeoncraft_quarter_native --smoke-scene assets/props/level_piece01.prop/asset.cprop
 test: build/terrain_prop_tests
+build/body_color_tests: tests/vulkan/body_color_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/body_color_tests
 build/scene_ground_tests: tests/world/scene_ground_tests.c $(GENERATE_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GENERATE_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/scene_ground_tests

@@ -6,6 +6,7 @@
 
 #include "dungeoncraft/contact_work_layout.h"
 #include "dungeoncraft/gpu.h"
+#include "dungeoncraft/color.h"
 #include "ferrum/structural/gpu.h"
 #include "mpm_activity_layout.h"
 
@@ -139,6 +140,7 @@ struct dc_gpu {
     VkPipeline structural_pipelines[DC_GPU_STRUCTURAL_PHASE_COUNT];
     bool structural_enabled;
     dc_chunk_t *checkpoint_chunks;
+    dc_chunk_colors_t *checkpoint_colors;
     uint32_t checkpoint_chunk_count;
     bool impact_fracture_enabled;
     bool rigid_solver_enabled;
@@ -163,6 +165,9 @@ struct dc_gpu {
     VkBuffer water_color_buffer;
     VkDeviceMemory water_color_memory;
     void *water_color_mapped;
+    VkBuffer shape_color_buffer;
+    VkDeviceMemory shape_color_memory;
+    void *shape_color_mapped;
     VkDeviceMemory fluid_previous_memory;
     VkDeviceMemory fluid_a_memory;
     VkBuffer fluid_b_buffer;
@@ -394,6 +399,13 @@ bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t width, uint32_t height,
 
 void dc_gpu_record_components(dc_gpu_t *gpu, bool rigid);
 void dc_gpu_record_component_extraction(dc_gpu_t *gpu);
+bool dc_gpu_colors_init(dc_gpu_t *gpu,char *err,uint32_t cap);
+void dc_gpu_colors_destroy(dc_gpu_t *gpu);
+VkDeviceSize dc_gpu_color_terrain_bytes(void);
+VkDeviceSize dc_gpu_color_bank_bytes(const dc_gpu_t *gpu);
+float *dc_gpu_shape_colors(dc_gpu_t *gpu,uint32_t absolute_word);
+void dc_gpu_read_chunk_colors(dc_gpu_t *gpu,uint32_t slot,dc_chunk_colors_t *colors);
+void dc_gpu_write_chunk_colors(dc_gpu_t *gpu,uint32_t slot,const dc_chunk_colors_t *colors);
 void dc_gpu_record_component_baseline(dc_gpu_t *gpu);
 
 #endif

@@ -45,6 +45,7 @@ bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if(!dc_gpu_make_mapped_buffer(gpu,color_bytes,&gpu->water_color_buffer,
         &gpu->water_color_memory,&gpu->water_color_mapped,err,cap)) return false;
     memset(gpu->water_color_mapped,0,(size_t)color_bytes);
+    if(!dc_gpu_colors_init(gpu,err,cap)) return false;
     return dc_gpu_make_device_buffer(gpu, bytes, &gpu->fluid_a_buffer,
                &gpu->fluid_a_memory, err, cap) &&
            dc_gpu_make_device_buffer(gpu, bytes, &gpu->fluid_b_buffer,
@@ -129,6 +130,7 @@ static void bind_fluid_mode(dc_gpu_t *gpu,uint32_t mode,bool projection) {
 }
 
 void dc_gpu_fluid_destroy(dc_gpu_t *gpu) {
+    dc_gpu_colors_destroy(gpu);
     if(gpu->water_color_mapped) vkUnmapMemory(gpu->device,gpu->water_color_memory);
     if(gpu->water_color_buffer) vkDestroyBuffer(gpu->device,gpu->water_color_buffer,NULL);
     if(gpu->water_color_memory) vkFreeMemory(gpu->device,gpu->water_color_memory,NULL);

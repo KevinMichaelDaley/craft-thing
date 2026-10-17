@@ -6,9 +6,9 @@ bool fr_renderer_compute_init(dc_gpu_t *g, fr_renderer_compute_t *c,
                               const VkDescriptorBufferInfo *buffers, uint32_t n,
                               uint32_t push_bytes, const char *shader,
                               char *err, uint32_t cap) {
-  if (!g || !c || !buffers || !n || n > 16)
+  if (!g || !c || !buffers || !n || n > 36)
     return false;
-  VkDescriptorSetLayoutBinding bindings[16] = {0};
+  VkDescriptorSetLayoutBinding bindings[36] = {0};
   for (uint32_t i = 0; i < n; i++)
     bindings[i] =
         (VkDescriptorSetLayoutBinding){i, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1,
@@ -35,7 +35,7 @@ bool fr_renderer_compute_init(dc_gpu_t *g, fr_renderer_compute_t *c,
       .pSetLayouts = &c->layout};
   if (vkAllocateDescriptorSets(g->device, &alloc, &c->descriptor) != VK_SUCCESS)
     return false;
-  VkWriteDescriptorSet writes[16] = {0};
+  VkWriteDescriptorSet writes[36] = {0};
   for (uint32_t i = 0; i < n; i++)
     writes[i] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,

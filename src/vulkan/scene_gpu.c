@@ -97,6 +97,7 @@ bool fr_renderer_enable(dc_gpu_t *g, char *err, uint32_t cap) {
     if (!dc_gpu_make_mapped_buffer(g, sizes[b], &s->buffers[b], &s->memory[b],
                                    &s->mapped[b], err, cap))
       goto fail;
+  memset(s->mapped[0],0,(size_t)sizes[0]);memset(s->mapped[1],0,(size_t)sizes[1]);
   if (!fr_occlusion_gpu_create(g, g->width, g->height, &s->occlusion, err,
                                cap) ||
       !fr_lighting_gpu_create(g, s->occlusion, &s->lighting, err, cap))
@@ -104,7 +105,7 @@ bool fr_renderer_enable(dc_gpu_t *g, char *err, uint32_t cap) {
   if (!fr_lighting_gpu_set_sources(s->lighting, NULL, 0, (fr_renderer_sun_t){0},
                                    1024))
     goto fail;
-  VkDescriptorBufferInfo buffers[16] = {
+  VkDescriptorBufferInfo buffers[36] = {
       {g->chunk_buffer, 0, (VkDeviceSize)atlas * sizeof(dc_cell_t)},
       {g->page_buffer, 0, (VkDeviceSize)g->page_width * g->page_height * 4},
       {g->occupancy_buffer, 0, (VkDeviceSize)grid * 20},
@@ -123,9 +124,14 @@ bool fr_renderer_enable(dc_gpu_t *g, char *err, uint32_t cap) {
       {VK_NULL_HANDLE, 0, 0},
       {s->buffers[4], 0, sizes[4]},
       {g->water_color_buffer,0,(VkDeviceSize)atlas*16}};
+  for(uint32_t i=16;i<33;i++) buffers[i]=(VkDescriptorBufferInfo){g->cells,0,(VkDeviceSize)grid*4};
+  VkDeviceSize terrain_colors=dc_gpu_color_terrain_bytes(),bank_colors=dc_gpu_color_bank_bytes(g);
+  buffers[33]=(VkDescriptorBufferInfo){g->shape_color_buffer,0,terrain_colors};
+  buffers[34]=(VkDescriptorBufferInfo){g->shape_color_buffer,terrain_colors,bank_colors};
+  buffers[35]=(VkDescriptorBufferInfo){g->shape_color_buffer,terrain_colors+bank_colors,bank_colors};
   if (!fr_occlusion_input_binding(s->occlusion, &buffers[8]) ||
       !fr_lighting_field_binding(s->lighting, &buffers[13]) ||
-      !fr_renderer_compute_init(g, &s->compute, buffers, 16, 32,
+      !fr_renderer_compute_init(g, &s->compute, buffers, 36, 32,
                                 "build/shaders/scene.comp.spv", err, cap) ||
       !scene_pipelines(g, err, cap))
     goto fail;

@@ -113,6 +113,9 @@ static void check_detached_color(bool roundtrip) {
         float alpha=1;memcpy(physical+128*128*8+i*64+48,&alpha,4);
     }
     unsigned water=40*128+40;physical[water*8]=6;physical[water*8+2]=1;
+    float water_rgb[3]={.12f,.8f,.3f},water_alpha=1;
+    memcpy(physical+128*128*8+water*64,water_rgb,sizeof(water_rgb));
+    memcpy(physical+128*128*8+water*64+48,&water_alpha,4);
     uint32_t crc=UINT32_MAX;
     for(size_t i=0;i<g_asset.size;i++) {
         if(i>=44&&i<48) continue;
@@ -140,8 +143,18 @@ static void check_detached_color(bool roundtrip) {
     uint32_t expected=0xff000000u|byte_from_linear(.1f)|
         (byte_from_linear(.23f)<<8)|(byte_from_linear(.71f)<<16);
     bool retained=((uint32_t*)g->mapped)[52*192+52]==expected;
+    for(unsigned y=20;y<23;y++) for(unsigned x=20;x<29;x++) {
+        int dx=(int)x-24,dy=(int)y-21;if(dx*dx+dy*dy<=1) continue;
+        uint32_t color=0xff000000u|byte_from_linear(.1f+.02f*(x-20))|
+            (byte_from_linear(.23f+.03f*(y-20))<<8)|(byte_from_linear(.71f)<<16);
+        retained=retained && ((uint32_t*)g->mapped)[(32+y)*192+32+x]==color;
+    }
     bool restored=true;
     if(roundtrip) {
+        ASSERT_TRUE(dc_gpu_paint_material(g,100,30,1,DC_MATERIAL_STONE,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+        ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+        ASSERT_EQ(((uint32_t*)g->mapped)[52*192+52],expected);
         size_t image_bytes=192*192*4,water_bytes=9*4096*16;
         void *image=malloc(image_bytes),*colors=malloc(water_bytes);
         ASSERT_TRUE(image&&colors);
@@ -154,6 +167,12 @@ static void check_detached_color(bool roundtrip) {
         ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
         restored=memcmp(image,g->mapped,image_bytes)==0 &&
             memcmp(colors,g->water_color_mapped,water_bytes)==0;
+        FILE *bad=fopen("build/authored_color_roundtrip.dcs","r+b");ASSERT_TRUE(bad);
+        ASSERT_EQ(fseek(bad,-4,SEEK_END),0);uint32_t nan=0x7fc00000u;
+        ASSERT_EQ(fwrite(&nan,4,1,bad),1u);fclose(bad);
+        ASSERT_TRUE(!fr_gpu_load_structure(g,"build/authored_color_roundtrip.dcs",err,sizeof(err)));
+        ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+        restored=restored && memcmp(image,g->mapped,image_bytes)==0;
         free(image);free(colors);
     }
     dc_gpu_destroy(g);free(bytes);

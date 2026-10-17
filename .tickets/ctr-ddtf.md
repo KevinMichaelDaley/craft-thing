@@ -23,3 +23,7 @@ Birth/rollback/retry, mixed pixels, fracture, page/body reuse, off-viewport cach
 **2026-10-17T18:05:52Z**
 
 Water now uses a separate atlas-indexed linear RGB concentration buffer (global descriptor32), seeded by imported water and advected/mixed by exact fluid flux including displacement/correction. Extend appearance persistence to serialize this pigment across save/reopen and chunk eviction; current chunk upload clears color state. Also retain pigment in bound MPM moisture and recover it with released pore water.
+
+**2026-10-17T19:15:10Z**
+
+ctr-nxdp implements linear RGB persistence for terrain, sparse body rest pixels and advected water in version 6 snapshots/chunks, plus GPU extraction/relocation/fracture transfer. Remaining scope includes full surface channels, emission, stable provenance and bound-particle moisture appearance.
