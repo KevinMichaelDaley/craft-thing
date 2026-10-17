@@ -40,6 +40,46 @@ static uint32_t byte_from_linear(float value) {
     return (uint32_t)lroundf(srgb*255.f);
 }
 
+static void test_imported_soil_and_gravel_start_at_full_cell_density(void) {
+    for(unsigned gravel=0;gravel<2;gravel++) {
+        uint8_t *bytes=malloc(g_asset.size);ASSERT_TRUE(bytes);
+        memcpy(bytes,g_bytes,g_asset.size);
+        if(gravel) {
+            for(unsigned i=0;i<g_asset.width*g_asset.height;i++) {
+                uint8_t *record=bytes+g_asset.data_offset+i*8;
+                if(record[0]==7 && record[1]==0) record[0]=8;
+            }
+            uint32_t crc=UINT32_MAX;
+            for(size_t i=0;i<g_asset.size;i++) {
+                if(i>=44&&i<48) continue;
+                crc^=bytes[i];
+                for(unsigned bit=0;bit<8;bit++) crc=(crc>>1)^(0xedb88320u&(0u-(crc&1u)));
+            }
+            crc=~crc;for(unsigned i=0;i<4;i++) bytes[44+i]=(uint8_t)(crc>>(i*8));
+        }
+        fr_prop_asset_t asset;char err[256];
+        ASSERT_TRUE(fr_prop_asset_open(&asset,bytes,g_asset.size,err,sizeof(err)));
+        dc_gpu_t *g=context();ASSERT_TRUE(g);
+        ASSERT_TRUE(fr_gpu_place_terrain_prop(g,&asset,0,32,32,err,sizeof(err)));
+        dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+        unsigned checked=0;uint32_t expected=(uint32_t)lround((gravel?2.7:1.2)*65536.);
+        for(unsigned slot=0;slot<9;slot++) {
+            ASSERT_TRUE(dc_gpu_download_chunk(g,slot,chunk,err,sizeof(err)));
+            for(unsigned i=0;i<DC_MPM_PARTICLES_PER_CHUNK;i++) {
+                dc_mpm_particle_t *p=chunk->particles+i;
+                if(!p->mass_fp||p->material!=(gravel?DC_MATERIAL_GRAVEL:DC_MATERIAL_DIRT)) continue;
+                ASSERT_INT_EQ(p->mass_fp,expected);
+                ASSERT_INT_EQ(p->grain_fp,DC_FLUID_FULL/2);
+                ASSERT_TRUE(fabs(p->deformation[0]*p->deformation[3]-1.)<1e-6);
+                checked++;
+            }
+        }
+        ASSERT_EQ(checked,1294u);
+        free(chunk);dc_gpu_destroy(g);free(bytes);
+    }
+    PASS();
+}
+
 static void test_actual_scene_places_exact_materials_colors_water_and_holes(void) {
     dc_gpu_t *g=context(); ASSERT_TRUE(g); char err[256];
     ASSERT_TRUE(fr_gpu_place_terrain_prop(g,&g_asset,0,32,32,err,sizeof(err)));
@@ -218,6 +258,7 @@ int main(void) {
     if (!g_bytes || fread(g_bytes,1,(size_t)size,file)!=(size_t)size) return 2;
     fclose(file);
     if (!fr_prop_asset_open(&g_asset,g_bytes,(size_t)size,NULL,0)) return 2;
+    RUN(test_imported_soil_and_gravel_start_at_full_cell_density);
     RUN(test_actual_scene_places_exact_materials_colors_water_and_holes);
     RUN(test_unknown_occupied_destination_rejects_entire_scene);
     RUN(test_detached_body_keeps_authored_color_map);
