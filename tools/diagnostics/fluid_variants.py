@@ -4,13 +4,19 @@ import pathlib
 import re
 
 
-def generate(source, pixel_types=False):
-    if pixel_types and "#define DC_RIGID_PIXEL_ONLY " not in source:
+def generate_typed(source):
+    if "#define DC_RIGID_PIXEL_ONLY " not in source:
         declaration = """layout(constant_id=1) const bool DIAGNOSTIC_PIXEL_ONLY=false;
 #define DC_RIGID_PIXEL_ONLY DIAGNOSTIC_PIXEL_ONLY
 """
         source = source.replace('#include "rigid_body.glsl"',
                                 declaration + '#include "rigid_body.glsl"', 1)
+    return source
+
+
+def generate(source, pixel_types=False):
+    if pixel_types:
+        source = generate_typed(source)
     candidate = source.replace("params.mode", "dispatch_mode()")
     declaration = re.search(r"}\s*params;", candidate)
     if declaration is None:
@@ -35,6 +41,8 @@ def main():
         print(path)
     body = (root / "shaders/sim/rigid_body.glsl").read_text()
     (args.output / "rigid_body.glsl").write_text(body)
+    contacts = (root / "shaders/sim/contacts.comp").read_text()
+    (args.output / "contacts_pixel.comp").write_text(generate_typed(contacts))
     raster = (root / "shaders/sim/rigid.comp").read_text()
     declaration = "layout(constant_id = 1) const bool RIGID_PIXEL_ONLY = false;"
     if raster.count(declaration) != 1:
