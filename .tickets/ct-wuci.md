@@ -78,3 +78,7 @@ Current checkpoint12f7f66 full make test with Vulkan validation exited0:356 repo
 **2026-10-17T04:26:06Z**
 
 Parallel MPM activity compaction follow-up ct-lqd8 enables native360 warm frame30FPS mean/p95 acceptance, preserving exact shapes/materials. Current480x270 steady passes rigid4.337ms,total7.063ms. Cold ring32/80/160 remainRED unchanged14ms gate at30.550/32.838/34.907ms; unchanged2.102/2.024/2.294ms. Existing fracture BFS/packing/arena-copy/property parallelization and cold birth properties remain outstanding; no epic completion claim.
+
+**2026-10-17T04:58:42Z**
+
+Cold detailed profiling REDac29ae5: ring32/80/160 cold30.366/32.728/35.249ms, unchanged1.917/2.044/2.401ms. Zero contacts; mass properties cached ready1. Cold contacts8substeps3.76-3.87ms vs warm0.31-0.38; other solver7.70-7.94 vs0.69-0.74; raster6.98-8.64 vs0.69-0.83. Hydro0.60/1.38/4.37ms vs0.059/0.152/0.337. Broad first-frame slowdown needs controlled investigation, not a claim of interior collision geometry cause. Original14ms cold gates remain failing. Log build/diagnostics/cold-solver-detail.log.
