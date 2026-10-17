@@ -464,6 +464,7 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/body_address_gpu_tests
 	./build/body_storage_gpu_tests
 	./build/body_scan_gpu_tests
+	./build/body_page_init_gpu_tests
 	./build/pixel_motion_cache_tests
 	./build/component_dispatch_tests
 	./build/pixel_properties_gpu_tests
@@ -1002,7 +1003,7 @@ build/diagnostics/body_allocator.spv: shaders/sim/body_allocator.comp shaders/si
 	spirv-val --target-env vulkan1.3 $@
 build/body_allocator_gpu_tests: tests/vulkan/body_allocator_gpu_tests.c tests/vulkan/body_probe_fixture.h tools/diagnostics/vulkan_probe.c src/vulkan/body_scan_gpu.h src/vulkan/body_scan_gpu.c src/vulkan/body_scan_record_gpu.c src/vulkan/body_storage_gpu.c src/vulkan/body_storage_gpu.h src/vulkan/body_address_gpu.c src/vulkan/body_address_gpu.h src/vulkan/shader.c include/dungeoncraft/body_storage_layout.h build/diagnostics/body_allocator.spv build/diagnostics/body_scan.spv build/diagnostics/body_storage_init.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_scan_gpu.c src/vulkan/body_scan_record_gpu.c src/vulkan/body_storage_gpu.c src/vulkan/body_address_gpu.c src/vulkan/shader.c -o $@ -lvulkan
-test: build/body_address_gpu_tests build/body_storage_gpu_tests build/body_scan_gpu_tests
+test: build/body_address_gpu_tests build/body_storage_gpu_tests build/body_scan_gpu_tests build/body_page_init_gpu_tests
 BODY_STORAGE_TEST_BINARIES = $(addprefix build/,body_address_gpu_tests body_storage_gpu_tests body_allocator_gpu_tests body_scan_gpu_tests body_address_allocation_tests body_storage_growth_tests)
 $(BODY_STORAGE_TEST_BINARIES): src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
 build/diagnostics/body_storage_init.spv: shaders/sim/body_storage_init.comp include/dungeoncraft/body_storage_layout.h | build
