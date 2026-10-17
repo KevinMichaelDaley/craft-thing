@@ -798,6 +798,7 @@ test_gpu_tools: build/contact_shader_contract_tests
 	python3 tests/vulkan/shader_variant_tests.py
 	python3 tests/vulkan/gpu_dependency_tests.py
 	./build/contact_shader_contract_tests
+	./build/fluid_transport_limits_tests
 
 build/contact_shader_contract_tests: tests/vulkan/contact_shader_contract_tests.c src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
 	@mkdir -p build/diagnostics
@@ -844,4 +845,8 @@ GPU_SOURCE_BINARIES += $(addprefix build/quarter_native_structural_, \
     streaming_tests submerged_load_tests)
 $(GPU_SOURCE_BINARIES): src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
 build/contact_gpu.o: src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
+
+build/fluid_transport_limits_tests: tests/vulkan/fluid_transport_limits_tests.c src/vulkan/fluid_transport_limits.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+test_gpu_tools: build/fluid_transport_limits_tests
 
