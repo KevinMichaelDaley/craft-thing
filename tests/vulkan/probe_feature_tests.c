@@ -6,6 +6,9 @@
 
 static int g_pass,g_fail;
 static bool supported,requested;
+#ifdef DC_PROBE_BUFFER_DEVICE_ADDRESS
+static bool address_supported=true,address_requested;
+#endif
 static unsigned device_calls;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
@@ -28,15 +31,25 @@ VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDe
 }
 VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceFeatures2(VkPhysicalDevice d,VkPhysicalDeviceFeatures2 *p) {
     (void)d;
-    for(VkBaseOutStructure *s=p->pNext;s;s=s->pNext)
+    for(VkBaseOutStructure *s=p->pNext;s;s=s->pNext) {
         if(s->sType==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES)
             ((VkPhysicalDeviceVulkan13Features *)s)->synchronization2=supported;
+#ifdef DC_PROBE_BUFFER_DEVICE_ADDRESS
+        if(s->sType==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES)
+            ((VkPhysicalDeviceVulkan12Features *)s)->bufferDeviceAddress=address_supported;
+#endif
+    }
 }
 VKAPI_ATTR VkResult VKAPI_CALL vkCreateDevice(VkPhysicalDevice d,const VkDeviceCreateInfo *i,const VkAllocationCallbacks *a,VkDevice *out) {
     (void)d;(void)a;(void)out;device_calls++;
-    for(const VkBaseInStructure *s=i->pNext;s;s=s->pNext)
+    for(const VkBaseInStructure *s=i->pNext;s;s=s->pNext) {
         if(s->sType==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES)
             requested=((const VkPhysicalDeviceVulkan13Features *)s)->synchronization2;
+#ifdef DC_PROBE_BUFFER_DEVICE_ADDRESS
+        if(s->sType==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES)
+            address_requested=((const VkPhysicalDeviceVulkan12Features *)s)->bufferDeviceAddress;
+#endif
+    }
     return VK_ERROR_INITIALIZATION_FAILED;
 }
 static void test_probe_explicitly_enables_supported_sync2(void) {
@@ -47,8 +60,23 @@ static void test_probe_rejects_missing_sync2_before_device_creation(void) {
     supported=false;requested=false;device_calls=0;probe_t p={0};
     ASSERT_TRUE(!initialize_device(&p));ASSERT_EQ(device_calls,0u);PASS();
 }
+#ifdef DC_PROBE_BUFFER_DEVICE_ADDRESS
+static void test_address_probe_explicitly_enables_address_without_int64(void) {
+    supported=true;address_supported=true;address_requested=false;device_calls=0;
+    probe_t p={0};ASSERT_TRUE(!initialize_device(&p));
+    ASSERT_EQ(device_calls,1u);ASSERT_TRUE(address_requested);PASS();
+}
+static void test_address_probe_rejects_missing_address_before_device_creation(void) {
+    supported=true;address_supported=false;device_calls=0;probe_t p={0};
+    ASSERT_TRUE(!initialize_device(&p));ASSERT_EQ(device_calls,0u);PASS();
+}
+#endif
 int main(void) {
     RUN(test_probe_explicitly_enables_supported_sync2);
     RUN(test_probe_rejects_missing_sync2_before_device_creation);
+#ifdef DC_PROBE_BUFFER_DEVICE_ADDRESS
+    RUN(test_address_probe_explicitly_enables_address_without_int64);
+    RUN(test_address_probe_rejects_missing_address_before_device_creation);
+#endif
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
