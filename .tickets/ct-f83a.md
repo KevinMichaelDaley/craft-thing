@@ -37,3 +37,7 @@ Atomic allocation RED compiled/SPIR-V validated, executed under bounded Vulkan/s
 **2026-10-17T09:06:44Z**
 
 Transactional allocator GPU GREEN verified0.328s with explicit synchronization validation, no errors:90tentative handles with commit0 preserve ownership/free masks; commit1 publishes90once, replay is idempotent;40more defer with required_slots132 and no mutation; store growth128→192 retries same queue and publishes130exact generation1handles. GPU lease returned immediately to parent terrain-placement/demo work. Still prototype only: runtime consumers remainlegacy64, release/reuse/indirect/live-ID work and full integration remain open.
+
+**2026-10-17T09:13:45Z**
+
+Audit identified another growth-dependent hidden bound: legacy ID collision reservation examines only128candidate serials. Once the store exceeds64live bodies,128consecutive occupied authored auto-namespace IDs could cause permanent retries. Design now requires >128collision RED and GPU-parallel stable ID index/allocation (e.g. sorted-gap binary search), preserving serial on failed joint reservations. Prototype currently reserves generation handles only; runtime IDs/live lists remain unimplemented.

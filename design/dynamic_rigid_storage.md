@@ -86,6 +86,20 @@ and fracture output queues grow from their own measured demand; growing records
 alone must not silently truncate another resource. Contact overflow remains
 conservative and observable until its complete work can be retried.
 
+Stable ID allocation must also outgrow the old 128-candidate collision window.
+With a larger live store, 128 consecutive authored IDs can occupy that entire
+window; retrying the same window forever would impose another hidden limit.
+One deterministic option is a GPU-sorted live-ID index. For sorted occupied auto
+serials above the last committed serial `s`, the number of gaps before entry `i`
+is `serial[i] - s - (i - first + 1)`. Each pending request can binary-search this
+monotone gap count to find its available serial independently in logarithmic
+steps. Commit the highest accepted serial only with the joint transaction; an
+allocation failure must not consume unused IDs. The sorted index itself must be
+built/merged in GPU-parallel passes, not by a single-invocation sort or host scan.
+Add a burst test with more than 128 consecutive occupied candidate IDs, in
+addition to existing small collision cases. This is a remaining implementation
+requirement, not a claim that the current prototype assigns runtime IDs.
+
 The shared accessor contract is `body_storage_layout.h` plus
 `shaders/sim/rigid_storage.glsl`. Its prototype has a 64-byte versioned root and
 48-byte directory entries pointing to record, solver, ownership and auxiliary
