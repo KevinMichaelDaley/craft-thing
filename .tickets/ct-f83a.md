@@ -53,3 +53,7 @@ Parallel page initialization GPU GREEN confirmed under sync validation: real dev
 **2026-10-17T09:27:45Z**
 
 Generation release/reuse RED now actually executed: current shader completes bounded release fence but leaves root130/committed0 instead of129/1 for duplicate slot0handle plus invalid sentinel; fails exact release assertion, zero validation errors. Test also covers replay, stale generation after reuse and generations1→2→3, which remain unimplemented next GREEN. No GPU work while parent UI/interactive lease active.
+
+**2026-10-17T09:31:49Z**
+
+Generation-safe release/reuse GPU GREEN verified in 0.457 seconds under explicit synchronization validation: duplicate plus invalid handles release slot 0 exactly once, replay is harmless, stale generation 1 cannot release generation 2, and reuse advances 1 to 2 to 3. All allocation/growth/retry assertions also pass; bounded fences completed without validation errors. Shader phases 5 and 6 use parallel handle ownership CAS plus a separate O(1) count publication. GPU immediately released to parent; no further submissions while parent visual investigation/demo owns it. Production remains legacy 64 bodies; actual-count indirect gates, runtime IDs/live lists and runtime migration are still open. Fresh full main regression remains paused, not reported complete.

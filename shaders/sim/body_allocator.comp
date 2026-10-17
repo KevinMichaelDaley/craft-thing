@@ -11,11 +11,19 @@ layout(buffer_reference,std430,buffer_reference_align=8) buffer Counts {uvec2 va
 shared uvec2 totals[64];
 shared uint masks[2];
 void main() {
-    if(ALLOCATION_PHASE==1u||ALLOCATION_PHASE==4u) {
+    if(ALLOCATION_PHASE==1u||ALLOCATION_PHASE==4u||ALLOCATION_PHASE==6u) {
         if(any(notEqual(gl_GlobalInvocationID,uvec3(0)))) return;
         BodyStorageRoot root=heap.state;
         if(!body_storage_root_valid(root)) return;
-        Batch batch=Batch(root.requests);Counts prefix=Counts(root.work);
+        Batch batch=Batch(root.requests);
+        if(ALLOCATION_PHASE==6u) {
+            if(batch.header.commit!=0u) {
+                heap.state.live_count=root.live_count-batch.header.committed;
+                batch.header.commit=0u;batch.header.ready=1u;
+            }
+            return;
+        }
+        Counts prefix=Counts(root.work);
         uvec2 total=prefix.values[root.slab_count-1u];
         if(ALLOCATION_PHASE==1u) {
             bool pending=batch.header.count>0u&&batch.header.committed==0u;
@@ -33,6 +41,28 @@ void main() {
     }
     BodyStorageRoot root=heap.state;
     uint page=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x,lane=gl_LocalInvocationID.x;
+    if(ALLOCATION_PHASE==5u) {
+        if(!body_storage_root_valid(root)) return;
+        Batch batch=Batch(root.requests);uint index=page*64u+lane;
+        if(batch.header.commit==0u||index>=batch.header.count) return;
+        uvec2 handle=batch.handles[index];
+        if(!body_storage_slot_valid(root,handle.x)||handle.y==0u||DC_BODY_OWNER(root,handle.x).generation!=handle.y) {
+            atomicOr(batch.header.error,DC_BODY_ALLOCATION_INVALID_HANDLE);return;
+        }
+        uint state=atomicAdd(DC_BODY_OWNER(root,handle.x).state,0u);
+        if((state!=DC_BODY_OWNER_RESERVED&&state!=DC_BODY_OWNER_LIVE)||
+            atomicCompSwap(DC_BODY_OWNER(root,handle.x).state,state,DC_BODY_OWNER_RETIRED)!=state) {
+            atomicOr(batch.header.error,DC_BODY_ALLOCATION_INVALID_HANDLE);return;
+        }
+        DC_BODY_AT(root,handle.x).enabled=0u;DC_BODY_AT(root,handle.x).id=0u;
+        DC_BODY_AT(root,handle.x).reserved0=0u;DC_BODY_AT(root,handle.x).reserved1=0u;
+        DC_BODY_OWNER(root,handle.x).runtime_id=0u;DC_BODY_OWNER(root,handle.x).live_index=DC_BODY_SLOT_NONE;
+        if(handle.y!=0xffffffffu) {
+            atomicExchange(DC_BODY_OWNER(root,handle.x).state,DC_BODY_OWNER_FREE);
+            atomicOr(DC_BODY_PAGE(root,handle.x).free_mask[(handle.x%64u)/32u],1u<<(handle.x%32u));
+        }
+        atomicAdd(batch.header.committed,1u);return;
+    }
     if(!body_storage_root_valid(root)||page>=root.slab_count) return;
     uint slot=page*64u+lane,word=lane/32u,bit=1u<<(lane%32u);
     BodyStorageOwner owner=DC_BODY_OWNER(root,slot);
