@@ -46,6 +46,13 @@ albedo mode. Press P to pause/resume, N to single-step, 0–6 to select air/ston
 water/dirt/gravel/wood, and use left/right mouse to paint/erase. Existing camera,
 zoom and physics overlays remain available. F8 restores authored albedo display.
 
+The air brush also carves moving rigid bodies and structural members at their
+current poses. Disconnected remnants become separate rigid bodies; fully erased
+bodies disappear. Surviving pixels retain their materials and custom colors,
+and saved worlds retain the carved geometry. Legacy convex/compound bodies are
+converted to physical pixel geometry when first carved. A carved structural
+member leaves the support graph and releases its remaining pieces.
+
 Loaded solid terrain stays fixed even when initially detached. Its original
 four-neighbor solid connections are recorded on the GPU and saved with the cells.
 Breaking those connections releases resulting isolated components; unrelated
