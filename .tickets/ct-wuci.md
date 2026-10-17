@@ -70,3 +70,7 @@ Oct16 safe GPU acceptance: draft128-lane pixel_properties helper now passes mixe
 **2026-10-16T20:22:52Z**
 
 Recovery ladder GREEN: full64x64 extraction and immediate motion-cache save integration1/1; production birth now reuses GPU-verified128-lane property helper;3844-pixel mass/COM/inertia exact within existing tolerance; standalone properties3/3 and indirect init2/2;128x64 wet mixed seam with save/load resume1/1 all validation clean. Quarter480x270 rotating exact bodies12.925ms wholeGPU tick/7.735ms rigid passes existing gates. Cold32 ring34.056ms remains above14ms gate; unchanged2.666ms. Cold80/160 sweep not reached due first failure. Full regression/native30FPS still pending.
+
+**2026-10-17T02:51:33Z**
+
+Current checkpoint12f7f66 full make test with Vulkan validation exited0:356 reported passes,0failures,0VUIDs;23SPIR-V modules validate. Actual displayed exact U/comb bodies and legacy concave pair pass, including exact mass and four identical paused frames. Existing480x270 steady GPU gate passes at rigid4.766ms,total10.677ms. Cold ring32/80/160 still FAIL unchanged14ms budget at30.288/26.893/35.647ms; unchanged frames1.766/1.895/2.293ms. Cold solver12.257/11.830/15.962ms and final raster7.716/3.930/7.504ms remain significant. Ticket remains in progress; existing fracture serial work remains outstanding.
