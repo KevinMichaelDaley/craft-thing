@@ -31,3 +31,7 @@ User additionally rejects viewport/full-visibility eligibility. Fully known load
 **2026-10-17T07:47:12Z**
 
 Behavioral RED executed after sandbox closed: onscreen known stone128pixels mass345.600006 vy65536 passes; partly offscreen cached stone x60 incorrectly vy-11439; wholly offscreen known cached seam x124 vy0.1PASS2FAIL, zero Vulkan/sync errors. Actual streamed dc_level_view paint+eraser3200pixel cross-seam mainland pond fixture passes stone+wood2/2: stone mass8640 density2.7 COMy-47.842529→-13.760376, wood mass1920 density.6 COM-48.166748→-70.105347; source cleared,dynamic flags,nooverflow/no solvedcontacts. Therefore generic large-stone hydro is not reproduced; user gray terrain still requires exact saved-world eligibility/reservation evidence. Saved user world preserved untouched. Test scheduler remains paused while prioritizing this bug.
+
+**2026-10-17T07:48:17Z**
+
+Offline read of the exact user-saved world proves all64/64 body records active and owned (IDs0x80000001..0x80000040): slots0..62 bounds7x7, slot63 bounds28x11. Arena uses only2722words, so body-slot exhaustion—not geometry arena or stone density—is the immediate birth blocker in saved state. Do not delete/merge bodies or increase constant as a substitute for real resource scaling. Held paint invokes material brush each rendered frame (main.c1280), and brush writes terrain under existing rigid occupancy; need deterministic repeated-stamp regression and explicit saturation diagnostics. Cached visibility RED remains a separate real dynamics defect.
