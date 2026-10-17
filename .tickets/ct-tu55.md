@@ -98,3 +98,7 @@ Raster runtime RED5785631 -> GREEN: GPU-only classifier now routes pixel-only an
 **2026-10-17T00:02:59Z**
 
 Integrated cooperative displacement runtime passes Vulkan validation: exact prior fingerprint 97a0ea02c0e0a633 and mass339325648, aperture mismatches0. Column/lateral displacement now256/128 workgroups instead of4/2 in128x64 two-update fixture. Native360 measurement follows; no30FPS claim.
+
+**2026-10-17T00:05:02Z**
+
+Full validation RED: pixel_properties_gpu_tests compiles, first two reductions pass, prepare fixture emits VUID07988/08114 because new shared rigid classifier binding27 is absent from minimal layout. Full suite stopped at invalid fixture dispatch. Correct fixture resource declaration before restarting; not a production driver hang.
