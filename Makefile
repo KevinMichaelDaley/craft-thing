@@ -949,6 +949,8 @@ build/dynamic_body_capacity_tests: tests/app/dynamic_body_capacity_tests.c tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
 build/body_address_feature_tests: tests/vulkan/probe_feature_tests.c tools/diagnostics/vulkan_probe.c | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_PROBE_BUFFER_DEVICE_ADDRESS $< -o $@ -lvulkan
+build/body_address_allocation_tests: tests/vulkan/body_address_allocation_tests.c src/vulkan/body_address_gpu.c src/vulkan/body_address_gpu.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_address_gpu.c -o $@ -lvulkan -Wl,--wrap=vkCreateBuffer -Wl,--wrap=vkGetBufferMemoryRequirements -Wl,--wrap=vkGetPhysicalDeviceMemoryProperties -Wl,--wrap=vkAllocateMemory -Wl,--wrap=vkBindBufferMemory -Wl,--wrap=vkGetBufferDeviceAddress -Wl,--wrap=vkDestroyBuffer -Wl,--wrap=vkFreeMemory
 shaders: $(MPM_COMPACTION_SHADER)
 .PHONY: test_mpm_compaction_work
 test_mpm_compaction_work: build/mpm_compaction_tests
