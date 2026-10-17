@@ -82,9 +82,10 @@ static bool equal_pixel_contacts(dc_gpu_t *g,char *err) {
     dc_gpu_contact_stats_t expected={0};
     equal=equal&&dc_gpu_read_contacts(g,&expected,reference,DC_GPU_CONTACT_CAPACITY,err,256);
     g->contact_pixel_pipeline=typed;
-    bool body=false,terrain=false;
-    for(unsigned i=0;i<expected.count;i++) {body|=reference[i].kind==0;terrain|=reference[i].kind==1;}
-    equal=equal&&expected.overflow==0&&body&&terrain;
+    bool body=false,terrain=false,grain=false;
+    uint32_t counters[3];memcpy(counters,dc_gpu_contact_data(g)+9,sizeof(counters));
+    for(unsigned i=0;i<expected.count;i++) {body|=reference[i].kind==0;terrain|=reference[i].kind==1;grain|=reference[i].kind==3;}
+    equal=equal&&expected.overflow==0&&body&&terrain&&grain;
     qsort(reference,expected.count,sizeof(*reference),contact_order);
     for(unsigned frame=0;frame<4&&equal;frame++) {
         dc_gpu_contact_stats_t stats;
@@ -92,10 +93,11 @@ static bool equal_pixel_contacts(dc_gpu_t *g,char *err) {
             dc_gpu_read_contacts(g,&stats,actual,DC_GPU_CONTACT_CAPACITY,err,256);
         if(equal) {
             qsort(actual,stats.count,sizeof(*actual),contact_order);
-            equal=memcmp(&expected,&stats,sizeof(stats))==0&&memcmp(reference,actual,stats.count*sizeof(*actual))==0;
+            equal=memcmp(&expected,&stats,sizeof(stats))==0&&memcmp(reference,actual,stats.count*sizeof(*actual))==0&&
+                memcmp(counters,dc_gpu_contact_data(g)+9,sizeof(counters))==0;
         }
     }
-    printf("concave typed contacts: %u constraints body%d terrain%d exact%d\n",expected.count,body,terrain,equal);
+    printf("concave typed contacts: %u constraints body%d terrain%d grain%d exact%d\n",expected.count,body,terrain,grain,equal);
     free(reference);free(actual);return equal;
 }
 static void test_two_rotated_concave_bodies_use_exact_pixel_raster(void) {
@@ -109,9 +111,11 @@ static void test_two_rotated_concave_bodies_use_exact_pixel_raster(void) {
             if(px>=12&&px<43&&py>=14&&py<43&&(px<18||py>=37)) material=px<18?DC_MATERIAL_WOOD:DC_MATERIAL_STONE;
             if(px>=70&&px<104&&py>=52&&py<87&&(px<76||px>=98||py>=80)) material=px<94?DC_MATERIAL_DENSE_WOOD:DC_MATERIAL_WOOD;
             if(py==110&&px<123) material=DC_MATERIAL_STONE;
+            if(py==105&&px>=30&&px<85) material=DC_MATERIAL_SAND;
             chunk->cells[y*64+x].material=material;
         }
         unsigned slot=cy*2+cx;
+        dc_chunk_seed_particles(chunk);
         ASSERT_TRUE(dc_gpu_upload_chunk(g,slot,chunk,err,sizeof(err)));
         ASSERT_TRUE(dc_gpu_set_page(g,cx,cy,slot,err,sizeof(err)));
     }
