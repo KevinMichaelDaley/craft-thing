@@ -187,6 +187,28 @@ test_two_concave_bodies_on_sideways_beam_and_angled_brace_collapse_visibly(
     ASSERT_TRUE(fabsf(motion.mass - 234.9f) < .001f);
     ASSERT_TRUE(dc_gpu_read_body_motion(gpu, 2, &motion, err, sizeof(err)));
     ASSERT_TRUE(fabsf(motion.mass - 340.2f) < .001f);
+    dc_gpu_contact_t *contacts=calloc(DC_GPU_CONTACT_CAPACITY,sizeof(*contacts));
+    ASSERT_TRUE(contacts);
+    dc_gpu_contact_stats_t stats;
+    ASSERT_TRUE(dc_gpu_read_contacts(gpu,&stats,contacts,DC_GPU_CONTACT_CAPACITY,err,sizeof(err)));
+    float support_low=INFINITY,support_high=-INFINITY;
+    uint32_t support_count=0;
+    for (uint32_t i=0;i<stats.count;i++) {
+        dc_gpu_contact_t c=contacts[i];
+        dc_gpu_contact_anchor_t p;
+        if (c.body_a==2 && c.normal_y<-.5f) p=c.anchor_a;
+        else if (c.body_b==2 && c.normal_y>.5f) p=c.anchor_b;
+        else continue;
+        float x=(float)(64.*p.chunk.x+p.x_fp/65536.);
+        support_low=fminf(support_low,x);support_high=fmaxf(support_high,x);support_count++;
+    }
+    free(contacts);
+    float com_x=(float)(64.*right.chunk.x+right.body.x_fp/65536.+motion.center_x);
+    bool moving=right.body.vx_fp!=0 || right.body.vy_fp!=0 || fabsf(motion.angular_velocity)>1e-6f;
+    printf("right U rest support: COMx %.6f support[%.6f,%.6f] contacts%u angle%.6f omega%.9f v(%d,%d)\n",
+        com_x,support_low,support_high,support_count,motion.angle,motion.angular_velocity,right.body.vx_fp,right.body.vy_fp);
+    ASSERT_TRUE(moving || (support_count>0 && com_x>=support_low-.01f && com_x<=support_high+.01f));
+    ASSERT_TRUE(!moving);
     ASSERT_TRUE(scene_snapshot(gpu, "build/structure_collapsed.bmp", err));
     dc_gpu_destroy(gpu);
     PASS();
