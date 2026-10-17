@@ -27,6 +27,19 @@ coordinates and physical pose never reseed an appearance.
 
 Defaults are deterministic and valid for older saves; explicit color/surface
 overrides must subsequently be stored in the versioned appearance sidecar.
+
+Runtime water has a separate atlas-indexed linear RGB concentration buffer,
+independent of terrain appearance and physical material IDs. Import seeds its
+color, and each accepted fluid flux blends incoming and resident concentration
+using their water masses. Advection, body displacement, and marker corrections
+carry the same pigment; empty donors clear their color. The renderer samples
+this field at the water's current location, including pore water in soil. GPU
+transport owns ordinary-frame updates; CPU access is confined to initialization
+and diagnostics. Default water uses linear RGB `(0.035,0.193,0.666)`.
+
+This runtime field currently resets on chunk upload. Persisting pigment across
+save/reopen and eviction, and carrying it with bound particle moisture, are part
+of `ctr-ddtf`; the terrain/body appearance atlas alone cannot preserve fluid color.
 Seed-only save support is insufficient for painted texels. Persistence and
 parallel extraction/fracture transfer remain ticket ctr-ddtf and require the
 completed ct-wuci transaction implementation. Its birth hook supplies one source

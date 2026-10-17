@@ -17,3 +17,9 @@ Coordinate ct-wuci hooks: transfer stable appearance/provenance atomically durin
 
 Birth/rollback/retry, mixed pixels, fracture, page/body reuse, off-viewport cached geometry, rebase/eviction/save/reopen preserve appearance and physical identity with no loss or duplication. GPU-sized work is parallel. Integrate completed ct-wuci changes; never restore its old serial extraction.
 
+
+## Notes
+
+**2026-10-17T18:05:52Z**
+
+Water now uses a separate atlas-indexed linear RGB concentration buffer (global descriptor32), seeded by imported water and advected/mixed by exact fluid flux including displacement/correction. Extend appearance persistence to serialize this pigment across save/reopen and chunk eviction; current chunk upload clears color state. Also retain pigment in bound MPM moisture and recover it with released pore water.
