@@ -776,9 +776,13 @@ build/diagnostics/shader_compile_probe: tools/diagnostics/shader_compile_probe.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ -lvulkan -Wl,--wrap=vkQueueSubmit -Wl,--wrap=vkQueueSubmit2
 
 .PHONY: diagnostic_fluid_variants
-build/diagnostics/mpm_case: tests/vulkan/mpm_specialization_tests.c tools/diagnostics/mpm_variants.c tests/vulkan/particle_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(STREAM_OBJ)
+MPM_VARIANT_WRAPS = -Wl,--wrap=dc_gpu_record_mpm -Wl,--wrap=dc_gpu_destroy -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants
+build/diagnostics/mpm_case: tests/vulkan/mpm_specialization_tests.c tools/diagnostics/mpm_variants.c tests/vulkan/particle_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(STREAM_OBJ) diagnostic_fluid_variants
 	@mkdir -p build/diagnostics
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/mpm_specialization_tests.c tools/diagnostics/mpm_variants.c $(GPU_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(STREAM_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_record_mpm
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/mpm_specialization_tests.c tools/diagnostics/mpm_variants.c $(GPU_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(STREAM_OBJ) -o $@ $(LDLIBS) $(MPM_VARIANT_WRAPS)
+
+build/diagnostics/native360_mpm_variants: tests/app/native_720_performance_tests.c tests/vulkan/pixel_component_tests.c tests/vulkan/native_scene.h tools/diagnostics/mpm_variants.c $(GPU_SRC) src/world/chunk.c diagnostic_fluid_variants
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GPU_CHUNK_SLOTS=90u -DNATIVE_PERF_WIDTH=640 -DNATIVE_PERF_HEIGHT=360 tests/app/native_720_performance_tests.c tools/diagnostics/mpm_variants.c $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) $(MPM_VARIANT_WRAPS)
 
 diagnostic_fluid_variants: build/diagnostics/shader_compile_probe
 	python3 tools/diagnostics/fluid_variants.py build/diagnostics/fluid-variants
