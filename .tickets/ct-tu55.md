@@ -134,3 +134,7 @@ Exact request reuse, fully-open aperture proof,32-lane transport team, and mutab
 **2026-10-17T03:08:27Z**
 
 Immutable source bitmap skips only initially ineligible or zero-allowance sources; prior ordered transfers cannot populate unvisited sources. Bounded word scans preserve exact priority and uncached fallback.30literal oracle cases (including one-unit quantization in all directions) and coupledhash97a0ea02c0e0a633 pass withvalidation. RED subunit work ratio15.875 now1.009, waterunchanged. Native concave mean30.752ms,p9534.804ms,cold102.398ms,32.518FPS: mean passes, p95 stillRED33.333. Dry9.714ms/p9511.882/102.949FPS anddense21.794ms/p9531.582/45.883FPS pass; fullregression pending afterthischeckpoint.
+
+**2026-10-17T03:12:21Z**
+
+Contact recorder removes intermediate publication barriers between atomic candidate passes, retaining reset-to-indirect and final-to-solver/host dependencies. CPU recording tests2/2 pass; exact44-contact/occupancy/image comparison and9contact cases pass with synchronization validation explicitly enabled (noSYNC/VUID diagnostics). Native run31.120ms mean,p9535.282ms,cold101.789ms,32.134FPS; barrier consolidation has no clear whole-frame timing gain and does not meet p95 target. Full current regression pending.

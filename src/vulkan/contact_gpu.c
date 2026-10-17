@@ -95,6 +95,10 @@ void dc_gpu_record_contacts(dc_gpu_t *gpu) {
                 (VkDeviceSize)word * sizeof(uint32_t);
             vkCmdDispatchIndirect(gpu->command, gpu->body_buffer, indirect);
         } else vkCmdDispatch(gpu->command, 1, 1, 1);
+        /* Candidate passes read immutable geometry and allocate disjoint records
+           with atomics. Publish reset/indirect inputs first, then all candidates
+           together before the solver or host consumes their records. */
+        if(pass!=0u&&pass+1u!=count) continue;
         VkMemoryBarrier2 memory = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
             .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
