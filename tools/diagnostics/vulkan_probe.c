@@ -255,6 +255,10 @@ static int create_pipeline(probe_t *p, const char *path) {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1,
         .pSetLayouts = &p->descriptor_layout};
+#ifdef DC_PROBE_PUSH_CONSTANT_BYTES
+    VkPushConstantRange constants={.stageFlags=VK_SHADER_STAGE_COMPUTE_BIT,.size=DC_PROBE_PUSH_CONSTANT_BYTES};
+    layout.pushConstantRangeCount=1;layout.pPushConstantRanges=&constants;
+#endif
     if (!check(vkCreatePipelineLayout(p->device, &layout, NULL, &p->layout),
                "pipeline layout"))
         return 0;

@@ -1,0 +1,8 @@
+#version 450
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+layout(local_size_x=128) in;
+layout(constant_id=0) const uint SCAN_PHASE=0u;
+layout(buffer_reference,std430,buffer_reference_align=8) buffer Pairs {uvec2 values[];};
+layout(push_constant) uniform Params {uvec2 data_address,parent_address;uint count,padding;} params;
+void main() {}
