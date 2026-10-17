@@ -934,6 +934,9 @@ test: build/fluid_transport_partial_tests
 build/fluid_recording_tests: tests/vulkan/fluid_recording_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdPipelineBarrier2 -Wl,--wrap=vkCmdBindDescriptorSets
 test_gpu_tools: build/fluid_recording_tests
+build/native_demo_controls_tests: tests/app/native_demo_controls_tests.c tests/app/native_demo_controls.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+test_gpu_tools: build/native_demo_controls_tests
 shaders: $(MPM_COMPACTION_SHADER)
 .PHONY: test_mpm_compaction_work
 test_mpm_compaction_work: build/mpm_compaction_tests
