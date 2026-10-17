@@ -37,3 +37,7 @@ Transactional resource-owner RED compiled and failed2tests, then CPU-mocked GREE
 **2026-10-17T08:21:05Z**
 
 Prepared device-local owner verification binary/SPIR-V for90→200→1025 bodies using GPU fill/directory copies and record persistence. Build warning-free and SPIR-V validation passes; GPU run deliberately deferred until parent renderer full-suite/display lease ends. Shared bounded-probe fixture extracted and configurable output size prevents diagnostic buffer overrun. CPU ownership/ABI/feature/allocation/diagnostic contracts15/15 pass; current gameplay remains64.
+
+**2026-10-17T08:22:08Z**
+
+Registered all new GREEN CPU contracts in normal test_gpu_tools. Complete CPU tools regression passes (including shader/dependency contracts and resource tests), log build/diagnostics/body-storage-tools-regression.log. No GPU submissions in this run. Full main GPU suite remains paused and parent renderer suite retains the GPU lease; device-local owner validation remains queued.

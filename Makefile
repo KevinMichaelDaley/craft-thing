@@ -846,6 +846,11 @@ test_gpu_tools: build/contact_shader_contract_tests
 	./build/probe_feature_tests
 	./build/fluid_recording_tests
 	./build/native_demo_controls_tests
+	./build/extraction_stats_tests
+	./build/body_address_feature_tests
+	./build/body_address_allocation_tests
+	./build/body_storage_layout_tests
+	./build/body_storage_growth_tests
 
 build/contact_shader_contract_tests: tests/vulkan/contact_shader_contract_tests.c src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
 	@mkdir -p build/diagnostics
@@ -961,6 +966,7 @@ build/body_storage_layout_tests: tests/vulkan/body_storage_layout_tests.c includ
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
 build/body_storage_growth_tests: tests/vulkan/body_storage_growth_tests.c src/vulkan/body_storage_gpu.c src/vulkan/body_storage_gpu.h include/dungeoncraft/body_storage_layout.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_storage_gpu.c -o $@ -lvulkan -Wl,--wrap=dc_gpu_address_buffer_create -Wl,--wrap=dc_gpu_address_buffer_destroy -Wl,--wrap=vkCmdCopyBuffer -Wl,--wrap=vkCmdFillBuffer -Wl,--wrap=vkCmdUpdateBuffer -Wl,--wrap=vkCmdPipelineBarrier2
+test_gpu_tools: build/extraction_stats_tests build/body_address_feature_tests build/body_address_allocation_tests build/body_storage_layout_tests build/body_storage_growth_tests
 build/diagnostics/body_growth_probe.spv: tests/vulkan/body_growth_probe.comp shaders/sim/rigid_body.glsl shaders/sim/rigid_storage.glsl include/dungeoncraft/body_storage_layout.h | build
 	mkdir -p build/diagnostics
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
