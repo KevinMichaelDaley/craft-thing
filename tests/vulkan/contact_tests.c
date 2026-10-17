@@ -119,6 +119,38 @@ static void test_mpm_material_contacts_use_occupied_cells_and_distinct_kind(void
     dc_gpu_destroy(gpu); PASS();
 }
 
+static void test_grain_contacts_use_actual_positions_radii_and_both_layers(void) {
+    char err[256];dc_gpu_t *gpu=grid();ASSERT_TRUE(gpu);
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    unsigned cell=20*64+20;
+    chunk->cells[cell].material=DC_MATERIAL_DIRT;dc_chunk_seed_particles(chunk);
+    chunk->particles[cell].x_fp=chunk->particles[cell].y_fp=20*65536+9830;
+    chunk->particles[cell].grain_fp=6554;
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err)));
+    dc_gpu_body_shape_t thin={.count=4,.material=DC_GPU_BODY_WOOD,
+        .vertices={{49152,0},{65536,0},{65536,65536},{49152,65536}}};
+    ASSERT_TRUE(dc_gpu_spawn_convex_body(gpu,box(77,20,20,1),&thin,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(gpu,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    dc_gpu_contact_stats_t stats;dc_gpu_contact_t contacts[8];
+    ASSERT_TRUE(dc_gpu_read_contacts(gpu,&stats,contacts,8,err,sizeof(err)));
+    ASSERT_EQ(stats.count,0u);
+    chunk->particles[cell+4096]=chunk->particles[cell];
+    chunk->particles[cell+4096].x_fp=20*65536+55706;
+    chunk->particles[cell+4096].id_lo+=4096;chunk->particle_count=2;
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(gpu,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_contacts(gpu,&stats,contacts,8,err,sizeof(err)));
+    ASSERT_EQ(stats.count,1u);
+    ASSERT_EQ(contacts[0].kind,DC_GPU_CONTACT_MPM);
+    chunk->particles[cell].x_fp=20*65536+55706;
+    chunk->particles[cell].y_fp=20*65536+55706;
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(gpu,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_contacts(gpu,&stats,contacts,8,err,sizeof(err)));
+    ASSERT_EQ(stats.count,2u);
+    dc_gpu_destroy(gpu);free(chunk);PASS();
+}
+
 static void test_body_pair_is_symmetric_under_geometry_exchange(void) {
     char err[256]; dc_gpu_t *gpu = grid(); ASSERT_TRUE(gpu);
     dc_gpu_contact_t first = {0};
@@ -263,6 +295,7 @@ static void test_partial_resident_tile_has_blocking_viewport_boundary(void) {
 }
 
 int main(void) {
+    RUN(test_grain_contacts_use_actual_positions_radii_and_both_layers);
     RUN(test_partial_resident_tile_has_blocking_viewport_boundary);
     RUN(test_thin_polygon_edge_finds_one_cell_obstacle);
     RUN(test_rotated_stone_and_wood_find_single_cell_steps_and_slopes);
