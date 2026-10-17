@@ -19,4 +19,8 @@ bool dc_gpu_body_scan_plan_create(uint32_t count,uint32_t max_groups_x,uint32_t 
     dc_gpu_body_scan_plan_t *out,char *err,uint32_t cap);
 /** Release host-owned dispatch metadata after recorded commands no longer need it. */
 void dc_gpu_body_scan_plan_destroy(dc_gpu_body_scan_plan_t *plan);
+/** Record hierarchical parallel pair scans; scratch input starts at level zero.
+ * Pipelines use 24-byte address/count push constants and scan/add specialization. */
+bool dc_gpu_body_scan_record(VkCommandBuffer command,const dc_gpu_body_scan_plan_t *plan,
+    VkDeviceAddress address,VkDeviceSize bytes,VkPipelineLayout layout,VkPipeline scan,VkPipeline add);
 #endif
