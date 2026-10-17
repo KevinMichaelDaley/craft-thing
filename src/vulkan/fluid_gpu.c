@@ -116,7 +116,7 @@ bool dc_gpu_fluid_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
 static void bind_fluid_mode(dc_gpu_t *gpu,uint32_t mode,bool projection) {
     VkPipeline pipeline=projection?gpu->projection_phase_pipelines[mode]:gpu->fluid_phase_pipelines[mode];
     if(!pipeline) pipeline=projection?gpu->projection_pipeline:gpu->fluid_pipeline;
-    if(!projection&&mode<4&&gpu->rigid_occupancy_present) pipeline=gpu->fluid_transport_pipelines[mode];
+    if(!projection&&mode<4) pipeline=gpu->fluid_transport_pipelines[mode];
     if(!projection&&mode==FLUID_DISPLACEMENT_MODE) pipeline=gpu->fluid_displacement_pipelines[0];
     if(!projection&&mode==FLUID_LATERAL_DISPLACEMENT_MODE) pipeline=gpu->fluid_displacement_pipelines[1];
     vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline);
@@ -316,11 +316,9 @@ static void record_fluid_transport(dc_gpu_t *gpu, uint32_t first,
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
         uint32_t work = mode < 2u ? gpu->width : gpu->height;
-        if (mode < 4u && gpu->rigid_occupancy_present)
+        if (mode < 4u)
             vkCmdDispatch(gpu->command, work < 65535u ? work : 65535u,
                            (work + 65534u) / 65535u, 1u);
-        else if (mode < 4u)
-            vkCmdDispatch(gpu->command, (work + 63u) / 64u, 1u, 1u);
         else
             vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u,
                           1u, DC_GPU_CHUNK_SLOTS);

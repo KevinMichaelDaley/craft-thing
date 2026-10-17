@@ -26,3 +26,11 @@ Per-dispatch attribution confirms transport dominates: late phase 3 has downward
 **2026-10-17T06:50:57Z**
 
 Compiling deterministic RED transport slice: native-game target stays 640×360, while an isolated 640×16 diagnostic compares one directional pass against the literal old recurrence. It has zero cell mismatches and exact water mass, but performs 3,251,248 request queries and 3,251,248 blocker checks for 10,192 sources. Actual participating subgroup is 16 lanes despite local size 32. New budgets require at most 64 request queries per source and linear blocker classification; baseline fails. Validation and synchronization validation report no errors. The explicit sustained performance target also compiles and fails on the dense p95 gate.
+
+**2026-10-17T07:01:36Z**
+
+Found production routing gap: zero-body scenes still selected serial fluid.comp transport, while cooperative fluid_transport.comp was gated by rigid_occupancy_present. Command-recording RED 5b2dff6 fails for ordinary water; candidate routes all four transport modes through cooperative line groups, retaining unused1=0 (original face-only aperture semantics) for no rigid occupancy. Exact coupled runtime fingerprint remains 97a0ea02c0e0a633, mass339325648, zero mismatches with explicit synchronization validation. Sustained displayed acceptance is running; no performance claim yet.
+
+**2026-10-17T07:02:07Z**
+
+Candidate GREEN now exercised by actual body-free runtime: dense native640x360 physics/display180-frame run mean11.604ms,p9517.114ms,max18.584ms,86.174FPS,cold30.788ms,offscreenfluid4.900ms. All three sustained loads also pass unchanged: see build/diagnostics/partial-fluid-native360-all.log; exact concave mean25.861ms,p9532.426ms,cold91.363ms. Two fixed60Hz steps/frame,cadence6,pressure20,scale1 retained. Full explicit synchronization validated headless battery is running before completion; ct-wuci cold14ms gates and existing fracture parallelization remain open.

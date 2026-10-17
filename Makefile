@@ -476,6 +476,7 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/fluid_transport_tests
 	./build/fluid_transport_long_tests
 	./build/fluid_transport_slow_tests
+	./build/fluid_transport_partial_tests
 	./build/fluid_displacement_tests
 	./build/fluid_displacement_wide_tests
 	./build/fluid_displacement_tall_tests
@@ -843,6 +844,7 @@ test_gpu_tools: build/contact_shader_contract_tests
 	./build/contact_recording_tests
 	./build/mpm_layout_tests
 	./build/probe_feature_tests
+	./build/fluid_recording_tests
 
 build/contact_shader_contract_tests: tests/vulkan/contact_shader_contract_tests.c src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
 	@mkdir -p build/diagnostics
@@ -923,11 +925,12 @@ test_gpu_tools: build/probe_feature_tests
 
 MINIMAL_VK_TESTS = $(addprefix build/,component_dispatch_tests pixel_properties_gpu_tests \
     fluid_transport_work_tests raster_dispatch_tests fluid_transport_tests fluid_transport_long_tests \
-    fluid_transport_slow_tests mpm_control_tests mpm_compaction_tests fluid_displacement_tests \
+    fluid_transport_slow_tests fluid_transport_partial_tests mpm_control_tests mpm_compaction_tests fluid_displacement_tests \
     fluid_displacement_wide_tests fluid_displacement_tall_tests hydro_head_tests fluid_aperture_tests \
     contact_dispatch_tests)
 $(MINIMAL_VK_TESTS): tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h
 test: build/mpm_compaction_tests
+test: build/fluid_transport_partial_tests
 build/fluid_recording_tests: tests/vulkan/fluid_recording_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdPipelineBarrier2 -Wl,--wrap=vkCmdBindDescriptorSets
 test_gpu_tools: build/fluid_recording_tests
