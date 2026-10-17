@@ -1,6 +1,6 @@
 ---
 id: ctr-11i9
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-17T08:59:40Z
@@ -22,3 +22,7 @@ User expanded acceptance to actual material placement gameplay, then corrected p
 **2026-10-17T09:29:27Z**
 
 Final UI suite exited0. Final selected actual-window scene run plus textureGPU/terrainprop checks passed core+sync validation with no VUID/SYNC hazards. Ground-boundary regressions2/2 and offline profile/ground companion tests4/4 pass; entire headless recipe completed with exactly the2pre-existing authored staging failures and no others (make -i used explicitly to continue, not a passing-suite claim). Final native launcher rebuild guards now include renderer/prop/authored shaders and shared asset headers; interactive launch and push remain.
+
+**2026-10-17T09:43:18Z**
+
+Completed requested interactive launch: tools/demo_level_piece01 running PID108258, native Wayland/Vulkan, paused, source128x128 centeredworldchunk(0,0), groundlineexposed. Startup confirms worldtop-left(-32,-32), terrain plus authoredcolor loaded; worldseparateworld_chunks_level_piece01. Persistent launcher, sourceASE/package/profile,groundcompanion and tests committed/pushed. Logs build/level-piece-interactive.log; verifiedcapture build/screenshots/level_piece01_ground_fixed.png. Parent kept generalrigid/structuralpublication/provenance and2knownauthoredREDs open as ctpf-iueo/ctpe-847v/ctpe-d6m2/ctr-ojvy. Additional userstructuralvisualendtiming request verifiedclosedctr-bxhz; no productionphysics modified for thatfixture.
