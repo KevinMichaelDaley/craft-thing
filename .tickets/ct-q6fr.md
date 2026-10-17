@@ -49,3 +49,7 @@ Required-feature helper RED→GREEN2/2 CPU contracts verifies owned stable pNext
 **2026-10-17T08:49:34Z**
 
 Device-local owner Vulkan GREEN:90→200→1025 records across2→4→17 slabs, three1second-deadline submissions, zero ID/mass/velocity/generation mismatches, zero VUID/SYNC, all resource accounting released; process0.235s. Current engine explicitly enabling BDA passes initialization-without-submission15second probe and full gpu_tests10/10 under sync validation. Main paused make73691 resumed only after smoke exits; finishing marker/world tail before fresh all-tests validation.
+
+**2026-10-17T09:45:36Z**
+
+Fresh main full suite is confirmed expired while paused for parent renderer/user GPU ownership: timeout PID92476 and scheduler92479 no longer exist; persistent log ends structural_failure13/13. This is PARTIAL, not a completed current regression. Restart fresh once parent explicitly releases the GPU. Current CPU test_gpu_tools passes; GPU remains exclusively live material demo PID108258.

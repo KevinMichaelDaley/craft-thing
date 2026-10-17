@@ -1012,6 +1012,12 @@ build/diagnostics/body_storage_init.spv: shaders/sim/body_storage_init.comp incl
 	spirv-val --target-env vulkan1.3 $@
 build/body_page_init_gpu_tests: tests/vulkan/body_page_init_gpu_tests.c tests/vulkan/body_probe_fixture.h tools/diagnostics/vulkan_probe.c src/vulkan/body_address_gpu.c src/vulkan/body_address_gpu.h src/vulkan/gpu_internal.h include/dungeoncraft/body_storage_layout.h build/diagnostics/body_storage_init.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_address_gpu.c -o $@ -lvulkan
+build/diagnostics/body_work_gate.spv: shaders/sim/body_work_gate.comp | build
+	mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
+	spirv-val --target-env vulkan1.3 $@
+build/body_work_gate_gpu_tests: tests/vulkan/body_work_gate_gpu_tests.c tests/vulkan/body_probe_fixture.h tools/diagnostics/vulkan_probe.c src/vulkan/body_address_gpu.c src/vulkan/body_address_gpu.h src/vulkan/gpu_internal.h include/dungeoncraft/body_storage_layout.h build/diagnostics/body_work_gate.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_address_gpu.c -o $@ -lvulkan
 shaders: $(MPM_COMPACTION_SHADER)
 .PHONY: test_mpm_compaction_work
 test_mpm_compaction_work: build/mpm_compaction_tests

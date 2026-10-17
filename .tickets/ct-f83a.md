@@ -61,3 +61,7 @@ Generation-safe release/reuse GPU GREEN verified in 0.457 seconds under explicit
 **2026-10-17T09:44:18Z**
 
 CPU-only indirect scan recording RED observed 3 pass/1 fail, then GREEN 4/4: all 2L-1 hierarchical passes consume packed GPU-generated dispatch triplets, preserving scan/add order, with compute-write to indirect-command-read synchronization; short, misaligned and overflow ranges reject before any commands. Shared direct/indirect recording avoids duplicate hierarchy logic. No GPU submissions while parent material demo is open. GPU producer/zero-work execution and runtime integration are not implemented or claimed by this CPU contract.
+
+**2026-10-17T09:45:36Z**
+
+Prepared optional bounded GPU work-gate test and no-op stub; both C and SPIR-V compile/validate, but GPU RED has NOT been executed because user material demo owns device. Test covers137 indirect triplets across 2D groups, active→empty→completed→null queue→active transitions, stale output clearing, immutable growth templates and output guards. Stub must remain unimplemented until observed RED under a new explicit GPU lease. Optional fixture is not in normal test recipe yet.
