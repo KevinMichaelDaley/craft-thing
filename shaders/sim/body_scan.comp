@@ -5,4 +5,23 @@ layout(local_size_x=128) in;
 layout(constant_id=0) const uint SCAN_PHASE=0u;
 layout(buffer_reference,std430,buffer_reference_align=8) buffer Pairs {uvec2 values[];};
 layout(push_constant) uniform Params {uvec2 data_address,parent_address;uint count,padding;} params;
-void main() {}
+shared uvec2 partial[128];
+void main() {
+    uint group=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x;
+    uint groups=(params.count-1u)/128u+1u;
+    if(group>=groups) return;
+    uint lane=gl_LocalInvocationID.x,index=group*128u+lane;
+    Pairs data=Pairs(params.data_address),parent=Pairs(params.parent_address);
+    if(SCAN_PHASE==1u) {
+        if(index<params.count&&group>0u) data.values[index]+=parent.values[group-1u];
+        return;
+    }
+    partial[lane]=index<params.count?data.values[index]:uvec2(0);
+    barrier();
+    for(uint stride=1u;stride<128u;stride*=2u) {
+        uvec2 before=lane>=stride?partial[lane-stride]:uvec2(0);
+        barrier();partial[lane]+=before;barrier();
+    }
+    if(index<params.count) data.values[index]=partial[lane];
+    if(lane==127u) parent.values[group]=partial[lane];
+}

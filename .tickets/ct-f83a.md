@@ -25,3 +25,7 @@ CPU-only preparatory RED→GREEN3/3 for resource-boundary hierarchical scan plan
 **2026-10-17T08:52:46Z**
 
 CPU recording RED→GREEN2/2 prepares hierarchical scan dispatches: ascending block scans followed by descending parent-prefix additions; each pass has compute dependencies and 24byte uvec2-address push constants. Short scratch/alignment/address-overflow checks prevent any GPU commands. This records O(log(page_count)) dispatch metadata only; page/body values are never scanned on CPU. GPU scan shader/test RED remains next; fresh full runtime regression continues independently without source/SPIR-V changes to its kernels.
+
+**2026-10-17T08:54:36Z**
+
+GPU prefix RED observed expected wrong-prefix/totals with no-op shader; minimal GREEN parallel128-lane scan + descending parent addition now exact for1,127,128,129,16384,16385 entries (up to3hierarchy levels), zero mismatches/guard corruption/VUID/SYNC under six1second fences. No serial whole-list scan: each group scans128 pairs in7barrier steps, global dependencies ascend/descend O(log_128 N) passes. Full runtime make92479 paused only after pixel_world8/8 child completed, then resumed immediately after bounded GREEN. Actual allocator reservation/commit remains pending.
