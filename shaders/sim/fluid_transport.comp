@@ -3,9 +3,9 @@
 #extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_arithmetic : require
 #extension GL_KHR_shader_subgroup_ballot : require
-layout(local_size_x=128) in;
+layout(local_size_x=32) in;
 layout(constant_id=0) const uint TRANSPORT_MODE=0u;
-layout(constant_id=1) const uint CACHE_CELLS=2048u;
+layout(constant_id=1) const uint CACHE_CELLS=1024u;
 layout(set=0,binding=1,std430) coherent buffer Cells {uvec2 chunk_cells[];};
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
@@ -19,8 +19,12 @@ layout(push_constant) uniform Params {
 const uint FULL=65536u,PERMEABLE=1u<<17u,KNOWN=1u<<18u;
 const float TRANSPORT_FUDGE=1.001;
 shared uvec4 cached[CACHE_CELLS];
+shared uint cached_requests[CACHE_CELLS];
+shared uint capacity_bits[(CACHE_CELLS+31u)/32u];
 bool vertical;
+bool line_open_aperture;
 uint line,length;
+uint transport_team_size() {return min(gl_SubgroupSize,gl_WorkGroupSize.x);}
 uint page_at(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0u;
     return pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
@@ -56,8 +60,30 @@ uint water_at(ivec2 p) {
 }
 void put_water(ivec2 p,uint value) {
     uint position=uint(vertical?p.y:p.x);
-    if(position<CACHE_CELLS) cached[position].x=value;
+    if(position<CACHE_CELLS) {
+        uint capacity=cached[position].y&131071u;
+        bool previous=cached[position].x<capacity,next=value<capacity;
+        cached[position].x=value;
+        if(previous!=next) {
+            uint mask=1u<<(position%32u);
+            if(next) atomicOr(capacity_bits[position/32u],mask);
+            else atomicAnd(capacity_bits[position/32u],~mask);
+        }
+    }
     else chunk_cells[atlas_index(p,page_at(p))].y=value;
+}
+bool recipients_full(uint coordinate,bool positive,uint reach) {
+    uint low=positive?coordinate+1u:coordinate-reach;
+    uint high=positive?coordinate+reach:coordinate-1u;
+    if(high>=CACHE_CELLS) return false;
+    uint first=low/32u,last=high/32u;
+    for(uint word=first;word<=last;word++) {
+        uint mask=0xffffffffu;
+        if(word==first) mask&=0xffffffffu<<(low%32u);
+        if(word==last) mask&=0xffffffffu>>(31u-high%32u);
+        if((capacity_bits[word]&mask)!=0u) return false;
+    }
+    return true;
 }
 float travel_for_speed(float speed) {
     if((TRANSPORT_MODE&1u)!=0u) speed=-speed;
@@ -78,7 +104,7 @@ uint request_at(ivec2 source,ivec2 direction,uint offset,float travel) {
     }
     if(receiving>=capacity) return 0u;
     float fraction=clamp(travel-float(offset-1u),0.,1.);
-    float aperture=cached_path_aperture(source,direction,offset);
+    float aperture=line_open_aperture?1.:cached_path_aperture(source,direction,offset);
     uint allowance=uint(floor(fraction*float(FULL)*aperture));
     return min(allowance,capacity-receiving);
 }
@@ -100,7 +126,7 @@ bool move_source(ivec2 source,ivec2 direction) {
     }
     if(travel<=0.) return false;
     if(travel<=1.&&water_at(source+direction)>=next_capacity) return false;
-    float aperture=face_aperture(source,direction);if(aperture<=0.) return false;
+    float aperture=line_open_aperture?1.:face_aperture(source,direction);if(aperture<=0.) return false;
     uint edge=(direction.x>0||direction.y>0)?length-1u-coordinate:coordinate;
     uint reach=min(uint(ceil(travel)),edge),lane=gl_SubgroupInvocationID;
     if(reach==1u) {
@@ -117,17 +143,23 @@ bool move_source(ivec2 source,ivec2 direction) {
         }
         return subgroupBroadcastFirst(moved)!=0u;
     }
+    if(recipients_full(coordinate,direction.x>0||direction.y>0,reach)) return false;
     uint blocked=reach+1u;
-    for(uint offset=2u+lane;offset<=reach;offset+=gl_SubgroupSize)
-        if(!open_cell(source+direction*int(offset))||face_aperture(source+direction*int(offset-1u),direction)<=0.) blocked=min(blocked,offset);
+    for(uint offset=2u+lane;offset<=reach;offset+=transport_team_size())
+        if(!open_cell(source+direction*int(offset))||(!line_open_aperture&&face_aperture(source+direction*int(offset-1u),direction)<=0.)) blocked=min(blocked,offset);
     reach=min(reach,subgroupMin(blocked)-1u);
-    uint chunk=(reach+gl_SubgroupSize-1u)/gl_SubgroupSize;
+    uint chunk=(reach+transport_team_size()-1u)/transport_team_size();
     uint first=lane*chunk,last=min(reach,first+chunk),requested=0u;
-    for(uint order=first;order<last;order++) requested+=request_at(source,direction,reach-order,travel);
+    for(uint order=first;order<last;order++) {
+        uint request=request_at(source,direction,reach-order,travel);
+        if(order<CACHE_CELLS) cached_requests[order]=request;
+        requested+=request;
+    }
     uint prior=subgroupExclusiveAdd(requested),total=subgroupAdd(requested);
     uint remaining=min(requested,available>prior?available-prior:0u);
     for(uint order=first;order<last&&remaining!=0u;order++) {
-        uint offset=reach-order,request=request_at(source,direction,offset,travel);
+        uint offset=reach-order;
+        uint request=order<CACHE_CELLS?cached_requests[order]:request_at(source,direction,offset,travel);
         uint flux=min(request,remaining);remaining-=flux;
         if(flux!=0u) {ivec2 target=source+direction*int(offset);put_water(target,water_at(target)+flux);}
     }
@@ -136,12 +168,14 @@ bool move_source(ivec2 source,ivec2 direction) {
     return sent!=0u;
 }
 void main() {
-    /* A complete subgroup owns each ordered line. Other subgroups never enter
+    /* One participating subgroup owns each ordered line. Other subgroups never enter
        its collectives; there are no workgroup barriers behind their return. */
     line=gl_WorkGroupID.x+gl_WorkGroupID.y*65535u;vertical=TRANSPORT_MODE<2u;
     length=vertical?params.height:params.width;
     if(gl_SubgroupID!=0u||line>=(vertical?params.width:params.height)) return;
-    for(uint position=gl_SubgroupInvocationID;position<min(length,CACHE_CELLS);position+=gl_SubgroupSize) {
+    line_open_aperture=params.unused1!=0u&&aperture_tree[16448u+line*2u*params.unused1+1u]==FULL;
+    uint any_water=0u;
+    for(uint position=gl_SubgroupInvocationID;position<min(length,CACHE_CELLS);position+=transport_team_size()) {
         ivec2 p=point_at(position);uint page=page_at(p);uvec4 value=uvec4(0);
         if(page!=0u) {
             uint index=uint(p.y)*params.width+uint(p.x);uvec2 cell=chunk_cells[atlas_index(p,page)];
@@ -153,8 +187,28 @@ void main() {
             value=uvec4(cell.y,capacity|KNOWN|(permeable_material(cell.x&65535u)?PERMEABLE:0u),aperture,floatBitsToUint(travel));
         }
         cached[position]=value;
+        any_water|=value.x;
     }
     subgroupMemoryBarrierShared();subgroupBarrier();
+    if(length<=CACHE_CELLS&&subgroupOr(any_water)==0u) return;
+    for(uint word=gl_SubgroupInvocationID;word<(CACHE_CELLS+31u)/32u;word+=transport_team_size())
+        capacity_bits[word]=0u;
+    subgroupMemoryBarrierShared();subgroupBarrier();
+    for(uint block=0u;block<min(length,CACHE_CELLS);block+=transport_team_size()) {
+        uint position=block+gl_SubgroupInvocationID;
+        bool available=false;
+        if(position<min(length,CACHE_CELLS)) {
+            uvec2 state=cached[position].xy;
+            available=(state.y&(KNOWN|PERMEABLE))==(KNOWN|PERMEABLE)&&state.x<(state.y&131071u);
+        }
+        uint mask=subgroupBallot(available).x;
+        if(gl_SubgroupInvocationID==0u) capacity_bits[block/32u]|=mask<<(block%32u);
+    }
+    subgroupMemoryBarrierShared();subgroupBarrier();
+    uint any_capacity=0u;
+    for(uint word=gl_SubgroupInvocationID;word<(CACHE_CELLS+31u)/32u;word+=transport_team_size())
+        any_capacity|=capacity_bits[word];
+    if(length<=CACHE_CELLS&&subgroupOr(any_capacity)==0u) return;
     bool positive=(TRANSPORT_MODE&1u)==0u;
     ivec2 direction=vertical?ivec2(0,positive?1:-1):ivec2(positive?1:-1,0);
     for(int position=positive?int(length)-2:1;position>=0&&position<int(length);position+=positive?-1:1) {
@@ -164,7 +218,7 @@ void main() {
             subgroupBarrier();
         }
     }
-    for(uint position=gl_SubgroupInvocationID;position<min(length,CACHE_CELLS);position+=gl_SubgroupSize) {
+    for(uint position=gl_SubgroupInvocationID;position<min(length,CACHE_CELLS);position+=transport_team_size()) {
         ivec2 p=point_at(position);uint page=page_at(p);if(page!=0u) chunk_cells[atlas_index(p,page)].y=cached[position].x;
     }
 }

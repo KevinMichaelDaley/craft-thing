@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "fluid_transport_limits.h"
 #include "gpu_internal.h"
 
 bool dc_gpu_fluid_displacement_overflow(dc_gpu_t *gpu, uint64_t *mass,
@@ -60,6 +61,11 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
     bool displacement=strcmp(path,"build/shaders/fluid_displacement.comp.spv")==0;
     uint32_t length=(displacement?phase==0:phase<2)?gpu->height:gpu->width;
     uint32_t values[2]={phase,length<2048u?length:2048u};
+    if(transport) {
+        VkPhysicalDeviceProperties properties;
+        vkGetPhysicalDeviceProperties(gpu->physical,&properties);
+        values[1]=dc_gpu_transport_cache_cells(length,properties.limits.maxComputeSharedMemorySize);
+    }
     VkSpecializationMapEntry entries[2]={{.constantID=0,.size=sizeof(uint32_t)},
         {.constantID=1,.offset=sizeof(uint32_t),.size=sizeof(uint32_t)}};
     VkSpecializationInfo specialization = {.mapEntryCount=transport||displacement?2u:1u,.pMapEntries=entries,

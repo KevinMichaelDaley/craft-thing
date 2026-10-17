@@ -843,8 +843,9 @@ GPU_SOURCE_BINARIES += $(addprefix build/quarter_native_structural_, \
     buckling_tests equilibrium_tests failure_tests fracture_tests impact_tests \
     particle_identity_tests placement_tests root_identity_tests store_tests \
     streaming_tests submerged_load_tests)
-$(GPU_SOURCE_BINARIES): src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
+$(GPU_SOURCE_BINARIES): src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h src/vulkan/fluid_transport_limits.h $(CONTACT_SHADER)
 build/contact_gpu.o: src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
+build/fluid_gpu.o: src/vulkan/fluid_transport_limits.h
 
 build/fluid_transport_limits_tests: tests/vulkan/fluid_transport_limits_tests.c src/vulkan/fluid_transport_limits.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@

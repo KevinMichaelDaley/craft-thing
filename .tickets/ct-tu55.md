@@ -126,3 +126,7 @@ Typed contact pipelines and compatibility guards pass targeted Vulkan selector a
 **2026-10-17T02:19:58Z**
 
 Reuse already-proven transport recipient residency for exact cache/global reads. All18 literal cases, coupled hash97a0ea02c0e0a633 mass339325648, and full-recipient work budget pass. Two visible native640x360 runs:33.673/33.720ms mean;41.042/41.688ms p95;102.557/102.690ms cold;29.698/29.656FPS. Fluid6.959/6.955ms per tick. Small measured improvement;30FPS remains RED.
+
+**2026-10-17T03:03:18Z**
+
+Exact request reuse, fully-open aperture proof,32-lane transport team, and mutable free-capacity summary pass18literal transport cases, coupledhash97a0ea02c0e0a633/mass339325648, SPIR-V validation and CPU shared-memory sizing checks. New committed RED long-range full-recipient budget now passes:21.650ms baseline to0.950ms; no-water/no-capacity exits prove no physical change. Visible native640x360 repeat32.462/32.780ms mean,38.616/39.044ms p95,97.989/102.148ms cold,30.805/30.506FPS. Mean passes30FPS but p95 gate remains RED; not overall target completion. Full regression must rerun after this transport checkpoint.
