@@ -39,13 +39,13 @@ static void selector_case(unsigned kind) {
     bool pixels=kind!=3&&kind!=4,typed=pixels&&kind!=1&&kind!=5&&kind!=6&&kind!=7;
     uint32_t generic=pixels&&!typed&&kind!=5?pair_count:0u,fast=typed?pair_count:0u;
     bool safe=solver[10]==generic&&solver[11]==1&&solver[12]==1&&
-        p.mapped[6]==fast&&p.mapped[7]==(fast?16u:1u)&&p.mapped[8]==1&&contacts[3]==777&&
-        p.mapped[9]==fast&&p.mapped[10]==1&&p.mapped[11]==1&&
-        p.mapped[12]==(fast+63u)/64u&&p.mapped[13]==1&&p.mapped[14]==1&&
+        p.mapped[15]==fast&&p.mapped[16]==(fast?16u:1u)&&p.mapped[17]==1&&contacts[3]==777&&
+        p.mapped[18]==fast&&p.mapped[19]==1&&p.mapped[20]==1&&
+        p.mapped[21]==(fast+63u)/64u&&p.mapped[22]==1&&p.mapped[23]==1&&
         contacts[6]==(kind==5?0u:(pair_count+63u)/64u);
     for(unsigned i=13;i<16;i++) safe=safe&&solver[i]==4369;
-    for(unsigned i=0;i<39;i++) if(i<6||i>14) safe=safe&&p.mapped[i]==4369;
-    printf("kind%u generic %u,%u,%u typed %u,%u,%u\n",kind,solver[10],solver[11],solver[12],p.mapped[6],p.mapped[7],p.mapped[8]);
+    for(unsigned i=0;i<39;i++) if(i<15||i>23) safe=safe&&p.mapped[i]==4369;
+    printf("kind%u generic %u,%u,%u typed %u,%u,%u\n",kind,solver[10],solver[11],solver[12],p.mapped[15],p.mapped[16],p.mapped[17]);
     fixture_release_pipeline(&p);
     vkUnmapMemory(p.device,body_memory);vkDestroyBuffer(p.device,body,NULL);vkFreeMemory(p.device,body_memory,NULL);
     vkUnmapMemory(p.device,p.memory);vkDestroyBuffer(p.device,p.buffer,NULL);vkFreeMemory(p.device,p.memory,NULL);
