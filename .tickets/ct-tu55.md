@@ -154,3 +154,7 @@ Sustained RED: opt-in 180-frame identical native640x360 physics/display fixture,
 **2026-10-17T05:03:22Z**
 
 Initialization-only trace isolates presentation watchdog failure to validation overhead:91 pipeline creations5223.643ms withvalidation versus36.796ms without. Unchanged15second three-context/270frame presentation test passes withoutvalidation; full test_ui then exits0. No runtime startup/Wayland change or gate relaxation. Full389 headless correctness remains validation-clean; full quarter functional suite now running. Persistent read-only tools/diagnostics/gpu_frequency.py added with2passing CPU tests; no sysfs writes.
+
+**2026-10-17T05:12:02Z**
+
+Displayed-frame diagnostic reproduces sustained p95 RED:180frames mean29.917ms,p9538.016,max44.564,33.426FPS. Runtime unchanged; hooks diagnostic-only, expanded query path validation-clean. Frame72 wall44.195ms:rigid28.649,contact16substeps21.552,allhydro1.470,fluid10.554,MPM2.591;0emittedcontacts. Frame73 rigid24.141/contact17.160/hydro1.530/0contacts. Late178 rigid18.711/contact11.941/hydro1.429/24contacts plusfluidphase3 14.359ms andphase2 4.651ms. Thus contact path andphase3 transport are measured next targets; phase0 wet detection~0.1ms/frame is not dominant. Read-only cold frequency sampler observes100MHz-to1150/1300MHz ramps, correlation only. Fullquarter168pass andUI17pass plus smokes complete; no gates loosened.

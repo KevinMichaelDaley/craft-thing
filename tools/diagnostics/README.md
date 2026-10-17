@@ -47,3 +47,20 @@ DC_COLD_DIAG=1 ./tools/with-vulkan python3 tools/diagnostics/gpu_frequency.py \
 
 The explicit process deadline is still required. A timed-out GPU command does
 not prove its GPU work was cancelled; follow the probe failure procedure above.
+
+`build/diagnostics/native360_frame_trace` links explicit timestamp wrappers around
+the unchanged native benchmark's displayed frames. It reports both physics
+steps' rigid, scheduled fluid-phase and MPM GPU totals, final candidate/contact
+counts, and wall time per frame. `DC_NATIVE_SUSTAINED=1` selects the same
+180-frame regression used by the normal benchmark. The extra query allocation,
+timestamps, readback and logging belong only to this diagnostic binary; use the
+ordinary native benchmark to establish final performance acceptance:
+
+```sh
+./tools/with-vulkan make build/diagnostics/native360_frame_trace
+SDL_VIDEODRIVER=wayland DC_NATIVE_SUSTAINED=1 ./tools/with-vulkan \
+  timeout --signal=TERM --kill-after=3s 45s \
+  ./build/diagnostics/native360_frame_trace concave
+```
+
+Use validation for query correctness and disable it for timing comparisons.

@@ -717,6 +717,9 @@ build/diagnostics/contact_scaling: tools/diagnostics/contact_scaling.c tests/vul
 build/diagnostics/native360_fluid_trace: tests/app/native_720_performance_tests.c tools/diagnostics/fluid_dispatch_trace.c $(GPU_SRC) src/world/chunk.c build/pixel_component_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GPU_CHUNK_SLOTS=90u -DNATIVE_PERF_WIDTH=640 -DNATIVE_PERF_HEIGHT=360 tests/app/native_720_performance_tests.c tools/diagnostics/fluid_dispatch_trace.c $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_tick_capture -Wl,--wrap=vkBeginCommandBuffer -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch
 
+build/diagnostics/native360_frame_trace: tests/app/native_720_performance_tests.c tools/diagnostics/frame_trace.c $(GPU_SRC) src/world/chunk.c build/pixel_component_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GPU_CHUNK_SLOTS=90u -DNATIVE_PERF_WIDTH=640 -DNATIVE_PERF_HEIGHT=360 tests/app/native_720_performance_tests.c tools/diagnostics/frame_trace.c $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_present_chunks_steps -Wl,--wrap=vkBeginCommandBuffer -Wl,--wrap=dc_gpu_record_rigid -Wl,--wrap=dc_gpu_record_fluid_phase -Wl,--wrap=dc_gpu_record_mpm -Wl,--wrap=dc_gpu_record_contacts -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect
+
 build/diagnostics/pixel_properties_probe.spv: tests/vulkan/pixel_properties_probe.comp shaders/sim/rigid_body.glsl shaders/sim/pixel_properties.glsl
 	mkdir -p build/diagnostics
 	$(GLSLANG) -V --target-env vulkan1.1 -S comp -Ishaders/sim -o $@ $<
@@ -846,7 +849,7 @@ diagnostic_fluid_variants: build/diagnostics/shader_compile_probe
 	spirv-val --target-env vulkan1.3 build/diagnostics/fluid-variants/rigid_pixel.spv
 
 GPU_SOURCE_BINARIES = $(addprefix build/, \
-    component_world_tests diagnostics/native360_fluid_trace \
+    component_world_tests diagnostics/native360_fluid_trace diagnostics/native360_frame_trace \
     diagnostics/native360_mpm_variants dungeoncraft_half_native \
     dungeoncraft_native dungeoncraft_quarter_native marker_slot_tests \
     native_360_performance_tests native_720_component_tests \
