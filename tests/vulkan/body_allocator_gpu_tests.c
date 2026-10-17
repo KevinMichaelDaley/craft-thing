@@ -8,7 +8,7 @@ typedef struct {
     dc_gpu_body_store_t store;
     dc_gpu_body_scan_plan_t plan;
     dc_gpu_address_buffer_t scratch,queue,readback;
-    VkPipeline reserve,commit,scan,add;
+    VkPipeline plan_pipeline,reserve,commit,publish,scan,add;
     VkShaderModule scan_module;
     uint64_t submission;
 } allocator_fixture_t;
@@ -58,11 +58,17 @@ static bool allocate_batch(allocator_fixture_t *f) {
     vkCmdBindPipeline(f->probe.command,VK_PIPELINE_BIND_POINT_COMPUTE,f->probe.pipeline);
     vkCmdDispatch(f->probe.command,f->store.slab_count,1,1);
     if(!dc_gpu_body_scan_record(f->probe.command,&f->plan,f->scratch.address,f->scratch.bytes,f->probe.layout,f->scan,f->add)) return false;
+    vkCmdBindPipeline(f->probe.command,VK_PIPELINE_BIND_POINT_COMPUTE,f->plan_pipeline);
+    vkCmdDispatch(f->probe.command,1,1,1);
+    memory_barrier(f,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_ACCESS_SHADER_WRITE_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_ACCESS_SHADER_READ_BIT|VK_ACCESS_SHADER_WRITE_BIT);
     vkCmdBindPipeline(f->probe.command,VK_PIPELINE_BIND_POINT_COMPUTE,f->reserve);
     vkCmdDispatch(f->probe.command,f->store.slab_count,1,1);
     memory_barrier(f,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_ACCESS_SHADER_WRITE_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_ACCESS_SHADER_READ_BIT|VK_ACCESS_SHADER_WRITE_BIT);
     vkCmdBindPipeline(f->probe.command,VK_PIPELINE_BIND_POINT_COMPUTE,f->commit);
     vkCmdDispatch(f->probe.command,f->store.slab_count,1,1);
+    memory_barrier(f,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_ACCESS_SHADER_WRITE_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_ACCESS_SHADER_READ_BIT|VK_ACCESS_SHADER_WRITE_BIT);
+    vkCmdBindPipeline(f->probe.command,VK_PIPELINE_BIND_POINT_COMPUTE,f->publish);
+    vkCmdDispatch(f->probe.command,1,1,1);
     memory_barrier(f,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_TRANSFER_BIT,VK_ACCESS_SHADER_WRITE_BIT|VK_ACCESS_TRANSFER_WRITE_BIT,
         VK_PIPELINE_STAGE_TRANSFER_BIT,VK_ACCESS_TRANSFER_READ_BIT);
     VkBufferCopy copy={.size=f->readback.bytes};
@@ -84,7 +90,9 @@ static void test_parallel_reservation_is_atomic_and_retries_through_growth(void)
     CHECK(initialize(&f.probe));CHECK(allocate_buffer(&f.probe));
     f.gpu.device=f.probe.device;f.gpu.physical=f.probe.physical;
     CHECK(create_pipeline(&f.probe,"build/diagnostics/body_allocator.spv"));
-    f.reserve=specialized(&f,f.probe.shader,1);f.commit=specialized(&f,f.probe.shader,2);CHECK(f.reserve&&f.commit);
+    f.plan_pipeline=specialized(&f,f.probe.shader,1);f.reserve=specialized(&f,f.probe.shader,2);
+    f.commit=specialized(&f,f.probe.shader,3);f.publish=specialized(&f,f.probe.shader,4);
+    CHECK(f.plan_pipeline&&f.reserve&&f.commit&&f.publish);
     CHECK(dc_gpu_load_shader_module(&f.gpu,"build/diagnostics/body_scan.spv",&f.scan_module,err,sizeof(err)));
     f.scan=specialized(&f,f.scan_module,0);f.add=specialized(&f,f.scan_module,1);CHECK(f.scan&&f.add);
     CHECK(dc_gpu_address_buffer_create(&f.gpu,sizeof(dc_body_allocation_batch_t)+90u*sizeof(dc_body_address_t),true,&f.queue,err,sizeof(err)));
@@ -116,6 +124,8 @@ done:
     dc_gpu_address_buffer_destroy(&f.gpu,&f.queue);dc_gpu_address_buffer_destroy(&f.gpu,&f.scratch);dc_gpu_address_buffer_destroy(&f.gpu,&f.readback);
     if(f.reserve) vkDestroyPipeline(f.gpu.device,f.reserve,NULL);
     if(f.commit) vkDestroyPipeline(f.gpu.device,f.commit,NULL);
+    if(f.plan_pipeline) vkDestroyPipeline(f.gpu.device,f.plan_pipeline,NULL);
+    if(f.publish) vkDestroyPipeline(f.gpu.device,f.publish,NULL);
     if(f.scan) vkDestroyPipeline(f.gpu.device,f.scan,NULL);
     if(f.add) vkDestroyPipeline(f.gpu.device,f.add,NULL);
     if(f.scan_module) vkDestroyShaderModule(f.gpu.device,f.scan_module,NULL);

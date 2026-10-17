@@ -29,3 +29,7 @@ CPU recording RED→GREEN2/2 prepares hierarchical scan dispatches: ascending bl
 **2026-10-17T08:54:36Z**
 
 GPU prefix RED observed expected wrong-prefix/totals with no-op shader; minimal GREEN parallel128-lane scan + descending parent addition now exact for1,127,128,129,16384,16385 entries (up to3hierarchy levels), zero mismatches/guard corruption/VUID/SYNC under six1second fences. No serial whole-list scan: each group scans128 pairs in7barrier steps, global dependencies ascend/descend O(log_128 N) passes. Full runtime make92479 paused only after pixel_world8/8 child completed, then resumed immediately after bounded GREEN. Actual allocator reservation/commit remains pending.
+
+**2026-10-17T09:05:03Z**
+
+Atomic allocation RED compiled/SPIR-V validated, executed under bounded Vulkan/sync validation and failed expected tentative ready assertion with stub. GREEN candidate now compiles:64-lane/page count/mask/rank, parallel tentative handles, commit-gated owner writes and separate O(1) status/publication dispatches. NOT GPU-verified yet: parent holds merged renderer regression lease. Main fresh full suite92479 paused only after structural_failure13/13 completed. Remaining allocator scope: actual-count indirect zero-work gates, generation-safe release/reuse, live/ID lists and runtime consumer integration. Current gameplay stilllegacy64.

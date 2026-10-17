@@ -50,6 +50,27 @@ deferred old-resource destruction; never rewrite descriptors still used by an
 in-flight submission. Copy/relocate payloads and patch GPU directories in parallel.
 Do not poll or copy every body on the host to advance ordinary frames.
 
+The allocator prototype separates five specialized passes. A 64-lane group per
+slab counts reusable free slots and owned slots, excluding retired or exhausted
+generations. Hierarchical 128-lane pair scans compute deterministic global ranks;
+the host records only the logarithmic dispatch topology. A single invocation
+then writes constant-size capacity/status fields. Parallel slab groups write
+tentative generation-bearing handles, followed by parallel owner/mask commits
+only when the joint transaction's commit gate is set. A final single invocation
+publishes only the batch count and live count after all owner writes complete.
+Neither scalar control invocation scans bodies, requests, pixels or components.
+Keeping scalar publication in its own dispatch prevents other workgroups from
+observing a changed commit flag halfway through their slot work.
+
+This is not yet the ordinary-frame allocator. Its current bounded fixture records
+direct scan dispatches; production integration must build request-dependent
+indirect counts so an empty request queue performs zero page/list scan work.
+Release/reuse must retain slot generations, reject stale and duplicate handles,
+retire exhausted generations, rebuild actual owned/live lists and publish stable
+ID lookup metadata in parallel. The current source implements/prepares these
+stages incrementally; ticket status and GPU checks distinguish verified pieces
+from unverified or missing behavior.
+
 Actual allocation failure produces explicit backpressure and leaves the complete
 transaction pending. Removal/reuse, returned memory or a later successful growth
 retries deterministically without skipped IDs or duplicated source pixels. Tests

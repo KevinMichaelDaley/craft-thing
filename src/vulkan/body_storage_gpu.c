@@ -8,7 +8,7 @@ struct dc_gpu_body_block {
     dc_gpu_address_buffer_t storage;
     dc_gpu_body_block_t *next;
 };
-enum {SOLVER_BYTES=32u*sizeof(uint32_t),OWNERSHIP_BYTES=32u,AUXILIARY_BYTES=32u};
+enum {SOLVER_BYTES=32u*sizeof(uint32_t),OWNERSHIP_BYTES=sizeof(dc_body_storage_owner_t),AUXILIARY_BYTES=32u};
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
     return false;
