@@ -959,6 +959,8 @@ build/body_address_gpu_tests: tests/vulkan/body_address_gpu_tests.c tools/diagno
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_address_gpu.c -o $@ -lvulkan
 build/body_storage_layout_tests: tests/vulkan/body_storage_layout_tests.c include/dungeoncraft/body_storage_layout.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+build/body_storage_growth_tests: tests/vulkan/body_storage_growth_tests.c src/vulkan/body_storage_gpu.c src/vulkan/body_storage_gpu.h include/dungeoncraft/body_storage_layout.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_storage_gpu.c -o $@ -lvulkan -Wl,--wrap=dc_gpu_address_buffer_create -Wl,--wrap=dc_gpu_address_buffer_destroy -Wl,--wrap=vkCmdCopyBuffer -Wl,--wrap=vkCmdFillBuffer -Wl,--wrap=vkCmdUpdateBuffer -Wl,--wrap=vkCmdPipelineBarrier2
 shaders: $(MPM_COMPACTION_SHADER)
 .PHONY: test_mpm_compaction_work
 test_mpm_compaction_work: build/mpm_compaction_tests
