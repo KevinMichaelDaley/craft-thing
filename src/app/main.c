@@ -1131,7 +1131,7 @@ int main(int argc, char **argv) {
     uint16_t material = DC_MATERIAL_SAND;
     bool running = true;
     bool failed = false;
-    bool paused = scene_path != NULL;
+    bool paused = false;
     bool spring_enabled = !(demo_coupled || demo_sifting || scene_path);
     bool marker_overlay = false;
     bool single_step = false;

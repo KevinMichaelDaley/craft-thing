@@ -41,8 +41,8 @@ image/material mask is unchanged.
 
 Launch the material placement demo with `./tools/demo_level_piece01`. The scene
 is centered on world chunk `(0,0)`; its full 128x128 footprint starts at world
-`(-32,-32)` and crosses neighboring 64x64 chunks. It opens paused in authored
-albedo mode. Press P to run/pause, N to single-step, 0–6 to select air/stone/sand/
+`(-32,-32)` and crosses neighboring 64x64 chunks. It opens with physics running in authored
+albedo mode. Press P to pause/resume, N to single-step, 0–6 to select air/stone/sand/
 water/dirt/gravel/wood, and use left/right mouse to paint/erase. Existing camera,
 zoom and physics overlays remain available. F8 restores authored albedo display.
 
