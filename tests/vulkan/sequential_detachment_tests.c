@@ -33,11 +33,11 @@ static void test_corner_connected_pixels_detach_as_one_component(void) {
 
 static void test_removing_granular_root_support_releases_entire_tree(void) {
     const unsigned materials[2]={DC_MATERIAL_DIRT,DC_MATERIAL_GRAVEL};
-    for(unsigned trial=0;trial<2;trial++) {
+    for(unsigned trial=0;trial<4;trial++) {
         dc_gpu_t *g=NULL;char err[256];dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
         chunk->cells[29*64+30]=(dc_cell_t){.material=DC_MATERIAL_LEAVES,.flags=DC_CELL_LOADED_TERRAIN};
         chunk->cells[30*64+30]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
-        chunk->cells[31*64+30].material=materials[trial];
+        chunk->cells[31*64+30].material=materials[trial%2];
         ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
         ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
         ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
@@ -45,8 +45,10 @@ static void test_removing_granular_root_support_releases_entire_tree(void) {
         ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
         dc_gpu_body_t body;
         ASSERT_TRUE(!dc_gpu_read_body_id(g,0x80000001u,&body,err,sizeof(err)));
-        ASSERT_TRUE(dc_gpu_paint_material(g,30,31,0,DC_MATERIAL_AIR,err,sizeof(err)));
-        ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+        if(trial<2) {
+            ASSERT_TRUE(dc_gpu_paint_material(g,30,31,0,DC_MATERIAL_AIR,err,sizeof(err)));
+            ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+        } else for(unsigned tick=0;tick<12;tick++) ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
         dc_gpu_body_pixel_t pixels[2];unsigned count=0;
         bool extracted=dc_gpu_read_pixel_shape(g,0x80000001u,pixels,2,&count,err,sizeof(err));
         dc_gpu_destroy(g);free(chunk);
@@ -105,7 +107,37 @@ static void test_corner_component_propagates_across_four_chunk_seam(void) {
     ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,pixels,4,&count,err,sizeof(err)));
     ASSERT_EQ(count,2u);dc_gpu_destroy(g);free(chunk);PASS();
 }
+static void test_unanchored_grains_inside_trunk_cannot_suspend_it(void) {
+    char err[256];dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    for(unsigned y=10;y<42;y++) chunk->cells[y*64+30].material=DC_MATERIAL_WOOD;
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    dc_gpu_body_record_t *body=g->body_mapped;
+    body->body.x_fp=body->local_x_fp=30*65536;body->body.y_fp=body->local_y_fp=10*65536;
+    body->body.vx_fp=body->body.vy_fp=0;body->angle=body->angular_velocity=0;
+    for(unsigned i=0;i<DC_CHUNK_CELLS;i++) chunk->cells[i]=(dc_cell_t){0};
+    for(unsigned y=15;y<35;y++) {
+        unsigned i=y*64+30;chunk->cells[i].material=DC_MATERIAL_DIRT;
+        dc_chunk_particle_init(chunk->particles+i,(dc_chunk_coord_t){0,0},i,DC_MATERIAL_DIRT);
+        chunk->particles[i].x_fp=30*65536+(y%2?13107:52429);
+        chunk->particles[i].grain_fp=26214;chunk->particle_count++;
+    }
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
+    for(unsigned tick=0;tick<12;tick++) ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+    dc_gpu_body_t result;ASSERT_TRUE(dc_gpu_read_body_id(g,0x80000001u,&result,err,sizeof(err)));
+    printf("unanchored trunk y %.4f\n",result.y_fp/65536.);
+    ASSERT_TRUE(result.y_fp>12*65536);
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+    uint64_t mass=0;for(unsigned i=0;i<DC_MPM_PARTICLES_PER_CHUNK;i++) mass+=chunk->particles[i].mass_fp;
+    ASSERT_EQ(mass,20u*(uint64_t)78643u);
+    dc_gpu_destroy(g);free(chunk);PASS();
+}
+
 int main(void) {
+    RUN(test_unanchored_grains_inside_trunk_cannot_suspend_it);
     RUN(test_removing_granular_root_support_releases_entire_tree);
     RUN(test_corner_connected_pixels_detach_as_one_component);
     RUN(test_corner_component_propagates_across_four_chunk_seam);
