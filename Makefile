@@ -878,3 +878,6 @@ build/probe_feature_tests: tests/vulkan/probe_feature_tests.c tools/diagnostics/
 test_probe_features: build/probe_feature_tests
 	./build/probe_feature_tests
 
+
+build/mpm_descriptor_tests: tests/vulkan/mpm_descriptor_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/gpu_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkUpdateDescriptorSets
