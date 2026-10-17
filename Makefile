@@ -872,3 +872,9 @@ build/mpm_layout_tests: tests/vulkan/mpm_layout_tests.c src/vulkan/mpm_activity_
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
 test_gpu_tools: build/mpm_layout_tests
 
+build/probe_feature_tests: tests/vulkan/probe_feature_tests.c tools/diagnostics/vulkan_probe.c | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ -lvulkan
+.PHONY: test_probe_features
+test_probe_features: build/probe_feature_tests
+	./build/probe_feature_tests
+
