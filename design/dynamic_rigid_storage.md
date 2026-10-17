@@ -93,6 +93,44 @@ The initial 64-record slab quantum is not a cap on the number of directory entri
 | Checkpoints | Fixed 64-record payload and absolute legacy geometry pointers | Counted canonical records/geometry, migration and all-allocation preflight |
 | Tests/tooling | Private header/SPIR-V pairs and minimal fixture features | Explicit storage ABI guard, BDA feature/flag checks, shared layout and lifetime tests |
 
+The October 17 source audit found 161 named capacity references on 157 lines in
+36 files (`build/diagnostics/body-capacity-audit.txt`). Literal constants need a
+separate audit: chunk sides and workgroup widths also equal 64 and must remain
+unchanged. The following are body-count dependencies even without the capacity
+symbol:
+
+- `component_extract.comp` phases 16/17/18/21 use 64 body lanes for arena
+  sizing, relocation, free-slot reservation and serial-ID collision checks.
+  Candidate selection caps a fair batch at 64; batching can stay bounded, but it
+  cannot bound total bodies or make later candidates permanently ineligible.
+- `pixel_hydro.comp` subtracts `64*32` when locating solver state. Its planning
+  prefixes and force-group binary search cover exactly 64 bodies. Shared arrays
+  of 64 lanes and loops stepping by 64 are team-local reductions and can stay;
+  the body-list scan and its upper bound must become hierarchical actual-count
+  planning.
+- `broadphase_gpu.c` asserts a 64-body shader contract. Its mask-based candidate
+  representation cannot be fixed by changing that assertion or widening the
+  mask once; use dynamic spatial intersection lists and conservative demand.
+- `component_gpu.c` diagnostic selected-count clamping and dispatch-group-to-phase
+  inference contain literal 64. Phase selection must be explicit when dynamic
+  group counts can equal values that previously identified a different pass.
+- `rigid_fragment.glsl` and `pixel_fragment.glsl` must reserve children through
+  the same allocator as extraction. Their capacity sentinel, whole-store ID
+  search and arena-prefix assumptions cannot survive as a second private pool.
+- `structural_store_gpu.c`, `structural_store_validate.c`,
+  `structural_store_internal.h` and `body_store_gpu.c` encode the record prefix in
+  snapshot words and validation. They must migrate together with host upload,
+  owned-source validation and counted snapshot preflight.
+
+The resource-owner prototype allocates one contiguous block for all newly added
+slabs, with separate record/solver/ownership/auxiliary planes. CPU loops initialize
+only new directory address descriptors; no body payload, geometry, mass or
+component is scanned or solved there. GPU transfer commands initialize the block
+and copy the old directory prefix. The host may adopt the new directory and
+retire its predecessor only after the recorded submission completes. These are
+explicit resource-boundary dependencies, not a claim that runtime allocator or
+physics consumers have already migrated.
+
 Render visibility is separate from physics residency. Known cached world chunks
 can supply extraction and dynamics outside mapped display pages. World-coordinate
 terrain/fluid queries and occupied-cell residency checks must use authoritative
