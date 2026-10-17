@@ -3,6 +3,7 @@
 #include <SDL.h>
 #include "../../src/vulkan/structural_store_internal.h"
 #include "ferrum/renderer/gpu.h"
+#include "terrain_support.h"
 
 static VkBuffer captured_buffer;
 static VkDeviceMemory captured_memory;
@@ -39,11 +40,20 @@ static void report(dc_gpu_t *g,unsigned tick) {
     for(unsigned slot=0;slot<DC_GPU_BODY_CAPACITY;slot++) {
         const dc_gpu_body_record_t *b=(dc_gpu_body_record_t*)g->body_mapped+slot;
         if(!b->body.active) continue;
+        unsigned wood=0;
+        if(b->piece_count&DC_GPU_PIXEL_BODY_FLAG) {
+            const uint32_t *shape=(const uint32_t*)g->body_mapped+b->compound_reserved;
+            for(unsigned tile=0;tile<shape[1];tile++) for(unsigned cell=0;cell<256;cell++) {
+                unsigned m=(shape[8+shape[2]*shape[3]+tile*33+1+cell/8]>>((cell%8)*4))&15u;
+                wood+=m==2||m==4;
+            }
+        }
         printf("  slot%u id%08x pos %.4f %.4f v %.4f %.4f angle %.4f flags%u rest%u visible%u invmass%g pixels%u awake%u support%u\n",
             slot,b->body.id,b->body.x_fp/65536.,b->body.y_fp/65536.,
             b->body.vx_fp/65536.,b->body.vy_fp/65536.,b->angle,b->motion_flags,
             b->rest_ticks,b->visible,b->inverse_mass,b->piece_count&~DC_GPU_PIXEL_BODY_FLAG,
             solver[16+slot*32+13],solver[16+slot*32+19]);
+        printf("    shape %ux%u center%g,%g wood%u mass%g\n",b->body.width,b->body.height,b->center[0],b->center[1],wood,b->mass);
     }
     const dc_gpu_contact_t *list=(const dc_gpu_contact_t*)(dc_gpu_contact_data(g)+DC_GPU_CONTACT_HEADER_WORDS);
     for(unsigned i=0;i<contacts.count;i++) if(list[i].body_a==0x80000001u||list[i].body_b==0x80000001u)
@@ -80,7 +90,7 @@ int main(int argc,char **argv) {
         free(chunk);slot++;
     }
     okay=okay&&dc_gpu_enable_automatic_components(g)&&dc_gpu_set_body_origin(g,header.origin,err,sizeof(err));
-    if(okay) report(g,0);
+    if(okay) {report(g,0);okay=report_terrain_support(g,err,sizeof(err));}
     for(int arg=2;okay&&arg<argc;arg+=2) {
         long double x=strtoll(argv[arg],NULL,10)-(long double)header.origin.x*64;
         long double y=strtoll(argv[arg+1],NULL,10)-(long double)header.origin.y*64;
@@ -93,11 +103,26 @@ int main(int argc,char **argv) {
         okay=dc_gpu_rigid_step(g,err,sizeof(err));if(okay) report(g,tick);
     }
     if(!okay) fprintf(stderr,"%s\n",err);
+    if(okay) okay=report_terrain_support(g,err,sizeof(err));
     if(okay&&fr_renderer_enable(g,err,sizeof(err))&&fr_renderer_set_mode(g,FR_RENDERER_ALBEDO)&&fr_renderer_render(g,err,sizeof(err))) {
         uint32_t *pixels=calloc(512u*448u,4);
         if(pixels&&dc_gpu_readback(g,pixels,512u*448u,err,sizeof(err))) {
             SDL_Surface *surface=SDL_CreateRGBSurfaceWithFormatFrom(pixels,512,448,32,512*4,SDL_PIXELFORMAT_ABGR8888);
-            if(surface) {SDL_SaveBMP(surface,"build/support_scene.bmp");SDL_FreeSurface(surface);}
+            if(surface) {
+                SDL_SaveBMP(surface,"build/support_scene.bmp");
+                const uint32_t *pages=g->page_mapped;const dc_cell_t *atlas=g->chunk_mapped;
+                for(unsigned y=0;y<448;y++) for(unsigned x=0;x<512;x++) {
+                    unsigned page=pages[(y/64)*g->page_width+x/64];
+                    if(!page) continue;
+                    unsigned material=atlas[(page-1)*4096+(y%64)*64+x%64].material;
+                    if(material==7||material==8) pixels[y*512+x]=0xffff00ffu;
+                }
+                SDL_SaveBMP(surface,"build/support_fixed_wood.bmp");
+                SDL_Surface *detail=SDL_CreateRGBSurfaceWithFormat(0,400,400,32,SDL_PIXELFORMAT_ABGR8888);
+                SDL_Rect crop={280,160,100,100};
+                if(detail) {SDL_BlitScaled(surface,&crop,detail,NULL);SDL_SaveBMP(detail,"build/support_tree_detail.bmp");SDL_FreeSurface(detail);}
+                SDL_FreeSurface(surface);
+            }
         }
         free(pixels);
     }

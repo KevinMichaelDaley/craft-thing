@@ -9,6 +9,12 @@ origin and its central 512x448 resident window, reports eight physics ticks,
 and captures each solver substep's contact witnesses for the first automatically
 extracted body, plus all bodies' awake states, rest flags, and overflow counters.
 `build/support_scene.bmp` shows the resulting albedo.
+The terrain inventory lists all rigid-capable components containing wood,
+including their original bonds, release flags and unknown neighbors. The body
+inventory includes size and wood-pixel counts. `support_fixed_wood.bmp` marks
+remaining wood terrain magenta; `support_tree_detail.bmp` enlarges the tree area
+of the level-piece scene so static branch pixels can be distinguished from the
+entire moving trunk/crown.
 Optional pairs of world X/Y coordinates erase those cells in the replay before
 stepping. The tool never saves over the input world. This distinguishes actual
 terrain supports from stale sleep flags, cold-page freezing, and solver rollback.
