@@ -49,3 +49,7 @@ Removed avoidable CPU loop over new directory pages: CPU RED observed host-visib
 **2026-10-17T09:27:45Z**
 
 Parallel page initialization GPU GREEN confirmed under sync validation: real device-local record growth90→200→1025→6000 across2→4→17→94pages, last growth77pages crosses initializer workgroups; zero record/generation mismatches. Separate64descriptor probe verifies carries and virtual multi-gigabyte plane offsets without allocating/dereferencing fake blocks, zero guard errors. Complete queued build+checks<4s, no VUID/SYNC. No serial CPU page initialization remains; host now emits48byte constants and constant resource calls, GPU lanes build new metadata. Both verified fixtures registered in regular headless recipe. Lease returned to parent UI/demo immediately.
+
+**2026-10-17T09:27:45Z**
+
+Generation release/reuse RED now actually executed: current shader completes bounded release fence but leaves root130/committed0 instead of129/1 for duplicate slot0handle plus invalid sentinel; fails exact release assertion, zero validation errors. Test also covers replay, stale generation after reuse and generations1→2→3, which remain unimplemented next GREEN. No GPU work while parent UI/interactive lease active.

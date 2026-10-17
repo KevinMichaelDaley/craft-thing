@@ -136,7 +136,8 @@ static void test_parallel_reservation_is_atomic_and_retries_through_growth(void)
     CHECK(batch->ready&&batch->committed==40u&&root->live_count==130u);
     for(uint32_t i=0;i<40;i++) CHECK(handles[i].low==92u+i&&handles[i].high==1u);
     set_batch(&f,3,1);handles[0]=(dc_body_address_t){0,1};handles[1]=handles[0];handles[2]=(dc_body_address_t){DC_BODY_SLOT_NONE,1};
-    CHECK(release_batch(&f));CHECK(root->live_count==129u&&batch->committed==1u);
+    CHECK(release_batch(&f));printf("duplicate release: owned%u committed%u expected129/1\n",root->live_count,batch->committed);
+    CHECK(root->live_count==129u&&batch->committed==1u);
     CHECK(batch->error==DC_BODY_ALLOCATION_INVALID_HANDLE);
     CHECK(release_batch(&f));CHECK(root->live_count==129u&&batch->committed==1u);
     set_batch(&f,1,1);CHECK(allocate_batch(&f));
