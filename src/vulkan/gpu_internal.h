@@ -53,6 +53,7 @@ typedef struct {
 } dc_gpu_body_record_t;
 
 struct dc_gpu {
+    struct dc_gpu_authored_stage *authored_stage;
     VkInstance instance;
     VkPhysicalDevice physical;
     VkDevice device;
@@ -296,6 +297,7 @@ static inline uint32_t dc_gpu_structural_graph_offset(void) {
     return DC_STRUCTURAL_HEADER_WORDS+DC_GPU_CHUNK_SLOTS*8u;
 }
 bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu,char *err,uint32_t cap);
+void dc_gpu_authored_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_structural(dc_gpu_t *gpu);
 void dc_gpu_record_structural_begin(dc_gpu_t *gpu);
 /** Record topology reconstruction at an explicit restore boundary. */

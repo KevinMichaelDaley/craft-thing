@@ -31,6 +31,9 @@ build/renderer_visual_tests: tests/renderer/visual_tests.c tests/renderer/concav
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 build/renderer_performance_tests: tests/renderer/performance_tests.c tests/renderer/concave_scene.h $(GPU_SRC) src/world/chunk.c $(RENDERER_SHADERS) build/quarter_native_solver_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -Wl,--wrap=fr_renderer_record -Wl,--wrap=fr_occlusion_record -Wl,--wrap=fr_lighting_record -Wl,--wrap=vkCmdDispatch
+build/authoring_request_tests: tests/structural/authoring_request_tests.c src/structural/authoring.c include/ferrum/structural/authoring.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/structural/authoring_request_tests.c src/structural/authoring.c -o $@
 .DEFAULT_GOAL := all
 .PHONY: tools tools-offline test_tools
 tools:
@@ -81,7 +84,18 @@ build/shaders/scene.comp.spv: shaders/renderer/scene.comp shaders/renderer/textu
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 GPU_OBJ += build/mpm_activity_gpu.o
-GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o,$(GPU_OBJ))) src/structural/material.c
+GPU_OBJ += build/authored_gpu.o build/authored_request.o
+build/authored_request.o: src/structural/authoring.c include/ferrum/structural/authoring.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/authored_gpu.o: src/vulkan/authored_gpu.c src/vulkan/gpu_internal.h include/ferrum/structural/authoring.h build/shaders/authored.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o build/authored_request.o,$(GPU_OBJ))) src/structural/material.c src/structural/authoring.c
+build/authored_stage_tests: tests/vulkan/authored_stage_tests.c build/compound_body_tests $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/authored_stage_tests
+build/shaders/authored.comp.spv: shaders/sim/authored.comp
+	mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/structural_material.o: src/structural/material.c include/ferrum/structural/mechanics.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 $(GPU_OBJ) build/chunk.o build/structural_mechanics_tests: include/dungeoncraft/material_density.h
@@ -506,7 +520,7 @@ build/dungeoncraft: src/app/structural_demo.c src/app/structural_demo.h src/app/
 build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/controls_tests.c src/app/level.c src/app/session.c $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 
-test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
+test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/appearance_tests
 	./build/texture_tests
 	./build/texture_gpu_tests
@@ -534,6 +548,8 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/fluid_displacement_wide_tests
 	./build/fluid_displacement_tall_tests
 	./build/diagnostics/fluid_case displacement-runtime
+	./build/authoring_request_tests
+	./build/authored_stage_tests
 	./build/pixel_component_tests
 	./build/pixel_world_tests
 	./build/pixel_geometry_tests
