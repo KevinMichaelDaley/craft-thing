@@ -97,7 +97,31 @@ static void test_dense_leaf_contacts_cannot_weaken_stone_floor(void) {
     dc_gpu_destroy(g);free(chunk);PASS();
 }
 
+static void test_grounded_powders_bear_rigid_loads(void) {
+    const unsigned materials[]={DC_MATERIAL_DIRT,DC_MATERIAL_GRAVEL,DC_MATERIAL_SAND};
+    for(unsigned trial=0;trial<3;trial++) {
+        char err[256];dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+        for(unsigned y=24;y<64;y++) for(unsigned x=0;x<64;x++)
+            chunk->cells[y*64+x].material=y>=56?DC_MATERIAL_STONE:materials[trial];
+        ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+        dc_gpu_body_shape_t shape={.count=4,.material=DC_GPU_BODY_STONE,
+            .vertices={{0,0},{8*65536,0},{8*65536,8*65536},{0,8*65536}}};
+        dc_gpu_world_body_t body={.body={.id=77,.active=1,.x_fp=28*65536,.y_fp=12*65536,.width=8,.height=8}};
+        ASSERT_TRUE(dc_gpu_spawn_convex_body(g,body,&shape,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_rigid_solver(g,true));
+        ASSERT_TRUE(dc_gpu_set_body_motion(g,77,0,0,2,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+        for(unsigned tick=0;tick<120;tick++) ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+        dc_gpu_body_t result;ASSERT_TRUE(dc_gpu_read_body_id(g,77,&result,err,sizeof(err)));
+        printf("powder%u stone body bottom %.4f (surface24)\n",materials[trial],result.y_fp/65536.+8);
+        dc_gpu_destroy(g);free(chunk);ASSERT_TRUE(result.y_fp<18*65536);
+    }
+    PASS();
+}
 int main(void) {
+    RUN(test_grounded_powders_bear_rigid_loads);
     RUN(test_partial_granular_support_motion_does_not_release_tree_but_cut_does);
     RUN(test_full_soil_and_gravel_remain_packed_after_settling);
     RUN(test_dense_leaf_contacts_cannot_weaken_stone_floor);
