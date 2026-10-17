@@ -34,8 +34,8 @@ bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkDeviceSize grid = (VkDeviceSize)gpu->width * gpu->height;
     VkDeviceSize component_cells =
         (VkDeviceSize)dc_gpu_pixel_pool_capacity(gpu) * 8u;
-    VkDeviceSize tiles =
-        (VkDeviceSize)((gpu->width + 15u) / 16u) * ((gpu->height + 15u) / 16u);
+    if(!dc_gpu_mpm_scan_layout(gpu->width,gpu->height,&gpu->mpm_scan_layout))
+        return error(err,cap,"Cannot size MPM activity scan scratch");
     return dc_gpu_make_device_buffer(gpu, particles, &gpu->mpm_proposal_buffer,
                                      &gpu->mpm_proposal_memory, err, cap) &&
            dc_gpu_make_device_buffer(gpu, particles, &gpu->mpm_output_buffer,
@@ -58,7 +58,7 @@ bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
            dc_gpu_make_device_buffer(gpu, flags, &gpu->mpm_accept_buffer,
                                      &gpu->mpm_accept_memory, err, cap) &&
            dc_gpu_make_device_buffer(
-               gpu, (tiles < 16u ? 39u : 7u + 2u * tiles) * sizeof(uint32_t),
+               gpu, (VkDeviceSize)gpu->mpm_scan_layout.words * sizeof(uint32_t),
                &gpu->mpm_activity_buffer, &gpu->mpm_activity_memory, err,
                cap) &&
            dc_gpu_make_mapped_buffer(gpu, component_cells * sizeof(uint32_t),
@@ -139,12 +139,14 @@ bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                          err, cap) &&
            make_pipeline(gpu, "build/shaders/mpm_active.comp.spv",
                          &gpu->mpm_activity_pipeline, err, cap) &&
+           dc_gpu_mpm_compaction_pipeline_init(gpu,err,cap) &&
            make_pipeline(gpu, "build/shaders/mpm_component.comp.spv",
                          &gpu->mpm_component_pipeline, err, cap) &&
            component_pipelines(gpu, err, cap);
 }
 
 void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu) {
+    dc_gpu_mpm_compaction_pipeline_destroy(gpu);
     for (unsigned mode = 0; mode < 35; ++mode)
         if (gpu->component_extract_pipelines[mode])
             vkDestroyPipeline(gpu->device,
@@ -265,29 +267,9 @@ static void mpm_barrier(dc_gpu_t *gpu, VkPipelineStageFlags2 target_stage,
 }
 
 void dc_gpu_record_components(dc_gpu_t *gpu, bool rigid) {
-    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
-                      gpu->mpm_activity_pipeline);
-    vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
-                            gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0,
-                            NULL);
+    dc_gpu_record_mpm_activity(gpu,rigid);
     uint32_t push[7] = {gpu->width, gpu->height, 0u, rigid ? 1u : 0u,
                         0u,         0u,          0u};
-    vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
-                       VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    vkCmdDispatch(gpu->command, (gpu->width + 15u) / 16u,
-                  (gpu->height + 15u) / 16u, 1u);
-    mpm_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
-                    VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    push[2] = 1u;
-    vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
-                       VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    vkCmdDispatch(gpu->command, 1u, 1u, 1u);
-    mpm_barrier(gpu,
-                VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT |
-                    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT |
-                    VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                       gpu->mpm_component_pipeline);
     VkDeviceSize component_indirect =

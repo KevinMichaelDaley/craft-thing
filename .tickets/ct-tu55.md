@@ -142,3 +142,7 @@ Contact recorder removes intermediate publication barriers between atomic candid
 **2026-10-17T03:48:48Z**
 
 Full checkpoint0766758 regression before MPM control fix exited0:372reportedpasses,0failures,0VUIDs. Subsequent forced-schedule test confirmed ct-fmj6; full rerun after MPM changes remains required.
+
+**2026-10-17T04:26:06Z**
+
+Native640x360 physics AND display, scale1,90slots,pressure20,cadence6,2fixed60Hzsteps/frame, visible exact1176/1872pixel bodies now pass warm mean+p95 gates twice:26.419/26.683ms mean,30.672/30.660ms p95,37.852/37.477FPS; cold94.165/93.897ms remains. Dry4.516ms mean,p955.827,cold18.856,221.445FPS; dense17.131mean,p9525.866,cold31.188,58.373FPS. MPM3.56to1.24ms/tick. Actualbothconcave visuals pass, mass/holes/fourpausedframes preserved; RGB screenshot inspected. Do not close yet: full regression/UI/quarter acceptance and cold extraction remain.

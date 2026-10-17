@@ -22,3 +22,7 @@ Replace the single-invocation viewport scan with GPU-parallel dilation, hierarch
 **2026-10-17T03:48:48Z**
 
 Baseline compaction correctness5/5 passes withvalidation, including>65ktiles sortedhalo andclean-cache resets. Performance RED at3600tiles9.626ms vs unchangednew .350ms stagebudget. New kernel must retain this exact oracle while replacing scalar scan.
+
+**2026-10-17T04:26:06Z**
+
+GREEN: removed scalar compact_tiles; cooperative dilation, hierarchical integer prefix scans, stable scatter/copy, separate logical count and balanced bounded2Ddispatch. CPUlayout3, descriptor2, metadata7 including66049dense tiles, convergence3, winding/mud2, exactcoupledhash and44constraint/image comparisons all pass. Corrected probe synchronization2 feature setup and rebuild dependencies; all targeted logs zeroVUID/SYNChazards. Pinned historical scalar reference with corrected harness:3600empty tiles9.629ms vs parallel0.111ms;66049empty tiles0.422ms. Reference is explicitdiagnostic only; no runtime fallback.24runtimeSPIR-Vmodulesvalidate. Fullheadless/UI/quarter acceptance pending.

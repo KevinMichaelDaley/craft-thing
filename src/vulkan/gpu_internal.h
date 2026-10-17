@@ -6,6 +6,7 @@
 
 #include "dungeoncraft/gpu.h"
 #include "ferrum/structural/gpu.h"
+#include "mpm_activity_layout.h"
 
 enum {
     DC_GPU_STRUCTURAL_TAG = 0x53545231u,
@@ -100,6 +101,8 @@ struct dc_gpu {
     VkBuffer mpm_activity_buffer;
     VkDeviceMemory mpm_activity_memory;
     VkPipeline mpm_activity_pipeline;
+    VkPipeline mpm_compaction_pipelines[DC_MPM_COMPACTION_PHASES];
+    dc_gpu_mpm_scan_layout_t mpm_scan_layout;
     VkBuffer mpm_label_a_buffer, mpm_label_b_buffer, mpm_component_size_buffer;
     VkDeviceMemory mpm_label_a_memory, mpm_label_b_memory, mpm_component_size_memory;
     void *mpm_label_a_mapped, *mpm_label_b_mapped, *mpm_component_size_mapped;
@@ -363,6 +366,11 @@ bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_mpm_buffers_destroy(dc_gpu_t *gpu);
 void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_mpm(dc_gpu_t *gpu);
+bool dc_gpu_mpm_compaction_pipeline_init(dc_gpu_t *gpu,char *err,uint32_t cap);
+void dc_gpu_mpm_compaction_pipeline_destroy(dc_gpu_t *gpu);
+/** Record deterministic compaction with compatible descriptors already bound. */
+void dc_gpu_record_active_compaction(dc_gpu_t *gpu,bool rigid);
+void dc_gpu_record_mpm_activity(dc_gpu_t *gpu,bool rigid);
 /** Create exact render variants sharing the ordinary descriptor interface. */
 bool dc_gpu_draw_pipeline_init(dc_gpu_t *gpu,VkShaderModule module,char *err,uint32_t cap);
 /** Record a draw with GPU body-type selection and the configured viewport. */

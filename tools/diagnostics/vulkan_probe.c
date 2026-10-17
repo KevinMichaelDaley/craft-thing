@@ -102,7 +102,16 @@ static int initialize_device(probe_t *p) {
         .queueFamilyIndex = p->family,
         .queueCount = 1,
         .pQueuePriorities = &priority};
+    VkPhysicalDeviceVulkan13Features supported13={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+    VkPhysicalDeviceFeatures2 supported={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,.pNext=&supported13};
+    vkGetPhysicalDeviceFeatures2(p->physical,&supported);
+    if(!supported13.synchronization2) {
+        puts("Device lacks required synchronization2");
+        return 0;
+    }
+    VkPhysicalDeviceVulkan13Features features13={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,.synchronization2=VK_TRUE};
     VkDeviceCreateInfo device = {.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+                                 .pNext=&features13,
                                  .queueCreateInfoCount = 1,
                                  .pQueueCreateInfos = &queue};
     if (!check(vkCreateDevice(p->physical, &device, NULL, &p->device),

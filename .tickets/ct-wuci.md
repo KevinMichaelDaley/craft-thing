@@ -74,3 +74,7 @@ Recovery ladder GREEN: full64x64 extraction and immediate motion-cache save inte
 **2026-10-17T02:51:33Z**
 
 Current checkpoint12f7f66 full make test with Vulkan validation exited0:356 reported passes,0failures,0VUIDs;23SPIR-V modules validate. Actual displayed exact U/comb bodies and legacy concave pair pass, including exact mass and four identical paused frames. Existing480x270 steady GPU gate passes at rigid4.766ms,total10.677ms. Cold ring32/80/160 still FAIL unchanged14ms budget at30.288/26.893/35.647ms; unchanged frames1.766/1.895/2.293ms. Cold solver12.257/11.830/15.962ms and final raster7.716/3.930/7.504ms remain significant. Ticket remains in progress; existing fracture serial work remains outstanding.
+
+**2026-10-17T04:26:06Z**
+
+Parallel MPM activity compaction follow-up ct-lqd8 enables native360 warm frame30FPS mean/p95 acceptance, preserving exact shapes/materials. Current480x270 steady passes rigid4.337ms,total7.063ms. Cold ring32/80/160 remainRED unchanged14ms gate at30.550/32.838/34.907ms; unchanged2.102/2.024/2.294ms. Existing fracture BFS/packing/arena-copy/property parallelization and cold birth properties remain outstanding; no epic completion claim.

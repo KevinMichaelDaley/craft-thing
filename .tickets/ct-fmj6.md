@@ -30,3 +30,7 @@ Controlled production-source schedule test fails as expected: later lanes overwr
 **2026-10-17T03:48:48Z**
 
 Minimal single-global-invocation publisher passes the forced legal schedule (count7 retained,flagcleared,untouchedwords unchanged). Actual production module and instrumented module SPIR-V validate. Existing winding dirt label/count and wet dirt seam/mud integration regressions pass2/2 withVulkanvalidation. Full regression and displayed acceptance remain pending before close.
+
+**2026-10-17T04:26:06Z**
+
+Extended legal-scheduling regression now3/3: changed count retained, unchanged work disabled, balanced2Dextent preserved; all untouched metadata verified. Production single-global-invocation publisher and integration remain valid under synchronizationvalidation. Full combined regression pending before close.

@@ -1,6 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 #include "rigid_body.glsl"
+#include "../../include/dungeoncraft/mpm_activity_layout.h"
 layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 chunk_cells[]; };
@@ -19,21 +20,18 @@ layout(push_constant) uniform Params {
     uint unused3;
 } params;
 
-bool rigid_clean() {
-    uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
-    uint base=8u+2u*w*h+4096u*8u+12u+8192u*32u+16u+64u*32u+8192u*16u;
-    return params.unused0!=0u && data[base+STRUCTURAL_COMPONENT_DIRTY_WORD]==0u;
-}
+#include "mpm_rigid_cache.glsl"
 shared uint has_grain;
 
 void scan_tile() {
-    if(rigid_clean()) return;
+    if(mpm_rigid_cache_clean()) return;
     uint tiles_x = (params.width + 15u) / 16u;
     uint tiles_y = (params.height + 15u) / 16u;
-    uint tile = gl_WorkGroupID.y * tiles_x + gl_WorkGroupID.x;
+    uint tile = gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;
+    if(tile>=tiles_x*tiles_y) return;
     if (gl_LocalInvocationIndex == 0u) has_grain = 0u;
     barrier();
-    uvec2 cell = gl_GlobalInvocationID.xy;
+    uvec2 cell = uvec2((tile%tiles_x)*16u,(tile/tiles_x)*16u)+gl_LocalInvocationID.xy;
     if (cell.x < params.width && cell.y < params.height) {
         uint page_width = (params.width + 63u) / 64u;
         uint page = pages[(cell.y / 64u) * page_width + cell.x / 64u];
@@ -50,42 +48,6 @@ void scan_tile() {
         activity[3u + tiles_x * tiles_y + tile] = has_grain;
 }
 
-void compact_tiles() {
-    if (gl_LocalInvocationIndex != 0u) return;
-    uint tiles_x = (params.width + 15u) / 16u;
-    uint tiles_y = (params.height + 15u) / 16u;
-    uint tile_count = tiles_x * tiles_y;
-    uint list_count = 0u;
-    for (uint y = 0u; !rigid_clean() && y < tiles_y; ++y) {
-        for (uint x = 0u; x < tiles_x; ++x) {
-            bool selected = false;
-            for (int dy = -1; dy <= 1 && !selected; ++dy) {
-                for (int dx = -1; dx <= 1; ++dx) {
-                    ivec2 neighbor = ivec2(int(x) + dx, int(y) + dy);
-                    if (neighbor.x < 0 || neighbor.y < 0 ||
-                        neighbor.x >= int(tiles_x) || neighbor.y >= int(tiles_y)) continue;
-                    uint index = uint(neighbor.y) * tiles_x + uint(neighbor.x);
-                    if (activity[3u + tile_count + index] != 0u) {
-                        selected = true;
-                        break;
-                    }
-                }
-            }
-            if (selected) activity[3u + list_count++] = y * tiles_x + x;
-        }
-    }
-    if(rigid_clean()) list_count=0u;
-    activity[0] = list_count;
-    activity[1] = 1u;
-    activity[2] = 1u;
-    uint control = 3u + 2u * tile_count;
-    activity[control] = 0u;
-    activity[control + 1u] = list_count;
-    activity[control + 2u] = 1u;
-    activity[control + 3u] = 1u;
-}
-
 void main() {
-    if (params.mode == 0u) scan_tile();
-    else compact_tiles();
+    scan_tile();
 }

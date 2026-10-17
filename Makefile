@@ -34,6 +34,7 @@ GPU_OBJ += build/structural_store_validate.o
 GPU_OBJ += build/structural_store_chunk.o
 GPU_OBJ += build/window_gpu.o
 GPU_OBJ += build/structural_gpu.o build/structural_material.o
+GPU_OBJ += build/mpm_activity_gpu.o
 GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o,$(GPU_OBJ))) src/structural/material.c
 build/structural_material.o: src/structural/material.c include/ferrum/structural/mechanics.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
@@ -86,6 +87,7 @@ MARKER_SHADER = build/shaders/marker.comp.spv
 SHIFT_SHADER = build/shaders/shift_velocity.comp.spv
 MPM_SHADER = build/shaders/mpm.comp.spv
 MPM_ACTIVITY_SHADER = build/shaders/mpm_active.comp.spv
+MPM_COMPACTION_SHADER = build/shaders/mpm_compact.comp.spv
 MPM_COMPONENT_SHADER = build/shaders/mpm_component.comp.spv
 
 build/compound_body_tests: tests/vulkan/compound_body_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(BROADPHASE_SHADER) $(CONTACT_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
@@ -314,6 +316,10 @@ $(MPM_ACTIVITY_SHADER): shaders/sim/mpm_active.comp
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
 
+$(MPM_COMPACTION_SHADER): shaders/sim/mpm_compact.comp shaders/sim/rigid_body.glsl shaders/sim/mpm_rigid_cache.glsl include/dungeoncraft/material_density.h include/dungeoncraft/mpm_activity_layout.h
+	@mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
+
 $(MPM_SHADER): shaders/sim/mpm.comp
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
@@ -398,6 +404,10 @@ build/mpm_gpu.o: src/vulkan/mpm_gpu.c src/vulkan/gpu_internal.h include/dungeonc
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
+build/mpm_activity_gpu.o: src/vulkan/mpm_activity_gpu.c src/vulkan/gpu_internal.h $(MPM_COMPACTION_SHADER)
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
 build/chunk.o: src/world/chunk.c include/dungeoncraft/chunk.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
@@ -459,6 +469,8 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/raster_dispatch_tests
 	./build/contact_dispatch_tests
 	./build/mpm_control_tests
+	./build/mpm_compaction_tests
+	./build/mpm_descriptor_tests
 	./build/raster_equivalence_tests
 	./build/fluid_transport_tests
 	./build/fluid_transport_long_tests
@@ -630,6 +642,8 @@ build/quarter_native_structural_submerged_load_tests: tests/structural/submerged
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
 
 build/shaders/mpm_active.comp.spv: shaders/sim/rigid_body.glsl include/dungeoncraft/material_density.h
+$(MPM_ACTIVITY_SHADER): shaders/sim/mpm_rigid_cache.glsl
+$(MPM_SHADER) $(MPM_COMPONENT_SHADER) $(MPM_ACTIVITY_SHADER): include/dungeoncraft/mpm_activity_layout.h
 
 build/pixel_component_tests: tests/vulkan/pixel_component_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ) build/component_extraction_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
@@ -802,6 +816,7 @@ test_gpu_tools: build/contact_shader_contract_tests
 	./build/fluid_transport_limits_tests
 	./build/contact_recording_tests
 	./build/mpm_layout_tests
+	./build/probe_feature_tests
 
 build/contact_shader_contract_tests: tests/vulkan/contact_shader_contract_tests.c src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
 	@mkdir -p build/diagnostics
@@ -846,7 +861,8 @@ GPU_SOURCE_BINARIES += $(addprefix build/quarter_native_structural_, \
     buckling_tests equilibrium_tests failure_tests fracture_tests impact_tests \
     particle_identity_tests placement_tests root_identity_tests store_tests \
     streaming_tests submerged_load_tests)
-$(GPU_SOURCE_BINARIES): src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h src/vulkan/fluid_transport_limits.h $(CONTACT_SHADER)
+$(GPU_SOURCE_BINARIES): src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h src/vulkan/fluid_transport_limits.h src/vulkan/mpm_activity_layout.h include/dungeoncraft/mpm_activity_layout.h $(CONTACT_SHADER) $(MPM_COMPACTION_SHADER) $(MPM_SHADER) $(MPM_COMPONENT_SHADER) $(MPM_ACTIVITY_SHADER)
+$(GPU_OBJ): src/vulkan/mpm_activity_layout.h include/dungeoncraft/mpm_activity_layout.h
 build/contact_gpu.o: src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
 build/fluid_gpu.o: src/vulkan/fluid_transport_limits.h
 
@@ -877,7 +893,25 @@ build/probe_feature_tests: tests/vulkan/probe_feature_tests.c tools/diagnostics/
 .PHONY: test_probe_features
 test_probe_features: build/probe_feature_tests
 	./build/probe_feature_tests
+test_gpu_tools: build/probe_feature_tests
 
+MINIMAL_VK_TESTS = $(addprefix build/,component_dispatch_tests pixel_properties_gpu_tests \
+    fluid_transport_work_tests raster_dispatch_tests fluid_transport_tests fluid_transport_long_tests \
+    fluid_transport_slow_tests mpm_control_tests mpm_compaction_tests fluid_displacement_tests \
+    fluid_displacement_wide_tests fluid_displacement_tall_tests hydro_head_tests fluid_aperture_tests \
+    contact_dispatch_tests)
+$(MINIMAL_VK_TESTS): tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h
+test: build/mpm_compaction_tests
+shaders: $(MPM_COMPACTION_SHADER)
+.PHONY: test_mpm_compaction_work
+test_mpm_compaction_work: build/mpm_compaction_tests
+	./build/mpm_compaction_tests performance
 
 build/mpm_descriptor_tests: tests/vulkan/mpm_descriptor_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/gpu_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkUpdateDescriptorSets
+test: build/mpm_descriptor_tests
+build/diagnostics/mpm_scalar_reference_tests: tools/diagnostics/mpm_scalar_reference.py tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ)
+	python3 tools/diagnostics/mpm_scalar_reference.py
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -Ishaders/sim -o build/diagnostics/mpm_scalar_reference.spv build/diagnostics/mpm_scalar_reference.comp
+	spirv-val --target-env vulkan1.3 build/diagnostics/mpm_scalar_reference.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) build/diagnostics/mpm_scalar_reference_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)

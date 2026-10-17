@@ -13,7 +13,7 @@ static int g_pass,g_fail;
 enum { SCAN_LANES=256, POISON=4369, GUARD_WORDS=16, SAMPLES=5 };
 
 static uint32_t storage_words(uint32_t tiles) {
-    uint32_t words=10u+2u*tiles,count=(tiles+SCAN_LANES-1u)/SCAN_LANES;
+    uint32_t words=11u+2u*tiles,count=(tiles+SCAN_LANES-1u)/SCAN_LANES;
     for(;;) {
         words+=count;
         if(count<=SCAN_LANES) {words++;break;}
@@ -66,6 +66,10 @@ static void compaction_case(uint32_t width,uint32_t height,unsigned pattern,bool
         write.dstBinding=empty_bindings[i];write.pBufferInfo=&empty_info;
         vkUpdateDescriptorSets(p.device,1,&write,0,NULL);
     }
+    gpu.command=p.command;gpu.pipeline_layout=p.layout;gpu.mpm_activity_buffer=p.buffer;
+    ASSERT_TRUE(dc_gpu_mpm_scan_layout(width,height,&gpu.mpm_scan_layout));
+    ASSERT_EQ(gpu.mpm_scan_layout.words,words);
+    ASSERT_TRUE(dc_gpu_mpm_compaction_pipeline_init(&gpu,err,sizeof(err)));
     uint32_t *expected=malloc(tiles*4u);ASSERT_TRUE(expected);
     uint32_t count=clean?0:reference(expected,tiles_x,tiles_y,pattern);
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(p.physical,&properties);
@@ -82,25 +86,25 @@ static void compaction_case(uint32_t width,uint32_t height,unsigned pattern,bool
         vkCmdPipelineBarrier(p.command,VK_PIPELINE_STAGE_HOST_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,0,1,&memory,0,NULL,0,NULL);
         vkCmdBindPipeline(p.command,VK_PIPELINE_BIND_POINT_COMPUTE,p.pipeline);
         vkCmdBindDescriptorSets(p.command,VK_PIPELINE_BIND_POINT_COMPUTE,p.layout,0,1,&p.descriptor,0,NULL);
-        uint32_t push[]={width,height,1,clean?1u:0u,0,0,0};
-        vkCmdPushConstants(p.command,p.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
         vkCmdWriteTimestamp2(p.command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,pool,0);
-        vkCmdDispatch(p.command,1,1,1);
+        dc_gpu_record_active_compaction(&gpu,clean);
         vkCmdWriteTimestamp2(p.command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,pool,1);
         host_barrier(&p,1);ASSERT_EQ(vkEndCommandBuffer(p.command),VK_SUCCESS);
         ASSERT_TRUE(submit(&p,"active tile compaction",1));
         uint64_t times[2];ASSERT_EQ(vkGetQueryPoolResults(p.device,pool,0,2,sizeof(times),times,sizeof(uint64_t),VK_QUERY_RESULT_64_BIT),VK_SUCCESS);
         samples[sample]=(times[1]-times[0])*properties.limits.timestampPeriod/1e6;
-        ASSERT_EQ(p.mapped[0],count);ASSERT_EQ(p.mapped[1],1u);ASSERT_EQ(p.mapped[2],1u);
+        uint32_t dispatch_y=count==0u?1u:(count+65534u)/65535u,dispatch_x=(count+dispatch_y-1u)/dispatch_y;
+        ASSERT_EQ(p.mapped[0],dispatch_x);ASSERT_EQ(p.mapped[1],dispatch_y);ASSERT_EQ(p.mapped[2],1u);
         ASSERT_TRUE(memcmp(p.mapped+3,expected,count*4u)==0);
         uint32_t control=3u+2u*tiles;
-        ASSERT_EQ(p.mapped[control],0u);ASSERT_EQ(p.mapped[control+1],count);
-        ASSERT_EQ(p.mapped[control+2],1u);ASSERT_EQ(p.mapped[control+3],1u);
+        ASSERT_EQ(p.mapped[control],0u);ASSERT_EQ(p.mapped[control+1],dispatch_x);
+        ASSERT_EQ(p.mapped[control+2],dispatch_y);ASSERT_EQ(p.mapped[control+3],1u);
+        ASSERT_EQ(p.mapped[control+7],count);
         for(uint32_t word=words;word<words+GUARD_WORDS;word++) ASSERT_EQ(p.mapped[word],POISON);
     }
     qsort(samples,repeats,sizeof(*samples),duration_order);double median=samples[repeats/2];
     printf("%ux%u tile metadata: %u selected, pattern%u clean%d median %.3fms\n",tiles_x,tiles_y,count,pattern,clean,median);
-    free(expected);vkDestroyQueryPool(p.device,pool,NULL);fixture_release_pipeline(&p);
+    free(expected);vkDestroyQueryPool(p.device,pool,NULL);dc_gpu_mpm_compaction_pipeline_destroy(&gpu);fixture_release_pipeline(&p);
     vkUnmapMemory(p.device,body_memory);vkDestroyBuffer(p.device,body,NULL);vkFreeMemory(p.device,body_memory,NULL);
     vkUnmapMemory(p.device,empty_memory);vkDestroyBuffer(p.device,empty,NULL);vkFreeMemory(p.device,empty_memory,NULL);
     vkUnmapMemory(p.device,p.memory);vkDestroyBuffer(p.device,p.buffer,NULL);vkFreeMemory(p.device,p.memory,NULL);
@@ -110,21 +114,27 @@ static void compaction_case(uint32_t width,uint32_t height,unsigned pattern,bool
     PASS();
 }
 static void test_empty_tiles_reset_poisoned_indirect_headers(void) {compaction_case(640,360,0,false,false);}
+static void test_single_prefix_block_preserves_exact_halo(void) {compaction_case(64,64,1,false,false);}
 static void test_sparse_halo_is_sorted_across_partial_scan_blocks(void) {compaction_case(2113,17,2,false,false);}
 static void test_dense_partial_blocks_keep_every_tile_once(void) {compaction_case(640,360,3,false,false);}
 static void test_clean_rigid_cache_resets_all_work(void) {compaction_case(64,64,3,true,false);}
 static void test_prefix_hierarchy_preserves_large_sparse_order(void) {compaction_case(4097,4097,2,false,false);}
+static void test_large_dense_list_uses_bounded_two_dimensional_dispatch(void) {compaction_case(4097,4097,3,false,false);}
 static void test_compaction_parallel_work_budget(void) {compaction_case(1280,720,0,false,true);}
 static void test_large_compaction_has_parallel_scaling(void) {compaction_case(4097,4097,0,false,true);}
 int main(int argc,char **argv) {
     setvbuf(stdout,NULL,_IOLBF,0);
-    if(argc==2&&strcmp(argv[1],"performance")==0) {
+    if(argc==2&&strcmp(argv[1],"smoke")==0) {
+        RUN(test_single_prefix_block_preserves_exact_halo);
+    } else if(argc==2&&strcmp(argv[1],"performance")==0) {
         RUN(test_compaction_parallel_work_budget);
         RUN(test_large_compaction_has_parallel_scaling);
     } else {
+        RUN(test_single_prefix_block_preserves_exact_halo);
         RUN(test_empty_tiles_reset_poisoned_indirect_headers);RUN(test_sparse_halo_is_sorted_across_partial_scan_blocks);
         RUN(test_dense_partial_blocks_keep_every_tile_once);RUN(test_clean_rigid_cache_resets_all_work);
         RUN(test_prefix_hierarchy_preserves_large_sparse_order);
+        RUN(test_large_dense_list_uses_bounded_two_dimensional_dispatch);
     }
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

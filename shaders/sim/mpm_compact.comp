@@ -1,0 +1,79 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "rigid_body.glsl"
+#include "../../include/dungeoncraft/mpm_activity_layout.h"
+layout(local_size_x=16,local_size_y=16) in;
+layout(constant_id=0) const uint COMPACTION_PHASE=0u;
+layout(set=0,binding=4,std430) readonly buffer Storage {Body bodies[BODY_CAPACITY];uint data[];};
+layout(set=0,binding=27,std430) buffer Activity {uint activity[];};
+uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
+layout(push_constant) uniform Params {
+    uint width,height,mode,unused0,unused1,unused2,unused3;
+} params;
+#include "mpm_rigid_cache.glsl"
+shared uint values[DC_MPM_SCAN_LANES];
+
+void scan_values(uint lane) {
+    barrier();
+    for(uint stride=1u;stride<DC_MPM_SCAN_LANES;stride*=2u) {
+        uint prior=lane>=stride?values[lane-stride]:0u;
+        barrier();values[lane]+=prior;barrier();
+    }
+}
+uvec3 dispatch_extent(uint count) {
+    uint rows=max(1u,(count+DC_MPM_DISPATCH_X_LIMIT-1u)/DC_MPM_DISPATCH_X_LIMIT);
+    return uvec3((count+rows-1u)/rows,rows,1u);
+}
+void main() {
+    uint lane=gl_LocalInvocationIndex,group=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;
+    uint index=group*DC_MPM_SCAN_LANES+lane;
+    uint tiles_x=(params.width+15u)/16u,tiles_y=(params.height+15u)/16u,tiles=tiles_x*tiles_y;
+    uint control=3u+2u*tiles,copy_word=control+4u,count_word=copy_word+3u;
+    if(COMPACTION_PHASE==0u) {
+        if(group>=(tiles+DC_MPM_SCAN_LANES-1u)/DC_MPM_SCAN_LANES) return;
+        bool selected=false;
+        if(index<tiles&&!mpm_rigid_cache_clean()) {
+            ivec2 p=ivec2(index%tiles_x,index/tiles_x);
+            for(int dy=-1;dy<=1;dy++) for(int dx=-1;dx<=1;dx++) {
+                ivec2 q=p+ivec2(dx,dy);
+                if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(tiles_x,tiles_y)))) continue;
+                selected=selected||activity[3u+tiles+uint(q.y)*tiles_x+uint(q.x)]!=0u;
+            }
+        }
+        values[lane]=uint(selected);scan_values(lane);
+        if(index<tiles) activity[3u+index]=values[lane];
+        if(lane==0u) activity[params.unused2+group]=values[DC_MPM_SCAN_LANES-1u];
+        return;
+    }
+    if(COMPACTION_PHASE==1u) {
+        if(group>=(params.unused1+DC_MPM_SCAN_LANES-1u)/DC_MPM_SCAN_LANES) return;
+        values[lane]=index<params.unused1?activity[params.unused2+index]:0u;scan_values(lane);
+        if(index<params.unused1) activity[params.unused2+index]=values[lane];
+        if(lane==0u) activity[params.unused3+group]=values[DC_MPM_SCAN_LANES-1u];
+        return;
+    }
+    if(COMPACTION_PHASE==2u) {
+        if(index<params.unused1&&group>0u)
+            activity[params.unused2+index]+=activity[params.unused3+group-1u];
+        return;
+    }
+    if(COMPACTION_PHASE==3u) {
+        if(index>=tiles) return;
+        uint local_rank=activity[3u+index],previous=lane==0u?0u:activity[2u+index];
+        if(local_rank>previous) {
+            uint rank=local_rank+(group==0u?0u:activity[params.unused2+group-1u]);
+            activity[3u+tiles+rank-1u]=index;
+        }
+        if(index==0u) {
+            uint count=activity[params.unused1];uvec3 work_extent=dispatch_extent(count);
+            activity[0]=work_extent.x;activity[1]=work_extent.y;activity[2]=work_extent.z;
+            activity[control]=0u;activity[control+1u]=work_extent.x;activity[control+2u]=work_extent.y;activity[control+3u]=work_extent.z;
+            uvec3 copy=dispatch_extent((count+DC_MPM_SCAN_LANES-1u)/DC_MPM_SCAN_LANES);
+            activity[copy_word]=copy.x;activity[copy_word+1u]=copy.y;activity[copy_word+2u]=copy.z;
+            activity[count_word]=count;
+        }
+        return;
+    }
+    if(COMPACTION_PHASE==4u&&index<activity[count_word])
+        activity[3u+index]=activity[3u+tiles+index];
+}
