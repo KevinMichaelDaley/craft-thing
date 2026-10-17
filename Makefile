@@ -76,7 +76,7 @@ BROADPHASE_SHADER = build/shaders/broadphase.comp.spv
 CONTACT_SHADER = build/shaders/contacts.comp.spv
 PROBE_SHADER = build/shaders/tick_probe.comp.spv
 HALO_SHADER = build/shaders/halo.comp.spv
-FLUID_SHADER = build/shaders/fluid.comp.spv build/shaders/fluid_aperture.comp.spv build/shaders/fluid_transport.comp.spv
+FLUID_SHADER = build/shaders/fluid.comp.spv build/shaders/fluid_aperture.comp.spv build/shaders/fluid_transport.comp.spv build/shaders/fluid_displacement.comp.spv
 PROJECTION_SHADER = build/shaders/projection.comp.spv build/shaders/hydro_head.comp.spv
 MARKER_SHADER = build/shaders/marker.comp.spv
 SHIFT_SHADER = build/shaders/shift_velocity.comp.spv
@@ -457,7 +457,10 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/fluid_transport_tests
 	./build/fluid_transport_long_tests
 	./build/fluid_transport_slow_tests
-	./build/diagnostics/fluid_case cooperative-runtime
+	./build/fluid_displacement_tests
+	./build/fluid_displacement_wide_tests
+	./build/fluid_displacement_tall_tests
+	./build/diagnostics/fluid_case displacement-runtime
 	./build/pixel_component_tests
 	./build/pixel_world_tests
 	./build/pixel_geometry_tests
@@ -764,6 +767,7 @@ build/fluid_displacement_tall_tests: tests/vulkan/fluid_displacement_tests.c tes
 test: build/fluid_aperture_tests build/diagnostics/fluid_case
 test: build/fluid_transport_tests build/fluid_transport_long_tests build/fluid_transport_slow_tests
 test: build/raster_dispatch_tests build/raster_equivalence_tests
+test: build/fluid_displacement_tests build/fluid_displacement_wide_tests build/fluid_displacement_tall_tests
 
 build/diagnostics/fluid_case: tools/diagnostics/fluid_case.c tests/vulkan/fluid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch

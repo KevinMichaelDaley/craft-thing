@@ -94,3 +94,7 @@ Immutable per-line field cache keeps all 18 recurrence tests and exact coupled f
 **2026-10-16T23:44:19Z**
 
 Raster runtime RED5785631 -> GREEN: GPU-only classifier now routes pixel-only and mixed/legacy raster pipelines through fully reset indirect triplets. Two different rotated mixed-material concave bodies (324/574pixels) on an odd123x117grid produce byte-identical five occupancy/volume/face planes for generic and specialized paths across four paused frames. Validation clean. Skipped structural refresh still executes the bounded classifier to zero both dispatches. No CPU body-type readback and no geometry/resolution change.
+
+**2026-10-17T00:02:59Z**
+
+Integrated cooperative displacement runtime passes Vulkan validation: exact prior fingerprint 97a0ea02c0e0a633 and mass339325648, aperture mismatches0. Column/lateral displacement now256/128 workgroups instead of4/2 in128x64 two-update fixture. Native360 measurement follows; no30FPS claim.
