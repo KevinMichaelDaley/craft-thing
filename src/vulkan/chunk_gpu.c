@@ -235,6 +235,9 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
         return error(err, cap, "GPU particle pool is full");
     dc_cell_t *cells = gpu->chunk_mapped;
     memcpy(cells + (size_t)slot * DC_CHUNK_CELLS, chunk->cells, sizeof(chunk->cells));
+    for (uint32_t i=0;i<DC_CHUNK_CELLS;i++)
+        if ((chunk->cells[i].flags & (DC_CELL_LOADED_TERRAIN|DC_CELL_BONDS_READY)) == DC_CELL_LOADED_TERRAIN)
+            gpu->component_baseline_pending=true;
     memcpy(gpu->chunk_velocity + (size_t)slot * DC_CHUNK_CELLS,
            chunk->face_velocity, sizeof(chunk->face_velocity));
     gpu->preserve_shifted_slot[slot] = false;

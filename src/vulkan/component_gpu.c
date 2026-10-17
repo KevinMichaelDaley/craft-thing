@@ -50,6 +50,19 @@ static void extraction_stage(dc_gpu_t *gpu, uint32_t push[8], uint32_t mode,
     vkCmdPipelineBarrier2(gpu->command, &dependency);
 }
 
+void dc_gpu_record_component_baseline(dc_gpu_t *gpu) {
+    if (!gpu->component_baseline_pending) return;
+    vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
+        gpu->pipeline_layout,0,1,&gpu->descriptor,0,NULL);
+    uint32_t push[8]={gpu->width,gpu->height,0};
+    uint32_t groups=(DC_GPU_CHUNK_SLOTS*4096u+127u)/128u;
+    extraction_stage(gpu,push,26,0,1);
+    extraction_stage(gpu,push,9,0,groups);
+    extraction_stage(gpu,push,11,0,groups);
+    extraction_stage(gpu,push,20,0,groups);
+    gpu->component_baseline_pending=false;
+}
+
 void dc_gpu_record_component_extraction(dc_gpu_t *gpu) {
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                             gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0,
@@ -122,6 +135,7 @@ void dc_gpu_record_component_extraction(dc_gpu_t *gpu) {
         vkCmdWriteTimestamp2(gpu->command,
                              VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                              gpu->timestamp_pool, 11);
+    extraction_stage(gpu, push, 11, 0, groups);
     extraction_stage(gpu, push, 24, 0, groups);
     extraction_stage(gpu, push, 25, 0, 1);
     if (gpu->component_profile)

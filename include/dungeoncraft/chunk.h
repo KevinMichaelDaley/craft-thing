@@ -45,6 +45,10 @@ uint32_t dc_chunk_grain_radius_fp(uint32_t material);
 
 typedef struct { int64_t x, y; } dc_chunk_coord_t;
 
+/** Persisted loaded-terrain provenance and four-neighbor bond history. */
+enum { DC_CELL_LOADED_TERRAIN = 0x100u, DC_CELL_BONDS_READY = 0x200u,
+       DC_CELL_BOND_MASK = 0x3c00u, DC_CELL_RELEASED_TERRAIN = 0x4000u };
+
 typedef struct {
     uint16_t material;
     uint16_t flags;

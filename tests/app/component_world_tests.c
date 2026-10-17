@@ -56,6 +56,14 @@ static void test_imported_tree_falls_after_air_cut(void) {
     dc_level_view_t *view = dc_prop_scene_create(directory, 314, asset, err, sizeof(err));
     ASSERT_TRUE(view);
     ASSERT_TRUE(dc_prop_scene_load(view, asset, err, sizeof(err)));
+    for (unsigned tick=0;tick<2;tick++) {
+        ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
+    }
+    dc_gpu_world_body_t initial_body;
+    dc_gpu_body_motion_t initial_motion;
+    ASSERT_TRUE(!dc_level_view_body_state(view,0x80000001u,&initial_body,
+        &initial_motion,err,sizeof(err)));
     /* Scene camera is centered on world (32,32). Cut the entire trunk. */
     for (int x = 8; x <= 30; x += 2)
         ASSERT_TRUE(dc_level_view_paint(view, VIEW_WIDTH/2+x-32,

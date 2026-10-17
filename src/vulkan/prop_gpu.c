@@ -64,6 +64,7 @@ bool fr_gpu_place_terrain_prop(dc_gpu_t *g, const fr_prop_asset_t *asset,
         okay=placement_error(err,cap,"Terrain prop preflight rejected role, unknown cell or body overlap");
     if (okay) {
         g->body_refresh_pending=true;
+        g->component_baseline_pending=true;
         g->fluid_snapshot_valid=false;
         dc_gpu_structural_data(g)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]=1;
     }

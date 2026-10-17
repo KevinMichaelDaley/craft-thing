@@ -46,6 +46,11 @@ albedo mode. Press P to pause/resume, N to single-step, 0–6 to select air/ston
 water/dirt/gravel/wood, and use left/right mouse to paint/erase. Existing camera,
 zoom and physics overlays remain available. F8 restores authored albedo display.
 
+Loaded solid terrain stays fixed even when initially detached. Its original
+four-neighbor solid connections are recorded on the GPU and saved with the cells.
+Breaking those connections releases resulting isolated components; unrelated
+edits leave existing islands fixed. Newly painted solids retain automatic extraction.
+
 `make test_scene_placement` verifies central-chunk content, matched physical
 ground at both exterior joins, stable paused frames, real brush editing and
 12 physics ticks; captures are under `build/screenshots/level_piece01_*.bmp`.

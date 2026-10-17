@@ -110,6 +110,7 @@ struct dc_gpu {
     void *mpm_label_a_mapped, *mpm_label_b_mapped, *mpm_component_size_mapped;
     VkPipeline mpm_component_pipeline, component_extract_pipelines[35];
     bool automatic_components_enabled;
+    bool component_baseline_pending;
     VkBuffer page_buffer;
     VkDeviceMemory page_memory;
     void *page_mapped;
@@ -390,5 +391,6 @@ bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t width, uint32_t height,
 
 void dc_gpu_record_components(dc_gpu_t *gpu, bool rigid);
 void dc_gpu_record_component_extraction(dc_gpu_t *gpu);
+void dc_gpu_record_component_baseline(dc_gpu_t *gpu);
 
 #endif

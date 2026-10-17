@@ -116,7 +116,7 @@ static bool component_pipelines(dc_gpu_t *gpu, char *err, uint32_t cap) {
         .layout = gpu->pipeline_layout};
     VkResult result = VK_SUCCESS;
     for (uint32_t mode = 1; mode < 35 && result == VK_SUCCESS; ++mode) {
-        if (mode == 11 || mode == 20 || mode == 33)
+        if (mode == 33)
             continue;
         VkSpecializationInfo phase = {.mapEntryCount = 1,
                                       .pMapEntries = &entry,

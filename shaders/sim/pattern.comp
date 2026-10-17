@@ -267,7 +267,7 @@ void main() {
                         particles[secondary_index].grain_fp = grain_radius_fp(material);
                     }
                 }
-                cell.x = (cell.x & 0xffff0000u) | material;
+                cell.x = ((cell.x & 0xffffu)==material ? cell.x & 0xffff0000u : 0u) | material;
                 cell.y = params.color == 3u ? 65536u : new_grain ? cell.y : 0u;
                 chunk_cells[index] = cell;
             }
