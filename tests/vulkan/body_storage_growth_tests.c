@@ -3,7 +3,7 @@
 #include <string.h>
 #include "../../src/vulkan/body_storage_gpu.h"
 static int g_pass,g_fail;
-static uint32_t allocations,releases,fail_at,copies,updates,fills,barriers;
+static uint32_t allocations,releases,fail_at,copies,updates,fills,barriers,host_buffers;
 static uint64_t handle;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
@@ -12,7 +12,7 @@ static uint64_t handle;
 #define PASS() g_pass++
 bool __wrap_dc_gpu_address_buffer_create(dc_gpu_t *gpu,VkDeviceSize bytes,bool mapped,
     dc_gpu_address_buffer_t *out,char *err,uint32_t cap) {
-    (void)gpu;(void)err;(void)cap;allocations++;
+    (void)gpu;(void)err;(void)cap;allocations++;host_buffers+=mapped;
     if(allocations==fail_at) return false;
     *out=(dc_gpu_address_buffer_t){.buffer=(VkBuffer)(uintptr_t)++handle,
         .address=handle*0x100000u,.bytes=bytes,.mapped=mapped?calloc(1,(size_t)bytes):NULL};return true;
@@ -24,7 +24,14 @@ VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdCopyBuffer(VkCommandBuffer c,VkBuffer a,V
 VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdFillBuffer(VkCommandBuffer c,VkBuffer b,VkDeviceSize o,VkDeviceSize s,uint32_t d) {(void)c;(void)b;(void)o;(void)s;(void)d;fills++;}
 VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdUpdateBuffer(VkCommandBuffer c,VkBuffer b,VkDeviceSize o,VkDeviceSize s,const void *d) {(void)c;(void)b;(void)o;(void)s;(void)d;updates++;}
 VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdPipelineBarrier2(VkCommandBuffer c,const VkDependencyInfo *d) {(void)c;(void)d;barriers++;}
-static void reset(void) {allocations=releases=fail_at=copies=updates=fills=barriers=0;}
+static void reset(void) {allocations=releases=fail_at=copies=updates=fills=barriers=host_buffers=0;}
+static void test_directory_metadata_is_initialized_without_a_serial_host_page_upload(void) {
+    reset();dc_gpu_t gpu={0};dc_gpu_body_store_t store={0};dc_gpu_body_growth_t growth={0};char err[128];
+    ASSERT_TRUE(dc_gpu_body_growth_prepare(&gpu,&store,1025,&growth,err,sizeof(err)));
+    uint32_t uploads=host_buffers;
+    ASSERT_TRUE(dc_gpu_body_growth_discard(&gpu,&growth));
+    ASSERT_EQ(uploads,0u);ASSERT_EQ(allocations,releases);PASS();
+}
 static void test_growth_preserves_store_until_submission_completion(void) {
     reset();dc_gpu_t gpu={0};dc_gpu_body_store_t store={0};dc_gpu_body_growth_t growth={0};char err[128];
     const uint32_t counts[]={65,200,1025};
@@ -51,4 +58,4 @@ static void test_partial_allocation_failure_preserves_active_store_and_destinati
         ASSERT_EQ(releases,failure-1);ASSERT_EQ(copies,0u);
     }PASS();
 }
-int main(void) {RUN(test_growth_preserves_store_until_submission_completion);RUN(test_partial_allocation_failure_preserves_active_store_and_destination);printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;}
+int main(void) {RUN(test_directory_metadata_is_initialized_without_a_serial_host_page_upload);RUN(test_growth_preserves_store_until_submission_completion);RUN(test_partial_allocation_failure_preserves_active_store_and_destination);printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;}
