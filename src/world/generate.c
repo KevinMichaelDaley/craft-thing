@@ -66,3 +66,9 @@ bool dc_generate_chunk_scaled(uint64_t seed, dc_chunk_coord_t coord,
 void dc_generate_chunk(uint64_t seed, dc_chunk_coord_t coord, dc_chunk_t *chunk) {
     (void)dc_generate_chunk_scaled(seed, coord, 1u, chunk);
 }
+
+bool dc_generate_chunk_ground(dc_chunk_coord_t coord, const dc_ground_profile_t *ground,
+                               dc_chunk_t *chunk) {
+    (void)ground;
+    return dc_generate_chunk_scaled(314,coord,1,chunk);
+}
