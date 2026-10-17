@@ -37,6 +37,21 @@ class GpuDependencyTests(unittest.TestCase):
                    if not required.issubset(deps)}
         self.assertEqual(missing, {})
 
+    def test_minimal_fixture_consumers_rebuild_when_probe_changes(self):
+        consumers = {}
+        includes = ("tools/diagnostics/vulkan_probe.c", "fluid_transport_tests.c",
+                    "fluid_displacement_tests.c")
+        for target, deps in self.rules.items():
+            sources = [ROOT / p for p in deps
+                       if p.startswith("tests/vulkan/") and p.endswith(".c")]
+            if any(any(name in source.read_text() for name in includes)
+                   for source in sources):
+                consumers[target] = deps
+        self.assertTrue(consumers)
+        missing = sorted(target for target, deps in consumers.items()
+                         if "tools/diagnostics/vulkan_probe.c" not in deps)
+        self.assertEqual(missing, [])
+
 
 if __name__ == "__main__":
     unittest.main()
