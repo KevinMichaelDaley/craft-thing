@@ -64,3 +64,11 @@ SDL_VIDEODRIVER=wayland DC_NATIVE_SUSTAINED=1 ./tools/with-vulkan \
 ```
 
 Use validation for query correctness and disable it for timing comparisons.
+
+`DC_CONTACT_PAIR_PROFILE=1` additionally freezes displayed frame 72 and measures
+each existing broadphase candidate separately. This explicit diagnostic copies
+and restores all touched body storage and backs up/restores device-only activity
+storage on the GPU. It never runs a CPU physics solve. Candidate count is bounded
+to 64, and the command still requires its external deadline. This extra work
+perturbs frame timing; use its per-candidate results for attribution, not FPS
+acceptance. Run with synchronization validation before using those timings.

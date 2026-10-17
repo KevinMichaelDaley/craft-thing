@@ -1,6 +1,8 @@
 /* Diagnostic-only displayed-frame timestamps; ordinary runtime has no hooks. */
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #include "../../src/vulkan/gpu_internal.h"
@@ -29,6 +31,112 @@ static double seconds(void) {
     struct timespec time;
     clock_gettime(CLOCK_MONOTONIC, &time);
     return time.tv_sec + time.tv_nsec / 1e9;
+}
+
+static bool copy_activity(dc_gpu_t *gpu, VkBuffer source, VkBuffer destination,
+                           VkDeviceSize bytes) {
+    VkCommandBufferBeginInfo begin = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS ||
+        vkBeginCommandBuffer(gpu->command, &begin) != VK_SUCCESS)
+        return false;
+    VkMemoryBarrier2 barrier = {.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+        .srcAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT};
+    VkDependencyInfo dependency = {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .memoryBarrierCount = 1, .pMemoryBarriers = &barrier};
+    vkCmdPipelineBarrier2(gpu->command, &dependency);
+    VkBufferCopy copy = {.size = bytes};
+    vkCmdCopyBuffer(gpu->command, source, destination, 1, &copy);
+    barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    barrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+    barrier.dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
+    vkCmdPipelineBarrier2(gpu->command, &dependency);
+    if (vkEndCommandBuffer(gpu->command) != VK_SUCCESS)
+        return false;
+    VkSubmitInfo submit = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1, .pCommandBuffers = &gpu->command};
+    return vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE) == VK_SUCCESS &&
+           vkQueueWaitIdle(gpu->queue) == VK_SUCCESS;
+}
+
+static bool profile_contact_pairs(dc_gpu_t *gpu) {
+    size_t body_bytes = dc_gpu_body_storage_bytes(gpu);
+    size_t activity_bytes = (size_t)gpu->mpm_scan_layout.words * sizeof(uint32_t);
+    void *body = malloc(body_bytes);
+    VkBuffer activity = VK_NULL_HANDLE;
+    VkDeviceMemory activity_memory = VK_NULL_HANDLE;
+    VkDeviceSize previous_device_bytes = gpu->device_only_bytes;
+    char err[256];
+    if (!body || !dc_gpu_make_device_buffer(gpu, activity_bytes, &activity,
+                                            &activity_memory, err, sizeof(err))) {
+        free(body);
+        if (activity) vkDestroyBuffer(gpu->device, activity, NULL);
+        if (activity_memory) vkFreeMemory(gpu->device, activity_memory, NULL);
+        gpu->device_only_bytes = previous_device_bytes;
+        return false;
+    }
+    memcpy(body, gpu->body_mapped, body_bytes);
+    uint32_t *pairs = dc_gpu_broadphase_data(gpu);
+    size_t pair_offset = (char *)pairs - (char *)gpu->body_mapped;
+    const uint32_t *original = (const uint32_t *)((char *)body + pair_offset);
+    unsigned count = original[0];
+    unsigned base = DC_GPU_BROADPHASE_HEADER_WORDS +
+                    2 * dc_gpu_broadphase_buckets(gpu);
+    bool okay = count <= 64 && copy_activity(gpu, gpu->mpm_activity_buffer,
+                                             activity, activity_bytes);
+    for (unsigned i = 0; i < count && okay; i++) {
+        double sum = 0;
+        const uint32_t *pair = original + base + i * 8;
+        for (unsigned sample = 0; sample < 4 && okay; sample++) {
+            pairs[0] = 1;
+            memcpy(pairs + base, pair, 8 * sizeof(uint32_t));
+            VkCommandBufferBeginInfo begin = {
+                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+            okay = vkResetCommandBuffer(gpu->command, 0) == VK_SUCCESS &&
+                   vkBeginCommandBuffer(gpu->command, &begin) == VK_SUCCESS;
+            if (!okay) break;
+            vkCmdResetQueryPool(gpu->command, pool, 0, 2);
+            vkCmdWriteTimestamp2(gpu->command,
+                                 VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, pool, 0);
+            dc_gpu_record_contacts(gpu);
+            vkCmdWriteTimestamp2(gpu->command,
+                                 VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, pool, 1);
+            okay = vkEndCommandBuffer(gpu->command) == VK_SUCCESS;
+            VkSubmitInfo submit = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                                   .commandBufferCount = 1,
+                                   .pCommandBuffers = &gpu->command};
+            okay = okay && vkQueueSubmit(gpu->queue, 1, &submit,
+                                         VK_NULL_HANDLE) == VK_SUCCESS &&
+                   vkQueueWaitIdle(gpu->queue) == VK_SUCCESS;
+            uint64_t times[2];
+            okay = okay && vkGetQueryPoolResults(
+                gpu->device, pool, 0, 2, sizeof(times), times,
+                sizeof(*times), VK_QUERY_RESULT_64_BIT) == VK_SUCCESS;
+            if (okay && sample)
+                sum += (times[1] - times[0]) * gpu->timestamp_period / 1e6;
+        }
+        if (okay) {
+            const uint32_t *contacts = dc_gpu_contact_data(gpu);
+            printf("pair-trace,index%u,kind%u,bodyA%u,bodyB%u,"
+                   "chunk(%u:%u,%u:%u),mean%.6f,contacts%u,visited%u\n",
+                   i, pair[2], pair[0], pair[1], pair[5], pair[4], pair[7],
+                   pair[6], sum / 3, contacts[0], contacts[9]);
+        }
+    }
+    if (okay) {
+        memcpy(gpu->body_mapped, body, body_bytes);
+        okay = copy_activity(gpu, activity, gpu->mpm_activity_buffer,
+                              activity_bytes);
+    }
+    free(body);
+    vkDestroyBuffer(gpu->device, activity, NULL);
+    vkFreeMemory(gpu->device, activity_memory, NULL);
+    gpu->device_only_bytes = previous_device_bytes;
+    return okay;
 }
 
 VkResult __wrap_vkBeginCommandBuffer(VkCommandBuffer command,
@@ -160,15 +268,18 @@ bool __wrap_dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
     const uint32_t *pairs = dc_gpu_broadphase_data(gpu);
     for (unsigned phase = 0; phase < 6; phase++)
         total[FLUID] += total[FLUID_PHASE + phase];
+    unsigned number = frame++;
     printf("frame-trace,%u,steps%u,wall%.3f,rigid%.3f,fluid%.3f,mpm%.3f,"
            "pairs%u,contacts%u,visited%u,overflow%u,contactms%.3f,"
            "hydro0=%.3f,hydro1=%.3f,hydro2=%.3f,hydro3=%.3f,hydro4=%.3f,"
-           "fluid0=%.3f,fluid1=%.3f,fluid2=%.3f,fluid3=%.3f,fluid4=%.3f,fluid5=%.3f\n", frame++, steps,
+           "fluid0=%.3f,fluid1=%.3f,fluid2=%.3f,fluid3=%.3f,fluid4=%.3f,fluid5=%.3f\n", number, steps,
            wall_ms, total[RIGID], total[FLUID], total[MPM], pairs[0],
            contacts[0], contacts[9], contacts[2], total[CONTACT],
            total[HYDRO], total[HYDRO + 1], total[HYDRO + 2], total[HYDRO + 3], total[HYDRO + 4],
            total[FLUID_PHASE], total[FLUID_PHASE + 1], total[FLUID_PHASE + 2],
            total[FLUID_PHASE + 3], total[FLUID_PHASE + 4], total[FLUID_PHASE + 5]);
+    if (okay && number == 72 && getenv("DC_CONTACT_PAIR_PROFILE"))
+        okay = profile_contact_pairs(gpu);
     vkDestroyQueryPool(gpu->device, pool, NULL);
     return okay && !overflow;
 }
