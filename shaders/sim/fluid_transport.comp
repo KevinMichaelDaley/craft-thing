@@ -21,6 +21,7 @@ const float TRANSPORT_FUDGE=1.001;
 shared uvec4 cached[CACHE_CELLS];
 shared uint cached_requests[CACHE_CELLS];
 shared uint capacity_bits[(CACHE_CELLS+31u)/32u];
+shared uint source_bits[(CACHE_CELLS+31u)/32u];
 bool vertical;
 bool line_open_aperture;
 uint line,length;
@@ -84,6 +85,18 @@ bool recipients_full(uint coordinate,bool positive,uint reach) {
         if((capacity_bits[word]&mask)!=0u) return false;
     }
     return true;
+}
+int next_source(int position,bool positive) {
+    if(position<0||position>=int(CACHE_CELLS)) return position;
+    uint word=uint(position)/32u;
+    uint mask=source_bits[word]&(positive?0xffffffffu>>(31u-uint(position)%32u):0xffffffffu<<(uint(position)%32u));
+    for(uint visited=0u;visited<(CACHE_CELLS+31u)/32u;visited++) {
+        if(mask!=0u) return int(word*32u)+int(positive?findMSB(mask):findLSB(mask));
+        if(positive) {if(word==0u) return -1;word--;}
+        else {word++;if(word>=(min(length,CACHE_CELLS)+31u)/32u) return int(min(length,CACHE_CELLS));}
+        mask=source_bits[word];
+    }
+    return positive?-1:int(min(length,CACHE_CELLS));
 }
 float travel_for_speed(float speed) {
     if((TRANSPORT_MODE&1u)!=0u) speed=-speed;
@@ -191,27 +204,43 @@ void main() {
     }
     subgroupMemoryBarrierShared();subgroupBarrier();
     if(length<=CACHE_CELLS&&subgroupOr(any_water)==0u) return;
-    for(uint word=gl_SubgroupInvocationID;word<(CACHE_CELLS+31u)/32u;word+=transport_team_size())
-        capacity_bits[word]=0u;
-    subgroupMemoryBarrierShared();subgroupBarrier();
-    for(uint block=0u;block<min(length,CACHE_CELLS);block+=transport_team_size()) {
-        uint position=block+gl_SubgroupInvocationID;
-        bool available=false;
-        if(position<min(length,CACHE_CELLS)) {
-            uvec2 state=cached[position].xy;
-            available=(state.y&(KNOWN|PERMEABLE))==(KNOWN|PERMEABLE)&&state.x<(state.y&131071u);
-        }
-        uint mask=subgroupBallot(available).x;
-        if(gl_SubgroupInvocationID==0u) capacity_bits[block/32u]|=mask<<(block%32u);
+    for(uint word=gl_SubgroupInvocationID;word<(CACHE_CELLS+31u)/32u;word+=transport_team_size()) {
+        capacity_bits[word]=0u;source_bits[word]=0u;
     }
     subgroupMemoryBarrierShared();subgroupBarrier();
-    uint any_capacity=0u;
-    for(uint word=gl_SubgroupInvocationID;word<(CACHE_CELLS+31u)/32u;word+=transport_team_size())
-        any_capacity|=capacity_bits[word];
-    if(length<=CACHE_CELLS&&subgroupOr(any_capacity)==0u) return;
     bool positive=(TRANSPORT_MODE&1u)==0u;
+    for(uint block=0u;block<min(length,CACHE_CELLS);block+=transport_team_size()) {
+        uint position=block+gl_SubgroupInvocationID;
+        bool available=false,source=false;
+        if(position<min(length,CACHE_CELLS)) {
+            uvec2 state=cached[position].xy;
+            bool eligible=(state.y&(KNOWN|PERMEABLE))==(KNOWN|PERMEABLE)&&(state.y&131071u)>0u;
+            available=eligible&&state.x<(state.y&131071u);
+            if(eligible&&state.x!=0u&&(positive||position>0u)) {
+                uvec2 face=cached[positive?position:position-1u].zw;
+                float travel=uintBitsToFloat(face.y),aperture=float(face.x)/float(FULL);
+                source=clamp(travel,0.,1.)*float(FULL)*aperture>=1.;
+            }
+        }
+        uint mask=subgroupBallot(available).x,sources=subgroupBallot(source).x;
+        if(gl_SubgroupInvocationID==0u) {
+            capacity_bits[block/32u]|=mask<<(block%32u);
+            source_bits[block/32u]|=sources<<(block%32u);
+        }
+    }
+    subgroupMemoryBarrierShared();subgroupBarrier();
+    uint any_capacity=0u,any_source=0u;
+    for(uint word=gl_SubgroupInvocationID;word<(CACHE_CELLS+31u)/32u;word+=transport_team_size()) {
+        any_capacity|=capacity_bits[word];any_source|=source_bits[word];
+    }
+    uint capacity_or=subgroupOr(any_capacity),source_or=subgroupOr(any_source);
+    if(length<=CACHE_CELLS&&(capacity_or==0u||source_or==0u)) return;
     ivec2 direction=vertical?ivec2(0,positive?1:-1):ivec2(positive?1:-1,0);
     for(int position=positive?int(length)-2:1;position>=0&&position<int(length);position+=positive?-1:1) {
+        /* Earlier sources move away from every unvisited source, so its
+           initial water and immutable velocity remain valid eligibility. */
+        position=next_source(position,positive);
+        if(position<0||position>=int(length)) break;
         if(move_source(point_at(uint(position)),direction)) {
             subgroupMemoryBarrierShared();
             if(length>CACHE_CELLS) subgroupMemoryBarrierBuffer();

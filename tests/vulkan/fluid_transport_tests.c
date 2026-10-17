@@ -86,7 +86,7 @@ static void reference_move(fixture_t *f,int x,int y,int dx,int dy) {
     f->expected[own]=available;
 }
 
-static void run_case(unsigned mode,unsigned unknown) {
+static void run_case_scaled(unsigned mode,unsigned unknown,float velocity_scale) {
     fixture_t *f=calloc(1,sizeof(*f));ASSERT_TRUE(f);ASSERT_TRUE(initialize(&f->p));
     f->gpu=(dc_gpu_t){.device=f->p.device,.physical=f->p.physical};char err[256];
     for(unsigned i=0;i<7;i++) {
@@ -107,7 +107,7 @@ static void run_case(unsigned mode,unsigned unknown) {
             f->words[2][3*CELLS+i]=(hash%5)*FULL/4;
             f->words[2][4*CELLS+i]=((hash/7)%5)*FULL/4;
         }
-        float velocity=(float)((x+y)%12+1)*(positive?1.f:-1.f);
+        float velocity=(float)((x+y)%12+1)*(positive?1.f:-1.f)*velocity_scale;
         f->words[4][2*i+(vertical?1:0)]=bits(velocity);f->words[3][i]=bits(velocity*.5f);
     }
     /* Seed the already independently GPU-tested cache, isolating transport. */
@@ -161,12 +161,17 @@ static void run_case(unsigned mode,unsigned unknown) {
     vkDestroyDevice(f->p.device,NULL);vkDestroyInstance(f->p.instance,NULL);free(f);
     ASSERT_EQ(mismatches,0u);PASS();
 }
+static void run_case(unsigned mode,unsigned unknown) {run_case_scaled(mode,unknown,1.f);}
 static void test_downward_priority_and_fractional_apertures(void) {run_case(0,0);}
 static void test_upward_priority_and_velocity_trapezoid(void) {run_case(1,0);}
 static void test_rightward_priority_across_partial_tiles(void) {run_case(2,0);}
 static void test_leftward_priority_across_partial_tiles(void) {run_case(3,0);}
 static void test_unknown_chunks_block_vertical_flow(void) {run_case(1,1);}
 static void test_unknown_chunks_block_horizontal_flow(void) {run_case(3,1);}
+static void test_downward_one_unit_quantization_is_exact(void) {run_case_scaled(0,0,2e-6f);}
+static void test_upward_one_unit_quantization_is_exact(void) {run_case_scaled(1,0,2e-6f);}
+static void test_rightward_one_unit_quantization_is_exact(void) {run_case_scaled(2,0,2e-6f);}
+static void test_leftward_one_unit_quantization_is_exact(void) {run_case_scaled(3,0,2e-6f);}
 #ifdef FLUID_TRANSPORT_FIXTURE_ONLY
 int transport_fixture_main(void) {
 #else
@@ -175,5 +180,7 @@ int main(void) {
     RUN(test_downward_priority_and_fractional_apertures);RUN(test_upward_priority_and_velocity_trapezoid);
     RUN(test_rightward_priority_across_partial_tiles);RUN(test_leftward_priority_across_partial_tiles);
     RUN(test_unknown_chunks_block_vertical_flow);RUN(test_unknown_chunks_block_horizontal_flow);
+    RUN(test_downward_one_unit_quantization_is_exact);RUN(test_upward_one_unit_quantization_is_exact);
+    RUN(test_rightward_one_unit_quantization_is_exact);RUN(test_leftward_one_unit_quantization_is_exact);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

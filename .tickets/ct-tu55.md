@@ -130,3 +130,7 @@ Reuse already-proven transport recipient residency for exact cache/global reads.
 **2026-10-17T03:03:18Z**
 
 Exact request reuse, fully-open aperture proof,32-lane transport team, and mutable free-capacity summary pass18literal transport cases, coupledhash97a0ea02c0e0a633/mass339325648, SPIR-V validation and CPU shared-memory sizing checks. New committed RED long-range full-recipient budget now passes:21.650ms baseline to0.950ms; no-water/no-capacity exits prove no physical change. Visible native640x360 repeat32.462/32.780ms mean,38.616/39.044ms p95,97.989/102.148ms cold,30.805/30.506FPS. Mean passes30FPS but p95 gate remains RED; not overall target completion. Full regression must rerun after this transport checkpoint.
+
+**2026-10-17T03:08:27Z**
+
+Immutable source bitmap skips only initially ineligible or zero-allowance sources; prior ordered transfers cannot populate unvisited sources. Bounded word scans preserve exact priority and uncached fallback.30literal oracle cases (including one-unit quantization in all directions) and coupledhash97a0ea02c0e0a633 pass withvalidation. RED subunit work ratio15.875 now1.009, waterunchanged. Native concave mean30.752ms,p9534.804ms,cold102.398ms,32.518FPS: mean passes, p95 stillRED33.333. Dry9.714ms/p9511.882/102.949FPS anddense21.794ms/p9531.582/45.883FPS pass; fullregression pending afterthischeckpoint.
