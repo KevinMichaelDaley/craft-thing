@@ -84,6 +84,22 @@ static void test_level03_stays_packed_then_cut_tree_stops_at_stone(void) {
         ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));
         ASSERT_EQ(wood,704u);ASSERT_EQ(doubled,0u);
     }
+    ASSERT_TRUE(dc_level_view_paint(view,VIEW_WIDTH/2+8-32,VIEW_HEIGHT/2+2-32,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    for(unsigned tick=0;tick<120;tick++) {
+        ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
+    }
+    wood=0;doubled=0;chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    for(unsigned page=0;page<70;page++) {
+        ASSERT_TRUE(dc_gpu_download_chunk(g,page,chunk,err,sizeof(err)));
+        for(unsigned cell=0;cell<4096;cell++) {
+            wood+=chunk->cells[cell].material==DC_MATERIAL_WOOD;
+            doubled+=(chunk->cells[cell].material==DC_MATERIAL_DIRT||chunk->cells[cell].material==DC_MATERIAL_GRAVEL)&&chunk->particles[cell+4096].mass_fp!=0;
+        }
+    }
+    free(chunk);printf("single dirt erase: terrain wood%u doubled soil/gravel%u\n",wood,doubled);
+    ASSERT_TRUE(screenshot(view,"build/level03_single_dirt_cut.bmp",err));
+    ASSERT_EQ(wood,704u);ASSERT_EQ(doubled,0u);
     for(int x=0;x<=34;x+=2) ASSERT_TRUE(dc_level_view_paint(view,VIEW_WIDTH/2+x-32,VIEW_HEIGHT/2-8-32,2,DC_MATERIAL_AIR,err,sizeof(err)));
     unsigned worst=0;
     for(unsigned tick=0;tick<240;tick++) {

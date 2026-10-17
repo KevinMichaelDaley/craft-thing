@@ -29,6 +29,9 @@ static void test_partial_granular_support_motion_does_not_release_tree_but_cut_d
     ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     dc_gpu_body_t body;
     ASSERT_TRUE(!dc_gpu_read_body_id(g,0x80000001u,&body,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,29,29,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(!dc_gpu_read_body_id(g,0x80000001u,&body,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_paint_material(g,30,30,0,DC_MATERIAL_AIR,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     dc_gpu_body_pixel_t pixel;unsigned count=0;
