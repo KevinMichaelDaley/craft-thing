@@ -63,6 +63,41 @@ static bool equal_draw_images(dc_gpu_t *g,char *err) {
     }
     free(reference);return equal;
 }
+static int contact_order(const void *a,const void *b) {return memcmp(a,b,sizeof(dc_gpu_contact_t));}
+static bool equal_pixel_contacts(dc_gpu_t *g,char *err) {
+    VkPipeline typed=g->contact_pixel_pipeline;
+    dc_gpu_contact_t *reference=malloc(DC_GPU_CONTACT_CAPACITY*sizeof(*reference));
+    dc_gpu_contact_t *actual=malloc(DC_GPU_CONTACT_CAPACITY*sizeof(*actual));
+    if(!reference||!actual) {free(reference);free(actual);return false;}
+    dc_gpu_body_record_t *b=g->body_mapped;
+    for(unsigned slot=0;slot<2;slot++) {
+        if(!dc_gpu_set_body_motion(g,b[slot].body.id,slot==0?.31f:-.27f,0,0,err,256)) return false;
+        b[slot].chunk_x[0]=b[slot].chunk_x[1]=0;
+        b[slot].chunk_y[0]=1;b[slot].chunk_y[1]=0;
+        b[slot].local_x_fp=(slot==0?30:45)<<16;
+        b[slot].local_y_fp=(slot==0?16:15)<<16;
+    }
+    g->contact_pixel_pipeline=VK_NULL_HANDLE;
+    bool equal=dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,256);
+    dc_gpu_contact_stats_t expected={0};
+    equal=equal&&dc_gpu_read_contacts(g,&expected,reference,DC_GPU_CONTACT_CAPACITY,err,256);
+    g->contact_pixel_pipeline=typed;
+    bool body=false,terrain=false;
+    for(unsigned i=0;i<expected.count;i++) {body|=reference[i].kind==0;terrain|=reference[i].kind==1;}
+    equal=equal&&expected.overflow==0&&body&&terrain;
+    qsort(reference,expected.count,sizeof(*reference),contact_order);
+    for(unsigned frame=0;frame<4&&equal;frame++) {
+        dc_gpu_contact_stats_t stats;
+        equal=dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,256)&&
+            dc_gpu_read_contacts(g,&stats,actual,DC_GPU_CONTACT_CAPACITY,err,256);
+        if(equal) {
+            qsort(actual,stats.count,sizeof(*actual),contact_order);
+            equal=memcmp(&expected,&stats,sizeof(stats))==0&&memcmp(reference,actual,stats.count*sizeof(*actual))==0;
+        }
+    }
+    printf("concave typed contacts: %u constraints body%d terrain%d exact%d\n",expected.count,body,terrain,equal);
+    free(reference);free(actual);return equal;
+}
 static void test_two_rotated_concave_bodies_use_exact_pixel_raster(void) {
     char err[256];dc_gpu_t *g=NULL;
     ASSERT_TRUE(dc_gpu_create(&g,123,117,"build/shaders/pattern.comp.spv",err,sizeof(err)));
@@ -73,6 +108,7 @@ static void test_two_rotated_concave_bodies_use_exact_pixel_raster(void) {
             unsigned px=cx*64+x,py=cy*64+y,material=DC_MATERIAL_AIR;
             if(px>=12&&px<43&&py>=14&&py<43&&(px<18||py>=37)) material=px<18?DC_MATERIAL_WOOD:DC_MATERIAL_STONE;
             if(px>=70&&px<104&&py>=52&&py<87&&(px<76||px>=98||py>=80)) material=px<94?DC_MATERIAL_DENSE_WOOD:DC_MATERIAL_WOOD;
+            if(py==110&&px<123) material=DC_MATERIAL_STONE;
             chunk->cells[y*64+x].material=material;
         }
         unsigned slot=cy*2+cx;
@@ -98,6 +134,7 @@ static void test_two_rotated_concave_bodies_use_exact_pixel_raster(void) {
     if(!selected) {dc_gpu_destroy(g);ASSERT_TRUE(selected);}
     ASSERT_TRUE(g->rigid_pixel_pipeline!=VK_NULL_HANDLE);
     ASSERT_TRUE(g->simple_draw_pipeline!=VK_NULL_HANDLE&&g->pixel_draw_pipeline!=VK_NULL_HANDLE);
+    ASSERT_TRUE(g->contact_pixel_pipeline!=VK_NULL_HANDLE);
     size_t bytes=(size_t)g->width*g->height*5*sizeof(uint32_t);void *reference=malloc(bytes);ASSERT_TRUE(reference);
     ASSERT_TRUE(raster_once(g,g->rigid_pipeline));memcpy(reference,g->occupancy_mapped,bytes);
     for(unsigned frame=0;frame<4;frame++) {
@@ -119,6 +156,8 @@ static void test_two_rotated_concave_bodies_use_exact_pixel_raster(void) {
     ASSERT_EQ(activity[0],6u);ASSERT_EQ(activity[1],5u);ASSERT_EQ(activity[3],0u);
     vkUnmapMemory(g->device,staging_memory);vkDestroyBuffer(g->device,staging,NULL);vkFreeMemory(g->device,staging_memory,NULL);
     printf("all overlays and cropped views draw byte-identical paused images; hidden legacy selects generic\n");
+    memset(legacy,0,sizeof(*legacy));
+    ASSERT_TRUE(equal_pixel_contacts(g,err));
     dc_gpu_destroy(g);PASS();
 }
 int main(void) {
