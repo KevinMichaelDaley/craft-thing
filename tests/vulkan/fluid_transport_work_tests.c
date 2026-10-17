@@ -9,9 +9,9 @@ static int duration_order(const void *a,const void *b) {
     return (x>y)-(x<y);
 }
 
-static bool measure(fixture_t *f,VkQueryPool pool,unsigned mode,bool moving,double *result) {
+static bool measure(fixture_t *f,VkQueryPool pool,unsigned mode,float magnitude,double *result) {
     bool vertical=mode<2;
-    float speed=moving?((mode&1u)?-.125f:.125f):0;
+    float speed=(mode&1u)?-magnitude:magnitude;
     memset(f->words[4],0,sizes[4]*4);
     for(unsigned i=0;i<CELLS;i++) f->words[4][2*i+(vertical?1:0)]=bits(speed);
     if(!begin(&f->p)) return false;
@@ -75,11 +75,12 @@ static void test_full_recipient_work_is_close_to_zero_velocity_work(void) {
             .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_COMPUTE_BIT,
                 .module=f->p.shader,.pName="main",.pSpecializationInfo=&constants},.layout=f->p.layout};
         ASSERT_EQ(vkCreateComputePipelines(f->p.device,VK_NULL_HANDLE,1,&pipeline,NULL,&f->p.pipeline),VK_SUCCESS);
-        double quiet,full;
-        ASSERT_TRUE(measure(f,pool,mode,false,&quiet));
-        ASSERT_TRUE(measure(f,pool,mode,true,&full));
-        printf("mode%u zero speed %.3f ms, full recipient %.3f ms, ratio %.3f\n",mode,quiet,full,full/quiet);
-        bounded=bounded&&full<=quiet*1.25+.05;
+        double quiet,full,long_full;
+        ASSERT_TRUE(measure(f,pool,mode,0,&quiet));
+        ASSERT_TRUE(measure(f,pool,mode,.125f,&full));
+        ASSERT_TRUE(measure(f,pool,mode,8.f,&long_full));
+        printf("mode%u zero speed %.3f ms, full recipient %.3f ms, long full %.3f ms, ratios %.3f/%.3f\n",mode,quiet,full,long_full,full/quiet,long_full/quiet);
+        bounded=bounded&&full<=quiet*1.25+.05&&long_full<=quiet*1.25+.05;
     }
     bool exact=true;
     for(unsigned i=0;i<CHUNKS*4096;i++) exact=exact&&f->words[0][2*i+1]==FULL;
