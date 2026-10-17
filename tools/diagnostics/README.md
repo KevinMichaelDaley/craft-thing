@@ -31,3 +31,19 @@ journalctl -k -b --no-pager --grep='i915|GPU HANG|wedged|Fence expiration|Resett
 using only one directly dispatched initialization workgroup. It never launches
 the poisoned indirect counts. Its source also reuses this minimal device fixture,
 avoiding initialization of all engine pipelines during this safety regression.
+
+`gpu_frequency.py` records read-only Intel frequency samples alongside a bounded
+command. It writes JSON lines under the supplied persistent output path and
+inherits the command's stdout/stderr and exit status. It never writes sysfs or
+changes clocks. Sampling adds host work, so use it to investigate frequency
+behavior rather than as the authoritative frame-time benchmark:
+
+```sh
+python3 tests/tools/gpu_frequency_tests.py
+DC_COLD_DIAG=1 ./tools/with-vulkan python3 tools/diagnostics/gpu_frequency.py \
+  --output build/diagnostics/cold-frequency.jsonl -- \
+  timeout --signal=TERM --kill-after=3s 30s ./build/pixel_performance_tests
+```
+
+The explicit process deadline is still required. A timed-out GPU command does
+not prove its GPU work was cancelled; follow the probe failure procedure above.
