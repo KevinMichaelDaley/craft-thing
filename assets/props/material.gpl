@@ -1,0 +1,13 @@
+GIMP Palette
+Name: Craft material
+Columns: 8
+# Transparent = absent; metadata labels must be opaque
+ 96  96  96 stone
+128  64   0 wood
+192 192 192 mortar
+ 64  32   0 dense_wood
+255 224   0 sand
+  0 128 255 water
+ 96  48  16 dirt
+160 128  96 gravel
+224 224 224 mortar_debris

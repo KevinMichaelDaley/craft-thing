@@ -1009,3 +1009,20 @@ build/diagnostics/mpm_scalar_reference_tests: tools/diagnostics/mpm_scalar_refer
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -Ishaders/sim -o build/diagnostics/mpm_scalar_reference.spv build/diagnostics/mpm_scalar_reference.comp
 	spirv-val --target-env vulkan1.3 build/diagnostics/mpm_scalar_reference.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) build/diagnostics/mpm_scalar_reference_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+# Offline authoring and preloaded prop reader checks (no Vulkan device needed).
+build/prop_tests: tests/assets/prop_tests.c src/assets/prop.c include/ferrum/assets/prop.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/assets/prop_tests.c src/assets/prop.c -o $@ -lm
+.PHONY: test_prop_assets test_libresprite_host
+test: test_prop_assets
+test_prop_assets: build/prop_tests
+	python3 -m unittest discover -s tests/assets -p '*_test.py' -k 'SchemaTests'
+	python3 tests/assets/package_test.py
+	python3 tests/assets/reader_test.py
+	python3 tests/assets/compiler_fixture.py
+	./build/prop_tests build/prop_fixture/asset.cprop
+test_libresprite_host:
+	python3 tests/assets/host_probe_test.py
+	python3 tests/assets/export_test.py
+	python3 tests/assets/host_example_test.py
