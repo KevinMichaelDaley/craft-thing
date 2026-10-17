@@ -164,7 +164,7 @@ void body_properties(inout Body b) {
         uint mass10=0u,count=0u;uvec2 first_x=uvec2(0),first_y=uvec2(0);
         for(uint p=0u;p<body_pieces(b);p++) {
             uint material=piece_material(b,p);if(material==0u) continue;
-            uint w=material==2u?6u:material==4u?12u:material==3u?16u:27u;
+            uint w=material==5u?2u:material==2u?6u:material==4u?12u:material==3u?16u:27u;
             uvec2 cell=uvec2(pixel_piece_cell(b,p));
             uint x=(cell.x*2u+1u)*w,y=(cell.y*2u+1u)*w;
             uint old_x=first_x.x,old_y=first_y.x;
@@ -178,7 +178,7 @@ void body_properties(inout Body b) {
         precise float moment=0,correction=0;
         for(uint p=0u;p<body_pieces(b);p++) {
             uint material=piece_material(b,p);if(material==0u) continue;
-            float w=material==2u?.6:material==4u?1.2:material==3u?1.6:2.7;
+            float w=material==5u?DC_DENSITY_LEAVES:material==2u?.6:material==4u?1.2:material==3u?1.6:2.7;
             vec2 delta=vec2(pixel_piece_cell(b,p))+.5-b.center;
             float term=w*(dot(delta,delta)+1./6.)-correction;
             float next=moment+term;correction=(next-moment)-term;moment=next;
@@ -197,7 +197,7 @@ void body_properties(inout Body b) {
     for(uint piece=0u;piece<body_pieces(b);++piece) {
         uint material=b.piece_count==0u ? b.material : b.pieces[piece].material;
         densities[piece]=material==4u ? DC_DENSITY_DENSE_WOOD :
-            material==2u ? DC_DENSITY_WOOD : material==3u ? DC_DENSITY_MORTAR : DC_DENSITY_STONE;
+            material==2u ? DC_DENSITY_WOOD : material==3u ? DC_DENSITY_MORTAR : material==5u ? DC_DENSITY_LEAVES : DC_DENSITY_STONE;
         piece_properties(b,piece,areas[piece],centers[piece],inertias[piece]);
         float mass=areas[piece]*densities[piece];
         area+=areas[piece];total_mass+=mass;weighted+=mass*centers[piece];

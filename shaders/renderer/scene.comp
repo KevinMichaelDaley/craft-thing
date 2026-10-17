@@ -50,7 +50,7 @@ uint body_slot(uint id) {
     return 64u;
 }
 uint terrain_material(uint material) {
-    return material==1u?1u:material==2u?7u:material==3u?6u:material==4u?8u:0u;
+    return material==1u?1u:material==2u?7u:material==3u?6u:material==4u?8u:material==5u?9u:0u;
 }
 int canonical_cell(uint chunk,uint local) {
     uint coordinate=((chunk&16383u)*64u+local)&1048575u;
@@ -86,7 +86,7 @@ Surface surface_at(uint i,out float opacity,out uint known) {
             if(coverage<=0.) continue;
             ivec2 rest=pixel_body(body)?pixel_piece_cell(body,piece):ivec2(floor(body_local_point(body,center_point-vec2(body.x_fp,body.y_fp)/65536.)));
             uint mapped_material=terrain_material(piece_material(body,piece));
-            Appearance a=texture_sample(rest,body.id,mapped_material,configuration[4u+mapped_material]);
+            Appearance a=texture_sample(rest,body.id,mapped_material,mapped_material<=10u?configuration[4u+mapped_material]:0u);
             if(pixel_body(body)) {
                 uint word=body.compound_reserved+pixel_tile_offset(body,piece/256u)+1u+(piece%256u)/8u;
                 vec4 color=shape_color_get(word,piece%8u);
@@ -99,7 +99,7 @@ Surface surface_at(uint i,out float opacity,out uint known) {
     float water=min(float(physical.y)/65536.,1.);
     if((params.flags>>8)<65535u) water=mix(min(float(previous_water[i])/65536.,1.),water,float(params.flags>>8)/65535.);
     float remaining=(1.-body_coverage)*(1.-water),solid=0.;
-    if(material==2u || material==4u || material==5u || material==6u) {
+    if(material==2u || material==4u || material==5u || material==6u || material==10u) {
         uint first=(page-1u)*8192u+local;float mass=0.;
         for(uint layer=0u;layer<2u;layer++) mass+=float(particles[first+4096u*layer].mass_fp)/65536.;
         if(mass>0.) {
@@ -151,7 +151,7 @@ void main() {
             uint registry=params.registry+32u+(i/4096u)*8u;
             if(body_data[registry+5u]!=0u) {
                 uint generation=body_data[registry+4u],material=chunk_cells[i].x&65535u;
-                uint style=material<=8u?configuration[4u+material]:0u,key=material|(style<<16);
+                uint style=material<=10u?configuration[4u+material]:0u,key=material|(style<<16);
                 if(uvec2(keys[i].x&0x7fffffffu,keys[i].y)!=uvec2(key,generation)) {
                     ivec2 rest=ivec2(canonical_cell(body_data[registry],i%64u),canonical_cell(body_data[registry+2u],(i%4096u)/64u));
                     palette[i]=texture_sample(rest,1u,material,style);keys[i]=uvec2(key,generation);

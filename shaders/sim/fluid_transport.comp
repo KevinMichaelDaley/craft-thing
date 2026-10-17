@@ -40,7 +40,7 @@ uint page_at(ivec2 p) {
 uint atlas_index(ivec2 p,uint page) {return (page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);}
 #include "hydraulic_face.glsl"
 #include "water_color.glsl"
-bool permeable_material(uint m) {return m==0u||m==2u||m==4u||m==5u||m==6u;}
+bool permeable_material(uint m) {return m==0u||m==2u||m==4u||m==5u||m==6u||m==10u;}
 uint cell_meta(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0u;
     uint position=uint(vertical?p.y:p.x);

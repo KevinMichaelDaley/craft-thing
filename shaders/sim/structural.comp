@@ -188,6 +188,7 @@ void topology() {
 }
 #include "structural_equilibrium.glsl"
 #include "structural_failure.glsl"
+#include "leaf_debris.glsl"
 #include "structural_impact.glsl"
 #include "body_carve.glsl"
 void main() {

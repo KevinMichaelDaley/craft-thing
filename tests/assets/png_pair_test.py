@@ -13,6 +13,27 @@ from profile_export import normalize
 
 
 class PairTests(unittest.TestCase):
+    def test_level_piece03_uses_explicit_leaf_material_and_lossless_crop(self):
+        import json
+        import struct
+        from pack_prop import build
+        profile_path = ROOT / 'assets/props/profiles/level_piece03.json'
+        profile = json.loads(profile_path.read_text())
+        document = normalize(read_pair(ROOT / 'assets/props/level_piece03.png',
+                                      ROOT / 'assets/props/level_piece03_mat.png', profile['crop']), profile_path)
+        self.assertEqual(document['canvas'], [439, 328])
+        payloads = build(document, {'allow_invisible_physics': True})
+        materials = struct.unpack('<' + str(439 * 328) + 'H', payloads['0000.material.u16'])
+        self.assertEqual(materials.count(10), 3526)
+        self.assertEqual(materials.count(2), 704)
+        self.assertEqual(materials.count(8), 4277)
+        with Image.open(ROOT / 'assets/props/level_piece03.png') as image:
+            original = image.convert('RGBA').crop(profile['crop']).tobytes()
+        color = document['frames'][0]['channels']['color']
+        for pixel, material in enumerate(materials):
+            if material:
+                self.assertEqual(color[pixel * 4:pixel * 4 + 4], original[pixel * 4:pixel * 4 + 4])
+
     def test_exact_pixels_transparency_and_material_mapping(self):
         with tempfile.TemporaryDirectory() as directory:
             color, material = Path(directory) / 'color.png', Path(directory) / 'material.png'

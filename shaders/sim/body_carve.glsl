@@ -84,11 +84,15 @@ void carve_bodies() {
             }
         }
         memoryBarrierBuffer();barrier();
+        if(carve_hits!=0u) leaf_reserve(carve_source);
+        memoryBarrierBuffer();barrier();
         if(lane==0u&&carve_hits!=0u) {
             if(pixel_fragment_source(slot,carve_source,2u,0.,max(1u,carve_source.reserved1))) {
                 carve_retire_member(slot);carve_changed=1u;
             }
         }
+        memoryBarrierBuffer();barrier();
+        if(carve_hits!=0u) leaf_finish(carve_source,carve_changed!=0u);
         memoryBarrierBuffer();barrier();
         if(carve_changed!=0u) {
             for(uint bond=lane;bond<192u;bond+=32u) {

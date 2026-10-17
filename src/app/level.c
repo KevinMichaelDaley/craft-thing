@@ -170,7 +170,7 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
             bool restored = false;
             for (uint32_t i=0;i<DC_CHUNK_CELLS;i++) {
                 uint32_t m=result.chunk->cells[i].material;
-                if (m==DC_MATERIAL_STONE || m==DC_MATERIAL_WOOD || m==DC_MATERIAL_DENSE_WOOD)
+                if (m==DC_MATERIAL_STONE || m==DC_MATERIAL_WOOD || m==DC_MATERIAL_DENSE_WOOD || m==DC_MATERIAL_LEAVES)
                     result.chunk->cells[i].flags |= DC_CELL_LOADED_TERRAIN;
             }
             if (!fr_gpu_upload_structure_chunk(view->gpu, index, result.chunk, &restored, err, cap) ||

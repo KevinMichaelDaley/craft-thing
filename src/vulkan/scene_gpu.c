@@ -157,7 +157,7 @@ bool fr_renderer_authored_bindings(dc_gpu_t *g, VkDescriptorBufferInfo buffers[3
 }
 bool fr_renderer_set_material_style(dc_gpu_t *g, uint32_t material,
                                     uint32_t style) {
-  if (!g || !g->renderer || material > DC_MATERIAL_DENSE_WOOD ||
+  if (!g || !g->renderer || material > DC_MATERIAL_LEAF_DEBRIS ||
       style > FR_TEXTURE_BRICK)
     return false;
   ((uint32_t *)g->renderer->mapped[4])[4 + material] = style;

@@ -245,8 +245,12 @@ def validate(directory):
     manifest = json.loads((directory / 'manifest.json').read_text())
     if manifest.get('schema') != 'craft.prop' or manifest.get('version') != 1 or manifest.get('registry') != SCHEMA['registry']:
         raise ValueError('Unsupported prop schema/registry')
-    if manifest.get('materials') != SCHEMA['materials'] or manifest.get('roles') != SCHEMA['roles']:
+    registry = manifest.get('materials')
+    if (not isinstance(registry, list) or not registry or
+            registry != SCHEMA['materials'][:len(registry)] or
+            manifest.get('roles') != SCHEMA['roles']):
         raise ValueError('Canonical material/role registry mismatch')
+    declared_materials = {entry['id'] for entry in registry}
     width, height = manifest['canvas']
     options = checked_options(manifest['options'])
     checked = {}
@@ -275,7 +279,7 @@ def validate(directory):
         for pixel in range(width * height):
             material, = struct.unpack_from('<H', materials, pixel * 2)
             role = roles[pixel]
-            if material not in MATERIALS and material or role not in role_defs and role:
+            if material not in declared_materials and material or role not in role_defs and role:
                 raise ValueError('Unknown typed map code')
             material_rgba.extend(bytes(MATERIALS[material]['rgba']) if material else bytes(4))
             role_rgba.extend(bytes(role_defs[role]['rgba']) if role else bytes(4))

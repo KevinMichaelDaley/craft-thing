@@ -102,7 +102,7 @@ bool fr_appearance_matches(const fr_appearance_owner_t *o, uint64_t i,
 bool fr_appearance_material(uint32_t d, uint32_t m, uint32_t *t) {
   static const uint32_t body_materials[] = {
       DC_MATERIAL_AIR, DC_MATERIAL_STONE, DC_MATERIAL_WOOD,
-      DC_MATERIAL_MORTAR_DEBRIS, DC_MATERIAL_DENSE_WOOD};
+      DC_MATERIAL_MORTAR_DEBRIS, DC_MATERIAL_DENSE_WOOD, DC_MATERIAL_LEAVES};
   if (!t)
     return false;
   if (d == FR_APPEARANCE_BODY) {
@@ -111,7 +111,7 @@ bool fr_appearance_material(uint32_t d, uint32_t m, uint32_t *t) {
     *t = body_materials[m];
     return true;
   }
-  if (d != FR_APPEARANCE_TERRAIN || m > DC_MATERIAL_DENSE_WOOD)
+  if (d != FR_APPEARANCE_TERRAIN || m > DC_MATERIAL_LEAF_DEBRIS)
     return false;
   *t = m;
   return true;
@@ -122,7 +122,9 @@ fr_appearance_texel_t fr_appearance_default(fr_appearance_owner_t o) {
       .color = {.2f, .2f, .2f}, .roughness = .85f, .normal = {0, 0, 1}};
   if (!fr_appearance_material(o.domain, o.material, &m))
     return result;
-  if (m == DC_MATERIAL_WOOD || m == DC_MATERIAL_DENSE_WOOD) {
+  if (m == DC_MATERIAL_LEAVES || m == DC_MATERIAL_LEAF_DEBRIS) {
+    result.color[0] = .08f;result.color[1] = .3f;result.color[2] = .025f;
+  } else if (m == DC_MATERIAL_WOOD || m == DC_MATERIAL_DENSE_WOOD) {
     result.color[0] = .35f;
     result.color[1] = .16f;
     result.color[2] = .045f;

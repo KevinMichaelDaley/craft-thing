@@ -20,9 +20,9 @@ layout(set=0,binding=9,std430) readonly buffer Registry {uint registry[];};
 layout(set=0,binding=10,std430) readonly buffer Occupancy {uint occupancy[];};
 layout(push_constant) uniform Params {uint width,height,x,y,asset_width,asset_height,phase,registry_base;} p;
 uint terrain(uint m) {
-    return m==1u?1u:m==2u?7u:m==4u?8u:m==5u?2u:m==6u?0u:m==7u?4u:m==8u?5u:m==9u?6u:0xffffffffu;
+    return m==1u?1u:m==2u?7u:m==4u?8u:m==5u?2u:m==6u?0u:m==7u?4u:m==8u?5u:m==9u?6u:m==10u?9u:0xffffffffu;
 }
-bool rigid_material(uint m) {return m==1u||m==7u||m==8u;}
+bool rigid_material(uint m) {return m==1u||m==7u||m==8u||m==9u;}
 void restore_bonds(uint i,uvec2 position,uint page,uint mapped) {
     if(page==0u||!rigid_material(mapped)) return;
     uint atlas=(page-1u)*4096u+(position.y%64u)*64u+position.x%64u;
@@ -76,7 +76,7 @@ void main() {
         particle.grain_fp=mapped==2u?16384u:mapped==4u?24576u:32768u;particle.material=mapped;particle.flags=0u;
         particles[first]=particle;atomicAdd(counts[slot],1u);
     }
-    cells[atlas]=uvec2(mapped|((mapped==1u||mapped==7u||mapped==8u)?DC_CELL_LOADED_TERRAIN<<DC_CELL_FLAGS_SHIFT:0u),material==6u?65536u:0u);
+    cells[atlas]=uvec2(mapped|((mapped==1u||mapped==7u||mapped==8u||mapped==9u)?DC_CELL_LOADED_TERRAIN<<DC_CELL_FLAGS_SHIFT:0u),material==6u?65536u:0u);
     uint r=p.registry_base+32u+slot*8u,style=configuration[4u+mapped];
     ivec2 rest=ivec2(canonical_cell(registry[r],position.x%64u),canonical_cell(registry[r+2u],position.y%64u));
     Appearance a=texture_sample(rest,1u,mapped,style);

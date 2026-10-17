@@ -14,7 +14,7 @@ uint atlas_of(ivec2 p) {
     uint page=pages[(uint(p.y)/64u)*((params.width+63u)/64u)+uint(p.x)/64u];
     return page==0u?0xffffffffu:(page-1u)*4096u+(uint(p.y)%64u)*64u+uint(p.x)%64u;
 }
-bool permeable(uint material) {return material==0u||material==2u||material==4u||material==5u||material==6u;}
+bool permeable(uint material) {return material==0u||material==2u||material==4u||material==5u||material==6u||material==10u;}
 bool wet(ivec2 p,uint atlas) {
     return atlas!=0xffffffffu&&permeable(cells[atlas].x&65535u)&&
         occupancy[2u*params.width*params.height+uint(p.y)*params.width+uint(p.x)]<FULL&&cells[atlas].y!=0u;

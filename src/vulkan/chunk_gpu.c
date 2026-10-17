@@ -227,7 +227,7 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
         uint32_t material = chunk->cells[i].material;
         if (seed && (material == DC_MATERIAL_SAND || material == DC_MATERIAL_DIRT ||
-             material == DC_MATERIAL_GRAVEL || material == DC_MATERIAL_MORTAR_DEBRIS) && chunk->particles[i].mass_fp == 0u &&
+             material == DC_MATERIAL_GRAVEL || material == DC_MATERIAL_MORTAR_DEBRIS || material == DC_MATERIAL_LEAF_DEBRIS) && chunk->particles[i].mass_fp == 0u &&
             chunk->particles[i + DC_CHUNK_CELLS].mass_fp == 0u)
             ++missing_primary;
     }
@@ -264,7 +264,7 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
             memset(&particles[i + DC_CHUNK_CELLS], 0, sizeof(dc_mpm_particle_t));
         }
         if (seed && (material == DC_MATERIAL_SAND || material == DC_MATERIAL_DIRT ||
-             material == DC_MATERIAL_GRAVEL || material == DC_MATERIAL_MORTAR_DEBRIS) && particles[i].mass_fp == 0u) {
+             material == DC_MATERIAL_GRAVEL || material == DC_MATERIAL_MORTAR_DEBRIS || material == DC_MATERIAL_LEAF_DEBRIS) && particles[i].mass_fp == 0u) {
             dc_chunk_particle_init(&particles[i], chunk->coord, i, material);
             ++particle_count;
         }

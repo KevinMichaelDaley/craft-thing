@@ -20,7 +20,7 @@ uint page_at(ivec2 p) {
     return pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
 }
 uint atlas_index(ivec2 p,uint page) {return (page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);}
-bool permeable(uint material) {return material==0u||material==2u||material==4u||material==5u||material==6u;}
+bool permeable(uint material) {return material==0u||material==2u||material==4u||material==5u||material==6u||material==10u;}
 uint global_meta(ivec2 p,uint page) {
     uint index=uint(p.y)*params.width+uint(p.x),cells=params.width*params.height;
     uint capacity=FULL-min(FULL,occupancy[2u*cells+index]);

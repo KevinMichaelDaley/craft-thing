@@ -153,11 +153,24 @@ static void test_broken_leaf_canopy_crumbles_without_losing_wood(void) {
     unsigned leaves=0;
     for(unsigned i=0;i<n;i++) leaves+=pixels[i].material==5;
     ASSERT_EQ(leaves,8u);
+    dc_gpu_body_motion_t leaf_motion;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,0x80000001u,&leaf_motion,err,sizeof(err)));
+    ASSERT_TRUE(fabs(leaf_motion.mass-6.4)<.001);
+    ASSERT_TRUE(fabs(leaf_motion.density-.4)<.001);
     dc_gpu_body_record_t *b=g->body_mapped;
     b->body.x_fp=b->local_x_fp=20<<16;b->body.y_fp=b->local_y_fp=20<<16;
     b->body.vx_fp=b->body.vy_fp=0;b->angular_velocity=0;
     ASSERT_TRUE(fr_gpu_save_structure(g,"build/leaf_canopy.dcs",err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_load_structure(g,"build/leaf_canopy.dcs",err,sizeof(err)));
+    for(unsigned slot=1;slot<DC_GPU_BODY_CAPACITY;slot++)
+        ((dc_gpu_body_record_t*)g->body_mapped)[slot].reserved[0]=0x53545232u;
+    ASSERT_TRUE(dc_gpu_paint_material(g,23,21,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,pixels,16,&n,err,sizeof(err)));
+    ASSERT_EQ(n,16u);
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,c,err,sizeof(err)));
+    ASSERT_EQ(c->particle_count,0u);
+    for(unsigned slot=1;slot<DC_GPU_BODY_CAPACITY;slot++)
+        ((dc_gpu_body_record_t*)g->body_mapped)[slot].reserved[0]=0u;
     ASSERT_TRUE(dc_gpu_paint_material(g,23,21,0,DC_MATERIAL_AIR,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,c,err,sizeof(err)));
     unsigned debris=0;uint64_t mass=0;
@@ -174,10 +187,35 @@ static void test_broken_leaf_canopy_crumbles_without_losing_wood(void) {
         for(unsigned i=0;i<n;i++) {ASSERT_EQ(pixels[i].material,DC_GPU_BODY_WOOD);wood++;}
     }
     ASSERT_EQ(wood,7u);
+    ASSERT_TRUE(fr_gpu_save_structure(g,"build/leaf_canopy.dcs",err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_load_structure(g,"build/leaf_canopy.dcs",err,sizeof(err)));
     remove("build/leaf_canopy.dcs");dc_gpu_destroy(g);free(c);PASS();
 }
 
+static void test_leaf_impact_crumbles_canopy(void) {
+    char err[256];dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    for(unsigned x=20;x<28;x++) c->cells[20*64+x].material=9;
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_impact_fracture(g));
+    uint32_t *pending=dc_gpu_structural_data(g)+dc_gpu_structural_graph_offset()+38000u;
+    pending[0]=pending[1]=10000;pending[2]=257;pending[3]=0x80000001u;
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    dc_gpu_body_t body;
+    ASSERT_TRUE(!dc_gpu_read_body_id(g,0x80000001u,&body,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,c,err,sizeof(err)));
+    unsigned debris=0;
+    for(unsigned i=0;i<DC_MPM_PARTICLES_PER_CHUNK;i++) if(c->particles[i].mass_fp) {
+        ASSERT_EQ(c->particles[i].material,10u);debris++;
+    }
+    ASSERT_EQ(debris,8u);dc_gpu_destroy(g);free(c);PASS();
+}
+
 int main(void) {
+    RUN(test_leaf_impact_crumbles_canopy);
     RUN(test_broken_leaf_canopy_crumbles_without_losing_wood);
     RUN(test_air_carves_colored_body_and_splits_remaining_components);
     RUN(test_air_carves_compound_wall_without_filling_its_cavity);

@@ -13,7 +13,8 @@
     {"id": 6, "name": "water", "rgba": [0, 128, 255, 255], "terrain": 3, "body": null},
     {"id": 7, "name": "dirt", "rgba": [96, 48, 16, 255], "terrain": 4, "body": null},
     {"id": 8, "name": "gravel", "rgba": [160, 128, 96, 255], "terrain": 5, "body": null},
-    {"id": 9, "name": "mortar_debris", "rgba": [224, 224, 224, 255], "terrain": 6, "body": null}
+    {"id": 9, "name": "mortar_debris", "rgba": [224, 224, 224, 255], "terrain": 6, "body": null},
+    {"id": 10, "name": "leaves", "rgba": [48, 128, 32, 255], "terrain": 9, "body": 5}
   ],
   "roles": [
     {"id": 1, "name": "terrain", "rgba": [0, 255, 0, 255]},

@@ -6,5 +6,6 @@
 #define DC_DENSITY_WOOD 0.6
 #define DC_DENSITY_DENSE_WOOD 1.2
 #define DC_DENSITY_MORTAR 1.6
+#define DC_DENSITY_LEAVES 0.2
 
 #endif

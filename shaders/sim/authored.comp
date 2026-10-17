@@ -11,8 +11,8 @@ uint members(uint i) {return 24u+pixels()*18u+i;}
 uint label(uint i) {return 24u+pixels()*19u+i;}
 uint graph() {return 24u+pixels()*20u;}
 void reject(uint i) {atomicOr(words[2],1u);atomicMin(words[20],i);}
-bool terrain_material(uint m) {return m>=1u&&m<=9u&&m!=3u;}
-bool body_material(uint m) {return m>=1u&&m<=4u;}
+bool terrain_material(uint m) {return m>=1u&&m<=10u&&m!=3u;}
+bool body_material(uint m) {return (m>=1u&&m<=4u)||m==10u;}
 bool finite_value(float f) {return !isnan(f)&&!isinf(f);}
 bool appearance_valid(uint index) {
     uint a=appearance(index);
@@ -54,7 +54,7 @@ void main() {
     uint i=gl_GlobalInvocationID.x;if(i>=pixels()) return;
     if(PHASE==0u) {
         uint packed=words[physical(i)],material=packed&65535u,role=(packed>>16u)&255u,anchor=packed>>24u;
-        bool valid=material<=9u&&role<=4u&&anchor<=1u&&words[physical(i)+1u]<=0xffffffu&&(anchor==0u||role==2u)&&
+        bool valid=material<=10u&&role<=4u&&anchor<=1u&&words[physical(i)+1u]<=0xffffffu&&(anchor==0u||role==2u)&&
             (material==0u?(role==0u||role==4u):role==1u?terrain_material(material):(role==2u||role==3u)&&body_material(material))&&appearance_valid(i);
         if(role==2u&&!member_valid(i,material)) valid=false;
         if(params.has_graph!=0u&&role!=2u&&words[members(i)]!=0u) valid=false;

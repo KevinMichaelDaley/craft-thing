@@ -18,7 +18,7 @@ void pixel_mass_properties(Body body,out uint mass10,out vec2 center,out float i
     for(uint pixel=lane;pixel<pixel_tile_count(body)*256u;pixel+=PIXEL_PROPERTY_LANES) {
         uint material=pixel_piece_material(body,pixel);
         if(material==0u) continue;
-        uint weight=material==1u?27u:material==2u?6u:material==4u?12u:16u;
+        uint weight=material==5u?2u:material==1u?27u:material==2u?6u:material==4u?12u:16u;
         uvec2 point=uvec2(pixel_piece_cell(body,pixel))*2u+1u;
         local_mass+=weight;
         first_x=property_add_wide(first_x,uvec2(point.x*weight,0));
@@ -42,7 +42,7 @@ void pixel_mass_properties(Body body,out uint mass10,out vec2 center,out float i
     for(uint pixel=lane;pixel<pixel_tile_count(body)*256u;pixel+=PIXEL_PROPERTY_LANES) {
         uint material=pixel_piece_material(body,pixel);
         if(material==0u) continue;
-        float density=material==1u?2.7:material==2u?.6:material==4u?1.2:1.6;
+        float density=material==5u?DC_DENSITY_LEAVES:material==1u?2.7:material==2u?.6:material==4u?1.2:1.6;
         vec2 delta=vec2(pixel_piece_cell(body,pixel))+.5-center;
         precise float value=density*(dot(delta,delta)+1./6.)-compensation;
         precise float sum=moment+value;compensation=(sum-moment)-value;moment=sum;

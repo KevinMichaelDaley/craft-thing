@@ -122,6 +122,7 @@ build/shaders/structural.comp.spv: shaders/sim/structural.comp shaders/sim/struc
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/shaders/structural.comp.spv: shaders/sim/rigid_fragment.glsl shaders/sim/pixel_fragment.glsl
 build/shaders/structural.comp.spv: shaders/sim/body_carve.glsl
+build/shaders/structural.comp.spv: shaders/sim/leaf_debris.glsl
 $(GPU_OBJ): build/shaders/structural.comp.spv
 build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench build/marker_slot_tests build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_solver_tests build/quarter_native_bench build/dungeoncraft_quarter_native: build/shaders/structural.comp.spv
 build/window_gpu.o: src/vulkan/window_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
@@ -1090,6 +1091,7 @@ test_prop_assets: build/prop_tests build/prop_channel_contract_tests
 	python3 tests/assets/package_test.py
 	python3 tests/assets/reader_test.py
 	python3 tests/assets/profile_test.py
+	python3 tests/assets/png_pair_test.py
 	python3 tests/assets/compiler_fixture.py
 	./build/prop_tests build/prop_fixture/asset.cprop
 	./build/prop_channel_contract_tests

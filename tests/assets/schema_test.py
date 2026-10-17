@@ -15,6 +15,8 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(materials['wood']['body'], 2)
         self.assertEqual(materials['dense_wood']['terrain'], 8)
         self.assertEqual(materials['dense_wood']['body'], 4)
+        self.assertEqual(materials['leaves']['terrain'], 9)
+        self.assertEqual(materials['leaves']['body'], 5)
         self.assertIsNone(materials['mortar']['terrain'])
         self.assertEqual(materials['mortar']['body'], 3)
         self.assertIsNone(materials['sand']['body'])

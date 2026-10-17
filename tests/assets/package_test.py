@@ -20,6 +20,17 @@ def document():
 
 
 class PackageTests(unittest.TestCase):
+    def test_additive_leaf_registry_keeps_existing_material_packages_valid(self):
+        import pack_prop
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'legacy'
+            pack_prop.export(document(), output)
+            path = output / 'manifest.json'
+            manifest = json.loads(path.read_text())
+            manifest['materials'] = manifest['materials'][:-1]
+            path.write_text(json.dumps(manifest))
+            self.assertEqual(pack_prop.validate(output)['canvas'], [3, 2])
+
     def setUp(self):
         import pack_prop
         self.packer = pack_prop

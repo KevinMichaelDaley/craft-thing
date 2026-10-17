@@ -35,7 +35,7 @@ bool fracture_impact_step() {
         uint p=g+38000u+slot*4u;Body b=bodies[slot];
         if(data[p+3u]!=b.id||b.enabled==0u||b.inverse_mass==0||
            (!pixel_body(b)&&b.material>1u)||data[p+2u]==0u) continue;
-        uint axis=data[p+2u]-1u;
+        uint axis=(data[p+2u]&255u)-1u;
         vec2 low=vec2(1e20),high=vec2(-1e20);
         for(uint part=0u;part<body_pieces(b);part++)
             for(uint vertex=0u;vertex<piece_vertices(b,part);vertex++) {
@@ -61,6 +61,7 @@ bool fracture_impact_step() {
 }
 void fracture_impacts() {
     uint lane=gl_LocalInvocationID.x;
+    leaf_impact_breaks();
     if(lane==0u) impact_color_cursor=0u;
     barrier();
     for(;;) {

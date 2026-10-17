@@ -24,7 +24,7 @@ uint pool() {return graph()+40000u;}
 uint capacity() {return 2u*((max(params.width*params.height,total())+7u)/8u)+64u*8u;}
 uint record(uint c) {return graph()+36300u+c*24u;}
 uint registry(uint s) {return base()+32u+s*8u;}
-bool solid(uint i) {uint m=cells[i].x&65535u;return data[registry(i/4096u)+5u]!=0u&&(m==1u||m==7u||m==8u);}
+bool solid(uint i) {uint m=cells[i].x&65535u;return data[registry(i/4096u)+5u]!=0u&&(m==1u||m==7u||m==8u||m==9u);}
 uint cardinal_neighbor(uint i,uint axis) {
     uint p=i%4096u,x=p%64u,y=p/64u;
     if(axis==0u&&x>0u) return i-1u;
@@ -93,7 +93,7 @@ void initialize_body(uint r) {
     b.local_fp=(low&63)<<16;b.visible=0u;b.angle=0.;b.angular_velocity=0.;
     b.motion_flags=0u;b.motion_ready=1u;b.piece_count=PIXEL_BODY_FLAG|data[r+5u];
     b.compound_reserved=BODY_STORAGE_WORDS+data[r+11u];b.vertex_count=0u;
-    uint m=cells[root].x&65535u;b.material=m==7u?2u:m==8u?4u:1u;
+    uint m=cells[root].x&65535u;b.material=m==7u?2u:m==8u?4u:m==9u?5u:1u;
     for(uint i=0u;i<8u;i++) b.vertices[i]=ivec2(0);
     for(uint p=0u;p<4u;p++) {b.pieces[p].count=0u;b.pieces[p].material=0u;for(uint i=0u;i<8u;i++) b.pieces[p].vertices[i]=ivec2(0);}
     b.previous_angle=0.;b.rest_position=ivec2(0);b.rest_angle=0.;b.rest_ticks=0u;
@@ -319,7 +319,7 @@ void main() {
         uint target=data[r+11u],offset=data[target+8u+tile],cell=uint(p.y%16)*16u+uint(p.x%16),m=cells[i].x&65535u;
         uint word=target+offset+1u+cell/8u;
         shape_color_set(BODY_STORAGE_WORDS+word,cell%8u,terrain_colors[i]);
-        atomicOr(data[word],(m==7u?2u:m==8u?4u:1u)<<((cell%8u)*4u));return;
+        atomicOr(data[word],(m==7u?2u:m==8u?4u:m==9u?5u:1u)<<((cell%8u)*4u));return;
     }
     if(EXTRACTION_PHASE==23u) {
         uint c=gl_WorkGroupID.x;if(c>=data[g+36257u]) return;uint r=record(c);if(data[r+14u]==0u) return;
