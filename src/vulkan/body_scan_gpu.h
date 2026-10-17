@@ -23,4 +23,10 @@ void dc_gpu_body_scan_plan_destroy(dc_gpu_body_scan_plan_t *plan);
  * Pipelines use 24-byte address/count push constants and scan/add specialization. */
 bool dc_gpu_body_scan_record(VkCommandBuffer command,const dc_gpu_body_scan_plan_t *plan,
     VkDeviceAddress address,VkDeviceSize bytes,VkPipelineLayout layout,VkPipeline scan,VkPipeline add);
+/** Record GPU-gated scans using one packed VkDispatchIndirectCommand per pass.
+ * A preceding GPU producer must write every triplet, including zero-work passes.
+ * commands_bytes is the complete buffer size; commands_offset is four-byte aligned. */
+bool dc_gpu_body_scan_record_indirect(VkCommandBuffer command,const dc_gpu_body_scan_plan_t *plan,
+    VkDeviceAddress address,VkDeviceSize bytes,VkPipelineLayout layout,VkPipeline scan,VkPipeline add,
+    VkBuffer commands,VkDeviceSize commands_offset,VkDeviceSize commands_bytes);
 #endif

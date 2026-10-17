@@ -1,4 +1,10 @@
 #include "body_scan_gpu.h"
+bool dc_gpu_body_scan_record_indirect(VkCommandBuffer command,const dc_gpu_body_scan_plan_t *plan,
+    VkDeviceAddress address,VkDeviceSize bytes,VkPipelineLayout layout,VkPipeline scan,VkPipeline add,
+    VkBuffer commands,VkDeviceSize commands_offset,VkDeviceSize commands_bytes) {
+    (void)command;(void)plan;(void)address;(void)bytes;(void)layout;(void)scan;(void)add;
+    (void)commands;(void)commands_offset;(void)commands_bytes;return false;
+}
 static void barrier(VkCommandBuffer command,bool first) {
     VkMemoryBarrier2 memory={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask=first?VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_2_HOST_BIT:VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,

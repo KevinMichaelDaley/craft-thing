@@ -976,7 +976,7 @@ build/body_features_tests: tests/vulkan/body_features_tests.c src/vulkan/body_fe
 build/body_scan_plan_tests: tests/vulkan/body_scan_plan_tests.c src/vulkan/body_scan_gpu.c src/vulkan/body_scan_gpu.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_scan_gpu.c -o $@
 build/body_scan_recording_tests: tests/vulkan/body_scan_recording_tests.c src/vulkan/body_scan_gpu.c src/vulkan/body_scan_record_gpu.c src/vulkan/body_scan_gpu.h | build
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_scan_gpu.c src/vulkan/body_scan_record_gpu.c -o $@ -lvulkan -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdPipelineBarrier2
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_scan_gpu.c src/vulkan/body_scan_record_gpu.c -o $@ -lvulkan -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect -Wl,--wrap=vkCmdPipelineBarrier2
 test_gpu_tools: build/body_scan_recording_tests
 test_gpu_tools: build/body_scan_plan_tests
 build/gpu.o: src/vulkan/body_features_gpu.h
