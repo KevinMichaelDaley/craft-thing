@@ -7,7 +7,6 @@ tools-offline:
 	python3 tools/bootstrap_vulkan.py bootstrap --offline
 test_tools:
 	python3 tests/tools/toolchain_tests.py
-	python3 tests/tools/shader_variant_tests.py
 test: test_tools
 STRUCTURAL_REFERENCE = tests/structural/reference_solver.c src/structural/material.c
 build/structural_failure_tests: tests/structural/failure_tests.c tests/structural/placement_tests.c build/compound_body_tests
@@ -793,6 +792,17 @@ build/diagnostics/shader_compile_probe: tools/diagnostics/shader_compile_probe.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ -lvulkan -Wl,--wrap=vkQueueSubmit -Wl,--wrap=vkQueueSubmit2
 
 .PHONY: diagnostic_fluid_variants
+.PHONY: test_gpu_tools
+test: test_gpu_tools
+test_gpu_tools: build/contact_shader_contract_tests
+	python3 tests/vulkan/shader_variant_tests.py
+	python3 tests/vulkan/gpu_dependency_tests.py
+	./build/contact_shader_contract_tests
+
+build/contact_shader_contract_tests: tests/vulkan/contact_shader_contract_tests.c src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
+	@mkdir -p build/diagnostics
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+
 MPM_VARIANT_WRAPS = -Wl,--wrap=dc_gpu_record_mpm -Wl,--wrap=dc_gpu_destroy -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants
 build/diagnostics/mpm_case: tests/vulkan/mpm_specialization_tests.c tools/diagnostics/mpm_variants.c tests/vulkan/particle_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(STREAM_OBJ) diagnostic_fluid_variants
 	@mkdir -p build/diagnostics

@@ -1,4 +1,4 @@
-"""Contracts for reproducible compiler experiments; no GPU submissions."""
+"""GPU compiler experiment contracts; no GPU submissions."""
 import importlib.util
 import pathlib
 import unittest
