@@ -130,8 +130,10 @@ static void native_scene(unsigned load) {
                                     err, sizeof(err)));
     }
     free(chunk);
-    if (load == 2)
+    if (load == 2) {
         ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
+        ASSERT_TRUE(dc_gpu_set_overlay(g, DC_GPU_OVERLAY_STRUCTURAL_STRESS));
+    }
     double loaded = seconds();
     printf("native load%u: submitting cold presented frame\n", load);
     if (load == 2 && getenv("DC_NATIVE_DIAG")) {

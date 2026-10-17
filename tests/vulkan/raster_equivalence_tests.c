@@ -45,6 +45,24 @@ static bool raster_once(dc_gpu_t *g,VkPipeline pipeline) {
     vkCmdPipelineBarrier2(g->command,&dependency);
     return finish_command(g);
 }
+static bool equal_draw_images(dc_gpu_t *g,char *err) {
+    VkPipeline simple=g->simple_draw_pipeline,pixel=g->pixel_draw_pipeline;
+    size_t bytes=(size_t)g->width*g->height*sizeof(uint32_t);
+    void *reference=malloc(bytes);if(!reference) return false;
+    bool equal=true;
+    for(unsigned overlay=0;overlay<=DC_GPU_OVERLAY_STRUCTURAL_STRESS&&equal;overlay++) {
+        equal=dc_gpu_set_overlay(g,(dc_gpu_overlay_t)overlay);
+        g->simple_draw_pipeline=g->pixel_draw_pipeline=VK_NULL_HANDLE;
+        equal=equal&&dc_gpu_render_chunks(g,err,256);
+        if(equal) memcpy(reference,g->mapped,bytes);
+        g->simple_draw_pipeline=simple;g->pixel_draw_pipeline=pixel;
+        for(unsigned frame=0;frame<4&&equal;frame++) {
+            equal=dc_gpu_render_chunks(g,err,256)&&memcmp(reference,g->mapped,bytes)==0;
+            if(!equal) printf("draw mismatch overlay%u paused frame%u\n",overlay,frame);
+        }
+    }
+    free(reference);return equal;
+}
 static void test_two_rotated_concave_bodies_use_exact_pixel_raster(void) {
     char err[256];dc_gpu_t *g=NULL;
     ASSERT_TRUE(dc_gpu_create(&g,123,117,"build/shaders/pattern.comp.spv",err,sizeof(err)));
@@ -79,6 +97,7 @@ static void test_two_rotated_concave_bodies_use_exact_pixel_raster(void) {
     vkUnmapMemory(g->device,staging_memory);vkDestroyBuffer(g->device,staging,NULL);vkFreeMemory(g->device,staging_memory,NULL);
     if(!selected) {dc_gpu_destroy(g);ASSERT_TRUE(selected);}
     ASSERT_TRUE(g->rigid_pixel_pipeline!=VK_NULL_HANDLE);
+    ASSERT_TRUE(g->simple_draw_pipeline!=VK_NULL_HANDLE&&g->pixel_draw_pipeline!=VK_NULL_HANDLE);
     size_t bytes=(size_t)g->width*g->height*5*sizeof(uint32_t);void *reference=malloc(bytes);ASSERT_TRUE(reference);
     ASSERT_TRUE(raster_once(g,g->rigid_pipeline));memcpy(reference,g->occupancy_mapped,bytes);
     for(unsigned frame=0;frame<4;frame++) {
@@ -86,7 +105,21 @@ static void test_two_rotated_concave_bodies_use_exact_pixel_raster(void) {
         ASSERT_EQ(memcmp(reference,g->occupancy_mapped,bytes),0);
     }
     printf("two concave shapes: all five occupancy/volume/face planes identical across four paused frames\n");
-    free(reference);dc_gpu_destroy(g);PASS();
+    free(reference);
+    ASSERT_TRUE(equal_draw_images(g,err));
+    ASSERT_TRUE(dc_gpu_set_viewport(g,7,9,91,73));
+    ASSERT_TRUE(equal_draw_images(g,err));
+    ASSERT_TRUE(dc_gpu_make_mapped_buffer(g,6u*sizeof(uint32_t),&staging,&staging_memory,(void **)&activity,err,sizeof(err)));
+    ASSERT_TRUE(copy_activity(g,staging,false));
+    ASSERT_EQ(activity[0],0u);ASSERT_EQ(activity[3],6u);ASSERT_EQ(activity[4],5u);
+    dc_gpu_body_record_t *legacy=(dc_gpu_body_record_t *)g->body_mapped+63;
+    *legacy=(dc_gpu_body_record_t){.body={.id=777,.active=1,.width=8,.height=8},.visible=0};
+    ASSERT_TRUE(equal_draw_images(g,err));
+    ASSERT_TRUE(copy_activity(g,staging,false));
+    ASSERT_EQ(activity[0],6u);ASSERT_EQ(activity[1],5u);ASSERT_EQ(activity[3],0u);
+    vkUnmapMemory(g->device,staging_memory);vkDestroyBuffer(g->device,staging,NULL);vkFreeMemory(g->device,staging_memory,NULL);
+    printf("all overlays and cropped views draw byte-identical paused images; hidden legacy selects generic\n");
+    dc_gpu_destroy(g);PASS();
 }
 int main(void) {
     RUN(test_two_rotated_concave_bodies_use_exact_pixel_raster);

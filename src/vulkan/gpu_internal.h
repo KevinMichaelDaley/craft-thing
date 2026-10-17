@@ -63,6 +63,7 @@ struct dc_gpu {
     VkDescriptorSet descriptor;
     VkPipelineLayout pipeline_layout;
     VkPipeline pipeline;
+    VkPipeline simple_draw_pipeline, pixel_draw_pipeline;
     VkCommandPool command_pool;
     VkCommandBuffer command;
     SDL_Window *window;

@@ -110,3 +110,7 @@ Native 640x360 physics and display displacement checkpoint: clean 30-sample conc
 **2026-10-17T00:36:05Z**
 
 Cooperative runtime full validation complete: make test exit0, 341 reported passes, zero failures and zero Vulkan validation errors. Log build/diagnostics/cooperative-fluid-full-test-retry.log. No runtime cleanup change was needed after review; actual displayed concave/UI and quarter performance checks remain queued. Thirty FPS and cold extraction gates remain open.
+
+**2026-10-17T00:47:34Z**
+
+Visible-body native baseline corrected: concave fixture now explicitly selects material/structural rendering. 640x360 physics/display: mean 36.921 ms, p95 45.220 ms, cold 104.098 ms, 27.085 presented FPS; still RED. Earlier native timings used overlay NONE, which omitted body material drawing. MPM same-blob generic/specialized/original controls were 35.961/35.896/36.240 ms with indistinguishable GPU MPM time; no runtime split adopted. Both actual concave visual tests pass validation, contacts/conservation and stable paused images. Typed-draw RED: missing pipeline handles and hidden enabled legacy classification fail as expected; eight-selector and image tests compile.

@@ -32,8 +32,8 @@ static void selector_case(unsigned kind) {
     uint32_t *shape=(uint32_t *)gpu.body_mapped+records[0].compound_reserved;
     const uint32_t header[]={42,1,1,1,0,0,1,1,9,0,2};memcpy(shape,header,sizeof(header));
     records[1]=records[0];records[1].body.id=38;records[1].piece_count=kind==0?DC_GPU_PIXEL_BODY_FLAG|1u:0u;
-    records[1].body.active=kind==0||kind==2||kind==4;
-    records[1].visible=kind!=4;
+    records[1].body.active=kind==0||kind==2||kind==4||kind==7;
+    records[1].visible=kind!=4&&kind!=7;
     if(kind==1) records[0].piece_count=0;
     dc_gpu_structural_data(&gpu)[16]=kind==6?4:0;
     for(unsigned i=0;i<39;i++) p.mapped[i]=4369;
@@ -48,12 +48,12 @@ static void selector_case(unsigned kind) {
     vkUpdateDescriptorSets(p.device,3,writes,0,NULL);ASSERT_TRUE(begin(&p));
     vkCmdBindPipeline(p.command,VK_PIPELINE_BIND_POINT_COMPUTE,p.pipeline);
     vkCmdBindDescriptorSets(p.command,VK_PIPELINE_BIND_POINT_COMPUTE,p.layout,0,1,&p.descriptor,0,NULL);
-    uint32_t push[8]={64,64,kind>=5?256u:0u,2};
+    uint32_t push[8]={64,64,kind==7?512u:kind>=5?256u:0u,2,64,64};
     vkCmdPushConstants(p.command,p.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
     /* Poisoned triplets are inspected after one bounded direct group, never executed. */
     vkCmdDispatch(p.command,1,1,1);host_barrier(&p,1);ASSERT_EQ(vkEndCommandBuffer(p.command),VK_SUCCESS);
     ASSERT_TRUE(submit(&p,"raster selector",1));
-    bool generic=kind==1||kind==2,refresh=kind!=5;
+    bool generic=kind==1||kind==2||kind==7,refresh=kind!=5;
     const uint32_t expected[]={generic&&refresh?4u:0u,generic&&refresh?4u:1u,1,
         !generic&&refresh?4u:0u,!generic&&refresh?4u:1u,1};
     bool safe=true;
@@ -76,9 +76,11 @@ static void test_disabled_legacy_does_not_disable_pixel_path(void) {selector_cas
 static void test_invisible_legacy_does_not_disable_pixel_path(void) {selector_case(4);}
 static void test_no_refresh_resets_both_triplets_to_zero_work(void) {selector_case(5);}
 static void test_refresh_reclassifies_current_bodies(void) {selector_case(6);}
+static void test_draw_selector_includes_invisible_enabled_legacy(void) {selector_case(7);}
 int main(void) {
     RUN(test_pixel_only_dispatch_resets_both_triplets);RUN(test_legacy_dispatch_resets_unused_pixel_triplet);
     RUN(test_mixed_bodies_use_exact_generic_raster);RUN(test_disabled_legacy_does_not_disable_pixel_path);
     RUN(test_invisible_legacy_does_not_disable_pixel_path);RUN(test_no_refresh_resets_both_triplets_to_zero_work);
-    RUN(test_refresh_reclassifies_current_bodies);printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
+    RUN(test_refresh_reclassifies_current_bodies);RUN(test_draw_selector_includes_invisible_enabled_legacy);
+    printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
