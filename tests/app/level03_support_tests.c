@@ -96,6 +96,7 @@ static void test_level03_stays_packed_then_cut_tree_stops_at_stone(void) {
     }
     ASSERT_TRUE(screenshot(view,"build/level03_tree_stopped.bmp",err));
     printf("worst wood-body centers in stone%u\n",worst);
+    ASSERT_EQ(stone_overlap(g,err),0u);
     ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));
     ASSERT_TRUE(wood_body_samples>0u&&moving_wood_seen);
     ASSERT_TRUE(worst<=2u);PASS();

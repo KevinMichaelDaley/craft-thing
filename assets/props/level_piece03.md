@@ -25,8 +25,21 @@ Older scene saves recover missing granular support history without restamping.
 Rigid contacts use each grain's actual position, radius and particle layer.
 Loose grains exchange corrections and impulses with bodies using their finite
 mass, so trapped dirt cannot act as an immovable anchor inside a falling trunk.
-The launcher uses `world_chunks_level_piece03_dense`; the earlier underfilled
-world remains in `world_chunks_level_piece03` with its edits intact.
+Granular transfer reserves rest volume rather than allowing two full-cell
+soil/gravel grains to collapse into one cell. Limited transient compression
+still allows smaller sand grains to sift through a mixture. Natural partial
+support motion keeps loaded terrain fixed while original granular support
+remains; a direct cut releases the affected component for contact simulation.
+Rigid contact relaxation accounts for grains' small share of body response and
+uses binding contacts, preserving stone support under dense leaf contacts.
+The launcher uses `world_chunks_level_piece03_packed`; earlier worlds remain in
+`world_chunks_level_piece03` and `world_chunks_level_piece03_dense` with edits intact.
+
+`build/dense_support_tests` checks 64-tick soil/gravel packing, partial support
+motion versus a direct cut, and dense-leaf contacts against a stone floor.
+`build/level03_support_tests` uses the actual scene in a Wayland window: 90
+untouched ticks, a trunk cut, then 240 physics ticks with stone-overlap checks.
+It writes `build/level03_packed.bmp` and `build/level03_tree_stopped.bmp`.
 
 Rebuild (Python with Pillow):
 

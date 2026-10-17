@@ -1,6 +1,6 @@
 ---
 id: ctr-s8k8
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-17T21:50:21Z
@@ -35,3 +35,11 @@ Actual saved level03 full-tick replay now falls: trunk y 60.4514 -> 68.1114 over
 **2026-10-17T22:51:31Z**
 
 GREEN and refactor verified: final saved level03 full-tick replay with core/synchronization validation moves trunk y60.4514 ->68.1114 over8 ticks, no errors/overflow. Trapped-grain regression trunk y10 ->25.763 and exact20x78643 mass conserved. Sequential detachment5/5; contacts10/10; rigid solver13/13; grain dispatch ownership10/10 validated. Grain coupling is parallel, finite-mass, two-way, uses actual centers/radii/layers and reused scratch; inactive work skipped onGPU. Original soil/gravel support history migrates without restamping. Full make test completed; two introduced dependency/dispatch-fixture failures corrected and verified separately; remaining baseline REDs tracked ctr-ojvy.
+
+**2026-10-17T23:02:56Z**
+
+Reopened after tree penetrated stone. Thousands of leaf/grain constraints diluted rigid contact relaxation equally despite their tiny body response. RED dense-leaf body penetrates floor to48.5969 (surface48). Separate conservative particle relaxation and mobility-weighted rigid degree now stops it at47.9842; core/sync validation clean. Adding full level03 settling/cut/floor integration beyond earlier eight-tick replay.
+
+**2026-10-17T23:21:03Z**
+
+Final GREEN: component aggregation distinguishes partial natural granular support motion from complete support loss; existing release bit records explicit cutting. Rigid rows use binding-set degree and grain mobility fraction, while particle/speculative rows keep conservative relaxation. Dense-leaf floor stops at47.9842 for floor48, rather than48.5969. Actual level03 retains initial tree after90 ticks, then trunk cut and240 further ticks show a falling tree stopped at rock, final zero wood-body pixel centers in stone (max2 transient sampled centers), validated under core/sync. Full suite only baseline ctr-ojvy two REDs. New regressions and actual rendered screenshots are reproducible from repo tests.

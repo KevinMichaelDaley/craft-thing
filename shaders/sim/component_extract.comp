@@ -61,6 +61,7 @@ const uint RELEASE_EXPLICIT=1u,RELEASE_SUPPORT_CHANGED=2u,RELEASE_GRANULAR_SUPPO
 uint terrain_release_state(uint i,uint bonds) {
     uint flags=cells[i].x;
     uint state=(flags&LOADED_TERRAIN)==0u||(flags&RELEASED_TERRAIN)!=0u?RELEASE_EXPLICIT:0u;
+    if(state!=0u) return state;
     bool changed=
         ((flags&BONDS_READY)!=0u && ((flags&CARDINAL_BOND_MASK)&~bonds)!=0u)||
         ((flags&DIAGONAL_BONDS_READY)!=0u && ((flags&DIAGONAL_BOND_MASK)&~bonds)!=0u);

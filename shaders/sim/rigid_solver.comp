@@ -33,9 +33,9 @@ const uint CLEAR = 5u, SOLVE = 6u, APPLY = 7u, DERIVE_VELOCITY = 8u, IMPULSE = 9
    indirect contact groups (3 words), speculative-contact mode, pixel contact
    groups (3 words), and grain contact groups (3 words).
    Body scratch (32 words): frame pose/velocity, substep pose/velocity, degree,
-   awake flag, and signed fixed-point Jacobi sums.
+   awake flag, signed fixed-point Jacobi sums, and binding-constraint degree.
    Contact scratch (16 words): normal/tangent multipliers, stable body slots,
-   rest-space COM-relative anchors, pre-impact speed, static witness, padding. */
+   rest-space COM-relative anchors, pre-impact speed, static witness, active flag. */
 uint cb() {
     uvec2 size = uvec2((params.width + 63u) / 64u, (params.height + 63u) / 64u) + 2u;
     return 8u + 2u * size.x * size.y + 4096u * 8u;
@@ -261,8 +261,9 @@ void main() {
             vb=vec2(p.vx_fp,p.vy_fp)/65536.0;
             atomicAdd(grain_scratch[(grain_ref-1u)*4u+3u],1u);
         }
-        /* Loose grains receive most of their own correction. Counting each
-           as a full body constraint would drown out a real stone support. */
+        /* Loose grains receive most of their own correction. Count their
+           body mobility fraction, and exclude nonbinding speculative rows
+           from rigid preconditioning. Those rows retain conservative weights. */
         float degree=1.0;
         if(grain_ref!=0u) {
             float arm=body_cross(ra,normal);

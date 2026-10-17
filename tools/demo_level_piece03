@@ -5,4 +5,4 @@ cd "$(dirname "$0")/.."
 exec env SDL_VIDEODRIVER=wayland ./tools/with-vulkan \
   ./build/dungeoncraft_quarter_native \
   --scene assets/props/level_piece03.prop/asset.cprop \
-  --world-dir world_chunks_level_piece03_dense "$@"
+  --world-dir world_chunks_level_piece03_packed "$@"
