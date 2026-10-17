@@ -6,6 +6,7 @@
 #include "../../src/vulkan/gpu_internal.h"
 #include "ferrum/assets/prop_gpu.h"
 #include "ferrum/renderer/gpu.h"
+#include "ferrum/structural/gpu.h"
 
 static int g_pass, g_fail;
 #define RUN(fn) do { printf("RUN %s\n", #fn); fn(); } while (0)
@@ -97,6 +98,70 @@ static void test_unknown_occupied_destination_rejects_entire_scene(void) {
     free(chunk); dc_gpu_destroy(g); PASS();
 }
 
+static void check_detached_color(bool roundtrip) {
+    dc_gpu_t *g=context();ASSERT_TRUE(g);char err[256]={0};
+    uint8_t *bytes=malloc(g_asset.size);ASSERT_TRUE(bytes);
+    memcpy(bytes,g_bytes,g_asset.size);
+    uint8_t *physical=bytes+g_asset.data_offset;
+    memset(physical,0,128*128*8);
+    for(unsigned y=20;y<24;y++) for(unsigned x=20;x<49;x++) {
+        bool wood=y<23&&x<29,stone=x>=40;
+        if(!wood&&!stone) continue;
+        unsigned i=y*128+x;physical[i*8]=wood?2:1;physical[i*8+2]=1;
+        float rgb[3]={.1f+.02f*(x-20),.23f+.03f*(y-20),.71f};
+        memcpy(physical+128*128*8+i*64,rgb,sizeof(rgb));
+        float alpha=1;memcpy(physical+128*128*8+i*64+48,&alpha,4);
+    }
+    unsigned water=40*128+40;physical[water*8]=6;physical[water*8+2]=1;
+    uint32_t crc=UINT32_MAX;
+    for(size_t i=0;i<g_asset.size;i++) {
+        if(i>=44&&i<48) continue;
+        crc^=bytes[i];
+        for(unsigned bit=0;bit<8;bit++) crc=(crc>>1)^(0xedb88320u&(0u-(crc&1u)));
+    }
+    crc=~crc;memcpy(bytes+44,&crc,4);
+    fr_prop_asset_t asset;
+    ASSERT_TRUE(fr_prop_asset_open(&asset,bytes,g_asset.size,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_place_terrain_prop(g,&asset,0,32,32,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
+    ASSERT_TRUE(dc_gpu_paint_material(g,56,53,1,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    for(unsigned i=0;i<DC_GPU_BODY_CAPACITY;i++) {
+        dc_gpu_body_record_t *body=(dc_gpu_body_record_t*)g->body_mapped+i;
+        if(!body->body.active) continue;
+        body->local_x_fp&=~65535;body->local_y_fp&=~65535;
+        body->angle=body->angular_velocity=0;body->body.vx_fp=body->body.vy_fp=0;
+        body->motion_flags=DC_GPU_BODY_KINEMATIC;
+    }
+    g->body_refresh_pending=true;
+    ASSERT_TRUE(dc_gpu_set_body_origin(g,g->body_origin,err,sizeof(err)));
+    ASSERT_TRUE(fr_renderer_set_mode(g,FR_RENDERER_ALBEDO));
+    ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+    uint32_t expected=0xff000000u|byte_from_linear(.1f)|
+        (byte_from_linear(.23f)<<8)|(byte_from_linear(.71f)<<16);
+    bool retained=((uint32_t*)g->mapped)[52*192+52]==expected;
+    bool restored=true;
+    if(roundtrip) {
+        size_t image_bytes=192*192*4,water_bytes=9*4096*16;
+        void *image=malloc(image_bytes),*colors=malloc(water_bytes);
+        ASSERT_TRUE(image&&colors);
+        memcpy(image,g->mapped,image_bytes);memcpy(colors,g->water_color_mapped,water_bytes);
+        ASSERT_TRUE(fr_gpu_save_structure(g,"build/authored_color_roundtrip.dcs",err,sizeof(err)));
+        dc_gpu_destroy(g);g=context();ASSERT_TRUE(g);
+        ASSERT_TRUE(fr_gpu_load_structure(g,"build/authored_color_roundtrip.dcs",err,sizeof(err)));
+        ASSERT_TRUE(fr_renderer_enable(g,err,sizeof(err)));
+        ASSERT_TRUE(fr_renderer_set_mode(g,FR_RENDERER_ALBEDO));
+        ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+        restored=memcmp(image,g->mapped,image_bytes)==0 &&
+            memcmp(colors,g->water_color_mapped,water_bytes)==0;
+        free(image);free(colors);
+    }
+    dc_gpu_destroy(g);free(bytes);
+    if(roundtrip) ASSERT_TRUE(restored);else ASSERT_TRUE(retained);
+    PASS();
+}
+static void test_detached_body_keeps_authored_color_map(void) {check_detached_color(false);}
+static void test_terrain_body_and_water_colors_survive_save_load(void) {check_detached_color(true);}
 int main(void) {
     FILE *file=fopen("assets/props/level_piece01.prop/asset.cprop","rb");
     if (!file) return 2;
@@ -107,5 +172,7 @@ int main(void) {
     if (!fr_prop_asset_open(&g_asset,g_bytes,(size_t)size,NULL,0)) return 2;
     RUN(test_actual_scene_places_exact_materials_colors_water_and_holes);
     RUN(test_unknown_occupied_destination_rejects_entire_scene);
+    RUN(test_detached_body_keeps_authored_color_map);
+    RUN(test_terrain_body_and_water_colors_survive_save_load);
     free(g_bytes); printf("%d passed, %d failed\n",g_pass,g_fail); return g_fail!=0;
 }
