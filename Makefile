@@ -109,7 +109,7 @@ test_rigid_dynamics: build/compound_body_tests build/rigid_dynamics_visual_tests
 
 test: build/compound_body_tests
 build/presentation_tests: tests/app/presentation_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/rigid_dynamics_visual_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -lm -Wl,--wrap=vkCreateSwapchainKHR -Wl,--wrap=vkAcquireNextImageKHR -Wl,--wrap=vkQueueWaitIdle -Wl,--wrap=vkQueuePresentKHR -Wl,--wrap=vkWaitForFences
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -lm -Wl,--wrap=vkCreateSwapchainKHR -Wl,--wrap=vkAcquireNextImageKHR -Wl,--wrap=vkQueueWaitIdle -Wl,--wrap=vkQueuePresentKHR -Wl,--wrap=vkWaitForFences -Wl,--wrap=vkCmdPipelineBarrier2
 
 test_presentation: build/presentation_tests
 	./build/presentation_tests

@@ -14,6 +14,9 @@ static unsigned idle_calls;
 static double acquire_ms, enqueue_ms, render_wait_ms;
 static VkSemaphore image_sems[32];
 static bool image_sems_safe;
+static dc_gpu_t *window_gpu;
+static VkImage acquired_image;
+static bool acquire_dependency;
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); printf("OK   %s\n", #fn); } while (0)
 #define ASSERT_TRUE(e) do { if (!(e)) { printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #e); ++g_fail; return; } } while (0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -30,8 +33,21 @@ VkResult __wrap_vkAcquireNextImageKHR(VkDevice d,VkSwapchainKHR s,uint64_t t,VkS
     finite_acquire=finite_acquire && t!=UINT64_MAX;
     uint64_t start=SDL_GetPerformanceCounter();
     VkResult result=__real_vkAcquireNextImageKHR(d,s,t,sem,f,i);
+    if (result==VK_SUCCESS && window_gpu && s==window_gpu->swapchain)
+        acquired_image=window_gpu->swap_images[*i];
     acquire_ms+=(SDL_GetPerformanceCounter()-start)*1000.0/SDL_GetPerformanceFrequency();
     return result;
+}
+void __real_vkCmdPipelineBarrier2(VkCommandBuffer,const VkDependencyInfo *);
+void __wrap_vkCmdPipelineBarrier2(VkCommandBuffer command,const VkDependencyInfo *dependency) {
+    for(uint32_t i=0;i<dependency->imageMemoryBarrierCount;i++) {
+        const VkImageMemoryBarrier2 *barrier=dependency->pImageMemoryBarriers+i;
+        if(barrier->image==acquired_image && barrier->oldLayout==VK_IMAGE_LAYOUT_UNDEFINED &&
+           barrier->newLayout==VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+            acquire_dependency=acquire_dependency &&
+                (barrier->srcStageMask&VK_PIPELINE_STAGE_2_TRANSFER_BIT)!=0;
+    }
+    __real_vkCmdPipelineBarrier2(command,dependency);
 }
 VkResult __real_vkQueuePresentKHR(VkQueue, const VkPresentInfoKHR *);
 VkResult __wrap_vkQueuePresentKHR(VkQueue q,const VkPresentInfoKHR *p) {
@@ -65,6 +81,9 @@ static int window_cycle(void) {
     if(!dc_gpu_create_window(&g,64,64,256,256,"build/shaders/pattern.comp.spv",err,sizeof(err))) {
         fprintf(stderr,"%s\n",err); return 1;
     }
+    window_gpu=g;
+    acquired_image=VK_NULL_HANDLE;
+    acquire_dependency=true;
     uint32_t count=0;
     if(vkGetPhysicalDeviceSurfacePresentModesKHR(g->physical,g->surface,&count,NULL)!=VK_SUCCESS) return 2;
     VkPresentModeKHR *modes=calloc(count,sizeof(*modes)); if(!modes) return 3;
@@ -94,11 +113,13 @@ static int window_cycle(void) {
         if(!okay) { fprintf(stderr,"%s\n",err); return 6; }
         SDL_Delay(2);
     }
-    bool okay=finite_acquire && idle_calls==0 && image_sems_safe;
+    bool okay=finite_acquire && idle_calls==0 && image_sems_safe && acquire_dependency;
     okay=okay && dc_gpu_read_body_id(g,1,&body,err,sizeof(err)) && body.x_fp==10*65536+90*4096;
     fprintf(stdout,"mode=%d finite acquire=%d presentation queue-idle calls=%u\n",mode,finite_acquire,idle_calls);
     fprintf(stdout,"90-frame waits: acquire=%.3fms enqueue=%.3fms render=%.3fms image semaphores safe=%d\n",
         acquire_ms,enqueue_ms,render_wait_ms,image_sems_safe);
+    fprintf(stdout,"acquired image transition chains transfer wait=%d\n",acquire_dependency);
+    window_gpu=NULL;
     dc_gpu_destroy(g);
     return okay ? 0 : 7;
 }
