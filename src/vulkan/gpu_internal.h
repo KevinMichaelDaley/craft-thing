@@ -7,6 +7,7 @@
 #include "dungeoncraft/gpu.h"
 #include "ferrum/structural/gpu.h"
 #include "mpm_activity_layout.h"
+#include "dungeoncraft/contact_work_layout.h"
 
 enum {
     DC_GPU_STRUCTURAL_TAG = 0x53545231u,
@@ -22,7 +23,7 @@ enum {
     DC_GPU_HALO_CELLS = DC_GPU_HALO_SIDE * DC_GPU_HALO_SIDE,
     DC_GPU_SOLVER_HEADER_WORDS = 16,
     DC_GPU_PIXEL_CONTACT_DISPATCH_WORD = 10,
-    DC_GPU_TYPED_CONTACT_ACTIVITY_WORD = 6,
+    DC_GPU_TYPED_CONTACT_ACTIVITY_WORD = DC_CONTACT_TYPED_ACTIVITY_WORD,
     DC_GPU_CONTACT_PHASE_COUNT = 3,
     DC_GPU_SOLVER_BODY_WORDS = 32,
     DC_GPU_SOLVER_CONTACT_WORDS = 16,
@@ -129,7 +130,8 @@ struct dc_gpu {
     VkPipeline rigid_prepare_pipeline;
     VkPipeline broadphase_pipeline;
     VkPipeline contact_pipelines[DC_GPU_CONTACT_PHASE_COUNT];
-    VkPipeline contact_pixel_pipeline;
+    VkPipeline contact_pixel_pipeline, contact_pixel_plan_pipeline,
+               contact_pixel_finish_pipeline;
     VkPipeline solver_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
     VkPipeline pixel_hydro_pipelines[5];
     VkPipeline structural_pipelines[DC_GPU_STRUCTURAL_PHASE_COUNT];

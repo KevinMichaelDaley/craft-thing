@@ -176,6 +176,8 @@ void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
     for (uint32_t phase=0; phase<DC_GPU_CONTACT_PHASE_COUNT; ++phase)
         if (gpu->contact_pipelines[phase]) vkDestroyPipeline(gpu->device, gpu->contact_pipelines[phase], NULL);
     if(gpu->contact_pixel_pipeline) vkDestroyPipeline(gpu->device,gpu->contact_pixel_pipeline,NULL);
+    if(gpu->contact_pixel_plan_pipeline) vkDestroyPipeline(gpu->device,gpu->contact_pixel_plan_pipeline,NULL);
+    if(gpu->contact_pixel_finish_pipeline) vkDestroyPipeline(gpu->device,gpu->contact_pixel_finish_pipeline,NULL);
     for (uint32_t i=0;i<DC_GPU_SOLVER_PHASE_COUNT;++i)
         if (gpu->solver_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->solver_pipelines[i],NULL);
     for (unsigned i = 0; i < 5; ++i)

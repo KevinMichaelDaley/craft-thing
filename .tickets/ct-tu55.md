@@ -158,3 +158,7 @@ Initialization-only trace isolates presentation watchdog failure to validation o
 **2026-10-17T05:12:02Z**
 
 Displayed-frame diagnostic reproduces sustained p95 RED:180frames mean29.917ms,p9538.016,max44.564,33.426FPS. Runtime unchanged; hooks diagnostic-only, expanded query path validation-clean. Frame72 wall44.195ms:rigid28.649,contact16substeps21.552,allhydro1.470,fluid10.554,MPM2.591;0emittedcontacts. Frame73 rigid24.141/contact17.160/hydro1.530/0contacts. Late178 rigid18.711/contact11.941/hydro1.429/24contacts plusfluidphase3 14.359ms andphase2 4.651ms. Thus contact path andphase3 transport are measured next targets; phase0 wet detection~0.1ms/frame is not dominant. Read-only cold frequency sampler observes100MHz-to1150/1300MHz ramps, correlation only. Fullquarter168pass andUI17pass plus smokes complete; no gates loosened.
+
+**2026-10-17T05:43:59Z**
+
+Sustained native360 warm target now passes twice after ct-sqg7 batching:180frames,25.773/25.776ms mean,32.789/32.973ms p95,38.800/38.796FPS. Exact shapes, native physics/display,2fixed60Hz steps/frame,cadence6,pressure20 unchanged. Cold91.454/91.018ms still unoptimized; no unqualified completion. New typed dispatch ABI rejects stale binaries. Targeted exact contacts, work counters and explicit sync validation pass; full current checkpoint regression required.
