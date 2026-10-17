@@ -540,6 +540,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/terrain_prop_tests
 	./build/body_color_tests
 	./build/body_carve_tests
+	./build/sequential_detachment_tests
 	./build/pixel_motion_cache_tests
 	./build/component_dispatch_tests
 	./build/pixel_properties_gpu_tests
@@ -1067,6 +1068,12 @@ test: build/body_color_tests
 build/body_carve_tests: tests/vulkan/body_carve_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/body_carve_tests
+build/sequential_detachment_tests: tests/vulkan/sequential_detachment_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/sequential_detachment_tests
+build/diagnostics/body_support: tools/diagnostics/body_support.c Makefile $(GPU_OBJ) $(CHUNK_OBJ)
+	@mkdir -p build/diagnostics
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_record_contacts
 build/scene_ground_tests: tests/world/scene_ground_tests.c $(GENERATE_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GENERATE_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/scene_ground_tests
