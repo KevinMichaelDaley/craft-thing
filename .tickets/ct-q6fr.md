@@ -25,3 +25,7 @@ Actual IrisXe supports/enables bufferDeviceAddress without shaderInt64. Correcte
 **2026-10-17T08:10:09Z**
 
 Address-directory GPU GREEN on actual IrisXe completes0.244s:90records/2pages then200/4pages, exact544byte Body stride,0mismatches for IDs/mass/width preservation and priorrecord visit counters. Two1second-fence submissions, zero Vulkan/sync errors, all address resources/accounting released. SPIR-V declares PhysicalStorageBufferAddresses and no Int64. This is a bounded ABI/resource prototype only; gameplay pipeline retains64 until all consumers and transactions migrate. GPU lease explicitly returned to parent renderer suite.
+
+**2026-10-17T08:16:39Z**
+
+Shared C/GLSL root64/page48 ABI and common typed body/data accessors now GPU verified: 90 then200 records, exact544byte stride, page/root generation roundtrip, zero mismatches and validation errors in0.256s. Runtime remains legacy64; this checkpoint provides one common accessor for subsequent consumers and renderer migration, not gameplay growth.

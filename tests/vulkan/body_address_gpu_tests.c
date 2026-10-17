@@ -4,13 +4,14 @@
 #undef main
 
 #include "../../src/vulkan/body_address_gpu.h"
+#include "dungeoncraft/body_storage_layout.h"
 static int g_pass,g_fail;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fflush(stdout);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() g_pass++
-static void write_address(uint32_t *words,VkDeviceAddress address) {words[0]=(uint32_t)address;words[1]=(uint32_t)(address>>32);}
+static dc_body_address_t address_words(VkDeviceAddress address) {return (dc_body_address_t){(uint32_t)address,(uint32_t)(address>>32)};}
 static void destroy_probe(probe_t *p) {
     vkDestroyPipeline(p->device,p->pipeline,NULL);
     vkDestroyShaderModule(p->device,p->shader,NULL);
@@ -31,16 +32,21 @@ static void test_address_directory_grows_without_relocating_prior_body_records(v
     for(unsigned stage=0;stage<2;stage++) {
         unsigned page_count=(counts[stage]+63u)/64u;
         dc_gpu_address_buffer_t next={0};
-        ASSERT_TRUE(dc_gpu_address_buffer_create(&gpu,page_count*8u,true,&next,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_address_buffer_create(&gpu,page_count*sizeof(dc_body_storage_page_t),true,&next,err,sizeof(err)));
         for(unsigned page=0;page<page_count;page++) {
             if(page>=allocated) {
                 ASSERT_TRUE(dc_gpu_address_buffer_create(&gpu,64u*sizeof(dc_gpu_body_record_t),true,&pages[page],err,sizeof(err)));
                 dc_gpu_body_record_t *records=pages[page].mapped;
                 for(unsigned i=0;i<64;i++) records[i].body.width=19u+page;
             }
-            write_address((uint32_t *)next.mapped+page*2u,pages[page].address);
+            dc_body_storage_page_t *entry=(dc_body_storage_page_t *)next.mapped+page;
+            entry->records=address_words(pages[page].address);
+            entry->generation=100u+page;entry->free_mask[0]=entry->free_mask[1]=0xffffffffu;
         }
-        write_address(probe.mapped,next.address);probe.mapped[2]=counts[stage];probe.mapped[3]=6u;
+        dc_body_storage_root_t *root=(dc_body_storage_root_t *)probe.mapped;
+        *root=(dc_body_storage_root_t){.directory=address_words(next.address),.live_count=counts[stage],
+            .slab_shift=DC_BODY_SLAB_SHIFT,.abi_version=DC_BODY_STORAGE_ABI,.generation=7u,
+            .slab_count=page_count,.directory_capacity=page_count};
         ASSERT_TRUE(begin(&probe));
         VkMemoryBarrier upload={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER,.srcAccessMask=VK_ACCESS_HOST_WRITE_BIT|VK_ACCESS_SHADER_WRITE_BIT,.dstAccessMask=VK_ACCESS_SHADER_READ_BIT|VK_ACCESS_SHADER_WRITE_BIT};
         vkCmdPipelineBarrier(probe.command,VK_PIPELINE_STAGE_HOST_BIT|VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,0,1,&upload,0,NULL,0,NULL);
@@ -54,7 +60,8 @@ static void test_address_directory_grows_without_relocating_prior_body_records(v
             dc_gpu_body_record_t *record=(dc_gpu_body_record_t *)pages[body/64].mapped+body%64;
             unsigned visits=stage==1&&body<counts[0]?2u:1u;
             mismatches+=record->body.id!=0x80000001u+body||record->body.width!=19u+body/64||
-                record->body.vx_fp!=(int)visits||record->mass!=(float)body+.5f;
+                record->body.vx_fp!=(int)visits||record->mass!=(float)body+.5f||
+                record->motion_flags!=((100u+body/64)^root->generation);
         }
         printf("Addressed body layout%zu bytes, dynamic records%u pages%u mismatches%u\n",sizeof(dc_gpu_body_record_t),counts[stage],page_count,mismatches);
         dc_gpu_address_buffer_destroy(&gpu,&directory);directory=next;allocated=page_count;

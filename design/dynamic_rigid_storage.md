@@ -65,6 +65,34 @@ and fracture output queues grow from their own measured demand; growing records
 alone must not silently truncate another resource. Contact overflow remains
 conservative and observable until its complete work can be retried.
 
+The shared accessor contract is `body_storage_layout.h` plus
+`shaders/sim/rigid_storage.glsl`. Its prototype has a 64-byte versioned root and
+48-byte directory entries pointing to record, solver, ownership and auxiliary
+resources. `DC_BODY_AT` resolves a validated slot as an lvalue in an addressed slab;
+`DC_BODY_DATA` accesses independently addressed metadata. Renderer consumers must
+include this contract instead of reproducing offsets. The current prototype is
+used only by bounded ABI tests; ordinary shaders still use the legacy store.
+
+The old slot sentinel equals 64. It must become `DC_BODY_SLOT_NONE` before slot 64
+is valid, otherwise an allocation-only patch would corrupt contact/body lookup.
+The initial 64-record slab quantum is not a cap on the number of directory entries.
+
+### Migration audit
+
+| Subsystem | Legacy coupling to remove | Required replacement |
+| --- | --- | --- |
+| Public/internal C state | `body_ids[64]`, host body count, records preceding every metadata table | Counted diagnostic interfaces and GPU ID/live maps; separate resource ownership |
+| Buffer sizing/descriptors | `dc_gpu_body_storage_bytes`, body-prefix and scratch offsets | Versioned root plus independently growable addressed tables; fence-safe retirement |
+| Shader body access | `Body bodies[BODY_CAPACITY]`, `BODY_STORAGE_WORDS=64*136` | Shared validated slab accessor; geometry handles independent of body-prefix bytes |
+| Broadphase | Fixed body masks, slot arrays and capacity dispatch | Sparse spatial lists and actual live-body/page work queues |
+| Contacts/solver | Capacity sentinel, per-body scratch and fixed manifold storage | Explicit invalid handles, dynamic state/manifold demand and conservative overflow retry |
+| Hydro | Fixed slot lists/64-body reductions/partial offsets | Hierarchical live wet lists and deterministic actual-count reductions |
+| Raster/draw | Full capacity scans and fixed tile/body lists | Parallel actual intersection lists; renderer uses the same storage helpers |
+| Extraction/fracture | Free-slot scan, output arrays, ID search and source/arena transaction | Parallel dynamic allocator, output preflight and joint publication |
+| Structural ownership | Per-body records sharing node/member allocation assumptions | Dynamic body/descendant handles independent of authored graph capacities |
+| Checkpoints | Fixed 64-record payload and absolute legacy geometry pointers | Counted canonical records/geometry, migration and all-allocation preflight |
+| Tests/tooling | Private header/SPIR-V pairs and minimal fixture features | Explicit storage ABI guard, BDA feature/flag checks, shared layout and lifetime tests |
+
 Render visibility is separate from physics residency. Known cached world chunks
 can supply extraction and dynamics outside mapped display pages. World-coordinate
 terrain/fluid queries and occupied-cell residency checks must use authoritative

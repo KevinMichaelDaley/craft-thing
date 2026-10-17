@@ -3,17 +3,15 @@
 #extension GL_EXT_buffer_reference : require
 #extension GL_EXT_buffer_reference_uvec2 : require
 #include "../../shaders/sim/rigid_body.glsl"
+#include "../../shaders/sim/rigid_storage.glsl"
 uint pixel_word_at(uint index) {return index;}
 layout(local_size_x=64) in;
-layout(buffer_reference,std430,buffer_reference_align=16) buffer BodyPage {Body records[];};
-layout(buffer_reference,std430,buffer_reference_align=8) readonly buffer Directory {uvec2 pages[];};
-layout(set=0,binding=0,std430) readonly buffer Root {uvec2 directory;uint count,slab_shift;} root;
+layout(set=0,binding=0,std430) readonly buffer Root {BodyStorageRoot state;} heap;
 void main() {
     uint body=gl_GlobalInvocationID.x;
-    if(body>=root.count) return;
-    uint page=body>>root.slab_shift,local=body&((1u<<root.slab_shift)-1u);
-    BodyPage records=BodyPage(Directory(root.directory).pages[page]);
-    records.records[local].id=0x80000001u+body;
-    records.records[local].vx_fp++;
-    records.records[local].mass=float(body)+.5;
+    if(body>=heap.state.live_count||!body_storage_slot_valid(heap.state,body)) return;
+    DC_BODY_AT(heap.state,body).id=0x80000001u+body;
+    DC_BODY_AT(heap.state,body).vx_fp++;
+    DC_BODY_AT(heap.state,body).mass=float(body)+.5;
+    DC_BODY_AT(heap.state,body).motion_flags=DC_BODY_PAGE(heap.state,body).generation^heap.state.generation;
 }
