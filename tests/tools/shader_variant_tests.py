@@ -27,6 +27,15 @@ class ShaderVariantTests(unittest.TestCase):
         self.assertNotIn("DIAGNOSTIC_PIXEL_ONLY", candidate)
         self.assertEqual(candidate.count("params.mode"), 1)
 
+    def test_typed_contact_experiment_preserves_phase_specialization(self):
+        source = (ROOT / "shaders/sim/contacts.comp").read_text()
+        candidate = VARIANTS.generate_typed(source)
+        self.assertEqual(candidate.count("const uint CONTACT_PHASE"), 1)
+        self.assertRegex(candidate, r"layout\(constant_id\s*=\s*1\).*const bool")
+        self.assertLess(candidate.index("#define DC_RIGID_PIXEL_ONLY"),
+                        candidate.index('#include "rigid_body.glsl"'))
+        self.assertEqual(candidate.count("params.mode"), source.count("params.mode"))
+
 
 if __name__ == "__main__":
     unittest.main()
