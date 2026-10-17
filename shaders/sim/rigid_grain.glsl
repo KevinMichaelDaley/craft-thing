@@ -8,6 +8,7 @@ struct Particle {
 layout(set=0,binding=19,std430) buffer Particles { Particle particles[]; };
 layout(set=0,binding=21,std430) buffer GrainScratch { uint grain_scratch[]; };
 layout(set=0,binding=1,std430) readonly buffer GrainTerrain { uvec2 grain_cells[]; };
+const uint GRAIN_PREPARE=15u,GRAIN_POSITION=16u,GRAIN_VELOCITY=17u;
 uint grain_reference(uint c) { return data[c+2u]==3u ? data[c+7u] : 0u; }
 vec2 grain_position(uint c,uint index) {
     return anchor(c+22u)-vec2(int(data[c+26u]),int(data[c+27u]))/65536.0+
@@ -31,7 +32,7 @@ void grain_phase(uint i) {
     uint c=cb()+12u+i*32u,ref=grain_reference(c);
     if(ref==0u) return;
     uint index=ref-1u,s=index*4u;
-    if(PHASE==15u) {
+    if(PHASE==GRAIN_PREPARE) {
         for(uint k=0u;k<4u;k++) atomicExchange(grain_scratch[s+k],0u);
         return;
     }
@@ -39,7 +40,7 @@ void grain_phase(uint i) {
     if(atomicExchange(grain_scratch[s+2u],epoch)==epoch) return;
     vec2 change=vec2(int(grain_scratch[s]),int(grain_scratch[s+1u]))/SUM_SCALE;
     Particle p=particles[index];
-    if(PHASE==16u) {
+    if(PHASE==GRAIN_POSITION) {
         /* Keep a particle inside the one-cell halo supported by MPM's rebin.
            Occupancy is intentionally ignored: it is the moving collider. */
         uint cell=index%4096u;

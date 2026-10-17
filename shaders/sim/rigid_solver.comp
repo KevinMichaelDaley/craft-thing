@@ -30,7 +30,8 @@ const uint RESET = 0u, BEGIN_FRAME = 1u, PREDICT = 2u, PREPARE = 3u, INIT_CONTAC
 const uint CLEAR = 5u, SOLVE = 6u, APPLY = 7u, DERIVE_VELOCITY = 8u, IMPULSE = 9u,
            APPLY_VELOCITY = 10u, FINISH = 11u;
 /* Header: enabled, iterations, substeps, sticky overflow, contact sum, awake count,
-   indirect contact groups (3 words), speculative-contact mode, and padding.
+   indirect contact groups (3 words), speculative-contact mode, pixel contact
+   groups (3 words), and grain contact groups (3 words).
    Body scratch (32 words): frame pose/velocity, substep pose/velocity, degree,
    awake flag, and signed fixed-point Jacobi sums.
    Contact scratch (16 words): normal/tangent multipliers, stable body slots,
@@ -215,7 +216,7 @@ void solve_contact(uint i, bool impulse) {
 #include "rigid_bonds.glsl"
 void main() {
     uint i = gl_GlobalInvocationID.x, h = sb();
-    if(PHASE>=15u) {grain_phase(i);return;}
+    if(PHASE>=GRAIN_PREPARE) {grain_phase(i);return;}
     if(PHASE>=12u) {solve_bonds(PHASE);return;}
     if (PHASE == RESET) {
         if (i == 0u) {
@@ -312,6 +313,9 @@ void main() {
             data[h + 6u] = data[h + 3u] == 0u ? (data[cb()] + 63u) / 64u : 0u;
             data[h + 7u] = 1u;
             data[h + 8u] = 1u;
+            data[h + 13u] = data[h+13u]!=0u ? data[h+6u] : 0u;
+            data[h + 14u] = 1u;
+            data[h + 15u] = 1u;
             if (data[h + 3u] == 0u)
                 data[h + 4u] += data[cb()];
         }

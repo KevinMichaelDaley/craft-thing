@@ -3,7 +3,8 @@
 #include <string.h>
 #include "gpu_internal.h"
 
-enum { SOLVER_ITERATIONS = 8, SOLVER_SUBSTEPS = 8, SOLVER_DISPATCH_WORD = 6 };
+enum { SOLVER_ITERATIONS = 8, SOLVER_SUBSTEPS = 8, SOLVER_DISPATCH_WORD = 6,
+       SOLVER_GRAIN_DISPATCH_WORD = 13, SOLVER_PHASE_MASK = 255 };
 typedef enum {
     SOLVER_RESET,
     SOLVER_BEGIN_FRAME,
@@ -195,7 +196,7 @@ static void record_pixel_hydro(dc_gpu_t *gpu) {
 }
 static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
-                      gpu->solver_pipelines[mode & 255u]);
+                      gpu->solver_pipelines[mode & SOLVER_PHASE_MASK]);
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
     uint32_t push[8] = {gpu->width,  gpu->height,
                         mode,        dc_gpu_runtime_body_count(gpu),
@@ -203,7 +204,7 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
                         (uint32_t)y, (uint32_t)(y >> 32)};
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    uint32_t phase = mode & 255u;
+    uint32_t phase = mode & SOLVER_PHASE_MASK;
     if (phase >= SOLVER_BOND_POSITION && phase <= SOLVER_BOND_RESET) {
         VkDeviceSize offset =
             sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
@@ -214,7 +215,8 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
         VkDeviceSize offset =
             sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
             (VkDeviceSize)(dc_gpu_solver_word_offset(gpu) +
-                           SOLVER_DISPATCH_WORD) *
+                           (phase >= SOLVER_GRAIN_PREPARE ? SOLVER_GRAIN_DISPATCH_WORD :
+                            SOLVER_DISPATCH_WORD)) *
                 sizeof(uint32_t);
         vkCmdDispatchIndirect(gpu->command, gpu->body_buffer, offset);
     } else

@@ -5,7 +5,7 @@
 `make build/diagnostics/body_support` builds an in-memory replay of a versioned
 world snapshot. Run `./tools/with-vulkan build/diagnostics/body_support
 PATH/rigid_bodies.bin` with no other GPU workloads. It restores the snapshot's
-origin and its central 512x448 resident window, reports eight physics ticks,
+origin and its central 640x448 resident window, reports eight physics ticks,
 and captures each solver substep's contact witnesses for the first automatically
 extracted body, plus all bodies' awake states, rest flags, and overflow counters.
 `build/support_scene.bmp` shows the resulting albedo.
@@ -20,6 +20,9 @@ stepping. The tool never saves over the input world. This distinguishes actual
 terrain supports from stale sleep flags, cold-page freezing, and solver rollback.
 Set `DC_SUPPORT_PROP=assets/props/level_piece01.prop/asset.cprop` to exercise
 the scene's old-save corner-bond migration before stepping, without saving it.
+Set `DC_SUPPORT_FULL_TICKS=1` to include fluid and granular simulation rather
+than stepping rigid bodies alone. Use this when investigating moving soil or
+particles caught inside a body.
 
 ## Device health probe
 

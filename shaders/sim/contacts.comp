@@ -124,6 +124,7 @@ bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_fea
     data[offset + 28u] = feature_x.x; data[offset + 29u] = feature_x.y;
     data[offset + 30u] = feature_y.x; data[offset + 31u] = feature_y.y;
     atomicAdd(data[base], 1u);
+    if(particle_ref!=0u) atomicAdd(data[base+CONTACT_HEADER_WORDS+8192u*CONTACT_WORDS+13u],1u);
     return true;
 }
 
@@ -207,6 +208,7 @@ void main() {
             data[base+lane]=value;
         }
         if(lane<3u) {
+            data[solver+13u+lane]=lane==0u?0u:1u;
             data[solver+PIXEL_CONTACT_DISPATCH_WORD+lane]=lane==0u?(pixels&&!typed&&data[2]==0u?data[0]:0u):1u;
             uint candidate_count=typed&&data[2]==0u?data[0]:0u;
             pixel_dispatch[TYPED_CONTACT_ACTIVITY_WORD+lane]=lane==0u?candidate_count:
