@@ -544,6 +544,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/body_color_tests
 	./build/body_carve_tests
 	./build/sequential_detachment_tests
+	./build/dense_support_tests
 	./build/pixel_motion_cache_tests
 	./build/component_dispatch_tests
 	./build/pixel_properties_gpu_tests
@@ -1074,6 +1075,9 @@ test: build/body_carve_tests
 build/sequential_detachment_tests: tests/vulkan/sequential_detachment_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/sequential_detachment_tests
+build/dense_support_tests: tests/vulkan/dense_support_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/dense_support_tests
 build/diagnostics/body_support: tools/diagnostics/body_support.c tools/diagnostics/terrain_support.h Makefile src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h $(CONTACT_SHADER) $(GPU_SRC) $(GPU_OBJ) $(CHUNK_OBJ) src/world/chunk.c $(RENDERER_SHADERS) build/shaders/prop_place.comp.spv
 	@mkdir -p build/diagnostics
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_record_contacts

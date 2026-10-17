@@ -1,6 +1,6 @@
 ---
 id: ctr-s8k8
-status: closed
+status: in_progress
 deps: []
 links: []
 created: 2026-10-17T21:50:21Z
