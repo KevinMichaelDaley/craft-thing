@@ -116,7 +116,7 @@ bool move_source(ivec2 source,ivec2 direction) {
     uint first=lane*chunk,last=min(reach,first+chunk),requested=0u;
     for(uint order=first;order<last;order++) requested+=request_at(source,direction,reach-order,travel);
     uint prior=subgroupExclusiveAdd(requested),total=subgroupAdd(requested);
-    uint remaining=available>prior?available-prior:0u;
+    uint remaining=min(requested,available>prior?available-prior:0u);
     for(uint order=first;order<last&&remaining!=0u;order++) {
         uint offset=reach-order,request=request_at(source,direction,offset,travel);
         uint flux=min(request,remaining);remaining-=flux;
