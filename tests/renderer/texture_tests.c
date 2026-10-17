@@ -103,7 +103,18 @@ static void test_brick_cosmetic_style_and_rings(void) {
   ASSERT_TRUE(memcmp(&stone, &brick, sizeof(stone)) != 0);
   PASS();
 }
+static void test_dirt_is_earth_colored_and_distinct_from_stone(void) {
+  fr_appearance_owner_t o={.identity=91,.material=DC_MATERIAL_DIRT,.visual_scale=1,.x=12,.y=11};
+  fr_appearance_texel_t dirt=fr_texture_sample(o,0);
+  ASSERT_TRUE(dirt.color[0]>dirt.color[1]*1.5f);
+  ASSERT_TRUE(dirt.color[1]>dirt.color[2]*1.5f);
+  o.material=DC_MATERIAL_STONE;
+  fr_appearance_texel_t stone=fr_texture_sample(o,0);
+  ASSERT_TRUE(fabsf(stone.color[0]-stone.color[1])<.001f);
+  PASS();
+}
 int main(void) {
+  RUN(test_dirt_is_earth_colored_and_distinct_from_stone);
   RUN(test_wood_grain_varies_coherently);
   RUN(test_stone_relief_and_normal);
   RUN(test_seed_ignores_slot_generation_and_material_namespace);

@@ -34,7 +34,7 @@ static void test_gpu_matches_reference_on_mixed_owners(void) {
                                         .generation = 3,
                                         .x = (int)i - 32,
                                         .y = 11,
-                                        .material = i < 32 ? 7u : 1u,
+                                        .material = i < 8 ? 4u : i < 32 ? 7u : 1u,
                                         .visual_scale = 1};
     styles[i] = i >= 64 ? FR_TEXTURE_BRICK : 0;
   }
