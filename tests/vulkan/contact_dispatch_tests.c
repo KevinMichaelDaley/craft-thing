@@ -30,12 +30,12 @@ static void selector_case(unsigned kind) {
     ASSERT_TRUE(begin(&p));
     vkCmdBindPipeline(p.command,VK_PIPELINE_BIND_POINT_COMPUTE,p.pipeline);
     vkCmdBindDescriptorSets(p.command,VK_PIPELINE_BIND_POINT_COMPUTE,p.layout,0,1,&p.descriptor,0,NULL);
-    uint32_t push[]={64,64,kind==6?512u:0u,64,0,0,0,0};
+    uint32_t push[]={64,64,kind==7?0u:1024u|(kind==6?512u:0u),64,0,0,0,0};
     vkCmdPushConstants(p.command,p.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
     /* Inspect poisoned triplets after one direct group; never execute poison. */
     vkCmdDispatch(p.command,1,1,1);host_barrier(&p,1);
     ASSERT_EQ(vkEndCommandBuffer(p.command),VK_SUCCESS);ASSERT_TRUE(submit(&p,"contact selector",1));
-    bool pixels=kind!=3&&kind!=4,typed=pixels&&kind!=1&&kind!=5&&kind!=6;
+    bool pixels=kind!=3&&kind!=4,typed=pixels&&kind!=1&&kind!=5&&kind!=6&&kind!=7;
     uint32_t generic=pixels&&!typed&&kind!=5?19u:0u,fast=typed?19u:0u;
     bool safe=solver[10]==generic&&solver[11]==1&&solver[12]==1&&
         p.mapped[0]==fast&&p.mapped[1]==1&&p.mapped[2]==1&&contacts[3]==777&&
@@ -56,10 +56,12 @@ static void test_ordinary_only_resets_both_pixel_triplets(void) {selector_case(3
 static void test_empty_body_set_resets_both_triplets(void) {selector_case(4);}
 static void test_broadphase_overflow_disables_both_triplets(void) {selector_case(5);}
 static void test_generic_reference_can_be_selected_explicitly(void) {selector_case(6);}
+static void test_older_recorders_keep_the_generic_dispatch_contract(void) {selector_case(7);}
 int main(void) {
     RUN(test_pixel_contacts_select_typed_triplet);RUN(test_hidden_legacy_preserves_generic_contacts);
     RUN(test_disabled_legacy_does_not_disable_typed_contacts);RUN(test_ordinary_only_resets_both_pixel_triplets);
     RUN(test_empty_body_set_resets_both_triplets);RUN(test_broadphase_overflow_disables_both_triplets);
     RUN(test_generic_reference_can_be_selected_explicitly);
+    RUN(test_older_recorders_keep_the_generic_dispatch_contract);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
