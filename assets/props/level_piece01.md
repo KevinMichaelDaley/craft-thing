@@ -55,7 +55,7 @@ edits leave existing islands fixed. Newly painted solids retain automatic extrac
 ground at both exterior joins, stable paused frames, real brush editing and
 12 physics ticks; captures are under `build/screenshots/level_piece01_*.bmp`.
 
-This terrain placement path publishes physical pixels and current resident
-appearance together. General rigid/structural authored publication, moving/
-fractured appearance ownership and save/reload of authored appearance remain
-tracked by `ctpf-iueo`, `ctpe-847v`, and `ctpe-d6m2`.
+Custom RGB follows detached bodies through movement, geometry relocation, and
+fracture. Version 6 saves preserve terrain, body, and water colors. Reopening a
+saved scene restores edits without stamping the source prop over them. Broader
+surface and emission persistence remains tracked by `ctr-ddtf`.

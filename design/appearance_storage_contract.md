@@ -37,16 +37,17 @@ this field at the water's current location, including pore water in soil. GPU
 transport owns ordinary-frame updates; CPU access is confined to initialization
 and diagnostics. Default water uses linear RGB `(0.035,0.193,0.666)`.
 
-This runtime field currently resets on chunk upload. Persisting pigment across
-save/reopen and eviction, and carrying it with bound particle moisture, are part
-of `ctr-ddtf`; the terrain/body appearance atlas alone cannot preserve fluid color.
-Seed-only save support is insufficient for painted texels. Persistence and
-parallel extraction/fracture transfer remain ticket ctr-ddtf and require the
-completed ct-wuci transaction implementation. Its birth hook supplies one source
-atlas index and one destination sparse16x16 tile cell per invocation. Transfers
-must preserve explicit values and preflight appearance capacity atomically with
-geometry before publishing the body. No old serial extraction shader is changed
-on the renderer branch.
+Version 6 world snapshots and streamed chunks persist linear terrain RGB overrides
+and water pigment. Snapshots also store body RGB in sparse geometry order.
+Extraction copies authored terrain color to rest pixels before publication;
+arena relocation and fracture transfer those colors with the geometry on the GPU.
+Streaming restores colors alongside physical cells. Checked payloads reject
+invalid values and corruption before installation. Legacy saves use deterministic
+defaults; colors already lost in older saves cannot be recovered.
+
+Full surface overrides, emission, persistent provenance, and pigment bound to
+particle moisture remain part of `ctr-ddtf`. RGB persistence does not yet provide
+those wider appearance channels.
 
 ## Authored appearance input
 
