@@ -5,11 +5,15 @@
 #include "../../src/vulkan/contact_shader_contract.h"
 static double last_contact_ms;
 static uint32_t last_emitted;
+static uint32_t last_visited;
 
 bool __real_dc_gpu_load_shader_module(dc_gpu_t *, const char *, VkShaderModule *, char *, uint32_t);
 bool __wrap_dc_gpu_load_shader_module(dc_gpu_t *gpu, const char *path, VkShaderModule *module,
                                       char *err, uint32_t cap) {
     const char *candidate = getenv("DC_CONTACT_SHADER");
+#ifdef DC_CONTACT_TERRAIN_PROFILE
+    if (!candidate) candidate="build/diagnostics/contacts_terrain_scan.comp.spv";
+#endif
     if (candidate && strcmp(path, "build/shaders/contacts.comp.spv") == 0) {
         if(!dc_gpu_contact_shader_compatible(candidate,DC_GPU_TYPED_CONTACT_ACTIVITY_WORD,err,cap)) return false;
         path = candidate;
@@ -26,7 +30,7 @@ static bool occupied(unsigned kind, unsigned x, unsigned y, unsigned side) {
 static void measure(unsigned side, unsigned kind, unsigned pair_kind) {
     char err[256] = {0};
     dc_gpu_t *g = NULL;
-    ASSERT_TRUE(side >= 8 && side <= 96 && kind <= 2 && pair_kind <= 2);
+    ASSERT_TRUE(side >= 8 && side <= 96 && kind <= 2 && pair_kind <= 4);
     ASSERT_TRUE(dc_gpu_create(&g, 256, 256, "build/shaders/pattern.comp.spv", err, sizeof(err)));
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     ASSERT_TRUE(chunk);
@@ -75,11 +79,22 @@ static void measure(unsigned side, unsigned kind, unsigned pair_kind) {
         bodies[legacy].local_x_fp += (int32_t)(low_x + side / 2) * 65536 + 16384;
         bodies[legacy].body.y_fp += (int32_t)low_y * 65536;
         bodies[legacy].local_y_fp += (int32_t)low_y * 65536;
-    } else {
+    } else if (pair_kind == 2) {
         bodies[1].body.x_fp += (int32_t)side * 65536 - 16384;
         bodies[1].local_x_fp += (int32_t)side * 65536 - 16384;
     }
     g->body_count = 2;
+    if (pair_kind >= 3) {
+        dc_chunk_t *terrain = calloc(1, sizeof(*terrain));
+        ASSERT_TRUE(terrain);
+        terrain->coord = (dc_chunk_coord_t){1, 1};
+        for (unsigned i = 0; i < (pair_kind == 4 ? 4096u : 1u); i++)
+            terrain->cells[i].material = DC_MATERIAL_STONE;
+        ASSERT_TRUE(dc_gpu_upload_chunk(g, 5, terrain, err, sizeof(err)));
+        free(terrain);
+        bodies[1].body.active = 0;
+        g->body_count = 1;
+    }
     uint32_t *pairs = dc_gpu_broadphase_data(g);
     unsigned pair_base = DC_GPU_BROADPHASE_HEADER_WORDS +
                          2 * dc_gpu_broadphase_buckets(g);
@@ -87,6 +102,12 @@ static void measure(unsigned side, unsigned kind, unsigned pair_kind) {
     pairs[pair_base] = bodies[0].body.id;
     pairs[pair_base + 1] = bodies[1].body.id;
     for (unsigned i = 2; i < 8; i++) pairs[pair_base + i] = 0;
+    if (pair_kind >= 3) {
+        pairs[pair_base + 1] = 0;
+        pairs[pair_base + 2] = 1;
+        pairs[pair_base + 4] = 1;
+        pairs[pair_base + 6] = 1;
+    }
     double total_ms = 0;
     for (unsigned sample = 0; sample < 10; sample++) {
         g->component_profile = sample == 9;
@@ -114,12 +135,16 @@ static void measure(unsigned side, unsigned kind, unsigned pair_kind) {
            side, kind, pair_kind, area, boundary, perimeter, contacts[9], contacts[10], contacts[11],
            contacts[0], contacts[2], total_ms / 8);
     ASSERT_EQ(contacts[2], 0u);
+    if (pair_kind >= 3)
+        ASSERT_EQ(contacts[0], 0u);
     last_contact_ms = total_ms / 8;
     last_emitted = contacts[0];
+    last_visited = contacts[9];
     dc_gpu_destroy(g);
     PASS();
 }
 
+#ifndef DC_CONTACT_SCALING_NO_MAIN
 static void test_legacy_pixel_order_does_not_serialize_pixel_query(void) {
     measure(64, 0, 0);
     double legacy_first = last_contact_ms;
@@ -142,3 +167,4 @@ int main(int argc, char **argv) {
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
+#endif

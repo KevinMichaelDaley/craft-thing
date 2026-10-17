@@ -213,7 +213,13 @@ void main() {
             cx >= 0 && cy >= 0 && (cx+1)*64 <= int(params.width) && (cy+1)*64 <= int(params.height)) {
             uint page = pages[uint(cy)*page_extent().x+uint(cx)];
             if (page != 0u) {
+#ifdef DC_TERRAIN_SCAN_PROFILE
+                uint scanned=0u;
+#endif
                 for (uint cell=lane; cell<4096u; cell+=CONTACT_GROUP_SIZE) {
+#ifdef DC_TERRAIN_SCAN_PROFILE
+                    scanned++;
+#endif
                     uint material=chunk_cells[(page-1u)*4096u+cell].x&0xffffu;
                     if (material==0u || material==3u) continue;
                     if (material==2u || material==4u || material==5u || material==6u) {
@@ -222,6 +228,9 @@ void main() {
                     }
                     atomicOr(group_found,1u);
                 }
+#ifdef DC_TERRAIN_SCAN_PROFILE
+                if ((params.mode&256u)!=0u) atomicAdd(data[base+9u],scanned);
+#endif
                 barrier();
                 bool empty_terrain = group_found == 0u;
                 barrier();
