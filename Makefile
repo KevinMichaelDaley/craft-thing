@@ -1032,12 +1032,17 @@ build/prop_tests: tests/assets/prop_tests.c src/assets/prop.c include/ferrum/ass
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/assets/prop_tests.c src/assets/prop.c -o $@ -lm
 .PHONY: test_prop_assets test_libresprite_host
 test: test_prop_assets
-test_prop_assets: build/prop_tests
+test_prop_assets: build/prop_tests build/prop_channel_contract_tests
 	python3 -m unittest discover -s tests/assets -p '*_test.py' -k 'SchemaTests'
 	python3 tests/assets/package_test.py
 	python3 tests/assets/reader_test.py
+	python3 tests/assets/profile_test.py
 	python3 tests/assets/compiler_fixture.py
 	./build/prop_tests build/prop_fixture/asset.cprop
+	./build/prop_channel_contract_tests
+build/prop_channel_contract_tests: tests/integration/prop_channel_contract_tests.c src/assets/prop.c include/ferrum/assets/prop.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/integration/prop_channel_contract_tests.c src/assets/prop.c -o $@ -lm
 test_libresprite_host:
 	python3 tests/assets/host_probe_test.py
 	python3 tests/assets/export_test.py

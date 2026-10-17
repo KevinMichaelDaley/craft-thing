@@ -51,6 +51,18 @@ static void test_reserved_negative_zero_rejected_atomically(void) {
     ASSERT_EQ(memcmp(&before, &view, sizeof(view)), 0);
     PASS();
 }
+static void test_explicit_normal_is_unit_length_but_absent_normal_is_not_an_override(void) {
+    unsigned char bad[sizeof(original)];
+    memcpy(bad, original, sizeof(bad));
+    word(bad + 88 + 24, 0); checksum(bad);
+    fr_prop_asset_t view, before;
+    ASSERT_TRUE(fr_prop_asset_open(&view, bad, sizeof(bad), NULL, 0));
+    before = view;
+    word(bad + 88 + 60, 1); checksum(bad);
+    ASSERT_TRUE(!fr_prop_asset_open(&view, bad, sizeof(bad), NULL, 0));
+    ASSERT_EQ(memcmp(&before, &view, sizeof(view)), 0);
+    PASS();
+}
 int main(void) {
     memcpy(original, "CPRP", 4);
     word(original + 4, 1); word(original + 8, sizeof(original));
@@ -65,6 +77,7 @@ int main(void) {
     RUN(test_valid_canonical_package);
     RUN(test_reserved_positive_word_rejected_atomically);
     RUN(test_reserved_negative_zero_rejected_atomically);
+    RUN(test_explicit_normal_is_unit_length_but_absent_normal_is_not_an_override);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
