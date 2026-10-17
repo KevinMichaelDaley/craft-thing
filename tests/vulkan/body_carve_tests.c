@@ -145,6 +145,13 @@ static void test_broken_leaf_canopy_crumbles_without_losing_wood(void) {
     ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    dc_chunk_colors_t *leaf_colors=calloc(1,sizeof(*leaf_colors));ASSERT_TRUE(leaf_colors);
+    for(unsigned x=20;x<28;x++) {
+        unsigned at=20*64+x;
+        leaf_colors->terrain[at][0]=.02f;leaf_colors->terrain[at][1]=.5f;
+        leaf_colors->terrain[at][2]=.08f;leaf_colors->terrain[at][3]=1.f;
+    }
+    ASSERT_TRUE(fr_renderer_upload_chunk_colors(g,0,leaf_colors,err,sizeof(err)));free(leaf_colors);
     ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
     ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     dc_gpu_body_pixel_t pixels[16];unsigned n;
@@ -176,6 +183,8 @@ static void test_broken_leaf_canopy_crumbles_without_losing_wood(void) {
     unsigned debris=0;uint64_t mass=0;
     for(unsigned i=0;i<DC_MPM_PARTICLES_PER_CHUNK;i++) if(c->particles[i].mass_fp) {
         ASSERT_EQ(c->particles[i].material,10u);
+        ASSERT_TRUE(c->particles[i].flags&0x20000000u);
+        ASSERT_EQ(c->particles[i].grain_fp,DC_FLUID_FULL/2);
         debris++;mass+=c->particles[i].mass_fp;
     }
     ASSERT_EQ(debris,8u);
