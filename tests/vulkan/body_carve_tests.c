@@ -117,15 +117,23 @@ static void test_air_carves_an_anchored_structural_member(void) {
         .rotational_stiffness=1e8,.bearing_capacity=1e7,.pullout_capacity=1e7,
         .shear_capacity=1e7,.moment_capacity=1e7,.friction=.5};
     ASSERT_TRUE(fr_gpu_place_structure(g,&graph,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_spawn_world_body(g,fixture_body(19,40,40),err,sizeof(err)));
+    dc_gpu_body_record_t *records=g->body_mapped;
+    uint32_t *bond=dc_gpu_structural_data(g)+dc_gpu_structural_graph_offset()+30000u;
+    bond[0]=1;bond[1]=0;bond[2]=1;bond[3]=records[0].body.id;bond[4]=19;
     ASSERT_TRUE(dc_gpu_paint_material(g,26,40,1,DC_MATERIAL_AIR,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
     unsigned live=0;
     for(unsigned slot=0;slot<DC_GPU_BODY_CAPACITY;slot++) {
         dc_gpu_body_record_t *b=(dc_gpu_body_record_t*)g->body_mapped+slot;
         if(!b->body.active) continue;
+        if(b->body.id==19) continue;
         live++;ASSERT_TRUE(b->piece_count&DC_GPU_PIXEL_BODY_FLAG);ASSERT_TRUE(b->inverse_mass>0);
     }
-    ASSERT_EQ(live,2u);dc_gpu_destroy(g);free(c);PASS();
+    ASSERT_EQ(live,2u);ASSERT_EQ(bond[0],0u);
+    ASSERT_TRUE(fr_gpu_save_structure(g,"build/carved_structure.dcs",err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_load_structure(g,"build/carved_structure.dcs",err,sizeof(err)));
+    dc_gpu_destroy(g);free(c);PASS();
 }
 int main(void) {
     RUN(test_air_carves_colored_body_and_splits_remaining_components);

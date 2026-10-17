@@ -91,6 +91,10 @@ void carve_bodies() {
         }
         memoryBarrierBuffer();barrier();
         if(carve_changed!=0u) {
+            for(uint bond=lane;bond<192u;bond+=32u) {
+                uint p=graph()+30000u+bond*20u;
+                if(data[p+1u]==slot||data[p+2u]==slot) data[p]=0u;
+            }
             uint pool=graph()+40000u;
             uint first=BODY_STORAGE_WORDS+pool+16u+data[pool]*color_capacity();
             for(uint word=lane;word<data[pool+1u];word+=32u) shape_color_resolve(first+word);
