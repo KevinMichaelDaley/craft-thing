@@ -35,7 +35,6 @@ uint cell_meta(ivec2 p) {
     uint capacity=FULL-min(FULL,occupancy[2u*params.width*params.height+uint(p.y)*params.width+uint(p.x)]);
     return capacity|KNOWN|(permeable_material(chunk_cells[atlas_index(p,page)].x&65535u)?PERMEABLE:0u);
 }
-uint receiving_capacity(ivec2 p) {return cell_meta(p)&131071u;}
 bool open_cell(ivec2 p) {
     uint meta=cell_meta(p);
     return (meta&(KNOWN|PERMEABLE))==(KNOWN|PERMEABLE)&&(meta&131071u)>0u;
@@ -66,7 +65,17 @@ float travel_for_speed(float speed) {
 }
 uint request_at(ivec2 source,ivec2 direction,uint offset,float travel) {
     ivec2 target=source+direction*int(offset);
-    uint receiving=water_at(target),capacity=receiving_capacity(target);
+    /* The collective blocker reduction already proved this recipient resident,
+       permeable and inside the line. Preserve the exact uncached capacity. */
+    uint position=uint(vertical?target.y:target.x),receiving,capacity;
+    if(position<CACHE_CELLS) {
+        uvec2 state=cached[position].xy;
+        receiving=state.x;capacity=state.y&131071u;
+    } else {
+        uint page=pages[uint(target.y/64)*((params.width+63u)/64u)+uint(target.x/64)];
+        receiving=chunk_cells[atlas_index(target,page)].y;
+        capacity=FULL-min(FULL,occupancy[2u*params.width*params.height+uint(target.y)*params.width+uint(target.x)]);
+    }
     if(receiving>=capacity) return 0u;
     float fraction=clamp(travel-float(offset-1u),0.,1.);
     float aperture=cached_path_aperture(source,direction,offset);

@@ -122,3 +122,7 @@ Typed drawing passes eight GPU selector cases plus byte-identical paused images 
 **2026-10-17T02:18:10Z**
 
 Typed contact pipelines and compatibility guards pass targeted Vulkan selector and exact 44-contact body/terrain/grain equivalence tests. Visible native 640x360 simulation and display: mean 33.768 ms, p95 41.021 ms, cold 102.650 ms, 29.614 FPS; target remains unmet. Full suite must be rerun after this checkpoint.
+
+**2026-10-17T02:19:58Z**
+
+Reuse already-proven transport recipient residency for exact cache/global reads. All18 literal cases, coupled hash97a0ea02c0e0a633 mass339325648, and full-recipient work budget pass. Two visible native640x360 runs:33.673/33.720ms mean;41.042/41.688ms p95;102.557/102.690ms cold;29.698/29.656FPS. Fluid6.959/6.955ms per tick. Small measured improvement;30FPS remains RED.
