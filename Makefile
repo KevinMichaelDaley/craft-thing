@@ -648,7 +648,7 @@ build/quarter_native_component_material_tests: tests/vulkan/component_material_t
 build/component_extraction_tests: tests/vulkan/component_extraction_tests.c build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/shaders/component_extract.comp.spv: shaders/sim/component_extract.comp shaders/sim/rigid_body.glsl shaders/sim/pixel_properties.glsl
+build/shaders/component_extract.comp.spv: shaders/sim/component_extract.comp shaders/sim/rigid_body.glsl shaders/sim/pixel_properties.glsl include/dungeoncraft/terrain_flags.h
 	mkdir -p build/shaders
 	glslangValidator -V --target-env vulkan1.3 $< -o $@
 build/fluid_tests: build/shaders/component_extract.comp.spv
@@ -1034,7 +1034,7 @@ build/diagnostics/mpm_scalar_reference_tests: tools/diagnostics/mpm_scalar_refer
 	spirv-val --target-env vulkan1.3 build/diagnostics/mpm_scalar_reference.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) build/diagnostics/mpm_scalar_reference_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/shaders/prop_place.comp.spv: shaders/renderer/prop_place.comp shaders/renderer/texture.glsl include/dungeoncraft/material_density.h
+build/shaders/prop_place.comp.spv: shaders/renderer/prop_place.comp shaders/renderer/texture.glsl include/dungeoncraft/material_density.h include/dungeoncraft/terrain_flags.h
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/terrain_prop_tests: tests/vulkan/terrain_prop_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/prop_place.comp.spv

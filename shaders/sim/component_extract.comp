@@ -1,6 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 #include "rigid_body.glsl"
+#include "../../include/dungeoncraft/terrain_flags.h"
 layout(local_size_x=128) in;
 layout(constant_id=0) const uint EXTRACTION_PHASE=0u;
 layout(set=0,binding=1,std430) buffer Cells { uvec2 cells[]; };
@@ -32,12 +33,14 @@ uint neighbor(uint i,uint axis) {
     uint s=labels[total()+i/4096u*4u+axis];
     return s==0xffffffffu?s:s*4096u+(axis==0u?y*64u+63u:axis==1u?y*64u:axis==2u?4032u+x:x);
 }
-const uint LOADED_TERRAIN=0x1000000u, BONDS_READY=0x2000000u;
-const uint BOND_MASK=0x3c000000u, RELEASED_TERRAIN=0x40000000u;
+const uint LOADED_TERRAIN=DC_CELL_LOADED_TERRAIN<<DC_CELL_FLAGS_SHIFT;
+const uint BONDS_READY=DC_CELL_BONDS_READY<<DC_CELL_FLAGS_SHIFT;
+const uint BOND_MASK=DC_CELL_BOND_MASK<<DC_CELL_FLAGS_SHIFT;
+const uint RELEASED_TERRAIN=DC_CELL_RELEASED_TERRAIN<<DC_CELL_FLAGS_SHIFT;
 uint terrain_bonds(uint i) {
     uint bonds=cells[i].x&BOND_MASK;
     for(uint axis=0u;axis<4u;axis++) {
-        uint other=neighbor(i,axis),bit=1u<<(26u+axis);
+        uint other=neighbor(i,axis),bit=1u<<(DC_CELL_BOND_SHIFT+axis);
         if(other!=0xffffffffu) bonds=solid(other)?bonds|bit:bonds&~bit;
     }
     return bonds;
