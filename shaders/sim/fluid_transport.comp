@@ -1,0 +1,359 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_arithmetic : require
+#extension GL_KHR_shader_subgroup_ballot : require
+layout(local_size_x=32) in;
+layout(constant_id=0) const uint TRANSPORT_MODE=0u;
+layout(constant_id=1) const uint CACHE_CELLS=1024u;
+layout(set=0,binding=1,std430) coherent buffer Cells {uvec2 chunk_cells[];};
+layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
+layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
+layout(set=0,binding=8,std430) readonly buffer SavedVelocity {uint fluid_a[];};
+layout(set=0,binding=10,std430) readonly buffer Velocity {vec2 face_velocity[];};
+layout(set=0,binding=28,std430) readonly buffer Prefix {uint aperture_prefix[];};
+layout(set=0,binding=29,std430) readonly buffer Tree {uint aperture_tree[];};
+#ifdef DC_TRANSPORT_PROFILE
+layout(set=0,binding=31,std430) buffer TransportProfile {uint transport_profile[];};
+uint request_queries=0u,blocker_checks=0u,source_queries=0u;
+#endif
+layout(push_constant) uniform Params {
+    uint width,height,mode,tick_parity,unused1,step_scale_bits,elapsed_time_mode;
+} params;
+const uint FULL=65536u,PERMEABLE=1u<<17u,KNOWN=1u<<18u;
+const float TRANSPORT_FUDGE=1.001;
+/* Shared metadata reserves the upper thirteen bits for a directional segment
+   endpoint. Global occupancy and material storage never contain this cache. */
+const uint BOUND_SHIFT=19u,BOUND_LIMIT=1u<<(32u-BOUND_SHIFT);
+shared uvec4 cached[CACHE_CELLS];
+shared uint cached_requests[CACHE_CELLS];
+shared uint capacity_bits[(CACHE_CELLS+31u)/32u];
+shared uint source_bits[(CACHE_CELLS+31u)/32u];
+bool vertical;
+bool line_open_aperture;
+uint line,length;
+uint transport_team_size() {return min(gl_SubgroupSize,gl_WorkGroupSize.x);}
+uint page_at(ivec2 p) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0u;
+    return pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
+}
+uint atlas_index(ivec2 p,uint page) {return (page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);}
+bool permeable_material(uint m) {return m==0u||m==2u||m==4u||m==5u||m==6u;}
+uint cell_meta(ivec2 p) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0u;
+    uint position=uint(vertical?p.y:p.x);
+    if(position<CACHE_CELLS) return cached[position].y;
+    uint page=page_at(p);if(page==0u) return 0u;
+    uint capacity=FULL-min(FULL,occupancy[2u*params.width*params.height+uint(p.y)*params.width+uint(p.x)]);
+    return capacity|KNOWN|(permeable_material(chunk_cells[atlas_index(p,page)].x&65535u)?PERMEABLE:0u);
+}
+bool open_cell(ivec2 p) {
+    uint meta=cell_meta(p);
+    return (meta&(KNOWN|PERMEABLE))==(KNOWN|PERMEABLE)&&(meta&131071u)>0u;
+}
+float face_aperture(ivec2 p,ivec2 direction) {
+    ivec2 face=p+min(direction,ivec2(0));
+    if(any(lessThan(face,ivec2(0)))||any(greaterThanEqual(face,ivec2(params.width,params.height)))) return 0.;
+    uint position=uint(vertical?face.y:face.x);
+    if(position<CACHE_CELLS) return float(cached[position].z)/float(FULL);
+    if(page_at(face)==0u) return 0.;
+    uint axis=direction.x!=0?3u:4u,index=uint(face.y)*params.width+uint(face.x);
+    return float(FULL-min(FULL,occupancy[axis*params.width*params.height+index]))/float(FULL);
+}
+#include "fluid_aperture.glsl"
+ivec2 point_at(uint position) {return vertical?ivec2(line,position):ivec2(position,line);}
+uint water_at(ivec2 p) {
+    uint position=uint(vertical?p.y:p.x);
+    return position<CACHE_CELLS?cached[position].x:chunk_cells[atlas_index(p,page_at(p))].y;
+}
+void put_water(ivec2 p,uint value) {
+    uint position=uint(vertical?p.y:p.x);
+    if(position<CACHE_CELLS) {
+        uint capacity=cached[position].y&131071u;
+        bool previous=cached[position].x<capacity,next=value<capacity;
+        cached[position].x=value;
+        if(previous!=next) {
+            uint mask=1u<<(position%32u);
+            if(next) atomicOr(capacity_bits[position/32u],mask);
+            else atomicAnd(capacity_bits[position/32u],~mask);
+        }
+    }
+    else chunk_cells[atlas_index(p,page_at(p))].y=value;
+}
+bool recipients_full(uint coordinate,bool positive,uint reach) {
+    uint low=positive?coordinate+1u:coordinate-reach;
+    uint high=positive?coordinate+reach:coordinate-1u;
+    if(high>=CACHE_CELLS) return false;
+    uint first=low/32u,last=high/32u;
+    for(uint word=first;word<=last;word++) {
+        uint mask=0xffffffffu;
+        if(word==first) mask&=0xffffffffu<<(low%32u);
+        if(word==last) mask&=0xffffffffu>>(31u-high%32u);
+        if((capacity_bits[word]&mask)!=0u) return false;
+    }
+    return true;
+}
+int next_source(int position,bool positive) {
+    if(position<0||position>=int(CACHE_CELLS)) return position;
+    uint word=uint(position)/32u;
+    uint mask=source_bits[word]&(positive?0xffffffffu>>(31u-uint(position)%32u):0xffffffffu<<(uint(position)%32u));
+    for(uint visited=0u;visited<(CACHE_CELLS+31u)/32u;visited++) {
+        if(mask!=0u) return int(word*32u)+int(positive?findMSB(mask):findLSB(mask));
+        if(positive) {if(word==0u) return -1;word--;}
+        else {word++;if(word>=(min(length,CACHE_CELLS)+31u)/32u) return int(min(length,CACHE_CELLS));}
+        mask=source_bits[word];
+    }
+    return positive?-1:int(min(length,CACHE_CELLS));
+}
+float travel_for_speed(float speed) {
+    if((TRANSPORT_MODE&1u)!=0u) speed=-speed;
+    return speed>0.?speed*uintBitsToFloat(params.step_scale_bits)*TRANSPORT_FUDGE:0.;
+}
+uint request_at(ivec2 source,ivec2 direction,uint offset,float travel) {
+#ifdef DC_TRANSPORT_PROFILE
+    request_queries++;
+#endif
+    ivec2 target=source+direction*int(offset);
+    /* The collective blocker reduction already proved this recipient resident,
+       permeable and inside the line. Preserve the exact uncached capacity. */
+    uint position=uint(vertical?target.y:target.x),receiving,capacity;
+    if(position<CACHE_CELLS) {
+        uvec2 state=cached[position].xy;
+        receiving=state.x;capacity=state.y&131071u;
+    } else {
+        uint page=pages[uint(target.y/64)*((params.width+63u)/64u)+uint(target.x/64)];
+        receiving=chunk_cells[atlas_index(target,page)].y;
+        capacity=FULL-min(FULL,occupancy[2u*params.width*params.height+uint(target.y)*params.width+uint(target.x)]);
+    }
+    if(receiving>=capacity) return 0u;
+    float fraction=clamp(travel-float(offset-1u),0.,1.);
+    float aperture=line_open_aperture?1.:cached_path_aperture(source,direction,offset);
+    uint allowance=uint(floor(fraction*float(FULL)*aperture));
+    return min(allowance,capacity-receiving);
+}
+void cache_blocker_bounds(bool positive) {
+    uint lane=gl_SubgroupInvocationID,team=transport_team_size();
+    uint carry=positive?length-1u:0u;
+    for(uint block=0u;block<length;block+=team) {
+        uint ordinal=block+lane,position=positive?length-1u-ordinal:ordinal;
+        uint boundary=positive?0xffffffffu:0u;
+        if(ordinal<length) {
+#ifdef DC_TRANSPORT_PROFILE
+            blocker_checks++;
+#endif
+            bool connected;
+            if(positive) connected=position+1u<length&&open_cell(point_at(position))&&
+                open_cell(point_at(position+1u))&&(line_open_aperture||cached[position].z!=0u);
+            else connected=position>0u&&open_cell(point_at(position-1u))&&
+                open_cell(point_at(position))&&(line_open_aperture||cached[position-1u].z!=0u);
+            if(!connected) boundary=position;
+        }
+        uint scan=positive?subgroupInclusiveMin(boundary):subgroupInclusiveMax(boundary);
+        uint bound=positive?min(carry,scan):max(carry,scan);
+        subgroupMemoryBarrierShared();subgroupBarrier();
+        if(ordinal<length) cached[position].y=(cached[position].y&((1u<<BOUND_SHIFT)-1u))|(bound<<BOUND_SHIFT);
+        subgroupMemoryBarrierShared();subgroupBarrier();
+        carry=positive?min(carry,subgroupMin(boundary)):max(carry,subgroupMax(boundary));
+    }
+}
+uint recipient_mask(uint word,uint low,uint high,bool atomic_read) {
+    uint mask=atomic_read?atomicOr(capacity_bits[word],0u):capacity_bits[word];
+    if(word==low/32u) mask&=0xffffffffu<<(low%32u);
+    if(word==high/32u) mask&=0xffffffffu>>(31u-high%32u);
+    return mask;
+}
+uint move_cached_recipients(ivec2 source,ivec2 direction,uint reach,float travel,uint available) {
+    bool positive=direction.x>0||direction.y>0;
+    uint coordinate=uint(vertical?source.y:source.x);
+    uint low=positive?coordinate+1u:coordinate-reach,high=positive?coordinate+reach:coordinate-1u;
+    uint first_word=low/32u,last_word=high/32u,words=last_word-first_word+1u;
+    uint chunk=(words+transport_team_size()-1u)/transport_team_size();
+    uint first=gl_SubgroupInvocationID*chunk,last=min(words,first+chunk),requested=0u;
+    /* Lane intervals follow the literal far-to-near priority. Saturating each
+       interval at the entire source budget cannot exclude a receivable flux;
+       the subgroup prefix then assigns that same budget across intervals. */
+    for(uint order=first;order<last&&requested<available;order++) {
+        uint word=positive?last_word-order:first_word+order,mask=recipient_mask(word,low,high,false);
+        while(mask!=0u&&requested<available) {
+            uint bit=uint(positive?findMSB(mask):findLSB(mask)),position=word*32u+bit;
+            uint offset=positive?position-coordinate:coordinate-position;
+            uint request=request_at(source,direction,offset,travel);
+            cached_requests[position]=request;
+            requested+=min(request,available-requested);mask&=~(1u<<bit);
+        }
+    }
+    uint prior=subgroupExclusiveAdd(requested),total=subgroupAdd(requested);
+    uint remaining=min(requested,available>prior?available-prior:0u);
+    for(uint order=first;order<last&&remaining!=0u;order++) {
+        uint word=positive?last_word-order:first_word+order,mask=recipient_mask(word,low,high,true);
+        while(mask!=0u&&remaining!=0u) {
+            uint bit=uint(positive?findMSB(mask):findLSB(mask)),position=word*32u+bit;
+            uint flux=min(cached_requests[position],remaining);remaining-=flux;
+            if(flux!=0u) {ivec2 target=point_at(position);put_water(target,water_at(target)+flux);}
+            mask&=~(1u<<bit);
+        }
+    }
+    subgroupMemoryBarrierShared();subgroupBarrier();
+    return min(available,total);
+}
+bool move_source(ivec2 source,ivec2 direction) {
+    uint meta=cell_meta(source);
+    if((meta&(KNOWN|PERMEABLE))!=(KNOWN|PERMEABLE)||(meta&131071u)==0u) return false;
+    uint coordinate=uint(vertical?source.y:source.x),available=water_at(source);
+    if(available==0u) return false;
+    uint next_meta=cell_meta(source+direction),next_capacity=next_meta&131071u;
+    if((next_meta&(KNOWN|PERMEABLE))!=(KNOWN|PERMEABLE)||next_capacity==0u) return false;
+    ivec2 face=source+min(direction,ivec2(0));uint face_index=uint(face.y)*params.width+uint(face.x);
+    uint face_coordinate=uint(vertical?face.y:face.x);
+    float travel;
+    if(face_coordinate<CACHE_CELLS) travel=uintBitsToFloat(cached[face_coordinate].w);
+    else {
+        float speed=vertical?face_velocity[face_index].y:face_velocity[face_index].x;
+        if(vertical&&params.elapsed_time_mode!=0u) speed=.5*(speed+uintBitsToFloat(fluid_a[face_index]));
+        travel=travel_for_speed(speed);
+    }
+    if(travel<=0.) return false;
+    if(travel<=1.&&water_at(source+direction)>=next_capacity) return false;
+    float aperture=line_open_aperture?1.:face_aperture(source,direction);if(aperture<=0.) return false;
+    uint edge=(direction.x>0||direction.y>0)?length-1u-coordinate:coordinate;
+    uint reach=min(uint(ceil(travel)),edge),lane=gl_SubgroupInvocationID;
+    if(reach==1u) {
+        ivec2 target=source+direction;
+        uint receiving=water_at(target),capacity=next_capacity;
+        if(receiving>=capacity) return false;
+        uint allowance=uint(floor(clamp(travel,0.,1.)*float(FULL)*aperture));
+        if(allowance==0u) return false;
+        subgroupBarrier();
+        uint moved=0u;
+        if(lane==0u) {
+            moved=min(min(allowance,available),capacity-receiving);
+            if(moved!=0u) {put_water(target,receiving+moved);put_water(source,available-moved);}
+        }
+        return subgroupBroadcastFirst(moved)!=0u;
+    }
+    if(recipients_full(coordinate,direction.x>0||direction.y>0,reach)) return false;
+#ifdef DC_TRANSPORT_PROFILE
+    source_queries++;
+#endif
+    if(length<=CACHE_CELLS&&length<=BOUND_LIMIT) {
+        uint bound=meta>>BOUND_SHIFT;
+        reach=min(reach,direction.x>0||direction.y>0?bound-coordinate:coordinate-bound);
+    } else {
+        uint blocked=reach+1u;
+        for(uint offset=2u+lane;offset<=reach;offset+=transport_team_size()) {
+#ifdef DC_TRANSPORT_PROFILE
+            blocker_checks++;
+#endif
+            if(!open_cell(source+direction*int(offset))||(!line_open_aperture&&face_aperture(source+direction*int(offset-1u),direction)<=0.)) blocked=min(blocked,offset);
+        }
+        reach=min(reach,subgroupMin(blocked)-1u);
+    }
+    uint high=direction.x>0||direction.y>0?coordinate+reach:coordinate-1u;
+    if(high<CACHE_CELLS) {
+        uint sent=move_cached_recipients(source,direction,reach,travel,available);
+        if(lane==0u&&sent!=0u) put_water(source,available-sent);
+        return sent!=0u;
+    }
+    uint chunk=(reach+transport_team_size()-1u)/transport_team_size();
+    uint first=lane*chunk,last=min(reach,first+chunk),requested=0u;
+    for(uint order=first;order<last;order++) {
+        uint request=request_at(source,direction,reach-order,travel);
+        if(order<CACHE_CELLS) cached_requests[order]=request;
+        requested+=request;
+    }
+    uint prior=subgroupExclusiveAdd(requested),total=subgroupAdd(requested);
+    uint remaining=min(requested,available>prior?available-prior:0u);
+    for(uint order=first;order<last&&remaining!=0u;order++) {
+        uint offset=reach-order;
+        uint request=order<CACHE_CELLS?cached_requests[order]:request_at(source,direction,offset,travel);
+        uint flux=min(request,remaining);remaining-=flux;
+        if(flux!=0u) {ivec2 target=source+direction*int(offset);put_water(target,water_at(target)+flux);}
+    }
+    subgroupMemoryBarrierShared();subgroupBarrier();
+    uint sent=min(available,total);
+    if(lane==0u&&sent!=0u) put_water(source,available-sent);
+    return sent!=0u;
+}
+void main() {
+    /* One participating subgroup owns each ordered line. Other subgroups never enter
+       its collectives; there are no workgroup barriers behind their return. */
+    line=gl_WorkGroupID.x+gl_WorkGroupID.y*65535u;vertical=TRANSPORT_MODE<2u;
+    length=vertical?params.height:params.width;
+    if(gl_SubgroupID!=0u||line>=(vertical?params.width:params.height)) return;
+#ifdef DC_TRANSPORT_PROFILE
+    if(line==0u&&gl_SubgroupInvocationID==0u) transport_profile[3]=transport_team_size();
+#endif
+    line_open_aperture=params.unused1!=0u&&aperture_tree[16448u+line*2u*params.unused1+1u]==FULL;
+    uint any_water=0u;
+    for(uint position=gl_SubgroupInvocationID;position<min(length,CACHE_CELLS);position+=transport_team_size()) {
+        ivec2 p=point_at(position);uint page=page_at(p);uvec4 value=uvec4(0);
+        if(page!=0u) {
+            uint index=uint(p.y)*params.width+uint(p.x);uvec2 cell=chunk_cells[atlas_index(p,page)];
+            uint capacity=FULL-min(FULL,occupancy[2u*params.width*params.height+index]);
+            uint aperture=FULL-min(FULL,occupancy[(vertical?4u:3u)*params.width*params.height+index]);
+            float speed=vertical?face_velocity[index].y:face_velocity[index].x;
+            if(vertical&&params.elapsed_time_mode!=0u) speed=.5*(speed+uintBitsToFloat(fluid_a[index]));
+            float travel=travel_for_speed(speed);
+            value=uvec4(cell.y,capacity|KNOWN|(permeable_material(cell.x&65535u)?PERMEABLE:0u),aperture,floatBitsToUint(travel));
+        }
+        cached[position]=value;
+        any_water|=value.x;
+    }
+    subgroupMemoryBarrierShared();subgroupBarrier();
+    if(length<=CACHE_CELLS&&subgroupOr(any_water)==0u) return;
+    for(uint word=gl_SubgroupInvocationID;word<(CACHE_CELLS+31u)/32u;word+=transport_team_size()) {
+        capacity_bits[word]=0u;source_bits[word]=0u;
+    }
+    subgroupMemoryBarrierShared();subgroupBarrier();
+    bool positive=(TRANSPORT_MODE&1u)==0u;
+    for(uint block=0u;block<min(length,CACHE_CELLS);block+=transport_team_size()) {
+        uint position=block+gl_SubgroupInvocationID;
+        bool available=false,source=false;
+        if(position<min(length,CACHE_CELLS)) {
+            uvec2 state=cached[position].xy;
+            bool eligible=(state.y&(KNOWN|PERMEABLE))==(KNOWN|PERMEABLE)&&(state.y&131071u)>0u;
+            available=eligible&&state.x<(state.y&131071u);
+            if(eligible&&state.x!=0u&&(positive||position>0u)) {
+                uvec2 face=cached[positive?position:position-1u].zw;
+                float travel=uintBitsToFloat(face.y),aperture=float(face.x)/float(FULL);
+                source=clamp(travel,0.,1.)*float(FULL)*aperture>=1.;
+            }
+        }
+        uint mask=subgroupBallot(available).x,sources=subgroupBallot(source).x;
+        if(gl_SubgroupInvocationID==0u) {
+            capacity_bits[block/32u]|=mask<<(block%32u);
+            source_bits[block/32u]|=sources<<(block%32u);
+        }
+    }
+    subgroupMemoryBarrierShared();subgroupBarrier();
+    uint any_capacity=0u,any_source=0u;
+    for(uint word=gl_SubgroupInvocationID;word<(CACHE_CELLS+31u)/32u;word+=transport_team_size()) {
+        any_capacity|=capacity_bits[word];any_source|=source_bits[word];
+    }
+    uint capacity_or=subgroupOr(any_capacity),source_or=subgroupOr(any_source);
+    if(length<=CACHE_CELLS&&(capacity_or==0u||source_or==0u)) return;
+    if(length<=CACHE_CELLS&&length<=BOUND_LIMIT) cache_blocker_bounds(positive);
+    ivec2 direction=vertical?ivec2(0,positive?1:-1):ivec2(positive?1:-1,0);
+    for(int position=positive?int(length)-2:1;position>=0&&position<int(length);position+=positive?-1:1) {
+        /* Earlier sources move away from every unvisited source, so its
+           initial water and immutable velocity remain valid eligibility. */
+        position=next_source(position,positive);
+        if(position<0||position>=int(length)) break;
+        if(move_source(point_at(uint(position)),direction)) {
+            subgroupMemoryBarrierShared();
+            if(length>CACHE_CELLS) subgroupMemoryBarrierBuffer();
+            subgroupBarrier();
+        }
+    }
+    for(uint position=gl_SubgroupInvocationID;position<min(length,CACHE_CELLS);position+=transport_team_size()) {
+        ivec2 p=point_at(position);uint page=page_at(p);if(page!=0u) chunk_cells[atlas_index(p,page)].y=cached[position].x;
+    }
+#ifdef DC_TRANSPORT_PROFILE
+    uint requests=subgroupAdd(request_queries),checks=subgroupAdd(blocker_checks);
+    if(gl_SubgroupInvocationID==0u) {
+        atomicAdd(transport_profile[0],requests);
+        atomicAdd(transport_profile[1],checks);
+        atomicAdd(transport_profile[2],source_queries);
+    }
+#endif
+}

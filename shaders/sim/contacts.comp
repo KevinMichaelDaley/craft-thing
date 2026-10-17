@@ -1,9 +1,14 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#include "../../include/dungeoncraft/contact_work_layout.h"
+layout(constant_id=1) const bool CONTACT_PIXEL_ONLY=false;
+#define DC_RIGID_PIXEL_ONLY CONTACT_PIXEL_ONLY
 #include "rigid_body.glsl"
 #include "contact_geometry.glsl"
 layout(local_size_x = 64) in;
 layout(constant_id = 0) const uint CONTACT_PHASE = 0u;
+layout(constant_id = 31) const uint TYPED_CONTACT_ACTIVITY_WORD = DC_CONTACT_TYPED_ACTIVITY_WORD;
+layout(constant_id = 32) const uint CONTACT_WORK_VERSION = DC_CONTACT_WORK_ABI;
 const uint PIXEL_CONTACT_DISPATCH_WORD = 10u;
 
 struct Particle {
@@ -14,6 +19,7 @@ struct Particle {
 layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 chunk_cells[]; };
 layout(set = 0, binding = 2, std430) readonly buffer Pages { uint pages[]; };
 layout(set = 0, binding = 19, std430) readonly buffer Particles { Particle particles[]; };
+layout(set = 0, binding = 27, std430) buffer PixelContactDispatch { uint pixel_dispatch[]; };
 layout(set = 0, binding = 4, std430) buffer Bodies { Body bodies[BODY_CAPACITY]; uint data[]; };
 uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
 layout(push_constant) uniform Params {
@@ -25,7 +31,9 @@ const uint HEADER_WORDS = 8u, PAIR_WORDS = 8u, PAIR_CAPACITY = 4096u;
 const uint CONTACT_HEADER_WORDS = 12u, CONTACT_GROUP_SIZE = 64u;
 const uint CONTACT_WORDS = 32u;
 const uint BODY_CONTACT = 0u, TERRAIN_CONTACT = 1u, BOUNDARY_CONTACT = 2u, MPM_CONTACT = 3u;
+const uint PAIR_CONTACT_FOUND=1u,PAIR_COLLIDABLE_TERRAIN=2u;
 shared uint group_found;
+shared uint body_kinds[BODY_CAPACITY];
 
 uvec2 page_extent() { return uvec2((params.width + 63u) / 64u, (params.height + 63u) / 64u); }
 uint pair_base() { uvec2 size = page_extent() + 2u; return HEADER_WORDS + 2u * size.x * size.y; }
@@ -153,7 +161,9 @@ bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygo
 }
 
 void main() {
-    bool cooperative = CONTACT_PHASE == 2u;
+    if(CONTACT_WORK_VERSION!=DC_CONTACT_WORK_ABI) return;
+    bool planner=CONTACT_PHASE==4u;
+    bool cooperative = CONTACT_PHASE == 2u || planner;
     uint index = cooperative ? gl_WorkGroupID.x : gl_GlobalInvocationID.x;
     uint lane = gl_LocalInvocationID.x, base = contact_base();
     /* Keep nearby constraints available when another Jacobi correction closes
@@ -161,26 +171,47 @@ void main() {
     uint solver = base + CONTACT_HEADER_WORDS + 8192u * CONTACT_WORDS;
     contact_skin = data[solver + 9u] != 0u ? 0.25 : CONTACT_SKIN;
     if (CONTACT_PHASE == 0u) {
-        if (index != 0u) return;
-        data[base] = 0u; data[base + 1u] = 0u;
-        data[base + 2u] = data[2] == 0u ? 0u : 4u;
-        data[base + 4u] = data[0]; data[base + 5u] = 0u;
-        data[base + 6u] = data[2] == 0u ? (data[0]+CONTACT_GROUP_SIZE-1u)/CONTACT_GROUP_SIZE : 0u;
-        data[base + 7u] = 1u; data[base + 8u] = 1u;
-        data[base + 9u] = 0u; data[base + 10u] = 0u; data[base + 11u] = 0u;
-        bool pixels = false;
-        for (uint i=0u; i<params.body_count; ++i)
-            pixels = pixels || (bodies[i].enabled!=0u && pixel_body(bodies[i]));
-        /* Reserved solver header words hold the GPU-only cooperative dispatch. */
-        data[solver+PIXEL_CONTACT_DISPATCH_WORD] = pixels && data[2]==0u ? data[0] : 0u;
-        data[solver+PIXEL_CONTACT_DISPATCH_WORD+1u] = 1u;
-        data[solver+PIXEL_CONTACT_DISPATCH_WORD+2u] = 1u;
+        uint kind=0u;
+        if(lane<params.body_count&&bodies[lane].enabled!=0u) kind=pixel_body(bodies[lane])?1u:2u;
+        body_kinds[lane]=kind;
+        barrier();
+        for(uint stride=BODY_CAPACITY/2u;stride>0u;stride/=2u) {
+            if(lane<stride) body_kinds[lane]|=body_kinds[lane+stride];
+            barrier();
+        }
+        bool pixels=(body_kinds[0]&1u)!=0u;
+        bool typed=pixels&&(body_kinds[0]&2u)==0u&&(params.mode&1024u)!=0u&&(params.mode&512u)==0u;
+        if(lane<CONTACT_HEADER_WORDS&&lane!=3u) {
+            uint value=0u;
+            if(lane==2u) value=data[2]==0u?0u:4u;
+            else if(lane==4u) value=data[0];
+            else if(lane==6u) value=data[2]==0u?(data[0]+CONTACT_GROUP_SIZE-1u)/CONTACT_GROUP_SIZE:0u;
+            else if(lane==7u||lane==8u) value=1u;
+            data[base+lane]=value;
+        }
+        if(lane<3u) {
+            data[solver+PIXEL_CONTACT_DISPATCH_WORD+lane]=lane==0u?(pixels&&!typed&&data[2]==0u?data[0]:0u):1u;
+            uint candidate_count=typed&&data[2]==0u?data[0]:0u;
+            pixel_dispatch[TYPED_CONTACT_ACTIVITY_WORD+lane]=lane==0u?candidate_count:
+                lane==1u&&candidate_count!=0u?DC_CONTACT_PIXEL_GROUPS:1u;
+            pixel_dispatch[DC_CONTACT_PLAN_ACTIVITY_WORD+lane]=lane==0u?candidate_count:1u;
+            pixel_dispatch[DC_CONTACT_FINISH_ACTIVITY_WORD+lane]=lane==0u?(candidate_count+63u)/64u:1u;
+        }
         return;
     }
     if (data[2] != 0u || index >= data[0]) return;
     uint offset = pair_base() + index * PAIR_WORDS;
+    if(CONTACT_PHASE==3u) {
+        if(pixel_dispatch[TYPED_CONTACT_ACTIVITY_WORD]!=0u &&
+           (atomicExchange(data[offset+3u],0u)&PAIR_CONTACT_FOUND)==0u) atomicAdd(data[base+5u],1u);
+        return;
+    }
+    if(planner&&lane==0u) data[offset+3u]=0u;
     uint slot = body_slot(data[offset]);
-    if (slot == BODY_CAPACITY) { if (!cooperative) atomicAdd(data[base + 5u], 1u); return; }
+    if (slot == BODY_CAPACITY) {
+        if (!cooperative&&pixel_dispatch[TYPED_CONTACT_ACTIVITY_WORD]==0u) atomicAdd(data[base + 5u], 1u);
+        return;
+    }
     Body a = bodies[slot];
     uint kind = data[offset + 2u]; bool found = false;
     bool pixel_candidate = pixel_body(a);
@@ -194,13 +225,22 @@ void main() {
         barrier();
     }
     if (cooperative && kind == TERRAIN_CONTACT) {
+        if(CONTACT_PIXEL_ONLY&&!planner) {
+            if((atomicOr(data[offset+3u],0u)&PAIR_COLLIDABLE_TERRAIN)==0u) return;
+        } else {
         int cx, cy;
         if (relative_chunk(uvec2(data[offset+4u],data[offset+5u]),params.origin_x,cx) &&
             relative_chunk(uvec2(data[offset+6u],data[offset+7u]),params.origin_y,cy) &&
             cx >= 0 && cy >= 0 && (cx+1)*64 <= int(params.width) && (cy+1)*64 <= int(params.height)) {
             uint page = pages[uint(cy)*page_extent().x+uint(cx)];
             if (page != 0u) {
+#ifdef DC_TERRAIN_SCAN_PROFILE
+                uint scanned=0u;
+#endif
                 for (uint cell=lane; cell<4096u; cell+=CONTACT_GROUP_SIZE) {
+#ifdef DC_TERRAIN_SCAN_PROFILE
+                    scanned++;
+#endif
                     uint material=chunk_cells[(page-1u)*4096u+cell].x&0xffffu;
                     if (material==0u || material==3u) continue;
                     if (material==2u || material==4u || material==5u || material==6u) {
@@ -208,30 +248,43 @@ void main() {
                         if (particles[pi].mass_fp==0u && particles[pi+4096u].mass_fp==0u) continue;
                     }
                     atomicOr(group_found,1u);
+                    break;
                 }
+#ifdef DC_TERRAIN_SCAN_PROFILE
+                if ((params.mode&256u)!=0u) atomicAdd(data[base+9u],scanned);
+#endif
                 barrier();
-                if (group_found==0u) {
-                    if (lane==0u) atomicAdd(data[base+5u],1u);
+                bool empty_terrain = group_found == 0u;
+                barrier();
+                if (empty_terrain) {
+                    if (lane==0u&&!planner) atomicAdd(data[base+5u],1u);
                     return;
                 }
                 if (lane==0u) group_found=0u;
                 barrier();
             }
         }
+        }
     }
+    if(planner) {if(lane==0u) data[offset+3u]=PAIR_COLLIDABLE_TERRAIN;return;}
+    uint work_lane=lane+(CONTACT_PIXEL_ONLY?gl_WorkGroupID.y*CONTACT_GROUP_SIZE:0u);
+    uint work_stride=CONTACT_GROUP_SIZE*(CONTACT_PIXEL_ONLY?DC_CONTACT_PIXEL_GROUPS:1u);
     if (kind == BODY_CONTACT) {
         uint other = body_slot(data[offset + 1u]); vec2 delta;
         if (other != BODY_CAPACITY && relative_body(a, bodies[other], delta)) {
             Body b = bodies[other];
-            if(pixel_body(a) && lane == 0u) atomicAdd(data[base+9u],body_pieces(a));
-            for(uint ap=cooperative?lane:0u;ap<body_pieces(a);ap+=cooperative?CONTACT_GROUP_SIZE:1u) {
+            bool distribute_b=cooperative&&!pixel_body(a)&&pixel_body(b);
+            if(pixel_body(a) && lane == 0u&&(!CONTACT_PIXEL_ONLY||gl_WorkGroupID.y==0u)) atomicAdd(data[base+9u],body_pieces(a));
+            for(uint ap=cooperative&&!distribute_b?work_lane:0u;ap<body_pieces(a);ap+=cooperative&&!distribute_b?work_stride:1u) {
                 if(!pixel_boundary(a,ap)) continue;
+                if((params.mode&256u)!=0u&&(!distribute_b||lane==0u)) atomicAdd(data[base+10u],1u);
                 Polygon pa=body_polygon(a,ap,vec2(0));vec2 lo=vec2(1e20),hi=vec2(-1e20);
                 for(uint vertex=0u;vertex<pa.count;vertex++) {lo=min(lo,pa.vertices[vertex]-delta);hi=max(hi,pa.vertices[vertex]-delta);}
                 uvec4 query=body_piece_query(b,lo-vec2(contact_skin),hi+vec2(contact_skin));
-                if(pixel_body(b)) atomicAdd(data[base+9u],query.z*query.w);
-                for(uint ordinal=0u;ordinal<query.z*query.w;ordinal++) {
+                if(pixel_body(b)&&(!distribute_b||lane==0u)) atomicAdd(data[base+9u],query.z*query.w);
+                for(uint ordinal=distribute_b?lane:0u;ordinal<query.z*query.w;ordinal+=distribute_b?CONTACT_GROUP_SIZE:1u) {
                     uint bp=query_piece(b,query,ordinal);if(!pixel_boundary(b,bp)) continue;
+                    if((params.mode&256u)!=0u) atomicAdd(data[base+11u],1u);
                 bool emitted=emit_contact(a, b.id, BODY_CONTACT, piece_material(b,bp),
                     0u, uvec2(0), uvec2(0), body_polygon(a,ap,vec2(0)), body_polygon(b,bp,delta),ap,bp);
                 found=found || emitted;
@@ -246,11 +299,12 @@ void main() {
                !relative_chunk(uvec2(data[offset+6u],data[offset+7u]),a.chunk_y,y)) return;
             vec2 low=vec2(x,y)*64.-vec2(a.local_fp)/65536.;
             query=body_piece_query(a,low-vec2(contact_skin),low+64.+vec2(contact_skin));
-            if (lane == 0u) atomicAdd(data[base+9u],query.z*query.w);
+            if (lane == 0u&&(!CONTACT_PIXEL_ONLY||gl_WorkGroupID.y==0u)) atomicAdd(data[base+9u],query.z*query.w);
         }
-        for(uint ordinal=cooperative?lane:0u;ordinal<query.z*query.w;ordinal+=cooperative?CONTACT_GROUP_SIZE:1u) {
+        for(uint ordinal=cooperative?work_lane:0u;ordinal<query.z*query.w;ordinal+=cooperative?work_stride:1u) {
             uint ap=query_piece(a,query,ordinal);
             if(!pixel_boundary(a,ap)) continue;
+            if((params.mode&256u)!=0u) atomicAdd(data[base+10u],1u);
             bool emitted=terrain_contacts(a, kind, uvec2(data[offset + 4u], data[offset + 5u]),
                 uvec2(data[offset + 6u], data[offset + 7u]), body_polygon(a,ap,vec2(0)),ap);
             found=found || emitted;
@@ -259,6 +313,10 @@ void main() {
     if (cooperative) {
         if (found) atomicOr(group_found, 1u);
         barrier();
-        if (lane == 0u && group_found == 0u) atomicAdd(data[base + 5u], 1u);
+        if (lane == 0u) {
+            if(CONTACT_PIXEL_ONLY) {
+                if(group_found!=0u) atomicOr(data[offset+3u],PAIR_CONTACT_FOUND);
+            } else if(group_found==0u) atomicAdd(data[base+5u],1u);
+        }
     } else if (!found) atomicAdd(data[base + 5u], 1u);
 }

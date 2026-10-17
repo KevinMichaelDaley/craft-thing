@@ -275,12 +275,14 @@ void main() {
         putf(s + 5u, body.angular_velocity);
         if (data[s + BODY_AWAKE_WORD] != 0u) {
             atomicAdd(data[h + 5u], 1u);
-            hydro_impulse(i, body);
-            body.vx_fp = clamp(body.vx_fp, -(4 << 16), 4 << 16);
-            body.vy_fp = clamp(clamp(body.vy_fp, -(4 << 16), 4 << 16) +
-                                   ((body.motion_flags & 1u) == 0u ? 16384 : 0),
-                               -(4 << 16), 4 << 16);
-            bodies[i] = body;
+            if(!pixel_body(body)) {
+                hydro_impulse(i, body);
+                body.vx_fp = clamp(body.vx_fp, -(4 << 16), 4 << 16);
+                body.vy_fp = clamp(clamp(body.vy_fp, -(4 << 16), 4 << 16) +
+                                       ((body.motion_flags & 1u) == 0u ? 16384 : 0),
+                                   -(4 << 16), 4 << 16);
+                bodies[i] = body;
+            }
         }
         return;
     }

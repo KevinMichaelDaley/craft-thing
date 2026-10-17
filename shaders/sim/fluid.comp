@@ -1,4 +1,5 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
 layout(local_size_x = 64, local_size_y = 1) in;
 
 layout(set = 0, binding = 1, std430) buffer ChunkCells { uvec2 chunk_cells[]; };
@@ -10,6 +11,8 @@ layout(set = 0, binding = 10, std430) buffer FaceVelocity { vec2 face_velocity[]
 layout(set = 0, binding = 16, std430) readonly buffer MarkerGrid { uint marker_grid[]; };
 layout(set = 0, binding = 17, std430) readonly buffer SlotPages { uint slot_pages[]; };
 layout(set = 0, binding = 31, std430) buffer FluidPrevious { uint fluid_previous[]; };
+layout(set = 0, binding = 28, std430) readonly buffer AperturePrefix { uint aperture_prefix[]; };
+layout(set = 0, binding = 29, std430) readonly buffer ApertureTree { uint aperture_tree[]; };
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -76,6 +79,8 @@ float face_aperture(ivec2 p,ivec2 direction) {
     return float(FULL-min(FULL,occupancy[axis*params.width*params.height+index]))/float(FULL);
 }
 
+#include "fluid_aperture.glsl"
+
 void move_line(ivec2 source, ivec2 direction, bool vertical) {
     uint source_page = page_at(source);
     if (source_page == 0u) return;
@@ -127,9 +132,7 @@ void move_line(ivec2 source, ivec2 direction, bool vertical) {
         uint capacity=receiving_capacity(destination);
         if (receiving >= capacity) continue;
         float fraction = clamp(travel - float(offset - 1u), 0.0, 1.0);
-        float path_aperture=aperture;
-        for(uint edge=1u;edge<offset;edge++)
-            path_aperture=min(path_aperture,face_aperture(source+direction*int(edge),direction));
+        float path_aperture=cached_path_aperture(source,direction,offset);
         uint allowance = uint(floor(fraction * float(FULL)*path_aperture));
         uint flux = min(min(allowance, available), capacity - receiving);
         available -= flux;

@@ -4,8 +4,10 @@
 #include <SDL.h>
 #include <vulkan/vulkan.h>
 
+#include "dungeoncraft/contact_work_layout.h"
 #include "dungeoncraft/gpu.h"
 #include "ferrum/structural/gpu.h"
+#include "mpm_activity_layout.h"
 
 enum {
     DC_GPU_STRUCTURAL_TAG = 0x53545231u,
@@ -21,6 +23,7 @@ enum {
     DC_GPU_HALO_CELLS = DC_GPU_HALO_SIDE * DC_GPU_HALO_SIDE,
     DC_GPU_SOLVER_HEADER_WORDS = 16,
     DC_GPU_PIXEL_CONTACT_DISPATCH_WORD = 10,
+    DC_GPU_TYPED_CONTACT_ACTIVITY_WORD = DC_CONTACT_TYPED_ACTIVITY_WORD,
     DC_GPU_CONTACT_PHASE_COUNT = 3,
     DC_GPU_SOLVER_BODY_WORDS = 32,
     DC_GPU_SOLVER_CONTACT_WORDS = 16,
@@ -63,6 +66,7 @@ struct dc_gpu {
     VkDescriptorSet descriptor;
     VkPipelineLayout pipeline_layout;
     VkPipeline pipeline;
+    VkPipeline simple_draw_pipeline, pixel_draw_pipeline;
     VkCommandPool command_pool;
     VkCommandBuffer command;
     SDL_Window *window;
@@ -98,10 +102,12 @@ struct dc_gpu {
     VkBuffer mpm_activity_buffer;
     VkDeviceMemory mpm_activity_memory;
     VkPipeline mpm_activity_pipeline;
+    VkPipeline mpm_compaction_pipelines[DC_MPM_COMPACTION_PHASES];
+    dc_gpu_mpm_scan_layout_t mpm_scan_layout;
     VkBuffer mpm_label_a_buffer, mpm_label_b_buffer, mpm_component_size_buffer;
     VkDeviceMemory mpm_label_a_memory, mpm_label_b_memory, mpm_component_size_memory;
     void *mpm_label_a_mapped, *mpm_label_b_mapped, *mpm_component_size_mapped;
-    VkPipeline mpm_component_pipeline, component_extract_pipeline;
+    VkPipeline mpm_component_pipeline, component_extract_pipelines[35];
     bool automatic_components_enabled;
     VkBuffer page_buffer;
     VkDeviceMemory page_memory;
@@ -120,10 +126,14 @@ struct dc_gpu {
     VkDeviceMemory occupancy_memory;
     void *occupancy_mapped;
     VkPipeline rigid_pipeline;
+    VkPipeline rigid_pixel_pipeline,rigid_classify_pipeline;
     VkPipeline rigid_prepare_pipeline;
     VkPipeline broadphase_pipeline;
     VkPipeline contact_pipelines[DC_GPU_CONTACT_PHASE_COUNT];
+    VkPipeline contact_pixel_pipeline, contact_pixel_plan_pipeline,
+               contact_pixel_finish_pipeline;
     VkPipeline solver_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
+    VkPipeline pixel_hydro_pipelines[5];
     VkPipeline structural_pipelines[DC_GPU_STRUCTURAL_PHASE_COUNT];
     bool structural_enabled;
     dc_chunk_t *checkpoint_chunks;
@@ -135,6 +145,7 @@ struct dc_gpu {
     void *trace_mapped;
     VkPipeline probe_pipeline;
     VkQueryPool timestamp_pool;
+    bool component_profile;
     float timestamp_period;
     uint32_t timestamp_bits;
     VkBuffer halo_buffer;
@@ -160,6 +171,12 @@ struct dc_gpu {
     VkBuffer pressure_a_buffer;
     VkDeviceMemory pressure_a_memory;
     VkPipeline projection_pipeline;
+    VkPipeline hydro_head_pipeline;
+    VkPipeline fluid_aperture_pipeline;
+    VkPipeline fluid_transport_pipelines[4];
+    VkPipeline fluid_displacement_pipelines[2];
+    VkPipeline fluid_phase_pipelines[13];
+    VkPipeline projection_phase_pipelines[6];
     VkPipeline velocity_shift_pipeline;
     uint32_t fluid_tick;
     uint32_t fluid_interval;
@@ -356,6 +373,15 @@ bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_mpm_buffers_destroy(dc_gpu_t *gpu);
 void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_mpm(dc_gpu_t *gpu);
+bool dc_gpu_mpm_compaction_pipeline_init(dc_gpu_t *gpu,char *err,uint32_t cap);
+void dc_gpu_mpm_compaction_pipeline_destroy(dc_gpu_t *gpu);
+/** Record deterministic compaction with compatible descriptors already bound. */
+void dc_gpu_record_active_compaction(dc_gpu_t *gpu,bool rigid);
+void dc_gpu_record_mpm_activity(dc_gpu_t *gpu,bool rigid);
+/** Create exact render variants sharing the ordinary descriptor interface. */
+bool dc_gpu_draw_pipeline_init(dc_gpu_t *gpu,VkShaderModule module,char *err,uint32_t cap);
+/** Record a draw with GPU body-type selection and the configured viewport. */
+void dc_gpu_record_draw(dc_gpu_t *gpu,const uint32_t push[7]);
 /** Initialize the window swapchain and its image-owned synchronization. */
 bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t width, uint32_t height,
                         char *err, uint32_t cap);

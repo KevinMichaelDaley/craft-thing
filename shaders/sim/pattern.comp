@@ -1,5 +1,8 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+layout(constant_id=1) const bool DRAW_PIXEL_ONLY=false;
+layout(constant_id=2) const bool DRAW_SIMPLE=false;
+#define DC_RIGID_PIXEL_ONLY DRAW_PIXEL_ONLY
 #include "rigid_body.glsl"
 #include "rigid_shape.glsl"
 #include "rigid_clip.glsl"
@@ -192,7 +195,7 @@ void main() {
         if (params.mode == 2u && params.brush_y != 2u) {
             uint filtered = cell_material_color(ivec2(p));
             uint body_id=occupancy[p.y*params.width+p.x];
-            if(params.brush_y==4u && body_id!=0u)
+            if(!DRAW_SIMPLE && params.brush_y==4u && body_id!=0u)
                 filtered=structural_pixel(ivec2(p),body_id,filtered);
             if(params.brush_y==3u && body_id!=0u)
                 filtered=(body_id&1u)!=0u ? 0xff30c040u : 0xffe09040u;

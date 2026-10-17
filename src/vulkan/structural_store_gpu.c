@@ -72,6 +72,9 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
         return error(err, cap, "Invalid structure snapshot path");
     if (!gpu->structural_enabled)
         return dc_gpu_save_bodies(gpu, path, err, cap);
+    if (gpu->body_refresh_pending &&
+        !dc_gpu_set_body_origin(gpu, gpu->body_origin, err, cap))
+        return false;
     if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
         return error(err, cap, "Cannot reach snapshot boundary");
     char temporary[1024];

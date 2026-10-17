@@ -69,7 +69,8 @@ bool dc_gpu_set_body_motion(dc_gpu_t *gpu, uint32_t id, float angle,
     b->angle = angle;
     b->angular_velocity = omega;
     b->motion_flags = flags;
-    b->motion_ready = 0;
+    if (!(b->piece_count & DC_GPU_PIXEL_BODY_FLAG))
+        b->motion_ready = 0;
     b->rest_ticks = 0;
     gpu->body_refresh_pending = true;
     return true;
@@ -92,6 +93,36 @@ bool dc_gpu_read_rigid_solver_stats(dc_gpu_t *gpu,
     memcpy(stats, dc_gpu_solver_data(gpu), sizeof(*stats));
     return true;
 }
+static bool pixel_hydro_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    VkShaderModule module = VK_NULL_HANDLE;
+    if (!dc_gpu_load_shader_module(gpu, "build/shaders/pixel_hydro.comp.spv",
+                                   &module, err, cap))
+        return false;
+    VkSpecializationMapEntry entry = {.constantID = 0,
+                                      .size = sizeof(uint32_t)};
+    VkComputePipelineCreateInfo info = {
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .stage = {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+                  .module = module,
+                  .pName = "main"},
+        .layout = gpu->pipeline_layout};
+    VkResult result = VK_SUCCESS;
+    for (uint32_t phase = 0; phase < 5 && result == VK_SUCCESS; ++phase) {
+        VkSpecializationInfo specialization = {.mapEntryCount = 1,
+                                               .pMapEntries = &entry,
+                                               .dataSize = sizeof(phase),
+                                               .pData = &phase};
+        info.stage.pSpecializationInfo = &specialization;
+        result =
+            vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1, &info,
+                                     NULL, &gpu->pixel_hydro_pipelines[phase]);
+    }
+    vkDestroyShaderModule(gpu->device, module, NULL);
+    return result == VK_SUCCESS ||
+           error(err, cap, "Cannot create pixel hydro pipelines");
+}
+
 bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkShaderModule module = VK_NULL_HANDLE;
     if (!dc_gpu_load_shader_module(gpu, "build/shaders/rigid_solver.comp.spv",
@@ -119,21 +150,61 @@ bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     }
     vkDestroyShaderModule(gpu->device, module, NULL);
     return result == VK_SUCCESS
-               ? true
+               ? pixel_hydro_pipeline_init(gpu, err, cap)
                : error(err, cap, "Cannot create GPU rigid solver pipeline");
+}
+static void record_pixel_hydro(dc_gpu_t *gpu) {
+    uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
+    uint32_t push[8] = {gpu->width,  gpu->height,
+                        0,           dc_gpu_runtime_body_count(gpu),
+                        (uint32_t)x, (uint32_t)(x >> 32),
+                        (uint32_t)y, (uint32_t)(y >> 32)};
+    const uint32_t phases[] = {0, 3, 1, 2, 4};
+    for (unsigned stage = 0; stage < sizeof(phases) / sizeof(*phases);
+         ++stage) {
+        uint32_t phase = phases[stage];
+        push[2] = phase;
+        vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                          gpu->pixel_hydro_pipelines[phase]);
+        vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+        if (phase == 1 || phase == 2)
+            vkCmdDispatchIndirect(gpu->command, gpu->mpm_activity_buffer,
+                                  (phase == 1 ? 33u : 36u) * sizeof(uint32_t));
+        else
+            vkCmdDispatch(gpu->command, phase == 3 ? 1 : DC_GPU_BODY_CAPACITY,
+                          1, 1);
+        VkMemoryBarrier2 barrier = {
+            .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT |
+                            VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+            .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                             VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
+                             VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT};
+        VkDependencyInfo dependency = {.sType =
+                                           VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                                       .memoryBarrierCount = 1,
+                                       .pMemoryBarriers = &barrier};
+        vkCmdPipelineBarrier2(gpu->command, &dependency);
+    }
 }
 static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                       gpu->solver_pipelines[mode]);
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
-    uint32_t push[8] = {
-        gpu->width,  gpu->height,         mode,        dc_gpu_runtime_body_count(gpu),
-        (uint32_t)x, (uint32_t)(x >> 32), (uint32_t)y, (uint32_t)(y >> 32)};
+    uint32_t push[8] = {gpu->width,  gpu->height,
+                        mode,        dc_gpu_runtime_body_count(gpu),
+                        (uint32_t)x, (uint32_t)(x >> 32),
+                        (uint32_t)y, (uint32_t)(y >> 32)};
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     if (mode >= SOLVER_BOND_POSITION) {
-        VkDeviceSize offset = sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
-            (VkDeviceSize)(dc_gpu_structural_word_offset(gpu) + 9u) * sizeof(uint32_t);
+        VkDeviceSize offset =
+            sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
+            (VkDeviceSize)(dc_gpu_structural_word_offset(gpu) + 9u) *
+                sizeof(uint32_t);
         vkCmdDispatchIndirect(gpu->command, gpu->body_buffer, offset);
     } else if (indirect) {
         VkDeviceSize offset =
@@ -163,12 +234,25 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
 void dc_gpu_record_solver(dc_gpu_t *gpu) {
     dispatch(gpu, SOLVER_RESET, false);
     dispatch(gpu, SOLVER_BEGIN_FRAME, false);
+    if (gpu->component_profile)
+        vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                             gpu->timestamp_pool, 16);
+    record_pixel_hydro(gpu);
+    if (gpu->component_profile)
+        vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                             gpu->timestamp_pool, 17);
     for (uint32_t step = 0; step < SOLVER_SUBSTEPS; ++step) {
         dispatch(gpu, SOLVER_PREDICT, false);
         if (gpu->structural_enabled)
             dispatch(gpu, SOLVER_BOND_RESET, false);
         dc_gpu_record_broadphase(gpu);
+        if (gpu->component_profile)
+            vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                                 gpu->timestamp_pool, 18 + step * 2);
         dc_gpu_record_contacts(gpu);
+        if (gpu->component_profile)
+            vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                                 gpu->timestamp_pool, 19 + step * 2);
         dispatch(gpu, SOLVER_PREPARE, false);
         dispatch(gpu, SOLVER_INIT_CONTACTS, true);
         dispatch(gpu, SOLVER_CLEAR, false);

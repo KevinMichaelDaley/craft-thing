@@ -39,7 +39,7 @@ bool dc_gpu_tick_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if (!gpu->timestamp_bits || gpu->timestamp_period <= 0.0f)
         return error(err, cap, "Compute queue lacks timestamp queries");
     VkQueryPoolCreateInfo query_info = { .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
-        .queryType = VK_QUERY_TYPE_TIMESTAMP, .queryCount = 4 };
+        .queryType = VK_QUERY_TYPE_TIMESTAMP, .queryCount = 34 };
     if (vkCreateQueryPool(gpu->device, &query_info, NULL, &gpu->timestamp_pool) != VK_SUCCESS)
         return error(err, cap, "Cannot create GPU timestamp pool");
     return make_probe_pipeline(gpu, err, cap) &&
@@ -121,7 +121,7 @@ static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
     if (vkBeginCommandBuffer(gpu->command, &begin) != VK_SUCCESS)
         return error(err, cap, "Cannot begin tick command buffer");
     if (capture) {
-        vkCmdResetQueryPool(gpu->command, gpu->timestamp_pool, 0, 4);
+        vkCmdResetQueryPool(gpu->command, gpu->timestamp_pool, 0, 34);
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                              gpu->timestamp_pool, 0);
     }

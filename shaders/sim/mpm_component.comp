@@ -1,4 +1,6 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#include "../../include/dungeoncraft/mpm_activity_layout.h"
 layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 cells[]; };
@@ -38,11 +40,17 @@ void main() {
     uint tiles_x = (params.width + 15u) / 16u;
     uint control = 3u + 2u * tiles_x * ((params.height + 15u) / 16u);
     if (params.mode == 5u) {
-        activity[control + 1u] = activity[control] != 0u ? activity[0] : 0u;
-        activity[control] = 0u;
+        if (all(equal(gl_GlobalInvocationID,uvec3(0)))) {
+            activity[control + 1u] = activity[control] != 0u ? activity[0] : 0u;
+            activity[control + 2u] = activity[control] != 0u ? activity[1] : 1u;
+            activity[control + 3u] = 1u;
+            activity[control] = 0u;
+        }
         return;
     }
-    uint tile = activity[3u + gl_WorkGroupID.x];
+    uint group=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;
+    if(group>=activity[control+7u]) return;
+    uint tile = activity[3u + group];
     ivec2 p = ivec2(int((tile % tiles_x) * 16u + gl_LocalInvocationID.x),
                     int((tile / tiles_x) * 16u + gl_LocalInvocationID.y));
     if (!in_grid(p)) return;

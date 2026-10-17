@@ -23,3 +23,7 @@ Visual captures and assertions demonstrate coherent grain/relief, exact holes/sh
 **2026-10-14T04:55:44Z**
 
 Device diagnostic under an explicitly granted30sec lease: unchanged previously passing96-texel texture check instrumented with linker-only progress wrappers. Context creation and texture resource/pipeline creation succeeded; first fr_texture_gpu_generate submission never completed before timeout25sec exit124. No validation error printed. Lease released, no renderer process remains. Display/performance fixtures compile but remain unrun; acceptance and FPS claims are blocked on shared submission recovery.
+
+**2026-10-17T08:40:44Z**
+
+Merged renderer fb395f4 with optimizer checkpoint 7b65fd5. Fresh shaders and full headless tests pass with core plus synchronization validation; displayed renderer visual fixture and full test_ui pass. Isolated no-validation 480x270 sun+4 point-light acceptance FAILS unchanged <=2ms added GPU gate: mean total10.563ms (texture0.123 optical2.350 hierarchy0.145 light7.030 compose0.752). Earlier timing20.266ms overlapped UI and is not authoritative. Performance remains open; no FPS or final renderer completion claim. Logs build/renderer-merge-performance-isolated.log and renderer-merge-visual.log.

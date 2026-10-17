@@ -1,0 +1,107 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_arithmetic : require
+layout(local_size_x=128) in;
+layout(constant_id=0) const uint LATERAL=0u;
+layout(constant_id=1) const uint CACHE_CELLS=2048u;
+layout(set=0,binding=1,std430) coherent buffer Cells {uvec2 chunk_cells[];};
+layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
+layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
+layout(push_constant) uniform Params {uint width,height,mode;} params;
+const uint FULL=65536u,PERMEABLE=1u<<17u,KNOWN=1u<<18u,OCCUPIED=1u<<19u;
+shared uvec2 cached[CACHE_CELLS];
+uint line,length;
+ivec2 point_at(uint position) {return LATERAL!=0u?ivec2(position,line):ivec2(line,position);}
+uint coordinate(ivec2 p) {return uint(LATERAL!=0u?p.x:p.y);}
+uint page_at(ivec2 p) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0u;
+    return pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
+}
+uint atlas_index(ivec2 p,uint page) {return (page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);}
+bool permeable(uint material) {return material==0u||material==2u||material==4u||material==5u||material==6u;}
+uint global_meta(ivec2 p,uint page) {
+    uint index=uint(p.y)*params.width+uint(p.x),cells=params.width*params.height;
+    uint capacity=FULL-min(FULL,occupancy[2u*cells+index]);
+    return capacity|KNOWN|(permeable(chunk_cells[atlas_index(p,page)].x&65535u)?PERMEABLE:0u)|
+        (occupancy[index]!=0u?OCCUPIED:0u);
+}
+uint cell_meta(ivec2 p) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0u;
+    uint position=coordinate(p);if(position<CACHE_CELLS) return cached[position].y;
+    uint page=page_at(p);if(page==0u) return 0u;
+    return global_meta(p,page);
+}
+uint water_at(ivec2 p) {
+    uint position=coordinate(p);
+    return position<CACHE_CELLS?cached[position].x:chunk_cells[atlas_index(p,page_at(p))].y;
+}
+void put_water(ivec2 p,uint value) {
+    uint position=coordinate(p);
+    if(position<CACHE_CELLS) cached[position].x=value;
+    else chunk_cells[atlas_index(p,page_at(p))].y=value;
+}
+bool receivable(ivec2 p) {
+    /* Zero capacity does not block geometric displacement through body cells. */
+    return (cell_meta(p)&(KNOWN|PERMEABLE))==(KNOWN|PERMEABLE);
+}
+ivec2 target_at(ivec2 source,uint order) {
+    if(LATERAL==0u) return source-ivec2(0,int(order+1u));
+    int distance=int(order/2u+1u);
+    return source+ivec2((order&1u)==0u?-distance:distance,0);
+}
+uint request_at(ivec2 source,uint order,uint left,uint right) {
+    if(LATERAL!=0u&&order/2u+1u>=((order&1u)==0u?left:right)) return 0u;
+    ivec2 target=target_at(source,order);uint capacity=cell_meta(target)&131071u,water=water_at(target);
+    return water<capacity?capacity-water:0u;
+}
+bool displace_source(ivec2 source) {
+    uint meta=cell_meta(source);
+    if((meta&(KNOWN|OCCUPIED))!=(KNOWN|OCCUPIED)) return false;
+    uint water=water_at(source),capacity=meta&131071u,available=water-min(water,capacity);
+    if(available==0u) return false;
+    uint lane=gl_SubgroupInvocationID,left,right,receivers;
+    if(LATERAL==0u) {
+        uint extent=uint(source.y),blocked=extent+1u;
+        for(uint distance=1u+lane;distance<=extent;distance+=gl_SubgroupSize)
+            if(!receivable(source-ivec2(0,int(distance)))) blocked=min(blocked,distance);
+        receivers=min(extent,subgroupMin(blocked)-1u);left=0u;right=0u;
+    } else {
+        left=65u;right=65u;
+        for(uint distance=1u+lane;distance<=64u;distance+=gl_SubgroupSize) {
+            if(!receivable(source-ivec2(int(distance),0))) left=min(left,distance);
+            if(!receivable(source+ivec2(int(distance),0))) right=min(right,distance);
+        }
+        left=subgroupMin(left);right=subgroupMin(right);receivers=128u;
+    }
+    uint chunk=(receivers+gl_SubgroupSize-1u)/gl_SubgroupSize;
+    uint first=lane*chunk,last=min(receivers,first+chunk),requested=0u;
+    for(uint order=first;order<last;order++) requested+=request_at(source,order,left,right);
+    uint prior=subgroupExclusiveAdd(requested),total=subgroupAdd(requested);
+    uint remaining=available>prior?available-prior:0u;
+    for(uint order=first;order<last&&remaining!=0u;order++) {
+        uint flux=min(remaining,request_at(source,order,left,right));remaining-=flux;
+        if(flux!=0u) {ivec2 target=target_at(source,order);put_water(target,water_at(target)+flux);}
+    }
+    uint sent=min(available,total);
+    if(lane==0u&&sent!=0u) put_water(source,water-sent);
+    return sent!=0u;
+}
+void main() {
+    line=gl_WorkGroupID.x+gl_WorkGroupID.y*65535u;
+    length=LATERAL!=0u?params.width:params.height;
+    if(gl_SubgroupID!=0u||line>=(LATERAL!=0u?params.height:params.width)) return;
+    for(uint position=gl_SubgroupInvocationID;position<min(length,CACHE_CELLS);position+=gl_SubgroupSize) {
+        ivec2 p=point_at(position);uint page=page_at(p);
+        cached[position]=uvec2(0);
+        if(page!=0u) cached[position]=uvec2(chunk_cells[atlas_index(p,page)].y,global_meta(p,page));
+    }
+    subgroupMemoryBarrierShared();subgroupBarrier();
+    for(int position=LATERAL!=0u?0:int(length)-1;position>=0&&position<int(length);position+=LATERAL!=0u?1:-1) {
+        if(displace_source(point_at(uint(position)))) {
+            subgroupMemoryBarrierShared();if(length>CACHE_CELLS) subgroupMemoryBarrierBuffer();subgroupBarrier();
+        }
+    }
+    for(uint position=gl_SubgroupInvocationID;position<min(length,CACHE_CELLS);position+=gl_SubgroupSize) {
+        ivec2 p=point_at(position);uint page=page_at(p);if(page!=0u) chunk_cells[atlas_index(p,page)].y=cached[position].x;
+    }
+}

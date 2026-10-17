@@ -1,0 +1,40 @@
+---
+id: ct-fmj6
+status: closed
+deps: []
+links: []
+created: 2026-10-17T03:42:04Z
+type: bug
+priority: 1
+tags: [vulkan, physics, correctness]
+---
+# Make GPU MPM convergence control independent of lane scheduling
+
+MPM component mode5 currently lets every workgroup lane nonatomically read the changed flag, overwrite the indirect work count and clear the flag. A later lane can observe the cleared flag and prematurely stop component convergence. This is a source-audit finding awaiting a controlled GPU RED; no display-crash cause is claimed.
+
+## Acceptance Criteria
+
+A compiling controlled scheduling test derived from the production shader must fail before the fix and pass afterward. Exactly one invocation publishes convergence control. Preserve all indirect triplet bounds and untouched words. Existing winding dirt, cohesion, mass, full headless and displayed concave regressions pass with Vulkan validation. Measure native360 frame effects without weakening the existing mean or p95 gates.
+
+
+## Notes
+
+**2026-10-17T03:42:10Z**
+
+Controlled schedule source generator and GPU test compile and SPIR-V validate. GPU run is queued behind current full regression; production mpm_component shader remains unchanged until failing RED is observed.
+
+**2026-10-17T03:43:36Z**
+
+Controlled production-source schedule test fails as expected: later lanes overwrite the correct7-item convergence count with0, noVUIDs. Full checkpoint0766758 headless regression separately completed372reportedpasses,0failures,0VUIDs before this fix.
+
+**2026-10-17T03:48:48Z**
+
+Minimal single-global-invocation publisher passes the forced legal schedule (count7 retained,flagcleared,untouchedwords unchanged). Actual production module and instrumented module SPIR-V validate. Existing winding dirt label/count and wet dirt seam/mud integration regressions pass2/2 withVulkanvalidation. Full regression and displayed acceptance remain pending before close.
+
+**2026-10-17T04:26:06Z**
+
+Extended legal-scheduling regression now3/3: changed count retained, unchanged work disabled, balanced2Dextent preserved; all untouched metadata verified. Production single-global-invocation publisher and integration remain valid under synchronizationvalidation. Full combined regression pending before close.
+
+**2026-10-17T05:06:52Z**
+
+Accepted after full validated headless389pass/0VUID plus full UI and quarter-native functional suites exit0. Single-writer convergence and2Ddispatch control tests3/3 pass, winding/mud connectivity and exact coupled state retained. UI wall-clock test requires validationOFF because91pipeline validation alone5.224s/context; unchanged presentation15s gate passes all3cycles without validation. No runtime quality/gates changed.

@@ -1,6 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 #include "../../include/dungeoncraft/material_density.h"
+#include "../../include/dungeoncraft/mpm_activity_layout.h"
 layout(local_size_x = 16, local_size_y = 16) in;
 
 struct Particle {
@@ -476,7 +477,10 @@ void commit_cell(ivec2 cell) {
 
 void main() {
     uint tiles_x = (params.width + 15u) / 16u;
-    uint tile = activity[3u + gl_WorkGroupID.x];
+    uint count_word=10u+2u*tiles_x*((params.height+15u)/16u);
+    uint group=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;
+    if(group>=activity[count_word]) return;
+    uint tile = activity[3u + group];
     ivec2 cell = ivec2(int((tile % tiles_x) * 16u + gl_LocalInvocationID.x),
                        int((tile / tiles_x) * 16u + gl_LocalInvocationID.y));
     if (!in_grid(cell)) return;

@@ -1,5 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+layout(constant_id = 1) const bool RIGID_PIXEL_ONLY = false;
+#define DC_RIGID_PIXEL_ONLY RIGID_PIXEL_ONLY
 #include "rigid_body.glsl"
 #include "rigid_shape.glsl"
 #include "rigid_clip.glsl"
@@ -8,10 +10,12 @@ layout(constant_id = 0) const uint RIGID_RASTER_STAGE = 0u;
 const uint RASTER_MODE=1u, PREPARE_MODE=2u, PHYSICAL_MASK=128u, MODE_MASK=127u;
 shared uint raster_ids[BODY_CAPACITY];
 shared uint raster_count;
+shared uint raster_legacy[BODY_CAPACITY];
 
 layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 chunk_cells[]; };
 layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
 layout(set = 0, binding = 3, std430) buffer Occupancy { uint occupancy[]; };
+layout(set = 0, binding = 27, std430) buffer RasterDispatch { uint raster_dispatch[]; };
 
 layout(set = 0, binding = 4, std430) buffer Bodies { Body bodies[BODY_CAPACITY]; uint data[]; };
 uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
@@ -23,6 +27,7 @@ layout(push_constant) uniform Params {
     uvec2 origin_x;
     uvec2 origin_y;
 } params;
+#include "structural_load.glsl"
 
 bool locate_body(inout Body body) {
     ivec2 old_position=ivec2(body.x_fp,body.y_fp);
@@ -66,7 +71,12 @@ bool solid_at(int x, int y) {
 
 void integrate_body(uint index) {
     Body body = bodies[index];
-    if (body.enabled == 0u) return;
+    if (body.enabled == 0u) {
+        if(body.reserved0!=0u&&pixel_body(body)&&body.motion_ready!=0u) {
+            body_properties(body);bodies[index]=body;
+        }
+        return;
+    }
     body_properties(body);
     bool visible = locate_body(body);
     body_cache_bounds(body);
@@ -121,6 +131,27 @@ void integrate_body(uint index) {
 
 void main() {
     uvec2 p = gl_GlobalInvocationID.xy;
+    if (RIGID_RASTER_STAGE == 2u) {
+        uint lane=gl_LocalInvocationIndex;
+        if(lane<BODY_CAPACITY)
+            raster_legacy[lane]=uint(lane<params.body_count&&bodies[lane].enabled!=0u&&((params.mode&512u)!=0u||bodies[lane].visible!=0u)&&!pixel_body(bodies[lane]));
+        barrier();
+        for(uint stride=32u;stride>0u;stride/=2u) {
+            if(lane<stride) raster_legacy[lane]|=raster_legacy[lane+stride];
+            barrier();
+        }
+        if(lane<6u) {
+            uint axis=lane%3u,value=axis==0u?0u:1u;
+            bool refresh=(params.mode&256u)==0u||data[structural_base()+16u]!=0u;
+            uint selected=raster_legacy[0]!=0u?0u:1u;
+            if(refresh&&lane/3u==selected&&axis<2u) {
+                uvec2 extent=(params.mode&512u)!=0u?params.origin_x:uvec2(params.width,params.height);
+                value=(extent[axis]+15u)/16u;
+            }
+            raster_dispatch[lane]=value;
+        }
+        return;
+    }
     if (RIGID_RASTER_STAGE == 0u) {
         uint index = gl_LocalInvocationIndex;
         if (index < params.body_count) integrate_body(index);
