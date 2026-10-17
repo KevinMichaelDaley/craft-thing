@@ -99,28 +99,90 @@ static void test_dense_leaf_contacts_cannot_weaken_stone_floor(void) {
 
 static void test_grounded_powders_bear_rigid_loads(void) {
     const unsigned materials[]={DC_MATERIAL_DIRT,DC_MATERIAL_GRAVEL,DC_MATERIAL_SAND};
-    for(unsigned trial=0;trial<3;trial++) {
+    bool held=true;
+    for(unsigned trial=0;trial<7;trial++) {
         char err[256];dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
         for(unsigned y=24;y<64;y++) for(unsigned x=0;x<64;x++)
-            chunk->cells[y*64+x].material=y>=56?DC_MATERIAL_STONE:materials[trial];
+            chunk->cells[y*64+x].material=y>=56?DC_MATERIAL_STONE:materials[trial%3];
         ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
         ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
         ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
-        dc_gpu_body_shape_t shape={.count=4,.material=DC_GPU_BODY_STONE,
+        for(unsigned tick=0;tick<90;tick++) ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+        unsigned surface=56;
+        for(unsigned y=0;y<56;y++) {
+            unsigned occupied=0;
+            for(unsigned x=28;x<36;x++) occupied+=chunk->cells[y*64+x].material==materials[trial%3];
+            if(occupied==8&&y<surface) surface=y;
+        }
+        ASSERT_TRUE(surface<56);
+        if(materials[trial%3]!=DC_MATERIAL_SAND) surface=24;
+        float grain_surface=64;
+        for(unsigned i=0;i<DC_MPM_PARTICLES_PER_CHUNK;i++) {
+            dc_mpm_particle_t p=chunk->particles[i];
+            if(p.mass_fp&&p.x_fp>=28*65536&&p.x_fp<36*65536)
+                grain_surface=fminf(grain_surface,(p.y_fp-(int)p.grain_fp)/65536.f);
+        }
+        dc_gpu_body_shape_t shape={.count=4,.material=trial<3?DC_GPU_BODY_WOOD:DC_GPU_BODY_STONE,
             .vertices={{0,0},{8*65536,0},{8*65536,8*65536},{0,8*65536}}};
-        dc_gpu_world_body_t body={.body={.id=77,.active=1,.x_fp=28*65536,.y_fp=12*65536,.width=8,.height=8}};
+        dc_gpu_world_body_t body={.body={.id=77,.active=1,.x_fp=28*65536,.y_fp=(surface-12)*65536,.width=8,.height=8}};
         ASSERT_TRUE(dc_gpu_spawn_convex_body(g,body,&shape,err,sizeof(err)));
         ASSERT_TRUE(dc_gpu_set_rigid_solver(g,true));
         ASSERT_TRUE(dc_gpu_set_body_motion(g,77,0,0,2,err,sizeof(err)));
         ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
-        for(unsigned tick=0;tick<120;tick++) ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+        if(trial==6) {
+            dc_gpu_body_record_t *record=g->body_mapped;
+            record->mass*=1000;record->density*=1000;record->inertia*=1000;
+            record->inverse_mass/=1000;record->inverse_inertia/=1000;
+            record->body.y_fp=record->local_y_fp=(int)((grain_surface-8)*65536);
+        }
+        float fastest=0;int previous=trial==6?(int)((grain_surface-8)*65536):(int)(surface-12)*65536;
+        for(unsigned tick=0;tick<120;tick++) {
+            ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+            dc_gpu_body_t current;ASSERT_TRUE(dc_gpu_read_body_id(g,77,&current,err,sizeof(err)));
+            if(trial==6&&current.y_fp>previous) fastest=fmaxf(fastest,(current.y_fp-previous)/65536.f);
+            if(trial==6&&current.y_fp-previous>6553) printf("overload tick%u descent%.4f\n",tick,(current.y_fp-previous)/65536.f);
+            previous=current.y_fp;
+        }
         dc_gpu_body_t result;ASSERT_TRUE(dc_gpu_read_body_id(g,77,&result,err,sizeof(err)));
-        printf("powder%u stone body bottom %.4f (surface24)\n",materials[trial],result.y_fp/65536.+8);
-        dc_gpu_destroy(g);free(chunk);ASSERT_TRUE(result.y_fp<18*65536);
+        printf("powder%u %s body bottom %.4f (settled surface%u), overload max step%.4f\n",materials[trial%3],trial<3?"wood":trial==6?"1000x stone":"stone",result.y_fp/65536.+8,surface,fastest);
+        ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+        uint64_t mass=0;for(unsigned i=0;i<DC_MPM_PARTICLES_PER_CHUNK;i++) mass+=chunk->particles[i].mass_fp;
+        ASSERT_EQ(mass,(uint64_t)2048*(trial%3==0?78643u:trial%3==1?176947u:65536u));
+        held=held&&fastest<.1f&&result.y_fp<(int)(surface-6)*65536;
+        dc_gpu_destroy(g);free(chunk);
     }
-    PASS();
+    ASSERT_TRUE(held);PASS();
+}
+static void test_embedded_tree_starts_in_equilibrium_without_soil_jacking(void) {
+    char err[256];dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    for(unsigned y=24;y<64;y++) for(unsigned x=0;x<64;x++)
+        if(!(y<26&&x>=31&&x<33)) chunk->cells[y*64+x].material=y>=56?DC_MATERIAL_STONE:DC_MATERIAL_DIRT;
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    dc_gpu_body_shape_t shape={.count=4,.material=DC_GPU_BODY_WOOD,
+        .vertices={{0,0},{2*65536,0},{2*65536,16*65536},{0,16*65536}}};
+    dc_gpu_world_body_t body={.body={.id=77,.active=1,.x_fp=31*65536,.y_fp=10*65536+32768,.width=2,.height=16}};
+    ASSERT_TRUE(dc_gpu_spawn_convex_body(g,body,&shape,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_rigid_solver(g,true));
+    ASSERT_TRUE(dc_gpu_set_body_motion(g,77,0,0,2,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    float highest=10.5f,lowest=10.5f;
+    for(unsigned tick=0;tick<180;tick++) {
+        ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+        dc_gpu_body_t result;ASSERT_TRUE(dc_gpu_read_body_id(g,77,&result,err,sizeof(err)));
+        highest=fminf(highest,result.y_fp/65536.f);lowest=fmaxf(lowest,result.y_fp/65536.f);
+    }
+    printf("embedded trunk equilibrium y10.5 range%.4f..%.4f\n",highest,lowest);
+    dc_gpu_destroy(g);free(chunk);
+    ASSERT_TRUE(highest>10.25f);ASSERT_TRUE(lowest<11.25f);PASS();
 }
 int main(void) {
+    RUN(test_embedded_tree_starts_in_equilibrium_without_soil_jacking);
+    if(getenv("DC_EQUILIBRIUM_ONLY")) {
+        printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
+    }
     RUN(test_grounded_powders_bear_rigid_loads);
     RUN(test_partial_granular_support_motion_does_not_release_tree_but_cut_does);
     RUN(test_full_soil_and_gravel_remain_packed_after_settling);

@@ -12,6 +12,8 @@ static int g_pass,g_fail;
 static dc_gpu_t *observed_gpu;
 static unsigned wood_body_samples;
 static bool moving_wood_seen;
+static uint32_t tracked_id[DC_GPU_BODY_CAPACITY];
+static float initial_center_y[DC_GPU_BODY_CAPACITY],upward_wood_motion;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -40,6 +42,9 @@ static unsigned stone_overlap(dc_gpu_t *g,char *err) {
         if(!dc_gpu_read_pixel_shape(g,b.body.id,pixels,8192,&count,err,256)) return UINT32_MAX;
         bool wood=false;for(unsigned i=0;i<count;i++) wood|=pixels[i].material==DC_GPU_BODY_WOOD;
         if(!wood) continue;
+        float center_y=b.body.y_fp/65536.f+b.center[1];
+        if(tracked_id[slot]!=b.body.id) {tracked_id[slot]=b.body.id;initial_center_y[slot]=center_y;}
+        upward_wood_motion=fmaxf(upward_wood_motion,initial_center_y[slot]-center_y);
         wood_body_samples++;moving_wood_seen|=b.body.vy_fp>0;
         for(unsigned i=0;i<count;i++) {
             float x=pixels[i].x+.5f-b.center[0],y=pixels[i].y+.5f-b.center[1];
@@ -65,12 +70,16 @@ static void test_level03_stays_packed_then_cut_tree_stops_at_stone(void) {
         ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)));
         ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
     }
-    unsigned wood=0,doubled=0;
+    unsigned wood=0,doubled=0;uint64_t soil_mass=0;
     dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     for(unsigned page=0;page<70;page++) {
         ASSERT_TRUE(dc_gpu_download_chunk(g,page,chunk,err,sizeof(err)));
         for(unsigned cell=0;cell<4096;cell++) {
             wood+=chunk->cells[cell].material==DC_MATERIAL_WOOD;
+            for(unsigned layer=0;layer<2;layer++) {
+                dc_mpm_particle_t *p=chunk->particles+cell+layer*4096;
+                if(p->material==DC_MATERIAL_DIRT||p->material==DC_MATERIAL_GRAVEL) soil_mass+=p->mass_fp;
+            }
             doubled+=(chunk->cells[cell].material==DC_MATERIAL_DIRT||chunk->cells[cell].material==DC_MATERIAL_GRAVEL)&&chunk->particles[cell+4096].mass_fp!=0;
         }
     }
@@ -84,22 +93,30 @@ static void test_level03_stays_packed_then_cut_tree_stops_at_stone(void) {
         ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));
         ASSERT_EQ(wood,704u);ASSERT_EQ(doubled,0u);
     }
+    chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    ASSERT_TRUE(dc_level_view_chunk(view,(dc_chunk_coord_t){0,0},chunk,err,sizeof(err)));
+    ASSERT_EQ(chunk->cells[2*64+8].material,DC_MATERIAL_DIRT);free(chunk);
     ASSERT_TRUE(dc_level_view_paint(view,VIEW_WIDTH/2+8-32,VIEW_HEIGHT/2+2-32,0,DC_MATERIAL_AIR,err,sizeof(err)));
     for(unsigned tick=0;tick<120;tick++) {
         ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)));
         ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
     }
-    wood=0;doubled=0;chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    wood=0;doubled=0;uint64_t remaining_mass=0;chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     for(unsigned page=0;page<70;page++) {
         ASSERT_TRUE(dc_gpu_download_chunk(g,page,chunk,err,sizeof(err)));
         for(unsigned cell=0;cell<4096;cell++) {
             wood+=chunk->cells[cell].material==DC_MATERIAL_WOOD;
+            for(unsigned layer=0;layer<2;layer++) {
+                dc_mpm_particle_t *p=chunk->particles+cell+layer*4096;
+                if(p->material==DC_MATERIAL_DIRT||p->material==DC_MATERIAL_GRAVEL) remaining_mass+=p->mass_fp;
+            }
             doubled+=(chunk->cells[cell].material==DC_MATERIAL_DIRT||chunk->cells[cell].material==DC_MATERIAL_GRAVEL)&&chunk->particles[cell+4096].mass_fp!=0;
         }
     }
     free(chunk);printf("single dirt erase: terrain wood%u doubled soil/gravel%u\n",wood,doubled);
     ASSERT_TRUE(screenshot(view,"build/level03_single_dirt_cut.bmp",err));
     ASSERT_EQ(wood,704u);ASSERT_EQ(doubled,0u);
+    ASSERT_EQ(remaining_mass,soil_mass-78643u);
     for(int x=0;x<=34;x+=2) ASSERT_TRUE(dc_level_view_paint(view,VIEW_WIDTH/2+x-32,VIEW_HEIGHT/2-8-32,2,DC_MATERIAL_AIR,err,sizeof(err)));
     unsigned worst=0;
     for(unsigned tick=0;tick<240;tick++) {
@@ -112,10 +129,11 @@ static void test_level03_stays_packed_then_cut_tree_stops_at_stone(void) {
     }
     ASSERT_TRUE(screenshot(view,"build/level03_tree_stopped.bmp",err));
     printf("worst wood-body centers in stone%u\n",worst);
+    printf("largest upward wood center displacement %.4f\n",upward_wood_motion);
     ASSERT_EQ(stone_overlap(g,err),0u);
     ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));
     ASSERT_TRUE(wood_body_samples>0u&&moving_wood_seen);
-    ASSERT_TRUE(worst<=2u);PASS();
+    ASSERT_TRUE(worst<=2u);ASSERT_TRUE(upward_wood_motion<.5f);PASS();
 }
 int main(void) {
     RUN(test_level03_stays_packed_then_cut_tree_stops_at_stone);
