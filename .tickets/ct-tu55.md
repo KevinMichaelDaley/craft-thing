@@ -162,3 +162,7 @@ Displayed-frame diagnostic reproduces sustained p95 RED:180frames mean29.917ms,p
 **2026-10-17T05:43:59Z**
 
 Sustained native360 warm target now passes twice after ct-sqg7 batching:180frames,25.773/25.776ms mean,32.789/32.973ms p95,38.800/38.796FPS. Exact shapes, native physics/display,2fixed60Hz steps/frame,cadence6,pressure20 unchanged. Cold91.454/91.018ms still unoptimized; no unqualified completion. New typed dispatch ABI rejects stale binaries. Targeted exact contacts, work counters and explicit sync validation pass; full current checkpoint regression required.
+
+**2026-10-17T07:37:17Z**
+
+User requested the existing material-painting graphical sandbox, not a benchmark demo. Full validated make scheduler73691 paused between children after particle27/27PASS; GPU released to parent for sandbox. Persistent benchmark demo scope cancelled before runtime integration; already committed controls RED0ceab18 retained and completed as isolated2/2 host tests, with benchmark/default paths unchanged. No validation/benchmark GPU work resumes until visible sandbox closes and parent releases lease. Full regression remainder and UI/quarter/stage trace remain pending.

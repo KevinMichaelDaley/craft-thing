@@ -845,6 +845,7 @@ test_gpu_tools: build/contact_shader_contract_tests
 	./build/mpm_layout_tests
 	./build/probe_feature_tests
 	./build/fluid_recording_tests
+	./build/native_demo_controls_tests
 
 build/contact_shader_contract_tests: tests/vulkan/contact_shader_contract_tests.c src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
 	@mkdir -p build/diagnostics
