@@ -1,0 +1,11 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+#include "../../shaders/sim/rigid_body.glsl"
+uint pixel_word_at(uint index) {return index;}
+layout(local_size_x=64) in;
+layout(buffer_reference,std430,buffer_reference_align=16) buffer BodyPage {Body records[];};
+layout(buffer_reference,std430,buffer_reference_align=8) readonly buffer Directory {uvec2 pages[];};
+layout(set=0,binding=0,std430) readonly buffer Root {uvec2 directory;uint count,slab_shift;} root;
+void main() {}

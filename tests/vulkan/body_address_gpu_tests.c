@@ -1,0 +1,71 @@
+#define DC_PROBE_BUFFER_DEVICE_ADDRESS
+#define main bounded_probe_main
+#include "../../tools/diagnostics/vulkan_probe.c"
+#undef main
+
+#include "../../src/vulkan/body_address_gpu.h"
+static int g_pass,g_fail;
+#define RUN(fn) do {printf("RUN %s\n",#fn);fflush(stdout);fn();} while(0)
+#define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
+#define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
+#define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
+#define PASS() g_pass++
+static void write_address(uint32_t *words,VkDeviceAddress address) {words[0]=(uint32_t)address;words[1]=(uint32_t)(address>>32);}
+static void destroy_probe(probe_t *p) {
+    vkDestroyPipeline(p->device,p->pipeline,NULL);
+    vkDestroyShaderModule(p->device,p->shader,NULL);
+    vkDestroyPipelineLayout(p->device,p->layout,NULL);
+    vkDestroyDescriptorPool(p->device,p->descriptor_pool,NULL);
+    vkDestroyDescriptorSetLayout(p->device,p->descriptor_layout,NULL);
+    vkUnmapMemory(p->device,p->memory);
+    vkDestroyBuffer(p->device,p->buffer,NULL);vkFreeMemory(p->device,p->memory,NULL);
+    vkDestroyCommandPool(p->device,p->pool,NULL);vkDestroyFence(p->device,p->fence,NULL);
+    vkDestroyDevice(p->device,NULL);vkDestroyInstance(p->instance,NULL);
+}
+static void test_address_directory_grows_without_relocating_prior_body_records(void) {
+    probe_t probe={0};ASSERT_TRUE(initialize(&probe));ASSERT_TRUE(allocate_buffer(&probe));
+    dc_gpu_t gpu={.device=probe.device,.physical=probe.physical};char err[256];
+    dc_gpu_address_buffer_t pages[4]={{0}},directory={0};
+    ASSERT_TRUE(create_pipeline(&probe,"build/diagnostics/body_address_probe.spv"));
+    const unsigned counts[]={90,200};unsigned allocated=0;
+    for(unsigned stage=0;stage<2;stage++) {
+        unsigned page_count=(counts[stage]+63u)/64u;
+        dc_gpu_address_buffer_t next={0};
+        ASSERT_TRUE(dc_gpu_address_buffer_create(&gpu,page_count*8u,true,&next,err,sizeof(err)));
+        for(unsigned page=0;page<page_count;page++) {
+            if(page>=allocated) {
+                ASSERT_TRUE(dc_gpu_address_buffer_create(&gpu,64u*sizeof(dc_gpu_body_record_t),true,&pages[page],err,sizeof(err)));
+                dc_gpu_body_record_t *records=pages[page].mapped;
+                for(unsigned i=0;i<64;i++) records[i].body.width=19u+page;
+            }
+            write_address((uint32_t *)next.mapped+page*2u,pages[page].address);
+        }
+        write_address(probe.mapped,next.address);probe.mapped[2]=counts[stage];probe.mapped[3]=6u;
+        ASSERT_TRUE(begin(&probe));
+        VkMemoryBarrier upload={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER,.srcAccessMask=VK_ACCESS_HOST_WRITE_BIT,.dstAccessMask=VK_ACCESS_SHADER_READ_BIT|VK_ACCESS_SHADER_WRITE_BIT};
+        vkCmdPipelineBarrier(probe.command,VK_PIPELINE_STAGE_HOST_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,0,1,&upload,0,NULL,0,NULL);
+        vkCmdBindPipeline(probe.command,VK_PIPELINE_BIND_POINT_COMPUTE,probe.pipeline);
+        vkCmdBindDescriptorSets(probe.command,VK_PIPELINE_BIND_POINT_COMPUTE,probe.layout,0,1,&probe.descriptor,0,NULL);
+        vkCmdDispatch(probe.command,(counts[stage]+63u)/64u,1,1);host_barrier(&probe,1);
+        ASSERT_EQ(vkEndCommandBuffer(probe.command),VK_SUCCESS);
+        if(!submit(&probe,"addressed body directory",1)) exit(2);
+        unsigned mismatches=0;
+        for(unsigned body=0;body<counts[stage];body++) {
+            dc_gpu_body_record_t *record=(dc_gpu_body_record_t *)pages[body/64].mapped+body%64;
+            unsigned visits=stage==1&&body<counts[0]?2u:1u;
+            mismatches+=record->body.id!=0x80000001u+body||record->body.width!=19u+body/64||
+                record->body.vx_fp!=(int)visits||record->mass!=(float)body+.5f;
+        }
+        printf("Addressed body layout%zu bytes, dynamic records%u pages%u mismatches%u\n",sizeof(dc_gpu_body_record_t),counts[stage],page_count,mismatches);
+        dc_gpu_address_buffer_destroy(&gpu,&directory);directory=next;allocated=page_count;
+        ASSERT_EQ(mismatches,0u);
+    }
+    dc_gpu_address_buffer_destroy(&gpu,&directory);
+    for(unsigned page=0;page<allocated;page++) dc_gpu_address_buffer_destroy(&gpu,&pages[page]);
+    ASSERT_EQ(gpu.mapped_local_bytes+gpu.mapped_system_bytes,0u);
+    destroy_probe(&probe);PASS();
+}
+int main(void) {
+    RUN(test_address_directory_grows_without_relocating_prior_body_records);
+    printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
+}
