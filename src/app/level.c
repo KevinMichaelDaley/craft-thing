@@ -50,20 +50,30 @@ bool dc_level_view_renderer_mode(dc_level_view_t *view, fr_renderer_mode_t mode)
     return view && fr_renderer_enable(view->gpu,err,sizeof(err)) &&
         fr_renderer_set_mode(view->gpu, mode);
 }
-bool dc_level_view_place_prop(dc_level_view_t *view, const fr_prop_asset_t *asset,
+static bool place_prop(dc_level_view_t *view, const fr_prop_asset_t *asset,
                               dc_chunk_coord_t chunk, uint32_t local_x, uint32_t local_y,
-                              char *err, uint32_t cap) {
+                              bool restore_bonds,char *err, uint32_t cap) {
     if (!view || !asset || local_x>=DC_CHUNK_SIDE || local_y>=DC_CHUNK_SIDE)
         return error(err,cap,"Invalid prop world address");
     long double x=((long double)chunk.x-view->mapped_origin.x+HALO_CHUNKS)*64+local_x;
     long double y=((long double)chunk.y-view->mapped_origin.y+HALO_CHUNKS)*64+local_y;
     if (x<0 || y<0 || x+asset->width>SIM_WIDTH || y+asset->height>SIM_HEIGHT)
         return error(err,cap,"Prop destination is not resident");
-    if (!fr_gpu_place_terrain_prop(view->gpu,asset,0,(uint32_t)x,(uint32_t)y,err,cap)) return false;
+    bool okay=restore_bonds?fr_gpu_restore_terrain_prop_bonds(view->gpu,asset,0,(uint32_t)x,(uint32_t)y,err,cap):
+        fr_gpu_place_terrain_prop(view->gpu,asset,0,(uint32_t)x,(uint32_t)y,err,cap);
+    if(!okay) return false;
     for (uint32_t i=0;i<view->table.capacity;i++)
         if (view->table.slots[i].state==DC_SLOT_ACTIVE || view->table.slots[i].state==DC_SLOT_SLEEPING)
             dc_chunk_table_mark_dirty(&view->table,i);
     return true;
+}
+bool dc_level_view_place_prop(dc_level_view_t *view,const fr_prop_asset_t *asset,
+                              dc_chunk_coord_t chunk,uint32_t x,uint32_t y,char *err,uint32_t cap) {
+    return place_prop(view,asset,chunk,x,y,false,err,cap);
+}
+bool dc_level_view_restore_prop_bonds(dc_level_view_t *view,const fr_prop_asset_t *asset,
+                                      dc_chunk_coord_t chunk,uint32_t x,uint32_t y,char *err,uint32_t cap) {
+    return place_prop(view,asset,chunk,x,y,true,err,cap);
 }
 
 bool dc_level_view_place_structure(dc_level_view_t *view,

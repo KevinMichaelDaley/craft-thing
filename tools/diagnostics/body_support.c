@@ -3,6 +3,7 @@
 #include <SDL.h>
 #include "../../src/vulkan/structural_store_internal.h"
 #include "ferrum/renderer/gpu.h"
+#include "ferrum/assets/prop_gpu.h"
 #include "terrain_support.h"
 
 static VkBuffer captured_buffer;
@@ -10,6 +11,23 @@ static VkDeviceMemory captured_memory;
 static void *captured;
 static uint32_t capture_count;
 static bool capturing;
+static bool migrate_prop(dc_gpu_t *g,char *err,uint32_t cap) {
+    const char *path=getenv("DC_SUPPORT_PROP");if(!path) return true;
+    FILE *file=fopen(path,"rb");if(!file) return false;
+    bool okay=fseek(file,0,SEEK_END)==0;long length=okay?ftell(file):-1;
+    okay=length>0&&length<256*1024*1024&&fseek(file,0,SEEK_SET)==0;
+    void *bytes=okay?malloc((size_t)length):NULL;
+    okay=bytes&&fread(bytes,1,(size_t)length,file)==(size_t)length;fclose(file);
+    fr_prop_asset_t asset;
+    okay=okay&&fr_prop_asset_open(&asset,bytes,(size_t)length,err,cap);
+    if(okay) {
+        long double x=32-(long double)asset.width/2-(long double)g->body_origin.x*64;
+        long double y=32-(long double)asset.height/2-(long double)g->body_origin.y*64;
+        okay=x>=0&&y>=0&&x+asset.width<=g->width&&y+asset.height<=g->height&&
+            fr_gpu_restore_terrain_prop_bonds(g,&asset,0,(uint32_t)x,(uint32_t)y,err,cap);
+    }
+    free(bytes);return okay;
+}
 static const VkDeviceSize contact_bytes=DC_GPU_CONTACT_HEADER_WORDS*4u+DC_GPU_CONTACT_CAPACITY*sizeof(dc_gpu_contact_t);
 void __real_dc_gpu_record_contacts(dc_gpu_t *g);
 void __wrap_dc_gpu_record_contacts(dc_gpu_t *g) {
@@ -89,7 +107,7 @@ int main(int argc,char **argv) {
             dc_gpu_set_page(g,(uint32_t)x,(uint32_t)y,slot,err,sizeof(err));
         free(chunk);slot++;
     }
-    okay=okay&&dc_gpu_enable_automatic_components(g)&&dc_gpu_set_body_origin(g,header.origin,err,sizeof(err));
+    okay=okay&&migrate_prop(g,err,sizeof(err))&&dc_gpu_enable_automatic_components(g)&&dc_gpu_set_body_origin(g,header.origin,err,sizeof(err));
     if(okay) {report(g,0);okay=report_terrain_support(g,err,sizeof(err));}
     for(int arg=2;okay&&arg<argc;arg+=2) {
         long double x=strtoll(argv[arg],NULL,10)-(long double)header.origin.x*64;

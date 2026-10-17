@@ -23,7 +23,8 @@ bool pixel_fragment_source(uint slot,Body source,uint axis,float cut,uint genera
         if(i!=slot&&bodies[i].enabled==0u&&bodies[i].reserved0==0u) slots[available++]=i;
     if(!carving) for(uint i=0u;i<area;i++) fracture_labels[i]=0u;
     uint count=0u;int plane=int(round(cut));
-    const ivec2 neighbors[4]=ivec2[4](ivec2(-1,0),ivec2(1,0),ivec2(0,-1),ivec2(0,1));
+    const ivec2 neighbors[8]=ivec2[8](ivec2(-1,0),ivec2(1,0),ivec2(0,-1),ivec2(0,1),
+        ivec2(-1,-1),ivec2(1,-1),ivec2(-1,1),ivec2(1,1));
     for(uint seed=0u;seed<area;seed++) {
         uint material=piece_material(source,seed);
         if(material==0u||fracture_labels[seed]!=0u) continue;
@@ -34,7 +35,7 @@ bool pixel_fragment_source(uint slot,Body source,uint axis,float cut,uint genera
         while(head<tail) {
             uint cell=fracture_queue[head++];ivec2 p=pixel_piece_cell(source,cell);
             lows[owner-1u]=min(lows[owner-1u],p);highs[owner-1u]=max(highs[owner-1u],p+1);
-            for(uint n=0u;n<4u;n++) {
+            for(uint n=0u;n<8u;n++) {
                 ivec2 q=p+neighbors[n];
                 if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(source.width,source.height)))||
                    (!carving&&(p[axis]<plane)!=(q[axis]<plane))) continue;

@@ -14,6 +14,10 @@
 typedef struct dc_level_view dc_level_view_t;
 /** Whether a persisted world checkpoint was restored at view creation. */
 bool dc_level_view_restored(const dc_level_view_t *view);
+/** Migrate corner-bond history without placing over saved scene edits. */
+bool dc_level_view_restore_prop_bonds(dc_level_view_t *view,const fr_prop_asset_t *asset,
+                                      dc_chunk_coord_t chunk,uint32_t x,uint32_t y,
+                                      char *err,uint32_t cap);
 
 typedef struct {
     dc_chunk_coord_t origin;

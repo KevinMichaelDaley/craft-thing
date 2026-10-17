@@ -35,3 +35,7 @@ Expanded full-trunk replay passed core/sync validation without errors. Full make
 **2026-10-17T20:59:55Z**
 
 User explicitly directs fixing whole-component rigid-state propagation. Proceed with consistent corner-inclusive connectivity and saved-scene bond migration; do not edit artwork or loosen initial-terrain holding policy. Replace previous pending design question with implementation.
+
+**2026-10-17T21:08:11Z**
+
+Implemented complete edge-and-corner component connectivity in parallel local/seam union, eight original-terrain bonds and consistent fracture/carve connectivity. Added GPU old-save corner-bond recovery from original prop, preserving material/RGB/player edits. Focused core/sync validation clean: propagation 3/3, terrain prop incl migration 5/5, carve 4/4, simultaneous color fracture 1/1, graphical world 3/3. Actual saved-world replay (no erasures) releases all remaining connected tree pixels and moves the full 288-pixel trunk from y181.8096 to y190.8096 in eight ticks; rest30 clears immediately. Full suite next.

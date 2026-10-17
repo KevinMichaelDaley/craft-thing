@@ -14,7 +14,7 @@ static bool report_terrain_support(dc_gpu_t *g,char *err,uint32_t cap) {
         uint32_t page=pages[(y/64)*g->page_width+x/64];
         if(page) cells[(size_t)y*g->width+x]=atlas[(page-1)*4096+(y%64)*64+x%64];
     }
-    const int dx[4]={-1,1,0,0},dy[4]={0,0,-1,1};
+    const int dx[8]={-1,1,0,0,-1,1,-1,1},dy[8]={0,0,-1,1,-1,-1,1,1};
     for(size_t start=0;start<area;start++) {
         if(seen[start]||!support_solid(cells[start].material)) continue;
         unsigned head=0,tail=1,wood=0,loaded=0,released=0,broken=0,cold=0;
@@ -29,15 +29,18 @@ static bool report_terrain_support(dc_gpu_t *g,char *err,uint32_t cap) {
             wood+=cell.material==7||cell.material==8;
             loaded+=(cell.flags&DC_CELL_LOADED_TERRAIN)!=0;
             released+=(cell.flags&DC_CELL_RELEASED_TERRAIN)!=0;
-            for(unsigned axis=0;axis<4;axis++) {
+            for(unsigned axis=0;axis<8;axis++) {
+                unsigned bit=1u<<(axis<4?10+axis:axis-4);
                 int nx=(int)x+dx[axis],ny=(int)y+dy[axis];
-                if(nx<0||ny<0||nx>=(int)g->width||ny>=(int)g->height||!pages[(ny/64)*g->page_width+nx/64]) {cold++;bonds|=cell.flags&(1u<<(10+axis));continue;}
+                if(nx<0||ny<0||nx>=(int)g->width||ny>=(int)g->height||!pages[(ny/64)*g->page_width+nx/64]) {cold++;bonds|=cell.flags&bit;continue;}
                 unsigned next=(unsigned)ny*g->width+(unsigned)nx;
                 if(!support_solid(cells[next].material)) continue;
-                bonds|=1u<<(10+axis);
+                bonds|=bit;
                 if(!seen[next]) {seen[next]=1;queue[tail++]=next;}
             }
-            broken+=(cell.flags&DC_CELL_BONDS_READY)!=0&&((cell.flags&DC_CELL_BOND_MASK)&~bonds)!=0;
+            unsigned known=((cell.flags&DC_CELL_BONDS_READY)?DC_CELL_BOND_MASK:0u)|
+                ((cell.flags&DC_CELL_DIAGONAL_BONDS_READY)?DC_CELL_DIAGONAL_BOND_MASK:0u);
+            broken+=((cell.flags&known)&~bonds)!=0;
         }
         if(wood) printf("terrain component cells%u wood%u bounds %.0Lf,%.0Lf..%.0Lf,%.0Lf loaded%u released%u broken%u unknown_faces%u\n",
             tail,wood,(long double)g->body_origin.x*64+lx,(long double)g->body_origin.y*64+ly,

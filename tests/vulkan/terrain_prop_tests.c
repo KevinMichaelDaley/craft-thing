@@ -181,6 +181,35 @@ static void check_detached_color(bool roundtrip) {
 }
 static void test_detached_body_keeps_authored_color_map(void) {check_detached_color(false);}
 static void test_terrain_body_and_water_colors_survive_save_load(void) {check_detached_color(true);}
+static void test_legacy_prop_bonds_release_leftover_tree_pixels_without_restamping(void) {
+    dc_gpu_t *g=context();ASSERT_TRUE(g);char err[256];
+    ASSERT_TRUE(dc_gpu_paint_material(g,32,32,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));dc_chunk_colors_t *colors=calloc(1,sizeof(*colors));
+    ASSERT_TRUE(chunk&&colors);
+    const unsigned slot=1,at=60*64+25;
+    chunk->coord=(dc_chunk_coord_t){1,0};
+    chunk->cells[at]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN|DC_CELL_BONDS_READY};
+    colors->terrain[at][0]=.73f;colors->terrain[at][1]=.21f;colors->terrain[at][2]=.11f;colors->terrain[at][3]=1;
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,slot,chunk,err,sizeof(err)));
+    ASSERT_TRUE(fr_renderer_upload_chunk_colors(g,slot,colors,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_restore_terrain_prop_bonds(g,&g_asset,0,32,32,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(g,slot,chunk,err,sizeof(err)));
+    ASSERT_EQ(chunk->cells[at].material,DC_MATERIAL_WOOD);
+    ASSERT_TRUE(chunk->cells[at].flags&DC_CELL_DIAGONAL_BONDS_READY);
+    ASSERT_TRUE(chunk->cells[at].flags&8u);
+    ASSERT_EQ(chunk->cells[61*64+26].material,DC_MATERIAL_AIR);
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    dc_gpu_body_pixel_t pixel[1];unsigned count=0;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,pixel,1,&count,err,sizeof(err)));
+    ASSERT_EQ(count,1u);
+    dc_gpu_body_record_t *b=g->body_mapped;const uint32_t *shape=(uint32_t*)g->body_mapped+b->compound_reserved;
+    const float *rgb=dc_gpu_shape_colors(g,b->compound_reserved+shape[8]+1);
+    ASSERT_TRUE(!memcmp(rgb,colors->terrain[at],16));
+    ASSERT_TRUE(dc_gpu_download_chunk(g,slot,chunk,err,sizeof(err)));
+    ASSERT_EQ(chunk->cells[at].material,DC_MATERIAL_AIR);
+    dc_gpu_destroy(g);free(chunk);free(colors);PASS();
+}
 int main(void) {
     FILE *file=fopen("assets/props/level_piece01.prop/asset.cprop","rb");
     if (!file) return 2;
@@ -193,5 +222,6 @@ int main(void) {
     RUN(test_unknown_occupied_destination_rejects_entire_scene);
     RUN(test_detached_body_keeps_authored_color_map);
     RUN(test_terrain_body_and_water_colors_survive_save_load);
+    RUN(test_legacy_prop_bonds_release_leftover_tree_pixels_without_restamping);
     free(g_bytes); printf("%d passed, %d failed\n",g_pass,g_fail); return g_fail!=0;
 }

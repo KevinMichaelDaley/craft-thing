@@ -22,6 +22,25 @@ layout(push_constant) uniform Params {uint width,height,x,y,asset_width,asset_he
 uint terrain(uint m) {
     return m==1u?1u:m==2u?7u:m==4u?8u:m==5u?2u:m==6u?0u:m==7u?4u:m==8u?5u:m==9u?6u:0xffffffffu;
 }
+bool rigid_material(uint m) {return m==1u||m==7u||m==8u;}
+void restore_bonds(uint i,uvec2 position,uint page,uint mapped) {
+    if(page==0u||!rigid_material(mapped)) return;
+    uint atlas=(page-1u)*4096u+(position.y%64u)*64u+position.x%64u;
+    uint flags=cells[atlas].x>>DC_CELL_FLAGS_SHIFT;
+    if((cells[atlas].x&65535u)!=mapped||(flags&DC_CELL_LOADED_TERRAIN)==0u||
+       (flags&DC_CELL_DIAGONAL_BONDS_READY)!=0u) return;
+    const ivec2 directions[4]=ivec2[4](ivec2(-1,-1),ivec2(1,-1),ivec2(-1,1),ivec2(1,1));
+    uint bonds=flags&DC_CELL_DIAGONAL_BOND_MASK;
+    for(uint axis=0u;axis<4u;axis++) {
+        ivec2 source=ivec2(i%p.asset_width,i/p.asset_width)+directions[axis];
+        if(any(lessThan(source,ivec2(0)))||any(greaterThanEqual(source,ivec2(p.asset_width,p.asset_height)))) continue;
+        uint packed=words[8u+(uint(source.y)*p.asset_width+uint(source.x))*2u];
+        bool connected=((packed>>16u)&255u)==1u&&rigid_material(terrain(packed&65535u));
+        uint bit=1u<<axis;bonds=connected?bonds|bit:bonds&~bit;
+    }
+    flags=(flags&~DC_CELL_DIAGONAL_BOND_MASK)|bonds|DC_CELL_DIAGONAL_BONDS_READY;
+    cells[atlas].x=(cells[atlas].x&65535u)|(flags<<DC_CELL_FLAGS_SHIFT);
+}
 float scalar(uint i) {return uintBitsToFloat(words[i]);}
 int canonical_cell(uint chunk,uint local) {
     uint coordinate=((chunk&16383u)*64u+local)&1048575u;
@@ -35,6 +54,7 @@ void main() {
     uvec2 position=uvec2(p.x+i%p.asset_width,p.y+i/p.asset_width);
     uint page=pages[(position.y/64u)*((p.width+63u)/64u)+position.x/64u];
     uint mapped=terrain(material);
+    if(p.phase==2u) {if(role==1u) restore_bonds(i,position,page,mapped);return;}
     if(p.phase==0u) {
         uint failure=role!=1u||mapped==0xffffffffu?1u:page==0u?2u:occupancy[position.y*p.width+position.x]!=0u?4u:0u;
         if(failure!=0u) atomicOr(words[0],failure);

@@ -60,8 +60,30 @@ static void test_settled_tree_falls_again_when_supporting_terrain_detaches(void)
     ASSERT_TRUE(tree.y_fp>settled_y+5*65536);
     ASSERT_TRUE(platform.y_fp>35*65536);ASSERT_EQ(stats.overflow,0u);PASS();
 }
+static void test_corner_component_propagates_across_four_chunk_seam(void) {
+    dc_gpu_t *g=NULL;char err[256];dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    ASSERT_TRUE(dc_gpu_create(&g,128,128,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    for(unsigned cy=0;cy<2;cy++) for(unsigned cx=0;cx<2;cx++) {
+        *chunk=(dc_chunk_t){.coord={cx,cy}};
+        for(unsigned y=0;y<64;y++) for(unsigned x=0;x<64;x++) {
+            unsigned wx=cx*64+x,wy=cy*64+y;
+            if((wx==63&&wy==63)||(wx==64&&wy==64)||(wx==65&&wy>=65))
+                chunk->cells[y*64+x]=(dc_cell_t){.material=wx==65?DC_MATERIAL_STONE:DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
+        }
+        ASSERT_TRUE(dc_gpu_upload_chunk(g,cy*2+cx,chunk,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_page(g,cx,cy,cy*2+cx,err,sizeof(err)));
+    }
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,65,65,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    dc_gpu_body_pixel_t pixels[4];unsigned count=0;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,pixels,4,&count,err,sizeof(err)));
+    ASSERT_EQ(count,2u);dc_gpu_destroy(g);free(chunk);PASS();
+}
 int main(void) {
     RUN(test_corner_connected_pixels_detach_as_one_component);
+    RUN(test_corner_component_propagates_across_four_chunk_seam);
     RUN(test_settled_tree_falls_again_when_supporting_terrain_detaches);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

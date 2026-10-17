@@ -25,7 +25,7 @@ uint capacity() {return 2u*((max(params.width*params.height,total())+7u)/8u)+64u
 uint record(uint c) {return graph()+36300u+c*24u;}
 uint registry(uint s) {return base()+32u+s*8u;}
 bool solid(uint i) {uint m=cells[i].x&65535u;return data[registry(i/4096u)+5u]!=0u&&(m==1u||m==7u||m==8u);}
-uint neighbor(uint i,uint axis) {
+uint cardinal_neighbor(uint i,uint axis) {
     uint p=i%4096u,x=p%64u,y=p/64u;
     if(axis==0u&&x>0u) return i-1u;
     if(axis==1u&&x<63u) return i+1u;
@@ -34,14 +34,22 @@ uint neighbor(uint i,uint axis) {
     uint s=labels[total()+i/4096u*4u+axis];
     return s==0xffffffffu?s:s*4096u+(axis==0u?y*64u+63u:axis==1u?y*64u:axis==2u?4032u+x:x);
 }
+uint neighbor(uint i,uint axis) {
+    if(axis<4u) return cardinal_neighbor(i,axis);
+    uint horizontal=cardinal_neighbor(i,(axis-4u)%2u);
+    return horizontal==0xffffffffu?horizontal:cardinal_neighbor(horizontal,axis<6u?2u:3u);
+}
 const uint LOADED_TERRAIN=DC_CELL_LOADED_TERRAIN<<DC_CELL_FLAGS_SHIFT;
 const uint BONDS_READY=DC_CELL_BONDS_READY<<DC_CELL_FLAGS_SHIFT;
-const uint BOND_MASK=DC_CELL_BOND_MASK<<DC_CELL_FLAGS_SHIFT;
+const uint CARDINAL_BOND_MASK=DC_CELL_BOND_MASK<<DC_CELL_FLAGS_SHIFT;
+const uint DIAGONAL_BOND_MASK=DC_CELL_DIAGONAL_BOND_MASK<<DC_CELL_FLAGS_SHIFT;
+const uint DIAGONAL_BONDS_READY=DC_CELL_DIAGONAL_BONDS_READY<<DC_CELL_FLAGS_SHIFT;
+const uint BOND_MASK=DC_CELL_ALL_BOND_MASK<<DC_CELL_FLAGS_SHIFT;
 const uint RELEASED_TERRAIN=DC_CELL_RELEASED_TERRAIN<<DC_CELL_FLAGS_SHIFT;
 uint terrain_bonds(uint i) {
     uint bonds=cells[i].x&BOND_MASK;
-    for(uint axis=0u;axis<4u;axis++) {
-        uint other=neighbor(i,axis),bit=1u<<(DC_CELL_BOND_SHIFT+axis);
+    for(uint axis=0u;axis<8u;axis++) {
+        uint other=neighbor(i,axis),bit=1u<<(axis<4u?DC_CELL_BOND_SHIFT+axis:DC_CELL_DIAGONAL_BOND_SHIFT+axis-4u);
         if(other!=0xffffffffu) bonds=solid(other)?bonds|bit:bonds&~bit;
     }
     return bonds;
@@ -49,7 +57,8 @@ uint terrain_bonds(uint i) {
 bool terrain_released(uint i,uint bonds) {
     uint flags=cells[i].x;
     return (flags&LOADED_TERRAIN)==0u || (flags&RELEASED_TERRAIN)!=0u ||
-        ((flags&BONDS_READY)!=0u && ((flags&BOND_MASK)&~bonds)!=0u);
+        ((flags&BONDS_READY)!=0u && ((flags&CARDINAL_BOND_MASK)&~bonds)!=0u)||
+        ((flags&DIAGONAL_BONDS_READY)!=0u && ((flags&DIAGONAL_BOND_MASK)&~bonds)!=0u);
 }
 ivec2 relative_point(uint root,uint i) {
     uint a=registry(root/4096u),b=registry(i/4096u);
@@ -111,8 +120,11 @@ void main() {
         return;
     }
     if(EXTRACTION_PHASE==20u) {
-        if(i<n&&solid(i)&&(cells[i].x&(LOADED_TERRAIN|BONDS_READY))==LOADED_TERRAIN)
-            cells[i].x=(cells[i].x&~BOND_MASK)|BONDS_READY|candidates[n+i];
+        if(i<n&&solid(i)&&(cells[i].x&(LOADED_TERRAIN|BONDS_READY))==LOADED_TERRAIN) {
+            uint missing=((cells[i].x&BONDS_READY)==0u?CARDINAL_BOND_MASK:0u)|
+                ((cells[i].x&DIAGONAL_BONDS_READY)==0u?DIAGONAL_BOND_MASK:0u);
+            cells[i].x=(cells[i].x&~missing)|BONDS_READY|DIAGONAL_BONDS_READY|(candidates[n+i]&missing);
+        }
         return;
     }
     if(EXTRACTION_PHASE==9u) {
@@ -134,11 +146,14 @@ void main() {
     if(EXTRACTION_PHASE==12u) {
         uint index=gl_WorkGroupID.x*4096u+(lane<64u?lane*64u+63u:4032u+lane-64u);
         if(!solid(index)) return;
-        uint other=neighbor(index,lane<64u?1u:3u);if(other==0xffffffffu||!solid(other)) return;
+        for(uint direction=0u;direction<3u;direction++) {
+        uint axis=lane<64u?(direction==0u?1u:direction==1u?5u:7u):(direction==0u?3u:direction==1u?6u:7u);
+        uint other=neighbor(index,axis);if(other==0xffffffffu||!solid(other)) continue;
         for(;;) {
             uint a=component_root(index),b=component_root(other);if(a==b) break;
             uint hi=max(a,b),lo=min(a,b);
             if(atomicCompSwap(candidates[hi],hi,lo)==hi) break;
+        }
         }
         return;
     }
@@ -200,7 +215,7 @@ void main() {
         atomicMin(data[r+1u],uint(p.x)^0x80000000u);atomicMin(data[r+2u],uint(p.y)^0x80000000u);
         atomicMax(data[r+3u],uint(p.x)^0x80000000u);atomicMax(data[r+4u],uint(p.y)^0x80000000u);atomicAdd(data[r+5u],1u);
         if(terrain_released(i,terrain_bonds(i))) atomicOr(data[r+23u],1u);
-        for(uint axis=0u;axis<4u;axis++) if(neighbor(i,axis)==0xffffffffu) atomicOr(data[r+6u],1u);
+        for(uint axis=0u;axis<8u;axis++) if(neighbor(i,axis)==0xffffffffu) atomicOr(data[r+6u],1u);
         return;
     }
     if(EXTRACTION_PHASE==8u) {
@@ -319,7 +334,7 @@ void main() {
             if(c<data[g+36257u]&&data[record(c)+14u]!=0u) {cells[i].x=0u;terrain_colors[i]=vec4(0);}
             else if((cells[i].x&LOADED_TERRAIN)!=0u) {
                 uint bonds=candidates[n+i],released=terrain_released(i,bonds)?RELEASED_TERRAIN:0u;
-                cells[i].x=(cells[i].x&~BOND_MASK)|BONDS_READY|bonds|released;
+                cells[i].x=(cells[i].x&~BOND_MASK)|BONDS_READY|DIAGONAL_BONDS_READY|bonds|released;
             }
         }
         return;

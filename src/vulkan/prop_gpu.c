@@ -10,9 +10,9 @@ static bool placement_error(char *err, uint32_t cap, const char *message) {
     return false;
 }
 
-bool fr_gpu_place_terrain_prop(dc_gpu_t *g, const fr_prop_asset_t *asset,
+static bool terrain_prop_operation(dc_gpu_t *g, const fr_prop_asset_t *asset,
                                uint32_t frame, uint32_t x, uint32_t y,
-                               char *err, uint32_t cap) {
+                               bool restore_bonds,char *err, uint32_t cap) {
     fr_prop_asset_t validated;
     if (!g || !asset || !fr_prop_asset_open(&validated,asset->bytes,asset->size,err,cap) ||
         frame>=validated.frame_count || x>=g->width || y>=g->height ||
@@ -53,7 +53,7 @@ bool fr_gpu_place_terrain_prop(dc_gpu_t *g, const fr_prop_asset_t *asset,
         (uint32_t)(sizeof(dc_gpu_body_record_t)*DC_GPU_BODY_CAPACITY/4)+dc_gpu_structural_word_offset(g)};
     vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,compute.pipeline);
     vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,compute.pipeline_layout,0,1,&compute.descriptor,0,NULL);
-    for (uint32_t phase=0;phase<2;phase++) {
+    for (uint32_t phase=restore_bonds?2u:0u;phase<(restore_bonds?3u:2u);phase++) {
         push[6]=phase;
         vkCmdPushConstants(g->command,compute.pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
         vkCmdDispatch(g->command,(count+127)/128,1,1);
@@ -78,4 +78,12 @@ done:
     g->mapped_local_bytes=local_before;
     g->mapped_system_bytes=system_before;
     return okay;
+}
+bool fr_gpu_place_terrain_prop(dc_gpu_t *g,const fr_prop_asset_t *asset,
+                               uint32_t frame,uint32_t x,uint32_t y,char *err,uint32_t cap) {
+    return terrain_prop_operation(g,asset,frame,x,y,false,err,cap);
+}
+bool fr_gpu_restore_terrain_prop_bonds(dc_gpu_t *g,const fr_prop_asset_t *asset,
+                                      uint32_t frame,uint32_t x,uint32_t y,char *err,uint32_t cap) {
+    return terrain_prop_operation(g,asset,frame,x,y,true,err,cap);
 }
