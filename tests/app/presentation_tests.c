@@ -17,6 +17,7 @@ static bool image_sems_safe;
 static dc_gpu_t *window_gpu;
 static VkImage acquired_image;
 static bool acquire_dependency;
+static bool present_dependency;
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); printf("OK   %s\n", #fn); } while (0)
 #define ASSERT_TRUE(e) do { if (!(e)) { printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #e); ++g_fail; return; } } while (0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -46,6 +47,9 @@ void __wrap_vkCmdPipelineBarrier2(VkCommandBuffer command,const VkDependencyInfo
            barrier->newLayout==VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             acquire_dependency=acquire_dependency &&
                 (barrier->srcStageMask&VK_PIPELINE_STAGE_2_TRANSFER_BIT)!=0;
+        if(barrier->image==acquired_image && barrier->newLayout==VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+            present_dependency=present_dependency &&
+                (barrier->dstStageMask&VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT)!=0;
     }
     __real_vkCmdPipelineBarrier2(command,dependency);
 }
@@ -84,6 +88,7 @@ static int window_cycle(void) {
     window_gpu=g;
     acquired_image=VK_NULL_HANDLE;
     acquire_dependency=true;
+    present_dependency=true;
     uint32_t count=0;
     if(vkGetPhysicalDeviceSurfacePresentModesKHR(g->physical,g->surface,&count,NULL)!=VK_SUCCESS) return 2;
     VkPresentModeKHR *modes=calloc(count,sizeof(*modes)); if(!modes) return 3;
@@ -113,12 +118,12 @@ static int window_cycle(void) {
         if(!okay) { fprintf(stderr,"%s\n",err); return 6; }
         SDL_Delay(2);
     }
-    bool okay=finite_acquire && idle_calls==0 && image_sems_safe && acquire_dependency;
+    bool okay=finite_acquire && idle_calls==0 && image_sems_safe && acquire_dependency && present_dependency;
     okay=okay && dc_gpu_read_body_id(g,1,&body,err,sizeof(err)) && body.x_fp==10*65536+90*4096;
     fprintf(stdout,"mode=%d finite acquire=%d presentation queue-idle calls=%u\n",mode,finite_acquire,idle_calls);
     fprintf(stdout,"90-frame waits: acquire=%.3fms enqueue=%.3fms render=%.3fms image semaphores safe=%d\n",
         acquire_ms,enqueue_ms,render_wait_ms,image_sems_safe);
-    fprintf(stdout,"acquired image transition chains transfer wait=%d\n",acquire_dependency);
+    fprintf(stdout,"image transitions chain transfer wait=%d and present signal=%d\n",acquire_dependency,present_dependency);
     window_gpu=NULL;
     dc_gpu_destroy(g);
     return okay ? 0 : 7;
