@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "contact_shader_contract.h"
 #include "gpu_internal.h"
 
 _Static_assert(sizeof(dc_gpu_contact_t) == 128, "GPU contact layout must match SPIR-V");
@@ -40,6 +41,8 @@ bool dc_gpu_read_contacts(dc_gpu_t *gpu, dc_gpu_contact_stats_t *stats,
 }
 
 bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    if(!dc_gpu_contact_shader_compatible("build/shaders/contacts.comp.spv",
+        DC_GPU_TYPED_CONTACT_ACTIVITY_WORD,err,cap)) return false;
     VkShaderModule module = VK_NULL_HANDLE;
     if (!dc_gpu_load_shader_module(gpu, "build/shaders/contacts.comp.spv", &module, err, cap)) return false;
     VkComputePipelineCreateInfo info = { .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
@@ -54,6 +57,15 @@ bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         info.stage.pSpecializationInfo=&specialization;
         result = vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,&gpu->contact_pipelines[phase]);
     }
+    if(result==VK_SUCCESS) {
+        uint32_t values[]={2u,1u};
+        VkSpecializationMapEntry entries[]={{.constantID=0,.size=sizeof(uint32_t)},
+            {.constantID=1,.offset=sizeof(uint32_t),.size=sizeof(uint32_t)}};
+        VkSpecializationInfo specialization={.mapEntryCount=2,.pMapEntries=entries,
+            .dataSize=sizeof(values),.pData=values};
+        info.stage.pSpecializationInfo=&specialization;
+        result=vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,&gpu->contact_pixel_pipeline);
+    }
     vkDestroyShaderModule(gpu->device, module, NULL);
     return result == VK_SUCCESS ? true : error(err, cap, "Cannot create GPU contact pipeline");
 }
@@ -64,12 +76,19 @@ void dc_gpu_record_contacts(dc_gpu_t *gpu) {
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
     uint32_t push[8] = {gpu->width, gpu->height, 0, dc_gpu_runtime_body_count(gpu),
         (uint32_t)x, (uint32_t)(x >> 32), (uint32_t)y, (uint32_t)(y >> 32)};
-    for (uint32_t mode = 0; mode < DC_GPU_CONTACT_PHASE_COUNT; ++mode) {
-        vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->contact_pipelines[mode]);
-        push[2] = mode | (gpu->component_profile ? 256u : 0u);
+    uint32_t count=DC_GPU_CONTACT_PHASE_COUNT+(gpu->contact_pixel_pipeline!=VK_NULL_HANDLE);
+    for (uint32_t pass = 0; pass < count; ++pass) {
+        bool typed=pass==DC_GPU_CONTACT_PHASE_COUNT;
+        uint32_t mode=typed?2u:pass;
+        vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
+            typed?gpu->contact_pixel_pipeline:gpu->contact_pipelines[mode]);
+        push[2] = mode | (gpu->component_profile ? 256u : 0u) |
+            (gpu->contact_pixel_pipeline==VK_NULL_HANDLE?512u:1024u);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-        if (mode) {
+        if(typed) vkCmdDispatchIndirect(gpu->command,gpu->mpm_activity_buffer,
+            DC_GPU_TYPED_CONTACT_ACTIVITY_WORD*sizeof(uint32_t));
+        else if (mode) {
             uint32_t word = mode == 2 ? dc_gpu_solver_word_offset(gpu) + DC_GPU_PIXEL_CONTACT_DISPATCH_WORD :
                 dc_gpu_contact_word_offset(gpu) + DC_GPU_CONTACT_DISPATCH_WORD;
             VkDeviceSize indirect = sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +

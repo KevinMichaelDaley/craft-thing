@@ -2,6 +2,7 @@
 #define main pixel_fixture_main
 #include "../../tests/vulkan/pixel_component_tests.c"
 #undef main
+#include "../../src/vulkan/contact_shader_contract.h"
 static double last_contact_ms;
 static uint32_t last_emitted;
 
@@ -9,7 +10,10 @@ bool __real_dc_gpu_load_shader_module(dc_gpu_t *, const char *, VkShaderModule *
 bool __wrap_dc_gpu_load_shader_module(dc_gpu_t *gpu, const char *path, VkShaderModule *module,
                                       char *err, uint32_t cap) {
     const char *candidate = getenv("DC_CONTACT_SHADER");
-    if (candidate && strcmp(path, "build/shaders/contacts.comp.spv") == 0) path = candidate;
+    if (candidate && strcmp(path, "build/shaders/contacts.comp.spv") == 0) {
+        if(!dc_gpu_contact_shader_compatible(candidate,DC_GPU_TYPED_CONTACT_ACTIVITY_WORD,err,cap)) return false;
+        path = candidate;
+    }
     return __real_dc_gpu_load_shader_module(gpu, path, module, err, cap);
 }
 

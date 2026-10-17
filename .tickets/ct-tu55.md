@@ -118,3 +118,7 @@ Visible-body native baseline corrected: concave fixture now explicitly selects m
 **2026-10-17T00:55:51Z**
 
 Typed drawing passes eight GPU selector cases plus byte-identical paused images across all five overlays, cropped viewport and hidden enabled legacy fallback. Physical five-plane occupancy/volume/face output remains identical. Visible native640x360 mean35.789ms,p9544.059ms,cold103.990ms,27.941FPS versus36.921ms generic baseline. No30FPS claim. Both draw variants use GPU/configuration selection; no CPU geometry scan. Classifier indirect words now have one final writer each, removing cross-lane reset/overwrite ordering dependence. Full headless341-pass checkpoint predates this draw change; final broad rerun pending.
+
+**2026-10-17T02:18:10Z**
+
+Typed contact pipelines and compatibility guards pass targeted Vulkan selector and exact 44-contact body/terrain/grain equivalence tests. Visible native 640x360 simulation and display: mean 33.768 ms, p95 41.021 ms, cold 102.650 ms, 29.614 FPS; target remains unmet. Full suite must be rerun after this checkpoint.

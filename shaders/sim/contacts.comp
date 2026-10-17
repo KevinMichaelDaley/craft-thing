@@ -1,9 +1,12 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+layout(constant_id=1) const bool CONTACT_PIXEL_ONLY=false;
+#define DC_RIGID_PIXEL_ONLY CONTACT_PIXEL_ONLY
 #include "rigid_body.glsl"
 #include "contact_geometry.glsl"
 layout(local_size_x = 64) in;
 layout(constant_id = 0) const uint CONTACT_PHASE = 0u;
+layout(constant_id = 31) const uint TYPED_CONTACT_ACTIVITY_WORD = 6u;
 const uint PIXEL_CONTACT_DISPATCH_WORD = 10u;
 
 struct Particle {
@@ -14,6 +17,7 @@ struct Particle {
 layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 chunk_cells[]; };
 layout(set = 0, binding = 2, std430) readonly buffer Pages { uint pages[]; };
 layout(set = 0, binding = 19, std430) readonly buffer Particles { Particle particles[]; };
+layout(set = 0, binding = 27, std430) buffer PixelContactDispatch { uint pixel_dispatch[]; };
 layout(set = 0, binding = 4, std430) buffer Bodies { Body bodies[BODY_CAPACITY]; uint data[]; };
 uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
 layout(push_constant) uniform Params {
@@ -26,6 +30,7 @@ const uint CONTACT_HEADER_WORDS = 12u, CONTACT_GROUP_SIZE = 64u;
 const uint CONTACT_WORDS = 32u;
 const uint BODY_CONTACT = 0u, TERRAIN_CONTACT = 1u, BOUNDARY_CONTACT = 2u, MPM_CONTACT = 3u;
 shared uint group_found;
+shared uint body_kinds[BODY_CAPACITY];
 
 uvec2 page_extent() { return uvec2((params.width + 63u) / 64u, (params.height + 63u) / 64u); }
 uint pair_base() { uvec2 size = page_extent() + 2u; return HEADER_WORDS + 2u * size.x * size.y; }
@@ -161,20 +166,28 @@ void main() {
     uint solver = base + CONTACT_HEADER_WORDS + 8192u * CONTACT_WORDS;
     contact_skin = data[solver + 9u] != 0u ? 0.25 : CONTACT_SKIN;
     if (CONTACT_PHASE == 0u) {
-        if (index != 0u) return;
-        data[base] = 0u; data[base + 1u] = 0u;
-        data[base + 2u] = data[2] == 0u ? 0u : 4u;
-        data[base + 4u] = data[0]; data[base + 5u] = 0u;
-        data[base + 6u] = data[2] == 0u ? (data[0]+CONTACT_GROUP_SIZE-1u)/CONTACT_GROUP_SIZE : 0u;
-        data[base + 7u] = 1u; data[base + 8u] = 1u;
-        data[base + 9u] = 0u; data[base + 10u] = 0u; data[base + 11u] = 0u;
-        bool pixels = false;
-        for (uint i=0u; i<params.body_count; ++i)
-            pixels = pixels || (bodies[i].enabled!=0u && pixel_body(bodies[i]));
-        /* Reserved solver header words hold the GPU-only cooperative dispatch. */
-        data[solver+PIXEL_CONTACT_DISPATCH_WORD] = pixels && data[2]==0u ? data[0] : 0u;
-        data[solver+PIXEL_CONTACT_DISPATCH_WORD+1u] = 1u;
-        data[solver+PIXEL_CONTACT_DISPATCH_WORD+2u] = 1u;
+        uint kind=0u;
+        if(lane<params.body_count&&bodies[lane].enabled!=0u) kind=pixel_body(bodies[lane])?1u:2u;
+        body_kinds[lane]=kind;
+        barrier();
+        for(uint stride=BODY_CAPACITY/2u;stride>0u;stride/=2u) {
+            if(lane<stride) body_kinds[lane]|=body_kinds[lane+stride];
+            barrier();
+        }
+        bool pixels=(body_kinds[0]&1u)!=0u;
+        bool typed=pixels&&(body_kinds[0]&2u)==0u&&(params.mode&1024u)!=0u&&(params.mode&512u)==0u;
+        if(lane<CONTACT_HEADER_WORDS&&lane!=3u) {
+            uint value=0u;
+            if(lane==2u) value=data[2]==0u?0u:4u;
+            else if(lane==4u) value=data[0];
+            else if(lane==6u) value=data[2]==0u?(data[0]+CONTACT_GROUP_SIZE-1u)/CONTACT_GROUP_SIZE:0u;
+            else if(lane==7u||lane==8u) value=1u;
+            data[base+lane]=value;
+        }
+        if(lane<3u) {
+            data[solver+PIXEL_CONTACT_DISPATCH_WORD+lane]=lane==0u?(pixels&&!typed&&data[2]==0u?data[0]:0u):1u;
+            pixel_dispatch[TYPED_CONTACT_ACTIVITY_WORD+lane]=lane==0u?(typed&&data[2]==0u?data[0]:0u):1u;
+        }
         return;
     }
     if (data[2] != 0u || index >= data[0]) return;

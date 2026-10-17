@@ -826,3 +826,22 @@ diagnostic_fluid_variants: build/diagnostics/shader_compile_probe
 	spirv-val --target-env vulkan1.3 build/diagnostics/fluid-variants/contacts_pixel.spv
 	spirv-val --target-env vulkan1.3 build/diagnostics/fluid-variants/rigid_pixel.spv
 
+GPU_SOURCE_BINARIES = $(addprefix build/, \
+    component_world_tests diagnostics/native360_fluid_trace \
+    diagnostics/native360_mpm_variants dungeoncraft_half_native \
+    dungeoncraft_native dungeoncraft_quarter_native marker_slot_tests \
+    native_360_performance_tests native_720_component_tests \
+    native_720_performance_tests native_bench pixel_dynamics_visual_tests \
+    pixel_performance_tests structural_bench structural_cadence_tests \
+    structural_material_visual_tests structural_visual_scene_tests \
+    structural_world_tests)
+GPU_SOURCE_BINARIES += $(addprefix build/quarter_native_, \
+    bench buoyancy_tests component_acceptance_tests component_extraction_tests \
+    component_material_tests fluid_tests rigid_solver_tests rigid_tests solver_tests)
+GPU_SOURCE_BINARIES += $(addprefix build/quarter_native_structural_, \
+    buckling_tests equilibrium_tests failure_tests fracture_tests impact_tests \
+    particle_identity_tests placement_tests root_identity_tests store_tests \
+    streaming_tests submerged_load_tests)
+$(GPU_SOURCE_BINARIES): src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
+build/contact_gpu.o: src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
+
