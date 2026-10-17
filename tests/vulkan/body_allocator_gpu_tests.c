@@ -1,4 +1,4 @@
-#define DC_PROBE_PUSH_CONSTANT_BYTES 24
+#define DC_PROBE_PUSH_CONSTANT_BYTES 48
 #include "body_probe_fixture.h"
 #include "../../src/vulkan/body_scan_gpu.h"
 #include "../../src/vulkan/body_storage_gpu.h"
@@ -8,7 +8,7 @@ typedef struct {
     dc_gpu_body_store_t store;
     dc_gpu_body_scan_plan_t plan;
     dc_gpu_address_buffer_t scratch,queue,readback;
-    VkPipeline plan_pipeline,reserve,commit,publish,scan,add;
+    VkPipeline initialize,plan_pipeline,reserve,commit,publish,release,release_publish,scan,add;
     VkShaderModule scan_module;
     uint64_t submission;
 } allocator_fixture_t;
@@ -43,7 +43,7 @@ static bool grow_store(allocator_fixture_t *f,uint32_t slots) {
         dc_gpu_body_growth_discard(&f->gpu,&growth);puts(err);return false;
     }
     if(!begin(&f->probe)) return false;
-    if(!dc_gpu_body_growth_record(f->probe.command,f->probe.buffer,&f->store,&growth,++f->submission)) return false;
+    if(!dc_gpu_body_growth_record(f->probe.command,f->probe.buffer,f->probe.layout,f->initialize,&f->store,&growth,++f->submission)) return false;
     dc_body_address_t pointers[]={address_words(f->scratch.address),address_words(f->queue.address)};
     vkCmdUpdateBuffer(f->probe.command,f->probe.buffer,offsetof(dc_body_storage_root_t,work),sizeof(pointers),pointers);
     memory_barrier(f,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_ACCESS_TRANSFER_WRITE_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_ACCESS_SHADER_READ_BIT|VK_ACCESS_SHADER_WRITE_BIT);
@@ -84,15 +84,31 @@ static void set_batch(allocator_fixture_t *f,uint32_t count,uint32_t commit) {
     dc_body_address_t *handles=(dc_body_address_t *)(batch+1);
     for(uint32_t i=0;i<count;i++) handles[i]=(dc_body_address_t){DC_BODY_SLOT_NONE,0};
 }
+static bool release_batch(allocator_fixture_t *f) {
+    if(!begin(&f->probe)) return false;
+    memory_barrier(f,VK_PIPELINE_STAGE_HOST_BIT|VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,VK_ACCESS_HOST_WRITE_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_ACCESS_SHADER_READ_BIT|VK_ACCESS_SHADER_WRITE_BIT);
+    vkCmdBindDescriptorSets(f->probe.command,VK_PIPELINE_BIND_POINT_COMPUTE,f->probe.layout,0,1,&f->probe.descriptor,0,NULL);
+    vkCmdBindPipeline(f->probe.command,VK_PIPELINE_BIND_POINT_COMPUTE,f->release);
+    dc_body_allocation_batch_t *batch=f->queue.mapped;
+    vkCmdDispatch(f->probe.command,(batch->count+63u)/64u,1,1);
+    memory_barrier(f,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_ACCESS_SHADER_WRITE_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_ACCESS_SHADER_READ_BIT|VK_ACCESS_SHADER_WRITE_BIT);
+    vkCmdBindPipeline(f->probe.command,VK_PIPELINE_BIND_POINT_COMPUTE,f->release_publish);
+    vkCmdDispatch(f->probe.command,1,1,1);
+    memory_barrier(f,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_ACCESS_SHADER_WRITE_BIT,VK_PIPELINE_STAGE_HOST_BIT,VK_ACCESS_HOST_READ_BIT);
+    return finish_submission(f,"generation-safe body release");
+}
 static void test_parallel_reservation_is_atomic_and_retries_through_growth(void) {
     allocator_fixture_t f={0};bool ok=true;char err[128];
 #define CHECK(e) do {if(!(e)){printf("allocation failure line%d: %s\n",__LINE__,#e);ok=false;goto done;}} while(0)
     CHECK(initialize(&f.probe));CHECK(allocate_buffer(&f.probe));
     f.gpu.device=f.probe.device;f.gpu.physical=f.probe.physical;
     CHECK(create_pipeline(&f.probe,"build/diagnostics/body_allocator.spv"));
+    f.initialize=create_body_probe_pipeline(&f.probe,&f.gpu,"build/diagnostics/body_storage_init.spv");CHECK(f.initialize);
     f.plan_pipeline=specialized(&f,f.probe.shader,1);f.reserve=specialized(&f,f.probe.shader,2);
     f.commit=specialized(&f,f.probe.shader,3);f.publish=specialized(&f,f.probe.shader,4);
-    CHECK(f.plan_pipeline&&f.reserve&&f.commit&&f.publish);
+    f.release=specialized(&f,f.probe.shader,5);f.release_publish=specialized(&f,f.probe.shader,6);
+    CHECK(f.plan_pipeline&&f.reserve&&f.commit&&f.publish&&f.release&&f.release_publish);
     CHECK(dc_gpu_load_shader_module(&f.gpu,"build/diagnostics/body_scan.spv",&f.scan_module,err,sizeof(err)));
     f.scan=specialized(&f,f.scan_module,0);f.add=specialized(&f,f.scan_module,1);CHECK(f.scan&&f.add);
     CHECK(dc_gpu_address_buffer_create(&f.gpu,sizeof(dc_body_allocation_batch_t)+90u*sizeof(dc_body_address_t),true,&f.queue,err,sizeof(err)));
@@ -119,13 +135,26 @@ static void test_parallel_reservation_is_atomic_and_retries_through_growth(void)
     CHECK(root->live_count==90u);CHECK(grow_store(&f,batch->required_slots));CHECK(allocate_batch(&f));
     CHECK(batch->ready&&batch->committed==40u&&root->live_count==130u);
     for(uint32_t i=0;i<40;i++) CHECK(handles[i].low==92u+i&&handles[i].high==1u);
+    set_batch(&f,3,1);handles[0]=(dc_body_address_t){0,1};handles[1]=handles[0];handles[2]=(dc_body_address_t){DC_BODY_SLOT_NONE,1};
+    CHECK(release_batch(&f));CHECK(root->live_count==129u&&batch->committed==1u);
+    CHECK(batch->error==DC_BODY_ALLOCATION_INVALID_HANDLE);
+    CHECK(release_batch(&f));CHECK(root->live_count==129u&&batch->committed==1u);
+    set_batch(&f,1,1);CHECK(allocate_batch(&f));
+    CHECK(root->live_count==130u&&handles[0].low==0u&&handles[0].high==2u);
+    set_batch(&f,1,1);handles[0]=(dc_body_address_t){0,1};CHECK(release_batch(&f));
+    CHECK(root->live_count==130u&&!batch->committed&&batch->error==DC_BODY_ALLOCATION_INVALID_HANDLE);
+    set_batch(&f,1,1);handles[0]=(dc_body_address_t){0,2};CHECK(release_batch(&f));CHECK(root->live_count==129u&&batch->committed==1u);
+    set_batch(&f,1,1);CHECK(allocate_batch(&f));CHECK(root->live_count==130u&&handles[0].low==0u&&handles[0].high==3u);
 done:
     dc_gpu_body_store_destroy(&f.gpu,&f.store);dc_gpu_body_scan_plan_destroy(&f.plan);
     dc_gpu_address_buffer_destroy(&f.gpu,&f.queue);dc_gpu_address_buffer_destroy(&f.gpu,&f.scratch);dc_gpu_address_buffer_destroy(&f.gpu,&f.readback);
     if(f.reserve) vkDestroyPipeline(f.gpu.device,f.reserve,NULL);
+    if(f.initialize) vkDestroyPipeline(f.gpu.device,f.initialize,NULL);
     if(f.commit) vkDestroyPipeline(f.gpu.device,f.commit,NULL);
     if(f.plan_pipeline) vkDestroyPipeline(f.gpu.device,f.plan_pipeline,NULL);
     if(f.publish) vkDestroyPipeline(f.gpu.device,f.publish,NULL);
+    if(f.release) vkDestroyPipeline(f.gpu.device,f.release,NULL);
+    if(f.release_publish) vkDestroyPipeline(f.gpu.device,f.release_publish,NULL);
     if(f.scan) vkDestroyPipeline(f.gpu.device,f.scan,NULL);
     if(f.add) vkDestroyPipeline(f.gpu.device,f.add,NULL);
     if(f.scan_module) vkDestroyShaderModule(f.gpu.device,f.scan_module,NULL);

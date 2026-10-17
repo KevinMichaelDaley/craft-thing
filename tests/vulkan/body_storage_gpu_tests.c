@@ -1,17 +1,19 @@
-#define DC_PROBE_WORDS (16+4*1025)
+#define DC_PROBE_WORDS (16+4*6000)
+#define DC_PROBE_PUSH_CONSTANT_BYTES 48
 #include "body_probe_fixture.h"
 #include "../../src/vulkan/body_storage_gpu.h"
 static void test_device_local_store_growth_copies_directory_preserves_records_and_live_count(void) {
     probe_t probe={0};ASSERT_TRUE(initialize(&probe));ASSERT_TRUE(allocate_buffer(&probe));
     ASSERT_TRUE(create_pipeline(&probe,"build/diagnostics/body_growth_probe.spv"));
     dc_gpu_t gpu={.device=probe.device,.physical=probe.physical};
+    VkPipeline initialize=create_body_probe_pipeline(&probe,&gpu,"build/diagnostics/body_storage_init.spv");ASSERT_TRUE(initialize);
     dc_gpu_body_store_t store={0};dc_gpu_body_growth_t growth={0};char err[256];
-    const uint32_t counts[]={90,200,1025};
+    const uint32_t counts[]={90,200,1025,6000};
     memset(probe.mapped,0,PROBE_WORDS*sizeof(uint32_t));
-    for(uint32_t stage=0;stage<3;stage++) {
+    for(uint32_t stage=0;stage<4;stage++) {
         ASSERT_TRUE(dc_gpu_body_growth_prepare(&gpu,&store,counts[stage],&growth,err,sizeof(err)));
         ASSERT_TRUE(begin(&probe));
-        ASSERT_TRUE(dc_gpu_body_growth_record(probe.command,probe.buffer,&store,&growth,stage+1));
+        ASSERT_TRUE(dc_gpu_body_growth_record(probe.command,probe.buffer,probe.layout,initialize,&store,&growth,stage+1));
         VkMemoryBarrier overwrite={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER,.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,
             .dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT};
         vkCmdPipelineBarrier(probe.command,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,0,1,&overwrite,0,NULL,0,NULL);
@@ -41,6 +43,7 @@ static void test_device_local_store_growth_copies_directory_preserves_records_an
         ASSERT_EQ(mismatches,0u);ASSERT_EQ(root->live_count,counts[stage]);
     }
     dc_gpu_body_store_destroy(&gpu,&store);
+    vkDestroyPipeline(gpu.device,initialize,NULL);
     ASSERT_EQ(gpu.device_only_bytes+gpu.mapped_local_bytes+gpu.mapped_system_bytes,0u);
     destroy_probe(&probe);PASS();
 }

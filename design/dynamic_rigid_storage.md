@@ -170,9 +170,10 @@ symbol:
   owned-source validation and counted snapshot preflight.
 
 The resource-owner prototype allocates one contiguous block for all newly added
-slabs, with separate record/solver/ownership/auxiliary planes. CPU loops initialize
-only new directory address descriptors; no body payload, geometry, mass or
-component is scanned or solved there. GPU transfer commands initialize the block
+slabs, with separate record/solver/ownership/auxiliary planes. The host supplies
+only a constant-size block/directory address and stride description. A GPU lane
+per new page initializes its descriptor; no host page loop, body payload,
+geometry, mass or component scan is needed. GPU transfer commands zero the block
 and copy the old directory prefix. The host may adopt the new directory and
 retire its predecessor only after the recorded submission completes. These are
 explicit resource-boundary dependencies, not a claim that runtime allocator or

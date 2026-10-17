@@ -10,6 +10,7 @@
 #define DC_BODY_OWNER_LIVE 2u
 #define DC_BODY_OWNER_RETIRED 3u
 #define DC_BODY_ALLOCATION_NO_CAPACITY 1u
+#define DC_BODY_ALLOCATION_INVALID_HANDLE 2u
 
 /* Slab size is allocation/work granularity, not a bound on directory pages. */
 #ifdef __STDC_VERSION__

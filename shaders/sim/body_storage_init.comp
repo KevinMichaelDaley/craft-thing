@@ -1,0 +1,25 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+#include "../../include/dungeoncraft/body_storage_layout.h"
+layout(local_size_x=64) in;
+layout(buffer_reference,std430,buffer_reference_align=8) buffer Directory {BodyStoragePage pages[];};
+layout(push_constant) uniform Params {uvec2 directory,block;uint previous,added;uvec2 padding;uvec4 strides;} params;
+uvec2 product(uint a,uint b) {uint high,low;umulExtended(a,b,high,low);return uvec2(low,high);}
+uvec2 address_add(uvec2 a,uvec2 b) {uint carry;uint low=uaddCarry(a.x,b.x,carry);return uvec2(low,a.y+b.y+carry);}
+void main() {
+    uint page=(gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x)*64u+gl_LocalInvocationID.x;
+    if(page>=params.added) return;
+    uvec4 strides=params.strides*DC_BODY_SLAB_RECORDS;
+    uvec2 solver=address_add(params.block,product(params.added,strides.x));
+    uvec2 ownership=address_add(solver,product(params.added,strides.y));
+    uvec2 auxiliary=address_add(ownership,product(params.added,strides.z));
+    BodyStoragePage entry;
+    entry.records=address_add(params.block,product(page,strides.x));
+    entry.solver=address_add(solver,product(page,strides.y));
+    entry.ownership=address_add(ownership,product(page,strides.z));
+    entry.auxiliary=address_add(auxiliary,product(page,strides.w));
+    entry.free_mask=uvec2(0xffffffffu);entry.generation=1u;entry.flags=0u;
+    Directory(params.directory).pages[params.previous+page]=entry;
+}

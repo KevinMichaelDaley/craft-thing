@@ -3,7 +3,7 @@
 #include <string.h>
 #include "../../src/vulkan/body_storage_gpu.h"
 static int g_pass,g_fail;
-static uint32_t allocations,releases,fail_at,copies,updates,fills,barriers,host_buffers;
+static uint32_t allocations,releases,fail_at,copies,updates,fills,barriers,host_buffers,initializers;
 static uint64_t handle;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
@@ -24,7 +24,10 @@ VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdCopyBuffer(VkCommandBuffer c,VkBuffer a,V
 VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdFillBuffer(VkCommandBuffer c,VkBuffer b,VkDeviceSize o,VkDeviceSize s,uint32_t d) {(void)c;(void)b;(void)o;(void)s;(void)d;fills++;}
 VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdUpdateBuffer(VkCommandBuffer c,VkBuffer b,VkDeviceSize o,VkDeviceSize s,const void *d) {(void)c;(void)b;(void)o;(void)s;(void)d;updates++;}
 VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdPipelineBarrier2(VkCommandBuffer c,const VkDependencyInfo *d) {(void)c;(void)d;barriers++;}
-static void reset(void) {allocations=releases=fail_at=copies=updates=fills=barriers=host_buffers=0;}
+VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdBindPipeline(VkCommandBuffer c,VkPipelineBindPoint b,VkPipeline p) {(void)c;(void)b;(void)p;}
+VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdPushConstants(VkCommandBuffer c,VkPipelineLayout l,VkShaderStageFlags s,uint32_t o,uint32_t n,const void *p) {(void)c;(void)l;(void)s;(void)o;(void)n;(void)p;}
+VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdDispatch(VkCommandBuffer c,uint32_t x,uint32_t y,uint32_t z) {(void)c;(void)x;(void)y;(void)z;initializers++;}
+static void reset(void) {allocations=releases=fail_at=copies=updates=fills=barriers=host_buffers=initializers=0;}
 static void test_directory_metadata_is_initialized_without_a_serial_host_page_upload(void) {
     reset();dc_gpu_t gpu={0};dc_gpu_body_store_t store={0};dc_gpu_body_growth_t growth={0};char err[128];
     ASSERT_TRUE(dc_gpu_body_growth_prepare(&gpu,&store,1025,&growth,err,sizeof(err)));
@@ -40,17 +43,18 @@ static void test_growth_preserves_store_until_submission_completion(void) {
         ASSERT_TRUE(dc_gpu_body_growth_prepare(&gpu,&store,counts[i],&growth,err,sizeof(err)));
         ASSERT_EQ(store.slab_count,previous);ASSERT_TRUE(growth.slab_count*64u>=counts[i]);
         ASSERT_TRUE(!dc_gpu_body_growth_finish(&gpu,&store,&growth,i+1));
-        ASSERT_TRUE(dc_gpu_body_growth_record((VkCommandBuffer)(uintptr_t)1,(VkBuffer)(uintptr_t)2,&store,&growth,i+1));
+        ASSERT_TRUE(dc_gpu_body_growth_record((VkCommandBuffer)(uintptr_t)1,(VkBuffer)(uintptr_t)2,
+            (VkPipelineLayout)(uintptr_t)3,(VkPipeline)(uintptr_t)4,&store,&growth,i+1));
         ASSERT_TRUE(!dc_gpu_body_growth_discard(&gpu,&growth));
         ASSERT_TRUE(!dc_gpu_body_growth_finish(&gpu,&store,&growth,i));
         ASSERT_TRUE(dc_gpu_body_growth_finish(&gpu,&store,&growth,i+1));
         ASSERT_TRUE(store.slab_count*64u>=counts[i]);ASSERT_EQ(growth.submission,0u);
     }
-    ASSERT_EQ(copies,5u);ASSERT_EQ(fills,3u);ASSERT_TRUE(barriers>=6u);
+    ASSERT_EQ(copies,2u);ASSERT_EQ(initializers,3u);ASSERT_EQ(fills,3u);ASSERT_TRUE(barriers>=6u);
     dc_gpu_body_store_destroy(&gpu,&store);ASSERT_EQ(allocations,releases);PASS();
 }
 static void test_partial_allocation_failure_preserves_active_store_and_destination(void) {
-    for(uint32_t failure=1;failure<=3;failure++) {
+    for(uint32_t failure=1;failure<=2;failure++) {
         reset();fail_at=failure;dc_gpu_t gpu={0};dc_gpu_body_store_t store={.slab_count=2};
         dc_gpu_body_growth_t growth={0},before=growth;char err[128];
         ASSERT_TRUE(!dc_gpu_body_growth_prepare(&gpu,&store,201,&growth,err,sizeof(err)));

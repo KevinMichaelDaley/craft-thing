@@ -41,3 +41,7 @@ Transactional allocator GPU GREEN verified0.328s with explicit synchronization v
 **2026-10-17T09:13:45Z**
 
 Audit identified another growth-dependent hidden bound: legacy ID collision reservation examines only128candidate serials. Once the store exceeds64live bodies,128consecutive occupied authored auto-namespace IDs could cause permanent retries. Design now requires >128collision RED and GPU-parallel stable ID index/allocation (e.g. sorted-gap binary search), preserving serial on failed joint reservations. Prototype currently reserves generation handles only; runtime IDs/live lists remain unimplemented.
+
+**2026-10-17T09:26:10Z**
+
+Removed avoidable CPU loop over new directory pages: CPU RED observed host-visible page upload; candidate now uses only device-local block+directory allocations and48byte host push constants, GPU lane/page builds addresses/free masks, transfer copies old prefix. CPU growth3/3 plus regular CPU tools pass; shader compiles/SPIR-V validates with Shader+PhysicalStorageBufferAddresses only (no Int64 capability). GPU verification pending parent lease: real growth90→200→1025→6000 covers multiple initializer groups, plus64opaque descriptors exercise multi-gigabyte/carry arithmetic without allocating/dereferencing fake blocks. Generation release/reuse RED is also compiled but unrun; no release implementation yet. Main fresh full suite92479 remains stopped after structural_failure13/13 and may require restart if outer timeout expires.
