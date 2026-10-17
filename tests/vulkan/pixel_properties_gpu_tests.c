@@ -145,10 +145,10 @@ test_cached_active_and_dormant_flags_refresh_without_geometry_reduction(void) {
           center[2] = {b->center[0], b->center[1]};
     uint32_t geometry[42];
     memcpy(geometry, f.shape, sizeof(geometry));
-    const uint32_t bindings[] = {1, 2, 3, 4};
+    const uint32_t bindings[] = {1, 2, 3, 4, 27};
     if (!fixture_body_pipeline(&f.probe, &f.gpu, f.body,
                                "build/diagnostics/rigid_prepare_probe.spv",
-                               bindings, 4, 0))
+                               bindings, 5, 0))
         exit(2);
     bool valid = true;
     char err[256];
