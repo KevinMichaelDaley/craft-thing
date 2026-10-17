@@ -776,6 +776,10 @@ build/diagnostics/shader_compile_probe: tools/diagnostics/shader_compile_probe.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ -lvulkan -Wl,--wrap=vkQueueSubmit -Wl,--wrap=vkQueueSubmit2
 
 .PHONY: diagnostic_fluid_variants
+build/diagnostics/mpm_case: tests/vulkan/mpm_specialization_tests.c tools/diagnostics/mpm_variants.c tests/vulkan/particle_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(STREAM_OBJ)
+	@mkdir -p build/diagnostics
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/mpm_specialization_tests.c tools/diagnostics/mpm_variants.c $(GPU_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(STREAM_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_record_mpm
+
 diagnostic_fluid_variants: build/diagnostics/shader_compile_probe
 	python3 tools/diagnostics/fluid_variants.py build/diagnostics/fluid-variants
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -Ishaders/sim -o build/diagnostics/fluid-variants/fluid.spv build/diagnostics/fluid-variants/fluid_specialized.comp
