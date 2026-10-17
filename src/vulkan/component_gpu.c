@@ -1,5 +1,9 @@
 #include "gpu_internal.h"
 
+bool dc_gpu_read_extraction_stats(dc_gpu_t *gpu,dc_gpu_extraction_stats_t *stats) {
+    (void)gpu;(void)stats;return false;
+}
+
 bool dc_gpu_enable_automatic_components(dc_gpu_t *gpu) {
     if (!gpu)
         return false;

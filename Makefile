@@ -942,6 +942,8 @@ build/pixel_residency_tests: tests/vulkan/pixel_residency_tests.c tests/vulkan/p
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/material_cut_buoyancy_tests: tests/app/material_cut_buoyancy_tests.c src/app/level.h src/app/view_config.h $(filter-out src/app/main.c,$(NATIVE_SRC))
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
+build/extraction_stats_tests: tests/vulkan/extraction_stats_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkQueueWaitIdle
 shaders: $(MPM_COMPACTION_SHADER)
 .PHONY: test_mpm_compaction_work
 test_mpm_compaction_work: build/mpm_compaction_tests

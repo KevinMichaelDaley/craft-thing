@@ -33,6 +33,16 @@ typedef struct {
 
 typedef struct dc_gpu dc_gpu_t;
 
+typedef struct {
+    uint32_t body_capacity, owned_bodies, free_body_slots;
+    uint32_t arena_capacity_words, arena_used_words;
+    uint32_t selected_components, committed_components, unknown_components;
+    uint32_t no_body_slot_components, no_arena_components, pending;
+} dc_gpu_extraction_stats_t;
+/** Explicit completed-queue diagnostic only; never used to solve physics.
+ * Reports the last extraction batch and current ownership/resource totals. */
+bool dc_gpu_read_extraction_stats(dc_gpu_t *gpu,dc_gpu_extraction_stats_t *stats);
+
 /** A unit solid pixel in a body's canonical local grid; zero material is a hole. */
 typedef struct { uint32_t x, y, material; } dc_gpu_body_pixel_t;
 /** Explicit diagnostic of exact variable-size geometry. A NULL output returns
