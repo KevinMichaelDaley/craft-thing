@@ -11,7 +11,7 @@ float body_material_density(uint material) {
     const float densities[10]=float[10](0.,DC_DENSITY_STONE,DC_DENSITY_WOOD,
         DC_DENSITY_MORTAR,DC_DENSITY_DENSE_WOOD,DC_DENSITY_LEAVES,
         DC_DENSITY_SAND,DC_DENSITY_DIRT,DC_DENSITY_STONE,DC_DENSITY_LEAVES);
-    return densities[min(material,9u)];
+    return densities[clamp(material,1u,9u)];
 }
 struct Shape { uint count, material; ivec2 vertices[BODY_VERTEX_CAPACITY]; };
 

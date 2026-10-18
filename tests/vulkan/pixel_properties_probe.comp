@@ -6,10 +6,10 @@ layout(set=0,binding=4,std430) buffer Storage {Body bodies[BODY_CAPACITY];uint d
 uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
 #include "pixel_properties.glsl"
 void main() {
-    Body body=bodies[0];uint mass10;vec2 center;float inertia;
-    pixel_mass_properties(body,mass10,center,inertia);
+    Body body=bodies[0];uint mass100;vec2 center;float inertia;
+    pixel_mass_properties(body,mass100,center,inertia);
     if(gl_LocalInvocationIndex==0u) {
-        body.mass=float(mass10)*.1;body.center=center;body.inertia=inertia;
+        body.mass=float(mass100)*.01;body.center=center;body.inertia=inertia;
         body.density=body.mass/float(body.piece_count&~PIXEL_BODY_FLAG);
         body.inverse_mass=(body.motion_flags&1u)==0u?1./body.mass:0.;
         body.inverse_inertia=(body.motion_flags&3u)==0u?1./body.inertia:0.;
