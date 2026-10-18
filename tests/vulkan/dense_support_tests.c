@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "../../src/vulkan/gpu_internal.h"
+#include "ferrum/structural/gpu.h"
 
 static int g_pass,g_fail;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
@@ -15,9 +16,13 @@ static void test_supported_stump_stays_terrain_after_trunk_cut(void) {
     for(unsigned y=20;y<=30;y++)
         chunk->cells[y*64+30]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
     chunk->cells[31*64+30].material=DC_MATERIAL_DIRT;
-    chunk->cells[32*64+30]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+    for(unsigned x=0;x<64;x++) chunk->cells[32*64+x]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
     chunk->cells[22*64+29].material=DC_MATERIAL_DIRT;
     chunk->cells[23*64+29]=chunk->cells[23*64+30];
+    chunk->cells[22*64+28].material=DC_MATERIAL_SAND;
+    chunk->cells[21*64+29].material=DC_MATERIAL_GRAVEL;
+    chunk->cells[21*64+28].material=DC_MATERIAL_MORTAR_DEBRIS;
+    chunk->cells[20*64+29].material=DC_MATERIAL_LEAF_DEBRIS;
     ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
@@ -31,10 +36,16 @@ static void test_supported_stump_stays_terrain_after_trunk_cut(void) {
     ASSERT_EQ(chunk->cells[22*64+29].material,DC_MATERIAL_AIR);
     dc_gpu_body_pixel_t pixels[16];unsigned count=0,dirt=0;
     ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,pixels,16,&count,err,sizeof(err)));
-    ASSERT_EQ(count,7u);
-    for(unsigned i=0;i<count;i++) dirt+=pixels[i].material==7u;
+    ASSERT_EQ(count,11u);
+    unsigned material_mask=0;
+    for(unsigned i=0;i<count;i++) {dirt+=pixels[i].material==DC_GPU_BODY_DIRT;material_mask|=1u<<pixels[i].material;}
     ASSERT_EQ(dirt,1u);
+    ASSERT_EQ(material_mask,(1u<<DC_GPU_BODY_WOOD)|(1u<<DC_GPU_BODY_MORTAR)|(1u<<DC_GPU_BODY_SAND)|(1u<<DC_GPU_BODY_DIRT)|(1u<<DC_GPU_BODY_GRAVEL)|(1u<<DC_GPU_BODY_LEAF_DEBRIS));
     ASSERT_EQ(chunk->particles[22*64+29].mass_fp,0u);
+    ASSERT_TRUE(fr_gpu_save_structure(g,"build/detached_mixed_terrain.dcs",err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_load_structure(g,"build/detached_mixed_terrain.dcs",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,pixels,16,&count,err,sizeof(err)));
+    ASSERT_EQ(count,11u);
     dc_gpu_destroy(g);free(chunk);PASS();
 }
 
@@ -45,7 +56,7 @@ static void test_partial_granular_support_motion_does_not_release_tree_but_cut_d
     chunk->cells[29*64+29].material=DC_MATERIAL_DIRT;
     chunk->cells[30*64+29].material=DC_MATERIAL_DIRT;
     chunk->cells[31*64+30].material=DC_MATERIAL_DIRT;
-    chunk->cells[32*64+30]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+    for(unsigned x=0;x<64;x++) chunk->cells[32*64+x]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
     ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
