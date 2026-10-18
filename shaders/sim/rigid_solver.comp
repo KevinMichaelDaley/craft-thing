@@ -191,7 +191,7 @@ void solve_contact(uint i, bool impulse) {
         if (wt > 0.0)
             dt = clamp(-dot(va - vb, t) / wt, -limit, limit) * scale;
     } else {
-        float alpha = getf(c + 13u) / (DT * DT), lambda = getf(s);
+        float alpha = creep>=0.0?0.0:getf(c + 13u) / (DT * DT), lambda = getf(s);
         dn = (max(0.0, lambda + (-dot(pa - pb, n) - alpha * lambda) / (wn + alpha)) - lambda) *
              scale;
         putf(s, lambda + dn);
