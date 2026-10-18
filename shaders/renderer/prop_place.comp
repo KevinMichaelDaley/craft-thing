@@ -27,10 +27,9 @@ void restore_bonds(uint i,uvec2 position,uint page,uint mapped) {
     if(page==0u||!rigid_material(mapped)) return;
     uint atlas=(page-1u)*4096u+(position.y%64u)*64u+position.x%64u;
     uint flags=cells[atlas].x>>DC_CELL_FLAGS_SHIFT;
-    if((cells[atlas].x&65535u)!=mapped) return;
+    if((cells[atlas].x&65535u)!=mapped||(flags&DC_CELL_LOADED_TERRAIN)==0u) return;
     if((flags&(DC_CELL_LOADED_TERRAIN|DC_CELL_DIAGONAL_BONDS_READY|DC_CELL_SUPPORT_BONDS_READY))==
             (DC_CELL_LOADED_TERRAIN|DC_CELL_DIAGONAL_BONDS_READY|DC_CELL_SUPPORT_BONDS_READY)) return;
-    flags|=DC_CELL_LOADED_TERRAIN;
     const ivec2 directions[8]=ivec2[8](ivec2(-1,0),ivec2(1,0),ivec2(0,-1),ivec2(0,1),
         ivec2(-1,-1),ivec2(1,-1),ivec2(-1,1),ivec2(1,1));
     uint bonds=flags&DC_CELL_ALL_BOND_MASK;

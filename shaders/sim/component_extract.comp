@@ -27,7 +27,7 @@ uint pool() {return graph()+40000u;}
 uint capacity() {return 2u*((max(params.width*params.height,total())+7u)/8u)+64u*8u;}
 uint record(uint c) {return graph()+36300u+c*24u;}
 uint registry(uint s) {return base()+32u+s*8u;}
-bool solid(uint i) {uint m=cells[i].x&65535u;return data[registry(i/4096u)+5u]!=0u&&m!=0u&&m!=3u;}
+bool solid(uint i) {return data[registry(i/4096u)+5u]!=0u&&DC_CELL_COMPONENT_MEMBER(cells[i].x);}
 uint cardinal_neighbor(uint i,uint axis) {
     uint p=i%4096u,x=p%64u,y=p/64u;
     if(axis==0u&&x>0u) return i-1u;
@@ -54,8 +54,7 @@ uint terrain_bonds(uint i) {
     for(uint axis=0u;axis<8u;axis++) {
         uint other=neighbor(i,axis),bit=1u<<(axis<4u?DC_CELL_BOND_SHIFT+axis:DC_CELL_DIAGONAL_BOND_SHIFT+axis-4u);
         if(other!=0xffffffffu) {
-            uint material=cells[other].x&65535u;
-            bonds=material!=0u&&material!=3u?bonds|bit:bonds&~bit;
+            bonds=solid(other)?bonds|bit:bonds&~bit;
         }
     }
     return bonds;

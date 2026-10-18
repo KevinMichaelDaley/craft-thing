@@ -38,6 +38,7 @@ static void test_removing_granular_root_support_releases_entire_tree(void) {
         chunk->cells[29*64+30]=(dc_cell_t){.material=DC_MATERIAL_LEAVES,.flags=DC_CELL_LOADED_TERRAIN};
         chunk->cells[30*64+30]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
         chunk->cells[31*64+30].material=materials[trial%2];
+        chunk->cells[31*64+30].flags=DC_CELL_LOADED_TERRAIN;
         ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
         ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
         ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));

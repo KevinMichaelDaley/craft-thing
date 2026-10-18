@@ -1,6 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 #include "rigid_body.glsl"
+#include "../../include/dungeoncraft/terrain_flags.h"
 layout(local_size_x=128) in;
 layout(constant_id=0) const uint EXTRACTION_PHASE=0u;
 layout(set=0,binding=1,std430) buffer Cells { uvec2 cells[]; };
@@ -21,7 +22,7 @@ uint pool() {return graph()+40000u;}
 uint capacity() {return 2u*((max(params.width*params.height,total())+7u)/8u)+64u*8u;}
 uint record(uint c) {return graph()+36300u+c*24u;}
 uint registry(uint s) {return base()+32u+s*8u;}
-bool solid(uint i) {uint m=cells[i].x&65535u;return data[registry(i/4096u)+5u]!=0u&&m!=0u&&m!=3u;}
+bool solid(uint i) {return data[registry(i/4096u)+5u]!=0u&&DC_CELL_COMPONENT_MEMBER(cells[i].x);}
 uint neighbor(uint i,uint axis) {
     uint p=i%4096u,x=p%64u,y=p/64u;
     if(axis==0u&&x>0u) return i-1u;

@@ -303,8 +303,7 @@ void main() {
                     }
                 }
                 if((cell.x&65535u)!=material) terrain_colors[index]=vec4(0);
-                uint old_material=cell.x&65535u;
-                if(rigid_material(old_material)&&!rigid_material(material))
+                if(DC_CELL_COMPONENT_MEMBER(cell.x)&&!DC_CELL_COMPONENT_MEMBER(material))
                     release_edited_support(ivec2(p));
                 cell.x = ((cell.x & 0xffffu)==material ? cell.x & 0xffff0000u : 0u) | material;
                 cell.y = params.color == 3u ? 65536u : new_grain ? cell.y : 0u;
