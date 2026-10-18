@@ -37,7 +37,7 @@ bool dc_gpu_pixel_geometry_valid(const dc_gpu_body_record_t *body,
         for (unsigned p = 0; p < 256; p++) {
             unsigned material =
                 (geometry[offset + 1 + p / 8] >> ((p % 8) * 4)) & 15u;
-            if (material > DC_GPU_BODY_LEAVES ||
+            if (material > DC_BODY_MATERIAL_MAX ||
                 (material && (x * 16 + p % 16 >= body->body.width ||
                               y * 16 + p / 16 >= body->body.height)))
                 return false;
@@ -53,10 +53,7 @@ bool dc_gpu_pixel_geometry_valid(const dc_gpu_body_record_t *body,
             if (py + 1 > high_y)
                 high_y = py + 1;
             occupied++;
-            mass += material == DC_GPU_BODY_WOOD         ? DC_DENSITY_WOOD
-                    : material == DC_GPU_BODY_DENSE_WOOD ? DC_DENSITY_DENSE_WOOD
-                    : material == DC_GPU_BODY_MORTAR     ? DC_DENSITY_MORTAR
-                                                         : material == DC_GPU_BODY_LEAVES ? DC_DENSITY_LEAVES : DC_DENSITY_STONE;
+            mass += DC_BODY_DENSITY(material);
         }
         if (!occupied)
             return false;
@@ -100,7 +97,7 @@ bool dc_gpu_upgrade_dense_pixels(dc_gpu_t *gpu, dc_gpu_body_record_t *bodies,
         uint32_t low_x = UINT32_MAX, low_y = UINT32_MAX, high_x = 0, high_y = 0;
         for (uint64_t p = 0; p < area; p++) {
             uint32_t material = (dense[p / 8] >> ((p % 8) * 4)) & 15u;
-            if (material > DC_GPU_BODY_LEAVES)
+            if (material > DC_BODY_MATERIAL_MAX)
                 goto invalid;
             count += material != 0;
             if (material) {

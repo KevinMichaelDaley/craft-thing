@@ -51,7 +51,7 @@ uint body_slot(uint id) {
     return 64u;
 }
 uint terrain_material(uint material) {
-    return material==1u?1u:material==2u?7u:material==3u?6u:material==4u?8u:material==5u?9u:0u;
+    return DC_BODY_TO_TERRAIN(material);
 }
 int canonical_cell(uint chunk,uint local) {
     uint coordinate=((chunk&16383u)*64u+local)&1048575u;

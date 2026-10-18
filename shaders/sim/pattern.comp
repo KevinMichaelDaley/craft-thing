@@ -37,7 +37,7 @@ layout(push_constant) uniform Params {
     uint color;
 } params;
 
-bool rigid_material(uint material) {return material==1u||material==7u||material==8u||material==9u;}
+bool rigid_material(uint material) {return material!=0u&&material!=3u;}
 void release_edited_support(ivec2 position) {
     for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++) {
         if(x==0&&y==0) continue;

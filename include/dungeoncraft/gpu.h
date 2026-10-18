@@ -206,7 +206,9 @@ typedef struct {
 
 #define DC_GPU_CONVEX_VERTICES 8u
 enum { DC_GPU_BODY_STONE = 1u, DC_GPU_BODY_WOOD = 2u, DC_GPU_BODY_MORTAR = 3u,
-       DC_GPU_BODY_DENSE_WOOD = 4u, DC_GPU_BODY_LEAVES = 5u };
+       DC_GPU_BODY_DENSE_WOOD = 4u, DC_GPU_BODY_LEAVES = 5u,
+       DC_GPU_BODY_SAND = 6u, DC_GPU_BODY_DIRT = 7u,
+       DC_GPU_BODY_GRAVEL = 8u, DC_GPU_BODY_LEAF_DEBRIS = 9u };
 /** Enable bounded GPU impact fracture and its fixed body/output ownership pool. */
 bool dc_gpu_enable_impact_fracture(dc_gpu_t *gpu);
 typedef struct {

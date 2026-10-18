@@ -13,7 +13,7 @@ void mpm_support_changed(ivec2 cell,uint before,uint after) {
         if(page==0u) continue;
         uint packed=chunk_cells[(page-1u)*4096u+local_cell(neighbor)].x,material=packed&65535u;
         if((packed&(DC_CELL_LOADED_TERRAIN<<DC_CELL_FLAGS_SHIFT))==0u||
-           (material!=1u&&material!=7u&&material!=8u&&material!=9u)) continue;
+           material==0u||material==3u) continue;
         uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
         uint base=8u+2u*w*h+4096u*8u+12u+8192u*32u+16u+64u*32u+8192u*16u;
         atomicOr(support_data[base+STRUCTURAL_COMPONENT_DIRTY_WORD],1u);

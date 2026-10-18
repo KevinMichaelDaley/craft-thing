@@ -10,6 +10,9 @@ layout(set=0,binding=27,std430) buffer Activity { uint activity[]; };
 layout(set=0,binding=28,std430) buffer Labels { uint labels[]; };
 layout(set=0,binding=29,std430) buffer Candidates { uint candidates[]; };
 layout(set=0,binding=30,std430) buffer Sizes { uint sizes[]; };
+struct Particle {int x_fp,y_fp,vx_fp,vy_fp;float f00,f01,f10,f11;uint id_lo,id_hi,mass_fp,grain_fp,material,flags;};
+layout(set=0,binding=19,std430) buffer Particles {Particle particles[];};
+layout(set=0,binding=20,std430) buffer Counts {uint particle_counts[];};
 layout(push_constant) uniform Params { uint width,height,mode,count; uvec2 origin_x,origin_y; } params;
 #include "shape_colors.glsl"
 uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
@@ -24,7 +27,7 @@ uint pool() {return graph()+40000u;}
 uint capacity() {return 2u*((max(params.width*params.height,total())+7u)/8u)+64u*8u;}
 uint record(uint c) {return graph()+36300u+c*24u;}
 uint registry(uint s) {return base()+32u+s*8u;}
-bool solid(uint i) {uint m=cells[i].x&65535u;return data[registry(i/4096u)+5u]!=0u&&(m==1u||m==7u||m==8u||m==9u);}
+bool solid(uint i) {uint m=cells[i].x&65535u;return data[registry(i/4096u)+5u]!=0u&&m!=0u&&m!=3u;}
 uint cardinal_neighbor(uint i,uint axis) {
     uint p=i%4096u,x=p%64u,y=p/64u;
     if(axis==0u&&x>0u) return i-1u;
@@ -57,22 +60,18 @@ uint terrain_bonds(uint i) {
     }
     return bonds;
 }
-const uint RELEASE_EXPLICIT=1u,RELEASE_SUPPORT_CHANGED=2u,RELEASE_GRANULAR_SUPPORT=4u;
+const uint RELEASE_EXPLICIT=1u,RELEASE_SUPPORT_CHANGED=2u;
 uint terrain_release_state(uint i,uint bonds) {
     uint flags=cells[i].x;
-    if((flags&LOADED_TERRAIN)==0u) return RELEASE_EXPLICIT;
+    if((flags&LOADED_TERRAIN)==0u) {
+        uint material=flags&65535u;
+        return material==1u||material==7u||material==8u||material==9u?RELEASE_EXPLICIT:0u;
+    }
     uint state=(flags&RELEASED_TERRAIN)!=0u?RELEASE_SUPPORT_CHANGED:0u;
     bool changed=
         ((flags&BONDS_READY)!=0u && ((flags&CARDINAL_BOND_MASK)&~bonds)!=0u)||
         ((flags&DIAGONAL_BONDS_READY)!=0u && ((flags&DIAGONAL_BOND_MASK)&~bonds)!=0u);
     if(changed) state|=RELEASE_SUPPORT_CHANGED;
-    for(uint axis=0u;axis<8u;axis++) {
-        uint bit=1u<<(axis<4u?DC_CELL_BOND_SHIFT+axis:DC_CELL_DIAGONAL_BOND_SHIFT+axis-4u);
-        if((flags&bonds&bit)==0u) continue;
-        uint other=neighbor(i,axis);if(other==0xffffffffu) continue;
-        uint material=cells[other].x&65535u;
-        if(material==2u||material==4u||material==5u||material==6u||material==10u) state|=RELEASE_GRANULAR_SUPPORT;
-    }
     return state;
 }
 ivec2 relative_point(uint root,uint i) {
@@ -108,11 +107,11 @@ void initialize_body(uint r) {
     b.local_fp=(low&63)<<16;b.visible=0u;b.angle=0.;b.angular_velocity=0.;
     b.motion_flags=0u;b.motion_ready=1u;b.piece_count=PIXEL_BODY_FLAG|data[r+5u];
     b.compound_reserved=BODY_STORAGE_WORDS+data[r+11u];b.vertex_count=0u;
-    uint m=cells[root].x&65535u;b.material=m==7u?2u:m==8u?4u:m==9u?5u:1u;
+    uint m=cells[root].x&65535u;b.material=DC_TERRAIN_TO_BODY(m);
     for(uint i=0u;i<8u;i++) b.vertices[i]=ivec2(0);
     for(uint p=0u;p<4u;p++) {b.pieces[p].count=0u;b.pieces[p].material=0u;for(uint i=0u;i<8u;i++) b.pieces[p].vertices[i]=ivec2(0);}
     b.previous_angle=0.;b.rest_position=ivec2(0);b.rest_angle=0.;b.rest_ticks=0u;
-    b.mass=float(data[r+15u])*.1;b.center=vec2(uintBitsToFloat(data[r+20u]),uintBitsToFloat(data[r+21u]));
+    b.mass=float(data[r+15u])*.01;b.center=vec2(uintBitsToFloat(data[r+20u]),uintBitsToFloat(data[r+21u]));
     b.inertia=max(uintBitsToFloat(data[r+22u]),1e-12);b.density=b.mass/float(data[r+5u]);
     b.inverse_mass=1./b.mass;b.inverse_inertia=1./b.inertia;
     vec2 hi=vec2(extent);b.radius=max(max(length(b.center),length(vec2(hi.x,0)-b.center)),max(length(vec2(0,hi.y)-b.center),length(hi-b.center)));
@@ -241,8 +240,7 @@ void main() {
             ivec2 extent=ivec2(data[r+3u],data[r+4u])-ivec2(data[r+1u],data[r+2u])+1;
             uint dir=uint((extent.x+15)/16)*uint((extent.y+15)/16);
             uint state=data[r+23u];
-            bool released=(state&RELEASE_EXPLICIT)!=0u||
-                ((state&RELEASE_SUPPORT_CHANGED)!=0u&&(state&RELEASE_GRANULAR_SUPPORT)==0u);
+            bool released=(state&(RELEASE_EXPLICIT|RELEASE_SUPPORT_CHANGED))!=0u;
             if(!released||data[r+6u]!=0u||data[r+5u]!=sizes[data[r]]||dir>n) dir=0u;
             data[r+7u]=dir;values[lane]=dir;
         } else values[lane]=0u;
@@ -338,19 +336,26 @@ void main() {
         uint target=data[r+11u],offset=data[target+8u+tile],cell=uint(p.y%16)*16u+uint(p.x%16),m=cells[i].x&65535u;
         uint word=target+offset+1u+cell/8u;
         shape_color_set(BODY_STORAGE_WORDS+word,cell%8u,terrain_colors[i]);
-        atomicOr(data[word],(m==7u?2u:m==8u?4u:m==9u?5u:1u)<<((cell%8u)*4u));return;
+        atomicOr(data[word],DC_TERRAIN_TO_BODY(m)<<((cell%8u)*4u));return;
     }
     if(EXTRACTION_PHASE==23u) {
         uint c=gl_WorkGroupID.x;if(c>=data[g+36257u]) return;uint r=record(c);if(data[r+14u]==0u) return;
         Body b=bodies[data[r+12u]];b.compound_reserved=BODY_STORAGE_WORDS+data[r+11u];b.piece_count=PIXEL_BODY_FLAG|data[r+5u];
-        uint mass10;vec2 center;float inertia;
-        pixel_mass_properties(b,mass10,center,inertia);
-        if(lane==0u) {data[r+15u]=mass10;data[r+20u]=floatBitsToUint(center.x);data[r+21u]=floatBitsToUint(center.y);data[r+22u]=floatBitsToUint(inertia);initialize_body(r);}return;
+        uint mass100;vec2 center;float inertia;
+        pixel_mass_properties(b,mass100,center,inertia);
+        if(lane==0u) {data[r+15u]=mass100;data[r+20u]=floatBitsToUint(center.x);data[r+21u]=floatBitsToUint(center.y);data[r+22u]=floatBitsToUint(inertia);initialize_body(r);}return;
     }
     if(EXTRACTION_PHASE==24u) {
         if(i<n&&solid(i)) {
             uint c=candidates[labels[i]];
-            if(c<data[g+36257u]&&data[record(c)+14u]!=0u) {cells[i].x=0u;terrain_colors[i]=vec4(0);}
+            if(c<data[g+36257u]&&data[record(c)+14u]!=0u) {
+                uint particle=i/4096u*8192u+i%4096u;
+                for(uint layer=0u;layer<2u;layer++) {
+                    uint p=particle+layer*4096u;
+                    if(particles[p].mass_fp!=0u) {particles[p].mass_fp=0u;atomicAdd(particle_counts[i/4096u],uint(-1));}
+                }
+                cells[i].x=0u;terrain_colors[i]=vec4(0);
+            }
             else if((cells[i].x&LOADED_TERRAIN)!=0u) {
                 uint bonds=candidates[n+i],released=(terrain_release_state(i,bonds)&RELEASE_EXPLICIT)!=0u?RELEASED_TERRAIN:0u;
                 cells[i].x=(cells[i].x&~BOND_MASK)|BONDS_READY|DIAGONAL_BONDS_READY|bonds|released;

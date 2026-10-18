@@ -144,9 +144,20 @@ static void test_level03_stays_packed_and_buried_trunk_cut_stays_supported(void)
     ASSERT_EQ(stone_overlap(g,err),0u);
     ASSERT_EQ(attached_material_pixels(g,DC_GPU_BODY_WOOD,err),0u);
     ASSERT_EQ(attached_material_pixels(g,DC_GPU_BODY_LEAVES,err),0u);
-    ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));
     ASSERT_EQ(wood_body_samples,0u);ASSERT_TRUE(!moving_wood_seen);
-    ASSERT_TRUE(worst<=2u);ASSERT_TRUE(upward_wood_motion<.5f);PASS();
+    ASSERT_TRUE(worst<=2u);ASSERT_TRUE(upward_wood_motion<.5f);
+    for(int x=0;x<=34;x+=2)
+        ASSERT_TRUE(dc_level_view_paint(view,VIEW_WIDTH/2+x-32,VIEW_HEIGHT/2-70-32,2,DC_MATERIAL_AIR,err,sizeof(err)));
+    for(unsigned tick=0;tick<32;tick++) {
+        ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
+        ASSERT_TRUE(stone_overlap(g,err)!=UINT32_MAX);
+    }
+    ASSERT_TRUE(attached_material_pixels(g,DC_GPU_BODY_WOOD,err)>0u);
+    ASSERT_TRUE(attached_material_pixels(g,DC_GPU_BODY_LEAVES,err)>0u);
+    ASSERT_TRUE(wood_body_samples>0u&&moving_wood_seen);
+    ASSERT_TRUE(screenshot(view,"build/level03_severed_crown.bmp",err));
+    ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));PASS();
 }
 int main(void) {
     RUN(test_level03_stays_packed_and_buried_trunk_cut_stays_supported);
