@@ -2,7 +2,7 @@
 id: ctr-9e4n
 status: closed
 deps: []
-links: [ct-wuci]
+links: [ct-wuci, ctr-12pa]
 created: 2026-10-18T01:27:03Z
 type: bug
 priority: 2

@@ -94,3 +94,7 @@ Correction to earlier outstanding-work wording: automatic birth mass/COM/inertia
 **2026-10-18T02:12:12Z**
 
 User clarification Oct18: terrain connectivity is independent of material. When a post-load modification isolates terrain, include every solid pixel in the component (soil/gravel/sand/debris as well as wood/leaves/stone) in one rigid body. Pure unmodified loose granular components retain particle simulation. Implemented and being verified under ctr-9e4n; supersedes the earlier rigid-capable-only exclusion for tagged terrain connectivity.
+
+**2026-10-18T02:43:50Z**
+
+Terrain-role clarification implemented in ctr-12pa: material-independent terrain extraction applies to tagged terrain pixels. Already broken/dissolved granular pixels with terrain flag zero (including loose dirt and leaf debris) remain independent particles, cannot bridge components, and are not re-tagged by prop restoration or particle transport.

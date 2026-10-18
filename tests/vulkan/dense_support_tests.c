@@ -64,7 +64,7 @@ static void test_supported_stump_stays_terrain_after_trunk_cut(void) {
     dc_gpu_destroy(g);free(chunk);PASS();
 }
 
-static void test_partial_granular_support_motion_does_not_release_tree_but_cut_does(void) {
+static void test_loose_grain_motion_and_edits_do_not_release_unchanged_terrain(void) {
     dc_gpu_t *g=NULL;char err[256];dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     chunk->cells[29*64+30]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
     chunk->cells[30*64+30]=chunk->cells[29*64+30];
@@ -280,7 +280,7 @@ int main(void) {
         printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
     }
     RUN(test_grounded_powders_bear_rigid_loads);
-    RUN(test_partial_granular_support_motion_does_not_release_tree_but_cut_does);
+    RUN(test_loose_grain_motion_and_edits_do_not_release_unchanged_terrain);
     RUN(test_full_soil_and_gravel_remain_packed_after_settling);
     RUN(test_dense_leaf_contacts_cannot_weaken_stone_floor);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
