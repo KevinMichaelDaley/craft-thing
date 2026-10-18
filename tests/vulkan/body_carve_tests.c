@@ -135,6 +135,30 @@ static void test_air_carves_an_anchored_structural_member(void) {
     ASSERT_TRUE(fr_gpu_load_structure(g,"build/carved_structure.dcs",err,sizeof(err)));
     dc_gpu_destroy(g);free(c);PASS();
 }
+static void test_trunk_only_carve_preserves_attached_canopy(void) {
+    char err[256];dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    for(unsigned x=20;x<28;x++) {
+        c->cells[20*64+x].material=DC_MATERIAL_LEAVES;
+        c->cells[21*64+x].material=DC_MATERIAL_WOOD;
+    }
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    dc_gpu_body_record_t *body=g->body_mapped;
+    body->body.x_fp=body->local_x_fp=20*65536;body->body.y_fp=body->local_y_fp=20*65536;
+    body->body.vx_fp=body->body.vy_fp=0;body->angle=body->angular_velocity=0;
+    ASSERT_TRUE(dc_gpu_paint_material(g,23,21,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    dc_gpu_body_pixel_t pixels[16];unsigned n=0,leaves=0,wood=0;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,pixels,16,&n,err,sizeof(err)));
+    for(unsigned i=0;i<n;i++) {leaves+=pixels[i].material==DC_GPU_BODY_LEAVES;wood+=pixels[i].material==DC_GPU_BODY_WOOD;}
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,c,err,sizeof(err)));
+    unsigned debris=c->particle_count;
+    dc_gpu_destroy(g);free(c);
+    ASSERT_EQ(leaves,8u);ASSERT_EQ(wood,7u);ASSERT_EQ(debris,0u);PASS();
+}
+
 static void test_broken_leaf_canopy_crumbles_without_losing_wood(void) {
     char err[256];dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));
     ASSERT_TRUE(c);
@@ -242,6 +266,7 @@ static void test_leaf_impact_crumbles_canopy(void) {
 }
 
 int main(void) {
+    RUN(test_trunk_only_carve_preserves_attached_canopy);
     RUN(test_leaf_impact_crumbles_canopy);
     RUN(test_broken_leaf_canopy_crumbles_without_losing_wood);
     RUN(test_air_carves_colored_body_and_splits_remaining_components);
