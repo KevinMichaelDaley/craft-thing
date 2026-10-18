@@ -28,6 +28,13 @@ static void test_supported_stump_stays_terrain_after_trunk_cut(void) {
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
     for(unsigned y=26;y<=30;y++) ASSERT_EQ(chunk->cells[y*64+30].material,DC_MATERIAL_WOOD);
     for(unsigned y=20;y<25;y++) ASSERT_EQ(chunk->cells[y*64+30].material,DC_MATERIAL_AIR);
+    ASSERT_EQ(chunk->cells[22*64+29].material,DC_MATERIAL_AIR);
+    dc_gpu_body_pixel_t pixels[16];unsigned count=0,dirt=0;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,pixels,16,&count,err,sizeof(err)));
+    ASSERT_EQ(count,7u);
+    for(unsigned i=0;i<count;i++) dirt+=pixels[i].material==7u;
+    ASSERT_EQ(dirt,1u);
+    ASSERT_EQ(chunk->particles[22*64+29].mass_fp,0u);
     dc_gpu_destroy(g);free(chunk);PASS();
 }
 
@@ -38,6 +45,7 @@ static void test_partial_granular_support_motion_does_not_release_tree_but_cut_d
     chunk->cells[29*64+29].material=DC_MATERIAL_DIRT;
     chunk->cells[30*64+29].material=DC_MATERIAL_DIRT;
     chunk->cells[31*64+30].material=DC_MATERIAL_DIRT;
+    chunk->cells[32*64+30]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
     ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
