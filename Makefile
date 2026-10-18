@@ -545,6 +545,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/body_carve_tests
 	./build/sequential_detachment_tests
 	./build/dense_support_tests
+	./build/loose_particle_role_tests
 	./build/pixel_motion_cache_tests
 	./build/component_dispatch_tests
 	./build/pixel_properties_gpu_tests
@@ -666,7 +667,12 @@ build/shaders/component_extract.comp.spv: shaders/sim/component_extract.comp sha
 	glslangValidator -V --target-env vulkan1.3 $< -o $@
 build/shaders/component_extract.comp.spv $(STRUCTURAL_SHADER) build/shaders/scene.comp.spv: shaders/sim/shape_colors.glsl
 build/fluid_tests: build/shaders/component_extract.comp.spv
-build/shaders/component_local.comp.spv: shaders/sim/component_local.comp shaders/sim/rigid_body.glsl
+build/loose_particle_role_tests: tests/vulkan/loose_particle_role_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/fluid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+test: build/loose_particle_role_tests
+
+build/shaders/component_local.comp.spv: shaders/sim/component_local.comp shaders/sim/rigid_body.glsl include/dungeoncraft/terrain_flags.h
 	mkdir -p build/shaders
 	glslangValidator -V --target-env vulkan1.3 $< -o $@
 
