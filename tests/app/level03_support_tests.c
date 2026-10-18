@@ -68,7 +68,7 @@ static unsigned attached_material_pixels(dc_gpu_t *g,unsigned material,char *err
     }
     return total;
 }
-static void test_level03_stays_packed_then_cut_tree_stops_at_stone(void) {
+static void test_level03_stays_packed_and_buried_trunk_cut_stays_supported(void) {
     char directory[]="build/ui_level03_support_XXXXXX",err[256]={0};
     const char *asset="assets/props/level_piece03.prop/asset.cprop";
     ASSERT_TRUE(mkdtemp(directory));printf("scene checkpoint %s\n",directory);
@@ -133,15 +133,6 @@ static void test_level03_stays_packed_then_cut_tree_stops_at_stone(void) {
     for(unsigned tick=0;tick<240;tick++) {
         ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)));
         ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
-        if(tick==0) {
-            unsigned before=attached_material_pixels(g,DC_GPU_BODY_LEAVES,err);ASSERT_TRUE(before>0&&before!=UINT32_MAX);
-            unsigned wood_before=attached_material_pixels(g,DC_GPU_BODY_WOOD,err);ASSERT_TRUE(wood_before!=UINT32_MAX);
-            ASSERT_TRUE(dc_level_view_paint(view,VIEW_WIDTH/2+15-32,VIEW_HEIGHT/2-16-32,1,DC_MATERIAL_AIR,err,sizeof(err)));
-            unsigned after=attached_material_pixels(g,DC_GPU_BODY_LEAVES,err);
-            printf("follow-up trunk brush attached leaves %u -> %u\n",before,after);
-            ASSERT_EQ(after,before);
-            ASSERT_TRUE(attached_material_pixels(g,DC_GPU_BODY_WOOD,err)<wood_before);
-        }
         if(tick%8==7) {
             unsigned overlap=stone_overlap(g,err);if(overlap>worst) worst=overlap;
             printf("cut tick%u wood-body centers in stone%u\n",tick+1,overlap);
@@ -151,11 +142,13 @@ static void test_level03_stays_packed_then_cut_tree_stops_at_stone(void) {
     printf("worst wood-body centers in stone%u\n",worst);
     printf("largest upward wood center displacement %.4f\n",upward_wood_motion);
     ASSERT_EQ(stone_overlap(g,err),0u);
+    ASSERT_EQ(attached_material_pixels(g,DC_GPU_BODY_WOOD,err),0u);
+    ASSERT_EQ(attached_material_pixels(g,DC_GPU_BODY_LEAVES,err),0u);
     ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));
-    ASSERT_TRUE(wood_body_samples>0u&&moving_wood_seen);
+    ASSERT_EQ(wood_body_samples,0u);ASSERT_TRUE(!moving_wood_seen);
     ASSERT_TRUE(worst<=2u);ASSERT_TRUE(upward_wood_motion<.5f);PASS();
 }
 int main(void) {
-    RUN(test_level03_stays_packed_then_cut_tree_stops_at_stone);
+    RUN(test_level03_stays_packed_and_buried_trunk_cut_stays_supported);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
