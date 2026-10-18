@@ -43,3 +43,7 @@ Reopened after tree penetrated stone. Thousands of leaf/grain constraints dilute
 **2026-10-17T23:21:03Z**
 
 Final GREEN: component aggregation distinguishes partial natural granular support motion from complete support loss; existing release bit records explicit cutting. Rigid rows use binding-set degree and grain mobility fraction, while particle/speculative rows keep conservative relaxation. Dense-leaf floor stops at47.9842 for floor48, rather than48.5969. Actual level03 retains initial tree after90 ticks, then trunk cut and240 further ticks show a falling tree stopped at rock, final zero wood-body pixel centers in stone (max2 transient sampled centers), validated under core/sync. Full suite only baseline ctr-ojvy two REDs. New regressions and actual rendered screenshots are reproducible from repo tests.
+
+**2026-10-18T00:01:00Z**
+
+Exact single-dirt-cell brush deletion regression passes: granular edits now use whole-component remaining-support logic; explicit release markers apply to rigid topology cuts. Full authored level03 retains704 terrain wood pixels after120 ticks following one-cell deletion, zero doubled soil/gravel cells, exact remaining granular mass. Subsequent trunk cut releases and falls with zero upward wood COM displacement and zero sampled stone overlap; core/sync validated.

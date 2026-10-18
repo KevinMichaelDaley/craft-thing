@@ -35,3 +35,7 @@ Reopened after user reports settling still leaves holes. RED 64-tick boxed slab:
 **2026-10-17T23:21:03Z**
 
 Final GREEN: transfers reserve material-derived rest volume, with compression limit1.5 allowing sand sifting but excluding two full-volume soil/gravel grains. 64-tick slabs retain384/384 cells and exact mass, no secondary grains. All27 particle tests pass, including sifting. Actual level03 after90 untouched ticks retains704 wood terrain pixels and zero doubled soil/gravel cells; rendered packing inspected. Full make test completed with only two pre-existing ctr-ojvy failures; final core/sync dense-support3/3 and actual330-tick GUI scene1/1 pass. Previous worlds preserved; launcher uses world_chunks_level_piece03_packed.
+
+**2026-10-18T00:01:00Z**
+
+Rechecked packing after the reported excavation collapse: the one-cell edit prematurely released the tree; full-volume transfers remain intact. Dense slabs retain384 full cells with exact mass and no secondary grains. Authored scene single-cell excavation preserves packing and mass; old saves retained, fresh equilibrium launcher directory introduced.
