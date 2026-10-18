@@ -15,6 +15,9 @@ static void test_supported_stump_stays_terrain_after_trunk_cut(void) {
     for(unsigned y=20;y<=30;y++)
         chunk->cells[y*64+30]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
     chunk->cells[31*64+30].material=DC_MATERIAL_DIRT;
+    chunk->cells[32*64+30]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+    chunk->cells[22*64+29].material=DC_MATERIAL_DIRT;
+    chunk->cells[23*64+29]=chunk->cells[23*64+30];
     ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
