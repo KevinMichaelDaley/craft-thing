@@ -10,6 +10,24 @@ static int g_pass,g_fail;
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() g_pass++
 
+static void test_supported_stump_stays_terrain_after_trunk_cut(void) {
+    dc_gpu_t *g=NULL;char err[256];dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    for(unsigned y=20;y<=30;y++)
+        chunk->cells[y*64+30]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
+    chunk->cells[31*64+30].material=DC_MATERIAL_DIRT;
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,30,25,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+    for(unsigned y=26;y<=30;y++) ASSERT_EQ(chunk->cells[y*64+30].material,DC_MATERIAL_WOOD);
+    for(unsigned y=20;y<25;y++) ASSERT_EQ(chunk->cells[y*64+30].material,DC_MATERIAL_AIR);
+    dc_gpu_destroy(g);free(chunk);PASS();
+}
+
 static void test_partial_granular_support_motion_does_not_release_tree_but_cut_does(void) {
     dc_gpu_t *g=NULL;char err[256];dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     chunk->cells[29*64+30]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
@@ -218,6 +236,7 @@ static void test_trapped_grains_cannot_bridge_a_clear_air_row(void) {
     dc_gpu_destroy(g);free(chunk);ASSERT_TRUE(result.y_fp>11*65536);PASS();
 }
 int main(void) {
+    RUN(test_supported_stump_stays_terrain_after_trunk_cut);
     RUN(test_trapped_grains_cannot_bridge_a_clear_air_row);
     RUN(test_embedded_tree_starts_in_equilibrium_without_soil_jacking);
     if(getenv("DC_EQUILIBRIUM_ONLY")) {
