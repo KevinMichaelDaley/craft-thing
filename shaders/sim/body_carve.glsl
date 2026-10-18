@@ -46,7 +46,7 @@ void carve_retire_member(uint slot) {
         if(data[m+7u]==slot) data[m+6u]|=2u;
     }
 }
-shared uint carve_changed,carve_pending,carve_hits,carve_cursor,carve_ids[64];
+shared uint carve_changed,carve_pending,carve_hits,carve_leaf_hits,carve_cursor,carve_ids[64];
 shared Body carve_source;
 void carve_bodies() {
     uint lane=gl_LocalInvocationID.x;
@@ -60,7 +60,7 @@ void carve_bodies() {
     for(;;) {
         uint slot=carve_cursor;if(slot>=BODY_CAPACITY) break;
         if(lane==0u) {
-            carve_changed=0u;carve_pending=0u;carve_hits=0u;Body source=bodies[slot];
+            carve_changed=0u;carve_pending=0u;carve_hits=0u;carve_leaf_hits=0u;Body source=bodies[slot];
             if(source.enabled!=0u&&source.id==carve_ids[slot]) {
                 vec2 low,high;body_bounds(source,low,high);
                 vec2 position=vec2(source.x_fp,source.y_fp)/65536.;
@@ -78,13 +78,15 @@ void carve_bodies() {
         memoryBarrierBuffer();barrier();
         if(carve_pending!=0u) {
             for(uint pixel=lane;pixel<body_pieces(carve_source);pixel+=32u) {
-                bool hit=piece_material(carve_source,pixel)!=0u&&carve_pixel(carve_source,pixel);
+                uint material=piece_material(carve_source,pixel);
+                bool hit=material!=0u&&carve_pixel(carve_source,pixel);
                 fracture_labels[pixel]=hit?0xffffffffu:0u;
                 if(hit) atomicOr(carve_hits,1u);
+                if(hit&&material==5u) atomicOr(carve_leaf_hits,1u);
             }
         }
         memoryBarrierBuffer();barrier();
-        if(carve_hits!=0u) leaf_reserve(carve_source);
+        if(carve_leaf_hits!=0u) leaf_reserve(carve_source);
         memoryBarrierBuffer();barrier();
         if(lane==0u&&carve_hits!=0u) {
             if(pixel_fragment_source(slot,carve_source,2u,0.,max(1u,carve_source.reserved1))) {
@@ -92,7 +94,7 @@ void carve_bodies() {
             }
         }
         memoryBarrierBuffer();barrier();
-        if(carve_hits!=0u) leaf_finish(carve_source,carve_changed!=0u);
+        if(carve_leaf_hits!=0u) leaf_finish(carve_source,carve_changed!=0u);
         memoryBarrierBuffer();barrier();
         if(carve_changed!=0u) {
             for(uint bond=lane;bond<192u;bond+=32u) {

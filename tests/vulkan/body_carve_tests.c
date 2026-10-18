@@ -144,6 +144,12 @@ static void test_trunk_only_carve_preserves_attached_canopy(void) {
     ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    dc_chunk_colors_t *colors=calloc(1,sizeof(*colors));ASSERT_TRUE(colors);
+    for(unsigned x=20;x<28;x++) {
+        colors->terrain[20*64+x][0]=.12f;colors->terrain[20*64+x][1]=.5f;
+        colors->terrain[20*64+x][2]=.08f;colors->terrain[20*64+x][3]=1;
+    }
+    ASSERT_TRUE(fr_renderer_upload_chunk_colors(g,0,colors,err,sizeof(err)));free(colors);
     ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
     ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     dc_gpu_body_record_t *body=g->body_mapped;
@@ -152,7 +158,17 @@ static void test_trunk_only_carve_preserves_attached_canopy(void) {
     ASSERT_TRUE(dc_gpu_paint_material(g,23,21,0,DC_MATERIAL_AIR,err,sizeof(err)));
     dc_gpu_body_pixel_t pixels[16];unsigned n=0,leaves=0,wood=0;
     ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,pixels,16,&n,err,sizeof(err)));
-    for(unsigned i=0;i<n;i++) {leaves+=pixels[i].material==DC_GPU_BODY_LEAVES;wood+=pixels[i].material==DC_GPU_BODY_WOOD;}
+    const uint32_t *shape=(uint32_t*)g->body_mapped+body->compound_reserved;
+    for(unsigned i=0;i<n;i++) {
+        wood+=pixels[i].material==DC_GPU_BODY_WOOD;
+        if(pixels[i].material!=DC_GPU_BODY_LEAVES) continue;
+        leaves++;
+        unsigned cell=(pixels[i].y%16)*16+pixels[i].x%16;
+        unsigned tile=(pixels[i].y/16)*shape[2]+pixels[i].x/16;
+        unsigned word=body->compound_reserved+shape[8+tile]+1+cell/8;
+        const float *rgb=dc_gpu_shape_colors(g,word)+(cell%8)*4;
+        ASSERT_EQ(rgb[0],.12f);ASSERT_EQ(rgb[1],.5f);ASSERT_EQ(rgb[2],.08f);ASSERT_EQ(rgb[3],1.f);
+    }
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,c,err,sizeof(err)));
     unsigned debris=c->particle_count;
     dc_gpu_destroy(g);free(c);
@@ -195,14 +211,14 @@ static void test_broken_leaf_canopy_crumbles_without_losing_wood(void) {
     ASSERT_TRUE(fr_gpu_load_structure(g,"build/leaf_canopy.dcs",err,sizeof(err)));
     for(unsigned slot=1;slot<DC_GPU_BODY_CAPACITY;slot++)
         ((dc_gpu_body_record_t*)g->body_mapped)[slot].reserved[0]=0x53545232u;
-    ASSERT_TRUE(dc_gpu_paint_material(g,23,21,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,23,20,1,DC_MATERIAL_AIR,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,pixels,16,&n,err,sizeof(err)));
     ASSERT_EQ(n,16u);
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,c,err,sizeof(err)));
     ASSERT_EQ(c->particle_count,0u);
     for(unsigned slot=1;slot<DC_GPU_BODY_CAPACITY;slot++)
         ((dc_gpu_body_record_t*)g->body_mapped)[slot].reserved[0]=0u;
-    ASSERT_TRUE(dc_gpu_paint_material(g,23,21,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,23,20,1,DC_MATERIAL_AIR,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,c,err,sizeof(err)));
     unsigned debris=0;uint64_t mass=0;
     for(unsigned i=0;i<DC_MPM_PARTICLES_PER_CHUNK;i++) if(c->particles[i].mass_fp) {
@@ -211,8 +227,8 @@ static void test_broken_leaf_canopy_crumbles_without_losing_wood(void) {
         ASSERT_EQ(c->particles[i].grain_fp,DC_FLUID_FULL/2);
         debris++;mass+=c->particles[i].mass_fp;
     }
-    ASSERT_EQ(debris,8u);
-    ASSERT_TRUE(llabs((long long)mass-(long long)(.2*8*65536))<8);
+    ASSERT_EQ(debris,5u);
+    ASSERT_TRUE(llabs((long long)mass-(long long)(.2*5*65536))<5);
     unsigned wood=0;
     for(unsigned slot=0;slot<DC_GPU_BODY_CAPACITY;slot++) {
         b=(dc_gpu_body_record_t*)g->body_mapped+slot;if(!b->body.active) continue;

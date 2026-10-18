@@ -57,6 +57,17 @@ static unsigned stone_overlap(dc_gpu_t *g,char *err) {
     }
     return overlaps;
 }
+static unsigned attached_material_pixels(dc_gpu_t *g,unsigned material,char *err) {
+    dc_gpu_body_pixel_t pixels[8192];unsigned total=0;
+    for(unsigned slot=0;slot<DC_GPU_BODY_CAPACITY;slot++) {
+        dc_gpu_body_record_t body=((dc_gpu_body_record_t*)g->body_mapped)[slot];
+        if(!body.body.active||!(body.piece_count&DC_GPU_PIXEL_BODY_FLAG)) continue;
+        unsigned count=0;
+        if(!dc_gpu_read_pixel_shape(g,body.body.id,pixels,8192,&count,err,256)) return UINT32_MAX;
+        for(unsigned i=0;i<count;i++) total+=pixels[i].material==material;
+    }
+    return total;
+}
 static void test_level03_stays_packed_then_cut_tree_stops_at_stone(void) {
     char directory[]="build/ui_level03_support_XXXXXX",err[256]={0};
     const char *asset="assets/props/level_piece03.prop/asset.cprop";
@@ -122,6 +133,15 @@ static void test_level03_stays_packed_then_cut_tree_stops_at_stone(void) {
     for(unsigned tick=0;tick<240;tick++) {
         ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)));
         ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
+        if(tick==0) {
+            unsigned before=attached_material_pixels(g,DC_GPU_BODY_LEAVES,err);ASSERT_TRUE(before>0&&before!=UINT32_MAX);
+            unsigned wood_before=attached_material_pixels(g,DC_GPU_BODY_WOOD,err);ASSERT_TRUE(wood_before!=UINT32_MAX);
+            ASSERT_TRUE(dc_level_view_paint(view,VIEW_WIDTH/2+15-32,VIEW_HEIGHT/2-16-32,1,DC_MATERIAL_AIR,err,sizeof(err)));
+            unsigned after=attached_material_pixels(g,DC_GPU_BODY_LEAVES,err);
+            printf("follow-up trunk brush attached leaves %u -> %u\n",before,after);
+            ASSERT_EQ(after,before);
+            ASSERT_TRUE(attached_material_pixels(g,DC_GPU_BODY_WOOD,err)<wood_before);
+        }
         if(tick%8==7) {
             unsigned overlap=stone_overlap(g,err);if(overlap>worst) worst=overlap;
             printf("cut tick%u wood-body centers in stone%u\n",tick+1,overlap);
