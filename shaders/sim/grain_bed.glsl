@@ -36,11 +36,11 @@ void grain_bed_phase(uint i) {
             float mass=float(particles[p].mass_fp+particles[p+4096u].mass_fp)/65536.0;
             if(mass>0.0) {
                 float next=-1.0;
-                /* The MPM kernel spans neighboring nodes: sparse small sand
-                   samples still transmit compression across that footprint. */
-                for(int dy=1;dy<=2&&next<0.0;dy++) for(int side=0;side<3;side++) {
+                /* Diagonal contacts can transmit compression, but an empty
+                   row breaks support even inside the MPM kernel footprint. */
+                for(int side=0;side<3;side++) {
                     int dx=side==0?0:side==1?-1:1;
-                    ivec2 below=ivec2(cell)+ivec2(dx,dy);
+                    ivec2 below=ivec2(cell)+ivec2(dx,1);
                     if(next<0.0&&bed_solid(bed_material(below))) next=float(uint(below.y)*params.width+uint(below.x));
                 }
                 value=vec4(next,mass,1,0);
