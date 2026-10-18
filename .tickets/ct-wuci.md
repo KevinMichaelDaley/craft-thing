@@ -2,7 +2,7 @@
 id: ct-wuci
 status: in_progress
 deps: []
-links: [dun-spbq, ct-alp7, ct-tu55]
+links: [dun-spbq, ct-alp7, ct-tu55, ctr-9e4n]
 created: 2026-10-12T23:07:46Z
 type: task
 priority: 2
@@ -90,3 +90,7 @@ Audit-only next cold-work candidate, not implemented or measured: the empty-cont
 **2026-10-17T06:11:38Z**
 
 Correction to earlier outstanding-work wording: automatic birth mass/COM/inertia are already wired through pixel_mass_properties in extraction phase 23 (commit 2ab7f2e), and current cold fixtures show motion_ready=1. Remaining cold work is the whole rigid-frame budget, not missing birth-property wiring. Existing fracture property/BFS/packing/arena-copy parallelization remains pending.
+
+**2026-10-18T02:12:12Z**
+
+User clarification Oct18: terrain connectivity is independent of material. When a post-load modification isolates terrain, include every solid pixel in the component (soil/gravel/sand/debris as well as wood/leaves/stone) in one rigid body. Pure unmodified loose granular components retain particle simulation. Implemented and being verified under ctr-9e4n; supersedes the earlier rigid-capable-only exclusion for tagged terrain connectivity.
