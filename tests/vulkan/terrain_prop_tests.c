@@ -258,7 +258,7 @@ static void test_old_save_recovers_missing_granular_support_history(void) {
         fr_prop_pixel_t wood,soil;
         ASSERT_TRUE(fr_prop_pixel(&g_asset,0,i,&wood));
         ASSERT_TRUE(fr_prop_pixel(&g_asset,0,i+g_asset.width,&soil));
-        if(wood.material==2&&soil.material==7) {source=i;break;}
+        if(wood.material==2&&soil.material==7&&(32+i/g_asset.width)%64<63) {source=i;break;}
     }
     ASSERT_TRUE(source!=UINT32_MAX);
     unsigned x=32+source%g_asset.width,y=32+source/g_asset.width,slot=y/64*3+x/64,at=y%64*64+x%64;
@@ -266,10 +266,12 @@ static void test_old_save_recovers_missing_granular_support_history(void) {
     chunk->coord=(dc_chunk_coord_t){x/64,y/64};
     chunk->cells[at]=(dc_cell_t){.material=DC_MATERIAL_WOOD,
         .flags=DC_CELL_LOADED_TERRAIN|DC_CELL_BONDS_READY|DC_CELL_DIAGONAL_BONDS_READY};
+    chunk->cells[at+64].material=DC_MATERIAL_DIRT;
     ASSERT_TRUE(dc_gpu_upload_chunk(g,slot,chunk,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_restore_terrain_prop_bonds(g,&g_asset,0,32,32,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_download_chunk(g,slot,chunk,err,sizeof(err)));
     ASSERT_TRUE(chunk->cells[at].flags&DC_CELL_SUPPORT_BONDS_READY);
+    ASSERT_EQ(chunk->cells[at+64].flags,0u);
     ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
     ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     dc_gpu_body_pixel_t pixel;unsigned count;

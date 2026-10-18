@@ -23,6 +23,10 @@ static void test_supported_stump_stays_terrain_after_trunk_cut(void) {
     chunk->cells[21*64+29].material=DC_MATERIAL_GRAVEL;
     chunk->cells[21*64+28].material=DC_MATERIAL_MORTAR_DEBRIS;
     chunk->cells[20*64+29].material=DC_MATERIAL_LEAF_DEBRIS;
+    const unsigned attached[]={31*64+30,22*64+29,22*64+28,21*64+29,21*64+28,20*64+29};
+    for(unsigned i=0;i<sizeof(attached)/sizeof(attached[0]);i++) chunk->cells[attached[i]].flags=DC_CELL_LOADED_TERRAIN;
+    chunk->cells[22*64+27].material=DC_MATERIAL_DIRT;
+    chunk->cells[20*64+28].material=DC_MATERIAL_LEAF_DEBRIS;
     ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
@@ -37,11 +41,22 @@ static void test_supported_stump_stays_terrain_after_trunk_cut(void) {
     dc_gpu_body_pixel_t pixels[16];unsigned count=0,dirt=0;
     ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,pixels,16,&count,err,sizeof(err)));
     ASSERT_EQ(count,11u);
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_EQ(chunk->cells[22*64+27].flags,0u);
+    ASSERT_EQ(chunk->cells[20*64+28].flags,0u);
+    ASSERT_TRUE(chunk->particles[22*64+27].mass_fp>0u);
+    ASSERT_TRUE(chunk->particles[20*64+28].mass_fp>0u);
     unsigned material_mask=0;
     for(unsigned i=0;i<count;i++) {dirt+=pixels[i].material==DC_GPU_BODY_DIRT;material_mask|=1u<<pixels[i].material;}
     ASSERT_EQ(dirt,1u);
     ASSERT_EQ(material_mask,(1u<<DC_GPU_BODY_WOOD)|(1u<<DC_GPU_BODY_MORTAR)|(1u<<DC_GPU_BODY_SAND)|(1u<<DC_GPU_BODY_DIRT)|(1u<<DC_GPU_BODY_GRAVEL)|(1u<<DC_GPU_BODY_LEAF_DEBRIS));
     ASSERT_EQ(chunk->particles[22*64+29].mass_fp,0u);
+    ASSERT_EQ(chunk->cells[22*64+27].material,DC_MATERIAL_DIRT);
+    ASSERT_EQ(chunk->cells[20*64+28].material,DC_MATERIAL_LEAF_DEBRIS);
+    ASSERT_EQ(chunk->cells[22*64+27].flags,0u);
+    ASSERT_EQ(chunk->cells[20*64+28].flags,0u);
+    ASSERT_TRUE(chunk->particles[22*64+27].mass_fp>0u);
+    ASSERT_TRUE(chunk->particles[20*64+28].mass_fp>0u);
     ASSERT_TRUE(fr_gpu_save_structure(g,"build/detached_mixed_terrain.dcs",err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_load_structure(g,"build/detached_mixed_terrain.dcs",err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,pixels,16,&count,err,sizeof(err)));
