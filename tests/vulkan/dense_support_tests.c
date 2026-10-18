@@ -197,7 +197,28 @@ static void test_embedded_tree_starts_in_equilibrium_without_soil_jacking(void) 
     ASSERT_TRUE(fabsf(final_y-settled_y)<.05f);
     ASSERT_TRUE(final_speed<.01f);ASSERT_EQ(refilled,0u);ASSERT_EQ(mass,(uint64_t)2044*78643u);PASS();
 }
+static void test_trapped_grains_cannot_bridge_a_clear_air_row(void) {
+    char err[256];dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    for(unsigned y=28;y<64;y++) for(unsigned x=0;x<64;x++)
+        chunk->cells[y*64+x].material=y>=56?DC_MATERIAL_STONE:DC_MATERIAL_DIRT;
+    chunk->cells[26*64+31].material=chunk->cells[26*64+32].material=DC_MATERIAL_DIRT;
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    dc_gpu_body_shape_t shape={.count=4,.material=DC_GPU_BODY_WOOD,
+        .vertices={{0,0},{2*65536,0},{2*65536,16*65536},{0,16*65536}}};
+    dc_gpu_world_body_t body={.body={.id=77,.active=1,.x_fp=31*65536,.y_fp=10*65536+32768,.width=2,.height=16}};
+    ASSERT_TRUE(dc_gpu_spawn_convex_body(g,body,&shape,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_rigid_solver(g,true));
+    ASSERT_TRUE(dc_gpu_set_body_motion(g,77,0,0,2,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    for(unsigned tick=0;tick<24;tick++) ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+    dc_gpu_body_t result;ASSERT_TRUE(dc_gpu_read_body_id(g,77,&result,err,sizeof(err)));
+    printf("air-gap trunk y%.4f (initial10.5)\n",result.y_fp/65536.f);
+    dc_gpu_destroy(g);free(chunk);ASSERT_TRUE(result.y_fp>11*65536);PASS();
+}
 int main(void) {
+    RUN(test_trapped_grains_cannot_bridge_a_clear_air_row);
     RUN(test_embedded_tree_starts_in_equilibrium_without_soil_jacking);
     if(getenv("DC_EQUILIBRIUM_ONLY")) {
         printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
