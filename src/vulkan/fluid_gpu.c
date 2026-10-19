@@ -91,11 +91,11 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
 
 bool dc_gpu_fluid_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     const char *variant=getenv("DC_FLUID_VARIANTS");
-    bool specialized=variant&&strcmp(variant,"specialized")==0;
+    bool specialized=!variant||strcmp(variant,"specialized")==0;
     if(variant&&!specialized&&strcmp(variant,"generic")!=0)
         return error(err,cap,"DC_FLUID_VARIANTS must be generic or specialized");
-    const char *fluid=variant?"build/diagnostics/fluid-variants/fluid.spv":"build/shaders/fluid.comp.spv";
-    const char *projection=variant?"build/diagnostics/fluid-variants/projection.spv":"build/shaders/projection.comp.spv";
+    const char *fluid="build/shaders/fluid.comp.spv";
+    const char *projection="build/shaders/projection.comp.spv";
     if(specialized) {
         for(uint32_t phase=0;phase<13;phase++)
             if(!make_pipeline(gpu,fluid,phase,&gpu->fluid_phase_pipelines[phase],err,cap)) return false;

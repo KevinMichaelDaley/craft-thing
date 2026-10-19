@@ -15,6 +15,8 @@ def generate_typed(source):
 
 
 def generate(source, pixel_types=False):
+    if "layout(constant_id=0) const uint FLUID_PHASE=" in source:
+        return source
     if pixel_types:
         source = generate_typed(source)
     candidate = source.replace("params.mode", "dispatch_mode()")

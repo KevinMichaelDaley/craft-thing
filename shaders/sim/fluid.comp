@@ -23,6 +23,8 @@ layout(push_constant) uniform Params {
     uint step_scale_bits;
     uint elapsed_time_mode;
 } params;
+layout(constant_id=0) const uint FLUID_PHASE=0xffffffffu;
+uint dispatch_mode() {return FLUID_PHASE==0xffffffffu?params.mode:FLUID_PHASE;}
 
 const uint SIDE = 64u;
 const uint CELLS_PER_CHUNK = 4096u;
@@ -48,12 +50,12 @@ uint atlas_index(ivec2 p, uint page) {
 #include "water_color.glsl"
 
 uint source_mass(uint index) {
-    return params.mode == 6u || params.mode == 8u ?
+    return dispatch_mode() == 6u || dispatch_mode() == 8u ?
            fluid_a[index] : uint(fluid_b[index]);
 }
 
 void write_mass(uint index, uint mass) {
-    if (params.mode == 6u || params.mode == 8u) fluid_b[index] = int(mass);
+    if (dispatch_mode() == 6u || dispatch_mode() == 8u) fluid_b[index] = int(mass);
     else fluid_a[index] = mass;
 }
 
@@ -148,9 +150,9 @@ void move_line(ivec2 source, ivec2 direction, bool vertical) {
 }
 
 void scan_line(uint line) {
-    if (params.mode <= 1u) {
+    if (dispatch_mode() <= 1u) {
         if (line >= params.width) return;
-        if (params.mode == 0u) {
+        if (dispatch_mode() == 0u) {
             for (int y = int(params.height) - 2; y >= 0; --y)
                 move_line(ivec2(int(line), y), ivec2(0, 1), true);
         } else {
@@ -159,7 +161,7 @@ void scan_line(uint line) {
         }
     } else {
         if (line >= params.height) return;
-        if (params.mode == 2u) {
+        if (dispatch_mode() == 2u) {
             for (int x = int(params.width) - 2; x >= 0; --x)
                 move_line(ivec2(x, int(line)), ivec2(1, 0), false);
         } else {
@@ -232,8 +234,8 @@ void displace_row(uint y) {
 void correct_pair(ivec2 p) {
     uint index = uint(p.y) * params.width + uint(p.x);
     uint own = source_mass(index);
-    bool vertical = params.mode <= 7u;
-    int parity = int(((params.mode - 6u) & 1u) ^ params.tick_parity);
+    bool vertical = dispatch_mode() <= 7u;
+    int parity = int(((dispatch_mode() - 6u) & 1u) ^ params.tick_parity);
     int coordinate = vertical ? p.y : p.x;
     int delta = (coordinate & 1) == parity ? 1 : -1;
     ivec2 neighbor = p + (vertical ? ivec2(0, delta) : ivec2(delta, 0));
@@ -283,15 +285,15 @@ void correct_pair(ivec2 p) {
 
 void main() {
     uint linear = gl_GlobalInvocationID.x;
-    if (params.mode == LATERAL_DISPLACEMENT_MODE) {
+    if (dispatch_mode() == LATERAL_DISPLACEMENT_MODE) {
         if(LEGACY_FLUID_PATHS) displace_row(linear);
         return;
     }
-    if (params.mode == DISPLACEMENT_MODE) {
+    if (dispatch_mode() == DISPLACEMENT_MODE) {
         if(LEGACY_FLUID_PATHS) displace_column(linear);
         return;
     }
-    if (params.mode <= 3u) {
+    if (dispatch_mode() <= 3u) {
         if(LEGACY_FLUID_PATHS) scan_line(linear);
         return;
     }
@@ -303,17 +305,17 @@ void main() {
     if (position.x >= int(params.width) || position.y >= int(params.height)) return;
     uint index = uint(position.y) * params.width + uint(position.x);
     uint page = page_at(position);
-    if (params.mode == 10u) {
+    if (dispatch_mode() == 10u) {
         fluid_previous[index] = page == 0u ? 0u :
                                 chunk_cells[atlas_index(position, page)].y;
-    } else if (params.mode == 4u) {
+    } else if (dispatch_mode() == 4u) {
         fluid_a[index] = page == 0u ? 0u :
                          chunk_cells[atlas_index(position, page)].y;
-    } else if (params.mode == 5u) {
+    } else if (dispatch_mode() == 5u) {
         if (page != 0u) chunk_cells[atlas_index(position, page)].y = fluid_a[index];
         face_velocity[index] *= pow(VELOCITY_DAMPING,
                                     uintBitsToFloat(params.step_scale_bits));
-    } else if (params.mode >= 6u && params.mode <= 9u) {
+    } else if (dispatch_mode() >= 6u && dispatch_mode() <= 9u) {
         correct_pair(position);
     }
 }

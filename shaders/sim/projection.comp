@@ -18,6 +18,8 @@ layout(push_constant) uniform Params {
     uint step_scale_bits;
     uint unused3;
 } params;
+layout(constant_id=0) const uint FLUID_PHASE=0xffffffffu;
+uint dispatch_mode() {return FLUID_PHASE==0xffffffffu?params.mode:FLUID_PHASE;}
 
 
 uint index_of(ivec2 p) { return uint(p.y) * params.width + uint(p.x); }
@@ -118,9 +120,9 @@ void main() {
     }
     if (p.x >= int(params.width) || p.y >= int(params.height)) return;
     uint index = index_of(p);
-    if (params.mode == 5u) {
+    if (dispatch_mode() == 5u) {
         previous_vertical_velocity[index] = floatBitsToUint(face_velocity[index].y);
-    } else if (params.mode == 4u) {
+    } else if (dispatch_mode() == 4u) {
         if (p.y != 0) return;
         uint head = 0u;
         for (uint y = 0u; y < params.height; ++y) {
@@ -132,7 +134,7 @@ void main() {
             } else head = wet(cell) ? min(head + cells[atlas_of(cell)].y, 64u * 65536u) : 0u;
             hydro_head[index_of(cell)] = head;
         }
-    } else if (params.mode == 0u) {
+    } else if (dispatch_mode() == 0u) {
         vec2 old_velocity = face_velocity[index];
         ivec2 right = p + ivec2(1, 0);
         ivec2 below = p + ivec2(0, 1);
@@ -151,8 +153,8 @@ void main() {
         pressure_a[index] = wet(p) ?
             0.5 * uintBitsToFloat(params.step_scale_bits) *
             float(hydro_head[index]) / 65536.0 : 0.0;
-    } else if (params.mode == 1u || params.mode == 2u) {
-        if (((p.x + p.y) & 1) != int(params.mode - 1u)) return;
+    } else if (dispatch_mode() == 1u || dispatch_mode() == 2u) {
+        if (((p.x + p.y) & 1) != int(dispatch_mode() - 1u)) return;
         float value = 0.0;
         if (wet(p)) {
             float sum = 0.0;
@@ -171,7 +173,7 @@ void main() {
             if (count > 0.0) value = (sum - divergence(p)) / count;
         }
         pressure_a[index] = mix(pressure_a[index], value, 1.5);
-    } else if (params.mode == 3u) {
+    } else if (dispatch_mode() == 3u) {
         vec2 result = face_velocity[index];
         ivec2 right = p + ivec2(1, 0);
         ivec2 below = p + ivec2(0, 1);
