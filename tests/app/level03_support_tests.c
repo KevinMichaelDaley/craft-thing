@@ -2,6 +2,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <SDL.h>
 #include "../../src/app/level.h"
 #include "../../src/app/prop_scene.h"
@@ -77,6 +78,27 @@ static void test_level03_stays_packed_and_buried_trunk_cut_stays_supported(void)
     dc_gpu_contact_stats_t contacts;
     ASSERT_TRUE(dc_level_view_contacts(view,&contacts,NULL,0,err,sizeof(err)));
     dc_gpu_t *g=observed_gpu;
+    size_t image_bytes=(size_t)VIEW_WIDTH*VIEW_HEIGHT*sizeof(uint32_t);
+    uint32_t *lit=malloc(image_bytes),*unlit=malloc(image_bytes);ASSERT_TRUE(lit&&unlit);
+    ASSERT_TRUE(dc_level_view_pixels(view,lit,VIEW_WIDTH*VIEW_HEIGHT,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO));
+    ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pixels(view,unlit,VIEW_WIDTH*VIEW_HEIGHT,err,sizeof(err)));
+    ASSERT_TRUE(memcmp(lit,unlit,image_bytes)!=0);
+    ASSERT_TRUE(dc_level_view_renderer_mode(view,FR_RENDERER_LIT));
+    for(unsigned frame=0;frame<4;frame++) {
+        ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+        ASSERT_TRUE(dc_level_view_pixels(view,unlit,VIEW_WIDTH*VIEW_HEIGHT,err,sizeof(err)));
+        ASSERT_TRUE(memcmp(lit,unlit,image_bytes)==0);
+    }
+    ASSERT_TRUE(fr_renderer_set_sources(g,NULL,0,(fr_renderer_sun_t){0}));
+    ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pixels(view,unlit,VIEW_WIDTH*VIEW_HEIGHT,err,sizeof(err)));
+    ASSERT_TRUE(memcmp(lit,unlit,image_bytes)!=0);
+    ASSERT_TRUE(dc_level_view_renderer_mode(view,FR_RENDERER_LIT));
+    ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+    ASSERT_TRUE(screenshot(view,"build/level03_lighting.bmp",err));
+    free(lit);free(unlit);
     for(unsigned tick=0;tick<90;tick++) {
         ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)));
         ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
