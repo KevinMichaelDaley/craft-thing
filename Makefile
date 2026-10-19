@@ -32,7 +32,7 @@ build/scene_gpu_tests: tests/renderer/scene_gpu_tests.c src/vulkan/scene_gpu.c i
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/renderer_visual_tests: tests/renderer/visual_tests.c tests/renderer/concave_scene.h $(GPU_SRC) src/world/chunk.c $(RENDERER_SHADERS) build/quarter_native_solver_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
-build/renderer_performance_tests: tests/renderer/performance_tests.c tests/renderer/concave_scene.h $(RENDERER_SHADERS) build/quarter_native_solver_tests
+build/renderer_performance_tests: tests/renderer/performance_tests.c tests/renderer/concave_scene.h $(RENDERER_SHADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=fr_renderer_record -Wl,--wrap=fr_occlusion_record -Wl,--wrap=fr_lighting_record -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect
 build/authoring_request_tests: tests/structural/authoring_request_tests.c src/structural/authoring.c include/ferrum/structural/authoring.h
 	mkdir -p build
@@ -222,7 +222,7 @@ build/convex_body_tests: tests/vulkan/convex_body_tests.c $(GPU_OBJ) $(CHUNK_OBJ
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 QUARTER_FLAGS = -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u -DDC_PRESSURE_SWEEPS=16u
 PERFORMANCE_OBJ = $(patsubst %.c,build/performance/%.o,$(GPU_SRC) src/world/chunk.c)
-build/performance/%.o: %.c
+build/performance/%.o: %.c Makefile
 	mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -MMD -MP -c $< -o $@
 build/renderer_performance_tests: $(PERFORMANCE_OBJ)

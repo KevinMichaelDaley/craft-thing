@@ -63,6 +63,19 @@ the former 2 ms renderer-only goal is superseded. Per-stage GPU times diagnose
 cost, and `DC_RENDERER_PASS_PROFILE=1` enables extra per-pass timestamps.
 Do not describe runs overlapping another GPU application as isolated.
 
+The noninteractive optimization checkpoint on the Intel Iris Xe TGL GT2 used
+two moving concave bodies, sunlight and four colored point sources. With an
+existing gameplay demo running, 24 complete frames averaged 46.516 ms at
+480x270 (worst 51.501 ms) and 77.207 ms at 640x360 (worst 93.399 ms).
+Renderer/light stage means were respectively 26.930/20.056 ms and
+49.179/38.762 ms. These runs fail the frame budget and are contended, not an
+isolated acceptance result. The other demo's i915 render-engine counter grew
+at 93.3 percent occupancy over a 7.61-second diagnostic interval. Its process
+and saved world were left untouched. The previous 32.186 ms renderer-only
+baseline was isolated, so it is not a directly comparable full-frame result.
+An isolated full-frame run, including tail latency, remains required by
+`ctr-ebl5` and `ctr-21eh` before performance completion.
+
 Regression coverage includes a wide eight-pixel-thick foliage canopy: light
 below it must recover by at least ten percentage points with distance,
 relative to the unobstructed field at the same coordinates. Sealed opaque

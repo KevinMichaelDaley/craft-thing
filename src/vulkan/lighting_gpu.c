@@ -28,9 +28,11 @@ struct fr_lighting_gpu {
   void *work_mapped;
   light_pass_t passes[LIGHTING_MAX_PASSES];
   uint32_t pass_count;
-  VkPipeline specialized[3][6];
+  VkPipeline specialized[FR_TRANSPORT_SOURCE_ITERATIONS][6];
 };
-static uint32_t tiles(uint32_t length) { return (length + FR_TRANSPORT_TILE - 1u) / FR_TRANSPORT_TILE; }
+static uint32_t tiles(uint32_t length) {
+  return (length + FR_TRANSPORT_TILE - 1u) / FR_TRANSPORT_TILE;
+}
 static uint32_t larger(uint32_t a, uint32_t b) { return a > b ? a : b; }
 static uint32_t smaller(uint32_t a, uint32_t b) { return a < b ? a : b; }
 static uint32_t block_nodes(uint32_t length, uint32_t lines) {
@@ -80,7 +82,8 @@ void fr_lighting_gpu_destroy(fr_lighting_gpu_t *l) {
   if (!l)
     return;
   VkDevice d = l->gpu->device;
-  for (unsigned iteration = 0; iteration < 3; iteration++)
+  for (unsigned iteration = 0; iteration < FR_TRANSPORT_SOURCE_ITERATIONS;
+       iteration++)
     for (unsigned phase = 0; phase < 6; phase++)
       if (l->specialized[iteration][phase])
         vkDestroyPipeline(d, l->specialized[iteration][phase], NULL);

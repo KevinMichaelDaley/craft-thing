@@ -155,6 +155,39 @@ static void test_colored_directions_keep_independent_rgb_moments(void) {
   ASSERT_TRUE(f.lx[0] < 0 && f.lx[2] > 0);
   PASS();
 }
+static void test_transport_carries_prefixes_across_recursive_scan_levels(void) {
+  const unsigned width = 1093, height = 3, count = width * height;
+  float *opacity = calloc(count, sizeof(*opacity));
+  uint32_t *known = malloc(count * sizeof(*known));
+  ASSERT_TRUE(opacity && known);
+  for (unsigned i = 0; i < count; i++)
+    known[i] = 1;
+  fr_occlusion_gpu_t *occlusion = NULL;
+  fr_lighting_gpu_t *lighting = NULL;
+  ASSERT_TRUE(fr_occlusion_gpu_create(g_gpu, width, height, &occlusion, g_error,
+                                      sizeof(g_error)));
+  ASSERT_TRUE(fr_lighting_gpu_create(g_gpu, occlusion, &lighting, g_error,
+                                     sizeof(g_error)));
+  fr_renderer_sun_t sun = {.direction = {-1, 0, 0},
+                           .color = {1, 1, 1},
+                           .intensity = 1,
+                           .known_sky = FR_SKY_LEFT};
+  ASSERT_TRUE(fr_lighting_gpu_set_sources(lighting, NULL, 0, sun, 4096));
+  ASSERT_TRUE(fr_occlusion_gpu_upload(occlusion, opacity, known));
+  ASSERT_TRUE(fr_occlusion_gpu_generate(occlusion, g_error, sizeof(g_error)));
+  ASSERT_TRUE(fr_lighting_gpu_generate(lighting, g_error, sizeof(g_error)));
+  fr_renderer_light_field_t before, boundary, after;
+  ASSERT_TRUE(fr_lighting_gpu_read(lighting, 1022, 1, &before));
+  ASSERT_TRUE(fr_lighting_gpu_read(lighting, 1023, 1, &boundary));
+  ASSERT_TRUE(fr_lighting_gpu_read(lighting, 1024, 1, &after));
+  ASSERT_TRUE(before.l0[0] > boundary.l0[0] && boundary.l0[0] > after.l0[0]);
+  ASSERT_TRUE(after.l0[0] > .95f * boundary.l0[0]);
+  fr_lighting_gpu_destroy(lighting);
+  fr_occlusion_gpu_destroy(occlusion);
+  free(opacity);
+  free(known);
+  PASS();
+}
 static void test_zero_distance_emitter_is_finite(void) {
   ASSERT_TRUE(empty_scene());
   ASSERT_TRUE(set_points());
@@ -292,6 +325,7 @@ int main(void) {
   RUN(test_skylight_loses_energy_with_depth);
   RUN(test_emission_propagates_around_an_open_doorway);
   RUN(test_large_field_crosses_scan_tiles_and_filters_foliage);
+  RUN(test_transport_carries_prefixes_across_recursive_scan_levels);
   RUN(test_zero_distance_emitter_is_finite);
   RUN(test_hdr_emission_preserves_energy_range_and_vertical_direction);
   RUN(test_thin_wall_and_one_pixel_hole_visibility);

@@ -228,7 +228,7 @@ void main() {
         uint line=group/blocks,tile=group%blocks,along=tile*FR_TRANSPORT_TILE+lane;
         if(line>=line_count(direction)) return;
         /* Diagonals have different lengths. Padded tiles carry identity, but
-           must not run a full shared/subgroup scan over 128 absent pixels. */
+           must not run a full shared/subgroup scan over absent pixels. */
         if(!inside(scan_cell(direction,line,tile*FR_TRANSPORT_TILE))) {
             if(lane==0u) totals[block_offset(direction,0u,line,tile)]=pack_beam(identity());
             return;

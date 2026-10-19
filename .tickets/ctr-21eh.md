@@ -39,3 +39,7 @@ User supersedes the old <=2ms renderer-only target: total frame time must be <30
 **2026-10-19T01:51:23Z**
 
 Acceptance body updated to user correction: TOTAL simulation+render frame <30ms at480x270 and640x360; <=2ms renderer-only goal superseded. Noninteractive optimization checkpoint ctr-ebl5 preserves radiance transport and all optical regressions. Current complete-frame gate still fails while an existing live demo consumes GPU time; do not infer isolated performance or close this ticket from renderer-only timing.
+
+**2026-10-19T02:00:46Z**
+
+Final noninteractive checkpoint keeps acceptance OPEN: full-frame mean/worst480x27046.516/51.501ms and640x36077.207/93.399ms, with live game demo on same GPU. Renderer-only26.930/49.179ms are diagnostic, not an acceptance substitute. Do not compare this contended run directly to prior isolated32.186ms renderer baseline. Transport working storage256 to120 bytes/cell, final field64 unchanged, all12 transport regressions and scene optics pass core+sync, full suite only known ctr-ojvy failures. Need isolated full frames under30ms including moving-body simulation before completion.
