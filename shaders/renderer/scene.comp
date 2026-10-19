@@ -5,6 +5,7 @@
 #include "../sim/rigid_shape.glsl"
 #include "../sim/rigid_clip.glsl"
 #include "texture.glsl"
+#include "directional_storage.glsl"
 #include "../sim/leaf_color.glsl"
 
 layout(local_size_x=64) in;
@@ -18,7 +19,8 @@ layout(set=0,binding=4,std430) readonly buffer Particles {Particle particles[];}
 layout(set=0,binding=5,std430) buffer Palette {Appearance palette[];};
 layout(set=0,binding=6,std430) buffer Keys {uvec2 keys[];};
 struct Surface {vec4 albedo;vec4 nx;vec4 ny;vec4 nz;vec4 weights;};
-layout(set=0,binding=7,std430) buffer Surfaces {Surface surfaces[];};
+struct PackedSurface {uint r,g,b,nr,ng,nb,background;};
+layout(set=0,binding=7,std430) buffer Surfaces {PackedSurface surfaces[];};
 layout(set=0,binding=8,std430) buffer OpticalInput {uvec2 optical[];};
 layout(set=0,binding=9,std430) buffer Work {uint work[];};
 layout(set=0,binding=10,std430) readonly buffer Markers {uint markers[];};
@@ -70,6 +72,24 @@ void add_surface(inout Surface surface,Appearance a,float coverage,float angle) 
 }
 float material_opacity(uint material) {
     return material==9u?FR_LEAF_OPACITY:material==10u?FR_LEAF_DEBRIS_OPACITY:1.;
+}
+PackedSurface pack_surface(Surface surface) {
+    uvec3 color=floatBitsToUint(surface.albedo.rgb);
+    vec3 inverse_color=1./max(surface.albedo.rgb,vec3(1e-30));
+    return PackedSurface(color.r,color.g,color.b,
+        renderer_pack_direction(vec3(surface.nx.r,surface.ny.r,surface.nz.r)*inverse_color.r),
+        renderer_pack_direction(vec3(surface.nx.g,surface.ny.g,surface.nz.g)*inverse_color.g),
+        renderer_pack_direction(vec3(surface.nx.b,surface.ny.b,surface.nz.b)*inverse_color.b),
+        floatBitsToUint(surface.weights.z)|(uint(surface.weights.w>0.)<<31u));
+}
+Surface unpack_surface(PackedSurface packed) {
+    vec3 color=uintBitsToFloat(uvec3(packed.r,packed.g,packed.b));
+    vec3 r=renderer_unpack_direction(packed.nr)*color.r;
+    vec3 g=renderer_unpack_direction(packed.ng)*color.g;
+    vec3 b=renderer_unpack_direction(packed.nb)*color.b;
+    return Surface(vec4(color,0),vec4(r.x,g.x,b.x,0),vec4(r.y,g.y,b.y,0),
+                   vec4(r.z,g.z,b.z,0),
+                   vec4(0,0,uintBitsToFloat(packed.background&0x7fffffffu),float(packed.background>>31u)));
 }
 Surface surface_at(uint i,out float opacity,out uint known) {
     Surface surface=Surface(vec4(0),vec4(0),vec4(0),vec4(0),vec4(0));
@@ -178,7 +198,8 @@ void main() {
     if(SCENE_PHASE==3u) {
         uint changed=0u;
         if(i<params.width*params.height) {
-            float opacity;uint known;surfaces[i]=surface_at(i,opacity,known);
+            float opacity;uint known;
+            surfaces[i]=pack_surface(surface_at(i,opacity,known));
             uvec2 value=uvec2(floatBitsToUint(opacity),known);
             changed=any(notEqual(optical[i],value))?1u:0u;optical[i]=value;
         }
@@ -198,7 +219,7 @@ void main() {
     uint view_width=configuration[0],view_height=configuration[1];
     if(i>=view_width*view_height) return;
     uvec2 cell=uvec2(i%view_width+params.view_x,i/view_width+params.view_y);
-    uint index=cell.y*params.width+cell.x;Surface surface=surfaces[index];
+    uint index=cell.y*params.width+cell.x;Surface surface=unpack_surface(surfaces[index]);
     if(surface.weights.w==0.) {display[index]=0xffff00ffu;return;}
     vec3 color=surface.albedo.rgb;bool lit=params.mode==0u;
     if(lit) {

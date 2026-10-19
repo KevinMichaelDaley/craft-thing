@@ -91,6 +91,7 @@ build/shaders/scene.comp.spv: shaders/renderer/scene.comp shaders/renderer/textu
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 
 build/shaders/scene.comp.spv: include/ferrum/renderer/light_transport.h
+build/shaders/scene.comp.spv build/shaders/lighting.comp.spv build/shaders/lighting_subgroup.comp.spv: shaders/renderer/directional_storage.glsl
 GPU_OBJ += build/mpm_activity_gpu.o
 GPU_OBJ += build/authored_gpu.o build/authored_request.o
 GPU_OBJ += build/prop_gpu.o build/prop_asset.o

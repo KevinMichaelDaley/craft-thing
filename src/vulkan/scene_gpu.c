@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "ferrum/renderer/gpu.h"
+#include "ferrum/renderer/light_transport.h"
 #include "ferrum/renderer/texture.h"
 #include "renderer_internal.h"
 
@@ -92,7 +93,7 @@ bool fr_renderer_enable(dc_gpu_t *g, char *err, uint32_t cap) {
            atlas = DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS;
   VkDeviceSize sizes[SCENE_BUFFERS] = {
       (VkDeviceSize)atlas * 32, (VkDeviceSize)atlas * 8,
-      (VkDeviceSize)grid * 80, SCENE_WORK_WORDS * 4, 64};
+      (VkDeviceSize)grid * FR_RENDERER_SURFACE_BYTES, SCENE_WORK_WORDS * 4, 64};
   for (uint32_t b = 0; b < SCENE_BUFFERS; b++)
     if (!dc_gpu_make_mapped_buffer(g, sizes[b], &s->buffers[b], &s->memory[b],
                                    &s->mapped[b], err, cap))
