@@ -30,6 +30,19 @@ static const uint32_t bindings[]={1,2,3,8,10,28,29,32};
 static const uint32_t sizes[]={CHUNKS*4096*2,CHUNKS,5*CELLS,CELLS,2*CELLS,2*CELLS,TREE_BASE+16384,CHUNKS*4096*4};
 static uint32_t minimum(uint32_t a,uint32_t b) {return a<b?a:b;}
 static uint32_t bits(float x) {uint32_t u;memcpy(&u,&x,4);return u;}
+#ifdef DC_SPLIT_TRANSPORT
+static VkPipeline split_pipeline(fixture_t *f,unsigned mode,unsigned stage) {
+    uint32_t values[]={mode,stage};
+    VkSpecializationMapEntry entries[]={{.constantID=0,.size=4},{.constantID=5,.offset=4,.size=4}};
+    VkSpecializationInfo specialization={.mapEntryCount=2,.pMapEntries=entries,.dataSize=sizeof(values),.pData=values};
+    VkComputePipelineCreateInfo info={.sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,.layout=f->p.layout,
+        .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_COMPUTE_BIT,
+            .module=f->p.shader,.pName="main",.pSpecializationInfo=&specialization}};
+    VkPipeline result=VK_NULL_HANDLE;
+    if(vkCreateComputePipelines(f->p.device,VK_NULL_HANDLE,1,&info,NULL,&result)!=VK_SUCCESS) return VK_NULL_HANDLE;
+    return result;
+}
+#endif
 static float number(uint32_t x) {float f;memcpy(&f,&x,4);return f;}
 static unsigned index_of(int x,int y) {return (unsigned)y*WIDTH+(unsigned)x;}
 static uint32_t atlas(const fixture_t *f,int x,int y) {
@@ -112,6 +125,9 @@ static void run_case_scaled(unsigned mode,unsigned unknown,float velocity_scale)
             f->words[2][4*CELLS+i]=((hash/7)%5)*FULL/4;
         }
         float velocity=(float)((x+y)%12+1)*(positive?1.f:-1.f)*velocity_scale;
+#ifdef DC_SPLIT_TRANSPORT
+        if((vertical?x:y)%2u==0u) velocity=(positive?1.f:-1.f)*.5f/(float)TRANSPORT_TEST_STEP;
+#endif
         f->words[4][2*i+(vertical?1:0)]=bits(velocity);f->words[3][i]=bits(velocity*.5f);
     }
     /* Seed the already independently GPU-tested cache, isolating transport. */
@@ -137,6 +153,10 @@ static void run_case_scaled(unsigned mode,unsigned unknown,float velocity_scale)
     }
     f->p.buffer=f->buffers[5];f->p.mapped=f->words[5];
     ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,"build/shaders/fluid_transport.comp.spv",bindings,8,mode));
+#ifdef DC_SPLIT_TRANSPORT
+    VkPipeline fast=split_pipeline(f,mode,1),general=split_pipeline(f,mode,2);
+    ASSERT_TRUE(fast&&general);vkDestroyPipeline(f->p.device,f->p.pipeline,NULL);f->p.pipeline=fast;
+#endif
     VkDescriptorBufferInfo info[8];VkWriteDescriptorSet writes[8];
     for(unsigned i=0;i<8;i++) {
         info[i]=(VkDescriptorBufferInfo){f->buffers[i],0,sizes[i]*4};
@@ -148,7 +168,14 @@ static void run_case_scaled(unsigned mode,unsigned unknown,float velocity_scale)
     vkCmdBindDescriptorSets(f->p.command,VK_PIPELINE_BIND_POINT_COMPUTE,f->p.layout,0,1,&f->p.descriptor,0,NULL);
     uint32_t push[8]={WIDTH,HEIGHT,mode,0,leaves,bits((float)TRANSPORT_TEST_STEP),1};
     vkCmdPushConstants(f->p.command,f->p.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
-    vkCmdDispatch(f->p.command,lines,1,1);host_barrier(&f->p,1);ASSERT_EQ(vkEndCommandBuffer(f->p.command),VK_SUCCESS);
+    vkCmdDispatch(f->p.command,lines,1,1);
+#ifdef DC_SPLIT_TRANSPORT
+    VkMemoryBarrier between={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+        .srcAccessMask=VK_ACCESS_SHADER_WRITE_BIT,.dstAccessMask=VK_ACCESS_SHADER_READ_BIT|VK_ACCESS_SHADER_WRITE_BIT};
+    vkCmdPipelineBarrier(f->p.command,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,0,1,&between,0,NULL,0,NULL);
+    vkCmdBindPipeline(f->p.command,VK_PIPELINE_BIND_POINT_COMPUTE,general);vkCmdDispatch(f->p.command,lines,1,1);
+#endif
+    host_barrier(&f->p,1);ASSERT_EQ(vkEndCommandBuffer(f->p.command),VK_SUCCESS);
     ASSERT_TRUE(submit(&f->p,"cooperative exact transport",1));
     unsigned mismatches=0;
     for(unsigned y=0;y<HEIGHT;y++) for(unsigned x=0;x<WIDTH;x++) {
@@ -160,6 +187,9 @@ static void run_case_scaled(unsigned mode,unsigned unknown,float velocity_scale)
     }
     printf("mode%u unknown%u: %u exact transport mismatches\n",mode,unknown,mismatches);
     fixture_release_pipeline(&f->p);
+#ifdef DC_SPLIT_TRANSPORT
+    vkDestroyPipeline(f->p.device,general,NULL);
+#endif
     for(unsigned i=0;i<8;i++) {vkUnmapMemory(f->p.device,f->memory[i]);vkDestroyBuffer(f->p.device,f->buffers[i],NULL);vkFreeMemory(f->p.device,f->memory[i],NULL);}
     vkDestroyFence(f->p.device,f->p.fence,NULL);vkDestroyCommandPool(f->p.device,f->p.pool,NULL);
     vkDestroyDevice(f->p.device,NULL);vkDestroyInstance(f->p.instance,NULL);free(f);

@@ -46,3 +46,7 @@ Full color-cache GPU correctnessGREEN2work+4watercolor+10literal cases and exact
 **2026-10-19T03:15:11Z**
 
 Lane-local sync targetedGREEN: one-cell2/2 preserves bfb12e1adda28360 and163072→0bufferbarriers; mixedfast/cooperative4/4 exactlymatches strongerbuffer-sync referencebothdirections (hash896f4baa302ac887 and0b326fcde3360bfe), barriers271776→108704; optionalcache2/2,watercolor4/4,literal10/10 allcore/syncclean. Actual lit180frame repeat59.646ms/p9572.339/max84.931 vsbaseline57.328/67.137/71.375 shows no clear wholeframe gain (rigid/MPM also~5-7percent slower), not performance completion. CapturedactualBMP andinspected realU+comb,4pausedimagesbyteidentical. Next GPU-uniform fastline specialization toprunegeneralrecipient controlflow; strict30ms gate unchanged.
+
+**2026-10-19T03:16:50Z**
+
+Global-fallback2113-cell literaltransport10/10 passes core+sync after narrowbarrierchange. New compiling specializedfast/general two-dispatch RED fails4841exactwatercells because specialization5isnotyetimplemented andbothpassesprocessalllines. Must classify from immutablefacevelocity (notmutablewatereligibility) sofastpasschangescannotcausegeneralsecondprocessing. Plan: subgroupmaxtravel overfullcachedline; fastspecializationprunesallmulti-cellrecipientloops andblocker scan, generalhandleslongtravel/uncachedlines. NoCPUphysicsreadback ornewdescriptorbinding. Targetframegate remainsRED.

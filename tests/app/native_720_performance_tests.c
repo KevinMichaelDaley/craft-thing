@@ -32,21 +32,21 @@ static int compare_sample(const void *a, const void *b) {
     return (x > y) - (x < y);
 }
 #ifdef DC_NATIVE_LIT_PERFORMANCE
-static bool capture_native_paused_scene(dc_gpu_t *gpu,unsigned load,char *err,uint32_t cap) {
+static bool capture_native_scene(dc_gpu_t *gpu,unsigned load,bool paused,char *err,uint32_t cap) {
     size_t bytes=(size_t)WIDTH*HEIGHT*sizeof(uint32_t);
     uint32_t *first=malloc(bytes),*next=malloc(bytes);
     bool okay=first&&next;
-    for(unsigned frame=0;frame<4&&okay;frame++) {
-        okay=dc_gpu_present_chunks_steps(gpu,0,err,cap)&&
+    for(unsigned frame=0;frame<(paused?4u:1u)&&okay;frame++) {
+        okay=(!paused||dc_gpu_present_chunks_steps(gpu,0,err,cap))&&
             dc_gpu_readback(gpu,frame?next:first,WIDTH*HEIGHT,err,cap);
         if(frame&&okay) okay=memcmp(first,next,bytes)==0;
     }
     if(okay) {
         SDL_Surface *surface=SDL_CreateRGBSurfaceWithFormatFrom(first,WIDTH,HEIGHT,32,WIDTH*4,SDL_PIXELFORMAT_ABGR8888);
-        char path[160];snprintf(path,sizeof(path),"build/diagnostics/native-lit-%u-%ux%u.bmp",load,WIDTH,HEIGHT);
+        char path[160];snprintf(path,sizeof(path),"build/diagnostics/native-lit-%u-%ux%u-%s.bmp",load,WIDTH,HEIGHT,paused?"paused":"cold");
         okay=surface&&SDL_SaveBMP(surface,path)==0;
         if(surface) SDL_FreeSurface(surface);
-        printf("native lit capture %s: four paused frames %s\n",path,okay?"identical":"FAILED");
+        printf("native lit capture %s: %s %s\n",path,paused?"four paused frames":"actual cold frame",okay?"verified":"FAILED");
     }
     free(next);free(first);return okay;
 }
@@ -193,6 +193,9 @@ static void native_scene(unsigned load) {
         dc_gpu_present_chunks_steps(g, PHYSICS_STEPS, err, sizeof(err)));
     ASSERT_EQ(vkQueueWaitIdle(g->queue), VK_SUCCESS);
     double cold_ms = (seconds() - loaded) * 1000.;
+#ifdef DC_NATIVE_LIT_PERFORMANCE
+    ASSERT_TRUE(capture_native_scene(g,load,false,err,sizeof(err)));
+#endif
     printf("native load%u: cold presented frame completed %.3fms\n", load,
            cold_ms);
     if (load == 2) {
@@ -233,7 +236,7 @@ static void native_scene(unsigned load) {
     ASSERT_EQ(vkQueueWaitIdle(g->queue), VK_SUCCESS);
     double wall_ms = (seconds() - start) * 1000. / sample_count;
 #ifdef DC_NATIVE_LIT_PERFORMANCE
-    ASSERT_TRUE(capture_native_paused_scene(g,load,err,sizeof(err)));
+    ASSERT_TRUE(capture_native_scene(g,load,true,err,sizeof(err)));
 #endif
     qsort(samples, sample_count, sizeof(*samples), compare_sample);
     uint64_t stage_ns[3] = {0};
