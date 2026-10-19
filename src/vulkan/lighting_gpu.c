@@ -29,6 +29,7 @@ struct fr_lighting_gpu {
 };
 static uint32_t tiles(uint32_t length) {return (length+127u)/128u;}
 static uint32_t larger(uint32_t a,uint32_t b) {return a>b?a:b;}
+static uint32_t smaller(uint32_t a,uint32_t b) {return a<b?a:b;}
 static uint32_t block_nodes(uint32_t length,uint32_t lines) {
   uint32_t count=tiles(length),sum=count;
   while(count>1u) {count=tiles(count);sum+=count;}
@@ -39,18 +40,22 @@ static void add_pass(fr_lighting_gpu_t *l,uint32_t phase,uint32_t level,
   l->passes[l->pass_count++]=(light_pass_t){phase,level,iteration,groups,directions};
 }
 static void plan_transport(fr_lighting_gpu_t *l) {
-  uint32_t horizontal[6],vertical[6],levels=0;
-  horizontal[0]=tiles(l->width);vertical[0]=tiles(l->height);
-  while(horizontal[levels]>1u||vertical[levels]>1u) {
-    horizontal[levels+1u]=tiles(horizontal[levels]);
-    vertical[levels+1u]=tiles(vertical[levels]);levels++;
-  }
   for(uint32_t iteration=0;iteration<FR_TRANSPORT_SOURCE_ITERATIONS;iteration++) {
-    add_pass(l,0,0,iteration,larger(l->height*horizontal[0],l->width*vertical[0]),4);
+    bool diagonal=iteration==1u;
+    uint32_t horizontal[6],vertical[6],levels=0;
+    uint32_t rows=diagonal?l->width+l->height-1u:l->height;
+    uint32_t columns=diagonal?rows:l->width;
+    horizontal[0]=tiles(diagonal?smaller(l->width,l->height):l->width);
+    vertical[0]=tiles(diagonal?smaller(l->width,l->height):l->height);
+    while(horizontal[levels]>1u||vertical[levels]>1u) {
+      horizontal[levels+1u]=tiles(horizontal[levels]);
+      vertical[levels+1u]=tiles(vertical[levels]);levels++;
+    }
+    add_pass(l,0,0,iteration,larger(rows*horizontal[0],columns*vertical[0]),4);
     for(uint32_t level=0;level<levels;level++)
-      add_pass(l,1,level,iteration,larger(l->height*tiles(horizontal[level]),l->width*tiles(vertical[level])),4);
+      add_pass(l,1,level,iteration,larger(rows*tiles(horizontal[level]),columns*tiles(vertical[level])),4);
     for(int level=(int)levels-2;level>=0;level--)
-      add_pass(l,2,(uint32_t)level,iteration,tiles(larger(l->height*horizontal[level],l->width*vertical[level])),4);
+      add_pass(l,2,(uint32_t)level,iteration,tiles(larger(rows*horizontal[level],columns*vertical[level])),4);
     add_pass(l,3,0,iteration,tiles(l->width*l->height),1);
   }
 }
@@ -104,11 +109,13 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
      l->width>UINT32_MAX-127u||l->height>UINT32_MAX-127u) goto fail;
   layout[6]=block_nodes(l->width,l->height);
   layout[7]=block_nodes(l->height,l->width);
+  uint32_t total_nodes=larger(2u*layout[6]+2u*layout[7],
+    4u*block_nodes(smaller(l->width,l->height),l->width+l->height-1u));
   plan_transport(l);
   VkDeviceSize transport_sizes[4]={
     (VkDeviceSize)l->width*l->height*4u*32u,
     (VkDeviceSize)l->width*l->height*4u*32u,
-    (VkDeviceSize)(2u*layout[6]+2u*layout[7])*32u,
+    (VkDeviceSize)total_nodes*32u,
     (4u+4u*l->pass_count)*sizeof(uint32_t)};
   for(unsigned i=0;i<4;i++) {
     bool okay=i==3u?dc_gpu_make_mapped_buffer(g,transport_sizes[i],&l->transport[i],

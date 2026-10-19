@@ -89,18 +89,20 @@ static void test_large_field_crosses_scan_tiles_and_filters_foliage(void) {
   ASSERT_TRUE(a.l0[0]>b.l0[0]&&b.l0[0]>c.l0[0]&&c.l0[0]>0);
   ASSERT_TRUE(c.l0[0]>.9f*b.l0[0]);float clear=c.l0[0];
   ASSERT_TRUE(clear>.35f);
+  fr_renderer_light_field_t near_canopy,far_canopy,open_sky,near_open;
+  ASSERT_TRUE(fr_lighting_gpu_read(lighting,128,110,&open_sky));
+  ASSERT_TRUE(fr_lighting_gpu_read(lighting,128,41,&near_open));
   for(unsigned y=32;y<40;y++)
     for(unsigned x=80;x<177;x++) opacity[y*width+x]=.08f;
   ASSERT_TRUE(fr_occlusion_gpu_upload(occlusion,opacity,known));
   ASSERT_TRUE(fr_occlusion_gpu_generate(occlusion,g_error,sizeof(g_error)));
   ASSERT_TRUE(fr_lighting_gpu_generate(lighting,g_error,sizeof(g_error)));
-  fr_renderer_light_field_t near_canopy,far_canopy,open_sky;
   ASSERT_TRUE(fr_lighting_gpu_read(lighting,128,41,&near_canopy));
   ASSERT_TRUE(fr_lighting_gpu_read(lighting,128,110,&far_canopy));
-  ASSERT_TRUE(fr_lighting_gpu_read(lighting,32,110,&open_sky));
-  printf("canopy near %.4f far %.4f open %.4f\n",near_canopy.l0[0],far_canopy.l0[0],open_sky.l0[0]);
+  printf("canopy near %.4f/%.4f far %.4f/%.4f\n",near_canopy.l0[0],near_open.l0[0],far_canopy.l0[0],open_sky.l0[0]);
   ASSERT_TRUE(far_canopy.l0[0]>.65f*open_sky.l0[0]);
-  ASSERT_TRUE(far_canopy.l0[0]/open_sky.l0[0]>near_canopy.l0[0]);
+  ASSERT_TRUE(far_canopy.l0[0]<=open_sky.l0[0]);
+  ASSERT_TRUE(far_canopy.l0[0]/open_sky.l0[0]>near_canopy.l0[0]/near_open.l0[0]+.1f);
   for(unsigned i=0;i<count;i++) opacity[i]=0;
   for(unsigned x=0;x<width;x++) opacity[64*width+x]=.08f;
   ASSERT_TRUE(fr_occlusion_gpu_upload(occlusion,opacity,known));
