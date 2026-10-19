@@ -3,7 +3,11 @@
 
 #include "dungeoncraft/chunk.h"
 
-#if defined(DC_QUARTER_NATIVE_VIEW)
+#if defined(DC_360_VIEW)
+enum { VIEW_WIDTH = 640, VIEW_HEIGHT = 360, WINDOW_SCALE = 1,
+       BRUSH_RADIUS = 3, FLUID_INTERVAL = 2, INITIAL_CHUNK_Y = -2,
+       WORLD_SCALE = 1 };
+#elif defined(DC_QUARTER_NATIVE_VIEW)
 enum { VIEW_WIDTH = 480, VIEW_HEIGHT = 270, WINDOW_SCALE = 4,
        BRUSH_RADIUS = 3, FLUID_INTERVAL = 2, INITIAL_CHUNK_Y = -2,
        WORLD_SCALE = 1 };

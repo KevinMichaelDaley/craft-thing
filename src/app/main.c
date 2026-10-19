@@ -1075,6 +1075,9 @@ int main(int argc, char **argv) {
     }
     uint64_t seed = 314;
     const char *scene_path = NULL;
+    uint32_t benchmark_frames = 0;
+    const char *benchmark_capture = NULL;
+    bool benchmark_world = false;
 #if defined(DC_QUARTER_NATIVE_VIEW)
     const char *directory = scripted_input ? scripted_directory : "world_chunks_quarter_native";
 #elif defined(DC_HALF_NATIVE_VIEW)
@@ -1097,14 +1100,31 @@ int main(int argc, char **argv) {
         }
         if (strcmp(argv[i], "--seed") == 0 && i + 1 < argc)
             seed = strtoull(argv[++i], NULL, 10);
-        else if (strcmp(argv[i], "--world-dir") == 0 && i + 1 < argc)
+        else if (strcmp(argv[i], "--world-dir") == 0 && i + 1 < argc) {
             directory = argv[++i];
+            benchmark_world = true;
+        }
         else if (strcmp(argv[i], "--scene") == 0 && i + 1 < argc)
             scene_path = argv[++i];
+        else if (strcmp(argv[i], "--benchmark-frames") == 0 && i + 1 < argc) {
+            char *end;
+            unsigned long frames = strtoul(argv[++i], &end, 10);
+            if (*end || !frames || frames > 100000u) {
+                fprintf(stderr, "Invalid benchmark frame count\n");
+                return 1;
+            }
+            benchmark_frames = (uint32_t)frames;
+        }
+        else if (strcmp(argv[i], "--benchmark-capture") == 0 && i + 1 < argc)
+            benchmark_capture = argv[++i];
         else {
             fprintf(stderr, "Usage: %s [--seed number] [--world-dir path] [--scene asset.cprop] [--demo-coupled|--demo-sifting]\n", argv[0]);
             return 1;
         }
+    }
+    if (benchmark_frames && !benchmark_world) {
+        fprintf(stderr, "A bounded benchmark requires an explicit --world-dir\n");
+        return 1;
     }
     char err[256] = {0};
     dc_level_view_t *view = scene_path ? dc_prop_scene_create(directory,seed,scene_path,err,sizeof(err)) :
@@ -1146,7 +1166,10 @@ int main(int argc, char **argv) {
     double accumulator = 0.0;
     const double tick_seconds = 1.0 / 60.0;
     uint32_t scripted_frame = 0;
+    uint32_t measured_frames = 0;
+    double benchmark_sum = 0, benchmark_worst = 0;
     while (running) {
+        uint64_t frame_start = SDL_GetPerformanceCounter();
         if (scripted_input && scripted_frame == 0) {
             SDL_Event key = { .type = SDL_KEYDOWN };
             key.key.keysym.sym = SDLK_F2;
@@ -1292,9 +1315,11 @@ int main(int argc, char **argv) {
         }
         if (!paused) accumulator += elapsed;
         else accumulator = 0.0;
-        if (running && (single_step || (!paused && accumulator >= tick_seconds))) {
+        if (running && (benchmark_frames || single_step || (!paused && accumulator >= tick_seconds))) {
             float step_seconds = single_step ? (float)tick_seconds :
                                  (float)accumulator;
+            if (benchmark_frames)
+                step_seconds = (float)(elapsed > tick_seconds ? elapsed : tick_seconds);
             if (step_seconds > 0.25f) step_seconds = 0.25f;
             if (!dc_level_view_step_timed(view, step_seconds, err, sizeof(err))) {
                 failed = true; running = false;
@@ -1313,8 +1338,40 @@ int main(int argc, char **argv) {
             snprintf(err, sizeof(err), "Cannot update world status");
             failed = true; running = false;
         }
-        SDL_Delay(1);
+        if (benchmark_frames && scripted_frame >= 8u && running) {
+            double ms = (SDL_GetPerformanceCounter() - frame_start) * 1000. /
+                        (double)SDL_GetPerformanceFrequency();
+            benchmark_sum += ms;
+            if (ms > benchmark_worst) benchmark_worst = ms;
+            if (++measured_frames == benchmark_frames) running = false;
+        }
+        if (!benchmark_frames) SDL_Delay(1);
         ++scripted_frame;
+    }
+    if (benchmark_frames && !failed) {
+        printf("Displayed full frame %ux%u (simulation %ux%u): mean %.3fms worst %.3fms, %u frames\n",
+               VIEW_WIDTH, VIEW_HEIGHT, SIM_WIDTH, SIM_HEIGHT,
+               benchmark_sum / measured_frames, benchmark_worst, measured_frames);
+        if (benchmark_capture) {
+            size_t count = (size_t)VIEW_WIDTH * VIEW_HEIGHT;
+            uint32_t *pixels = malloc(count * sizeof(*pixels));
+            uint32_t *paused_pixels = malloc(count * sizeof(*paused_pixels));
+            bool stable = pixels && paused_pixels &&
+                dc_level_view_pixels(view, pixels, (uint32_t)count, err, sizeof(err)) &&
+                save_level_bmp(benchmark_capture, pixels);
+            for (unsigned frame = 0; stable && frame < 4u; frame++)
+                stable = dc_level_view_tick(view, err, sizeof(err)) &&
+                    dc_level_view_pixels(view, paused_pixels, (uint32_t)count, err, sizeof(err)) &&
+                    memcmp(pixels, paused_pixels, count * sizeof(*pixels)) == 0;
+            free(pixels);
+            free(paused_pixels);
+            if (!stable) { snprintf(err, sizeof(err), "Benchmark paused capture changed"); failed = true; }
+            else printf("Four paused pixels identical; captured %s\n", benchmark_capture);
+        }
+        if (benchmark_worst >= 30.) {
+            snprintf(err, sizeof(err), "Displayed total frame budget exceeds 30ms");
+            failed = true;
+        }
     }
     if (scripted_input && !failed) {
         dc_level_view_status_t status = {0};

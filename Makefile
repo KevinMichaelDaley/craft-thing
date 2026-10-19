@@ -30,8 +30,8 @@ build/shading_tests: tests/renderer/shading_tests.c src/renderer/shading.c inclu
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/renderer/shading.c -o $@ -lm
 build/scene_gpu_tests: tests/renderer/scene_gpu_tests.c src/vulkan/scene_gpu.c include/ferrum/renderer/gpu.h build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
-build/renderer_visual_tests: tests/renderer/visual_tests.c tests/renderer/concave_scene.h $(GPU_SRC) src/world/chunk.c $(RENDERER_SHADERS) build/quarter_native_solver_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+build/renderer_visual_tests: tests/renderer/visual_tests.c tests/renderer/concave_scene.h $(RENDERER_SHADERS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/renderer_performance_tests: tests/renderer/performance_tests.c tests/renderer/concave_scene.h $(RENDERER_SHADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=fr_renderer_record -Wl,--wrap=fr_occlusion_record -Wl,--wrap=fr_lighting_record -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect
 build/authoring_request_tests: tests/structural/authoring_request_tests.c src/structural/authoring.c include/ferrum/structural/authoring.h
@@ -226,6 +226,20 @@ build/performance/%.o: %.c Makefile
 	mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -MMD -MP -c $< -o $@
 build/renderer_performance_tests: $(PERFORMANCE_OBJ)
+build/renderer_visual_tests: $(PERFORMANCE_OBJ)
+QUARTER_APP_OBJ = $(patsubst %.c,build/performance/%.o,$(filter-out $(GPU_SRC) src/world/chunk.c,$(NATIVE_SRC)))
+-include $(QUARTER_APP_OBJ:.o=.d)
+FRAME_TRACE_LINK = -Wl,--wrap=dc_gpu_present_chunks_steps -Wl,--wrap=vkBeginCommandBuffer -Wl,--wrap=dc_gpu_record_rigid -Wl,--wrap=dc_gpu_record_fluid_phase -Wl,--wrap=dc_gpu_record_mpm -Wl,--wrap=dc_gpu_record_contacts -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect -Wl,--wrap=fr_renderer_record
+build/diagnostics/quarter_app_frame_trace: tools/diagnostics/frame_trace.c $(QUARTER_APP_OBJ) $(PERFORMANCE_OBJ) $(RENDERER_SHADERS) build/dungeoncraft_quarter_native
+	mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(QUARTER_APP_OBJ) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) $(FRAME_TRACE_LINK)
+NATIVE360_OBJ = $(patsubst %.c,build/native360/%.o,$(NATIVE_SRC))
+build/native360/%.o: %.c Makefile
+	mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_360_VIEW -DDC_GPU_CHUNK_SLOTS=96u -DDC_PRESSURE_SWEEPS=16u -MMD -MP -c $< -o $@
+-include $(NATIVE360_OBJ:.o=.d)
+build/dungeoncraft_360: $(NATIVE360_OBJ) build/dungeoncraft_quarter_native $(RENDERER_SHADERS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(NATIVE360_OBJ) -o $@ $(LDLIBS)
 -include $(PERFORMANCE_OBJ:.o=.d)
 NATIVE_720_FLAGS = -DDC_GPU_CHUNK_SLOTS=270u
 build/broadphase_tests: tests/vulkan/broadphase_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
@@ -350,7 +364,8 @@ bench_quarter_native: build/quarter_native_bench
 	./build/quarter_native_bench
 
 build/dungeoncraft_quarter_native: Makefile $(NATIVE_SRC) src/app/level.h src/app/view_config.h include/dungeoncraft/gpu.h $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $(NATIVE_SRC) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $(QUARTER_APP_OBJ) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/dungeoncraft_quarter_native: $(QUARTER_APP_OBJ) $(PERFORMANCE_OBJ)
 
 build/quarter_native_bench: tests/vulkan/native_bench.c Makefile tests/vulkan/native_scene.h src/app/view_config.h $(GPU_SRC) src/world/chunk.c $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) tests/vulkan/native_bench.c $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
@@ -852,7 +867,7 @@ build/diagnostics/native360_fluid_trace: tests/app/native_720_performance_tests.
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GPU_CHUNK_SLOTS=90u -DNATIVE_PERF_WIDTH=640 -DNATIVE_PERF_HEIGHT=360 tests/app/native_720_performance_tests.c tools/diagnostics/fluid_dispatch_trace.c $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_tick_capture -Wl,--wrap=vkBeginCommandBuffer -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch
 
 build/diagnostics/native360_frame_trace: tests/app/native_720_performance_tests.c tools/diagnostics/frame_trace.c $(GPU_SRC) src/world/chunk.c build/pixel_component_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GPU_CHUNK_SLOTS=90u -DNATIVE_PERF_WIDTH=640 -DNATIVE_PERF_HEIGHT=360 tests/app/native_720_performance_tests.c tools/diagnostics/frame_trace.c $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_present_chunks_steps -Wl,--wrap=vkBeginCommandBuffer -Wl,--wrap=dc_gpu_record_rigid -Wl,--wrap=dc_gpu_record_fluid_phase -Wl,--wrap=dc_gpu_record_mpm -Wl,--wrap=dc_gpu_record_contacts -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GPU_CHUNK_SLOTS=90u -DNATIVE_PERF_WIDTH=640 -DNATIVE_PERF_HEIGHT=360 tests/app/native_720_performance_tests.c tools/diagnostics/frame_trace.c $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) $(FRAME_TRACE_LINK)
 
 build/diagnostics/pixel_properties_probe.spv: tests/vulkan/pixel_properties_probe.comp shaders/sim/rigid_body.glsl shaders/sim/pixel_properties.glsl
 	mkdir -p build/diagnostics
