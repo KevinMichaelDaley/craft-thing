@@ -43,7 +43,11 @@ static uint64_t water_mass(dc_gpu_t *gpu) {
 
 static void test_dry_scheduled_ticks_do_not_record_fluid_phases(void) {
     dc_gpu_t *gpu = context(); ASSERT_TRUE(gpu);
-    for (unsigned i = 0; i < 4; i++) ASSERT_TRUE(dc_gpu_tick_step(gpu, g_error, sizeof(g_error)));
+    for (unsigned i = 0; i < 4; i++) {
+        ASSERT_TRUE(dc_gpu_tick_step(gpu, g_error, sizeof(g_error)));
+        ASSERT_EQ(gpu->fluid_phase, ((i + 1u) * 3u) % 6u);
+        ASSERT_EQ(gpu->fluid_tick, (i + 1u) / 2u);
+    }
     ASSERT_EQ(g_fluid_phases, 0u);
     ASSERT_EQ(water_mass(gpu), 0u);
     dc_gpu_destroy(gpu); PASS();
