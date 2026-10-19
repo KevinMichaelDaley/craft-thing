@@ -162,6 +162,13 @@ bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
     if (!gpu || (slot >= DC_GPU_CHUNK_SLOTS && slot != UINT32_MAX) ||
         (particles && slot == UINT32_MAX))
         return error(err, cap, "Invalid chunk transfer slot");
+    if (upload && !gpu->fluid_work_possible) {
+        const dc_cell_t *cells = gpu->chunk_mapped;
+        uint32_t begin = slot == UINT32_MAX ? 0u : slot * DC_CHUNK_CELLS;
+        uint32_t end = slot == UINT32_MAX ? DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS : begin + DC_CHUNK_CELLS;
+        for (uint32_t i = begin; i < end; i++)
+            if (cells[i].fluid_mass) { gpu->fluid_work_possible = true; break; }
+    }
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
         return error(err, cap, "Cannot reset chunk transfer command");
     VkCommandBufferBeginInfo begin = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
@@ -233,6 +240,11 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
     }
     if (missing_primary > DC_MPM_PARTICLES_PER_CHUNK - particle_count)
         return error(err, cap, "GPU particle pool is full");
+    if (!gpu->fluid_work_possible) {
+        gpu->fluid_work_possible = chunk->marker_count != 0u;
+        for (uint32_t i = 0; i < DC_CHUNK_CELLS && !gpu->fluid_work_possible; i++)
+            gpu->fluid_work_possible = chunk->face_velocity[i].x != 0.f || chunk->face_velocity[i].y != 0.f;
+    }
     dc_cell_t *cells = gpu->chunk_mapped;
     memcpy(cells + (size_t)slot * DC_CHUNK_CELLS, chunk->cells, sizeof(chunk->cells));
     memset((float*)gpu->water_color_mapped+(size_t)slot*DC_CHUNK_CELLS*4,0,DC_CHUNK_CELLS*16);

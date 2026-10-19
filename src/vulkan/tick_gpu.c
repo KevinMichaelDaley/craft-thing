@@ -71,14 +71,16 @@ static void stage_barrier(dc_gpu_t *gpu, VkPipelineStageFlags2 dst_stage,
 static void record_scheduled_fluid(dc_gpu_t *gpu) {
     if (gpu->fluid_interval == 1u) {
         gpu->fluid_step_scale = gpu->timed_fluid ? gpu->tick_time_scale : 1.0f;
-        dc_gpu_record_fluid(gpu);
+        if (gpu->fluid_work_possible) dc_gpu_record_fluid(gpu);
+        else ++gpu->fluid_tick;
         return;
     }
     gpu->fluid_step_scale = gpu->timed_fluid ? (float)gpu->fluid_interval : 1.0f;
     gpu->fluid_phase_budget += (gpu->timed_fluid ? gpu->tick_time_scale : 1.0f) *
                                (6.0f / (float)gpu->fluid_interval);
     while (gpu->fluid_phase_budget >= 1.0f) {
-        dc_gpu_record_fluid_phase(gpu, gpu->fluid_phase);
+        if (gpu->fluid_work_possible) dc_gpu_record_fluid_phase(gpu, gpu->fluid_phase);
+        else if (gpu->fluid_phase == 5u) ++gpu->fluid_tick;
         gpu->fluid_phase = (gpu->fluid_phase + 1u) % 6u;
         gpu->fluid_phase_budget -= 1.0f;
     }

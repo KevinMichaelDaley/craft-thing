@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ferrum/assets/prop.h"
 #include "ferrum/structural/authoring.h"
 #include "gpu_internal.h"
 
@@ -145,6 +146,16 @@ bool fr_gpu_prepare_authored(dc_gpu_t *gpu, const fr_authored_request_t *r,
     s->mapped[FR_AUTHORED_TX_HI] = (uint32_t)(r->transaction_id >> 32);
     s->mapped[20] = UINT32_MAX;
     memcpy(s->mapped + STAGE_HEADER_WORDS, r->physical, r->physical_bytes);
+    if (!gpu->fluid_work_possible) {
+        const uint8_t *physical = r->physical;
+        for (uint32_t i = 0; i < count; i++) {
+            const uint8_t *pixel = physical + (size_t)i * FR_AUTHORED_PHYSICAL_STRIDE;
+            if (pixel[0] == FR_PROP_MATERIAL_WATER && pixel[1] == 0u) {
+                gpu->fluid_work_possible = true;
+                break;
+            }
+        }
+    }
     memcpy(s->mapped + STAGE_HEADER_WORDS + count * 2u, r->appearance, r->appearance_bytes);
     if (r->structure) {
         memcpy(s->mapped + STAGE_HEADER_WORDS + count * 18u, r->member_ownership, r->member_ownership_bytes);

@@ -377,6 +377,32 @@ static void record_fluid_correction(dc_gpu_t *gpu) {
     ++gpu->fluid_tick;
 }
 
+bool dc_gpu_clear_fluid_scratch(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    VkCommandBufferBeginInfo begin = {.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    if (vkBeginCommandBuffer(gpu->command, &begin) != VK_SUCCESS)
+        return error(err, cap, "Cannot begin dry fluid initialization");
+    VkDeviceSize bytes = (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t);
+    VkBuffer buffers[4] = {gpu->fluid_a_buffer, gpu->fluid_b_buffer,
+                           gpu->pressure_a_buffer, gpu->fluid_previous_buffer};
+    for (unsigned i = 0; i < 4; i++) vkCmdFillBuffer(gpu->command, buffers[i], 0, bytes, 0);
+    VkMemoryBarrier2 barrier = {.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT};
+    VkDependencyInfo dependency = {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .memoryBarrierCount = 1, .pMemoryBarriers = &barrier};
+    vkCmdPipelineBarrier2(gpu->command, &dependency);
+    if (vkEndCommandBuffer(gpu->command) != VK_SUCCESS)
+        return error(err, cap, "Cannot end dry fluid initialization");
+    VkSubmitInfo submit = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1, .pCommandBuffers = &gpu->command};
+    if (vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
+        vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
+        return error(err, cap, "Cannot initialize dry fluid scratch");
+    return true;
+}
+
 void dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase) {
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);

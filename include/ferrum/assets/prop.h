@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define FR_PROP_MATERIAL_WATER 6u
+
 typedef struct {
     const uint8_t *bytes;
     size_t size;

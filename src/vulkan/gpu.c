@@ -259,6 +259,7 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     if (vkAllocateCommandBuffers(gpu->device, &command_info, &gpu->command) != VK_SUCCESS) {
         error(err, cap, "Cannot allocate compute command buffer"); goto fail;
     }
+    if (!dc_gpu_clear_fluid_scratch(gpu, err, cap)) goto fail;
     if (gpu->window && !dc_gpu_window_init(gpu, window_width, window_height, err, cap)) goto fail;
     *out = gpu;
     return true;
@@ -405,6 +406,7 @@ bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
     bool okay=dispatch_cells(gpu, push, err, cap);
     if(okay) {
         gpu->body_refresh_pending=true;
+        if (material == DC_MATERIAL_WATER) gpu->fluid_work_possible=true;
         if (material != DC_MATERIAL_WATER) dc_gpu_structural_data(gpu)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD] = 1;
     }
     return okay;
@@ -414,6 +416,7 @@ bool dc_gpu_set_tick_water_source(dc_gpu_t *gpu, bool enabled,
                                   uint32_t x, uint32_t y) {
     if (!gpu || (enabled && (x >= gpu->width || y >= gpu->height))) return false;
     gpu->tick_water_source = enabled;
+    if (enabled) gpu->fluid_work_possible = true;
     gpu->tick_water_x = x;
     gpu->tick_water_y = y;
     return true;
