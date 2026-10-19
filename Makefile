@@ -567,6 +567,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/lighting_gpu_tests
 	./build/shading_tests
 	./build/scene_gpu_tests
+	./build/dry_fluid_tests
 	./build/terrain_prop_tests
 	./build/body_color_tests
 	./build/body_carve_tests
@@ -1145,3 +1146,7 @@ test_libresprite_host:
 	python3 tests/assets/host_probe_test.py
 	python3 tests/assets/export_test.py
 	python3 tests/assets/host_example_test.py
+
+build/dry_fluid_tests: tests/vulkan/dry_fluid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/fluid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_record_fluid_phase
+test: build/dry_fluid_tests
