@@ -45,7 +45,11 @@ static void partial_case(unsigned mode) {
         f->expected[index]=water;before+=water;
         f->words[2][2*CELLS+index]=FULL/4u;
         f->words[2][3*CELLS+index]=FULL/2u;
-        f->words[4][2*index]=bits((mode==2?1.f:-1.f)*WIDTH/6.f);
+        float speed=(mode==2?1.f:-1.f)*WIDTH/6.f;
+#ifdef DC_COLOR_ONE_CELL
+        speed=(mode==2?1.f:-1.f)*.5f/6.f;
+#endif
+        f->words[4][2*index]=bits(speed);
 #ifdef DC_COLOR_CACHE_PROFILE
         float *colors=(float *)f->words[7];
         colors[4*a]=(float)((x*17u+y)%23u)/23.f;
@@ -104,12 +108,23 @@ static void partial_case(unsigned mode) {
     vkDestroyFence(f->p.device,f->p.fence,NULL);vkDestroyCommandPool(f->p.device,f->p.pool,NULL);
     vkDestroyDevice(f->p.device,NULL);vkDestroyInstance(f->p.instance,NULL);free(f);
     ASSERT_EQ(mismatches,0u);ASSERT_EQ(after,before);
-    ASSERT_TRUE(counts[2]>0u&&counts[3]>0u&&counts[3]<=32u);
+    ASSERT_TRUE(counts[3]>0u&&counts[3]<=32u);
+#ifndef DC_COLOR_ONE_CELL
+    ASSERT_TRUE(counts[2]>0u);
+#endif
     ASSERT_TRUE(counts[0]<=counts[2]*MAX_REQUESTS_PER_SOURCE&&counts[1]<=2u*CELLS);
 #ifdef DC_COLOR_CACHE_PROFILE
+#ifndef DC_COLOR_ONE_CELL
     if(mode==2u) ASSERT_EQ(color_hash,0x028933e7c8fc0d8eull);
+#else
+    if(mode==2u) ASSERT_EQ(color_hash,0xbfb12e1adda28360ull);
+#endif
     ASSERT_EQ(counts[6],0u);
+#ifdef DC_COLOR_ONE_CELL
+    ASSERT_TRUE(counts[4]<=2u*CELLS);
+#else
     ASSERT_TRUE(counts[4]<=CELLS&&counts[5]<=CELLS);
+#endif
 #endif
     PASS();
 }

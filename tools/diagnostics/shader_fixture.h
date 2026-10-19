@@ -79,6 +79,14 @@ static int fixture_body_pipeline(probe_t *p, dc_gpu_t *gpu, VkBuffer body,
     VkSpecializationInfo water_specialization={.mapEntryCount=2,.pMapEntries=water_entries,
         .dataSize=sizeof(water_values),.pData=water_values};
     pipeline.stage.pSpecializationInfo=&water_specialization;
+#ifdef DC_FIXTURE_COLOR_CACHE
+    uint32_t cache_values[3]={phase,1u,1u};
+    VkSpecializationMapEntry cache_entries[3]={{.constantID=0,.size=4},
+        {.constantID=2,.offset=4,.size=4},{.constantID=4,.offset=8,.size=4}};
+    VkSpecializationInfo cache_specialization={.mapEntryCount=3,.pMapEntries=cache_entries,
+        .dataSize=sizeof(cache_values),.pData=cache_values};
+    pipeline.stage.pSpecializationInfo=&cache_specialization;
+#endif
 #endif
     if (!check(vkCreateComputePipelines(p->device, VK_NULL_HANDLE, 1, &pipeline,
                                         NULL, &p->pipeline),

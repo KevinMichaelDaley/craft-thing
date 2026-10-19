@@ -31,6 +31,26 @@ static int compare_sample(const void *a, const void *b) {
     double x = *(const double *)a, y = *(const double *)b;
     return (x > y) - (x < y);
 }
+#ifdef DC_NATIVE_LIT_PERFORMANCE
+static bool capture_native_paused_scene(dc_gpu_t *gpu,unsigned load,char *err,uint32_t cap) {
+    size_t bytes=(size_t)WIDTH*HEIGHT*sizeof(uint32_t);
+    uint32_t *first=malloc(bytes),*next=malloc(bytes);
+    bool okay=first&&next;
+    for(unsigned frame=0;frame<4&&okay;frame++) {
+        okay=dc_gpu_present_chunks_steps(gpu,0,err,cap)&&
+            dc_gpu_readback(gpu,frame?next:first,WIDTH*HEIGHT,err,cap);
+        if(frame&&okay) okay=memcmp(first,next,bytes)==0;
+    }
+    if(okay) {
+        SDL_Surface *surface=SDL_CreateRGBSurfaceWithFormatFrom(first,WIDTH,HEIGHT,32,WIDTH*4,SDL_PIXELFORMAT_ABGR8888);
+        char path[160];snprintf(path,sizeof(path),"build/diagnostics/native-lit-%u-%ux%u.bmp",load,WIDTH,HEIGHT);
+        okay=surface&&SDL_SaveBMP(surface,path)==0;
+        if(surface) SDL_FreeSurface(surface);
+        printf("native lit capture %s: four paused frames %s\n",path,okay?"identical":"FAILED");
+    }
+    free(next);free(first);return okay;
+}
+#endif
 static void profile_completed_concave_tick(dc_gpu_t *g) {
     uint64_t times[12];
     VkResult result = vkGetQueryPoolResults(
@@ -212,6 +232,9 @@ static void native_scene(unsigned load) {
     }
     ASSERT_EQ(vkQueueWaitIdle(g->queue), VK_SUCCESS);
     double wall_ms = (seconds() - start) * 1000. / sample_count;
+#ifdef DC_NATIVE_LIT_PERFORMANCE
+    ASSERT_TRUE(capture_native_paused_scene(g,load,err,sizeof(err)));
+#endif
     qsort(samples, sample_count, sizeof(*samples), compare_sample);
     uint64_t stage_ns[3] = {0};
     bool profile = load == 2 && getenv("DC_NATIVE_DIAG");

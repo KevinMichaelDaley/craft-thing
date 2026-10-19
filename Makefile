@@ -845,7 +845,10 @@ build/diagnostics/fluid_transport_profile.comp.spv: shaders/sim/fluid_transport.
 build/fluid_transport_partial_tests: tests/vulkan/fluid_transport_partial_tests.c tests/vulkan/fluid_transport_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/fluid_transport_profile.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/fluid_color_cache_tests: tests/vulkan/fluid_transport_partial_tests.c tests/vulkan/fluid_transport_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/fluid_transport_profile.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_FIXTURE_WATER_COLOR -DDC_COLOR_CACHE_PROFILE $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_FIXTURE_WATER_COLOR -DDC_FIXTURE_COLOR_CACHE -DDC_COLOR_CACHE_PROFILE $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/fluid_color_one_cell_tests: tests/vulkan/fluid_transport_partial_tests.c tests/vulkan/fluid_transport_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/fluid_transport_profile.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_FIXTURE_WATER_COLOR -DDC_COLOR_CACHE_PROFILE -DDC_COLOR_ONE_CELL $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/fluid_color_cache_tests build/fluid_color_one_cell_tests: src/vulkan/gpu_internal.h tools/diagnostics/shader_fixture.h
 
 build/contact_terrain_work_tests: tests/vulkan/contact_terrain_work_tests.c tools/diagnostics/contact_scaling.c tests/vulkan/pixel_component_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/pixel_component_tests build/diagnostics/contacts_terrain_scan.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_CONTACT_TERRAIN_PROFILE $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_load_shader_module
