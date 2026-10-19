@@ -65,3 +65,7 @@ CPU-only indirect scan recording RED observed 3 pass/1 fail, then GREEN 4/4: all
 **2026-10-17T09:45:36Z**
 
 Prepared optional bounded GPU work-gate test and no-op stub; both C and SPIR-V compile/validate, but GPU RED has NOT been executed because user material demo owns device. Test covers137 indirect triplets across 2D groups, active→empty→completed→null queue→active transitions, stale output clearing, immutable growth templates and output guards. Stub must remain unimplemented until observed RED under a new explicit GPU lease. Optional fixture is not in normal test recipe yet.
+
+**2026-10-19T02:49:16Z**
+
+Resumed dedicated optimizer worktree. GPU work-gate RED now observed under explicit sync validation: active90-request queue leaves all137 stale indirect triplets untouched with no-op shader, test0pass1fail; all bounded fences complete, no VUID/SYNC. Exclusive lease returned immediately to lighting optimizer before its graphical run. Implementing parallel command producer next; CPU template construction is growth metadata only, GPU queue state controls actual dispatch.

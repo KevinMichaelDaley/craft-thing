@@ -166,3 +166,7 @@ Sustained native360 warm target now passes twice after ct-sqg7 batching:180frame
 **2026-10-17T07:37:17Z**
 
 User requested the existing material-painting graphical sandbox, not a benchmark demo. Full validated make scheduler73691 paused between children after particle27/27PASS; GPU released to parent for sandbox. Persistent benchmark demo scope cancelled before runtime integration; already committed controls RED0ceab18 retained and completed as isolated2/2 host tests, with benchmark/default paths unchanged. No validation/benchmark GPU work resumes until visible sandbox closes and parent releases lease. Full regression remainder and UI/quarter/stage trace remain pending.
+
+**2026-10-19T02:48:39Z**
+
+Resumed by explicit user instruction in dedicated worktree /home/kmd/craft-thing-physics-opt on feat/physics-frame-optimization. Current acceptance supersedes earlier 33.333 ms target: total simulation plus actual displayed rendering must be strictly below 30 ms on this machine, native640x360 simulation/display, unchanged fixed scheduling/cadence/pressure/quality, dense fluids and exact concave bodies. Coordinate exclusive GPU windows with lighting optimizer; no obsolete demo hold. Existing cold, dynamic-count, fracture, full regression/UI/quarter requirements remain open.
