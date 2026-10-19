@@ -113,7 +113,10 @@ static void test_full_frame(unsigned width, unsigned height) {
   vkGetPhysicalDeviceProperties(g->physical, &device);
   printf("Vulkan device: %s; fluid pressure sweeps %u, chunk slots %u\n",
          device.deviceName, DC_PRESSURE_SWEEPS, DC_GPU_CHUNK_SLOTS);
-  ASSERT_TRUE((width == RENDERER_WIDTH ? renderer_concave_scene(g, err, sizeof(err)) : renderer_concave_scene_sized(g, width, height, err, sizeof(err))));
+  ASSERT_TRUE(width == RENDERER_WIDTH
+                  ? renderer_concave_scene(g, err, sizeof(err))
+                  : renderer_concave_scene_sized(g, width, height, err,
+                                                 sizeof(err)));
   ASSERT_TRUE(renderer_four_lights(g, 4));
   g_command = g->command;
   VkQueryPoolCreateInfo qi = {.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
@@ -133,8 +136,11 @@ static void test_full_frame(unsigned width, unsigned height) {
     ASSERT_TRUE(dc_gpu_tick_step(g, err, sizeof(err)));
     ASSERT_TRUE(fr_renderer_render(g, err, sizeof(err)));
     clock_gettime(CLOCK_MONOTONIC, &stop);
-    double frame = (stop.tv_sec - start.tv_sec)*1000. + (stop.tv_nsec - start.tv_nsec)/1e6;
-    wall += frame; if (frame > worst) worst = frame;
+    double frame = (stop.tv_sec - start.tv_sec) * 1000. +
+                   (stop.tv_nsec - start.tv_nsec) / 1e6;
+    wall += frame;
+    if (frame > worst)
+      worst = frame;
     uint64_t q[64];
     ASSERT_EQ(vkGetQueryPoolResults(
                   g->device, g_queries, 0, 12u + 2u * g_light_passes, sizeof(q), q, 8,
@@ -150,7 +156,9 @@ static void test_full_frame(unsigned width, unsigned height) {
       passes[pass] += ((q[13u + 2u * pass] - q[12u + 2u * pass]) & mask) *
                      g->timestamp_period / 1e6;
   }
-  printf("Full frame %ux%u mean %.3f ms, worst %.3f ms (simulation + render + submission/wait)\n", width, height, wall / samples, worst);
+  printf("Full frame %ux%u mean %.3f ms, worst %.3f ms "
+         "(simulation + render + submission/wait, %u samples)\n",
+         width, height, wall / samples, worst, samples);
   printf("Renderer mean GPU ms: total %.3f, texture %.3f, optical %.3f, "
          "hierarchy %.3f, light %.3f, compose %.3f\n",
          times[0] / samples, times[1] / samples, times[2] / samples,
@@ -161,6 +169,7 @@ static void test_full_frame(unsigned width, unsigned height) {
   g_queries = VK_NULL_HANDLE;
   dc_gpu_destroy(g);
   ASSERT_TRUE(wall / samples < 30.0);
+  ASSERT_TRUE(worst < 30.0);
   PASS();
 }
 int main(void) {
