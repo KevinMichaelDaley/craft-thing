@@ -8,7 +8,7 @@
 _Static_assert(sizeof(fr_renderer_point_light_t) == 32,
                "Point light GPU layout must be two vec4 values");
 _Static_assert(sizeof(fr_renderer_light_field_t) == 64,
-               "Lighting field GPU layout must be four vec4 values");
+               "Public lighting diagnostic layout must be four vec4 values");
 #include "renderer_internal.h"
 
 enum { LIGHTING_MAX_PASSES = 64 };
@@ -174,7 +174,7 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
                                  err, cap) ||
       !dc_gpu_make_mapped_buffer(g, 17u * 32u, &l->sources, &l->source_memory,
                                  &l->source_mapped, err, cap) ||
-      !dc_gpu_make_mapped_buffer(g, (VkDeviceSize)l->width * l->height * 64,
+      !dc_gpu_make_mapped_buffer(g, (VkDeviceSize)l->width * l->height * FR_RENDERER_FIELD_BYTES,
                                  &l->field, &l->field_memory, &l->field_mapped,
                                  err, cap))
     goto fail;
@@ -182,7 +182,7 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
   buffers[1] = (VkDescriptorBufferInfo){l->parameters, 0, sizeof(layout)};
   buffers[2] = (VkDescriptorBufferInfo){l->sources, 0, 17u * 32u};
   buffers[3] = (VkDescriptorBufferInfo){
-      l->field, 0, (VkDeviceSize)l->width * l->height * 64};
+      l->field, 0, (VkDeviceSize)l->width * l->height * FR_RENDERER_FIELD_BYTES};
   VkPhysicalDeviceSubgroupProperties subgroup = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES};
   VkPhysicalDeviceProperties2 properties = {
@@ -350,7 +350,19 @@ bool fr_lighting_gpu_read(fr_lighting_gpu_t *l, uint32_t x, uint32_t y,
                           fr_renderer_light_field_t *field) {
   if (!l || !field || x >= l->width || y >= l->height)
     return false;
-  *field = ((fr_renderer_light_field_t *)l->field_mapped)[y * l->width + x];
+  const uint32_t *packed = (const uint32_t *)l->field_mapped +
+                           (y * l->width + x) * 6u;
+  memset(field, 0, sizeof(*field));
+  for (uint32_t color = 0; color < 3u; color++) {
+    memcpy(&field->l0[color], &packed[color], sizeof(float));
+    float *moments[3] = {field->lx, field->ly, field->lz};
+    for (uint32_t axis = 0; axis < 3u; axis++) {
+      int32_t component = (int32_t)((packed[3u + color] >> (axis * 10u)) & 1023u);
+      if (component >= 512)
+        component -= 1024;
+      moments[axis][color] = (float)component / 511.f * field->l0[color];
+    }
+  }
   return true;
 }
 bool fr_lighting_field_binding(fr_lighting_gpu_t *l,
@@ -358,6 +370,6 @@ bool fr_lighting_field_binding(fr_lighting_gpu_t *l,
   if (!l || !buffer)
     return false;
   *buffer = (VkDescriptorBufferInfo){l->field, 0,
-                                     (VkDeviceSize)l->width * l->height * 64};
+                                     (VkDeviceSize)l->width * l->height * FR_RENDERER_FIELD_BYTES};
   return true;
 }

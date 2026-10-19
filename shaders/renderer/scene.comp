@@ -26,8 +26,7 @@ layout(set=0,binding=9,std430) buffer Work {uint work[];};
 layout(set=0,binding=10,std430) readonly buffer Markers {uint markers[];};
 layout(set=0,binding=11,std430) buffer Display {uint display[];};
 layout(set=0,binding=12,std430) readonly buffer PreviousWater {uint previous_water[];};
-struct Field {vec4 l0;vec4 lx;vec4 ly;vec4 lz;};
-layout(set=0,binding=13,std430) readonly buffer Fields {Field fields[];};
+layout(set=0,binding=13,std430) readonly buffer Fields {PackedField fields[];};
 layout(set=0,binding=14,std430) readonly buffer Configuration {uint configuration[];};
 layout(set=0,binding=15,std430) readonly buffer WaterColors {vec4 water_colors[];};
 layout(push_constant) uniform Params {uint width;uint height;uint registry;uint force_light;uint flags;uint mode;uint view_x;uint view_y;} params;
@@ -223,11 +222,11 @@ void main() {
     if(surface.weights.w==0.) {display[index]=0xffff00ffu;return;}
     vec3 color=surface.albedo.rgb;bool lit=params.mode==0u;
     if(lit) {
-        Field field=fields[index];
+        Field field=renderer_unpack_field(fields[index]);
         color=max(vec3(0),.5*(surface.albedo.rgb*field.l0.rgb+surface.nx.rgb*field.lx.rgb+surface.ny.rgb*field.ly.rgb+surface.nz.rgb*field.lz.rgb));
     }
     vec3 background=surface.weights.y*vec3(.035,.193,.666)+surface.weights.z*vec3(.00886);
-    color+=lit?background*fields[index].l0.rgb:background;
+    color+=lit?background*uintBitsToFloat(uvec3(fields[index].r,fields[index].g,fields[index].b)):background;
     uint packed=pack_display(color,lit);
     if((params.flags&1u)!=0u) {
         uint page=pages[(cell.y/64u)*((params.width+63u)/64u)+cell.x/64u];

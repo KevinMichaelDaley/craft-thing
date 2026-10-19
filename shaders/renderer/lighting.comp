@@ -1,6 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 #include "../../include/ferrum/renderer/light_transport.h"
+#include "directional_storage.glsl"
 #ifdef FR_SUBGROUP_SCAN
 #extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_shuffle_relative : require
@@ -11,8 +12,7 @@ layout(set=0,binding=0,std430) readonly buffer Hierarchy {Node nodes[];};
 layout(set=0,binding=1,std430) readonly buffer Parameters {uint metadata[];};
 struct Light {vec4 position_radius;vec4 color_intensity;};
 layout(set=0,binding=2,std430) readonly buffer Sources {Light sources[];};
-struct Field {vec4 l0;vec4 lx;vec4 ly;vec4 lz;};
-layout(set=0,binding=3,std430) buffer Fields {Field fields[];};
+layout(set=0,binding=3,std430) buffer Fields {PackedField fields[];};
 /* RGB incoming radiance, affine transmission, and RGB vertical moments. */
 struct Beam {vec4 light;vec4 vertical;};
 /* Energy/transmission retain FP32 range. Bounded vertical direction ratios
@@ -270,8 +270,9 @@ void main() {
     }
     previous[global]=pack_beam(Beam(vec4(energy,0),vec4(mz,0)));
     if(ITERATION!=0u) {
-        energy+=fields[global].l0.rgb;mx+=fields[global].lx.rgb;
-        my+=fields[global].ly.rgb;mz+=fields[global].lz.rgb;
+        Field prior=renderer_unpack_field(fields[global]);
+        energy+=prior.l0.rgb;mx+=prior.lx.rgb;
+        my+=prior.ly.rgb;mz+=prior.lz.rgb;
     }
-    fields[global]=Field(vec4(energy,0),vec4(mx,0),vec4(my,0),vec4(mz,0));
+    fields[global]=renderer_pack_field(Field(vec4(energy,0),vec4(mx,0),vec4(my,0),vec4(mz,0)));
 }
