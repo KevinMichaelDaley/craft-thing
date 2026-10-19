@@ -196,6 +196,20 @@ static void test_zero_distance_emitter_is_finite(void) {
   ASSERT_TRUE(isfinite(f.l0[0]) && f.l0[0] > 0);
   PASS();
 }
+static void test_diagonal_schedule_excludes_absent_tiles(void) {
+  const uint32_t width = 193, height = 65;
+  fr_occlusion_gpu_t *occlusion = NULL;
+  fr_lighting_gpu_t *lighting = NULL;
+  ASSERT_TRUE(fr_occlusion_gpu_create(g_gpu,width,height,&occlusion,g_error,sizeof(g_error)));
+  ASSERT_TRUE(fr_lighting_gpu_create(g_gpu,occlusion,&lighting,g_error,sizeof(g_error)));
+  uint32_t expected = 0;
+  for (uint32_t along = 0; along < height; along += 32u)
+    expected += width + height - 1u - 2u * along;
+  ASSERT_EQ(fr_lighting_gpu_scan_groups(lighting,1),expected);
+  fr_lighting_gpu_destroy(lighting);
+  fr_occlusion_gpu_destroy(occlusion);
+  PASS();
+}
 static void test_hdr_emission_preserves_energy_range_and_vertical_direction(void) {
   ASSERT_TRUE(empty_scene());
   fr_renderer_point_light_t light = {4.5f, 4.5f, 1, 20, {1, .5f, .25f}, 1e8f};
@@ -327,6 +341,7 @@ int main(void) {
   RUN(test_large_field_crosses_scan_tiles_and_filters_foliage);
   RUN(test_transport_carries_prefixes_across_recursive_scan_levels);
   RUN(test_zero_distance_emitter_is_finite);
+  RUN(test_diagonal_schedule_excludes_absent_tiles);
   RUN(test_hdr_emission_preserves_energy_range_and_vertical_direction);
   RUN(test_thin_wall_and_one_pixel_hole_visibility);
   RUN(test_sun_requires_explicit_known_sky_boundary);

@@ -78,6 +78,15 @@ static void plan_transport(fr_lighting_gpu_t *l) {
     add_pass(l, 3, 0, iteration, tiles(l->width * l->height), 1);
   }
 }
+uint32_t fr_lighting_gpu_scan_groups(const fr_lighting_gpu_t *l,
+                                      uint32_t iteration) {
+  if (!l)
+    return 0;
+  for (uint32_t i = 0; i < l->pass_count; i++)
+    if (l->passes[i].phase == 0u && l->passes[i].iteration == iteration)
+      return l->passes[i].groups;
+  return 0;
+}
 void fr_lighting_gpu_destroy(fr_lighting_gpu_t *l) {
   if (!l)
     return;

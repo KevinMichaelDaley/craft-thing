@@ -36,6 +36,9 @@ bool fr_lighting_gpu_create(dc_gpu_t *gpu, fr_occlusion_gpu_t *occlusion,
 /** Release field resources before releasing the referenced hierarchy/context.
  */
 void fr_lighting_gpu_destroy(fr_lighting_gpu_t *lighting);
+/** Planned scan workgroups per direction, without GPU synchronization. */
+uint32_t fr_lighting_gpu_scan_groups(const fr_lighting_gpu_t *lighting,
+                                      uint32_t iteration);
 /** Explicit light edit. Propagation reach is measured in scene cells;
  * unknown residency blocks transport. */
 bool fr_lighting_gpu_set_sources(fr_lighting_gpu_t *lighting,
