@@ -48,11 +48,14 @@ The final field stores RGB energy and signed RGB first moments independently
 of material/albedo. Opposing lights preserve energy while their moments cancel.
 Persistent local prefixes, prior-stage sums and source seeds require 120 bytes
 per scene cell, plus scan totals and the
-64-byte final field. GPU cost and memory therefore need measurement before
+24-byte final field. The public diagnostic field remains 64 bytes and is
+reconstructed only on an explicit read. GPU cost and memory need measurement before
 raising simulation resolution; renderer performance remains separately tracked.
 Intermediate RGB energy and affine transmission retain FP32 range and
 precision. Vertical RGB direction ratios use signed ten-bit components
-(at most 1/1022 quantization error per packing); final RGB moments remain FP32.
+(at most 1/1022 quantization error per packing). Final RGB energies remain FP32;
+three independent RGB direction triples use the same bounded encoding.
+Scene surface RGB also remains FP32, with packed color-weighted directions.
 This avoids FP16 overflow for HDR emitters. Subgroup scans retain FP32 working
 values in registers rather than round each prefix composition.
 
@@ -80,3 +83,37 @@ Regression coverage includes a wide eight-pixel-thick foliage canopy: light
 below it must recover by at least ten percentage points with distance,
 relative to the unobstructed field at the same coordinates. Sealed opaque
 layers still block all sky light; no ambient floor is added underground.
+
+The inline optimization work also gates unrelated simulation work conservatively.
+A cold upload/edit latch skips scheduled fluid kernels only until water, a source,
+markers, or saved face velocity may exist. Scheduler phase and tick cadence remain
+unchanged; once awakened the latch stays active. Fluid scratch starts explicitly
+zeroed. A GPU planner separately emits grain-bed and per-body indirect triplets
+from live particle counts and enabled bodies. It skips grain-bed construction only
+when either grains or bodies are absent, preserving support whenever both exist.
+These triplets reuse MPM scratch only during the preceding rigid phase.
+
+Graphical level_piece03 at 640x360 with its normal simulation halo averaged
+20.878 ms over 90 frames after these changes, with a 62.580 ms worst frame.
+This is progress, not acceptance: both complete-frame mean and worst must remain
+below 30 ms. A source-height basis representation was rejected after a same-binary
+comparison showed no meaningful frame-time improvement despite lower compiler
+instruction counts. No precision, physics cadence, or simulation resolution was
+reduced.
+
+Repository diagnostics include `tools/diagnostics/app_frame_trace.mk` for the exact
+360p graphical application with stage timestamps, and `intel_shader_stats.py`
+to retain Intel compiler summaries without large assembly dumps. The shader
+compile probe performs no queue submission. `DC_RENDERER_FRAME_PROFILE=1` adds
+per-frame simulation timings; `DC_RENDERER_COMPONENT_PROFILE=1` adds component
+query diagnostics. Instrumented measurements diagnose costs and do not replace
+uninstrumented acceptance runs or graphical capture review.
+
+Diagonal scan dispatch now uses an immutable geometry table built at field
+creation. It schedules each existing line tile exactly once; it never walks scene
+pixels on the CPU. Higher-level scans inject identity for absent diagonal tiles,
+so no uninitialized total participates in a carry. The rectangular symmetry and
+work-count regression passes with both scan implementations under core and
+synchronization validation. A strict moving-concave run measured 25.831 ms mean
+and 41.067 ms worst at 640x360; the actual graphical level03 run measured
+20.748/64.560 ms with four identical paused captures. Tail latency remains open.

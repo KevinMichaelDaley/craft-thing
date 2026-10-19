@@ -130,10 +130,14 @@ static void test_full_frame(unsigned width, unsigned height) {
   double times[6] = {0}, wall = 0, worst = 0;
   double passes[26] = {0};
   unsigned samples = 24;
+  g->component_profile = getenv("DC_RENDERER_COMPONENT_PROFILE") != NULL;
   for (unsigned i = 0; i < samples; i++) {
     struct timespec start, stop;
     clock_gettime(CLOCK_MONOTONIC, &start);
-    ASSERT_TRUE(dc_gpu_tick_step(g, err, sizeof(err)));
+    dc_gpu_tick_capture_t tick = {0};
+    bool profile_frame = getenv("DC_RENDERER_FRAME_PROFILE") != NULL;
+    ASSERT_TRUE(profile_frame ? dc_gpu_tick_capture(g, &tick, err, sizeof(err)) :
+                               dc_gpu_tick_step(g, err, sizeof(err)));
     ASSERT_TRUE(fr_renderer_render(g, err, sizeof(err)));
     clock_gettime(CLOCK_MONOTONIC, &stop);
     double frame = (stop.tv_sec - start.tv_sec) * 1000. +
@@ -150,16 +154,27 @@ static void test_full_frame(unsigned width, unsigned height) {
                         ? UINT64_MAX
                         : ((UINT64_C(1) << g->timestamp_bits) - 1);
     if (getenv("DC_RENDERER_FRAME_PROFILE"))
-      printf("frame,%ux%u,%u,wall%.3f,renderer%.3f,light%.3f\n", width,
+      printf("frame,%ux%u,%u,wall%.3f,renderer%.3f,light%.3f,rigid%.3f,fluid%.3f,mpm%.3f\n", width,
              height, i, frame, ((q[1] - q[0]) & mask) *
              g->timestamp_period / 1e6, ((q[9] - q[8]) & mask) *
-             g->timestamp_period / 1e6);
+             g->timestamp_period / 1e6, tick.stages[0].gpu_ns / 1e6,
+             tick.stages[1].gpu_ns / 1e6, tick.stages[2].gpu_ns / 1e6);
     for (unsigned stage = 0; stage < 6; stage++)
       times[stage] += ((q[2 * stage + 1] - q[2 * stage]) & mask) *
                       g->timestamp_period / 1e6;
     for (unsigned pass = 0; pass < g_light_passes; pass++)
       passes[pass] += ((q[13u + 2u * pass] - q[12u + 2u * pass]) & mask) *
                      g->timestamp_period / 1e6;
+    if (g->component_profile && i < 2u) {
+      uint64_t component[34][2] = {{0}};
+      VkResult result = vkGetQueryPoolResults(g->device, g->timestamp_pool, 0, 34,
+          sizeof(component), component, sizeof(component[0]),
+          VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
+      ASSERT_TRUE(result == VK_SUCCESS || result == VK_NOT_READY);
+      for (unsigned j = 0; j < 34; j++)
+        if (component[j][1]) printf("rigid-profile,%ux%u,frame%u,q%u,%.3f\n",
+            width,height,i,j,((component[j][0]-component[0][0])&mask)*g->timestamp_period/1e6);
+    }
   }
   printf("Full frame %ux%u mean %.3f ms, worst %.3f ms "
          "(simulation + render + submission/wait, %u samples)\n",

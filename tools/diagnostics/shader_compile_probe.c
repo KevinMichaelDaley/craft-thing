@@ -33,8 +33,8 @@ static double seconds(void) {
     return t.tv_sec + t.tv_nsec / 1e9;
 }
 int main(int argc, char **argv) {
-    if (argc != 3 && argc != 4) {
-        fprintf(stderr, "usage: %s shader.spv generic|phase [constant1]\n", argv[0]);
+    if (argc < 3 || argc > 5) {
+        fprintf(stderr, "usage: %s shader.spv generic|phase [constant1 [constant2]]\n", argv[0]);
         return 2;
     }
     probe_t p = {0};
@@ -91,22 +91,23 @@ int main(int argc, char **argv) {
     if (strcmp(argv[2], "generic") != 0) {
         char *end;
         unsigned long number = strtoul(argv[2], &end, 10);
-        if (*end || number > 12)
+        if (*end || number > UINT32_MAX)
             return 2;
         phase = (uint32_t)number;
     }
-    uint32_t values[2] = {phase, 0};
-    if (argc == 4) {
+    uint32_t values[3] = {phase, 0, 0};
+    for (int i = 3; i < argc; i++) {
         char *end;
-        unsigned long value = strtoul(argv[3], &end, 10);
+        unsigned long value = strtoul(argv[i], &end, 10);
         if (*end || value > UINT32_MAX || phase == UINT32_MAX) return 2;
-        values[1] = (uint32_t)value;
+        values[i - 2] = (uint32_t)value;
     }
-    VkSpecializationMapEntry entries[2] = {{.constantID = 0, .size = sizeof(uint32_t)},
-                                          {.constantID = 1, .offset = sizeof(uint32_t), .size = sizeof(uint32_t)}};
-    VkSpecializationInfo specialization = {.mapEntryCount = argc == 4 ? 2u : 1u,
+    VkSpecializationMapEntry entries[3] = {{.constantID = 0, .size = sizeof(uint32_t)},
+                                          {.constantID = 1, .offset = sizeof(uint32_t), .size = sizeof(uint32_t)},
+                                          {.constantID = 2, .offset = 2u * sizeof(uint32_t), .size = sizeof(uint32_t)}};
+    VkSpecializationInfo specialization = {.mapEntryCount = (uint32_t)(argc - 2),
                                            .pMapEntries = entries,
-                                           .dataSize = argc == 4 ? sizeof(values) : sizeof(phase),
+                                           .dataSize = (size_t)(argc - 2) * sizeof(uint32_t),
                                            .pData = values};
     VkComputePipelineCreateInfo pipeline = {
         .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
