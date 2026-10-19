@@ -1,5 +1,10 @@
 # Dungeoncraft
 
+Loaded scenes start with directional lighting enabled. F8 toggles lighting and
+albedo preview. Sky and point sources propagate through a separate RGB
+directional field; foliage transmits some light and underground illumination
+fades with distance. See [light transport](design/directional_light_transport.md).
+
 Multilayer prop authoring now has a [LibreSprite exporter workflow](design/prop_package_v1.md)
 with editable templates, independent physics/color/emission layers, deterministic
 packages and a preloaded C asset reader. Run `make test_prop_assets` for offline

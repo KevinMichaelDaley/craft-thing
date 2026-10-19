@@ -27,3 +27,7 @@ Device diagnostic under an explicitly granted30sec lease: unchanged previously p
 **2026-10-17T08:40:44Z**
 
 Merged renderer fb395f4 with optimizer checkpoint 7b65fd5. Fresh shaders and full headless tests pass with core plus synchronization validation; displayed renderer visual fixture and full test_ui pass. Isolated no-validation 480x270 sun+4 point-light acceptance FAILS unchanged <=2ms added GPU gate: mean total10.563ms (texture0.123 optical2.350 hierarchy0.145 light7.030 compose0.752). Earlier timing20.266ms overlapped UI and is not authoritative. Performance remains open; no FPS or final renderer completion claim. Logs build/renderer-merge-performance-isolated.log and renderer-merge-visual.log.
+
+**2026-10-19T01:21:42Z**
+
+Latest actual directional transport with cardinal direct light, diagonal sky transport and lateral diffuse fill: isolated no-validation 480x270 sun+4 points still FAILS unchanged <=2ms gate. Total32.186ms: texture0.232 optical2.573 hierarchy0.165 light28.302 compose0.739. Lighting correctness and graphical level03 checks pass with core+sync validation, but GPU cost is unacceptable and this performance ticket remains open. Persistent 256-byte/cell intermediate beams plus64-byte field and scan traffic/barriers are optimization candidates; preserve transport/foliage/shadow recovery assertions. Logs build/ambient_performance.log, ambient_focused.log, ambient_scene_final.log.

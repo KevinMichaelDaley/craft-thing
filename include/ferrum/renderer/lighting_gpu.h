@@ -36,14 +36,14 @@ bool fr_lighting_gpu_create(dc_gpu_t *gpu, fr_occlusion_gpu_t *occlusion,
 /** Release field resources before releasing the referenced hierarchy/context.
  */
 void fr_lighting_gpu_destroy(fr_lighting_gpu_t *lighting);
-/** Explicit light edit; rays outside known residency are conservatively
- * limited. */
+/** Explicit light edit. Propagation reach is measured in scene cells;
+ * unknown residency blocks transport. */
 bool fr_lighting_gpu_set_sources(fr_lighting_gpu_t *lighting,
                                  const fr_renderer_point_light_t *points,
                                  uint32_t count, fr_renderer_sun_t sun,
-                                 uint32_t ray_budget);
-/** Parallel receiver/source visibility and cooperative deterministic RGB
- * reduction. */
+                                 uint32_t propagation_reach);
+/** Inject sky/emitter radiance, propagate directional beams with parallel
+ * affine scans, then aggregate deterministic RGB energy and first moments. */
 bool fr_lighting_gpu_generate(fr_lighting_gpu_t *lighting, char *err,
                               uint32_t cap);
 /** Diagnostic access to HDR moments, independent of material/color. */

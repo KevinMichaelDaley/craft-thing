@@ -38,15 +38,23 @@ test_renderer_uses_textures_preserves_holes_and_paused_physics(void) {
     for (unsigned x = 35; x < 54; x++)
       if (x < 39 || y % 6 < 3)
         chunk->cells[y * 64 + x].material = DC_MATERIAL_STONE;
-  chunk->cells[2*64+2].material=DC_MATERIAL_LEAVES;
+  chunk->cells[2 * 64 + 2].material = DC_MATERIAL_LEAVES;
   ASSERT_TRUE(dc_gpu_upload_chunk(g, 0, chunk, err, sizeof(err)));
   ASSERT_TRUE(dc_gpu_set_page(g, 0, 0, 0, err, sizeof(err)));
-  dc_gpu_body_shape_t leaves={.count=4,.material=DC_GPU_BODY_LEAVES,
-    .vertices={{0,0},{65536,0},{65536,65536},{0,65536}}};
-  dc_gpu_world_body_t leaf_body={.body={.id=77,.active=1,.width=1,.height=1,
-    .x_fp=60*65536,.y_fp=60*65536}};
-  ASSERT_TRUE(dc_gpu_spawn_convex_body(g,leaf_body,&leaves,err,sizeof(err)));
-  ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+  dc_gpu_body_shape_t leaves = {
+      .count = 4,
+      .material = DC_GPU_BODY_LEAVES,
+      .vertices = {{0, 0}, {65536, 0}, {65536, 65536}, {0, 65536}}};
+  dc_gpu_world_body_t leaf_body = {.body = {.id = 77,
+                                            .active = 1,
+                                            .width = 1,
+                                            .height = 1,
+                                            .x_fp = 60 * 65536,
+                                            .y_fp = 60 * 65536}};
+  ASSERT_TRUE(
+      dc_gpu_spawn_convex_body(g, leaf_body, &leaves, err, sizeof(err)));
+  ASSERT_TRUE(
+      dc_gpu_set_body_origin(g, (dc_chunk_coord_t){0, 0}, err, sizeof(err)));
   ASSERT_TRUE(dc_gpu_render_chunks(g, err, sizeof(err)));
   uint32_t reference[4096], lit[4096];
   memcpy(reference, g->mapped, sizeof(reference));
@@ -57,11 +65,10 @@ test_renderer_uses_textures_preserves_holes_and_paused_physics(void) {
   ASSERT_TRUE(fr_renderer_set_mode(g, FR_RENDERER_ALBEDO));
   ASSERT_TRUE(fr_renderer_render(g, err, sizeof(err)));
   fr_occlusion_node_t leaf;
-  ASSERT_TRUE(fr_renderer_read_opacity(g,2,2,&leaf));
-  ASSERT_TRUE(leaf.maximum>0&&leaf.maximum<1);
-  ASSERT_TRUE(fr_renderer_read_opacity(g,60,60,&leaf));
-  printf("leaf-body optical opacity %.6f\n",leaf.maximum);
-  ASSERT_TRUE(leaf.maximum>0&&leaf.maximum<1);
+  ASSERT_TRUE(fr_renderer_read_opacity(g, 2, 2, &leaf));
+  ASSERT_TRUE(leaf.maximum > 0 && leaf.maximum < 1);
+  ASSERT_TRUE(fr_renderer_read_opacity(g, 60, 60, &leaf));
+  ASSERT_TRUE(leaf.maximum > 0 && leaf.maximum < 1);
   memcpy(lit, g->mapped, sizeof(lit));
   ASSERT_TRUE(memcmp(lit, reference, sizeof(lit)) != 0);
   unsigned variations = 0;
