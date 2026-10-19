@@ -20,7 +20,10 @@ build/occlusion_gpu_tests: tests/renderer/occlusion_gpu_tests.c src/vulkan/occlu
 build/shaders/lighting.comp.spv: shaders/renderer/lighting.comp include/ferrum/renderer/light_transport.h
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
-build/lighting_gpu_tests: tests/renderer/lighting_gpu_tests.c src/vulkan/lighting_gpu.c src/vulkan/occlusion_gpu.c src/vulkan/renderer_resource.c src/vulkan/renderer_internal.h build/fluid_tests build/shaders/occlusion.comp.spv build/shaders/lighting.comp.spv
+build/shaders/lighting_subgroup.comp.spv: shaders/renderer/lighting.comp include/ferrum/renderer/light_transport.h
+	mkdir -p build/shaders
+	$(GLSLANG) -DFR_SUBGROUP_SCAN=1 -V --target-env vulkan1.3 $< -o $@
+build/lighting_gpu_tests: tests/renderer/lighting_gpu_tests.c src/vulkan/lighting_gpu.c src/vulkan/occlusion_gpu.c src/vulkan/renderer_resource.c src/vulkan/renderer_internal.h build/fluid_tests build/shaders/occlusion.comp.spv build/shaders/lighting.comp.spv build/shaders/lighting_subgroup.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/shading_tests: tests/renderer/shading_tests.c src/renderer/shading.c include/ferrum/renderer/shading.h
 	mkdir -p build
@@ -29,8 +32,8 @@ build/scene_gpu_tests: tests/renderer/scene_gpu_tests.c src/vulkan/scene_gpu.c i
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/renderer_visual_tests: tests/renderer/visual_tests.c tests/renderer/concave_scene.h $(GPU_SRC) src/world/chunk.c $(RENDERER_SHADERS) build/quarter_native_solver_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
-build/renderer_performance_tests: tests/renderer/performance_tests.c tests/renderer/concave_scene.h $(GPU_SRC) src/world/chunk.c $(RENDERER_SHADERS) build/quarter_native_solver_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -Wl,--wrap=fr_renderer_record -Wl,--wrap=fr_occlusion_record -Wl,--wrap=fr_lighting_record -Wl,--wrap=vkCmdDispatch
+build/renderer_performance_tests: tests/renderer/performance_tests.c tests/renderer/concave_scene.h $(RENDERER_SHADERS) build/quarter_native_solver_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=fr_renderer_record -Wl,--wrap=fr_occlusion_record -Wl,--wrap=fr_lighting_record -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect
 build/authoring_request_tests: tests/structural/authoring_request_tests.c src/structural/authoring.c include/ferrum/structural/authoring.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/structural/authoring_request_tests.c src/structural/authoring.c -o $@
@@ -73,7 +76,7 @@ build/color_gpu.o: src/vulkan/color_gpu.c src/vulkan/gpu_internal.h include/dung
 GPU_OBJ += build/window_gpu.o
 GPU_OBJ += build/structural_gpu.o build/structural_material.o
 GPU_OBJ += build/scene_gpu.o build/renderer_resource.o build/occlusion_gpu.o build/lighting_gpu.o
-RENDERER_SHADERS = build/shaders/scene.comp.spv build/shaders/occlusion.comp.spv build/shaders/lighting.comp.spv
+RENDERER_SHADERS = build/shaders/lighting_subgroup.comp.spv build/shaders/scene.comp.spv build/shaders/occlusion.comp.spv build/shaders/lighting.comp.spv
 $(GPU_OBJ): $(RENDERER_SHADERS)
 build/scene_gpu.o: src/vulkan/scene_gpu.c src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h include/ferrum/renderer/gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
@@ -218,6 +221,12 @@ build/world_body_tests: tests/vulkan/world_body_tests.c $(GPU_OBJ) $(CHUNK_OBJ) 
 build/convex_body_tests: tests/vulkan/convex_body_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 QUARTER_FLAGS = -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u -DDC_PRESSURE_SWEEPS=16u
+PERFORMANCE_OBJ = $(patsubst %.c,build/performance/%.o,$(GPU_SRC) src/world/chunk.c)
+build/performance/%.o: %.c
+	mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -MMD -MP -c $< -o $@
+build/renderer_performance_tests: $(PERFORMANCE_OBJ)
+-include $(PERFORMANCE_OBJ:.o=.d)
 NATIVE_720_FLAGS = -DDC_GPU_CHUNK_SLOTS=270u
 build/broadphase_tests: tests/vulkan/broadphase_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)

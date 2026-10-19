@@ -133,7 +133,7 @@ Surface surface_at(uint i,out float opacity,out uint known) {
         surface.weights.y=0.;
     }
     surface.weights.z=max(0.,1.-surface.weights.x-surface.weights.y);
-    opacity=clamp(body_opacity+remaining*solid*material_opacity(material)+(1.-body_coverage)*water*.08,0.,1.);
+    opacity=clamp(body_opacity+(1.-body_coverage)*solid*material_opacity(material),0.,1.);
     return surface;
 }
 uint pack_display(vec3 linear,bool lit) {

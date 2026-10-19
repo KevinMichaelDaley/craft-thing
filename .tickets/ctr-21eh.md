@@ -35,3 +35,7 @@ Latest actual directional transport with cardinal direct light, diagonal sky tra
 **2026-10-19T01:34:04Z**
 
 User supersedes the old <=2ms renderer-only target: total frame time must be <30ms on this machine, including simulation and rendering. Use full-frame timings as acceptance; retain per-stage GPU measurements for diagnosis.
+
+**2026-10-19T01:51:23Z**
+
+Acceptance body updated to user correction: TOTAL simulation+render frame <30ms at480x270 and640x360; <=2ms renderer-only goal superseded. Noninteractive optimization checkpoint ctr-ebl5 preserves radiance transport and all optical regressions. Current complete-frame gate still fails while an existing live demo consumes GPU time; do not infer isolated performance or close this ticket from renderer-only timing.

@@ -23,13 +23,14 @@ struct fr_lighting_gpu {
   VkDeviceMemory parameter_memory, source_memory, field_memory;
   void *parameter_mapped, *source_mapped, *field_mapped;
   fr_renderer_compute_t compute;
-  VkBuffer transport[4];
-  VkDeviceMemory transport_memory[4];
+  VkBuffer transport[5];
+  VkDeviceMemory transport_memory[5];
   void *work_mapped;
   light_pass_t passes[LIGHTING_MAX_PASSES];
   uint32_t pass_count;
+  VkPipeline specialized[3][6];
 };
-static uint32_t tiles(uint32_t length) { return (length + 127u) / 128u; }
+static uint32_t tiles(uint32_t length) { return (length + FR_TRANSPORT_TILE - 1u) / FR_TRANSPORT_TILE; }
 static uint32_t larger(uint32_t a, uint32_t b) { return a > b ? a : b; }
 static uint32_t smaller(uint32_t a, uint32_t b) { return a < b ? a : b; }
 static uint32_t block_nodes(uint32_t length, uint32_t lines) {
@@ -46,10 +47,11 @@ static void add_pass(fr_lighting_gpu_t *l, uint32_t phase, uint32_t level,
       (light_pass_t){phase, level, iteration, groups, directions};
 }
 static void plan_transport(fr_lighting_gpu_t *l) {
+  add_pass(l, 5, 0, 0, tiles(l->width * l->height), 1);
   for (uint32_t iteration = 0; iteration < FR_TRANSPORT_SOURCE_ITERATIONS;
        iteration++) {
     bool diagonal = iteration == 1u;
-    uint32_t horizontal[6], vertical[6], levels = 0;
+    uint32_t horizontal[8], vertical[8], levels = 0;
     uint32_t rows = diagonal ? l->width + l->height - 1u : l->height;
     uint32_t columns = diagonal ? rows : l->width;
     horizontal[0] = tiles(diagonal ? smaller(l->width, l->height) : l->width);
@@ -78,10 +80,14 @@ void fr_lighting_gpu_destroy(fr_lighting_gpu_t *l) {
   if (!l)
     return;
   VkDevice d = l->gpu->device;
+  for (unsigned iteration = 0; iteration < 3; iteration++)
+    for (unsigned phase = 0; phase < 6; phase++)
+      if (l->specialized[iteration][phase])
+        vkDestroyPipeline(d, l->specialized[iteration][phase], NULL);
   fr_renderer_compute_destroy(l->gpu, &l->compute);
   if (l->work_mapped)
     vkUnmapMemory(d, l->transport_memory[3]);
-  for (unsigned i = 0; i < 4; i++) {
+  for (unsigned i = 0; i < 5; i++) {
     if (l->transport[i])
       vkDestroyBuffer(d, l->transport[i], NULL);
     if (l->transport_memory[i])
@@ -118,7 +124,7 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
     return false;
   l->gpu = g;
   uint32_t layout[136] = {0};
-  VkDescriptorBufferInfo buffers[8];
+  VkDescriptorBufferInfo buffers[9];
   if (!fr_occlusion_gpu_layout(c, &buffers[0], layout))
     goto fail;
   l->width = layout[0];
@@ -132,12 +138,13 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
                                 4u * block_nodes(smaller(l->width, l->height),
                                                  l->width + l->height - 1u));
   plan_transport(l);
-  VkDeviceSize transport_sizes[4] = {
-      (VkDeviceSize)l->width * l->height * 4u * 32u,
-      (VkDeviceSize)l->width * l->height * 4u * 32u,
-      (VkDeviceSize)total_nodes * 32u,
-      (4u + 4u * l->pass_count) * sizeof(uint32_t)};
-  for (unsigned i = 0; i < 4; i++) {
+  VkDeviceSize transport_sizes[5] = {
+      (VkDeviceSize)l->width * l->height * 4u * FR_TRANSPORT_BEAM_BYTES,
+      (VkDeviceSize)l->width * l->height * FR_TRANSPORT_BEAM_BYTES,
+      (VkDeviceSize)total_nodes * FR_TRANSPORT_BEAM_BYTES,
+      (4u + 4u * l->pass_count) * sizeof(uint32_t),
+      (VkDeviceSize)l->width * l->height * FR_TRANSPORT_BEAM_BYTES};
+  for (unsigned i = 0; i < 5; i++) {
     bool okay =
         i == 3u
             ? dc_gpu_make_mapped_buffer(g, transport_sizes[i], &l->transport[i],
@@ -173,9 +180,45 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
   buffers[2] = (VkDescriptorBufferInfo){l->sources, 0, 17u * 32u};
   buffers[3] = (VkDescriptorBufferInfo){
       l->field, 0, (VkDeviceSize)l->width * l->height * 64};
-  if (!fr_renderer_compute_init(g, &l->compute, buffers, 8, 16,
-                                "build/shaders/lighting.comp.spv", err, cap))
+  VkPhysicalDeviceSubgroupProperties subgroup = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES};
+  VkPhysicalDeviceProperties2 properties = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &subgroup};
+  vkGetPhysicalDeviceProperties2(g->physical, &properties);
+  VkSubgroupFeatureFlags required = VK_SUBGROUP_FEATURE_BASIC_BIT |
+                                    VK_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT;
+  bool fast_scan = (subgroup.supportedStages & VK_SHADER_STAGE_COMPUTE_BIT) &&
+                   (subgroup.supportedOperations & required) == required &&
+                   subgroup.subgroupSize >= 16u && subgroup.subgroupSize <= 128u &&
+                   !getenv("DC_LIGHTING_SHARED_SCAN");
+  const char *shader = fast_scan ? "build/shaders/lighting_subgroup.comp.spv"
+                                 : "build/shaders/lighting.comp.spv";
+  if (!fr_renderer_compute_init(g, &l->compute, buffers, 9, 16,
+                                shader, err, cap))
     goto fail;
+  VkShaderModule module;
+  if (!dc_gpu_load_shader_module(g, shader, &module, err, cap))
+    goto fail;
+  for (unsigned i = 0; i < l->pass_count; i++) {
+    light_pass_t pass = l->passes[i];
+    if (l->specialized[pass.iteration][pass.phase])
+      continue;
+    uint32_t values[2] = {pass.phase, pass.iteration};
+    VkSpecializationMapEntry entries[2] = {{0, 0, 4}, {1, 4, 4}};
+    VkSpecializationInfo specialization = {2, entries, sizeof(values), values};
+    VkComputePipelineCreateInfo info = {
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .stage = {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = module,
+                  .pName = "main", .pSpecializationInfo = &specialization},
+        .layout = l->compute.pipeline_layout};
+    if (vkCreateComputePipelines(g->device, VK_NULL_HANDLE, 1, &info, NULL,
+        &l->specialized[pass.iteration][pass.phase]) != VK_SUCCESS) {
+      vkDestroyShaderModule(g->device, module, NULL);
+      goto fail;
+    }
+  }
+  vkDestroyShaderModule(g->device, module, NULL);
   *out = l;
   return true;
 fail:
@@ -284,6 +327,8 @@ void fr_lighting_record(fr_lighting_gpu_t *l, VkBuffer indirect,
                           VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
   for (uint32_t i = 0; i < l->pass_count; i++) {
     light_pass_t pass = l->passes[i];
+    vkCmdBindPipeline(g->command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                      l->specialized[pass.iteration][pass.phase]);
     push[0] = pass.phase;
     push[1] = pass.level;
     push[2] = pass.iteration;
