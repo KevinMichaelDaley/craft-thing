@@ -5,6 +5,7 @@
 
 #include <SDL.h>
 #include <time.h>
+#include "ferrum/renderer/gpu.h"
 #include "../vulkan/native_scene.h"
 
 #ifndef NATIVE_PERF_WIDTH
@@ -135,6 +136,17 @@ static void native_scene(unsigned load) {
         ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
         ASSERT_TRUE(dc_gpu_set_overlay(g, DC_GPU_OVERLAY_STRUCTURAL_STRESS));
     }
+#ifdef DC_NATIVE_LIT_PERFORMANCE
+    ASSERT_TRUE(dc_gpu_set_overlay(g, DC_GPU_OVERLAY_NONE));
+    ASSERT_TRUE(fr_renderer_enable(g,err,sizeof(err)));
+    fr_renderer_point_light_t lights[4];
+    for(unsigned i=0;i<4;i++) lights[i]=(fr_renderer_point_light_t){
+        .x=80.f+i*110.f,.y=45.f,.height=18.f,.radius=300.f,
+        .color={i%3==0?1.f:.3f,i%3==1?1.f:.35f,i%3==2?1.f:.3f},.intensity=1800.f};
+    fr_renderer_sun_t sun={.direction={-.3f,-.8f,.5f},.color={1.f,.94f,.8f},
+        .intensity=1.4f,.known_sky=FR_SKY_TOP};
+    ASSERT_TRUE(fr_renderer_set_sources(g,lights,4,sun));
+#endif
     double loaded = seconds();
     printf("native load%u: submitting cold presented frame\n", load);
     if (load == 2 && getenv("DC_NATIVE_DIAG")) {
@@ -229,8 +241,14 @@ static void native_scene(unsigned load) {
            getenv("DC_FLUID_VARIANTS") ? getenv("DC_FLUID_VARIANTS")
                                        : "production");
     dc_gpu_destroy(g);
+#ifdef DC_NATIVE_LIT_PERFORMANCE
+    ASSERT_TRUE(wall_ms<30.);
+    ASSERT_TRUE(samples[(sample_count*95+99)/100-1]<30.);
+    ASSERT_TRUE(samples[sample_count-1]<30.);
+#else
     ASSERT_TRUE(wall_ms <= 1000. / 30.);
     ASSERT_TRUE(samples[(sample_count * 95 + 99) / 100 - 1] <= 1000. / 30.);
+#endif
     PASS();
 }
 static void test_native_dry_presented_frame_meets_30fps(void) {

@@ -34,3 +34,7 @@ Found production routing gap: zero-body scenes still selected serial fluid.comp 
 **2026-10-17T07:02:07Z**
 
 Candidate GREEN now exercised by actual body-free runtime: dense native640x360 physics/display180-frame run mean11.604ms,p9517.114ms,max18.584ms,86.174FPS,cold30.788ms,offscreenfluid4.900ms. All three sustained loads also pass unchanged: see build/diagnostics/partial-fluid-native360-all.log; exact concave mean25.861ms,p9532.426ms,cold91.363ms. Two fixed60Hz steps/frame,cadence6,pressure20,scale1 retained. Full explicit synchronization validated headless battery is running before completion; ct-wuci cold14ms gates and existing fracture parallelization remain open.
+
+**2026-10-19T02:59:02Z**
+
+Current renderer baseline9482754 merged only into dedicated optimizer branch645e71b. New lit exact dense-concave native640x360/2fixed60Hz-step180frame acceptance RED:57.328ms mean,67.137p95,71.375max,cold154.579,FPS17.444; old overlay fixture bypassed renderer. Pigment transport work RED under sync validation:640x16 exact literal water0mismatches,10192sources,27168globalcolorloads/13584stores/163072outer lane-buffer-barrier participations; color fingerprint028933e7c8fc0d8e retained as oracle. CPU shared-memory budget RED1pass1fail anticipates color cache. Implement shared color cache with unchanged float mix order and conservative long-line global fallback, then measure actual displayed stages; no target completion claim.

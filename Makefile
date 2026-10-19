@@ -548,6 +548,8 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/body_storage_gpu_tests
 	./build/body_scan_gpu_tests
 	./build/body_page_init_gpu_tests
+	./build/body_allocator_gpu_tests
+	./build/body_work_gate_gpu_tests
 	./build/appearance_tests
 	./build/texture_tests
 	./build/texture_gpu_tests
@@ -842,6 +844,8 @@ build/diagnostics/fluid_transport_profile.comp.spv: shaders/sim/fluid_transport.
 
 build/fluid_transport_partial_tests: tests/vulkan/fluid_transport_partial_tests.c tests/vulkan/fluid_transport_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/fluid_transport_profile.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/fluid_color_cache_tests: tests/vulkan/fluid_transport_partial_tests.c tests/vulkan/fluid_transport_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/fluid_transport_profile.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_FIXTURE_WATER_COLOR -DDC_COLOR_CACHE_PROFILE $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
 build/contact_terrain_work_tests: tests/vulkan/contact_terrain_work_tests.c tools/diagnostics/contact_scaling.c tests/vulkan/pixel_component_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/pixel_component_tests build/diagnostics/contacts_terrain_scan.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_CONTACT_TERRAIN_PROFILE $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_load_shader_module
@@ -857,6 +861,8 @@ build/diagnostics/native360_fluid_trace: tests/app/native_720_performance_tests.
 
 build/diagnostics/native360_frame_trace: tests/app/native_720_performance_tests.c tools/diagnostics/frame_trace.c $(GPU_SRC) src/world/chunk.c build/pixel_component_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GPU_CHUNK_SLOTS=90u -DNATIVE_PERF_WIDTH=640 -DNATIVE_PERF_HEIGHT=360 tests/app/native_720_performance_tests.c tools/diagnostics/frame_trace.c $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_present_chunks_steps -Wl,--wrap=vkBeginCommandBuffer -Wl,--wrap=dc_gpu_record_rigid -Wl,--wrap=dc_gpu_record_fluid_phase -Wl,--wrap=dc_gpu_record_mpm -Wl,--wrap=dc_gpu_record_contacts -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect
+build/diagnostics/native360_lit_frame_trace: tests/app/native_720_performance_tests.c tools/diagnostics/frame_trace.c $(GPU_SRC) src/world/chunk.c build/pixel_component_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_NATIVE_LIT_PERFORMANCE -DDC_GPU_CHUNK_SLOTS=90u -DNATIVE_PERF_WIDTH=640 -DNATIVE_PERF_HEIGHT=360 tests/app/native_720_performance_tests.c tools/diagnostics/frame_trace.c $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_present_chunks_steps -Wl,--wrap=vkBeginCommandBuffer -Wl,--wrap=dc_gpu_record_rigid -Wl,--wrap=dc_gpu_record_fluid_phase -Wl,--wrap=dc_gpu_record_mpm -Wl,--wrap=dc_gpu_record_contacts -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect
 
 build/diagnostics/pixel_properties_probe.spv: tests/vulkan/pixel_properties_probe.comp shaders/sim/rigid_body.glsl shaders/sim/pixel_properties.glsl
 	mkdir -p build/diagnostics
@@ -1123,7 +1129,7 @@ build/diagnostics/body_allocator.spv: shaders/sim/body_allocator.comp shaders/si
 	spirv-val --target-env vulkan1.3 $@
 build/body_allocator_gpu_tests: tests/vulkan/body_allocator_gpu_tests.c tests/vulkan/body_probe_fixture.h tools/diagnostics/vulkan_probe.c src/vulkan/body_scan_gpu.h src/vulkan/body_scan_gpu.c src/vulkan/body_scan_record_gpu.c src/vulkan/body_storage_gpu.c src/vulkan/body_storage_gpu.h src/vulkan/body_address_gpu.c src/vulkan/body_address_gpu.h src/vulkan/shader.c include/dungeoncraft/body_storage_layout.h build/diagnostics/body_allocator.spv build/diagnostics/body_scan.spv build/diagnostics/body_storage_init.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_scan_gpu.c src/vulkan/body_scan_record_gpu.c src/vulkan/body_storage_gpu.c src/vulkan/body_address_gpu.c src/vulkan/shader.c -o $@ -lvulkan
-test: build/body_address_gpu_tests build/body_storage_gpu_tests build/body_scan_gpu_tests build/body_page_init_gpu_tests
+test: build/body_address_gpu_tests build/body_storage_gpu_tests build/body_scan_gpu_tests build/body_page_init_gpu_tests build/body_allocator_gpu_tests build/body_work_gate_gpu_tests
 BODY_STORAGE_TEST_BINARIES = $(addprefix build/,body_address_gpu_tests body_storage_gpu_tests body_allocator_gpu_tests body_scan_gpu_tests body_address_allocation_tests body_storage_growth_tests)
 $(BODY_STORAGE_TEST_BINARIES): src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
 build/diagnostics/body_storage_init.spv: shaders/sim/body_storage_init.comp include/dungeoncraft/body_storage_layout.h | build

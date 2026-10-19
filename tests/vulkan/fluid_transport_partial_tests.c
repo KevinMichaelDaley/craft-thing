@@ -3,7 +3,7 @@
 #define FLUID_TRANSPORT_FIXTURE_ONLY
 #include "fluid_transport_tests.c"
 
-enum { PROFILE_WORDS=4,MAX_REQUESTS_PER_SOURCE=64 };
+enum { PROFILE_WORDS=7,MAX_REQUESTS_PER_SOURCE=64 };
 
 static unsigned seed_horizontal_cache(fixture_t *f) {
     unsigned leaves=1;
@@ -46,6 +46,12 @@ static void partial_case(unsigned mode) {
         f->words[2][2*CELLS+index]=FULL/4u;
         f->words[2][3*CELLS+index]=FULL/2u;
         f->words[4][2*index]=bits((mode==2?1.f:-1.f)*WIDTH/6.f);
+#ifdef DC_COLOR_CACHE_PROFILE
+        float *colors=(float *)f->words[7];
+        colors[4*a]=(float)((x*17u+y)%23u)/23.f;
+        colors[4*a+1]=(float)((x+y*13u)%31u)/31.f;
+        colors[4*a+2]=(float)((x*7u+y*5u)%37u)/37.f;colors[4*a+3]=1.f;
+#endif
     }
     unsigned leaves=seed_horizontal_cache(f);
     for(unsigned y=0;y<HEIGHT;y++)
@@ -86,6 +92,12 @@ static void partial_case(unsigned mode) {
     uint32_t counts[PROFILE_WORDS];memcpy(counts,profile,sizeof(counts));
     printf("mode%u requests%u blocker checks%u sources%u team%u GPU%.3fms mismatches%u\n",
         mode,counts[0],counts[1],counts[2],counts[3],(times[1]-times[0])*properties.limits.timestampPeriod/1e6,mismatches);
+#ifdef DC_COLOR_CACHE_PROFILE
+    uint64_t color_hash=1469598103934665603ull;
+    for(unsigned i=0;i<sizes[7];i++) {color_hash^=f->words[7][i];color_hash*=1099511628211ull;}
+    printf("mode%u pigment hash%016llx global loads%u stores%u buffer barriers%u\n",mode,
+        (unsigned long long)color_hash,counts[4],counts[5],counts[6]);
+#endif
     vkDestroyQueryPool(f->p.device,pool,NULL);fixture_release_pipeline(&f->p);
     vkUnmapMemory(f->p.device,profile_memory);vkDestroyBuffer(f->p.device,profile_buffer,NULL);vkFreeMemory(f->p.device,profile_memory,NULL);
     for(unsigned i=0;i<8;i++) {vkUnmapMemory(f->p.device,f->memory[i]);vkDestroyBuffer(f->p.device,f->buffers[i],NULL);vkFreeMemory(f->p.device,f->memory[i],NULL);}
@@ -94,6 +106,11 @@ static void partial_case(unsigned mode) {
     ASSERT_EQ(mismatches,0u);ASSERT_EQ(after,before);
     ASSERT_TRUE(counts[2]>0u&&counts[3]>0u&&counts[3]<=32u);
     ASSERT_TRUE(counts[0]<=counts[2]*MAX_REQUESTS_PER_SOURCE&&counts[1]<=2u*CELLS);
+#ifdef DC_COLOR_CACHE_PROFILE
+    if(mode==2u) ASSERT_EQ(color_hash,0x028933e7c8fc0d8eull);
+    ASSERT_EQ(counts[6],0u);
+    ASSERT_TRUE(counts[4]<=CELLS&&counts[5]<=CELLS);
+#endif
     PASS();
 }
 static void test_rightward_partial_recipients_have_bounded_work(void) {partial_case(2);}

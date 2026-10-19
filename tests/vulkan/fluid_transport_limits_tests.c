@@ -16,7 +16,8 @@ static void test_transport_cache_respects_shared_memory_budget(void) {
     for(unsigned b=0;b<3;b++) for(unsigned l=0;l<7;l++) {
         uint32_t cells=dc_gpu_transport_cache_cells(lengths[l],budgets[b]);
         ASSERT_TRUE(cells>0&&cells<=lengths[l]&&cells<=2048);
-        ASSERT_TRUE(20u*cells+8u*((cells+31u)/32u)<=budgets[b]);
+        uint32_t colors=cells<1024u?cells:1024u;
+        ASSERT_TRUE(20u*cells+16u*colors+8u*((cells+31u)/32u)<=budgets[b]);
     }
     PASS();
 }
