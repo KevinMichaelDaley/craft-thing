@@ -569,6 +569,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/scene_gpu_tests
 	./build/dry_fluid_tests
 	./build/fluid_specialization_tests
+	./build/pressure_work_tests
 	./build/grain_bed_work_tests
 	./build/terrain_prop_tests
 	./build/body_color_tests
@@ -1156,6 +1157,10 @@ test: build/dry_fluid_tests
 build/fluid_specialization_tests: tests/vulkan/fluid_specialization_tests.c tests/vulkan/fluid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/fluid_specialization_tests
+
+build/pressure_work_tests: tests/vulkan/pressure_work_tests.c tests/vulkan/fluid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/fluid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/pressure_work_tests
 
 build/grain_bed_work_tests: tests/vulkan/grain_bed_work_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
