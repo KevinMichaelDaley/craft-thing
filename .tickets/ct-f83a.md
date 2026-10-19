@@ -69,3 +69,7 @@ Prepared optional bounded GPU work-gate test and no-op stub; both C and SPIR-V c
 **2026-10-19T02:49:16Z**
 
 Resumed dedicated optimizer worktree. GPU work-gate RED now observed under explicit sync validation: active90-request queue leaves all137 stale indirect triplets untouched with no-op shader, test0pass1fail; all bounded fences complete, no VUID/SYNC. Exclusive lease returned immediately to lighting optimizer before its graphical run. Implementing parallel command producer next; CPU template construction is growth metadata only, GPU queue state controls actual dispatch.
+
+**2026-10-19T02:50:29Z**
+
+Work-gate GPU GREEN now passes all5 active/empty/completed/null/active transitions and137packed triplets under explicit sync validation, zero mismatches/guard damage/VUID/SYNC; process0.19seconds. Each GPU lane writes one complete triplet, immutable growth templates restore active counts and zero triplets suppress stale empty work. Initial GREEN attempt correctly failed after overlooked reserved-word compile error left old stub; corrected identifier and explicitly verified compiler/SPIR-V/C success before passing retry. This is verified queue-control primitive, not yet ordinary-frame integration. GPU immediately released to lighting agent graphical baseline.
