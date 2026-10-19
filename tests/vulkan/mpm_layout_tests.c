@@ -23,7 +23,7 @@ static void test_scan_scratch_regions_are_disjoint_and_bounded(void) {
             offset+=count;count=(count+255u)/256u;
         }
         ASSERT_EQ(count,1u);ASSERT_EQ(l.root_word,offset);
-        ASSERT_EQ(l.words,offset+1u<39u?39u:offset+1u);
+        ASSERT_EQ(l.words,offset+1u<DC_MPM_ACTIVITY_MIN_WORDS?DC_MPM_ACTIVITY_MIN_WORDS:offset+1u);
     }
     PASS();
 }

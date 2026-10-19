@@ -1155,3 +1155,4 @@ test: build/dry_fluid_tests
 build/grain_bed_work_tests: tests/vulkan/grain_bed_work_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/grain_bed_work_tests
+$(SOLVER_SHADER): include/dungeoncraft/mpm_activity_layout.h

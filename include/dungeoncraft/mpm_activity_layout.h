@@ -3,6 +3,7 @@
 
 #define DC_MPM_SCAN_LANES 256u
 #define DC_MPM_MAX_SCAN_LEVELS 8u
+/** Owner-specific rigid-phase triplets; MPM may reuse these words afterwards. */
 #define DC_GRAIN_BED_WORK_WORD 39u
 #define DC_RIGID_BODY_WORK_WORD 42u
 #define DC_MPM_ACTIVITY_MIN_WORDS 45u

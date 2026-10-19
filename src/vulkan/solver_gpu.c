@@ -25,9 +25,10 @@ typedef enum {
     SOLVER_GRAIN_POSITION,
     SOLVER_GRAIN_VELOCITY,
     SOLVER_GRAIN_BED_INIT,
-    SOLVER_GRAIN_BED_JUMP
+    SOLVER_GRAIN_BED_JUMP,
+    SOLVER_GRAIN_BED_PLAN
 } solver_phase_t;
-_Static_assert(SOLVER_GRAIN_BED_JUMP + 1 == DC_GPU_SOLVER_PHASE_COUNT,
+_Static_assert(SOLVER_GRAIN_BED_PLAN + 1 == DC_GPU_SOLVER_PHASE_COUNT,
                "GPU solver phase count changed");
 static bool error(char *err, uint32_t cap, const char *message) {
     if (err && cap)
@@ -207,8 +208,16 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     uint32_t phase = mode & SOLVER_PHASE_MASK;
-    if (phase >= SOLVER_GRAIN_BED_INIT) {
-        vkCmdDispatch(gpu->command, (gpu->width * gpu->height + 63u) / 64u, 1, 1);
+    if (phase == SOLVER_GRAIN_BED_PLAN) {
+        vkCmdDispatch(gpu->command, 1, 1, 1);
+    } else if (phase >= SOLVER_GRAIN_BED_INIT) {
+        vkCmdDispatchIndirect(gpu->command, gpu->mpm_activity_buffer,
+            DC_GRAIN_BED_WORK_WORD * sizeof(uint32_t));
+    } else if (phase == SOLVER_PREDICT || phase == SOLVER_CLEAR ||
+               phase == SOLVER_APPLY || phase == SOLVER_DERIVE_VELOCITY ||
+               phase == SOLVER_APPLY_VELOCITY) {
+        vkCmdDispatchIndirect(gpu->command, gpu->mpm_activity_buffer,
+            DC_RIGID_BODY_WORK_WORD * sizeof(uint32_t));
     } else if (phase >= SOLVER_BOND_POSITION && phase <= SOLVER_BOND_RESET) {
         VkDeviceSize offset =
             sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
@@ -242,6 +251,7 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
     vkCmdPipelineBarrier2(gpu->command, &dep);
 }
 void dc_gpu_record_solver(dc_gpu_t *gpu) {
+    dispatch(gpu, SOLVER_GRAIN_BED_PLAN | (DC_GPU_CHUNK_SLOTS << 8u), false);
     dispatch(gpu, SOLVER_GRAIN_BED_INIT, false);
     for (uint32_t span=1, pass=0; span<gpu->height; span*=2, pass++)
         dispatch(gpu, SOLVER_GRAIN_BED_JUMP | (pass << 8u), false);

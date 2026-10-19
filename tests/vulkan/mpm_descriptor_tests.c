@@ -24,7 +24,7 @@ static uint32_t required_words(uint32_t width,uint32_t height) {
     for(uint32_t count=(tiles+255u)/256u;;count=(count+255u)/256u) {
         words+=count;if(count<=256u) {words++;break;}
     }
-    return words<39u?39u:words;
+    return words<DC_MPM_ACTIVITY_MIN_WORDS?DC_MPM_ACTIVITY_MIN_WORDS:words;
 }
 static void descriptor_case(uint32_t width,uint32_t height) {
     activity_range=0;activity_buffer=VK_NULL_HANDLE;dc_gpu_t *gpu=NULL;char err[256];

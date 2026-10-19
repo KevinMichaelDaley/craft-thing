@@ -1,8 +1,32 @@
 /* MPM grid scratch is dead during rigid solving. Parallel pointer doubling
    transmits column support to terrain without a CPU walk or a depth limit. */
+#include "../../include/dungeoncraft/mpm_activity_layout.h"
 layout(set=0,binding=23,std430) buffer GrainBed { vec4 bed[]; };
 layout(set=0,binding=24,std430) buffer GrainBedScratch { vec4 bed_scratch[]; };
+layout(set=0,binding=20,std430) readonly buffer GrainCounts {uint grain_counts[];};
+layout(set=0,binding=27,std430) buffer GrainWork {uint grain_work[];};
 const uint GRAIN_BED_INIT=18u,GRAIN_BED_JUMP=19u;
+const uint GRAIN_BED_PLAN=20u;
+shared uint grain_work_flags;
+void grain_bed_plan() {
+    uint lane=gl_LocalInvocationIndex;
+    if(lane==0u) grain_work_flags=0u;
+    barrier();
+    for(uint slot=lane;slot<(params.mode>>8u);slot+=gl_WorkGroupSize.x)
+        if(grain_counts[slot]!=0u) atomicOr(grain_work_flags,1u);
+    for(uint slot=lane;slot<params.body_count;slot+=gl_WorkGroupSize.x)
+        if(bodies[slot].enabled!=0u) atomicOr(grain_work_flags,2u);
+    barrier();
+    if(lane==0u) {
+        uint groups=(params.width*params.height+63u)/64u;
+        grain_work[DC_GRAIN_BED_WORK_WORD]=grain_work_flags==3u?min(groups,65535u):0u;
+        grain_work[DC_GRAIN_BED_WORK_WORD+1u]=grain_work_flags==3u?(groups+65534u)/65535u:1u;
+        grain_work[DC_GRAIN_BED_WORK_WORD+2u]=1u;
+        grain_work[DC_RIGID_BODY_WORK_WORD]=(grain_work_flags&2u)!=0u?(params.body_count+63u)/64u:0u;
+        grain_work[DC_RIGID_BODY_WORK_WORD+1u]=1u;
+        grain_work[DC_RIGID_BODY_WORK_WORD+2u]=1u;
+    }
+}
 uint bed_steps() {return uint(findMSB(max(params.height,2u)-1u))+1u;}
 vec4 bed_read(uint index) {return (bed_steps()&1u)==0u?bed[index]:bed_scratch[index];}
 uint bed_material(ivec2 cell) {
@@ -12,6 +36,7 @@ uint bed_material(ivec2 cell) {
 }
 bool bed_solid(uint material) {return material!=0u&&material!=3u;}
 void grain_bed_phase(uint i) {
+    i=(gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x)*gl_WorkGroupSize.x+gl_LocalInvocationIndex;
     if(i>=params.width*params.height) return;
     if(PHASE==GRAIN_BED_JUMP) {
         bool odd=((params.mode>>8u)&1u)!=0u;
