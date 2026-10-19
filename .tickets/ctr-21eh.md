@@ -31,3 +31,7 @@ Merged renderer fb395f4 with optimizer checkpoint 7b65fd5. Fresh shaders and ful
 **2026-10-19T01:21:42Z**
 
 Latest actual directional transport with cardinal direct light, diagonal sky transport and lateral diffuse fill: isolated no-validation 480x270 sun+4 points still FAILS unchanged <=2ms gate. Total32.186ms: texture0.232 optical2.573 hierarchy0.165 light28.302 compose0.739. Lighting correctness and graphical level03 checks pass with core+sync validation, but GPU cost is unacceptable and this performance ticket remains open. Persistent 256-byte/cell intermediate beams plus64-byte field and scan traffic/barriers are optimization candidates; preserve transport/foliage/shadow recovery assertions. Logs build/ambient_performance.log, ambient_focused.log, ambient_scene_final.log.
+
+**2026-10-19T01:34:04Z**
+
+User supersedes the old <=2ms renderer-only target: total frame time must be <30ms on this machine, including simulation and rendering. Use full-frame timings as acceptance; retain per-stage GPU measurements for diagnosis.
