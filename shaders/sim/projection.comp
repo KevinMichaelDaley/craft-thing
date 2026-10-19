@@ -9,6 +9,7 @@ layout(set = 0, binding = 11, std430) buffer PressureA { float pressure_a[]; };
 layout(set = 0, binding = 17, std430) readonly buffer SlotPages { uint slot_pages[]; };
 layout(set = 0, binding = 9, std430) buffer HydroHead { uint hydro_head[]; };
 layout(set = 0, binding = 8, std430) buffer PreviousVerticalVelocity { uint previous_vertical_velocity[]; };
+layout(set = 1, binding = 0, std430) readonly buffer PressureWork {uint pressure_work[];};
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -111,7 +112,12 @@ uint neighboring_head(ivec2 p) {
 
 void main() {
     ivec2 p = ivec2(gl_GlobalInvocationID.xy);
-    if (params.unused0 != 0u) {
+    if (params.unused1 != 0u) {
+        uint ordinal=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x;
+        if(ordinal>=pressure_work[0]) return;
+        uint tile=pressure_work[4u+ordinal],stride=(params.width+15u)/16u;
+        p=ivec2((tile%stride)*16u,(tile/stride)*16u)+ivec2(gl_LocalInvocationID.xy);
+    } else if (params.unused0 != 0u) {
         uint tile = slot_pages[gl_WorkGroupID.z];
         if (tile == 0xffffffffu) return;
         uint stride = (params.width + 63u) / 64u;

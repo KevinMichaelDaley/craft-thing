@@ -1,0 +1,39 @@
+#version 450
+layout(local_size_x=16,local_size_y=16) in;
+layout(constant_id=0) const uint PHASE=0u;
+layout(set=0,binding=1,std430) readonly buffer Cells {uvec2 cells[];};
+layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
+layout(set=0,binding=11,std430) readonly buffer Pressure {float pressure[];};
+layout(set=1,binding=0,std430) buffer Work {uint work[];};
+layout(push_constant) uniform Params {uint width,height,mode,unused0,unused1,scale,unused3;} params;
+shared uint tile_active;
+void main() {
+    uint lane=gl_LocalInvocationIndex;
+    if(PHASE==0u) {
+        if(lane==0u) {work[0]=0u;work[1]=0u;work[2]=1u;work[3]=1u;}
+        return;
+    }
+    if(PHASE==2u) {
+        if(lane==0u) {
+            work[1]=min(work[0],65535u);
+            work[2]=max(1u,(work[0]+65534u)/65535u);
+            work[3]=1u;
+        }
+        return;
+    }
+    if(lane==0u) tile_active=0u;
+    barrier();
+    uvec2 p=gl_GlobalInvocationID.xy;
+    if(p.x<params.width&&p.y<params.height) {
+        uint index=p.y*params.width+p.x;
+        uint page=pages[(p.y/64u)*((params.width+63u)/64u)+p.x/64u];
+        uint mass=page==0u?0u:cells[(page-1u)*4096u+(p.y%64u)*64u+p.x%64u].y;
+        /* Retain residual dry pressure too: SOR must decay it identically. */
+        if(page!=0u&&(mass!=0u||floatBitsToUint(pressure[index])!=0u)) atomicOr(tile_active,1u);
+    }
+    barrier();
+    if(lane==0u&&tile_active!=0u) {
+        uint ordinal=atomicAdd(work[0],1u);
+        work[4u+ordinal]=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x;
+    }
+}

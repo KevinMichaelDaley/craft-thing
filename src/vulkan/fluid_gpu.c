@@ -81,7 +81,8 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
         .stage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = shader, .pName = "main",
             .pSpecializationInfo=&specialization },
-        .layout = gpu->pipeline_layout };
+        .layout = strcmp(path,"build/shaders/projection.comp.spv")==0?
+            gpu->pressure_pipeline_layout:gpu->pipeline_layout };
     VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE,
                                                 1, &info, NULL, pipeline);
     vkDestroyShaderModule(gpu->device, shader, NULL);
@@ -96,6 +97,8 @@ bool dc_gpu_fluid_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         return error(err,cap,"DC_FLUID_VARIANTS must be generic or specialized");
     const char *fluid="build/shaders/fluid.comp.spv";
     const char *projection="build/shaders/projection.comp.spv";
+    gpu->pressure_work_enabled=specialized;
+    if(!dc_gpu_pressure_work_init(gpu,err,cap)) return false;
     if(specialized) {
         for(uint32_t phase=0;phase<13;phase++)
             if(!make_pipeline(gpu,fluid,phase,&gpu->fluid_phase_pipelines[phase],err,cap)) return false;
@@ -127,6 +130,8 @@ static void bind_fluid_mode(dc_gpu_t *gpu,uint32_t mode,bool projection) {
     if(!projection&&mode==FLUID_DISPLACEMENT_MODE) pipeline=gpu->fluid_displacement_pipelines[0];
     if(!projection&&mode==FLUID_LATERAL_DISPLACEMENT_MODE) pipeline=gpu->fluid_displacement_pipelines[1];
     vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline);
+    if(projection) vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
+        gpu->pressure_pipeline_layout,1,1,&gpu->pressure_work_descriptor,0,NULL);
 }
 
 void dc_gpu_fluid_destroy(dc_gpu_t *gpu) {
@@ -141,6 +146,7 @@ void dc_gpu_fluid_destroy(dc_gpu_t *gpu) {
     for(uint32_t i=0;i<6;i++) if(gpu->projection_phase_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->projection_phase_pipelines[i],NULL);
     if (gpu->fluid_pipeline) vkDestroyPipeline(gpu->device, gpu->fluid_pipeline, NULL);
     if (gpu->projection_pipeline) vkDestroyPipeline(gpu->device, gpu->projection_pipeline, NULL);
+    dc_gpu_pressure_work_destroy(gpu);
     if (gpu->hydro_head_pipeline) vkDestroyPipeline(gpu->device, gpu->hydro_head_pipeline, NULL);
     if (gpu->velocity_shift_pipeline)
         vkDestroyPipeline(gpu->device, gpu->velocity_shift_pipeline, NULL);
@@ -254,15 +260,20 @@ static void record_projection_begin(dc_gpu_t *gpu) {
 
 static void record_pressure_passes(dc_gpu_t *gpu, uint32_t first,
                                     uint32_t stop) {
+    if(first>=stop) return;
+    if(gpu->pressure_work_enabled) dc_gpu_record_pressure_work(gpu);
     uint32_t push[7] = { gpu->width, gpu->height, 0, 1, 0, 0, 0 };
     push[5] = dc_gpu_float_bits(gpu->fluid_step_scale);
     for (uint32_t pass = first; pass < stop; ++pass) {
         push[2] = pass == 0 ? 0u : pass == 2u * DC_PRESSURE_SWEEPS + 1u ? 3u :
                   ((pass & 1u) ? 1u : 2u);
+        bool sparse=gpu->pressure_work_enabled&&(push[2]==1u||push[2]==2u);
+        push[3]=sparse?0u:1u;push[4]=sparse?1u:0u;
         bind_fluid_mode(gpu,push[2],true);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-        vkCmdDispatch(gpu->command, 4u, 4u, DC_GPU_CHUNK_SLOTS);
+        if(sparse) vkCmdDispatchIndirect(gpu->command,gpu->pressure_work_buffer,sizeof(uint32_t));
+        else vkCmdDispatch(gpu->command, 4u, 4u, DC_GPU_CHUNK_SLOTS);
         fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,

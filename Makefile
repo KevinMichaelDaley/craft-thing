@@ -103,6 +103,12 @@ build/authored_request.o: src/structural/authoring.c include/ferrum/structural/a
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/authored_gpu.o: src/vulkan/authored_gpu.c src/vulkan/gpu_internal.h include/ferrum/structural/authoring.h build/shaders/authored.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+GPU_OBJ += build/pressure_work_gpu.o
+build/pressure_work_gpu.o: src/vulkan/pressure_work_gpu.c src/vulkan/gpu_internal.h build/shaders/pressure_work.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/shaders/pressure_work.comp.spv: shaders/sim/pressure_work.comp
+	mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o build/authored_request.o build/prop_asset.o,$(GPU_OBJ))) src/structural/material.c src/structural/authoring.c src/assets/prop.c
 build/authored_stage_tests: tests/vulkan/authored_stage_tests.c build/compound_body_tests $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
@@ -160,7 +166,7 @@ CONTACT_SHADER = build/shaders/contacts.comp.spv
 PROBE_SHADER = build/shaders/tick_probe.comp.spv
 HALO_SHADER = build/shaders/halo.comp.spv
 FLUID_SHADER = build/shaders/fluid.comp.spv build/shaders/fluid_aperture.comp.spv build/shaders/fluid_transport.comp.spv build/shaders/fluid_displacement.comp.spv
-PROJECTION_SHADER = build/shaders/projection.comp.spv build/shaders/hydro_head.comp.spv
+PROJECTION_SHADER = build/shaders/projection.comp.spv build/shaders/hydro_head.comp.spv build/shaders/pressure_work.comp.spv
 MARKER_SHADER = build/shaders/marker.comp.spv
 SHIFT_SHADER = build/shaders/shift_velocity.comp.spv
 MPM_SHADER = build/shaders/mpm.comp.spv

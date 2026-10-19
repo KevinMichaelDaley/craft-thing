@@ -76,12 +76,18 @@ int main(int argc, char **argv) {
                                            &p.descriptor_layout),
                "descriptor layout"))
         return 2;
+    VkDescriptorSetLayout work_layout;
+    descriptor.bindingCount = 1;
+    if (!check(vkCreateDescriptorSetLayout(p.device, &descriptor, NULL,
+                                           &work_layout), "work descriptor layout"))
+        return 2;
+    VkDescriptorSetLayout sets[] = {p.descriptor_layout,work_layout};
     VkPushConstantRange push = {.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
                                 .size = 32};
     VkPipelineLayoutCreateInfo layout = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 1,
-        .pSetLayouts = &p.descriptor_layout,
+        .setLayoutCount = 2,
+        .pSetLayouts = sets,
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = &push};
     if (!check(vkCreatePipelineLayout(p.device, &layout, NULL, &p.layout),
@@ -127,6 +133,7 @@ int main(int argc, char **argv) {
         vkDestroyPipeline(p.device, p.pipeline, NULL);
     vkDestroyPipelineLayout(p.device, p.layout, NULL);
     vkDestroyDescriptorSetLayout(p.device, p.descriptor_layout, NULL);
+    vkDestroyDescriptorSetLayout(p.device, work_layout, NULL);
     vkDestroyShaderModule(p.device, p.shader, NULL);
     vkDestroyDevice(p.device, NULL);
     vkDestroyInstance(p.instance, NULL);
