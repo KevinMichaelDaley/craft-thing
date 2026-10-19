@@ -75,7 +75,7 @@ test_renderer_uses_textures_preserves_holes_and_paused_physics(void) {
                    after.device_only_bytes - before.mapped_local_bytes -
                    before.mapped_system_bytes - before.device_only_bytes;
   uint64_t budget = (uint64_t)DC_GPU_CHUNK_SLOTS * 4096u * 40u +
-                    4096u * 256u + 65536u;
+                    4096u * 216u + 65536u;
   printf("renderer working memory %llu bytes, budget %llu\n",
          (unsigned long long)bytes, (unsigned long long)budget);
   ASSERT_TRUE(bytes <= budget);

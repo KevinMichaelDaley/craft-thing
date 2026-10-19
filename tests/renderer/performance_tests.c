@@ -149,6 +149,11 @@ static void test_full_frame(unsigned width, unsigned height) {
     uint64_t mask = g->timestamp_bits == 64
                         ? UINT64_MAX
                         : ((UINT64_C(1) << g->timestamp_bits) - 1);
+    if (getenv("DC_RENDERER_FRAME_PROFILE"))
+      printf("frame,%ux%u,%u,wall%.3f,renderer%.3f,light%.3f\n", width,
+             height, i, frame, ((q[1] - q[0]) & mask) *
+             g->timestamp_period / 1e6, ((q[9] - q[8]) & mask) *
+             g->timestamp_period / 1e6);
     for (unsigned stage = 0; stage < 6; stage++)
       times[stage] += ((q[2 * stage + 1] - q[2 * stage]) & mask) *
                       g->timestamp_period / 1e6;
