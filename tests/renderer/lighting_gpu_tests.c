@@ -88,6 +88,7 @@ static void test_large_field_crosses_scan_tiles_and_filters_foliage(void) {
   ASSERT_TRUE(fr_lighting_gpu_read(lighting,128,128,&c));
   ASSERT_TRUE(a.l0[0]>b.l0[0]&&b.l0[0]>c.l0[0]&&c.l0[0]>0);
   ASSERT_TRUE(c.l0[0]>.9f*b.l0[0]);float clear=c.l0[0];
+  ASSERT_TRUE(clear>.35f);
   for(unsigned x=0;x<width;x++) opacity[64*width+x]=.08f;
   ASSERT_TRUE(fr_occlusion_gpu_upload(occlusion,opacity,known));
   ASSERT_TRUE(fr_occlusion_gpu_generate(occlusion,g_error,sizeof(g_error)));
@@ -191,7 +192,7 @@ static void test_sun_thin_wall_preserves_one_pixel_gap(void) {
   ASSERT_TRUE(f.l0[0]>0&&f.l0[0]<direct);
   PASS();
 }
-static void test_unknown_and_unfinished_rays_cannot_leak(void) {
+static void test_unknown_boundaries_and_propagation_reach_cannot_leak(void) {
   ASSERT_TRUE(empty_scene());
   ASSERT_TRUE(set_points());
   for(unsigned y=0;y<LIGHT_HEIGHT;y++) g_known[y*LIGHT_WIDTH+7]=0;
@@ -238,7 +239,7 @@ int main(void) {
   RUN(test_sun_requires_explicit_known_sky_boundary);
   RUN(test_opposing_equal_lights_keep_energy_when_direction_cancels);
   RUN(test_sun_thin_wall_preserves_one_pixel_gap);
-  RUN(test_unknown_and_unfinished_rays_cannot_leak);
+  RUN(test_unknown_boundaries_and_propagation_reach_cannot_leak);
   fr_lighting_gpu_destroy(g_lighting);
   fr_occlusion_gpu_destroy(g_occlusion);
   dc_gpu_destroy(g_gpu);
