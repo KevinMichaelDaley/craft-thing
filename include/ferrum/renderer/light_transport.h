@@ -3,8 +3,8 @@
 /** Optical properties are independent of collision occupancy. */
 #define FR_LEAF_OPACITY .08
 #define FR_LEAF_DEBRIS_OPACITY .04
-#define FR_TRANSPORT_AIR_TRANSMISSION .995
-#define FR_TRANSPORT_FORWARD_FRACTION .985
+#define FR_TRANSPORT_AIR_TRANSMISSION .999
+#define FR_TRANSPORT_FORWARD_FRACTION .995
 #define FR_TRANSPORT_SOURCE_ITERATIONS 3u
 #define FR_TRANSPORT_TILE 128u
 #endif
