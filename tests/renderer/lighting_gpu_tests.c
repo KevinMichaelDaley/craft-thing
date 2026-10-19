@@ -42,6 +42,31 @@ static bool set_points(void) {
   return fr_lighting_gpu_set_sources(g_lighting, points, 2, sun, 128) &&
          fr_lighting_gpu_generate(g_lighting, g_error, sizeof(g_error));
 }
+static void test_skylight_loses_energy_with_depth(void) {
+  ASSERT_TRUE(empty_scene());
+  fr_renderer_sun_t sun={.direction={0,-1,0},.color={1,1,1},.intensity=1,.known_sky=FR_SKY_TOP};
+  ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,NULL,0,sun,128));
+  ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
+  fr_renderer_light_field_t shallow,deep;
+  ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,8,0,&shallow));
+  ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,8,7,&deep));
+  ASSERT_TRUE(deep.l0[0]>0&&deep.l0[0]<shallow.l0[0]*.98f);
+  PASS();
+}
+static void test_emission_propagates_around_an_open_doorway(void) {
+  ASSERT_TRUE(empty_scene());
+  for(unsigned y=0;y<8;y++) g_opacity[y*16+7]=1;
+  g_opacity[4*16+7]=0;
+  ASSERT_TRUE(fr_occlusion_gpu_upload(g_occlusion,g_opacity,g_known));
+  ASSERT_TRUE(fr_occlusion_gpu_generate(g_occlusion,g_error,sizeof(g_error)));
+  fr_renderer_point_light_t light={4.5f,4.5f,0,20,{1,0,0},10};
+  ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,&light,1,(fr_renderer_sun_t){0},128));
+  ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
+  fr_renderer_light_field_t field;
+  ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,9,6,&field));
+  ASSERT_TRUE(field.l0[0]>0);
+  PASS();
+}
 static void test_colored_directions_keep_independent_rgb_moments(void) {
   ASSERT_TRUE(empty_scene());
   ASSERT_TRUE(set_points());
@@ -170,6 +195,8 @@ int main(void) {
     return 1;
   }
   RUN(test_colored_directions_keep_independent_rgb_moments);
+  RUN(test_skylight_loses_energy_with_depth);
+  RUN(test_emission_propagates_around_an_open_doorway);
   RUN(test_zero_distance_emitter_is_finite);
   RUN(test_thin_wall_and_one_pixel_hole_visibility);
   RUN(test_sun_requires_explicit_known_sky_boundary);
