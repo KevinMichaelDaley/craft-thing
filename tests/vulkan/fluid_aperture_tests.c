@@ -13,23 +13,23 @@ static int g_pass, g_fail;
 typedef struct {
     probe_t p;
     dc_gpu_t gpu;
-    VkBuffer buffers[5];
-    VkDeviceMemory memory[5];
-    uint32_t *words[5];
+    VkBuffer buffers[6];
+    VkDeviceMemory memory[6];
+    uint32_t *words[6];
 } fixture_t;
-static const uint32_t bindings[] = {2,3,28,29,30};
-static const uint32_t sizes[] = {6,5*CELLS,2*CELLS,TREE_BASE+16384,4*CELLS};
+static const uint32_t bindings[] = {2,3,28,29,30,1};
+static const uint32_t sizes[] = {6,5*CELLS,2*CELLS,TREE_BASE+16384,4*CELLS,6*4096*2};
 
 static bool pipeline(fixture_t *f,const char *path) {
-    if (!fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,path,bindings,5,UINT32_MAX)) return false;
-    VkDescriptorBufferInfo buffers[5]; VkWriteDescriptorSet writes[5];
-    for (unsigned i=0;i<5;i++) {
+    if (!fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,path,bindings,6,UINT32_MAX)) return false;
+    VkDescriptorBufferInfo buffers[6]; VkWriteDescriptorSet writes[6];
+    for (unsigned i=0;i<6;i++) {
         buffers[i]=(VkDescriptorBufferInfo){f->buffers[i],0,sizes[i]*sizeof(uint32_t)};
         writes[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet=f->p.descriptor,.dstBinding=bindings[i],.descriptorCount=1,
             .descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&buffers[i]};
     }
-    vkUpdateDescriptorSets(f->p.device,5,writes,0,NULL);
+    vkUpdateDescriptorSets(f->p.device,6,writes,0,NULL);
     return true;
 }
 static void bind(fixture_t *f) {
@@ -52,10 +52,10 @@ static void run_case(unsigned axis,unsigned unknown) {
     ASSERT_TRUE(initialize(&f->p));
     f->gpu=(dc_gpu_t){.device=f->p.device,.physical=f->p.physical};
     char err[256];
-    for (unsigned i=0;i<5;i++) {
+    for (unsigned i=0;i<6;i++) {
         ASSERT_TRUE(dc_gpu_make_mapped_buffer(&f->gpu,sizes[i]*sizeof(uint32_t),&f->buffers[i],
             &f->memory[i],(void **)&f->words[i],err,sizeof(err)));
-        memset(f->words[i],0xa5,sizes[i]*sizeof(uint32_t));
+        memset(f->words[i],i==5?0:0xa5,sizes[i]*sizeof(uint32_t));
     }
     for (unsigned i=0;i<6;i++) f->words[0][i]=unknown&&i==1?0:i+1;
     for (unsigned y=0;y<HEIGHT;y++) for (unsigned x=0;x<WIDTH;x++) {
@@ -114,7 +114,7 @@ static void run_case(unsigned axis,unsigned unknown) {
     }
     printf("axis%u unknown%u: %u exact cache/query mismatches\n",axis,unknown,mismatches);
     fixture_release_pipeline(&f->p);
-    for(unsigned i=0;i<5;i++) {vkUnmapMemory(f->p.device,f->memory[i]);vkDestroyBuffer(f->p.device,f->buffers[i],NULL);vkFreeMemory(f->p.device,f->memory[i],NULL);}
+    for(unsigned i=0;i<6;i++) {vkUnmapMemory(f->p.device,f->memory[i]);vkDestroyBuffer(f->p.device,f->buffers[i],NULL);vkFreeMemory(f->p.device,f->memory[i],NULL);}
     vkDestroyFence(f->p.device,f->p.fence,NULL);vkDestroyCommandPool(f->p.device,f->p.pool,NULL);
     vkDestroyDevice(f->p.device,NULL);vkDestroyInstance(f->p.instance,NULL);free(f);
     ASSERT_EQ(mismatches,0u);PASS();

@@ -15,7 +15,7 @@ uint hydro_atlas(ivec2 p,uint page) {
     return (page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);
 }
 bool hydro_permeable(uint material) {
-    return material==0u||material==2u||material==4u||material==5u||material==6u;
+    return material==0u||material==2u||material==4u||material==5u||material==6u||material==10u;
 }
 
 bool hydro_near_water(vec2 low,vec2 high) {

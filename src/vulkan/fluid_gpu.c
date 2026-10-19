@@ -41,6 +41,11 @@ enum { FLUID_DISPLACEMENT_MODE = 11u, FLUID_LATERAL_DISPLACEMENT_MODE = 12u };
 
 bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkDeviceSize bytes = (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t);
+    VkDeviceSize color_bytes=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS*16;
+    if(!dc_gpu_make_mapped_buffer(gpu,color_bytes,&gpu->water_color_buffer,
+        &gpu->water_color_memory,&gpu->water_color_mapped,err,cap)) return false;
+    memset(gpu->water_color_mapped,0,(size_t)color_bytes);
+    if(!dc_gpu_colors_init(gpu,err,cap)) return false;
     return dc_gpu_make_device_buffer(gpu, bytes, &gpu->fluid_a_buffer,
                &gpu->fluid_a_memory, err, cap) &&
            dc_gpu_make_device_buffer(gpu, bytes, &gpu->fluid_b_buffer,
@@ -60,20 +65,22 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
     bool transport=strcmp(path,"build/shaders/fluid_transport.comp.spv")==0;
     bool displacement=strcmp(path,"build/shaders/fluid_displacement.comp.spv")==0;
     uint32_t length=(displacement?phase==0:phase<2)?gpu->height:gpu->width;
-    uint32_t values[2]={phase,length<2048u?length:2048u};
+    uint32_t values[4]={phase,length<2048u?length:2048u,1u,0u};
     if(transport) {
         VkPhysicalDeviceProperties properties;
         vkGetPhysicalDeviceProperties(gpu->physical,&properties);
         values[1]=dc_gpu_transport_cache_cells(length,properties.limits.maxComputeSharedMemorySize);
     }
-    VkSpecializationMapEntry entries[2]={{.constantID=0,.size=sizeof(uint32_t)},
-        {.constantID=1,.offset=sizeof(uint32_t),.size=sizeof(uint32_t)}};
-    VkSpecializationInfo specialization = {.mapEntryCount=transport||displacement?2u:1u,.pMapEntries=entries,
-        .dataSize=transport||displacement?sizeof(values):sizeof(phase),.pData=values};
+    VkSpecializationMapEntry entries[4]={{.constantID=0,.size=sizeof(uint32_t)},
+        {.constantID=1,.offset=sizeof(uint32_t),.size=sizeof(uint32_t)},
+        {.constantID=2,.offset=2*sizeof(uint32_t),.size=sizeof(uint32_t)},
+        {.constantID=3,.offset=3*sizeof(uint32_t),.size=sizeof(uint32_t)}};
+    VkSpecializationInfo specialization = {.mapEntryCount=4u,
+        .pMapEntries=entries,.dataSize=sizeof(values),.pData=values};
     VkComputePipelineCreateInfo info = { .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = shader, .pName = "main",
-            .pSpecializationInfo=phase==UINT32_MAX?NULL:&specialization },
+            .pSpecializationInfo=&specialization },
         .layout = gpu->pipeline_layout };
     VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE,
                                                 1, &info, NULL, pipeline);
@@ -123,6 +130,10 @@ static void bind_fluid_mode(dc_gpu_t *gpu,uint32_t mode,bool projection) {
 }
 
 void dc_gpu_fluid_destroy(dc_gpu_t *gpu) {
+    dc_gpu_colors_destroy(gpu);
+    if(gpu->water_color_mapped) vkUnmapMemory(gpu->device,gpu->water_color_memory);
+    if(gpu->water_color_buffer) vkDestroyBuffer(gpu->device,gpu->water_color_buffer,NULL);
+    if(gpu->water_color_memory) vkFreeMemory(gpu->device,gpu->water_color_memory,NULL);
     for(uint32_t i=0;i<2;i++) if(gpu->fluid_displacement_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->fluid_displacement_pipelines[i],NULL);
     for(uint32_t i=0;i<4;i++) if(gpu->fluid_transport_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->fluid_transport_pipelines[i],NULL);
     if (gpu->fluid_aperture_pipeline) vkDestroyPipeline(gpu->device, gpu->fluid_aperture_pipeline, NULL);

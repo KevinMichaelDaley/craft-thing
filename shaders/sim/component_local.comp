@@ -1,6 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 #include "rigid_body.glsl"
+#include "../../include/dungeoncraft/terrain_flags.h"
 layout(local_size_x=128) in;
 layout(constant_id=0) const uint EXTRACTION_PHASE=0u;
 layout(set=0,binding=1,std430) buffer Cells { uvec2 cells[]; };
@@ -21,7 +22,7 @@ uint pool() {return graph()+40000u;}
 uint capacity() {return 2u*((max(params.width*params.height,total())+7u)/8u)+64u*8u;}
 uint record(uint c) {return graph()+36300u+c*24u;}
 uint registry(uint s) {return base()+32u+s*8u;}
-bool solid(uint i) {uint m=cells[i].x&65535u;return data[registry(i/4096u)+5u]!=0u&&(m==1u||m==7u||m==8u);}
+bool solid(uint i) {return data[registry(i/4096u)+5u]!=0u&&DC_CELL_COMPONENT_MEMBER(cells[i].x);}
 uint neighbor(uint i,uint axis) {
     uint p=i%4096u,x=p%64u,y=p/64u;
     if(axis==0u&&x>0u) return i-1u;
@@ -50,9 +51,11 @@ void main() {
             uint changed=0u;
             for(uint cell=lane;cell<4096u;cell+=128u) {
                 uint a=atomicAdd(chunk_roots[cell],0u);if(a==0xffffffffu) continue;
-                for(uint axis=0u;axis<2u;axis++) {
-                    if(axis==0u?cell%64u==63u:cell>=4032u) continue;
-                    uint b=atomicAdd(chunk_roots[cell+(axis==0u?1u:64u)],0u);
+                for(uint axis=0u;axis<4u;axis++) {
+                    if((axis==0u||axis==3u)&&cell%64u==63u) continue;
+                    if(axis>0u&&cell>=4032u) continue;
+                    if(axis==2u&&cell%64u==0u) continue;
+                    uint b=atomicAdd(chunk_roots[cell+(axis==0u?1u:axis==1u?64u:axis==2u?63u:65u)],0u);
                     if(b!=0xffffffffu) {uint old=atomicMin(chunk_roots[max(a,b)],min(a,b));changed|=uint(old>min(a,b));}
                 }
             }

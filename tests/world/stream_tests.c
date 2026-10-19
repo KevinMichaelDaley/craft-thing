@@ -232,6 +232,36 @@ static void test_version_four_grain_radius_migrates(void) {
     PASS();
 }
 
+static void test_color_chunk_roundtrip_and_corruption_rejection(void) {
+    char directory[]="build/stream_color_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
+    dc_streamer_t *stream=dc_stream_create(directory,314,2);ASSERT_TRUE(stream);
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    dc_chunk_colors_t *colors=calloc(1,sizeof(*colors));ASSERT_TRUE(chunk&&colors);
+    chunk->coord=(dc_chunk_coord_t){-1,2};chunk->cells[0].material=DC_MATERIAL_WOOD;
+    chunk->cells[4095].fluid_mass=32768;
+    float terrain[4]={1.4f,.24f,.9f,1.f},water[4]={.12f,.83f,.1f,1.f};
+    memcpy(colors->terrain[0],terrain,sizeof(terrain));memcpy(colors->water[4095],water,sizeof(water));
+    ASSERT_TRUE(dc_stream_request_save_colors(stream,chunk,colors,9));
+    colors->terrain[0][0]=8.f;
+    dc_stream_result_t result={0};ASSERT_TRUE(wait_result(stream,&result));
+    ASSERT_EQ(result.kind,DC_STREAM_SAVED);dc_stream_result_release(&result);dc_stream_destroy(stream);
+    stream=dc_stream_create(directory,314,2);ASSERT_TRUE(stream);
+    ASSERT_TRUE(dc_stream_request_load(stream,chunk->coord,10));ASSERT_TRUE(wait_result(stream,&result));
+    ASSERT_EQ(result.kind,DC_STREAM_LOADED);ASSERT_TRUE(result.colors);
+    ASSERT_TRUE(!memcmp(result.colors->terrain[0],terrain,sizeof(terrain)));
+    ASSERT_TRUE(!memcmp(result.colors->water[4095],water,sizeof(water)));
+    ASSERT_EQ(result.chunk->cells[0].material,DC_MATERIAL_WOOD);
+    dc_stream_result_release(&result);
+    colors->terrain[0][0]=NAN;
+    ASSERT_TRUE(!dc_stream_request_save_colors(stream,chunk,colors,11));
+    char path[256];snprintf(path,sizeof(path),"%s/chunk_ffffffffffffffff_0000000000000002.bin",directory);
+    FILE *file=fopen(path,"r+b");ASSERT_TRUE(file);
+    ASSERT_EQ(fseek(file,-1,SEEK_END),0);int byte=fgetc(file);ASSERT_TRUE(byte!=EOF);
+    ASSERT_EQ(fseek(file,-1,SEEK_END),0);ASSERT_TRUE(fputc(byte^128,file)!=EOF);fclose(file);
+    ASSERT_TRUE(dc_stream_request_load(stream,chunk->coord,12));ASSERT_TRUE(wait_result(stream,&result));
+    ASSERT_EQ(result.kind,DC_STREAM_FAILED);ASSERT_TRUE(!result.chunk);
+    dc_stream_result_release(&result);dc_stream_destroy(stream);free(chunk);free(colors);PASS();
+}
 int main(void) {
     RUN(test_worker_generates_saves_and_reloads_chunk);
     RUN(test_shutdown_flushes_queued_saves);
@@ -239,6 +269,7 @@ int main(void) {
     RUN(test_worker_loads_procedural_basin);
     RUN(test_legacy_chunk_loads_with_zero_velocity);
     RUN(test_version_four_grain_radius_migrates);
+    RUN(test_color_chunk_roundtrip_and_corruption_rejection);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

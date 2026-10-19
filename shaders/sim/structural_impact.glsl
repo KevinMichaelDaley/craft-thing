@@ -27,14 +27,15 @@ float impact_cut_work(Body body,uint axis,float cut) {
             work+=min(toughness[a],toughness[b])*max(0.,min(high[a],high[b])-max(low[a],low[b]));
     return work;
 }
-void fracture_impacts() {
-    if(gl_LocalInvocationID.x!=0u) return;
+shared uint impact_color_cursor,impact_color_pending;
+bool fracture_impact_step() {
     uint g=graph();
-    for(uint slot=0u;slot<BODY_CAPACITY;slot++) {
+    while(impact_color_cursor<BODY_CAPACITY) {
+        uint slot=impact_color_cursor++;
         uint p=g+38000u+slot*4u;Body b=bodies[slot];
         if(data[p+3u]!=b.id||b.enabled==0u||b.inverse_mass==0||
            (!pixel_body(b)&&b.material>1u)||data[p+2u]==0u) continue;
-        uint axis=data[p+2u]-1u;
+        uint axis=(data[p+2u]&255u)-1u;
         vec2 low=vec2(1e20),high=vec2(-1e20);
         for(uint part=0u;part<body_pieces(b);part++)
             for(uint vertex=0u;vertex<piece_vertices(b,part);vertex++) {
@@ -54,5 +55,22 @@ void fracture_impacts() {
         data[ledger+2u]=floatBitsToUint(available-work);
         data[ledger+3u]=b.id;
         data[p]=0u;data[p+1u]=0u;data[p+2u]=0u;
+        if(pixel_body(b)) return true;
+    }
+    return false;
+}
+void fracture_impacts() {
+    uint lane=gl_LocalInvocationID.x;
+    leaf_impact_breaks();
+    if(lane==0u) impact_color_cursor=0u;
+    barrier();
+    for(;;) {
+        if(lane==0u) impact_color_pending=uint(fracture_impact_step());
+        memoryBarrierBuffer();barrier();
+        if(impact_color_pending==0u) break;
+        uint pool=graph()+40000u;
+        uint first=BODY_STORAGE_WORDS+pool+16u+data[pool]*color_capacity();
+        for(uint word=lane;word<data[pool+1u];word+=32u) shape_color_resolve(first+word);
+        memoryBarrierBuffer();barrier();
     }
 }

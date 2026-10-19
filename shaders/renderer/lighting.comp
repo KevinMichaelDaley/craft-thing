@@ -1,0 +1,277 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "../../include/ferrum/renderer/light_transport.h"
+#ifdef FR_SUBGROUP_SCAN
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_shuffle_relative : require
+#endif
+layout(local_size_x=FR_TRANSPORT_TILE) in;
+struct Node {float minimum;float maximum;uint known;uint reserved;};
+layout(set=0,binding=0,std430) readonly buffer Hierarchy {Node nodes[];};
+layout(set=0,binding=1,std430) readonly buffer Parameters {uint metadata[];};
+struct Light {vec4 position_radius;vec4 color_intensity;};
+layout(set=0,binding=2,std430) readonly buffer Sources {Light sources[];};
+struct Field {vec4 l0;vec4 lx;vec4 ly;vec4 lz;};
+layout(set=0,binding=3,std430) buffer Fields {Field fields[];};
+/* RGB incoming radiance, affine transmission, and RGB vertical moments. */
+struct Beam {vec4 light;vec4 vertical;};
+/* Energy/transmission retain FP32 range. Bounded vertical direction ratios
+   use signed ten-bit components, avoiding half-float overflow for HDR sources. */
+struct PackedBeam {uint r,g,b,t,z;};
+vec4 unpack_direction(uint packed) {
+    return vec4(vec3(bitfieldExtract(int(packed),0,10),
+                     bitfieldExtract(int(packed),10,10),
+                     bitfieldExtract(int(packed),20,10))/511.,float(packed>>30u));
+}
+uint pack_direction(vec4 ratio) {
+    uvec3 value=uvec3(ivec3(round(ratio.rgb*511.)))&1023u;
+    return value.x|(value.y<<10u)|(value.z<<20u)|(uint(ratio.a>0.)<<30u);
+}
+Beam unpack_beam(PackedBeam packed) {
+    vec4 light=uintBitsToFloat(uvec4(packed.r,packed.g,packed.b,packed.t));
+    vec4 ratio=unpack_direction(packed.z);
+    return Beam(light,vec4(ratio.rgb*light.rgb,ratio.a));
+}
+PackedBeam pack_beam(Beam beam) {
+    uvec4 light=floatBitsToUint(beam.light);
+    vec3 ratio=clamp(beam.vertical.rgb/max(beam.light.rgb,vec3(1e-30)),-1.,1.);
+    return PackedBeam(light.r,light.g,light.b,light.a,
+                       pack_direction(vec4(ratio,beam.vertical.a)));
+}
+layout(set=0,binding=4,std430) buffer Local {PackedBeam local_prefix[];};
+layout(set=0,binding=5,std430) buffer Previous {PackedBeam previous[];};
+layout(set=0,binding=6,std430) buffer Totals {PackedBeam totals[];};
+layout(set=0,binding=7,std430) buffer Work {uint work[];};
+layout(set=0,binding=8,std430) buffer Seeds {PackedBeam seeds[];};
+layout(push_constant) uniform Push {uint phase,level,iteration,commands;} p;
+layout(constant_id=0) const uint TRANSPORT_PHASE=99u;
+layout(constant_id=1) const uint TRANSPORT_ITERATION=99u;
+#define PHASE (TRANSPORT_PHASE==99u?p.phase:TRANSPORT_PHASE)
+#define ITERATION (TRANSPORT_ITERATION==99u?p.iteration:TRANSPORT_ITERATION)
+#ifdef FR_SUBGROUP_SCAN
+shared Beam prefix[8];
+#else
+shared Beam prefix[FR_TRANSPORT_TILE];
+#endif
+Beam identity() {return Beam(vec4(0,0,0,1),vec4(0));}
+Beam compose(Beam current,Beam preceding) {
+    current.vertical.rgb+=current.light.a*preceding.vertical.rgb;
+    current.light.rgb+=current.light.a*preceding.light.rgb;
+    current.light.a*=preceding.light.a;return current;
+}
+#ifdef FR_SUBGROUP_SCAN
+Beam subgroup_scan(Beam value) {
+    for(uint stride=1u;stride<gl_SubgroupSize;stride*=2u) {
+        Beam before=Beam(subgroupShuffleUp(value.light,stride),
+                         subgroupShuffleUp(value.vertical,stride));
+        if(gl_SubgroupInvocationID>=stride) value=compose(value,before);
+    }
+    return value;
+}
+Beam scan(Beam value) {
+    value=subgroup_scan(value);
+    if(gl_NumSubgroups==1u) return value;
+    if(gl_SubgroupInvocationID==gl_SubgroupSize-1u)
+        prefix[gl_SubgroupID]=value;
+    barrier();
+    if(gl_SubgroupID==0u) {
+        Beam total=gl_SubgroupInvocationID<gl_NumSubgroups?
+            prefix[gl_SubgroupInvocationID]:identity();
+        total=subgroup_scan(total);
+        if(gl_SubgroupInvocationID<gl_NumSubgroups)
+            prefix[gl_SubgroupInvocationID]=total;
+    }
+    barrier();
+    if(gl_SubgroupID>0u) value=compose(value,prefix[gl_SubgroupID-1u]);
+    return value;
+}
+#else
+Beam scan(Beam value) {
+    uint lane=gl_LocalInvocationIndex;prefix[lane]=value;barrier();
+    for(uint stride=1u;stride<FR_TRANSPORT_TILE;stride*=2u) {
+        Beam current=prefix[lane],preceding=prefix[lane>=stride?lane-stride:lane];
+        barrier();
+        if(lane>=stride) current=compose(current,preceding);
+        prefix[lane]=current;barrier();
+    }
+    return prefix[lane];
+}
+#endif
+uint length_at(uint direction,uint level) {
+    uint length=ITERATION==1u?min(metadata[0],metadata[1]):direction<2u?metadata[0]:metadata[1];
+    for(uint step=0u;step<=level;step++) length=(length+(FR_TRANSPORT_TILE-1u))/FR_TRANSPORT_TILE;
+    return length;
+}
+uint line_count(uint direction) {return ITERATION==1u?metadata[0]+metadata[1]-1u:direction<2u?metadata[1]:metadata[0];}
+uint block_offset(uint direction,uint level,uint line,uint index) {
+    uint base=direction==0u?0u:direction==1u?metadata[6]:2u*metadata[6]+(direction==3u?metadata[7]:0u);
+    if(ITERATION==1u) {
+        uint count=length_at(direction,0u),total=count;
+        while(count>1u) {count=(count+(FR_TRANSPORT_TILE-1u))/FR_TRANSPORT_TILE;total+=count;}
+        base=direction*total*line_count(direction);
+    }
+    for(uint step=0u;step<level;step++) base+=length_at(direction,step)*line_count(direction);
+    return base+line*length_at(direction,level)+index;
+}
+ivec2 travel(uint direction) {
+    if(ITERATION==1u) return ivec2((direction&1u)==0u?1:-1,direction<2u?1:-1);
+    return direction==0u?ivec2(1,0):direction==1u?ivec2(-1,0):direction==2u?ivec2(0,1):ivec2(0,-1);
+}
+ivec2 scan_cell(uint direction,uint line,uint along) {
+    if(ITERATION==1u) {
+        ivec2 cell=line<metadata[0]?ivec2(line,0):ivec2(0,line-metadata[0]+1u);
+        cell+=ivec2(along);
+        if((direction&1u)!=0u) cell.x=int(metadata[0])-1-cell.x;
+        if(direction>=2u) cell.y=int(metadata[1])-1-cell.y;
+        return cell;
+    }
+    uint length=direction<2u?metadata[0]:metadata[1];
+    uint coordinate=(direction&1u)==0u?along:length-1u-along;
+    return direction<2u?ivec2(coordinate,line):ivec2(line,coordinate);
+}
+uvec2 scan_address(ivec2 cell,uint direction) {
+    if(ITERATION==1u) {
+        if((direction&1u)!=0u) cell.x=int(metadata[0])-1-cell.x;
+        if(direction>=2u) cell.y=int(metadata[1])-1-cell.y;
+        return cell.x>=cell.y?uvec2(cell.x-cell.y,cell.y):uvec2(int(metadata[0])+cell.y-cell.x-1,cell.x);
+    }
+    uint length=direction<2u?metadata[0]:metadata[1],coordinate=uint(direction<2u?cell.x:cell.y);
+    return uvec2(direction<2u?cell.y:cell.x,(direction&1u)==0u?coordinate:length-1u-coordinate);
+}
+bool inside(ivec2 cell) {return all(greaterThanEqual(cell,ivec2(0)))&&all(lessThan(cell,ivec2(metadata[0],metadata[1])));}
+uint index_at(ivec2 cell) {return uint(cell.y)*metadata[0]+uint(cell.x);}
+vec3 emission(ivec2 cell,out vec3 vertical) {
+    vec3 result=vec3(0);vertical=vec3(0);
+    for(uint source=0u;source<metadata[3];source++) {
+        Light light=sources[source];
+        if(any(notEqual(floor(light.position_radius.xy),vec2(cell)))) continue;
+        float height=light.position_radius.z;
+        vec3 energy=light.color_intensity.rgb*light.color_intensity.a*.25/(1.+height*height);
+        result+=energy;vertical+=energy*height/sqrt(1.+height*height);
+    }
+    return result;
+}
+Beam inject(ivec2 cell,uint direction) {
+    uint index=index_at(cell);
+    if(nodes[index].known==0u) return Beam(vec4(0),vec4(0));
+    vec3 z=vec3(0),energy=vec3(0);
+    if(ITERATION<=1u) {
+        Beam seed=unpack_beam(seeds[index]);energy=seed.light.rgb;z=seed.vertical.rgb;
+        if(ITERATION==1u) {energy*=.5;z*=.5;}
+    }
+    ivec2 preceding=cell-travel(direction);float transmission=0.;
+    if(inside(preceding)) {
+        uint before=index_at(preceding);
+        if(nodes[before].known!=0u) {
+            transmission=1.-nodes[before].maximum;
+            if(ITERATION<=1u&&uintBitsToFloat(seeds[before].t)>0.) transmission=1.;
+            transmission*=ITERATION==1u?FR_TRANSPORT_AIR_TRANSMISSION*FR_TRANSPORT_AIR_TRANSMISSION:FR_TRANSPORT_AIR_TRANSMISSION;
+            if(ITERATION!=0u) {
+                vec3 scatter=vec3(0),scatter_z=vec3(0);
+                Beam incoming=unpack_beam(previous[before]);scatter=incoming.light.rgb;scatter_z=incoming.vertical.rgb;
+                float weight=transmission*FR_TRANSPORT_DIFFUSE_INJECTION*.25;
+                energy+=weight*scatter;z+=weight*scatter_z;
+            }
+        }
+    } else if(ITERATION<=1u) {
+        Light sun=sources[metadata[3]];
+        uint bit=direction==0u?1u:direction==1u?2u:direction==2u?4u:8u;
+        vec2 incoming=sun.position_radius.xy;
+        float weight=max(0.,-dot(vec2(travel(direction)),incoming));
+        if(length(incoming)<1e-6&&direction==2u) weight=1.;
+        if(ITERATION==1u) {
+            bit=0u;
+            if(preceding.x<0) bit|=1u;if(preceding.x>=int(metadata[0])) bit|=2u;
+            if(preceding.y<0) bit|=4u;if(preceding.y>=int(metadata[1])) bit|=8u;
+            weight=.35;
+        }
+        if((metadata[5]&bit)!=0u) {
+            vec3 sky=sun.color_intensity.rgb*sun.color_intensity.a*weight;
+            energy+=sky;z+=sky*sun.position_radius.z;
+        }
+    }
+    float forward=ITERATION<=1u?FR_TRANSPORT_FORWARD_FRACTION:FR_TRANSPORT_DIFFUSE_FORWARD;
+    return Beam(vec4(energy,transmission*forward),vec4(z,0));
+}
+bool reachable(ivec2 cell) {
+    float budget=float(metadata[4]);
+    for(uint source=0u;source<metadata[3];source++) {
+        Light light=sources[source];
+        if(light.color_intensity.a>0.&&distance(vec2(cell)+.5,light.position_radius.xy)<=min(budget,light.position_radius.w)) return true;
+    }
+    if(sources[metadata[3]].color_intensity.a<=0.) return false;
+    return ((metadata[5]&1u)!=0u&&float(cell.x)<=budget)||
+           ((metadata[5]&2u)!=0u&&float(int(metadata[0])-1-cell.x)<=budget)||
+           ((metadata[5]&4u)!=0u&&float(cell.y)<=budget)||
+           ((metadata[5]&8u)!=0u&&float(int(metadata[1])-1-cell.y)<=budget);
+}
+void main() {
+    uint lane=gl_LocalInvocationIndex;
+    uint group=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x;
+    uint global=group*FR_TRANSPORT_TILE+lane;
+    if(PHASE==4u) {
+        if(global<p.commands) work[4u+global*4u]=work[0]!=0u?work[7u+global*4u]:0u;
+        return;
+    }
+    if(work[0]==0u) return;
+    if(PHASE==5u) {
+        if(global>=metadata[0]*metadata[1]) return;
+        ivec2 cell=ivec2(global%metadata[0],global/metadata[0]);
+        vec3 vertical;vec3 emitted=emission(cell,vertical);
+        seeds[global]=pack_beam(Beam(vec4(emitted,any(greaterThan(emitted,vec3(0)))?1.:0.),
+                           vec4(vertical,reachable(cell)?1.:0.)));
+        return;
+    }
+    uint direction=gl_WorkGroupID.z;
+    if(PHASE==0u) {
+        uint length=ITERATION==1u?min(metadata[0],metadata[1]):direction<2u?metadata[0]:metadata[1],blocks=(length+(FR_TRANSPORT_TILE-1u))/FR_TRANSPORT_TILE;
+        uint line=group/blocks,tile=group%blocks,along=tile*FR_TRANSPORT_TILE+lane;
+        if(line>=line_count(direction)) return;
+        /* Diagonals have different lengths. Padded tiles carry identity, but
+           must not run a full shared/subgroup scan over absent pixels. */
+        if(!inside(scan_cell(direction,line,tile*FR_TRANSPORT_TILE))) {
+            if(lane==0u) totals[block_offset(direction,0u,line,tile)]=pack_beam(identity());
+            return;
+        }
+        ivec2 cell=scan_cell(direction,line,along);bool valid=along<length&&inside(cell);
+        Beam scanned=scan(valid?inject(cell,direction):identity());
+        if(valid) local_prefix[direction*metadata[0]*metadata[1]+index_at(cell)]=pack_beam(scanned);
+        if(lane==(FR_TRANSPORT_TILE-1u)) totals[block_offset(direction,0u,line,tile)]=pack_beam(scanned);
+        return;
+    }
+    if(PHASE==1u) {
+        uint length=length_at(direction,p.level),blocks=(length+(FR_TRANSPORT_TILE-1u))/FR_TRANSPORT_TILE;
+        uint line=group/blocks,tile=group%blocks,along=tile*FR_TRANSPORT_TILE+lane;
+        if(length<=1u||line>=line_count(direction)) return;
+        Beam scanned=scan(along<length?unpack_beam(totals[block_offset(direction,p.level,line,along)]):identity());
+        if(along<length) totals[block_offset(direction,p.level,line,along)]=pack_beam(scanned);
+        if(lane==(FR_TRANSPORT_TILE-1u)) totals[block_offset(direction,p.level+1u,line,tile)]=pack_beam(scanned);
+        return;
+    }
+    if(PHASE==2u) {
+        uint length=length_at(direction,p.level),line=global/length,along=global%length,tile=along/FR_TRANSPORT_TILE;
+        if(length<=FR_TRANSPORT_TILE||line>=line_count(direction)||tile==0u) return;
+        uint at=block_offset(direction,p.level,line,along);
+        totals[at]=pack_beam(compose(unpack_beam(totals[at]),unpack_beam(totals[block_offset(direction,p.level+1u,line,tile-1u)])));return;
+    }
+    if(global>=metadata[0]*metadata[1]) return;
+    ivec2 cell=ivec2(global%metadata[0],global/metadata[0]);
+    bool known=nodes[global].known!=0u&&(seeds[global].z>>30u)!=0u;
+    vec3 energy=vec3(0),mx=vec3(0),my=vec3(0),mz=vec3(0);
+    for(uint d=0u;d<4u;d++) {
+        uvec2 address=scan_address(cell,d);uint line=address.x,tile=address.y/FR_TRANSPORT_TILE;
+        Beam beam=unpack_beam(local_prefix[d*metadata[0]*metadata[1]+global]);
+        if(tile>0u) beam=compose(beam,unpack_beam(totals[block_offset(d,0u,line,tile-1u)]));
+        if(!known) beam=Beam(vec4(0),vec4(0));
+
+        vec3 vertical=clamp(beam.vertical.rgb,-beam.light.rgb,beam.light.rgb);
+        vec3 planar=sqrt(max(vec3(0),beam.light.rgb*beam.light.rgb-vertical*vertical));
+        vec2 axis=normalize(vec2(travel(d)));energy+=beam.light.rgb;mx-=axis.x*planar;my-=axis.y*planar;mz+=vertical;
+    }
+    previous[global]=pack_beam(Beam(vec4(energy,0),vec4(mz,0)));
+    if(ITERATION!=0u) {
+        energy+=fields[global].l0.rgb;mx+=fields[global].lx.rgb;
+        my+=fields[global].ly.rgb;mz+=fields[global].lz.rgb;
+    }
+    fields[global]=Field(vec4(energy,0),vec4(mx,0),vec4(my,0),vec4(mz,0));
+}

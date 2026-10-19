@@ -38,7 +38,7 @@ static void reference_displacement(fixture_t *f,bool lateral) {
 static void displacement_case(bool lateral,unsigned unknown) {
     fixture_t *f=calloc(1,sizeof(*f));ASSERT_TRUE(f);ASSERT_TRUE(initialize(&f->p));
     f->gpu=(dc_gpu_t){.device=f->p.device,.physical=f->p.physical};char err[256];
-    for(unsigned i=0;i<7;i++) {
+    for(unsigned i=0;i<8;i++) {
         ASSERT_TRUE(dc_gpu_make_mapped_buffer(&f->gpu,sizes[i]*4,&f->buffers[i],&f->memory[i],(void **)&f->words[i],err,sizeof(err)));
         memset(f->words[i],0,sizes[i]*4);
     }
@@ -57,14 +57,14 @@ static void displacement_case(bool lateral,unsigned unknown) {
     }
     reference_displacement(f,lateral);
     f->p.buffer=f->buffers[5];f->p.mapped=f->words[5];
-    ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,"build/shaders/fluid_displacement.comp.spv",bindings,7,lateral));
-    VkDescriptorBufferInfo info[7];VkWriteDescriptorSet writes[7];
-    for(unsigned i=0;i<7;i++) {
+    ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,"build/shaders/fluid_displacement.comp.spv",bindings,8,lateral));
+    VkDescriptorBufferInfo info[8];VkWriteDescriptorSet writes[8];
+    for(unsigned i=0;i<8;i++) {
         info[i]=(VkDescriptorBufferInfo){f->buffers[i],0,sizes[i]*4};
         writes[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=f->p.descriptor,
             .dstBinding=bindings[i],.descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&info[i]};
     }
-    vkUpdateDescriptorSets(f->p.device,7,writes,0,NULL);ASSERT_TRUE(begin(&f->p));
+    vkUpdateDescriptorSets(f->p.device,8,writes,0,NULL);ASSERT_TRUE(begin(&f->p));
     vkCmdBindPipeline(f->p.command,VK_PIPELINE_BIND_POINT_COMPUTE,f->p.pipeline);
     vkCmdBindDescriptorSets(f->p.command,VK_PIPELINE_BIND_POINT_COMPUTE,f->p.layout,0,1,&f->p.descriptor,0,NULL);
     uint32_t push[8]={WIDTH,HEIGHT,lateral?12u:11u};
@@ -83,7 +83,7 @@ static void displacement_case(bool lateral,unsigned unknown) {
     printf("%ux%u lateral%u unknown%u: %u exact displacement mismatches, mass%llu/%llu\n",
         WIDTH,HEIGHT,lateral,unknown,mismatches,(unsigned long long)mass,(unsigned long long)initial_mass);
     fixture_release_pipeline(&f->p);
-    for(unsigned i=0;i<7;i++) {vkUnmapMemory(f->p.device,f->memory[i]);vkDestroyBuffer(f->p.device,f->buffers[i],NULL);vkFreeMemory(f->p.device,f->memory[i],NULL);}
+    for(unsigned i=0;i<8;i++) {vkUnmapMemory(f->p.device,f->memory[i]);vkDestroyBuffer(f->p.device,f->buffers[i],NULL);vkFreeMemory(f->p.device,f->memory[i],NULL);}
     vkDestroyFence(f->p.device,f->p.fence,NULL);vkDestroyCommandPool(f->p.device,f->p.pool,NULL);
     vkDestroyDevice(f->p.device,NULL);vkDestroyInstance(f->p.instance,NULL);free(f);
     ASSERT_EQ(mismatches,0u);ASSERT_EQ(mass,initial_mass);PASS();

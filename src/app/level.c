@@ -6,6 +6,7 @@
 
 #include "dungeoncraft/gpu.h"
 #include "dungeoncraft/stream.h"
+#include "ferrum/assets/prop_gpu.h"
 #include "level.h"
 #include "view_config.h"
 
@@ -24,7 +25,10 @@ struct dc_level_view {
     char body_path[1024];
     float pending_seconds;
     bool marker_overlay;
+    bool lighting_initialized;
+    fr_renderer_mode_t renderer_mode;
     bool spring_enabled;
+    bool restored;
     bool transfer_pending, transfer_complete;
     dc_gpu_transfer_state_t transfer_state;
     dc_chunk_coord_t transfer_from, transfer_to;
@@ -38,9 +42,51 @@ static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
     return false;
 }
+bool dc_level_view_restored(const dc_level_view_t *view) {return view&&view->restored;}
 
 bool dc_level_view_step(dc_level_view_t *view, char *err, uint32_t cap) {
     return dc_level_view_step_timed(view, 1.0f / 60.0f, err, cap);
+}
+bool dc_level_view_renderer_mode(dc_level_view_t *view, fr_renderer_mode_t mode) {
+    char err[256];
+    if (!view || !fr_renderer_enable(view->gpu,err,sizeof(err))) return false;
+    if (!view->lighting_initialized) {
+        fr_renderer_sun_t sun={.direction={-.4f,-.8f,.45f},.intensity=1.8f,
+            .color={1.f,.95f,.85f},.known_sky=FR_SKY_TOP|FR_SKY_LEFT};
+        if (!fr_renderer_set_sources(view->gpu,NULL,0,sun)) return false;
+        view->lighting_initialized=true;
+    }
+    if (!fr_renderer_set_mode(view->gpu,mode)) return false;
+    view->renderer_mode=mode;return true;
+}
+bool dc_level_view_toggle_lighting(dc_level_view_t *view) {
+    return view && dc_level_view_renderer_mode(view,
+        view->renderer_mode==FR_RENDERER_LIT?FR_RENDERER_ALBEDO:FR_RENDERER_LIT);
+}
+static bool place_prop(dc_level_view_t *view, const fr_prop_asset_t *asset,
+                              dc_chunk_coord_t chunk, uint32_t local_x, uint32_t local_y,
+                              bool restore_bonds,char *err, uint32_t cap) {
+    if (!view || !asset || local_x>=DC_CHUNK_SIDE || local_y>=DC_CHUNK_SIDE)
+        return error(err,cap,"Invalid prop world address");
+    long double x=((long double)chunk.x-view->mapped_origin.x+HALO_CHUNKS)*64+local_x;
+    long double y=((long double)chunk.y-view->mapped_origin.y+HALO_CHUNKS)*64+local_y;
+    if (x<0 || y<0 || x+asset->width>SIM_WIDTH || y+asset->height>SIM_HEIGHT)
+        return error(err,cap,"Prop destination is not resident");
+    bool okay=restore_bonds?fr_gpu_restore_terrain_prop_bonds(view->gpu,asset,0,(uint32_t)x,(uint32_t)y,err,cap):
+        fr_gpu_place_terrain_prop(view->gpu,asset,0,(uint32_t)x,(uint32_t)y,err,cap);
+    if(!okay) return false;
+    for (uint32_t i=0;i<view->table.capacity;i++)
+        if (view->table.slots[i].state==DC_SLOT_ACTIVE || view->table.slots[i].state==DC_SLOT_SLEEPING)
+            dc_chunk_table_mark_dirty(&view->table,i);
+    return true;
+}
+bool dc_level_view_place_prop(dc_level_view_t *view,const fr_prop_asset_t *asset,
+                              dc_chunk_coord_t chunk,uint32_t x,uint32_t y,char *err,uint32_t cap) {
+    return place_prop(view,asset,chunk,x,y,false,err,cap);
+}
+bool dc_level_view_restore_prop_bonds(dc_level_view_t *view,const fr_prop_asset_t *asset,
+                                      dc_chunk_coord_t chunk,uint32_t x,uint32_t y,char *err,uint32_t cap) {
+    return place_prop(view,asset,chunk,x,y,true,err,cap);
 }
 
 bool dc_level_view_place_structure(dc_level_view_t *view,
@@ -135,12 +181,20 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
         }
         if (result.kind == DC_STREAM_LOADED) {
             bool restored = false;
+            for (uint32_t i=0;i<DC_CHUNK_CELLS;i++) {
+                uint32_t m=result.chunk->cells[i].material;
+                if (m==DC_MATERIAL_STONE || m==DC_MATERIAL_WOOD || m==DC_MATERIAL_DENSE_WOOD || m==DC_MATERIAL_LEAVES)
+                    result.chunk->cells[i].flags |= DC_CELL_LOADED_TERRAIN;
+            }
             if (!fr_gpu_upload_structure_chunk(view->gpu, index, result.chunk, &restored, err, cap) ||
                 !dc_chunk_table_finish_load(&view->table, index, result.generation)) {
                 dc_stream_result_release(&result);
                 return error(err, cap, "Cannot publish loaded GPU chunk");
             }
             if (restored) dc_chunk_table_mark_dirty(&view->table, index);
+            else if(result.colors && !fr_renderer_upload_chunk_colors(view->gpu,index,result.colors,err,cap)) {
+                dc_stream_result_release(&result);return false;
+            }
         } else if (!dc_chunk_table_finish_save(&view->table, index, result.generation)) {
             dc_stream_result_release(&result);
             return error(err, cap, "Cannot complete chunk save");
@@ -163,11 +217,13 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
         dc_chunk_slot_t *slot = &view->table.slots[i];
         if (slot->state != DC_SLOT_SLEEPING || !slot->dirty || slot->pinned) continue;
         dc_chunk_t chunk = { .coord = slot->coord };
+        dc_chunk_colors_t colors;
         uint64_t generation;
         if (!dc_gpu_download_chunk(view->gpu, i, &chunk, err, cap)) return false;
+        if(!fr_renderer_download_chunk_colors(view->gpu,i,&colors,err,cap)) return false;
         if (!dc_chunk_table_begin_save(&view->table, i, &generation))
             return error(err, cap, "Cannot begin dirty chunk save");
-        if (!dc_stream_request_save(view->stream, &chunk, generation))
+        if (!dc_stream_request_save_colors(view->stream, &chunk,&colors, generation))
             return error(err, cap, "Cannot queue dirty chunk save");
     }
     return true;
@@ -241,6 +297,12 @@ bool dc_level_view_rigid_solver_stats(dc_level_view_t *view,dc_gpu_rigid_solver_
 
 dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
                                       char *err, uint32_t cap) {
+    return dc_level_view_create_ground(directory,seed,NULL,err,cap);
+}
+
+dc_level_view_t *dc_level_view_create_ground(const char *directory, uint64_t seed,
+                                            const dc_ground_profile_t *ground,
+                                            char *err, uint32_t cap) {
     dc_level_view_t *view = calloc(1, sizeof(*view));
     if (!view) { error(err, cap, "Out of memory creating level view"); return NULL; }
     view->origin.y = INITIAL_CHUNK_Y;
@@ -255,13 +317,15 @@ dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
         !dc_gpu_set_fluid_interval(view->gpu, FLUID_INTERVAL) ||
         !dc_gpu_set_rigid_solver(view->gpu, true)) goto fail;
     view->spring_enabled = true;
-    view->stream = dc_stream_create(directory, seed,
-                                    DC_GPU_CHUNK_SLOTS * 2u);
+    view->stream = dc_stream_create_ground(directory, seed,
+                                    DC_GPU_CHUNK_SLOTS * 2u, ground);
     if (!view->stream) { error(err, cap, "Cannot start chunk streaming worker"); goto fail; }
     int length = snprintf(view->body_path, sizeof(view->body_path), "%s/rigid_bodies.bin", directory);
     if (length < 0 || (size_t)length >= sizeof(view->body_path)) {
         error(err, cap, "World directory path is too long"); goto fail;
     }
+    FILE *saved=fopen(view->body_path,"rb");
+    view->restored=saved!=NULL;if(saved) fclose(saved);
     if (!dc_gpu_set_body_origin(view->gpu, (dc_chunk_coord_t){
             view->origin.x - HALO_CHUNKS, view->origin.y - HALO_CHUNKS }, err, cap) ||
         !fr_gpu_load_structure(view->gpu, view->body_path, err, cap) ||

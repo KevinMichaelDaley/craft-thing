@@ -19,10 +19,7 @@ static int node_index(const fr_structural_gpu_graph_t *g, uint32_t id) {
 }
 
 static float material_density(uint32_t material) {
-    return material == DC_GPU_BODY_DENSE_WOOD ? DC_DENSITY_DENSE_WOOD
-           : material == DC_GPU_BODY_WOOD     ? DC_DENSITY_WOOD
-           : material == DC_GPU_BODY_MORTAR   ? DC_DENSITY_MORTAR
-                                              : DC_DENSITY_STONE;
+    return DC_BODY_DENSITY(material);
 }
 
 static float composition_density(const dc_gpu_body_record_t *body) {
@@ -78,7 +75,7 @@ static bool body_valid(const dc_gpu_body_record_t *b, const uint32_t *pixels,
     if (!b->reserved[0] && b->reserved[1])
         return false;
     if (b->shape.count > DC_GPU_CONVEX_VERTICES ||
-        b->shape.material > DC_GPU_BODY_DENSE_WOOD)
+        b->shape.material > DC_BODY_MATERIAL_MAX)
         return false;
     if (pixel) {
         if (!pixel_valid(b, pixels, words, &density))
@@ -225,7 +222,7 @@ bool dc_gpu_structure_payload_valid(const dc_gpu_t *gpu,
              output[0] != b->body.id || output[1] != b->reserved[1]))
             return false;
         const uint32_t *pending = p->graph + 38000u + i * 4u;
-        if (pending[0] > 1000000 || pending[1] > 1000000 || pending[2] > 2)
+        if (pending[0] > 1000000 || pending[1] > 1000000 || (pending[2] & ~256u) > 2)
             return false;
     }
     uint32_t maximum_ticks = 0;

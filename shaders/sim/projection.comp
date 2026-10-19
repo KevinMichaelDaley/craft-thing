@@ -36,7 +36,7 @@ bool open_cell(ivec2 p) {
     if (atlas == 0xffffffffu) return false;
     uint material = cells[atlas].x & 0xffffu;
     return (material == 0u || material == 2u || material == 4u ||
-            material == 5u || material == 6u) &&
+            material == 5u || material == 6u || material == 10u) &&
             occupancy[2u*params.width*params.height+index_of(p)] < 65536u;
 }
 
@@ -94,7 +94,7 @@ uint neighboring_head(ivec2 p) {
             ivec2 q=p+ivec2(side*distance,0);uint atlas=atlas_of(q);
             if(atlas==0xffffffffu) break;
             uint material=cells[atlas].x&0xffffu;
-            if(material!=0u&&material!=2u&&material!=4u&&material!=5u&&material!=6u) break;
+            if(material!=0u&&material!=2u&&material!=4u&&material!=5u&&material!=6u&&material!=10u) break;
             if(occupancy[index_of(q)]!=0u) continue;
             uint head=0u;
             for(int y=q.y;y>=0;y--) {

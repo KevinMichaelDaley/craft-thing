@@ -61,8 +61,8 @@ int main(int argc, char **argv) {
     if (!check(vkCreateShaderModule(p.device, &module, NULL, &p.shader),
                "shader module"))
         return 2;
-    VkDescriptorSetLayoutBinding bindings[32] = {0};
-    for (unsigned i = 0; i < 32; i++)
+    VkDescriptorSetLayoutBinding bindings[36] = {0};
+    for (unsigned i = 0; i < 36; i++)
         bindings[i] = (VkDescriptorSetLayoutBinding){
             .binding = i,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
             .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT};
     VkDescriptorSetLayoutCreateInfo descriptor = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 32,
+        .bindingCount = 36,
         .pBindings = bindings};
     if (!check(vkCreateDescriptorSetLayout(p.device, &descriptor, NULL,
                                            &p.descriptor_layout),

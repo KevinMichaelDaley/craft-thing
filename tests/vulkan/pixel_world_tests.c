@@ -24,7 +24,7 @@ static void ring_world(unsigned composition) {
                 mass += material == DC_MATERIAL_WOOD ? .6
                         : material == DC_MATERIAL_DENSE_WOOD ? 1.2 : 2.7;
             }
-    chunks[0].cells[9 * 64 + 39].material = DC_MATERIAL_STONE;
+    chunks[0].cells[8 * 64 + 38].material = DC_MATERIAL_STONE;
     chunks[0].cells[24 * 64 + 62].material = DC_MATERIAL_SAND;
     ASSERT_TRUE(dc_gpu_create(&gpu, 128, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunks, err, sizeof(err)));

@@ -40,15 +40,20 @@ static uint64_t hash_bytes(uint64_t hash, const void *bytes, size_t count) {
 
 static uint64_t checksum(dc_structural_store_header_t header,
                          const dc_structural_store_payload_t *payload,
-                         const uint32_t *pixels, const dc_chunk_t *chunks) {
+                         const uint32_t *pixels, const dc_chunk_t *chunks,
+                         const float *body_colors,const dc_chunk_colors_t *colors) {
     header.checksum = 0;
     uint64_t hash =
         hash_bytes(UINT64_C(14695981039346656037), &header, sizeof(header));
     hash = hash_bytes(hash, payload, sizeof(*payload));
     hash =
         hash_bytes(hash, pixels, (size_t)header.reserved[1] * sizeof(*pixels));
-    return hash_bytes(hash, chunks,
-                      (size_t)header.reserved[0] * sizeof(*chunks));
+    hash=hash_bytes(hash,chunks,(size_t)header.reserved[0]*sizeof(*chunks));
+    if(header.version>=6) {
+        hash=hash_bytes(hash,body_colors,(size_t)header.reserved[1]*128);
+        hash=hash_bytes(hash,colors,(size_t)header.reserved[0]*sizeof(*colors));
+    }
+    return hash;
 }
 
 static void clear_transients(uint32_t *graph) {
@@ -70,8 +75,6 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
                            uint32_t cap) {
     if (!gpu || !path || !*path)
         return error(err, cap, "Invalid structure snapshot path");
-    if (!gpu->structural_enabled)
-        return dc_gpu_save_bodies(gpu, path, err, cap);
     if (gpu->body_refresh_pending &&
         !dc_gpu_set_body_origin(gpu, gpu->body_origin, err, cap))
         return false;
@@ -95,7 +98,7 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
     clear_transients(payload->graph);
     dc_structural_store_header_t header = {
         .magic = {'D', 'C', 'S', '1'},
-        .version = 5,
+        .version = 6,
         .body_words = STORE_BODY_WORDS,
         .graph_words = DC_STRUCTURAL_RESERVE_WORDS,
         .flags = 1u | (gpu->impact_fracture_enabled ? 2u : 0u) |
@@ -103,7 +106,8 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
         .origin = gpu->body_origin};
     uint32_t capacity = dc_gpu_pixel_pool_capacity(gpu);
     uint32_t *pixels = calloc(capacity, sizeof(*pixels));
-    bool okay = pixels != NULL;
+    float *body_colors=calloc((size_t)capacity*32,sizeof(float));
+    bool okay = pixels != NULL && body_colors != NULL;
     for (unsigned i = 0; okay && i < DC_GPU_BODY_CAPACITY; i++) {
         dc_gpu_body_record_t *b = payload->bodies + i;
         if ((!b->body.active && !b->reserved[0]) ||
@@ -124,6 +128,8 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
         memcpy(pixels + header.reserved[1],
                (uint32_t *)gpu->body_mapped + b->compound_reserved,
                words * sizeof(*pixels));
+        memcpy(body_colors+(size_t)header.reserved[1]*32,
+            dc_gpu_shape_colors(gpu,b->compound_reserved),(size_t)words*128);
         b->compound_reserved = header.reserved[1];
         header.reserved[1] += words;
     }
@@ -131,11 +137,14 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
                                                   header.reserved[1]);
     dc_chunk_t *chunks = calloc(
         DC_GPU_CHUNK_SLOTS + gpu->checkpoint_chunk_count, sizeof(*chunks));
-    okay = okay && chunks != NULL;
+    dc_chunk_colors_t *colors=calloc(DC_GPU_CHUNK_SLOTS+gpu->checkpoint_chunk_count,sizeof(*colors));
+    okay = okay && chunks != NULL && colors != NULL;
     if (okay && gpu->checkpoint_chunk_count) {
         memcpy(chunks, gpu->checkpoint_chunks,
                (size_t)gpu->checkpoint_chunk_count * sizeof(*chunks));
         header.reserved[0] = gpu->checkpoint_chunk_count;
+        if(gpu->checkpoint_colors) memcpy(colors,gpu->checkpoint_colors,
+            (size_t)gpu->checkpoint_chunk_count*sizeof(*colors));
     }
     for (unsigned slot = 0; okay && slot < DC_GPU_CHUNK_SLOTS; slot++) {
         const uint32_t *record = data + DC_STRUCTURAL_HEADER_WORDS + slot * 8u;
@@ -145,8 +154,10 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
         memcpy(&chunk->coord, record, sizeof(chunk->coord));
         okay = dc_gpu_download_chunk(gpu, slot, chunk, err, cap) &&
                dc_gpu_checkpoint_chunk_valid(chunk);
-        if (okay)
+        if (okay) {
+            dc_gpu_read_chunk_colors(gpu,slot,colors+header.reserved[0]);
             header.reserved[0]++;
+        }
     }
     for (unsigned c = 0; okay && c < header.reserved[0]; c++) {
         dc_chunk_t *chunk = chunks + c;
@@ -158,14 +169,20 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
                 memset(chunk->particles + i, 0, sizeof(*chunk->particles));
     }
     okay = okay && header.reserved[0] <= DC_GPU_CHUNK_SLOTS * 2u;
-    header.checksum = checksum(header, payload, pixels, chunks);
+    okay=okay && dc_color_records_valid(body_colors,(size_t)header.reserved[1]*8);
+    for(unsigned c=0;okay&&c<header.reserved[0];c++)
+        okay=dc_color_records_valid((const float*)(colors+c),DC_CHUNK_CELLS*2);
+    if (okay)
+        header.checksum = checksum(header, payload, pixels, chunks,body_colors,colors);
     FILE *file = okay ? fopen(temporary, "wb") : NULL;
     if (file) {
         okay = fwrite(&header, sizeof(header), 1, file) == 1 &&
                fwrite(payload, sizeof(*payload), 1, file) == 1 &&
                fwrite(pixels, sizeof(*pixels), header.reserved[1], file) ==
                    header.reserved[1] &&
-               dc_gpu_checkpoint_write_chunks(file, chunks, header.reserved[0]);
+               dc_gpu_checkpoint_write_chunks(file, chunks, header.reserved[0]) &&
+               fwrite(body_colors,128,header.reserved[1],file)==header.reserved[1] &&
+               fwrite(colors,sizeof(*colors),header.reserved[0],file)==header.reserved[0];
         if (fclose(file) != 0)
             okay = false;
         if (okay)
@@ -177,6 +194,7 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
     free(payload);
     free(pixels);
     free(chunks);
+    free(body_colors);free(colors);
     return okay || error(err, cap, "Cannot write validated structure snapshot");
 }
 
@@ -264,7 +282,7 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
     bool okay =
         payload && framed && fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCS1", 4) == 0 && header.version >= 1 &&
-        header.version <= 5 && header.body_words == STORE_BODY_WORDS &&
+        header.version <= 6 && header.body_words == STORE_BODY_WORDS &&
         header.graph_words == DC_STRUCTURAL_RESERVE_WORDS &&
         (header.flags & 1u) && !(header.flags & ~7u) &&
         header.reserved[0] <= DC_GPU_CHUNK_SLOTS * 2u &&
@@ -284,8 +302,17 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
         (header.version >= 3
              ? dc_gpu_checkpoint_read_chunks(file, chunks, header.reserved[0])
              : fread(chunks, sizeof(*chunks), header.reserved[0], file) ==
-                   header.reserved[0]) &&
-        fgetc(file) == EOF && !ferror(file);
+                   header.reserved[0]);
+    float *body_colors=okay?calloc((size_t)header.reserved[1]*32+1,sizeof(float)):NULL;
+    dc_chunk_colors_t *colors=okay?calloc(header.reserved[0]+1,sizeof(*colors)):NULL;
+    okay=okay && body_colors && colors;
+    if(okay && header.version>=6)
+        okay=fread(body_colors,128,header.reserved[1],file)==header.reserved[1] &&
+            fread(colors,sizeof(*colors),header.reserved[0],file)==header.reserved[0];
+    okay=okay && fgetc(file)==EOF && !ferror(file);
+    okay=okay && dc_color_records_valid(body_colors,(size_t)header.reserved[1]*8);
+    for(unsigned c=0;okay&&c<header.reserved[0];c++)
+        okay=dc_color_records_valid((const float*)(colors+c),DC_CHUNK_CELLS*2);
     for (unsigned i = 0; okay && i < header.reserved[0]; i++) {
         okay = dc_gpu_checkpoint_chunk_valid(chunks + i);
         for (unsigned j = 0; okay && j < i; j++)
@@ -294,7 +321,7 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
     }
     if (fclose(file) != 0)
         okay = false;
-    okay = okay && header.checksum == checksum(header, payload, pixels, chunks);
+    okay = okay && header.checksum == checksum(header, payload, pixels, chunks,body_colors,colors);
     if (okay && header.version == 4)
         okay = dc_gpu_upgrade_dense_pixels(gpu, payload->bodies, &pixels,
                                            &header.reserved[1]);
@@ -304,20 +331,27 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
         free(payload);
         free(pixels);
         free(chunks);
+        free(body_colors);free(colors);
         return error(err, cap, "Invalid or truncated structure snapshot");
     }
     if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS) {
         free(payload);
         free(pixels);
         free(chunks);
+        free(body_colors);free(colors);
         return error(err, cap, "Cannot reach restore boundary");
     }
     dc_chunk_coord_t origin = gpu->body_origin;
     install(gpu, &header, payload, pixels);
+    memset(gpu->shape_color_mapped,0,(size_t)(dc_gpu_color_terrain_bytes()+2*dc_gpu_color_bank_bytes(gpu)));
+    if(header.version>=6) memcpy((uint8_t*)gpu->shape_color_mapped+dc_gpu_color_terrain_bytes(),
+        body_colors,(size_t)header.reserved[1]*128);
+    free(body_colors);
     free(payload);
     free(pixels);
     free(gpu->checkpoint_chunks);
     gpu->checkpoint_chunks = chunks;
+    free(gpu->checkpoint_colors);gpu->checkpoint_colors=colors;
     gpu->checkpoint_chunk_count = header.reserved[0];
     for (unsigned slot = 0; okay && slot < DC_GPU_CHUNK_SLOTS; slot++) {
         const uint32_t *record = dc_gpu_structural_data(gpu) +
@@ -331,8 +365,11 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
             if (chunk->coord.x != coord.x || chunk->coord.y != coord.y)
                 continue;
             okay = dc_gpu_upload_chunk_exact(gpu, slot, chunk, false, err, cap);
-            if (okay)
+            if (okay) {
+                dc_gpu_write_chunk_colors(gpu,slot,colors+i);
                 *chunk = gpu->checkpoint_chunks[--gpu->checkpoint_chunk_count];
+                colors[i]=colors[gpu->checkpoint_chunk_count];
+            }
             break;
         }
     }

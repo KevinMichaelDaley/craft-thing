@@ -30,11 +30,12 @@ const uint RESET = 0u, BEGIN_FRAME = 1u, PREDICT = 2u, PREPARE = 3u, INIT_CONTAC
 const uint CLEAR = 5u, SOLVE = 6u, APPLY = 7u, DERIVE_VELOCITY = 8u, IMPULSE = 9u,
            APPLY_VELOCITY = 10u, FINISH = 11u;
 /* Header: enabled, iterations, substeps, sticky overflow, contact sum, awake count,
-   indirect contact groups (3 words), speculative-contact mode, and padding.
+   indirect contact groups (3 words), speculative-contact mode, pixel contact
+   groups (3 words), and grain contact groups (3 words).
    Body scratch (32 words): frame pose/velocity, substep pose/velocity, degree,
-   awake flag, and signed fixed-point Jacobi sums.
+   awake flag, signed fixed-point Jacobi sums, and binding-constraint degree.
    Contact scratch (16 words): normal/tangent multipliers, stable body slots,
-   rest-space COM-relative anchors, pre-impact speed, static witness, padding. */
+   rest-space COM-relative anchors, pre-impact speed, static witness, active flag. */
 uint cb() {
     uvec2 size = uvec2((params.width + 63u) / 64u, (params.height + 63u) / 64u) + 2u;
     return 8u + 2u * size.x * size.y + 4096u * 8u;
@@ -133,12 +134,15 @@ vec3 correction(uint i) {
     uint p = bs(i) + 16u;
     return vec3(int(data[p]), int(data[p + 1u]), int(data[p + 2u])) / SUM_SCALE;
 }
-float weight(uint a, uint b) {
-    uint degree = data[bs(a) + 12u];
+float weight(uint a, uint b,bool conservative) {
+    uint offset=conservative?12u:20u;
+    uint degree = data[bs(a) + offset];
     if (b != BODY_CAPACITY)
-        degree = max(degree, data[bs(b) + 12u]);
-    return 0.8 / float(max(degree, 1u));
+        degree = max(degree, data[bs(b) + offset]);
+    return 0.8 / max(float(degree)/(conservative?1.0:SUM_SCALE), 1.0);
 }
+#include "rigid_grain.glsl"
+#include "grain_bed.glsl"
 void solve_contact(uint i, bool impulse) {
     uint c = cb() + 12u + i * 32u, s = cs(i), a = data[s + 2u], b = data[s + 3u];
     if (a == BODY_CAPACITY)
@@ -147,7 +151,20 @@ void solve_contact(uint i, bool impulse) {
     vec2 ra = body_rotate(getv(s + 4u), ba.angle), rb = getv(s + 6u);
     vec2 pa = position(ba) + ba.center + ra, pb = getv(s + 9u);
     vec2 va = velocity(ba) + ba.angular_velocity * vec2(-ra.y, ra.x), vb = vec2(0);
+    uint grain_ref=grain_reference(c);
+    float creep=getf(s+12u);
     float mb = 0.0, ib = 0.0;
+    if(grain_ref!=0u) {
+        Particle p=particles[grain_ref-1u];
+        pb=grain_position(c,grain_ref-1u)+rb;
+        vb=vec2(p.vx_fp,p.vy_fp)/65536.0;
+        mb=p.mass_fp!=0u?65536.0/float(p.mass_fp):0.0;
+        if(creep>=0.0) {
+            mb=0.0;
+            pb+=getf(s+13u)*getv(c+8u);
+            pb.y+=creep*DT;vb.y=creep;
+        }
+    }
     if (b != BODY_CAPACITY) {
         Body bb = contact_body(b);
         rb = body_rotate(rb, bb.angle);
@@ -163,7 +180,8 @@ void solve_contact(uint i, bool impulse) {
     float wt = ba.inverse_mass + mb + ba.inverse_inertia * at * at + ib * bt * bt;
     if (wn <= 0.0)
         return;
-    float scale = weight(a, b), dn = 0.0, dt = 0.0;
+    float scale = weight(a, b,(grain_ref!=0u&&creep<0.0)||data[s+11u]==0u), dn = 0.0, dt = 0.0;
+    if(grain_ref!=0u) scale=min(scale,0.8/float(max(grain_scratch[(grain_ref-1u)*4u+3u],1u)));
     if (impulse) {
         if (dot(pa - pb, n) > 1.0 / 65536.0 && getf(s) == 0.0)
             return;
@@ -173,7 +191,7 @@ void solve_contact(uint i, bool impulse) {
         if (wt > 0.0)
             dt = clamp(-dot(va - vb, t) / wt, -limit, limit) * scale;
     } else {
-        float alpha = getf(c + 13u) / (DT * DT), lambda = getf(s);
+        float alpha = creep>=0.0?0.0:getf(c + 13u) / (DT * DT), lambda = getf(s);
         dn = (max(0.0, lambda + (-dot(pa - pb, n) - alpha * lambda) / (wn + alpha)) - lambda) *
              scale;
         putf(s, lambda + dn);
@@ -201,10 +219,13 @@ void solve_contact(uint i, bool impulse) {
         atomicOr(data[structural_clipped()+b],1u);
     add_correction(a, ba.inverse_mass * force, ba.inverse_inertia * (an * dn + at * dt));
     add_correction(b, -mb * force, -ib * (bn * dn + bt * dt));
+    if(grain_ref!=0u) grain_correction(grain_ref-1u,-mb*force);
 }
 #include "rigid_bonds.glsl"
 void main() {
     uint i = gl_GlobalInvocationID.x, h = sb();
+    if(PHASE>=GRAIN_BED_INIT) {grain_bed_phase(i);return;}
+    if(PHASE>=GRAIN_PREPARE) {grain_phase(i);return;}
     if(PHASE>=12u) {solve_bonds(PHASE);return;}
     if (PHASE == RESET) {
         if (i == 0u) {
@@ -237,10 +258,38 @@ void main() {
         putv(s + 9u, pb);
         vec2 va = velocity(ba) + ba.angular_velocity * vec2(-ra.y, ra.x), vb = vec2(0);
         vec2 normal=getv(c+8u);
+        data[s+11u]=uint(dot(pa-pb,normal)<=1.0/65536.0);
         if(dot(pa-pb,normal)<=REST_CONTACT_DISTANCE && normal.y<-.5)
             atomicOr(data[bs(a)+REST_FLAGS_WORD],REST_SUPPORTED);
-        bool moving=data[c+2u]==3u;
-        atomicAdd(data[bs(a) + 12u], 1u);
+        uint grain_ref=grain_reference(c);
+        float creep=grain_ref!=0u&&normal.y<-.5?grain_bed_creep(ba,c,grain_ref):-1.0;
+        putf(s+12u,creep);
+        if(creep>=0.0) {
+            /* Existing granular overlap represents the loaded bed's rest
+               configuration. Resist new compression without lifting the body
+               out of that configuration and letting grains ratchet beneath it. */
+            vec2 start=getv(bs(a)+6u)+ba.center+body_rotate(getv(s+4u),getf(bs(a)+8u));
+            putf(s+13u,min(dot(start-pb,normal),0.0));
+        }
+        bool moving=grain_ref!=0u&&creep<0.0;
+        if(grain_ref!=0u) {
+            Particle p=particles[grain_ref-1u];
+            putv(s+6u,pb-grain_position(c,grain_ref-1u));
+            vb=vec2(p.vx_fp,p.vy_fp)/65536.0;
+            atomicAdd(grain_scratch[(grain_ref-1u)*4u+3u],1u);
+        }
+        /* Loose grains receive most of their own correction. Count their
+           body mobility fraction, and exclude nonbinding speculative rows
+           from rigid preconditioning. Those rows retain conservative weights. */
+        float degree=1.0;
+        if(grain_ref!=0u&&creep<0.0) {
+            float arm=body_cross(ra,normal);
+            float body_weight=ba.inverse_mass+ba.inverse_inertia*arm*arm;
+            float grain_weight=65536.0/float(particles[grain_ref-1u].mass_fp);
+            degree=body_weight/(body_weight+grain_weight);
+        } else if(data[s+11u]==0u) degree=0.0;
+        atomicAdd(data[bs(a) + 12u],1u);
+        atomicAdd(data[bs(a) + 20u],uint(round(degree*SUM_SCALE)));
         if (b != BODY_CAPACITY) {
             Body bb = contact_body(b);
             vec2 rb = pb - position(bb) - bb.center;
@@ -251,7 +300,8 @@ void main() {
             float limit_a=(ba.motion_flags&1u)!=0u ? 1.0/65536.0 : REST_SPEED;
             float limit_b=(bb.motion_flags&1u)!=0u ? 1.0/65536.0 : REST_SPEED;
             moving=moving || length(va)>limit_a || length(vb)>limit_b;
-            atomicAdd(data[bs(b) + 12u], 1u);
+            atomicAdd(data[bs(b) + 12u],1u);
+            atomicAdd(data[bs(b) + 20u],uint(round(degree*SUM_SCALE)));
         }
         if(moving) {
             atomicOr(data[bs(a)+REST_FLAGS_WORD],REST_MOVING_CONTACT);
@@ -288,12 +338,16 @@ void main() {
     }
     if (PHASE == PREPARE) {
         data[s + 12u] = 0u;
+        data[s + 20u] = 0u;
         data[s + REST_FLAGS_WORD] = 0u;
         if (i == 0u) {
             atomicOr(data[h + 3u], data[cb() + 2u]);
             data[h + 6u] = data[h + 3u] == 0u ? (data[cb()] + 63u) / 64u : 0u;
             data[h + 7u] = 1u;
             data[h + 8u] = 1u;
+            data[h + 13u] = data[h+13u]!=0u ? data[h+6u] : 0u;
+            data[h + 14u] = 1u;
+            data[h + 15u] = 1u;
             if (data[h + 3u] == 0u)
                 data[h + 4u] += data[cb()];
         }

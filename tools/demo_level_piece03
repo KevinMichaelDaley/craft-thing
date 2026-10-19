@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+./tools/with-vulkan make build/dungeoncraft_quarter_native
+exec env SDL_VIDEODRIVER=wayland ./tools/with-vulkan \
+  ./build/dungeoncraft_quarter_native \
+  --scene assets/props/level_piece03.prop/asset.cprop \
+  --world-dir world_chunks_level_piece03_equilibrium "$@"

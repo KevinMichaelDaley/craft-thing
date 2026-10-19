@@ -23,11 +23,11 @@ static int g_pass,g_fail;
 #define PASS() g_pass++
 typedef struct {
     probe_t p;dc_gpu_t gpu;
-    VkBuffer buffers[7];VkDeviceMemory memory[7];uint32_t *words[7];
+    VkBuffer buffers[8];VkDeviceMemory memory[8];uint32_t *words[8];
     uint32_t expected[CELLS];
 } fixture_t;
-static const uint32_t bindings[]={1,2,3,8,10,28,29};
-static const uint32_t sizes[]={CHUNKS*4096*2,CHUNKS,5*CELLS,CELLS,2*CELLS,2*CELLS,TREE_BASE+16384};
+static const uint32_t bindings[]={1,2,3,8,10,28,29,32};
+static const uint32_t sizes[]={CHUNKS*4096*2,CHUNKS,5*CELLS,CELLS,2*CELLS,2*CELLS,TREE_BASE+16384,CHUNKS*4096*4};
 static uint32_t minimum(uint32_t a,uint32_t b) {return a<b?a:b;}
 static uint32_t bits(float x) {uint32_t u;memcpy(&u,&x,4);return u;}
 static float number(uint32_t x) {float f;memcpy(&f,&x,4);return f;}
@@ -47,7 +47,11 @@ static bool open_cell(const fixture_t *f,int x,int y) {
 }
 static uint32_t aperture(const fixture_t *f,int x,int y,bool vertical) {
     if(atlas(f,x,y)==UINT32_MAX) return 0;
-    return FULL-minimum(FULL,f->words[2][(vertical?4:3)*CELLS+index_of(x,y)]);
+    uint32_t value=FULL-minimum(FULL,f->words[2][(vertical?4:3)*CELLS+index_of(x,y)]);
+    uint32_t a=atlas(f,x,y),b=atlas(f,x+!vertical,y+vertical);
+    bool soil=(a!=UINT32_MAX&&(f->words[0][2*a]&65535u)==4u)||
+        (b!=UINT32_MAX&&(f->words[0][2*b]&65535u)==4u);
+    return soil?value/64u:value;
 }
 
 /* Literal old ordered GPU recurrence, used only as a diagnostic oracle. */
@@ -89,7 +93,7 @@ static void reference_move(fixture_t *f,int x,int y,int dx,int dy) {
 static void run_case_scaled(unsigned mode,unsigned unknown,float velocity_scale) {
     fixture_t *f=calloc(1,sizeof(*f));ASSERT_TRUE(f);ASSERT_TRUE(initialize(&f->p));
     f->gpu=(dc_gpu_t){.device=f->p.device,.physical=f->p.physical};char err[256];
-    for(unsigned i=0;i<7;i++) {
+    for(unsigned i=0;i<8;i++) {
         ASSERT_TRUE(dc_gpu_make_mapped_buffer(&f->gpu,sizes[i]*4,&f->buffers[i],&f->memory[i],(void **)&f->words[i],err,sizeof(err)));
         memset(f->words[i],0,sizes[i]*4);
     }
@@ -132,14 +136,14 @@ static void run_case_scaled(unsigned mode,unsigned unknown,float velocity_scale)
             reference_move(f,vertical?(int)line:p,vertical?p:(int)line,vertical?0:positive?1:-1,vertical?positive?1:-1:0);
     }
     f->p.buffer=f->buffers[5];f->p.mapped=f->words[5];
-    ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,"build/shaders/fluid_transport.comp.spv",bindings,7,mode));
-    VkDescriptorBufferInfo info[7];VkWriteDescriptorSet writes[7];
-    for(unsigned i=0;i<7;i++) {
+    ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,"build/shaders/fluid_transport.comp.spv",bindings,8,mode));
+    VkDescriptorBufferInfo info[8];VkWriteDescriptorSet writes[8];
+    for(unsigned i=0;i<8;i++) {
         info[i]=(VkDescriptorBufferInfo){f->buffers[i],0,sizes[i]*4};
         writes[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=f->p.descriptor,
             .dstBinding=bindings[i],.descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&info[i]};
     }
-    vkUpdateDescriptorSets(f->p.device,7,writes,0,NULL);ASSERT_TRUE(begin(&f->p));
+    vkUpdateDescriptorSets(f->p.device,8,writes,0,NULL);ASSERT_TRUE(begin(&f->p));
     vkCmdBindPipeline(f->p.command,VK_PIPELINE_BIND_POINT_COMPUTE,f->p.pipeline);
     vkCmdBindDescriptorSets(f->p.command,VK_PIPELINE_BIND_POINT_COMPUTE,f->p.layout,0,1,&f->p.descriptor,0,NULL);
     uint32_t push[8]={WIDTH,HEIGHT,mode,0,leaves,bits((float)TRANSPORT_TEST_STEP),1};
@@ -156,7 +160,7 @@ static void run_case_scaled(unsigned mode,unsigned unknown,float velocity_scale)
     }
     printf("mode%u unknown%u: %u exact transport mismatches\n",mode,unknown,mismatches);
     fixture_release_pipeline(&f->p);
-    for(unsigned i=0;i<7;i++) {vkUnmapMemory(f->p.device,f->memory[i]);vkDestroyBuffer(f->p.device,f->buffers[i],NULL);vkFreeMemory(f->p.device,f->memory[i],NULL);}
+    for(unsigned i=0;i<8;i++) {vkUnmapMemory(f->p.device,f->memory[i]);vkDestroyBuffer(f->p.device,f->buffers[i],NULL);vkFreeMemory(f->p.device,f->memory[i],NULL);}
     vkDestroyFence(f->p.device,f->p.fence,NULL);vkDestroyCommandPool(f->p.device,f->p.pool,NULL);
     vkDestroyDevice(f->p.device,NULL);vkDestroyInstance(f->p.instance,NULL);free(f);
     ASSERT_EQ(mismatches,0u);PASS();

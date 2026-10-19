@@ -6,6 +6,7 @@
 
 #include "dungeoncraft/contact_work_layout.h"
 #include "dungeoncraft/gpu.h"
+#include "dungeoncraft/color.h"
 #include "ferrum/structural/gpu.h"
 #include "mpm_activity_layout.h"
 
@@ -27,8 +28,8 @@ enum {
     DC_GPU_CONTACT_PHASE_COUNT = 3,
     DC_GPU_SOLVER_BODY_WORDS = 32,
     DC_GPU_SOLVER_CONTACT_WORDS = 16,
-    DC_GPU_SOLVER_PHASE_COUNT = 15,
-    DC_GPU_STRUCTURAL_PHASE_COUNT = 6
+    DC_GPU_SOLVER_PHASE_COUNT = 20,
+    DC_GPU_STRUCTURAL_PHASE_COUNT = 7
 };
 
 typedef struct {
@@ -53,6 +54,7 @@ typedef struct {
 } dc_gpu_body_record_t;
 
 struct dc_gpu {
+    struct dc_gpu_authored_stage *authored_stage;
     VkInstance instance;
     VkPhysicalDevice physical;
     VkDevice device;
@@ -109,6 +111,7 @@ struct dc_gpu {
     void *mpm_label_a_mapped, *mpm_label_b_mapped, *mpm_component_size_mapped;
     VkPipeline mpm_component_pipeline, component_extract_pipelines[35];
     bool automatic_components_enabled;
+    bool component_baseline_pending;
     VkBuffer page_buffer;
     VkDeviceMemory page_memory;
     void *page_mapped;
@@ -137,6 +140,7 @@ struct dc_gpu {
     VkPipeline structural_pipelines[DC_GPU_STRUCTURAL_PHASE_COUNT];
     bool structural_enabled;
     dc_chunk_t *checkpoint_chunks;
+    dc_chunk_colors_t *checkpoint_colors;
     uint32_t checkpoint_chunk_count;
     bool impact_fracture_enabled;
     bool rigid_solver_enabled;
@@ -158,6 +162,12 @@ struct dc_gpu {
     bool has_transfer;
     VkBuffer fluid_a_buffer;
     VkBuffer fluid_previous_buffer;
+    VkBuffer water_color_buffer;
+    VkDeviceMemory water_color_memory;
+    void *water_color_mapped;
+    VkBuffer shape_color_buffer;
+    VkDeviceMemory shape_color_memory;
+    void *shape_color_mapped;
     VkDeviceMemory fluid_previous_memory;
     VkDeviceMemory fluid_a_memory;
     VkBuffer fluid_b_buffer;
@@ -207,7 +217,12 @@ struct dc_gpu {
     uint32_t view_x, view_y, view_width, view_height;
     uint32_t display_zoom;
     dc_gpu_overlay_t overlay;
+    struct fr_scene_gpu *renderer;
 };
+
+bool fr_renderer_active(const dc_gpu_t *gpu);
+void fr_renderer_record(dc_gpu_t *gpu);
+void fr_renderer_destroy(dc_gpu_t *gpu);
 
 enum {
     DC_GPU_BROADPHASE_HEADER_WORDS = 8,
@@ -291,10 +306,12 @@ static inline uint32_t dc_gpu_structural_graph_offset(void) {
     return DC_STRUCTURAL_HEADER_WORDS+DC_GPU_CHUNK_SLOTS*8u;
 }
 bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu,char *err,uint32_t cap);
+void dc_gpu_authored_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_structural(dc_gpu_t *gpu);
 void dc_gpu_record_structural_begin(dc_gpu_t *gpu);
 /** Record topology reconstruction at an explicit restore boundary. */
 void dc_gpu_record_structural_topology(dc_gpu_t *gpu);
+void dc_gpu_record_body_carve(dc_gpu_t *gpu,uint32_t x,uint32_t y,uint32_t radius);
 void dc_gpu_structural_track_chunk(dc_gpu_t *gpu,uint32_t slot,dc_chunk_coord_t coord);
 bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
                               bool seed, char *err, uint32_t cap);
@@ -383,5 +400,13 @@ bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t width, uint32_t height,
 
 void dc_gpu_record_components(dc_gpu_t *gpu, bool rigid);
 void dc_gpu_record_component_extraction(dc_gpu_t *gpu);
+bool dc_gpu_colors_init(dc_gpu_t *gpu,char *err,uint32_t cap);
+void dc_gpu_colors_destroy(dc_gpu_t *gpu);
+VkDeviceSize dc_gpu_color_terrain_bytes(void);
+VkDeviceSize dc_gpu_color_bank_bytes(const dc_gpu_t *gpu);
+float *dc_gpu_shape_colors(dc_gpu_t *gpu,uint32_t absolute_word);
+void dc_gpu_read_chunk_colors(dc_gpu_t *gpu,uint32_t slot,dc_chunk_colors_t *colors);
+void dc_gpu_write_chunk_colors(dc_gpu_t *gpu,uint32_t slot,const dc_chunk_colors_t *colors);
+void dc_gpu_record_component_baseline(dc_gpu_t *gpu);
 
 #endif

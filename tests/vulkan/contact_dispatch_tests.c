@@ -43,7 +43,9 @@ static void selector_case(unsigned kind) {
         p.mapped[18]==fast&&p.mapped[19]==1&&p.mapped[20]==1&&
         p.mapped[21]==(fast+63u)/64u&&p.mapped[22]==1&&p.mapped[23]==1&&
         contacts[6]==(kind==5?0u:(pair_count+63u)/64u);
-    for(unsigned i=13;i<16;i++) safe=safe&&solver[i]==4369;
+    /* The final solver triplet now belongs to grain coupling. It must start
+       inactive even when the old contents were poisoned. */
+    safe=safe&&solver[13]==0u&&solver[14]==1u&&solver[15]==1u;
     for(unsigned i=0;i<39;i++) if(i<15||i>23) safe=safe&&p.mapped[i]==4369;
     printf("kind%u generic %u,%u,%u typed %u,%u,%u\n",kind,solver[10],solver[11],solver[12],p.mapped[15],p.mapped[16],p.mapped[17]);
     fixture_release_pipeline(&p);

@@ -1,4 +1,42 @@
 CC ?= cc
+build/appearance_tests: tests/renderer/appearance_tests.c src/renderer/appearance.c include/ferrum/renderer/appearance.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/renderer/appearance_tests.c src/renderer/appearance.c -o $@ -lm
+test: build/appearance_tests
+test: build/texture_tests build/texture_gpu_tests build/occlusion_gpu_tests build/lighting_gpu_tests build/shading_tests build/scene_gpu_tests
+build/texture_tests: tests/renderer/texture_tests.c src/renderer/appearance.c src/renderer/texture.c include/ferrum/renderer/texture.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/renderer/texture_tests.c src/renderer/appearance.c src/renderer/texture.c -o $@ -lm
+build/shaders/texture.comp.spv: shaders/renderer/texture.comp shaders/renderer/texture.glsl
+	mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/texture_gpu_tests: tests/renderer/texture_gpu_tests.c src/vulkan/texture_gpu.c src/vulkan/renderer_resource.c src/vulkan/renderer_internal.h src/renderer/appearance.c src/renderer/texture.c build/fluid_tests build/shaders/texture.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/texture_gpu.c src/renderer/appearance.c src/renderer/texture.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/shaders/occlusion.comp.spv: shaders/renderer/occlusion.comp
+	mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/occlusion_gpu_tests: tests/renderer/occlusion_gpu_tests.c src/vulkan/occlusion_gpu.c src/vulkan/renderer_resource.c src/vulkan/renderer_internal.h build/fluid_tests build/shaders/occlusion.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/shaders/lighting.comp.spv: shaders/renderer/lighting.comp include/ferrum/renderer/light_transport.h
+	mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/shaders/lighting_subgroup.comp.spv: shaders/renderer/lighting.comp include/ferrum/renderer/light_transport.h
+	mkdir -p build/shaders
+	$(GLSLANG) -DFR_SUBGROUP_SCAN=1 -V --target-env vulkan1.3 $< -o $@
+build/lighting_gpu_tests: tests/renderer/lighting_gpu_tests.c src/vulkan/lighting_gpu.c src/vulkan/occlusion_gpu.c src/vulkan/renderer_resource.c src/vulkan/renderer_internal.h build/fluid_tests build/shaders/occlusion.comp.spv build/shaders/lighting.comp.spv build/shaders/lighting_subgroup.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/shading_tests: tests/renderer/shading_tests.c src/renderer/shading.c include/ferrum/renderer/shading.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/renderer/shading.c -o $@ -lm
+build/scene_gpu_tests: tests/renderer/scene_gpu_tests.c src/vulkan/scene_gpu.c include/ferrum/renderer/gpu.h build/fluid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/renderer_visual_tests: tests/renderer/visual_tests.c tests/renderer/concave_scene.h $(GPU_SRC) src/world/chunk.c $(RENDERER_SHADERS) build/quarter_native_solver_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+build/renderer_performance_tests: tests/renderer/performance_tests.c tests/renderer/concave_scene.h $(RENDERER_SHADERS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=fr_renderer_record -Wl,--wrap=fr_occlusion_record -Wl,--wrap=fr_lighting_record -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect
+build/authoring_request_tests: tests/structural/authoring_request_tests.c src/structural/authoring.c include/ferrum/structural/authoring.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/structural/authoring_request_tests.c src/structural/authoring.c -o $@
 .DEFAULT_GOAL := all
 .PHONY: tools tools-offline test_tools
 tools:
@@ -32,10 +70,45 @@ GPU_OBJ += build/compound_gpu.o build/component_gpu.o build/pixel_gpu.o
 GPU_OBJ += build/structural_store_gpu.o
 GPU_OBJ += build/structural_store_validate.o
 GPU_OBJ += build/structural_store_chunk.o
+GPU_OBJ += build/color_gpu.o
+build/color_gpu.o: src/vulkan/color_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/color.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/window_gpu.o
 GPU_OBJ += build/structural_gpu.o build/structural_material.o
+GPU_OBJ += build/scene_gpu.o build/renderer_resource.o build/occlusion_gpu.o build/lighting_gpu.o
+RENDERER_SHADERS = build/shaders/lighting_subgroup.comp.spv build/shaders/scene.comp.spv build/shaders/occlusion.comp.spv build/shaders/lighting.comp.spv
+$(GPU_OBJ): $(RENDERER_SHADERS)
+build/scene_gpu.o: src/vulkan/scene_gpu.c src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h include/ferrum/renderer/gpu.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/renderer_resource.o: src/vulkan/renderer_resource.c src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/occlusion_gpu.o: src/vulkan/occlusion_gpu.c src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/lighting_gpu.o: src/vulkan/lighting_gpu.c src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/shaders/scene.comp.spv: shaders/renderer/scene.comp shaders/renderer/texture.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl shaders/sim/rigid_clip.glsl
+	mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+
+build/shaders/scene.comp.spv: include/ferrum/renderer/light_transport.h
 GPU_OBJ += build/mpm_activity_gpu.o
-GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o,$(GPU_OBJ))) src/structural/material.c
+GPU_OBJ += build/authored_gpu.o build/authored_request.o
+GPU_OBJ += build/prop_gpu.o build/prop_asset.o
+build/prop_gpu.o: src/vulkan/prop_gpu.c src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h include/ferrum/assets/prop.h include/ferrum/assets/prop_gpu.h build/shaders/prop_place.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/prop_asset.o: src/assets/prop.c include/ferrum/assets/prop.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/authored_request.o: src/structural/authoring.c include/ferrum/structural/authoring.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/authored_gpu.o: src/vulkan/authored_gpu.c src/vulkan/gpu_internal.h include/ferrum/structural/authoring.h build/shaders/authored.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o build/authored_request.o build/prop_asset.o,$(GPU_OBJ))) src/structural/material.c src/structural/authoring.c src/assets/prop.c
+build/authored_stage_tests: tests/vulkan/authored_stage_tests.c build/compound_body_tests $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/authored_stage_tests
+build/shaders/authored.comp.spv: shaders/sim/authored.comp
+	mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/structural_material.o: src/structural/material.c include/ferrum/structural/mechanics.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 $(GPU_OBJ) build/chunk.o build/structural_mechanics_tests: include/dungeoncraft/material_density.h
@@ -53,6 +126,10 @@ build/shaders/structural.comp.spv: shaders/sim/structural.comp shaders/sim/struc
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/shaders/structural.comp.spv: shaders/sim/rigid_fragment.glsl shaders/sim/pixel_fragment.glsl
+build/shaders/structural.comp.spv: shaders/sim/body_carve.glsl
+build/shaders/structural.comp.spv: shaders/sim/leaf_debris.glsl
+build/shaders/structural.comp.spv build/shaders/scene.comp.spv: shaders/sim/leaf_color.glsl include/dungeoncraft/leaf_material.h
+build/shaders/mpm.comp.spv: shaders/sim/mpm_terrain_support.glsl shaders/sim/rigid_body.glsl include/dungeoncraft/terrain_flags.h
 $(GPU_OBJ): build/shaders/structural.comp.spv
 build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench build/marker_slot_tests build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_solver_tests build/quarter_native_bench build/dungeoncraft_quarter_native: build/shaders/structural.comp.spv
 build/window_gpu.o: src/vulkan/window_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
@@ -99,7 +176,7 @@ build/rigid_solver_tests: tests/vulkan/rigid_solver_tests.c $(GPU_OBJ) $(CHUNK_O
 .PHONY: all test test_ui test_ui_long test_rigid_dynamics test_presentation clean shaders
 all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
 
-NATIVE_SRC = src/app/main.c src/app/structural_demo.c src/app/level.c src/app/session.c $(GPU_SRC) src/world/chunk.c src/world/stream.c src/world/generate.c
+NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c $(GPU_SRC) src/world/chunk.c src/world/stream.c src/world/generate.c
 build/rigid_dynamics_visual_tests: tests/app/rigid_dynamics_visual_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u -DDC_PRESSURE_SWEEPS=16u $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -lm
 
@@ -144,6 +221,12 @@ build/world_body_tests: tests/vulkan/world_body_tests.c $(GPU_OBJ) $(CHUNK_OBJ) 
 build/convex_body_tests: tests/vulkan/convex_body_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 QUARTER_FLAGS = -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u -DDC_PRESSURE_SWEEPS=16u
+PERFORMANCE_OBJ = $(patsubst %.c,build/performance/%.o,$(GPU_SRC) src/world/chunk.c)
+build/performance/%.o: %.c Makefile
+	mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -MMD -MP -c $< -o $@
+build/renderer_performance_tests: $(PERFORMANCE_OBJ)
+-include $(PERFORMANCE_OBJ:.o=.d)
 NATIVE_720_FLAGS = -DDC_GPU_CHUNK_SLOTS=270u
 build/broadphase_tests: tests/vulkan/broadphase_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
@@ -455,16 +538,29 @@ build/stream_tests: tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENE
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) -o $@ -pthread
 
 build/dungeoncraft: src/app/structural_demo.c src/app/structural_demo.h src/app/main.c src/app/level.c src/app/level.h src/app/view_config.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/main.c src/app/structural_demo.c src/app/level.c src/app/session.c $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 
 build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/controls_tests.c src/app/level.c src/app/session.c $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 
-test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
+test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/body_address_gpu_tests
 	./build/body_storage_gpu_tests
 	./build/body_scan_gpu_tests
 	./build/body_page_init_gpu_tests
+	./build/appearance_tests
+	./build/texture_tests
+	./build/texture_gpu_tests
+	./build/occlusion_gpu_tests
+	./build/lighting_gpu_tests
+	./build/shading_tests
+	./build/scene_gpu_tests
+	./build/terrain_prop_tests
+	./build/body_color_tests
+	./build/body_carve_tests
+	./build/sequential_detachment_tests
+	./build/dense_support_tests
+	./build/loose_particle_role_tests
 	./build/pixel_motion_cache_tests
 	./build/component_dispatch_tests
 	./build/pixel_properties_gpu_tests
@@ -478,6 +574,7 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/mpm_descriptor_tests
 	./build/raster_equivalence_tests
 	./build/fluid_transport_tests
+	./build/water_color_tests
 	./build/fluid_transport_long_tests
 	./build/fluid_transport_slow_tests
 	./build/fluid_transport_partial_tests
@@ -485,6 +582,8 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/fluid_displacement_wide_tests
 	./build/fluid_displacement_tall_tests
 	./build/diagnostics/fluid_case displacement-runtime
+	./build/authoring_request_tests
+	./build/authored_stage_tests
 	./build/pixel_component_tests
 	./build/pixel_world_tests
 	./build/pixel_geometry_tests
@@ -524,9 +623,11 @@ test: build/rigid_solver_tests build/contact_tests build/convex_body_tests build
 	./build/marker_slot_tests
 	./build/chunk_tests
 	./build/generate_tests
+	./build/scene_ground_tests
 	./build/stream_tests
 
 test_ui: build/dungeoncraft build/controls_tests build/structural_world_tests
+	./build/level03_support_tests
 	./build/pixel_dynamics_visual_tests
 	./build/structural_cadence_tests
 	./build/presentation_tests
@@ -557,7 +658,7 @@ clean:
 build/buoyancy_tests: tests/vulkan/buoyancy_tests.c build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/shaders/rigid_solver.comp.spv: shaders/sim/rigid_hydro.glsl
+build/shaders/rigid_solver.comp.spv: shaders/sim/rigid_hydro.glsl shaders/sim/rigid_grain.glsl shaders/sim/grain_bed.glsl
 build/shaders/rigid.comp.spv build/shaders/rigid_solver.comp.spv: shaders/sim/rigid_clip.glsl
 
 test: build/buoyancy_tests
@@ -576,11 +677,17 @@ build/quarter_native_component_material_tests: tests/vulkan/component_material_t
 build/component_extraction_tests: tests/vulkan/component_extraction_tests.c build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/shaders/component_extract.comp.spv: shaders/sim/component_extract.comp shaders/sim/rigid_body.glsl shaders/sim/pixel_properties.glsl
+build/shaders/component_extract.comp.spv: shaders/sim/component_extract.comp shaders/sim/rigid_body.glsl shaders/sim/pixel_properties.glsl include/dungeoncraft/terrain_flags.h
 	mkdir -p build/shaders
 	glslangValidator -V --target-env vulkan1.3 $< -o $@
+build/shaders/component_extract.comp.spv $(STRUCTURAL_SHADER) build/shaders/scene.comp.spv: shaders/sim/shape_colors.glsl
 build/fluid_tests: build/shaders/component_extract.comp.spv
-build/shaders/component_local.comp.spv: shaders/sim/component_local.comp shaders/sim/rigid_body.glsl
+build/loose_particle_role_tests: tests/vulkan/loose_particle_role_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/fluid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+test: build/loose_particle_role_tests
+
+build/shaders/component_local.comp.spv: shaders/sim/component_local.comp shaders/sim/rigid_body.glsl include/dungeoncraft/terrain_flags.h
 	mkdir -p build/shaders
 	glslangValidator -V --target-env vulkan1.3 $< -o $@
 
@@ -603,6 +710,9 @@ build/quarter_native_component_extraction_tests: tests/vulkan/component_extracti
 
 build/component_world_tests: tests/app/component_world_tests.c Makefile src/app/level.h src/app/view_config.h $(filter-out src/app/main.c,$(NATIVE_SRC)) build/quarter_native_rigid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
+build/level03_support_tests: tests/app/level03_support_tests.c Makefile src/app/level.h src/app/view_config.h src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h $(CONTACT_SHADER) $(MPM_SHADER) $(SOLVER_SHADER) $(filter-out src/app/main.c,$(NATIVE_SRC)) build/quarter_native_rigid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_read_contacts
+test_ui: build/level03_support_tests
 
 build/component_acceptance_tests: tests/vulkan/component_acceptance_tests.c build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
@@ -622,7 +732,7 @@ build/structural_composition_fracture_tests: tests/structural/composition_fractu
 build/structural_shadow_chunk_store_tests: tests/structural/shadow_chunk_store_tests.c tests/structural/placement_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/shaders/pattern.comp.spv: shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl
+build/shaders/pattern.comp.spv: shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl include/dungeoncraft/terrain_flags.h
 
 build/structural_composition_energy_tests: tests/structural/composition_fracture_energy_tests.c tests/structural/placement_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
@@ -790,6 +900,13 @@ build/shaders/fluid_transport.comp.spv: shaders/sim/fluid_transport.comp shaders
 build/fluid_transport_tests: tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
+build/water_color_tests: tests/vulkan/water_color_tests.c tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv build/shaders/fluid_displacement.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/water_color_tests
+
+$(FLUID_SHADER) build/shaders/fluid_transport.comp.spv build/shaders/fluid_aperture.comp.spv build/diagnostics/fluid_transport_profile.comp.spv: shaders/sim/hydraulic_face.glsl
+$(FLUID_SHADER) build/shaders/fluid_transport.comp.spv build/shaders/fluid_displacement.comp.spv build/diagnostics/fluid_transport_profile.comp.spv: shaders/sim/water_color.glsl
+
 build/fluid_transport_long_tests: tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DTRANSPORT_TEST_WIDTH=2113 -DTRANSPORT_TEST_HEIGHT=3 $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
@@ -903,7 +1020,10 @@ GPU_SOURCE_BINARIES += $(addprefix build/quarter_native_structural_, \
     buckling_tests equilibrium_tests failure_tests fracture_tests impact_tests \
     particle_identity_tests placement_tests root_identity_tests store_tests \
     streaming_tests submerged_load_tests)
-$(GPU_SOURCE_BINARIES): src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h src/vulkan/fluid_transport_limits.h src/vulkan/mpm_activity_layout.h include/dungeoncraft/mpm_activity_layout.h $(CONTACT_SHADER) $(MPM_COMPACTION_SHADER) $(MPM_SHADER) $(MPM_COMPONENT_SHADER) $(MPM_ACTIVITY_SHADER)
+GPU_SOURCE_BINARIES += build/material_cut_buoyancy_tests build/renderer_visual_tests build/renderer_performance_tests
+$(GPU_SOURCE_BINARIES): $(GPU_SRC) src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h src/vulkan/fluid_transport_limits.h src/vulkan/mpm_activity_layout.h include/dungeoncraft/mpm_activity_layout.h $(CONTACT_SHADER) $(MPM_COMPACTION_SHADER) $(MPM_SHADER) $(MPM_COMPONENT_SHADER) $(MPM_ACTIVITY_SHADER)
+$(GPU_SOURCE_BINARIES): $(RENDERER_SHADERS) build/shaders/prop_place.comp.spv build/shaders/authored.comp.spv include/ferrum/assets/prop.h include/ferrum/assets/prop_gpu.h src/vulkan/renderer_internal.h
+$(GPU_SOURCE_BINARIES) $(GPU_OBJ) $(STREAM_OBJ): include/dungeoncraft/color.h
 $(GPU_OBJ): src/vulkan/mpm_activity_layout.h include/dungeoncraft/mpm_activity_layout.h
 build/contact_gpu.o: src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
 build/fluid_gpu.o: src/vulkan/fluid_transport_limits.h
@@ -938,7 +1058,7 @@ test_probe_features: build/probe_feature_tests
 test_gpu_tools: build/probe_feature_tests
 
 MINIMAL_VK_TESTS = $(addprefix build/,component_dispatch_tests pixel_properties_gpu_tests \
-    fluid_transport_work_tests raster_dispatch_tests fluid_transport_tests fluid_transport_long_tests \
+    fluid_transport_work_tests raster_dispatch_tests fluid_transport_tests fluid_transport_long_tests water_color_tests \
     fluid_transport_slow_tests fluid_transport_partial_tests mpm_control_tests mpm_compaction_tests fluid_displacement_tests \
     fluid_displacement_wide_tests fluid_displacement_tall_tests hydro_head_tests fluid_aperture_tests \
     contact_dispatch_tests)
@@ -1031,3 +1151,57 @@ build/diagnostics/mpm_scalar_reference_tests: tools/diagnostics/mpm_scalar_refer
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -Ishaders/sim -o build/diagnostics/mpm_scalar_reference.spv build/diagnostics/mpm_scalar_reference.comp
 	spirv-val --target-env vulkan1.3 build/diagnostics/mpm_scalar_reference.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) build/diagnostics/mpm_scalar_reference_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+build/shaders/prop_place.comp.spv: shaders/renderer/prop_place.comp shaders/renderer/texture.glsl include/dungeoncraft/material_density.h include/dungeoncraft/terrain_flags.h
+	mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/terrain_prop_tests: tests/vulkan/terrain_prop_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/prop_place.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+.PHONY: test_terrain_prop test_scene_placement
+test_terrain_prop: build/terrain_prop_tests
+	./build/terrain_prop_tests
+test_scene_placement: build/dungeoncraft_quarter_native
+	./build/dungeoncraft_quarter_native --smoke-scene assets/props/level_piece01.prop/asset.cprop
+test: build/terrain_prop_tests
+build/body_color_tests: tests/vulkan/body_color_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/body_color_tests
+build/body_carve_tests: tests/vulkan/body_carve_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/body_carve_tests
+build/sequential_detachment_tests: tests/vulkan/sequential_detachment_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/sequential_detachment_tests
+build/dense_support_tests: tests/vulkan/dense_support_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(MPM_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/dense_support_tests
+build/diagnostics/body_support: tools/diagnostics/body_support.c tools/diagnostics/terrain_support.h Makefile src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h $(CONTACT_SHADER) $(GPU_SRC) $(GPU_OBJ) $(CHUNK_OBJ) src/world/chunk.c $(RENDERER_SHADERS) build/shaders/prop_place.comp.spv
+	@mkdir -p build/diagnostics
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_record_contacts
+build/scene_ground_tests: tests/world/scene_ground_tests.c $(GENERATE_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GENERATE_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/scene_ground_tests
+build/dungeoncraft: src/app/prop_scene.c src/app/prop_scene.h
+
+# Offline authoring and preloaded prop reader checks (no Vulkan device needed).
+build/prop_tests: tests/assets/prop_tests.c src/assets/prop.c include/ferrum/assets/prop.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/assets/prop_tests.c src/assets/prop.c -o $@ -lm
+.PHONY: test_prop_assets test_libresprite_host
+test: test_prop_assets
+test_prop_assets: build/prop_tests build/prop_channel_contract_tests
+	python3 -m unittest discover -s tests/assets -p '*_test.py' -k 'SchemaTests'
+	python3 tests/assets/package_test.py
+	python3 tests/assets/reader_test.py
+	python3 tests/assets/profile_test.py
+	python3 tests/assets/png_pair_test.py
+	python3 tests/assets/compiler_fixture.py
+	./build/prop_tests build/prop_fixture/asset.cprop
+	./build/prop_channel_contract_tests
+build/prop_channel_contract_tests: tests/integration/prop_channel_contract_tests.c src/assets/prop.c include/ferrum/assets/prop.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/integration/prop_channel_contract_tests.c src/assets/prop.c -o $@ -lm
+test_libresprite_host:
+	python3 tests/assets/host_probe_test.py
+	python3 tests/assets/export_test.py
+	python3 tests/assets/host_example_test.py

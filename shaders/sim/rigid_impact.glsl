@@ -8,9 +8,9 @@ void impact_capture(uint slot,uint other,uint material,uint other_material,vec2 
     uint g=structural_graph(),profile=g+29000u;
     if(pixel_body(b)) profile+=(material==2u||material==4u?1u:material==3u?2u:0u)*12u;
     float density=pixel_body(b)?(material==2u?DC_DENSITY_WOOD:material==4u?DC_DENSITY_DENSE_WOOD:
-        material==3u?DC_DENSITY_MORTAR:DC_DENSITY_STONE):uintBitsToFloat(data[profile+1u]);
+        material==3u?DC_DENSITY_MORTAR:material==5u?DC_DENSITY_LEAVES:DC_DENSITY_STONE):uintBitsToFloat(data[profile+1u]);
     float impedance=sqrt(uintBitsToFloat(data[profile])*density);
-    if(-incoming*60.0*impedance<=uintBitsToFloat(data[profile+4u])) return;
+    if(-incoming*60.0*impedance<=(material==5u?500.0:uintBitsToFloat(data[profile+4u]))) return;
     uint p=g+38000u+slot*4u;
     float retained=1.0-clamp(restitution,0.0,1.0);
     float share=other<BODY_CAPACITY&&bodies[other].inverse_mass>0&&
@@ -22,4 +22,5 @@ void impact_capture(uint slot,uint other,uint material,uint other_material,vec2 
     atomicMax(data[p+1u],uint(min(available/16.0,1000000.0)));
     vec2 local=body_rotate(normal,-b.angle);
     atomicMax(data[p+2u],abs(local.y)>=abs(local.x)?2u:1u);
+    if(material==5u) atomicOr(data[p+2u],256u);
 }

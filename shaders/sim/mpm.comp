@@ -44,6 +44,9 @@ const float GRAVITY = 0.25;
 const float MAX_VELOCITY = 2.0;
 const float VELOCITY_DAMPING = 0.999;
 const float WATER_DRAG = 0.5;
+/* Permit transient compression while small grains sift past larger grains,
+   but never place two full-rest-cell grains in one cell. */
+const uint CELL_REST_VOLUME_LIMIT_FP=98304u;
 const uint MODE_WATER_FEEDBACK = 6u;
 const uint MODE_MOISTURE = 7u;
 const uint MOISTURE_MASK = 0x00ffffffu;
@@ -77,11 +80,13 @@ uint particle_index(ivec2 cell, uint layer) {
     return (page_at(cell) - 1u) * PARTICLES + layer * CELLS + local_cell(cell);
 }
 
+#include "mpm_terrain_support.glsl"
+
 bool grain_at(ivec2 cell) {
     uint page = page_at(cell);
     if (page == 0u) return false;
     uint material = chunk_cells[(page - 1u) * CELLS + local_cell(cell)].x & 0xffffu;
-    return material == 2u || material == 4u || material == 5u || material == 6u;
+    return material == 2u || material == 4u || material == 5u || material == 6u || material == 10u;
 }
 
 bool load_particle(ivec2 cell, uint layer, out Particle particle) {
@@ -101,8 +106,8 @@ bool particle_is_mud(Particle particle) {
 }
 
 float grain_density(uint material) {
-    return material == 2u ? 2.65 : material == 5u ? DC_DENSITY_STONE :
-           material == 6u ? DC_DENSITY_MORTAR : 1.2;
+    return material == 2u ? DC_DENSITY_SAND : material == 5u ? DC_DENSITY_STONE :
+           material == 6u ? DC_DENSITY_MORTAR : material == 10u ? DC_DENSITY_LEAVES : DC_DENSITY_DIRT;
 }
 
 float grain_friction(uint material) {
@@ -126,7 +131,7 @@ bool solid_at(ivec2 cell) {
     uint index = (page_at(cell) - 1u) * CELLS + local_cell(cell);
     uint material = chunk_cells[index].x & 0xffffu;
     return (material == 1u || (material != 0u && material != 2u &&
-            material != 4u && material != 5u && material != 6u)) ||
+            material != 4u && material != 5u && material != 6u && material != 10u)) ||
            occupancy[uint(cell.y) * params.width + uint(cell.x)] != 0u;
 }
 
@@ -210,11 +215,12 @@ void p2g(ivec2 node) {
                 float jacobian = clamp(particle.f00 * particle.f11 -
                                        particle.f01 * particle.f10, 0.5, 1.5);
                 bool mud = particle_is_mud(particle);
-                bool fragment = particle.material == 6u || (particle.material == 4u &&
+                bool fragment = (particle.material == 6u || particle.material == 10u) || (particle.material == 4u &&
                                 (particle.flags & FRAGMENT_FLAG) != 0u);
                 float bulk = mud ? 1.2 : particle.material == 5u ? 8.0 :
                              fragment ? 0.4 : particle.material == 4u ? 3.0 : 5.0;
-                float wetness = float(particle.flags & MOISTURE_MASK) / float(MOISTURE_CAP);
+                float wetness = particle.material==2u||particle.material==4u?
+                    float(particle.flags & MOISTURE_MASK) / float(MOISTURE_CAP):0.;
                 float pressure = bulk * max(0.0, 1.0 - jacobian) +
                                  (fragment ? 0.8 * min(wetness, 1.0) : 0.0);
                 float shear_limit = mud ? 0.05 : fragment ? 0.0 : 0.2;
@@ -359,7 +365,10 @@ void g2p_one(ivec2 owner, uint layer) {
                          mud ? 0.3 : 0.15);
     particle.f10 = clamp(deformation[0][1], mud ? -0.3 : -0.15,
                          mud ? 0.3 : 0.15);
-    vec2 next_position = position + DT * velocity;
+    /* Rigid contact corrections can already move a grain across its owner's
+       edge. Keep the combined movement inside the gather's one-cell halo. */
+    vec2 next_position = clamp(position + DT * velocity,
+        vec2(owner)-vec2(0.999),vec2(owner)+vec2(1.999));
     ivec2 target = ivec2(floor(next_position));
     if (blocked_destination(target)) {
         next_position = position;
@@ -379,6 +388,10 @@ bool id_less(Particle left, uint left_index, Particle right, uint right_index) {
     return left_index < right_index;
 }
 
+uint rest_volume_fp(Particle particle) {
+    return uint(round(float(particle.mass_fp)/grain_density(particle.material)));
+}
+
 void accept_one(ivec2 owner, uint layer) {
     uint index = particle_index(owner, layer);
     Particle particle = proposals[index];
@@ -386,11 +399,16 @@ void accept_one(ivec2 owner, uint layer) {
     ivec2 target = target_of(particle, owner);
     if (all(equal(target, owner))) { accepted[index] = 1u; return; }
     if (page_at(target) == 0u) { accepted[index] = 0u; return; }
-    uint occupied = 0u;
+    uint occupied = 0u,used_volume=0u,volume=rest_volume_fp(particle);
     for (uint other_layer = 0u; other_layer < 2u; ++other_layer) {
         Particle old;
-        if (load_particle(target, other_layer, old)) ++occupied;
+        if (load_particle(target, other_layer, old)) {
+            ++occupied;used_volume+=rest_volume_fp(old);
+        }
     }
+    /* Resident grains reserve their rest volume until they actually leave.
+       A second storage layer is not a second physical cell of capacity. */
+    if(occupied>=2u||used_volume+volume>CELL_REST_VOLUME_LIMIT_FP) {accepted[index]=0u;return;}
     uint rank = 0u;
     for (int dy = -1; dy <= 1; ++dy) {
         for (int dx = -1; dx <= 1; ++dx) {
@@ -401,11 +419,13 @@ void accept_one(ivec2 owner, uint layer) {
                 if (!load_proposal(source, other_layer, rival) ||
                     !all(equal(target_of(rival, source), target))) continue;
                 uint rival_index = particle_index(source, other_layer);
-                if (id_less(rival, rival_index, particle, index)) ++rank;
+                if (id_less(rival, rival_index, particle, index)) {
+                    ++rank;used_volume+=rest_volume_fp(rival);
+                }
             }
         }
     }
-    accepted[index] = occupied < 2u && rank < 2u - occupied ? 1u : 0u;
+    accepted[index] = rank < 2u - occupied && used_volume+volume<=CELL_REST_VOLUME_LIMIT_FP ? 1u : 0u;
 }
 
 Particle zero_particle() {
@@ -469,10 +489,12 @@ void commit_cell(ivec2 cell) {
     if (new_count != old_count)
         atomicAdd(particle_counts[page_at(cell) - 1u], uint(int(new_count) - int(old_count)));
     uint cell_index = (page_at(cell) - 1u) * CELLS + local_cell(cell);
-    uint material = chunk_cells[cell_index].x & 0xffffu;
+    uint material = chunk_cells[cell_index].x & 0xffffu,before=material;
     if (new_count != 0u) material = first.material;
-    else if (material == 2u || material == 4u || material == 5u || material == 6u) material = 0u;
-    chunk_cells[cell_index].x = (chunk_cells[cell_index].x & 0xffff0000u) | material;
+    else if (material == 2u || material == 4u || material == 5u || material == 6u || material == 10u) material = 0u;
+    uint flags=material==before?chunk_cells[cell_index].x&0xffff0000u:0u;
+    chunk_cells[cell_index].x = flags | material;
+    mpm_support_changed(cell,before,material);
 }
 
 void main() {

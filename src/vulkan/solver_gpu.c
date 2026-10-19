@@ -3,7 +3,8 @@
 #include <string.h>
 #include "gpu_internal.h"
 
-enum { SOLVER_ITERATIONS = 8, SOLVER_SUBSTEPS = 8, SOLVER_DISPATCH_WORD = 6 };
+enum { SOLVER_ITERATIONS = 8, SOLVER_SUBSTEPS = 8, SOLVER_DISPATCH_WORD = 6,
+       SOLVER_GRAIN_DISPATCH_WORD = 13, SOLVER_PHASE_MASK = 255 };
 typedef enum {
     SOLVER_RESET,
     SOLVER_BEGIN_FRAME,
@@ -19,9 +20,14 @@ typedef enum {
     SOLVER_FINISH,
     SOLVER_BOND_POSITION,
     SOLVER_BOND_VELOCITY,
-    SOLVER_BOND_RESET
+    SOLVER_BOND_RESET,
+    SOLVER_GRAIN_PREPARE,
+    SOLVER_GRAIN_POSITION,
+    SOLVER_GRAIN_VELOCITY,
+    SOLVER_GRAIN_BED_INIT,
+    SOLVER_GRAIN_BED_JUMP
 } solver_phase_t;
-_Static_assert(SOLVER_BOND_RESET + 1 == DC_GPU_SOLVER_PHASE_COUNT,
+_Static_assert(SOLVER_GRAIN_BED_JUMP + 1 == DC_GPU_SOLVER_PHASE_COUNT,
                "GPU solver phase count changed");
 static bool error(char *err, uint32_t cap, const char *message) {
     if (err && cap)
@@ -192,7 +198,7 @@ static void record_pixel_hydro(dc_gpu_t *gpu) {
 }
 static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
-                      gpu->solver_pipelines[mode]);
+                      gpu->solver_pipelines[mode & SOLVER_PHASE_MASK]);
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
     uint32_t push[8] = {gpu->width,  gpu->height,
                         mode,        dc_gpu_runtime_body_count(gpu),
@@ -200,7 +206,10 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
                         (uint32_t)y, (uint32_t)(y >> 32)};
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    if (mode >= SOLVER_BOND_POSITION) {
+    uint32_t phase = mode & SOLVER_PHASE_MASK;
+    if (phase >= SOLVER_GRAIN_BED_INIT) {
+        vkCmdDispatch(gpu->command, (gpu->width * gpu->height + 63u) / 64u, 1, 1);
+    } else if (phase >= SOLVER_BOND_POSITION && phase <= SOLVER_BOND_RESET) {
         VkDeviceSize offset =
             sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
             (VkDeviceSize)(dc_gpu_structural_word_offset(gpu) + 9u) *
@@ -210,7 +219,8 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
         VkDeviceSize offset =
             sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
             (VkDeviceSize)(dc_gpu_solver_word_offset(gpu) +
-                           SOLVER_DISPATCH_WORD) *
+                           (phase >= SOLVER_GRAIN_PREPARE ? SOLVER_GRAIN_DISPATCH_WORD :
+                            SOLVER_DISPATCH_WORD)) *
                 sizeof(uint32_t);
         vkCmdDispatchIndirect(gpu->command, gpu->body_buffer, offset);
     } else
@@ -232,6 +242,9 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
     vkCmdPipelineBarrier2(gpu->command, &dep);
 }
 void dc_gpu_record_solver(dc_gpu_t *gpu) {
+    dispatch(gpu, SOLVER_GRAIN_BED_INIT, false);
+    for (uint32_t span=1, pass=0; span<gpu->height; span*=2, pass++)
+        dispatch(gpu, SOLVER_GRAIN_BED_JUMP | (pass << 8u), false);
     dispatch(gpu, SOLVER_RESET, false);
     dispatch(gpu, SOLVER_BEGIN_FRAME, false);
     if (gpu->component_profile)
@@ -254,18 +267,21 @@ void dc_gpu_record_solver(dc_gpu_t *gpu) {
             vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
                                  gpu->timestamp_pool, 19 + step * 2);
         dispatch(gpu, SOLVER_PREPARE, false);
+        dispatch(gpu, SOLVER_GRAIN_PREPARE, true);
         dispatch(gpu, SOLVER_INIT_CONTACTS, true);
         dispatch(gpu, SOLVER_CLEAR, false);
         for (uint32_t iteration = 0; iteration < SOLVER_ITERATIONS;
              ++iteration) {
             dispatch(gpu, SOLVER_SOLVE, true);
             dispatch(gpu, SOLVER_APPLY, false);
+            dispatch(gpu, SOLVER_GRAIN_POSITION | ((iteration + 1u) << 8u), true);
             if (gpu->structural_enabled)
                 dispatch(gpu, SOLVER_BOND_POSITION, false);
         }
         dispatch(gpu, SOLVER_DERIVE_VELOCITY, false);
         dispatch(gpu, SOLVER_IMPULSE, true);
         dispatch(gpu, SOLVER_APPLY_VELOCITY, false);
+        dispatch(gpu, SOLVER_GRAIN_VELOCITY | ((SOLVER_ITERATIONS + 1u) << 8u), true);
         if (gpu->structural_enabled)
             dispatch(gpu, SOLVER_BOND_VELOCITY, false);
     }

@@ -6,9 +6,18 @@
 
 #include "dungeoncraft/chunk.h"
 #include "dungeoncraft/gpu.h"
+#include "dungeoncraft/generate.h"
 #include "ferrum/structural/gpu.h"
+#include "ferrum/assets/prop.h"
+#include "ferrum/renderer/gpu.h"
 
 typedef struct dc_level_view dc_level_view_t;
+/** Whether a persisted world checkpoint was restored at view creation. */
+bool dc_level_view_restored(const dc_level_view_t *view);
+/** Migrate corner-bond history without placing over saved scene edits. */
+bool dc_level_view_restore_prop_bonds(dc_level_view_t *view,const fr_prop_asset_t *asset,
+                                      dc_chunk_coord_t chunk,uint32_t x,uint32_t y,
+                                      char *err,uint32_t cap);
 
 typedef struct {
     dc_chunk_coord_t origin;
@@ -18,8 +27,20 @@ typedef struct {
 
 dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
                                       char *err, uint32_t err_cap);
+/** Create a scene world whose missing chunks follow the authored ground line. */
+dc_level_view_t *dc_level_view_create_ground(const char *directory, uint64_t seed,
+                                            const dc_ground_profile_t *ground,
+                                            char *err, uint32_t err_cap);
 bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t err_cap);
 bool dc_level_view_step(dc_level_view_t *view, char *err, uint32_t err_cap);
+/** Place terrain assets in resident world chunks, independently of visibility. */
+bool dc_level_view_place_prop(dc_level_view_t *view, const fr_prop_asset_t *asset,
+                              dc_chunk_coord_t chunk, uint32_t local_x, uint32_t local_y,
+                              char *err, uint32_t err_cap);
+/** Choose how the separately stored appearance channel is displayed. */
+bool dc_level_view_renderer_mode(dc_level_view_t *view, fr_renderer_mode_t mode);
+/** Toggle lit gameplay and unlit appearance without advancing physics. */
+bool dc_level_view_toggle_lighting(dc_level_view_t *view);
 /** Author explicitly placed structural members in the streamed world. */
 bool dc_level_view_place_structure(dc_level_view_t *view,
                                    const fr_structural_gpu_graph_t *graph,

@@ -142,7 +142,62 @@ static void test_checkpoint_restores_automatic_extraction_and_cold_wood(void) {
     ASSERT_TRUE(extracted);
     PASS();
 }
+static void check_loaded_island(bool warm, bool reload) {
+    dc_gpu_t *gpu = NULL;
+    char err[256] = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    for (unsigned y=20;y<24;y++) for (unsigned x=20;x<32;x++) {
+        chunk->cells[y*64+x].material=DC_MATERIAL_WOOD;
+        chunk->cells[y*64+x].flags=DC_CELL_LOADED_TERRAIN;
+    }
+    ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
+    if (warm) ASSERT_TRUE(dc_gpu_rigid_step(gpu,err,sizeof(err)));
+    dc_gpu_body_t body={0};
+    bool initially_fixed=!dc_gpu_read_body_id(gpu,0x80000001u,&body,err,sizeof(err));
+    if (reload) {
+        ASSERT_TRUE(fr_gpu_save_structure(gpu,"build/loaded_terrain_baseline.dcs",err,sizeof(err)));
+        dc_gpu_destroy(gpu);gpu=NULL;
+        ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+        ASSERT_TRUE(fr_gpu_load_structure(gpu,"build/loaded_terrain_baseline.dcs",err,sizeof(err)));
+        bool restored=false;
+        ASSERT_TRUE(fr_gpu_upload_structure_chunk(gpu,0,chunk,&restored,err,sizeof(err)));
+        ASSERT_TRUE(restored);
+        ASSERT_TRUE(dc_gpu_set_page(gpu,0,0,0,err,sizeof(err)));
+    }
+    if (warm) {
+        ASSERT_TRUE(dc_gpu_paint_material(gpu,45,45,1,DC_MATERIAL_STONE,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_rigid_step(gpu,err,sizeof(err)));
+    }
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu,0,chunk,err,sizeof(err)));
+    bool unrelated_edit_holds=chunk->cells[20*64+20].material==DC_MATERIAL_WOOD;
+    ASSERT_TRUE(dc_gpu_paint_material(gpu,26,21,3,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu,0,chunk,err,sizeof(err)));
+    bool split_released=chunk->cells[20*64+20].material==DC_MATERIAL_AIR &&
+        chunk->cells[20*64+31].material==DC_MATERIAL_AIR;
+    dc_gpu_destroy(gpu);free(chunk);
+    ASSERT_TRUE(initially_fixed);
+    ASSERT_TRUE(unrelated_edit_holds);
+    ASSERT_TRUE(split_released);
+    PASS();
+}
+static void test_loaded_island_holds_until_its_connections_change(void) {
+    check_loaded_island(true,false);
+}
+static void test_cut_before_first_physics_step_releases_loaded_terrain(void) {
+    check_loaded_island(false,false);
+}
+static void test_loaded_terrain_bonds_survive_checkpoint(void) {
+    check_loaded_island(true,true);
+}
 int main(void) {
+    RUN(test_loaded_island_holds_until_its_connections_change);
+    RUN(test_cut_before_first_physics_step_releases_loaded_terrain);
+    RUN(test_loaded_terrain_bonds_survive_checkpoint);
     RUN(test_isolated_stone_automatically_becomes_a_falling_body);
     RUN(test_component_touching_cold_boundary_remains_terrain);
     RUN(test_removing_last_support_triggers_automatic_fall);

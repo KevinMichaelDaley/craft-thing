@@ -161,7 +161,7 @@ test_two_concave_bodies_on_sideways_beam_and_angled_brace_collapse_visibly(
     ASSERT_TRUE((pixels[80 * 160 + 44] & 255u) > 200u);
     ASSERT_TRUE(((pixels[80 * 160 + 44] >> 8) & 255u) < 80u);
     ASSERT_TRUE(scene_snapshot(gpu, "build/structure_unbraced.bmp", err));
-    for (unsigned tick = 0; tick < 180; tick++)
+    for (unsigned tick = 0; tick < 600; tick++)
         ASSERT_TRUE(scene_tick(gpu, err));
     ASSERT_TRUE(dc_gpu_read_world_body(gpu, 1, &left, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_world_body(gpu, 2, &right, err, sizeof(err)));
@@ -187,6 +187,44 @@ test_two_concave_bodies_on_sideways_beam_and_angled_brace_collapse_visibly(
     ASSERT_TRUE(fabsf(motion.mass - 234.9f) < .001f);
     ASSERT_TRUE(dc_gpu_read_body_motion(gpu, 2, &motion, err, sizeof(err)));
     ASSERT_TRUE(fabsf(motion.mass - 340.2f) < .001f);
+    dc_gpu_contact_t *contacts=calloc(DC_GPU_CONTACT_CAPACITY,sizeof(*contacts));
+    ASSERT_TRUE(contacts);
+    dc_gpu_contact_stats_t stats;
+    ASSERT_TRUE(dc_gpu_read_contacts(gpu,&stats,contacts,DC_GPU_CONTACT_CAPACITY,err,sizeof(err)));
+    float support_low=INFINITY,support_high=-INFINITY;
+    uint32_t support_count=0;
+    for (uint32_t i=0;i<stats.count;i++) {
+        dc_gpu_contact_t c=contacts[i];
+        dc_gpu_contact_anchor_t p;
+        if (c.body_a==2 && c.normal_y<-.5f) p=c.anchor_a;
+        else if (c.body_b==2 && c.normal_y>.5f) p=c.anchor_b;
+        else continue;
+        float x=(float)(64.*p.chunk.x+p.x_fp/65536.);
+        support_low=fminf(support_low,x);support_high=fmaxf(support_high,x);support_count++;
+    }
+    free(contacts);
+    float com_x=(float)(64.*right.chunk.x+right.body.x_fp/65536.+motion.center_x);
+    float com_y=(float)(64.*right.chunk.y+right.body.y_fp/65536.+motion.center_y);
+    float lowest=-INFINITY;
+    for (uint32_t p=0;p<u.count;p++) for (uint32_t v=0;v<u.pieces[p].count;v++) {
+        float x=u.pieces[p].vertices[v].x_fp/65536.f-motion.center_x;
+        float y=u.pieces[p].vertices[v].y_fp/65536.f-motion.center_y;
+        float wx=com_x+cosf(motion.angle)*x-sinf(motion.angle)*y;
+        float wy=com_y+sinf(motion.angle)*x+cosf(motion.angle)*y;
+        lowest=fmaxf(lowest,wy);
+        /* The resting solver permits a subpixel contact skin. Derive support
+         * from actual shape vertices against this scene's known flat floor,
+         * independently of whether the final manifold includes speculative contacts. */
+        if (fabsf(wy-100.f)<=.05f) {
+            support_low=fminf(support_low,wx);support_high=fmaxf(support_high,wx);support_count++;
+        }
+    }
+    bool moving=right.body.vx_fp!=0 || right.body.vy_fp!=0 || fabsf(motion.angular_velocity)>1e-6f;
+    printf("right U rest support: COMx %.6f support[%.6f,%.6f] witnesses%u angle%.6f omega%.9f v(%d,%d)\n",
+        com_x,support_low,support_high,support_count,motion.angle,motion.angular_velocity,right.body.vx_fp,right.body.vy_fp);
+    ASSERT_TRUE(moving || (support_count>0 && com_x>=support_low-.01f && com_x<=support_high+.01f));
+    ASSERT_TRUE(!moving);
+    ASSERT_TRUE(lowest<=100.05f && lowest>=99.95f);
     ASSERT_TRUE(scene_snapshot(gpu, "build/structure_collapsed.bmp", err));
     dc_gpu_destroy(gpu);
     PASS();

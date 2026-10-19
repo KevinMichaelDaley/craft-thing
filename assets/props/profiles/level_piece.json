@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "layers": {"Layer 1": "color", "Layer 2": "physics.material", "Layer 3": "physics.role"},
+  "materials": {"255,0,0,255": "wood", "0,0,0,255": "stone", "255,255,0,255": "dirt", "0,0,255,255": "water"},
+  "roles": {"255,255,255,255": "terrain"},
+  "transparent_material": "preserve_existing",
+  "allow_invisible_physics": true,
+  "ground_soil_depth": 12,
+  "ground_surface_points": [[0,76],[41,64],[51,65],[73,65],[74,64],[103,64],[104,66],[124,66],[125,67],[127,67]]
+}

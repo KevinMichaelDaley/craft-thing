@@ -216,7 +216,9 @@ typedef struct {
 
 #define DC_GPU_CONVEX_VERTICES 8u
 enum { DC_GPU_BODY_STONE = 1u, DC_GPU_BODY_WOOD = 2u, DC_GPU_BODY_MORTAR = 3u,
-       DC_GPU_BODY_DENSE_WOOD = 4u };
+       DC_GPU_BODY_DENSE_WOOD = 4u, DC_GPU_BODY_LEAVES = 5u,
+       DC_GPU_BODY_SAND = 6u, DC_GPU_BODY_DIRT = 7u,
+       DC_GPU_BODY_GRAVEL = 8u, DC_GPU_BODY_LEAF_DEBRIS = 9u };
 /** Enable bounded GPU impact fracture and its fixed body/output ownership pool. */
 bool dc_gpu_enable_impact_fracture(dc_gpu_t *gpu);
 typedef struct {
@@ -305,8 +307,11 @@ typedef struct {
  * Body material IDs and cell material IDs use their respective namespaces.
  */
 typedef struct {
-    /* Pixel features preserve the tile-cell ordinal in bits 3..30, the local
+    /* MPM feature_b stores the owner cell in bits 0..11 and layer in bit 12.
+     * Pixel features preserve the tile-cell ordinal in bits 3..30, the local
      * vertex in bits 0..2, and the support-edge marker in bit 31. */
+    /* For MPM contacts, reserved is the resident particle index plus one;
+       it is zero for terrain, boundary and body contacts. */
     uint32_t body_a, body_b, kind, feature_a, feature_b, material_a, material_b, reserved;
     float normal_x, normal_y, depth, friction, restitution, compliance;
     uint32_t flags, reserved2;

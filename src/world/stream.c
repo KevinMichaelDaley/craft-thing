@@ -15,6 +15,7 @@ typedef struct {
     dc_chunk_coord_t coord;
     uint64_t generation;
     dc_chunk_t *chunk;
+    dc_chunk_colors_t *colors;
 } stream_job_t;
 
 typedef struct {
@@ -30,6 +31,8 @@ struct dc_streamer {
     char *directory;
     uint64_t seed;
     uint32_t capacity;
+    dc_ground_profile_t ground;
+    uint32_t *ground_surface;
     stream_job_t *jobs;
     dc_stream_result_t *results;
     uint32_t job_head, job_tail, job_count;
@@ -49,7 +52,7 @@ static bool chunk_path(const dc_streamer_t *stream, dc_chunk_coord_t coord,
     return count > 0 && (size_t)count < cap;
 }
 
-static bool save_chunk(const dc_streamer_t *stream, const dc_chunk_t *chunk) {
+static bool save_chunk(const dc_streamer_t *stream, const dc_chunk_t *chunk,const dc_chunk_colors_t *colors) {
     char temporary[1024], final[1024];
     if (!chunk_path(stream, chunk->coord, temporary, sizeof(temporary), true) ||
         !chunk_path(stream, chunk->coord, final, sizeof(final), false)) return false;
@@ -57,6 +60,7 @@ static bool save_chunk(const dc_streamer_t *stream, const dc_chunk_t *chunk) {
     if (!file) return false;
     chunk_header_t header = { .magic = {'D', 'C', 'C', '1'}, .version = 5,
         .x = chunk->coord.x, .y = chunk->coord.y, .seed = stream->seed };
+    if(colors) header.version=6;
     bool okay = fwrite(&header, sizeof(header), 1, file) == 1 &&
         fwrite(chunk->cells, sizeof(chunk->cells), 1, file) == 1 &&
         chunk->marker_count <= DC_MARKERS_PER_CHUNK &&
@@ -74,19 +78,29 @@ static bool save_chunk(const dc_streamer_t *stream, const dc_chunk_t *chunk) {
         ++written;
     }
     okay = okay && written == chunk->particle_count;
+    if(okay && colors) {
+        uint64_t hash=dc_color_hash(14695981039346656037ull,chunk->cells,sizeof(chunk->cells));
+        hash=dc_color_hash(hash,colors,sizeof(*colors));
+        okay=dc_color_records_valid((const float*)colors,DC_CHUNK_CELLS*2) &&
+            fwrite(colors,sizeof(*colors),1,file)==1 && fwrite(&hash,sizeof(hash),1,file)==1;
+    }
     if (fclose(file) != 0) okay = false;
     if (okay) okay = rename(temporary, final) == 0;
     if (!okay) remove(temporary);
     return okay;
 }
 
-static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coord) {
+static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coord,dc_chunk_colors_t *colors) {
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     if (!chunk) return NULL;
     char path[1024];
     if (!chunk_path(stream, coord, path, sizeof(path), false)) { free(chunk); return NULL; }
     FILE *file = fopen(path, "rb");
     if (!file && errno == ENOENT) {
+        if (stream->ground_surface) {
+            if (!dc_generate_chunk_ground(coord,&stream->ground,chunk)) {free(chunk);return NULL;}
+            return chunk;
+        }
 #ifdef DC_NATIVE_VIEW
         if (!dc_generate_chunk_scaled(stream->seed, coord, 4u, chunk)) {
             free(chunk);
@@ -101,7 +115,7 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coor
     chunk_header_t header;
     bool okay = fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCC1", 4) == 0 &&
-        (header.version >= 1 && header.version <= 5) &&
+        (header.version >= 1 && header.version <= 6) &&
         header.x == coord.x && header.y == coord.y && header.seed == stream->seed &&
         fread(chunk->cells, sizeof(chunk->cells), 1, file) == 1;
     if (okay && header.version >= 2)
@@ -128,6 +142,13 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coor
             }
         }
     }
+    if(okay && header.version>=6) {
+        uint64_t stored=0,hash=dc_color_hash(14695981039346656037ull,chunk->cells,sizeof(chunk->cells));
+        okay=fread(colors,sizeof(*colors),1,file)==1 && fread(&stored,sizeof(stored),1,file)==1 &&
+            dc_color_records_valid((const float*)colors,DC_CHUNK_CELLS*2);
+        hash=dc_color_hash(hash,colors,sizeof(*colors));
+        okay=okay && hash==stored && fgetc(file)==EOF && !ferror(file);
+    }
     if (fclose(file) != 0) okay = false;
     if (!okay) { free(chunk); return NULL; }
     chunk->coord = coord;
@@ -150,11 +171,13 @@ static int worker_main(void *arg) {
 
         dc_stream_result_t result = { .coord = job.coord, .generation = job.generation };
         if (job.kind == JOB_LOAD) {
-            result.chunk = load_chunk(stream, job.coord);
+            result.colors=calloc(1,sizeof(*result.colors));
+            result.chunk = result.colors?load_chunk(stream, job.coord,result.colors):NULL;
             result.kind = result.chunk ? DC_STREAM_LOADED : DC_STREAM_FAILED;
         } else {
-            result.kind = save_chunk(stream, job.chunk) ? DC_STREAM_SAVED : DC_STREAM_FAILED;
+            result.kind = save_chunk(stream, job.chunk,job.colors) ? DC_STREAM_SAVED : DC_STREAM_FAILED;
             free(job.chunk);
+            free(job.colors);
         }
 
         mtx_lock(&stream->mutex);
@@ -175,7 +198,13 @@ static int worker_main(void *arg) {
 
 dc_streamer_t *dc_stream_create(const char *directory, uint64_t seed,
                                 uint32_t queue_capacity) {
+    return dc_stream_create_ground(directory,seed,queue_capacity,NULL);
+}
+
+dc_streamer_t *dc_stream_create_ground(const char *directory, uint64_t seed,
+                                       uint32_t queue_capacity, const dc_ground_profile_t *ground) {
     if (!directory || !directory[0] || strlen(directory) > 900 || !queue_capacity) return NULL;
+    if (ground && (!ground->surface || !ground->width || ground->width>4194304u || !ground->soil_depth)) return NULL;
     if (mkdir(directory, 0755) != 0 && errno != EEXIST) return NULL;
     dc_streamer_t *stream = calloc(1, sizeof(*stream));
     if (!stream) return NULL;
@@ -184,6 +213,12 @@ dc_streamer_t *dc_stream_create(const char *directory, uint64_t seed,
     stream->jobs = calloc(queue_capacity, sizeof(*stream->jobs));
     stream->results = calloc(queue_capacity, sizeof(*stream->results));
     if (!stream->directory || !stream->jobs || !stream->results) goto fail_alloc;
+    if (ground) {
+        stream->ground_surface=malloc((size_t)ground->width*sizeof(uint32_t));
+        if (!stream->ground_surface) goto fail_alloc;
+        memcpy(stream->ground_surface,ground->surface,(size_t)ground->width*sizeof(uint32_t));
+        stream->ground=*ground;stream->ground.surface=stream->ground_surface;
+    }
     memcpy(stream->directory, directory, length);
     stream->seed = seed;
     stream->capacity = queue_capacity;
@@ -199,6 +234,7 @@ fail_jobs:
 fail_mutex:
     mtx_destroy(&stream->mutex);
 fail_alloc:
+    free(stream->ground_surface);
     free(stream->directory); free(stream->jobs); free(stream->results); free(stream);
     return NULL;
 }
@@ -226,14 +262,23 @@ bool dc_stream_request_load(dc_streamer_t *stream, dc_chunk_coord_t coord,
 
 bool dc_stream_request_save(dc_streamer_t *stream, const dc_chunk_t *chunk,
                             uint64_t generation) {
+    return dc_stream_request_save_colors(stream,chunk,NULL,generation);
+}
+bool dc_stream_request_save_colors(dc_streamer_t *stream,const dc_chunk_t *chunk,
+    const dc_chunk_colors_t *colors,uint64_t generation) {
     if (!stream || !chunk || !generation) return false;
+    if(colors && !dc_color_records_valid((const float*)colors,DC_CHUNK_CELLS*2)) return false;
     dc_chunk_t *copy = malloc(sizeof(*copy));
     if (!copy) return false;
     memcpy(copy, chunk, sizeof(*copy));
+    dc_chunk_colors_t *color_copy=colors?malloc(sizeof(*color_copy)):NULL;
+    if(colors && !color_copy) {free(copy);return false;}
+    if(colors) memcpy(color_copy,colors,sizeof(*colors));
     stream_job_t job = { .kind = JOB_SAVE, .coord = chunk->coord,
-        .generation = generation, .chunk = copy };
+        .generation = generation, .chunk = copy,.colors=color_copy };
     if (queue_job(stream, job)) return true;
     free(copy);
+    free(color_copy);
     return false;
 }
 
@@ -253,6 +298,7 @@ bool dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *result) {
 void dc_stream_result_release(dc_stream_result_t *result) {
     if (!result) return;
     free(result->chunk);
+    free(result->colors);
     memset(result, 0, sizeof(*result));
 }
 
@@ -266,10 +312,12 @@ void dc_stream_destroy(dc_streamer_t *stream) {
     thrd_join(stream->thread, NULL);
     for (uint32_t i = 0; i < stream->capacity; ++i) {
         free(stream->jobs[i].chunk);
+        free(stream->jobs[i].colors);
         dc_stream_result_release(&stream->results[i]);
     }
     cnd_destroy(&stream->results_space);
     cnd_destroy(&stream->jobs_ready);
     mtx_destroy(&stream->mutex);
+    free(stream->ground_surface);
     free(stream->directory); free(stream->jobs); free(stream->results); free(stream);
 }

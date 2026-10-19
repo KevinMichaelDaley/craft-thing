@@ -98,7 +98,7 @@ static void test_corrupt_tiled_geometry_is_rejected(void) {
     ASSERT_TRUE(!dc_gpu_pixel_geometry_valid(bodies, pixels, words, &density));
     pixels[8]--;
     uint32_t original = pixels[10];
-    pixels[10] = (original & ~15u) | 5u;
+    pixels[10] = (original & ~15u) | 15u;
     ASSERT_TRUE(!dc_gpu_pixel_geometry_valid(bodies, pixels, words, &density));
     pixels[10] = original;
     bodies[0].piece_count--;

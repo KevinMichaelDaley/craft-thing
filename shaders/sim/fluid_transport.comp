@@ -38,7 +38,9 @@ uint page_at(ivec2 p) {
     return pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
 }
 uint atlas_index(ivec2 p,uint page) {return (page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);}
-bool permeable_material(uint m) {return m==0u||m==2u||m==4u||m==5u||m==6u;}
+#include "hydraulic_face.glsl"
+#include "water_color.glsl"
+bool permeable_material(uint m) {return m==0u||m==2u||m==4u||m==5u||m==6u||m==10u;}
 uint cell_meta(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0u;
     uint position=uint(vertical?p.y:p.x);
@@ -58,7 +60,7 @@ float face_aperture(ivec2 p,ivec2 direction) {
     if(position<CACHE_CELLS) return float(cached[position].z)/float(FULL);
     if(page_at(face)==0u) return 0.;
     uint axis=direction.x!=0?3u:4u,index=uint(face.y)*params.width+uint(face.x);
-    return float(FULL-min(FULL,occupancy[axis*params.width*params.height+index]))/float(FULL);
+    return float(hydraulic_aperture(FULL-min(FULL,occupancy[axis*params.width*params.height+index]),face,direction))/float(FULL);
 }
 #include "fluid_aperture.glsl"
 ivec2 point_at(uint position) {return vertical?ivec2(line,position):ivec2(position,line);}
@@ -67,6 +69,7 @@ uint water_at(ivec2 p) {
     return position<CACHE_CELLS?cached[position].x:chunk_cells[atlas_index(p,page_at(p))].y;
 }
 void put_water(ivec2 p,uint value) {
+    water_color_clear(atlas_index(p,page_at(p)),value);
     uint position=uint(vertical?p.y:p.x);
     if(position<CACHE_CELLS) {
         uint capacity=cached[position].y&131071u;
@@ -189,11 +192,11 @@ uint move_cached_recipients(ivec2 source,ivec2 direction,uint reach,float travel
         while(mask!=0u&&remaining!=0u) {
             uint bit=uint(positive?findMSB(mask):findLSB(mask)),position=word*32u+bit;
             uint flux=min(cached_requests[position],remaining);remaining-=flux;
-            if(flux!=0u) {ivec2 target=point_at(position);put_water(target,water_at(target)+flux);}
+            if(flux!=0u) {ivec2 target=point_at(position);water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),water_at(target),flux);put_water(target,water_at(target)+flux);}
             mask&=~(1u<<bit);
         }
     }
-    subgroupMemoryBarrierShared();subgroupBarrier();
+    subgroupMemoryBarrierShared();subgroupMemoryBarrierBuffer();subgroupBarrier();
     return min(available,total);
 }
 bool move_source(ivec2 source,ivec2 direction) {
@@ -227,7 +230,7 @@ bool move_source(ivec2 source,ivec2 direction) {
         uint moved=0u;
         if(lane==0u) {
             moved=min(min(allowance,available),capacity-receiving);
-            if(moved!=0u) {put_water(target,receiving+moved);put_water(source,available-moved);}
+            if(moved!=0u) {water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),receiving,moved);put_water(target,receiving+moved);put_water(source,available-moved);}
         }
         return subgroupBroadcastFirst(moved)!=0u;
     }
@@ -267,9 +270,9 @@ bool move_source(ivec2 source,ivec2 direction) {
         uint offset=reach-order;
         uint request=order<CACHE_CELLS?cached_requests[order]:request_at(source,direction,offset,travel);
         uint flux=min(request,remaining);remaining-=flux;
-        if(flux!=0u) {ivec2 target=source+direction*int(offset);put_water(target,water_at(target)+flux);}
+        if(flux!=0u) {ivec2 target=source+direction*int(offset);water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),water_at(target),flux);put_water(target,water_at(target)+flux);}
     }
-    subgroupMemoryBarrierShared();subgroupBarrier();
+    subgroupMemoryBarrierShared();subgroupMemoryBarrierBuffer();subgroupBarrier();
     uint sent=min(available,total);
     if(lane==0u&&sent!=0u) put_water(source,available-sent);
     return sent!=0u;
@@ -291,6 +294,7 @@ void main() {
             uint index=uint(p.y)*params.width+uint(p.x);uvec2 cell=chunk_cells[atlas_index(p,page)];
             uint capacity=FULL-min(FULL,occupancy[2u*params.width*params.height+index]);
             uint aperture=FULL-min(FULL,occupancy[(vertical?4u:3u)*params.width*params.height+index]);
+            aperture=hydraulic_aperture(aperture,p,vertical?ivec2(0,1):ivec2(1,0));
             float speed=vertical?face_velocity[index].y:face_velocity[index].x;
             if(vertical&&params.elapsed_time_mode!=0u) speed=.5*(speed+uintBitsToFloat(fluid_a[index]));
             float travel=travel_for_speed(speed);
@@ -341,7 +345,7 @@ void main() {
         if(position<0||position>=int(length)) break;
         if(move_source(point_at(uint(position)),direction)) {
             subgroupMemoryBarrierShared();
-            if(length>CACHE_CELLS) subgroupMemoryBarrierBuffer();
+            subgroupMemoryBarrierBuffer();
             subgroupBarrier();
         }
     }

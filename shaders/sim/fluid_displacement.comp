@@ -1,4 +1,5 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
 #extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_arithmetic : require
 layout(local_size_x=128) in;
@@ -7,6 +8,7 @@ layout(constant_id=1) const uint CACHE_CELLS=2048u;
 layout(set=0,binding=1,std430) coherent buffer Cells {uvec2 chunk_cells[];};
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
+#include "water_color.glsl"
 layout(push_constant) uniform Params {uint width,height,mode;} params;
 const uint FULL=65536u,PERMEABLE=1u<<17u,KNOWN=1u<<18u,OCCUPIED=1u<<19u;
 shared uvec2 cached[CACHE_CELLS];
@@ -18,7 +20,7 @@ uint page_at(ivec2 p) {
     return pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
 }
 uint atlas_index(ivec2 p,uint page) {return (page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);}
-bool permeable(uint material) {return material==0u||material==2u||material==4u||material==5u||material==6u;}
+bool permeable(uint material) {return material==0u||material==2u||material==4u||material==5u||material==6u||material==10u;}
 uint global_meta(ivec2 p,uint page) {
     uint index=uint(p.y)*params.width+uint(p.x),cells=params.width*params.height;
     uint capacity=FULL-min(FULL,occupancy[2u*cells+index]);
@@ -36,6 +38,7 @@ uint water_at(ivec2 p) {
     return position<CACHE_CELLS?cached[position].x:chunk_cells[atlas_index(p,page_at(p))].y;
 }
 void put_water(ivec2 p,uint value) {
+    water_color_clear(atlas_index(p,page_at(p)),value);
     uint position=coordinate(p);
     if(position<CACHE_CELLS) cached[position].x=value;
     else chunk_cells[atlas_index(p,page_at(p))].y=value;
@@ -80,8 +83,9 @@ bool displace_source(ivec2 source) {
     uint remaining=available>prior?available-prior:0u;
     for(uint order=first;order<last&&remaining!=0u;order++) {
         uint flux=min(remaining,request_at(source,order,left,right));remaining-=flux;
-        if(flux!=0u) {ivec2 target=target_at(source,order);put_water(target,water_at(target)+flux);}
+        if(flux!=0u) {ivec2 target=target_at(source,order);water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),water_at(target),flux);put_water(target,water_at(target)+flux);}
     }
+    subgroupMemoryBarrierBuffer();subgroupBarrier();
     uint sent=min(available,total);
     if(lane==0u&&sent!=0u) put_water(source,water-sent);
     return sent!=0u;
@@ -98,7 +102,7 @@ void main() {
     subgroupMemoryBarrierShared();subgroupBarrier();
     for(int position=LATERAL!=0u?0:int(length)-1;position>=0&&position<int(length);position+=LATERAL!=0u?1:-1) {
         if(displace_source(point_at(uint(position)))) {
-            subgroupMemoryBarrierShared();if(length>CACHE_CELLS) subgroupMemoryBarrierBuffer();subgroupBarrier();
+            subgroupMemoryBarrierShared();subgroupMemoryBarrierBuffer();subgroupBarrier();
         }
     }
     for(uint position=gl_SubgroupInvocationID;position<min(length,CACHE_CELLS);position+=gl_SubgroupSize) {

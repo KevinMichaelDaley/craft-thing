@@ -19,6 +19,7 @@ uint base() {
     return 8u+2u*w*h+4096u*8u+12u+8192u*32u+16u+64u*32u+8192u*16u;
 }
 uint graph() { uint s=base();return s+32u+data[s+1u]*8u; }
+#include "shape_colors.glsl"
 uint state(uint i) { return graph()+2u*GRAPH_WORDS+i*12u; }
 uvec2 pair(uint p) { return uvec2(data[p],data[p+1u]); }
 int node_index(uint g,uint id) {
@@ -187,8 +188,11 @@ void topology() {
 }
 #include "structural_equilibrium.glsl"
 #include "structural_failure.glsl"
+#include "leaf_debris.glsl"
 #include "structural_impact.glsl"
+#include "body_carve.glsl"
 void main() {
+    if(STRUCTURAL_PHASE==6u) {carve_bodies();return;}
     if(STRUCTURAL_PHASE==0u) {if(gl_LocalInvocationID.x==0u) transaction();return;}
     if(STRUCTURAL_PHASE==2u) {
         uint lane=gl_LocalInvocationID.x;
