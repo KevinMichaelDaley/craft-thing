@@ -45,6 +45,15 @@ test_renderer_uses_textures_preserves_holes_and_paused_physics(void) {
   }
   chunk->cells[20 * 64 + 32].material = DC_MATERIAL_STONE;
   chunk->cells[20 * 64 + 32].fluid_mass = 65536;
+  chunk->cells[30 * 64 + 12].material = DC_MATERIAL_DIRT;
+  chunk->cells[30 * 64 + 12].flags = DC_CELL_LOADED_TERRAIN;
+  chunk->cells[30 * 64 + 13].material = DC_MATERIAL_DIRT;
+  for (unsigned x = 12; x <= 13; x++) {
+    dc_chunk_particle_init(&chunk->particles[30 * 64 + x], chunk->coord,
+                           30 * 64 + x, DC_MATERIAL_DIRT);
+    chunk->particles[30 * 64 + x].mass_fp = 49152;
+  }
+  chunk->particle_count = 2;
   ASSERT_TRUE(dc_gpu_upload_chunk(g, 0, chunk, err, sizeof(err)));
   ASSERT_TRUE(dc_gpu_set_page(g, 0, 0, 0, err, sizeof(err)));
   dc_gpu_body_shape_t leaves = {
@@ -92,6 +101,12 @@ test_renderer_uses_textures_preserves_holes_and_paused_physics(void) {
   ASSERT_EQ(leaf.maximum, 0.f);
   ASSERT_TRUE(fr_renderer_read_opacity(g, 32, 20, &leaf));
   ASSERT_EQ(leaf.maximum, 1.f);
+  /* Terrain remains an intact optical solid while its MPM support settles.
+     Loose grains still use their actual coverage. */
+  ASSERT_TRUE(fr_renderer_read_opacity(g, 12, 30, &leaf));
+  ASSERT_EQ(leaf.maximum, 1.f);
+  ASSERT_TRUE(fr_renderer_read_opacity(g, 13, 30, &leaf));
+  ASSERT_EQ(leaf.maximum, .75f);
   memcpy(lit, g->mapped, sizeof(lit));
   ASSERT_TRUE(memcmp(lit, reference, sizeof(lit)) != 0);
   unsigned variations = 0;
