@@ -206,6 +206,23 @@ static void test_diagonal_schedule_excludes_absent_tiles(void) {
   for (uint32_t along = 0; along < height; along += 32u)
     expected += width + height - 1u - 2u * along;
   ASSERT_EQ(fr_lighting_gpu_scan_groups(lighting,1),expected);
+  float *opacity = calloc(width * height,sizeof(*opacity));
+  uint32_t *known = malloc(width * height * sizeof(*known));
+  ASSERT_TRUE(opacity && known);
+  for (uint32_t i = 0; i < width * height; i++) known[i] = 1u;
+  ASSERT_TRUE(fr_occlusion_gpu_upload(occlusion,opacity,known));
+  ASSERT_TRUE(fr_occlusion_gpu_generate(occlusion,g_error,sizeof(g_error)));
+  fr_renderer_point_light_t point = {96.5f,32.5f,0,1000,{1,.3f,.7f},100};
+  ASSERT_TRUE(fr_lighting_gpu_set_sources(lighting,&point,1,(fr_renderer_sun_t){0},1024));
+  ASSERT_TRUE(fr_lighting_gpu_generate(lighting,g_error,sizeof(g_error)));
+  for (uint32_t y = 0; y < height; y++) {
+    fr_renderer_light_field_t a,b;
+    ASSERT_TRUE(fr_lighting_gpu_read(lighting,1,y,&a));
+    ASSERT_TRUE(fr_lighting_gpu_read(lighting,width-2u,height-1u-y,&b));
+    for (uint32_t color = 0; color < 3; color++)
+      ASSERT_TRUE(fabsf(a.l0[color]-b.l0[color])<.00001f);
+  }
+  free(opacity);free(known);
   fr_lighting_gpu_destroy(lighting);
   fr_occlusion_gpu_destroy(occlusion);
   PASS();

@@ -226,6 +226,12 @@ void main() {
     if(PHASE==0u) {
         uint length=ITERATION==1u?min(metadata[0],metadata[1]):direction<2u?metadata[0]:metadata[1],blocks=(length+(FR_TRANSPORT_TILE-1u))/FR_TRANSPORT_TILE;
         uint line=group/blocks,tile=group%blocks,along=tile*FR_TRANSPORT_TILE+lane;
+        if(ITERATION==1u) {
+            uint count=metadata.length();
+            if(136u+2u*group+1u>=count) return;
+            line=metadata[136u+2u*group];tile=metadata[137u+2u*group];
+            along=tile*FR_TRANSPORT_TILE+lane;
+        }
         if(line>=line_count(direction)) return;
         /* Diagonals have different lengths. Padded tiles carry identity, but
            must not run a full shared/subgroup scan over absent pixels. */
@@ -243,7 +249,10 @@ void main() {
         uint length=length_at(direction,p.level),blocks=(length+(FR_TRANSPORT_TILE-1u))/FR_TRANSPORT_TILE;
         uint line=group/blocks,tile=group%blocks,along=tile*FR_TRANSPORT_TILE+lane;
         if(length<=1u||line>=line_count(direction)) return;
-        Beam scanned=scan(along<length?unpack_beam(totals[block_offset(direction,p.level,line,along)]):identity());
+        bool present=along<length;
+        if(ITERATION==1u&&p.level==0u)
+            present=present&&inside(scan_cell(direction,line,along*FR_TRANSPORT_TILE));
+        Beam scanned=scan(present?unpack_beam(totals[block_offset(direction,p.level,line,along)]):identity());
         if(along<length) totals[block_offset(direction,p.level,line,along)]=pack_beam(scanned);
         if(lane==(FR_TRANSPORT_TILE-1u)) totals[block_offset(direction,p.level+1u,line,tile)]=pack_beam(scanned);
         return;

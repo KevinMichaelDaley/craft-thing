@@ -28,6 +28,7 @@ struct fr_lighting_gpu {
   void *work_mapped;
   light_pass_t passes[LIGHTING_MAX_PASSES];
   uint32_t pass_count;
+  uint32_t diagonal_groups;
   VkPipeline specialized[FR_TRANSPORT_SOURCE_ITERATIONS][6];
 };
 static uint32_t tiles(uint32_t length) {
@@ -64,6 +65,7 @@ static void plan_transport(fr_lighting_gpu_t *l) {
       levels++;
     }
     add_pass(l, 0, 0, iteration,
+             diagonal ? l->diagonal_groups :
              larger(rows * horizontal[0], columns * vertical[0]), 4);
     for (uint32_t level = 0; level < levels; level++)
       add_pass(l, 1, level, iteration,
@@ -146,6 +148,15 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
     goto fail;
   layout[6] = block_nodes(l->width, l->height);
   layout[7] = block_nodes(l->height, l->width);
+  uint64_t diagonal_groups = 0;
+  for (uint32_t along = 0; along < smaller(l->width,l->height);
+       along += FR_TRANSPORT_TILE)
+    diagonal_groups += (uint64_t)l->width + l->height - 1u - 2u * along;
+  if (diagonal_groups > (UINT32_MAX - 136u) / 2u)
+    goto fail;
+  l->diagonal_groups = (uint32_t)diagonal_groups;
+  VkDeviceSize parameter_bytes =
+      ((VkDeviceSize)136u + 2u * l->diagonal_groups) * sizeof(uint32_t);
   uint32_t total_nodes = larger(2u * layout[6] + 2u * layout[7],
                                 4u * block_nodes(smaller(l->width, l->height),
                                                  l->width + l->height - 1u));
@@ -178,7 +189,7 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
     commands[5u + i * 4u] = (groups + 65534u) / 65535u;
     commands[6u + i * 4u] = l->passes[i].directions;
   }
-  if (!dc_gpu_make_mapped_buffer(g, sizeof(layout), &l->parameters,
+  if (!dc_gpu_make_mapped_buffer(g, parameter_bytes, &l->parameters,
                                  &l->parameter_memory, &l->parameter_mapped,
                                  err, cap) ||
       !dc_gpu_make_mapped_buffer(g, 17u * 32u, &l->sources, &l->source_memory,
@@ -188,7 +199,21 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
                                  err, cap))
     goto fail;
   memcpy(l->parameter_mapped, layout, sizeof(layout));
-  buffers[1] = (VkDescriptorBufferInfo){l->parameters, 0, sizeof(layout)};
+  /* Immutable geometry schedule: omit diagonals ending before each tile.
+     No scene pixels or simulation state are read by this cold setup. */
+  uint32_t *scan_map = (uint32_t *)l->parameter_mapped + 136u;
+  for (uint32_t along = 0; along < smaller(l->width,l->height);
+       along += FR_TRANSPORT_TILE) {
+    for (uint32_t x = 0; x < l->width - along; x++) {
+      *scan_map++ = x;
+      *scan_map++ = along / FR_TRANSPORT_TILE;
+    }
+    for (uint32_t y = 1; y < l->height - along; y++) {
+      *scan_map++ = l->width + y - 1u;
+      *scan_map++ = along / FR_TRANSPORT_TILE;
+    }
+  }
+  buffers[1] = (VkDescriptorBufferInfo){l->parameters, 0, parameter_bytes};
   buffers[2] = (VkDescriptorBufferInfo){l->sources, 0, 17u * 32u};
   buffers[3] = (VkDescriptorBufferInfo){
       l->field, 0, (VkDeviceSize)l->width * l->height * FR_RENDERER_FIELD_BYTES};
