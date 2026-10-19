@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "ferrum/renderer/lighting_gpu.h"
 
@@ -8,8 +9,9 @@ static dc_gpu_t *g_gpu;
 static fr_occlusion_gpu_t *g_occlusion;
 static fr_lighting_gpu_t *g_lighting;
 static char g_error[256];
-static float g_opacity[128];
-static uint32_t g_known[128];
+enum { LIGHT_WIDTH=17,LIGHT_HEIGHT=9,LIGHT_CELLS=LIGHT_WIDTH*LIGHT_HEIGHT };
+static float g_opacity[LIGHT_CELLS];
+static uint32_t g_known[LIGHT_CELLS];
 #define RUN(fn)                                                                \
   do {                                                                         \
     printf("RUN %s\n", #fn);                                                   \
@@ -28,7 +30,7 @@ static uint32_t g_known[128];
 #define PASS() g_pass++
 
 static bool empty_scene(void) {
-  for (unsigned i = 0; i < 128; i++) {
+  for (unsigned i = 0; i < LIGHT_CELLS; i++) {
     g_opacity[i] = 0;
     g_known[i] = 1;
   }
@@ -55,8 +57,8 @@ static void test_skylight_loses_energy_with_depth(void) {
 }
 static void test_emission_propagates_around_an_open_doorway(void) {
   ASSERT_TRUE(empty_scene());
-  for(unsigned y=0;y<8;y++) g_opacity[y*16+7]=1;
-  g_opacity[4*16+7]=0;
+  for(unsigned y=0;y<LIGHT_HEIGHT;y++) g_opacity[y*LIGHT_WIDTH+7]=1;
+  g_opacity[4*LIGHT_WIDTH+7]=0;
   ASSERT_TRUE(fr_occlusion_gpu_upload(g_occlusion,g_opacity,g_known));
   ASSERT_TRUE(fr_occlusion_gpu_generate(g_occlusion,g_error,sizeof(g_error)));
   fr_renderer_point_light_t light={4.5f,4.5f,0,20,{1,0,0},10};
@@ -66,6 +68,38 @@ static void test_emission_propagates_around_an_open_doorway(void) {
   ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,9,6,&field));
   ASSERT_TRUE(field.l0[0]>0);
   PASS();
+}
+static void test_large_field_crosses_scan_tiles_and_filters_foliage(void) {
+  const unsigned width=257,height=129,count=width*height;
+  float *opacity=calloc(count,sizeof(*opacity));uint32_t *known=malloc(count*sizeof(*known));
+  ASSERT_TRUE(opacity&&known);
+  for(unsigned i=0;i<count;i++) known[i]=1;
+  fr_occlusion_gpu_t *occlusion=NULL;fr_lighting_gpu_t *lighting=NULL;
+  ASSERT_TRUE(fr_occlusion_gpu_create(g_gpu,width,height,&occlusion,g_error,sizeof(g_error)));
+  ASSERT_TRUE(fr_lighting_gpu_create(g_gpu,occlusion,&lighting,g_error,sizeof(g_error)));
+  fr_renderer_sun_t sun={.direction={0,-1,0},.color={1,1,1},.intensity=1,.known_sky=FR_SKY_TOP};
+  ASSERT_TRUE(fr_lighting_gpu_set_sources(lighting,NULL,0,sun,1024));
+  ASSERT_TRUE(fr_occlusion_gpu_upload(occlusion,opacity,known));
+  ASSERT_TRUE(fr_occlusion_gpu_generate(occlusion,g_error,sizeof(g_error)));
+  ASSERT_TRUE(fr_lighting_gpu_generate(lighting,g_error,sizeof(g_error)));
+  fr_renderer_light_field_t a,b,c;
+  ASSERT_TRUE(fr_lighting_gpu_read(lighting,128,126,&a));
+  ASSERT_TRUE(fr_lighting_gpu_read(lighting,128,127,&b));
+  ASSERT_TRUE(fr_lighting_gpu_read(lighting,128,128,&c));
+  ASSERT_TRUE(a.l0[0]>b.l0[0]&&b.l0[0]>c.l0[0]&&c.l0[0]>0);
+  ASSERT_TRUE(c.l0[0]>.9f*b.l0[0]);float clear=c.l0[0];
+  for(unsigned x=0;x<width;x++) opacity[64*width+x]=.08f;
+  ASSERT_TRUE(fr_occlusion_gpu_upload(occlusion,opacity,known));
+  ASSERT_TRUE(fr_occlusion_gpu_generate(occlusion,g_error,sizeof(g_error)));
+  ASSERT_TRUE(fr_lighting_gpu_generate(lighting,g_error,sizeof(g_error)));
+  ASSERT_TRUE(fr_lighting_gpu_read(lighting,128,128,&c));
+  ASSERT_TRUE(c.l0[0]>0&&c.l0[0]<clear);
+  for(unsigned x=0;x<width;x++) opacity[64*width+x]=1.f;
+  ASSERT_TRUE(fr_occlusion_gpu_upload(occlusion,opacity,known));
+  ASSERT_TRUE(fr_occlusion_gpu_generate(occlusion,g_error,sizeof(g_error)));
+  ASSERT_TRUE(fr_lighting_gpu_generate(lighting,g_error,sizeof(g_error)));
+  ASSERT_TRUE(fr_lighting_gpu_read(lighting,128,128,&c));ASSERT_EQ(c.l0[0],0.f);
+  fr_lighting_gpu_destroy(lighting);fr_occlusion_gpu_destroy(occlusion);free(opacity);free(known);PASS();
 }
 static void test_colored_directions_keep_independent_rgb_moments(void) {
   ASSERT_TRUE(empty_scene());
@@ -87,8 +121,8 @@ static void test_zero_distance_emitter_is_finite(void) {
 static void test_thin_wall_and_one_pixel_hole_visibility(void) {
   ASSERT_TRUE(empty_scene());
   ASSERT_TRUE(set_points());
-  for (unsigned y = 0; y < 8; y++)
-    g_opacity[y * 16 + 7] = 1;
+  for (unsigned y = 0; y < LIGHT_HEIGHT; y++)
+    g_opacity[y * LIGHT_WIDTH + 7] = 1;
   ASSERT_TRUE(fr_occlusion_gpu_upload(g_occlusion, g_opacity, g_known));
   ASSERT_TRUE(fr_occlusion_gpu_generate(g_occlusion, g_error, sizeof(g_error)));
   ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting, g_error, sizeof(g_error)));
@@ -96,7 +130,7 @@ static void test_thin_wall_and_one_pixel_hole_visibility(void) {
   ASSERT_TRUE(fr_lighting_gpu_read(g_lighting, 9, 4, &f));
   ASSERT_EQ(f.l0[0], 0.f);
   ASSERT_TRUE(f.l0[2] > 0);
-  g_opacity[4 * 16 + 7] = 0;
+  g_opacity[4 * LIGHT_WIDTH + 7] = 0;
   ASSERT_TRUE(fr_occlusion_gpu_upload(g_occlusion, g_opacity, g_known));
   ASSERT_TRUE(fr_occlusion_gpu_generate(g_occlusion, g_error, sizeof(g_error)));
   ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting, g_error, sizeof(g_error)));
@@ -138,9 +172,9 @@ test_opposing_equal_lights_keep_energy_when_direction_cancels(void) {
 }
 static void test_sun_thin_wall_preserves_one_pixel_gap(void) {
   ASSERT_TRUE(empty_scene());
-  for (unsigned x = 0; x < 16; x++)
-    g_opacity[3 * 16 + x] = 1;
-  g_opacity[3 * 16 + 4] = 0;
+  for (unsigned x = 0; x < LIGHT_WIDTH; x++)
+    g_opacity[3 * LIGHT_WIDTH + x] = 1;
+  g_opacity[3 * LIGHT_WIDTH + 4] = 0;
   ASSERT_TRUE(fr_occlusion_gpu_upload(g_occlusion, g_opacity, g_known));
   ASSERT_TRUE(fr_occlusion_gpu_generate(g_occlusion, g_error, sizeof(g_error)));
   fr_renderer_sun_t sun = {.direction = {0, -1, 0},
@@ -152,14 +186,15 @@ static void test_sun_thin_wall_preserves_one_pixel_gap(void) {
   fr_renderer_light_field_t f;
   ASSERT_TRUE(fr_lighting_gpu_read(g_lighting, 4, 5, &f));
   ASSERT_TRUE(f.l0[0] > 0);
+  float direct=f.l0[0];
   ASSERT_TRUE(fr_lighting_gpu_read(g_lighting, 5, 5, &f));
-  ASSERT_EQ(f.l0[0], 0.f);
+  ASSERT_TRUE(f.l0[0]>0&&f.l0[0]<direct);
   PASS();
 }
 static void test_unknown_and_unfinished_rays_cannot_leak(void) {
   ASSERT_TRUE(empty_scene());
   ASSERT_TRUE(set_points());
-  g_known[4 * 16 + 7] = 0;
+  for(unsigned y=0;y<LIGHT_HEIGHT;y++) g_known[y*LIGHT_WIDTH+7]=0;
   ASSERT_TRUE(fr_occlusion_gpu_upload(g_occlusion, g_opacity, g_known));
   ASSERT_TRUE(fr_occlusion_gpu_generate(g_occlusion, g_error, sizeof(g_error)));
   ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting, g_error, sizeof(g_error)));
@@ -167,9 +202,9 @@ static void test_unknown_and_unfinished_rays_cannot_leak(void) {
   ASSERT_TRUE(fr_lighting_gpu_read(g_lighting, 9, 4, &f));
   ASSERT_EQ(f.l0[0], 0.f);
   ASSERT_TRUE(empty_scene());
-  for (unsigned y = 0; y < 8; y++)
-    g_opacity[y * 16 + 7] = 1;
-  g_opacity[4 * 16 + 7] = 0;
+  for (unsigned y = 0; y < LIGHT_HEIGHT; y++)
+    g_opacity[y * LIGHT_WIDTH + 7] = 1;
+  g_opacity[4 * LIGHT_WIDTH + 7] = 0;
   ASSERT_TRUE(fr_occlusion_gpu_upload(g_occlusion, g_opacity, g_known));
   ASSERT_TRUE(fr_occlusion_gpu_generate(g_occlusion, g_error, sizeof(g_error)));
   fr_renderer_point_light_t point = {14.5f, 4.5f, 0, 32, {1, 0, 0}, 10};
@@ -187,7 +222,7 @@ static void test_unknown_and_unfinished_rays_cannot_leak(void) {
 int main(void) {
   if (!dc_gpu_create(&g_gpu, 64, 64, "build/shaders/pattern.comp.spv", g_error,
                      sizeof(g_error)) ||
-      !fr_occlusion_gpu_create(g_gpu, 16, 8, &g_occlusion, g_error,
+      !fr_occlusion_gpu_create(g_gpu, LIGHT_WIDTH, LIGHT_HEIGHT, &g_occlusion, g_error,
                                sizeof(g_error)) ||
       !fr_lighting_gpu_create(g_gpu, g_occlusion, &g_lighting, g_error,
                               sizeof(g_error))) {
@@ -197,6 +232,7 @@ int main(void) {
   RUN(test_colored_directions_keep_independent_rgb_moments);
   RUN(test_skylight_loses_energy_with_depth);
   RUN(test_emission_propagates_around_an_open_doorway);
+  RUN(test_large_field_crosses_scan_tiles_and_filters_foliage);
   RUN(test_zero_distance_emitter_is_finite);
   RUN(test_thin_wall_and_one_pixel_hole_visibility);
   RUN(test_sun_requires_explicit_known_sky_boundary);

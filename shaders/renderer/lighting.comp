@@ -1,5 +1,7 @@
 #version 450
-layout(local_size_x=8,local_size_y=8) in;
+#extension GL_GOOGLE_include_directive : require
+#include "../../include/ferrum/renderer/light_transport.h"
+layout(local_size_x=128) in;
 struct Node {float minimum;float maximum;uint known;uint reserved;};
 layout(set=0,binding=0,std430) readonly buffer Hierarchy {Node nodes[];};
 layout(set=0,binding=1,std430) readonly buffer Parameters {uint metadata[];};
@@ -7,88 +9,151 @@ struct Light {vec4 position_radius;vec4 color_intensity;};
 layout(set=0,binding=2,std430) readonly buffer Sources {Light sources[];};
 struct Field {vec4 l0;vec4 lx;vec4 ly;vec4 lz;};
 layout(set=0,binding=3,std430) buffer Fields {Field fields[];};
-shared vec4 energy[64];
-shared vec4 moment_x[64];
-shared vec4 moment_y[64];
-shared vec4 moment_z[64];
-
-float cell_exit(vec2 point,vec2 direction,vec2 low,vec2 high) {
-    vec2 distance=vec2(1e30);
-    if(abs(direction.x)>1e-8) distance.x=((direction.x>0.?high.x:low.x)-point.x)/direction.x;
-    if(abs(direction.y)>1e-8) distance.y=((direction.y>0.?high.y:low.y)-point.y)/direction.y;
-    return max(min(distance.x,distance.y),0.);
+/* RGB incoming radiance, affine transmission, and RGB vertical moments. */
+struct Beam {vec4 light;vec4 vertical;};
+layout(set=0,binding=4,std430) buffer Local {Beam local_prefix[];};
+layout(set=0,binding=5,std430) buffer Previous {Beam previous[];};
+layout(set=0,binding=6,std430) buffer Totals {Beam totals[];};
+layout(set=0,binding=7,std430) buffer Work {uint work[];};
+layout(push_constant) uniform Push {uint phase,level,iteration,commands;} p;
+shared Beam prefix[128];
+Beam identity() {return Beam(vec4(0,0,0,1),vec4(0));}
+Beam compose(Beam current,Beam preceding) {
+    current.vertical.rgb+=current.light.a*preceding.vertical.rgb;
+    current.light.rgb+=current.light.a*preceding.light.rgb;
+    current.light.a*=preceding.light.a;return current;
 }
-uint boundary_bit(vec2 p) {
-    if(p.x<0.) return 1u;if(p.x>=float(metadata[0])) return 2u;
-    if(p.y<0.) return 4u;return 8u;
-}
-float visibility(vec2 receiver,vec2 direction,float limit,bool sun) {
-    uint width=metadata[0],height=metadata[1];
-    uint receiver_index=uint(receiver.y)*width+uint(receiver.x);
-    if(nodes[receiver_index].known==0u) return 0.;
-    if(limit<1e-5) return 1.;
-    if(dot(direction,direction)<1e-10) return sun && metadata[5]==0u?0.:1.;
-    float t=cell_exit(receiver,direction,floor(receiver),floor(receiver)+1.)+.0001;
-    float transmission=1.;
-    for(uint iteration=0u;iteration<metadata[4];iteration++) {
-        if(t>=limit) return transmission;
-        vec2 point=receiver+direction*t;
-        if(point.x<0. || point.y<0. || point.x>=float(width) || point.y>=float(height))
-            return sun && (metadata[5]&boundary_bit(point))!=0u?transmission:0.;
-        float span=1.;Node node;
-        for(int level=int(metadata[2])-1;level>=0;level--) {
-            uint base=8u+uint(level)*4u,scale=1u<<uint(level);
-            uvec2 position=uvec2(point)/scale;
-            node=nodes[metadata[base]+position.y*metadata[base+1u]+position.x];
-            if(node.minimum>=1.) return 0.;
-            if(node.maximum==0. || level==0) {span=float(scale);break;}
-        }
-        if(node.known==0u && span==1.) return 0.;
-        if(span==1.) transmission*=1.-node.maximum;
-        if(transmission<=.00001) return 0.;
-        vec2 low=floor(point/span)*span;
-        vec2 high=min(low+span,vec2(width,height));
-        t+=cell_exit(point,direction,low,high)+.0001;
-        if(t>=limit) return transmission;
-    }
-    return 0.;
-}
-
-void main() {
-    uint lane=gl_LocalInvocationID.x,row=gl_LocalInvocationID.y;
-    uint local=row*8u+lane,i=gl_WorkGroupID.x*8u+row;
-    vec3 l0=vec3(0),lx=vec3(0),ly=vec3(0),lz=vec3(0);
-    if(i<metadata[0]*metadata[1]) {
-        vec2 receiver=vec2(i%metadata[0],i/metadata[0])+.5;
-        for(uint source=lane;source<=metadata[3];source+=8u) {
-            Light light=sources[source];
-            if(light.color_intensity.a<=0.) continue;
-            bool sun=source==metadata[3];vec3 direction;float attenuation=1.,limit;
-            if(sun) {
-                direction=light.position_radius.xyz;limit=float(metadata[0]+metadata[1])*2.;
-            } else {
-                vec3 delta=vec3(light.position_radius.xy-receiver,light.position_radius.z);
-                float distance_squared=dot(delta,delta),radius_squared=light.position_radius.w*light.position_radius.w;
-                if(distance_squared>=radius_squared) continue;
-                direction=distance_squared>1e-10?delta*inversesqrt(distance_squared):vec3(0,0,1);
-                float falloff=1.-distance_squared/radius_squared;
-                attenuation=falloff*falloff/max(distance_squared,.25);
-                limit=length(delta.xy);
-            }
-            float planar=length(direction.xy);
-            vec2 ray=planar>1e-8?direction.xy/planar:vec2(0);
-            vec3 contribution=light.color_intensity.rgb*light.color_intensity.a*attenuation*visibility(receiver,ray,limit,sun);
-            l0+=contribution;lx+=contribution*direction.x;ly+=contribution*direction.y;lz+=contribution*direction.z;
-        }
-    }
-    energy[local]=vec4(l0,0);moment_x[local]=vec4(lx,0);moment_y[local]=vec4(ly,0);moment_z[local]=vec4(lz,0);
-    barrier();
-    for(uint step=4u;step>0u;step>>=1u) {
-        if(lane<step) {
-            energy[local]+=energy[local+step];moment_x[local]+=moment_x[local+step];
-            moment_y[local]+=moment_y[local+step];moment_z[local]+=moment_z[local+step];
-        }
+void scan(Beam value) {
+    uint lane=gl_LocalInvocationIndex;prefix[lane]=value;barrier();
+    for(uint stride=1u;stride<128u;stride*=2u) {
+        Beam current=prefix[lane],preceding=prefix[lane>=stride?lane-stride:lane];
         barrier();
+        if(lane>=stride) current=compose(current,preceding);
+        prefix[lane]=current;barrier();
     }
-    if(lane==0u && i<metadata[0]*metadata[1]) fields[i]=Field(energy[local],moment_x[local],moment_y[local],moment_z[local]);
+}
+uint length_at(uint direction,uint level) {
+    uint length=direction<2u?metadata[0]:metadata[1];
+    for(uint step=0u;step<=level;step++) length=(length+127u)/128u;
+    return length;
+}
+uint line_count(uint direction) {return direction<2u?metadata[1]:metadata[0];}
+uint block_offset(uint direction,uint level,uint line,uint index) {
+    uint base=direction==0u?0u:direction==1u?metadata[6]:2u*metadata[6]+(direction==3u?metadata[7]:0u);
+    for(uint step=0u;step<level;step++) base+=length_at(direction,step)*line_count(direction);
+    return base+line*length_at(direction,level)+index;
+}
+ivec2 travel(uint direction) {
+    return direction==0u?ivec2(1,0):direction==1u?ivec2(-1,0):direction==2u?ivec2(0,1):ivec2(0,-1);
+}
+bool inside(ivec2 cell) {return all(greaterThanEqual(cell,ivec2(0)))&&all(lessThan(cell,ivec2(metadata[0],metadata[1])));}
+uint index_at(ivec2 cell) {return uint(cell.y)*metadata[0]+uint(cell.x);}
+vec3 emission(ivec2 cell,out vec3 vertical) {
+    vec3 result=vec3(0);vertical=vec3(0);
+    for(uint source=0u;source<metadata[3];source++) {
+        Light light=sources[source];
+        if(any(notEqual(floor(light.position_radius.xy),vec2(cell)))) continue;
+        float height=light.position_radius.z;
+        vec3 energy=light.color_intensity.rgb*light.color_intensity.a*.25/(1.+height*height);
+        result+=energy;vertical+=energy*height/sqrt(1.+height*height);
+    }
+    return result;
+}
+Beam inject(ivec2 cell,uint direction) {
+    uint index=index_at(cell);
+    if(nodes[index].known==0u) return Beam(vec4(0),vec4(0));
+    vec3 z,energy=emission(cell,z);
+    ivec2 preceding=cell-travel(direction);float transmission=0.;
+    if(inside(preceding)) {
+        uint before=index_at(preceding);
+        if(nodes[before].known!=0u) {
+            transmission=1.-nodes[before].maximum;
+            vec3 unused;
+            if(any(greaterThan(emission(preceding,unused),vec3(0)))) transmission=1.;
+            transmission*=FR_TRANSPORT_AIR_TRANSMISSION;
+            if(p.iteration!=0u) {
+                vec3 scatter=vec3(0),scatter_z=vec3(0);
+                for(uint d=0u;d<4u;d++) {scatter+=previous[before*4u+d].light.rgb;scatter_z+=previous[before*4u+d].vertical.rgb;}
+                float weight=transmission*(1.-FR_TRANSPORT_FORWARD_FRACTION)*.25;
+                energy+=weight*scatter;z+=weight*scatter_z;
+            }
+        }
+    } else {
+        Light sun=sources[metadata[3]];
+        uint bit=direction==0u?1u:direction==1u?2u:direction==2u?4u:8u;
+        vec2 incoming=sun.position_radius.xy;
+        float weight=max(0.,-dot(vec2(travel(direction)),incoming));
+        if(length(incoming)<1e-6&&direction==2u) weight=1.;
+        if((metadata[5]&bit)!=0u) {
+            vec3 sky=sun.color_intensity.rgb*sun.color_intensity.a*weight;
+            energy+=sky;z+=sky*sun.position_radius.z;
+        }
+    }
+    return Beam(vec4(energy,transmission*FR_TRANSPORT_FORWARD_FRACTION),vec4(z,0));
+}
+bool reachable(ivec2 cell) {
+    float budget=float(metadata[4]);
+    for(uint source=0u;source<metadata[3];source++) {
+        Light light=sources[source];
+        if(light.color_intensity.a>0.&&distance(vec2(cell)+.5,light.position_radius.xy)<=min(budget,light.position_radius.w)) return true;
+    }
+    if(sources[metadata[3]].color_intensity.a<=0.) return false;
+    return ((metadata[5]&1u)!=0u&&float(cell.x)<=budget)||
+           ((metadata[5]&2u)!=0u&&float(int(metadata[0])-1-cell.x)<=budget)||
+           ((metadata[5]&4u)!=0u&&float(cell.y)<=budget)||
+           ((metadata[5]&8u)!=0u&&float(int(metadata[1])-1-cell.y)<=budget);
+}
+void main() {
+    uint lane=gl_LocalInvocationIndex;
+    uint group=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x;
+    uint global=group*128u+lane;
+    if(p.phase==4u) {
+        if(global<p.commands) work[4u+global*4u]=work[0]!=0u?work[7u+global*4u]:0u;
+        return;
+    }
+    if(work[0]==0u) return;
+    uint direction=gl_WorkGroupID.z;
+    if(p.phase==0u) {
+        uint length=direction<2u?metadata[0]:metadata[1],blocks=(length+127u)/128u;
+        uint line=group/blocks,tile=group%blocks,along=tile*128u+lane;
+        if(line>=line_count(direction)) return;
+        uint coordinate=(direction&1u)==0u?along:length-1u-min(along,length-1u);
+        ivec2 cell=direction<2u?ivec2(coordinate,line):ivec2(line,coordinate);
+        scan(along<length?inject(cell,direction):identity());
+        if(along<length) local_prefix[index_at(cell)*4u+direction]=prefix[lane];
+        if(lane==127u) totals[block_offset(direction,0u,line,tile)]=prefix[lane];
+        return;
+    }
+    if(p.phase==1u) {
+        uint length=length_at(direction,p.level),blocks=(length+127u)/128u;
+        uint line=group/blocks,tile=group%blocks,along=tile*128u+lane;
+        if(length<=1u||line>=line_count(direction)) return;
+        scan(along<length?totals[block_offset(direction,p.level,line,along)]:identity());
+        if(along<length) totals[block_offset(direction,p.level,line,along)]=prefix[lane];
+        if(lane==127u) totals[block_offset(direction,p.level+1u,line,tile)]=prefix[lane];
+        return;
+    }
+    if(p.phase==2u) {
+        uint length=length_at(direction,p.level),line=global/length,along=global%length,tile=along/128u;
+        if(length<=128u||line>=line_count(direction)||tile==0u) return;
+        uint at=block_offset(direction,p.level,line,along);
+        totals[at]=compose(totals[at],totals[block_offset(direction,p.level+1u,line,tile-1u)]);return;
+    }
+    if(global>=metadata[0]*metadata[1]) return;
+    ivec2 cell=ivec2(global%metadata[0],global/metadata[0]);
+    bool known=nodes[global].known!=0u&&reachable(cell);
+    vec3 energy=vec3(0),mx=vec3(0),my=vec3(0),mz=vec3(0);
+    for(uint d=0u;d<4u;d++) {
+        uint length=d<2u?metadata[0]:metadata[1],coordinate=uint(d<2u?cell.x:cell.y);
+        uint along=(d&1u)==0u?coordinate:length-1u-coordinate,tile=along/128u;
+        uint line=uint(d<2u?cell.y:cell.x);
+        Beam beam=local_prefix[global*4u+d];
+        if(tile>0u) beam=compose(beam,totals[block_offset(d,0u,line,tile-1u)]);
+        if(!known) beam=Beam(vec4(0),vec4(0));
+        previous[global*4u+d]=beam;
+        vec3 vertical=clamp(beam.vertical.rgb,-beam.light.rgb,beam.light.rgb);
+        vec3 planar=sqrt(max(vec3(0),beam.light.rgb*beam.light.rgb-vertical*vertical));
+        ivec2 axis=travel(d);energy+=beam.light.rgb;mx-=float(axis.x)*planar;my-=float(axis.y)*planar;mz+=vertical;
+    }
+    fields[global]=Field(vec4(energy,0),vec4(mx,0),vec4(my,0),vec4(mz,0));
 }

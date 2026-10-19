@@ -17,7 +17,7 @@ build/shaders/occlusion.comp.spv: shaders/renderer/occlusion.comp
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/occlusion_gpu_tests: tests/renderer/occlusion_gpu_tests.c src/vulkan/occlusion_gpu.c src/vulkan/renderer_resource.c src/vulkan/renderer_internal.h build/fluid_tests build/shaders/occlusion.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
-build/shaders/lighting.comp.spv: shaders/renderer/lighting.comp
+build/shaders/lighting.comp.spv: shaders/renderer/lighting.comp include/ferrum/renderer/light_transport.h
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/lighting_gpu_tests: tests/renderer/lighting_gpu_tests.c src/vulkan/lighting_gpu.c src/vulkan/occlusion_gpu.c src/vulkan/renderer_resource.c src/vulkan/renderer_internal.h build/fluid_tests build/shaders/occlusion.comp.spv build/shaders/lighting.comp.spv
@@ -86,6 +86,8 @@ build/lighting_gpu.o: src/vulkan/lighting_gpu.c src/vulkan/renderer_internal.h s
 build/shaders/scene.comp.spv: shaders/renderer/scene.comp shaders/renderer/texture.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl shaders/sim/rigid_clip.glsl
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+
+build/shaders/scene.comp.spv: include/ferrum/renderer/light_transport.h
 GPU_OBJ += build/mpm_activity_gpu.o
 GPU_OBJ += build/authored_gpu.o build/authored_request.o
 GPU_OBJ += build/prop_gpu.o build/prop_asset.o

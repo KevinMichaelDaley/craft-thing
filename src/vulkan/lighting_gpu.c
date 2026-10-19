@@ -3,12 +3,16 @@
 #include <string.h>
 
 #include "ferrum/renderer/lighting_gpu.h"
+#include "ferrum/renderer/light_transport.h"
 
 _Static_assert(sizeof(fr_renderer_point_light_t) == 32,
                "Point light GPU layout must be two vec4 values");
 _Static_assert(sizeof(fr_renderer_light_field_t) == 64,
                "Lighting field GPU layout must be four vec4 values");
 #include "renderer_internal.h"
+
+enum { LIGHTING_MAX_PASSES=64 };
+typedef struct {uint32_t phase,level,iteration,groups,directions;} light_pass_t;
 
 struct fr_lighting_gpu {
   dc_gpu_t *gpu;
@@ -17,12 +21,49 @@ struct fr_lighting_gpu {
   VkDeviceMemory parameter_memory, source_memory, field_memory;
   void *parameter_mapped, *source_mapped, *field_mapped;
   fr_renderer_compute_t compute;
+  VkBuffer transport[4];
+  VkDeviceMemory transport_memory[4];
+  void *work_mapped;
+  light_pass_t passes[LIGHTING_MAX_PASSES];
+  uint32_t pass_count;
 };
+static uint32_t tiles(uint32_t length) {return (length+127u)/128u;}
+static uint32_t larger(uint32_t a,uint32_t b) {return a>b?a:b;}
+static uint32_t block_nodes(uint32_t length,uint32_t lines) {
+  uint32_t count=tiles(length),sum=count;
+  while(count>1u) {count=tiles(count);sum+=count;}
+  return sum*lines;
+}
+static void add_pass(fr_lighting_gpu_t *l,uint32_t phase,uint32_t level,
+                      uint32_t iteration,uint32_t groups,uint32_t directions) {
+  l->passes[l->pass_count++]=(light_pass_t){phase,level,iteration,groups,directions};
+}
+static void plan_transport(fr_lighting_gpu_t *l) {
+  uint32_t horizontal[6],vertical[6],levels=0;
+  horizontal[0]=tiles(l->width);vertical[0]=tiles(l->height);
+  while(horizontal[levels]>1u||vertical[levels]>1u) {
+    horizontal[levels+1u]=tiles(horizontal[levels]);
+    vertical[levels+1u]=tiles(vertical[levels]);levels++;
+  }
+  for(uint32_t iteration=0;iteration<FR_TRANSPORT_SOURCE_ITERATIONS;iteration++) {
+    add_pass(l,0,0,iteration,larger(l->height*horizontal[0],l->width*vertical[0]),4);
+    for(uint32_t level=0;level<levels;level++)
+      add_pass(l,1,level,iteration,larger(l->height*tiles(horizontal[level]),l->width*tiles(vertical[level])),4);
+    for(int level=(int)levels-2;level>=0;level--)
+      add_pass(l,2,(uint32_t)level,iteration,tiles(larger(l->height*horizontal[level],l->width*vertical[level])),4);
+    add_pass(l,3,0,iteration,tiles(l->width*l->height),1);
+  }
+}
 void fr_lighting_gpu_destroy(fr_lighting_gpu_t *l) {
   if (!l)
     return;
   VkDevice d = l->gpu->device;
   fr_renderer_compute_destroy(l->gpu, &l->compute);
+  if(l->work_mapped) vkUnmapMemory(d,l->transport_memory[3]);
+  for(unsigned i=0;i<4;i++) {
+    if(l->transport[i]) vkDestroyBuffer(d,l->transport[i],NULL);
+    if(l->transport_memory[i]) vkFreeMemory(d,l->transport_memory[i],NULL);
+  }
   if (l->parameter_mapped)
     vkUnmapMemory(d, l->parameter_memory);
   if (l->source_mapped)
@@ -54,11 +95,36 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
     return false;
   l->gpu = g;
   uint32_t layout[136] = {0};
-  VkDescriptorBufferInfo buffers[4];
+  VkDescriptorBufferInfo buffers[8];
   if (!fr_occlusion_gpu_layout(c, &buffers[0], layout))
     goto fail;
   l->width = layout[0];
   l->height = layout[1];
+  if((uint64_t)l->width*l->height>UINT32_MAX/4u||
+     l->width>UINT32_MAX-127u||l->height>UINT32_MAX-127u) goto fail;
+  layout[6]=block_nodes(l->width,l->height);
+  layout[7]=block_nodes(l->height,l->width);
+  plan_transport(l);
+  VkDeviceSize transport_sizes[4]={
+    (VkDeviceSize)l->width*l->height*4u*32u,
+    (VkDeviceSize)l->width*l->height*4u*32u,
+    (VkDeviceSize)(2u*layout[6]+2u*layout[7])*32u,
+    (4u+4u*l->pass_count)*sizeof(uint32_t)};
+  for(unsigned i=0;i<4;i++) {
+    bool okay=i==3u?dc_gpu_make_mapped_buffer(g,transport_sizes[i],&l->transport[i],
+      &l->transport_memory[i],&l->work_mapped,err,cap):
+      dc_gpu_make_device_buffer(g,transport_sizes[i],&l->transport[i],&l->transport_memory[i],err,cap);
+    if(!okay) goto fail;
+    buffers[4u+i]=(VkDescriptorBufferInfo){l->transport[i],0,transport_sizes[i]};
+  }
+  uint32_t *commands=l->work_mapped;
+  memset(commands,0,(size_t)transport_sizes[3]);
+  for(uint32_t i=0;i<l->pass_count;i++) {
+    uint32_t groups=l->passes[i].groups,x=groups<65535u?groups:65535u;
+    commands[4u+i*4u]=commands[7u+i*4u]=x;
+    commands[5u+i*4u]=(groups+65534u)/65535u;
+    commands[6u+i*4u]=l->passes[i].directions;
+  }
   if (!dc_gpu_make_mapped_buffer(g, sizeof(layout), &l->parameters,
                                  &l->parameter_memory, &l->parameter_mapped,
                                  err, cap) ||
@@ -73,7 +139,7 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
   buffers[2] = (VkDescriptorBufferInfo){l->sources, 0, 17u * 32u};
   buffers[3] = (VkDescriptorBufferInfo){
       l->field, 0, (VkDeviceSize)l->width * l->height * 64};
-  if (!fr_renderer_compute_init(g, &l->compute, buffers, 4, 4,
+  if (!fr_renderer_compute_init(g, &l->compute, buffers, 8, 16,
                                 "build/shaders/lighting.comp.spv", err, cap))
     goto fail;
   *out = l;
@@ -151,15 +217,33 @@ bool fr_lighting_gpu_generate(fr_lighting_gpu_t *l, char *err, uint32_t cap) {
 void fr_lighting_record(fr_lighting_gpu_t *l, VkBuffer indirect,
                         VkDeviceSize offset) {
   dc_gpu_t *g = l->gpu;
+  fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+    VK_ACCESS_2_MEMORY_READ_BIT|VK_ACCESS_2_MEMORY_WRITE_BIT,
+    VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_READ_BIT|VK_ACCESS_2_TRANSFER_WRITE_BIT);
+  if(indirect) {
+    VkBufferCopy copy={offset,0,sizeof(uint32_t)};
+    vkCmdCopyBuffer(g->command,indirect,l->transport[3],1,&copy);
+  } else vkCmdFillBuffer(g->command,l->transport[3],0,sizeof(uint32_t),1);
+  fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
+    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
   vkCmdBindPipeline(g->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                     l->compute.pipeline);
   vkCmdBindDescriptorSets(g->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                           l->compute.pipeline_layout, 0, 1,
                           &l->compute.descriptor, 0, NULL);
-  if (indirect)
-    vkCmdDispatchIndirect(g->command, indirect, offset);
-  else
-    vkCmdDispatch(g->command, (l->width * l->height + 7) / 8, 1, 1);
+  uint32_t push[4]={4,0,0,l->pass_count};
+  vkCmdPushConstants(g->command,l->compute.pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
+  vkCmdDispatch(g->command,tiles(l->pass_count),1,1);
+  fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+    VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT|VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+    VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+  for(uint32_t i=0;i<l->pass_count;i++) {
+    light_pass_t pass=l->passes[i];push[0]=pass.phase;push[1]=pass.level;push[2]=pass.iteration;
+    vkCmdPushConstants(g->command,l->compute.pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
+    vkCmdDispatchIndirect(g->command,l->transport[3],(VkDeviceSize)(4u+i*4u)*sizeof(uint32_t));
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+      VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+  }
 }
 bool fr_lighting_gpu_read(fr_lighting_gpu_t *l, uint32_t x, uint32_t y,
                           fr_renderer_light_field_t *field) {

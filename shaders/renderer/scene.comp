@@ -1,5 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#include "../../include/ferrum/renderer/light_transport.h"
 #include "../sim/rigid_body.glsl"
 #include "../sim/rigid_shape.glsl"
 #include "../sim/rigid_clip.glsl"
@@ -67,6 +68,9 @@ void add_surface(inout Surface surface,Appearance a,float coverage,float angle) 
     surface.nz.rgb+=weighted*contrast*a.normal_relief.z;
     surface.weights.x+=coverage;
 }
+float material_opacity(uint material) {
+    return material==9u?FR_LEAF_OPACITY:material==10u?FR_LEAF_DEBRIS_OPACITY:1.;
+}
 Surface surface_at(uint i,out float opacity,out uint known) {
     Surface surface=Surface(vec4(0),vec4(0),vec4(0),vec4(0),vec4(0));
     uvec2 cell=uvec2(i%params.width,i/params.width);
@@ -76,7 +80,7 @@ Surface surface_at(uint i,out float opacity,out uint known) {
     if(known==0u) return surface;
     uint local=(cell.y%64u)*64u+cell.x%64u,atlas=(page-1u)*4096u+local;
     uvec2 physical=chunk_cells[atlas];uint material=physical.x&65535u;
-    float body_coverage=0.;uint id=occupancy[i],slot=id==0u?64u:body_slot(id);
+    float body_coverage=0.,body_opacity=0.;uint id=occupancy[i],slot=id==0u?64u:body_slot(id);
     if(slot<64u) {
         Body body=bodies[slot];
         vec2 relative=vec2(cell)-vec2(body.x_fp,body.y_fp)/65536.;
@@ -94,6 +98,7 @@ Surface surface_at(uint i,out float opacity,out uint known) {
                 if(color.w>0.) a.color_roughness.rgb=color.rgb;
             }
             add_surface(surface,a,coverage,body.angle);body_coverage+=coverage;
+            body_opacity+=coverage*material_opacity(mapped_material);
         }
     }
     body_coverage=min(body_coverage,1.);
@@ -128,7 +133,7 @@ Surface surface_at(uint i,out float opacity,out uint known) {
         surface.weights.y=0.;
     }
     surface.weights.z=max(0.,1.-surface.weights.x-surface.weights.y);
-    opacity=body_coverage>0. || solid>0.?1.:water*.08;
+    opacity=clamp(body_opacity+remaining*solid*material_opacity(material)+(1.-body_coverage)*water*.08,0.,1.);
     return surface;
 }
 uint pack_display(vec3 linear,bool lit) {
@@ -199,9 +204,9 @@ void main() {
     if(lit) {
         Field field=fields[index];
         color=max(vec3(0),.5*(surface.albedo.rgb*field.l0.rgb+surface.nx.rgb*field.lx.rgb+surface.ny.rgb*field.ly.rgb+surface.nz.rgb*field.lz.rgb));
-        color+=surface.albedo.rgb*.18;
     }
-    color+=surface.weights.y*vec3(.035,.193,.666)+surface.weights.z*vec3(.00886);
+    vec3 background=surface.weights.y*vec3(.035,.193,.666)+surface.weights.z*vec3(.00886);
+    color+=lit?background*fields[index].l0.rgb:background;
     uint packed=pack_display(color,lit);
     if((params.flags&1u)!=0u) {
         uint page=pages[(cell.y/64u)*((params.width+63u)/64u)+cell.x/64u];
