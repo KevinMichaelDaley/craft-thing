@@ -43,6 +43,8 @@ test_renderer_uses_textures_preserves_holes_and_paused_physics(void) {
     chunk->cells[y * 64 + 31].material = DC_MATERIAL_WATER;
     chunk->cells[y * 64 + 31].fluid_mass = 65536;
   }
+  chunk->cells[20 * 64 + 32].material = DC_MATERIAL_STONE;
+  chunk->cells[20 * 64 + 32].fluid_mass = 65536;
   ASSERT_TRUE(dc_gpu_upload_chunk(g, 0, chunk, err, sizeof(err)));
   ASSERT_TRUE(dc_gpu_set_page(g, 0, 0, 0, err, sizeof(err)));
   dc_gpu_body_shape_t leaves = {
@@ -77,6 +79,8 @@ test_renderer_uses_textures_preserves_holes_and_paused_physics(void) {
      stamp column-shaped shadows into the incoming radiance field. */
   ASSERT_TRUE(fr_renderer_read_opacity(g, 31, 20, &leaf));
   ASSERT_EQ(leaf.maximum, 0.f);
+  ASSERT_TRUE(fr_renderer_read_opacity(g, 32, 20, &leaf));
+  ASSERT_EQ(leaf.maximum, 1.f);
   memcpy(lit, g->mapped, sizeof(lit));
   ASSERT_TRUE(memcmp(lit, reference, sizeof(lit)) != 0);
   unsigned variations = 0;
@@ -91,6 +95,10 @@ test_renderer_uses_textures_preserves_holes_and_paused_physics(void) {
   }
   ASSERT_TRUE(dc_gpu_download_chunk(g, 0, chunk, err, sizeof(err)));
   ASSERT_TRUE(memcmp(cells_before, chunk->cells, sizeof(cells_before)) == 0);
+  ASSERT_TRUE(fr_renderer_set_mode(g, FR_RENDERER_LIT));
+  ASSERT_TRUE(fr_renderer_set_sources(g, NULL, 0, (fr_renderer_sun_t){0}));
+  ASSERT_TRUE(fr_renderer_render(g, err, sizeof(err)));
+  ASSERT_EQ(((uint32_t *)g->mapped)[20 * 64 + 31], 0xff000000u);
   ASSERT_TRUE(fr_renderer_set_mode(g, FR_RENDERER_REFERENCE));
   ASSERT_TRUE(fr_renderer_render(g, err, sizeof(err)));
   ASSERT_TRUE(memcmp(reference, g->mapped, sizeof(reference)) == 0);

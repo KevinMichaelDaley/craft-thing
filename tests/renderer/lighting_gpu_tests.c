@@ -163,6 +163,19 @@ static void test_zero_distance_emitter_is_finite(void) {
   ASSERT_TRUE(isfinite(f.l0[0]) && f.l0[0] > 0);
   PASS();
 }
+static void test_hdr_emission_preserves_energy_range_and_vertical_direction(void) {
+  ASSERT_TRUE(empty_scene());
+  fr_renderer_point_light_t light = {4.5f, 4.5f, 1, 20, {1, .5f, .25f}, 1e8f};
+  ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting, &light, 1,
+                                          (fr_renderer_sun_t){0}, 128));
+  ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting, g_error, sizeof(g_error)));
+  fr_renderer_light_field_t field;
+  ASSERT_TRUE(fr_lighting_gpu_read(g_lighting, 8, 4, &field));
+  ASSERT_TRUE(isfinite(field.l0[0]) && field.l0[0] > 1e6f);
+  ASSERT_TRUE(fabsf(field.l0[0] - 2.f * field.l0[1]) < field.l0[0] * 1e-5f);
+  ASSERT_TRUE(fabsf(field.lz[0] / field.l0[0] - sqrtf(.5f)) < .003f);
+  PASS();
+}
 static void test_thin_wall_and_one_pixel_hole_visibility(void) {
   ASSERT_TRUE(empty_scene());
   ASSERT_TRUE(set_points());
@@ -280,6 +293,7 @@ int main(void) {
   RUN(test_emission_propagates_around_an_open_doorway);
   RUN(test_large_field_crosses_scan_tiles_and_filters_foliage);
   RUN(test_zero_distance_emitter_is_finite);
+  RUN(test_hdr_emission_preserves_energy_range_and_vertical_direction);
   RUN(test_thin_wall_and_one_pixel_hole_visibility);
   RUN(test_sun_requires_explicit_known_sky_boundary);
   RUN(test_opposing_equal_lights_keep_energy_when_direction_cancels);
