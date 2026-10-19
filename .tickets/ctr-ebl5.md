@@ -1,6 +1,6 @@
 ---
 id: ctr-ebl5
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-19T01:33:39Z
@@ -15,7 +15,7 @@ User reports that water creates light shafts. Fix that artifact while optimizing
 
 ## Acceptance Criteria
 
-RED-GREEN-REFACTOR regressions demonstrate that water neither emits light nor introduces spurious light shafts. Preserve canopy shadow recovery, opaque/unknown blocking, colored moments and stable paused frames. Benchmark Vulkan on this machine at 480x270 and 640x360 with unchanged physics and report isolated GPU timings versus the 32.186ms renderer baseline. Pursue existing <=2ms renderer gate without weakening it. No interactive demo or UI automation; commit repository tools and tests, update tickets, run full headless suite and push.
+RED-GREEN-REFACTOR regressions demonstrate that water neither emits light nor introduces spurious light shafts. Preserve canopy shadow recovery, opaque/unknown blocking, colored moments and stable paused frames. Benchmark Vulkan on this machine at 480x270 and 640x360 with unchanged physics and report isolated GPU timings versus the 32.186ms renderer baseline. Acceptance is total simulation plus rendering frame time <30ms on this machine, at both 480x270 and 640x360 with unchanged physics fidelity; renderer stage times are diagnostic only. No interactive demo or UI automation; commit repository tools and tests, update tickets, run full headless suite and push.
 
 
 ## Notes

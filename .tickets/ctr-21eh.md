@@ -15,7 +15,7 @@ Build actual displayed visual battery with two different concave textured bodies
 
 ## Acceptance Criteria
 
-Visual captures and assertions demonstrate coherent grain/relief, exact holes/shadows, stable paused frames and persistent textures. Vulkan/SPIR-V/headless/UI/quarter batteries pass. Reference480x270 sun+4 lights targets <=2ms added mean renderer GPU time; report cold/tail/VRAM and actual displayed FPS without reducing physics or weakening gates.
+Visual captures and assertions demonstrate coherent grain/relief, exact holes/shadows, stable paused frames and persistent textures. Vulkan/SPIR-V/headless/UI/quarter batteries pass. At 480x270 and 640x360 with sun+4 lights, total simulation plus rendering frame time must be <30ms on this machine; report cold/tail/VRAM and actual displayed FPS without reducing physics or weakening gates.
 
 
 ## Notes

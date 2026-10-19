@@ -39,6 +39,10 @@ test_renderer_uses_textures_preserves_holes_and_paused_physics(void) {
       if (x < 39 || y % 6 < 3)
         chunk->cells[y * 64 + x].material = DC_MATERIAL_STONE;
   chunk->cells[2 * 64 + 2].material = DC_MATERIAL_LEAVES;
+  for (unsigned y = 0; y < 64; y++) {
+    chunk->cells[y * 64 + 31].material = DC_MATERIAL_WATER;
+    chunk->cells[y * 64 + 31].fluid_mass = 65536;
+  }
   ASSERT_TRUE(dc_gpu_upload_chunk(g, 0, chunk, err, sizeof(err)));
   ASSERT_TRUE(dc_gpu_set_page(g, 0, 0, 0, err, sizeof(err)));
   dc_gpu_body_shape_t leaves = {
@@ -69,6 +73,10 @@ test_renderer_uses_textures_preserves_holes_and_paused_physics(void) {
   ASSERT_TRUE(leaf.maximum > 0 && leaf.maximum < 1);
   ASSERT_TRUE(fr_renderer_read_opacity(g, 60, 60, &leaf));
   ASSERT_TRUE(leaf.maximum > 0 && leaf.maximum < 1);
+  /* Clear water is not an opaque leaf canopy: moving bulk water must not
+     stamp column-shaped shadows into the incoming radiance field. */
+  ASSERT_TRUE(fr_renderer_read_opacity(g, 31, 20, &leaf));
+  ASSERT_EQ(leaf.maximum, 0.f);
   memcpy(lit, g->mapped, sizeof(lit));
   ASSERT_TRUE(memcmp(lit, reference, sizeof(lit)) != 0);
   unsigned variations = 0;

@@ -7,20 +7,21 @@
 #include "ferrum/renderer/gpu.h"
 
 enum { RENDERER_WIDTH = 480, RENDERER_HEIGHT = 270 };
-static bool renderer_concave_scene(dc_gpu_t *gpu, char *err, uint32_t cap) {
+static bool renderer_concave_scene_sized(dc_gpu_t *gpu, unsigned width, unsigned height, char *err, uint32_t cap) {
+  unsigned columns = (width + 63u) / 64u, rows = (height + 63u) / 64u;
   dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
   if (!chunk)
     return false;
   bool okay = true;
-  for (unsigned cy = 0; cy < 5 && okay; cy++)
-    for (unsigned cx = 0; cx < 8 && okay; cx++) {
+  for (unsigned cy = 0; cy < rows && okay; cy++)
+    for (unsigned cx = 0; cx < columns && okay; cx++) {
       memset(chunk, 0, sizeof(*chunk));
       chunk->coord = (dc_chunk_coord_t){cx, cy};
       for (unsigned y = 0; y < 64; y++)
         for (unsigned x = 0; x < 64; x++) {
           unsigned wx = cx * 64 + x, wy = cy * 64 + y,
                    material = DC_MATERIAL_AIR;
-          if (wy == 244 && wx < 480)
+          if (wy == height - 26u && wx < width)
             material = DC_MATERIAL_STONE;
           else if (wx >= 180 && wx < 260 && wy >= 30 && wy < 94 &&
                    (wx < 186 || wx >= 254 || wy >= 88))
@@ -30,13 +31,16 @@ static bool renderer_concave_scene(dc_gpu_t *gpu, char *err, uint32_t cap) {
             material = wx < 210 ? DC_MATERIAL_STONE : DC_MATERIAL_DENSE_WOOD;
           chunk->cells[y * 64 + x].material = material;
         }
-      okay = dc_gpu_upload_chunk(gpu, cy * 8 + cx, chunk, err, cap) &&
-             dc_gpu_set_page(gpu, cx, cy, cy * 8 + cx, err, cap);
+      okay = dc_gpu_upload_chunk(gpu, cy * columns + cx, chunk, err, cap) &&
+             dc_gpu_set_page(gpu, cx, cy, cy * columns + cx, err, cap);
     }
   free(chunk);
   return okay && dc_gpu_set_fluid_interval(gpu, 2) &&
          dc_gpu_enable_automatic_components(gpu) &&
          dc_gpu_tick_step(gpu, err, cap) && fr_renderer_enable(gpu, err, cap);
+}
+static bool renderer_concave_scene(dc_gpu_t *gpu, char *err, uint32_t cap) {
+  return renderer_concave_scene_sized(gpu, RENDERER_WIDTH, RENDERER_HEIGHT, err, cap);
 }
 static bool renderer_four_lights(dc_gpu_t *gpu, uint32_t count) {
   fr_renderer_point_light_t points[16];

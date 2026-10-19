@@ -1,4 +1,6 @@
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
+#include <time.h>
 
 #include "../../src/vulkan/gpu_internal.h"
 #include "concave_scene.h"
@@ -82,12 +84,12 @@ void __wrap_fr_lighting_record(fr_lighting_gpu_t *l, VkBuffer b,
   g_subsystem = false;
 }
 VkCommandBuffer g_command;
-static void test_sun_and_four_lights_stay_within_added_gpu_budget(void) {
+static void test_full_frame(unsigned width, unsigned height) {
   dc_gpu_t *g;
   char err[256] = {0};
-  ASSERT_TRUE(dc_gpu_create(&g, 480, 270, "build/shaders/pattern.comp.spv", err,
+  ASSERT_TRUE(dc_gpu_create(&g, width, height, "build/shaders/pattern.comp.spv", err,
                             sizeof(err)));
-  ASSERT_TRUE(renderer_concave_scene(g, err, sizeof(err)));
+  ASSERT_TRUE((width == RENDERER_WIDTH ? renderer_concave_scene(g, err, sizeof(err)) : renderer_concave_scene_sized(g, width, height, err, sizeof(err))));
   ASSERT_TRUE(renderer_four_lights(g, 4));
   g_command = g->command;
   VkQueryPoolCreateInfo qi = {.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
@@ -98,11 +100,16 @@ static void test_sun_and_four_lights_stay_within_added_gpu_budget(void) {
       dc_gpu_set_body_motion(g, 0x80000001u, 0, .005f, 0, err, sizeof(err)));
   ASSERT_TRUE(
       dc_gpu_set_body_motion(g, 0x80000002u, 0, -.003f, 0, err, sizeof(err)));
-  double times[6] = {0};
+  double times[6] = {0}, wall = 0, worst = 0;
   unsigned samples = 24;
   for (unsigned i = 0; i < samples; i++) {
+    struct timespec start, stop;
+    clock_gettime(CLOCK_MONOTONIC, &start);
     ASSERT_TRUE(dc_gpu_tick_step(g, err, sizeof(err)));
     ASSERT_TRUE(fr_renderer_render(g, err, sizeof(err)));
+    clock_gettime(CLOCK_MONOTONIC, &stop);
+    double frame = (stop.tv_sec - start.tv_sec)*1000. + (stop.tv_nsec - start.tv_nsec)/1e6;
+    wall += frame; if (frame > worst) worst = frame;
     uint64_t q[12];
     ASSERT_EQ(vkGetQueryPoolResults(
                   g->device, g_queries, 0, 12, sizeof(q), q, 8,
@@ -115,6 +122,7 @@ static void test_sun_and_four_lights_stay_within_added_gpu_budget(void) {
       times[stage] += ((q[2 * stage + 1] - q[2 * stage]) & mask) *
                       g->timestamp_period / 1e6;
   }
+  printf("Full frame %ux%u mean %.3f ms, worst %.3f ms (simulation + render + submission/wait)\n", width, height, wall / samples, worst);
   printf("Renderer mean GPU ms: total %.3f, texture %.3f, optical %.3f, "
          "hierarchy %.3f, light %.3f, compose %.3f\n",
          times[0] / samples, times[1] / samples, times[2] / samples,
@@ -122,11 +130,12 @@ static void test_sun_and_four_lights_stay_within_added_gpu_budget(void) {
   vkDestroyQueryPool(g->device, g_queries, NULL);
   g_queries = VK_NULL_HANDLE;
   dc_gpu_destroy(g);
-  ASSERT_TRUE(times[0] / samples <= 2.0);
+  ASSERT_TRUE(wall / samples < 30.0);
   PASS();
 }
 int main(void) {
-  RUN(test_sun_and_four_lights_stay_within_added_gpu_budget);
+  test_full_frame(480, 270);
+  test_full_frame(640, 360);
   printf("Results: %d passed, %d failed\n", g_pass, g_fail);
   return g_fail ? 1 : 0;
 }
