@@ -4,6 +4,10 @@
 #include "fluid_transport_tests.c"
 
 enum { PROFILE_WORDS=7,MAX_REQUESTS_PER_SOURCE=64 };
+static const char *g_profile_shader="build/diagnostics/fluid_transport_profile.comp.spv";
+#ifdef DC_COLOR_CACHE_PROFILE
+static uint64_t g_color_hash;
+#endif
 
 static unsigned seed_horizontal_cache(fixture_t *f) {
     unsigned leaves=1;
@@ -49,6 +53,9 @@ static void partial_case(unsigned mode) {
 #ifdef DC_COLOR_ONE_CELL
         speed=(mode==2?1.f:-1.f)*.5f/6.f;
 #endif
+#ifdef DC_COLOR_MIXED_REACH
+        if((x+y)%3u!=0u) speed=(mode==2?1.f:-1.f)*.5f/6.f;
+#endif
         f->words[4][2*index]=bits(speed);
 #ifdef DC_COLOR_CACHE_PROFILE
         float *colors=(float *)f->words[7];
@@ -66,7 +73,7 @@ static void partial_case(unsigned mode) {
     const uint32_t profile_bindings[]={1,2,3,8,10,28,29,32,31};
     f->p.buffer=f->buffers[5];f->p.mapped=f->words[5];
     ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,
-        "build/diagnostics/fluid_transport_profile.comp.spv",profile_bindings,9,mode));
+        g_profile_shader,profile_bindings,9,mode));
     VkDescriptorBufferInfo buffers[9];VkWriteDescriptorSet writes[9];
     for(unsigned i=0;i<9;i++) {
         buffers[i]=(VkDescriptorBufferInfo){i<8?f->buffers[i]:profile_buffer,0,i<8?sizes[i]*4:PROFILE_WORDS*4};
@@ -99,6 +106,7 @@ static void partial_case(unsigned mode) {
 #ifdef DC_COLOR_CACHE_PROFILE
     uint64_t color_hash=1469598103934665603ull;
     for(unsigned i=0;i<sizes[7];i++) {color_hash^=f->words[7][i];color_hash*=1099511628211ull;}
+    g_color_hash=color_hash;
     printf("mode%u pigment hash%016llx global loads%u stores%u buffer barriers%u\n",mode,
         (unsigned long long)color_hash,counts[4],counts[5],counts[6]);
 #endif
@@ -114,6 +122,9 @@ static void partial_case(unsigned mode) {
 #endif
     ASSERT_TRUE(counts[0]<=counts[2]*MAX_REQUESTS_PER_SOURCE&&counts[1]<=2u*CELLS);
 #ifdef DC_COLOR_CACHE_PROFILE
+#ifdef DC_COLOR_MIXED_REACH
+    ASSERT_TRUE(counts[6]>0u);
+#else
 #ifndef DC_COLOR_ONE_CELL
     if(mode==2u) ASSERT_EQ(color_hash,0x028933e7c8fc0d8eull);
 #else
@@ -126,10 +137,31 @@ static void partial_case(unsigned mode) {
     ASSERT_TRUE(counts[4]<=CELLS&&counts[5]<=CELLS);
 #endif
 #endif
+#endif
     PASS();
 }
-static void test_rightward_partial_recipients_have_bounded_work(void) {partial_case(2);}
-static void test_leftward_partial_recipients_have_bounded_work(void) {partial_case(3);}
+#ifdef DC_COLOR_MIXED_REACH
+static void mixed_case(unsigned mode) {
+    g_profile_shader="build/diagnostics/fluid_transport_color_reference.comp.spv";partial_case(mode);
+    uint64_t expected=g_color_hash;
+    g_profile_shader="build/diagnostics/fluid_transport_profile.comp.spv";partial_case(mode);
+    ASSERT_EQ(g_color_hash,expected);
+}
+#endif
+static void test_rightward_partial_recipients_have_bounded_work(void) {
+#ifdef DC_COLOR_MIXED_REACH
+    mixed_case(2);
+#else
+    partial_case(2);
+#endif
+}
+static void test_leftward_partial_recipients_have_bounded_work(void) {
+#ifdef DC_COLOR_MIXED_REACH
+    mixed_case(3);
+#else
+    partial_case(3);
+#endif
+}
 int main(void) {
     RUN(test_rightward_partial_recipients_have_bounded_work);
     RUN(test_leftward_partial_recipients_have_bounded_work);

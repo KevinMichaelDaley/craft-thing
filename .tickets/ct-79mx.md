@@ -42,3 +42,7 @@ Current renderer baseline9482754 merged only into dedicated optimizer branch645e
 **2026-10-19T03:08:11Z**
 
 Full color-cache GPU correctnessGREEN2work+4watercolor+10literal cases and exactRGBhash028933e7c8fc0d8e, but identical180frame displayedA/B REGRESSED57.328→61.203ms mean,p9567.137→77.937,max71.375→82.007,fluid6.413→8.924ms/tick. Therefore cache is explicitly experimental specialization4 defaultfalse; normalcachebudget remains unchanged, optional colorbudget/test retained. Next narrow one-cell sync RED observed: exactwater0mismatches,RBGhashbfb12e1adda28360,20384globalloads/10192stores/163072lane-buffer-barriers. Onlylane0 writescolors in one-cell path; implement publish/read synchronization at cooperative recipient transitions while preserving global water fallback. No target completion; ownbranchwork continues.
+
+**2026-10-19T03:15:11Z**
+
+Lane-local sync targetedGREEN: one-cell2/2 preserves bfb12e1adda28360 and163072→0bufferbarriers; mixedfast/cooperative4/4 exactlymatches strongerbuffer-sync referencebothdirections (hash896f4baa302ac887 and0b326fcde3360bfe), barriers271776→108704; optionalcache2/2,watercolor4/4,literal10/10 allcore/syncclean. Actual lit180frame repeat59.646ms/p9572.339/max84.931 vsbaseline57.328/67.137/71.375 shows no clear wholeframe gain (rigid/MPM also~5-7percent slower), not performance completion. CapturedactualBMP andinspected realU+comb,4pausedimagesbyteidentical. Next GPU-uniform fastline specialization toprunegeneralrecipient controlflow; strict30ms gate unchanged.
