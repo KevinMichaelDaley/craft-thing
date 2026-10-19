@@ -258,3 +258,7 @@ void fr_renderer_record(dc_gpu_t *g) {
 bool fr_renderer_render(dc_gpu_t *g, char *err, uint32_t cap) {
   return g && g->renderer && dc_gpu_render_chunks(g, err, cap);
 }
+bool fr_renderer_read_opacity(dc_gpu_t *g,uint32_t x,uint32_t y,
+                              fr_occlusion_node_t *node) {
+  return g&&g->renderer&&fr_occlusion_gpu_read(g->renderer->occlusion,0,x,y,node);
+}

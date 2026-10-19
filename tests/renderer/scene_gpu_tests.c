@@ -38,6 +38,7 @@ test_renderer_uses_textures_preserves_holes_and_paused_physics(void) {
     for (unsigned x = 35; x < 54; x++)
       if (x < 39 || y % 6 < 3)
         chunk->cells[y * 64 + x].material = DC_MATERIAL_STONE;
+  chunk->cells[2*64+2].material=DC_MATERIAL_LEAVES;
   ASSERT_TRUE(dc_gpu_upload_chunk(g, 0, chunk, err, sizeof(err)));
   ASSERT_TRUE(dc_gpu_set_page(g, 0, 0, 0, err, sizeof(err)));
   ASSERT_TRUE(dc_gpu_render_chunks(g, err, sizeof(err)));
@@ -49,6 +50,9 @@ test_renderer_uses_textures_preserves_holes_and_paused_physics(void) {
   ASSERT_TRUE(fr_renderer_enable(g, err, sizeof(err)));
   ASSERT_TRUE(fr_renderer_set_mode(g, FR_RENDERER_ALBEDO));
   ASSERT_TRUE(fr_renderer_render(g, err, sizeof(err)));
+  fr_occlusion_node_t leaf;
+  ASSERT_TRUE(fr_renderer_read_opacity(g,2,2,&leaf));
+  ASSERT_TRUE(leaf.maximum>0&&leaf.maximum<1);
   memcpy(lit, g->mapped, sizeof(lit));
   ASSERT_TRUE(memcmp(lit, reference, sizeof(lit)) != 0);
   unsigned variations = 0;
