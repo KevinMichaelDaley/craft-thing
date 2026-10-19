@@ -67,7 +67,18 @@ test_renderer_uses_textures_preserves_holes_and_paused_physics(void) {
   dc_cell_t cells_before[4096];
   ASSERT_TRUE(dc_gpu_download_chunk(g, 0, chunk, err, sizeof(err)));
   memcpy(cells_before, chunk->cells, sizeof(cells_before));
+  dc_gpu_memory_stats_t before, after;
+  ASSERT_TRUE(dc_gpu_memory_stats(g, &before));
   ASSERT_TRUE(fr_renderer_enable(g, err, sizeof(err)));
+  ASSERT_TRUE(dc_gpu_memory_stats(g, &after));
+  uint64_t bytes = after.mapped_local_bytes + after.mapped_system_bytes +
+                   after.device_only_bytes - before.mapped_local_bytes -
+                   before.mapped_system_bytes - before.device_only_bytes;
+  uint64_t budget = (uint64_t)DC_GPU_CHUNK_SLOTS * 4096u * 40u +
+                    4096u * 256u + 65536u;
+  printf("renderer working memory %llu bytes, budget %llu\n",
+         (unsigned long long)bytes, (unsigned long long)budget);
+  ASSERT_TRUE(bytes <= budget);
   ASSERT_TRUE(fr_renderer_set_mode(g, FR_RENDERER_ALBEDO));
   ASSERT_TRUE(fr_renderer_render(g, err, sizeof(err)));
   fr_occlusion_node_t leaf;
