@@ -70,7 +70,7 @@ bool dc_prop_scene_load(dc_level_view_t *view, const char *path, char *err, uint
             dc_level_view_wait_visible(view,120000,err,cap) &&
             (dc_level_view_restored(view)?dc_level_view_restore_prop_bonds(view,&asset,chunk,local_x,local_y,err,cap):
                 dc_level_view_place_prop(view,&asset,chunk,local_x,local_y,err,cap)) &&
-            dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO) &&
+            dc_level_view_renderer_mode(view,FR_RENDERER_LIT) &&
             dc_level_view_tick(view,err,cap);
         if (okay) printf("Scene %s: %ux%u centered on chunk(0,0), world top-left(%lld,%lld), terrain and authored color loaded\n",
             path,asset.width,asset.height,(long long)(32-(int64_t)asset.width/2),(long long)(32-(int64_t)asset.height/2));

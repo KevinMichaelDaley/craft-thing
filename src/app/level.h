@@ -39,6 +39,8 @@ bool dc_level_view_place_prop(dc_level_view_t *view, const fr_prop_asset_t *asse
                               char *err, uint32_t err_cap);
 /** Choose how the separately stored appearance channel is displayed. */
 bool dc_level_view_renderer_mode(dc_level_view_t *view, fr_renderer_mode_t mode);
+/** Toggle lit gameplay and unlit appearance without advancing physics. */
+bool dc_level_view_toggle_lighting(dc_level_view_t *view);
 /** Author explicitly placed structural members in the streamed world. */
 bool dc_level_view_place_structure(dc_level_view_t *view,
                                    const fr_structural_gpu_graph_t *graph,

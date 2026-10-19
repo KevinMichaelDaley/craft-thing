@@ -25,6 +25,8 @@ struct dc_level_view {
     char body_path[1024];
     float pending_seconds;
     bool marker_overlay;
+    bool lighting_initialized;
+    fr_renderer_mode_t renderer_mode;
     bool spring_enabled;
     bool restored;
     bool transfer_pending, transfer_complete;
@@ -47,8 +49,19 @@ bool dc_level_view_step(dc_level_view_t *view, char *err, uint32_t cap) {
 }
 bool dc_level_view_renderer_mode(dc_level_view_t *view, fr_renderer_mode_t mode) {
     char err[256];
-    return view && fr_renderer_enable(view->gpu,err,sizeof(err)) &&
-        fr_renderer_set_mode(view->gpu, mode);
+    if (!view || !fr_renderer_enable(view->gpu,err,sizeof(err))) return false;
+    if (!view->lighting_initialized) {
+        fr_renderer_sun_t sun={.direction={-.4f,-.8f,.45f},.intensity=1.8f,
+            .color={1.f,.95f,.85f},.known_sky=FR_SKY_TOP|FR_SKY_LEFT};
+        if (!fr_renderer_set_sources(view->gpu,NULL,0,sun)) return false;
+        view->lighting_initialized=true;
+    }
+    if (!fr_renderer_set_mode(view->gpu,mode)) return false;
+    view->renderer_mode=mode;return true;
+}
+bool dc_level_view_toggle_lighting(dc_level_view_t *view) {
+    return view && dc_level_view_renderer_mode(view,
+        view->renderer_mode==FR_RENDERER_LIT?FR_RENDERER_ALBEDO:FR_RENDERER_LIT);
 }
 static bool place_prop(dc_level_view_t *view, const fr_prop_asset_t *asset,
                               dc_chunk_coord_t chunk, uint32_t local_x, uint32_t local_y,

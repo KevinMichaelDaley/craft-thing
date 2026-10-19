@@ -1213,7 +1213,7 @@ int main(int argc, char **argv) {
                 case SDLK_5: material = DC_MATERIAL_GRAVEL; break;
                 case SDLK_6: material = DC_MATERIAL_WOOD; break;
                 case SDLK_F8:
-                    if (scene_path) dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO);
+                    if (scene_path && !event.key.repeat) dc_level_view_toggle_lighting(view);
                     break;
                 case SDLK_p: paused = !paused; break;
                 case SDLK_n: single_step = true; break;
