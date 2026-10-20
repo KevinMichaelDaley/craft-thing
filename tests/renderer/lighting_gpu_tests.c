@@ -229,12 +229,13 @@ static void test_common_direction_matches_general_transport(void) {
   ASSERT_EQ(unsetenv("DC_LIGHTING_GENERAL_TRANSPORT"),0);ASSERT_TRUE(created);
   fr_renderer_point_light_t points[2]={{4.5f,4.5f,2,20,{1,.2f,.3f},100},{12.5f,4.5f,2,20,{.1f,.3f,1},100}};
   fr_renderer_sun_t sky={.direction={-.3f,-.8f,.5f},.color={1,.7f,.4f},.intensity=1.4f,.known_sky=FR_SKY_TOP|FR_SKY_LEFT};
-  for(unsigned point_case=0;point_case<2;point_case++) {
+  for(unsigned point_case=0;point_case<3;point_case++) {
     const fr_renderer_point_light_t *p=point_case?points:NULL;
     uint32_t count=point_case?2u:0u;
-    fr_renderer_sun_t sun=point_case?(fr_renderer_sun_t){0}:sky;
+    fr_renderer_sun_t sun=point_case==1?(fr_renderer_sun_t){0}:sky;
     ASSERT_TRUE(fr_lighting_gpu_set_sources(reference,p,count,sun,128));
     ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,p,count,sun,128));
+    ASSERT_EQ(fr_lighting_gpu_scan_channels(g_lighting),point_case==2?5u:4u);
     ASSERT_TRUE(fr_lighting_gpu_generate(reference,g_error,sizeof(g_error)));
     ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
     for(unsigned y=0;y<LIGHT_HEIGHT;y++) for(unsigned x=0;x<LIGHT_WIDTH;x++) {
@@ -251,6 +252,18 @@ static void test_common_direction_matches_general_transport(void) {
     }
   }
   fr_lighting_gpu_destroy(reference);PASS();
+}
+static void test_mixed_heights_preserve_independent_vertical_moments(void) {
+  ASSERT_TRUE(empty_scene());
+  fr_renderer_point_light_t points[2]={{8.5f,4.5f,1,20,{1,0,0},100},{8.5f,4.5f,3,20,{0,0,1},100}};
+  ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,points,2,(fr_renderer_sun_t){0},128));
+  ASSERT_EQ(fr_lighting_gpu_scan_channels(g_lighting),7u);
+  ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
+  fr_renderer_light_field_t f;ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,8,4,&f));
+  ASSERT_TRUE(f.l0[0]>0&&f.l0[2]>0);
+  ASSERT_TRUE(fabsf(f.lz[0]/f.l0[0]-sqrtf(.5f))<.004f);
+  ASSERT_TRUE(fabsf(f.lz[2]/f.l0[2]-3.f/sqrtf(10.f))<.004f);
+  PASS();
 }
 static void test_light_edits_read_authoritative_optics_without_tree_rebuild(void) {
   ASSERT_TRUE(empty_scene());
@@ -433,6 +446,7 @@ int main(void) {
   RUN(test_zero_distance_emitter_is_finite);
   RUN(test_common_direction_compacts_beams_and_mixed_heights_fall_back);
   RUN(test_common_direction_matches_general_transport);
+  RUN(test_mixed_heights_preserve_independent_vertical_moments);
   RUN(test_light_edits_read_authoritative_optics_without_tree_rebuild);
   RUN(test_diagonal_schedule_excludes_absent_tiles);
   RUN(test_hdr_emission_preserves_energy_range_and_vertical_direction);

@@ -41,6 +41,8 @@ uint32_t fr_lighting_gpu_scan_groups(const fr_lighting_gpu_t *lighting,
                                       uint32_t iteration);
 /** Working beam byte stride; seed storage and maximum allocation are separate. */
 uint32_t fr_lighting_gpu_beam_stride(const fr_lighting_gpu_t *lighting);
+/** Number of independent affine scan values, including transmission. */
+uint32_t fr_lighting_gpu_scan_channels(const fr_lighting_gpu_t *lighting);
 /** Explicit light edit. Propagation reach is measured in scene cells;
  * unknown residency blocks transport. */
 bool fr_lighting_gpu_set_sources(fr_lighting_gpu_t *lighting,
