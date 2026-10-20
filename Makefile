@@ -29,7 +29,7 @@ build/shading_tests: tests/renderer/shading_tests.c src/renderer/shading.c inclu
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/renderer/shading.c -o $@ -lm
 build/scene_gpu_tests: tests/renderer/scene_gpu_tests.c src/vulkan/scene_gpu.c include/ferrum/renderer/gpu.h build/fluid_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=fr_occlusion_record
 build/renderer_visual_tests: tests/renderer/visual_tests.c tests/renderer/concave_scene.h $(RENDERER_SHADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/renderer_performance_tests: tests/renderer/performance_tests.c tests/renderer/concave_scene.h $(RENDERER_SHADERS)

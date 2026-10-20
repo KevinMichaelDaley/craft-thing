@@ -4,8 +4,15 @@
 
 #include "../../src/vulkan/gpu_internal.h"
 #include "ferrum/renderer/gpu.h"
+#include "ferrum/renderer/occlusion_gpu.h"
 
 static int g_pass, g_fail;
+static unsigned g_hierarchy_recordings;
+void __real_fr_occlusion_record(fr_occlusion_gpu_t *,VkBuffer,VkDeviceSize);
+void __wrap_fr_occlusion_record(fr_occlusion_gpu_t *o,VkBuffer b,VkDeviceSize offset) {
+  g_hierarchy_recordings++;
+  __real_fr_occlusion_record(o,b,offset);
+}
 #define RUN(fn)                                                                \
   do {                                                                         \
     printf("RUN %s\n", #fn);                                                   \
@@ -130,6 +137,7 @@ test_renderer_uses_textures_preserves_holes_and_paused_physics(void) {
   ASSERT_TRUE(memcmp(reference, g->mapped, sizeof(reference)) == 0);
   dc_gpu_destroy(g);
   free(chunk);
+  ASSERT_EQ(g_hierarchy_recordings,0u);
   PASS();
 }
 int main(void) {
