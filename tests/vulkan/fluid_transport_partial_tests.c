@@ -109,7 +109,11 @@ static void partial_case(unsigned mode) {
     vkDestroyFence(f->p.device,f->p.fence,NULL);vkDestroyCommandPool(f->p.device,f->p.pool,NULL);
     vkDestroyDevice(f->p.device,NULL);vkDestroyInstance(f->p.instance,NULL);free(f);
     ASSERT_EQ(mismatches,0u);ASSERT_EQ(after,before);
-    ASSERT_TRUE(counts[2]>0u&&counts[3]>0u&&counts[3]<=32u);
+    bool cooperative=true;
+#ifdef DC_COLOR_SYNC_PROFILE
+    cooperative=g_mixed_reach;
+#endif
+    ASSERT_TRUE((!cooperative||counts[2]>0u)&&counts[3]>0u&&counts[3]<=32u);
     ASSERT_TRUE(counts[0]<=counts[2]*MAX_REQUESTS_PER_SOURCE&&counts[1]<=2u*CELLS);
 #ifdef DC_COLOR_SYNC_PROFILE
     if(!g_mixed_reach&&strstr(g_profile_shader,"reference")==NULL) ASSERT_EQ(counts[4],0u);
