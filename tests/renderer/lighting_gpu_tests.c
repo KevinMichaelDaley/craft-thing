@@ -1,6 +1,8 @@
+#define _POSIX_C_SOURCE 200809L
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "ferrum/renderer/lighting_gpu.h"
 
@@ -196,6 +198,60 @@ static void test_zero_distance_emitter_is_finite(void) {
   ASSERT_TRUE(isfinite(f.l0[0]) && f.l0[0] > 0);
   PASS();
 }
+static void test_common_direction_compacts_beams_and_mixed_heights_fall_back(void) {
+  ASSERT_TRUE(empty_scene());
+  fr_renderer_sun_t sun={.direction={0,-1,1},.color={1,.7f,.4f},.intensity=1,.known_sky=FR_SKY_TOP};
+  ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,NULL,0,sun,128));
+  ASSERT_EQ(fr_lighting_gpu_beam_stride(g_lighting),16u);
+  ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
+  fr_renderer_light_field_t before[LIGHT_CELLS],after;
+  for(unsigned y=0;y<LIGHT_HEIGHT;y++) for(unsigned x=0;x<LIGHT_WIDTH;x++)
+    ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,x,y,&before[y*LIGHT_WIDTH+x]));
+  fr_renderer_point_light_t points[2]={{4.5f,4.5f,1,20,{1,0,0},100},{12.5f,4.5f,3,20,{0,0,1},100}};
+  ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,points,2,sun,128));
+  ASSERT_EQ(fr_lighting_gpu_beam_stride(g_lighting),20u);
+  ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
+  ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,NULL,0,sun,128));
+  ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
+  for(unsigned y=0;y<LIGHT_HEIGHT;y++) for(unsigned x=0;x<LIGHT_WIDTH;x++) {
+    ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,x,y,&after));
+    ASSERT_EQ(memcmp(&after,&before[y*LIGHT_WIDTH+x],sizeof(after)),0);
+  }
+  PASS();
+}
+static void test_common_direction_matches_general_transport(void) {
+  ASSERT_TRUE(empty_scene());
+  for(unsigned y=0;y<LIGHT_HEIGHT;y++) g_opacity[y*LIGHT_WIDTH+7]=y==4?0.f:1.f;
+  ASSERT_TRUE(fr_occlusion_gpu_upload(g_occlusion,g_opacity,g_known));
+  fr_lighting_gpu_t *reference=NULL;
+  ASSERT_EQ(setenv("DC_LIGHTING_GENERAL_TRANSPORT","1",1),0);
+  bool created=fr_lighting_gpu_create(g_gpu,g_occlusion,&reference,g_error,sizeof(g_error));
+  ASSERT_EQ(unsetenv("DC_LIGHTING_GENERAL_TRANSPORT"),0);ASSERT_TRUE(created);
+  fr_renderer_point_light_t points[2]={{4.5f,4.5f,2,20,{1,.2f,.3f},100},{12.5f,4.5f,2,20,{.1f,.3f,1},100}};
+  fr_renderer_sun_t sky={.direction={-.3f,-.8f,.5f},.color={1,.7f,.4f},.intensity=1.4f,.known_sky=FR_SKY_TOP|FR_SKY_LEFT};
+  for(unsigned point_case=0;point_case<2;point_case++) {
+    const fr_renderer_point_light_t *p=point_case?points:NULL;
+    uint32_t count=point_case?2u:0u;
+    fr_renderer_sun_t sun=point_case?(fr_renderer_sun_t){0}:sky;
+    ASSERT_TRUE(fr_lighting_gpu_set_sources(reference,p,count,sun,128));
+    ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,p,count,sun,128));
+    ASSERT_TRUE(fr_lighting_gpu_generate(reference,g_error,sizeof(g_error)));
+    ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
+    for(unsigned y=0;y<LIGHT_HEIGHT;y++) for(unsigned x=0;x<LIGHT_WIDTH;x++) {
+      fr_renderer_light_field_t a,b;
+      ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,x,y,&a));
+      ASSERT_TRUE(fr_lighting_gpu_read(reference,x,y,&b));
+      for(unsigned c=0;c<3;c++) {
+        float scale=fmaxf(.01f,b.l0[c]);
+        ASSERT_TRUE(fabsf(a.l0[c]-b.l0[c])<.0001f*scale);
+        ASSERT_TRUE(fabsf(a.lx[c]-b.lx[c])<.006f*scale);
+        ASSERT_TRUE(fabsf(a.ly[c]-b.ly[c])<.006f*scale);
+        ASSERT_TRUE(fabsf(a.lz[c]-b.lz[c])<.006f*scale);
+      }
+    }
+  }
+  fr_lighting_gpu_destroy(reference);PASS();
+}
 static void test_light_edits_read_authoritative_optics_without_tree_rebuild(void) {
   ASSERT_TRUE(empty_scene());
   fr_renderer_point_light_t point={4.5f,4.5f,0,20,{1,0,0},10};
@@ -375,6 +431,8 @@ int main(void) {
   RUN(test_large_field_crosses_scan_tiles_and_filters_foliage);
   RUN(test_transport_carries_prefixes_across_recursive_scan_levels);
   RUN(test_zero_distance_emitter_is_finite);
+  RUN(test_common_direction_compacts_beams_and_mixed_heights_fall_back);
+  RUN(test_common_direction_matches_general_transport);
   RUN(test_light_edits_read_authoritative_optics_without_tree_rebuild);
   RUN(test_diagonal_schedule_excludes_absent_tiles);
   RUN(test_hdr_emission_preserves_energy_range_and_vertical_direction);
