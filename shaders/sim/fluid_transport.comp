@@ -47,6 +47,9 @@ void transport_buffer_barrier() {
     buffer_barriers++;
 #endif
 }
+void transport_color_publish() {
+    if(WATER_COLOR_ENABLED) {transport_buffer_barrier();subgroupBarrier();}
+}
 bool permeable_material(uint m) {return m==0u||m==2u||m==4u||m==5u||m==6u||m==10u;}
 uint cell_meta(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0u;
@@ -194,6 +197,7 @@ uint move_cached_recipients(ivec2 source,ivec2 direction,uint reach,float travel
     }
     uint prior=subgroupExclusiveAdd(requested),total=subgroupAdd(requested);
     uint remaining=min(requested,available>prior?available-prior:0u);
+    transport_color_publish();
     for(uint order=first;order<last&&remaining!=0u;order++) {
         uint word=positive?last_word-order:first_word+order,mask=recipient_mask(word,low,high,true);
         while(mask!=0u&&remaining!=0u) {
@@ -273,6 +277,7 @@ bool move_source(ivec2 source,ivec2 direction) {
     }
     uint prior=subgroupExclusiveAdd(requested),total=subgroupAdd(requested);
     uint remaining=min(requested,available>prior?available-prior:0u);
+    transport_color_publish();
     for(uint order=first;order<last&&remaining!=0u;order++) {
         uint offset=reach-order;
         uint request=order<CACHE_CELLS?cached_requests[order]:request_at(source,direction,offset,travel);
@@ -352,7 +357,13 @@ void main() {
         if(position<0||position>=int(length)) break;
         if(move_source(point_at(uint(position)),direction)) {
             subgroupMemoryBarrierShared();
+#ifdef DC_TRANSPORT_CONSERVATIVE_COLOR_SYNC
             transport_buffer_barrier();
+#else
+            /* Cached one-cell moves own pigment in lane zero. Cooperative
+               recipients publish before/after crossing lane ownership. */
+            if(length>CACHE_CELLS) transport_buffer_barrier();
+#endif
             subgroupBarrier();
         }
     }
