@@ -196,6 +196,23 @@ static void test_zero_distance_emitter_is_finite(void) {
   ASSERT_TRUE(isfinite(f.l0[0]) && f.l0[0] > 0);
   PASS();
 }
+static void test_light_edits_read_authoritative_optics_without_tree_rebuild(void) {
+  ASSERT_TRUE(empty_scene());
+  fr_renderer_point_light_t point={4.5f,4.5f,0,20,{1,0,0},10};
+  ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,&point,1,(fr_renderer_sun_t){0},128));
+  for(unsigned y=0;y<LIGHT_HEIGHT;y++) g_opacity[y*LIGHT_WIDTH+7]=1.f;
+  ASSERT_TRUE(fr_occlusion_gpu_upload(g_occlusion,g_opacity,g_known));
+  ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
+  fr_renderer_light_field_t field;
+  ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,12,4,&field));
+  ASSERT_EQ(field.l0[0],0.f);
+  g_opacity[4*LIGHT_WIDTH+7]=0.f;
+  ASSERT_TRUE(fr_occlusion_gpu_upload(g_occlusion,g_opacity,g_known));
+  ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
+  ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,12,4,&field));
+  ASSERT_TRUE(field.l0[0]>0.f);
+  PASS();
+}
 static void test_diagonal_schedule_excludes_absent_tiles(void) {
   const uint32_t width = 193, height = 65;
   fr_occlusion_gpu_t *occlusion = NULL;
@@ -358,6 +375,7 @@ int main(void) {
   RUN(test_large_field_crosses_scan_tiles_and_filters_foliage);
   RUN(test_transport_carries_prefixes_across_recursive_scan_levels);
   RUN(test_zero_distance_emitter_is_finite);
+  RUN(test_light_edits_read_authoritative_optics_without_tree_rebuild);
   RUN(test_diagonal_schedule_excludes_absent_tiles);
   RUN(test_hdr_emission_preserves_energy_range_and_vertical_direction);
   RUN(test_thin_wall_and_one_pixel_hole_visibility);
