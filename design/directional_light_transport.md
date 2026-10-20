@@ -117,3 +117,25 @@ work-count regression passes with both scan implementations under core and
 synchronization validation. A strict moving-concave run measured 25.831 ms mean
 and 41.067 ms worst at 640x360; the actual graphical level03 run measured
 20.748/64.560 ms with four identical paused captures. Tail latency remains open.
+
+Fluid projection/correction phases now specialize their mode in production;
+`DC_FLUID_VARIANTS=generic` retains the dense, runtime-mode oracle. Three-tick
+canonical water and saved velocity snapshots match byte for byte. GPU pressure
+work compaction uses a separate descriptor set, preserving the global simulation
+descriptor layout. Before every scheduled pressure batch, parallel tile
+classification retains any resident tile containing water or residual pressure.
+Residual dry pressure is essential: skipping it would change SOR decay. Initial
+prediction and final velocity passes remain dense, and split-batch edits wake
+new tiles immediately. There is no frame-time CPU list construction or readback.
+
+Water pigment synchronization retains the ordered transport recurrence while
+publishing buffer writes before and after cooperative cross-lane access. Cached
+one-cell moves use lane zero for pigment and only need shared mass synchronization.
+The conservative shader remains a test oracle. Both directions preserve exact
+pigment hashes for one-cell and mixed-reach fixtures, with global buffer barrier
+counts reduced from 10,192 to zero and 16,986 to 6,794 respectively. The actual
+lit level03 plus coupled-water demo measured 107.875 ms mean and 126.091 ms worst
+after these changes; this remains far above the required complete-frame budget.
+The plain coupled demo uses the legacy albedo view and is not a lit-renderer
+acceptance test. Graphical validation must combine the scene and coupled flags
+or explicitly enable propagated lighting.

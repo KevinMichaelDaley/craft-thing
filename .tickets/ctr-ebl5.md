@@ -43,3 +43,15 @@ Inline takeover checkpoint: dry scheduled-fluid gate and GPU grain/body work pla
 **2026-10-19T22:15:09Z**
 
 Compact diagonal schedule verified RED work-count, GREEN13/13 subgroup and shared fallback with core+sync validation. Immutable cold geometry table omits absent scan tiles; parent scans explicitly use identity for absent totals. Strict480 mean16.473/worst38.475ms,640 mean25.831/worst41.067ms (unchanged16 pressure sweeps); target remainsRED. Actual Wayland level03 640display/768x512sim mean20.748/worst64.560ms90frames, four paused captures identical; inspected build/inline_diagonal360/scene.png. Full suite before this candidate completed with only two known authored-stage failures plus its intentional RED work-count failure. Final shader broad suite rerun pending.
+
+**2026-10-19T22:20:26Z**
+
+Graphical water diagnosis: plain --demo-coupled uses the legacy/albedo view, so its53.534ms mean is physics-only diagnostic evidence, not lit-renderer acceptance. Combining --scene level_piece03 with --demo-coupled enables actual propagated lighting:136.998ms mean/157.663ms worst. Diagnostic phase-specialized fluid preserves generic fingerprint993637574fbe0c8f and mass230613072, and plain water demo mean49.570ms (worst77.659). Preparing a production phase specialization regression before promotion. Startup empty-program preparation candidate was discarded after failing to remove first-frame spikes reliably.
+
+**2026-10-20T17:03:07Z**
+
+Resumed inline. Rejected removing internal HOST visibility after no reliable measured win. Narrow pigment sync port verified corrected RED zero-barrier assertion (10192 conservative barriers), GREEN8/8 reference hash/mass checks core+sync; standard water-color4/4 core+sync. Cached one-cell pigment barriers10192->0, mixed16986->6794, exact hashes retained both directions. Actual lit-water graphical107.875ms mean/126.091ms worst, four paused pixels identical; target still unmet. Testing zero-input subgroup scan skip for opaque/unlit regions next.
+
+**2026-10-20T17:04:49Z**
+
+Zero-input subgroup scan skip passed13/13 core+sync but graphical107.801ms mean was indistinguishable from107.875ms baseline; discarded. Full retained-code make test rerun is underway (build/resume_full_test.log). No resolution, pressure-sweep, transport-reach, or physics-cadence reductions; no timing samples excluded. Parent target remains RED.
