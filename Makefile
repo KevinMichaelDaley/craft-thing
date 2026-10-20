@@ -600,6 +600,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/fluid_transport_long_tests
 	./build/fluid_transport_slow_tests
 	./build/fluid_transport_partial_tests
+	./build/fluid_color_sync_tests
 	./build/fluid_displacement_tests
 	./build/fluid_displacement_wide_tests
 	./build/fluid_displacement_tall_tests
@@ -1078,6 +1079,12 @@ MINIMAL_VK_TESTS = $(addprefix build/,component_dispatch_tests pixel_properties_
 $(MINIMAL_VK_TESTS): tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h
 test: build/mpm_compaction_tests
 test: build/fluid_transport_partial_tests
+build/diagnostics/fluid_transport_color_reference.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl shaders/sim/water_color.glsl
+	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TRANSPORT_PROFILE -DDC_TRANSPORT_CONSERVATIVE_COLOR_SYNC -o $@ $<
+	spirv-val --target-env vulkan1.3 $@
+build/fluid_color_sync_tests: tests/vulkan/fluid_transport_partial_tests.c tests/vulkan/fluid_transport_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/fluid_transport_profile.comp.spv build/diagnostics/fluid_transport_color_reference.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_FIXTURE_WATER_COLOR -DDC_COLOR_SYNC_PROFILE $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/fluid_color_sync_tests
 build/fluid_recording_tests: tests/vulkan/fluid_recording_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdPipelineBarrier2 -Wl,--wrap=vkCmdBindDescriptorSets
 test_gpu_tools: build/fluid_recording_tests

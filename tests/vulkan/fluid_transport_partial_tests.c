@@ -3,7 +3,12 @@
 #define FLUID_TRANSPORT_FIXTURE_ONLY
 #include "fluid_transport_tests.c"
 
-enum { PROFILE_WORDS=4,MAX_REQUESTS_PER_SOURCE=64 };
+enum { PROFILE_WORDS=5,MAX_REQUESTS_PER_SOURCE=64 };
+static const char *g_profile_shader="build/diagnostics/fluid_transport_profile.comp.spv";
+#ifdef DC_COLOR_SYNC_PROFILE
+static uint64_t g_color_hash;
+static bool g_mixed_reach;
+#endif
 
 static unsigned seed_horizontal_cache(fixture_t *f) {
     unsigned leaves=1;
@@ -46,6 +51,13 @@ static void partial_case(unsigned mode) {
         f->words[2][2*CELLS+index]=FULL/4u;
         f->words[2][3*CELLS+index]=FULL/2u;
         f->words[4][2*index]=bits((mode==2?1.f:-1.f)*WIDTH/6.f);
+#ifdef DC_COLOR_SYNC_PROFILE
+        if(!g_mixed_reach||(x+y)%3u!=0u)
+            f->words[4][2*index]=bits((mode==2?1.f:-1.f)*.5f/6.f);
+        float *color=(float *)f->words[7];
+        color[4*a]=(x%4u)*.25f;color[4*a+1]=(y%4u)*.25f;
+        color[4*a+2]=.75f;color[4*a+3]=1.f;
+#endif
     }
     unsigned leaves=seed_horizontal_cache(f);
     for(unsigned y=0;y<HEIGHT;y++)
@@ -56,7 +68,7 @@ static void partial_case(unsigned mode) {
     const uint32_t profile_bindings[]={1,2,3,8,10,28,29,32,31};
     f->p.buffer=f->buffers[5];f->p.mapped=f->words[5];
     ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,
-        "build/diagnostics/fluid_transport_profile.comp.spv",profile_bindings,9,mode));
+        g_profile_shader,profile_bindings,9,mode));
     VkDescriptorBufferInfo buffers[9];VkWriteDescriptorSet writes[9];
     for(unsigned i=0;i<9;i++) {
         buffers[i]=(VkDescriptorBufferInfo){i<8?f->buffers[i]:profile_buffer,0,i<8?sizes[i]*4:PROFILE_WORDS*4};
@@ -84,6 +96,11 @@ static void partial_case(unsigned mode) {
         mismatches+=water!=f->expected[y*WIDTH+x];
     }
     uint32_t counts[PROFILE_WORDS];memcpy(counts,profile,sizeof(counts));
+#ifdef DC_COLOR_SYNC_PROFILE
+    g_color_hash=14695981039346656037ull;
+    for(unsigned i=0;i<sizes[7];i++) g_color_hash=(g_color_hash^f->words[7][i])*1099511628211ull;
+    printf("pigment hash%016llx buffer barriers%u\n",(unsigned long long)g_color_hash,counts[4]);
+#endif
     printf("mode%u requests%u blocker checks%u sources%u team%u GPU%.3fms mismatches%u\n",
         mode,counts[0],counts[1],counts[2],counts[3],(times[1]-times[0])*properties.limits.timestampPeriod/1e6,mismatches);
     vkDestroyQueryPool(f->p.device,pool,NULL);fixture_release_pipeline(&f->p);
@@ -94,10 +111,26 @@ static void partial_case(unsigned mode) {
     ASSERT_EQ(mismatches,0u);ASSERT_EQ(after,before);
     ASSERT_TRUE(counts[2]>0u&&counts[3]>0u&&counts[3]<=32u);
     ASSERT_TRUE(counts[0]<=counts[2]*MAX_REQUESTS_PER_SOURCE&&counts[1]<=2u*CELLS);
+#ifdef DC_COLOR_SYNC_PROFILE
+    if(!g_mixed_reach&&strstr(g_profile_shader,"reference")==NULL) ASSERT_EQ(counts[4],0u);
+#endif
     PASS();
 }
-static void test_rightward_partial_recipients_have_bounded_work(void) {partial_case(2);}
-static void test_leftward_partial_recipients_have_bounded_work(void) {partial_case(3);}
+static void sync_case(unsigned mode) {
+#ifdef DC_COLOR_SYNC_PROFILE
+    for(unsigned mixed=0;mixed<2;mixed++) {
+        g_mixed_reach=mixed!=0;
+        g_profile_shader="build/diagnostics/fluid_transport_color_reference.comp.spv";
+        partial_case(mode);uint64_t expected=g_color_hash;
+        g_profile_shader="build/diagnostics/fluid_transport_profile.comp.spv";
+        partial_case(mode);ASSERT_EQ(g_color_hash,expected);
+    }
+#else
+    partial_case(mode);
+#endif
+}
+static void test_rightward_partial_recipients_have_bounded_work(void) {sync_case(2);}
+static void test_leftward_partial_recipients_have_bounded_work(void) {sync_case(3);}
 int main(void) {
     RUN(test_rightward_partial_recipients_have_bounded_work);
     RUN(test_leftward_partial_recipients_have_bounded_work);

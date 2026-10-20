@@ -16,6 +16,7 @@ layout(set=0,binding=29,std430) readonly buffer Tree {uint aperture_tree[];};
 #ifdef DC_TRANSPORT_PROFILE
 layout(set=0,binding=31,std430) buffer TransportProfile {uint transport_profile[];};
 uint request_queries=0u,blocker_checks=0u,source_queries=0u;
+uint buffer_barriers=0u;
 #endif
 layout(push_constant) uniform Params {
     uint width,height,mode,tick_parity,unused1,step_scale_bits,elapsed_time_mode;
@@ -40,6 +41,12 @@ uint page_at(ivec2 p) {
 uint atlas_index(ivec2 p,uint page) {return (page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);}
 #include "hydraulic_face.glsl"
 #include "water_color.glsl"
+void transport_buffer_barrier() {
+    subgroupMemoryBarrierBuffer();
+#ifdef DC_TRANSPORT_PROFILE
+    buffer_barriers++;
+#endif
+}
 bool permeable_material(uint m) {return m==0u||m==2u||m==4u||m==5u||m==6u||m==10u;}
 uint cell_meta(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0u;
@@ -196,7 +203,7 @@ uint move_cached_recipients(ivec2 source,ivec2 direction,uint reach,float travel
             mask&=~(1u<<bit);
         }
     }
-    subgroupMemoryBarrierShared();subgroupMemoryBarrierBuffer();subgroupBarrier();
+    subgroupMemoryBarrierShared();transport_buffer_barrier();subgroupBarrier();
     return min(available,total);
 }
 bool move_source(ivec2 source,ivec2 direction) {
@@ -272,7 +279,7 @@ bool move_source(ivec2 source,ivec2 direction) {
         uint flux=min(request,remaining);remaining-=flux;
         if(flux!=0u) {ivec2 target=source+direction*int(offset);water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),water_at(target),flux);put_water(target,water_at(target)+flux);}
     }
-    subgroupMemoryBarrierShared();subgroupMemoryBarrierBuffer();subgroupBarrier();
+    subgroupMemoryBarrierShared();transport_buffer_barrier();subgroupBarrier();
     uint sent=min(available,total);
     if(lane==0u&&sent!=0u) put_water(source,available-sent);
     return sent!=0u;
@@ -345,7 +352,7 @@ void main() {
         if(position<0||position>=int(length)) break;
         if(move_source(point_at(uint(position)),direction)) {
             subgroupMemoryBarrierShared();
-            subgroupMemoryBarrierBuffer();
+            transport_buffer_barrier();
             subgroupBarrier();
         }
     }
@@ -358,6 +365,7 @@ void main() {
         atomicAdd(transport_profile[0],requests);
         atomicAdd(transport_profile[1],checks);
         atomicAdd(transport_profile[2],source_queries);
+        atomicAdd(transport_profile[4],buffer_barriers);
     }
 #endif
 }
