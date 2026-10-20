@@ -29,6 +29,8 @@ bool fr_occlusion_gpu_layout(fr_occlusion_gpu_t *occlusion,
 
 bool fr_occlusion_input_binding(fr_occlusion_gpu_t *occlusion,
                                 VkDescriptorBufferInfo *buffer);
+bool fr_occlusion_input_read(fr_occlusion_gpu_t *occlusion,uint32_t x,uint32_t y,
+                              fr_occlusion_node_t *node);
 void fr_occlusion_record(fr_occlusion_gpu_t *occlusion, VkBuffer indirect,
                          VkDeviceSize offset);
 bool fr_lighting_field_binding(fr_lighting_gpu_t *lighting,

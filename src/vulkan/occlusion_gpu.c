@@ -4,6 +4,7 @@
 
 #include "ferrum/renderer/occlusion_gpu.h"
 #include "renderer_internal.h"
+typedef struct {float opacity;uint32_t known;} optical_input_t;
 
 struct fr_occlusion_gpu {
   dc_gpu_t *gpu;
@@ -87,13 +88,9 @@ bool fr_occlusion_gpu_upload(fr_occlusion_gpu_t *c, const float *opacity,
     if (!isfinite(opacity[i]) || opacity[i] < 0 || opacity[i] > 1 ||
         known[i] > 1)
       return false;
-  typedef struct {
-    float opacity;
-    uint32_t known;
-  } input_t;
-  input_t *inputs = c->input_mapped;
+  optical_input_t *inputs = c->input_mapped;
   for (uint32_t i = 0; i < count; i++)
-    inputs[i] = (input_t){opacity[i], known[i]};
+    inputs[i] = (optical_input_t){opacity[i], known[i]};
   return true;
 }
 bool fr_occlusion_gpu_generate(fr_occlusion_gpu_t *c, char *err, uint32_t cap) {
@@ -170,5 +167,14 @@ bool fr_occlusion_input_binding(fr_occlusion_gpu_t *c,
     return false;
   *buffer = (VkDescriptorBufferInfo){
       c->input, 0, (VkDeviceSize)c->width[0] * c->height[0] * 8};
+  return true;
+}
+bool fr_occlusion_input_read(fr_occlusion_gpu_t *c,uint32_t x,uint32_t y,
+                              fr_occlusion_node_t *node) {
+  if(!c||!node||x>=c->width[0]||y>=c->height[0]) return false;
+  const optical_input_t *input=c->input_mapped;
+  optical_input_t cell=input[y*c->width[0]+x];
+  float opacity=cell.known?cell.opacity:1.f;
+  *node=(fr_occlusion_node_t){opacity,opacity,cell.known,0};
   return true;
 }

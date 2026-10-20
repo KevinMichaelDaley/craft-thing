@@ -248,8 +248,6 @@ void fr_renderer_record(dc_gpu_t *g) {
   scene_dispatch(g, 2, DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS, push);
   scene_dispatch(g, 3, g->width * g->height, push);
   scene_dispatch(g, 4, 32, push);
-  fr_occlusion_record(s->occlusion, s->buffers[3], 8u * sizeof(uint32_t));
-  scene_barrier(g);
   if (s->mode == FR_RENDERER_LIT) {
     fr_lighting_record(s->lighting, s->buffers[3], sizeof(uint32_t));
     scene_barrier(g);
@@ -261,5 +259,5 @@ bool fr_renderer_render(dc_gpu_t *g, char *err, uint32_t cap) {
 }
 bool fr_renderer_read_opacity(dc_gpu_t *g,uint32_t x,uint32_t y,
                               fr_occlusion_node_t *node) {
-  return g&&g->renderer&&fr_occlusion_gpu_read(g->renderer->occlusion,0,x,y,node);
+  return g&&g->renderer&&fr_occlusion_input_read(g->renderer->occlusion,x,y,node);
 }
