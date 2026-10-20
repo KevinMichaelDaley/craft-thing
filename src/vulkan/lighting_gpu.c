@@ -29,7 +29,8 @@ struct fr_lighting_gpu {
   light_pass_t passes[LIGHTING_MAX_PASSES];
   uint32_t pass_count;
   uint32_t diagonal_groups;
-  VkPipeline specialized[FR_TRANSPORT_SOURCE_ITERATIONS][6];
+  VkPipeline specialized[2][FR_TRANSPORT_SOURCE_ITERATIONS][6];
+  bool compact_available, common_direction;
 };
 static uint32_t tiles(uint32_t length) {
   return (length + FR_TRANSPORT_TILE - 1u) / FR_TRANSPORT_TILE;
@@ -90,17 +91,18 @@ uint32_t fr_lighting_gpu_scan_groups(const fr_lighting_gpu_t *l,
   return 0;
 }
 uint32_t fr_lighting_gpu_beam_stride(const fr_lighting_gpu_t *l) {
-  return l ? FR_TRANSPORT_BEAM_BYTES : 0u;
+  return l ? (l->common_direction ? 16u : FR_TRANSPORT_BEAM_BYTES) : 0u;
 }
 void fr_lighting_gpu_destroy(fr_lighting_gpu_t *l) {
   if (!l)
     return;
   VkDevice d = l->gpu->device;
+  for (unsigned compact = 0; compact < 2; compact++)
   for (unsigned iteration = 0; iteration < FR_TRANSPORT_SOURCE_ITERATIONS;
        iteration++)
     for (unsigned phase = 0; phase < 6; phase++)
-      if (l->specialized[iteration][phase])
-        vkDestroyPipeline(d, l->specialized[iteration][phase], NULL);
+      if (l->specialized[compact][iteration][phase])
+        vkDestroyPipeline(d, l->specialized[compact][iteration][phase], NULL);
   fr_renderer_compute_destroy(l->gpu, &l->compute);
   if (l->work_mapped)
     vkUnmapMemory(d, l->transport_memory[3]);
@@ -140,6 +142,7 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
   if (!l)
     return false;
   l->gpu = g;
+  l->compact_available = getenv("DC_LIGHTING_GENERAL_TRANSPORT") == NULL;
   uint32_t layout[136] = {0};
   VkDescriptorBufferInfo buffers[9];
   if (!fr_occlusion_gpu_layout(c, &buffers[0], layout) ||
@@ -240,13 +243,14 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
   VkShaderModule module;
   if (!dc_gpu_load_shader_module(g, shader, &module, err, cap))
     goto fail;
+  for (unsigned compact = 0; compact <= (unsigned)l->compact_available; compact++)
   for (unsigned i = 0; i < l->pass_count; i++) {
     light_pass_t pass = l->passes[i];
-    if (l->specialized[pass.iteration][pass.phase])
+    if (l->specialized[compact][pass.iteration][pass.phase])
       continue;
-    uint32_t values[2] = {pass.phase, pass.iteration};
-    VkSpecializationMapEntry entries[2] = {{0, 0, 4}, {1, 4, 4}};
-    VkSpecializationInfo specialization = {2, entries, sizeof(values), values};
+    uint32_t values[3] = {pass.phase, pass.iteration, compact};
+    VkSpecializationMapEntry entries[3] = {{0, 0, 4}, {1, 4, 4}, {2, 8, 4}};
+    VkSpecializationInfo specialization = {3, entries, sizeof(values), values};
     VkComputePipelineCreateInfo info = {
         .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage = {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -254,7 +258,7 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
                   .pName = "main", .pSpecializationInfo = &specialization},
         .layout = l->compute.pipeline_layout};
     if (vkCreateComputePipelines(g->device, VK_NULL_HANDLE, 1, &info, NULL,
-        &l->specialized[pass.iteration][pass.phase]) != VK_SUCCESS) {
+        &l->specialized[compact][pass.iteration][pass.phase]) != VK_SUCCESS) {
       vkDestroyShaderModule(g->device, module, NULL);
       goto fail;
     }
@@ -306,12 +310,21 @@ bool fr_lighting_gpu_set_sources(fr_lighting_gpu_t *l,
     sources[8 * count + k] = sun.direction[k] * inv;
     sources[8 * count + 4 + k] = sun.color[k];
   }
-  sources[8 * count + 3] = -1;
+  float common_z = count ? points[0].height / hypotf(1.f, points[0].height) :
+                          sources[8 * count + 2];
+  l->common_direction = l->compact_available;
+  if (count && sun.intensity > 0 && common_z != sources[8 * count + 2])
+    l->common_direction = false;
+  for (uint32_t i = 1; i < count; i++)
+    if (points[i].height != points[0].height) l->common_direction = false;
+  sources[8 * count + 3] = common_z;
   sources[8 * count + 7] = sun.intensity;
   uint32_t *p = l->parameter_mapped;
   p[3] = count;
   p[4] = budget;
   p[5] = sun.known_sky;
+  float planar = sqrtf(fmaxf(0.f, 1.f - common_z * common_z));
+  memcpy(p + 8, &planar, sizeof(planar));
   return true;
 }
 bool fr_lighting_gpu_generate(fr_lighting_gpu_t *l, char *err, uint32_t cap) {
@@ -369,7 +382,7 @@ void fr_lighting_record(fr_lighting_gpu_t *l, VkBuffer indirect,
   for (uint32_t i = 0; i < l->pass_count; i++) {
     light_pass_t pass = l->passes[i];
     vkCmdBindPipeline(g->command, VK_PIPELINE_BIND_POINT_COMPUTE,
-                      l->specialized[pass.iteration][pass.phase]);
+                      l->specialized[l->common_direction][pass.iteration][pass.phase]);
     push[0] = pass.phase;
     push[1] = pass.level;
     push[2] = pass.iteration;
