@@ -30,7 +30,7 @@ typedef struct {
 } fr_renderer_light_field_t;
 typedef struct fr_lighting_gpu fr_lighting_gpu_t;
 
-/** Allocate a directional field coupled to a conservative opacity hierarchy. */
+/** Allocate a directional field coupled to the authoritative optical cells. */
 bool fr_lighting_gpu_create(dc_gpu_t *gpu, fr_occlusion_gpu_t *occlusion,
                             fr_lighting_gpu_t **out, char *err, uint32_t cap);
 /** Release field resources before releasing the referenced hierarchy/context.
@@ -45,7 +45,8 @@ bool fr_lighting_gpu_set_sources(fr_lighting_gpu_t *lighting,
                                  const fr_renderer_point_light_t *points,
                                  uint32_t count, fr_renderer_sun_t sun,
                                  uint32_t propagation_reach);
-/** Inject sky/emitter radiance, propagate directional beams with parallel
+/** Read current optical cells directly; no hierarchy rebuild is required.
+ * Inject sky/emitter radiance, propagate directional beams with parallel
  * affine scans, then aggregate deterministic RGB energy and first moments. */
 bool fr_lighting_gpu_generate(fr_lighting_gpu_t *lighting, char *err,
                               uint32_t cap);

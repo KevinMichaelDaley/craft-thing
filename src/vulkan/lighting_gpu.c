@@ -139,7 +139,8 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
   l->gpu = g;
   uint32_t layout[136] = {0};
   VkDescriptorBufferInfo buffers[9];
-  if (!fr_occlusion_gpu_layout(c, &buffers[0], layout))
+  if (!fr_occlusion_gpu_layout(c, &buffers[0], layout) ||
+      !fr_occlusion_input_binding(c, &buffers[0]))
     goto fail;
   l->width = layout[0];
   l->height = layout[1];

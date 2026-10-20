@@ -7,8 +7,8 @@
 #extension GL_KHR_shader_subgroup_shuffle_relative : require
 #endif
 layout(local_size_x=FR_TRANSPORT_TILE) in;
-struct Node {float minimum;float maximum;uint known;uint reserved;};
-layout(set=0,binding=0,std430) readonly buffer Hierarchy {Node nodes[];};
+struct OpticalCell {float opacity;uint known;};
+layout(set=0,binding=0,std430) readonly buffer Optics {OpticalCell nodes[];};
 layout(set=0,binding=1,std430) readonly buffer Parameters {uint metadata[];};
 struct Light {vec4 position_radius;vec4 color_intensity;};
 layout(set=0,binding=2,std430) readonly buffer Sources {Light sources[];};
@@ -163,7 +163,7 @@ Beam inject(ivec2 cell,uint direction) {
     if(inside(preceding)) {
         uint before=index_at(preceding);
         if(nodes[before].known!=0u) {
-            transmission=1.-nodes[before].maximum;
+            transmission=1.-nodes[before].opacity;
             if(ITERATION<=1u&&uintBitsToFloat(seeds[before].t)>0.) transmission=1.;
             transmission*=ITERATION==1u?FR_TRANSPORT_AIR_TRANSMISSION*FR_TRANSPORT_AIR_TRANSMISSION:FR_TRANSPORT_AIR_TRANSMISSION;
             if(ITERATION!=0u) {
