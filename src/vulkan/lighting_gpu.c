@@ -96,6 +96,9 @@ uint32_t fr_lighting_gpu_beam_stride(const fr_lighting_gpu_t *l) {
 uint32_t fr_lighting_gpu_scan_channels(const fr_lighting_gpu_t *l) {
   return l ? (l->common_direction ? 4u : 7u) : 0u;
 }
+uint32_t fr_lighting_gpu_source_cells(const fr_lighting_gpu_t *l) {
+  return l ? l->width*l->height*((uint32_t *)l->parameter_mapped)[3] : 0u;
+}
 void fr_lighting_gpu_destroy(fr_lighting_gpu_t *l) {
   if (!l)
     return;
