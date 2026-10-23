@@ -454,6 +454,28 @@ static void test_source_buffer_injection_is_bounded_and_combines_emitters(void) 
   ASSERT_EQ(combined.l0[2],0.f);
   PASS();
 }
+static void test_source_buffer_survives_optical_edits_without_reinjection(void) {
+  ASSERT_TRUE(empty_scene());
+  fr_renderer_point_light_t point={4.5f,4.5f,1,20,{1,0,0},12};
+  ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,&point,1,(fr_renderer_sun_t){0},128));
+  ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
+  uint32_t builds=fr_lighting_gpu_source_builds(g_lighting);
+  for(unsigned y=0;y<LIGHT_HEIGHT;y++) g_opacity[y*LIGHT_WIDTH+7]=1.f;
+  ASSERT_TRUE(fr_occlusion_gpu_upload(g_occlusion,g_opacity,g_known));
+  ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
+  ASSERT_EQ(fr_lighting_gpu_source_builds(g_lighting),builds);
+  fr_renderer_light_field_t field;
+  ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,9,4,&field));
+  ASSERT_EQ(field.l0[0],0.f);
+  point.color[0]=0;point.color[2]=1;
+  ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,&point,1,(fr_renderer_sun_t){0},128));
+  ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
+  ASSERT_EQ(fr_lighting_gpu_source_builds(g_lighting),builds+1u);
+  ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,4,4,&field));
+  ASSERT_EQ(field.l0[0],0.f);
+  ASSERT_TRUE(field.l0[2]>0.f);
+  PASS();
+}
 int main(void) {
   if (!dc_gpu_create(&g_gpu, 64, 64, "build/shaders/pattern.comp.spv", g_error,
                      sizeof(g_error)) ||
@@ -474,6 +496,7 @@ int main(void) {
   RUN(test_common_direction_matches_general_transport);
   RUN(test_mixed_heights_preserve_independent_vertical_moments);
   RUN(test_source_buffer_injection_is_bounded_and_combines_emitters);
+  RUN(test_source_buffer_survives_optical_edits_without_reinjection);
   RUN(test_light_edits_read_authoritative_optics_without_tree_rebuild);
   RUN(test_diagonal_schedule_excludes_absent_tiles);
   RUN(test_hdr_emission_preserves_energy_range_and_vertical_direction);

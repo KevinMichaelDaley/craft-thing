@@ -242,6 +242,7 @@ void main() {
     if(work[0]==0u) return;
     if(PHASE==5u) {
         if(global>=metadata[0]*metadata[1]) return;
+        if(global==0u) work[2]++;
         ivec2 cell=ivec2(global%metadata[0],global/metadata[0]);
         seeds[global]=PackedBeam(0u,0u,0u,0u,uint(sky_reachable(cell))<<30u);
         return;

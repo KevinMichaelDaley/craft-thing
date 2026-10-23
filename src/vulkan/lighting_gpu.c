@@ -102,6 +102,9 @@ uint32_t fr_lighting_gpu_source_cells(const fr_lighting_gpu_t *l) {
   uint64_t cells=(uint64_t)l->passes[1].groups*FR_TRANSPORT_TILE*l->passes[1].directions;
   return cells>UINT32_MAX?UINT32_MAX:(uint32_t)cells;
 }
+uint32_t fr_lighting_gpu_source_builds(const fr_lighting_gpu_t *l) {
+  return l ? ((const uint32_t *)l->work_mapped)[2] : 0u;
+}
 void fr_lighting_gpu_destroy(fr_lighting_gpu_t *l) {
   if (!l)
     return;
