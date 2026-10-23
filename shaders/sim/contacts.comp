@@ -313,8 +313,22 @@ void main() {
         if (other != BODY_CAPACITY && relative_body(a, DC_BODY(other), delta)) {
             Body b = DC_BODY(other);
             bool distribute_b=cooperative&&!pixel_body(a)&&pixel_body(b);
-            if(pixel_body(a) && lane == 0u&&(!CONTACT_PIXEL_ONLY||gl_WorkGroupID.y==0u)) atomicAdd(DC_DATA(base+9u),body_pieces(a));
-            for(uint ap=cooperative&&!distribute_b?work_lane:0u;ap<body_pieces(a);ap+=cooperative&&!distribute_b?work_stride:1u) {
+            uint work_count=body_pieces(a);uvec4 scan=uvec4(0);bool rectangle=false;
+            bool single_tile=pixel_body(a)&&work_count==256u;
+            if(pixel_body(a)) {
+                uvec2 low=uvec2(pixel_low(a)),extent=uvec2(pixel_high(a))-low;
+                /* Sparse, distant tiles retain tile-list traversal. A smaller
+                   occupied rectangle avoids scanning unused allocation cells. */
+                if(extent.y!=0u&&extent.x<=work_count/extent.y) {
+                    scan=uvec4(low,extent);work_count=extent.x*extent.y;rectangle=true;
+                }
+                if(lane==0u&&(!CONTACT_PIXEL_ONLY||gl_WorkGroupID.y==0u)) atomicAdd(DC_DATA(base+9u),work_count);
+            }
+            if(CONTACT_PIXEL_ONLY&&gl_WorkGroupID.y*CONTACT_GROUP_SIZE>=work_count) return;
+            for(uint ordinal=cooperative&&!distribute_b?work_lane:0u;ordinal<work_count;ordinal+=cooperative&&!distribute_b?work_stride:1u) {
+                uint ap=rectangle?(single_tile?
+                    ((scan.y+ordinal/scan.z)%16u)*16u+(scan.x+ordinal%scan.z)%16u:
+                    query_piece(a,scan,ordinal)):ordinal;
                 if(!pixel_boundary(a,ap)) continue;
                 if((params.mode&256u)!=0u&&(!distribute_b||lane==0u)) atomicAdd(DC_DATA(base+10u),1u);
                 Polygon pa=body_polygon(a,ap,vec2(0));vec2 lo=vec2(1e20),hi=vec2(-1e20);
@@ -340,6 +354,7 @@ void main() {
             query=body_piece_query(a,low-vec2(contact_skin),low+64.+vec2(contact_skin));
             if (lane == 0u&&(!CONTACT_PIXEL_ONLY||gl_WorkGroupID.y==0u)) atomicAdd(DC_DATA(base+9u),query.z*query.w);
         }
+        if(CONTACT_PIXEL_ONLY&&gl_WorkGroupID.y*CONTACT_GROUP_SIZE>=query.z*query.w) return;
         for(uint ordinal=cooperative?work_lane:0u;ordinal<query.z*query.w;ordinal+=cooperative?work_stride:1u) {
             uint ap=query_piece(a,query,ordinal);
             if(!pixel_boundary(a,ap)) continue;
