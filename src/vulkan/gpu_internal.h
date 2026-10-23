@@ -144,6 +144,7 @@ struct dc_gpu {
     VkPipeline contact_pixel_pipeline, contact_pixel_plan_pipeline,
                contact_pixel_finish_pipeline, contact_pixel_work_pipeline;
     VkPipeline solver_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
+    VkPipeline solver_pixel_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
     VkPipeline pixel_hydro_pipelines[5];
     VkPipeline structural_pipelines[DC_GPU_STRUCTURAL_PHASE_COUNT];
     bool structural_enabled;
@@ -159,6 +160,7 @@ struct dc_gpu {
     VkQueryPool timestamp_pool;
     bool component_profile;
     bool solver_recording;
+    bool legacy_body_possible;
     float timestamp_period;
     uint32_t timestamp_bits;
     VkBuffer halo_buffer;
