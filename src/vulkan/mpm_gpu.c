@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "gpu_internal.h"
 
@@ -75,8 +77,12 @@ bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                                      &gpu->mpm_component_size_mapped, err, cap);
 }
 
-static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkPipeline *pipeline,
+static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPipeline *pipeline,
                           char *err, uint32_t cap) {
+    const char *stencil=getenv("DC_MPM_GATHER_STENCIL");
+    bool use_stencil=phase==4u&&stencil&&strcmp(stencil,"1")==0;
+    if(use_stencil) path=gpu->runtime_body_consumers?"build/shaders/runtime/mpm_stencil.comp.spv":
+                                                     "build/shaders/mpm_stencil.comp.spv";
     VkShaderModule module = VK_NULL_HANDLE;
     if (!dc_gpu_load_shader_module(gpu, path, &module, err, cap))
         return false;
@@ -87,6 +93,10 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkPipeline *pipeline,
                   .module = module,
                   .pName = "main"},
         .layout = gpu->pipeline_layout};
+    uint32_t values[]={phase,use_stencil?1u:0u};
+    VkSpecializationMapEntry entries[]={{2u,0u,4u},{1u,4u,4u}};
+    VkSpecializationInfo specialization={2u,entries,sizeof(values),values};
+    if(phase!=UINT32_MAX) info.stage.pSpecializationInfo=&specialization;
     VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1,
                                                &info, NULL, pipeline);
     vkDestroyShaderModule(gpu->device, module, NULL);
@@ -135,14 +145,18 @@ static bool component_pipelines(dc_gpu_t *gpu, char *err, uint32_t cap) {
 }
 
 bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    return make_pipeline(gpu, "build/shaders/mpm.comp.spv", &gpu->mpm_pipeline,
-                         err, cap) &&
-           make_pipeline(gpu, "build/shaders/mpm_active.comp.spv",
-                         &gpu->mpm_activity_pipeline, err, cap) &&
+    if(!make_pipeline(gpu,"build/shaders/mpm.comp.spv",UINT32_MAX,&gpu->mpm_pipeline,err,cap)) return false;
+    const char *variant=getenv("DC_MPM_KERNELS");
+    bool specialized=variant&&strcmp(variant,"specialized")==0;
+    if(variant&&!specialized&&strcmp(variant,"generic")!=0) return error(err,cap,"Invalid MPM kernel variant");
+    for(uint32_t phase=0;specialized&&phase<DC_GPU_MPM_PHASE_COUNT;phase++)
+        if(!make_pipeline(gpu,"build/shaders/mpm.comp.spv",phase,&gpu->mpm_phase_pipelines[phase],err,cap)) return false;
+    return make_pipeline(gpu,"build/shaders/mpm_active.comp.spv",UINT32_MAX,
+                         &gpu->mpm_activity_pipeline,err,cap) &&
            dc_gpu_mpm_compaction_pipeline_init(gpu,err,cap) &&
-           make_pipeline(gpu, "build/shaders/mpm_component.comp.spv",
-                         &gpu->mpm_component_pipeline, err, cap) &&
-           component_pipelines(gpu, err, cap);
+           make_pipeline(gpu,"build/shaders/mpm_component.comp.spv",UINT32_MAX,
+                         &gpu->mpm_component_pipeline,err,cap) &&
+           component_pipelines(gpu,err,cap);
 }
 
 void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu) {
@@ -151,6 +165,8 @@ void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu) {
         if (gpu->component_extract_pipelines[mode])
             vkDestroyPipeline(gpu->device,
                               gpu->component_extract_pipelines[mode], NULL);
+    for(unsigned phase=0;phase<DC_GPU_MPM_PHASE_COUNT;phase++)
+        if(gpu->mpm_phase_pipelines[phase]) vkDestroyPipeline(gpu->device,gpu->mpm_phase_pipelines[phase],NULL);
     if (gpu->mpm_pipeline)
         vkDestroyPipeline(gpu->device, gpu->mpm_pipeline, NULL);
     if (gpu->mpm_activity_pipeline)
@@ -307,11 +323,19 @@ void dc_gpu_record_components(dc_gpu_t *gpu, bool rigid) {
     }
 }
 
+static void bind_mpm_phase(dc_gpu_t *gpu,uint32_t phase,VkPipeline *bound) {
+    VkPipeline pipeline=gpu->mpm_phase_pipelines[phase];
+    if(!pipeline) pipeline=gpu->mpm_pipeline;
+    if(pipeline==*bound) return;
+    vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline);
+    *bound=pipeline;
+}
+
 void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu) {
     dc_gpu_record_components(gpu, false);
     uint32_t push[7] = {gpu->width, gpu->height, 0u, 0u, 0u, 0u, 0u};
-    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
-                      gpu->mpm_pipeline);
+    VkPipeline bound=VK_NULL_HANDLE;
+    bind_mpm_phase(gpu,DC_MPM_MOISTURE_MODE,&bound);
     push[2] = DC_MPM_MOISTURE_MODE;
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
@@ -322,6 +346,7 @@ void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu) {
     for (uint32_t step = 0; step < DC_MPM_SUBSTEPS; ++step) {
         for (uint32_t mode = 0; mode < DC_MPM_MODES; ++mode) {
             push[2] = mode;
+            bind_mpm_phase(gpu,mode,&bound);
             vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                                VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push),
                                push);
@@ -331,6 +356,7 @@ void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu) {
                             VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
             if (mode == 1u) {
                 push[2] = DC_MPM_WATER_FEEDBACK_MODE;
+                bind_mpm_phase(gpu,DC_MPM_WATER_FEEDBACK_MODE,&bound);
                 vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                                    VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push),
                                    push);

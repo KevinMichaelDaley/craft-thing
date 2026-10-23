@@ -29,6 +29,7 @@ enum {
     DC_GPU_SOLVER_BODY_WORDS = 32,
     DC_GPU_SOLVER_CONTACT_WORDS = 16,
     DC_GPU_SOLVER_PHASE_COUNT = 21,
+    DC_GPU_MPM_PHASE_COUNT = 8,
     DC_GPU_STRUCTURAL_PHASE_COUNT = 7
 };
 
@@ -101,7 +102,7 @@ struct dc_gpu {
     void *mpm_grid_mapped;
     void *mpm_force_mapped, *mpm_velocity_mapped;
     VkPipeline mpm_pipeline;
-    VkPipeline mpm_phase_pipelines[8];
+    VkPipeline mpm_phase_pipelines[DC_GPU_MPM_PHASE_COUNT];
     VkBuffer mpm_activity_buffer;
     VkDeviceMemory mpm_activity_memory;
     VkPipeline mpm_activity_pipeline;

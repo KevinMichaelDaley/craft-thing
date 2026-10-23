@@ -60,8 +60,15 @@ void main() {
     uint x=gl_WorkGroupID.x,lane=gl_LocalInvocationIndex;
     if(x>=params.width) return;
     uint length=(params.height+LANES-1u)/LANES,begin=lane*length,end=min(begin+length,params.height);
+    const uint CACHE_LENGTH=8u;
+    uvec3 cached[CACHE_LENGTH];
+    bool reuse=length<=CACHE_LENGTH;
     uvec3 own=uvec3(0);
-    for(uint y=begin;y<end;y++) own=compose(own,cell_transform(ivec2(x,y)));
+    for(uint y=begin;y<end;y++) {
+        uvec3 transform=cell_transform(ivec2(x,y));
+        if(reuse) cached[y-begin]=transform;
+        own=compose(own,transform);
+    }
     transforms[lane]=own;barrier();
     for(uint stride=1u;stride<LANES;stride*=2u) {
         uvec3 previous=lane>=stride?transforms[lane-stride]:uvec3(0),current=transforms[lane];
@@ -71,7 +78,7 @@ void main() {
     }
     uint head=lane==0u?0u:transforms[lane-1u].y;
     for(uint y=begin;y<end;y++) {
-        head=apply_head(cell_transform(ivec2(x,y)),head);
+        head=apply_head(reuse?cached[y-begin]:cell_transform(ivec2(x,y)),head);
         uint index=y*params.width+x;
         if(params.phase==0u) raw_heads[index]=head;else heads[index]=head;
     }

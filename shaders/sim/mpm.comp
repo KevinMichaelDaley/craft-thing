@@ -5,6 +5,7 @@
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(constant_id=0) const bool MOVEMENT_FLAGS_ENABLED=true;
 layout(constant_id=1) const bool GATHER_STENCIL_ENABLED=false;
+layout(constant_id=2) const uint MPM_PHASE=0xffffffffu;
 
 struct Particle {
     int x_fp, y_fp, vx_fp, vy_fp;
@@ -446,7 +447,9 @@ uint gather_decision(uint index) {
     return accepted[index];
 }
 
+#ifdef DC_MPM_SHARED_GATHER
 #include "mpm_gather_cache.glsl"
+#endif
 
 void gather(ivec2 target) {
     uint base = particle_index(target, 0u);
@@ -456,21 +459,30 @@ void gather(ivec2 target) {
     for (int dy = -1; dy <= 1; ++dy) {
         for (int dx = -1; dx <= 1; ++dx) {
             ivec2 source = target + ivec2(dx, dy);
+#ifdef DC_MPM_SHARED_GATHER
             ivec2 stencil=ivec2(gl_LocalInvocationID.xy)+ivec2(dx+1,dy+1);
             uint cache_index=uint(stencil.y)*GATHER_SIDE+uint(stencil.x);
             uint source_page=GATHER_STENCIL_ENABLED?gather_pages[cache_index]:page_at(source);
+#else
+            uint source_page=page_at(source);
+#endif
             if(source_page==0u) continue;
             bool source_here=all(equal(source,target));
             for (uint layer = 0u; layer < 2u; ++layer) {
                 uint source_index=0u,decision;
+#ifdef DC_MPM_SHARED_GATHER
                 if(GATHER_STENCIL_ENABLED) decision=gather_flags[cache_index][layer];
-                else {source_index=particle_index(source,layer);decision=gather_decision(source_index);}
+                else
+#endif
+                {source_index=particle_index(source,layer);decision=gather_decision(source_index);}
                 /* A neighboring source can contribute only an accepted move
                    out of its own cell. Inspect its word before loading two
                    complete particle records from an unchanged neighborhood. */
                 if(MOVEMENT_FLAGS_ENABLED&&!source_here&&decision!=2u) continue;
+#ifdef DC_MPM_SHARED_GATHER
                 if(GATHER_STENCIL_ENABLED)
                     source_index=(source_page-1u)*PARTICLES+layer*CELLS+local_cell(source);
+#endif
                 Particle old = particles[source_index];
                 if (old.mass_fp == 0u) continue;
                 Particle candidate = proposals[source_index];
@@ -524,6 +536,7 @@ void commit_cell(ivec2 cell) {
 }
 
 void main() {
+    uint mode=MPM_PHASE==0xffffffffu?params.mode:MPM_PHASE;
     uint tiles_x = (params.width + 15u) / 16u;
     uint count_word=10u+2u*tiles_x*((params.height+15u)/16u);
     uint group=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;
@@ -531,21 +544,23 @@ void main() {
     uint tile = activity[3u + group];
     ivec2 cell = ivec2(int((tile % tiles_x) * 16u + gl_LocalInvocationID.x),
                        int((tile / tiles_x) * 16u + gl_LocalInvocationID.y));
-    if(GATHER_STENCIL_ENABLED&&params.mode==4u) gather_cache_fill(tile,tiles_x);
+#ifdef DC_MPM_SHARED_GATHER
+    if(GATHER_STENCIL_ENABLED&&mode==4u) gather_cache_fill(tile,tiles_x);
+#endif
     if (!in_grid(cell)) return;
-    if (params.mode == MODE_MOISTURE) { exchange_moisture(cell); return; }
-    if (params.mode == 0u) { p2g(cell); return; }
-    if (params.mode == 1u) { solve_grid(cell); return; }
-    if (params.mode == MODE_WATER_FEEDBACK) { apply_feedback(cell); return; }
+    if (mode == MODE_MOISTURE) { exchange_moisture(cell); return; }
+    if (mode == 0u) { p2g(cell); return; }
+    if (mode == 1u) { solve_grid(cell); return; }
+    if (mode == MODE_WATER_FEEDBACK) { apply_feedback(cell); return; }
     if (page_at(cell) == 0u) return;
-    if (params.mode == 2u) {
+    if (mode == 2u) {
         if (particle_counts[page_at(cell) - 1u] == 0u || !grain_at(cell)) return;
         g2p_one(cell, 0u);
         g2p_one(cell, 1u);
-    } else if (params.mode == 3u) {
+    } else if (mode == 3u) {
         if (particle_counts[page_at(cell) - 1u] == 0u || !grain_at(cell)) return;
         accept_one(cell, 0u);
         accept_one(cell, 1u);
-    } else if (params.mode == 4u) gather(cell);
-    else if (params.mode == 5u) commit_cell(cell);
+    } else if (mode == 4u) gather(cell);
+    else if (mode == 5u) commit_cell(cell);
 }

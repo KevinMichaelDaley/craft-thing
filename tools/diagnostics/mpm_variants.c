@@ -59,14 +59,18 @@ static void prepare(dc_gpu_t *gpu) {
 }
 
 void __wrap_dc_gpu_record_mpm(dc_gpu_t *gpu) {
+    gpu->solver_cache_disabled=true;
     if (variant_gpu != gpu) prepare(gpu);
     __real_dc_gpu_record_mpm(gpu);
 }
 
 void __wrap_vkCmdBindPipeline(VkCommandBuffer command, VkPipelineBindPoint point,
                               VkPipeline pipeline) {
-    if (variant_gpu && command == variant_gpu->command && point == VK_PIPELINE_BIND_POINT_COMPUTE)
+    if (variant_gpu && command == variant_gpu->command && point == VK_PIPELINE_BIND_POINT_COMPUTE) {
         bound_mpm = !production && pipeline == variant_gpu->mpm_pipeline;
+        for(unsigned phase=0;!production&&phase<8u;phase++)
+            bound_mpm=bound_mpm||pipeline==variant_gpu->mpm_phase_pipelines[phase];
+    }
     __real_vkCmdBindPipeline(command, point, pipeline);
 }
 
