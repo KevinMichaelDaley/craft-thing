@@ -41,6 +41,7 @@ static bool scan_submit(fixture_t *f,unsigned mode) {
 static void test_scan_matches_ordered_mass_and_pigment_for_every_direction(void) {
     ASSERT_TRUE(scan_override_present(5u));
     ASSERT_TRUE(scan_override_present(6u));
+    ASSERT_TRUE(scan_override_present(7u));
     for(unsigned mode=0;mode<4;mode++) for(unsigned variant=0;variant<12;variant++) {
         fixture_t *f=calloc(1,sizeof(*f));ASSERT_TRUE(f&&initialize(&f->p));
         f->gpu=(dc_gpu_t){.device=f->p.device,.physical=f->p.physical};char err[256];

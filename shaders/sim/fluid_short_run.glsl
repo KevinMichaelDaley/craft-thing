@@ -37,7 +37,7 @@ uint short_run_block(int first,bool positive) {
     int direction=positive?1:-1;
     uint face=uint(positive?first:first-1);
     float first_travel=uintBitsToFloat(cached[face].w);
-    if(first_travel<=1.||first_travel>float(2u*team)) return 0u;
+    if(first_travel<=1.||first_travel>float(4u*team)) return 0u;
     uint distance=uint(ceil(first_travel));
     int front=first+direction*int(distance);
     if(front<0||front>=int(length)) return 0u;
@@ -54,7 +54,7 @@ uint short_run_block(int first,bool positive) {
         if(!positive&&position==0u) simple=false;
         else {
             travel=uintBitsToFloat(cached[own_face].w);
-            simple=cached[own_face].z==FULL&&(mass==0u||ceil(travel)==float(distance));
+            simple=(cached[own_face].z&131071u)==FULL&&(mass==0u||ceil(travel)==float(distance));
         }
     }
     uint count=subgroupMin(simple?team:lane);
@@ -69,7 +69,7 @@ uint short_run_block(int first,bool positive) {
             (state&131071u)==FULL&&cached[p].x<=FULL;
         if(offset<distance) {
             uint edge=positive?p:p-1u;
-            clear_front=clear_front&&cached[p].x==0u&&cached[edge].z==FULL;
+            clear_front=clear_front&&cached[p].x==0u&&(cached[edge].z&131071u)==FULL;
         }
     }
     if(subgroupMin(uint(clear_front))==0u) return 0u;

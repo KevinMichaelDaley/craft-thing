@@ -14,6 +14,7 @@ layout(constant_id=1) const uint CACHE_CELLS=1024u;
 layout(constant_id=5) const bool ONE_CELL_SCAN_ENABLED=true;
 /* Enable only in explicit experiments until full-frame scheduling benefits. */
 layout(constant_id=6) const bool LONG_RUN_SCAN_ENABLED=false;
+layout(constant_id=7) const bool PAGE_CACHE_ENABLED=false;
 layout(set=0,binding=1,std430) coherent buffer Cells {uvec2 chunk_cells[];};
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
@@ -45,6 +46,11 @@ uint line,length;
 uint transport_team_size() {return min(gl_SubgroupSize,gl_WorkGroupSize.x);}
 uint page_at(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0u;
+    uint position=uint(vertical?p.y:p.x);
+    if(PAGE_CACHE_ENABLED&&cache_ready&&position<CACHE_CELLS) {
+        uint page=cached[position].z>>17u;
+        if(page!=32767u) return page;
+    }
 #ifdef DC_TRANSPORT_PROFILE
     if(cache_ready) page_queries++;
 #endif
@@ -79,7 +85,7 @@ float face_aperture(ivec2 p,ivec2 direction) {
     ivec2 face=p+min(direction,ivec2(0));
     if(any(lessThan(face,ivec2(0)))||any(greaterThanEqual(face,ivec2(params.width,params.height)))) return 0.;
     uint position=uint(vertical?face.y:face.x);
-    if(position<CACHE_CELLS) return float(cached[position].z)/float(FULL);
+    if(position<CACHE_CELLS) return float(cached[position].z&131071u)/float(FULL);
     if(page_at(face)==0u) return 0.;
     uint axis=direction.x!=0?3u:4u,index=uint(face.y)*params.width+uint(face.x);
     return float(hydraulic_aperture(FULL-min(FULL,occupancy[axis*params.width*params.height+index]),face,direction))/float(FULL);
@@ -168,9 +174,9 @@ void cache_blocker_bounds(bool positive) {
 #endif
             bool connected;
             if(positive) connected=position+1u<length&&open_cell(point_at(position))&&
-                open_cell(point_at(position+1u))&&(line_open_aperture||cached[position].z!=0u);
+                open_cell(point_at(position+1u))&&(line_open_aperture||(cached[position].z&131071u)!=0u);
             else connected=position>0u&&open_cell(point_at(position-1u))&&
-                open_cell(point_at(position))&&(line_open_aperture||cached[position-1u].z!=0u);
+                open_cell(point_at(position))&&(line_open_aperture||(cached[position-1u].z&131071u)!=0u);
             if(!connected) boundary=position;
         }
         uint scan=positive?subgroupInclusiveMin(boundary):subgroupInclusiveMax(boundary);
@@ -326,6 +332,7 @@ void main() {
             float travel=travel_for_speed(speed);
             value=uvec4(cell.y,capacity|KNOWN|(permeable_material(cell.x&65535u)?PERMEABLE:0u),aperture,floatBitsToUint(travel));
         }
+        if(PAGE_CACHE_ENABLED) value.z|=min(page,32767u)<<17u;
         cached[position]=value;
         any_water|=value.x;
     }
@@ -346,7 +353,7 @@ void main() {
             available=eligible&&state.x<(state.y&131071u);
             if(eligible&&state.x!=0u&&(positive||position>0u)) {
                 uvec2 face=cached[positive?position:position-1u].zw;
-                float travel=uintBitsToFloat(face.y),aperture=float(face.x)/float(FULL);
+                float travel=uintBitsToFloat(face.y),aperture=float(face.x&131071u)/float(FULL);
                 source=clamp(travel,0.,1.)*float(FULL)*aperture>=1.;
             }
         }

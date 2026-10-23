@@ -17,7 +17,7 @@ uint one_cell_block(int first,bool positive) {
         float travel=uintBitsToFloat(cached[face].w);
         simple=simple&&mass<=(meta&131071u)&&next_mass<=(next_meta&131071u)&&travel<=1.;
         if((next_meta&(KNOWN|PERMEABLE))==(KNOWN|PERMEABLE)&&(next_meta&131071u)!=0u) {
-            float aperture=line_open_aperture?1.:float(cached[face].z)/float(FULL);
+            float aperture=line_open_aperture?1.:float((cached[face].z&131071u))/float(FULL);
             allowance=uint(floor(clamp(travel,0.,1.)*float(FULL)*aperture));
         }
     }
