@@ -603,6 +603,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/mpm_support_dirty_tests
 	./build/mpm_gather_tests
 	./build/mpm_gather_partial_tile_tests
+	./build/mpm_transfer_load_tests
 	./build/mpm_shader_storage_tests
 	./build/mpm_copy_tests
 	./build/solver_motion_store_tests

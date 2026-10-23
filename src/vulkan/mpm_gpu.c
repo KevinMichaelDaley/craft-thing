@@ -79,6 +79,8 @@ bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
 
 static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPipeline *pipeline,
                           char *err, uint32_t cap) {
+    bool mpm=strcmp(path,"build/shaders/mpm.comp.spv")==0;
+    const char *early=getenv("DC_MPM_EARLY_LOADS");
     const char *commit=getenv("DC_MPM_COMMIT");
     if(phase==5u&&strcmp(path,"build/shaders/mpm.comp.spv")==0&&commit&&strcmp(commit,"packed")==0)
         path=gpu->runtime_body_consumers?"build/shaders/runtime/mpm_commit.comp.spv":"build/shaders/mpm_commit.comp.spv";
@@ -96,10 +98,10 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
                   .module = module,
                   .pName = "main"},
         .layout = gpu->pipeline_layout};
-    uint32_t values[]={phase,use_stencil?1u:0u};
-    VkSpecializationMapEntry entries[]={{2u,0u,4u},{1u,4u,4u}};
-    VkSpecializationInfo specialization={2u,entries,sizeof(values),values};
-    if(phase!=UINT32_MAX) info.stage.pSpecializationInfo=&specialization;
+    uint32_t values[]={phase,use_stencil?1u:0u,early&&strcmp(early,"1")==0};
+    VkSpecializationMapEntry entries[]={{2u,0u,4u},{1u,4u,4u},{3u,8u,4u}};
+    VkSpecializationInfo specialization={3u,entries,sizeof(values),values};
+    if(phase!=UINT32_MAX||mpm) info.stage.pSpecializationInfo=&specialization;
     VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1,
                                                &info, NULL, pipeline);
     vkDestroyShaderModule(gpu->device, module, NULL);

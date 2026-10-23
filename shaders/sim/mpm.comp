@@ -6,6 +6,7 @@ layout(local_size_x = 16, local_size_y = 16) in;
 layout(constant_id=0) const bool MOVEMENT_FLAGS_ENABLED=true;
 layout(constant_id=1) const bool GATHER_STENCIL_ENABLED=false;
 layout(constant_id=2) const uint MPM_PHASE=0xffffffffu;
+layout(constant_id=3) const bool EARLY_PARTICLE_LOADS=false;
 
 struct Particle {
     int x_fp, y_fp, vx_fp, vy_fp;
@@ -97,7 +98,9 @@ bool grain_at(ivec2 cell) {
 
 bool load_particle(ivec2 cell, uint layer, out Particle particle) {
     if (!grain_at(cell)) return false;
-    particle = particles[particle_index(cell, layer)];
+    uint index=particle_index(cell,layer);
+    if(EARLY_PARTICLE_LOADS&&particles[index].mass_fp==0u) return false;
+    particle = particles[index];
 #ifdef DC_MPM_GATHER_PROFILE
     atomicAdd(gather_profile[1],1u);
 #endif
@@ -202,6 +205,26 @@ vec2 kernel_gradient(vec2 delta) {
     return vec2(sign(delta.x) * w.y, sign(delta.y) * w.x);
 }
 
+bool load_p2g_particle(ivec2 owner,uint layer,vec2 node_position,
+                       out Particle particle,out vec2 delta,out float weight) {
+    if(!EARLY_PARTICLE_LOADS) {
+        if(!load_particle(owner,layer,particle)) return false;
+        delta=node_position-position_of(particle,owner);weight=kernel(delta);
+        return weight>0.0;
+    }
+    if(!grain_at(owner)) return false;
+    uint index=particle_index(owner,layer);
+    if(particles[index].mass_fp==0u) return false;
+    vec2 position=vec2(tile_origin(owner))+vec2(particles[index].x_fp,particles[index].y_fp)/65536.0;
+    delta=node_position-position;weight=kernel(delta);
+    if(weight<=0.0) return false;
+    particle=particles[index];
+#ifdef DC_MPM_GATHER_PROFILE
+    atomicAdd(gather_profile[1],1u);
+#endif
+    return true;
+}
+
 void p2g(ivec2 node) {
     uint index = uint(node.y) * params.width + uint(node.x);
     vec4 total = vec4(0.0);
@@ -212,10 +235,8 @@ void p2g(ivec2 node) {
             ivec2 owner = node + ivec2(dx, dy);
             for (uint layer = 0u; layer < 2u; ++layer) {
                 Particle particle;
-                if (!load_particle(owner, layer, particle)) continue;
-                vec2 delta = node_position - position_of(particle, owner);
-                float weight = kernel(delta);
-                if (weight <= 0.0) continue;
+                vec2 delta;float weight;
+                if (!load_p2g_particle(owner,layer,node_position,particle,delta,weight)) continue;
                 float mass = float(particle.mass_fp) / 65536.0;
                 vec2 velocity = vec2(particle.vx_fp, particle.vy_fp) / 65536.0;
                 total.x += weight * mass;
@@ -349,10 +370,11 @@ void g2p_one(ivec2 owner, uint layer) {
             ivec2 node = base + ivec2(dx, dy);
             if (!in_grid(node)) continue;
             uint grid_index = uint(node.y) * params.width + uint(node.x);
-            if (grid[grid_index].x <= 0.000001) continue;
+            if (!EARLY_PARTICLE_LOADS&&grid[grid_index].x <= 0.000001) continue;
             vec2 delta = vec2(node) + vec2(0.5) - position;
             float weight = kernel(delta);
             if (weight <= 0.0) continue;
+            if (EARLY_PARTICLE_LOADS&&grid[grid_index].x <= 0.000001) continue;
             vec2 node_velocity = grid_velocity[grid_index];
             velocity += weight * node_velocity;
             gradient += outerProduct(node_velocity, kernel_gradient(delta));
