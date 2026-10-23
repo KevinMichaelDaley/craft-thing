@@ -15,9 +15,9 @@ static bool scan_override_present(uint32_t id) {
     free(words);return found;
 }
 static VkPipeline scan_pipeline(fixture_t *f,unsigned mode,bool enabled) {
-    uint32_t values[]={mode,1u,enabled,enabled};
-    VkSpecializationMapEntry entries[]={{0,0,4},{2,4,4},{5,8,4},{6,12,4}};
-    VkSpecializationInfo spec={4,entries,sizeof(values),values};
+    uint32_t values[]={mode,1u,enabled,enabled,enabled};
+    VkSpecializationMapEntry entries[]={{0,0,4},{2,4,4},{5,8,4},{6,12,4},{7,16,4}};
+    VkSpecializationInfo spec={5,entries,sizeof(values),values};
     VkShaderModule module=VK_NULL_HANDLE;char err[256];
     if(!dc_gpu_load_shader_module(&f->gpu,enabled?"build/diagnostics/fluid_transport_profile_16.comp.spv":
         "build/diagnostics/fluid_transport_profile.comp.spv",&module,err,sizeof(err))) return VK_NULL_HANDLE;
@@ -94,24 +94,26 @@ static void test_scan_matches_ordered_mass_and_pigment_for_every_direction(void)
         memcpy(initial_mass,f->words[0],mass_bytes);memcpy(initial_color,f->words[7],color_bytes);
         f->p.buffer=f->buffers[5];f->p.mapped=f->words[5];
         VkBuffer profile;VkDeviceMemory profile_memory;uint32_t *counts;
-        ASSERT_TRUE(dc_gpu_make_mapped_buffer(&f->gpu,20u,&profile,&profile_memory,(void **)&counts,err,sizeof(err)));
-        memset(counts,0,20u);
+        ASSERT_TRUE(dc_gpu_make_mapped_buffer(&f->gpu,24u,&profile,&profile_memory,(void **)&counts,err,sizeof(err)));
+        memset(counts,0,24u);
         uint32_t descriptors[9];memcpy(descriptors,bindings,sizeof(bindings));descriptors[8]=31u;
         ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,"build/diagnostics/fluid_transport_profile.comp.spv",descriptors,9,mode));
         VkDescriptorBufferInfo buffers[9];VkWriteDescriptorSet writes[9];
         for(unsigned i=0;i<9;i++) {
-            buffers[i]=(VkDescriptorBufferInfo){i==8?profile:f->buffers[i],0,i==8?20u:sizes[i]*4};
+            buffers[i]=(VkDescriptorBufferInfo){i==8?profile:f->buffers[i],0,i==8?24u:sizes[i]*4};
             writes[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=f->p.descriptor,
                 .dstBinding=descriptors[i],.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.descriptorCount=1,.pBufferInfo=buffers+i};
         }
         vkUpdateDescriptorSets(f->p.device,9,writes,0,NULL);
         vkDestroyPipeline(f->p.device,f->p.pipeline,NULL);f->p.pipeline=scan_pipeline(f,mode,false);ASSERT_TRUE(f->p.pipeline);
         ASSERT_TRUE(scan_submit(f,mode));memcpy(reference_mass,f->words[0],mass_bytes);memcpy(reference_color,f->words[7],color_bytes);
-        uint32_t reference_work=counts[2];memset(counts,0,20u);
+        uint32_t reference_work=counts[2];memset(counts,0,24u);
         memcpy(f->words[0],initial_mass,mass_bytes);memcpy(f->words[7],initial_color,color_bytes);
         vkDestroyPipeline(f->p.device,f->p.pipeline,NULL);f->p.pipeline=scan_pipeline(f,mode,true);ASSERT_TRUE(f->p.pipeline);
         ASSERT_TRUE(scan_submit(f,mode));
         bool exact_mass=memcmp(reference_mass,f->words[0],mass_bytes)==0,exact_color=memcmp(reference_color,f->words[7],color_bytes)==0;
+        bool cached_pages=counts[5]==0u;
+        printf("uncached runtime page reads%u\n",counts[5]);
         bool parallel=(variant!=6&&variant!=7&&variant!=8)||counts[2]*4u<reference_work;
         printf("mode%u variant%u: exact mass%d pigment%d, ordered sources%u -> %u\n",
             mode,variant,exact_mass,exact_color,reference_work,counts[2]);
@@ -127,7 +129,7 @@ static void test_scan_matches_ordered_mass_and_pigment_for_every_direction(void)
         vkDestroyFence(f->p.device,f->p.fence,NULL);vkDestroyCommandPool(f->p.device,f->p.pool,NULL);
         vkDestroyDevice(f->p.device,NULL);vkDestroyInstance(f->p.instance,NULL);
         free(initial_mass);free(initial_color);free(reference_mass);free(reference_color);free(f);
-        ASSERT_TRUE(exact_mass);ASSERT_TRUE(exact_color);ASSERT_TRUE(parallel);
+        ASSERT_TRUE(exact_mass);ASSERT_TRUE(exact_color);ASSERT_TRUE(parallel);ASSERT_TRUE(cached_pages);
     }
     PASS();
 }
