@@ -1067,7 +1067,7 @@ int main(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "--smoke-motion-long") == 0)
         return smoke_moving_water_long();
     bool scripted_input = argc > 1 && strcmp(argv[1], "--smoke-controls-ui") == 0;
-    bool demo_coupled = false, demo_sifting = false;
+    bool demo_coupled = false, demo_sifting = false, lighting = false;
     char scripted_directory[] = "build/ui_input_XXXXXX";
     if (scripted_input && !mkdtemp(scripted_directory)) {
         perror("mkdtemp");
@@ -1094,6 +1094,10 @@ int main(int argc, char **argv) {
             demo_coupled = true;
             continue;
         }
+        if (strcmp(argv[i], "--lighting") == 0) {
+            lighting = true;
+            continue;
+        }
         if (strcmp(argv[i], "--demo-sifting") == 0) {
             demo_sifting = true;
             continue;
@@ -1118,7 +1122,7 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--benchmark-capture") == 0 && i + 1 < argc)
             benchmark_capture = argv[++i];
         else {
-            fprintf(stderr, "Usage: %s [--seed number] [--world-dir path] [--scene asset.cprop] [--demo-coupled|--demo-sifting]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [--seed number] [--world-dir path] [--scene asset.cprop] [--lighting] [--demo-coupled|--demo-sifting]\n", argv[0]);
             return 1;
         }
     }
@@ -1134,6 +1138,12 @@ int main(int argc, char **argv) {
         fprintf(stderr,"Scene load: %s\n",err);
         dc_level_view_destroy(view,err,sizeof(err));return 1;
     }
+    if (lighting && !dc_level_view_renderer_mode(view,FR_RENDERER_LIT)) {
+        fprintf(stderr,"Cannot enable propagated lighting\n");
+        dc_level_view_destroy(view,err,sizeof(err));return 1;
+    }
+    printf("Propagated lighting: %s%s\n",lighting?"enabled":"disabled",
+           lighting?"":" (enable with --lighting)");
     if (demo_coupled &&
         (!dc_level_view_set_spring_enabled(view, false) ||
          !setup_coupled_materials(view, err, sizeof(err)))) {

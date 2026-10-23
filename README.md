@@ -1,6 +1,7 @@
 # Dungeoncraft
 
-Loaded scenes start with directional lighting enabled. F8 toggles lighting and
+Loaded scenes default to authored material colors. Pass `--lighting` to enable
+propagated directional lighting. F8 toggles lighting and
 albedo preview. Sky and point sources propagate through a separate RGB
 directional field; foliage transmits some light and underground illumination
 fades with distance. See [light transport](design/directional_light_transport.md).
