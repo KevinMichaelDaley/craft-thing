@@ -246,6 +246,7 @@ build/renderer_visual_tests: $(PERFORMANCE_OBJ)
 QUARTER_APP_OBJ = $(patsubst %.c,build/performance/%.o,$(filter-out $(GPU_SRC) src/world/chunk.c,$(NATIVE_SRC)))
 -include $(QUARTER_APP_OBJ:.o=.d)
 FRAME_TRACE_LINK = -Wl,--wrap=dc_gpu_present_chunks_steps -Wl,--wrap=vkBeginCommandBuffer -Wl,--wrap=dc_gpu_record_rigid -Wl,--wrap=dc_gpu_record_fluid_phase -Wl,--wrap=dc_gpu_record_mpm -Wl,--wrap=dc_gpu_record_contacts -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect -Wl,--wrap=fr_renderer_record
+FRAME_TRACE_LINK += -Wl,--wrap=dc_gpu_record_component_extraction -Wl,--wrap=dc_gpu_record_broadphase -Wl,--wrap=dc_gpu_record_solver
 build/diagnostics/quarter_app_frame_trace: tools/diagnostics/frame_trace.c $(QUARTER_APP_OBJ) $(PERFORMANCE_OBJ) $(RENDERER_SHADERS) build/dungeoncraft_quarter_native
 	mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(QUARTER_APP_OBJ) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) $(FRAME_TRACE_LINK)
@@ -662,6 +663,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/component_material_tests
 	./build/component_extraction_tests
 	./build/dynamic_runtime_tests
+	./build/component_cache_tests
 	./build/component_acceptance_tests
 	./build/particle_tests
 	./build/marker_slot_tests
@@ -1309,3 +1311,6 @@ $(SOLVER_SHADER): include/dungeoncraft/mpm_activity_layout.h
 build/dynamic_runtime_tests: tests/vulkan/dynamic_runtime_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/dynamic_runtime_tests
+build/component_cache_tests: tests/vulkan/component_cache_tests.c tests/vulkan/component_extraction_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/component_cache_tests

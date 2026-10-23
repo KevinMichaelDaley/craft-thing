@@ -7,9 +7,9 @@
 
 #include "../../src/vulkan/gpu_internal.h"
 
-enum { QUERY_CAPACITY = 128, RIGID = 0, FLUID = 1, MPM = 2,
+enum { QUERY_CAPACITY = 2048, RIGID = 0, FLUID = 1, MPM = 2,
        CONTACT = 3, HYDRO = 4, FLUID_PHASE = 9, RENDERER = 15,
-       LABEL_COUNT = 16 };
+       EXTRACTION = 16, BROADPHASE = 17, SOLVER = 18, LABEL_COUNT = 19 };
 static dc_gpu_t *traced;
 static VkQueryPool pool;
 static unsigned query_count, frame;
@@ -25,6 +25,9 @@ void __real_dc_gpu_record_fluid_phase(dc_gpu_t *, uint32_t);
 void __real_dc_gpu_record_mpm(dc_gpu_t *);
 void __real_fr_renderer_record(dc_gpu_t *);
 void __real_dc_gpu_record_contacts(dc_gpu_t *);
+void __real_dc_gpu_record_component_extraction(dc_gpu_t *);
+void __real_dc_gpu_record_broadphase(dc_gpu_t *);
+void __real_dc_gpu_record_solver(dc_gpu_t *);
 void __real_vkCmdBindPipeline(VkCommandBuffer, VkPipelineBindPoint, VkPipeline);
 void __real_vkCmdDispatch(VkCommandBuffer, uint32_t, uint32_t, uint32_t);
 void __real_vkCmdDispatchIndirect(VkCommandBuffer, VkBuffer, VkDeviceSize);
@@ -196,6 +199,15 @@ void __wrap_fr_renderer_record(dc_gpu_t *gpu) {
 void __wrap_dc_gpu_record_contacts(dc_gpu_t *gpu) {
     stage(gpu, CONTACT, __real_dc_gpu_record_contacts);
 }
+void __wrap_dc_gpu_record_component_extraction(dc_gpu_t *gpu) {
+    stage(gpu, EXTRACTION, __real_dc_gpu_record_component_extraction);
+}
+void __wrap_dc_gpu_record_broadphase(dc_gpu_t *gpu) {
+    stage(gpu, BROADPHASE, __real_dc_gpu_record_broadphase);
+}
+void __wrap_dc_gpu_record_solver(dc_gpu_t *gpu) {
+    stage(gpu, SOLVER, __real_dc_gpu_record_solver);
+}
 
 void __wrap_vkCmdBindPipeline(VkCommandBuffer command, VkPipelineBindPoint point,
                               VkPipeline pipeline) {
@@ -277,13 +289,13 @@ bool __wrap_dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
     printf("frame-trace,%u,steps%u,wall%.3f,rigid%.3f,fluid%.3f,mpm%.3f,"
            "pairs%u,contacts%u,visited%u,overflow%u,contactms%.3f,"
            "hydro0=%.3f,hydro1=%.3f,hydro2=%.3f,hydro3=%.3f,hydro4=%.3f,"
-           "fluid0=%.3f,fluid1=%.3f,fluid2=%.3f,fluid3=%.3f,fluid4=%.3f,fluid5=%.3f,renderer=%.3f\n", number, steps,
+           "fluid0=%.3f,fluid1=%.3f,fluid2=%.3f,fluid3=%.3f,fluid4=%.3f,fluid5=%.3f,renderer=%.3f,extraction=%.3f,broadphase=%.3f,solver=%.3f\n", number, steps,
            wall_ms, total[RIGID], total[FLUID], total[MPM], pairs[0],
            contacts[0], contacts[9], contacts[2], total[CONTACT],
            total[HYDRO], total[HYDRO + 1], total[HYDRO + 2], total[HYDRO + 3], total[HYDRO + 4],
            total[FLUID_PHASE], total[FLUID_PHASE + 1], total[FLUID_PHASE + 2],
            total[FLUID_PHASE + 3], total[FLUID_PHASE + 4], total[FLUID_PHASE + 5],
-           total[RENDERER]);
+           total[RENDERER],total[EXTRACTION],total[BROADPHASE],total[SOLVER]);
     if (okay && number == 72 && getenv("DC_CONTACT_PAIR_PROFILE"))
         okay = profile_contact_pairs(gpu);
     vkDestroyQueryPool(gpu->device, pool, NULL);
