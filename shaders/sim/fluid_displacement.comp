@@ -12,6 +12,9 @@ layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
 layout(push_constant) uniform Params {uint width,height,mode;} params;
 const uint FULL=65536u,PERMEABLE=1u<<17u,KNOWN=1u<<18u,OCCUPIED=1u<<19u;
 shared uvec2 cached[CACHE_CELLS];
+#ifdef DC_DISPLACEMENT_PROFILE
+layout(set=0,binding=31,std430) buffer Profile {uint source_visits;};
+#endif
 uint line,length;
 ivec2 point_at(uint position) {return LATERAL!=0u?ivec2(position,line):ivec2(line,position);}
 uint coordinate(ivec2 p) {return uint(LATERAL!=0u?p.x:p.y);}
@@ -58,6 +61,9 @@ uint request_at(ivec2 source,uint order,uint left,uint right) {
     return water<capacity?capacity-water:0u;
 }
 bool displace_source(ivec2 source) {
+#ifdef DC_DISPLACEMENT_PROFILE
+    if(gl_SubgroupInvocationID==0u) atomicAdd(source_visits,1u);
+#endif
     uint meta=cell_meta(source);
     if((meta&(KNOWN|OCCUPIED))!=(KNOWN|OCCUPIED)) return false;
     uint water=water_at(source),capacity=meta&131071u,available=water-min(water,capacity);

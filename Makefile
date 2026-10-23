@@ -602,6 +602,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/fluid_transport_partial_tests
 	./build/fluid_color_sync_tests
 	./build/fluid_displacement_tests
+	./build/fluid_displacement_work_tests
 	./build/fluid_displacement_wide_tests
 	./build/fluid_displacement_tall_tests
 	./build/diagnostics/fluid_case displacement-runtime
@@ -949,6 +950,15 @@ build/shaders/fluid_displacement.comp.spv: shaders/sim/fluid_displacement.comp
 build/fluid_displacement_tests: tests/vulkan/fluid_displacement_tests.c tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_displacement.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
+build/diagnostics/fluid_displacement_profile.comp.spv: shaders/sim/fluid_displacement.comp shaders/sim/water_color.glsl
+	@mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.3 -DDC_DISPLACEMENT_PROFILE=1 $< -o $@
+
+build/fluid_displacement_work_tests: tests/vulkan/fluid_displacement_tests.c tests/vulkan/fluid_transport_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/fluid_displacement_profile.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_DISPLACEMENT_PROFILE=1 $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+
+test: build/fluid_displacement_work_tests
+
 build/fluid_transport_work_tests: tests/vulkan/fluid_transport_work_tests.c tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
@@ -1074,7 +1084,7 @@ test_gpu_tools: build/probe_feature_tests
 MINIMAL_VK_TESTS = $(addprefix build/,component_dispatch_tests pixel_properties_gpu_tests \
     fluid_transport_work_tests raster_dispatch_tests fluid_transport_tests fluid_transport_long_tests water_color_tests \
     fluid_transport_slow_tests fluid_transport_partial_tests fluid_color_sync_tests mpm_control_tests mpm_compaction_tests fluid_displacement_tests \
-    fluid_displacement_wide_tests fluid_displacement_tall_tests hydro_head_tests fluid_aperture_tests \
+    fluid_displacement_wide_tests fluid_displacement_tall_tests fluid_displacement_work_tests hydro_head_tests fluid_aperture_tests \
     contact_dispatch_tests)
 $(MINIMAL_VK_TESTS): tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h
 test: build/mpm_compaction_tests
