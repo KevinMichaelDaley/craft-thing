@@ -7,6 +7,7 @@ layout(set=0,binding=31,std430) buffer MotionProfile {uint motion_profile[];};
 #endif
 /* Specializing each phase removes unrelated branches and their register pressure. */
 layout(constant_id = 0) const uint PHASE = 0u;
+layout(constant_id = 1) const bool SPARSE_MOTION_WRITES = true;
 layout(set = 0, binding = 2, std430) readonly buffer Pages { uint pages[]; };
 #ifndef DC_RUNTIME_BODY_STORAGE
 layout(set = 0, binding = 4, std430) buffer Bodies {
@@ -462,8 +463,29 @@ void main() {
         body.angular_velocity =
             clamp(body.angular_velocity + change.z, -angular_limit(body), angular_limit(body));
     }
+    if (SPARSE_MOTION_WRITES && (PHASE == PREDICT || PHASE == APPLY)) {
+        DC_BODY(i).x_fp = body.x_fp;
+        DC_BODY(i).y_fp = body.y_fp;
+        DC_BODY(i).chunk_x = body.chunk_x;
+        DC_BODY(i).chunk_y = body.chunk_y;
+        DC_BODY(i).local_fp = body.local_fp;
+        DC_BODY(i).angle = body.angle;
+        if (PHASE == PREDICT) DC_BODY(i).angular_velocity = body.angular_velocity;
 #ifdef DC_SOLVER_MOTION_PROFILE
-    atomicAdd(motion_profile[0],136u);
+        atomicAdd(motion_profile[0],PHASE == PREDICT ? 10u : 9u);
 #endif
-    DC_BODY(i) = body;
+    } else if (SPARSE_MOTION_WRITES &&
+               (PHASE == DERIVE_VELOCITY || PHASE == APPLY_VELOCITY)) {
+        DC_BODY(i).vx_fp = body.vx_fp;
+        DC_BODY(i).vy_fp = body.vy_fp;
+        DC_BODY(i).angular_velocity = body.angular_velocity;
+#ifdef DC_SOLVER_MOTION_PROFILE
+        atomicAdd(motion_profile[0],3u);
+#endif
+    } else {
+#ifdef DC_SOLVER_MOTION_PROFILE
+        atomicAdd(motion_profile[0],136u);
+#endif
+        DC_BODY(i) = body;
+    }
 }
