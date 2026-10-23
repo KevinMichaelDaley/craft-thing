@@ -7,9 +7,9 @@ static bool zero_case;
 static VkPipeline contact_start_pipeline(probe_t *p,dc_gpu_t *gpu,uint32_t phase,bool cached) {
     VkShaderModule module=VK_NULL_HANDLE;char err[256];
     if(!dc_gpu_load_shader_module(gpu,"build/diagnostics/solver_motion_profile.comp.spv",&module,err,sizeof(err))) return VK_NULL_HANDLE;
-    uint32_t values[]={phase,cached,zero_case?cached:1u};
-    VkSpecializationMapEntry entries[]={{0,0,4},{3,4,4},{4,8,4}};
-    VkSpecializationInfo spec={3,entries,sizeof(values),values};
+    uint32_t values[]={phase,cached,zero_case?cached:1u,cached};
+    VkSpecializationMapEntry entries[]={{0,0,4},{3,4,4},{4,8,4},{5,12,4}};
+    VkSpecializationInfo spec={4,entries,sizeof(values),values};
     VkComputePipelineCreateInfo info={.sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_COMPUTE_BIT,
             .module=module,.pName="main",.pSpecializationInfo=&spec},.layout=p->layout};
@@ -41,14 +41,14 @@ static void run_contact_case(bool zero) {
         data[state+13]=1;data[state+6]=float_bits(19.9f-i);data[state+7]=float_bits(19.9f+i);
         data[state+8]=float_bits(b[i].angle-.01f);
     }
-    data[CONTACT_BASE]=2;
-    for(unsigned i=0;i<2;i++) {
+    data[CONTACT_BASE]=32;
+    for(unsigned i=0;i<32;i++) {
         uint32_t c=CONTACT_BASE+12+i*32;
-        data[c]=123;data[c+1]=i?0:124;data[c+2]=i?1:0;
+        data[c]=123;data[c+1]=(i&1u)?0:124;data[c+2]=(i&1u)?1:0;
         data[c+8]=float_bits(0);data[c+9]=float_bits(-1);
         data[c+11]=float_bits(.5f);data[c+12]=float_bits(.1f);data[c+13]=float_bits(.00001f);
-        data[c+20]=(uint32_t)((21.25f+i*.5f)*65536.f);
-        data[c+21]=(uint32_t)((22.5f+i)*65536.f);
+        data[c+20]=(uint32_t)((21.25f+(i%4u)*.125f)*65536.f);
+        data[c+21]=(uint32_t)((22.5f+(i%3u)*.125f)*65536.f);
         data[c+26]=data[c+20];data[c+27]=zero?data[c+21]+65536u:data[c+21]-16384u;
     }
     p.buffer=storage;p.mapped=mapped;
@@ -90,7 +90,7 @@ static void run_contact_case(bool zero) {
     vkDestroyFence(p.device,p.fence,NULL);vkDestroyCommandPool(p.device,p.pool,NULL);
     vkDestroyDevice(p.device,NULL);vkDestroyInstance(p.instance,NULL);free(initial);free(expected);
     ASSERT_TRUE(exact);ASSERT_TRUE(rotations[0]>0u);ASSERT_TRUE(rotations[1]*2u<rotations[0]);
-    ASSERT_TRUE(!zero||(atomics[0]>0u&&atomics[1]==0u));PASS();
+    ASSERT_TRUE(zero?(atomics[0]>0u&&atomics[1]==0u):(atomics[1]*2u<atomics[0]));PASS();
 }
 static void test_cached_start_anchors_preserve_all_solver_and_body_bits(void) {run_contact_case(false);}
 static void test_zero_contact_work_preserves_bits_without_atomic_reductions(void) {run_contact_case(true);}
