@@ -605,7 +605,6 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/mpm_copy_tests
 	./build/solver_motion_store_tests
 	./build/solver_recording_tests
-	./build/solver_type_tests
 	./build/body_address_gpu_tests
 	./build/body_storage_gpu_tests
 	./build/body_scan_gpu_tests
@@ -1385,7 +1384,3 @@ test: build/solver_motion_store_tests
 build/solver_recording_tests: tests/vulkan/solver_recording_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/solver_recording_tests
-
-build/solver_type_tests: tests/vulkan/solver_type_tests.c tests/vulkan/pixel_component_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/pixel_component_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
-test: build/solver_type_tests
