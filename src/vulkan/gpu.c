@@ -19,6 +19,7 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu) free(gpu->checkpoint_chunks);
     if (!gpu) return;
     if (gpu->device) vkDeviceWaitIdle(gpu->device);
+    dc_gpu_solver_commands_destroy(gpu);
     if (gpu->device) fr_renderer_destroy(gpu);
     if (gpu->device) dc_gpu_authored_destroy(gpu);
     if (gpu->acquire_sem) vkDestroySemaphore(gpu->device, gpu->acquire_sem, NULL);
@@ -128,6 +129,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         writes[i].pBufferInfo = &buffers[i];
     }
     vkUpdateDescriptorSets(gpu->device, 36, writes, 0, NULL);
+    gpu->descriptor_revision++;
     VkPushConstantRange range = { .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .size = 32 };
     VkPipelineLayoutCreateInfo pipeline_layout_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1, .pSetLayouts = &gpu->set_layout,
@@ -257,7 +259,8 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     if (vkAllocateCommandBuffers(gpu->device, &command_info, &gpu->command) != VK_SUCCESS) {
         error(err, cap, "Cannot allocate compute command buffer"); goto fail;
     }
-    if (!dc_gpu_clear_fluid_scratch(gpu, err, cap)) goto fail;
+    if (!dc_gpu_solver_commands_init(gpu,err,cap) ||
+        !dc_gpu_clear_fluid_scratch(gpu, err, cap)) goto fail;
     if (gpu->window && !dc_gpu_window_init(gpu, window_width, window_height, err, cap)) goto fail;
     *out = gpu;
     return true;

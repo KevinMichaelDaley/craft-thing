@@ -31,6 +31,7 @@ bool dc_gpu_pressure_work_init(dc_gpu_t *g,char *err,uint32_t cap) {
         .dstSet=g->pressure_work_descriptor,.descriptorCount=1,
         .descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&buffer};
     vkUpdateDescriptorSets(g->device,1,&write,0,NULL);
+    g->descriptor_revision++;
     VkDescriptorSetLayout sets[]={g->set_layout,g->pressure_work_set_layout};
     VkPushConstantRange range={VK_SHADER_STAGE_COMPUTE_BIT,0,32};
     VkPipelineLayoutCreateInfo layout={.sType=VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,

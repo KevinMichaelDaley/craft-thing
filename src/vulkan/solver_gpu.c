@@ -268,7 +268,7 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
                             .pMemoryBarriers = &barrier};
     vkCmdPipelineBarrier2(gpu->command, &dep);
 }
-void dc_gpu_record_solver(dc_gpu_t *gpu) {
+void dc_gpu_record_solver_uncached(dc_gpu_t *gpu) {
     gpu->solver_recording = true;
     dispatch(gpu, SOLVER_GRAIN_BED_PLAN | (DC_GPU_CHUNK_SLOTS << 8u), false);
     dispatch(gpu, SOLVER_GRAIN_BED_INIT, false);

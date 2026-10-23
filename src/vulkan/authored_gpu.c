@@ -87,6 +87,7 @@ static bool stage_init(dc_gpu_t *gpu, uint32_t count, char *err, uint32_t cap) {
         .dstSet = s->descriptor, .dstBinding = 0, .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &buffer};
     vkUpdateDescriptorSets(gpu->device, 1, &write, 0, NULL);
+    gpu->descriptor_revision++;
     VkPushConstantRange push = {VK_SHADER_STAGE_COMPUTE_BIT, 0, 16};
     VkPipelineLayoutCreateInfo layout = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,

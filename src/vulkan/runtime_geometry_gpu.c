@@ -97,7 +97,8 @@ static bool storage_reserve(dc_gpu_t *g,uint32_t required,uint32_t pairs,uint32_
     VkWriteDescriptorSet write[3]={0};
     for(uint32_t i=0;i<3;i++) write[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=g->descriptor,
         .dstBinding=33+i,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.descriptorCount=1,.pBufferInfo=binding+i};
-    vkUpdateDescriptorSets(g->device,3,write,0,NULL);fr_renderer_rebind_colors(g);
+    vkUpdateDescriptorSets(g->device,3,write,0,NULL);
+    g->descriptor_revision++;fr_renderer_rebind_colors(g);
     dc_gpu_address_buffer_destroy(g,&old_colors);return true;
 fail:
     dc_gpu_address_buffer_destroy(g,&metadata);dc_gpu_address_buffer_destroy(g,&colors);

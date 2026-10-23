@@ -400,6 +400,8 @@ bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_contacts(dc_gpu_t *gpu);
 bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_solver(dc_gpu_t *gpu);
+/** Record the reference solver sequence for cache rebuilds and diagnostics. */
+void dc_gpu_record_solver_uncached(dc_gpu_t *gpu);
 /** Allocate reusable solver commands during context initialization. */
 bool dc_gpu_solver_commands_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 /** Release cached solver commands before destroying their command pool. */

@@ -45,6 +45,7 @@ bool fr_renderer_compute_init(dc_gpu_t *g, fr_renderer_compute_t *c,
         .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
         .pBufferInfo = &buffers[i]};
   vkUpdateDescriptorSets(g->device, n, writes, 0, NULL);
+    g->descriptor_revision++;
   VkPushConstantRange range = {VK_SHADER_STAGE_COMPUTE_BIT, 0, push_bytes};
   VkPipelineLayoutCreateInfo pl = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,

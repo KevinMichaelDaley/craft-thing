@@ -229,6 +229,8 @@ void __wrap_dc_gpu_record_broadphase(dc_gpu_t *gpu) {
     stage(gpu, BROADPHASE, __real_dc_gpu_record_broadphase);
 }
 void __wrap_dc_gpu_record_solver(dc_gpu_t *gpu) {
+    /* Per-dispatch query IDs are allocated anew for each detailed trace. */
+    gpu->solver_cache_disabled = true;
     stage(gpu, SOLVER, __real_dc_gpu_record_solver);
 }
 

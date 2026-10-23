@@ -34,6 +34,7 @@ void fr_renderer_rebind_colors(dc_gpu_t *g) {
     .dstSet=g->renderer->compute.descriptor,.dstBinding=33+i,.descriptorCount=1,
     .descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=b+i};
   vkUpdateDescriptorSets(g->device,3,w,0,NULL);
+    g->descriptor_revision++;
 }
 
 bool fr_renderer_active(const dc_gpu_t *g) {
