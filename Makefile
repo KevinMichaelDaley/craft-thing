@@ -1352,3 +1352,9 @@ test: build/mpm_support_dirty_tests
 build/mpm_gather_tests: tests/vulkan/mpm_gather_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(MPM_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/mpm_gather_tests
+
+# Profiled literal-size transport variants exercise the exact cooperative path.
+build/diagnostics/fluid_transport_profile_16.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_one_cell.glsl shaders/sim/fluid_aperture.glsl shaders/sim/hydraulic_face.glsl shaders/sim/water_color.glsl Makefile
+	@mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TRANSPORT_PROFILE=1 -DDC_TRANSPORT_GROUP_SIZE=16 $< -o $@
+build/fluid_one_cell_scan_tests: build/diagnostics/fluid_transport_profile.comp.spv build/diagnostics/fluid_transport_profile_16.comp.spv

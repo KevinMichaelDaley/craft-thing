@@ -19,8 +19,8 @@ static VkPipeline scan_pipeline(fixture_t *f,unsigned mode,bool enabled) {
     VkSpecializationMapEntry entries[]={{0,0,4},{2,4,4},{5,8,4}};
     VkSpecializationInfo spec={3,entries,sizeof(values),values};
     VkShaderModule module=VK_NULL_HANDLE;char err[256];
-    if(!dc_gpu_load_shader_module(&f->gpu,enabled?"build/shaders/fluid_transport_16.comp.spv":
-        "build/shaders/fluid_transport.comp.spv",&module,err,sizeof(err))) return VK_NULL_HANDLE;
+    if(!dc_gpu_load_shader_module(&f->gpu,enabled?"build/diagnostics/fluid_transport_profile_16.comp.spv":
+        "build/diagnostics/fluid_transport_profile.comp.spv",&module,err,sizeof(err))) return VK_NULL_HANDLE;
     VkComputePipelineCreateInfo info={.sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_COMPUTE_BIT,
             .module=module,.pName="main",.pSpecializationInfo=&spec},.layout=f->p.layout};
@@ -40,7 +40,7 @@ static bool scan_submit(fixture_t *f,unsigned mode) {
 }
 static void test_scan_matches_ordered_mass_and_pigment_for_every_direction(void) {
     ASSERT_TRUE(scan_override_present(5u));
-    for(unsigned mode=0;mode<4;mode++) for(unsigned variant=0;variant<6;variant++) {
+    for(unsigned mode=0;mode<4;mode++) for(unsigned variant=0;variant<7;variant++) {
         fixture_t *f=calloc(1,sizeof(*f));ASSERT_TRUE(f&&initialize(&f->p));
         f->gpu=(dc_gpu_t){.device=f->p.device,.physical=f->p.physical};char err[256];
         for(unsigned i=0;i<8;i++) {
@@ -60,8 +60,10 @@ static void test_scan_matches_ordered_mass_and_pigment_for_every_direction(void)
                 f->words[2][2*CELLS+cell]=0u;
                 f->words[0][2*a]=0u;
                 unsigned coordinate=mode<2?y:x;
-                f->words[0][2*a+1]=(variant==4?coordinate==50u:hash%23u==0u)?0u:FULL;
-                float packed_speed=(mode&1u?-1.f:1.f)*(variant==4?3.f:((hash%7u)+1u)*.6f);
+                bool slab=(mode&1u)?coordinate>=25u:coordinate<50u;
+                f->words[0][2*a+1]=variant==5?(hash%23u==0u?0u:FULL):
+                    !slab?0u:variant==6?hash%(FULL+1u):FULL;
+                float packed_speed=(mode&1u?-1.f:1.f)*(variant==4?3.f:variant==6?2.37f:((hash%7u)+1u)*.6f);
                 f->words[4][2*cell+(mode<2?1:0)]=bits(packed_speed);
                 f->words[3][cell]=bits(packed_speed);
             }
@@ -76,21 +78,28 @@ static void test_scan_matches_ordered_mass_and_pigment_for_every_direction(void)
         ASSERT_TRUE(initial_mass&&initial_color&&reference_mass&&reference_color);
         memcpy(initial_mass,f->words[0],mass_bytes);memcpy(initial_color,f->words[7],color_bytes);
         f->p.buffer=f->buffers[5];f->p.mapped=f->words[5];
-        ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,"build/shaders/fluid_transport.comp.spv",bindings,8,mode));
-        VkDescriptorBufferInfo buffers[8];VkWriteDescriptorSet writes[8];
-        for(unsigned i=0;i<8;i++) {
-            buffers[i]=(VkDescriptorBufferInfo){f->buffers[i],0,sizes[i]*4};
+        VkBuffer profile;VkDeviceMemory profile_memory;uint32_t *counts;
+        ASSERT_TRUE(dc_gpu_make_mapped_buffer(&f->gpu,20u,&profile,&profile_memory,(void **)&counts,err,sizeof(err)));
+        memset(counts,0,20u);
+        uint32_t descriptors[9];memcpy(descriptors,bindings,sizeof(bindings));descriptors[8]=31u;
+        ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,"build/diagnostics/fluid_transport_profile.comp.spv",descriptors,9,mode));
+        VkDescriptorBufferInfo buffers[9];VkWriteDescriptorSet writes[9];
+        for(unsigned i=0;i<9;i++) {
+            buffers[i]=(VkDescriptorBufferInfo){i==8?profile:f->buffers[i],0,i==8?20u:sizes[i]*4};
             writes[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=f->p.descriptor,
-                .dstBinding=bindings[i],.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.descriptorCount=1,.pBufferInfo=buffers+i};
+                .dstBinding=descriptors[i],.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.descriptorCount=1,.pBufferInfo=buffers+i};
         }
-        vkUpdateDescriptorSets(f->p.device,8,writes,0,NULL);
+        vkUpdateDescriptorSets(f->p.device,9,writes,0,NULL);
         vkDestroyPipeline(f->p.device,f->p.pipeline,NULL);f->p.pipeline=scan_pipeline(f,mode,false);ASSERT_TRUE(f->p.pipeline);
         ASSERT_TRUE(scan_submit(f,mode));memcpy(reference_mass,f->words[0],mass_bytes);memcpy(reference_color,f->words[7],color_bytes);
+        uint32_t reference_work=counts[2];memset(counts,0,20u);
         memcpy(f->words[0],initial_mass,mass_bytes);memcpy(f->words[7],initial_color,color_bytes);
         vkDestroyPipeline(f->p.device,f->p.pipeline,NULL);f->p.pipeline=scan_pipeline(f,mode,true);ASSERT_TRUE(f->p.pipeline);
         ASSERT_TRUE(scan_submit(f,mode));
         bool exact_mass=memcmp(reference_mass,f->words[0],mass_bytes)==0,exact_color=memcmp(reference_color,f->words[7],color_bytes)==0;
-        printf("mode%u variant%u: exact mass%d pigment%d\n",mode,variant,exact_mass,exact_color);
+        bool parallel=variant!=6||counts[2]*4u<reference_work;
+        printf("mode%u variant%u: exact mass%d pigment%d, ordered sources%u -> %u\n",
+            mode,variant,exact_mass,exact_color,reference_work,counts[2]);
         if(!exact_mass) {
             unsigned printed=0;uint32_t *expected=reference_mass;
             for(unsigned word=0;word<sizes[0]&&printed<8;word++) if(expected[word]!=f->words[0][word]) {
@@ -98,11 +107,12 @@ static void test_scan_matches_ordered_mass_and_pigment_for_every_direction(void)
             }
         }
         fixture_release_pipeline(&f->p);
+        vkUnmapMemory(f->p.device,profile_memory);vkDestroyBuffer(f->p.device,profile,NULL);vkFreeMemory(f->p.device,profile_memory,NULL);
         for(unsigned i=0;i<8;i++) {vkUnmapMemory(f->p.device,f->memory[i]);vkDestroyBuffer(f->p.device,f->buffers[i],NULL);vkFreeMemory(f->p.device,f->memory[i],NULL);}
         vkDestroyFence(f->p.device,f->p.fence,NULL);vkDestroyCommandPool(f->p.device,f->p.pool,NULL);
         vkDestroyDevice(f->p.device,NULL);vkDestroyInstance(f->p.instance,NULL);
         free(initial_mass);free(initial_color);free(reference_mass);free(reference_color);free(f);
-        ASSERT_TRUE(exact_mass);ASSERT_TRUE(exact_color);
+        ASSERT_TRUE(exact_mass);ASSERT_TRUE(exact_color);ASSERT_TRUE(parallel);
     }
     PASS();
 }
