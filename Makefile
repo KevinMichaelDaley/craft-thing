@@ -603,6 +603,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/mpm_support_dirty_tests
 	./build/mpm_gather_tests
 	./build/mpm_gather_partial_tile_tests
+	./build/mpm_layout_tests
 	./build/mpm_copy_tests
 	./build/solver_motion_store_tests
 	./build/solver_recording_tests
@@ -1403,3 +1404,7 @@ build/mpm_gather_partial_tile_tests: tests/vulkan/mpm_gather_tests.c $(GPU_OBJ) 
 test: build/mpm_gather_partial_tile_tests
 
 $(MPM_SHADER) build/shaders/runtime/mpm.comp.spv: shaders/sim/mpm_gather_cache.glsl
+
+build/mpm_layout_tests: tests/vulkan/mpm_layout_tests.c $(MPM_SHADER) build/diagnostics/mpm_gather_profile.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+test: build/mpm_layout_tests
