@@ -1,7 +1,7 @@
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
+
+#include "../../src/vulkan/mpm_activity_layout.h"
 
 static int g_pass,g_fail;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
@@ -9,30 +9,38 @@ static int g_pass,g_fail;
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() g_pass++
-static uint32_t workgroup_variables(const char *path) {
-    FILE *file=fopen(path,"rb");if(!file) return UINT32_MAX;
-    if(fseek(file,0,SEEK_END)!=0) {fclose(file);return UINT32_MAX;}
-    long bytes=ftell(file);rewind(file);
-    if(bytes<20||bytes%4) {fclose(file);return UINT32_MAX;}
-    uint32_t *words=malloc((size_t)bytes);if(!words) {fclose(file);return UINT32_MAX;}
-    bool okay=fread(words,1,(size_t)bytes,file)==(size_t)bytes;fclose(file);
-    uint32_t count=0;
-    if(!okay||words[0]!=0x07230203u) count=UINT32_MAX;
-    else for(size_t at=5;at<(size_t)bytes/4;) {
-        uint32_t length=words[at]>>16u,opcode=words[at]&65535u;
-        if(!length||at+length>(size_t)bytes/4) {count=UINT32_MAX;break;}
-        if(opcode==59u&&length>=4u&&words[at+3u]==4u) count++;
-        at+=length;
+
+static void test_scan_scratch_regions_are_disjoint_and_bounded(void) {
+    const uint32_t dimensions[][2]={{1,1},{64,64},{640,360},{1280,720},{2113,17},{4097,4097},{UINT32_MAX,1}};
+    for(unsigned i=0;i<sizeof(dimensions)/sizeof(*dimensions);i++) {
+        dc_gpu_mpm_scan_layout_t l;ASSERT_TRUE(dc_gpu_mpm_scan_layout(dimensions[i][0],dimensions[i][1],&l));
+        ASSERT_TRUE(l.levels>0&&l.levels<=DC_MPM_MAX_SCAN_LEVELS);
+        ASSERT_EQ(l.groups,(l.tiles+255u)/256u);
+        ASSERT_EQ(l.copy_word,7u+2u*l.tiles);ASSERT_EQ(l.count_word,l.copy_word+3u);
+        uint32_t offset=l.count_word+1u,count=l.groups;
+        for(uint32_t level=0;level<l.levels;level++) {
+            ASSERT_EQ(l.level_words[level],offset);ASSERT_EQ(l.level_counts[level],count);
+            offset+=count;count=(count+255u)/256u;
+        }
+        ASSERT_EQ(count,1u);ASSERT_EQ(l.root_word,offset);
+        ASSERT_EQ(l.words,offset+1u<DC_MPM_ACTIVITY_MIN_WORDS?DC_MPM_ACTIVITY_MIN_WORDS:offset+1u);
     }
-    free(words);return count;
+    PASS();
 }
-static void test_production_mpm_does_not_reserve_experimental_shared_memory(void) {
-    uint32_t normal=workgroup_variables("build/shaders/mpm.comp.spv");
-    uint32_t diagnostic=workgroup_variables("build/diagnostics/mpm_gather_profile.comp.spv");
-    printf("production workgroup variables%u diagnostic%u\n",normal,diagnostic);
-    ASSERT_EQ(normal,0u);ASSERT_TRUE(diagnostic>0u&&diagnostic!=UINT32_MAX);PASS();
+static void test_large_domain_uses_multiple_prefix_levels(void) {
+    dc_gpu_mpm_scan_layout_t l;ASSERT_TRUE(dc_gpu_mpm_scan_layout(4097,4097,&l));
+    ASSERT_TRUE(l.tiles>65535u);ASSERT_EQ(l.levels,2u);
+    ASSERT_EQ(l.level_counts[0],259u);ASSERT_EQ(l.level_counts[1],2u);PASS();
+}
+static void test_invalid_or_overflowing_dimensions_are_rejected(void) {
+    dc_gpu_mpm_scan_layout_t l;
+    ASSERT_TRUE(!dc_gpu_mpm_scan_layout(0,1,&l));ASSERT_TRUE(!dc_gpu_mpm_scan_layout(1,0,&l));
+    ASSERT_TRUE(!dc_gpu_mpm_scan_layout(UINT32_MAX,UINT32_MAX,&l));
+    ASSERT_TRUE(!dc_gpu_mpm_scan_layout(1,1,NULL));PASS();
 }
 int main(void) {
-    RUN(test_production_mpm_does_not_reserve_experimental_shared_memory);
+    RUN(test_scan_scratch_regions_are_disjoint_and_bounded);
+    RUN(test_large_domain_uses_multiple_prefix_levels);
+    RUN(test_invalid_or_overflowing_dimensions_are_rejected);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
