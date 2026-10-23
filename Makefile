@@ -589,6 +589,10 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/sequential_detachment_tests
 	./build/dense_support_tests
 	./build/loose_particle_role_tests
+	./build/body_address_gpu_tests
+	./build/body_storage_gpu_tests
+	./build/body_scan_gpu_tests
+	./build/body_page_init_gpu_tests
 	./build/pixel_motion_cache_tests
 	./build/component_dispatch_tests
 	./build/pixel_properties_gpu_tests
@@ -1006,6 +1010,14 @@ test_gpu_tools: build/contact_shader_contract_tests
 	./build/probe_feature_tests
 	./build/fluid_recording_tests
 	./build/native_demo_controls_tests
+	./build/extraction_stats_tests
+	./build/body_address_feature_tests
+	./build/body_address_allocation_tests
+	./build/body_storage_layout_tests
+	./build/body_storage_growth_tests
+	./build/body_features_tests
+	./build/body_scan_plan_tests
+	./build/body_scan_recording_tests
 
 build/contact_shader_contract_tests: tests/vulkan/contact_shader_contract_tests.c src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
 	@mkdir -p build/diagnostics
@@ -1038,6 +1050,7 @@ GPU_SOURCE_BINARIES = $(addprefix build/, \
     component_world_tests diagnostics/native360_fluid_trace diagnostics/native360_frame_trace \
     diagnostics/native360_mpm_variants dungeoncraft_half_native \
     dungeoncraft_native dungeoncraft_quarter_native marker_slot_tests \
+    material_cut_buoyancy_tests dynamic_body_capacity_tests \
     native_360_performance_tests native_720_component_tests \
     native_720_performance_tests native_bench pixel_dynamics_visual_tests \
     pixel_performance_tests structural_bench structural_cadence_tests \
@@ -1111,6 +1124,69 @@ build/pixel_residency_tests: tests/vulkan/pixel_residency_tests.c tests/vulkan/p
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/material_cut_buoyancy_tests: tests/app/material_cut_buoyancy_tests.c src/app/level.h src/app/view_config.h $(filter-out src/app/main.c,$(NATIVE_SRC))
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
+build/extraction_stats_tests: tests/vulkan/extraction_stats_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkQueueWaitIdle
+build/dynamic_body_capacity_tests: tests/app/dynamic_body_capacity_tests.c tests/app/material_cut_buoyancy_tests.c src/app/level.h src/app/view_config.h $(filter-out src/app/main.c,$(NATIVE_SRC))
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
+build/body_address_feature_tests: tests/vulkan/probe_feature_tests.c tools/diagnostics/vulkan_probe.c | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_PROBE_BUFFER_DEVICE_ADDRESS $< -o $@ -lvulkan
+build/body_address_allocation_tests: tests/vulkan/body_address_allocation_tests.c src/vulkan/body_address_gpu.c src/vulkan/body_address_gpu.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_address_gpu.c -o $@ -lvulkan -Wl,--wrap=vkCreateBuffer -Wl,--wrap=vkGetBufferMemoryRequirements -Wl,--wrap=vkGetPhysicalDeviceMemoryProperties -Wl,--wrap=vkAllocateMemory -Wl,--wrap=vkBindBufferMemory -Wl,--wrap=vkGetBufferDeviceAddress -Wl,--wrap=vkDestroyBuffer -Wl,--wrap=vkFreeMemory
+build/diagnostics/body_address_probe.spv: tests/vulkan/body_address_probe.comp shaders/sim/rigid_body.glsl shaders/sim/rigid_storage.glsl include/dungeoncraft/body_storage_layout.h | build
+	mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
+	spirv-val --target-env vulkan1.3 $@
+build/body_address_gpu_tests: tests/vulkan/body_address_gpu_tests.c tests/vulkan/body_probe_fixture.h tools/diagnostics/vulkan_probe.c src/vulkan/body_address_gpu.c src/vulkan/body_address_gpu.h src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h include/dungeoncraft/body_storage_layout.h build/diagnostics/body_address_probe.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_address_gpu.c -o $@ -lvulkan
+build/body_storage_layout_tests: tests/vulkan/body_storage_layout_tests.c include/dungeoncraft/body_storage_layout.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+build/body_features_tests: tests/vulkan/body_features_tests.c src/vulkan/body_features_gpu.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ -lvulkan -Wl,--wrap=vkGetPhysicalDeviceFeatures2
+build/body_scan_plan_tests: tests/vulkan/body_scan_plan_tests.c src/vulkan/body_scan_gpu.c src/vulkan/body_scan_gpu.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_scan_gpu.c -o $@
+build/body_scan_recording_tests: tests/vulkan/body_scan_recording_tests.c src/vulkan/body_scan_gpu.c src/vulkan/body_scan_record_gpu.c src/vulkan/body_scan_gpu.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_scan_gpu.c src/vulkan/body_scan_record_gpu.c -o $@ -lvulkan -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect -Wl,--wrap=vkCmdPipelineBarrier2
+test_gpu_tools: build/body_scan_recording_tests
+test_gpu_tools: build/body_scan_plan_tests
+build/gpu.o: src/vulkan/body_features_gpu.h
+$(GPU_SOURCE_BINARIES): src/vulkan/body_features_gpu.h
+test_gpu_tools: build/body_features_tests
+build/body_storage_growth_tests: tests/vulkan/body_storage_growth_tests.c src/vulkan/body_storage_gpu.c src/vulkan/body_storage_gpu.h include/dungeoncraft/body_storage_layout.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_storage_gpu.c -o $@ -lvulkan -Wl,--wrap=dc_gpu_address_buffer_create -Wl,--wrap=dc_gpu_address_buffer_destroy -Wl,--wrap=vkCmdCopyBuffer -Wl,--wrap=vkCmdFillBuffer -Wl,--wrap=vkCmdUpdateBuffer -Wl,--wrap=vkCmdPipelineBarrier2 -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch
+test_gpu_tools: build/extraction_stats_tests build/body_address_feature_tests build/body_address_allocation_tests build/body_storage_layout_tests build/body_storage_growth_tests
+build/diagnostics/body_growth_probe.spv: tests/vulkan/body_growth_probe.comp shaders/sim/rigid_body.glsl shaders/sim/rigid_storage.glsl include/dungeoncraft/body_storage_layout.h | build
+	mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
+	spirv-val --target-env vulkan1.3 $@
+build/body_storage_gpu_tests: tests/vulkan/body_storage_gpu_tests.c tests/vulkan/body_probe_fixture.h tools/diagnostics/vulkan_probe.c src/vulkan/body_storage_gpu.c src/vulkan/body_storage_gpu.h src/vulkan/body_address_gpu.c src/vulkan/body_address_gpu.h src/vulkan/shader.c include/dungeoncraft/body_storage_layout.h build/diagnostics/body_growth_probe.spv build/diagnostics/body_storage_init.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_storage_gpu.c src/vulkan/body_address_gpu.c src/vulkan/shader.c -o $@ -lvulkan
+build/diagnostics/body_scan.spv: shaders/sim/body_scan.comp | build
+	mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
+	spirv-val --target-env vulkan1.3 $@
+build/body_scan_gpu_tests: tests/vulkan/body_scan_gpu_tests.c tests/vulkan/body_probe_fixture.h tools/diagnostics/vulkan_probe.c src/vulkan/body_scan_gpu.h src/vulkan/body_scan_gpu.c src/vulkan/body_scan_record_gpu.c src/vulkan/body_address_gpu.h src/vulkan/body_address_gpu.c build/diagnostics/body_scan.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_scan_gpu.c src/vulkan/body_scan_record_gpu.c src/vulkan/body_address_gpu.c -o $@ -lvulkan
+build/diagnostics/body_allocator.spv: shaders/sim/body_allocator.comp shaders/sim/rigid_body.glsl shaders/sim/rigid_storage.glsl include/dungeoncraft/body_storage_layout.h | build
+	mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -Ishaders/sim -o $@ $<
+	spirv-val --target-env vulkan1.3 $@
+build/body_allocator_gpu_tests: tests/vulkan/body_allocator_gpu_tests.c tests/vulkan/body_probe_fixture.h tools/diagnostics/vulkan_probe.c src/vulkan/body_scan_gpu.h src/vulkan/body_scan_gpu.c src/vulkan/body_scan_record_gpu.c src/vulkan/body_storage_gpu.c src/vulkan/body_storage_gpu.h src/vulkan/body_address_gpu.c src/vulkan/body_address_gpu.h src/vulkan/shader.c include/dungeoncraft/body_storage_layout.h build/diagnostics/body_allocator.spv build/diagnostics/body_scan.spv build/diagnostics/body_storage_init.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_scan_gpu.c src/vulkan/body_scan_record_gpu.c src/vulkan/body_storage_gpu.c src/vulkan/body_address_gpu.c src/vulkan/shader.c -o $@ -lvulkan
+test: build/body_address_gpu_tests build/body_storage_gpu_tests build/body_scan_gpu_tests build/body_page_init_gpu_tests
+BODY_STORAGE_TEST_BINARIES = $(addprefix build/,body_address_gpu_tests body_storage_gpu_tests body_allocator_gpu_tests body_scan_gpu_tests body_address_allocation_tests body_storage_growth_tests)
+$(BODY_STORAGE_TEST_BINARIES): src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
+build/diagnostics/body_storage_init.spv: shaders/sim/body_storage_init.comp include/dungeoncraft/body_storage_layout.h | build
+	mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
+	spirv-val --target-env vulkan1.3 $@
+build/body_page_init_gpu_tests: tests/vulkan/body_page_init_gpu_tests.c tests/vulkan/body_probe_fixture.h tools/diagnostics/vulkan_probe.c src/vulkan/body_address_gpu.c src/vulkan/body_address_gpu.h src/vulkan/gpu_internal.h include/dungeoncraft/body_storage_layout.h build/diagnostics/body_storage_init.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_address_gpu.c -o $@ -lvulkan
+build/diagnostics/body_work_gate.spv: shaders/sim/body_work_gate.comp | build
+	mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
+	spirv-val --target-env vulkan1.3 $@
+build/body_work_gate_gpu_tests: tests/vulkan/body_work_gate_gpu_tests.c tests/vulkan/body_probe_fixture.h tools/diagnostics/vulkan_probe.c src/vulkan/body_address_gpu.c src/vulkan/body_address_gpu.h src/vulkan/gpu_internal.h include/dungeoncraft/body_storage_layout.h build/diagnostics/body_work_gate.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_address_gpu.c -o $@ -lvulkan
 shaders: $(MPM_COMPACTION_SHADER)
 .PHONY: test_mpm_compaction_work
 test_mpm_compaction_work: build/mpm_compaction_tests

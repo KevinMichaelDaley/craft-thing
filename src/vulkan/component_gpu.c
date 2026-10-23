@@ -1,5 +1,31 @@
 #include "gpu_internal.h"
 
+bool dc_gpu_read_extraction_stats(dc_gpu_t *gpu,dc_gpu_extraction_stats_t *stats) {
+    if(!gpu||!stats||!gpu->body_mapped||vkQueueWaitIdle(gpu->queue)!=VK_SUCCESS) return false;
+    *stats=(dc_gpu_extraction_stats_t){.body_capacity=DC_GPU_BODY_CAPACITY};
+    const dc_gpu_body_record_t *bodies=gpu->body_mapped;
+    for(uint32_t slot=0;slot<DC_GPU_BODY_CAPACITY;slot++)
+        stats->owned_bodies+=bodies[slot].body.active!=0u||bodies[slot].reserved[0]!=0u;
+    stats->free_body_slots=stats->body_capacity-stats->owned_bodies;
+    if(!gpu->automatic_components_enabled) return true;
+    const uint32_t *base=dc_gpu_structural_data(gpu),*graph=base+dc_gpu_structural_graph_offset();
+    stats->arena_used_words=graph[40001];stats->arena_capacity_words=graph[40002];
+    stats->pending=base[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]!=0u;
+    stats->selected_components=graph[36257]<64u?graph[36257]:64u;
+    uint32_t free_words=stats->arena_capacity_words>stats->arena_used_words?
+        stats->arena_capacity_words-stats->arena_used_words:0u;
+    for(uint32_t candidate=0;candidate<stats->selected_components;candidate++) {
+        const uint32_t *record=graph+36300u+candidate*24u;
+        if(record[14]!=0u) {stats->committed_components++;continue;}
+        if(record[6]!=0u) {stats->unknown_components++;continue;}
+        if(record[7]!=0u) {
+            stats->no_body_slot_components+=stats->free_body_slots==0u;
+            stats->no_arena_components+=record[10]>free_words;
+        }
+    }
+    return true;
+}
+
 bool dc_gpu_enable_automatic_components(dc_gpu_t *gpu) {
     if (!gpu)
         return false;

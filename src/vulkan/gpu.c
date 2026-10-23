@@ -6,6 +6,7 @@
 #include <SDL_vulkan.h>
 #include <vulkan/vulkan.h>
 
+#include "body_features_gpu.h"
 #include "gpu_internal.h"
 
 static bool error(char *buf, uint32_t cap, const char *message) {
@@ -218,17 +219,13 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     VkDeviceSize bytes = (VkDeviceSize)width * height * 4;
     VkDeviceSize atlas_bytes = (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t);
     if (!dc_gpu_pick_device(gpu, bytes > atlas_bytes ? bytes : atlas_bytes, err, cap)) goto fail;
-    VkPhysicalDeviceSynchronization2Features sync = {
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES };
-    VkPhysicalDeviceFeatures2 features = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-        .pNext = &sync };
-    vkGetPhysicalDeviceFeatures2(gpu->physical, &features);
-    if (!sync.synchronization2) { error(err, cap, "Device lacks synchronization2"); goto fail; }
+    dc_gpu_body_features_t body_features;
+    if (!dc_gpu_body_features_query(gpu->physical, &body_features, err, cap)) goto fail;
     float priority = 1.0f;
     VkDeviceQueueCreateInfo queue_info = { .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         .queueFamilyIndex = gpu->family, .queueCount = 1, .pQueuePriorities = &priority };
     VkDeviceCreateInfo device_info = { .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext = &sync, .queueCreateInfoCount = 1, .pQueueCreateInfos = &queue_info };
+        .pNext = &body_features.synchronization, .queueCreateInfoCount = 1, .pQueueCreateInfos = &queue_info };
     const char *swap_extension = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
     if (gpu->window) {
         device_info.enabledExtensionCount = 1;

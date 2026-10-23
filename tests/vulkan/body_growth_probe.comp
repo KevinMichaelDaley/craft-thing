@@ -1,0 +1,16 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "../../shaders/sim/rigid_body.glsl"
+#include "../../shaders/sim/rigid_storage.glsl"
+uint pixel_word_at(uint index) {return index;}
+layout(local_size_x=64) in;
+layout(set=0,binding=0,std430) buffer Root {BodyStorageRoot state;uvec4 results[];} heap;
+void main() {
+    uint slot=gl_GlobalInvocationID.x;
+    if(slot>=heap.state.live_count||!body_storage_slot_valid(heap.state,slot)) return;
+    DC_BODY_AT(heap.state,slot).id=0x80000001u+slot;
+    DC_BODY_AT(heap.state,slot).vx_fp++;
+    DC_BODY_AT(heap.state,slot).mass=float(slot)+.5;
+    heap.results[slot]=uvec4(DC_BODY_AT(heap.state,slot).id,uint(DC_BODY_AT(heap.state,slot).vx_fp),
+        floatBitsToUint(DC_BODY_AT(heap.state,slot).mass),DC_BODY_PAGE(heap.state,slot).generation);
+}

@@ -1,0 +1,93 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "rigid_body.glsl"
+#include "rigid_storage.glsl"
+uint pixel_word_at(uint index) {return index;}
+layout(local_size_x=64) in;
+layout(constant_id=0) const uint ALLOCATION_PHASE=0u;
+layout(set=0,binding=0,std430) buffer Root {BodyStorageRoot state;} heap;
+layout(buffer_reference,std430,buffer_reference_align=8) buffer Batch {BodyAllocationBatch header;uvec2 handles[];};
+layout(buffer_reference,std430,buffer_reference_align=8) buffer Counts {uvec2 values[];};
+shared uvec2 totals[64];
+shared uint masks[2];
+void main() {
+    if(ALLOCATION_PHASE==1u||ALLOCATION_PHASE==4u||ALLOCATION_PHASE==6u) {
+        if(any(notEqual(gl_GlobalInvocationID,uvec3(0)))) return;
+        BodyStorageRoot root=heap.state;
+        if(!body_storage_root_valid(root)) return;
+        Batch batch=Batch(root.requests);
+        if(ALLOCATION_PHASE==6u) {
+            if(batch.header.commit!=0u) {
+                heap.state.live_count=root.live_count-batch.header.committed;
+                batch.header.commit=0u;batch.header.ready=1u;
+            }
+            return;
+        }
+        Counts prefix=Counts(root.work);
+        uvec2 total=prefix.values[root.slab_count-1u];
+        if(ALLOCATION_PHASE==1u) {
+            bool pending=batch.header.count>0u&&batch.header.committed==0u;
+            bool ready=pending&&batch.header.count<=total.x;
+            batch.header.ready=uint(ready);batch.header.error=pending&&!ready?DC_BODY_ALLOCATION_NO_CAPACITY:0u;
+            uint deficit=batch.header.count>total.x?batch.header.count-total.x:0u;
+            uint capacity=root.slab_count*64u;
+            batch.header.required_slots=pending&&!ready?
+                (root.slab_count>=0x04000000u||deficit>0xffffffffu-capacity?0xffffffffu:capacity+deficit):0u;
+        } else if(batch.header.ready!=0u&&batch.header.commit!=0u&&batch.header.committed==0u) {
+            heap.state.live_count=total.y+batch.header.count;
+            batch.header.committed=batch.header.count;
+        }
+        return;
+    }
+    BodyStorageRoot root=heap.state;
+    uint page=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x,lane=gl_LocalInvocationID.x;
+    if(ALLOCATION_PHASE==5u) {
+        if(!body_storage_root_valid(root)) return;
+        Batch batch=Batch(root.requests);uint index=page*64u+lane;
+        if(batch.header.commit==0u||index>=batch.header.count) return;
+        uvec2 handle=batch.handles[index];
+        if(!body_storage_slot_valid(root,handle.x)||handle.y==0u||DC_BODY_OWNER(root,handle.x).generation!=handle.y) {
+            atomicOr(batch.header.error,DC_BODY_ALLOCATION_INVALID_HANDLE);return;
+        }
+        uint state=atomicAdd(DC_BODY_OWNER(root,handle.x).state,0u);
+        if((state!=DC_BODY_OWNER_RESERVED&&state!=DC_BODY_OWNER_LIVE)||
+            atomicCompSwap(DC_BODY_OWNER(root,handle.x).state,state,DC_BODY_OWNER_RETIRED)!=state) {
+            atomicOr(batch.header.error,DC_BODY_ALLOCATION_INVALID_HANDLE);return;
+        }
+        DC_BODY_AT(root,handle.x).enabled=0u;DC_BODY_AT(root,handle.x).id=0u;
+        DC_BODY_AT(root,handle.x).reserved0=0u;DC_BODY_AT(root,handle.x).reserved1=0u;
+        DC_BODY_OWNER(root,handle.x).runtime_id=0u;DC_BODY_OWNER(root,handle.x).live_index=DC_BODY_SLOT_NONE;
+        if(handle.y!=0xffffffffu) {
+            atomicExchange(DC_BODY_OWNER(root,handle.x).state,DC_BODY_OWNER_FREE);
+            atomicOr(DC_BODY_PAGE(root,handle.x).free_mask[(handle.x%64u)/32u],1u<<(handle.x%32u));
+        }
+        atomicAdd(batch.header.committed,1u);return;
+    }
+    if(!body_storage_root_valid(root)||page>=root.slab_count) return;
+    uint slot=page*64u+lane,word=lane/32u,bit=1u<<(lane%32u);
+    BodyStorageOwner owner=DC_BODY_OWNER(root,slot);
+    bool free=(DC_BODY_PAGE(root,slot).free_mask[word]&bit)!=0u&&
+        owner.state==DC_BODY_OWNER_FREE&&owner.generation!=0xffffffffu;
+    Counts prefix=Counts(root.work);
+    if(ALLOCATION_PHASE==0u) {
+        bool owned=owner.state==DC_BODY_OWNER_RESERVED||owner.state==DC_BODY_OWNER_LIVE;
+        totals[lane]=uvec2(uint(free),uint(owned));
+        for(uint stride=32u;stride>0u;stride/=2u) {barrier();if(lane<stride) totals[lane]+=totals[lane+stride];}
+        barrier();if(lane==0u) prefix.values[page]=totals[0];return;
+    }
+    Batch batch=Batch(root.requests);
+    if(batch.header.ready==0u||(ALLOCATION_PHASE==3u&&batch.header.commit==0u)) return;
+    if(lane<2u) masks[lane]=0u;
+    barrier();if(free) atomicOr(masks[word],bit);barrier();
+    uint page_free=bitCount(masks[0])+bitCount(masks[1]);
+    uint rank=prefix.values[page].x-page_free+bitCount(masks[word]&(bit-1u))+(word==1u?bitCount(masks[0]):0u);
+    if(!free||rank>=batch.header.count) return;
+    if(ALLOCATION_PHASE==2u) batch.handles[rank]=uvec2(slot,owner.generation+1u);
+    else if(ALLOCATION_PHASE==3u) {
+        owner.generation=batch.handles[rank].y;owner.runtime_id=0u;owner.state=DC_BODY_OWNER_RESERVED;
+        owner.live_index=DC_BODY_SLOT_NONE;owner.source_transaction=batch.header.transaction;
+        owner.source_object=0u;owner.flags=0u;
+        DC_BODY_OWNER(root,slot)=owner;
+        atomicAnd(DC_BODY_PAGE(root,slot).free_mask[word],~bit);
+    }
+}
