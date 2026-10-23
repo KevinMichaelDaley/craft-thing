@@ -12,6 +12,14 @@ Polygon body_polygon(Body body,uint piece, vec2 offset) {
     /* Typed contacts call this only after the occupied boundary test. Keeping
        that proven count constant avoids dynamic polygon loops for pixel cells. */
     polygon.count = CONTACT_PIXEL_ONLY ? 4u : piece_vertices(body,piece);
+    if(CONTACT_PIXEL_ONLY) {
+        vec2 cell=vec2(pixel_piece_cell(body,piece));
+        for(uint i=0u;i<4u;i++) {
+            vec2 local=cell+vec2((i==1u||i==2u)?1:0,i>=2u?1:0);
+            polygon.vertices[i]=offset+(body.center+body_rotate(local-body.center,body.angle));
+        }
+        return polygon;
+    }
     for (uint i = 0u; i < polygon.count; ++i)
         polygon.vertices[i] = offset + piece_vertex(body,piece,i);
     return polygon;
