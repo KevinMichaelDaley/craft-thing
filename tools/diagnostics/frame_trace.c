@@ -14,13 +14,16 @@ enum { QUERY_CAPACITY = 4096, RIGID = 0, FLUID = 1, MPM = 2,
        TRANSPORT_PHASE = SOLVER_PHASE + DC_GPU_SOLVER_PHASE_COUNT,
        FLUID_KERNEL = TRANSPORT_PHASE + 4, PROJECTION_KERNEL = FLUID_KERNEL + 13,
        DISPLACEMENT_KERNEL = PROJECTION_KERNEL + 6, HEAD_KERNEL = DISPLACEMENT_KERNEL + 2,
-       APERTURE_KERNEL = HEAD_KERNEL + 1, LABEL_COUNT = APERTURE_KERNEL + 1 };
+       APERTURE_KERNEL = HEAD_KERNEL + 1, MPM_PHASE = APERTURE_KERNEL + 1,
+       MPM_COMPONENT_PHASE = MPM_PHASE + 8, CONTACT_KERNEL = MPM_COMPONENT_PHASE + 6,
+       MPM_ACTIVITY_KERNEL = CONTACT_KERNEL + 7, LABEL_COUNT = MPM_ACTIVITY_KERNEL + 1 };
 static dc_gpu_t *traced;
 static VkQueryPool pool;
 static unsigned query_count, frame;
 static unsigned labels[QUERY_CAPACITY / 2];
 static bool overflow;
 static VkPipeline bound;
+static uint32_t pushed_mode;
 
 VkResult __real_vkBeginCommandBuffer(VkCommandBuffer,
                                      const VkCommandBufferBeginInfo *);
@@ -35,6 +38,13 @@ void __real_dc_gpu_record_broadphase(dc_gpu_t *);
 void __real_dc_gpu_record_solver(dc_gpu_t *);
 void __real_vkCmdBindPipeline(VkCommandBuffer, VkPipelineBindPoint, VkPipeline);
 void __real_vkCmdDispatch(VkCommandBuffer, uint32_t, uint32_t, uint32_t);
+void __real_vkCmdPushConstants(VkCommandBuffer,VkPipelineLayout,VkShaderStageFlags,uint32_t,uint32_t,const void *);
+void __wrap_vkCmdPushConstants(VkCommandBuffer command,VkPipelineLayout layout,
+    VkShaderStageFlags stages,uint32_t offset,uint32_t bytes,const void *data) {
+    if(traced&&command==traced->command&&(stages&VK_SHADER_STAGE_COMPUTE_BIT)&&offset<=8u&&bytes>=12u-offset)
+        memcpy(&pushed_mode,(const unsigned char *)data+8u-offset,sizeof(pushed_mode));
+    __real_vkCmdPushConstants(command,layout,stages,offset,bytes,data);
+}
 void __real_vkCmdDispatchIndirect(VkCommandBuffer, VkBuffer, VkDeviceSize);
 
 static double seconds(void) {
@@ -266,6 +276,16 @@ static unsigned hydro_begin(VkCommandBuffer command) {
     for(unsigned phase=0;phase<2;phase++) if(bound==traced->fluid_displacement_pipelines[phase]) label=DISPLACEMENT_KERNEL+phase;
     if(bound==traced->hydro_head_pipeline) label=HEAD_KERNEL;
     if(bound==traced->fluid_aperture_pipeline) label=APERTURE_KERNEL;
+    if(bound==traced->mpm_pipeline&&pushed_mode<8u) label=MPM_PHASE+pushed_mode;
+    if(bound==traced->mpm_component_pipeline&&pushed_mode<6u) label=MPM_COMPONENT_PHASE+pushed_mode;
+    if(bound==traced->mpm_activity_pipeline) label=MPM_ACTIVITY_KERNEL;
+    for(unsigned phase=0;phase<DC_MPM_COMPACTION_PHASES;phase++)
+        if(bound==traced->mpm_compaction_pipelines[phase]) label=MPM_ACTIVITY_KERNEL;
+    for(unsigned phase=0;phase<3u;phase++) if(bound==traced->contact_pipelines[phase]) label=CONTACT_KERNEL+phase;
+    if(bound==traced->contact_pixel_plan_pipeline) label=CONTACT_KERNEL+3;
+    if(bound==traced->contact_pixel_work_pipeline) label=CONTACT_KERNEL+4;
+    if(bound==traced->contact_pixel_pipeline) label=CONTACT_KERNEL+5;
+    if(bound==traced->contact_pixel_finish_pipeline) label=CONTACT_KERNEL+6;
     if(label!=LABEL_COUNT) {
         if(query_count+2>QUERY_CAPACITY) {overflow=true;return QUERY_CAPACITY;}
         unsigned at=query_count;labels[at/2]=label;query_count+=2;
@@ -348,6 +368,11 @@ bool __wrap_dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
     for(unsigned phase=0;phase<6;phase++) printf(",p%u=%.3f",phase,total[PROJECTION_KERNEL+phase]);
     printf(",displace0=%.3f,displace1=%.3f,head=%.3f,aperture=%.3f\n",
         total[DISPLACEMENT_KERNEL],total[DISPLACEMENT_KERNEL+1],total[HEAD_KERNEL],total[APERTURE_KERNEL]);
+    printf("mpm-contact-kernels,%u",number);
+    for(unsigned phase=0;phase<8;phase++) printf(",m%u=%.3f",phase,total[MPM_PHASE+phase]);
+    for(unsigned phase=0;phase<6;phase++) printf(",c%u=%.3f",phase,total[MPM_COMPONENT_PHASE+phase]);
+    for(unsigned phase=0;phase<7;phase++) printf(",contact%u=%.3f",phase,total[CONTACT_KERNEL+phase]);
+    printf(",activity=%.3f\n",total[MPM_ACTIVITY_KERNEL]);
     if (okay && number == 72 && getenv("DC_CONTACT_PAIR_PROFILE"))
         okay = profile_contact_pairs(gpu);
     vkDestroyQueryPool(gpu->device, pool, NULL);

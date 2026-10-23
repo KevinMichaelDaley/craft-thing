@@ -246,7 +246,7 @@ build/renderer_visual_tests: $(PERFORMANCE_OBJ)
 QUARTER_APP_OBJ = $(patsubst %.c,build/performance/%.o,$(filter-out $(GPU_SRC) src/world/chunk.c,$(NATIVE_SRC)))
 -include $(QUARTER_APP_OBJ:.o=.d)
 FRAME_TRACE_LINK = -Wl,--wrap=dc_gpu_present_chunks_steps -Wl,--wrap=vkBeginCommandBuffer -Wl,--wrap=dc_gpu_record_rigid -Wl,--wrap=dc_gpu_record_fluid_phase -Wl,--wrap=dc_gpu_record_mpm -Wl,--wrap=dc_gpu_record_contacts -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect -Wl,--wrap=fr_renderer_record
-FRAME_TRACE_LINK += -Wl,--wrap=dc_gpu_record_component_extraction -Wl,--wrap=dc_gpu_record_broadphase -Wl,--wrap=dc_gpu_record_solver
+FRAME_TRACE_LINK += -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=dc_gpu_record_component_extraction -Wl,--wrap=dc_gpu_record_broadphase -Wl,--wrap=dc_gpu_record_solver
 build/diagnostics/quarter_app_frame_trace: tools/diagnostics/frame_trace.c $(QUARTER_APP_OBJ) $(PERFORMANCE_OBJ) $(RENDERER_SHADERS) build/dungeoncraft_quarter_native
 	mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(QUARTER_APP_OBJ) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) $(FRAME_TRACE_LINK)
@@ -600,6 +600,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/sequential_detachment_tests
 	./build/dense_support_tests
 	./build/loose_particle_role_tests
+	./build/mpm_support_dirty_tests
 	./build/body_address_gpu_tests
 	./build/body_storage_gpu_tests
 	./build/body_scan_gpu_tests
@@ -1342,3 +1343,7 @@ test: build/pixel_boundary_tests
 build/contact_piece_work_tests: tests/vulkan/contact_piece_work_tests.c tools/diagnostics/contact_scaling.c tests/vulkan/pixel_component_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/pixel_component_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_load_shader_module
 test: build/contact_piece_work_tests
+
+build/mpm_support_dirty_tests: tests/vulkan/mpm_support_dirty_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(MPM_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/mpm_support_dirty_tests
