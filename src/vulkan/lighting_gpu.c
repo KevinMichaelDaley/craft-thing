@@ -335,6 +335,7 @@ bool fr_lighting_gpu_set_sources(fr_lighting_gpu_t *l,
   p[3] = count;
   p[4] = budget;
   p[5] = sun.known_sky;
+  p[73]++;
   float planar = sqrtf(fmaxf(0.f, 1.f - common_z * common_z));
   memcpy(p + 8, &planar, sizeof(planar));
   /* Source edits aggregate only the small configuration list. Scene pixels
