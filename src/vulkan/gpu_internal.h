@@ -423,6 +423,7 @@ void dc_gpu_record_pressure_work(dc_gpu_t *gpu);
 void dc_gpu_fluid_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_fluid(dc_gpu_t *gpu);
 void dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase);
+void dc_gpu_record_fluid_phase_uncached(dc_gpu_t *gpu, uint32_t phase);
 void dc_gpu_record_tick_water_source(dc_gpu_t *gpu);
 /** Initialize dry fluid scratch before scheduling can omit its zero work. */
 bool dc_gpu_clear_fluid_scratch(dc_gpu_t *gpu, char *err, uint32_t cap);

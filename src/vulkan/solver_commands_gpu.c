@@ -12,8 +12,9 @@ typedef struct {
     VkDescriptorSet descriptor;
     VkPipelineLayout layout;
     uint64_t structural,runtime;
+    uint64_t fluid_scale,fluid_timed,fluid_occupancy,pressure_work;
 } solver_command_key_t;
-enum { RIGID_PROGRAM, MPM_PROGRAM, COMMAND_PROGRAM_COUNT };
+enum { RIGID_PROGRAM, MPM_PROGRAM, FLUID_PROGRAM, COMMAND_PROGRAM_COUNT=FLUID_PROGRAM+10 };
 typedef struct {
     VkCommandBuffer command;
     solver_command_key_t key;
@@ -22,7 +23,7 @@ typedef struct {
 } solver_command_program_t;
 struct dc_solver_commands {solver_command_program_t programs[COMMAND_PROGRAM_COUNT];};
 
-static solver_command_key_t command_key(const dc_gpu_t *g) {
+static solver_command_key_t command_key(const dc_gpu_t *g,unsigned program) {
     solver_command_key_t key;memset(&key,0,sizeof(key));
     key.origin_x=g->body_origin.x;key.origin_y=g->body_origin.y;
     key.revision=g->descriptor_revision;
@@ -32,6 +33,11 @@ static solver_command_key_t command_key(const dc_gpu_t *g) {
     key.body=g->body_buffer;key.activity=g->mpm_activity_buffer;
     key.descriptor=g->descriptor;key.layout=g->pipeline_layout;
     key.structural=g->structural_enabled;key.runtime=g->runtime_body_consumers;
+    if(program>=FLUID_PROGRAM) {
+        key.fluid_scale=dc_gpu_float_bits(g->fluid_step_scale);
+        key.fluid_timed=g->timed_fluid;key.fluid_occupancy=g->rigid_occupancy_present;
+        key.pressure_work=g->pressure_work_enabled;
+    }
     return key;
 }
 bool dc_gpu_solver_commands_init(dc_gpu_t *g,char *err,uint32_t cap) {
@@ -76,11 +82,16 @@ bool dc_gpu_solver_commands_stats(const dc_gpu_t *g,uint64_t *recordings,uint64_
     *recordings=g->solver_commands->programs[RIGID_PROGRAM].recordings;
     *executions=g->solver_commands->programs[RIGID_PROGRAM].executions;return true;
 }
-static bool execute_cached(dc_gpu_t *g,unsigned program,void (*record)(dc_gpu_t *)) {
+static void record_program(dc_gpu_t *g,unsigned program) {
+    if(program==RIGID_PROGRAM) dc_gpu_record_solver_uncached(g);
+    else if(program==MPM_PROGRAM) dc_gpu_record_mpm_uncached(g);
+    else dc_gpu_record_fluid_phase_uncached(g,(program-FLUID_PROGRAM)/2u);
+}
+static bool execute_cached(dc_gpu_t *g,unsigned program) {
     if(!g->solver_commands||g->solver_cache_disabled||g->component_profile) return false;
     solver_command_program_t *cache=&g->solver_commands->programs[program];
     if(cache->disabled) return false;
-    solver_command_key_t key=command_key(g);
+    solver_command_key_t key=command_key(g,program);
     if(!cache->valid||memcmp(&key,&cache->key,sizeof(key))!=0) {
         cache->valid=false;
         VkCommandBufferInheritanceInfo inheritance={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO};
@@ -93,7 +104,7 @@ static bool execute_cached(dc_gpu_t *g,unsigned program,void (*record)(dc_gpu_t 
         VkCommandBuffer primary=g->command;g->command=cache->command;
         vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,g->pipeline_layout,
             0,1,&g->descriptor,0,NULL);
-        record(g);
+        record_program(g,program);
         VkResult result=vkEndCommandBuffer(g->command);g->command=primary;
         if(result!=VK_SUCCESS) {g->solver_cache_disabled=true;return false;}
         cache->key=key;cache->valid=true;cache->recordings++;
@@ -105,8 +116,16 @@ static bool execute_cached(dc_gpu_t *g,unsigned program,void (*record)(dc_gpu_t 
     cache->executions++;return true;
 }
 void dc_gpu_record_solver(dc_gpu_t *g) {
-    if(!execute_cached(g,RIGID_PROGRAM,dc_gpu_record_solver_uncached)) dc_gpu_record_solver_uncached(g);
+    if(!execute_cached(g,RIGID_PROGRAM)) dc_gpu_record_solver_uncached(g);
 }
 void dc_gpu_record_mpm(dc_gpu_t *g) {
-    if(!execute_cached(g,MPM_PROGRAM,dc_gpu_record_mpm_uncached)) dc_gpu_record_mpm_uncached(g);
+    if(!execute_cached(g,MPM_PROGRAM)) dc_gpu_record_mpm_uncached(g);
+}
+
+void dc_gpu_record_fluid_phase(dc_gpu_t *g,uint32_t phase) {
+    if(phase>=5u||!execute_cached(g,FLUID_PROGRAM+phase*2u+(g->fluid_tick&1u))) {
+        dc_gpu_record_fluid_phase_uncached(g,phase);
+        return;
+    }
+    if(phase==3u) g->fluid_snapshot_valid=true;
 }

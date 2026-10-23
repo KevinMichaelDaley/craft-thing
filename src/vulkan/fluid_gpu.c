@@ -423,7 +423,7 @@ bool dc_gpu_clear_fluid_scratch(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return true;
 }
 
-void dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase) {
+void dc_gpu_record_fluid_phase_uncached(dc_gpu_t *gpu, uint32_t phase) {
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     if (phase == 0u) record_projection_begin(gpu);
