@@ -7,7 +7,7 @@
 #include "dungeoncraft/mpm_activity_layout.h"
 
 typedef struct {
-    uint32_t tiles_x,tiles_y,tiles,groups,copy_word,count_word,levels;
+    uint32_t tiles_x,tiles_y,tiles,groups,copy_word,count_word,small_word,levels;
     uint32_t level_counts[DC_MPM_MAX_SCAN_LEVELS];
     uint32_t level_words[DC_MPM_MAX_SCAN_LEVELS];
     uint32_t root_word,words;

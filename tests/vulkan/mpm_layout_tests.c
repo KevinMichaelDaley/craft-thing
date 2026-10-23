@@ -17,7 +17,8 @@ static void test_scan_scratch_regions_are_disjoint_and_bounded(void) {
         ASSERT_TRUE(l.levels>0&&l.levels<=DC_MPM_MAX_SCAN_LEVELS);
         ASSERT_EQ(l.groups,(l.tiles+255u)/256u);
         ASSERT_EQ(l.copy_word,7u+2u*l.tiles);ASSERT_EQ(l.count_word,l.copy_word+3u);
-        uint32_t offset=l.count_word+1u,count=l.groups;
+        ASSERT_EQ(l.small_word,l.count_word+1u);
+        uint32_t offset=l.small_word+3u,count=l.groups;
         for(uint32_t level=0;level<l.levels;level++) {
             ASSERT_EQ(l.level_words[level],offset);ASSERT_EQ(l.level_counts[level],count);
             offset+=count;count=(count+255u)/256u;
