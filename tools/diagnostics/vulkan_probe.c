@@ -122,7 +122,8 @@ static int initialize_device(probe_t *p) {
         return 0;
     }
 #endif
-    VkPhysicalDeviceVulkan13Features features13={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,.synchronization2=VK_TRUE};
+    VkPhysicalDeviceVulkan13Features features13={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,.synchronization2=VK_TRUE,
+        .subgroupSizeControl=supported13.subgroupSizeControl};
 #ifdef DC_PROBE_BUFFER_DEVICE_ADDRESS
     VkPhysicalDeviceVulkan12Features features12={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,.bufferDeviceAddress=VK_TRUE};
     features13.pNext=&features12;

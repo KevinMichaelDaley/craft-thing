@@ -1368,3 +1368,6 @@ build/shaders/mpm_copy.comp.spv: shaders/sim/mpm_copy.comp
 build/mpm_copy_tests: tests/vulkan/mpm_copy_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/mpm_copy.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/mpm_copy_tests
+
+build/fluid_gpu.o: src/vulkan/subgroup_gpu.h
+build/fluid_one_cell_scan_tests: src/vulkan/subgroup_gpu.h tools/diagnostics/vulkan_probe.c

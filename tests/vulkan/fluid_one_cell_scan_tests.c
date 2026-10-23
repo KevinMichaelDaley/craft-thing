@@ -1,5 +1,6 @@
 #define FLUID_TRANSPORT_FIXTURE_ONLY
 #include "fluid_transport_tests.c"
+#include "../../src/vulkan/subgroup_gpu.h"
 
 static bool scan_override_present(uint32_t id) {
     FILE *file=fopen("build/shaders/fluid_transport.comp.spv","rb");if(!file) return false;
@@ -24,6 +25,11 @@ static VkPipeline scan_pipeline(fixture_t *f,unsigned mode,bool enabled) {
     VkComputePipelineCreateInfo info={.sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_COMPUTE_BIT,
             .module=module,.pName="main",.pSpecializationInfo=&spec},.layout=f->p.layout};
+    uint32_t required_size=enabled?dc_gpu_transport_subgroup_size(f->p.physical):0u;
+    VkPipelineShaderStageRequiredSubgroupSizeCreateInfo required={
+        .sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO,
+        .requiredSubgroupSize=required_size};
+    if(required_size) info.stage.pNext=&required;
     VkPipeline result=VK_NULL_HANDLE;
     VkResult status=vkCreateComputePipelines(f->p.device,VK_NULL_HANDLE,1,&info,NULL,&result);
     vkDestroyShaderModule(f->p.device,module,NULL);
@@ -114,6 +120,7 @@ static void test_scan_matches_ordered_mass_and_pigment_for_every_direction(void)
         ASSERT_TRUE(scan_submit(f,mode));
         bool exact_mass=memcmp(reference_mass,f->words[0],mass_bytes)==0,exact_color=memcmp(reference_color,f->words[7],color_bytes)==0;
         bool cached_pages=counts[5]==0u;
+        bool subgroup_size=!dc_gpu_transport_subgroup_size(f->p.physical)||counts[3]==16u;
         printf("uncached runtime page reads%u\n",counts[5]);
         bool parallel=(variant!=6&&variant!=7&&variant!=8)||counts[2]*4u<reference_work;
         printf("mode%u variant%u: exact mass%d pigment%d, ordered sources%u -> %u\n",
@@ -130,7 +137,7 @@ static void test_scan_matches_ordered_mass_and_pigment_for_every_direction(void)
         vkDestroyFence(f->p.device,f->p.fence,NULL);vkDestroyCommandPool(f->p.device,f->p.pool,NULL);
         vkDestroyDevice(f->p.device,NULL);vkDestroyInstance(f->p.instance,NULL);
         free(initial_mass);free(initial_color);free(reference_mass);free(reference_color);free(f);
-        ASSERT_TRUE(exact_mass);ASSERT_TRUE(exact_color);ASSERT_TRUE(parallel);ASSERT_TRUE(cached_pages);
+        ASSERT_TRUE(exact_mass);ASSERT_TRUE(exact_color);ASSERT_TRUE(parallel);ASSERT_TRUE(cached_pages);ASSERT_TRUE(subgroup_size);
     }
     PASS();
 }

@@ -7,6 +7,7 @@
 typedef struct {
     VkPhysicalDeviceSynchronization2Features synchronization;
     VkPhysicalDeviceBufferDeviceAddressFeatures addresses;
+    VkPhysicalDeviceSubgroupSizeControlFeatures subgroups;
 } dc_gpu_body_features_t;
 /** Query required body-storage features, preserving output if unsupported.
  * The successful chain belongs to out and may be passed to VkDeviceCreateInfo. */
@@ -18,8 +19,10 @@ static inline bool dc_gpu_body_features_query(VkPhysicalDevice physical,
     }
     dc_gpu_body_features_t available={
         .synchronization={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES},
-        .addresses={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES}};
+        .addresses={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES},
+        .subgroups={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES}};
     available.synchronization.pNext=&available.addresses;
+    available.addresses.pNext=&available.subgroups;
     VkPhysicalDeviceFeatures2 features={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext=&available.synchronization};
     vkGetPhysicalDeviceFeatures2(physical,&features);
@@ -28,8 +31,11 @@ static inline bool dc_gpu_body_features_query(VkPhysicalDevice physical,
     if(missing) {if(err&&cap) snprintf(err,cap,"%s",missing);return false;}
     *out=(dc_gpu_body_features_t){
         .synchronization={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,.synchronization2=VK_TRUE},
-        .addresses={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES,.bufferDeviceAddress=VK_TRUE}};
+        .addresses={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES,.bufferDeviceAddress=VK_TRUE},
+        .subgroups={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES,
+                    .subgroupSizeControl=available.subgroups.subgroupSizeControl}};
     out->synchronization.pNext=&out->addresses;
+    out->addresses.pNext=&out->subgroups;
     return true;
 }
 #endif

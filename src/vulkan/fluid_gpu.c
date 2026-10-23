@@ -4,6 +4,7 @@
 
 #include "fluid_transport_limits.h"
 #include "gpu_internal.h"
+#include "subgroup_gpu.h"
 
 bool dc_gpu_fluid_displacement_overflow(dc_gpu_t *gpu, uint64_t *mass,
                                       char *err, uint32_t cap) {
@@ -65,12 +66,13 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
     bool displacement=strcmp(path,"build/shaders/fluid_displacement.comp.spv")==0;
     uint32_t length=(displacement?phase==0:phase<2)?gpu->height:gpu->width;
     uint32_t values[4]={phase,length<2048u?length:2048u,1u,0u};
+    uint32_t required_size=transport?dc_gpu_transport_subgroup_size(gpu->physical):0u;
     if(transport) {
         VkPhysicalDeviceSubgroupProperties subgroup={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES};
         VkPhysicalDeviceProperties2 device={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,.pNext=&subgroup};
         vkGetPhysicalDeviceProperties2(gpu->physical,&device);
         VkPhysicalDeviceProperties properties=device.properties;
-        if(subgroup.subgroupSize==16u) path="build/shaders/fluid_transport_16.comp.spv";
+        if(required_size==16u||subgroup.subgroupSize==16u) path="build/shaders/fluid_transport_16.comp.spv";
         values[1]=dc_gpu_transport_cache_cells(length,properties.limits.maxComputeSharedMemorySize);
     }
     if (!dc_gpu_load_shader_module(gpu,path,&shader,err,cap)) return false;
@@ -86,6 +88,10 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
             .pSpecializationInfo=&specialization },
         .layout = strcmp(path,"build/shaders/projection.comp.spv")==0?
             gpu->pressure_pipeline_layout:gpu->pipeline_layout };
+    VkPipelineShaderStageRequiredSubgroupSizeCreateInfo required = {
+        .sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO,
+        .requiredSubgroupSize=required_size};
+    if(required_size) info.stage.pNext=&required;
     VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE,
                                                 1, &info, NULL, pipeline);
     vkDestroyShaderModule(gpu->device, shader, NULL);
