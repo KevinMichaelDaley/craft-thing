@@ -79,6 +79,9 @@ bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
 
 static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPipeline *pipeline,
                           char *err, uint32_t cap) {
+    const char *commit=getenv("DC_MPM_COMMIT");
+    if(phase==5u&&strcmp(path,"build/shaders/mpm.comp.spv")==0&&commit&&strcmp(commit,"packed")==0)
+        path=gpu->runtime_body_consumers?"build/shaders/runtime/mpm_commit.comp.spv":"build/shaders/mpm_commit.comp.spv";
     const char *stencil=getenv("DC_MPM_GATHER_STENCIL");
     bool use_stencil=phase==4u&&stencil&&strcmp(stencil,"1")==0;
     if(use_stencil) path=gpu->runtime_body_consumers?"build/shaders/runtime/mpm_stencil.comp.spv":
@@ -151,6 +154,9 @@ bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if(variant&&!specialized&&strcmp(variant,"generic")!=0) return error(err,cap,"Invalid MPM kernel variant");
     for(uint32_t phase=0;specialized&&phase<DC_GPU_MPM_PHASE_COUNT;phase++)
         if(!make_pipeline(gpu,"build/shaders/mpm.comp.spv",phase,&gpu->mpm_phase_pipelines[phase],err,cap)) return false;
+    const char *commit=getenv("DC_MPM_COMMIT");
+    if(!specialized&&commit&&strcmp(commit,"packed")==0&&
+       !make_pipeline(gpu,"build/shaders/mpm.comp.spv",5u,&gpu->mpm_phase_pipelines[5],err,cap)) return false;
     return make_pipeline(gpu,"build/shaders/mpm_active.comp.spv",UINT32_MAX,
                          &gpu->mpm_activity_pipeline,err,cap) &&
            dc_gpu_mpm_compaction_pipeline_init(gpu,err,cap) &&

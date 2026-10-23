@@ -522,8 +522,10 @@ void commit_cell(ivec2 cell) {
     Particle first = output_particles[primary];
     Particle second = output_particles[secondary];
     uint new_count = uint(first.mass_fp != 0u) + uint(second.mass_fp != 0u);
+#ifndef DC_MPM_COALESCED_COMMIT
     particles[primary] = first;
     particles[secondary] = second;
+#endif
     if (new_count != old_count)
         atomicAdd(particle_counts[page_at(cell) - 1u], uint(int(new_count) - int(old_count)));
     uint cell_index = (page_at(cell) - 1u) * CELLS + local_cell(cell);
@@ -534,6 +536,10 @@ void commit_cell(ivec2 cell) {
     chunk_cells[cell_index].x = flags | material;
     mpm_support_changed(cell,before,flags|material);
 }
+
+#ifdef DC_MPM_COALESCED_COMMIT
+#include "mpm_commit_copy.glsl"
+#endif
 
 void main() {
     uint mode=MPM_PHASE==0xffffffffu?params.mode:MPM_PHASE;
@@ -546,6 +552,9 @@ void main() {
                        int((tile / tiles_x) * 16u + gl_LocalInvocationID.y));
 #ifdef DC_MPM_SHARED_GATHER
     if(GATHER_STENCIL_ENABLED&&mode==4u) gather_cache_fill(tile,tiles_x);
+#endif
+#ifdef DC_MPM_COALESCED_COMMIT
+    if(mode==5u) {coalesced_commit(tile,tiles_x);return;}
 #endif
     if (!in_grid(cell)) return;
     if (mode == MODE_MOISTURE) { exchange_moisture(cell); return; }

@@ -1436,3 +1436,12 @@ build/diagnostics/pixel_boundary_probe.spv: shaders/sim/contact_geometry.glsl
 build/solver_contact_start_tests: tests/vulkan/solver_contact_start_tests.c tests/vulkan/solver_motion_store_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_motion_profile.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/solver_contact_start_tests
+
+build/shaders/mpm_commit.comp.spv: shaders/sim/mpm.comp $(wildcard shaders/sim/*.glsl)
+	@mkdir -p $(@D)
+	glslangValidator -V --target-env vulkan1.1 -DDC_MPM_COALESCED_COMMIT=1 -o $@ $<
+build/shaders/runtime/mpm_commit.comp.spv: shaders/sim/mpm.comp $(wildcard shaders/sim/*.glsl)
+	@mkdir -p $(@D)
+	glslangValidator -V --target-env vulkan1.1 -DDC_MPM_COALESCED_COMMIT=1 -DDC_RUNTIME_BODY_STORAGE=1 -o $@ $<
+$(GPU_OBJ) $(GPU_SOURCE_BINARIES): build/shaders/mpm_commit.comp.spv build/shaders/runtime/mpm_commit.comp.spv
+build/mpm_gather_tests build/mpm_gather_partial_tile_tests: build/shaders/mpm_commit.comp.spv
