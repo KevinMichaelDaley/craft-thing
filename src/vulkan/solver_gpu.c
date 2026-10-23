@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "gpu_internal.h"
 #include "runtime_body_gpu.h"
@@ -145,14 +146,15 @@ bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                   .pName = "main"},
         .layout = gpu->pipeline_layout};
     VkResult result = VK_SUCCESS;
-    VkSpecializationMapEntry entry = {
-        .constantID = 0, .offset = 0, .size = sizeof(uint32_t)};
+    const char *grouped=getenv("DC_SOLVER_GROUPED_REDUCTIONS");
+    VkSpecializationMapEntry entries[]={{0u,0u,4u},{5u,4u,4u}};
     for (uint32_t mode = 0;
          mode < DC_GPU_SOLVER_PHASE_COUNT && result == VK_SUCCESS; ++mode) {
-        VkSpecializationInfo phase = {.mapEntryCount = 1,
-                                      .pMapEntries = &entry,
-                                      .dataSize = sizeof(mode),
-                                      .pData = &mode};
+        uint32_t values[]={mode,grouped&&strcmp(grouped,"1")==0};
+        VkSpecializationInfo phase = {.mapEntryCount = 2,
+                                      .pMapEntries = entries,
+                                      .dataSize = sizeof(values),
+                                      .pData = values};
         info.stage.pSpecializationInfo = &phase;
         result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1, &info,
                                           NULL, &gpu->solver_pipelines[mode]);

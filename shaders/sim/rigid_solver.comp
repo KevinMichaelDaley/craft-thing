@@ -1,5 +1,8 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_arithmetic : require
+#extension GL_KHR_shader_subgroup_ballot : require
 #include "rigid_body.glsl"
 layout(local_size_x = 64) in;
 #ifdef DC_SOLVER_MOTION_PROFILE
@@ -10,6 +13,7 @@ layout(constant_id = 0) const uint PHASE = 0u;
 layout(constant_id = 1) const bool SPARSE_MOTION_WRITES = true;
 layout(constant_id = 3) const bool CACHE_CONTACT_STARTS = true;
 layout(constant_id = 4) const bool SKIP_ZERO_REDUCTIONS = true;
+layout(constant_id = 5) const bool GROUPED_REDUCTIONS = false;
 layout(set = 0, binding = 2, std430) readonly buffer Pages { uint pages[]; };
 #ifndef DC_RUNTIME_BODY_STORAGE
 layout(set = 0, binding = 4, std430) buffer Bodies {
@@ -146,12 +150,21 @@ void add_correction(uint i, vec2 linear, float angular) {
     /* Integer reduction is independent of emission order; the proposal bound
        keeps all 8192 contributions inside signed 32-bit range. */
     ivec3 v = ivec3(round(clamp(vec3(linear, angular), vec3(-2), vec3(2)) * SUM_SCALE));
+    uvec3 packed_sum=uvec3(v);
+    if(GROUPED_REDUCTIONS) {
+        uint first=subgroupBroadcastFirst(i);
+        uvec4 matching=subgroupBallot(i==first);
+        if(subgroupBallotBitCount(matching)>=4u&&i==first) {
+            packed_sum=subgroupAdd(packed_sum);
+            if(!subgroupElect()) return;
+        }
+    }
     for(uint axis=0u;axis<3u;axis++) {
-        if(SKIP_ZERO_REDUCTIONS&&v[axis]==0) continue;
+        if(SKIP_ZERO_REDUCTIONS&&packed_sum[axis]==0u) continue;
 #ifdef DC_SOLVER_MOTION_PROFILE
         atomicAdd(motion_profile[2],1u);
 #endif
-        atomicAdd(DC_SOLVER_DATA(p+axis),uint(v[axis]));
+        atomicAdd(DC_SOLVER_DATA(p+axis),packed_sum[axis]);
     }
 }
 vec3 correction(uint i) {

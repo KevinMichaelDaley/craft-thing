@@ -17,7 +17,7 @@ static VkPipeline contact_start_pipeline(probe_t *p,dc_gpu_t *gpu,uint32_t phase
     vkCreateComputePipelines(p->device,VK_NULL_HANDLE,1,&info,NULL,&result);
     vkDestroyShaderModule(p->device,module,NULL);return result;
 }
-static void run_contact_case(bool zero) {
+static void run_contact_case(bool zero,bool mixed,bool masked) {
     zero_case=zero;
     probe_t p={0};ASSERT_TRUE(initialize(&p));char err[256];
     dc_gpu_t gpu={.device=p.device,.physical=p.physical};
@@ -44,7 +44,8 @@ static void run_contact_case(bool zero) {
     data[CONTACT_BASE]=32;
     for(unsigned i=0;i<32;i++) {
         uint32_t c=CONTACT_BASE+12+i*32;
-        data[c]=123;data[c+1]=(i&1u)?0:124;data[c+2]=(i&1u)?1:0;
+        data[c]=masked&&i%16u==0u?0u:mixed&&(i&1u)?124u:123u;
+        data[c+1]=mixed?0u:(i&1u)?0u:124u;data[c+2]=data[c+1]==0u?1u:0u;
         data[c+8]=float_bits(0);data[c+9]=float_bits(-1);
         data[c+11]=float_bits(.5f);data[c+12]=float_bits(.1f);data[c+13]=float_bits(.00001f);
         data[c+20]=(uint32_t)((21.25f+(i%4u)*.125f)*65536.f);
@@ -82,7 +83,7 @@ static void run_contact_case(bool zero) {
         for(unsigned i=0;i<5;i++) vkDestroyPipeline(p.device,pipelines[i],NULL);
     }
     printf("exact body/contact solver bytes%d, anchor rotations%u -> %u\n",exact,rotations[0],rotations[1]);
-    printf("zero case%d correction atomics%u -> %u\n",zero,atomics[0],atomics[1]);
+    printf("zero%d mixed%d masked%d correction atomics%u -> %u\n",zero,mixed,masked,atomics[0],atomics[1]);
     fixture_release_pipeline(&p);
     vkUnmapMemory(p.device,storage_memory);vkUnmapMemory(p.device,profile_memory);
     vkDestroyBuffer(p.device,storage,NULL);vkDestroyBuffer(p.device,profile,NULL);
@@ -90,10 +91,14 @@ static void run_contact_case(bool zero) {
     vkDestroyFence(p.device,p.fence,NULL);vkDestroyCommandPool(p.device,p.pool,NULL);
     vkDestroyDevice(p.device,NULL);vkDestroyInstance(p.instance,NULL);free(initial);free(expected);
     ASSERT_TRUE(exact);ASSERT_TRUE(rotations[0]>0u);ASSERT_TRUE(rotations[1]*2u<rotations[0]);
-    ASSERT_TRUE(zero?(atomics[0]>0u&&atomics[1]==0u):(atomics[1]*2u<atomics[0]));PASS();
+    ASSERT_TRUE(zero?(atomics[0]>0u&&atomics[1]==0u):(mixed?atomics[1]<=atomics[0]:atomics[1]*2u<atomics[0]));PASS();
 }
-static void test_cached_start_anchors_preserve_all_solver_and_body_bits(void) {run_contact_case(false);}
-static void test_zero_contact_work_preserves_bits_without_atomic_reductions(void) {run_contact_case(true);}
+static void test_cached_start_anchors_preserve_all_solver_and_body_bits(void) {run_contact_case(false,false,false);}
+static void test_zero_contact_work_preserves_bits_without_atomic_reductions(void) {run_contact_case(true,false,false);}
+static void test_mixed_body_subgroups_preserve_independent_corrections(void) {run_contact_case(false,true,false);}
+static void test_inactive_leading_lanes_preserve_all_corrections(void) {run_contact_case(false,false,true);}
 int main(void) {RUN(test_cached_start_anchors_preserve_all_solver_and_body_bits);
     RUN(test_zero_contact_work_preserves_bits_without_atomic_reductions);
+    RUN(test_mixed_body_subgroups_preserve_independent_corrections);
+    RUN(test_inactive_leading_lanes_preserve_all_corrections);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;}
