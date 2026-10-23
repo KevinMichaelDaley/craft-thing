@@ -199,7 +199,11 @@ void main() {
     if(EXTRACTION_PHASE==13u) {
         if(i>=n) return;
         if(!solid(i)) return;
-        labels[i]=component_root(i);
+        /* The union dispatch has completed. Read immutable parents here so
+           every member can resolve its root without contended atomic writes. */
+        uint root=candidates[i];
+        for(uint parent=candidates[root];parent!=root;parent=candidates[root]) root=parent;
+        labels[i]=root;
         return;
     }
     if(EXTRACTION_PHASE==14u) {

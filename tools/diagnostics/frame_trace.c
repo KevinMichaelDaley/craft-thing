@@ -10,7 +10,8 @@
 enum { QUERY_CAPACITY = 4096, RIGID = 0, FLUID = 1, MPM = 2,
        CONTACT = 3, HYDRO = 4, FLUID_PHASE = 9, RENDERER = 15,
        EXTRACTION = 16, BROADPHASE = 17, SOLVER = 18,
-       COMPONENT_PHASE = 19, LABEL_COUNT = COMPONENT_PHASE + 38 };
+       COMPONENT_PHASE = 19, SOLVER_PHASE = COMPONENT_PHASE + 38,
+       LABEL_COUNT = SOLVER_PHASE + DC_GPU_SOLVER_PHASE_COUNT };
 static dc_gpu_t *traced;
 static VkQueryPool pool;
 static unsigned query_count, frame;
@@ -242,6 +243,13 @@ static unsigned hydro_begin(VkCommandBuffer command) {
         vkCmdWriteTimestamp2(command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,pool,at);
         return at;
     }
+    for(unsigned phase=0;phase<DC_GPU_SOLVER_PHASE_COUNT;phase++) {
+        if(bound!=traced->solver_pipelines[phase]) continue;
+        if(query_count+2>QUERY_CAPACITY) {overflow=true;break;}
+        unsigned at=query_count;labels[at/2]=SOLVER_PHASE+phase;query_count+=2;
+        vkCmdWriteTimestamp2(command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,pool,at);
+        return at;
+    }
     return QUERY_CAPACITY;
 }
 
@@ -307,6 +315,10 @@ bool __wrap_dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
            total[COMPONENT_PHASE+10],total[COMPONENT_PHASE+12],total[COMPONENT_PHASE+13],
            total[COMPONENT_PHASE+14],total[COMPONENT_PHASE+7],
            total[COMPONENT_PHASE+16]+total[COMPONENT_PHASE+17]+total[COMPONENT_PHASE+18]);
+    printf("solver-phases,%u",number);
+    for(unsigned phase=0;phase<DC_GPU_SOLVER_PHASE_COUNT;phase++)
+        printf(",p%u=%.3f",phase,total[SOLVER_PHASE+phase]);
+    putchar('\n');
     if (okay && number == 72 && getenv("DC_CONTACT_PAIR_PROFILE"))
         okay = profile_contact_pairs(gpu);
     vkDestroyQueryPool(gpu->device, pool, NULL);
