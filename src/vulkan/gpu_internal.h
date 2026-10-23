@@ -101,6 +101,7 @@ struct dc_gpu {
     void *mpm_grid_mapped;
     void *mpm_force_mapped, *mpm_velocity_mapped;
     VkPipeline mpm_pipeline;
+    VkPipeline mpm_phase_pipelines[8];
     VkBuffer mpm_activity_buffer;
     VkDeviceMemory mpm_activity_memory;
     VkPipeline mpm_activity_pipeline;
