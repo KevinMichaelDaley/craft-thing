@@ -603,6 +603,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/mpm_support_dirty_tests
 	./build/mpm_gather_tests
 	./build/mpm_copy_tests
+	./build/solver_motion_store_tests
 	./build/body_address_gpu_tests
 	./build/body_storage_gpu_tests
 	./build/body_scan_gpu_tests
@@ -1371,3 +1372,10 @@ test: build/mpm_copy_tests
 
 build/fluid_gpu.o: src/vulkan/subgroup_gpu.h
 build/fluid_one_cell_scan_tests: src/vulkan/subgroup_gpu.h tools/diagnostics/vulkan_probe.c
+
+build/diagnostics/solver_motion_profile.comp.spv: shaders/sim/rigid_solver.comp shaders/sim/rigid_body.glsl
+	@mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.3 -DDC_SOLVER_MOTION_PROFILE=1 -S comp -o $@ $<
+build/solver_motion_store_tests: tests/vulkan/solver_motion_store_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_motion_profile.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/solver_motion_store_tests

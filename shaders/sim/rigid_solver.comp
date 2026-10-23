@@ -2,6 +2,9 @@
 #extension GL_GOOGLE_include_directive : require
 #include "rigid_body.glsl"
 layout(local_size_x = 64) in;
+#ifdef DC_SOLVER_MOTION_PROFILE
+layout(set=0,binding=31,std430) buffer MotionProfile {uint motion_profile[];};
+#endif
 /* Specializing each phase removes unrelated branches and their register pressure. */
 layout(constant_id = 0) const uint PHASE = 0u;
 layout(set = 0, binding = 2, std430) readonly buffer Pages { uint pages[]; };
@@ -459,5 +462,8 @@ void main() {
         body.angular_velocity =
             clamp(body.angular_velocity + change.z, -angular_limit(body), angular_limit(body));
     }
+#ifdef DC_SOLVER_MOTION_PROFILE
+    atomicAdd(motion_profile[0],136u);
+#endif
     DC_BODY(i) = body;
 }
