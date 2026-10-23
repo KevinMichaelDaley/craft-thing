@@ -159,6 +159,9 @@ struct dc_gpu {
     VkQueryPool timestamp_pool;
     bool component_profile;
     bool solver_recording;
+    bool solver_cache_disabled;
+    uint64_t descriptor_revision;
+    struct dc_solver_commands *solver_commands;
     float timestamp_period;
     uint32_t timestamp_bits;
     VkBuffer halo_buffer;
@@ -397,6 +400,12 @@ bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_contacts(dc_gpu_t *gpu);
 bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_solver(dc_gpu_t *gpu);
+/** Allocate reusable solver commands during context initialization. */
+bool dc_gpu_solver_commands_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+/** Release cached solver commands before destroying their command pool. */
+void dc_gpu_solver_commands_destroy(dc_gpu_t *gpu);
+/** Read CPU recording counters without reading simulation payloads. */
+bool dc_gpu_solver_commands_stats(const dc_gpu_t *gpu, uint64_t *recordings, uint64_t *executions);
 bool dc_gpu_tick_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_tick_destroy(dc_gpu_t *gpu);
 bool dc_gpu_halo_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);

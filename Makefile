@@ -73,7 +73,7 @@ build/body_address_gpu.o: src/vulkan/body_address_gpu.c src/vulkan/body_address_
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/body_storage_gpu.o: src/vulkan/body_storage_gpu.c src/vulkan/body_storage_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-GPU_OBJ += build/solver_gpu.o
+GPU_OBJ += build/solver_gpu.o build/solver_commands_gpu.o
 GPU_OBJ += build/draw_gpu.o
 GPU_OBJ += build/compound_gpu.o build/component_gpu.o build/pixel_gpu.o
 GPU_OBJ += build/structural_store_gpu.o
@@ -605,6 +605,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/mpm_copy_tests
 	./build/solver_motion_store_tests
 	./build/solver_recording_tests
+	./build/solver_commands_tests
 	./build/body_address_gpu_tests
 	./build/body_storage_gpu_tests
 	./build/body_scan_gpu_tests
@@ -1384,3 +1385,9 @@ test: build/solver_motion_store_tests
 build/solver_recording_tests: tests/vulkan/solver_recording_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/solver_recording_tests
+
+build/solver_commands_gpu.o: src/vulkan/solver_commands_gpu.c src/vulkan/gpu_internal.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/solver_commands_tests: tests/vulkan/solver_commands_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/solver_commands_tests
