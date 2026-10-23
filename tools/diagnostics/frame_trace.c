@@ -41,9 +41,17 @@ void __real_vkCmdDispatch(VkCommandBuffer, uint32_t, uint32_t, uint32_t);
 void __real_vkCmdPushConstants(VkCommandBuffer,VkPipelineLayout,VkShaderStageFlags,uint32_t,uint32_t,const void *);
 void __wrap_vkCmdPushConstants(VkCommandBuffer command,VkPipelineLayout layout,
     VkShaderStageFlags stages,uint32_t offset,uint32_t bytes,const void *data) {
+    uint32_t profile_push[8];const void *submitted=data;
+    if(traced&&command==traced->command&&bound!=VK_NULL_HANDLE&&offset==0u&&bytes>=12u&&bytes<=sizeof(profile_push)) {
+        bool contact=false;
+        for(unsigned phase=0;phase<3;phase++) contact|=bound==traced->contact_pipelines[phase];
+        contact|=bound==traced->contact_pixel_pipeline||bound==traced->contact_pixel_plan_pipeline||
+            bound==traced->contact_pixel_work_pipeline||bound==traced->contact_pixel_finish_pipeline;
+        if(contact) {memcpy(profile_push,data,bytes);profile_push[2]|=256u;submitted=profile_push;}
+    }
     if(traced&&command==traced->command&&(stages&VK_SHADER_STAGE_COMPUTE_BIT)&&offset<=8u&&bytes>=12u-offset)
-        memcpy(&pushed_mode,(const unsigned char *)data+8u-offset,sizeof(pushed_mode));
-    __real_vkCmdPushConstants(command,layout,stages,offset,bytes,data);
+        memcpy(&pushed_mode,(const unsigned char *)submitted+8u-offset,sizeof(pushed_mode));
+    __real_vkCmdPushConstants(command,layout,stages,offset,bytes,submitted);
 }
 void __real_vkCmdDispatchIndirect(VkCommandBuffer, VkBuffer, VkDeviceSize);
 

@@ -8,6 +8,7 @@ static uint32_t last_emitted;
 static uint32_t last_visited;
 static uint32_t last_workgroups;
 static uint32_t last_rejected;
+static uint32_t last_plain_visited,last_plain_emitted;
 
 bool __real_dc_gpu_load_shader_module(dc_gpu_t *, const char *, VkShaderModule *, char *, uint32_t);
 bool __wrap_dc_gpu_load_shader_module(dc_gpu_t *gpu, const char *path, VkShaderModule *module,
@@ -127,6 +128,10 @@ static void measure(unsigned side, unsigned kind, unsigned pair_kind) {
                                .commandBufferCount = 1, .pCommandBuffers = &g->command};
         ASSERT_EQ(vkQueueSubmit(g->queue, 1, &submit, VK_NULL_HANDLE), VK_SUCCESS);
         ASSERT_EQ(vkQueueWaitIdle(g->queue), VK_SUCCESS);
+        if(sample==8u) {
+            last_plain_visited=dc_gpu_contact_data(g)[9];
+            last_plain_emitted=dc_gpu_contact_data(g)[0];
+        }
         uint64_t times[2];
         ASSERT_EQ(vkGetQueryPoolResults(g->device, g->timestamp_pool, 0, 2, sizeof(times), times,
                                        sizeof(uint64_t), VK_QUERY_RESULT_64_BIT), VK_SUCCESS);
