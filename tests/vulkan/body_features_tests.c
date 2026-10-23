@@ -3,7 +3,7 @@
 #include <string.h>
 #include "../../src/vulkan/body_features_gpu.h"
 static int g_pass,g_fail;
-static bool sync_supported,address_supported;
+static bool sync_supported,address_supported,subgroup_supported;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -21,6 +21,8 @@ VKAPI_ATTR void VKAPI_CALL __wrap_vkGetPhysicalDeviceFeatures2(VkPhysicalDevice 
             address->bufferDeviceAddress=address_supported;
             address->bufferDeviceAddressCaptureReplay=VK_TRUE;address->bufferDeviceAddressMultiDevice=VK_TRUE;
         }
+        if(type==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES)
+            ((VkPhysicalDeviceSubgroupSizeControlFeatures *)next)->subgroupSizeControl=subgroup_supported;
         next=following;
     }
 }
@@ -28,7 +30,7 @@ static void test_success_owns_feature_chain_and_enables_only_required_features(v
     sync_supported=address_supported=true;dc_gpu_body_features_t out={0};char err[128];
     ASSERT_TRUE(dc_gpu_body_features_query((VkPhysicalDevice)(uintptr_t)1,&out,err,sizeof(err)));
     ASSERT_TRUE(out.synchronization.synchronization2&&out.addresses.bufferDeviceAddress);
-    ASSERT_TRUE(out.synchronization.pNext==&out.addresses);ASSERT_TRUE(out.addresses.pNext==NULL);
+    ASSERT_TRUE(out.synchronization.pNext==&out.addresses);ASSERT_TRUE(out.addresses.pNext!=NULL);
     ASSERT_TRUE(!out.addresses.bufferDeviceAddressCaptureReplay&&!out.addresses.bufferDeviceAddressMultiDevice);PASS();
 }
 static void test_missing_feature_preserves_destination_and_reports_exact_requirement(void) {
@@ -40,4 +42,17 @@ static void test_missing_feature_preserves_destination_and_reports_exact_require
         ASSERT_TRUE(strstr(err,missing==0?"synchronization2":"bufferDeviceAddress")!=NULL);
     }PASS();
 }
-int main(void) {RUN(test_success_owns_feature_chain_and_enables_only_required_features);RUN(test_missing_feature_preserves_destination_and_reports_exact_requirement);printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;}
+static void test_optional_subgroup_control_is_enabled_only_when_available(void) {
+    sync_supported=address_supported=true;
+    for(unsigned supported=0;supported<2;supported++) {
+        subgroup_supported=supported;dc_gpu_body_features_t out={0};char err[128];
+        ASSERT_TRUE(dc_gpu_body_features_query((VkPhysicalDevice)(uintptr_t)1,&out,err,sizeof(err)));
+        VkBaseOutStructure *node=out.addresses.pNext;
+        ASSERT_TRUE(node&&node->sType==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES);
+        VkPhysicalDeviceSubgroupSizeControlFeatures *subgroup=(void *)node;
+        ASSERT_EQ(subgroup->subgroupSizeControl,supported);
+        ASSERT_TRUE(!subgroup->computeFullSubgroups&&subgroup->pNext==NULL);
+    }
+    PASS();
+}
+int main(void) {RUN(test_optional_subgroup_control_is_enabled_only_when_available);RUN(test_success_owns_feature_chain_and_enables_only_required_features);RUN(test_missing_feature_preserves_destination_and_reports_exact_requirement);printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;}
