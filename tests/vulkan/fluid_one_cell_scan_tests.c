@@ -15,9 +15,9 @@ static bool scan_override_present(uint32_t id) {
     free(words);return found;
 }
 static VkPipeline scan_pipeline(fixture_t *f,unsigned mode,bool enabled) {
-    uint32_t values[]={mode,1u,enabled};
-    VkSpecializationMapEntry entries[]={{0,0,4},{2,4,4},{5,8,4}};
-    VkSpecializationInfo spec={3,entries,sizeof(values),values};
+    uint32_t values[]={mode,1u,enabled,enabled};
+    VkSpecializationMapEntry entries[]={{0,0,4},{2,4,4},{5,8,4},{6,12,4}};
+    VkSpecializationInfo spec={4,entries,sizeof(values),values};
     VkShaderModule module=VK_NULL_HANDLE;char err[256];
     if(!dc_gpu_load_shader_module(&f->gpu,enabled?"build/diagnostics/fluid_transport_profile_16.comp.spv":
         "build/diagnostics/fluid_transport_profile.comp.spv",&module,err,sizeof(err))) return VK_NULL_HANDLE;
@@ -40,14 +40,15 @@ static bool scan_submit(fixture_t *f,unsigned mode) {
 }
 static void test_scan_matches_ordered_mass_and_pigment_for_every_direction(void) {
     ASSERT_TRUE(scan_override_present(5u));
-    for(unsigned mode=0;mode<4;mode++) for(unsigned variant=0;variant<7;variant++) {
+    ASSERT_TRUE(scan_override_present(6u));
+    for(unsigned mode=0;mode<4;mode++) for(unsigned variant=0;variant<12;variant++) {
         fixture_t *f=calloc(1,sizeof(*f));ASSERT_TRUE(f&&initialize(&f->p));
         f->gpu=(dc_gpu_t){.device=f->p.device,.physical=f->p.physical};char err[256];
         for(unsigned i=0;i<8;i++) {
             ASSERT_TRUE(dc_gpu_make_mapped_buffer(&f->gpu,sizes[i]*4,&f->buffers[i],&f->memory[i],(void **)&f->words[i],err,sizeof(err)));
             memset(f->words[i],0,sizes[i]*4);
         }
-        for(unsigned i=0;i<CHUNKS;i++) f->words[1][i]=variant==1&&i==1?0:i+1;
+        for(unsigned i=0;i<CHUNKS;i++) f->words[1][i]=(variant==1||variant==10)&&i==1?0:i+1;
         for(unsigned y=0;y<HEIGHT;y++) for(unsigned x=0;x<WIDTH;x++) {
             unsigned cell=y*WIDTH+x,a=atlas(f,(int)x,(int)y),hash=x*7919u+y*17239u;
             f->words[2][2*CELLS+cell]=(hash%4)*FULL/4;
@@ -62,10 +63,24 @@ static void test_scan_matches_ordered_mass_and_pigment_for_every_direction(void)
                 unsigned coordinate=mode<2?y:x;
                 bool slab=(mode&1u)?coordinate>=25u:coordinate<50u;
                 f->words[0][2*a+1]=variant==5?(hash%23u==0u?0u:FULL):
-                    !slab?0u:variant==6?hash%(FULL+1u):FULL;
-                float packed_speed=(mode&1u?-1.f:1.f)*(variant==4?3.f:variant==6?2.37f:((hash%7u)+1u)*.6f);
+                    !slab?0u:(variant==6||variant==7||variant==8||variant==10||variant==11)?hash%(FULL+1u):FULL;
+                float packed_speed=(mode&1u?-1.f:1.f)*(variant==4?3.f:variant==5?((hash%7u)+1u)*.6f:variant==7?1.37f:(variant==8||variant==10)?21.3f:2.37f);
                 f->words[4][2*cell+(mode<2?1:0)]=bits(packed_speed);
                 f->words[3][cell]=bits(packed_speed);
+                if(variant==9&&coordinate==((mode&1u)?23u:51u)) {
+                    f->words[0][2*a+1]=FULL/2u;
+                    f->words[4][2*cell+(mode<2?1:0)]=bits(0.f);f->words[3][cell]=bits(0.f);
+                }
+                if(variant==9&&coordinate==((mode&1u)?22u:52u)) {
+                    f->words[0][2*a+1]=FULL*3u/4u;
+                    f->words[4][2*cell+(mode<2?1:0)]=bits(0.f);f->words[3][cell]=bits(0.f);
+                }
+                if(variant==11&&coordinate==37u) {f->words[0][2*a]=1u;f->words[0][2*a+1]=0u;}
+                if(variant==11&&coordinate==40u) {
+                    f->words[2][2*CELLS+cell]=FULL/2u;
+                    f->words[2][(mode<2?4u:3u)*CELLS+cell]=FULL/2u;
+                    f->words[0][2*a+1]=minimum(f->words[0][2*a+1],FULL/2u);
+                }
             }
             float *color=(float *)(f->words[7]+4*a);
             color[0]=(hash%251)/251.f;color[1]=((hash/7)%239)/239.f;color[2]=((hash/19)%233)/233.f;color[3]=1.f;
@@ -97,7 +112,7 @@ static void test_scan_matches_ordered_mass_and_pigment_for_every_direction(void)
         vkDestroyPipeline(f->p.device,f->p.pipeline,NULL);f->p.pipeline=scan_pipeline(f,mode,true);ASSERT_TRUE(f->p.pipeline);
         ASSERT_TRUE(scan_submit(f,mode));
         bool exact_mass=memcmp(reference_mass,f->words[0],mass_bytes)==0,exact_color=memcmp(reference_color,f->words[7],color_bytes)==0;
-        bool parallel=variant!=6||counts[2]*4u<reference_work;
+        bool parallel=(variant!=6&&variant!=7&&variant!=8)||counts[2]*4u<reference_work;
         printf("mode%u variant%u: exact mass%d pigment%d, ordered sources%u -> %u\n",
             mode,variant,exact_mass,exact_color,reference_work,counts[2]);
         if(!exact_mass) {

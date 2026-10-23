@@ -1358,3 +1358,5 @@ build/diagnostics/fluid_transport_profile_16.comp.spv: shaders/sim/fluid_transpo
 	@mkdir -p build/diagnostics
 	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TRANSPORT_PROFILE=1 -DDC_TRANSPORT_GROUP_SIZE=16 $< -o $@
 build/fluid_one_cell_scan_tests: build/diagnostics/fluid_transport_profile.comp.spv build/diagnostics/fluid_transport_profile_16.comp.spv
+
+build/shaders/fluid_transport.comp.spv build/shaders/fluid_transport_16.comp.spv build/diagnostics/fluid_transport_profile.comp.spv build/diagnostics/fluid_transport_profile_16.comp.spv build/diagnostics/fluid_transport_color_reference.comp.spv: shaders/sim/fluid_short_run.glsl

@@ -4,6 +4,7 @@
 #extension GL_KHR_shader_subgroup_arithmetic : require
 #extension GL_KHR_shader_subgroup_ballot : require
 #extension GL_KHR_shader_subgroup_shuffle_relative : require
+#extension GL_KHR_shader_subgroup_shuffle : require
 #ifndef DC_TRANSPORT_GROUP_SIZE
 #define DC_TRANSPORT_GROUP_SIZE 32
 #endif
@@ -11,6 +12,8 @@ layout(local_size_x=DC_TRANSPORT_GROUP_SIZE) in;
 layout(constant_id=0) const uint TRANSPORT_MODE=0u;
 layout(constant_id=1) const uint CACHE_CELLS=1024u;
 layout(constant_id=5) const bool ONE_CELL_SCAN_ENABLED=true;
+/* Enable only in explicit experiments until full-frame scheduling benefits. */
+layout(constant_id=6) const bool LONG_RUN_SCAN_ENABLED=false;
 layout(set=0,binding=1,std430) coherent buffer Cells {uvec2 chunk_cells[];};
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
@@ -295,6 +298,7 @@ bool move_source(ivec2 source,ivec2 direction) {
     return sent!=0u;
 }
 #include "fluid_one_cell.glsl"
+#include "fluid_short_run.glsl"
 void main() {
     /* One participating subgroup owns each ordered line. Other subgroups never enter
        its collectives; there are no workgroup barriers behind their return. */
@@ -362,7 +366,9 @@ void main() {
         position=next_source(position,positive);
         if(position<0||position>=int(length)) break;
         if(ONE_CELL_SCAN_ENABLED&&length<=CACHE_CELLS) {
-            uint covered=one_cell_block(position,positive);
+            uint covered=0u;
+            if(LONG_RUN_SCAN_ENABLED) covered=short_run_block(position,positive);
+            if(covered==0u) covered=one_cell_block(position,positive);
             if(covered!=0u) {
                 position+=positive?-int(covered-1u):int(covered-1u);
                 continue;
