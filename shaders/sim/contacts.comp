@@ -382,7 +382,7 @@ void main() {
             uvec4 scan;bool rectangle,single_tile;
             uint work_count=body_contact_scan(a,scan,rectangle,single_tile);
             if(pixel_body(a)) {
-                if(lane==0u&&(!CONTACT_PIXEL_ONLY||pair_group==0u)) atomicAdd(DC_DATA(base+9u),work_count);
+                if((params.mode&256u)!=0u&&lane==0u&&(!CONTACT_PIXEL_ONLY||pair_group==0u)) atomicAdd(DC_DATA(base+9u),work_count);
             }
             if(CONTACT_PIXEL_ONLY&&pair_group*CONTACT_GROUP_SIZE>=work_count) return;
             for(uint ordinal=cooperative&&!distribute_b?work_lane:0u;ordinal<work_count;ordinal+=cooperative&&!distribute_b?work_stride:1u) {
@@ -394,7 +394,7 @@ void main() {
                 Polygon pa=body_polygon(a,ap,vec2(0));vec2 lo=vec2(1e20),hi=vec2(-1e20);
                 for(uint vertex=0u;vertex<pa.count;vertex++) {lo=min(lo,pa.vertices[vertex]-delta);hi=max(hi,pa.vertices[vertex]-delta);}
                 uvec4 query=body_piece_query(b,lo-vec2(contact_skin),hi+vec2(contact_skin));
-                if(pixel_body(b)&&(!distribute_b||lane==0u)) atomicAdd(DC_DATA(base+9u),query.z*query.w);
+                if((params.mode&256u)!=0u&&pixel_body(b)&&(!distribute_b||lane==0u)) atomicAdd(DC_DATA(base+9u),query.z*query.w);
                 for(uint ordinal=distribute_b?lane:0u;ordinal<query.z*query.w;ordinal+=distribute_b?CONTACT_GROUP_SIZE:1u) {
                     uint bp=query_piece(b,query,ordinal);if(!pixel_boundary(b,bp)) continue;
                     if((params.mode&256u)!=0u) atomicAdd(DC_DATA(base+11u),1u);
@@ -407,7 +407,7 @@ void main() {
     } else {
         uvec4 query=terrain_contact_scan(a,offset);
         if(pixel_body(a)) {
-            if (lane == 0u&&(!CONTACT_PIXEL_ONLY||pair_group==0u)) atomicAdd(DC_DATA(base+9u),query.z*query.w);
+            if ((params.mode&256u)!=0u&&lane==0u&&(!CONTACT_PIXEL_ONLY||pair_group==0u)) atomicAdd(DC_DATA(base+9u),query.z*query.w);
         }
         if(CONTACT_PIXEL_ONLY&&pair_group*CONTACT_GROUP_SIZE>=query.z*query.w) return;
         for(uint ordinal=cooperative?work_lane:0u;ordinal<query.z*query.w;ordinal+=cooperative?work_stride:1u) {
