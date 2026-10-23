@@ -9,7 +9,7 @@ static uint32_t dispatches,executed,allocated;
 static uint64_t program_hashes[32],last_executed_hash;
 static dc_gpu_t *expected_mpm;
 static VkPipeline bound;
-static uint32_t pushed_mode,mpm_modes,bad_mpm_bindings;
+static uint32_t pushed_mode,mpm_modes,bad_mpm_bindings,generic_mpm_binds;
 static const uint64_t HASH_SEED=1469598103934665603ull;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
@@ -20,7 +20,9 @@ static void hash_word(uint64_t value) {command_hash=(command_hash^value)*1099511
 VKAPI_ATTR void VKAPI_CALL vkCmdBindDescriptorSets(VkCommandBuffer c,VkPipelineBindPoint p,VkPipelineLayout l,uint32_t first,uint32_t count,const VkDescriptorSet *s,uint32_t dynamic_count,const uint32_t *offsets) {
     (void)c;(void)p;(void)l;(void)first;(void)count;(void)s;(void)dynamic_count;(void)offsets;
 }
-VKAPI_ATTR void VKAPI_CALL vkCmdBindPipeline(VkCommandBuffer c,VkPipelineBindPoint p,VkPipeline pipeline) {(void)c;(void)p;bound=pipeline;hash_word(1);hash_word((uintptr_t)pipeline);}
+VKAPI_ATTR void VKAPI_CALL vkCmdBindPipeline(VkCommandBuffer c,VkPipelineBindPoint p,VkPipeline pipeline) {(void)c;(void)p;bound=pipeline;
+    if(expected_mpm&&pipeline==expected_mpm->mpm_pipeline) generic_mpm_binds++;
+    hash_word(1);hash_word((uintptr_t)pipeline);}
 VKAPI_ATTR void VKAPI_CALL vkCmdPushConstants(VkCommandBuffer c,VkPipelineLayout l,VkShaderStageFlags f,uint32_t o,uint32_t n,const void *v) {
     (void)c;(void)l;(void)f;hash_word(2);hash_word(o);hash_word(n);
     if(o==0u&&n>=12u) memcpy(&pushed_mode,(const uint8_t *)v+8u,4u);
@@ -109,10 +111,18 @@ static void test_mpm_uses_a_separate_pipeline_for_each_unchanged_phase(void) {
     printf("MPM phase mask0x%x incorrect pipeline bindings%u\n",mpm_modes,bad_mpm_bindings);
     ASSERT_EQ(mpm_modes,255u);ASSERT_EQ(bad_mpm_bindings,0u);PASS();
 }
+static void test_generic_mpm_binds_once_while_executing_all_eight_phases(void) {
+    dc_gpu_t g=fake_gpu();ASSERT_TRUE(dc_gpu_mpm_scan_layout(g.width,g.height,&g.mpm_scan_layout));
+    g.mpm_pipeline=(VkPipeline)(uintptr_t)1000u;
+    expected_mpm=&g;mpm_modes=generic_mpm_binds=0u;dc_gpu_record_mpm(&g);expected_mpm=NULL;
+    printf("generic MPM phase mask0x%x pipeline binds%u\n",mpm_modes,generic_mpm_binds);
+    ASSERT_EQ(mpm_modes,255u);ASSERT_EQ(generic_mpm_binds,1u);PASS();
+}
 int main(void) {
     RUN(test_reuses_the_exact_solver_program_without_recording_again);
     RUN(test_rebuilds_for_origin_growth_descriptor_and_structural_changes);
     RUN(test_reuses_exact_mpm_commands_without_repeating_cpu_recording);
     RUN(test_mpm_uses_a_separate_pipeline_for_each_unchanged_phase);
+    RUN(test_generic_mpm_binds_once_while_executing_all_eight_phases);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
