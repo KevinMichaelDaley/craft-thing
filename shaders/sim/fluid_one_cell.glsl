@@ -1,76 +1,54 @@
-/* Ordered one-cell flux satisfies f[i]=min(a[i],b[i]+f[i+1]), where a is
- * the source allowance and b is the recipient's initial free capacity.
- * Composition of (a,b) is associative: (min(a,b+c),b+d). A suffix scan
- * therefore preserves the serial integer recurrence without serial sources.
- * Nonnegative b and travel <=1 are checked before entering this path. */
-uvec2 one_cell_state(uint i,bool alternate) {
-    return alternate?cached[i].wy:uvec2(cached_requests[i],cached[i].z);
-}
-void one_cell_scan(bool positive) {
-    uint lane=gl_SubgroupInvocationID,team=transport_team_size(),any_request=0u;
-    for(uint oriented=lane;oriented<length;oriented+=team) {
-        uint position=positive?oriented:length-1u-oriented,request=0u;
-        if(oriented+1u<length) {
-            uint target=positive?position+1u:position-1u,face=positive?position:target;
-            uint source_meta=cached[position].y,target_meta=cached[target].y;
-            if((source_meta&(KNOWN|PERMEABLE))==(KNOWN|PERMEABLE)&&
-               (target_meta&(KNOWN|PERMEABLE))==(KNOWN|PERMEABLE)&&
-               (source_meta&131071u)!=0u&&(target_meta&131071u)!=0u) {
-                float travel=uintBitsToFloat(cached[face].w);
-                float aperture=line_open_aperture?1.:float(cached[face].z)/float(FULL);
-                uint allowance=uint(floor(clamp(travel,0.,1.)*float(FULL)*aperture));
-                request=min(allowance,cached[position].x);
-            }
+/* A maximal simple prefix of the ordered source stream is evaluated by a
+ * subgroup min-plus scan. Complex sources retain the general transport path.
+ * For outgoing flux f[i], f[i]=min(allowance[i], free[i]+f[i-1]). */
+uint one_cell_block(int first,bool positive) {
+    uint lane=gl_SubgroupInvocationID,team=transport_team_size();
+    int coordinate=first+(positive?-int(lane):int(lane));
+    bool valid=coordinate>=0&&coordinate<int(length);
+    uint position=valid?uint(coordinate):0u,target=positive?position+1u:position-1u;
+    bool target_valid=valid&&(positive?position+1u<length:position>0u);
+    uint mass=valid?cached[position].x:0u;
+    uint meta=valid?cached[position].y:0u,next_meta=target_valid?cached[target].y:0u;
+    uint next_mass=target_valid?cached[target].x:0u,allowance=0u;
+    bool source=valid&&(source_bits[position/32u]&(1u<<(position%32u)))!=0u;
+    bool simple=target_valid;
+    if(source) {
+        uint face=positive?position:target;
+        float travel=uintBitsToFloat(cached[face].w);
+        simple=simple&&mass<=(meta&131071u)&&next_mass<=(next_meta&131071u)&&travel<=1.;
+        if((next_meta&(KNOWN|PERMEABLE))==(KNOWN|PERMEABLE)&&(next_meta&131071u)!=0u) {
+            float aperture=line_open_aperture?1.:float(cached[face].z)/float(FULL);
+            allowance=uint(floor(clamp(travel,0.,1.)*float(FULL)*aperture));
         }
-        cached_requests[oriented]=request;any_request|=request;
     }
-    subgroupMemoryBarrierShared();subgroupBarrier();
-    if(subgroupOr(any_request)==0u) return;
-    for(uint oriented=lane;oriented<length;oriented+=team) {
-        uint free_capacity=0u;
-        if(oriented+1u<length) {
-            uint target=positive?oriented+1u:length-2u-oriented;
-            free_capacity=(cached[target].y&131071u)-cached[target].x;
-        }
-        cached[oriented].z=free_capacity;
+    uint count=subgroupMin(simple?team:lane);
+    if(count==0u) return 0u;
+    uvec2 value=uvec2(min(allowance,mass),next_mass<=(next_meta&131071u)?(next_meta&131071u)-next_mass:0u);
+    for(uint span=1u;span<team;span*=2u) {
+        uvec2 prior=subgroupShuffleUp(value,span);
+        if(lane>=span) value=uvec2(min(value.x,value.y+prior.x),value.y+prior.y);
     }
-    subgroupMemoryBarrierShared();subgroupBarrier();
-    bool alternate=false;
-    for(uint span=1u;span<length;span*=2u) {
-        for(uint i=lane;i<length;i+=team) {
-            uvec2 value=one_cell_state(i,alternate);
-            if(i+span<length) {
-                uvec2 next=one_cell_state(i+span,alternate);
-                value=uvec2(min(value.x,value.y+next.x),value.y+next.y);
-            }
-            if(alternate) {cached_requests[i]=value.x;cached[i].z=value.y;}
-            else {cached[i].w=value.x;cached[i].y=value.y;}
-        }
-        subgroupMemoryBarrierShared();subgroupBarrier();alternate=!alternate;
-    }
-    for(uint i=lane;i<length;i+=team) cached_requests[i]=one_cell_state(i,alternate).x;
-    subgroupMemoryBarrierShared();subgroupBarrier();
+    uint outgoing=lane<count?min(value.x,value.y):0u;
+    uint incoming=subgroupShuffleDown(outgoing,1u);
+    if(lane+1u>=count) incoming=0u;
+    vec3 color=DEFAULT_WATER_COLOR,lower_color=DEFAULT_WATER_COLOR,terminal_color=DEFAULT_WATER_COLOR;
     if(WATER_COLOR_ENABLED) {
-        for(uint position=lane;position<length;position+=team) {
-            ivec2 p=point_at(position);uint page=page_at(p);
-            vec3 color=page==0u?DEFAULT_WATER_COLOR:water_color_at(atlas_index(p,page));
-            cached[position].yzw=floatBitsToUint(color);
-        }
-        subgroupMemoryBarrierShared();subgroupBarrier();
+        if(valid&&page_at(point_at(position))!=0u) color=water_color_at(atlas_index(point_at(position),page_at(point_at(position))));
+        lower_color=subgroupShuffleDown(color,1u);
+        if(lane==0u&&page_at(point_at(target))!=0u) terminal_color=water_color_at(atlas_index(point_at(target),page_at(point_at(target))));
+        transport_color_publish();
     }
-    for(uint oriented=lane;oriented<length;oriented+=team) {
-        uint position=positive?oriented:length-1u-oriented;
-        ivec2 p=point_at(position);uint page=page_at(p);if(page==0u) continue;
-        uint outgoing=cached_requests[oriented],incoming=oriented==0u?0u:cached_requests[oriented-1u];
-        uint receiving=cached[position].x-outgoing,a=atlas_index(p,page);
-        chunk_cells[a].y=receiving+incoming;
-        if(WATER_COLOR_ENABLED) {
-            if(incoming!=0u) {
-                uint source=positive?position-1u:position+1u;
-                vec3 color=(uintBitsToFloat(cached[position].yzw)*float(receiving)+
-                    uintBitsToFloat(cached[source].yzw)*float(incoming))/(float(receiving)+float(incoming));
-                water_colors[a]=vec4(color,1.);
-            } else if(outgoing!=0u&&receiving==0u) water_colors[a]=vec4(0);
-        }
+    if(lane<count&&(outgoing!=0u||incoming!=0u)) {
+        uint remaining=mass-outgoing;
+        put_water(point_at(position),remaining+incoming);
+        if(WATER_COLOR_ENABLED&&incoming!=0u) water_colors[atlas_index(point_at(position),page_at(point_at(position)))]=
+            vec4((color*float(remaining)+lower_color*float(incoming))/(float(remaining)+float(incoming)),1.);
     }
+    if(lane==0u&&outgoing!=0u) {
+        put_water(point_at(target),next_mass+outgoing);
+        if(WATER_COLOR_ENABLED) water_colors[atlas_index(point_at(target),page_at(point_at(target)))]=
+            vec4((terminal_color*float(next_mass)+color*float(outgoing))/(float(next_mass)+float(outgoing)),1.);
+    }
+    subgroupMemoryBarrierShared();transport_color_publish();subgroupBarrier();
+    return count;
 }

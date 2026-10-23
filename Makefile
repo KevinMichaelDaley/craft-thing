@@ -174,7 +174,7 @@ BROADPHASE_SHADER = build/shaders/broadphase.comp.spv
 CONTACT_SHADER = build/shaders/contacts.comp.spv
 PROBE_SHADER = build/shaders/tick_probe.comp.spv
 HALO_SHADER = build/shaders/halo.comp.spv
-FLUID_SHADER = build/shaders/fluid.comp.spv build/shaders/fluid_aperture.comp.spv build/shaders/fluid_transport.comp.spv build/shaders/fluid_displacement.comp.spv
+FLUID_SHADER = build/shaders/fluid_transport_16.comp.spv build/shaders/fluid.comp.spv build/shaders/fluid_aperture.comp.spv build/shaders/fluid_transport.comp.spv build/shaders/fluid_displacement.comp.spv
 PROJECTION_SHADER = build/shaders/projection.comp.spv build/shaders/hydro_head.comp.spv build/shaders/pressure_work.comp.spv
 MARKER_SHADER = build/shaders/marker.comp.spv
 SHIFT_SHADER = build/shaders/shift_velocity.comp.spv
@@ -944,7 +944,7 @@ build/shaders/fluid_aperture_query.comp.spv: tests/vulkan/fluid_aperture_query.c
 build/fluid_aperture_tests: tests/vulkan/fluid_aperture_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_aperture.comp.spv build/shaders/fluid_aperture_query.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/shaders/fluid_transport.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl
+build/shaders/fluid_transport.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl Makefile
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 
@@ -1322,4 +1322,10 @@ test: build/albedo_work_tests
 build/fluid_one_cell_scan_tests: tests/vulkan/fluid_one_cell_scan_tests.c tests/vulkan/fluid_transport_tests.c tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/fluid_one_cell_scan_tests
-build/shaders/fluid_transport.comp.spv build/diagnostics/fluid_transport_profile.comp.spv build/diagnostics/fluid_transport_color_reference.comp.spv: shaders/sim/fluid_one_cell.glsl
+build/shaders/fluid_transport.comp.spv build/diagnostics/fluid_transport_profile.comp.spv build/diagnostics/fluid_transport_color_reference.comp.spv: shaders/sim/fluid_one_cell.glsl Makefile
+
+# A literal group size keeps older Vulkan feature configurations supported.
+build/shaders/fluid_transport_16.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl shaders/sim/fluid_one_cell.glsl shaders/sim/hydraulic_face.glsl shaders/sim/water_color.glsl Makefile
+	@mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TRANSPORT_GROUP_SIZE=16 $< -o $@
+$(GPU_OBJ) build/diagnostics/quarter_app_frame_trace build/fluid_one_cell_scan_tests: build/shaders/fluid_transport_16.comp.spv

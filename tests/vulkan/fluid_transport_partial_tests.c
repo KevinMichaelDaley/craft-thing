@@ -116,7 +116,10 @@ static void partial_case(unsigned mode) {
     ASSERT_TRUE((!cooperative||counts[2]>0u)&&counts[3]>0u&&counts[3]<=32u);
     ASSERT_TRUE(counts[0]<=counts[2]*MAX_REQUESTS_PER_SOURCE&&counts[1]<=2u*CELLS);
 #ifdef DC_COLOR_SYNC_PROFILE
-    if(!g_mixed_reach&&strstr(g_profile_shader,"reference")==NULL) ASSERT_EQ(counts[4],0u);
+    /* Parallel batches publish pigment at subgroup handoffs rather than
+       once for each source. Bound synchronization by batches, not pixels. */
+    if(!g_mixed_reach&&strstr(g_profile_shader,"reference")==NULL)
+        ASSERT_TRUE(counts[4]<=4u*((CELLS+counts[3]-1u)/counts[3]));
 #endif
     PASS();
 }

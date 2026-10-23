@@ -174,3 +174,11 @@ Observed cold startup while validating ctr-9e4n: after shader changes, dc_gpu_cr
 **2026-10-23T17:27:32Z**
 
 Dynamic-body integration saved-world replay (lighting branch3ff98eb) preserves original snapshot and now grows64->128 slots, reaching71 active bodies. Actual Wayland quarter display480x270/simulation640x448, lighting disabled, on copied saved level03: without Vulkan validation mean61.523ms worst66.540ms over10 frames; with core+sync validation mean148.744ms worst153.914ms over30 frames. Strict30ms benchmark gate correctly fails and has not been relaxed. Logs build/runtime_saved_scene_without_validation.log and build/runtime_final_saved_scene.log; native360 target remains unfinished in its separate optimization scope.
+
+**2026-10-23T18:23:25Z**
+
+Inline continuation: pushed dynamic-body foundation and verified optimization commits through 96e1ab3. Real Wayland saved-scene copies measure 67.621ms before optimization, 57.983ms with visible-only unlit rendering, 50.063ms after exact subgroup component statistics. Whole-line water scan regressed to55.286ms; replaced locally with adaptive register/subgroup batches: exact mass and RGBA in all16 direction/fallback comparisons under core+sync validation, real displayed mean46.991ms worst50.667ms. Target<30ms remains unmet and ticket stays in progress. Original world checksum unchanged. Profiling shows contacts~7ms, fluid~12-17ms, MPM~5.3ms; now evaluating immutable addressed root access and non-atomic post-union root traversal.
+
+**2026-10-23T18:43:20Z**
+
+Follow-up measurements: non-atomic post-union root traversal reduces roots~1.05ms to~0.08ms (validated cache/detach3/3). Read-only root annotation and stationary-water prefix experiments showed no improvement and were removed. Adaptive one-cell register batches preserve exact mass/pigment across24 cases, including packed long-reach water, with core+sync validation. A specialized local-size experiment disagreed even on the ordered path; replaced with literal16/32 compiled variants, exact24/24 under validation. Real displayed saved-scene mean47.285ms worst51.098ms (target remains RED). Contact bounds rejection10/10 validated; contact stage~6.7ms. Full make -i test running serially under core+sync to collect all failures, including known ctr-ojvy authored staging REDs.

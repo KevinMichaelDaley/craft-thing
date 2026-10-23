@@ -172,6 +172,10 @@ bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygo
                     Particle grain=particles[pi+layer*4096u];if(grain.mass_fp==0u) continue;
                     float radius=float(grain.grain_fp)/65536.;
                     vec2 center=vec2(tile_low)+vec2(grain.x_fp,grain.y_fp)/65536.-vec2(current)/65536.;
+                    /* Grain axes include world X/Y, so this rejects only
+                       candidates that the exact SAT would also reject. */
+                    if(any(lessThan(center+vec2(radius),shape_low-vec2(contact_skin)))||
+                       any(greaterThan(center-vec2(radius),shape_high+vec2(contact_skin)))) continue;
                     Polygon grain_shape=cell_polygon(center-vec2(radius));
                     for(uint vertex=0u;vertex<4u;vertex++)
                         grain_shape.vertices[vertex]=center-vec2(radius)+
@@ -184,6 +188,8 @@ bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygo
             }
         } else contact_kind = BOUNDARY_CONTACT;
         vec2 offset = vec2((ivec2(x, y) << 16) - current) / 65536.0;
+        if(any(lessThan(offset+vec2(1),shape_low-vec2(contact_skin)))||
+           any(greaterThan(offset,shape_high+vec2(contact_skin)))) continue;
         bool emitted = emit_contact(body, 0u, contact_kind, material, cell_feature,
             chunk_x, chunk_y, polygon, cell_polygon(offset),piece,0u);
         found = found || emitted;
@@ -319,7 +325,7 @@ void main() {
                     uint bp=query_piece(b,query,ordinal);if(!pixel_boundary(b,bp)) continue;
                     if((params.mode&256u)!=0u) atomicAdd(DC_DATA(base+11u),1u);
                 bool emitted=emit_contact(a, b.id, BODY_CONTACT, piece_material(b,bp),
-                    0u, uvec2(0), uvec2(0), body_polygon(a,ap,vec2(0)), body_polygon(b,bp,delta),ap,bp);
+                    0u, uvec2(0), uvec2(0), pa, body_polygon(b,bp,delta),ap,bp);
                 found=found || emitted;
                 }
             }
