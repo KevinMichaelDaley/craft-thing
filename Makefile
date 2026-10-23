@@ -602,6 +602,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/loose_particle_role_tests
 	./build/mpm_support_dirty_tests
 	./build/mpm_gather_tests
+	./build/mpm_copy_tests
 	./build/body_address_gpu_tests
 	./build/body_storage_gpu_tests
 	./build/body_scan_gpu_tests
@@ -1360,3 +1361,10 @@ build/diagnostics/fluid_transport_profile_16.comp.spv: shaders/sim/fluid_transpo
 build/fluid_one_cell_scan_tests: build/diagnostics/fluid_transport_profile.comp.spv build/diagnostics/fluid_transport_profile_16.comp.spv
 
 build/shaders/fluid_transport.comp.spv build/shaders/fluid_transport_16.comp.spv build/diagnostics/fluid_transport_profile.comp.spv build/diagnostics/fluid_transport_profile_16.comp.spv build/diagnostics/fluid_transport_color_reference.comp.spv: shaders/sim/fluid_short_run.glsl
+
+build/shaders/mpm_copy.comp.spv: shaders/sim/mpm_copy.comp
+	@mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
+build/mpm_copy_tests: tests/vulkan/mpm_copy_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/mpm_copy.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/mpm_copy_tests
