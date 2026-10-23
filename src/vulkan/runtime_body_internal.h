@@ -5,6 +5,7 @@
 #include "runtime_body_gpu.h"
 struct dc_runtime_bodies {
     dc_gpu_address_buffer_t metadata,root,initial_auxiliary,work,mailbox;
+    dc_gpu_address_buffer_t component_cache;
     dc_gpu_body_store_t store;
     fr_renderer_compute_t initialize,index,scan;
     uint64_t submission;

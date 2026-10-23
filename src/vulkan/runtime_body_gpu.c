@@ -50,6 +50,8 @@ static bool work_create(dc_gpu_t *g,uint32_t slots,uint32_t force_groups,uint32_
     h[32]=a.low;h[33]=a.high;h[34]=b.low;h[35]=b.high;
     h[36]=g->runtime_pair_capacity?g->runtime_pair_capacity:DC_GPU_BROADPHASE_PAIR_CAPACITY;
     h[37]=g->runtime_contact_capacity?g->runtime_contact_capacity:DC_GPU_CONTACT_CAPACITY;
+    dc_body_address_t cache=address(g->runtime_bodies->component_cache.address);
+    h[42]=cache.low;h[43]=cache.high;
     return true;
 }
 bool dc_gpu_runtime_bodies_init(dc_gpu_t *g,char *err,uint32_t cap) {
@@ -68,6 +70,7 @@ bool dc_gpu_runtime_bodies_init(dc_gpu_t *g,char *err,uint32_t cap) {
        !dc_gpu_address_buffer_create(g,sizeof(dc_body_storage_page_t),true,&r->store.directory,err,cap)||
        !dc_gpu_address_buffer_create(g,DC_BODY_SLAB_RECORDS*(256u+32u+512u),true,&r->initial_auxiliary,err,cap)||
        !dc_gpu_address_buffer_create(g,64u,true,&r->mailbox,err,cap)||
+       !dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS*4u,true,&r->component_cache,err,cap)||
        !work_create(g,DC_BODY_SLAB_RECORDS,r->force_groups,r->fragment_cells,&r->work,err,cap)) return false;
     VkDeviceAddress data=r->metadata.address+DC_BODY_SLAB_RECORDS*sizeof(dc_gpu_body_record_t);
     dc_body_storage_page_t page={.records=address(r->metadata.address),
@@ -102,6 +105,7 @@ void dc_gpu_runtime_bodies_destroy(dc_gpu_t *g) {
     dc_gpu_body_store_destroy(g,&r->store);
     dc_gpu_address_buffer_destroy(g,&r->initial_auxiliary);
     dc_gpu_address_buffer_destroy(g,&r->work);
+    dc_gpu_address_buffer_destroy(g,&r->component_cache);
     dc_gpu_address_buffer_destroy(g,&r->mailbox);
     dc_gpu_address_buffer_destroy(g,&r->root);
     /* The existing body-buffer owner releases this aliased metadata allocation. */

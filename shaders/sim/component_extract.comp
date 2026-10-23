@@ -134,6 +134,9 @@ void initialize_body(uint r) {
 void main() {
     if(EXTRACTION_PHASE==26u) {
         uint lane=gl_LocalInvocationID.x,enabled=uint(DC_DATA(base()+STRUCTURAL_COMPONENT_DIRTY_WORD)!=0u);
+#ifdef DC_RUNTIME_BODY_STORAGE
+        if(lane==0u) DC_RUNTIME_WORK(44u)=0u;
+#endif
         if(lane<27u) activity[lane]=lane%3u==0u?enabled*(lane==0u||lane==12u?(total()+127u)/128u:lane==6u?64u:lane==9u?0u:lane==15u?DC_DATA(base()+1u)*4u:lane==18u?(total()+16383u)/16384u:lane==21u||lane==24u?DC_DATA(base()+1u):1u):1u;
         if(lane>=27u&&lane<33u) activity[lane]=lane%3u==0u?0u:1u;
         if(lane==0u) {activity[36]=enabled*((DC_DATA(base()+1u)+127u)/128u);activity[37]=1u;activity[38]=1u;}
