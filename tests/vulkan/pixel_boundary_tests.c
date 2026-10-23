@@ -35,8 +35,10 @@ static void test_packed_boundary_matches_sparse_concave_reference_with_bounded_r
             pattern,errors,interior,f.probe.mapped[3],tested);
         uint32_t polygon_reads=f.probe.mapped[4],polygon_errors=f.probe.mapped[5];
         printf("polygon reads%u exact vertex mismatches%u\n",polygon_reads,polygon_errors);
+        uint32_t axes=f.probe.mapped[6],sat_errors=f.probe.mapped[7];
+        printf("quad axes%u exact SAT mismatches%u\n",axes,sat_errors);
         fixture_stop(&f);
-        ASSERT_EQ(errors,0u);ASSERT_EQ(tested,1024u);ASSERT_TRUE(interior<=10u);ASSERT_EQ(polygon_errors,0u);ASSERT_TRUE(polygon_reads<=3u);
+        ASSERT_EQ(errors,0u);ASSERT_EQ(tested,1024u);ASSERT_TRUE(interior<=10u);ASSERT_EQ(polygon_errors,0u);ASSERT_TRUE(polygon_reads<=3u);ASSERT_EQ(sat_errors,0u);ASSERT_TRUE(axes<=4u);
     }
     PASS();
 }
