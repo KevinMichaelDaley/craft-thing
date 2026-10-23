@@ -20,7 +20,7 @@ enum { SOURCE_X=80,SOURCE_Y=60,SOURCE_WIDTH=80,SOURCE_HEIGHT=40,SOURCE_PIXELS=32
 
 /* Disk initialization makes the environment reproducible without introducing
    bodies or bypassing the streamed level's ownership/paint/extraction path. */
-static bool seed_mainland_pond(const char *directory,uint16_t material) {
+static bool seed_mainland_pond_layout(const char *directory,uint16_t material,bool ledge) {
     dc_streamer_t *stream=dc_stream_create(directory,314,2);
     dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     bool okay=stream&&chunk;
@@ -32,7 +32,7 @@ static bool seed_mainland_pond(const char *directory,uint16_t material) {
                 dc_cell_t *cell=&chunk->cells[y*64+x];
                 bool source=wx>=SOURCE_X&&wx<SOURCE_X+SOURCE_WIDTH&&
                     wy>=INITIAL_CHUNK_Y*64+SOURCE_Y&&wy<INITIAL_CHUNK_Y*64+SOURCE_Y+SOURCE_HEIGHT;
-                bool mainland=wy>=20||wx==-64||(wy==INITIAL_CHUNK_Y*64+80&&wx<SOURCE_X);
+                bool mainland=wy>=20||(ledge&&(wx==-64||(wy==INITIAL_CHUNK_Y*64+80&&wx<SOURCE_X)));
                 if(source) cell->material=material;
                 else if(mainland) cell->material=DC_MATERIAL_STONE;
                 else if(wy>=-80&&wy<20) cell->fluid_mass=DC_FLUID_FULL;
@@ -49,6 +49,9 @@ static bool seed_mainland_pond(const char *directory,uint16_t material) {
             okay=okay&&completed;
         }
     free(chunk);dc_stream_destroy(stream);return okay;
+}
+static bool seed_mainland_pond(const char *directory,uint16_t material) {
+    return seed_mainland_pond_layout(directory,material,true);
 }
 static void cut_material(uint16_t material) {
     char directory[]="build/ui_material_cut_XXXXXX",err[256]={0};

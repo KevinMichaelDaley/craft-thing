@@ -6,12 +6,15 @@ static void test_material_painting_grows_beyond_sixty_four_live_bodies(void) {
     enum { REQUESTED_BODIES=320 };
     char directory[]="build/ui_dynamic_bodies_XXXXXX",err[256]={0};
     ASSERT_TRUE(mkdtemp(directory));
-    ASSERT_TRUE(seed_mainland_pond(directory,DC_MATERIAL_AIR));
+    printf("Actual sandbox world: %s\n",directory);
+    ASSERT_TRUE(seed_mainland_pond_layout(directory,DC_MATERIAL_AIR,false));
     dc_level_view_t *view=dc_level_view_create(directory,314,err,sizeof(err));
     ASSERT_TRUE(view);ASSERT_TRUE(dc_level_view_set_spring_enabled(view,false));
     ASSERT_TRUE(dc_level_view_wait_visible(view,120000,err,sizeof(err)));
     for(unsigned stamp=0;stamp<REQUESTED_BODIES;stamp++) {
-        unsigned x=20u+(stamp%30u)*14u,y=10u+(stamp/30u)*12u;
+        /* Paint upward: earlier falling bodies stay below the next row.
+         * The gameplay brush intentionally ignores already occupied pixels. */
+        unsigned x=20u+(stamp%30u)*14u,y=130u-(stamp/30u)*12u;
         ASSERT_TRUE(dc_level_view_paint(view,x,y,1,DC_MATERIAL_STONE,err,sizeof(err)));
         ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)));
         ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));

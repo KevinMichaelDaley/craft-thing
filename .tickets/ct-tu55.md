@@ -170,3 +170,7 @@ User requested the existing material-painting graphical sandbox, not a benchmark
 **2026-10-18T02:12:13Z**
 
 Observed cold startup while validating ctr-9e4n: after shader changes, dc_gpu_create before the first dense_support test spent about four minutes at one CPU core and ~1.9 GB RSS compiling pipelines; warm runs proceed normally. Consider lazy/batched pipeline creation and persisted pipeline caching separately from per-frame optimization. Logs build/terrain_component_final_green.log and build/terrain_component_integrated_full_suite.log in renderer worktree.
+
+**2026-10-23T17:27:32Z**
+
+Dynamic-body integration saved-world replay (lighting branch3ff98eb) preserves original snapshot and now grows64->128 slots, reaching71 active bodies. Actual Wayland quarter display480x270/simulation640x448, lighting disabled, on copied saved level03: without Vulkan validation mean61.523ms worst66.540ms over10 frames; with core+sync validation mean148.744ms worst153.914ms over30 frames. Strict30ms benchmark gate correctly fails and has not been relaxed. Logs build/runtime_saved_scene_without_validation.log and build/runtime_final_saved_scene.log; native360 target remains unfinished in its separate optimization scope.
