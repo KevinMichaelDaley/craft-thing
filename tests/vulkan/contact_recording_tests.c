@@ -32,12 +32,16 @@ static void recording_case(bool typed) {
     if(typed) gpu.contact_pixel_pipeline=(VkPipeline)(uintptr_t)4;
     dc_gpu_record_contacts(&gpu);
     printf("typed%d dispatches%u barriers%u\n",typed,dispatches,barriers);
-    ASSERT_EQ(dispatches,typed?6u:3u);
-    ASSERT_EQ(barriers,typed?4u:2u);
+    ASSERT_EQ(dispatches,typed?7u:3u);
+    ASSERT_EQ(barriers,typed?5u:2u);
     ASSERT_EQ(points[0],1u);
     unsigned final=barriers-1;
     ASSERT_EQ(points[final],dispatches);
-    if(typed) {ASSERT_EQ(points[1],4u);ASSERT_EQ(points[2],5u);}
+    if(typed) {
+        ASSERT_EQ(points[1],4u);ASSERT_EQ(points[2],5u);ASSERT_EQ(points[3],6u);
+        ASSERT_TRUE((memory[2].dstStageMask&VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT)!=0);
+        ASSERT_TRUE((memory[2].dstAccessMask&VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)!=0);
+    }
     ASSERT_TRUE((memory[0].srcAccessMask&VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)!=0);
     ASSERT_TRUE((memory[0].dstStageMask&VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT)!=0);
     ASSERT_TRUE((memory[0].dstAccessMask&VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)!=0);

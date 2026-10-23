@@ -6,6 +6,7 @@
 static double last_contact_ms;
 static uint32_t last_emitted;
 static uint32_t last_visited;
+static uint32_t last_workgroups;
 
 bool __real_dc_gpu_load_shader_module(dc_gpu_t *, const char *, VkShaderModule *, char *, uint32_t);
 bool __wrap_dc_gpu_load_shader_module(dc_gpu_t *gpu, const char *path, VkShaderModule *module,
@@ -142,6 +143,11 @@ static void measure(unsigned side, unsigned kind, unsigned pair_kind) {
     last_contact_ms = total_ms / 8;
     last_emitted = contacts[0];
     last_visited = contacts[9];
+    uint32_t work=dc_gpu_pixel_pool_word_offset(g)+DC_GPU_PIXEL_POOL_HEADER_WORDS+2u*dc_gpu_pixel_pool_capacity(g);
+    last_workgroups=DC_CONTACT_PIXEL_GROUPS;
+    if(g->runtime_body_consumers&&dc_gpu_body_storage_bytes(g)>(VkDeviceSize)work*4u)
+        last_workgroups=((const uint32_t *)g->body_mapped)[work];
+    printf("pixel contact workgroups %u\n",last_workgroups);
     dc_gpu_destroy(g);
     PASS();
 }
