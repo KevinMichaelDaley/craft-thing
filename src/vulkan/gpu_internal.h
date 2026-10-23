@@ -158,6 +158,7 @@ struct dc_gpu {
     VkPipeline probe_pipeline;
     VkQueryPool timestamp_pool;
     bool component_profile;
+    bool solver_recording;
     float timestamp_period;
     uint32_t timestamp_bits;
     VkBuffer halo_buffer;

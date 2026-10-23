@@ -269,6 +269,7 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
     vkCmdPipelineBarrier2(gpu->command, &dep);
 }
 void dc_gpu_record_solver(dc_gpu_t *gpu) {
+    gpu->solver_recording = true;
     dispatch(gpu, SOLVER_GRAIN_BED_PLAN | (DC_GPU_CHUNK_SLOTS << 8u), false);
     dispatch(gpu, SOLVER_GRAIN_BED_INIT, false);
     for (uint32_t span=1, pass=0; span<gpu->height; span*=2, pass++)
@@ -314,4 +315,5 @@ void dc_gpu_record_solver(dc_gpu_t *gpu) {
             dispatch(gpu, SOLVER_BOND_VELOCITY, false);
     }
     dispatch(gpu, SOLVER_FINISH, false);
+    gpu->solver_recording = false;
 }

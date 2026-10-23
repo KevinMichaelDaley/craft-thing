@@ -115,10 +115,10 @@ void dc_gpu_record_contacts(dc_gpu_t *gpu) {
             .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
             .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT |
                             ((initial||typed)?VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT:0) |
-                            (final?VK_PIPELINE_STAGE_2_HOST_BIT:0),
+                            (final&&!gpu->solver_recording?VK_PIPELINE_STAGE_2_HOST_BIT:0),
             .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
                              ((initial||typed)?VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT:0) |
-                             (final?VK_ACCESS_2_HOST_READ_BIT:0) };
+                             (final&&!gpu->solver_recording?VK_ACCESS_2_HOST_READ_BIT:0) };
         VkDependencyInfo dependency = { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
             .memoryBarrierCount = 1, .pMemoryBarriers = &memory };
         vkCmdPipelineBarrier2(gpu->command, &dependency);

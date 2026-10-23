@@ -190,3 +190,7 @@ Contact regression work: exact packed boundary oracle4/4 fixtures reduces source
 **2026-10-23T20:42:48Z**
 
 Resolution audit: quarter-native visible physics and renderer are both480x270 (1:1 cells/pixels).640x448 is the rounded viewport plus a one-chunk offscreen simulation halo, not visible supersampling. Normal displayed saved-scene benchmark remains above30ms (~37.6ms best repeat); target not achieved. Continuing exact GPU optimization inline. New coalesced particle-copy byte oracle passes all five sizes under synchronization validation; integrating for displayed measurement.
+
+**2026-10-23T21:08:55Z**
+
+Inline progress: visible physics/render are1:1 at480x270;640x448 includes simulation halo. Explicit supported16-lane water subgroup control passes48 exact mass/pigment cases with synchronization validation;32 lanes and packed page caching did not improve displayed frame times, remain disabled. Solver motion publication now preserves every body/metadata byte while writing3-10 words instead of136 in repeated phases, including chunk crossing. Pixel-only buoyancy geometry retains raw type guards; wet3844-cell integration and14 buoyancy tests pass. Displayed saved-scene replay improved to35.643ms mean42.681ms worst, stable paused captures;30ms target still unmet. Testing removal of274 redundant intermediate host publications plus nested collision host publications, retaining final host visibility and compute/indirect barriers.
