@@ -589,6 +589,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/lighting_gpu_tests
 	./build/shading_tests
 	./build/scene_gpu_tests
+	./build/albedo_work_tests
 	./build/dry_fluid_tests
 	./build/fluid_specialization_tests
 	./build/pressure_work_tests
@@ -1314,3 +1315,6 @@ test: build/dynamic_runtime_tests
 build/component_cache_tests: tests/vulkan/component_cache_tests.c tests/vulkan/component_extraction_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/component_cache_tests
+build/albedo_work_tests: tests/renderer/albedo_work_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=fr_renderer_record -Wl,--wrap=vkCmdDispatch
+test: build/albedo_work_tests
