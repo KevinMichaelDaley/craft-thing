@@ -111,7 +111,7 @@ Surface surface_at(uint i,out float opacity,out uint known) {
     if(known==0u) return surface;
     uint local=(cell.y%64u)*64u+cell.x%64u,atlas=(page-1u)*4096u+local;
     uvec2 physical=chunk_cells[atlas];uint material=physical.x&65535u;
-    float body_coverage=0.,body_opacity=0.;uint id=occupancy[i],slot=id==0u?64u:body_slot(id);
+    float body_coverage=0.,body_opacity=0.;uint id=occupancy[i],slot=id==0u?BODY_CAPACITY:body_slot(id);
     if(slot<BODY_CAPACITY) {
         Body body=DC_BODY(slot);
         vec2 relative=vec2(cell)-vec2(body.x_fp,body.y_fp)/65536.;
@@ -176,6 +176,12 @@ uint pack_display(vec3 linear,bool lit) {
 }
 void main() {
     uint i=gl_GlobalInvocationID.x;
+    if(SCENE_PHASE==7u) {
+        if(i!=0u||params.force_light>=params.width*params.height) return;
+        float opacity;uint known;surface_at(params.force_light,opacity,known);
+        optical[params.force_light]=uvec2(floatBitsToUint(opacity),known);
+        return;
+    }
     if(SCENE_PHASE==0u) {
         if(i<4096u) work[128u+i]=0u;
         if(i==0u) {work[0]=0u;work[1]=0u;work[2]=1u;work[3]=1u;work[4]=0u;work[5]=0u;}
@@ -235,9 +241,13 @@ void main() {
     uint view_width=configuration[0],view_height=configuration[1];
     if(i>=view_width*view_height) return;
     uvec2 cell=uvec2(i%view_width+params.view_x,i/view_width+params.view_y);
-    uint index=cell.y*params.width+cell.x;Surface surface=unpack_surface(surfaces[index]);
+    uint index=cell.y*params.width+cell.x;Surface surface;
+    if(SCENE_PHASE==6u) {
+        float opacity;uint known;
+        surface=unpack_surface(pack_surface(surface_at(index,opacity,known)));
+    } else surface=unpack_surface(surfaces[index]);
     if(surface.weights.w==0.) {display[index]=0xffff00ffu;return;}
-    vec3 color=surface.albedo.rgb;bool lit=params.mode==0u;
+    vec3 color=surface.albedo.rgb;bool lit=SCENE_PHASE!=6u&&params.mode==0u;
     if(lit) {
         Field field=renderer_unpack_field(fields[index]);
         color=max(vec3(0),.5*(surface.albedo.rgb*field.l0.rgb+surface.nx.rgb*field.lx.rgb+surface.ny.rgb*field.ly.rgb+surface.nz.rgb*field.lz.rgb));

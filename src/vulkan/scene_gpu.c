@@ -9,7 +9,7 @@
 #include "renderer_internal.h"
 #include "runtime_body_gpu.h"
 
-enum { SCENE_PHASES = 6, SCENE_BUFFERS = 5, SCENE_WORK_WORDS = 128 + 4096 };
+enum { SCENE_PHASES = 8, SCENE_BUFFERS = 5, SCENE_WORK_WORDS = 128 + 4096 };
 struct fr_scene_gpu {
   fr_renderer_mode_t mode;
   uint32_t light_revision, point_count;
@@ -256,9 +256,13 @@ void fr_renderer_record(dc_gpu_t *g) {
                       (uint32_t)s->mode,
                       g->view_x,
                       g->view_y};
-  scene_dispatch(g, 0, 4096, push);
-  scene_dispatch(g, 1, 64, push);
+  scene_dispatch(g, 0, g->runtime_body_consumers?64:4096, push);
+  if(!g->runtime_body_consumers) scene_dispatch(g, 1, 64, push);
   scene_dispatch(g, 2, DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS, push);
+  if(s->mode==FR_RENDERER_ALBEDO) {
+    scene_dispatch(g,6,g->view_width*g->view_height,push);
+    return;
+  }
   scene_dispatch(g, 3, g->width * g->height, push);
   scene_dispatch(g, 4, 32, push);
   if (s->mode == FR_RENDERER_LIT) {
@@ -272,5 +276,14 @@ bool fr_renderer_render(dc_gpu_t *g, char *err, uint32_t cap) {
 }
 bool fr_renderer_read_opacity(dc_gpu_t *g,uint32_t x,uint32_t y,
                               fr_occlusion_node_t *node) {
+  if(g&&g->renderer&&g->renderer->mode==FR_RENDERER_ALBEDO) {
+    if(x>=g->width||y>=g->height||!node||!fr_renderer_begin(g)) return false;
+    uint32_t push[8]={g->width,g->height,dc_gpu_structural_word_offset(g),
+        y*g->width+x,dc_gpu_render_flags(g),FR_RENDERER_ALBEDO,g->view_x,g->view_y};
+    scene_dispatch(g,7,1,push);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
+    if(!fr_renderer_submit(g)) return false;
+  }
   return g&&g->renderer&&fr_occlusion_input_read(g->renderer->occlusion,x,y,node);
 }
