@@ -1,7 +1,7 @@
 #define FLUID_TRANSPORT_FIXTURE_ONLY
 #include "fluid_transport_tests.c"
 
-static bool scan_override_present(void) {
+static bool scan_override_present(uint32_t id) {
     FILE *file=fopen("build/shaders/fluid_transport.comp.spv","rb");if(!file) return false;
     bool okay=fseek(file,0,SEEK_END)==0;long bytes=okay?ftell(file):0;rewind(file);
     uint32_t *words=bytes>0?malloc((size_t)bytes):NULL;
@@ -9,15 +9,15 @@ static bool scan_override_present(void) {
     bool found=false;
     for(size_t i=5;okay&&i<(size_t)bytes/4;) {
         uint32_t length=words[i]>>16;if(!length||i+length>(size_t)bytes/4) break;
-        if((words[i]&65535u)==71u&&length==4u&&words[i+2]==1u&&words[i+3]==5u) found=true;
+        if((words[i]&65535u)==71u&&length==4u&&words[i+2]==1u&&words[i+3]==id) found=true;
         i+=length;
     }
     free(words);return found;
 }
 static VkPipeline scan_pipeline(fixture_t *f,unsigned mode,bool enabled) {
-    uint32_t values[]={mode,1u,enabled};
-    VkSpecializationMapEntry entries[]={{0,0,4},{2,4,4},{5,8,4}};
-    VkSpecializationInfo spec={3,entries,sizeof(values),values};
+    uint32_t values[]={mode,1u,enabled,enabled?16u:32u};
+    VkSpecializationMapEntry entries[]={{0,0,4},{2,4,4},{5,8,4},{6,12,4}};
+    VkSpecializationInfo spec={4,entries,sizeof(values),values};
     VkComputePipelineCreateInfo info={.sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_COMPUTE_BIT,
             .module=f->p.shader,.pName="main",.pSpecializationInfo=&spec},.layout=f->p.layout};
@@ -34,8 +34,9 @@ static bool scan_submit(fixture_t *f,unsigned mode) {
     return vkEndCommandBuffer(f->p.command)==VK_SUCCESS&&submit(&f->p,"one-cell ordered scan",1);
 }
 static void test_scan_matches_ordered_mass_and_pigment_for_every_direction(void) {
-    ASSERT_TRUE(scan_override_present());
-    for(unsigned mode=0;mode<4;mode++) for(unsigned variant=0;variant<4;variant++) {
+    ASSERT_TRUE(scan_override_present(5u));
+    ASSERT_TRUE(scan_override_present(6u));
+    for(unsigned mode=0;mode<4;mode++) for(unsigned variant=0;variant<6;variant++) {
         fixture_t *f=calloc(1,sizeof(*f));ASSERT_TRUE(f&&initialize(&f->p));
         f->gpu=(dc_gpu_t){.device=f->p.device,.physical=f->p.physical};char err[256];
         for(unsigned i=0;i<8;i++) {
@@ -51,6 +52,15 @@ static void test_scan_matches_ordered_mass_and_pigment_for_every_direction(void)
             if(a==UINT32_MAX) continue;
             f->words[0][2*a]=hash%29==0?1u:hash%17==0?4u:0u;
             f->words[0][2*a+1]=minimum(hash%(FULL+1),capacity(f,(int)x,(int)y));
+            if(variant>=4) {
+                f->words[2][2*CELLS+cell]=0u;
+                f->words[0][2*a]=0u;
+                unsigned coordinate=mode<2?y:x;
+                f->words[0][2*a+1]=(variant==4?coordinate==50u:hash%23u==0u)?0u:FULL;
+                float packed_speed=(mode&1u?-1.f:1.f)*(variant==4?3.f:((hash%7u)+1u)*.6f);
+                f->words[4][2*cell+(mode<2?1:0)]=bits(packed_speed);
+                f->words[3][cell]=bits(packed_speed);
+            }
             float *color=(float *)(f->words[7]+4*a);
             color[0]=(hash%251)/251.f;color[1]=((hash/7)%239)/239.f;color[2]=((hash/19)%233)/233.f;color[3]=1.f;
         }
