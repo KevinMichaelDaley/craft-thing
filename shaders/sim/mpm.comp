@@ -29,6 +29,9 @@ layout(set = 0, binding = 26, std430) buffer Accept { uint accepted[]; };
 layout(set = 0, binding = 27, std430) readonly buffer Activity { uint activity[]; };
 layout(set = 0, binding = 28, std430) readonly buffer ComponentLabels { uint component_labels[]; };
 layout(set = 0, binding = 30, std430) readonly buffer ComponentSizes { uint component_sizes[]; };
+#ifdef DC_MPM_GATHER_PROFILE
+layout(set=0,binding=31,std430) buffer GatherProfile {uint gather_profile[];};
+#endif
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -95,6 +98,9 @@ bool grain_at(ivec2 cell) {
 bool load_particle(ivec2 cell, uint layer, out Particle particle) {
     if (!grain_at(cell)) return false;
     particle = particles[particle_index(cell, layer)];
+#ifdef DC_MPM_GATHER_PROFILE
+    atomicAdd(gather_profile[1],1u);
+#endif
     return particle.mass_fp != 0u;
 }
 
@@ -437,9 +443,6 @@ Particle zero_particle() {
                     0u, 0u, 0u, 0u, 0u, 0u);
 }
 
-#ifdef DC_MPM_GATHER_PROFILE
-layout(set=0,binding=31,std430) buffer GatherProfile {uint gather_profile[];};
-#endif
 uint gather_decision(uint index) {
 #ifdef DC_MPM_GATHER_PROFILE
     atomicAdd(gather_profile[0],1u);

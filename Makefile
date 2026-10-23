@@ -1445,3 +1445,7 @@ build/shaders/runtime/mpm_commit.comp.spv: shaders/sim/mpm.comp $(wildcard shade
 	glslangValidator -V --target-env vulkan1.1 -DDC_MPM_COALESCED_COMMIT=1 -DDC_RUNTIME_BODY_STORAGE=1 -o $@ $<
 $(GPU_OBJ) $(GPU_SOURCE_BINARIES): build/shaders/mpm_commit.comp.spv build/shaders/runtime/mpm_commit.comp.spv
 build/mpm_gather_tests build/mpm_gather_partial_tile_tests: build/shaders/mpm_commit.comp.spv
+
+build/mpm_transfer_load_tests: tests/vulkan/mpm_transfer_load_tests.c tests/vulkan/mpm_gather_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/mpm_gather_profile.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/mpm_transfer_load_tests
