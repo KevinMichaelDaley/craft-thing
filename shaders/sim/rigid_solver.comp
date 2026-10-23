@@ -159,6 +159,12 @@ float weight(uint a, uint b,bool conservative) {
         degree = max(degree, DC_SOLVER_DATA(bs(b) + offset));
     return 0.8 / max(float(degree)/(conservative?1.0:SUM_SCALE), 1.0);
 }
+vec2 contact_start_anchor(uint slot,Body body,vec2 local) {
+#ifdef DC_SOLVER_MOTION_PROFILE
+    atomicAdd(motion_profile[1],1u);
+#endif
+    return getv(bs(slot)+6u)+body.center+body_rotate(local,getf(bs(slot)+8u));
+}
 #include "rigid_grain.glsl"
 #include "grain_bed.glsl"
 void solve_contact(uint i, bool impulse) {
@@ -213,11 +219,11 @@ void solve_contact(uint i, bool impulse) {
         dn = (max(0.0, lambda + (-dot(pa - pb, n) - alpha * lambda) / (wn + alpha)) - lambda) *
              scale;
         putf(s, lambda + dn);
-        vec2 start_a = getv(bs(a) + 6u) + ba.center + body_rotate(getv(s + 4u), getf(bs(a) + 8u));
+        vec2 start_a = contact_start_anchor(a,ba,getv(s+4u));
         vec2 start_b = getv(s + 9u);
         if (b != BODY_CAPACITY)
             start_b =
-                getv(bs(b) + 6u) + DC_BODY(b).center + body_rotate(getv(s + 6u), getf(bs(b) + 8u));
+                contact_start_anchor(b,DC_BODY(b),getv(s+6u));
         float tangent_error = dot((pa - start_a) - (pb - start_b), t);
         float lt = getf(s + 1u), limit = getf(c + 11u) * max(0.0, lambda + dn);
         if (wt > 0.0)
@@ -287,7 +293,7 @@ void main() {
             /* Existing granular overlap represents the loaded bed's rest
                configuration. Resist new compression without lifting the body
                out of that configuration and letting grains ratchet beneath it. */
-            vec2 start=getv(bs(a)+6u)+ba.center+body_rotate(getv(s+4u),getf(bs(a)+8u));
+            vec2 start=contact_start_anchor(a,ba,getv(s+4u));
             putf(s+13u,min(dot(start-pb,normal),0.0));
         }
         bool moving=grain_ref!=0u&&creep<0.0;

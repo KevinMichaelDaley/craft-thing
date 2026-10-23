@@ -606,6 +606,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/mpm_shader_storage_tests
 	./build/mpm_copy_tests
 	./build/solver_motion_store_tests
+	./build/solver_contact_start_tests
 	./build/solver_recording_tests
 	./build/solver_commands_tests
 	./build/body_address_gpu_tests
@@ -1431,3 +1432,7 @@ build/hydro_head_tall_work_tests: tests/vulkan/hydro_head_tests.c tools/diagnost
 test: build/hydro_head_work_tests build/hydro_head_tall_work_tests
 
 build/diagnostics/pixel_boundary_probe.spv: shaders/sim/contact_geometry.glsl
+
+build/solver_contact_start_tests: tests/vulkan/solver_contact_start_tests.c tests/vulkan/solver_motion_store_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_motion_profile.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/solver_contact_start_tests

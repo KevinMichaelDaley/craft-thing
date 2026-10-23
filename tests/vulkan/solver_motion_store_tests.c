@@ -94,7 +94,10 @@ static void test_motion_phases_preserve_every_body_word_with_narrow_writes(void)
     vkDestroyDevice(p.device,NULL);vkDestroyInstance(p.instance,NULL);free(initial);free(reference);
     ASSERT_TRUE(exact);ASSERT_TRUE(narrow);PASS();
 }
-int main(void) {
+#ifndef DC_SOLVER_MOTION_TEST_MAIN
+#define DC_SOLVER_MOTION_TEST_MAIN main
+#endif
+int DC_SOLVER_MOTION_TEST_MAIN(void) {
     RUN(test_motion_phases_preserve_every_body_word_with_narrow_writes);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
