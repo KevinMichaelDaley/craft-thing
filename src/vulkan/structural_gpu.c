@@ -1,6 +1,8 @@
 #include <math.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include "runtime_body_gpu.h"
 #include <string.h>
 #include "gpu_internal.h"
 
@@ -356,7 +358,7 @@ static bool spawn_member(dc_gpu_t *gpu, const fr_structural_gpu_graph_t *g,
     for (uint32_t i = 0; i < gpu->body_count; i++)
         if (gpu->body_ids[i] == w.body.id) {
             dc_gpu_body_record_t *r =
-                (dc_gpu_body_record_t *)gpu->body_mapped + i;
+                dc_gpu_body_record(gpu,i);
             r->body.active = 0;
             r->reserved[0] = DC_GPU_STRUCTURAL_TAG;
             r->reserved[1] = index + 1;
@@ -380,10 +382,10 @@ bool fr_gpu_place_structure(dc_gpu_t *gpu, const fr_structural_gpu_graph_t *g,
     const uint32_t *outputs = dc_gpu_structural_data(gpu) +
                               dc_gpu_structural_graph_offset() + 36000u;
     for (unsigned m = 0; m < g->member_count; m++)
-        for (unsigned i = 0; i < DC_GPU_BODY_CAPACITY; i++)
+        for (unsigned i = 0; i < dc_gpu_body_capacity(gpu); i++)
             if (gpu->body_ids[i] &&
-                outputs[i * 4u] == FR_STRUCTURAL_BODY_ID_BASE + g->members[m].id &&
-                g->members[m].generation <= outputs[i * 4u + 1u])
+                (gpu->runtime_body_consumers?dc_gpu_body_solver_state(gpu,i)[60]:outputs[i*4u]) == FR_STRUCTURAL_BODY_ID_BASE + g->members[m].id &&
+                g->members[m].generation <= (gpu->runtime_body_consumers?dc_gpu_body_solver_state(gpu,i)[61]:outputs[i*4u+1u]))
                 return error(err, cap, "A live descendant retains this root generation");
     const fr_structural_gpu_graph_t *old =
         (void *)(dc_gpu_structural_data(gpu) +
@@ -395,26 +397,30 @@ bool fr_gpu_place_structure(dc_gpu_t *gpu, const fr_structural_gpu_graph_t *g,
         for (uint32_t i = 0; i < gpu->body_count; i++)
             if (gpu->body_ids[i] ==
                     FR_STRUCTURAL_BODY_ID_BASE + g->members[m].id &&
-                ((dc_gpu_body_record_t *)gpu->body_mapped)[i].reserved[0] !=
+                dc_gpu_body_record(gpu,i)->reserved[0] !=
                     DC_GPU_STRUCTURAL_TAG)
                 return error(err, cap,
                              "Structural body ID collides with another owner");
-    dc_gpu_body_record_t backup[DC_GPU_BODY_CAPACITY];
-    uint32_t ids[DC_GPU_BODY_CAPACITY], count = gpu->body_count;
-    memcpy(backup, gpu->body_mapped, sizeof(backup));
-    memcpy(ids, gpu->body_ids, sizeof(ids));
-    unsigned free_count = 0;
-    for (unsigned i = 0; i < DC_GPU_BODY_CAPACITY; i++)
-        if (!ids[i] || backup[i].reserved[0] == DC_GPU_STRUCTURAL_TAG)
-            free_count++;
-    if (g->member_count > free_count)
-        return error(err, cap, "Structural collision pool full");
+    uint32_t slots=dc_gpu_body_capacity(gpu),count=gpu->body_count;
+    unsigned free_count=0;
+    for(uint32_t i=0;i<slots;i++)
+        if((!gpu->body_ids[i]&&dc_gpu_body_owner(gpu,i)->state!=DC_BODY_OWNER_RETIRED)||
+           dc_gpu_body_record(gpu,i)->reserved[0]==DC_GPU_STRUCTURAL_TAG) free_count++;
+    if(g->member_count>free_count&&!dc_gpu_runtime_bodies_reserve(gpu,
+        slots+g->member_count-free_count,err,cap)) return false;
+    slots=dc_gpu_body_capacity(gpu);
+    dc_gpu_body_record_t *backup=calloc(slots,sizeof(*backup));
+    uint32_t *ids=calloc(slots,sizeof(*ids));
+    if(!backup||!ids) {free(backup);free(ids);return error(err,cap,"Cannot stage structural ownership");}
+    for(uint32_t i=0;i<slots;i++) backup[i]=*dc_gpu_body_record(gpu,i);
+    memcpy(ids,gpu->body_ids,(size_t)slots*sizeof(*ids));
+
     uint32_t *data = dc_gpu_structural_data(gpu);
     memcpy(data + dc_gpu_structural_graph_offset() + DC_STRUCTURAL_GRAPH_WORDS,
            g, sizeof(*g));
-    for (unsigned i = 0; i < DC_GPU_BODY_CAPACITY; i++)
+    for (unsigned i = 0; i < slots; i++)
         if (backup[i].reserved[0] == DC_GPU_STRUCTURAL_TAG) {
-            memset((dc_gpu_body_record_t *)gpu->body_mapped + i, 0,
+            memset(dc_gpu_body_record(gpu,i), 0,
                    sizeof(backup[i]));
             gpu->body_ids[i] = 0;
         }
@@ -424,19 +430,21 @@ bool fr_gpu_place_structure(dc_gpu_t *gpu, const fr_structural_gpu_graph_t *g,
     if (okay)
         okay = commit(gpu, err, cap) && data[2] == 1;
     if (!okay) {
-        memcpy(gpu->body_mapped, backup, sizeof(backup));
-        memcpy(gpu->body_ids, ids, sizeof(ids));
+        for(uint32_t i=0;i<slots;i++) *dc_gpu_body_record(gpu,i)=backup[i];
+        memcpy(gpu->body_ids,ids,(size_t)slots*sizeof(*ids));
         gpu->body_count = count;
+        free(backup);free(ids);
         return error(err, cap,
                      "Structural transaction rejected; ownership unchanged");
     }
     gpu->structural_enabled = g->member_count != 0 || gpu->impact_fracture_enabled;
     for (unsigned i = 0; i < gpu->body_count; i++)
-        if (((dc_gpu_body_record_t *)gpu->body_mapped)[i].reserved[0] ==
+        if (dc_gpu_body_record(gpu,i)->reserved[0] ==
             DC_GPU_STRUCTURAL_CONVERTED_TAG)
             gpu->structural_enabled = true;
     if (gpu->structural_enabled)
         dc_gpu_set_rigid_solver(gpu, true);
+    free(backup);free(ids);
     gpu->body_refresh_pending = true;
     return dc_gpu_set_body_origin(gpu, gpu->body_origin, err, cap);
 }

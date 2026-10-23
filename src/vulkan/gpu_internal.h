@@ -109,7 +109,7 @@ struct dc_gpu {
     VkBuffer mpm_label_a_buffer, mpm_label_b_buffer, mpm_component_size_buffer;
     VkDeviceMemory mpm_label_a_memory, mpm_label_b_memory, mpm_component_size_memory;
     void *mpm_label_a_mapped, *mpm_label_b_mapped, *mpm_component_size_mapped;
-    VkPipeline mpm_component_pipeline, component_extract_pipelines[35];
+    VkPipeline mpm_component_pipeline, component_extract_pipelines[38];
     bool automatic_components_enabled;
     bool component_baseline_pending;
     VkBuffer page_buffer;
@@ -120,7 +120,15 @@ struct dc_gpu {
     VkBuffer body_buffer;
     VkDeviceMemory body_memory;
     void *body_mapped;
-    uint32_t body_ids[DC_GPU_BODY_CAPACITY];
+    uint32_t *body_ids;
+    struct dc_runtime_bodies *runtime_bodies;
+    bool runtime_body_consumers;
+    uint32_t runtime_body_slots;
+    uint32_t pixel_pool_words;
+    uint32_t runtime_pair_capacity,runtime_contact_capacity;
+    VkDeviceAddress shape_color_address;
+    VkDeviceSize shape_color_allocation_bytes;
+    bool shape_color_device_local;
     uint32_t body_count;
     bool rigid_occupancy_present;
     dc_chunk_coord_t body_origin;
@@ -259,7 +267,7 @@ static inline uint32_t *dc_gpu_broadphase_data(const dc_gpu_t *gpu) {
 static inline uint32_t dc_gpu_contact_word_offset(const dc_gpu_t *gpu) {
     return DC_GPU_BROADPHASE_HEADER_WORDS +
         DC_GPU_BROADPHASE_BUCKET_WORDS * dc_gpu_broadphase_buckets(gpu) +
-        DC_GPU_BROADPHASE_PAIR_CAPACITY * (sizeof(dc_gpu_broadphase_pair_t) / sizeof(uint32_t));
+        (gpu->runtime_pair_capacity?gpu->runtime_pair_capacity:DC_GPU_BROADPHASE_PAIR_CAPACITY) * (sizeof(dc_gpu_broadphase_pair_t) / sizeof(uint32_t));
 }
 
 static inline uint32_t *dc_gpu_contact_data(const dc_gpu_t *gpu) {
@@ -269,13 +277,14 @@ static inline uint32_t *dc_gpu_contact_data(const dc_gpu_t *gpu) {
 static inline VkDeviceSize dc_gpu_legacy_body_storage_bytes(const dc_gpu_t *gpu) {
     return sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY +
         (VkDeviceSize)(dc_gpu_contact_word_offset(gpu) + DC_GPU_CONTACT_HEADER_WORDS) * sizeof(uint32_t) +
-        (VkDeviceSize)DC_GPU_CONTACT_CAPACITY * sizeof(dc_gpu_contact_t) +
+        (VkDeviceSize)(gpu->runtime_contact_capacity?gpu->runtime_contact_capacity:DC_GPU_CONTACT_CAPACITY) * sizeof(dc_gpu_contact_t) +
         (DC_GPU_SOLVER_HEADER_WORDS + DC_GPU_BODY_CAPACITY * DC_GPU_SOLVER_BODY_WORDS +
-         DC_GPU_CONTACT_CAPACITY * DC_GPU_SOLVER_CONTACT_WORDS) * sizeof(uint32_t) +
+         (gpu->runtime_contact_capacity?gpu->runtime_contact_capacity:DC_GPU_CONTACT_CAPACITY) * DC_GPU_SOLVER_CONTACT_WORDS) * sizeof(uint32_t) +
         (DC_STRUCTURAL_HEADER_WORDS + DC_GPU_CHUNK_SLOTS*8u + DC_STRUCTURAL_RESERVE_WORDS)*sizeof(uint32_t);
 }
 
 static inline uint32_t dc_gpu_pixel_pool_capacity(const dc_gpu_t *gpu) {
+    if(gpu->pixel_pool_words) return gpu->pixel_pool_words;
     uint32_t cells = gpu->width * gpu->height;
     uint32_t resident = DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS;
     return 2u * (((cells > resident ? cells : resident) + 7u) / 8u) +
@@ -298,7 +307,7 @@ static inline VkDeviceSize dc_gpu_body_storage_bytes(const dc_gpu_t *gpu) {
 
 static inline uint32_t dc_gpu_solver_word_offset(const dc_gpu_t *gpu) {
     return dc_gpu_contact_word_offset(gpu) + DC_GPU_CONTACT_HEADER_WORDS +
-        DC_GPU_CONTACT_CAPACITY * (sizeof(dc_gpu_contact_t) / sizeof(uint32_t));
+        (gpu->runtime_contact_capacity?gpu->runtime_contact_capacity:DC_GPU_CONTACT_CAPACITY) * (sizeof(dc_gpu_contact_t) / sizeof(uint32_t));
 }
 static inline uint32_t *dc_gpu_solver_data(const dc_gpu_t *gpu) {
     return dc_gpu_broadphase_data(gpu) + dc_gpu_solver_word_offset(gpu);
@@ -307,7 +316,7 @@ static inline uint32_t *dc_gpu_solver_data(const dc_gpu_t *gpu) {
 static inline uint32_t dc_gpu_structural_word_offset(const dc_gpu_t *gpu) {
     return dc_gpu_solver_word_offset(gpu) + DC_GPU_SOLVER_HEADER_WORDS +
         DC_GPU_BODY_CAPACITY*DC_GPU_SOLVER_BODY_WORDS +
-        DC_GPU_CONTACT_CAPACITY*DC_GPU_SOLVER_CONTACT_WORDS;
+        (gpu->runtime_contact_capacity?gpu->runtime_contact_capacity:DC_GPU_CONTACT_CAPACITY)*DC_GPU_SOLVER_CONTACT_WORDS;
 }
 static inline uint32_t *dc_gpu_structural_data(const dc_gpu_t *gpu) {
     return dc_gpu_broadphase_data(gpu)+dc_gpu_structural_word_offset(gpu);
@@ -366,9 +375,13 @@ bool dc_gpu_broadphase_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_broadphase(dc_gpu_t *gpu);
 /** Reconcile GPU-born owners only at explicit authoring/diagnostic checkpoints. */
 void dc_gpu_refresh_body_registry(dc_gpu_t *gpu);
+/** Allocated runtime slots; allocation granularity is not a body-count ceiling. */
+uint32_t dc_gpu_body_capacity(const dc_gpu_t *gpu);
+/** Direct mapped access, restricted to explicit host authoring/diagnostics. */
+dc_gpu_body_record_t *dc_gpu_body_record(const dc_gpu_t *gpu,uint32_t slot);
 /** Fixed GPU bound lets new descendants participate without frame-time readback. */
 static inline uint32_t dc_gpu_runtime_body_count(const dc_gpu_t *gpu) {
-    return gpu->structural_enabled ? DC_GPU_BODY_CAPACITY : gpu->body_count;
+    return gpu->structural_enabled ? (gpu->runtime_body_slots?gpu->runtime_body_slots:DC_GPU_BODY_CAPACITY) : gpu->body_count;
 }
 bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_contacts(dc_gpu_t *gpu);

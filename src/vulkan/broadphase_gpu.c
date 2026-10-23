@@ -28,7 +28,7 @@ bool dc_gpu_broadphase_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
 
 bool dc_gpu_set_broadphase_capacity(dc_gpu_t *gpu, uint32_t capacity,
                                     char *err, uint32_t cap) {
-    if (!gpu || capacity > DC_GPU_BROADPHASE_PAIR_CAPACITY)
+    if (!gpu || capacity > (gpu->runtime_pair_capacity?gpu->runtime_pair_capacity:DC_GPU_BROADPHASE_PAIR_CAPACITY))
         return error(err, cap, "Invalid broadphase capacity");
     dc_gpu_broadphase_data(gpu)[DC_GPU_BROADPHASE_CAPACITY_WORD] = capacity;
     gpu->body_refresh_pending = true;
@@ -43,7 +43,7 @@ bool dc_gpu_read_broadphase(dc_gpu_t *gpu, dc_gpu_broadphase_stats_t *stats,
     const uint32_t *data = dc_gpu_broadphase_data(gpu);
     dc_gpu_broadphase_stats_t completed;
     memcpy(&completed, data, sizeof(completed));
-    if (completed.count > DC_GPU_BROADPHASE_PAIR_CAPACITY ||
+    if (completed.count > (gpu->runtime_pair_capacity?gpu->runtime_pair_capacity:DC_GPU_BROADPHASE_PAIR_CAPACITY) ||
         (pairs && pair_cap < completed.count))
         return error(err, cap, "Broadphase readback buffer is too small");
     if (pairs) {
@@ -81,10 +81,15 @@ void dc_gpu_record_broadphase(dc_gpu_t *gpu) {
         push[2] = mode;
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-        uint32_t work = mode == 0 ? DC_GPU_BROADPHASE_BUCKET_WORDS * buckets :
-                        mode == 1 ? DC_GPU_BODY_CAPACITY : buckets;
-        vkCmdDispatch(gpu->command,
-            (work + DC_GPU_BROADPHASE_GROUP_SIZE - 1u) / DC_GPU_BROADPHASE_GROUP_SIZE, 1, 1);
+        uint64_t work = mode == 0 ? DC_GPU_BROADPHASE_BUCKET_WORDS * buckets :
+                        mode == 1 ? dc_gpu_runtime_body_count(gpu) : buckets;
+        if(gpu->runtime_body_consumers) {
+            if(mode==0) work=(uint64_t)buckets*((dc_gpu_body_capacity(gpu)+31u)/32u);
+            if(mode==2) work=(uint64_t)buckets*((dc_gpu_runtime_body_count(gpu)+63u)/64u)*64u;
+        }
+        uint64_t groups=(work+DC_GPU_BROADPHASE_GROUP_SIZE-1u)/DC_GPU_BROADPHASE_GROUP_SIZE;
+        uint32_t x=groups<65535u?(uint32_t)groups:65535u;
+        vkCmdDispatch(gpu->command,x,x?(uint32_t)((groups+x-1u)/x):0u,1);
         barrier(gpu, mode == 2);
     }
 }

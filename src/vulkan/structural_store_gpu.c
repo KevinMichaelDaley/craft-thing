@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "structural_store_internal.h"
+#include "runtime_body_internal.h"
 
 _Static_assert(sizeof(dc_structural_store_header_t) == 56,
                "Structure snapshot header ABI");
@@ -45,7 +46,11 @@ static uint64_t checksum(dc_structural_store_header_t header,
     header.checksum = 0;
     uint64_t hash =
         hash_bytes(UINT64_C(14695981039346656037), &header, sizeof(header));
-    hash = hash_bytes(hash, payload, sizeof(*payload));
+    hash = hash_bytes(hash, payload->control, sizeof(payload->control));
+    hash = hash_bytes(hash, payload->bodies, (size_t)header.body_words*4u);
+    hash = hash_bytes(hash, payload->graph, sizeof(payload->graph));
+    if(header.version>=7) hash=hash_bytes(hash,payload->states,
+        (size_t)payload->body_count*sizeof(*payload->states));
     hash =
         hash_bytes(hash, pixels, (size_t)header.reserved[1] * sizeof(*pixels));
     hash=hash_bytes(hash,chunks,(size_t)header.reserved[0]*sizeof(*chunks));
@@ -54,6 +59,19 @@ static uint64_t checksum(dc_structural_store_header_t header,
         hash=hash_bytes(hash,colors,(size_t)header.reserved[0]*sizeof(*colors));
     }
     return hash;
+}
+
+static dc_structural_store_payload_t *payload_create(uint32_t count) {
+    if(!count||count>UINT32_MAX/sizeof(dc_gpu_body_record_t)) return NULL;
+    dc_structural_store_payload_t *p=calloc(1,sizeof(*p));
+    if(!p) return NULL;
+    p->body_count=count;p->bodies=calloc(count,sizeof(*p->bodies));
+    p->states=calloc(count,sizeof(*p->states));
+    if(!p->bodies||!p->states) {free(p->bodies);free(p->states);free(p);return NULL;}
+    return p;
+}
+static void payload_destroy(dc_structural_store_payload_t *p) {
+    if(p) {free(p->bodies);free(p->states);free(p);}
 }
 
 static void clear_transients(uint32_t *graph) {
@@ -84,7 +102,7 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
     int length = snprintf(temporary, sizeof(temporary), "%s.tmp", path);
     if (length < 0 || (size_t)length >= sizeof(temporary))
         return error(err, cap, "Snapshot path too long");
-    dc_structural_store_payload_t *payload = calloc(1, sizeof(*payload));
+    dc_structural_store_payload_t *payload = payload_create(dc_gpu_body_capacity(gpu));
     if (!payload)
         return error(err, cap, "Cannot allocate snapshot staging");
     uint32_t *data = dc_gpu_structural_data(gpu);
@@ -92,14 +110,26 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
     payload->control[1] = data[3];
     payload->control[2] = data[6];
     payload->control[3] = data[14];
-    memcpy(payload->bodies, gpu->body_mapped, sizeof(payload->bodies));
+    for(uint32_t i=0;i<payload->body_count;i++) {
+        payload->bodies[i]=*dc_gpu_body_record(gpu,i);
+        dc_body_storage_owner_t *owner=dc_gpu_body_owner(gpu,i);
+        if(owner) payload->states[i].owner=*owner;
+        if(gpu->runtime_body_consumers) memcpy(payload->states[i].persistent,
+            dc_gpu_body_solver_state(gpu,i)+52u,sizeof(payload->states[i].persistent));
+        else if(i<64u) {
+            const uint32_t *g=data+dc_gpu_structural_graph_offset();
+            memcpy(payload->states[i].persistent,g+38000u+i*4u,16);
+            memcpy(payload->states[i].persistent+4,g+38500u+i*4u,16);
+            memcpy(payload->states[i].persistent+8,g+36000u+i*4u,16);
+        }
+    }
     memcpy(payload->graph, data + dc_gpu_structural_graph_offset(),
            sizeof(payload->graph));
     clear_transients(payload->graph);
     dc_structural_store_header_t header = {
         .magic = {'D', 'C', 'S', '1'},
-        .version = 6,
-        .body_words = STORE_BODY_WORDS,
+        .version = 7,
+        .body_words = payload->body_count * (sizeof(dc_gpu_body_record_t)/4u),
         .graph_words = DC_STRUCTURAL_RESERVE_WORDS,
         .flags = 1u | (gpu->impact_fracture_enabled ? 2u : 0u) |
                  (gpu->automatic_components_enabled ? 4u : 0u),
@@ -108,7 +138,7 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
     uint32_t *pixels = calloc(capacity, sizeof(*pixels));
     float *body_colors=calloc((size_t)capacity*32,sizeof(float));
     bool okay = pixels != NULL && body_colors != NULL;
-    for (unsigned i = 0; okay && i < DC_GPU_BODY_CAPACITY; i++) {
+    for (unsigned i = 0; okay && i < payload->body_count; i++) {
         dc_gpu_body_record_t *b = payload->bodies + i;
         if ((!b->body.active && !b->reserved[0]) ||
             !(b->piece_count & DC_GPU_PIXEL_BODY_FLAG))
@@ -177,7 +207,10 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
     FILE *file = okay ? fopen(temporary, "wb") : NULL;
     if (file) {
         okay = fwrite(&header, sizeof(header), 1, file) == 1 &&
-               fwrite(payload, sizeof(*payload), 1, file) == 1 &&
+               fwrite(payload->control,sizeof(payload->control),1,file)==1 &&
+               fwrite(payload->bodies,4,header.body_words,file)==header.body_words &&
+               fwrite(payload->graph,sizeof(payload->graph),1,file)==1 &&
+               fwrite(payload->states,sizeof(*payload->states),payload->body_count,file)==payload->body_count &&
                fwrite(pixels, sizeof(*pixels), header.reserved[1], file) ==
                    header.reserved[1] &&
                dc_gpu_checkpoint_write_chunks(file, chunks, header.reserved[0]) &&
@@ -191,7 +224,7 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
             remove(temporary);
     } else
         okay = false;
-    free(payload);
+    payload_destroy(payload);
     free(pixels);
     free(chunks);
     free(body_colors);free(colors);
@@ -220,7 +253,19 @@ static void install(dc_gpu_t *gpu, const dc_structural_store_header_t *header,
                     const dc_structural_store_payload_t *payload,
                     const uint32_t *pixels) {
     uint32_t *data = dc_gpu_structural_data(gpu);
-    memcpy(gpu->body_mapped, payload->bodies, sizeof(payload->bodies));
+    for(uint32_t i=0;i<dc_gpu_body_capacity(gpu);i++) {
+        dc_gpu_body_record_t *body=dc_gpu_body_record(gpu,i);
+        memset(body,0,sizeof(*body));
+        if(i<payload->body_count) *body=payload->bodies[i];
+        if(gpu->runtime_body_consumers) {
+            uint32_t *state=dc_gpu_body_solver_state(gpu,i);memset(state,0,256);
+            dc_body_storage_owner_t *owner=dc_gpu_body_owner(gpu,i);memset(owner,0,sizeof(*owner));
+            if(i<payload->body_count) {
+                *owner=payload->states[i].owner;
+                memcpy(state+52,payload->states[i].persistent,sizeof(payload->states[i].persistent));
+            }
+        }
+    }
     uint32_t offset = dc_gpu_pixel_pool_word_offset(gpu);
     uint32_t *pool = (uint32_t *)gpu->body_mapped + offset;
     memset(pool, 0, DC_GPU_PIXEL_POOL_HEADER_WORDS * sizeof(*pool));
@@ -228,8 +273,8 @@ static void install(dc_gpu_t *gpu, const dc_structural_store_header_t *header,
     pool[2] = dc_gpu_pixel_pool_capacity(gpu);
     memcpy(pool + DC_GPU_PIXEL_POOL_HEADER_WORDS, pixels,
            (size_t)header->reserved[1] * sizeof(*pixels));
-    for (unsigned i = 0; i < DC_GPU_BODY_CAPACITY; i++) {
-        dc_gpu_body_record_t *b = (dc_gpu_body_record_t *)gpu->body_mapped + i;
+    for (unsigned i = 0; i < payload->body_count; i++) {
+        dc_gpu_body_record_t *b = dc_gpu_body_record(gpu,i);
         if (!b->body.active && !b->reserved[0])
             memset(b, 0, sizeof(*b));
         else if (b->piece_count & DC_GPU_PIXEL_BODY_FLAG)
@@ -280,16 +325,24 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
     dc_structural_store_header_t header = {0};
     dc_structural_store_payload_t *payload = calloc(1, sizeof(*payload));
     bool okay =
-        payload && framed && fread(&header, sizeof(header), 1, file) == 1 &&
+        framed && fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCS1", 4) == 0 && header.version >= 1 &&
-        header.version <= 6 && header.body_words == STORE_BODY_WORDS &&
+        header.version <= 7 && header.body_words &&
+        header.body_words%(sizeof(dc_gpu_body_record_t)/4u)==0 &&
+        (header.version>=7 || header.body_words==STORE_BODY_WORDS) &&
         header.graph_words == DC_STRUCTURAL_RESERVE_WORDS &&
         (header.flags & 1u) && !(header.flags & ~7u) &&
         header.reserved[0] <= DC_GPU_CHUNK_SLOTS * 2u &&
         (header.version >= 2 || !header.reserved[0]) &&
         (header.version >= 4 || !header.reserved[1]) &&
-        header.reserved[1] <= dc_gpu_pixel_pool_capacity(gpu) &&
-        !header.reserved[2] && fread(payload, sizeof(*payload), 1, file) == 1;
+        header.reserved[1] <= UINT32_MAX/128u &&
+        !header.reserved[2];
+    if(okay) payload=payload_create(header.body_words/(sizeof(dc_gpu_body_record_t)/4u));
+    okay=okay && payload && fread(payload->control,sizeof(payload->control),1,file)==1 &&
+        fread(payload->bodies,4,header.body_words,file)==header.body_words &&
+        fread(payload->graph,sizeof(payload->graph),1,file)==1;
+    if(okay&&header.version>=7) okay=fread(payload->states,sizeof(*payload->states),
+        payload->body_count,file)==payload->body_count;
     uint32_t *pixels =
         okay ? calloc(header.reserved[1] + 1u, sizeof(*pixels)) : NULL;
     okay = okay && pixels &&
@@ -325,21 +378,35 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
     if (okay && header.version == 4)
         okay = dc_gpu_upgrade_dense_pixels(gpu, payload->bodies, &pixels,
                                            &header.reserved[1]);
+    if(okay&&header.version<7) for(uint32_t i=0;i<payload->body_count;i++) {
+        memcpy(payload->states[i].persistent,payload->graph+38000u+i*4u,16);
+        memcpy(payload->states[i].persistent+4,payload->graph+38500u+i*4u,16);
+        memcpy(payload->states[i].persistent+8,payload->graph+36000u+i*4u,16);
+    }
     okay = okay && dc_gpu_structure_payload_valid(gpu, payload, pixels,
                                                   header.reserved[1]);
     if (!okay) {
-        free(payload);
+        payload_destroy(payload);
         free(pixels);
         free(chunks);
         free(body_colors);free(colors);
         return error(err, cap, "Invalid or truncated structure snapshot");
     }
     if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS) {
-        free(payload);
+        payload_destroy(payload);
         free(pixels);
         free(chunks);
         free(body_colors);free(colors);
         return error(err, cap, "Cannot reach restore boundary");
+    }
+    if(!dc_gpu_runtime_bodies_reserve(gpu,payload->body_count,err,cap)||
+       !dc_gpu_runtime_geometry_reserve(gpu,header.reserved[1],err,cap)) {
+        payload_destroy(payload);free(pixels);free(chunks);free(body_colors);free(colors);return false;
+    }
+    if(header.version<7) for(uint32_t i=0;i<payload->body_count;i++) {
+        memcpy(payload->states[i].persistent,payload->graph+38000u+i*4u,16);
+        memcpy(payload->states[i].persistent+4,payload->graph+38500u+i*4u,16);
+        memcpy(payload->states[i].persistent+8,payload->graph+36000u+i*4u,16);
     }
     dc_chunk_coord_t origin = gpu->body_origin;
     install(gpu, &header, payload, pixels);
@@ -347,7 +414,7 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
     if(header.version>=6) memcpy((uint8_t*)gpu->shape_color_mapped+dc_gpu_color_terrain_bytes(),
         body_colors,(size_t)header.reserved[1]*128);
     free(body_colors);
-    free(payload);
+    payload_destroy(payload);
     free(pixels);
     free(gpu->checkpoint_chunks);
     gpu->checkpoint_chunks = chunks;

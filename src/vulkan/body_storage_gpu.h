@@ -8,6 +8,9 @@ typedef struct {
     dc_gpu_address_buffer_t directory;
     dc_gpu_body_block_t *blocks;
     uint32_t slab_count;
+    uint32_t auxiliary_bytes;
+    uint32_t solver_bytes;
+    bool host_records;
 } dc_gpu_body_store_t;
 typedef struct {
     dc_gpu_address_buffer_t directory;
@@ -29,4 +32,11 @@ bool dc_gpu_body_growth_finish(dc_gpu_t *gpu,dc_gpu_body_store_t *store,
 bool dc_gpu_body_growth_discard(dc_gpu_t *gpu,dc_gpu_body_growth_t *growth);
 /** Destroy the store after all uses have completed. */
 void dc_gpu_body_store_destroy(dc_gpu_t *gpu,dc_gpu_body_store_t *store);
+/** Resolve mapped records only at explicit authoring/diagnostic boundaries. */
+void *dc_gpu_body_store_record(const dc_gpu_body_store_t *store,uint32_t slot);
+/** Mapped solver/ownership planes are used only by explicit persistence APIs. */
+void *dc_gpu_body_store_solver(const dc_gpu_body_store_t *store,uint32_t slot);
+void *dc_gpu_body_store_owner(const dc_gpu_body_store_t *store,uint32_t slot);
+/** Explicit completed auxiliary-state access for diagnostics. */
+void *dc_gpu_body_store_auxiliary(const dc_gpu_body_store_t *store,uint32_t slot);
 #endif

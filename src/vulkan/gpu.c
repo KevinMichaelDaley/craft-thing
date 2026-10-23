@@ -7,6 +7,7 @@
 #include <vulkan/vulkan.h>
 
 #include "body_features_gpu.h"
+#include "runtime_body_gpu.h"
 #include "gpu_internal.h"
 
 static bool error(char *buf, uint32_t cap, const char *message) {
@@ -84,7 +85,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         { gpu->chunk_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t) },
         { gpu->page_buffer, 0, (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t) },
         { gpu->occupancy_buffer, 0, bytes * 5 },
-        { gpu->body_buffer, 0, dc_gpu_body_storage_bytes(gpu) },
+        dc_gpu_runtime_bodies_binding(gpu),
         { gpu->trace_buffer, 0, 3 * sizeof(uint32_t) },
         { gpu->halo_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_GPU_HALO_CELLS * sizeof(dc_gpu_halo_cell_t) },
         { gpu->transfer_buffer, 0, sizeof(dc_gpu_transfer_t) },
@@ -114,8 +115,8 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         { gpu->fluid_previous_buffer, 0, bytes },
         { gpu->water_color_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS*16 },
         { gpu->shape_color_buffer,0,terrain_colors },
-        { gpu->shape_color_buffer,terrain_colors,bank_colors },
-        { gpu->shape_color_buffer,terrain_colors+bank_colors,bank_colors }
+        { gpu->shape_color_buffer,gpu->runtime_body_consumers?0:terrain_colors,gpu->runtime_body_consumers?16:bank_colors },
+        { gpu->shape_color_buffer,gpu->runtime_body_consumers?0:terrain_colors+bank_colors,gpu->runtime_body_consumers?16:bank_colors }
     };
     VkWriteDescriptorSet writes[36] = {0};
     for (uint32_t i = 0; i < 36; ++i) {
@@ -329,6 +330,7 @@ bool dc_gpu_set_window_title(dc_gpu_t *gpu, const char *title) {
 
 static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7], char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
+    if(push[2]==3u&&push[6]==DC_MATERIAL_AIR&&!dc_gpu_runtime_prepare_fragments(gpu,err,cap)) return false;
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
         return error(err, cap, "Cannot reset compute command buffer");
     VkCommandBufferBeginInfo begin = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
@@ -400,7 +402,9 @@ bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
                            char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     uint32_t push[7] = { gpu->width, gpu->height, 3, x, y, radius, material };
-    bool okay=dispatch_cells(gpu, push, err, cap);
+    bool okay;
+    do {okay=dispatch_cells(gpu,push,err,cap);}
+    while(okay&&material==DC_MATERIAL_AIR&&dc_gpu_runtime_carve_retry(gpu));
     if(okay) {
         gpu->body_refresh_pending=true;
         if (material == DC_MATERIAL_WATER) gpu->fluid_work_possible=true;

@@ -5,7 +5,9 @@
 layout(local_size_x=128) in;
 layout(constant_id=0) const uint EXTRACTION_PHASE=0u;
 layout(set=0,binding=1,std430) buffer Cells { uvec2 cells[]; };
+#ifndef DC_RUNTIME_BODY_STORAGE
 layout(set=0,binding=4,std430) buffer Storage { Body bodies[BODY_CAPACITY]; uint data[]; };
+#endif
 layout(set=0,binding=27,std430) buffer Activity { uint activity[]; };
 layout(set=0,binding=28,std430) buffer Labels { uint labels[]; };
 layout(set=0,binding=29,std430) buffer Candidates { uint candidates[]; };
@@ -15,19 +17,25 @@ layout(set=0,binding=19,std430) buffer Particles {Particle particles[];};
 layout(set=0,binding=20,std430) buffer Counts {uint particle_counts[];};
 layout(push_constant) uniform Params { uint width,height,mode,count; uvec2 origin_x,origin_y; } params;
 #include "shape_colors.glsl"
-uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
+uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 #include "pixel_properties.glsl"
 uint base() {
     uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
-    return 8u+2u*w*h+4096u*8u+12u+8192u*32u+16u+64u*32u+8192u*16u;
+    return 8u+2u*w*h+DC_LAYOUT_PAIR_CAPACITY*8u+12u+DC_LAYOUT_CONTACT_CAPACITY*32u+16u+64u*32u+DC_LAYOUT_CONTACT_CAPACITY*16u;
 }
-uint graph() {return base()+32u+data[base()+1u]*8u;}
-uint total() {return data[base()+1u]*4096u;}
+uint graph() {return base()+32u+DC_DATA(base()+1u)*8u;}
+uint total() {return DC_DATA(base()+1u)*4096u;}
 uint pool() {return graph()+40000u;}
-uint capacity() {return 2u*((max(params.width*params.height,total())+7u)/8u)+64u*8u;}
+uint capacity() {
+#ifdef DC_RUNTIME_BODY_STORAGE
+    return DC_RUNTIME_WORK(29u);
+#else
+    return 2u*((max(params.width*params.height,total())+7u)/8u)+64u*8u;
+#endif
+}
 uint record(uint c) {return graph()+36300u+c*24u;}
 uint registry(uint s) {return base()+32u+s*8u;}
-bool solid(uint i) {return data[registry(i/4096u)+5u]!=0u&&DC_CELL_COMPONENT_MEMBER(cells[i].x);}
+bool solid(uint i) {return DC_DATA(registry(i/4096u)+5u)!=0u&&DC_CELL_COMPONENT_MEMBER(cells[i].x);}
 uint cardinal_neighbor(uint i,uint axis) {
     uint p=i%4096u,x=p%64u,y=p/64u;
     if(axis==0u&&x>0u) return i-1u;
@@ -75,7 +83,7 @@ uint terrain_release_state(uint i,uint bonds) {
 }
 ivec2 relative_point(uint root,uint i) {
     uint a=registry(root/4096u),b=registry(i/4096u);
-    return ivec2(data[b]-data[a],data[b+2u]-data[a+2u])*64+ivec2(i%64u,(i%4096u)/64u);
+    return ivec2(DC_DATA(b)-DC_DATA(a),DC_DATA(b+2u)-DC_DATA(a+2u))*64+ivec2(i%64u,(i%4096u)/64u);
 }
 shared uint values[128],slots[128];
 shared uint birth_count;
@@ -96,37 +104,49 @@ void scan_values() {
     }
 }
 void initialize_body(uint r) {
-    uint slot=data[r+12u],root=data[r],source=registry(root/4096u);
-    ivec2 low=ivec2(data[r+1u],data[r+2u]),extent=ivec2(data[r+3u],data[r+4u])-low+1;
-    Body b=bodies[slot];b.x_fp=0;b.y_fp=0;b.vx_fp=0;b.vy_fp=0;
-    b.width=uint(extent.x);b.height=uint(extent.y);b.id=0x80000000u+data[r+13u];b.enabled=1u;
+    uint slot=DC_DATA(r+12u),root=DC_DATA(r),source=registry(root/4096u);
+    ivec2 low=ivec2(DC_DATA(r+1u),DC_DATA(r+2u)),extent=ivec2(DC_DATA(r+3u),DC_DATA(r+4u))-low+1;
+    Body b=DC_BODY(slot);b.x_fp=0;b.y_fp=0;b.vx_fp=0;b.vy_fp=0;
+    b.width=uint(extent.x);b.height=uint(extent.y);b.id=0x80000000u+DC_DATA(r+13u);b.enabled=1u;
     b.previous_x_fp=0;b.previous_y_fp=0;b.reserved0=0x53545232u;b.reserved1=1u;
-    shifted_chunk(uvec2(data[source],data[source+1u]),low.x>>6,b.chunk_x);
-    shifted_chunk(uvec2(data[source+2u],data[source+3u]),low.y>>6,b.chunk_y);
+    shifted_chunk(uvec2(DC_DATA(source),DC_DATA(source+1u)),low.x>>6,b.chunk_x);
+    shifted_chunk(uvec2(DC_DATA(source+2u),DC_DATA(source+3u)),low.y>>6,b.chunk_y);
     b.local_fp=(low&63)<<16;b.visible=0u;b.angle=0.;b.angular_velocity=0.;
-    b.motion_flags=0u;b.motion_ready=1u;b.piece_count=PIXEL_BODY_FLAG|data[r+5u];
-    b.compound_reserved=BODY_STORAGE_WORDS+data[r+11u];b.vertex_count=0u;
+    b.motion_flags=0u;b.motion_ready=1u;b.piece_count=PIXEL_BODY_FLAG|DC_DATA(r+5u);
+    b.compound_reserved=BODY_STORAGE_WORDS+DC_DATA(r+11u);b.vertex_count=0u;
     uint m=cells[root].x&65535u;b.material=DC_TERRAIN_TO_BODY(m);
     for(uint i=0u;i<8u;i++) b.vertices[i]=ivec2(0);
     for(uint p=0u;p<4u;p++) {b.pieces[p].count=0u;b.pieces[p].material=0u;for(uint i=0u;i<8u;i++) b.pieces[p].vertices[i]=ivec2(0);}
     b.previous_angle=0.;b.rest_position=ivec2(0);b.rest_angle=0.;b.rest_ticks=0u;
-    b.mass=float(data[r+15u])*.01;b.center=vec2(uintBitsToFloat(data[r+20u]),uintBitsToFloat(data[r+21u]));
-    b.inertia=max(uintBitsToFloat(data[r+22u]),1e-12);b.density=b.mass/float(data[r+5u]);
+    b.mass=float(DC_DATA(r+15u))*.01;b.center=vec2(uintBitsToFloat(DC_DATA(r+20u)),uintBitsToFloat(DC_DATA(r+21u)));
+    b.inertia=max(uintBitsToFloat(DC_DATA(r+22u)),1e-12);b.density=b.mass/float(DC_DATA(r+5u));
     b.inverse_mass=1./b.mass;b.inverse_inertia=1./b.inertia;
     vec2 hi=vec2(extent);b.radius=max(max(length(b.center),length(vec2(hi.x,0)-b.center)),max(length(vec2(0,hi.y)-b.center),length(hi-b.center)));
-    body_cache_bounds(b);bodies[slot]=b;
+    body_cache_bounds(b);DC_BODY(slot)=b;
+#ifdef DC_RUNTIME_BODY_STORAGE
+    for(uint word=0u;word<64u;word++) DC_SOLVER_DATA(DC_RUNTIME_BODY_STATE(slot)+word)=0u;
+    uint owner=DC_RUNTIME_BODY_STATE(slot)+60u;
+#else
     uint owner=graph()+36000u+slot*4u;
-    data[owner]=b.id;data[owner+1u]=1u;data[owner+2u]=data[r+13u];data[owner+3u]=1u;
+#endif
+    DC_SOLVER_DATA(owner)=b.id;DC_SOLVER_DATA(owner+1u)=1u;DC_SOLVER_DATA(owner+2u)=DC_DATA(r+13u);DC_SOLVER_DATA(owner+3u)=1u;
 }
 void main() {
     if(EXTRACTION_PHASE==26u) {
-        uint lane=gl_LocalInvocationID.x,enabled=uint(data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]!=0u);
-        if(lane<27u) activity[lane]=lane%3u==0u?enabled*(lane==0u||lane==12u?(total()+127u)/128u:lane==6u?64u:lane==9u?0u:lane==15u?data[base()+1u]*4u:lane==18u?(total()+16383u)/16384u:lane==21u||lane==24u?data[base()+1u]:1u):1u;
+        uint lane=gl_LocalInvocationID.x,enabled=uint(DC_DATA(base()+STRUCTURAL_COMPONENT_DIRTY_WORD)!=0u);
+        if(lane<27u) activity[lane]=lane%3u==0u?enabled*(lane==0u||lane==12u?(total()+127u)/128u:lane==6u?64u:lane==9u?0u:lane==15u?DC_DATA(base()+1u)*4u:lane==18u?(total()+16383u)/16384u:lane==21u||lane==24u?DC_DATA(base()+1u):1u):1u;
         if(lane>=27u&&lane<33u) activity[lane]=lane%3u==0u?0u:1u;
-        if(lane==0u) {activity[36]=enabled*((data[base()+1u]+127u)/128u);activity[37]=1u;activity[38]=1u;}
+        if(lane==0u) {activity[36]=enabled*((DC_DATA(base()+1u)+127u)/128u);activity[37]=1u;activity[38]=1u;}
+#ifdef DC_RUNTIME_BODY_STORAGE
+        if(lane==0u) {
+            DC_RUNTIME_WORK(16u)=enabled*((BODY_CAPACITY+127u)/128u);DC_RUNTIME_WORK(17u)=1u;DC_RUNTIME_WORK(18u)=1u;
+            DC_RUNTIME_WORK(19u)=enabled*min(BODY_CAPACITY,65535u);DC_RUNTIME_WORK(20u)=(BODY_CAPACITY+65534u)/65535u;DC_RUNTIME_WORK(21u)=1u;
+            DC_RUNTIME_WORK(22u)=enabled*((BODY_CAPACITY+64u+127u)/128u);DC_RUNTIME_WORK(23u)=1u;DC_RUNTIME_WORK(24u)=1u;
+        }
+#endif
         return;
     }
-    if(data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]==0u) return;
+    if(DC_DATA(base()+STRUCTURAL_COMPONENT_DIRTY_WORD)==0u) return;
     uint i=gl_GlobalInvocationID.x,lane=gl_LocalInvocationID.x,n=total(),g=graph();
     if(EXTRACTION_PHASE==11u) {
         if(i<n&&solid(i)) candidates[n+i]=terrain_bonds(i);
@@ -143,13 +163,13 @@ void main() {
     }
     if(EXTRACTION_PHASE==9u) {
         uint key=gl_WorkGroupID.x;
-        if(key>=data[base()+1u]*4u) return;
+        if(key>=DC_DATA(base()+1u)*4u) return;
         uint own=registry(key/4u),axis=key%4u,found=0xffffffffu;uvec2 x,y;
-        bool valid=shifted_chunk(uvec2(data[own],data[own+1u]),axis==0u?-1:axis==1u?1:0,x)&&shifted_chunk(uvec2(data[own+2u],data[own+3u]),axis==2u?-1:axis==3u?1:0,y);
-        if(valid&&data[own+5u]!=0u) {
-            for(uint candidate=lane;candidate<data[base()+1u];candidate+=128u) {
+        bool valid=shifted_chunk(uvec2(DC_DATA(own),DC_DATA(own+1u)),axis==0u?-1:axis==1u?1:0,x)&&shifted_chunk(uvec2(DC_DATA(own+2u),DC_DATA(own+3u)),axis==2u?-1:axis==3u?1:0,y);
+        if(valid&&DC_DATA(own+5u)!=0u) {
+            for(uint candidate=lane;candidate<DC_DATA(base()+1u);candidate+=128u) {
                 uint other=registry(candidate);
-                if(data[other+5u]!=0u&&all(equal(uvec2(data[other],data[other+1u]),x))&&all(equal(uvec2(data[other+2u],data[other+3u]),y))) found=min(found,candidate);
+                if(DC_DATA(other+5u)!=0u&&all(equal(uvec2(DC_DATA(other),DC_DATA(other+1u)),x))&&all(equal(uvec2(DC_DATA(other+2u),DC_DATA(other+3u)),y))) found=min(found,candidate);
             }
         }
         values[lane]=found;
@@ -181,31 +201,31 @@ void main() {
     if(EXTRACTION_PHASE==1u) {
         if(i>=n/32u) return;
         uint mask=0u;
-        for(uint bit=0u;bit<32u;bit++) {uint root=(data[g+36256u]%n+i*32u+bit)%n;if(solid(root)&&labels[root]==root&&sizes[root]!=0u) mask|=1u<<bit;}
+        for(uint bit=0u;bit<32u;bit++) {uint root=(DC_DATA(g+36256u)%n+i*32u+bit)%n;if(solid(root)&&labels[root]==root&&sizes[root]!=0u) mask|=1u<<bit;}
         candidates[i]=bitCount(mask);candidates[n+i]=mask;return;
     }
     if(EXTRACTION_PHASE==2u||EXTRACTION_PHASE==19u) {
-        uint shift=EXTRACTION_PHASE==19u?n:0u,limit=params.count==0u?data[g+36260u]:params.count;
+        uint shift=EXTRACTION_PHASE==19u?n:0u,limit=params.count==0u?DC_DATA(g+36260u):params.count;
         values[lane]=i<limit?candidates[shift+i]:0u;
         scan_values();if(i<limit) candidates[shift+i]=values[lane];
         if(lane==127u) sizes[n+gl_WorkGroupID.x]=values[lane];return;
     }
     if(EXTRACTION_PHASE==3u) {
-        uint limit=params.count==0u?data[g+36260u]:params.count,blocks=(limit+127u)/128u;if(gl_WorkGroupID.x>=(blocks+127u)/128u) return;
+        uint limit=params.count==0u?DC_DATA(g+36260u):params.count,blocks=(limit+127u)/128u;if(gl_WorkGroupID.x>=(blocks+127u)/128u) return;
         values[lane]=i<blocks?sizes[n+i]:0u;scan_values();
         if(i<blocks) sizes[n+i]=values[lane];
         if(lane==127u) sizes[n+blocks+gl_WorkGroupID.x]=values[lane];return;
     }
     if(EXTRACTION_PHASE==29u) {
-        uint limit=params.count==0u?data[g+36260u]:params.count,blocks=(limit+127u)/128u,higher=(blocks+127u)/128u;
+        uint limit=params.count==0u?DC_DATA(g+36260u):params.count,blocks=(limit+127u)/128u,higher=(blocks+127u)/128u;
         values[lane]=lane<higher?sizes[n+blocks+lane]:0u;scan_values();
         if(lane<higher) sizes[n+blocks+lane]=values[lane];return;
     }
     if(EXTRACTION_PHASE==30u) {
-        uint limit=params.count==0u?data[g+36260u]:params.count,blocks=(limit+127u)/128u;if(i<blocks&&i>=128u) sizes[n+i]+=sizes[n+blocks+i/128u-1u];return;
+        uint limit=params.count==0u?DC_DATA(g+36260u):params.count,blocks=(limit+127u)/128u;if(i<blocks&&i>=128u) sizes[n+i]+=sizes[n+blocks+i/128u-1u];return;
     }
     if(EXTRACTION_PHASE==31u||EXTRACTION_PHASE==32u) {
-        uint shift=EXTRACTION_PHASE==32u?n:0u,limit=params.count==0u?data[g+36260u]:params.count;
+        uint shift=EXTRACTION_PHASE==32u?n:0u,limit=params.count==0u?DC_DATA(g+36260u):params.count;
         if(i<limit&&i>=128u) candidates[shift+i]+=sizes[n+i/128u-1u];return;
     }
     if(EXTRACTION_PHASE==4u) {
@@ -213,141 +233,246 @@ void main() {
         uint rank=candidates[i],previous=i==0u?0u:candidates[i-1u],mask=candidates[n+i];
         for(uint bit=0u;bit<32u;bit++) if((mask&(1u<<bit))!=0u) {
             uint selected=previous+bitCount(mask&((1u<<bit)-1u));if(selected>=64u) continue;
-            uint r=record(selected);for(uint word=0u;word<24u;word++) data[r+word]=0u;
-            data[r]=(data[g+36256u]%n+i*32u+bit)%n;data[r+1u]=0xffffffffu;data[r+2u]=0xffffffffu;
+            uint r=record(selected);for(uint word=0u;word<24u;word++) DC_DATA(r+word)=0u;
+            DC_DATA(r)=(DC_DATA(g+36256u)%n+i*32u+bit)%n;DC_DATA(r+1u)=0xffffffffu;DC_DATA(r+2u)=0xffffffffu;
         }
-        if(i==n/32u-1u) {data[g+36257u]=min(rank,64u);data[g+36259u]=uint(rank>64u);}
+        if(i==n/32u-1u) {DC_DATA(g+36257u)=min(rank,64u);DC_DATA(g+36259u)=uint(rank>64u);}
         return;
     }
     if(EXTRACTION_PHASE==5u) {if(i<n) candidates[i]=0xffffffffu;return;}
-    if(EXTRACTION_PHASE==34u) {if(i<data[g+36260u]) candidates[n+i]=0u;return;}
-    if(EXTRACTION_PHASE==6u) {if(i<data[g+36257u]) candidates[data[record(i)]]=i;return;}
+    if(EXTRACTION_PHASE==34u) {if(i<DC_DATA(g+36260u)) candidates[n+i]=0u;return;}
+    if(EXTRACTION_PHASE==6u) {if(i<DC_DATA(g+36257u)) candidates[DC_DATA(record(i))]=i;return;}
     if(EXTRACTION_PHASE==7u) {
         if(i>=n||!solid(i)) return;
-        uint c=candidates[labels[i]];if(c>=data[g+36257u]) return;
-        uint r=record(c);ivec2 p=relative_point(data[r],i);
-        atomicMin(data[r+1u],uint(p.x)^0x80000000u);atomicMin(data[r+2u],uint(p.y)^0x80000000u);
-        atomicMax(data[r+3u],uint(p.x)^0x80000000u);atomicMax(data[r+4u],uint(p.y)^0x80000000u);atomicAdd(data[r+5u],1u);
-        atomicOr(data[r+23u],terrain_release_state(i,terrain_bonds(i)));
-        for(uint axis=0u;axis<8u;axis++) if(neighbor(i,axis)==0xffffffffu) atomicOr(data[r+6u],1u);
+        uint c=candidates[labels[i]];if(c>=DC_DATA(g+36257u)) return;
+        uint r=record(c);ivec2 p=relative_point(DC_DATA(r),i);
+        atomicMin(DC_DATA(r+1u),uint(p.x)^0x80000000u);atomicMin(DC_DATA(r+2u),uint(p.y)^0x80000000u);
+        atomicMax(DC_DATA(r+3u),uint(p.x)^0x80000000u);atomicMax(DC_DATA(r+4u),uint(p.y)^0x80000000u);atomicAdd(DC_DATA(r+5u),1u);
+        atomicOr(DC_DATA(r+23u),terrain_release_state(i,terrain_bonds(i)));
+        for(uint axis=0u;axis<8u;axis++) if(neighbor(i,axis)==0xffffffffu) atomicOr(DC_DATA(r+6u),1u);
         return;
     }
     if(EXTRACTION_PHASE==8u) {
-        uint count=data[g+36257u];
+        uint count=DC_DATA(g+36257u);
         if(lane<count) {
-            uint r=record(lane);for(uint w=1u;w<=4u;w++) data[r+w]^=0x80000000u;
-            ivec2 extent=ivec2(data[r+3u],data[r+4u])-ivec2(data[r+1u],data[r+2u])+1;
+            uint r=record(lane);for(uint w=1u;w<=4u;w++) DC_DATA(r+w)^=0x80000000u;
+            ivec2 extent=ivec2(DC_DATA(r+3u),DC_DATA(r+4u))-ivec2(DC_DATA(r+1u),DC_DATA(r+2u))+1;
             uint dir=uint((extent.x+15)/16)*uint((extent.y+15)/16);
-            uint state=data[r+23u];
+            uint state=DC_DATA(r+23u);
             bool released=(state&(RELEASE_EXPLICIT|RELEASE_SUPPORT_CHANGED))!=0u;
-            if(!released||data[r+6u]!=0u||data[r+5u]!=sizes[data[r]]||dir>n) dir=0u;
-            data[r+7u]=dir;values[lane]=dir;
+            if(!released||DC_DATA(r+6u)!=0u||DC_DATA(r+5u)!=sizes[DC_DATA(r)]||dir>n) dir=0u;
+            DC_DATA(r+7u)=dir;values[lane]=dir;
         } else values[lane]=0u;
         scan_values();
-        if(lane<count) {uint r=record(lane);data[r+9u]=values[lane]-data[r+7u];if(values[lane]>n) data[r+7u]=0u;}
-        if(lane==0u) {uint limit=min(values[127],n);data[g+36260u]=limit;activity[27]=(limit+127u)/128u;activity[28]=1u;activity[29]=1u;activity[30]=(limit+16383u)/16384u;activity[31]=1u;activity[32]=1u;}return;
+        if(lane<count) {uint r=record(lane);DC_DATA(r+9u)=values[lane]-DC_DATA(r+7u);if(values[lane]>n) DC_DATA(r+7u)=0u;}
+        if(lane==0u) {uint limit=min(values[127],n);DC_DATA(g+36260u)=limit;activity[27]=(limit+127u)/128u;activity[28]=1u;activity[29]=1u;activity[30]=(limit+16383u)/16384u;activity[31]=1u;activity[32]=1u;}return;
     }
     if(EXTRACTION_PHASE==15u) {
         if(i>=n||!solid(i)) return;
-        uint c=candidates[labels[i]];if(c>=data[g+36257u]) return;
-        uint r=record(c);if(data[r+7u]==0u) return;
-        ivec2 low=ivec2(data[r+1u],data[r+2u]),p=relative_point(data[r],i)-low;
-        uint width=uint((int(data[r+3u])-low.x+16)/16),tile=uint(p.y/16)*width+uint(p.x/16);
-        atomicOr(candidates[n+data[r+9u]+tile],1u);return;
+        uint c=candidates[labels[i]];if(c>=DC_DATA(g+36257u)) return;
+        uint r=record(c);if(DC_DATA(r+7u)==0u) return;
+        ivec2 low=ivec2(DC_DATA(r+1u),DC_DATA(r+2u)),p=relative_point(DC_DATA(r),i)-low;
+        uint width=uint((int(DC_DATA(r+3u))-low.x+16)/16),tile=uint(p.y/16)*width+uint(p.x/16);
+        atomicOr(candidates[n+DC_DATA(r+9u)+tile],1u);return;
     }
     if(EXTRACTION_PHASE==16u) {
-        uint words=lane<64u&&pixel_body(bodies[lane])&&(bodies[lane].enabled!=0u||bodies[lane].reserved0!=0u)?pixel_shape_words(bodies[lane]):0u;
+#ifdef DC_RUNTIME_BODY_STORAGE
+        if(i>=BODY_CAPACITY) return;
+        Body b=DC_BODY(i);
+        uint words=pixel_body(b)&&(b.enabled!=0u||b.reserved0!=0u)?pixel_shape_words(b):0u;
+        uint scan=DC_RUNTIME_WORK(9u);
+        DC_RUNTIME_WORK(scan+2u*i)=words;DC_RUNTIME_WORK(scan+2u*i+1u)=0u;
+        if(i==0u) DC_DATA(g+36262u)=1u-DC_DATA(pool());
+        return;
+#else
+        uint words=lane<64u&&pixel_body(DC_BODY(lane))&&(DC_BODY(lane).enabled!=0u||DC_BODY(lane).reserved0!=0u)?pixel_shape_words(DC_BODY(lane)):0u;
         values[lane]=words;scan_values();if(lane<64u) sizes[lane]=values[lane]-words;
-        if(lane==0u) {data[g+36261u]=values[127];data[g+36262u]=1u-data[pool()];}return;
+        if(lane==0u) {DC_DATA(g+36261u)=values[127];DC_DATA(g+36262u)=1u-DC_DATA(pool());}return;
+#endif
     }
     if(EXTRACTION_PHASE==17u) {
-        uint s=gl_WorkGroupID.x;if(s>=64u) return;Body b=bodies[s];if(!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) return;
-        uint target=pool()+16u+data[g+36262u]*capacity()+sizes[s];
+        uint s=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x;if(s>=BODY_CAPACITY) return;Body b=DC_BODY(s);if(!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) return;
+#ifdef DC_RUNTIME_BODY_STORAGE
+        uint offset=DC_RUNTIME_WORK(DC_RUNTIME_WORK(9u)+2u*s)-pixel_shape_words(b);
+#else
+        uint offset=sizes[s];
+#endif
+        uint target=pool()+16u+DC_DATA(g+36262u)*capacity()+offset;
         for(uint w=lane;w<pixel_shape_words(b);w+=128u) {
-            data[target+w]=pixel_word_at(b.compound_reserved+w);
+            DC_DATA(target+w)=pixel_word_at(b.compound_reserved+w);
             shape_color_copy_word(BODY_STORAGE_WORDS+target+w,b.compound_reserved+w);
         }return;
     }
     if(EXTRACTION_PHASE==18u) {
-        if(i<64u&&pixel_body(bodies[i])&&(bodies[i].enabled!=0u||bodies[i].reserved0!=0u)) bodies[i].compound_reserved=BODY_STORAGE_WORDS+pool()+16u+data[g+36262u]*capacity()+sizes[i];
-        if(i==0u) {data[pool()]=data[g+36262u];data[pool()+1u]=data[g+36261u];data[pool()+2u]=capacity();}return;
+#ifdef DC_RUNTIME_BODY_STORAGE
+        if(i<BODY_CAPACITY&&pixel_body(DC_BODY(i))&&(DC_BODY(i).enabled!=0u||DC_BODY(i).reserved0!=0u)) {
+            uint words=pixel_shape_words(DC_BODY(i));
+            DC_BODY(i).compound_reserved=BODY_STORAGE_WORDS+pool()+16u+DC_DATA(g+36262u)*capacity()+
+                DC_RUNTIME_WORK(DC_RUNTIME_WORK(9u)+2u*i)-words;
+        }
+        if(i==0u) {
+            uint used=DC_RUNTIME_WORK(DC_RUNTIME_WORK(9u)+2u*(BODY_CAPACITY-1u));
+            DC_DATA(g+36261u)=used;
+            DC_DATA(pool())=DC_DATA(g+36262u);DC_DATA(pool()+1u)=used;DC_DATA(pool()+2u)=capacity();
+        }
+        return;
+#else
+        if(i<64u&&pixel_body(DC_BODY(i))&&(DC_BODY(i).enabled!=0u||DC_BODY(i).reserved0!=0u)) DC_BODY(i).compound_reserved=BODY_STORAGE_WORDS+pool()+16u+DC_DATA(g+36262u)*capacity()+sizes[i];
+        if(i==0u) {DC_DATA(pool())=DC_DATA(g+36262u);DC_DATA(pool()+1u)=DC_DATA(g+36261u);DC_DATA(pool()+2u)=capacity();}return;
+#endif
     }
+#ifdef DC_RUNTIME_BODY_STORAGE
+    if(EXTRACTION_PHASE==33u) {
+        if(i>=BODY_CAPACITY) return;
+        Body b=DC_BODY(i);BodyStorageOwner owner=DC_BODY_OWNER(runtime_body_root,i);
+        uint free=uint(b.enabled==0u&&b.reserved0==0u&&owner.state!=DC_BODY_OWNER_RETIRED);
+        uint scan=DC_RUNTIME_WORK(9u);DC_RUNTIME_WORK(scan+2u*i)=free;DC_RUNTIME_WORK(scan+2u*i+1u)=0u;
+        return;
+    }
+    if(EXTRACTION_PHASE==35u) {
+        if(i>=BODY_CAPACITY) return;
+        Body b=DC_BODY(i);uint serial=DC_DATA(base()+14u),id=0x80000000u+serial;
+        if((b.enabled!=0u||b.reserved0!=0u)&&b.id>id&&b.id-id<=BODY_CAPACITY+64u) {
+            uint relative=b.id-id-1u;
+            atomicOr(DC_RUNTIME_WORK(DC_RUNTIME_WORK(5u)+relative/32u),1u<<(relative%32u));
+        }
+        return;
+    }
+    if(EXTRACTION_PHASE==36u) {
+        if(i>=BODY_CAPACITY+64u) return;
+        uint serial=DC_DATA(base()+14u),scan=DC_RUNTIME_WORK(9u);
+        uint occupied=DC_RUNTIME_WORK(DC_RUNTIME_WORK(5u)+i/32u)&(1u<<(i%32u));
+        DC_RUNTIME_WORK(scan+2u*i)=uint(i<0x7fffffffu-serial&&occupied==0u);
+        DC_RUNTIME_WORK(scan+2u*i+1u)=0u;return;
+    }
+    if(EXTRACTION_PHASE==37u) {
+        uint count=DC_DATA(g+36257u),scan=DC_RUNTIME_WORK(9u),range=BODY_CAPACITY+64u;
+        uint free_ids=DC_RUNTIME_WORK(scan+2u*(range-1u));
+        if(lane<count) {
+            uint r=record(lane),rank=DC_DATA(r+16u);
+            uint eligible=DC_DATA(r+14u)*uint(rank>0u&&rank<=free_ids);
+            if(eligible!=0u) {
+                uint lo=0u,hi=range;
+                while(lo<hi) {uint middle=lo+(hi-lo)/2u;if(DC_RUNTIME_WORK(scan+2u*middle)<rank) lo=middle+1u;else hi=middle;}
+                DC_DATA(r+13u)=DC_DATA(base()+14u)+lo+1u;
+            }
+            DC_DATA(r+14u)=eligible;
+        }
+        barrier();values[lane]=lane<count&&DC_DATA(record(lane)+14u)!=0u?lane+1u:0u;
+        for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) values[lane]=max(values[lane],values[lane+stride]);}barrier();
+        if(lane==0u) {
+            uint last=values[0];DC_DATA(g+36258u)=last;
+            if(last!=0u) {uint r=record(last-1u);DC_DATA(pool()+1u)=DC_DATA(r+11u)+DC_DATA(r+10u)-(pool()+16u+DC_DATA(pool())*capacity());DC_DATA(base()+14u)=DC_DATA(r+13u);DC_DATA(g+36256u)=(DC_DATA(r)+1u)%n;}
+            else if(count!=0u) DC_DATA(g+36256u)=(DC_DATA(record(count-1u))+1u)%n;
+        }
+        barrier();values[lane]=lane<count&&DC_DATA(record(lane)+7u)!=0u&&DC_DATA(record(lane)+14u)==0u?1u:0u;
+        for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) values[lane]|=values[lane+stride];}barrier();
+        if(lane==0u) DC_DATA(g+36259u)|=values[0];return;
+    }
+#endif
     if(EXTRACTION_PHASE==21u) {
-        uint count=data[g+36257u],free=lane<64u?uint(bodies[lane].enabled==0u&&bodies[lane].reserved0==0u):0u;
+        uint count=DC_DATA(g+36257u);
+#ifdef DC_RUNTIME_BODY_STORAGE
+        uint scan=DC_RUNTIME_WORK(9u),available=DC_RUNTIME_WORK(scan+2u*(BODY_CAPACITY-1u));
+        for(uint word=lane;word<(BODY_CAPACITY+64u+31u)/32u;word+=128u)
+            DC_RUNTIME_WORK(DC_RUNTIME_WORK(5u)+word)=0u;
+#else
+        uint free=lane<64u?uint(DC_BODY(lane).enabled==0u&&DC_BODY(lane).reserved0==0u):0u;
         values[lane]=free;scan_values();if(free!=0u) slots[values[lane]-1u]=lane;uint available=values[127];barrier();
+#endif
         uint words=0u,eligible=0u;
         if(lane<count) {
-            uint r=record(lane),dir=data[r+7u],start=data[r+9u],before=start==0u?0u:candidates[n+start-1u];
-            uint tiles=dir==0u?0u:candidates[n+start+dir-1u]-before;data[r+8u]=tiles;words=dir==0u?0u:8u+dir+tiles*33u;
-            eligible=uint(words>0u&&words<=capacity()-data[pool()+1u]);data[r+10u]=words;
+            uint r=record(lane),dir=DC_DATA(r+7u),start=DC_DATA(r+9u),before=start==0u?0u:candidates[n+start-1u];
+            uint tiles=dir==0u?0u:candidates[n+start+dir-1u]-before;DC_DATA(r+8u)=tiles;words=dir==0u?0u:8u+dir+tiles*33u;
+            eligible=uint(words>0u&&words<=capacity()-DC_DATA(pool()+1u));DC_DATA(r+10u)=words;
+#ifdef DC_RUNTIME_BODY_STORAGE
+            if(words>capacity()-DC_DATA(pool()+1u)) atomicMax(DC_RUNTIME_REQUEST(11u),DC_DATA(pool()+1u)+words);
+#endif
         }
         values[lane]=eligible*words;scan_values();uint offset=values[lane]-eligible*words;
-        eligible*=uint(values[lane]<=capacity()-data[pool()+1u]);values[lane]=eligible;scan_values();
+        eligible*=uint(values[lane]<=capacity()-DC_DATA(pool()+1u));values[lane]=eligible;scan_values();
         eligible*=uint(values[lane]<=available);
-        if(lane==0u) birth_count=min(values[127],available);
-        if(lane<count) {uint r=record(lane);data[r+14u]=eligible;data[r+13u]=0u;if(eligible!=0u) {data[r+11u]=pool()+16u+data[pool()]*capacity()+data[pool()+1u]+offset;data[r+12u]=slots[values[lane]-1u];moments_x[values[lane]-1u].x=lane;}}
+        if(lane==0u) {
+            birth_count=min(values[127],available);
+#ifdef DC_RUNTIME_BODY_STORAGE
+            if(values[127]>available) atomicMax(DC_RUNTIME_REQUEST(2u),BODY_CAPACITY+values[127]-available);
+#endif
+        }
+#ifdef DC_RUNTIME_BODY_STORAGE
+        if(lane<count) {
+            uint r=record(lane);DC_DATA(r+14u)=eligible;DC_DATA(r+13u)=0u;DC_DATA(r+16u)=values[lane];
+            if(eligible!=0u) {
+                uint rank=values[lane],lo=0u,hi=BODY_CAPACITY;
+                while(lo<hi) {uint middle=lo+(hi-lo)/2u;if(DC_RUNTIME_WORK(scan+2u*middle)<rank) lo=middle+1u;else hi=middle;}
+                DC_DATA(r+11u)=pool()+16u+DC_DATA(pool())*capacity()+DC_DATA(pool()+1u)+offset;DC_DATA(r+12u)=lo;
+            }
+        }
+        return;
+#else
+        if(lane<count) {uint r=record(lane);DC_DATA(r+14u)=eligible;DC_DATA(r+13u)=0u;if(eligible!=0u) {DC_DATA(r+11u)=pool()+16u+DC_DATA(pool())*capacity()+DC_DATA(pool()+1u)+offset;DC_DATA(r+12u)=slots[values[lane]-1u];moments_x[values[lane]-1u].x=lane;}}
         barrier();
-        uint serial=data[base()+14u];slots[lane]=uint(lane+1u<=0x7fffffffu-serial);barrier();
-        if(lane<64u&&(bodies[lane].enabled!=0u||bodies[lane].reserved0!=0u)) {
-            uint id=bodies[lane].id;
+        uint serial=DC_DATA(base()+14u);slots[lane]=uint(lane+1u<=0x7fffffffu-serial);barrier();
+        if(lane<64u&&(DC_BODY(lane).enabled!=0u||DC_BODY(lane).reserved0!=0u)) {
+            uint id=DC_BODY(lane).id;
             if(id>0x80000000u+serial&&id-(0x80000000u+serial)<=128u)
                 atomicExchange(slots[id-(0x80000000u+serial)-1u],0u);
         }
         barrier();values[lane]=slots[lane];scan_values();
-        if(slots[lane]!=0u&&values[lane]<=birth_count) data[record(moments_x[values[lane]-1u].x)+13u]=serial+lane+1u;
+        if(slots[lane]!=0u&&values[lane]<=birth_count) DC_DATA(record(moments_x[values[lane]-1u].x)+13u)=serial+lane+1u;
         barrier();
-        if(lane<count) {uint r=record(lane);data[r+14u]*=uint(data[r+13u]!=0u);eligible=data[r+14u];}
+        if(lane<count) {uint r=record(lane);DC_DATA(r+14u)*=uint(DC_DATA(r+13u)!=0u);eligible=DC_DATA(r+14u);}
         values[lane]=eligible!=0u?lane+1u:0u;
         for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) values[lane]=max(values[lane],values[lane+stride]);}barrier();
         if(lane==0u) {
-            uint last=values[0];data[g+36258u]=last;
-            if(last!=0u) {uint r=record(last-1u);data[pool()+1u]=data[r+11u]+data[r+10u]-(pool()+16u+data[pool()]*capacity());data[base()+14u]=data[r+13u];data[g+36256u]=(data[r]+1u)%n;}
-            else if(count!=0u) data[g+36256u]=(data[record(count-1u)]+1u)%n;
+            uint last=values[0];DC_DATA(g+36258u)=last;
+            if(last!=0u) {uint r=record(last-1u);DC_DATA(pool()+1u)=DC_DATA(r+11u)+DC_DATA(r+10u)-(pool()+16u+DC_DATA(pool())*capacity());DC_DATA(base()+14u)=DC_DATA(r+13u);DC_DATA(g+36256u)=(DC_DATA(r)+1u)%n;}
+            else if(count!=0u) DC_DATA(g+36256u)=(DC_DATA(record(count-1u))+1u)%n;
         }
-        barrier();values[lane]=lane<count&&data[record(lane)+7u]!=0u&&data[record(lane)+14u]==0u?1u:0u;
+        barrier();values[lane]=lane<count&&DC_DATA(record(lane)+7u)!=0u&&DC_DATA(record(lane)+14u)==0u?1u:0u;
         for(uint stride=64u;stride>0u;stride/=2u) {barrier();if(lane<stride) values[lane]|=values[lane+stride];}barrier();
-        if(lane==0u) data[g+36259u]|=values[0];return;
+        if(lane==0u) DC_DATA(g+36259u)|=values[0];return;
+#endif
     }
     if(EXTRACTION_PHASE==22u) {
-        uint c=gl_WorkGroupID.x;if(c>=data[g+36257u]) return;uint r=record(c);if(data[r+14u]==0u) return;
-        uint target=data[r+11u],dir=data[r+7u],start=data[r+9u],width=uint((int(data[r+3u])-int(data[r+1u])+16)/16);
-        ivec2 low=ivec2(data[r+1u],data[r+2u]);
-        for(uint word=lane;word<data[r+10u];word+=128u) {
-            data[target+word]=0u;
+        uint c=gl_WorkGroupID.x;if(c>=DC_DATA(g+36257u)) return;uint r=record(c);if(DC_DATA(r+14u)==0u) return;
+        uint target=DC_DATA(r+11u),dir=DC_DATA(r+7u),start=DC_DATA(r+9u),width=uint((int(DC_DATA(r+3u))-int(DC_DATA(r+1u))+16)/16);
+        ivec2 low=ivec2(DC_DATA(r+1u),DC_DATA(r+2u));
+        for(uint word=lane;word<DC_DATA(r+10u);word+=128u) {
+            DC_DATA(target+word)=0u;
             for(uint nibble=0u;nibble<8u;nibble++) shape_color_set(BODY_STORAGE_WORDS+target+word,nibble,vec4(0));
         }
         memoryBarrierBuffer();barrier();
-        if(lane<8u) {uint h[8]=uint[8](data[r+10u],data[r+8u],width,dir/width,0u,0u,uint(int(data[r+3u])-low.x+1),uint(int(data[r+4u])-low.y+1));data[target+lane]=h[lane];}
+        if(lane<8u) {uint h[8]=uint[8](DC_DATA(r+10u),DC_DATA(r+8u),width,dir/width,0u,0u,uint(int(DC_DATA(r+3u))-low.x+1),uint(int(DC_DATA(r+4u))-low.y+1));DC_DATA(target+lane)=h[lane];}
         uint before=start==0u?0u:candidates[n+start-1u];
         for(uint t=lane;t<dir;t+=128u) {
             uint prefix=candidates[n+start+t],previous=start+t==0u?0u:candidates[n+start+t-1u];bool occupied=prefix>previous;
-            uint offset=8u+dir+(prefix-before-1u)*33u;data[target+8u+t]=occupied?offset:0u;if(!occupied) continue;
-            data[target+offset]=(t%width)|((t/width)<<16);
+            uint offset=8u+dir+(prefix-before-1u)*33u;DC_DATA(target+8u+t)=occupied?offset:0u;if(!occupied) continue;
+            DC_DATA(target+offset)=(t%width)|((t/width)<<16);
         }
         return;
     }
     if(EXTRACTION_PHASE==28u) {
         if(i>=n||!solid(i)) return;
-        uint c=candidates[labels[i]];if(c>=data[g+36257u]) return;
-        uint r=record(c);if(data[r+14u]==0u) return;
-        ivec2 low=ivec2(data[r+1u],data[r+2u]),p=relative_point(data[r],i)-low;
-        uint width=uint((int(data[r+3u])-low.x+16)/16),tile=uint(p.y/16)*width+uint(p.x/16);
-        uint target=data[r+11u],offset=data[target+8u+tile],cell=uint(p.y%16)*16u+uint(p.x%16),m=cells[i].x&65535u;
+        uint c=candidates[labels[i]];if(c>=DC_DATA(g+36257u)) return;
+        uint r=record(c);if(DC_DATA(r+14u)==0u) return;
+        ivec2 low=ivec2(DC_DATA(r+1u),DC_DATA(r+2u)),p=relative_point(DC_DATA(r),i)-low;
+        uint width=uint((int(DC_DATA(r+3u))-low.x+16)/16),tile=uint(p.y/16)*width+uint(p.x/16);
+        uint target=DC_DATA(r+11u),offset=DC_DATA(target+8u+tile),cell=uint(p.y%16)*16u+uint(p.x%16),m=cells[i].x&65535u;
         uint word=target+offset+1u+cell/8u;
         shape_color_set(BODY_STORAGE_WORDS+word,cell%8u,terrain_colors[i]);
-        atomicOr(data[word],DC_TERRAIN_TO_BODY(m)<<((cell%8u)*4u));return;
+        atomicOr(DC_DATA(word),DC_TERRAIN_TO_BODY(m)<<((cell%8u)*4u));return;
     }
     if(EXTRACTION_PHASE==23u) {
-        uint c=gl_WorkGroupID.x;if(c>=data[g+36257u]) return;uint r=record(c);if(data[r+14u]==0u) return;
-        Body b=bodies[data[r+12u]];b.compound_reserved=BODY_STORAGE_WORDS+data[r+11u];b.piece_count=PIXEL_BODY_FLAG|data[r+5u];
+        uint c=gl_WorkGroupID.x;if(c>=DC_DATA(g+36257u)) return;uint r=record(c);if(DC_DATA(r+14u)==0u) return;
+        Body b=DC_BODY(DC_DATA(r+12u));b.compound_reserved=BODY_STORAGE_WORDS+DC_DATA(r+11u);b.piece_count=PIXEL_BODY_FLAG|DC_DATA(r+5u);
         uint mass100;vec2 center;float inertia;
         pixel_mass_properties(b,mass100,center,inertia);
-        if(lane==0u) {data[r+15u]=mass100;data[r+20u]=floatBitsToUint(center.x);data[r+21u]=floatBitsToUint(center.y);data[r+22u]=floatBitsToUint(inertia);initialize_body(r);}return;
+        if(lane==0u) {DC_DATA(r+15u)=mass100;DC_DATA(r+20u)=floatBitsToUint(center.x);DC_DATA(r+21u)=floatBitsToUint(center.y);DC_DATA(r+22u)=floatBitsToUint(inertia);initialize_body(r);}return;
     }
     if(EXTRACTION_PHASE==24u) {
         if(i<n&&solid(i)) {
             uint c=candidates[labels[i]];
-            if(c<data[g+36257u]&&data[record(c)+14u]!=0u) {
+            if(c<DC_DATA(g+36257u)&&DC_DATA(record(c)+14u)!=0u) {
                 uint particle=i/4096u*8192u+i%4096u;
                 for(uint layer=0u;layer<2u;layer++) {
                     uint p=particle+layer*4096u;
@@ -362,6 +487,6 @@ void main() {
         }
         return;
     }
-    if(EXTRACTION_PHASE==25u&&i==0u) data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]=data[g+36259u];
-    if(EXTRACTION_PHASE==27u&&i==0u) {activity[12]=activity[9]!=0u?(n+127u)/128u:0u;activity[21]=activity[9]!=0u?data[base()+1u]:0u;activity[9]=0u;}
+    if(EXTRACTION_PHASE==25u&&i==0u) DC_DATA(base()+STRUCTURAL_COMPONENT_DIRTY_WORD)=DC_DATA(g+36259u);
+    if(EXTRACTION_PHASE==27u&&i==0u) {activity[12]=activity[9]!=0u?(n+127u)/128u:0u;activity[21]=activity[9]!=0u?DC_DATA(base()+1u):0u;activity[9]=0u;}
 }

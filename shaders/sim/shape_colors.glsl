@@ -1,17 +1,29 @@
 #ifndef DC_SHAPE_COLORS_GLSL
 #define DC_SHAPE_COLORS_GLSL
 layout(set=0,binding=33,std430) buffer TerrainColors {vec4 terrain_colors[];};
+#ifdef DC_RUNTIME_BODY_STORAGE
+layout(buffer_reference,std430,buffer_reference_align=16) coherent buffer RuntimeShapeColors {vec4 colors[];};
+#define shape_colors_a RuntimeShapeColors(uvec2(DC_RUNTIME_WORK(32u),DC_RUNTIME_WORK(33u))).colors
+#define shape_colors_b RuntimeShapeColors(uvec2(DC_RUNTIME_WORK(34u),DC_RUNTIME_WORK(35u))).colors
+#else
 layout(set=0,binding=34,std430) coherent buffer ShapeColorsA {vec4 shape_colors_a[];};
 layout(set=0,binding=35,std430) coherent buffer ShapeColorsB {vec4 shape_colors_b[];};
+#endif
 uint color_slots() {
     uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
-    uint base=8u+2u*w*h+4096u*8u+12u+8192u*32u+16u+64u*32u+8192u*16u;
+    uint base=8u+2u*w*h+DC_LAYOUT_PAIR_CAPACITY*8u+12u+DC_LAYOUT_CONTACT_CAPACITY*32u+16u+64u*32u+DC_LAYOUT_CONTACT_CAPACITY*16u;
     return pixel_word_at(BODY_STORAGE_WORDS+base+1u);
 }
-uint color_capacity() {return 2u*((max(params.width*params.height,color_slots()*4096u)+7u)/8u)+64u*8u;}
+uint color_capacity() {
+#ifdef DC_RUNTIME_BODY_STORAGE
+    return DC_RUNTIME_WORK(29u);
+#else
+    return 2u*((max(params.width*params.height,color_slots()*4096u)+7u)/8u)+64u*8u;
+#endif
+}
 uint color_pool_word() {
     uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
-    return BODY_STORAGE_WORDS+8u+2u*w*h+4096u*8u+12u+8192u*32u+16u+64u*32u+8192u*16u+
+    return BODY_STORAGE_WORDS+8u+2u*w*h+DC_LAYOUT_PAIR_CAPACITY*8u+12u+DC_LAYOUT_CONTACT_CAPACITY*32u+16u+64u*32u+DC_LAYOUT_CONTACT_CAPACITY*16u+
         32u+color_slots()*8u+40000u+16u;
 }
 vec4 shape_color_get(uint word,uint nibble) {

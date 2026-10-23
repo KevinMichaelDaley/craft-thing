@@ -115,8 +115,8 @@ static bool component_pipelines(dc_gpu_t *gpu, char *err, uint32_t cap) {
                   .pName = "main"},
         .layout = gpu->pipeline_layout};
     VkResult result = VK_SUCCESS;
-    for (uint32_t mode = 1; mode < 35 && result == VK_SUCCESS; ++mode) {
-        if (mode == 33)
+    for (uint32_t mode = 1; mode < (gpu->runtime_body_consumers?38u:35u) && result == VK_SUCCESS; ++mode) {
+        if (mode == 33 && !gpu->runtime_body_consumers)
             continue;
         VkSpecializationInfo phase = {.mapEntryCount = 1,
                                       .pMapEntries = &entry,
@@ -147,7 +147,7 @@ bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
 
 void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu) {
     dc_gpu_mpm_compaction_pipeline_destroy(gpu);
-    for (unsigned mode = 0; mode < 35; ++mode)
+    for (unsigned mode = 0; mode < 38; ++mode)
         if (gpu->component_extract_pipelines[mode])
             vkDestroyPipeline(gpu->device,
                               gpu->component_extract_pipelines[mode], NULL);

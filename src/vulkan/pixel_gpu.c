@@ -165,9 +165,8 @@ bool dc_gpu_read_pixel_shape(dc_gpu_t *gpu, uint32_t id,
                              uint32_t *count, char *err, uint32_t cap) {
     if (gpu && id && count) {
         dc_gpu_refresh_body_registry(gpu);
-        const dc_gpu_body_record_t *bodies = gpu->body_mapped;
-        for (unsigned slot = 0; slot < DC_GPU_BODY_CAPACITY; slot++) {
-            const dc_gpu_body_record_t *body = bodies + slot;
+        for (unsigned slot = 0; slot < dc_gpu_body_capacity(gpu); slot++) {
+            const dc_gpu_body_record_t *body = dc_gpu_body_record(gpu,slot);
             if (!body->body.active || body->body.id != id)
                 continue;
             if (!(body->piece_count & DC_GPU_PIXEL_BODY_FLAG))

@@ -6,7 +6,36 @@ does not satisfy this design. The user's saved material sandbox contains 64 acti
 owned bodies and only 2,722 geometry words; this exhausted body records and left
 later isolated stone as gray terrain. Density changes cannot fix that condition.
 
-This is a proposed implementation roadmap, not a claim that growth is implemented.
+## Gameplay integration
+
+Gameplay uses the addressed root by default. Body records grow in 64-record
+slabs; 64 is an allocation quantum and legacy codec prefix, never a live-body
+maximum. Extraction reserves slots and collision-free IDs using GPU prefix
+scans. The GPU builds the ID lookup and generation/free ownership state. The
+host services a constant-size completed allocation mailbox at submission
+boundaries without reading body geometry or solving physics.
+
+Solver, impact, fracture ancestry and hydrodynamic state follow each slab.
+Broadphase masks, scan planes, fracture labels, carving snapshots and hydro force
+partials grow with demand. Pair/contact storage and pixel geometry/color banks
+grow through GPU-copy transactions, preserving IDs, geometry, mass and custom
+colors. Allocation failure leaves source ownership available for retry. Carving
+rollback tests inject Vulkan allocation failures rather than assuming a fixed
+body ceiling.
+
+DCS1 version 7 stores a counted body array, ownership generations and persistent
+impact/fracture state. Geometry and color payloads remain compact and checksummed.
+Versions 1 through 6 retain their legacy migration readers. Body-only DCB1 files
+already contain a count and now stage/restore it without fixed-size host arrays.
+The first 64 diagnostic records and state mirrors preserve fixture compatibility;
+additional bodies use the same physics.
+
+Regression coverage includes the real Wayland material sandbox with 320 bodies
+and save/reload, gravity across body pages, GPU queue exhaustion/retry, and
+geometry/appearance preservation through arena and queue relocation. Cold
+addressed shader startup latency is tracked separately in ctlo-inhv.
+
+The remaining sections record the original roadmap and ABI rationale.
 ct-yd8t separately tracks extraction diagnostics and known offscreen dynamics.
 
 ## Storage and identity

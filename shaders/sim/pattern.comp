@@ -14,7 +14,9 @@ layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; }
 layout(set=0,binding=32,std430) buffer WaterColors {vec4 water_colors[];};
 layout(set=0,binding=33,std430) buffer TerrainColors {vec4 terrain_colors[];};
 layout(set = 0, binding = 3, std430) readonly buffer Occupancy { uint occupancy[]; };
+#ifndef DC_RUNTIME_BODY_STORAGE
 layout(set = 0, binding = 4, std430) readonly buffer Bodies { Body bodies[64]; uint body_data[]; };
+#endif
 layout(set = 0, binding = 16, std430) readonly buffer MarkerGrid { uint marker_grid[]; };
 struct Particle {
     int x_fp, y_fp, vx_fp, vy_fp;
@@ -26,7 +28,11 @@ layout(set = 0, binding = 18, std430) readonly buffer SlotSeeds { uint seeds[]; 
 layout(set = 0, binding = 19, std430) buffer Particles { Particle particles[]; };
 layout(set = 0, binding = 20, std430) buffer ParticleCounts { uint particle_counts[]; };
 layout(set = 0, binding = 31, std430) readonly buffer FluidPrevious { uint previous_mass[]; };
-uint pixel_word_at(uint index) {return body_data[index-BODY_STORAGE_WORDS];}
+#ifndef DC_RUNTIME_BODY_STORAGE
+#undef DC_PIXEL_WORD
+#define DC_PIXEL_WORD(index) DC_BUFFER_DATA((index)-BODY_STORAGE_WORDS)
+#endif
+uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -96,19 +102,24 @@ uint structure_color(Body body) {
     uint color=material==2u?0xff287aaau:material==4u?0xff205f85u:material==3u?0xffb0b8c0u:0xff909090u;
     if(body.reserved0!=0x53545231u||body.reserved1==0u||body.reserved1>16u) return color;
     uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
-    uint base=8u+2u*w*h+4096u*8u+12u+8192u*32u+16u+64u*32u+8192u*16u;
-    uint graph=base+32u+body_data[base+1u]*8u;
+    uint base=8u+2u*w*h+DC_LAYOUT_PAIR_CAPACITY*8u+12u+DC_LAYOUT_CONTACT_CAPACITY*32u+16u+64u*32u+DC_LAYOUT_CONTACT_CAPACITY*16u;
+    uint graph=base+32u+DC_BUFFER_DATA(base+1u)*8u;
     uint state=graph+24000u+(body.reserved1-1u)*16u;
-    float utilization=uintBitsToFloat(body_data[state+7u]);
-    if(body_data[state+3u]==3u||isnan(utilization)||isinf(utilization)) return 0xffd040d0u;
+    float utilization=uintBitsToFloat(DC_BUFFER_DATA(state+7u));
+    if(DC_BUFFER_DATA(state+3u)==3u||isnan(utilization)||isinf(utilization)) return 0xffd040d0u;
     vec3 green=vec3(48,192,64),yellow=vec3(240,208,32),red=vec3(240,48,32);
     vec3 stress=utilization<.5?mix(green,yellow,clamp(utilization*2.,0.,1.)):
         mix(yellow,red,clamp((utilization-.5)*2.,0.,1.));
     return packed_color(stress);
 }
 uint structural_pixel(ivec2 cell,uint id,uint background) {
-    for(uint slot=0u;slot<64u;slot++) {
-        Body body=bodies[slot];if(body.enabled==0u||body.id!=id) continue;
+#ifdef DC_RUNTIME_BODY_STORAGE
+    uint found=runtime_body_find(id);
+    for(uint slot=found;slot<min(found+1u,BODY_CAPACITY);slot++) {
+#else
+    for(uint slot=0u;slot<BODY_CAPACITY;slot++) {
+#endif
+        Body body=DC_BODY(slot);if(body.enabled==0u||body.id!=id) continue;
         uint foreground=structure_color(body);
         if(body.reserved0!=0x53545231u&&body.piece_count!=0u) {
             vec2 low=vec2(cell)-vec2(body.x_fp,body.y_fp)/65536.;uvec4 query=body_piece_query(body,low,low+1);

@@ -13,7 +13,7 @@ void leaf_reserve(Body source) {
     if(lane==0u) leaf_changed=0u;
     barrier();
     for(uint pixel=lane;pixel<body_pieces(source);pixel+=32u) {
-        if(piece_material(source,pixel)!=5u||fracture_labels[pixel]!=0u) continue;
+        if(piece_material(source,pixel)!=5u||DC_FRAGMENT_LABEL(pixel)!=0u) continue;
         ivec2 cell=ivec2(floor(leaf_position(source,pixel)));
         if(any(lessThan(cell,ivec2(0)))||any(greaterThanEqual(cell,ivec2(params.width,params.height)))) continue;
         uint page=pages[uint(cell.y/64)*((params.width+63u)/64u)+uint(cell.x/64)];
@@ -26,45 +26,59 @@ void leaf_reserve(Body source) {
             p+=4096u;
             if(atomicCompSwap(debris_particles[p].mass_fp,0u,0xffffffffu)!=0u) continue;
         }
-        fracture_labels[pixel]=LEAF_RESERVATION|(p+1u);
+        DC_FRAGMENT_LABEL(pixel)=LEAF_RESERVATION|(p+1u);
         atomicOr(leaf_changed,1u);
     }
     memoryBarrierBuffer();barrier();
 }
 shared Body leaf_impact_source;
 void leaf_finish(Body source,bool committed);
-shared uint leaf_impact_mask[2],leaf_impact_committed;
+shared uint leaf_impact_committed;
+#ifdef DC_RUNTIME_BODY_STORAGE
+#define LEAF_MASK(i) DC_RUNTIME_WORK(DC_RUNTIME_WORK(5u)+(i))
+#else
+shared uint leaf_impact_mask[2];
+#define LEAF_MASK(i) leaf_impact_mask[i]
+#endif
 void leaf_impact_breaks() {
     uint lane=gl_LocalInvocationIndex;
-    if(lane<2u) leaf_impact_mask[lane]=0u;
+    uint mask_words=(BODY_CAPACITY+31u)/32u;
+    for(uint word=lane;word<mask_words;word+=32u) LEAF_MASK(word)=0u;
+    memoryBarrierBuffer();
     barrier();
     for(uint slot=lane;slot<BODY_CAPACITY;slot+=32u) {
-        uint p=graph()+38000u+slot*4u;Body b=bodies[slot];
-        if(b.enabled!=0u&&pixel_body(b)&&data[p+3u]==b.id&&(data[p+2u]&256u)!=0u)
-            atomicOr(leaf_impact_mask[slot/32u],1u<<(slot%32u));
+        uint p=body_impact_pending(slot);Body b=DC_BODY(slot);
+        if(b.enabled!=0u&&pixel_body(b)&&DC_SOLVER_DATA(p+3u)==b.id&&(DC_SOLVER_DATA(p+2u)&256u)!=0u) {
+#ifdef DC_RUNTIME_BODY_STORAGE
+            if(body_pieces(b)>DC_RUNTIME_WORK(13u)) {
+                atomicMax(DC_RUNTIME_REQUEST(9u),body_pieces(b));continue;
+            }
+#endif
+            atomicOr(LEAF_MASK(slot/32u),1u<<(slot%32u));
+        }
     }
-    barrier();
-    for(uint word=0u;word<2u;word++) for(uint mask=leaf_impact_mask[word];mask!=0u;mask&=mask-1u) {
+    memoryBarrierBuffer();barrier();
+    for(uint word=0u;word<mask_words;word++) for(uint mask=LEAF_MASK(word);mask!=0u;mask&=mask-1u) {
         uint slot=word*32u+uint(findLSB(mask));
         if(lane==0u) {
-            leaf_impact_source=bodies[slot];
+            leaf_impact_source=DC_BODY(slot);
             leaf_impact_committed=0u;
         }
         barrier();
         {
-            for(uint pixel=lane;pixel<body_pieces(leaf_impact_source);pixel+=32u) fracture_labels[pixel]=0u;
+            for(uint pixel=lane;pixel<body_pieces(leaf_impact_source);pixel+=32u) DC_FRAGMENT_LABEL(pixel)=0u;
             memoryBarrierBuffer();barrier();
             leaf_reserve(leaf_impact_source);
             if(lane==0u&&leaf_changed!=0u)
                 leaf_impact_committed=uint(pixel_fragment_source(slot,leaf_impact_source,2u,0.,max(1u,leaf_impact_source.reserved1)));
             memoryBarrierBuffer();barrier();
             leaf_finish(leaf_impact_source,leaf_impact_committed!=0u);
-            if(lane==0u&&leaf_impact_committed!=0u) data[graph()+38000u+slot*4u+2u]&=255u;
+            if(lane==0u&&leaf_impact_committed!=0u) DC_SOLVER_DATA(body_impact_pending(slot)+2u)&=255u;
             memoryBarrierBuffer();barrier();
             if(leaf_impact_committed!=0u) {
                 uint pool=graph()+40000u;
-                uint first=BODY_STORAGE_WORDS+pool+16u+data[pool]*color_capacity();
-                for(uint word=lane;word<data[pool+1u];word+=32u) shape_color_resolve(first+word);
+                uint first=BODY_STORAGE_WORDS+pool+16u+DC_SOLVER_DATA(pool)*color_capacity();
+                for(uint word=lane;word<DC_SOLVER_DATA(pool+1u);word+=32u) shape_color_resolve(first+word);
             }
             memoryBarrierBuffer();barrier();
         }
@@ -73,7 +87,7 @@ void leaf_impact_breaks() {
 void leaf_finish(Body source,bool committed) {
     uint lane=gl_LocalInvocationIndex;
     for(uint pixel=lane;pixel<body_pieces(source);pixel+=32u) {
-        uint label=fracture_labels[pixel];
+        uint label=DC_FRAGMENT_LABEL(pixel);
         if(label==0xffffffffu||(label&LEAF_RESERVATION)==0u) continue;
         uint p=(label&~LEAF_RESERVATION)-1u;
         if(!committed) {debris_particles[p].mass_fp=0u;continue;}

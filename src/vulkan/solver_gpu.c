@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "gpu_internal.h"
+#include "runtime_body_gpu.h"
 
 enum { SOLVER_ITERATIONS = 8, SOLVER_SUBSTEPS = 8, SOLVER_DISPATCH_WORD = 6,
        SOLVER_GRAIN_DISPATCH_WORD = 13, SOLVER_PHASE_MASK = 255 };
@@ -41,7 +42,7 @@ static dc_gpu_body_record_t *find_body(dc_gpu_t *gpu, uint32_t id) {
     dc_gpu_refresh_body_registry(gpu);
     for (uint32_t i = 0; i < gpu->body_count; ++i)
         if (gpu->body_ids[i] == id)
-            return &((dc_gpu_body_record_t *)gpu->body_mapped)[i];
+            return &(*dc_gpu_body_record(gpu,i));
     return NULL;
 }
 bool dc_gpu_set_rigid_solver(dc_gpu_t *gpu, bool enabled) {
@@ -178,9 +179,24 @@ static void record_pixel_hydro(dc_gpu_t *gpu) {
         if (phase == 1 || phase == 2)
             vkCmdDispatchIndirect(gpu->command, gpu->mpm_activity_buffer,
                                   (phase == 1 ? 33u : 36u) * sizeof(uint32_t));
-        else
-            vkCmdDispatch(gpu->command, phase == 3 ? 1 : DC_GPU_BODY_CAPACITY,
-                          1, 1);
+        else {
+            uint32_t groups=phase==3?(gpu->runtime_body_consumers?(dc_gpu_body_capacity(gpu)+63u)/64u:1u):dc_gpu_body_capacity(gpu);
+            uint32_t x=groups<65535u?groups:65535u;
+            vkCmdDispatch(gpu->command,x,(groups+x-1u)/x,1);
+        }
+        if(phase==3u&&gpu->runtime_body_consumers) {
+            VkMemoryBarrier2 memory={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+                .srcStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,.srcAccessMask=VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                .dstStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                .dstAccessMask=VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT};
+            VkDependencyInfo dependency={.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,.memoryBarrierCount=1,.pMemoryBarriers=&memory};
+            vkCmdPipelineBarrier2(gpu->command,&dependency);
+            dc_gpu_runtime_record_prefix(gpu,dc_gpu_body_capacity(gpu),UINT32_MAX);
+            vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->pixel_hydro_pipelines[phase]);
+            push[2]=phase|(1u<<8u);
+            vkCmdPushConstants(gpu->command,gpu->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
+            vkCmdDispatch(gpu->command,(dc_gpu_body_capacity(gpu)+63u)/64u,1,1);
+        }
         VkMemoryBarrier2 barrier = {
             .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
             .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
@@ -213,6 +229,8 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
     } else if (phase >= SOLVER_GRAIN_BED_INIT) {
         vkCmdDispatchIndirect(gpu->command, gpu->mpm_activity_buffer,
             DC_GRAIN_BED_WORK_WORD * sizeof(uint32_t));
+    } else if (phase == SOLVER_BEGIN_FRAME || phase == SOLVER_PREPARE || phase == SOLVER_FINISH) {
+        vkCmdDispatch(gpu->command,(dc_gpu_runtime_body_count(gpu)+63u)/64u,1,1);
     } else if (phase == SOLVER_PREDICT || phase == SOLVER_CLEAR ||
                phase == SOLVER_APPLY || phase == SOLVER_DERIVE_VELOCITY ||
                phase == SOLVER_APPLY_VELOCITY) {

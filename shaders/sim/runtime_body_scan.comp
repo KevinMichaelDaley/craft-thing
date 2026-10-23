@@ -1,0 +1,17 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#define DC_RUNTIME_BODY_STORAGE 1
+#include "rigid_body.glsl"
+layout(local_size_x=128) in;
+layout(push_constant) uniform Params {uint span,source,destination,count;} params;
+uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
+void main() {
+    uint group=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x;
+    uint i=group*128u+gl_LocalInvocationIndex;
+    if(i>=params.count) return;
+    uvec2 value=uvec2(DC_RUNTIME_WORK(params.source+2u*i),DC_RUNTIME_WORK(params.source+2u*i+1u));
+    if(params.span!=0u&&i>=params.span)
+        value+=uvec2(DC_RUNTIME_WORK(params.source+2u*(i-params.span)),DC_RUNTIME_WORK(params.source+2u*(i-params.span)+1u));
+    DC_RUNTIME_WORK(params.destination+2u*i)=value.x;
+    DC_RUNTIME_WORK(params.destination+2u*i+1u)=value.y;
+}

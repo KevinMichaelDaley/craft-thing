@@ -12,7 +12,8 @@ bool __wrap_dc_gpu_load_shader_module(dc_gpu_t *gpu, const char *path, VkShaderM
                                       char *err, uint32_t cap) {
     const char *candidate = getenv("DC_CONTACT_SHADER");
 #ifdef DC_CONTACT_TERRAIN_PROFILE
-    if (!candidate) candidate="build/diagnostics/contacts_terrain_scan.comp.spv";
+    if (!candidate) candidate=gpu->runtime_body_consumers?
+        "build/diagnostics/runtime_contacts_terrain_scan.comp.spv":"build/diagnostics/contacts_terrain_scan.comp.spv";
 #endif
     if (candidate && strcmp(path, "build/shaders/contacts.comp.spv") == 0) {
         if(!dc_gpu_contact_shader_compatible(candidate,DC_GPU_TYPED_CONTACT_ACTIVITY_WORD,err,cap)) return false;
@@ -115,6 +116,7 @@ static void measure(unsigned side, unsigned kind, unsigned pair_kind) {
         VkCommandBufferBeginInfo begin = {.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
         ASSERT_EQ(vkBeginCommandBuffer(g->command, &begin), VK_SUCCESS);
         vkCmdResetQueryPool(g->command, g->timestamp_pool, 0, 2);
+        dc_gpu_runtime_record_body_index(g);
         vkCmdWriteTimestamp2(g->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, g->timestamp_pool, 0);
         dc_gpu_record_contacts(g);
         vkCmdWriteTimestamp2(g->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, g->timestamp_pool, 1);

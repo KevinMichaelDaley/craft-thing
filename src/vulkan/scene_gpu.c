@@ -7,6 +7,7 @@
 #include "ferrum/renderer/light_transport.h"
 #include "ferrum/renderer/texture.h"
 #include "renderer_internal.h"
+#include "runtime_body_gpu.h"
 
 enum { SCENE_PHASES = 6, SCENE_BUFFERS = 5, SCENE_WORK_WORDS = 128 + 4096 };
 struct fr_scene_gpu {
@@ -23,6 +24,17 @@ struct fr_scene_gpu {
   VkDeviceMemory memory[SCENE_BUFFERS];
   void *mapped[SCENE_BUFFERS];
 };
+
+void fr_renderer_rebind_colors(dc_gpu_t *g) {
+  if(!g||!g->renderer) return;
+  VkDescriptorBufferInfo b[3]={{g->shape_color_buffer,0,dc_gpu_color_terrain_bytes()},
+    {g->shape_color_buffer,0,16},{g->shape_color_buffer,0,16}};
+  VkWriteDescriptorSet w[3]={0};
+  for(uint32_t i=0;i<3;i++) w[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+    .dstSet=g->renderer->compute.descriptor,.dstBinding=33+i,.descriptorCount=1,
+    .descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=b+i};
+  vkUpdateDescriptorSets(g->device,3,w,0,NULL);
+}
 
 bool fr_renderer_active(const dc_gpu_t *g) {
   return g && g->renderer && g->renderer->mode != FR_RENDERER_REFERENCE &&
@@ -110,7 +122,7 @@ bool fr_renderer_enable(dc_gpu_t *g, char *err, uint32_t cap) {
       {g->chunk_buffer, 0, (VkDeviceSize)atlas * sizeof(dc_cell_t)},
       {g->page_buffer, 0, (VkDeviceSize)g->page_width * g->page_height * 4},
       {g->occupancy_buffer, 0, (VkDeviceSize)grid * 20},
-      {g->body_buffer, 0, dc_gpu_body_storage_bytes(g)},
+      dc_gpu_runtime_bodies_binding(g),
       {g->particle_buffer, 0,
        (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MPM_PARTICLES_PER_CHUNK *
            sizeof(dc_mpm_particle_t)},
@@ -128,8 +140,8 @@ bool fr_renderer_enable(dc_gpu_t *g, char *err, uint32_t cap) {
   for(uint32_t i=16;i<33;i++) buffers[i]=(VkDescriptorBufferInfo){g->cells,0,(VkDeviceSize)grid*4};
   VkDeviceSize terrain_colors=dc_gpu_color_terrain_bytes(),bank_colors=dc_gpu_color_bank_bytes(g);
   buffers[33]=(VkDescriptorBufferInfo){g->shape_color_buffer,0,terrain_colors};
-  buffers[34]=(VkDescriptorBufferInfo){g->shape_color_buffer,terrain_colors,bank_colors};
-  buffers[35]=(VkDescriptorBufferInfo){g->shape_color_buffer,terrain_colors+bank_colors,bank_colors};
+  buffers[34]=(VkDescriptorBufferInfo){g->shape_color_buffer,g->runtime_body_consumers?0:terrain_colors,g->runtime_body_consumers?16:bank_colors};
+  buffers[35]=(VkDescriptorBufferInfo){g->shape_color_buffer,g->runtime_body_consumers?0:terrain_colors+bank_colors,g->runtime_body_consumers?16:bank_colors};
   if (!fr_occlusion_input_binding(s->occlusion, &buffers[8]) ||
       !fr_lighting_field_binding(s->lighting, &buffers[13]) ||
       !fr_renderer_compute_init(g, &s->compute, buffers, 36, 32,
@@ -223,6 +235,7 @@ static void scene_dispatch(dc_gpu_t *g, uint32_t phase, uint32_t work,
   scene_barrier(g);
 }
 void fr_renderer_record(dc_gpu_t *g) {
+  dc_gpu_runtime_record_body_index(g);
   struct fr_scene_gpu *s = g->renderer;
   scene_rebase_sources(g);
   uint32_t *config = s->mapped[4];

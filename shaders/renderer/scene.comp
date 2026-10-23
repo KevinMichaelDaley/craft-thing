@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "../../include/ferrum/renderer/light_transport.h"
 #include "../../include/dungeoncraft/terrain_flags.h"
+#define DC_RUNTIME_BODY_BINDING 3
 #include "../sim/rigid_body.glsl"
 #include "../sim/rigid_shape.glsl"
 #include "../sim/rigid_clip.glsl"
@@ -14,7 +15,13 @@ layout(constant_id=0) const uint SCENE_PHASE=0u;
 layout(set=0,binding=0,std430) readonly buffer ChunkCells {uvec2 chunk_cells[];};
 layout(set=0,binding=1,std430) readonly buffer PageTable {uint pages[];};
 layout(set=0,binding=2,std430) readonly buffer Occupancy {uint occupancy[];};
+#ifndef DC_RUNTIME_BODY_STORAGE
 layout(set=0,binding=3,std430) readonly buffer Bodies {Body bodies[64];uint body_data[];};
+#endif
+#ifndef DC_RUNTIME_BODY_STORAGE
+#undef DC_PIXEL_WORD
+#define DC_PIXEL_WORD(index) DC_BUFFER_DATA((index)-BODY_STORAGE_WORDS)
+#endif
 struct Particle {int x_fp,y_fp,vx_fp,vy_fp;float f00,f01,f10,f11;uint id_lo,id_hi,mass_fp,grain_fp,material,flags;};
 layout(set=0,binding=4,std430) readonly buffer Particles {Particle particles[];};
 layout(set=0,binding=5,std430) buffer Palette {Appearance palette[];};
@@ -41,17 +48,21 @@ uint group_sum(uint value) {
     return group_statistics[0];
 }
 
-uint pixel_word_at(uint index) {return body_data[index-BODY_STORAGE_WORDS];}
+uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 #include "../sim/shape_colors.glsl"
 uint map_hash(uint id) {return texture_hash(id)&4095u;}
 uint body_slot(uint id) {
+#ifdef DC_RUNTIME_BODY_STORAGE
+    return runtime_body_find(id);
+#else
     uint hash=map_hash(id);
     for(uint probe=0u;probe<64u;probe++) {
         uint slot=work[128u+((hash+probe)&4095u)];
         if(slot==0u) return 64u;
-        if(bodies[slot-1u].id==id) return slot-1u;
+        if(DC_BODY(slot-1u).id==id) return slot-1u;
     }
     return 64u;
+#endif
 }
 uint terrain_material(uint material) {
     return DC_BODY_TO_TERRAIN(material);
@@ -101,8 +112,8 @@ Surface surface_at(uint i,out float opacity,out uint known) {
     uint local=(cell.y%64u)*64u+cell.x%64u,atlas=(page-1u)*4096u+local;
     uvec2 physical=chunk_cells[atlas];uint material=physical.x&65535u;
     float body_coverage=0.,body_opacity=0.;uint id=occupancy[i],slot=id==0u?64u:body_slot(id);
-    if(slot<64u) {
-        Body body=bodies[slot];
+    if(slot<BODY_CAPACITY) {
+        Body body=DC_BODY(slot);
         vec2 relative=vec2(cell)-vec2(body.x_fp,body.y_fp)/65536.;
         uvec4 query=body_piece_query(body,relative,relative+1.);
         for(uint ordinal=0u;ordinal<query.z*query.w;ordinal++) {
@@ -171,21 +182,25 @@ void main() {
         return;
     }
     if(SCENE_PHASE==1u) {
-        if(i>=64u || bodies[i].enabled==0u || bodies[i].id==0u) return;
-        uint hash=map_hash(bodies[i].id);
+#ifdef DC_RUNTIME_BODY_STORAGE
+        return;
+#else
+        if(i>=64u || DC_BODY(i).enabled==0u || DC_BODY(i).id==0u) return;
+        uint hash=map_hash(DC_BODY(i).id);
         for(uint probe=0u;probe<64u;probe++)
             if(atomicCompSwap(work[128u+((hash+probe)&4095u)],0u,i+1u)==0u) break;
         return;
+#endif
     }
     if(SCENE_PHASE==2u) {
         uint generated=0u;
-        if(i<body_data[params.registry+1u]*4096u) {
+        if(i<DC_BUFFER_DATA(params.registry+1u)*4096u) {
             uint registry=params.registry+32u+(i/4096u)*8u;
-            if(body_data[registry+5u]!=0u) {
-                uint generation=body_data[registry+4u],material=chunk_cells[i].x&65535u;
+            if(DC_BUFFER_DATA(registry+5u)!=0u) {
+                uint generation=DC_BUFFER_DATA(registry+4u),material=chunk_cells[i].x&65535u;
                 uint style=material<=10u?configuration[4u+material]:0u,key=material|(style<<16);
                 if(uvec2(keys[i].x&0x7fffffffu,keys[i].y)!=uvec2(key,generation)) {
-                    ivec2 rest=ivec2(canonical_cell(body_data[registry],i%64u),canonical_cell(body_data[registry+2u],(i%4096u)/64u));
+                    ivec2 rest=ivec2(canonical_cell(DC_BUFFER_DATA(registry),i%64u),canonical_cell(DC_BUFFER_DATA(registry+2u),(i%4096u)/64u));
                     palette[i]=texture_sample(rest,1u,material,style);keys[i]=uvec2(key,generation);
                     generated=material!=0u && material!=3u?1u:0u;
                 }

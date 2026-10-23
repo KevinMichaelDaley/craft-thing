@@ -6,8 +6,10 @@ layout(local_size_x = 1, local_size_y = 1) in;
 layout(set = 0, binding = 3, std430) readonly buffer Occupancy { uint occupancy[]; };
 layout(set = 0, binding = 5, std430) buffer Trace { uint trace_values[]; };
 
+#ifndef DC_RUNTIME_BODY_STORAGE
 layout(set = 0, binding = 4, std430) readonly buffer Bodies { Body bodies[BODY_CAPACITY]; uint data[]; };
-uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
+#endif
+uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -22,7 +24,7 @@ void main() {
     if (params.mode == 0u) {
         uint seen = 0u;
         for (uint i = 0u; i < params.body_count; ++i) {
-            Body body = bodies[i];
+            Body body = DC_BODY(i);
             if (body.enabled == 0u || body.visible == 0u) continue;
             int x = body.x_fp >> 16;
             int y = body.y_fp >> 16;

@@ -38,5 +38,7 @@ bool fr_lighting_field_binding(fr_lighting_gpu_t *lighting,
 bool fr_renderer_authored_bindings(dc_gpu_t *gpu, VkDescriptorBufferInfo buffers[3]);
 void fr_lighting_record(fr_lighting_gpu_t *lighting, VkBuffer indirect,
                         VkDeviceSize offset);
+/** Rebind appearance after a completed resource-growth transaction. */
+void fr_renderer_rebind_colors(dc_gpu_t *gpu);
 
 #endif

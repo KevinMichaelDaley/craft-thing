@@ -127,7 +127,7 @@ static bool graph_valid(const dc_structural_store_payload_t *p) {
             node_index(g, m->a) < 0 || node_index(g, m->b) < 0 ||
             m->a == m->b || m->material >= FR_STRUCTURAL_MATERIAL_COUNT ||
             !m->depth_fp || m->depth_fp > 16u * 65536u || (m->flags & ~2u) ||
-            m->reserved >= DC_GPU_BODY_CAPACITY)
+            m->reserved >= p->body_count)
             return false;
         for (unsigned j = 0; j < i; j++)
             if (g->members[j].id == m->id)
@@ -197,7 +197,7 @@ bool dc_gpu_structure_payload_valid(const dc_gpu_t *gpu,
                               dc_gpu_structural_graph_offset();
     if (memcmp(p->graph + 29000u, current + 29000u, 36 * sizeof(uint32_t)))
         return false;
-    for (unsigned i = 0; i < DC_GPU_BODY_CAPACITY; i++) {
+    for (unsigned i = 0; i < p->body_count; i++) {
         const dc_gpu_body_record_t *b = &p->bodies[i];
         if (!body_valid(b, pixels, words))
             return false;
@@ -212,7 +212,7 @@ bool dc_gpu_structure_payload_valid(const dc_gpu_t *gpu,
                 if ((p->bodies[j].body.active || p->bodies[j].reserved[0]) &&
                     p->bodies[j].body.id == b->body.id)
                     return false;
-        const uint32_t *output = p->graph + 36000u + i * 4u;
+        const uint32_t *output = p->states[i].persistent+8u;
         if (output[0] && (!output[1] || output[2] > p->control[3] ||
                           (output[3] != 1 && output[3] != 2)))
             return false;
@@ -221,7 +221,7 @@ bool dc_gpu_structure_payload_valid(const dc_gpu_t *gpu,
              b->reserved[0] != DC_GPU_STRUCTURAL_CONVERTED_TAG ||
              output[0] != b->body.id || output[1] != b->reserved[1]))
             return false;
-        const uint32_t *pending = p->graph + 38000u + i * 4u;
+        const uint32_t *pending = p->states[i].persistent;
         if (pending[0] > 1000000 || pending[1] > 1000000 || (pending[2] & ~256u) > 2)
             return false;
     }
@@ -250,8 +250,8 @@ bool dc_gpu_structure_payload_valid(const dc_gpu_t *gpu,
             return false;
         if (!bond[0])
             continue;
-        if (bond[1] >= DC_GPU_BODY_CAPACITY ||
-            bond[2] >= DC_GPU_BODY_CAPACITY || bond[5] > FR_JOINT_MOMENT ||
+        if (bond[1] >= p->body_count ||
+            bond[2] >= p->body_count || bond[5] > FR_JOINT_MOMENT ||
             p->bodies[bond[1]].body.id != bond[3] ||
             p->bodies[bond[2]].body.id != bond[4])
             return false;

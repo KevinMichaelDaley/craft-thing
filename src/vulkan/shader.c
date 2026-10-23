@@ -2,9 +2,12 @@
 #include <stdlib.h>
 
 #include "gpu_internal.h"
+#include "runtime_body_gpu.h"
 
 bool dc_gpu_load_shader_module(dc_gpu_t *gpu, const char *path,
                                VkShaderModule *module, char *err, uint32_t cap) {
+    char runtime_path[1024];
+    path=dc_gpu_runtime_body_shader(gpu,path,runtime_path);
     FILE *file = fopen(path, "rb");
     if (!file) {
         if (err && cap) snprintf(err, cap, "Cannot open SPIR-V shader: %s", path);

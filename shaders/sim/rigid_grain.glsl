@@ -9,9 +9,9 @@ layout(set=0,binding=19,std430) buffer Particles { Particle particles[]; };
 layout(set=0,binding=21,std430) buffer GrainScratch { uint grain_scratch[]; };
 layout(set=0,binding=1,std430) readonly buffer GrainTerrain { uvec2 grain_cells[]; };
 const uint GRAIN_PREPARE=15u,GRAIN_POSITION=16u,GRAIN_VELOCITY=17u;
-uint grain_reference(uint c) { return data[c+2u]==3u ? data[c+7u] : 0u; }
+uint grain_reference(uint c) { return DC_DATA(c+2u)==3u ? DC_DATA(c+7u) : 0u; }
 vec2 grain_position(uint c,uint index) {
-    return anchor(c+22u)-vec2(int(data[c+26u]),int(data[c+27u]))/65536.0+
+    return anchor(c+22u)-vec2(int(DC_DATA(c+26u)),int(DC_DATA(c+27u)))/65536.0+
         vec2(particles[index].x_fp,particles[index].y_fp)/65536.0;
 }
 void grain_correction(uint index,vec2 change) {
@@ -28,7 +28,7 @@ bool grain_static_at(vec2 point) {
     return material==1u||material==7u||material==8u||material==9u;
 }
 void grain_phase(uint i) {
-    if(data[sb()+3u]!=0u||i>=data[cb()]) return;
+    if(DC_DATA(sb()+3u)!=0u||i>=DC_DATA(cb())) return;
     uint c=cb()+12u+i*32u,ref=grain_reference(c);
     if(ref==0u) return;
     uint index=ref-1u,s=index*4u;

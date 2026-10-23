@@ -53,10 +53,10 @@ void update_bearings(uint owner) {
     uint g=graph(),lane=gl_LocalInvocationID.x;
     if(lane==0u) eq_changed=0u;
     barrier();
-    for(uint a=lane;a<data[g+3u];a+=32u) if(eq_anchor[a]>=0&&
-        data[state(uint(eq_anchor[a]))+1u]==data[state(owner)+1u]) {
+    for(uint a=lane;a<DC_DATA(g+3u);a+=32u) if(eq_anchor[a]>=0&&
+        DC_DATA(state(uint(eq_anchor[a]))+1u)==DC_DATA(state(owner)+1u)) {
         uint an=g+ANCHORS+a*24u;
-        if(data[an+3u]!=0u) continue;
+        if(DC_DATA(an+3u)!=0u) continue;
         vec3 gap=anchor_gap(a);
         bool open=gap.x>1e-9,closed=gap.x<-1e-9;
         vec3 original=vec3(eq_get(an+13u),eq_get(an+14u),0);
@@ -76,10 +76,10 @@ void update_bearings(uint owner) {
             eq_ak[a]=next;eq_anchor_slide[a]=slide;atomicOr(eq_changed,1u);
         }
     }
-    for(uint j=lane;j<data[g+2u];j+=32u) if(
-        data[state(uint(eq_joint_nodes[j].x))+1u]==data[state(owner)+1u]) {
+    for(uint j=lane;j<DC_DATA(g+2u);j+=32u) if(
+        DC_DATA(state(uint(eq_joint_nodes[j].x))+1u)==DC_DATA(state(owner)+1u)) {
         uint p=g+JOINTS+j*16u;
-        if(data[p+4u]!=0u||data[p+14u]!=0u) continue;
+        if(DC_DATA(p+4u)!=0u||DC_DATA(p+14u)!=0u) continue;
         vec3 gap=joint_gap(j);
         bool open=gap.x>1e-9,closed=gap.x<-1e-9;
         vec3 original=vec3(eq_get(p+5u),eq_get(p+6u),0);

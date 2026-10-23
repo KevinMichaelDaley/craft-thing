@@ -19,7 +19,7 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 }
 
 bool dc_gpu_set_contact_capacity(dc_gpu_t *gpu, uint32_t capacity, char *err, uint32_t cap) {
-    if (!gpu || capacity > DC_GPU_CONTACT_CAPACITY)
+    if (!gpu || capacity > (gpu->runtime_contact_capacity?gpu->runtime_contact_capacity:DC_GPU_CONTACT_CAPACITY))
         return error(err, cap, "Invalid contact capacity");
     dc_gpu_contact_data(gpu)[DC_GPU_CONTACT_CAPACITY_WORD] = capacity;
     gpu->body_refresh_pending = true;
@@ -34,7 +34,7 @@ bool dc_gpu_read_contacts(dc_gpu_t *gpu, dc_gpu_contact_stats_t *stats,
     const uint32_t *data = dc_gpu_contact_data(gpu);
     dc_gpu_contact_stats_t completed;
     memcpy(&completed, data, sizeof(completed));
-    if (completed.count > DC_GPU_CONTACT_CAPACITY || (contacts && contact_cap < completed.count))
+    if (completed.count > (gpu->runtime_contact_capacity?gpu->runtime_contact_capacity:DC_GPU_CONTACT_CAPACITY) || (contacts && contact_cap < completed.count))
         return error(err, cap, "Contact readback buffer is too small");
     if (contacts) memcpy(contacts, data + DC_GPU_CONTACT_HEADER_WORDS,
                          (size_t)completed.count * sizeof(*contacts));

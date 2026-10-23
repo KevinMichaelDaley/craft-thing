@@ -212,7 +212,7 @@ static void test_anchor_must_attach_to_the_member(void) {
     dc_gpu_destroy(g);
     PASS();
 }
-static void test_capacity_failure_keeps_sources(void) {
+static void test_capacity_growth_keeps_sources(void) {
     char e[256];
     dc_gpu_t *g = grid();
     ASSERT_TRUE(g);
@@ -227,12 +227,12 @@ static void test_capacity_failure_keeps_sources(void) {
     }
     fr_structural_gpu_graph_t s = beam(20);
     s.anchor_count = 0;
-    ASSERT_TRUE(!fr_gpu_place_structure(g, &s, e, sizeof(e)));
+    ASSERT_TRUE(fr_gpu_place_structure(g, &s, e, sizeof(e)));
     dc_gpu_body_t b;
     ASSERT_TRUE(dc_gpu_read_body_id(g, 64, &b, e, sizeof(e)));
     ASSERT_EQ(b.active, 1u);
     fr_structural_gpu_node_state_t n;
-    ASSERT_TRUE(!fr_gpu_read_structure_node(g, 1, &n));
+    ASSERT_TRUE(fr_gpu_read_structure_node(g, 1, &n));
     dc_gpu_destroy(g);
     PASS();
 }
@@ -352,7 +352,7 @@ int main(void) {
     RUN(test_cold_anchor_and_slot_identity);
     RUN(test_marking_ownership_and_rejection);
     RUN(test_structural_ownership_cannot_be_overwritten);
-    RUN(test_capacity_failure_keeps_sources);
+    RUN(test_capacity_growth_keeps_sources);
     RUN(test_anchor_must_attach_to_the_member);
     RUN(test_explicit_joint_graph_does_not_multiply_roots);
     RUN(test_body_identity_collision_is_atomic);

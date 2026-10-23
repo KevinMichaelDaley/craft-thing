@@ -99,16 +99,18 @@ static void test_pool_capacity_removal_and_slot_reuse_keep_ids_stable(void) {
     ASSERT_TRUE(gpu != NULL);
     for (uint32_t id = 1; id <= DC_GPU_BODY_CAPACITY; ++id)
         ASSERT_TRUE(dc_gpu_spawn_body(gpu, box(id, id, 2), err, sizeof(err)));
-    ASSERT_TRUE(!dc_gpu_spawn_body(gpu, box(1001, 100, 2), err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_spawn_body(gpu, box(1001, 100, 2), err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_spawn_body(gpu, box(64, 80, 2), err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_remove_body(gpu, 32, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_spawn_body(gpu, box(1001, 100, 2), err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_spawn_body(gpu, box(1002, 104, 2), err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
     dc_gpu_body_t saved = {.id = 999};
     ASSERT_TRUE(!dc_gpu_read_body_id(gpu, 32, &saved, err, sizeof(err)));
     ASSERT_EQ(saved.id, 999u);
     ASSERT_TRUE(dc_gpu_read_body_id(gpu, 1001, &saved, err, sizeof(err)));
     ASSERT_EQ(saved.x_fp, 100 * (int32_t)DC_FLUID_FULL);
+    ASSERT_TRUE(dc_gpu_read_body_id(gpu, 1002, &saved, err, sizeof(err)));
+    ASSERT_EQ(saved.x_fp, 104 * (int32_t)DC_FLUID_FULL);
     for (uint32_t id = 1; id <= DC_GPU_BODY_CAPACITY; ++id) {
         if (id == 32u) continue;
         ASSERT_TRUE(dc_gpu_read_body_id(gpu, id, &saved, err, sizeof(err)));

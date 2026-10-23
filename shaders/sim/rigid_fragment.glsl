@@ -1,4 +1,9 @@
 const uint FRAGMENT_CAPACITY=8u,FRAGMENT_ID_BASE=0x80000000u;
+void fragment_sum(inout float sum,inout float correction,float value) {
+    precise float term=value-correction;
+    precise float next=sum+term;
+    correction=(next-sum)-term;sum=next;
+}
 bool fragment_clip(Body source,uint piece,uint axis,float cut,bool lower,out Shape shape) {
     shape.count=0u;shape.material=source.piece_count==0u ? source.material : source.pieces[piece].material;
     for(uint i=0u;i<BODY_VERTEX_CAPACITY;i++) shape.vertices[i]=ivec2(0);
@@ -67,7 +72,7 @@ Body fragment_build(Body source,Shape pieces[8],uint labels[8],uint owner,uint g
     return b;
 }
 bool fragment_body(uint slot,uint axis,float cut,uint generation) {
-    Body source=bodies[slot];Shape pieces[8];uint labels[8],owners[8],slots[8],ids[8];
+    Body source=DC_BODY(slot);Shape pieces[8];uint labels[8],owners[8],slots[8],ids[8];
     if(source.material==0u) source.material=1u;
     for(uint i=0u;i<FRAGMENT_CAPACITY;i++) {pieces[i].count=0u;labels[i]=i;}
     cut=round(cut*65536.0)/65536.0;
@@ -84,16 +89,21 @@ bool fragment_body(uint slot,uint axis,float cut,uint generation) {
     if(count<2u) return false;
     slots[0]=slot;ids[0]=source.id;uint allocated=1u;
     for(uint i=0u;i<BODY_CAPACITY&&allocated<count;i++)
-        if(i!=slot&&bodies[i].enabled==0u&&bodies[i].reserved0==0u) slots[allocated++]=i;
-    if(allocated!=count) return false;
-    uint base=structural_base(),next=data[base+14u];
+        if(i!=slot&&DC_BODY_FREE(i)) slots[allocated++]=i;
+    if(allocated!=count) {
+#ifdef DC_RUNTIME_BODY_STORAGE
+        atomicMax(DC_RUNTIME_REQUEST(2u),BODY_CAPACITY+count-allocated);
+#endif
+        return false;
+    }
+    uint base=structural_base(),next=DC_DATA(base+14u);
     for(uint child=1u;child<count;child++) {
         bool available=false;
         for(uint attempt=0u;attempt<=BODY_CAPACITY&&!available;attempt++) {
             if(next==0x7fffffffu) return false;
             ids[child]=FRAGMENT_ID_BASE+(++next);available=true;
             for(uint i=0u;i<BODY_CAPACITY;i++)
-                if(bodies[i].id==ids[child]&&(bodies[i].enabled!=0u||bodies[i].reserved0!=0u)) available=false;
+                if(DC_BODY(i).id==ids[child]&&(DC_BODY(i).enabled!=0u||DC_BODY(i).reserved0!=0u)) available=false;
         }
         if(!available) return false;
     }
@@ -115,17 +125,17 @@ bool fragment_body(uint slot,uint axis,float cut,uint generation) {
        abs(angular-source.inertia*source.angular_velocity)>max(.002,abs(source.inertia*source.angular_velocity)*1e-4)||
        energy>initial+max(.002,initial*1e-4)) return false;
     uint root=source.id,root_generation=generation,g=structural_graph();
-    if(data[g+36000u+slot*4u]!=0u) {
-        root=data[g+36000u+slot*4u];root_generation=data[g+36000u+slot*4u+1u];
+    if(DC_SOLVER_DATA(body_fragment_record(slot))!=0u) {
+        root=DC_SOLVER_DATA(body_fragment_record(slot));root_generation=DC_SOLVER_DATA(body_fragment_record(slot)+1u);
     }
     for(uint child=0u;child<count;child++) {
         Body b=fragment_build(source,pieces,labels,owners[child],generation);
-        b.id=ids[child];bodies[slots[child]]=b;
-        uint record=g+36000u+slots[child]*4u;
-        data[record]=root;data[record+1u]=root_generation;data[record+2u]=next;data[record+3u]=1u;
+        b.id=ids[child];DC_BODY(slots[child])=b;
+        uint record=body_fragment_record(slots[child]);
+        DC_SOLVER_DATA(record)=root;DC_SOLVER_DATA(record+1u)=root_generation;DC_SOLVER_DATA(record+2u)=next;DC_SOLVER_DATA(record+3u)=1u;
     }
-    data[base+14u]=next;
-    data[base+16u]=(params.width+15u)/16u;
-    data[base+17u]=(params.height+15u)/16u;data[base+18u]=1u;
+    DC_DATA(base+14u)=next;
+    DC_DATA(base+16u)=(params.width+15u)/16u;
+    DC_DATA(base+17u)=(params.height+15u)/16u;DC_DATA(base+18u)=1u;
     return true;
 }

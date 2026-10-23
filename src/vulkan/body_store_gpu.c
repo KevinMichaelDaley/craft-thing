@@ -1,6 +1,8 @@
 #include <errno.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include "runtime_body_gpu.h"
 #include <string.h>
 
 #include "gpu_internal.h"
@@ -45,23 +47,26 @@ bool dc_gpu_save_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap
     int length = snprintf(temporary, sizeof(temporary), "%s.tmp", path);
     if (length < 0 || (size_t)length >= sizeof(temporary))
         return error(err, cap, "Body snapshot path is too long");
-    moving_body_t bodies[DC_GPU_BODY_CAPACITY] = {0};
+    dc_gpu_refresh_body_registry(gpu);
+    moving_body_t *bodies=calloc(dc_gpu_body_capacity(gpu),sizeof(*bodies));
+    if(!bodies) return error(err,cap,"Cannot allocate body snapshot staging");
     body_header_t header = { .magic = {'D', 'C', 'B', '1'}, .version = 4 };
     for (uint32_t i = 0; i < gpu->body_count; ++i) {
         if (!gpu->body_ids[i]) continue;
         if (!dc_gpu_read_world_body(gpu, gpu->body_ids[i], &bodies[header.count].world, err, cap) ||
             !dc_gpu_read_body_shape(gpu, gpu->body_ids[i], &bodies[header.count].shape, err, cap) ||
             !dc_gpu_read_compound_shape(gpu,gpu->body_ids[i],&bodies[header.count].compound,err,cap))
-            return false;
+            {free(bodies);return false;}
         dc_gpu_body_motion_t motion;
-        if (!dc_gpu_read_body_motion(gpu,gpu->body_ids[i],&motion,err,cap)) return false;
+        if (!dc_gpu_read_body_motion(gpu,gpu->body_ids[i],&motion,err,cap)) {free(bodies);return false;}
         bodies[header.count].motion = (saved_motion_t){motion.angle,motion.angular_velocity,motion.flags,0};
         ++header.count;
     }
     FILE *file = fopen(temporary, "wb");
-    if (!file) return error(err, cap, "Cannot open body snapshot for writing");
+    if (!file) {free(bodies);return error(err, cap, "Cannot open body snapshot for writing");}
     bool okay = fwrite(&header, sizeof(header), 1, file) == 1 &&
         fwrite(bodies, sizeof(*bodies), header.count, file) == header.count;
+    free(bodies);
     if (fclose(file) != 0) okay = false;
     if (okay) okay = rename(temporary, path) == 0;
     if (!okay) { remove(temporary); return error(err, cap, "Cannot save body snapshot"); }
@@ -75,10 +80,12 @@ bool dc_gpu_load_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap
     FILE *file = fopen(path, "rb");
     if (!file) return errno == ENOENT ? true : error(err, cap, "Cannot open body snapshot");
     body_header_t header = {0};
-    moving_body_t bodies[DC_GPU_BODY_CAPACITY] = {0};
+    moving_body_t *bodies=NULL;
     bool okay = fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCB1", 4) == 0 && header.version >= 1 && header.version <= 4 && !header.reserved &&
-        header.count <= DC_GPU_BODY_CAPACITY;
+        header.count <= UINT32_MAX/sizeof(moving_body_t);
+    if(okay) bodies=calloc((size_t)header.count+1u,sizeof(*bodies));
+    okay=okay&&bodies;
     for (uint32_t i = 0; okay && i < header.count; ++i) {
         okay = fread(&bodies[i].world, sizeof(bodies[i].world), 1, file) == 1;
         if (okay && header.version >= 2)
@@ -118,9 +125,11 @@ bool dc_gpu_load_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap
             isfinite(motion.angular_velocity) && fabsf(motion.angular_velocity)<=.5f &&
             !(motion.flags & ~3u) && !motion.reserved;
     }
-    if (!okay) return error(err, cap, "Invalid or truncated body snapshot");
-    memset(gpu->body_mapped, 0, sizeof(dc_gpu_body_record_t) * DC_GPU_BODY_CAPACITY);
-    memset(gpu->body_ids, 0, sizeof(gpu->body_ids));
+    if (!okay) {free(bodies);return error(err, cap, "Invalid or truncated body snapshot");}
+    if(!dc_gpu_runtime_bodies_reserve(gpu,header.count,err,cap)) {free(bodies);return false;}
+    for(uint32_t i=0;i<dc_gpu_body_capacity(gpu);i++)
+        memset(dc_gpu_body_record(gpu,i),0,sizeof(dc_gpu_body_record_t));
+    memset(gpu->body_ids, 0, (size_t)dc_gpu_body_capacity(gpu)*sizeof(*gpu->body_ids));
     gpu->body_count = 0;
     gpu->body_refresh_pending = true;
     for (uint32_t i = 0; i < header.count; ++i) {
@@ -128,10 +137,11 @@ bool dc_gpu_load_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap
             dc_gpu_spawn_compound_body(gpu,bodies[i].world,&bodies[i].compound,err,cap) : bodies[i].shape.count ?
             dc_gpu_spawn_convex_body(gpu, bodies[i].world, &bodies[i].shape, err, cap) :
             dc_gpu_spawn_world_body(gpu, bodies[i].world, err, cap);
-        if (!spawned) return false;
+        if (!spawned) {free(bodies);return false;}
         saved_motion_t motion=bodies[i].motion;
         if (!dc_gpu_set_body_motion(gpu,bodies[i].world.body.id,motion.angle,
-                                    motion.angular_velocity,motion.flags,err,cap)) return false;
+                                    motion.angular_velocity,motion.flags,err,cap)) {free(bodies);return false;}
     }
+    free(bodies);
     return dc_gpu_set_body_origin(gpu, gpu->body_origin, err, cap);
 }

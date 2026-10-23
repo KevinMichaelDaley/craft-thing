@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "gpu_internal.h"
+#include "runtime_body_gpu.h"
 
 static const uint64_t ACQUIRE_TIMEOUT_NS = 1000000000ull;
 
@@ -29,6 +30,7 @@ static void image_barrier(VkCommandBuffer command, VkImage image,
 static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
                           char *err, uint32_t cap) {
     if (!gpu || !gpu->swapchain) return error(err, cap, "GPU window is not initialized");
+    if(!dc_gpu_runtime_bodies_service(gpu,err,cap)) return false;
     SDL_PumpEvents();
     uint32_t index = 0;
     VkResult result = vkAcquireNextImageKHR(gpu->device, gpu->swapchain, ACQUIRE_TIMEOUT_NS,

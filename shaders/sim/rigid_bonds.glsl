@@ -1,18 +1,18 @@
 #include "structural_bonds.glsl"
 #include "rigid_bond_budget.glsl"
 void solve_bonds(uint phase) {
-    if(gl_GlobalInvocationID.x!=0u||data[sb()+3u]!=0u) return;
+    if(gl_GlobalInvocationID.x!=0u||DC_DATA(sb()+3u)!=0u) return;
     if(phase==14u) prepare_bond_budgets();
     for(uint i=0u;i<STRUCTURAL_BOND_CAPACITY;i++) {
         uint p=bond_record(i);
         if(!bond_live(p)) continue;
         if(phase==14u) {
-            for(uint axis=0u;axis<3u;axis++) data[p+15u+axis]=0u;
+            for(uint axis=0u;axis<3u;axis++) DC_DATA(p+15u+axis)=0u;
             continue;
         }
-        uint ai=data[p+1u],bi=data[p+2u];
-        if(data[bs(ai)+BODY_AWAKE_WORD]==0u||data[bs(bi)+BODY_AWAKE_WORD]==0u) continue;
-        Body a=bodies[ai],b=bodies[bi];float normal_impulse=0;
+        uint ai=DC_DATA(p+1u),bi=DC_DATA(p+2u);
+        if(DC_SOLVER_DATA(bs(ai)+BODY_AWAKE_WORD)==0u||DC_SOLVER_DATA(bs(bi)+BODY_AWAKE_WORD)==0u) continue;
+        Body a=DC_BODY(ai),b=DC_BODY(bi);float normal_impulse=0;
         for(uint axis=0u;axis<3u;axis++) {
             float stiffness=getf(p+12u+axis);
             if(stiffness<=0) continue;
@@ -34,7 +34,7 @@ void solve_bonds(uint phase) {
             float compliance=phase==13u?0:3600.0/(stiffness*DT*DT);
             float previous=getf(p+15u+axis);
             float lambda=-(c+compliance*previous)/(mass+compliance);
-            if(data[p+5u]==0u&&axis<2u) {
+            if(DC_DATA(p+5u)==0u&&axis<2u) {
                 vec2 normal=vec2(cos(a.angle+getf(p+11u)),sin(a.angle+getf(p+11u)));
                 float gap=dot(normal,position(b)+b.center+rb-position(a)-a.center-ra);
                 if(phase==13u) {
@@ -71,7 +71,7 @@ void solve_bonds(uint phase) {
                 b.angle=wrap(b.angle+b.inverse_inertia*jb*lambda);
             }
         }
-        bodies[ai]=a;bodies[bi]=b;
+        DC_BODY(ai)=a;DC_BODY(bi)=b;
     }
     if(phase==13u) conserve_isolated_bonds();
 }

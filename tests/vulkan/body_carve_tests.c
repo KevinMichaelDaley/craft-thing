@@ -3,10 +3,17 @@
 #include <stdlib.h>
 #include "compound_fixture.h"
 #include "../../src/vulkan/gpu_internal.h"
+#include "../../src/vulkan/runtime_body_gpu.h"
 #include "ferrum/renderer/gpu.h"
 #include "ferrum/structural/gpu.h"
 
 static int g_pass,g_fail;
+static bool reject_allocations;
+VKAPI_ATTR VkResult VKAPI_CALL __real_vkAllocateMemory(VkDevice device,const VkMemoryAllocateInfo *info,const VkAllocationCallbacks *callbacks,VkDeviceMemory *memory);
+VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkAllocateMemory(VkDevice device,const VkMemoryAllocateInfo *info,const VkAllocationCallbacks *callbacks,VkDeviceMemory *memory) {
+    if(reject_allocations) return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+    return __real_vkAllocateMemory(device,info,callbacks,memory);
+}
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -29,9 +36,12 @@ static void test_air_carves_colored_body_and_splits_remaining_components(void) {
     dc_gpu_body_record_t *b=g->body_mapped;
     b->body.x_fp=b->local_x_fp=20<<16;b->body.y_fp=b->local_y_fp=20<<16;
     b->body.vx_fp=1<<16;b->body.vy_fp=0;b->angular_velocity=0;
+    ASSERT_TRUE(dc_gpu_runtime_prepare_fragments(g,err,sizeof(err)));
     for(unsigned slot=1;slot<DC_GPU_BODY_CAPACITY;slot++)
         ((dc_gpu_body_record_t*)g->body_mapped)[slot].reserved[0]=0x53545232u;
-    ASSERT_TRUE(dc_gpu_paint_material(g,24,21,1,DC_MATERIAL_AIR,err,sizeof(err)));
+    reject_allocations=true;
+    bool accepted=dc_gpu_paint_material(g,24,21,1,DC_MATERIAL_AIR,err,sizeof(err));
+    reject_allocations=false;ASSERT_TRUE(!accepted);
     dc_gpu_body_pixel_t unchanged[27];unsigned unchanged_count=0;
     ASSERT_TRUE(dc_gpu_read_pixel_shape(g,b->body.id,unchanged,27,&unchanged_count,err,sizeof(err)));
     ASSERT_EQ(unchanged_count,27u);
@@ -209,9 +219,12 @@ static void test_broken_leaf_canopy_crumbles_without_losing_wood(void) {
     b->body.vx_fp=b->body.vy_fp=0;b->angular_velocity=0;
     ASSERT_TRUE(fr_gpu_save_structure(g,"build/leaf_canopy.dcs",err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_load_structure(g,"build/leaf_canopy.dcs",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_runtime_prepare_fragments(g,err,sizeof(err)));
     for(unsigned slot=1;slot<DC_GPU_BODY_CAPACITY;slot++)
         ((dc_gpu_body_record_t*)g->body_mapped)[slot].reserved[0]=0x53545232u;
-    ASSERT_TRUE(dc_gpu_paint_material(g,23,20,1,DC_MATERIAL_AIR,err,sizeof(err)));
+    reject_allocations=true;
+    bool accepted=dc_gpu_paint_material(g,23,20,1,DC_MATERIAL_AIR,err,sizeof(err));
+    reject_allocations=false;ASSERT_TRUE(!accepted);
     ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,pixels,16,&n,err,sizeof(err)));
     ASSERT_EQ(n,16u);
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,c,err,sizeof(err)));
@@ -268,7 +281,7 @@ static void test_leaf_impact_crumbles_canopy(void) {
     ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
     ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_enable_impact_fracture(g));
-    uint32_t *pending=dc_gpu_structural_data(g)+dc_gpu_structural_graph_offset()+38000u;
+    uint32_t *pending=dc_gpu_body_solver_state(g,0)+52u;
     pending[0]=pending[1]=10000;pending[2]=257;pending[3]=0x80000001u;
     ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     dc_gpu_body_t body;

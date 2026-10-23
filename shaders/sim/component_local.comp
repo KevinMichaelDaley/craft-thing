@@ -5,24 +5,26 @@
 layout(local_size_x=128) in;
 layout(constant_id=0) const uint EXTRACTION_PHASE=0u;
 layout(set=0,binding=1,std430) buffer Cells { uvec2 cells[]; };
+#ifndef DC_RUNTIME_BODY_STORAGE
 layout(set=0,binding=4,std430) buffer Storage { Body bodies[BODY_CAPACITY]; uint data[]; };
+#endif
 layout(set=0,binding=27,std430) buffer Activity { uint activity[]; };
 layout(set=0,binding=28,std430) buffer Labels { uint labels[]; };
 layout(set=0,binding=29,std430) buffer Candidates { uint candidates[]; };
 layout(set=0,binding=30,std430) buffer Sizes { uint sizes[]; };
 layout(push_constant) uniform Params { uint width,height,mode,count; uvec2 origin_x,origin_y; } params;
-uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
+uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 uint base() {
     uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
-    return 8u+2u*w*h+4096u*8u+12u+8192u*32u+16u+64u*32u+8192u*16u;
+    return 8u+2u*w*h+DC_LAYOUT_PAIR_CAPACITY*8u+12u+DC_LAYOUT_CONTACT_CAPACITY*32u+16u+64u*32u+DC_LAYOUT_CONTACT_CAPACITY*16u;
 }
-uint graph() {return base()+32u+data[base()+1u]*8u;}
-uint total() {return data[base()+1u]*4096u;}
+uint graph() {return base()+32u+DC_DATA(base()+1u)*8u;}
+uint total() {return DC_DATA(base()+1u)*4096u;}
 uint pool() {return graph()+40000u;}
 uint capacity() {return 2u*((max(params.width*params.height,total())+7u)/8u)+64u*8u;}
 uint record(uint c) {return graph()+36300u+c*24u;}
 uint registry(uint s) {return base()+32u+s*8u;}
-bool solid(uint i) {return data[registry(i/4096u)+5u]!=0u&&DC_CELL_COMPONENT_MEMBER(cells[i].x);}
+bool solid(uint i) {return DC_DATA(registry(i/4096u)+5u)!=0u&&DC_CELL_COMPONENT_MEMBER(cells[i].x);}
 uint neighbor(uint i,uint axis) {
     uint p=i%4096u,x=p%64u,y=p/64u;
     if(axis==0u&&x>0u) return i-1u;
@@ -34,14 +36,14 @@ uint neighbor(uint i,uint axis) {
 }
 ivec2 relative_point(uint root,uint i) {
     uint a=registry(root/4096u),b=registry(i/4096u);
-    return ivec2(data[b]-data[a],data[b+2u]-data[a+2u])*64+ivec2(i%64u,(i%4096u)/64u);
+    return ivec2(DC_DATA(b)-DC_DATA(a),DC_DATA(b+2u)-DC_DATA(a+2u))*64+ivec2(i%64u,(i%4096u)/64u);
 }
 shared uint values[128],chunk_roots[4096];
 void main() {
-    if(data[base()+STRUCTURAL_COMPONENT_DIRTY_WORD]==0u) return;
+    if(DC_DATA(base()+STRUCTURAL_COMPONENT_DIRTY_WORD)==0u) return;
     uint lane=gl_LocalInvocationID.x;
     if(EXTRACTION_PHASE==10u) {
-        uint slot=gl_WorkGroupID.x;if(slot>=data[base()+1u]) return;
+        uint slot=gl_WorkGroupID.x;if(slot>=DC_DATA(base()+1u)) return;
         uint count=0u;
         for(uint cell=lane;cell<4096u;cell+=128u) {bool occupied=solid(slot*4096u+cell);chunk_roots[cell]=occupied?cell:0xffffffffu;count+=uint(occupied);}
         values[lane]=count;

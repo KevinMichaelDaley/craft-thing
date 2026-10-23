@@ -14,7 +14,7 @@ float attachment_ratio(vec3 demand,uint p) {
 }
 vec3 member_point(uint e,uint bin) {
     uint p=structural_bins()+(e*17u+bin)*3u;
-    return vec3(int(data[p]),int(data[p+1u]),int(data[p+2u]))*3600.0/STRUCTURAL_LOAD_SCALE;
+    return vec3(int(DC_DATA(p)),int(DC_DATA(p+1u)),int(DC_DATA(p+2u)))*3600.0/STRUCTURAL_LOAD_SCALE;
 }
 vec3 member_resultant(float x,float l,vec3 end,vec2 distributed,uint e,bool right_side) {
     vec3 result=vec3(-end.x-distributed.x*x,-end.y-distributed.y*x,
@@ -35,10 +35,10 @@ float continuous_buckling(uint member) {
     uint g=graph(),mask=1u<<member;
     for(uint pass=0u;pass<16u;pass++) {
         uint previous=mask;
-        for(uint candidate=0u;candidate<data[g+1u];candidate++) {
+        for(uint candidate=0u;candidate<DC_DATA(g+1u);candidate++) {
             uint m=g+MEMBERS+candidate*8u;
-            if((data[m+6u]&2u)!=0u||abs(body_cross(eq_direction[member],eq_direction[candidate]))>1e-6) continue;
-            for(uint connected=0u;connected<data[g+1u];connected++)
+            if((DC_DATA(m+6u)&2u)!=0u||abs(body_cross(eq_direction[member],eq_direction[candidate]))>1e-6) continue;
+            for(uint connected=0u;connected<DC_DATA(g+1u);connected++)
                 if((mask&(1u<<connected))!=0u&&
                    (eq_a[candidate]==eq_a[connected]||eq_a[candidate]==eq_b[connected]||
                     eq_b[candidate]==eq_a[connected]||eq_b[candidate]==eq_b[connected]))
@@ -47,7 +47,7 @@ float continuous_buckling(uint member) {
         if(mask==previous) break;
     }
     float span=0,minimum=1e30;
-    for(uint e=0u;e<data[g+1u];e++) if((mask&(1u<<e))!=0u) {
+    for(uint e=0u;e<DC_DATA(g+1u);e++) if((mask&(1u<<e))!=0u) {
         span+=eq_length[e];minimum=min(minimum,eq_k[e].z*eq_length[e]);
     }
     return 9.869604401*minimum/(4.0*span*span);
@@ -62,7 +62,7 @@ float member_utilization(vec3 force,float depth,uint profile,float buckling) {
 }
 void member_stress(uint e) {
     uint g=graph(),m=g+MEMBERS+e*8u,st=member_state(e);
-    float l=eq_length[e],depth=float(data[m+5u])/65536.0;
+    float l=eq_length[e],depth=float(DC_DATA(m+5u))/65536.0;
     vec3 strain=vec3(0);
     for(uint dof=0u;dof<3u;dof++) {
         strain+=eq_vector(e,uint(eq_a[e])*3u+dof)*eq_q(uint(eq_a[e])*3u+dof);
@@ -72,7 +72,7 @@ void member_stress(uint e) {
     vec2 distributed=eq_weight[e]*vec2(eq_direction[e].y,eq_direction[e].x);
     vec3 end=vec3(-force.x,-force.y,-l*force.y/2.0-force.z)-
         vec3(distributed*l/2.0,distributed.y*l*l/12.0);
-    uint profile=g+29000u+data[m+4u]*12u;
+    uint profile=g+29000u+DC_DATA(m+4u)*12u;
     float phi=eq_get(profile+1u)*depth*depth/((5.0/6.0)*eq_get(profile+2u)*l*l),den=1+phi;
     for(uint b=0u;b<17u;b++) {
         float r=float(b)/16.0;vec3 point=member_point(e,b);
@@ -102,8 +102,8 @@ void member_stress(uint e) {
             result.z*result.z/(eq_get(profile+1u)*inertia)+
             result.y*result.y/((5.0/6.0)*eq_get(profile+2u)*depth));
     }
-    data[st]=data[m];data[st+1u]=data[m+1u];data[st+2u]=data[state(uint(eq_a[e]))+1u];
-    data[st+3u]=peak>1?1u:0u;
+    DC_DATA(st)=DC_DATA(m);DC_DATA(st+1u)=DC_DATA(m+1u);DC_DATA(st+2u)=DC_DATA(state(uint(eq_a[e]))+1u);
+    DC_DATA(st+3u)=peak>1?1u:0u;
     for(uint axis=0u;axis<3u;axis++) eq_put(st+4u+axis,peak_force[axis]);
     eq_put(st+7u,peak);eq_put(st+8u,location);eq_put(st+9u,energy);
     if(peak>1) atomicMax(eq_status,1u);
@@ -113,7 +113,7 @@ void component_budget(uint owner) {
     vec2 origin=eq_position(owner);float maximum_residual=0;
     for(uint r=0u;r<eq_count;r++) {
         uint dof=eq_map[r],node=dof/3u,axis=dof%3u;float f=eq_load(dof),support=0;
-        for(uint a=0u;a<data[g+3u];a++) support+=anchor_reaction(a,dof);
+        for(uint a=0u;a<DC_DATA(g+3u);a++) support+=anchor_reaction(a,dof);
         applied[axis]+=f;reaction[axis]+=support;
         vec2 arm=eq_position(node)-origin;
         if(axis<2u) {
@@ -123,9 +123,9 @@ void component_budget(uint owner) {
         vec2 physical=eq_physical(dof);
         maximum_residual=max(maximum_residual,abs(physical.x-f)/max(physical.y+abs(f),1));
     }
-    data[st]=data[g+NODES+owner*12u];data[st+1u]=eq_status;data[st+2u]=eq_count/3u;
+    DC_DATA(st)=DC_DATA(g+NODES+owner*12u);DC_DATA(st+1u)=eq_status;DC_DATA(st+2u)=eq_count/3u;
     for(uint axis=0u;axis<3u;axis++) {eq_put(st+4u+axis,applied[axis]);eq_put(st+7u+axis,reaction[axis]);}
-    eq_put(st+10u,maximum_residual);eq_put(st+11u,eq_minimum);data[st+12u]=eq_iterations;
-    data[st+13u]=eq_active_iterations;data[st+14u]=eq_refinement_iterations;
+    eq_put(st+10u,maximum_residual);eq_put(st+11u,eq_minimum);DC_DATA(st+12u)=eq_iterations;
+    DC_DATA(st+13u)=eq_active_iterations;DC_DATA(st+14u)=eq_refinement_iterations;
     eq_put(st+15u,eq_geometry_minimum);
 }

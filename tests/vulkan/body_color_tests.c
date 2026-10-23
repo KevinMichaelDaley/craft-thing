@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "../../src/vulkan/gpu_internal.h"
+#include "../../src/vulkan/runtime_body_gpu.h"
 #include "ferrum/renderer/gpu.h"
 #include "ferrum/structural/gpu.h"
 
@@ -57,10 +58,10 @@ static void test_two_pixel_fractures_relocate_colors_and_restore_them(void) {
     ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
     ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_enable_impact_fracture(g));
-    uint32_t *impact=dc_gpu_structural_data(g)+dc_gpu_structural_graph_offset()+38000;
     for(unsigned i=0;i<2;i++) {
-        impact[i*4]=impact[i*4+1]=1000000;impact[i*4+2]=1;
-        impact[i*4+3]=0x80000001u+i;
+        uint32_t *impact=dc_gpu_body_solver_state(g,i)+52u;
+        impact[0]=impact[1]=1000000;impact[2]=1;
+        impact[3]=0x80000001u+i;
     }
     ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     bool fractured=colors_match(g);

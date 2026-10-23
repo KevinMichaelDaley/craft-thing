@@ -2,6 +2,7 @@
 #define DUNGEONCRAFT_STRUCTURAL_STORE_INTERNAL_H
 
 #include "gpu_internal.h"
+#include "runtime_body_gpu.h"
 #include <stdio.h>
 
 typedef struct {
@@ -12,9 +13,16 @@ typedef struct {
 } dc_structural_store_header_t;
 
 typedef struct {
+    dc_body_storage_owner_t owner;
+    uint32_t persistent[12];
+} dc_structural_store_body_state_t;
+
+typedef struct {
     uint32_t control[8];
-    dc_gpu_body_record_t bodies[DC_GPU_BODY_CAPACITY];
+    dc_gpu_body_record_t *bodies;
     uint32_t graph[DC_STRUCTURAL_RESERVE_WORDS];
+    uint32_t body_count;
+    dc_structural_store_body_state_t *states;
 } dc_structural_store_payload_t;
 
 /** Validate bounds, material geometry, ownership and authoritative state. */

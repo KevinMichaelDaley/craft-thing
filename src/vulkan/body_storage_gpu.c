@@ -6,6 +6,7 @@
 struct dc_gpu_body_block {
     dc_gpu_address_buffer_t storage;
     dc_gpu_body_block_t *next;
+    uint32_t first_slot,slot_count,auxiliary_bytes,solver_bytes;
 };
 enum {SOLVER_BYTES=32u*sizeof(uint32_t),OWNERSHIP_BYTES=sizeof(dc_body_storage_owner_t),AUXILIARY_BYTES=32u};
 static bool error(char *err,uint32_t cap,const char *message) {
@@ -35,9 +36,14 @@ bool dc_gpu_body_growth_prepare(dc_gpu_t *gpu,const dc_gpu_body_store_t *store,
     if(!pending.block) return error(err,cap,"Cannot allocate body resource ownership metadata");
     VkDeviceSize added=slabs-store->slab_count,slots=added*DC_BODY_SLAB_RECORDS;
     VkDeviceSize record_bytes=slots*sizeof(dc_gpu_body_record_t);
-    VkDeviceSize solver_bytes=slots*SOLVER_BYTES,ownership_bytes=slots*OWNERSHIP_BYTES;
-    VkDeviceSize bytes=record_bytes+solver_bytes+ownership_bytes+slots*AUXILIARY_BYTES;
-    if(!dc_gpu_address_buffer_create(gpu,bytes,false,&pending.block->storage,err,cap)||
+    uint32_t solver_stride=store->solver_bytes?store->solver_bytes:SOLVER_BYTES;
+    VkDeviceSize solver_bytes=slots*solver_stride,ownership_bytes=slots*OWNERSHIP_BYTES;
+    uint32_t auxiliary=store->auxiliary_bytes?store->auxiliary_bytes:AUXILIARY_BYTES;
+    pending.block->first_slot=store->slab_count*DC_BODY_SLAB_RECORDS;
+    pending.block->slot_count=(uint32_t)slots;pending.block->auxiliary_bytes=auxiliary;
+    pending.block->solver_bytes=solver_stride;
+    VkDeviceSize bytes=record_bytes+solver_bytes+ownership_bytes+slots*auxiliary;
+    if(!dc_gpu_address_buffer_create(gpu,bytes,store->host_records,&pending.block->storage,err,cap)||
        !dc_gpu_address_buffer_create(gpu,(VkDeviceSize)slabs*sizeof(dc_body_storage_page_t),false,&pending.directory,err,cap)) {
         discard_resources(gpu,&pending);return false;
     }
@@ -67,7 +73,7 @@ bool dc_gpu_body_growth_record(VkCommandBuffer command,VkBuffer root,VkPipelineL
     dc_body_address_t directory=address(growth->directory.address),block=address(growth->block->storage.address);
     uint32_t added=growth->slab_count-store->slab_count;
     uint32_t constants[]={directory.low,directory.high,block.low,block.high,store->slab_count,added,0,0,
-        sizeof(dc_gpu_body_record_t),SOLVER_BYTES,OWNERSHIP_BYTES,AUXILIARY_BYTES};
+        sizeof(dc_gpu_body_record_t),growth->block->solver_bytes,OWNERSHIP_BYTES,growth->block->auxiliary_bytes};
     vkCmdBindPipeline(command,VK_PIPELINE_BIND_POINT_COMPUTE,initialize);
     vkCmdPushConstants(command,layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(constants),constants);
     uint32_t groups=(added-1u)/64u+1u,x=groups<65535u?groups:65535u;
@@ -106,4 +112,39 @@ void dc_gpu_body_store_destroy(dc_gpu_t *gpu,dc_gpu_body_store_t *store) {
         dc_gpu_address_buffer_destroy(gpu,&block->storage);free(block);
     }
     *store=(dc_gpu_body_store_t){0};
+}
+void *dc_gpu_body_store_record(const dc_gpu_body_store_t *store,uint32_t slot) {
+    if(!store) return NULL;
+    for(const dc_gpu_body_block_t *block=store->blocks;block;block=block->next)
+        if(slot>=block->first_slot&&slot-block->first_slot<block->slot_count)
+            return block->storage.mapped?(char *)block->storage.mapped+
+                (size_t)(slot-block->first_slot)*sizeof(dc_gpu_body_record_t):NULL;
+    return NULL;
+}
+void *dc_gpu_body_store_solver(const dc_gpu_body_store_t *store,uint32_t slot) {
+    if(!store) return NULL;
+    for(const dc_gpu_body_block_t *block=store->blocks;block;block=block->next)
+        if(slot>=block->first_slot&&slot-block->first_slot<block->slot_count)
+            return block->storage.mapped?(char *)block->storage.mapped+
+                (size_t)block->slot_count*sizeof(dc_gpu_body_record_t)+
+                (size_t)(slot-block->first_slot)*block->solver_bytes:NULL;
+    return NULL;
+}
+void *dc_gpu_body_store_owner(const dc_gpu_body_store_t *store,uint32_t slot) {
+    if(!store) return NULL;
+    for(const dc_gpu_body_block_t *block=store->blocks;block;block=block->next)
+        if(slot>=block->first_slot&&slot-block->first_slot<block->slot_count)
+            return block->storage.mapped?(char *)block->storage.mapped+
+                (size_t)block->slot_count*(sizeof(dc_gpu_body_record_t)+block->solver_bytes)+
+                (size_t)(slot-block->first_slot)*sizeof(dc_body_storage_owner_t):NULL;
+    return NULL;
+}
+void *dc_gpu_body_store_auxiliary(const dc_gpu_body_store_t *store,uint32_t slot) {
+    if(!store) return NULL;
+    for(const dc_gpu_body_block_t *block=store->blocks;block;block=block->next)
+        if(slot>=block->first_slot&&slot-block->first_slot<block->slot_count)
+            return block->storage.mapped?(char *)block->storage.mapped+
+                (size_t)block->slot_count*(sizeof(dc_gpu_body_record_t)+block->solver_bytes+OWNERSHIP_BYTES)+
+                (size_t)(slot-block->first_slot)*block->auxiliary_bytes:NULL;
+    return NULL;
 }

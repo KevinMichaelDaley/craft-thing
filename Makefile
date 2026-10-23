@@ -64,6 +64,15 @@ LDLIBS += -lvulkan $(shell pkg-config --libs sdl2) -pthread -lm
 GLSLANG ?= glslangValidator
 
 GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/broadphase_gpu.o build/contact_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
+GPU_OBJ += build/runtime_body_gpu.o build/runtime_geometry_gpu.o build/body_address_gpu.o build/body_storage_gpu.o
+build/runtime_geometry_gpu.o: src/vulkan/runtime_geometry_gpu.c src/vulkan/runtime_body_internal.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/runtime_body_gpu.o: src/vulkan/runtime_body_gpu.c src/vulkan/runtime_body_gpu.h src/vulkan/body_storage_gpu.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/body_address_gpu.o: src/vulkan/body_address_gpu.c src/vulkan/body_address_gpu.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/body_storage_gpu.o: src/vulkan/body_storage_gpu.c src/vulkan/body_storage_gpu.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/solver_gpu.o
 GPU_OBJ += build/draw_gpu.o
 GPU_OBJ += build/compound_gpu.o build/component_gpu.o build/pixel_gpu.o
@@ -652,6 +661,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/buoyancy_tests
 	./build/component_material_tests
 	./build/component_extraction_tests
+	./build/dynamic_runtime_tests
 	./build/component_acceptance_tests
 	./build/particle_tests
 	./build/marker_slot_tests
@@ -870,6 +880,9 @@ build/diagnostics/contact_scaling: tools/diagnostics/contact_scaling.c tests/vul
 
 build/diagnostics/contacts_terrain_scan.comp.spv: shaders/sim/contacts.comp shaders/sim/contact_geometry.glsl shaders/sim/rigid_body.glsl $(CONTACT_SHADER)
 	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TERRAIN_SCAN_PROFILE=1 -o $@ $<
+build/diagnostics/runtime_contacts_terrain_scan.comp.spv: shaders/sim/contacts.comp $(wildcard shaders/sim/*.glsl) include/dungeoncraft/body_storage_layout.h
+	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TERRAIN_SCAN_PROFILE=1 -DDC_RUNTIME_BODY_STORAGE=1 -o $@ $<
+build/contact_terrain_work_tests build/diagnostics/contact_scaling: build/diagnostics/runtime_contacts_terrain_scan.comp.spv
 
 build/diagnostics/fluid_transport_profile.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl
 	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TRANSPORT_PROFILE=1 -o $@ $<
@@ -1179,6 +1192,27 @@ build/diagnostics/body_storage_init.spv: shaders/sim/body_storage_init.comp incl
 	mkdir -p build/diagnostics
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
 	spirv-val --target-env vulkan1.3 $@
+$(GPU_OBJ): build/diagnostics/body_storage_init.spv
+build/shaders/runtime_body_index.comp.spv: shaders/sim/runtime_body_index.comp $(wildcard shaders/sim/*.glsl) include/dungeoncraft/body_storage_layout.h
+	@mkdir -p $(dir $@)
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+$(GPU_OBJ): build/shaders/runtime_body_index.comp.spv
+build/shaders/runtime_body_scan.comp.spv: shaders/sim/runtime_body_scan.comp $(wildcard shaders/sim/*.glsl) include/dungeoncraft/body_storage_layout.h
+	@mkdir -p $(dir $@)
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+$(GPU_OBJ): build/shaders/runtime_body_scan.comp.spv
+
+RUNTIME_BODY_NAMES = pattern rigid rigid_solver contacts broadphase component_extract component_local structural pixel_hydro mpm mpm_active mpm_compact tick_probe scene
+RUNTIME_BODY_SHADERS = $(addprefix build/shaders/runtime/,$(addsuffix .comp.spv,$(RUNTIME_BODY_NAMES)))
+$(GPU_OBJ): $(RUNTIME_BODY_SHADERS)
+$(GPU_SOURCE_BINARIES) build/dungeoncraft_360: $(RUNTIME_BODY_SHADERS) build/shaders/runtime_body_index.comp.spv build/shaders/runtime_body_scan.comp.spv build/diagnostics/body_storage_init.spv src/vulkan/runtime_body_gpu.h src/vulkan/runtime_body_internal.h
+$(GPU_OBJ): src/vulkan/runtime_body_gpu.h src/vulkan/runtime_body_internal.h
+build/shaders/runtime/%.comp.spv: shaders/sim/%.comp $(wildcard shaders/sim/*.glsl) include/dungeoncraft/body_storage_layout.h
+	@mkdir -p $(dir $@)
+	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -V --target-env vulkan1.3 $< -o $@
+build/shaders/runtime/scene.comp.spv: shaders/renderer/scene.comp $(wildcard shaders/renderer/*.glsl) $(wildcard shaders/sim/*.glsl) include/dungeoncraft/body_storage_layout.h
+	@mkdir -p $(dir $@)
+	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -V --target-env vulkan1.3 $< -o $@
 build/body_page_init_gpu_tests: tests/vulkan/body_page_init_gpu_tests.c tests/vulkan/body_probe_fixture.h tools/diagnostics/vulkan_probe.c src/vulkan/body_address_gpu.c src/vulkan/body_address_gpu.h src/vulkan/gpu_internal.h include/dungeoncraft/body_storage_layout.h build/diagnostics/body_storage_init.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_address_gpu.c -o $@ -lvulkan
 build/diagnostics/body_work_gate.spv: shaders/sim/body_work_gate.comp | build
@@ -1216,7 +1250,7 @@ build/body_color_tests: tests/vulkan/body_color_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/body_color_tests
 build/body_carve_tests: tests/vulkan/body_carve_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkAllocateMemory
 test: build/body_carve_tests
 build/sequential_detachment_tests: tests/vulkan/sequential_detachment_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
@@ -1271,3 +1305,7 @@ build/grain_bed_work_tests: tests/vulkan/grain_bed_work_tests.c $(GPU_OBJ) $(CHU
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/grain_bed_work_tests
 $(SOLVER_SHADER): include/dungeoncraft/mpm_activity_layout.h
+
+build/dynamic_runtime_tests: tests/vulkan/dynamic_runtime_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/dynamic_runtime_tests

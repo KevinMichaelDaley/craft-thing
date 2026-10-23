@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "gpu_internal.h"
+#include "runtime_body_gpu.h"
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -117,6 +118,7 @@ static uint64_t elapsed_ns(const dc_gpu_t *gpu, uint64_t start, uint64_t stop) {
 static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
                         char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "Invalid GPU tick");
+    if(!dc_gpu_runtime_bodies_service(gpu,err,cap)) return false;
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
         return error(err, cap, "Cannot reset tick command buffer");
     VkCommandBufferBeginInfo begin = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };

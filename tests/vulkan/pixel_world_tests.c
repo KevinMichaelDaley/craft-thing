@@ -1,3 +1,4 @@
+#include "../../src/vulkan/runtime_body_gpu.h"
 #define main pixel_component_fixture_main
 #include "pixel_component_tests.c"
 #undef main
@@ -168,7 +169,7 @@ static void test_partial_grid_fracture_uses_all_tile_cells_conservatively(void) 
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_motion(gpu, 0x80000001u, .02f, .001f, 0, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_enable_impact_fracture(gpu));
-    uint32_t *pending = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset() + 38000u;
+    uint32_t *pending = dc_gpu_body_solver_state(gpu,0)+52u;
     pending[0] = pending[1] = 1000000;
     pending[2] = 1;
     pending[3] = 0x80000001u;
@@ -248,7 +249,7 @@ static void test_rotated_pixel_fracture_preserves_world_pixel_positions(void) {
     ASSERT_TRUE(dc_gpu_read_body_id(reference, 0x80000001u, &parent, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_body_motion(reference, parent.id, &parent_motion, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_enable_impact_fracture(gpu));
-    uint32_t *pending = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset() + 38000u;
+    uint32_t *pending = dc_gpu_body_solver_state(gpu,0)+52u;
     pending[0] = pending[1] = 1000000;
     pending[2] = 2;
     pending[3] = 0x80000001u;

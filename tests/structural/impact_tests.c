@@ -66,7 +66,7 @@ static void test_hard_stone_contact_fractures_conservatively(void) {
     PASS();
 }
 
-static void test_full_pool_keeps_impact_pending_then_commits_once(void) {
+static void test_full_initial_page_grows_and_preserves_all_impact_owners(void) {
     char err[256];
     dc_gpu_t *g = grid();
     ASSERT_TRUE(g && dc_gpu_enable_impact_fracture(g));
@@ -94,18 +94,18 @@ static void test_full_pool_keeps_impact_pending_then_commits_once(void) {
         ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
     dc_gpu_body_motion_t a, b;
     ASSERT_TRUE(dc_gpu_read_body_motion(g, 100, &a, err, sizeof(err)));
-    ASSERT_TRUE(fabs(a.mass - 172.8) < .001);
     dc_gpu_impact_fracture_state_t state;
-    ASSERT_TRUE(dc_gpu_read_impact_fracture(g, 100, &state));
-    ASSERT_TRUE(state.pending);
-    ASSERT_TRUE(dc_gpu_remove_body(g, 63, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_OUTPUT_ID_BASE + 1, &b,
                                         err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_body_motion(g, 100, &a, err, sizeof(err)));
     ASSERT_TRUE(fabs(a.mass + b.mass - 172.8) < .001);
     ASSERT_TRUE(dc_gpu_read_impact_fracture(g, 100, &state));
     ASSERT_TRUE(!state.pending);
+    for(unsigned i=1;i<=63;i++) {
+        dc_gpu_body_t retained;
+        ASSERT_TRUE(dc_gpu_read_body_id(g,i,&retained,err,sizeof(err)));
+        ASSERT_EQ(retained.id,i);
+    }
     dc_gpu_destroy(g);
     PASS();
 }
@@ -149,7 +149,7 @@ static void test_two_concave_impacts_preserve_connected_output_mass(void) {
 int main(void) {
     RUN(test_gentle_stone_contact_stays_intact);
     RUN(test_hard_stone_contact_fractures_conservatively);
-    RUN(test_full_pool_keeps_impact_pending_then_commits_once);
+    RUN(test_full_initial_page_grows_and_preserves_all_impact_owners);
     RUN(test_two_concave_impacts_preserve_connected_output_mass);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;

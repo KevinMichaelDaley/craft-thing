@@ -74,7 +74,7 @@ bool dc_gpu_spawn_compound_body(dc_gpu_t *gpu,dc_gpu_world_body_t body,
     }
     if(!dc_gpu_spawn_convex_body(gpu,body,&copy.pieces[0],err,cap)) return false;
     for(uint32_t i=0;i<gpu->body_count;++i) if(gpu->body_ids[i]==body.body.id) {
-        dc_gpu_body_record_t *record=(dc_gpu_body_record_t *)gpu->body_mapped+i;
+        dc_gpu_body_record_t *record=dc_gpu_body_record(gpu,i);
         record->piece_count=copy.count;
         memcpy(record->pieces,copy.pieces,sizeof(copy.pieces));
         return true;
@@ -85,7 +85,7 @@ bool dc_gpu_read_compound_shape(dc_gpu_t *gpu,uint32_t id,dc_gpu_compound_shape_
     char *err,uint32_t cap) {
     dc_gpu_refresh_body_registry(gpu);
     if(gpu && shape && id) for(uint32_t i=0;i<gpu->body_count;++i) if(gpu->body_ids[i]==id) {
-        const dc_gpu_body_record_t *record=(dc_gpu_body_record_t *)gpu->body_mapped+i;
+        const dc_gpu_body_record_t *record=dc_gpu_body_record(gpu,i);
         if(record->piece_count&DC_GPU_PIXEL_BODY_FLAG) {
             if(err&&cap) snprintf(err,cap,"Pixel bodies require the variable-size geometry diagnostic");
             return false;

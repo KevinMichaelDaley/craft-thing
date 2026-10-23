@@ -55,8 +55,8 @@ static void report(dc_gpu_t *g,unsigned tick) {
     const uint32_t *solver=dc_gpu_solver_data(g);
     printf("tick%u solver_flags=%u contacts=%u attempted=%u contact_flags=%u\n",
         tick,solver[3],contacts.count,((uint32_t*)dc_gpu_contact_data(g))[1],contacts.overflow);
-    for(unsigned slot=0;slot<DC_GPU_BODY_CAPACITY;slot++) {
-        const dc_gpu_body_record_t *b=(dc_gpu_body_record_t*)g->body_mapped+slot;
+    for(unsigned slot=0;slot<dc_gpu_body_capacity(g);slot++) {
+        const dc_gpu_body_record_t *b=dc_gpu_body_record(g,slot);
         if(!b->body.active) continue;
         unsigned wood=0;
         if(b->piece_count&DC_GPU_PIXEL_BODY_FLAG) {
@@ -70,7 +70,7 @@ static void report(dc_gpu_t *g,unsigned tick) {
             slot,b->body.id,b->body.x_fp/65536.,b->body.y_fp/65536.,
             b->body.vx_fp/65536.,b->body.vy_fp/65536.,b->angle,b->motion_flags,
             b->rest_ticks,b->visible,b->inverse_mass,b->piece_count&~DC_GPU_PIXEL_BODY_FLAG,
-            solver[16+slot*32+13],solver[16+slot*32+19]);
+            dc_gpu_body_solver_state(g,slot)[13],dc_gpu_body_solver_state(g,slot)[19]);
         printf("    shape %ux%u center%g,%g wood%u mass%g\n",b->body.width,b->body.height,b->center[0],b->center[1],wood,b->mass);
     }
     const dc_gpu_contact_t *list=(const dc_gpu_contact_t*)(dc_gpu_contact_data(g)+DC_GPU_CONTACT_HEADER_WORDS);
@@ -79,7 +79,9 @@ static void report(dc_gpu_t *g,unsigned tick) {
     for(unsigned phase=0;phase<capture_count;phase++) {
         const uint32_t *data=(const uint32_t*)((const uint8_t*)captured+phase*contact_bytes);
         list=(const dc_gpu_contact_t*)(data+DC_GPU_CONTACT_HEADER_WORDS);
-        for(unsigned i=0;i<data[0];i++) if(list[i].body_a==0x80000001u||list[i].body_b==0x80000001u)
+        if(data[0]>DC_GPU_CONTACT_CAPACITY)
+            printf("    phase%u capture truncated to %u of %u contacts\n",phase,DC_GPU_CONTACT_CAPACITY,data[0]);
+        for(unsigned i=0;i<data[0]&&i<DC_GPU_CONTACT_CAPACITY;i++) if(list[i].body_a==0x80000001u||list[i].body_b==0x80000001u)
             printf("    phase%u tree %08x %08x kind%u material%u normal%g,%g depth%g terrain %lld,%lld cell%u point %lld,%lld:%d,%d\n",phase,
                 list[i].body_a,list[i].body_b,list[i].kind,list[i].material_b,list[i].normal_x,list[i].normal_y,list[i].depth,
                 (long long)list[i].feature_chunk.x,(long long)list[i].feature_chunk.y,list[i].feature_b,

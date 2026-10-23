@@ -4,20 +4,33 @@
 layout(local_size_x=64) in;
 layout(constant_id=0) const uint HYDRO_PHASE=0u;
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
+#ifndef DC_RUNTIME_BODY_STORAGE
 layout(set=0,binding=4,std430) buffer Storage {Body bodies[BODY_CAPACITY];uint data[];};
+#endif
 layout(set=0,binding=27,std430) buffer Activity {uint activity[];};
 layout(set=0,binding=29,std430) buffer Scratch {uint scratch[];};
-uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
+uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 layout(push_constant) uniform Params {uint width,height,mode,body_count;uvec2 origin_x,origin_y;} params;
 #include "structural_load.glsl"
 #include "rigid_hydro.glsl"
-uint body_state(uint slot) {return structural_base()-64u*32u-8192u*16u+slot*32u;}
+uint body_state(uint slot) {
+#ifdef DC_RUNTIME_BODY_STORAGE
+    return DC_RUNTIME_BODY_STATE(slot);
+#else
+    return structural_base()-64u*32u-DC_LAYOUT_CONTACT_CAPACITY*16u+slot*32u;
+#endif
+}
+#ifdef DC_RUNTIME_BODY_STORAGE
+uint state(uint slot) {return 0x80000000u|slot*128u;}
+const uint WET_LIST=0x40000000u,FORCE_PARTIALS=0x20000000u;
+#else
 uint state(uint slot) {return 8192u+slot*128u;}
-const uint WET_LIST=16384u;
+const uint WET_LIST=16384u,FORCE_PARTIALS=16448u;
+#endif
 /* Metadata ends at16384, followed by64wet-slot IDs. Three words per
    ceil(view cells/256) batch per body fit the existing2*max(view,resident)
    +4096-word scratch allocation; resident capacity supplies the small-view floor. */
-const uint FORCE_PARTIALS=16448u, FORCE_BATCH=256u;
+const uint FORCE_BATCH=256u;
 shared uvec3 masks[64];
 shared uvec2 volumes[64];
 shared vec3 impulses[64];
@@ -30,12 +43,47 @@ void gravity(inout Body b) {
     b.vy_fp=clamp(clamp(b.vy_fp,-(4<<16),4<<16)+((b.motion_flags&1u)==0u?16384:0),-(4<<16),4<<16);
 }
 void main() {
-    uint lane=gl_LocalInvocationID.x,slot=gl_WorkGroupID.x;
+    uint lane=gl_LocalInvocationID.x,slot=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x;
     if(HYDRO_PHASE==3u) {
-        uint wet=uint(scratch[state(lane)]!=0u);counts[lane]=wet;barrier();
+#ifdef DC_RUNTIME_BODY_STORAGE
+        uint i=slot*64u+lane;if(i>=BODY_CAPACITY) return;
+        uint s=state(i),scan=DC_RUNTIME_WORK(9u);
+        uint wet=uint(DC_HYDRO_WORD(s)!=0u),cells=0u;
+        if((params.mode>>8u)==0u) {
+            if(wet!=0u) {
+                Body planned=DC_BODY(i);vec2 lo,hi;body_bounds(planned,lo,hi);
+                vec2 origin=vec2(planned.x_fp,planned.y_fp)/65536.;
+                ivec2 begin=max(ivec2(floor(lo+origin)),ivec2(0));
+                ivec2 end=min(ivec2(ceil(hi+origin)),ivec2(params.width,params.height));
+                uvec2 extent=uvec2(max(end-begin,ivec2(0)));cells=extent.x*extent.y;
+            }
+            uint groups=(cells+FORCE_BATCH-1u)/FORCE_BATCH;
+            DC_HYDRO_WORD(s+85u)=groups;DC_HYDRO_WORD(s+92u)=groups;
+            DC_HYDRO_WORD(s+93u)=min(4u,(cells+63u)/64u);DC_HYDRO_WORD(s+94u)=cells;
+            DC_RUNTIME_WORK(scan+2u*i)=wet;DC_RUNTIME_WORK(scan+2u*i+1u)=groups;
+        } else {
+            uint wet_end=DC_RUNTIME_WORK(scan+2u*i),force_end=DC_RUNTIME_WORK(scan+2u*i+1u);
+            DC_HYDRO_WORD(s+84u)=force_end-DC_HYDRO_WORD(s+85u);
+            if(wet!=0u) DC_HYDRO_WORD(WET_LIST+wet_end-1u)=i;
+            if(i==BODY_CAPACITY-1u) {
+                uint columns=wet_end*32u,forces=force_end;
+                bool overflow=forces>DC_RUNTIME_WORK(2u);
+                DC_RUNTIME_WORK(15u)=uint(overflow);
+                if(overflow) {
+                    atomicMax(DC_RUNTIME_REQUEST(8u),forces);
+                    atomicOr(DC_DATA(structural_base()-16u-64u*32u-DC_LAYOUT_CONTACT_CAPACITY*16u+3u),2u);
+                    forces=0u;
+                }
+                activity[33]=min(columns,65535u);activity[34]=max(1u,(columns+65534u)/65535u);activity[35]=1u;
+                activity[36]=min(forces,65535u);activity[37]=max(1u,(forces+65534u)/65535u);activity[38]=1u;
+            }
+        }
+        return;
+#else
+        uint wet=uint(DC_HYDRO_WORD(state(lane))!=0u);counts[lane]=wet;barrier();
         uint cells=0u;
         if(wet!=0u) {
-            Body planned=bodies[lane];vec2 lo,hi;body_bounds(planned,lo,hi);
+            Body planned=DC_BODY(lane);vec2 lo,hi;body_bounds(planned,lo,hi);
             vec2 origin=vec2(planned.x_fp,planned.y_fp)/65536.;
             ivec2 begin=max(ivec2(floor(lo+origin)),ivec2(0));
             ivec2 end=min(ivec2(ceil(hi+origin)),ivec2(params.width,params.height));
@@ -45,38 +93,39 @@ void main() {
         force_counts[lane]=groups;barrier();
         for(uint stride=1u;stride<64u;stride*=2u) {uint prior=lane>=stride?counts[lane-stride]:0u;barrier();counts[lane]+=prior;barrier();}
         for(uint stride=1u;stride<64u;stride*=2u) {uint prior=lane>=stride?force_counts[lane-stride]:0u;barrier();force_counts[lane]+=prior;barrier();}
-        scratch[state(lane)+84u]=force_counts[lane]-groups;
-        scratch[state(lane)+85u]=groups;
-        scratch[state(lane)+92u]=groups;
-        scratch[state(lane)+93u]=min(4u,(cells+63u)/64u);
-        scratch[state(lane)+94u]=cells;
-        if(wet!=0u) scratch[WET_LIST+counts[lane]-1u]=lane;
+        DC_HYDRO_WORD(state(lane)+84u)=force_counts[lane]-groups;
+        DC_HYDRO_WORD(state(lane)+85u)=groups;
+        DC_HYDRO_WORD(state(lane)+92u)=groups;
+        DC_HYDRO_WORD(state(lane)+93u)=min(4u,(cells+63u)/64u);
+        DC_HYDRO_WORD(state(lane)+94u)=cells;
+        if(wet!=0u) DC_HYDRO_WORD(WET_LIST+counts[lane]-1u)=lane;
         if(lane==0u) {
             activity[33]=counts[63]*32u;activity[34]=1u;activity[35]=1u;
             uint total=force_counts[63];activity[36]=min(total,65535u);
             activity[37]=max(1u,(total+65534u)/65535u);activity[38]=1u;
         }
         return;
+#endif
     }
     uint force_group=gl_WorkGroupID.x+gl_WorkGroupID.y*65535u;
     if(HYDRO_PHASE==2u) {
-        uint lo=0u,hi=64u;
-        for(uint iteration=0u;iteration<7u;iteration++) {
+        uint lo=0u,hi=BODY_CAPACITY;
+        while(lo<hi) {
             uint middle=(lo+hi)/2u;
-            if(middle<64u&&scratch[state(middle)+84u]+scratch[state(middle)+85u]<=force_group) lo=middle+1u;
+            if(middle<BODY_CAPACITY&&DC_HYDRO_WORD(state(middle)+84u)+DC_HYDRO_WORD(state(middle)+85u)<=force_group) lo=middle+1u;
             else hi=middle;
         }
         slot=lo;
     }
     uint column=slot%32u;
-    if(HYDRO_PHASE==1u) slot=scratch[WET_LIST+slot/32u];
+    if(HYDRO_PHASE==1u) slot=DC_HYDRO_WORD(WET_LIST+slot/32u);
     if(slot>=BODY_CAPACITY) return;
-    Body b=bodies[slot];uint s=state(slot);
+    Body b=DC_BODY(slot);uint s=state(slot);
     if(HYDRO_PHASE==0u) {
-        if(lane<32u) {scratch[s+16u+lane]=0u;scratch[s+48u+lane]=0u;}
-        if(lane==0u) {scratch[s]=0u;scratch[s+80u]=0u;scratch[s+81u]=0u;scratch[s+82u]=0u;scratch[s+83u]=b.id;}
+        if(lane<32u) {DC_HYDRO_WORD(s+16u+lane)=0u;DC_HYDRO_WORD(s+48u+lane)=0u;}
+        if(lane==0u) {DC_HYDRO_WORD(s)=0u;DC_HYDRO_WORD(s+80u)=0u;DC_HYDRO_WORD(s+81u)=0u;DC_HYDRO_WORD(s+82u)=0u;DC_HYDRO_WORD(s+83u)=b.id;}
     }
-    if(slot>=params.body_count||b.enabled==0u||!pixel_body(b)||data[body_state(slot)+13u]==0u) return;
+    if(slot>=params.body_count||b.enabled==0u||!pixel_body(b)||DC_SOLVER_DATA(body_state(slot)+13u)==0u) return;
     vec2 low,high;body_bounds(b,low,high);vec2 origin=vec2(b.x_fp,b.y_fp)/65536.;low+=origin;high+=origin;
     if(HYDRO_PHASE==0u) {
         ivec2 begin=max(ivec2(floor(low))-1,ivec2(0)),end=min(ivec2(ceil(high))+1,ivec2(params.width,params.height));
@@ -95,12 +144,12 @@ void main() {
         }
         masks[lane]=uvec3(uint(wet),blocked_left,blocked_right);counts[lane]=visited;levels[lane]=float(visited);
         for(uint stride=32u;stride>0u;stride/=2u) {barrier();if(lane<stride) {masks[lane]=uvec3(masks[lane].x|masks[lane+stride].x,min(masks[lane].yz,masks[lane+stride].yz));counts[lane]+=counts[lane+stride];levels[lane]=max(levels[lane],levels[lane+stride]);}}
-        barrier();if(lane==0u) {scratch[s]=masks[0].x;scratch[s+1u]=masks[0].y;scratch[s+2u]=masks[0].z;scratch[s+80u]=counts[0];scratch[s+81u]=uint(levels[0]);scratch[s+82u]=64u;}
+        barrier();if(lane==0u) {DC_HYDRO_WORD(s)=masks[0].x;DC_HYDRO_WORD(s+1u)=masks[0].y;DC_HYDRO_WORD(s+2u)=masks[0].z;DC_HYDRO_WORD(s+80u)=counts[0];DC_HYDRO_WORD(s+81u)=uint(levels[0]);DC_HYDRO_WORD(s+82u)=64u;}
         return;
     }
     if(HYDRO_PHASE==1u) {
         uint distance=column%16u+1u;bool right=column>=16u;
-        if(distance>=scratch[s+(right?2u:1u)]) return;
+        if(distance>=DC_HYDRO_WORD(s+(right?2u:1u))) return;
         int x=right?int(ceil(high.x))-1+int(distance):int(floor(low.x))-int(distance);
         int begin=max(int(floor(low.y)),0);uint boundary=params.height;
         for(uint y=uint(begin)+lane;y<params.height;y+=64u) {
@@ -126,31 +175,34 @@ void main() {
         }
         volumes[lane]=volume;counts[lane]=occupied;
         for(uint stride=32u;stride>0u;stride/=2u) {barrier();if(lane<stride) {volumes[lane]=add_wide(volumes[lane],volumes[lane+stride]);counts[lane]|=counts[lane+stride];}}barrier();
-        if(lane==0u&&counts[0]==0u) {scratch[s+16u+column]=1u;float amount=(float(volumes[0].y)*4294967296.+float(volumes[0].x))/65536.;scratch[s+48u+column]=floatBitsToUint(float(floor_y)-amount);}
+        if(lane==0u&&counts[0]==0u) {DC_HYDRO_WORD(s+16u+column)=1u;float amount=(float(volumes[0].y)*4294967296.+float(volumes[0].x))/65536.;DC_HYDRO_WORD(s+48u+column)=floatBitsToUint(float(floor_y)-amount);}
         return;
     }
     if(HYDRO_PHASE==4u) {
+#ifdef DC_RUNTIME_BODY_STORAGE
+        if(DC_RUNTIME_WORK(15u)!=0u) return;
+#endif
         precise vec3 sum=vec3(0),compensation=vec3(0);
-        uint count=scratch[s+85u],first=scratch[s+84u];
+        uint count=DC_HYDRO_WORD(s+85u),first=DC_HYDRO_WORD(s+84u);
         for(uint group=lane;group<count;group+=64u) {
             uint at=FORCE_PARTIALS+(first+group)*3u;
-            precise vec3 value=vec3(uintBitsToFloat(scratch[at]),uintBitsToFloat(scratch[at+1u]),uintBitsToFloat(scratch[at+2u]))-compensation;
+            precise vec3 value=vec3(uintBitsToFloat(DC_HYDRO_WORD(at)),uintBitsToFloat(DC_HYDRO_WORD(at+1u)),uintBitsToFloat(DC_HYDRO_WORD(at+2u)))-compensation;
             precise vec3 next=sum+value;compensation=(next-sum)-value;sum=next;
         }
         impulses[lane]=sum;
         for(uint stride=32u;stride>0u;stride/=2u) {barrier();if(lane<stride) impulses[lane]+=impulses[lane+stride];}barrier();
-        if(lane==0u) {if((b.motion_flags&1u)==0u) {b.vx_fp+=int(round(impulses[0].x*b.inverse_mass*65536.));b.vy_fp+=int(round(impulses[0].y*b.inverse_mass*65536.));b.angular_velocity+=impulses[0].z*b.inverse_inertia;}gravity(b);bodies[slot]=b;}
+        if(lane==0u) {if((b.motion_flags&1u)==0u) {b.vx_fp+=int(round(impulses[0].x*b.inverse_mass*65536.));b.vy_fp+=int(round(impulses[0].y*b.inverse_mass*65536.));b.angular_velocity+=impulses[0].z*b.inverse_inertia;}gravity(b);DC_BODY(slot)=b;}
         return;
     }
     if(HYDRO_PHASE==2u) {
-        if(scratch[s]==0u) {if(lane==0u) {gravity(b);bodies[slot]=b;}return;}
-        counts[lane]=lane<32u?scratch[s+16u+lane]:0u;levels[lane]=lane<32u?uintBitsToFloat(scratch[s+48u+lane]):0.;
+        if(DC_HYDRO_WORD(s)==0u) {if(lane==0u) {gravity(b);DC_BODY(slot)=b;}return;}
+        counts[lane]=lane<32u?DC_HYDRO_WORD(s+16u+lane):0u;levels[lane]=lane<32u?uintBitsToFloat(DC_HYDRO_WORD(s+48u+lane)):0.;
         for(uint stride=32u;stride>0u;stride/=2u) {barrier();if(lane<stride) {counts[lane]+=counts[lane+stride];levels[lane]+=levels[lane+stride];}}barrier();
         bool pooled=counts[0]!=0u;float waterline=levels[0]/max(float(counts[0]),1.);
         ivec2 begin=max(ivec2(floor(low)),ivec2(0)),end=min(ivec2(ceil(high)),ivec2(params.width,params.height));
         uint width=uint(max(end.x-begin.x,0)),cells=width*uint(max(end.y-begin.y,0));
         vec2 center=origin+b.center,v=vec2(b.vx_fp,b.vy_fp)/65536.;precise vec3 sum=vec3(0),compensation=vec3(0);
-        uint batch_begin=(force_group-scratch[s+84u])*FORCE_BATCH;
+        uint batch_begin=(force_group-DC_HYDRO_WORD(s+84u))*FORCE_BATCH;
         for(uint cell=batch_begin+lane;cell<min(cells,batch_begin+FORCE_BATCH);cell+=64u) {
             ivec2 p=begin+ivec2(cell%width,cell/width);vec2 flow;float fraction=hydro_sample(p,flow);
             if(pooled) fraction=clamp(float(p.y)+1.-waterline,0.,1.);if(fraction<=0.) continue;
@@ -166,7 +218,7 @@ void main() {
         for(uint stride=32u;stride>0u;stride/=2u) {barrier();if(lane<stride) impulses[lane]+=impulses[lane+stride];}barrier();
         if(lane==0u) {
             uint at=FORCE_PARTIALS+force_group*3u;
-            scratch[at]=floatBitsToUint(impulses[0].x);scratch[at+1u]=floatBitsToUint(impulses[0].y);scratch[at+2u]=floatBitsToUint(impulses[0].z);
+            DC_HYDRO_WORD(at)=floatBitsToUint(impulses[0].x);DC_HYDRO_WORD(at+1u)=floatBitsToUint(impulses[0].y);DC_HYDRO_WORD(at+2u)=floatBitsToUint(impulses[0].z);
         }
     }
 }

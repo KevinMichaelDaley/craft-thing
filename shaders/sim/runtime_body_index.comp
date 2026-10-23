@@ -1,0 +1,73 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#define DC_RUNTIME_BODY_STORAGE 1
+#include "rigid_body.glsl"
+layout(local_size_x=64) in;
+layout(push_constant) uniform Params {uint phase,legacy_state,graph,reserved;} params;
+uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
+void main() {
+    uint i=gl_GlobalInvocationID.x;
+    if(params.phase==4u) {
+        if(i>=BODY_CAPACITY) return;
+        Body b=DC_BODY(i);
+        if(pixel_body(b)&&(b.enabled!=0u||b.reserved0!=0u)&&b.compound_reserved>=params.legacy_state) {
+            uint relative=b.compound_reserved-params.legacy_state;
+            DC_BODY(i).compound_reserved=params.reserved+(relative/params.graph)*DC_RUNTIME_WORK(29u)+relative%params.graph;
+        }
+        return;
+    }
+    if(params.phase==2u) {
+        uint slot=i/64u,word=i%64u;if(slot>=64u) return;
+        uint value=DC_SOLVER_DATA(DC_RUNTIME_BODY_STATE(slot)+word);
+        if(word<32u) DC_DATA(params.legacy_state+slot*32u+word)=value;
+        else if(word<48u) DC_DATA(params.graph+34000u+slot*16u+word-32u)=value;
+        else if(word==48u) DC_DATA(params.graph+25300u+slot)=value;
+        else if(word==49u) DC_DATA(params.graph+25200u+slot)=value;
+        else if(word>=52u&&word<56u) DC_DATA(params.graph+38000u+slot*4u+word-52u)=value;
+        else if(word>=56u&&word<60u) DC_DATA(params.graph+38500u+slot*4u+word-56u)=value;
+        else if(word>=60u) DC_DATA(params.graph+36000u+slot*4u+word-60u)=value;
+        return;
+    }
+    if(params.phase==3u) {
+        if(i>=BODY_CAPACITY) return;
+        Body body=DC_BODY(i);
+        if(body.enabled==0u&&body.reserved0==0u) return;
+        uint cells=pixel_body(body)?pixel_tile_count(body)*256u:
+            ((body.width+15u)/16u)*((body.height+15u)/16u)*256u;
+        if(cells>DC_RUNTIME_WORK(13u)) atomicMax(DC_RUNTIME_REQUEST(9u),cells);
+        return;
+    }
+    uint base=DC_RUNTIME_WORK(7u),count=DC_RUNTIME_WORK(8u);
+    if(params.phase==0u) {
+        if(i<count) {DC_RUNTIME_WORK(base+2u*i)=0u;DC_RUNTIME_WORK(base+2u*i+1u)=DC_BODY_SLOT_NONE;}
+        if(i<runtime_body_root.slab_count) BodyStorageDirectory(runtime_body_root.directory).pages[i].free_mask=uvec2(0);
+        if(i==0u) runtime_body_root.live_count=0u;
+        return;
+    }
+    if(i>=BODY_CAPACITY) return;
+    Body body=DC_BODY(i);BodyStorageOwner owner=DC_BODY_OWNER(runtime_body_root,i);
+    bool owned=body.enabled!=0u||body.reserved0!=0u;
+    if(owned) {
+        if(pixel_body(body)) {
+            uint cells=pixel_tile_count(body)*256u;
+            if(cells>DC_RUNTIME_WORK(13u)) atomicMax(DC_RUNTIME_REQUEST(9u),cells);
+        }
+        if(owner.runtime_id!=body.id&&owner.state!=DC_BODY_OWNER_RESERVED)
+            owner.generation=owner.generation==0xffffffffu?owner.generation:owner.generation+1u;
+        owner.runtime_id=body.id;owner.state=DC_BODY_OWNER_LIVE;owner.live_index=i;
+        DC_BODY_OWNER(runtime_body_root,i)=owner;
+        atomicAdd(runtime_body_root.live_count,1u);
+        if(body.id==0u) return;
+        uint hash=runtime_body_hash(body.id)&(count-1u);
+        for(uint probe=0u;probe<count;probe++) {
+            uint at=base+2u*((hash+probe)&(count-1u));
+            uint old=atomicCompSwap(DC_RUNTIME_WORK(at),0u,body.id);
+            if(old==0u||old==body.id) {DC_RUNTIME_WORK(at+1u)=i;break;}
+        }
+    } else {
+        owner.runtime_id=0u;owner.state=owner.generation==0xffffffffu?DC_BODY_OWNER_RETIRED:DC_BODY_OWNER_FREE;
+        DC_BODY_OWNER(runtime_body_root,i)=owner;
+        if(owner.state==DC_BODY_OWNER_FREE)
+            atomicOr(BodyStorageDirectory(runtime_body_root.directory).pages[i>>DC_BODY_SLAB_SHIFT].free_mask[(i&63u)/32u],1u<<(i%32u));
+    }
+}

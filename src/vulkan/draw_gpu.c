@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "gpu_internal.h"
+#include "runtime_body_gpu.h"
 
 bool dc_gpu_draw_pipeline_init(dc_gpu_t *gpu,VkShaderModule module,char *err,uint32_t cap) {
     VkPipeline *outputs[]={&gpu->simple_draw_pipeline,&gpu->pixel_draw_pipeline};
@@ -45,6 +46,7 @@ static void draw_pipeline(dc_gpu_t *gpu,VkPipeline pipeline,const uint32_t push[
 }
 
 void dc_gpu_record_draw(dc_gpu_t *gpu,const uint32_t push[7]) {
+    dc_gpu_runtime_record_body_index(gpu);
     vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout,0,1,&gpu->descriptor,0,NULL);
     if(push[4]!=DC_GPU_OVERLAY_STRUCTURAL_STRESS||!gpu->pixel_draw_pipeline) {

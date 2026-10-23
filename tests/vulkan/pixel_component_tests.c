@@ -5,6 +5,7 @@
 #include "dungeoncraft/gpu.h"
 #include "ferrum/structural/gpu.h"
 #include "../../src/vulkan/gpu_internal.h"
+#include "../../src/vulkan/runtime_body_gpu.h"
 static int g_pass, g_fail;
 #define RUN(fn)                                                                \
     do {                                                                       \
@@ -107,7 +108,7 @@ static void test_pixel_fracture_preserves_material_volume(void) {
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_enable_impact_fracture(gpu));
     uint32_t *pending =
-        dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset() + 38000u;
+        dc_gpu_body_solver_state(gpu,0)+52u;
     pending[0] = pending[1] = 1000000u;
     pending[2] = 1u;
     pending[3] = 0x80000001u;
@@ -215,7 +216,7 @@ test_mixed_concave_cut_preserves_three_connected_material_fragments(void) {
                                        sizeof(err)));
     ASSERT_TRUE(dc_gpu_enable_impact_fracture(gpu));
     uint32_t *pending =
-        dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset() + 38000u;
+        dc_gpu_body_solver_state(gpu,0)+52u;
     pending[0] = pending[1] = 1000000u;
     pending[2] = 2u;
     pending[3] = 0x80000001u;
@@ -364,7 +365,7 @@ static void test_pixel_hydro_uses_bounded_cooperative_area_work(void) {
     ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
     const uint32_t *work =
-        (const uint32_t *)gpu->mpm_label_b_mapped + 8192 + 80;
+        dc_gpu_body_hydro_state(gpu,0)+80;
     ASSERT_TRUE(work[0] >= 62u * 62u && work[0] <= 64u * 64u);
     ASSERT_TRUE(work[1] <= 64u);
     ASSERT_EQ(work[2], 64u);
@@ -389,7 +390,7 @@ static void test_wet_pixel_hydro_distributes_force_integration(void) {
     ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
-    const uint32_t *work = (const uint32_t *)gpu->mpm_label_b_mapped + 8192;
+    const uint32_t *work = dc_gpu_body_hydro_state(gpu,0);
     ASSERT_EQ(work[92], 16u);
     ASSERT_TRUE(work[93] <= 4u);
     ASSERT_EQ(work[94], 62u * 62u);

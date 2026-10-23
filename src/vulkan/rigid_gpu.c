@@ -1,8 +1,10 @@
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "gpu_internal.h"
+#include "runtime_body_gpu.h"
 
 _Static_assert(sizeof(dc_gpu_body_t) == 32, "GPU body layout must match SPIR-V");
 _Static_assert(sizeof(dc_gpu_body_record_t) == 544, "GPU body record must match SPIR-V");
@@ -29,16 +31,16 @@ bool dc_gpu_read_impact_fracture(dc_gpu_t *gpu, uint32_t source_id,
                                 dc_gpu_impact_fracture_state_t *state) {
     if (!gpu || !source_id || !state) return false;
     uint32_t *graph = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset();
-    const dc_gpu_body_record_t *bodies = gpu->body_mapped;
-    for (unsigned slot = 0; slot < DC_GPU_BODY_CAPACITY; slot++) {
-        uint32_t *pending = graph + 38000u + slot * 4u;
-        if (bodies[slot].body.id == source_id && pending[3] == source_id && pending[2]) {
+
+    for (unsigned slot = 0; slot < dc_gpu_body_capacity(gpu); slot++) {
+        uint32_t *pending = gpu->runtime_body_consumers?dc_gpu_body_solver_state(gpu,slot)+52u:graph+38000u+slot*4u;
+        if ((*dc_gpu_body_record(gpu,slot)).body.id == source_id && pending[3] == source_id && pending[2]) {
             *state = (dc_gpu_impact_fracture_state_t){
                 .available_work = (float)(pending[0] < pending[1] ? pending[0] : pending[1]) * 16,
                 .pending = true};
             return true;
         }
-        uint32_t *ledger = graph + 38500u + slot * 4u;
+        uint32_t *ledger = gpu->runtime_body_consumers?dc_gpu_body_solver_state(gpu,slot)+56u:graph+38500u+slot*4u;
         if (ledger[3] == source_id) {
             memcpy(&state->available_work, ledger, 3 * sizeof(float));
             state->pending = false;
@@ -55,19 +57,19 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 }
 
 static uint32_t body_slot(const dc_gpu_t *gpu, uint32_t id) {
-    const dc_gpu_body_record_t *records = gpu->body_mapped;
-    for (uint32_t i = 0; i < DC_GPU_BODY_CAPACITY; ++i)
-        if (records[i].body.id == id &&
-            (records[i].body.active || records[i].reserved[0])) return i;
-    return DC_GPU_BODY_CAPACITY;
+
+    for (uint32_t i = 0; i < dc_gpu_body_capacity(gpu); ++i)
+        if ((*dc_gpu_body_record(gpu,i)).body.id == id &&
+            ((*dc_gpu_body_record(gpu,i)).body.active || (*dc_gpu_body_record(gpu,i)).reserved[0])) return i;
+    return UINT32_MAX;
 }
 void dc_gpu_refresh_body_registry(dc_gpu_t *gpu) {
     if (!gpu) return;
-    const dc_gpu_body_record_t *records = gpu->body_mapped;
+
     gpu->body_count = 0;
-    for (uint32_t i = 0; i < DC_GPU_BODY_CAPACITY; ++i) {
-        gpu->body_ids[i] = records[i].body.active || records[i].reserved[0] ?
-                          records[i].body.id : 0;
+    for (uint32_t i = 0; i < dc_gpu_body_capacity(gpu); ++i) {
+        gpu->body_ids[i] = (*dc_gpu_body_record(gpu,i)).body.active || (*dc_gpu_body_record(gpu,i)).reserved[0] ?
+                          (*dc_gpu_body_record(gpu,i)).body.id : 0;
         if (gpu->body_ids[i]) gpu->body_count = i + 1;
     }
 }
@@ -103,7 +105,7 @@ bool dc_gpu_spawn_convex_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
     dc_gpu_body_shape_t copy = { .count = shape->count, .material = shape->material };
     memcpy(copy.vertices, shape->vertices, shape->count * sizeof(shape->vertices[0]));
     if (!dc_gpu_spawn_world_body(gpu, body, err, cap)) return false;
-    ((dc_gpu_body_record_t *)gpu->body_mapped)[body_slot(gpu, body.body.id)].shape = copy;
+    (*dc_gpu_body_record(gpu,body_slot(gpu, body.body.id))).shape = copy;
     return true;
 }
 
@@ -111,23 +113,22 @@ bool dc_gpu_read_body_shape(dc_gpu_t *gpu, uint32_t id, dc_gpu_body_shape_t *sha
                              char *err, uint32_t cap) {
     if (!gpu || !shape || !id) return error(err, cap, "Invalid body shape readback");
     uint32_t slot = body_slot(gpu, id);
-    if (slot == DC_GPU_BODY_CAPACITY) return error(err, cap, "GPU body ID not found");
-    if (((dc_gpu_body_record_t *)gpu->body_mapped)[slot].piece_count & DC_GPU_PIXEL_BODY_FLAG)
+    if (slot == UINT32_MAX) return error(err, cap, "GPU body ID not found");
+    if ((*dc_gpu_body_record(gpu,slot)).piece_count & DC_GPU_PIXEL_BODY_FLAG)
         return error(err, cap, "Pixel bodies require the variable-size geometry diagnostic");
-    *shape = ((dc_gpu_body_record_t *)gpu->body_mapped)[slot].shape;
+    *shape = (*dc_gpu_body_record(gpu,slot)).shape;
     return true;
 }
 
 uint32_t dc_gpu_next_body_id(const dc_gpu_t *gpu) {
     if (!gpu) return 0;
-    for (uint32_t id = 1; id <= DC_GPU_BODY_CAPACITY + 1; ++id)
-        if (body_slot(gpu, id) == DC_GPU_BODY_CAPACITY) return id;
+    for (uint32_t id = 1; id <= dc_gpu_body_capacity(gpu) + 1; ++id)
+        if (body_slot(gpu, id) == UINT32_MAX) return id;
     return 0;
 }
 
 bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    bool okay = dc_gpu_make_mapped_buffer(gpu, dc_gpu_body_storage_bytes(gpu),
-               &gpu->body_buffer, &gpu->body_memory, &gpu->body_mapped, err, cap) &&
+    bool okay = dc_gpu_runtime_bodies_init(gpu,err,cap) &&
            dc_gpu_make_mapped_buffer(gpu,
                (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t) * 5,
                &gpu->occupancy_buffer, &gpu->occupancy_memory,
@@ -190,6 +191,8 @@ void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
     for (unsigned phase = 0; phase < DC_GPU_STRUCTURAL_PHASE_COUNT; phase++)
         if (gpu->structural_pipelines[phase])
             vkDestroyPipeline(gpu->device, gpu->structural_pipelines[phase], NULL);
+    dc_gpu_runtime_bodies_destroy(gpu);
+    free(gpu->body_ids);gpu->body_ids=NULL;
     if (gpu->body_mapped) vkUnmapMemory(gpu->device, gpu->body_memory);
     if (gpu->occupancy_mapped) vkUnmapMemory(gpu->device, gpu->occupancy_memory);
     if (gpu->body_buffer) vkDestroyBuffer(gpu->device, gpu->body_buffer, NULL);
@@ -216,7 +219,7 @@ bool dc_gpu_spawn_body(dc_gpu_t *gpu, dc_gpu_body_t body,
     world.body.x_fp %= (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL);
     world.body.y_fp %= (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL);
     if (!dc_gpu_spawn_world_body(gpu, world, err, cap)) return false;
-    ((dc_gpu_body_record_t *)gpu->body_mapped)[body_slot(gpu, body.id)].body = body;
+    (*dc_gpu_body_record(gpu,body_slot(gpu, body.id))).body = body;
     return true;
 }
 
@@ -226,7 +229,7 @@ bool dc_gpu_read_body(dc_gpu_t *gpu, dc_gpu_body_t *body,
     memset(body, 0, sizeof(*body));
     for (uint32_t i = 0; i < gpu->body_count; ++i) {
         if (gpu->body_ids[i]) {
-            *body = ((dc_gpu_body_record_t *)gpu->body_mapped)[i].body;
+            *body = (*dc_gpu_body_record(gpu,i)).body;
             break;
         }
     }
@@ -238,8 +241,8 @@ bool dc_gpu_read_body_id(dc_gpu_t *gpu, uint32_t id, dc_gpu_body_t *body,
     if (!gpu || !body || !id)
         return error(err, cap, "Invalid GPU body ID readback");
     uint32_t slot = body_slot(gpu, id);
-    if (slot == DC_GPU_BODY_CAPACITY) return error(err, cap, "GPU body ID not found");
-    *body = ((dc_gpu_body_record_t *)gpu->body_mapped)[slot].body;
+    if (slot == UINT32_MAX) return error(err, cap, "GPU body ID not found");
+    *body = (*dc_gpu_body_record(gpu,slot)).body;
     return true;
 }
 
@@ -247,20 +250,22 @@ bool dc_gpu_remove_body(dc_gpu_t *gpu, uint32_t id, char *err, uint32_t cap) {
     if (!gpu || !id) return error(err, cap, "Invalid GPU body removal");
     dc_gpu_refresh_body_registry(gpu);
     uint32_t slot = body_slot(gpu, id);
-    if (slot == DC_GPU_BODY_CAPACITY) return error(err, cap, "GPU body ID not found");
-    if (((dc_gpu_body_record_t *)gpu->body_mapped)[slot].reserved[0] == DC_GPU_STRUCTURAL_TAG)
+    if (slot == UINT32_MAX) return error(err, cap, "GPU body ID not found");
+    if ((*dc_gpu_body_record(gpu,slot)).reserved[0] == DC_GPU_STRUCTURAL_TAG)
         return error(err, cap, "Structural removal is owned by its graph");
     uint32_t *graph = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset();
-    if (graph[36000u + slot * 4u + 3u] == 2u)
+    uint32_t *journal=gpu->runtime_body_consumers?dc_gpu_body_solver_state(gpu,slot)+60u:
+        graph+36000u+slot*4u;
+    if (journal[3] == 2u)
         return error(err, cap, "MPM descendants retain this source identity");
     for (uint32_t i = 0; i < 192u; i++) {
         uint32_t *bond = graph + 30000u + i * 20u;
         if (bond[3] == id || bond[4] == id)
             bond[0] = 0;
     }
-    memset(&((dc_gpu_body_record_t *)gpu->body_mapped)[slot], 0,
+    memset(&(*dc_gpu_body_record(gpu,slot)), 0,
            sizeof(dc_gpu_body_record_t));
-    memset(graph + 36000u + slot * 4u, 0, 4u * sizeof(uint32_t));
+    memset(journal, 0, 4u * sizeof(uint32_t));
     gpu->body_ids[slot] = 0;
     gpu->body_refresh_pending = true;
     while (gpu->body_count && !gpu->body_ids[gpu->body_count - 1]) --gpu->body_count;
@@ -301,18 +306,24 @@ bool dc_gpu_spawn_world_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
         return error(err, cap, "Invalid world body");
     dc_gpu_refresh_body_registry(gpu);
     uint32_t slot = body_slot(gpu, body.body.id);
-    if (slot != DC_GPU_BODY_CAPACITY) {
-        uint32_t tag = ((dc_gpu_body_record_t *)gpu->body_mapped)[slot].reserved[0];
+    if (slot != UINT32_MAX) {
+        uint32_t tag = (*dc_gpu_body_record(gpu,slot)).reserved[0];
         if (tag == DC_GPU_STRUCTURAL_TAG || tag == DC_GPU_STRUCTURAL_CONVERTED_TAG)
             return error(err, cap, "Structural or converted placement retains its ownership");
     }
-    if (slot == DC_GPU_BODY_CAPACITY)
-        for (uint32_t i = 0; i < DC_GPU_BODY_CAPACITY; ++i)
-            if (!gpu->body_ids[i]) { slot = i; break; }
-    if (slot == DC_GPU_BODY_CAPACITY) return error(err, cap, "GPU body pool is full");
+    if (slot == UINT32_MAX)
+        for (uint32_t i = 0; i < dc_gpu_body_capacity(gpu); ++i)
+            if (!gpu->body_ids[i]&&dc_gpu_body_owner(gpu,i)->state!=DC_BODY_OWNER_RETIRED) { slot = i; break; }
+    if (slot == UINT32_MAX) {
+        uint32_t previous=dc_gpu_body_capacity(gpu);
+        if(!dc_gpu_runtime_bodies_reserve(gpu,previous+1u,err,cap)) return false;
+        slot=previous;
+    }
     uint64_t x = (uint64_t)body.chunk.x, y = (uint64_t)body.chunk.y;
-    dc_gpu_body_record_t *records = gpu->body_mapped;
-    records[slot] = (dc_gpu_body_record_t){ .body = body.body,
+    if(gpu->runtime_body_consumers)
+        memset(dc_gpu_body_solver_state(gpu,slot),0,256u);
+
+    (*dc_gpu_body_record(gpu,slot)) = (dc_gpu_body_record_t){ .body = body.body,
         .chunk_x = {(uint32_t)x, (uint32_t)(x >> 32)},
         .chunk_y = {(uint32_t)y, (uint32_t)(y >> 32)},
         .local_x_fp = body.body.x_fp, .local_y_fp = body.body.y_fp };
@@ -326,8 +337,8 @@ bool dc_gpu_read_world_body(dc_gpu_t *gpu, uint32_t id, dc_gpu_world_body_t *bod
                              char *err, uint32_t cap) {
     if (!gpu || !body || !id) return error(err, cap, "Invalid world body readback");
     uint32_t slot = body_slot(gpu, id);
-    if (slot == DC_GPU_BODY_CAPACITY) return error(err, cap, "GPU body ID not found");
-    const dc_gpu_body_record_t *record = &((dc_gpu_body_record_t *)gpu->body_mapped)[slot];
+    if (slot == UINT32_MAX) return error(err, cap, "GPU body ID not found");
+    const dc_gpu_body_record_t *record = &(*dc_gpu_body_record(gpu,slot));
     uint64_t x = record->chunk_x[0] | ((uint64_t)record->chunk_x[1] << 32);
     uint64_t y = record->chunk_y[0] | ((uint64_t)record->chunk_y[1] << 32);
     *body = (dc_gpu_world_body_t){ .body = record->body };
@@ -344,6 +355,7 @@ bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
 
 static bool submit_rigid(dc_gpu_t *gpu, bool advance, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
+    if(!dc_gpu_runtime_bodies_service(gpu,err,cap)) return false;
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
         return error(err, cap, "Cannot reset rigid command buffer");
     VkCommandBufferBeginInfo begin = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
@@ -396,9 +408,11 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
     VkDependencyInfo dep = { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
         .memoryBarrierCount = 1, .pMemoryBarriers = &upload };
     vkCmdPipelineBarrier2(gpu->command, &dep);
+    dc_gpu_runtime_record_body_index(gpu);
     dc_gpu_record_component_baseline(gpu);
     if (advance && gpu->automatic_components_enabled) dc_gpu_record_component_extraction(gpu);
     if (advance) dc_gpu_record_structural_begin(gpu);
+    dc_gpu_runtime_record_body_index(gpu);
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_prepare_pipeline);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
@@ -408,7 +422,7 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
         (uint32_t)x, (uint32_t)(x >> 32), (uint32_t)y, (uint32_t)(y >> 32) };
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    if (count) vkCmdDispatch(gpu->command, 1, 1, 1);
+    if (count) vkCmdDispatch(gpu->command, (count+255u)/256u, 1, 1);
     VkMemoryBarrier2 between = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
@@ -446,5 +460,6 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
         vkCmdPipelineBarrier2(gpu->command, &dep);
     }
     gpu->rigid_occupancy_present = count != 0;
+    dc_gpu_runtime_record_legacy_state(gpu);
     gpu->body_refresh_pending = false;
 }

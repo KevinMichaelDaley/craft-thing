@@ -5,8 +5,8 @@ float impact_cut_work(Body body,uint axis,float cut) {
     for(uint piece=0u;piece<count;piece++) {
         uint material=body.piece_count==0u?body.material:body.pieces[piece].material;
         uint profile=g+29000u+(material==2u||material==4u?1u:material==3u?2u:0u)*12u;
-        toughness[piece]=uintBitsToFloat(data[profile+6u]);
-        if((material==2u||material==4u)&&axis==1u) toughness[piece]*=uintBitsToFloat(data[profile+9u]);
+        toughness[piece]=uintBitsToFloat(DC_SOLVER_DATA(profile+6u));
+        if((material==2u||material==4u)&&axis==1u) toughness[piece]*=uintBitsToFloat(DC_SOLVER_DATA(profile+9u));
         float minimum=1e20,maximum=-1e20;low[piece]=1e20;high[piece]=-1e20;
         for(uint vertex=0u;vertex<piece_vertices(body,piece);vertex++) {
             vec2 a=piece_rest_vertex(body,piece,vertex),b=piece_rest_vertex(body,piece,(vertex+1u)%piece_vertices(body,piece));
@@ -32,10 +32,10 @@ bool fracture_impact_step() {
     uint g=graph();
     while(impact_color_cursor<BODY_CAPACITY) {
         uint slot=impact_color_cursor++;
-        uint p=g+38000u+slot*4u;Body b=bodies[slot];
-        if(data[p+3u]!=b.id||b.enabled==0u||b.inverse_mass==0||
-           (!pixel_body(b)&&b.material>1u)||data[p+2u]==0u) continue;
-        uint axis=(data[p+2u]&255u)-1u;
+        uint p=body_impact_pending(slot);Body b=DC_BODY(slot);
+        if(DC_SOLVER_DATA(p+3u)!=b.id||b.enabled==0u||b.inverse_mass==0||
+           (!pixel_body(b)&&b.material>1u)||DC_SOLVER_DATA(p+2u)==0u) continue;
+        uint axis=(DC_SOLVER_DATA(p+2u)&255u)-1u;
         vec2 low=vec2(1e20),high=vec2(-1e20);
         for(uint part=0u;part<body_pieces(b);part++)
             for(uint vertex=0u;vertex<piece_vertices(b,part);vertex++) {
@@ -45,16 +45,16 @@ bool fracture_impact_step() {
         float cut=pixel_body(b)?round((low[axis]+high[axis])*.5):round((low[axis]+high[axis])*.5*65536.)/65536.;
         float work=impact_cut_work(b,axis,cut);
         if(work<=0) continue;
-        float available=float(min(data[p],data[p+1u]))*16.0;
+        float available=float(min(DC_SOLVER_DATA(p),DC_SOLVER_DATA(p+1u)))*16.0;
         if(available<work) continue;
         uint generation=b.reserved1==0u?1u:b.reserved1;
         if(pixel_body(b)?!pixel_fragment_body(slot,axis,cut,generation):!fragment_body(slot,axis,cut,generation)) continue;
-        uint ledger=g+38500u+slot*4u;
-        data[ledger]=floatBitsToUint(available);
-        data[ledger+1u]=floatBitsToUint(work);
-        data[ledger+2u]=floatBitsToUint(available-work);
-        data[ledger+3u]=b.id;
-        data[p]=0u;data[p+1u]=0u;data[p+2u]=0u;
+        uint ledger=body_impact_ledger(slot);
+        DC_SOLVER_DATA(ledger)=floatBitsToUint(available);
+        DC_SOLVER_DATA(ledger+1u)=floatBitsToUint(work);
+        DC_SOLVER_DATA(ledger+2u)=floatBitsToUint(available-work);
+        DC_SOLVER_DATA(ledger+3u)=b.id;
+        DC_SOLVER_DATA(p)=0u;DC_SOLVER_DATA(p+1u)=0u;DC_SOLVER_DATA(p+2u)=0u;
         if(pixel_body(b)) return true;
     }
     return false;
@@ -69,8 +69,8 @@ void fracture_impacts() {
         memoryBarrierBuffer();barrier();
         if(impact_color_pending==0u) break;
         uint pool=graph()+40000u;
-        uint first=BODY_STORAGE_WORDS+pool+16u+data[pool]*color_capacity();
-        for(uint word=lane;word<data[pool+1u];word+=32u) shape_color_resolve(first+word);
+        uint first=BODY_STORAGE_WORDS+pool+16u+DC_SOLVER_DATA(pool)*color_capacity();
+        for(uint word=lane;word<DC_SOLVER_DATA(pool+1u);word+=32u) shape_color_resolve(first+word);
         memoryBarrierBuffer();barrier();
     }
 }

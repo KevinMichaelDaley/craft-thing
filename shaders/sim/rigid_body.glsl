@@ -2,7 +2,9 @@
 #define DC_RIGID_BODY_GLSL
 #include "../../include/dungeoncraft/material_density.h"
 
+#ifndef DC_RUNTIME_BODY_STORAGE
 const uint BODY_CAPACITY = 64u;
+#endif
 const uint STRUCTURAL_COMPONENT_DIRTY_WORD = 20u;
 const uint BODY_VERTEX_CAPACITY = 8u;
 const uint BODY_MAX_SIDE = 16u;
@@ -38,6 +40,25 @@ struct Body {
     uint rest_ticks;
 };
 
+#ifdef DC_RUNTIME_BODY_STORAGE
+#include "runtime_body_storage.glsl"
+#else
+#define DC_BODY(slot) bodies[slot]
+#define DC_LAYOUT_PAIR_CAPACITY 4096u
+#define DC_LAYOUT_CONTACT_CAPACITY 8192u
+#define DC_BODY_FREE(slot) (bodies[slot].enabled==0u&&bodies[slot].reserved0==0u)
+#define DC_DATA(index) data[index]
+#define DC_SOLVER_DATA(index) data[index]
+#define DC_HYDRO_WORD(index) scratch[index]
+#define DC_FRAGMENT_LABEL(index) fracture_labels[index]
+#define DC_FRAGMENT_QUEUE(index) fracture_queue[index]
+#define DC_CARVE_ID(index) carve_ids[index]
+#define DC_BODY_CLIPPED(slot) DC_DATA(structural_clipped()+(slot))
+#define DC_BODY_DEPENDENCIES(slot) DC_DATA(structural_dependencies()+(slot))
+#define DC_BUFFER_DATA(index) body_data[index]
+#define DC_SUPPORT_DATA(index) support_data[index]
+#define DC_PIXEL_WORD(index) DC_DATA((index)-BODY_STORAGE_WORDS)
+#endif
 const uint PIXEL_BODY_FLAG=0x80000000u;
 const uint BODY_STORAGE_WORDS=64u*136u;
 uint pixel_word_at(uint index);

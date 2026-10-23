@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "gpu_internal.h"
+#include "body_address_gpu.h"
 #include "ferrum/renderer/gpu.h"
 
 VkDeviceSize dc_gpu_color_terrain_bytes(void) {
@@ -13,11 +14,15 @@ VkDeviceSize dc_gpu_color_bank_bytes(const dc_gpu_t *g) {
 bool dc_gpu_colors_init(dc_gpu_t *g,char *err,uint32_t cap) {
     VkDeviceSize terrain=dc_gpu_color_terrain_bytes(),bank=dc_gpu_color_bank_bytes(g);
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(g->physical,&properties);
-    if(bank>properties.limits.maxStorageBufferRange || terrain>properties.limits.maxStorageBufferRange) {
+    if(terrain>properties.limits.maxStorageBufferRange) {
         snprintf(err,cap,"Pixel appearance exceeds device storage-buffer range");return false;
     }
-    if(!dc_gpu_make_mapped_buffer(g,terrain+2*bank,&g->shape_color_buffer,
-        &g->shape_color_memory,&g->shape_color_mapped,err,cap)) return false;
+    dc_gpu_address_buffer_t colors={0};
+    if(!dc_gpu_address_buffer_create(g,terrain+2*bank,true,&colors,err,cap)) return false;
+    g->shape_color_buffer=colors.buffer;g->shape_color_memory=colors.memory;
+    g->shape_color_mapped=colors.mapped;g->shape_color_address=colors.address;
+    g->shape_color_allocation_bytes=colors.allocation_bytes;
+    g->shape_color_device_local=colors.device_local;
     memset(g->shape_color_mapped,0,(size_t)(terrain+2*bank));return true;
 }
 void dc_gpu_colors_destroy(dc_gpu_t *g) {

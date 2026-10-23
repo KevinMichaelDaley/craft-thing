@@ -8,17 +8,19 @@ layout(constant_id = 1) const bool RIGID_PIXEL_ONLY = false;
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(constant_id = 0) const uint RIGID_RASTER_STAGE = 0u;
 const uint RASTER_MODE=1u, PREPARE_MODE=2u, PHYSICAL_MASK=128u, MODE_MASK=127u;
-shared uint raster_ids[BODY_CAPACITY];
+shared uint raster_ids[64];
 shared uint raster_count;
-shared uint raster_legacy[BODY_CAPACITY];
+shared uint raster_legacy[64];
 
 layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 chunk_cells[]; };
 layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
 layout(set = 0, binding = 3, std430) buffer Occupancy { uint occupancy[]; };
 layout(set = 0, binding = 27, std430) buffer RasterDispatch { uint raster_dispatch[]; };
 
+#ifndef DC_RUNTIME_BODY_STORAGE
 layout(set = 0, binding = 4, std430) buffer Bodies { Body bodies[BODY_CAPACITY]; uint data[]; };
-uint pixel_word_at(uint index) {return data[index-BODY_STORAGE_WORDS];}
+#endif
+uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -70,10 +72,10 @@ bool solid_at(int x, int y) {
 }
 
 void integrate_body(uint index) {
-    Body body = bodies[index];
+    Body body = DC_BODY(index);
     if (body.enabled == 0u) {
         if(body.reserved0!=0u&&pixel_body(body)&&body.motion_ready!=0u) {
-            body_properties(body);bodies[index]=body;
+            body_properties(body);DC_BODY(index)=body;
         }
         return;
     }
@@ -83,7 +85,7 @@ void integrate_body(uint index) {
     if (!visible || params.mode == PREPARE_MODE ||
         !resident_at(clamp(body.x_fp >> 16, 0, int(params.width) - 1),
                      clamp(body.y_fp >> 16, 0, int(params.height) - 1))) {
-        bodies[index] = body;
+        DC_BODY(index) = body;
         return;
     }
     int vx = clamp(body.vx_fp, -(4 << 16), 4 << 16);
@@ -126,15 +128,19 @@ void integrate_body(uint index) {
     body.vx_fp = vx;
     body.vy_fp = vy;
     body_cache_bounds(body);
-    bodies[index] = body;
+    DC_BODY(index) = body;
 }
 
 void main() {
     uvec2 p = gl_GlobalInvocationID.xy;
     if (RIGID_RASTER_STAGE == 2u) {
         uint lane=gl_LocalInvocationIndex;
-        if(lane<BODY_CAPACITY)
-            raster_legacy[lane]=uint(lane<params.body_count&&bodies[lane].enabled!=0u&&((params.mode&512u)!=0u||bodies[lane].visible!=0u)&&!pixel_body(bodies[lane]));
+        if(lane<64u) {
+            uint legacy=0u;
+            for(uint body=lane;body<params.body_count;body+=64u)
+                legacy|=uint(DC_BODY(body).enabled!=0u&&((params.mode&512u)!=0u||DC_BODY(body).visible!=0u)&&!pixel_body(DC_BODY(body)));
+            raster_legacy[lane]=legacy;
+        }
         barrier();
         for(uint stride=32u;stride>0u;stride/=2u) {
             if(lane<stride) raster_legacy[lane]|=raster_legacy[lane+stride];
@@ -142,7 +148,7 @@ void main() {
         }
         if(lane<6u) {
             uint axis=lane%3u,value=axis==0u?0u:1u;
-            bool refresh=(params.mode&256u)==0u||data[structural_base()+16u]!=0u;
+            bool refresh=(params.mode&256u)==0u||DC_DATA(structural_base()+16u)!=0u;
             uint selected=raster_legacy[0]!=0u?0u:1u;
             if(refresh&&lane/3u==selected&&axis<2u) {
                 uvec2 extent=(params.mode&512u)!=0u?params.origin_x:uvec2(params.width,params.height);
@@ -153,37 +159,45 @@ void main() {
         return;
     }
     if (RIGID_RASTER_STAGE == 0u) {
-        uint index = gl_LocalInvocationIndex;
+        uint index = gl_WorkGroupID.x*256u+gl_LocalInvocationIndex;
         if (index < params.body_count) integrate_body(index);
         return;
     }
-    if (gl_LocalInvocationIndex == 0u) {
-        /* Preserve slot order and conservatively include swept cells and faces. */
-        raster_count = 0u;
-        ivec2 tile_low = ivec2(gl_WorkGroupID.xy * gl_WorkGroupSize.xy);
-        ivec2 tile_high = tile_low + ivec2(gl_WorkGroupSize.xy);
-        for (uint i = 0u; i < params.body_count; ++i) {
-            if (bodies[i].enabled == 0u || bodies[i].visible == 0u) continue;
-            ivec2 low = min(bodies[i].bounds_low - ivec2(1), bodies[i].swept_low);
-            ivec2 high = max(bodies[i].bounds_high, bodies[i].swept_high);
-            if (all(lessThan(tile_low, high)) && all(greaterThan(tile_high, low)))
-                raster_ids[raster_count++] = i;
-        }
-    }
-    barrier();
-    if (p.x >= params.width || p.y >= params.height) return;
+    bool valid_cell=p.x<params.width&&p.y<params.height;
     uint current = 0u, swept = 0u;float volume=0;vec2 face_covered=vec2(0);
-    for (uint ordinal_id = 0u; ordinal_id < raster_count; ++ordinal_id) {
+    /* A fixed team compacts each batch in parallel, retaining slot order.
+       The number of batches follows runtime storage, not a shared-array cap. */
+    for(uint first=0u;first<params.body_count;first+=64u) {
+        uint lane=gl_LocalInvocationIndex,slot=first+lane;bool selected=false;
+        if(lane<64u) {
+            if(slot<params.body_count&&DC_BODY(slot).enabled!=0u&&DC_BODY(slot).visible!=0u) {
+                ivec2 tile_low=ivec2(gl_WorkGroupID.xy*gl_WorkGroupSize.xy);
+                ivec2 tile_high=tile_low+ivec2(gl_WorkGroupSize.xy);
+                ivec2 low=min(DC_BODY(slot).bounds_low-ivec2(1),DC_BODY(slot).swept_low);
+                ivec2 high=max(DC_BODY(slot).bounds_high,DC_BODY(slot).swept_high);
+                selected=all(lessThan(tile_low,high))&&all(greaterThan(tile_high,low));
+            }
+            raster_legacy[lane]=uint(selected);
+        }
+        barrier();
+        for(uint stride=1u;stride<64u;stride*=2u) {
+            uint prior=lane<64u&&lane>=stride?raster_legacy[lane-stride]:0u;
+            barrier();if(lane<64u) raster_legacy[lane]+=prior;barrier();
+        }
+        if(lane<64u&&selected) raster_ids[raster_legacy[lane]-1u]=slot;
+        if(lane==0u) raster_count=raster_legacy[63];
+        barrier();
+    for (uint ordinal_id = 0u; valid_cell&&ordinal_id < raster_count; ++ordinal_id) {
         uint i = raster_ids[ordinal_id];
         ivec2 cell = ivec2(p);
-        bool potential = all(greaterThanEqual(cell,bodies[i].bounds_low)) &&
-                         all(lessThan(cell,bodies[i].bounds_high));
-        bool face_potential=all(greaterThanEqual(cell+ivec2(1),bodies[i].bounds_low)) &&
-                            all(lessThan(cell,bodies[i].bounds_high));
-        bool crossed = all(greaterThanEqual(cell,bodies[i].swept_low)) &&
-                       all(lessThan(cell,bodies[i].swept_high));
+        bool potential = all(greaterThanEqual(cell,DC_BODY(i).bounds_low)) &&
+                         all(lessThan(cell,DC_BODY(i).bounds_high));
+        bool face_potential=all(greaterThanEqual(cell+ivec2(1),DC_BODY(i).bounds_low)) &&
+                            all(lessThan(cell,DC_BODY(i).bounds_high));
+        bool crossed = all(greaterThanEqual(cell,DC_BODY(i).swept_low)) &&
+                       all(lessThan(cell,DC_BODY(i).swept_high));
         if (!potential && !crossed && !face_potential) continue;
-        Body body = bodies[i];
+        Body body = DC_BODY(i);
         ivec2 origin = ivec2(body.x_fp, body.y_fp) >> 16;
         ivec2 extent = ivec2(body.width, body.height);
         bool inside = all(greaterThanEqual(cell, origin)) &&
@@ -205,6 +219,9 @@ void main() {
         }
         if (crossed && (swept == 0u || body.id < swept)) swept = body.id;
     }
+        barrier();
+    }
+    if(!valid_cell) return;
     uint index = p.y * params.width + p.x;
     if (!resident_at(int(p.x), int(p.y))) { current = 0u; swept = 0u; volume=0; face_covered=vec2(0); }
     occupancy[index] = current;

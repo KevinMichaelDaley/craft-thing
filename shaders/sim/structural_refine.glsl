@@ -2,29 +2,29 @@ shared vec3 eq_member_force[16],eq_anchor_force[32],eq_joint_force[64];
 shared float eq_delta[96];
 void eq_physical_prepare() {
     uint g=graph(),lane=gl_LocalInvocationID.x;
-    for(uint e=lane;e<data[g+1u];e+=32u) {
+    for(uint e=lane;e<DC_DATA(g+1u);e+=32u) {
         vec3 strain=vec3(0);
         for(uint axis=0u;axis<3u;axis++) {
             uint a=uint(eq_a[e])*3u+axis,b=uint(eq_b[e])*3u+axis;
             strain+=eq_vector(e,a)*eq_q(a)+eq_vector(e,b)*eq_q(b);
         }
-        eq_member_force[e]=(data[g+MEMBERS+e*8u+6u]&2u)==0u?eq_k[e]*strain:vec3(0);
+        eq_member_force[e]=(DC_DATA(g+MEMBERS+e*8u+6u)&2u)==0u?eq_k[e]*strain:vec3(0);
     }
-    for(uint a=lane;a<data[g+3u];a+=32u) eq_anchor_force[a]=anchor_demand(a);
-    for(uint j=lane;j<data[g+2u];j+=32u) eq_joint_force[j]=joint_demand(j);
+    for(uint a=lane;a<DC_DATA(g+3u);a+=32u) eq_anchor_force[a]=anchor_demand(a);
+    for(uint j=lane;j<DC_DATA(g+2u);j+=32u) eq_joint_force[j]=joint_demand(j);
     barrier();
 }
 vec2 eq_physical(uint dof) {
     float sum=0,scale=0;uint g=graph();
-    for(uint e=0u;e<data[g+1u];e++) {
+    for(uint e=0u;e<DC_DATA(g+1u);e++) {
         vec3 terms=eq_vector(e,dof)*eq_member_force[e];
         sum+=dot(terms,vec3(1));scale+=dot(abs(terms),vec3(1));
     }
-    for(uint a=0u;a<data[g+3u];a++) {
+    for(uint a=0u;a<DC_DATA(g+3u);a++) {
         vec3 terms=anchor_vector(a,dof)*eq_anchor_force[a];
         sum+=dot(terms,vec3(1));scale+=dot(abs(terms),vec3(1));
     }
-    for(uint j=0u;j<data[g+2u];j++) {
+    for(uint j=0u;j<DC_DATA(g+2u);j++) {
         vec3 terms=joint_vector(j,dof)*eq_joint_force[j];
         sum+=dot(terms,vec3(1));scale+=dot(abs(terms),vec3(1));
     }

@@ -36,16 +36,16 @@ float debris_cell(Body b,ivec2 cell,out vec2 center) {
 }
 bool crumble_member(uint member) {
     uint g=graph(),m=g+MEMBERS+member*8u,st=member_state(member);
-    uint serial=data[base()+14u]+1u;
+    uint serial=DC_DATA(base()+14u)+1u;
     if(serial==0u||serial>0x1fffffffu) return false;
-    Body b=bodies[data[m+7u]];
-    uint debris_material=data[m+4u]==0u?5u:6u;
+    Body b=DC_BODY(DC_DATA(m+7u));
+    uint debris_material=DC_DATA(m+4u)==0u?5u:6u;
     vec2 low,high;body_bounds(b,low,high);
     vec2 origin=vec2(b.x_fp,b.y_fp)/65536.0;
     ivec2 begin=ivec2(floor(origin+low)),end=ivec2(ceil(origin+high));
     float area=0;
-    uint profile=g+29000u+data[m+4u]*12u;
-    float work=eq_get(profile+6u)*float(data[m+5u])/65536.0;
+    uint profile=g+29000u+DC_DATA(m+4u)*12u;
+    float work=eq_get(profile+6u)*float(DC_DATA(m+5u))/65536.0;
     if(eq_get(st+9u)+1e-4<work) return false;
     for(int y=begin.y;y<end.y;y++) for(int x=begin.x;x<end.x;x++) {
         ivec2 cell=ivec2(x,y);vec2 center;float volume=debris_cell(b,cell,center);
@@ -86,16 +86,16 @@ bool crumble_member(uint member) {
         if(debris_occupancy[params.width*params.height+view]==b.id)
             debris_occupancy[params.width*params.height+view]=0u;
     }
-    b.enabled=0u;b.reserved0=0x53545232u;b.reserved1=data[m+1u];
-    bodies[data[m+7u]]=b;
-    uint record=g+36000u+data[m+7u]*4u;
-    data[record]=b.id;data[record+1u]=data[m+1u];
-    data[record+2u]=serial;data[record+3u]=2u;
-    data[base()+14u]=serial;
-    data[m+6u]|=STRUCTURAL_RETIRED;data[st+3u]=5u;
+    b.enabled=0u;b.reserved0=0x53545232u;b.reserved1=DC_DATA(m+1u);
+    DC_BODY(DC_DATA(m+7u))=b;
+    uint record=body_fragment_record(DC_DATA(m+7u));
+    DC_SOLVER_DATA(record)=b.id;DC_SOLVER_DATA(record+1u)=DC_DATA(m+1u);
+    DC_SOLVER_DATA(record+2u)=serial;DC_SOLVER_DATA(record+3u)=2u;
+    DC_DATA(base()+14u)=serial;
+    DC_DATA(m+6u)|=STRUCTURAL_RETIRED;DC_DATA(st+3u)=5u;
     eq_put(st+11u,work);
     eq_put(st+12u,max(eq_get(st+9u)-work,0));
-    data[base()+16u]=(params.width+15u)/16u;
-    data[base()+17u]=(params.height+15u)/16u;data[base()+18u]=1u;
+    DC_DATA(base()+16u)=(params.width+15u)/16u;
+    DC_DATA(base()+17u)=(params.height+15u)/16u;DC_DATA(base()+18u)=1u;
     return true;
 }

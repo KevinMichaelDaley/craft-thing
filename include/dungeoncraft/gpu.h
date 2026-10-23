@@ -21,6 +21,7 @@ typedef struct {
 #define DC_GPU_CHUNK_SLOTS 64u
 #endif
 
+/** Legacy snapshot-prefix extent and initial allocation quantum; never a live-body limit. */
 #define DC_GPU_BODY_CAPACITY 64u
 #define DC_GPU_BODY_MAX_SIDE 16u
 
@@ -195,7 +196,7 @@ bool dc_gpu_set_tick_water_source(dc_gpu_t *gpu, bool enabled,
                                   uint32_t x, uint32_t y);
 
 /** Spawn or replace a stable-ID box in viewport-local 16.16 coordinates.
- * Up to DC_GPU_BODY_CAPACITY boxes may be active; new IDs fail when full.
+ * Body storage grows on demand; allocation failure leaves existing bodies intact.
  */
 bool dc_gpu_spawn_body(dc_gpu_t *gpu, dc_gpu_body_t body,
                        char *err_buf, uint32_t err_cap);
