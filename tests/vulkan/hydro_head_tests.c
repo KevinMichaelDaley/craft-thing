@@ -3,11 +3,18 @@
 #undef main
 #include "../../tools/diagnostics/shader_fixture.h"
 
+
+#ifndef HYDRO_TEST_HEIGHT
+#define HYDRO_TEST_HEIGHT 721
+#endif
+#ifndef HYDRO_TEST_SHADER
+#define HYDRO_TEST_SHADER "build/shaders/hydro_head.comp.spv"
+#endif
 enum {
     FULL = 65536,
     CAP = 64 * FULL,
     WIDTH = 64,
-    HEIGHT = 721,
+    HEIGHT = HYDRO_TEST_HEIGHT,
     CELLS = WIDTH * HEIGHT
 };
 static int g_pass, g_fail;
@@ -30,9 +37,9 @@ static int g_pass, g_fail;
 typedef struct {
     probe_t p;
     dc_gpu_t gpu;
-    VkBuffer buffers[5];
-    VkDeviceMemory memories[5];
-    uint32_t *words[5];
+    VkBuffer buffers[6];
+    VkDeviceMemory memories[6];
+    uint32_t *words[6];
     uint32_t expected[CELLS];
 } fixture_t;
 static uint32_t capped(uint32_t a, uint32_t b) {
@@ -103,10 +110,10 @@ static bool setup(fixture_t *f, unsigned scenario) {
     if (!initialize(&f->p))
         return false;
     f->gpu = (dc_gpu_t){.device = f->p.device, .physical = f->p.physical};
-    const uint32_t counts[] = {12u * 4096u * 2u, 12, 5u * CELLS, CELLS, CELLS};
-    const uint32_t bindings[] = {1, 2, 3, 9, 11};
+    const uint32_t counts[] = {12u * 4096u * 2u, 12, 5u * CELLS, CELLS, CELLS, 1};
+    const uint32_t bindings[] = {1, 2, 3, 9, 11, 31};
     char err[256];
-    for (unsigned i = 0; i < 5; i++) {
+    for (unsigned i = 0; i < 6; i++) {
         if (!dc_gpu_make_mapped_buffer(&f->gpu, counts[i] * sizeof(uint32_t),
                                        &f->buffers[i], &f->memories[i],
                                        (void **)&f->words[i], err, sizeof(err)))
@@ -116,10 +123,10 @@ static bool setup(fixture_t *f, unsigned scenario) {
     f->p.buffer = f->buffers[3];
     f->p.mapped = f->words[3];
     if (!fixture_body_pipeline(&f->p, &f->gpu, VK_NULL_HANDLE,
-                               "build/shaders/hydro_head.comp.spv", bindings, 5,
+                               HYDRO_TEST_SHADER, bindings, 6,
                                UINT32_MAX))
         return false;
-    for (unsigned i = 0; i < 5; i++) {
+    for (unsigned i = 0; i < 6; i++) {
         VkDescriptorBufferInfo info = {f->buffers[i], 0,
                                        counts[i] * sizeof(uint32_t)};
         VkWriteDescriptorSet write = {
@@ -190,8 +197,14 @@ static void run_case(unsigned scenario) {
         }
     printf("scenario%u %u exact heads, %u mismatches\n", scenario, CELLS,
            mismatches);
+#ifdef HYDRO_TEST_PROFILE
+    uint32_t evaluations=f->words[5][0];
+    uint32_t budget=2u*CELLS*((HEIGHT+127u)/128u<=8u?1u:2u);
+    printf("transform evaluations%u budget%u\n",evaluations,budget);
+    if(evaluations>budget) mismatches++;
+#endif
     fixture_release_pipeline(p);
-    for (unsigned i = 0; i < 5; i++) {
+    for (unsigned i = 0; i < 6; i++) {
         vkUnmapMemory(p->device, f->memories[i]);
         vkDestroyBuffer(p->device, f->buffers[i], NULL);
         vkFreeMemory(p->device, f->memories[i], NULL);

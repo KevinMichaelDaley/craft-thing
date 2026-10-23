@@ -603,7 +603,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/mpm_support_dirty_tests
 	./build/mpm_gather_tests
 	./build/mpm_gather_partial_tile_tests
-	./build/mpm_layout_tests
+	./build/mpm_shader_storage_tests
 	./build/mpm_copy_tests
 	./build/solver_motion_store_tests
 	./build/solver_recording_tests
@@ -1396,7 +1396,7 @@ test: build/solver_commands_tests
 
 build/diagnostics/mpm_gather_profile.comp.spv: shaders/sim/mpm.comp $(wildcard shaders/sim/*.glsl)
 	@mkdir -p build/diagnostics
-	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -DDC_MPM_GATHER_PROFILE=1 -V --target-env vulkan1.3 -S comp -o $@ $<
+	$(GLSLANG) -DDC_MPM_SHARED_GATHER=1 -DDC_RUNTIME_BODY_STORAGE=1 -DDC_MPM_GATHER_PROFILE=1 -V --target-env vulkan1.3 -S comp -o $@ $<
 build/mpm_gather_tests: build/diagnostics/mpm_gather_profile.comp.spv
 
 build/mpm_gather_partial_tile_tests: tests/vulkan/mpm_gather_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(MPM_SHADER) build/diagnostics/mpm_gather_profile.comp.spv
@@ -1405,6 +1405,21 @@ test: build/mpm_gather_partial_tile_tests
 
 $(MPM_SHADER) build/shaders/runtime/mpm.comp.spv: shaders/sim/mpm_gather_cache.glsl
 
-build/mpm_layout_tests: tests/vulkan/mpm_layout_tests.c $(MPM_SHADER) build/diagnostics/mpm_gather_profile.comp.spv
+build/mpm_shader_storage_tests: tests/vulkan/mpm_shader_storage_tests.c $(MPM_SHADER) build/diagnostics/mpm_gather_profile.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
-test: build/mpm_layout_tests
+test: build/mpm_shader_storage_tests
+
+build/shaders/mpm_stencil.comp.spv: shaders/sim/mpm.comp $(wildcard shaders/sim/*.glsl)
+	@mkdir -p build/shaders
+	$(GLSLANG) -DDC_MPM_SHARED_GATHER=1 -V --target-env vulkan1.3 -S comp -o $@ $<
+build/shaders/runtime/mpm_stencil.comp.spv: shaders/sim/mpm.comp $(wildcard shaders/sim/*.glsl)
+	@mkdir -p build/shaders/runtime
+	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -DDC_MPM_SHARED_GATHER=1 -V --target-env vulkan1.3 -S comp -o $@ $<
+$(GPU_OBJ) $(GPU_SOURCE_BINARIES): build/shaders/mpm_stencil.comp.spv build/shaders/runtime/mpm_stencil.comp.spv
+
+# Exact hydrostatic recurrence and duplicate-transform work budget.
+build/diagnostics/hydro_head_profile.comp.spv: shaders/sim/hydro_head.comp
+	@mkdir -p $(@D)
+	glslangValidator -V --target-env vulkan1.1 -DDC_HYDRO_HEAD_PROFILE=1 -o $@ $<
+build/hydro_head_work_tests: tests/vulkan/hydro_head_tests.c tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/hydro_head_profile.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DHYDRO_TEST_PROFILE=1 -DHYDRO_TEST_SHADER='"build/diagnostics/hydro_head_profile.comp.spv"' -o $@ $< $(GPU_OBJ) $(CHUNK_OBJ) $(LDLIBS)

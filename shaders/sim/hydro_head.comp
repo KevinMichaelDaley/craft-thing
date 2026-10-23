@@ -8,6 +8,9 @@ layout(set=0,binding=11,std430) buffer RawHeads {uint raw_heads[];};
 layout(push_constant) uniform Params {uint width,height,phase,unused0,unused1,unused2,unused3,unused4;} params;
 const uint FULL=65536u,CAP=64u*FULL,LANES=128u;
 shared uvec3 transforms[128];
+#ifdef DC_HYDRO_HEAD_PROFILE
+layout(set=0,binding=31,std430) buffer Profile {uint evaluations;};
+#endif
 
 uint atlas_of(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0xffffffffu;
@@ -39,6 +42,9 @@ uvec3 compose(uvec3 before,uvec3 after) {
     return before.z!=0u?uvec3(0u,zero,1u):uvec3(min(CAP,before.x+after.x),zero,0u);
 }
 uvec3 cell_transform(ivec2 p) {
+#ifdef DC_HYDRO_HEAD_PROFILE
+    atomicAdd(evaluations,1u);
+#endif
     uint atlas=atlas_of(p),index=uint(p.y)*params.width+uint(p.x);
     if(params.phase!=0u) {
         uint covered=occupancy[2u*params.width*params.height+index];
