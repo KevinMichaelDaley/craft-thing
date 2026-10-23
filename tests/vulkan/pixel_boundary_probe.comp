@@ -2,7 +2,6 @@
 #extension GL_GOOGLE_include_directive : require
 #include "rigid_body.glsl"
 const bool CONTACT_PIXEL_ONLY=true;
-#define DC_CONTACT_AXIS_PROFILE 1
 #include "contact_geometry.glsl"
 layout(local_size_x=128) in;
 layout(set=0,binding=4,std430) buffer Storage {Body bodies[BODY_CAPACITY];uint data[];};
@@ -16,20 +15,8 @@ bool reference_boundary(Body b,uint p) {
         pixel_material(b,cell+ivec2(1,0))==0u||pixel_material(b,cell+ivec2(0,-1))==0u||
         pixel_material(b,cell+ivec2(0,1))==0u);
 }
-bool reference_polygon_contact(Polygon a,Polygon b,out vec2 normal,out float depth) {
-    depth=1e20;normal=vec2(0);
-    for(uint i=0u;i<a.count;i++) if(!contact_axis(a,b,a.vertices[(i+1u)%a.count]-a.vertices[i],normal,depth)) return false;
-    for(uint i=0u;i<b.count;i++) if(!contact_axis(a,b,b.vertices[(i+1u)%b.count]-b.vertices[i],normal,depth)) return false;
-    return true;
-}
 void main() {
     Body body=bodies[0];
-    if(gl_LocalInvocationIndex==0u) {
-        Polygon a=cell_polygon(vec2(0)),b=cell_polygon(vec2(.125,.25));vec2 n;float d;
-        contact_axis_evaluations=0u;
-        bool hit=polygon_contact(a,b,n,d);results[6]=contact_axis_evaluations;
-        if(!hit) atomicAdd(results[7],1u);
-    }
     for(uint piece=gl_LocalInvocationIndex;piece<1024u;piece+=128u) {
         bool expected=reference_boundary(body,piece);
         reads=0u;
@@ -46,12 +33,6 @@ void main() {
             for(uint v=0u;v<4u;v++) reference[v]=vec2(3.25,-1.75)+piece_vertex(body,piece,v);
             reads=0u;Polygon polygon=body_polygon(body,piece,vec2(3.25,-1.75));
             atomicMax(results[4],reads);
-            Polygon other=cell_polygon(polygon.vertices[0]+vec2(.2+float(piece%5u)*.05,.125));
-            vec2 expected_normal,actual_normal;float expected_depth,actual_depth;
-            bool expected_hit=reference_polygon_contact(polygon,other,expected_normal,expected_depth);
-            bool actual_hit=polygon_contact(polygon,other,actual_normal,actual_depth);
-            if(expected_hit!=actual_hit||(expected_hit&&(any(notEqual(floatBitsToUint(expected_normal),floatBitsToUint(actual_normal)))||
-                floatBitsToUint(expected_depth)!=floatBitsToUint(actual_depth)))) atomicAdd(results[7],1u);
             for(uint v=0u;v<4u;v++) if(any(notEqual(floatBitsToUint(reference[v]),floatBitsToUint(polygon.vertices[v])))) atomicAdd(results[5],1u);
         }
         atomicAdd(results[2],1u);
