@@ -36,7 +36,7 @@ static bool storage_reserve(dc_gpu_t *g,uint32_t required,uint32_t pairs,uint32_
     VkDeviceSize new_structure=body_prefix+dc_gpu_structural_word_offset(&layout)*4u;
     VkDeviceSize terrain=dc_gpu_color_terrain_bytes(),old_bank=(VkDeviceSize)old*128u,new_bank=(VkDeviceSize)next*128u;
     dc_gpu_address_buffer_t metadata={0},colors={0};
-    if(!dc_gpu_address_buffer_create(g,prefix+(VkDeviceSize)next*8u,true,&metadata,err,cap)||
+    if(!dc_gpu_address_buffer_create(g,prefix+(VkDeviceSize)next*8u+dc_gpu_contact_work_bytes(&layout),true,&metadata,err,cap)||
        !dc_gpu_address_buffer_create(g,terrain+new_bank*2u,true,&colors,err,cap)) {
         dc_gpu_address_buffer_destroy(g,&metadata);return false;
     }
@@ -91,6 +91,8 @@ static bool storage_reserve(dc_gpu_t *g,uint32_t required,uint32_t pairs,uint32_
     uint32_t *h=r->work.mapped;h[29]=next;h[36]=pairs;h[37]=contacts;
     dc_body_address_t a=address(colors.address+terrain),b=address(colors.address+terrain+new_bank);
     h[32]=a.low;h[33]=a.high;h[34]=b.low;h[35]=b.high;
+    dc_body_address_t work=address(metadata.address+prefix+(VkDeviceSize)next*8u);
+    h[45]=work.low;h[46]=work.high;
     VkDescriptorBufferInfo binding[3]={{colors.buffer,0,terrain},{colors.buffer,0,16},{colors.buffer,0,16}};
     VkWriteDescriptorSet write[3]={0};
     for(uint32_t i=0;i<3;i++) write[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=g->descriptor,

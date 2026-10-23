@@ -142,7 +142,7 @@ struct dc_gpu {
     VkPipeline broadphase_pipeline;
     VkPipeline contact_pipelines[DC_GPU_CONTACT_PHASE_COUNT];
     VkPipeline contact_pixel_pipeline, contact_pixel_plan_pipeline,
-               contact_pixel_finish_pipeline;
+               contact_pixel_finish_pipeline, contact_pixel_work_pipeline;
     VkPipeline solver_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
     VkPipeline pixel_hydro_pipelines[5];
     VkPipeline structural_pipelines[DC_GPU_STRUCTURAL_PHASE_COUNT];
@@ -300,9 +300,18 @@ bool dc_gpu_pixel_geometry_valid(const dc_gpu_body_record_t *body,
 /** Upgrade version-four dense geometry at an explicit checkpoint restore boundary. */
 bool dc_gpu_upgrade_dense_pixels(dc_gpu_t *gpu, dc_gpu_body_record_t *bodies,
                                  uint32_t **pixels, uint32_t *words);
+static inline uint32_t dc_gpu_contact_work_word_offset(const dc_gpu_t *gpu) {
+    return dc_gpu_pixel_pool_word_offset(gpu)+DC_GPU_PIXEL_POOL_HEADER_WORDS+
+        2u*dc_gpu_pixel_pool_capacity(gpu);
+}
+static inline VkDeviceSize dc_gpu_contact_work_bytes(const dc_gpu_t *gpu) {
+    uint32_t pairs=gpu->runtime_pair_capacity?gpu->runtime_pair_capacity:DC_GPU_BROADPHASE_PAIR_CAPACITY;
+    return gpu->runtime_bodies?(4u+(VkDeviceSize)pairs*DC_CONTACT_PIXEL_GROUPS*2u)*sizeof(uint32_t):0u;
+}
 static inline VkDeviceSize dc_gpu_body_storage_bytes(const dc_gpu_t *gpu) {
     return dc_gpu_legacy_body_storage_bytes(gpu) +
-        (DC_GPU_PIXEL_POOL_HEADER_WORDS + 2u * dc_gpu_pixel_pool_capacity(gpu)) * sizeof(uint32_t);
+        (DC_GPU_PIXEL_POOL_HEADER_WORDS + 2u * dc_gpu_pixel_pool_capacity(gpu)) * sizeof(uint32_t)+
+        dc_gpu_contact_work_bytes(gpu);
 }
 
 static inline uint32_t dc_gpu_solver_word_offset(const dc_gpu_t *gpu) {

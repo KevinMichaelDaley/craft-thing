@@ -52,6 +52,9 @@ static bool work_create(dc_gpu_t *g,uint32_t slots,uint32_t force_groups,uint32_
     h[37]=g->runtime_contact_capacity?g->runtime_contact_capacity:DC_GPU_CONTACT_CAPACITY;
     dc_body_address_t cache=address(g->runtime_bodies->component_cache.address);
     h[42]=cache.low;h[43]=cache.high;
+    dc_body_address_t contacts=address(g->runtime_bodies->metadata.address+
+        (VkDeviceSize)dc_gpu_contact_work_word_offset(g)*4u);
+    h[45]=contacts.low;h[46]=contacts.high;
     return true;
 }
 bool dc_gpu_runtime_bodies_init(dc_gpu_t *g,char *err,uint32_t cap) {
