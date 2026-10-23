@@ -88,16 +88,60 @@ static void test_grain_bed_work_tracks_body_activation_on_gpu(void) {
     ASSERT_TRUE(spawn(gpu));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, g_error, sizeof(g_error)));
     ASSERT_TRUE(triplet(gpu, DC_GRAIN_BED_WORK_WORD, work));
-    ASSERT_EQ(work[0], 64u); ASSERT_EQ(work[1], 1u); ASSERT_EQ(work[2], 1u);
+    ASSERT_EQ(work[0], 1u); ASSERT_EQ(work[1], 1u); ASSERT_EQ(work[2], 1u);
     ASSERT_TRUE(dc_gpu_remove_body(gpu, 1, g_error, sizeof(g_error)));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu, g_error, sizeof(g_error)));
     ASSERT_TRUE(triplet(gpu, DC_GRAIN_BED_WORK_WORD, work)); ASSERT_EQ(work[0], 0u);
     dc_gpu_destroy(gpu); PASS();
 }
 
+
+static bool bed_reference_pipelines(dc_gpu_t *g) {
+    VkShaderModule module=VK_NULL_HANDLE;
+    if(!dc_gpu_load_shader_module(g,"build/shaders/rigid_solver.comp.spv",&module,g_error,sizeof(g_error))) return false;
+    const uint32_t phases[]={18,19};
+    VkSpecializationMapEntry entries[]={{0,0,4},{2,4,4}};
+    bool okay=true;
+    for(unsigned i=0;i<2;i++) {
+        uint32_t data[]={phases[i],0};
+        VkSpecializationInfo spec={2,entries,sizeof(data),data};
+        VkComputePipelineCreateInfo info={.sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+            .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_COMPUTE_BIT,
+                .module=module,.pName="main",.pSpecializationInfo=&spec},.layout=g->pipeline_layout};
+        VkPipeline pipeline=VK_NULL_HANDLE;
+        if(vkCreateComputePipelines(g->device,VK_NULL_HANDLE,1,&info,NULL,&pipeline)!=VK_SUCCESS) {okay=false;break;}
+        vkDestroyPipeline(g->device,g->solver_pipelines[phases[i]],NULL);
+        g->solver_pipelines[phases[i]]=pipeline;
+    }
+    vkDestroyShaderModule(g->device,module,NULL);g->solver_cache_disabled=true;return okay;
+}
+static void test_compact_bed_preserves_every_support_graph_value(void) {
+    float expected[64u*64u*4u];
+    for(unsigned compact=0;compact<2;compact++) {
+        dc_gpu_t *g=context(false);ASSERT_TRUE(g);
+        dc_chunk_t chunk={0};
+        for(unsigned y=12;y<61;y++) for(unsigned x=7;x<54;x++)
+            if((x*13u+y*7u)%29u!=0u) chunk.cells[y*64u+x].material=DC_MATERIAL_DIRT;
+        for(unsigned x=0;x<64;x++) chunk.cells[61u*64u+x].material=DC_MATERIAL_STONE;
+        ASSERT_TRUE(dc_gpu_upload_chunk(g,0,&chunk,g_error,sizeof(g_error)));
+        if(!compact) ASSERT_TRUE(bed_reference_pipelines(g));
+        ASSERT_TRUE(spawn(g));ASSERT_TRUE(dc_gpu_rigid_step(g,g_error,sizeof(g_error)));
+        if(!compact) memcpy(expected,g->mpm_grid_mapped,sizeof(expected));
+        else {
+            unsigned mismatches=0;
+            const float *actual=g->mpm_grid_mapped;
+            for(unsigned i=0;i<64u*64u*4u;i++) mismatches+=memcmp(expected+i,actual+i,4u)!=0;
+            printf("compact support graph mismatches%u\n",mismatches);
+            ASSERT_EQ(mismatches,0u);
+        }
+        dc_gpu_destroy(g);
+    }
+    PASS();
+}
 int main(void) {
     RUN(test_body_without_particles_has_no_grain_bed_work);
     RUN(test_grain_bed_work_tracks_body_activation_on_gpu);
+    RUN(test_compact_bed_preserves_every_support_graph_value);
     printf("Results: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
