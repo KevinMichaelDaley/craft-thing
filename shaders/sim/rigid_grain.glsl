@@ -16,8 +16,8 @@ vec2 grain_position(uint c,uint index) {
 }
 void grain_correction(uint index,vec2 change) {
     ivec2 fp=ivec2(round(clamp(change,vec2(-2),vec2(2))*SUM_SCALE));
-    atomicAdd(grain_scratch[index*4u],uint(fp.x));
-    atomicAdd(grain_scratch[index*4u+1u],uint(fp.y));
+    if(!SKIP_ZERO_REDUCTIONS||fp.x!=0) atomicAdd(grain_scratch[index*4u],uint(fp.x));
+    if(!SKIP_ZERO_REDUCTIONS||fp.y!=0) atomicAdd(grain_scratch[index*4u+1u],uint(fp.y));
 }
 bool grain_static_at(vec2 point) {
     ivec2 cell=ivec2(floor(point));
