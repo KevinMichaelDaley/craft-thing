@@ -3,7 +3,7 @@
 #define FLUID_TRANSPORT_FIXTURE_ONLY
 #include "fluid_transport_tests.c"
 
-enum { PROFILE_WORDS=6,MAX_REQUESTS_PER_SOURCE=64 };
+enum { PROFILE_WORDS=7,MAX_REQUESTS_PER_SOURCE=64 };
 static const char *g_profile_shader="build/diagnostics/fluid_transport_profile.comp.spv";
 #ifdef DC_COLOR_SYNC_PROFILE
 static uint64_t g_color_hash;

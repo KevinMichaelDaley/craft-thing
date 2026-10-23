@@ -15,6 +15,7 @@ enum {
     CAP = 64 * FULL,
     WIDTH = 64,
     HEIGHT = HYDRO_TEST_HEIGHT,
+    PAGES = (HEIGHT + 63) / 64,
     CELLS = WIDTH * HEIGHT
 };
 static int g_pass, g_fail;
@@ -110,7 +111,7 @@ static bool setup(fixture_t *f, unsigned scenario) {
     if (!initialize(&f->p))
         return false;
     f->gpu = (dc_gpu_t){.device = f->p.device, .physical = f->p.physical};
-    const uint32_t counts[] = {12u * 4096u * 2u, 12, 5u * CELLS, CELLS, CELLS, 1};
+    const uint32_t counts[] = {PAGES * 4096u * 2u, PAGES, 5u * CELLS, CELLS, CELLS, 1};
     const uint32_t bindings[] = {1, 2, 3, 9, 11, 31};
     char err[256];
     for (unsigned i = 0; i < 6; i++) {
@@ -138,7 +139,7 @@ static bool setup(fixture_t *f, unsigned scenario) {
             .pBufferInfo = &info};
         vkUpdateDescriptorSets(f->p.device, 1, &write, 0, NULL);
     }
-    for (unsigned p = 0; p < 12; p++)
+    for (unsigned p = 0; p < PAGES; p++)
         f->words[1][p] = p + 1;
     if (scenario == 2)
         f->words[1][3] = 0;

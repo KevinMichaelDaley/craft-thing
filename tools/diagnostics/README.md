@@ -122,3 +122,10 @@ Use `DC_SOLVER_COMMAND_CACHE=0` for the original recording path, or
 Detailed `quarter_app_frame_trace` queries disable command reuse so each frame
 gets fresh per-dispatch query IDs; establish final frame-time acceptance with
 the ordinary displayed application.
+
+Set `DC_FRAME_TRACE_COARSE=1` on `quarter_app_frame_trace` to retain reusable
+command streams and measure their enclosing rigid, MPM, fluid-phase, renderer,
+and extraction stages. Queries remain in the primary command buffer; cached
+secondaries never contain query IDs. Detailed kernel fields are zero for cached
+programs in this mode. This reduces diagnostic disturbance but still requires
+normal displayed application measurements for final acceptance.

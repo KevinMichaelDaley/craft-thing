@@ -616,6 +616,8 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/component_dispatch_tests
 	./build/pixel_properties_gpu_tests
 	./build/hydro_head_tests
+	./build/hydro_head_work_tests
+	./build/hydro_head_tall_work_tests
 	./build/fluid_aperture_tests
 	./build/raster_dispatch_tests
 	./build/contact_dispatch_tests
@@ -1423,3 +1425,7 @@ build/diagnostics/hydro_head_profile.comp.spv: shaders/sim/hydro_head.comp
 	glslangValidator -V --target-env vulkan1.1 -DDC_HYDRO_HEAD_PROFILE=1 -o $@ $<
 build/hydro_head_work_tests: tests/vulkan/hydro_head_tests.c tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/hydro_head_profile.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DHYDRO_TEST_PROFILE=1 -DHYDRO_TEST_SHADER='"build/diagnostics/hydro_head_profile.comp.spv"' -o $@ $< $(GPU_OBJ) $(CHUNK_OBJ) $(LDLIBS)
+
+build/hydro_head_tall_work_tests: tests/vulkan/hydro_head_tests.c tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/hydro_head_profile.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DHYDRO_TEST_HEIGHT=1153 -DHYDRO_TEST_PROFILE=1 -DHYDRO_TEST_SHADER='"build/diagnostics/hydro_head_profile.comp.spv"' -o $@ $< $(GPU_OBJ) $(CHUNK_OBJ) $(LDLIBS)
+test: build/hydro_head_work_tests build/hydro_head_tall_work_tests

@@ -18,6 +18,8 @@ enum { QUERY_CAPACITY = 4096, RIGID = 0, FLUID = 1, MPM = 2,
        MPM_COMPONENT_PHASE = MPM_PHASE + 8, CONTACT_KERNEL = MPM_COMPONENT_PHASE + 6,
        MPM_ACTIVITY_KERNEL = CONTACT_KERNEL + 7, LABEL_COUNT = MPM_ACTIVITY_KERNEL + 1 };
 static dc_gpu_t *traced;
+static VkCommandBuffer traced_primary;
+static bool coarse;
 static VkQueryPool pool;
 static unsigned query_count, frame;
 static unsigned labels[QUERY_CAPACITY / 2];
@@ -170,7 +172,7 @@ static bool profile_contact_pairs(dc_gpu_t *gpu) {
 VkResult __wrap_vkBeginCommandBuffer(VkCommandBuffer command,
                                      const VkCommandBufferBeginInfo *begin) {
     VkResult result = __real_vkBeginCommandBuffer(command, begin);
-    if (result == VK_SUCCESS && traced && command == traced->command) {
+    if (result == VK_SUCCESS && traced && command == traced_primary) {
         query_count = 0;
         vkCmdResetQueryPool(command, pool, 0, QUERY_CAPACITY);
     }
@@ -178,9 +180,10 @@ VkResult __wrap_vkBeginCommandBuffer(VkCommandBuffer command,
 }
 
 static void stage(dc_gpu_t *gpu, unsigned label, void (*record)(dc_gpu_t *)) {
-    bool capture = gpu == traced && query_count + 2 <= QUERY_CAPACITY;
+    bool eligible=gpu==traced&&gpu->command==traced_primary;
+    bool capture = eligible && query_count + 2 <= QUERY_CAPACITY;
     unsigned at = query_count;
-    if (gpu == traced && !capture)
+    if (eligible && !capture)
         overflow = true;
     if (capture) {
         labels[at / 2] = label;
@@ -198,9 +201,10 @@ void __wrap_dc_gpu_record_rigid(dc_gpu_t *gpu) {
     stage(gpu, RIGID, __real_dc_gpu_record_rigid);
 }
 void __wrap_dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase) {
-    bool capture = gpu == traced && query_count + 2 <= QUERY_CAPACITY;
+    bool eligible=gpu==traced&&gpu->command==traced_primary;
+    bool capture = eligible && query_count + 2 <= QUERY_CAPACITY;
     unsigned at = query_count;
-    if (gpu == traced && !capture)
+    if (eligible && !capture)
         overflow = true;
     if (capture) {
         labels[at / 2] = FLUID_PHASE + phase;
@@ -214,7 +218,7 @@ void __wrap_dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase) {
                              pool, at + 1);
 }
 void __wrap_dc_gpu_record_mpm(dc_gpu_t *gpu) {
-    gpu->solver_cache_disabled = true;
+    if(!coarse) gpu->solver_cache_disabled = true;
     stage(gpu, MPM, __real_dc_gpu_record_mpm);
 }
 void __wrap_fr_renderer_record(dc_gpu_t *gpu) {
@@ -231,7 +235,7 @@ void __wrap_dc_gpu_record_broadphase(dc_gpu_t *gpu) {
 }
 void __wrap_dc_gpu_record_solver(dc_gpu_t *gpu) {
     /* Per-dispatch query IDs are allocated anew for each detailed trace. */
-    gpu->solver_cache_disabled = true;
+    if(!coarse) gpu->solver_cache_disabled = true;
     stage(gpu, SOLVER, __real_dc_gpu_record_solver);
 }
 
@@ -244,7 +248,7 @@ void __wrap_vkCmdBindPipeline(VkCommandBuffer command, VkPipelineBindPoint point
 }
 
 static unsigned hydro_begin(VkCommandBuffer command) {
-    if (!traced || command != traced->command)
+    if (coarse || !traced || command != traced->command)
         return QUERY_CAPACITY;
     for (unsigned phase = 0; phase < 5; phase++) {
         if (bound != traced->pixel_hydro_pipelines[phase])
@@ -333,7 +337,7 @@ bool __wrap_dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
         .queryType = VK_QUERY_TYPE_TIMESTAMP, .queryCount = QUERY_CAPACITY};
     if (vkCreateQueryPool(gpu->device, &info, NULL, &pool) != VK_SUCCESS)
         return false;
-    traced = gpu;
+    traced = gpu;traced_primary=gpu->command;coarse=getenv("DC_FRAME_TRACE_COARSE")!=NULL;
     overflow = false;
     double began = seconds();
     bool okay = __real_dc_gpu_present_chunks_steps(gpu, steps, err, cap);

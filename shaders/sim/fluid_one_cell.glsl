@@ -29,6 +29,7 @@ uint one_cell_block(int first,bool positive) {
         if(lane>=span) value=uvec2(min(value.x,value.y+prior.x),value.y+prior.y);
     }
     uint outgoing=lane<count?min(value.x,value.y):0u;
+    if(subgroupOr(outgoing)==0u) return count;
     uint incoming=subgroupShuffleDown(outgoing,1u);
     if(lane+1u>=count) incoming=0u;
     vec3 color=DEFAULT_WATER_COLOR,lower_color=DEFAULT_WATER_COLOR,terminal_color=DEFAULT_WATER_COLOR;

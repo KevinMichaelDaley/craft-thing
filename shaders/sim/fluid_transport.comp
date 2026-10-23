@@ -15,6 +15,7 @@ layout(constant_id=5) const bool ONE_CELL_SCAN_ENABLED=true;
 /* Enable only in explicit experiments until full-frame scheduling benefits. */
 layout(constant_id=6) const bool LONG_RUN_SCAN_ENABLED=false;
 layout(constant_id=7) const bool PAGE_CACHE_ENABLED=false;
+layout(constant_id=8) const bool STAGNANT_SCAN_ENABLED=true;
 layout(set=0,binding=1,std430) coherent buffer Cells {uvec2 chunk_cells[];};
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
@@ -25,7 +26,7 @@ layout(set=0,binding=29,std430) readonly buffer Tree {uint aperture_tree[];};
 #ifdef DC_TRANSPORT_PROFILE
 layout(set=0,binding=31,std430) buffer TransportProfile {uint transport_profile[];};
 uint request_queries=0u,blocker_checks=0u,source_queries=0u;
-uint buffer_barriers=0u,page_queries=0u;
+uint buffer_barriers=0u,page_queries=0u,stagnant_sources=0u;
 #endif
 layout(push_constant) uniform Params {
     uint width,height,mode,tick_parity,unused1,step_scale_bits,elapsed_time_mode;
@@ -307,6 +308,30 @@ bool move_source(ivec2 source,ivec2 direction) {
     if(lane==0u&&sent!=0u) put_water(source,available-sent);
     return sent!=0u;
 }
+/* A prefix whose complete reachable intervals are already full cannot move.
+ * No member of that prefix vacates a recipient for a later source. */
+uint stagnant_block(int first,bool positive) {
+    uint lane=gl_SubgroupInvocationID,team=transport_team_size();
+    int coordinate=first+(positive?-int(lane):int(lane));
+    bool valid=coordinate>=0&&coordinate<int(length),stationary=valid;
+    if(valid) {
+        uint position=uint(coordinate);
+        bool source=(source_bits[position/32u]&(1u<<(position%32u)))!=0u;
+        if(source) {
+            uint face=positive?position:position-1u;
+            uint edge=positive?length-1u-position:position;
+            uint reach=min(uint(ceil(uintBitsToFloat(cached[face].w))),edge);
+            uint bound=cached[position].y>>BOUND_SHIFT;
+            reach=min(reach,positive?bound-position:position-bound);
+            stationary=reach==0u||recipients_full(position,positive,reach);
+        }
+    }
+    uint count=subgroupMin(stationary?team:lane);
+#ifdef DC_TRANSPORT_PROFILE
+    if(lane==0u) stagnant_sources+=count;
+#endif
+    return count;
+}
 #include "fluid_one_cell.glsl"
 #include "fluid_short_run.glsl"
 void main() {
@@ -379,7 +404,10 @@ void main() {
         if(position<0||position>=int(length)) break;
         if(ONE_CELL_SCAN_ENABLED&&length<=CACHE_CELLS) {
             uint covered=0u;
-            if(LONG_RUN_SCAN_ENABLED) covered=short_run_block(position,positive);
+            uint face=positive?uint(position):uint(position)-1u;
+            if(STAGNANT_SCAN_ENABLED&&length<=BOUND_LIMIT&&uintBitsToFloat(cached[face].w)>1.)
+                covered=stagnant_block(position,positive);
+            if(covered==0u&&LONG_RUN_SCAN_ENABLED) covered=short_run_block(position,positive);
             if(covered==0u) covered=one_cell_block(position,positive);
             if(covered!=0u) {
                 position+=positive?-int(covered-1u):int(covered-1u);
@@ -409,6 +437,7 @@ void main() {
         atomicAdd(transport_profile[2],source_queries);
         atomicAdd(transport_profile[4],buffer_barriers);
         atomicAdd(transport_profile[5],page_reads);
+        atomicAdd(transport_profile[6],stagnant_sources);
     }
 #endif
 }
