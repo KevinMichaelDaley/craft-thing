@@ -7,6 +7,7 @@ static void test_packed_boundary_matches_sparse_concave_reference_with_bounded_r
         property_fixture_t f={0};fixture_start(&f,1);
         dc_gpu_body_record_t *body=f.gpu.body_mapped;
         body->body.width=32;body->body.height=32;
+        body->angle=(pattern&1u)?0.371f:-0.217f;body->center[0]=5.25f;body->center[1]=14.125f;
         body->piece_count=DC_GPU_PIXEL_BODY_FLAG|768u;
         memset(f.shape,0,144u*sizeof(uint32_t));
         const uint32_t header[]={144,3,2,2,0,0,32,32,12,45,78,0};
@@ -32,8 +33,10 @@ static void test_packed_boundary_matches_sparse_concave_reference_with_bounded_r
         uint32_t errors=f.probe.mapped[0],interior=f.probe.mapped[1],tested=f.probe.mapped[2];
         printf("pattern%u: %u exact mismatches, %u interior reads, %u edge reads, %u candidates\n",
             pattern,errors,interior,f.probe.mapped[3],tested);
+        uint32_t polygon_reads=f.probe.mapped[4],polygon_errors=f.probe.mapped[5];
+        printf("polygon reads%u exact vertex mismatches%u\n",polygon_reads,polygon_errors);
         fixture_stop(&f);
-        ASSERT_EQ(errors,0u);ASSERT_EQ(tested,1024u);ASSERT_TRUE(interior<=10u);
+        ASSERT_EQ(errors,0u);ASSERT_EQ(tested,1024u);ASSERT_TRUE(interior<=10u);ASSERT_EQ(polygon_errors,0u);ASSERT_TRUE(polygon_reads<=3u);
     }
     PASS();
 }

@@ -1,6 +1,8 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 #include "rigid_body.glsl"
+const bool CONTACT_PIXEL_ONLY=true;
+#include "contact_geometry.glsl"
 layout(local_size_x=128) in;
 layout(set=0,binding=4,std430) buffer Storage {Body bodies[BODY_CAPACITY];uint data[];};
 layout(set=0,binding=0,std430) buffer Results {uint results[];};
@@ -25,6 +27,13 @@ void main() {
             if(all(greaterThan(local,uvec2(0)))&&all(lessThan(local,uvec2(15))))
                 atomicMax(results[1],cost);
             else atomicMax(results[3],cost);
+        }
+        if(piece<pixel_tile_count(body)*256u) {
+            vec2 reference[4];
+            for(uint v=0u;v<4u;v++) reference[v]=vec2(3.25,-1.75)+piece_vertex(body,piece,v);
+            reads=0u;Polygon polygon=body_polygon(body,piece,vec2(3.25,-1.75));
+            atomicMax(results[4],reads);
+            for(uint v=0u;v<4u;v++) if(any(notEqual(floatBitsToUint(reference[v]),floatBitsToUint(polygon.vertices[v])))) atomicAdd(results[5],1u);
         }
         atomicAdd(results[2],1u);
     }
