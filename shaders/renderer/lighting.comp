@@ -237,7 +237,7 @@ void main() {
     uint global=group*FR_TRANSPORT_TILE+lane;
     if(PHASE==4u) {
         if(global<p.commands) {
-            bool enabled=work[0]!=0u&&(global>=2u||work[1]!=metadata[73]);
+            bool enabled=work[0]!=0u&&(global>=2u||work[1]!=metadata[FR_TRANSPORT_SOURCE_REVISION]);
             work[4u+global*4u]=enabled?work[7u+global*4u]:0u;
         }
         return;
@@ -245,13 +245,13 @@ void main() {
     if(work[0]==0u) return;
     if(PHASE==5u) {
         if(global>=metadata[0]*metadata[1]) return;
-        if(global==0u) {work[1]=metadata[73];work[2]++;}
+        if(global==0u) {work[1]=metadata[FR_TRANSPORT_SOURCE_REVISION];work[2]++;}
         ivec2 cell=ivec2(global%metadata[0],global/metadata[0]);
         seeds[global]=PackedBeam(0u,0u,0u,0u,uint(sky_reachable(cell))<<30u);
         return;
     }
     if(PHASE==6u) {
-        uint source=gl_WorkGroupID.z,at=9u+4u*source;
+        uint source=gl_WorkGroupID.z,at=FR_TRANSPORT_SOURCE_RECTS+4u*source;
         uvec2 size=uvec2(metadata[at+2u],metadata[at+3u]);
         if(global>=size.x*size.y) return;
         ivec2 cell=ivec2(metadata[at],metadata[at+1u])+ivec2(global%size.x,global/size.x);
@@ -260,7 +260,7 @@ void main() {
         bool reaches=light.color_intensity.a>0.&&distance(vec2(cell)+.5,light.position_radius.xy)<=min(float(metadata[4]),light.position_radius.w);
         uint bits=uint(reaches)<<30u;
         if(all(equal(vec2(cell),floor(light.position_radius.xy)))) {
-            Light aggregate=sources[17u+source];
+            Light aggregate=sources[FR_TRANSPORT_AGGREGATE_BASE+source];
             vec3 energy=aggregate.position_radius.rgb;
             if(any(greaterThan(energy,vec3(0)))) {
                 PackedBeam seed=pack_beam(Beam(vec4(energy,1.),vec4(aggregate.color_intensity.rgb,0)));

@@ -211,7 +211,7 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
   if (!dc_gpu_make_mapped_buffer(g, parameter_bytes, &l->parameters,
                                  &l->parameter_memory, &l->parameter_mapped,
                                  err, cap) ||
-      !dc_gpu_make_mapped_buffer(g, 33u * 32u, &l->sources, &l->source_memory,
+      !dc_gpu_make_mapped_buffer(g, FR_TRANSPORT_SOURCE_RECORDS * 32u, &l->sources, &l->source_memory,
                                  &l->source_mapped, err, cap) ||
       !dc_gpu_make_mapped_buffer(g, (VkDeviceSize)l->width * l->height * FR_RENDERER_FIELD_BYTES,
                                  &l->field, &l->field_memory, &l->field_mapped,
@@ -233,7 +233,7 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
     }
   }
   buffers[1] = (VkDescriptorBufferInfo){l->parameters, 0, parameter_bytes};
-  buffers[2] = (VkDescriptorBufferInfo){l->sources, 0, 33u * 32u};
+  buffers[2] = (VkDescriptorBufferInfo){l->sources, 0, FR_TRANSPORT_SOURCE_RECORDS * 32u};
   buffers[3] = (VkDescriptorBufferInfo){
       l->field, 0, (VkDeviceSize)l->width * l->height * FR_RENDERER_FIELD_BYTES};
   VkPhysicalDeviceSubgroupProperties subgroup = {
@@ -335,12 +335,12 @@ bool fr_lighting_gpu_set_sources(fr_lighting_gpu_t *l,
   p[3] = count;
   p[4] = budget;
   p[5] = sun.known_sky;
-  p[73]++;
+  p[FR_TRANSPORT_SOURCE_REVISION]++;
   float planar = sqrtf(fmaxf(0.f, 1.f - common_z * common_z));
   memcpy(p + 8, &planar, sizeof(planar));
   /* Source edits aggregate only the small configuration list. Scene pixels
      are cleared and injected in parallel on the GPU, never walked here. */
-  memset(sources+17u*8u,0,16u*32u);
+  memset(sources+FR_TRANSPORT_AGGREGATE_BASE*8u,0,FR_RENDERER_POINT_LIGHT_CAPACITY*32u);
   uint32_t largest=0;
   for (uint32_t i=0;i<count;i++) {
     float radius=fminf((float)budget,points[i].radius);
@@ -348,8 +348,9 @@ bool fr_lighting_gpu_set_sources(fr_lighting_gpu_t *l,
     uint32_t y0=(uint32_t)fminf((float)l->height,fmaxf(0,floorf(points[i].y-radius)));
     uint32_t x1=(uint32_t)fminf((float)l->width,fmaxf(0,floorf(points[i].x+radius)+1.f));
     uint32_t y1=(uint32_t)fminf((float)l->height,fmaxf(0,floorf(points[i].y+radius)+1.f));
-    p[9u+4u*i]=x0;p[10u+4u*i]=y0;
-    p[11u+4u*i]=x1-x0;p[12u+4u*i]=y1-y0;
+    uint32_t at=FR_TRANSPORT_SOURCE_RECTS+4u*i;
+    p[at]=x0;p[at+1u]=y0;
+    p[at+2u]=x1-x0;p[at+3u]=y1-y0;
     uint32_t groups=tiles((x1-x0)*(y1-y0));
     if (groups>largest) largest=groups;
     uint32_t owner=i;
@@ -360,8 +361,8 @@ bool fr_lighting_gpu_set_sources(fr_lighting_gpu_t *l,
     float vertical=height/hypotf(1.f,height);
     for(uint32_t c=0;c<3;c++) {
       float energy=points[i].color[c]*scale;
-      sources[(17u+owner)*8u+c]+=energy;
-      sources[(17u+owner)*8u+4u+c]+=energy*vertical;
+      sources[(FR_TRANSPORT_AGGREGATE_BASE+owner)*8u+c]+=energy;
+      sources[(FR_TRANSPORT_AGGREGATE_BASE+owner)*8u+4u+c]+=energy*vertical;
     }
   }
   l->passes[1].groups=largest;

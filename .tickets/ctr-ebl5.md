@@ -55,3 +55,15 @@ Resumed inline. Rejected removing internal HOST visibility after no reliable mea
 **2026-10-20T17:04:49Z**
 
 Zero-input subgroup scan skip passed13/13 core+sync but graphical107.801ms mean was indistinguishable from107.875ms baseline; discarded. Full retained-code make test rerun is underway (build/resume_full_test.log). No resolution, pressure-sweep, transport-reach, or physics-cadence reductions; no timing samples excluded. Parent target remains RED.
+
+**2026-10-20T17:33:09Z**
+
+Retained direct8-byte optical-cell transport and removed unused per-frame hierarchy generation. Lighting14/14 subgroup/shared core+sync and scene1/1 core+sync; renderer diagnostics now read authoritative optics. Strict640mean22.967/worst43.153ms, actual lit-water98.868/122.473ms. Common-direction transport subsequently verified RED16-byte working stride, GREEN16/16 subgroup/shared core+sync plus scene1/1; exact mode-switch roundtrip and general-field parity. Working energy/transmission stay FP32; common-source vertical moments derive analytically, mixed heights use20-byte general beams. Same-binary graphical common-direction86.005/102.675ms versus forced-general101.455/127.904ms; paused frames identical and actual capture inspected. Target remains RED.
+
+**2026-10-23T14:38:18Z**
+
+User-directed aggregate light buffer implemented: removed per-pixel emission/reach light-list loops. Parallel bounded source injection writes FP32 RGB/packed directional seed buffer with atomic union reach and deterministic colocated-emitter aggregation; propagation consumes the buffer. Source revisions retain seeds across authoritative optical edits. RED bounded-work and persistence tests observed failing, GREEN lighting 19/19 core+sync and shared fallback; scene validation and graphical recheck in progress. Initial uncached graphical lit-water 97.706ms mean/188.786ms worst, four paused captures identical and actual frame inspected. Strict 480 15.782/33.741ms,640 24.840/50.592ms; target remains unmet. Displayed-frame profiler identifies fluid39-43ms and renderer22-24ms, no fidelity reductions.
+
+**2026-10-23T14:42:07Z**
+
+Aggregate-buffer checkpoint verified: source persistence RED failed extra-build assertion, GREEN19/19 subgroup and shared fallback core+sync; final scene1/1 core+sync. Actual cached Wayland lit-water60frames86.481ms mean/102.980ms worst, four paused captures identical; inspected build/light_buffer_cached_graphical/scene.png. Full make -j4 -i test completed (build/light_buffer_full_suite.log), exactly two known ctr-ojvy authored_stage failures67/135 and zero new failures/warnings. Parent target remains RED. Next measured displacement work is ctlo-6tk8.

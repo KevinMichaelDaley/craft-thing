@@ -1,6 +1,6 @@
 ---
 id: ctlo-55mm
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-19T22:22:54Z
@@ -23,3 +23,7 @@ RED empty/localized-water work counts; exact production-vs-dense canonical water
 **2026-10-20T16:58:30Z**
 
 GPU sparse pressure GREEN: empty-to-water work counts and insertion between scheduled batches2/2 core+sync; production-vs-generic canonical water and saved face velocities byte-identical after each of3ticks. Actual lit level03+coupled Wayland benchmark110.633ms mean/124.983ms worst versus132.544/147.894 phase-only baseline,60frames, four paused captures identical; inspected actual scene capture. Full suite pending; parent<30ms target remains unmet. New exact app trace shows remaining fluid transport and dirty renderer work dominate.
+
+**2026-10-20T17:10:04Z**
+
+Full retained-code make test completed: sparse pressure, production dense-oracle, pigment, support and fluid-flow tests pass. Only runtime failures are the two pre-existing authored-stage failures67/135 (ctr-ojvy). One new color-test probe dependency check failed; fixed in62a8551 and dependency suite3/3 rerun passes. Sparse-pressure scope and graphical/core/sync criteria are complete; parent frame-time target remains in progress.
