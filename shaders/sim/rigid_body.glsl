@@ -131,10 +131,28 @@ uint query_piece(Body b,uvec4 query,uint ordinal) {
 }
 bool pixel_boundary(Body b,uint p) {
     if(!pixel_body(b)) return true;
-    if(pixel_piece_material(b,p)==0u) return false;
-    ivec2 cell=pixel_piece_cell(b,p);
-    return pixel_material(b,cell)!=0u && (pixel_material(b,cell+ivec2(-1,0))==0u ||
-        pixel_material(b,cell+ivec2(1,0))==0u || pixel_material(b,cell+ivec2(0,-1))==0u || pixel_material(b,cell+ivec2(0,1))==0u);
+    if(p>=pixel_tile_count(b)*256u) return false;
+    uint local=p%256u,word=local/8u,shift=(local%8u)*4u;
+    uint start=b.compound_reserved+pixel_tile_offset(b,p/256u)+1u;
+    uint packed=pixel_word_at(start+word);
+    if(((packed>>shift)&15u)==0u) return false;
+    uint x=local%16u,y=local/16u;
+    ivec2 cell=ivec2(0);
+    if(x==0u||x==15u||y==0u||y==15u) cell=pixel_piece_cell(b,p);
+    /* Interior neighbors share the tile's packed words. Only a tile edge
+       needs the directory lookup, including absent tiles and concavities. */
+    uint left=x==0u?pixel_material(b,cell+ivec2(-1,0)):
+        (local%8u==0u?pixel_word_at(start+word-1u)>>28u:(packed>>(shift-4u))&15u);
+    if(left==0u) return true;
+    uint right=x==15u?pixel_material(b,cell+ivec2(1,0)):
+        (local%8u==7u?pixel_word_at(start+word+1u)&15u:(packed>>(shift+4u))&15u);
+    if(right==0u) return true;
+    uint up=y==0u?pixel_material(b,cell+ivec2(0,-1)):
+        (pixel_word_at(start+word-2u)>>shift)&15u;
+    if(up==0u) return true;
+    uint down=y==15u?pixel_material(b,cell+ivec2(0,1)):
+        (pixel_word_at(start+word+2u)>>shift)&15u;
+    return down==0u;
 }
 float body_cross(vec2 a, vec2 b) { return a.x * b.y - a.y * b.x; }
 uint body_vertices(Body b) { return b.vertex_count == 0u ? 4u : b.vertex_count; }
