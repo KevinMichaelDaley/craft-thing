@@ -181,17 +181,6 @@ uvec2 scan_address(ivec2 cell,uint direction) {
 }
 bool inside(ivec2 cell) {return all(greaterThanEqual(cell,ivec2(0)))&&all(lessThan(cell,ivec2(metadata[0],metadata[1])));}
 uint index_at(ivec2 cell) {return uint(cell.y)*metadata[0]+uint(cell.x);}
-vec3 emission(ivec2 cell,out vec3 vertical) {
-    vec3 result=vec3(0);vertical=vec3(0);
-    for(uint source=0u;source<metadata[3];source++) {
-        Light light=sources[source];
-        if(any(notEqual(floor(light.position_radius.xy),vec2(cell)))) continue;
-        float height=light.position_radius.z;
-        vec3 energy=light.color_intensity.rgb*light.color_intensity.a*.25/(1.+height*height);
-        result+=energy;vertical+=energy*height/sqrt(1.+height*height);
-    }
-    return result;
-}
 Beam inject(ivec2 cell,uint direction) {
     uint index=index_at(cell);
     if(nodes[index].known==0u) return Beam(vec4(0),vec4(0));
@@ -234,12 +223,8 @@ Beam inject(ivec2 cell,uint direction) {
     float forward=ITERATION<=1u?FR_TRANSPORT_FORWARD_FRACTION:FR_TRANSPORT_DIFFUSE_FORWARD;
     return Beam(vec4(energy,transmission*forward),vec4(z,0));
 }
-bool reachable(ivec2 cell) {
+bool sky_reachable(ivec2 cell) {
     float budget=float(metadata[4]);
-    for(uint source=0u;source<metadata[3];source++) {
-        Light light=sources[source];
-        if(light.color_intensity.a>0.&&distance(vec2(cell)+.5,light.position_radius.xy)<=min(budget,light.position_radius.w)) return true;
-    }
     if(sources[metadata[3]].color_intensity.a<=0.) return false;
     return ((metadata[5]&1u)!=0u&&float(cell.x)<=budget)||
            ((metadata[5]&2u)!=0u&&float(int(metadata[0])-1-cell.x)<=budget)||
@@ -258,9 +243,29 @@ void main() {
     if(PHASE==5u) {
         if(global>=metadata[0]*metadata[1]) return;
         ivec2 cell=ivec2(global%metadata[0],global/metadata[0]);
-        vec3 vertical;vec3 emitted=emission(cell,vertical);
-        seeds[global]=pack_beam(Beam(vec4(emitted,any(greaterThan(emitted,vec3(0)))?1.:0.),
-                           vec4(vertical,reachable(cell)?1.:0.)));
+        seeds[global]=PackedBeam(0u,0u,0u,0u,uint(sky_reachable(cell))<<30u);
+        return;
+    }
+    if(PHASE==6u) {
+        uint source=gl_WorkGroupID.z,at=9u+4u*source;
+        uvec2 size=uvec2(metadata[at+2u],metadata[at+3u]);
+        if(global>=size.x*size.y) return;
+        ivec2 cell=ivec2(metadata[at],metadata[at+1u])+ivec2(global%size.x,global/size.x);
+        uint index=index_at(cell);
+        Light light=sources[source];
+        bool reaches=light.color_intensity.a>0.&&distance(vec2(cell)+.5,light.position_radius.xy)<=min(float(metadata[4]),light.position_radius.w);
+        uint bits=uint(reaches)<<30u;
+        if(all(equal(vec2(cell),floor(light.position_radius.xy)))) {
+            Light aggregate=sources[17u+source];
+            vec3 energy=aggregate.position_radius.rgb;
+            if(any(greaterThan(energy,vec3(0)))) {
+                PackedBeam seed=pack_beam(Beam(vec4(energy,1.),vec4(aggregate.color_intensity.rgb,0)));
+                seeds[index].r=seed.r;seeds[index].g=seed.g;
+                seeds[index].b=seed.b;seeds[index].t=seed.t;
+                bits|=seed.z;
+            }
+        }
+        atomicOr(seeds[index].z,bits);
         return;
     }
     uint direction=gl_WorkGroupID.z;

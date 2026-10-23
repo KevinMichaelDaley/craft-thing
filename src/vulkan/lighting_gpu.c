@@ -29,7 +29,7 @@ struct fr_lighting_gpu {
   light_pass_t passes[LIGHTING_MAX_PASSES];
   uint32_t pass_count;
   uint32_t diagonal_groups;
-  VkPipeline specialized[2][FR_TRANSPORT_SOURCE_ITERATIONS][6];
+  VkPipeline specialized[2][FR_TRANSPORT_SOURCE_ITERATIONS][7];
   bool compact_available, common_direction;
 };
 static uint32_t tiles(uint32_t length) {
@@ -52,6 +52,7 @@ static void add_pass(fr_lighting_gpu_t *l, uint32_t phase, uint32_t level,
 }
 static void plan_transport(fr_lighting_gpu_t *l) {
   add_pass(l, 5, 0, 0, tiles(l->width * l->height), 1);
+  add_pass(l, 6, 0, 0, 0, 0);
   for (uint32_t iteration = 0; iteration < FR_TRANSPORT_SOURCE_ITERATIONS;
        iteration++) {
     bool diagonal = iteration == 1u;
@@ -97,7 +98,9 @@ uint32_t fr_lighting_gpu_scan_channels(const fr_lighting_gpu_t *l) {
   return l ? (l->common_direction ? 4u : 7u) : 0u;
 }
 uint32_t fr_lighting_gpu_source_cells(const fr_lighting_gpu_t *l) {
-  return l ? l->width*l->height*((uint32_t *)l->parameter_mapped)[3] : 0u;
+  if (!l) return 0u;
+  uint64_t cells=(uint64_t)l->passes[1].groups*FR_TRANSPORT_TILE*l->passes[1].directions;
+  return cells>UINT32_MAX?UINT32_MAX:(uint32_t)cells;
 }
 void fr_lighting_gpu_destroy(fr_lighting_gpu_t *l) {
   if (!l)
@@ -106,7 +109,7 @@ void fr_lighting_gpu_destroy(fr_lighting_gpu_t *l) {
   for (unsigned compact = 0; compact < 2; compact++)
   for (unsigned iteration = 0; iteration < FR_TRANSPORT_SOURCE_ITERATIONS;
        iteration++)
-    for (unsigned phase = 0; phase < 6; phase++)
+    for (unsigned phase = 0; phase < 7; phase++)
       if (l->specialized[compact][iteration][phase])
         vkDestroyPipeline(d, l->specialized[compact][iteration][phase], NULL);
   fr_renderer_compute_destroy(l->gpu, &l->compute);
@@ -205,7 +208,7 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
   if (!dc_gpu_make_mapped_buffer(g, parameter_bytes, &l->parameters,
                                  &l->parameter_memory, &l->parameter_mapped,
                                  err, cap) ||
-      !dc_gpu_make_mapped_buffer(g, 17u * 32u, &l->sources, &l->source_memory,
+      !dc_gpu_make_mapped_buffer(g, 33u * 32u, &l->sources, &l->source_memory,
                                  &l->source_mapped, err, cap) ||
       !dc_gpu_make_mapped_buffer(g, (VkDeviceSize)l->width * l->height * FR_RENDERER_FIELD_BYTES,
                                  &l->field, &l->field_memory, &l->field_mapped,
@@ -227,7 +230,7 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
     }
   }
   buffers[1] = (VkDescriptorBufferInfo){l->parameters, 0, parameter_bytes};
-  buffers[2] = (VkDescriptorBufferInfo){l->sources, 0, 17u * 32u};
+  buffers[2] = (VkDescriptorBufferInfo){l->sources, 0, 33u * 32u};
   buffers[3] = (VkDescriptorBufferInfo){
       l->field, 0, (VkDeviceSize)l->width * l->height * FR_RENDERER_FIELD_BYTES};
   VkPhysicalDeviceSubgroupProperties subgroup = {
@@ -331,6 +334,39 @@ bool fr_lighting_gpu_set_sources(fr_lighting_gpu_t *l,
   p[5] = sun.known_sky;
   float planar = sqrtf(fmaxf(0.f, 1.f - common_z * common_z));
   memcpy(p + 8, &planar, sizeof(planar));
+  /* Source edits aggregate only the small configuration list. Scene pixels
+     are cleared and injected in parallel on the GPU, never walked here. */
+  memset(sources+17u*8u,0,16u*32u);
+  uint32_t largest=0;
+  for (uint32_t i=0;i<count;i++) {
+    float radius=fminf((float)budget,points[i].radius);
+    uint32_t x0=(uint32_t)fminf((float)l->width,fmaxf(0,floorf(points[i].x-radius)));
+    uint32_t y0=(uint32_t)fminf((float)l->height,fmaxf(0,floorf(points[i].y-radius)));
+    uint32_t x1=(uint32_t)fminf((float)l->width,fmaxf(0,floorf(points[i].x+radius)+1.f));
+    uint32_t y1=(uint32_t)fminf((float)l->height,fmaxf(0,floorf(points[i].y+radius)+1.f));
+    p[9u+4u*i]=x0;p[10u+4u*i]=y0;
+    p[11u+4u*i]=x1-x0;p[12u+4u*i]=y1-y0;
+    uint32_t groups=tiles((x1-x0)*(y1-y0));
+    if (groups>largest) largest=groups;
+    uint32_t owner=i;
+    for(uint32_t j=0;j<i;j++)
+      if(floorf(points[j].x)==floorf(points[i].x)&&floorf(points[j].y)==floorf(points[i].y)) {owner=j;break;}
+    float height=points[i].height;
+    float scale=points[i].intensity*.25f/(1.f+height*height);
+    float vertical=height/hypotf(1.f,height);
+    for(uint32_t c=0;c<3;c++) {
+      float energy=points[i].color[c]*scale;
+      sources[(17u+owner)*8u+c]+=energy;
+      sources[(17u+owner)*8u+4u+c]+=energy*vertical;
+    }
+  }
+  l->passes[1].groups=largest;
+  l->passes[1].directions=count;
+  uint32_t *commands=l->work_mapped;
+  uint32_t x=smaller(largest,65535u);
+  commands[8]=commands[11]=x;
+  commands[9]=(largest+65534u)/65535u;
+  commands[10]=count;
   return true;
 }
 bool fr_lighting_gpu_generate(fr_lighting_gpu_t *l, char *err, uint32_t cap) {
