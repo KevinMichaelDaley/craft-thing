@@ -1,4 +1,9 @@
 CC ?= cc
+build/lighting_flag_tests: tests/app/lighting_flag_tests.c build/dungeoncraft_360
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+.PHONY: test_lighting_flag
+test_lighting_flag: build/lighting_flag_tests
+	./build/lighting_flag_tests
 build/appearance_tests: tests/renderer/appearance_tests.c src/renderer/appearance.c include/ferrum/renderer/appearance.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/renderer/appearance_tests.c src/renderer/appearance.c -o $@ -lm
