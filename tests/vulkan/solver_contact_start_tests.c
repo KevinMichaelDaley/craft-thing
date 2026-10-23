@@ -2,12 +2,14 @@
 #include "solver_motion_store_tests.c"
 #undef DC_SOLVER_MOTION_TEST_MAIN
 
+static bool zero_case;
+
 static VkPipeline contact_start_pipeline(probe_t *p,dc_gpu_t *gpu,uint32_t phase,bool cached) {
     VkShaderModule module=VK_NULL_HANDLE;char err[256];
     if(!dc_gpu_load_shader_module(gpu,"build/diagnostics/solver_motion_profile.comp.spv",&module,err,sizeof(err))) return VK_NULL_HANDLE;
-    uint32_t values[]={phase,cached};
-    VkSpecializationMapEntry entries[]={{0,0,4},{3,4,4}};
-    VkSpecializationInfo spec={2,entries,sizeof(values),values};
+    uint32_t values[]={phase,cached,zero_case?cached:1u};
+    VkSpecializationMapEntry entries[]={{0,0,4},{3,4,4},{4,8,4}};
+    VkSpecializationInfo spec={3,entries,sizeof(values),values};
     VkComputePipelineCreateInfo info={.sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_COMPUTE_BIT,
             .module=module,.pName="main",.pSpecializationInfo=&spec},.layout=p->layout};
@@ -15,7 +17,8 @@ static VkPipeline contact_start_pipeline(probe_t *p,dc_gpu_t *gpu,uint32_t phase
     vkCreateComputePipelines(p->device,VK_NULL_HANDLE,1,&info,NULL,&result);
     vkDestroyShaderModule(p->device,module,NULL);return result;
 }
-static void test_cached_start_anchors_preserve_all_solver_and_body_bits(void) {
+static void run_contact_case(bool zero) {
+    zero_case=zero;
     probe_t p={0};ASSERT_TRUE(initialize(&p));char err[256];
     dc_gpu_t gpu={.device=p.device,.physical=p.physical};
     enum {WIDTH=128,HEIGHT=128,RECORDS=64,CONTACT_BASE=8+32+4096*8,
@@ -46,7 +49,7 @@ static void test_cached_start_anchors_preserve_all_solver_and_body_bits(void) {
         data[c+11]=float_bits(.5f);data[c+12]=float_bits(.1f);data[c+13]=float_bits(.00001f);
         data[c+20]=(uint32_t)((21.25f+i*.5f)*65536.f);
         data[c+21]=(uint32_t)((22.5f+i)*65536.f);
-        data[c+26]=data[c+20];data[c+27]=data[c+21]-16384u;
+        data[c+26]=data[c+20];data[c+27]=zero?data[c+21]+65536u:data[c+21]-16384u;
     }
     p.buffer=storage;p.mapped=mapped;
     const uint32_t bindings[]={1,2,3,4,10,19,20,21,23,24,25,27,31};
@@ -57,7 +60,7 @@ static void test_cached_start_anchors_preserve_all_solver_and_body_bits(void) {
             .dstBinding=bindings[i],.descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&buffer};
         vkUpdateDescriptorSets(p.device,1,&write,0,NULL);
     }
-    uint32_t rotations[2]={0};bool exact=false;
+    uint32_t rotations[2]={0},atomics[2]={0};bool exact=false;
     for(unsigned cached=0;cached<2;cached++) {
         const uint32_t phases[]={4,6,7,9,10};VkPipeline pipelines[5];
         for(unsigned i=0;i<5;i++) {pipelines[i]=contact_start_pipeline(&p,&gpu,phases[i],cached);ASSERT_TRUE(pipelines[i]);}
@@ -74,18 +77,23 @@ static void test_cached_start_anchors_preserve_all_solver_and_body_bits(void) {
             vkCmdPipelineBarrier(p.command,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,0,1,&barrier,0,NULL,0,NULL);
         }
         host_barrier(&p,1);ASSERT_TRUE(vkEndCommandBuffer(p.command)==VK_SUCCESS&&submit(&p,"cached contact anchors",1));
-        rotations[cached]=counts[1];
+        rotations[cached]=counts[1];atomics[cached]=counts[2];
         if(!cached) memcpy(expected,mapped,(size_t)bytes);else exact=memcmp(expected,mapped,(size_t)bytes)==0;
         for(unsigned i=0;i<5;i++) vkDestroyPipeline(p.device,pipelines[i],NULL);
     }
     printf("exact body/contact solver bytes%d, anchor rotations%u -> %u\n",exact,rotations[0],rotations[1]);
+    printf("zero case%d correction atomics%u -> %u\n",zero,atomics[0],atomics[1]);
     fixture_release_pipeline(&p);
     vkUnmapMemory(p.device,storage_memory);vkUnmapMemory(p.device,profile_memory);
     vkDestroyBuffer(p.device,storage,NULL);vkDestroyBuffer(p.device,profile,NULL);
     vkFreeMemory(p.device,storage_memory,NULL);vkFreeMemory(p.device,profile_memory,NULL);
     vkDestroyFence(p.device,p.fence,NULL);vkDestroyCommandPool(p.device,p.pool,NULL);
     vkDestroyDevice(p.device,NULL);vkDestroyInstance(p.instance,NULL);free(initial);free(expected);
-    ASSERT_TRUE(exact);ASSERT_TRUE(rotations[0]>0u);ASSERT_TRUE(rotations[1]*2u<rotations[0]);PASS();
+    ASSERT_TRUE(exact);ASSERT_TRUE(rotations[0]>0u);ASSERT_TRUE(rotations[1]*2u<rotations[0]);
+    ASSERT_TRUE(!zero||(atomics[0]>0u&&atomics[1]==0u));PASS();
 }
+static void test_cached_start_anchors_preserve_all_solver_and_body_bits(void) {run_contact_case(false);}
+static void test_zero_contact_work_preserves_bits_without_atomic_reductions(void) {run_contact_case(true);}
 int main(void) {RUN(test_cached_start_anchors_preserve_all_solver_and_body_bits);
+    RUN(test_zero_contact_work_preserves_bits_without_atomic_reductions);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;}
