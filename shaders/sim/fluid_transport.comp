@@ -6,6 +6,7 @@
 layout(local_size_x=32) in;
 layout(constant_id=0) const uint TRANSPORT_MODE=0u;
 layout(constant_id=1) const uint CACHE_CELLS=1024u;
+layout(constant_id=5) const bool ONE_CELL_SCAN_ENABLED=true;
 layout(set=0,binding=1,std430) coherent buffer Cells {uvec2 chunk_cells[];};
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
@@ -289,6 +290,7 @@ bool move_source(ivec2 source,ivec2 direction) {
     if(lane==0u&&sent!=0u) put_water(source,available-sent);
     return sent!=0u;
 }
+#include "fluid_one_cell.glsl"
 void main() {
     /* One participating subgroup owns each ordered line. Other subgroups never enter
        its collectives; there are no workgroup barriers behind their return. */
@@ -299,7 +301,7 @@ void main() {
     if(line==0u&&gl_SubgroupInvocationID==0u) transport_profile[3]=transport_team_size();
 #endif
     line_open_aperture=params.unused1!=0u&&aperture_tree[16448u+line*2u*params.unused1+1u]==FULL;
-    uint any_water=0u;
+    uint any_water=0u,scan_safe=uint(length<=CACHE_CELLS);
     for(uint position=gl_SubgroupInvocationID;position<min(length,CACHE_CELLS);position+=transport_team_size()) {
         ivec2 p=point_at(position);uint page=page_at(p);uvec4 value=uvec4(0);
         if(page!=0u) {
@@ -310,6 +312,7 @@ void main() {
             float speed=vertical?face_velocity[index].y:face_velocity[index].x;
             if(vertical&&params.elapsed_time_mode!=0u) speed=.5*(speed+uintBitsToFloat(fluid_a[index]));
             float travel=travel_for_speed(speed);
+            scan_safe&=uint(cell.y<=capacity&&travel<=1.);
             value=uvec4(cell.y,capacity|KNOWN|(permeable_material(cell.x&65535u)?PERMEABLE:0u),aperture,floatBitsToUint(travel));
         }
         cached[position]=value;
@@ -348,6 +351,7 @@ void main() {
     }
     uint capacity_or=subgroupOr(any_capacity),source_or=subgroupOr(any_source);
     if(length<=CACHE_CELLS&&(capacity_or==0u||source_or==0u)) return;
+    if(ONE_CELL_SCAN_ENABLED&&subgroupAnd(scan_safe)!=0u) {one_cell_scan(positive);return;}
     if(length<=CACHE_CELLS&&length<=BOUND_LIMIT) cache_blocker_bounds(positive);
     ivec2 direction=vertical?ivec2(0,positive?1:-1):ivec2(positive?1:-1,0);
     for(int position=positive?int(length)-2:1;position>=0&&position<int(length);position+=positive?-1:1) {

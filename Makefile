@@ -1322,3 +1322,4 @@ test: build/albedo_work_tests
 build/fluid_one_cell_scan_tests: tests/vulkan/fluid_one_cell_scan_tests.c tests/vulkan/fluid_transport_tests.c tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/fluid_one_cell_scan_tests
+build/shaders/fluid_transport.comp.spv build/diagnostics/fluid_transport_profile.comp.spv build/diagnostics/fluid_transport_color_reference.comp.spv: shaders/sim/fluid_one_cell.glsl
