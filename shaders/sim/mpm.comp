@@ -435,6 +435,16 @@ Particle zero_particle() {
                     0u, 0u, 0u, 0u, 0u, 0u);
 }
 
+#ifdef DC_MPM_GATHER_PROFILE
+layout(set=0,binding=31,std430) buffer GatherProfile {uint gather_profile[];};
+#endif
+uint gather_decision(uint index) {
+#ifdef DC_MPM_GATHER_PROFILE
+    atomicAdd(gather_profile[0],1u);
+#endif
+    return accepted[index];
+}
+
 void gather(ivec2 target) {
     uint base = particle_index(target, 0u);
     Particle first = zero_particle(), second = zero_particle();
@@ -447,7 +457,7 @@ void gather(ivec2 target) {
             for (uint layer = 0u; layer < 2u; ++layer) {
                 uint source_index = particle_index(source, layer);
                 bool source_here = all(equal(source, target));
-                uint decision=accepted[source_index];
+                uint decision=gather_decision(source_index);
                 /* A neighboring source can contribute only an accepted move
                    out of its own cell. Inspect its word before loading two
                    complete particle records from an unchanged neighborhood. */

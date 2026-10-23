@@ -602,6 +602,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/loose_particle_role_tests
 	./build/mpm_support_dirty_tests
 	./build/mpm_gather_tests
+	./build/mpm_gather_partial_tile_tests
 	./build/mpm_copy_tests
 	./build/solver_motion_store_tests
 	./build/solver_recording_tests
@@ -1391,3 +1392,12 @@ build/solver_commands_gpu.o: src/vulkan/solver_commands_gpu.c src/vulkan/gpu_int
 build/solver_commands_tests: tests/vulkan/solver_commands_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/solver_commands_tests
+
+build/diagnostics/mpm_gather_profile.comp.spv: shaders/sim/mpm.comp $(wildcard shaders/sim/*.glsl)
+	@mkdir -p build/diagnostics
+	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -DDC_MPM_GATHER_PROFILE=1 -V --target-env vulkan1.3 -S comp -o $@ $<
+build/mpm_gather_tests: build/diagnostics/mpm_gather_profile.comp.spv
+
+build/mpm_gather_partial_tile_tests: tests/vulkan/mpm_gather_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(MPM_SHADER) build/diagnostics/mpm_gather_profile.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GATHER_TEST_WIDTH=137u -DDC_GATHER_TEST_HEIGHT=83u $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/mpm_gather_partial_tile_tests
