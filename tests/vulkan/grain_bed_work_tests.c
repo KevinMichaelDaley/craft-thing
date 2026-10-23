@@ -99,10 +99,10 @@ static void test_grain_bed_work_tracks_body_activation_on_gpu(void) {
 static bool bed_reference_pipelines(dc_gpu_t *g) {
     VkShaderModule module=VK_NULL_HANDLE;
     if(!dc_gpu_load_shader_module(g,"build/shaders/rigid_solver.comp.spv",&module,g_error,sizeof(g_error))) return false;
-    const uint32_t phases[]={18,19};
+    const uint32_t phases[]={18,19,21};
     VkSpecializationMapEntry entries[]={{0,0,4},{2,4,4}};
     bool okay=true;
-    for(unsigned i=0;i<2;i++) {
+    for(unsigned i=0;i<3;i++) {
         uint32_t data[]={phases[i],0};
         VkSpecializationInfo spec={2,entries,sizeof(data),data};
         VkComputePipelineCreateInfo info={.sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,

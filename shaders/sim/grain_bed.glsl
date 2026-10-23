@@ -6,11 +6,14 @@ layout(set=0,binding=24,std430) buffer GrainBedScratch { vec4 bed_scratch[]; };
 layout(set=0,binding=20,std430) readonly buffer GrainCounts {uint grain_counts[];};
 layout(set=0,binding=27,std430) buffer GrainWork {uint grain_work[];};
 const uint GRAIN_BED_INIT=18u,GRAIN_BED_JUMP=19u;
-const uint GRAIN_BED_PLAN=20u;
+const uint GRAIN_BED_PLAN=20u,GRAIN_BED_PUBLISH=21u;
+layout(constant_id=2) const bool COMPACT_GRAIN_BED_ENABLED=true;
+layout(set=0,binding=25,std430) buffer BedIndices {uint bed_indices[];};
+shared uint bed_first;
 shared uint grain_work_flags;
 void grain_bed_plan() {
     uint lane=gl_LocalInvocationIndex;
-    if(lane==0u) grain_work_flags=0u;
+    if(lane==0u) {grain_work_flags=0u;bed_indices[0]=0u;}
     barrier();
     for(uint slot=lane;slot<(params.mode>>8u);slot+=gl_WorkGroupSize.x)
         if(grain_counts[slot]!=0u) atomicOr(grain_work_flags,1u);
@@ -37,8 +40,21 @@ uint bed_material(ivec2 cell) {
 bool bed_solid(uint material) {return material!=0u&&material!=3u;}
 void grain_bed_phase(uint i) {
     i=(gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x)*gl_WorkGroupSize.x+gl_LocalInvocationIndex;
-    if(i>=params.width*params.height) return;
+    uint cells=params.width*params.height;
+    if(PHASE==GRAIN_BED_PUBLISH) {
+        if(i==0u&&COMPACT_GRAIN_BED_ENABLED) {
+            uint groups=(bed_indices[0]+63u)/64u;
+            grain_work[DC_GRAIN_BED_WORK_WORD]=min(groups,65535u);
+            grain_work[DC_GRAIN_BED_WORK_WORD+1u]=groups==0u?1u:(groups-1u)/65535u+1u;
+            grain_work[DC_GRAIN_BED_WORK_WORD+2u]=1u;
+        }
+        return;
+    }
     if(PHASE==GRAIN_BED_JUMP) {
+        if(COMPACT_GRAIN_BED_ENABLED) {
+            if(i>=bed_indices[0]) return;
+            i=bed_indices[1u+i];
+        } else if(i>=cells) return;
         bool odd=((params.mode>>8u)&1u)!=0u;
         vec4 value=odd?bed_scratch[i]:bed[i];
         if(value.x>=0.0) {
@@ -49,8 +65,12 @@ void grain_bed_phase(uint i) {
         if(odd) bed[i]=value;else bed_scratch[i]=value;
         return;
     }
+    if(COMPACT_GRAIN_BED_ENABLED) {
+        if(gl_LocalInvocationIndex==0u) grain_work_flags=0u;
+        barrier();
+    }
     uvec2 cell=uvec2(i%params.width,i/params.width);
-    uint page=pages[(cell.y/64u)*((params.width+63u)/64u)+cell.x/64u];
+    uint page=i<cells?pages[(cell.y/64u)*((params.width+63u)/64u)+cell.x/64u]:0u;
     vec4 value=vec4(-1,0,0,0);
     if(page!=0u) {
         uint local=(cell.y%64u)*64u+cell.x%64u;
@@ -72,7 +92,18 @@ void grain_bed_phase(uint i) {
             }
         }
     }
-    bed[i]=value;
+    if(i<cells) {
+        bed[i]=value;
+        if(COMPACT_GRAIN_BED_ENABLED) bed_scratch[i]=value;
+    }
+    if(COMPACT_GRAIN_BED_ENABLED) {
+        bool moving_node=i<cells&&value.z>0.0;
+        uint ordinal=moving_node?atomicAdd(grain_work_flags,1u):0u;
+        barrier();
+        if(gl_LocalInvocationIndex==0u) bed_first=atomicAdd(bed_indices[0],grain_work_flags);
+        barrier();
+        if(moving_node) bed_indices[1u+bed_first+ordinal]=i;
+    }
 }
 /* Drained frictional bearing capacity scales with loaded width and supported
    depth. Exceeding yield introduces bounded viscoplastic settlement, rather

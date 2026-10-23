@@ -27,9 +27,10 @@ typedef enum {
     SOLVER_GRAIN_VELOCITY,
     SOLVER_GRAIN_BED_INIT,
     SOLVER_GRAIN_BED_JUMP,
-    SOLVER_GRAIN_BED_PLAN
+    SOLVER_GRAIN_BED_PLAN,
+    SOLVER_GRAIN_BED_PUBLISH
 } solver_phase_t;
-_Static_assert(SOLVER_GRAIN_BED_PLAN + 1 == DC_GPU_SOLVER_PHASE_COUNT,
+_Static_assert(SOLVER_GRAIN_BED_PUBLISH + 1 == DC_GPU_SOLVER_PHASE_COUNT,
                "GPU solver phase count changed");
 static bool error(char *err, uint32_t cap, const char *message) {
     if (err && cap)
@@ -224,7 +225,7 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     uint32_t phase = mode & SOLVER_PHASE_MASK;
-    if (phase == SOLVER_GRAIN_BED_PLAN) {
+    if (phase == SOLVER_GRAIN_BED_PLAN || phase == SOLVER_GRAIN_BED_PUBLISH) {
         vkCmdDispatch(gpu->command, 1, 1, 1);
     } else if (phase >= SOLVER_GRAIN_BED_INIT) {
         vkCmdDispatchIndirect(gpu->command, gpu->mpm_activity_buffer,
@@ -272,6 +273,7 @@ void dc_gpu_record_solver_uncached(dc_gpu_t *gpu) {
     gpu->solver_recording = true;
     dispatch(gpu, SOLVER_GRAIN_BED_PLAN | (DC_GPU_CHUNK_SLOTS << 8u), false);
     dispatch(gpu, SOLVER_GRAIN_BED_INIT, false);
+    dispatch(gpu, SOLVER_GRAIN_BED_PUBLISH, false);
     for (uint32_t span=1, pass=0; span<gpu->height; span*=2, pass++)
         dispatch(gpu, SOLVER_GRAIN_BED_JUMP | (pass << 8u), false);
     dispatch(gpu, SOLVER_RESET, false);
