@@ -1,3 +1,34 @@
 #version 450
 layout(local_size_x=256) in;
-void main() {}
+layout(set=0,binding=2,std430) readonly buffer Pages { uint pages[]; };
+layout(set=0,binding=19,std430) buffer Particles { uvec4 particles[]; };
+layout(set=0,binding=22,std430) readonly buffer Output { uvec4 output_particles[]; };
+layout(set=0,binding=27,std430) readonly buffer Activity { uint activity[]; };
+layout(push_constant) uniform Params { uint width; uint height; } params;
+
+void main() {
+    uint tiles_x=(params.width+15u)/16u;
+    uint tiles=tiles_x*((params.height+15u)/16u);
+    uint group=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;
+    if(group>=activity[10u+2u*tiles]) return;
+    uint tile=activity[3u+group];
+    uvec2 first=uvec2(tile%tiles_x,tile/tiles_x)*16u;
+    uint page=pages[(first.y/64u)*((params.width+63u)/64u)+first.x/64u];
+    if(page==0u) return;
+    uint columns=min(16u,params.width-first.x);
+    uint rows=min(16u,params.height-first.y);
+    for(uint item=gl_LocalInvocationIndex;item<2u*16u*56u;item+=256u) {
+        uint layer=item/(16u*56u),row=(item/56u)%16u,vector=item%56u;
+        if(row>=rows||vector*4u>=columns*14u) continue;
+        uint particle=(page-1u)*8192u+layer*4096u+
+                      (first.y%64u+row)*64u+first.x%64u;
+        uint index=particle*14u/4u+vector;
+        uvec4 value=output_particles[index];
+        if(vector*4u+4u>columns*14u) {
+            uvec4 old=particles[index];
+            for(uint lane=0u;lane<4u;lane++)
+                if(vector*4u+lane>=columns*14u) value[lane]=old[lane];
+        }
+        particles[index]=value;
+    }
+}
