@@ -612,6 +612,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/raster_dispatch_tests
 	./build/contact_dispatch_tests
 	./build/contact_terrain_work_tests
+	./build/contact_piece_work_tests
 	./build/mpm_control_tests
 	./build/mpm_compaction_tests
 	./build/mpm_descriptor_tests
@@ -1337,3 +1338,7 @@ build/diagnostics/pixel_boundary_probe.spv: tests/vulkan/pixel_boundary_probe.co
 build/pixel_boundary_tests: tests/vulkan/pixel_boundary_tests.c tests/vulkan/pixel_properties_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/pixel_properties_probe.spv build/diagnostics/pixel_boundary_probe.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/pixel_boundary_tests
+
+build/contact_piece_work_tests: tests/vulkan/contact_piece_work_tests.c tools/diagnostics/contact_scaling.c tests/vulkan/pixel_component_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/pixel_component_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_load_shader_module
+test: build/contact_piece_work_tests
