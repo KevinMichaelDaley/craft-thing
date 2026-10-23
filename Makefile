@@ -665,6 +665,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/component_extraction_tests
 	./build/dynamic_runtime_tests
 	./build/component_cache_tests
+	./build/fluid_one_cell_scan_tests
 	./build/component_acceptance_tests
 	./build/particle_tests
 	./build/marker_slot_tests
@@ -1318,3 +1319,6 @@ test: build/component_cache_tests
 build/albedo_work_tests: tests/renderer/albedo_work_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=fr_renderer_record -Wl,--wrap=vkCmdDispatch
 test: build/albedo_work_tests
+build/fluid_one_cell_scan_tests: tests/vulkan/fluid_one_cell_scan_tests.c tests/vulkan/fluid_transport_tests.c tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/fluid_one_cell_scan_tests
