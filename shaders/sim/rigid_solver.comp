@@ -8,6 +8,7 @@ layout(set=0,binding=31,std430) buffer MotionProfile {uint motion_profile[];};
 /* Specializing each phase removes unrelated branches and their register pressure. */
 layout(constant_id = 0) const uint PHASE = 0u;
 layout(constant_id = 1) const bool SPARSE_MOTION_WRITES = true;
+layout(constant_id = 3) const bool CACHE_CONTACT_STARTS = true;
 layout(set = 0, binding = 2, std430) readonly buffer Pages { uint pages[]; };
 #ifndef DC_RUNTIME_BODY_STORAGE
 layout(set = 0, binding = 4, std430) buffer Bodies {
@@ -219,11 +220,11 @@ void solve_contact(uint i, bool impulse) {
         dn = (max(0.0, lambda + (-dot(pa - pb, n) - alpha * lambda) / (wn + alpha)) - lambda) *
              scale;
         putf(s, lambda + dn);
-        vec2 start_a = contact_start_anchor(a,ba,getv(s+4u));
+        vec2 start_a = CACHE_CONTACT_STARTS?getv(s+14u):contact_start_anchor(a,ba,getv(s+4u));
         vec2 start_b = getv(s + 9u);
         if (b != BODY_CAPACITY)
             start_b =
-                contact_start_anchor(b,DC_BODY(b),getv(s+6u));
+                CACHE_CONTACT_STARTS?getv(s+9u):contact_start_anchor(b,DC_BODY(b),getv(s+6u));
         float tangent_error = dot((pa - start_a) - (pb - start_b), t);
         float lt = getf(s + 1u), limit = getf(c + 11u) * max(0.0, lambda + dn);
         if (wt > 0.0)
@@ -281,6 +282,7 @@ void main() {
         vec2 ra = pa - position(ba) - ba.center;
         putv(s + 4u, body_rotate(ra, -ba.angle));
         putv(s + 9u, pb);
+        putv(s+14u,contact_start_anchor(a,ba,getv(s+4u)));
         vec2 va = velocity(ba) + ba.angular_velocity * vec2(-ra.y, ra.x), vb = vec2(0);
         vec2 normal=getv(c+8u);
         DC_SOLVER_DATA(s+11u)=uint(dot(pa-pb,normal)<=1.0/65536.0);
@@ -319,6 +321,7 @@ void main() {
             Body bb = contact_body(b);
             vec2 rb = pb - position(bb) - bb.center;
             putv(s + 6u, body_rotate(rb, -bb.angle));
+            putv(s+9u,contact_start_anchor(b,bb,getv(s+6u)));
             vb = velocity(bb) + bb.angular_velocity * vec2(-rb.y, rb.x);
             if(dot(pa-pb,normal)<=REST_CONTACT_DISTANCE && normal.y>.5)
                 atomicOr(DC_SOLVER_DATA(bs(b)+REST_FLAGS_WORD),REST_SUPPORTED);
