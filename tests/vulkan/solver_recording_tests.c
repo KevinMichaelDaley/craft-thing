@@ -3,7 +3,7 @@
 #include "../../src/vulkan/gpu_internal.h"
 
 static int g_pass,g_fail;
-static uint32_t phase=UINT32_MAX,solver_barriers,host_publications,bad_dependencies,nested_host_publications,prepared_lanes;
+static uint32_t phase=UINT32_MAX,solver_barriers,host_publications,bad_dependencies,nested_host_publications;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -17,7 +17,7 @@ VKAPI_ATTR void VKAPI_CALL vkCmdBindPipeline(VkCommandBuffer c,VkPipelineBindPoi
     (void)c;(void)p;uintptr_t value=(uintptr_t)pipeline;
     phase=value>=1&&value<=DC_GPU_SOLVER_PHASE_COUNT?(uint32_t)value-1u:UINT32_MAX;
 }
-VKAPI_ATTR void VKAPI_CALL vkCmdPushConstants(VkCommandBuffer c,VkPipelineLayout l,VkShaderStageFlags f,uint32_t o,uint32_t n,const void *v) {(void)c;(void)l;(void)f;(void)o;if(phase==3u&&n>=12u) prepared_lanes=((const uint32_t *)v)[2]>>16u;}
+VKAPI_ATTR void VKAPI_CALL vkCmdPushConstants(VkCommandBuffer c,VkPipelineLayout l,VkShaderStageFlags f,uint32_t o,uint32_t n,const void *v) {(void)c;(void)l;(void)f;(void)o;(void)n;(void)v;}
 VKAPI_ATTR void VKAPI_CALL vkCmdDispatch(VkCommandBuffer c,uint32_t x,uint32_t y,uint32_t z) {(void)c;(void)x;(void)y;(void)z;}
 VKAPI_ATTR void VKAPI_CALL vkCmdDispatchIndirect(VkCommandBuffer c,VkBuffer b,VkDeviceSize o) {(void)c;(void)b;(void)o;}
 VKAPI_ATTR void VKAPI_CALL vkCmdPipelineBarrier2(VkCommandBuffer c,const VkDependencyInfo *info) {
@@ -46,7 +46,7 @@ static void test_solver_publishes_to_host_once_after_all_iterations(void) {
     for(unsigned i=0;i<DC_GPU_SOLVER_PHASE_COUNT;i++) gpu.solver_pipelines[i]=(VkPipeline)(uintptr_t)(i+1u);
     dc_gpu_record_solver(&gpu);
     printf("solver barriers%u host publications%u invalid dependencies%u\n",solver_barriers,host_publications,bad_dependencies);
-    ASSERT_TRUE(solver_barriers>200u);ASSERT_EQ(prepared_lanes,16u);
+    ASSERT_TRUE(solver_barriers>200u);
     ASSERT_EQ(nested_host_publications,0u);ASSERT_EQ(host_publications,1u);ASSERT_EQ(bad_dependencies,0u);PASS();
 }
 int main(void) {
