@@ -489,12 +489,12 @@ void commit_cell(ivec2 cell) {
     if (new_count != old_count)
         atomicAdd(particle_counts[page_at(cell) - 1u], uint(int(new_count) - int(old_count)));
     uint cell_index = (page_at(cell) - 1u) * CELLS + local_cell(cell);
-    uint material = chunk_cells[cell_index].x & 0xffffu,before=material;
+    uint before=chunk_cells[cell_index].x,material=before&0xffffu;
     if (new_count != 0u) material = first.material;
     else if (material == 2u || material == 4u || material == 5u || material == 6u || material == 10u) material = 0u;
-    uint flags=material==before?chunk_cells[cell_index].x&0xffff0000u:0u;
+    uint flags=material==(before&0xffffu)?before&0xffff0000u:0u;
     chunk_cells[cell_index].x = flags | material;
-    mpm_support_changed(cell,before,material);
+    mpm_support_changed(cell,before,flags|material);
 }
 
 void main() {

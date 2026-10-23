@@ -11,7 +11,7 @@ uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 
 /* Only changing support next to held terrain invalidates the rigid graph. */
 void mpm_support_changed(ivec2 cell,uint before,uint after) {
-    bool was_solid=before!=0u&&before!=3u,is_solid=after!=0u&&after!=3u;
+    bool was_solid=DC_CELL_COMPONENT_MEMBER(before),is_solid=DC_CELL_COMPONENT_MEMBER(after);
     if(was_solid==is_solid) return;
     for(int dy=-1;dy<=1;dy++) for(int dx=-1;dx<=1;dx++) {
         if(dx==0&&dy==0) continue;
