@@ -1,5 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+layout(constant_id=1) const bool HYDRO_PIXEL_ONLY=true;
+#define DC_RIGID_PIXEL_ONLY HYDRO_PIXEL_ONLY
 #include "rigid_body.glsl"
 layout(local_size_x=64) in;
 layout(constant_id=0) const uint HYDRO_PHASE=0u;
@@ -125,7 +127,7 @@ void main() {
         if(lane<32u) {DC_HYDRO_WORD(s+16u+lane)=0u;DC_HYDRO_WORD(s+48u+lane)=0u;}
         if(lane==0u) {DC_HYDRO_WORD(s)=0u;DC_HYDRO_WORD(s+80u)=0u;DC_HYDRO_WORD(s+81u)=0u;DC_HYDRO_WORD(s+82u)=0u;DC_HYDRO_WORD(s+83u)=b.id;}
     }
-    if(slot>=params.body_count||b.enabled==0u||!pixel_body(b)||DC_SOLVER_DATA(body_state(slot)+13u)==0u) return;
+    if(slot>=params.body_count||b.enabled==0u||(b.piece_count&PIXEL_BODY_FLAG)==0u||DC_SOLVER_DATA(body_state(slot)+13u)==0u) return;
     vec2 low,high;body_bounds(b,low,high);vec2 origin=vec2(b.x_fp,b.y_fp)/65536.;low+=origin;high+=origin;
     if(HYDRO_PHASE==0u) {
         ivec2 begin=max(ivec2(floor(low))-1,ivec2(0)),end=min(ivec2(ceil(high))+1,ivec2(params.width,params.height));
