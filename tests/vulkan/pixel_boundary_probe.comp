@@ -1,0 +1,31 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "rigid_body.glsl"
+layout(local_size_x=128) in;
+layout(set=0,binding=4,std430) buffer Storage {Body bodies[BODY_CAPACITY];uint data[];};
+layout(set=0,binding=0,std430) buffer Results {uint results[];};
+uint reads=0u;
+uint pixel_word_at(uint index) {reads++;return data[index-BODY_STORAGE_WORDS];}
+bool reference_boundary(Body b,uint p) {
+    if(pixel_piece_material(b,p)==0u) return false;
+    ivec2 cell=pixel_piece_cell(b,p);
+    return pixel_material(b,cell)!=0u&&(pixel_material(b,cell+ivec2(-1,0))==0u||
+        pixel_material(b,cell+ivec2(1,0))==0u||pixel_material(b,cell+ivec2(0,-1))==0u||
+        pixel_material(b,cell+ivec2(0,1))==0u);
+}
+void main() {
+    Body body=bodies[0];
+    for(uint piece=gl_LocalInvocationIndex;piece<1024u;piece+=128u) {
+        bool expected=reference_boundary(body,piece);
+        reads=0u;
+        bool actual=pixel_boundary(body,piece);uint cost=reads;
+        if(actual!=expected) atomicAdd(results[0],1u);
+        if(pixel_piece_material(body,piece)!=0u) {
+            uvec2 local=uvec2(piece%16u,(piece%256u)/16u);
+            if(all(greaterThan(local,uvec2(0)))&&all(lessThan(local,uvec2(15))))
+                atomicMax(results[1],cost);
+            else atomicMax(results[3],cost);
+        }
+        atomicAdd(results[2],1u);
+    }
+}

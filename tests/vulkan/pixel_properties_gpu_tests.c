@@ -180,7 +180,10 @@ test_cached_active_and_dormant_flags_refresh_without_geometry_reduction(void) {
     ASSERT_TRUE(valid);
     PASS();
 }
-int main(void) {
+#ifndef DC_PIXEL_PROPERTY_MAIN
+#define DC_PIXEL_PROPERTY_MAIN main
+#endif
+int DC_PIXEL_PROPERTY_MAIN(void) {
     setvbuf(stdout, NULL, _IOLBF, 0);
     RUN(test_exact_mixed_concave_properties);
     RUN(test_mortar_uses_its_own_density);

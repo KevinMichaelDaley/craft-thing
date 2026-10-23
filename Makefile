@@ -632,6 +632,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/pixel_component_tests
 	./build/pixel_world_tests
 	./build/pixel_geometry_tests
+	./build/pixel_boundary_tests
 	./build/structural_mechanics_tests
 	./build/structural_placement_tests
 	./build/structural_submerged_load_tests
@@ -1329,3 +1330,10 @@ build/shaders/fluid_transport_16.comp.spv: shaders/sim/fluid_transport.comp shad
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TRANSPORT_GROUP_SIZE=16 $< -o $@
 $(GPU_OBJ) build/diagnostics/quarter_app_frame_trace build/fluid_one_cell_scan_tests: build/shaders/fluid_transport_16.comp.spv
+
+build/diagnostics/pixel_boundary_probe.spv: tests/vulkan/pixel_boundary_probe.comp shaders/sim/rigid_body.glsl
+	mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.1 -S comp -Ishaders/sim -o $@ $<
+build/pixel_boundary_tests: tests/vulkan/pixel_boundary_tests.c tests/vulkan/pixel_properties_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/pixel_properties_probe.spv build/diagnostics/pixel_boundary_probe.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/pixel_boundary_tests
