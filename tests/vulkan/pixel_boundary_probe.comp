@@ -37,4 +37,10 @@ void main() {
         }
         atomicAdd(results[2],1u);
     }
+    for(uint word=gl_LocalInvocationIndex;word<pixel_tile_count(body)*32u;word+=128u) {
+        reads=0u;uint mask=pixel_boundary_mask(body,word),cost=reads,expected=0u;
+        for(uint bit=0u;bit<8u;bit++) if(reference_boundary(body,word*8u+bit)) expected|=1u<<(bit*4u);
+        if(mask!=expected) atomicAdd(results[6],1u);
+        atomicMax(results[7],cost);
+    }
 }

@@ -154,6 +154,11 @@ bool pixel_boundary(Body b,uint p) {
         (pixel_word_at(start+word+2u)>>shift)&15u;
     return down==0u;
 }
+uint pixel_boundary_mask(Body b,uint word) {
+    uint mask=0u;
+    for(uint bit=0u;bit<8u;bit++) if(pixel_boundary(b,word*8u+bit)) mask|=1u<<(bit*4u);
+    return mask;
+}
 float body_cross(vec2 a, vec2 b) { return a.x * b.y - a.y * b.x; }
 uint body_vertices(Body b) { return b.vertex_count == 0u ? 4u : b.vertex_count; }
 vec2 body_rest_vertex(Body b, uint i) {
