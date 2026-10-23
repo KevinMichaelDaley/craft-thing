@@ -601,6 +601,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/dense_support_tests
 	./build/loose_particle_role_tests
 	./build/mpm_support_dirty_tests
+	./build/mpm_gather_tests
 	./build/body_address_gpu_tests
 	./build/body_storage_gpu_tests
 	./build/body_scan_gpu_tests
@@ -1347,3 +1348,7 @@ test: build/contact_piece_work_tests
 build/mpm_support_dirty_tests: tests/vulkan/mpm_support_dirty_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(MPM_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/mpm_support_dirty_tests
+
+build/mpm_gather_tests: tests/vulkan/mpm_gather_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(MPM_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/mpm_gather_tests
