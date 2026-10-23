@@ -3,6 +3,7 @@
 #include "../../include/dungeoncraft/material_density.h"
 #include "../../include/dungeoncraft/mpm_activity_layout.h"
 layout(local_size_x = 16, local_size_y = 16) in;
+layout(constant_id=0) const bool MOVEMENT_FLAGS_ENABLED=true;
 
 struct Particle {
     int x_fp, y_fp, vx_fp, vy_fp;
@@ -425,7 +426,8 @@ void accept_one(ivec2 owner, uint layer) {
             }
         }
     }
-    accepted[index] = rank < 2u - occupied && used_volume+volume<=CELL_REST_VOLUME_LIMIT_FP ? 1u : 0u;
+    accepted[index] = rank < 2u - occupied && used_volume+volume<=CELL_REST_VOLUME_LIMIT_FP ?
+        (MOVEMENT_FLAGS_ENABLED?2u:1u) : 0u;
 }
 
 Particle zero_particle() {
@@ -444,12 +446,17 @@ void gather(ivec2 target) {
             if (page_at(source) == 0u) continue;
             for (uint layer = 0u; layer < 2u; ++layer) {
                 uint source_index = particle_index(source, layer);
+                bool source_here = all(equal(source, target));
+                uint decision=accepted[source_index];
+                /* A neighboring source can contribute only an accepted move
+                   out of its own cell. Inspect its word before loading two
+                   complete particle records from an unchanged neighborhood. */
+                if(MOVEMENT_FLAGS_ENABLED&&!source_here&&decision!=2u) continue;
                 Particle old = particles[source_index];
                 if (old.mass_fp == 0u) continue;
                 Particle candidate = proposals[source_index];
                 ivec2 proposed_target = target_of(candidate, source);
-                bool source_here = all(equal(source, target));
-                bool accepted_move = accepted[source_index] != 0u;
+                bool accepted_move = decision != 0u;
                 bool include = (accepted_move && all(equal(proposed_target, target))) ||
                                (source_here && !accepted_move);
                 if (!include) continue;
