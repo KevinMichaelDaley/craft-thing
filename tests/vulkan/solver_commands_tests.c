@@ -5,7 +5,8 @@
 
 static int g_pass,g_fail;
 static uint64_t command_hash,secondary_hash;
-static uint32_t dispatches,executed;
+static uint32_t dispatches,executed,allocated;
+static uint64_t program_hashes[32],last_executed_hash;
 static const uint64_t HASH_SEED=1469598103934665603ull;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
@@ -32,7 +33,7 @@ VKAPI_ATTR void VKAPI_CALL vkCmdPipelineBarrier2(VkCommandBuffer c,const VkDepen
 }
 VKAPI_ATTR VkResult VKAPI_CALL vkAllocateCommandBuffers(VkDevice d,const VkCommandBufferAllocateInfo *i,VkCommandBuffer *out) {
     (void)d;if(i->level!=VK_COMMAND_BUFFER_LEVEL_SECONDARY||i->commandBufferCount!=1u) return VK_ERROR_INITIALIZATION_FAILED;
-    *out=(VkCommandBuffer)(uintptr_t)10u;return VK_SUCCESS;
+    *out=(VkCommandBuffer)(uintptr_t)(10u+allocated++);return VK_SUCCESS;
 }
 VKAPI_ATTR void VKAPI_CALL vkFreeCommandBuffers(VkDevice d,VkCommandPool p,uint32_t n,const VkCommandBuffer *b) {(void)d;(void)p;(void)n;(void)b;}
 VKAPI_ATTR VkResult VKAPI_CALL vkResetCommandBuffer(VkCommandBuffer c,VkCommandBufferResetFlags f) {(void)c;(void)f;return VK_SUCCESS;}
@@ -40,8 +41,8 @@ VKAPI_ATTR VkResult VKAPI_CALL vkBeginCommandBuffer(VkCommandBuffer c,const VkCo
     (void)c;if(!i->pInheritanceInfo) return VK_ERROR_INITIALIZATION_FAILED;
     command_hash=HASH_SEED;return VK_SUCCESS;
 }
-VKAPI_ATTR VkResult VKAPI_CALL vkEndCommandBuffer(VkCommandBuffer c) {(void)c;secondary_hash=command_hash;return VK_SUCCESS;}
-VKAPI_ATTR void VKAPI_CALL vkCmdExecuteCommands(VkCommandBuffer c,uint32_t n,const VkCommandBuffer *b) {(void)c;(void)n;(void)b;executed++;}
+VKAPI_ATTR VkResult VKAPI_CALL vkEndCommandBuffer(VkCommandBuffer c) {secondary_hash=command_hash;program_hashes[(uintptr_t)c-10u]=command_hash;return VK_SUCCESS;}
+VKAPI_ATTR void VKAPI_CALL vkCmdExecuteCommands(VkCommandBuffer c,uint32_t n,const VkCommandBuffer *b) {(void)c;for(unsigned i=0;i<n;i++) {last_executed_hash=program_hashes[(uintptr_t)b[i]-10u];executed++;}}
 static dc_gpu_t fake_gpu(void) {
     dc_gpu_t g={.width=64,.height=64,.page_width=1,.page_height=1,.body_count=1,
         .device=(VkDevice)(uintptr_t)8,.command_pool=(VkCommandPool)(uintptr_t)7,
@@ -78,8 +79,23 @@ static void test_rebuilds_for_origin_growth_descriptor_and_structural_changes(vo
     ASSERT_EQ(recordings,6u);ASSERT_EQ(executions,6u);
     dc_gpu_solver_commands_destroy(&g);PASS();
 }
+static void test_reuses_exact_mpm_commands_without_repeating_cpu_recording(void) {
+    dc_gpu_t g=fake_gpu();char err[128];
+    ASSERT_TRUE(dc_gpu_mpm_scan_layout(g.width,g.height,&g.mpm_scan_layout));
+    command_hash=HASH_SEED;dispatches=0;dc_gpu_record_mpm(&g);
+    uint64_t reference=command_hash;uint32_t reference_dispatches=dispatches;
+    ASSERT_TRUE(dc_gpu_solver_commands_init(&g,err,sizeof(err)));
+    command_hash=HASH_SEED;dispatches=0;dc_gpu_record_mpm(&g);
+    bool exact=command_hash==reference;
+    dc_gpu_record_mpm(&g);bool reused=dispatches==reference_dispatches;
+    bool executed_exact=last_executed_hash==reference;
+    dc_gpu_solver_commands_destroy(&g);
+    printf("MPM exact stream%d, reused%d, executed exact%d\n",exact,reused,executed_exact);
+    ASSERT_TRUE(exact);ASSERT_TRUE(reused);ASSERT_TRUE(executed_exact);PASS();
+}
 int main(void) {
     RUN(test_reuses_the_exact_solver_program_without_recording_again);
     RUN(test_rebuilds_for_origin_growth_descriptor_and_structural_changes);
+    RUN(test_reuses_exact_mpm_commands_without_repeating_cpu_recording);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
