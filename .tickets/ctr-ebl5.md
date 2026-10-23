@@ -1,6 +1,6 @@
 ---
 id: ctr-ebl5
-status: in_progress
+status: open
 deps: []
 links: []
 created: 2026-10-19T01:33:39Z
@@ -67,3 +67,7 @@ User-directed aggregate light buffer implemented: removed per-pixel emission/rea
 **2026-10-23T14:42:07Z**
 
 Aggregate-buffer checkpoint verified: source persistence RED failed extra-build assertion, GREEN19/19 subgroup and shared fallback core+sync; final scene1/1 core+sync. Actual cached Wayland lit-water60frames86.481ms mean/102.980ms worst, four paused captures identical; inspected build/light_buffer_cached_graphical/scene.png. Full make -j4 -i test completed (build/light_buffer_full_suite.log), exactly two known ctr-ojvy authored_stage failures67/135 and zero new failures/warnings. Parent target remains RED. Next measured displacement work is ctlo-6tk8.
+
+**2026-10-23T14:51:56Z**
+
+USER STEERING: propagated lighting is now gated behind --lighting and disabled by default for scene gameplay. User explicitly defers further lighting performance work for now. Keep directional-buffer implementation and explicit renderer correctness/performance tests; do not claim original <30ms target met. Default scene uses authored material colors and skips fr_lighting_record; F8 remains an explicit runtime toggle.

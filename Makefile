@@ -1,9 +1,4 @@
 CC ?= cc
-build/lighting_flag_tests: tests/app/lighting_flag_tests.c build/dungeoncraft_360
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
-.PHONY: test_lighting_flag
-test_lighting_flag: build/lighting_flag_tests
-	./build/lighting_flag_tests
 build/appearance_tests: tests/renderer/appearance_tests.c src/renderer/appearance.c include/ferrum/renderer/appearance.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/renderer/appearance_tests.c src/renderer/appearance.c -o $@ -lm
@@ -252,6 +247,12 @@ build/native360/%.o: %.c Makefile
 -include $(NATIVE360_OBJ:.o=.d)
 build/dungeoncraft_360: $(NATIVE360_OBJ) build/dungeoncraft_quarter_native $(RENDERER_SHADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(NATIVE360_OBJ) -o $@ $(LDLIBS)
+
+build/lighting_flag_tests: tests/app/lighting_flag_tests.c build/dungeoncraft_360
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+.PHONY: test_lighting_flag
+test_lighting_flag: build/lighting_flag_tests
+	./build/lighting_flag_tests
 -include $(PERFORMANCE_OBJ:.o=.d)
 NATIVE_720_FLAGS = -DDC_GPU_CHUNK_SLOTS=270u
 build/broadphase_tests: tests/vulkan/broadphase_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
