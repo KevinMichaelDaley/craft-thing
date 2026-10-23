@@ -1401,3 +1401,5 @@ build/mpm_gather_tests: build/diagnostics/mpm_gather_profile.comp.spv
 build/mpm_gather_partial_tile_tests: tests/vulkan/mpm_gather_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(MPM_SHADER) build/diagnostics/mpm_gather_profile.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_GATHER_TEST_WIDTH=137u -DDC_GATHER_TEST_HEIGHT=83u $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/mpm_gather_partial_tile_tests
+
+$(MPM_SHADER) build/shaders/runtime/mpm.comp.spv: shaders/sim/mpm_gather_cache.glsl
