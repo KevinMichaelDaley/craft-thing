@@ -6,7 +6,7 @@
 static int g_pass,g_fail;
 static uint64_t command_hash,secondary_hash;
 static uint32_t dispatches,executed,allocated;
-static uint64_t program_hashes[32],last_executed_hash;
+static uint64_t program_hashes[256],last_executed_hash;
 static dc_gpu_t *expected_mpm;
 static VkPipeline bound;
 static uint32_t pushed_mode,mpm_modes,bad_mpm_bindings,generic_mpm_binds;
@@ -118,11 +118,37 @@ static void test_generic_mpm_binds_once_while_executing_all_eight_phases(void) {
     printf("generic MPM phase mask0x%x pipeline binds%u\n",mpm_modes,generic_mpm_binds);
     ASSERT_EQ(mpm_modes,255u);ASSERT_EQ(generic_mpm_binds,1u);PASS();
 }
+
+static void test_reuses_exact_fluid_phases_and_invalidates_changed_parameters(void) {
+    for(unsigned phase=0;phase<5;phase++) {
+        dc_gpu_t g=fake_gpu();char err[128];
+        g.fluid_step_scale=2.0f;g.timed_fluid=true;g.rigid_occupancy_present=true;
+        for(unsigned parity=0;parity<2;parity++) {
+            g.fluid_tick=parity;command_hash=HASH_SEED;dispatches=0;
+            g.solver_cache_disabled=true;dc_gpu_record_fluid_phase(&g,phase);g.solver_cache_disabled=false;
+            uint64_t reference=command_hash;uint32_t count=dispatches;
+            if(!g.solver_commands) ASSERT_TRUE(dc_gpu_solver_commands_init(&g,err,sizeof(err)));
+            dispatches=0;dc_gpu_record_fluid_phase(&g,phase);
+            bool exact=last_executed_hash==reference;
+            dc_gpu_record_fluid_phase(&g,phase);
+            bool reused=dispatches==count;
+            printf("fluid phase%u parity%u exact%d reused%d\n",phase,parity,exact,reused);
+            ASSERT_TRUE(exact);ASSERT_TRUE(reused);
+            g.fluid_snapshot_valid=false;dc_gpu_record_fluid_phase(&g,phase);
+            if(phase==3u) ASSERT_TRUE(g.fluid_snapshot_valid);
+            g.fluid_step_scale=1.0f;dispatches=0;dc_gpu_record_fluid_phase(&g,phase);
+            ASSERT_TRUE(dispatches>0u);g.fluid_step_scale=2.0f;
+        }
+        dc_gpu_solver_commands_destroy(&g);
+    }
+    PASS();
+}
 int main(void) {
     RUN(test_reuses_the_exact_solver_program_without_recording_again);
     RUN(test_rebuilds_for_origin_growth_descriptor_and_structural_changes);
     RUN(test_reuses_exact_mpm_commands_without_repeating_cpu_recording);
     RUN(test_mpm_uses_a_separate_pipeline_for_each_unchanged_phase);
     RUN(test_generic_mpm_binds_once_while_executing_all_eight_phases);
+    RUN(test_reuses_exact_fluid_phases_and_invalidates_changed_parameters);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
