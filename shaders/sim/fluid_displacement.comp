@@ -12,6 +12,7 @@ layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
 layout(push_constant) uniform Params {uint width,height,mode;} params;
 const uint FULL=65536u,PERMEABLE=1u<<17u,KNOWN=1u<<18u,OCCUPIED=1u<<19u;
 shared uvec2 cached[CACHE_CELLS];
+shared uint source_bits[(CACHE_CELLS+31u)/32u];
 #ifdef DC_DISPLACEMENT_PROFILE
 layout(set=0,binding=31,std430) buffer Profile {uint source_visits;};
 #endif
@@ -96,17 +97,46 @@ bool displace_source(ivec2 source) {
     if(lane==0u&&sent!=0u) put_water(source,water-sent);
     return sent!=0u;
 }
+int next_source(int position) {
+    if(position<0||position>=int(CACHE_CELLS)) return position;
+    int word=position/32;
+    uint mask=LATERAL!=0u?0xffffffffu<<(uint(position)%32u):
+                               0xffffffffu>>(31u-uint(position)%32u);
+    uint bits=source_bits[word]&mask;
+    while(bits==0u) {
+        word+=LATERAL!=0u?1:-1;
+        if(word<0) return -1;
+        if(word>=int((min(length,CACHE_CELLS)+31u)/32u))
+            return int(min(length,CACHE_CELLS));
+        bits=source_bits[word];
+    }
+    return word*32+(LATERAL!=0u?findLSB(bits):findMSB(bits));
+}
 void main() {
     line=gl_WorkGroupID.x+gl_WorkGroupID.y*65535u;
     length=LATERAL!=0u?params.width:params.height;
     if(gl_SubgroupID!=0u||line>=(LATERAL!=0u?params.height:params.width)) return;
+    for(uint word=gl_SubgroupInvocationID;word<(CACHE_CELLS+31u)/32u;word+=gl_SubgroupSize)
+        source_bits[word]=0u;
+    subgroupMemoryBarrierShared();subgroupBarrier();
     for(uint position=gl_SubgroupInvocationID;position<min(length,CACHE_CELLS);position+=gl_SubgroupSize) {
         ivec2 p=point_at(position);uint page=page_at(p);
         cached[position]=uvec2(0);
         if(page!=0u) cached[position]=uvec2(chunk_cells[atlas_index(p,page)].y,global_meta(p,page));
+        uvec2 value=cached[position];
+        if((value.y&(KNOWN|OCCUPIED))==(KNOWN|OCCUPIED)&&value.x>(value.y&131071u))
+            atomicOr(source_bits[position/32u],1u<<(position%32u));
     }
     subgroupMemoryBarrierShared();subgroupBarrier();
     for(int position=LATERAL!=0u?0:int(length)-1;position>=0&&position<int(length);position+=LATERAL!=0u?1:-1) {
+        /* Recipients are capped at capacity, so displacement cannot create a
+           new overcapacity source. The initial candidate mask stays exact. */
+        position=next_source(position);
+        if(position<0||position>=int(length)) break;
+        if(position>=int(CACHE_CELLS)) {
+            ivec2 p=point_at(uint(position));uint meta=cell_meta(p);
+            if((meta&(KNOWN|OCCUPIED))!=(KNOWN|OCCUPIED)||water_at(p)<=(meta&131071u)) continue;
+        }
         if(displace_source(point_at(uint(position)))) {
             subgroupMemoryBarrierShared();subgroupMemoryBarrierBuffer();subgroupBarrier();
         }
