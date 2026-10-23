@@ -112,3 +112,13 @@ Set `DC_FLUID_DISPATCH_TRACE=1` on the explicit
 `build/diagnostics/native360_fluid_trace` binary to capture its post-measurement
 fluid dispatches for dry or dense workloads as well as concave bodies. This does
 not enable hooks in the ordinary benchmark or change the measured frame loop.
+
+Solver command recording is reused through secondary Vulkan command buffers.
+These cache commands, never simulation results or indirect work counts. Origins,
+body/queue growth, structural mode, and descriptor updates invalidate recordings.
+Use `DC_SOLVER_COMMAND_CACHE=0` for the original recording path, or
+`DC_MPM_COMMAND_CACHE=0` to disable only MPM command reuse. Set
+`DC_COMMAND_CACHE_STATS=1` to print recording/execution counts at shutdown.
+Detailed `quarter_app_frame_trace` queries disable command reuse so each frame
+gets fresh per-dispatch query IDs; establish final frame-time acceptance with
+the ordinary displayed application.

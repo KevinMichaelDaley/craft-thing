@@ -214,6 +214,7 @@ void __wrap_dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase) {
                              pool, at + 1);
 }
 void __wrap_dc_gpu_record_mpm(dc_gpu_t *gpu) {
+    gpu->solver_cache_disabled = true;
     stage(gpu, MPM, __real_dc_gpu_record_mpm);
 }
 void __wrap_fr_renderer_record(dc_gpu_t *gpu) {

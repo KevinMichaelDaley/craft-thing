@@ -307,7 +307,7 @@ void dc_gpu_record_components(dc_gpu_t *gpu, bool rigid) {
     }
 }
 
-void dc_gpu_record_mpm(dc_gpu_t *gpu) {
+void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu) {
     dc_gpu_record_components(gpu, false);
     uint32_t push[7] = {gpu->width, gpu->height, 0u, 0u, 0u, 0u, 0u};
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,

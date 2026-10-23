@@ -13,12 +13,14 @@ typedef struct {
     VkPipelineLayout layout;
     uint64_t structural,runtime;
 } solver_command_key_t;
-struct dc_solver_commands {
+enum { RIGID_PROGRAM, MPM_PROGRAM, COMMAND_PROGRAM_COUNT };
+typedef struct {
     VkCommandBuffer command;
     solver_command_key_t key;
     uint64_t recordings,executions;
-    bool valid;
-};
+    bool valid,disabled;
+} solver_command_program_t;
+struct dc_solver_commands {solver_command_program_t programs[COMMAND_PROGRAM_COUNT];};
 
 static solver_command_key_t command_key(const dc_gpu_t *g) {
     solver_command_key_t key;memset(&key,0,sizeof(key));
@@ -41,27 +43,43 @@ bool dc_gpu_solver_commands_init(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!cache) {if(err&&cap) snprintf(err,cap,"Cannot allocate solver command cache");return false;}
     VkCommandBufferAllocateInfo allocation={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool=g->command_pool,.level=VK_COMMAND_BUFFER_LEVEL_SECONDARY,.commandBufferCount=1};
-    if(vkAllocateCommandBuffers(g->device,&allocation,&cache->command)!=VK_SUCCESS) {
-        free(cache);if(err&&cap) snprintf(err,cap,"Cannot allocate reusable solver commands");return false;
+    g->solver_commands=cache;
+    for(unsigned program=0;program<COMMAND_PROGRAM_COUNT;program++) {
+        if(vkAllocateCommandBuffers(g->device,&allocation,&cache->programs[program].command)!=VK_SUCCESS) {
+            dc_gpu_solver_commands_destroy(g);
+            if(err&&cap) snprintf(err,cap,"Cannot allocate reusable solver commands");
+            return false;
+        }
     }
     const char *control=getenv("DC_SOLVER_COMMAND_CACHE");
     if(control&&strcmp(control,"0")==0) g->solver_cache_disabled=true;
+    const char *mpm_control=getenv("DC_MPM_COMMAND_CACHE");
+    if(mpm_control&&strcmp(mpm_control,"0")==0) cache->programs[MPM_PROGRAM].disabled=true;
     g->solver_commands=cache;return true;
 }
 void dc_gpu_solver_commands_destroy(dc_gpu_t *g) {
     if(!g||!g->solver_commands) return;
     struct dc_solver_commands *cache=g->solver_commands;
-    if(cache->command&&g->command_pool)
-        vkFreeCommandBuffers(g->device,g->command_pool,1,&cache->command);
+    for(unsigned program=0;program<COMMAND_PROGRAM_COUNT;program++)
+        if(cache->programs[program].command&&g->command_pool)
+            vkFreeCommandBuffers(g->device,g->command_pool,1,&cache->programs[program].command);
+    if(getenv("DC_COMMAND_CACHE_STATS")) {
+        for(unsigned program=0;program<COMMAND_PROGRAM_COUNT;program++)
+            fprintf(stderr,"command cache program%u: recordings%llu executions%llu\n",program,
+                (unsigned long long)cache->programs[program].recordings,
+                (unsigned long long)cache->programs[program].executions);
+    }
     free(cache);g->solver_commands=NULL;
 }
 bool dc_gpu_solver_commands_stats(const dc_gpu_t *g,uint64_t *recordings,uint64_t *executions) {
     if(!g||!g->solver_commands||!recordings||!executions) return false;
-    *recordings=g->solver_commands->recordings;*executions=g->solver_commands->executions;return true;
+    *recordings=g->solver_commands->programs[RIGID_PROGRAM].recordings;
+    *executions=g->solver_commands->programs[RIGID_PROGRAM].executions;return true;
 }
-static bool execute_cached(dc_gpu_t *g) {
-    struct dc_solver_commands *cache=g->solver_commands;
-    if(!cache||g->solver_cache_disabled||g->component_profile) return false;
+static bool execute_cached(dc_gpu_t *g,unsigned program,void (*record)(dc_gpu_t *)) {
+    if(!g->solver_commands||g->solver_cache_disabled||g->component_profile) return false;
+    solver_command_program_t *cache=&g->solver_commands->programs[program];
+    if(cache->disabled) return false;
     solver_command_key_t key=command_key(g);
     if(!cache->valid||memcmp(&key,&cache->key,sizeof(key))!=0) {
         cache->valid=false;
@@ -75,7 +93,7 @@ static bool execute_cached(dc_gpu_t *g) {
         VkCommandBuffer primary=g->command;g->command=cache->command;
         vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,g->pipeline_layout,
             0,1,&g->descriptor,0,NULL);
-        dc_gpu_record_solver_uncached(g);
+        record(g);
         VkResult result=vkEndCommandBuffer(g->command);g->command=primary;
         if(result!=VK_SUCCESS) {g->solver_cache_disabled=true;return false;}
         cache->key=key;cache->valid=true;cache->recordings++;
@@ -87,5 +105,8 @@ static bool execute_cached(dc_gpu_t *g) {
     cache->executions++;return true;
 }
 void dc_gpu_record_solver(dc_gpu_t *g) {
-    if(!execute_cached(g)) dc_gpu_record_solver_uncached(g);
+    if(!execute_cached(g,RIGID_PROGRAM,dc_gpu_record_solver_uncached)) dc_gpu_record_solver_uncached(g);
+}
+void dc_gpu_record_mpm(dc_gpu_t *g) {
+    if(!execute_cached(g,MPM_PROGRAM,dc_gpu_record_mpm_uncached)) dc_gpu_record_mpm_uncached(g);
 }
