@@ -1,6 +1,6 @@
 ---
 id: ctlo-qnrt
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-24T07:36:04Z

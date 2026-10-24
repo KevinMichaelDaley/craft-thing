@@ -1,4 +1,26 @@
 /* Brush transactions reuse the fracture reservation/publication gate. */
+#ifndef DC_CARVE_REUSE_CLASSIFICATION
+#define DC_CARVE_REUSE_CLASSIFICATION 0
+#endif
+#ifdef DC_CARVE_WORK_PROFILE
+layout(set=0,binding=31,std430) restrict buffer CarveWorkProfile {uint carve_work_profile[];};
+#endif
+uint carve_mask_material(Body source,uint pixel) {
+#ifdef DC_CARVE_WORK_PROFILE
+    atomicAdd(carve_work_profile[0],1u);
+#endif
+    return piece_material(source,pixel);
+}
+bool carve_component_solid(Body source,uint pixel) {
+#if DC_CARVE_REUSE_CLASSIFICATION
+    return true;
+#else
+#ifdef DC_CARVE_WORK_PROFILE
+    atomicAdd(carve_work_profile[1],1u);
+#endif
+    return piece_material(source,pixel)!=0u;
+#endif
+}
 #ifdef DC_RUNTIME_BODY_STORAGE
 #include "pixel_carve_parallel.glsl"
 #endif
@@ -104,7 +126,7 @@ void carve_bodies() {
         memoryBarrierBuffer();barrier();
         if(carve_pending!=0u) {
             for(uint pixel=lane;pixel<body_pieces(carve_source);pixel+=gl_WorkGroupSize.x) {
-                uint material=piece_material(carve_source,pixel);
+                uint material=carve_mask_material(carve_source,pixel);
                 bool hit=material!=0u&&carve_pixel(carve_source,pixel);
                 DC_FRAGMENT_LABEL(pixel)=hit?0xffffffffu:0u;
                 if(hit) atomicOr(carve_hits,1u);

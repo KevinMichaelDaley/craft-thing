@@ -34,7 +34,7 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
         if(lane==0u) pc_seed=area;
         barrier();
         for(uint i=lane;i<area;i+=DC_STRUCTURAL_LANES)
-            if(DC_FRAGMENT_LABEL(i)==0u&&piece_material(source,i)!=0u) atomicMin(pc_seed,i);
+            if(DC_FRAGMENT_LABEL(i)==0u&&carve_component_solid(source,i)) atomicMin(pc_seed,i);
         barrier();
         if(pc_seed==area) break;
         if(pc_count==pc_available) {
@@ -58,7 +58,7 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
                     ivec2 q=p+neighbors[n];
                     if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(source.width,source.height)))) continue;
                     uint next=pixel_piece_at(source,q);
-                    if(next==0xffffffffu||piece_material(source,next)==0u) continue;
+                    if(next==0xffffffffu||!carve_component_solid(source,next)) continue;
                     if(atomicCompSwap(DC_FRAGMENT_LABEL(next),0u,pc_count)==0u)
                         DC_FRAGMENT_QUEUE(atomicAdd(pc_tail,1u))=next;
                 }

@@ -615,6 +615,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/terrain_prop_tests
 	./build/body_color_tests
 	./build/body_carve_tests
+	./build/carve_work_tests
 	./build/sequential_detachment_tests
 	./build/dense_support_tests
 	./build/loose_particle_role_tests
@@ -1302,6 +1303,13 @@ test: build/body_color_tests
 build/body_carve_tests: tests/vulkan/body_carve_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkAllocateMemory -Wl,--wrap=vkQueueSubmit
 test: build/body_carve_tests
+
+build/diagnostics/carve_work_profile.spv: shaders/sim/structural.comp $(wildcard shaders/sim/*.glsl)
+	@mkdir -p build/diagnostics
+	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -DDC_CARVE_MODULE=1 -DDC_STRUCTURAL_LANES=128 -DDC_CARVE_WORK_PROFILE=1 -V --target-env vulkan1.3 -S comp -o $@ $<
+build/carve_work_tests: tests/vulkan/carve_work_tests.c tests/vulkan/body_carve_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/carve_work_profile.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkAllocateMemory -Wl,--wrap=vkQueueSubmit
+test: build/carve_work_tests
 build/sequential_detachment_tests: tests/vulkan/sequential_detachment_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/sequential_detachment_tests
