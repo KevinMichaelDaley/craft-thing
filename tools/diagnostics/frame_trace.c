@@ -300,7 +300,10 @@ static unsigned hydro_begin(VkCommandBuffer command) {
         return at;
     }
     for(unsigned phase=0;phase<DC_GPU_SOLVER_PHASE_COUNT;phase++) {
-        if(bound!=traced->solver_pipelines[phase]) continue;
+        bool matches=bound==traced->solver_pipelines[phase];
+        if(phase==6) matches|=bound==traced->solver_unstructured[0];
+        if(phase==9) matches|=bound==traced->solver_unstructured[1];
+        if(!matches) continue;
         if(query_count+2>QUERY_CAPACITY) {overflow=true;break;}
         unsigned at=query_count;labels[at/2]=SOLVER_PHASE+phase;query_count+=2;
         vkCmdWriteTimestamp2(command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,pool,at);
