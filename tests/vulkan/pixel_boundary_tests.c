@@ -37,9 +37,15 @@ static void test_packed_boundary_matches_sparse_concave_reference_with_bounded_r
         printf("polygon reads%u exact vertex mismatches%u\n",polygon_reads,polygon_errors);
         uint32_t mask_errors=f.probe.mapped[6],mask_reads=f.probe.mapped[7];
         printf("boundary mask exact mismatches%u maximum reads%u\n",mask_errors,mask_reads);
+        unsigned volume_reads=f.probe.mapped[8],volume_errors=f.probe.mapped[9];
+        unsigned face_reads=f.probe.mapped[10],face_errors=f.probe.mapped[11],clips=f.probe.mapped[12];
+        printf("%u exact clipping cases: volume reads %u errors %u, face reads %u errors %u\n",
+            clips,volume_reads,volume_errors,face_reads,face_errors);
         fixture_stop(&f);
         ASSERT_EQ(errors,0u);ASSERT_EQ(tested,1024u);ASSERT_TRUE(interior<=10u);ASSERT_EQ(polygon_errors,0u);ASSERT_TRUE(polygon_reads<=3u);
         ASSERT_EQ(mask_errors,0u);ASSERT_TRUE(mask_reads<=32u);
+        ASSERT_EQ(clips,768u*18u);ASSERT_EQ(volume_errors,0u);ASSERT_EQ(face_errors,0u);
+        ASSERT_TRUE(volume_reads<=6u);ASSERT_TRUE(face_reads<=6u);
     }
     PASS();
 }

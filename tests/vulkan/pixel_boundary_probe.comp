@@ -8,6 +8,8 @@ layout(set=0,binding=4,std430) buffer Storage {Body bodies[BODY_CAPACITY];uint d
 layout(set=0,binding=0,std430) buffer Results {uint results[];};
 uint reads=0u;
 uint pixel_word_at(uint index) {reads++;return data[index-BODY_STORAGE_WORDS];}
+#include "rigid_clip.glsl"
+#include "rigid_clip_reference.glsl"
 bool reference_boundary(Body b,uint p) {
     if(pixel_piece_material(b,p)==0u) return false;
     ivec2 cell=pixel_piece_cell(b,p);
@@ -34,6 +36,22 @@ void main() {
             reads=0u;Polygon polygon=body_polygon(body,piece,vec2(3.25,-1.75));
             atomicMax(results[4],reads);
             for(uint v=0u;v<4u;v++) if(any(notEqual(floatBitsToUint(reference[v]),floatBitsToUint(polygon.vertices[v])))) atomicAdd(results[5],1u);
+            vec2 middle=body.center+body_rotate(vec2(pixel_piece_cell(body,piece))+.5-body.center,body.angle);
+            for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++) for(uint f=0u;f<2u;f++) {
+                ivec2 cell=ivec2(floor(middle))+ivec2(x,y);float fraction=f==0u?1.:.37;
+                vec2 expected_center,actual_center;
+                float expected_volume=reference_cell_volume(body,piece,cell,fraction,expected_center);
+                reads=0u;float actual_volume=body_cell_volume(body,piece,cell,fraction,actual_center);
+                atomicMax(results[8],reads);
+                if(floatBitsToUint(actual_volume)!=floatBitsToUint(expected_volume)||
+                   any(notEqual(floatBitsToUint(actual_center),floatBitsToUint(expected_center)))) atomicAdd(results[9],1u);
+                vec2 start=vec2(cell)+vec2(.125,.25),stop=start+vec2(.75,.5);
+                float expected_face=reference_face_coverage(body,piece,start,stop);
+                reads=0u;float actual_face=body_face_coverage(body,piece,start,stop);
+                atomicMax(results[10],reads);
+                if(floatBitsToUint(actual_face)!=floatBitsToUint(expected_face)) atomicAdd(results[11],1u);
+                atomicAdd(results[12],1u);
+            }
         }
         atomicAdd(results[2],1u);
     }

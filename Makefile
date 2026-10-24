@@ -1440,6 +1440,7 @@ build/hydro_head_tall_work_tests: tests/vulkan/hydro_head_tests.c tools/diagnost
 test: build/hydro_head_work_tests build/hydro_head_tall_work_tests
 
 build/diagnostics/pixel_boundary_probe.spv: shaders/sim/contact_geometry.glsl
+build/diagnostics/pixel_boundary_probe.spv: shaders/sim/rigid_clip.glsl tests/vulkan/rigid_clip_reference.glsl
 
 build/solver_contact_start_tests: tests/vulkan/solver_contact_start_tests.c tests/vulkan/solver_motion_store_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_motion_profile.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
