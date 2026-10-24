@@ -1,9 +1,12 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "../../src/vulkan/gpu_internal.h"
+#include "../../src/vulkan/runtime_body_internal.h"
 
 static int g_pass,g_fail;
 static uint32_t phase=UINT32_MAX,solver_barriers,host_publications,bad_dependencies,nested_host_publications;
+static uint32_t indirect_publications;
+static bool runtime_fixture;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -32,13 +35,15 @@ VKAPI_ATTR void VKAPI_CALL vkCmdPipelineBarrier2(VkCommandBuffer c,const VkDepen
         bool host=(m->dstStageMask&VK_PIPELINE_STAGE_2_HOST_BIT)!=0u;
         if(host) {host_publications++;if(phase!=11u) bad_dependencies++;}
         if(host!=((m->dstAccessMask&VK_ACCESS_2_HOST_READ_BIT)!=0u)) bad_dependencies++;
+        bool indirect=(m->dstStageMask&VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT)!=0u;
+        indirect_publications+=indirect;
+        if(indirect!=(!runtime_fixture||phase==3u||phase==20u||phase==21u)) bad_dependencies++;
+        if(indirect!=((m->dstAccessMask&VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)!=0u)) bad_dependencies++;
         if(!(m->srcStageMask&VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT)||
            !(m->srcAccessMask&VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)||
            !(m->dstStageMask&VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT)||
-           !(m->dstStageMask&VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT)||
            !(m->dstAccessMask&VK_ACCESS_2_SHADER_STORAGE_READ_BIT)||
-           !(m->dstAccessMask&VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)||
-           !(m->dstAccessMask&VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)) bad_dependencies++;
+           !(m->dstAccessMask&VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)) bad_dependencies++;
     }
 }
 static void test_solver_publishes_to_host_once_after_all_iterations(void) {
@@ -49,7 +54,21 @@ static void test_solver_publishes_to_host_once_after_all_iterations(void) {
     ASSERT_TRUE(solver_barriers>200u);
     ASSERT_EQ(nested_host_publications,0u);ASSERT_EQ(host_publications,1u);ASSERT_EQ(bad_dependencies,0u);PASS();
 }
+static void test_runtime_solver_publishes_indirect_only_when_commands_change(void) {
+    uint32_t header[64]={0};header[9]=256;header[10]=512;
+    struct dc_runtime_bodies runtime={.work={.mapped=header},.store={.slab_count=1}};
+    runtime.scan.pipeline=(VkPipeline)(uintptr_t)1000;
+    dc_gpu_t gpu={.width=64,.height=64,.page_width=1,.page_height=1,.body_count=1,
+        .runtime_bodies=&runtime,.runtime_body_consumers=true};
+    for(unsigned i=0;i<DC_GPU_SOLVER_PHASE_COUNT;i++) gpu.solver_pipelines[i]=(VkPipeline)(uintptr_t)(i+1u);
+    phase=UINT32_MAX;solver_barriers=host_publications=bad_dependencies=nested_host_publications=indirect_publications=0;
+    runtime_fixture=true;dc_gpu_record_solver_uncached(&gpu);runtime_fixture=false;
+    printf("runtime barriers%u indirect publications%u invalid dependencies%u\n",solver_barriers,indirect_publications,bad_dependencies);
+    ASSERT_EQ(indirect_publications,10u);ASSERT_EQ(host_publications,1u);
+    ASSERT_EQ(nested_host_publications,0u);ASSERT_EQ(bad_dependencies,0u);PASS();
+}
 int main(void) {
     RUN(test_solver_publishes_to_host_once_after_all_iterations);
+    RUN(test_runtime_solver_publishes_indirect_only_when_commands_change);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
