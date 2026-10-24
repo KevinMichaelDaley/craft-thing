@@ -13,7 +13,10 @@ layout(constant_id=1) const bool CONTACT_PIXEL_ONLY=false;
 #include "rigid_body.glsl"
 #include "contact_boundary.glsl"
 #include "contact_geometry.glsl"
-layout(local_size_x = 64) in;
+#ifndef DC_CONTACT_GROUP_LANES
+#define DC_CONTACT_GROUP_LANES 32
+#endif
+layout(local_size_x = DC_CONTACT_GROUP_LANES) in;
 layout(constant_id = 0) const uint CONTACT_PHASE = 0u;
 layout(constant_id = 31) const uint TYPED_CONTACT_ACTIVITY_WORD = DC_CONTACT_TYPED_ACTIVITY_WORD;
 layout(constant_id = 32) const uint CONTACT_WORK_VERSION = DC_CONTACT_WORK_ABI;
@@ -39,7 +42,7 @@ layout(push_constant) uniform Params {
 
 const uint HEADER_WORDS = 8u, PAIR_WORDS = 8u;
 #define PAIR_CAPACITY DC_LAYOUT_PAIR_CAPACITY
-const uint CONTACT_HEADER_WORDS = 12u, CONTACT_GROUP_SIZE = 64u;
+const uint CONTACT_HEADER_WORDS = 12u, CONTACT_GROUP_SIZE = DC_CONTACT_GROUP_LANES;
 const uint CONTACT_WORDS = 32u;
 const uint BODY_CONTACT = 0u, TERRAIN_CONTACT = 1u, BOUNDARY_CONTACT = 2u, MPM_CONTACT = 3u;
 const uint PAIR_CONTACT_FOUND=1u,PAIR_COLLIDABLE_TERRAIN=2u;
@@ -262,11 +265,11 @@ void main() {
         if(lane==0u) DC_CONTACT_WORK(0u)=0u;
 #endif
         uint kind=0u;
-        for(uint body=lane;body<params.body_count;body+=64u)
+        for(uint body=lane;body<params.body_count;body+=CONTACT_GROUP_SIZE)
             if(DC_BODY(body).enabled!=0u) kind|=pixel_body(DC_BODY(body))?1u:2u;
         body_kinds[lane]=kind;
         barrier();
-        for(uint stride=32u;stride>0u;stride/=2u) {
+        for(uint stride=CONTACT_GROUP_SIZE/2u;stride>0u;stride/=2u) {
             if(lane<stride) body_kinds[lane]|=body_kinds[lane+stride];
             barrier();
         }
@@ -287,7 +290,7 @@ void main() {
             pixel_dispatch[TYPED_CONTACT_ACTIVITY_WORD+lane]=lane==0u?candidate_count:
                 lane==1u&&candidate_count!=0u?DC_CONTACT_PIXEL_GROUPS:1u;
             pixel_dispatch[DC_CONTACT_PLAN_ACTIVITY_WORD+lane]=lane==0u?candidate_count:1u;
-            pixel_dispatch[DC_CONTACT_FINISH_ACTIVITY_WORD+lane]=lane==0u?(candidate_count+63u)/64u:1u;
+            pixel_dispatch[DC_CONTACT_FINISH_ACTIVITY_WORD+lane]=lane==0u?(candidate_count+CONTACT_GROUP_SIZE-1u)/CONTACT_GROUP_SIZE:1u;
         }
         return;
     }
