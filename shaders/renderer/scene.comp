@@ -129,7 +129,7 @@ Surface surface_at(uint i,out float opacity,out uint known) {
                 authored=shape_color_get(word,piece%8u);
             }
             Appearance a;
-            if(SCENE_PHASE==6u&&authored.w>0.) {
+            if((SCENE_PHASE==6u||SCENE_PHASE==9u)&&authored.w>0.) {
                 a=Appearance(vec4(authored.rgb,0),vec4(0));
             } else {
                 a=texture_sample(rest,body.id,mapped_material,mapped_material<=10u?configuration[4u+mapped_material]:0u);
@@ -257,15 +257,28 @@ void main() {
         return;
     }
     uint view_width=configuration[0],view_height=configuration[1];
+    if(SCENE_PHASE==9u) {
+        uint generated=0u;
+        if(i<view_width*view_height) {
+            uvec2 cell=uvec2(i%view_width+params.view_x,i/view_width+params.view_y);
+            uint page=pages[(cell.y/64u)*((params.width+63u)/64u)+cell.x/64u];
+            if(page!=0u) {
+                uint atlas=(page-1u)*4096u+(cell.y%64u)*64u+cell.x%64u;
+                generated=refresh_palette(atlas);
+            }
+        }
+        uint count=group_sum(generated);
+        if(gl_LocalInvocationID.x==0u&&count!=0u) atomicAdd(work[4],count);
+    }
     if(i>=view_width*view_height) return;
     uvec2 cell=uvec2(i%view_width+params.view_x,i/view_width+params.view_y);
     uint index=cell.y*params.width+cell.x;Surface surface;
-    if(SCENE_PHASE==6u) {
+    if(SCENE_PHASE==6u||SCENE_PHASE==9u) {
         float opacity;uint known;
         surface=surface_at(index,opacity,known);
     } else surface=unpack_surface(surfaces[index]);
     if(surface.weights.w==0.) {display[index]=0xffff00ffu;return;}
-    vec3 color=surface.albedo.rgb;bool lit=SCENE_PHASE!=6u&&params.mode==0u;
+    vec3 color=surface.albedo.rgb;bool lit=SCENE_PHASE!=6u&&SCENE_PHASE!=9u&&params.mode==0u;
     if(lit) {
         Field field=renderer_unpack_field(fields[index]);
         color=max(vec3(0),.5*(surface.albedo.rgb*field.l0.rgb+surface.nx.rgb*field.lx.rgb+surface.ny.rgb*field.ly.rgb+surface.nz.rgb*field.lz.rgb));

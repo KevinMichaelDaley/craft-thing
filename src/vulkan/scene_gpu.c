@@ -9,7 +9,7 @@
 #include "renderer_internal.h"
 #include "runtime_body_gpu.h"
 
-enum { SCENE_PHASES = 9, SCENE_BUFFERS = 5, SCENE_WORK_WORDS = 128 + 4096 };
+enum { SCENE_PHASES = 10, SCENE_BUFFERS = 5, SCENE_WORK_WORDS = 128 + 4096 };
 struct fr_scene_gpu {
   fr_renderer_mode_t mode;
   uint32_t light_revision, point_count;
@@ -260,8 +260,11 @@ void fr_renderer_record(dc_gpu_t *g) {
   scene_dispatch(g, 0, g->runtime_body_consumers?64:4096, push);
   if(!g->runtime_body_consumers) scene_dispatch(g, 1, 64, push);
   if(s->mode==FR_RENDERER_ALBEDO) {
-    scene_dispatch(g,8,g->view_width*g->view_height,push);
-    scene_dispatch(g,6,g->view_width*g->view_height,push);
+    const char *fused=getenv("DC_ALBEDO_FUSED");
+    if(fused&&strcmp(fused,"0")==0) {
+      scene_dispatch(g,8,g->view_width*g->view_height,push);
+      scene_dispatch(g,6,g->view_width*g->view_height,push);
+    } else scene_dispatch(g,9,g->view_width*g->view_height,push);
     return;
   }
   scene_dispatch(g, 2, DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS, push);
