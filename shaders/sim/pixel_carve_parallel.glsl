@@ -10,6 +10,12 @@ shared ivec2 pc_lows[DC_STRUCTURAL_LANES],pc_highs[DC_STRUCTURAL_LANES];
 #if DC_CARVE_UNION_LABELS && DC_CARVE_REUSE_CLASSIFICATION
 #include "carve_union.glsl"
 #endif
+#ifndef DC_CARVE_PARALLEL_TILES
+#define DC_CARVE_PARALLEL_TILES 1
+#endif
+#if DC_CARVE_PARALLEL_TILES
+#include "carve_tiles.glsl"
+#endif
 
 Body carve_build_cached(Body source,uint child,uint pointer,uint generation) {
     Body b=source;b.piece_count=PIXEL_BODY_FLAG|PF_COUNT(child);b.compound_reserved=pointer;
@@ -99,6 +105,9 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
         for(uint i=0u;i<BODY_CAPACITY;i++) if(i!=slot&&pixel_body(DC_BODY(i))&&
             (DC_BODY(i).enabled!=0u||DC_BODY(i).reserved0!=0u)) pc_used+=pixel_shape_words(DC_BODY(i));
     }
+#if DC_CARVE_PARALLEL_TILES
+    carve_count_tiles(source);
+#else
     for(uint child=lane;child<pc_count;child+=DC_STRUCTURAL_LANES) {
         uint tiles=0u;
         for(uint tile=0u;tile<pixel_tile_count(source);tile++) {
@@ -108,6 +117,7 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
         }
         PF_TILES(child)=tiles;
     }
+#endif
     memoryBarrierBuffer();barrier();
     if(lane==0u) for(uint child=0u;child<pc_count;child++) {
         PF_OFFSET(child)=pc_total;pc_total+=8u+directory+PF_TILES(child)*33u;
@@ -153,6 +163,9 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
             DC_DATA(pointer+4u)=uint(PF_LOW(child).x);DC_DATA(pointer+5u)=uint(PF_LOW(child).y);
             DC_DATA(pointer+6u)=uint(PF_HIGH(child).x);DC_DATA(pointer+7u)=uint(PF_HIGH(child).y);
         }
+#if DC_CARVE_PARALLEL_TILES
+        carve_pack_tiles(source,child,pointer,directory);
+#else
         uint tile_output=0u;
         for(uint tile=0u;tile<pixel_tile_count(source);tile++) {
 #ifdef DC_CARVE_WORK_PROFILE
@@ -179,6 +192,7 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
                     source.compound_reserved+pixel_tile_offset(source,tile)+1u+lane);
             }
         }
+#endif
         memoryBarrierBuffer();barrier();
     }
     for(uint child=0u;child<pc_count;child++) {
