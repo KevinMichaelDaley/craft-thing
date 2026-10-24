@@ -83,7 +83,9 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
                 "build/shaders/fluid_transport_recompute_16.comp.spv":"build/shaders/fluid_transport_recompute.comp.spv";
         values[1]=dc_gpu_transport_cache_cells(length,properties.limits.maxComputeSharedMemorySize);
     }
-    if (!dc_gpu_load_shader_module(gpu,path,&shader,err,cap)) return false;
+    const char *load_path=phase==6u&&strcmp(path,"build/shaders/projection.comp.spv")==0?
+        "build/shaders/pressure_stencil.comp.spv":path;
+    if (!dc_gpu_load_shader_module(gpu,load_path,&shader,err,cap)) return false;
     VkSpecializationMapEntry entries[7]={{.constantID=0,.size=sizeof(uint32_t)},
         {.constantID=1,.offset=sizeof(uint32_t),.size=sizeof(uint32_t)},
         {.constantID=2,.offset=2*sizeof(uint32_t),.size=sizeof(uint32_t)},
@@ -122,7 +124,7 @@ bool dc_gpu_fluid_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if(specialized) {
         for(uint32_t phase=0;phase<13;phase++)
             if(!make_pipeline(gpu,fluid,phase,&gpu->fluid_phase_pipelines[phase],err,cap)) return false;
-        for(uint32_t phase=0;phase<6;phase++) {
+        for(uint32_t phase=0;phase<7;phase++) {
             if(phase==4) continue;
             if(!make_pipeline(gpu,projection,phase,&gpu->projection_phase_pipelines[phase],err,cap)) return false;
         }
@@ -163,7 +165,7 @@ void dc_gpu_fluid_destroy(dc_gpu_t *gpu) {
     for(uint32_t i=0;i<4;i++) if(gpu->fluid_transport_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->fluid_transport_pipelines[i],NULL);
     if (gpu->fluid_aperture_pipeline) vkDestroyPipeline(gpu->device, gpu->fluid_aperture_pipeline, NULL);
     for(uint32_t i=0;i<13;i++) if(gpu->fluid_phase_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->fluid_phase_pipelines[i],NULL);
-    for(uint32_t i=0;i<6;i++) if(gpu->projection_phase_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->projection_phase_pipelines[i],NULL);
+    for(uint32_t i=0;i<7;i++) if(gpu->projection_phase_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->projection_phase_pipelines[i],NULL);
     if (gpu->fluid_pipeline) vkDestroyPipeline(gpu->device, gpu->fluid_pipeline, NULL);
     if (gpu->projection_pipeline) vkDestroyPipeline(gpu->device, gpu->projection_pipeline, NULL);
     dc_gpu_pressure_work_destroy(gpu);
@@ -278,10 +280,22 @@ static void record_projection_begin(dc_gpu_t *gpu) {
     }
 }
 
+static void record_pressure_stencil(dc_gpu_t *gpu) {
+    uint32_t push[7]={gpu->width,gpu->height,6u,0u,1u,0u,0u};
+    bind_fluid_mode(gpu,6u,true);
+    vkCmdPushConstants(gpu->command,gpu->pipeline_layout,
+        VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
+    vkCmdDispatchIndirect(gpu->command,gpu->pressure_work_buffer,sizeof(uint32_t));
+    fluid_barrier(gpu,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
+}
+
 static void record_pressure_passes(dc_gpu_t *gpu, uint32_t first,
                                     uint32_t stop) {
     if(first>=stop) return;
     if(gpu->pressure_work_enabled) dc_gpu_record_pressure_work(gpu);
+    if(gpu->pressure_work_enabled&&first!=0u) record_pressure_stencil(gpu);
     uint32_t push[7] = { gpu->width, gpu->height, 0, 1, 0, 0, 0 };
     push[5] = dc_gpu_float_bits(gpu->fluid_step_scale);
     for (uint32_t pass = first; pass < stop; ++pass) {
@@ -289,6 +303,7 @@ static void record_pressure_passes(dc_gpu_t *gpu, uint32_t first,
                   ((pass & 1u) ? 1u : 2u);
         bool sparse=gpu->pressure_work_enabled&&(push[2]==1u||push[2]==2u);
         push[3]=sparse?0u:1u;push[4]=sparse?1u:0u;
+        push[6]=sparse?1u:0u;
         bind_fluid_mode(gpu,push[2],true);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
@@ -298,6 +313,7 @@ static void record_pressure_passes(dc_gpu_t *gpu, uint32_t first,
             VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+        if(gpu->pressure_work_enabled&&pass==0u) record_pressure_stencil(gpu);
     }
 }
 

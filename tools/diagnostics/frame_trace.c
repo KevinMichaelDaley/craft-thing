@@ -31,7 +31,7 @@ enum { QUERY_CAPACITY = 4096, RIGID = 0, FLUID = 1, MPM = 2,
        COMPONENT_PHASE = 19, SOLVER_PHASE = COMPONENT_PHASE + 38,
        TRANSPORT_PHASE = SOLVER_PHASE + DC_GPU_SOLVER_PHASE_COUNT,
        FLUID_KERNEL = TRANSPORT_PHASE + 4, PROJECTION_KERNEL = FLUID_KERNEL + 13,
-       DISPLACEMENT_KERNEL = PROJECTION_KERNEL + 6, HEAD_KERNEL = DISPLACEMENT_KERNEL + 2,
+       DISPLACEMENT_KERNEL = PROJECTION_KERNEL + 7, HEAD_KERNEL = DISPLACEMENT_KERNEL + 2,
        APERTURE_KERNEL = HEAD_KERNEL + 1, MPM_PHASE = APERTURE_KERNEL + 1,
        MPM_COMPONENT_PHASE = MPM_PHASE + 8, CONTACT_KERNEL = MPM_COMPONENT_PHASE + 6,
        MPM_ACTIVITY_KERNEL = CONTACT_KERNEL + 7, LABEL_COUNT = MPM_ACTIVITY_KERNEL + 1 };
@@ -315,7 +315,7 @@ static unsigned hydro_begin(VkCommandBuffer command) {
     }
     unsigned label=LABEL_COUNT;
     for(unsigned phase=0;phase<13;phase++) if(bound==traced->fluid_phase_pipelines[phase]) label=FLUID_KERNEL+phase;
-    for(unsigned phase=0;phase<6;phase++) if(bound==traced->projection_phase_pipelines[phase]) label=PROJECTION_KERNEL+phase;
+    for(unsigned phase=0;phase<7;phase++) if(bound==traced->projection_phase_pipelines[phase]) label=PROJECTION_KERNEL+phase;
     for(unsigned phase=0;phase<2;phase++) if(bound==traced->fluid_displacement_pipelines[phase]) label=DISPLACEMENT_KERNEL+phase;
     if(bound==traced->hydro_head_pipeline) label=HEAD_KERNEL;
     if(bound==traced->fluid_aperture_pipeline) label=APERTURE_KERNEL;
@@ -417,7 +417,7 @@ bool __wrap_dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
     putchar('\n');
     printf("fluid-kernels,%u",number);
     for(unsigned phase=0;phase<13;phase++) printf(",f%u=%.3f",phase,total[FLUID_KERNEL+phase]);
-    for(unsigned phase=0;phase<6;phase++) printf(",p%u=%.3f",phase,total[PROJECTION_KERNEL+phase]);
+    for(unsigned phase=0;phase<7;phase++) printf(",p%u=%.3f",phase,total[PROJECTION_KERNEL+phase]);
     printf(",displace0=%.3f,displace1=%.3f,head=%.3f,aperture=%.3f\n",
         total[DISPLACEMENT_KERNEL],total[DISPLACEMENT_KERNEL+1],total[HEAD_KERNEL],total[APERTURE_KERNEL]);
     printf("mpm-contact-kernels,%u",number);

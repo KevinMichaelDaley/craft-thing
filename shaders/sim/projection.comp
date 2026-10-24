@@ -9,7 +9,11 @@ layout(set = 0, binding = 11, std430) buffer PressureA { float pressure_a[]; };
 layout(set = 0, binding = 17, std430) readonly buffer SlotPages { uint slot_pages[]; };
 layout(set = 0, binding = 9, std430) buffer HydroHead { uint hydro_head[]; };
 layout(set = 0, binding = 8, std430) buffer PreviousVerticalVelocity { uint previous_vertical_velocity[]; };
+#ifdef DC_CACHE_PRESSURE_STENCIL
+layout(set = 1, binding = 0, std430) buffer PressureWork {uint pressure_work[];};
+#else
 layout(set = 1, binding = 0, std430) readonly buffer PressureWork {uint pressure_work[];};
+#endif
 layout(push_constant) uniform Params {
     uint width;
     uint height;
@@ -73,6 +77,41 @@ float divergence(ivec2 p) {
            velocity_at(p+ivec2(0,-1)).y*face_aperture(p,ivec2(0,-1));
 }
 
+uint stencil_base(uint index) {
+    return 4u+((params.width+15u)/16u)*((params.height+15u)/16u)+5u*index;
+}
+ivec2 stencil_delta(int axis) {
+    return axis==0?ivec2(-1,0):axis==1?ivec2(1,0):axis==2?ivec2(0,-1):ivec2(0,1);
+}
+#ifdef DC_CACHE_PRESSURE_STENCIL
+void cache_pressure_stencil(ivec2 p,uint index) {
+    uint base=stencil_base(index);float count=0.0;bool source_wet=wet(p);
+    for(int axis=0;axis<4;axis++) {
+        float weight=-1.0;ivec2 delta=stencil_delta(axis),next=p+delta;
+        if(source_wet&&open_cell(next)) {
+            float aperture=face_aperture(p,delta);count+=aperture;
+            weight=wet(next)?aperture:0.0;
+        }
+        pressure_work[base+uint(axis)]=floatBitsToUint(weight);
+    }
+    pressure_work[base+4u]=floatBitsToUint(count);
+}
+#endif
+float cached_pressure_value(ivec2 p,uint index) {
+    uint base=stencil_base(index);float sum=0.0;
+    for(int axis=0;axis<4;axis++) {
+        float weight=uintBitsToFloat(pressure_work[base+uint(axis)]);
+        if(weight>=0.0) {
+            float pressure=weight>0.0?pressure_a[index_of(p+stencil_delta(axis))]:0.0;
+            sum+=weight*pressure;
+        }
+    }
+    float count=uintBitsToFloat(pressure_work[base+4u]);
+    /* Keep divergence in the original expression: caching its rounded result
+       changes contraction and the pressure bytes on partial hydraulic faces. */
+    return count>0.0?(sum-divergence(p))/count:0.0;
+}
+
 float previous_vertical_at(ivec2 p) {
     if (p.x < 0 || p.y < 0 || p.x >= int(params.width) ||
         p.y >= int(params.height)) return 0.0;
@@ -126,6 +165,12 @@ void main() {
     }
     if (p.x >= int(params.width) || p.y >= int(params.height)) return;
     uint index = index_of(p);
+#ifdef DC_CACHE_PRESSURE_STENCIL
+    if (dispatch_mode() == 6u) {
+        cache_pressure_stencil(p,index);
+        return;
+    }
+#endif
     if (dispatch_mode() == 5u) {
         previous_vertical_velocity[index] = floatBitsToUint(face_velocity[index].y);
     } else if (dispatch_mode() == 4u) {
@@ -162,7 +207,8 @@ void main() {
     } else if (dispatch_mode() == 1u || dispatch_mode() == 2u) {
         if (((p.x + p.y) & 1) != int(dispatch_mode() - 1u)) return;
         float value = 0.0;
-        if (wet(p)) {
+        if(params.unused3!=0u) value=cached_pressure_value(p,index);
+        else if (wet(p)) {
             float sum = 0.0;
             float count = 0.0;
             for (int axis = 0; axis < 4; ++axis) {

@@ -213,7 +213,7 @@ struct dc_gpu {
     VkPipeline fluid_transport_pipelines[4];
     VkPipeline fluid_displacement_pipelines[2];
     VkPipeline fluid_phase_pipelines[13];
-    VkPipeline projection_phase_pipelines[6];
+    VkPipeline projection_phase_pipelines[7];
     VkPipeline velocity_shift_pipeline;
     uint32_t fluid_tick;
     uint32_t fluid_interval;

@@ -25,7 +25,7 @@ static void test_pressure_batches_have_exact_stencil_cache_storage(void) {
     VkMemoryRequirements requirements;
     vkGetBufferMemoryRequirements(gpu->device,gpu->pressure_work_buffer,&requirements);
     VkDeviceSize tiles=((VkDeviceSize)gpu->width+15u)/16u*((gpu->height+15u)/16u);
-    VkDeviceSize required=(4u+tiles+6u*(VkDeviceSize)gpu->width*gpu->height)*sizeof(uint32_t);
+    VkDeviceSize required=(4u+tiles+5u*(VkDeviceSize)gpu->width*gpu->height)*sizeof(uint32_t);
     bool enough=requirements.size>=required;
     dc_gpu_destroy(gpu);
     ASSERT_TRUE(enough);PASS();
@@ -113,10 +113,65 @@ static void test_water_inserted_between_pressure_batches_matches_dense_solver(vo
     }
     free(pressure_a);free(pressure_b);dc_gpu_destroy(sparse);dc_gpu_destroy(dense);PASS();
 }
+static void test_cached_stencil_matches_dense_with_partial_faces_and_mixed_terrain(void) {
+    dc_chunk_t left={0},right={0};char err[256]={0};uint32_t seed=0x684126u;
+    for(unsigned slot=0;slot<2;slot++) {
+        dc_chunk_t *chunk=slot?&right:&left;
+        for(unsigned i=0;i<DC_CHUNK_CELLS;i++) {
+            seed=seed*1664525u+1013904223u;
+            unsigned material=seed%11u;
+            chunk->cells[i].material=material==0?DC_MATERIAL_STONE:material==1?DC_MATERIAL_DIRT:
+                material==2?DC_MATERIAL_GRAVEL:material==3?DC_MATERIAL_LEAF_DEBRIS:DC_MATERIAL_AIR;
+            chunk->cells[i].fluid_mass=(seed>>7u)%65537u;
+        }
+    }
+    ASSERT_EQ(unsetenv("DC_FLUID_VARIANTS"),0);
+    dc_gpu_t *sparse=make_grid(&left,&right,err,sizeof(err));ASSERT_TRUE(sparse);
+    ASSERT_EQ(setenv("DC_FLUID_VARIANTS","generic",1),0);
+    dc_gpu_t *dense=make_grid(&left,&right,err,sizeof(err));
+    ASSERT_EQ(unsetenv("DC_FLUID_VARIANTS"),0);ASSERT_TRUE(dense);
+    size_t cells=(size_t)sparse->width*sparse->height,bytes=cells*sizeof(float);
+    void *a=malloc(bytes),*b=malloc(bytes);ASSERT_TRUE(a&&b);
+    dc_gpu_t *grids[]={sparse,dense};
+    for(unsigned grid=0;grid<2;grid++) {
+        uint32_t *occupancy=grids[grid]->occupancy_mapped;
+        dc_face_velocity_t *velocity=grids[grid]->velocity_mapped;
+        for(size_t i=0;i<cells;i++) {
+            occupancy[2*cells+i]=i%13u==0u?65536u:((uint32_t)i*499u)%65536u;
+            occupancy[3*cells+i]=((uint32_t)i*733u)%65537u;
+            occupancy[4*cells+i]=((uint32_t)i*977u)%65537u;
+            velocity[i]=(dc_face_velocity_t){((int)(i%19u)-9)/16.f,((int)(i%23u)-11)/16.f};
+        }
+    }
+    for(uint32_t mode=0;mode<6;mode++) {
+        ASSERT_TRUE(phase(sparse,mode));ASSERT_TRUE(phase(dense,mode));
+        ASSERT_TRUE(pressure_snapshot(sparse,a,err,sizeof(err)));
+        ASSERT_TRUE(pressure_snapshot(dense,b,err,sizeof(err)));
+        if(memcmp(a,b,bytes)!=0) {
+            unsigned mismatches=0;
+            for(size_t i=0;i<cells;i++) if(((uint32_t *)a)[i]!=((uint32_t *)b)[i]) {
+                if(mismatches<4) printf("stencil mode%u cell%zu cached %08x %g dense %08x %g\n",
+                    mode,i,((uint32_t *)a)[i],((float *)a)[i],((uint32_t *)b)[i],((float *)b)[i]);
+                mismatches++;
+            }
+            printf("stencil pressure mismatches%u\n",mismatches);
+        }
+        ASSERT_EQ(memcmp(a,b,bytes),0);
+        for(uint32_t slot=0;slot<2;slot++) {
+            dc_chunk_t ca,cb;
+            ASSERT_TRUE(dc_gpu_download_chunk(sparse,slot,&ca,err,sizeof(err)));
+            ASSERT_TRUE(dc_gpu_download_chunk(dense,slot,&cb,err,sizeof(err)));
+            ASSERT_EQ(memcmp(ca.cells,cb.cells,sizeof(ca.cells)),0);
+            ASSERT_EQ(memcmp(ca.face_velocity,cb.face_velocity,sizeof(ca.face_velocity)),0);
+        }
+    }
+    free(a);free(b);dc_gpu_destroy(sparse);dc_gpu_destroy(dense);PASS();
+}
 int main(void) {
     RUN(test_pressure_batches_have_exact_stencil_cache_storage);
     RUN(test_pressure_work_is_empty_then_wakes_for_local_water);
     RUN(test_water_inserted_between_pressure_batches_matches_dense_solver);
+    RUN(test_cached_stencil_matches_dense_with_partial_faces_and_mixed_terrain);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);
     return g_fail!=0;
 }

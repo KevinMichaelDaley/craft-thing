@@ -8,7 +8,8 @@ static bool error(char *err,uint32_t cap,const char *message) {
 }
 bool dc_gpu_pressure_work_init(dc_gpu_t *g,char *err,uint32_t cap) {
     VkDeviceSize tiles=((VkDeviceSize)g->width+15u)/16u*((g->height+15u)/16u);
-    VkDeviceSize bytes=(4u+tiles)*sizeof(uint32_t);
+    VkDeviceSize stencil=g->pressure_work_enabled?5u*(VkDeviceSize)g->width*g->height:0u;
+    VkDeviceSize bytes=(4u+tiles+stencil)*sizeof(uint32_t);
     if(!dc_gpu_make_mapped_buffer(g,bytes,&g->pressure_work_buffer,
         &g->pressure_work_memory,&g->pressure_work_mapped,err,cap)) return false;
     VkDescriptorSetLayoutBinding binding={0,VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,1,

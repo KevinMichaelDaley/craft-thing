@@ -184,7 +184,7 @@ CONTACT_SHADER = build/shaders/contacts.comp.spv
 PROBE_SHADER = build/shaders/tick_probe.comp.spv
 HALO_SHADER = build/shaders/halo.comp.spv
 FLUID_SHADER = build/shaders/fluid_transport_16.comp.spv build/shaders/fluid.comp.spv build/shaders/fluid_aperture.comp.spv build/shaders/fluid_transport.comp.spv build/shaders/fluid_displacement.comp.spv
-PROJECTION_SHADER = build/shaders/projection.comp.spv build/shaders/hydro_head.comp.spv build/shaders/pressure_work.comp.spv
+PROJECTION_SHADER = build/shaders/projection.comp.spv build/shaders/hydro_head.comp.spv build/shaders/pressure_work.comp.spv build/shaders/pressure_stencil.comp.spv
 MARKER_SHADER = build/shaders/marker.comp.spv
 SHIFT_SHADER = build/shaders/shift_velocity.comp.spv
 MPM_SHADER = build/shaders/mpm.comp.spv
@@ -468,6 +468,10 @@ $(MARKER_SHADER): shaders/sim/marker.comp
 build/shaders/projection.comp.spv: shaders/sim/projection.comp
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
+
+build/shaders/pressure_stencil.comp.spv: shaders/sim/projection.comp
+	@mkdir -p build/shaders
+	$(GLSLANG) -DDC_CACHE_PRESSURE_STENCIL=1 -V --target-env vulkan1.3 -S comp -o $@ $<
 
 build/shaders/hydro_head.comp.spv: shaders/sim/hydro_head.comp
 	@mkdir -p build/shaders
