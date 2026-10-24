@@ -107,6 +107,12 @@ class FireFixtureContractTests(unittest.TestCase):
         bad["scenes"]["forest_bonfire"]["primitives"][0]["rect"][0] = -1
         with self.assertRaises(ValueError): module.validate(bad)
 
+    def test_generated_physical_profiles_match_the_locked_manifest(self):
+        module, data = self.inputs()
+        generated=ROOT/"src/fire/material_profile_data.inc"
+        self.assertTrue(generated.is_file())
+        self.assertEqual(generated.read_text(),module.material_c(data))
+
 
 if __name__ == "__main__":
     unittest.main()
