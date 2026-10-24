@@ -15,6 +15,41 @@ static int g_pass,g_fail;
 #define PASS() g_pass++
 static int marker_order(const void *a,const void *b) {return memcmp(a,b,sizeof(dc_marker_t));}
 
+static void verify_metadata_commit_does_not_copy_particles(dc_gpu_t *g,const dc_chunk_t *before) {
+    char err[256]={0};
+    ASSERT_EQ(vkResetCommandBuffer(g->command,0),VK_SUCCESS);
+    VkCommandBufferBeginInfo begin={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    ASSERT_EQ(vkBeginCommandBuffer(g->command,&begin),VK_SUCCESS);
+    VkDeviceSize bytes=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_MPM_PARTICLES_PER_CHUNK*sizeof(dc_mpm_particle_t);
+    vkCmdFillBuffer(g->command,g->mpm_output_buffer,0,bytes,0u);
+    VkMemoryBarrier2 barrier={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT,.srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .dstStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .dstAccessMask=VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT};
+    VkDependencyInfo dependency={.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,.memoryBarrierCount=1,.pMemoryBarriers=&barrier};
+    vkCmdPipelineBarrier2(g->command,&dependency);
+    vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,g->pipeline_layout,0,1,&g->descriptor,0,NULL);
+    dc_gpu_record_mpm_activity(g,false);
+    vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,g->mpm_swap_commit_pipeline);
+    uint32_t push[]={g->width,g->height,5u,0u,0u,0u,0u};
+    vkCmdPushConstants(g->command,g->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
+    vkCmdDispatchIndirect(g->command,g->mpm_activity_buffer,0);
+    barrier.srcStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    barrier.srcAccessMask=VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+    barrier.dstStageMask=VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    barrier.dstAccessMask=VK_ACCESS_2_HOST_READ_BIT|VK_ACCESS_2_TRANSFER_READ_BIT;
+    vkCmdPipelineBarrier2(g->command,&dependency);
+    ASSERT_EQ(vkEndCommandBuffer(g->command),VK_SUCCESS);
+    VkSubmitInfo submit={.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,.commandBufferCount=1,.pCommandBuffers=&g->command};
+    ASSERT_EQ(vkQueueSubmit(g->queue,1,&submit,VK_NULL_HANDLE),VK_SUCCESS);
+    ASSERT_EQ(vkQueueWaitIdle(g->queue),VK_SUCCESS);
+    dc_chunk_t *after=calloc(1,sizeof(*after));ASSERT_TRUE(after);
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,after,err,sizeof(err)));
+    ASSERT_EQ(after->particle_count,0u);
+    ASSERT_EQ(memcmp(before->particles,after->particles,sizeof(before->particles)),0);
+    free(after);printf("metadata-only commit: zero authoritative particle bytes changed\n");
+}
+
 static void test_swapping_preserves_authoritative_state_across_edits_and_reload(void) {
     char err[256]={0};dc_gpu_t *grids[2]={0};
     dc_chunk_t *initial=calloc(1,sizeof(*initial)),*states[2]={calloc(1,sizeof(**states)),calloc(1,sizeof(**states))};
@@ -64,6 +99,8 @@ static void test_swapping_preserves_authoritative_state_across_edits_and_reload(
         ASSERT_TRUE(equal);
         if(frame==3||frame==7||frame==8) ASSERT_EQ(states[1]->particle_count,0u);
     }
+    verify_metadata_commit_does_not_copy_particles(grids[1],states[1]);
+    if(g_fail) return;
     for(unsigned variant=0;variant<2;variant++) {dc_gpu_destroy(grids[variant]);free(states[variant]);}
     free(initial);PASS();
 }

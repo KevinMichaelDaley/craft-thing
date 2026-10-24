@@ -160,7 +160,8 @@ bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     const char *commit=getenv("DC_MPM_COMMIT");
     if(!specialized&&commit&&strcmp(commit,"packed")==0&&
        !make_pipeline(gpu,"build/shaders/mpm.comp.spv",5u,&gpu->mpm_phase_pipelines[5],err,cap)) return false;
-    return make_pipeline(gpu,"build/shaders/mpm_active.comp.spv",UINT32_MAX,
+    return dc_gpu_mpm_swap_init(gpu,err,cap) &&
+           make_pipeline(gpu,"build/shaders/mpm_active.comp.spv",UINT32_MAX,
                          &gpu->mpm_activity_pipeline,err,cap) &&
            dc_gpu_mpm_compaction_pipeline_init(gpu,err,cap) &&
            make_pipeline(gpu,"build/shaders/mpm_component.comp.spv",UINT32_MAX,
@@ -169,6 +170,7 @@ bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
 }
 
 void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu) {
+    if(gpu->mpm_swap_commit_pipeline) vkDestroyPipeline(gpu->device,gpu->mpm_swap_commit_pipeline,NULL);
     dc_gpu_mpm_compaction_pipeline_destroy(gpu);
     for (unsigned mode = 0; mode < 38; ++mode)
         if (gpu->component_extract_pipelines[mode])
@@ -341,6 +343,7 @@ static void bind_mpm_phase(dc_gpu_t *gpu,uint32_t phase,VkPipeline *bound) {
 }
 
 void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu) {
+    dc_gpu_mpm_swap_descriptors(gpu);
     dc_gpu_record_components(gpu, false);
     uint32_t push[7] = {gpu->width, gpu->height, 0u, 0u, 0u, 0u, 0u};
     VkPipeline bound=VK_NULL_HANDLE;
@@ -356,7 +359,10 @@ void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu) {
         for (uint32_t mode = 0; mode < DC_MPM_MODES; ++mode) {
             if(gpu->mpm_fused_grid&&mode==1u) continue;
             push[2] = mode;
-            bind_mpm_phase(gpu,mode,&bound);
+            if(gpu->mpm_swap_buffers&&mode==5u) {
+                vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->mpm_swap_commit_pipeline);
+                bound=gpu->mpm_swap_commit_pipeline;
+            } else bind_mpm_phase(gpu,mode,&bound);
             vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                                VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push),
                                push);
@@ -364,6 +370,11 @@ void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu) {
             mpm_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                         VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
                             VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+            if(gpu->mpm_swap_buffers&&mode==5u) {
+                VkDescriptorSet next=(step&1u)?gpu->descriptor:gpu->mpm_swapped_descriptor;
+                vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
+                    gpu->pipeline_layout,0,1,&next,0,NULL);
+            }
             if (mode == 1u) {
                 push[2] = DC_MPM_WATER_FEEDBACK_MODE;
                 bind_mpm_phase(gpu,DC_MPM_WATER_FEEDBACK_MODE,&bound);

@@ -9,6 +9,7 @@ layout(constant_id=1) const bool GATHER_STENCIL_ENABLED=false;
 layout(constant_id=2) const uint MPM_PHASE=0xffffffffu;
 layout(constant_id=3) const bool EARLY_PARTICLE_LOADS=false;
 layout(constant_id=4) const bool FUSED_GRID_NODES=false;
+layout(constant_id=5) const bool COMMIT_PARTICLE_COPY=true;
 
 struct Particle {
     int x_fp, y_fp, vx_fp, vy_fp;
@@ -556,8 +557,10 @@ void commit_cell(ivec2 cell) {
     Particle second = output_particles[secondary];
     uint new_count = uint(first.mass_fp != 0u) + uint(second.mass_fp != 0u);
 #ifndef DC_MPM_COALESCED_COMMIT
-    particles[primary] = first;
-    particles[secondary] = second;
+    if(COMMIT_PARTICLE_COPY) {
+        particles[primary] = first;
+        particles[secondary] = second;
+    }
 #endif
     if (new_count != old_count)
         atomicAdd(particle_counts[page_at(cell) - 1u], uint(int(new_count) - int(old_count)));

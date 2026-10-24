@@ -1,4 +1,6 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#include "mpm_particle_mirror.glsl"
 layout(local_size_x = 8, local_size_y = 8) in;
 
 layout(set = 0, binding = 1, std430) buffer ChunkCells { uvec2 chunk_cells[]; };
@@ -124,10 +126,12 @@ void resolve_transfer() {
         if (particles[source_second].mass_fp != 0u) {
             particles[source_particle] = particles[source_second];
             particles[source_second].mass_fp = 0u;
+            mpm_forget_output(source_second);
             source_cell.x = (source_cell.x & 0xffff0000u) |
                             particles[source_particle].material;
         } else {
             particles[source_particle].mass_fp = 0u;
+            mpm_forget_output(source_particle);
             source_cell.x = 0u;
         }
         atomicAdd(particle_counts[source_slot], uint(-1));

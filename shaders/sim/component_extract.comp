@@ -4,6 +4,7 @@
 #extension GL_KHR_shader_subgroup_arithmetic : require
 #include "rigid_body.glsl"
 #include "../../include/dungeoncraft/terrain_flags.h"
+#include "mpm_particle_mirror.glsl"
 layout(local_size_x=128) in;
 layout(constant_id=0) const uint EXTRACTION_PHASE=0u;
 layout(set=0,binding=1,std430) buffer Cells { uvec2 cells[]; };
@@ -541,6 +542,7 @@ void main() {
                 uint particle=i/4096u*8192u+i%4096u;
                 for(uint layer=0u;layer<2u;layer++) {
                     uint p=particle+layer*4096u;
+                    mpm_forget_output(p);
                     if(particles[p].mass_fp!=0u) {particles[p].mass_fp=0u;atomicAdd(particle_counts[i/4096u],uint(-1));}
                 }
                 cells[i].x=0u;terrain_colors[i]=vec4(0);

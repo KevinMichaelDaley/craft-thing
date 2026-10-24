@@ -66,6 +66,9 @@ GLSLANG ?= glslangValidator
 
 GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/broadphase_gpu.o build/contact_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
 GPU_OBJ += build/runtime_body_gpu.o build/runtime_geometry_gpu.o build/body_address_gpu.o build/body_storage_gpu.o
+GPU_OBJ += build/mpm_swap_gpu.o
+build/mpm_swap_gpu.o: src/vulkan/mpm_swap_gpu.c src/vulkan/gpu_internal.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/runtime_geometry_gpu.o: src/vulkan/runtime_geometry_gpu.c src/vulkan/runtime_body_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/runtime_body_gpu.o: src/vulkan/runtime_body_gpu.c src/vulkan/runtime_body_gpu.h src/vulkan/body_storage_gpu.h
@@ -1531,6 +1534,8 @@ build/contact_shader_contract_tests: build/shaders/contacts_pixel.comp.spv
 build/mpm_swap_tests: tests/vulkan/mpm_swap_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/particle_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/mpm_swap_tests
+
+$(SHADER) $(HALO_SHADER) $(MPM_COMPONENT_SHADER) build/shaders/component_extract.comp.spv build/shaders/structural.comp.spv build/shaders/structural_carve.comp.spv: shaders/sim/mpm_particle_mirror.glsl
 build/diagnostics/pixel_boundary_probe.spv: shaders/sim/rigid_clip.glsl shaders/sim/rigid_shape.glsl tests/vulkan/rigid_clip_reference.glsl
 
 build/solver_contact_start_tests: tests/vulkan/solver_contact_start_tests.c tests/vulkan/solver_motion_store_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_motion_profile.comp.spv

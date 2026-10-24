@@ -70,9 +70,9 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         .bindingCount = 36, .pBindings = bindings };
     if (vkCreateDescriptorSetLayout(gpu->device, &layout_info, NULL, &gpu->set_layout) != VK_SUCCESS)
         return error(err, cap, "Cannot create descriptor layout");
-    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 36 };
+    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 72 };
     VkDescriptorPoolCreateInfo pool_info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .maxSets = 1, .poolSizeCount = 1, .pPoolSizes = &size };
+        .maxSets = 2, .poolSizeCount = 1, .pPoolSizes = &size };
     if (vkCreateDescriptorPool(gpu->device, &pool_info, NULL, &gpu->descriptor_pool) != VK_SUCCESS)
         return error(err, cap, "Cannot create descriptor pool");
     VkDescriptorSetAllocateInfo set_info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -80,6 +80,8 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         .pSetLayouts = &gpu->set_layout };
     if (vkAllocateDescriptorSets(gpu->device, &set_info, &gpu->descriptor) != VK_SUCCESS)
         return error(err, cap, "Cannot allocate descriptor set");
+    if(vkAllocateDescriptorSets(gpu->device,&set_info,&gpu->mpm_swapped_descriptor)!=VK_SUCCESS)
+        return error(err,cap,"Cannot allocate alternating particle descriptors");
     VkDeviceSize terrain_colors=dc_gpu_color_terrain_bytes(),bank_colors=dc_gpu_color_bank_bytes(gpu);
     VkDescriptorBufferInfo buffers[36] = {
         { gpu->cells, 0, bytes },

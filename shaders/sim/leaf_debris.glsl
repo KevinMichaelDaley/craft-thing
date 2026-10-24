@@ -1,6 +1,7 @@
 /* Leaf emission cooperates across the workgroup. Particle slots are reserved
  * before remnant publication and released if that transaction cannot commit. */
 const uint LEAF_RESERVATION=0x80000000u;
+#include "mpm_particle_mirror.glsl"
 #include "leaf_color.glsl"
 shared uint leaf_changed;
 vec2 leaf_position(Body source,uint pixel) {
@@ -90,7 +91,7 @@ void leaf_finish(Body source,bool committed) {
         uint label=DC_FRAGMENT_LABEL(pixel);
         if(label==0xffffffffu||(label&LEAF_RESERVATION)==0u) continue;
         uint p=(label&~LEAF_RESERVATION)-1u;
-        if(!committed) {debris_particles[p].mass_fp=0u;continue;}
+        if(!committed) {debris_particles[p].mass_fp=0u;mpm_forget_output(p);continue;}
         vec2 position=leaf_position(source,pixel);
         ivec2 cell=ivec2(floor(position));
         uint slot=p/8192u,c=slot*4096u+p%4096u;

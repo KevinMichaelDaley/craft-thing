@@ -464,6 +464,10 @@ void dc_gpu_marker_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_markers(dc_gpu_t *gpu);
 bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+/** Prepare the metadata-only commit variant without allocating another particle pool. */
+bool dc_gpu_mpm_swap_init(dc_gpu_t *gpu,char *err,uint32_t cap);
+/** Mirror immutable descriptors and exchange only the two existing particle bindings. */
+void dc_gpu_mpm_swap_descriptors(dc_gpu_t *gpu);
 void dc_gpu_mpm_buffers_destroy(dc_gpu_t *gpu);
 void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_mpm(dc_gpu_t *gpu);

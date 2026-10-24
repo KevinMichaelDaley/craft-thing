@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #define DC_RUNTIME_ROOT_READONLY 1
 #include "../../include/dungeoncraft/terrain_flags.h"
+#include "mpm_particle_mirror.glsl"
 layout(constant_id=1) const bool DRAW_PIXEL_ONLY=false;
 layout(constant_id=2) const bool DRAW_SIMPLE=false;
 #define DC_RIGID_PIXEL_ONLY DRAW_PIXEL_ONLY
@@ -278,6 +279,7 @@ void main() {
                            ? material : params.color == 3u ? 0u : params.color;
                 bool new_grain = material == 2u || material == 4u || material == 5u || material == 6u || material == 10u;
                 if (!new_grain) {
+                    mpm_forget_output(particle_index);mpm_forget_output(secondary_index);
                     if (particles[particle_index].mass_fp != 0u) {
                         particles[particle_index].mass_fp = 0u;
                         atomicAdd(particle_counts[slot], uint(-1));
@@ -291,6 +293,7 @@ void main() {
                         particles[secondary_index].mass_fp != 0u) {
                         particles[particle_index] = particles[secondary_index];
                         particles[secondary_index].mass_fp = 0u;
+                        mpm_forget_output(secondary_index);
                     }
                     if (particles[particle_index].mass_fp == 0u) {
                         Particle particle;
@@ -315,6 +318,7 @@ void main() {
                             particles[particle_index].f01=particles[particle_index].f10=0.;
                             if(particles[secondary_index].mass_fp!=0u) {
                                 particles[secondary_index].mass_fp=0u;
+                                mpm_forget_output(secondary_index);
                                 atomicAdd(particle_counts[slot],uint(-1));
                             }
                         }

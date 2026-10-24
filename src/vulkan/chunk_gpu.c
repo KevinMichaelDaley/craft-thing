@@ -199,6 +199,7 @@ bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
         vkCmdCopyBuffer(gpu->command,
             upload ? gpu->particle_staging_buffer : gpu->particle_buffer,
             upload ? gpu->particle_buffer : gpu->particle_staging_buffer, 1, &region);
+        if(upload) vkCmdCopyBuffer(gpu->command,gpu->particle_staging_buffer,gpu->mpm_output_buffer,1,&region);
     }
     VkMemoryBarrier2 after = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,

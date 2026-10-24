@@ -432,6 +432,9 @@ bool dc_gpu_clear_fluid_scratch(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkBuffer buffers[4] = {gpu->fluid_a_buffer, gpu->fluid_b_buffer,
                            gpu->pressure_a_buffer, gpu->fluid_previous_buffer};
     for (unsigned i = 0; i < 4; i++) vkCmdFillBuffer(gpu->command, buffers[i], 0, bytes, 0);
+    VkDeviceSize particle_bytes=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_MPM_PARTICLES_PER_CHUNK*sizeof(dc_mpm_particle_t);
+    vkCmdFillBuffer(gpu->command,gpu->mpm_output_buffer,0,particle_bytes,0);
+    vkCmdFillBuffer(gpu->command,gpu->particle_buffer,0,particle_bytes,0);
     VkMemoryBarrier2 barrier = {.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
