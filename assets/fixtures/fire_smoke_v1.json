@@ -1,0 +1,173 @@
+{
+  "schema": 1,
+  "revision": "fire-smoke-acceptance-1",
+  "view": [480, 270],
+  "simulation": [640, 448],
+  "halo_cells": 64,
+  "clock": {
+    "rigid_tick_seconds": [1, 60],
+    "rigid_substeps": 8,
+    "jacobi_iterations": 8,
+    "mpm_substeps": 2,
+    "gravity_cells_per_second2": 900,
+    "maximum_rigid_cells_per_second": 240,
+    "reaction_interval": "accepted level simulation seconds, once per interval; zero on presentation-only frames",
+    "energy_unit": "game energy; mass in water-cell mass units, temperature in kelvin, heat capacities in game energy per mass-kelvin",
+    "ambient_temperature_K": 293.15,
+    "water_vaporization_temperature_K": 373.15,
+    "water_latent_heat_per_mass": 2260
+  },
+  "acceptance": {
+    "frame_budget_ms": 30,
+    "consecutive_runs": 2,
+    "measured_frames": 1000,
+    "warmup_frames": 8,
+    "first_second_coverage_fraction_max": 0.25,
+    "smoke_coverage_opacity": 0.2,
+    "flame_coverage_linear_emission": 0.1,
+    "mass_fixed_point_tolerance_units": 4,
+    "energy_relative_tolerance": 0.0001,
+    "gas_pressure_relative_reference_tolerance": 0.01,
+    "gas_advection_cfl_max": 0.5,
+    "baseline_scene": "assets/props/level_piece03.prop/asset.cprop",
+    "baseline_air_brush": [225, 42, 5],
+    "baseline_world_rigid_sha256": "07115a01c9e50c90b946529ca89a3d31fd0e37a699b08bc1b20c1bd7571a12f8"
+  },
+  "material_fields": {
+    "fuel_yields": ["char", "ash", "soot", "exhaust_from_fuel"],
+    "oxygen_accounting": "additional oxidizer mass is credited to exhaust; yields partition the reacted fuel mass only",
+    "heat_accounting": "primary heat plus char yield times char chemical energy cannot exceed source chemical energy",
+    "status": "synthetic locked reference parameters, not measured SI material data"
+  },
+  "materials": [
+    {"id":0,"name":"air","density":0.0012,"heat_capacity":1,"conductivity":0.02,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"fuel_yields":[0,0,0,1]},
+    {"id":1,"name":"stone","density":2.7,"heat_capacity":0.8,"conductivity":1.5,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"fuel_yields":[0,0,0,1]},
+    {"id":2,"name":"sand","density":2.65,"heat_capacity":0.8,"conductivity":0.3,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"fuel_yields":[0,0,0,1]},
+    {"id":3,"name":"water","density":1,"heat_capacity":4.18,"conductivity":0.6,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"fuel_yields":[0,0,0,1]},
+    {"id":4,"name":"dirt","density":1.2,"heat_capacity":1,"conductivity":0.4,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"fuel_yields":[0,0,0,1]},
+    {"id":5,"name":"gravel","density":2.7,"heat_capacity":0.8,"conductivity":0.5,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"fuel_yields":[0,0,0,1]},
+    {"id":6,"name":"mortar_debris","density":1.6,"heat_capacity":0.9,"conductivity":0.6,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"fuel_yields":[0,0,0,1]},
+    {"id":7,"name":"wood","density":0.6,"heat_capacity":1.5,"conductivity":0.12,"fuel_fraction":1,"ignition_K":600,"hazard_per_second":1,"surface_burn_per_second":0.002,"chemical_energy":8000,"primary_heat":6000,"oxygen_per_fuel":1.2,"fuel_yields":[0.25,0.05,0.08,0.62]},
+    {"id":8,"name":"dense_wood","density":1.2,"heat_capacity":1.5,"conductivity":0.15,"fuel_fraction":1,"ignition_K":620,"hazard_per_second":0.8,"surface_burn_per_second":0.0015,"chemical_energy":8000,"primary_heat":6000,"oxygen_per_fuel":1.2,"fuel_yields":[0.25,0.05,0.08,0.62]},
+    {"id":9,"name":"leaves","density":0.2,"heat_capacity":1.2,"conductivity":0.05,"fuel_fraction":1,"ignition_K":500,"hazard_per_second":2,"surface_burn_per_second":0.008,"chemical_energy":5300,"primary_heat":4500,"oxygen_per_fuel":1,"fuel_yields":[0.1,0.1,0.12,0.68]},
+    {"id":10,"name":"leaf_debris","density":0.2,"heat_capacity":1.2,"conductivity":0.05,"fuel_fraction":1,"ignition_K":500,"hazard_per_second":2,"surface_burn_per_second":0.008,"chemical_energy":5300,"primary_heat":4500,"oxygen_per_fuel":1,"fuel_yields":[0.1,0.1,0.12,0.68]},
+    {"id":11,"name":"coal","density":1.3,"heat_capacity":1,"conductivity":0.3,"fuel_fraction":1,"ignition_K":750,"hazard_per_second":0.7,"surface_burn_per_second":0.003,"chemical_energy":12000,"primary_heat":11200,"oxygen_per_fuel":1.4,"fuel_yields":[0.1,0.08,0.05,0.77]},
+    {"id":12,"name":"char","density":0.35,"heat_capacity":1,"conductivity":0.08,"fuel_fraction":1,"ignition_K":550,"hazard_per_second":0.8,"surface_burn_per_second":0.003,"chemical_energy":8000,"primary_heat":8000,"oxygen_per_fuel":1.5,"fuel_yields":[0,0.1,0.02,0.88]},
+    {"id":13,"name":"ash","density":0.25,"heat_capacity":0.9,"conductivity":0.04,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"fuel_yields":[0,0,0,1]},
+    {"id":14,"name":"oil","density":1.1,"heat_capacity":2,"conductivity":0.12,"fuel_fraction":1,"ignition_K":520,"hazard_per_second":3,"surface_burn_per_second":0.004,"chemical_energy":10000,"primary_heat":10000,"oxygen_per_fuel":1.5,"fuel_yields":[0,0.02,0.15,0.83]},
+    {"id":15,"name":"red_slime_jelly","density":1.3,"heat_capacity":2.5,"conductivity":0.2,"fuel_fraction":0.4,"ignition_K":900,"hazard_per_second":0.1,"surface_burn_per_second":0.001,"chemical_energy":16000,"primary_heat":16000,"oxygen_per_fuel":0.4,"bound_oxidizer_fraction":0.6,"fuel_yields":[0,0.05,0.1,0.85]},
+    {"id":16,"name":"greek_fire","density":1.2,"heat_capacity":2,"conductivity":0.18,"fuel_fraction":0.7,"ignition_K":480,"hazard_per_second":5,"surface_burn_per_second":0.012,"chemical_energy":16000,"primary_heat":16000,"oxygen_per_fuel":0.4,"bound_oxidizer_fraction":0.3,"water_dousing_cancels_reaction":false,"fuel_yields":[0,0.08,0.12,0.8]},
+    {"id":17,"name":"corrosion_residue","density":2.4,"heat_capacity":0.8,"conductivity":0.3,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"fuel_yields":[0,0,0,1]},
+    {"id":18,"name":"gold","density":19.3,"heat_capacity":0.13,"conductivity":3,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"greek_corrosion_product":"corrosion_residue","fuel_yields":[0,0,0,1]},
+    {"id":19,"name":"magic_ingredient","density":0.7,"heat_capacity":1.2,"conductivity":0.1,"fuel_fraction":0.5,"ignition_K":650,"hazard_per_second":0.5,"surface_burn_per_second":0.003,"chemical_energy":6000,"primary_heat":6000,"oxygen_per_fuel":1,"greek_corrosion_product":"ash","fuel_yields":[0,0.4,0.1,0.5]}
+  ],
+  "reaction_controls": {
+    "wet_capacity_per_mass":0.5,
+    "ordinary_wet_hazard_factor_at_full_saturation":0.001,
+    "ordinary_extinguish_oxygen_mass_fraction":0.12,
+    "ambient_oxygen_mass_fraction":0.21,
+    "oil_coating_hazard_factor_at_full_coverage":3,
+    "shock_energy_to_heat_fraction":1,
+    "oil_jelly_mix_mass_fractions":[0.5,0.5],
+    "oil_yield_stress":4,
+    "oil_consistency":2,
+    "oil_shear_exponent":0.6,
+    "jelly_yield_stress":12,
+    "jelly_consistency":4,
+    "jelly_shear_exponent":0.5,
+    "sludge_softening_temperature_K":360,
+    "hot_yield_stress_multiplier":0.1,
+    "cold_film_adhesion_energy_per_mass":8,
+    "hot_film_adhesion_energy_per_mass":3,
+    "greek_corrosion_rate_per_second":0.04
+  },
+  "scenes": {
+    "forest_bonfire": {
+      "seed":5370425,
+      "duration_seconds":180,
+      "wind_controls_cells_per_second":[[0,0],[-1,0],[1,0]],
+      "warmth_probe":[249,202],
+      "warmth_temperature_K_range":[298.15,318.15],
+      "warmth_begin_seconds":20,
+      "warmth_end_seconds":120,
+      "cleared_boundary":[196,176,76,34],
+      "ignition":{"center":[228,204],"radius":4,"energy":12000,"start_seconds":0},
+      "primitives":[
+        {"rect":[0,210,480,60],"material":"stone","role":1},
+        {"rect":[214,207,32,3],"material":"stone","role":1},
+        {"rect":[214,199,3,11],"material":"stone","role":1},
+        {"rect":[243,199,3,11],"material":"stone","role":1},
+        {"rect":[220,203,16,4],"material":"wood","role":1,"object":1},
+        {"rect":[218,202,22,1],"material":"wood","role":1,"object":1},
+        {"rect":[224,200,1,3],"material":"wood","role":1,"object":1},
+        {"rect":[232,200,1,3],"material":"wood","role":1,"object":1},
+        {"rect":[88,154,4,56],"material":"wood","role":1,"object":2},
+        {"circle":[90,150,16],"material":"leaves","role":1,"object":2},
+        {"rect":[143,160,4,50],"material":"wood","role":1,"object":3},
+        {"circle":[145,156,16],"material":"leaves","role":1,"object":3},
+        {"rect":[308,158,4,52],"material":"wood","role":1,"object":4},
+        {"circle":[310,154,16],"material":"leaves","role":1,"object":4},
+        {"rect":[368,154,4,56],"material":"wood","role":1,"object":5,"wetness":0.95},
+        {"circle":[370,150,16],"material":"leaves","role":1,"object":5,"wetness":0.95}
+      ],
+      "variants": {
+        "dry_bridge":[{"rect":[236,202,76,2],"material":"wood","role":1,"object":6}],
+        "broken_ring":[{"rect":[243,199,3,8],"material":"air","role":0}]
+      }
+    },
+    "coal_siege": {
+      "seed":112347,
+      "duration_seconds":60,
+      "wall":[154,150,8,80],
+      "wall_loss_fraction":[0.1,0.35],
+      "wet_control_saturation":0.95,
+      "pivot":[104,188],
+      "arm_length":36,
+      "initial_arm_angle_rad":-0.83,
+      "spring_release_seconds":2,
+      "release":{"position":[104,148],"velocity_cells_per_second":[210,0],"angular_crossing_rad":0,"projectile_radius":4,"criterion":"measure real release at angular crossing; never assign target position or velocity"},
+      "initial_states":[{"object":25,"temperature_K":1000,"ignited":true}],
+      "state_variants":{"cold_projectile":[{"object":25,"temperature_K":293.15,"ignited":false}]},
+      "impact_target_seconds_after_release_range":[0.2,0.3],
+      "primitives":[
+        {"rect":[0,230,480,40],"material":"stone","role":1},
+        {"rect":[154,150,8,80],"material":"wood","role":1,"object":10},
+        {"rect":[76,222,48,8],"material":"stone","role":2,"object":20},
+        {"rect":[84,198,4,24],"material":"wood","role":2,"object":21},
+        {"rect":[116,198,4,24],"material":"wood","role":2,"object":22},
+        {"rect":[84,188,36,4],"material":"wood","role":2,"object":23},
+        {"rect":[102,152,4,36],"material":"wood","role":3,"object":24},
+        {"circle":[104,148,4],"material":"coal","role":3,"object":25}
+      ],
+      "variants": {
+        "wet_wall":[{"rect":[154,150,8,80],"material":"wood","role":1,"object":10,"wetness":0.95}],
+        "cold_projectile":[{"circle":[104,148,4],"material":"coal","role":3,"object":25}]
+      }
+    },
+    "greek_siege": {
+      "inherits":"coal_siege",
+      "seed":991397,
+      "duration_seconds":60,
+      "matched_fuel_mass":16,
+      "bound_oxidizer_mass":6.857142857142857,
+      "delayed_launch_seconds":10,
+      "minimum_launcher_ignitions":48,
+      "risk_seeds":[991397,991398,991399,991400,991401,991402,991403,991404,991405,991406,991407,991408,991409,991410,991411,991412,991413,991414,991415,991416,991417,991418,991419,991420,991421,991422,991423,991424,991425,991426,991427,991428,991429,991430,991431,991432,991433,991434,991435,991436,991437,991438,991439,991440,991441,991442,991443,991444,991445,991446,991447,991448,991449,991450,991451,991452,991453,991454,991455,991456,991457,991458,991459,991460],
+      "maximum_oil_relative_depletion_time":0.5,
+      "dousing":{"start_seconds":3,"duration_seconds":12,"volume_per_second":8},
+      "submersion":{"start_seconds":3,"duration_seconds":10,"depth_cells":8},
+      "primitives":[
+        {"circle":[104,148,4],"material":"greek_fire","role":3,"object":25},
+        {"rect":[178,185,3,45],"material":"wood","role":1,"object":30},
+        {"circle":[179,180,12],"material":"leaves","role":1,"object":30},
+        {"rect":[188,202,6,12],"material":"wood","role":3,"object":31},
+        {"rect":[198,226,4,4],"material":"gold","role":3,"object":32},
+        {"rect":[208,226,4,4],"material":"magic_ingredient","role":3,"object":33}
+      ],
+      "variants": {
+        "ordinary_oil":[{"circle":[104,148,4],"material":"oil","role":3,"object":25}],
+        "shielded_carrier":[{"rect":[98,150,12,2],"material":"stone","role":3,"object":26}]
+      }
+    }
+  }
+}

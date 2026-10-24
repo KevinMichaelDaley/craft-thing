@@ -1,8 +1,4 @@
 CC ?= cc
-.PHONY: test_fire_fixtures
-test_fire_fixtures:
-	python3 -m py_compile tests/fire/fixture_contract_tests.py
-	python3 tests/fire/fixture_contract_tests.py
 build/appearance_tests: tests/renderer/appearance_tests.c src/renderer/appearance.c include/ferrum/renderer/appearance.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/renderer/appearance_tests.c src/renderer/appearance.c -o $@ -lm
@@ -1623,3 +1619,9 @@ build/transport_options_tests: tests/vulkan/transport_options_tests.c $(GPU_OBJ)
 test: test_transport_options
 test_transport_options: build/transport_options_tests
 	./build/transport_options_tests
+
+.PHONY: test_fire_fixtures
+test: test_fire_fixtures
+test_fire_fixtures:
+	python3 -m py_compile tests/fire/fixture_contract_tests.py tools/diagnostics/fire_fixture.py
+	python3 tests/fire/fixture_contract_tests.py
