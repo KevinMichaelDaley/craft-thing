@@ -47,6 +47,7 @@ layout(set = 0, binding = 4, std430) buffer Bodies {
     uint data[];
 };
 #endif
+#include "solver_contact_metadata.glsl"
 uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 layout(push_constant) uniform Params {
     uint width, height, mode, body_count;
@@ -162,12 +163,12 @@ Body contact_body(uint i) {
 }
 vec2 anchor(uint p) {
     int x, y;
-    if (!relative_chunk(uvec2(DC_SOLVER_DATA(p), DC_SOLVER_DATA(p + 1u)), params.origin_x, x) ||
-        !relative_chunk(uvec2(DC_SOLVER_DATA(p + 2u), DC_SOLVER_DATA(p + 3u)), params.origin_y, y)) {
+    if (!relative_chunk(uvec2(DC_CONTACT_DATA(p), DC_CONTACT_DATA(p + 1u)), params.origin_x, x) ||
+        !relative_chunk(uvec2(DC_CONTACT_DATA(p + 2u), DC_CONTACT_DATA(p + 3u)), params.origin_y, y)) {
         atomicOr(DC_DATA(sb() + 3u), 2u);
         return vec2(0);
     }
-    return vec2(x, y) * 64.0 + vec2(int(DC_SOLVER_DATA(p + 4u)), int(DC_SOLVER_DATA(p + 5u))) / 65536.0;
+    return vec2(x, y) * 64.0 + vec2(int(DC_CONTACT_DATA(p + 4u)), int(DC_CONTACT_DATA(p + 5u))) / 65536.0;
 }
 void add_correction(uint i, vec2 linear, float angular) {
     if (i == BODY_CAPACITY)
@@ -222,15 +223,15 @@ vec2 contact_start_anchor(uint slot,Body body,vec2 local) {
 #include "rigid_grain.glsl"
 #include "grain_bed.glsl"
 void solve_contact(uint i, bool impulse) {
-    uint c = cb() + 12u + i * 32u, s = cs(i), a = DC_SOLVER_DATA(s + 2u), b = DC_SOLVER_DATA(s + 3u);
+    uint c = cb() + 12u + i * 32u, s = cs(i), a = DC_CONTACT_DATA(s + 2u), b = DC_CONTACT_DATA(s + 3u);
     if (a == BODY_CAPACITY)
         return;
     Body ba = contact_body(a);
-    vec2 ra = body_rotate(getv(s + 4u), ba.angle), rb = getv(s + 6u);
-    vec2 pa = position(ba) + ba.center + ra, pb = getv(s + 9u);
+    vec2 ra = body_rotate(contact_getv(s + 4u), ba.angle), rb = contact_getv(s + 6u);
+    vec2 pa = position(ba) + ba.center + ra, pb = contact_getv(s + 9u);
     vec2 va = velocity(ba) + ba.angular_velocity * vec2(-ra.y, ra.x), vb = vec2(0);
     uint grain_ref=grain_reference(c);
-    float creep=getf(s+12u);
+    float creep=contact_getf(s+12u);
     float mb = 0.0, ib = 0.0;
     if(grain_ref!=0u) {
         Particle p=particles[grain_ref-1u];
@@ -239,7 +240,7 @@ void solve_contact(uint i, bool impulse) {
         mb=p.mass_fp!=0u?65536.0/float(p.mass_fp):0.0;
         if(creep>=0.0) {
             mb=0.0;
-            pb+=getf(s+13u)*getv(c+8u);
+            pb+=contact_getf(s+13u)*contact_getv(c+8u);
             pb.y+=creep*DT;vb.y=creep;
         }
     }
@@ -251,45 +252,45 @@ void solve_contact(uint i, bool impulse) {
         mb = bb.inverse_mass;
         ib = bb.inverse_inertia;
     }
-    vec2 n = getv(c + 8u), t = vec2(-n.y, n.x);
+    vec2 n = contact_getv(c + 8u), t = vec2(-n.y, n.x);
     float an = body_cross(ra, n), bn = body_cross(rb, n), at = body_cross(ra, t),
           bt = body_cross(rb, t);
     float wn = ba.inverse_mass + mb + ba.inverse_inertia * an * an + ib * bn * bn;
     float wt = ba.inverse_mass + mb + ba.inverse_inertia * at * at + ib * bt * bt;
     if (wn <= 0.0)
         return;
-    float scale = weight(a, b,(grain_ref!=0u&&creep<0.0)||DC_SOLVER_DATA(s+11u)==0u), dn = 0.0, dt = 0.0;
+    float scale = weight(a, b,(grain_ref!=0u&&creep<0.0)||DC_CONTACT_DATA(s+11u)==0u), dn = 0.0, dt = 0.0;
     if(grain_ref!=0u) scale=min(scale,0.8/float(max(grain_scratch[(grain_ref-1u)*4u+3u],1u)));
     if (impulse) {
-        if (dot(pa - pb, n) > 1.0 / 65536.0 && getf(s) == 0.0)
+        if (dot(pa - pb, n) > 1.0 / 65536.0 && contact_getf(s) == 0.0)
             return;
-        float pre = getf(s + 8u), target = pre < -0.5 ? -getf(c + 12u) * pre : 0.0;
+        float pre = contact_getf(s + 8u), target = pre < -0.5 ? -contact_getf(c + 12u) * pre : 0.0;
         dn = max(0.0, (target - dot(va - vb, n)) / wn) * scale;
-        float limit = getf(c + 11u) * (getf(s) / DT + dn);
+        float limit = contact_getf(c + 11u) * (contact_getf(s) / DT + dn);
         if (wt > 0.0)
             dt = clamp(-dot(va - vb, t) / wt, -limit, limit) * scale;
     } else {
-        float alpha = creep>=0.0?0.0:getf(c + 13u) / (DT * DT), lambda = getf(s);
+        float alpha = creep>=0.0?0.0:contact_getf(c + 13u) / (DT * DT), lambda = contact_getf(s);
         dn = (max(0.0, lambda + (-dot(pa - pb, n) - alpha * lambda) / (wn + alpha)) - lambda) *
              scale;
-        putf(s, lambda + dn);
-        vec2 start_a = CACHE_CONTACT_STARTS?getv(s+14u):contact_start_anchor(a,ba,getv(s+4u));
-        vec2 start_b = getv(s + 9u);
+        contact_putf(s, lambda + dn);
+        vec2 start_a = CACHE_CONTACT_STARTS?contact_getv(s+14u):contact_start_anchor(a,ba,contact_getv(s+4u));
+        vec2 start_b = contact_getv(s + 9u);
         if (b != BODY_CAPACITY)
             start_b =
-                CACHE_CONTACT_STARTS?getv(s+9u):contact_start_anchor(b,DC_BODY(b),getv(s+6u));
+                CACHE_CONTACT_STARTS?contact_getv(s+9u):contact_start_anchor(b,DC_BODY(b),contact_getv(s+6u));
         float tangent_error = dot((pa - start_a) - (pb - start_b), t);
-        float lt = getf(s + 1u), limit = getf(c + 11u) * max(0.0, lambda + dn);
+        float lt = contact_getf(s + 1u), limit = contact_getf(c + 11u) * max(0.0, lambda + dn);
         if (wt > 0.0)
             dt = (clamp(lt - tangent_error / wt, -limit, limit) - lt) * scale;
-        putf(s + 1u, lt + dt);
+        contact_putf(s + 1u, lt + dt);
     }
     if(SKIP_ZERO_REDUCTIONS&&dn==0.0&&dt==0.0) return;
     vec2 force = dn * n + dt * t;
     vec2 applied_impulse=force/(impulse?1.0:DT);
-    float incoming=getf(s+8u),normal_impulse=max(dn,0)/(impulse?1.0:DT);
-    impact_capture(a,b,DC_DATA(c+5u),DC_DATA(c+6u),n,incoming,normal_impulse,wn,getf(c+12u));
-    impact_capture(b,a,DC_DATA(c+6u),DC_DATA(c+5u),-n,incoming,normal_impulse,wn,getf(c+12u));
+    float incoming=contact_getf(s+8u),normal_impulse=max(dn,0)/(impulse?1.0:DT);
+    impact_capture(a,b,DC_DATA(c+5u),DC_DATA(c+6u),n,incoming,normal_impulse,wn,contact_getf(c+12u));
+    impact_capture(b,a,DC_DATA(c+6u),DC_DATA(c+5u),-n,incoming,normal_impulse,wn,contact_getf(c+12u));
     structural_capture(a,b,pa,applied_impulse);
     structural_capture(b,a,pb,-applied_impulse);
     if(any(greaterThan(abs(vec3(ba.inverse_mass*force,ba.inverse_inertia*(an*dn+at*dt))),vec3(2))))
@@ -335,36 +336,36 @@ void main() {
         uint c = cb() + 12u + i * 32u, s = cs(i), a = slot(DC_DATA(c)), b = slot(DC_DATA(c + 1u));
         /* Cold start each regenerated manifold; retain multipliers within its iterations. */
         for (uint k = 0u; k < 16u; ++k)
-            DC_SOLVER_DATA(s + k) = 0u;
-        DC_SOLVER_DATA(s + 2u) = a;
-        DC_SOLVER_DATA(s + 3u) = b;
+            DC_CONTACT_DATA(s + k) = 0u;
+        DC_CONTACT_DATA(s + 2u) = a;
+        DC_CONTACT_DATA(s + 3u) = b;
         if (a == BODY_CAPACITY)
             return;
         Body ba = contact_body(a);
         vec2 pa = anchor(c + 16u), pb = anchor(c + 22u);
         vec2 ra = pa - position(ba) - ba.center;
-        putv(s + 4u, body_rotate(ra, -ba.angle));
-        putv(s + 9u, pb);
-        putv(s+14u,contact_start_anchor(a,ba,getv(s+4u)));
+        contact_putv(s + 4u, body_rotate(ra, -ba.angle));
+        contact_putv(s + 9u, pb);
+        contact_putv(s+14u,contact_start_anchor(a,ba,contact_getv(s+4u)));
         vec2 va = velocity(ba) + ba.angular_velocity * vec2(-ra.y, ra.x), vb = vec2(0);
-        vec2 normal=getv(c+8u);
-        DC_SOLVER_DATA(s+11u)=uint(dot(pa-pb,normal)<=1.0/65536.0);
+        vec2 normal=contact_getv(c+8u);
+        DC_CONTACT_DATA(s+11u)=uint(dot(pa-pb,normal)<=1.0/65536.0);
         if(dot(pa-pb,normal)<=REST_CONTACT_DISTANCE && normal.y<-.5)
             atomicOr(DC_SOLVER_DATA(bs(a)+REST_FLAGS_WORD),REST_SUPPORTED);
         uint grain_ref=grain_reference(c);
         float creep=grain_ref!=0u&&normal.y<-.5?grain_bed_creep(ba,c,grain_ref):-1.0;
-        putf(s+12u,creep);
+        contact_putf(s+12u,creep);
         if(creep>=0.0) {
             /* Existing granular overlap represents the loaded bed's rest
                configuration. Resist new compression without lifting the body
                out of that configuration and letting grains ratchet beneath it. */
-            vec2 start=contact_start_anchor(a,ba,getv(s+4u));
-            putf(s+13u,min(dot(start-pb,normal),0.0));
+            vec2 start=contact_start_anchor(a,ba,contact_getv(s+4u));
+            contact_putf(s+13u,min(dot(start-pb,normal),0.0));
         }
         bool moving=grain_ref!=0u&&creep<0.0;
         if(grain_ref!=0u) {
             Particle p=particles[grain_ref-1u];
-            putv(s+6u,pb-grain_position(c,grain_ref-1u));
+            contact_putv(s+6u,pb-grain_position(c,grain_ref-1u));
             vb=vec2(p.vx_fp,p.vy_fp)/65536.0;
             atomicAdd(grain_scratch[(grain_ref-1u)*4u+3u],1u);
         }
@@ -377,14 +378,14 @@ void main() {
             float body_weight=ba.inverse_mass+ba.inverse_inertia*arm*arm;
             float grain_weight=65536.0/float(particles[grain_ref-1u].mass_fp);
             degree=body_weight/(body_weight+grain_weight);
-        } else if(DC_SOLVER_DATA(s+11u)==0u) degree=0.0;
+        } else if(DC_CONTACT_DATA(s+11u)==0u) degree=0.0;
         atomicAdd(DC_SOLVER_DATA(bs(a) + 12u),1u);
         atomicAdd(DC_SOLVER_DATA(bs(a) + 20u),uint(round(degree*SUM_SCALE)));
         if (b != BODY_CAPACITY) {
             Body bb = contact_body(b);
             vec2 rb = pb - position(bb) - bb.center;
-            putv(s + 6u, body_rotate(rb, -bb.angle));
-            putv(s+9u,contact_start_anchor(b,bb,getv(s+6u)));
+            contact_putv(s + 6u, body_rotate(rb, -bb.angle));
+            contact_putv(s+9u,contact_start_anchor(b,bb,contact_getv(s+6u)));
             vb = velocity(bb) + bb.angular_velocity * vec2(-rb.y, rb.x);
             if(dot(pa-pb,normal)<=REST_CONTACT_DISTANCE && normal.y>.5)
                 atomicOr(DC_SOLVER_DATA(bs(b)+REST_FLAGS_WORD),REST_SUPPORTED);
@@ -398,7 +399,7 @@ void main() {
             atomicOr(DC_SOLVER_DATA(bs(a)+REST_FLAGS_WORD),REST_MOVING_CONTACT);
             if(b!=BODY_CAPACITY) atomicOr(DC_SOLVER_DATA(bs(b)+REST_FLAGS_WORD),REST_MOVING_CONTACT);
         }
-        putf(s + 8u, dot(va - vb, getv(c + 8u)));
+        contact_putf(s + 8u, dot(va - vb, contact_getv(c + 8u)));
         return;
     }
     if (i >= params.body_count)

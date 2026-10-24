@@ -47,15 +47,18 @@ static void test_solver_reads_dynamic_layout_once_and_matches_uncached_after_gro
             exact=exact&&memcmp(dc_gpu_body_record(g[0],slot),dc_gpu_body_record(g[1],slot),sizeof(dc_gpu_body_record_t))==0;
     }
     unsigned queries[2]={counts[0][0],counts[1][0]},invocations[2]={counts[0][1],counts[1][1]};
+    unsigned tagged_contacts[2]={counts[0][2],counts[1][2]};
     printf("solver metadata reads%u/%u -> %u/%u invocations, exact bodies%d\n",
         queries[0],invocations[0],queries[1],invocations[1],exact);
+    printf("generic contact metadata resolutions%u -> %u\n",tagged_contacts[0],tagged_contacts[1]);
     for(unsigned variant=0;variant<2;variant++) {
         vkUnmapMemory(g[variant]->device,memory[variant]);vkDestroyBuffer(g[variant]->device,buffer[variant],NULL);
         vkFreeMemory(g[variant]->device,memory[variant],NULL);dc_gpu_destroy(g[variant]);
     }
     ASSERT_TRUE(exact);ASSERT_TRUE(invocations[0]>0&&invocations[1]>0);
     ASSERT_EQ(invocations[0],invocations[1]);ASSERT_TRUE(queries[0]>2u*invocations[0]);
-    ASSERT_TRUE(queries[1]<=2u*invocations[1]);PASS();
+    ASSERT_TRUE(queries[1]<=2u*invocations[1]);
+    ASSERT_TRUE(tagged_contacts[0]>0u);ASSERT_EQ(tagged_contacts[1],0u);PASS();
 }
 int main(void) {RUN(test_solver_reads_dynamic_layout_once_and_matches_uncached_after_growth);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;}

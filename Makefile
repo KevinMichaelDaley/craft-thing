@@ -1508,7 +1508,7 @@ build/diagnostics/solver_capacity_profile.spv: shaders/sim/rigid_solver.comp $(w
 	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -DDC_SOLVER_CAPACITY_PROFILE=1 -V --target-env vulkan1.3 -S comp -o $@ $<
 build/diagnostics/solver_capacity_reference.spv: shaders/sim/rigid_solver.comp $(wildcard shaders/sim/*.glsl)
 	@mkdir -p build/diagnostics
-	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -DDC_SOLVER_CAPACITY_PROFILE=1 -DDC_SOLVER_CAPACITY_CACHE=0 -V --target-env vulkan1.3 -S comp -o $@ $<
+	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -DDC_SOLVER_CAPACITY_PROFILE=1 -DDC_SOLVER_CAPACITY_CACHE=0 -DDC_SOLVER_DIRECT_CONTACTS=0 -V --target-env vulkan1.3 -S comp -o $@ $<
 build/solver_capacity_tests: tests/vulkan/solver_capacity_tests.c tests/vulkan/rigid_solver_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_capacity_profile.spv build/diagnostics/solver_capacity_reference.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/solver_capacity_tests
