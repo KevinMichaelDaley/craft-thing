@@ -6,7 +6,7 @@
 #define DC_RUNTIME_ROOT_READONLY 1
 #include "rigid_body.glsl"
 #ifndef DC_SOLVER_CAPACITY_CACHE
-#define DC_SOLVER_CAPACITY_CACHE 0
+#define DC_SOLVER_CAPACITY_CACHE 1
 #endif
 #ifdef DC_SOLVER_CAPACITY_PROFILE
 layout(set=0,binding=31,std430) restrict buffer CapacityProfile {uint capacity_profile[];};
