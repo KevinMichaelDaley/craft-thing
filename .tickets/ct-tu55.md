@@ -198,3 +198,7 @@ Inline progress: visible physics/render are1:1 at480x270;640x448 includes simula
 **2026-10-23T22:41:30Z**
 
 Inline displayed saved-scene progress: reusable rigid command streams improved mean to32.408ms; MPM/fluid command streams now reused with exact CPU command-hash tests, parameter/resource invalidation and sync-validated loose-grain behavior. Hydrostatic transform reuse halves evaluations and preserves all exact heads (including721-row columns), displayed32.186ms. Compact GPU grain-bed work list preserves every support-graph float bit against dense reference,3/3 tests with synchronization validation, and improves real Wayland60-frame saved scene to30.702ms mean35.493ms worst. Four paused captures identical. Target<30ms remains unmet; now testing smaller contact solver workgroups without changing physics iterations/cadence/resolution or introducing body limits.
+
+**2026-10-24T00:24:53Z**
+
+Displayed GPU/API trace isolates warm delays to compute (not pipeline creation/allocation/acquire/present). Visible simulation/render are 480x270 1:1; 640x448 includes chunk-rounded offscreen simulation halo. Dirty extraction bounds/release costs ~1.5-2ms. Implementing sufficient-boundary-anchor proof to bypass already-rejected component statistics while retaining unknown-component diagnostics and original physical behavior. Normal displayed <30ms target remains unmet.

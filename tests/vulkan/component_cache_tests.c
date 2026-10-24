@@ -63,7 +63,26 @@ static void test_reductions_keep_adjacent_subgroup_components_and_materials_dist
     }
     dc_gpu_destroy(g);free(chunk);PASS();
 }
+static void test_boundary_ground_skips_candidate_bounds_work(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    for(unsigned y=32;y<64;y++) for(unsigned x=0;x<64;x++)
+        chunk->cells[y*64+x].material=DC_MATERIAL_STONE;
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_EQ(((uint32_t *)g->runtime_bodies->work.mapped)[49],1u);
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+    unsigned count=0;for(unsigned i=0;i<4096;i++) count+=chunk->cells[i].material==DC_MATERIAL_STONE;
+    ASSERT_EQ(count,2048u);
+    ASSERT_TRUE(dc_gpu_paint_material(g,20,40,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_EQ(((uint32_t *)g->runtime_bodies->work.mapped)[49],1u);
+    dc_gpu_destroy(g);free(chunk);PASS();
+}
 int main(void) {
+    RUN(test_boundary_ground_skips_candidate_bounds_work);
     RUN(test_unchanged_membership_reuses_chunk_components_and_edits_invalidate);
     RUN(test_cached_component_detaches_immediately_when_its_bridge_is_cut);
     RUN(test_reductions_keep_adjacent_subgroup_components_and_materials_distinct);
