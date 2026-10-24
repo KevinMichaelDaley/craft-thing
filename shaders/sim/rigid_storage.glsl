@@ -4,7 +4,11 @@
 #extension GL_EXT_buffer_reference_uvec2 : require
 #include "../../include/dungeoncraft/body_storage_layout.h"
 
+#ifdef DC_RUNTIME_ROOT_READONLY
+layout(buffer_reference,std430,buffer_reference_align=16) restrict buffer BodyStorageRecords {Body records[];};
+#else
 layout(buffer_reference,std430,buffer_reference_align=16) buffer BodyStorageRecords {Body records[];};
+#endif
 #ifdef DC_RUNTIME_ROOT_READONLY
 layout(buffer_reference,std430,buffer_reference_align=8) readonly restrict buffer BodyStorageDirectory {BodyStoragePage pages[];};
 layout(buffer_reference,std430,buffer_reference_align=4) readonly restrict buffer BodyStorageGeometry {uint words[];};
