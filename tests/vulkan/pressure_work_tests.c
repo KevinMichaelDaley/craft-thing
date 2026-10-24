@@ -23,9 +23,9 @@ static void test_pressure_batches_have_exact_stencil_cache_storage(void) {
     dc_gpu_t *gpu=make_grid(&left,&right,err,sizeof(err));
     ASSERT_TRUE(gpu);
     VkMemoryRequirements requirements;
-    vkGetBufferMemoryRequirements(gpu->device,gpu->pressure_work_buffer,&requirements);
-    VkDeviceSize tiles=((VkDeviceSize)gpu->width+15u)/16u*((gpu->height+15u)/16u);
-    VkDeviceSize required=(4u+tiles+5u*(VkDeviceSize)gpu->width*gpu->height)*sizeof(uint32_t);
+    ASSERT_TRUE(gpu->pressure_stencil_buffer!=VK_NULL_HANDLE);
+    vkGetBufferMemoryRequirements(gpu->device,gpu->pressure_stencil_buffer,&requirements);
+    VkDeviceSize required=4u*(VkDeviceSize)gpu->width*gpu->height*sizeof(uint32_t);
     bool enough=requirements.size>=required;
     dc_gpu_destroy(gpu);
     ASSERT_TRUE(enough);PASS();

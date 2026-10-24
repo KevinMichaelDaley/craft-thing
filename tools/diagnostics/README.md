@@ -12,7 +12,7 @@ access paths before and after dynamic queue growth. GPU counters verify two
 layout-capacity queries per invocation and no generic tagged address decoding
 for known contact and body-state accesses. This does not limit body capacity.
 
-Pressure batches cache five words of terrain/face coefficients per cell, while
+Pressure batches cache four device-only words of terrain/face coefficients per cell, while
 retaining the original divergence expression and every red/black sweep. The
 cache refreshes at each batch so intervening brush edits are respected. The
 `pressure_work_tests` fixture compares pressure, velocity and cell bytes against

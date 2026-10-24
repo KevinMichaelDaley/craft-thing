@@ -8,17 +8,20 @@ static bool error(char *err,uint32_t cap,const char *message) {
 }
 bool dc_gpu_pressure_work_init(dc_gpu_t *g,char *err,uint32_t cap) {
     VkDeviceSize tiles=((VkDeviceSize)g->width+15u)/16u*((g->height+15u)/16u);
-    VkDeviceSize stencil=g->pressure_work_enabled?5u*(VkDeviceSize)g->width*g->height:0u;
-    VkDeviceSize bytes=(4u+tiles+stencil)*sizeof(uint32_t);
+    VkDeviceSize bytes=(4u+tiles)*sizeof(uint32_t);
+    VkDeviceSize stencil_bytes=4u*(VkDeviceSize)g->width*g->height*sizeof(uint32_t);
     if(!dc_gpu_make_mapped_buffer(g,bytes,&g->pressure_work_buffer,
         &g->pressure_work_memory,&g->pressure_work_mapped,err,cap)) return false;
-    VkDescriptorSetLayoutBinding binding={0,VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,1,
-        VK_SHADER_STAGE_COMPUTE_BIT,NULL};
+    if(g->pressure_work_enabled&&!dc_gpu_make_device_buffer(g,stencil_bytes,
+        &g->pressure_stencil_buffer,&g->pressure_stencil_memory,err,cap)) return false;
+    VkDescriptorSetLayoutBinding binding[]={
+        {0,VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,1,VK_SHADER_STAGE_COMPUTE_BIT,NULL},
+        {1,VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,1,VK_SHADER_STAGE_COMPUTE_BIT,NULL}};
     VkDescriptorSetLayoutCreateInfo set={.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount=1,.pBindings=&binding};
+        .bindingCount=2,.pBindings=binding};
     if(vkCreateDescriptorSetLayout(g->device,&set,NULL,&g->pressure_work_set_layout)!=VK_SUCCESS)
         return error(err,cap,"Cannot create pressure work descriptor layout");
-    VkDescriptorPoolSize size={VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,1};
+    VkDescriptorPoolSize size={VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,2};
     VkDescriptorPoolCreateInfo pool={.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .maxSets=1,.poolSizeCount=1,.pPoolSizes=&size};
     if(vkCreateDescriptorPool(g->device,&pool,NULL,&g->pressure_work_pool)!=VK_SUCCESS)
@@ -27,11 +30,14 @@ bool dc_gpu_pressure_work_init(dc_gpu_t *g,char *err,uint32_t cap) {
         .descriptorPool=g->pressure_work_pool,.descriptorSetCount=1,.pSetLayouts=&g->pressure_work_set_layout};
     if(vkAllocateDescriptorSets(g->device,&alloc,&g->pressure_work_descriptor)!=VK_SUCCESS)
         return error(err,cap,"Cannot allocate pressure work descriptor");
-    VkDescriptorBufferInfo buffer={g->pressure_work_buffer,0,bytes};
-    VkWriteDescriptorSet write={.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet=g->pressure_work_descriptor,.descriptorCount=1,
-        .descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&buffer};
-    vkUpdateDescriptorSets(g->device,1,&write,0,NULL);
+    VkDescriptorBufferInfo buffers[]={{g->pressure_work_buffer,0,bytes},
+        {g->pressure_work_enabled?g->pressure_stencil_buffer:g->pressure_work_buffer,0,
+         g->pressure_work_enabled?stencil_bytes:bytes}};
+    VkWriteDescriptorSet writes[2]={0};
+    for(unsigned i=0;i<2;i++) writes[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet=g->pressure_work_descriptor,.dstBinding=i,.descriptorCount=1,
+        .descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=buffers+i};
+    vkUpdateDescriptorSets(g->device,2,writes,0,NULL);
     g->descriptor_revision++;
     VkDescriptorSetLayout sets[]={g->set_layout,g->pressure_work_set_layout};
     VkPushConstantRange range={VK_SHADER_STAGE_COMPUTE_BIT,0,32};
@@ -64,6 +70,8 @@ void dc_gpu_pressure_work_destroy(dc_gpu_t *g) {
     if(g->pressure_work_mapped) vkUnmapMemory(g->device,g->pressure_work_memory);
     if(g->pressure_work_buffer) vkDestroyBuffer(g->device,g->pressure_work_buffer,NULL);
     if(g->pressure_work_memory) vkFreeMemory(g->device,g->pressure_work_memory,NULL);
+    if(g->pressure_stencil_buffer) vkDestroyBuffer(g->device,g->pressure_stencil_buffer,NULL);
+    if(g->pressure_stencil_memory) vkFreeMemory(g->device,g->pressure_stencil_memory,NULL);
 }
 static void barrier(dc_gpu_t *g) {
     VkMemoryBarrier2 memory={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,

@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
                "descriptor layout"))
         return 2;
     VkDescriptorSetLayout work_layout;
-    descriptor.bindingCount = 1;
+    descriptor.bindingCount = 2;
     if (!check(vkCreateDescriptorSetLayout(p.device, &descriptor, NULL,
                                            &work_layout), "work descriptor layout"))
         return 2;

@@ -19,3 +19,7 @@ Pressure coefficient cache consumes no mapped allocation relative to the dense r
 **2026-10-24T07:57:52Z**
 
 RED: cached128x64 solver maps62382764 bytes versus62218924 for dense reference; focused test fails zero additional mapped-memory requirement. Full native UI19/1 and quarter172/1 each fail the unchanged mapped-memory assertion; wet scene89.026MiB mapped and107.196MiB device. All other native checks pass.
+
+**2026-10-24T08:04:56Z**
+
+GREEN exact aperture-bit packing in separate device-only storage: focused5/5 with actual sync validation, noVUID/hazard; mapped cache and dense solver allocations match. Full graphical material fixture3/3:83.557MiB mapped and111.571MiB device, satisfying original thresholds. Reused identically flagged quarter GPU objects for this visual target; DC_STRUCTURAL_PRESENTATION_TEST is test-source-only.

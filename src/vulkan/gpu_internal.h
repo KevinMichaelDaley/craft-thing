@@ -202,6 +202,8 @@ struct dc_gpu {
     VkPipeline projection_pipeline;
     VkBuffer pressure_work_buffer;
     VkDeviceMemory pressure_work_memory;
+    VkBuffer pressure_stencil_buffer;
+    VkDeviceMemory pressure_stencil_memory;
     void *pressure_work_mapped;
     VkDescriptorSetLayout pressure_work_set_layout;
     VkDescriptorPool pressure_work_pool;

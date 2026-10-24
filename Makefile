@@ -835,8 +835,8 @@ build/structural_submerged_load_tests: tests/structural/submerged_load_tests.c t
 test_ui test_quarter_native: build/structural_demo_controls_tests
 test: build/structural_submerged_load_tests
 
-build/structural_material_visual_tests: tests/structural/material_visual_tests.c tests/structural/placement_tests.c Makefile $(GPU_SRC) src/world/chunk.c build/quarter_native_solver_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DDC_STRUCTURAL_PRESENTATION_TEST $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+build/structural_material_visual_tests: tests/structural/material_visual_tests.c tests/structural/placement_tests.c Makefile $(PERFORMANCE_OBJ) $(RENDERER_SHADERS) build/dungeoncraft_quarter_native
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DDC_STRUCTURAL_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 
 test_ui test_quarter_native: build/structural_material_visual_tests
 test_quarter_native: build/quarter_native_structural_submerged_load_tests
