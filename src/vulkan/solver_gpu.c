@@ -255,16 +255,18 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
         vkCmdDispatchIndirect(gpu->command, gpu->body_buffer, offset);
     } else
         vkCmdDispatch(gpu->command, 1, 1, 1);
+    bool publish_indirect=!gpu->runtime_body_consumers||phase==SOLVER_PREPARE||
+        phase==SOLVER_GRAIN_BED_PLAN||phase==SOLVER_GRAIN_BED_PUBLISH;
     VkMemoryBarrier2 barrier = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT |
-                        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT |
+                        (publish_indirect ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : 0) |
                         (phase == SOLVER_FINISH ? VK_PIPELINE_STAGE_2_HOST_BIT : 0),
         .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
                          VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
-                         VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT |
+                         (publish_indirect ? VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT : 0) |
                          (phase == SOLVER_FINISH ? VK_ACCESS_2_HOST_READ_BIT : 0)};
     VkDependencyInfo dep = {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
                             .memoryBarrierCount = 1,
