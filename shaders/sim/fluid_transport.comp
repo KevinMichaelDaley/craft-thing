@@ -362,6 +362,9 @@ void main() {
     line_open_aperture=params.unused1!=0u&&aperture_tree[16448u+line*2u*params.unused1+1u]==FULL;
     uint any_water=0u;
     for(uint position=gl_SubgroupInvocationID;position<min(length,CACHE_CELLS);position+=transport_team_size()) {
+#ifdef DC_DRY_LINE_PROFILE
+        atomicAdd(transport_profile[7],1u);
+#endif
         ivec2 p=point_at(position);uint page=page_at(p);uvec4 value=uvec4(0);
         if(page!=0u) {
             uint index=uint(p.y)*params.width+uint(p.x);uvec2 cell=chunk_cells[atlas_index(p,page)];
