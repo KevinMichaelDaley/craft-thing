@@ -166,6 +166,8 @@ $(GPU_OBJ): $(SOLVER_SHADER)
 $(SOLVER_SHADER): shaders/sim/rigid_solver.comp shaders/sim/rigid_body.glsl shaders/sim/structural_load.glsl shaders/sim/rigid_bonds.glsl shaders/sim/structural_bonds.glsl shaders/sim/rigid_bond_budget.glsl
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+
+$(SOLVER_SHADER) build/diagnostics/solver_motion_profile.comp.spv: shaders/sim/solver_contact_metadata.glsl shaders/sim/solver_body_state.glsl
 build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_bench build/dungeoncraft_quarter_native build/marker_slot_tests build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench: $(SOLVER_SHADER)
 
 build/solver_gpu.o: src/vulkan/solver_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
@@ -1508,7 +1510,7 @@ build/diagnostics/solver_capacity_profile.spv: shaders/sim/rigid_solver.comp $(w
 	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -DDC_SOLVER_CAPACITY_PROFILE=1 -V --target-env vulkan1.3 -S comp -o $@ $<
 build/diagnostics/solver_capacity_reference.spv: shaders/sim/rigid_solver.comp $(wildcard shaders/sim/*.glsl)
 	@mkdir -p build/diagnostics
-	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -DDC_SOLVER_CAPACITY_PROFILE=1 -DDC_SOLVER_CAPACITY_CACHE=0 -DDC_SOLVER_DIRECT_CONTACTS=0 -V --target-env vulkan1.3 -S comp -o $@ $<
+	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -DDC_SOLVER_CAPACITY_PROFILE=1 -DDC_SOLVER_CAPACITY_CACHE=0 -DDC_SOLVER_DIRECT_CONTACTS=0 -DDC_SOLVER_DIRECT_BODY_STATE=0 -V --target-env vulkan1.3 -S comp -o $@ $<
 build/solver_capacity_tests: tests/vulkan/solver_capacity_tests.c tests/vulkan/rigid_solver_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_capacity_profile.spv build/diagnostics/solver_capacity_reference.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/solver_capacity_tests
