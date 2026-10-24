@@ -168,6 +168,10 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     gpu->fluid_step_scale = 1.0f;
     for (uint32_t i = 0; i < DC_GPU_CHUNK_SLOTS; ++i) gpu->slot_page[i] = UINT32_MAX;
     if (window_width && window_height) {
+        const char *wayland=getenv("WAYLAND_DISPLAY");
+        if(wayland&&*wayland&&!SDL_GetHint(SDL_HINT_VIDEODRIVER)&&
+           !(SDL_WasInit(SDL_INIT_VIDEO)&SDL_INIT_VIDEO))
+            SDL_SetHint(SDL_HINT_VIDEODRIVER,"wayland");
         if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
             error(err, cap, SDL_GetError()); goto fail;
         }

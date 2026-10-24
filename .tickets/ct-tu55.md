@@ -214,3 +214,7 @@ New default exact water optimizations: recompute unique recipient requests to re
 **2026-10-24T01:12:12Z**
 
 Normal material-placement application (not the query profiler), DC_FRAME_TIMINGS=1 host-stage diagnostics only, Wayland+Vulkan saved-scene fresh copy:500 measured frames mean25.371ms worst29.124ms, all500under30ms, four paused captures identical. Worst frame input0.088ms prepare0.002 paint0.001 present29.017 title0.045. No physics cadence/resolution/material/geometry reduction; dynamic body count retained. Fixed broad-suite fixture sizing and enabled proper reset/profile capture for partial-grid contact work: MPM compaction7/7 and pixel-world8/8 explicit core+sync validation clean. Final full/default, UI and quarter regression running serially before another ordinary no-instrumentation displayed repeat.
+
+**2026-10-24T07:45:52Z**
+
+Inline checkpoint: ordinary real-time Wayland saved-scene500-frame mean32.414ms /worst38.887ms after exact solver address-domain changes. Optional combined MPM/grain/zero-reduction paths31.587ms mean /43.411ms worst, still fail strict30ms. No resolution/iteration/geometry reduction. Full headless run reports628 passes, two known authored-stage failures (ctr-ojvy), and one missed-brush latency outlier5.684ms vs3ms; isolated miss recheck2.577ms passes with one submission. Native UI and quarter suites ongoing; frame target remains unfinished.
