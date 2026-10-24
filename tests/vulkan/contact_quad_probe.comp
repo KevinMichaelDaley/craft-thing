@@ -3,6 +3,7 @@
 #include "rigid_body.glsl"
 const bool CONTACT_PIXEL_ONLY=true;
 uint contact_dynamic_iterations=0u;
+uint contact_axis_invocations=0u;
 #define DC_CONTACT_PROFILE 1
 #include "contact_geometry.glsl"
 #include "contact_geometry_reference.glsl"
@@ -14,13 +15,14 @@ Polygon quad(vec2 low,float angle,float size) {
     for(uint v=0u;v<4u;v++) p.vertices[v]=low+body_rotate(p.vertices[v]*size,angle);
     return p;
 }
-void main() {
-    for(uint id=gl_GlobalInvocationID.x;id<32768u;id+=128u) {
-    Polygon a=quad(vec2(-.375,.125),float(id%31u)*.103,.5+float(id%5u)*.25);
-    Polygon b=quad(vec2(int((id/31u)%17u)-8,int((id/527u)%17u)-8)*.25,float((id/7u)%29u)*-.117,.75);
+Polygon rectangle(vec2 low,vec2 size) {
+    Polygon p=cell_polygon(low);
+    for(uint vertex=0u;vertex<4u;vertex++) p.vertices[vertex]=low+(p.vertices[vertex]-low)*size;
+    return p;
+}
+bool matches_reference(Polygon a,Polygon b) {
     vec2 n,rn;float d,rd;
     bool expected=reference_polygon_contact(a,b,rn,rd);
-    contact_dynamic_iterations=0u;
     bool actual=polygon_contact(a,b,n,d);
     bool exact=actual==expected;
     if(actual&&expected) {
@@ -30,21 +32,32 @@ void main() {
         contact_witnesses(a,b,n,pa,pb,fa,fb);
         exact=exact&&all(equal(floatBitsToUint(pa),floatBitsToUint(ra)))&&all(equal(floatBitsToUint(pb),floatBitsToUint(rb)))&&fa==rfa&&fb==rfb;
     }
-    atomicAdd(results[0],exact?0u:1u);atomicAdd(results[1],1u);
-    atomicMax(results[2],contact_dynamic_iterations);
-    a.count=5u;
-    for(uint vertex=0u;vertex<5u;vertex++) {
-        float angle=float(vertex)*1.2566370614359172+float(id%31u)*.103;
-        a.vertices[vertex]=vec2(-.375,.125)+vec2(cos(angle),sin(angle));
-    }
-    expected=reference_polygon_contact(a,b,rn,rd);actual=polygon_contact(a,b,n,d);
-    exact=actual==expected;
-    if(actual&&expected) {
-        exact=exact&&all(equal(floatBitsToUint(n),floatBitsToUint(rn)))&&floatBitsToUint(d)==floatBitsToUint(rd);
-        vec2 pa,pb,ra,rb;uint fa,fb,rfa,rfb;
-        reference_contact_witnesses(a,b,rn,ra,rb,rfa,rfb);contact_witnesses(a,b,n,pa,pb,fa,fb);
-        exact=exact&&all(equal(floatBitsToUint(pa),floatBitsToUint(ra)))&&all(equal(floatBitsToUint(pb),floatBitsToUint(rb)))&&fa==rfa&&fb==rfb;
-    }
-    atomicAdd(results[3],exact?0u:1u);atomicAdd(results[4],1u);
+    return exact;
+}
+void main() {
+    for(uint id=gl_GlobalInvocationID.x;id<32768u;id+=128u) {
+        float angle=float(id%31u)*.103;
+        Polygon a=quad(vec2(-.375,.125),angle,.5+float(id%5u)*.25);
+        vec2 low=vec2(int((id/31u)%17u)-8,int((id/527u)%17u)-8)*.25;
+        Polygon b=quad(low,float((id/7u)%29u)*-.117,.75);
+        contact_dynamic_iterations=0u;
+        atomicAdd(results[0],uint(!matches_reference(a,b)));atomicAdd(results[1],1u);
+        atomicMax(results[2],contact_dynamic_iterations);
+        a.count=5u;
+        for(uint vertex=0u;vertex<5u;vertex++) {
+            float phase=float(vertex)*1.2566370614359172+angle;
+            a.vertices[vertex]=vec2(-.375,.125)+vec2(cos(phase),sin(phase));
+        }
+        atomicAdd(results[3],uint(!matches_reference(a,b)));atomicAdd(results[4],1u);
+        vec2 offset=vec2(float(int((id/1024u)%3u)-1)*256.,float(int((id/256u)%3u)-1)*512.);
+        a=quad(offset+vec2(-.375,.125),angle,.5+float(id%5u)*.25);
+        b=rectangle(offset+low+vec2(float(id%11u)/65536.),
+            vec2(float(4096u+id%65000u)/65536.,float(4096u+(id*7u)%65000u)/65536.));
+        contact_axis_invocations=0u;
+        atomicAdd(results[5],uint(!matches_reference(a,b)));atomicAdd(results[6],1u);
+        atomicMax(results[7],contact_axis_invocations);
+        a=rectangle(offset+vec2(-.375,.125),vec2(.75,.625));contact_axis_invocations=0u;
+        atomicAdd(results[8],uint(!matches_reference(a,b)));atomicAdd(results[9],1u);
+        atomicMax(results[10],contact_axis_invocations);
     }
 }

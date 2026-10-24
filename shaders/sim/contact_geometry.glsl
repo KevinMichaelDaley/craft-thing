@@ -56,6 +56,9 @@ vec2 project_polygon(Polygon polygon, vec2 axis) {
 }
 
 bool contact_axis(Polygon a, Polygon b, vec2 edge, inout vec2 normal, inout float depth) {
+#ifdef DC_CONTACT_PROFILE
+    contact_axis_invocations++;
+#endif
     vec2 axis = normalize(vec2(-edge.y, edge.x));
     vec2 pa = project_polygon(a, axis), pb = project_polygon(b, axis);
     float positive = pb.y - pa.x, negative = pa.y - pb.x;
