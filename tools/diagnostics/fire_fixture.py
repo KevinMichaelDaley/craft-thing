@@ -39,6 +39,19 @@ def validate(data):
     if not 0<=controls["ordinary_extinguish_oxygen_mass_fraction"]<controls["ambient_oxygen_mass_fraction"]<=1:
         raise ValueError("Invalid oxygen thresholds")
     profiles = data["materials"]
+    named={p["name"]:p for p in profiles}
+    mix=controls["oil_jelly_mix_mass_fractions"]
+    if len(mix)!=2 or any(v<0 for v in mix) or abs(sum(mix)-1)>1e-8:
+        raise ValueError("Invalid oil/jelly recipe proportions")
+    ingredients=[named["oil"],named["red_slime_jelly"]]
+    input_fuel=sum(w*p["fuel_fraction"] for w,p in zip(mix,ingredients))
+    input_oxidizer=sum(w*p.get("bound_oxidizer_fraction",0) for w,p in zip(mix,ingredients))
+    input_energy=sum(w*p["fuel_fraction"]*p["chemical_energy"] for w,p in zip(mix,ingredients))
+    compound=named["greek_fire"]
+    if abs(input_fuel-compound["fuel_fraction"])>1e-8 or abs(input_oxidizer-compound["bound_oxidizer_fraction"])>1e-8:
+        raise ValueError("Compound mixing creates/destroys fuel or oxidizer")
+    if compound["fuel_fraction"]*compound["chemical_energy"]>input_energy+1e-6:
+        raise ValueError("Compound mixing creates chemical energy")
     ids = {p["id"] for p in profiles}
     names = {p["name"] for p in profiles}
     if len(ids) != len(profiles) or len(names) != len(profiles):

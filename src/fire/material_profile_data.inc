@@ -130,7 +130,7 @@ static const fr_reactive_profile_t profiles[] = {
      .fuel_yields={0.0f,0.05f,0.1f,0.85f}},
     {.material=16u,.legacy_body_material=0u,.phase=FR_REACTIVE_LIQUID,.flags=5u,
      .density=1.2f,.heat_capacity=2.0f,.conductivity=0.18f,.ignition_K=480.0f,
-     .hazard_per_second=5.0f,.fuel_fraction=0.7f,.chemical_energy=16000.0f,.primary_heat=16000.0f,
+     .hazard_per_second=5.0f,.fuel_fraction=0.7f,.chemical_energy=11714.2857f,.primary_heat=11714.2857f,
      .oxygen_per_fuel=0.4f,.surface_burn_per_second=0.012f,.bound_oxidizer_fraction=0.3f,.electrical_conductivity=0.03f,
      .moisture_capacity=0.0f,.oxidized_hazard_scale=1.0f,.greek_corrosion_susceptibility=0.0f,.saturated_hazard_factor=0.001f,
      .oil_hazard_factor=3.0f,.yield_stress=8.0f,.consistency=3.0f,.shear_exponent=0.55f,

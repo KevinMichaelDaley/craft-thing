@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "fire-smoke-acceptance-1",
+  "revision": "fire-smoke-acceptance-2-energy-conservation",
   "view": [480, 270],
   "simulation": [640, 448],
   "halo_cells": 64,
@@ -56,7 +56,7 @@
     {"id":13,"name":"ash","density":0.25,"heat_capacity":0.9,"conductivity":0.04,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"fuel_yields":[0,0,0,1]},
     {"id":14,"name":"oil","density":1.1,"heat_capacity":2,"conductivity":0.12,"fuel_fraction":1,"ignition_K":520,"hazard_per_second":3,"surface_burn_per_second":0.004,"chemical_energy":10000,"primary_heat":10000,"oxygen_per_fuel":1.5,"fuel_yields":[0,0.02,0.15,0.83]},
     {"id":15,"name":"red_slime_jelly","density":1.3,"heat_capacity":2.5,"conductivity":0.2,"fuel_fraction":0.4,"ignition_K":900,"hazard_per_second":0.1,"surface_burn_per_second":0.001,"chemical_energy":16000,"primary_heat":16000,"oxygen_per_fuel":0.4,"bound_oxidizer_fraction":0.6,"fuel_yields":[0,0.05,0.1,0.85]},
-    {"id":16,"name":"greek_fire","density":1.2,"heat_capacity":2,"conductivity":0.18,"fuel_fraction":0.7,"ignition_K":480,"hazard_per_second":5,"surface_burn_per_second":0.012,"chemical_energy":16000,"primary_heat":16000,"oxygen_per_fuel":0.4,"bound_oxidizer_fraction":0.3,"water_dousing_cancels_reaction":false,"fuel_yields":[0,0.08,0.12,0.8]},
+    {"id":16,"name":"greek_fire","density":1.2,"heat_capacity":2,"conductivity":0.18,"fuel_fraction":0.7,"ignition_K":480,"hazard_per_second":5,"surface_burn_per_second":0.012,"chemical_energy":11714.285714285714,"primary_heat":11714.285714285714,"oxygen_per_fuel":0.4,"bound_oxidizer_fraction":0.3,"water_dousing_cancels_reaction":false,"fuel_yields":[0,0.08,0.12,0.8]},
     {"id":17,"name":"corrosion_residue","density":2.4,"heat_capacity":0.8,"conductivity":0.3,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"fuel_yields":[0,0,0,1]},
     {"id":18,"name":"gold","density":19.3,"heat_capacity":0.13,"conductivity":3,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"greek_corrosion_product":"corrosion_residue","fuel_yields":[0,0,0,1]},
     {"id":19,"name":"magic_ingredient","density":0.7,"heat_capacity":1.2,"conductivity":0.1,"fuel_fraction":0.5,"ignition_K":650,"hazard_per_second":0.5,"surface_burn_per_second":0.003,"chemical_energy":6000,"primary_heat":6000,"oxygen_per_fuel":1,"greek_corrosion_product":"ash","fuel_yields":[0,0.4,0.1,0.5]}
