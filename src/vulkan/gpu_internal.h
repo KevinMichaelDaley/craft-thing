@@ -148,6 +148,7 @@ struct dc_gpu {
     VkPipeline contact_pipelines[DC_GPU_CONTACT_PHASE_COUNT];
     VkPipeline contact_pixel_pipeline, contact_pixel_plan_pipeline,
                contact_pixel_finish_pipeline, contact_pixel_work_pipeline;
+    VkPipeline contact_terrain_pipeline;
     VkPipeline solver_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
     VkPipeline solver_unstructured[2];
     VkPipeline pixel_hydro_pipelines[5];
