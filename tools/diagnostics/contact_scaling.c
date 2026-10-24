@@ -9,11 +9,20 @@ static uint32_t last_visited;
 static uint32_t last_workgroups;
 static uint32_t last_rejected;
 static uint32_t last_plain_visited,last_plain_emitted;
+static uint64_t last_contact_digest;
+static float contact_test_angle;
+
+static int compare_contact_bytes(const void *a,const void *b) {
+    return memcmp(a,b,sizeof(dc_gpu_contact_t));
+}
 
 bool __real_dc_gpu_load_shader_module(dc_gpu_t *, const char *, VkShaderModule *, char *, uint32_t);
 bool __wrap_dc_gpu_load_shader_module(dc_gpu_t *gpu, const char *path, VkShaderModule *module,
                                       char *err, uint32_t cap) {
     const char *candidate = getenv("DC_CONTACT_SHADER");
+    if(candidate&&strcmp(candidate,"scalar-reference")==0)
+        candidate=gpu->runtime_body_consumers?"build/diagnostics/runtime_contacts_scalar_reference.spv":
+            "build/diagnostics/contacts_scalar_reference.spv";
 #ifdef DC_CONTACT_TERRAIN_PROFILE
     if (!candidate) candidate=gpu->runtime_body_consumers?
         "build/diagnostics/runtime_contacts_terrain_scan.comp.spv":"build/diagnostics/contacts_terrain_scan.comp.spv";
@@ -88,6 +97,7 @@ static void measure(unsigned side, unsigned kind, unsigned pair_kind) {
         bodies[1].local_x_fp += (int32_t)side * 65536 - 16384;
     }
     g->body_count = 2;
+    bodies[0].angle=contact_test_angle;bodies[1].angle=-contact_test_angle*.7f;
     if (pair_kind >= 3) {
         dc_chunk_t *terrain = calloc(1, sizeof(*terrain));
         ASSERT_TRUE(terrain);
@@ -144,6 +154,16 @@ static void measure(unsigned side, unsigned kind, unsigned pair_kind) {
            side, kind, pair_kind, area, boundary, perimeter, contacts[9], contacts[10], contacts[11],
            contacts[0], contacts[2], total_ms / 8);
     ASSERT_EQ(contacts[2], 0u);
+    dc_gpu_contact_t *ordered=malloc((contacts[0]?contacts[0]:1u)*sizeof(*ordered));
+    ASSERT_TRUE(ordered);
+    memcpy(ordered,contacts+DC_GPU_CONTACT_HEADER_WORDS,(size_t)contacts[0]*sizeof(*ordered));
+    qsort(ordered,contacts[0],sizeof(*ordered),compare_contact_bytes);
+    last_contact_digest=1469598103934665603ull;
+    const unsigned char *bytes=(const unsigned char *)ordered;
+    for(size_t i=0;i<(size_t)contacts[0]*sizeof(*ordered);i++)
+        last_contact_digest=(last_contact_digest^bytes[i])*1099511628211ull;
+    free(ordered);
+    printf("canonical contact digest %016llx\n",(unsigned long long)last_contact_digest);
     if (pair_kind >= 3)
         ASSERT_EQ(contacts[0], 0u);
     last_contact_ms = total_ms / 8;

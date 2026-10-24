@@ -12,7 +12,7 @@ static void test_cooperative_boundaries_match_scalar_with_fewer_reads(void) {
         unsigned errors=f.probe.mapped[0],scalar=f.probe.mapped[1],cooperative=f.probe.mapped[2],cases=f.probe.mapped[3];
         printf("pattern%u: %u boundary mismatches, reads %u -> %u, cases %u subgroup%u\n",
             pattern,errors,scalar,cooperative,cases,f.probe.mapped[4]);
-        fixture_stop(&f);ASSERT_EQ(errors,0u);ASSERT_EQ(cases,1024u);
+        fixture_stop(&f);ASSERT_EQ(errors,0u);ASSERT_EQ(cases,1704u);
         ASSERT_TRUE(cooperative<scalar);if(pattern==0u) ASSERT_TRUE(cooperative*2u<scalar);
     }
     PASS();

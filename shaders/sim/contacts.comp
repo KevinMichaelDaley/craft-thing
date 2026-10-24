@@ -1,10 +1,13 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_ballot : require
 #define DC_RUNTIME_ROOT_READONLY 1
 #include "../../include/dungeoncraft/contact_work_layout.h"
 layout(constant_id=1) const bool CONTACT_PIXEL_ONLY=false;
 #define DC_RIGID_PIXEL_ONLY CONTACT_PIXEL_ONLY
 #include "rigid_body.glsl"
+#include "contact_boundary.glsl"
 #include "contact_geometry.glsl"
 layout(local_size_x = 64) in;
 layout(constant_id = 0) const uint CONTACT_PHASE = 0u;
@@ -390,7 +393,7 @@ void main() {
                 uint ap=rectangle?(single_tile?
                     ((scan.y+ordinal/scan.z)%16u)*16u+(scan.x+ordinal%scan.z)%16u:
                     query_piece(a,scan,ordinal)):ordinal;
-                if(!pixel_boundary(a,ap)) continue;
+                if(!contact_pixel_boundary(a,ap,CONTACT_PIXEL_ONLY&&work_count>=256u&&(!rectangle||scan.z>=8u)&&contact_dense_pixel_body(a))) continue;
                 if((params.mode&256u)!=0u&&(!distribute_b||lane==0u)) atomicAdd(DC_DATA(base+10u),1u);
                 Polygon pa=body_polygon(a,ap,vec2(0));vec2 lo=vec2(1e20),hi=vec2(-1e20);
                 for(uint vertex=0u;vertex<pa.count;vertex++) {lo=min(lo,pa.vertices[vertex]-delta);hi=max(hi,pa.vertices[vertex]-delta);}
@@ -413,7 +416,7 @@ void main() {
         if(CONTACT_PIXEL_ONLY&&pair_group*CONTACT_GROUP_SIZE>=query.z*query.w) return;
         for(uint ordinal=cooperative?work_lane:0u;ordinal<query.z*query.w;ordinal+=cooperative?work_stride:1u) {
             uint ap=query_piece(a,query,ordinal);
-            if(!pixel_boundary(a,ap)) continue;
+            if(!contact_pixel_boundary(a,ap,CONTACT_PIXEL_ONLY&&query.z>=8u&&query.z*query.w>=256u&&contact_dense_pixel_body(a))) continue;
             if((params.mode&256u)!=0u) atomicAdd(DC_DATA(base+10u),1u);
             bool emitted=terrain_contacts(a, kind, uvec2(DC_DATA(offset + 4u), DC_DATA(offset + 5u)),
                 uvec2(DC_DATA(offset + 6u), DC_DATA(offset + 7u)), body_polygon(a,ap,vec2(0)),ap);
