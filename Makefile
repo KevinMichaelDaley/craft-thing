@@ -1141,7 +1141,8 @@ MINIMAL_VK_TESTS = $(addprefix build/,component_dispatch_tests pixel_properties_
     fluid_transport_work_tests raster_dispatch_tests fluid_transport_tests fluid_transport_long_tests water_color_tests \
     fluid_transport_slow_tests fluid_transport_partial_tests fluid_color_sync_tests mpm_control_tests mpm_compaction_tests fluid_displacement_tests \
     fluid_displacement_wide_tests fluid_displacement_tall_tests fluid_displacement_work_tests hydro_head_tests fluid_aperture_tests \
-    contact_dispatch_tests)
+    contact_dispatch_tests fluid_dry_line_tests fluid_recompute_requests_tests mpm_copy_tests \
+    pixel_boundary_tests solver_contact_start_tests solver_grain_fusion_tests solver_motion_store_tests)
 $(MINIMAL_VK_TESTS): tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h
 test: build/mpm_compaction_tests
 test: build/fluid_transport_partial_tests

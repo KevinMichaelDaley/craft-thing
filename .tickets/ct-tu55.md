@@ -206,3 +206,7 @@ Displayed GPU/API trace isolates warm delays to compute (not pipeline creation/a
 **2026-10-24T00:37:51Z**
 
 Boundary-anchor bypass and narrowed indirect barriers pass component/cache4, extraction diagnostics3 and dynamic growth/fracture3 under explicit core+sync validation. Actual Wayland saved scene 90frames29.253ms mean33.765ms worst, repeat scalar baseline29.440/33.176; target remains RED. Fused grain/body apply removes72 dispatches and preserves every fixture byte; dynamic3/3 validation-clean, but180frame displayed29.692/34.222 shows no win, so DC_SOLVER_FUSED_GRAIN=1 remains opt-in. Original saved-world checksum unchanged.
+
+**2026-10-24T00:52:41Z**
+
+New default exact water optimizations: recompute unique recipient requests to release shared array;9 partial mass/pigment checks pass plus SPIR-V storage proof. Dry-line prescan reduces10240 cache cell loads to0, exact zero-water inputs preserved under core+sync. Actual Wayland180 frames25.357ms mean29.644ms worst, paused images stable. Longer360-frame repeat26.272ms mean131.020ms worst remains RED.400-frame coarse trace26.881/51.831; subsequent idle-stack trace sees37.851ms app frame with26.531ms present/GPU wrapper and no warm queue idle; not claiming sustained worst-frame completion. Full current make -j4 -i test under core+sync validation running. Benchmark label now distinguishes480x270 physics/render from640x448 active region including halo.

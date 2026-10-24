@@ -22,7 +22,7 @@ static const uint32_t valid[]={0x07230203u,0x00010600u,0,64,0,
     (3u<<16)|49u,2,11,
     (4u<<16)|50u,3,12,15,
     (4u<<16)|71u,13,1,32,
-    (4u<<16)|50u,3,13,2};
+    (4u<<16)|50u,3,13,DC_CONTACT_WORK_ABI};
 static const char *fixture="build/diagnostics/contact_contract_fixture.spv";
 
 static void write_fixture(const uint32_t *words,size_t count) {
