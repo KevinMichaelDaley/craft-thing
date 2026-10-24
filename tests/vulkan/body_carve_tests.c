@@ -22,6 +22,28 @@ VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkAllocateMemory(VkDevice device,const VkM
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() g_pass++
 
+static void test_brush_invalidates_only_the_state_it_changes(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    dc_gpu_world_body_t b={.body={.id=1,.active=1,.width=1,.height=1,.x_fp=4<<16,.y_fp=4<<16}};
+    ASSERT_TRUE(dc_gpu_spawn_world_body(g,b,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    dc_gpu_structural_data(g)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]=0;
+    ASSERT_TRUE(!g->body_refresh_pending);
+    ASSERT_TRUE(dc_gpu_paint_material(g,63,63,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(!g->body_refresh_pending);
+    ASSERT_EQ(dc_gpu_structural_data(g)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD],0u);
+    ASSERT_TRUE(dc_gpu_paint_material(g,15,15,0,DC_MATERIAL_STONE,err,sizeof(err)));
+    ASSERT_TRUE(!g->body_refresh_pending);
+    ASSERT_EQ(dc_gpu_structural_data(g)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD],1u);
+    ASSERT_TRUE(dc_gpu_paint_material(g,4,4,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(g->body_refresh_pending);
+    dc_gpu_destroy(g);free(chunk);PASS();
+}
+
 static void test_missed_brush_does_not_serialize_all_body_slots(void) {
     char err[256]={0};dc_gpu_t *g=NULL;
     ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
@@ -352,6 +374,10 @@ static void test_leaf_impact_crumbles_canopy(void) {
 }
 
 int main(void) {
+    if(getenv("DC_TEST_BRUSH_INVALIDATION_ONLY")) {
+        RUN(test_brush_invalidates_only_the_state_it_changes);
+        return g_fail!=0;
+    }
     if(getenv("DC_TEST_MISSED_BRUSH_ONLY")) {
         RUN(test_missed_brush_does_not_serialize_all_body_slots);
         return g_fail!=0;
@@ -361,6 +387,7 @@ int main(void) {
         return g_fail!=0;
     }
     RUN(test_large_body_brush_preserves_mass_with_bounded_latency);
+    RUN(test_brush_invalidates_only_the_state_it_changes);
     RUN(test_missed_brush_does_not_serialize_all_body_slots);
     RUN(test_trunk_only_carve_preserves_attached_canopy);
     RUN(test_leaf_impact_crumbles_canopy);
