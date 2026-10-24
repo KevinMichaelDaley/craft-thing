@@ -66,7 +66,10 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
     bool displacement=strcmp(path,"build/shaders/fluid_displacement.comp.spv")==0;
     uint32_t length=(displacement?phase==0:phase<2)?gpu->height:gpu->width;
     const char *dry=getenv("DC_TRANSPORT_DRY_SCAN");
-    uint32_t values[5]={phase,length<2048u?length:2048u,1u,0u,transport&&(!dry||strcmp(dry,"0")!=0)};
+    const char *scan=getenv("DC_TRANSPORT_LONG_SCAN");
+    const char *page_cache=getenv("DC_TRANSPORT_PAGE_CACHE");
+    uint32_t values[7]={phase,length<2048u?length:2048u,1u,0u,transport&&(!dry||strcmp(dry,"0")!=0),
+        transport&&scan&&strcmp(scan,"1")==0,transport&&page_cache&&strcmp(page_cache,"1")==0};
     uint32_t required_size=transport?dc_gpu_transport_subgroup_size(gpu->physical):0u;
     if(transport) {
         VkPhysicalDeviceSubgroupProperties subgroup={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES};
@@ -81,12 +84,14 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
         values[1]=dc_gpu_transport_cache_cells(length,properties.limits.maxComputeSharedMemorySize);
     }
     if (!dc_gpu_load_shader_module(gpu,path,&shader,err,cap)) return false;
-    VkSpecializationMapEntry entries[5]={{.constantID=0,.size=sizeof(uint32_t)},
+    VkSpecializationMapEntry entries[7]={{.constantID=0,.size=sizeof(uint32_t)},
         {.constantID=1,.offset=sizeof(uint32_t),.size=sizeof(uint32_t)},
         {.constantID=2,.offset=2*sizeof(uint32_t),.size=sizeof(uint32_t)},
         {.constantID=3,.offset=3*sizeof(uint32_t),.size=sizeof(uint32_t)},
-        {.constantID=10,.offset=4*sizeof(uint32_t),.size=sizeof(uint32_t)}};
-    VkSpecializationInfo specialization = {.mapEntryCount=5u,
+        {.constantID=10,.offset=4*sizeof(uint32_t),.size=sizeof(uint32_t)},
+        {.constantID=6,.offset=5*sizeof(uint32_t),.size=sizeof(uint32_t)},
+        {.constantID=7,.offset=6*sizeof(uint32_t),.size=sizeof(uint32_t)}};
+    VkSpecializationInfo specialization = {.mapEntryCount=7u,
         .pMapEntries=entries,.dataSize=sizeof(values),.pData=values};
     VkComputePipelineCreateInfo info = { .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,

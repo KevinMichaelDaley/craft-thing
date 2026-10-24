@@ -1,5 +1,15 @@
 # Bounded Vulkan device probe
 
+## Optional transport comparisons
+
+`DC_TRANSPORT_LONG_SCAN=1` and `DC_TRANSPORT_PAGE_CACHE=1` select existing
+cooperative long-run transport and page-cache specializations independently.
+Both remain off by default. Four pipeline-wiring cases and the exact mass/color
+fixture pass. Displayed fixed-clock tree-cut comparisons measured 29.434 ms
+reference, 29.194 ms long-run, 29.539 ms page-cache and 29.692 ms combined average
+over 300 frames; none met the worst-frame gate. These results do not establish
+a runtime speedup. Final acceptance uses real elapsed time without a fixed clock.
+
 ## Saved-body support replay
 
 `make build/diagnostics/body_support` builds an in-memory replay of a versioned
