@@ -69,6 +69,10 @@ struct dc_gpu {
     VkDescriptorSetLayout set_layout;
     VkDescriptorPool descriptor_pool;
     VkDescriptorSet descriptor;
+    VkDescriptorSet mpm_swapped_descriptor;
+    VkPipeline mpm_swap_commit_pipeline;
+    uint64_t mpm_swap_descriptor_revision;
+    bool mpm_swap_buffers;
     VkPipelineLayout pipeline_layout;
     VkPipeline pipeline;
     VkPipeline simple_draw_pipeline, pixel_draw_pipeline;

@@ -603,6 +603,7 @@ build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h
 test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/appearance_tests
 	./build/brush_region_tests
+	./build/mpm_swap_tests
 	./build/texture_tests
 	./build/texture_gpu_tests
 	./build/occlusion_gpu_tests
@@ -1526,6 +1527,10 @@ test: build/brush_region_tests
 
 build/shaders/runtime/contacts.comp.spv build/diagnostics/contacts_scalar_reference.spv build/diagnostics/runtime_contacts_scalar_reference.spv build/diagnostics/contacts_terrain_scan.comp.spv build/diagnostics/runtime_contacts_terrain_scan.comp.spv: include/dungeoncraft/contact_work_layout.h
 build/contact_shader_contract_tests: build/shaders/contacts_pixel.comp.spv
+
+build/mpm_swap_tests: tests/vulkan/mpm_swap_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/particle_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/mpm_swap_tests
 build/diagnostics/pixel_boundary_probe.spv: shaders/sim/rigid_clip.glsl shaders/sim/rigid_shape.glsl tests/vulkan/rigid_clip_reference.glsl
 
 build/solver_contact_start_tests: tests/vulkan/solver_contact_start_tests.c tests/vulkan/solver_motion_store_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_motion_profile.comp.spv
