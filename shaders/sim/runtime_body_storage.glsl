@@ -33,6 +33,14 @@ RuntimeBodyWord runtime_body_data_word(uint index) {
 #define DC_BODY_CLIPPED(slot) DC_SOLVER_DATA(DC_RUNTIME_BODY_STATE(slot)+48u)
 #define DC_BODY_DEPENDENCIES(slot) DC_SOLVER_DATA(DC_RUNTIME_BODY_STATE(slot)+49u)
 #define DC_RUNTIME_WORK(index) BodyStorageWords(runtime_body_root.work).words[index]
+bool runtime_component_anchors_enabled() {
+    return DC_RUNTIME_WORK(DC_BODY_ANCHOR_MAGIC_WORD)==DC_BODY_ANCHOR_MAGIC;
+}
+#define DC_COMPONENT_ANCHOR_BITS(word) DC_RUNTIME_WORK(DC_RUNTIME_WORK(DC_BODY_ANCHOR_BITS_WORD)+(word))
+bool runtime_component_anchored(uint root) {
+    return runtime_component_anchors_enabled()&&
+        (DC_COMPONENT_ANCHOR_BITS(root/32u)&(1u<<(root%32u)))!=0u;
+}
 #define DC_COMPONENT_CACHE(index) BodyStorageWords(uvec2(DC_RUNTIME_WORK(42u),DC_RUNTIME_WORK(43u))).words[index]
 #define DC_CONTACT_WORK(index) BodyStorageWords(uvec2(DC_RUNTIME_WORK(45u),DC_RUNTIME_WORK(46u))).words[index]
 #define DC_LAYOUT_PAIR_CAPACITY DC_RUNTIME_WORK(36u)

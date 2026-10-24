@@ -47,6 +47,9 @@ void main() {
     uint lane=gl_LocalInvocationID.x;
     if(EXTRACTION_PHASE==10u) {
         uint slot=gl_WorkGroupID.x;if(slot>=DC_DATA(base()+1u)) return;
+#ifdef DC_RUNTIME_BODY_STORAGE
+        if(runtime_component_anchors_enabled()) DC_COMPONENT_ANCHOR_BITS(slot*128u+lane)=0u;
+#endif
         uint count=0u,changed=0u;
         for(uint cell=lane;cell<4096u;cell+=128u) {
             bool occupied=solid(slot*4096u+cell);chunk_roots[cell]=occupied?cell:0xffffffffu;count+=uint(occupied);

@@ -38,6 +38,7 @@ static bool work_create(dc_gpu_t *g,uint32_t slots,uint32_t force_groups,uint32_
     uint64_t carve_ids=words;words+=slots;
     if(fragment_cells<slots) fragment_cells=slots;
     uint64_t fragments=words;words+=12u*(uint64_t)fragment_cells;
+    uint64_t anchors=words;words+=(uint64_t)DC_GPU_CHUNK_SLOTS*128u;
     if(words>UINT32_MAX||!dc_gpu_address_buffer_create(g,words*4u,true,out,err,cap))
         return error(err,cap,"Cannot allocate dynamic body work resources");
     uint32_t header[16]={slots,(uint32_t)bits,force_groups,(uint32_t)wet,
@@ -55,6 +56,8 @@ static bool work_create(dc_gpu_t *g,uint32_t slots,uint32_t force_groups,uint32_
     dc_body_address_t contacts=address(g->runtime_bodies->metadata.address+
         (VkDeviceSize)dc_gpu_contact_work_word_offset(g)*4u);
     h[45]=contacts.low;h[46]=contacts.high;
+    h[DC_BODY_ANCHOR_BITS_WORD]=(uint32_t)anchors;
+    h[DC_BODY_ANCHOR_MAGIC_WORD]=DC_BODY_ANCHOR_MAGIC;
     return true;
 }
 bool dc_gpu_runtime_bodies_init(dc_gpu_t *g,char *err,uint32_t cap) {

@@ -137,7 +137,7 @@ void main() {
     if(EXTRACTION_PHASE==26u) {
         uint lane=gl_LocalInvocationID.x,enabled=uint(DC_DATA(base()+STRUCTURAL_COMPONENT_DIRTY_WORD)!=0u);
 #ifdef DC_RUNTIME_BODY_STORAGE
-        if(lane==0u) DC_RUNTIME_WORK(44u)=0u;
+        if(lane==0u) {DC_RUNTIME_WORK(44u)=0u;DC_RUNTIME_WORK(DC_BODY_ANCHOR_SKIPS_WORD)=0u;}
 #endif
         if(lane<27u) activity[lane]=lane%3u==0u?enabled*(lane==0u||lane==12u?(total()+127u)/128u:lane==6u?64u:lane==9u?0u:lane==15u?DC_DATA(base()+1u)*4u:lane==18u?(total()+16383u)/16384u:lane==21u||lane==24u?DC_DATA(base()+1u):1u):1u;
         if(lane>=27u&&lane<33u) activity[lane]=lane%3u==0u?0u:1u;
@@ -208,13 +208,26 @@ void main() {
     }
     if(EXTRACTION_PHASE==14u) {
         uint key=i<n&&solid(i)?labels[i]:0xffffffffu;
+        bool anchored=false;
+#ifdef DC_RUNTIME_BODY_STORAGE
+        if(key!=0xffffffffu&&runtime_component_anchors_enabled()&&
+            (i%64u==0u||i%64u==63u||i%4096u<64u||i%4096u>=4032u)) {
+            for(uint axis=0u;axis<8u;axis++) anchored=anchored||neighbor(i,axis)==0xffffffffu;
+        }
+#endif
         bool pending=key!=0xffffffffu;
         for(;;) {
             uint root=subgroupMin(pending?key:0xffffffffu);
             if(root==0xffffffffu) break;
             bool member=pending&&key==root;
             uint count=subgroupAdd(uint(member));
-            if(gl_SubgroupInvocationID==0u) atomicAdd(sizes[root],count);
+            uint cold=subgroupOr(uint(member&&anchored));
+            if(gl_SubgroupInvocationID==0u) {
+                atomicAdd(sizes[root],count);
+#ifdef DC_RUNTIME_BODY_STORAGE
+                if(cold!=0u) atomicOr(DC_COMPONENT_ANCHOR_BITS(root/32u),1u<<(root%32u));
+#endif
+            }
             pending=pending&&!member;
         }
         return;
@@ -268,9 +281,22 @@ void main() {
         if(i<n&&solid(i)) {
             uint c=candidates[labels[i]];
             if(c<DC_DATA(g+36257u)) {
+#ifdef DC_RUNTIME_BODY_STORAGE
+                if(runtime_component_anchored(labels[i])) {
+                    if(i==labels[i]) {
+                        uint r=record(c);
+                        DC_DATA(r+1u)=0x80000000u;DC_DATA(r+2u)=0x80000000u;
+                        DC_DATA(r+3u)=0x80000000u;DC_DATA(r+4u)=0x80000000u;
+                        DC_DATA(r+5u)=sizes[i];DC_DATA(r+6u)=1u;
+                        atomicAdd(DC_RUNTIME_WORK(DC_BODY_ANCHOR_SKIPS_WORD),1u);
+                    }
+                } else
+#endif
+                {
                 key=c;point=uvec2(relative_point(DC_DATA(record(c)),i))^uvec2(0x80000000u);
                 state=terrain_release_state(i,terrain_bonds(i));
                 for(uint axis=0u;axis<8u;axis++) unknown|=uint(neighbor(i,axis)==0xffffffffu);
+                }
             }
         }
         bool pending=key!=0xffffffffu;
