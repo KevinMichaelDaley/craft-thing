@@ -65,10 +65,11 @@ bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         DC_GPU_TYPED_CONTACT_ACTIVITY_WORD,err,cap)) return false;
     if(!dc_gpu_load_shader_module(gpu,"build/shaders/contacts_pixel.comp.spv",&module,err,cap)) return false;
     info.stage.module=module;
-    const uint32_t pixel_phases[]={4u,5u,2u,3u};
+    const uint32_t pixel_phases[]={4u,5u,2u,3u,6u};
     VkPipeline *pixel_pipelines[]={&gpu->contact_pixel_plan_pipeline,
-        &gpu->contact_pixel_work_pipeline,&gpu->contact_pixel_pipeline,&gpu->contact_pixel_finish_pipeline};
-    for(unsigned i=0;i<4u&&result==VK_SUCCESS;i++) {
+        &gpu->contact_pixel_work_pipeline,&gpu->contact_pixel_pipeline,&gpu->contact_pixel_finish_pipeline,
+        &gpu->contact_terrain_pipeline};
+    for(unsigned i=0;i<5u&&result==VK_SUCCESS;i++) {
         uint32_t values[]={pixel_phases[i],1u};
         VkSpecializationMapEntry entries[]={{.constantID=0,.size=sizeof(uint32_t)},
             {.constantID=1,.offset=sizeof(uint32_t),.size=sizeof(uint32_t)}};
@@ -81,7 +82,25 @@ bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return result == VK_SUCCESS ? true : error(err, cap, "Cannot create GPU contact pipeline");
 }
 
+void dc_gpu_record_contact_terrain(dc_gpu_t *gpu) {
+    if(!gpu->runtime_body_consumers||!gpu->contact_terrain_pipeline) return;
+    uint32_t push[8]={gpu->width,gpu->height,6u,0,0,0,0,0};
+    vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
+        gpu->pipeline_layout,0,1,&gpu->descriptor,0,NULL);
+    vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->contact_terrain_pipeline);
+    vkCmdPushConstants(gpu->command,gpu->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
+    vkCmdDispatch(gpu->command,(gpu->width+63u)/64u,(gpu->height+63u)/64u,1u);
+    VkMemoryBarrier2 memory={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .srcAccessMask=VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        .dstStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .dstAccessMask=VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT};
+    VkDependencyInfo dependency={.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .memoryBarrierCount=1,.pMemoryBarriers=&memory};
+    vkCmdPipelineBarrier2(gpu->command,&dependency);
+}
 void dc_gpu_record_contacts(dc_gpu_t *gpu) {
+    if(!gpu->solver_recording) dc_gpu_record_contact_terrain(gpu);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
@@ -98,7 +117,8 @@ void dc_gpu_record_contacts(dc_gpu_t *gpu) {
         vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
             pipeline);
         push[2] = mode | (gpu->component_profile ? 256u : 0u) |
-            (gpu->contact_pixel_pipeline==VK_NULL_HANDLE?512u:1024u);
+            (gpu->contact_pixel_pipeline==VK_NULL_HANDLE?512u:1024u) |
+            (gpu->runtime_body_consumers&&gpu->contact_terrain_pipeline?2048u:0u);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
         if(typed&&pass==4u) vkCmdDispatch(gpu->command,1,1,1);

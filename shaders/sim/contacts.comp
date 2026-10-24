@@ -49,6 +49,30 @@ const uint PAIR_CONTACT_FOUND=1u,PAIR_COLLIDABLE_TERRAIN=2u;
 shared uint group_found;
 shared uint group_work_first;
 shared uint body_kinds[64];
+#ifndef DC_CONTACT_TERRAIN_CACHE
+#define DC_CONTACT_TERRAIN_CACHE 1
+#endif
+#ifdef DC_RUNTIME_BODY_STORAGE
+uint terrain_cache_base() {return 4u+DC_LAYOUT_PAIR_CAPACITY*DC_CONTACT_PIXEL_GROUPS*2u;}
+void cache_terrain_presence() {
+    uint lane=gl_LocalInvocationIndex;
+    uint tile=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x;
+    uint page=pages[tile];
+    if(lane==0u) group_found=0u;
+    barrier();
+    if(page!=0u) for(uint cell=lane;cell<4096u;cell+=CONTACT_GROUP_SIZE) {
+        uint material=chunk_cells[(page-1u)*4096u+cell].x&65535u;
+        if(material==0u||material==3u) continue;
+        if(material==2u||material==4u||material==5u||material==6u||material==10u) {
+            uint particle=(page-1u)*8192u+cell;
+            if(particles[particle].mass_fp==0u&&particles[particle+4096u].mass_fp==0u) continue;
+        }
+        atomicOr(group_found,1u);break;
+    }
+    barrier();
+    if(lane==0u) DC_CONTACT_WORK(terrain_cache_base()+tile)=group_found;
+}
+#endif
 
 uvec2 page_extent() { return uvec2((params.width + 63u) / 64u, (params.height + 63u) / 64u); }
 uint pair_base() { uvec2 size = page_extent() + 2u; return HEADER_WORDS + 2u * size.x * size.y; }
@@ -231,6 +255,12 @@ uvec4 terrain_contact_scan(Body a,uint offset) {
 
 void main() {
     if(CONTACT_WORK_VERSION!=DC_CONTACT_WORK_ABI) return;
+    if(CONTACT_PHASE==6u) {
+#ifdef DC_RUNTIME_BODY_STORAGE
+        cache_terrain_presence();
+#endif
+        return;
+    }
     if(CONTACT_PHASE==5u) {
 #ifdef DC_RUNTIME_BODY_STORAGE
         if(gl_GlobalInvocationID.x==0u) {
@@ -329,6 +359,12 @@ void main() {
             cx >= 0 && cy >= 0 && (cx+1)*64 <= int(params.width) && (cy+1)*64 <= int(params.height)) {
             uint page = pages[uint(cy)*page_extent().x+uint(cx)];
             if (page != 0u) {
+#if defined(DC_RUNTIME_BODY_STORAGE) && DC_CONTACT_TERRAIN_CACHE
+                if((params.mode&2048u)!=0u) {
+                    if(lane==0u) group_found=DC_CONTACT_WORK(terrain_cache_base()+uint(cy)*page_extent().x+uint(cx));
+                } else
+#endif
+                {
 #ifdef DC_TERRAIN_SCAN_PROFILE
                 uint scanned=0u;
 #endif
@@ -348,6 +384,7 @@ void main() {
 #ifdef DC_TERRAIN_SCAN_PROFILE
                 if ((params.mode&256u)!=0u) atomicAdd(DC_DATA(base+9u),scanned);
 #endif
+                }
                 barrier();
                 bool empty_terrain = group_found == 0u;
                 barrier();

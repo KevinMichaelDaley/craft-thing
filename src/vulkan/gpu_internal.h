@@ -330,7 +330,8 @@ static inline uint32_t dc_gpu_contact_work_word_offset(const dc_gpu_t *gpu) {
 }
 static inline VkDeviceSize dc_gpu_contact_work_bytes(const dc_gpu_t *gpu) {
     uint32_t pairs=gpu->runtime_pair_capacity?gpu->runtime_pair_capacity:DC_GPU_BROADPHASE_PAIR_CAPACITY;
-    return gpu->runtime_bodies?(4u+(VkDeviceSize)pairs*DC_CONTACT_PIXEL_GROUPS*2u)*sizeof(uint32_t):0u;
+    VkDeviceSize chunks=(VkDeviceSize)((gpu->width+63u)/64u)*((gpu->height+63u)/64u);
+    return gpu->runtime_bodies?(4u+(VkDeviceSize)pairs*DC_CONTACT_PIXEL_GROUPS*2u+chunks)*sizeof(uint32_t):0u;
 }
 static inline VkDeviceSize dc_gpu_body_storage_bytes(const dc_gpu_t *gpu) {
     return dc_gpu_legacy_body_storage_bytes(gpu) +
@@ -418,6 +419,8 @@ static inline uint32_t dc_gpu_runtime_body_count(const dc_gpu_t *gpu) {
 }
 bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_contacts(dc_gpu_t *gpu);
+/** Refresh GPU chunk collision presence before an immutable-terrain solver batch. */
+void dc_gpu_record_contact_terrain(dc_gpu_t *gpu);
 bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 /** Prepare graph-only solver variants before publishing an authored/restored graph. */
 bool dc_gpu_solver_graph_prepare(dc_gpu_t *gpu, char *err, uint32_t cap);

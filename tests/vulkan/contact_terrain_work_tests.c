@@ -10,7 +10,7 @@ static void test_dense_negative_candidate_uses_bounded_presence_work(void) {
     ASSERT_EQ(last_emitted, 0u);
     printf("negative terrain presence: sparse %.6fms dense %.6fms\n",
            sparse, dense);
-    ASSERT_TRUE(last_visited > 0u && last_visited <= 64u);
+    ASSERT_EQ(last_visited,0u);
     PASS();
 }
 
