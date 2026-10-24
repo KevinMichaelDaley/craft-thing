@@ -22,6 +22,27 @@ VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkAllocateMemory(VkDevice device,const VkM
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() g_pass++
 
+static void test_missed_brush_does_not_serialize_all_body_slots(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    for(unsigned id=1;id<=320;id++) {
+        dc_gpu_world_body_t b={.body={.id=id,.active=1,.width=1,.height=1}};
+        ASSERT_TRUE(dc_gpu_spawn_world_body(g,b,err,sizeof(err)));
+    }
+    ASSERT_TRUE(dc_gpu_body_capacity(g)>=320u);
+    ASSERT_TRUE(dc_gpu_paint_material(g,63,63,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    struct timespec before,after;clock_gettime(CLOCK_MONOTONIC,&before);
+    ASSERT_TRUE(dc_gpu_paint_material(g,63,63,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    clock_gettime(CLOCK_MONOTONIC,&after);
+    double ms=(after.tv_sec-before.tv_sec)*1000.+(after.tv_nsec-before.tv_nsec)/1e6;
+    for(unsigned id=1;id<=320;id++) {
+        dc_gpu_body_t b;ASSERT_TRUE(dc_gpu_read_body_id(g,id,&b,err,sizeof(err)));
+        ASSERT_TRUE(b.active);ASSERT_EQ(b.x_fp,0);ASSERT_EQ(b.y_fp,0);
+    }
+    printf("Missed air brush with 320 bodies: %.3f ms\n",ms);
+    dc_gpu_destroy(g);ASSERT_TRUE(ms<3.);PASS();
+}
+
 static void test_large_body_brush_preserves_mass_with_bounded_latency(void) {
     char err[256]={0};dc_gpu_t *g=NULL;
     dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
@@ -46,6 +67,7 @@ static void test_large_body_brush_preserves_mass_with_bounded_latency(void) {
     unsigned removed=0;for(int y=-4;y<=4;y++) for(int x=-4;x<=4;x++) removed+=x*x+y*y<=16;
     dc_gpu_body_pixel_t *pixels=calloc(190u*190u,sizeof(*pixels));unsigned count=0;ASSERT_TRUE(pixels);
     ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,pixels,190u*190u,&count,err,sizeof(err)));
+    printf("Large body brush output: %u pixels, expected %u, %.3f ms\n",count,190u*190u-removed,ms);
     ASSERT_EQ(count,190u*190u-removed);
     dc_gpu_body_motion_t motion;ASSERT_TRUE(dc_gpu_read_body_motion(g,0x80000001u,&motion,err,sizeof(err)));
     ASSERT_TRUE(fabsf(motion.mass-count*.6f)<.01f);
@@ -330,11 +352,16 @@ static void test_leaf_impact_crumbles_canopy(void) {
 }
 
 int main(void) {
+    if(getenv("DC_TEST_MISSED_BRUSH_ONLY")) {
+        RUN(test_missed_brush_does_not_serialize_all_body_slots);
+        return g_fail!=0;
+    }
     if(getenv("DC_TEST_LARGE_BRUSH_ONLY")) {
         RUN(test_large_body_brush_preserves_mass_with_bounded_latency);
         return g_fail!=0;
     }
     RUN(test_large_body_brush_preserves_mass_with_bounded_latency);
+    RUN(test_missed_brush_does_not_serialize_all_body_slots);
     RUN(test_trunk_only_carve_preserves_attached_canopy);
     RUN(test_leaf_impact_crumbles_canopy);
     RUN(test_broken_leaf_canopy_crumbles_without_losing_wood);
