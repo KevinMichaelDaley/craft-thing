@@ -19,3 +19,7 @@ Compiled SPIR-V must use 32 lanes, retain all contact work coverage, strict cano
 **2026-10-24T11:08:54Z**
 
 32-lane GREEN compiled reflection and actual core+synchronization validation canonical manifold oracle 7/7 exact (rotated solid, hollow, comb vs frozen 64-lane reference). Real displayed 500-frame replay:30.283ms mean37.502ms worst vs31.545/37.961 immediately before; four paused captures identical. Improvement is insufficient; testing subgroup-sized16 lanes next before choosing default.
+
+**2026-10-24T11:23:03Z**
+
+Continue workgroup optimization to16 lanes (one native subgroup) after32-lane gain. Compiled reflection RED still32; keep full64-lane scalar reference and verify exact contact coverage before selecting16 as default.

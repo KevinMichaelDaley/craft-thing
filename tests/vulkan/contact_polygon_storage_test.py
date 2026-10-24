@@ -57,7 +57,7 @@ class ContactPolygonStorageTests(unittest.TestCase):
                     if opcode == 16 and args[1] == 17:
                         sizes.append(tuple(args[2:]))
                     offset += size
-                self.assertEqual(sizes, [(32, 1, 1)], module)
+                self.assertEqual(sizes, [(16, 1, 1)], module)
 
     def test_contact_storage_matches_the_specialized_geometry(self):
         for variant in ("", "runtime/"):
