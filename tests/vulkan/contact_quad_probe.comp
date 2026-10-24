@@ -59,5 +59,12 @@ void main() {
         a=rectangle(offset+vec2(-.375,.125),vec2(.75,.625));contact_axis_invocations=0u;
         atomicAdd(results[8],uint(!matches_reference(a,b)));atomicAdd(results[9],1u);
         atomicMax(results[10],contact_axis_invocations);
+        a=quad(offset+vec2(-.375,.125),angle,.5+float(id%5u)*.25);
+        b=cell_polygon(offset+low);contact_axis_invocations=0u;
+        atomicAdd(results[11],uint(!matches_reference(a,b)));atomicAdd(results[12],1u);
+        atomicMax(results[13],contact_axis_invocations);
+        a=cell_polygon(offset+vec2(-.375,.125));contact_axis_invocations=0u;
+        atomicAdd(results[14],uint(!matches_reference(a,b)));atomicAdd(results[15],1u);
+        atomicMax(results[16],contact_axis_invocations);
     }
 }

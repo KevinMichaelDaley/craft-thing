@@ -71,17 +71,26 @@ bool contact_axis(Polygon a, Polygon b, vec2 edge, inout vec2 normal, inout floa
     return true;
 }
 
+bool polygon_axis_rectangle(Polygon p) {
+    return p.vertices[0].y==p.vertices[1].y&&p.vertices[1].x==p.vertices[2].x&&
+        p.vertices[2].y==p.vertices[3].y&&p.vertices[3].x==p.vertices[0].x&&
+        p.vertices[1].x-p.vertices[0].x==1.0&&p.vertices[2].y-p.vertices[1].y==1.0;
+}
 bool polygon_contact(Polygon a, Polygon b, out vec2 normal, out float depth) {
     depth = 1e20; normal = vec2(0);
     if(CONTACT_PIXEL_ONLY&&a.count==4u&&b.count==4u) {
-        return contact_axis(a,b,a.vertices[1]-a.vertices[0],normal,depth)&&
-            contact_axis(a,b,a.vertices[2]-a.vertices[1],normal,depth)&&
-            contact_axis(a,b,a.vertices[3]-a.vertices[2],normal,depth)&&
-            contact_axis(a,b,a.vertices[0]-a.vertices[3],normal,depth)&&
-            contact_axis(a,b,b.vertices[1]-b.vertices[0],normal,depth)&&
-            contact_axis(a,b,b.vertices[2]-b.vertices[1],normal,depth)&&
-            contact_axis(a,b,b.vertices[3]-b.vertices[2],normal,depth)&&
-            contact_axis(a,b,b.vertices[0]-b.vertices[3],normal,depth);
+        if(!contact_axis(a,b,a.vertices[1]-a.vertices[0],normal,depth)||
+           !contact_axis(a,b,a.vertices[2]-a.vertices[1],normal,depth)) return false;
+        /* Rectangular opposite edges have exactly mirrored projections, so
+         * their candidate cannot improve the earlier strict minimum. */
+        if(!polygon_axis_rectangle(a)&&
+           (!contact_axis(a,b,a.vertices[3]-a.vertices[2],normal,depth)||
+            !contact_axis(a,b,a.vertices[0]-a.vertices[3],normal,depth))) return false;
+        if(!contact_axis(a,b,b.vertices[1]-b.vertices[0],normal,depth)||
+           !contact_axis(a,b,b.vertices[2]-b.vertices[1],normal,depth)) return false;
+        return polygon_axis_rectangle(b)||
+            (contact_axis(a,b,b.vertices[3]-b.vertices[2],normal,depth)&&
+             contact_axis(a,b,b.vertices[0]-b.vertices[3],normal,depth));
     }
     for (uint i = 0u; i < a.count; ++i)
         if (!contact_axis(a, b, a.vertices[(i + 1u) % a.count] - a.vertices[i], normal, depth))
