@@ -8,6 +8,7 @@
 static int g_pass,g_fail;
 static bool recording;
 static unsigned full_grid_dispatches;
+static unsigned maximum_groups;
 void __real_fr_renderer_record(dc_gpu_t *);
 VKAPI_ATTR void VKAPI_CALL __real_vkCmdDispatch(VkCommandBuffer,uint32_t,uint32_t,uint32_t);
 void __wrap_fr_renderer_record(dc_gpu_t *g) {
@@ -15,6 +16,7 @@ void __wrap_fr_renderer_record(dc_gpu_t *g) {
 }
 VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdDispatch(VkCommandBuffer c,uint32_t x,uint32_t y,uint32_t z) {
     if(recording&&x==128u*128u/64u&&y==1u&&z==1u) full_grid_dispatches++;
+    if(recording&&x*y*z>maximum_groups) maximum_groups=x*y*z;
     __real_vkCmdDispatch(c,x,y,z);
 }
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
@@ -40,7 +42,7 @@ static dc_gpu_t *scene(char *err,uint32_t cap) {
 }
 static void test_albedo_work_tracks_visible_pixels_and_optical_queries_stay_fresh(void) {
     char err[256]={0};dc_gpu_t *g=scene(err,sizeof(err));ASSERT_TRUE(g);
-    full_grid_dispatches=0;
+    full_grid_dispatches=0;maximum_groups=0;
     ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
     unsigned hidden_work=full_grid_dispatches;
     fr_occlusion_node_t node;
@@ -48,7 +50,13 @@ static void test_albedo_work_tracks_visible_pixels_and_optical_queries_stay_fres
     ASSERT_TRUE(dc_gpu_paint_material(g,66,66,0,DC_MATERIAL_AIR,err,sizeof(err)));
     ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
     ASSERT_TRUE(fr_renderer_read_opacity(g,66,66,&node));ASSERT_EQ(node.maximum,0.f);
-    dc_gpu_destroy(g);ASSERT_EQ(hidden_work,0u);PASS();
+    ASSERT_TRUE(dc_gpu_paint_material(g,66,66,0,DC_MATERIAL_WOOD,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_viewport(g,64,64,64,64));
+    ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+    uint32_t pixels[128*128];ASSERT_TRUE(dc_gpu_readback(g,pixels,128*128,err,sizeof(err)));
+    uint32_t wood=pixels[2*64+2];ASSERT_TRUE((wood&255u)>((wood>>16u)&255u));
+    unsigned peak=maximum_groups;
+    dc_gpu_destroy(g);ASSERT_EQ(hidden_work,0u);ASSERT_TRUE(peak<=64u);PASS();
 }
 static void test_zero_coverage_does_not_alias_body_slot_sixty_four(void) {
     char err[256]={0};dc_gpu_t *g=scene(err,sizeof(err));ASSERT_TRUE(g);
