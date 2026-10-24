@@ -11,6 +11,8 @@ static int g_pass, g_fail;
 static VkPresentModeKHR mode;
 static bool presenting, finite_acquire;
 static unsigned idle_calls;
+static bool painting;
+static unsigned brush_fence_waits;
 static double acquire_ms, enqueue_ms, render_wait_ms;
 static VkSemaphore image_sems[32];
 static bool image_sems_safe;
@@ -69,6 +71,7 @@ VkResult __wrap_vkQueuePresentKHR(VkQueue q,const VkPresentInfoKHR *p) {
 }
 VkResult __real_vkWaitForFences(VkDevice,uint32_t,const VkFence *,VkBool32,uint64_t);
 VkResult __wrap_vkWaitForFences(VkDevice d,uint32_t n,const VkFence *f,VkBool32 all,uint64_t timeout) {
+    if(painting) brush_fence_waits++;
     uint64_t start=SDL_GetPerformanceCounter();
     VkResult result=__real_vkWaitForFences(d,n,f,all,timeout);
     render_wait_ms+=(SDL_GetPerformanceCounter()-start)*1000.0/SDL_GetPerformanceFrequency();
@@ -107,20 +110,28 @@ static int window_cycle(void) {
        !dc_gpu_set_rigid_solver(g,true) || !dc_gpu_spawn_body(g,body,err,sizeof(err)) ||
        !dc_gpu_set_body_motion(g,1,0,0,DC_GPU_BODY_KINEMATIC|DC_GPU_BODY_LOCK_ROTATION,err,sizeof(err))) return 9;
     finite_acquire=true;idle_calls=0;image_sems_safe=true;
+    if(!dc_gpu_paint_material(g,63,63,0,DC_MATERIAL_AIR,err,sizeof(err))) return 10;
+    idle_calls=brush_fence_waits=0;
     acquire_ms=enqueue_ms=render_wait_ms=0;
     for(uint32_t i=0;i<32;++i) image_sems[i]=VK_NULL_HANDLE;
     for(unsigned frame=0;frame<90;++frame) {
         if(frame==30) SDL_HideWindow(g->window);
         if(frame==60) SDL_ShowWindow(g->window);
         presenting=true;
+        painting=true;
+        bool painted=dc_gpu_paint_material(g,63,63,0,
+            frame%2u?DC_MATERIAL_AIR:DC_MATERIAL_STONE,err,sizeof(err));
+        painting=false;
+        if(!painted) {fprintf(stderr,"%s\n",err);return 11;}
         bool okay=dc_gpu_present_chunks_steps(g,1,err,sizeof(err));
         presenting=false;
         if(!okay) { fprintf(stderr,"%s\n",err); return 6; }
         SDL_Delay(2);
     }
-    bool okay=finite_acquire && idle_calls==0 && image_sems_safe && acquire_dependency && present_dependency;
+    bool okay=finite_acquire && idle_calls==0 && brush_fence_waits==90u && image_sems_safe && acquire_dependency && present_dependency;
     okay=okay && dc_gpu_read_body_id(g,1,&body,err,sizeof(err)) && body.x_fp==10*65536+90*4096;
     fprintf(stdout,"mode=%d finite acquire=%d presentation queue-idle calls=%u\n",mode,finite_acquire,idle_calls);
+    fprintf(stdout,"90 brush transactions fence waits=%u\n",brush_fence_waits);
     fprintf(stdout,"90-frame waits: acquire=%.3fms enqueue=%.3fms render=%.3fms image semaphores safe=%d\n",
         acquire_ms,enqueue_ms,render_wait_ms,image_sems_safe);
     fprintf(stdout,"image transitions chain transfer wait=%d and present signal=%d\n",acquire_dependency,present_dependency);
