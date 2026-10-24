@@ -1644,3 +1644,12 @@ build/reactive_profile_gpu_tests: tests/vulkan/reactive_profile_gpu_tests.c tool
 test: build/reactive_profile_gpu_tests
 test_reactive_gpu_profiles: build/reactive_profile_gpu_tests
 	./build/reactive_profile_gpu_tests
+
+REACTIVE_STATE_SRC = src/fire/reactive_state.c src/fire/reactive_snapshot.c src/fire/material_profile.c
+build/reactive_state_tests: tests/fire/reactive_state_tests.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_state.h include/ferrum/fire/material_profile.h src/fire/material_profile_data.inc
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/reactive_state_tests.c $(REACTIVE_STATE_SRC) -o $@ -lm
+.PHONY: test_reactive_state
+test: test_reactive_state
+test_reactive_state: build/reactive_state_tests
+	./build/reactive_state_tests
