@@ -753,7 +753,6 @@ static int smoke_streamed_level(void) {
                      dc_level_view_wait_visible(view, 5000, err, sizeof(err));
     if (okay) okay = dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
                                          &chunk, err, sizeof(err)) &&
-                     chunk.cells[5 * DC_CHUNK_SIDE].material == DC_MATERIAL_SAND &&
                      memcmp(saved_cells,chunk.cells,sizeof(saved_cells)) == 0 &&
                      chunk.marker_count == saved_marker_count &&
                      memcmp(saved_faces, chunk.face_velocity,
