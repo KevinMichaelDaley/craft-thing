@@ -59,6 +59,12 @@ bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         info.stage.pSpecializationInfo=&specialization;
         result = vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,&gpu->contact_pipelines[phase]);
     }
+    vkDestroyShaderModule(gpu->device,module,NULL);
+    if(result!=VK_SUCCESS) return error(err,cap,"Cannot create generic contact pipelines");
+    if(!dc_gpu_contact_shader_pixels("build/shaders/contacts_pixel.comp.spv",
+        DC_GPU_TYPED_CONTACT_ACTIVITY_WORD,err,cap)) return false;
+    if(!dc_gpu_load_shader_module(gpu,"build/shaders/contacts_pixel.comp.spv",&module,err,cap)) return false;
+    info.stage.module=module;
     const uint32_t pixel_phases[]={4u,5u,2u,3u};
     VkPipeline *pixel_pipelines[]={&gpu->contact_pixel_plan_pipeline,
         &gpu->contact_pixel_work_pipeline,&gpu->contact_pixel_pipeline,&gpu->contact_pixel_finish_pipeline};

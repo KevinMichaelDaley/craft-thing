@@ -1510,6 +1510,14 @@ build/diagnostics/pressure_stencil_pack_probe.spv: tests/vulkan/pressure_stencil
 build/pressure_stencil_pack_tests: tests/vulkan/pressure_stencil_pack_tests.c tools/diagnostics/vulkan_probe.c build/diagnostics/pressure_stencil_pack_probe.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ $(LDLIBS)
 test: build/pressure_stencil_pack_tests
+build/shaders/contacts_pixel.comp.spv: shaders/sim/contacts.comp $(wildcard shaders/sim/*.glsl)
+	mkdir -p $(dir $@)
+	glslangValidator -DDC_CONTACT_PIXEL_MODULE=1 -DDC_CONTACT_POLYGON_CAPACITY=4 -V --target-env vulkan1.3 -S comp -o $@ $<
+build/shaders/runtime/contacts_pixel.comp.spv: shaders/sim/contacts.comp $(wildcard shaders/sim/*.glsl)
+	mkdir -p $(dir $@)
+	glslangValidator -DDC_RUNTIME_BODY_STORAGE=1 -DDC_CONTACT_PIXEL_MODULE=1 -DDC_CONTACT_POLYGON_CAPACITY=4 -V --target-env vulkan1.3 -S comp -o $@ $<
+$(GPU_OBJ) $(GPU_SOURCE_BINARIES): build/shaders/contacts_pixel.comp.spv build/shaders/runtime/contacts_pixel.comp.spv
+test_gpu_tools: build/shaders/contacts_pixel.comp.spv build/shaders/runtime/contacts_pixel.comp.spv
 build/diagnostics/pixel_boundary_probe.spv: shaders/sim/rigid_clip.glsl shaders/sim/rigid_shape.glsl tests/vulkan/rigid_clip_reference.glsl
 
 build/solver_contact_start_tests: tests/vulkan/solver_contact_start_tests.c tests/vulkan/solver_motion_store_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_motion_profile.comp.spv

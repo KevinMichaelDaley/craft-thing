@@ -27,7 +27,8 @@ bool __wrap_dc_gpu_load_shader_module(dc_gpu_t *gpu, const char *path, VkShaderM
     if (!candidate) candidate=gpu->runtime_body_consumers?
         "build/diagnostics/runtime_contacts_terrain_scan.comp.spv":"build/diagnostics/contacts_terrain_scan.comp.spv";
 #endif
-    if (candidate && strcmp(path, "build/shaders/contacts.comp.spv") == 0) {
+    if (candidate && (strcmp(path,"build/shaders/contacts.comp.spv")==0||
+        strcmp(path,"build/shaders/contacts_pixel.comp.spv")==0)) {
         if(!dc_gpu_contact_shader_compatible(candidate,DC_GPU_TYPED_CONTACT_ACTIVITY_WORD,err,cap)) return false;
         path = candidate;
     }

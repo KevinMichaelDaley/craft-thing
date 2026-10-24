@@ -45,11 +45,12 @@ def corner_capacity(path, pixel_only):
 
 class ContactPolygonStorageTests(unittest.TestCase):
     def test_contact_storage_matches_the_specialized_geometry(self):
-        for variant in ("contacts.comp.spv", "runtime/contacts.comp.spv"):
+        for variant in ("", "runtime/"):
             with self.subTest(variant=variant):
-                path = f"build/shaders/{variant}"
-                self.assertEqual(corner_capacity(path, False), 8)
-                self.assertEqual(corner_capacity(path, True), 4)
+                generic = f"build/shaders/{variant}contacts.comp.spv"
+                pixels = f"build/shaders/{variant}contacts_pixel.comp.spv"
+                self.assertEqual(corner_capacity(generic, False), 8)
+                self.assertEqual(corner_capacity(pixels, True), 4)
 
 
 if __name__ == "__main__":

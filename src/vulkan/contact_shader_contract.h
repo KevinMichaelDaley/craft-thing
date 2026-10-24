@@ -7,8 +7,8 @@
 
 #include "dungeoncraft/contact_work_layout.h"
 
-/** Check typed-body specialization and transient dispatch storage agreement. */
-static bool dc_gpu_contact_shader_compatible(const char *path,uint32_t word,char *err,uint32_t cap) {
+/** Check specialization defaults and transient dispatch storage agreement. */
+static bool dc_gpu_contact_shader_interface(const char *path,uint32_t word,bool pixel_only,char *err,uint32_t cap) {
     FILE *file=fopen(path,"rb");
     const char *failure="Cannot read contact shader interface";
     bool binding=false,dynamic=false,slot=false,work=false;
@@ -38,7 +38,7 @@ static bool dc_gpu_contact_shader_compatible(const char *path,uint32_t word,char
                     if(decoration==1u&&value==31u) slot_result=target;
                     if(decoration==1u&&value==32u) work_result=target;
                 }
-            } else if(opcode==49u&&count==3u&&i==2u&&type_result&&value==type_result) {
+            } else if(opcode==(pixel_only?48u:49u)&&count==3u&&i==2u&&type_result&&value==type_result) {
                 dynamic=true;
             } else if(opcode==50u&&count==4u) {
                 if(i==2u) target=value;
@@ -55,6 +55,15 @@ fail:
     if(file) fclose(file);
     if(err&&cap) snprintf(err,cap,"%s",failure);
     return false;
+}
+
+/** Validate a generic module which can execute legacy and pixel contacts. */
+static inline bool dc_gpu_contact_shader_compatible(const char *path,uint32_t word,char *err,uint32_t cap) {
+    return dc_gpu_contact_shader_interface(path,word,false,err,cap);
+}
+/** Validate a module dedicated to four-corner pixel geometry. */
+static inline bool dc_gpu_contact_shader_pixels(const char *path,uint32_t word,char *err,uint32_t cap) {
+    return dc_gpu_contact_shader_interface(path,word,true,err,cap);
 }
 
 #endif

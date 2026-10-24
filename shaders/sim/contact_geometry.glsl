@@ -5,7 +5,10 @@ const float CONTACT_SKIN = 1.0 / 65536.0;
 float contact_skin = CONTACT_SKIN;
 const float FEATURE_EPSILON = 0.0001;
 
-struct Polygon { vec2 vertices[BODY_VERTEX_CAPACITY]; uint count; };
+#ifndef DC_CONTACT_POLYGON_CAPACITY
+#define DC_CONTACT_POLYGON_CAPACITY BODY_VERTEX_CAPACITY
+#endif
+struct Polygon { vec2 vertices[DC_CONTACT_POLYGON_CAPACITY]; uint count; };
 
 Polygon body_polygon(Body body,uint piece, vec2 offset) {
     Polygon polygon;

@@ -36,7 +36,7 @@ VkDescriptorBufferInfo dc_gpu_runtime_bodies_binding(const dc_gpu_t *gpu);
 static inline const char *dc_gpu_runtime_body_shader(const dc_gpu_t *g,const char *path,char output[1024]) {
     if(!g||!g->runtime_body_consumers) return path;
     const char *name=strrchr(path,'/');name=name?name+1:path;
-    const char *consumers[]={"pattern.comp.spv","rigid.comp.spv","rigid_solver.comp.spv","contacts.comp.spv",
+    const char *consumers[]={"pattern.comp.spv","rigid.comp.spv","rigid_solver.comp.spv","contacts.comp.spv","contacts_pixel.comp.spv",
         "broadphase.comp.spv","component_extract.comp.spv","component_local.comp.spv","structural.comp.spv","structural_carve.comp.spv",
         "pixel_hydro.comp.spv","mpm.comp.spv","mpm_active.comp.spv","mpm_compact.comp.spv","tick_probe.comp.spv","scene.comp.spv"};
     for(unsigned i=0;i<sizeof(consumers)/sizeof(*consumers);i++)

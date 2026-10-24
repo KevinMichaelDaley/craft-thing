@@ -4,7 +4,11 @@
 #extension GL_KHR_shader_subgroup_ballot : require
 #define DC_RUNTIME_ROOT_READONLY 1
 #include "../../include/dungeoncraft/contact_work_layout.h"
+#ifdef DC_CONTACT_PIXEL_MODULE
+layout(constant_id=1) const bool CONTACT_PIXEL_ONLY=true;
+#else
 layout(constant_id=1) const bool CONTACT_PIXEL_ONLY=false;
+#endif
 #define DC_RIGID_PIXEL_ONLY CONTACT_PIXEL_ONLY
 #include "rigid_body.glsl"
 #include "contact_boundary.glsl"

@@ -43,6 +43,13 @@ static void test_scratch_offset_mismatch_is_rejected(void) {
     ASSERT_TRUE(!dc_gpu_contact_shader_compatible(fixture,16,err,sizeof(err)));
     ASSERT_TRUE(err[0]!=0);PASS();
 }
+static void test_pixel_module_cannot_replace_general_geometry(void) {
+    char err[256]={0};
+    const char *path="build/shaders/contacts_pixel.comp.spv";
+    ASSERT_TRUE(dc_gpu_contact_shader_pixels(path,15,err,sizeof(err)));
+    ASSERT_TRUE(!dc_gpu_contact_shader_compatible(path,15,err,sizeof(err)));
+    PASS();
+}
 static void test_forced_pixel_default_is_rejected(void) {
     uint32_t words[sizeof(valid)/4];memcpy(words,valid,sizeof(valid));words[17]=(3u<<16)|48u;
     write_fixture(words,sizeof(words)/4);char err[256]={0};
@@ -77,6 +84,7 @@ int main(void) {
     if(mkdir("build/diagnostics",0777)!=0&&errno!=EEXIST) return 2;
     RUN(test_current_dispatch_contract_is_accepted);RUN(test_runtime_shader_has_the_same_contract);
     RUN(test_scratch_offset_mismatch_is_rejected);RUN(test_forced_pixel_default_is_rejected);
+    RUN(test_pixel_module_cannot_replace_general_geometry);
     RUN(test_old_unversioned_or_missing_binding_shaders_are_rejected);
     RUN(test_truncated_and_zero_length_instructions_are_rejected);
     RUN(test_unbatched_and_wrong_work_interfaces_are_rejected);
