@@ -122,11 +122,17 @@ Surface surface_at(uint i,out float opacity,out uint known) {
             if(coverage<=0.) continue;
             ivec2 rest=pixel_body(body)?pixel_piece_cell(body,piece):ivec2(floor(body_local_point(body,center_point-vec2(body.x_fp,body.y_fp)/65536.)));
             uint mapped_material=terrain_material(piece_material(body,piece));
-            Appearance a=texture_sample(rest,body.id,mapped_material,mapped_material<=10u?configuration[4u+mapped_material]:0u);
+            vec4 authored=vec4(0);
             if(pixel_body(body)) {
                 uint word=body.compound_reserved+pixel_tile_offset(body,piece/256u)+1u+(piece%256u)/8u;
-                vec4 color=shape_color_get(word,piece%8u);
-                if(color.w>0.) a.color_roughness.rgb=color.rgb;
+                authored=shape_color_get(word,piece%8u);
+            }
+            Appearance a;
+            if(SCENE_PHASE==6u&&authored.w>0.) {
+                a=Appearance(vec4(authored.rgb,0),vec4(0));
+            } else {
+                a=texture_sample(rest,body.id,mapped_material,mapped_material<=10u?configuration[4u+mapped_material]:0u);
+                if(authored.w>0.) a.color_roughness.rgb=authored.rgb;
             }
             add_surface(surface,a,coverage,body.angle);body_coverage+=coverage;
             body_opacity+=coverage*material_opacity(mapped_material);
@@ -174,6 +180,21 @@ uint pack_display(vec3 linear,bool lit) {
     uvec3 rgb=uvec3(round(clamp(srgb,vec3(0),vec3(1))*255.));
     return 0xff000000u|(rgb.z<<16)|(rgb.y<<8)|rgb.x;
 }
+uint refresh_palette(uint atlas) {
+    if(atlas>=DC_BUFFER_DATA(params.registry+1u)*4096u) return 0u;
+    uint registry=params.registry+32u+(atlas/4096u)*8u;
+    if(DC_BUFFER_DATA(registry+5u)==0u) return 0u;
+    uint generated=0u,generation=DC_BUFFER_DATA(registry+4u),material=chunk_cells[atlas].x&65535u;
+    uint style=material<=10u?configuration[4u+material]:0u,key=material|(style<<16u);
+    if(uvec2(keys[atlas].x&0x7fffffffu,keys[atlas].y)!=uvec2(key,generation)) {
+        ivec2 rest=ivec2(canonical_cell(DC_BUFFER_DATA(registry),atlas%64u),
+            canonical_cell(DC_BUFFER_DATA(registry+2u),(atlas%4096u)/64u));
+        palette[atlas]=texture_sample(rest,1u,material,style);keys[atlas]=uvec2(key,generation);
+        generated=material!=0u&&material!=3u?1u:0u;
+    }
+    if(terrain_colors[atlas].w>0.) palette[atlas].color_roughness.rgb=terrain_colors[atlas].rgb;
+    return generated;
+}
 void main() {
     uint i=gl_GlobalInvocationID.x;
     if(SCENE_PHASE==7u) {
@@ -198,19 +219,15 @@ void main() {
         return;
 #endif
     }
-    if(SCENE_PHASE==2u) {
+    if(SCENE_PHASE==2u||SCENE_PHASE==8u) {
         uint generated=0u;
-        if(i<DC_BUFFER_DATA(params.registry+1u)*4096u) {
-            uint registry=params.registry+32u+(i/4096u)*8u;
-            if(DC_BUFFER_DATA(registry+5u)!=0u) {
-                uint generation=DC_BUFFER_DATA(registry+4u),material=chunk_cells[i].x&65535u;
-                uint style=material<=10u?configuration[4u+material]:0u,key=material|(style<<16);
-                if(uvec2(keys[i].x&0x7fffffffu,keys[i].y)!=uvec2(key,generation)) {
-                    ivec2 rest=ivec2(canonical_cell(DC_BUFFER_DATA(registry),i%64u),canonical_cell(DC_BUFFER_DATA(registry+2u),(i%4096u)/64u));
-                    palette[i]=texture_sample(rest,1u,material,style);keys[i]=uvec2(key,generation);
-                    generated=material!=0u && material!=3u?1u:0u;
-                }
-                if(terrain_colors[i].w>0.) palette[i].color_roughness.rgb=terrain_colors[i].rgb;
+        if(SCENE_PHASE==2u) generated=refresh_palette(i);
+        else if(i<configuration[0]*configuration[1]) {
+            uvec2 cell=uvec2(i%configuration[0]+params.view_x,i/configuration[0]+params.view_y);
+            uint page=pages[(cell.y/64u)*((params.width+63u)/64u)+cell.x/64u];
+            if(page!=0u) {
+                uint atlas=(page-1u)*4096u+(cell.y%64u)*64u+cell.x%64u;
+                generated=refresh_palette(atlas);
             }
         }
         uint count=group_sum(generated);
@@ -244,7 +261,7 @@ void main() {
     uint index=cell.y*params.width+cell.x;Surface surface;
     if(SCENE_PHASE==6u) {
         float opacity;uint known;
-        surface=unpack_surface(pack_surface(surface_at(index,opacity,known)));
+        surface=surface_at(index,opacity,known);
     } else surface=unpack_surface(surfaces[index]);
     if(surface.weights.w==0.) {display[index]=0xffff00ffu;return;}
     vec3 color=surface.albedo.rgb;bool lit=SCENE_PHASE!=6u&&params.mode==0u;
