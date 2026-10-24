@@ -119,6 +119,15 @@ static void test_duplicate_owners_or_parcel_ids_are_not_saved(void) {
     ASSERT_TRUE(!fr_reactive_snapshot_write(path,a,2,2,err,sizeof(err)));
     remove(path);PASS();
 }
+static void test_snapshot_counter_cannot_reuse_a_preserved_origin_identity(void) {
+    const char *path="build/reactive_origin_counter.bin";char err[128];
+    fr_reactive_record_t record={.owner={.kind=FR_REACTIVE_OWNER_BODY,.key={19,2,4,8,0}}};
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,750,5,&record.state,err,sizeof(err)));
+    record.state.origin_id_low=100;
+    ASSERT_TRUE(!fr_reactive_snapshot_write(path,&record,1,6,err,sizeof(err)));
+    ASSERT_TRUE(fr_reactive_snapshot_write(path,&record,1,101,err,sizeof(err)));
+    remove(path);PASS();
+}
 int main(void) {
     _Static_assert(sizeof(fr_reactive_state_t)==FR_REACTIVE_STATE_WORDS*4u,"Reactive state ABI changed");
     _Static_assert(offsetof(fr_reactive_state_t,thermal_energy)==68u,"Reactive energy offset changed");
@@ -130,5 +139,6 @@ int main(void) {
     RUN(test_snapshot_roundtrip_and_capacity_failure_are_transactional);
     RUN(test_corrupt_or_future_snapshot_cannot_publish_partial_state);
     RUN(test_duplicate_owners_or_parcel_ids_are_not_saved);
+    RUN(test_snapshot_counter_cannot_reuse_a_preserved_origin_identity);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
