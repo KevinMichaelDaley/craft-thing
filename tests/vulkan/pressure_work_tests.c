@@ -30,6 +30,21 @@ static void test_pressure_batches_have_exact_stencil_cache_storage(void) {
     dc_gpu_destroy(gpu);
     ASSERT_TRUE(enough);PASS();
 }
+static void test_pressure_stencil_does_not_increase_mapped_memory(void) {
+    dc_chunk_t left={0},right={0};char err[256]={0};dc_gpu_memory_stats_t cached,dense;
+    ASSERT_EQ(unsetenv("DC_FLUID_VARIANTS"),0);
+    dc_gpu_t *a=make_grid(&left,&right,err,sizeof(err));ASSERT_TRUE(a);
+    ASSERT_EQ(setenv("DC_FLUID_VARIANTS","generic",1),0);
+    dc_gpu_t *b=make_grid(&left,&right,err,sizeof(err));
+    ASSERT_EQ(unsetenv("DC_FLUID_VARIANTS"),0);ASSERT_TRUE(b);
+    ASSERT_TRUE(dc_gpu_memory_stats(a,&cached));ASSERT_TRUE(dc_gpu_memory_stats(b,&dense));
+    uint64_t cached_mapped=cached.mapped_local_bytes+cached.mapped_system_bytes;
+    uint64_t dense_mapped=dense.mapped_local_bytes+dense.mapped_system_bytes;
+    printf("pressure cache mapped allocation %llu, dense %llu bytes\n",
+        (unsigned long long)cached_mapped,(unsigned long long)dense_mapped);
+    dc_gpu_destroy(a);dc_gpu_destroy(b);
+    ASSERT_EQ(cached_mapped,dense_mapped);PASS();
+}
 static bool phase(dc_gpu_t *g,uint32_t mode) {
     VkCommandBufferBeginInfo begin={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     if(vkResetCommandBuffer(g->command,0)!=VK_SUCCESS||
@@ -169,6 +184,7 @@ static void test_cached_stencil_matches_dense_with_partial_faces_and_mixed_terra
 }
 int main(void) {
     RUN(test_pressure_batches_have_exact_stencil_cache_storage);
+    RUN(test_pressure_stencil_does_not_increase_mapped_memory);
     RUN(test_pressure_work_is_empty_then_wakes_for_local_water);
     RUN(test_water_inserted_between_pressure_batches_matches_dense_solver);
     RUN(test_cached_stencil_matches_dense_with_partial_faces_and_mixed_terrain);
