@@ -26,19 +26,19 @@ bool carve_union_components(Body source,uint area) {
     memoryBarrierBuffer();barrier();
     const ivec2 edges[4]=ivec2[4](ivec2(1,0),ivec2(-1,1),ivec2(0,1),ivec2(1,1));
     for(uint pixel=lane;pixel<area;pixel+=DC_STRUCTURAL_LANES) {
-        if(atomicAdd(DC_FRAGMENT_LABEL(pixel),0u)==0xffffffffu) continue;
+        if((atomicAdd(DC_FRAGMENT_LABEL(pixel),0u)&LEAF_RESERVATION)!=0u) continue;
         ivec2 p=pixel_piece_cell(source,pixel);
         for(uint edge=0u;edge<4u;edge++) {
             ivec2 q=p+edges[edge];
             if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(source.width,source.height)))) continue;
             uint next=carve_neighbor_piece(source,pixel,edges[edge],q);
-            if(next!=0xffffffffu&&atomicAdd(DC_FRAGMENT_LABEL(next),0u)!=0xffffffffu)
+            if(next!=0xffffffffu&&(atomicAdd(DC_FRAGMENT_LABEL(next),0u)&LEAF_RESERVATION)==0u)
                 carve_union_join(pixel,next);
         }
     }
     memoryBarrierBuffer();barrier();
     for(uint pixel=lane;pixel<area;pixel+=DC_STRUCTURAL_LANES)
-        if(atomicAdd(DC_FRAGMENT_LABEL(pixel),0u)!=0xffffffffu) {
+        if((atomicAdd(DC_FRAGMENT_LABEL(pixel),0u)&LEAF_RESERVATION)==0u) {
             uint root=carve_union_root(pixel);
             atomicMin(DC_FRAGMENT_LABEL(pixel),root+1u);
         }
@@ -70,7 +70,7 @@ bool carve_union_components(Body source,uint area) {
     memoryBarrierBuffer();barrier();
     for(uint pixel=lane;pixel<area;pixel+=DC_STRUCTURAL_LANES) {
         uint root=DC_FRAGMENT_LABEL(pixel);
-        if(root!=0xffffffffu) DC_FRAGMENT_LABEL(pixel)=DC_FRAGMENT_QUEUE(root-1u)+1u;
+        if((root&LEAF_RESERVATION)==0u) DC_FRAGMENT_LABEL(pixel)=DC_FRAGMENT_QUEUE(root-1u)+1u;
     }
     memoryBarrierBuffer();barrier();
     for(uint owner=1u;owner<=pc_count;owner++) {

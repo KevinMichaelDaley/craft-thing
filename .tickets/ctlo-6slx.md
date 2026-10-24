@@ -19,3 +19,7 @@ RED GPU work probe exposes more than32 synchronized frontier rounds for190x190 c
 **2026-10-24T08:57:45Z**
 
 RED2/2 work failures:195 synchronized frontier rounds. GREEN2/2 actual core/synchronization checks:zero frontier rounds,12210 directory resolutions, exact36051 remaining pixels/materials/customRGBA/mass and bounded repeated misses. Displayed500 frames30.304ms mean36.891ms worst: target remains unmet, follow-up locating remaining per-tile serial packing barriers. Full brush and mixed-polygon oracle running.
+
+**2026-10-24T09:00:44Z**
+
+Full brush regression initially found reserved leaf labels being mistaken for union links. Fixed by preserving LEAF_RESERVATION high-bit entries through linking, compression and remapping. Normal full brush battery now12/12, including failed-allocation rollback, leaf bits/material10, mixed wood preservation, concavities, rotation and anchored members.
