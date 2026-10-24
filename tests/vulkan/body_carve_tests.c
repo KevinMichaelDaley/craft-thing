@@ -115,8 +115,10 @@ static void test_brush_invalidates_only_the_state_it_changes(void) {
     ASSERT_TRUE(!g->body_refresh_pending);
     ASSERT_EQ(dc_gpu_structural_data(g)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD],0u);
     ASSERT_TRUE(dc_gpu_paint_material(g,15,15,0,DC_MATERIAL_STONE,err,sizeof(err)));
-    ASSERT_TRUE(!g->body_refresh_pending);
+    ASSERT_TRUE(g->body_refresh_pending);
     ASSERT_EQ(dc_gpu_structural_data(g)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD],1u);
+    ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    ASSERT_TRUE(!g->body_refresh_pending);
     ASSERT_TRUE(dc_gpu_paint_material(g,4,4,0,DC_MATERIAL_AIR,err,sizeof(err)));
     ASSERT_TRUE(g->body_refresh_pending);
     dc_gpu_destroy(g);free(chunk);PASS();
