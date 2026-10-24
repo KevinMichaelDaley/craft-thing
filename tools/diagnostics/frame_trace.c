@@ -324,6 +324,7 @@ static unsigned hydro_begin(VkCommandBuffer command) {
     if(bound==traced->fluid_aperture_pipeline) label=APERTURE_KERNEL;
     if(bound==traced->mpm_pipeline&&pushed_mode<8u) label=MPM_PHASE+pushed_mode;
     for(unsigned phase=0;phase<8u;phase++) if(bound==traced->mpm_phase_pipelines[phase]) label=MPM_PHASE+phase;
+    if(bound==traced->mpm_swap_commit_pipeline) label=MPM_PHASE+5u;
     if(bound==traced->mpm_component_pipeline&&pushed_mode<6u) label=MPM_COMPONENT_PHASE+pushed_mode;
     if(bound==traced->mpm_activity_pipeline) label=MPM_ACTIVITY_KERNEL;
     for(unsigned phase=0;phase<DC_MPM_COMPACTION_PHASES;phase++)
