@@ -155,6 +155,9 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
         }
         uint tile_output=0u;
         for(uint tile=0u;tile<pixel_tile_count(source);tile++) {
+#ifdef DC_CARVE_WORK_PROFILE
+            if(lane==0u) atomicAdd(carve_work_profile[4],2u);
+#endif
             if(lane==0u) pc_seed=0u;barrier();
             for(uint cell=lane;cell<256u;cell+=DC_STRUCTURAL_LANES)
                 if(DC_FRAGMENT_LABEL(tile*256u+cell)==child+1u) atomicOr(pc_seed,1u);
