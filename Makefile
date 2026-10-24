@@ -205,7 +205,7 @@ all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests bui
 
 NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c $(GPU_SRC) src/world/chunk.c src/world/stream.c src/world/generate.c
 build/rigid_dynamics_visual_tests: tests/app/rigid_dynamics_visual_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u -DDC_PRESSURE_SWEEPS=16u $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -lm
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 
 test_rigid_dynamics: build/compound_body_tests build/rigid_dynamics_visual_tests
 	./build/compound_body_tests
@@ -249,6 +249,7 @@ build/convex_body_tests: tests/vulkan/convex_body_tests.c $(GPU_OBJ) $(CHUNK_OBJ
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 QUARTER_FLAGS = -DDC_QUARTER_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=70u -DDC_PRESSURE_SWEEPS=16u
 PERFORMANCE_OBJ = $(patsubst %.c,build/performance/%.o,$(GPU_SRC) src/world/chunk.c)
+build/rigid_dynamics_visual_tests: $(PERFORMANCE_OBJ)
 build/performance/%.o: %.c Makefile
 	mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -MMD -MP -c $< -o $@
@@ -633,6 +634,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/fluid_dry_line_tests
 	./tools/with-vulkan python3 tests/vulkan/transport_request_storage_test.py
 	./build/solver_recording_tests
+	./build/solver_pipeline_tests
 	./build/solver_capacity_tests
 	./build/solver_commands_tests
 	./build/body_address_gpu_tests
@@ -863,8 +865,8 @@ build/pixel_geometry_tests: tests/vulkan/pixel_geometry_tests.c Makefile $(GPU_O
 build/pixel_world_tests: tests/vulkan/pixel_world_tests.c tests/vulkan/pixel_component_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/pixel_dynamics_visual_tests: tests/app/pixel_dynamics_visual_tests.c tests/vulkan/pixel_component_tests.c Makefile $(GPU_SRC) src/world/chunk.c build/quarter_native_solver_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+build/pixel_dynamics_visual_tests: tests/app/pixel_dynamics_visual_tests.c tests/vulkan/pixel_component_tests.c Makefile $(PERFORMANCE_OBJ) build/quarter_native_solver_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 
 build/pixel_performance_tests: tests/vulkan/pixel_performance_tests.c Makefile $(GPU_SRC) src/world/chunk.c build/pixel_component_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
@@ -1434,6 +1436,9 @@ test: build/solver_motion_store_tests
 build/solver_recording_tests: tests/vulkan/solver_recording_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/solver_recording_tests
+build/solver_pipeline_tests: tests/vulkan/solver_pipeline_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/solver_pipeline_tests
 
 build/solver_commands_gpu.o: src/vulkan/solver_commands_gpu.c src/vulkan/gpu_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
