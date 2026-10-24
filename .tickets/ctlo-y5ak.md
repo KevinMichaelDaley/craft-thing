@@ -1,6 +1,6 @@
 ---
 id: ctlo-y5ak
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T19:34:24Z

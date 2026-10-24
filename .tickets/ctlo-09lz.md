@@ -1,6 +1,6 @@
 ---
 id: ctlo-09lz
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T11:08:54Z
@@ -19,3 +19,7 @@ Build conservative per-chunk terrain and grain presence on GPU once per rigid fr
 **2026-10-24T11:18:31Z**
 
 GREEN actual core+synchronization validation: contact mechanics10/10, cached negative terrain work3/3 (per-pair scanned cells0), frozen scalar manifold oracle7/7 exact. CPU command recording3/3 and solver recording5/5 preserve all8x8 iterations. New per-chunk flags are rebuilt before each solver batch and standalone contact call; terrain/grain masses cannot change during its rigid substeps. Real displayed500-frame replay29.160ms mean36.357ms worst vs30.283/37.502 prior, stable four paused captures; target still RED.
+
+**2026-10-24T19:30:38Z**
+
+Final full regression retains exact manifold/terrain/negative-candidate work and both granular layers. Combined default actual displayed1000-frame repeated-cut replays pass24.079/29.334ms and24.133/29.147ms mean/worst.

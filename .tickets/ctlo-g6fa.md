@@ -1,6 +1,6 @@
 ---
 id: ctlo-g6fa
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T19:21:02Z

@@ -1,6 +1,6 @@
 ---
 id: ctlo-1qay
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T19:10:51Z
@@ -23,3 +23,7 @@ RED GPU probe preserved3 words but reported0 cooperative copy lanes. GREEN probe
 **2026-10-24T19:20:29Z**
 
 Full actual core+synchronization body-carve suite12/12 passes. Default displayed1000 replay24.467ms mean29.815ms worst passes, but repeat24.960/30.562 still misses strict tail budget. Preserve the byte-exact cooperative implementation; global performance work continues.
+
+**2026-10-24T19:37:17Z**
+
+Final combined defaults include fused albedo pass and pass two consecutive1000-frame displayed replays24.079/29.334ms and24.133/29.147ms mean/worst. Full regression retains exact24-texel cooperative probe and12 carving cases; all accepted color/copy/validation requirements met.

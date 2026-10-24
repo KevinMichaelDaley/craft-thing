@@ -18,3 +18,7 @@ Combined renderer/exporter/physics checkpoint retains two observed authored_stag
 **2026-10-24T01:16:15Z**
 
 Final inline optimization full headless regression again reproduces only the two existing authored-stage failures at tests/vulkan/authored_stage_tests.c:67 and :135.604 reported passing cases; the activity-size and profiling fixture failures from the first run were corrected and pass in this final full rerun. No staging assertion was relaxed.
+
+**2026-10-24T19:27:40Z**
+
+Final inline performance regression rerun still reproduces the same two authored_stage_tests failures at67 (component-plan getter stub) and135 (absent-normal default). These predate this optimization work; no assertions relaxed. All newly corrected fluid/contact and color/albedo tests pass in the rerun so far.
