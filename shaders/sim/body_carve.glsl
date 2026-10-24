@@ -21,6 +21,20 @@ bool carve_component_solid(Body source,uint pixel) {
     return piece_material(source,pixel)!=0u;
 #endif
 }
+#ifndef DC_CARVE_TILE_NEIGHBORS
+#define DC_CARVE_TILE_NEIGHBORS 0
+#endif
+uint carve_neighbor_piece(Body source,uint piece,ivec2 delta,ivec2 cell) {
+#if DC_CARVE_TILE_NEIGHBORS
+    ivec2 local=ivec2(int(piece%16u),int((piece%256u)/16u))+delta;
+    if(all(greaterThanEqual(local,ivec2(0)))&&all(lessThan(local,ivec2(16))))
+        return piece+uint(delta.y*16+delta.x);
+#endif
+#ifdef DC_CARVE_WORK_PROFILE
+    atomicAdd(carve_work_profile[2],1u);
+#endif
+    return pixel_piece_at(source,cell);
+}
 #ifdef DC_RUNTIME_BODY_STORAGE
 #include "pixel_carve_parallel.glsl"
 #endif

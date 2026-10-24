@@ -52,12 +52,13 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
         while(head<pc_end) {
             uint end=pc_end;
             for(uint i=head+lane;i<end;i+=DC_STRUCTURAL_LANES) {
-                ivec2 p=pixel_piece_cell(source,DC_FRAGMENT_QUEUE(i));
+                uint piece=DC_FRAGMENT_QUEUE(i);
+                ivec2 p=pixel_piece_cell(source,piece);
                 low=min(low,p);high=max(high,p+1);
                 for(uint n=0u;n<8u;n++) {
                     ivec2 q=p+neighbors[n];
                     if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(source.width,source.height)))) continue;
-                    uint next=pixel_piece_at(source,q);
+                    uint next=carve_neighbor_piece(source,piece,neighbors[n],q);
                     if(next==0xffffffffu||!carve_component_solid(source,next)) continue;
                     if(atomicCompSwap(DC_FRAGMENT_LABEL(next),0u,pc_count)==0u)
                         DC_FRAGMENT_QUEUE(atomicAdd(pc_tail,1u))=next;
