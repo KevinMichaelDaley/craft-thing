@@ -612,6 +612,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/dry_fluid_tests
 	./build/fluid_specialization_tests
 	./build/pressure_work_tests
+	./build/pressure_stencil_pack_tests
 	./build/grain_bed_work_tests
 	./build/terrain_prop_tests
 	./build/body_color_tests
@@ -1065,6 +1066,7 @@ test_gpu_tools: build/contact_shader_contract_tests build/shaders/runtime/rigid_
 	python3 tests/vulkan/shader_variant_tests.py
 	python3 tests/vulkan/gpu_dependency_tests.py
 	python3 tests/vulkan/runtime_root_storage_test.py
+	python3 tests/vulkan/contact_polygon_storage_test.py
 	python3 tests/vulkan/mpm_storage_test.py
 	./build/contact_shader_contract_tests
 	./build/fluid_transport_limits_tests
@@ -1495,13 +1497,19 @@ build/contact_boundary_tests: tests/vulkan/contact_boundary_tests.c tests/vulkan
 test: build/contact_boundary_tests
 build/diagnostics/contacts_scalar_reference.spv: shaders/sim/contacts.comp $(wildcard shaders/sim/*.glsl)
 	mkdir -p $(dir $@)
-	glslangValidator -DDC_CONTACT_COOPERATIVE_BOUNDARY=0 -V --target-env vulkan1.3 -S comp -o $@ $<
+	glslangValidator -DDC_CONTACT_COOPERATIVE_BOUNDARY=0 -DDC_CONTACT_POLYGON_CAPACITY=8 -V --target-env vulkan1.3 -S comp -o $@ $<
 build/diagnostics/runtime_contacts_scalar_reference.spv: shaders/sim/contacts.comp $(wildcard shaders/sim/*.glsl)
 	mkdir -p $(dir $@)
-	glslangValidator -DDC_RUNTIME_BODY_STORAGE=1 -DDC_CONTACT_COOPERATIVE_BOUNDARY=0 -V --target-env vulkan1.3 -S comp -o $@ $<
+	glslangValidator -DDC_RUNTIME_BODY_STORAGE=1 -DDC_CONTACT_COOPERATIVE_BOUNDARY=0 -DDC_CONTACT_POLYGON_CAPACITY=8 -V --target-env vulkan1.3 -S comp -o $@ $<
 build/contact_boundary_manifold_tests: tests/vulkan/contact_boundary_manifold_tests.c tools/diagnostics/contact_scaling.c $(GPU_OBJ) $(CHUNK_OBJ) build/pixel_component_tests build/diagnostics/contacts_scalar_reference.spv build/diagnostics/runtime_contacts_scalar_reference.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_load_shader_module
 test: build/contact_boundary_manifold_tests
+build/diagnostics/pressure_stencil_pack_probe.spv: tests/vulkan/pressure_stencil_pack_probe.comp shaders/sim/pressure_stencil_pack.glsl
+	mkdir -p $(dir $@)
+	glslangValidator -V --target-env vulkan1.3 -Ishaders/sim -o $@ $<
+build/pressure_stencil_pack_tests: tests/vulkan/pressure_stencil_pack_tests.c tools/diagnostics/vulkan_probe.c build/diagnostics/pressure_stencil_pack_probe.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ $(LDLIBS)
+test: build/pressure_stencil_pack_tests
 build/diagnostics/pixel_boundary_probe.spv: shaders/sim/rigid_clip.glsl shaders/sim/rigid_shape.glsl tests/vulkan/rigid_clip_reference.glsl
 
 build/solver_contact_start_tests: tests/vulkan/solver_contact_start_tests.c tests/vulkan/solver_motion_store_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_motion_profile.comp.spv

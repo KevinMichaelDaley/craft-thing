@@ -1,0 +1,23 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "pressure_stencil_pack.glsl"
+layout(local_size_x=128) in;
+layout(set=0,binding=0,std430) buffer Results {uint results[];};
+void main() {
+    for(uint code=gl_GlobalInvocationID.x;code<=65536u;code+=128u) {
+        uvec4 weights;
+        for(uint axis=0u;axis<4u;axis++) {
+            uint coverage=(code*(axis*2u+1u)+axis*117u)%65537u;
+            weights[axis]=floatBitsToUint(float(coverage)/65536.)|(((code+axis)&3u)<<30u);
+            if((weights[axis]&255u)!=0u) atomicAdd(results[3],1u);
+        }
+        uint payload=code*0x9e3779b9u;payload^=payload>>13u;
+        bool cached=(code&1u)!=0u;
+        uvec4 packed=pack_pressure_stencil(weights,payload,cached);
+        for(int axis=0;axis<4;axis++)
+            if(unpack_pressure_weight(packed,axis)!=weights[axis]) atomicAdd(results[0],1u);
+        if(unpack_pressure_divergence(packed)!=payload) atomicAdd(results[1],1u);
+        if(pressure_divergence_cached(packed)!=cached) atomicAdd(results[2],1u);
+        atomicAdd(results[4],1u);
+    }
+}
