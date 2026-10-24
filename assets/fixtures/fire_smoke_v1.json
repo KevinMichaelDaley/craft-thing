@@ -61,6 +61,29 @@
     {"id":18,"name":"gold","density":19.3,"heat_capacity":0.13,"conductivity":3,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"greek_corrosion_product":"corrosion_residue","fuel_yields":[0,0,0,1]},
     {"id":19,"name":"magic_ingredient","density":0.7,"heat_capacity":1.2,"conductivity":0.1,"fuel_fraction":0.5,"ignition_K":650,"hazard_per_second":0.5,"surface_burn_per_second":0.003,"chemical_energy":6000,"primary_heat":6000,"oxygen_per_fuel":1,"greek_corrosion_product":"ash","fuel_yields":[0,0.4,0.1,0.5]}
   ],
+  "material_modifiers": {
+    "fields":["electrical_conductivity","bound_water_capacity_per_mass","oxidized_hazard_scale","greek_corrosion_susceptibility"],
+    "air":[0.00001,0,1,0],
+    "stone":[0.0001,0.02,1,0.02],
+    "sand":[0.0001,0.0625,1,0.01],
+    "water":[1,0,1,0],
+    "dirt":[0.001,0.25,1,0.02],
+    "gravel":[0.0001,0.02,1,0.01],
+    "mortar_debris":[0.0001,0.05,1,0.1],
+    "wood":[0.00001,0.5,1.3,0.5],
+    "dense_wood":[0.00001,0.4,1.2,0.4],
+    "leaves":[0.0001,1,1.1,0.8],
+    "leaf_debris":[0.0001,1,1.1,0.8],
+    "coal":[0.1,0.05,0.3,0.1],
+    "char":[0.2,0.1,0.4,0.1],
+    "ash":[0.001,0.1,1,0],
+    "oil":[0.00001,0,0.8,0],
+    "red_slime_jelly":[0.02,0.1,1.2,0],
+    "greek_fire":[0.03,0,1,0],
+    "corrosion_residue":[0.001,0.05,1,0],
+    "gold":[10,0,1,1],
+    "magic_ingredient":[0.05,0.2,0.5,1]
+  },
   "reaction_controls": {
     "wet_capacity_per_mass":0.5,
     "ordinary_wet_hazard_factor_at_full_saturation":0.001,
@@ -146,6 +169,8 @@
     },
     "greek_siege": {
       "inherits":"coal_siege",
+      "remove_objects":[25],
+      "initial_states":[],
       "seed":991397,
       "duration_seconds":60,
       "matched_fuel_mass":16,
@@ -156,8 +181,12 @@
       "maximum_oil_relative_depletion_time":0.5,
       "dousing":{"start_seconds":3,"duration_seconds":12,"volume_per_second":8},
       "submersion":{"start_seconds":3,"duration_seconds":10,"depth_cells":8},
+      "phase_sources":[{"material":"greek_fire","circle":[104,146,3],"host_object":26,"fuel_mass":16,"bound_oxidizer_mass":6.857142857142857,"total_mass":22.857142857142858,"temperature_K":1000,"ignited":true}],
+      "phase_source_variants":{"ordinary_oil":[{"material":"oil","circle":[104,146,3],"host_object":26,"fuel_mass":16,"bound_oxidizer_mass":0,"total_mass":16,"temperature_K":1000,"ignited":true}]},
       "primitives":[
-        {"circle":[104,148,4],"material":"greek_fire","role":3,"object":25},
+        {"rect":[99,150,10,2],"material":"wood","role":3,"object":26},
+        {"rect":[99,142,1,8],"material":"wood","role":3,"object":26},
+        {"rect":[108,142,1,8],"material":"wood","role":3,"object":26},
         {"rect":[178,185,3,45],"material":"wood","role":1,"object":30},
         {"circle":[179,180,12],"material":"leaves","role":1,"object":30},
         {"rect":[188,202,6,12],"material":"wood","role":3,"object":31},
@@ -165,8 +194,8 @@
         {"rect":[208,226,4,4],"material":"magic_ingredient","role":3,"object":33}
       ],
       "variants": {
-        "ordinary_oil":[{"circle":[104,148,4],"material":"oil","role":3,"object":25}],
-        "shielded_carrier":[{"rect":[98,150,12,2],"material":"stone","role":3,"object":26}]
+        "ordinary_oil":[],
+        "shielded_carrier":[{"rect":[99,150,10,2],"material":"stone","role":3,"object":26},{"rect":[99,142,1,8],"material":"stone","role":3,"object":26},{"rect":[108,142,1,8],"material":"stone","role":3,"object":26}]
       }
     }
   }

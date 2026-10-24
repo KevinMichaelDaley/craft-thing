@@ -86,6 +86,9 @@ class FireFixtureContractTests(unittest.TestCase):
         self.assertEqual(greek["minimum_launcher_ignitions"], 48)
         self.assertEqual(greek["matched_fuel_mass"], 16)
         self.assertGreater(greek["bound_oxidizer_mass"], 0)
+        self.assertEqual(greek["phase_sources"][0]["fuel_mass"], 16)
+        self.assertIn(25,greek["remove_objects"])
+        self.assertTrue(all(p["material"] not in ("oil","greek_fire") for p in greek["primitives"]))
         for profile in data["materials"]:
             self.assertGreater(profile["density"], 0)
             self.assertGreater(profile["heat_capacity"], 0)

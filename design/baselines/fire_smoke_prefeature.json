@@ -1,0 +1,39 @@
+{
+  "captured_utc_date":"2026-10-24",
+  "feature_state":"pre-feature baseline; no fire/gas runtime implemented",
+  "code_commit":"ee657db33395424d7bc79384029d92ca629fbc16",
+  "captured_manifest_sha256":"451aa938ff1851533a0457b2be41fb8ff1b12887dd990f966e78705e20ba2c1b",
+  "final_locked_manifest_sha256":"fbaf568bd7a4d2693696073ff455afb232843e4eb0dc1021802c07568ceded95",
+  "hardware":"Intel Iris Xe TGL GT2",
+  "driver":"Mesa 26.0.2 kisak",
+  "backend":"Vulkan/Wayland",
+  "visible_physics_and_render":[480,270],
+  "active_grid_including_halo":[640,448],
+  "world_rigid_sha256":"07115a01c9e50c90b946529ca89a3d31fd0e37a699b08bc1b20c1bd7571a12f8",
+  "original_world_unchanged":true,
+  "lighting":false,
+  "runtime_profile":"defaults, no physics or render quality changes",
+  "air_brush":[225,42,5],
+  "frame_budget_ms":30,
+  "runs":[
+    {"measured_frames":1000,"mean_ms":23.284,"worst_ms":48.363,"wall_seconds_including_startup":26.168624090991216,"paused_captures_identical":true,"budget_pass":false},
+    {"measured_frames":1000,"mean_ms":23.088,"worst_ms":55.194,"wall_seconds_including_startup":26.09909208099998,"paused_captures_identical":true,"budget_pass":false}
+  ],
+  "separate_instrumented_replay":{
+    "measured_frames":180,
+    "full_frame_mean_ms":23.116,
+    "full_frame_worst_ms":29.122,
+    "gpu_region_mean_max_ms":{
+      "rigid":[9.790,12.504],"fluid":[5.414,8.049],"mpm":[4.517,5.451],
+      "renderer":[0.690,1.249],"extraction_within_rigid":[0.257,2.692],
+      "broadphase_within_rigid":[0.097,0.131],"solver_within_rigid":[7.773,8.998]
+    },
+    "maximum_pairs":353,"maximum_contacts":461,"contact_overflow":0
+  },
+  "separate_native_smoke":{
+    "mapped_vram_MiB":83.6,"mapped_system_MiB":0,"device_only_MiB":111.6,
+    "presented_physics_ticks":60,"wall_seconds":0.463,"maximum_startup_inclusive_tick_ms":45.4
+  },
+  "future_reaction_ledger_counters":"not implemented; no zero-error claim",
+  "final_performance_ticket":"ctlo-jjye remains required and open"
+}

@@ -31,3 +31,7 @@ After dun-9qub, serial headless dense quarter_native_bench with validation disab
 **2026-10-13T06:40:25Z**
 
 2026-10-13 serial comparison after ct-alp7: current dense 640x448/70-slot/16-pressure benchmark 20.274ms physics (49.32Hz), 21.500ms including render; rigid 0, fluid13.993ms, granular4.465ms. Detached pushed baseline232d76b built on same machine/config gives20.240ms physics (49.41Hz),21.299ms including render; rigid0,fluid13.923ms,granular4.465ms. Dense gate remains failing, essentially identical baseline/current, so not caused by pixel contact/raster optimizations. Intel frequency observed1200MHz, max1300,min100 after run; no attribution of variance from this single sample. Strict gate retained.
+
+**2026-10-24T22:30:10Z**
+
+New worktree at unchanged engine baseline captured isolated native Wayland level03 repeated-cut1000 replays23.284ms mean48.363ms worst and23.088/55.194. Prior passing24.079/29.334 and24.133/29.147 do not guarantee tail stability. Instrumented180 frames23.116/29.122, no contact overflow. No new engine/shader code or concurrent builds/GPU tests; see design/fire_smoke_baseline.md on feat/fire-smoke-reactive-materials. Final feature30ms gate is retained.

@@ -24,7 +24,7 @@ def scene_data(data, name, seen=()):
     if "inherits" not in scene:
         return dict(scene)
     parent = scene_data(data, scene["inherits"], seen + (name,))
-    inherited = list(parent["primitives"])
+    inherited = [p for p in parent["primitives"] if p.get("object",0) not in scene.get("remove_objects",[])]
     parent.update(scene)
     parent["primitives"] = inherited + scene["primitives"]
     return parent
@@ -58,12 +58,30 @@ def validate(data):
             raise ValueError("Primary heat plus retained char creates chemical energy")
         if p["fuel_fraction"] + p.get("bound_oxidizer_fraction", 0) > 1 + 1e-8:
             raise ValueError("Fuel and bound oxidizer exceed material mass")
+        modifiers=data["material_modifiers"][p["name"]]
+        if len(modifiers)!=4 or any(not math.isfinite(v) or v<0 for v in modifiers):
+            raise ValueError("Invalid electrical/water/oxidation/corrosion modifiers")
     width, height = data["view"]
     for name in data["scenes"]:
         scene = scene_data(data, name)
         if not isinstance(scene["seed"], int) or scene["duration_seconds"] <= 0:
             raise ValueError("Invalid fixture seed/duration")
         shapes = list(scene["primitives"])
+        objects={p.get("object",0) for p in shapes}
+        for state in scene.get("initial_states",[]):
+            if state["object"] not in objects or state["temperature_K"]<=0:
+                raise ValueError("Initial reactive state refers to absent/invalid object")
+        sources=list(scene.get("phase_sources",[]))
+        for variant in scene.get("phase_source_variants",{}).values():
+            sources+=variant
+        for source in sources:
+            profile=next((p for p in profiles if p["name"]==source["material"]),None)
+            if not profile or source["host_object"] not in objects or source["total_mass"]<=0:
+                raise ValueError("Invalid phase source material, carrier or mass")
+            if abs(source["fuel_mass"]-profile["fuel_fraction"]*source["total_mass"])>1e-6:
+                raise ValueError("Phase source fuel disagrees with total composition")
+            if abs(source["bound_oxidizer_mass"]-profile.get("bound_oxidizer_fraction",0)*source["total_mass"])>1e-6:
+                raise ValueError("Phase source oxidizer disagrees with total composition")
         for variant in scene.get("variants", {}).values():
             shapes += variant
         for shape in shapes:
@@ -127,6 +145,7 @@ def build_map(data, name, variant=None):
 
 def export_maps(data, output):
     digests = {}
+    (output/"fixture_manifest.json").write_text(json.dumps(data,indent=2)+"\n")
     for name in data["scenes"]:
         scene = scene_data(data, name)
         for variant in [None] + list(scene.get("variants", {})):

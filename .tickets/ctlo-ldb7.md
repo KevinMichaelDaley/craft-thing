@@ -1,6 +1,6 @@
 ---
 id: ctlo-ldb7
-status: open
+status: in_progress
 deps: [ctlo-wmy2, ctlo-ck1i]
 links: []
 created: 2026-10-24T22:06:18Z
