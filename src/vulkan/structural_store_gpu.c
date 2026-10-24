@@ -393,6 +393,11 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
         free(body_colors);free(colors);
         return error(err, cap, "Invalid or truncated structure snapshot");
     }
+    bool graph_solver=payload->graph[0]!=0u||payload->graph[1]!=0u;
+    for(unsigned bond=0;bond<192u;bond++) graph_solver|=payload->graph[30000u+bond*20u]!=0u;
+    if(graph_solver&&!dc_gpu_solver_graph_prepare(gpu,err,cap)) {
+        payload_destroy(payload);free(pixels);free(chunks);free(body_colors);free(colors);return false;
+    }
     if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS) {
         payload_destroy(payload);
         free(pixels);

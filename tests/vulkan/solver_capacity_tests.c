@@ -4,6 +4,7 @@
 #include "../../src/vulkan/runtime_body_internal.h"
 
 static bool capacity_pipeline(dc_gpu_t *g,bool reference,char *err,uint32_t cap) {
+    if(reference&&!dc_gpu_solver_graph_prepare(g,err,cap)) return false;
     VkShaderModule module=VK_NULL_HANDLE;
     const char *path=reference?"build/diagnostics/solver_capacity_reference.spv":"build/diagnostics/solver_capacity_profile.spv";
     if(!dc_gpu_load_shader_module(g,path,&module,err,cap)) return false;

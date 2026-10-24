@@ -134,18 +134,30 @@ static bool pixel_hydro_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
            error(err, cap, "Cannot create pixel hydro pipelines");
 }
 
-bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    VkShaderModule module = VK_NULL_HANDLE;
-    if (!dc_gpu_load_shader_module(gpu, "build/shaders/rigid_solver.comp.spv",
-                                   &module, err, cap))
-        return false;
+static VkResult solver_phase_pipeline(dc_gpu_t *gpu,VkShaderModule module,uint32_t mode,
+                                      bool capture,VkPipeline *pipeline) {
+    uint32_t values[]={mode,gpu->solver_grouped_reductions,gpu->solver_skip_zero_reductions,
+        gpu->solver_fused_grain,capture};
+    const VkSpecializationMapEntry entries[]={{0u,0u,4u},{5u,4u,4u},{4u,8u,4u},{6u,12u,4u},{7u,16u,4u}};
+    VkSpecializationInfo phase={.mapEntryCount=5,.pMapEntries=entries,
+        .dataSize=sizeof(values),.pData=values};
     VkComputePipelineCreateInfo info = {
         .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage = {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_COMPUTE_BIT,
                   .module = module,
-                  .pName = "main"},
+                  .pName = "main",.pSpecializationInfo=&phase},
         .layout = gpu->pipeline_layout};
+    return vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,pipeline);
+}
+static bool graph_only_phase(uint32_t phase) {
+    return phase==SOLVER_SOLVE||phase==SOLVER_IMPULSE||
+        (phase>=SOLVER_BOND_POSITION&&phase<=SOLVER_BOND_RESET);
+}
+bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    VkShaderModule module = VK_NULL_HANDLE;
+    if (!dc_gpu_load_shader_module(gpu, "build/shaders/rigid_solver.comp.spv",
+                                   &module, err, cap)) return false;
     VkResult result = VK_SUCCESS;
     const char *grouped=getenv("DC_SOLVER_GROUPED_REDUCTIONS");
     const char *zero=getenv("DC_SOLVER_SKIP_ZERO_REDUCTIONS");
@@ -153,30 +165,36 @@ bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     const char *overlap=getenv("DC_SOLVER_APPLY_OVERLAP");
     gpu->solver_fused_grain=fused&&strcmp(fused,"1")==0;
     gpu->solver_apply_overlap=overlap&&strcmp(overlap,"1")==0;
-    VkSpecializationMapEntry entries[]={{0u,0u,4u},{5u,4u,4u},{4u,8u,4u},{6u,12u,4u},{7u,16u,4u}};
+    gpu->solver_grouped_reductions=grouped&&strcmp(grouped,"1")==0;
+    gpu->solver_skip_zero_reductions=zero&&strcmp(zero,"1")==0;
     for (uint32_t mode = 0;
          mode < DC_GPU_SOLVER_PHASE_COUNT && result == VK_SUCCESS; ++mode) {
-        uint32_t values[]={mode,grouped&&strcmp(grouped,"1")==0,zero&&strcmp(zero,"1")==0,gpu->solver_fused_grain,1u};
-        VkSpecializationInfo phase = {.mapEntryCount = 5,
-                                      .pMapEntries = entries,
-                                      .dataSize = sizeof(values),
-                                      .pData = values};
-        info.stage.pSpecializationInfo = &phase;
-        result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1, &info,
-                                          NULL, &gpu->solver_pipelines[mode]);
+        if(graph_only_phase(mode)&&!gpu->structural_graph_possible) continue;
+        result=solver_phase_pipeline(gpu,module,mode,true,&gpu->solver_pipelines[mode]);
     }
     for(unsigned i=0;i<2&&result==VK_SUCCESS;i++) {
-        uint32_t values[]={i?SOLVER_IMPULSE:SOLVER_SOLVE,grouped&&strcmp(grouped,"1")==0,
-            zero&&strcmp(zero,"1")==0,gpu->solver_fused_grain,0u};
-        VkSpecializationInfo phase={.mapEntryCount=5,.pMapEntries=entries,
-            .dataSize=sizeof(values),.pData=values};
-        info.stage.pSpecializationInfo=&phase;
-        result=vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,&gpu->solver_unstructured[i]);
+        result=solver_phase_pipeline(gpu,module,i?SOLVER_IMPULSE:SOLVER_SOLVE,false,&gpu->solver_unstructured[i]);
     }
     vkDestroyShaderModule(gpu->device, module, NULL);
     return result == VK_SUCCESS
                ? pixel_hydro_pipeline_init(gpu, err, cap)
                : error(err, cap, "Cannot create GPU rigid solver pipeline");
+}
+bool dc_gpu_solver_graph_prepare(dc_gpu_t *gpu,char *err,uint32_t cap) {
+    const uint32_t phases[]={SOLVER_SOLVE,SOLVER_IMPULSE,SOLVER_BOND_POSITION,
+        SOLVER_BOND_VELOCITY,SOLVER_BOND_RESET};
+    bool ready=true;
+    for(unsigned i=0;i<sizeof(phases)/sizeof(*phases);i++) ready&=gpu->solver_pipelines[phases[i]]!=VK_NULL_HANDLE;
+    if(ready) return true;
+    VkShaderModule module=VK_NULL_HANDLE;
+    if(!dc_gpu_load_shader_module(gpu,"build/shaders/rigid_solver.comp.spv",&module,err,cap)) return false;
+    VkResult result=VK_SUCCESS;
+    for(unsigned i=0;i<sizeof(phases)/sizeof(*phases)&&result==VK_SUCCESS;i++) {
+        uint32_t phase=phases[i];
+        if(!gpu->solver_pipelines[phase]) result=solver_phase_pipeline(gpu,module,phase,true,&gpu->solver_pipelines[phase]);
+    }
+    vkDestroyShaderModule(gpu->device,module,NULL);
+    return result==VK_SUCCESS||error(err,cap,"Cannot prepare structural solver pipelines");
 }
 static void record_pixel_hydro(dc_gpu_t *gpu) {
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;

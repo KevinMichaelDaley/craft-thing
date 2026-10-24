@@ -160,6 +160,8 @@ struct dc_gpu {
     bool impact_fracture_enabled;
     bool rigid_solver_enabled;
     bool solver_fused_grain;
+    bool solver_grouped_reductions;
+    bool solver_skip_zero_reductions;
     bool solver_apply_overlap;
     VkBuffer trace_buffer;
     VkDeviceMemory trace_memory;
@@ -416,6 +418,8 @@ static inline uint32_t dc_gpu_runtime_body_count(const dc_gpu_t *gpu) {
 bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_contacts(dc_gpu_t *gpu);
 bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
+/** Prepare graph-only solver variants before publishing an authored/restored graph. */
+bool dc_gpu_solver_graph_prepare(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_solver(dc_gpu_t *gpu);
 /** Record the reference solver sequence for cache rebuilds and diagnostics. */
 void dc_gpu_record_solver_uncached(dc_gpu_t *gpu);

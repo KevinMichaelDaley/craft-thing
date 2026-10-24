@@ -382,6 +382,7 @@ bool fr_gpu_place_structure(dc_gpu_t *gpu, const fr_structural_gpu_graph_t *g,
     if (!gpu || !validate(g))
         return error(err, cap,
                      "Invalid structural graph or unsupported geometry");
+    if((g->node_count||g->member_count)&&!dc_gpu_solver_graph_prepare(gpu,err,cap)) return false;
     if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
         return error(err, cap, "Cannot reach structural authoring boundary");
     dc_gpu_refresh_body_registry(gpu);
