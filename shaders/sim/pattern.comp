@@ -208,6 +208,13 @@ uint cell_material_color(ivec2 p) {
 void main() {
     uvec2 display_cell = gl_GlobalInvocationID.xy;
     uvec2 p = display_cell;
+    if(params.mode==3u) {
+        uvec2 center=uvec2(params.brush_x,params.brush_y);
+        p+=center-min(center,uvec2(params.radius));
+        ivec2 delta=ivec2(p)-ivec2(center);
+        int radius=int(params.radius);
+        if(delta.x*delta.x+delta.y*delta.y>radius*radius) return;
+    }
     if (params.mode == 2u) p += uvec2(params.radius, params.color);
     if (params.mode == 4u) {
         ivec2 source = ivec2(display_cell) +

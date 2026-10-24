@@ -364,7 +364,15 @@ static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7], char *err, uin
         vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
             gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 28, push);
-        vkCmdDispatch(gpu->command,(gpu->width+15u)/16u,(gpu->height+15u)/16u,1);
+        uint32_t groups[2]={(gpu->width+15u)/16u,(gpu->height+15u)/16u};
+        if(push[2]==3u) for(unsigned axis=0;axis<2;axis++) {
+            uint64_t center=push[3u+axis],radius=push[5];
+            uint64_t low=center>radius?center-radius:0u;
+            uint64_t high=center+radius+1u;
+            if(high>push[axis]) high=push[axis];
+            groups[axis]=low<high?(uint32_t)((high-low+15u)/16u):0u;
+        }
+        vkCmdDispatch(gpu->command,groups[0],groups[1],1);
     }
     VkMemoryBarrier2 barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
