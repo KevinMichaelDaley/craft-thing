@@ -73,7 +73,21 @@ static void test_legacy_shapes_keep_initialization_contract(void) {
     ASSERT_EQ(records[0].motion_ready, 0u);
     PASS();
 }
+static void test_motion_lookup_does_not_rebuild_registry(void) {
+    dc_gpu_body_record_t records[DC_GPU_BODY_CAPACITY] = {0};
+    uint32_t ids[DC_GPU_BODY_CAPACITY];
+    for (unsigned i = 0; i < DC_GPU_BODY_CAPACITY; ++i) ids[i] = 12345u;
+    records[DC_GPU_BODY_CAPACITY-1u].body =
+        (dc_gpu_body_t){.id = 37, .active = 1, .width = 3, .height = 4};
+    dc_gpu_t gpu = {.body_mapped = records, .body_ids = ids, .body_count = 19};
+    char err[128] = {0};
+    ASSERT_TRUE(dc_gpu_set_body_motion(&gpu, 37, .5f, .01f, 0, err, sizeof(err)));
+    ASSERT_EQ(gpu.body_count, 19u);
+    for (unsigned i = 0; i < DC_GPU_BODY_CAPACITY; ++i) ASSERT_EQ(ids[i], 12345u);
+    PASS();
+}
 int main(void) {
+    RUN(test_motion_lookup_does_not_rebuild_registry);
     RUN(test_motion_updates_preserve_ready_pixel_geometry_properties);
     RUN(test_uncached_geometry_still_requests_initial_properties);
     RUN(test_legacy_shapes_keep_initialization_contract);
