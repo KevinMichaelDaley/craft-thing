@@ -8,6 +8,7 @@ layout(constant_id=0) const bool MOVEMENT_FLAGS_ENABLED=true;
 layout(constant_id=1) const bool GATHER_STENCIL_ENABLED=false;
 layout(constant_id=2) const uint MPM_PHASE=0xffffffffu;
 layout(constant_id=3) const bool EARLY_PARTICLE_LOADS=false;
+layout(constant_id=4) const bool FUSED_GRID_NODES=false;
 
 struct Particle {
     int x_fp, y_fp, vx_fp, vy_fp;
@@ -590,7 +591,11 @@ void main() {
 #endif
     if (!in_grid(cell)) return;
     if (mode == MODE_MOISTURE) { exchange_moisture(cell); return; }
-    if (mode == 0u) { p2g(cell); return; }
+    if (mode == 0u) {
+        p2g(cell);
+        if(FUSED_GRID_NODES) {solve_grid(cell);apply_feedback(cell);}
+        return;
+    }
     if (mode == 1u) { solve_grid(cell); return; }
     if (mode == MODE_WATER_FEEDBACK) { apply_feedback(cell); return; }
     if (page_at(cell) == 0u) return;

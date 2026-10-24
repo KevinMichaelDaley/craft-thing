@@ -97,9 +97,9 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
                   .module = module,
                   .pName = "main"},
         .layout = gpu->pipeline_layout};
-    uint32_t values[]={phase,use_stencil?1u:0u,early&&strcmp(early,"1")==0};
-    VkSpecializationMapEntry entries[]={{2u,0u,4u},{1u,4u,4u},{3u,8u,4u}};
-    VkSpecializationInfo specialization={3u,entries,sizeof(values),values};
+    uint32_t values[]={phase,use_stencil?1u:0u,early&&strcmp(early,"1")==0,gpu->mpm_fused_grid};
+    VkSpecializationMapEntry entries[]={{2u,0u,4u},{1u,4u,4u},{3u,8u,4u},{4u,12u,4u}};
+    VkSpecializationInfo specialization={4u,entries,sizeof(values),values};
     if(phase!=UINT32_MAX||mpm) info.stage.pSpecializationInfo=&specialization;
     VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1,
                                                &info, NULL, pipeline);
@@ -149,6 +149,8 @@ static bool component_pipelines(dc_gpu_t *gpu, char *err, uint32_t cap) {
 }
 
 bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    const char *fused=getenv("DC_MPM_FUSED_GRID");
+    gpu->mpm_fused_grid=fused&&strcmp(fused,"1")==0;
     if(!make_pipeline(gpu,"build/shaders/mpm.comp.spv",UINT32_MAX,&gpu->mpm_pipeline,err,cap)) return false;
     const char *variant=getenv("DC_MPM_KERNELS");
     bool specialized=variant&&strcmp(variant,"specialized")==0;
@@ -352,6 +354,7 @@ void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu) {
                     VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     for (uint32_t step = 0; step < DC_MPM_SUBSTEPS; ++step) {
         for (uint32_t mode = 0; mode < DC_MPM_MODES; ++mode) {
+            if(gpu->mpm_fused_grid&&mode==1u) continue;
             push[2] = mode;
             bind_mpm_phase(gpu,mode,&bound);
             vkCmdPushConstants(gpu->command, gpu->pipeline_layout,

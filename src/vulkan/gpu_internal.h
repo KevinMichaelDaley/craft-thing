@@ -105,6 +105,7 @@ struct dc_gpu {
     void *mpm_force_mapped, *mpm_velocity_mapped;
     VkPipeline mpm_pipeline;
     VkPipeline mpm_phase_pipelines[DC_GPU_MPM_PHASE_COUNT];
+    bool mpm_fused_grid;
     VkBuffer mpm_activity_buffer;
     VkDeviceMemory mpm_activity_memory;
     VkPipeline mpm_activity_pipeline;
