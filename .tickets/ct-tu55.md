@@ -202,3 +202,7 @@ Inline displayed saved-scene progress: reusable rigid command streams improved m
 **2026-10-24T00:24:53Z**
 
 Displayed GPU/API trace isolates warm delays to compute (not pipeline creation/allocation/acquire/present). Visible simulation/render are 480x270 1:1; 640x448 includes chunk-rounded offscreen simulation halo. Dirty extraction bounds/release costs ~1.5-2ms. Implementing sufficient-boundary-anchor proof to bypass already-rejected component statistics while retaining unknown-component diagnostics and original physical behavior. Normal displayed <30ms target remains unmet.
+
+**2026-10-24T00:37:51Z**
+
+Boundary-anchor bypass and narrowed indirect barriers pass component/cache4, extraction diagnostics3 and dynamic growth/fracture3 under explicit core+sync validation. Actual Wayland saved scene 90frames29.253ms mean33.765ms worst, repeat scalar baseline29.440/33.176; target remains RED. Fused grain/body apply removes72 dispatches and preserves every fixture byte; dynamic3/3 validation-clean, but180frame displayed29.692/34.222 shows no win, so DC_SOLVER_FUSED_GRAIN=1 remains opt-in. Original saved-world checksum unchanged.
