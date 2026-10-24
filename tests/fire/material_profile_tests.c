@@ -125,6 +125,17 @@ static void test_invalid_profiles_and_exposures_do_not_publish_output(void) {
     ASSERT_TRUE(!fr_reactive_ignition_rates(wood,NULL,&e,&rates,err,sizeof(err)));
     ASSERT_EQ(memcmp(&rates,&saved,sizeof(rates)),0);PASS();
 }
+static void test_mixing_oil_and_jelly_does_not_create_chemical_energy(void) {
+    const fr_reactive_profile_t *oil=fr_reactive_profile(DC_MATERIAL_OIL);
+    const fr_reactive_profile_t *jelly=fr_reactive_profile(DC_MATERIAL_RED_SLIME_JELLY);
+    const fr_reactive_profile_t *greek=fr_reactive_profile(DC_MATERIAL_GREEK_FIRE);
+    ASSERT_TRUE(oil&&jelly&&greek);
+    float input=.5f*oil->fuel_fraction*oil->chemical_energy+
+                .5f*jelly->fuel_fraction*jelly->chemical_energy;
+    float output=greek->fuel_fraction*greek->chemical_energy;
+    printf("mixture energy input %.6f output %.6f\n",input,output);
+    ASSERT_TRUE(output<=input+.01f);PASS();
+}
 int main(void) {
     _Static_assert(sizeof(fr_reactive_profile_t)==128,"GPU profile stride changed");
     _Static_assert(offsetof(fr_reactive_profile_t,fuel_yields)==56,"GPU yield offset changed");
@@ -136,5 +147,6 @@ int main(void) {
     RUN(test_oil_increases_exposed_wood_hazard_and_shock_is_finite_heat);
     RUN(test_oxygen_and_bound_oxidizer_are_different_supplies);
     RUN(test_invalid_profiles_and_exposures_do_not_publish_output);
+    RUN(test_mixing_oil_and_jelly_does_not_create_chemical_energy);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
