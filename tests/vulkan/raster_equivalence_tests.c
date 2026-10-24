@@ -103,13 +103,15 @@ static bool equal_pixel_contacts(dc_gpu_t *g,char *err) {
 static VkPipeline raster_team_pipeline(dc_gpu_t *g,const char *path) {
     VkShaderModule module;char err[256];
     if(!dc_gpu_load_shader_module(g,path,&module,err,sizeof(err))) return VK_NULL_HANDLE;
-    uint32_t phase=1;VkSpecializationMapEntry entry={0,0,4};
-    VkSpecializationInfo spec={1,&entry,sizeof(phase),&phase};
+    uint32_t values[]={1,0};VkSpecializationMapEntry entries[]={{0,0,4},{1,4,4}};
+    VkSpecializationInfo spec={2,entries,sizeof(values),values};
     VkComputePipelineCreateInfo info={.sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_COMPUTE_BIT,
             .module=module,.pName="main",.pSpecializationInfo=&spec},.layout=g->pipeline_layout};
     VkPipeline pipeline=VK_NULL_HANDLE;
+    printf("raster team pipeline begin %s\n",path);fflush(stdout);
     vkCreateComputePipelines(g->device,VK_NULL_HANDLE,1,&info,NULL,&pipeline);
+    printf("raster team pipeline end %s\n",path);fflush(stdout);
     vkDestroyShaderModule(g->device,module,NULL);return pipeline;
 }
 static bool bounded_raster_teams_match_frozen_scan(dc_gpu_t *g,char *err) {

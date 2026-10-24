@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
+#define DC_PROBE_BUFFER_DEVICE_ADDRESS 1
 #define main bounded_probe_main
 #include "vulkan_probe.c"
 #undef main

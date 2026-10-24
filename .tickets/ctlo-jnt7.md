@@ -31,3 +31,7 @@ Additional RED tests: a warm missed brush still submits twice (1.980 ms), and sc
 **2026-10-24T04:00:15Z**
 
 GREEN focused validation: 12/12 body-carving tests pass with Vulkan core and synchronization validation. Large 36,100-pixel carve: 14.894 ms with 36,051 pixels and exact expected mass retained. Warm miss with 320 bodies: 1.719 ms and one submission. Tests cover cached-command invalidation and paused body lookup after work growth, camera reprojection while continuing gravity, colors, allocation rejection/retry, compound cavities, canopy preservation, leaf particles, and GPU water-source isolation. Five clean-build/header dependency checks also pass. Overall displayed 30 ms worst-frame acceptance is still outstanding; do not close this ticket.
+
+**2026-10-24T05:57:11Z**
+
+Corrected validation audit: DC_VK_SYNC_VALIDATE is not recognized. With DC_VK_VALIDATE=1 and VK_LAYER_ENABLES=VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT, raster1/1, coupled-grain1/1 and dynamic-runtime5/5 pass with no hazards. Full carving actual-sync run has11/12 passes: only the warm-miss timing assertion fails at3.166ms under layers (no VUID/hazards); ordinary warm-miss rerun is0.678ms and one submission. No timing threshold was relaxed. Global<30ms remains unmet.

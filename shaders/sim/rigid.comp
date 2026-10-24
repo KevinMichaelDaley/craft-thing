@@ -13,7 +13,7 @@ shared uint raster_ids[64];
 shared uint raster_count;
 shared uint raster_legacy[64];
 #ifdef DC_RASTER_TEAM_PROFILE
-layout(set=0,binding=31,std430) buffer RasterTeamProfile {uint raster_profile[];};
+layout(set=0,binding=31,std430) restrict buffer RasterTeamProfile {uint raster_profile[];};
 void raster_barrier() {barrier();if(gl_LocalInvocationIndex==0u) atomicAdd(raster_profile[0],1u);}
 #else
 #define raster_barrier() barrier()

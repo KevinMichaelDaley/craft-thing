@@ -1,28 +1,23 @@
 #ifndef DC_RIGID_CLIP_GLSL
 #define DC_RIGID_CLIP_GLSL
-void body_clip_polygon(Body b,uint piece,out vec2 polygon[12],out uint count) {
+#ifdef DC_RIGID_PIXEL_ONLY
+const uint BODY_CLIP_VERTICES=DC_RIGID_PIXEL_ONLY?8u:12u;
+#else
+const uint BODY_CLIP_VERTICES=12u;
+#endif
+void body_clip_polygon(Body b,uint piece,out vec2 polygon[BODY_CLIP_VERTICES],out uint count) {
     vec2 origin=vec2(b.x_fp,b.y_fp)/65536.0;
     if(pixel_body(b)) {
-        count=0u;
-        if(piece>=pixel_tile_count(b)*256u) return;
-        uint offset=b.compound_reserved+pixel_tile_offset(b,piece/256u);
-        uint material=pixel_word_at(offset+1u+(piece%256u)/8u);
-        if(((material>>((piece%8u)*4u))&15u)==0u) return;
-        uint coordinate=pixel_word_at(offset);
-        vec2 cell=vec2(ivec2(coordinate&65535u,coordinate>>16u)*16+
-                       ivec2(piece%16u,(piece%256u)/16u));
+        count=0u;BodyQuad q;if(!body_pixel_quad(b,piece,q)) return;
         count=4u;
-        for(uint i=0u;i<4u;i++) {
-            vec2 local=cell+vec2((i==1u||i==2u)?1:0,i>=2u?1:0);
-            polygon[i]=origin+(b.center+body_rotate(local-b.center,b.angle));
-        }
+        for(uint i=0u;i<4u;i++) polygon[i]=origin+(i==0u?q.a:i==1u?q.b:i==2u?q.c:q.d);
     } else {
         count=piece_vertices(b,piece);
         for(uint i=0u;i<count;i++) polygon[i]=origin+piece_vertex(b,piece,i);
     }
 }
 float body_cell_volume(Body b,uint piece,ivec2 cell,float fraction,out vec2 center_point) {
-    vec2 polygon[12],next[12];uint count;
+    vec2 polygon[BODY_CLIP_VERTICES],next[BODY_CLIP_VERTICES];uint count;
     body_clip_polygon(b,piece,polygon,count);
     if(count<3u) {center_point=vec2(0);return 0;}
     vec2 low=vec2(cell)+vec2(0,1-fraction),high=vec2(cell)+1;
@@ -47,18 +42,28 @@ float body_cell_volume(Body b,uint piece,ivec2 cell,float fraction,out vec2 cent
     center_point=vec2(cell)+moment/max(3*twice,1e-20);
     return max(twice*.5,0);
 }
+bool clip_face_edge(vec2 a,vec2 z,vec2 start,vec2 stop,inout float low,inout float high) {
+    vec2 edge=z-a,normal=vec2(-edge.y,edge.x);
+    float first=dot(normal,start-a),delta=dot(normal,stop-start);
+    if(abs(delta)<1e-12) {if(first<0) return false;}
+    else if(delta>0) low=max(low,-first/delta);
+    else high=min(high,-first/delta);
+    return true;
+}
 float body_face_coverage(Body b,uint piece,vec2 start,vec2 stop) {
-    vec2 polygon[12];uint count;
-    body_clip_polygon(b,piece,polygon,count);
-    if(count==0u) return 0;
     float low=0,high=1;
-    for(uint i=0u;i<count;i++) {
-        vec2 a=polygon[i],z=polygon[(i+1u)%count];
-        vec2 edge=z-a,normal=vec2(-edge.y,edge.x);
-        float first=dot(normal,start-a),delta=dot(normal,stop-start);
-        if(abs(delta)<1e-12) {if(first<0) return 0;}
-        else if(delta>0) low=max(low,-first/delta);
-        else high=min(high,-first/delta);
+    vec2 origin=vec2(b.x_fp,b.y_fp)/65536.;
+    if(pixel_body(b)) {
+        BodyQuad q;if(!body_pixel_quad(b,piece,q)) return 0;
+        q.a=origin+q.a;q.b=origin+q.b;q.c=origin+q.c;q.d=origin+q.d;
+        if(!clip_face_edge(q.a,q.b,start,stop,low,high)||!clip_face_edge(q.b,q.c,start,stop,low,high)||
+           !clip_face_edge(q.c,q.d,start,stop,low,high)||!clip_face_edge(q.d,q.a,start,stop,low,high)) return 0;
+    } else {
+        uint count=piece_vertices(b,piece);if(count==0u) return 0;
+        for(uint i=0u;i<count;i++) {
+            vec2 a=origin+piece_vertex(b,piece,i),z=origin+piece_vertex(b,piece,(i+1u)%count);
+            if(!clip_face_edge(a,z,start,stop,low,high)) return 0;
+        }
     }
     return max(0,high-low);
 }

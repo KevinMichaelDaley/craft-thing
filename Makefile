@@ -1047,7 +1047,7 @@ build/diagnostics/shader_compile_probe: tools/diagnostics/shader_compile_probe.c
 .PHONY: diagnostic_fluid_variants
 .PHONY: test_gpu_tools
 test: test_gpu_tools
-test_gpu_tools: build/contact_shader_contract_tests
+test_gpu_tools: build/contact_shader_contract_tests build/shaders/runtime/rigid_solver.comp.spv build/shaders/runtime/rigid.comp.spv build/shaders/runtime/pattern.comp.spv build/shaders/runtime/mpm.comp.spv build/shaders/runtime/scene.comp.spv build/shaders/runtime_body_index.comp.spv
 	python3 tests/vulkan/shader_variant_tests.py
 	python3 tests/vulkan/gpu_dependency_tests.py
 	python3 tests/vulkan/runtime_root_storage_test.py
@@ -1452,7 +1452,7 @@ build/hydro_head_tall_work_tests: tests/vulkan/hydro_head_tests.c tools/diagnost
 test: build/hydro_head_work_tests build/hydro_head_tall_work_tests
 
 build/diagnostics/pixel_boundary_probe.spv: shaders/sim/contact_geometry.glsl
-build/diagnostics/pixel_boundary_probe.spv: shaders/sim/rigid_clip.glsl tests/vulkan/rigid_clip_reference.glsl
+build/diagnostics/pixel_boundary_probe.spv: shaders/sim/rigid_clip.glsl shaders/sim/rigid_shape.glsl tests/vulkan/rigid_clip_reference.glsl
 
 build/solver_contact_start_tests: tests/vulkan/solver_contact_start_tests.c tests/vulkan/solver_motion_store_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_motion_profile.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
