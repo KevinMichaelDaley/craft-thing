@@ -105,3 +105,11 @@ complete captured post-step cell plane and every live particle byte, in addition
 to its existing velocity, marker, halo, negative-coordinate and process-restart
 checks. Both modes pass this stronger persistence check. Engine behavior was
 unchanged by that test correction.
+
+The complete Wayland `test_ui` rerun passes all commands, including streaming,
+both concave-body visual scenes, material controls and coupled-water smokes.
+The complete `test_quarter_native` run also passes all commands, including
+solver, buoyancy, component extraction, structural cases, equal-time cadence
+and graphical checks. The final quarter-native smoke reports 83.6 MiB mapped
+VRAM and 111.6 MiB device-only VRAM. Its short startup-inclusive timing is a
+different fixture from the warmed, saved-scene full-frame replay above.

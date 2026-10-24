@@ -31,3 +31,7 @@ Final default profile adds cooperative staged color copies and fused visible alb
 **2026-10-24T19:29:19Z**
 
 Final make -j8 -i test completed:660 reported passing cases, only2 pre-existing authored-stage failures tracked in ctr-ojvy, zero compiler warnings. Fluid specialization1/1, buoyancy14/14, updated contact selector10/10, cooperative color probe1/1 and carving12/12, albedo2/2/full scene1/1 all pass. Actual Wayland UI and quarter-native suites next.
+
+**2026-10-24T19:44:49Z**
+
+Final actual Wayland test_ui rerun passes every command (20 reported unit/visual cases plus all application smokes). Complete test_quarter_native also passes every command, including solver/buoyancy/extraction/structural/cadence/visual cases and native smoke. Original equilibrium rigid_bodies.bin checksum unchanged. Remaining2 authored-stage failures only in full headless suite remain tracked in ctr-ojvy.
