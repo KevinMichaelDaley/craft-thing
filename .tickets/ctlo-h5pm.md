@@ -23,3 +23,7 @@ Compiled SPIR-V must use 32 lanes, retain all contact work coverage, strict cano
 **2026-10-24T11:23:03Z**
 
 Continue workgroup optimization to16 lanes (one native subgroup) after32-lane gain. Compiled reflection RED still32; keep full64-lane scalar reference and verify exact contact coverage before selecting16 as default.
+
+**2026-10-24T11:35:44Z**
+
+16-lane GREEN reflection and actual core+synchronization canonical manifold oracle7/7 exact. Displayed API-only500-frame diagnostic27.702ms mean37.679ms worst with existing combined options (p952? actual95th31.467ms), no mid-frame allocations or shader compiles. Long-scan/page-cache fluid options did not improve full-frame outcome:28.133/35.885; keep those experiments off. Global frame target remains unmet.

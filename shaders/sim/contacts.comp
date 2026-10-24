@@ -14,7 +14,7 @@ layout(constant_id=1) const bool CONTACT_PIXEL_ONLY=false;
 #include "contact_boundary.glsl"
 #include "contact_geometry.glsl"
 #ifndef DC_CONTACT_GROUP_LANES
-#define DC_CONTACT_GROUP_LANES 32
+#define DC_CONTACT_GROUP_LANES 16
 #endif
 layout(local_size_x = DC_CONTACT_GROUP_LANES) in;
 layout(constant_id = 0) const uint CONTACT_PHASE = 0u;
