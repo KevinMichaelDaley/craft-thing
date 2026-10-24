@@ -412,7 +412,7 @@ bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
     while(okay&&material==DC_MATERIAL_AIR&&dc_gpu_runtime_carve_retry(gpu));
     if(okay) {
         uint32_t *state=dc_gpu_structural_data(gpu);
-        gpu->body_refresh_pending|=(state[DC_STRUCTURAL_BRUSH_RESULT_WORD]&1u)!=0u;
+        gpu->body_refresh_pending|=(state[DC_STRUCTURAL_BRUSH_RESULT_WORD]&3u)!=0u;
         if (material == DC_MATERIAL_WATER) gpu->fluid_work_possible=true;
         if((state[DC_STRUCTURAL_BRUSH_RESULT_WORD]&2u)!=0u) state[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]=1u;
     }
