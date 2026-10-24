@@ -1439,6 +1439,10 @@ build/solver_contact_start_tests: tests/vulkan/solver_contact_start_tests.c test
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/solver_contact_start_tests
 
+build/solver_grain_fusion_tests: tests/vulkan/solver_grain_fusion_tests.c tests/vulkan/solver_motion_store_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_motion_profile.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/solver_grain_fusion_tests
+
 build/shaders/mpm_commit.comp.spv: shaders/sim/mpm.comp $(wildcard shaders/sim/*.glsl)
 	@mkdir -p $(@D)
 	glslangValidator -V --target-env vulkan1.1 -DDC_MPM_COALESCED_COMMIT=1 -o $@ $<
