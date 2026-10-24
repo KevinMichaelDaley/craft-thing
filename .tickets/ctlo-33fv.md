@@ -19,3 +19,7 @@ RED probe exposes hundreds of tile packing barriers; GREEN bounds packing synchr
 **2026-10-24T09:02:43Z**
 
 RED2/2 packing-work failures:288 per-tile barriers. GREEN2/2 actual core/synchronization checks:16 stable-prefix packing barriers, one source read per packed material word, exact36051 remaining pixels/material/customRGBA/mass and rotated misses. Displayed benchmark running; full brush regressions next.
+
+**2026-10-24T09:17:15Z**
+
+Normal full brush suite12/12 after tile packing, large190x190 cut9.791ms versus11.296ms before packing. Displayed500-frame result31.148ms mean36.126ms worst; still over budget. Packed-commit and shared-gather diagnostic controls show no decisive MPM frame win; remain optional.
