@@ -22,7 +22,7 @@ bool carve_component_solid(Body source,uint pixel) {
 #endif
 }
 #ifndef DC_CARVE_TILE_NEIGHBORS
-#define DC_CARVE_TILE_NEIGHBORS 0
+#define DC_CARVE_TILE_NEIGHBORS 1
 #endif
 uint carve_neighbor_piece(Body source,uint piece,ivec2 delta,ivec2 cell) {
 #if DC_CARVE_TILE_NEIGHBORS
