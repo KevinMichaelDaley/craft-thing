@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "dungeoncraft/reactive_profile_layout.h"
+
 enum {
     FR_REACTIVE_SOLID,
     FR_REACTIVE_GRANULAR,
@@ -12,10 +14,10 @@ enum {
     FR_REACTIVE_PHASE_COUNT
 };
 enum {
-    FR_REACTIVE_FUEL = 1u,
-    FR_REACTIVE_WATER_DOUSEABLE = 2u,
-    FR_REACTIVE_BOUND_OXIDIZER = 4u,
-    FR_REACTIVE_RIGID_CAPABLE = 8u
+    FR_REACTIVE_FUEL = FR_PROFILE_FLAG_FUEL,
+    FR_REACTIVE_WATER_DOUSEABLE = FR_PROFILE_FLAG_WATER_DOUSEABLE,
+    FR_REACTIVE_BOUND_OXIDIZER = FR_PROFILE_FLAG_BOUND_OXIDIZER,
+    FR_REACTIVE_RIGID_CAPABLE = FR_PROFILE_FLAG_RIGID_CAPABLE
 };
 
 /** A 128-byte GPU-transferable profile. The four product yields partition fuel

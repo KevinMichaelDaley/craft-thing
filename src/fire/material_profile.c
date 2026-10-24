@@ -8,7 +8,7 @@
 
 #include "material_profile_data.inc"
 
-_Static_assert(sizeof(fr_reactive_profile_t)==128,"GPU profile stride changed");
+_Static_assert(sizeof(fr_reactive_profile_t)==FR_PROFILE_WORDS*sizeof(uint32_t),"GPU profile stride changed");
 _Static_assert(offsetof(fr_reactive_profile_t,fuel_yields)==56,"GPU profile yield offset changed");
 _Static_assert(sizeof(profiles)/sizeof(profiles[0])==DC_MATERIAL_COUNT,"Material registry changed");
 
@@ -32,13 +32,13 @@ const char *fr_reactive_material_name(uint32_t material) {
 bool fr_reactive_profile_valid(const fr_reactive_profile_t *profile,
                                char *err, uint32_t cap) {
     if(!profile||profile->material>=DC_MATERIAL_COUNT||profile->phase>=FR_REACTIVE_PHASE_COUNT||
-       (profile->flags&~15u)!=0) return error(err,cap,"Invalid reactive material identity/flags");
+       (profile->flags&~FR_PROFILE_FLAG_MASK)!=0) return error(err,cap,"Invalid reactive material identity/flags");
     if(profile->legacy_body_material!=0) {
         const fr_reactive_profile_t *mapped=fr_reactive_profile_for_body(profile->legacy_body_material);
         if(!mapped||mapped->material!=profile->material)
             return error(err,cap,"Invalid legacy body-material mapping");
     }
-    float values[28];memcpy(values,&profile->density,sizeof(values));
+    float values[FR_PROFILE_FLOAT_WORDS];memcpy(values,&profile->density,sizeof(values));
     for(size_t i=0;i<sizeof(values)/sizeof(values[0]);i++)
         if(!isfinite(values[i])||values[i]<0) return error(err,cap,"Invalid reactive coefficient");
     if(profile->density<=0||profile->heat_capacity<=0||profile->fuel_fraction>1||

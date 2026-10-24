@@ -618,6 +618,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/albedo_work_tests
 	./build/dry_fluid_tests
 	./build/fluid_specialization_tests
+	./build/reactive_profile_gpu_tests
 	./build/pressure_work_tests
 	./build/pressure_stencil_pack_tests
 	./build/grain_bed_work_tests
@@ -1626,7 +1627,7 @@ test_fire_fixtures:
 	python3 -m py_compile tests/fire/fixture_contract_tests.py tools/diagnostics/fire_fixture.py
 	python3 tests/fire/fixture_contract_tests.py
 
-build/reactive_material_tests: tests/fire/material_profile_tests.c src/fire/material_profile.c src/fire/material_profile_data.inc include/ferrum/fire/material_profile.h include/dungeoncraft/chunk.h
+build/reactive_material_tests: tests/fire/material_profile_tests.c src/fire/material_profile.c src/fire/material_profile_data.inc include/ferrum/fire/material_profile.h include/dungeoncraft/reactive_profile_layout.h include/dungeoncraft/chunk.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/material_profile_tests.c src/fire/material_profile.c -o $@ -lm
 .PHONY: test_reactive_materials
@@ -1634,12 +1635,12 @@ test: test_reactive_materials
 test_reactive_materials: build/reactive_material_tests
 	./build/reactive_material_tests
 
-build/diagnostics/reactive_profile_probe.spv: tests/vulkan/reactive_profile_probe.comp
+build/diagnostics/reactive_profile_probe.spv: tests/vulkan/reactive_profile_probe.comp shaders/reactive/material_profile.glsl include/dungeoncraft/reactive_profile_layout.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
-build/reactive_profile_gpu_tests: tests/vulkan/reactive_profile_gpu_tests.c tools/diagnostics/vulkan_probe.c src/fire/material_profile.c src/fire/material_profile_data.inc include/ferrum/fire/material_profile.h build/diagnostics/reactive_profile_probe.spv
+build/reactive_profile_gpu_tests: tests/vulkan/reactive_profile_gpu_tests.c tools/diagnostics/vulkan_probe.c src/fire/material_profile.c src/fire/material_profile_data.inc include/ferrum/fire/material_profile.h include/dungeoncraft/reactive_profile_layout.h include/dungeoncraft/chunk.h build/diagnostics/reactive_profile_probe.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/reactive_profile_gpu_tests.c src/fire/material_profile.c -o $@ $(LDLIBS)
 .PHONY: test_reactive_gpu_profiles
-test: test_reactive_gpu_profiles
+test: build/reactive_profile_gpu_tests
 test_reactive_gpu_profiles: build/reactive_profile_gpu_tests
 	./build/reactive_profile_gpu_tests

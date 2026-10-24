@@ -1,8 +1,21 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#include "../../include/dungeoncraft/reactive_profile_layout.h"
 layout(local_size_x=64) in;
 layout(set=0,binding=0,std430) buffer Fixture {uint words[];};
+uint reactive_material_count() {return words[1];}
+uint reactive_material_word(uint material,uint field) {return words[16u+material*FR_PROFILE_WORDS+field];}
+#include "../../shaders/reactive/material_profile.glsl"
 void main() {
     uint i=gl_GlobalInvocationID.x;
     if(i>=words[0]) return;
-    for(uint field=0u;field<5u;field++) words[3216u+i*5u+field]=0u;
+    uint source=656u+i*10u,material=words[source],coating=words[source+1u];
+    float e[8];for(uint field=0u;field<8u;field++) e[field]=uintBitsToFloat(words[source+2u+field]);
+    vec2 rates=reactive_ignition_rates(material,coating,e[0],e[1],e[2],e[3],e[4],
+        e[5],e[6],e[7],vec2(uintBitsToFloat(words[2]),uintBitsToFloat(words[3])));
+    uint target=3216u+i*5u;
+    words[target]=reactive_material_word(material,FR_PROFILE_DENSITY_WORD);
+    words[target+1u]=reactive_material_word(material,FR_PROFILE_PRIMARY_HEAT_WORD);
+    words[target+2u]=reactive_material_word(material,FR_PROFILE_FLAGS_WORD);
+    words[target+3u]=floatBitsToUint(rates.x);words[target+4u]=floatBitsToUint(rates.y);
 }

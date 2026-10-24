@@ -1,10 +1,14 @@
 # Locked fire/smoke inputs and pre-feature baseline
 
 Ticket: `ctlo-ck1i`. Fixture schema 1 is stored in
-`assets/fixtures/fire_smoke_v1.json`; its final canonical sorted-JSON SHA256 is
+`assets/fixtures/fire_smoke_v1.json`; the original frozen revision 1 canonical
+sorted-JSON SHA256 was
 `fbaf568bd7a4d2693696073ff455afb232843e4eb0dc1021802c07568ceded95`.
 This locks reference inputs before reactive runtime work. The numbers are
 synthetic gameplay parameters, not measured physical material data.
+The subsequent explicit recipe-energy correction in revision 2 is documented in
+`design/reactive_material_profiles.md`; it changes no maps, quantities, gameplay
+thresholds, clocks or performance gates, and does not affect the level03 replay.
 
 `tools/diagnostics/fire_fixture.py` validates the manifest, rejects invalid material
 identity/composition/energy, exports exact little-endian material/role/object/wetness

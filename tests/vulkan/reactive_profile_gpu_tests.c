@@ -46,7 +46,8 @@ static void test_gpu_profiles_match_cpu_rates_and_ignore_visual_pigment(void) {
     fr_reactive_ignition_rates_t expected[CASES];
     char err[128];
     for(uint32_t i=0;i<CASES;i++) {
-        uint32_t material=i%DC_MATERIAL_COUNT,coat=i%3u?DC_MATERIAL_OIL:UINT32_MAX;
+        uint32_t material=i%DC_MATERIAL_COUNT;
+        uint32_t coat=i%3u==0?UINT32_MAX:i%3u==1?DC_MATERIAL_OIL:DC_MATERIAL_GREEK_FIRE;
         fr_reactive_exposure_t e={.temperature_K=293.15f+(float)(i%11u)*73,
             .saturation=(float)(i%5u)/4,.coating_coverage=.5f,
             .substrate_oxidation=(float)(i%4u)/3,.coating_oxidation=.25f,
@@ -68,8 +69,8 @@ static void test_gpu_profiles_match_cpu_rates_and_ignore_visual_pigment(void) {
         layout_errors+=memcmp(out+1,&profile->primary_heat,4)!=0;
         layout_errors+=out[2]!=profile->flags;
         float rates[2];memcpy(rates,out+3,sizeof(rates));
-        rate_errors+=fabsf(rates[0]-expected[i].substrate)>2e-6f*(1+expected[i].substrate);
-        rate_errors+=fabsf(rates[1]-expected[i].coating)>2e-6f*(1+expected[i].coating);
+        rate_errors+=!isfinite(rates[0])||fabsf(rates[0]-expected[i].substrate)>2e-6f*(1+expected[i].substrate);
+        rate_errors+=!isfinite(rates[1])||fabsf(rates[1]-expected[i].coating)>2e-6f*(1+expected[i].coating);
     }
     p.mapped[6]=0x40a00000u;p.mapped[7]=0x3f800000u;p.mapped[8]=0x41400000u;
     ASSERT_TRUE(dispatch(&p));
