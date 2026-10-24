@@ -29,9 +29,10 @@ typedef enum {
     SOLVER_GRAIN_BED_INIT,
     SOLVER_GRAIN_BED_JUMP,
     SOLVER_GRAIN_BED_PLAN,
-    SOLVER_GRAIN_BED_PUBLISH
+    SOLVER_GRAIN_BED_PUBLISH,
+    SOLVER_BATCH
 } solver_phase_t;
-_Static_assert(SOLVER_GRAIN_BED_PUBLISH + 1 == DC_GPU_SOLVER_PHASE_COUNT,
+_Static_assert(SOLVER_BATCH + 1 == DC_GPU_SOLVER_PHASE_COUNT,
                "GPU solver phase count changed");
 static bool error(char *err, uint32_t cap, const char *message) {
     if (err && cap)
@@ -151,11 +152,20 @@ bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     const char *zero=getenv("DC_SOLVER_SKIP_ZERO_REDUCTIONS");
     const char *fused=getenv("DC_SOLVER_FUSED_GRAIN");
     const char *overlap=getenv("DC_SOLVER_APPLY_OVERLAP");
+    const char *batch=getenv("DC_SOLVER_BATCH");
     gpu->solver_fused_grain=fused&&strcmp(fused,"1")==0;
     gpu->solver_apply_overlap=overlap&&strcmp(overlap,"1")==0;
+    gpu->solver_batch=batch&&strcmp(batch,"1")==0;
     VkSpecializationMapEntry entries[]={{0u,0u,4u},{5u,4u,4u},{4u,8u,4u},{6u,12u,4u}};
     for (uint32_t mode = 0;
          mode < DC_GPU_SOLVER_PHASE_COUNT && result == VK_SUCCESS; ++mode) {
+        if(mode==SOLVER_BATCH) {
+            if(!gpu->solver_batch) break;
+            vkDestroyShaderModule(gpu->device,module,NULL);
+            if(!dc_gpu_load_shader_module(gpu,"build/shaders/rigid_solver_batch.comp.spv",
+                &module,err,cap)) return false;
+            info.stage.module=module;
+        }
         uint32_t values[]={mode,grouped&&strcmp(grouped,"1")==0,zero&&strcmp(zero,"1")==0,gpu->solver_fused_grain};
         VkSpecializationInfo phase = {.mapEntryCount = 4,
                                       .pMapEntries = entries,
@@ -233,7 +243,7 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     uint32_t phase = mode & SOLVER_PHASE_MASK;
-    if (phase == SOLVER_GRAIN_BED_PLAN || phase == SOLVER_GRAIN_BED_PUBLISH) {
+    if (phase == SOLVER_BATCH || phase == SOLVER_GRAIN_BED_PLAN || phase == SOLVER_GRAIN_BED_PUBLISH) {
         vkCmdDispatch(gpu->command, 1, 1, 1);
     } else if (phase >= SOLVER_GRAIN_BED_INIT) {
         vkCmdDispatchIndirect(gpu->command, gpu->mpm_activity_buffer,
@@ -322,7 +332,8 @@ void dc_gpu_record_solver_uncached(dc_gpu_t *gpu) {
         dispatch(gpu, SOLVER_GRAIN_PREPARE, true);
         dispatch(gpu, SOLVER_INIT_CONTACTS, true);
         dispatch(gpu, SOLVER_CLEAR, false);
-        for (uint32_t iteration = 0; iteration < SOLVER_ITERATIONS;
+        if(gpu->solver_batch) dispatch(gpu,SOLVER_BATCH|(gpu->structural_enabled?65536u:0u),false);
+        else for (uint32_t iteration = 0; iteration < SOLVER_ITERATIONS;
              ++iteration) {
             dispatch(gpu, SOLVER_SOLVE, true);
             dispatch(gpu, SOLVER_APPLY | ((iteration + 1u) << 8u), false);

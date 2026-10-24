@@ -1491,3 +1491,16 @@ build/mpm_transfer_load_tests: tests/vulkan/mpm_transfer_load_tests.c tests/vulk
 test: build/mpm_transfer_load_tests
 
 build/diagnostics/quarter_app_frame_trace build/diagnostics/native360_frame_trace: tools/diagnostics/frame_api_trace.h
+
+build/shaders/rigid_solver_batch.comp.spv: shaders/sim/rigid_solver.comp $(wildcard shaders/sim/*.glsl) Makefile
+	mkdir -p $(dir $@)
+	$(GLSLANG) -DDC_SOLVER_BATCH=1 -DDC_SOLVER_TEAM=512 -V --target-env vulkan1.3 -S comp -o $@ $<
+build/shaders/runtime/rigid_solver_batch.comp.spv: shaders/sim/rigid_solver.comp $(wildcard shaders/sim/*.glsl) Makefile
+	mkdir -p $(dir $@)
+	$(GLSLANG) -DDC_SOLVER_BATCH=1 -DDC_SOLVER_TEAM=512 -DDC_RUNTIME_BODY_STORAGE=1 -V --target-env vulkan1.3 -S comp -o $@ $<
+build/diagnostics/solver_batch_profile.comp.spv: shaders/sim/rigid_solver.comp $(wildcard shaders/sim/*.glsl) Makefile
+	mkdir -p $(dir $@)
+	$(GLSLANG) -DDC_SOLVER_BATCH=1 -DDC_SOLVER_TEAM=512 -DDC_SOLVER_MOTION_PROFILE=1 -V --target-env vulkan1.3 -S comp -o $@ $<
+build/solver_contact_start_tests: build/diagnostics/solver_batch_profile.comp.spv
+$(GPU_OBJ) $(PERFORMANCE_OBJ) $(NATIVE360_OBJ) $(GPU_SOURCE_BINARIES): build/shaders/rigid_solver_batch.comp.spv build/shaders/runtime/rigid_solver_batch.comp.spv
+$(GPU_OBJ) $(PERFORMANCE_OBJ) $(NATIVE360_OBJ) $(GPU_SOURCE_BINARIES): src/vulkan/runtime_body_gpu.h

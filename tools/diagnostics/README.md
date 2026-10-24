@@ -1,5 +1,20 @@
 # Bounded Vulkan device probe
 
+## Rejected whole-workgroup Jacobi experiment
+
+This branch preserves the `DC_SOLVER_BATCH=1` experiment. It strides arbitrary
+body/contact counts through a 512-lane workgroup, retains eight iterations, and
+uses coherent buffers plus workgroup barriers. The ordinary solver remains the
+default. Five body/contact comparison cases (including 1,057 rows), two coupled
+grain cases, and seven command-cache cases pass exactly.
+
+On the displayed Iris Xe tree-cut workload, the fixed-clock diagnostic measured
+45.239 ms average /53.309 ms worst, versus approximately 29.4 ms average for
+separate dispatches. The fixed clock controls comparison work; it is not real-time
+frame acceptance. The experiment also has substantial cold pipeline compilation
+cost. It must not be enabled as a performance fix. It is retained on
+`experiment/workgroup-jacobi` for reproducible investigation.
+
 ## Saved-body support replay
 
 `make build/diagnostics/body_support` builds an in-memory replay of a versioned

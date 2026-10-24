@@ -30,7 +30,7 @@ enum {
     DC_GPU_CONTACT_PHASE_COUNT = 3,
     DC_GPU_SOLVER_BODY_WORDS = 32,
     DC_GPU_SOLVER_CONTACT_WORDS = 16,
-    DC_GPU_SOLVER_PHASE_COUNT = 22,
+    DC_GPU_SOLVER_PHASE_COUNT = 23,
     DC_GPU_MPM_PHASE_COUNT = 8,
     DC_GPU_STRUCTURAL_PHASE_COUNT = 7
 };
@@ -158,6 +158,7 @@ struct dc_gpu {
     bool rigid_solver_enabled;
     bool solver_fused_grain;
     bool solver_apply_overlap;
+    bool solver_batch;
     VkBuffer trace_buffer;
     VkDeviceMemory trace_memory;
     void *trace_mapped;

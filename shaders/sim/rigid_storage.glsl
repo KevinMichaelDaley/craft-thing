@@ -4,9 +4,12 @@
 #extension GL_EXT_buffer_reference_uvec2 : require
 #include "../../include/dungeoncraft/body_storage_layout.h"
 
-layout(buffer_reference,std430,buffer_reference_align=16) buffer BodyStorageRecords {Body records[];};
+#ifndef DC_BODY_COHERENT
+#define DC_BODY_COHERENT
+#endif
+layout(buffer_reference,std430,buffer_reference_align=16) DC_BODY_COHERENT buffer BodyStorageRecords {Body records[];};
 layout(buffer_reference,std430,buffer_reference_align=8) buffer BodyStorageDirectory {BodyStoragePage pages[];};
-layout(buffer_reference,std430,buffer_reference_align=4) buffer BodyStorageWords {uint words[];};
+layout(buffer_reference,std430,buffer_reference_align=4) DC_BODY_COHERENT buffer BodyStorageWords {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=8) buffer BodyStorageOwners {BodyStorageOwner owners[];};
 
 bool body_storage_root_valid(BodyStorageRoot root) {

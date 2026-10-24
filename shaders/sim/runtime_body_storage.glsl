@@ -7,7 +7,7 @@
 layout(set=0,binding=DC_RUNTIME_BODY_BINDING,std430) buffer RuntimeBodyRoot {
     BodyStorageRoot runtime_body_root;
 };
-layout(buffer_reference,std430,buffer_reference_align=4) buffer RuntimeBodyWord {uint value;};
+layout(buffer_reference,std430,buffer_reference_align=4) DC_BODY_COHERENT buffer RuntimeBodyWord {uint value;};
 #define BODY_CAPACITY (runtime_body_root.slab_count<<DC_BODY_SLAB_SHIFT)
 #define DC_BODY(slot) DC_BODY_AT(runtime_body_root,slot)
 #define DC_BODY_FREE(slot) (DC_BODY(slot).enabled==0u&&DC_BODY(slot).reserved0==0u&&DC_BODY_OWNER(runtime_body_root,slot).state!=DC_BODY_OWNER_RETIRED)

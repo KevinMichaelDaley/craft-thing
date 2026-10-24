@@ -44,8 +44,9 @@ static void run_contact_case(bool zero,bool mixed,bool masked) {
         data[state+13]=1;data[state+6]=float_bits(19.9f-i);data[state+7]=float_bits(19.9f+i);
         data[state+8]=float_bits(b[i].angle-.01f);
     }
-    data[CONTACT_BASE]=32;
-    for(unsigned i=0;i<32;i++) {
+    unsigned rows=batch_case?1057u:32u;
+    data[CONTACT_BASE]=rows;
+    for(unsigned i=0;i<rows;i++) {
         uint32_t c=CONTACT_BASE+12+i*32;
         data[c]=masked&&i%16u==0u?0u:mixed&&(i&1u)?124u:123u;
         data[c+1]=mixed?0u:(i&1u)?0u:124u;data[c+2]=data[c+1]==0u?1u:0u;
@@ -76,7 +77,9 @@ static void run_contact_case(bool zero,bool mixed,bool masked) {
             uint32_t push[8]={WIDTH,HEIGHT,phases[stage],2,0,0,0,0};
             vkCmdBindPipeline(p.command,VK_PIPELINE_BIND_POINT_COMPUTE,pipelines[stage]);
             vkCmdPushConstants(p.command,p.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
-            vkCmdDispatch(p.command,1,1,1);
+            unsigned groups=(stage==0u||stage==1u||stage==3u)?(rows+63u)/64u:1u;
+            if(batch_case&&cached&&stage==1u) groups=1u;
+            vkCmdDispatch(p.command,groups,1,1);
             VkMemoryBarrier barrier={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER,.srcAccessMask=VK_ACCESS_SHADER_WRITE_BIT,
                 .dstAccessMask=VK_ACCESS_SHADER_READ_BIT|VK_ACCESS_SHADER_WRITE_BIT};
             vkCmdPipelineBarrier(p.command,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,0,1,&barrier,0,NULL,0,NULL);

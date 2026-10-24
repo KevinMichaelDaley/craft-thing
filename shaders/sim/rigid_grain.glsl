@@ -5,8 +5,8 @@ struct Particle {
     float f00, f01, f10, f11;
     uint id_lo, id_hi, mass_fp, grain_fp, material, flags;
 };
-layout(set=0,binding=19,std430) buffer Particles { Particle particles[]; };
-layout(set=0,binding=21,std430) buffer GrainScratch { uint grain_scratch[]; };
+layout(set=0,binding=19,std430) DC_BODY_COHERENT buffer Particles { Particle particles[]; };
+layout(set=0,binding=21,std430) DC_BODY_COHERENT buffer GrainScratch { uint grain_scratch[]; };
 layout(set=0,binding=1,std430) readonly buffer GrainTerrain { uvec2 grain_cells[]; };
 const uint GRAIN_PREPARE=15u,GRAIN_POSITION=16u,GRAIN_VELOCITY=17u;
 uint grain_reference(uint c) { return DC_DATA(c+2u)==3u ? DC_DATA(c+7u) : 0u; }
@@ -27,7 +27,7 @@ bool grain_static_at(vec2 point) {
     uint material=grain_cells[(page-1u)*4096u+uint(cell.y%64)*64u+uint(cell.x%64)].x&65535u;
     return material==1u||material==7u||material==8u||material==9u;
 }
-void grain_phase(uint i,uint phase) {
+void grain_apply(uint i,uint phase,uint epoch) {
     if(DC_DATA(sb()+3u)!=0u||i>=DC_DATA(cb())) return;
     uint c=cb()+12u+i*32u,ref=grain_reference(c);
     if(ref==0u) return;
@@ -36,7 +36,6 @@ void grain_phase(uint i,uint phase) {
         for(uint k=0u;k<4u;k++) atomicExchange(grain_scratch[s+k],0u);
         return;
     }
-    uint epoch=params.mode>>8u;
     if(atomicExchange(grain_scratch[s+2u],epoch)==epoch) return;
     vec2 change=vec2(int(grain_scratch[s]),int(grain_scratch[s+1u]))/SUM_SCALE;
     Particle p=particles[index];
@@ -60,3 +59,4 @@ void grain_phase(uint i,uint phase) {
     particles[index]=p;
     grain_scratch[s]=0u;grain_scratch[s+1u]=0u;
 }
+void grain_phase(uint i,uint phase) {grain_apply(i,phase,params.mode>>8u);}

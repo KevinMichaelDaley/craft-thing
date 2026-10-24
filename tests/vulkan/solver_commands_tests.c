@@ -101,6 +101,11 @@ static void test_rebuilds_when_independent_apply_overlap_changes(void) {
     uint64_t recordings,executions;ASSERT_TRUE(dc_gpu_solver_commands_stats(&g,&recordings,&executions));
     ASSERT_EQ(recordings,2u);ASSERT_EQ(executions,2u);
     ASSERT_TRUE(last_executed_hash!=conservative);
+    uint64_t separate=last_executed_hash;
+    g.solver_batch=true;dc_gpu_record_solver(&g);
+    ASSERT_TRUE(dc_gpu_solver_commands_stats(&g,&recordings,&executions));
+    ASSERT_EQ(recordings,3u);ASSERT_EQ(executions,3u);
+    ASSERT_TRUE(last_executed_hash!=separate);
     dc_gpu_solver_commands_destroy(&g);PASS();
 }
 static void test_reuses_exact_mpm_commands_without_repeating_cpu_recording(void) {

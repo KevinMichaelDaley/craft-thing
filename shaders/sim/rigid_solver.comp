@@ -3,8 +3,16 @@
 #extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_arithmetic : require
 #extension GL_KHR_shader_subgroup_ballot : require
+#ifdef DC_SOLVER_BATCH
+#define DC_BODY_COHERENT coherent
+#else
+#define DC_BODY_COHERENT
+#endif
 #include "rigid_body.glsl"
-layout(local_size_x = 64) in;
+#ifndef DC_SOLVER_TEAM
+#define DC_SOLVER_TEAM 64
+#endif
+layout(local_size_x = DC_SOLVER_TEAM) in;
 #ifdef DC_SOLVER_MOTION_PROFILE
 layout(set=0,binding=31,std430) buffer MotionProfile {uint motion_profile[];};
 #endif
@@ -17,7 +25,7 @@ layout(constant_id = 5) const bool GROUPED_REDUCTIONS = false;
 layout(constant_id = 6) const bool FUSED_GRAIN_APPLICATION = false;
 layout(set = 0, binding = 2, std430) readonly buffer Pages { uint pages[]; };
 #ifndef DC_RUNTIME_BODY_STORAGE
-layout(set = 0, binding = 4, std430) buffer Bodies {
+layout(set = 0, binding = 4, std430) DC_BODY_COHERENT buffer Bodies {
     Body bodies[BODY_CAPACITY];
     uint data[];
 };
@@ -276,13 +284,15 @@ void solve_contact(uint i, bool impulse) {
     if(grain_ref!=0u) grain_correction(grain_ref-1u,-mb*force);
 }
 #include "rigid_bonds.glsl"
-void main() {
-    uint i = gl_GlobalInvocationID.x, h = sb();
+const uint PIPELINE_PHASE=PHASE;
+#define PHASE phase
+void solver_phase(uint i,uint phase) {
+    uint h = sb();
     if(PHASE==GRAIN_BED_PLAN) {grain_bed_plan();return;}
     if(PHASE>=GRAIN_BED_INIT) {grain_bed_phase(i);return;}
     if(PHASE>=GRAIN_PREPARE) {grain_phase(i,PHASE);return;}
     if(PHASE>=12u) {solve_bonds(PHASE);return;}
-    if(FUSED_GRAIN_APPLICATION&&(PHASE==APPLY||PHASE==APPLY_VELOCITY)&&DC_DATA(h+13u)!=0u)
+    if(FUSED_GRAIN_APPLICATION&&PIPELINE_PHASE!=22u&&(PHASE==APPLY||PHASE==APPLY_VELOCITY)&&DC_DATA(h+13u)!=0u)
         grain_phase(i,PHASE==APPLY?GRAIN_POSITION:GRAIN_VELOCITY);
     if (PHASE == RESET) {
         if (i == 0u) {
@@ -530,5 +540,22 @@ void main() {
         atomicAdd(motion_profile[0],136u);
 #endif
         DC_BODY(i) = body;
+    }
+}
+#undef PHASE
+
+void iteration_barrier() {memoryBarrierBuffer();barrier();}
+void main() {
+    if(PHASE!=22u) {solver_phase(gl_GlobalInvocationID.x,PHASE);return;}
+    uint lane=gl_LocalInvocationIndex,team=gl_WorkGroupSize.x;
+    for(uint iteration=1u;iteration<=8u;iteration++) {
+        for(uint row=lane;row<DC_DATA(cb());row+=team) solver_phase(row,SOLVE);
+        iteration_barrier();
+        for(uint body=lane;body<params.body_count;body+=team) solver_phase(body,APPLY);
+        iteration_barrier();
+        for(uint row=lane;row<DC_DATA(cb());row+=team) grain_apply(row,GRAIN_POSITION,iteration);
+        iteration_barrier();
+        if((params.mode&65536u)!=0u) solve_bonds(12u);
+        iteration_barrier();
     }
 }
