@@ -76,4 +76,42 @@ void shape_color_resolve(uint word) {
     }
 #endif
 }
+#ifdef DC_COOPERATIVE_SHAPE_COLORS
+/* Each eight-lane team owns one packed word. All lanes must enter, including
+ * padding teams, so marker reads complete before alpha is overwritten. */
+void shape_color_resolve_cooperative(uint word,bool enabled) {
+    if(gl_SubgroupSize<8u) {
+        if(enabled&&gl_LocalInvocationIndex%8u==0u) shape_color_resolve(word);
+        return;
+    }
+    uint nibble=gl_LocalInvocationIndex%8u;
+    uint relative=0u,capacity=1u,marker=0u;
+    if(enabled&&nibble==0u) {
+        relative=word-color_pool_word();capacity=color_capacity();
+        uint target=(relative%capacity)*8u;
+        marker=floatBitsToUint(relative<capacity?shape_colors_a[target].w:shape_colors_b[target].w);
+    }
+    uint leader=gl_SubgroupInvocationID&~7u;
+    relative=subgroupShuffle(relative,leader);
+    capacity=subgroupShuffle(capacity,leader);
+    marker=subgroupShuffle(marker,leader);
+    subgroupMemoryBarrierBuffer();subgroupBarrier();
+    if(enabled&&(marker&0x80000000u)!=0u) {
+        uint source=marker&0x7fffffffu,source_relative=source==0u?0u:source-1u;
+        uint target=(relative%capacity)*8u+nibble,origin=(source_relative%capacity)*8u+nibble;
+        vec4 color=source==0u?vec4(0):source_relative<capacity?shape_colors_a[origin]:shape_colors_b[origin];
+        if(relative<capacity) shape_colors_a[target]=color;else shape_colors_b[target]=color;
+#ifdef DC_SHAPE_COLOR_PROFILE
+        atomicAdd(color_profile[2],1u);
+#endif
+    }
+}
+void shape_color_resolve_range(uint first,uint count) {
+    uint teams=gl_WorkGroupSize.x/8u;
+    for(uint base=0u;base<count;base+=teams) {
+        uint word=base+gl_LocalInvocationIndex/8u;
+        shape_color_resolve_cooperative(first+word,word<count);
+    }
+}
+#endif
 #endif

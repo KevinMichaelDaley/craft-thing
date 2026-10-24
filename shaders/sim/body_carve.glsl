@@ -192,7 +192,7 @@ void carve_bodies() {
             }
             uint pool=graph()+40000u;
             uint first=BODY_STORAGE_WORDS+pool+16u+DC_DATA(pool)*color_capacity();
-            for(uint word=lane;word<DC_DATA(pool+1u);word+=gl_WorkGroupSize.x) shape_color_resolve(first+word);
+            shape_color_resolve_range(first,DC_DATA(pool+1u));
         }
         if(lane==0u) carve_cursor++;
         memoryBarrierBuffer();barrier();

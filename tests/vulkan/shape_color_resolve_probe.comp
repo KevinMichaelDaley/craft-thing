@@ -9,6 +9,7 @@ layout(set=0,binding=31,std430) buffer ColorProfile {uint color_profile[];};
 layout(push_constant) uniform Params {uint width,height,mode,count;uvec2 origin_x,origin_y;} params;
 uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 #define DC_SHAPE_COLOR_PROFILE 1
+#define DC_COOPERATIVE_SHAPE_COLORS 1
 #include "shape_colors.glsl"
 void main() {
     uint index=gl_GlobalInvocationID.x/8u;
