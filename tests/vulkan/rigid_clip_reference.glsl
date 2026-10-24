@@ -1,4 +1,19 @@
 /* Frozen scalar clipping oracle; intentionally independent of optimized reads. */
+bool reference_piece_cell_overlap(Body body,uint piece,ivec2 cell) {
+    if(piece_vertices(body,piece)==0u) return false;
+    vec2 low=vec2((cell<<16)-ivec2(body.x_fp,body.y_fp))/65536.0;
+    vec2 high=low+vec2(1.0);
+    vec2 bounds_low=vec2(1e20),bounds_high=vec2(-1e20);
+    for(uint i=0u;i<piece_vertices(body,piece);++i) {
+        vec2 a=piece_vertex(body,piece,i);
+        vec2 b=piece_vertex(body,piece,(i+1u)%piece_vertices(body,piece));
+        bounds_low=min(bounds_low,a);bounds_high=max(bounds_high,a);
+        vec2 edge=b-a,inward=vec2(-edge.y,edge.x);
+        vec2 support=mix(low,high,greaterThanEqual(inward,vec2(0.0)));
+        if(dot(inward,support-a)<=0.0) return false;
+    }
+    return all(greaterThan(high,bounds_low))&&all(lessThan(low,bounds_high));
+}
 float reference_cell_volume(Body b,uint piece,ivec2 cell,float fraction,out vec2 center_point) {
     vec2 polygon[12],next[12];uint count=piece_vertices(b,piece);
     if(count<3u) {center_point=vec2(0);return 0;}

@@ -9,6 +9,7 @@ layout(set=0,binding=0,std430) buffer Results {uint results[];};
 uint reads=0u;
 uint pixel_word_at(uint index) {reads++;return data[index-BODY_STORAGE_WORDS];}
 #include "rigid_clip.glsl"
+#include "rigid_shape.glsl"
 #include "rigid_clip_reference.glsl"
 bool reference_boundary(Body b,uint p) {
     if(pixel_piece_material(b,p)==0u) return false;
@@ -50,6 +51,10 @@ void main() {
                 reads=0u;float actual_face=body_face_coverage(body,piece,start,stop);
                 atomicMax(results[10],reads);
                 if(floatBitsToUint(actual_face)!=floatBitsToUint(expected_face)) atomicAdd(results[11],1u);
+                bool expected_overlap=reference_piece_cell_overlap(body,piece,cell);
+                reads=0u;bool actual_overlap=piece_cell_overlap(body,piece,cell);
+                atomicMax(results[13],reads);
+                if(actual_overlap!=expected_overlap) atomicAdd(results[14],1u);
                 atomicAdd(results[12],1u);
             }
         }
