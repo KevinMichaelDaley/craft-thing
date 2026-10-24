@@ -41,10 +41,11 @@ static bool error(char *err, uint32_t cap, const char *message) {
 static dc_gpu_body_record_t *find_body(dc_gpu_t *gpu, uint32_t id) {
     if (!gpu || !id)
         return NULL;
-    dc_gpu_refresh_body_registry(gpu);
-    for (uint32_t i = 0; i < gpu->body_count; ++i)
-        if (gpu->body_ids[i] == id)
-            return &(*dc_gpu_body_record(gpu,i));
+    for (uint32_t i = 0; i < dc_gpu_body_capacity(gpu); ++i) {
+        dc_gpu_body_record_t *record = dc_gpu_body_record(gpu, i);
+        if (record->body.id == id && (record->body.active || record->reserved[0]))
+            return record;
+    }
     return NULL;
 }
 bool dc_gpu_set_rigid_solver(dc_gpu_t *gpu, bool enabled) {
