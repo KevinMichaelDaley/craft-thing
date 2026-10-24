@@ -24,6 +24,7 @@ static bool storage_reserve(dc_gpu_t *g,uint32_t required,uint32_t pairs,uint32_
         }
         next*=2u;
     }
+    layout.pixel_pool_words=next;
     struct dc_runtime_bodies *r=g->runtime_bodies;
     VkDeviceSize old_prefix=(VkDeviceSize)dc_gpu_pixel_pool_word_offset(g)*4u+64u;
     VkDeviceSize prefix=(VkDeviceSize)dc_gpu_pixel_pool_word_offset(&layout)*4u+64u;

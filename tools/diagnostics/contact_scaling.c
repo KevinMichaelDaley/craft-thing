@@ -41,6 +41,40 @@ static bool occupied(unsigned kind, unsigned x, unsigned y, unsigned side) {
     return x == 0 || y % 4 < 2;
 }
 
+static bool fixture_solid(unsigned kind,int x,int y,unsigned side) {
+    return x>=0&&y>=0&&(unsigned)x<side&&(unsigned)y<side&&occupied(kind,(unsigned)x,(unsigned)y,side);
+}
+static bool cached_boundaries_match_fixture(dc_gpu_t *g,unsigned kind,unsigned side) {
+    if(!g->runtime_body_consumers) return true;
+    const uint32_t *words=g->body_mapped;
+    const dc_gpu_body_record_t *body=dc_gpu_body_record(g,0);
+    if(!(body->piece_count&DC_GPU_PIXEL_BODY_FLAG)) body=dc_gpu_body_record(g,1);
+    uint32_t pointer=body->compound_reserved,tiles=words[pointer+1u];
+    uint32_t directory=words[pointer+2u]*words[pointer+3u];
+    uint32_t low=dc_gpu_pixel_pool_word_offset(g)+DC_GPU_PIXEL_POOL_HEADER_WORDS;
+    uint32_t pairs=g->runtime_pair_capacity?g->runtime_pair_capacity:DC_GPU_BROADPHASE_PAIR_CAPACITY;
+    uint32_t cache=dc_gpu_contact_work_word_offset(g)+4u+pairs*DC_CONTACT_PIXEL_GROUPS*2u+
+        ((g->width+63u)/64u)*((g->height+63u)/64u);
+    for(uint32_t tile=0;tile<tiles;tile++) {
+        uint32_t start=pointer+8u+directory+tile*33u,coord=words[start];
+        for(uint32_t word=0;word<32;word++) {
+            int x=(int)((coord&65535u)*16u+(word%2u)*8u)-(int)words[pointer+4u];
+            int y=(int)((coord>>16u)*16u+word/2u)-(int)words[pointer+5u];
+            uint32_t expected=0u;
+            for(int bit=0;bit<8;bit++) if(fixture_solid(kind,x+bit,y,side)&&
+                (!fixture_solid(kind,x+bit-1,y,side)||!fixture_solid(kind,x+bit+1,y,side)||
+                 !fixture_solid(kind,x+bit,y-1,side)||!fixture_solid(kind,x+bit,y+1,side)))
+                expected|=1u<<(bit*4);
+            uint32_t actual=words[cache+start+1u+word-low];
+            if(actual!=expected) {
+                printf("cached boundary tile%u word%u expected%08x actual%08x\n",tile,word,expected,actual);
+                return false;
+            }
+        }
+    }
+    printf("verified packed boundary cache %u words\n",tiles*32u);return true;
+}
+
 static void measure(unsigned side, unsigned kind, unsigned pair_kind) {
     char err[256] = {0};
     dc_gpu_t *g = NULL;
@@ -176,6 +210,7 @@ static void measure(unsigned side, unsigned kind, unsigned pair_kind) {
     if(g->runtime_body_consumers&&dc_gpu_body_storage_bytes(g)>(VkDeviceSize)work*4u)
         last_workgroups=((const uint32_t *)g->body_mapped)[work];
     printf("pixel contact workgroups %u\n",last_workgroups);
+    ASSERT_TRUE(cached_boundaries_match_fixture(g,kind,side));
     dc_gpu_destroy(g);
     PASS();
 }

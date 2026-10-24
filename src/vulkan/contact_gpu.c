@@ -65,11 +65,11 @@ bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         DC_GPU_TYPED_CONTACT_ACTIVITY_WORD,err,cap)) return false;
     if(!dc_gpu_load_shader_module(gpu,"build/shaders/contacts_pixel.comp.spv",&module,err,cap)) return false;
     info.stage.module=module;
-    const uint32_t pixel_phases[]={4u,5u,2u,3u,6u};
+    const uint32_t pixel_phases[]={4u,5u,2u,3u,6u,7u};
     VkPipeline *pixel_pipelines[]={&gpu->contact_pixel_plan_pipeline,
         &gpu->contact_pixel_work_pipeline,&gpu->contact_pixel_pipeline,&gpu->contact_pixel_finish_pipeline,
-        &gpu->contact_terrain_pipeline};
-    for(unsigned i=0;i<5u&&result==VK_SUCCESS;i++) {
+        &gpu->contact_terrain_pipeline,&gpu->contact_boundary_pipeline};
+    for(unsigned i=0;i<6u&&result==VK_SUCCESS;i++) {
         uint32_t values[]={pixel_phases[i],1u};
         VkSpecializationMapEntry entries[]={{.constantID=0,.size=sizeof(uint32_t)},
             {.constantID=1,.offset=sizeof(uint32_t),.size=sizeof(uint32_t)}};
@@ -98,6 +98,16 @@ void dc_gpu_record_contact_terrain(dc_gpu_t *gpu) {
     VkDependencyInfo dependency={.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
         .memoryBarrierCount=1,.pMemoryBarriers=&memory};
     vkCmdPipelineBarrier2(gpu->command,&dependency);
+    if(gpu->contact_boundary_pipeline) {
+        uint32_t count=dc_gpu_runtime_body_count(gpu),groups=count?count:1u;
+        uint32_t columns=groups<65535u?groups:65535u;
+        push[2]=7u;push[3]=count;
+        push[4]=dc_gpu_pixel_pool_word_offset(gpu)+DC_GPU_PIXEL_POOL_HEADER_WORDS;
+        vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->contact_boundary_pipeline);
+        vkCmdPushConstants(gpu->command,gpu->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
+        vkCmdDispatch(gpu->command,columns,DC_CONTACT_PIXEL_GROUPS,(groups-1u)/columns+1u);
+        vkCmdPipelineBarrier2(gpu->command,&dependency);
+    }
 }
 void dc_gpu_record_contacts(dc_gpu_t *gpu) {
     if(!gpu->solver_recording) dc_gpu_record_contact_terrain(gpu);
@@ -118,7 +128,8 @@ void dc_gpu_record_contacts(dc_gpu_t *gpu) {
             pipeline);
         push[2] = mode | (gpu->component_profile ? 256u : 0u) |
             (gpu->contact_pixel_pipeline==VK_NULL_HANDLE?512u:1024u) |
-            (gpu->runtime_body_consumers&&gpu->contact_terrain_pipeline?2048u:0u);
+            (gpu->runtime_body_consumers&&gpu->contact_terrain_pipeline?2048u:0u) |
+            (gpu->runtime_body_consumers&&gpu->contact_boundary_pipeline?4096u:0u);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
         if(typed&&pass==4u) vkCmdDispatch(gpu->command,1,1,1);

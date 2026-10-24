@@ -180,6 +180,7 @@ void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
     if(gpu->contact_pixel_finish_pipeline) vkDestroyPipeline(gpu->device,gpu->contact_pixel_finish_pipeline,NULL);
     if(gpu->contact_pixel_work_pipeline) vkDestroyPipeline(gpu->device,gpu->contact_pixel_work_pipeline,NULL);
     if(gpu->contact_terrain_pipeline) vkDestroyPipeline(gpu->device,gpu->contact_terrain_pipeline,NULL);
+    if(gpu->contact_boundary_pipeline) vkDestroyPipeline(gpu->device,gpu->contact_boundary_pipeline,NULL);
     for (uint32_t i=0;i<DC_GPU_SOLVER_PHASE_COUNT;++i)
         if (gpu->solver_pipelines[i]) vkDestroyPipeline(gpu->device,gpu->solver_pipelines[i],NULL);
     for (unsigned i=0;i<2;i++)

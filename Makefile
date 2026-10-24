@@ -226,7 +226,7 @@ $(RIGID_SHADER): shaders/sim/structural_load.glsl
 build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_bench build/dungeoncraft_quarter_native build/marker_slot_tests: $(BROADPHASE_SHADER)
 build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench: $(BROADPHASE_SHADER) src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
 build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_bench build/dungeoncraft_quarter_native build/marker_slot_tests build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench: $(CONTACT_SHADER)
-$(CONTACT_SHADER): shaders/sim/contacts.comp shaders/sim/rigid_body.glsl shaders/sim/contact_geometry.glsl include/dungeoncraft/contact_work_layout.h
+$(CONTACT_SHADER): shaders/sim/contacts.comp $(wildcard shaders/sim/*.glsl) include/dungeoncraft/contact_work_layout.h
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
 $(BROADPHASE_SHADER): shaders/sim/broadphase.comp
@@ -1498,10 +1498,10 @@ build/contact_boundary_tests: tests/vulkan/contact_boundary_tests.c tests/vulkan
 test: build/contact_boundary_tests
 build/diagnostics/contacts_scalar_reference.spv: shaders/sim/contacts.comp $(wildcard shaders/sim/*.glsl)
 	mkdir -p $(dir $@)
-	glslangValidator -DDC_CONTACT_TERRAIN_CACHE=0 -DDC_CONTACT_GROUP_LANES=64 -DDC_CONTACT_COOPERATIVE_BOUNDARY=0 -DDC_CONTACT_POLYGON_CAPACITY=8 -V --target-env vulkan1.3 -S comp -o $@ $<
+	glslangValidator -DDC_CONTACT_BOUNDARY_CACHE=0 -DDC_CONTACT_TERRAIN_CACHE=0 -DDC_CONTACT_GROUP_LANES=64 -DDC_CONTACT_COOPERATIVE_BOUNDARY=0 -DDC_CONTACT_POLYGON_CAPACITY=8 -V --target-env vulkan1.3 -S comp -o $@ $<
 build/diagnostics/runtime_contacts_scalar_reference.spv: shaders/sim/contacts.comp $(wildcard shaders/sim/*.glsl)
 	mkdir -p $(dir $@)
-	glslangValidator -DDC_RUNTIME_BODY_STORAGE=1 -DDC_CONTACT_TERRAIN_CACHE=0 -DDC_CONTACT_GROUP_LANES=64 -DDC_CONTACT_COOPERATIVE_BOUNDARY=0 -DDC_CONTACT_POLYGON_CAPACITY=8 -V --target-env vulkan1.3 -S comp -o $@ $<
+	glslangValidator -DDC_RUNTIME_BODY_STORAGE=1 -DDC_CONTACT_BOUNDARY_CACHE=0 -DDC_CONTACT_TERRAIN_CACHE=0 -DDC_CONTACT_GROUP_LANES=64 -DDC_CONTACT_COOPERATIVE_BOUNDARY=0 -DDC_CONTACT_POLYGON_CAPACITY=8 -V --target-env vulkan1.3 -S comp -o $@ $<
 build/contact_boundary_manifold_tests: tests/vulkan/contact_boundary_manifold_tests.c tools/diagnostics/contact_scaling.c $(GPU_OBJ) $(CHUNK_OBJ) build/pixel_component_tests build/diagnostics/contacts_scalar_reference.spv build/diagnostics/runtime_contacts_scalar_reference.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_load_shader_module
 test: build/contact_boundary_manifold_tests
@@ -1511,10 +1511,10 @@ build/diagnostics/pressure_stencil_pack_probe.spv: tests/vulkan/pressure_stencil
 build/pressure_stencil_pack_tests: tests/vulkan/pressure_stencil_pack_tests.c tools/diagnostics/vulkan_probe.c build/diagnostics/pressure_stencil_pack_probe.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ $(LDLIBS)
 test: build/pressure_stencil_pack_tests
-build/shaders/contacts_pixel.comp.spv: shaders/sim/contacts.comp $(wildcard shaders/sim/*.glsl)
+build/shaders/contacts_pixel.comp.spv: shaders/sim/contacts.comp $(wildcard shaders/sim/*.glsl) include/dungeoncraft/contact_work_layout.h
 	mkdir -p $(dir $@)
 	glslangValidator -DDC_CONTACT_PIXEL_MODULE=1 -DDC_CONTACT_POLYGON_CAPACITY=4 -V --target-env vulkan1.3 -S comp -o $@ $<
-build/shaders/runtime/contacts_pixel.comp.spv: shaders/sim/contacts.comp $(wildcard shaders/sim/*.glsl)
+build/shaders/runtime/contacts_pixel.comp.spv: shaders/sim/contacts.comp $(wildcard shaders/sim/*.glsl) include/dungeoncraft/contact_work_layout.h
 	mkdir -p $(dir $@)
 	glslangValidator -DDC_RUNTIME_BODY_STORAGE=1 -DDC_CONTACT_PIXEL_MODULE=1 -DDC_CONTACT_POLYGON_CAPACITY=4 -V --target-env vulkan1.3 -S comp -o $@ $<
 $(GPU_OBJ) $(GPU_SOURCE_BINARIES): build/shaders/contacts_pixel.comp.spv build/shaders/runtime/contacts_pixel.comp.spv
@@ -1523,6 +1523,9 @@ test_gpu_tools: build/shaders/contacts_pixel.comp.spv build/shaders/runtime/cont
 build/brush_region_tests: tests/vulkan/brush_region_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/gpu_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdDispatch
 test: build/brush_region_tests
+
+build/shaders/runtime/contacts.comp.spv build/diagnostics/contacts_scalar_reference.spv build/diagnostics/runtime_contacts_scalar_reference.spv build/diagnostics/contacts_terrain_scan.comp.spv build/diagnostics/runtime_contacts_terrain_scan.comp.spv: include/dungeoncraft/contact_work_layout.h
+build/contact_shader_contract_tests: build/shaders/contacts_pixel.comp.spv
 build/diagnostics/pixel_boundary_probe.spv: shaders/sim/rigid_clip.glsl shaders/sim/rigid_shape.glsl tests/vulkan/rigid_clip_reference.glsl
 
 build/solver_contact_start_tests: tests/vulkan/solver_contact_start_tests.c tests/vulkan/solver_motion_store_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_motion_profile.comp.spv

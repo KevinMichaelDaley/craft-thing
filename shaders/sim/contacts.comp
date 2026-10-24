@@ -77,6 +77,7 @@ void cache_terrain_presence() {
 uvec2 page_extent() { return uvec2((params.width + 63u) / 64u, (params.height + 63u) / 64u); }
 uint pair_base() { uvec2 size = page_extent() + 2u; return HEADER_WORDS + 2u * size.x * size.y; }
 uint contact_base() { return pair_base() + PAIR_CAPACITY * PAIR_WORDS; }
+#include "contact_boundary_cache.glsl"
 
 uint body_slot(uint id) {
 #ifdef DC_RUNTIME_BODY_STORAGE
@@ -255,6 +256,18 @@ uvec4 terrain_contact_scan(Body a,uint offset) {
 
 void main() {
     if(CONTACT_WORK_VERSION!=DC_CONTACT_WORK_ABI) return;
+    if(CONTACT_PHASE==7u) {
+#ifdef DC_RUNTIME_BODY_STORAGE
+        cache_body_boundaries();
+#endif
+        return;
+    }
+#ifdef DC_RUNTIME_BODY_STORAGE
+    contact_boundary_cached=(params.mode&4096u)!=0u;
+    contact_boundary_cache_base=boundary_cache_base();
+    contact_boundary_geometry_base=DC_RUNTIME_WORK(52u);
+    contact_boundary_geometry_capacity=2u*DC_RUNTIME_WORK(29u);
+#endif
     if(CONTACT_PHASE==6u) {
 #ifdef DC_RUNTIME_BODY_STORAGE
         cache_terrain_presence();
@@ -444,7 +457,7 @@ void main() {
                 uvec4 query=body_piece_query(b,lo-vec2(contact_skin),hi+vec2(contact_skin));
                 if((params.mode&256u)!=0u&&pixel_body(b)&&(!distribute_b||lane==0u)) atomicAdd(DC_DATA(base+9u),query.z*query.w);
                 for(uint ordinal=distribute_b?lane:0u;ordinal<query.z*query.w;ordinal+=distribute_b?CONTACT_GROUP_SIZE:1u) {
-                    uint bp=query_piece(b,query,ordinal);if(!pixel_boundary(b,bp)) continue;
+                    uint bp=query_piece(b,query,ordinal);if(!contact_pixel_boundary(b,bp,false)) continue;
                     if((params.mode&256u)!=0u) atomicAdd(DC_DATA(base+11u),1u);
                 bool emitted=emit_contact(a, b.id, BODY_CONTACT, piece_material(b,bp),
                     0u, uvec2(0), uvec2(0), pa, body_polygon(b,bp,delta),ap,bp);

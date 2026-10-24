@@ -137,6 +137,7 @@ static void test_empty_runtime_reserves_bounded_appearance_storage_and_can_grow(
     ASSERT_TRUE(g->shape_color_allocation_bytes<=dc_gpu_color_terrain_bytes()+2u*1048576u);
     ASSERT_TRUE(dc_gpu_runtime_geometry_reserve(g,words*4u,err,sizeof(err)));
     ASSERT_EQ(dc_gpu_pixel_pool_capacity(g),words*4u);
+    ASSERT_TRUE(g->runtime_bodies->metadata.bytes>=dc_gpu_body_storage_bytes(g));
     ASSERT_TRUE(dc_gpu_color_bank_bytes(g)>1048576u);
     dc_gpu_destroy(g);PASS();
 }
@@ -159,6 +160,7 @@ static void test_large_component_automatically_grows_geometry_without_losing_sou
     ASSERT_EQ(chunk->cells[64+1].material,DC_MATERIAL_STONE);
     for(unsigned frame=0;frame<3;frame++) ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_pixel_pool_capacity(g)>initial);
+    ASSERT_TRUE(g->runtime_bodies->metadata.bytes>=dc_gpu_body_storage_bytes(g));
     uint32_t count=0;dc_gpu_body_motion_t motion;
     ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,NULL,0,&count,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_body_motion(g,0x80000001u,&motion,err,sizeof(err)));

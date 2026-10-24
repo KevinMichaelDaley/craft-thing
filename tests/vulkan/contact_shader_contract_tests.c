@@ -80,6 +80,12 @@ static void test_unbatched_and_wrong_work_interfaces_are_rejected(void) {
     write_fixture(words,sizeof(words)/4);
     ASSERT_TRUE(!dc_gpu_contact_shader_compatible(fixture,15,err,sizeof(err)));PASS();
 }
+static void test_pre_cache_work_interface_is_rejected(void) {
+    uint32_t words[sizeof(valid)/4];char err[256]={0};
+    memcpy(words,valid,sizeof(valid));words[sizeof(words)/4-1]=DC_CONTACT_WORK_ABI-1u;
+    write_fixture(words,sizeof(words)/4);
+    ASSERT_TRUE(!dc_gpu_contact_shader_compatible(fixture,15,err,sizeof(err)));PASS();
+}
 int main(void) {
     if(mkdir("build/diagnostics",0777)!=0&&errno!=EEXIST) return 2;
     RUN(test_current_dispatch_contract_is_accepted);RUN(test_runtime_shader_has_the_same_contract);
@@ -88,5 +94,6 @@ int main(void) {
     RUN(test_old_unversioned_or_missing_binding_shaders_are_rejected);
     RUN(test_truncated_and_zero_length_instructions_are_rejected);
     RUN(test_unbatched_and_wrong_work_interfaces_are_rejected);
+    RUN(test_pre_cache_work_interface_is_rejected);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
