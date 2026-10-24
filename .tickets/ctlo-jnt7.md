@@ -2,7 +2,7 @@
 id: ctlo-jnt7
 status: in_progress
 deps: []
-links: [ctlo-pwxh, ctlo-z0zo]
+links: [ctlo-pwxh, ctlo-z0zo, ctlo-32z4]
 created: 2026-10-24T02:19:33Z
 type: bug
 priority: 1

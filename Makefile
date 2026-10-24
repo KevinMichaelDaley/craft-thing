@@ -257,6 +257,7 @@ FRAME_TRACE_LINK = -Wl,--wrap=dc_gpu_present_chunks_steps -Wl,--wrap=vkBeginComm
 FRAME_TRACE_LINK += -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=dc_gpu_record_component_extraction -Wl,--wrap=dc_gpu_record_broadphase -Wl,--wrap=dc_gpu_record_solver
 FRAME_TRACE_LINK += -Wl,--wrap=vkCreateComputePipelines -Wl,--wrap=vkAllocateMemory -Wl,--wrap=vkAcquireNextImageKHR -Wl,--wrap=vkQueuePresentKHR -Wl,--wrap=vkWaitForFences -Wl,--wrap=vkQueueWaitIdle -Wl,--wrap=vkDeviceWaitIdle -Wl,--wrap=dc_gpu_runtime_bodies_service
 FRAME_TRACE_LINK += -rdynamic
+FRAME_TRACE_LINK += -Wl,--wrap=dc_gpu_set_tick_seconds
 build/diagnostics/quarter_app_frame_trace: tools/diagnostics/frame_trace.c $(QUARTER_APP_OBJ) $(PERFORMANCE_OBJ) $(RENDERER_SHADERS) build/dungeoncraft_quarter_native
 	mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(QUARTER_APP_OBJ) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) $(FRAME_TRACE_LINK)

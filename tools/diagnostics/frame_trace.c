@@ -1,5 +1,6 @@
 /* Diagnostic-only displayed-frame timestamps; ordinary runtime has no hooks. */
 #define _POSIX_C_SOURCE 200809L
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +8,22 @@
 
 #include "../../src/vulkan/gpu_internal.h"
 #include "frame_api_trace.h"
+
+bool __real_dc_gpu_set_tick_seconds(dc_gpu_t *,float);
+bool __wrap_dc_gpu_set_tick_seconds(dc_gpu_t *gpu,float seconds) {
+    static bool announced;
+    const char *setting=getenv("DC_FRAME_TRACE_FIXED_SECONDS");
+    if(setting) {
+        char *end;double fixed=strtod(setting,&end);
+        if(end==setting||*end||!isfinite(fixed)||fixed<=0.||fixed>.25) return false;
+        seconds=(float)fixed;
+        if(!announced) {
+            printf("Diagnostic fixed simulation clock: %.6f seconds; not realtime frame acceptance\n",fixed);
+            announced=true;
+        }
+    }
+    return __real_dc_gpu_set_tick_seconds(gpu,seconds);
+}
 
 enum { QUERY_CAPACITY = 4096, RIGID = 0, FLUID = 1, MPM = 2,
        CONTACT = 3, HYDRO = 4, FLUID_PHASE = 9, RENDERER = 15,

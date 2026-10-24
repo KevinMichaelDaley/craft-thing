@@ -165,6 +165,11 @@ timestamp queries. Its `present-api` and `frame-api` lines isolate host API wait
 without changing the GPU command stream. `DC_FRAME_TIMINGS=1` adds application
 stages, including brush transactions outside presentation. Diagnose interaction
 costs with controls enabled; idle replay alone does not establish brush latency.
+`DC_FRAME_TRACE_FIXED_SECONDS=0.0166666667` makes the diagnostic executable use
+a repeatable simulation clock for comparisons. This is necessary when comparing
+shader variants: the ordinary app schedules additional fluid work as elapsed
+frame time increases. Fixed-clock results are diagnostic only; final frame-budget
+acceptance must use the ordinary application and its real elapsed simulation time.
 For a reproducible displayed cutting workload, set
 `DC_BENCHMARK_AIR_BRUSH=x,y,radius` on a bounded application benchmark. It applies
 the real air brush at the given visible cell on every measured frame (starting

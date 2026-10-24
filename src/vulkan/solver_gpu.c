@@ -149,7 +149,9 @@ bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     const char *grouped=getenv("DC_SOLVER_GROUPED_REDUCTIONS");
     const char *zero=getenv("DC_SOLVER_SKIP_ZERO_REDUCTIONS");
     const char *fused=getenv("DC_SOLVER_FUSED_GRAIN");
+    const char *overlap=getenv("DC_SOLVER_APPLY_OVERLAP");
     gpu->solver_fused_grain=fused&&strcmp(fused,"1")==0;
+    gpu->solver_apply_overlap=overlap&&strcmp(overlap,"1")==0;
     VkSpecializationMapEntry entries[]={{0u,0u,4u},{5u,4u,4u},{4u,8u,4u},{6u,12u,4u}};
     for (uint32_t mode = 0;
          mode < DC_GPU_SOLVER_PHASE_COUNT && result == VK_SUCCESS; ++mode) {
@@ -260,6 +262,15 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
         vkCmdDispatchIndirect(gpu->command, gpu->body_buffer, offset);
     } else
         vkCmdDispatch(gpu->command, 1, 1, 1);
+    if(gpu->runtime_body_consumers&&gpu->solver_apply_overlap&&!gpu->solver_fused_grain&&
+       (phase==SOLVER_APPLY||phase==SOLVER_APPLY_VELOCITY)) {
+        const int64_t margin=INT32_MAX/DC_FLUID_FULL/DC_CHUNK_SIDE+1;
+        /* Grain anchors were validated by INIT_CONTACTS and stay immutable.
+         * This margin also rules out publish() writing a world-overflow fault.
+         * Both apply passes can therefore finish at the following barrier. */
+        if(gpu->body_origin.x>=INT64_MIN+margin&&gpu->body_origin.x<=INT64_MAX-margin&&
+           gpu->body_origin.y>=INT64_MIN+margin&&gpu->body_origin.y<=INT64_MAX-margin) return;
+    }
     bool publish_indirect=!gpu->runtime_body_consumers||phase==SOLVER_PREPARE||
         phase==SOLVER_GRAIN_BED_PLAN||phase==SOLVER_GRAIN_BED_PUBLISH;
     VkMemoryBarrier2 barrier = {
