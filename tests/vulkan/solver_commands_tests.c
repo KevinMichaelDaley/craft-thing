@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "../../src/vulkan/gpu_internal.h"
+#include "../../src/vulkan/runtime_body_internal.h"
 
 static int g_pass,g_fail;
 static uint64_t command_hash,secondary_hash;
@@ -89,6 +90,19 @@ static void test_rebuilds_for_origin_growth_descriptor_and_structural_changes(vo
     ASSERT_EQ(recordings,6u);ASSERT_EQ(executions,6u);
     dc_gpu_solver_commands_destroy(&g);PASS();
 }
+static void test_rebuilds_when_independent_apply_overlap_changes(void) {
+    uint32_t header[64]={0};header[9]=256;header[10]=512;
+    struct dc_runtime_bodies runtime={.work={.mapped=header},.store={.slab_count=1}};
+    dc_gpu_t g=fake_gpu();char err[128];
+    g.runtime_body_consumers=true;g.runtime_bodies=&runtime;
+    ASSERT_TRUE(dc_gpu_solver_commands_init(&g,err,sizeof(err)));
+    dc_gpu_record_solver(&g);uint64_t conservative=last_executed_hash;
+    g.solver_apply_overlap=true;dc_gpu_record_solver(&g);
+    uint64_t recordings,executions;ASSERT_TRUE(dc_gpu_solver_commands_stats(&g,&recordings,&executions));
+    ASSERT_EQ(recordings,2u);ASSERT_EQ(executions,2u);
+    ASSERT_TRUE(last_executed_hash!=conservative);
+    dc_gpu_solver_commands_destroy(&g);PASS();
+}
 static void test_reuses_exact_mpm_commands_without_repeating_cpu_recording(void) {
     dc_gpu_t g=fake_gpu();char err[128];
     ASSERT_TRUE(dc_gpu_mpm_scan_layout(g.width,g.height,&g.mpm_scan_layout));
@@ -146,6 +160,7 @@ static void test_reuses_exact_fluid_phases_and_invalidates_changed_parameters(vo
 int main(void) {
     RUN(test_reuses_the_exact_solver_program_without_recording_again);
     RUN(test_rebuilds_for_origin_growth_descriptor_and_structural_changes);
+    RUN(test_rebuilds_when_independent_apply_overlap_changes);
     RUN(test_reuses_exact_mpm_commands_without_repeating_cpu_recording);
     RUN(test_mpm_uses_a_separate_pipeline_for_each_unchanged_phase);
     RUN(test_generic_mpm_binds_once_while_executing_all_eight_phases);

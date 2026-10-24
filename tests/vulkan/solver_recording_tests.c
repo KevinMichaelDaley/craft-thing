@@ -54,21 +54,37 @@ static void test_solver_publishes_to_host_once_after_all_iterations(void) {
     ASSERT_TRUE(solver_barriers>200u);
     ASSERT_EQ(nested_host_publications,0u);ASSERT_EQ(host_publications,1u);ASSERT_EQ(bad_dependencies,0u);PASS();
 }
-static void test_runtime_solver_publishes_indirect_only_when_commands_change(void) {
+static void record_runtime_solver(dc_chunk_coord_t origin,bool overlap) {
     uint32_t header[64]={0};header[9]=256;header[10]=512;
     struct dc_runtime_bodies runtime={.work={.mapped=header},.store={.slab_count=1}};
     runtime.scan.pipeline=(VkPipeline)(uintptr_t)1000;
     dc_gpu_t gpu={.width=64,.height=64,.page_width=1,.page_height=1,.body_count=1,
-        .runtime_bodies=&runtime,.runtime_body_consumers=true};
+        .runtime_bodies=&runtime,.runtime_body_consumers=true,.body_origin=origin,
+        .solver_apply_overlap=overlap};
     for(unsigned i=0;i<DC_GPU_SOLVER_PHASE_COUNT;i++) gpu.solver_pipelines[i]=(VkPipeline)(uintptr_t)(i+1u);
     phase=UINT32_MAX;solver_barriers=host_publications=bad_dependencies=nested_host_publications=indirect_publications=0;
     runtime_fixture=true;dc_gpu_record_solver_uncached(&gpu);runtime_fixture=false;
+}
+static void test_runtime_solver_publishes_indirect_only_when_commands_change(void) {
+    record_runtime_solver((dc_chunk_coord_t){0,0},true);
     printf("runtime barriers%u indirect publications%u invalid dependencies%u\n",solver_barriers,indirect_publications,bad_dependencies);
     ASSERT_EQ(indirect_publications,10u);ASSERT_EQ(host_publications,1u);
-    ASSERT_EQ(nested_host_publications,0u);ASSERT_EQ(bad_dependencies,0u);PASS();
+    ASSERT_EQ(nested_host_publications,0u);ASSERT_EQ(bad_dependencies,0u);
+    ASSERT_EQ(solver_barriers,204u);
+    PASS();
+}
+static void test_reference_and_extreme_origins_keep_conservative_barriers(void) {
+    const dc_chunk_coord_t origins[]={{0,0},{INT64_MIN,0},{0,INT64_MAX}};
+    for(unsigned i=0;i<3;i++) {
+        record_runtime_solver(origins[i],i!=0u);
+        ASSERT_EQ(solver_barriers,276u);ASSERT_EQ(indirect_publications,10u);
+        ASSERT_EQ(host_publications,1u);ASSERT_EQ(bad_dependencies,0u);
+    }
+    PASS();
 }
 int main(void) {
     RUN(test_solver_publishes_to_host_once_after_all_iterations);
     RUN(test_runtime_solver_publishes_indirect_only_when_commands_change);
+    RUN(test_reference_and_extreme_origins_keep_conservative_barriers);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

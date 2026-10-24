@@ -157,6 +157,7 @@ struct dc_gpu {
     bool impact_fracture_enabled;
     bool rigid_solver_enabled;
     bool solver_fused_grain;
+    bool solver_apply_overlap;
     VkBuffer trace_buffer;
     VkDeviceMemory trace_memory;
     void *trace_mapped;
