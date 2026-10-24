@@ -22,14 +22,17 @@ void raster_barrier() {barrier();if(gl_LocalInvocationIndex==0u) atomicAdd(raste
 #include "../../tests/vulkan/raster_team_reference.glsl"
 #else
 void select_raster_team(uint lane,uint slot,bool selected) {
-    if(lane<64u) raster_legacy[lane]=uint(selected);
+    if(lane<2u) raster_legacy[lane]=0u;
     raster_barrier();
-    for(uint stride=1u;stride<64u;stride*=2u) {
-        uint prior=lane<64u&&lane>=stride?raster_legacy[lane-stride]:0u;
-        raster_barrier();if(lane<64u) raster_legacy[lane]+=prior;raster_barrier();
+    if(selected) atomicOr(raster_legacy[lane/32u],1u<<(lane%32u));
+    raster_barrier();
+    if(selected) {
+        uint word=lane/32u,bit=lane%32u;
+        uint rank=uint(bitCount(raster_legacy[word]&((1u<<bit)-1u)));
+        if(word!=0u) rank+=uint(bitCount(raster_legacy[0]));
+        raster_ids[rank]=slot;
     }
-    if(lane<64u&&selected) raster_ids[raster_legacy[lane]-1u]=slot;
-    if(lane==0u) raster_count=raster_legacy[63];
+    if(lane==0u) raster_count=uint(bitCount(raster_legacy[0])+bitCount(raster_legacy[1]));
     raster_barrier();
 }
 #endif
