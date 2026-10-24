@@ -67,7 +67,10 @@ static void test_standalone_contacts_refresh_terrain_but_substeps_reuse_it(void)
     gpu.solver_recording=true;
     for(unsigned step=0;step<8;step++) dc_gpu_record_contacts(&gpu);
     ASSERT_EQ(terrain_builds,1u);ASSERT_EQ(boundary_builds,1u);
-    gpu.solver_recording=false;dc_gpu_record_contacts(&gpu);
+    gpu.solver_recording=false;gpu.contact_caches_reusable=true;
+    dc_gpu_record_contacts(&gpu);
+    ASSERT_EQ(terrain_builds,1u);ASSERT_EQ(boundary_builds,1u);
+    gpu.contact_caches_reusable=false;dc_gpu_record_contacts(&gpu);
     ASSERT_EQ(terrain_builds,2u);ASSERT_EQ(boundary_builds,2u);PASS();
 }
 int main(void) {
