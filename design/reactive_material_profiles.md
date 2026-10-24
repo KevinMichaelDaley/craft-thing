@@ -90,3 +90,8 @@ Intel Iris Xe probe dispatches 256 independent material/exposure cases and compa
 checks wet/dry, oxidation, prospective shock, external/bound oxidizer and ordinary
 oil/magical coatings, including pigment independence. This is unit-level hardware
 evidence; the final displayed gameplay/performance gates remain required.
+
+The final full `make -j8 -i test` run reports 670 passing C cases plus the six
+Python fixture checks, zero compiler warnings and only the same two known
+authored-stage failures in `ctr-ojvy`. Existing gameplay behavior is unchanged;
+the normal runtime has not yet adopted the new reactive state/phase simulation.

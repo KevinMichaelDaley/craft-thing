@@ -1,6 +1,6 @@
 ---
 id: ctlo-2q4f
-status: open
+status: in_progress
 deps: [ctlo-ldb7]
 links: [dun-sndp, dun-i1zd]
 created: 2026-10-24T22:06:18Z
