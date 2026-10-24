@@ -19,7 +19,7 @@ static uint32_t storage_words(uint32_t tiles) {
         if(count<=SCAN_LANES) {words++;break;}
         count=(count+SCAN_LANES-1u)/SCAN_LANES;
     }
-    return words<39u?39u:words;
+    return words<DC_MPM_ACTIVITY_MIN_WORDS?DC_MPM_ACTIVITY_MIN_WORDS:words;
 }
 static bool selected(uint32_t tile,unsigned pattern,uint32_t count) {
     return pattern==0?false:pattern==1?tile==count/2u:pattern==2?tile%997u==13u:true;

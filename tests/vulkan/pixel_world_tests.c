@@ -173,7 +173,10 @@ static void test_partial_grid_fracture_uses_all_tile_cells_conservatively(void) 
     pending[0] = pending[1] = 1000000;
     pending[2] = 1;
     pending[3] = 0x80000001u;
-    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    dc_gpu_tick_capture_t capture;
+    gpu->component_profile=true;
+    ASSERT_TRUE(dc_gpu_tick_capture(gpu,&capture,err,sizeof(err)));
+    gpu->component_profile=false;
     double mass = 0;
     uint32_t count = 0;
     for (unsigned child = 0; child < 2; child++) {
