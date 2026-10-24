@@ -28,15 +28,6 @@ void main() {
         else if(word>=60u) DC_DATA(params.graph+36000u+slot*4u+word-60u)=value;
         return;
     }
-    if(params.phase==3u) {
-        if(i>=BODY_CAPACITY) return;
-        Body body=DC_BODY(i);
-        if(body.enabled==0u&&body.reserved0==0u) return;
-        uint cells=pixel_body(body)?pixel_tile_count(body)*256u:
-            ((body.width+15u)/16u)*((body.height+15u)/16u)*256u;
-        if(cells>DC_RUNTIME_WORK(13u)) atomicMax(DC_RUNTIME_REQUEST(9u),cells);
-        return;
-    }
     uint base=DC_RUNTIME_WORK(7u),count=DC_RUNTIME_WORK(8u);
     if(params.phase==0u) {
         if(i<count) {DC_RUNTIME_WORK(base+2u*i)=0u;DC_RUNTIME_WORK(base+2u*i+1u)=DC_BODY_SLOT_NONE;}

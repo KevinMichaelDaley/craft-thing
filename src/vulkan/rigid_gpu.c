@@ -298,7 +298,13 @@ bool dc_gpu_set_body_origin(dc_gpu_t *gpu, dc_chunk_coord_t origin,
 
 bool dc_gpu_prepare_body_origin(dc_gpu_t *gpu, dc_chunk_coord_t origin,
                                 char *err, uint32_t cap) {
-    return dc_gpu_set_body_origin(gpu,origin,err,cap);
+    if(!gpu) return error(err,cap,"Invalid body origin");
+    if(origin.x!=gpu->body_origin.x||origin.y!=gpu->body_origin.y) {
+        gpu->body_origin=origin;
+        gpu->body_refresh_pending=true;
+        dc_gpu_structural_data(gpu)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]=1u;
+    }
+    return true;
 }
 
 bool dc_gpu_spawn_world_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,

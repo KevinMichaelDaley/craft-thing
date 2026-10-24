@@ -1130,6 +1130,15 @@ int main(int argc, char **argv) {
         fprintf(stderr, "A bounded benchmark requires an explicit --world-dir\n");
         return 1;
     }
+    unsigned benchmark_brush[3]={0};
+    const char *brush_setting=benchmark_frames?getenv("DC_BENCHMARK_AIR_BRUSH"):NULL;
+    char brush_tail;
+    if(brush_setting&&(sscanf(brush_setting,"%u,%u,%u%c",&benchmark_brush[0],
+        &benchmark_brush[1],&benchmark_brush[2],&brush_tail)!=3||
+        benchmark_brush[0]>=VIEW_WIDTH||benchmark_brush[1]>=VIEW_HEIGHT||benchmark_brush[2]>32u)) {
+        fprintf(stderr,"DC_BENCHMARK_AIR_BRUSH requires visible x,y,radius (radius <=32)\n");
+        return 1;
+    }
     char err[256] = {0};
     dc_level_view_t *view = scene_path ? dc_prop_scene_create(directory,seed,scene_path,err,sizeof(err)) :
         dc_level_view_create(directory, seed, err, sizeof(err));
@@ -1342,6 +1351,11 @@ int main(int argc, char **argv) {
         uint64_t prepare_done=benchmark_timings?SDL_GetPerformanceCounter():0;
         if (!paint_held(view, material, err, sizeof(err))) {
             failed = true; running = false;
+        }
+        if(running&&brush_setting&&scripted_frame>=8u&&
+           !dc_level_view_paint(view,benchmark_brush[0],benchmark_brush[1],
+               benchmark_brush[2],DC_MATERIAL_AIR,err,sizeof(err))) {
+            failed=true;running=false;
         }
         uint64_t paint_done=benchmark_timings?SDL_GetPerformanceCounter():0;
         if (running && !dc_level_view_tick(view, err, sizeof(err))) {

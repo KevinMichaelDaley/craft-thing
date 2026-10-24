@@ -118,6 +118,14 @@ void dc_gpu_runtime_bodies_destroy(dc_gpu_t *g) {
     /* The existing body-buffer owner releases this aliased metadata allocation. */
     free(r);g->runtime_bodies=NULL;
 }
+static bool publish_body_work(dc_gpu_t *g,char *err,uint32_t cap) {
+    ++g->descriptor_revision;
+    if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin body-work publication");
+    dc_gpu_runtime_record_body_index(g);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
+    return fr_renderer_submit(g)||error(err,cap,"Cannot rebuild body lookup after work growth");
+}
 bool dc_gpu_runtime_bodies_reserve(dc_gpu_t *g,uint32_t slots,char *err,uint32_t cap) {
     if(!g||!g->runtime_bodies||!g->command) return error(err,cap,"Body growth requires an initialized context");
     uint32_t previous=dc_gpu_body_capacity(g);
@@ -154,7 +162,7 @@ bool dc_gpu_runtime_bodies_reserve(dc_gpu_t *g,uint32_t slots,char *err,uint32_t
     ((dc_body_storage_root_t *)r->root.mapped)->work=address(work.address);
     free(g->body_ids);g->body_ids=ids;
     g->runtime_body_slots=allocated;
-    return true;
+    return publish_body_work(g,err,cap);
 }
 bool dc_gpu_runtime_bodies_service(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!g||!g->runtime_bodies||!g->runtime_bodies->enabled) return true;
@@ -174,7 +182,7 @@ bool dc_gpu_runtime_bodies_service(dc_gpu_t *g,char *err,uint32_t cap) {
     dc_gpu_address_buffer_destroy(g,&r->work);r->work=work;
     r->force_groups=force;r->fragment_cells=fragment;
     ((dc_body_storage_root_t *)r->root.mapped)->work=address(work.address);
-    return true;
+    return publish_body_work(g,err,cap);
 }
 VkDescriptorBufferInfo dc_gpu_runtime_bodies_binding(const dc_gpu_t *g) {
     if(g&&g->runtime_bodies&&g->runtime_bodies->enabled)
@@ -233,18 +241,7 @@ void dc_gpu_runtime_record_legacy_state(dc_gpu_t *g) {
 }
 bool dc_gpu_runtime_prepare_fragments(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!g||!g->runtime_body_consumers) return true;
-    if(!dc_gpu_runtime_bodies_service(g,err,cap)||!fr_renderer_begin(g)) return false;
-    struct dc_runtime_bodies *r=g->runtime_bodies;uint32_t push[4]={3u,0,0,0};
-    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
-        VK_ACCESS_2_MEMORY_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,r->index.pipeline);
-    vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,r->index.pipeline_layout,0,1,&r->index.descriptor,0,NULL);
-    vkCmdPushConstants(g->command,r->index.pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
-    vkCmdDispatch(g->command,(dc_gpu_body_capacity(g)+63u)/64u,1,1);
-    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-        VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
-    return fr_renderer_submit(g)&&dc_gpu_runtime_bodies_service(g,err,cap);
+    return dc_gpu_runtime_bodies_service(g,err,cap);
 }
 bool dc_gpu_runtime_carve_retry(dc_gpu_t *g) {
     if(!g||!g->runtime_body_consumers) return false;

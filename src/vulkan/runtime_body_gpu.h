@@ -26,7 +26,7 @@ uint32_t *dc_gpu_body_hydro_state(const dc_gpu_t *gpu,uint32_t slot);
 dc_body_storage_owner_t *dc_gpu_body_owner(const dc_gpu_t *gpu,uint32_t slot);
 /** Mirror the legacy diagnostic codec only; ordinary physics uses addressed state. */
 void dc_gpu_runtime_record_legacy_state(dc_gpu_t *gpu);
-/** GPU-only source-size preflight before an explicit carving transaction. */
+/** Service completed requests; carving validates its own scratch and retries. */
 bool dc_gpu_runtime_prepare_fragments(dc_gpu_t *gpu,char *err,uint32_t cap);
 /** Consume a completed carving resource-retry flag without reading geometry. */
 bool dc_gpu_runtime_carve_retry(dc_gpu_t *gpu);
@@ -37,7 +37,7 @@ static inline const char *dc_gpu_runtime_body_shader(const dc_gpu_t *g,const cha
     if(!g||!g->runtime_body_consumers) return path;
     const char *name=strrchr(path,'/');name=name?name+1:path;
     const char *consumers[]={"pattern.comp.spv","rigid.comp.spv","rigid_solver.comp.spv","contacts.comp.spv",
-        "broadphase.comp.spv","component_extract.comp.spv","component_local.comp.spv","structural.comp.spv",
+        "broadphase.comp.spv","component_extract.comp.spv","component_local.comp.spv","structural.comp.spv","structural_carve.comp.spv",
         "pixel_hydro.comp.spv","mpm.comp.spv","mpm_active.comp.spv","mpm_compact.comp.spv","tick_probe.comp.spv","scene.comp.spv"};
     for(unsigned i=0;i<sizeof(consumers)/sizeof(*consumers);i++)
         if(!strcmp(name,consumers[i])) {

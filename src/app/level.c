@@ -381,8 +381,10 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     view->pending_chunk_dx = 0;
     view->pending_chunk_dy = 0;
     view->mapped_origin = view->origin;
-    if (!dc_gpu_set_body_origin(view->gpu, (dc_chunk_coord_t){
-            view->origin.x - HALO_CHUNKS, view->origin.y - HALO_CHUNKS }, err, cap)) return false;
+    dc_chunk_coord_t body_origin={view->origin.x-HALO_CHUNKS,view->origin.y-HALO_CHUNKS};
+    bool ticking=all_resident&&view->pending_steps!=0u&&!view->transfer_pending;
+    if(!(ticking?dc_gpu_prepare_body_origin(view->gpu,body_origin,err,cap):
+                 dc_gpu_set_body_origin(view->gpu,body_origin,err,cap))) return false;
     if (!resolve_world_transfer(view, err, cap)) return false;
     if (view->spring_enabled && view->origin.x - HALO_CHUNKS <= 2 * WORLD_SCALE &&
         view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS > 2 * WORLD_SCALE &&

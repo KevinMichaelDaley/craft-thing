@@ -232,16 +232,22 @@ bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         .layout = gpu->pipeline_layout};
     VkSpecializationMapEntry entry = {.constantID = 0, .offset = 0,
                                       .size = sizeof(uint32_t)};
+    VkShaderModule carve_shader;
+    if(!dc_gpu_load_shader_module(gpu,"build/shaders/structural_carve.comp.spv",&carve_shader,err,cap)) {
+        vkDestroyShaderModule(gpu->device,shader,NULL);return false;
+    }
     VkResult r = VK_SUCCESS;
     for (uint32_t phase = 0; phase < DC_GPU_STRUCTURAL_PHASE_COUNT && r == VK_SUCCESS; phase++) {
         VkSpecializationInfo specialization = {
             .mapEntryCount = 1, .pMapEntries = &entry,
             .dataSize = sizeof(phase), .pData = &phase};
         info.stage.pSpecializationInfo = &specialization;
+        info.stage.module=phase==6u?carve_shader:shader;
         r = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1, &info,
                                      NULL, &gpu->structural_pipelines[phase]);
     }
     vkDestroyShaderModule(gpu->device, shader, NULL);
+    vkDestroyShaderModule(gpu->device, carve_shader, NULL);
     return r == VK_SUCCESS ||
            error(err, cap, "Cannot create structural pipeline");
 }

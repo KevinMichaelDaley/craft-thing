@@ -406,13 +406,15 @@ bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
                            char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     uint32_t push[7] = { gpu->width, gpu->height, 3, x, y, radius, material };
+    dc_gpu_structural_data(gpu)[DC_STRUCTURAL_BRUSH_RESULT_WORD]=0u;
     bool okay;
     do {okay=dispatch_cells(gpu,push,err,cap);}
     while(okay&&material==DC_MATERIAL_AIR&&dc_gpu_runtime_carve_retry(gpu));
     if(okay) {
-        gpu->body_refresh_pending=true;
+        uint32_t *state=dc_gpu_structural_data(gpu);
+        gpu->body_refresh_pending|=(state[DC_STRUCTURAL_BRUSH_RESULT_WORD]&1u)!=0u;
         if (material == DC_MATERIAL_WATER) gpu->fluid_work_possible=true;
-        if (material != DC_MATERIAL_WATER) dc_gpu_structural_data(gpu)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD] = 1;
+        if((state[DC_STRUCTURAL_BRUSH_RESULT_WORD]&2u)!=0u) state[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]=1u;
     }
     return okay;
 }

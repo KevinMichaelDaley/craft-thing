@@ -1,7 +1,10 @@
 #ifndef DC_PIXEL_PROPERTIES_GLSL
 #define DC_PIXEL_PROPERTIES_GLSL
 
-const uint PIXEL_PROPERTY_LANES=128u;
+#ifndef DC_PIXEL_PROPERTY_LANES
+#define DC_PIXEL_PROPERTY_LANES 128u
+#endif
+const uint PIXEL_PROPERTY_LANES=DC_PIXEL_PROPERTY_LANES;
 shared uint property_mass100[128];
 shared uvec2 property_x[128],property_y[128];
 shared float property_inertia[128];
@@ -11,7 +14,7 @@ uvec2 property_add_wide(uvec2 a,uvec2 b) {
     return uvec2(lo,a.y+b.y+uint(lo<a.x));
 }
 
-/* Every lane of one 128-lane workgroup must participate with the same shape. */
+/* Every lane of the workgroup must participate with the same shape. */
 void pixel_mass_properties(Body body,out uint mass100,out vec2 center,out float inertia) {
     uint lane=gl_LocalInvocationIndex,local_mass=0u;
     uvec2 first_x=uvec2(0),first_y=uvec2(0);
@@ -25,7 +28,7 @@ void pixel_mass_properties(Body body,out uint mass100,out vec2 center,out float 
         first_y=property_add_wide(first_y,uvec2(point.y*weight,0));
     }
     property_mass100[lane]=local_mass;property_x[lane]=first_x;property_y[lane]=first_y;
-    for(uint stride=64u;stride>0u;stride/=2u) {
+    for(uint stride=PIXEL_PROPERTY_LANES/2u;stride>0u;stride/=2u) {
         barrier();
         if(lane<stride) {
             property_mass100[lane]+=property_mass100[lane+stride];
@@ -48,7 +51,7 @@ void pixel_mass_properties(Body body,out uint mass100,out vec2 center,out float 
         precise float sum=moment+value;compensation=(sum-moment)-value;moment=sum;
     }
     property_inertia[lane]=moment;
-    for(uint stride=64u;stride>0u;stride/=2u) {
+    for(uint stride=PIXEL_PROPERTY_LANES/2u;stride>0u;stride/=2u) {
         barrier();if(lane<stride) property_inertia[lane]+=property_inertia[lane+stride];
     }
     barrier();inertia=property_inertia[0];

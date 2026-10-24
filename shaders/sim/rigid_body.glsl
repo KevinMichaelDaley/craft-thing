@@ -6,6 +6,7 @@
 const uint BODY_CAPACITY = 64u;
 #endif
 const uint STRUCTURAL_COMPONENT_DIRTY_WORD = 20u;
+const uint STRUCTURAL_BRUSH_RESULT_WORD = 21u;
 const uint BODY_VERTEX_CAPACITY = 8u;
 const uint BODY_MAX_SIDE = 16u;
 const uint BODY_PIECES = 4u;

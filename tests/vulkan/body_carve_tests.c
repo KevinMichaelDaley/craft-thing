@@ -92,7 +92,11 @@ static void test_cut_and_physics_tick_share_the_occupancy_refresh(void) {
     ASSERT_TRUE(dc_gpu_read_occupancy(g,21,20,&occupied,NULL,err,sizeof(err)));ASSERT_EQ(occupied,0u);
     ASSERT_TRUE(dc_gpu_prepare_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
-    ASSERT_TRUE(dc_gpu_read_occupancy(g,21,20,&occupied,NULL,err,sizeof(err)));ASSERT_EQ(occupied,1u);
+    ASSERT_TRUE(dc_gpu_read_world_body(g,1,&b,err,sizeof(err)));
+    ASSERT_EQ(b.chunk.x,0);ASSERT_EQ(b.chunk.y,0);ASSERT_EQ(b.body.x_fp,20<<16);
+    ASSERT_TRUE(b.body.y_fp>20<<16);
+    ASSERT_TRUE(dc_gpu_read_occupancy(g,21,(unsigned)(b.body.y_fp>>16)+1u,&occupied,NULL,err,sizeof(err)));
+    ASSERT_EQ(occupied,1u);
     dc_gpu_destroy(g);free(chunk);PASS();
 }
 

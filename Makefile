@@ -143,6 +143,14 @@ build/shaders/structural.comp.spv: shaders/sim/structural.comp shaders/sim/struc
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/shaders/structural.comp.spv: shaders/sim/rigid_fragment.glsl shaders/sim/pixel_fragment.glsl
 build/shaders/structural.comp.spv: shaders/sim/body_carve.glsl
+build/shaders/structural.comp.spv: shaders/sim/pixel_carve_parallel.glsl shaders/sim/pixel_properties.glsl
+build/shaders/structural_carve.comp.spv: shaders/sim/structural.comp $(wildcard shaders/sim/*.glsl)
+	mkdir -p build/shaders
+	$(GLSLANG) -DDC_CARVE_MODULE=1 -V --target-env vulkan1.3 $< -o $@
+build/shaders/runtime/structural_carve.comp.spv: shaders/sim/structural.comp $(wildcard shaders/sim/*.glsl)
+	mkdir -p build/shaders/runtime
+	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -DDC_CARVE_MODULE=1 -DDC_STRUCTURAL_LANES=128 -V --target-env vulkan1.3 $< -o $@
+build/shaders/structural_carve.comp.spv build/shaders/runtime/structural_carve.comp.spv: include/dungeoncraft/body_storage_layout.h include/dungeoncraft/material_density.h include/dungeoncraft/terrain_flags.h include/dungeoncraft/leaf_material.h
 build/shaders/structural.comp.spv: shaders/sim/leaf_debris.glsl
 build/shaders/structural.comp.spv build/shaders/scene.comp.spv: shaders/sim/leaf_color.glsl include/dungeoncraft/leaf_material.h
 build/shaders/mpm.comp.spv: shaders/sim/mpm_terrain_support.glsl shaders/sim/rigid_body.glsl include/dungeoncraft/terrain_flags.h
@@ -1229,6 +1237,7 @@ $(GPU_OBJ): build/shaders/runtime_body_scan.comp.spv
 
 RUNTIME_BODY_NAMES = pattern rigid rigid_solver contacts broadphase component_extract component_local structural pixel_hydro mpm mpm_active mpm_compact tick_probe scene
 RUNTIME_BODY_SHADERS = $(addprefix build/shaders/runtime/,$(addsuffix .comp.spv,$(RUNTIME_BODY_NAMES)))
+$(GPU_OBJ) $(PERFORMANCE_OBJ) $(NATIVE360_OBJ) $(GPU_SOURCE_BINARIES) build/dungeoncraft_360 build/diagnostics/body_support build/level03_support_tests: build/shaders/structural_carve.comp.spv build/shaders/runtime/structural_carve.comp.spv
 $(GPU_OBJ): $(RUNTIME_BODY_SHADERS)
 $(GPU_SOURCE_BINARIES) build/dungeoncraft_360: $(RUNTIME_BODY_SHADERS) build/shaders/runtime_body_index.comp.spv build/shaders/runtime_body_scan.comp.spv build/diagnostics/body_storage_init.spv src/vulkan/runtime_body_gpu.h src/vulkan/runtime_body_internal.h
 $(GPU_OBJ): src/vulkan/runtime_body_gpu.h src/vulkan/runtime_body_internal.h

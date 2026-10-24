@@ -159,3 +159,25 @@ and extraction stages. Queries remain in the primary command buffer; cached
 secondaries never contain query IDs. Detailed kernel fields are zero for cached
 programs in this mode. This reduces diagnostic disturbance but still requires
 normal displayed application measurements for final acceptance.
+
+`DC_FRAME_TRACE_API_ONLY=1` retains ordinary command reuse and installs no GPU
+timestamp queries. Its `present-api` and `frame-api` lines isolate host API waits
+without changing the GPU command stream. `DC_FRAME_TIMINGS=1` adds application
+stages, including brush transactions outside presentation. Diagnose interaction
+costs with controls enabled; idle replay alone does not establish brush latency.
+For a reproducible displayed cutting workload, set
+`DC_BENCHMARK_AIR_BRUSH=x,y,radius` on a bounded application benchmark. It applies
+the real air brush at the given visible cell on every measured frame (starting
+after the eight warm-up frames), with normal controls still active. Use a fresh
+copy of the saved world and select a position intersecting actual geometry.
+
+The normal quarter-native demo uses 480×270 simulation and rendered pixels,
+upscaled four times for a 1920×1080 window. Its 640×448 active simulation region
+includes chunk rounding and an offscreen neighbor halo, not supersampling.
+
+Empty worlds start with an 8192-word pixel-geometry bank. Geometry and appearance
+storage grow from GPU capacity requests; this initial granule is not a body or
+shape limit. Terrain connectivity scratch remains sized for all resident cells
+independently of the geometry bank. `DC_TEST_INITIAL_ARENA_ONLY=1` and
+`DC_TEST_GEOMETRY_GROWTH_ONLY=1` on `dynamic_runtime_tests` check actual appearance
+allocation and automatic growth for a 97,028-pixel component respectively.

@@ -2,7 +2,10 @@
 #extension GL_GOOGLE_include_directive : require
 #include "rigid_body.glsl"
 #include "rigid_shape.glsl"
-layout(local_size_x=32) in;
+#ifndef DC_STRUCTURAL_LANES
+#define DC_STRUCTURAL_LANES 32
+#endif
+layout(local_size_x=DC_STRUCTURAL_LANES) in;
 layout(constant_id=0) const uint STRUCTURAL_PHASE=0u;
 layout(set=0,binding=1,std430) buffer Cells { uvec2 cells[]; };
 layout(set=0,binding=2,std430) readonly buffer Pages { uint pages[]; };
@@ -192,9 +195,11 @@ void topology() {
 #include "structural_failure.glsl"
 #include "leaf_debris.glsl"
 #include "structural_impact.glsl"
+#ifdef DC_CARVE_MODULE
 #include "body_carve.glsl"
+void main() {carve_bodies();}
+#else
 void main() {
-    if(STRUCTURAL_PHASE==6u) {carve_bodies();return;}
     if(STRUCTURAL_PHASE==0u) {if(gl_LocalInvocationID.x==0u) transaction();return;}
     if(STRUCTURAL_PHASE==2u) {
         uint lane=gl_LocalInvocationID.x;
@@ -216,3 +221,4 @@ void main() {
     else if(STRUCTURAL_PHASE==4u) failure();
     else if(STRUCTURAL_PHASE==3u) equilibrium();else topology();
 }
+#endif

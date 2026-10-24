@@ -1,4 +1,7 @@
 /* Brush transactions reuse the fracture reservation/publication gate. */
+#ifdef DC_RUNTIME_BODY_STORAGE
+#include "pixel_carve_parallel.glsl"
+#endif
 uint carve_rest_material(Body b,vec2 point) {
     for(uint piece=0u;piece<body_pieces(b);piece++) {
         bool inside=true;
@@ -52,14 +55,14 @@ void carve_retire_member(uint slot) {
         if(DC_DATA(m+7u)==slot) DC_DATA(m+6u)|=2u;
     }
 }
-shared uint carve_changed,carve_pending,carve_hits,carve_leaf_hits,carve_cursor;
+shared uint carve_changed,carve_pending,carve_hits,carve_leaf_hits,carve_cursor,carve_candidate;
 #ifndef DC_RUNTIME_BODY_STORAGE
 shared uint carve_ids[64];
 #endif
 shared Body carve_source;
 void carve_bodies() {
     uint lane=gl_LocalInvocationID.x;
-    for(uint slot=lane;slot<BODY_CAPACITY;slot+=32u) DC_CARVE_ID(slot)=DC_BODY(slot).id;
+    for(uint slot=lane;slot<BODY_CAPACITY;slot+=gl_WorkGroupSize.x) DC_CARVE_ID(slot)=DC_BODY(slot).id;
     if(lane==0u) {
         carve_cursor=0u;
         uint pool=graph()+40000u;
@@ -67,26 +70,40 @@ void carve_bodies() {
     }
     memoryBarrierBuffer();barrier();
     for(;;) {
-        uint slot=carve_cursor;if(slot>=BODY_CAPACITY) break;
+        if(lane==0u) carve_candidate=BODY_CAPACITY;
+        barrier();
+        for(uint candidate=carve_cursor+lane;candidate<BODY_CAPACITY;candidate+=gl_WorkGroupSize.x) {
+            Body b=DC_BODY(candidate);
+            if(b.enabled==0u||b.id!=DC_CARVE_ID(candidate)) continue;
+            vec2 low,high;body_bounds(b,low,high);
+            vec2 position=vec2(b.x_fp,b.y_fp)/65536.;
+            vec2 point=clamp(vec2(params.origin_x)+.5,position+low,position+high);
+            vec2 delta=point-(vec2(params.origin_x)+.5);
+            float radius=float(params.origin_y.x)+1.;
+            if(dot(delta,delta)<=radius*radius) atomicMin(carve_candidate,candidate);
+        }
+        barrier();
+        uint slot=carve_candidate;if(slot>=BODY_CAPACITY) break;
         if(lane==0u) {
+            carve_cursor=slot;
             carve_changed=0u;carve_pending=0u;carve_hits=0u;carve_leaf_hits=0u;Body source=DC_BODY(slot);
-            if(source.enabled!=0u&&source.id==DC_CARVE_ID(slot)) {
-                vec2 low,high;body_bounds(source,low,high);
-                vec2 position=vec2(source.x_fp,source.y_fp)/65536.;
-                vec2 point=clamp(vec2(params.origin_x)+.5,position+low,position+high);
-                vec2 delta=point-(vec2(params.origin_x)+.5);
-                float radius=float(params.origin_y.x)+1.;
-                if(dot(delta,delta)<=radius*radius) {
-                    Body pixels;
-                    if(carve_raster_source(source,pixels)) {
-                        carve_source=pixels;carve_pending=1u;
-                    }
+            Body pixels;
+            if(carve_raster_source(source,pixels)) {
+#ifdef DC_RUNTIME_BODY_STORAGE
+                uint needed=body_pieces(pixels);
+                if(needed>DC_RUNTIME_WORK(13u)) {
+                    atomicMax(DC_RUNTIME_REQUEST(9u),needed);
+                    atomicOr(DC_RUNTIME_REQUEST(10u),1u);
+                } else
+#endif
+                {
+                carve_source=pixels;carve_pending=1u;
                 }
             }
         }
         memoryBarrierBuffer();barrier();
         if(carve_pending!=0u) {
-            for(uint pixel=lane;pixel<body_pieces(carve_source);pixel+=32u) {
+            for(uint pixel=lane;pixel<body_pieces(carve_source);pixel+=gl_WorkGroupSize.x) {
                 uint material=piece_material(carve_source,pixel);
                 bool hit=material!=0u&&carve_pixel(carve_source,pixel);
                 DC_FRAGMENT_LABEL(pixel)=hit?0xffffffffu:0u;
@@ -97,22 +114,28 @@ void carve_bodies() {
         memoryBarrierBuffer();barrier();
         if(carve_leaf_hits!=0u) leaf_reserve(carve_source);
         memoryBarrierBuffer();barrier();
-        if(lane==0u&&carve_hits!=0u) {
-            if(pixel_fragment_source(slot,carve_source,2u,0.,max(1u,carve_source.reserved1))) {
+        if(carve_hits!=0u) {
+#ifdef DC_RUNTIME_BODY_STORAGE
+            bool changed=pixel_carve_parallel(slot,carve_source,max(1u,carve_source.reserved1));
+            if(lane==0u&&changed) {carve_retire_member(slot);carve_changed=1u;}
+#else
+            if(lane==0u&&pixel_fragment_source(slot,carve_source,2u,0.,max(1u,carve_source.reserved1))) {
                 carve_retire_member(slot);carve_changed=1u;
             }
+#endif
         }
         memoryBarrierBuffer();barrier();
         if(carve_leaf_hits!=0u) leaf_finish(carve_source,carve_changed!=0u);
         memoryBarrierBuffer();barrier();
         if(carve_changed!=0u) {
-            for(uint bond=lane;bond<192u;bond+=32u) {
+            if(lane==0u) atomicOr(DC_DATA(base()+STRUCTURAL_BRUSH_RESULT_WORD),1u);
+            for(uint bond=lane;bond<192u;bond+=gl_WorkGroupSize.x) {
                 uint p=graph()+30000u+bond*20u;
                 if(DC_DATA(p+1u)==slot||DC_DATA(p+2u)==slot) DC_DATA(p)=0u;
             }
             uint pool=graph()+40000u;
             uint first=BODY_STORAGE_WORDS+pool+16u+DC_DATA(pool)*color_capacity();
-            for(uint word=lane;word<DC_DATA(pool+1u);word+=32u) shape_color_resolve(first+word);
+            for(uint word=lane;word<DC_DATA(pool+1u);word+=gl_WorkGroupSize.x) shape_color_resolve(first+word);
         }
         if(lane==0u) carve_cursor++;
         memoryBarrierBuffer();barrier();
