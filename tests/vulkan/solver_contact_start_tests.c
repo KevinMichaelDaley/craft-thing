@@ -3,10 +3,13 @@
 #undef DC_SOLVER_MOTION_TEST_MAIN
 
 static bool zero_case;
+static bool batch_case;
 
 static VkPipeline contact_start_pipeline(probe_t *p,dc_gpu_t *gpu,uint32_t phase,bool cached) {
     VkShaderModule module=VK_NULL_HANDLE;char err[256];
-    if(!dc_gpu_load_shader_module(gpu,"build/diagnostics/solver_motion_profile.comp.spv",&module,err,sizeof(err))) return VK_NULL_HANDLE;
+    const char *path=phase==22u?"build/diagnostics/solver_batch_profile.comp.spv":
+        "build/diagnostics/solver_motion_profile.comp.spv";
+    if(!dc_gpu_load_shader_module(gpu,path,&module,err,sizeof(err))) return VK_NULL_HANDLE;
     uint32_t values[]={phase,cached,zero_case?cached:1u,cached};
     VkSpecializationMapEntry entries[]={{0,0,4},{3,4,4},{4,8,4},{5,12,4}};
     VkSpecializationInfo spec={4,entries,sizeof(values),values};
@@ -63,12 +66,13 @@ static void run_contact_case(bool zero,bool mixed,bool masked) {
     }
     uint32_t rotations[2]={0},atomics[2]={0};bool exact=false;
     for(unsigned cached=0;cached<2;cached++) {
-        const uint32_t phases[]={4,6,7,9,10};VkPipeline pipelines[5];
+        const uint32_t phases[]={4,batch_case&&cached?22u:6u,7,9,10};VkPipeline pipelines[5];
         for(unsigned i=0;i<5;i++) {pipelines[i]=contact_start_pipeline(&p,&gpu,phases[i],cached);ASSERT_TRUE(pipelines[i]);}
         memcpy(mapped,initial,(size_t)bytes);memset(counts,0,16);ASSERT_TRUE(begin(&p));
         vkCmdBindDescriptorSets(p.command,VK_PIPELINE_BIND_POINT_COMPUTE,p.layout,0,1,&p.descriptor,0,NULL);
-        for(unsigned pass=0;pass<19;pass++) {
-            unsigned stage=pass==0?0:pass<=16?1+(pass-1)%2:pass-14;
+        for(unsigned pass=0;pass<(batch_case&&cached?4u:19u);pass++) {
+            unsigned stage=batch_case&&cached?(pass<2u?pass:pass+1u):
+                pass==0?0:pass<=16?1+(pass-1)%2:pass-14;
             uint32_t push[8]={WIDTH,HEIGHT,phases[stage],2,0,0,0,0};
             vkCmdBindPipeline(p.command,VK_PIPELINE_BIND_POINT_COMPUTE,pipelines[stage]);
             vkCmdPushConstants(p.command,p.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
@@ -97,8 +101,12 @@ static void test_cached_start_anchors_preserve_all_solver_and_body_bits(void) {r
 static void test_zero_contact_work_preserves_bits_without_atomic_reductions(void) {run_contact_case(true,false,false);}
 static void test_mixed_body_subgroups_preserve_independent_corrections(void) {run_contact_case(false,true,false);}
 static void test_inactive_leading_lanes_preserve_all_corrections(void) {run_contact_case(false,false,true);}
+static void test_batched_jacobi_preserves_all_solver_and_body_bits(void) {
+    batch_case=true;run_contact_case(false,true,false);batch_case=false;
+}
 int main(void) {RUN(test_cached_start_anchors_preserve_all_solver_and_body_bits);
     RUN(test_zero_contact_work_preserves_bits_without_atomic_reductions);
     RUN(test_mixed_body_subgroups_preserve_independent_corrections);
     RUN(test_inactive_leading_lanes_preserve_all_corrections);
+    RUN(test_batched_jacobi_preserves_all_solver_and_body_bits);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;}
