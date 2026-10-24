@@ -12,7 +12,7 @@ layout(set=0,binding=31,std430) buffer MotionProfile {uint motion_profile[];};
 layout(constant_id = 0) const uint PHASE = 0u;
 layout(constant_id = 1) const bool SPARSE_MOTION_WRITES = true;
 layout(constant_id = 3) const bool CACHE_CONTACT_STARTS = true;
-layout(constant_id = 4) const bool SKIP_ZERO_REDUCTIONS = true;
+layout(constant_id = 4) const bool SKIP_ZERO_REDUCTIONS = false;
 layout(constant_id = 5) const bool GROUPED_REDUCTIONS = false;
 layout(set = 0, binding = 2, std430) readonly buffer Pages { uint pages[]; };
 #ifndef DC_RUNTIME_BODY_STORAGE
@@ -151,6 +151,15 @@ void add_correction(uint i, vec2 linear, float angular) {
        keeps all 8192 contributions inside signed 32-bit range. */
     ivec3 v = ivec3(round(clamp(vec3(linear, angular), vec3(-2), vec3(2)) * SUM_SCALE));
     uvec3 packed_sum=uvec3(v);
+    if(!SKIP_ZERO_REDUCTIONS&&!GROUPED_REDUCTIONS) {
+#ifdef DC_SOLVER_MOTION_PROFILE
+        atomicAdd(motion_profile[2],3u);
+#endif
+        atomicAdd(DC_SOLVER_DATA(p),packed_sum.x);
+        atomicAdd(DC_SOLVER_DATA(p+1u),packed_sum.y);
+        atomicAdd(DC_SOLVER_DATA(p+2u),packed_sum.z);
+        return;
+    }
     if(GROUPED_REDUCTIONS) {
         uint first=subgroupBroadcastFirst(i);
         uvec4 matching=subgroupBallot(i==first);
