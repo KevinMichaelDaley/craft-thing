@@ -26,7 +26,7 @@ def root_decorations(path, block="RuntimeBodyRoot"):
 
 class RuntimeRootStorageTests(unittest.TestCase):
     def test_consumers_promise_readonly_nonaliasing_root_storage(self):
-        for shader in ("rigid_solver", "rigid", "pattern", "mpm", "scene"):
+        for shader in ("rigid_solver", "rigid", "pattern", "mpm", "scene", "contacts"):
             with self.subTest(shader=shader):
                 decorations = root_decorations(f"build/shaders/runtime/{shader}.comp.spv")
                 self.assertIn(24, decorations, "root must be NonWritable")
@@ -37,7 +37,7 @@ class RuntimeRootStorageTests(unittest.TestCase):
         self.assertNotIn(24, decorations)
 
     def test_consumers_cache_directory_addresses_and_immutable_geometry(self):
-        for shader in ("rigid_solver", "rigid", "pattern", "scene"):
+        for shader in ("rigid_solver", "rigid", "pattern", "scene", "contacts"):
             for block in ("BodyStorageDirectory", "BodyStorageGeometry"):
                 with self.subTest(shader=shader, block=block):
                     decorations = root_decorations(f"build/shaders/runtime/{shader}.comp.spv", block)
@@ -49,7 +49,7 @@ class RuntimeRootStorageTests(unittest.TestCase):
         self.assertNotIn(24, decorations)
 
     def test_selected_consumers_keep_record_slabs_disjoint_and_writable(self):
-        for shader in ("rigid_solver", "rigid", "pattern", "scene"):
+        for shader in ("rigid_solver", "rigid", "pattern", "scene", "contacts"):
             with self.subTest(shader=shader):
                 decorations = root_decorations(f"build/shaders/runtime/{shader}.comp.spv", "BodyStorageRecords")
                 self.assertIn(19, decorations)
