@@ -4,6 +4,12 @@
 #include "pixel_properties.glsl"
 shared uint pc_count,pc_available,pc_seed,pc_tail,pc_end,pc_used,pc_total,pc_next,pc_failed;
 shared ivec2 pc_lows[DC_STRUCTURAL_LANES],pc_highs[DC_STRUCTURAL_LANES];
+#ifndef DC_CARVE_UNION_LABELS
+#define DC_CARVE_UNION_LABELS 1
+#endif
+#if DC_CARVE_UNION_LABELS && DC_CARVE_REUSE_CLASSIFICATION
+#include "carve_union.glsl"
+#endif
 
 Body carve_build_cached(Body source,uint child,uint pointer,uint generation) {
     Body b=source;b.piece_count=PIXEL_BODY_FLAG|PF_COUNT(child);b.compound_reserved=pointer;
@@ -28,6 +34,9 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
         for(uint i=0u;i<BODY_CAPACITY;i++) if(i!=slot&&DC_BODY_FREE(i)) PF_SLOT(pc_available++)=i;
     }
     memoryBarrierBuffer();barrier();
+#if DC_CARVE_UNION_LABELS && DC_CARVE_REUSE_CLASSIFICATION
+    if(!carve_union_components(source,area)) return false;
+#else
     const ivec2 neighbors[8]=ivec2[8](ivec2(-1,0),ivec2(1,0),ivec2(0,-1),ivec2(0,1),
         ivec2(-1,-1),ivec2(1,-1),ivec2(-1,1),ivec2(1,1));
     for(;;) {
@@ -78,6 +87,7 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
         }
         memoryBarrierBuffer();barrier();
     }
+#endif
     if(pc_count==0u) {
         if(lane==0u) {DC_BODY(slot).enabled=0u;DC_BODY(slot).reserved0=0u;}
         memoryBarrierBuffer();barrier();return true;
