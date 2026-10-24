@@ -630,6 +630,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/fluid_dry_line_tests
 	./tools/with-vulkan python3 tests/vulkan/transport_request_storage_test.py
 	./build/solver_recording_tests
+	./build/solver_capacity_tests
 	./build/solver_commands_tests
 	./build/body_address_gpu_tests
 	./build/body_storage_gpu_tests
@@ -1501,6 +1502,16 @@ test: build/mpm_transfer_load_tests
 build/mpm_grid_fusion_tests: tests/vulkan/mpm_grid_fusion_tests.c tests/vulkan/mpm_transfer_load_tests.c tests/vulkan/mpm_gather_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(MPM_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/mpm_grid_fusion_tests
+
+build/diagnostics/solver_capacity_profile.spv: shaders/sim/rigid_solver.comp $(wildcard shaders/sim/*.glsl)
+	@mkdir -p build/diagnostics
+	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -DDC_SOLVER_CAPACITY_PROFILE=1 -V --target-env vulkan1.3 -S comp -o $@ $<
+build/diagnostics/solver_capacity_reference.spv: shaders/sim/rigid_solver.comp $(wildcard shaders/sim/*.glsl)
+	@mkdir -p build/diagnostics
+	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -DDC_SOLVER_CAPACITY_PROFILE=1 -DDC_SOLVER_CAPACITY_CACHE=0 -V --target-env vulkan1.3 -S comp -o $@ $<
+build/solver_capacity_tests: tests/vulkan/solver_capacity_tests.c tests/vulkan/rigid_solver_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_capacity_profile.spv build/diagnostics/solver_capacity_reference.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/solver_capacity_tests
 
 build/diagnostics/quarter_app_frame_trace build/diagnostics/native360_frame_trace: tools/diagnostics/frame_api_trace.h
 

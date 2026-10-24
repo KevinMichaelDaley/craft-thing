@@ -5,6 +5,30 @@
 #extension GL_KHR_shader_subgroup_ballot : require
 #define DC_RUNTIME_ROOT_READONLY 1
 #include "rigid_body.glsl"
+#ifndef DC_SOLVER_CAPACITY_CACHE
+#define DC_SOLVER_CAPACITY_CACHE 0
+#endif
+#ifdef DC_SOLVER_CAPACITY_PROFILE
+layout(set=0,binding=31,std430) restrict buffer CapacityProfile {uint capacity_profile[];};
+#endif
+#ifdef DC_RUNTIME_BODY_STORAGE
+uint solver_capacity_read(uint word) {
+#ifdef DC_SOLVER_CAPACITY_PROFILE
+    atomicAdd(capacity_profile[0],1u);
+#endif
+    return DC_RUNTIME_WORK(word);
+}
+#undef DC_LAYOUT_PAIR_CAPACITY
+#undef DC_LAYOUT_CONTACT_CAPACITY
+#if DC_SOLVER_CAPACITY_CACHE
+uint solver_pair_capacity,solver_contact_capacity;
+#define DC_LAYOUT_PAIR_CAPACITY solver_pair_capacity
+#define DC_LAYOUT_CONTACT_CAPACITY solver_contact_capacity
+#else
+#define DC_LAYOUT_PAIR_CAPACITY solver_capacity_read(36u)
+#define DC_LAYOUT_CONTACT_CAPACITY solver_capacity_read(37u)
+#endif
+#endif
 layout(local_size_x = 64) in;
 #ifdef DC_SOLVER_MOTION_PROFILE
 layout(set=0,binding=31,std430) buffer MotionProfile {uint motion_profile[];};
@@ -278,6 +302,13 @@ void solve_contact(uint i, bool impulse) {
 }
 #include "rigid_bonds.glsl"
 void main() {
+#ifdef DC_SOLVER_CAPACITY_PROFILE
+    atomicAdd(capacity_profile[1],1u);
+#endif
+#if defined(DC_RUNTIME_BODY_STORAGE) && DC_SOLVER_CAPACITY_CACHE
+    solver_pair_capacity=solver_capacity_read(36u);
+    solver_contact_capacity=solver_capacity_read(37u);
+#endif
     uint i = gl_GlobalInvocationID.x, h = sb();
     if(PHASE==GRAIN_BED_PLAN) {grain_bed_plan();return;}
     if(PHASE>=GRAIN_BED_INIT) {grain_bed_phase(i);return;}
