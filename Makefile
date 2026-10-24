@@ -1493,3 +1493,10 @@ build/mpm_transfer_load_tests: tests/vulkan/mpm_transfer_load_tests.c tests/vulk
 test: build/mpm_transfer_load_tests
 
 build/diagnostics/quarter_app_frame_trace build/diagnostics/native360_frame_trace: tools/diagnostics/frame_api_trace.h
+
+build/transport_options_tests: tests/vulkan/transport_options_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_load_shader_module -Wl,--wrap=dc_gpu_pressure_work_init
+.PHONY: test_transport_options
+test: test_transport_options
+test_transport_options: build/transport_options_tests
+	./build/transport_options_tests
