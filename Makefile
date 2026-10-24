@@ -602,6 +602,7 @@ build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h
 
 test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/appearance_tests
+	./build/brush_region_tests
 	./build/texture_tests
 	./build/texture_gpu_tests
 	./build/occlusion_gpu_tests
@@ -1497,10 +1498,10 @@ build/contact_boundary_tests: tests/vulkan/contact_boundary_tests.c tests/vulkan
 test: build/contact_boundary_tests
 build/diagnostics/contacts_scalar_reference.spv: shaders/sim/contacts.comp $(wildcard shaders/sim/*.glsl)
 	mkdir -p $(dir $@)
-	glslangValidator -DDC_CONTACT_GROUP_LANES=64 -DDC_CONTACT_COOPERATIVE_BOUNDARY=0 -DDC_CONTACT_POLYGON_CAPACITY=8 -V --target-env vulkan1.3 -S comp -o $@ $<
+	glslangValidator -DDC_CONTACT_TERRAIN_CACHE=0 -DDC_CONTACT_GROUP_LANES=64 -DDC_CONTACT_COOPERATIVE_BOUNDARY=0 -DDC_CONTACT_POLYGON_CAPACITY=8 -V --target-env vulkan1.3 -S comp -o $@ $<
 build/diagnostics/runtime_contacts_scalar_reference.spv: shaders/sim/contacts.comp $(wildcard shaders/sim/*.glsl)
 	mkdir -p $(dir $@)
-	glslangValidator -DDC_RUNTIME_BODY_STORAGE=1 -DDC_CONTACT_GROUP_LANES=64 -DDC_CONTACT_COOPERATIVE_BOUNDARY=0 -DDC_CONTACT_POLYGON_CAPACITY=8 -V --target-env vulkan1.3 -S comp -o $@ $<
+	glslangValidator -DDC_RUNTIME_BODY_STORAGE=1 -DDC_CONTACT_TERRAIN_CACHE=0 -DDC_CONTACT_GROUP_LANES=64 -DDC_CONTACT_COOPERATIVE_BOUNDARY=0 -DDC_CONTACT_POLYGON_CAPACITY=8 -V --target-env vulkan1.3 -S comp -o $@ $<
 build/contact_boundary_manifold_tests: tests/vulkan/contact_boundary_manifold_tests.c tools/diagnostics/contact_scaling.c $(GPU_OBJ) $(CHUNK_OBJ) build/pixel_component_tests build/diagnostics/contacts_scalar_reference.spv build/diagnostics/runtime_contacts_scalar_reference.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_load_shader_module
 test: build/contact_boundary_manifold_tests
@@ -1518,6 +1519,10 @@ build/shaders/runtime/contacts_pixel.comp.spv: shaders/sim/contacts.comp $(wildc
 	glslangValidator -DDC_RUNTIME_BODY_STORAGE=1 -DDC_CONTACT_PIXEL_MODULE=1 -DDC_CONTACT_POLYGON_CAPACITY=4 -V --target-env vulkan1.3 -S comp -o $@ $<
 $(GPU_OBJ) $(GPU_SOURCE_BINARIES): build/shaders/contacts_pixel.comp.spv build/shaders/runtime/contacts_pixel.comp.spv
 test_gpu_tools: build/shaders/contacts_pixel.comp.spv build/shaders/runtime/contacts_pixel.comp.spv
+
+build/brush_region_tests: tests/vulkan/brush_region_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/gpu_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdDispatch
+test: build/brush_region_tests
 build/diagnostics/pixel_boundary_probe.spv: shaders/sim/rigid_clip.glsl shaders/sim/rigid_shape.glsl tests/vulkan/rigid_clip_reference.glsl
 
 build/solver_contact_start_tests: tests/vulkan/solver_contact_start_tests.c tests/vulkan/solver_motion_store_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_motion_profile.comp.spv
