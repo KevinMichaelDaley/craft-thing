@@ -44,6 +44,21 @@ def corner_capacity(path, pixel_only):
 
 
 class ContactPolygonStorageTests(unittest.TestCase):
+    def test_contact_workgroups_spread_small_manifolds(self):
+        for variant in ("", "runtime/"):
+            for module in ("contacts", "contacts_pixel"):
+                raw = Path(f"build/shaders/{variant}{module}.comp.spv").read_bytes()
+                words = struct.unpack(f"<{len(raw) // 4}I", raw)
+                offset = 5
+                sizes = []
+                while offset < len(words):
+                    size, opcode = words[offset] >> 16, words[offset] & 65535
+                    args = words[offset + 1:offset + size]
+                    if opcode == 16 and args[1] == 17:
+                        sizes.append(tuple(args[2:]))
+                    offset += size
+                self.assertEqual(sizes, [(32, 1, 1)], module)
+
     def test_contact_storage_matches_the_specialized_geometry(self):
         for variant in ("", "runtime/"):
             with self.subTest(variant=variant):
