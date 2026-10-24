@@ -126,12 +126,29 @@ static void test_one_concave_component_fractures_into_more_than_a_page_of_bodies
     for(unsigned slot=0;slot<71;slot++) ASSERT_EQ(dc_gpu_body_solver_state(g,slot)[60],0x80000001u);
     dc_gpu_destroy(g);free(chunk);PASS();
 }
+static void test_empty_runtime_reserves_bounded_appearance_storage_and_can_grow(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    VkDeviceSize initial=dc_gpu_color_bank_bytes(g);
+    uint32_t words=dc_gpu_pixel_pool_capacity(g);
+    printf("Empty appearance bank: %llu bytes\n",(unsigned long long)initial);
+    ASSERT_TRUE(initial<=1048576u);
+    ASSERT_TRUE(dc_gpu_runtime_geometry_reserve(g,words*4u,err,sizeof(err)));
+    ASSERT_EQ(dc_gpu_pixel_pool_capacity(g),words*4u);
+    ASSERT_TRUE(dc_gpu_color_bank_bytes(g)>1048576u);
+    dc_gpu_destroy(g);PASS();
+}
 int main(void) {
+    if(getenv("DC_TEST_INITIAL_ARENA_ONLY")) {
+        RUN(test_empty_runtime_reserves_bounded_appearance_storage_and_can_grow);
+        printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
+    }
     if(getenv("DC_TEST_FRACTURE_ONLY")) {
         RUN(test_one_concave_component_fractures_into_more_than_a_page_of_bodies);
         return g_fail!=0;
     }
     RUN(test_growth_preserves_geometry_colors_and_gravity_across_pages);
+    RUN(test_empty_runtime_reserves_bounded_appearance_storage_and_can_grow);
     RUN(test_gpu_queue_exhaustion_grows_and_retries_without_losing_bodies);
     RUN(test_one_concave_component_fractures_into_more_than_a_page_of_bodies);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;

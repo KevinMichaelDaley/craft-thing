@@ -151,6 +151,8 @@ test_wood_floats_and_stone_sinks_visibly_from_material_density(void) {
     dc_gpu_memory_stats_t memory;
     dc_gpu_tick_capture_t capture;
     ASSERT_TRUE(dc_gpu_memory_stats(gpu, &memory));
+    printf("Wet visual memory: mapped %.3f MiB, device %.3f MiB\n",
+           memory.mapped_local_bytes/1048576.,memory.device_only_bytes/1048576.);
     ASSERT_TRUE(memory.mapped_local_bytes < 72u * 1048576u);
     ASSERT_TRUE(memory.device_only_bytes < 112u * 1048576u);
     ASSERT_TRUE(dc_gpu_tick_capture(gpu, &capture, err, 256));

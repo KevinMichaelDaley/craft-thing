@@ -2,7 +2,7 @@
 id: ct-tu55
 status: in_progress
 deps: [ct-fmj6, ct-lqd8, ct-79mx]
-links: [ct-wuci, ct-k6ym, ct-sqg7, ct-79mx, ct-irzt]
+links: [ct-wuci, ct-k6ym, ct-sqg7, ct-79mx, ct-irzt, ctlo-sgja, ctlo-zejd]
 created: 2026-10-14T03:55:23Z
 type: task
 priority: 1
@@ -210,3 +210,7 @@ Boundary-anchor bypass and narrowed indirect barriers pass component/cache4, ext
 **2026-10-24T00:52:41Z**
 
 New default exact water optimizations: recompute unique recipient requests to release shared array;9 partial mass/pigment checks pass plus SPIR-V storage proof. Dry-line prescan reduces10240 cache cell loads to0, exact zero-water inputs preserved under core+sync. Actual Wayland180 frames25.357ms mean29.644ms worst, paused images stable. Longer360-frame repeat26.272ms mean131.020ms worst remains RED.400-frame coarse trace26.881/51.831; subsequent idle-stack trace sees37.851ms app frame with26.531ms present/GPU wrapper and no warm queue idle; not claiming sustained worst-frame completion. Full current make -j4 -i test under core+sync validation running. Benchmark label now distinguishes480x270 physics/render from640x448 active region including halo.
+
+**2026-10-24T01:12:12Z**
+
+Normal material-placement application (not the query profiler), DC_FRAME_TIMINGS=1 host-stage diagnostics only, Wayland+Vulkan saved-scene fresh copy:500 measured frames mean25.371ms worst29.124ms, all500under30ms, four paused captures identical. Worst frame input0.088ms prepare0.002 paint0.001 present29.017 title0.045. No physics cadence/resolution/material/geometry reduction; dynamic body count retained. Fixed broad-suite fixture sizing and enabled proper reset/profile capture for partial-grid contact work: MPM compaction7/7 and pixel-world8/8 explicit core+sync validation clean. Final full/default, UI and quarter regression running serially before another ordinary no-instrumentation displayed repeat.

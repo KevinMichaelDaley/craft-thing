@@ -2,7 +2,7 @@
 id: ctlo-sgja
 status: in_progress
 deps: []
-links: [ctlo-inhv]
+links: [ctlo-inhv, ctlo-zejd, ct-tu55]
 created: 2026-10-23T15:05:14Z
 type: bug
 priority: 1
