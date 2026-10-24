@@ -1,0 +1,16 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#define DC_RUNTIME_ROOT_READONLY 1
+#include "rigid_body.glsl"
+layout(local_size_x=32) in;
+layout(set=0,binding=31,std430) buffer ColorProfile {uint color_profile[];};
+layout(push_constant) uniform Params {uint width,height,mode,count;uvec2 origin_x,origin_y;} params;
+uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
+#define DC_SHAPE_COLOR_PROFILE 1
+#include "shape_colors.glsl"
+void main() {
+    uint index=gl_GlobalInvocationID.x;
+    if(index>=3u) return;
+    uint target=params.mode+(index==1u?1u:params.origin_x.x+(index==2u?2u:0u));
+    shape_color_resolve(target);
+}

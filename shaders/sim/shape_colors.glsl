@@ -15,6 +15,9 @@ uint color_slots() {
     return pixel_word_at(BODY_STORAGE_WORDS+base+1u);
 }
 uint color_capacity() {
+#ifdef DC_SHAPE_COLOR_PROFILE
+    atomicAdd(color_profile[1],1u);
+#endif
 #ifdef DC_RUNTIME_BODY_STORAGE
     return DC_RUNTIME_WORK(29u);
 #else
@@ -22,6 +25,9 @@ uint color_capacity() {
 #endif
 }
 uint color_pool_word() {
+#ifdef DC_SHAPE_COLOR_PROFILE
+    atomicAdd(color_profile[0],1u);
+#endif
     uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
     return BODY_STORAGE_WORDS+8u+2u*w*h+DC_LAYOUT_PAIR_CAPACITY*8u+12u+DC_LAYOUT_CONTACT_CAPACITY*32u+16u+64u*32u+DC_LAYOUT_CONTACT_CAPACITY*16u+
         32u+color_slots()*8u+40000u+16u;

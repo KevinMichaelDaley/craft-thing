@@ -607,6 +607,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/appearance_tests
 	./build/brush_region_tests
 	./build/mpm_swap_tests
+	./build/shape_color_resolve_tests
 	./build/texture_tests
 	./build/texture_gpu_tests
 	./build/occlusion_gpu_tests
@@ -1536,6 +1537,13 @@ build/mpm_swap_tests: tests/vulkan/mpm_swap_tests.c $(GPU_OBJ) $(CHUNK_OBJ) buil
 test: build/mpm_swap_tests
 
 $(SHADER) $(HALO_SHADER) $(MPM_COMPONENT_SHADER) build/shaders/component_extract.comp.spv build/shaders/structural.comp.spv build/shaders/structural_carve.comp.spv: shaders/sim/mpm_particle_mirror.glsl
+
+build/diagnostics/shape_color_resolve_probe.spv: tests/vulkan/shape_color_resolve_probe.comp $(wildcard shaders/sim/*.glsl)
+	mkdir -p $(dir $@)
+	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -V --target-env vulkan1.3 -Ishaders/sim -S comp -o $@ $<
+build/shape_color_resolve_tests: tests/vulkan/shape_color_resolve_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/shape_color_resolve_probe.spv build/gpu_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/shape_color_resolve_tests
 build/diagnostics/pixel_boundary_probe.spv: shaders/sim/rigid_clip.glsl shaders/sim/rigid_shape.glsl tests/vulkan/rigid_clip_reference.glsl
 
 build/solver_contact_start_tests: tests/vulkan/solver_contact_start_tests.c tests/vulkan/solver_motion_store_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_motion_profile.comp.spv
