@@ -22,3 +22,7 @@ All child milestones and three reproducible integration scenes pass on the actua
 **2026-10-24T22:10:27Z**
 
 Planning completed per explicit Design and tickets first selection. Baseline ctlo-ck1i is the first implementation gate; profiles and dynamic pivot branch independently after it. Ordinary fire requires heat/gas/oxygen; Greek fire adds finite oil/slime, coatings, bound oxidizer and corrosion. Three displayed scenes feed the final 30 ms gate ctlo-jjye. Full lightning propagation ctlo-ddvz is linked but nonblocking. Detailed design and all initial numeric fixture targets are in design/fire_smoke_reactive_materials.md.
+
+**2026-10-24T22:15:03Z**
+
+The user now explicitly authorized implementation by asking to run one agent through these tickets. The earlier planning-only scope applies to the completed planning turn and no longer blocks implementation. Work begins with ctlo-ck1i in /home/kmd/craft-thing-fire-smoke on feat/fire-smoke-reactive-materials. Proceed through required dependencies, preserve the real displayed performance gate and keep deferred ctlo-ddvz nonblocking.

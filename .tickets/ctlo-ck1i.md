@@ -1,6 +1,6 @@
 ---
 id: ctlo-ck1i
-status: open
+status: in_progress
 deps: [ctlo-wmy2]
 links: []
 created: 2026-10-24T22:06:18Z
