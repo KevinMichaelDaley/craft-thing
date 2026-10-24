@@ -1625,3 +1625,8 @@ test: test_fire_fixtures
 test_fire_fixtures:
 	python3 -m py_compile tests/fire/fixture_contract_tests.py tools/diagnostics/fire_fixture.py
 	python3 tests/fire/fixture_contract_tests.py
+
+build/reactive_material_tests: tests/fire/material_profile_tests.c src/fire/material_profile.c include/ferrum/fire/material_profile.h include/dungeoncraft/chunk.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/material_profile_tests.c src/fire/material_profile.c -o $@ -lm
+test: build/reactive_material_tests
