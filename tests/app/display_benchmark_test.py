@@ -21,6 +21,7 @@ class DisplayBenchmarkTest(unittest.TestCase):
             cwd=ROOT, text=True, capture_output=True, timeout=90)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("Displayed full frame", result.stdout)
+        self.assertIn("physics/render", result.stdout)
         self.assertIn("paused pixels identical", result.stdout)
         self.assertTrue(capture.is_file())
         self.assertTrue(any((work / "world").rglob("*.bin")))
