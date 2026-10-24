@@ -29,6 +29,32 @@ VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkAllocateMemory(VkDevice device,const VkM
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() g_pass++
 
+static void test_gpu_water_source_releases_newly_isolated_terrain(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    for(unsigned y=32;y<64;y++) for(unsigned x=0;x<64;x++) {
+        chunk->cells[y*64+x].material=DC_MATERIAL_STONE;
+        chunk->cells[y*64+x].flags=DC_CELL_LOADED_TERRAIN;
+    }
+    for(unsigned y=10;y<32;y++) {
+        chunk->cells[y*64+20].material=DC_MATERIAL_WOOD;
+        chunk->cells[y*64+20].flags=DC_CELL_LOADED_TERRAIN;
+    }
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
+    for(unsigned i=0;i<2;i++) ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    dc_gpu_body_t body;
+    ASSERT_TRUE(!dc_gpu_read_body_id(g,0x80000001u,&body,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_tick_water_source(g,true,20,25));
+    ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+    unsigned count=0;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,NULL,0,&count,err,sizeof(err)));
+    ASSERT_EQ(count,13u);
+    dc_gpu_destroy(g);free(chunk);PASS();
+}
+
 static void test_cut_and_physics_tick_share_the_occupancy_refresh(void) {
     char err[256]={0};dc_gpu_t *g=NULL;
     dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
@@ -412,6 +438,10 @@ static void test_leaf_impact_crumbles_canopy(void) {
 }
 
 int main(void) {
+    if(getenv("DC_TEST_WATER_SOURCE_RELEASE_ONLY")) {
+        RUN(test_gpu_water_source_releases_newly_isolated_terrain);
+        return g_fail!=0;
+    }
     if(getenv("DC_TEST_BRUSH_TICK_ONLY")) {
         RUN(test_cut_and_physics_tick_share_the_occupancy_refresh);
         return g_fail!=0;
@@ -429,6 +459,7 @@ int main(void) {
         return g_fail!=0;
     }
     RUN(test_large_body_brush_preserves_mass_with_bounded_latency);
+    RUN(test_gpu_water_source_releases_newly_isolated_terrain);
     RUN(test_cut_and_physics_tick_share_the_occupancy_refresh);
     RUN(test_brush_invalidates_only_the_state_it_changes);
     RUN(test_missed_brush_does_not_serialize_all_body_slots);
