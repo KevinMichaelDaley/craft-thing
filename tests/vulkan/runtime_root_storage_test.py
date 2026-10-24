@@ -3,7 +3,7 @@ import struct
 import unittest
 
 
-def root_decorations(path):
+def root_decorations(path, block="RuntimeBodyRoot"):
     raw = Path(path).read_bytes()
     words = struct.unpack(f"<{len(raw) // 4}I", raw)
     names, decorations = {}, set()
@@ -19,7 +19,7 @@ def root_decorations(path):
         if opcode == 72 and len(operands) >= 3:
             decorations.add(tuple(operands[:3]))
         offset += length
-    root = names["RuntimeBodyRoot"]
+    root = names[block]
     return {decoration for target, member, decoration in decorations
             if target == root and member == 0}
 
@@ -34,6 +34,18 @@ class RuntimeRootStorageTests(unittest.TestCase):
 
     def test_explicit_index_writer_can_publish_the_live_count(self):
         decorations = root_decorations("build/shaders/runtime_body_index.comp.spv")
+        self.assertNotIn(24, decorations)
+
+    def test_consumers_cache_directory_addresses_and_immutable_geometry(self):
+        for shader in ("rigid_solver", "rigid", "pattern", "mpm", "scene"):
+            for block in ("BodyStorageDirectory", "BodyStorageGeometry"):
+                with self.subTest(shader=shader, block=block):
+                    decorations = root_decorations(f"build/shaders/runtime/{shader}.comp.spv", block)
+                    self.assertIn(24, decorations)
+                    self.assertIn(19, decorations)
+
+    def test_index_writer_retains_directory_free_mask_updates(self):
+        decorations = root_decorations("build/shaders/runtime_body_index.comp.spv", "BodyStorageDirectory")
         self.assertNotIn(24, decorations)
 
 
