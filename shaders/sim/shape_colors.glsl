@@ -48,10 +48,32 @@ void shape_color_stage(uint target,uint source) {
     shape_color_set(target,0u,marker);
 }
 void shape_color_resolve(uint word) {
-    uint marker=floatBitsToUint(shape_color_get(word,0u).w);
+    uint pool=color_pool_word(),capacity=color_capacity();
+    uint relative=word-pool,target=(relative%capacity)*8u;
+#ifdef DC_RUNTIME_BODY_STORAGE
+    uvec2 target_address=relative<capacity?uvec2(DC_RUNTIME_WORK(32u),DC_RUNTIME_WORK(33u)):
+        uvec2(DC_RUNTIME_WORK(34u),DC_RUNTIME_WORK(35u));
+    RuntimeShapeColors destination=RuntimeShapeColors(target_address);
+    uint marker=floatBitsToUint(destination.colors[target].w);
+#else
+    uint marker=floatBitsToUint(relative<capacity?shape_colors_a[target].w:shape_colors_b[target].w);
+#endif
     if((marker&0x80000000u)==0u) return;
     uint source=marker&0x7fffffffu;
+    uint source_relative=source==0u?0u:source-1u,source_index=(source_relative%capacity)*8u;
+#ifdef DC_RUNTIME_BODY_STORAGE
+    uvec2 source_address=source_relative<capacity?uvec2(DC_RUNTIME_WORK(32u),DC_RUNTIME_WORK(33u)):
+        uvec2(DC_RUNTIME_WORK(34u),DC_RUNTIME_WORK(35u));
+    RuntimeShapeColors origin=RuntimeShapeColors(source_address);
     for(uint nibble=0u;nibble<8u;nibble++)
-        shape_color_set(word,nibble,source==0u?vec4(0):shape_color_get(color_pool_word()+source-1u,nibble));
+        destination.colors[target+nibble]=source==0u?vec4(0):origin.colors[source_index+nibble];
+#else
+    for(uint nibble=0u;nibble<8u;nibble++) {
+        vec4 color=source==0u?vec4(0):source_relative<capacity?
+            shape_colors_a[source_index+nibble]:shape_colors_b[source_index+nibble];
+        if(relative<capacity) shape_colors_a[target+nibble]=color;
+        else shape_colors_b[target+nibble]=color;
+    }
+#endif
 }
 #endif
