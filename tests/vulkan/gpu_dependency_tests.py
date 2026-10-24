@@ -27,6 +27,23 @@ class GpuDependencyTests(unittest.TestCase):
         self.assertIn("src/vulkan/contact_shader_contract.h",
                       self.rules["build/contact_gpu.o"])
 
+    def test_structural_consumers_require_both_carve_shader_modules(self):
+        users = {target: deps for target, deps in self.rules.items()
+                 if "src/vulkan/structural_gpu.c" in deps}
+        self.assertTrue(users)
+        required = {"build/shaders/structural_carve.comp.spv",
+                    "build/shaders/runtime/structural_carve.comp.spv"}
+        missing = {target: sorted(required - deps) for target, deps in users.items()
+                   if not required.issubset(deps)}
+        self.assertEqual(missing, {})
+
+    def test_carve_shaders_track_shared_physics_headers(self):
+        required = {"include/dungeoncraft/body_storage_layout.h",
+                    "include/dungeoncraft/material_density.h"}
+        for target in ("build/shaders/structural_carve.comp.spv",
+                       "build/shaders/runtime/structural_carve.comp.spv"):
+            self.assertTrue(required.issubset(self.rules[target]), target)
+
     def test_direct_source_binaries_require_private_header_and_contact_shader(self):
         users = {target: deps for target, deps in self.rules.items()
                  if not target.endswith(".o") and "src/vulkan/gpu.c" in deps}
