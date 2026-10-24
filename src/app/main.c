@@ -708,6 +708,12 @@ static int smoke_streamed_level(void) {
                                          &chunk, err, sizeof(err)) &&
                      chunk.marker_count > 0;
     uint32_t saved_marker_count = chunk.marker_count;
+    uint16_t saved_sand_cell_material = chunk.cells[5 * DC_CHUNK_SIDE].material;
+    dc_cell_t saved_cells[DC_CHUNK_CELLS];
+    memcpy(saved_cells,chunk.cells,sizeof(saved_cells));
+    dc_mpm_particle_t *saved_particles=malloc(sizeof(chunk.particles));
+    if(!saved_particles) okay=false;
+    else memcpy(saved_particles,chunk.particles,sizeof(chunk.particles));
     dc_face_velocity_t saved_faces[DC_CHUNK_CELLS];
     memcpy(saved_faces, chunk.face_velocity, sizeof(saved_faces));
     bool moving_face = false;
@@ -748,9 +754,18 @@ static int smoke_streamed_level(void) {
     if (okay) okay = dc_level_view_chunk(view, (dc_chunk_coord_t){1, 0},
                                          &chunk, err, sizeof(err)) &&
                      chunk.cells[5 * DC_CHUNK_SIDE].material == DC_MATERIAL_SAND &&
+                     memcmp(saved_cells,chunk.cells,sizeof(saved_cells)) == 0 &&
                      chunk.marker_count == saved_marker_count &&
                      memcmp(saved_faces, chunk.face_velocity,
                             sizeof(saved_faces)) == 0;
+    for(uint32_t i=0;okay&&i<DC_MPM_PARTICLES_PER_CHUNK;i++)
+        okay=chunk.particles[i].mass_fp==saved_particles[i].mass_fp&&
+            (saved_particles[i].mass_fp==0u||memcmp(&saved_particles[i],&chunk.particles[i],sizeof(*saved_particles))==0);
+    if (!okay && strcmp(stage,"positive reload")==0)
+        fprintf(stderr,"Reload material %u expected post-step %u, markers %u expected %u, face bytes equal %d\n",
+            chunk.cells[5*DC_CHUNK_SIDE].material,saved_sand_cell_material,chunk.marker_count,
+            saved_marker_count,memcmp(saved_faces,chunk.face_velocity,sizeof(saved_faces))==0);
+    free(saved_particles);
     if (okay) stage = "halo edge reload";
     if (okay) okay = dc_level_view_chunk(view, (dc_chunk_coord_t){-1, 0},
                                          &halo_painted, err, sizeof(err)) &&
