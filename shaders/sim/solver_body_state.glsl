@@ -1,7 +1,7 @@
 #ifndef DC_SOLVER_BODY_STATE_GLSL
 #define DC_SOLVER_BODY_STATE_GLSL
 #ifndef DC_SOLVER_DIRECT_BODY_STATE
-#define DC_SOLVER_DIRECT_BODY_STATE 0
+#define DC_SOLVER_DIRECT_BODY_STATE 1
 #endif
 #if defined(DC_RUNTIME_BODY_STORAGE) && DC_SOLVER_DIRECT_BODY_STATE
 #define SOLVER_BODY_WORD(slot,word) BodyStorageWords(DC_BODY_PAGE(runtime_body_root,slot).solver).words[((slot)&63u)*64u+(word)]
