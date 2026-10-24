@@ -378,9 +378,14 @@ static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7], char *err, uin
         return error(err, cap, "Cannot end compute command buffer");
     VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .commandBufferCount = 1, .pCommandBuffers = &gpu->command };
-    if (vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
-        vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
+    VkFence completed=gpu->render_fence;
+    if(completed&&vkResetFences(gpu->device,1,&completed)!=VK_SUCCESS)
+        return error(err,cap,"Cannot reset brush completion fence");
+    if (vkQueueSubmit(gpu->queue, 1, &submit, completed) != VK_SUCCESS)
         return error(err, cap, "Compute submission failed");
+    VkResult waited=completed?vkWaitForFences(gpu->device,1,&completed,VK_TRUE,UINT64_MAX):
+        vkQueueWaitIdle(gpu->queue);
+    if(waited!=VK_SUCCESS) return error(err,cap,"Compute completion wait failed");
     return true;
 }
 
