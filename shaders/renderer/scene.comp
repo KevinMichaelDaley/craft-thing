@@ -1,5 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#define DC_RUNTIME_ROOT_READONLY 1
 #include "../../include/ferrum/renderer/light_transport.h"
 #include "../../include/dungeoncraft/terrain_flags.h"
 #define DC_RUNTIME_BODY_BINDING 3

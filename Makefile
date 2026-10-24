@@ -1050,6 +1050,7 @@ test: test_gpu_tools
 test_gpu_tools: build/contact_shader_contract_tests
 	python3 tests/vulkan/shader_variant_tests.py
 	python3 tests/vulkan/gpu_dependency_tests.py
+	python3 tests/vulkan/runtime_root_storage_test.py
 	./build/contact_shader_contract_tests
 	./build/fluid_transport_limits_tests
 	./build/contact_recording_tests

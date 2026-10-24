@@ -1,5 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#define DC_RUNTIME_ROOT_READONLY 1
 #include "../../include/dungeoncraft/terrain_flags.h"
 layout(constant_id=1) const bool DRAW_PIXEL_ONLY=false;
 layout(constant_id=2) const bool DRAW_SIMPLE=false;

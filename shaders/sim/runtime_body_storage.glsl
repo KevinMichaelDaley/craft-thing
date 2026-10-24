@@ -4,7 +4,13 @@
 #ifndef DC_RUNTIME_BODY_BINDING
 #define DC_RUNTIME_BODY_BINDING 4
 #endif
+/* Opt in per consumer: the Intel fracture compiler expands phase 4
+   prohibitively with this declaration. Its root remains conservative. */
+#ifdef DC_RUNTIME_ROOT_READONLY
+layout(set=0,binding=DC_RUNTIME_BODY_BINDING,std430) readonly restrict buffer RuntimeBodyRoot {
+#else
 layout(set=0,binding=DC_RUNTIME_BODY_BINDING,std430) buffer RuntimeBodyRoot {
+#endif
     BodyStorageRoot runtime_body_root;
 };
 layout(buffer_reference,std430,buffer_reference_align=4) buffer RuntimeBodyWord {uint value;};

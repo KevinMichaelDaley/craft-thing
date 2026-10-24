@@ -1,5 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#define DC_RUNTIME_ROOT_READONLY 1
 layout(constant_id = 1) const bool RIGID_PIXEL_ONLY = false;
 #define DC_RIGID_PIXEL_ONLY RIGID_PIXEL_ONLY
 #include "rigid_body.glsl"

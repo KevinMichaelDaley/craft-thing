@@ -1,5 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#define DC_RUNTIME_ROOT_READONLY 1
 #include "../../include/dungeoncraft/material_density.h"
 #include "../../include/dungeoncraft/mpm_activity_layout.h"
 layout(local_size_x = 16, local_size_y = 16) in;
