@@ -1057,7 +1057,7 @@ build/diagnostics/shader_compile_probe: tools/diagnostics/shader_compile_probe.c
 .PHONY: diagnostic_fluid_variants
 .PHONY: test_gpu_tools
 test: test_gpu_tools
-test_gpu_tools: build/contact_shader_contract_tests build/shaders/runtime/rigid_solver.comp.spv build/shaders/runtime/rigid.comp.spv build/shaders/runtime/pattern.comp.spv build/shaders/runtime/mpm.comp.spv build/shaders/runtime/scene.comp.spv build/shaders/runtime_body_index.comp.spv build/shaders/mpm.comp.spv build/video_driver_tests
+test_gpu_tools: build/contact_shader_contract_tests build/shaders/runtime/rigid_solver.comp.spv build/shaders/runtime/rigid.comp.spv build/shaders/runtime/pattern.comp.spv build/shaders/runtime/mpm.comp.spv build/shaders/runtime/scene.comp.spv build/shaders/runtime/contacts.comp.spv build/shaders/runtime_body_index.comp.spv build/shaders/mpm.comp.spv build/video_driver_tests
 	python3 tests/vulkan/shader_variant_tests.py
 	python3 tests/vulkan/gpu_dependency_tests.py
 	python3 tests/vulkan/runtime_root_storage_test.py

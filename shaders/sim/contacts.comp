@@ -1,5 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#define DC_RUNTIME_ROOT_READONLY 1
 #include "../../include/dungeoncraft/contact_work_layout.h"
 layout(constant_id=1) const bool CONTACT_PIXEL_ONLY=false;
 #define DC_RIGID_PIXEL_ONLY CONTACT_PIXEL_ONLY
