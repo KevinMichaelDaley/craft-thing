@@ -154,6 +154,7 @@ struct dc_gpu {
     uint32_t checkpoint_chunk_count;
     bool impact_fracture_enabled;
     bool rigid_solver_enabled;
+    bool solver_fused_grain;
     VkBuffer trace_buffer;
     VkDeviceMemory trace_memory;
     void *trace_mapped;

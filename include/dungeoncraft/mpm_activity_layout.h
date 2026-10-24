@@ -6,7 +6,8 @@
 /** Owner-specific rigid-phase triplets; MPM may reuse these words afterwards. */
 #define DC_GRAIN_BED_WORK_WORD 39u
 #define DC_RIGID_BODY_WORK_WORD 42u
-#define DC_MPM_ACTIVITY_MIN_WORDS 45u
+#define DC_RIGID_APPLY_WORK_WORD 45u
+#define DC_MPM_ACTIVITY_MIN_WORDS 48u
 #define DC_MPM_DISPATCH_X_LIMIT 65535u
 #define DC_MPM_COMPACTION_PHASES 5u
 

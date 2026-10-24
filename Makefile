@@ -609,6 +609,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/mpm_copy_tests
 	./build/solver_motion_store_tests
 	./build/solver_contact_start_tests
+	./build/solver_grain_fusion_tests
 	./build/solver_recording_tests
 	./build/solver_commands_tests
 	./build/body_address_gpu_tests

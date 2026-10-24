@@ -148,11 +148,13 @@ bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkResult result = VK_SUCCESS;
     const char *grouped=getenv("DC_SOLVER_GROUPED_REDUCTIONS");
     const char *zero=getenv("DC_SOLVER_SKIP_ZERO_REDUCTIONS");
-    VkSpecializationMapEntry entries[]={{0u,0u,4u},{5u,4u,4u},{4u,8u,4u}};
+    const char *fused=getenv("DC_SOLVER_FUSED_GRAIN");
+    gpu->solver_fused_grain=fused&&strcmp(fused,"1")==0;
+    VkSpecializationMapEntry entries[]={{0u,0u,4u},{5u,4u,4u},{4u,8u,4u},{6u,12u,4u}};
     for (uint32_t mode = 0;
          mode < DC_GPU_SOLVER_PHASE_COUNT && result == VK_SUCCESS; ++mode) {
-        uint32_t values[]={mode,grouped&&strcmp(grouped,"1")==0,zero&&strcmp(zero,"1")==0};
-        VkSpecializationInfo phase = {.mapEntryCount = 3,
+        uint32_t values[]={mode,grouped&&strcmp(grouped,"1")==0,zero&&strcmp(zero,"1")==0,gpu->solver_fused_grain};
+        VkSpecializationInfo phase = {.mapEntryCount = 4,
                                       .pMapEntries = entries,
                                       .dataSize = sizeof(values),
                                       .pData = values};
@@ -235,6 +237,8 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
             DC_GRAIN_BED_WORK_WORD * sizeof(uint32_t));
     } else if (phase == SOLVER_BEGIN_FRAME || phase == SOLVER_PREPARE || phase == SOLVER_FINISH) {
         vkCmdDispatch(gpu->command,(dc_gpu_runtime_body_count(gpu)+63u)/64u,1,1);
+    } else if (gpu->solver_fused_grain&&(phase==SOLVER_APPLY||phase==SOLVER_APPLY_VELOCITY)) {
+        vkCmdDispatchIndirect(gpu->command,gpu->mpm_activity_buffer,DC_RIGID_APPLY_WORK_WORD*sizeof(uint32_t));
     } else if (phase == SOLVER_PREDICT || phase == SOLVER_CLEAR ||
                phase == SOLVER_APPLY || phase == SOLVER_DERIVE_VELOCITY ||
                phase == SOLVER_APPLY_VELOCITY) {
@@ -309,15 +313,15 @@ void dc_gpu_record_solver_uncached(dc_gpu_t *gpu) {
         for (uint32_t iteration = 0; iteration < SOLVER_ITERATIONS;
              ++iteration) {
             dispatch(gpu, SOLVER_SOLVE, true);
-            dispatch(gpu, SOLVER_APPLY, false);
-            dispatch(gpu, SOLVER_GRAIN_POSITION | ((iteration + 1u) << 8u), true);
+            dispatch(gpu, SOLVER_APPLY | ((iteration + 1u) << 8u), false);
+            if(!gpu->solver_fused_grain) dispatch(gpu, SOLVER_GRAIN_POSITION | ((iteration + 1u) << 8u), true);
             if (gpu->structural_enabled)
                 dispatch(gpu, SOLVER_BOND_POSITION, false);
         }
         dispatch(gpu, SOLVER_DERIVE_VELOCITY, false);
         dispatch(gpu, SOLVER_IMPULSE, true);
-        dispatch(gpu, SOLVER_APPLY_VELOCITY, false);
-        dispatch(gpu, SOLVER_GRAIN_VELOCITY | ((SOLVER_ITERATIONS + 1u) << 8u), true);
+        dispatch(gpu, SOLVER_APPLY_VELOCITY | ((SOLVER_ITERATIONS + 1u) << 8u), false);
+        if(!gpu->solver_fused_grain) dispatch(gpu, SOLVER_GRAIN_VELOCITY | ((SOLVER_ITERATIONS + 1u) << 8u), true);
         if (gpu->structural_enabled)
             dispatch(gpu, SOLVER_BOND_VELOCITY, false);
     }

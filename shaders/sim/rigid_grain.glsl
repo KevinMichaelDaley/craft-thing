@@ -27,12 +27,12 @@ bool grain_static_at(vec2 point) {
     uint material=grain_cells[(page-1u)*4096u+uint(cell.y%64)*64u+uint(cell.x%64)].x&65535u;
     return material==1u||material==7u||material==8u||material==9u;
 }
-void grain_phase(uint i) {
+void grain_phase(uint i,uint phase) {
     if(DC_DATA(sb()+3u)!=0u||i>=DC_DATA(cb())) return;
     uint c=cb()+12u+i*32u,ref=grain_reference(c);
     if(ref==0u) return;
     uint index=ref-1u,s=index*4u;
-    if(PHASE==GRAIN_PREPARE) {
+    if(phase==GRAIN_PREPARE) {
         for(uint k=0u;k<4u;k++) atomicExchange(grain_scratch[s+k],0u);
         return;
     }
@@ -40,7 +40,7 @@ void grain_phase(uint i) {
     if(atomicExchange(grain_scratch[s+2u],epoch)==epoch) return;
     vec2 change=vec2(int(grain_scratch[s]),int(grain_scratch[s+1u]))/SUM_SCALE;
     Particle p=particles[index];
-    if(PHASE==GRAIN_POSITION) {
+    if(phase==GRAIN_POSITION) {
         /* Keep a particle inside the one-cell halo supported by MPM's rebin.
            Occupancy is intentionally ignored: it is the moving collider. */
         uint cell=index%4096u;
