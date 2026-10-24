@@ -620,6 +620,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/mpm_gather_tests
 	./build/mpm_gather_partial_tile_tests
 	./build/mpm_transfer_load_tests
+	./build/mpm_grid_fusion_tests
 	./build/mpm_shader_storage_tests
 	./build/mpm_copy_tests
 	./build/solver_motion_store_tests
@@ -1496,6 +1497,10 @@ build/mpm_gather_tests build/mpm_gather_partial_tile_tests: build/shaders/mpm_co
 build/mpm_transfer_load_tests: tests/vulkan/mpm_transfer_load_tests.c tests/vulkan/mpm_gather_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/mpm_gather_profile.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/mpm_transfer_load_tests
+
+build/mpm_grid_fusion_tests: tests/vulkan/mpm_grid_fusion_tests.c tests/vulkan/mpm_transfer_load_tests.c tests/vulkan/mpm_gather_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(MPM_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/mpm_grid_fusion_tests
 
 build/diagnostics/quarter_app_frame_trace build/diagnostics/native360_frame_trace: tools/diagnostics/frame_api_trace.h
 
