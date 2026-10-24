@@ -91,6 +91,36 @@ SDL_VIDEODRIVER=wayland DC_NATIVE_SUSTAINED=1 ./tools/with-vulkan \
 
 Use validation for query correctness and disable it for timing comparisons.
 
+`build/diagnostics/quarter_app_frame_trace` runs the actual material-placement
+application, including saved scenes, with the same timestamp and Vulkan API
+wrappers. Use a fresh copy of a saved world for each comparison. The original
+world must remain untouched. Quarter-native visible physics and rendering are
+both 480×270; the 640×448 active region also includes chunk rounding and the
+offscreen simulation halo.
+
+`DC_FRAME_TRACE_COARSE=1` keeps reusable command streams enabled and reports
+whole-stage GPU timings. Add `DC_FRAME_TRACE_COMPONENTS=1` to inspect extraction
+dispatches specifically. API rows separately report pipeline creation, memory
+allocation, image acquisition, presentation, fence waits, queue/device idle and
+body-resource servicing. These counters can overlap and must not be summed.
+On Linux, `DC_FRAME_TRACE_IDLE_STACKS=1` prints call stacks for warm idle waits
+longer than 1 ms.
+
+`DC_FRAME_TIMINGS=1` works on the ordinary application with
+`--benchmark-frames`. It prints total application frame time plus input,
+preparation, painting, presentation and title-update times. This distinguishes
+application stalls from time inside the GPU presentation function. Logging and
+query instrumentation can perturb timing; use the ordinary application with
+these flags unset for final performance acceptance.
+
+Water transport normally recomputes each recipient's request instead of keeping
+a separate shared-memory request array. Each lane owns disjoint recipients and
+reads a recipient before its own write, preserving the original request and
+priority. `DC_TRANSPORT_REQUESTS=cached` selects the reference path.
+`DC_TRANSPORT_DRY_SCAN=0` disables the exact dry-line cache bypass. The experimental
+`DC_SOLVER_FUSED_GRAIN=1` path remains opt-in because its displayed measurements
+did not improve on the separate body/grain application passes.
+
 `DC_CONTACT_PAIR_PROFILE=1` additionally freezes displayed frame 72 and measures
 each existing broadphase candidate separately. This explicit diagnostic copies
 and restores all touched body storage and backs up/restores device-only activity

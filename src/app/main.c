@@ -1315,6 +1315,7 @@ int main(int argc, char **argv) {
                 }
             }
         }
+        uint64_t input_done=benchmark_timings?SDL_GetPerformanceCounter():0;
         uint64_t now = SDL_GetPerformanceCounter();
         double elapsed = (double)(now - previous) / (double)SDL_GetPerformanceFrequency();
         previous = now;
@@ -1338,12 +1339,15 @@ int main(int argc, char **argv) {
             single_step = false;
             accumulator = 0.0;
         }
+        uint64_t prepare_done=benchmark_timings?SDL_GetPerformanceCounter():0;
         if (!paint_held(view, material, err, sizeof(err))) {
             failed = true; running = false;
         }
+        uint64_t paint_done=benchmark_timings?SDL_GetPerformanceCounter():0;
         if (running && !dc_level_view_tick(view, err, sizeof(err))) {
             failed = true; running = false;
         }
+        uint64_t present_done=benchmark_timings?SDL_GetPerformanceCounter():0;
         if (running && !update_demo_title(view, seed, zoom, paused, entering_seed,
                                           seed_error, seed_text, previous_title)) {
             snprintf(err, sizeof(err), "Cannot update world status");
@@ -1353,6 +1357,13 @@ int main(int argc, char **argv) {
             double ms = (SDL_GetPerformanceCounter() - frame_start) * 1000. /
                         (double)SDL_GetPerformanceFrequency();
             if(benchmark_timings) printf("app-frame,%u,%.3fms\n",scripted_frame,ms);
+            if(benchmark_timings) {
+                double scale=1000./(double)SDL_GetPerformanceFrequency();
+                printf("app-stages,%u,input%.3f,prepare%.3f,paint%.3f,present%.3f,title%.3f\n",
+                    scripted_frame,(input_done-frame_start)*scale,(prepare_done-input_done)*scale,
+                    (paint_done-prepare_done)*scale,(present_done-paint_done)*scale,
+                    (SDL_GetPerformanceCounter()-present_done)*scale);
+            }
             benchmark_sum += ms;
             if (ms > benchmark_worst) benchmark_worst = ms;
             if (++measured_frames == benchmark_frames) running = false;
