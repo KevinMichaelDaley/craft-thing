@@ -1178,6 +1178,7 @@ int main(int argc, char **argv) {
     uint32_t scripted_frame = 0;
     uint32_t measured_frames = 0;
     double benchmark_sum = 0, benchmark_worst = 0;
+    bool benchmark_timings=benchmark_frames&&getenv("DC_FRAME_TIMINGS")!=NULL;
     while (running) {
         uint64_t frame_start = SDL_GetPerformanceCounter();
         if (scripted_input && scripted_frame == 0) {
@@ -1351,6 +1352,7 @@ int main(int argc, char **argv) {
         if (benchmark_frames && scripted_frame >= 8u && running) {
             double ms = (SDL_GetPerformanceCounter() - frame_start) * 1000. /
                         (double)SDL_GetPerformanceFrequency();
+            if(benchmark_timings) printf("app-frame,%u,%.3fms\n",scripted_frame,ms);
             benchmark_sum += ms;
             if (ms > benchmark_worst) benchmark_worst = ms;
             if (++measured_frames == benchmark_frames) running = false;
@@ -1359,7 +1361,7 @@ int main(int argc, char **argv) {
         ++scripted_frame;
     }
     if (benchmark_frames && !failed) {
-        printf("Displayed full frame %ux%u (simulation %ux%u): mean %.3fms worst %.3fms, %u frames\n",
+        printf("Displayed full frame %ux%u physics/render (active region %ux%u incl. halo): mean %.3fms worst %.3fms, %u frames\n",
                VIEW_WIDTH, VIEW_HEIGHT, SIM_WIDTH, SIM_HEIGHT,
                benchmark_sum / measured_frames, benchmark_worst, measured_frames);
         if (benchmark_capture) {
