@@ -1055,13 +1055,11 @@ build/diagnostics/shader_compile_probe: tools/diagnostics/shader_compile_probe.c
 .PHONY: diagnostic_fluid_variants
 .PHONY: test_gpu_tools
 test: test_gpu_tools
-test_gpu_tools: build/contact_shader_contract_tests build/shaders/runtime/rigid_solver.comp.spv build/shaders/runtime/rigid.comp.spv build/shaders/runtime/pattern.comp.spv build/shaders/runtime/mpm.comp.spv build/shaders/runtime/scene.comp.spv build/shaders/runtime_body_index.comp.spv
+test_gpu_tools: build/contact_shader_contract_tests build/shaders/runtime/rigid_solver.comp.spv build/shaders/runtime/rigid.comp.spv build/shaders/runtime/pattern.comp.spv build/shaders/runtime/mpm.comp.spv build/shaders/runtime/scene.comp.spv build/shaders/runtime_body_index.comp.spv build/shaders/mpm.comp.spv build/video_driver_tests
 	python3 tests/vulkan/shader_variant_tests.py
 	python3 tests/vulkan/gpu_dependency_tests.py
 	python3 tests/vulkan/runtime_root_storage_test.py
 	python3 tests/vulkan/mpm_storage_test.py
-
-test_gpu_tools: build/shaders/mpm.comp.spv
 	./build/contact_shader_contract_tests
 	./build/fluid_transport_limits_tests
 	./build/contact_recording_tests
@@ -1077,6 +1075,10 @@ test_gpu_tools: build/shaders/mpm.comp.spv
 	./build/body_features_tests
 	./build/body_scan_plan_tests
 	./build/body_scan_recording_tests
+	./build/video_driver_tests
+
+build/video_driver_tests: tests/app/video_driver_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=SDL_CreateWindow
 
 build/contact_shader_contract_tests: tests/vulkan/contact_shader_contract_tests.c src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
 	@mkdir -p build/diagnostics
