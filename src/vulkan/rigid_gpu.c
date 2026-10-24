@@ -465,7 +465,9 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
     dep.pMemoryBarriers = &finish;
     vkCmdPipelineBarrier2(gpu->command, &dep);
     dc_gpu_record_broadphase(gpu);
+    gpu->contact_caches_reusable=advance&&gpu->rigid_solver_enabled&&count!=0u;
     dc_gpu_record_contacts(gpu);
+    gpu->contact_caches_reusable=false;
     if (advance) dc_gpu_record_structural(gpu);
     if (gpu->component_profile)
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,

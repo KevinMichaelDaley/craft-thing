@@ -110,7 +110,7 @@ void dc_gpu_record_contact_terrain(dc_gpu_t *gpu) {
     }
 }
 void dc_gpu_record_contacts(dc_gpu_t *gpu) {
-    if(!gpu->solver_recording) dc_gpu_record_contact_terrain(gpu);
+    if(!gpu->solver_recording&&!gpu->contact_caches_reusable) dc_gpu_record_contact_terrain(gpu);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;

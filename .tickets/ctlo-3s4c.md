@@ -23,3 +23,7 @@ Packed cache exact checks pass: every mask in512-word solid/comb and384-word hol
 **2026-10-24T11:51:35Z**
 
 Automatic large-component geometry growth passes actual core+synchronization validation, retaining382x254 stone pixels and mass after arena expansion. Body-carve suite12/12 passes with cache enabled, including custom RGBA, concavities, repeated splitting and leaves. Shader interface tests9/9 pass with ABI4, which rejects pre-cache modules; generated shader dependencies now track the versioned header.
+
+**2026-10-24T12:02:05Z**
+
+Removed the redundant post-solver cache rebuild while keeping standalone queries fresh. CPU recording regression3/3 and real Wayland500-frame replay with stable four paused captures pass correctness;28.144ms mean35.282ms worst (quiet repeat28.158/34.860). Cache contents are identical across the intervening raster. Full frame gate still fails; next investigating repeated granular-particle buffer copies.
