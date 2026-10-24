@@ -162,6 +162,8 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
         return error(err, cap, "Invalid GPU grid dimensions or arguments");
     dc_gpu_t *gpu = calloc(1, sizeof(*gpu));
     if (!gpu) return error(err, cap, "Out of memory creating GPU context");
+    const char *boundary_cache=getenv("DC_CONTACT_BODY_CACHE");
+    gpu->contact_boundary_cache_enabled=boundary_cache&&strcmp(boundary_cache,"1")==0;
     gpu->width = width; gpu->height = height;
     gpu->pixel_pool_words=DC_GPU_INITIAL_PIXEL_POOL_WORDS;
     gpu->view_width = width; gpu->view_height = height;

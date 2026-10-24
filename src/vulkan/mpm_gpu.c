@@ -84,7 +84,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
     if(phase==5u&&strcmp(path,"build/shaders/mpm.comp.spv")==0&&commit&&strcmp(commit,"packed")==0)
         path=gpu->runtime_body_consumers?"build/shaders/runtime/mpm_commit.comp.spv":"build/shaders/mpm_commit.comp.spv";
     const char *stencil=getenv("DC_MPM_GATHER_STENCIL");
-    bool use_stencil=phase==4u&&stencil&&strcmp(stencil,"1")==0;
+    bool use_stencil=phase==4u&&(!stencil||strcmp(stencil,"1")==0);
     if(use_stencil) path=gpu->runtime_body_consumers?"build/shaders/runtime/mpm_stencil.comp.spv":
                                                      "build/shaders/mpm_stencil.comp.spv";
     VkShaderModule module = VK_NULL_HANDLE;
@@ -150,18 +150,20 @@ static bool component_pipelines(dc_gpu_t *gpu, char *err, uint32_t cap) {
 
 bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     const char *fused=getenv("DC_MPM_FUSED_GRID");
-    gpu->mpm_fused_grid=fused&&strcmp(fused,"1")==0;
-    if(!make_pipeline(gpu,"build/shaders/mpm.comp.spv",UINT32_MAX,&gpu->mpm_pipeline,err,cap)) return false;
+    gpu->mpm_fused_grid=!fused||strcmp(fused,"1")==0;
+    if(!make_pipeline(gpu,"build/shaders/mpm.comp.spv",UINT32_MAX,&gpu->mpm_pipeline,err,cap)||
+       !dc_gpu_mpm_swap_init(gpu,err,cap)) return false;
     const char *variant=getenv("DC_MPM_KERNELS");
-    bool specialized=variant&&strcmp(variant,"specialized")==0;
+    bool specialized=!variant||strcmp(variant,"specialized")==0;
     if(variant&&!specialized&&strcmp(variant,"generic")!=0) return error(err,cap,"Invalid MPM kernel variant");
-    for(uint32_t phase=0;specialized&&phase<DC_GPU_MPM_PHASE_COUNT;phase++)
+    for(uint32_t phase=0;specialized&&phase<DC_GPU_MPM_PHASE_COUNT;phase++) {
+        if(phase==5u&&gpu->mpm_swap_buffers) continue;
         if(!make_pipeline(gpu,"build/shaders/mpm.comp.spv",phase,&gpu->mpm_phase_pipelines[phase],err,cap)) return false;
+    }
     const char *commit=getenv("DC_MPM_COMMIT");
-    if(!specialized&&commit&&strcmp(commit,"packed")==0&&
+    if(!specialized&&!gpu->mpm_swap_buffers&&commit&&strcmp(commit,"packed")==0&&
        !make_pipeline(gpu,"build/shaders/mpm.comp.spv",5u,&gpu->mpm_phase_pipelines[5],err,cap)) return false;
-    return dc_gpu_mpm_swap_init(gpu,err,cap) &&
-           make_pipeline(gpu,"build/shaders/mpm_active.comp.spv",UINT32_MAX,
+    return make_pipeline(gpu,"build/shaders/mpm_active.comp.spv",UINT32_MAX,
                          &gpu->mpm_activity_pipeline,err,cap) &&
            dc_gpu_mpm_compaction_pipeline_init(gpu,err,cap) &&
            make_pipeline(gpu,"build/shaders/mpm_component.comp.spv",UINT32_MAX,

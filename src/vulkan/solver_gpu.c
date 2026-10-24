@@ -136,7 +136,9 @@ static bool pixel_hydro_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
 
 static VkResult solver_phase_pipeline(dc_gpu_t *gpu,VkShaderModule module,uint32_t mode,
                                       bool capture,VkPipeline *pipeline) {
-    uint32_t values[]={mode,gpu->solver_grouped_reductions,gpu->solver_skip_zero_reductions,
+    bool skip_zero=gpu->solver_skip_zero_reductions&&
+        !(capture&&(mode==SOLVER_SOLVE||mode==SOLVER_IMPULSE));
+    uint32_t values[]={mode,gpu->solver_grouped_reductions,skip_zero,
         gpu->solver_fused_grain,capture};
     const VkSpecializationMapEntry entries[]={{0u,0u,4u},{5u,4u,4u},{4u,8u,4u},{6u,12u,4u},{7u,16u,4u}};
     VkSpecializationInfo phase={.mapEntryCount=5,.pMapEntries=entries,
@@ -164,9 +166,9 @@ bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     const char *fused=getenv("DC_SOLVER_FUSED_GRAIN");
     const char *overlap=getenv("DC_SOLVER_APPLY_OVERLAP");
     gpu->solver_fused_grain=fused&&strcmp(fused,"1")==0;
-    gpu->solver_apply_overlap=overlap&&strcmp(overlap,"1")==0;
+    gpu->solver_apply_overlap=!overlap||strcmp(overlap,"1")==0;
     gpu->solver_grouped_reductions=grouped&&strcmp(grouped,"1")==0;
-    gpu->solver_skip_zero_reductions=zero&&strcmp(zero,"1")==0;
+    gpu->solver_skip_zero_reductions=!zero||strcmp(zero,"1")==0;
     for (uint32_t mode = 0;
          mode < DC_GPU_SOLVER_PHASE_COUNT && result == VK_SUCCESS; ++mode) {
         if(graph_only_phase(mode)&&!gpu->structural_graph_possible) continue;

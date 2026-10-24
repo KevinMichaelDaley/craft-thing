@@ -154,6 +154,7 @@ struct dc_gpu {
                contact_pixel_finish_pipeline, contact_pixel_work_pipeline;
     VkPipeline contact_terrain_pipeline;
     VkPipeline contact_boundary_pipeline;
+    bool contact_boundary_cache_enabled;
     bool contact_caches_reusable;
     VkPipeline solver_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
     VkPipeline solver_unstructured[2];
@@ -337,8 +338,9 @@ static inline uint32_t dc_gpu_contact_work_word_offset(const dc_gpu_t *gpu) {
 static inline VkDeviceSize dc_gpu_contact_work_bytes(const dc_gpu_t *gpu) {
     uint32_t pairs=gpu->runtime_pair_capacity?gpu->runtime_pair_capacity:DC_GPU_BROADPHASE_PAIR_CAPACITY;
     VkDeviceSize chunks=(VkDeviceSize)((gpu->width+63u)/64u)*((gpu->height+63u)/64u);
-    return gpu->runtime_bodies?(4u+(VkDeviceSize)pairs*DC_CONTACT_PIXEL_GROUPS*2u+chunks+
-        2u*(VkDeviceSize)dc_gpu_pixel_pool_capacity(gpu))*sizeof(uint32_t):0u;
+    VkDeviceSize boundaries=gpu->contact_boundary_cache_enabled?
+        2u*(VkDeviceSize)dc_gpu_pixel_pool_capacity(gpu):0u;
+    return gpu->runtime_bodies?(4u+(VkDeviceSize)pairs*DC_CONTACT_PIXEL_GROUPS*2u+chunks+boundaries)*sizeof(uint32_t):0u;
 }
 static inline VkDeviceSize dc_gpu_body_storage_bytes(const dc_gpu_t *gpu) {
     return dc_gpu_legacy_body_storage_bytes(gpu) +

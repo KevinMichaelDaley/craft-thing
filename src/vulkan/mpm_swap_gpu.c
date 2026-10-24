@@ -6,7 +6,7 @@
 
 bool dc_gpu_mpm_swap_init(dc_gpu_t *g,char *err,uint32_t cap) {
     const char *control=getenv("DC_MPM_PARTICLE_SWAP");
-    g->mpm_swap_buffers=control&&strcmp(control,"1")==0;
+    g->mpm_swap_buffers=!control||strcmp(control,"1")==0;
     if(!g->mpm_swap_buffers) return true;
     VkShaderModule module=VK_NULL_HANDLE;
     if(!dc_gpu_load_shader_module(g,"build/shaders/mpm.comp.spv",&module,err,cap)) return false;

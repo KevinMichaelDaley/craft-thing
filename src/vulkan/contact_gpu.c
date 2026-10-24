@@ -1,6 +1,5 @@
 #include <stddef.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "contact_shader_contract.h"
@@ -53,8 +52,7 @@ bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
             .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = module, .pName = "main" },
         .layout = gpu->pipeline_layout };
     VkResult result = VK_SUCCESS;
-    const char *body_cache=getenv("DC_CONTACT_BODY_CACHE");
-    uint32_t cache_enabled=!(body_cache&&strcmp(body_cache,"0")==0);
+    uint32_t cache_enabled=gpu->contact_boundary_cache_enabled;
     VkSpecializationMapEntry generic_entries[]={{.constantID=0,.offset=0,.size=4},
         {.constantID=33,.offset=4,.size=4}};
     for (uint32_t phase=0; phase<DC_GPU_CONTACT_PHASE_COUNT && result==VK_SUCCESS; ++phase) {
