@@ -46,7 +46,8 @@ static bool records_valid(fr_reactive_record_t *records,uint32_t count,uint64_t 
     if(next==0) return error(err,cap,"Reactive identity counter cannot wrap");
     for(uint32_t i=0;i<count;i++)
         if(!fr_reactive_owner_valid(&records[i].owner,err,cap)||
-           !fr_reactive_state_valid(&records[i].state,err,cap)||parcel_id(&records[i])>=next)
+           !fr_reactive_state_valid(&records[i].state,err,cap)||parcel_id(&records[i])>=next||
+           ((uint64_t)records[i].state.origin_id_low|((uint64_t)records[i].state.origin_id_high<<32))>=next)
             return error(err,cap,"Invalid reactive snapshot identity/state/counter");
     if(count>1) qsort(records,count,sizeof(*records),parcel_order);
     for(uint32_t i=1;i<count;i++) if(parcel_id(&records[i-1])==parcel_id(&records[i]))
@@ -127,10 +128,11 @@ bool fr_reactive_snapshot_read(const char *path,fr_reactive_record_t *records,ui
     }
     if(bytes) okay=fread(payload,bytes,1,file)==1;
     if(fclose(file)!=0) okay=false;
+    if(!okay) {free(payload);free(copy);return error(err,cap,"Truncated reactive snapshot payload");}
     uint64_t hash=hash_bytes(UINT64_C(14695981039346656037),encoded,8u*4u);
     hash=hash_bytes(hash,payload,bytes);
     uint64_t stored=(uint64_t)header[8]|((uint64_t)header[9]<<32);
-    if(!okay||hash!=stored) {free(payload);free(copy);return error(err,cap,"Reactive snapshot checksum mismatch");}
+    if(hash!=stored) {free(payload);free(copy);return error(err,cap,"Reactive snapshot checksum mismatch");}
     for(uint32_t i=0;i<header[4];i++) {
         uint32_t words[RECORD_WORDS];decode(words,payload+(size_t)i*sizeof(*copy),RECORD_WORDS);
         memcpy(copy+i,words,sizeof(words));
