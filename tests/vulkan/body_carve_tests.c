@@ -1,6 +1,8 @@
+#define _POSIX_C_SOURCE 200809L
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include "compound_fixture.h"
 #include "../../src/vulkan/gpu_internal.h"
 #include "../../src/vulkan/runtime_body_gpu.h"
@@ -19,6 +21,39 @@ VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkAllocateMemory(VkDevice device,const VkM
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() g_pass++
+
+static void test_large_body_brush_preserves_mass_with_bounded_latency(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    ASSERT_TRUE(dc_gpu_create(&g,192,192,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    for(unsigned cy=0;cy<3;cy++) for(unsigned cx=0;cx<3;cx++) {
+        memset(chunk,0,sizeof(*chunk));chunk->coord=(dc_chunk_coord_t){cx,cy};
+        for(unsigned y=0;y<64;y++) for(unsigned x=0;x<64;x++) {
+            unsigned wx=cx*64+x,wy=cy*64+y;
+            if(wx>0&&wx<191&&wy>0&&wy<191) chunk->cells[y*64+x].material=DC_MATERIAL_WOOD;
+        }
+        ASSERT_TRUE(dc_gpu_upload_chunk(g,cy*3+cx,chunk,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_page(g,cx,cy,cy*3+cx,err,sizeof(err)));
+    }
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
+    for(unsigned i=0;i<4;i++) ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_runtime_prepare_fragments(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,0,0,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    struct timespec before,after;clock_gettime(CLOCK_MONOTONIC,&before);
+    ASSERT_TRUE(dc_gpu_paint_material(g,96,96,4,DC_MATERIAL_AIR,err,sizeof(err)));
+    clock_gettime(CLOCK_MONOTONIC,&after);
+    double ms=(after.tv_sec-before.tv_sec)*1000.+(after.tv_nsec-before.tv_nsec)/1e6;
+    unsigned removed=0;for(int y=-4;y<=4;y++) for(int x=-4;x<=4;x++) removed+=x*x+y*y<=16;
+    dc_gpu_body_pixel_t *pixels=calloc(190u*190u,sizeof(*pixels));unsigned count=0;ASSERT_TRUE(pixels);
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,pixels,190u*190u,&count,err,sizeof(err)));
+    ASSERT_EQ(count,190u*190u-removed);
+    dc_gpu_body_motion_t motion;ASSERT_TRUE(dc_gpu_read_body_motion(g,0x80000001u,&motion,err,sizeof(err)));
+    ASSERT_TRUE(fabsf(motion.mass-count*.6f)<.01f);
+    printf("Large body air brush: %.3f ms, %u remaining pixels\n",ms,count);
+    dc_gpu_destroy(g);free(chunk);free(pixels);
+    ASSERT_TRUE(ms<30.);
+    PASS();
+}
 
 static void test_air_carves_colored_body_and_splits_remaining_components(void) {
     char err[256];dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));
@@ -295,6 +330,11 @@ static void test_leaf_impact_crumbles_canopy(void) {
 }
 
 int main(void) {
+    if(getenv("DC_TEST_LARGE_BRUSH_ONLY")) {
+        RUN(test_large_body_brush_preserves_mass_with_bounded_latency);
+        return g_fail!=0;
+    }
+    RUN(test_large_body_brush_preserves_mass_with_bounded_latency);
     RUN(test_trunk_only_carve_preserves_attached_canopy);
     RUN(test_leaf_impact_crumbles_canopy);
     RUN(test_broken_leaf_canopy_crumbles_without_losing_wood);
