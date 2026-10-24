@@ -48,6 +48,13 @@ class RuntimeRootStorageTests(unittest.TestCase):
         decorations = root_decorations("build/shaders/runtime_body_index.comp.spv", "BodyStorageDirectory")
         self.assertNotIn(24, decorations)
 
+    def test_selected_consumers_keep_record_slabs_disjoint_and_writable(self):
+        for shader in ("rigid_solver", "rigid", "pattern", "scene"):
+            with self.subTest(shader=shader):
+                decorations = root_decorations(f"build/shaders/runtime/{shader}.comp.spv", "BodyStorageRecords")
+                self.assertIn(19, decorations)
+                self.assertNotIn(24, decorations)
+
 
 if __name__ == "__main__":
     unittest.main()
