@@ -45,7 +45,7 @@ static bool fixture_solid(unsigned kind,int x,int y,unsigned side) {
     return x>=0&&y>=0&&(unsigned)x<side&&(unsigned)y<side&&occupied(kind,(unsigned)x,(unsigned)y,side);
 }
 static bool cached_boundaries_match_fixture(dc_gpu_t *g,unsigned kind,unsigned side) {
-    if(!g->runtime_body_consumers) return true;
+    if(!g->runtime_body_consumers||!g->contact_boundary_pipeline) return true;
     const uint32_t *words=g->body_mapped;
     const dc_gpu_body_record_t *body=dc_gpu_body_record(g,0);
     if(!(body->piece_count&DC_GPU_PIXEL_BODY_FLAG)) body=dc_gpu_body_record(g,1);
@@ -80,6 +80,8 @@ static void measure(unsigned side, unsigned kind, unsigned pair_kind) {
     dc_gpu_t *g = NULL;
     ASSERT_TRUE(side >= 8 && side <= 96 && kind <= 2 && pair_kind <= 4);
     ASSERT_TRUE(dc_gpu_create(&g, 256, 256, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    const char *cache_control=getenv("DC_CONTACT_BODY_CACHE");
+    if(cache_control&&strcmp(cache_control,"0")==0) ASSERT_TRUE(g->contact_boundary_pipeline==VK_NULL_HANDLE);
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     ASSERT_TRUE(chunk);
     unsigned area = 0, boundary = 0, perimeter = 0;
