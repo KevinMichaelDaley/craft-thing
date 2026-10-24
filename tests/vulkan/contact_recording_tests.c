@@ -6,7 +6,7 @@
 static int g_pass,g_fail;
 static unsigned dispatches,barriers,points[8];
 static VkMemoryBarrier2 memory[8];
-static unsigned mode,terrain_builds;
+static unsigned mode,terrain_builds,boundary_builds;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -18,7 +18,7 @@ VKAPI_ATTR void VKAPI_CALL vkCmdBindDescriptorSets(VkCommandBuffer c,VkPipelineB
 }
 VKAPI_ATTR void VKAPI_CALL vkCmdBindPipeline(VkCommandBuffer c,VkPipelineBindPoint p,VkPipeline pipeline) {(void)c;(void)p;(void)pipeline;}
 VKAPI_ATTR void VKAPI_CALL vkCmdPushConstants(VkCommandBuffer c,VkPipelineLayout l,VkShaderStageFlags f,uint32_t o,uint32_t n,const void *v) {(void)c;(void)l;(void)f;(void)o;(void)n;mode=((const uint32_t *)v)[2]&255u;}
-VKAPI_ATTR void VKAPI_CALL vkCmdDispatch(VkCommandBuffer c,uint32_t x,uint32_t y,uint32_t z) {(void)c;(void)x;(void)y;(void)z;dispatches++;terrain_builds+=mode==6u;}
+VKAPI_ATTR void VKAPI_CALL vkCmdDispatch(VkCommandBuffer c,uint32_t x,uint32_t y,uint32_t z) {(void)c;(void)x;(void)y;(void)z;dispatches++;terrain_builds+=mode==6u;boundary_builds+=mode==7u;}
 VKAPI_ATTR void VKAPI_CALL vkCmdDispatchIndirect(VkCommandBuffer c,VkBuffer b,VkDeviceSize o) {(void)c;(void)b;(void)o;dispatches++;}
 VKAPI_ATTR void VKAPI_CALL vkCmdPipelineBarrier2(VkCommandBuffer c,const VkDependencyInfo *info) {
     (void)c;
@@ -60,14 +60,15 @@ static void test_generic_reference_keeps_both_dependency_boundaries(void) {recor
 static void test_standalone_contacts_refresh_terrain_but_substeps_reuse_it(void) {
     dc_gpu_t gpu={.width=128,.height=64,.body_count=1,.runtime_body_consumers=true,
         .contact_pixel_pipeline=(VkPipeline)(uintptr_t)4,
-        .contact_terrain_pipeline=(VkPipeline)(uintptr_t)5};
-    terrain_builds=0;dc_gpu_record_contacts(&gpu);
-    ASSERT_EQ(terrain_builds,1u);
+        .contact_terrain_pipeline=(VkPipeline)(uintptr_t)5,
+        .contact_boundary_pipeline=(VkPipeline)(uintptr_t)6};
+    terrain_builds=boundary_builds=0;dc_gpu_record_contacts(&gpu);
+    ASSERT_EQ(terrain_builds,1u);ASSERT_EQ(boundary_builds,1u);
     gpu.solver_recording=true;
     for(unsigned step=0;step<8;step++) dc_gpu_record_contacts(&gpu);
-    ASSERT_EQ(terrain_builds,1u);
+    ASSERT_EQ(terrain_builds,1u);ASSERT_EQ(boundary_builds,1u);
     gpu.solver_recording=false;dc_gpu_record_contacts(&gpu);
-    ASSERT_EQ(terrain_builds,2u);PASS();
+    ASSERT_EQ(terrain_builds,2u);ASSERT_EQ(boundary_builds,2u);PASS();
 }
 int main(void) {
     RUN(test_atomic_candidate_passes_publish_together);
