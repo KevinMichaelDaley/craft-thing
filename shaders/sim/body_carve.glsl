@@ -1,6 +1,6 @@
 /* Brush transactions reuse the fracture reservation/publication gate. */
 #ifndef DC_CARVE_REUSE_CLASSIFICATION
-#define DC_CARVE_REUSE_CLASSIFICATION 0
+#define DC_CARVE_REUSE_CLASSIFICATION 1
 #endif
 #ifdef DC_CARVE_WORK_PROFILE
 layout(set=0,binding=31,std430) restrict buffer CarveWorkProfile {uint carve_work_profile[];};
@@ -124,11 +124,32 @@ void carve_bodies() {
             }
         }
         memoryBarrierBuffer();barrier();
+#if DC_CARVE_REUSE_CLASSIFICATION
+        if(carve_pending!=0u) {
+            vec2 position=vec2(carve_source.x_fp,carve_source.y_fp)/65536.;
+            vec2 radius=vec2(float(params.origin_y.x));
+            vec2 low=vec2(params.origin_x)-radius-position;
+            uvec4 query=body_piece_query(carve_source,low,low+2.*radius+1.);
+            uint area=body_pieces(carve_source);
+            bool local=query.z==0u?true:query.w<=area/query.z;
+            uint work=local?query.z*query.w:area;
+            for(uint ordinal=lane;ordinal<work;ordinal+=gl_WorkGroupSize.x) {
+                uint pixel=local?query_piece(carve_source,query,ordinal):ordinal;
+                if(pixel==0xffffffffu) continue;
+                if(carve_mask_material(carve_source,pixel)!=0u&&carve_pixel(carve_source,pixel))
+                    atomicOr(carve_hits,1u);
+            }
+        }
+        memoryBarrierBuffer();barrier();
+        if(lane==0u&&carve_hits==0u) carve_pending=0u;
+        memoryBarrierBuffer();barrier();
+#endif
         if(carve_pending!=0u) {
             for(uint pixel=lane;pixel<body_pieces(carve_source);pixel+=gl_WorkGroupSize.x) {
                 uint material=carve_mask_material(carve_source,pixel);
                 bool hit=material!=0u&&carve_pixel(carve_source,pixel);
-                DC_FRAGMENT_LABEL(pixel)=hit?0xffffffffu:0u;
+                bool blocked=hit||(DC_CARVE_REUSE_CLASSIFICATION!=0&&material==0u);
+                DC_FRAGMENT_LABEL(pixel)=blocked?0xffffffffu:0u;
                 if(hit) atomicOr(carve_hits,1u);
                 if(hit&&material==5u) atomicOr(carve_leaf_hits,1u);
             }
