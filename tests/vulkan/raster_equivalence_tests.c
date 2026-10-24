@@ -100,6 +100,59 @@ static bool equal_pixel_contacts(dc_gpu_t *g,char *err) {
     printf("concave typed contacts: %u constraints body%d terrain%d grain%d exact%d\n",expected.count,body,terrain,grain,equal);
     free(reference);free(actual);return equal;
 }
+static VkPipeline raster_team_pipeline(dc_gpu_t *g,const char *path) {
+    VkShaderModule module;char err[256];
+    if(!dc_gpu_load_shader_module(g,path,&module,err,sizeof(err))) return VK_NULL_HANDLE;
+    uint32_t phase=1;VkSpecializationMapEntry entry={0,0,4};
+    VkSpecializationInfo spec={1,&entry,sizeof(phase),&phase};
+    VkComputePipelineCreateInfo info={.sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_COMPUTE_BIT,
+            .module=module,.pName="main",.pSpecializationInfo=&spec},.layout=g->pipeline_layout};
+    VkPipeline pipeline=VK_NULL_HANDLE;
+    vkCreateComputePipelines(g->device,VK_NULL_HANDLE,1,&info,NULL,&pipeline);
+    vkDestroyShaderModule(g->device,module,NULL);return pipeline;
+}
+static bool bounded_raster_teams_match_frozen_scan(dc_gpu_t *g,char *err) {
+    for(unsigned i=0;i<83;i++) {
+        unsigned x=3u+i%10u*10u,y=4u+i/10u*11u;
+        dc_gpu_world_body_t b={.body={.id=100u+i,.active=1,.width=6,.height=6,
+            .x_fp=(int32_t)((x%64u)*65536u+(i*997u)%65536u),
+            .y_fp=(int32_t)((y%64u)*65536u+(i*619u)%65536u)},.chunk={x/64u,y/64u}};
+        if(!dc_gpu_spawn_world_body(g,b,err,256)||
+           !dc_gpu_set_body_motion(g,b.body.id,.013f*(i%7u),0,DC_GPU_BODY_KINEMATIC,err,256)) {
+            printf("raster fixture body%u: %s\n",i,err);return false;
+        }
+    }
+    if(!dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,256)) return false;
+    VkBuffer counter;VkDeviceMemory memory;uint32_t *count;
+    if(!dc_gpu_make_mapped_buffer(g,16,&counter,&memory,(void **)&count,err,256)) return false;
+    VkDescriptorBufferInfo buffer={counter,0,16};
+    VkWriteDescriptorSet write={.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=g->descriptor,
+        .dstBinding=31,.descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&buffer};
+    vkUpdateDescriptorSets(g->device,1,&write,0,NULL);
+    size_t bytes=(size_t)g->width*g->height*20u;void *reference=malloc(bytes);
+    if(!reference) return false;
+    const char *paths[]={"build/diagnostics/raster_team_reference.spv","build/diagnostics/raster_team_profile.spv"};
+    uint32_t barriers[2]={0};bool exact=true;
+    for(unsigned variant=0;variant<2;variant++) {
+        VkPipeline pipeline=raster_team_pipeline(g,paths[variant]);
+        if(!pipeline) return false;
+        *count=0;
+        if(!raster_once(g,pipeline)) return false;
+        barriers[variant]=*count;
+        if(!variant) memcpy(reference,g->occupancy_mapped,bytes);
+        else exact=memcmp(reference,g->occupancy_mapped,bytes)==0;
+        vkDestroyPipeline(g->device,pipeline,NULL);
+    }
+    uint32_t teams=((g->width+15u)/16u)*((g->height+15u)/16u);
+    uint32_t batches=(dc_gpu_runtime_body_count(g)+63u)/64u,limit=4u*teams*batches;
+    printf("raster candidate team barriers%u -> %u (limit%u), %u slots, exact five planes%d\n",
+        barriers[0],barriers[1],limit,dc_gpu_runtime_body_count(g),exact);
+    buffer=(VkDescriptorBufferInfo){g->fluid_previous_buffer,0,(VkDeviceSize)g->width*g->height*4u};
+    vkUpdateDescriptorSets(g->device,1,&write,0,NULL);
+    free(reference);vkUnmapMemory(g->device,memory);vkDestroyBuffer(g->device,counter,NULL);vkFreeMemory(g->device,memory,NULL);
+    return exact&&barriers[0]==15u*teams*batches&&barriers[1]<=limit&&batches>1u;
+}
 static void test_two_rotated_concave_bodies_use_exact_pixel_raster(void) {
     char err[256];dc_gpu_t *g=NULL;
     ASSERT_TRUE(dc_gpu_create(&g,123,117,"build/shaders/pattern.comp.spv",err,sizeof(err)));
@@ -162,6 +215,7 @@ static void test_two_rotated_concave_bodies_use_exact_pixel_raster(void) {
     printf("all overlays and cropped views draw byte-identical paused images; hidden legacy selects generic\n");
     memset(legacy,0,sizeof(*legacy));
     ASSERT_TRUE(equal_pixel_contacts(g,err));
+    ASSERT_TRUE(bounded_raster_teams_match_frozen_scan(g,err));
     dc_gpu_destroy(g);PASS();
 }
 int main(void) {

@@ -1494,6 +1494,14 @@ test: build/mpm_transfer_load_tests
 
 build/diagnostics/quarter_app_frame_trace build/diagnostics/native360_frame_trace: tools/diagnostics/frame_api_trace.h
 
+build/diagnostics/raster_team_profile.spv: shaders/sim/rigid.comp $(wildcard shaders/sim/*.glsl) Makefile
+	mkdir -p $(dir $@)
+	$(GLSLANG) -DDC_RASTER_TEAM_PROFILE=1 -DDC_RUNTIME_BODY_STORAGE=1 -V --target-env vulkan1.3 -S comp -o $@ $<
+build/diagnostics/raster_team_reference.spv: shaders/sim/rigid.comp tests/vulkan/raster_team_reference.glsl $(wildcard shaders/sim/*.glsl) Makefile
+	mkdir -p $(dir $@)
+	$(GLSLANG) -DDC_RASTER_REFERENCE_TEAM=1 -DDC_RASTER_TEAM_PROFILE=1 -DDC_RUNTIME_BODY_STORAGE=1 -V --target-env vulkan1.3 -S comp -o $@ $<
+build/raster_equivalence_tests: build/diagnostics/raster_team_profile.spv build/diagnostics/raster_team_reference.spv
+
 build/transport_options_tests: tests/vulkan/transport_options_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_load_shader_module -Wl,--wrap=dc_gpu_pressure_work_init
 .PHONY: test_transport_options

@@ -12,6 +12,27 @@ const uint RASTER_MODE=1u, PREPARE_MODE=2u, PHYSICAL_MASK=128u, MODE_MASK=127u;
 shared uint raster_ids[64];
 shared uint raster_count;
 shared uint raster_legacy[64];
+#ifdef DC_RASTER_TEAM_PROFILE
+layout(set=0,binding=31,std430) buffer RasterTeamProfile {uint raster_profile[];};
+void raster_barrier() {barrier();if(gl_LocalInvocationIndex==0u) atomicAdd(raster_profile[0],1u);}
+#else
+#define raster_barrier() barrier()
+#endif
+#ifdef DC_RASTER_REFERENCE_TEAM
+#include "../../tests/vulkan/raster_team_reference.glsl"
+#else
+void select_raster_team(uint lane,uint slot,bool selected) {
+    if(lane<64u) raster_legacy[lane]=uint(selected);
+    raster_barrier();
+    for(uint stride=1u;stride<64u;stride*=2u) {
+        uint prior=lane<64u&&lane>=stride?raster_legacy[lane-stride]:0u;
+        raster_barrier();if(lane<64u) raster_legacy[lane]+=prior;raster_barrier();
+    }
+    if(lane<64u&&selected) raster_ids[raster_legacy[lane]-1u]=slot;
+    if(lane==0u) raster_count=raster_legacy[63];
+    raster_barrier();
+}
+#endif
 
 layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 chunk_cells[]; };
 layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
@@ -178,16 +199,8 @@ void main() {
                 ivec2 high=max(DC_BODY(slot).bounds_high,DC_BODY(slot).swept_high);
                 selected=all(lessThan(tile_low,high))&&all(greaterThan(tile_high,low));
             }
-            raster_legacy[lane]=uint(selected);
         }
-        barrier();
-        for(uint stride=1u;stride<64u;stride*=2u) {
-            uint prior=lane<64u&&lane>=stride?raster_legacy[lane-stride]:0u;
-            barrier();if(lane<64u) raster_legacy[lane]+=prior;barrier();
-        }
-        if(lane<64u&&selected) raster_ids[raster_legacy[lane]-1u]=slot;
-        if(lane==0u) raster_count=raster_legacy[63];
-        barrier();
+        select_raster_team(lane,slot,selected);
     for (uint ordinal_id = 0u; valid_cell&&ordinal_id < raster_count; ++ordinal_id) {
         uint i = raster_ids[ordinal_id];
         ivec2 cell = ivec2(p);
@@ -220,7 +233,7 @@ void main() {
         }
         if (crossed && (swept == 0u || body.id < swept)) swept = body.id;
     }
-        barrier();
+        raster_barrier();
     }
     if(!valid_cell) return;
     uint index = p.y * params.width + p.x;
