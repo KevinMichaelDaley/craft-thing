@@ -468,11 +468,11 @@ $(MARKER_SHADER): shaders/sim/marker.comp
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
 
-build/shaders/projection.comp.spv: shaders/sim/projection.comp
+build/shaders/projection.comp.spv: shaders/sim/projection.comp shaders/sim/pressure_stencil_pack.glsl
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
 
-build/shaders/pressure_stencil.comp.spv: shaders/sim/projection.comp
+build/shaders/pressure_stencil.comp.spv: shaders/sim/projection.comp shaders/sim/pressure_stencil_pack.glsl
 	@mkdir -p build/shaders
 	$(GLSLANG) -DDC_CACHE_PRESSURE_STENCIL=1 -V --target-env vulkan1.3 -S comp -o $@ $<
 

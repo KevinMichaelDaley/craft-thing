@@ -19,3 +19,7 @@ All65537 aperture codes and arbitrary32-bit cached payloads round-trip exactly w
 **2026-10-24T10:43:10Z**
 
 RED minimal GPU packet probe:65537 aperture codes preserve coefficients but lose65536 payloads and32768 validity flags. GREEN exact coefficient/flag and arbitrary32-bit payload round-trip passes all65537 codes under actual core/synchronization validation, within the original four words. Uses guaranteed zero mantissa bits plus a recoverable exponent bit; pressure-sweep integration and bytewise physical oracle next.
+
+**2026-10-24T11:03:26Z**
+
+Integrated binary-face divergence cache within the existing four words. Actual Vulkan core+synchronization validation pressure oracle 5/5: all pressure/velocity/cell bytes identical, including 8192 mixed partial-face cells and water edits between batches. Mapped allocations identical (62218924 bytes in fixture). Full displayed benchmark next; global frame target remains unmet.
