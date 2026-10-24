@@ -7,6 +7,7 @@ static int g_pass,g_fail;
 static uint32_t phase=UINT32_MAX,solver_barriers,host_publications,bad_dependencies,nested_host_publications;
 static uint32_t indirect_publications;
 static bool runtime_fixture;
+static uint32_t bond_dispatches;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -22,7 +23,7 @@ VKAPI_ATTR void VKAPI_CALL vkCmdBindPipeline(VkCommandBuffer c,VkPipelineBindPoi
 }
 VKAPI_ATTR void VKAPI_CALL vkCmdPushConstants(VkCommandBuffer c,VkPipelineLayout l,VkShaderStageFlags f,uint32_t o,uint32_t n,const void *v) {(void)c;(void)l;(void)f;(void)o;(void)n;(void)v;}
 VKAPI_ATTR void VKAPI_CALL vkCmdDispatch(VkCommandBuffer c,uint32_t x,uint32_t y,uint32_t z) {(void)c;(void)x;(void)y;(void)z;}
-VKAPI_ATTR void VKAPI_CALL vkCmdDispatchIndirect(VkCommandBuffer c,VkBuffer b,VkDeviceSize o) {(void)c;(void)b;(void)o;}
+VKAPI_ATTR void VKAPI_CALL vkCmdDispatchIndirect(VkCommandBuffer c,VkBuffer b,VkDeviceSize o) {(void)c;(void)b;(void)o;if(phase>=12u&&phase<=14u) bond_dispatches++;}
 VKAPI_ATTR void VKAPI_CALL vkCmdPipelineBarrier2(VkCommandBuffer c,const VkDependencyInfo *info) {
     (void)c;
     if(phase==UINT32_MAX) {
@@ -82,7 +83,16 @@ static void test_reference_and_extreme_origins_keep_conservative_barriers(void) 
     }
     PASS();
 }
+static void test_automatic_components_do_not_dispatch_empty_structural_bonds(void) {
+    dc_gpu_t gpu={.width=64,.height=64,.body_count=1,.structural_enabled=true};
+    for(unsigned i=0;i<DC_GPU_SOLVER_PHASE_COUNT;i++) gpu.solver_pipelines[i]=(VkPipeline)(uintptr_t)(i+1u);
+    bond_dispatches=0;dc_gpu_record_solver_uncached(&gpu);
+    printf("empty graph bond dispatches %u\n",bond_dispatches);
+    ASSERT_EQ(bond_dispatches,0u);PASS();
+}
 int main(void) {
+    RUN(test_automatic_components_do_not_dispatch_empty_structural_bonds);
+    phase=UINT32_MAX;solver_barriers=host_publications=bad_dependencies=nested_host_publications=indirect_publications=0;
     RUN(test_solver_publishes_to_host_once_after_all_iterations);
     RUN(test_runtime_solver_publishes_indirect_only_when_commands_change);
     RUN(test_reference_and_extreme_origins_keep_conservative_barriers);
