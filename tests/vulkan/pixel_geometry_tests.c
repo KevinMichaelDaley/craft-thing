@@ -168,7 +168,17 @@ static void test_dense_fragment_upgrade_records_actual_occupied_bounds(void) {
     PASS();
 }
 
+static void test_version_four_upgrade_is_independent_of_initial_runtime_arena(void) {
+    dc_gpu_t gpu={.width=64,.height=64,.pixel_pool_words=16};
+    dc_gpu_body_record_t bodies[64]={0};uint32_t words;
+    uint32_t *pixels=fixture(bodies,&words);ASSERT_TRUE(pixels);
+    ASSERT_TRUE(dc_gpu_upgrade_dense_pixels(&gpu,bodies,&pixels,&words));
+    ASSERT_EQ(words,42u);ASSERT_EQ(gpu.pixel_pool_words,16u);
+    float density;ASSERT_TRUE(dc_gpu_pixel_geometry_valid(bodies,pixels,words,&density));
+    free(pixels);PASS();
+}
 int main(void) {
+    RUN(test_version_four_upgrade_is_independent_of_initial_runtime_arena);
     RUN(test_version_four_upgrade_preserves_materials_and_empty_cells);
     RUN(test_corrupt_tiled_geometry_is_rejected);
     RUN(test_truncated_dense_upgrade_keeps_input_allocation);
