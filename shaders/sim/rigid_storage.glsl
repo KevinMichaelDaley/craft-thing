@@ -5,7 +5,12 @@
 #include "../../include/dungeoncraft/body_storage_layout.h"
 
 layout(buffer_reference,std430,buffer_reference_align=16) buffer BodyStorageRecords {Body records[];};
+#ifdef DC_RUNTIME_ROOT_READONLY
+layout(buffer_reference,std430,buffer_reference_align=8) readonly restrict buffer BodyStorageDirectory {BodyStoragePage pages[];};
+layout(buffer_reference,std430,buffer_reference_align=4) readonly restrict buffer BodyStorageGeometry {uint words[];};
+#else
 layout(buffer_reference,std430,buffer_reference_align=8) buffer BodyStorageDirectory {BodyStoragePage pages[];};
+#endif
 layout(buffer_reference,std430,buffer_reference_align=4) buffer BodyStorageWords {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=8) buffer BodyStorageOwners {BodyStorageOwner owners[];};
 

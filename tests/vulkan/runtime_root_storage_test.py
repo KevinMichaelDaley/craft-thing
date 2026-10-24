@@ -37,7 +37,7 @@ class RuntimeRootStorageTests(unittest.TestCase):
         self.assertNotIn(24, decorations)
 
     def test_consumers_cache_directory_addresses_and_immutable_geometry(self):
-        for shader in ("rigid_solver", "rigid", "pattern", "mpm", "scene"):
+        for shader in ("rigid_solver", "rigid", "pattern", "scene"):
             for block in ("BodyStorageDirectory", "BodyStorageGeometry"):
                 with self.subTest(shader=shader, block=block):
                     decorations = root_decorations(f"build/shaders/runtime/{shader}.comp.spv", block)

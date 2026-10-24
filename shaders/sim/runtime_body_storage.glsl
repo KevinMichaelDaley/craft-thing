@@ -34,7 +34,11 @@ RuntimeBodyWord runtime_body_data_word(uint index) {
 #define DC_SOLVER_DATA(index) runtime_body_data_word(index).value
 #define DC_BUFFER_DATA(index) DC_DATA(index)
 #define DC_SUPPORT_DATA(index) DC_DATA(index)
+#ifdef DC_RUNTIME_ROOT_READONLY
+#define DC_PIXEL_WORD(index) BodyStorageGeometry(runtime_body_root.geometry).words[index]
+#else
 #define DC_PIXEL_WORD(index) BodyStorageWords(runtime_body_root.geometry).words[index]
+#endif
 #define DC_RUNTIME_BODY_STATE(slot) (0x80000000u|((slot)*64u))
 #define DC_BODY_CLIPPED(slot) DC_SOLVER_DATA(DC_RUNTIME_BODY_STATE(slot)+48u)
 #define DC_BODY_DEPENDENCIES(slot) DC_SOLVER_DATA(DC_RUNTIME_BODY_STATE(slot)+49u)
