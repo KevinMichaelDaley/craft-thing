@@ -263,10 +263,12 @@ void main() {
         return;
     }
 #ifdef DC_RUNTIME_BODY_STORAGE
-    contact_boundary_cached=(params.mode&4096u)!=0u;
-    contact_boundary_cache_base=boundary_cache_base();
-    contact_boundary_geometry_base=DC_RUNTIME_WORK(52u);
-    contact_boundary_geometry_capacity=2u*DC_RUNTIME_WORK(29u);
+    contact_boundary_cached=CONTACT_BOUNDARY_CACHE_ENABLED&&(params.mode&4096u)!=0u;
+    if(contact_boundary_cached) {
+        contact_boundary_cache_base=boundary_cache_base();
+        contact_boundary_geometry_base=DC_RUNTIME_WORK(52u);
+        contact_boundary_geometry_capacity=2u*DC_RUNTIME_WORK(29u);
+    }
 #endif
     if(CONTACT_PHASE==6u) {
 #ifdef DC_RUNTIME_BODY_STORAGE

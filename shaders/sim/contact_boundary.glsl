@@ -6,6 +6,7 @@
 #ifndef DC_CONTACT_BOUNDARY_CACHE
 #define DC_CONTACT_BOUNDARY_CACHE 1
 #endif
+layout(constant_id=33) const bool CONTACT_BOUNDARY_CACHE_ENABLED=true;
 bool contact_boundary_cached=false;
 uint contact_boundary_cache_base=0u;
 uint contact_boundary_geometry_base=0u,contact_boundary_geometry_capacity=0u;

@@ -27,3 +27,7 @@ Automatic large-component geometry growth passes actual core+synchronization val
 **2026-10-24T12:02:05Z**
 
 Removed the redundant post-solver cache rebuild while keeping standalone queries fresh. CPU recording regression3/3 and real Wayland500-frame replay with stable four paused captures pass correctness;28.144ms mean35.282ms worst (quiet repeat28.158/34.860). Cache contents are identical across the intervening raster. Full frame gate still fails; next investigating repeated granular-particle buffer copies.
+
+**2026-10-24T18:32:28Z**
+
+Uncached comparison path and specialization33 both pass exact core+synchronization manifold oracle7/7. With no-cache specialization and alternating granular pools, displayed500-frame replay23.864ms mean30.879ms worst; original resolution and paused pixels retained. Remaining measured peak is dominated by active cutting, so next targeting staged-color address work.
