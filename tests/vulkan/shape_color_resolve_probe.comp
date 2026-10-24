@@ -1,5 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_shuffle : require
 #define DC_RUNTIME_ROOT_READONLY 1
 #include "rigid_body.glsl"
 layout(local_size_x=32) in;
@@ -9,8 +11,11 @@ uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 #define DC_SHAPE_COLOR_PROFILE 1
 #include "shape_colors.glsl"
 void main() {
-    uint index=gl_GlobalInvocationID.x;
-    if(index>=3u) return;
+    uint index=gl_GlobalInvocationID.x/8u;
     uint target=params.mode+(index==1u?1u:params.origin_x.x+(index==2u?2u:0u));
-    shape_color_resolve(target);
+#ifdef DC_COOPERATIVE_SHAPE_COLORS
+    shape_color_resolve_cooperative(target,index<3u);
+#else
+    if(index<3u&&gl_LocalInvocationIndex%8u==0u) shape_color_resolve(target);
+#endif
 }

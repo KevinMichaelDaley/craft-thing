@@ -63,10 +63,11 @@ static void test_staged_colors_preserve_both_banks_with_bounded_address_work(voi
     unsigned errors=0;for(unsigned word=0;word<3;word++)
         errors+=memcmp(dc_gpu_shape_colors(g,targets[word]),expected[word],sizeof(expected[word]))!=0;
     uint32_t pool=((uint32_t *)mapped)[0],capacities=((uint32_t *)mapped)[1];
-    printf("resolved3 words: RGBA errors%u pool queries%u capacity queries%u\n",errors,pool,capacities);
+    uint32_t lanes=((uint32_t *)mapped)[2];
+    printf("resolved3 words: RGBA errors%u pool queries%u capacity queries%u copy lanes%u\n",errors,pool,capacities,lanes);
     vkDestroyPipeline(g->device,pipeline,NULL);vkDestroyShaderModule(g->device,module,NULL);
     vkUnmapMemory(g->device,memory);vkDestroyBuffer(g->device,profile,NULL);vkFreeMemory(g->device,memory,NULL);
-    dc_gpu_destroy(g);ASSERT_EQ(errors,0u);ASSERT_TRUE(pool<=3u);ASSERT_TRUE(capacities<=3u);PASS();
+    dc_gpu_destroy(g);ASSERT_EQ(errors,0u);ASSERT_TRUE(pool<=3u);ASSERT_TRUE(capacities<=3u);ASSERT_EQ(lanes,24u);PASS();
 }
 int main(void) {
     RUN(test_staged_colors_preserve_both_banks_with_bounded_address_work);
