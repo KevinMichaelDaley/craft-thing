@@ -219,7 +219,7 @@ void __wrap_dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase) {
                              pool, at + 1);
 }
 void __wrap_dc_gpu_record_mpm(dc_gpu_t *gpu) {
-    if(!coarse) gpu->solver_cache_disabled = true;
+    if(traced&&!coarse) gpu->solver_cache_disabled = true;
     stage(gpu, MPM, __real_dc_gpu_record_mpm);
 }
 void __wrap_fr_renderer_record(dc_gpu_t *gpu) {
@@ -236,7 +236,7 @@ void __wrap_dc_gpu_record_broadphase(dc_gpu_t *gpu) {
 }
 void __wrap_dc_gpu_record_solver(dc_gpu_t *gpu) {
     /* Per-dispatch query IDs are allocated anew for each detailed trace. */
-    if(!coarse) gpu->solver_cache_disabled = true;
+    if(traced&&!coarse) gpu->solver_cache_disabled = true;
     stage(gpu, SOLVER, __real_dc_gpu_record_solver);
 }
 
@@ -343,6 +343,13 @@ void __wrap_vkCmdDispatchIndirect(VkCommandBuffer command, VkBuffer buffer,
 
 bool __wrap_dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
                                        char *err, uint32_t cap) {
+    if(getenv("DC_FRAME_TRACE_API_ONLY")) {
+        coarse=true;
+        double began=seconds();
+        bool okay=__real_dc_gpu_present_chunks_steps(gpu,steps,err,cap);
+        printf("present-api,%u,wall%.3f,steps%u\n",frame,(seconds()-began)*1000.,steps);
+        frame_api_print(frame++);return okay;
+    }
     VkQueryPoolCreateInfo info = {
         .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
         .queryType = VK_QUERY_TYPE_TIMESTAMP, .queryCount = QUERY_CAPACITY};
