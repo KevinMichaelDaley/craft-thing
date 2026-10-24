@@ -1,10 +1,13 @@
+#define _POSIX_C_SOURCE 200809L
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "../../src/vulkan/gpu_internal.h"
 
 static int g_pass,g_fail;
 static unsigned pipelines,graph_pipelines,modules;
+static unsigned skipped_graph_capture,skipped_unstructured;
 static uint32_t fail_phase=UINT32_MAX;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
@@ -23,12 +26,16 @@ VKAPI_ATTR VkResult VKAPI_CALL vkCreateComputePipelines(VkDevice d,VkPipelineCac
     const VkComputePipelineCreateInfo *info,const VkAllocationCallbacks *a,VkPipeline *out) {
     (void)d;(void)c;(void)a;
     for(unsigned i=0;i<n;i++) {
-        uint32_t phase=UINT32_MAX,capture=1u;
+        uint32_t phase=UINT32_MAX,capture=1u,skip_zero=0u;
         const VkSpecializationInfo *spec=info[i].stage.pSpecializationInfo;
         for(unsigned entry=0;spec&&entry<spec->mapEntryCount;entry++) {
             const VkSpecializationMapEntry *map=spec->pMapEntries+entry;
             if(map->constantID==0u) memcpy(&phase,(const char *)spec->pData+map->offset,4);
             if(map->constantID==7u) memcpy(&capture,(const char *)spec->pData+map->offset,4);
+            if(map->constantID==4u) memcpy(&skip_zero,(const char *)spec->pData+map->offset,4);
+        }
+        if((phase==6u||phase==9u)&&skip_zero) {
+            skipped_graph_capture+=capture!=0u;skipped_unstructured+=capture==0u;
         }
         graph_pipelines+=(phase>=12u&&phase<=14u)||((phase==6u||phase==9u)&&capture);
         if(phase==fail_phase) {out[i]=VK_NULL_HANDLE;return VK_ERROR_OUT_OF_DEVICE_MEMORY;}
@@ -65,9 +72,20 @@ static void test_failed_graph_preparation_reuses_successful_variants_on_retry(vo
     ASSERT_TRUE(dc_gpu_solver_graph_prepare(&g,err,sizeof(err)));
     ASSERT_EQ(pipelines,before+2u);ASSERT_EQ(g.solver_pipelines[6],original);PASS();
 }
+static void test_zero_reduction_does_not_skip_structural_dependency_capture(void) {
+    dc_gpu_t g={.device=(VkDevice)(uintptr_t)1,.pipeline_layout=(VkPipelineLayout)(uintptr_t)2};
+    char err[128]={0};skipped_graph_capture=skipped_unstructured=0u;
+    ASSERT_EQ(setenv("DC_SOLVER_SKIP_ZERO_REDUCTIONS","1",1),0);
+    ASSERT_TRUE(dc_gpu_solver_pipeline_init(&g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_solver_graph_prepare(&g,err,sizeof(err)));
+    ASSERT_EQ(unsetenv("DC_SOLVER_SKIP_ZERO_REDUCTIONS"),0);
+    printf("zero-reduction variants: unstructured%u unsafe structural%u\n",skipped_unstructured,skipped_graph_capture);
+    ASSERT_EQ(skipped_unstructured,2u);ASSERT_EQ(skipped_graph_capture,0u);PASS();
+}
 int main(void) {
     RUN(test_automatic_body_context_does_not_compile_graph_only_variants);
     RUN(test_graph_boundary_prepares_variants_once);
     RUN(test_failed_graph_preparation_reuses_successful_variants_on_retry);
+    RUN(test_zero_reduction_does_not_skip_structural_dependency_capture);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
