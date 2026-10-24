@@ -296,6 +296,11 @@ bool dc_gpu_set_body_origin(dc_gpu_t *gpu, dc_chunk_coord_t origin,
     return submit_rigid(gpu, false, err, cap);
 }
 
+bool dc_gpu_prepare_body_origin(dc_gpu_t *gpu, dc_chunk_coord_t origin,
+                                char *err, uint32_t cap) {
+    return dc_gpu_set_body_origin(gpu,origin,err,cap);
+}
+
 bool dc_gpu_spawn_world_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
                               char *err, uint32_t cap) {
     if (!gpu || !body.body.id || !body.body.active || !body.body.width ||

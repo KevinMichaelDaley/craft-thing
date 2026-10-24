@@ -260,6 +260,10 @@ bool dc_gpu_read_body_shape(dc_gpu_t *gpu, uint32_t id, dc_gpu_body_shape_t *sha
 /** Set the world chunk represented by simulation cell (0,0), without advancing time. */
 bool dc_gpu_set_body_origin(dc_gpu_t *gpu, dc_chunk_coord_t origin,
                              char *err_buf, uint32_t err_cap);
+/** Stage an origin for the next physics tick without refreshing occupancy.
+ * Submit that tick before reading occupancy or resolving transfers. */
+bool dc_gpu_prepare_body_origin(dc_gpu_t *gpu, dc_chunk_coord_t origin,
+                                char *err_buf, uint32_t err_cap);
 /** Spawn or update a world-anchored body, including bodies outside the viewport. */
 bool dc_gpu_spawn_world_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
                               char *err_buf, uint32_t err_cap);

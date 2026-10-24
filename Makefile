@@ -1275,7 +1275,7 @@ build/body_color_tests: tests/vulkan/body_color_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/body_color_tests
 build/body_carve_tests: tests/vulkan/body_carve_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkAllocateMemory
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkAllocateMemory -Wl,--wrap=vkQueueSubmit
 test: build/body_carve_tests
 build/sequential_detachment_tests: tests/vulkan/sequential_detachment_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)

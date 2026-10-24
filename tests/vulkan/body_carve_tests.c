@@ -11,6 +11,13 @@
 
 static int g_pass,g_fail;
 static bool reject_allocations;
+static bool count_submits;
+static unsigned submissions;
+VKAPI_ATTR VkResult VKAPI_CALL __real_vkQueueSubmit(VkQueue queue,uint32_t count,const VkSubmitInfo *info,VkFence fence);
+VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkQueueSubmit(VkQueue queue,uint32_t count,const VkSubmitInfo *info,VkFence fence) {
+    if(count_submits) submissions++;
+    return __real_vkQueueSubmit(queue,count,info,fence);
+}
 VKAPI_ATTR VkResult VKAPI_CALL __real_vkAllocateMemory(VkDevice device,const VkMemoryAllocateInfo *info,const VkAllocationCallbacks *callbacks,VkDeviceMemory *memory);
 VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkAllocateMemory(VkDevice device,const VkMemoryAllocateInfo *info,const VkAllocationCallbacks *callbacks,VkDeviceMemory *memory) {
     if(reject_allocations) return VK_ERROR_OUT_OF_DEVICE_MEMORY;
@@ -21,6 +28,37 @@ VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkAllocateMemory(VkDevice device,const VkM
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() g_pass++
+
+static void test_cut_and_physics_tick_share_the_occupancy_refresh(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    dc_gpu_world_body_t b={.body={.id=1,.active=1,.width=2,.height=2,.x_fp=20<<16,.y_fp=20<<16}};
+    ASSERT_TRUE(dc_gpu_spawn_world_body(g,b,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,20,20,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(g->body_refresh_pending);
+    submissions=0;count_submits=true;
+    bool prepared=dc_gpu_prepare_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err));
+    count_submits=false;ASSERT_TRUE(prepared);ASSERT_EQ(submissions,0u);
+    ASSERT_TRUE(g->body_refresh_pending);
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(!g->body_refresh_pending);
+    unsigned occupied;
+    ASSERT_TRUE(dc_gpu_read_occupancy(g,20,20,&occupied,NULL,err,sizeof(err)));ASSERT_EQ(occupied,0u);
+    ASSERT_TRUE(dc_gpu_read_occupancy(g,21,20,&occupied,NULL,err,sizeof(err)));ASSERT_EQ(occupied,1u);
+    submissions=0;count_submits=true;
+    prepared=dc_gpu_prepare_body_origin(g,(dc_chunk_coord_t){1,0},err,sizeof(err));
+    count_submits=false;ASSERT_TRUE(prepared);ASSERT_EQ(submissions,0u);
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_occupancy(g,21,20,&occupied,NULL,err,sizeof(err)));ASSERT_EQ(occupied,0u);
+    ASSERT_TRUE(dc_gpu_prepare_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_occupancy(g,21,20,&occupied,NULL,err,sizeof(err)));ASSERT_EQ(occupied,1u);
+    dc_gpu_destroy(g);free(chunk);PASS();
+}
 
 static void test_brush_invalidates_only_the_state_it_changes(void) {
     char err[256]={0};dc_gpu_t *g=NULL;
@@ -374,6 +412,10 @@ static void test_leaf_impact_crumbles_canopy(void) {
 }
 
 int main(void) {
+    if(getenv("DC_TEST_BRUSH_TICK_ONLY")) {
+        RUN(test_cut_and_physics_tick_share_the_occupancy_refresh);
+        return g_fail!=0;
+    }
     if(getenv("DC_TEST_BRUSH_INVALIDATION_ONLY")) {
         RUN(test_brush_invalidates_only_the_state_it_changes);
         return g_fail!=0;
@@ -387,6 +429,7 @@ int main(void) {
         return g_fail!=0;
     }
     RUN(test_large_body_brush_preserves_mass_with_bounded_latency);
+    RUN(test_cut_and_physics_tick_share_the_occupancy_refresh);
     RUN(test_brush_invalidates_only_the_state_it_changes);
     RUN(test_missed_brush_does_not_serialize_all_body_slots);
     RUN(test_trunk_only_carve_preserves_attached_canopy);
