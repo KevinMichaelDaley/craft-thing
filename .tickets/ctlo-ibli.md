@@ -19,3 +19,7 @@ GPU frozen oracle compares overlap, exact normals/depth, witness coordinates/fea
 **2026-10-24T08:45:33Z**
 
 RED32768 ordered quad cases preserve exact results but execute up to54 dynamic projection iterations. GREEN actual core/synchronization oracle32768/32768 exact overlap, normal/depth, witness points/features with zero dynamic projection iterations. Ordinary displayed500-frame brush run30.150ms mean41.552ms worst, improved average but frame target remains unmet; early repeated large cuts cost5-9ms.
+
+**2026-10-24T09:01:49Z**
+
+Extended actual core/synchronization frozen oracle passes32768 rotated quad cases plus32768 mixed pentagon/quad cases, exact hit/miss, normal/depth, witness coordinates and feature IDs. Quad dynamic projection iterations remain zero.
