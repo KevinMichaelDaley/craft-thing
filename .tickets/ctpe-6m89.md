@@ -2,7 +2,7 @@
 id: ctpe-6m89
 status: open
 deps: []
-links: []
+links: [ctlo-hjxc]
 created: 2026-10-14T03:22:18Z
 type: epic
 priority: 1
