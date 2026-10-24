@@ -50,6 +50,9 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
         memoryBarrierBuffer();barrier();
         uint head=0u;
         while(head<pc_end) {
+#ifdef DC_CARVE_WORK_PROFILE
+            if(lane==0u) atomicAdd(carve_work_profile[3],1u);
+#endif
             uint end=pc_end;
             for(uint i=head+lane;i<end;i+=DC_STRUCTURAL_LANES) {
                 uint piece=DC_FRAGMENT_QUEUE(i);
