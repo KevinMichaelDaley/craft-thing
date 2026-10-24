@@ -38,6 +38,9 @@ Polygon cell_polygon(vec2 low) {
 vec2 project_polygon(Polygon polygon, vec2 axis) {
     vec2 range = vec2(dot(polygon.vertices[0], axis));
     for (uint i = 1u; i < polygon.count; ++i) {
+#ifdef DC_CONTACT_PROFILE
+        contact_dynamic_iterations++;
+#endif
         float value = dot(polygon.vertices[i], axis);
         range.x = min(range.x, value); range.y = max(range.y, value);
     }

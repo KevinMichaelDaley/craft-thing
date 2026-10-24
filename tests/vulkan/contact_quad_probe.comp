@@ -1,0 +1,36 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "rigid_body.glsl"
+const bool CONTACT_PIXEL_ONLY=true;
+uint contact_dynamic_iterations=0u;
+#define DC_CONTACT_PROFILE 1
+#include "contact_geometry.glsl"
+#include "contact_geometry_reference.glsl"
+layout(local_size_x=128) in;
+layout(set=0,binding=0,std430) buffer Results {uint results[];};
+uint pixel_word_at(uint index) {return 0u;}
+Polygon quad(vec2 low,float angle,float size) {
+    Polygon p=cell_polygon(vec2(0));
+    for(uint v=0u;v<4u;v++) p.vertices[v]=low+body_rotate(p.vertices[v]*size,angle);
+    return p;
+}
+void main() {
+    for(uint id=gl_GlobalInvocationID.x;id<32768u;id+=128u) {
+    Polygon a=quad(vec2(-.375,.125),float(id%31u)*.103,.5+float(id%5u)*.25);
+    Polygon b=quad(vec2(int((id/31u)%17u)-8,int((id/527u)%17u)-8)*.25,float((id/7u)%29u)*-.117,.75);
+    vec2 n,rn;float d,rd;
+    bool expected=reference_polygon_contact(a,b,rn,rd);
+    contact_dynamic_iterations=0u;
+    bool actual=polygon_contact(a,b,n,d);
+    bool exact=actual==expected;
+    if(actual&&expected) {
+        exact=exact&&all(equal(floatBitsToUint(n),floatBitsToUint(rn)))&&floatBitsToUint(d)==floatBitsToUint(rd);
+        vec2 pa,pb,ra,rb;uint fa,fb,rfa,rfb;
+        reference_contact_witnesses(a,b,rn,ra,rb,rfa,rfb);
+        contact_witnesses(a,b,n,pa,pb,fa,fb);
+        exact=exact&&all(equal(floatBitsToUint(pa),floatBitsToUint(ra)))&&all(equal(floatBitsToUint(pb),floatBitsToUint(rb)))&&fa==rfa&&fb==rfb;
+    }
+    atomicAdd(results[0],exact?0u:1u);atomicAdd(results[1],1u);
+    atomicMax(results[2],contact_dynamic_iterations);
+    }
+}
