@@ -154,10 +154,32 @@ bool pixel_boundary(Body b,uint p) {
         (pixel_word_at(start+word+2u)>>shift)&15u;
     return down==0u;
 }
+uint pixel_word_occupancy(uint packed) {
+    return (packed|(packed>>1u)|(packed>>2u)|(packed>>3u))&0x11111111u;
+}
+uint pixel_occupancy_word_at(Body b,ivec2 cell) {
+    if(any(lessThan(cell,ivec2(0)))||any(greaterThanEqual(cell,ivec2(b.width,b.height)))) return 0u;
+    uint width=pixel_word_at(b.compound_reserved+2u);
+    uint tile=pixel_word_at(b.compound_reserved+8u+uint(cell.y/16)*width+uint(cell.x/16));
+    if(tile==0u) return 0u;
+    uint local=uint(cell.y%16)*2u+uint(cell.x%16)/8u;
+    return pixel_word_occupancy(pixel_word_at(b.compound_reserved+tile+1u+local));
+}
 uint pixel_boundary_mask(Body b,uint word) {
-    uint mask=0u;
-    for(uint bit=0u;bit<8u;bit++) if(pixel_boundary(b,word*8u+bit)) mask|=1u<<(bit*4u);
-    return mask;
+    uint local=word%32u,start=b.compound_reserved+pixel_tile_offset(b,word/32u)+1u;
+    uint own=pixel_word_occupancy(pixel_word_at(start+local));
+    if(own==0u) return 0u;
+    ivec2 cell=pixel_piece_cell(b,word*8u);
+    uint left_edge=local%2u==0u?uint(pixel_material(b,cell+ivec2(-1,0))!=0u):
+        pixel_word_occupancy(pixel_word_at(start+local-1u))>>28u;
+    uint right_edge=local%2u!=0u?uint(pixel_material(b,cell+ivec2(8,0))!=0u):
+        pixel_word_occupancy(pixel_word_at(start+local+1u))&1u;
+    uint left=(own<<4u)|left_edge,right=(own>>4u)|(right_edge<<28u);
+    uint up=local<2u?pixel_occupancy_word_at(b,cell+ivec2(0,-1)):
+        pixel_word_occupancy(pixel_word_at(start+local-2u));
+    uint down=local>=30u?pixel_occupancy_word_at(b,cell+ivec2(0,1)):
+        pixel_word_occupancy(pixel_word_at(start+local+2u));
+    return own&~(left&right&up&down);
 }
 float body_cross(vec2 a, vec2 b) { return a.x * b.y - a.y * b.x; }
 uint body_vertices(Body b) { return b.vertex_count == 0u ? 4u : b.vertex_count; }

@@ -6,6 +6,7 @@
 #include <time.h>
 
 #include "../../src/vulkan/gpu_internal.h"
+#include "frame_api_trace.h"
 
 enum { QUERY_CAPACITY = 4096, RIGID = 0, FLUID = 1, MPM = 2,
        CONTACT = 3, HYDRO = 4, FLUID_PHASE = 9, RENDERER = 15,
@@ -19,7 +20,7 @@ enum { QUERY_CAPACITY = 4096, RIGID = 0, FLUID = 1, MPM = 2,
        MPM_ACTIVITY_KERNEL = CONTACT_KERNEL + 7, LABEL_COUNT = MPM_ACTIVITY_KERNEL + 1 };
 static dc_gpu_t *traced;
 static VkCommandBuffer traced_primary;
-static bool coarse;
+static bool coarse,component_detail;
 static VkQueryPool pool;
 static unsigned query_count, frame;
 static unsigned labels[QUERY_CAPACITY / 2];
@@ -49,7 +50,7 @@ void __wrap_vkCmdPushConstants(VkCommandBuffer command,VkPipelineLayout layout,
         for(unsigned phase=0;phase<3;phase++) contact|=bound==traced->contact_pipelines[phase];
         contact|=bound==traced->contact_pixel_pipeline||bound==traced->contact_pixel_plan_pipeline||
             bound==traced->contact_pixel_work_pipeline||bound==traced->contact_pixel_finish_pipeline;
-        if(contact) {memcpy(profile_push,data,bytes);profile_push[2]|=256u;submitted=profile_push;}
+        if(contact&&!coarse) {memcpy(profile_push,data,bytes);profile_push[2]|=256u;submitted=profile_push;}
     }
     if(traced&&command==traced->command&&(stages&VK_SHADER_STAGE_COMPUTE_BIT)&&offset<=8u&&bytes>=12u-offset)
         memcpy(&pushed_mode,(const unsigned char *)submitted+8u-offset,sizeof(pushed_mode));
@@ -248,8 +249,18 @@ void __wrap_vkCmdBindPipeline(VkCommandBuffer command, VkPipelineBindPoint point
 }
 
 static unsigned hydro_begin(VkCommandBuffer command) {
-    if (coarse || !traced || command != traced->command)
+    if (!traced || command != traced->command)
         return QUERY_CAPACITY;
+    if(coarse) {
+        if(!component_detail||command!=traced_primary) return QUERY_CAPACITY;
+        for(unsigned phase=0;phase<38;phase++) {
+            if(bound!=traced->component_extract_pipelines[phase]) continue;
+            if(query_count+2>QUERY_CAPACITY) {overflow=true;return QUERY_CAPACITY;}
+            unsigned at=query_count;labels[at/2]=COMPONENT_PHASE+phase;query_count+=2;
+            vkCmdWriteTimestamp2(command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,pool,at);return at;
+        }
+        return QUERY_CAPACITY;
+    }
     for (unsigned phase = 0; phase < 5; phase++) {
         if (bound != traced->pixel_hydro_pipelines[phase])
             continue;
@@ -338,6 +349,7 @@ bool __wrap_dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
     if (vkCreateQueryPool(gpu->device, &info, NULL, &pool) != VK_SUCCESS)
         return false;
     traced = gpu;traced_primary=gpu->command;coarse=getenv("DC_FRAME_TRACE_COARSE")!=NULL;
+    component_detail=getenv("DC_FRAME_TRACE_COMPONENTS")!=NULL;
     overflow = false;
     double began = seconds();
     bool okay = __real_dc_gpu_present_chunks_steps(gpu, steps, err, cap);
@@ -389,6 +401,7 @@ bool __wrap_dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
     for(unsigned phase=0;phase<6;phase++) printf(",c%u=%.3f",phase,total[MPM_COMPONENT_PHASE+phase]);
     for(unsigned phase=0;phase<7;phase++) printf(",contact%u=%.3f",phase,total[CONTACT_KERNEL+phase]);
     printf(",activity=%.3f\n",total[MPM_ACTIVITY_KERNEL]);
+    frame_api_print(number);
     if (okay && number == 72 && getenv("DC_CONTACT_PAIR_PROFILE"))
         okay = profile_contact_pairs(gpu);
     vkDestroyQueryPool(gpu->device, pool, NULL);
