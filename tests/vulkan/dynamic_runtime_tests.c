@@ -132,13 +132,50 @@ static void test_empty_runtime_reserves_bounded_appearance_storage_and_can_grow(
     VkDeviceSize initial=dc_gpu_color_bank_bytes(g);
     uint32_t words=dc_gpu_pixel_pool_capacity(g);
     printf("Empty appearance bank: %llu bytes\n",(unsigned long long)initial);
+    printf("Actual appearance allocation: %llu bytes\n",(unsigned long long)g->shape_color_allocation_bytes);
     ASSERT_TRUE(initial<=1048576u);
+    ASSERT_TRUE(g->shape_color_allocation_bytes<=dc_gpu_color_terrain_bytes()+2u*1048576u);
     ASSERT_TRUE(dc_gpu_runtime_geometry_reserve(g,words*4u,err,sizeof(err)));
     ASSERT_EQ(dc_gpu_pixel_pool_capacity(g),words*4u);
     ASSERT_TRUE(dc_gpu_color_bank_bytes(g)>1048576u);
     dc_gpu_destroy(g);PASS();
 }
+static void test_large_component_automatically_grows_geometry_without_losing_source(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    ASSERT_TRUE(dc_gpu_create(&g,384,256,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    uint32_t initial=dc_gpu_pixel_pool_capacity(g);
+    for(unsigned cy=0;cy<4;cy++) for(unsigned cx=0;cx<6;cx++) {
+        memset(chunk,0,sizeof(*chunk));chunk->coord=(dc_chunk_coord_t){cx,cy};
+        for(unsigned y=0;y<64;y++) for(unsigned x=0;x<64;x++)
+            if(cx*64+x>0&&cx*64+x<383&&cy*64+y>0&&cy*64+y<255)
+                chunk->cells[y*64+x].material=DC_MATERIAL_STONE;
+        ASSERT_TRUE(dc_gpu_upload_chunk(g,cy*6+cx,chunk,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_page(g,cx,cy,cy*6+cx,err,sizeof(err)));
+    }
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_EQ(chunk->cells[64+1].material,DC_MATERIAL_STONE);
+    for(unsigned frame=0;frame<3;frame++) ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_pixel_pool_capacity(g)>initial);
+    uint32_t count=0;dc_gpu_body_motion_t motion;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,NULL,0,&count,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,0x80000001u,&motion,err,sizeof(err)));
+    ASSERT_EQ(count,382u*254u);ASSERT_TRUE(fabs(motion.mass-382*254*2.7)<.1);
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_EQ(chunk->cells[64+1].material,DC_MATERIAL_AIR);
+    dc_gpu_destroy(g);free(chunk);PASS();
+}
 int main(void) {
+    if(getenv("DC_TEST_GROWTH_ONLY")) {
+        RUN(test_growth_preserves_geometry_colors_and_gravity_across_pages);
+        printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
+    }
+    if(getenv("DC_TEST_GEOMETRY_GROWTH_ONLY")) {
+        RUN(test_large_component_automatically_grows_geometry_without_losing_source);
+        printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
+    }
     if(getenv("DC_TEST_INITIAL_ARENA_ONLY")) {
         RUN(test_empty_runtime_reserves_bounded_appearance_storage_and_can_grow);
         printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
@@ -149,6 +186,7 @@ int main(void) {
     }
     RUN(test_growth_preserves_geometry_colors_and_gravity_across_pages);
     RUN(test_empty_runtime_reserves_bounded_appearance_storage_and_can_grow);
+    RUN(test_large_component_automatically_grows_geometry_without_losing_source);
     RUN(test_gpu_queue_exhaustion_grows_and_retries_without_losing_bodies);
     RUN(test_one_concave_component_fractures_into_more_than_a_page_of_bodies);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
