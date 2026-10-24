@@ -64,7 +64,17 @@ static void test_cut_and_physics_tick_share_the_occupancy_refresh(void) {
     dc_gpu_world_body_t b={.body={.id=1,.active=1,.width=2,.height=2,.x_fp=20<<16,.y_fp=20<<16}};
     ASSERT_TRUE(dc_gpu_spawn_world_body(g,b,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_rigid_solver(g,true));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(fr_renderer_enable(g,err,sizeof(err)));
+    ASSERT_TRUE(fr_renderer_set_mode(g,FR_RENDERER_ALBEDO));
+    ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+    uint64_t revision=g->descriptor_revision;
     ASSERT_TRUE(dc_gpu_paint_material(g,20,20,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(g->descriptor_revision>revision);
+    ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+    uint32_t pixels[64*64];ASSERT_TRUE(dc_gpu_readback(g,pixels,64*64,err,sizeof(err)));
+    ASSERT_TRUE(pixels[20*64+21]!=pixels[63*64+63]);
     ASSERT_TRUE(g->body_refresh_pending);
     submissions=0;count_submits=true;
     bool prepared=dc_gpu_prepare_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err));
@@ -118,7 +128,9 @@ static void test_missed_brush_does_not_serialize_all_body_slots(void) {
     ASSERT_TRUE(dc_gpu_body_capacity(g)>=320u);
     ASSERT_TRUE(dc_gpu_paint_material(g,63,63,0,DC_MATERIAL_AIR,err,sizeof(err)));
     struct timespec before,after;clock_gettime(CLOCK_MONOTONIC,&before);
+    submissions=0;count_submits=true;
     ASSERT_TRUE(dc_gpu_paint_material(g,63,63,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    count_submits=false;
     clock_gettime(CLOCK_MONOTONIC,&after);
     double ms=(after.tv_sec-before.tv_sec)*1000.+(after.tv_nsec-before.tv_nsec)/1e6;
     for(unsigned id=1;id<=320;id++) {
@@ -126,7 +138,8 @@ static void test_missed_brush_does_not_serialize_all_body_slots(void) {
         ASSERT_TRUE(b.active);ASSERT_EQ(b.x_fp,0);ASSERT_EQ(b.y_fp,0);
     }
     printf("Missed air brush with 320 bodies: %.3f ms\n",ms);
-    dc_gpu_destroy(g);ASSERT_TRUE(ms<3.);PASS();
+    printf("Warm missed brush GPU submissions: %u\n",submissions);
+    dc_gpu_destroy(g);ASSERT_EQ(submissions,1u);ASSERT_TRUE(ms<3.);PASS();
 }
 
 static void test_large_body_brush_preserves_mass_with_bounded_latency(void) {
