@@ -64,6 +64,12 @@ inherits the command's stdout/stderr and exit status. It never writes sysfs or
 changes clocks. Sampling adds host work, so use it to investigate frequency
 behavior rather than as the authoritative frame-time benchmark:
 
+Add `--drm-clients` to record cumulative per-client engine nanoseconds once per
+second. Clients shared by multiple descriptors/processes are counted once per
+PCI device and DRM client ID. Differences between samples expose competing GPU
+work without changing other applications. Use `--interval .1` for displayed
+comparisons; final frame acceptance should also run without the sampler.
+
 ```sh
 python3 tests/tools/gpu_frequency_tests.py
 DC_COLD_DIAG=1 ./tools/with-vulkan python3 tools/diagnostics/gpu_frequency.py \
