@@ -1493,13 +1493,13 @@ build/diagnostics/pixel_boundary_probe.spv: shaders/sim/contact_geometry.glsl
 build/diagnostics/contact_quad_probe.spv: tests/vulkan/contact_quad_probe.comp tests/vulkan/contact_geometry_reference.glsl shaders/sim/contact_geometry.glsl
 	mkdir -p $(dir $@)
 	glslangValidator -V --target-env vulkan1.3 -Ishaders/sim -Itests/vulkan -o $@ $<
-build/contact_quad_tests: tests/vulkan/contact_quad_tests.c tests/vulkan/pixel_properties_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/pixel_properties_probe.spv build/diagnostics/contact_quad_probe.spv
+build/contact_quad_tests: tests/vulkan/contact_quad_tests.c tests/vulkan/pixel_properties_gpu_tests.c tools/diagnostics/vulkan_probe.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/pixel_properties_probe.spv build/diagnostics/contact_quad_probe.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/contact_quad_tests
 build/diagnostics/contact_boundary_probe.spv: tests/vulkan/contact_boundary_probe.comp shaders/sim/contact_boundary.glsl shaders/sim/rigid_body.glsl
 	mkdir -p $(dir $@)
 	glslangValidator -V --target-env vulkan1.3 -Ishaders/sim -o $@ $<
-build/contact_boundary_tests: tests/vulkan/contact_boundary_tests.c tests/vulkan/pixel_boundary_tests.c tests/vulkan/pixel_properties_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/pixel_properties_probe.spv build/diagnostics/contact_boundary_probe.spv
+build/contact_boundary_tests: tests/vulkan/contact_boundary_tests.c tests/vulkan/pixel_boundary_tests.c tests/vulkan/pixel_properties_gpu_tests.c tools/diagnostics/vulkan_probe.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/pixel_properties_probe.spv build/diagnostics/contact_boundary_probe.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/contact_boundary_tests
 build/diagnostics/contacts_scalar_reference.spv: shaders/sim/contacts.comp $(wildcard shaders/sim/*.glsl)
@@ -1539,7 +1539,7 @@ test: build/mpm_swap_tests
 
 $(SHADER) $(HALO_SHADER) $(MPM_COMPONENT_SHADER) build/shaders/component_extract.comp.spv build/shaders/structural.comp.spv build/shaders/structural_carve.comp.spv: shaders/sim/mpm_particle_mirror.glsl
 
-build/diagnostics/shape_color_resolve_probe.spv: tests/vulkan/shape_color_resolve_probe.comp $(wildcard shaders/sim/*.glsl)
+build/diagnostics/shape_color_resolve_probe.spv: tests/vulkan/shape_color_resolve_probe.comp $(wildcard shaders/sim/*.glsl) include/dungeoncraft/body_storage_layout.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -V --target-env vulkan1.3 -Ishaders/sim -S comp -o $@ $<
 build/shape_color_resolve_tests: tests/vulkan/shape_color_resolve_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/shape_color_resolve_probe.spv build/gpu_tests

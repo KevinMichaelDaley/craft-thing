@@ -23,3 +23,7 @@ RED minimal GPU packet probe:65537 aperture codes preserve coefficients but lose
 **2026-10-24T11:03:26Z**
 
 Integrated binary-face divergence cache within the existing four words. Actual Vulkan core+synchronization validation pressure oracle 5/5: all pressure/velocity/cell bytes identical, including 8192 mixed partial-face cells and water edits between batches. Mapped allocations identical (62218924 bytes in fixture). Full displayed benchmark next; global frame target remains unmet.
+
+**2026-10-24T19:10:07Z**
+
+Full coupled fluid specialization oracle exposed a divergence-cache precision mismatch even on binary faces. Removed production integration; original weight-only stencil and inline divergence preserve exact cells/velocities again. Packet helper/probe retained as an experiment. Fluid oracle1/1 and buoyancy14/14 pass after rollback.

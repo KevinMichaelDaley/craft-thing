@@ -1,6 +1,4 @@
 #version 450
-#extension GL_GOOGLE_include_directive : require
-#include "pressure_stencil_pack.glsl"
 layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 cells[]; };
@@ -88,36 +86,27 @@ ivec2 stencil_delta(int axis) {
 }
 #ifdef DC_CACHE_PRESSURE_STENCIL
 void cache_pressure_stencil(ivec2 p,uint index) {
-    uint base=stencil_base(index);bool source_wet=wet(p),binary_faces=source_wet;
-    uvec4 weights=uvec4(0u);
+    uint base=stencil_base(index);bool source_wet=wet(p);
     for(int axis=0;axis<4;axis++) {
         uint weight=0u;ivec2 delta=stencil_delta(axis),next=p+delta;
-        float aperture=source_wet?face_aperture(p,delta):0.0;
-        binary_faces=binary_faces&&(aperture==0.0||aperture==1.0);
         if(source_wet&&open_cell(next)) {
             /* Apertures in [0,1] leave the top two float bits free. */
-            weight=floatBitsToUint(aperture)|0x80000000u|(wet(next)?0x40000000u:0u);
+            weight=floatBitsToUint(face_aperture(p,delta))|0x80000000u|(wet(next)?0x40000000u:0u);
         }
-        weights[axis]=weight;
+        pressure_stencil[base+uint(axis)]=weight;
     }
-    uvec4 packed=pack_pressure_stencil(weights,binary_faces?floatBitsToUint(divergence(p)):0u,binary_faces);
-    for(int axis=0;axis<4;axis++) pressure_stencil[base+uint(axis)]=packed[axis];
 }
 #endif
 float cached_pressure_value(ivec2 p,uint index) {
     uint base=stencil_base(index);float sum=0.0,count=0.0;
-    uvec4 packed=uvec4(pressure_stencil[base],pressure_stencil[base+1u],
-                      pressure_stencil[base+2u],pressure_stencil[base+3u]);
     for(int axis=0;axis<4;axis++) {
-        uint weight=unpack_pressure_weight(packed,axis);
+        uint weight=pressure_stencil[base+uint(axis)];
         if((weight&0x80000000u)!=0u) {
             float aperture=uintBitsToFloat(weight&0x3fffffffu);
             float pressure=(weight&0x40000000u)!=0u?pressure_a[index_of(p+stencil_delta(axis))]:0.0;
             sum+=aperture*pressure;count+=aperture;
         }
     }
-    if(pressure_divergence_cached(packed))
-        return count>0.0?(sum-uintBitsToFloat(unpack_pressure_divergence(packed)))/count:0.0;
     /* Keep divergence in the original expression: caching its rounded result
        changes contraction and the pressure bytes on partial hydraulic faces. */
     return count>0.0?(sum-divergence(p))/count:0.0;

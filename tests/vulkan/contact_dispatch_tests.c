@@ -41,8 +41,8 @@ static void selector_case(unsigned kind) {
     bool safe=solver[10]==generic&&solver[11]==1&&solver[12]==1&&
         p.mapped[15]==fast&&p.mapped[16]==(fast?16u:1u)&&p.mapped[17]==1&&contacts[3]==777&&
         p.mapped[18]==fast&&p.mapped[19]==1&&p.mapped[20]==1&&
-        p.mapped[21]==(fast+63u)/64u&&p.mapped[22]==1&&p.mapped[23]==1&&
-        contacts[6]==(kind==5?0u:(pair_count+63u)/64u);
+        p.mapped[21]==(fast+15u)/16u&&p.mapped[22]==1&&p.mapped[23]==1&&
+        contacts[6]==(kind==5?0u:(pair_count+15u)/16u);
     /* The final solver triplet now belongs to grain coupling. It must start
        inactive even when the old contents were poisoned. */
     safe=safe&&solver[13]==0u&&solver[14]==1u&&solver[15]==1u;

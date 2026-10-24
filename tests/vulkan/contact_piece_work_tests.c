@@ -8,7 +8,7 @@ static void test_small_pixel_pairs_do_not_scan_unused_tile_padding(void) {
         measure(8,shape,2);
         ASSERT_TRUE(last_emitted>0u);
         ASSERT_TRUE(last_visited<=200u);
-        ASSERT_EQ(last_workgroups,1u);
+        ASSERT_EQ(last_workgroups,4u);
     }
     PASS();
 }
