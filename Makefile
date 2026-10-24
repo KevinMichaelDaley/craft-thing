@@ -167,7 +167,7 @@ $(SOLVER_SHADER): shaders/sim/rigid_solver.comp shaders/sim/rigid_body.glsl shad
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 
-$(SOLVER_SHADER) build/diagnostics/solver_motion_profile.comp.spv: shaders/sim/solver_contact_metadata.glsl shaders/sim/solver_body_state.glsl
+$(SOLVER_SHADER) build/diagnostics/solver_motion_profile.comp.spv: shaders/sim/solver_contact_metadata.glsl shaders/sim/solver_body_state.glsl shaders/sim/solver_layout.glsl shaders/sim/solver_contacts.glsl
 build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_bench build/dungeoncraft_quarter_native build/marker_slot_tests build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench: $(SOLVER_SHADER)
 
 build/solver_gpu.o: src/vulkan/solver_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
@@ -1060,6 +1060,8 @@ test_gpu_tools: build/contact_shader_contract_tests build/shaders/runtime/rigid_
 	python3 tests/vulkan/gpu_dependency_tests.py
 	python3 tests/vulkan/runtime_root_storage_test.py
 	python3 tests/vulkan/mpm_storage_test.py
+
+test_gpu_tools: build/shaders/mpm.comp.spv
 	./build/contact_shader_contract_tests
 	./build/fluid_transport_limits_tests
 	./build/contact_recording_tests

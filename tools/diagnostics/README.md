@@ -1,5 +1,28 @@
 # Bounded Vulkan device probe
 
+## Exact solver and MPM comparisons
+
+`DC_MPM_FUSED_GRID=1` combines particle-to-grid, grid solve and same-node water
+feedback within each of the two unchanged MPM substeps. It remains optional;
+four GPU fixtures compare all grid, force, velocity and particle bytes against
+the separate stages, including water, obstacles, two layers and missing pages.
+
+`solver_capacity_tests` compares the optimized solver against its frozen address
+access paths before and after dynamic queue growth. GPU counters verify two
+layout-capacity queries per invocation and no generic tagged address decoding
+for known contact and body-state accesses. This does not limit body capacity.
+
+Pressure batches cache five words of terrain/face coefficients per cell, while
+retaining the original divergence expression and every red/black sweep. The
+cache refreshes at each batch so intervening brush edits are respected. The
+`pressure_work_tests` fixture compares pressure, velocity and cell bytes against
+`DC_FLUID_VARIANTS=generic`, including mixed materials and partial hydraulic faces.
+
+The saved-scene ordinary Wayland benchmark after these address changes measured
+32.414 ms average and 38.887 ms worst over 500 real-time frames at 480x270 visible
+physics/render resolution (640x448 with halo), with repeated air brush input.
+The full-frame target remains unmet; kernel counters are not frame acceptance.
+
 ## Optional transport comparisons
 
 `DC_TRANSPORT_LONG_SCAN=1` and `DC_TRANSPORT_PAGE_CACHE=1` select existing
