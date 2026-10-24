@@ -672,6 +672,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/pixel_geometry_tests
 	./build/pixel_boundary_tests
 	./build/contact_quad_tests
+	./build/contact_boundary_tests
 	./build/structural_mechanics_tests
 	./build/structural_placement_tests
 	./build/structural_submerged_load_tests
@@ -1480,6 +1481,12 @@ build/diagnostics/contact_quad_probe.spv: tests/vulkan/contact_quad_probe.comp t
 build/contact_quad_tests: tests/vulkan/contact_quad_tests.c tests/vulkan/pixel_properties_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/pixel_properties_probe.spv build/diagnostics/contact_quad_probe.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/contact_quad_tests
+build/diagnostics/contact_boundary_probe.spv: tests/vulkan/contact_boundary_probe.comp shaders/sim/contact_boundary.glsl shaders/sim/rigid_body.glsl
+	mkdir -p $(dir $@)
+	glslangValidator -V --target-env vulkan1.3 -Ishaders/sim -o $@ $<
+build/contact_boundary_tests: tests/vulkan/contact_boundary_tests.c tests/vulkan/pixel_boundary_tests.c tests/vulkan/pixel_properties_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/pixel_properties_probe.spv build/diagnostics/contact_boundary_probe.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/contact_boundary_tests
 build/diagnostics/pixel_boundary_probe.spv: shaders/sim/rigid_clip.glsl shaders/sim/rigid_shape.glsl tests/vulkan/rigid_clip_reference.glsl
 
 build/solver_contact_start_tests: tests/vulkan/solver_contact_start_tests.c tests/vulkan/solver_motion_store_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/solver_motion_profile.comp.spv

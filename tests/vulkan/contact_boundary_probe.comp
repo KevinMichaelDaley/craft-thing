@@ -1,0 +1,22 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_ballot : require
+#define DC_RIGID_PIXEL_ONLY true
+#include "rigid_body.glsl"
+#include "contact_boundary.glsl"
+layout(local_size_x=128) in;
+layout(set=0,binding=4,std430) buffer Storage {Body bodies[BODY_CAPACITY];uint data[];};
+layout(set=0,binding=0,std430) buffer Results {uint results[];};
+uint reads=0u;
+uint pixel_word_at(uint index) {reads++;return data[index-BODY_STORAGE_WORDS];}
+void main() {
+    Body body=bodies[0];
+    for(uint piece=gl_LocalInvocationIndex;piece<1024u;piece+=128u) {
+        reads=0u;bool expected=pixel_boundary(body,piece);uint scalar=reads;
+        reads=0u;bool actual=contact_pixel_boundary(body,piece,true);uint cooperative=reads;
+        atomicAdd(results[0],uint(actual!=expected));atomicAdd(results[1],scalar);
+        atomicAdd(results[2],cooperative);atomicAdd(results[3],1u);
+        atomicMax(results[4],gl_SubgroupSize);
+    }
+}
