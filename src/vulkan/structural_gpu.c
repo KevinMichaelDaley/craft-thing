@@ -444,6 +444,7 @@ bool fr_gpu_place_structure(dc_gpu_t *gpu, const fr_structural_gpu_graph_t *g,
                      "Structural transaction rejected; ownership unchanged");
     }
     gpu->structural_enabled = g->member_count != 0 || gpu->impact_fracture_enabled;
+    gpu->structural_graph_possible |= g->member_count != 0 || data[9] != 0;
     for (unsigned i = 0; i < gpu->body_count; i++)
         if (dc_gpu_body_record(gpu,i)->reserved[0] ==
             DC_GPU_STRUCTURAL_CONVERTED_TAG)

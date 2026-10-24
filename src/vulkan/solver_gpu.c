@@ -153,17 +153,25 @@ bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     const char *overlap=getenv("DC_SOLVER_APPLY_OVERLAP");
     gpu->solver_fused_grain=fused&&strcmp(fused,"1")==0;
     gpu->solver_apply_overlap=overlap&&strcmp(overlap,"1")==0;
-    VkSpecializationMapEntry entries[]={{0u,0u,4u},{5u,4u,4u},{4u,8u,4u},{6u,12u,4u}};
+    VkSpecializationMapEntry entries[]={{0u,0u,4u},{5u,4u,4u},{4u,8u,4u},{6u,12u,4u},{7u,16u,4u}};
     for (uint32_t mode = 0;
          mode < DC_GPU_SOLVER_PHASE_COUNT && result == VK_SUCCESS; ++mode) {
-        uint32_t values[]={mode,grouped&&strcmp(grouped,"1")==0,zero&&strcmp(zero,"1")==0,gpu->solver_fused_grain};
-        VkSpecializationInfo phase = {.mapEntryCount = 4,
+        uint32_t values[]={mode,grouped&&strcmp(grouped,"1")==0,zero&&strcmp(zero,"1")==0,gpu->solver_fused_grain,1u};
+        VkSpecializationInfo phase = {.mapEntryCount = 5,
                                       .pMapEntries = entries,
                                       .dataSize = sizeof(values),
                                       .pData = values};
         info.stage.pSpecializationInfo = &phase;
         result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1, &info,
                                           NULL, &gpu->solver_pipelines[mode]);
+    }
+    for(unsigned i=0;i<2&&result==VK_SUCCESS;i++) {
+        uint32_t values[]={i?SOLVER_IMPULSE:SOLVER_SOLVE,grouped&&strcmp(grouped,"1")==0,
+            zero&&strcmp(zero,"1")==0,gpu->solver_fused_grain,0u};
+        VkSpecializationInfo phase={.mapEntryCount=5,.pMapEntries=entries,
+            .dataSize=sizeof(values),.pData=values};
+        info.stage.pSpecializationInfo=&phase;
+        result=vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,&gpu->solver_unstructured[i]);
     }
     vkDestroyShaderModule(gpu->device, module, NULL);
     return result == VK_SUCCESS
@@ -223,8 +231,14 @@ static void record_pixel_hydro(dc_gpu_t *gpu) {
     }
 }
 static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
+    uint32_t selected=mode&SOLVER_PHASE_MASK;
+    VkPipeline pipeline=gpu->solver_pipelines[selected];
+    if(!gpu->structural_graph_possible&&(selected==SOLVER_SOLVE||selected==SOLVER_IMPULSE)) {
+        VkPipeline plain=gpu->solver_unstructured[selected==SOLVER_IMPULSE];
+        if(plain) pipeline=plain;
+    }
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
-                      gpu->solver_pipelines[mode & SOLVER_PHASE_MASK]);
+                      pipeline);
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
     uint32_t push[8] = {gpu->width,  gpu->height,
                         mode,        dc_gpu_runtime_body_count(gpu),
@@ -308,7 +322,7 @@ void dc_gpu_record_solver_uncached(dc_gpu_t *gpu) {
                              gpu->timestamp_pool, 17);
     for (uint32_t step = 0; step < SOLVER_SUBSTEPS; ++step) {
         dispatch(gpu, SOLVER_PREDICT, false);
-        if (gpu->structural_enabled)
+        if (gpu->structural_enabled && gpu->structural_graph_possible)
             dispatch(gpu, SOLVER_BOND_RESET, false);
         dc_gpu_record_broadphase(gpu);
         if (gpu->component_profile)
@@ -327,14 +341,14 @@ void dc_gpu_record_solver_uncached(dc_gpu_t *gpu) {
             dispatch(gpu, SOLVER_SOLVE, true);
             dispatch(gpu, SOLVER_APPLY | ((iteration + 1u) << 8u), false);
             if(!gpu->solver_fused_grain) dispatch(gpu, SOLVER_GRAIN_POSITION | ((iteration + 1u) << 8u), true);
-            if (gpu->structural_enabled)
+            if (gpu->structural_enabled && gpu->structural_graph_possible)
                 dispatch(gpu, SOLVER_BOND_POSITION, false);
         }
         dispatch(gpu, SOLVER_DERIVE_VELOCITY, false);
         dispatch(gpu, SOLVER_IMPULSE, true);
         dispatch(gpu, SOLVER_APPLY_VELOCITY | ((SOLVER_ITERATIONS + 1u) << 8u), false);
         if(!gpu->solver_fused_grain) dispatch(gpu, SOLVER_GRAIN_VELOCITY | ((SOLVER_ITERATIONS + 1u) << 8u), true);
-        if (gpu->structural_enabled)
+        if (gpu->structural_enabled && gpu->structural_graph_possible)
             dispatch(gpu, SOLVER_BOND_VELOCITY, false);
     }
     dispatch(gpu, SOLVER_FINISH, false);

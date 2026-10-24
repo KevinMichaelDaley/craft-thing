@@ -300,6 +300,7 @@ static void install(dc_gpu_t *gpu, const dc_structural_store_header_t *header,
     data[17] = (gpu->height + 15u) / 16u;
     data[18] = 1;
     gpu->structural_enabled = true;
+    gpu->structural_graph_possible = payload->graph[1] != 0 || data[9] != 0;
     gpu->impact_fracture_enabled = (header->flags & 2u) != 0;
     gpu->automatic_components_enabled = (header->flags & 4u) != 0;
     gpu->body_origin = header->origin;

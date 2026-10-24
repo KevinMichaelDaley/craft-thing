@@ -48,6 +48,9 @@ void structural_sum(uint p,float value,uint node) {
         atomicOr(DC_DATA(structural_bad()+node),1u);
 }
 void structural_capture(uint source,uint other,vec2 point,vec2 impulse) {
+#ifdef DC_SOLVER_CAPACITY_PROFILE
+    atomicAdd(capacity_profile[4],1u);
+#endif
     if(DC_DATA(structural_base())==0u||source>=BODY_CAPACITY||
        DC_BODY(source).reserved0!=STRUCTURAL_SOURCE) return;
     uint member=DC_BODY(source).reserved1-1u,g=structural_graph(),m=g+400u+member*8u;

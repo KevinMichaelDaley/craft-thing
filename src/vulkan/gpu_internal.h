@@ -149,9 +149,11 @@ struct dc_gpu {
     VkPipeline contact_pixel_pipeline, contact_pixel_plan_pipeline,
                contact_pixel_finish_pipeline, contact_pixel_work_pipeline;
     VkPipeline solver_pipelines[DC_GPU_SOLVER_PHASE_COUNT];
+    VkPipeline solver_unstructured[2];
     VkPipeline pixel_hydro_pipelines[5];
     VkPipeline structural_pipelines[DC_GPU_STRUCTURAL_PHASE_COUNT];
     bool structural_enabled;
+    bool structural_graph_possible;
     dc_chunk_t *checkpoint_chunks;
     dc_chunk_colors_t *checkpoint_colors;
     uint32_t checkpoint_chunk_count;

@@ -90,8 +90,15 @@ static void test_automatic_components_do_not_dispatch_empty_structural_bonds(voi
     printf("empty graph bond dispatches %u\n",bond_dispatches);
     ASSERT_EQ(bond_dispatches,0u);PASS();
 }
+static void test_explicit_graph_keeps_every_bond_iteration(void) {
+    dc_gpu_t gpu={.width=64,.height=64,.body_count=1,.structural_enabled=true,.structural_graph_possible=true};
+    for(unsigned i=0;i<DC_GPU_SOLVER_PHASE_COUNT;i++) gpu.solver_pipelines[i]=(VkPipeline)(uintptr_t)(i+1u);
+    bond_dispatches=0;dc_gpu_record_solver_uncached(&gpu);
+    ASSERT_EQ(bond_dispatches,80u);PASS();
+}
 int main(void) {
     RUN(test_automatic_components_do_not_dispatch_empty_structural_bonds);
+    RUN(test_explicit_graph_keeps_every_bond_iteration);
     phase=UINT32_MAX;solver_barriers=host_publications=bad_dependencies=nested_host_publications=indirect_publications=0;
     RUN(test_solver_publishes_to_host_once_after_all_iterations);
     RUN(test_runtime_solver_publishes_indirect_only_when_commands_change);

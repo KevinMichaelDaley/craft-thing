@@ -69,8 +69,10 @@ void solve_contact(uint i, bool impulse) {
     float incoming=contact_getf(s+8u),normal_impulse=max(dn,0)/(impulse?1.0:DT);
     impact_capture(a,b,DC_DATA(c+5u),DC_DATA(c+6u),n,incoming,normal_impulse,wn,contact_getf(c+12u));
     impact_capture(b,a,DC_DATA(c+6u),DC_DATA(c+5u),-n,incoming,normal_impulse,wn,contact_getf(c+12u));
-    structural_capture(a,b,pa,applied_impulse);
-    structural_capture(b,a,pb,-applied_impulse);
+    if(CAPTURE_STRUCTURAL_LOADS) {
+        structural_capture(a,b,pa,applied_impulse);
+        structural_capture(b,a,pb,-applied_impulse);
+    }
     if(any(greaterThan(abs(vec3(ba.inverse_mass*force,ba.inverse_inertia*(an*dn+at*dt))),vec3(2))))
         atomicOr(DC_BODY_CLIPPED(a),1u);
     if(b<BODY_CAPACITY&&any(greaterThan(abs(vec3(mb*force,ib*(bn*dn+bt*dt))),vec3(2))))

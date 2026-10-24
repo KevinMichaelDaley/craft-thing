@@ -157,7 +157,17 @@ static void test_reuses_exact_fluid_phases_and_invalidates_changed_parameters(vo
     }
     PASS();
 }
+static void test_graph_authoring_invalidates_cached_empty_graph_commands(void) {
+    dc_gpu_t g=fake_gpu();char err[128];g.structural_enabled=true;
+    ASSERT_TRUE(dc_gpu_solver_commands_init(&g,err,sizeof(err)));
+    dc_gpu_record_solver(&g);uint64_t empty=last_executed_hash;
+    g.structural_graph_possible=true;dc_gpu_record_solver(&g);
+    uint64_t recordings,executions;ASSERT_TRUE(dc_gpu_solver_commands_stats(&g,&recordings,&executions));
+    ASSERT_EQ(recordings,2u);ASSERT_TRUE(last_executed_hash!=empty);
+    dc_gpu_solver_commands_destroy(&g);PASS();
+}
 int main(void) {
+    RUN(test_graph_authoring_invalidates_cached_empty_graph_commands);
     RUN(test_reuses_the_exact_solver_program_without_recording_again);
     RUN(test_rebuilds_for_origin_growth_descriptor_and_structural_changes);
     RUN(test_rebuilds_when_independent_apply_overlap_changes);
