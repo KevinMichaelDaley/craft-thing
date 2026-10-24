@@ -1633,3 +1633,13 @@ build/reactive_material_tests: tests/fire/material_profile_tests.c src/fire/mate
 test: test_reactive_materials
 test_reactive_materials: build/reactive_material_tests
 	./build/reactive_material_tests
+
+build/diagnostics/reactive_profile_probe.spv: tests/vulkan/reactive_profile_probe.comp
+	mkdir -p $(dir $@)
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
+build/reactive_profile_gpu_tests: tests/vulkan/reactive_profile_gpu_tests.c tools/diagnostics/vulkan_probe.c src/fire/material_profile.c src/fire/material_profile_data.inc include/ferrum/fire/material_profile.h build/diagnostics/reactive_profile_probe.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/reactive_profile_gpu_tests.c src/fire/material_profile.c -o $@ $(LDLIBS)
+.PHONY: test_reactive_gpu_profiles
+test: test_reactive_gpu_profiles
+test_reactive_gpu_profiles: build/reactive_profile_gpu_tests
+	./build/reactive_profile_gpu_tests
