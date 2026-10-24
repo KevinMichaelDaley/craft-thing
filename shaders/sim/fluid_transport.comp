@@ -37,7 +37,9 @@ const float TRANSPORT_FUDGE=1.001;
    endpoint. Global occupancy and material storage never contain this cache. */
 const uint BOUND_SHIFT=19u,BOUND_LIMIT=1u<<(32u-BOUND_SHIFT);
 shared uvec4 cached[CACHE_CELLS];
+#ifndef DC_RECOMPUTE_REQUESTS
 shared uint cached_requests[CACHE_CELLS];
+#endif
 shared uint capacity_bits[(CACHE_CELLS+31u)/32u];
 shared uint source_bits[(CACHE_CELLS+31u)/32u];
 bool vertical;
@@ -210,7 +212,9 @@ uint move_cached_recipients(ivec2 source,ivec2 direction,uint reach,float travel
             uint bit=uint(positive?findMSB(mask):findLSB(mask)),position=word*32u+bit;
             uint offset=positive?position-coordinate:coordinate-position;
             uint request=request_at(source,direction,offset,travel);
+#ifndef DC_RECOMPUTE_REQUESTS
             cached_requests[position]=request;
+#endif
             requested+=min(request,available-requested);mask&=~(1u<<bit);
         }
     }
@@ -221,7 +225,13 @@ uint move_cached_recipients(ivec2 source,ivec2 direction,uint reach,float travel
         uint word=positive?last_word-order:first_word+order,mask=recipient_mask(word,low,high,true);
         while(mask!=0u&&remaining!=0u) {
             uint bit=uint(positive?findMSB(mask):findLSB(mask)),position=word*32u+bit;
-            uint flux=min(cached_requests[position],remaining);remaining-=flux;
+#ifdef DC_RECOMPUTE_REQUESTS
+            uint offset=positive?position-coordinate:coordinate-position;
+            uint request=request_at(source,direction,offset,travel);
+#else
+            uint request=cached_requests[position];
+#endif
+            uint flux=min(request,remaining);remaining-=flux;
             if(flux!=0u) {ivec2 target=point_at(position);water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),water_at(target),flux);put_water(target,water_at(target)+flux);}
             mask&=~(1u<<bit);
         }
@@ -291,7 +301,9 @@ bool move_source(ivec2 source,ivec2 direction) {
     uint first=lane*chunk,last=min(reach,first+chunk),requested=0u;
     for(uint order=first;order<last;order++) {
         uint request=request_at(source,direction,reach-order,travel);
+#ifndef DC_RECOMPUTE_REQUESTS
         if(order<CACHE_CELLS) cached_requests[order]=request;
+#endif
         requested+=request;
     }
     uint prior=subgroupExclusiveAdd(requested),total=subgroupAdd(requested);
@@ -299,7 +311,11 @@ bool move_source(ivec2 source,ivec2 direction) {
     transport_color_publish();
     for(uint order=first;order<last&&remaining!=0u;order++) {
         uint offset=reach-order;
+#ifdef DC_RECOMPUTE_REQUESTS
+        uint request=request_at(source,direction,offset,travel);
+#else
         uint request=order<CACHE_CELLS?cached_requests[order]:request_at(source,direction,offset,travel);
+#endif
         uint flux=min(request,remaining);remaining-=flux;
         if(flux!=0u) {ivec2 target=source+direction*int(offset);water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),water_at(target),flux);put_water(target,water_at(target)+flux);}
     }

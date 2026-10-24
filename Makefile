@@ -1447,12 +1447,16 @@ build/solver_grain_fusion_tests: tests/vulkan/solver_grain_fusion_tests.c tests/
 test: build/solver_grain_fusion_tests
 
 build/shaders/fluid_transport_recompute_16.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_short_run.glsl shaders/sim/fluid_one_cell.glsl Makefile
-	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TRANSPORT_GROUP_SIZE=16 $< -o $@
+	$(GLSLANG) -V --target-env vulkan1.3 -DDC_RECOMPUTE_REQUESTS=1 -DDC_TRANSPORT_GROUP_SIZE=16 $< -o $@
+build/shaders/fluid_transport_recompute.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_short_run.glsl shaders/sim/fluid_one_cell.glsl Makefile
+	$(GLSLANG) -V --target-env vulkan1.3 -DDC_RECOMPUTE_REQUESTS=1 $< -o $@
 build/diagnostics/fluid_transport_recompute_profile.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_short_run.glsl shaders/sim/fluid_one_cell.glsl Makefile
-	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TRANSPORT_GROUP_SIZE=16 -DDC_TRANSPORT_PROFILE=1 $< -o $@
+	$(GLSLANG) -V --target-env vulkan1.3 -DDC_RECOMPUTE_REQUESTS=1 -DDC_TRANSPORT_GROUP_SIZE=16 -DDC_TRANSPORT_PROFILE=1 $< -o $@
 build/fluid_recompute_requests_tests: tests/vulkan/fluid_recompute_requests_tests.c tests/vulkan/fluid_transport_partial_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/fluid_transport_profile_16.comp.spv build/diagnostics/fluid_transport_recompute_profile.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/fluid_recompute_requests_tests build/shaders/fluid_transport_recompute_16.comp.spv
+build/shaders/fluid_transport_recompute_16.comp.spv build/shaders/fluid_transport_recompute.comp.spv build/diagnostics/fluid_transport_recompute_profile.comp.spv: shaders/sim/fluid_aperture.glsl shaders/sim/hydraulic_face.glsl shaders/sim/water_color.glsl
+$(GPU_OBJ) $(PERFORMANCE_OBJ): build/shaders/fluid_transport_recompute_16.comp.spv build/shaders/fluid_transport_recompute.comp.spv
 
 build/shaders/mpm_commit.comp.spv: shaders/sim/mpm.comp $(wildcard shaders/sim/*.glsl)
 	@mkdir -p $(@D)

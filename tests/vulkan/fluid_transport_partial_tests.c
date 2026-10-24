@@ -138,7 +138,10 @@ static void sync_case(unsigned mode) {
 }
 static void test_rightward_partial_recipients_have_bounded_work(void) {sync_case(2);}
 static void test_leftward_partial_recipients_have_bounded_work(void) {sync_case(3);}
-int main(void) {
+#ifndef DC_TRANSPORT_PARTIAL_TEST_MAIN
+#define DC_TRANSPORT_PARTIAL_TEST_MAIN main
+#endif
+int DC_TRANSPORT_PARTIAL_TEST_MAIN(void) {
     RUN(test_rightward_partial_recipients_have_bounded_work);
     RUN(test_leftward_partial_recipients_have_bounded_work);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;

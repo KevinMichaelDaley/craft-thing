@@ -73,6 +73,10 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
         vkGetPhysicalDeviceProperties2(gpu->physical,&device);
         VkPhysicalDeviceProperties properties=device.properties;
         if(required_size==16u||subgroup.subgroupSize==16u) path="build/shaders/fluid_transport_16.comp.spv";
+        const char *requests=getenv("DC_TRANSPORT_REQUESTS");
+        if(requests&&strcmp(requests,"recompute")==0)
+            path=required_size==16u||subgroup.subgroupSize==16u?
+                "build/shaders/fluid_transport_recompute_16.comp.spv":"build/shaders/fluid_transport_recompute.comp.spv";
         values[1]=dc_gpu_transport_cache_cells(length,properties.limits.maxComputeSharedMemorySize);
     }
     if (!dc_gpu_load_shader_module(gpu,path,&shader,err,cap)) return false;
