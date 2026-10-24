@@ -80,6 +80,8 @@ static void test_level03_stays_packed_and_buried_trunk_cut_stays_supported(void)
     dc_gpu_t *g=observed_gpu;
     size_t image_bytes=(size_t)VIEW_WIDTH*VIEW_HEIGHT*sizeof(uint32_t);
     uint32_t *lit=malloc(image_bytes),*unlit=malloc(image_bytes);ASSERT_TRUE(lit&&unlit);
+    ASSERT_TRUE(dc_level_view_renderer_mode(view,FR_RENDERER_LIT));
+    ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
     ASSERT_TRUE(dc_level_view_pixels(view,lit,VIEW_WIDTH*VIEW_HEIGHT,err,sizeof(err)));
     ASSERT_TRUE(dc_level_view_toggle_lighting(view));
     ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));

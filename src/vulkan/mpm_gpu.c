@@ -34,8 +34,7 @@ bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkDeviceSize flags = (VkDeviceSize)DC_GPU_CHUNK_SLOTS *
                          DC_MPM_PARTICLES_PER_CHUNK * sizeof(uint32_t);
     VkDeviceSize grid = (VkDeviceSize)gpu->width * gpu->height;
-    VkDeviceSize component_cells =
-        (VkDeviceSize)dc_gpu_pixel_pool_capacity(gpu) * 8u;
+    VkDeviceSize component_bytes=dc_gpu_component_storage_bytes(gpu);
     if(!dc_gpu_mpm_scan_layout(gpu->width,gpu->height,&gpu->mpm_scan_layout))
         return error(err,cap,"Cannot size MPM activity scan scratch");
     return dc_gpu_make_device_buffer(gpu, particles, &gpu->mpm_proposal_buffer,
@@ -63,15 +62,15 @@ bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                gpu, (VkDeviceSize)gpu->mpm_scan_layout.words * sizeof(uint32_t),
                &gpu->mpm_activity_buffer, &gpu->mpm_activity_memory, err,
                cap) &&
-           dc_gpu_make_mapped_buffer(gpu, component_cells * sizeof(uint32_t),
+           dc_gpu_make_mapped_buffer(gpu, component_bytes,
                                      &gpu->mpm_label_a_buffer,
                                      &gpu->mpm_label_a_memory,
                                      &gpu->mpm_label_a_mapped, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, component_cells * sizeof(uint32_t),
+           dc_gpu_make_mapped_buffer(gpu, component_bytes,
                                      &gpu->mpm_label_b_buffer,
                                      &gpu->mpm_label_b_memory,
                                      &gpu->mpm_label_b_mapped, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, component_cells * sizeof(uint32_t),
+           dc_gpu_make_mapped_buffer(gpu, component_bytes,
                                      &gpu->mpm_component_size_buffer,
                                      &gpu->mpm_component_size_memory,
                                      &gpu->mpm_component_size_mapped, err, cap);

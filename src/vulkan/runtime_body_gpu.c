@@ -65,6 +65,7 @@ bool dc_gpu_runtime_bodies_init(dc_gpu_t *g,char *err,uint32_t cap) {
     struct dc_runtime_bodies *r=calloc(1,sizeof(*r));
     if(!r) return error(err,cap,"Cannot allocate body resource ownership");
     g->runtime_bodies=r;
+    if(!g->pixel_pool_words) g->pixel_pool_words=DC_GPU_INITIAL_PIXEL_POOL_WORDS;
     g->runtime_body_slots=DC_BODY_SLAB_RECORDS;
     r->force_groups=64u;r->fragment_cells=64u;
     r->store=(dc_gpu_body_store_t){.slab_count=1,.auxiliary_bytes=512,.solver_bytes=256,.host_records=true};

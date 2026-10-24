@@ -73,9 +73,26 @@ static uint32_t dense_material(const uint32_t *pixels, uint32_t width,
     return (pixels[index / 8] >> ((index % 8) * 4)) & 15u;
 }
 
+static bool pixel_dense_layout(const dc_gpu_body_record_t *b,uint32_t words,
+                               uint64_t *area,uint64_t *dw,uint64_t *dh) {
+    *area=(uint64_t)b->body.width*b->body.height;
+    *dw=((uint64_t)b->body.width+15u)/16u;
+    *dh=((uint64_t)b->body.height+15u)/16u;
+    return *area&&b->compound_reserved<=words&&(*area+7u)/8u<=words-b->compound_reserved&&
+        *dw<=65536u&&*dh<=65536u;
+}
 bool dc_gpu_upgrade_dense_pixels(dc_gpu_t *gpu, dc_gpu_body_record_t *bodies,
                                  uint32_t **pixels, uint32_t *words) {
     uint32_t capacity = dc_gpu_pixel_pool_capacity(gpu), used = 0;
+    uint64_t required=0;
+    for(unsigned slot=0;slot<DC_GPU_BODY_CAPACITY;slot++) {
+        const dc_gpu_body_record_t *b=bodies+slot;uint64_t area,dw,dh;
+        if((!b->body.active&&!b->reserved[0])||!(b->piece_count&DC_GPU_PIXEL_BODY_FLAG)) continue;
+        if(!pixel_dense_layout(b,*words,&area,&dw,&dh)) return false;
+        required+=8u+dw*dh*34u;
+        if(required>UINT32_MAX) return false;
+    }
+    if(required>capacity) capacity=(uint32_t)required;
     uint32_t *converted = calloc(capacity, sizeof(*converted));
     if (!converted)
         return false;
@@ -84,13 +101,8 @@ bool dc_gpu_upgrade_dense_pixels(dc_gpu_t *gpu, dc_gpu_body_record_t *bodies,
         if ((!b->body.active && !b->reserved[0]) ||
             !(b->piece_count & DC_GPU_PIXEL_BODY_FLAG))
             continue;
-        uint64_t area = (uint64_t)b->body.width * b->body.height;
-        uint64_t length = (area + 7) / 8;
-        uint64_t dw = ((uint64_t)b->body.width + 15) / 16;
-        uint64_t dh = ((uint64_t)b->body.height + 15) / 16;
-        if (!area || b->compound_reserved > *words ||
-            length > *words - b->compound_reserved || dw > 65536 ||
-            dh > 65536 || 8 + dw * dh > capacity - used)
+        uint64_t area,dw,dh;
+        if (!pixel_dense_layout(b,*words,&area,&dw,&dh)||8+dw*dh>capacity-used)
             goto invalid;
         const uint32_t *dense = *pixels + b->compound_reserved;
         uint32_t count = 0;

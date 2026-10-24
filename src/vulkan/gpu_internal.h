@@ -15,6 +15,7 @@ enum {
     DC_STRUCTURAL_HEADER_WORDS = 32,
     DC_GPU_PIXEL_BODY_FLAG = 0x80000000u,
     DC_GPU_PIXEL_POOL_HEADER_WORDS = 16,
+    DC_GPU_INITIAL_PIXEL_POOL_WORDS = 8192,
     DC_STRUCTURAL_COMPONENT_DIRTY_WORD = 20,
     DC_STRUCTURAL_GRAPH_WORDS = 2320,
     DC_STRUCTURAL_RESERVE_WORDS = 40000,
@@ -290,6 +291,12 @@ static inline VkDeviceSize dc_gpu_legacy_body_storage_bytes(const dc_gpu_t *gpu)
         (DC_STRUCTURAL_HEADER_WORDS + DC_GPU_CHUNK_SLOTS*8u + DC_STRUCTURAL_RESERVE_WORDS)*sizeof(uint32_t);
 }
 
+/** Terrain scratch covers resident cells independently of growing body geometry. */
+static inline VkDeviceSize dc_gpu_component_storage_bytes(const dc_gpu_t *gpu) {
+    VkDeviceSize visible=(VkDeviceSize)gpu->width*gpu->height;
+    VkDeviceSize resident=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS;
+    return (2u*(visible>resident?visible:resident)+DC_CHUNK_CELLS)*sizeof(uint32_t);
+}
 static inline uint32_t dc_gpu_pixel_pool_capacity(const dc_gpu_t *gpu) {
     if(gpu->pixel_pool_words) return gpu->pixel_pool_words;
     uint32_t cells = gpu->width * gpu->height;
