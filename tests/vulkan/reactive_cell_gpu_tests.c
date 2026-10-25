@@ -3,6 +3,7 @@
 #include <string.h>
 #include "ferrum/fire/gpu.h"
 #include "../../src/vulkan/gpu_internal.h"
+#include "../../src/vulkan/runtime_body_gpu.h"
 
 static int g_pass,g_fail;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
@@ -142,10 +143,34 @@ static void test_broken_leaf_keeps_composition_heat_and_history_as_a_leaf_bit(vo
     ASSERT_EQ(record.owner.key[1],0x80000001u);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_reused_body_slot_and_carving_keep_actual_owner_generation(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    for(uint32_t y=10;y<14;y++) for(uint32_t x=10;x<14;x++) c->cells[y*64+x].material=DC_MATERIAL_WOOD;
+    ASSERT_TRUE(context(&g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t state;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,700,91,&state,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,11*64+11,&state,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g)&&dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,11,12,4,DC_MATERIAL_AIR,err,sizeof(err))&&dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,30,30,1,DC_MATERIAL_WOOD,err,sizeof(err)));
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,800,92,&state,err,sizeof(err)));
+    state.ignition_threshold=.9f;state.ignition_integral=.6f;
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,30*64+30,&state,err,sizeof(err))&&dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_EQ(dc_gpu_body_owner(g,0)->generation,2u);
+    fr_reactive_record_t record;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000002u,1,1,&record,&found,err,sizeof(err)));ASSERT_TRUE(found);
+    ASSERT_EQ(record.owner.key[1],2u);ASSERT_TRUE(memcmp(&record.state,&state,sizeof(state))==0);
+    ASSERT_TRUE(dc_gpu_set_body_motion(g,0x80000002u,0,0,DC_GPU_BODY_KINEMATIC,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,29,31,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000002u,1,1,&record,&found,err,sizeof(err)));ASSERT_TRUE(found);
+    ASSERT_EQ(record.owner.key[1],2u);ASSERT_TRUE(memcmp(&record.state,&state,sizeof(state))==0);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     RUN(test_cells_retain_sparse_state_and_brush_replacement_retires_it);
     RUN(test_extraction_and_next_arena_flip_keep_exact_state);
     RUN(test_mpm_pool_swaps_preserve_parcel_and_leaf_pigment);
     RUN(test_broken_leaf_keeps_composition_heat_and_history_as_a_leaf_bit);
+    RUN(test_reused_body_slot_and_carving_keep_actual_owner_generation);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
