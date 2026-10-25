@@ -1,0 +1,15 @@
+void transport_apply_cell(ivec2 p) {
+    uint index=uint(p.y)*params.width+uint(p.x),atlas=gas_atlas(p);if(atlas==0xffffffffu) return;
+    if(transport_work[transport_line_start(p)].mass.w<0.) return;
+    ivec2 step=transport_axis()==0u?ivec2(1,0):ivec2(0,1);
+    GasFlux incoming=transport_face_flux(p-step),outgoing=transport_face_flux(p);
+    float energy_in=incoming.dynamics.y,energy_out=outgoing.dynamics.y;
+    Gas source=gas_provisional(atlas);float trace_scale=transport_work[transport_position(p)].mass.w;
+    precise vec2 carrier=vec2(source.species.z,source.dynamics.x)*trace_scale+vec2(incoming.species.z,incoming.dynamics.x)-vec2(outgoing.species.z,outgoing.dynamics.x);
+    precise vec3 pigment=source.visual.rgb*trace_scale+incoming.pigment-outgoing.pigment;
+    GasFlux net=GasFlux(incoming.species-outgoing.species,incoming.dynamics-outgoing.dynamics,vec3(0));net.dynamics.y=0.;net.species.z=0.;net.dynamics.x=0.;
+    Gas value=gas_add_flux(source,net,1.);value.species.z=carrier.x/trace_scale;value.dynamics.x=carrier.y/trace_scale;value.visual.rgb=pigment/trace_scale;
+    GasFlux energy=gas_empty_flux();
+    energy.dynamics.y=energy_in;value=gas_add_flux(value,energy,1.);
+    energy.dynamics.y=-energy_out;value=gas_add_flux(value,energy,1.);gas_write_provisional(atlas,value);
+}

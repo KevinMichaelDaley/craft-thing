@@ -1,6 +1,7 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_KHR_shader_subgroup_shuffle_relative : require
 #include "transport_implicit.glsl"
+#include "transport_apply_body.glsl"
 shared vec2 group_factor[64];
 shared vec4 group_species[64],group_dynamics[64],group_visual[64];
 shared uint group_moving[64];
@@ -56,5 +57,9 @@ void main() {
         prefix=transport_add(own_value,transport_scale(prefix,own_factor));
         uint index=transport_position(p);transport_work[index].species=prefix.species;
         transport_work[index].dynamics=prefix.dynamics;transport_work[index].visual=vec4(prefix.pigment,0);
+    }
+    if((params.bank&FR_GAS_FUSED_APPLY_BIT)!=0u) {
+        memoryBarrierBuffer();barrier();
+        for(uint cell=begin;cell<end;cell++) transport_apply_cell(transport_point(line,cell));
     }
 }

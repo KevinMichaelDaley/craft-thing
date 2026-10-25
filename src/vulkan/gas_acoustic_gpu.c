@@ -125,6 +125,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     } else if(!t->large_transport||compact_large) dispatch(g,&t->activity,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
     dispatch(g,&t->activity_compact,(tiles+63u)/64u,1u,dt,bank);
     if(t->large_transport) {
+        const char *fused_setting=getenv("DC_GAS_FUSED_APPLY");bool fused=fused_setting&&strcmp(fused_setting,"0")!=0;
         barrier(g);VkBufferCopy copy={.size=t->state_bytes};
         vkCmdCopyBuffer(g->command,t->state_bank[bank&1u],t->state_bank[(bank&1u)^1u],1,&copy);
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,4);
@@ -134,9 +135,9 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
             if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,5u+axis*4u);
             dispatch(g,&t->transport_prefix,lines,1u,dt,flags);
             if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,6u+axis*4u);
-            dispatch(g,&t->transport_prefix,lines,1u,dt,flags|16u);
+            dispatch(g,&t->transport_prefix,lines,1u,dt,flags|16u|(fused?FR_GAS_FUSED_APPLY_BIT:0u));
             if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,7u+axis*4u);
-            dispatch(g,&t->transport_apply,gx,gy,dt,flags);
+            if(!fused) dispatch(g,&t->transport_apply,gx,gy,dt,flags);
             if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,8u+axis*4u);
         }
         indirect_dispatch(g,t,&t->transport_metadata,dt,bank,32);

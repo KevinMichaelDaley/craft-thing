@@ -309,11 +309,11 @@ static void sparse_footprints_match_dense(uint32_t policy,float seconds,double v
     }
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,policy,err,sizeof(err)));
-    const char *names[4]={"DC_GAS_SPARSE_RHS","DC_GAS_SPARSE_ACTIVITY","DC_GAS_SPARSE_CLASSIFY","DC_GAS_SPARSE_LARGE"};char *saved[4]={0};
-    for(uint32_t k=0;k<4;k++) {const char *s=getenv(names[k]);saved[k]=s?SDL_strdup(s):NULL;}
+    const char *names[5]={"DC_GAS_SPARSE_RHS","DC_GAS_SPARSE_ACTIVITY","DC_GAS_SPARSE_CLASSIFY","DC_GAS_SPARSE_LARGE","DC_GAS_FUSED_APPLY"};char *saved[5]={0};
+    for(uint32_t k=0;k<5;k++) {const char *s=getenv(names[k]);saved[k]=s?SDL_strdup(s):NULL;}
     for(uint32_t path=0;path<2;path++) {
         const char *control=getenv("DC_GAS_TEST_SPARSE_CONTROL");
-        for(uint32_t k=0;k<4;k++) ASSERT_EQ(SDL_setenv(names[k],path&&(!control||strcmp(control,names[k])==0)?"1":"0",1),0);
+        for(uint32_t k=0;k<5;k++) ASSERT_EQ(SDL_setenv(names[k],path&&(!control||strcmp(control,names[k])==0)?"1":"0",1),0);
         ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_set_gravity(g,0,err,sizeof(err)));
         ASSERT_TRUE(fr_gas_gpu_gate(g,31,0,1,64,0,true,err,sizeof(err)));
         for(uint32_t step=0;step<20;step++) {
@@ -323,7 +323,7 @@ static void sparse_footprints_match_dense(uint32_t policy,float seconds,double v
         }
         ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,path?out:dense,4096,err,sizeof(err)));
     }
-    for(uint32_t k=0;k<4;k++) {ASSERT_EQ(SDL_setenv(names[k],saved[k]?saved[k]:"1",1),0);SDL_free(saved[k]);}
+    for(uint32_t k=0;k<5;k++) {ASSERT_EQ(SDL_setenv(names[k],saved[k]?saved[k]:"1",1),0);SDL_free(saved[k]);}
     if(memcmp(dense,out,4096*sizeof(*out))) {
         uint32_t printed=0;
         for(uint32_t i=0;i<4096&&printed<8;i++) {
