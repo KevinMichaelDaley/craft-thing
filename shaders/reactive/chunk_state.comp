@@ -1,0 +1,99 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+#include "../../include/dungeoncraft/reactive_state_layout.h"
+#include "../../include/dungeoncraft/reactive_arena_layout.h"
+#include "../../include/dungeoncraft/terrain_flags.h"
+#include "address.glsl"
+layout(local_size_x=64) in;
+layout(set=0,binding=0,std430) readonly buffer Root {uint root[];};
+layout(set=0,binding=1,std430) readonly buffer Cells {uvec2 cells[];};
+layout(set=0,binding=2,std430) readonly buffer Particles {uint particles[];};
+layout(push_constant) uniform Params {uint phase,slot,count,unused;} params;
+layout(buffer_reference,std430,buffer_reference_align=4) coherent buffer Words {uint words[];};
+layout(buffer_reference,std430,buffer_reference_align=8) coherent buffer Handles {uvec2 values[];};
+const uint ROWS=12288u,RECORD=35u,HANDLES=4u+ROWS*RECORD;
+#define PACKET Words(uvec2(root[26],root[27]))
+#define MARKS Words(uvec2(root[28],root[29]))
+Words entry(uint index) {return Words(reactive_entry_address(uvec2(root[4],root[5]),index));}
+bool valid(uvec2 handle) {
+    if(handle.y==0u||handle.x>=root[2]) return false;
+    Words e=entry(handle.x);
+    return e.words[FR_ENTRY_GENERATION]==handle.y&&e.words[FR_ENTRY_OWNER]>=1u&&e.words[FR_ENTRY_OWNER]<=3u;
+}
+uvec2 read_handle(uint local) {
+    if(local<4096u) return Handles(uvec2(root[6],root[7])).values[params.slot*4096u+local];
+    if((root[14]|root[15])==0u) return uvec2(0);
+    return Handles(uvec2(root[14],root[15])).values[params.slot*8192u+local-4096u];
+}
+void write_handle(uint local,uvec2 handle) {
+    if(local<4096u) Handles(uvec2(root[6],root[7])).values[params.slot*4096u+local]=handle;
+    else if((root[14]|root[15])!=0u) {
+        uint at=params.slot*8192u+local-4096u;
+        Handles(uvec2(root[14],root[15])).values[at]=handle;
+        Handles(uvec2(root[16],root[17])).values[at]=uvec2(0);
+    }
+}
+void retire(uvec2 handle) {
+    if(!valid(handle)) return;
+    Words e=entry(handle.x),mail=Words(uvec2(root[20],root[21]));
+    uint generation=min(handle.y,0xfffffffeu)+1u;
+    e.words[FR_ENTRY_OWNER]=0u;e.words[FR_ENTRY_GENERATION]=generation;
+    atomicAdd(mail.words[FR_ARENA_MAIL_LIVE],0xffffffffu);
+    if(generation==0xffffffffu) atomicAdd(mail.words[FR_ARENA_MAIL_RETIRED],1u);
+    else {
+        memoryBarrierBuffer();atomicOr(Words(uvec2(root[18],root[19])).words[handle.x/32u],1u<<(handle.x%32u));
+        memoryBarrierBuffer();atomicAdd(mail.words[FR_ARENA_MAIL_FREE],1u);
+    }
+}
+bool less_id(uvec2 a,uvec2 b) {return a.y<b.y||(a.y==b.y&&a.x<b.x);}
+uvec2 input_id(uint index) {uint at=4u+index*RECORD+1u+6u+FR_STATE_PARCEL_LOW;return uvec2(PACKET.words[at],PACKET.words[at+1u]);}
+void validate_physical(uint index) {
+    uint at=4u+index*RECORD,local=PACKET.words[at],kind=PACKET.words[at+1u],material=PACKET.words[at+7u];
+    bool okay=false;
+    if(kind==1u&&local<4096u) okay=(cells[params.slot*4096u+local].x&65535u)==material;
+    if(kind==3u&&local<8192u) {
+        uint p=(params.slot*8192u+local)*14u;
+        okay=particles[p+10u]!=0u&&particles[p+12u]==material&&particles[p+8u]==PACKET.words[at+2u]&&particles[p+9u]==PACKET.words[at+3u];
+        if(local<4096u) {
+            uint packed=cells[params.slot*4096u+local].x;
+            if((packed&(DC_CELL_LOADED_TERRAIN<<16u))!=0u&&(packed&65535u)==material) okay=false;
+        }
+    }
+    if(!okay) atomicOr(PACKET.words[1],2u);
+}
+void main() {
+    uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
+    if(params.phase==0u&&index<ROWS) {
+        uvec2 handle=read_handle(index);
+        if(valid(handle)) {
+            uint output_index=atomicAdd(PACKET.words[0],1u),at=4u+output_index*RECORD;
+            PACKET.words[at]=index<4096u?index:index-4096u;
+            Words e=entry(handle.x);
+            for(uint word=0u;word<6u;word++) PACKET.words[at+1u+word]=e.words[FR_ENTRY_OWNER+word];
+            for(uint word=0u;word<FR_STATE_WORDS;word++) PACKET.words[at+7u+word]=e.words[FR_ENTRY_STATE+word];
+        }
+    }
+    if(params.phase==1u&&index<ROWS) {
+        uvec2 handle=read_handle(index);if(valid(handle)) MARKS.words[handle.x]=1u;
+    }
+    if(params.phase==2u) {
+        if(index<params.count) validate_physical(index);
+        if(index<root[2]&&MARKS.words[index]==0u) {
+            Words e=entry(index);uint kind=e.words[FR_ENTRY_OWNER];
+            if(kind>=1u&&kind<=3u) {
+                uvec2 id=uvec2(e.words[FR_ENTRY_STATE+FR_STATE_PARCEL_LOW],e.words[FR_ENTRY_STATE+FR_STATE_PARCEL_LOW+1u]);
+                uint lo=0u,hi=params.count;
+                while(lo<hi) {uint mid=lo+(hi-lo)/2u;if(less_id(input_id(mid),id)) lo=mid+1u;else hi=mid;}
+                if(lo<params.count&&all(equal(input_id(lo),id))) atomicOr(PACKET.words[1],1u);
+            }
+        }
+    }
+    if(params.phase==3u&&index<ROWS) {retire(read_handle(index));write_handle(index,uvec2(0));}
+    if(params.phase==4u&&index<params.count) {
+        uint at=4u+index*RECORD,local=PACKET.words[at],kind=PACKET.words[at+1u];
+        uvec2 handle=uvec2(PACKET.words[HANDLES+index*2u],PACKET.words[HANDLES+index*2u+1u]);
+        write_handle(local+(kind==3u?4096u:0u),handle);
+    }
+}

@@ -66,7 +66,7 @@ GLSLANG ?= glslangValidator
 
 GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/broadphase_gpu.o build/contact_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
 GPU_OBJ += build/runtime_body_gpu.o build/runtime_geometry_gpu.o build/body_address_gpu.o build/body_storage_gpu.o
-GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o
+GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o build/reactive_chunk_gpu.o
 build/reactive_arena_gpu.o: src/vulkan/reactive_arena_gpu.c src/vulkan/reactive_arena_gpu.h include/dungeoncraft/reactive_arena_layout.h include/dungeoncraft/reactive_state_layout.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/reactive_state.o build/reactive_snapshot.o build/reactive_material.o build/reactive_chunk.o
@@ -1723,3 +1723,8 @@ build/reactive_chunk.o: src/fire/reactive_chunk.c include/ferrum/fire/reactive_c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/reactive_chunk_display_tests: tests/vulkan/reactive_chunk_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/shaders/reactive_chunk_state.comp.spv: shaders/reactive/chunk_state.comp shaders/reactive/address.glsl include/dungeoncraft/reactive_arena_layout.h include/dungeoncraft/reactive_state_layout.h
+	mkdir -p $(dir $@)
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+$(GPU_OBJ) build/reactive_chunk_display_tests: build/shaders/reactive_chunk_state.comp.spv
+build/reactive_gpu.o build/reactive_chunk_gpu.o: src/vulkan/reactive_storage_gpu.h

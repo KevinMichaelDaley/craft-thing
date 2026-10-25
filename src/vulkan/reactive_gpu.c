@@ -4,14 +4,10 @@
 #include "dungeoncraft/reactive_state_layout.h"
 #include "reactive_arena_gpu.h"
 #include "reactive_gpu_internal.h"
+#include "reactive_storage_gpu.h"
 #include "runtime_body_internal.h"
 
 #define REACTIVE_ROOT_MAGIC 0x46525331u
-struct fr_reactive_gpu {
-    fr_reactive_arena_gpu_t arena;
-    dc_gpu_address_buffer_t cells,shapes,particles;
-    uint64_t high_id;
-};
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
     return false;
@@ -33,12 +29,14 @@ void fr_gpu_reactive_bind_work(dc_gpu_t *g,uint32_t *h) {
 void fr_gpu_reactive_destroy(dc_gpu_t *g) {
     if(!g||!g->reactive) return;
     struct fr_reactive_gpu *r=g->reactive;
+    fr_renderer_compute_destroy(g,&r->stream_compute);
+    dc_gpu_address_buffer_destroy(g,&r->stream);dc_gpu_address_buffer_destroy(g,&r->stream_marks);
     fr_reactive_arena_destroy(g,&r->arena);
     dc_gpu_address_buffer_destroy(g,&r->cells);dc_gpu_address_buffer_destroy(g,&r->shapes);
     dc_gpu_address_buffer_destroy(g,&r->particles);
     free(r);g->reactive=NULL;
 }
-static bool initialize(dc_gpu_t *g,char *err,uint32_t cap) {
+bool fr_gpu_reactive_initialize(dc_gpu_t *g,char *err,uint32_t cap) {
     if(g->reactive) return true;
     struct fr_reactive_gpu *r=calloc(1,sizeof(*r));
     if(!r) return error(err,cap,"Cannot allocate reactive resource owner");
@@ -55,7 +53,7 @@ static bool initialize(dc_gpu_t *g,char *err,uint32_t cap) {
     fr_gpu_reactive_bind_work(g,g->runtime_bodies->work.mapped);g->descriptor_revision++;
     return true;
 }
-static bool particle_storage(dc_gpu_t *g,char *err,uint32_t cap) {
+bool fr_gpu_reactive_particle_storage(dc_gpu_t *g,char *err,uint32_t cap) {
     struct fr_reactive_gpu *r=g->reactive;
     if(r->particles.buffer) return true;
     VkDeviceSize bank=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_MPM_PARTICLES_PER_CHUNK*8u;
@@ -118,8 +116,8 @@ bool fr_gpu_reactive_seed_cell(dc_gpu_t *g,uint32_t slot,uint32_t local,
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Reactive import wait failed");
     const uint32_t *registry=dc_gpu_structural_data(g)+DC_STRUCTURAL_HEADER_WORDS+slot*8u;
     if(!registry[5]) return error(err,cap,"Reactive cell owner is not resident");
-    if(!initialize(g,err,cap)) return false;
-    if(state->material==DC_MATERIAL_LEAVES&&!particle_storage(g,err,cap)) return false;
+    if(!fr_gpu_reactive_initialize(g,err,cap)) return false;
+    if(state->material==DC_MATERIAL_LEAVES&&!fr_gpu_reactive_particle_storage(g,err,cap)) return false;
     dc_chunk_coord_t coord;memcpy(&coord,registry,sizeof(coord));
     fr_reactive_owner_t owner=fr_reactive_cell_owner(coord,local);
     uint32_t *handle=(uint32_t *)g->reactive->cells.mapped+((size_t)slot*4096u+local)*2u;
@@ -177,9 +175,9 @@ bool fr_gpu_reactive_seed_particle(dc_gpu_t *g,uint32_t particle,
     const dc_mpm_particle_t *p=(const dc_mpm_particle_t *)g->particle_mapped+particle;
     if(!p->mass_fp||p->material!=state->material||(p->id_lo|p->id_hi)==0)
         return error(err,cap,"Reactive particle source is absent or has another material");
-    if(!initialize(g,err,cap)) return false;
+    if(!fr_gpu_reactive_initialize(g,err,cap)) return false;
     struct fr_reactive_gpu *r=g->reactive;
-    if(!particle_storage(g,err,cap)) return false;
+    if(!fr_gpu_reactive_particle_storage(g,err,cap)) return false;
     fr_reactive_owner_t owner={.kind=FR_REACTIVE_OWNER_PARTICLE,
         .key={p->id_lo,p->id_hi,state->parcel_id_low,state->parcel_id_high,0}};
     return admit(g,(uint32_t *)r->particles.mapped+(size_t)particle*2u,&owner,state,err,cap);
@@ -193,12 +191,4 @@ bool fr_gpu_reactive_read_particle(dc_gpu_t *g,uint32_t particle,
         entry(g,(uint32_t *)g->reactive->particles.mapped+(size_t)particle*2u):NULL;
     if(e) {memcpy(&out->owner,e+FR_ENTRY_OWNER,sizeof(out->owner));memcpy(&out->state,e+FR_ENTRY_STATE,sizeof(out->state));}
     *found=e!=NULL;return true;
-}
-bool fr_gpu_reactive_export_chunk(dc_gpu_t *g,uint32_t slot,const dc_chunk_t *chunk,
-    fr_reactive_chunk_t *out,char *err,uint32_t cap) {
-    (void)g;(void)slot;(void)chunk;(void)out;(void)err;(void)cap;return false;
-}
-bool fr_gpu_reactive_import_chunk(dc_gpu_t *g,uint32_t slot,const dc_chunk_t *chunk,
-    const fr_reactive_chunk_t *channel,char *err,uint32_t cap) {
-    (void)g;(void)slot;(void)chunk;(void)channel;(void)err;(void)cap;return false;
 }

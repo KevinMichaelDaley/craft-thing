@@ -63,3 +63,7 @@ Live state storage now uses the GPU reserve/publish/rollback arena instead of CP
 **2026-10-25T02:25:24Z**
 
 Persistent identity GREEN: actual Wayland Vulkan regression moved a live leaf parcel, repainted its vacated cell and reproduced two concurrent particles sharing physical PID. Their owners now retain distinct 64-bit birth identities across movement; all5 lifecycle display cases pass (20 presented frames) with core/sync validation. FRS1 writes semantic ABI2 and reads ABI1 without accepting its reserved high-birth bits. CPU packet6 and state9 tests pass. Chunk attachment codec3 CPU cases pass; actual stream/checkpoint embedding remains underway.
+
+**2026-10-25T02:33:23Z**
+
+Atomic DCC7 streaming GREEN:3 new asynchronous worker cases plus7 unchanged stream cases pass. GPU chunk channel GREEN:3 actual Wayland Vulkan cases pass with core/sync validation and12 displayed frames. Save compaction builds sparse CELL/PARTICLE records on GPU; restore validates actual GPU materials/PIDs and rejects duplicate parcel IDs in other resident owners before allocation/publication. Replacing slot state retires old entries and retains the identity high-water mark. App-level wiring, DCS checkpoint integration and remaining mechanical/admission paths are still required.
