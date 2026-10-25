@@ -343,6 +343,9 @@ static void test_native_large_cfl_sparse_footprints_match_dense_after_gravity_an
 static void test_native_prototype_sparse_large_footprints_match_dense(void) {
     sparse_footprints_match_dense(FR_GAS_PRESSURE_LARGE_CFL,.01f,100,1./512.);
 }
+static void test_native_explicit_sustained_gravity_control(void) {
+    sparse_footprints_match_dense(FR_GAS_PRESSURE_HLLC,.05f,25,1);
+}
 static void test_native_large_cfl_packet_matches_composed_oracle_in_one_step(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     fr_gas_model_t m=reference_model();fr_gas_state_t *input=calloc(4096,sizeof(*input)),*expected=malloc(4096*sizeof(*expected)),*out=malloc(4096*sizeof(*out));
@@ -413,5 +416,6 @@ int main(void) {
     RUN(test_native_large_cfl_sparse_footprints_match_dense_after_gravity_and_valve_changes);
     RUN(test_native_receding_gate_matches_real_reflecting_wall);
     RUN(test_native_prototype_sparse_large_footprints_match_dense);
+    RUN(test_native_explicit_sustained_gravity_control);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0||g_pass==0;
 }
