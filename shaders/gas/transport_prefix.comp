@@ -3,58 +3,73 @@
 #extension GL_KHR_shader_subgroup_shuffle_relative : require
 #include "transport_implicit.glsl"
 shared vec2 group_factor[64];
-shared vec4 group_species[64],group_dynamics[64],group_visual[64];
+shared vec4 group_value[64];
 shared uint group_moving[64];
-GasFlux shuffle_up(GasFlux value,uint offset) {
-    return GasFlux(subgroupShuffleUp(value.species,offset),subgroupShuffleUp(value.dynamics,offset),subgroupShuffleUp(value.pigment,offset));
+vec4 field_scale(vec2 factor,uint pack) {
+    return pack==1u?vec4(factor.x,factor.y,factor.x,factor.x):vec4(factor.x);
 }
-void cell_map(ivec2 p,out vec2 factor,out GasFlux value,out bool moving) {
+vec4 source_value(uint atlas,uint pack,bool backward) {
+    if(backward) {
+        if(pack==0u) return transport_work[atlas].species;
+        if(pack==1u) return transport_work[atlas].dynamics;
+        return transport_work[atlas].visual;
+    }
+    bool bank=(params.bank&1u)==0u;
+    if(pack==0u) return bank?bank1[atlas].species:bank0[atlas].species;
+    if(pack==2u) return vec4(bank?bank1[atlas].visual.rgb:bank0[atlas].visual.rgb,0);
+    vec4 value=bank?bank1[atlas].dynamics:bank0[atlas].dynamics;
+    value.y+=(bank?bank1[atlas].visual.w:bank0[atlas].visual.w)+(bank?bank1[atlas].geometry.z:bank0[atlas].geometry.z);
+    return value;
+}
+void store_value(uint atlas,uint pack,vec4 value) {
+    if(pack==0u) transport_work[atlas].species=value;
+    else if(pack==1u) transport_work[atlas].dynamics=value;
+    else transport_work[atlas].visual=value;
+}
+void cell_map(ivec2 p,uint pack,out vec2 factor,out vec4 value,out bool moving) {
     uint index=uint(p.y)*params.width+uint(p.x),atlas=gas_atlas(p);bool backward=transport_direction()<0;
     vec4 mass=acoustic[index],energy=provisional[index];
     factor=backward?vec2(mass.z,energy.z):vec2(mass.x,energy.x);
-    value=gas_empty_flux();moving=any(notEqual(stencil[index],vec4(0)));
+    value=vec4(0);moving=any(notEqual(stencil[index],vec4(0)));
     if(atlas==0xffffffffu) return;
-    Gas source=backward?transport_work[atlas]:gas_provisional(atlas);
-    value=transport_state(source);
-    if(!backward) {value.species.z*=mass.w;value.dynamics.x*=mass.w;value.pigment*=mass.w;}
-    value=transport_scale(value,backward?vec2(1):vec2(mass.y,energy.y));
+    value=source_value(atlas,pack,backward);
+    if(!backward) {
+        if(pack==0u) value.z*=mass.w;
+        else if(pack==1u) value.x*=mass.w;
+        else value.rgb*=mass.w;
+        value*=field_scale(vec2(mass.y,energy.y),pack);
+    }
 }
 void main() {
-    uint lane=gl_SubgroupInvocationID,rank=gl_SubgroupID*gl_SubgroupSize+lane;
+    uint lane=gl_SubgroupInvocationID,rank=gl_SubgroupID*gl_SubgroupSize+lane,pack=gl_WorkGroupID.y;
     uint length=transport_axis()==0u?params.width:params.height,span=(length+63u)/64u;
     uint begin=rank*span,end=min(begin+span,length),line=gl_WorkGroupID.x;
-    vec2 factor=vec2(1);GasFlux value=gas_empty_flux();bool moving=false;
+    vec2 factor=vec2(1);vec4 value=vec4(0);bool moving=false;
     for(uint cell=begin;cell<end;cell++) {
-        vec2 own_factor;GasFlux own_value;bool own_moving;cell_map(transport_point(line,cell),own_factor,own_value,own_moving);
-        moving=moving||own_moving;value=transport_add(own_value,transport_scale(value,own_factor));factor*=own_factor;
+        vec2 own_factor;vec4 own_value;bool own_moving;cell_map(transport_point(line,cell),pack,own_factor,own_value,own_moving);
+        moving=moving||own_moving;value=own_value+value*field_scale(own_factor,pack);factor*=own_factor;
     }
     uint moving_mask=subgroupOr(moving?1u:0u);
     if(lane+1u==gl_SubgroupSize) group_moving[gl_SubgroupID]=moving_mask;
     barrier();bool any_moving=false;
     for(uint group=0;group<gl_NumSubgroups;group++) any_moving=any_moving||group_moving[group]!=0u;
     if(!any_moving) {
-        for(uint cell=begin;cell<end;cell++) {uint atlas=gas_atlas(transport_point(line,cell));if(atlas!=0xffffffffu) transport_work[atlas]=gas_empty();}
+        for(uint cell=begin;cell<end;cell++) {uint atlas=gas_atlas(transport_point(line,cell));if(atlas!=0xffffffffu) store_value(atlas,pack,vec4(0));}
         return;
     }
     for(uint offset=1u;offset<gl_SubgroupSize;offset*=2u) {
-        vec2 previous=subgroupShuffleUp(factor,offset);GasFlux prior=shuffle_up(value,offset);
-        if(lane>=offset) {value=transport_add(value,transport_scale(prior,factor));factor*=previous;}
+        vec2 previous=subgroupShuffleUp(factor,offset);vec4 prior=subgroupShuffleUp(value,offset);
+        if(lane>=offset) {value+=prior*field_scale(factor,pack);factor*=previous;}
     }
-    if(lane+1u==gl_SubgroupSize) {
-        group_factor[gl_SubgroupID]=factor;group_species[gl_SubgroupID]=value.species;
-        group_dynamics[gl_SubgroupID]=value.dynamics;group_visual[gl_SubgroupID]=vec4(value.pigment,0);
-    }
-    vec2 exclusive_factor=subgroupShuffleUp(factor,1u);GasFlux exclusive_value=shuffle_up(value,1u);
-    if(lane==0u) {exclusive_factor=vec2(1);exclusive_value=gas_empty_flux();}
-    barrier();GasFlux prefix=gas_empty_flux();
-    for(uint group=0;group<gl_SubgroupID;group++) {
-        GasFlux prior=GasFlux(group_species[group],group_dynamics[group],group_visual[group].rgb);
-        prefix=transport_add(prior,transport_scale(prefix,group_factor[group]));
-    }
-    prefix=transport_add(exclusive_value,transport_scale(prefix,exclusive_factor));
+    if(lane+1u==gl_SubgroupSize) {group_factor[gl_SubgroupID]=factor;group_value[gl_SubgroupID]=value;}
+    vec2 exclusive_factor=subgroupShuffleUp(factor,1u);vec4 exclusive_value=subgroupShuffleUp(value,1u);
+    if(lane==0u) {exclusive_factor=vec2(1);exclusive_value=vec4(0);}
+    barrier();vec4 prefix=vec4(0);
+    for(uint group=0;group<gl_SubgroupID;group++) prefix=group_value[group]+prefix*field_scale(group_factor[group],pack);
+    prefix=exclusive_value+prefix*field_scale(exclusive_factor,pack);
     for(uint cell=begin;cell<end;cell++) {
-        ivec2 p=transport_point(line,cell);vec2 own_factor;GasFlux own_value;bool own_moving;cell_map(p,own_factor,own_value,own_moving);
-        prefix=transport_add(own_value,transport_scale(prefix,own_factor));
-        uint atlas=gas_atlas(p);if(atlas!=0xffffffffu) transport_work[atlas]=Gas(prefix.species,prefix.dynamics,vec4(prefix.pigment,0),vec4(0));
+        ivec2 p=transport_point(line,cell);vec2 own_factor;vec4 own_value;bool own_moving;cell_map(p,pack,own_factor,own_value,own_moving);
+        prefix=own_value+prefix*field_scale(own_factor,pack);
+        uint atlas=gas_atlas(p);if(atlas!=0xffffffffu) store_value(atlas,pack,prefix);
     }
 }

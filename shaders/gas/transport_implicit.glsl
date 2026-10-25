@@ -20,7 +20,8 @@ GasFlux transport_scale(GasFlux a,vec2 factor) {
 }
 GasFlux transport_state(Gas value) {return GasFlux(value.species,vec4(value.dynamics.x,gas_energy(value),value.dynamics.zw),value.visual.rgb);}
 GasFlux transport_work_at(ivec2 p) {
-    uint at=gas_atlas(p);return at==0xffffffffu?gas_empty_flux():transport_state(transport_work[at]);
+    uint at=gas_atlas(p);if(at==0xffffffffu) return gas_empty_flux();
+    Gas value=transport_work[at];return GasFlux(value.species,value.dynamics,value.visual.rgb);
 }
 vec4 transport_face_rates(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return vec4(0);

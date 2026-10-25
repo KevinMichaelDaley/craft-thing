@@ -128,9 +128,9 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
             uint32_t flags=bank|(axis<<3u),lines=axis==0?g->height:g->width;
             dispatch(g,&t->transport_factor,lines,1u,dt,flags);
             if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,5u+axis*4u);
-            dispatch(g,&t->transport_prefix,lines,1u,dt,flags);
+            dispatch(g,&t->transport_prefix,lines,3u,dt,flags);
             if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,6u+axis*4u);
-            dispatch(g,&t->transport_prefix,lines,1u,dt,flags|16u);
+            dispatch(g,&t->transport_prefix,lines,3u,dt,flags|16u);
             if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,7u+axis*4u);
             dispatch(g,&t->transport_apply,gx,gy,dt,flags);
             if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,8u+axis*4u);
