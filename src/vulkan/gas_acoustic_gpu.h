@@ -9,6 +9,7 @@ typedef struct {
     fr_renderer_compute_t clear_pressure,prepare_pressure;
     fr_renderer_compute_t activity_candidates;
     fr_renderer_compute_t transport_factor,transport_prefix,transport_apply,transport_metadata;
+    fr_renderer_compute_t restrict_pressure,coarse_sor,prolong_pressure;
     dc_gpu_address_buffer_t transport_work;
     VkBuffer state_bank[2];VkDeviceSize state_bytes;
     dc_gpu_address_buffer_t fields[11],indirect;

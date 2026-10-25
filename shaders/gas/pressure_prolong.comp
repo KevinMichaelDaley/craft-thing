@@ -1,0 +1,8 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "pressure_coarse.glsl"
+void main() {
+    uint tile=active_tiles[gl_WorkGroupID.x],lane=gl_LocalInvocationIndex,width=coarse_width();
+    uvec2 p=uvec2(tile%width,tile/width)*8u+uvec2(lane%8u,lane/8u);
+    if(p.x<params.width&&p.y<params.height) correction[p.y*params.width+p.x]=coarse[tile].data.z;
+}

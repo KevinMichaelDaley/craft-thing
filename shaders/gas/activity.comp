@@ -8,15 +8,19 @@ void main() {
     uint tile=(params.bank&512u)!=0u?active_tiles[gl_WorkGroupID.x]:gl_WorkGroupID.y*width+gl_WorkGroupID.x;
     uvec2 p=uvec2(tile%width,tile/width)*8u+uvec2(lane%8u,lane/8u);
     if(p.x<params.width&&p.y<params.height) {
-        Primitive own=gas_cached(ivec2(p));bool awake=any(notEqual(own.hydro.yz,vec2(0)));
+        Primitive own=gas_cached(ivec2(p));bool practical=(params.bank&FR_GAS_PRACTICAL_BIT)!=0u;
+        bool awake=practical?any(greaterThan(abs(own.hydro.yz),vec2(.05))):any(notEqual(own.hydro.yz,vec2(0)));
         if(own.metric.w>0.) {
             float fraction=gas_parameter(FR_GAS_OXYGEN_WORD);
             float oxygen=(fraction/gas_parameter(0u))/(fraction/gas_parameter(0u)+(1.-fraction)/gas_parameter(1u));
             float reference=(oxygen*gas_parameter(0u)+(1.-oxygen)*gas_parameter(1u))*gas_parameter(FR_GAS_AMBIENT_WORD);
             float ratio=gas_parameter(FR_GAS_KINETIC_WORD)*own.hydro.w/(own.hydro.x*reference);
-            awake=awake||(gas_parameter(FR_GAS_GRAVITY_WORD)!=0.&&abs(ratio-1.)>0.00000095367431640625);
+            awake=awake||(gas_parameter(FR_GAS_GRAVITY_WORD)!=0.&&abs(ratio-1.)>(practical?.001:0.00000095367431640625));
             for(uint d=0u;d<4u;d++) {
-                uint j=0u;if(gas_neighbor(ivec2(p),d,j)&&gas_cached(ivec2(p)+gas_direction(d)).hydro.w!=own.hydro.w) awake=true;
+                uint j=0u;if(gas_neighbor(ivec2(p),d,j)) {
+                    float other=gas_cached(ivec2(p)+gas_direction(d)).hydro.w;
+                    if(practical?abs(other-own.hydro.w)>.001*max(abs(other),abs(own.hydro.w)):other!=own.hydro.w) awake=true;
+                }
             }
         }
         if(awake) atomicOr(needed,1u);

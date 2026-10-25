@@ -67,3 +67,7 @@ Latest user direction authorizes bounded practical pressure work, approximate re
 **2026-10-25T21:05:39Z**
 
 Practical thermal prototype passes two actual Wayland/Vulkan gates: unsupported force admission and 120 variable intervals spanning12 physical seconds with no retries, fixed256 SOR sweeps, full clock, finite T/P/velocity and meaningful stock/drift bounds. Worst64x64 gas call20.862ms; this is NOT full-frame acceptance.32/64 bounded sweeps failed density bounds. Practical thermal channel advects internal heat, pressure changes bulk momentum, with Mach0.5 guard and explicit numerical/mechanical work ledger. Strict compressible modes remain diagnostics. Next actual scene timing/visuals and current validation; save/edit/stream scope and milestone remain open.
+
+**2026-10-25T21:10:27Z**
+
+Opt-in GPU coarse pressure prototype (8x8 aggregate,128 coarse/128 fine sweeps) passes120-interval stability. Real40-frame trace49.102ms mean75.891ms worst, four paused captures identical. No retry/catch-up growth. Screenshot inspected: rising colored plumes, but fine-grid reservoir density artifacts remain; visual and complete-frame acceptance NOT passed. Practical activity tolerances retain stock and pass stability. Next pressure/transport coupling artifact and budget work; no other module started.

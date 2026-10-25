@@ -1,0 +1,14 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "pressure_coarse.glsl"
+void main() {
+    uint at=gl_GlobalInvocationID.x,width=coarse_width();
+    if(at>=gas_tile_count()||((at%width+at/width)&1u)!=((params.bank>>1u)&1u)) return;
+    CoarseRow row=coarse[at];if(row.data.y<=0.) return;
+    float rhs=row.data.x;
+    for(uint d=0u;d<4u;d++) if(row.coefficients[d]>0.) {
+        uint j=d==0u?at+1u:(d==1u?at-1u:(d==2u?at+width:at-width));
+        rhs+=row.coefficients[d]*coarse[j].data.z;
+    }
+    coarse[at].data.z+=1.5*(rhs/row.data.y-row.data.z);
+}

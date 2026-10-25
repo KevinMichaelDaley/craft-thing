@@ -1791,6 +1791,7 @@ build/gas_model.o: src/fire/gas.c src/fire/gas_internal.h include/ferrum/fire/ga
 build/gpu.o build/present_gpu.o: src/vulkan/gas_gpu_internal.h
 GAS_SHADERS = build/shaders/gas_init.comp.spv build/shaders/gas_prepare.comp.spv build/shaders/gas_transport.comp.spv build/shaders/gas_gate.comp.spv build/shaders/gas_overlay.comp.spv $(patsubst %,build/shaders/gas_%.comp.spv,transport_factor transport_prefix transport_apply transport_metadata activity_candidates pressure_clear pressure_prepare activity activity_compact final_compact sparse_commit advect acoustic_init pressure_rhs pressure_classify pressure_compact pressure_sor pressure_tile pressure_correct pressure_residual acoustic_finish)
 GAS_SHADERS += build/shaders/gas_transport_prefix_wide.comp.spv
+GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_restrict pressure_coarse_sor pressure_prolong)
 build/gas_acoustic_gpu.o: src/vulkan/gas_acoustic_gpu.c src/vulkan/gas_acoustic_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/shaders/gas_%.comp.spv: shaders/gas/%.comp $(wildcard shaders/gas/*.glsl) include/dungeoncraft/gas_layout.h include/ferrum/fire/gas_constants.h include/dungeoncraft/terrain_flags.h
