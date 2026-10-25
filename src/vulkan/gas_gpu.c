@@ -203,6 +203,10 @@ bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot configure acoustic policy");
     ((float *)t->parameters.mapped)[FR_GAS_POLICY_WORD]=(float)policy;t->policy=policy;return true;
 }
+bool fr_gas_gpu_gate(dc_gpu_t *g,uint32_t x,uint32_t y,uint32_t width,uint32_t height,uint32_t axis,bool closed,char *err,uint32_t cap) {
+    (void)g;(void)x;(void)y;(void)width;(void)height;(void)axis;(void)closed;
+    return error(err,cap,"Gas gate not implemented");
+}
 bool fr_gas_gpu_read_work_chunk(dc_gpu_t *g,uint32_t slot,double *work,uint32_t count,char *err,uint32_t cap) {
     if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!work||count<4096u) return error(err,cap,"Invalid gas work snapshot");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas work snapshot");

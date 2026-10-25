@@ -16,6 +16,10 @@ bool fr_gas_gpu_step(dc_gpu_t *gpu,float seconds,char *err_buf,uint32_t err_cap)
 bool fr_gas_gpu_set_gravity(dc_gpu_t *gpu,float gravity,char *err_buf,uint32_t err_cap);
 /** Select a validated acoustic policy without changing stock or physical time. */
 bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *gpu,uint32_t policy,char *err_buf,uint32_t err_cap);
+/** Open/close gas-flow faces in a physical-cell rectangle. Axis0 is the right
+ * face, axis1 the lower face. This changes boundary conditions, never gas stock. */
+bool fr_gas_gpu_gate(dc_gpu_t *gpu,uint32_t x,uint32_t y,uint32_t width,uint32_t height,
+    uint32_t axis,bool closed,char *err_buf,uint32_t err_cap);
 /** Cold diagnostic of cumulative external buoyancy work, never a frame scan. */
 bool fr_gas_gpu_read_work_chunk(dc_gpu_t *gpu,uint32_t slot,double *work,
     uint32_t capacity,char *err_buf,uint32_t err_cap);

@@ -184,6 +184,28 @@ static void test_native_implicit_sparse_pressure_and_color_cross_chunk_seams_wit
     ASSERT_TRUE(out[32*128+64].pigment[0]>1e-5&&out[32*128+64].pigment[2]>1e-5&&present(g,err,sizeof(err)));
     free(input);free(out);free(expected);free(local);free(volumes);free(c);dc_gpu_destroy(g);PASS();
 }
+static void finite_gate(uint32_t policy) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_gas_model_t m=reference_model();ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,policy,err,sizeof(err)));
+    fr_gas_state_t *input=malloc(4096*sizeof(*input)),*out=malloc(4096*sizeof(*out));double *volumes=malloc(4096*sizeof(*volumes));ASSERT_TRUE(input&&out&&volumes);
+    for(uint32_t i=0;i<4096;i++) {
+        volumes[i]=1;input[i]=reference_air(m,1,300,0);
+        if(i%64<32) {input[i].species[2]=.1;input[i].energy+=.1*m.heat_capacity_cv[2]*330;input[i].pigment[0]=.1;}
+    }
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volumes,4096,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,input,4096,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_gate(g,31,0,1,64,0,true,err,sizeof(err))&&fr_gas_gpu_step(g,.005f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+    ASSERT_EQ(memcmp(input,out,4096*sizeof(*input)),0);
+    ASSERT_TRUE(fr_gas_gpu_gate(g,31,0,1,64,0,false,err,sizeof(err))&&fr_gas_gpu_step(g,.005f,err,sizeof(err))&&
+        fr_gas_gpu_step(g,.005f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+    double mass[5]={0},energy=0,color=0;
+    for(uint32_t i=0;i<4096;i++) {for(uint32_t k=0;k<5;k++) mass[k]+=out[i].species[k]-input[i].species[k];energy+=out[i].energy-input[i].energy;color+=out[i].pigment[0]-input[i].pigment[0];}
+    for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(mass[k])<.0002);
+    ASSERT_TRUE(fabs(energy)<.02&&fabs(color)<2e-5&&out[32*64+32].pigment[0]>1e-5&&present(g,err,sizeof(err)));
+    free(input);free(out);free(volumes);free(c);dc_gpu_destroy(g);PASS();
+}
+static void test_native_closed_gate_retains_stock_then_opens_real_hllc_flow(void) {finite_gate(FR_GAS_PRESSURE_HLLC);}
+static void test_native_closed_gate_retains_stock_then_opens_real_implicit_flow(void) {finite_gate(FR_GAS_PRESSURE_IMPLICIT);}
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
@@ -192,5 +214,7 @@ int main(void) {
     RUN(test_native_implicit_acoustics_match_reference_beyond_explicit_acoustic_cfl);
     RUN(test_native_implicit_colored_transport_matches_reference_and_retains_closed_budgets);
     RUN(test_native_implicit_sparse_pressure_and_color_cross_chunk_seams_without_stock_loss);
+    RUN(test_native_closed_gate_retains_stock_then_opens_real_hllc_flow);
+    RUN(test_native_closed_gate_retains_stock_then_opens_real_implicit_flow);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
