@@ -58,4 +58,8 @@ bool fr_gas_implicit_reference_step(const fr_gas_model_t *model,const fr_gas_sta
 bool fr_gas_transport_reference_step(const fr_gas_model_t *model,const fr_gas_state_t *source,
     const double *void_fractions,uint32_t width,uint32_t height,double seconds,
     fr_gas_state_t *out,char *err_buf,uint32_t err_cap);
+/** Cold composed large-CFL transport/acoustic numerical gate. */
+bool fr_gas_large_cfl_reference_step(const fr_gas_model_t *model,const fr_gas_state_t *source,
+    const double *void_fractions,uint32_t width,uint32_t height,double seconds,
+    fr_gas_state_t *out,char *err_buf,uint32_t err_cap);
 #endif

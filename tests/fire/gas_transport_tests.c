@@ -53,9 +53,31 @@ static void test_invalid_and_zero_time_are_transactional(void) {
     ASSERT_TRUE(fr_gas_transport_reference_step(&m,s,v,2,1,0,out,err,sizeof(err)));
     ASSERT_EQ(memcmp(s,out,sizeof(out)),0);PASS();
 }
+static void test_large_cfl_composed_pressure_keeps_packet_budgets_and_positive_thermodynamics(void) {
+    char err[256]={0};fr_gas_model_t m=model();fr_gas_state_t s[32],out[32];double v[32];
+    for(uint32_t i=0;i<32;i++) {v[i]=1;s[i]=air(10,0);}s[4].pigment[0]=.1;
+    ASSERT_TRUE(fr_gas_large_cfl_reference_step(&m,s,v,32,1,.4,out,err,sizeof(err)));
+    double mass=0,energy=0,red=0;
+    for(uint32_t i=0;i<32;i++) {
+        fr_gas_thermo_t t;ASSERT_TRUE(fr_gas_thermodynamics(&m,out+i,1,&t,err,sizeof(err)));
+        double expected=i<4?0:(i==31?.1*pow(.8,27):.02*pow(.8,i-4));
+        ASSERT_TRUE(fabs(out[i].pigment[0]-expected)<1e-12&&t.temperature_K>0);
+        mass+=t.mass;energy+=out[i].energy;red+=out[i].pigment[0];
+    }
+    ASSERT_TRUE(fabs(mass-32.)<1e-10&&fabs(energy-32.*800.)<1e-8&&fabs(red-.1)<1e-12);PASS();
+}
+static void test_large_cfl_composition_retains_reference_acoustic_mode(void) {
+    char err[256]={0};fr_gas_model_t m=model();fr_gas_state_t s[64],out[64],expected[64];double v[64];
+    for(uint32_t i=0;i<64;i++) {v[i]=1;s[i]=air(0,0);s[i].energy*=1.+.0001*cos(acos(-1.)*(i+.5)/64.);}
+    ASSERT_TRUE(fr_gas_implicit_reference_step(&m,s,v,64,1,1,expected,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_large_cfl_reference_step(&m,s,v,64,1,1,out,err,sizeof(err)));
+    ASSERT_EQ(memcmp(out,expected,sizeof(out)),0);PASS();
+}
 int main(void) {
     RUN(test_cfl_four_matches_independent_geometric_packet_and_closed_budgets);
     RUN(test_two_dimensional_large_cfl_keeps_walls_species_energy_and_pigment);
     RUN(test_invalid_and_zero_time_are_transactional);
+    RUN(test_large_cfl_composed_pressure_keeps_packet_budgets_and_positive_thermodynamics);
+    RUN(test_large_cfl_composition_retains_reference_acoustic_mode);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

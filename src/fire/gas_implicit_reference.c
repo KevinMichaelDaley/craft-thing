@@ -6,6 +6,11 @@
 
 typedef struct {size_t a,b;uint32_t axis;double area,enthalpy,momentum,energy_diffusion;} face_t;
 typedef struct {double pressure,capacity,enthalpy,kinetic;} cell_t;
+bool fr_gas_large_cfl_reference_step(const fr_gas_model_t *m,const fr_gas_state_t *s,
+    const double *v,uint32_t width,uint32_t height,double dt,fr_gas_state_t *out,char *err,uint32_t cap) {
+    (void)m;(void)s;(void)v;(void)width;(void)height;(void)dt;(void)out;
+    return gas_error(err,cap,"Composed large-CFL oracle is not implemented");
+}
 
 static fr_gas_state_t advective_flux(const fr_gas_state_t *a,const fr_gas_state_t *b,
     double va,double vb,double area,uint32_t axis) {
