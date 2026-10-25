@@ -12,4 +12,11 @@ bool fr_thermal_gpu_step(dc_gpu_t *gpu,float seconds,char *err_buf,uint32_t err_
 bool fr_thermal_gpu_probe(dc_gpu_t *gpu,uint32_t x,uint32_t y,bool active);
 /** Choose authored color, temperature or wetness feedback independently of physics. */
 bool fr_thermal_gpu_overlay(dc_gpu_t *gpu,uint32_t mode);
+/** Cold fixture/import of liquid enthalpy above ambient, independent of pigment
+ * and solid parcel state. Validate against actual authoritative water volume. */
+bool fr_thermal_gpu_seed_water(dc_gpu_t *gpu,uint32_t slot,uint32_t local_cell,
+    float excess_energy,char *err_buf,uint32_t err_cap);
+/** Completed-queue diagnostic/save snapshot, never a runtime CPU fluid solve. */
+bool fr_thermal_gpu_read_water_chunk(dc_gpu_t *gpu,uint32_t slot,float *excess_energy,
+    uint32_t cell_capacity,char *err_buf,uint32_t err_cap);
 #endif

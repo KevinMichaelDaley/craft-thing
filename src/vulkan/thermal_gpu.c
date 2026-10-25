@@ -82,6 +82,12 @@ bool fr_thermal_gpu_overlay(dc_gpu_t *g,uint32_t mode) {
     if(!g||!g->thermal||mode>2u) return false;
     g->thermal->overlay=mode;return true;
 }
+bool fr_thermal_gpu_seed_water(dc_gpu_t *g,uint32_t slot,uint32_t cell,float energy,char *err,uint32_t cap) {
+    (void)g;(void)slot;(void)cell;(void)energy;(void)err;(void)cap;return false;
+}
+bool fr_thermal_gpu_read_water_chunk(dc_gpu_t *g,uint32_t slot,float *energy,uint32_t count,char *err,uint32_t cap) {
+    (void)g;(void)slot;(void)energy;(void)count;(void)err;(void)cap;return false;
+}
 bool fr_thermal_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(!g||!g->thermal||!isfinite(seconds)||seconds<0)
         return error(err,cap,"Invalid standalone thermal interval");
