@@ -38,11 +38,12 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     VkDeviceSize tiles=(VkDeviceSize)((g->width+7u)/8u)*((g->height+7u)/8u);
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(g->physical,&properties);
     VkPhysicalDeviceSubgroupProperties subgroup={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES};
+    VkPhysicalDeviceFloatControlsProperties floats={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES};subgroup.pNext=&floats;
     VkPhysicalDeviceProperties2 details={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,.pNext=&subgroup};
     vkGetPhysicalDeviceProperties2(g->physical,&details);
     t->supports_large_transport=(subgroup.supportedStages&VK_SHADER_STAGE_COMPUTE_BIT)!=0u&&
         (subgroup.supportedOperations&VK_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT)!=0u&&subgroup.subgroupSize>0u&&
-        subgroup.subgroupSize<=64u&&64u%subgroup.subgroupSize==0u;
+        subgroup.subgroupSize<=64u&&64u%subgroup.subgroupSize==0u&&floats.shaderDenormPreserveFloat32;
     if(tiles>properties.limits.maxComputeWorkGroupCount[0]) return error(err,cap,"Gas pressure work exceeds device indirect dispatch range");
     for(uint32_t i=0;i<11;i++) {
         VkDeviceSize field_bytes=i==10?bytes:(i==9?tiles*8u:(i==8?bytes/2u:(i>=6?tiles*(i==7?16u:4u):(i==4?bytes/4u:bytes))));

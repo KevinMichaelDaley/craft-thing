@@ -1,3 +1,4 @@
+#include "transport_float_controls.glsl"
 #include "acoustic.glsl"
 layout(set=0,binding=24,std430) restrict buffer TransportWork {Gas transport_work[];};
 uint transport_axis() {return (params.bank>>3u)&1u;}

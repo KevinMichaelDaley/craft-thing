@@ -32,7 +32,7 @@ void main() {
         value=gas_add_flux(value,correction,1.);correction.dynamics.y=work;
         value=gas_add_flux(value,correction,1.);value.geometry.w+=work;
         bool okay=false;primitive=gas_primitive(value,okay);
-        if(!okay) gas_error(index);else gas_rate(primitive);
+        if(!okay) {gas_error(index);atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],FR_GAS_REJECT_FINISH);}else gas_rate(primitive);
         gas_write_provisional(atlas,value);
     }
     if((params.bank&1u)==0u) cache1[index]=primitive;else cache0[index]=primitive;

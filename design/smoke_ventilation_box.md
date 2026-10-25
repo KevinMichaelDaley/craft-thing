@@ -358,3 +358,21 @@ the original implicit oracle4, and actual displayed native tests19, including
 analytic stationary density/energy with decaying opposing momentum, chunk and
 subgroup seams, closed/open valves and a concave2D wall. This numerical
 checkpoint does not establish performance or promote the experimental policy.
+
+Recovery diagnostics retain the experimental selector `DC_GAS_LARGE_CFL=1`;
+the default remains policy1. An accepted-step scheduling hint learns rejected
+interval sizes and cautiously grows accepted full intervals, without dropping
+requested time. Constant-size GPU rejection metadata distinguishes factor,
+transport and final-state failures. The real enclosure passes1/1, including
+stock budgets, rising finite smoke and pause captures. The full-clock30-frame
+probe still fails badly (1404.706mean/2157.514worst ms); retries dominate.
+
+Trace colors exposed subnormal pigment/carrier mismatches. Experimental transport
+now requests SPIR-V `DenormPreserve32`, guarded by the actual device property;
+unsupported devices retain the old policy. Actual native21/21 cases pass,
+including tiny resting and active transported colored stock. Rejections still
+occur at a one-smallest-float pigment/carrier difference; no values are clipped
+or conservation/reference thresholds changed. The original19-case checkpoint
+passed core+synchronization validation; the newer21-case changes still need that
+validation. Cached factor coefficients remove duplicate neighbor gathers and
+are awaiting new complete-frame timing. This remains unfinished optimization.

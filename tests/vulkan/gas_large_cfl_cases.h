@@ -1,5 +1,22 @@
 #ifndef GAS_LARGE_CFL_CASES_H
 #define GAS_LARGE_CFL_CASES_H
+static void test_native_large_cfl_subnormal_packet_keeps_one_step_and_closed_stock(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));
+    fr_gas_state_t *input=calloc(4096,sizeof(*input)),*out=calloc(4096,sizeof(*out));double *volume=calloc(4096,sizeof(*volume));
+    ASSERT_TRUE(c&&input&&out&&volume);fr_gas_model_t m=reference_model();
+    for(uint32_t i=0;i<4096;i++) c->cells[i]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+    for(uint32_t x=0;x<64;x++) {uint32_t i=20u*64u+x;c->cells[i]=(dc_cell_t){0};volume[i]=1;input[i]=reference_air(m,1,300,10+5*sin(x*.3));}
+    uint32_t index=20u*64u+20u;input[index].species[FR_GAS_EXHAUST]=(float)1e-38;input[index].pigment[0]=(float)8.5e-39;
+    input[index+1u].species[FR_GAS_EXHAUST]=(float)1e-38;input[index+1u].pigment[0]=(float)9.5e-39;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_LARGE_CFL,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_step(g,.4f,err,sizeof(err)));
+    fr_gas_gpu_clock_t clock;ASSERT_TRUE(fr_gas_gpu_clock(g,&clock));ASSERT_EQ(clock.substeps,1u);
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+    double before=0,after=0;for(uint32_t x=0;x<64;x++) {before+=input[20u*64u+x].pigment[0];after+=out[20u*64u+x].pigment[0];}
+    ASSERT_TRUE(after>0&&fabs(after-before)<1e-43&&present(g,err,sizeof(err)));
+    free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
+}
 static fr_gas_state_t large_air(fr_gas_model_t m,double temperature,double u,double v) {
     fr_gas_state_t s=reference_air(m,.9,temperature,u);s.species[FR_GAS_EXHAUST]=.1;
     s.energy+=.1*m.heat_capacity_cv[FR_GAS_EXHAUST]*temperature+.05*u*u+.5*v*v;

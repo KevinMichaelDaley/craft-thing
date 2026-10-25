@@ -21,7 +21,9 @@ void main() {
     vec4 mass=vec4(1,0,0,1),energy=mass;
     for(uint cell=begin;cell<end;cell++) {
         ivec2 p=transport_point(line,cell);vec2 lower,diagonal,upper,previous;vec4 face;coefficients(p,dt,lower,diagonal,upper,previous,face);
-        stencil[uint(p.y)*params.width+uint(p.x)]=face;
+        uint index=uint(p.y)*params.width+uint(p.x);stencil[index]=face;
+        acoustic[index]=vec4(lower.x,diagonal.x,upper.x,previous.x);
+        provisional[index]=vec4(lower.y,diagonal.y,upper.y,previous.y);
         mass=matrix_product(vec4(diagonal.x,-lower.x*previous.x,1,0),mass);
         energy=matrix_product(vec4(diagonal.y,-lower.y*previous.y,1,0),energy);
     }
@@ -37,11 +39,13 @@ void main() {
     mass=matrix_product(exclusive_mass,mass);energy=matrix_product(exclusive_energy,energy);
     for(uint cell=begin;cell<end;cell++) {
         ivec2 p=transport_point(line,cell);uint index=uint(p.y)*params.width+uint(p.x);
-        vec2 lower,diagonal,upper,previous;vec4 face;coefficients(p,dt,lower,diagonal,upper,previous,face);
+        vec4 saved_mass=acoustic[index],saved_energy=provisional[index];
+        vec2 lower=vec2(saved_mass.x,saved_energy.x),diagonal=vec2(saved_mass.y,saved_energy.y);
+        vec2 upper=vec2(saved_mass.z,saved_energy.z),previous=vec2(saved_mass.w,saved_energy.w);
         mass=matrix_product(vec4(diagonal.x,-lower.x*previous.x,1,0),mass);
         energy=matrix_product(vec4(diagonal.y,-lower.y*previous.y,1,0),energy);
         vec2 inverse=vec2(mass.z/mass.x,energy.z/energy.x);
-        if(any(lessThanEqual(inverse,vec2(0)))||any(isnan(inverse))||any(isinf(inverse))) {gas_error(index);inverse=vec2(0);}
+        if(any(lessThanEqual(inverse,vec2(0)))||any(isnan(inverse))||any(isinf(inverse))) {gas_error(index);atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],FR_GAS_REJECT_FACTOR);inverse=vec2(0);}
         acoustic[index]=vec4(lower.x*inverse.x,inverse.x,upper.x*inverse.x,0);
         provisional[index]=vec4(lower.y*inverse.y,inverse.y,upper.y*inverse.y,0);
     }
