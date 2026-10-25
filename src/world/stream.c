@@ -16,6 +16,7 @@ typedef struct {
     uint64_t generation;
     dc_chunk_t *chunk;
     dc_chunk_colors_t *colors;
+    fr_reactive_chunk_t *reactive;
 } stream_job_t;
 
 typedef struct {
@@ -52,15 +53,32 @@ static bool chunk_path(const dc_streamer_t *stream, dc_chunk_coord_t coord,
     return count > 0 && (size_t)count < cap;
 }
 
-static bool save_chunk(const dc_streamer_t *stream, const dc_chunk_t *chunk,const dc_chunk_colors_t *colors) {
+static bool prefix_hash(FILE *file,long end,uint64_t *out) {
+    if(end<0||fseek(file,0,SEEK_SET)!=0) return false;
+    uint64_t value=UINT64_C(14695981039346656037);uint8_t bytes[4096];
+    while(end>0) {
+        size_t count=(unsigned long)end<sizeof(bytes)?(size_t)end:sizeof(bytes);
+        if(fread(bytes,1,count,file)!=count) return false;
+        value=dc_color_hash(value,bytes,count);end-=(long)count;
+    }
+    *out=value;return true;
+}
+static void release_channel(fr_reactive_chunk_t *channel) {
+    if(channel) {fr_reactive_chunk_release(channel);free(channel);}
+}
+static bool save_chunk(const dc_streamer_t *stream,const dc_chunk_t *chunk,
+    const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive) {
+    dc_chunk_colors_t ambient_colors={0};
+    if(reactive&&!colors) colors=&ambient_colors;
     char temporary[1024], final[1024];
     if (!chunk_path(stream, chunk->coord, temporary, sizeof(temporary), true) ||
         !chunk_path(stream, chunk->coord, final, sizeof(final), false)) return false;
-    FILE *file = fopen(temporary, "wb");
+    FILE *file = fopen(temporary, "w+b");
     if (!file) return false;
     chunk_header_t header = { .magic = {'D', 'C', 'C', '1'}, .version = 5,
         .x = chunk->coord.x, .y = chunk->coord.y, .seed = stream->seed };
     if(colors) header.version=6;
+    if(reactive) header.version=7;
     bool okay = fwrite(&header, sizeof(header), 1, file) == 1 &&
         fwrite(chunk->cells, sizeof(chunk->cells), 1, file) == 1 &&
         chunk->marker_count <= DC_MARKERS_PER_CHUNK &&
@@ -84,15 +102,27 @@ static bool save_chunk(const dc_streamer_t *stream, const dc_chunk_t *chunk,cons
         okay=dc_color_records_valid((const float*)colors,DC_CHUNK_CELLS*2) &&
             fwrite(colors,sizeof(*colors),1,file)==1 && fwrite(&hash,sizeof(hash),1,file)==1;
     }
+    if(okay&&reactive) {
+        size_t size=0,written=0;uint8_t *bytes=NULL;
+        okay=fr_reactive_chunk_size(reactive->count,&size)&&(bytes=malloc(size))!=NULL&&
+            fr_reactive_chunk_encode(reactive,chunk,bytes,size,&written,NULL,0);
+        uint64_t length=size,hash=0;
+        if(okay) okay=fwrite(&length,sizeof(length),1,file)==1&&fwrite(bytes,size,1,file)==1;
+        free(bytes);
+        long end=okay?ftell(file):-1;
+        if(okay) okay=prefix_hash(file,end,&hash)&&fseek(file,end,SEEK_SET)==0&&fwrite(&hash,sizeof(hash),1,file)==1;
+    }
     if (fclose(file) != 0) okay = false;
     if (okay) okay = rename(temporary, final) == 0;
     if (!okay) remove(temporary);
     return okay;
 }
 
-static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coord,dc_chunk_colors_t *colors) {
+static dc_chunk_t *load_chunk(const dc_streamer_t *stream,dc_chunk_coord_t coord,
+    dc_chunk_colors_t *colors,fr_reactive_chunk_t **reactive) {
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     if (!chunk) return NULL;
+    chunk->coord=coord;
     char path[1024];
     if (!chunk_path(stream, coord, path, sizeof(path), false)) { free(chunk); return NULL; }
     FILE *file = fopen(path, "rb");
@@ -115,7 +145,7 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coor
     chunk_header_t header;
     bool okay = fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCC1", 4) == 0 &&
-        (header.version >= 1 && header.version <= 6) &&
+        (header.version >= 1 && header.version <= 7) &&
         header.x == coord.x && header.y == coord.y && header.seed == stream->seed &&
         fread(chunk->cells, sizeof(chunk->cells), 1, file) == 1;
     if (okay && header.version >= 2)
@@ -147,10 +177,23 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream, dc_chunk_coord_t coor
         okay=fread(colors,sizeof(*colors),1,file)==1 && fread(&stored,sizeof(stored),1,file)==1 &&
             dc_color_records_valid((const float*)colors,DC_CHUNK_CELLS*2);
         hash=dc_color_hash(hash,colors,sizeof(*colors));
-        okay=okay && hash==stored && fgetc(file)==EOF && !ferror(file);
+        okay=okay&&hash==stored;
+        if(okay&&header.version==6) okay=fgetc(file)==EOF&&!ferror(file);
+    }
+    if(okay&&header.version==7) {
+        uint64_t length=0;size_t maximum=0;uint8_t *bytes=NULL;
+        okay=fr_reactive_chunk_size(DC_CHUNK_CELLS+DC_MPM_PARTICLES_PER_CHUNK,&maximum)&&
+            fread(&length,sizeof(length),1,file)==1&&length>=72u&&length<=maximum;
+        if(okay) okay=(bytes=malloc((size_t)length))!=NULL&&fread(bytes,(size_t)length,1,file)==1;
+        long end=okay?ftell(file):-1;uint64_t stored=0,hash=0;
+        if(okay) okay=fread(&stored,sizeof(stored),1,file)==1&&fgetc(file)==EOF&&!ferror(file)&&
+            prefix_hash(file,end,&hash)&&hash==stored;
+        if(okay) okay=(*reactive=calloc(1,sizeof(**reactive)))!=NULL&&
+            fr_reactive_chunk_decode(bytes,(size_t)length,chunk,*reactive,NULL,0);
+        free(bytes);
     }
     if (fclose(file) != 0) okay = false;
-    if (!okay) { free(chunk); return NULL; }
+    if (!okay) {release_channel(*reactive);*reactive=NULL;free(chunk);return NULL;}
     chunk->coord = coord;
     if (header.version < 4) dc_chunk_seed_particles(chunk);
     return chunk;
@@ -172,12 +215,13 @@ static int worker_main(void *arg) {
         dc_stream_result_t result = { .coord = job.coord, .generation = job.generation };
         if (job.kind == JOB_LOAD) {
             result.colors=calloc(1,sizeof(*result.colors));
-            result.chunk = result.colors?load_chunk(stream, job.coord,result.colors):NULL;
+            result.chunk = result.colors?load_chunk(stream,job.coord,result.colors,&result.reactive):NULL;
             result.kind = result.chunk ? DC_STREAM_LOADED : DC_STREAM_FAILED;
         } else {
-            result.kind = save_chunk(stream, job.chunk,job.colors) ? DC_STREAM_SAVED : DC_STREAM_FAILED;
+            result.kind = save_chunk(stream,job.chunk,job.colors,job.reactive) ? DC_STREAM_SAVED : DC_STREAM_FAILED;
             free(job.chunk);
             free(job.colors);
+            release_channel(job.reactive);
         }
 
         mtx_lock(&stream->mutex);
@@ -266,25 +310,37 @@ bool dc_stream_request_save(dc_streamer_t *stream, const dc_chunk_t *chunk,
 }
 bool dc_stream_request_save_colors(dc_streamer_t *stream,const dc_chunk_t *chunk,
     const dc_chunk_colors_t *colors,uint64_t generation) {
+    return dc_stream_request_save_reactive(stream,chunk,colors,NULL,generation);
+}
+bool dc_stream_request_save_reactive(dc_streamer_t *stream,const dc_chunk_t *chunk,
+    const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,uint64_t generation) {
     if (!stream || !chunk || !generation) return false;
     if(colors && !dc_color_records_valid((const float*)colors,DC_CHUNK_CELLS*2)) return false;
+    if(reactive&&!fr_reactive_chunk_valid(reactive,chunk,NULL,0)) return false;
     dc_chunk_t *copy = malloc(sizeof(*copy));
     if (!copy) return false;
     memcpy(copy, chunk, sizeof(*copy));
     dc_chunk_colors_t *color_copy=colors?malloc(sizeof(*color_copy)):NULL;
     if(colors && !color_copy) {free(copy);return false;}
     if(colors) memcpy(color_copy,colors,sizeof(*colors));
+    fr_reactive_chunk_t *reaction_copy=reactive?calloc(1,sizeof(*reaction_copy)):NULL;
+    if(reactive) {
+        if(!reaction_copy) {free(copy);free(color_copy);return false;}
+        *reaction_copy=*reactive;reaction_copy->attachments=NULL;
+        if(reactive->count) {
+            size_t bytes=(size_t)reactive->count*sizeof(*reactive->attachments);
+            reaction_copy->attachments=malloc(bytes);
+            if(!reaction_copy->attachments) {free(copy);free(color_copy);free(reaction_copy);return false;}
+            memcpy(reaction_copy->attachments,reactive->attachments,bytes);
+        }
+    }
     stream_job_t job = { .kind = JOB_SAVE, .coord = chunk->coord,
-        .generation = generation, .chunk = copy,.colors=color_copy };
+        .generation = generation, .chunk = copy,.colors=color_copy,.reactive=reaction_copy };
     if (queue_job(stream, job)) return true;
     free(copy);
     free(color_copy);
+    release_channel(reaction_copy);
     return false;
-}
-
-bool dc_stream_request_save_reactive(dc_streamer_t *stream,const dc_chunk_t *chunk,
-    const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,uint64_t generation) {
-    (void)stream;(void)chunk;(void)colors;(void)reactive;(void)generation;return false;
 }
 
 bool dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *result) {
@@ -304,6 +360,7 @@ void dc_stream_result_release(dc_stream_result_t *result) {
     if (!result) return;
     free(result->chunk);
     free(result->colors);
+    release_channel(result->reactive);
     memset(result, 0, sizeof(*result));
 }
 
@@ -318,6 +375,7 @@ void dc_stream_destroy(dc_streamer_t *stream) {
     for (uint32_t i = 0; i < stream->capacity; ++i) {
         free(stream->jobs[i].chunk);
         free(stream->jobs[i].colors);
+        release_channel(stream->jobs[i].reactive);
         dc_stream_result_release(&stream->results[i]);
     }
     cnd_destroy(&stream->results_space);

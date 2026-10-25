@@ -69,7 +69,7 @@ GPU_OBJ += build/runtime_body_gpu.o build/runtime_geometry_gpu.o build/body_addr
 GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o
 build/reactive_arena_gpu.o: src/vulkan/reactive_arena_gpu.c src/vulkan/reactive_arena_gpu.h include/dungeoncraft/reactive_arena_layout.h include/dungeoncraft/reactive_state_layout.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-GPU_OBJ += build/reactive_state.o build/reactive_snapshot.o build/reactive_material.o
+GPU_OBJ += build/reactive_state.o build/reactive_snapshot.o build/reactive_material.o build/reactive_chunk.o
 build/reactive_state.o: src/fire/reactive_state.c include/ferrum/fire/reactive_state.h include/dungeoncraft/reactive_state_layout.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/reactive_snapshot.o: src/fire/reactive_snapshot.c include/ferrum/fire/reactive_state.h
@@ -133,7 +133,7 @@ build/pressure_work_gpu.o: src/vulkan/pressure_work_gpu.c src/vulkan/gpu_interna
 build/shaders/pressure_work.comp.spv: shaders/sim/pressure_work.comp
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
-GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o build/authored_request.o build/prop_asset.o build/reactive_state.o build/reactive_snapshot.o build/reactive_material.o,$(GPU_OBJ))) src/structural/material.c src/structural/authoring.c src/assets/prop.c $(REACTIVE_STATE_SRC)
+GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o build/authored_request.o build/prop_asset.o build/reactive_state.o build/reactive_snapshot.o build/reactive_material.o build/reactive_chunk.o,$(GPU_OBJ))) src/structural/material.c src/structural/authoring.c src/assets/prop.c src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC)
 build/authored_stage_tests: tests/vulkan/authored_stage_tests.c build/compound_body_tests $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/authored_stage_tests
@@ -605,8 +605,8 @@ build/chunk_tests: tests/world/chunk_tests.c $(CHUNK_OBJ)
 build/generate_tests: tests/world/generate_tests.c $(GENERATE_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/generate_tests.c $(GENERATE_OBJ) $(CHUNK_OBJ) -o $@
 
-build/stream_tests: tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ)
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) -o $@ -pthread
+build/stream_tests: tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) -o $@ -pthread -lm
 
 build/dungeoncraft: src/app/structural_demo.c src/app/structural_demo.h src/app/main.c src/app/level.c src/app/level.h src/app/view_config.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
@@ -1719,3 +1719,5 @@ build/reactive_chunk_tests: tests/fire/reactive_chunk_tests.c src/fire/reactive_
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/reactive_chunk_tests.c src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) -o $@ -lm
 build/reactive_stream_tests: tests/fire/reactive_stream_tests.c tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) -o $@ -pthread -lm
+build/reactive_chunk.o: src/fire/reactive_chunk.c include/ferrum/fire/reactive_chunk.h include/ferrum/fire/reactive_state.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
