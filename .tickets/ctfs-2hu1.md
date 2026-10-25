@@ -1,6 +1,6 @@
 ---
 id: ctfs-2hu1
-status: in_progress
+status: closed
 deps: [ctlo-ck1i, ctlo-ldb7]
 links: [ctlo-2q4f, ctlo-18l4]
 created: 2026-10-25T02:54:23Z
@@ -99,3 +99,7 @@ Scoped camera streaming prerequisite now GREEN locally: DCC8 stores immutable li
 **2026-10-25T07:38:51Z**
 
 Extended conservation REDd38658a found true61-step energy drift-0.027087608 outside locked0.02, despite exact water mass. A conductive-quantization diagnostic still failed-0.024460072 and was removed. Scoped compensated parcel accumulation now gives-0.000357833 with exact1900544 mass; tolerance unchanged. ABI3 uses two former reserved words for normalized heat remainder/correction without growing28-word state; ABI1/2 zero-reserved migration is retained and malformed legacy bits rejected. CPU precision4/thermal6/state9/packet6 pass, including100000 sub-ULP additions error-2.52e-10 and split/serialization. Native pour1/core2/water4/checkpoint4 pass core+sync; checkpoint includes nonzero remainder and14 allocation rollbacks. The previously recorded736+2 full run predates this precision fix; full/default/native and displayed timings are being repeated before closure.
+
+**2026-10-25T07:57:06Z**
+
+ACCEPTANCE COMPLETE: permanent make test_heat_bench35/35PASS actual Wayland/core+sync (thermal_precision_heat_battery.log); strengthened nonzero remainder+correction extraction/BODY and pending-chunk2/2 plus CPU precision4/4 repeatPASS. Actual inspected wet-pour294.7K/3.8% and resumed water296.1K/100% captures; finite probe, painting, wetting, stable pause, reset, global restore and camera streaming all functional. Post-precision default740 C passes + exactly2 known ctr-ojvy failures, zero compiler warnings/errors. Final tools/bench_heat_bench1000 real display with no overlapping builds/GPU work: dry13.436mean/21.115worst,13.422/15.621; finite-pour13.884/15.700,13.889/15.742ms. AllstrictmeanANDworst<30, each1000frames, four paused captures identical, exactly one pouratframe8. Evidence heat_bench_measurements_RbPxN4 / thermal_final_display_benchmark.log. Grid/cadence unchanged480x270 physics/render,640x448halo,8x8rigid,2MPM,lightingoff. This closes only the scoped heat/wetting module; broad heat/phase-change and ownership tickets remain open. No smoke or combustion completion claimed.

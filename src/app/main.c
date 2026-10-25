@@ -1177,7 +1177,7 @@ int main(int argc, char **argv) {
     if(heat_bench&&!dc_level_view_setup_heat_bench(view,err,sizeof(err))) {
         fprintf(stderr,"Heat bench setup: %s\n",err);dc_level_view_destroy(view,err,sizeof(err));return 1;
     }
-    if(heat_bench) printf("Heat bench: %s | finite350K stone/probe, dry and pre-wet wood controls | H+LMB probe/hover, F7 view | ownership/restore still under development\n",directory);
+    if(heat_bench) printf("Heat bench: %s | finite350K stone/probe, dry and pre-wet wood controls | H+LMB probe/hover, F7 view\n",directory);
     if (lighting && !dc_level_view_renderer_mode(view,FR_RENDERER_LIT)) {
         fprintf(stderr,"Cannot enable propagated lighting\n");
         dc_level_view_destroy(view,err,sizeof(err));return 1;

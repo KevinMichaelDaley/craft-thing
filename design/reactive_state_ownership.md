@@ -1,12 +1,14 @@
 # Reactive parcel ownership foundation
 
-Ticket: `ctlo-2q4f`, still in progress. This document records the implemented
+Ticket: `ctlo-2q4f`, still open. This document records the implemented
 foundation and its boundaries; it does not declare the fire/smoke epic complete.
 
 ## Persistent representation
 
 `fr_reactive_state_t` occupies 28 little-endian 32-bit words in snapshots.
-Persistent owner semantics use ABI 2; ABI 1 saves remain readable. Particle
+Owner keys retain ABI 2 semantics; current parcel ABI 3 adds compensated heat
+in two formerly reserved words without changing the 28-word width. ABI 1/2
+saves with zero reserved words remain readable. Particle
 owners include a full-width lifetime identity, separate from their physical PID.
 Repainting a vacated cell can reuse that PID while the original grain is alive.
 The birth identity remains stable during movement and distinguishes both parcels.
@@ -141,3 +143,14 @@ note; `git apply --check` succeeds. No DCS8 format was enabled. This ticket stay
 open for its remaining scope and must not block a visible feature on unrelated
 future owner/material paths. Bring forward only prerequisites that the active
 feature actually needs.
+
+The subsequent visible heat/wetting module needed a scoped integrated save path.
+DCS8 now frames logical reaction state with liquid enthalpy and the finite probe,
+prepares detached resources and all pending handles before publication, and
+passes native body/pending/rollback/reopen tests. DCC8 preserves liquid heat
+through actual camera eviction/reload. The old draft above is historical and
+must not be reapplied; see its updated status note and
+`design/heat_wetting_bench.md`. The default regression now reports 740 C passes,
+the same two `ctr-ojvy` failures and zero compiler warnings/errors. This does not
+close the remaining impact-fracture, analytic-owner and general admission scope
+of `ctlo-2q4f`.

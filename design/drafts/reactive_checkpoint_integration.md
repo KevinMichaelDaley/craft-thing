@@ -14,8 +14,11 @@ handles through the parallel kernel rather than allocating runtime identities.
 Actual Wayland transaction coverage passes exact parcel/liquid/source restore
 into a different slot, future-version rejection, and fourteen injected address
 allocation failures that leave the newer live state untouched. Extracted-body,
-pending-chunk and frontend regression verification is still underway at this
-checkpoint. Broader owner admission and all of `ctlo-2q4f` remain incomplete.
+pending-chunk, frontend reopen/reset/camera and legacy structure save/stream
+checks pass. The post-precision default regression reports 740 C passes, the same two
+`ctr-ojvy` failures and zero compiler warnings/errors in
+`build/thermal_precision_full_suite.log`. Broader owner admission and all of
+`ctlo-2q4f` remain incomplete.
 
 ## Historical safe-boundary record
 

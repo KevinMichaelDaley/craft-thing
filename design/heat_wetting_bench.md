@@ -1,6 +1,6 @@
 # Interactive heat and wetting bench
 
-Active visible milestone: `ctfs-2hu1`. Deliver this module before smoke or burning.
+Delivered visible milestone: `ctfs-2hu1`, before smoke or burning.
 The scene uses matching stone/wood contact benches, one dry and one receiving
 water. Temperature and wetness have separate overlays, independent of authored
 color. A finite contact probe lets the player move heat into nearby matter.
@@ -28,7 +28,7 @@ The runtime module must additionally pass GPU parity, real display interaction,
 capture, whole-frame measurements and the edits/persistence it exposes. A passing
 CPU reference alone does not complete the visible milestone.
 
-## Current interactive prototype
+## Interactive bench
 
 `tools/with-vulkan ./build/dungeoncraft_quarter_native --heat-bench` starts a
 fresh placement world. Hold H and the left mouse button for finite probe contact;
@@ -42,9 +42,11 @@ and pigment conservation during actual water movement. Wetting is committed
 before a fresh conduction snapshot, avoiding simultaneous-transfer overshoot.
 Both ordinary fan-out and subgroup prefix transport carry the same channel;
 default-disabled shader fixtures bind an explicit zeroed thermal control.
-Natural edits and persistence remain under development. The prototype refuses restored worlds until
-the required thermal checkpoint path is validated, rather than silently
-discarding their heat history. This restriction must be resolved for acceptance.
+Wood/stone painting admits canonical parcels, while natural owner handoffs keep
+their extensive heat with the parcel. The scoped checkpoint/streaming paths
+below preserve the bench's source, solid state, liquid heat and authored colors
+through quitting/reopening and camera eviction. Reset creates an explicit fresh
+world. Arbitrary-body heat exchange and combustion remain later systems.
 
 The native bench test passes probe heating, pre-wet state, overlay switches and
 four identical paused frames. Actual captures are
@@ -84,13 +86,14 @@ gameplay draws the values directly on the GPU. Actual captures show 317.1 K /
 The saturated test fixture derives water quantity from the profile's actual
 moisture capacity (wood is 0.5, not the mistaken initial 0.35 assumption).
 
-`tools/with-vulkan make test_heat_bench` now builds/runs six reference checks and
-thirteen displayed Vulkan checks serially. These visual cases also belong to
+`tools/with-vulkan make test_heat_bench` builds/runs thirteen CPU thermal,
+precision and worker checks and twenty-two displayed Vulkan checks serially.
+These visual cases also belong to
 `test_ui` and `test_quarter_native`; the CPU reference belongs to `test`.
 The first 18-case run passes with core/synchronization validation in
 `build/thermal_feedback_module_display.log`; the additional placement pour passes
 with the original bench case in `build/thermal_pour_red_display.log`. Remaining
-ownership/edit/save interactions are still acceptance work, not waived gates.
+The subsequent checkpoint, camera and precision coverage is recorded below.
 
 The placement-path pour case also passes: a radius-three water brush above
 warmed wood injects 29 finite water units. After one real physical interval,
@@ -137,9 +140,7 @@ The subsequent full default battery finishes **727 C passes**, the same two
 now-needed bench save/restore transaction work. No DCS8 format was enabled by
 the heat/feedback/benchmark changes.
 
-Remaining in this milestone: complete liquid regression/interaction coverage,
-temperature/wetness inspection, natural edits/owner admission and the persistence
-the exposed scene needs, plus reference budgets and passing displayed timing.
+Final persistence/precision validation and displayed timings are recorded below.
 
 ## Heat-bench checkpoint integration
 
@@ -158,12 +159,78 @@ exact parcel/liquid/source restoration into another slot, future-version
 rejection and fourteen allocation-failure rollbacks against a newer live world.
 The two extracted-body/pending negative-coordinate cases pass, as do four
 interactive bench cases including reopening and explicit fresh-run reset.
-Legacy save/stream regression and the full battery remain underway here.
+Legacy structure save/stream regression passes 8+5 cases. The full default
+battery reports 736 C passes, the same two tracked `ctr-ojvy` authored-stage
+failures and zero compiler warnings/errors in
+`build/thermal_persistence_full_suite.log`.
 
 The extended pour regression found a genuine transport rounding defect: a full
 withdrawal computed through reciprocal division could retain tiny excess heat
 after its mass reached zero. Full withdrawal now transfers the exact inventory.
 The real placement pour passes sixty subsequent physical steps with per-step
 checks for orphan heat, and successfully writes its strict validated checkpoint.
-Per-chunk streaming of the liquid channel is the next scoped prerequisite;
-the global checkpoint alone does not make camera unload/reload complete.
+Per-chunk DCC8 streaming now carries a validated immutable THR1 liquid packet
+beside its physical/color/reaction packet and the outer checksum. Its source
+field is canonically empty; the finite world probe remains solely in DCS8.
+Three worker cases pass immutable mixed-channel round trips, invalid inventory
+rejection without replacing a valid file, corruption/future-version rejection
+and ambient compatibility for older chunk files. Existing reaction/world stream
+regressions pass 3+7 cases. The real camera test evicts the initial region by
+twenty chunks and returns: liquid heat bytes and the finite source are exact.
+The inspected capture `build/screenshots/thermal_bench_stream_resume.png`
+shows the restored water at 296.1 K and 100% wetness.
+
+## Precision regression caught by the extended reference
+
+The sixty-step closed pour initially lost 0.027087608 energy units, outside the
+existing absolute 0.02 bound, while keeping exactly 1,900,544 water quanta.
+A common-quantum conductive-flux trial still lost 0.024460072 and was removed.
+The final module retains low-order full-enthalpy accumulation instead: ABI 3
+uses two formerly reserved words for a normalized heat remainder and its
+accumulation correction, leaving the state at 28 words. The parallel shader
+uses explicit error-free two-sum operations; CPU reference/temperature/split
+and budget readers consume the complete energy expansion. Tiny transfers are
+retained rather than cut off, and no FP64 device feature is required.
+
+The native extended pour now closes at -0.000357833 units under the unchanged
+0.02 bound, with exact water mass. Four precision references pass 100,000
+sub-ULP additions (error -2.52e-10), split/serialization, invalid-input rollback
+and ABI 2 migration. Existing ABI 1/2 zero-reserved records remain readable;
+nonzero old reserved bits and future ABI versions remain rejected. The previous
+full-width ABI 2 particle-birth check now explicitly reads an actual ABI 2
+packet, preserving that migration test rather than dropping its assertion.
+Native core/water/checkpoint cases also pass, including nonzero remainder
+restoration and fourteen allocation-failure rollbacks. The post-change full
+default suite reports 740 C passes, exactly the two known `ctr-ojvy` failures
+and zero compiler warnings/errors (`build/thermal_precision_full_suite.log`).
+The permanent 35-case native/reference heat battery passes with core and
+synchronization validation (`build/thermal_precision_heat_battery.log`). A
+strengthened repeat also passes both extracted-body/pending cases with both
+nonzero compensation words and the four precision references
+(`build/thermal_precision_owner_display.log` / `thermal_precision_owner_reference.log`).
+The earlier 736+2 full result predates the precision change.
+
+## Final displayed gate
+
+The final `tools/bench_heat_bench 1000` run after persistence/precision changes
+passes all four actual Wayland Vulkan trials. Build work finished before timed
+runs, and no other GPU jobs overlapped them. Evidence is in
+`build/heat_bench_measurements_RbPxN4` and
+`build/thermal_final_display_benchmark.log`.
+
+| Trial | Complete frames | Mean ms | Worst ms |
+|---|---:|---:|---:|
+| Dry 1 | 1000 | 13.436 | 21.115 |
+| Dry 2 | 1000 | 13.422 | 15.621 |
+| Finite pour 1 | 1000 | 13.884 | 15.700 |
+| Finite pour 2 | 1000 | 13.889 | 15.742 |
+
+Every mean and worst is strictly below 30 ms; all four runs produce four
+identical paused captures. Each pour occurs exactly once at frame 8 through
+the existing placement API. Physics/render remain 480×270, active halo 640×448,
+eight rigid substeps/eight Jacobi iterations/two MPM substeps and the same
+physical clock. Propagated lighting is off. The source and material budgets
+remain real simulation state, including save/reopen/reset/camera interactions.
+This delivers the scoped heat/wetting module. It does not complete the broader
+heat/phase-change/owner tickets or certify the future bonfire/siege/Greek-fire
+scenarios; those retain their own functional and performance gates.

@@ -49,7 +49,8 @@ static void test_abi_two_migrates_zero_remainder_but_rejects_nonzero_old_reserve
 static void test_splits_and_snapshots_preserve_the_full_energy_expansion(void) {
     char err[256]={0};fr_reactive_record_t record={.owner={.kind=FR_REACTIVE_OWNER_BODY,.key={7,1,2,3,0}}},out;
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,1000,350,1,&record.state,err,sizeof(err)));
-    ASSERT_TRUE(fr_reactive_state_add_heat(&record.state,1e-6,err,sizeof(err)));
+    ASSERT_TRUE(fr_reactive_state_add_heat(&record.state,1e-5+1e-13,err,sizeof(err)));
+    ASSERT_TRUE(record.state.thermal_energy_residual!=0.f&&record.state.thermal_energy_correction!=0.f);
     fr_reactive_state_t a,b;ASSERT_TRUE(fr_reactive_state_split(&record.state,21845,2,3,&a,&b,err,sizeof(err)));
     ASSERT_TRUE(fabs(fr_reactive_state_energy(&a)+fr_reactive_state_energy(&b)-fr_reactive_state_energy(&record.state))<1e-10);
     size_t length=0,written=0;ASSERT_TRUE(fr_reactive_snapshot_size(1,&length));uint8_t *bytes=malloc(length);ASSERT_TRUE(bytes);
