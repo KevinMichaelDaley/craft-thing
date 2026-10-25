@@ -5,8 +5,11 @@ void main() {
     uint index=gas_index();if(index>=params.width*params.height) return;
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));
     if(((uint(p.x+p.y))&1u)!=((params.bank>>1u)&1u)||pressure[index].z<=0.) return;
-    if(gas_pressure_row_converged(index)) return;
-    float correction=1.6*gas_pressure_residual(index)/pressure[index].z;
-    vec2 first=gas_two_sum(pressure[index].x,correction),next=gas_two_sum(first.x,acoustic[index].z+first.y);
-    pressure[index].x=next.x;acoustic[index].z=next.y;
+    vec4 data=correction_data[index];float rhs=data.x;vec4 coefficients=stencil[index];
+    for(uint d=0u;d<4u;d++) {
+        if(coefficients[d]==0.) continue;
+        uint j=d==0u?index+1u:(d==1u?index-1u:(d==2u?index+params.width:index-params.width));
+        rhs+=coefficients[d]*correction[j];
+    }
+    correction[index]+=data.z*(rhs*data.y-correction[index]);
 }

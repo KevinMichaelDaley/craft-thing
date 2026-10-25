@@ -148,3 +148,14 @@ still failed at225.300/293.848ms over30 frames. This variant is also preserved
 as an unsuccessful experiment. The next optimization uses iterative refinement:
 cheap inner float correction solves, compensated outer pressure accumulation,
 and the same accurate global residual criterion after each correction batch.
+
+The strengthened native battery now has5 passing cases: both policies retain
+exact ambient state, and implicit colored moving-gas transport matches the cold
+reference with closed energy error -0.0000449125655 and red error0.000000281586718.
+This coverage caught and corrected the GPU's provisional-versus-explicit kinetic
+split; the reference/tolerances were preserved, and buoyancy's separately admitted
+work remains excluded from spurious internal heating. Iterative refinement reduced
+full-field timing to83.998/101.533ms. Compact scalar correction storage and cached
+relaxation coefficients reduced it further to58.875/73.470ms over30 frames. The
+target remains unmet; next is GPU-discovered pressure work with full residual
+checks, preserving every gas cell and avoiding CPU field/list readback.

@@ -8,23 +8,25 @@ static bool error(char *err,uint32_t cap,const char *message) {if(err&&cap) snpr
 void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->advect);fr_renderer_compute_destroy(g,&t->initialize);
     fr_renderer_compute_destroy(g,&t->rhs);fr_renderer_compute_destroy(g,&t->sor);
+    fr_renderer_compute_destroy(g,&t->correct);
     fr_renderer_compute_destroy(g,&t->residual);fr_renderer_compute_destroy(g,&t->finish);
-    for(uint32_t i=0;i<4;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
+    for(uint32_t i=0;i<6;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
     memset(t,0,sizeof(*t));
 }
 bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescriptorBufferInfo source[11],char *err,uint32_t cap) {
     if(t->ready) return true;
-    VkDescriptorBufferInfo buffers[15];memcpy(buffers,source,11*sizeof(*source));
+    VkDescriptorBufferInfo buffers[17];memcpy(buffers,source,11*sizeof(*source));
     VkDeviceSize bytes=(VkDeviceSize)g->width*g->height*16u;
-    for(uint32_t i=0;i<4;i++) {
-        if(!dc_gpu_address_buffer_create(g,bytes,true,t->fields+i,err,cap)) goto fail;
-        buffers[11+i]=(VkDescriptorBufferInfo){t->fields[i].buffer,0,bytes};
-    }
-    fr_renderer_compute_t *pipelines[]={&t->advect,&t->initialize,&t->rhs,&t->sor,&t->residual,&t->finish};
-    const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_tile","pressure_residual","acoustic_finish"};
     for(uint32_t i=0;i<6;i++) {
+        VkDeviceSize field_bytes=i==4?bytes/4u:bytes;
+        if(!dc_gpu_address_buffer_create(g,field_bytes,true,t->fields+i,err,cap)) goto fail;
+        buffers[11+i]=(VkDescriptorBufferInfo){t->fields[i].buffer,0,field_bytes};
+    }
+    fr_renderer_compute_t *pipelines[]={&t->advect,&t->initialize,&t->rhs,&t->sor,&t->correct,&t->residual,&t->finish};
+    const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_sor","pressure_correct","pressure_residual","acoustic_finish"};
+    for(uint32_t i=0;i<7;i++) {
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",paths[i]);
-        if(!fr_renderer_compute_init(g,pipelines[i],buffers,15,16,path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,pipelines[i],buffers,17,16,path,err,cap)) goto fail;
     }
     t->ready=true;return true;
 fail:
@@ -57,8 +59,10 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,1);
     uint32_t stalled=0,batches=0;float best=INFINITY;
     for(;;) {
-        dispatch(g,&t->sor,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
-        dispatch(g,&t->sor,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank|4u);
+        for(uint32_t sweep=0;sweep<8;sweep++) {
+            dispatch(g,&t->sor,gx,gy,dt,bank);dispatch(g,&t->sor,gx,gy,dt,bank|2u);
+        }
+        dispatch(g,&t->correct,gx,gy,dt,bank);
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,2);
         barrier(g);vkCmdFillBuffer(g->command,stats->buffer,FR_GAS_RESIDUAL_WORD*4u,4,0);
         dispatch(g,&t->residual,gx,gy,dt,bank);

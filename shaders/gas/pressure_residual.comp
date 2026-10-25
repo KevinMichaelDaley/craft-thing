@@ -4,7 +4,9 @@
 void main() {
     uint index=gas_index();float residual=0.;
     if(index<params.width*params.height&&pressure[index].z>0.) {
-        residual=abs(gas_pressure_residual(index))/pressure[index].w;
+        float difference=gas_pressure_residual(index);
+        correction_data[index].x=difference;correction[index]=0.;
+        residual=abs(difference)/pressure[index].w;
         if(!gas_finite(residual)) {gas_error(index);residual=0.;}
     }
     uint maximum=subgroupMax(floatBitsToUint(residual));if(subgroupElect()) atomicMax(stats[FR_GAS_RESIDUAL_WORD],maximum);

@@ -4,13 +4,14 @@
 void main() {
     uint index=gas_index();if(index>=params.width*params.height) return;
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
-    pressure[index]=vec4(0);stencil[index]=vec4(0);if(atlas==0xffffffffu) return;
+    pressure[index]=vec4(0);stencil[index]=vec4(0);correction[index]=0.;correction_data[index]=vec4(0);
+    if(atlas==0xffffffffu) return;
     Gas old=gas_source(p),star=gas_provisional(atlas);float volume=old.geometry.x;
     if(volume<=0.) return;
     float old_kinetic=gas_kinetic(old),internal=gas_energy(old)-old_kinetic;
     float capacity=acoustic[index].z,old_capacity=acoustic[index].w;
     float difference=(star.dynamics.y-old.dynamics.y)+(star.visual.w-old.visual.w)+(star.geometry.z-old.geometry.z);
-    float rhs=difference-(provisional[index].z-old_kinetic)+
+    float rhs=difference-provisional[index].z+
         (old_capacity>0.?internal*(1.-capacity/old_capacity):internal);
     float dt=uintBitsToFloat(params.seconds),diagonal=capacity;vec4 coefficients=vec4(0);
     for(uint d=0u;d<4u;d++) {
@@ -23,4 +24,7 @@ void main() {
     }
     pressure[index]=vec4(0,rhs,diagonal,max(abs(internal),1e-20));stencil[index]=coefficients;
     acoustic[index].z=0.;
+    float ratio=diagonal>0.?min(dot(coefficients,vec4(1))/diagonal,.99999994):0.;
+    float relaxation=2./(1.+sqrt(max(0.,1.-ratio*ratio)));
+    correction_data[index]=vec4(rhs,diagonal>0.?1./diagonal:0.,relaxation,0);
 }

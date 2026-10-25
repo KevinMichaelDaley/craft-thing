@@ -22,6 +22,7 @@ void main() {
         GasFlux face=forward?gas_advective_face(p,q,d/2u):gas_advective_face(q,p,d/2u);float sign=forward?-1.:1.;
         net.species+=sign*face.species;net.dynamics+=sign*face.dynamics;net.pigment+=sign*face.pigment;
     }
-    float dt=uintBitsToFloat(params.seconds);Gas value=gas_buoyancy(gas_add_flux(gas_source(p),net,dt),dt);
+    float dt=uintBitsToFloat(params.seconds),work=0.;Gas value=gas_buoyancy(gas_add_flux(gas_source(p),net,dt),dt,work);
+    provisional[index].z=work;
     gas_write_provisional(atlas,value);
 }

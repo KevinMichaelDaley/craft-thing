@@ -3,6 +3,8 @@ layout(set=0,binding=11,std430) restrict buffer Acoustic {vec4 acoustic[];};
 layout(set=0,binding=12,std430) restrict buffer Pressure {vec4 pressure[];};
 layout(set=0,binding=13,std430) restrict buffer Stencil {vec4 stencil[];};
 layout(set=0,binding=14,std430) restrict buffer Provisional {vec4 provisional[];};
+layout(set=0,binding=15,std430) restrict buffer Correction {float correction[];};
+layout(set=0,binding=16,std430) restrict buffer CorrectionData {vec4 correction_data[];};
 Gas gas_provisional(uint atlas) {return (params.bank&1u)==0u?bank1[atlas]:bank0[atlas];}
 void gas_write_provisional(uint atlas,Gas value) {
     if((params.bank&1u)==0u) bank1[atlas]=value;else bank0[atlas]=value;
