@@ -42,6 +42,11 @@ void gas_rate(Primitive p) {
     uint bound=subgroupMax(gas_finite(rate)&&rate>=0.?floatBitsToUint(rate):0u);
     if(subgroupElect()&&bound!=0u) atomicMax(stats[FR_GAS_RATE_WORD],bound);
     if(gas_implicit_policy()) {
+        float gamma=p.metric.y>0.?1.+gas_parameter(FR_GAS_KINETIC_WORD)*p.metric.w/p.metric.y:1.;
+        float sound=p.hydro.x>0.?sqrt(gamma*p.hydro.w/p.hydro.x):0.;
+        float mach=sound>0.?(abs(p.hydro.y)+abs(p.hydro.z))/sound:0.;
+        uint maximum_mach=subgroupMax(floatBitsToUint(mach));
+        if(subgroupElect()&&maximum_mach!=0u) atomicMax(stats[FR_GAS_MACH_WORD],maximum_mach);
         uint x=subgroupMax(floatBitsToUint(abs(p.hydro.y))),y=subgroupMax(floatBitsToUint(abs(p.hydro.z)));
         if(subgroupElect()) {if(x!=0u) atomicMax(stats[FR_GAS_RATE_X_WORD],x);if(y!=0u) atomicMax(stats[FR_GAS_RATE_Y_WORD],y);}
     }
