@@ -35,7 +35,9 @@ uint one_cell_block(int first,bool positive) {
     float own_heat=0.,out_heat=0.,terminal_heat=0.;
     if(thermal_water_on()) {
         if(valid&&page_at(point_at(position))!=0u) own_heat=thermal_water_at(atlas_index(point_at(position),page_at(point_at(position))));
-        out_heat=mass!=0u?own_heat*(float(outgoing)/float(mass)):0.;
+        /* Complete withdrawal transfers the exact inventory. GPU reciprocal
+         * division can otherwise leave heat behind in an empty cell. */
+        out_heat=outgoing==mass?own_heat:mass!=0u?own_heat*(float(outgoing)/float(mass)):0.;
         if(lane==0u&&page_at(point_at(target))!=0u) terminal_heat=thermal_water_at(atlas_index(point_at(target),page_at(point_at(target))));
     }
     float incoming_heat=subgroupShuffleDown(out_heat,1u);
