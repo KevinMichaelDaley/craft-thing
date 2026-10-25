@@ -1,0 +1,28 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "acoustic.glsl"
+shared float local_correction[100];
+void main() {
+    uint tile=active_tiles[gl_WorkGroupID.x],width=(params.width+7u)/8u;
+    if(((tile%width+tile/width)&1u)!=((params.bank>>1u)&1u)) return;
+    uint lane=gl_LocalInvocationIndex;ivec2 origin=ivec2(int(tile%width),int(tile/width))*8;
+    for(uint at=lane;at<100u;at+=64u) {
+        ivec2 p=origin+ivec2(int(at%10u)-1,int(at/10u)-1);
+        bool corner=(at%10u==0u||at%10u==9u)&&(at/10u==0u||at/10u==9u);
+        local_correction[at]=!corner&&all(greaterThanEqual(p,ivec2(0)))&&all(lessThan(p,ivec2(params.width,params.height)))?
+            correction[uint(p.y)*params.width+uint(p.x)]:0.;
+    }
+    uvec2 p=uvec2(origin)+uvec2(lane%8u,lane/8u);bool valid=p.x<params.width&&p.y<params.height;
+    uint index=valid?p.y*params.width+p.x:0u,center=(lane/8u+1u)*10u+lane%8u+1u;
+    vec4 edges=valid?stencil[index]:vec4(0),data=valid?correction_data[index]:vec4(0);
+    barrier();
+    for(uint sweep=0u;sweep<8u;sweep++) for(uint color=0u;color<2u;color++) {
+        if(valid&&data.y>0.&&((p.x+p.y)&1u)==color) {
+            float rhs=data.x+edges.x*local_correction[center+1u]+edges.y*local_correction[center-1u]+
+                edges.z*local_correction[center+10u]+edges.w*local_correction[center-10u];
+            local_correction[center]+=1.45*(rhs*data.y-local_correction[center]);
+        }
+        barrier();
+    }
+    if(valid) correction[index]=local_correction[center];
+}

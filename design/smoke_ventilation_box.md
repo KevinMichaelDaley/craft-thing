@@ -256,3 +256,9 @@ halve and retry without publishing state or losing time. The cold reference has
 a new locked diagonal-flow positivity/budget case and transactional rejection
 outside this bound (RED6384ec2); it now passes4/4. Physical clock, source fixtures,
 pressure operator and compensated residual tolerance are unchanged.
+
+Scalar32-sweep residual batches pass13 native cases and improve the actual
+30-frame elapsed-clock probe to31.762/50.584ms mean/worst. The cheaper shared
+block-correction experiment also passed13 numerical cases, but its local barriers
+and slower enclosure convergence cost840.708/996.273ms in the actual CLI scene.
+It is rejected and archived in history; it is not a production option.
