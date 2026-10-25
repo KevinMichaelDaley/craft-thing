@@ -28,6 +28,10 @@ static bool bench_budget(dc_level_view_t *view,uint64_t *water,double *energy,ch
             fr_thermal_gpu_read_water_chunk(view->gpu,slot,excess,4096,err,cap);
         if(okay) {
             for(uint32_t i=0;i<4096;i++) {
+                if(chunk->cells[i].fluid_mass==0u&&excess[i]!=0.f) {
+                    snprintf(err,cap,"Orphan heat chunk(%lld,%lld) cell%u excess%.9g",(long long)x,(long long)y,i,(double)excess[i]);
+                    okay=false;break;
+                }
                 mass+=chunk->cells[i].fluid_mass;
                 total+=(double)chunk->cells[i].fluid_mass/65536.*water_cp*FR_THERMAL_AMBIENT_K+excess[i];
             }
@@ -99,7 +103,11 @@ static void test_placement_water_pour_cools_and_wets_wood_with_closed_reference_
         before_temperature,after_temperature,after.state.bound_water_fp,(unsigned long long)(final_water-initial_water),cells*65536u,
         final_energy-initial_energy-injected);
     ASSERT_TRUE(fabs(final_energy-initial_energy-injected)<.02);
-    for(uint32_t i=0;i<60;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
+    for(uint32_t i=0;i<60;i++) {
+        ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
+        printf("Pour reference step%u\n",i+2u);
+        ASSERT_TRUE(bench_budget(view,&final_water,&final_energy,err,sizeof(err)));
+    }
     uint32_t *pixels=malloc(480u*270u*4u);ASSERT_TRUE(pixels);
     ASSERT_TRUE(dc_level_view_heat_overlay(view,2)&&dc_level_view_tick(view,err,sizeof(err))&&dc_level_view_pixels(view,pixels,480u*270u,err,sizeof(err)));
     mkdir("build/screenshots",0777);ASSERT_TRUE(bench_capture(pixels,"build/screenshots/thermal_bench_water_pour.bmp"));
@@ -144,8 +152,13 @@ static void test_explicit_new_run_resets_source_and_wetness_without_reusing_old_
     ASSERT_TRUE(fabs(wood.state.thermal_energy/fr_reactive_state_heat_capacity(&wood.state)-FR_THERMAL_AMBIENT_K)<1e-3);
     ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err))&&dc_level_view_destroy(view,err,sizeof(err)));PASS();
 }
-int main(void) {
+int main(int argc,char **argv) {
     setvbuf(stdout,NULL,_IOLBF,0);
+    if(argc==2&&strcmp(argv[1],"--pour")==0) {
+        RUN(test_placement_water_pour_cools_and_wets_wood_with_closed_reference_budgets);
+        printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
+    }
+    if(argc!=1) {fprintf(stderr,"Usage: %s [--pour]\n",argv[0]);return 2;}
     RUN(test_interactive_bench_has_finite_sources_wet_control_probe_and_stable_pause);
     RUN(test_placement_water_pour_cools_and_wets_wood_with_closed_reference_budgets);
     RUN(test_reopened_bench_retains_warm_parcels_water_source_and_custom_colors);
