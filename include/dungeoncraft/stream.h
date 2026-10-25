@@ -20,6 +20,7 @@ typedef struct {
     dc_chunk_t *chunk;
     dc_chunk_colors_t *colors;
     fr_reactive_chunk_t *reactive;
+    float *water_excess;
 } dc_stream_result_t;
 
 /** Start a worker thread for procedural generation and chunk disk I/O. */
@@ -45,6 +46,11 @@ bool dc_stream_request_save_colors(dc_streamer_t *stream,const dc_chunk_t *chunk
  * The queue owns an immutable copy; invalid bindings leave existing files intact. */
 bool dc_stream_request_save_reactive(dc_streamer_t *stream,const dc_chunk_t *chunk,
     const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,uint64_t generation);
+/** Save immutable physical/color/parcel/liquid channels atomically. Liquid heat
+ * is bound to this chunk's volume; the world probe remains in the global file. */
+bool dc_stream_request_save_thermal(dc_streamer_t *stream,const dc_chunk_t *chunk,
+    const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
+    const float *water_excess,uint64_t generation);
 
 /** Poll one completed result without waiting for disk I/O. */
 bool dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *result);

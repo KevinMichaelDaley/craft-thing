@@ -1747,6 +1747,8 @@ build/reactive_chunk_tests: tests/fire/reactive_chunk_tests.c src/fire/reactive_
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/reactive_chunk_tests.c src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) -o $@ -lm
 build/reactive_stream_tests: tests/fire/reactive_stream_tests.c tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) -o $@ -pthread -lm
+build/thermal_stream_tests: tests/fire/thermal_stream_tests.c tests/fire/reactive_stream_tests.c tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) -o $@ -pthread -lm
 build/reactive_chunk.o: src/fire/reactive_chunk.c include/ferrum/fire/reactive_chunk.h include/ferrum/fire/reactive_state.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/reactive_chunk_display_tests: tests/vulkan/reactive_chunk_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv

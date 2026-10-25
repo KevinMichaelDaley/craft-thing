@@ -356,6 +356,13 @@ bool dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *result) {
     return true;
 }
 
+bool dc_stream_request_save_thermal(dc_streamer_t *stream,const dc_chunk_t *chunk,
+    const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
+    const float *water_excess,uint64_t generation) {
+    (void)stream;(void)chunk;(void)colors;(void)reactive;(void)water_excess;(void)generation;
+    return false;
+}
+
 void dc_stream_result_release(dc_stream_result_t *result) {
     if (!result) return;
     free(result->chunk);
