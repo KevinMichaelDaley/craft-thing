@@ -1786,8 +1786,8 @@ build/thermal_model.o: src/fire/thermal.c include/ferrum/fire/thermal.h include/
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/thermal_gpu_display_tests: tests/vulkan/thermal_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
-build/thermal_bench_display_tests: tests/app/thermal_bench_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level.c $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
+build/thermal_bench_display_tests: tests/app/thermal_bench_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level.c src/app/session.c $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< src/app/session.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 build/thermal_water_display_tests: tests/vulkan/thermal_water_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/thermal_admission_display_tests: tests/vulkan/thermal_admission_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv

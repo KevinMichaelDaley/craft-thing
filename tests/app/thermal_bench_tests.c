@@ -4,6 +4,7 @@
 #undef main
 #include <math.h>
 #include "../../src/app/level.c"
+#include "../../src/app/session.h"
 #include "ferrum/fire/material_profile.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include <sys/stat.h>
@@ -104,9 +105,50 @@ static void test_placement_water_pour_cools_and_wets_wood_with_closed_reference_
     mkdir("build/screenshots",0777);ASSERT_TRUE(bench_capture(pixels,"build/screenshots/thermal_bench_water_pour.bmp"));
     free(pixels);ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));PASS();
 }
+static void test_reopened_bench_retains_warm_parcels_water_source_and_custom_colors(void) {
+    char err[256]={0},directory[]="build/thermal_resume_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view=dc_level_view_create(directory,314,err,sizeof(err));ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_setup_heat_bench(view,err,sizeof(err))&&dc_level_view_heat_probe(view,140,192,true));
+    for(uint32_t i=0;i<12;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_heat_probe(view,140,192,false)&&dc_level_view_paint(view,140,188,3,DC_MATERIAL_WATER,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
+    uint32_t slot=0,water_slot=0;bool found=false;
+    ASSERT_TRUE(dc_chunk_table_find(&view->table,(dc_chunk_coord_t){2,1},&slot)&&dc_chunk_table_find(&view->table,(dc_chunk_coord_t){2,0},&water_slot));
+    fr_reactive_record_t before,after;fr_thermal_probe_t source,fresh_source;float heat[4096],fresh_heat[4096];
+    dc_chunk_colors_t *colors=malloc(sizeof(*colors)),*fresh_colors=malloc(sizeof(*fresh_colors));ASSERT_TRUE(colors&&fresh_colors);
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(view->gpu,slot,12,&before,&found,err,sizeof(err))&&found);
+    ASSERT_TRUE(fr_thermal_gpu_source_state(view->gpu,&source,err,sizeof(err))&&source.excess_energy<11370.f);
+    ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(view->gpu,water_slot,heat,4096,err,sizeof(err))&&fr_renderer_download_chunk_colors(view->gpu,slot,colors,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));view=dc_level_view_create(directory,314,err,sizeof(err));ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_restored(view)&&dc_level_view_setup_heat_bench(view,err,sizeof(err)));
+    ASSERT_TRUE(dc_chunk_table_find(&view->table,(dc_chunk_coord_t){2,1},&slot)&&dc_chunk_table_find(&view->table,(dc_chunk_coord_t){2,0},&water_slot));
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(view->gpu,slot,12,&after,&found,err,sizeof(err))&&found&&memcmp(&before,&after,sizeof(before))==0);
+    ASSERT_TRUE(fr_thermal_gpu_source_state(view->gpu,&fresh_source,err,sizeof(err))&&memcmp(&source,&fresh_source,sizeof(source))==0);
+    ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(view->gpu,water_slot,fresh_heat,4096,err,sizeof(err))&&memcmp(heat,fresh_heat,sizeof(heat))==0);
+    ASSERT_TRUE(fr_renderer_download_chunk_colors(view->gpu,slot,fresh_colors,err,sizeof(err))&&memcmp(colors,fresh_colors,sizeof(*colors))==0);
+    ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err))&&dc_level_view_destroy(view,err,sizeof(err)));
+    free(colors);free(fresh_colors);PASS();
+}
+static void test_explicit_new_run_resets_source_and_wetness_without_reusing_old_world(void) {
+    char err[256]={0},directory[]="build/thermal_restart_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view=dc_level_view_create(directory,314,err,sizeof(err));ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_setup_heat_bench(view,err,sizeof(err))&&dc_level_view_heat_probe(view,140,192,true));
+    for(uint32_t i=0;i<3;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
+    fr_thermal_probe_t spent,fresh;ASSERT_TRUE(fr_thermal_gpu_source_state(view->gpu,&spent,err,sizeof(err))&&spent.excess_energy<11370.f);
+    ASSERT_TRUE(dc_app_restart_view(&view,directory,2718,1,err,sizeof(err))&&dc_level_view_setup_heat_bench(view,err,sizeof(err)));
+    ASSERT_TRUE(!dc_level_view_restored(view)&&fr_thermal_gpu_source_state(view->gpu,&fresh,err,sizeof(err)));
+    ASSERT_EQ(fresh.excess_energy,11370.f);ASSERT_EQ(fresh.capacity,200.f);
+    uint32_t slot=0;bool found=false;fr_reactive_record_t wood;
+    ASSERT_TRUE(dc_chunk_table_find(&view->table,(dc_chunk_coord_t){2,1},&slot)&&fr_gpu_reactive_read_cell(view->gpu,slot,12,&wood,&found,err,sizeof(err))&&found);
+    ASSERT_EQ(wood.state.bound_water_fp,0u);
+    ASSERT_TRUE(fabs(wood.state.thermal_energy/fr_reactive_state_heat_capacity(&wood.state)-FR_THERMAL_AMBIENT_K)<1e-3);
+    ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err))&&dc_level_view_destroy(view,err,sizeof(err)));PASS();
+}
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);
     RUN(test_interactive_bench_has_finite_sources_wet_control_probe_and_stable_pause);
     RUN(test_placement_water_pour_cools_and_wets_wood_with_closed_reference_budgets);
+    RUN(test_reopened_bench_retains_warm_parcels_water_source_and_custom_colors);
+    RUN(test_explicit_new_run_resets_source_and_wetness_without_reusing_old_world);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
