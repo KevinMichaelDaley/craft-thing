@@ -6,11 +6,6 @@
 
 typedef struct {size_t a,b;uint32_t axis;double area,enthalpy,momentum,energy_diffusion;} face_t;
 typedef struct {double pressure,capacity,enthalpy,kinetic;} cell_t;
-bool fr_gas_large_cfl_reference_step(const fr_gas_model_t *m,const fr_gas_state_t *s,
-    const double *v,uint32_t width,uint32_t height,double dt,fr_gas_state_t *out,char *err,uint32_t cap) {
-    (void)m;(void)s;(void)v;(void)width;(void)height;(void)dt;(void)out;
-    return gas_error(err,cap,"Composed large-CFL oracle is not implemented");
-}
 
 static fr_gas_state_t advective_flux(const fr_gas_state_t *a,const fr_gas_state_t *b,
     double va,double vb,double area,uint32_t axis) {
@@ -20,8 +15,8 @@ static fr_gas_state_t advective_flux(const fr_gas_state_t *a,const fr_gas_state_
     double speed=fmax(fabs(ua),fabs(ub));
     return gas_combine(a,area*(ua+speed)*.5/va,b,area*(ub-speed)*.5/vb);
 }
-bool fr_gas_implicit_reference_step(const fr_gas_model_t *m,const fr_gas_state_t *s,
-    const double *v,uint32_t width,uint32_t height,double dt,fr_gas_state_t *out,char *err,uint32_t cap) {
+static bool implicit_reference_step(const fr_gas_model_t *m,const fr_gas_state_t *s,
+    const double *v,uint32_t width,uint32_t height,double dt,bool large,fr_gas_state_t *out,char *err,uint32_t cap) {
     uint64_t wide=(uint64_t)width*height;
     if(!m||!s||!v||!out||!wide||wide>SIZE_MAX/(2*sizeof(face_t))||!isfinite(dt)||dt<0)
         return gas_error(err,cap,"Invalid implicit gas reference request");
@@ -40,8 +35,9 @@ bool fr_gas_implicit_reference_step(const fr_gas_model_t *m,const fr_gas_state_t
         cells[i].pressure=t.pressure;cells[i].enthalpy=(s[i].energy+m->kinetic_scale*t.pressure*v[i])/t.mass;
         cells[i].kinetic=.5*m->kinetic_scale*(s[i].momentum[0]*s[i].momentum[0]+s[i].momentum[1]*s[i].momentum[1])/t.mass;
     }
-    if((axis_rate[0]+axis_rate[1])*dt>FR_GAS_ADVECTIVE_COURANT) {gas_error(err,cap,"Implicit gas violates advective axis CFL");goto done;}
+    if(!large&&(axis_rate[0]+axis_rate[1])*dt>FR_GAS_ADVECTIVE_COURANT) {gas_error(err,cap,"Implicit gas violates advective axis CFL");goto done;}
     if(dt==0) {memcpy(out,s,count*sizeof(*s));okay=true;goto done;}
+    if(large&&!fr_gas_transport_reference_step(m,s,v,width,height,dt,star,err,cap)) goto done;
     for(size_t i=0;i<count;i++) for(uint32_t axis=0;axis<2;axis++) {
         if((axis==0&&i%width+1>=width)||(axis==1&&i+width>=count)) continue;
         size_t j=i+(axis?width:1);double area=fmin(v[i],v[j]);if(area<=0) continue;
@@ -49,15 +45,15 @@ bool fr_gas_implicit_reference_step(const fr_gas_model_t *m,const fr_gas_state_t
         double ma=0,mb=0;for(uint32_t k=0;k<5;k++) {ma+=s[i].species[k];mb+=s[j].species[k];}
         double speed=fmax(ma?fabs(s[i].momentum[axis])/ma:0,mb?fabs(s[j].momentum[axis])/mb:0);
         face_t face={.a=i,.b=j,.axis=axis,.area=area,.enthalpy=.5*(cells[i].enthalpy+cells[j].enthalpy),
-            .energy_diffusion=-.5*area*speed*(s[j].energy/v[j]-s[i].energy/v[i])};
+            .energy_diffusion=large?0:-.5*area*speed*(s[j].energy/v[j]-s[i].energy/v[i])};
         faces[face_count++]=face;
-        flux.energy=0;star[i]=gas_combine(star+i,1,&flux,-dt);star[j]=gas_combine(star+j,1,&flux,dt);
+        if(!large) {flux.energy=0;star[i]=gas_combine(star+i,1,&flux,-dt);star[j]=gas_combine(star+j,1,&flux,dt);}
     }
     for(size_t i=0;i<count;i++) {
         double capacity=0,molecular=0;
         for(uint32_t k=0;k<5;k++) {capacity+=star[i].species[k]*m->heat_capacity_cv[k];molecular+=star[i].species[k]*m->gas_constant[k];}
         if(molecular>0) cells[i].capacity=m->kinetic_scale*v[i]*capacity/molecular;
-        p[i]=cells[i].pressure;rhs[i]=s[i].energy-cells[i].kinetic;diagonal[i]=cells[i].capacity;
+        p[i]=cells[i].pressure;rhs[i]=(large?star[i].energy:s[i].energy)-cells[i].kinetic;diagonal[i]=cells[i].capacity;
     }
     for(size_t f=0;f<face_count;f++) {
         face_t *face=faces+f;size_t i=face->a,j=face->b;uint32_t axis=face->axis;
@@ -84,7 +80,7 @@ bool fr_gas_implicit_reference_step(const fr_gas_model_t *m,const fr_gas_state_t
         }
     }
     free(neighbor);memcpy(result,star,count*sizeof(*star));
-    for(size_t i=0;i<count;i++) result[i].energy=s[i].energy;
+    if(!large) for(size_t i=0;i<count;i++) result[i].energy=s[i].energy;
     for(size_t f=0;f<face_count;f++) {
         face_t face=faces[f];size_t i=face.a,j=face.b;uint32_t axis=face.axis;
         double momentum=face.momentum-dt*face.area*(p[j]-p[i]);
@@ -98,4 +94,12 @@ bool fr_gas_implicit_reference_step(const fr_gas_model_t *m,const fr_gas_state_t
     memcpy(out,result,count*sizeof(*result));okay=true;
 done:
     free(star);free(result);free(cells);free(faces);free(p);free(rhs);free(diagonal);return okay;
+}
+bool fr_gas_implicit_reference_step(const fr_gas_model_t *m,const fr_gas_state_t *s,
+    const double *v,uint32_t width,uint32_t height,double dt,fr_gas_state_t *out,char *err,uint32_t cap) {
+    return implicit_reference_step(m,s,v,width,height,dt,false,out,err,cap);
+}
+bool fr_gas_large_cfl_reference_step(const fr_gas_model_t *m,const fr_gas_state_t *s,
+    const double *v,uint32_t width,uint32_t height,double dt,fr_gas_state_t *out,char *err,uint32_t cap) {
+    return implicit_reference_step(m,s,v,width,height,dt,true,out,err,cap);
 }
