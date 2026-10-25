@@ -1,0 +1,208 @@
+diff --git a/src/vulkan/chunk_gpu.c b/src/vulkan/chunk_gpu.c
+index 3080373..b705602 100644
+--- a/src/vulkan/chunk_gpu.c
++++ b/src/vulkan/chunk_gpu.c
+@@ -242,7 +242,7 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
+     }
+     if (missing_primary > DC_MPM_PARTICLES_PER_CHUNK - particle_count)
+         return error(err, cap, "GPU particle pool is full");
+-    if(!fr_gpu_reactive_clear_chunk(gpu,slot,err,cap)) return false;
++    if(!gpu->reactive_checkpoint_installing&&!fr_gpu_reactive_clear_chunk(gpu,slot,err,cap)) return false;
+     if (!gpu->fluid_work_possible) {
+         gpu->fluid_work_possible = chunk->marker_count != 0u;
+         for (uint32_t i = 0; i < DC_CHUNK_CELLS && !gpu->fluid_work_possible; i++)
+diff --git a/src/vulkan/gpu_internal.h b/src/vulkan/gpu_internal.h
+index 0a15df1..5cbcd7e 100644
+--- a/src/vulkan/gpu_internal.h
++++ b/src/vulkan/gpu_internal.h
+@@ -8,6 +8,7 @@
+ #include "dungeoncraft/gpu.h"
+ #include "dungeoncraft/color.h"
+ #include "ferrum/structural/gpu.h"
++#include "ferrum/fire/reactive_chunk.h"
+ #include "mpm_activity_layout.h"
+ 
+ enum {
+@@ -164,6 +165,8 @@ struct dc_gpu {
+     bool structural_enabled;
+     bool structural_graph_possible;
+     dc_chunk_t *checkpoint_chunks;
++    fr_reactive_chunk_t *checkpoint_reactive;
++    bool reactive_checkpoint_installing;
+     dc_chunk_colors_t *checkpoint_colors;
+     uint32_t checkpoint_chunk_count;
+     bool impact_fracture_enabled;
+--- /dev/null
++++ b/src/vulkan/reactive_checkpoint_gpu.h
+@@ -0,0 +1,18 @@
++#ifndef FR_REACTIVE_CHECKPOINT_GPU_H
++#define FR_REACTIVE_CHECKPOINT_GPU_H
++#include "ferrum/fire/reactive_archive.h"
++#include "structural_store_internal.h"
++struct fr_reactive_gpu;
++/** Collect immutable body and resident/pending chunk channels at a cold boundary. */
++bool fr_gpu_reactive_checkpoint_collect(dc_gpu_t *gpu,const dc_chunk_t *chunks,
++    uint32_t count,fr_reactive_archive_t *out,char *err,uint32_t cap);
++/** Validate immutable checkpoint bindings and preflight detached GPU state before
++ * the live physical checkpoint is changed. Failure preserves its entire source. */
++bool fr_gpu_reactive_checkpoint_prepare(dc_gpu_t *gpu,const fr_reactive_archive_t *archive,
++    const dc_chunk_t *chunks,const dc_structural_store_payload_t *payload,const uint32_t *pixels,uint32_t pixel_words,
++    struct fr_reactive_gpu **out,char *err,uint32_t cap);
++/** Publish already prepared storage after the corresponding physical install. */
++void fr_gpu_reactive_checkpoint_publish(dc_gpu_t *gpu,struct fr_reactive_gpu *prepared);
++/** Release pending immutable chunk channels when a checkpoint is replaced. */
++void fr_gpu_reactive_checkpoint_clear_pending(dc_gpu_t *gpu);
++#endif
+--- /dev/null
++++ b/src/vulkan/reactive_checkpoint_gpu.c
+@@ -0,0 +1,150 @@
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include "ferrum/fire/material_profile.h"
++#include "reactive_checkpoint_gpu.h"
++#include "reactive_gpu_internal.h"
++#include "reactive_storage_gpu.h"
++#include "runtime_body_internal.h"
++
++static bool error(char *err,uint32_t cap,const char *message) {
++    if(err&&cap) snprintf(err,cap,"%s",message);
++    return false;
++}
++void fr_gpu_reactive_checkpoint_clear_pending(dc_gpu_t *g) {
++    for(uint32_t i=0;g->checkpoint_reactive&&i<g->checkpoint_chunk_count;i++)
++        fr_reactive_chunk_release(g->checkpoint_reactive+i);
++    free(g->checkpoint_reactive);g->checkpoint_reactive=NULL;
++}
++static bool copy_channel(const fr_reactive_chunk_t *source,fr_reactive_chunk_t *out) {
++    *out=*source;out->attachments=NULL;
++    if(source->count) {
++        out->attachments=malloc((size_t)source->count*sizeof(*out->attachments));
++        if(!out->attachments) return false;
++        memcpy(out->attachments,source->attachments,(size_t)source->count*sizeof(*out->attachments));
++    }
++    return true;
++}
++bool fr_gpu_reactive_checkpoint_collect(dc_gpu_t *g,const dc_chunk_t *chunks,
++    uint32_t count,fr_reactive_archive_t *out,char *err,uint32_t cap) {
++    fr_reactive_archive_t archive={.chunk_count=count};
++    if(!g||!out||(!chunks&&count)||!fr_gpu_reactive_export_bodies(g,&archive.bodies,
++        &archive.body_count,&archive.next_id,err,cap)) return false;
++    archive.chunks=count?calloc(count,sizeof(*archive.chunks)):NULL;
++    if(count&&!archive.chunks) {fr_reactive_archive_release(&archive);return error(err,cap,"Cannot stage checkpoint chunk channels");}
++    bool okay=true;
++    for(uint32_t i=0;okay&&i<count;i++) {
++        bool found=false;
++        for(uint32_t slot=0;!found&&slot<DC_GPU_CHUNK_SLOTS;slot++) {
++            const uint32_t *registry=dc_gpu_structural_data(g)+DC_STRUCTURAL_HEADER_WORDS+slot*8u;
++            if(registry[5]&&memcmp(registry,&chunks[i].coord,sizeof(chunks[i].coord))==0) {
++                okay=fr_gpu_reactive_export_chunk(g,slot,chunks+i,archive.chunks+i,err,cap);found=true;
++            }
++        }
++        for(uint32_t old=0;!found&&old<g->checkpoint_chunk_count;old++)
++            if(memcmp(&g->checkpoint_chunks[old].coord,&chunks[i].coord,sizeof(chunks[i].coord))==0) {
++                if(g->checkpoint_reactive) okay=copy_channel(g->checkpoint_reactive+old,archive.chunks+i);
++                else archive.chunks[i].next_id=1;
++                found=true;
++            }
++        if(!found) okay=error(err,cap,"Checkpoint physical chunk has no immutable channel source");
++        if(archive.chunks[i].next_id>archive.next_id) archive.next_id=archive.chunks[i].next_id;
++    }
++    if(!okay) {fr_reactive_archive_release(&archive);return false;}
++    *out=archive;return true;
++}
++typedef struct {uint32_t id,slot;} identity_t;
++typedef struct {uint32_t kind,word,nibble;} binding_t;
++static int identity_order(const void *a,const void *b) {
++    const identity_t *x=a,*y=b;return x->id<y->id?-1:x->id>y->id?1:0;
++}
++static bool body_binding(const fr_reactive_record_t *record,const identity_t *ids,uint32_t count,
++    const dc_structural_store_payload_t *payload,const uint32_t *pixels,uint32_t words,binding_t *out) {
++    identity_t key={.id=record->owner.key[0]};const identity_t *match=bsearch(&key,ids,count,sizeof(*ids),identity_order);
++    if(!match) return false;
++    const dc_gpu_body_record_t *body=payload->bodies+match->slot;
++    if((!body->body.active&&!body->reserved[0])||!(body->piece_count&DC_GPU_PIXEL_BODY_FLAG)||
++       payload->states[match->slot].owner.generation!=record->owner.key[1]||
++       payload->states[match->slot].owner.runtime_id!=record->owner.key[0]) return false;
++    uint32_t source=body->compound_reserved,x=record->owner.key[2],y=record->owner.key[3];
++    if((uint64_t)source+8u>words) return false;
++    const uint32_t *shape=pixels+source;
++    if(x>=shape[6]||y>=shape[7]||(uint64_t)source+shape[0]>words) return false;
++    uint64_t tile=(uint64_t)(y/16u)*shape[2]+x/16u;
++    if(tile+8u>=shape[0]) return false;
++    uint32_t offset=shape[8u+tile],cell=(y%16u)*16u+x%16u;
++    uint64_t word=(uint64_t)offset+1u+cell/8u;
++    if(!offset||word>=shape[0]) return false;
++    uint32_t nibble=(shape[word]>>((cell%8u)*4u))&15u;
++    const fr_reactive_profile_t *profile=fr_reactive_profile_for_body(nibble);
++    if(!profile||profile->material!=record->state.material) return false;
++    *out=(binding_t){FR_REACTIVE_OWNER_BODY,source+(uint32_t)word,cell%8u};return true;
++}
++bool fr_gpu_reactive_checkpoint_prepare(dc_gpu_t *g,const fr_reactive_archive_t *archive,
++    const dc_chunk_t *chunks,const dc_structural_store_payload_t *payload,const uint32_t *pixels,uint32_t pixel_words,
++    struct fr_reactive_gpu **out,char *err,uint32_t cap) {
++    if(!g||!payload||!out) return error(err,cap,"Invalid checkpoint reaction transaction");
++    if(!archive) {*out=NULL;return true;}
++    if(archive->chunk_count&&!chunks) return error(err,cap,"Missing checkpoint physical chunks");
++    uint32_t *slots=archive->chunk_count?malloc((size_t)archive->chunk_count*sizeof(*slots)):NULL;
++    if(archive->chunk_count&&!slots) return error(err,cap,"Cannot preflight resident checkpoint channels");
++    uint64_t total=archive->body_count;
++    for(uint32_t i=0;i<archive->chunk_count;i++) {
++        slots[i]=UINT32_MAX;
++        for(uint32_t slot=0;slot<DC_GPU_CHUNK_SLOTS;slot++) {
++            const uint32_t *registry=dc_gpu_structural_data(g)+DC_STRUCTURAL_HEADER_WORDS+slot*8u;
++            if(registry[5]&&memcmp(registry,&chunks[i].coord,sizeof(chunks[i].coord))==0) {
++                slots[i]=slot;total+=archive->chunks[i].count;break;
++            }
++        }
++    }
++    if(total>UINT32_MAX) {free(slots);return error(err,cap,"Checkpoint reactive address range overflow");}
++    uint32_t count=(uint32_t)total;
++    identity_t *ids=malloc((size_t)payload->body_count*sizeof(*ids));
++    binding_t *bindings=count?malloc((size_t)count*sizeof(*bindings)):NULL;
++    fr_reactive_arena_request_t *requests=count?calloc(count,sizeof(*requests)):NULL;
++    fr_reactive_handle_t *handles=count?malloc((size_t)count*sizeof(*handles)):NULL;
++    if(!ids||(count&&(!bindings||!requests||!handles))) {
++        free(slots);free(ids);free(bindings);free(requests);free(handles);return error(err,cap,"Cannot stage immutable checkpoint body bindings");
++    }
++    for(uint32_t i=0;i<payload->body_count;i++) ids[i]=(identity_t){payload->bodies[i].body.id,i};
++    qsort(ids,payload->body_count,sizeof(*ids),identity_order);
++    bool okay=true,particles=false;
++    for(uint32_t i=0;okay&&i<archive->body_count;i++) {
++        okay=body_binding(archive->bodies+i,ids,payload->body_count,payload,pixels,pixel_words,bindings+i);
++        requests[i]=(fr_reactive_arena_request_t){.operation=FR_REACTIVE_ARENA_ALLOCATE,.record=archive->bodies[i]};
++        particles|=archive->bodies[i].state.material==DC_MATERIAL_LEAVES;
++    }
++    free(ids);
++    uint32_t at=archive->body_count;
++    for(uint32_t i=0;okay&&i<archive->chunk_count;i++) if(slots[i]!=UINT32_MAX)
++        for(uint32_t j=0;j<archive->chunks[i].count;j++) {
++            const fr_reactive_attachment_t *attachment=archive->chunks[i].attachments+j;
++            uint32_t kind=attachment->record.owner.kind;
++            bindings[at]=(binding_t){kind,slots[i]*(kind==FR_REACTIVE_OWNER_CELL?4096u:8192u)+attachment->local_index,0};
++            requests[at++]=(fr_reactive_arena_request_t){.operation=FR_REACTIVE_ARENA_ALLOCATE,.record=attachment->record};
++            particles|=kind==FR_REACTIVE_OWNER_PARTICLE||attachment->record.state.material==DC_MATERIAL_LEAVES;
++        }
++    free(slots);
++    struct fr_reactive_gpu *pending=NULL;
++    if(okay) okay=fr_gpu_reactive_storage_create(g,dc_gpu_pixel_pool_capacity(g),&pending,err,cap);
++    if(okay&&particles) okay=fr_gpu_reactive_storage_particles(g,pending,err,cap);
++    uint32_t required=0;
++    if(okay&&count) okay=fr_reactive_arena_apply(g,&pending->arena,requests,count,handles,&required,err,cap);
++    if(okay) {
++        for(uint32_t i=0;i<count;i++) {
++            uint32_t *destination=NULL;size_t offset=(size_t)bindings[i].word*2u;
++            if(bindings[i].kind==FR_REACTIVE_OWNER_BODY) {destination=pending->shapes.mapped;offset=((size_t)bindings[i].word*8u+bindings[i].nibble)*2u;}
++            else if(bindings[i].kind==FR_REACTIVE_OWNER_CELL) destination=pending->cells.mapped;
++            else destination=pending->particles.mapped;
++            memcpy(destination+offset,handles+i,sizeof(*handles));
++        }
++        pending->high_id=archive->next_id-1u;*out=pending;
++    } else {fr_gpu_reactive_storage_destroy(g,pending);error(err,cap,"Invalid/unallocatable checkpoint reaction body bindings");}
++    free(bindings);free(requests);free(handles);return okay;
++}
++void fr_gpu_reactive_checkpoint_publish(dc_gpu_t *g,struct fr_reactive_gpu *prepared) {
++    struct fr_reactive_gpu *old=g->reactive;g->reactive=prepared;
++    fr_gpu_reactive_bind_work(g,g->runtime_bodies->work.mapped);g->descriptor_revision++;
++    fr_gpu_reactive_storage_destroy(g,old);
++}

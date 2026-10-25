@@ -26,40 +26,47 @@ void fr_gpu_reactive_bind_work(dc_gpu_t *g,uint32_t *h) {
     h[64]=g->reactive?REACTIVE_ROOT_MAGIC:0u;
     put_address(h+65,g->reactive?g->reactive->arena.root.address:0);
 }
-void fr_gpu_reactive_destroy(dc_gpu_t *g) {
-    if(!g||!g->reactive) return;
-    struct fr_reactive_gpu *r=g->reactive;
+void fr_gpu_reactive_storage_destroy(dc_gpu_t *g,struct fr_reactive_gpu *r) {
+    if(!g||!r) return;
     fr_renderer_compute_destroy(g,&r->stream_compute);
     dc_gpu_address_buffer_destroy(g,&r->stream);dc_gpu_address_buffer_destroy(g,&r->stream_marks);
+    dc_gpu_address_buffer_destroy(g,&r->snapshot);
     fr_reactive_arena_destroy(g,&r->arena);
     dc_gpu_address_buffer_destroy(g,&r->cells);dc_gpu_address_buffer_destroy(g,&r->shapes);
     dc_gpu_address_buffer_destroy(g,&r->particles);
-    free(r);g->reactive=NULL;
+    free(r);
 }
-bool fr_gpu_reactive_initialize(dc_gpu_t *g,char *err,uint32_t cap) {
-    if(g->reactive) return true;
+void fr_gpu_reactive_destroy(dc_gpu_t *g) {
+    if(g) {fr_gpu_reactive_storage_destroy(g,g->reactive);g->reactive=NULL;}
+}
+bool fr_gpu_reactive_storage_create(dc_gpu_t *g,uint32_t shapes,struct fr_reactive_gpu **out,char *err,uint32_t cap) {
+    if(!g||!shapes||!out) return error(err,cap,"Invalid detached reactive storage");
     struct fr_reactive_gpu *r=calloc(1,sizeof(*r));
     if(!r) return error(err,cap,"Cannot allocate reactive resource owner");
-    g->reactive=r;
-    uint32_t shapes=dc_gpu_pixel_pool_capacity(g);
     if(!fr_reactive_arena_create(g,64u,&r->arena,err,cap)||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*8u,true,&r->cells,err,cap)||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)shapes*8u*8u*2u,true,&r->shapes,err,cap)) {
-        fr_gpu_reactive_destroy(g);return false;
+        fr_gpu_reactive_storage_destroy(g,r);return false;
     }
     uint32_t *h=r->arena.root.mapped;h[12]=shapes;
     put_address(h+6,r->cells.address);
     put_address(h+8,r->shapes.address);put_address(h+10,r->shapes.address+(VkDeviceSize)shapes*64u);
-    fr_gpu_reactive_bind_work(g,g->runtime_bodies->work.mapped);g->descriptor_revision++;
-    return true;
+    *out=r;return true;
 }
-bool fr_gpu_reactive_particle_storage(dc_gpu_t *g,char *err,uint32_t cap) {
-    struct fr_reactive_gpu *r=g->reactive;
+bool fr_gpu_reactive_initialize(dc_gpu_t *g,char *err,uint32_t cap) {
+    if(g->reactive) return true;
+    if(!fr_gpu_reactive_storage_create(g,dc_gpu_pixel_pool_capacity(g),&g->reactive,err,cap)) return false;
+    fr_gpu_reactive_bind_work(g,g->runtime_bodies->work.mapped);g->descriptor_revision++;return true;
+}
+bool fr_gpu_reactive_storage_particles(dc_gpu_t *g,struct fr_reactive_gpu *r,char *err,uint32_t cap) {
     if(r->particles.buffer) return true;
     VkDeviceSize bank=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_MPM_PARTICLES_PER_CHUNK*8u;
     if(!dc_gpu_address_buffer_create(g,bank*2u,true,&r->particles,err,cap)) return false;
     uint32_t *h=r->arena.root.mapped;put_address(h+14,r->particles.address);put_address(h+16,r->particles.address+bank);
     g->descriptor_revision++;return true;
+}
+bool fr_gpu_reactive_particle_storage(dc_gpu_t *g,char *err,uint32_t cap) {
+    return fr_gpu_reactive_storage_particles(g,g->reactive,err,cap);
 }
 static uint32_t *entry(dc_gpu_t *g,const uint32_t *handle) {
     if(!g->reactive||!handle[1]) return NULL;

@@ -96,4 +96,12 @@ void main() {
         uvec2 handle=uvec2(PACKET.words[HANDLES+index*2u],PACKET.words[HANDLES+index*2u+1u]);
         write_handle(local+(kind==3u?4096u:0u),handle);
     }
+    if(params.phase==5u&&index<root[2]) {
+        Words e=entry(index);
+        if(e.words[FR_ENTRY_OWNER]==2u&&e.words[FR_ENTRY_GENERATION]!=0u) {
+            Words output_words=Words(uvec2(root[30],root[31]));uint at=4u+atomicAdd(output_words.words[0],1u)*34u;
+            for(uint word=0u;word<6u;word++) output_words.words[at+word]=e.words[FR_ENTRY_OWNER+word];
+            for(uint word=0u;word<FR_STATE_WORDS;word++) output_words.words[at+6u+word]=e.words[FR_ENTRY_STATE+word];
+        }
+    }
 }

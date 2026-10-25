@@ -83,3 +83,7 @@ Chunk slot reuse GREEN: native RED confirmed a new physical chunk inherited the 
 **2026-10-25T02:47:38Z**
 
 DCS checkpoint RED confirmed exact body and pending-negative-chunk state are currently lost on reload (2 native Vulkan cases fail). Shared FRW1 archive codec now passes3 CPU cases for one global identity counter across body/chunk channels, cross-channel duplicate identity/counter rollback rejection, empty high-water persistence and corrupt/future/truncated rollback. This codec alone does not complete DCS integration; both graphical checkpoint cases remain RED until the transaction is wired.
+
+**2026-10-25T03:02:22Z**
+
+Safe boundary after modular user steering: private detached-storage factory and parallel BODY snapshot compaction pass2 native Wayland cases; all4 chunk cases and actual level worker reload case pass again (28 presented frames total, core/sync validation). Exact unlinked DCS helper/header/private hooks preserved as design/drafts/reactive_checkpoint_integration.patch; git apply --check passes. No DCS8 format enabled. Both explicit checkpoint display tests remain intentional RED and outside the passing default battery. Remaining broad scope: DCS body/pending checkpoint persistence and rollback, other impact/analytic handoffs, runtime physical admission and loose-cell/particle transitions. These are deferred until required by the active visible feature; this ticket is NOT complete. Next visible sequence is ctfs-2hu1 heat/wetting, then ctfs-dmxv smoke, then ctfs-81vw terrain bonfire.

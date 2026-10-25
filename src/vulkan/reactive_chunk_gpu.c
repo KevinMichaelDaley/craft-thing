@@ -76,7 +76,26 @@ bool fr_gpu_reactive_clear_chunk(dc_gpu_t *g,uint32_t slot,char *err,uint32_t ca
 }
 bool fr_gpu_reactive_export_bodies(dc_gpu_t *g,fr_reactive_record_t **records,
     uint32_t *count,uint64_t *next,char *err,uint32_t cap) {
-    (void)g;(void)records;(void)count;(void)next;(void)err;(void)cap;return false;
+    if(!g||!records||!count||!next||vkQueueWaitIdle(g->queue)!=VK_SUCCESS)
+        return error(err,cap,"Invalid reactive body save boundary");
+    if(!g->reactive) {*records=NULL;*count=0;*next=1;return true;}
+    struct fr_reactive_gpu *r=g->reactive;
+    if(r->high_id==UINT64_MAX||!resources(g,err,cap)) return error(err,cap,"Cannot preflight reactive body snapshot");
+    VkDeviceSize size=16u+(VkDeviceSize)r->arena.capacity*sizeof(fr_reactive_record_t);
+    if(r->snapshot.bytes<size) {
+        dc_gpu_address_buffer_t pending={0};
+        if(!dc_gpu_address_buffer_create(g,size,true,&pending,err,cap)) return false;
+        dc_gpu_address_buffer_destroy(g,&r->snapshot);r->snapshot=pending;
+    }
+    address((uint32_t *)r->arena.root.mapped+30,r->snapshot.address);
+    memset(r->snapshot.mapped,0,16);
+    if(!dispatch(g,0,0,5,5,err,cap)) return false;
+    uint32_t total=((uint32_t *)r->snapshot.mapped)[0];
+    if(total>r->arena.capacity) return error(err,cap,"Reactive body snapshot overflow");
+    fr_reactive_record_t *copy=total?malloc((size_t)total*sizeof(*copy)):NULL;
+    if(total&&!copy) return error(err,cap,"Cannot receive immutable body snapshot");
+    if(total) memcpy(copy,(uint32_t *)r->snapshot.mapped+4,(size_t)total*sizeof(*copy));
+    *records=copy;*count=total;*next=r->high_id+1u;return true;
 }
 bool fr_gpu_reactive_export_chunk(dc_gpu_t *g,uint32_t slot,const dc_chunk_t *chunk,
     fr_reactive_chunk_t *out,char *err,uint32_t cap) {
