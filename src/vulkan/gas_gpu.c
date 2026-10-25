@@ -220,6 +220,7 @@ bool fr_gas_gpu_gate(dc_gpu_t *g,uint32_t x,uint32_t y,uint32_t width,uint32_t h
     uint32_t groups=(width*height+63u)/64u,gx=groups<g->gas->groups_x?groups:g->gas->groups_x;
     vkCmdDispatch(g->command,gx,(groups+gx-1u)/gx,1);return submit(g,err,cap);
 }
+bool fr_gas_gpu_overlay(dc_gpu_t *g,uint32_t mode) {(void)g;(void)mode;return false;}
 bool fr_gas_gpu_read_work_chunk(dc_gpu_t *g,uint32_t slot,double *work,uint32_t count,char *err,uint32_t cap) {
     if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!work||count<4096u) return error(err,cap,"Invalid gas work snapshot");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas work snapshot");

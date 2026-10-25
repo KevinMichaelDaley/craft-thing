@@ -206,6 +206,33 @@ static void finite_gate(uint32_t policy) {
 }
 static void test_native_closed_gate_retains_stock_then_opens_real_hllc_flow(void) {finite_gate(FR_GAS_PRESSURE_HLLC);}
 static void test_native_closed_gate_retains_stock_then_opens_real_implicit_flow(void) {finite_gate(FR_GAS_PRESSURE_IMPLICIT);}
+static void test_native_oxygen_and_valve_feedback_are_visible_and_do_not_advance_stock(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_gas_model_t m=reference_model();ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err)));
+    fr_gas_state_t *input=calloc(4096,sizeof(*input)),*out=malloc(4096*sizeof(*out));double *volumes=malloc(4096*sizeof(*volumes));
+    uint32_t *smoke=malloc(480u*270u*4u),*oxygen=malloc(480u*270u*4u),*closed=malloc(480u*270u*4u);ASSERT_TRUE(input&&out&&volumes&&smoke&&oxygen&&closed);
+    for(uint32_t i=0;i<4096;i++) {
+        volumes[i]=1;if(i%64>=32) input[i]=reference_air(m,1,300,0);
+        else {input[i].species[2]=1;input[i].energy=m.heat_capacity_cv[2]*300;input[i].pigment[0]=.8;input[i].pigment[2]=.5;}
+    }
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volumes,4096,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,input,4096,err,sizeof(err)));
+    fr_gas_gpu_clock_t before,after;ASSERT_TRUE(fr_gas_gpu_clock(g,&before));
+    ASSERT_TRUE(present(g,err,sizeof(err))&&dc_gpu_readback(g,smoke,480u*270u,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_overlay(g,1)&&present(g,err,sizeof(err))&&dc_gpu_readback(g,oxygen,480u*270u,err,sizeof(err)));
+    uint32_t left=oxygen[32u*480u+16u],right=oxygen[32u*480u+48u],changed=0;
+    for(uint32_t i=0;i<480u*270u;i++) changed+=smoke[i]!=oxygen[i];
+    ASSERT_TRUE(changed>3000u&&(left&255u)>((left>>8u)&255u)&&((right>>16u)&255u)>(right&255u));
+    ASSERT_TRUE(fr_gas_gpu_gate(g,31,0,1,64,0,true,err,sizeof(err))&&present(g,err,sizeof(err))&&dc_gpu_readback(g,closed,480u*270u,err,sizeof(err)));
+    ASSERT_TRUE(closed[32u*480u+31u]!=oxygen[32u*480u+31u]);
+    ASSERT_TRUE(present(g,err,sizeof(err))&&dc_gpu_readback(g,smoke,480u*270u,err,sizeof(err)));
+    ASSERT_EQ(memcmp(smoke,closed,480u*270u*4u),0);
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err))&&fr_gas_gpu_clock(g,&after));
+    ASSERT_EQ(memcmp(input,out,4096*sizeof(*input)),0);ASSERT_EQ(memcmp(&before,&after,sizeof(before)),0);
+    SDL_Surface *image=SDL_CreateRGBSurfaceWithFormatFrom(closed,480,270,32,480*4,SDL_PIXELFORMAT_ABGR8888);ASSERT_TRUE(image);
+    ASSERT_EQ(SDL_SaveBMP(image,"build/screenshots/gas_oxygen_feedback.bmp"),0);SDL_FreeSurface(image);
+    free(input);free(out);free(volumes);free(smoke);free(oxygen);free(closed);free(c);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
@@ -216,5 +243,6 @@ int main(void) {
     RUN(test_native_implicit_sparse_pressure_and_color_cross_chunk_seams_without_stock_loss);
     RUN(test_native_closed_gate_retains_stock_then_opens_real_hllc_flow);
     RUN(test_native_closed_gate_retains_stock_then_opens_real_implicit_flow);
+    RUN(test_native_oxygen_and_valve_feedback_are_visible_and_do_not_advance_stock);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

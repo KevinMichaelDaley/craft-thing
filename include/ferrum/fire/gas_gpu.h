@@ -20,6 +20,8 @@ bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *gpu,uint32_t policy,char *err_buf,
  * face, axis1 the lower face. This changes boundary conditions, never gas stock. */
 bool fr_gas_gpu_gate(dc_gpu_t *gpu,uint32_t x,uint32_t y,uint32_t width,uint32_t height,
     uint32_t axis,bool closed,char *err_buf,uint32_t err_cap);
+/** Read-only feedback:0 smoke pigment,1 oxygen molecular fraction. */
+bool fr_gas_gpu_overlay(dc_gpu_t *gpu,uint32_t mode);
 /** Cold diagnostic of cumulative external buoyancy work, never a frame scan. */
 bool fr_gas_gpu_read_work_chunk(dc_gpu_t *gpu,uint32_t slot,double *work,
     uint32_t capacity,char *err_buf,uint32_t err_cap);
