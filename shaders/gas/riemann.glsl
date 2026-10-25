@@ -13,6 +13,12 @@ GasFlux gas_flux_combine(GasFlux a,float x,GasFlux b,float y) {
 GasFlux gas_face(ivec2 a,ivec2 b,uint axis) {
     Primitive pl=gas_cached(a),pr=gas_cached(b);float vl=pl.metric.w,vr=pr.metric.w;
     if(vl==0.&&vr==0.) return gas_empty_flux();
+    if((vl==0.||pl.hydro[axis+1u]==0.)&&(vr==0.||pr.hydro[axis+1u]==0.)&&
+       (vl==0.||vr==0.||pl.hydro.w==pr.hydro.w)) {
+        GasFlux rest=gas_empty_flux();
+        rest.dynamics[axis+2u]=vl==0.?pr.hydro.w*vr:(vr==0.?pl.hydro.w*vl:pl.hydro.w*min(vl,vr));
+        return rest;
+    }
     Gas left=gas_source(a),right=gas_source(b);float area=min(vl,vr);
     if(vl==0.) {left=right;left.dynamics[axis+2u]*=-1.;pl=pr;pl.hydro[axis+1u]*=-1.;vl=vr;area=vr;}
     if(vr==0.) {right=left;right.dynamics[axis+2u]*=-1.;pr=pl;pr.hydro[axis+1u]*=-1.;vr=vl;area=vl;}

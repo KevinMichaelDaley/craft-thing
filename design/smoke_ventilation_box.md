@@ -93,3 +93,12 @@ temperature293.15K and gravity900 cells/s². These are explicit game calibration
 parameters, not a claim of SI acoustics. The CFL bound and budget tolerances
 remain unchanged. Whole-frame measurements must decide whether this prototype
 is viable before the interactive module is accepted.
+
+The first actual-display full-field probe failed:30 measured frames after20
+warmup, mean111.907/worst119.253ms (gas109.963ms),1107 gas substeps across50
+physical ticks. A stationary-face shortcut reduced this only to98.377/115.135ms.
+A shared-face buffer experiment retained all3 displayed numerical cases,
+including strengthened moving-wall coverage, but worsened cost to163.711/173.258ms.
+The added flux-buffer bandwidth is not viable; this experiment is retained in
+git history rather than selected as the production backend. No target, clock,
+budget tolerance, velocity or substep limit was changed to pass this gate.

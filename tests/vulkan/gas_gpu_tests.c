@@ -45,6 +45,7 @@ static void test_native_colored_transport_matches_reference_and_retains_closed_b
         uint32_t i=y*64+x;bool wall=x==32&&(y<20||y>=44);volumes[i]=wall?0:1;
         if(wall) {c->cells[i]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};continue;}
         input[i]=reference_air(m,1,300,0);
+        if(x==0&&y>=10&&y<16) input[i]=reference_air(m,1,300,2);
         if(x>=24&&x<32&&y>=26&&y<38) {
             input[i].species[FR_GAS_EXHAUST]=.1;input[i].energy+=.1*m.heat_capacity_cv[FR_GAS_EXHAUST]*330;
             input[i].pigment[x<28?0:2]=.1;input[i].momentum[0]=1.1*20;

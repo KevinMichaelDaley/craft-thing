@@ -1769,7 +1769,7 @@ build/gas_feedback_gpu.o: src/vulkan/gas_feedback_gpu.c src/vulkan/gas_feedback_
 build/gas_model.o: src/fire/gas.c src/fire/gas_internal.h include/ferrum/fire/gas.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/gpu.o build/present_gpu.o: src/vulkan/gas_gpu_internal.h
-GAS_SHADERS = build/shaders/gas_init.comp.spv build/shaders/gas_prepare.comp.spv build/shaders/gas_transport.comp.spv build/shaders/gas_overlay.comp.spv
+GAS_SHADERS = build/shaders/gas_init.comp.spv build/shaders/gas_prepare.comp.spv build/shaders/gas_faces.comp.spv build/shaders/gas_transport.comp.spv build/shaders/gas_overlay.comp.spv
 build/shaders/gas_%.comp.spv: shaders/gas/%.comp $(wildcard shaders/gas/*.glsl) include/dungeoncraft/gas_layout.h include/dungeoncraft/terrain_flags.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
