@@ -295,17 +295,17 @@ static void test_native_implicit_axis_cfl_matches_cold_oracle_in_one_positive_st
     ASSERT_TRUE(fabs(mass-4096.)<.0002&&fabs(after-before)<.02);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(input);free(expected);free(out);free(volume);free(c);dc_gpu_destroy(g);PASS();
 }
-static void test_native_sparse_footprints_match_dense_after_gravity_and_valve_changes(void) {
+static void sparse_footprints_match_dense(uint32_t policy,float seconds,double velocity) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     fr_gas_model_t m=reference_model();fr_gas_state_t *input=malloc(4096*sizeof(*input)),*dense=malloc(4096*sizeof(*dense)),*out=malloc(4096*sizeof(*out));
     double *volume=malloc(4096*sizeof(*volume));ASSERT_TRUE(input&&dense&&out&&volume);
     for(uint32_t i=0;i<4096;i++) {
         volume[i]=1;input[i]=reference_air(m,1,300,0);
-        if(i%64>=12&&i%64<20&&i/64>=20&&i/64<28) input[i]=reference_air(m,1,300,2);
+        if(i%64>=12&&i%64<20&&i/64>=20&&i/64<28) input[i]=reference_air(m,1,300,velocity);
         if(i%64>=44&&i%64<52&&i/64>=44&&i/64<52) input[i]=reference_air(m,.5,600,0);
     }
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
-    ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_IMPLICIT,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,policy,err,sizeof(err)));
     const char *names[3]={"DC_GAS_SPARSE_RHS","DC_GAS_SPARSE_ACTIVITY","DC_GAS_SPARSE_CLASSIFY"};char *saved[3]={0};
     for(uint32_t k=0;k<3;k++) {const char *s=getenv(names[k]);saved[k]=s?SDL_strdup(s):NULL;}
     for(uint32_t path=0;path<2;path++) {
@@ -315,13 +315,19 @@ static void test_native_sparse_footprints_match_dense_after_gravity_and_valve_ch
         for(uint32_t step=0;step<20;step++) {
             if(step==7) ASSERT_TRUE(fr_gas_gpu_set_gravity(g,900,err,sizeof(err)));
             if(step==12) ASSERT_TRUE(fr_gas_gpu_gate(g,31,0,1,64,0,false,err,sizeof(err)));
-            ASSERT_TRUE(fr_gas_gpu_step(g,.001f,err,sizeof(err)));
+            ASSERT_TRUE(fr_gas_gpu_step(g,seconds,err,sizeof(err)));
         }
         ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,path?out:dense,4096,err,sizeof(err)));
     }
     for(uint32_t k=0;k<3;k++) {ASSERT_EQ(SDL_setenv(names[k],saved[k]?saved[k]:"1",1),0);SDL_free(saved[k]);}
     ASSERT_EQ(memcmp(dense,out,4096*sizeof(*out)),0);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(input);free(dense);free(out);free(volume);free(c);dc_gpu_destroy(g);PASS();
+}
+static void test_native_sparse_footprints_match_dense_after_gravity_and_valve_changes(void) {
+    sparse_footprints_match_dense(FR_GAS_PRESSURE_IMPLICIT,.001f,2);
+}
+static void test_native_large_cfl_sparse_footprints_match_dense_after_gravity_and_valve_changes(void) {
+    sparse_footprints_match_dense(FR_GAS_PRESSURE_LARGE_CFL,.05f,25);
 }
 static void test_native_large_cfl_packet_matches_composed_oracle_in_one_step(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
@@ -390,5 +396,6 @@ int main(void) {
     RUN(test_native_large_cfl_balanced_counterflow_has_no_artificial_compression);
     RUN(test_native_subnormal_colored_stock_is_valid_and_retained_at_rest);
     RUN(test_native_large_cfl_subnormal_packet_keeps_one_step_and_closed_stock);
+    RUN(test_native_large_cfl_sparse_footprints_match_dense_after_gravity_and_valve_changes);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
