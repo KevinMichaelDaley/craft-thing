@@ -93,6 +93,18 @@ static void test_fractional_energy_advection_matches_independent_two_cell_invers
     ASSERT_TRUE(fabs(out[0].energy-left)<1e-10&&fabs(out[1].energy-right)<1e-10);
     ASSERT_TRUE(fabs(out[0].energy+out[1].energy-input[0].energy-input[1].energy)<1e-10);PASS();
 }
+static void test_composed_half_energy_split_matches_independent_two_cell_inverse(void) {
+    char err[256]={0};fr_gas_model_t m=model();fr_gas_state_t input[2]={air(1,0),air(1,0)},out[2];double volume[2]={1,1};
+    double dt=4.,capacity=2.5,enthalpy=.5*750.5+300.;
+    double transported[2]={750.5*.6,750.5*1.4};
+    double left=transported[0]-.5-dt*enthalpy,right=transported[1]-.5+dt*enthalpy;
+    double difference=(right-left)/(capacity+2.*dt*dt*enthalpy),flux=1.-dt*difference;
+    double energy[2]={transported[0]-dt*enthalpy*flux,transported[1]+dt*enthalpy*flux};
+    double momentum[2]={.2-.5*dt*difference,1.8-.5*dt*difference};
+    ASSERT_TRUE(fr_gas_large_cfl_reference_step(&m,input,volume,2,1,dt,out,err,sizeof(err)));
+    for(uint32_t i=0;i<2;i++) {ASSERT_TRUE(fabs(out[i].energy-energy[i])<1e-7);ASSERT_TRUE(fabs(out[i].momentum[0]-momentum[i])<1e-9);}
+    PASS();
+}
 int main(void) {
     RUN(test_cfl_four_matches_independent_geometric_packet_and_closed_budgets);
     RUN(test_two_dimensional_large_cfl_keeps_walls_species_energy_and_pigment);
@@ -101,5 +113,6 @@ int main(void) {
     RUN(test_large_cfl_composition_retains_reference_acoustic_mode);
     RUN(test_balanced_counterflow_preserves_uniform_density_energy_and_exact_pair_momentum);
     RUN(test_fractional_energy_advection_matches_independent_two_cell_inverse);
+    RUN(test_composed_half_energy_split_matches_independent_two_cell_inverse);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
