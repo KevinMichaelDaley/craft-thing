@@ -1,10 +1,12 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
+#define FR_GAS_LOCAL_SIZE 32
 #include "acoustic.glsl"
 void main() {
     uint tile=active_tiles[gl_WorkGroupID.x],lane=gl_LocalInvocationIndex,tiles_x=(params.width+7u)/8u;
-    uvec2 p=uvec2(tile%tiles_x,tile/tiles_x)*8u+uvec2(lane%8u,lane/8u);
-    if(p.x>=params.width||p.y>=params.height||((p.x+p.y)&1u)!=((params.bank>>1u)&1u)) return;
+    uint row=lane/4u,color=(params.bank>>1u)&1u;
+    uvec2 p=uvec2(tile%tiles_x,tile/tiles_x)*8u+uvec2(2u*(lane%4u)+((row+color)&1u),row);
+    if(p.x>=params.width||p.y>=params.height) return;
     uint index=p.y*params.width+p.x;
     vec4 data=correction_data[index];float rhs=data.x;vec4 coefficients=stencil[index];
     if(data.y<=0.) return;

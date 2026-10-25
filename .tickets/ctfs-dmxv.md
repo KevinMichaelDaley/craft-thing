@@ -119,3 +119,7 @@ Rejected ordinary-float energy update experiment:5 practical cases passed and au
 **2026-10-25T22:59:36Z**
 
 Direct guarded publication GREEN: warm practical interval uses1 GPU submission vs2; exact state+clock preserved after rejected huge interval, successful recovery and exact practical/implicit/HLLC policy roundtrips pass. All5 practical displayed gates pass. Audited1000 actual untraced frames36.344ms mean45.945ms worst, zero invalid cells; species7.36e-5/pigment1.13e-6/energy-ledger−5.25e-5 relative drift, T293..362K. Canonical ownership transfers cold to guarded working bank in practical mode; final redundant bank copy+fence removed without numerical changes.30ms still RED. Next32-lane checkerboard SOR mapping removes half-idle SIMD work, same cells/arithmetic/sweeps.
+
+**2026-10-25T23:09:26Z**
+
+SOR32-lane checkerboard mapping preserves same cells/arithmetic/48 sweeps;5 practical, independent acoustic reference, dense/sparse parity and transactional publication displayed tests pass. Audited1000 actual run36.009mean43.953worst, stock/finite bounds pass. Onlysmallgain vs36.344/45.945;30ms still RED. Next exact overlap-halo temporal blocking of two global sweeps, distinct from rejected approximate block GS, with immutable source/doublebuffer output and original active-set mask. Lock numerical comparison and dispatch-budget RED before implementation.
