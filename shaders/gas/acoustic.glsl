@@ -13,12 +13,11 @@ layout(set=0,binding=21,std430) restrict buffer Activity {uint activity[];};
 layout(set=0,binding=22,std430) restrict buffer Matrix {vec4 matrix[];};
 layout(set=0,binding=23,std430) restrict buffer Indirect {uint indirect[];};
 uint gas_tile_count() {return ((params.width+7u)/8u)*((params.height+7u)/8u);}
-float gas_pressure_enthalpy(Primitive own) {
-    if((params.bank&FR_GAS_LARGE_ENERGY_BIT)==0u) return own.metric.x;
-    if(own.hydro.x<=0.) return 0.;
-    precise float pressure_part=gas_parameter(FR_GAS_KINETIC_WORD)*own.hydro.w/own.hydro.x;
-    precise float result=(1.-FR_GAS_LARGE_ENERGY_ADVECTION)*own.metric.x+FR_GAS_LARGE_ENERGY_ADVECTION*pressure_part;
-    return result;
+vec2 gas_large_pressure_state(Gas value,float old_pressure) {
+    precise float mass=(((value.species.x+value.species.y)+value.species.z)+value.species.w)+value.dynamics.x;
+    precise float energy=(value.dynamics.y+value.visual.w)+value.geometry.z;
+    precise float numerator=(1.-FR_GAS_LARGE_ENERGY_ADVECTION)*energy+gas_parameter(FR_GAS_KINETIC_WORD)*old_pressure*value.geometry.x;
+    return mass>0.?vec2(mass/value.geometry.x,numerator/mass):vec2(0);
 }
 float gas_pressure_relaxation(vec4 coefficients,float diagonal) {
     precise float total=((coefficients.x+coefficients.y)+coefficients.z)+coefficients.w;
@@ -31,6 +30,11 @@ bool gas_pressure_accepted() {return stats[FR_GAS_ERROR_WORD]==0u&&uintBitsToFlo
 bool gas_advected(uint index) {
     uint tile=(index/params.width/8u)*((params.width+7u)/8u)+(index%params.width/8u);
     return (activity[gas_tile_count()+tile]&1u)!=0u;
+}
+Primitive gas_pressure_stage(ivec2 p,uint index) {
+    if(gas_advected(index)) return (params.bank&1u)==0u?cache1[index]:cache0[index];
+    Primitive own=gas_cached(p);vec2 stage=gas_large_pressure_state(gas_source(p),own.hydro.w);
+    own.hydro.x=stage.x;own.metric.x=stage.y;return own;
 }
 uint gas_sparse_index(uint section) {
     uint tile=active_tiles[section*gas_tile_count()+gl_WorkGroupID.x],lane=gl_LocalInvocationIndex;

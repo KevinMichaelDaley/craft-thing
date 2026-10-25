@@ -17,7 +17,7 @@ void main() {
             uint j=0u;if(!gas_neighbor(p,d,j)) {if(d>=2u) vertical_walls++;continue;}
             Primitive other=gas_cached(p+gas_direction(d));
             vec4 neighbor=gas_advected(j)?provisional[j]:vec4(other.hydro.yz*other.metric.z,0.,other.metric.w);
-            float area=min(volume,neighbor.w),enthalpy=.5*(gas_pressure_enthalpy(center)+gas_pressure_enthalpy(other));
+            float area=min(volume,neighbor.w),enthalpy=(params.bank&FR_GAS_LARGE_ENERGY_BIT)!=0u?matrix[index][d]/area:.5*(center.metric.x+other.metric.x);
             float difference=((other.hydro.w-center.hydro.w)+(pressure[j].x-pressure[index].x))+(acoustic[j].z-acoustic[index].z);
             float sign=(d&1u)==0u?-1.:1.;
             float q=.5*(own_provisional[d/2u]/volume+neighbor[d/2u]/neighbor.w)*area+sign*dt*area*difference;

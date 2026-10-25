@@ -8,7 +8,7 @@ void main() {
     bool advected=gas_advected(index);
     if(!advected) {
         Primitive own=gas_cached(p);
-        acoustic[index]=vec4(gas_pressure_enthalpy(own),own.hydro.w,own.metric.y,own.metric.y);
+        acoustic[index]=vec4(own.metric.x,own.hydro.w,own.metric.y,own.metric.y);
         provisional[index]=vec4(own.hydro.yz*own.metric.z,0.,own.metric.w);
         correction_data[index]=vec4(0);force[index]=vec2(0);
     }
@@ -22,6 +22,8 @@ void main() {
     float rhs=energy_delta+
         (old_capacity>0.?internal*(1.-capacity/old_capacity):internal);
     float dt=uintBitsToFloat(params.seconds),diagonal=capacity;vec4 coefficients=vec4(0);
+    bool large_energy=(params.bank&FR_GAS_LARGE_ENERGY_BIT)!=0u;
+    Primitive own_stage=large_energy?gas_pressure_stage(p,index):gas_empty_primitive();
     bool rebuild=advected||(params.bank&4u)!=0u;
     if(!rebuild) {coefficients=matrix[index]*(dt*dt);for(uint d=0u;d<4u;d++) diagonal+=coefficients[d];}
     vec4 normalized=vec4(0);
@@ -32,7 +34,13 @@ void main() {
         if(owner!=0xffffffffu&&(gates[owner]&(1u<<(d/2u)))!=0u) continue;
         uint j=uint(q.y)*params.width+uint(q.x);bool moved=gas_advected(j);
         vec4 neighbor=moved?provisional[j]:vec4(other.hydro.yz*other.metric.z,0.,other.metric.w);
-        float area=min(volume,neighbor.w),enthalpy=.5*(acoustic[index].x+gas_pressure_enthalpy(other));
+        float area=min(volume,neighbor.w),enthalpy=.5*(acoustic[index].x+other.metric.x);
+        if(large_energy) {
+            Primitive other_stage=gas_pressure_stage(q,j);
+            precise float density=own_stage.hydro.x+other_stage.hydro.x;
+            precise float energy=own_stage.hydro.x*own_stage.metric.x+other_stage.hydro.x*other_stage.metric.x;
+            enthalpy=density>0.?energy/density:0.;
+        }
         float coefficient=(dt*dt)*(area*enthalpy);
         normalized[d]=area*enthalpy;
         float flux=.5*(provisional[index][d/2u]/volume+neighbor[d/2u]/neighbor.w)*area;

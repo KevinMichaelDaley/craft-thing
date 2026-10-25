@@ -416,3 +416,18 @@ method remains unchanged. A separate cold transport entry keeps the previous
 oracle intact; an independent two-cell inverse locks the new energy flux and
 closed budget. Native/reference, contact/wave and displayed long-run validation
 must establish this experimental gate before any performance promotion.
+
+The half-energy gate passes independent transport and coupled two-cell inverses.
+The stiff cold Jacobi reference uses positive damping to remove an oscillatory
+roundoff cycle at unchanged residual tolerance. A moving isobaric density
+contact then exposed an arithmetic-specific-enthalpy defect: the face flux
+created pressure waves at constant bulk velocity. The gate now weights reduced
+enthalpy with transported density. Metadata temporarily stores that density and
+coefficient in the opposite primitive cache; finish consumes the frozen symmetric
+matrix and replaces scratch with final EOS primitives before guarded commit.
+The new cold512-cell and actual displayed cross-chunk contact checks pass with
+the locked0.1 pressure/0.01 velocity bounds. Current native results are24 passes
+and the two sustained strong-gravity failures (implicit and explicit controls)
+still RED. The last pre-contact-fix30-frame box probe484.632/1748.961ms remains
+far outside acceptance; current core/synchronization and performance validation
+are still required. No validity, conservation or prior reference tolerances changed.
