@@ -43,4 +43,19 @@ Gas gas_add_flux(Gas s,GasFlux flux,float dt) {
     result.dynamics.y=top.x;result.visual.w=tail.x;result.geometry.z=tail.y;
     return result;
 }
+Gas gas_buoyancy(Gas s,float dt) {
+    float gravity=gas_parameter(FR_GAS_GRAVITY_WORD),mass=gas_mass(s);
+    if(gravity==0.||mass==0.) return s;
+    bool okay=false;Primitive primitive=gas_primitive(s,okay);if(!okay) return s;
+    float fraction=gas_parameter(FR_GAS_OXYGEN_WORD);
+    float oxygen=(fraction/gas_parameter(0u))/(fraction/gas_parameter(0u)+(1.-fraction)/gas_parameter(1u));
+    float reference=(oxygen*gas_parameter(0u)+(1.-oxygen)*gas_parameter(1u))*gas_parameter(FR_GAS_AMBIENT_WORD);
+    float molecular=dot(s.species,vec4(gas_parameter(0u),gas_parameter(1u),gas_parameter(2u),gas_parameter(3u)))+s.dynamics.x*gas_parameter(4u);
+    float ratio=molecular*primitive.metric.y/(mass*reference);
+    float acceleration=abs(ratio-1.)<=0.00000095367431640625?0.:gravity*(1.-ratio);
+    float impulse=mass*acceleration*dt;
+    float work=gas_parameter(FR_GAS_KINETIC_WORD)*impulse*(s.dynamics.w+.5*impulse)/mass;
+    GasFlux flux=gas_empty_flux();flux.dynamics.y=work;flux.dynamics.w=impulse;
+    Gas result=gas_add_flux(s,flux,1.);result.geometry.w+=work;return result;
+}
 #endif
