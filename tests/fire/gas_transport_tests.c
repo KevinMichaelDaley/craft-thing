@@ -84,6 +84,15 @@ static void test_balanced_counterflow_preserves_uniform_density_energy_and_exact
     }
     PASS();
 }
+static void test_fractional_energy_advection_matches_independent_two_cell_inverse(void) {
+    char err[256]={0};fr_gas_model_t m=model();fr_gas_state_t input[2]={air(1,0),air(1,0)},out[2];double volume[2]={1,1};
+    input[1].energy+=1.;double seconds=4.,plus=5./6.,minus=1./6.,determinant=1.+seconds*(plus+minus);
+    double left=((1.+seconds*minus)*input[0].energy+seconds*minus*input[1].energy)/determinant;
+    double right=(seconds*plus*input[0].energy+(1.+seconds*plus)*input[1].energy)/determinant;
+    ASSERT_TRUE(fr_gas_large_energy_transport_reference_step(&m,input,volume,2,1,seconds,out,err,sizeof(err)));
+    ASSERT_TRUE(fabs(out[0].energy-left)<1e-10&&fabs(out[1].energy-right)<1e-10);
+    ASSERT_TRUE(fabs(out[0].energy+out[1].energy-input[0].energy-input[1].energy)<1e-10);PASS();
+}
 int main(void) {
     RUN(test_cfl_four_matches_independent_geometric_packet_and_closed_budgets);
     RUN(test_two_dimensional_large_cfl_keeps_walls_species_energy_and_pigment);
@@ -91,5 +100,6 @@ int main(void) {
     RUN(test_large_cfl_composed_pressure_keeps_packet_budgets_and_positive_thermodynamics);
     RUN(test_large_cfl_composition_retains_reference_acoustic_mode);
     RUN(test_balanced_counterflow_preserves_uniform_density_energy_and_exact_pair_momentum);
+    RUN(test_fractional_energy_advection_matches_independent_two_cell_inverse);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

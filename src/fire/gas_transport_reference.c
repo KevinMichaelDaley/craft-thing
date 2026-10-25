@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include "gas_internal.h"
 typedef struct {double mass,energy;} rates_t;
+bool fr_gas_large_energy_transport_reference_step(const fr_gas_model_t *m,const fr_gas_state_t *s,
+    const double *v,uint32_t width,uint32_t height,double dt,fr_gas_state_t *out,char *err,uint32_t cap) {
+    return fr_gas_transport_reference_step(m,s,v,width,height,dt,out,err,cap);
+}
 static rates_t rates(const double *volume,const double *velocity,size_t index,
     uint32_t width,uint32_t height,uint32_t axis,int direction) {
     uint32_t coordinate=axis?(uint32_t)(index/width):(uint32_t)(index%width),length=axis?height:width;
