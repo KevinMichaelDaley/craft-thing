@@ -31,9 +31,11 @@ void main() {
     for(uint cell=begin;cell<end;cell++) {
         ivec2 p=transport_point(line,cell);vec2 lower,diagonal,upper,previous;vec4 face;coefficients(p,dt,lower,diagonal,upper,previous,face);
         uint index=uint(p.y)*params.width+uint(p.x);stencil[index]=face;
-        uint atlas=gas_atlas(p);if(atlas!=0xffffffffu) {Gas source=gas_provisional(atlas);peak=max(peak,max(source.species.z,source.dynamics.x));}
-        acoustic[index]=vec4(lower.x,diagonal.x,upper.x,previous.x);
-        provisional[index]=vec4(lower.y,diagonal.y,upper.y,previous.y);
+        uint atlas=gas_atlas(p);GasFlux value=atlas==0xffffffffu?gas_empty_flux():transport_state(gas_provisional(atlas));
+        peak=max(peak,max(value.species.z,value.dynamics.x));
+        transport_work[transport_position(p)]=TransportCell(value.species,value.dynamics,
+            vec4(value.pigment,any(notEqual(face,vec4(0)))?1.:0.),
+            vec4(lower.x,diagonal.x,upper.x,previous.x),vec4(lower.y,diagonal.y,upper.y,previous.y));
         mass=matrix_product(vec4(diagonal.x,-lower.x*previous.x,1,0),mass);
         energy=matrix_product(vec4(diagonal.y,-lower.y*previous.y,1,0),energy);
     }
@@ -53,16 +55,16 @@ void main() {
     vec2 prior_inverse=vec2(mass.z/mass.x,energy.z/energy.x);
     for(uint cell=begin;cell<end;cell++) {
         ivec2 p=transport_point(line,cell);uint index=uint(p.y)*params.width+uint(p.x);
-        vec4 saved_mass=acoustic[index],saved_energy=provisional[index];
+        TransportCell stored=transport_work[transport_position(p)];vec4 saved_mass=stored.mass,saved_energy=stored.energy;
         vec2 lower=vec2(saved_mass.x,saved_energy.x),diagonal=vec2(saved_mass.y,saved_energy.y);
         vec2 upper=vec2(saved_mass.z,saved_energy.z),previous=vec2(saved_mass.w,saved_energy.w);
         vec2 inverse=vec2(1)/(diagonal-lower*previous*prior_inverse);
         if(any(lessThanEqual(inverse,vec2(0)))||any(isnan(inverse))||any(isinf(inverse))) {gas_error(index);atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],FR_GAS_REJECT_FACTOR);inverse=vec2(0);}
-        uint atlas=gas_atlas(p);GasFlux value=atlas==0xffffffffu?gas_empty_flux():transport_state(gas_provisional(atlas));
+        GasFlux value=GasFlux(stored.species,stored.dynamics,stored.visual.rgb);
         value.species.z*=trace_scale;value.dynamics.x*=trace_scale;value.pigment*=trace_scale;
         transport_work[transport_position(p)]=TransportCell(value.species,value.dynamics,vec4(value.pigment,0),
             vec4(lower.x*inverse.x,inverse.x,upper.x*inverse.x,trace_scale),
-            vec4(lower.y*inverse.y,inverse.y,upper.y*inverse.y,any(notEqual(stencil[index],vec4(0)))?1.:0.));
+            vec4(lower.y*inverse.y,inverse.y,upper.y*inverse.y,stored.visual.w));
         prior_inverse=inverse;
     }
 }
