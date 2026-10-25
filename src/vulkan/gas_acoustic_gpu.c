@@ -87,6 +87,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,1);
     uint32_t stalled=0,batches=0;float best=INFINITY;
     for(;;) {
+        for(uint32_t batch=0;batch<4u;batch++) {
         barrier(g);vkCmdFillBuffer(g->command,t->indirect.buffer,0,4,0);
         vkCmdFillBuffer(g->command,t->indirect.buffer,16,4,0);
         dispatch(g,&t->classify,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
@@ -95,18 +96,19 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
             indirect_dispatch(g,t,&t->sor,dt,bank,0);indirect_dispatch(g,t,&t->sor,dt,bank|2u,0);
         }
         indirect_dispatch(g,t,&t->correct,dt,bank,0);
-        if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,2);
+        if(trace&&batch==3u) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,2);
         barrier(g);vkCmdFillBuffer(g->command,stats->buffer,FR_GAS_RESIDUAL_WORD*4u,4,0);
         indirect_dispatch(g,t,&t->residual,dt,bank,16);
+        }
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,3);
         if(!submit(g,err,cap)) return false;
         uint32_t bits=((uint32_t *)stats->mapped)[FR_GAS_RESIDUAL_WORD];float residual=0;memcpy(&residual,&bits,4);
-        batches++;if(trace&&(batches<=4u||(batches&(batches-1u))==0u))
+        batches+=4u;if(trace&&(batches<=4u||(batches&(batches-1u))==0u))
             fprintf(stderr,"Acoustic dt%.9g batch%u residual%.9g error%u\n",dt,batches,residual,((uint32_t *)stats->mapped)[FR_GAS_ERROR_WORD]);
         if(trace) {
             uint64_t times[4];
             if(vkGetQueryPoolResults(g->device,g->timestamp_pool,0,4,sizeof(times),times,sizeof(uint64_t),VK_QUERY_RESULT_64_BIT)==VK_SUCCESS)
-                fprintf(stderr,"Acoustic GPU init%.3f sor8%.3f residual%.3f ms\n",(times[1]-times[0])*g->timestamp_period/1e6,
+                fprintf(stderr,"Acoustic GPU init%.3f pressure-group%.3f residual%.3f ms\n",(times[1]-times[0])*g->timestamp_period/1e6,
                     (times[2]-times[1])*g->timestamp_period/1e6,(times[3]-times[2])*g->timestamp_period/1e6);
         }
         if(((uint32_t *)stats->mapped)[FR_GAS_ERROR_WORD]) return true;
