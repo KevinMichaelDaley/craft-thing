@@ -44,7 +44,30 @@ static void test_cells_retain_sparse_state_and_brush_replacement_retires_it(void
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,1,&record,&found,err,sizeof(err)));ASSERT_TRUE(!found);
     free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_extraction_and_next_arena_flip_keep_exact_state(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    for(uint32_t y=10;y<14;y++) for(uint32_t x=10;x<14;x++) c->cells[y*64+x].material=DC_MATERIAL_WOOD;
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t state;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,900,700,91,&state,err,sizeof(err)));
+    state.coating_oil_fuel_fp=500;state.ignition_threshold=.8f;state.ignition_integral=.4f;
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,11*64+11,&state,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g));ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    fr_reactive_record_t record;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,1,1,&record,&found,err,sizeof(err)));
+    ASSERT_TRUE(found);ASSERT_TRUE(memcmp(&record.state,&state,sizeof(state))==0);
+    ASSERT_EQ(record.owner.kind,FR_REACTIVE_OWNER_BODY);ASSERT_EQ(record.owner.key[0],0x80000001u);
+    ASSERT_EQ(record.owner.key[1],1u);ASSERT_EQ(record.owner.key[2],1u);ASSERT_EQ(record.owner.key[3],1u);
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,11*64+11,&record,&found,err,sizeof(err)));ASSERT_TRUE(!found);
+    ASSERT_TRUE(dc_gpu_set_body_motion(g,0x80000001u,0,0,DC_GPU_BODY_KINEMATIC,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g,30,30,0,DC_MATERIAL_STONE,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,1,1,&record,&found,err,sizeof(err)));
+    ASSERT_TRUE(found);ASSERT_TRUE(memcmp(&record.state,&state,sizeof(state))==0);
+    free(c);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     RUN(test_cells_retain_sparse_state_and_brush_replacement_retires_it);
+    RUN(test_extraction_and_next_arena_flip_keep_exact_state);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

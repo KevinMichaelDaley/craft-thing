@@ -13,4 +13,7 @@ bool fr_gpu_reactive_seed_cell(dc_gpu_t *gpu,uint32_t slot,uint32_t local_cell,
  * changing out; this is not a runtime thermal or component readback. */
 bool fr_gpu_reactive_read_cell(dc_gpu_t *gpu,uint32_t slot,uint32_t local_cell,
     fr_reactive_record_t *out,bool *found,char *err_buf,uint32_t err_cap);
+/** Explicit diagnostic by stable body identity and canonical rest-grid texel. */
+bool fr_gpu_reactive_read_body(dc_gpu_t *gpu,uint32_t body_id,uint32_t x,uint32_t y,
+    fr_reactive_record_t *out,bool *found,char *err_buf,uint32_t err_cap);
 #endif

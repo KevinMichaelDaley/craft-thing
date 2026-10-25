@@ -110,3 +110,7 @@ bool fr_gpu_reactive_read_cell(dc_gpu_t *g,uint32_t slot,uint32_t local,
     if(e) {memcpy(&out->owner,e+FR_ENTRY_OWNER,sizeof(out->owner));memcpy(&out->state,e+FR_ENTRY_STATE,sizeof(out->state));}
     *found=e!=NULL;return true;
 }
+bool fr_gpu_reactive_read_body(dc_gpu_t *g,uint32_t id,uint32_t x,uint32_t y,
+    fr_reactive_record_t *out,bool *found,char *err,uint32_t cap) {
+    (void)g;(void)id;(void)x;(void)y;(void)out;(void)found;(void)err;(void)cap;return false;
+}
