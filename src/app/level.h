@@ -49,6 +49,8 @@ bool dc_level_view_heat_probe(dc_level_view_t *view,uint32_t x,uint32_t y,bool a
 bool dc_level_view_heat_overlay(dc_level_view_t *view,uint32_t mode);
 /** Create the finite-reservoir smoke/ventilation fixture in a fresh world. */
 bool dc_level_view_setup_smoke_box(dc_level_view_t *view,char *err,uint32_t err_cap);
+/** Create the authored dry-world fixture without first generating unrelated water. */
+dc_level_view_t *dc_level_view_create_smoke_box(const char *directory,uint64_t seed,char *err,uint32_t err_cap);
 /** Toggle fixture valve0 red,1 blue,2 enclosure vent. */
 bool dc_level_view_smoke_valve(dc_level_view_t *view,uint32_t valve,char *err,uint32_t err_cap);
 /** Select smoke pigment or oxygen molecular-fraction feedback. */

@@ -24,7 +24,7 @@ static bool smoke_budget(dc_level_view_t *view,double species[5],double *energy,
 }
 static void test_native_placement_box_has_finite_sources_real_controls_rising_smoke_and_stable_pause(void) {
     char err[256]={0},directory[]="build/smoke_box_native_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
-    dc_level_view_t *view=dc_level_view_create(directory,314,err,sizeof(err));ASSERT_TRUE(view);
+    dc_level_view_t *view=dc_level_view_create_smoke_box(directory,314,err,sizeof(err));ASSERT_TRUE(view);
     ASSERT_TRUE(dc_level_view_setup_smoke_box(view,err,sizeof(err)));
     uint32_t *first=malloc(480u*270u*4u),*second=malloc(480u*270u*4u);ASSERT_TRUE(first&&second);
     ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err))&&dc_gpu_readback(view->gpu,first,480u*270u,err,sizeof(err)));

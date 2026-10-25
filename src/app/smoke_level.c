@@ -5,6 +5,9 @@
 #include "smoke_box.h"
 #include "view_config.h"
 static bool error(char *err,uint32_t cap,const char *message) {if(err&&cap) snprintf(err,cap,"%s",message);return false;}
+dc_level_view_t *dc_level_view_create_smoke_box(const char *directory,uint64_t seed,char *err,uint32_t cap) {
+    (void)directory;(void)seed;error(err,cap,"Cold smoke fixture factory not implemented");return NULL;
+}
 static bool valve(dc_level_view_t *view,uint32_t index,bool closed,char *err,uint32_t cap) {
     static const int32_t rectangle[3][5]={{124,47,8,1,1},{324,47,8,1,1},{399,-48,1,16,0}};
     if(!view||index>=3) return error(err,cap,"Invalid smoke fixture valve");
