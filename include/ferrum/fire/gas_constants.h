@@ -3,4 +3,5 @@
 /* Unsplit Rusanov outgoing species weights sum to at most
  * dt * (global_max_abs_vx + global_max_abs_vy). */
 #define FR_GAS_ADVECTIVE_COURANT 0.9
+#define FR_GAS_LARGE_ENERGY_ADVECTION 0.5
 #endif
