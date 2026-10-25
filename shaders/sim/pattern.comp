@@ -7,6 +7,7 @@ layout(constant_id=1) const bool DRAW_PIXEL_ONLY=false;
 layout(constant_id=2) const bool DRAW_SIMPLE=false;
 #define DC_RIGID_PIXEL_ONLY DRAW_PIXEL_ONLY
 #include "rigid_body.glsl"
+#include "../reactive/gpu_storage.glsl"
 #include "rigid_shape.glsl"
 #include "rigid_clip.glsl"
 layout(local_size_x = 16, local_size_y = 16) in;
@@ -330,7 +331,7 @@ void main() {
                         particles[secondary_index].grain_fp = grain_radius_fp(material);
                     }
                 }
-                if((cell.x&65535u)!=material) terrain_colors[index]=vec4(0);
+                if((cell.x&65535u)!=material) {terrain_colors[index]=vec4(0);reactive_forget_cell(index);}
                 if(DC_CELL_COMPONENT_MEMBER(cell.x)&&!DC_CELL_COMPONENT_MEMBER(material))
                     release_edited_support(ivec2(p));
                 cell.x = ((cell.x & 0xffffu)==material ? cell.x & 0xffff0000u : 0u) | material;

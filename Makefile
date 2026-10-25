@@ -67,6 +67,13 @@ GLSLANG ?= glslangValidator
 GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/broadphase_gpu.o build/contact_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
 GPU_OBJ += build/runtime_body_gpu.o build/runtime_geometry_gpu.o build/body_address_gpu.o build/body_storage_gpu.o
 GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o
+GPU_OBJ += build/reactive_state.o build/reactive_snapshot.o build/reactive_material.o
+build/reactive_state.o: src/fire/reactive_state.c include/ferrum/fire/reactive_state.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/reactive_snapshot.o: src/fire/reactive_snapshot.c include/ferrum/fire/reactive_state.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/reactive_material.o: src/fire/material_profile.c src/fire/material_profile_data.inc include/ferrum/fire/material_profile.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/reactive_gpu.o: src/vulkan/reactive_gpu.c include/ferrum/fire/gpu.h include/ferrum/fire/reactive_state.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/mpm_swap_gpu.o: src/vulkan/mpm_swap_gpu.c src/vulkan/gpu_internal.h
@@ -124,7 +131,7 @@ build/pressure_work_gpu.o: src/vulkan/pressure_work_gpu.c src/vulkan/gpu_interna
 build/shaders/pressure_work.comp.spv: shaders/sim/pressure_work.comp
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
-GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o build/authored_request.o build/prop_asset.o,$(GPU_OBJ))) src/structural/material.c src/structural/authoring.c src/assets/prop.c
+GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o build/authored_request.o build/prop_asset.o build/reactive_state.o build/reactive_snapshot.o build/reactive_material.o,$(GPU_OBJ))) src/structural/material.c src/structural/authoring.c src/assets/prop.c $(REACTIVE_STATE_SRC)
 build/authored_stage_tests: tests/vulkan/authored_stage_tests.c build/compound_body_tests $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/authored_stage_tests
@@ -1662,4 +1669,5 @@ build/diagnostics/reactive_state_probe.spv: tests/vulkan/reactive_state_probe.co
 build/reactive_state_gpu_tests: tests/vulkan/reactive_state_gpu_tests.c tools/diagnostics/vulkan_probe.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_state.h build/diagnostics/reactive_state_probe.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/reactive_state_gpu_tests.c $(REACTIVE_STATE_SRC) -o $@ $(LDLIBS)
 build/reactive_cell_gpu_tests: tests/vulkan/reactive_cell_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(REACTIVE_STATE_SRC) build/shaders/pattern.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) $(REACTIVE_STATE_SRC) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/shaders/runtime/pattern.comp.spv: shaders/reactive/gpu_storage.glsl shaders/reactive/state.glsl include/dungeoncraft/reactive_state_layout.h

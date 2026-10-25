@@ -7,6 +7,7 @@
 #include "renderer_internal.h"
 #include "runtime_body_gpu.h"
 #include "runtime_body_internal.h"
+#include "reactive_gpu_internal.h"
 static dc_body_address_t address(VkDeviceAddress a) {
     return (dc_body_address_t){(uint32_t)a,(uint32_t)(a>>32)};
 }
@@ -58,6 +59,7 @@ static bool work_create(dc_gpu_t *g,uint32_t slots,uint32_t force_groups,uint32_
     h[45]=contacts.low;h[46]=contacts.high;
     h[DC_BODY_ANCHOR_BITS_WORD]=(uint32_t)anchors;
     h[DC_BODY_ANCHOR_MAGIC_WORD]=DC_BODY_ANCHOR_MAGIC;
+    fr_gpu_reactive_bind_work(g,h);
     return true;
 }
 bool dc_gpu_runtime_bodies_init(dc_gpu_t *g,char *err,uint32_t cap) {

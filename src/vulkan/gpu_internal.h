@@ -57,6 +57,7 @@ typedef struct {
 } dc_gpu_body_record_t;
 
 struct dc_gpu {
+    struct fr_reactive_gpu *reactive;
     struct dc_gpu_authored_stage *authored_stage;
     VkInstance instance;
     VkPhysicalDevice physical;
