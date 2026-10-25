@@ -53,4 +53,9 @@ bool fr_gas_reference_step(const fr_gas_model_t *model,const fr_gas_state_t *sou
 bool fr_gas_implicit_reference_step(const fr_gas_model_t *model,const fr_gas_state_t *source,
     const double *void_fractions,uint32_t width,uint32_t height,double seconds,
     fr_gas_state_t *out,char *err_buf,uint32_t err_cap);
+/** Cold large-CFL conservative directional transport oracle. This is a
+ * numerical gate only; production field transport must stay on the GPU. */
+bool fr_gas_transport_reference_step(const fr_gas_model_t *model,const fr_gas_state_t *source,
+    const double *void_fractions,uint32_t width,uint32_t height,double seconds,
+    fr_gas_state_t *out,char *err_buf,uint32_t err_cap);
 #endif

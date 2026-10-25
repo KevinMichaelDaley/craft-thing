@@ -1759,6 +1759,8 @@ build/gas_reference_tests: tests/fire/gas_reference_tests.c src/fire/gas.c src/f
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c src/fire/gas_reference.c -o $@ -lm
 build/gas_implicit_tests: tests/fire/gas_implicit_tests.c src/fire/gas.c src/fire/gas_implicit_reference.c src/fire/gas_internal.h include/ferrum/fire/gas.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c src/fire/gas_implicit_reference.c -o $@ -lm
+build/gas_transport_tests: tests/fire/gas_transport_tests.c src/fire/gas.c src/fire/gas_transport_reference.c src/fire/gas_internal.h include/ferrum/fire/gas.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c src/fire/gas_transport_reference.c -o $@ -lm
 build/smoke_box_fixture_tests: tests/app/smoke_box_fixture_tests.c src/app/smoke_box.c src/app/smoke_box.h src/fire/gas.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/smoke_box.c src/fire/gas.c -o $@ -lm
 build/smoke_box_display_tests: tests/app/smoke_box_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level.c src/app/level_internal.h src/app/smoke_box.c src/app/smoke_level.c $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
