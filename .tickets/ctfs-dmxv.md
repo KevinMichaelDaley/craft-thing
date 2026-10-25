@@ -55,3 +55,7 @@ Heat milestone remains closed. Smoke runtime now has finite colored reservoirs, 
 **2026-10-25T16:12:22Z**
 
 Pushed18261fe adds exact GPU dependency footprints for RHS/activity/convergence classification. Actual native14/14 pass, including20-step byte-exact dense/sparse comparison across gravity and valve changes; displayed enclosure1/1. Core+synchronization validation14/14 also passes with DC_VK_VALIDATE=1 VK_VALIDATION_VALIDATE_SYNC=1 and zero VUID/SYNC errors. Best short16x2 sweep diagnostic23.782ms mean34.348ms worst remains RED; strict repeated1000-frame acceptance is NOT met. Current optimization removes a redundant finish-submission wait using GPU residual/error guards. No bonfire work or clock/resolution/stock/tolerance changes.
+
+**2026-10-25T18:12:26Z**
+
+Recovery after unrelated PC crash preserved existing work. Pushed2d663c3 corrects experimental large-CFL transport: independent counterflow RED51449d6 now passes with unsplit normalized-matrix/affine subgroup tridiagonal solve. Actual Wayland native19/19 pass, cold numerical+fixture21/21 pass and registered in normal test target. Default remains prior policy; core/sync validation and full elapsed-clock performance still pending. No interrupted benchmark treated as passed; no bonfire work.
