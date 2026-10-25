@@ -11,7 +11,6 @@ layout(set=0,binding=20,std430) restrict buffer Force {vec2 force[];};
 layout(set=0,binding=21,std430) restrict buffer Activity {uint activity[];};
 layout(set=0,binding=22,std430) restrict buffer Matrix {vec4 matrix[];};
 layout(set=0,binding=23,std430) restrict buffer Indirect {uint indirect[];};
-layout(set=0,binding=24,std430) restrict buffer LineData {vec2 line_data[];};
 uint gas_tile_count() {return ((params.width+7u)/8u)*((params.height+7u)/8u);}
 bool gas_advected(uint index) {
     uint tile=(index/params.width/8u)*((params.width+7u)/8u)+(index%params.width/8u);
