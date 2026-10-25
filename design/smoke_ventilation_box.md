@@ -262,3 +262,11 @@ Scalar32-sweep residual batches pass13 native cases and improve the actual
 block-correction experiment also passed13 numerical cases, but its local barriers
 and slower enclosure convergence cost840.708/996.273ms in the actual CLI scene.
 It is rejected and archived in history; it is not a production option.
+
+The64-sweep scalar path passes13 native cases and measures26.663/51.330ms on
+the30-frame real elapsed-clock probe: average passes, worst frame still fails.
+A parallel cyclic-reduction/Peaceman--Rachford ADI experiment also passed13
+numerical cases, but cost838.521/963.679ms in that scene. It is rejected; the
+shared-memory line barriers are too expensive on this machine. The method's
+background is [Peaceman and Rachford](https://epubs.siam.org/doi/10.1137/0103003).
+All experimental source is retained in history, not enabled in production.

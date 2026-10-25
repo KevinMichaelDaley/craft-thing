@@ -40,6 +40,11 @@ void main() {
     }
     if(rebuild) matrix[index]=normalized;
     pressure[index]=vec4(0,rhs,diagonal,max(abs(internal),1e-20));stencil[index]=coefficients;
+    if((params.bank&128u)!=0u) {
+        line_data[index]=vec2(capacity,0.);
+        uint maximum=subgroupMax(floatBitsToUint(diagonal)),minimum=subgroupMin(floatBitsToUint(capacity));
+        if(subgroupElect()) {atomicMax(stats[FR_GAS_MATRIX_MAX_WORD],maximum);atomicMin(stats[FR_GAS_CAPACITY_MIN_WORD],minimum);}
+    }
     acoustic[index].z=0.;
     float ratio=diagonal>0.?min(dot(coefficients,vec4(1))/diagonal,.99999994):0.;
     float relaxation=2./(1.+sqrt(max(0.,1.-ratio*ratio)));

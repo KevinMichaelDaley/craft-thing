@@ -19,5 +19,7 @@
 #define FR_GAS_ERROR_AT_WORD 2u
 #define FR_GAS_RATE_X_WORD 4u
 #define FR_GAS_RATE_Y_WORD 5u
+#define FR_GAS_MATRIX_MAX_WORD 6u
+#define FR_GAS_CAPACITY_MIN_WORD 7u
 #define FR_GAS_COURANT 0.4
 #endif

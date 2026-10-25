@@ -62,6 +62,7 @@ static bool submit(dc_gpu_t *g,char *err,uint32_t cap) {
 static void clear_stats(struct fr_gas_gpu *t) {
     uint32_t *words=t->stats.mapped;words[FR_GAS_RATE_WORD]=0;words[FR_GAS_ERROR_WORD]=0;words[FR_GAS_ERROR_AT_WORD]=UINT32_MAX;
     words[FR_GAS_RATE_X_WORD]=0;words[FR_GAS_RATE_Y_WORD]=0;
+    words[FR_GAS_MATRIX_MAX_WORD]=0;words[FR_GAS_CAPACITY_MIN_WORD]=UINT32_MAX;
 }
 static bool shader_ok(struct fr_gas_gpu *t,char *err,uint32_t cap) {
     const uint32_t *words=t->stats.mapped;if(!words[FR_GAS_ERROR_WORD]) return true;

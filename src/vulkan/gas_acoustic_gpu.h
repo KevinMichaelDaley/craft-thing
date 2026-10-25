@@ -6,7 +6,9 @@
 typedef struct {
     fr_renderer_compute_t advect,initialize,rhs,classify,compact,sor,correct,residual,finish;
     fr_renderer_compute_t activity,activity_compact,final_compact,commit;
+    fr_renderer_compute_t adi;
     dc_gpu_address_buffer_t fields[11],indirect;
+    dc_gpu_address_buffer_t line_data;
     bool ready,matrix_valid;
 } fr_gas_acoustic_gpu_t;
 /** Lazily create only the selected optional acoustic module. */
