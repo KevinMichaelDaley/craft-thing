@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "gpu_internal.h"
+#include "reactive_gpu_internal.h"
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -241,6 +242,7 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
     }
     if (missing_primary > DC_MPM_PARTICLES_PER_CHUNK - particle_count)
         return error(err, cap, "GPU particle pool is full");
+    if(!fr_gpu_reactive_clear_chunk(gpu,slot,err,cap)) return false;
     if (!gpu->fluid_work_possible) {
         gpu->fluid_work_possible = chunk->marker_count != 0u;
         for (uint32_t i = 0; i < DC_CHUNK_CELLS && !gpu->fluid_work_possible; i++)

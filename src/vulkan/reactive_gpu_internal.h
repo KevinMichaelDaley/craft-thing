@@ -9,4 +9,7 @@ void fr_gpu_reactive_bind_work(dc_gpu_t *gpu,uint32_t *header);
 void fr_gpu_reactive_destroy(dc_gpu_t *gpu);
 /** Preflight appearance-like handle banks before geometry layout publication. */
 bool fr_gpu_reactive_reserve_shapes(dc_gpu_t *gpu,uint32_t words,char *err,uint32_t cap);
+/** Retire the old CELL/PARTICLE state before a validated cold physical upload.
+ * Resource failure leaves both physical and reactive source data unchanged. */
+bool fr_gpu_reactive_clear_chunk(dc_gpu_t *gpu,uint32_t slot,char *err,uint32_t cap);
 #endif

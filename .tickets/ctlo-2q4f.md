@@ -75,3 +75,7 @@ REFACTOR regression complete through e11f84f: corrected full make -j8 -i test re
 **2026-10-25T02:41:48Z**
 
 Level-view stream wiring GREEN: a native Wayland Vulkan RED exercised actual schedule_saves/process_results and found result.reactive absent. The app now exports GPU channels into the immutable worker save and restores them before finishing chunk publication. GREEN presents4 frames at480x270+halo and retains exact bound water, heat, coating and ignition history after worker reload. DCS structure-checkpoint integration remains separate and unfinished.
+
+**2026-10-25T02:45:05Z**
+
+Chunk slot reuse GREEN: native RED confirmed a new physical chunk inherited the previous chunk CELL heat/oil. Validated cold uploads now preflight and retire the old CELL/PARTICLE handles in parallel before mutating physical data; allocation/resource failure leaves the old upload source intact. All4 GPU chunk cases and the actual level-view worker reload case pass on Wayland Vulkan with core/sync validation (20 presented frames). Next: DCS body and pending-chunk channels.

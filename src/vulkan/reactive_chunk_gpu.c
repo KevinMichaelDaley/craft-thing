@@ -68,6 +68,12 @@ static bool dispatch(dc_gpu_t *g,uint32_t slot,uint32_t count,uint32_t first,uin
         VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
     return fr_renderer_submit(g)||error(err,cap,"Reactive chunk boundary submission failed");
 }
+bool fr_gpu_reactive_clear_chunk(dc_gpu_t *g,uint32_t slot,char *err,uint32_t cap) {
+    if(!g||slot>=DC_GPU_CHUNK_SLOTS) return error(err,cap,"Invalid reactive chunk retirement");
+    if(!g->reactive) return true;
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!resources(g,err,cap)) return false;
+    return dispatch(g,slot,0,3,3,err,cap);
+}
 bool fr_gpu_reactive_export_chunk(dc_gpu_t *g,uint32_t slot,const dc_chunk_t *chunk,
     fr_reactive_chunk_t *out,char *err,uint32_t cap) {
     if(!out||!resident(g,slot,chunk,err,cap)) return false;
