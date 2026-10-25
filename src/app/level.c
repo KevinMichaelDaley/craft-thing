@@ -100,6 +100,13 @@ bool dc_level_view_heat_probe(dc_level_view_t *view,uint32_t x,uint32_t y,bool a
 bool dc_level_view_heat_overlay(dc_level_view_t *view,uint32_t mode) {
     return view&&fr_thermal_gpu_overlay(view->gpu,mode);
 }
+bool dc_level_view_setup_smoke_box(dc_level_view_t *view,char *err,uint32_t cap) {
+    (void)view;return error(err,cap,"Smoke box placement adapter not implemented");
+}
+bool dc_level_view_smoke_valve(dc_level_view_t *view,uint32_t valve,char *err,uint32_t cap) {
+    (void)view;(void)valve;return error(err,cap,"Smoke box valve adapter not implemented");
+}
+bool dc_level_view_smoke_overlay(dc_level_view_t *view,uint32_t mode) {(void)view;(void)mode;return false;}
 static bool place_prop(dc_level_view_t *view, const fr_prop_asset_t *asset,
                               dc_chunk_coord_t chunk, uint32_t local_x, uint32_t local_y,
                               bool restore_bonds,char *err, uint32_t cap) {

@@ -47,6 +47,12 @@ bool dc_level_view_setup_heat_bench(dc_level_view_t *view,char *err,uint32_t err
 bool dc_level_view_heat_probe(dc_level_view_t *view,uint32_t x,uint32_t y,bool active);
 /** Thermal feedback: 0 authored color, 1 temperature, 2 material wetness. */
 bool dc_level_view_heat_overlay(dc_level_view_t *view,uint32_t mode);
+/** Create the finite-reservoir smoke/ventilation fixture in a fresh world. */
+bool dc_level_view_setup_smoke_box(dc_level_view_t *view,char *err,uint32_t err_cap);
+/** Toggle fixture valve0 red,1 blue,2 enclosure vent. */
+bool dc_level_view_smoke_valve(dc_level_view_t *view,uint32_t valve,char *err,uint32_t err_cap);
+/** Select smoke pigment or oxygen molecular-fraction feedback. */
+bool dc_level_view_smoke_overlay(dc_level_view_t *view,uint32_t mode);
 /** Author explicitly placed structural members in the streamed world. */
 bool dc_level_view_place_structure(dc_level_view_t *view,
                                    const fr_structural_gpu_graph_t *graph,
