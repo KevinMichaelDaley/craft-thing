@@ -1697,3 +1697,8 @@ build/shaders/reactive_arena.comp.spv: shaders/reactive/arena.comp shaders/react
 build/reactive_arena_gpu_tests: tests/vulkan/reactive_arena_gpu_tests.c tests/vulkan/body_probe_fixture.h tools/diagnostics/vulkan_probe.c src/vulkan/reactive_arena_gpu.h $(REACTIVE_ARENA_SRC) $(REACTIVE_STATE_SRC)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(REACTIVE_ARENA_SRC) $(REACTIVE_STATE_SRC) -o $@ $(LDLIBS) -Wl,--wrap=vkAllocateMemory
 build/reactive_arena_gpu_tests: build/shaders/reactive_arena.comp.spv include/dungeoncraft/reactive_arena_layout.h
+build/diagnostics/reactive_address_probe.spv: tests/vulkan/reactive_address_probe.comp shaders/reactive/address.glsl
+	mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/reactive_address_gpu_tests: tests/vulkan/reactive_address_gpu_tests.c tests/vulkan/body_probe_fixture.h tools/diagnostics/vulkan_probe.c build/diagnostics/reactive_address_probe.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ -lvulkan

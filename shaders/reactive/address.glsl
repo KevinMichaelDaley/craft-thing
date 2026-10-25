@@ -6,4 +6,7 @@ uvec2 reactive_entry_address(uvec2 base,uint index) {
     uint high,low,carry;umulExtended(index,144u,high,low);
     low=uaddCarry(base.x,low,carry);return uvec2(low,base.y+high+carry);
 }
+uvec2 reactive_request_address(uvec2 base,uint index) {
+    return uvec2(base.x+index*168u,base.y);
+}
 #endif

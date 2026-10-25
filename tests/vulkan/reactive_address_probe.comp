@@ -1,0 +1,11 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "../../shaders/reactive/address.glsl"
+layout(local_size_x=64) in;
+layout(set=0,binding=0,std430) buffer Fixture {uint words[];};
+void main() {
+    uint i=gl_GlobalInvocationID.x;if(i>=words[0]) return;
+    uint source=16u+i*4u;uvec2 base=uvec2(words[source],words[source+1u]);
+    uvec2 address=words[source+3u]==0u?reactive_entry_address(base,words[source+2u]):reactive_request_address(base,words[source+2u]);
+    words[2048u+i*2u]=address.x;words[2049u+i*2u]=address.y;
+}
