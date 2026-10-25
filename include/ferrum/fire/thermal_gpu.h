@@ -34,4 +34,10 @@ bool fr_thermal_gpu_seed_water(dc_gpu_t *gpu,uint32_t slot,uint32_t local_cell,
 /** Completed-queue diagnostic/save snapshot, never a runtime CPU fluid solve. */
 bool fr_thermal_gpu_read_water_chunk(dc_gpu_t *gpu,uint32_t slot,float *excess_energy,
     uint32_t cell_capacity,char *err_buf,uint32_t err_cap);
+/** Whether a thermal world is enabled; does not read back simulation data. */
+bool fr_thermal_gpu_enabled(const dc_gpu_t *gpu);
+/** Import immutable streamed liquid heat bound to its physical file packet.
+ * Requires the world's finite thermal source to have been created/restored. */
+bool fr_thermal_gpu_import_water_chunk(dc_gpu_t *gpu,uint32_t slot,
+    const dc_chunk_t *chunk,const float *energy,char *err_buf,uint32_t err_cap);
 #endif

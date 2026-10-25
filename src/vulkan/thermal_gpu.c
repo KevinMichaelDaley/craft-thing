@@ -184,6 +184,20 @@ void fr_thermal_clear_water_chunk(dc_gpu_t *g,uint32_t slot) {
     if(g&&g->thermal&&slot<DC_GPU_CHUNK_SLOTS)
         memset((float *)g->thermal->water.mapped+slot*4096u,0,4096u*sizeof(float));
 }
+bool fr_thermal_gpu_enabled(const dc_gpu_t *g) {return g&&g->thermal;}
+bool fr_thermal_gpu_import_water_chunk(dc_gpu_t *g,uint32_t slot,
+    const dc_chunk_t *chunk,const float *energy,char *err,uint32_t cap) {
+    if(!g||!g->thermal||slot>=DC_GPU_CHUNK_SLOTS||!chunk||!energy)
+        return error(err,cap,"Liquid import requires its world thermal checkpoint");
+    double specific=fr_reactive_profile(DC_MATERIAL_WATER)->heat_capacity*FR_THERMAL_AMBIENT_K/65536.;
+    for(uint32_t i=0;i<4096u;i++) {
+        uint32_t mass=chunk->cells[i].fluid_mass;
+        if(!isfinite(energy[i])||(!mass&&energy[i]!=0.f)||mass*specific+energy[i]<0.)
+            return error(err,cap,"Streamed liquid heat does not match its physical packet");
+    }
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete liquid heat import");
+    memcpy((float *)g->thermal->water.mapped+slot*4096u,energy,4096u*sizeof(float));return true;
+}
 bool fr_thermal_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(!g||!g->thermal||!isfinite(seconds)||seconds<0)
         return error(err,cap,"Invalid standalone thermal interval");

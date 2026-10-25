@@ -228,7 +228,8 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
                 return error(err, cap, "Cannot publish loaded GPU chunk");
             }
             if(!restored&&((result.colors&&!fr_renderer_upload_chunk_colors(view->gpu,index,result.colors,err,cap))||
-                !fr_gpu_reactive_import_chunk(view->gpu,index,result.chunk,result.reactive,err,cap))) {
+                !fr_gpu_reactive_import_chunk(view->gpu,index,result.chunk,result.reactive,err,cap)||
+                (result.water_excess&&!fr_thermal_gpu_import_water_chunk(view->gpu,index,result.chunk,result.water_excess,err,cap)))) {
                 dc_stream_result_release(&result);return false;
             }
             if(!dc_chunk_table_finish_load(&view->table,index,result.generation)) {
@@ -263,12 +264,19 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
         if(!fr_renderer_download_chunk_colors(view->gpu,i,&colors,err,cap)) return false;
         fr_reactive_chunk_t reactive={0};
         if(!fr_gpu_reactive_export_chunk(view->gpu,i,&chunk,&reactive,err,cap)) return false;
+        const fr_reactive_chunk_t *channel=reactive.count||reactive.next_id>1u?&reactive:NULL;
+        float water_excess[4096];const float *liquid=NULL;
+        if(fr_thermal_gpu_enabled(view->gpu)) {
+            if(!fr_thermal_gpu_read_water_chunk(view->gpu,i,water_excess,4096,err,cap)) {
+                fr_reactive_chunk_release(&reactive);return false;
+            }
+            liquid=water_excess;
+        }
         if (!dc_chunk_table_begin_save(&view->table, i, &generation)) {
             fr_reactive_chunk_release(&reactive);
             return error(err, cap, "Cannot begin dirty chunk save");
         }
-        const fr_reactive_chunk_t *channel=reactive.count||reactive.next_id>1u?&reactive:NULL;
-        bool queued=dc_stream_request_save_reactive(view->stream,&chunk,&colors,channel,generation);
+        bool queued=dc_stream_request_save_thermal(view->stream,&chunk,&colors,channel,liquid,generation);
         fr_reactive_chunk_release(&reactive);
         if(!queued)
             return error(err, cap, "Cannot queue dirty chunk save");
