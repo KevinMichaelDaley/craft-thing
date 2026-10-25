@@ -1767,6 +1767,8 @@ build/reactive_body_snapshot_tests: tests/vulkan/reactive_body_snapshot_tests.c 
 test: build/reactive_body_snapshot_tests build/reactive_archive_tests
 build/thermal_tests: tests/fire/thermal_tests.c src/fire/thermal.c $(REACTIVE_STATE_SRC) include/ferrum/fire/thermal.h include/dungeoncraft/thermal_parameters.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/thermal.c $(REACTIVE_STATE_SRC) -o $@ -lm
+build/benchmark_brush_tests: tests/app/benchmark_brush_tests.c src/app/benchmark_brush.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
 test: build/thermal_tests
 build/thermal_gpu.o: src/vulkan/thermal_gpu.c include/ferrum/fire/thermal_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
