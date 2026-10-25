@@ -15,7 +15,9 @@ void cell_map(ivec2 p,out vec2 factor,out GasFlux value,out bool moving) {
     value=gas_empty_flux();moving=any(notEqual(stencil[index],vec4(0)));
     if(atlas==0xffffffffu) return;
     Gas source=backward?transport_work[atlas]:gas_provisional(atlas);
-    value=transport_scale(transport_state(source),backward?vec2(1):vec2(mass.y,energy.y));
+    value=transport_state(source);
+    if(!backward) {value.species.z*=mass.w;value.dynamics.x*=mass.w;value.pigment*=mass.w;}
+    value=transport_scale(value,backward?vec2(1):vec2(mass.y,energy.y));
 }
 void main() {
     uint lane=gl_SubgroupInvocationID,rank=gl_SubgroupID*gl_SubgroupSize+lane;

@@ -108,7 +108,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(t->large_transport) bank|=2048u;
     if(!t->matrix_valid) bank|=4u;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin acoustic advection");
-    if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,4);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);}
+    if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,t->large_transport?14u:4u);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);}
     if(sparse) indirect_dispatch(g,t,&t->clear_pressure,dt,bank,48);
     barrier(g);
     vkCmdFillBuffer(g->command,t->indirect.buffer,32,4,0);vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
@@ -123,14 +123,20 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(t->large_transport) {
         barrier(g);VkBufferCopy copy={.size=t->state_bytes};
         vkCmdCopyBuffer(g->command,t->state_bank[bank&1u],t->state_bank[(bank&1u)^1u],1,&copy);
+        if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,4);
         for(uint32_t axis=0;axis<2;axis++) {
             uint32_t flags=bank|(axis<<3u),lines=axis==0?g->height:g->width;
             dispatch(g,&t->transport_factor,lines,1u,dt,flags);
+            if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,5u+axis*4u);
             dispatch(g,&t->transport_prefix,lines,1u,dt,flags);
+            if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,6u+axis*4u);
             dispatch(g,&t->transport_prefix,lines,1u,dt,flags|16u);
+            if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,7u+axis*4u);
             dispatch(g,&t->transport_apply,gx,gy,dt,flags);
+            if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,8u+axis*4u);
         }
         dispatch(g,&t->transport_metadata,gx,gy,dt,bank);
+        if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,13);
     } else indirect_dispatch(g,t,&t->advect,dt,bank,32);
     if(sparse) indirect_dispatch(g,t,&t->rhs,dt,bank,32);else dispatch(g,&t->rhs,gx,gy,dt,bank);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,1);
@@ -163,6 +169,14 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         indirect_dispatch(g,t,&t->finish,dt,bank,48);
         indirect_dispatch(g,t,&t->commit,dt,bank,48);
         if(!submit(g,err,cap)) return false;
+        if(trace&&t->large_transport&&batches==0u) {
+            uint64_t phases[10];
+            if(vkGetQueryPoolResults(g->device,g->timestamp_pool,4,10,sizeof(phases),phases,sizeof(uint64_t),VK_QUERY_RESULT_64_BIT)==VK_SUCCESS) {
+                fprintf(stderr,"Gas transport GPU ms:");
+                for(uint32_t i=1;i<10;i++) fprintf(stderr," %.3f",(phases[i]-phases[i-1u])*g->timestamp_period/1e6);
+                fprintf(stderr," (X factor/forward/back/apply, Y factor/forward/back/apply, metadata)\n");
+            }
+        }
         uint32_t bits=((uint32_t *)stats->mapped)[FR_GAS_RESIDUAL_WORD];float residual=0;memcpy(&residual,&bits,4);
         batches+=batch_group;if(trace&&(batches<=4u||(batches&(batches-1u))==0u))
             fprintf(stderr,"Acoustic dt%.9g batch%u residual%.9g error%u tiles%u advected%u sweeps%u group%u large%u\n",dt,batches,residual,
