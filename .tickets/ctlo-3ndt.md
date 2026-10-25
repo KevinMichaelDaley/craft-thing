@@ -2,7 +2,7 @@
 id: ctlo-3ndt
 status: open
 deps: [ctlo-8b67]
-links: []
+links: [ctfs-81vw, ctlo-ehqj, ctlo-8b67]
 created: 2026-10-24T22:06:19Z
 type: feature
 priority: 1

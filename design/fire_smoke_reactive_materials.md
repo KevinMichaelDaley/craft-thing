@@ -1,7 +1,47 @@
 # Fire, smoke and reactive materials
 
-Status: design and ticket roadmap only; no runtime implementation in this change.
-Epic: `ctlo-d7vm`. The user explicitly selected design and tickets first.
+Status: implementation authorized after the initial design-and-ticket turn.
+Epic: `ctlo-d7vm`. Runtime progress and unfinished work are tracked in its tickets.
+
+## Modular delivery sequence
+
+Latest user direction: develop one visually testable gameplay feature or system
+at a time, with the prerequisites that feature actually needs. This takes
+precedence over completing every broad foundation ticket before a visible result.
+
+There is one active visible milestone. Implement, demonstrate, test and push it
+before starting the next. Small prerequisite changes belong to that milestone;
+do not expand them to every future material, owner or scenario. Keep thermal,
+gas, reaction, ownership and renderer adapters as separate modules with explicit
+interfaces, rather than growing a shared simulation monolith.
+
+| Delivery order | Ticket | Runnable result |
+| --- | --- | --- |
+| Next | `ctfs-2hu1` | Heat/wetting bench: finite heat source/brush, wood/stone, water cooling, and visible temperature/wetness feedback |
+| Then | `ctfs-dmxv` | Smoke/ventilation box: finite colored smoke, real enclosure/vent controls, flow and oxygen feedback |
+| First gameplay feature | `ctfs-81vw` | Terrain wood bonfire: ignition, gradual fuel/char/ash, visible flame/smoke, warmth and dry/wet containment controls |
+
+These are functional systems, not cosmetic substitutes for missing simulation.
+Each needs a permanent demo/test entry, real Vulkan/Wayland captures, appropriate
+reference/conservation tests and complete-frame measurements. Record its exact
+supported interactions and prerequisites. Do not enable an interaction that loses
+authoritative state or disable existing mechanics to make a demo appear correct.
+If a supported interaction requires more persistence or handoff work, complete
+that specific prerequisite then; unrelated future paths can remain open.
+
+The broader technical tickets below retain their full acceptance criteria and
+stay open until actually complete. The new milestones link to them rather than
+pretending a terrain heat bench completes all heat/gas/persistence requirements.
+Finish or preserve the current in-flight checkpoint work at a tested safe
+boundary, document pending intentional RED cases, and stop broad DCS/analytic
+body/actor/chemistry expansion until the active visible feature needs it. No work
+is discarded or hidden in a stash.
+
+After the bonfire, select one visible extension at a time, such as a cold pivoted
+launcher, coal siege damage, a sludge/water basin, or sticky Greek fire. Each adds
+its own necessary prerequisites and demo before moving on. The final three large
+integration scenarios and strict frame budget remain required; early slices
+must not be mislabeled as completion of the epic.
 
 ## Intended behavior
 
@@ -291,9 +331,10 @@ consumption. Cold or magic-colored smoke keeps its own density/color behavior.
 
 ## Ticket roadmap
 
-The dependency-linked ticket table below records the implementation stages. Independent
-milestones may be implemented in isolated worktrees if subsequently authorized;
-this planning change starts no implementation agent.
+The dependency-linked table below records the full technical scope. Implementation
+now follows the visible milestones above; it is not a requirement to finish the
+entire horizontal table before showing a usable system. One implementation agent
+works in its isolated worktree.
 
 | Stage | Ticket | Delivery |
 | --- | --- | --- |
@@ -311,7 +352,7 @@ this planning change starts no implementation agent.
 | 4 | `ctlo-iit1` | Future-lightning shock/energy and conductivity interfaces |
 | 4 | `ctlo-tk0j` | Substrate oxidation/corrosion, valuables and spent residues |
 | 5 | `ctlo-3hb8` | Finite mixed Greek-fire fuel, bound oxidizer and water resistance |
-| Parallel mechanics | `ctlo-x5gv` | True moving rigid-body pivot constraints and save/load |
+| Later mechanics | `ctlo-x5gv` | True moving rigid-body pivot constraints and save/load |
 | 5 | `ctlo-6syy` | Assembled siege launcher, stored work and real projectile release |
 | 3-5 | `ctlo-h9of` | Colored flame/smoke and aggregate emissive-buffer integration |
 | 1-5 | `ctlo-hjxc` | Optional versioned initial-state prop/export channels |
@@ -321,18 +362,20 @@ this planning change starts no implementation agent.
 | Final gate | `ctlo-jjye` | All three displayed scenarios under the full-frame budget |
 | Deferred, nonblocking | `ctlo-ddvz` | Full conductive lightning-energy propagation |
 
-The baseline precedes runtime work. Profiles and the pivot can proceed independently
-after it; state/heat/gas unlock ordinary fire, while oil rheology/coatings unlock
+The baseline precedes runtime work. The pivot is a later visible mechanical feature;
+state/heat/gas unlock ordinary fire, while oil rheology/coatings unlock
 Greek fire. The three scenario tickets have their own prerequisites and feed the
 final acceptance gate. Authoring extends the existing exporter and depends on
 completion of the existing all-role admission ticket; programmatic scenarios do
 not depend on that authoring path. The deferred electrical propagation ticket is
 linked to this epic, but is not a prerequisite for closing the fire milestone.
 
-Planning validation: all 24 new ticket records are represented here (the epic,
+Original planning validation at aaf24e2: all 24 ticket records were represented here (the epic,
 22 required children including this planning ticket, and one independent deferred
 electrical follow-up). IDs, acceptance sections, dependency targets and reciprocal
-links were checked; `tk dep cycle` reports no cycles. Runtime code is unchanged.
+links were checked and `tk dep cycle` reported no cycles. That planning commit
+changed no runtime code. The three modular-delivery milestones above were added
+by the subsequent user steering; they do not close the broader technical scope.
 
 ## Numerical references
 

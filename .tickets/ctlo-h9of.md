@@ -2,7 +2,7 @@
 id: ctlo-h9of
 status: open
 deps: [ctlo-8b67]
-links: [ctr-6fii]
+links: [ctr-6fii, ctlo-r2ap, ctfs-dmxv]
 created: 2026-10-24T22:06:19Z
 type: feature
 priority: 1

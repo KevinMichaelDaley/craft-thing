@@ -2,7 +2,7 @@
 id: ctlo-r2ap
 status: open
 deps: [ctlo-18l4]
-links: [dun-u68k]
+links: [dun-u68k, ctlo-h9of, ctfs-dmxv]
 created: 2026-10-24T22:06:18Z
 type: feature
 priority: 1

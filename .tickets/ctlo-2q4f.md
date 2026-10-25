@@ -2,7 +2,7 @@
 id: ctlo-2q4f
 status: in_progress
 deps: [ctlo-ldb7]
-links: [dun-sndp, dun-i1zd]
+links: [dun-sndp, dun-i1zd, ctfs-2hu1, ctlo-18l4]
 created: 2026-10-24T22:06:18Z
 type: feature
 priority: 1

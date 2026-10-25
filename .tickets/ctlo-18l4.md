@@ -2,7 +2,7 @@
 id: ctlo-18l4
 status: open
 deps: [ctlo-2q4f]
-links: []
+links: [ctlo-2q4f, ctfs-2hu1]
 created: 2026-10-24T22:06:18Z
 type: feature
 priority: 1

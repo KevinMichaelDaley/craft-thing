@@ -26,3 +26,7 @@ Planning completed per explicit Design and tickets first selection. Baseline ctl
 **2026-10-24T22:15:03Z**
 
 The user now explicitly authorized implementation by asking to run one agent through these tickets. The earlier planning-only scope applies to the completed planning turn and no longer blocks implementation. Work begins with ctlo-ck1i in /home/kmd/craft-thing-fire-smoke on feat/fire-smoke-reactive-materials. Proceed through required dependencies, preserve the real displayed performance gate and keep deferred ctlo-ddvz nonblocking.
+
+**2026-10-25T02:55:25Z**
+
+User steering: develop ONE visually testable gameplay feature or system at a time, with only needed prerequisites. After a tested safe boundary for current persistence work, sequence ctfs-2hu1 heat/wetting bench -> ctfs-dmxv smoke/ventilation box -> ctfs-81vw terrain bonfire. Deliver a runnable demo, actual displayed evidence, tests and pushed commit for each before the next. Stop horizontal foundation expansion for future oil/metals/actors/checkpoints until the active feature needs it. Broad technical tickets retain all original requirements and remain open for unfinished paths. See the new modular-delivery section in the design.
