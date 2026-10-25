@@ -95,6 +95,17 @@ static bool grow_entries(dc_gpu_t *g,fr_reactive_arena_gpu_t *a,uint32_t require
 fail:
     dc_gpu_address_buffer_destroy(g,&entries);dc_gpu_address_buffer_destroy(g,&bits);return false;
 }
+bool fr_reactive_arena_reserve_free(dc_gpu_t *g,fr_reactive_arena_gpu_t *a,uint32_t count,char *err,uint32_t cap) {
+    if(!g||!a||!a->root.buffer) return error(err,cap,"Invalid GPU producer reservation");
+    VkResult waited=vkQueueWaitIdle(g->queue);
+    if(waited!=VK_SUCCESS) return error(err,cap,"Cannot complete GPU producer preflight");
+    uint32_t free=((uint32_t *)a->mailbox.mapped)[FR_ARENA_MAIL_FREE];
+    uint32_t needed=count>a->capacity/8u?count:a->capacity/8u;
+    if(free>=needed) return true;
+    uint64_t required=(uint64_t)a->capacity+needed-free;
+    if(required>UINT32_MAX) return error(err,cap,"Reactive arena exceeds its address range");
+    return grow_entries(g,a,(uint32_t)required,err,cap);
+}
 static bool dispatch(dc_gpu_t *g,fr_reactive_arena_gpu_t *a,uint32_t count,char *err,uint32_t cap) {
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(g->physical,&properties);
     uint32_t groups=(count-1u)/64u+1u,x=groups;

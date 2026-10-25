@@ -55,3 +55,11 @@ Edit-boundary REDc31e592 exposed stale liquid heat both after AIR erase and phys
 **2026-10-25T04:47:45Z**
 
 Liquid-stage REFACTOR/full regression boundary e8e22ea: make -j8 -i test finished718 C passes and exactly the two known ctr-ojvy authored-stage failures, zero compiler warnings. Log build/thermal_water_full_suite.log. Native liquid4 and existing thermal/fluid20 cases passed separately with core/sync validation. New wood/stone admission RED source is queued, not yet run/claimed.
+
+**2026-10-25T04:51:59Z**
+
+Admission REDb12f850 now locally GREEN3/3 actual Wayland/core+sync: newly painted wood matches canonical ambient payload and finite CPU probe reference, replacement stone gets fresh identity/ambient heat with one live record, and613-cell brushes grow beyond the64-entry initial allocation and recycle all entries across5 erase/repaint cycles. Dynamic preflight reads allocation counters only; GPU constructs/publishes state. Scope wood/stone bench solids; compatibility checks underway, broad owner admission still open.
+
+**2026-10-25T04:57:10Z**
+
+Admission compatibility complete:16 existing cases pass (arena4, ownership6, brush1, displayed liquid4, displayed bench1) with core/sync validation and no errors; new admission3 also pass, build zero warnings. The prior718+2 full log is the liquid-stage boundary, not a claim that the newly changed admission source already passed a second full run. Next visible work is inspection/labels and water interaction capture before any broader prerequisite expansion.

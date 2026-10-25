@@ -60,6 +60,8 @@ bool fr_thermal_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
     uint32_t *control=g->thermal_control_mapped;
     control[2]=(uint32_t)t->water.address;control[3]=(uint32_t)(t->water.address>>32);
     control[4]=DC_GPU_CHUNK_SLOTS*4096u;control[0]=DC_THERMAL_WATER_MAGIC;
+    control[DC_THERMAL_PROFILE_ADDRESS_WORD]=(uint32_t)t->profiles.address;
+    control[DC_THERMAL_PROFILE_ADDRESS_WORD+1u]=(uint32_t)(t->profiles.address>>32);
     g->thermal=t;return true;
 }
 static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
@@ -91,6 +93,26 @@ bool fr_thermal_gpu_probe(dc_gpu_t *g,uint32_t x,uint32_t y,bool active) {
 bool fr_thermal_gpu_overlay(dc_gpu_t *g,uint32_t mode) {
     if(!g||!g->thermal||mode>2u) return false;
     g->thermal->overlay=mode;return true;
+}
+bool fr_thermal_prepare_paint(dc_gpu_t *g,uint32_t x,uint32_t y,uint32_t radius,
+    uint32_t material,char *err,uint32_t cap) {
+    if(!g||!g->thermal) return true;
+    uint32_t *control=g->thermal_control_mapped;control[DC_THERMAL_BRUSH_MATERIAL_WORD]=0u;
+    if(material!=DC_MATERIAL_WOOD&&material!=DC_MATERIAL_STONE) return true;
+    uint64_t left=x>radius?x-radius:0u,top=y>radius?y-radius:0u;
+    uint64_t right=(uint64_t)x+radius+1u,bottom=(uint64_t)y+radius+1u;
+    if(right>g->width) right=g->width;
+    if(bottom>g->height) bottom=g->height;
+    if(left>=right||top>=bottom) return true;
+    uint32_t count=(uint32_t)((right-left)*(bottom-top));
+    uint64_t base=g->reactive->high_id+1u;
+    if(count>=UINT64_MAX-g->reactive->high_id) return error(err,cap,"Thermal parcel identities exceed their address range");
+    if(!fr_reactive_arena_reserve_free(g,&g->reactive->arena,count,err,cap)) return false;
+    g->reactive->high_id+=count;
+    control[DC_THERMAL_BRUSH_ID_WORD]=(uint32_t)base;control[DC_THERMAL_BRUSH_ID_WORD+1u]=(uint32_t)(base>>32);
+    control[DC_THERMAL_BRUSH_X_WORD]=(uint32_t)left;control[DC_THERMAL_BRUSH_Y_WORD]=(uint32_t)top;
+    control[DC_THERMAL_BRUSH_WIDTH_WORD]=(uint32_t)(right-left);control[DC_THERMAL_BRUSH_MATERIAL_WORD]=material;
+    return true;
 }
 bool fr_thermal_gpu_seed_water(dc_gpu_t *g,uint32_t slot,uint32_t cell,float energy,char *err,uint32_t cap) {
     if(!g||!g->thermal||slot>=DC_GPU_CHUNK_SLOTS||cell>=4096u||!isfinite(energy))

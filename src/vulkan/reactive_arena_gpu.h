@@ -37,4 +37,8 @@ bool fr_reactive_arena_read(dc_gpu_t *gpu,const fr_reactive_arena_gpu_t *arena,
 /** Read constant-size allocation counters at a completed boundary. */
 bool fr_reactive_arena_stats(dc_gpu_t *gpu,const fr_reactive_arena_gpu_t *arena,
     fr_reactive_arena_stats_t *out);
+/** Preflight a bounded GPU producer using allocation counters only. Grow by
+ * device copies before mutation; never read or construct a CPU parcel list. */
+bool fr_reactive_arena_reserve_free(dc_gpu_t *gpu,fr_reactive_arena_gpu_t *arena,
+    uint32_t count,char *err,uint32_t cap);
 #endif

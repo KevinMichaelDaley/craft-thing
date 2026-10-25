@@ -1774,5 +1774,6 @@ build/shaders/thermal.comp.spv: shaders/reactive/thermal.comp shaders/reactive/a
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 $(GPU_OBJ) build/thermal_gpu_display_tests: build/shaders/thermal.comp.spv
 $(PERFORMANCE_OBJ): build/shaders/thermal.comp.spv build/shaders/reactive_chunk_state.comp.spv build/shaders/reactive_arena.comp.spv
-build/shaders/pattern.comp.spv: shaders/reactive/thermal_water.glsl include/dungeoncraft/thermal_water_layout.h
+build/shaders/pattern.comp.spv build/shaders/runtime/pattern.comp.spv: shaders/reactive/thermal_water.glsl include/dungeoncraft/thermal_water_layout.h
+build/shaders/pattern.comp.spv build/shaders/runtime/pattern.comp.spv: shaders/reactive/thermal_brush.glsl include/dungeoncraft/thermal_parameters.h include/dungeoncraft/reactive_profile_layout.h
 build/thermal_gpu.o build/tick_gpu.o build/present_gpu.o build/gpu.o: src/vulkan/thermal_gpu_internal.h

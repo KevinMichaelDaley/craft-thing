@@ -9,4 +9,7 @@ void fr_thermal_record_overlay(dc_gpu_t *gpu);
 void fr_thermal_gpu_destroy(dc_gpu_t *gpu);
 /** Cold physical-slot replacement after validation and completed upload. */
 void fr_thermal_clear_water_chunk(dc_gpu_t *gpu,uint32_t slot);
+/** Reserve resources/unique identities before wood/stone brush mutation. */
+bool fr_thermal_prepare_paint(dc_gpu_t *gpu,uint32_t x,uint32_t y,uint32_t radius,
+    uint32_t material,char *err,uint32_t cap);
 #endif

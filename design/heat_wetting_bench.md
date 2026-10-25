@@ -65,6 +65,16 @@ replacement. Separate existing thermal, bench, transport, prefix, pigment and
 partial-recipient regressions report 20 passes without validation errors. These
 checks cover the liquid substage, not completion of this visible milestone.
 
+Newly painted wood/stone now obtain canonical ambient parcels on the GPU when
+the thermal module is enabled. Before physical mutation, the host reserves a
+bounded brush rectangle using only arena counters and a unique 64-bit identity
+range. GPU lanes construct state and publish handles; existing same-material
+parcels retain history. Device copies grow storage rather than imposing a parcel
+quota. Three native cases check canonical state/probe parity, replacement identity
+and five reuse cycles of a 613-cell brush; sixteen existing arena, ownership,
+brush, liquid and bench cases also pass without Vulkan validation errors. This
+is the bench's wood/stone admission subset, not all future materials or owners.
+
 Remaining in this milestone: complete liquid regression/interaction coverage,
 temperature/wetness inspection, natural edits/owner admission and the persistence
 the exposed scene needs, plus reference budgets and passing displayed timing.

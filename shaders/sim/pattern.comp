@@ -105,6 +105,7 @@ uint structure_base() {
     uint w=(params.width+63u)/64u+2u,h=(params.height+63u)/64u+2u;
     return 8u+2u*w*h+DC_LAYOUT_PAIR_CAPACITY*8u+12u+DC_LAYOUT_CONTACT_CAPACITY*32u+16u+64u*32u+DC_LAYOUT_CONTACT_CAPACITY*16u;
 }
+#include "../reactive/thermal_brush.glsl"
 vec3 unpacked_color(uint color) {return vec3(color&255u,(color>>8)&255u,(color>>16)&255u);}
 uint structure_color(Body body) {
     uint material=body.material;
@@ -279,6 +280,10 @@ void main() {
                 material = params.color == 3u &&
                            (material == 2u || material == 4u || material == 5u || material == 6u || material == 10u)
                            ? material : params.color == 3u ? 0u : params.color;
+                uvec2 thermal_prepared;
+                if(!thermal_brush_begin(index,old_cell_word&65535u,material,p,thermal_prepared)) {
+                    atomicOr(DC_BUFFER_DATA(structure_base()+STRUCTURAL_BRUSH_RESULT_WORD),16u);return;
+                }
                 bool new_grain = material == 2u || material == 4u || material == 5u || material == 6u || material == 10u;
                 if (!new_grain) {
                     mpm_forget_output(particle_index);mpm_forget_output(secondary_index);
@@ -336,6 +341,7 @@ void main() {
                     }
                 }
                 if((cell.x&65535u)!=material) {terrain_colors[index]=vec4(0);reactive_forget_cell(index);}
+                thermal_brush_publish(index,slot,local_index,thermal_prepared);
                 if(DC_CELL_COMPONENT_MEMBER(cell.x)&&!DC_CELL_COMPONENT_MEMBER(material))
                     release_edited_support(ivec2(p));
                 cell.x = ((cell.x & 0xffffu)==material ? cell.x & 0xffff0000u : 0u) | material;
