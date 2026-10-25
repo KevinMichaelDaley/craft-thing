@@ -1,7 +1,0 @@
-#version 460
-#extension GL_GOOGLE_include_directive : require
-#include "multigrid.glsl"
-void main() {
-    uint index=gas_index();if(index>=params.width*params.height) return;
-    hierarchy[index]=GasPressureNode(stencil[index],vec4(pressure[index].z,correction_data[index].x,0.,0.));
-}

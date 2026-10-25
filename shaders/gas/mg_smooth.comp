@@ -1,9 +1,0 @@
-#version 460
-#extension GL_GOOGLE_include_directive : require
-#include "multigrid.glsl"
-void main() {
-    uint level=params.bank>>3u;uvec2 size=gas_level_size(level);uint index=gas_index();
-    if(index>=size.x*size.y||((index%size.x+index/size.x)&1u)!=((params.bank>>1u)&1u)) return;
-    uint at=gas_level_offset(level)+index;GasPressureNode node=hierarchy[at];if(node.data.x<=0.) return;
-    hierarchy[at].data.z+=gas_level_residual(at,size.x)/node.data.x;
-}
