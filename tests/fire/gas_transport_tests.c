@@ -73,11 +73,23 @@ static void test_large_cfl_composition_retains_reference_acoustic_mode(void) {
     ASSERT_TRUE(fr_gas_large_cfl_reference_step(&m,s,v,64,1,1,out,err,sizeof(err)));
     ASSERT_EQ(memcmp(out,expected,sizeof(out)),0);PASS();
 }
+static void test_balanced_counterflow_preserves_uniform_density_energy_and_exact_pair_momentum(void) {
+    char err[256]={0};fr_gas_model_t m=model();fr_gas_state_t s[8],out[8];double v[8];
+    for(uint32_t i=0;i<8;i++) {v[i]=1;s[i]=air(i%2u?-1:1,0);}
+    ASSERT_TRUE(fr_gas_transport_reference_step(&m,s,v,8,1,4,out,err,sizeof(err)));
+    for(uint32_t i=0;i<8;i++) {
+        for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(out[i].species[k]-s[i].species[k])<1e-12);
+        ASSERT_TRUE(fabs(out[i].energy-s[i].energy)<1e-10);
+        ASSERT_TRUE(fabs(out[i].momentum[0]-(i%2u?-1.:1.)/9.)<1e-12);
+    }
+    PASS();
+}
 int main(void) {
     RUN(test_cfl_four_matches_independent_geometric_packet_and_closed_budgets);
     RUN(test_two_dimensional_large_cfl_keeps_walls_species_energy_and_pigment);
     RUN(test_invalid_and_zero_time_are_transactional);
     RUN(test_large_cfl_composed_pressure_keeps_packet_budgets_and_positive_thermodynamics);
     RUN(test_large_cfl_composition_retains_reference_acoustic_mode);
+    RUN(test_balanced_counterflow_preserves_uniform_density_energy_and_exact_pair_momentum);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
