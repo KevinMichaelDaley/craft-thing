@@ -27,3 +27,7 @@ RED-GREEN-REFACTOR. A permanent placement-demo entry or deterministic scene lets
 **2026-10-25T02:56:00Z**
 
 Next active visible system after the current safe checkpoint. Reuse completed parcel/profile/streaming work; bring forward additional ownership or save support only when an exposed interaction needs it. A scoped demonstration must not claim unsupported persistence or suppress existing mechanics.
+
+**2026-10-25T03:20:14Z**
+
+Thermal reference GREEN:6 RED tests now pass for composition-derived capacity, signed conservative face flux, four-face monotonicity, finite probe reservoir, exact Q16 wetting mass and proportional enthalpy, preserved identities/hazards, pause and invalid-input rollback. Existing parcel9 tests also pass; no compiler warnings. Bench sources are finite350K reservoirs (not output clamps), keeping this first module below boiling by construction. Next is the real Vulkan thermal field and displayed placement-demo interaction; CPU reference alone is not milestone completion.

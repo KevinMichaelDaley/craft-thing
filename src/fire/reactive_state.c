@@ -26,6 +26,9 @@ static double capacity(const fr_reactive_state_t *s) {
         ((double)s->coating_jelly_fuel_fp+s->coating_oxidizer_fp)*
             fr_reactive_profile(DC_MATERIAL_RED_SLIME_JELLY)->heat_capacity)/DC_FLUID_FULL;
 }
+double fr_reactive_state_heat_capacity(const fr_reactive_state_t *s) {
+    return s&&fr_reactive_profile(s->material)?capacity(s):0;
+}
 
 bool fr_reactive_state_default(uint32_t material,uint32_t mass,uint32_t water,
                                 float temperature,uint64_t id,fr_reactive_state_t *out,

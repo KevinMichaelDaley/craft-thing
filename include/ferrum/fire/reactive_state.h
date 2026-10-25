@@ -52,6 +52,9 @@ bool fr_reactive_state_default(uint32_t material, uint32_t dry_mass_fp,
                                 uint32_t bound_water_fp, float temperature_K,
                                 uint64_t parcel_id, fr_reactive_state_t *out,
                                 char *err_buf, uint32_t err_cap);
+/** Sum actual species heat capacities; dry reference mass is excluded. Missing
+ * state or unknown material returns zero. This reference has no runtime readback. */
+double fr_reactive_state_heat_capacity(const fr_reactive_state_t *state);
 /** Preserve actual particle mass and old soil/sand bound water. Leaf pigment
  * flags are not moisture and are never reinterpreted or modified. */
 bool fr_reactive_state_from_particle(const dc_mpm_particle_t *particle,
