@@ -2,6 +2,7 @@
 #define FERRUM_FIRE_GPU_H
 #include "dungeoncraft/gpu.h"
 #include "ferrum/fire/reactive_state.h"
+#include "ferrum/fire/reactive_chunk.h"
 
 /** Allocated storage counters, never a permanent body/fire quota. */
 typedef struct {uint32_t capacity,live,free,retired;} fr_gpu_reactive_stats_t;
@@ -29,4 +30,12 @@ bool fr_gpu_reactive_seed_particle(dc_gpu_t *gpu,uint32_t particle,
 /** Explicit completed-queue canonical-particle diagnostic. */
 bool fr_gpu_reactive_read_particle(dc_gpu_t *gpu,uint32_t particle,
     fr_reactive_record_t *out,bool *found,char *err_buf,uint32_t err_cap);
+/** Cold save boundary: GPU compaction emits logical parcel records and physical
+ * row bindings. The CPU never constructs a live physics/component list. */
+bool fr_gpu_reactive_export_chunk(dc_gpu_t *gpu,uint32_t slot,const dc_chunk_t *chunk,
+    fr_reactive_chunk_t *out,char *err_buf,uint32_t err_cap);
+/** Cold restore boundary after physical upload. Validate and reserve the whole
+ * immutable packet before publishing handles; failure preserves live state. */
+bool fr_gpu_reactive_import_chunk(dc_gpu_t *gpu,uint32_t slot,const dc_chunk_t *chunk,
+    const fr_reactive_chunk_t *channel,char *err_buf,uint32_t err_cap);
 #endif

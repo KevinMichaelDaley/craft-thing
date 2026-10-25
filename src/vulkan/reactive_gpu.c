@@ -194,3 +194,11 @@ bool fr_gpu_reactive_read_particle(dc_gpu_t *g,uint32_t particle,
     if(e) {memcpy(&out->owner,e+FR_ENTRY_OWNER,sizeof(out->owner));memcpy(&out->state,e+FR_ENTRY_STATE,sizeof(out->state));}
     *found=e!=NULL;return true;
 }
+bool fr_gpu_reactive_export_chunk(dc_gpu_t *g,uint32_t slot,const dc_chunk_t *chunk,
+    fr_reactive_chunk_t *out,char *err,uint32_t cap) {
+    (void)g;(void)slot;(void)chunk;(void)out;(void)err;(void)cap;return false;
+}
+bool fr_gpu_reactive_import_chunk(dc_gpu_t *g,uint32_t slot,const dc_chunk_t *chunk,
+    const fr_reactive_chunk_t *channel,char *err,uint32_t cap) {
+    (void)g;(void)slot;(void)chunk;(void)channel;(void)err;(void)cap;return false;
+}
