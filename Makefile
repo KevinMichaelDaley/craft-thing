@@ -1653,3 +1653,9 @@ build/reactive_state_tests: tests/fire/reactive_state_tests.c $(REACTIVE_STATE_S
 test: test_reactive_state
 test_reactive_state: build/reactive_state_tests
 	./build/reactive_state_tests
+
+build/diagnostics/reactive_state_probe.spv: tests/vulkan/reactive_state_probe.comp shaders/reactive/state.glsl include/dungeoncraft/reactive_state_layout.h
+	mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/reactive_state_gpu_tests: tests/vulkan/reactive_state_gpu_tests.c tools/diagnostics/vulkan_probe.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_state.h build/diagnostics/reactive_state_probe.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/reactive_state_gpu_tests.c $(REACTIVE_STATE_SRC) -o $@ $(LDLIBS)

@@ -1,0 +1,23 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "../../include/dungeoncraft/reactive_state_layout.h"
+layout(local_size_x=64) in;
+layout(set=0,binding=0,std430) buffer Fixture {uint words[];};
+uint reactive_entry_capacity() {return words[0];}
+uint reactive_entry_read(uint entry,uint field) {return words[64u+entry*FR_ENTRY_WORDS+field];}
+void reactive_entry_write(uint entry,uint field,uint value) {words[64u+entry*FR_ENTRY_WORDS+field]=value;}
+uvec2 reactive_handle_read(uint location) {return uvec2(words[1024u+location*2u],words[1025u+location*2u]);}
+void reactive_handle_write(uint location,uvec2 value) {words[1024u+location*2u]=value.x;words[1025u+location*2u]=value.y;}
+#include "../../shaders/reactive/state.glsl"
+void main() {
+    uint lane=gl_GlobalInvocationID.x;
+    if(lane>=words[1]) return;
+    uint c=2048u+lane*10u;
+    uint operation=words[c],source=words[c+1u],target=words[c+2u];
+    bool result=false;
+    if(operation==1u) result=reactive_move(source,target,words[c+3u],
+        uvec4(words[c+4u],words[c+5u],words[c+6u],words[c+7u]),words[c+8u]);
+    else if(operation==2u) result=reactive_erase(source);
+    else result=reactive_handle_valid(reactive_handle_read(source));
+    words[c+9u]=result?1u:0u;
+}
