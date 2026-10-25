@@ -13,7 +13,12 @@ void main() {
         if(local.x==0u) boundary.y=coefficients.y;
         if(local.y==7u) boundary.z=coefficients.z;
         if(local.y==0u) boundary.w=coefficients.w;
-        total=vec2(correction_data[at].x,max(0.,pressure[at].z-dot(coefficients,vec4(1))));
+        float residual=correction_data[at].x-pressure[at].z*correction[at];
+        for(uint d=0u;d<4u;d++) if(coefficients[d]>0.) {
+            uint j=d==0u?at+1u:(d==1u?at-1u:(d==2u?at+params.width:at-params.width));
+            residual+=coefficients[d]*correction[j];
+        }
+        total=vec2(residual,max(0.,pressure[at].z-dot(coefficients,vec4(1))));
     }
     edges[lane]=boundary;totals[lane]=total;barrier();
     for(uint stride=32u;stride>0u;stride/=2u) {

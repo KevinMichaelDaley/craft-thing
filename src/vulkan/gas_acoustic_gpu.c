@@ -59,7 +59,10 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     fr_renderer_compute_t *pipelines[]={&t->advect,&t->initialize,&t->rhs,&t->classify,&t->compact,&t->sor,&t->correct,&t->residual,&t->finish,&t->activity,&t->activity_compact,&t->final_compact,&t->commit,&t->clear_pressure,&t->prepare_pressure,&t->activity_candidates,&t->transport_factor,&t->transport_prefix,&t->transport_apply,&t->transport_metadata};
     const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_classify","pressure_compact","pressure_sor","pressure_correct","pressure_residual","acoustic_finish","activity","activity_compact","final_compact","sparse_commit","pressure_clear","pressure_prepare","activity_candidates","transport_factor","transport_prefix","transport_apply","transport_metadata"};
     const char *wide=getenv("DC_GAS_WIDE_SCAN");
-    if(wide&&strcmp(wide,"0")!=0&&subgroup.subgroupSize>=4u&&properties.limits.maxComputeWorkGroupInvocations>=256u&&properties.limits.maxComputeWorkGroupSize[0]>=256u) paths[17]="transport_prefix_wide";
+    if(wide&&strcmp(wide,"0")!=0&&subgroup.subgroupSize>=4u&&properties.limits.maxComputeWorkGroupInvocations>=256u&&properties.limits.maxComputeWorkGroupSize[0]>=256u) {
+        paths[17]="transport_prefix_wide";
+        paths[16]="transport_factor_wide";
+    }
     for(uint32_t i=0;i<20;i++) {
         if(i>=16u&&!t->supports_large_transport) continue;
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",paths[i]);
@@ -161,7 +164,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     for(;;) {
         uint32_t batch_group=t->practical?1u:(batches==0u?1u:group);
         bool coarse=t->practical&&getenv("DC_GAS_COARSE")!=NULL;
-        uint32_t batch_sweeps=t->practical?(coarse?128u:GAS_PRACTICAL_SWEEPS):(batches==0u?budget("DC_GAS_FIRST_SWEEPS",sweeps):sweeps);
+        uint32_t batch_sweeps=t->practical?(coarse?32u:GAS_PRACTICAL_SWEEPS):(batches==0u?budget("DC_GAS_FIRST_SWEEPS",sweeps):sweeps);
         for(uint32_t batch=0;batch<batch_group;batch++) {
         barrier(g);vkCmdFillBuffer(g->command,t->indirect.buffer,0,4,0);
         vkCmdFillBuffer(g->command,t->indirect.buffer,16,4,0);
@@ -174,6 +177,9 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         dispatch(g,&t->compact,(tiles+63u)/64u,1u,dt,bank);
         if(sparse) indirect_dispatch(g,t,&t->prepare_pressure,dt,bank,16);
         if(coarse) {
+            for(uint32_t sweep=0;sweep<16u;sweep++) {
+                indirect_dispatch(g,t,&t->sor,dt,bank,0);indirect_dispatch(g,t,&t->sor,dt,bank|2u,0);
+            }
             dispatch(g,&t->restrict_pressure,tiles,1u,dt,bank);
             for(uint32_t sweep=0;sweep<128u;sweep++) {
                 dispatch(g,&t->coarse_sor,(tiles+63u)/64u,1u,dt,bank);

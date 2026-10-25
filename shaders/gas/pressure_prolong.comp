@@ -4,5 +4,13 @@
 void main() {
     uint tile=active_tiles[gl_WorkGroupID.x],lane=gl_LocalInvocationIndex,width=coarse_width();
     uvec2 p=uvec2(tile%width,tile/width)*8u+uvec2(lane%8u,lane/8u);
-    if(p.x<params.width&&p.y<params.height) correction[p.y*params.width+p.x]=coarse[tile].data.z;
+    if(p.x<params.width&&p.y<params.height) {
+        CoarseRow row=coarse[tile];float own=row.data.z;vec4 neighbors=vec4(own);
+        for(uint d=0u;d<4u;d++) if(row.coefficients[d]>0.) {
+            uint j=d==0u?tile+1u:(d==1u?tile-1u:(d==2u?tile+width:tile-width));
+            neighbors[d]=coarse[j].data.z;
+        }
+        vec2 offset=(vec2(lane%8u,lane/8u)-3.5)/8.;
+        correction[p.y*params.width+p.x]+=own+.5*dot(offset,vec2(neighbors.x-neighbors.y,neighbors.z-neighbors.w));
+    }
 }

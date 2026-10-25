@@ -71,3 +71,7 @@ Practical thermal prototype passes two actual Wayland/Vulkan gates: unsupported 
 **2026-10-25T21:10:27Z**
 
 Opt-in GPU coarse pressure prototype (8x8 aggregate,128 coarse/128 fine sweeps) passes120-interval stability. Real40-frame trace49.102ms mean75.891ms worst, four paused captures identical. No retry/catch-up growth. Screenshot inspected: rising colored plumes, but fine-grid reservoir density artifacts remain; visual and complete-frame acceptance NOT passed. Practical activity tolerances retain stock and pass stability. Next pressure/transport coupling artifact and budget work; no other module started.
+
+**2026-10-25T21:15:39Z**
+
+Residual V-cycle48 fine sweeps +128 coarse sweeps passes all3 actual-display practical gates. Wide256-lane factorization improves real40-frame trace41.935ms mean63.417ms worst (previous48.708/72.383), fixed one interval/two submissions, no retries. Pressure~13ms, transport init~29ms at3040 tiles; target remains RED. Extreme kinetic_scale1/gravity900 diagnostics remain available with DC_GAS_EXTREME_STRESS=1; user-authorized practical admission rejects unresolved scale heights. Next stage face coefficients once in parallel instead of repeated scattered per-line cache gathers; no CPU field solve/readback.
