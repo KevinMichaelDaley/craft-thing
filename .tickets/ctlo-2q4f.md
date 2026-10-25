@@ -55,3 +55,7 @@ Full-width arena addressing GREEN:256 Intel GPU arithmetic cases now match uint6
 **2026-10-25T02:05:16Z**
 
 Embedded packet codec GREEN:4 new CPU cases pass for canonical bytes identical to the existing FRS1 file codec, immutable input, transactional capacity/corruption/new-version/typed-owner rejection and empty ambient packets. The9 existing parcel/file-codec cases also pass with zero compiler warnings. These memory packets are ready to embed in atomic chunk/structure formats; actual format integration is still required.
+
+**2026-10-25T02:19:31Z**
+
+Live state storage now uses the GPU reserve/publish/rollback arena instead of CPU append-only entries. Native Wayland Vulkan integration passed six cell/body/MPM/reuse cases and four particle lifecycle cases, including 128 erase/repaint cycles with 64 live entries and no historical allocation growth. Persistence, physical admission and remaining handoff paths still in progress.

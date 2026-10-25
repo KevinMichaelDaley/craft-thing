@@ -16,11 +16,7 @@ void reactive_particle_write(uint pool,uint index,uvec2 handle) {
 void reactive_forget_particle(uint particle) {
     if(!reactive_particles_enabled()) return;
     uvec2 handle=reactive_particle_read(0u,particle);
-    if(reactive_handle_valid(handle)) {
-        ReactiveWords entries=reactive_entries();uint at=handle.x*FR_ENTRY_WORDS;
-        entries.words[at+FR_ENTRY_OWNER]=0u;
-        entries.words[at+FR_ENTRY_GENERATION]=min(handle.y,0xfffffffeu)+1u;
-    }
+    reactive_retire_handle(handle);
     reactive_particle_write(0u,particle,uvec2(0));reactive_particle_write(1u,particle,uvec2(0));
 }
 bool reactive_move_particle(uint source,uint target) {

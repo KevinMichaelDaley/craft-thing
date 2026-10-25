@@ -41,7 +41,7 @@ bool fr_reactive_arena_create(dc_gpu_t *g,uint32_t initial,fr_reactive_arena_gpu
        !dc_gpu_address_buffer_create(g,bit_bytes(a.capacity),true,&a.free_bits,err,cap)||
        !dc_gpu_address_buffer_create(g,64,true,&a.mailbox,err,cap)||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)a.request_capacity*FR_ARENA_REQUEST_WORDS*4u,true,&a.requests,err,cap)) goto fail;
-    uint32_t *root=a.root.mapped;root[0]=FR_ARENA_MAGIC;root[1]=FR_REACTIVE_STATE_ABI;root[2]=a.capacity;
+    uint32_t *root=a.root.mapped;root[0]=FR_ARENA_MAGIC;root[1]=FR_ARENA_GPU_ABI;root[2]=a.capacity;
     address(root+FR_ARENA_ENTRIES,a.entries.address);address(root+FR_ARENA_BITS,a.free_bits.address);
     address(root+FR_ARENA_MAILBOX,a.mailbox.address);address(root+FR_ARENA_REQUESTS,a.requests.address);
     ((uint32_t *)a.mailbox.mapped)[FR_ARENA_MAIL_FREE]=a.capacity;
