@@ -102,4 +102,21 @@ static void test_native_large_cfl_two_dimensional_concave_wall_matches_oracle(vo
     ASSERT_TRUE(large_equal(expected,out,64,err,sizeof(err))&&large_budget(input,out,64,err,sizeof(err))&&present(g,err,sizeof(err)));
     free(c);free(chunk);free(readback);free(volume);dc_gpu_destroy(g);PASS();
 }
+static void test_native_large_cfl_balanced_counterflow_has_no_artificial_compression(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));fr_gas_model_t m=reference_model();
+    fr_gas_state_t *chunk=calloc(4096,sizeof(*chunk)),*readback=malloc(4096*sizeof(*readback));double *volume=calloc(4096,sizeof(*volume));ASSERT_TRUE(c&&chunk&&readback&&volume);
+    for(uint32_t i=0;i<4096;i++) c->cells[i]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+    for(uint32_t x=0;x<64;x++) {uint32_t i=20u*64u+x;c->cells[i]=(dc_cell_t){0};volume[i]=1;chunk[i]=reference_air(m,1,300,x%2u?-1:1);}
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_LARGE_CFL,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,chunk,volume,4096,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,chunk,4096,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_step(g,4,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,readback,4096,err,sizeof(err)));
+    for(uint32_t x=0;x<64;x++) {
+        uint32_t i=20u*64u+x;
+        for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(readback[i].species[k]-chunk[i].species[k])<2e-6);
+        ASSERT_TRUE(fabs(readback[i].energy-chunk[i].energy)<.005);
+        ASSERT_TRUE(fabs(readback[i].momentum[0]-(x%2u?-1.:1.)/9.)<.0002);
+    }
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(c);free(chunk);free(readback);free(volume);dc_gpu_destroy(g);PASS();
+}
 #endif

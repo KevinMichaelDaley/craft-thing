@@ -372,5 +372,6 @@ int main(void) {
     RUN(test_native_large_cfl_crosses_chunk_and_subgroup_seams_with_mixed_color);
     RUN(test_native_large_cfl_closed_valve_matches_two_independent_chambers);
     RUN(test_native_large_cfl_two_dimensional_concave_wall_matches_oracle);
+    RUN(test_native_large_cfl_balanced_counterflow_has_no_artificial_compression);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
