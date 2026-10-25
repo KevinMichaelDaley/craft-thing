@@ -143,12 +143,57 @@ bool fr_reactive_snapshot_read(const char *path,fr_reactive_record_t *records,ui
     if(bytes) memcpy(records,copy,bytes);
     free(copy);*count=header[4];*next=restored_next;*required=header[4];return true;
 }
-bool fr_reactive_snapshot_size(uint32_t count,size_t *out) {(void)count;(void)out;return false;}
+bool fr_reactive_snapshot_size(uint32_t count,size_t *out) {
+    if(!out) return false;
+    size_t bytes=(size_t)count*sizeof(fr_reactive_record_t);
+    if((count&&bytes/count!=sizeof(fr_reactive_record_t))||bytes>SIZE_MAX-HEADER_WORDS*4u) return false;
+    *out=bytes+HEADER_WORDS*4u;return true;
+}
 bool fr_reactive_snapshot_encode(const fr_reactive_record_t *records,uint32_t count,uint64_t next,
     uint8_t *bytes,size_t capacity,size_t *written,char *err,uint32_t cap) {
-    (void)records;(void)count;(void)next;(void)bytes;(void)capacity;(void)written;(void)err;(void)cap;return false;
+    size_t total=0;
+    if(!bytes||!written||(!records&&count)||!fr_reactive_snapshot_size(count,&total)||capacity<total)
+        return error(err,cap,"Invalid or insufficient reactive packet destination");
+    size_t payload=total-HEADER_WORDS*4u;
+    fr_reactive_record_t *copy=payload?malloc(payload):NULL;
+    if(payload&&!copy) return error(err,cap,"Cannot stage reactive packet");
+    if(payload) memcpy(copy,records,payload);
+    if(!records_valid(copy,count,next,err,cap)) {free(copy);return false;}
+    uint32_t header[HEADER_WORDS]={0x31535246u,FR_REACTIVE_STATE_ABI,FR_REACTIVE_STATE_WORDS,
+        FR_REACTIVE_OWNER_WORDS,count,0,(uint32_t)next,(uint32_t)(next>>32),0,0};
+    encode(bytes,header,HEADER_WORDS);
+    for(uint32_t i=0;i<count;i++) {
+        uint32_t words[RECORD_WORDS];memcpy(words,copy+i,sizeof(words));
+        encode(bytes+HEADER_WORDS*4u+(size_t)i*sizeof(*copy),words,RECORD_WORDS);
+    }
+    free(copy);
+    uint64_t hash=hash_bytes(UINT64_C(14695981039346656037),bytes,8u*4u);
+    hash=hash_bytes(hash,bytes+HEADER_WORDS*4u,payload);
+    header[8]=(uint32_t)hash;header[9]=(uint32_t)(hash>>32);encode(bytes,header,HEADER_WORDS);
+    *written=total;return true;
 }
 bool fr_reactive_snapshot_decode(const uint8_t *bytes,size_t length,fr_reactive_record_t *records,
     uint32_t capacity,uint32_t *count,uint64_t *next,uint32_t *required,char *err,uint32_t cap) {
-    (void)bytes;(void)length;(void)records;(void)capacity;(void)count;(void)next;(void)required;(void)err;(void)cap;return false;
+    if(!bytes||length<HEADER_WORDS*4u||!count||!next||!required||(!records&&capacity))
+        return error(err,cap,"Invalid reactive packet restore request");
+    uint32_t header[HEADER_WORDS];decode(header,bytes,HEADER_WORDS);size_t total=0;
+    if(header[0]!=0x31535246u||header[1]!=FR_REACTIVE_STATE_ABI||header[2]!=FR_REACTIVE_STATE_WORDS||
+       header[3]!=FR_REACTIVE_OWNER_WORDS||header[5]!=0||!fr_reactive_snapshot_size(header[4],&total))
+        return error(err,cap,"Unsupported/corrupt reactive packet header");
+    if(length!=total) return error(err,cap,"Reactive packet length mismatch");
+    size_t payload=total-HEADER_WORDS*4u;
+    uint64_t hash=hash_bytes(UINT64_C(14695981039346656037),bytes,8u*4u);
+    hash=hash_bytes(hash,bytes+HEADER_WORDS*4u,payload);
+    if(hash!=((uint64_t)header[8]|((uint64_t)header[9]<<32))) return error(err,cap,"Reactive packet checksum mismatch");
+    if(header[4]>capacity) {*required=header[4];return error(err,cap,"Reactive packet requires more record capacity");}
+    fr_reactive_record_t *copy=payload?malloc(payload):NULL;
+    if(payload&&!copy) return error(err,cap,"Cannot stage reactive packet restore");
+    for(uint32_t i=0;i<header[4];i++) {
+        uint32_t words[RECORD_WORDS];decode(words,bytes+HEADER_WORDS*4u+(size_t)i*sizeof(*copy),RECORD_WORDS);
+        memcpy(copy+i,words,sizeof(words));
+    }
+    uint64_t restored_next=(uint64_t)header[6]|((uint64_t)header[7]<<32);
+    if(!records_valid(copy,header[4],restored_next,err,cap)) {free(copy);return false;}
+    if(payload) memcpy(records,copy,payload);
+    free(copy);*count=header[4];*next=restored_next;*required=header[4];return true;
 }

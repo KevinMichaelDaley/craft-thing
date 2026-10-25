@@ -1710,3 +1710,7 @@ $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv: include
 build/reactive_packet_tests: tests/fire/reactive_packet_tests.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_state.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(REACTIVE_STATE_SRC) -o $@ -lm
+.PHONY: test_reactive_packets
+test: test_reactive_packets
+test_reactive_packets: build/reactive_packet_tests
+	./build/reactive_packet_tests

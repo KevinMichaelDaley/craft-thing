@@ -51,3 +51,7 @@ GPU arena foundation GREEN:4 Intel core/sync-validated cases pass for freed-slot
 **2026-10-25T01:45:49Z**
 
 Full-width arena addressing GREEN:256 Intel GPU arithmetic cases now match uint64 reference values, including carry and high index bits; the RED request-address stub had112 errors. Request storage uses BDA rather than a large storage-buffer descriptor, and all4 arena rollback/reuse/update cases still pass with core/sync validation. The first address harness attempt used the minimal probe default buffer and crashed its process; fixed its explicit8192-word allocation plus compile-time output bounds before the valid RED/GREEN runs. No computed test address is dereferenced. Live admission integration is next.
+
+**2026-10-25T02:05:16Z**
+
+Embedded packet codec GREEN:4 new CPU cases pass for canonical bytes identical to the existing FRS1 file codec, immutable input, transactional capacity/corruption/new-version/typed-owner rejection and empty ambient packets. The9 existing parcel/file-codec cases also pass with zero compiler warnings. These memory packets are ready to embed in atomic chunk/structure formats; actual format integration is still required.
