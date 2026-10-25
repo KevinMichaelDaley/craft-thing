@@ -9,6 +9,17 @@ SPEC.loader.exec_module(TRACE)
 
 
 class SmokeTraceTests(unittest.TestCase):
+    def test_finish_and_commit_are_gpu_work_not_unexplained_frame_time(self):
+        rows = TRACE.frames([
+            "Acoustic GPU init4 pressure-group3 residual0.5 ms\n",
+            "Acoustic GPU tail finish2 commit1 ms\n",
+            "app-frame,9,15.0ms\n",
+        ])
+        self.assertAlmostEqual(rows[0]["finish_ms"], 2.)
+        self.assertAlmostEqual(rows[0]["commit_ms"], 1.)
+        self.assertAlmostEqual(rows[0]["gpu_ms"], 10.5)
+        self.assertAlmostEqual(rows[0]["remaining_ms"], 4.5)
+
     def test_groups_accumulate_until_each_presented_frame(self):
         lines = [
             "Acoustic GPU init0.5 pressure-group2.0 residual0.1 ms\n",
