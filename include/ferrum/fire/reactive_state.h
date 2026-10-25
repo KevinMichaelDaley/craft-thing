@@ -2,6 +2,7 @@
 #define FERRUM_FIRE_REACTIVE_STATE_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "dungeoncraft/chunk.h"
@@ -88,5 +89,17 @@ bool fr_reactive_snapshot_read(const char *path, fr_reactive_record_t *records,
                                 uint32_t capacity, uint32_t *count,
                                 uint64_t *next_parcel_id, uint32_t *required_count,
                                 char *err_buf, uint32_t err_cap);
+/** Size of the canonical FRS1 packet, including its versioned header. */
+bool fr_reactive_snapshot_size(uint32_t count,size_t *out_bytes);
+/** Encode an embeddable packet without modifying input records. Invalid data,
+ * allocation failure or insufficient capacity leaves bytes/written untouched. */
+bool fr_reactive_snapshot_encode(const fr_reactive_record_t *records,uint32_t count,
+    uint64_t next_parcel_id,uint8_t *bytes,size_t capacity,size_t *written,
+    char *err_buf,uint32_t err_cap);
+/** Decode an embedded packet transactionally. Capacity failure reports the
+ * required record count; corrupt/newer packets never publish partial state. */
+bool fr_reactive_snapshot_decode(const uint8_t *bytes,size_t length,
+    fr_reactive_record_t *records,uint32_t capacity,uint32_t *count,
+    uint64_t *next_parcel_id,uint32_t *required_count,char *err_buf,uint32_t err_cap);
 
 #endif

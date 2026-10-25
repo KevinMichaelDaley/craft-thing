@@ -66,7 +66,9 @@ GLSLANG ?= glslangValidator
 
 GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/broadphase_gpu.o build/contact_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
 GPU_OBJ += build/runtime_body_gpu.o build/runtime_geometry_gpu.o build/body_address_gpu.o build/body_storage_gpu.o
-GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o
+GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o
+build/reactive_arena_gpu.o: src/vulkan/reactive_arena_gpu.c src/vulkan/reactive_arena_gpu.h include/dungeoncraft/reactive_arena_layout.h include/dungeoncraft/reactive_state_layout.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/reactive_state.o build/reactive_snapshot.o build/reactive_material.o
 build/reactive_state.o: src/fire/reactive_state.c include/ferrum/fire/reactive_state.h include/dungeoncraft/reactive_state_layout.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
@@ -1702,3 +1704,9 @@ build/diagnostics/reactive_address_probe.spv: tests/vulkan/reactive_address_prob
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/reactive_address_gpu_tests: tests/vulkan/reactive_address_gpu_tests.c tests/vulkan/body_probe_fixture.h tools/diagnostics/vulkan_probe.c build/diagnostics/reactive_address_probe.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ -lvulkan
+$(GPU_OBJ): build/shaders/reactive_arena.comp.spv
+build/reactive_gpu.o: src/vulkan/reactive_arena_gpu.h
+$(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv: include/dungeoncraft/reactive_arena_layout.h shaders/reactive/address.glsl
+build/reactive_packet_tests: tests/fire/reactive_packet_tests.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_state.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(REACTIVE_STATE_SRC) -o $@ -lm

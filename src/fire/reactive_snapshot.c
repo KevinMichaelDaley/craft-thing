@@ -143,3 +143,12 @@ bool fr_reactive_snapshot_read(const char *path,fr_reactive_record_t *records,ui
     if(bytes) memcpy(records,copy,bytes);
     free(copy);*count=header[4];*next=restored_next;*required=header[4];return true;
 }
+bool fr_reactive_snapshot_size(uint32_t count,size_t *out) {(void)count;(void)out;return false;}
+bool fr_reactive_snapshot_encode(const fr_reactive_record_t *records,uint32_t count,uint64_t next,
+    uint8_t *bytes,size_t capacity,size_t *written,char *err,uint32_t cap) {
+    (void)records;(void)count;(void)next;(void)bytes;(void)capacity;(void)written;(void)err;(void)cap;return false;
+}
+bool fr_reactive_snapshot_decode(const uint8_t *bytes,size_t length,fr_reactive_record_t *records,
+    uint32_t capacity,uint32_t *count,uint64_t *next,uint32_t *required,char *err,uint32_t cap) {
+    (void)bytes;(void)length;(void)records;(void)capacity;(void)count;(void)next;(void)required;(void)err;(void)cap;return false;
+}
