@@ -47,6 +47,14 @@ static bool initialize(dc_gpu_t *g,char *err,uint32_t cap) {
     fr_gpu_reactive_bind_work(g,g->runtime_bodies->work.mapped);g->descriptor_revision++;
     return true;
 }
+static bool particle_storage(dc_gpu_t *g,char *err,uint32_t cap) {
+    struct fr_reactive_gpu *r=g->reactive;
+    if(r->particles.buffer) return true;
+    VkDeviceSize bank=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_MPM_PARTICLES_PER_CHUNK*8u;
+    if(!dc_gpu_address_buffer_create(g,bank*2u,true,&r->particles,err,cap)) return false;
+    uint32_t *h=r->root.mapped;put_address(h+14,r->particles.address);put_address(h+16,r->particles.address+bank);
+    g->descriptor_revision++;return true;
+}
 static bool grow_entries(dc_gpu_t *g,char *err,uint32_t cap) {
     struct fr_reactive_gpu *r=g->reactive;uint32_t *h=r->root.mapped;
     if(h[3]<h[2]) return true;
@@ -122,6 +130,7 @@ bool fr_gpu_reactive_seed_cell(dc_gpu_t *g,uint32_t slot,uint32_t local,
     const uint32_t *registry=dc_gpu_structural_data(g)+DC_STRUCTURAL_HEADER_WORDS+slot*8u;
     if(!registry[5]) return error(err,cap,"Reactive cell owner is not resident");
     if(!initialize(g,err,cap)) return false;
+    if(state->material==DC_MATERIAL_LEAVES&&!particle_storage(g,err,cap)) return false;
     dc_chunk_coord_t coord;memcpy(&coord,registry,sizeof(coord));
     fr_reactive_owner_t owner=fr_reactive_cell_owner(coord,local);
     uint32_t *handle=(uint32_t *)g->reactive->cells.mapped+((size_t)slot*4096u+local)*2u;
@@ -181,12 +190,7 @@ bool fr_gpu_reactive_seed_particle(dc_gpu_t *g,uint32_t particle,
         return error(err,cap,"Reactive particle source is absent or has another material");
     if(!initialize(g,err,cap)) return false;
     struct fr_reactive_gpu *r=g->reactive;
-    if(!r->particles.buffer) {
-        VkDeviceSize bank=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_MPM_PARTICLES_PER_CHUNK*8u;
-        if(!dc_gpu_address_buffer_create(g,bank*2u,true,&r->particles,err,cap)) return false;
-        uint32_t *h=r->root.mapped;put_address(h+14,r->particles.address);put_address(h+16,r->particles.address+bank);
-        g->descriptor_revision++;
-    }
+    if(!particle_storage(g,err,cap)) return false;
     fr_reactive_owner_t owner={.kind=FR_REACTIVE_OWNER_PARTICLE,.key={p->id_lo,p->id_hi,0,0,0}};
     return admit(g,(uint32_t *)r->particles.mapped+(size_t)particle*2u,&owner,state,err,cap);
 }

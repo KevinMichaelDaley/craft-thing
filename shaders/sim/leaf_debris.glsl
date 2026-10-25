@@ -1,6 +1,7 @@
 /* Leaf emission cooperates across the workgroup. Particle slots are reserved
  * before remnant publication and released if that transaction cannot commit. */
 const uint LEAF_RESERVATION=0x80000000u;
+#include "../reactive/particle_storage.glsl"
 #include "mpm_particle_mirror.glsl"
 #include "leaf_color.glsl"
 shared uint leaf_changed;
@@ -15,6 +16,8 @@ void leaf_reserve(Body source) {
     barrier();
     for(uint pixel=lane;pixel<body_pieces(source);pixel+=gl_WorkGroupSize.x) {
         if(piece_material(source,pixel)!=5u||DC_FRAGMENT_LABEL(pixel)!=0u) continue;
+        uint state_word=source.compound_reserved+pixel_tile_offset(source,pixel/256u)+1u+(pixel%256u)/8u;
+        if(!reactive_leaf_reservation_ready(state_word-color_pool_word(),pixel%8u,color_capacity())) continue;
         ivec2 cell=ivec2(floor(leaf_position(source,pixel)));
         if(any(lessThan(cell,ivec2(0)))||any(greaterThanEqual(cell,ivec2(params.width,params.height)))) continue;
         uint page=pages[uint(cell.y/64)*((params.width+63u)/64u)+uint(cell.x/64)];
@@ -111,6 +114,7 @@ void leaf_finish(Body source,bool committed) {
         particle.grain_fp=DC_LEAF_GRAIN_RADIUS_FP;particle.material=10u;
         particle.flags=leaf_color_pack(color.w>0.?color.rgb:vec3(.08,.3,.025));
         debris_particles[p]=particle;atomicAdd(debris_counts[slot],1u);
+        reactive_leaf_to_particle(color_word-color_pool_word(),pixel%8u,color_capacity(),p,uvec2(particle.id_lo,particle.id_hi));
         atomicExchange(cells[c].x,10u);
         if((p%8192u)<4096u) {
             terrain_colors[c]=vec4(leaf_color_unpack(particle.flags),1.);
