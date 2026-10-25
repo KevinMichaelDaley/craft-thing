@@ -105,6 +105,21 @@ static void test_composed_half_energy_split_matches_independent_two_cell_inverse
     for(uint32_t i=0;i<2;i++) {ASSERT_TRUE(fabs(out[i].energy-energy[i])<1e-7);ASSERT_TRUE(fabs(out[i].momentum[0]-momentum[i])<1e-9);}
     PASS();
 }
+static void test_moving_isobaric_density_contact_does_not_create_pressure_wave(void) {
+    char err[256]={0};enum {WIDTH=512};fr_gas_model_t m=model();fr_gas_state_t input[WIDTH],out[WIDTH];double volume[WIDTH];
+    for(uint32_t i=0;i<WIDTH;i++) {
+        double density=i<WIDTH/2u?1.:2.;input[i]=air(1,0);volume[i]=1.;
+        for(uint32_t k=0;k<5;k++) input[i].species[k]*=density;
+        input[i].momentum[0]=density;input[i].energy=750.+.5*density;
+    }
+    ASSERT_TRUE(fr_gas_large_cfl_reference_step(&m,input,volume,WIDTH,1,1,out,err,sizeof(err)));
+    for(uint32_t i=192;i<320;i++) {
+        fr_gas_thermo_t t;ASSERT_TRUE(fr_gas_thermodynamics(&m,out+i,1,&t,err,sizeof(err)));
+        ASSERT_TRUE(fabs(t.pressure-300.)<.1);
+        ASSERT_TRUE(fabs(out[i].momentum[0]/t.mass-1.)<.01);
+    }
+    PASS();
+}
 int main(void) {
     RUN(test_cfl_four_matches_independent_geometric_packet_and_closed_budgets);
     RUN(test_two_dimensional_large_cfl_keeps_walls_species_energy_and_pigment);
@@ -114,5 +129,6 @@ int main(void) {
     RUN(test_balanced_counterflow_preserves_uniform_density_energy_and_exact_pair_momentum);
     RUN(test_fractional_energy_advection_matches_independent_two_cell_inverse);
     RUN(test_composed_half_energy_split_matches_independent_two_cell_inverse);
+    RUN(test_moving_isobaric_density_contact_does_not_create_pressure_wave);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
