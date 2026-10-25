@@ -152,16 +152,49 @@ static void test_explicit_new_run_resets_source_and_wetness_without_reusing_old_
     ASSERT_TRUE(fabs(wood.state.thermal_energy/fr_reactive_state_heat_capacity(&wood.state)-FR_THERMAL_AMBIENT_K)<1e-3);
     ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err))&&dc_level_view_destroy(view,err,sizeof(err)));PASS();
 }
+static void test_camera_unload_reload_preserves_liquid_heat_without_recharging_source(void) {
+    char err[256]={0},directory[]="build/thermal_camera_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view=dc_level_view_create(directory,314,err,sizeof(err));ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_wait_visible(view,120000,err,sizeof(err))&&dc_level_view_setup_heat_bench(view,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view,140,188,0,DC_MATERIAL_WATER,err,sizeof(err)));
+    uint32_t slot=0;ASSERT_TRUE(dc_chunk_table_find(&view->table,(dc_chunk_coord_t){2,0},&slot));
+    const uint32_t cell=60u*64u+12u;
+    ASSERT_TRUE(fr_thermal_gpu_seed_water(view->gpu,slot,cell,12.5f,err,sizeof(err)));
+    float before[4096],after[4096];fr_thermal_probe_t source_before,source_after;
+    ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(view->gpu,slot,before,4096,err,sizeof(err)));
+    ASSERT_TRUE(fr_thermal_gpu_source_state(view->gpu,&source_before,err,sizeof(err)));
+    for(uint32_t i=0;i<20;i++) ASSERT_TRUE(dc_level_view_move(view,1,0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view,120000,err,sizeof(err)));
+    ASSERT_TRUE(!dc_chunk_table_find(&view->table,(dc_chunk_coord_t){2,0},&slot));
+    for(uint32_t i=0;i<20;i++) ASSERT_TRUE(dc_level_view_move(view,-1,0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view,120000,err,sizeof(err)));
+    ASSERT_TRUE(dc_chunk_table_find(&view->table,(dc_chunk_coord_t){2,0},&slot));
+    ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(view->gpu,slot,after,4096,err,sizeof(err)));
+    ASSERT_TRUE(memcmp(before,after,sizeof(before))==0);
+    ASSERT_TRUE(fr_thermal_gpu_source_state(view->gpu,&source_after,err,sizeof(err)));
+    ASSERT_TRUE(memcmp(&source_before,&source_after,sizeof(source_before))==0);
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    ASSERT_TRUE(dc_gpu_download_chunk(view->gpu,slot,chunk,err,sizeof(err)));ASSERT_EQ(chunk->cells[cell].fluid_mass,65536u);free(chunk);
+    ASSERT_TRUE(dc_level_view_heat_probe(view,140,188,false)&&dc_level_view_heat_overlay(view,1)&&dc_level_view_tick(view,err,sizeof(err)));
+    uint32_t *pixels=malloc(480u*270u*4u);ASSERT_TRUE(pixels&&dc_level_view_pixels(view,pixels,480u*270u,err,sizeof(err)));
+    mkdir("build/screenshots",0777);ASSERT_TRUE(bench_capture(pixels,"build/screenshots/thermal_bench_stream_resume.bmp"));free(pixels);
+    ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));PASS();
+}
 int main(int argc,char **argv) {
     setvbuf(stdout,NULL,_IOLBF,0);
     if(argc==2&&strcmp(argv[1],"--pour")==0) {
         RUN(test_placement_water_pour_cools_and_wets_wood_with_closed_reference_budgets);
         printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
     }
-    if(argc!=1) {fprintf(stderr,"Usage: %s [--pour]\n",argv[0]);return 2;}
+    if(argc==2&&strcmp(argv[1],"--stream")==0) {
+        RUN(test_camera_unload_reload_preserves_liquid_heat_without_recharging_source);
+        printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
+    }
+    if(argc!=1) {fprintf(stderr,"Usage: %s [--pour|--stream]\n",argv[0]);return 2;}
     RUN(test_interactive_bench_has_finite_sources_wet_control_probe_and_stable_pause);
     RUN(test_placement_water_pour_cools_and_wets_wood_with_closed_reference_budgets);
     RUN(test_reopened_bench_retains_warm_parcels_water_source_and_custom_colors);
     RUN(test_explicit_new_run_resets_source_and_wetness_without_reusing_old_world);
+    RUN(test_camera_unload_reload_preserves_liquid_heat_without_recharging_source);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
