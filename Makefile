@@ -1759,6 +1759,8 @@ build/gas_reference_tests: tests/fire/gas_reference_tests.c src/fire/gas.c src/f
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c src/fire/gas_reference.c -o $@ -lm
 build/gas_implicit_tests: tests/fire/gas_implicit_tests.c src/fire/gas.c src/fire/gas_implicit_reference.c src/fire/gas_internal.h include/ferrum/fire/gas.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c src/fire/gas_implicit_reference.c -o $@ -lm
+build/smoke_box_fixture_tests: tests/app/smoke_box_fixture_tests.c src/app/smoke_box.c src/app/smoke_box.h src/fire/gas.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/smoke_box.c src/fire/gas.c -o $@ -lm
 build/gas_display_tests: tests/vulkan/gas_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/fire/gas_reference.c src/fire/gas_implicit_reference.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< src/fire/gas_reference.c src/fire/gas_implicit_reference.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/diagnostics/gas_frame: tools/diagnostics/gas_frame.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
