@@ -79,3 +79,7 @@ Level-view stream wiring GREEN: a native Wayland Vulkan RED exercised actual sch
 **2026-10-25T02:45:05Z**
 
 Chunk slot reuse GREEN: native RED confirmed a new physical chunk inherited the previous chunk CELL heat/oil. Validated cold uploads now preflight and retire the old CELL/PARTICLE handles in parallel before mutating physical data; allocation/resource failure leaves the old upload source intact. All4 GPU chunk cases and the actual level-view worker reload case pass on Wayland Vulkan with core/sync validation (20 presented frames). Next: DCS body and pending-chunk channels.
+
+**2026-10-25T02:47:38Z**
+
+DCS checkpoint RED confirmed exact body and pending-negative-chunk state are currently lost on reload (2 native Vulkan cases fail). Shared FRW1 archive codec now passes3 CPU cases for one global identity counter across body/chunk channels, cross-channel duplicate identity/counter rollback rejection, empty high-water persistence and corrupt/future/truncated rollback. This codec alone does not complete DCS integration; both graphical checkpoint cases remain RED until the transaction is wired.
