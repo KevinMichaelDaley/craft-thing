@@ -75,6 +75,22 @@ and five reuse cycles of a 613-cell brush; sixteen existing arena, ownership,
 brush, liquid and bench cases also pass without Vulkan validation errors. This
 is the bench's wood/stone admission subset, not all future materials or owners.
 
+Hover feedback now reports temperature in kelvin and material-relative wetness.
+The visual adapter (`thermal_feedback_gpu.c` / `thermal_overlay.comp`) consumes
+read-only thermal snapshots and the finite probe reservoir. The solver no longer
+binds a framebuffer. A cold single-point inspection API is diagnostic only;
+gameplay draws the values directly on the GPU. Actual captures show 317.1 K /
+100.0% for heated water and about 296.0 K / 0.0% for the probed dry bench wood.
+The saturated test fixture derives water quantity from the profile's actual
+moisture capacity (wood is 0.5, not the mistaken initial 0.35 assumption).
+
+`tools/with-vulkan make test_heat_bench` builds/runs six reference checks and
+twelve displayed Vulkan checks serially. These visual cases also belong to
+`test_ui` and `test_quarter_native`; the CPU reference belongs to `test`.
+All 18 pass with core/synchronization validation in
+`build/thermal_feedback_module_display.log`. Performance and the remaining
+ownership/edit/save interactions are still acceptance work, not waived gates.
+
 Remaining in this milestone: complete liquid regression/interaction coverage,
 temperature/wetness inspection, natural edits/owner admission and the persistence
 the exposed scene needs, plus reference budgets and passing displayed timing.

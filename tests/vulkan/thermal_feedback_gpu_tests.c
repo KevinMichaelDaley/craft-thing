@@ -3,13 +3,15 @@
 #undef main
 #include <math.h>
 #include <sys/stat.h>
+#include "ferrum/fire/material_profile.h"
 #include "ferrum/fire/thermal_gpu.h"
 
 static bool feedback_fixture(dc_gpu_t **g,fr_reactive_state_t *wood,char *err,uint32_t cap) {
     dc_chunk_t *c=calloc(1,sizeof(*c));if(!c) return false;
+    uint32_t bound_water=(uint32_t)llround(39322.*fr_reactive_profile(DC_MATERIAL_WOOD)->moisture_capacity);
     c->cells[20*64+20].material=DC_MATERIAL_WOOD;c->cells[20*64+21].fluid_mass=65536;
     bool okay=context(g,err,cap)&&dc_gpu_upload_chunk(*g,0,c,err,cap)&&dc_gpu_set_page(*g,0,0,0,err,cap)&&
-        fr_reactive_state_default(DC_MATERIAL_WOOD,39322,13763,350,71,wood,err,cap)&&
+        fr_reactive_state_default(DC_MATERIAL_WOOD,39322,bound_water,350,71,wood,err,cap)&&
         fr_gpu_reactive_seed_cell(*g,0,20*64+20,wood,err,cap)&&fr_thermal_gpu_enable(*g,err,cap)&&
         fr_thermal_gpu_seed_water(*g,0,20*64+21,100,err,cap);
     free(c);return okay;
@@ -20,6 +22,7 @@ static void test_single_point_inspection_matches_real_solid_and_liquid_inventori
     fr_thermal_inspection_t info;
     ASSERT_TRUE(fr_thermal_gpu_inspect(g,20,20,&info,err,sizeof(err)));
     ASSERT_EQ(info.occupied,1u);ASSERT_EQ(info.material,DC_MATERIAL_WOOD);
+    printf("Wood hover: %.6fK wetness%.6f energy%.6f capacity%.6f\n",info.temperature_K,info.wetness,info.thermal_energy,info.heat_capacity);
     ASSERT_TRUE(fabsf(info.temperature_K-350.f)<1e-3f&&fabsf(info.wetness-1.f)<1e-4f);
     ASSERT_TRUE(fabsf(info.thermal_energy-wood.thermal_energy)<1e-4f);
     ASSERT_TRUE(fabs(info.heat_capacity-fr_reactive_state_heat_capacity(&wood))<1e-5);

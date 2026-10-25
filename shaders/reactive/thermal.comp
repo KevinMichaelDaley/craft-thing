@@ -12,10 +12,9 @@ layout(set=0,binding=1,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=2,std430) readonly buffer Profiles {uint profiles[];};
 layout(set=0,binding=3,std430) buffer Samples {vec4 samples[];};
 layout(set=0,binding=4,std430) buffer Fluxes {vec4 fluxes[];};
-layout(set=0,binding=5,std430) buffer Pixels {uint pixels[];};
-layout(set=0,binding=6,std430) buffer Probe {float probe_excess,probe_capacity;uint probe_index,probe_active;};
-layout(set=0,binding=7,std430) buffer Cells {uvec2 cells[];};
-layout(set=0,binding=8,std430) buffer WaterEnergy {float water_energy[];};
+layout(set=0,binding=5,std430) buffer Probe {float probe_excess,probe_capacity;uint probe_index,probe_active;};
+layout(set=0,binding=6,std430) buffer Cells {uvec2 cells[];};
+layout(set=0,binding=7,std430) buffer WaterEnergy {float water_energy[];};
 layout(push_constant) uniform Params {uint width,height,phase,seconds,view_x,view_y,mode,unused;} params;
 layout(buffer_reference,std430,buffer_reference_align=4) buffer Words {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=8) readonly buffer Handles {uvec2 values[];};
@@ -54,11 +53,11 @@ vec4 metadata_at(uint index) {
     uvec2 handle=handle_at(index);
     if(valid(handle)) {
         Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));uint at=FR_ENTRY_STATE,m=e.words[at];
-        return vec4(uintBitsToFloat(1u),uintBitsToFloat(e.words[at+12u]),0.,
+        return vec4(uintBitsToFloat(1u),uintBitsToFloat(e.words[at+12u]),uintBitsToFloat(m),
             round(float(e.words[at+8u])*coefficient(m,19u)));
     }
     uint atlas=atlas_at(index);
-    return atlas==0xffffffffu||cells[atlas].y==0u?vec4(0):vec4(uintBitsToFloat(2u),uintBitsToFloat(cells[atlas].y),0.,0.);
+    return atlas==0xffffffffu||cells[atlas].y==0u?vec4(0):vec4(uintBitsToFloat(2u),uintBitsToFloat(cells[atlas].y),uintBitsToFloat(3u),0.);
 }
 float temperature(vec4 node,uint index) {
     return node.x/node.y+(floatBitsToUint(samples[index+params.width*params.height].x)==2u?float(FR_THERMAL_AMBIENT_K):0.);
@@ -85,10 +84,6 @@ float exchange(vec4 a,vec4 b) {
     float requested=conductance*difference*uintBitsToFloat(params.seconds);
     float bound=min(a.y,b.y)*abs(difference)/float(FR_THERMAL_NEIGHBORS);
     return sign(requested)*min(abs(requested),bound);
-}
-vec3 temperature_color(float temperature) {
-    float t=clamp((temperature-float(FR_THERMAL_AMBIENT_K))/(float(FR_THERMAL_PROBE_K)-float(FR_THERMAL_AMBIENT_K)),0.,1.);
-    return t<.5?mix(vec3(.025,.12,.65),vec3(.05,.85,.7),t*2.):mix(vec3(.05,.85,.7),vec3(1.,.13,.025),(t-.5)*2.);
 }
 void main() {
     uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
@@ -132,17 +127,6 @@ void main() {
             Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
             e.words[FR_ENTRY_STATE+FR_STATE_ENERGY]=floatBitsToUint(energy);samples[index].x=energy;
         } else {uint atlas=atlas_at(index);if(atlas!=0xffffffffu) water_energy[atlas]=energy;}
-    }
-    if(params.phase==3u) {
-        vec4 node=samples[index];
-        if(node.y>0.) pixels[index]=packUnorm4x8(vec4(params.mode==2u?mix(vec3(.32),vec3(.02,.42,1.),node.w):temperature_color(temperature(node,index)),1.));
-        if(x>=params.view_x+10u&&x<params.view_x+150u&&y>=params.view_y+10u&&y<params.view_y+18u)
-            pixels[index]=packUnorm4x8(vec4(params.mode==2u?mix(vec3(.32),vec3(.02,.42,1.),float(x-params.view_x-10u)/139.):
-                temperature_color(float(FR_THERMAL_AMBIENT_K)+float(x-params.view_x-10u)/139.*(float(FR_THERMAL_PROBE_K)-float(FR_THERMAL_AMBIENT_K))),1.));
-        if(x>=params.view_x+10u&&x<params.view_x+150u&&y>=params.view_y+24u&&y<params.view_y+29u) {
-            float charge=probe_excess/(float(FR_THERMAL_PROBE_CAPACITY)*(float(FR_THERMAL_PROBE_K)-float(FR_THERMAL_AMBIENT_K)));
-            pixels[index]=packUnorm4x8(vec4(float(x-params.view_x-10u)/139.<charge?vec3(.9,.55,.08):vec3(.12),1.));
-        }
     }
     if(params.phase==4u&&index==0u&&probe_active!=0u) {
         vec4 target=sample_at(probe_index);

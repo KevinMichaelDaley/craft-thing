@@ -63,3 +63,7 @@ Admission REDb12f850 now locally GREEN3/3 actual Wayland/core+sync: newly painte
 **2026-10-25T04:57:10Z**
 
 Admission compatibility complete:16 existing cases pass (arena4, ownership6, brush1, displayed liquid4, displayed bench1) with core/sync validation and no errors; new admission3 also pass, build zero warnings. The prior718+2 full log is the liquid-stage boundary, not a claim that the newly changed admission source already passed a second full run. Next visible work is inspection/labels and water interaction capture before any broader prerequisite expansion.
+
+**2026-10-25T05:10:54Z**
+
+Feedback RED42c67e8 now GREEN: permanent make test_heat_bench passes18 total (6 CPU reference +12 actual displayed Vulkan), zero core/sync validation errors. GPU hover numbers match solid/liquid inventory and change with target while pause preserves exact payload/water heat; actual captures inspected (water317.1K/100%, dry probed wood296.0K/0%). Renderer adapter is separate and solver no longer binds framebuffer. Fixture saturation amount corrected from mistaken0.35 assumption to actual wood moisture_capacity0.5;100% expectation/tolerances unchanged. Visual cases added to test_ui/test_quarter_native, reference6 to test. Next water-pour scene capture and fresh graphical timings; module still open.

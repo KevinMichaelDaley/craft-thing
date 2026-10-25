@@ -6,10 +6,11 @@
 #include "ferrum/fire/material_profile.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "reactive_storage_gpu.h"
+#include "thermal_feedback_gpu.h"
 #include "thermal_gpu_internal.h"
 
 struct fr_thermal_gpu {
-    fr_renderer_compute_t compute;
+    fr_renderer_compute_t compute,feedback;
     dc_gpu_address_buffer_t profiles,samples,fluxes,probe,water;
     uint32_t groups_x,groups_y,profile_count,overlay;
     bool probe_active;
@@ -21,6 +22,7 @@ static bool error(char *err,uint32_t cap,const char *message) {
 static void destroy(dc_gpu_t *g,struct fr_thermal_gpu *t) {
     if(!t) return;
     fr_renderer_compute_destroy(g,&t->compute);
+    fr_renderer_compute_destroy(g,&t->feedback);
     dc_gpu_address_buffer_destroy(g,&t->profiles);dc_gpu_address_buffer_destroy(g,&t->samples);
     dc_gpu_address_buffer_destroy(g,&t->fluxes);dc_gpu_address_buffer_destroy(g,&t->probe);
     dc_gpu_address_buffer_destroy(g,&t->water);free(t);
@@ -50,13 +52,14 @@ bool fr_thermal_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
     ((float *)t->probe.mapped)[1]=FR_THERMAL_PROBE_CAPACITY;t->overlay=1;
     for(uint32_t i=0;i<t->profile_count;i++) memcpy((fr_reactive_profile_t *)t->profiles.mapped+i,fr_reactive_profile(i),sizeof(fr_reactive_profile_t));
     memset(t->water.mapped,0,(size_t)t->water.bytes);
-    VkDescriptorBufferInfo buffers[9]={{g->reactive->arena.root.buffer,0,g->reactive->arena.root.bytes},
+    VkDescriptorBufferInfo buffers[8]={{g->reactive->arena.root.buffer,0,g->reactive->arena.root.bytes},
         {g->page_buffer,0,VK_WHOLE_SIZE},{t->profiles.buffer,0,t->profiles.bytes},
-        {t->samples.buffer,0,t->samples.bytes},{t->fluxes.buffer,0,t->fluxes.bytes},{g->cells,0,VK_WHOLE_SIZE},
+        {t->samples.buffer,0,t->samples.bytes},{t->fluxes.buffer,0,t->fluxes.bytes},
         {t->probe.buffer,0,t->probe.bytes},{g->chunk_buffer,0,VK_WHOLE_SIZE},{t->water.buffer,0,t->water.bytes}};
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"thermal pipeline begin\n");
-    if(!fr_renderer_compute_init(g,&t->compute,buffers,9,32,"build/shaders/thermal.comp.spv",err,cap)) {destroy(g,t);return false;}
+    if(!fr_renderer_compute_init(g,&t->compute,buffers,8,32,"build/shaders/thermal.comp.spv",err,cap)) {destroy(g,t);return false;}
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"thermal pipeline end\n");
+    if(!fr_thermal_feedback_init(g,&t->feedback,buffers[3],buffers[5],err,cap)) {destroy(g,t);return false;}
     uint32_t *control=g->thermal_control_mapped;
     control[2]=(uint32_t)t->water.address;control[3]=(uint32_t)(t->water.address>>32);
     control[4]=DC_GPU_CHUNK_SLOTS*4096u;control[0]=DC_THERMAL_WATER_MAGIC;
@@ -66,7 +69,7 @@ bool fr_thermal_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
 }
 static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
     struct fr_thermal_gpu *t=g->thermal;uint32_t bits=0;memcpy(&bits,&seconds,sizeof(bits));
-    uint32_t push[8]={g->width,g->height,mode,bits,g->view_x,g->view_y,t->overlay,t->profile_count};
+    uint32_t push[8]={g->width,g->height,mode,bits,0,0,0,t->profile_count};
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
@@ -83,7 +86,8 @@ void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
 }
 void fr_thermal_record_overlay(dc_gpu_t *g) {
     if(!g->thermal||g->thermal->overlay==0u) return;
-    phase(g,0,0);phase(g,3,0);
+    phase(g,0,0);fr_thermal_feedback_record(g,&g->thermal->feedback,g->thermal->overlay,
+        g->thermal->groups_x,g->thermal->groups_y);
 }
 bool fr_thermal_gpu_probe(dc_gpu_t *g,uint32_t x,uint32_t y,bool active) {
     if(!g||!g->thermal||x>=g->width||y>=g->height) return false;
@@ -96,7 +100,24 @@ bool fr_thermal_gpu_overlay(dc_gpu_t *g,uint32_t mode) {
 }
 bool fr_thermal_gpu_inspect(dc_gpu_t *g,uint32_t x,uint32_t y,
     fr_thermal_inspection_t *out,char *err,uint32_t cap) {
-    (void)g;(void)x;(void)y;(void)out;(void)err;(void)cap;return false;
+    if(!g||!g->thermal||!out||x>=g->width||y>=g->height)
+        return error(err,cap,"Invalid thermal inspection point");
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g))
+        return error(err,cap,"Cannot begin thermal inspection snapshot");
+    phase(g,0,0);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
+    if(!fr_renderer_submit(g)) return error(err,cap,"Cannot complete thermal inspection snapshot");
+    uint32_t index=y*g->width+x,count=g->width*g->height;
+    const float *node=(const float *)g->thermal->samples.mapped+index*4u;
+    const uint32_t *metadata=(const uint32_t *)g->thermal->samples.mapped+(index+count)*4u;
+    fr_thermal_inspection_t value={0};
+    if(node[1]>0.f) {
+        value.occupied=1;value.material=metadata[2];value.heat_capacity=node[1];value.wetness=node[3];
+        value.thermal_energy=node[0]+(metadata[0]==2u?node[1]*FR_THERMAL_AMBIENT_K:0.);
+        value.temperature_K=value.thermal_energy/value.heat_capacity;
+    }
+    *out=value;return true;
 }
 bool fr_thermal_prepare_paint(dc_gpu_t *g,uint32_t x,uint32_t y,uint32_t radius,
     uint32_t material,char *err,uint32_t cap) {

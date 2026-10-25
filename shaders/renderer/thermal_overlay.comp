@@ -1,0 +1,78 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "../../include/dungeoncraft/thermal_parameters.h"
+layout(local_size_x=64) in;
+layout(set=0,binding=0,std430) readonly buffer Samples {vec4 samples[];};
+layout(set=0,binding=1,std430) buffer Pixels {uint pixels[];};
+layout(set=0,binding=2,std430) readonly buffer Probe {float probe_excess,probe_capacity;uint probe_index,probe_active;};
+layout(push_constant) uniform Params {uint width,height,view_x,view_y,mode,pad0,pad1,pad2;} params;
+float temperature(uint index) {
+    vec4 node=samples[index];
+    return node.x/node.y+(floatBitsToUint(samples[index+params.width*params.height].x)==2u?float(FR_THERMAL_AMBIENT_K):0.);
+}
+vec3 temperature_color(float value) {
+    float t=clamp((value-float(FR_THERMAL_AMBIENT_K))/(float(FR_THERMAL_PROBE_K)-float(FR_THERMAL_AMBIENT_K)),0.,1.);
+    return t<.5?mix(vec3(.025,.12,.65),vec3(.05,.85,.7),t*2.):mix(vec3(.05,.85,.7),vec3(1.,.13,.025),(t-.5)*2.);
+}
+/* Three-by-five glyphs, scaled at presentation independently of the solver. */
+uint glyph(uint c) {
+    const uint digits[10]=uint[10](
+        7u|(5u<<3)|(5u<<6)|(5u<<9)|(7u<<12),2u|(6u<<3)|(2u<<6)|(2u<<9)|(7u<<12),
+        7u|(1u<<3)|(7u<<6)|(4u<<9)|(7u<<12),7u|(1u<<3)|(7u<<6)|(1u<<9)|(7u<<12),
+        5u|(5u<<3)|(7u<<6)|(1u<<9)|(1u<<12),7u|(4u<<3)|(7u<<6)|(1u<<9)|(7u<<12),
+        7u|(4u<<3)|(7u<<6)|(5u<<9)|(7u<<12),7u|(1u<<3)|(1u<<6)|(1u<<9)|(1u<<12),
+        7u|(5u<<3)|(7u<<6)|(5u<<9)|(7u<<12),7u|(5u<<3)|(7u<<6)|(1u<<9)|(7u<<12));
+    if(c<10u) return digits[c];
+    if(c==10u) return 7u|(2u<<3)|(2u<<6)|(2u<<9)|(2u<<12);
+    if(c==11u) return 7u|(4u<<3)|(6u<<6)|(4u<<9)|(7u<<12);
+    if(c==12u) return 5u|(7u<<3)|(7u<<6)|(5u<<9)|(5u<<12);
+    if(c==13u) return 6u|(5u<<3)|(6u<<6)|(4u<<9)|(4u<<12);
+    if(c==14u) return 5u|(5u<<3)|(6u<<6)|(5u<<9)|(5u<<12);
+    if(c==15u) return 5u|(5u<<3)|(7u<<6)|(7u<<9)|(5u<<12);
+    if(c==16u) return 2u<<12;
+    if(c==17u) return 5u|(1u<<3)|(2u<<6)|(4u<<9)|(5u<<12);
+    if(c==18u) return 7u<<6;
+    return 0u;
+}
+uint character(uint slot,uint heat,uint wet,bool occupied) {
+    if(slot==0u||slot==15u) return 10u;
+    if(slot==1u||slot==14u) return 11u;
+    if(slot==2u) return 12u;if(slot==3u) return 13u;
+    if(slot==10u) return 14u;if(slot==13u) return 15u;
+    if(slot==8u||slot==20u) return 16u;if(slot==22u) return 17u;
+    bool a=slot>=5u&&slot<=9u,b=slot>=17u&&slot<=21u;
+    if(!a&&!b) return 19u;
+    if(!occupied) return 18u;
+    uint value=a?heat:wet,position=slot-(a?5u:17u);
+    if(position==0u) return b&&value<1000u?19u:value/1000u;
+    if(position==1u) return b&&value<100u?19u:(value/100u)%10u;
+    if(position==2u) return (value/10u)%10u;
+    return value%10u;
+}
+void main() {
+    uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
+    if(index>=params.width*params.height) return;
+    uint x=index%params.width,y=index/params.width;vec4 node=samples[index];
+    if(node.y>0.) pixels[index]=packUnorm4x8(vec4(params.mode==2u?mix(vec3(.32),vec3(.02,.42,1.),node.w):temperature_color(temperature(index)),1.));
+    if(x>=params.view_x+10u&&x<params.view_x+150u&&y>=params.view_y+10u&&y<params.view_y+18u) {
+        float fraction=float(x-params.view_x-10u)/139.;
+        pixels[index]=packUnorm4x8(vec4(params.mode==2u?mix(vec3(.32),vec3(.02,.42,1.),fraction):
+            temperature_color(float(FR_THERMAL_AMBIENT_K)+fraction*(float(FR_THERMAL_PROBE_K)-float(FR_THERMAL_AMBIENT_K))),1.));
+    }
+    if(x>=params.view_x+10u&&x<params.view_x+150u&&y>=params.view_y+24u&&y<params.view_y+29u) {
+        float charge=probe_excess/(float(FR_THERMAL_PROBE_CAPACITY)*(float(FR_THERMAL_PROBE_K)-float(FR_THERMAL_AMBIENT_K)));
+        pixels[index]=packUnorm4x8(vec4(float(x-params.view_x-10u)/139.<charge?vec3(.9,.55,.08):vec3(.12),1.));
+    }
+    if(x>=params.view_x+10u&&x<params.view_x+286u&&y>=params.view_y+36u&&y<params.view_y+46u) {
+        uint px=x-params.view_x-10u,py=y-params.view_y-36u;
+        vec4 target=samples[probe_index];bool occupied=target.y>0.;
+        uint heat=occupied?uint(round(clamp(temperature(probe_index)*10.,0.,9999.))):0u;
+        uint wet=uint(round(clamp(target.w,0.,1.)*1000.));
+        uint c=character(px/12u,heat,wet,occupied),column=(px%12u)/2u,row=py/2u;
+        uint bits=((glyph(c)>>(row*3u))&7u)<<1u;
+        const uint m[5]=uint[5](17u,27u,21u,17u,17u),w[5]=uint[5](17u,17u,21u,21u,10u);
+        if(c==12u) bits=m[row];if(c==15u) bits=w[row];
+        bool ink=column<5u&&((bits>>(4u-min(column,4u)))&1u)!=0u;
+        pixels[index]=ink?0xffffffffu:0xff080808u;
+    }
+}
