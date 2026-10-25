@@ -11,6 +11,7 @@ import re
 import sys
 
 GPU = re.compile(r"Acoustic GPU init([\d.]+) pressure-group([\d.]+) residual([\d.]+) ms")
+TAIL = re.compile(r"Acoustic GPU tail finish([\d.]+) commit([\d.]+) ms")
 FRAME = re.compile(r"app-frame,(\d+),([\d.]+)ms")
 ACOUSTIC = re.compile(r"Acoustic dt([\deE.+-]+) batch(\d+) residual([\deE.+-]+).* tiles(\d+) advected(\d+)")
 INTERVAL = re.compile(r"Gas interval dt([\deE.+-]+) accepted(\d+) retries(\d+) submits(\d+) queue([\d.]+) wait([\d.]+) storage(\d+)")
@@ -29,11 +30,15 @@ def counters():
 
 def frames(lines):
     result = []
-    init = pressure = residual = 0.0
+    init = pressure = residual = finish = commit = 0.0
     substeps = submissions = 0
     extra = counters()
     intervals = 0
     for line in lines:
+        match = TAIL.search(line)
+        if match:
+            finish += float(match[1])
+            commit += float(match[2])
         if line.startswith("Gas retry "):
             extra["retry_lines"] += 1
         match = ACOUSTIC.search(line)
@@ -69,15 +74,15 @@ def frames(lines):
         match = FRAME.search(line)
         if match:
             index, total = int(match[1]), float(match[2])
-            gpu = init + pressure + residual
+            gpu = init + pressure + residual + finish + commit
             if not intervals:
                 extra["retries"] = extra["retry_lines"]
                 extra["accepted"] = max(0, substeps-extra["retry_lines"])
             result.append(dict(frame=index, total_ms=total, substeps=substeps,
                                submissions=submissions, init_ms=init,
-                               pressure_ms=pressure, residual_ms=residual,
+                               pressure_ms=pressure, residual_ms=residual, finish_ms=finish, commit_ms=commit,
                                gpu_ms=gpu, remaining_ms=total-gpu, **extra))
-            init = pressure = residual = 0.0
+            init = pressure = residual = finish = commit = 0.0
             substeps = submissions = 0
             extra = counters()
             intervals = 0

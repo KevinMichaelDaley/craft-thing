@@ -131,6 +131,7 @@ static bool submit(dc_gpu_t *g,char *err,uint32_t cap) {
 bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint32_t gy,
     float dt,uint32_t bank,dc_gpu_address_buffer_t *stats,char *err,uint32_t cap) {
     bool trace=getenv("DC_GAS_TRACE")!=NULL&&g->timestamp_bits;
+    uint32_t tail_query=t->large_transport?14u:4u;
     bool matrix_large=t->large_transport||t->practical;
     if(t->matrix_valid&&t->matrix_large!=matrix_large) t->matrix_valid=false;
     uint32_t sweeps=budget("DC_GAS_PRESSURE_SWEEPS",GAS_PRESSURE_SWEEPS),group=budget("DC_GAS_PRESSURE_GROUP",GAS_PRESSURE_GROUP);
@@ -147,7 +148,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(getenv("DC_GAS_COMPARE_ROW_SETUP")) bank|=FR_GAS_COMPARE_ROW_SETUP_BIT;
     if(!t->matrix_valid) bank|=4u;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin acoustic advection");
-    if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,t->large_transport?14u:4u);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);}
+    if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,tail_query+2u);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);}
     if(sparse) indirect_dispatch(g,t,&t->clear_pressure,dt,bank,48);
     barrier(g);
     vkCmdFillBuffer(g->command,t->indirect.buffer,32,4,0);vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
@@ -235,7 +236,9 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         barrier(g);vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
         dispatch(g,&t->final_compact,(tiles+63u)/64u,1u,dt,bank);
         indirect_dispatch(g,t,&t->finish,dt,bank,48);
+        if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,tail_query);
         indirect_dispatch(g,t,&t->commit,dt,bank,48);
+        if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,tail_query+1u);
         if(!submit(g,err,cap)) return false;
         if((bank&FR_GAS_COMPARE_ROW_SETUP_BIT)!=0u) {
             uint32_t *words=stats->mapped;float values[4];memcpy(values,words+FR_GAS_ROW_DIAGONAL_BEFORE_WORD,sizeof(values));
@@ -254,10 +257,13 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
             fprintf(stderr,"Acoustic dt%.9g batch%u residual%.9g error%u tiles%u advected%u sweeps%u group%u large%u\n",dt,batches,residual,
                 ((uint32_t *)stats->mapped)[FR_GAS_ERROR_WORD],((uint32_t *)t->indirect.mapped)[0],((uint32_t *)t->indirect.mapped)[8],batch_sweeps,batch_group,t->large_transport?1u:0u);
         if(trace) {
-            uint64_t times[4];
-            if(vkGetQueryPoolResults(g->device,g->timestamp_pool,0,4,sizeof(times),times,sizeof(uint64_t),VK_QUERY_RESULT_64_BIT)==VK_SUCCESS)
+            uint64_t times[4],tail[2];
+            if(vkGetQueryPoolResults(g->device,g->timestamp_pool,0,4,sizeof(times),times,sizeof(uint64_t),VK_QUERY_RESULT_64_BIT)==VK_SUCCESS) {
                 fprintf(stderr,"Acoustic GPU init%.3f pressure-group%.3f residual%.3f ms\n",(times[1]-times[0])*g->timestamp_period/1e6,
                     (times[2]-times[1])*g->timestamp_period/1e6,(times[3]-times[2])*g->timestamp_period/1e6);
+                if(vkGetQueryPoolResults(g->device,g->timestamp_pool,tail_query,2,sizeof(tail),tail,sizeof(uint64_t),VK_QUERY_RESULT_64_BIT)==VK_SUCCESS)
+                    fprintf(stderr,"Acoustic GPU tail finish%.3f commit%.3f ms\n",(tail[0]-times[3])*g->timestamp_period/1e6,(tail[1]-tail[0])*g->timestamp_period/1e6);
+            }
         }
         if(((uint32_t *)stats->mapped)[FR_GAS_ERROR_WORD]) return true;
         if(t->practical) break;
@@ -265,7 +271,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         if(residual<best*.99f) {best=residual;stalled=0;} else stalled++;
         if(!isfinite(residual)||stalled>=8) {((uint32_t *)stats->mapped)[FR_GAS_ERROR_WORD]=1;return true;}
         if(!fr_renderer_begin(g)) return error(err,cap,"Cannot continue acoustic pressure solve");
-        if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,4);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);
+        if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,tail_query+2u);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);
             vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,1);}
     }
     t->matrix_valid=true;t->matrix_large=matrix_large;return true;

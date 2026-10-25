@@ -107,3 +107,7 @@ Cold parallel GPU audit GREEN: actual ambient+moving-color test proves totals/ve
 **2026-10-25T22:26:09Z**
 
 Hybrid local-CFL transport GREEN: independent safe-line explicit flux oracle passes inside stiff global interval; all5 practical actual-display gates pass. GPU chooses at most3 CFL<=.9 stages per line, implicit fallback for stiff/long/hardware-ineligible lines;640-cell shared workspace is a fast-path threshold, never a simulation cap. Audited1000 actual untraced frames38.763ms mean49.387ms worst (previous44.721/54.353); invalid0, species5.28e-5/pigment1.04e-6/energy-minus-work−2.84e-5 relative drift. T293..367K. No stock/time/resolution loss.30ms still RED; profiling remaining steady-state stages next.
+
+**2026-10-25T22:39:57Z**
+
+Completed tail timing instrumentation: parser4/4 passes, actual200-frame trace attributes late frame~40.5ms to init~14ms, pressure~11ms, residual~0.6ms, finish~3ms and commit~2.6ms, plus publish/waits/render. Hybrid late counts908 explicit lines/1225 local stages,20 implicit,160 inactive; one interval and two submits, no retries. Target now remaining pressure/bandwidth/energy-update overhead; not another convergence retry stall. Next practical float energy updates under unchanged3% long-run energy budget; strict compensated diagnostics remain intact.
