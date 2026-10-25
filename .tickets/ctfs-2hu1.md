@@ -83,3 +83,7 @@ Pre-persistence REFACTOR safe boundary35cf70c: full default suite727 C passes, e
 **2026-10-25T05:45:51Z**
 
 Persistence REDb7ff0d9 compiled and failed2/2 native tests. Minimal source diagnostic now passes its real-contact/atomic-output case; rerun reaches the actual missing behavior: save/load succeeds physically, but restored thermal source is absent (1pass/1fail, build/thermal_checkpoint_source_display.log). This confirms the old checkpoint omission before format integration. Existing two reactive checkpoint REDs remain separate from default battery. No DCS8 linked/enabled yet.
+
+**2026-10-25T05:53:01Z**
+
+Thermal codec RED507fed8 ->6GREEN CPU cases, zero warnings. THR1 stores exact signed liquid excess heat, logical negative-coordinate bindings, finite source and world-purpose metadata in versioned little-endian48-byte framing. It validates ambient/water-capacity references and profile ABI before publication, rejects orphan/negative-absolute-energy/NaN heat, duplicate chunks, checksum corruption, future versions and truncation/trailing bytes; output unchanged on failure. Codec added to default tests. Gameplay DCS restore remains RED/unlinked while integration proceeds; no completion claim.
