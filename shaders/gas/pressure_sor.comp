@@ -1,0 +1,12 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "acoustic.glsl"
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));
+    if(((uint(p.x+p.y))&1u)!=((params.bank>>1u)&1u)||pressure[index].z<=0.) return;
+    if(gas_pressure_row_converged(index)) return;
+    float correction=1.6*gas_pressure_residual(index)/pressure[index].z;
+    vec2 first=gas_two_sum(pressure[index].x,correction),next=gas_two_sum(first.x,acoustic[index].z+first.y);
+    pressure[index].x=next.x;acoustic[index].z=next.y;
+}

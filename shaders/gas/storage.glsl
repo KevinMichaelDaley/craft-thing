@@ -23,15 +23,15 @@ uint gas_atlas(ivec2 p) {
 }
 Gas gas_source(ivec2 p) {
     uint at=gas_atlas(p);if(at==0xffffffffu) return gas_empty();
-    return params.bank==0u?bank0[at]:bank1[at];
+    return (params.bank&1u)==0u?bank0[at]:bank1[at];
 }
 Primitive gas_cached(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return gas_empty_primitive();
-    uint at=uint(p.y)*params.width+uint(p.x);return params.bank==0u?cache0[at]:cache1[at];
+    uint at=uint(p.y)*params.width+uint(p.x);return (params.bank&1u)==0u?cache0[at]:cache1[at];
 }
 void gas_error(uint at) {atomicOr(stats[FR_GAS_ERROR_WORD],1u);atomicMin(stats[FR_GAS_ERROR_AT_WORD],at);}
 void gas_rate(Primitive p) {
-    float rate=abs(p.hydro.y)+abs(p.hydro.z)+2.*p.metric.x;
+    float rate=abs(p.hydro.y)+abs(p.hydro.z)+(gas_parameter(FR_GAS_POLICY_WORD)==0.?2.*p.metric.x:0.);
     uint bound=subgroupMax(gas_finite(rate)&&rate>=0.?floatBitsToUint(rate):0u);
     if(subgroupElect()&&bound!=0u) atomicMax(stats[FR_GAS_RATE_WORD],bound);
 }

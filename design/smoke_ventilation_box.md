@@ -114,3 +114,21 @@ The initial derivation follows the pressure/energy coupling in
 [Cordier, Degond and Kumbaro](https://arxiv.org/abs/1108.2876); the implementation
 is a separate experimental numerical policy until its real Vulkan reference
 and complete-frame measurements pass. Existing HLLC tests remain intact.
+
+The GPU implicit checkpoint passes4 actual Wayland cases, including the original
+HLLC cases and the new independent pressure comparison. Core validation passed
+before the precision refinement; the refined path has also passed4 displayed
+numerical cases. It uses explicit conservative advection, a red/black GPU pressure
+solve with reduced residual feedback, and conservative enthalpy flux. All requested
+physical time is completed; no acoustic speed or iteration-count cap is imposed.
+Stagnation rejects the staged step and retries a smaller interval rather than
+publishing partial state. Compensated pressure and product residuals remove a
+3–5e-6 float convergence floor without loosening the1e-7 residual target.
+
+An initial compensated full-field diagnostic still failed at193.265ms for its
+single measured frame. The next optimization retains the same stencil/tolerance,
+skipping a row's expensive update only when a conservative floating-point error
+bound proves the row already converged. Rows are rechecked every sweep and wake
+when neighbors change. Full-field performance remains RED. Vacuum admission,
+geometry edits, streaming/checkpoint ownership and the interactive box remain
+unfinished; implicit policy is not enabled in ordinary gameplay.

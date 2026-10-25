@@ -1,0 +1,26 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "acoustic.glsl"
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
+    pressure[index]=vec4(0);stencil[index]=vec4(0);if(atlas==0xffffffffu) return;
+    Gas old=gas_source(p),star=gas_provisional(atlas);float volume=old.geometry.x;
+    if(volume<=0.) return;
+    float old_kinetic=gas_kinetic(old),internal=gas_energy(old)-old_kinetic;
+    float capacity=acoustic[index].z,old_capacity=acoustic[index].w;
+    float difference=(star.dynamics.y-old.dynamics.y)+(star.visual.w-old.visual.w)+(star.geometry.z-old.geometry.z);
+    float rhs=difference-(provisional[index].z-old_kinetic)+
+        (old_capacity>0.?internal*(1.-capacity/old_capacity):internal);
+    float dt=uintBitsToFloat(params.seconds),diagonal=capacity;vec4 coefficients=vec4(0);
+    for(uint d=0u;d<4u;d++) {
+        uint j=0u;if(!gas_neighbor(p,d,j)) continue;
+        float area=min(volume,provisional[j].w),enthalpy=.5*(acoustic[index].x+acoustic[j].x);
+        float coefficient=dt*dt*area*enthalpy;
+        float q=.5*(provisional[index][d/2u]/volume+provisional[j][d/2u]/provisional[j].w)*area;
+        rhs+=((d&1u)==0u?-1.:1.)*dt*enthalpy*q+coefficient*(acoustic[j].y-acoustic[index].y);
+        coefficients[d]=coefficient;diagonal+=coefficient;
+    }
+    pressure[index]=vec4(0,rhs,diagonal,max(abs(internal),1e-20));stencil[index]=coefficients;
+    acoustic[index].z=0.;
+}

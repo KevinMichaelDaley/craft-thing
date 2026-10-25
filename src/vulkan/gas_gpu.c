@@ -6,6 +6,7 @@
 #include "ferrum/fire/gas_gpu.h"
 #include "body_address_gpu.h"
 #include "gas_feedback_gpu.h"
+#include "gas_acoustic_gpu.h"
 #include "gas_gpu_internal.h"
 
 typedef struct {float words[FR_GAS_CELL_WORDS];} gas_packet_t;
@@ -16,6 +17,8 @@ struct fr_gas_gpu {
     float density,temperature;
     uint32_t groups_x,groups_y;
     fr_gas_gpu_clock_t clock;
+    fr_gas_acoustic_gpu_t acoustic;
+    uint32_t policy;
 };
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
@@ -23,6 +26,7 @@ static bool error(char *err,uint32_t cap,const char *message) {
 }
 static void destroy(dc_gpu_t *g,struct fr_gas_gpu *t) {
     if(!t) return;
+    fr_gas_acoustic_destroy(g,&t->acoustic);
     fr_renderer_compute_destroy(g,&t->initialize);fr_renderer_compute_destroy(g,&t->prepare);
     fr_renderer_compute_destroy(g,&t->transport);fr_renderer_compute_destroy(g,&t->feedback);
     for(uint32_t i=0;i<3;i++) dc_gpu_address_buffer_destroy(g,t->state+i);
@@ -120,9 +124,14 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
         if(dt>allowed) dt=nextafterf(dt,0.f);
         for(;;) {
             if(!(dt>0)||remaining-(double)dt==remaining) return error(err,cap,"Gas interval is below clock precision");
-            clear_stats(t);if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas substep");
-            dispatch(g,t,&t->transport,dt,bank);
-            if(!submit(g,err,cap)) return false;
+            clear_stats(t);
+            if(t->policy==FR_GAS_PRESSURE_IMPLICIT) {
+                if(!fr_gas_acoustic_step(g,&t->acoustic,t->groups_x,t->groups_y,dt,bank,&t->stats,err,cap)) return false;
+            } else {
+                if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas substep");
+                dispatch(g,t,&t->transport,dt,bank);
+                if(!submit(g,err,cap)) return false;
+            }
             if(!((uint32_t *)t->stats.mapped)[FR_GAS_ERROR_WORD]) break;
             dt*=.5f;
         }
@@ -180,7 +189,19 @@ bool fr_gas_gpu_set_gravity(dc_gpu_t *g,float gravity,char *err,uint32_t cap) {
     ((float *)g->gas->parameters.mapped)[FR_GAS_GRAVITY_WORD]=gravity;return true;
 }
 bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32_t cap) {
-    (void)g;(void)policy;return error(err,cap,"Implicit acoustic GPU policy not implemented");
+    if(!g||!g->gas||policy>FR_GAS_PRESSURE_IMPLICIT) return error(err,cap,"Invalid gas acoustic policy");
+    struct fr_gas_gpu *t=g->gas;
+    if(policy==FR_GAS_PRESSURE_IMPLICIT&&!t->acoustic.ready) {
+        VkDescriptorBufferInfo buffers[11];
+        for(uint32_t i=0;i<3;i++) buffers[i]=(VkDescriptorBufferInfo){t->state[i].buffer,0,t->state[i].bytes};
+        for(uint32_t i=0;i<2;i++) buffers[3+i]=(VkDescriptorBufferInfo){t->cache[i].buffer,0,t->cache[i].bytes};
+        buffers[5]=(VkDescriptorBufferInfo){t->parameters.buffer,0,t->parameters.bytes};buffers[6]=(VkDescriptorBufferInfo){t->stats.buffer,0,t->stats.bytes};
+        buffers[7]=(VkDescriptorBufferInfo){g->page_buffer,0,VK_WHOLE_SIZE};buffers[8]=(VkDescriptorBufferInfo){g->chunk_buffer,0,VK_WHOLE_SIZE};
+        buffers[9]=(VkDescriptorBufferInfo){g->occupancy_buffer,0,VK_WHOLE_SIZE};buffers[10]=(VkDescriptorBufferInfo){g->mpm_grid_buffer,0,VK_WHOLE_SIZE};
+        if(!fr_gas_acoustic_create(g,&t->acoustic,buffers,err,cap)) return false;
+    }
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot configure acoustic policy");
+    ((float *)t->parameters.mapped)[FR_GAS_POLICY_WORD]=(float)policy;t->policy=policy;return true;
 }
 bool fr_gas_gpu_read_work_chunk(dc_gpu_t *g,uint32_t slot,double *work,uint32_t count,char *err,uint32_t cap) {
     if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!work||count<4096u) return error(err,cap,"Invalid gas work snapshot");

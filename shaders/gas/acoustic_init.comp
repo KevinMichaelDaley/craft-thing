@@ -1,0 +1,13 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "acoustic.glsl"
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
+    acoustic[index]=vec4(0);provisional[index]=vec4(0);
+    if(atlas==0xffffffffu) return;
+    Gas old=gas_source(p),star=gas_provisional(atlas);Primitive primitive=gas_cached(p);float mass=gas_mass(old);
+    float enthalpy=mass>0.?(gas_energy(old)+gas_parameter(FR_GAS_KINETIC_WORD)*primitive.hydro.w*old.geometry.x)/mass:0.;
+    acoustic[index]=vec4(enthalpy,primitive.hydro.w,gas_specific_capacity(star),gas_specific_capacity(old));
+    provisional[index]=vec4(star.dynamics.zw,gas_kinetic(star),old.geometry.x);
+}

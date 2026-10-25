@@ -1,0 +1,25 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "acoustic.glsl"
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
+    Primitive primitive=gas_empty_primitive();
+    if(atlas!=0xffffffffu) {
+        Gas value=gas_provisional(atlas);float dt=uintBitsToFloat(params.seconds),volume=value.geometry.x;
+        GasFlux change=gas_empty_flux();
+        if(volume>0.) for(uint d=0u;d<4u;d++) {
+            uint j=0u;if(!gas_neighbor(p,d,j)) continue;
+            float area=min(volume,provisional[j].w),enthalpy=.5*(acoustic[index].x+acoustic[j].x);
+            float difference=((acoustic[j].y-acoustic[index].y)+(pressure[j].x-pressure[index].x))+(acoustic[j].z-acoustic[index].z);
+            float sign=(d&1u)==0u?-1.:1.;
+            float q=.5*(provisional[index][d/2u]/volume+provisional[j][d/2u]/provisional[j].w)*area+sign*dt*area*difference;
+            change.dynamics.y+=sign*enthalpy*q;
+            change.dynamics[2u+d/2u]+=sign*.5*area*difference;
+        }
+        value=gas_add_flux(value,change,dt);bool okay=false;primitive=gas_primitive(value,okay);
+        if(!okay) gas_error(index);else gas_rate(primitive);
+        gas_write_provisional(atlas,value);
+    }
+    if((params.bank&1u)==0u) cache1[index]=primitive;else cache0[index]=primitive;
+}

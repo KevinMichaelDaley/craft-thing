@@ -1,0 +1,27 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "acoustic.glsl"
+GasFlux gas_advective_face(ivec2 a,ivec2 b,uint axis) {
+    Primitive pl=gas_cached(a),pr=gas_cached(b);float vl=pl.metric.w,vr=pr.metric.w;
+    if(vl==0.||vr==0.) return gas_empty_flux();
+    float u=pl.hydro[axis+1u],v=pr.hydro[axis+1u],speed=max(abs(u),abs(v)),area=min(vl,vr);
+    Gas left=gas_source(a),right=gas_source(b);
+    float first=.5*area*(u+speed)/vl,second=.5*area*(v-speed)/vr;
+    return GasFlux(left.species*first+right.species*second,
+        vec4(left.dynamics.x*first+right.dynamics.x*second,
+            -.5*area*speed*(gas_energy(right)/vr-gas_energy(left)/vl),
+            left.dynamics.zw*first+right.dynamics.zw*second),
+        left.visual.rgb*first+right.visual.rgb*second);
+}
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);if(atlas==0xffffffffu) return;
+    GasFlux net=gas_empty_flux();
+    for(uint d=0u;d<4u;d++) {
+        ivec2 q=p+gas_direction(d);bool forward=(d&1u)==0u;
+        GasFlux face=forward?gas_advective_face(p,q,d/2u):gas_advective_face(q,p,d/2u);float sign=forward?-1.:1.;
+        net.species+=sign*face.species;net.dynamics+=sign*face.dynamics;net.pigment+=sign*face.pigment;
+    }
+    float dt=uintBitsToFloat(params.seconds);Gas value=gas_buoyancy(gas_add_flux(gas_source(p),net,dt),dt);
+    gas_write_provisional(atlas,value);
+}
