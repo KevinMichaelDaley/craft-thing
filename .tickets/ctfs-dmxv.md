@@ -75,3 +75,7 @@ Opt-in GPU coarse pressure prototype (8x8 aggregate,128 coarse/128 fine sweeps) 
 **2026-10-25T21:15:39Z**
 
 Residual V-cycle48 fine sweeps +128 coarse sweeps passes all3 actual-display practical gates. Wide256-lane factorization improves real40-frame trace41.935ms mean63.417ms worst (previous48.708/72.383), fixed one interval/two submissions, no retries. Pressure~13ms, transport init~29ms at3040 tiles; target remains RED. Extreme kinetic_scale1/gravity900 diagnostics remain available with DC_GAS_EXTREME_STRESS=1; user-authorized practical admission rejects unresolved scale heights. Next stage face coefficients once in parallel instead of repeated scattered per-line cache gathers; no CPU field solve/readback.
+
+**2026-10-25T21:31:51Z**
+
+Actual Wayland/Vulkan supported native battery27/27 PASS with DC_VK_VALIDATE=1 and VK_VALIDATION_VALIDATE_SYNC=1, wide/fused/coarse/staged-rate diagnostics enabled. Zero VUID, Validation Error or SYNC-HAZARD lines. This validates the pre-matrix-reuse checkpoint; new offset-wall case and matrix reuse remain queued. Full make -i test is executing its complete recipe serially; only the two known ctr-ojvy authored-stage failures seen so far. Latest frame budget remains RED41.935/63.417ms; no default promotion/module closure.

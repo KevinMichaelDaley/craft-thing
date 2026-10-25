@@ -456,3 +456,29 @@ pigment drift below0.3%, and energy-minus-work drift below3%. Observed drift was
 checks, not complete-frame performance acceptance.32 and64 sweeps failed the
 pressure bound; the fixed256 budget needs real scene timing and optimization.
 Default scene policy is unchanged pending that evidence. The module remains open.
+
+The bounded coarse prototype is selected with `DC_GAS_COARSE=1`. A residual
+V-cycle performs16 fine pre-sweeps, sums residual/capacity/face conductances into
+8-square GPU aggregates, runs128 coarse sweeps, adds a linear reconstruction of
+the coarse error, and performs32 fine post-sweeps. It reuses transport scratch
+after transport completes; no CPU field solve or new unbounded allocation occurs.
+The practical Rusanov floor corresponds to diffusivity2 cells squared/second.
+This conservative mixing reduces a one-percent alternating density artifact by
+more than99.9% in the displayed regression while preserving total mass. It does
+not clip smoke or pigment. Exact compressible diagnostic policies are unchanged.
+
+With `DC_GAS_WIDE_SCAN=1`, factorization and forward/back substitution use256
+lanes where supported. The latest40-frame actual elapsed-clock trace measured
+41.935ms mean /63.417ms worst. The optional `DC_GAS_STAGED_RATES=1` experiment
+measured42.615/63.113ms and has no demonstrated timing benefit; leave it disabled
+for acceptance. All3 practical displayed stability gates pass. Four paused scene
+captures match exactly; reservoir grid structure is reduced but visual and long
+run acceptance remain unfinished. The supported27-case actual-display battery
+passes with core and synchronization validation enabled, with zero validation
+errors. Complete-frame acceptance still must pass before promoting defaults or
+closing the module.
+
+The two extreme kinetic_scale1/gravity900 diagnostic cases remain available
+through `DC_GAS_EXTREME_STRESS=1`; they are unresolved, explicitly unsupported
+by practical scale-height admission, and are no longer gameplay gates under the
+user's revised numerical scope. They are not claimed to pass or called baseline.
