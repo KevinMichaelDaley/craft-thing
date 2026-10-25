@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "gpu_internal.h"
 #include "runtime_body_gpu.h"
@@ -38,9 +39,12 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
     }
     if(!dc_gpu_runtime_bodies_service(gpu,err,cap)) return false;
     SDL_PumpEvents();
+    bool trace_waits=getenv("DC_FRAME_TIMINGS")!=NULL;
+    uint64_t acquire_begin=trace_waits?SDL_GetPerformanceCounter():0;
     uint32_t index = 0;
     VkResult result = vkAcquireNextImageKHR(gpu->device, gpu->swapchain, ACQUIRE_TIMEOUT_NS,
         gpu->acquire_sem, VK_NULL_HANDLE, &index);
+    uint64_t acquire_done=trace_waits?SDL_GetPerformanceCounter():0;
     if (result == VK_TIMEOUT || result == VK_NOT_READY)
         return error(err, cap, "Vulkan window image acquisition timed out");
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
@@ -143,12 +147,19 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
     VkPresentInfoKHR present = { .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1, .pWaitSemaphores = &gpu->present_sems[index],
         .swapchainCount = 1, .pSwapchains = &gpu->swapchain, .pImageIndices = &index };
+    uint64_t present_begin=trace_waits?SDL_GetPerformanceCounter():0;
     result = vkQueuePresentKHR(gpu->queue, &present);
+    uint64_t present_done=trace_waits?SDL_GetPerformanceCounter():0;
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         return error(err, cap, "Vulkan swapchain presentation failed");
     /* Wait for command and host-visible physics completion, not compositor display. */
     if (vkWaitForFences(gpu->device, 1, &gpu->render_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
         return error(err, cap, "Vulkan present wait failed");
+    if(trace_waits) {
+        double scale=1000./SDL_GetPerformanceFrequency();
+        fprintf(stderr,"Present waits acquire%.3f fence%.3f present%.3f\n",(acquire_done-acquire_begin)*scale,
+            (SDL_GetPerformanceCounter()-present_done)*scale,(present_done-present_begin)*scale);
+    }
     return true;
 }
 

@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 
 #include <SDL.h>
@@ -1452,7 +1453,11 @@ int main(int argc, char **argv) {
         if (benchmark_frames && scripted_frame >= DC_BENCHMARK_WARMUP_FRAMES && running) {
             double ms = (SDL_GetPerformanceCounter() - frame_start) * 1000. /
                         (double)SDL_GetPerformanceFrequency();
-            if(benchmark_timings) printf("app-frame,%u,%.3fms\n",scripted_frame,ms);
+            if(benchmark_timings) {
+                struct rusage usage={0};
+                if(getrusage(RUSAGE_SELF,&usage)==0) printf("app-memory,%u,rss_kb%ld,minflt%ld,majflt%ld\n",scripted_frame,usage.ru_maxrss,usage.ru_minflt,usage.ru_majflt);
+                printf("app-frame,%u,%.3fms\n",scripted_frame,ms);
+            }
             if(benchmark_timings) {
                 double scale=1000./(double)SDL_GetPerformanceFrequency();
                 printf("app-stages,%u,input%.3f,prepare%.3f,paint%.3f,present%.3f,title%.3f\n",
@@ -1503,7 +1508,12 @@ int main(int argc, char **argv) {
         }
     }
     if (entering_seed) SDL_StopTextInput();
-    if (!dc_level_view_destroy(view, err, sizeof(err))) failed = true;
+    char cleanup_error[sizeof(err)]={0};
+    if (!dc_level_view_destroy(view, cleanup_error, sizeof(cleanup_error))) {
+        if(!failed) snprintf(err,sizeof(err),"%s",cleanup_error);
+        else fprintf(stderr,"Dungeoncraft cleanup: %s\n",cleanup_error);
+        failed=true;
+    }
     if (failed) fprintf(stderr, "Dungeoncraft: %s\n", err);
     else if (scripted_input) printf("Interactive seed and reset controls passed\n");
     return failed ? 1 : 0;

@@ -24,6 +24,8 @@ struct fr_gas_gpu {
     bool cache_valid;
     VkFence completion;
     double large_step_hint;
+    bool trace;
+    uint64_t trace_submits,trace_queue_ticks,trace_wait_ticks;
 };
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
@@ -47,7 +49,11 @@ bool fr_gas_submit(dc_gpu_t *g) {
     VkFence fence=g->gas->completion;
     if(vkEndCommandBuffer(g->command)!=VK_SUCCESS||vkResetFences(g->device,1,&fence)!=VK_SUCCESS) return false;
     VkSubmitInfo submit={.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,.commandBufferCount=1,.pCommandBuffers=&g->command};
-    return vkQueueSubmit(g->queue,1,&submit,fence)==VK_SUCCESS&&vkWaitForFences(g->device,1,&fence,VK_TRUE,UINT64_MAX)==VK_SUCCESS;
+    struct fr_gas_gpu *t=g->gas;uint64_t begin=t->trace?SDL_GetPerformanceCounter():0;
+    VkResult queued=vkQueueSubmit(g->queue,1,&submit,fence);uint64_t queued_at=t->trace?SDL_GetPerformanceCounter():0;
+    VkResult completed=queued==VK_SUCCESS?vkWaitForFences(g->device,1,&fence,VK_TRUE,UINT64_MAX):queued;
+    if(t->trace) {t->trace_submits++;t->trace_queue_ticks+=queued_at-begin;t->trace_wait_ticks+=SDL_GetPerformanceCounter()-queued_at;}
+    return queued==VK_SUCCESS&&completed==VK_SUCCESS;
 }
 void fr_gas_gpu_invalidate_cache(dc_gpu_t *g) {if(g&&g->gas) {g->gas->cache_valid=false;g->gas->acoustic.matrix_valid=false;}}
 static void barrier(dc_gpu_t *g) {
@@ -141,7 +147,8 @@ bool fr_gas_gpu_enable(dc_gpu_t *g,const fr_gas_model_t *model,float density,flo
 bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(!g||!g->gas||!isfinite(seconds)||seconds<0) return error(err,cap,"Invalid Vulkan gas interval");
     if(seconds==0) return true;
-    struct fr_gas_gpu *t=g->gas;clear_stats(t);
+    struct fr_gas_gpu *t=g->gas;t->trace=getenv("DC_GAS_TRACE")!=NULL;clear_stats(t);
+    uint64_t start_submits=t->trace_submits,start_queue=t->trace_queue_ticks,start_wait=t->trace_wait_ticks;
     bool cached=t->cache_valid;t->cache_valid=false;
     uint32_t bank=cached?t->cached_bank:0;float speed=t->cached_rate;
     VkBufferCopy copy={.size=t->state[0].bytes};
@@ -154,7 +161,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
         if(!submit(g,err,cap)||!shader_ok(t,err,cap)) return false;
         speed=rate(t);
     }
-    double remaining=seconds,hint=t->large_step_hint>0?t->large_step_hint:seconds;uint64_t accepted=0;
+    double remaining=seconds,hint=t->large_step_hint>0?t->large_step_hint:seconds;uint64_t accepted=0,retries=0;
     while(remaining>0) {
         if(!isfinite(speed)||speed<0) return error(err,cap,"Invalid reduced gas CFL metadata");
         double courant=t->policy!=FR_GAS_PRESSURE_HLLC?FR_GAS_ADVECTIVE_COURANT:FR_GAS_COURANT;
@@ -175,7 +182,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
             if(!((uint32_t *)t->stats.mapped)[FR_GAS_ERROR_WORD]) break;
             if(getenv("DC_GAS_TRACE")) fprintf(stderr,"Gas retry dt%.9g speed%.9g large%u stages%u cell%u\n",dt,speed,t->acoustic.large_transport?1u:0u,((uint32_t *)t->stats.mapped)[FR_GAS_REJECT_STAGE_WORD],((uint32_t *)t->stats.mapped)[FR_GAS_ERROR_AT_WORD]);
             if(getenv("DC_GAS_TRACE")) {float negative=0,excess=0;memcpy(&negative,(uint32_t *)t->stats.mapped+FR_GAS_NEGATIVE_PIGMENT_WORD,4);memcpy(&excess,(uint32_t *)t->stats.mapped+FR_GAS_EXCESS_PIGMENT_WORD,4);fprintf(stderr,"Gas pigment reject negative%.9g excess%.9g\n",negative,excess);}
-            t->acoustic.matrix_valid=false;dt*=.5f;rejected=true;
+            t->acoustic.matrix_valid=false;dt*=.5f;rejected=true;retries++;
             if(t->policy==FR_GAS_PRESSURE_LARGE_CFL) hint=dt;
         }
         if(t->policy==FR_GAS_PRESSURE_LARGE_CFL&&!rejected&&(double)dt>=hint*.9) hint*=1.25;
@@ -186,7 +193,18 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(!submit(g,err,cap)) return false;
     t->cached_bank=bank;t->cached_rate=speed;t->cache_valid=true;
     if(t->policy==FR_GAS_PRESSURE_LARGE_CFL) t->large_step_hint=hint;
-    t->clock.physical_steps++;t->clock.substeps+=accepted;t->clock.advanced_seconds+=seconds;return true;
+    t->clock.physical_steps++;t->clock.substeps+=accepted;t->clock.advanced_seconds+=seconds;
+    if(t->trace) {
+        VkDeviceSize bytes=t->parameters.bytes+t->stats.bytes+t->gates.bytes+t->acoustic.indirect.bytes+t->acoustic.transport_work.bytes;
+        for(uint32_t i=0;i<3;i++) bytes+=t->state[i].bytes;
+        for(uint32_t i=0;i<2;i++) bytes+=t->cache[i].bytes;
+        for(uint32_t i=0;i<11;i++) bytes+=t->acoustic.fields[i].bytes;
+        double scale=1000./SDL_GetPerformanceFrequency();
+        fprintf(stderr,"Gas interval dt%.9g accepted%llu retries%llu submits%llu queue%.3f wait%.3f storage%llu\n",seconds,
+            (unsigned long long)accepted,(unsigned long long)retries,(unsigned long long)(t->trace_submits-start_submits),
+            (t->trace_queue_ticks-start_queue)*scale,(t->trace_wait_ticks-start_wait)*scale,(unsigned long long)bytes);
+    }
+    return true;
 }
 static fr_gas_state_t unpack(const gas_packet_t *packet) {
     const float *p=packet->words;fr_gas_state_t s={0};

@@ -12,13 +12,52 @@ import sys
 
 GPU = re.compile(r"Acoustic GPU init([\d.]+) pressure-group([\d.]+) residual([\d.]+) ms")
 FRAME = re.compile(r"app-frame,(\d+),([\d.]+)ms")
+ACOUSTIC = re.compile(r"Acoustic dt([\deE.+-]+) batch(\d+) residual([\deE.+-]+).* tiles(\d+) advected(\d+)")
+INTERVAL = re.compile(r"Gas interval dt([\deE.+-]+) accepted(\d+) retries(\d+) submits(\d+) queue([\d.]+) wait([\d.]+) storage(\d+)")
+WAITS = re.compile(r"Present waits acquire([\d.]+) fence([\d.]+)")
+MEMORY = re.compile(r"app-memory,\d+,rss_kb(\d+),minflt(\d+),majflt(\d+)")
+
+
+def counters():
+    return dict(accepted=0, retries=0, retry_lines=0, gas_submits=0,
+                simulated_seconds=0.0, queue_ms=0.0, gas_wait_ms=0.0,
+                storage_bytes=0, acquire_ms=0.0, present_fence_ms=0.0,
+                solve_tiles_peak=0, advection_tiles_peak=0,
+                residual_peak=0.0, pressure_batches_peak=0,
+                rss_kb=0, minor_faults=0, major_faults=0)
 
 
 def frames(lines):
     result = []
     init = pressure = residual = 0.0
     substeps = submissions = 0
+    extra = counters()
+    intervals = 0
     for line in lines:
+        if line.startswith("Gas retry "):
+            extra["retry_lines"] += 1
+        match = ACOUSTIC.search(line)
+        if match:
+            extra["pressure_batches_peak"] = max(extra["pressure_batches_peak"], int(match[2]))
+            extra["residual_peak"] = max(extra["residual_peak"], float(match[3]))
+            extra["solve_tiles_peak"] = max(extra["solve_tiles_peak"], int(match[4]))
+            extra["advection_tiles_peak"] = max(extra["advection_tiles_peak"], int(match[5]))
+        match = INTERVAL.search(line)
+        if match:
+            intervals += 1
+            extra["simulated_seconds"] += float(match[1])
+            for name, group in (("accepted", 2), ("retries", 3), ("gas_submits", 4)):
+                extra[name] += int(match[group])
+            extra["queue_ms"] += float(match[5])
+            extra["gas_wait_ms"] += float(match[6])
+            extra["storage_bytes"] = max(extra["storage_bytes"], int(match[7]))
+        match = WAITS.search(line)
+        if match:
+            extra["acquire_ms"] += float(match[1])
+            extra["present_fence_ms"] += float(match[2])
+        match = MEMORY.search(line)
+        if match:
+            extra["rss_kb"], extra["minor_faults"], extra["major_faults"] = map(int, match.groups())
         match = GPU.search(line)
         if match:
             first, second, third = map(float, match.groups())
@@ -31,12 +70,17 @@ def frames(lines):
         if match:
             index, total = int(match[1]), float(match[2])
             gpu = init + pressure + residual
+            if not intervals:
+                extra["retries"] = extra["retry_lines"]
+                extra["accepted"] = max(0, substeps-extra["retry_lines"])
             result.append(dict(frame=index, total_ms=total, substeps=substeps,
                                submissions=submissions, init_ms=init,
                                pressure_ms=pressure, residual_ms=residual,
-                               gpu_ms=gpu, remaining_ms=total-gpu))
+                               gpu_ms=gpu, remaining_ms=total-gpu, **extra))
             init = pressure = residual = 0.0
             substeps = submissions = 0
+            extra = counters()
+            intervals = 0
     return result
 
 

@@ -3,6 +3,22 @@
 Status: implementation authorized after the initial design-and-ticket turn.
 Epic: `ctlo-d7vm`. Runtime progress and unfinished work are tracked in its tickets.
 
+## Practical interactive numerical policy
+
+Latest user direction supersedes earlier exact per-frame convergence, bitwise
+identity and perfect-energy requirements. Diagnose delayed stalls with frame
+time series, not only averages. Gameplay pressure work must be bounded; it must
+not wait indefinitely for a residual or retry negligible roundoff indefinitely.
+Use finite, nonnegative state, convincing visible flow and measured long-run
+inventory/energy drift as acceptance. Exact-reference and dense-parity modes
+remain diagnostics. Negligible subnormal/pigment and tiny-negative cleanup is
+allowed and must be documented. This does not authorize erasing meaningful
+smoke/fuel/products, dropping simulated time, changing resolution or inventing
+a performance pass. Supported gameplay parameters and unresolved extreme-force
+diagnostics must be distinguished at admission. The complete-frame target and
+sustained actual Vulkan/Wayland validation remain required, including the
+delayed onset, retries, waits, activity expansion and resource growth.
+
 ## Modular delivery sequence
 
 Latest user direction: develop one visually testable gameplay feature or system
