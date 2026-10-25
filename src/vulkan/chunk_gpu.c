@@ -4,6 +4,7 @@
 
 #include "gpu_internal.h"
 #include "reactive_gpu_internal.h"
+#include "thermal_gpu_internal.h"
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -288,7 +289,9 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
     ((uint32_t *)gpu->slot_seed_mapped)[slot] = dc_chunk_particle_seed(chunk->coord);
     dc_gpu_structural_track_chunk(gpu, slot, chunk->coord);
     gpu->fluid_snapshot_valid = false;
-    return dc_gpu_copy_chunk_state(gpu, slot, true, true, err, cap);
+    bool okay=dc_gpu_copy_chunk_state(gpu, slot, true, true, err, cap);
+    if(okay) fr_thermal_clear_water_chunk(gpu,slot);
+    return okay;
 }
 
 bool dc_gpu_upload_chunk_checkpoint(dc_gpu_t *gpu, uint32_t slot,

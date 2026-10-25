@@ -110,6 +110,10 @@ bool fr_thermal_gpu_read_water_chunk(dc_gpu_t *g,uint32_t slot,float *energy,uin
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete liquid heat snapshot");
     memcpy(energy,(float *)g->thermal->water.mapped+slot*4096u,4096u*sizeof(float));return true;
 }
+void fr_thermal_clear_water_chunk(dc_gpu_t *g,uint32_t slot) {
+    if(g&&g->thermal&&slot<DC_GPU_CHUNK_SLOTS)
+        memset((float *)g->thermal->water.mapped+slot*4096u,0,4096u*sizeof(float));
+}
 bool fr_thermal_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(!g||!g->thermal||!isfinite(seconds)||seconds<0)
         return error(err,cap,"Invalid standalone thermal interval");

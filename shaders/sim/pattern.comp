@@ -7,6 +7,7 @@ layout(constant_id=2) const bool DRAW_SIMPLE=false;
 #define DC_RIGID_PIXEL_ONLY DRAW_PIXEL_ONLY
 #include "rigid_body.glsl"
 #include "../reactive/particle_storage.glsl"
+#include "../reactive/thermal_water.glsl"
 #include "mpm_particle_mirror.glsl"
 #include "rigid_shape.glsl"
 #include "rigid_clip.glsl"
@@ -343,6 +344,7 @@ void main() {
                     atomicOr(DC_BUFFER_DATA(structure_base()+STRUCTURAL_COMPONENT_DIRTY_WORD),1u);
                 }
                 cell.y = params.color == 3u ? 65536u : new_grain ? cell.y : 0u;
+                thermal_water_resize(index,old_water_mass,cell.y);
                 chunk_cells[index] = cell;
                 if(params.color==3u) {
                     uint old_mass=min(old_water_mass,65536u);

@@ -47,3 +47,7 @@ Water stage RED6af74f9 now locally GREEN: actual Wayland/core+sync2 cases pass f
 **2026-10-25T04:35:07Z**
 
 Water GREEN regression:20 existing cases pass across native thermal2, native interactive bench1, transport10, subgroup scan1 (56 internal direction/variant cases), pigment4 and partial-recipient2. Core+sync logs contain no validation errors after enabling BDA in the minimal fluid fixture and binding zero thermal control. New displayed water2 also pass. Startup tracing is opt-in DC_PIPELINE_TRACE; no temporary tools. Full module acceptance remains pending.
+
+**2026-10-25T04:38:05Z**
+
+Edit-boundary REDc31e592 exposed stale liquid heat both after AIR erase and physical chunk replacement. GREEN now4/4 native Wayland/core+sync water cases pass: painting ambient water preserves existing heat while adding ambient mass, erasure removes proportional heat, fresh water cannot resurrect it, and validated completed physical-slot replacement clears its old liquid channel. Heat/removal remains an explicit external authoring sink; chunk persistence still pending.

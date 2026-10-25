@@ -7,4 +7,6 @@ void fr_thermal_record_step(dc_gpu_t *gpu,float seconds);
 void fr_thermal_record_overlay(dc_gpu_t *gpu);
 /** Release thermal resources before their reactive backing storage. */
 void fr_thermal_gpu_destroy(dc_gpu_t *gpu);
+/** Cold physical-slot replacement after validation and completed upload. */
+void fr_thermal_clear_water_chunk(dc_gpu_t *gpu,uint32_t slot);
 #endif
