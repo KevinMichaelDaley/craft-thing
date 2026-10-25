@@ -1738,3 +1738,5 @@ build/reactive_chunk_gpu.o: src/vulkan/reactive_chunk_gpu.c src/vulkan/reactive_
 build/reactive_chunk_gpu_tests: tests/vulkan/reactive_chunk_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/reactive_arena_gpu_tests build/reactive_address_gpu_tests build/reactive_chunk_gpu_tests build/reactive_chunk_tests build/reactive_stream_tests
+build/reactive_stream_view_display_tests: tests/app/reactive_stream_view_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level.c $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
