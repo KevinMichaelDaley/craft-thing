@@ -7,6 +7,7 @@
 #include "dungeoncraft/gpu.h"
 #include "dungeoncraft/stream.h"
 #include "ferrum/assets/prop_gpu.h"
+#include "ferrum/fire/gpu.h"
 #include "level.h"
 #include "view_config.h"
 
@@ -186,15 +187,18 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
                 if (m==DC_MATERIAL_STONE || m==DC_MATERIAL_WOOD || m==DC_MATERIAL_DENSE_WOOD || m==DC_MATERIAL_LEAVES)
                     result.chunk->cells[i].flags |= DC_CELL_LOADED_TERRAIN;
             }
-            if (!fr_gpu_upload_structure_chunk(view->gpu, index, result.chunk, &restored, err, cap) ||
-                !dc_chunk_table_finish_load(&view->table, index, result.generation)) {
+            if (!fr_gpu_upload_structure_chunk(view->gpu,index,result.chunk,&restored,err,cap)) {
                 dc_stream_result_release(&result);
                 return error(err, cap, "Cannot publish loaded GPU chunk");
             }
-            if (restored) dc_chunk_table_mark_dirty(&view->table, index);
-            else if(result.colors && !fr_renderer_upload_chunk_colors(view->gpu,index,result.colors,err,cap)) {
+            if(!restored&&((result.colors&&!fr_renderer_upload_chunk_colors(view->gpu,index,result.colors,err,cap))||
+                !fr_gpu_reactive_import_chunk(view->gpu,index,result.chunk,result.reactive,err,cap))) {
                 dc_stream_result_release(&result);return false;
             }
+            if(!dc_chunk_table_finish_load(&view->table,index,result.generation)) {
+                dc_stream_result_release(&result);return error(err,cap,"Cannot finish loaded chunk publication");
+            }
+            if(restored) dc_chunk_table_mark_dirty(&view->table,index);
         } else if (!dc_chunk_table_finish_save(&view->table, index, result.generation)) {
             dc_stream_result_release(&result);
             return error(err, cap, "Cannot complete chunk save");
@@ -221,9 +225,16 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
         uint64_t generation;
         if (!dc_gpu_download_chunk(view->gpu, i, &chunk, err, cap)) return false;
         if(!fr_renderer_download_chunk_colors(view->gpu,i,&colors,err,cap)) return false;
-        if (!dc_chunk_table_begin_save(&view->table, i, &generation))
+        fr_reactive_chunk_t reactive={0};
+        if(!fr_gpu_reactive_export_chunk(view->gpu,i,&chunk,&reactive,err,cap)) return false;
+        if (!dc_chunk_table_begin_save(&view->table, i, &generation)) {
+            fr_reactive_chunk_release(&reactive);
             return error(err, cap, "Cannot begin dirty chunk save");
-        if (!dc_stream_request_save_colors(view->stream, &chunk,&colors, generation))
+        }
+        const fr_reactive_chunk_t *channel=reactive.count||reactive.next_id>1u?&reactive:NULL;
+        bool queued=dc_stream_request_save_reactive(view->stream,&chunk,&colors,channel,generation);
+        fr_reactive_chunk_release(&reactive);
+        if(!queued)
             return error(err, cap, "Cannot queue dirty chunk save");
     }
     return true;

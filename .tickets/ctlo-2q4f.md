@@ -71,3 +71,7 @@ Atomic DCC7 streaming GREEN:3 new asynchronous worker cases plus7 unchanged stre
 **2026-10-25T02:40:02Z**
 
 REFACTOR regression complete through e11f84f: corrected full make -j8 -i test reports712 C passes, only the same2 ctr-ojvy authored-stage failures at67/135, zero compiler warnings and no new failures. The first run exposed a missing standard object rule for reactive_chunk_gpu; fixed the rule, discarded that incomplete run, and repeated the complete battery. Added allocator/address/chunk CPU+GPU/worker cases to the standard recipe. Native displayed lifecycle5 and GPU chunk3 cases passed separately with core/sync validation.
+
+**2026-10-25T02:41:48Z**
+
+Level-view stream wiring GREEN: a native Wayland Vulkan RED exercised actual schedule_saves/process_results and found result.reactive absent. The app now exports GPU channels into the immutable worker save and restores them before finishing chunk publication. GREEN presents4 frames at480x270+halo and retains exact bound water, heat, coating and ignition history after worker reload. DCS structure-checkpoint integration remains separate and unfinished.
