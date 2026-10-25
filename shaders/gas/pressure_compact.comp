@@ -11,6 +11,7 @@ void main() {
             residual_needed=true;if(abs(x)<=2&&abs(y)<=2) needed=true;
         }
     }
+    activity[width*height+tile]=(activity[width*height+tile]&~FR_GAS_SOLVE_TILE_BIT)|(needed?FR_GAS_SOLVE_TILE_BIT:0u);
     if(needed) {uint slot=atomicAdd(indirect[0],1u);active_tiles[slot]=tile;}
     if(residual_needed) {uint slot=atomicAdd(indirect[4],1u);active_tiles[width*height+slot]=tile;activity[width*height+tile]|=2u;}
 }

@@ -14,6 +14,7 @@ typedef struct {
     fr_renderer_compute_t practical_factor,practical_prefix,practical_apply;
     fr_renderer_compute_t practical_axis;
     fr_renderer_compute_t practical_explicit;
+    fr_renderer_compute_t temporal_sor;
     dc_gpu_address_buffer_t transport_work;
     VkBuffer state_bank[2];VkDeviceSize state_bytes;
     dc_gpu_address_buffer_t fields[11],indirect;

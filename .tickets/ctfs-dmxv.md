@@ -123,3 +123,7 @@ Direct guarded publication GREEN: warm practical interval uses1 GPU submission v
 **2026-10-25T23:09:26Z**
 
 SOR32-lane checkerboard mapping preserves same cells/arithmetic/48 sweeps;5 practical, independent acoustic reference, dense/sparse parity and transactional publication displayed tests pass. Audited1000 actual run36.009mean43.953worst, stock/finite bounds pass. Onlysmallgain vs36.344/45.945;30ms still RED. Next exact overlap-halo temporal blocking of two global sweeps, distinct from rejected approximate block GS, with immutable source/doublebuffer output and original active-set mask. Lock numerical comparison and dispatch-budget RED before implementation.
+
+**2026-10-25T23:20:51Z**
+
+Exact temporal SOR GREEN:34 indirect dispatches vs106 and BYTE-identical global-solver snapshot across valve changes;5 practical, transactional publication/recovery, independent acoustic reference and dense/sparse parity displayed tests pass. Same48 numerical fine sweeps. Audited1000 actual run34.838mean43.431worst; stock/finite budgets pass.30ms remains RED. Next same32 coarse sweeps in one parallel workgroup for small coarse grids, hardware/workspace fallback to original global coarse solver; no global gas capacity limit or reduced physical time.
