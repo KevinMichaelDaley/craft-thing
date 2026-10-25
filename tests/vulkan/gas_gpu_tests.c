@@ -109,10 +109,32 @@ static void test_native_buoyancy_matches_reference_and_accounts_for_external_wor
     ASSERT_TRUE(fabs(energy_change-total_work)<1e-6);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(input);free(out);free(volumes);free(work);free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_native_implicit_acoustics_match_reference_beyond_explicit_acoustic_cfl(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_gas_model_t m=reference_model();ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_IMPLICIT,err,sizeof(err)));
+    fr_gas_state_t *input=malloc(4096*sizeof(*input)),*out=malloc(4096*sizeof(*out)),*expected=malloc(4096*sizeof(*expected));
+    double *volumes=malloc(4096*sizeof(*volumes));ASSERT_TRUE(input&&out&&expected&&volumes);
+    for(uint32_t i=0;i<4096;i++) {input[i]=reference_air(m,1,300*(1.+.0001*cos(acos(-1.)*((i%64)+.5)/64.)),0);volumes[i]=1;}
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volumes,4096,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,input,4096,err,sizeof(err)));
+    float seconds=.05f;ASSERT_TRUE(fr_gas_implicit_reference_step(&m,input,volumes,64,64,seconds,expected,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_step(g,seconds,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+    double energy_error=0;
+    for(uint32_t i=0;i<4096;i++) {
+        ASSERT_EQ(memcmp(input[i].species,out[i].species,sizeof(out[i].species)),0);
+        ASSERT_TRUE(fabs(out[i].energy-expected[i].energy)<.0002);
+        ASSERT_TRUE(fabs(out[i].momentum[0]-expected[i].momentum[0])<2e-5&&fabs(out[i].momentum[1]-expected[i].momentum[1])<2e-5);
+        energy_error+=out[i].energy-input[i].energy;
+    }
+    ASSERT_TRUE(fabs(energy_error)<.02&&present(g,err,sizeof(err)));
+    free(input);free(out);free(expected);free(volumes);free(c);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
     RUN(test_native_colored_transport_matches_reference_and_retains_closed_budgets);
     RUN(test_native_buoyancy_matches_reference_and_accounts_for_external_work);
+    RUN(test_native_implicit_acoustics_match_reference_beyond_explicit_acoustic_cfl);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

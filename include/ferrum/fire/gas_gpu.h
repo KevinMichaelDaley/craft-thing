@@ -4,6 +4,7 @@
 #include "ferrum/fire/gas.h"
 
 typedef struct {uint64_t physical_steps,substeps;double advanced_seconds;} fr_gas_gpu_clock_t;
+enum {FR_GAS_PRESSURE_HLLC,FR_GAS_PRESSURE_IMPLICIT};
 /** Enable one authoritative Vulkan gas field. Coefficients and initial ambient
  * stock are explicit; repeated configuration must not replenish existing gas. */
 bool fr_gas_gpu_enable(dc_gpu_t *gpu,const fr_gas_model_t *model,
@@ -13,6 +14,8 @@ bool fr_gas_gpu_enable(dc_gpu_t *gpu,const fr_gas_model_t *model,
 bool fr_gas_gpu_step(dc_gpu_t *gpu,float seconds,char *err_buf,uint32_t err_cap);
 /** Configure reference-atmosphere gravity in cells per physical second squared. */
 bool fr_gas_gpu_set_gravity(dc_gpu_t *gpu,float gravity,char *err_buf,uint32_t err_cap);
+/** Select a validated acoustic policy without changing stock or physical time. */
+bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *gpu,uint32_t policy,char *err_buf,uint32_t err_cap);
 /** Cold diagnostic of cumulative external buoyancy work, never a frame scan. */
 bool fr_gas_gpu_read_work_chunk(dc_gpu_t *gpu,uint32_t slot,double *work,
     uint32_t capacity,char *err_buf,uint32_t err_cap);
