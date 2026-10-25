@@ -358,6 +358,7 @@ void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu) {
                 VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
                     VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     for (uint32_t step = 0; step < DC_MPM_SUBSTEPS; ++step) {
+        push[3]=gpu->mpm_swap_buffers?(step&1u):0u;
         for (uint32_t mode = 0; mode < DC_MPM_MODES; ++mode) {
             if(gpu->mpm_fused_grid&&mode==1u) continue;
             push[2] = mode;

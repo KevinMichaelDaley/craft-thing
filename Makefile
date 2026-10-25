@@ -1675,5 +1675,6 @@ build/reactive_cell_gpu_tests: tests/vulkan/reactive_cell_gpu_tests.c $(GPU_OBJ)
 build/shaders/runtime/pattern.comp.spv: shaders/reactive/gpu_storage.glsl shaders/reactive/state.glsl include/dungeoncraft/reactive_state_layout.h
 $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv: shaders/reactive/gpu_storage.glsl shaders/reactive/state.glsl include/dungeoncraft/reactive_state_layout.h
 test: build/reactive_state_gpu_tests build/reactive_cell_gpu_tests
-build/reactive_cell_display_tests: tests/vulkan/reactive_cell_gpu_tests.c $(GPU_SRC) src/world/chunk.c $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
+build/reactive_cell_display_tests: tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/shaders/mpm.comp.spv build/shaders/runtime/mpm.comp.spv build/shaders/runtime/mpm_stencil.comp.spv build/shaders/mpm_stencil.comp.spv: shaders/reactive/particle_storage.glsl

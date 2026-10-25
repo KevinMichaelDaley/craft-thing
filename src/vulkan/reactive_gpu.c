@@ -7,7 +7,7 @@
 
 #define REACTIVE_ROOT_MAGIC 0x46525331u
 struct fr_reactive_gpu {
-    dc_gpu_address_buffer_t root,entries,cells,shapes;
+    dc_gpu_address_buffer_t root,entries,cells,shapes,particles;
     uint64_t high_id;
 };
 static bool error(char *err,uint32_t cap,const char *message) {
@@ -26,6 +26,7 @@ void fr_gpu_reactive_destroy(dc_gpu_t *g) {
     struct fr_reactive_gpu *r=g->reactive;
     dc_gpu_address_buffer_destroy(g,&r->root);dc_gpu_address_buffer_destroy(g,&r->entries);
     dc_gpu_address_buffer_destroy(g,&r->cells);dc_gpu_address_buffer_destroy(g,&r->shapes);
+    dc_gpu_address_buffer_destroy(g,&r->particles);
     free(r);g->reactive=NULL;
 }
 static bool initialize(dc_gpu_t *g,char *err,uint32_t cap) {
@@ -93,6 +94,26 @@ fail:
     dc_gpu_address_buffer_destroy(g,&pending);return error(err,cap,"Reactive geometry bank growth failed");
 }
 
+static bool admit(dc_gpu_t *g,uint32_t *handle,const fr_reactive_owner_t *owner,
+    const fr_reactive_state_t *state,char *err,uint32_t cap) {
+    uint64_t id=((uint64_t)state->parcel_id_high<<32)|state->parcel_id_low;
+    uint32_t *existing=entry(g,handle);
+    bool same=existing&&existing[FR_ENTRY_STATE+2]==state->parcel_id_low&&existing[FR_ENTRY_STATE+3]==state->parcel_id_high;
+    if(!same&&g->reactive&&id<=g->reactive->high_id) return error(err,cap,"Reactive parcel ID would reuse history");
+    if(!same&&!grow_entries(g,err,cap)) return false;
+    struct fr_reactive_gpu *r=g->reactive;uint32_t *h=r->root.mapped;
+    /* Growth can relocate entries; resolve again after publishing the new arena. */
+    existing=entry(g,handle);
+    uint32_t index=same?handle[0]:h[3]++;
+    uint32_t *e=(uint32_t *)r->entries.mapped+(size_t)index*FR_ENTRY_WORDS;
+    if(!same) {if(existing) {existing[0]++;existing[1]=0;}memset(e,0,FR_ENTRY_WORDS*4u);e[0]=1;}
+    memcpy(e+FR_ENTRY_OWNER,owner,sizeof(*owner));memcpy(e+FR_ENTRY_STATE,state,sizeof(*state));
+    handle[0]=index;handle[1]=e[0];
+    uint64_t origin=((uint64_t)state->origin_id_high<<32)|state->origin_id_low;
+    if(r->high_id<id) r->high_id=id;
+    if(r->high_id<origin) r->high_id=origin;
+    return true;
+}
 bool fr_gpu_reactive_seed_cell(dc_gpu_t *g,uint32_t slot,uint32_t local,
     const fr_reactive_state_t *state,char *err,uint32_t cap) {
     if(!g||!g->runtime_bodies||slot>=DC_GPU_CHUNK_SLOTS||local>=4096||
@@ -100,27 +121,11 @@ bool fr_gpu_reactive_seed_cell(dc_gpu_t *g,uint32_t slot,uint32_t local,
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Reactive import wait failed");
     const uint32_t *registry=dc_gpu_structural_data(g)+DC_STRUCTURAL_HEADER_WORDS+slot*8u;
     if(!registry[5]) return error(err,cap,"Reactive cell owner is not resident");
-    uint64_t id=((uint64_t)state->parcel_id_high<<32)|state->parcel_id_low;
-    uint32_t *handle=g->reactive?(uint32_t *)g->reactive->cells.mapped+((size_t)slot*4096u+local)*2u:NULL;
-    uint32_t *existing=handle?entry(g,handle):NULL;
-    bool same=existing&&existing[FR_ENTRY_STATE+2]==state->parcel_id_low&&existing[FR_ENTRY_STATE+3]==state->parcel_id_high;
-    if(!same&&g->reactive&&id<=g->reactive->high_id) return error(err,cap,"Reactive parcel ID would reuse history");
-    if(!initialize(g,err,cap)||(!same&&!grow_entries(g,err,cap))) return false;
-    struct fr_reactive_gpu *r=g->reactive;uint32_t *h=r->root.mapped;
-    handle=(uint32_t *)r->cells.mapped+((size_t)slot*4096u+local)*2u;
-    /* Growth can relocate entries; resolve again after publishing the new arena. */
-    existing=entry(g,handle);
-    uint32_t index=same?handle[0]:h[3]++;
-    uint32_t *e=(uint32_t *)r->entries.mapped+(size_t)index*FR_ENTRY_WORDS;
-    if(!same) {if(existing) {existing[0]++;existing[1]=0;}memset(e,0,FR_ENTRY_WORDS*4u);e[0]=1;}
+    if(!initialize(g,err,cap)) return false;
     dc_chunk_coord_t coord;memcpy(&coord,registry,sizeof(coord));
     fr_reactive_owner_t owner=fr_reactive_cell_owner(coord,local);
-    memcpy(e+FR_ENTRY_OWNER,&owner,sizeof(owner));memcpy(e+FR_ENTRY_STATE,state,sizeof(*state));
-    handle[0]=index;handle[1]=e[0];
-    uint64_t origin=((uint64_t)state->origin_id_high<<32)|state->origin_id_low;
-    if(r->high_id<id) r->high_id=id;
-    if(r->high_id<origin) r->high_id=origin;
-    return true;
+    uint32_t *handle=(uint32_t *)g->reactive->cells.mapped+((size_t)slot*4096u+local)*2u;
+    return admit(g,handle,&owner,state,err,cap);
 }
 bool fr_gpu_reactive_read_cell(dc_gpu_t *g,uint32_t slot,uint32_t local,
     fr_reactive_record_t *out,bool *found,char *err,uint32_t cap) {
@@ -160,9 +165,38 @@ bool fr_gpu_reactive_read_body(dc_gpu_t *g,uint32_t id,uint32_t x,uint32_t y,
 }
 bool fr_gpu_reactive_seed_particle(dc_gpu_t *g,uint32_t particle,
     const fr_reactive_state_t *state,char *err,uint32_t cap) {
-    (void)g;(void)particle;(void)state;(void)err;(void)cap;return false;
+    if(!g||particle>=DC_GPU_CHUNK_SLOTS*DC_MPM_PARTICLES_PER_CHUNK||
+       !fr_reactive_state_valid(state,err,cap)) return error(err,cap,"Invalid reactive particle import");
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g)) return error(err,cap,"Particle import wait failed");
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,VK_ACCESS_2_MEMORY_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_READ_BIT);
+    VkDeviceSize offset=(VkDeviceSize)particle*sizeof(dc_mpm_particle_t);
+    VkBufferCopy copy={offset,offset,sizeof(dc_mpm_particle_t)};
+    vkCmdCopyBuffer(g->command,g->particle_buffer,g->particle_staging_buffer,1,&copy);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
+    if(!fr_renderer_submit(g)) return error(err,cap,"Cannot inspect imported particle owner");
+    const dc_mpm_particle_t *p=(const dc_mpm_particle_t *)g->particle_mapped+particle;
+    if(!p->mass_fp||p->material!=state->material||(p->id_lo|p->id_hi)==0)
+        return error(err,cap,"Reactive particle source is absent or has another material");
+    if(!initialize(g,err,cap)) return false;
+    struct fr_reactive_gpu *r=g->reactive;
+    if(!r->particles.buffer) {
+        VkDeviceSize bank=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_MPM_PARTICLES_PER_CHUNK*8u;
+        if(!dc_gpu_address_buffer_create(g,bank*2u,true,&r->particles,err,cap)) return false;
+        uint32_t *h=r->root.mapped;put_address(h+14,r->particles.address);put_address(h+16,r->particles.address+bank);
+        g->descriptor_revision++;
+    }
+    fr_reactive_owner_t owner={.kind=FR_REACTIVE_OWNER_PARTICLE,.key={p->id_lo,p->id_hi,0,0,0}};
+    return admit(g,(uint32_t *)r->particles.mapped+(size_t)particle*2u,&owner,state,err,cap);
 }
 bool fr_gpu_reactive_read_particle(dc_gpu_t *g,uint32_t particle,
     fr_reactive_record_t *out,bool *found,char *err,uint32_t cap) {
-    (void)g;(void)particle;(void)out;(void)found;(void)err;(void)cap;return false;
+    if(!g||particle>=DC_GPU_CHUNK_SLOTS*DC_MPM_PARTICLES_PER_CHUNK||!out||!found)
+        return error(err,cap,"Invalid reactive particle diagnostic");
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Particle diagnostic wait failed");
+    uint32_t *e=g->reactive&&g->reactive->particles.buffer?
+        entry(g,(uint32_t *)g->reactive->particles.mapped+(size_t)particle*2u):NULL;
+    if(e) {memcpy(&out->owner,e+FR_ENTRY_OWNER,sizeof(out->owner));memcpy(&out->state,e+FR_ENTRY_STATE,sizeof(out->state));}
+    *found=e!=NULL;return true;
 }

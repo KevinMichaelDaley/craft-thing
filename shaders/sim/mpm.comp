@@ -97,6 +97,7 @@ uint particle_index(ivec2 cell, uint layer) {
 }
 
 #include "mpm_terrain_support.glsl"
+#include "../reactive/particle_storage.glsl"
 
 bool grain_at(ivec2 cell) {
     uint page = page_at(cell);
@@ -546,6 +547,8 @@ void gather(ivec2 target) {
     }
     output_particles[base] = has_first ? first : zero_particle();
     output_particles[base + CELLS] = has_second ? second : zero_particle();
+    reactive_particle_gather(params.unused0,first_index,base,has_first);
+    reactive_particle_gather(params.unused0,second_index,base+CELLS,has_second);
 }
 
 void commit_cell(ivec2 cell) {
@@ -555,6 +558,10 @@ void commit_cell(ivec2 cell) {
                      uint(particles[secondary].mass_fp != 0u);
     Particle first = output_particles[primary];
     Particle second = output_particles[secondary];
+    if(COMMIT_PARTICLE_COPY) {
+        reactive_particle_commit(params.unused0,primary);
+        reactive_particle_commit(params.unused0,secondary);
+    }
     uint new_count = uint(first.mass_fp != 0u) + uint(second.mass_fp != 0u);
 #ifndef DC_MPM_COALESCED_COMMIT
     if(COMMIT_PARTICLE_COPY) {
