@@ -1003,7 +1003,7 @@ static bool restart_demo(dc_level_view_t **view, const char *base_directory,
 static bool update_demo_title(dc_level_view_t *view, uint64_t seed,
                               uint32_t zoom, bool paused, bool entering_seed,
                               bool seed_error, const char *seed_text,
-                              char previous[192],bool heat_bench,uint32_t heat_mode) {
+                              char previous[192],bool heat_bench,uint32_t heat_mode,bool smoke_box,uint32_t smoke_mode) {
     dc_level_view_status_t status;
     if (!dc_level_view_status(view, &status)) return false;
     char title[192];
@@ -1014,6 +1014,9 @@ static bool update_demo_title(dc_level_view_t *view, uint64_t seed,
         const char *modes[]={"authored color","temperature","wetness"};
         snprintf(title,sizeof(title),"Heat bench prototype | %s | H+LMB finite probe | F7 view | 0-6 materials | P pause, N step, R reset%s",
             modes[heat_mode],paused?" | paused":"");
+    } else if(smoke_box) {
+        snprintf(title,sizeof(title),"Smoke box prototype | %s | F9 red, F10 blue, F11 vent | F7 view | P pause, N step, R reset%s",
+            smoke_mode?"oxygen: cyan21%, red0%":"finite smoke pigment",paused?" | paused":"");
     } else
         snprintf(title, sizeof(title),
                  "Dungeoncraft  |  seed %" PRIu64 "  |  chunk (%" PRId64 ",%" PRId64
@@ -1086,8 +1089,9 @@ int main(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "--smoke-motion-long") == 0)
         return smoke_moving_water_long();
     bool scripted_input = argc > 1 && strcmp(argv[1], "--smoke-controls-ui") == 0;
-    bool demo_coupled = false, demo_sifting = false, lighting = false,heat_bench=false;
+    bool demo_coupled = false, demo_sifting = false, lighting = false,heat_bench=false,smoke_box=false;
     char heat_directory[]="build/heat_bench_interactive_XXXXXX";
+    char smoke_directory[]="build/smoke_box_interactive_XXXXXX";
     char scripted_directory[] = "build/ui_input_XXXXXX";
     if (scripted_input && !mkdtemp(scripted_directory)) {
         perror("mkdtemp");
@@ -1119,6 +1123,7 @@ int main(int argc, char **argv) {
             continue;
         }
         if(strcmp(argv[i],"--heat-bench")==0) {heat_bench=true;continue;}
+        if(strcmp(argv[i],"--smoke-box")==0) {smoke_box=true;continue;}
         if (strcmp(argv[i], "--demo-sifting") == 0) {
             demo_sifting = true;
             continue;
@@ -1143,7 +1148,7 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--benchmark-capture") == 0 && i + 1 < argc)
             benchmark_capture = argv[++i];
         else {
-            fprintf(stderr, "Usage: %s [--seed number] [--world-dir path] [--scene asset.cprop|--heat-bench] [--lighting] [--demo-coupled|--demo-sifting]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [--seed number] [--world-dir path] [--scene asset.cprop|--heat-bench|--smoke-box] [--lighting] [--demo-coupled|--demo-sifting]\n", argv[0]);
             return 1;
         }
     }
@@ -1152,9 +1157,14 @@ int main(int argc, char **argv) {
         return 1;
     }
     if(heat_bench&&scene_path) {fprintf(stderr,"Choose --heat-bench or --scene\n");return 1;}
+    if(smoke_box&&(heat_bench||scene_path)) {fprintf(stderr,"Choose one authored fixture\n");return 1;}
     if(heat_bench&&!benchmark_world) {
         if(!mkdtemp(heat_directory)) {perror("mkdtemp");return 1;}
         directory=heat_directory;
+    }
+    if(smoke_box&&!benchmark_world) {
+        if(!mkdtemp(smoke_directory)) {perror("mkdtemp");return 1;}
+        directory=smoke_directory;
     }
     dc_benchmark_brush_t benchmark_brush={0},benchmark_pour={0};
     const char *brush_setting=benchmark_frames?getenv("DC_BENCHMARK_AIR_BRUSH"):NULL;
@@ -1178,6 +1188,10 @@ int main(int argc, char **argv) {
         fprintf(stderr,"Heat bench setup: %s\n",err);dc_level_view_destroy(view,err,sizeof(err));return 1;
     }
     if(heat_bench) printf("Heat bench: %s | finite350K stone/probe, dry and pre-wet wood controls | H+LMB probe/hover, F7 view\n",directory);
+    if(smoke_box&&!dc_level_view_setup_smoke_box(view,err,sizeof(err))) {
+        fprintf(stderr,"Smoke box setup: %s\n",err);dc_level_view_destroy(view,err,sizeof(err));return 1;
+    }
+    if(smoke_box) printf("Smoke box prototype: %s | finite650K reservoirs | F9 red, F10 blue, F11 vent; F7 oxygen view\n",directory);
     if (lighting && !dc_level_view_renderer_mode(view,FR_RENDERER_LIT)) {
         fprintf(stderr,"Cannot enable propagated lighting\n");
         dc_level_view_destroy(view,err,sizeof(err));return 1;
@@ -1202,8 +1216,9 @@ int main(int argc, char **argv) {
     bool running = true;
     bool failed = false;
     bool paused = false;
-    bool spring_enabled = !(demo_coupled || demo_sifting || scene_path || heat_bench);
+    bool spring_enabled = !(demo_coupled || demo_sifting || scene_path || heat_bench || smoke_box);
     uint32_t heat_mode=1;
+    uint32_t smoke_mode=0;
     bool marker_overlay = false;
     bool single_step = false;
     uint32_t zoom = WINDOW_SCALE;
@@ -1266,7 +1281,8 @@ int main(int argc, char **argv) {
                         } else if (!restart_demo(&view, directory, (uint64_t)parsed,
                                                  &run, zoom, overlay, spring_enabled,
                                                  marker_overlay, scene_path, err, sizeof(err))||
-                                  (heat_bench&&!dc_level_view_setup_heat_bench(view,err,sizeof(err)))) {
+                                  (heat_bench&&!dc_level_view_setup_heat_bench(view,err,sizeof(err)))||
+                                  (smoke_box&&!dc_level_view_setup_smoke_box(view,err,sizeof(err)))) {
                             failed = true; running = false;
                         } else {
                             seed = (uint64_t)parsed;
@@ -1276,6 +1292,7 @@ int main(int argc, char **argv) {
                             previous = SDL_GetPerformanceCounter();
                             previous_title[0] = '\0';
                             if(heat_bench) dc_level_view_heat_overlay(view,heat_mode);
+                            if(smoke_box) dc_level_view_smoke_overlay(view,smoke_mode);
                         }
                     }
                     continue;
@@ -1294,6 +1311,13 @@ int main(int argc, char **argv) {
                     break;
                 case SDLK_F7:
                     if(heat_bench&&!event.key.repeat) {heat_mode=(heat_mode+1u)%3u;dc_level_view_heat_overlay(view,heat_mode);}
+                    if(smoke_box&&!event.key.repeat) {smoke_mode=(smoke_mode+1u)%2u;dc_level_view_smoke_overlay(view,smoke_mode);}
+                    break;
+                case SDLK_F9: case SDLK_F10: case SDLK_F11:
+                    if(smoke_box&&!event.key.repeat) {
+                        uint32_t valve=event.key.keysym.sym==SDLK_F9?0u:(event.key.keysym.sym==SDLK_F10?1u:2u);
+                        if(!dc_level_view_smoke_valve(view,valve,err,sizeof(err))) {failed=true;running=false;}
+                    }
                     break;
                 case SDLK_p: paused = !paused; break;
                 case SDLK_n: single_step = true; break;
@@ -1315,7 +1339,8 @@ int main(int argc, char **argv) {
                         if (!restart_demo(&view, directory, seed, &run, zoom,
                                           overlay, spring_enabled, marker_overlay,
                                           scene_path, err, sizeof(err))||
-                            (heat_bench&&!dc_level_view_setup_heat_bench(view,err,sizeof(err)))) {
+                            (heat_bench&&!dc_level_view_setup_heat_bench(view,err,sizeof(err)))||
+                            (smoke_box&&!dc_level_view_setup_smoke_box(view,err,sizeof(err)))) {
                             failed = true; running = false;
                         }
                         accumulator = 0.0;
@@ -1323,6 +1348,7 @@ int main(int argc, char **argv) {
                         previous = SDL_GetPerformanceCounter();
                         previous_title[0] = '\0';
                         if(heat_bench&&running) dc_level_view_heat_overlay(view,heat_mode);
+                        if(smoke_box&&running) dc_level_view_smoke_overlay(view,smoke_mode);
                     }
                     break;
                 case SDLK_MINUS:
@@ -1409,12 +1435,17 @@ int main(int argc, char **argv) {
             else printf("Finite benchmark water pour at frame%u: %u,%u radius%u\n",scripted_frame,benchmark_pour.x,benchmark_pour.y,benchmark_pour.radius);
         }
         uint64_t paint_done=benchmark_timings?SDL_GetPerformanceCounter():0;
+        if(running&&smoke_box&&benchmark_frames&&scripted_frame==DC_BENCHMARK_WARMUP_FRAMES&&
+            getenv("DC_BENCHMARK_SMOKE_OPEN")&&strcmp(getenv("DC_BENCHMARK_SMOKE_OPEN"),"1")==0) {
+            for(uint32_t valve=0;running&&valve<3;valve++) if(!dc_level_view_smoke_valve(view,valve,err,sizeof(err))) {failed=true;running=false;}
+            if(running) printf("Finite benchmark smoke valves opened at frame%u\n",scripted_frame);
+        }
         if (running && !dc_level_view_tick(view, err, sizeof(err))) {
             failed = true; running = false;
         }
         uint64_t present_done=benchmark_timings?SDL_GetPerformanceCounter():0;
         if (running && !update_demo_title(view, seed, zoom, paused, entering_seed,
-                                          seed_error, seed_text, previous_title,heat_bench,heat_mode)) {
+                                          seed_error, seed_text, previous_title,heat_bench,heat_mode,smoke_box,smoke_mode)) {
             snprintf(err, sizeof(err), "Cannot update world status");
             failed = true; running = false;
         }
