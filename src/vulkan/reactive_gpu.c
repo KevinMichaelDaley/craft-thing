@@ -146,6 +146,7 @@ bool fr_gpu_reactive_read_body(dc_gpu_t *g,uint32_t id,uint32_t x,uint32_t y,
         uint32_t tile=(y/16u)*shape[2]+x/16u,offset=shape[8u+tile];
         if(!offset) return true;
         uint32_t cell=(y%16u)*16u+x%16u;
+        if(((shape[offset+1u+cell/8u]>>((cell%8u)*4u))&15u)==0u) return true;
         uint32_t word=b->compound_reserved+offset+1u+cell/8u;
         uint32_t relative=word-dc_gpu_pixel_pool_word_offset(g)-DC_GPU_PIXEL_POOL_HEADER_WORDS;
         uint32_t capacity=dc_gpu_pixel_pool_capacity(g),allocated=((uint32_t *)g->reactive->root.mapped)[12];
@@ -156,4 +157,12 @@ bool fr_gpu_reactive_read_body(dc_gpu_t *g,uint32_t id,uint32_t x,uint32_t y,
         return true;
     }
     return true;
+}
+bool fr_gpu_reactive_seed_particle(dc_gpu_t *g,uint32_t particle,
+    const fr_reactive_state_t *state,char *err,uint32_t cap) {
+    (void)g;(void)particle;(void)state;(void)err;(void)cap;return false;
+}
+bool fr_gpu_reactive_read_particle(dc_gpu_t *g,uint32_t particle,
+    fr_reactive_record_t *out,bool *found,char *err,uint32_t cap) {
+    (void)g;(void)particle;(void)out;(void)found;(void)err;(void)cap;return false;
 }

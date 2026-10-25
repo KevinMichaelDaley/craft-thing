@@ -628,6 +628,8 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/dry_fluid_tests
 	./build/fluid_specialization_tests
 	./build/reactive_profile_gpu_tests
+	./build/reactive_state_gpu_tests
+	./build/reactive_cell_gpu_tests
 	./build/pressure_work_tests
 	./build/pressure_stencil_pack_tests
 	./build/grain_bed_work_tests
@@ -1672,3 +1674,6 @@ build/reactive_cell_gpu_tests: tests/vulkan/reactive_cell_gpu_tests.c $(GPU_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/shaders/runtime/pattern.comp.spv: shaders/reactive/gpu_storage.glsl shaders/reactive/state.glsl include/dungeoncraft/reactive_state_layout.h
 $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv: shaders/reactive/gpu_storage.glsl shaders/reactive/state.glsl include/dungeoncraft/reactive_state_layout.h
+test: build/reactive_state_gpu_tests build/reactive_cell_gpu_tests
+build/reactive_cell_display_tests: tests/vulkan/reactive_cell_gpu_tests.c $(GPU_SRC) src/world/chunk.c $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)
