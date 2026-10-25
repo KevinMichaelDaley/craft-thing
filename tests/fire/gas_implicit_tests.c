@@ -62,9 +62,27 @@ static void test_implicit_two_dimensional_pressure_release_preserves_closed_spec
     for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(after[k]-stock[k])<1e-10);
     ASSERT_TRUE(moved&&fabs(after_energy-energy)<1e-7&&fabs(after_color-color)<1e-10);PASS();
 }
+static void test_implicit_advection_uses_positive_global_axis_bound_with_closed_budgets(void) {
+    char err[256]={0};fr_gas_model_t m=model();fr_gas_state_t s[64]={0},out[64];double v[64];
+    for(uint32_t i=0;i<64;i++) {
+        v[i]=1;s[i].species[0]=.21;s[i].species[1]=.79;s[i].momentum[0]=2;s[i].momentum[1]=1;s[i].energy=752.5;
+    }
+    ASSERT_TRUE(fr_gas_implicit_reference_step(&m,s,v,8,8,.25,out,err,sizeof(err)));
+    double energy=0,mass=0;
+    for(uint32_t i=0;i<64;i++) {
+        fr_gas_thermo_t t;ASSERT_TRUE(fr_gas_thermodynamics(&m,out+i,1,&t,err,sizeof(err)));
+        ASSERT_TRUE(out[i].species[0]>=0&&out[i].species[1]>=0&&t.temperature_K>0);
+        energy+=out[i].energy;mass+=t.mass;
+    }
+    ASSERT_TRUE(fabs(energy-64.*752.5)<1e-7&&fabs(mass-64.)<1e-10);
+    memset(out,0x5a,sizeof(out));fr_gas_state_t saved[64];memcpy(saved,out,sizeof(out));
+    ASSERT_TRUE(!fr_gas_implicit_reference_step(&m,s,v,8,8,.31,out,err,sizeof(err)));
+    ASSERT_EQ(memcmp(out,saved,sizeof(out)),0);PASS();
+}
 int main(void) {
     RUN(test_implicit_acoustic_mode_matches_independent_backward_euler_at_large_acoustic_cfl);
     RUN(test_implicit_stationary_colored_contacts_and_walls_preserve_exact_inventory);
     RUN(test_implicit_two_dimensional_pressure_release_preserves_closed_species_energy_and_pigment);
+    RUN(test_implicit_advection_uses_positive_global_axis_bound_with_closed_budgets);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
