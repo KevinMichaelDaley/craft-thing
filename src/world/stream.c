@@ -8,6 +8,7 @@
 
 #include "dungeoncraft/generate.h"
 #include "dungeoncraft/stream.h"
+#include "ferrum/fire/thermal_checkpoint.h"
 
 typedef enum { JOB_LOAD, JOB_SAVE } job_kind_t;
 typedef struct {
@@ -17,6 +18,8 @@ typedef struct {
     dc_chunk_t *chunk;
     dc_chunk_colors_t *colors;
     fr_reactive_chunk_t *reactive;
+    uint8_t *thermal;
+    size_t thermal_bytes;
 } stream_job_t;
 
 typedef struct {
@@ -67,7 +70,8 @@ static void release_channel(fr_reactive_chunk_t *channel) {
     if(channel) {fr_reactive_chunk_release(channel);free(channel);}
 }
 static bool save_chunk(const dc_streamer_t *stream,const dc_chunk_t *chunk,
-    const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive) {
+    const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
+    const uint8_t *thermal,size_t thermal_bytes) {
     dc_chunk_colors_t ambient_colors={0};
     if(reactive&&!colors) colors=&ambient_colors;
     char temporary[1024], final[1024];
@@ -79,6 +83,7 @@ static bool save_chunk(const dc_streamer_t *stream,const dc_chunk_t *chunk,
         .x = chunk->coord.x, .y = chunk->coord.y, .seed = stream->seed };
     if(colors) header.version=6;
     if(reactive) header.version=7;
+    if(thermal) header.version=8;
     bool okay = fwrite(&header, sizeof(header), 1, file) == 1 &&
         fwrite(chunk->cells, sizeof(chunk->cells), 1, file) == 1 &&
         chunk->marker_count <= DC_MARKERS_PER_CHUNK &&
@@ -109,6 +114,11 @@ static bool save_chunk(const dc_streamer_t *stream,const dc_chunk_t *chunk,
         uint64_t length=size,hash=0;
         if(okay) okay=fwrite(&length,sizeof(length),1,file)==1&&fwrite(bytes,size,1,file)==1;
         free(bytes);
+        if(okay&&thermal) {
+            uint64_t liquid_length=thermal_bytes;
+            okay=fwrite(&liquid_length,sizeof(liquid_length),1,file)==1&&
+                fwrite(thermal,thermal_bytes,1,file)==1;
+        }
         long end=okay?ftell(file):-1;
         if(okay) okay=prefix_hash(file,end,&hash)&&fseek(file,end,SEEK_SET)==0&&fwrite(&hash,sizeof(hash),1,file)==1;
     }
@@ -119,7 +129,7 @@ static bool save_chunk(const dc_streamer_t *stream,const dc_chunk_t *chunk,
 }
 
 static dc_chunk_t *load_chunk(const dc_streamer_t *stream,dc_chunk_coord_t coord,
-    dc_chunk_colors_t *colors,fr_reactive_chunk_t **reactive) {
+    dc_chunk_colors_t *colors,fr_reactive_chunk_t **reactive,float **water_excess) {
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     if (!chunk) return NULL;
     chunk->coord=coord;
@@ -145,7 +155,7 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,dc_chunk_coord_t coord
     chunk_header_t header;
     bool okay = fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCC1", 4) == 0 &&
-        (header.version >= 1 && header.version <= 7) &&
+        (header.version >= 1 && header.version <= 8) &&
         header.x == coord.x && header.y == coord.y && header.seed == stream->seed &&
         fread(chunk->cells, sizeof(chunk->cells), 1, file) == 1;
     if (okay && header.version >= 2)
@@ -180,20 +190,33 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,dc_chunk_coord_t coord
         okay=okay&&hash==stored;
         if(okay&&header.version==6) okay=fgetc(file)==EOF&&!ferror(file);
     }
-    if(okay&&header.version==7) {
+    if(okay&&header.version>=7) {
         uint64_t length=0;size_t maximum=0;uint8_t *bytes=NULL;
         okay=fr_reactive_chunk_size(DC_CHUNK_CELLS+DC_MPM_PARTICLES_PER_CHUNK,&maximum)&&
             fread(&length,sizeof(length),1,file)==1&&length>=72u&&length<=maximum;
         if(okay) okay=(bytes=malloc((size_t)length))!=NULL&&fread(bytes,(size_t)length,1,file)==1;
+        uint64_t liquid_length=0;uint8_t *liquid=NULL;
+        if(okay&&header.version==8) {
+            enum { LIQUID_CHUNK_BYTES=48+16+DC_CHUNK_CELLS*4 };
+            okay=fread(&liquid_length,sizeof(liquid_length),1,file)==1&&liquid_length==LIQUID_CHUNK_BYTES;
+            if(okay) okay=(liquid=malloc((size_t)liquid_length))!=NULL&&fread(liquid,(size_t)liquid_length,1,file)==1;
+        }
         long end=okay?ftell(file):-1;uint64_t stored=0,hash=0;
         if(okay) okay=fread(&stored,sizeof(stored),1,file)==1&&fgetc(file)==EOF&&!ferror(file)&&
             prefix_hash(file,end,&hash)&&hash==stored;
         if(okay) okay=(*reactive=calloc(1,sizeof(**reactive)))!=NULL&&
             fr_reactive_chunk_decode(bytes,(size_t)length,chunk,*reactive,NULL,0);
-        free(bytes);
+        if(okay&&liquid) {
+            fr_thermal_checkpoint_t state={0};
+            okay=fr_thermal_checkpoint_decode(liquid,(size_t)liquid_length,chunk,1,&state,NULL,0)&&
+                state.purpose==FR_THERMAL_WORLD_GENERIC&&state.source.excess_energy==0.f;
+            if(okay) {*water_excess=state.water_excess;state.water_excess=NULL;}
+            fr_thermal_checkpoint_release(&state);
+        }
+        free(bytes);free(liquid);
     }
     if (fclose(file) != 0) okay = false;
-    if (!okay) {release_channel(*reactive);*reactive=NULL;free(chunk);return NULL;}
+    if (!okay) {release_channel(*reactive);*reactive=NULL;free(*water_excess);*water_excess=NULL;free(chunk);return NULL;}
     chunk->coord = coord;
     if (header.version < 4) dc_chunk_seed_particles(chunk);
     return chunk;
@@ -215,13 +238,14 @@ static int worker_main(void *arg) {
         dc_stream_result_t result = { .coord = job.coord, .generation = job.generation };
         if (job.kind == JOB_LOAD) {
             result.colors=calloc(1,sizeof(*result.colors));
-            result.chunk = result.colors?load_chunk(stream,job.coord,result.colors,&result.reactive):NULL;
+            result.chunk = result.colors?load_chunk(stream,job.coord,result.colors,&result.reactive,&result.water_excess):NULL;
             result.kind = result.chunk ? DC_STREAM_LOADED : DC_STREAM_FAILED;
         } else {
-            result.kind = save_chunk(stream,job.chunk,job.colors,job.reactive) ? DC_STREAM_SAVED : DC_STREAM_FAILED;
+            result.kind = save_chunk(stream,job.chunk,job.colors,job.reactive,job.thermal,job.thermal_bytes) ? DC_STREAM_SAVED : DC_STREAM_FAILED;
             free(job.chunk);
             free(job.colors);
             release_channel(job.reactive);
+            free(job.thermal);
         }
 
         mtx_lock(&stream->mutex);
@@ -314,6 +338,13 @@ bool dc_stream_request_save_colors(dc_streamer_t *stream,const dc_chunk_t *chunk
 }
 bool dc_stream_request_save_reactive(dc_streamer_t *stream,const dc_chunk_t *chunk,
     const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,uint64_t generation) {
+    return dc_stream_request_save_thermal(stream,chunk,colors,reactive,NULL,generation);
+}
+bool dc_stream_request_save_thermal(dc_streamer_t *stream,const dc_chunk_t *chunk,
+    const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
+    const float *water_excess,uint64_t generation) {
+    fr_reactive_chunk_t empty={.next_id=1};
+    if(water_excess&&!reactive) reactive=&empty;
     if (!stream || !chunk || !generation) return false;
     if(colors && !dc_color_records_valid((const float*)colors,DC_CHUNK_CELLS*2)) return false;
     if(reactive&&!fr_reactive_chunk_valid(reactive,chunk,NULL,0)) return false;
@@ -336,10 +367,17 @@ bool dc_stream_request_save_reactive(dc_streamer_t *stream,const dc_chunk_t *chu
     }
     stream_job_t job = { .kind = JOB_SAVE, .coord = chunk->coord,
         .generation = generation, .chunk = copy,.colors=color_copy,.reactive=reaction_copy };
+    if(water_excess) {
+        fr_thermal_checkpoint_t state={.source={0,FR_THERMAL_PROBE_CAPACITY},.chunk_count=1,.water_excess=(float *)water_excess};
+        if(!fr_thermal_checkpoint_encode(&state,copy,1,&job.thermal,&job.thermal_bytes,NULL,0)) {
+            free(copy);free(color_copy);release_channel(reaction_copy);return false;
+        }
+    }
     if (queue_job(stream, job)) return true;
     free(copy);
     free(color_copy);
     release_channel(reaction_copy);
+    free(job.thermal);
     return false;
 }
 
@@ -356,18 +394,12 @@ bool dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *result) {
     return true;
 }
 
-bool dc_stream_request_save_thermal(dc_streamer_t *stream,const dc_chunk_t *chunk,
-    const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
-    const float *water_excess,uint64_t generation) {
-    (void)stream;(void)chunk;(void)colors;(void)reactive;(void)water_excess;(void)generation;
-    return false;
-}
-
 void dc_stream_result_release(dc_stream_result_t *result) {
     if (!result) return;
     free(result->chunk);
     free(result->colors);
     release_channel(result->reactive);
+    free(result->water_excess);
     memset(result, 0, sizeof(*result));
 }
 
@@ -383,6 +415,7 @@ void dc_stream_destroy(dc_streamer_t *stream) {
         free(stream->jobs[i].chunk);
         free(stream->jobs[i].colors);
         release_channel(stream->jobs[i].reactive);
+        free(stream->jobs[i].thermal);
         dc_stream_result_release(&stream->results[i]);
     }
     cnd_destroy(&stream->results_space);
