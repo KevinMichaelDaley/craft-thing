@@ -4,6 +4,7 @@
 #extension GL_KHR_shader_subgroup_arithmetic : require
 #include "rigid_body.glsl"
 #include "../../include/dungeoncraft/terrain_flags.h"
+#include "../reactive/particle_storage.glsl"
 #include "mpm_particle_mirror.glsl"
 layout(local_size_x=128) in;
 layout(constant_id=0) const uint EXTRACTION_PHASE=0u;

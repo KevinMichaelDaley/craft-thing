@@ -2,12 +2,12 @@
 #extension GL_GOOGLE_include_directive : require
 #define DC_RUNTIME_ROOT_READONLY 1
 #include "../../include/dungeoncraft/terrain_flags.h"
-#include "mpm_particle_mirror.glsl"
 layout(constant_id=1) const bool DRAW_PIXEL_ONLY=false;
 layout(constant_id=2) const bool DRAW_SIMPLE=false;
 #define DC_RIGID_PIXEL_ONLY DRAW_PIXEL_ONLY
 #include "rigid_body.glsl"
-#include "../reactive/gpu_storage.glsl"
+#include "../reactive/particle_storage.glsl"
+#include "mpm_particle_mirror.glsl"
 #include "rigid_shape.glsl"
 #include "rigid_clip.glsl"
 layout(local_size_x = 16, local_size_y = 16) in;
@@ -292,6 +292,7 @@ void main() {
                 } else {
                     if (particles[particle_index].mass_fp == 0u &&
                         particles[secondary_index].mass_fp != 0u) {
+                        if(!reactive_move_particle(secondary_index,particle_index)) return;
                         particles[particle_index] = particles[secondary_index];
                         particles[secondary_index].mass_fp = 0u;
                         mpm_forget_output(secondary_index);
@@ -314,6 +315,8 @@ void main() {
                     } else {
                         bool full_stamp=params.color!=3u&&(particles[particle_index].material!=material||material==4u||material==5u);
                         if(full_stamp) {
+                            mpm_forget_output(particle_index);
+                            if(particles[particle_index].material!=material) particles[particle_index].flags=0u;
                             particles[particle_index].mass_fp=grain_mass_fp(material);
                             particles[particle_index].f00=particles[particle_index].f11=1.;
                             particles[particle_index].f01=particles[particle_index].f10=0.;

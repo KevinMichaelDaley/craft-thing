@@ -630,6 +630,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/reactive_profile_gpu_tests
 	./build/reactive_state_gpu_tests
 	./build/reactive_cell_gpu_tests
+	./build/reactive_particle_lifecycle_tests
 	./build/pressure_work_tests
 	./build/pressure_stencil_pack_tests
 	./build/grain_bed_work_tests
@@ -1278,7 +1279,7 @@ build/shaders/runtime_body_scan.comp.spv: shaders/sim/runtime_body_scan.comp $(w
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 $(GPU_OBJ): build/shaders/runtime_body_scan.comp.spv
 
-RUNTIME_BODY_NAMES = pattern rigid rigid_solver contacts broadphase component_extract component_local structural pixel_hydro mpm mpm_active mpm_compact tick_probe scene
+RUNTIME_BODY_NAMES = pattern rigid rigid_solver contacts broadphase component_extract component_local structural pixel_hydro mpm mpm_active mpm_compact tick_probe scene halo
 RUNTIME_BODY_SHADERS = $(addprefix build/shaders/runtime/,$(addsuffix .comp.spv,$(RUNTIME_BODY_NAMES)))
 $(GPU_OBJ) $(PERFORMANCE_OBJ) $(NATIVE360_OBJ) $(GPU_SOURCE_BINARIES) build/dungeoncraft_360 build/diagnostics/body_support build/level03_support_tests: build/shaders/structural_carve.comp.spv build/shaders/runtime/structural_carve.comp.spv
 $(GPU_OBJ): $(RUNTIME_BODY_SHADERS)
@@ -1686,3 +1687,5 @@ build/reactive_particle_lifecycle_tests: tests/vulkan/reactive_particle_lifecycl
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/reactive_particle_lifecycle_display_tests: tests/vulkan/reactive_particle_lifecycle_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/shaders/runtime/pattern.comp.spv build/shaders/runtime/halo.comp.spv build/shaders/runtime/component_extract.comp.spv: shaders/reactive/particle_storage.glsl
+test: build/reactive_particle_lifecycle_tests

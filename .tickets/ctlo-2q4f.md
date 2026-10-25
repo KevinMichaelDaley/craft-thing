@@ -35,3 +35,7 @@ Full regression RED found one new issue beyond the two tracked authored-stage fa
 **2026-10-25T00:57:58Z**
 
 REFACTOR validation complete: corrected unchanged color-work test reports3 pool queries/3 capacity queries/24 lanes/0 color errors; all4 native Wayland ownership cases pass again. Repeated full make -j8 -i test has685 C passes plus6 fixture checks, only the same2 ctr-ojvy authored-stage failures at67/135, and0 compiler warnings/new failures. State/ownership ticket remains in progress; no final epic frame-time acceptance is claimed.
+
+**2026-10-25T01:12:20Z**
+
+Particle lifecycle GREEN:4 new RED cases reproduced stale state after air/repaint, lost secondary-promotion state, leaf RGB flags becoming soil moisture, and state loss across a negative-coordinate halo transfer. All4 now pass on native Wayland Vulkan at480x270+halo with core/sync validation (16 presented frames); the prior4 ownership cases pass again on Intel. Canonical A erasure retires only its entry and clears stale B handles without retiring unrelated B aliases. Halo runtime variant follows particle handles and promotion; material replacement clears incompatible flags. No ticket/epic closure yet.

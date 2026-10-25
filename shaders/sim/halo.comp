@@ -1,5 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#include "rigid_body.glsl"
+#include "../reactive/particle_storage.glsl"
 #include "mpm_particle_mirror.glsl"
 layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -118,12 +120,14 @@ void resolve_transfer() {
         }
         uint source_particle = source_slot * 8192u + source_index % CELLS_PER_CHUNK;
         uint destination_particle = destination_slot * 8192u + destination_index % CELLS_PER_CHUNK;
+        if(!reactive_move_particle(source_particle,destination_particle)) {command.state=2u;return;}
         Particle moving = particles[source_particle];
         moving.x_fp = int((command.to_x % SIDE) * FLUID_FULL + FLUID_FULL / 2u);
         moving.y_fp = int((command.to_y % SIDE) * FLUID_FULL + FLUID_FULL / 2u);
         particles[destination_particle] = moving;
         uint source_second = source_particle + CELLS_PER_CHUNK;
         if (particles[source_second].mass_fp != 0u) {
+            reactive_move_particle(source_second,source_particle);
             particles[source_particle] = particles[source_second];
             particles[source_second].mass_fp = 0u;
             mpm_forget_output(source_second);
