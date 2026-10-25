@@ -79,3 +79,7 @@ Permanent tools/bench_heat_bench now completed four real Wayland Vulkan1000-fram
 **2026-10-25T05:39:02Z**
 
 Pre-persistence REFACTOR safe boundary35cf70c: full default suite727 C passes, exactly2 known ctr-ojvy authored-stage failures, zero warnings (build/thermal_feedback_full_suite.log). Actual dry/pour1000x2 performance passes remain recorded. Heatbench is still open because supported restore currently refuses worlds; audit preserved DCS transaction draft now only for this visible module needed state, including liquid enthalpy and finite probe. No DCS8 active yet, no future material/owner admission claimed.
+
+**2026-10-25T05:45:51Z**
+
+Persistence REDb7ff0d9 compiled and failed2/2 native tests. Minimal source diagnostic now passes its real-contact/atomic-output case; rerun reaches the actual missing behavior: save/load succeeds physically, but restored thermal source is absent (1pass/1fail, build/thermal_checkpoint_source_display.log). This confirms the old checkpoint omission before format integration. Existing two reactive checkpoint REDs remain separate from default battery. No DCS8 linked/enabled yet.

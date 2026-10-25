@@ -120,7 +120,10 @@ bool fr_thermal_gpu_inspect(dc_gpu_t *g,uint32_t x,uint32_t y,
     *out=value;return true;
 }
 bool fr_thermal_gpu_source_state(dc_gpu_t *g,fr_thermal_probe_t *out,char *err,uint32_t cap) {
-    (void)g;(void)out;(void)err;(void)cap;return false;
+    if(!g||!g->thermal||!out) return error(err,cap,"Invalid thermal source snapshot");
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete thermal source snapshot");
+    const float *source=g->thermal->probe.mapped;
+    *out=(fr_thermal_probe_t){.excess_energy=source[0],.capacity=source[1]};return true;
 }
 bool fr_thermal_prepare_paint(dc_gpu_t *g,uint32_t x,uint32_t y,uint32_t radius,
     uint32_t material,char *err,uint32_t cap) {
