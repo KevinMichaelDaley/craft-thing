@@ -323,6 +323,34 @@ static void test_native_sparse_footprints_match_dense_after_gravity_and_valve_ch
     ASSERT_EQ(memcmp(dense,out,4096*sizeof(*out)),0);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(input);free(dense);free(out);free(volume);free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_native_large_cfl_packet_matches_composed_oracle_in_one_step(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    fr_gas_model_t m=reference_model();fr_gas_state_t *input=calloc(4096,sizeof(*input)),*expected=malloc(4096*sizeof(*expected)),*out=malloc(4096*sizeof(*out));
+    double *volume=calloc(4096,sizeof(*volume));ASSERT_TRUE(input&&expected&&out&&volume);
+    for(uint32_t i=0;i<4096;i++) c->cells[i]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+    for(uint32_t x=0;x<64;x++) {
+        uint32_t i=20u*64u+x;c->cells[i]=(dc_cell_t){0};volume[i]=1;input[i]=reference_air(m,.9,300,10);
+        input[i].species[FR_GAS_EXHAUST]=.1;input[i].energy+=.1*m.heat_capacity_cv[FR_GAS_EXHAUST]*300+5;input[i].momentum[0]=10;
+        if(x==4) input[i].pigment[0]=.1;
+        if(x==6) input[i].pigment[2]=.1;
+    }
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_LARGE_CFL,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,input,4096,err,sizeof(err)));
+    float seconds=.4f;ASSERT_TRUE(fr_gas_large_cfl_reference_step(&m,input,volume,64,64,seconds,expected,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_step(g,seconds,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+    fr_gas_gpu_clock_t clock;ASSERT_TRUE(fr_gas_gpu_clock(g,&clock));ASSERT_EQ(clock.substeps,1u);
+    double energy=0,original=0,stock[5]={0},before[5]={0};
+    for(uint32_t i=0;i<4096;i++) {
+        for(uint32_t k=0;k<5;k++) {ASSERT_TRUE(fabs(out[i].species[k]-expected[i].species[k])<2e-5);stock[k]+=out[i].species[k];before[k]+=input[i].species[k];}
+        for(uint32_t k=0;k<3;k++) ASSERT_TRUE(fabs(out[i].pigment[k]-expected[i].pigment[k])<2e-6);
+        for(uint32_t k=0;k<2;k++) ASSERT_TRUE(fabs(out[i].momentum[k]-expected[i].momentum[k])<.0002);
+        ASSERT_TRUE(fabs(out[i].energy-expected[i].energy)<.01);energy+=out[i].energy;original+=input[i].energy;
+    }
+    for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(stock[k]-before[k])<.0002);
+    ASSERT_TRUE(fabs(energy-original)<.02&&present(g,err,sizeof(err)));
+    free(input);free(expected);free(out);free(volume);free(c);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
@@ -339,5 +367,6 @@ int main(void) {
     RUN(test_native_derived_cache_rebuilds_after_seed_and_page_remap);
     RUN(test_native_implicit_axis_cfl_matches_cold_oracle_in_one_positive_step);
     RUN(test_native_sparse_footprints_match_dense_after_gravity_and_valve_changes);
+    RUN(test_native_large_cfl_packet_matches_composed_oracle_in_one_step);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
