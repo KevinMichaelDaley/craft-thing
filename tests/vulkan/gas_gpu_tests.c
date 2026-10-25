@@ -23,6 +23,7 @@ static void test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     fr_gas_model_t m=reference_model();ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_set_gravity(g,900,err,sizeof(err)));
     fr_gas_state_t *before=malloc(4096*sizeof(*before)),*after=malloc(4096*sizeof(*after));ASSERT_TRUE(before&&after);
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,before,4096,err,sizeof(err)));
     fr_gas_thermo_t t;ASSERT_TRUE(fr_gas_thermodynamics(&m,before,1,&t,err,sizeof(err)));
@@ -82,9 +83,35 @@ static void test_native_colored_transport_matches_reference_and_retains_closed_b
     ASSERT_EQ(SDL_SaveBMP(surface,"build/screenshots/gas_reference_transport.bmp"),0);SDL_FreeSurface(surface);free(pixels);
     free(input);free(expected);free(out);free(volumes);free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_native_buoyancy_matches_reference_and_accounts_for_external_work(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_gas_model_t m=reference_model();ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err)));
+    fr_gas_state_t *input=malloc(4096*sizeof(*input)),*out=malloc(4096*sizeof(*out));
+    double *volumes=malloc(4096*sizeof(*volumes)),*work=malloc(4096*sizeof(*work));ASSERT_TRUE(input&&out&&volumes&&work);
+    for(uint32_t i=0;i<4096;i++) {input[i]=reference_air(m,.5,600,0);volumes[i]=1;}
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volumes,4096,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,input,4096,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_set_gravity(g,900,err,sizeof(err)));
+    float seconds=.0001f;
+    ASSERT_TRUE(fr_gas_gpu_step(g,seconds,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_read_work_chunk(g,0,work,4096,err,sizeof(err)));
+    fr_gas_state_t ambient=reference_air(m,1,300,0);double specific=0,total_work=0,energy_change=0;
+    for(uint32_t k=0;k<5;k++) specific+=ambient.species[k]*m.gas_constant[k]*300;
+    for(uint32_t i=0;i<4096;i++) {
+        fr_gas_state_t expected;double admitted=0;
+        ASSERT_TRUE(fr_gas_reference_buoyancy(&m,input+i,1,specific,900,seconds,&expected,&admitted,err,sizeof(err)));
+        ASSERT_TRUE(out[i].momentum[1]<0&&fabs(out[i].momentum[1]-expected.momentum[1])<2e-7);
+        ASSERT_TRUE(fabs(out[i].energy-expected.energy)<1e-6&&fabs(work[i]-admitted)<1e-7);
+        ASSERT_EQ(memcmp(out[i].species,input[i].species,sizeof(out[i].species)),0);
+        energy_change+=out[i].energy-input[i].energy;total_work+=work[i];
+    }
+    ASSERT_TRUE(fabs(energy_change-total_work)<1e-6);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(input);free(out);free(volumes);free(work);free(c);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
     RUN(test_native_colored_transport_matches_reference_and_retains_closed_budgets);
+    RUN(test_native_buoyancy_matches_reference_and_accounts_for_external_work);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

@@ -11,6 +11,11 @@ bool fr_gas_gpu_enable(dc_gpu_t *gpu,const fr_gas_model_t *model,
 /** Advance the complete requested interval using reference-validated CFL steps.
  * Runtime reads only reduced scalar scheduling metadata, never field lists. */
 bool fr_gas_gpu_step(dc_gpu_t *gpu,float seconds,char *err_buf,uint32_t err_cap);
+/** Configure reference-atmosphere gravity in cells per physical second squared. */
+bool fr_gas_gpu_set_gravity(dc_gpu_t *gpu,float gravity,char *err_buf,uint32_t err_cap);
+/** Cold diagnostic of cumulative external buoyancy work, never a frame scan. */
+bool fr_gas_gpu_read_work_chunk(dc_gpu_t *gpu,uint32_t slot,double *work,
+    uint32_t capacity,char *err_buf,uint32_t err_cap);
 /** Completed-queue fixture/import of immutable logical chunk data. */
 bool fr_gas_gpu_seed_chunk(dc_gpu_t *gpu,uint32_t slot,const fr_gas_state_t *states,
     const double *void_fractions,uint32_t count,char *err_buf,uint32_t err_cap);

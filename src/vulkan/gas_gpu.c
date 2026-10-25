@@ -174,3 +174,9 @@ bool fr_gas_gpu_clock(const dc_gpu_t *g,fr_gas_gpu_clock_t *out) {
 void fr_gas_record_overlay(dc_gpu_t *g) {
     if(g->gas) fr_gas_feedback_record(g,&g->gas->feedback,g->gas->groups_x,g->gas->groups_y);
 }
+bool fr_gas_gpu_set_gravity(dc_gpu_t *g,float gravity,char *err,uint32_t cap) {
+    (void)g;(void)gravity;return error(err,cap,"Gravity not implemented");
+}
+bool fr_gas_gpu_read_work_chunk(dc_gpu_t *g,uint32_t slot,double *work,uint32_t count,char *err,uint32_t cap) {
+    (void)g;(void)slot;(void)work;(void)count;return error(err,cap,"Work snapshot not implemented");
+}
