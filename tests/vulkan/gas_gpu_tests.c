@@ -35,9 +35,11 @@ static void test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock
     ASSERT_TRUE(!fr_gas_gpu_step(g,NAN,err,sizeof(err))&&fr_gas_gpu_step(g,0,err,sizeof(err))&&present(g,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_clock(g,&paused)&&memcmp(&clock,&paused,sizeof(clock))==0);
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));ASSERT_EQ(memcmp(before,after,4096*sizeof(*before)),0);
+    ASSERT_TRUE(fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_IMPLICIT,err,sizeof(err))&&fr_gas_gpu_step(g,1.f/60.f,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));ASSERT_EQ(memcmp(before,after,4096*sizeof(*before)),0);
     free(before);free(after);free(c);dc_gpu_destroy(g);PASS();
 }
-static void test_native_colored_transport_matches_reference_and_retains_closed_budgets(void) {
+static void colored_transport(uint32_t policy) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     fr_gas_model_t m=reference_model();fr_gas_state_t *input=calloc(4096,sizeof(*input)),*expected=calloc(4096,sizeof(*expected)),*out=calloc(4096,sizeof(*out));
     double *volumes=malloc(4096*sizeof(*volumes));ASSERT_TRUE(input&&expected&&out&&volumes);
@@ -54,6 +56,7 @@ static void test_native_colored_transport_matches_reference_and_retains_closed_b
     }
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err))&&fr_gas_gpu_seed_chunk(g,0,input,volumes,4096,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_set_pressure_policy(g,policy,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,input,4096,err,sizeof(err)));
     double before_mass[5]={0},before_energy=0,before_color=0;
     for(uint32_t i=0;i<4096;i++) {
@@ -61,7 +64,11 @@ static void test_native_colored_transport_matches_reference_and_retains_closed_b
         before_energy+=input[i].energy;before_color+=input[i].pigment[0];
     }
     float interval=.001f;
-    ASSERT_TRUE(fr_gas_reference_step(&m,input,volumes,64,64,1,interval,FR_GAS_FLUX_HLLC,expected,err,sizeof(err)));
+    if(policy==FR_GAS_PRESSURE_HLLC) {
+        ASSERT_TRUE(fr_gas_reference_step(&m,input,volumes,64,64,1,interval,FR_GAS_FLUX_HLLC,expected,err,sizeof(err)));
+    } else {
+        ASSERT_TRUE(fr_gas_implicit_reference_step(&m,input,volumes,64,64,interval,expected,err,sizeof(err)));
+    }
     ASSERT_TRUE(fr_gas_gpu_step(g,interval,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
     for(uint32_t i=0;i<4096;i++) {
         for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(out[i].species[k]-expected[i].species[k])<2e-6);
@@ -84,6 +91,8 @@ static void test_native_colored_transport_matches_reference_and_retains_closed_b
     ASSERT_EQ(SDL_SaveBMP(surface,"build/screenshots/gas_reference_transport.bmp"),0);SDL_FreeSurface(surface);free(pixels);
     free(input);free(expected);free(out);free(volumes);free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_native_colored_transport_matches_reference_and_retains_closed_budgets(void) {colored_transport(FR_GAS_PRESSURE_HLLC);}
+static void test_native_implicit_colored_transport_matches_reference_and_retains_closed_budgets(void) {colored_transport(FR_GAS_PRESSURE_IMPLICIT);}
 static void test_native_buoyancy_matches_reference_and_accounts_for_external_work(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
@@ -136,5 +145,6 @@ int main(void) {
     RUN(test_native_colored_transport_matches_reference_and_retains_closed_budgets);
     RUN(test_native_buoyancy_matches_reference_and_accounts_for_external_work);
     RUN(test_native_implicit_acoustics_match_reference_beyond_explicit_acoustic_cfl);
+    RUN(test_native_implicit_colored_transport_matches_reference_and_retains_closed_budgets);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
