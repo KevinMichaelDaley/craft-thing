@@ -127,3 +127,7 @@ SOR32-lane checkerboard mapping preserves same cells/arithmetic/48 sweeps;5 prac
 **2026-10-25T23:20:51Z**
 
 Exact temporal SOR GREEN:34 indirect dispatches vs106 and BYTE-identical global-solver snapshot across valve changes;5 practical, transactional publication/recovery, independent acoustic reference and dense/sparse parity displayed tests pass. Same48 numerical fine sweeps. Audited1000 actual run34.838mean43.431worst; stock/finite budgets pass.30ms remains RED. Next same32 coarse sweeps in one parallel workgroup for small coarse grids, hardware/workspace fallback to original global coarse solver; no global gas capacity limit or reduced physical time.
+
+**2026-10-25T23:30:54Z**
+
+Coarse workgroup implementation preserves BYTE-identical reference snapshot,7 direct vs70 dispatches and all30 supported actual-display native tests pass. Audited1000 actual frames34.954mean40.595worst, stock/finite bounds pass; no clear mean gain vs34.838/43.431, retained opt-in for comparison, not promoted. Next16x16 output tiles for exact temporal fine sweeps to amortize halo/coefficient duplication, same48 fine/32 coarse iterations and immutable-source semantics.30ms still RED.

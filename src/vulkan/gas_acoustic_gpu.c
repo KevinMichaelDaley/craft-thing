@@ -32,6 +32,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->practical_axis);
     fr_renderer_compute_destroy(g,&t->practical_explicit);
     fr_renderer_compute_destroy(g,&t->temporal_sor);
+    fr_renderer_compute_destroy(g,&t->coarse_group);
     for(uint32_t i=0;i<11;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
     dc_gpu_address_buffer_destroy(g,&t->indirect);
     memset(t,0,sizeof(*t));
@@ -98,6 +99,11 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     }
     if(properties.limits.maxComputeWorkGroupInvocations>=128u&&properties.limits.maxComputeWorkGroupSize[0]>=128u&&
        !fr_renderer_compute_init(g,&t->temporal_sor,buffers,25,16,"build/shaders/gas_pressure_temporal.comp.spv",err,cap)) goto fail;
+    if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_COARSE_GROUP_CAPACITY*4u&&
+       properties.limits.maxComputeWorkGroupInvocations>=128u&&properties.limits.maxComputeWorkGroupSize[0]>=128u) {
+        const char *path=use_wide?"build/shaders/gas_pressure_coarse_group_wide.comp.spv":"build/shaders/gas_pressure_coarse_group.comp.spv";
+        if(!fr_renderer_compute_init(g,&t->coarse_group,buffers,25,16,path,err,cap)) goto fail;
+    }
     t->ready=true;return true;
 fail:
     fr_gas_acoustic_destroy(g,t);return false;
@@ -231,7 +237,10 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         if(coarse) {
             pressure_sweeps(g,t,dt,bank,16u);
             dispatch(g,&t->restrict_pressure,tiles,1u,dt,bank);
-            for(uint32_t sweep=0;sweep<32u;sweep++) {
+            const char *coarse_setting=getenv("DC_GAS_COARSE_WG");
+            if(t->coarse_group.pipeline&&coarse_setting&&strcmp(coarse_setting,"0")!=0&&tiles<=FR_GAS_COARSE_GROUP_CAPACITY)
+                dispatch(g,&t->coarse_group,1u,1u,dt,bank);
+            else for(uint32_t sweep=0;sweep<32u;sweep++) {
                 dispatch(g,&t->coarse_sor,(tiles+63u)/64u,1u,dt,bank);
                 dispatch(g,&t->coarse_sor,(tiles+63u)/64u,1u,dt,bank|2u);
             }

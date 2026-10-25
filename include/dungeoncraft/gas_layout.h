@@ -9,6 +9,7 @@
 #define FR_GAS_HYBRID_LINES_BIT 131072u
 #define FR_GAS_TEMPORAL_SOURCE_BIT 262144u
 #define FR_GAS_SOLVE_TILE_BIT 4u
+#define FR_GAS_COARSE_GROUP_CAPACITY 8192u
 /* Fast-path workspace and stage budget; longer/stiffer lines stay implicit. */
 #define FR_GAS_EXPLICIT_LINE_CAPACITY 640u
 #define FR_GAS_EXPLICIT_MAX_STAGES 3u
