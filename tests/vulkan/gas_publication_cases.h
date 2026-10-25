@@ -2,6 +2,11 @@
 #define GAS_PUBLICATION_CASES_H
 static uint32_t g_publication_submits;
 static uint32_t g_pressure_dispatches;
+static uint32_t g_direct_dispatches;
+VKAPI_ATTR void VKAPI_CALL __real_vkCmdDispatch(VkCommandBuffer command,uint32_t x,uint32_t y,uint32_t z);
+VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdDispatch(VkCommandBuffer command,uint32_t x,uint32_t y,uint32_t z) {
+    g_direct_dispatches++;__real_vkCmdDispatch(command,x,y,z);
+}
 VKAPI_ATTR void VKAPI_CALL __real_vkCmdDispatchIndirect(VkCommandBuffer command,VkBuffer buffer,VkDeviceSize offset);
 VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdDispatchIndirect(VkCommandBuffer command,VkBuffer buffer,VkDeviceSize offset) {
     g_pressure_dispatches++;__real_vkCmdDispatchIndirect(command,buffer,offset);
@@ -44,6 +49,7 @@ static void test_native_publication_uses_one_submission_and_preserves_rejected_s
 }
 static void test_native_temporal_sor_matches_global_and_bounds_dispatches(void) {
     char err[256]={0};const char *old=getenv("DC_GAS_TEMPORAL_SOR");char *saved=old?SDL_strdup(old):NULL;
+    const char *old_coarse=getenv("DC_GAS_COARSE_WG");char *saved_coarse=old_coarse?SDL_strdup(old_coarse):NULL;
     fr_gas_state_t *input=malloc(4096*sizeof(*input)),*reference=malloc(4096*sizeof(*reference)),*out=malloc(4096*sizeof(*out));
     double *volume=malloc(4096*sizeof(*volume));dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(input&&reference&&out&&volume&&c);
     fr_gas_model_t m=reference_model();m.kinetic_scale=1./512.;
@@ -52,18 +58,20 @@ static void test_native_temporal_sor_matches_global_and_bounds_dispatches(void) 
         fr_gas_state_t *s=input+y*64+x;s->species[FR_GAS_NITROGEN]-=.00001;s->species[FR_GAS_EXHAUST]=.00001;
         s->energy+=.00001*(m.heat_capacity_cv[FR_GAS_EXHAUST]-m.heat_capacity_cv[FR_GAS_NITROGEN])*300;s->pigment[0]=.000005;
     }
-    uint32_t baseline_dispatches=0,temporal_dispatches=0;
+    uint32_t baseline_dispatches=0,temporal_dispatches=0,baseline_direct=0,temporal_direct=0;
     for(uint32_t path=0;path<2;path++) {
         ASSERT_EQ(SDL_setenv("DC_GAS_TEMPORAL_SOR",path?"1":"0",1),0);dc_gpu_t *g=NULL;
+        ASSERT_EQ(SDL_setenv("DC_GAS_COARSE_WG",path?"1":"0",1),0);
         ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
         ASSERT_TRUE(fr_gas_gpu_enable(g,&m,.0012,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&fr_gas_gpu_set_gravity(g,900,err,sizeof(err)));
         ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
         for(uint32_t step=0;step<12;step++) {
             if(step==0||step==8) ASSERT_TRUE(fr_gas_gpu_gate(g,29,0,1,64,0,true,err,sizeof(err)));
             if(step==4) ASSERT_TRUE(fr_gas_gpu_gate(g,29,0,1,64,0,false,err,sizeof(err)));
-            g_pressure_dispatches=0;ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err)));
+            g_pressure_dispatches=0;g_direct_dispatches=0;ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err)));
         }
-        if(path) temporal_dispatches=g_pressure_dispatches;else baseline_dispatches=g_pressure_dispatches;
+        if(path) {temporal_dispatches=g_pressure_dispatches;temporal_direct=g_direct_dispatches;}
+        else {baseline_dispatches=g_pressure_dispatches;baseline_direct=g_direct_dispatches;}
         ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,path?out:reference,4096,err,sizeof(err))&&present(g,err,sizeof(err)));dc_gpu_destroy(g);
     }
     for(uint32_t i=0;i<4096;i++) {
@@ -75,6 +83,8 @@ static void test_native_temporal_sor_matches_global_and_bounds_dispatches(void) 
     printf("Temporal pressure dispatches%u vs global%u, exact snapshot%s\n",temporal_dispatches,baseline_dispatches,
         memcmp(out,reference,4096*sizeof(*out))==0?" yes":" no");
     ASSERT_TRUE(temporal_dispatches<70u&&temporal_dispatches<baseline_dispatches);
+    printf("Coarse direct dispatches%u vs global%u\n",temporal_direct,baseline_direct);ASSERT_TRUE(temporal_direct<40u&&temporal_direct<baseline_direct);
+    ASSERT_EQ(SDL_setenv("DC_GAS_COARSE_WG",saved_coarse?saved_coarse:"0",1),0);SDL_free(saved_coarse);
     ASSERT_EQ(SDL_setenv("DC_GAS_TEMPORAL_SOR",saved?saved:"0",1),0);SDL_free(saved);free(input);free(reference);free(out);free(volume);free(c);PASS();
 }
 #endif
