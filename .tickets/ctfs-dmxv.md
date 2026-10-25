@@ -131,3 +131,7 @@ Exact temporal SOR GREEN:34 indirect dispatches vs106 and BYTE-identical global-
 **2026-10-25T23:30:54Z**
 
 Coarse workgroup implementation preserves BYTE-identical reference snapshot,7 direct vs70 dispatches and all30 supported actual-display native tests pass. Audited1000 actual frames34.954mean40.595worst, stock/finite bounds pass; no clear mean gain vs34.838/43.431, retained opt-in for comparison, not promoted. Next16x16 output tiles for exact temporal fine sweeps to amortize halo/coefficient duplication, same48 fine/32 coarse iterations and immutable-source semantics.30ms still RED.
+
+**2026-10-25T23:57:07Z**
+
+Discarded larger temporal tile variants after full audited runs:AoS36.534/42.727 andSoA37.262/43.252, both slower despite reference equality. Practical compact normal float mode improves audited1000 to33.500mean39.247worst, invalid0/species4.72e-5/pigment7.16e-7/energy-ledger−2.45e-5 relative drift. All30 displayed native and transactional publication tests pass; strict denormal-preserving modes unchanged. Still over30ms. Next bounded GPU h2/h4/h8 pressure hierarchy; lock flow-error/stock/finite/clock and dispatch-budget tests first, no exact residual loop or CPU field solver.
