@@ -4,6 +4,7 @@ struct TransportCell {vec4 species,dynamics,visual,mass,energy;};
 layout(set=0,binding=24,std430) restrict buffer TransportWork {TransportCell transport_work[];};
 uint transport_axis() {return (params.bank>>3u)&1u;}
 uint transport_position(ivec2 p) {return transport_axis()==0u?uint(p.y)*params.width+uint(p.x):uint(p.x)*params.height+uint(p.y);}
+uint transport_line_start(ivec2 p) {return transport_axis()==0u?uint(p.y)*params.width:uint(p.x)*params.height;}
 int transport_direction() {return (params.bank&16u)!=0u?-1:1;}
 ivec2 transport_step() {return transport_axis()==0u?ivec2(transport_direction(),0):ivec2(0,transport_direction());}
 vec2 transport_rates(ivec2 p,int direction) {

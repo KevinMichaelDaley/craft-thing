@@ -18,6 +18,7 @@ void main() {
     uint lane=gl_SubgroupInvocationID,rank=gl_SubgroupID*gl_SubgroupSize+lane;
     uint length=transport_axis()==0u?params.width:params.height,span=(length+FR_GAS_LOCAL_SIZE-1u)/FR_GAS_LOCAL_SIZE;
     uint begin=rank*span,end=min(begin+span,length),line=gl_WorkGroupID.x;
+    if(transport_work[line*length].mass.w<0.) return;
     vec2 factor=vec2(1);GasFlux value=gas_empty_flux();bool moving=false;
     for(uint cell=begin;cell<end;cell++) {
         vec2 own_factor;GasFlux own_value;bool own_moving;cell_map(transport_point(line,cell),own_factor,own_value,own_moving);

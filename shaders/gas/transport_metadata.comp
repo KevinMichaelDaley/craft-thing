@@ -3,7 +3,7 @@
 #include "transport_float_controls.glsl"
 #include "acoustic.glsl"
 void main() {
-    uint index=gas_index();if(index>=params.width*params.height) return;
+    uint index=gas_sparse_index(2u);if(index>=params.width*params.height) return;
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
     if(atlas==0xffffffffu) {acoustic[index]=vec4(0);provisional[index]=vec4(0);force[index]=vec2(0);return;}
     Gas old=gas_source(p),transported=gas_provisional(atlas);Primitive center=gas_cached(p);bool valid=false;

@@ -376,3 +376,30 @@ or conservation/reference thresholds changed. The original19-case checkpoint
 passed core+synchronization validation; the newer21-case changes still need that
 validation. Cached factor coefficients remove duplicate neighbor gathers and
 are awaiting new complete-frame timing. This remains unfinished optimization.
+
+Checkpoint896803b instead conditions exhaust, soot and pigment with a shared
+power-of-two scale through the line solve and conservative face update, then
+unscales only final stored values. Huge-stock lines select scale1 rather than
+rejecting or truncating stock. This removes subnormal pigment rejection without
+changing the validity rule. A three-pack scan experiment8f77620 was slower and
+reverted7dea750. Optional `DC_GAS_WIDE_SCAN=1` and transposed line scratch remain
+under measurement; neither is evidence of meeting the frame budget.
+
+The displayed battery now has24 cases:23 pass and one newly added sustained
+strong-gravity case remains intentionally RED (9d91d9e). Its20 successive0.05s
+steps at kinetic scale1 eventually retry below clock precision. An experimental
+Mach-triggered HLLC fallback did not resolve it and was reverted; this is not
+classified as a baseline failure. The separate20-step test at prototype kinetic
+scale1/512 initially exposed differing cached/full relaxation arithmetic.
+GPU row comparison isolated that term; shared explicitly ordered computation
+540d75f restores byte-exact equality without changing tolerances.
+
+`DC_GAS_COMPARE_ROW_SETUP=1` reuses transport scratch for cold diagnostic row
+baselines and reports only a constant-size GPU comparison summary after the
+existing completion. `DC_GAS_TEST_FILTER` and `DC_GAS_TEST_SPARSE_CONTROL` isolate
+permanent native cases/controls; an empty test selection fails. New large-step
+activity footprints and exact zero-velocity line skipping retain the prototype
+byte comparison and the original21 cases. They remain under full-clock timing
+and current synchronization validation. The earlier complete headless run had
+761 C passes and only the two tracked authored-stage failures in ctr-ojvy;
+that result does not turn the new displayed RED into a baseline exception.

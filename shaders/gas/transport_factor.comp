@@ -19,6 +19,14 @@ void main() {
     uint lane=gl_SubgroupInvocationID,rank=gl_SubgroupID*gl_SubgroupSize+lane;
     uint length=transport_axis()==0u?params.width:params.height,span=(length+63u)/64u;
     uint begin=rank*span,end=min(begin+span,length),line=gl_WorkGroupID.x;float dt=uintBitsToFloat(params.seconds);
+    float maximum_speed=0.;
+    for(uint cell=begin;cell<end;cell++) maximum_speed=max(maximum_speed,abs(gas_cached(transport_point(line,cell)).hydro[transport_axis()+1u]));
+    float subgroup_speed=subgroupMax(maximum_speed);
+    if(lane+1u==gl_SubgroupSize) group_peak[gl_SubgroupID]=subgroup_speed;
+    barrier();maximum_speed=0.;
+    for(uint group=0u;group<gl_NumSubgroups;group++) maximum_speed=max(maximum_speed,group_peak[group]);
+    if(maximum_speed==0.) {if(rank==0u) transport_work[line*length].mass.w=-1.;return;}
+    barrier();
     vec4 mass=vec4(1,0,0,1),energy=mass;float peak=0.;
     for(uint cell=begin;cell<end;cell++) {
         ivec2 p=transport_point(line,cell);vec2 lower,diagonal,upper,previous;vec4 face;coefficients(p,dt,lower,diagonal,upper,previous,face);
