@@ -71,6 +71,21 @@ bool fr_gas_admit(const fr_gas_model_t *m,const fr_gas_state_t *s,const fr_gas_s
 bool fr_gas_reference_buoyancy(const fr_gas_model_t *m,const fr_gas_state_t *s,
     double volume,double ambient_specific_RT,double gravity,double seconds,
     fr_gas_state_t *out,double *work,char *err,uint32_t cap) {
-    (void)m;(void)s;(void)volume;(void)ambient_specific_RT;(void)gravity;(void)seconds;
-    (void)out;(void)work;return gas_error(err,cap,"Buoyancy not implemented");
+    fr_gas_thermo_t before,after;
+    if(!out||!work||!isfinite(ambient_specific_RT)||ambient_specific_RT<=0||
+       !isfinite(gravity)||gravity<0||!isfinite(seconds)||seconds<0||
+       !fr_gas_thermodynamics(m,s,volume,&before,err,cap))
+        return gas_error(err,cap,"Invalid reference-atmosphere impulse");
+    fr_gas_state_t result=*s;double admitted=0;
+    if(before.mass>0&&seconds>0&&gravity>0) {
+        double specific=0;
+        for(uint32_t k=0;k<FR_GAS_SPECIES;k++) specific+=s->species[k]*m->gas_constant[k];
+        double ratio=specific*before.temperature_K/(before.mass*ambient_specific_RT);
+        double acceleration=fabs(ratio-1.)<=8.*DBL_EPSILON?0.:gravity*(1.-ratio);
+        double impulse=before.mass*acceleration*seconds;
+        admitted=m->kinetic_scale*impulse*(s->momentum[1]+.5*impulse)/before.mass;
+        result.momentum[1]+=impulse;result.energy+=admitted;
+    }
+    if(!fr_gas_thermodynamics(m,&result,volume,&after,err,cap)) return false;
+    *out=result;*work=admitted;return true;
 }
