@@ -41,6 +41,12 @@ bool dc_level_view_place_prop(dc_level_view_t *view, const fr_prop_asset_t *asse
 bool dc_level_view_renderer_mode(dc_level_view_t *view, fr_renderer_mode_t mode);
 /** Toggle lit gameplay and unlit appearance without advancing physics. */
 bool dc_level_view_toggle_lighting(dc_level_view_t *view);
+/** Set up the finite heat bench in a fresh, fully resident placement world. */
+bool dc_level_view_setup_heat_bench(dc_level_view_t *view,char *err,uint32_t err_cap);
+/** Contact the finite probe at a visible cell; input does not advance physics. */
+bool dc_level_view_heat_probe(dc_level_view_t *view,uint32_t x,uint32_t y,bool active);
+/** Thermal feedback: 0 authored color, 1 temperature, 2 material wetness. */
+bool dc_level_view_heat_overlay(dc_level_view_t *view,uint32_t mode);
 /** Author explicitly placed structural members in the streamed world. */
 bool dc_level_view_place_structure(dc_level_view_t *view,
                                    const fr_structural_gpu_graph_t *graph,

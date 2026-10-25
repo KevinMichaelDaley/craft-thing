@@ -64,6 +64,15 @@ bool dc_level_view_toggle_lighting(dc_level_view_t *view) {
     return view && dc_level_view_renderer_mode(view,
         view->renderer_mode==FR_RENDERER_LIT?FR_RENDERER_ALBEDO:FR_RENDERER_LIT);
 }
+bool dc_level_view_setup_heat_bench(dc_level_view_t *view,char *err,uint32_t cap) {
+    (void)view;(void)err;(void)cap;return false;
+}
+bool dc_level_view_heat_probe(dc_level_view_t *view,uint32_t x,uint32_t y,bool active) {
+    (void)view;(void)x;(void)y;(void)active;return false;
+}
+bool dc_level_view_heat_overlay(dc_level_view_t *view,uint32_t mode) {
+    (void)view;(void)mode;return false;
+}
 static bool place_prop(dc_level_view_t *view, const fr_prop_asset_t *asset,
                               dc_chunk_coord_t chunk, uint32_t local_x, uint32_t local_y,
                               bool restore_bonds,char *err, uint32_t cap) {
