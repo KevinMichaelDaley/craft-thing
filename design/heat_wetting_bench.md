@@ -131,6 +131,12 @@ Propagated lighting is off. Two earlier current dry runs also pass
 remain recorded. These measurements cover the heat bench, not the epic's later
 bonfire/launcher/Greek-fire scenarios and not unfinished ownership/save behavior.
 
+The subsequent full default battery finishes **727 C passes**, the same two
+`ctr-ojvy` authored-stage failures and **zero compiler warnings** in
+`build/thermal_feedback_full_suite.log`. This is the safe checkpoint before the
+now-needed bench save/restore transaction work. No DCS8 format was enabled by
+the heat/feedback/benchmark changes.
+
 Remaining in this milestone: complete liquid regression/interaction coverage,
 temperature/wetness inspection, natural edits/owner admission and the persistence
 the exposed scene needs, plus reference budgets and passing displayed timing.

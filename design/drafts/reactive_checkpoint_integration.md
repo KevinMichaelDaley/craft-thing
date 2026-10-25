@@ -21,5 +21,12 @@ The two new tests in `tests/vulkan/reactive_checkpoint_gpu_tests.c` intentionall
 remain RED: the existing structure checkpoint drops extracted-body reaction state
 and pending negative-coordinate chunk channels. They are available through
 `build/reactive_checkpoint_display_tests`, separate from the passing default
-battery. Ticket `ctlo-2q4f` stays in progress. The FRW1 archive codec is tested,
+battery. Ticket `ctlo-2q4f` remains open. The FRW1 archive codec is tested,
 but it is not a completed gameplay or structure-checkpoint feature.
+
+The visible heat/wetting bench now has displayed interaction and repeated
+sub-30-ms complete-frame evidence. Its exposed save/reload requirement makes
+the checkpoint subset necessary next, including liquid enthalpy and the finite
+probe reservoir. Audit/reuse this draft within that module; it still does not
+authorize claiming all future owner/material admission or this broad ticket
+complete. The preserved patch remains unlinked at this checkpoint.

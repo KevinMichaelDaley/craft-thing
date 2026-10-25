@@ -75,3 +75,7 @@ Actual placement-pour integration passes alongside original bench case (2/2 nati
 **2026-10-25T05:31:03Z**
 
 Permanent tools/bench_heat_bench now completed four real Wayland Vulkan1000-frame trials with no concurrent builds/GPU work: dry13.771mean15.309worst; dry13.712/15.252; finite-pour14.183/15.553; finite-pour14.163/16.039ms. All strictmean ANDworst<30, all4paused capturesidentical; eachpour exactlyonceatframe8 viarealplacementAPI. Evidence build/heat_bench_measurements_aaT6PO and build/thermal_repeated_display_benchmark.log. Earlier currentdry13.612/17.986 and13.644/15.788also pass; oldprototypefailedtails remainrecorded. InputRED7fe932b ->3GREENCPUchecks; permanenttool/reusableheaderinrepo. Resolution/cadenceunchanged, lightingoff. Heatbenchperformance passes current dry/pour cases; ticket staysopen for requiredownership/edit/save. This does not certifyfuture3epicscenarios.
+
+**2026-10-25T05:39:02Z**
+
+Pre-persistence REFACTOR safe boundary35cf70c: full default suite727 C passes, exactly2 known ctr-ojvy authored-stage failures, zero warnings (build/thermal_feedback_full_suite.log). Actual dry/pour1000x2 performance passes remain recorded. Heatbench is still open because supported restore currently refuses worlds; audit preserved DCS transaction draft now only for this visible module needed state, including liquid enthalpy and finite probe. No DCS8 active yet, no future material/owner admission claimed.
