@@ -13,6 +13,13 @@ layout(set=0,binding=21,std430) restrict buffer Activity {uint activity[];};
 layout(set=0,binding=22,std430) restrict buffer Matrix {vec4 matrix[];};
 layout(set=0,binding=23,std430) restrict buffer Indirect {uint indirect[];};
 uint gas_tile_count() {return ((params.width+7u)/8u)*((params.height+7u)/8u);}
+float gas_pressure_relaxation(vec4 coefficients,float diagonal) {
+    precise float total=((coefficients.x+coefficients.y)+coefficients.z)+coefficients.w;
+    precise float ratio=diagonal>0.?min(total/diagonal,.99999994):0.;
+    precise float remainder=1.-ratio*ratio;
+    precise float denominator=1.+sqrt(max(0.,remainder));
+    return 2./denominator;
+}
 bool gas_pressure_accepted() {return stats[FR_GAS_ERROR_WORD]==0u&&uintBitsToFloat(stats[FR_GAS_RESIDUAL_WORD])<=1e-7;}
 bool gas_advected(uint index) {
     uint tile=(index/params.width/8u)*((params.width+7u)/8u)+(index%params.width/8u);

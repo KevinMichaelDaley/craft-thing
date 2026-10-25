@@ -108,6 +108,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(sparse_activity) bank|=512u;
     if(sparse_classify) bank|=1024u;
     if(t->large_transport) bank|=2048u;
+    if(getenv("DC_GAS_COMPARE_ROW_SETUP")) bank|=FR_GAS_COMPARE_ROW_SETUP_BIT;
     if(!t->matrix_valid) bank|=4u;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin acoustic advection");
     if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,t->large_transport?14u:4u);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);}
@@ -140,7 +141,8 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         dispatch(g,&t->transport_metadata,gx,gy,dt,bank);
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,13);
     } else indirect_dispatch(g,t,&t->advect,dt,bank,32);
-    if(sparse) indirect_dispatch(g,t,&t->rhs,dt,bank,32);else dispatch(g,&t->rhs,gx,gy,dt,bank);
+    if(sparse&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) indirect_dispatch(g,t,&t->rhs,dt,bank,32);
+    else dispatch(g,&t->rhs,gx,gy,dt,bank&~256u);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,1);
     uint32_t stalled=0,batches=0;float best=INFINITY;
     for(;;) {
@@ -171,6 +173,10 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         indirect_dispatch(g,t,&t->finish,dt,bank,48);
         indirect_dispatch(g,t,&t->commit,dt,bank,48);
         if(!submit(g,err,cap)) return false;
+        if((bank&FR_GAS_COMPARE_ROW_SETUP_BIT)!=0u) {
+            uint32_t *words=stats->mapped;float values[4];memcpy(values,words+FR_GAS_ROW_DIAGONAL_BEFORE_WORD,sizeof(values));
+            fprintf(stderr,"Gas row compare flags%u count%u first%u cell0 diagonal%.9g/%.9g norm%.9g/%.9g\n",words[FR_GAS_ROW_DIFF_WORD],words[FR_GAS_ROW_DIFF_COUNT_WORD],words[FR_GAS_ROW_DIFF_AT_WORD],values[0],values[1],values[2],values[3]);
+        }
         if(trace&&t->large_transport&&batches==0u) {
             uint64_t phases[10];
             if(vkGetQueryPoolResults(g->device,g->timestamp_pool,4,10,sizeof(phases),phases,sizeof(uint64_t),VK_QUERY_RESULT_64_BIT)==VK_SUCCESS) {

@@ -1,6 +1,7 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #include "acoustic.glsl"
+layout(set=0,binding=24,std430) restrict buffer RowBaseline {vec4 row_baseline[];};
 void main() {
     uint index=(params.bank&256u)!=0u?gas_sparse_index(2u):gas_index();if(index>=params.width*params.height) return;
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
@@ -42,7 +43,10 @@ void main() {
     pressure[index]=vec4(0,rhs,diagonal,max(abs(internal),1e-20));stencil[index]=coefficients;
     acoustic[index].w=capacity;
     acoustic[index].z=0.;
-    float ratio=diagonal>0.?min(dot(coefficients,vec4(1))/diagonal,.99999994):0.;
-    float relaxation=2./(1.+sqrt(max(0.,1.-ratio*ratio)));
+    float relaxation=gas_pressure_relaxation(coefficients,diagonal);
     correction_data[index]=vec4(rhs,diagonal>0.?1./diagonal:0.,relaxation,0);
+    if((params.bank&FR_GAS_COMPARE_ROW_SETUP_BIT)!=0u) {
+        row_baseline[index*2u]=vec4(diagonal,pressure[index].w,correction_data[index].yz);
+        row_baseline[index*2u+1u]=coefficients;
+    }
 }

@@ -73,6 +73,7 @@ static bool submit(dc_gpu_t *g,char *err,uint32_t cap) {
 static void clear_stats(struct fr_gas_gpu *t) {
     uint32_t *words=t->stats.mapped;words[FR_GAS_RATE_WORD]=0;words[FR_GAS_ERROR_WORD]=0;words[FR_GAS_ERROR_AT_WORD]=UINT32_MAX;words[FR_GAS_REJECT_STAGE_WORD]=0;
     words[FR_GAS_NEGATIVE_PIGMENT_WORD]=0;words[FR_GAS_EXCESS_PIGMENT_WORD]=0;
+    words[FR_GAS_ROW_DIFF_WORD]=0;words[FR_GAS_ROW_DIFF_COUNT_WORD]=0;words[FR_GAS_ROW_DIFF_AT_WORD]=UINT32_MAX;
     words[FR_GAS_RATE_X_WORD]=0;words[FR_GAS_RATE_Y_WORD]=0;
 }
 static bool shader_ok(struct fr_gas_gpu *t,char *err,uint32_t cap) {
@@ -211,7 +212,7 @@ bool fr_gas_gpu_seed_chunk(dc_gpu_t *g,uint32_t slot,const fr_gas_state_t *state
         okay=fr_gas_thermodynamics(&g->gas->model,&rounded,p[12],&t,err,cap);
     }
     if(okay) okay=vkQueueWaitIdle(g->queue)==VK_SUCCESS;
-    if(okay) {memcpy((gas_packet_t *)g->gas->state[0].mapped+(size_t)slot*4096u,packets,count*sizeof(*packets));fr_gas_gpu_invalidate_cache(g);}
+    if(okay) {memcpy((gas_packet_t *)g->gas->state[0].mapped+(size_t)slot*4096u,packets,count*sizeof(*packets));fr_gas_gpu_invalidate_cache(g);g->gas->large_step_hint=0;}
     free(packets);return okay;
 }
 bool fr_gas_gpu_read_chunk(dc_gpu_t *g,uint32_t slot,fr_gas_state_t *states,uint32_t count,char *err,uint32_t cap) {

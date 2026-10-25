@@ -1,6 +1,7 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #include "acoustic.glsl"
+layout(set=0,binding=24,std430) restrict buffer RowBaseline {vec4 row_baseline[];};
 void main() {
     uint index=gas_sparse_index(1u);if(index>=params.width*params.height) return;
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));Primitive own=gas_cached(p);
@@ -8,7 +9,14 @@ void main() {
     float diagonal=own.metric.w>0.?(gas_advected(index)?acoustic[index].w:own.metric.y):0.;
     for(uint d=0u;d<4u;d++) diagonal+=coefficients[d];
     stencil[index]=coefficients;pressure[index].z=diagonal;pressure[index].w=max(abs(own.metric.y*own.hydro.w),1e-20);
-    float ratio=diagonal>0.?min(dot(coefficients,vec4(1))/diagonal,.99999994):0.;
     correction_data[index].y=diagonal>0.?1./diagonal:0.;
-    correction_data[index].z=2./(1.+sqrt(max(0.,1.-ratio*ratio)));
+    correction_data[index].z=gas_pressure_relaxation(coefficients,diagonal);
+    if((params.bank&FR_GAS_COMPARE_ROW_SETUP_BIT)!=0u&&own.metric.w>0.) {
+        vec4 before=row_baseline[index*2u],after=vec4(diagonal,pressure[index].w,correction_data[index].yz);
+        uvec4 different=uvec4(notEqual(floatBitsToUint(before),floatBitsToUint(after)));
+        uint flags=different.x|(different.y<<1u)|(different.z<<2u)|(different.w<<3u);
+        if(any(notEqual(floatBitsToUint(row_baseline[index*2u+1u]),floatBitsToUint(coefficients)))) flags|=16u;
+        if(flags!=0u) {atomicOr(stats[FR_GAS_ROW_DIFF_WORD],flags);atomicAdd(stats[FR_GAS_ROW_DIFF_COUNT_WORD],1u);atomicMin(stats[FR_GAS_ROW_DIFF_AT_WORD],index);}
+        if(index==0u) {stats[FR_GAS_ROW_DIAGONAL_BEFORE_WORD]=floatBitsToUint(before.x);stats[FR_GAS_ROW_DIAGONAL_AFTER_WORD]=floatBitsToUint(after.x);stats[FR_GAS_ROW_NORM_BEFORE_WORD]=floatBitsToUint(before.y);stats[FR_GAS_ROW_NORM_AFTER_WORD]=floatBitsToUint(after.y);}
+    }
 }
