@@ -1,7 +1,10 @@
 #extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_arithmetic : require
 #include "types.glsl"
-layout(local_size_x=64) in;
+#ifndef FR_GAS_LOCAL_SIZE
+#define FR_GAS_LOCAL_SIZE 64
+#endif
+layout(local_size_x=FR_GAS_LOCAL_SIZE) in;
 layout(set=0,binding=0,std430) restrict buffer World {Gas world[];};
 layout(set=0,binding=1,std430) restrict buffer Bank0 {Gas bank0[];};
 layout(set=0,binding=2,std430) restrict buffer Bank1 {Gas bank1[];};
