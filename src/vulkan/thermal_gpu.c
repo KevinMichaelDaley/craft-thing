@@ -94,6 +94,10 @@ bool fr_thermal_gpu_overlay(dc_gpu_t *g,uint32_t mode) {
     if(!g||!g->thermal||mode>2u) return false;
     g->thermal->overlay=mode;return true;
 }
+bool fr_thermal_gpu_inspect(dc_gpu_t *g,uint32_t x,uint32_t y,
+    fr_thermal_inspection_t *out,char *err,uint32_t cap) {
+    (void)g;(void)x;(void)y;(void)out;(void)err;(void)cap;return false;
+}
 bool fr_thermal_prepare_paint(dc_gpu_t *g,uint32_t x,uint32_t y,uint32_t radius,
     uint32_t material,char *err,uint32_t cap) {
     if(!g||!g->thermal) return true;

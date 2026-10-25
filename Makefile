@@ -1768,6 +1768,8 @@ build/thermal_water_display_tests: tests/vulkan/thermal_water_gpu_tests.c tests/
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/thermal_admission_display_tests: tests/vulkan/thermal_admission_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/thermal_feedback_display_tests: tests/vulkan/thermal_feedback_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/dungeoncraft build/controls_tests build/reactive_stream_view_display_tests build/thermal_bench_display_tests: $(THERMAL_BENCH_SRC) src/app/thermal_bench.h
 build/shaders/thermal.comp.spv: shaders/reactive/thermal.comp shaders/reactive/address.glsl include/dungeoncraft/thermal_parameters.h include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/reactive_profile_layout.h
 	mkdir -p $(dir $@)
