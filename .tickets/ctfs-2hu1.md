@@ -31,3 +31,7 @@ Next active visible system after the current safe checkpoint. Reuse completed pa
 **2026-10-25T03:20:14Z**
 
 Thermal reference GREEN:6 RED tests now pass for composition-derived capacity, signed conservative face flux, four-face monotonicity, finite probe reservoir, exact Q16 wetting mass and proportional enthalpy, preserved identities/hazards, pause and invalid-input rollback. Existing parcel9 tests also pass; no compiler warnings. Bench sources are finite350K reservoirs (not output clamps), keeping this first module below boiling by construction. Next is the real Vulkan thermal field and displayed placement-demo interaction; CPU reference alone is not milestone completion.
+
+**2026-10-25T03:36:46Z**
+
+First Vulkan thermal field GREEN: both native Wayland cases pass with core/sync validation (8 presented frames). GPU face exchange matches CPU energy within1e-4, paused presentation leaves parcel bytes unchanged, and the real8x8 rigid/2-substep MPM tick applies one thermal interval. Displayed framebuffer capture: build/screenshots/thermal_reference_pair.bmp (converted PNG inspected). This is a two-cell functional field check, NOT the interactive bench or completed milestone. Water/admission/bench controls and full-frame acceptance remain underway.

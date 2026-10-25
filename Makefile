@@ -1760,3 +1760,8 @@ build/thermal_model.o: src/fire/thermal.c include/ferrum/fire/thermal.h include/
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/thermal_gpu_display_tests: tests/vulkan/thermal_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/shaders/thermal.comp.spv: shaders/reactive/thermal.comp shaders/reactive/address.glsl include/dungeoncraft/thermal_parameters.h include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/reactive_profile_layout.h
+	mkdir -p $(dir $@)
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+$(GPU_OBJ) build/thermal_gpu_display_tests: build/shaders/thermal.comp.spv
+build/thermal_gpu.o build/tick_gpu.o build/present_gpu.o build/gpu.o: src/vulkan/thermal_gpu_internal.h

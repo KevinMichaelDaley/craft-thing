@@ -10,6 +10,7 @@
 #include "runtime_body_gpu.h"
 #include "gpu_internal.h"
 #include "reactive_gpu_internal.h"
+#include "thermal_gpu_internal.h"
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -21,6 +22,7 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (!gpu) return;
     if (gpu->device) vkDeviceWaitIdle(gpu->device);
     dc_gpu_solver_commands_destroy(gpu);
+    if (gpu->device) fr_thermal_gpu_destroy(gpu);
     if (gpu->device) fr_gpu_reactive_destroy(gpu);
     if (gpu->device) fr_renderer_destroy(gpu);
     if (gpu->device) dc_gpu_authored_destroy(gpu);

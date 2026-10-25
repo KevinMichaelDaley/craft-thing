@@ -3,6 +3,7 @@
 
 #include "gpu_internal.h"
 #include "runtime_body_gpu.h"
+#include "thermal_gpu_internal.h"
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -96,6 +97,7 @@ void dc_gpu_record_tick_step(dc_gpu_t *gpu) {
     stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                   VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     dc_gpu_record_mpm(gpu);
+    fr_thermal_record_step(gpu,(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f);
 }
 
 static void record_probe(dc_gpu_t *gpu, uint32_t mode) {
@@ -144,6 +146,7 @@ static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
     stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                   VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     dc_gpu_record_mpm(gpu);
+    fr_thermal_record_step(gpu,(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f);
     if (capture) {
         record_probe(gpu, 1);
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
