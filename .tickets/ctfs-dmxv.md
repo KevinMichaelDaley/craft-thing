@@ -95,3 +95,7 @@ Practical64-byte scratch (duplicate mass/thermal coefficients removed) passes4 a
 **2026-10-25T21:47:17Z**
 
 Opt-in whole-axis practical transport fusion passes all4 actual displayed practical gates (finite12-second variable clock, inventory/energy drift, checkerboard damping, offset-wall isolation). Sustained actual untraced1000 open frames improve50.170/59.897 to45.100ms mean56.411ms worst, four paused captures identical. Same factor/forward/back/apply work synchronized within each independently owned line, no CPU field/list solve or stock/time drop. Target still RED. Next practical shared-tile pressure smoothing to reduce full-grid dispatch/cache traffic.
+
+**2026-10-25T21:56:31Z**
+
+Rejected optional shared-block smoothing experiment:4 inner over-relaxed sweeps failed isolated-neighbor density20% and pressure bound; monotone2-inner also failed; global pre-smoothing plus2-inner post-smoothing passed long pressure bound but still disturbed sealed neighbor2.5% vs locked1% gate. Removed experimental path; retained passing global48-fine V-cycle. No gate weakened. Next cold end-of-benchmark velocity/inventory audit to target actual sustained active-state cost rather than further blind variants.

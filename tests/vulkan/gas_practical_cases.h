@@ -1,5 +1,22 @@
 #ifndef GAS_PRACTICAL_CASES_H
 #define GAS_PRACTICAL_CASES_H
+static void test_native_cold_audit_reduces_stock_and_does_not_advance_physics(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    fr_gas_model_t m=reference_model();
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err)));
+    fr_gas_gpu_clock_t before,after;fr_gas_gpu_audit_t audit;
+    ASSERT_TRUE(fr_gas_gpu_clock(g,&before)&&fr_gas_gpu_audit(g,&audit,err,sizeof(err))&&fr_gas_gpu_clock(g,&after));
+    ASSERT_TRUE(memcmp(&before,&after,sizeof(before))==0);
+    ASSERT_TRUE(fabs(audit.metrics[FR_GAS_AUDIT_MASS]-4096.)<.04);
+    ASSERT_EQ(audit.metrics[FR_GAS_AUDIT_CELLS],4096.f);ASSERT_EQ(audit.metrics[FR_GAS_AUDIT_INVALID],0.f);
+    ASSERT_EQ(audit.metrics[FR_GAS_AUDIT_VELOCITY_BINS],4096.f);ASSERT_EQ(audit.metrics[FR_GAS_AUDIT_MAX_SPEED],0.f);
+    ASSERT_TRUE(fabs(audit.metrics[FR_GAS_AUDIT_MIN_TEMPERATURE]-300.)<.001&&fabs(audit.metrics[FR_GAS_AUDIT_MAX_TEMPERATURE]-300.)<.001);
+    fr_gas_state_t air=reference_air(m,1,300,0);
+    for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(audit.metrics[FR_GAS_AUDIT_SPECIES+k]-air.species[k]*4096)<.04);
+    ASSERT_TRUE(fabs(audit.metrics[FR_GAS_AUDIT_ENERGY]-air.energy*4096)<air.energy*.1);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
+}
 static void test_native_practical_offset_wall_does_not_drive_sealed_neighbor(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));
     fr_gas_state_t *input=malloc(4096*sizeof(*input)),*out=malloc(4096*sizeof(*out));

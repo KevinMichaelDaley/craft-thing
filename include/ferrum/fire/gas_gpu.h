@@ -1,9 +1,14 @@
 #ifndef FERRUM_FIRE_GAS_GPU_H
 #define FERRUM_FIRE_GAS_GPU_H
 #include "dungeoncraft/gpu.h"
+#include "dungeoncraft/gas_audit_layout.h"
 #include "ferrum/fire/gas.h"
 
 typedef struct {uint64_t physical_steps,substeps;double advanced_seconds;} fr_gas_gpu_clock_t;
+typedef struct {float metrics[FR_GAS_AUDIT_WORDS];} fr_gas_gpu_audit_t;
+/** Cold GPU reduction after queue completion; reads only32 scalar diagnostics.
+ * Never invoked by normal simulation frames and never advances physical time. */
+bool fr_gas_gpu_audit(dc_gpu_t *gpu,fr_gas_gpu_audit_t *out,char *err_buf,uint32_t err_cap);
 enum {FR_GAS_PRESSURE_HLLC,FR_GAS_PRESSURE_IMPLICIT,FR_GAS_PRESSURE_LARGE_CFL,FR_GAS_PRESSURE_PRACTICAL};
 /** Enable one authoritative Vulkan gas field. Coefficients and initial ambient
  * stock are explicit; repeated configuration must not replenish existing gas. */

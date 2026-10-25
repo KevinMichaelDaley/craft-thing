@@ -422,6 +422,7 @@ int main(void) {
     } else printf("Extreme unresolved-gravity diagnostic cases require DC_GAS_EXTREME_STRESS=1; practical admission rejects that regime.\n");
     RUN(test_native_moving_density_contact_keeps_pressure_and_velocity);
     RUN(test_native_practical_policy_rejects_unresolved_gravity_without_advancing);
+    RUN(test_native_cold_audit_reduces_stock_and_does_not_advance_physics);
     RUN(test_native_practical_checkerboard_pressure_relaxes_conservatively);
     RUN(test_native_practical_offset_wall_does_not_drive_sealed_neighbor);
     RUN(test_native_practical_variable_intervals_stay_finite_without_retry_stalls);

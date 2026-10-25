@@ -249,6 +249,9 @@ bool fr_gas_gpu_clock(const dc_gpu_t *g,fr_gas_gpu_clock_t *out) {
     if(!g||!g->gas||!out) return false;
     *out=g->gas->clock;return true;
 }
+bool fr_gas_gpu_audit(dc_gpu_t *g,fr_gas_gpu_audit_t *out,char *err,uint32_t cap) {
+    (void)g;(void)out;return error(err,cap,"Cold gas audit is not implemented");
+}
 void fr_gas_record_overlay(dc_gpu_t *g) {
     if(g->gas) fr_gas_feedback_record(g,&g->gas->feedback,g->gas->groups_x,g->gas->groups_y);
 }
