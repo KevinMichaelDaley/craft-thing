@@ -1714,3 +1714,6 @@ build/reactive_packet_tests: tests/fire/reactive_packet_tests.c $(REACTIVE_STATE
 test: test_reactive_packets
 test_reactive_packets: build/reactive_packet_tests
 	./build/reactive_packet_tests
+
+build/reactive_chunk_tests: tests/fire/reactive_chunk_tests.c src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_chunk.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/reactive_chunk_tests.c src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) -o $@ -lm
