@@ -57,6 +57,13 @@ static bool records_valid(fr_reactive_record_t *records,uint32_t count,uint64_t 
         return error(err,cap,"Duplicate reactive owner");
     return true;
 }
+static bool legacy_owners_valid(const fr_reactive_record_t *records,uint32_t count,
+                                uint32_t version,char *err,uint32_t cap) {
+    for(uint32_t i=0;version==1u&&i<count;i++)
+        if(records[i].owner.kind==FR_REACTIVE_OWNER_PARTICLE&&records[i].owner.key[3]!=0u)
+            return error(err,cap,"Reserved ABI 1 particle owner bits are nonzero");
+    return true;
+}
 
 bool fr_reactive_snapshot_write(const char *path,const fr_reactive_record_t *records,
                                  uint32_t count,uint64_t next,char *err,uint32_t cap) {
@@ -105,7 +112,7 @@ bool fr_reactive_snapshot_read(const char *path,fr_reactive_record_t *records,ui
     uint8_t encoded[HEADER_WORDS*4];uint32_t header[HEADER_WORDS];
     bool okay=fread(encoded,sizeof(encoded),1,file)==1;
     if(okay) decode(header,encoded,HEADER_WORDS);
-    if(!okay||header[0]!=0x31535246u||header[1]!=FR_REACTIVE_STATE_ABI||
+    if(!okay||header[0]!=0x31535246u||(header[1]!=1u&&header[1]!=FR_REACTIVE_STATE_ABI)||
        header[2]!=FR_REACTIVE_STATE_WORDS||header[3]!=FR_REACTIVE_OWNER_WORDS||header[5]!=0) {
         fclose(file);return error(err,cap,"Unsupported/corrupt reactive snapshot header");
     }
@@ -139,7 +146,8 @@ bool fr_reactive_snapshot_read(const char *path,fr_reactive_record_t *records,ui
     }
     free(payload);
     uint64_t restored_next=(uint64_t)header[6]|((uint64_t)header[7]<<32);
-    if(!records_valid(copy,header[4],restored_next,err,cap)) {free(copy);return false;}
+    if(!legacy_owners_valid(copy,header[4],header[1],err,cap)||
+       !records_valid(copy,header[4],restored_next,err,cap)) {free(copy);return false;}
     if(bytes) memcpy(records,copy,bytes);
     free(copy);*count=header[4];*next=restored_next;*required=header[4];return true;
 }
@@ -177,7 +185,7 @@ bool fr_reactive_snapshot_decode(const uint8_t *bytes,size_t length,fr_reactive_
     if(!bytes||length<HEADER_WORDS*4u||!count||!next||!required||(!records&&capacity))
         return error(err,cap,"Invalid reactive packet restore request");
     uint32_t header[HEADER_WORDS];decode(header,bytes,HEADER_WORDS);size_t total=0;
-    if(header[0]!=0x31535246u||header[1]!=FR_REACTIVE_STATE_ABI||header[2]!=FR_REACTIVE_STATE_WORDS||
+    if(header[0]!=0x31535246u||(header[1]!=1u&&header[1]!=FR_REACTIVE_STATE_ABI)||header[2]!=FR_REACTIVE_STATE_WORDS||
        header[3]!=FR_REACTIVE_OWNER_WORDS||header[5]!=0||!fr_reactive_snapshot_size(header[4],&total))
         return error(err,cap,"Unsupported/corrupt reactive packet header");
     if(length!=total) return error(err,cap,"Reactive packet length mismatch");
@@ -193,7 +201,8 @@ bool fr_reactive_snapshot_decode(const uint8_t *bytes,size_t length,fr_reactive_
         memcpy(copy+i,words,sizeof(words));
     }
     uint64_t restored_next=(uint64_t)header[6]|((uint64_t)header[7]<<32);
-    if(!records_valid(copy,header[4],restored_next,err,cap)) {free(copy);return false;}
+    if(!legacy_owners_valid(copy,header[4],header[1],err,cap)||
+       !records_valid(copy,header[4],restored_next,err,cap)) {free(copy);return false;}
     if(payload) memcpy(records,copy,payload);
     free(copy);*count=header[4];*next=restored_next;*required=header[4];return true;
 }

@@ -124,7 +124,7 @@ bool fr_reactive_owner_valid(const fr_reactive_owner_t *o,char *err,uint32_t cap
         return (o->key[0]!=0&&o->key[1]!=0&&o->key[2]<=INT32_MAX&&o->key[3]<=INT32_MAX&&o->key[4]==0)||
             error(err,cap,"Invalid reactive body generation/rest coordinate");
     if(o->kind==FR_REACTIVE_OWNER_PARTICLE)
-        return ((o->key[0]!=0||o->key[1]!=0)&&o->key[3]==0&&o->key[4]==0)||
+        return ((o->key[0]!=0||o->key[1]!=0)&&o->key[4]==0)||
             error(err,cap,"Invalid reactive particle identity");
     return error(err,cap,"Unknown reactive owner kind");
 }

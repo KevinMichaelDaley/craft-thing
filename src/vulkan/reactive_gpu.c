@@ -180,7 +180,8 @@ bool fr_gpu_reactive_seed_particle(dc_gpu_t *g,uint32_t particle,
     if(!initialize(g,err,cap)) return false;
     struct fr_reactive_gpu *r=g->reactive;
     if(!particle_storage(g,err,cap)) return false;
-    fr_reactive_owner_t owner={.kind=FR_REACTIVE_OWNER_PARTICLE,.key={p->id_lo,p->id_hi,0,0,0}};
+    fr_reactive_owner_t owner={.kind=FR_REACTIVE_OWNER_PARTICLE,
+        .key={p->id_lo,p->id_hi,state->parcel_id_low,state->parcel_id_high,0}};
     return admit(g,(uint32_t *)r->particles.mapped+(size_t)particle*2u,&owner,state,err,cap);
 }
 bool fr_gpu_reactive_read_particle(dc_gpu_t *g,uint32_t particle,

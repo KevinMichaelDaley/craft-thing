@@ -59,3 +59,7 @@ Embedded packet codec GREEN:4 new CPU cases pass for canonical bytes identical t
 **2026-10-25T02:19:31Z**
 
 Live state storage now uses the GPU reserve/publish/rollback arena instead of CPU append-only entries. Native Wayland Vulkan integration passed six cell/body/MPM/reuse cases and four particle lifecycle cases, including 128 erase/repaint cycles with 64 live entries and no historical allocation growth. Persistence, physical admission and remaining handoff paths still in progress.
+
+**2026-10-25T02:25:24Z**
+
+Persistent identity GREEN: actual Wayland Vulkan regression moved a live leaf parcel, repainted its vacated cell and reproduced two concurrent particles sharing physical PID. Their owners now retain distinct 64-bit birth identities across movement; all5 lifecycle display cases pass (20 presented frames) with core/sync validation. FRS1 writes semantic ABI2 and reads ABI1 without accepting its reserved high-birth bits. CPU packet6 and state9 tests pass. Chunk attachment codec3 CPU cases pass; actual stream/checkpoint embedding remains underway.

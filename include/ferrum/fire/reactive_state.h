@@ -7,7 +7,7 @@
 
 #include "dungeoncraft/chunk.h"
 
-#define FR_REACTIVE_STATE_ABI 1u
+#define FR_REACTIVE_STATE_ABI 2u
 #define FR_REACTIVE_STATE_WORDS 28u
 #define FR_REACTIVE_OWNER_WORDS 6u
 enum {
@@ -38,7 +38,8 @@ enum { FR_REACTIVE_OWNER_CELL=1u, FR_REACTIVE_OWNER_BODY=2u,
        FR_REACTIVE_OWNER_PARTICLE=3u };
 /** CELL key is chunk x low/high, chunk y low/high, local cell. BODY key is
  * body ID, generation, rest x, rest y, zero. PARTICLE key is stable ID low/high,
- * birth generation, zero, zero. GPU addresses and arena offsets are never saved. */
+ * birth identity low/high, zero. ABI 1 birth generations migrate with high=0.
+ * GPU addresses and arena offsets are never saved. */
 typedef struct { uint32_t kind, key[5]; } fr_reactive_owner_t;
 typedef struct {
     fr_reactive_owner_t owner;
