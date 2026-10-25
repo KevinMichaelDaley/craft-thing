@@ -26,12 +26,6 @@ static void publish_barrier(dc_gpu_t *g) {
         VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_HOST_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
 }
-static void bind_requests(dc_gpu_t *g,fr_reactive_arena_gpu_t *a) {
-    VkDescriptorBufferInfo info={a->requests.buffer,0,a->requests.bytes};
-    VkWriteDescriptorSet write={.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=a->compute.descriptor,
-        .dstBinding=1,.descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&info};
-    vkUpdateDescriptorSets(g->device,1,&write,0,NULL);
-}
 void fr_reactive_arena_destroy(dc_gpu_t *g,fr_reactive_arena_gpu_t *a) {
     if(!g||!a) return;
     fr_renderer_compute_destroy(g,&a->compute);
@@ -60,8 +54,8 @@ bool fr_reactive_arena_create(dc_gpu_t *g,uint32_t initial,fr_reactive_arena_gpu
         vkCmdUpdateBuffer(g->command,a.free_bits.buffer,a.free_bits.bytes-4u,4,&mask);
     }
     publish_barrier(g);if(!fr_renderer_submit(g)) goto fail;
-    VkDescriptorBufferInfo buffers[2]={{a.root.buffer,0,a.root.bytes},{a.requests.buffer,0,a.requests.bytes}};
-    if(!fr_renderer_compute_init(g,&a.compute,buffers,2,16,"build/shaders/reactive_arena.comp.spv",err,cap)) goto fail;
+    VkDescriptorBufferInfo buffer={a.root.buffer,0,a.root.bytes};
+    if(!fr_renderer_compute_init(g,&a.compute,&buffer,1,16,"build/shaders/reactive_arena.comp.spv",err,cap)) goto fail;
     *out=a;return true;
 fail:
     fr_reactive_arena_destroy(g,&a);return error(err,cap,"Cannot initialize reactive GPU arena");
@@ -72,7 +66,7 @@ static bool grow_requests(dc_gpu_t *g,fr_reactive_arena_gpu_t *a,uint32_t count,
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)next*FR_ARENA_REQUEST_WORDS*4u,true,&pending,err,cap)) return false;
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) {dc_gpu_address_buffer_destroy(g,&pending);return false;}
     dc_gpu_address_buffer_destroy(g,&a->requests);a->requests=pending;a->request_capacity=next;
-    address((uint32_t *)a->root.mapped+FR_ARENA_REQUESTS,pending.address);bind_requests(g,a);return true;
+    address((uint32_t *)a->root.mapped+FR_ARENA_REQUESTS,pending.address);return true;
 }
 static bool grow_entries(dc_gpu_t *g,fr_reactive_arena_gpu_t *a,uint32_t required,char *err,uint32_t cap) {
     if(required<=a->capacity) return error(err,cap,"Reactive arena cannot grow beyond its address range");

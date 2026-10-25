@@ -47,3 +47,7 @@ Generation GREEN: a new RED case reused hot slot0 and confirmed the runtime owne
 **2026-10-25T01:38:35Z**
 
 GPU arena foundation GREEN:4 Intel core/sync-validated cases pass for freed-slot reuse/generation safety, all-or-nothing rollback under injected VkAllocateMemory failure followed by successful growth/retry, stale/duplicate retire rollback, and identity-preserving updates with stale peers. Allocation reserves entries on GPU and commits or rolls back the whole batch; output handles stay unchanged on failure. This isolated arena is not yet attached to live admission; integration and streaming/checkpoints remain required.
+
+**2026-10-25T01:45:49Z**
+
+Full-width arena addressing GREEN:256 Intel GPU arithmetic cases now match uint64 reference values, including carry and high index bits; the RED request-address stub had112 errors. Request storage uses BDA rather than a large storage-buffer descriptor, and all4 arena rollback/reuse/update cases still pass with core/sync validation. The first address harness attempt used the minimal probe default buffer and crashed its process; fixed its explicit8192-word allocation plus compile-time output bounds before the valid RED/GREEN runs. No computed test address is dereferenced. Live admission integration is next.

@@ -7,7 +7,6 @@
 #include "address.glsl"
 layout(local_size_x=64) in;
 layout(set=0,binding=0,std430) readonly buffer Root {uint root[];};
-layout(set=0,binding=1,std430) buffer Requests {uint requests[];};
 layout(buffer_reference,std430,buffer_reference_align=4) coherent buffer Words {uint words[];};
 layout(push_constant) uniform Params {uint count,phase,pad0,pad1;} params;
 Words entry(uint index) {return Words(reactive_entry_address(uvec2(root[4],root[5]),index));}
@@ -39,9 +38,10 @@ void main() {
     uint group=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x;
     if(group>=(params.count-1u)/64u+1u) return;
     uint i=group*64u+gl_LocalInvocationID.x;if(i>=params.count) return;
-    uint r=i*FR_ARENA_REQUEST_WORDS,operation=requests[r];
+    Words request=Words(reactive_request_address(uvec2(root[22],root[23]),i));
+    uint operation=request.words[0];
     if(params.phase==0u) {
-        requests[r+FR_ARENA_REQUEST_RESERVED]=0u;
+        request.words[FR_ARENA_REQUEST_RESERVED]=0u;
         if(operation==FR_ARENA_ALLOCATE) {
             if(!quota()) {
                 fail(FR_ARENA_STATUS_CAPACITY);
@@ -55,26 +55,26 @@ void main() {
                 fail(FR_ARENA_STATUS_INVALID);return;
             }
             uint generation=entry(slot).words[FR_ENTRY_GENERATION];
-            requests[r+FR_ARENA_REQUEST_INDEX]=slot;
-            requests[r+FR_ARENA_REQUEST_GENERATION]=max(generation,1u);
-            requests[r+FR_ARENA_REQUEST_OLD_OWNER]=0u;
-            requests[r+FR_ARENA_REQUEST_RESERVED]=1u;
+            request.words[FR_ARENA_REQUEST_INDEX]=slot;
+            request.words[FR_ARENA_REQUEST_GENERATION]=max(generation,1u);
+            request.words[FR_ARENA_REQUEST_OLD_OWNER]=0u;
+            request.words[FR_ARENA_REQUEST_RESERVED]=1u;
             return;
         }
-        uint slot=requests[r+1u],generation=requests[r+2u];
+        uint slot=request.words[1u],generation=request.words[2u];
         if((operation!=FR_ARENA_UPDATE&&operation!=FR_ARENA_RETIRE)||slot>=root[2]||generation==0u) {fail(FR_ARENA_STATUS_STALE);return;}
         Words e=entry(slot);uint owner=e.words[FR_ENTRY_OWNER];
         if(e.words[FR_ENTRY_GENERATION]!=generation||owner<1u||owner>3u) {fail(FR_ARENA_STATUS_STALE);return;}
         if(operation==FR_ARENA_UPDATE) {
-            for(uint field=0u;field<6u;field++) if(e.words[FR_ENTRY_OWNER+field]!=requests[r+4u+field]) {fail(FR_ARENA_STATUS_INVALID);return;}
-            for(uint field=2u;field<6u;field++) if(e.words[FR_ENTRY_STATE+field]!=requests[r+10u+field]) {fail(FR_ARENA_STATUS_INVALID);return;}
+            for(uint field=0u;field<6u;field++) if(e.words[FR_ENTRY_OWNER+field]!=request.words[4u+field]) {fail(FR_ARENA_STATUS_INVALID);return;}
+            for(uint field=2u;field<6u;field++) if(e.words[FR_ENTRY_STATE+field]!=request.words[10u+field]) {fail(FR_ARENA_STATUS_INVALID);return;}
         }
         if(atomicCompSwap(e.words[FR_ENTRY_OWNER],owner,FR_ARENA_OWNER_RESERVED)!=owner) {fail(FR_ARENA_STATUS_STALE);return;}
-        requests[r+FR_ARENA_REQUEST_INDEX]=slot;requests[r+FR_ARENA_REQUEST_GENERATION]=generation;
-        requests[r+FR_ARENA_REQUEST_OLD_OWNER]=owner;requests[r+FR_ARENA_REQUEST_RESERVED]=1u;return;
+        request.words[FR_ARENA_REQUEST_INDEX]=slot;request.words[FR_ARENA_REQUEST_GENERATION]=generation;
+        request.words[FR_ARENA_REQUEST_OLD_OWNER]=owner;request.words[FR_ARENA_REQUEST_RESERVED]=1u;return;
     }
-    if(requests[r+FR_ARENA_REQUEST_RESERVED]==0u) return;
-    uint slot=requests[r+FR_ARENA_REQUEST_INDEX],generation=requests[r+FR_ARENA_REQUEST_GENERATION];
+    if(request.words[FR_ARENA_REQUEST_RESERVED]==0u) return;
+    uint slot=request.words[FR_ARENA_REQUEST_INDEX],generation=request.words[FR_ARENA_REQUEST_GENERATION];
     Words e=entry(slot);uint status=mailbox().words[FR_ARENA_MAIL_STATUS];
     if(params.phase==1u&&status==0u) {
         if(operation==FR_ARENA_RETIRE) {
@@ -83,14 +83,14 @@ void main() {
             if(next==0xffffffffu) atomicAdd(mailbox().words[FR_ARENA_MAIL_RETIRED],1u);
             else {atomicOr(bits().words[slot/32u],1u<<(slot%32u));atomicAdd(mailbox().words[FR_ARENA_MAIL_FREE],1u);}
         } else {
-            for(uint field=0u;field<6u;field++) e.words[FR_ENTRY_OWNER+field]=requests[r+4u+field];
-            for(uint field=0u;field<FR_STATE_WORDS;field++) e.words[FR_ENTRY_STATE+field]=requests[r+10u+field];
+            for(uint field=0u;field<6u;field++) e.words[FR_ENTRY_OWNER+field]=request.words[4u+field];
+            for(uint field=0u;field<FR_STATE_WORDS;field++) e.words[FR_ENTRY_STATE+field]=request.words[10u+field];
             e.words[FR_ENTRY_GENERATION]=generation;
             if(operation==FR_ARENA_ALLOCATE) atomicAdd(mailbox().words[FR_ARENA_MAIL_LIVE],1u);
         }
     }
     if(params.phase==2u&&status!=0u) {
-        e.words[FR_ENTRY_OWNER]=requests[r+FR_ARENA_REQUEST_OLD_OWNER];
+        e.words[FR_ENTRY_OWNER]=request.words[FR_ARENA_REQUEST_OLD_OWNER];
         if(operation==FR_ARENA_ALLOCATE) {
             atomicOr(bits().words[slot/32u],1u<<(slot%32u));atomicAdd(mailbox().words[FR_ARENA_MAIL_FREE],1u);
         }
