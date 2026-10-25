@@ -35,10 +35,10 @@ Primitive gas_cached(ivec2 p) {
 }
 void gas_error(uint at) {atomicOr(stats[FR_GAS_ERROR_WORD],1u);atomicMin(stats[FR_GAS_ERROR_AT_WORD],at);}
 void gas_rate(Primitive p) {
-    float rate=abs(p.hydro.y)+abs(p.hydro.z)+(gas_parameter(FR_GAS_POLICY_WORD)==0.?2.*p.metric.x:0.);
+    float rate=abs(p.hydro.y)+abs(p.hydro.z)+(!gas_implicit_policy()?2.*p.metric.x:0.);
     uint bound=subgroupMax(gas_finite(rate)&&rate>=0.?floatBitsToUint(rate):0u);
     if(subgroupElect()&&bound!=0u) atomicMax(stats[FR_GAS_RATE_WORD],bound);
-    if(gas_parameter(FR_GAS_POLICY_WORD)!=0.) {
+    if(gas_implicit_policy()) {
         uint x=subgroupMax(floatBitsToUint(abs(p.hydro.y))),y=subgroupMax(floatBitsToUint(abs(p.hydro.z)));
         if(subgroupElect()) {if(x!=0u) atomicMax(stats[FR_GAS_RATE_X_WORD],x);if(y!=0u) atomicMax(stats[FR_GAS_RATE_Y_WORD],y);}
     }

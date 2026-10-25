@@ -1,6 +1,13 @@
 #ifndef FR_GAS_MODEL_GLSL
 #define FR_GAS_MODEL_GLSL
 float gas_parameter(uint word) {return uintBitsToFloat(parameters[word]);}
+bool gas_implicit_policy() {
+#ifdef FR_GAS_FORCE_IMPLICIT
+    return true;
+#else
+    return gas_parameter(FR_GAS_POLICY_WORD)!=0.;
+#endif
+}
 float gas_mass(Gas s) {return dot(s.species,vec4(1))+s.dynamics.x;}
 float gas_energy(Gas s) {return s.dynamics.y+s.visual.w+s.geometry.z;}
 bool gas_finite(float x) {return !isnan(x)&&!isinf(x);}
@@ -22,7 +29,7 @@ Primitive gas_primitive(Gas s,out bool okay) {
     float temperature=(gas_energy(s)-kinetic)/capacity;
     float pressure=moles*temperature/(volume*gas_parameter(FR_GAS_KINETIC_WORD));
     okay=okay&&temperature>0.&&gas_finite(temperature)&&gas_finite(pressure);
-    if(gas_parameter(FR_GAS_POLICY_WORD)!=0.) {
+    if(gas_implicit_policy()) {
         float enthalpy=(gas_energy(s)+gas_parameter(FR_GAS_KINETIC_WORD)*pressure*volume)/mass;
         float pressure_capacity=moles>0.?gas_parameter(FR_GAS_KINETIC_WORD)*volume*capacity/moles:0.;
         okay=okay&&gas_finite(enthalpy)&&gas_finite(pressure_capacity);
@@ -58,7 +65,7 @@ Gas gas_buoyancy_cached(Gas s,Primitive primitive,float dt,out float admitted_wo
     float oxygen=(fraction/gas_parameter(0u))/(fraction/gas_parameter(0u)+(1.-fraction)/gas_parameter(1u));
     float reference=(oxygen*gas_parameter(0u)+(1.-oxygen)*gas_parameter(1u))*gas_parameter(FR_GAS_AMBIENT_WORD);
     float molecular=dot(s.species,vec4(gas_parameter(0u),gas_parameter(1u),gas_parameter(2u),gas_parameter(3u)))+s.dynamics.x*gas_parameter(4u);
-    float ratio=gas_parameter(FR_GAS_POLICY_WORD)==0.?molecular*primitive.metric.y/(mass*reference):
+    float ratio=!gas_implicit_policy()?molecular*primitive.metric.y/(mass*reference):
         gas_parameter(FR_GAS_KINETIC_WORD)*primitive.hydro.w/(primitive.hydro.x*reference);
     float acceleration=abs(ratio-1.)<=0.00000095367431640625?0.:gravity*(1.-ratio);
     float impulse=mass*acceleration*dt;

@@ -1,3 +1,4 @@
+#define FR_GAS_FORCE_IMPLICIT 1
 #include "storage.glsl"
 layout(set=0,binding=12,std430) restrict buffer Acoustic {vec4 acoustic[];};
 layout(set=0,binding=13,std430) restrict buffer Pressure {vec4 pressure[];};

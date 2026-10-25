@@ -310,3 +310,20 @@ modify the working source. This removes one queue-wide completion wait per
 substep. All14 native cases and the displayed enclosure pass; the complete
 four-run1000-frame displayed battery is now being measured, without validation
 or builds overlapping its measured frames. No acceptance result is claimed yet.
+
+The full closed1000-frame runs FAIL:48.938/321.568ms and32.414/258.863ms.
+Both have four identical paused captures. The first open run was stopped after
+381 frames because sustained cost became excessive; its634.121/1113.589ms result
+is diagnostic only, including a brief parser compilation overlap, not acceptance
+evidence. All owned benchmark processes were stopped and verified gone before
+subsequent builds/tests. No final timing gate has passed.
+
+The permanent `tools/diagnostics/smoke_trace.py` parser has two passing tests and
+accounts line-buffered `DC_GAS_TRACE=1 DC_FRAME_TIMINGS=1` records by complete
+frame. The open100-frame trace shows30--50 substeps per slow0.25s frame, broad
+activity (~180k cells), and substantial transport, pressure and completion costs.
+A one-sweep first pass passed14 numerical cases but worsened the open30-frame
+probe to773.476/1109.057ms; that default is rejected. Current experiments retain
+the normal sweep budget, compile implicit-only shader branches statically, and
+wait for a per-gas submission fence rather than queue-wide idle. These remain
+under displayed/reference/performance validation and are not a completion claim.

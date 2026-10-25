@@ -22,6 +22,7 @@ struct fr_gas_gpu {
     uint32_t cached_bank;
     float cached_rate;
     bool cache_valid;
+    VkFence completion;
 };
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
@@ -35,9 +36,18 @@ static void destroy(dc_gpu_t *g,struct fr_gas_gpu *t) {
     fr_renderer_compute_destroy(g,&t->gate);dc_gpu_address_buffer_destroy(g,&t->gates);
     for(uint32_t i=0;i<3;i++) dc_gpu_address_buffer_destroy(g,t->state+i);
     for(uint32_t i=0;i<2;i++) dc_gpu_address_buffer_destroy(g,t->cache+i);
-    dc_gpu_address_buffer_destroy(g,&t->parameters);dc_gpu_address_buffer_destroy(g,&t->stats);free(t);
+    dc_gpu_address_buffer_destroy(g,&t->parameters);dc_gpu_address_buffer_destroy(g,&t->stats);
+    if(t->completion) vkDestroyFence(g->device,t->completion,NULL);
+    free(t);
 }
 void fr_gas_gpu_destroy(dc_gpu_t *g) {if(g) {destroy(g,g->gas);g->gas=NULL;}}
+bool fr_gas_submit(dc_gpu_t *g) {
+    if(!g->gas) return fr_renderer_submit(g);
+    VkFence fence=g->gas->completion;
+    if(vkEndCommandBuffer(g->command)!=VK_SUCCESS||vkResetFences(g->device,1,&fence)!=VK_SUCCESS) return false;
+    VkSubmitInfo submit={.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,.commandBufferCount=1,.pCommandBuffers=&g->command};
+    return vkQueueSubmit(g->queue,1,&submit,fence)==VK_SUCCESS&&vkWaitForFences(g->device,1,&fence,VK_TRUE,UINT64_MAX)==VK_SUCCESS;
+}
 void fr_gas_gpu_invalidate_cache(dc_gpu_t *g) {if(g&&g->gas) {g->gas->cache_valid=false;g->gas->acoustic.matrix_valid=false;}}
 static void barrier(dc_gpu_t *g) {
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_TRANSFER_BIT,
@@ -57,7 +67,7 @@ static bool submit(dc_gpu_t *g,char *err,uint32_t cap) {
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_TRANSFER_WRITE_BIT,
         VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_HOST_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
-    return fr_renderer_submit(g)||error(err,cap,"Cannot complete Vulkan gas transaction");
+    return fr_gas_submit(g)||error(err,cap,"Cannot complete Vulkan gas transaction");
 }
 static void clear_stats(struct fr_gas_gpu *t) {
     uint32_t *words=t->stats.mapped;words[FR_GAS_RATE_WORD]=0;words[FR_GAS_ERROR_WORD]=0;words[FR_GAS_ERROR_AT_WORD]=UINT32_MAX;
@@ -82,6 +92,8 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     t->groups_y=(groups-1u)/t->groups_x+1u;
     if(states>properties.limits.maxStorageBufferRange||(VkDeviceSize)count*32u>properties.limits.maxStorageBufferRange||
        t->groups_y>properties.limits.maxComputeWorkGroupCount[1]) return error(err,cap,"Gas field exceeds Vulkan address limits");
+    VkFenceCreateInfo fence={.sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+    if(vkCreateFence(g->device,&fence,NULL,&t->completion)!=VK_SUCCESS) return error(err,cap,"Cannot create gas completion fence");
     for(uint32_t i=0;i<3;i++) if(!dc_gpu_address_buffer_create(g,states,true,t->state+i,err,cap)) return false;
     for(uint32_t i=0;i<2;i++) if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,true,t->cache+i,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*4u,true,&t->gates,err,cap)) return false;
