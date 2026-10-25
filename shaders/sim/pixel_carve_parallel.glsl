@@ -248,7 +248,8 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
         uint word=source.compound_reserved+pixel_tile_offset(source,pixel/256u)+1u+(pixel%256u)/8u;
         uint label=DC_FRAGMENT_LABEL(pixel);
         if(label>0u&&label<=pc_count)
-            reactive_shape_reown(word-color_pool_word(),pixel%8u,color_capacity(),PF_ID(label-1u),generation,uvec2(pixel_piece_cell(source,pixel)));
+            reactive_shape_reown(word-color_pool_word(),pixel%8u,color_capacity(),PF_ID(label-1u),
+                reactive_body_generation(PF_SLOT(label-1u),PF_ID(label-1u)),uvec2(pixel_piece_cell(source,pixel)));
         else if(material!=5u||label==0xffffffffu) reactive_shape_erase(word-color_pool_word(),pixel%8u,color_capacity());
     }
     memoryBarrierBuffer();barrier();return true;

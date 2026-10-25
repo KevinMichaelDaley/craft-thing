@@ -39,3 +39,7 @@ REFACTOR validation complete: corrected unchanged color-work test reports3 pool 
 **2026-10-25T01:12:20Z**
 
 Particle lifecycle GREEN:4 new RED cases reproduced stale state after air/repaint, lost secondary-promotion state, leaf RGB flags becoming soil moisture, and state loss across a negative-coordinate halo transfer. All4 now pass on native Wayland Vulkan at480x270+halo with core/sync validation (16 presented frames); the prior4 ownership cases pass again on Intel. Canonical A erasure retires only its entry and clears stale B handles without retiring unrelated B aliases. Halo runtime variant follows particle handles and promotion; material replacement clears incompatible flags. No ticket/epic closure yet.
+
+**2026-10-25T01:29:25Z**
+
+Generation GREEN: a new RED case reused hot slot0 and confirmed the runtime owner advanced to generation2 while its reactive record incorrectly stayed1. Extraction and carving now use the actual/pending runtime ownership generation, distinct from structural fracture lineage. All5 live ownership cases pass on native Wayland Vulkan with core+sync validation (20 presented frames). Continuing with GPU arena reservation/reuse/rollback and remaining persistence/handoff paths.

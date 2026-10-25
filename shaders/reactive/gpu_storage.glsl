@@ -3,6 +3,14 @@
 #include "../../include/dungeoncraft/reactive_state_layout.h"
 #ifdef DC_RUNTIME_BODY_STORAGE
 bool reactive_enabled() {return DC_RUNTIME_WORK(64u)==0x46525331u;}
+/* Match the index pass that follows publication, including reused hot slots.
+ * The structural fracture lineage generation is a different identity. */
+uint reactive_body_generation(uint slot,uint id) {
+    BodyStorageOwner owner=DC_BODY_OWNER(runtime_body_root,slot);
+    if(owner.runtime_id!=id&&owner.state!=DC_BODY_OWNER_RESERVED&&owner.generation!=0xffffffffu)
+        return owner.generation+1u;
+    return owner.generation;
+}
 layout(buffer_reference,std430,buffer_reference_align=4) coherent buffer ReactiveWords {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=4) readonly restrict buffer ReactiveRootWords {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=8) coherent buffer ReactiveHandles {uvec2 values[];};
@@ -90,6 +98,7 @@ void reactive_extract_cell(uint cell,uint relative,uint nibble,uint capacity,uin
 }
 #else
 bool reactive_enabled() {return false;}
+uint reactive_body_generation(uint slot,uint id) {return 1u;}
 void reactive_forget_cell(uint cell) {}
 void reactive_shape_copy(uint target,uint source,uint capacity) {}
 void reactive_shape_clear(uint relative,uint nibble,uint capacity) {}
