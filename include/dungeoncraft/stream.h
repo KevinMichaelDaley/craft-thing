@@ -7,6 +7,7 @@
 #include "dungeoncraft/chunk.h"
 #include "dungeoncraft/color.h"
 #include "dungeoncraft/generate.h"
+#include "ferrum/fire/reactive_chunk.h"
 
 typedef struct dc_streamer dc_streamer_t;
 
@@ -18,6 +19,7 @@ typedef struct {
     uint64_t generation;
     dc_chunk_t *chunk;
     dc_chunk_colors_t *colors;
+    fr_reactive_chunk_t *reactive;
 } dc_stream_result_t;
 
 /** Start a worker thread for procedural generation and chunk disk I/O. */
@@ -39,6 +41,10 @@ bool dc_stream_request_save(dc_streamer_t *stream, const dc_chunk_t *chunk,
 /** Save physical cells and their terrain/water colors in one atomic chunk file. */
 bool dc_stream_request_save_colors(dc_streamer_t *stream,const dc_chunk_t *chunk,
     const dc_chunk_colors_t *colors,uint64_t generation);
+/** Save physics, colors and logical reaction state in one atomic versioned file.
+ * The queue owns an immutable copy; invalid bindings leave existing files intact. */
+bool dc_stream_request_save_reactive(dc_streamer_t *stream,const dc_chunk_t *chunk,
+    const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,uint64_t generation);
 
 /** Poll one completed result without waiting for disk I/O. */
 bool dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *result);

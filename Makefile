@@ -1717,3 +1717,5 @@ test_reactive_packets: build/reactive_packet_tests
 
 build/reactive_chunk_tests: tests/fire/reactive_chunk_tests.c src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_chunk.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/reactive_chunk_tests.c src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) -o $@ -lm
+build/reactive_stream_tests: tests/fire/reactive_stream_tests.c tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) -o $@ -pthread -lm

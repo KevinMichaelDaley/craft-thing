@@ -282,6 +282,11 @@ bool dc_stream_request_save_colors(dc_streamer_t *stream,const dc_chunk_t *chunk
     return false;
 }
 
+bool dc_stream_request_save_reactive(dc_streamer_t *stream,const dc_chunk_t *chunk,
+    const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,uint64_t generation) {
+    (void)stream;(void)chunk;(void)colors;(void)reactive;(void)generation;return false;
+}
+
 bool dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *result) {
     if (!stream || !result) return false;
     mtx_lock(&stream->mutex);
