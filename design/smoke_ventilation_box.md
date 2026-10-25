@@ -102,3 +102,15 @@ including strengthened moving-wall coverage, but worsened cost to163.711/173.258
 The added flux-buffer bandwidth is not viable; this experiment is retained in
 git history rather than selected as the production backend. No target, clock,
 budget tolerance, velocity or substep limit was changed to pass this gate.
+
+The next gate separates explicit conservative advection from an implicit
+acoustic pressure/enthalpy step. Its cold oracle retains variable composition,
+finite pressure and expansion rather than imposing zero divergence. A sealed
+linear acoustic mode at a timestep far beyond explicit acoustic CFL matches an
+independently derived backward-Euler amplitude (0.0149118946719 versus
+0.0149118946537), with energy error -1.4552e-11. Stationary colored contacts and
+2D pressure release/walls also pass strict stock, energy and pigment checks.
+The initial derivation follows the pressure/energy coupling in
+[Cordier, Degond and Kumbaro](https://arxiv.org/abs/1108.2876); the implementation
+is a separate experimental numerical policy until its real Vulkan reference
+and complete-frame measurements pass. Existing HLLC tests remain intact.
