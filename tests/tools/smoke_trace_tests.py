@@ -27,6 +27,23 @@ class SmokeTraceTests(unittest.TestCase):
     def test_truncated_tail_does_not_invent_a_complete_frame(self):
         self.assertEqual(TRACE.frames(["Acoustic GPU init1 pressure-group2 residual0 ms\n"]), [])
 
+    def test_delayed_stall_accounts_retries_activity_waits_and_fixed_storage(self):
+        rows = TRACE.frames([
+            "Acoustic dt0.02 batch1 residual0.0002 error0 tiles40 advected80 sweeps32 group1 large1\n",
+            "Gas interval dt0.02 accepted1 retries0 submits2 queue0.1 wait12.0 storage1024\n",
+            "Present waits acquire0.1 fence0.2\n", "app-frame,9,20.0ms\n",
+            "Acoustic dt0.01 batch3 residual0.1 error0 tiles2000 advected2800 sweeps16 group2 large1\n",
+            "Gas retry dt0.01 speed200 large1 stages4 cell123\n",
+            "Gas interval dt0.25 accepted30 retries20 submits90 queue1.0 wait900.0 storage1024\n",
+            "Present waits acquire0.2 fence0.3\n", "app-frame,10,1000.0ms\n",
+        ])
+        self.assertEqual(rows[1]["retries"], 20)
+        self.assertEqual(rows[1]["accepted"], 30)
+        self.assertEqual(rows[1]["solve_tiles_peak"], 2000)
+        self.assertAlmostEqual(rows[1]["gas_wait_ms"], 900.0)
+        self.assertAlmostEqual(rows[1]["acquire_ms"], 0.2)
+        self.assertEqual(rows[0]["storage_bytes"], rows[1]["storage_bytes"])
+
 
 if __name__ == "__main__":
     unittest.main()
