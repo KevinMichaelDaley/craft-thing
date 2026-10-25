@@ -142,3 +142,9 @@ frame cost to360.387/652.893ms (109 accepted substeps over50 physical ticks).
 This failed variant is preserved in history. The next experiment uses alternating
 tile colors so adjacent tiles consume newly updated boundary data; all acceptance
 tolerances and full-frame targets remain unchanged.
+
+Alternating in-place tile colors also retained4 numerical display passes but
+still failed at225.300/293.848ms over30 frames. This variant is also preserved
+as an unsuccessful experiment. The next optimization uses iterative refinement:
+cheap inner float correction solves, compensated outer pressure accumulation,
+and the same accurate global residual criterion after each correction batch.

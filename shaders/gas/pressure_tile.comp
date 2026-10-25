@@ -3,6 +3,7 @@
 #include "acoustic.glsl"
 shared float tile_high[100];
 shared float tile_low[100];
+shared uint tile_active;
 float tile_residual(uint center,vec4 coefficients,float diagonal,float rhs) {
     vec2 sum=gas_pressure_product(vec2(rhs,0),-diagonal,tile_high[center]);
     sum=gas_pressure_product(sum,-diagonal,tile_low[center]);
@@ -14,13 +15,15 @@ float tile_residual(uint center,vec4 coefficients,float diagonal,float rhs) {
     return sum.x+sum.y;
 }
 void main() {
+    if(((gl_WorkGroupID.x+gl_WorkGroupID.y)&1u)!=((params.bank>>2u)&1u)) return;
     uint lane=gl_LocalInvocationIndex;ivec2 origin=ivec2(gl_WorkGroupID.xy)*8;
-    bool alternate=(params.bank&4u)!=0u;
+    if(lane==0u) tile_active=0u;
     for(uint cell=lane;cell<100u;cell+=64u) {
         ivec2 p=origin+ivec2(int(cell%10u)-1,int(cell/10u)-1);vec2 value=vec2(0);
-        if(all(greaterThanEqual(p,ivec2(0)))&&all(lessThan(p,ivec2(params.width,params.height)))) {
+        bool corner=(cell%10u==0u||cell%10u==9u)&&(cell/10u==0u||cell/10u==9u);
+        if(!corner&&all(greaterThanEqual(p,ivec2(0)))&&all(lessThan(p,ivec2(params.width,params.height)))) {
             uint at=uint(p.y)*params.width+uint(p.x);
-            value=alternate?vec2(provisional[at].z,acoustic[at].w):vec2(pressure[at].x,acoustic[at].z);
+            value=vec2(pressure[at].x,acoustic[at].z);
         }
         tile_high[cell]=value.x;tile_low[cell]=value.y;
     }
@@ -31,6 +34,9 @@ void main() {
     float ratio=row.z>0.?min(dot(coefficients,vec4(1))/row.z,.99999994):0.;
     float relaxation=2./(1.+sqrt(max(0.,1.-ratio*ratio)));
     barrier();
+    if(valid&&row.z>0.&&abs(tile_residual(center,coefficients,row.z,row.y))>1e-7*row.w) atomicOr(tile_active,1u);
+    barrier();
+    if(tile_active==0u) return;
     for(uint sweep=0u;sweep<4u;sweep++) for(uint color=0u;color<2u;color++) {
         if(valid&&row.z>0.&&((uint(p.x+p.y)&1u)==color)) {
             float residual=tile_residual(center,coefficients,row.z,row.y);
@@ -42,8 +48,5 @@ void main() {
         }
         barrier();
     }
-    if(valid) {
-        if(alternate) {pressure[index].x=tile_high[center];acoustic[index].z=tile_low[center];}
-        else {provisional[index].z=tile_high[center];acoustic[index].w=tile_low[center];}
-    }
+    if(valid) {pressure[index].x=tile_high[center];acoustic[index].z=tile_low[center];}
 }
