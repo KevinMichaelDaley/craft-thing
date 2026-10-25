@@ -27,10 +27,7 @@ void reactive_leaf_to_particle(uint relative,uint nibble,uint capacity,uint part
     if(!reactive_particles_enabled()) return;
     uvec2 handle=reactive_shape_read(relative,nibble,capacity);
     if(!reactive_handle_valid(handle)) return;
-    reactive_entry_write(handle.x,FR_ENTRY_OWNER,3u);
-    reactive_entry_write(handle.x,FR_ENTRY_OWNER+1u,id.x);
-    reactive_entry_write(handle.x,FR_ENTRY_OWNER+2u,id.y);
-    for(uint field=3u;field<=5u;field++) reactive_entry_write(handle.x,FR_ENTRY_OWNER+field,0u);
+    reactive_owner_write(handle.x,3u,uvec4(id,0u,0u),0u);
     reactive_entry_write(handle.x,FR_ENTRY_STATE+FR_STATE_MATERIAL,10u);
     reactive_particle_write(0u,particle,handle);reactive_particle_write(1u,particle,uvec2(0));
     reactive_shape_write(relative,nibble,capacity,uvec2(0));

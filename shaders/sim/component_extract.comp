@@ -542,12 +542,14 @@ void main() {
         if(i<n&&solid(i)) {
             uint c=candidates[labels[i]];
             if(c<DC_DATA(g+36257u)&&DC_DATA(record(c)+14u)!=0u) {
+                if(reactive_enabled()) {
                 uint r=record(c);ivec2 low=ivec2(DC_DATA(r+1u),DC_DATA(r+2u)),p=relative_point(DC_DATA(r),i)-low;
                 uint width=uint((int(DC_DATA(r+3u))-low.x+16)/16),tile=uint(p.y/16)*width+uint(p.x/16);
                 uint target=DC_DATA(r+11u),offset=DC_DATA(target+8u+tile),cell=uint(p.y%16)*16u+uint(p.x%16);
                 uint word=target+offset+1u+cell/8u;
                 reactive_extract_cell(i,BODY_STORAGE_WORDS+word-color_pool_word(),cell%8u,capacity(),
                     0x80000000u+DC_DATA(r+13u),1u,uvec2(p));
+                }
                 uint particle=i/4096u*8192u+i%4096u;
                 for(uint layer=0u;layer<2u;layer++) {
                     uint p=particle+layer*4096u;

@@ -42,18 +42,18 @@ void shape_color_set(uint word,uint nibble,vec4 color) {
     if(relative<capacity) shape_colors_a[index]=color;else shape_colors_b[index]=color;
 }
 void shape_color_copy_word(uint target,uint source) {
-    reactive_shape_copy(target-color_pool_word(),source-color_pool_word(),color_capacity());
+    if(reactive_enabled()) reactive_shape_copy(target-color_pool_word(),source-color_pool_word(),color_capacity());
     for(uint nibble=0u;nibble<8u;nibble++) shape_color_set(target,nibble,shape_color_get(source,nibble));
 }
 void shape_color_stage(uint target,uint source) {
-    reactive_shape_stage(target-color_pool_word(),source==0u?0xffffffffu:source-color_pool_word(),color_capacity());
+    if(reactive_enabled()) reactive_shape_stage(target-color_pool_word(),source==0u?0xffffffffu:source-color_pool_word(),color_capacity());
     vec4 marker=vec4(0);marker.w=uintBitsToFloat(0x80000000u|(source==0u?0u:source-color_pool_word()+1u));
     shape_color_set(target,0u,marker);
 }
 void shape_color_resolve(uint word) {
-    reactive_shape_resolve(word-color_pool_word(),color_capacity(),pixel_word_at(word));
     uint pool=color_pool_word(),capacity=color_capacity();
     uint relative=word-pool,target=(relative%capacity)*8u;
+    if(reactive_enabled()) reactive_shape_resolve(relative,capacity,pixel_word_at(word));
 #ifdef DC_RUNTIME_BODY_STORAGE
     uvec2 target_address=relative<capacity?uvec2(DC_RUNTIME_WORK(32u),DC_RUNTIME_WORK(33u)):
         uvec2(DC_RUNTIME_WORK(34u),DC_RUNTIME_WORK(35u));
@@ -84,8 +84,6 @@ void shape_color_resolve(uint word) {
 /* Each eight-lane team owns one packed word. All lanes must enter, including
  * padding teams, so marker reads complete before alpha is overwritten. */
 void shape_color_resolve_cooperative(uint word,bool enabled) {
-    if(enabled&&gl_LocalInvocationIndex%8u==0u)
-        reactive_shape_resolve(word-color_pool_word(),color_capacity(),pixel_word_at(word));
     if(gl_SubgroupSize<8u) {
         if(enabled&&gl_LocalInvocationIndex%8u==0u) shape_color_resolve(word);
         return;
@@ -96,6 +94,7 @@ void shape_color_resolve_cooperative(uint word,bool enabled) {
         relative=word-color_pool_word();capacity=color_capacity();
         uint target=(relative%capacity)*8u;
         marker=floatBitsToUint(relative<capacity?shape_colors_a[target].w:shape_colors_b[target].w);
+        if(reactive_enabled()) reactive_shape_resolve(relative,capacity,pixel_word_at(word));
     }
     uint leader=gl_SubgroupInvocationID&~7u;
     relative=subgroupShuffle(relative,leader);

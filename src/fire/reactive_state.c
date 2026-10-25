@@ -3,11 +3,14 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "dungeoncraft/reactive_state_layout.h"
 #include "ferrum/fire/material_profile.h"
 #include "ferrum/fire/reactive_state.h"
 
-_Static_assert(sizeof(fr_reactive_state_t)==112,"Reactive state ABI changed");
-_Static_assert(offsetof(fr_reactive_state_t,thermal_energy)==68,"Reactive quantity layout changed");
+_Static_assert(sizeof(fr_reactive_state_t)==FR_STATE_WORDS*4u,"Reactive state ABI changed");
+_Static_assert(offsetof(fr_reactive_state_t,thermal_energy)==FR_STATE_ENERGY*4u,"Reactive energy layout changed");
+_Static_assert(offsetof(fr_reactive_state_t,dry_mass_fp)==FR_STATE_MASS_FIRST*4u,"Reactive species layout changed");
+_Static_assert(offsetof(fr_reactive_state_t,pending_shock_energy)==FR_STATE_SHOCK*4u,"Reactive shock layout changed");
 static bool error(char *err,uint32_t cap,const char *reason) {
     if(err&&cap) snprintf(err,cap,"%s",reason);
     return false;
