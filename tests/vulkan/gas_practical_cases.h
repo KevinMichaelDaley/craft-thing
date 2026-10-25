@@ -1,5 +1,25 @@
 #ifndef GAS_PRACTICAL_CASES_H
 #define GAS_PRACTICAL_CASES_H
+static void test_native_practical_checkerboard_pressure_relaxes_conservatively(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));
+    fr_gas_state_t *input=malloc(4096*sizeof(*input)),*out=malloc(4096*sizeof(*out));
+    double *volume=malloc(4096*sizeof(*volume));ASSERT_TRUE(c&&input&&out&&volume);
+    fr_gas_model_t m=reference_model();m.kinetic_scale=1./512.;double before=0,variance=0;
+    for(uint32_t i=0;i<4096;i++) {
+        volume[i]=1;double density=.0012*(1.+(((i%64+i/64)&1u)? .01:-.01));
+        input[i]=reference_air(m,density,300,0);before+=density;variance+=(density-.0012)*(density-.0012);
+    }
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&m,.0012,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
+    for(uint32_t step=0;step<20;step++) ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+    double after=0,remaining=0;
+    for(uint32_t i=0;i<4096;i++) {fr_gas_thermo_t t;ASSERT_TRUE(fr_gas_thermodynamics(&m,out+i,1,&t,err,sizeof(err)));after+=t.mass;remaining+=(t.mass-.0012)*(t.mass-.0012);}
+    printf("Checkerboard variance %.9g -> %.9g, mass drift%.9g\n",variance,remaining,after-before);
+    ASSERT_TRUE(remaining<variance*.5&&fabs(after-before)<before*.003);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
+}
 static void test_native_practical_policy_rejects_unresolved_gravity_without_advancing(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     fr_gas_model_t m=reference_model();
