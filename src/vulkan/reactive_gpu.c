@@ -71,6 +71,27 @@ static uint32_t *entry(dc_gpu_t *g,const uint32_t *handle) {
     uint32_t *e=(uint32_t *)g->reactive->entries.mapped+(size_t)handle[0]*FR_ENTRY_WORDS;
     return e[0]==handle[1]&&e[1]?e:NULL;
 }
+bool fr_gpu_reactive_reserve_shapes(dc_gpu_t *g,uint32_t words,char *err,uint32_t cap) {
+    if(!g->reactive) return true;
+    struct fr_reactive_gpu *r=g->reactive;uint32_t *h=r->root.mapped,old=h[12];
+    if(words<=old) return true;
+    dc_gpu_address_buffer_t pending={0};VkDeviceSize bank=(VkDeviceSize)old*64u;
+    VkDeviceSize next_bank=(VkDeviceSize)words*64u;
+    if(!dc_gpu_address_buffer_create(g,next_bank*2u,true,&pending,err,cap)) return false;
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g)) goto fail;
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_READ_BIT);
+    VkBufferCopy regions[2]={{0,0,bank},{bank,next_bank,bank}};
+    vkCmdCopyBuffer(g->command,r->shapes.buffer,pending.buffer,2,regions);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_HOST_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+    if(!fr_renderer_submit(g)) goto fail;
+    dc_gpu_address_buffer_destroy(g,&r->shapes);r->shapes=pending;
+    h[12]=words;put_address(h+8,pending.address);put_address(h+10,pending.address+next_bank);
+    g->descriptor_revision++;return true;
+fail:
+    dc_gpu_address_buffer_destroy(g,&pending);return error(err,cap,"Reactive geometry bank growth failed");
+}
 
 bool fr_gpu_reactive_seed_cell(dc_gpu_t *g,uint32_t slot,uint32_t local,
     const fr_reactive_state_t *state,char *err,uint32_t cap) {
@@ -112,5 +133,27 @@ bool fr_gpu_reactive_read_cell(dc_gpu_t *g,uint32_t slot,uint32_t local,
 }
 bool fr_gpu_reactive_read_body(dc_gpu_t *g,uint32_t id,uint32_t x,uint32_t y,
     fr_reactive_record_t *out,bool *found,char *err,uint32_t cap) {
-    (void)g;(void)id;(void)x;(void)y;(void)out;(void)found;(void)err;(void)cap;return false;
+    if(!g||!id||!out||!found) return error(err,cap,"Invalid reactive body diagnostic");
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Reactive body wait failed");
+    dc_gpu_refresh_body_registry(g);*found=false;
+    if(!g->reactive) return true;
+    for(uint32_t slot=0;slot<dc_gpu_body_capacity(g);slot++) {
+        const dc_gpu_body_record_t *b=dc_gpu_body_record(g,slot);
+        if(!b->body.active||b->body.id!=id) continue;
+        if(!(b->piece_count&DC_GPU_PIXEL_BODY_FLAG)) return true;
+        const uint32_t *shape=(const uint32_t *)g->body_mapped+b->compound_reserved;
+        if(x>=shape[6]||y>=shape[7]) return true;
+        uint32_t tile=(y/16u)*shape[2]+x/16u,offset=shape[8u+tile];
+        if(!offset) return true;
+        uint32_t cell=(y%16u)*16u+x%16u;
+        uint32_t word=b->compound_reserved+offset+1u+cell/8u;
+        uint32_t relative=word-dc_gpu_pixel_pool_word_offset(g)-DC_GPU_PIXEL_POOL_HEADER_WORDS;
+        uint32_t capacity=dc_gpu_pixel_pool_capacity(g),allocated=((uint32_t *)g->reactive->root.mapped)[12];
+        if(relative>=2u*capacity) return error(err,cap,"Reactive shape address is invalid");
+        size_t location=(size_t)(relative/capacity)*allocated*8u+(relative%capacity)*8u+cell%8u;
+        uint32_t *e=entry(g,(uint32_t *)g->reactive->shapes.mapped+location*2u);
+        if(e) {memcpy(&out->owner,e+FR_ENTRY_OWNER,sizeof(out->owner));memcpy(&out->state,e+FR_ENTRY_STATE,sizeof(out->state));*found=true;}
+        return true;
+    }
+    return true;
 }

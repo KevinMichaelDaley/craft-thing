@@ -505,7 +505,10 @@ void main() {
         ivec2 low=ivec2(DC_DATA(r+1u),DC_DATA(r+2u));
         for(uint word=lane;word<DC_DATA(r+10u);word+=128u) {
             DC_DATA(target+word)=0u;
-            for(uint nibble=0u;nibble<8u;nibble++) shape_color_set(BODY_STORAGE_WORDS+target+word,nibble,vec4(0));
+            for(uint nibble=0u;nibble<8u;nibble++) {
+                shape_color_set(BODY_STORAGE_WORDS+target+word,nibble,vec4(0));
+                reactive_shape_clear(BODY_STORAGE_WORDS+target+word-color_pool_word(),nibble,capacity());
+            }
         }
         memoryBarrierBuffer();barrier();
         if(lane<8u) {uint h[8]=uint[8](DC_DATA(r+10u),DC_DATA(r+8u),width,dir/width,0u,0u,uint(int(DC_DATA(r+3u))-low.x+1),uint(int(DC_DATA(r+4u))-low.y+1));DC_DATA(target+lane)=h[lane];}
@@ -539,6 +542,12 @@ void main() {
         if(i<n&&solid(i)) {
             uint c=candidates[labels[i]];
             if(c<DC_DATA(g+36257u)&&DC_DATA(record(c)+14u)!=0u) {
+                uint r=record(c);ivec2 low=ivec2(DC_DATA(r+1u),DC_DATA(r+2u)),p=relative_point(DC_DATA(r),i)-low;
+                uint width=uint((int(DC_DATA(r+3u))-low.x+16)/16),tile=uint(p.y/16)*width+uint(p.x/16);
+                uint target=DC_DATA(r+11u),offset=DC_DATA(target+8u+tile),cell=uint(p.y%16)*16u+uint(p.x%16);
+                uint word=target+offset+1u+cell/8u;
+                reactive_extract_cell(i,BODY_STORAGE_WORDS+word-color_pool_word(),cell%8u,capacity(),
+                    0x80000000u+DC_DATA(r+13u),1u,uvec2(p));
                 uint particle=i/4096u*8192u+i%4096u;
                 for(uint layer=0u;layer<2u;layer++) {
                     uint p=particle+layer*4096u;

@@ -1,5 +1,6 @@
 #ifndef DC_SHAPE_COLORS_GLSL
 #define DC_SHAPE_COLORS_GLSL
+#include "../reactive/gpu_storage.glsl"
 layout(set=0,binding=33,std430) buffer TerrainColors {vec4 terrain_colors[];};
 #ifdef DC_RUNTIME_BODY_STORAGE
 layout(buffer_reference,std430,buffer_reference_align=16) coherent buffer RuntimeShapeColors {vec4 colors[];};
@@ -41,6 +42,7 @@ void shape_color_set(uint word,uint nibble,vec4 color) {
     if(relative<capacity) shape_colors_a[index]=color;else shape_colors_b[index]=color;
 }
 void shape_color_copy_word(uint target,uint source) {
+    reactive_shape_copy(target-color_pool_word(),source-color_pool_word(),color_capacity());
     for(uint nibble=0u;nibble<8u;nibble++) shape_color_set(target,nibble,shape_color_get(source,nibble));
 }
 void shape_color_stage(uint target,uint source) {

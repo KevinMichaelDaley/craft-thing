@@ -1671,3 +1671,4 @@ build/reactive_state_gpu_tests: tests/vulkan/reactive_state_gpu_tests.c tools/di
 build/reactive_cell_gpu_tests: tests/vulkan/reactive_cell_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(REACTIVE_STATE_SRC) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/shaders/runtime/pattern.comp.spv: shaders/reactive/gpu_storage.glsl shaders/reactive/state.glsl include/dungeoncraft/reactive_state_layout.h
+$(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv: shaders/reactive/gpu_storage.glsl shaders/reactive/state.glsl include/dungeoncraft/reactive_state_layout.h

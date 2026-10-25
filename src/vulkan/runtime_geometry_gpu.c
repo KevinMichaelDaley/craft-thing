@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "runtime_body_internal.h"
+#include "reactive_gpu_internal.h"
 
 static dc_body_address_t address(VkDeviceAddress a) {
     return (dc_body_address_t){(uint32_t)a,(uint32_t)(a>>32)};
@@ -25,6 +26,7 @@ static bool storage_reserve(dc_gpu_t *g,uint32_t required,uint32_t pairs,uint32_
         next*=2u;
     }
     layout.pixel_pool_words=next;
+    if(!fr_gpu_reactive_reserve_shapes(g,next,err,cap)) return false;
     struct dc_runtime_bodies *r=g->runtime_bodies;
     VkDeviceSize old_prefix=(VkDeviceSize)dc_gpu_pixel_pool_word_offset(g)*4u+64u;
     VkDeviceSize prefix=(VkDeviceSize)dc_gpu_pixel_pool_word_offset(&layout)*4u+64u;
