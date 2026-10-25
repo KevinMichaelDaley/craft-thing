@@ -86,7 +86,7 @@ static void test_balanced_counterflow_preserves_uniform_density_energy_and_exact
 }
 static void test_fractional_energy_advection_matches_independent_two_cell_inverse(void) {
     char err[256]={0};fr_gas_model_t m=model();fr_gas_state_t input[2]={air(1,0),air(1,0)},out[2];double volume[2]={1,1};
-    input[1].energy+=1.;double seconds=4.,plus=5./6.,minus=1./6.,determinant=1.+seconds*(plus+minus);
+    input[1].energy+=1.;double seconds=4.,plus=3./4.,minus=1./4.,determinant=1.+seconds*(plus+minus);
     double left=((1.+seconds*minus)*input[0].energy+seconds*minus*input[1].energy)/determinant;
     double right=(seconds*plus*input[0].energy+(1.+seconds*plus)*input[1].energy)/determinant;
     ASSERT_TRUE(fr_gas_large_energy_transport_reference_step(&m,input,volume,2,1,seconds,out,err,sizeof(err)));

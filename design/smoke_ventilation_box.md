@@ -405,11 +405,13 @@ and current synchronization validation. The earlier complete headless run had
 that result does not turn the new displayed RED into a baseline exception.
 
 The next numerical gate splits large-step energy consistently: transport
-two-thirds of advective total energy implicitly with Rusanov diffusion, and
-retain one-third plus pressure work in the acoustic enthalpy. This coefficient
+half of advective total energy implicitly with Rusanov diffusion, and
+retain half plus pressure work in the acoustic enthalpy. This coefficient
 is selected before GREEN from the linear acoustic stability bound, not frame
-timings: for ideal-gas gamma>=1, implicit pressure coupling B=gamma-2/3 gives
-the large-step amplification trace2-gamma/B in[-1,1]. The old zero-bulk/small-CFL
+timings: for ideal-gas gamma>=1, implicit pressure coupling B=gamma-1/2 gives
+the large-step amplification trace1-gamma/B in[-1,0]. Its determinant tends
+to zero, and the finite-step Jury condition2B>=gamma holds. This corrects the
+initial trace calculation before implementing the gate. The old zero-bulk/small-CFL
 method remains unchanged. A separate cold transport entry keeps the previous
 oracle intact; an independent two-cell inverse locks the new energy flux and
 closed budget. Native/reference, contact/wave and displayed long-run validation
