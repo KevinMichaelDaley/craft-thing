@@ -1,0 +1,21 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "multigrid.glsl"
+void main() {
+    uint level=params.bank>>3u;uvec2 size=gas_level_size(level),fine_size=gas_level_size(level-1u);
+    uint index=gas_index();if(index>=size.x*size.y) return;
+    uvec2 origin=uvec2(index%size.x,index/size.x)*2u;
+    uint fine_offset=gas_level_offset(level-1u),offset=gas_level_offset(level);
+    vec4 edges=vec4(0);float mass=0.,rhs=0.;
+    for(uint y=0u;y<2u;y++) for(uint x=0u;x<2u;x++) {
+        uvec2 p=origin+uvec2(x,y);if(any(greaterThanEqual(p,fine_size))) continue;
+        uint at=fine_offset+p.y*fine_size.x+p.x;GasPressureNode node=hierarchy[at];
+        rhs+=gas_level_residual(at,fine_size.x);
+        mass+=max(node.data.x-dot(node.edges,vec4(1)),max(node.data.x*1e-7,1e-20));
+        if(x==1u||p.x+1u==fine_size.x) edges.x+=node.edges.x;
+        if(x==0u) edges.y+=node.edges.y;
+        if(y==1u||p.y+1u==fine_size.y) edges.z+=node.edges.z;
+        if(y==0u) edges.w+=node.edges.w;
+    }
+    hierarchy[offset+index]=GasPressureNode(edges,vec4(mass+dot(edges,vec4(1)),rhs,0.,0.));
+}

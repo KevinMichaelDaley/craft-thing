@@ -1,0 +1,9 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "multigrid.glsl"
+void main() {
+    uint level=params.bank>>3u;uvec2 size=gas_level_size(level),coarse_size=gas_level_size(level+1u);
+    uint index=gas_index();if(index>=size.x*size.y) return;
+    uvec2 p=uvec2(index%size.x,index/size.x)/2u;
+    hierarchy[gas_level_offset(level)+index].data.z+=hierarchy[gas_level_offset(level+1u)+p.y*coarse_size.x+p.x].data.z;
+}

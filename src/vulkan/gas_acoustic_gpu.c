@@ -14,13 +14,16 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->activity);fr_renderer_compute_destroy(g,&t->activity_compact);
     fr_renderer_compute_destroy(g,&t->final_compact);
     fr_renderer_compute_destroy(g,&t->commit);
+    fr_renderer_compute_destroy(g,&t->mg_setup);fr_renderer_compute_destroy(g,&t->mg_restrict);
+    fr_renderer_compute_destroy(g,&t->mg_smooth);fr_renderer_compute_destroy(g,&t->mg_prolong);fr_renderer_compute_destroy(g,&t->mg_extract);
+    dc_gpu_address_buffer_destroy(g,&t->hierarchy);
     for(uint32_t i=0;i<11;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
     dc_gpu_address_buffer_destroy(g,&t->indirect);
     memset(t,0,sizeof(*t));
 }
 bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescriptorBufferInfo source[12],char *err,uint32_t cap) {
     if(t->ready) return true;
-    VkDescriptorBufferInfo buffers[24];memcpy(buffers,source,12*sizeof(*source));
+    VkDescriptorBufferInfo buffers[25];memcpy(buffers,source,12*sizeof(*source));
     VkDeviceSize bytes=(VkDeviceSize)g->width*g->height*16u;
     VkDeviceSize tiles=(VkDeviceSize)((g->width+7u)/8u)*((g->height+7u)/8u);
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(g->physical,&properties);
@@ -33,11 +36,15 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     if(!dc_gpu_address_buffer_create(g,64,true,&t->indirect,err,cap)) goto fail;
     for(uint32_t i=0;i<4;i++) {((uint32_t *)t->indirect.mapped)[i*4+1]=1u;((uint32_t *)t->indirect.mapped)[i*4+2]=1u;}
     buffers[23]=(VkDescriptorBufferInfo){t->indirect.buffer,0,64};
-    fr_renderer_compute_t *pipelines[]={&t->advect,&t->initialize,&t->rhs,&t->classify,&t->compact,&t->sor,&t->correct,&t->residual,&t->finish,&t->activity,&t->activity_compact,&t->final_compact,&t->commit};
-    const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_classify","pressure_compact","pressure_sor","pressure_correct","pressure_residual","acoustic_finish","activity","activity_compact","final_compact","sparse_commit"};
-    for(uint32_t i=0;i<13;i++) {
+    uint64_t nodes=0;uint32_t width=g->width,height=g->height;
+    do {nodes+=(uint64_t)width*height;t->levels++;width=(width+1u)/2u;height=(height+1u)/2u;} while(t->levels<6u&&(width>10u||height>10u));
+    if(!dc_gpu_address_buffer_create(g,nodes*32u,true,&t->hierarchy,err,cap)) goto fail;
+    buffers[24]=(VkDescriptorBufferInfo){t->hierarchy.buffer,0,t->hierarchy.bytes};
+    fr_renderer_compute_t *pipelines[]={&t->advect,&t->initialize,&t->rhs,&t->classify,&t->compact,&t->sor,&t->correct,&t->residual,&t->finish,&t->activity,&t->activity_compact,&t->final_compact,&t->commit,&t->mg_setup,&t->mg_restrict,&t->mg_smooth,&t->mg_prolong,&t->mg_extract};
+    const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_classify","pressure_compact","pressure_sor","pressure_correct","pressure_residual","acoustic_finish","activity","activity_compact","final_compact","sparse_commit","mg_setup","mg_restrict","mg_smooth","mg_prolong","mg_extract"};
+    for(uint32_t i=0;i<18;i++) {
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",paths[i]);
-        if(!fr_renderer_compute_init(g,pipelines[i],buffers,24,16,path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,pipelines[i],buffers,25,16,path,err,cap)) goto fail;
     }
     t->ready=true;return true;
 fail:
@@ -72,6 +79,32 @@ static bool submit(dc_gpu_t *g,char *err,uint32_t cap) {
         VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_HOST_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
     return fr_renderer_submit(g)||error(err,cap,"Cannot complete acoustic pressure work");
 }
+static void multigrid(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank) {
+    uint32_t counts[6];
+    for(uint32_t level=0;level<t->levels;level++) {
+        uint32_t scale=1u<<level,width=(g->width+scale-1u)/scale,height=(g->height+scale-1u)/scale;
+        counts[level]=(width*height+63u)/64u;
+    }
+    dispatch(g,&t->mg_setup,counts[0],1u,dt,bank);
+    for(uint32_t level=0;level+1u<t->levels;level++) {
+        uint32_t flags=bank|(level<<3u);
+        dispatch(g,&t->mg_smooth,counts[level],1u,dt,flags);
+        dispatch(g,&t->mg_smooth,counts[level],1u,dt,flags|2u);
+        dispatch(g,&t->mg_restrict,counts[level+1u],1u,dt,bank|((level+1u)<<3u));
+    }
+    uint32_t last=t->levels-1u;
+    for(uint32_t sweep=0;sweep<4u;sweep++) {
+        dispatch(g,&t->mg_smooth,counts[last],1u,dt,bank|(last<<3u));
+        dispatch(g,&t->mg_smooth,counts[last],1u,dt,bank|(last<<3u)|2u);
+    }
+    for(uint32_t level=last;level>0u;) {
+        level--;uint32_t flags=bank|(level<<3u);
+        dispatch(g,&t->mg_prolong,counts[level],1u,dt,flags);
+        dispatch(g,&t->mg_smooth,counts[level],1u,dt,flags);
+        dispatch(g,&t->mg_smooth,counts[level],1u,dt,flags|2u);
+    }
+    dispatch(g,&t->mg_extract,counts[0],1u,dt,bank);
+}
 bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint32_t gy,
     float dt,uint32_t bank,dc_gpu_address_buffer_t *stats,char *err,uint32_t cap) {
     bool trace=getenv("DC_GAS_TRACE")!=NULL&&g->timestamp_bits;
@@ -91,9 +124,10 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         vkCmdFillBuffer(g->command,t->indirect.buffer,16,4,0);
         dispatch(g,&t->classify,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
         dispatch(g,&t->compact,(tiles+63u)/64u,1u,dt,bank);
-        for(uint32_t sweep=0;sweep<8;sweep++) {
-            indirect_dispatch(g,t,&t->sor,dt,bank,0);indirect_dispatch(g,t,&t->sor,dt,bank|2u,0);
-        }
+        if(getenv("DC_GAS_MULTIGRID")) multigrid(g,t,dt,bank);
+        else for(uint32_t sweep=0;sweep<8;sweep++) {
+                indirect_dispatch(g,t,&t->sor,dt,bank,0);indirect_dispatch(g,t,&t->sor,dt,bank|2u,0);
+            }
         indirect_dispatch(g,t,&t->correct,dt,bank,0);
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,2);
         barrier(g);vkCmdFillBuffer(g->command,stats->buffer,FR_GAS_RESIDUAL_WORD*4u,4,0);

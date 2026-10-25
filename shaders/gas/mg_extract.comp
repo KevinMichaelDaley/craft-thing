@@ -1,0 +1,7 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "multigrid.glsl"
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    correction[index]=hierarchy[index].data.z;
+}

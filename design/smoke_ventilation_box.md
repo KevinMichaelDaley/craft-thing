@@ -229,3 +229,10 @@ There is no activity threshold, CPU work-list construction or capacity truncatio
 The existing eleven native reference/conservation tests pass this sparse path.
 The short actual-display probe remains RED: steady1/60 frames33--48ms and
 0.25s catch-up265--420ms. These short diagnostics are not final benchmark passes.
+
+The experimental aggregate multigrid preconditioner passes all12 native cases
+but is rejected on actual scene cost: approximately4ms per pressure cycle and
+1718.912ms for the last0.25s catch-up frame. Coarse aggregates mix disconnected
+regions across thin walls and reduce this fixture's residual too slowly. It does
+not change the physical operator or tolerance, but is not a production speedup.
+Its source is archived in git history; the runtime keeps the validated SOR path.
