@@ -87,3 +87,7 @@ Persistence REDb7ff0d9 compiled and failed2/2 native tests. Minimal source diagn
 **2026-10-25T05:53:01Z**
 
 Thermal codec RED507fed8 ->6GREEN CPU cases, zero warnings. THR1 stores exact signed liquid excess heat, logical negative-coordinate bindings, finite source and world-purpose metadata in versioned little-endian48-byte framing. It validates ambient/water-capacity references and profile ABI before publication, rejects orphan/negative-absolute-energy/NaN heat, duplicate chunks, checksum corruption, future versions and truncation/trailing bytes; output unchanged on failure. Codec added to default tests. Gameplay DCS restore remains RED/unlinked while integration proceeds; no completion claim.
+
+**2026-10-25T07:00:02Z**
+
+Displayed persistence integration: native transaction4/4, extracted-body/pending negative chunk2/2, frontend bench4/4 pass under core/synchronization validation. Exact payload/source/liquid restoration into another slot, future-version rejection and14 injected allocation-failure rollbacks preserve newer live state. Extended placement pour exposed tiny orphan heat from floating reciprocal full withdrawal; RED04b035b -> GREEN948ed17 fixes exact full-inventory transfer,60 further physical steps pass per-step orphan checks and strict save. Pushed948ed17. DCS8 integration remains uncommitted pending legacy/full regression; next scoped exposed gap is liquid enthalpy in camera-streamed chunk packets. Broad ctlo-2q4f stays open.

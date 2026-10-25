@@ -13,6 +13,8 @@ struct fr_thermal_gpu {
     fr_renderer_compute_t compute,feedback;
     dc_gpu_address_buffer_t profiles,samples,fluxes,probe,water;
     uint32_t groups_x,groups_y,profile_count,overlay;
+    uint32_t purpose,pending_count;
+    float *pending_water;
     bool probe_active;
 };
 static bool error(char *err,uint32_t cap,const char *message) {
@@ -25,16 +27,12 @@ static void destroy(dc_gpu_t *g,struct fr_thermal_gpu *t) {
     fr_renderer_compute_destroy(g,&t->feedback);
     dc_gpu_address_buffer_destroy(g,&t->profiles);dc_gpu_address_buffer_destroy(g,&t->samples);
     dc_gpu_address_buffer_destroy(g,&t->fluxes);dc_gpu_address_buffer_destroy(g,&t->probe);
-    dc_gpu_address_buffer_destroy(g,&t->water);free(t);
+    dc_gpu_address_buffer_destroy(g,&t->water);free(t->pending_water);free(t);
 }
 void fr_thermal_gpu_destroy(dc_gpu_t *g) {
     if(g) {if(g->thermal_control_mapped) memset(g->thermal_control_mapped,0,128);destroy(g,g->thermal);g->thermal=NULL;}
 }
-bool fr_thermal_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
-    if(!g||!g->runtime_body_consumers||(uint64_t)g->width*g->height>UINT32_MAX)
-        return error(err,cap,"Invalid thermal grid context");
-    if(g->thermal) return true;
-    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_gpu_reactive_initialize(g,err,cap)) return false;
+static bool create(dc_gpu_t *g,struct fr_reactive_gpu *reactive,struct fr_thermal_gpu **out,char *err,uint32_t cap) {
     struct fr_thermal_gpu *t=calloc(1,sizeof(*t));
     if(!t) return error(err,cap,"Cannot allocate thermal module");
     uint32_t count=g->width*g->height;t->profile_count=fr_reactive_profile_count();
@@ -52,7 +50,7 @@ bool fr_thermal_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
     ((float *)t->probe.mapped)[1]=FR_THERMAL_PROBE_CAPACITY;t->overlay=1;
     for(uint32_t i=0;i<t->profile_count;i++) memcpy((fr_reactive_profile_t *)t->profiles.mapped+i,fr_reactive_profile(i),sizeof(fr_reactive_profile_t));
     memset(t->water.mapped,0,(size_t)t->water.bytes);
-    VkDescriptorBufferInfo buffers[8]={{g->reactive->arena.root.buffer,0,g->reactive->arena.root.bytes},
+    VkDescriptorBufferInfo buffers[8]={{reactive->arena.root.buffer,0,reactive->arena.root.bytes},
         {g->page_buffer,0,VK_WHOLE_SIZE},{t->profiles.buffer,0,t->profiles.bytes},
         {t->samples.buffer,0,t->samples.bytes},{t->fluxes.buffer,0,t->fluxes.bytes},
         {t->probe.buffer,0,t->probe.bytes},{g->chunk_buffer,0,VK_WHOLE_SIZE},{t->water.buffer,0,t->water.bytes}};
@@ -60,12 +58,31 @@ bool fr_thermal_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!fr_renderer_compute_init(g,&t->compute,buffers,8,32,"build/shaders/thermal.comp.spv",err,cap)) {destroy(g,t);return false;}
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"thermal pipeline end\n");
     if(!fr_thermal_feedback_init(g,&t->feedback,buffers[3],buffers[5],err,cap)) {destroy(g,t);return false;}
-    uint32_t *control=g->thermal_control_mapped;
+    *out=t;return true;
+}
+static void bind_control(dc_gpu_t *g,const struct fr_thermal_gpu *t) {
+    uint32_t *control=g->thermal_control_mapped;memset(control,0,128);
+    if(!t) return;
     control[2]=(uint32_t)t->water.address;control[3]=(uint32_t)(t->water.address>>32);
     control[4]=DC_GPU_CHUNK_SLOTS*4096u;control[0]=DC_THERMAL_WATER_MAGIC;
     control[DC_THERMAL_PROFILE_ADDRESS_WORD]=(uint32_t)t->profiles.address;
     control[DC_THERMAL_PROFILE_ADDRESS_WORD+1u]=(uint32_t)(t->profiles.address>>32);
-    g->thermal=t;return true;
+}
+bool fr_thermal_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
+    if(!g||!g->runtime_body_consumers||(uint64_t)g->width*g->height>UINT32_MAX)
+        return error(err,cap,"Invalid thermal grid context");
+    if(g->thermal) return true;
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_gpu_reactive_initialize(g,err,cap)) return false;
+    struct fr_thermal_gpu *t=NULL;
+    if(!create(g,g->reactive,&t,err,cap)) return false;
+    g->thermal=t;bind_control(g,t);return true;
+}
+bool fr_thermal_gpu_mark_bench_world(dc_gpu_t *g) {
+    if(!g||!g->thermal) return false;
+    g->thermal->purpose=FR_THERMAL_WORLD_HEAT_BENCH;return true;
+}
+bool fr_thermal_gpu_is_bench_world(const dc_gpu_t *g) {
+    return g&&g->thermal&&g->thermal->purpose==FR_THERMAL_WORLD_HEAT_BENCH;
 }
 static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
     struct fr_thermal_gpu *t=g->thermal;uint32_t bits=0;memcpy(&bits,&seconds,sizeof(bits));
@@ -175,4 +192,74 @@ bool fr_thermal_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
     return fr_renderer_submit(g)||error(err,cap,"Cannot complete thermal interval");
+}
+static uint32_t resident_slot(dc_gpu_t *g,dc_chunk_coord_t coord) {
+    for(uint32_t slot=0;slot<DC_GPU_CHUNK_SLOTS;slot++) {
+        const uint32_t *record=dc_gpu_structural_data(g)+DC_STRUCTURAL_HEADER_WORDS+slot*8u;
+        if(record[5]&&memcmp(record,&coord,sizeof(coord))==0) return slot;
+    }
+    return UINT32_MAX;
+}
+bool fr_thermal_checkpoint_collect(dc_gpu_t *g,const dc_chunk_t *chunks,uint32_t count,
+    fr_thermal_checkpoint_t *out,char *err,uint32_t cap) {
+    if(!g||!g->thermal||!out||(count&&!chunks)) return error(err,cap,"Invalid thermal save boundary");
+    fr_thermal_checkpoint_t value={.purpose=g->thermal->purpose,.chunk_count=count};
+    if(!fr_thermal_gpu_source_state(g,&value.source,err,cap)) return false;
+    value.water_excess=count?calloc((size_t)count*4096u,sizeof(float)):NULL;
+    if(count&&!value.water_excess) return error(err,cap,"Cannot stage thermal checkpoint liquid");
+    for(uint32_t i=0;i<count;i++) {
+        uint32_t slot=resident_slot(g,chunks[i].coord);bool found=slot!=UINT32_MAX;
+        float *destination=value.water_excess+(size_t)i*4096u;
+        if(found) memcpy(destination,(float *)g->thermal->water.mapped+(size_t)slot*4096u,4096u*sizeof(float));
+        for(uint32_t pending=0;!found&&pending<g->checkpoint_chunk_count;pending++)
+            if(memcmp(&g->checkpoint_chunks[pending].coord,&chunks[i].coord,sizeof(chunks[i].coord))==0) {
+                if(g->thermal->pending_water&&pending<g->thermal->pending_count)
+                    memcpy(destination,g->thermal->pending_water+(size_t)pending*4096u,4096u*sizeof(float));
+                found=true;
+            }
+        if(!found) {fr_thermal_checkpoint_release(&value);return error(err,cap,"Thermal checkpoint has no logical liquid source");}
+    }
+    *out=value;return true;
+}
+bool fr_thermal_checkpoint_prepare(dc_gpu_t *g,struct fr_reactive_gpu *reactive,
+    const fr_thermal_checkpoint_t *state,const dc_chunk_t *chunks,
+    struct fr_thermal_gpu **out,char *err,uint32_t cap) {
+    if(!g||!out) return error(err,cap,"Invalid thermal restore transaction");
+    if(!state) {*out=NULL;return true;}
+    if(!reactive||(state->chunk_count&&!chunks)) return error(err,cap,"Thermal restore needs prepared parcels and physical chunks");
+    struct fr_thermal_gpu *t=NULL;
+    if(!create(g,reactive,&t,err,cap)) return false;
+    t->purpose=state->purpose;t->pending_count=state->chunk_count;
+    t->pending_water=state->chunk_count?malloc((size_t)state->chunk_count*4096u*sizeof(float)):NULL;
+    if(state->chunk_count&&!t->pending_water) {destroy(g,t);return error(err,cap,"Cannot stage pending thermal chunks");}
+    ((float *)t->probe.mapped)[0]=state->source.excess_energy;((float *)t->probe.mapped)[1]=state->source.capacity;
+    if(state->chunk_count) memcpy(t->pending_water,state->water_excess,(size_t)state->chunk_count*4096u*sizeof(float));
+    for(uint32_t i=0;i<state->chunk_count;i++) {
+        uint32_t slot=resident_slot(g,chunks[i].coord);
+        if(slot!=UINT32_MAX) memcpy((float *)t->water.mapped+(size_t)slot*4096u,
+            state->water_excess+(size_t)i*4096u,4096u*sizeof(float));
+    }
+    *out=t;return true;
+}
+void fr_thermal_checkpoint_publish(dc_gpu_t *g,struct fr_thermal_gpu *prepared) {
+    struct fr_thermal_gpu *old=g->thermal;g->thermal=prepared;bind_control(g,prepared);destroy(g,old);
+}
+void fr_thermal_checkpoint_discard(dc_gpu_t *g,struct fr_thermal_gpu *prepared) {destroy(g,prepared);}
+bool fr_thermal_checkpoint_preflight_chunk(dc_gpu_t *g,uint32_t index,char *err,uint32_t cap) {
+    if(!g||index>=g->checkpoint_chunk_count) return error(err,cap,"Invalid pending thermal index");
+    if(!g->thermal||!g->thermal->pending_count) return true;
+    return (g->thermal->pending_water&&index<g->thermal->pending_count)||error(err,cap,"Pending thermal packet is inconsistent");
+}
+bool fr_thermal_checkpoint_bind_chunk(dc_gpu_t *g,uint32_t slot,uint32_t index,char *err,uint32_t cap) {
+    if(!fr_thermal_checkpoint_preflight_chunk(g,index,err,cap)||slot>=DC_GPU_CHUNK_SLOTS) return false;
+    if(g->thermal&&g->thermal->pending_count) memcpy((float *)g->thermal->water.mapped+(size_t)slot*4096u,
+        g->thermal->pending_water+(size_t)index*4096u,4096u*sizeof(float));
+    return true;
+}
+void fr_thermal_checkpoint_remove_pending(dc_gpu_t *g,uint32_t index,uint32_t last) {
+    if(!g->thermal||!g->thermal->pending_count) return;
+    struct fr_thermal_gpu *t=g->thermal;
+    if(index!=last) memcpy(t->pending_water+(size_t)index*4096u,t->pending_water+(size_t)last*4096u,4096u*sizeof(float));
+    t->pending_count=last;
+    if(!last) {free(t->pending_water);t->pending_water=NULL;}
 }

@@ -74,6 +74,9 @@ static void test_future_checkpoint_rejection_preserves_live_heat_and_source(void
     ASSERT_TRUE(fr_gpu_save_structure(g,"build/thermal_future_checkpoint.bin",err,sizeof(err)));
     FILE *file=fopen("build/thermal_future_checkpoint.bin","r+b");ASSERT_TRUE(file);
     uint32_t future=9;ASSERT_EQ(fseek(file,4,SEEK_SET),0);ASSERT_EQ(fwrite(&future,4,1,file),1u);ASSERT_EQ(fclose(file),0);
+    ASSERT_TRUE(fr_thermal_gpu_step(g,1.f/60.f,err,sizeof(err)));
+    ASSERT_TRUE(fr_thermal_gpu_source_state(g,&before,err,sizeof(err))&&fr_thermal_gpu_read_water_chunk(g,0,heat,4096,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,20*64+20,&parcel,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(!fr_gpu_load_structure(g,"build/thermal_future_checkpoint.bin",err,sizeof(err)));
     ASSERT_TRUE(fr_thermal_gpu_source_state(g,&after,err,sizeof(err))&&memcmp(&before,&after,sizeof(before))==0);
     ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(g,0,fresh,4096,err,sizeof(err))&&memcmp(heat,fresh,sizeof(heat))==0);
@@ -86,11 +89,15 @@ static void test_every_checkpoint_address_preflight_failure_preserves_the_warm_w
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     ASSERT_TRUE(thermal_checkpoint_fixture(&g,chunk,err,sizeof(err))&&fr_thermal_gpu_probe(g,20,20,true)&&fr_thermal_gpu_step(g,1.f/60.f,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_save_structure(g,"build/thermal_allocation_checkpoint.bin",err,sizeof(err)));
-    fr_thermal_probe_t source,fresh_source;fr_reactive_record_t parcel,fresh;bool found=false;float heat[4096],fresh_heat[4096];
+    fr_thermal_probe_t saved_source,source,fresh_source;fr_reactive_record_t saved_parcel,parcel,fresh;bool found=false;float heat[4096],fresh_heat[4096];
+    ASSERT_TRUE(fr_thermal_gpu_source_state(g,&saved_source,err,sizeof(err))&&fr_gpu_reactive_read_cell(g,0,20*64+20,&saved_parcel,&found,err,sizeof(err))&&found);
+    for(uint32_t i=0;i<3;i++) ASSERT_TRUE(fr_thermal_gpu_step(g,1.f/60.f,err,sizeof(err)));
     ASSERT_TRUE(fr_thermal_gpu_source_state(g,&source,err,sizeof(err))&&fr_thermal_gpu_read_water_chunk(g,0,heat,4096,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,20*64+20,&parcel,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
     dc_cell_t physical_before[4096];memcpy(physical_before,chunk->cells,sizeof(physical_before));
+    uint32_t flags=(g->rigid_solver_enabled?1u:0u)|(g->structural_enabled?2u:0u)|(g->automatic_components_enabled?4u:0u)|(g->impact_fracture_enabled?8u:0u);
+    dc_chunk_coord_t origin=g->body_origin;
     uint32_t failures=0;bool complete=false;
     for(uint32_t attempt=1;attempt<=64;attempt++) {
         allocation_calls=0;allocation_fail_at=attempt;
@@ -102,10 +109,13 @@ static void test_every_checkpoint_address_preflight_failure_preserves_the_warm_w
         ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(g,0,fresh_heat,4096,err,sizeof(err))&&memcmp(heat,fresh_heat,sizeof(heat))==0);
         ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,20*64+20,&fresh,&found,err,sizeof(err))&&found&&memcmp(&parcel,&fresh,sizeof(parcel))==0);
         ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err))&&memcmp(physical_before,chunk->cells,sizeof(physical_before))==0);
+        ASSERT_EQ(flags,(g->rigid_solver_enabled?1u:0u)|(g->structural_enabled?2u:0u)|(g->automatic_components_enabled?4u:0u)|(g->impact_fracture_enabled?8u:0u));
+        ASSERT_TRUE(memcmp(&origin,&g->body_origin,sizeof(origin))==0);
     }
     printf("Checkpoint address preflight: %u injected failures, eventual success%d\n",failures,complete);
     ASSERT_TRUE(complete&&failures>=8u);
-    ASSERT_TRUE(fr_thermal_gpu_source_state(g,&fresh_source,err,sizeof(err))&&memcmp(&source,&fresh_source,sizeof(source))==0);
+    ASSERT_TRUE(fr_thermal_gpu_source_state(g,&fresh_source,err,sizeof(err))&&memcmp(&saved_source,&fresh_source,sizeof(saved_source))==0);
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,20*64+20,&fresh,&found,err,sizeof(err))&&found&&memcmp(&saved_parcel,&fresh,sizeof(fresh))==0);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(chunk);dc_gpu_destroy(g);PASS();
 }
 int main(void) {

@@ -20,8 +20,8 @@ static bool resident(dc_gpu_t *g,uint32_t slot,const dc_chunk_t *chunk,char *err
     return (registry[5]&&memcmp(registry,&chunk->coord,sizeof(chunk->coord))==0)||
         error(err,cap,"Reactive chunk is not resident at this physical slot");
 }
-static bool resources(dc_gpu_t *g,char *err,uint32_t cap) {
-    struct fr_reactive_gpu *r=g->reactive;
+bool fr_gpu_reactive_storage_stream(dc_gpu_t *g,struct fr_reactive_gpu *r,char *err,uint32_t cap) {
+    if(!g||!r) return error(err,cap,"Invalid reactive transfer storage");
     if(!r->stream.buffer&&!dc_gpu_address_buffer_create(g,(VkDeviceSize)STREAM_WORDS*4u,true,&r->stream,err,cap)) return false;
     VkDeviceSize marks=(VkDeviceSize)r->arena.capacity*4u;
     if(r->stream_marks.bytes<marks) {
@@ -39,6 +39,9 @@ static bool resources(dc_gpu_t *g,char *err,uint32_t cap) {
         .dstSet=r->stream_compute.descriptor,.dstBinding=i,.descriptorCount=1,
         .descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=buffers+i};
     vkUpdateDescriptorSets(g->device,3,writes,0,NULL);return true;
+}
+static bool resources(dc_gpu_t *g,char *err,uint32_t cap) {
+    return fr_gpu_reactive_storage_stream(g,g->reactive,err,cap);
 }
 static bool dispatch(dc_gpu_t *g,uint32_t slot,uint32_t count,uint32_t first,uint32_t last,char *err,uint32_t cap) {
     struct fr_reactive_gpu *r=g->reactive;fr_renderer_compute_t *compute=&r->stream_compute;
@@ -121,6 +124,20 @@ static int parcel_order(const void *a,const void *b) {
     uint64_t first=(uint64_t)x->record.state.parcel_id_low|((uint64_t)x->record.state.parcel_id_high<<32);
     uint64_t second=(uint64_t)y->record.state.parcel_id_low|((uint64_t)y->record.state.parcel_id_high<<32);
     return first<second?-1:first>second?1:0;
+}
+bool fr_gpu_reactive_bind_prepared_chunk(dc_gpu_t *g,uint32_t slot,
+    const fr_reactive_chunk_t *channel,const uint32_t *handles,char *err,uint32_t cap) {
+    if(!g||!g->reactive||!channel||slot>=DC_GPU_CHUNK_SLOTS||channel->count>ROWS||
+       (channel->count&&!handles)||!g->reactive->stream_compute.pipeline)
+        return error(err,cap,"Invalid prepared checkpoint chunk binding");
+    struct fr_reactive_gpu *r=g->reactive;
+    memset(r->stream.mapped,0,16);
+    if(channel->count) {
+        memcpy((uint32_t *)r->stream.mapped+4,channel->attachments,(size_t)channel->count*sizeof(*channel->attachments));
+        memcpy((uint32_t *)r->stream.mapped+HANDLE_OFFSET,handles,(size_t)channel->count*8u);
+        return dispatch(g,slot,channel->count,4,4,err,cap);
+    }
+    return true;
 }
 bool fr_gpu_reactive_import_chunk(dc_gpu_t *g,uint32_t slot,const dc_chunk_t *chunk,
     const fr_reactive_chunk_t *channel,char *err,uint32_t cap) {

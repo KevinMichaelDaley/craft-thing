@@ -36,15 +36,20 @@ static bool unique_chunks(const dc_chunk_t *chunks,uint32_t count) {
     for(uint32_t i=1;i<count;i++) if(coord_order(coords+i-1,coords+i)==0) {okay=false;break;}
     free(coords);return okay;
 }
-static bool valid(const fr_thermal_checkpoint_t *state,const dc_chunk_t *chunks,uint32_t count) {
+static bool valid(const fr_thermal_checkpoint_t *state,const dc_chunk_t *chunks,uint32_t count,char *err,uint32_t cap) {
     if(!state||state->chunk_count!=count||state->purpose>FR_THERMAL_WORLD_HEAT_BENCH||
        !isfinite(state->source.excess_energy)||state->source.excess_energy<0||
        state->source.capacity!=(float)FR_THERMAL_PROBE_CAPACITY||
-       (count&&(!chunks||!state->water_excess))||!unique_chunks(chunks,count)) return false;
+       (count&&(!chunks||!state->water_excess))||!unique_chunks(chunks,count))
+        return error(err,cap,"Invalid thermal checkpoint inventories or bindings");
     double specific=fr_reactive_profile(DC_MATERIAL_WATER)->heat_capacity*FR_THERMAL_AMBIENT_K/65536.;
     for(uint32_t c=0;c<count;c++) for(uint32_t i=0;i<DC_CHUNK_CELLS;i++) {
         float excess=state->water_excess[(size_t)c*DC_CHUNK_CELLS+i];uint32_t mass=chunks[c].cells[i].fluid_mass;
-        if(!isfinite(excess)||(!mass&&excess!=0.f)||mass*specific+excess<0.) return false;
+        if(!isfinite(excess)||(!mass&&excess!=0.f)||mass*specific+excess<0.) {
+            if(err&&cap) snprintf(err,cap,"Invalid thermal liquid at chunk(%lld,%lld) cell%u: mass%u excess%.9g",
+                (long long)chunks[c].coord.x,(long long)chunks[c].coord.y,i,mass,(double)excess);
+            return false;
+        }
     }
     return true;
 }
@@ -56,8 +61,9 @@ static bool encoded_size(uint32_t count,size_t *out) {
 bool fr_thermal_checkpoint_encode(const fr_thermal_checkpoint_t *state,const dc_chunk_t *chunks,
     uint32_t count,uint8_t **bytes,size_t *length,char *err,uint32_t cap) {
     size_t size=0;
-    if(!bytes||!length||!encoded_size(count,&size)||!valid(state,chunks,count))
+    if(!bytes||!length||!encoded_size(count,&size))
         return error(err,cap,"Invalid thermal checkpoint inventories or bindings");
+    if(!valid(state,chunks,count,err,cap)) return false;
     uint8_t *output=calloc(1,size);if(!output) return error(err,cap,"Cannot allocate thermal checkpoint bytes");
     memcpy(output,"THR1",4);put32(output+4,1);put32(output+8,THERMAL_HEADER_BYTES);
     put32(output+12,state->purpose);put32(output+16,count);put32(output+20,bits(FR_THERMAL_AMBIENT_K));
@@ -88,7 +94,8 @@ bool fr_thermal_checkpoint_decode(const uint8_t *bytes,size_t length,const dc_ch
         okay=get64(record)==(uint64_t)chunks[c].coord.x&&get64(record+8)==(uint64_t)chunks[c].coord.y;
         for(uint32_t i=0;i<DC_CHUNK_CELLS;i++) value.water_excess[(size_t)c*DC_CHUNK_CELLS+i]=number(get32(record+16+i*4u));
     }
-    if(!okay||!valid(&value,chunks,count)) {fr_thermal_checkpoint_release(&value);return error(err,cap,"Thermal checkpoint does not match physical liquid inventory");}
+    if(!okay) {fr_thermal_checkpoint_release(&value);return error(err,cap,"Thermal checkpoint does not match physical liquid inventory");}
+    if(!valid(&value,chunks,count,err,cap)) {fr_thermal_checkpoint_release(&value);return false;}
     *out=value;return true;
 }
 void fr_thermal_checkpoint_release(fr_thermal_checkpoint_t *state) {

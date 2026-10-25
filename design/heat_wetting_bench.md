@@ -140,3 +140,30 @@ the heat/feedback/benchmark changes.
 Remaining in this milestone: complete liquid regression/interaction coverage,
 temperature/wetness inspection, natural edits/owner admission and the persistence
 the exposed scene needs, plus reference budgets and passing displayed timing.
+
+## Heat-bench checkpoint integration
+
+The scoped DCS8 extension stores logical FRW1 reaction records and a THR1 liquid
+and finite-source record beneath the existing outer checksum. THR1 has a
+48-byte little-endian header and one logical-coordinate/4096-float record per
+physical chunk. It locks profile ABI, ambient temperature and water heat
+capacity. Zero liquid mass must have exactly zero excess heat; full enthalpy
+must be nonnegative and finite. Parse/allocation errors preserve caller output.
+
+Restore prepares detached reaction and thermal resources before installing any
+physical chunk or publishing roots. Every pending file parcel is allocated up
+front, including chunks outside the viewport; later streaming binds prepared
+handles through the parallel kernel. Four actual-display transaction tests pass
+exact parcel/liquid/source restoration into another slot, future-version
+rejection and fourteen allocation-failure rollbacks against a newer live world.
+The two extracted-body/pending negative-coordinate cases pass, as do four
+interactive bench cases including reopening and explicit fresh-run reset.
+Legacy save/stream regression and the full battery remain underway here.
+
+The extended pour regression found a genuine transport rounding defect: a full
+withdrawal computed through reciprocal division could retain tiny excess heat
+after its mass reached zero. Full withdrawal now transfers the exact inventory.
+The real placement pour passes sixty subsequent physical steps with per-step
+checks for orphan heat, and successfully writes its strict validated checkpoint.
+Per-chunk streaming of the liquid channel is the next scoped prerequisite;
+the global checkpoint alone does not make camera unload/reload complete.

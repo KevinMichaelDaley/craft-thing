@@ -5,6 +5,7 @@
 #include "gpu_internal.h"
 #include "reactive_gpu_internal.h"
 #include "thermal_gpu_internal.h"
+#include "reactive_checkpoint_gpu.h"
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -243,7 +244,7 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
     }
     if (missing_primary > DC_MPM_PARTICLES_PER_CHUNK - particle_count)
         return error(err, cap, "GPU particle pool is full");
-    if(!fr_gpu_reactive_clear_chunk(gpu,slot,err,cap)) return false;
+    if(!gpu->reactive_checkpoint_installing&&!fr_gpu_reactive_clear_chunk(gpu,slot,err,cap)) return false;
     if (!gpu->fluid_work_possible) {
         gpu->fluid_work_possible = chunk->marker_count != 0u;
         for (uint32_t i = 0; i < DC_CHUNK_CELLS && !gpu->fluid_work_possible; i++)
@@ -290,7 +291,7 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
     dc_gpu_structural_track_chunk(gpu, slot, chunk->coord);
     gpu->fluid_snapshot_valid = false;
     bool okay=dc_gpu_copy_chunk_state(gpu, slot, true, true, err, cap);
-    if(okay) fr_thermal_clear_water_chunk(gpu,slot);
+    if(okay&&!gpu->reactive_checkpoint_installing) fr_thermal_clear_water_chunk(gpu,slot);
     return okay;
 }
 
@@ -302,10 +303,17 @@ bool dc_gpu_upload_chunk_checkpoint(dc_gpu_t *gpu, uint32_t slot,
         for (uint32_t i = 0; i < gpu->checkpoint_chunk_count; i++) {
             const dc_chunk_t *saved = gpu->checkpoint_chunks + i;
             if (saved->coord.x == chunk->coord.x && saved->coord.y == chunk->coord.y) {
-                bool okay = dc_gpu_upload_chunk_exact(gpu, slot, saved, false, err, cap);
+                bool okay=fr_gpu_reactive_checkpoint_preflight_chunk(gpu,saved,i,err,cap)&&
+                    fr_thermal_checkpoint_preflight_chunk(gpu,i,err,cap)&&
+                    dc_gpu_upload_chunk_exact(gpu, slot, saved, false, err, cap)&&
+                    fr_gpu_reactive_checkpoint_bind_chunk(gpu,slot,i,err,cap)&&
+                    fr_thermal_checkpoint_bind_chunk(gpu,slot,i,err,cap);
                 if (okay) {
                     if(gpu->checkpoint_colors) dc_gpu_write_chunk_colors(gpu,slot,gpu->checkpoint_colors+i);
-                    gpu->checkpoint_chunks[i]=gpu->checkpoint_chunks[--gpu->checkpoint_chunk_count];
+                    uint32_t last=gpu->checkpoint_chunk_count-1u;
+                    fr_gpu_reactive_checkpoint_remove_pending(gpu,i,last);
+                    fr_thermal_checkpoint_remove_pending(gpu,i,last);
+                    gpu->checkpoint_chunks[i]=gpu->checkpoint_chunks[last];gpu->checkpoint_chunk_count=last;
                     if(gpu->checkpoint_colors) gpu->checkpoint_colors[i]=gpu->checkpoint_colors[gpu->checkpoint_chunk_count];
                 }
                 if (restored) *restored = okay;

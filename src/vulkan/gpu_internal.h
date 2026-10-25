@@ -8,6 +8,7 @@
 #include "dungeoncraft/gpu.h"
 #include "dungeoncraft/color.h"
 #include "ferrum/structural/gpu.h"
+#include "ferrum/fire/reactive_chunk.h"
 #include "mpm_activity_layout.h"
 
 enum {
@@ -166,6 +167,9 @@ struct dc_gpu {
     bool structural_enabled;
     bool structural_graph_possible;
     dc_chunk_t *checkpoint_chunks;
+    fr_reactive_chunk_t *checkpoint_reactive;
+    uint32_t **checkpoint_reactive_handles;
+    bool reactive_checkpoint_installing;
     dc_chunk_colors_t *checkpoint_colors;
     uint32_t checkpoint_chunk_count;
     bool impact_fracture_enabled;

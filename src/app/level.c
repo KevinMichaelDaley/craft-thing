@@ -67,8 +67,14 @@ bool dc_level_view_toggle_lighting(dc_level_view_t *view) {
         view->renderer_mode==FR_RENDERER_LIT?FR_RENDERER_ALBEDO:FR_RENDERER_LIT);
 }
 bool dc_level_view_setup_heat_bench(dc_level_view_t *view,char *err,uint32_t cap) {
-    if(!view||VIEW_WIDTH!=480||VIEW_HEIGHT!=270||view->restored||view->origin.x!=0||view->origin.y!=INITIAL_CHUNK_Y)
-        return error(err,cap,"Heat bench prototype requires a fresh quarter-native placement world");
+    if(!view||VIEW_WIDTH!=480||VIEW_HEIGHT!=270)
+        return error(err,cap,"Heat bench requires quarter-native placement resolution");
+    if(view->restored) {
+        if(!fr_thermal_gpu_is_bench_world(view->gpu)) return error(err,cap,"Saved world is not an authored heat bench");
+        return dc_level_view_wait_visible(view,120000,err,cap)&&dc_level_view_set_spring_enabled(view,false)&&
+            dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO);
+    }
+    if(view->origin.x!=0||view->origin.y!=INITIAL_CHUNK_Y) return error(err,cap,"Fresh heat bench requires its initial world origin");
     if(!dc_level_view_wait_visible(view,120000,err,cap)) return false;
     uint32_t count=view->table.capacity;
     dc_chunk_coord_t *coords=calloc(count,sizeof(*coords));
@@ -84,7 +90,8 @@ bool dc_level_view_setup_heat_bench(dc_level_view_t *view,char *err,uint32_t cap
     }
     dc_thermal_bench_release(chunks,count);
     return okay&&dc_level_view_set_spring_enabled(view,false)&&
-        dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO)&&fr_thermal_gpu_enable(view->gpu,err,cap);
+        dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO)&&fr_thermal_gpu_enable(view->gpu,err,cap)&&
+        fr_thermal_gpu_mark_bench_world(view->gpu);
 }
 bool dc_level_view_heat_probe(dc_level_view_t *view,uint32_t x,uint32_t y,bool active) {
     return view&&x<VIEW_WIDTH&&y<VIEW_HEIGHT&&fr_thermal_gpu_probe(view->gpu,

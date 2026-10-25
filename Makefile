@@ -68,6 +68,7 @@ GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/b
 GPU_OBJ += build/runtime_body_gpu.o build/runtime_geometry_gpu.o build/body_address_gpu.o build/body_storage_gpu.o
 GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o build/reactive_chunk_gpu.o
 GPU_OBJ += build/thermal_gpu.o build/thermal_feedback_gpu.o build/thermal_model.o
+GPU_OBJ += build/reactive_checkpoint_gpu.o build/structural_store_channels.o build/reactive_archive_model.o build/thermal_checkpoint_model.o
 build/reactive_arena_gpu.o: src/vulkan/reactive_arena_gpu.c src/vulkan/reactive_arena_gpu.h include/dungeoncraft/reactive_arena_layout.h include/dungeoncraft/reactive_state_layout.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/reactive_state.o build/reactive_snapshot.o build/reactive_material.o build/reactive_chunk.o
@@ -134,7 +135,7 @@ build/pressure_work_gpu.o: src/vulkan/pressure_work_gpu.c src/vulkan/gpu_interna
 build/shaders/pressure_work.comp.spv: shaders/sim/pressure_work.comp
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
-GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o build/authored_request.o build/prop_asset.o build/reactive_state.o build/reactive_snapshot.o build/reactive_material.o build/reactive_chunk.o build/thermal_model.o,$(GPU_OBJ))) src/structural/material.c src/structural/authoring.c src/assets/prop.c src/fire/reactive_chunk.c src/fire/thermal.c $(REACTIVE_STATE_SRC)
+GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o build/authored_request.o build/prop_asset.o build/reactive_state.o build/reactive_snapshot.o build/reactive_material.o build/reactive_chunk.o build/thermal_model.o build/reactive_archive_model.o build/thermal_checkpoint_model.o,$(GPU_OBJ))) src/structural/material.c src/structural/authoring.c src/assets/prop.c src/fire/reactive_chunk.c src/fire/thermal.c src/fire/reactive_archive.c src/fire/thermal_checkpoint.c $(REACTIVE_STATE_SRC)
 build/authored_stage_tests: tests/vulkan/authored_stage_tests.c build/compound_body_tests $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/authored_stage_tests
@@ -384,6 +385,8 @@ test_quarter_native: build/quarter_native_config_tests build/quarter_native_flui
 	./build/thermal_admission_display_tests
 	./build/thermal_feedback_display_tests
 	./build/thermal_bench_display_tests
+	./build/thermal_checkpoint_display_tests
+	./build/reactive_checkpoint_display_tests
 	./build/pixel_dynamics_visual_tests
 	./build/quarter_native_structural_placement_tests
 	./build/quarter_native_structural_equilibrium_tests
@@ -764,6 +767,8 @@ test_ui: build/dungeoncraft build/controls_tests build/structural_world_tests
 	./build/thermal_admission_display_tests
 	./build/thermal_feedback_display_tests
 	./build/thermal_bench_display_tests
+	./build/thermal_checkpoint_display_tests
+	./build/reactive_checkpoint_display_tests
 	./build/level03_support_tests
 	./build/pixel_dynamics_visual_tests
 	./build/structural_cadence_tests
@@ -1784,6 +1789,15 @@ build/thermal_feedback_gpu.o: src/vulkan/thermal_feedback_gpu.c src/vulkan/therm
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/thermal_model.o: src/fire/thermal.c include/ferrum/fire/thermal.h include/dungeoncraft/thermal_parameters.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/reactive_archive_model.o: src/fire/reactive_archive.c include/ferrum/fire/reactive_archive.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/thermal_checkpoint_model.o: src/fire/thermal_checkpoint.c include/ferrum/fire/thermal_checkpoint.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/reactive_checkpoint_gpu.o: src/vulkan/reactive_checkpoint_gpu.c src/vulkan/reactive_checkpoint_gpu.h src/vulkan/reactive_storage_gpu.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/structural_store_channels.o: src/vulkan/structural_store_channels.c src/vulkan/structural_store_channels.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/gpu.o build/chunk_gpu.o build/structural_store_gpu.o: src/vulkan/reactive_checkpoint_gpu.h src/vulkan/structural_store_channels.h
 build/thermal_gpu_display_tests: tests/vulkan/thermal_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/thermal_bench_display_tests: tests/app/thermal_bench_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level.c src/app/session.c $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
@@ -1797,7 +1811,7 @@ build/thermal_feedback_display_tests: tests/vulkan/thermal_feedback_gpu_tests.c 
 build/thermal_checkpoint_display_tests: tests/vulkan/thermal_checkpoint_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_address_buffer_create
 .PHONY: test_heat_bench
-THERMAL_DISPLAY_TESTS = build/thermal_gpu_display_tests build/thermal_water_display_tests build/thermal_admission_display_tests build/thermal_feedback_display_tests build/thermal_bench_display_tests
+THERMAL_DISPLAY_TESTS = build/thermal_gpu_display_tests build/thermal_water_display_tests build/thermal_admission_display_tests build/thermal_feedback_display_tests build/thermal_bench_display_tests build/thermal_checkpoint_display_tests build/reactive_checkpoint_display_tests
 test_ui test_quarter_native: $(THERMAL_DISPLAY_TESTS)
 test_heat_bench: build/thermal_tests $(THERMAL_DISPLAY_TESTS)
 	./build/thermal_tests
@@ -1806,6 +1820,8 @@ test_heat_bench: build/thermal_tests $(THERMAL_DISPLAY_TESTS)
 	./build/thermal_admission_display_tests
 	./build/thermal_feedback_display_tests
 	./build/thermal_bench_display_tests
+	./build/thermal_checkpoint_display_tests
+	./build/reactive_checkpoint_display_tests
 build/dungeoncraft build/controls_tests build/reactive_stream_view_display_tests build/thermal_bench_display_tests: $(THERMAL_BENCH_SRC) src/app/thermal_bench.h
 build/shaders/thermal.comp.spv: shaders/reactive/thermal.comp shaders/reactive/address.glsl include/dungeoncraft/thermal_parameters.h include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/reactive_profile_layout.h
 	mkdir -p $(dir $@)

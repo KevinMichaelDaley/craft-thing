@@ -1,4 +1,23 @@
-# Deferred reactive structure-checkpoint integration
+# Preserved reactive structure-checkpoint integration draft
+
+## Heat-bench integration status
+
+The original patch below is historical and must not be reapplied over the live
+implementation. The interactive heat bench exposed a real persistence need:
+quitting/reopening must retain its finite probe, parcel state and moving water
+enthalpy. The live DCS8 extension now frames the tested FRW1 and THR1 codecs
+under the outer snapshot checksum. It validates and allocates detached reaction
+storage, liquid storage and pending chunk bindings before publishing either
+root. All pending file parcels are allocated up front; streaming binds prepared
+handles through the parallel kernel rather than allocating runtime identities.
+
+Actual Wayland transaction coverage passes exact parcel/liquid/source restore
+into a different slot, future-version rejection, and fourteen injected address
+allocation failures that leave the newer live state untouched. Extracted-body,
+pending-chunk and frontend regression verification is still underway at this
+checkpoint. Broader owner admission and all of `ctlo-2q4f` remain incomplete.
+
+## Historical safe-boundary record
 
 The user redirected development toward one visibly testable system at a time.
 This exact draft is preserved instead of extending persistence across every
