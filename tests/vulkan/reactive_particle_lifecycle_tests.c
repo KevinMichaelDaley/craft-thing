@@ -96,10 +96,40 @@ static void test_halo_transfer_and_secondary_promotion_preserve_both_parcels(voi
     ASSERT_TRUE(fr_gpu_reactive_read_particle(g,secondary,&record,&found,err,sizeof(err)));ASSERT_TRUE(!found);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(left);free(right);dc_gpu_destroy(g);PASS();
 }
+static void test_repainting_a_vacated_cell_keeps_two_particle_lifetimes_distinct(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;uint32_t source=10*64+20,target=10*64+21;
+    dc_chunk_t *c=loose_leaf_chunk(source,false);ASSERT_TRUE(c);
+    ASSERT_TRUE(context(&g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    uint64_t first=(UINT64_C(1)<<32)+2001,second=(UINT64_C(2)<<32)+2002;
+    fr_reactive_state_t a,b;
+    ASSERT_TRUE(fr_reactive_state_from_particle(c->particles+source,800,first,&a,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_seed_particle(g,source,&a,err,sizeof(err)));
+    fr_reactive_record_t before,records[2];bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_particle(g,source,&before,&found,err,sizeof(err))&&found);
+    dc_gpu_transfer_t transfer={.from_x=20,.from_y=10,.to_x=21,.to_y=10,.kind=DC_GPU_TRANSFER_PARTICLE};
+    dc_gpu_transfer_state_t outcome;
+    ASSERT_TRUE(dc_gpu_queue_transfer(g,transfer,err,sizeof(err))&&dc_gpu_try_transfer(g,&outcome,err,sizeof(err)));
+    ASSERT_EQ(outcome,DC_GPU_TRANSFER_APPLIED);
+    ASSERT_TRUE(dc_gpu_paint_material(g,20,10,0,DC_MATERIAL_LEAF_DEBRIS,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,c,err,sizeof(err)));
+    ASSERT_EQ(c->particles[source].id_lo,c->particles[target].id_lo);
+    ASSERT_EQ(c->particles[source].id_hi,c->particles[target].id_hi);
+    ASSERT_TRUE(fr_reactive_state_from_particle(c->particles+source,600,second,&b,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_seed_particle(g,source,&b,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_read_particle(g,target,records,&found,err,sizeof(err))&&found);
+    ASSERT_TRUE(memcmp(&before.owner,&records[0].owner,sizeof(before.owner))==0);
+    ASSERT_TRUE(fr_gpu_reactive_read_particle(g,source,records+1,&found,err,sizeof(err))&&found);
+    ASSERT_TRUE(memcmp(&records[0].owner,&records[1].owner,sizeof(before.owner))!=0);
+    uint8_t bytes[312];size_t written=0;
+    ASSERT_TRUE(fr_reactive_snapshot_encode(records,2,second+1,bytes,sizeof(bytes),&written,err,sizeof(err)));
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     RUN(test_erasing_and_repainting_same_particle_id_does_not_restore_old_heat);
     RUN(test_secondary_promotion_moves_state_and_retains_leaf_pigment);
     RUN(test_replacing_leaf_with_soil_does_not_inherit_pigment_as_water_or_reactions);
     RUN(test_halo_transfer_and_secondary_promotion_preserve_both_parcels);
+    RUN(test_repainting_a_vacated_cell_keeps_two_particle_lifetimes_distinct);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

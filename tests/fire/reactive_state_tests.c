@@ -102,7 +102,7 @@ static void test_corrupt_or_future_snapshot_cannot_publish_partial_state(void) {
     ASSERT_EQ(memcmp(&out,&saved,sizeof(out)),0);ASSERT_EQ(count,4u);ASSERT_EQ(next,5u);
     ASSERT_TRUE(fr_reactive_snapshot_write(path,&record,1,2,err,sizeof(err)));
     file=fopen(path,"r+b");ASSERT_TRUE(file);ASSERT_EQ(fseek(file,4,SEEK_SET),0);
-    ASSERT_TRUE(fputc(2,file)!=EOF);ASSERT_EQ(fclose(file),0);
+    ASSERT_TRUE(fputc(FR_REACTIVE_STATE_ABI+1u,file)!=EOF);ASSERT_EQ(fclose(file),0);
     ASSERT_TRUE(!fr_reactive_snapshot_read(path,&out,1,&count,&next,&required,err,sizeof(err)));
     ASSERT_EQ(memcmp(&out,&saved,sizeof(out)),0);remove(path);PASS();
 }

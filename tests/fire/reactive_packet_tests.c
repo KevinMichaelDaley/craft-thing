@@ -73,10 +73,42 @@ static void test_empty_packet_retains_the_ambient_old_world_contract(void) {
     ASSERT_TRUE(fr_reactive_snapshot_decode(bytes,sizeof(bytes),NULL,0,&count,&next,&required,err,sizeof(err)));
     ASSERT_EQ(count,0u);ASSERT_EQ(required,0u);ASSERT_EQ(next,1u);PASS();
 }
+static void test_version_one_particle_births_migrate_but_reserved_bits_remain_invalid(void) {
+    char err[128];fr_reactive_record_t record={0},out;
+    record.owner=(fr_reactive_owner_t){.kind=FR_REACTIVE_OWNER_PARTICLE,.key={123,456,77,0,0}};
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_LEAF_DEBRIS,1000,0,600,80,&record.state,err,sizeof(err)));
+    uint8_t bytes[176];size_t written=0;uint32_t count=0,required=0;uint64_t next=0;
+    ASSERT_TRUE(fr_reactive_snapshot_encode(&record,1,81,bytes,sizeof(bytes),&written,err,sizeof(err)));
+    bytes[4]=1;checksum(bytes,sizeof(bytes));
+    ASSERT_TRUE(fr_reactive_snapshot_decode(bytes,sizeof(bytes),&out,1,&count,&next,&required,err,sizeof(err)));
+    ASSERT_TRUE(memcmp(&record,&out,sizeof(out))==0);ASSERT_EQ(next,81u);
+    FILE *file=fopen("build/reactive_packet_v1.frs","wb");ASSERT_TRUE(file);
+    ASSERT_EQ(fwrite(bytes,1,sizeof(bytes),file),sizeof(bytes));ASSERT_EQ(fclose(file),0);
+    ASSERT_TRUE(fr_reactive_snapshot_read("build/reactive_packet_v1.frs",&out,1,&count,&next,&required,err,sizeof(err)));
+    ASSERT_TRUE(memcmp(&record,&out,sizeof(out))==0);
+    bytes[56]=1;checksum(bytes,sizeof(bytes));
+    ASSERT_TRUE(!fr_reactive_snapshot_decode(bytes,sizeof(bytes),&out,1,&count,&next,&required,err,sizeof(err)));
+    remove("build/reactive_packet_v1.frs");PASS();
+}
+static void test_full_width_particle_births_round_trip_as_version_two(void) {
+    char err[128];fr_reactive_record_t record={0},out;
+    record.owner=(fr_reactive_owner_t){.kind=FR_REACTIVE_OWNER_PARTICLE,.key={123,456,77,2,0}};
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_LEAF_DEBRIS,1000,0,600,80,&record.state,err,sizeof(err)));
+    uint8_t bytes[176];size_t written=0;uint32_t count=0,required=0;uint64_t next=0;
+    ASSERT_TRUE(fr_reactive_snapshot_encode(&record,1,81,bytes,sizeof(bytes),&written,err,sizeof(err)));
+    ASSERT_EQ(bytes[4],2u);
+    ASSERT_TRUE(fr_reactive_snapshot_decode(bytes,sizeof(bytes),&out,1,&count,&next,&required,err,sizeof(err)));
+    ASSERT_TRUE(memcmp(&record,&out,sizeof(out))==0);
+    ASSERT_TRUE(fr_reactive_snapshot_write("build/reactive_packet_v2.frs",&record,1,81,err,sizeof(err)));
+    ASSERT_TRUE(fr_reactive_snapshot_read("build/reactive_packet_v2.frs",&out,1,&count,&next,&required,err,sizeof(err)));
+    ASSERT_TRUE(memcmp(&record,&out,sizeof(out))==0);remove("build/reactive_packet_v2.frs");PASS();
+}
 int main(void) {
     RUN(test_memory_packet_matches_existing_file_codec_and_preserves_input);
     RUN(test_encode_failure_does_not_touch_the_destination_or_written_size);
     RUN(test_capacity_corruption_future_version_and_typed_errors_roll_back);
     RUN(test_empty_packet_retains_the_ambient_old_world_contract);
+    RUN(test_version_one_particle_births_migrate_but_reserved_bits_remain_invalid);
+    RUN(test_full_width_particle_births_round_trip_as_version_two);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
