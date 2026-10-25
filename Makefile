@@ -1689,3 +1689,7 @@ build/reactive_particle_lifecycle_display_tests: tests/vulkan/reactive_particle_
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/shaders/runtime/pattern.comp.spv build/shaders/runtime/halo.comp.spv build/shaders/runtime/component_extract.comp.spv: shaders/reactive/particle_storage.glsl
 test: build/reactive_particle_lifecycle_tests
+
+REACTIVE_ARENA_SRC = src/vulkan/reactive_arena_gpu.c src/vulkan/body_address_gpu.c src/vulkan/renderer_resource.c src/vulkan/shader.c
+build/reactive_arena_gpu_tests: tests/vulkan/reactive_arena_gpu_tests.c tests/vulkan/body_probe_fixture.h tools/diagnostics/vulkan_probe.c src/vulkan/reactive_arena_gpu.h $(REACTIVE_ARENA_SRC) $(REACTIVE_STATE_SRC)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(REACTIVE_ARENA_SRC) $(REACTIVE_STATE_SRC) -o $@ $(LDLIBS) -Wl,--wrap=vkAllocateMemory
