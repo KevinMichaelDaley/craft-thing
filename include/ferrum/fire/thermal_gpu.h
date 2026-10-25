@@ -20,6 +20,9 @@ typedef struct {
  * same GPU cache directly; this API must never become a per-frame CPU solve. */
 bool fr_thermal_gpu_inspect(dc_gpu_t *gpu,uint32_t x,uint32_t y,
     fr_thermal_inspection_t *out,char *err_buf,uint32_t err_cap);
+/** Completed-queue finite-source snapshot for diagnostics/checkpoints only. */
+bool fr_thermal_gpu_source_state(dc_gpu_t *gpu,fr_thermal_probe_t *out,
+    char *err_buf,uint32_t err_cap);
 /** Cold fixture/import of liquid enthalpy above ambient, independent of pigment
  * and solid parcel state. Validate against actual authoritative water volume. */
 bool fr_thermal_gpu_seed_water(dc_gpu_t *gpu,uint32_t slot,uint32_t local_cell,

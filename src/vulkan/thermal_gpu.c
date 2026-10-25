@@ -119,6 +119,9 @@ bool fr_thermal_gpu_inspect(dc_gpu_t *g,uint32_t x,uint32_t y,
     }
     *out=value;return true;
 }
+bool fr_thermal_gpu_source_state(dc_gpu_t *g,fr_thermal_probe_t *out,char *err,uint32_t cap) {
+    (void)g;(void)out;(void)err;(void)cap;return false;
+}
 bool fr_thermal_prepare_paint(dc_gpu_t *g,uint32_t x,uint32_t y,uint32_t radius,
     uint32_t material,char *err,uint32_t cap) {
     if(!g||!g->thermal) return true;
