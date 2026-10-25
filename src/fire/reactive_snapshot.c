@@ -62,6 +62,11 @@ static bool legacy_owners_valid(const fr_reactive_record_t *records,uint32_t cou
     for(uint32_t i=0;version==1u&&i<count;i++)
         if(records[i].owner.kind==FR_REACTIVE_OWNER_PARTICLE&&records[i].owner.key[3]!=0u)
             return error(err,cap,"Reserved ABI 1 particle owner bits are nonzero");
+    for(uint32_t i=0;version<3u&&i<count;i++) {
+        uint64_t bits=0;memcpy(&bits,&records[i].state.thermal_energy_residual,sizeof(bits));
+        if(bits!=0u)
+            return error(err,cap,"Reserved legacy thermal remainder bits are nonzero");
+    }
     return true;
 }
 
@@ -112,7 +117,7 @@ bool fr_reactive_snapshot_read(const char *path,fr_reactive_record_t *records,ui
     uint8_t encoded[HEADER_WORDS*4];uint32_t header[HEADER_WORDS];
     bool okay=fread(encoded,sizeof(encoded),1,file)==1;
     if(okay) decode(header,encoded,HEADER_WORDS);
-    if(!okay||header[0]!=0x31535246u||(header[1]!=1u&&header[1]!=FR_REACTIVE_STATE_ABI)||
+    if(!okay||header[0]!=0x31535246u||(header[1]<1u||header[1]>FR_REACTIVE_STATE_ABI)||
        header[2]!=FR_REACTIVE_STATE_WORDS||header[3]!=FR_REACTIVE_OWNER_WORDS||header[5]!=0) {
         fclose(file);return error(err,cap,"Unsupported/corrupt reactive snapshot header");
     }
@@ -185,7 +190,7 @@ bool fr_reactive_snapshot_decode(const uint8_t *bytes,size_t length,fr_reactive_
     if(!bytes||length<HEADER_WORDS*4u||!count||!next||!required||(!records&&capacity))
         return error(err,cap,"Invalid reactive packet restore request");
     uint32_t header[HEADER_WORDS];decode(header,bytes,HEADER_WORDS);size_t total=0;
-    if(header[0]!=0x31535246u||(header[1]!=1u&&header[1]!=FR_REACTIVE_STATE_ABI)||header[2]!=FR_REACTIVE_STATE_WORDS||
+    if(header[0]!=0x31535246u||(header[1]<1u||header[1]>FR_REACTIVE_STATE_ABI)||header[2]!=FR_REACTIVE_STATE_WORDS||
        header[3]!=FR_REACTIVE_OWNER_WORDS||header[5]!=0||!fr_reactive_snapshot_size(header[4],&total))
         return error(err,cap,"Unsupported/corrupt reactive packet header");
     if(length!=total) return error(err,cap,"Reactive packet length mismatch");

@@ -96,10 +96,12 @@ static void test_full_width_particle_births_round_trip_as_version_two(void) {
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_LEAF_DEBRIS,1000,0,600,80,&record.state,err,sizeof(err)));
     uint8_t bytes[176];size_t written=0;uint32_t count=0,required=0;uint64_t next=0;
     ASSERT_TRUE(fr_reactive_snapshot_encode(&record,1,81,bytes,sizeof(bytes),&written,err,sizeof(err)));
-    ASSERT_EQ(bytes[4],2u);
+    ASSERT_EQ(bytes[4],FR_REACTIVE_STATE_ABI);
+    bytes[4]=2;checksum(bytes,sizeof(bytes));
     ASSERT_TRUE(fr_reactive_snapshot_decode(bytes,sizeof(bytes),&out,1,&count,&next,&required,err,sizeof(err)));
     ASSERT_TRUE(memcmp(&record,&out,sizeof(out))==0);
-    ASSERT_TRUE(fr_reactive_snapshot_write("build/reactive_packet_v2.frs",&record,1,81,err,sizeof(err)));
+    FILE *file=fopen("build/reactive_packet_v2.frs","wb");ASSERT_TRUE(file);
+    ASSERT_EQ(fwrite(bytes,1,sizeof(bytes),file),sizeof(bytes));ASSERT_EQ(fclose(file),0);
     ASSERT_TRUE(fr_reactive_snapshot_read("build/reactive_packet_v2.frs",&out,1,&count,&next,&required,err,sizeof(err)));
     ASSERT_TRUE(memcmp(&record,&out,sizeof(out))==0);remove("build/reactive_packet_v2.frs");PASS();
 }

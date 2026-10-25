@@ -32,6 +32,21 @@ bool valid(uvec2 handle) {
     Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
     return e.words[FR_ENTRY_GENERATION]==handle.y&&e.words[FR_ENTRY_OWNER]==1u;
 }
+vec2 two_sum(float a,float b) {
+    precise float sum=a+b;
+    precise float recovered=sum-a;
+    precise float error=(a-(sum-recovered))+(b-recovered);
+    return vec2(sum,error);
+}
+void add_energy(Words entry,float delta) {
+    vec2 first=two_sum(uintBitsToFloat(entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY]),delta);
+    vec2 second=two_sum(uintBitsToFloat(entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY_RESIDUAL]),first.y);
+    precise float last=uintBitsToFloat(entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY_CORRECTION])+second.y;
+    vec2 middle=two_sum(second.x,last),top=two_sum(first.x,middle.x),tail=two_sum(top.y,middle.y);
+    entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY]=floatBitsToUint(top.x);
+    entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY_RESIDUAL]=floatBitsToUint(tail.x);
+    entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY_CORRECTION]=floatBitsToUint(tail.y);
+}
 vec4 sample_at(uint index) {
     uvec2 handle=handle_at(index);
     if(!valid(handle)) {
@@ -103,8 +118,7 @@ void main() {
         if(kind==1u&&mass!=0) {
             uvec2 h=handle_at(index);Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),h.x));
             e.words[FR_ENTRY_STATE+12u]=uint(int(e.words[FR_ENTRY_STATE+12u])+mass);
-            e.words[FR_ENTRY_STATE+17u]=floatBitsToUint(samples[index].x+energy+
-                float(mass)/65536.*coefficient(3u,5u)*float(FR_THERMAL_AMBIENT_K));
+            add_energy(e,energy+float(mass)/65536.*coefficient(3u,5u)*float(FR_THERMAL_AMBIENT_K));
         }
         if(kind==2u&&mass!=0) {
             uint atlas=atlas_at(index);cells[atlas].y=uint(int(cells[atlas].y)+mass);water_energy[atlas]+=energy;
@@ -119,14 +133,14 @@ void main() {
         fluxes[index]=vec4(exchange(a,b),exchange(a,c),0.,0.);
     }
     if(params.phase==2u&&samples[index].y>0.) {
-        float energy=samples[index].x-fluxes[index].x-fluxes[index].y;
+        float energy=-fluxes[index].x-fluxes[index].y;
         if(x>0u) energy+=fluxes[index-1u].x;
         if(y>0u) energy+=fluxes[index-params.width].y;
         uvec2 handle=handle_at(index);
         if(valid(handle)) {
             Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
-            e.words[FR_ENTRY_STATE+FR_STATE_ENERGY]=floatBitsToUint(energy);samples[index].x=energy;
-        } else {uint atlas=atlas_at(index);if(atlas!=0xffffffffu) water_energy[atlas]=energy;}
+            add_energy(e,energy);samples[index].x=uintBitsToFloat(e.words[FR_ENTRY_STATE+FR_STATE_ENERGY]);
+        } else {uint atlas=atlas_at(index);if(atlas!=0xffffffffu) water_energy[atlas]=samples[index].x+energy;}
     }
     if(params.phase==4u&&index==0u&&probe_active!=0u) {
         vec4 target=sample_at(probe_index);
@@ -137,7 +151,7 @@ void main() {
             float flux=min(exchange(source,target),probe_excess);
             uvec2 handle=handle_at(probe_index);
             if(liquid) water_energy[atlas_at(probe_index)]=stored+flux;
-            else {Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));e.words[FR_ENTRY_STATE+FR_STATE_ENERGY]=floatBitsToUint(target.x+flux);}
+            else {Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));add_energy(e,flux);}
             probe_excess-=flux;
         }
     }

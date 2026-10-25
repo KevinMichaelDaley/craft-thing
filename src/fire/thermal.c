@@ -15,7 +15,7 @@ static bool sample_valid(fr_thermal_sample_t sample) {
 bool fr_thermal_sample_from_state(const fr_reactive_state_t *state,
     fr_thermal_sample_t *out,char *err,uint32_t cap) {
     if(!out||!fr_reactive_state_valid(state,err,cap)) return false;
-    fr_thermal_sample_t sample={state->thermal_energy,(float)fr_reactive_state_heat_capacity(state),
+    fr_thermal_sample_t sample={(float)fr_reactive_state_energy(state),(float)fr_reactive_state_heat_capacity(state),
         fr_reactive_profile(state->material)->conductivity};
     if(!sample_valid(sample)) return error(err,cap,"Thermal sample has no finite heat capacity");
     *out=sample;return true;
@@ -68,9 +68,10 @@ bool fr_thermal_absorb_pair(const fr_reactive_state_t *solid,const fr_reactive_s
     if(transfer>room) transfer=room;
     if(transfer>b.inert_mass_fp/FR_THERMAL_NEIGHBORS) transfer=b.inert_mass_fp/FR_THERMAL_NEIGHBORS;
     if(transfer) {
-        float enthalpy=(float)((double)b.thermal_energy*transfer/b.inert_mass_fp);
-        b.inert_mass_fp-=transfer;b.dry_mass_fp=b.inert_mass_fp;b.thermal_energy-=enthalpy;
-        a.bound_water_fp+=transfer;a.thermal_energy+=enthalpy;
+        double enthalpy=fr_reactive_state_energy(&b)*transfer/b.inert_mass_fp;
+        if(!fr_reactive_state_add_heat(&a,enthalpy,err,cap)||!fr_reactive_state_add_heat(&b,-enthalpy,err,cap)) return false;
+        b.inert_mass_fp-=transfer;b.dry_mass_fp=b.inert_mass_fp;
+        a.bound_water_fp+=transfer;
     }
     if(!fr_reactive_state_valid(&a,err,cap)||!fr_reactive_state_valid(&b,err,cap)) return false;
     *solid_out=a;*water_out=b;return true;

@@ -17,6 +17,7 @@ static void test_sub_ulp_heat_is_retained_and_temperature_uses_full_inventory(vo
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,176947,0,350,1,&s,err,sizeof(err)));
     double before=fr_reactive_state_energy(&s);
     for(uint32_t i=0;i<100000;i++) ASSERT_TRUE(fr_reactive_state_add_heat(&s,1e-6,err,sizeof(err)));
+    printf("Repeated sub-ULP heat error %.12g\n",fr_reactive_state_energy(&s)-before-.1);
     ASSERT_TRUE(fabs(fr_reactive_state_energy(&s)-before-.1)<1e-8);
     ASSERT_TRUE(s.thermal_energy_residual!=0.f&&fr_reactive_state_valid(&s,err,sizeof(err)));
     float temperature=0;ASSERT_TRUE(fr_reactive_state_temperature(&s,&temperature,err,sizeof(err)));
@@ -36,12 +37,16 @@ static void test_abi_two_migrates_zero_remainder_but_rejects_nonzero_old_reserve
     ASSERT_TRUE(fr_reactive_snapshot_decode(bytes,length,&out,1,&count,&next,&required,err,sizeof(err)));
     ASSERT_EQ(out.state.thermal_energy_residual,0.f);ASSERT_EQ(memcmp(&out,&record,sizeof(record)),0);
     uint32_t value=0;float residual=1e-6f;memcpy(&value,&residual,4);
-    for(uint32_t i=0;i<4;i++) bytes[40+(FR_REACTIVE_OWNER_WORDS+25)*4+i]=(uint8_t)(value>>(8*i));
-    rehash(bytes,length);fr_reactive_record_t saved=out;count=91;next=92;
-    ASSERT_TRUE(!fr_reactive_snapshot_decode(bytes,length,&out,1,&count,&next,&required,err,sizeof(err)));
-    ASSERT_EQ(memcmp(&out,&saved,sizeof(out)),0);ASSERT_EQ(count,91u);ASSERT_EQ(next,92u);free(bytes);PASS();
+    for(uint32_t word=25;word<=26;word++) {
+        for(uint32_t i=0;i<4;i++) bytes[40+(FR_REACTIVE_OWNER_WORDS+word)*4+i]=(uint8_t)(value>>(8*i));
+        rehash(bytes,length);fr_reactive_record_t saved=out;count=91;next=92;
+        ASSERT_TRUE(!fr_reactive_snapshot_decode(bytes,length,&out,1,&count,&next,&required,err,sizeof(err)));
+        ASSERT_EQ(memcmp(&out,&saved,sizeof(out)),0);ASSERT_EQ(count,91u);ASSERT_EQ(next,92u);
+        memset(bytes+40+(FR_REACTIVE_OWNER_WORDS+word)*4,0,4);
+    }
+    free(bytes);PASS();
 }
-static void test_splits_and_snapshots_preserve_both_energy_words(void) {
+static void test_splits_and_snapshots_preserve_the_full_energy_expansion(void) {
     char err[256]={0};fr_reactive_record_t record={.owner={.kind=FR_REACTIVE_OWNER_BODY,.key={7,1,2,3,0}}},out;
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,1000,350,1,&record.state,err,sizeof(err)));
     ASSERT_TRUE(fr_reactive_state_add_heat(&record.state,1e-6,err,sizeof(err)));
@@ -61,11 +66,13 @@ static void test_invalid_heat_or_residual_leaves_state_unchanged(void) {
     ASSERT_TRUE(!fr_reactive_state_add_heat(&s,-10000,err,sizeof(err)));ASSERT_EQ(memcmp(&saved,&s,sizeof(s)),0);
     ASSERT_TRUE(!fr_reactive_state_add_heat(&s,DBL_MAX,err,sizeof(err)));ASSERT_EQ(memcmp(&saved,&s,sizeof(s)),0);
     s.thermal_energy_residual=NAN;ASSERT_TRUE(!fr_reactive_state_valid(&s,err,sizeof(err)));
-    s.thermal_energy_residual=1;ASSERT_TRUE(!fr_reactive_state_valid(&s,err,sizeof(err)));PASS();
+    s.thermal_energy_residual=1;ASSERT_TRUE(!fr_reactive_state_valid(&s,err,sizeof(err)));
+    s=saved;s.thermal_energy_correction=NAN;ASSERT_TRUE(!fr_reactive_state_valid(&s,err,sizeof(err)));
+    s.thermal_energy_correction=1;ASSERT_TRUE(!fr_reactive_state_valid(&s,err,sizeof(err)));PASS();
 }
 int main(void) {
     RUN(test_sub_ulp_heat_is_retained_and_temperature_uses_full_inventory);
-    RUN(test_splits_and_snapshots_preserve_both_energy_words);
+    RUN(test_splits_and_snapshots_preserve_the_full_energy_expansion);
     RUN(test_invalid_heat_or_residual_leaves_state_unchanged);
     RUN(test_abi_two_migrates_zero_remainder_but_rejects_nonzero_old_reserved_bits);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;

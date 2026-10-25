@@ -1,3 +1,4 @@
+#include <float.h>
 #include <math.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -9,6 +10,8 @@
 
 _Static_assert(sizeof(fr_reactive_state_t)==FR_STATE_WORDS*4u,"Reactive state ABI changed");
 _Static_assert(offsetof(fr_reactive_state_t,thermal_energy)==FR_STATE_ENERGY*4u,"Reactive energy layout changed");
+_Static_assert(offsetof(fr_reactive_state_t,thermal_energy_residual)==FR_STATE_ENERGY_RESIDUAL*4u,"Reactive energy remainder layout changed");
+_Static_assert(offsetof(fr_reactive_state_t,thermal_energy_correction)==FR_STATE_ENERGY_CORRECTION*4u,"Reactive energy correction layout changed");
 _Static_assert(offsetof(fr_reactive_state_t,dry_mass_fp)==FR_STATE_MASS_FIRST*4u,"Reactive species layout changed");
 _Static_assert(offsetof(fr_reactive_state_t,pending_shock_energy)==FR_STATE_SHOCK*4u,"Reactive shock layout changed");
 static bool error(char *err,uint32_t cap,const char *reason) {
@@ -29,9 +32,22 @@ static double capacity(const fr_reactive_state_t *s) {
 double fr_reactive_state_heat_capacity(const fr_reactive_state_t *s) {
     return s&&fr_reactive_profile(s->material)?capacity(s):0;
 }
-double fr_reactive_state_energy(const fr_reactive_state_t *s) {return s?s->thermal_energy:0;}
+double fr_reactive_state_energy(const fr_reactive_state_t *s) {
+    return s?(double)s->thermal_energy+s->thermal_energy_residual+s->thermal_energy_correction:0;
+}
+static bool set_energy(fr_reactive_state_t *s,double energy) {
+    if(!isfinite(energy)||energy<0||energy>FLT_MAX) return false;
+    s->thermal_energy=(float)energy;
+    double residual=energy-s->thermal_energy;
+    s->thermal_energy_residual=(float)residual;
+    s->thermal_energy_correction=(float)(residual-s->thermal_energy_residual);return true;
+}
 bool fr_reactive_state_add_heat(fr_reactive_state_t *s,double energy,char *err,uint32_t cap) {
-    (void)s;(void)energy;return error(err,cap,"Compensated heat is not implemented");
+    if(!isfinite(energy)||!fr_reactive_state_valid(s,err,cap)) return error(err,cap,"Invalid compensated heat input");
+    fr_reactive_state_t value=*s;
+    if(!set_energy(&value,fr_reactive_state_energy(s)+energy)||!fr_reactive_state_valid(&value,err,cap))
+        return error(err,cap,"Compensated heat exceeds its physical storage");
+    *s=value;return true;
 }
 
 bool fr_reactive_state_default(uint32_t material,uint32_t mass,uint32_t water,
@@ -70,8 +86,16 @@ bool fr_reactive_state_valid(const fr_reactive_state_t *s,char *err,uint32_t cap
     if(!s||!fr_reactive_profile(s->material)||(s->flags&~31u)!=0||
        identity(s->parcel_id_low,s->parcel_id_high)==0||identity(s->origin_id_low,s->origin_id_high)==0)
         return error(err,cap,"Invalid reactive identity/flags");
-    if(s->identity_reserved[0]||s->identity_reserved[1]||s->reserved[0]||s->reserved[1]||s->thermal_energy_residual!=0.f)
+    if(s->identity_reserved[0]||s->identity_reserved[1]||s->reserved[0])
         return error(err,cap,"Nonzero reactive reserved fields");
+    float step=s->thermal_energy-nextafterf(s->thermal_energy,0.f);
+    float next=nextafterf(s->thermal_energy,INFINITY);
+    if(isfinite(next)) step=next-s->thermal_energy;
+    if(!isfinite(s->thermal_energy_residual)||fabsf(s->thermal_energy_residual)>step*.5f)
+        return error(err,cap,"Invalid reactive energy remainder");
+    float residual_step=nextafterf(fabsf(s->thermal_energy_residual),INFINITY)-fabsf(s->thermal_energy_residual);
+    if(!isfinite(s->thermal_energy_correction)||fabsf(s->thermal_energy_correction)>residual_step*.5f)
+        return error(err,cap,"Invalid reactive energy accumulation correction");
     float values[8];memcpy(values,&s->thermal_energy,sizeof(values));
     for(unsigned i=0;i<8;i++) if(!isfinite(values[i])||values[i]<0)
         return error(err,cap,"Invalid reactive energy/exposure");
@@ -93,7 +117,7 @@ bool fr_reactive_state_temperature(const fr_reactive_state_t *s,float *out,char 
     if(!out||!fr_reactive_state_valid(s,err,cap)) return false;
     double c=capacity(s);
     if(c<=0) return error(err,cap,"An empty parcel has no material temperature");
-    float t=(float)(s->thermal_energy/c);
+    float t=(float)(fr_reactive_state_energy(s)/c);
     if(!isfinite(t)) return error(err,cap,"Reactive temperature overflow");
     *out=t;return true;
 }
@@ -111,8 +135,9 @@ bool fr_reactive_state_split(const fr_reactive_state_t *s,uint32_t weight,uint64
     first.parcel_id_low=(uint32_t)a;first.parcel_id_high=(uint32_t)(a>>32);
     second.parcel_id_low=(uint32_t)b;second.parcel_id_high=(uint32_t)(b>>32);
     double total=capacity(s),fraction=total>0?capacity(&first)/total:0;
-    first.thermal_energy=(float)(s->thermal_energy*fraction);
-    second.thermal_energy=s->thermal_energy-first.thermal_energy;
+    double energy=fr_reactive_state_energy(s);
+    if(!set_energy(&first,energy*fraction)||!set_energy(&second,energy-fr_reactive_state_energy(&first)))
+        return error(err,cap,"Reactive split energy overflow");
     first.pending_shock_energy=(float)(s->pending_shock_energy*fraction);
     second.pending_shock_energy=s->pending_shock_energy-first.pending_shock_energy;
     if(!fr_reactive_state_valid(&first,err,cap)||!fr_reactive_state_valid(&second,err,cap)) return false;

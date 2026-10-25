@@ -23,6 +23,7 @@ static bool thermal_checkpoint_fixture(dc_gpu_t **g,dc_chunk_t *chunk,char *err,
     fr_reactive_state_t wood;
     return context(g,err,cap)&&dc_gpu_upload_chunk(*g,0,chunk,err,cap)&&dc_gpu_set_page(*g,0,0,0,err,cap)&&
         fr_reactive_state_default(DC_MATERIAL_WOOD,39322,900,330,91,&wood,err,cap)&&
+        fr_reactive_state_add_heat(&wood,1e-6+1e-13,err,cap)&&
         fr_gpu_reactive_seed_cell(*g,0,20*64+20,&wood,err,cap)&&fr_thermal_gpu_enable(*g,err,cap)&&
         fr_thermal_gpu_seed_water(*g,0,20*64+21,100,err,cap);
 }
@@ -46,6 +47,7 @@ static void test_checkpoint_restores_exact_parcel_liquid_heat_and_spent_probe_in
     for(uint32_t i=0;i<3;i++) ASSERT_TRUE(fr_thermal_gpu_step(g,1.f/60.f,err,sizeof(err)));
     fr_reactive_record_t before,after;bool found=false;
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,20*64+20,&before,&found,err,sizeof(err))&&found);
+    ASSERT_TRUE(before.state.thermal_energy_residual!=0.f);
     fr_thermal_probe_t source,restored;
     ASSERT_TRUE(fr_thermal_gpu_source_state(g,&source,err,sizeof(err)));ASSERT_TRUE(source.excess_energy<11370.f);
     float heat[4096],loaded[4096];ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(g,0,heat,4096,err,sizeof(err)));

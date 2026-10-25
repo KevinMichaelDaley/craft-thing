@@ -652,6 +652,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/reactive_chunk_tests
 	./build/reactive_stream_tests
 	./build/thermal_stream_tests
+	./build/thermal_precision_tests
 	./build/reactive_body_snapshot_tests
 	./build/reactive_archive_tests
 	./build/pressure_work_tests
@@ -1753,6 +1754,8 @@ build/thermal_stream_tests: tests/fire/thermal_stream_tests.c tests/world/stream
 test: build/thermal_stream_tests
 build/thermal_precision_tests: tests/fire/thermal_precision_tests.c $(REACTIVE_STATE_SRC)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(REACTIVE_STATE_SRC) -o $@ -lm
+test: build/thermal_precision_tests
+build/stream.o: include/ferrum/fire/thermal_checkpoint.h
 build/reactive_chunk.o: src/fire/reactive_chunk.c include/ferrum/fire/reactive_chunk.h include/ferrum/fire/reactive_state.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/reactive_chunk_display_tests: tests/vulkan/reactive_chunk_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
@@ -1819,8 +1822,10 @@ build/thermal_checkpoint_display_tests: tests/vulkan/thermal_checkpoint_gpu_test
 .PHONY: test_heat_bench
 THERMAL_DISPLAY_TESTS = build/thermal_gpu_display_tests build/thermal_water_display_tests build/thermal_admission_display_tests build/thermal_feedback_display_tests build/thermal_bench_display_tests build/thermal_checkpoint_display_tests build/reactive_checkpoint_display_tests
 test_ui test_quarter_native: $(THERMAL_DISPLAY_TESTS)
-test_heat_bench: build/thermal_tests $(THERMAL_DISPLAY_TESTS)
+test_heat_bench: build/thermal_tests build/thermal_stream_tests build/thermal_precision_tests $(THERMAL_DISPLAY_TESTS)
 	./build/thermal_tests
+	./build/thermal_stream_tests
+	./build/thermal_precision_tests
 	./build/thermal_gpu_display_tests
 	./build/thermal_water_display_tests
 	./build/thermal_admission_display_tests

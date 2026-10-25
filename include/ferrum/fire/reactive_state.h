@@ -7,7 +7,7 @@
 
 #include "dungeoncraft/chunk.h"
 
-#define FR_REACTIVE_STATE_ABI 2u
+#define FR_REACTIVE_STATE_ABI 3u
 #define FR_REACTIVE_STATE_WORDS 28u
 #define FR_REACTIVE_OWNER_WORDS 6u
 enum {
@@ -20,6 +20,8 @@ enum {
 
 /** Persistent parcel data. Species masses are Q16.16 and extensive. dry_mass_fp
  * is reference metadata, not another mass inventory. Color stays independent.
+ * ABI 3 retains low-order heat in two formerly reserved words; budget readers
+ * use fr_reactive_state_energy() rather than discarding those remainders.
  * A WATER_MIRROR particle caches its existing moisture flag amount: ledgers count
  * that physical bound water once, not once in each representation. */
 typedef struct {
@@ -31,8 +33,9 @@ typedef struct {
     float thermal_energy, oxidized_fraction, corroded_fraction;
     float ignition_threshold, ignition_integral;
     float coating_threshold, coating_integral, pending_shock_energy;
-    float thermal_energy_residual;
-    uint32_t reserved[2];
+    float thermal_energy_residual; /**< Signed low-order extensive heat. */
+    float thermal_energy_correction; /**< Retained residual accumulation error. */
+    uint32_t reserved[1];
 } fr_reactive_state_t;
 
 enum { FR_REACTIVE_OWNER_CELL=1u, FR_REACTIVE_OWNER_BODY=2u,

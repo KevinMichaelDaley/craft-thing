@@ -37,7 +37,7 @@ static bool bench_budget(dc_level_view_t *view,uint64_t *water,double *energy,ch
             }
             for(uint32_t i=0;i<channel.count;i++) {
                 mass+=channel.attachments[i].record.state.bound_water_fp;
-                total+=channel.attachments[i].record.state.thermal_energy;
+                total+=fr_reactive_state_energy(&channel.attachments[i].record.state);
             }
         }
         fr_reactive_chunk_release(&channel);
