@@ -91,9 +91,30 @@ static void test_stale_or_duplicate_retire_requests_cannot_partially_erase_a_bat
     fr_reactive_arena_stats_t stats;ASSERT_TRUE(fr_reactive_arena_stats(&f.gpu,&f.arena,&stats));
     ASSERT_EQ(stats.live,2u);ASSERT_EQ(stats.free,62u);cleanup(&f);PASS();
 }
+static void test_updates_keep_identity_and_do_not_partially_publish_with_a_stale_peer(void) {
+    char err[256]={0};fixture_t f={0};ASSERT_TRUE(fixture(&f,err,sizeof(err)));
+    fr_reactive_arena_request_t request[2];fr_reactive_handle_t handles[2],out[2];uint32_t needed=0;
+    ASSERT_TRUE(records(request,2,0));
+    ASSERT_TRUE(fr_reactive_arena_apply(&f.gpu,&f.arena,request,2,handles,&needed,err,sizeof(err)));
+    fr_reactive_record_t expected=request[0].record;expected.state.thermal_energy+=11;
+    request[0]=(fr_reactive_arena_request_t){.operation=FR_REACTIVE_ARENA_UPDATE,.handle=handles[0],.record=expected};
+    ASSERT_TRUE(fr_reactive_arena_apply(&f.gpu,&f.arena,request,1,out,&needed,err,sizeof(err)));
+    ASSERT_EQ(out[0].index,handles[0].index);ASSERT_EQ(out[0].generation,handles[0].generation);
+    request[0].record.state.thermal_energy+=7;
+    request[1]=(fr_reactive_arena_request_t){.operation=FR_REACTIVE_ARENA_RETIRE,.handle={handles[1].index,handles[1].generation+1u}};
+    ASSERT_TRUE(!fr_reactive_arena_apply(&f.gpu,&f.arena,request,2,out,&needed,err,sizeof(err)));
+    request[1]=request[0];
+    ASSERT_TRUE(!fr_reactive_arena_apply(&f.gpu,&f.arena,request,2,out,&needed,err,sizeof(err)));
+    request[0].record.state.origin_id_low=1000;
+    ASSERT_TRUE(!fr_reactive_arena_apply(&f.gpu,&f.arena,request,1,out,&needed,err,sizeof(err)));
+    fr_reactive_record_t record;bool found=false;
+    ASSERT_TRUE(fr_reactive_arena_read(&f.gpu,&f.arena,handles[0],&record,&found,err,sizeof(err)));ASSERT_TRUE(found);
+    ASSERT_TRUE(memcmp(&record,&expected,sizeof(record))==0);cleanup(&f);PASS();
+}
 int main(void) {
     RUN(test_gpu_allocator_reuses_freed_slots_without_reviving_stale_handles);
     RUN(test_failed_growth_rolls_back_the_whole_gpu_batch_and_then_retries);
     RUN(test_stale_or_duplicate_retire_requests_cannot_partially_erase_a_batch);
+    RUN(test_updates_keep_identity_and_do_not_partially_publish_with_a_stale_peer);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
