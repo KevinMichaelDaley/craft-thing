@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "ferrum/fire/gas.h"
 
@@ -57,12 +58,98 @@ static void test_finite_colored_smoke_dilutes_oxygen_without_consuming_it(void) 
 }
 static void test_stationary_pressure_balanced_contacts_do_not_diffuse_pigment_at_sound_speed(void) {
     char err[256]={0};fr_gas_model_t m=model();fr_gas_state_t input[8],out[8];double volume[8];
-    for(uint32_t i=0;i<8;i++) {input[i]=air(m,i<4?1:2,i<4?300:150,0);volume[i]=1;}
+    for(uint32_t i=0;i<8;i++) {
+        double mass=i<4?1:2,temperature=i<4?300:150;
+        input[i]=air(m,mass,temperature,0);volume[i]=1;
+        input[i].species[FR_GAS_EXHAUST]=mass*.01;
+        input[i].energy+=mass*.01*m.heat_capacity_cv[FR_GAS_EXHAUST]*temperature;
+        input[i].pigment[i<4?0:2]=mass*.01;
+    }
     double dt=0;ASSERT_TRUE(fr_gas_reference_max_dt(&m,input,volume,8,1,1,.4,&dt,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_reference_step(&m,input,volume,8,1,1,dt,FR_GAS_FLUX_HLLC,out,err,sizeof(err)));
     for(uint32_t i=0;i<8;i++) {
         ASSERT_TRUE(fabs(out[i].energy-input[i].energy)<1e-10);
         ASSERT_TRUE(fabs(out[i].species[0]-input[i].species[0])<1e-12&&fabs(out[i].momentum[0])<1e-12);
+        for(uint32_t k=0;k<3;k++) ASSERT_TRUE(fabs(out[i].pigment[k]-input[i].pigment[k])<1e-12);
+    }
+    PASS();
+}
+static void test_two_dimensional_wall_and_open_vent_preserve_closed_inventory(void) {
+    char err[256]={0};fr_gas_model_t m=model();enum {W=16,H=12,N=W*H};
+    fr_gas_state_t cells[N],out[N];double volume[N],before[5]={0},energy=0,red=0;
+    for(uint32_t y=0;y<H;y++) for(uint32_t x=0;x<W;x++) {
+        uint32_t i=y*W+x;volume[i]=x==7?0:1;cells[i]=(fr_gas_state_t){0};if(x==7) continue;
+        cells[i]=air(m,x<7?1:.125,x<7?300:240,0);
+        cells[i].species[FR_GAS_EXHAUST]=.01;cells[i].energy+=.01*m.heat_capacity_cv[FR_GAS_EXHAUST]*300;
+        cells[i].pigment[x<7?0:2]=.01;
+        for(uint32_t k=0;k<5;k++) before[k]+=cells[i].species[k];
+        energy+=cells[i].energy;red+=cells[i].pigment[0];
+    }
+    for(uint32_t stage=0;stage<2;stage++) {
+        if(stage==1) volume[6*W+7]=1;
+        for(uint32_t step=0;step<100;step++) {
+            double dt=0;ASSERT_TRUE(fr_gas_reference_max_dt(&m,cells,volume,W,H,1,.4,&dt,err,sizeof(err)));
+            ASSERT_TRUE(fr_gas_reference_step(&m,cells,volume,W,H,1,dt,FR_GAS_FLUX_HLLC,out,err,sizeof(err)));memcpy(cells,out,sizeof(cells));
+        }
+        double after[5]={0},heat=0,color=0,right_red=0;
+        for(uint32_t y=0;y<H;y++) for(uint32_t x=0;x<W;x++) {
+            uint32_t i=y*W+x;for(uint32_t k=0;k<5;k++) after[k]+=cells[i].species[k];
+            heat+=cells[i].energy;color+=cells[i].pigment[0];if(x>7) right_red+=cells[i].pigment[0];
+        }
+        for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(after[k]-before[k])<1e-9);
+        ASSERT_TRUE(fabs(heat-energy)<1e-7&&fabs(color-red)<1e-10);
+        ASSERT_TRUE(stage==0?right_red==0:right_red>1e-6);
+    }
+    PASS();
+}
+/* Independent self-similar Sod solution from the ideal-gas wave curves;
+ * this does not call either finite-volume flux under test. */
+static void exact_sod(double xi,double *rho,double *velocity,double *pressure) {
+    const double gamma=1.4,cl=sqrt(1.4),cr=sqrt(1.4*.1/.125);double lo=.1,hi=1.;
+    for(uint32_t k=0;k<100;k++) {
+        double p=.5*(lo+hi),a=2*cl/(gamma-1)*(pow(p,(gamma-1)/(2*gamma))-1);
+        double b=(p-.1)*sqrt((2/((gamma+1)*.125))/(p+(gamma-1)/(gamma+1)*.1));
+        if(a+b>0) hi=p;else lo=p;
+    }
+    double p=.5*(lo+hi),u=-2*cl/(gamma-1)*(pow(p,(gamma-1)/(2*gamma))-1);
+    double left=pow(p,1/gamma),beta=(gamma-1)/(gamma+1),ratio=p/.1;
+    double right=.125*(ratio+beta)/(beta*ratio+1),tail=u-sqrt(gamma*p/left);
+    double shock=cr*sqrt((gamma+1)/(2*gamma)*ratio+(gamma-1)/(2*gamma));
+    if(xi<-cl) {*rho=1;*velocity=0;*pressure=1;}
+    else if(xi<tail) {
+        double sound=2/(gamma+1)*(cl-(gamma-1)*xi/2);
+        *velocity=2/(gamma+1)*(cl+xi);*rho=pow(sound/cl,2/(gamma-1));*pressure=pow(sound/cl,2*gamma/(gamma-1));
+    } else if(xi<u) {*rho=left;*velocity=u;*pressure=p;}
+    else if(xi<shock) {*rho=right;*velocity=u;*pressure=p;}
+    else {*rho=.125;*velocity=0;*pressure=.1;}
+}
+static void test_both_fluxes_converge_to_an_independent_exact_pressure_release(void) {
+    char err[256]={0};fr_gas_model_t m=model();
+    for(uint32_t solver=0;solver<2;solver++) {
+        double coarse=0;
+        for(uint32_t n=128;n<=256;n*=2) {
+            double dx=1./n,*volume=malloc(n*sizeof(*volume));fr_gas_state_t *cells=calloc(n,sizeof(*cells)),*out=calloc(n,sizeof(*out));ASSERT_TRUE(volume&&cells&&out);
+            for(uint32_t i=0;i<n;i++) {
+                volume[i]=1;cells[i].species[FR_GAS_NITROGEN]=(i<n/2?1:.125)*dx;
+                cells[i].energy=(i<n/2?1:.1)/.4*dx;
+            }
+            double elapsed=0;
+            while(elapsed<.15) {
+                double dt=0;ASSERT_TRUE(fr_gas_reference_max_dt(&m,cells,volume,n,1,dx,.4,&dt,err,sizeof(err)));dt=fmin(dt,.15-elapsed);
+                ASSERT_TRUE(fr_gas_reference_step(&m,cells,volume,n,1,dx,dt,solver,out,err,sizeof(err)));memcpy(cells,out,n*sizeof(*cells));elapsed+=dt;
+            }
+            double density_error=0,pressure_error=0,velocity_error=0;
+            for(uint32_t i=0;i<n;i++) {
+                fr_gas_thermo_t t;ASSERT_TRUE(fr_gas_thermodynamics(&m,cells+i,dx,&t,err,sizeof(err)));
+                double rho=0,u=0,p=0;exact_sod(((i+.5)*dx-.5)/.15,&rho,&u,&p);
+                density_error+=fabs(t.mass/dx-rho)/n;pressure_error+=fabs(t.pressure-p)/n;
+                velocity_error+=fabs(cells[i].momentum[0]/t.mass-u)/n;
+            }
+            printf("Sod solver%u n%u L1 density%.9g pressure%.9g velocity%.9g\n",solver,n,density_error,pressure_error,velocity_error);
+            ASSERT_TRUE(density_error<.025&&pressure_error<.025&&velocity_error<.05);
+            if(n==128) coarse=density_error;else ASSERT_TRUE(density_error<coarse);
+            free(volume);free(cells);free(out);
+        }
     }
     PASS();
 }
@@ -110,5 +197,7 @@ int main(void) {
     RUN(test_stationary_pressure_balanced_contacts_do_not_diffuse_pigment_at_sound_speed);
     RUN(test_closed_pressure_release_conserves_species_energy_and_pigment_for_both_solvers);
     RUN(test_cfl_violation_and_invalid_volume_or_admission_are_transactional);
+    RUN(test_two_dimensional_wall_and_open_vent_preserve_closed_inventory);
+    RUN(test_both_fluxes_converge_to_an_independent_exact_pressure_release);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
