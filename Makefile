@@ -638,6 +638,8 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/reactive_chunk_gpu_tests
 	./build/reactive_chunk_tests
 	./build/reactive_stream_tests
+	./build/reactive_body_snapshot_tests
+	./build/reactive_archive_tests
 	./build/pressure_work_tests
 	./build/pressure_stencil_pack_tests
 	./build/grain_bed_work_tests
@@ -1746,3 +1748,6 @@ build/reactive_archive_tests: tests/fire/reactive_archive_tests.c src/fire/react
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/reactive_archive.c src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) -o $@ -lm
 build/reactive_body_snapshot_display_tests: tests/vulkan/reactive_body_snapshot_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/reactive_body_snapshot_tests: tests/vulkan/reactive_body_snapshot_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/reactive_body_snapshot_tests build/reactive_archive_tests

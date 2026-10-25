@@ -1,6 +1,6 @@
 ---
 id: ctlo-2q4f
-status: in_progress
+status: open
 deps: [ctlo-ldb7]
 links: [dun-sndp, dun-i1zd, ctfs-2hu1, ctlo-18l4]
 created: 2026-10-24T22:06:18Z
@@ -87,3 +87,7 @@ DCS checkpoint RED confirmed exact body and pending-negative-chunk state are cur
 **2026-10-25T03:02:22Z**
 
 Safe boundary after modular user steering: private detached-storage factory and parallel BODY snapshot compaction pass2 native Wayland cases; all4 chunk cases and actual level worker reload case pass again (28 presented frames total, core/sync validation). Exact unlinked DCS helper/header/private hooks preserved as design/drafts/reactive_checkpoint_integration.patch; git apply --check passes. No DCS8 format enabled. Both explicit checkpoint display tests remain intentional RED and outside the passing default battery. Remaining broad scope: DCS body/pending checkpoint persistence and rollback, other impact/analytic handoffs, runtime physical admission and loose-cell/particle transitions. These are deferred until required by the active visible feature; this ticket is NOT complete. Next visible sequence is ctfs-2hu1 heat/wetting, then ctfs-dmxv smoke, then ctfs-81vw terrain bonfire.
+
+**2026-10-25T03:09:25Z**
+
+Modular handoff REFACTOR complete: full battery718 C passes, same2 ctr-ojvy authored-stage failures only, zero warnings/new regressions. Log build/reactive_safe_boundary_full_suite.log. Native BODY snapshot2/chunk4/actual level stream1 passed with28 displayed frames and core/sync validation. Broad ticket returns open, not complete. Deferred DCS2 intentional RED tests and exact checked draft are documented; no DCS8 format enabled. Next sole active visible milestone is ctfs-2hu1; add only prerequisites actually required by it.

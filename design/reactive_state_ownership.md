@@ -121,3 +121,23 @@ integration. Add corresponding RED tests,
 complete the full regression battery and retain the final epic's two 1000-frame
 displayed performance runs for each of its three scenarios. Heat transport,
 combustion and smoke are not enabled by this foundation alone.
+
+## Modular handoff boundary
+
+The user's delivery sequence now advances to `ctfs-2hu1`, the interactive
+heat/wetting bench, before more horizontal persistence work. The final safe
+boundary runs all **718 C checks successfully except the same two tracked
+authored-stage failures**; there are zero compiler warnings/new failures in
+`build/reactive_safe_boundary_full_suite.log`. Native Vulkan core/sync validation
+also passes two body-snapshot cases, four chunk-channel cases and the actual
+level-view worker save/reload case (28 presented frames at 480×270 with halo).
+
+The detached resource factory and GPU BODY compaction are tested helpers, not
+an integrated structure checkpoint. The two explicit checkpoint display cases
+remain intentional RED outside the default passing battery. The exact unlinked
+checkpoint preparation draft and private hooks are preserved in
+`design/drafts/reactive_checkpoint_integration.patch`, accompanied by its status
+note; `git apply --check` succeeds. No DCS8 format was enabled. This ticket stays
+open for its remaining scope and must not block a visible feature on unrelated
+future owner/material paths. Bring forward only prerequisites that the active
+feature actually needs.
