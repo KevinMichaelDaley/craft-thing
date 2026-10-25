@@ -245,6 +245,20 @@ static void test_native_gas_automatically_follows_full_tick_clock_and_present_pa
     ASSERT_TRUE(present(g,err,sizeof(err))&&fr_gas_gpu_clock(g,&paused));ASSERT_EQ(memcmp(&clock,&paused,sizeof(clock)),0);
     free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_native_sealed_hot_cell_cannot_gain_heat_from_wall_blocked_buoyancy(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    for(uint32_t i=0;i<4096;i++) c->cells[i]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+    uint32_t hot=20u*64u+20u;c->cells[hot]=(dc_cell_t){0};
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_gas_model_t m=reference_model();ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_IMPLICIT,err,sizeof(err))&&fr_gas_gpu_set_gravity(g,900,err,sizeof(err)));
+    fr_gas_state_t *input=calloc(4096,sizeof(*input)),*out=malloc(4096*sizeof(*out));double *volumes=calloc(4096,sizeof(*volumes)),*work=malloc(4096*sizeof(*work));ASSERT_TRUE(input&&out&&volumes&&work);
+    input[hot]=reference_air(m,.5,600,0);volumes[hot]=1;
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volumes,4096,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,input,4096,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err))&&fr_gas_gpu_read_work_chunk(g,0,work,4096,err,sizeof(err)));
+    printf("Sealed hot cell: energy delta%.9g momentum%.9g external work%.9g\n",out[hot].energy-input[hot].energy,out[hot].momentum[1],work[hot]);
+    ASSERT_EQ(memcmp(input,out,4096*sizeof(*input)),0);ASSERT_EQ(work[hot],0.);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(input);free(out);free(volumes);free(work);free(c);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
@@ -257,5 +271,6 @@ int main(void) {
     RUN(test_native_closed_gate_retains_stock_then_opens_real_implicit_flow);
     RUN(test_native_oxygen_and_valve_feedback_are_visible_and_do_not_advance_stock);
     RUN(test_native_gas_automatically_follows_full_tick_clock_and_present_pause);
+    RUN(test_native_sealed_hot_cell_cannot_gain_heat_from_wall_blocked_buoyancy);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
