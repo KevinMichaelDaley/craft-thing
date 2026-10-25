@@ -376,6 +376,9 @@ static void test_native_large_cfl_packet_matches_composed_oracle_in_one_step(voi
 }
 #include "gas_large_cfl_cases.h"
 #include "gas_practical_cases.h"
+#ifdef FR_GAS_PUBLICATION_TEST
+#include "gas_publication_cases.h"
+#endif
 static void test_native_subnormal_colored_stock_is_valid_and_retained_at_rest(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));
     fr_gas_state_t *input=calloc(4096,sizeof(*input)),*out=calloc(4096,sizeof(*out));double *volume=malloc(4096*sizeof(*volume));
@@ -393,6 +396,9 @@ static void test_native_subnormal_colored_stock_is_valid_and_retained_at_rest(vo
 }
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);
+#ifdef FR_GAS_PUBLICATION_TEST
+    RUN(test_native_publication_uses_one_submission_and_preserves_rejected_state);
+#endif
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
     RUN(test_native_colored_transport_matches_reference_and_retains_closed_budgets);
     RUN(test_native_buoyancy_matches_reference_and_accounts_for_external_work);

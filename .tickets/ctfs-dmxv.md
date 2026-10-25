@@ -111,3 +111,7 @@ Hybrid local-CFL transport GREEN: independent safe-line explicit flux oracle pas
 **2026-10-25T22:39:57Z**
 
 Completed tail timing instrumentation: parser4/4 passes, actual200-frame trace attributes late frame~40.5ms to init~14ms, pressure~11ms, residual~0.6ms, finish~3ms and commit~2.6ms, plus publish/waits/render. Hybrid late counts908 explicit lines/1225 local stages,20 implicit,160 inactive; one interval and two submits, no retries. Target now remaining pressure/bandwidth/energy-update overhead; not another convergence retry stall. Next practical float energy updates under unchanged3% long-run energy budget; strict compensated diagnostics remain intact.
+
+**2026-10-25T22:45:05Z**
+
+Rejected ordinary-float energy update experiment:5 practical cases passed and audited1000 stock/finite bounds passed, but39.005/46.708ms did not show a clear mean gain vs38.763/49.387; restored compensated updates. Rejected two smaller pressure V-cycles(32 total fine vs48): offset chamber disturbed7.29% and long pressure bound failed atstep119; restored passing one-cycle48-fine configuration. No acceptance thresholds weakened. Next eliminate redundant publication copies via transactional buffer ownership rotation, preserving numerical method and locking rejection/policy roundtrips first.
