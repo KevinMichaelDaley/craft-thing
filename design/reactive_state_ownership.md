@@ -126,8 +126,8 @@ combustion and smoke are not enabled by this foundation alone.
 
 The user's delivery sequence now advances to `ctfs-2hu1`, the interactive
 heat/wetting bench, before more horizontal persistence work. The final safe
-boundary runs all **718 C checks successfully except the same two tracked
-authored-stage failures**; there are zero compiler warnings/new failures in
+boundary reports **718 C passes and the same two tracked authored-stage
+failures**; there are zero compiler warnings/new failures in
 `build/reactive_safe_boundary_full_suite.log`. Native Vulkan core/sync validation
 also passes two body-snapshot cases, four chunk-channel cases and the actual
 level-view worker save/reload case (28 presented frames at 480×270 with halo).

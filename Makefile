@@ -1751,3 +1751,5 @@ build/reactive_body_snapshot_display_tests: tests/vulkan/reactive_body_snapshot_
 build/reactive_body_snapshot_tests: tests/vulkan/reactive_body_snapshot_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/reactive_body_snapshot_tests build/reactive_archive_tests
+build/thermal_tests: tests/fire/thermal_tests.c src/fire/thermal.c $(REACTIVE_STATE_SRC) include/ferrum/fire/thermal.h include/dungeoncraft/thermal_parameters.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/thermal.c $(REACTIVE_STATE_SRC) -o $@ -lm
