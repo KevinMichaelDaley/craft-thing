@@ -13,7 +13,6 @@ layout(set=0,binding=7,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=8,std430) readonly buffer Cells {uvec2 cells[];};
 layout(set=0,binding=9,std430) readonly buffer Occupancy {uint occupancy[];};
 layout(set=0,binding=10,std430) readonly buffer Mpm {vec4 mpm[];};
-layout(set=0,binding=11,std430) restrict buffer Faces {GasFlux faces[];};
 layout(push_constant) uniform Params {uint width,height,seconds,bank;} params;
 #include "model.glsl"
 uint gas_index() {return gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;}
