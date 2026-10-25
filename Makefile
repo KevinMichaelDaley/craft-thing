@@ -633,6 +633,11 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/reactive_state_gpu_tests
 	./build/reactive_cell_gpu_tests
 	./build/reactive_particle_lifecycle_tests
+	./build/reactive_arena_gpu_tests
+	./build/reactive_address_gpu_tests
+	./build/reactive_chunk_gpu_tests
+	./build/reactive_chunk_tests
+	./build/reactive_stream_tests
 	./build/pressure_work_tests
 	./build/pressure_stencil_pack_tests
 	./build/grain_bed_work_tests
@@ -1728,3 +1733,8 @@ build/shaders/reactive_chunk_state.comp.spv: shaders/reactive/chunk_state.comp s
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 $(GPU_OBJ) build/reactive_chunk_display_tests: build/shaders/reactive_chunk_state.comp.spv
 build/reactive_gpu.o build/reactive_chunk_gpu.o: src/vulkan/reactive_storage_gpu.h
+build/reactive_chunk_gpu.o: src/vulkan/reactive_chunk_gpu.c src/vulkan/reactive_gpu_internal.h include/ferrum/fire/reactive_chunk.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/reactive_chunk_gpu_tests: tests/vulkan/reactive_chunk_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/reactive_arena_gpu_tests build/reactive_address_gpu_tests build/reactive_chunk_gpu_tests build/reactive_chunk_tests build/reactive_stream_tests

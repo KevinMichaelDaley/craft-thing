@@ -5,7 +5,11 @@ foundation and its boundaries; it does not declare the fire/smoke epic complete.
 
 ## Persistent representation
 
-`fr_reactive_state_t` is ABI 1, 28 little-endian 32-bit words in snapshots.
+`fr_reactive_state_t` occupies 28 little-endian 32-bit words in snapshots.
+Persistent owner semantics use ABI 2; ABI 1 saves remain readable. Particle
+owners include a full-width lifetime identity, separate from their physical PID.
+Repainting a vacated cell can reuse that PID while the original grain is alive.
+The birth identity remains stable during movement and distinguishes both parcels.
 Nine Q16.16 fields retain dry reference mass, fuel, char, inert material, bound
 water, oil/jelly coating fuel and core/coating oxidizer. Dry reference mass is
 metadata, excluded from the physical species sum. Absolute thermal energy and
@@ -21,8 +25,17 @@ energy by the children's heat capacities without rerolling ignition thresholds.
 next parcel ID. It checks versions, lengths, hash, reserved fields, finite values,
 duplicate owners and parcel IDs. The next ID must exceed parcel **and origin**
 IDs. Insufficient capacity or corrupt input does not publish partial output;
-missing old-save data initializes zero nonambient records. The codec currently
-exists independently of the world's chunk and structure checkpoint formats.
+missing old-save data initializes zero nonambient records.
+
+The `FRC1` chunk channel combines canonical logical records with serialized
+physical row bindings. These are chunk-local cell/particle rows, never GPU arena
+indices or addresses. Row bindings disambiguate equal physical particle PIDs on
+restore. The worker validates material, identity, held-terrain role, unique rows,
+state and counters against the immutable physical chunk before publishing.
+`DCC1` version 7 stores this channel, physics and colors in one temporary/rename
+transaction with a whole-file checksum. Older chunk versions remain readable
+with ambient reaction defaults; empty channels still retain the ID high-water
+mark. The level view and structure checkpoint wiring remain to be completed.
 
 ## GPU storage and completed paths
 
@@ -31,7 +44,10 @@ A small stable BDA root is published in reserved body work words 64–66. Dynami
 entry storage uses 36 words per entry: generation, six logical owner words,
 padding and the 28 state words. Handles use a full-width index and generation;
 there is no packed index quota or fixed global body/fire count. Entry and shape
-bank growth copies payloads on the GPU before publishing new addresses.
+bank growth copies payloads on the GPU before publishing new addresses. The live
+pool now uses the GPU arena's reserve/publish/rollback protocol, reuses retired
+entries, and never resets saturated generations. Requests use full-width BDA
+address arithmetic rather than a storage-buffer descriptor range or packed index.
 
 Cell handles are separate from cell flags. Shape handles follow both geometry
 banks. Particle handles follow the physical A/B pools, including the default
@@ -53,6 +69,14 @@ Implemented mechanical handoffs:
 - MPM gather carries the chosen source handle with each chosen particle and
   clears empty destinations. Copy commits copy handles; alternating commits
   retain the A/B orientation without copying the particle pool.
+- Air/material replacement retires canonical particle state; secondary promotion
+  and negative-coordinate halo movement retain state and pigment. Incompatible
+  leaf pigment bits do not become soil moisture after a material replacement.
+- Slot save compaction constructs the sparse CELL/PARTICLE list in parallel on
+  GPU. Cold restore validates actual GPU materials/PIDs and checks new IDs against
+  other resident entries before reserving the entire batch and replacing handles.
+  Conflicts leave both original inventories intact. Packet processing by the
+  disk worker is separate from runtime component/reaction work.
 
 `fr_gpu_reactive_seed_*` APIs are explicit **cold fixture/import** boundaries.
 Their CPU validation, resource growth and diagnostic reads are not a runtime
@@ -82,9 +106,18 @@ fixture checks, with zero compiler warnings and no new failures. Logs remain in
 invocation took 215.63 seconds including compiler startup; no startup performance
 improvement is claimed by the buffer-address cleanup.
 
+Through `e11f84f`, the extended battery (including the arena, full-width address,
+chunk codec/worker and GPU stream tests) reports **712 C passes**, the same two
+tracked authored-stage failures, and zero compiler warnings or new failures.
+The first attempt exposed a missing standard object rule for the new GPU chunk
+module; that incomplete run is not validation. The corrected full run is
+`build/reactive_stream_full_suite_fixed.log`. Separate actual-display runs pass
+all five particle lifecycle cases and all three GPU chunk save/restore cases
+with Vulkan core and synchronization validation, totaling 32 presented frames.
+
 Before closing this ticket: finish the other impact-fracture/analytic-body
-handoffs, particle erasure/reuse paths, transactional runtime admission and actual
-chunk streaming/structure checkpoint integration. Add corresponding RED tests,
+handoffs, GPU runtime admission and actual level-view/structure checkpoint
+integration. Add corresponding RED tests,
 complete the full regression battery and retain the final epic's two 1000-frame
 displayed performance runs for each of its three scenarios. Heat transport,
 combustion and smoke are not enabled by this foundation alone.

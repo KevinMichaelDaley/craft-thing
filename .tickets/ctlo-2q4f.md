@@ -67,3 +67,7 @@ Persistent identity GREEN: actual Wayland Vulkan regression moved a live leaf pa
 **2026-10-25T02:33:23Z**
 
 Atomic DCC7 streaming GREEN:3 new asynchronous worker cases plus7 unchanged stream cases pass. GPU chunk channel GREEN:3 actual Wayland Vulkan cases pass with core/sync validation and12 displayed frames. Save compaction builds sparse CELL/PARTICLE records on GPU; restore validates actual GPU materials/PIDs and rejects duplicate parcel IDs in other resident owners before allocation/publication. Replacing slot state retires old entries and retains the identity high-water mark. App-level wiring, DCS checkpoint integration and remaining mechanical/admission paths are still required.
+
+**2026-10-25T02:40:02Z**
+
+REFACTOR regression complete through e11f84f: corrected full make -j8 -i test reports712 C passes, only the same2 ctr-ojvy authored-stage failures at67/135, zero compiler warnings and no new failures. The first run exposed a missing standard object rule for reactive_chunk_gpu; fixed the rule, discarded that incomplete run, and repeated the complete battery. Added allocator/address/chunk CPU+GPU/worker cases to the standard recipe. Native displayed lifecycle5 and GPU chunk3 cases passed separately with core/sync validation.
