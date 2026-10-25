@@ -1,5 +1,7 @@
+#ifndef FR_GAS_FUSED_AXIS
 #extension GL_GOOGLE_include_directive : require
 #extension GL_KHR_shader_subgroup_shuffle_relative : require
+#endif
 #include "transport_implicit.glsl"
 #include "transport_apply_body.glsl"
 shared vec2 group_factor[64];
@@ -20,7 +22,10 @@ void cell_map(ivec2 p,out vec2 factor,out GasFlux value,out bool moving) {
     value=GasFlux(source.species,source.dynamics,source.visual.rgb);
     value=transport_scale(value,backward?vec2(1):vec2(mass.y,energy.y));
 }
-void main() {
+#ifndef FR_GAS_PREFIX_ENTRY
+#define FR_GAS_PREFIX_ENTRY main
+#endif
+void FR_GAS_PREFIX_ENTRY() {
     uint lane=gl_SubgroupInvocationID,rank=gl_SubgroupID*gl_SubgroupSize+lane;
     uint length=transport_axis()==0u?params.width:params.height,span=(length+FR_GAS_LOCAL_SIZE-1u)/FR_GAS_LOCAL_SIZE;
     uint begin=rank*span,end=min(begin+span,length),line=gl_WorkGroupID.x;
@@ -64,7 +69,11 @@ void main() {
         transport_work[index].dynamics=prefix.dynamics;
         transport_work[index].visual=vec4(prefix.pigment,transport_work[index].visual.w);
     }
+#ifdef FR_GAS_FUSED_AXIS
+    if(transport_pass!=0u) {
+#else
     if((params.bank&FR_GAS_FUSED_APPLY_BIT)!=0u) {
+#endif
         memoryBarrierBuffer();barrier();
         for(uint cell=begin;cell<end;cell++) transport_apply_cell(transport_point(line,cell));
     }

@@ -19,7 +19,10 @@ void coefficients(ivec2 p,float dt,out vec2 lower,out vec2 diagonal,out vec2 upp
     lower=dt*transport_rates(p-step,1);diagonal=vec2(1)+dt*(plus+minus);upper=dt*transport_rates(p+step,-1);previous_upper=dt*minus;
     face=vec4(plus.x,minus.x,plus.y,minus.y);
 }
-void main() {
+#ifndef FR_GAS_FACTOR_ENTRY
+#define FR_GAS_FACTOR_ENTRY main
+#endif
+void FR_GAS_FACTOR_ENTRY() {
     uint lane=gl_SubgroupInvocationID,rank=gl_SubgroupID*gl_SubgroupSize+lane;
     uint length=transport_axis()==0u?params.width:params.height,span=(length+FR_GAS_LOCAL_SIZE-1u)/FR_GAS_LOCAL_SIZE;
     uint begin=rank*span,end=min(begin+span,length),line=gl_WorkGroupID.x;float dt=uintBitsToFloat(params.seconds);

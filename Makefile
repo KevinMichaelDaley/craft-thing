@@ -1794,6 +1794,7 @@ GAS_SHADERS += build/shaders/gas_transport_prefix_wide.comp.spv
 GAS_SHADERS += build/shaders/gas_transport_factor_wide.comp.spv
 GAS_SHADERS += build/shaders/gas_transport_stage.comp.spv
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_factor_compact transport_factor_compact_wide transport_prefix_compact transport_prefix_compact_wide transport_apply_compact)
+GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_axis_compact transport_axis_compact_wide)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_restrict pressure_coarse_sor pressure_prolong)
 build/gas_acoustic_gpu.o: src/vulkan/gas_acoustic_gpu.c src/vulkan/gas_acoustic_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@

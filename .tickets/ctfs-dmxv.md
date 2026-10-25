@@ -91,3 +91,7 @@ Sustained actual-display1000-frame elapsed-clock open/vent run (no GPU trace, st
 **2026-10-25T21:44:08Z**
 
 Practical64-byte scratch (duplicate mass/thermal coefficients removed) passes4 actual displayed practical gates unchanged;120-interval worst call17.941ms. Sustained actual untraced1000-frame open run improves53.448/61.982 to50.170ms mean59.897ms worst, four paused captures identical. Still RED vs30ms. Next line-local whole-axis kernel fusion to reuse scratch/cache and remove separate factor/forward/back/apply dispatch traffic; no new gameplay module or altered clock/stock.
+
+**2026-10-25T21:47:17Z**
+
+Opt-in whole-axis practical transport fusion passes all4 actual displayed practical gates (finite12-second variable clock, inventory/energy drift, checkerboard damping, offset-wall isolation). Sustained actual untraced1000 open frames improve50.170/59.897 to45.100ms mean56.411ms worst, four paused captures identical. Same factor/forward/back/apply work synchronized within each independently owned line, no CPU field/list solve or stock/time drop. Target still RED. Next practical shared-tile pressure smoothing to reduce full-grid dispatch/cache traffic.

@@ -1,3 +1,5 @@
+#ifndef FR_GAS_TRANSPORT_IMPLICIT_GLSL
+#define FR_GAS_TRANSPORT_IMPLICIT_GLSL
 #include "transport_float_controls.glsl"
 #include "acoustic.glsl"
 #ifdef FR_GAS_COMPACT_WORK
@@ -9,7 +11,12 @@ layout(set=0,binding=24,std430) restrict buffer TransportWork {TransportCell tra
 uint transport_axis() {return (params.bank>>3u)&1u;}
 uint transport_position(ivec2 p) {return transport_axis()==0u?uint(p.y)*params.width+uint(p.x):uint(p.x)*params.height+uint(p.y);}
 uint transport_line_start(ivec2 p) {return transport_axis()==0u?uint(p.y)*params.width:uint(p.x)*params.height;}
+#ifdef FR_GAS_FUSED_AXIS
+uint transport_pass;
+int transport_direction() {return transport_pass!=0u?-1:1;}
+#else
 int transport_direction() {return (params.bank&16u)!=0u?-1:1;}
+#endif
 ivec2 transport_step() {return transport_axis()==0u?ivec2(transport_direction(),0):ivec2(0,transport_direction());}
 vec2 transport_rates(ivec2 p,int direction) {
     ivec2 step=transport_axis()==0u?ivec2(direction,0):ivec2(0,direction);
@@ -49,3 +56,4 @@ ivec2 transport_point(uint line,uint ordered) {
     uint cell=transport_direction()>0?ordered:length-1u-ordered;
     return transport_axis()==0u?ivec2(int(cell),int(line)):ivec2(int(line),int(cell));
 }
+#endif

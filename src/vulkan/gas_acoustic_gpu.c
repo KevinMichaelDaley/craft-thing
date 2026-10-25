@@ -29,6 +29,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->restrict_pressure);fr_renderer_compute_destroy(g,&t->coarse_sor);fr_renderer_compute_destroy(g,&t->prolong_pressure);
     fr_renderer_compute_destroy(g,&t->stage_transport);
     fr_renderer_compute_destroy(g,&t->practical_factor);fr_renderer_compute_destroy(g,&t->practical_prefix);fr_renderer_compute_destroy(g,&t->practical_apply);
+    fr_renderer_compute_destroy(g,&t->practical_axis);
     for(uint32_t i=0;i<11;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
     dc_gpu_address_buffer_destroy(g,&t->indirect);
     memset(t,0,sizeof(*t));
@@ -86,6 +87,8 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
             char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",names[i]);
             if(!fr_renderer_compute_init(g,practical[i],buffers,25,16,path,err,cap)) goto fail;
         }
+        const char *axis_path=use_wide?"build/shaders/gas_transport_axis_compact_wide.comp.spv":"build/shaders/gas_transport_axis_compact.comp.spv";
+        if(!fr_renderer_compute_init(g,&t->practical_axis,buffers,25,16,axis_path,err,cap)) goto fail;
     }
     t->ready=true;return true;
 fail:
@@ -161,6 +164,12 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
             if(getenv("DC_GAS_STAGED_RATES")) {
                 flags|=FR_GAS_STAGED_RATES_BIT;
                 dispatch(g,&t->stage_transport,gx,gy,dt,flags);
+            }
+            if(t->practical&&getenv("DC_GAS_FUSED_AXIS")) {
+                dispatch(g,&t->practical_axis,lines,1u,dt,flags);
+                if(trace) for(uint32_t stamp=5u;stamp<=8u;stamp++)
+                    vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,stamp+axis*4u);
+                continue;
             }
             dispatch(g,t->practical?&t->practical_factor:&t->transport_factor,lines,1u,dt,flags);
             if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,5u+axis*4u);
