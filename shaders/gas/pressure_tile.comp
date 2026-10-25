@@ -1,0 +1,49 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "acoustic.glsl"
+shared float tile_high[100];
+shared float tile_low[100];
+float tile_residual(uint center,vec4 coefficients,float diagonal,float rhs) {
+    vec2 sum=gas_pressure_product(vec2(rhs,0),-diagonal,tile_high[center]);
+    sum=gas_pressure_product(sum,-diagonal,tile_low[center]);
+    for(uint d=0u;d<4u;d++) {
+        uint j=d==0u?center+1u:(d==1u?center-1u:(d==2u?center+10u:center-10u));
+        sum=gas_pressure_product(sum,coefficients[d],tile_high[j]);
+        sum=gas_pressure_product(sum,coefficients[d],tile_low[j]);
+    }
+    return sum.x+sum.y;
+}
+void main() {
+    uint lane=gl_LocalInvocationIndex;ivec2 origin=ivec2(gl_WorkGroupID.xy)*8;
+    bool alternate=(params.bank&4u)!=0u;
+    for(uint cell=lane;cell<100u;cell+=64u) {
+        ivec2 p=origin+ivec2(int(cell%10u)-1,int(cell/10u)-1);vec2 value=vec2(0);
+        if(all(greaterThanEqual(p,ivec2(0)))&&all(lessThan(p,ivec2(params.width,params.height)))) {
+            uint at=uint(p.y)*params.width+uint(p.x);
+            value=alternate?vec2(provisional[at].z,acoustic[at].w):vec2(pressure[at].x,acoustic[at].z);
+        }
+        tile_high[cell]=value.x;tile_low[cell]=value.y;
+    }
+    ivec2 p=origin+ivec2(int(lane%8u),int(lane/8u));
+    bool valid=all(lessThan(p,ivec2(params.width,params.height)));
+    uint index=valid?uint(p.y)*params.width+uint(p.x):0u,center=(lane/8u+1u)*10u+lane%8u+1u;
+    vec4 coefficients=valid?stencil[index]:vec4(0),row=valid?pressure[index]:vec4(0);
+    float ratio=row.z>0.?min(dot(coefficients,vec4(1))/row.z,.99999994):0.;
+    float relaxation=2./(1.+sqrt(max(0.,1.-ratio*ratio)));
+    barrier();
+    for(uint sweep=0u;sweep<4u;sweep++) for(uint color=0u;color<2u;color++) {
+        if(valid&&row.z>0.&&((uint(p.x+p.y)&1u)==color)) {
+            float residual=tile_residual(center,coefficients,row.z,row.y);
+            if(abs(residual)>1e-7*row.w) {
+                vec2 first=gas_two_sum(tile_high[center],relaxation*residual/row.z);
+                vec2 next=gas_two_sum(first.x,tile_low[center]+first.y);
+                tile_high[center]=next.x;tile_low[center]=next.y;
+            }
+        }
+        barrier();
+    }
+    if(valid) {
+        if(alternate) {pressure[index].x=tile_high[center];acoustic[index].z=tile_low[center];}
+        else {provisional[index].z=tile_high[center];acoustic[index].w=tile_low[center];}
+    }
+}

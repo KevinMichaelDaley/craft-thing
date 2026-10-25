@@ -21,7 +21,7 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         buffers[11+i]=(VkDescriptorBufferInfo){t->fields[i].buffer,0,bytes};
     }
     fr_renderer_compute_t *pipelines[]={&t->advect,&t->initialize,&t->rhs,&t->sor,&t->residual,&t->finish};
-    const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_sor","pressure_residual","acoustic_finish"};
+    const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_tile","pressure_residual","acoustic_finish"};
     for(uint32_t i=0;i<6;i++) {
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",paths[i]);
         if(!fr_renderer_compute_init(g,pipelines[i],buffers,15,16,path,err,cap)) goto fail;
@@ -50,24 +50,36 @@ static bool submit(dc_gpu_t *g,char *err,uint32_t cap) {
 }
 bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint32_t gy,
     float dt,uint32_t bank,dc_gpu_address_buffer_t *stats,char *err,uint32_t cap) {
+    bool trace=getenv("DC_GAS_TRACE")!=NULL&&g->timestamp_bits;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin acoustic advection");
+    if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,4);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);}
     dispatch(g,&t->advect,gx,gy,dt,bank);dispatch(g,&t->initialize,gx,gy,dt,bank);dispatch(g,&t->rhs,gx,gy,dt,bank);
-    uint32_t stalled=0,batches=0;float best=INFINITY;bool trace=getenv("DC_GAS_TRACE")!=NULL;
+    if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,1);
+    uint32_t stalled=0,batches=0;float best=INFINITY;
     for(;;) {
-        for(uint32_t sweep=0;sweep<8;sweep++) {
-            dispatch(g,&t->sor,gx,gy,dt,bank);dispatch(g,&t->sor,gx,gy,dt,bank|2u);
-        }
+        dispatch(g,&t->sor,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
+        dispatch(g,&t->sor,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank|4u);
+        if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,2);
         barrier(g);vkCmdFillBuffer(g->command,stats->buffer,FR_GAS_RESIDUAL_WORD*4u,4,0);
         dispatch(g,&t->residual,gx,gy,dt,bank);
+        if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,3);
         if(!submit(g,err,cap)) return false;
         uint32_t bits=((uint32_t *)stats->mapped)[FR_GAS_RESIDUAL_WORD];float residual=0;memcpy(&residual,&bits,4);
         batches++;if(trace&&(batches<=4u||(batches&(batches-1u))==0u))
             fprintf(stderr,"Acoustic dt%.9g batch%u residual%.9g error%u\n",dt,batches,residual,((uint32_t *)stats->mapped)[FR_GAS_ERROR_WORD]);
+        if(trace) {
+            uint64_t times[4];
+            if(vkGetQueryPoolResults(g->device,g->timestamp_pool,0,4,sizeof(times),times,sizeof(uint64_t),VK_QUERY_RESULT_64_BIT)==VK_SUCCESS)
+                fprintf(stderr,"Acoustic GPU init%.3f sor8%.3f residual%.3f ms\n",(times[1]-times[0])*g->timestamp_period/1e6,
+                    (times[2]-times[1])*g->timestamp_period/1e6,(times[3]-times[2])*g->timestamp_period/1e6);
+        }
         if(((uint32_t *)stats->mapped)[FR_GAS_ERROR_WORD]) return true;
         if(residual<=1e-7f) break;
         if(residual<best*.99f) {best=residual;stalled=0;} else stalled++;
         if(!isfinite(residual)||stalled>=8) {((uint32_t *)stats->mapped)[FR_GAS_ERROR_WORD]=1;return true;}
         if(!fr_renderer_begin(g)) return error(err,cap,"Cannot continue acoustic pressure solve");
+        if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,4);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);
+            vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,1);}
     }
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot finish acoustic pressure solve");
     dispatch(g,&t->finish,gx,gy,dt,bank);return submit(g,err,cap);

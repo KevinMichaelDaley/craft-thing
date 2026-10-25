@@ -132,3 +132,13 @@ bound proves the row already converged. Rows are rechecked every sweep and wake
 when neighbors change. Full-field performance remains RED. Vacuum admission,
 geometry edits, streaming/checkpoint ownership and the interactive box remain
 unfinished; implicit policy is not enabled in ordinary gameplay.
+
+The precomputed-stencil/converged-row full-field result was129.949ms mean and
+184.158ms worst over30 frames. GPU timestamps identify repeated pressure sweeps
+as the dominant cost; a targeted Intel compiler probe reports382 instructions,
+zero spills/fills for the global pressure shader. A shared-memory block-Jacobi
+experiment retained all4 numerical display tests but worsened convergence and
+frame cost to360.387/652.893ms (109 accepted substeps over50 physical ticks).
+This failed variant is preserved in history. The next experiment uses alternating
+tile colors so adjacent tiles consume newly updated boundary data; all acceptance
+tolerances and full-frame targets remain unchanged.
