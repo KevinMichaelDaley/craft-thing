@@ -48,4 +48,9 @@ bool fr_gas_reference_max_dt(const fr_gas_model_t *model,const fr_gas_state_t *s
 bool fr_gas_reference_step(const fr_gas_model_t *model,const fr_gas_state_t *source,
     const double *volumes,uint32_t width,uint32_t height,double cell_size,
     double seconds,uint32_t solver,fr_gas_state_t *out,char *err_buf,uint32_t err_cap);
+/** Cold conservative acoustic-pressure oracle. Acoustic stiffness is implicit;
+ * explicit species/momentum transport still obeys the advective CFL bound. */
+bool fr_gas_implicit_reference_step(const fr_gas_model_t *model,const fr_gas_state_t *source,
+    const double *void_fractions,uint32_t width,uint32_t height,double seconds,
+    fr_gas_state_t *out,char *err_buf,uint32_t err_cap);
 #endif
