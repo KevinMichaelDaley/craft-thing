@@ -58,9 +58,24 @@ static void test_import_rejects_duplicate_resident_identity_and_rolls_back_all_s
     fr_gpu_reactive_stats_t stats;ASSERT_TRUE(fr_gpu_reactive_read_stats(g,&stats,err,sizeof(err)));ASSERT_EQ(stats.live,2u);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(a);free(b);dc_gpu_destroy(g);PASS();
 }
+static void test_reusing_a_physical_chunk_slot_does_not_reuse_its_old_reactions(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    c->cells[0].material=DC_MATERIAL_WOOD;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err)));
+    fr_reactive_state_t state;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,800,80,&state,err,sizeof(err)));
+    state.coating_oil_fuel_fp=500;
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,0,&state,err,sizeof(err)));
+    c->coord=(dc_chunk_coord_t){-8,12};
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err)));
+    fr_reactive_record_t record;bool found=true;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,0,&record,&found,err,sizeof(err))&&!found);
+    fr_gpu_reactive_stats_t stats;ASSERT_TRUE(fr_gpu_reactive_read_stats(g,&stats,err,sizeof(err)));ASSERT_EQ(stats.live,0u);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     RUN(test_gpu_compaction_exports_negative_chunk_cells_and_particle_rows);
     RUN(test_import_replaces_old_slot_state_and_retains_high_water_without_reusing_ids);
     RUN(test_import_rejects_duplicate_resident_identity_and_rolls_back_all_source_state);
+    RUN(test_reusing_a_physical_chunk_slot_does_not_reuse_its_old_reactions);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
