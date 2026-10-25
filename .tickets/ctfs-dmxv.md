@@ -79,3 +79,7 @@ Residual V-cycle48 fine sweeps +128 coarse sweeps passes all3 actual-display pra
 **2026-10-25T21:31:51Z**
 
 Actual Wayland/Vulkan supported native battery27/27 PASS with DC_VK_VALIDATE=1 and VK_VALIDATION_VALIDATE_SYNC=1, wide/fused/coarse/staged-rate diagnostics enabled. Zero VUID, Validation Error or SYNC-HAZARD lines. This validates the pre-matrix-reuse checkpoint; new offset-wall case and matrix reuse remain queued. Full make -i test is executing its complete recipe serially; only the two known ctr-ojvy authored-stage failures seen so far. Latest frame budget remains RED41.935/63.417ms; no default promotion/module closure.
+
+**2026-10-25T21:35:14Z**
+
+Offset sealed-wall regression GREEN: restricting coarse correction to fully open aggregates reduces sealed-neighbor density disturbance11.6% to2.53e-8, with exactly zero escaped smoke. All4 actual displayed practical cases pass, including checkerboard damping and12-second variable-clock/no-retry/stock/finite-state gate (worst gas call20.456ms). Coarse blocks with internal gates/solids retain fine-grid wall topology. Full regression764 passes plus exactly2 known ctr-ojvy failures. Next sustained untraced real-scene timing; performance/module remain open.

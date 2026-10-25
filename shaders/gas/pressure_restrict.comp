@@ -3,12 +3,15 @@
 #include "pressure_coarse.glsl"
 shared vec4 edges[64];
 shared vec2 totals[64];
+shared uint blocked;
 void main() {
     uint lane=gl_LocalInvocationIndex,tile=gl_WorkGroupID.x,width=coarse_width();
+    if(lane==0u) blocked=0u;barrier();
     uvec2 local=uvec2(lane%8u,lane/8u),p=uvec2(tile%width,tile/width)*8u+local;
     vec4 boundary=vec4(0);vec2 total=vec2(0);
     if(p.x<params.width&&p.y<params.height) {
         uint at=p.y*params.width+p.x;vec4 coefficients=pressure[at].z>0.?stencil[at]:vec4(0);
+        if(pressure[at].z<=0.||(local.x<7u&&coefficients.x<=0.)||(local.y<7u&&coefficients.z<=0.)) atomicOr(blocked,1u);
         if(local.x==7u) boundary.x=coefficients.x;
         if(local.x==0u) boundary.y=coefficients.y;
         if(local.y==7u) boundary.z=coefficients.z;
@@ -19,7 +22,7 @@ void main() {
             residual+=coefficients[d]*correction[j];
         }
         total=vec2(residual,max(0.,pressure[at].z-dot(coefficients,vec4(1))));
-    }
+    } else atomicOr(blocked,1u);
     edges[lane]=boundary;totals[lane]=total;barrier();
     for(uint stride=32u;stride>0u;stride/=2u) {
         if(lane<stride) {edges[lane]+=edges[lane+stride];totals[lane]+=totals[lane+stride];}
@@ -27,6 +30,7 @@ void main() {
     }
     if(lane==0u) {
         vec4 coefficients=edges[0]/8.;
-        coarse[tile]=CoarseRow(coefficients,vec4(totals[0].x,totals[0].y+dot(coefficients,vec4(1)),0,0));
+        coarse[tile]=blocked!=0u?CoarseRow(vec4(0),vec4(0)):
+            CoarseRow(coefficients,vec4(totals[0].x,totals[0].y+dot(coefficients,vec4(1)),0,1));
     }
 }
