@@ -4,14 +4,14 @@
 void main() {
     uint index=gas_index();if(index>=params.width*params.height) return;
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
+    float energy_delta=correction_data[index].w;
     pressure[index]=vec4(0);stencil[index]=vec4(0);correction[index]=0.;correction_data[index]=vec4(0);
     if(atlas==0xffffffffu) return;
-    Gas old=gas_source(p),star=gas_provisional(atlas);float volume=old.geometry.x;
+    float volume=provisional[index].w;
     if(volume<=0.) return;
-    float old_kinetic=gas_kinetic(old),internal=gas_energy(old)-old_kinetic;
     float capacity=acoustic[index].z,old_capacity=acoustic[index].w;
-    float difference=(star.dynamics.y-old.dynamics.y)+(star.visual.w-old.visual.w)+(star.geometry.z-old.geometry.z);
-    float rhs=difference-provisional[index].z+
+    float internal=old_capacity*acoustic[index].y;
+    float rhs=energy_delta+
         (old_capacity>0.?internal*(1.-capacity/old_capacity):internal);
     float dt=uintBitsToFloat(params.seconds),diagonal=capacity;vec4 coefficients=vec4(0);
     for(uint d=0u;d<4u;d++) {

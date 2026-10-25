@@ -21,6 +21,13 @@ Primitive gas_primitive(Gas s,out bool okay) {
     float kinetic=.5*gas_parameter(FR_GAS_KINETIC_WORD)*dot(s.dynamics.zw,s.dynamics.zw)/mass;
     float temperature=(gas_energy(s)-kinetic)/capacity;
     float pressure=moles*temperature/(volume*gas_parameter(FR_GAS_KINETIC_WORD));
+    okay=okay&&temperature>0.&&gas_finite(temperature)&&gas_finite(pressure);
+    if(gas_parameter(FR_GAS_POLICY_WORD)!=0.) {
+        float enthalpy=(gas_energy(s)+gas_parameter(FR_GAS_KINETIC_WORD)*pressure*volume)/mass;
+        float pressure_capacity=moles>0.?gas_parameter(FR_GAS_KINETIC_WORD)*volume*capacity/moles:0.;
+        okay=okay&&gas_finite(enthalpy)&&gas_finite(pressure_capacity);
+        return Primitive(vec4(mass/volume,s.dynamics.zw/mass,pressure),vec4(enthalpy,pressure_capacity,mass,volume));
+    }
     float sound=sqrt((1.+moles/capacity)*pressure*volume/mass);
     okay=okay&&temperature>0.&&gas_finite(temperature)&&gas_finite(pressure)&&gas_finite(sound);
     return Primitive(vec4(mass/volume,s.dynamics.zw/mass,pressure),vec4(sound,temperature,mass,volume));
@@ -43,16 +50,16 @@ Gas gas_add_flux(Gas s,GasFlux flux,float dt) {
     result.dynamics.y=top.x;result.visual.w=tail.x;result.geometry.z=tail.y;
     return result;
 }
-Gas gas_buoyancy(Gas s,float dt,out float admitted_work,out float admitted_impulse) {
+Gas gas_buoyancy_cached(Gas s,Primitive primitive,float dt,out float admitted_work,out float admitted_impulse) {
     admitted_work=0.;admitted_impulse=0.;
     float gravity=gas_parameter(FR_GAS_GRAVITY_WORD),mass=gas_mass(s);
     if(gravity==0.||mass==0.) return s;
-    bool okay=false;Primitive primitive=gas_primitive(s,okay);if(!okay) return s;
     float fraction=gas_parameter(FR_GAS_OXYGEN_WORD);
     float oxygen=(fraction/gas_parameter(0u))/(fraction/gas_parameter(0u)+(1.-fraction)/gas_parameter(1u));
     float reference=(oxygen*gas_parameter(0u)+(1.-oxygen)*gas_parameter(1u))*gas_parameter(FR_GAS_AMBIENT_WORD);
     float molecular=dot(s.species,vec4(gas_parameter(0u),gas_parameter(1u),gas_parameter(2u),gas_parameter(3u)))+s.dynamics.x*gas_parameter(4u);
-    float ratio=molecular*primitive.metric.y/(mass*reference);
+    float ratio=gas_parameter(FR_GAS_POLICY_WORD)==0.?molecular*primitive.metric.y/(mass*reference):
+        gas_parameter(FR_GAS_KINETIC_WORD)*primitive.hydro.w/(primitive.hydro.x*reference);
     float acceleration=abs(ratio-1.)<=0.00000095367431640625?0.:gravity*(1.-ratio);
     float impulse=mass*acceleration*dt;
     admitted_impulse=impulse;
@@ -60,6 +67,11 @@ Gas gas_buoyancy(Gas s,float dt,out float admitted_work,out float admitted_impul
     admitted_work=work;
     GasFlux flux=gas_empty_flux();flux.dynamics.y=work;flux.dynamics.w=impulse;
     Gas result=gas_add_flux(s,flux,1.);result.geometry.w+=work;return result;
+}
+Gas gas_buoyancy(Gas s,float dt,out float work,out float impulse) {
+    bool okay=false;Primitive primitive=gas_primitive(s,okay);
+    if(!okay) {work=0.;impulse=0.;return s;}
+    return gas_buoyancy_cached(s,primitive,dt,work,impulse);
 }
 Gas gas_buoyancy(Gas s,float dt,out float work) {float impulse;return gas_buoyancy(s,dt,work,impulse);}
 Gas gas_buoyancy(Gas s,float dt) {float work;return gas_buoyancy(s,dt,work);}

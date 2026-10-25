@@ -2,6 +2,8 @@
 #define FR_GAS_TYPES_GLSL
 #include "../../include/dungeoncraft/gas_layout.h"
 struct Gas {vec4 species;vec4 dynamics;vec4 visual;vec4 geometry;};
+/* Hydro: density,u,v,pressure. Metric: sound/enthalpy,temperature/pressure
+ * capacity,mass,void; the implicit policy caches its sufficient thermodynamics. */
 struct Primitive {vec4 hydro;vec4 metric;};
 struct GasFlux {vec4 species;vec4 dynamics;vec3 pigment;};
 Gas gas_empty() {return Gas(vec4(0),vec4(0),vec4(0),vec4(0));}
