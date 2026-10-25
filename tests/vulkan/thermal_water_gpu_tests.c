@@ -9,7 +9,7 @@ static void test_wetting_moves_exact_water_and_enthalpy_into_wood_before_conduct
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     uint32_t solid=20*64+20,liquid=solid+1;
     c->cells[solid]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
-    c->cells[liquid]=(dc_cell_t){.material=DC_MATERIAL_WATER,.fluid_mass=65536};
+    c->cells[liquid]=(dc_cell_t){.material=DC_MATERIAL_AIR,.fluid_mass=65536};
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     fr_reactive_state_t wood,water,wet,remaining;
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,350,51,&wood,err,sizeof(err)));
@@ -53,9 +53,37 @@ static void test_actual_parallel_water_transport_preserves_excess_heat_and_custo
     ASSERT_EQ(mass,65536u);ASSERT_TRUE(moved);ASSERT_TRUE(fabs(heat-100.)<.02);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(colors);free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_erased_hot_water_cannot_reappear_when_painted_at_ambient(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    uint32_t source=20*64+20;c->cells[source].fluid_mass=65536;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_thermal_gpu_seed_water(g,0,source,100.f,err,sizeof(err)));
+    float energy[4096];
+    ASSERT_TRUE(dc_gpu_paint_material(g,20,20,0,DC_MATERIAL_WATER,err,sizeof(err)));
+    ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(g,0,energy,4096,err,sizeof(err)));ASSERT_EQ(energy[source],100.f);
+    ASSERT_TRUE(dc_gpu_paint_material(g,20,20,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,c,err,sizeof(err)));ASSERT_EQ(c->cells[source].fluid_mass,0u);
+    ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(g,0,energy,4096,err,sizeof(err)));ASSERT_EQ(energy[source],0.f);
+    ASSERT_TRUE(dc_gpu_paint_material(g,20,20,0,DC_MATERIAL_WATER,err,sizeof(err)));
+    ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(g,0,energy,4096,err,sizeof(err)));ASSERT_EQ(energy[source],0.f);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
+}
+static void test_replacing_physical_chunk_starts_its_new_liquid_at_ambient(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    uint32_t source=20*64+20;c->cells[source].fluid_mass=65536;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_thermal_gpu_seed_water(g,0,source,100.f,err,sizeof(err)));
+    memset(c,0,sizeof(*c));c->cells[source+1].fluid_mass=65536;
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err)));
+    float energy[4096];ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(g,0,energy,4096,err,sizeof(err)));
+    for(uint32_t i=0;i<4096;i++) ASSERT_EQ(energy[i],0.f);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);
     RUN(test_wetting_moves_exact_water_and_enthalpy_into_wood_before_conduction);
     RUN(test_actual_parallel_water_transport_preserves_excess_heat_and_custom_pigment);
+    RUN(test_erased_hot_water_cannot_reappear_when_painted_at_ambient);
+    RUN(test_replacing_physical_chunk_starts_its_new_liquid_at_ambient);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
