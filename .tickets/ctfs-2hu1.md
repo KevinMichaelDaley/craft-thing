@@ -67,3 +67,7 @@ Admission compatibility complete:16 existing cases pass (arena4, ownership6, bru
 **2026-10-25T05:10:54Z**
 
 Feedback RED42c67e8 now GREEN: permanent make test_heat_bench passes18 total (6 CPU reference +12 actual displayed Vulkan), zero core/sync validation errors. GPU hover numbers match solid/liquid inventory and change with target while pause preserves exact payload/water heat; actual captures inspected (water317.1K/100%, dry probed wood296.0K/0%). Renderer adapter is separate and solver no longer binds framebuffer. Fixture saturation amount corrected from mistaken0.35 assumption to actual wood moisture_capacity0.5;100% expectation/tolerances unchanged. Visual cases added to test_ui/test_quarter_native, reference6 to test. Next water-pour scene capture and fresh graphical timings; module still open.
+
+**2026-10-25T05:20:25Z**
+
+Actual placement-pour integration passes alongside original bench case (2/2 native/core+sync, no warnings/errors). Radius3 water brush above warmed wood injects29 units; next physical interval retains exact1900544 Q16 water, energy discrepancy-0.000042149 vs locked0.02 absolute tolerance, wood295.968906K ->295.936791K with16 bound quanta and unchanged identity. After60 further physical steps actual capture shows294.7K/3.8%wetness and water flowing into basin. Added acceptance coverage uses existing GREEN kernels, no new runtime implementation required. Cold fixture fixed to supply logical chunk coords to export API. Next normal graphical full-frame measurements.

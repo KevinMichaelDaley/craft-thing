@@ -91,6 +91,17 @@ All 18 pass with core/synchronization validation in
 `build/thermal_feedback_module_display.log`. Performance and the remaining
 ownership/edit/save interactions are still acceptance work, not waived gates.
 
+The placement-path pour case also passes: a radius-three water brush above
+warmed wood injects 29 finite water units. After one real physical interval,
+the four-chunk reference region retains exactly 1,900,544 Q16 water quanta and
+energy differs from its explicit ambient-water input by -0.000042149 units
+(locked absolute tolerance 0.02). The wood cools from 295.968906 K to 295.936791 K,
+absorbs 16 quanta and retains identity. After another second, the actual wetness
+capture shows about 294.7 K / 3.8% and water flowing into the basin:
+`build/screenshots/thermal_bench_water_pour.bmp`. The cold snapshot helper passes
+the explicit logical chunk coordinates required by the physical download/export
+API. This adds one integration case to the standalone/display batteries.
+
 Remaining in this milestone: complete liquid regression/interaction coverage,
 temperature/wetness inspection, natural edits/owner admission and the persistence
 the exposed scene needs, plus reference budgets and passing displayed timing.

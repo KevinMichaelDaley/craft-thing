@@ -4,12 +4,40 @@
 #undef main
 #include <math.h>
 #include "../../src/app/level.c"
+#include "ferrum/fire/material_profile.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include <sys/stat.h>
 
 static bool bench_capture(uint32_t *pixels,const char *path) {
     SDL_Surface *surface=SDL_CreateRGBSurfaceWithFormatFrom(pixels,480,270,32,480*4,SDL_PIXELFORMAT_ABGR8888);
     bool okay=surface&&SDL_SaveBMP(surface,path)==0;if(surface) SDL_FreeSurface(surface);return okay;
+}
+/* Cold reference snapshots only. Runtime neither reads nor constructs these
+ * cell/parcel lists; its transfer kernels are the subject of this check. */
+static bool bench_budget(dc_level_view_t *view,uint64_t *water,double *energy,char *err,uint32_t cap) {
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));if(!chunk) return false;
+    uint64_t mass=0;double total=0;bool okay=true;
+    const double water_cp=fr_reactive_profile(DC_MATERIAL_WATER)->heat_capacity;
+    for(int64_t y=0;okay&&y<2;y++) for(int64_t x=1;okay&&x<3;x++) {
+        uint32_t slot=0;fr_reactive_chunk_t channel={0};float excess[4096];
+        chunk->coord=(dc_chunk_coord_t){x,y};
+        okay=dc_chunk_table_find(&view->table,(dc_chunk_coord_t){x,y},&slot)&&
+            dc_gpu_download_chunk(view->gpu,slot,chunk,err,cap)&&
+            fr_gpu_reactive_export_chunk(view->gpu,slot,chunk,&channel,err,cap)&&
+            fr_thermal_gpu_read_water_chunk(view->gpu,slot,excess,4096,err,cap);
+        if(okay) {
+            for(uint32_t i=0;i<4096;i++) {
+                mass+=chunk->cells[i].fluid_mass;
+                total+=(double)chunk->cells[i].fluid_mass/65536.*water_cp*FR_THERMAL_AMBIENT_K+excess[i];
+            }
+            for(uint32_t i=0;i<channel.count;i++) {
+                mass+=channel.attachments[i].record.state.bound_water_fp;
+                total+=channel.attachments[i].record.state.thermal_energy;
+            }
+        }
+        fr_reactive_chunk_release(&channel);
+    }
+    free(chunk);if(okay) {*water=mass;*energy=total;}return okay;
 }
 
 static void test_interactive_bench_has_finite_sources_wet_control_probe_and_stable_pause(void) {
@@ -42,7 +70,43 @@ static void test_interactive_bench_has_finite_sources_wet_control_probe_and_stab
     ASSERT_TRUE(dc_level_view_heat_overlay(view,0)&&dc_level_view_tick(view,err,sizeof(err)));
     free(before);free(after);ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));PASS();
 }
+static void test_placement_water_pour_cools_and_wets_wood_with_closed_reference_budgets(void) {
+    char err[256]={0},directory[]="build/thermal_pour_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view=dc_level_view_create(directory,314,err,sizeof(err));ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_wait_visible(view,120000,err,sizeof(err))&&dc_level_view_setup_heat_bench(view,err,sizeof(err)));
+    uint32_t slot=0;ASSERT_TRUE(dc_chunk_table_find(&view->table,(dc_chunk_coord_t){2,1},&slot));
+    ASSERT_TRUE(dc_level_view_heat_probe(view,140,192,true));
+    for(uint32_t i=0;i<12;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_heat_probe(view,140,192,false));
+    fr_reactive_record_t before,after;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(view->gpu,slot,12,&before,&found,err,sizeof(err))&&found);
+    double before_temperature=before.state.thermal_energy/fr_reactive_state_heat_capacity(&before.state);
+    uint64_t initial_water=0,final_water=0;double initial_energy=0,final_energy=0;
+    ASSERT_TRUE(bench_budget(view,&initial_water,&initial_energy,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view,140,188,3,DC_MATERIAL_WATER,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(view->gpu,slot,12,&after,&found,err,sizeof(err))&&found);
+    ASSERT_TRUE(after.state.bound_water_fp>before.state.bound_water_fp);
+    ASSERT_EQ(after.state.parcel_id_low,before.state.parcel_id_low);ASSERT_EQ(after.state.parcel_id_high,before.state.parcel_id_high);
+    double after_temperature=after.state.thermal_energy/fr_reactive_state_heat_capacity(&after.state);
+    ASSERT_TRUE(after_temperature<before_temperature-1e-4);
+    ASSERT_TRUE(bench_budget(view,&final_water,&final_energy,err,sizeof(err)));
+    uint32_t cells=0;for(int y=-3;y<=3;y++) for(int x=-3;x<=3;x++) cells+=x*x+y*y<=9;
+    ASSERT_EQ(final_water-initial_water,(uint64_t)cells*65536u);
+    double injected=cells*(double)fr_reactive_profile(DC_MATERIAL_WATER)->heat_capacity*FR_THERMAL_AMBIENT_K;
+    printf("Placement pour: wood %.6fK -> %.6fK, bound water%u, mass%llu/%u, energy error%.9f\n",
+        before_temperature,after_temperature,after.state.bound_water_fp,(unsigned long long)(final_water-initial_water),cells*65536u,
+        final_energy-initial_energy-injected);
+    ASSERT_TRUE(fabs(final_energy-initial_energy-injected)<.02);
+    for(uint32_t i=0;i<60;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
+    uint32_t *pixels=malloc(480u*270u*4u);ASSERT_TRUE(pixels);
+    ASSERT_TRUE(dc_level_view_heat_overlay(view,2)&&dc_level_view_tick(view,err,sizeof(err))&&dc_level_view_pixels(view,pixels,480u*270u,err,sizeof(err)));
+    mkdir("build/screenshots",0777);ASSERT_TRUE(bench_capture(pixels,"build/screenshots/thermal_bench_water_pour.bmp"));
+    free(pixels);ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));PASS();
+}
 int main(void) {
+    setvbuf(stdout,NULL,_IOLBF,0);
     RUN(test_interactive_bench_has_finite_sources_wet_control_probe_and_stable_pause);
+    RUN(test_placement_water_pour_cools_and_wets_wood_with_closed_reference_budgets);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
