@@ -201,3 +201,20 @@ Both HLLC and implicit policies retain bit-exact closed chamber state, then move
 finite colored gas when opened. The native battery now passes8 cases. The scene
 will use precharged hot colored reservoirs and a controlled enclosure vent; this
 fixture valve does not yet claim a constructed mechanical-door implementation.
+
+The real elapsed-clock CLI probe exposed a new force-work bug, not a baseline
+failure: a single wall-blocked hot cell gained81.0000381 energy units and normal
+momentum -9.00000191 in one0.02s step. Implicit pressure now uses the wall's force
+reaction, and external work uses pressure-constrained velocity; rejected provisional
+kick energy is removed separately through compensated accumulation. The locked
+cell is now bit-exact, with zero energy change/momentum/work. All11 native cases
+pass, and the30-tick enclosure still rises and passes its stock/work budgets.
+
+The elapsed-clock closed scene is still RED:519.603/623.152ms before that fix,
+349.703/386.935ms afterward. The permanent `smoke_box_frame` stage probe shows
+~29ms first-tick rigid preparation, then~1.5ms rigid work. Empty water phases
+cost~3.7ms at1/60s and~40ms at0.25s because the generic initial lake/spring latches
+fluid work before being replaced by the dry fixture. Gas catch-up also remains
+costly. The next cold-authoring optimization avoids generating unrelated water
+and prepares static metadata before starting the physical clock. It does not
+disable water painting, alter substeps or change the clock.

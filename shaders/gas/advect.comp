@@ -18,13 +18,16 @@ GasFlux gas_advective_neighbor(Gas own,Primitive center,float energy,ivec2 p,ive
 void main() {
     uint index=gas_index();if(index>=params.width*params.height) return;
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
-    if(atlas==0xffffffffu) {acoustic[index]=vec4(0);provisional[index]=vec4(0);return;}
+    if(atlas==0xffffffffu) {acoustic[index]=vec4(0);provisional[index]=vec4(0);force[index]=vec2(0);return;}
     Gas own=gas_source(p);Primitive center=gas_cached(p);float energy=gas_energy(own);GasFlux net=gas_empty_flux();
     if(own.geometry.x>0.) for(uint d=0u;d<4u;d++) {
         GasFlux face=gas_advective_neighbor(own,center,energy,p,p+gas_direction(d),d/2u,(d&1u)==0u?1.:-1.);
         net.species+=face.species;net.dynamics+=face.dynamics;net.pigment+=face.pigment;
     }
-    float dt=uintBitsToFloat(params.seconds),work=0.;Gas value=gas_buoyancy(gas_add_flux(own,net,dt),dt,work);
+    float dt=uintBitsToFloat(params.seconds),work=0.,impulse=0.;Gas transported=gas_add_flux(own,net,dt);
+    Gas value=gas_buoyancy(transported,dt,work,impulse);float transported_mass=gas_mass(transported);
+    force[index]=vec2(impulse,transported_mass>0.?transported.dynamics.w/transported_mass:0.);
+    value.geometry.w=transported.geometry.w;
     float mass=gas_mass(own);
     float enthalpy=mass>0.?(energy+gas_parameter(FR_GAS_KINETIC_WORD)*center.hydro.w*own.geometry.x)/mass:0.;
     acoustic[index]=vec4(enthalpy,center.hydro.w,gas_specific_capacity(value),gas_specific_capacity(own));

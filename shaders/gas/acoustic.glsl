@@ -7,7 +7,8 @@ layout(set=0,binding=16,std430) restrict buffer Correction {float correction[];}
 layout(set=0,binding=17,std430) restrict buffer CorrectionData {vec4 correction_data[];};
 layout(set=0,binding=18,std430) restrict buffer ActiveMask {uint active_mask[];};
 layout(set=0,binding=19,std430) restrict buffer ActiveTiles {uint active_tiles[];};
-layout(set=0,binding=20,std430) restrict buffer Indirect {uint indirect[];};
+layout(set=0,binding=20,std430) restrict buffer Force {vec2 force[];};
+layout(set=0,binding=21,std430) restrict buffer Indirect {uint indirect[];};
 Gas gas_provisional(uint atlas) {return (params.bank&1u)==0u?bank1[atlas]:bank0[atlas];}
 void gas_write_provisional(uint atlas,Gas value) {
     if((params.bank&1u)==0u) bank1[atlas]=value;else bank0[atlas]=value;
