@@ -51,3 +51,7 @@ Water GREEN regression:20 existing cases pass across native thermal2, native int
 **2026-10-25T04:38:05Z**
 
 Edit-boundary REDc31e592 exposed stale liquid heat both after AIR erase and physical chunk replacement. GREEN now4/4 native Wayland/core+sync water cases pass: painting ambient water preserves existing heat while adding ambient mass, erasure removes proportional heat, fresh water cannot resurrect it, and validated completed physical-slot replacement clears its old liquid channel. Heat/removal remains an explicit external authoring sink; chunk persistence still pending.
+
+**2026-10-25T04:47:45Z**
+
+Liquid-stage REFACTOR/full regression boundary e8e22ea: make -j8 -i test finished718 C passes and exactly the two known ctr-ojvy authored-stage failures, zero compiler warnings. Log build/thermal_water_full_suite.log. Native liquid4 and existing thermal/fluid20 cases passed separately with core/sync validation. New wood/stone admission RED source is queued, not yet run/claimed.

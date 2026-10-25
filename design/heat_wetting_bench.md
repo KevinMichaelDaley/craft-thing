@@ -57,6 +57,14 @@ worst-frame target. The largest traced tail included 20.553 ms input processing
 and 25.342 ms presentation/physical work. These failures remain part of the
 record; no module or epic performance acceptance is claimed.
 
+Liquid-stage regression boundary (`e8e22ea`): the full headless battery reports
+718 C passes, the same two `ctr-ojvy` authored-stage failures, and zero compiler
+warnings (`build/thermal_water_full_suite.log`). Four real Wayland liquid cases
+pass with core/synchronization validation, including erasure and physical-slot
+replacement. Separate existing thermal, bench, transport, prefix, pigment and
+partial-recipient regressions report 20 passes without validation errors. These
+checks cover the liquid substage, not completion of this visible milestone.
+
 Remaining in this milestone: complete liquid regression/interaction coverage,
 temperature/wetness inspection, natural edits/owner admission and the persistence
 the exposed scene needs, plus reference budgets and passing displayed timing.
