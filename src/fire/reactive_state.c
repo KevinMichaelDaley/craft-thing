@@ -29,6 +29,10 @@ static double capacity(const fr_reactive_state_t *s) {
 double fr_reactive_state_heat_capacity(const fr_reactive_state_t *s) {
     return s&&fr_reactive_profile(s->material)?capacity(s):0;
 }
+double fr_reactive_state_energy(const fr_reactive_state_t *s) {return s?s->thermal_energy:0;}
+bool fr_reactive_state_add_heat(fr_reactive_state_t *s,double energy,char *err,uint32_t cap) {
+    (void)s;(void)energy;return error(err,cap,"Compensated heat is not implemented");
+}
 
 bool fr_reactive_state_default(uint32_t material,uint32_t mass,uint32_t water,
                                 float temperature,uint64_t id,fr_reactive_state_t *out,
@@ -66,7 +70,7 @@ bool fr_reactive_state_valid(const fr_reactive_state_t *s,char *err,uint32_t cap
     if(!s||!fr_reactive_profile(s->material)||(s->flags&~31u)!=0||
        identity(s->parcel_id_low,s->parcel_id_high)==0||identity(s->origin_id_low,s->origin_id_high)==0)
         return error(err,cap,"Invalid reactive identity/flags");
-    if(s->identity_reserved[0]||s->identity_reserved[1]||s->reserved[0]||s->reserved[1]||s->reserved[2])
+    if(s->identity_reserved[0]||s->identity_reserved[1]||s->reserved[0]||s->reserved[1]||s->thermal_energy_residual!=0.f)
         return error(err,cap,"Nonzero reactive reserved fields");
     float values[8];memcpy(values,&s->thermal_energy,sizeof(values));
     for(unsigned i=0;i<8;i++) if(!isfinite(values[i])||values[i]<0)

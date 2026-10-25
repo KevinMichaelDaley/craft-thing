@@ -31,7 +31,8 @@ typedef struct {
     float thermal_energy, oxidized_fraction, corroded_fraction;
     float ignition_threshold, ignition_integral;
     float coating_threshold, coating_integral, pending_shock_energy;
-    uint32_t reserved[3];
+    float thermal_energy_residual;
+    uint32_t reserved[2];
 } fr_reactive_state_t;
 
 enum { FR_REACTIVE_OWNER_CELL=1u, FR_REACTIVE_OWNER_BODY=2u,
@@ -55,6 +56,12 @@ bool fr_reactive_state_default(uint32_t material, uint32_t dry_mass_fp,
 /** Sum actual species heat capacities; dry reference mass is excluded. Missing
  * state or unknown material returns zero. This reference has no runtime readback. */
 double fr_reactive_state_heat_capacity(const fr_reactive_state_t *state);
+/** Read extensive energy including its persisted low-order remainder. */
+double fr_reactive_state_energy(const fr_reactive_state_t *state);
+/** Transactional cold/reference heat addition with compensated storage.
+ * Runtime applies the same arithmetic in its parallel GPU module. */
+bool fr_reactive_state_add_heat(fr_reactive_state_t *state,double energy,
+    char *err_buf,uint32_t err_cap);
 /** Preserve actual particle mass and old soil/sand bound water. Leaf pigment
  * flags are not moisture and are never reinterpreted or modified. */
 bool fr_reactive_state_from_particle(const dc_mpm_particle_t *particle,
