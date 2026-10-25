@@ -4,6 +4,8 @@
 #include <math.h>
 #include <sys/stat.h>
 #include "ferrum/fire/gas_gpu.h"
+#undef RUN
+#define RUN(fn) do {const char *filter=getenv("DC_GAS_TEST_FILTER");if(!filter||strstr(#fn,filter)) {printf("RUN %s\n",#fn);fn();}} while(0)
 
 static fr_gas_model_t reference_model(void) {
     fr_gas_model_t m={.kinetic_scale=1};double molecular[5]={32,28,44,18,0};
@@ -295,10 +297,11 @@ static void test_native_implicit_axis_cfl_matches_cold_oracle_in_one_positive_st
     ASSERT_TRUE(fabs(mass-4096.)<.0002&&fabs(after-before)<.02);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(input);free(expected);free(out);free(volume);free(c);dc_gpu_destroy(g);PASS();
 }
-static void sparse_footprints_match_dense(uint32_t policy,float seconds,double velocity) {
+static void sparse_footprints_match_dense(uint32_t policy,float seconds,double velocity,double kinetic_scale) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     fr_gas_model_t m=reference_model();fr_gas_state_t *input=malloc(4096*sizeof(*input)),*dense=malloc(4096*sizeof(*dense)),*out=malloc(4096*sizeof(*out));
     double *volume=malloc(4096*sizeof(*volume));ASSERT_TRUE(input&&dense&&out&&volume);
+    m.kinetic_scale=kinetic_scale;
     for(uint32_t i=0;i<4096;i++) {
         volume[i]=1;input[i]=reference_air(m,1,300,0);
         if(i%64>=12&&i%64<20&&i/64>=20&&i/64<28) input[i]=reference_air(m,1,300,velocity);
@@ -306,10 +309,11 @@ static void sparse_footprints_match_dense(uint32_t policy,float seconds,double v
     }
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,policy,err,sizeof(err)));
-    const char *names[3]={"DC_GAS_SPARSE_RHS","DC_GAS_SPARSE_ACTIVITY","DC_GAS_SPARSE_CLASSIFY"};char *saved[3]={0};
-    for(uint32_t k=0;k<3;k++) {const char *s=getenv(names[k]);saved[k]=s?SDL_strdup(s):NULL;}
+    const char *names[4]={"DC_GAS_SPARSE_RHS","DC_GAS_SPARSE_ACTIVITY","DC_GAS_SPARSE_CLASSIFY","DC_GAS_SPARSE_LARGE"};char *saved[4]={0};
+    for(uint32_t k=0;k<4;k++) {const char *s=getenv(names[k]);saved[k]=s?SDL_strdup(s):NULL;}
     for(uint32_t path=0;path<2;path++) {
-        for(uint32_t k=0;k<3;k++) ASSERT_EQ(SDL_setenv(names[k],path?"1":"0",1),0);
+        const char *control=getenv("DC_GAS_TEST_SPARSE_CONTROL");
+        for(uint32_t k=0;k<4;k++) ASSERT_EQ(SDL_setenv(names[k],path&&(!control||strcmp(control,names[k])==0)?"1":"0",1),0);
         ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_set_gravity(g,0,err,sizeof(err)));
         ASSERT_TRUE(fr_gas_gpu_gate(g,31,0,1,64,0,true,err,sizeof(err)));
         for(uint32_t step=0;step<20;step++) {
@@ -319,15 +323,25 @@ static void sparse_footprints_match_dense(uint32_t policy,float seconds,double v
         }
         ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,path?out:dense,4096,err,sizeof(err)));
     }
-    for(uint32_t k=0;k<3;k++) {ASSERT_EQ(SDL_setenv(names[k],saved[k]?saved[k]:"1",1),0);SDL_free(saved[k]);}
+    for(uint32_t k=0;k<4;k++) {ASSERT_EQ(SDL_setenv(names[k],saved[k]?saved[k]:"1",1),0);SDL_free(saved[k]);}
+    if(memcmp(dense,out,4096*sizeof(*out))) {
+        uint32_t printed=0;
+        for(uint32_t i=0;i<4096&&printed<8;i++) {
+            double a[11],b[11];memcpy(a,dense+i,sizeof(a));memcpy(b,out+i,sizeof(b));
+            for(uint32_t k=0;k<11&&printed<8;k++) if(memcmp(a+k,b+k,8)) {printf("Footprint difference cell%u word%u %.17g %.17g delta%.9g\n",i,k,a[k],b[k],b[k]-a[k]);printed++;}
+        }
+    }
     ASSERT_EQ(memcmp(dense,out,4096*sizeof(*out)),0);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(input);free(dense);free(out);free(volume);free(c);dc_gpu_destroy(g);PASS();
 }
 static void test_native_sparse_footprints_match_dense_after_gravity_and_valve_changes(void) {
-    sparse_footprints_match_dense(FR_GAS_PRESSURE_IMPLICIT,.001f,2);
+    sparse_footprints_match_dense(FR_GAS_PRESSURE_IMPLICIT,.001f,2,1);
 }
 static void test_native_large_cfl_sparse_footprints_match_dense_after_gravity_and_valve_changes(void) {
-    sparse_footprints_match_dense(FR_GAS_PRESSURE_LARGE_CFL,.05f,25);
+    sparse_footprints_match_dense(FR_GAS_PRESSURE_LARGE_CFL,.05f,25,1);
+}
+static void test_native_prototype_sparse_large_footprints_match_dense(void) {
+    sparse_footprints_match_dense(FR_GAS_PRESSURE_LARGE_CFL,.01f,100,1./512.);
 }
 static void test_native_large_cfl_packet_matches_composed_oracle_in_one_step(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
@@ -397,5 +411,7 @@ int main(void) {
     RUN(test_native_subnormal_colored_stock_is_valid_and_retained_at_rest);
     RUN(test_native_large_cfl_subnormal_packet_keeps_one_step_and_closed_stock);
     RUN(test_native_large_cfl_sparse_footprints_match_dense_after_gravity_and_valve_changes);
-    printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
+    RUN(test_native_receding_gate_matches_real_reflecting_wall);
+    RUN(test_native_prototype_sparse_large_footprints_match_dense);
+    printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0||g_pass==0;
 }

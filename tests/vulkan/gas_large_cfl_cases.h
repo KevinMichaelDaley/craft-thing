@@ -1,5 +1,25 @@
 #ifndef GAS_LARGE_CFL_CASES_H
 #define GAS_LARGE_CFL_CASES_H
+static void test_native_receding_gate_matches_real_reflecting_wall(void) {
+    char err[256]={0};fr_gas_model_t m=reference_model();
+    fr_gas_state_t *reference=malloc(4096*sizeof(*reference)),*out=malloc(4096*sizeof(*out)),*input=malloc(4096*sizeof(*input));
+    double *volume=malloc(4096*sizeof(*volume));dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(reference&&out&&input&&volume&&c);
+    for(uint32_t path=0;path<2;path++) {
+        dc_gpu_t *g=NULL;
+        for(uint32_t i=0;i<4096;i++) {
+            bool wall=path==1u&&i%64u>=32u;volume[i]=wall?0:1;
+            c->cells[i]=wall?(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN}:(dc_cell_t){0};
+            input[i]=wall?(fr_gas_state_t){0}:reference_air(m,1,300,i%64u<32u?-30:0);
+        }
+        ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+        ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err))&&fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
+        if(path==0u) ASSERT_TRUE(fr_gas_gpu_gate(g,31,0,1,64,0,true,err,sizeof(err)));
+        ASSERT_TRUE(fr_gas_gpu_step(g,.001f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,path?out:reference,4096,err,sizeof(err))&&present(g,err,sizeof(err)));
+        dc_gpu_destroy(g);
+    }
+    for(uint32_t y=0;y<64;y++) ASSERT_EQ(memcmp(reference+y*64u,out+y*64u,32u*sizeof(*out)),0);
+    free(reference);free(out);free(input);free(volume);free(c);PASS();
+}
 static void test_native_large_cfl_subnormal_packet_keeps_one_step_and_closed_stock(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));
     fr_gas_state_t *input=calloc(4096,sizeof(*input)),*out=calloc(4096,sizeof(*out));double *volume=calloc(4096,sizeof(*volume));
