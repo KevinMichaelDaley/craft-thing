@@ -21,3 +21,9 @@ See the modular delivery section of design/fire_smoke_reactive_materials.md. Thi
 
 RED-GREEN-REFACTOR. Player can ignite the pile, see actual flame/smoke, feel measured warmth, douse ordinary fuel and observe progressive char/ash. Finite fuel/oxygen/heat/product budgets, stable seeded ignition, oxygen starvation/vented recovery and maintained-wet controls are tested. Stone/cleared containment limits spread; a fuel bridge permits it. Ash stays loose and authored colors/loaded-terrain semantics remain correct. Provide a repeatable interactive demo, permanent displayed integration tests/captures and complete-frame performance evidence on this machine. No cosmetic-only fire, instant whole-component burning, future-material expansion or completion claim for all owners, forest scenario, Greek fire or siege features. Continue to the next visible feature only after this slice is usable, validated and pushed.
 
+
+## Notes
+
+**2026-10-25T02:56:00Z**
+
+Start after the smoke/ventilation box is delivered. This is the first contained gameplay fire, not a claim that arbitrary-body combustion, all forest scenarios, oil or siege mechanics are complete.
