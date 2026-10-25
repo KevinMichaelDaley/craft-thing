@@ -1754,8 +1754,8 @@ build/thermal_stream_tests: tests/fire/thermal_stream_tests.c tests/world/stream
 test: build/thermal_stream_tests
 build/thermal_precision_tests: tests/fire/thermal_precision_tests.c $(REACTIVE_STATE_SRC)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(REACTIVE_STATE_SRC) -o $@ -lm
-build/gas_reference_tests: tests/fire/gas_reference_tests.c src/fire/gas.c include/ferrum/fire/gas.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c -o $@ -lm
+build/gas_reference_tests: tests/fire/gas_reference_tests.c src/fire/gas.c src/fire/gas_reference.c src/fire/gas_internal.h include/ferrum/fire/gas.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c src/fire/gas_reference.c -o $@ -lm
 test: build/thermal_precision_tests
 build/stream.o: include/ferrum/fire/thermal_checkpoint.h
 build/reactive_chunk.o: src/fire/reactive_chunk.c include/ferrum/fire/reactive_chunk.h include/ferrum/fire/reactive_state.h
