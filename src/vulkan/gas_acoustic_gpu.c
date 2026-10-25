@@ -28,6 +28,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->transport_metadata);dc_gpu_address_buffer_destroy(g,&t->transport_work);
     fr_renderer_compute_destroy(g,&t->restrict_pressure);fr_renderer_compute_destroy(g,&t->coarse_sor);fr_renderer_compute_destroy(g,&t->prolong_pressure);
     fr_renderer_compute_destroy(g,&t->stage_transport);
+    fr_renderer_compute_destroy(g,&t->practical_factor);fr_renderer_compute_destroy(g,&t->practical_prefix);fr_renderer_compute_destroy(g,&t->practical_apply);
     for(uint32_t i=0;i<11;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
     dc_gpu_address_buffer_destroy(g,&t->indirect);
     memset(t,0,sizeof(*t));
@@ -60,7 +61,8 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     fr_renderer_compute_t *pipelines[]={&t->advect,&t->initialize,&t->rhs,&t->classify,&t->compact,&t->sor,&t->correct,&t->residual,&t->finish,&t->activity,&t->activity_compact,&t->final_compact,&t->commit,&t->clear_pressure,&t->prepare_pressure,&t->activity_candidates,&t->transport_factor,&t->transport_prefix,&t->transport_apply,&t->transport_metadata};
     const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_classify","pressure_compact","pressure_sor","pressure_correct","pressure_residual","acoustic_finish","activity","activity_compact","final_compact","sparse_commit","pressure_clear","pressure_prepare","activity_candidates","transport_factor","transport_prefix","transport_apply","transport_metadata"};
     const char *wide=getenv("DC_GAS_WIDE_SCAN");
-    if(wide&&strcmp(wide,"0")!=0&&subgroup.subgroupSize>=4u&&properties.limits.maxComputeWorkGroupInvocations>=256u&&properties.limits.maxComputeWorkGroupSize[0]>=256u) {
+    bool use_wide=wide&&strcmp(wide,"0")!=0&&subgroup.subgroupSize>=4u&&properties.limits.maxComputeWorkGroupInvocations>=256u&&properties.limits.maxComputeWorkGroupSize[0]>=256u;
+    if(use_wide) {
         paths[17]="transport_prefix_wide";
         paths[16]="transport_factor_wide";
     }
@@ -76,6 +78,15 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         if(!fr_renderer_compute_init(g,coarse_pipelines[i],buffers,25,16,path,err,cap)) goto fail;
     }
     if(t->supports_large_transport&&!fr_renderer_compute_init(g,&t->stage_transport,buffers,25,16,"build/shaders/gas_transport_stage.comp.spv",err,cap)) goto fail;
+    if(t->supports_large_transport) {
+        fr_renderer_compute_t *practical[]={&t->practical_factor,&t->practical_prefix,&t->practical_apply};
+        const char *names[]={use_wide?"transport_factor_compact_wide":"transport_factor_compact",
+            use_wide?"transport_prefix_compact_wide":"transport_prefix_compact","transport_apply_compact"};
+        for(uint32_t i=0;i<3;i++) {
+            char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",names[i]);
+            if(!fr_renderer_compute_init(g,practical[i],buffers,25,16,path,err,cap)) goto fail;
+        }
+    }
     t->ready=true;return true;
 fail:
     fr_gas_acoustic_destroy(g,t);return false;
@@ -151,13 +162,13 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
                 flags|=FR_GAS_STAGED_RATES_BIT;
                 dispatch(g,&t->stage_transport,gx,gy,dt,flags);
             }
-            dispatch(g,&t->transport_factor,lines,1u,dt,flags);
+            dispatch(g,t->practical?&t->practical_factor:&t->transport_factor,lines,1u,dt,flags);
             if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,5u+axis*4u);
-            dispatch(g,&t->transport_prefix,lines,1u,dt,flags);
+            dispatch(g,t->practical?&t->practical_prefix:&t->transport_prefix,lines,1u,dt,flags);
             if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,6u+axis*4u);
-            dispatch(g,&t->transport_prefix,lines,1u,dt,flags|16u|(fused?FR_GAS_FUSED_APPLY_BIT:0u));
+            dispatch(g,t->practical?&t->practical_prefix:&t->transport_prefix,lines,1u,dt,flags|16u|(fused?FR_GAS_FUSED_APPLY_BIT:0u));
             if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,7u+axis*4u);
-            if(!fused) dispatch(g,&t->transport_apply,gx,gy,dt,flags);
+            if(!fused) dispatch(g,t->practical?&t->practical_apply:&t->transport_apply,gx,gy,dt,flags);
             if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,8u+axis*4u);
         }
         indirect_dispatch(g,t,&t->transport_metadata,dt,bank,32);
@@ -187,7 +198,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
                 indirect_dispatch(g,t,&t->sor,dt,bank,0);indirect_dispatch(g,t,&t->sor,dt,bank|2u,0);
             }
             dispatch(g,&t->restrict_pressure,tiles,1u,dt,bank);
-            for(uint32_t sweep=0;sweep<128u;sweep++) {
+            for(uint32_t sweep=0;sweep<32u;sweep++) {
                 dispatch(g,&t->coarse_sor,(tiles+63u)/64u,1u,dt,bank);
                 dispatch(g,&t->coarse_sor,(tiles+63u)/64u,1u,dt,bank|2u);
             }

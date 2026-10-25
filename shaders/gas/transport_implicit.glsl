@@ -1,6 +1,10 @@
 #include "transport_float_controls.glsl"
 #include "acoustic.glsl"
+#ifdef FR_GAS_COMPACT_WORK
+struct TransportCell {vec4 species,dynamics,visual,mass;};
+#else
 struct TransportCell {vec4 species,dynamics,visual,mass,energy;};
+#endif
 layout(set=0,binding=24,std430) restrict buffer TransportWork {TransportCell transport_work[];};
 uint transport_axis() {return (params.bank>>3u)&1u;}
 uint transport_position(ivec2 p) {return transport_axis()==0u?uint(p.y)*params.width+uint(p.x):uint(p.x)*params.height+uint(p.y);}

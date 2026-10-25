@@ -11,6 +11,7 @@ typedef struct {
     fr_renderer_compute_t transport_factor,transport_prefix,transport_apply,transport_metadata;
     fr_renderer_compute_t restrict_pressure,coarse_sor,prolong_pressure;
     fr_renderer_compute_t stage_transport;
+    fr_renderer_compute_t practical_factor,practical_prefix,practical_apply;
     dc_gpu_address_buffer_t transport_work;
     VkBuffer state_bank[2];VkDeviceSize state_bytes;
     dc_gpu_address_buffer_t fields[11],indirect;

@@ -10,9 +10,14 @@ GasFlux shuffle_up(GasFlux value,uint offset) {
 }
 void cell_map(ivec2 p,out vec2 factor,out GasFlux value,out bool moving) {
     TransportCell source=transport_work[transport_position(p)];bool backward=transport_direction()<0;
-    vec4 mass=source.mass,energy=source.energy;
+    vec4 mass=source.mass;
+#ifdef FR_GAS_COMPACT_WORK
+    vec4 energy=mass;moving=source.visual.w!=0.;
+#else
+    vec4 energy=source.energy;moving=energy.w!=0.;
+#endif
     factor=backward?vec2(mass.z,energy.z):vec2(mass.x,energy.x);
-    moving=energy.w!=0.;value=GasFlux(source.species,source.dynamics,source.visual.rgb);
+    value=GasFlux(source.species,source.dynamics,source.visual.rgb);
     value=transport_scale(value,backward?vec2(1):vec2(mass.y,energy.y));
 }
 void main() {
@@ -56,7 +61,8 @@ void main() {
         ivec2 p=transport_point(line,cell);vec2 own_factor;GasFlux own_value;bool own_moving;cell_map(p,own_factor,own_value,own_moving);
         prefix=transport_add(own_value,transport_scale(prefix,own_factor));
         uint index=transport_position(p);transport_work[index].species=prefix.species;
-        transport_work[index].dynamics=prefix.dynamics;transport_work[index].visual=vec4(prefix.pigment,0);
+        transport_work[index].dynamics=prefix.dynamics;
+        transport_work[index].visual=vec4(prefix.pigment,transport_work[index].visual.w);
     }
     if((params.bank&FR_GAS_FUSED_APPLY_BIT)!=0u) {
         memoryBarrierBuffer();barrier();

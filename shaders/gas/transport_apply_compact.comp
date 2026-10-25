@@ -1,0 +1,9 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#define FR_GAS_COMPACT_WORK 1
+#include "transport_implicit.glsl"
+#include "transport_apply_body.glsl"
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    transport_apply_cell(ivec2(int(index%params.width),int(index/params.width)));
+}

@@ -87,3 +87,7 @@ Offset sealed-wall regression GREEN: restricting coarse correction to fully open
 **2026-10-25T21:37:45Z**
 
 Sustained actual-display1000-frame elapsed-clock open/vent run (no GPU trace, staged-rate experiment off) completes without numerical failure:55.239ms mean64.393ms worst.100-frame blocks settle55.7–56.1ms after first48.9ms block; no delayed tail runaway. Four paused captures identical; final capture inspected: smoke mixes and escapes vent, reservoir checkerboard gone. Original retry stall removed; steady gas cost remains over30ms. Next smaller bounded coarse budget and practical transport work reduction; no stock/time/resolution drop and no module closure.
+
+**2026-10-25T21:44:08Z**
+
+Practical64-byte scratch (duplicate mass/thermal coefficients removed) passes4 actual displayed practical gates unchanged;120-interval worst call17.941ms. Sustained actual untraced1000-frame open run improves53.448/61.982 to50.170ms mean59.897ms worst, four paused captures identical. Still RED vs30ms. Next line-local whole-axis kernel fusion to reuse scratch/cache and remove separate factor/forward/back/apply dispatch traffic; no new gameplay module or altered clock/stock.

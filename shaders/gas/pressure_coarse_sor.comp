@@ -10,5 +10,5 @@ void main() {
         uint j=d==0u?at+1u:(d==1u?at-1u:(d==2u?at+width:at-width));
         rhs+=row.coefficients[d]*coarse[j].data.z;
     }
-    coarse[at].data.z+=1.5*(rhs/row.data.y-row.data.z);
+    coarse[at].data.z+=1.8*(rhs/row.data.y-row.data.z);
 }

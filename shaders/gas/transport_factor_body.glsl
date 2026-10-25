@@ -39,9 +39,14 @@ void main() {
         if((params.bank&FR_GAS_STAGED_RATES_BIT)==0u) stencil[index]=face;
         uint atlas=gas_atlas(p);GasFlux value=atlas==0xffffffffu?gas_empty_flux():transport_state(gas_provisional(atlas));
         peak=max(peak,max(value.species.z,value.dynamics.x));
+#ifdef FR_GAS_COMPACT_WORK
+        transport_work[transport_position(p)]=TransportCell(value.species,value.dynamics,
+            vec4(value.pigment,any(notEqual(face,vec4(0)))?1.:0.),vec4(lower.x,diagonal.x,upper.x,previous.x));
+#else
         transport_work[transport_position(p)]=TransportCell(value.species,value.dynamics,
             vec4(value.pigment,any(notEqual(face,vec4(0)))?1.:0.),
             vec4(lower.x,diagonal.x,upper.x,previous.x),vec4(lower.y,diagonal.y,upper.y,previous.y));
+#endif
         mass=matrix_product(vec4(diagonal.x,-lower.x*previous.x,1,0),mass);
         energy=practical?mass:matrix_product(vec4(diagonal.y,-lower.y*previous.y,1,0),energy);
     }
@@ -61,16 +66,26 @@ void main() {
     vec2 prior_inverse=vec2(mass.z/mass.x,energy.z/energy.x);
     for(uint cell=begin;cell<end;cell++) {
         ivec2 p=transport_point(line,cell);uint index=uint(p.y)*params.width+uint(p.x);
-        TransportCell stored=transport_work[transport_position(p)];vec4 saved_mass=stored.mass,saved_energy=stored.energy;
+        TransportCell stored=transport_work[transport_position(p)];vec4 saved_mass=stored.mass;
+#ifdef FR_GAS_COMPACT_WORK
+        vec4 saved_energy=saved_mass;
+#else
+        vec4 saved_energy=stored.energy;
+#endif
         vec2 lower=vec2(saved_mass.x,saved_energy.x),diagonal=vec2(saved_mass.y,saved_energy.y);
         vec2 upper=vec2(saved_mass.z,saved_energy.z),previous=vec2(saved_mass.w,saved_energy.w);
         vec2 inverse=vec2(1)/(diagonal-lower*previous*prior_inverse);
         if(any(lessThanEqual(inverse,vec2(0)))||any(isnan(inverse))||any(isinf(inverse))) {gas_error(index);atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],FR_GAS_REJECT_FACTOR);inverse=vec2(0);}
         GasFlux value=GasFlux(stored.species,stored.dynamics,stored.visual.rgb);
         value.species.z*=trace_scale;value.dynamics.x*=trace_scale;value.pigment*=trace_scale;
+#ifdef FR_GAS_COMPACT_WORK
+        transport_work[transport_position(p)]=TransportCell(value.species,value.dynamics,vec4(value.pigment,stored.visual.w),
+            vec4(lower.x*inverse.x,inverse.x,upper.x*inverse.x,trace_scale));
+#else
         transport_work[transport_position(p)]=TransportCell(value.species,value.dynamics,vec4(value.pigment,0),
             vec4(lower.x*inverse.x,inverse.x,upper.x*inverse.x,trace_scale),
             vec4(lower.y*inverse.y,inverse.y,upper.y*inverse.y,stored.visual.w));
+#endif
         prior_inverse=inverse;
     }
 }
