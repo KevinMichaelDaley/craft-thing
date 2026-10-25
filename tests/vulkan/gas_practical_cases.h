@@ -45,6 +45,7 @@ static void test_native_practical_variable_intervals_stay_finite_without_retry_s
             ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err))&&dc_gpu_present_chunks(g,err,sizeof(err)));
             for(uint32_t i=0;i<4096;i++) {
                 fr_gas_thermo_t t;ASSERT_TRUE(fr_gas_thermodynamics(&m,out+i,1,&t,err,sizeof(err)));
+                if(!(t.temperature_K<5000&&t.pressure<ambient_pressure*10.)) printf("Practical bound step%u cell%u T%.9g pressure%.9g ambient%.9g mass%.9g\n",step,i,t.temperature_K,t.pressure,ambient_pressure,t.mass);
                 ASSERT_TRUE(t.temperature_K<5000&&t.pressure<ambient_pressure*10.);
                 double speed=hypot(out[i].momentum[0],out[i].momentum[1])/t.mass;ASSERT_TRUE(isfinite(speed)&&speed<1000.);
             }

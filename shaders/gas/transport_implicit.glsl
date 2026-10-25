@@ -13,7 +13,8 @@ vec2 transport_rates(ivec2 p,int direction) {
     if(own.metric.w<=0.||other.metric.w<=0.||!gas_gate_open(direction>0?p:q,transport_axis())) return vec2(0);
     float u=own.hydro[transport_axis()+1u],v=other.hydro[transport_axis()+1u],speed=max(abs(u),abs(v));
     float area=.5*min(own.metric.w,other.metric.w)/own.metric.w;
-    return area*vec2(speed+float(direction)*u,speed+FR_GAS_LARGE_ENERGY_ADVECTION*float(direction)*u);
+    float energy_fraction=(params.bank&FR_GAS_PRACTICAL_BIT)!=0u?1.:FR_GAS_LARGE_ENERGY_ADVECTION;
+    return area*vec2(speed+float(direction)*u,speed+energy_fraction*float(direction)*u);
 }
 GasFlux transport_add(GasFlux a,GasFlux b) {
     a.species+=b.species;a.dynamics+=b.dynamics;a.pigment+=b.pigment;return a;
@@ -21,7 +22,10 @@ GasFlux transport_add(GasFlux a,GasFlux b) {
 GasFlux transport_scale(GasFlux a,vec2 factor) {
     float energy=a.dynamics.y*factor.y;a.species*=factor.x;a.dynamics*=factor.x;a.dynamics.y=energy;a.pigment*=factor.x;return a;
 }
-GasFlux transport_state(Gas value) {return GasFlux(value.species,vec4(value.dynamics.x,gas_energy(value),value.dynamics.zw),value.visual.rgb);}
+GasFlux transport_state(Gas value) {
+    float energy=(params.bank&FR_GAS_PRACTICAL_BIT)!=0u?gas_thermal_energy(value):gas_energy(value);
+    return GasFlux(value.species,vec4(value.dynamics.x,energy,value.dynamics.zw),value.visual.rgb);
+}
 GasFlux transport_work_at(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return gas_empty_flux();
     TransportCell value=transport_work[transport_position(p)];return GasFlux(value.species,value.dynamics,value.visual.rgb);

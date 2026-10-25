@@ -39,9 +39,11 @@ bool dc_level_view_setup_smoke_box(dc_level_view_t *view,char *err,uint32_t cap)
         fr_renderer_upload_chunk_colors(view->gpu,i,chunks[i].colors,err,cap)&&dc_chunk_table_mark_dirty(&view->table,i);
     fr_gas_model_t model=dc_smoke_box_model();const char *large=getenv("DC_GAS_LARGE_CFL");
     bool large_cfl=large&&strcmp(large,"0")!=0;
+    const char *practical=getenv("DC_GAS_PRACTICAL");
+    bool bounded=practical&&strcmp(practical,"0")!=0;
     if(okay) okay=dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO)&&dc_gpu_render_chunks(view->gpu,err,cap)&&
         fr_gas_gpu_enable(view->gpu,&model,.0012f,293.15f,err,cap)&&
-        fr_gas_gpu_set_pressure_policy(view->gpu,large_cfl?FR_GAS_PRESSURE_LARGE_CFL:FR_GAS_PRESSURE_IMPLICIT,err,cap)&&fr_gas_gpu_set_gravity(view->gpu,900,err,cap);
+        fr_gas_gpu_set_pressure_policy(view->gpu,bounded?FR_GAS_PRESSURE_PRACTICAL:(large_cfl?FR_GAS_PRESSURE_LARGE_CFL:FR_GAS_PRESSURE_IMPLICIT),err,cap)&&fr_gas_gpu_set_gravity(view->gpu,900,err,cap);
     for(uint32_t i=0;okay&&i<count;i++) okay=fr_gas_gpu_seed_chunk(view->gpu,i,chunks[i].gas,chunks[i].void_fractions,4096,err,cap);
     dc_smoke_box_release(chunks,count);free(chunks);
     for(uint32_t i=0;okay&&i<3;i++) okay=valve(view,i,true,err,cap);

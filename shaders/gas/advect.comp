@@ -9,9 +9,11 @@ GasFlux gas_advective_neighbor(Gas own,Primitive center,float energy,ivec2 p,ive
     if(speed==0.) return gas_empty_flux();
     float area=.5*min(volume,other_volume);Gas other=gas_source(q);
     float first=-area*(normal*u+speed)/volume,second=-area*(normal*v-speed)/other_volume;
+    float thermal_flux=(params.bank&FR_GAS_PRACTICAL_BIT)!=0u?energy*first+gas_thermal_energy(other)*second:
+        area*speed*(gas_energy(other)/other_volume-energy/volume);
     return GasFlux(own.species*first+other.species*second,
         vec4(own.dynamics.x*first+other.dynamics.x*second,
-            area*speed*(gas_energy(other)/other_volume-energy/volume),
+            thermal_flux,
             own.dynamics.zw*first+other.dynamics.zw*second),
         own.visual.rgb*first+other.visual.rgb*second);
 }
@@ -19,12 +21,16 @@ void main() {
     uint index=gas_sparse_index(2u);if(index>=params.width*params.height) return;
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
     if(atlas==0xffffffffu) {acoustic[index]=vec4(0);provisional[index]=vec4(0);force[index]=vec2(0);return;}
-    Gas own=gas_source(p);Primitive center=gas_cached(p);float energy=gas_energy(own);GasFlux net=gas_empty_flux();
+    Gas own=gas_source(p);Primitive center=gas_cached(p);bool practical=(params.bank&FR_GAS_PRACTICAL_BIT)!=0u;
+    float energy=practical?gas_thermal_energy(own):gas_energy(own);GasFlux net=gas_empty_flux();
     if(own.geometry.x>0.) for(uint d=0u;d<4u;d++) {
         GasFlux face=gas_advective_neighbor(own,center,energy,p,p+gas_direction(d),d/2u,(d&1u)==0u?1.:-1.);
         net.species+=face.species;net.dynamics+=face.dynamics;net.pigment+=face.pigment;
     }
-    float dt=uintBitsToFloat(params.seconds),work=0.,impulse=0.;Gas transported=gas_add_flux(own,net,dt);
+    float dt=uintBitsToFloat(params.seconds),work=0.,impulse=0.,old_kinetic=practical?gas_kinetic_energy(own):0.;Gas base=own;
+    if(practical) {GasFlux remove=gas_empty_flux();remove.dynamics.y=-old_kinetic;base=gas_add_flux(base,remove,1.);}
+    Gas transported=gas_add_flux(base,net,dt);
+    if(practical) {float kinetic=gas_kinetic_energy(transported);GasFlux add=gas_empty_flux();add.dynamics.y=kinetic;transported=gas_add_flux(transported,add,1.);transported.geometry.w+=kinetic-old_kinetic;}
     if((params.bank&FR_GAS_PRACTICAL_BIT)!=0u) transported=gas_practical_state(transported);
     bool valid=false;Primitive moved=gas_primitive(transported,valid);Gas value=transported;
     if(valid) value=gas_buoyancy_cached(transported,moved,dt,work,impulse);
@@ -32,6 +38,11 @@ void main() {
     force[index]=vec2(impulse,transported_mass>0.?transported.dynamics.w/transported_mass:0.);
     value.geometry.w=transported.geometry.w;
     acoustic[index]=vec4(center.metric.x,center.hydro.w,moved.metric.y,center.metric.y);
+    if(practical) {
+        vec2 head=gas_large_pressure_state(transported,center.hydro.w);Primitive pressure_stage=moved;
+        pressure_stage.hydro.x=head.x;pressure_stage.metric.x=head.y;acoustic[index].x=head.y;
+        if((params.bank&1u)==0u) cache1[index]=pressure_stage;else cache0[index]=pressure_stage;
+    }
     provisional[index]=vec4(value.dynamics.zw,work,own.geometry.x);
     correction_data[index].w=net.dynamics.y*dt;
     gas_write_provisional(atlas,value);

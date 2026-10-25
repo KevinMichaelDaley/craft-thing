@@ -30,5 +30,6 @@ void main() {
     provisional[index]=vec4(value.dynamics.zw,work,old.geometry.x);
     vec2 difference=gas_two_sum(transported.dynamics.y,-old.dynamics.y);
     correction_data[index].w=difference.x+(difference.y+(transported.visual.w-old.visual.w)+(transported.geometry.z-old.geometry.z));
+    if((params.bank&FR_GAS_PRACTICAL_BIT)!=0u) correction_data[index].w=gas_thermal_energy(transported)-gas_thermal_energy(old);
     gas_write_provisional(atlas,value);
 }

@@ -431,3 +431,28 @@ and the two sustained strong-gravity failures (implicit and explicit controls)
 still RED. The last pre-contact-fix30-frame box probe484.632/1748.961ms remains
 far outside acceptance; current core/synchronization and performance validation
 are still required. No validity, conservation or prior reference tolerances changed.
+
+## Practical thermal checkpoint after delayed-stall diagnosis
+
+The latest user instruction permits approximate bounded numerical work. The
+strict40-frame elapsed-clock trace grew from32ms to723ms as expanding activity,
+convergence retries and elapsed-time catch-up multiplied submissions. Gas storage
+and RSS remained constant; acquire waits stayed below0.1ms. This is a solver
+feedback stall, not display acquisition or resource growth.
+
+The opt-in `DC_GAS_PRACTICAL=1` prototype advances each requested interval once,
+with256 red-black SOR sweeps at relaxation1.8 and no convergence retry. Internal
+heat is transported with material; pressure projection changes momentum without
+compressional heating. A local Mach0.5 guard bounds momentum. The work diagnostic
+records numerical/mechanical changes as well as buoyancy, so it must not be
+interpreted as exact physical external work in this mode. Negligible roundoff
+reconciliation preserves meaningful inventory. Strict compressible modes remain
+available for diagnostics.
+
+The actual Wayland/Vulkan64-square fixture passes120 variable intervals through
+0.25s, advancing12 seconds, with finite temperature/pressure/speed, species and
+pigment drift below0.3%, and energy-minus-work drift below3%. Observed drift was
+4.86e-7. Two runs had worst gas calls20.862ms and32.407ms. These are stability
+checks, not complete-frame performance acceptance.32 and64 sweeps failed the
+pressure bound; the fixed256 budget needs real scene timing and optimization.
+Default scene policy is unchanged pending that evidence. The module remains open.

@@ -5,7 +5,7 @@
 #include "dungeoncraft/gas_layout.h"
 #include "gas_acoustic_gpu.h"
 #include "gas_gpu_internal.h"
-enum { GAS_PRESSURE_SWEEPS=16, GAS_PRESSURE_GROUP=2, GAS_PRACTICAL_SWEEPS=32 };
+enum { GAS_PRESSURE_SWEEPS=16, GAS_PRESSURE_GROUP=2, GAS_PRACTICAL_SWEEPS=256 };
 static bool enabled(const char *name) {const char *value=getenv(name);return !value||strcmp(value,"0")!=0;}
 static uint32_t budget(const char *name,uint32_t fallback) {
     const char *value=getenv(name);if(!value) return fallback;
@@ -26,7 +26,6 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->activity_candidates);
     fr_renderer_compute_destroy(g,&t->transport_factor);fr_renderer_compute_destroy(g,&t->transport_prefix);fr_renderer_compute_destroy(g,&t->transport_apply);
     fr_renderer_compute_destroy(g,&t->transport_metadata);dc_gpu_address_buffer_destroy(g,&t->transport_work);
-    fr_renderer_compute_destroy(g,&t->energy_limit);
     for(uint32_t i=0;i<11;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
     dc_gpu_address_buffer_destroy(g,&t->indirect);
     memset(t,0,sizeof(*t));
@@ -60,8 +59,6 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_classify","pressure_compact","pressure_sor","pressure_correct","pressure_residual","acoustic_finish","activity","activity_compact","final_compact","sparse_commit","pressure_clear","pressure_prepare","activity_candidates","transport_factor","transport_prefix","transport_apply","transport_metadata"};
     const char *wide=getenv("DC_GAS_WIDE_SCAN");
     if(wide&&strcmp(wide,"0")!=0&&subgroup.subgroupSize>=4u&&properties.limits.maxComputeWorkGroupInvocations>=256u&&properties.limits.maxComputeWorkGroupSize[0]>=256u) paths[17]="transport_prefix_wide";
-    fr_renderer_compute_t *extra_pipeline=&t->energy_limit;
-    if(t->supports_large_transport&&!fr_renderer_compute_init(g,extra_pipeline,buffers,25,16,"build/shaders/gas_pressure_energy_limit.comp.spv",err,cap)) goto fail;
     for(uint32_t i=0;i<20;i++) {
         if(i>=16u&&!t->supports_large_transport) continue;
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",paths[i]);
@@ -103,7 +100,8 @@ static bool submit(dc_gpu_t *g,char *err,uint32_t cap) {
 bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint32_t gy,
     float dt,uint32_t bank,dc_gpu_address_buffer_t *stats,char *err,uint32_t cap) {
     bool trace=getenv("DC_GAS_TRACE")!=NULL&&g->timestamp_bits;
-    if(t->matrix_valid&&t->matrix_large!=t->large_transport) t->matrix_valid=false;
+    bool matrix_large=t->large_transport||t->practical;
+    if(t->matrix_valid&&t->matrix_large!=matrix_large) t->matrix_valid=false;
     uint32_t sweeps=budget("DC_GAS_PRESSURE_SWEEPS",GAS_PRESSURE_SWEEPS),group=budget("DC_GAS_PRESSURE_GROUP",GAS_PRESSURE_GROUP);
     bool compact_large=t->large_transport&&enabled("DC_GAS_SPARSE_LARGE");
     bool sparse=enabled("DC_GAS_SPARSE_RHS")&&t->matrix_valid&&(!t->large_transport||compact_large);
@@ -113,7 +111,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(sparse_activity) bank|=512u;
     if(sparse_classify) bank|=1024u;
     if(t->large_transport&&!compact_large) bank|=2048u;
-    if(t->large_transport) bank|=FR_GAS_LARGE_ENERGY_BIT;
+    if(matrix_large) bank|=FR_GAS_LARGE_ENERGY_BIT;
     if(t->practical) bank|=FR_GAS_PRACTICAL_BIT;
     if(getenv("DC_GAS_COMPARE_ROW_SETUP")) bank|=FR_GAS_COMPARE_ROW_SETUP_BIT;
     if(!t->matrix_valid) bank|=4u;
@@ -178,7 +176,6 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,3);
         barrier(g);vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
         dispatch(g,&t->final_compact,(tiles+63u)/64u,1u,dt,bank);
-        if(t->practical) indirect_dispatch(g,t,&t->energy_limit,dt,bank,48);
         indirect_dispatch(g,t,&t->finish,dt,bank,48);
         indirect_dispatch(g,t,&t->commit,dt,bank,48);
         if(!submit(g,err,cap)) return false;
@@ -213,5 +210,5 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,4);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);
             vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,1);}
     }
-    t->matrix_valid=true;t->matrix_large=t->large_transport;return true;
+    t->matrix_valid=true;t->matrix_large=matrix_large;return true;
 }

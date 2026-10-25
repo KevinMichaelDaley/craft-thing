@@ -22,7 +22,8 @@ bool fr_gas_gpu_gate(dc_gpu_t *gpu,uint32_t x,uint32_t y,uint32_t width,uint32_t
     uint32_t axis,bool closed,char *err_buf,uint32_t err_cap);
 /** Read-only feedback:0 smoke pigment,1 oxygen molecular fraction. */
 bool fr_gas_gpu_overlay(dc_gpu_t *gpu,uint32_t mode);
-/** Cold diagnostic of cumulative external buoyancy work, never a frame scan. */
+/** Cold work diagnostic, never a frame scan. Practical mode also records
+ * mechanical changes from transport and pressure projection. */
 bool fr_gas_gpu_read_work_chunk(dc_gpu_t *gpu,uint32_t slot,double *work,
     uint32_t capacity,char *err_buf,uint32_t err_cap);
 /** Completed-queue fixture/import of immutable logical chunk data. */
