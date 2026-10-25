@@ -4,7 +4,8 @@
 void main() {
     uint index=gas_index();if(index>=params.width*params.height) return;
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);if(atlas==0xffffffffu) return;
-    GasFlux incoming=transport_flux_at(p-transport_step()),outgoing=transport_flux_at(p);
+    ivec2 step=transport_axis()==0u?ivec2(1,0):ivec2(0,1);
+    GasFlux incoming=transport_face_flux(p-step),outgoing=transport_face_flux(p);
     float energy_in=incoming.dynamics.y,energy_out=outgoing.dynamics.y;
     GasFlux net=GasFlux(incoming.species-outgoing.species,incoming.dynamics-outgoing.dynamics,incoming.pigment-outgoing.pigment);net.dynamics.y=0.;
     Gas value=gas_add_flux(gas_provisional(atlas),net,1.);GasFlux energy=gas_empty_flux();

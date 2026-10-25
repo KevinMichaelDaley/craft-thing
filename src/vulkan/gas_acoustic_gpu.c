@@ -24,8 +24,8 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->commit);
     fr_renderer_compute_destroy(g,&t->clear_pressure);fr_renderer_compute_destroy(g,&t->prepare_pressure);
     fr_renderer_compute_destroy(g,&t->activity_candidates);
-    fr_renderer_compute_destroy(g,&t->transport_prefix);fr_renderer_compute_destroy(g,&t->transport_apply);
-    fr_renderer_compute_destroy(g,&t->transport_metadata);dc_gpu_address_buffer_destroy(g,&t->transport_flux);
+    fr_renderer_compute_destroy(g,&t->transport_factor);fr_renderer_compute_destroy(g,&t->transport_prefix);fr_renderer_compute_destroy(g,&t->transport_apply);
+    fr_renderer_compute_destroy(g,&t->transport_metadata);dc_gpu_address_buffer_destroy(g,&t->transport_work);
     for(uint32_t i=0;i<11;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
     dc_gpu_address_buffer_destroy(g,&t->indirect);
     memset(t,0,sizeof(*t));
@@ -52,11 +52,11 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     if(!dc_gpu_address_buffer_create(g,64,true,&t->indirect,err,cap)) goto fail;
     for(uint32_t i=0;i<4;i++) {((uint32_t *)t->indirect.mapped)[i*4]=0u;((uint32_t *)t->indirect.mapped)[i*4+1]=1u;((uint32_t *)t->indirect.mapped)[i*4+2]=1u;}
     buffers[23]=(VkDescriptorBufferInfo){t->indirect.buffer,0,64};
-    if(!dc_gpu_address_buffer_create(g,t->state_bytes,true,&t->transport_flux,err,cap)) goto fail;
-    buffers[24]=(VkDescriptorBufferInfo){t->transport_flux.buffer,0,t->transport_flux.bytes};
-    fr_renderer_compute_t *pipelines[]={&t->advect,&t->initialize,&t->rhs,&t->classify,&t->compact,&t->sor,&t->correct,&t->residual,&t->finish,&t->activity,&t->activity_compact,&t->final_compact,&t->commit,&t->clear_pressure,&t->prepare_pressure,&t->activity_candidates,&t->transport_prefix,&t->transport_apply,&t->transport_metadata};
-    const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_classify","pressure_compact","pressure_sor","pressure_correct","pressure_residual","acoustic_finish","activity","activity_compact","final_compact","sparse_commit","pressure_clear","pressure_prepare","activity_candidates","transport_prefix","transport_apply","transport_metadata"};
-    for(uint32_t i=0;i<19;i++) {
+    if(!dc_gpu_address_buffer_create(g,t->state_bytes,true,&t->transport_work,err,cap)) goto fail;
+    buffers[24]=(VkDescriptorBufferInfo){t->transport_work.buffer,0,t->transport_work.bytes};
+    fr_renderer_compute_t *pipelines[]={&t->advect,&t->initialize,&t->rhs,&t->classify,&t->compact,&t->sor,&t->correct,&t->residual,&t->finish,&t->activity,&t->activity_compact,&t->final_compact,&t->commit,&t->clear_pressure,&t->prepare_pressure,&t->activity_candidates,&t->transport_factor,&t->transport_prefix,&t->transport_apply,&t->transport_metadata};
+    const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_classify","pressure_compact","pressure_sor","pressure_correct","pressure_residual","acoustic_finish","activity","activity_compact","final_compact","sparse_commit","pressure_clear","pressure_prepare","activity_candidates","transport_factor","transport_prefix","transport_apply","transport_metadata"};
+    for(uint32_t i=0;i<20;i++) {
         if(i>=16u&&!t->supports_large_transport) continue;
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",paths[i]);
         if(!fr_renderer_compute_init(g,pipelines[i],buffers,25,16,path,err,cap)) goto fail;
@@ -122,9 +122,11 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(t->large_transport) {
         barrier(g);VkBufferCopy copy={.size=t->state_bytes};
         vkCmdCopyBuffer(g->command,t->state_bank[bank&1u],t->state_bank[(bank&1u)^1u],1,&copy);
-        for(uint32_t axis=0;axis<2;axis++) for(uint32_t reverse=0;reverse<2;reverse++) {
-            uint32_t flags=bank|(axis<<3u)|(reverse<<4u);
-            dispatch(g,&t->transport_prefix,axis==0?g->height:g->width,1u,dt,flags);
+        for(uint32_t axis=0;axis<2;axis++) {
+            uint32_t flags=bank|(axis<<3u),lines=axis==0?g->height:g->width;
+            dispatch(g,&t->transport_factor,lines,1u,dt,flags);
+            dispatch(g,&t->transport_prefix,lines,1u,dt,flags);
+            dispatch(g,&t->transport_prefix,lines,1u,dt,flags|16u);
             dispatch(g,&t->transport_apply,gx,gy,dt,flags);
         }
         dispatch(g,&t->transport_metadata,gx,gy,dt,bank);
@@ -162,8 +164,8 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         if(!submit(g,err,cap)) return false;
         uint32_t bits=((uint32_t *)stats->mapped)[FR_GAS_RESIDUAL_WORD];float residual=0;memcpy(&residual,&bits,4);
         batches+=batch_group;if(trace&&(batches<=4u||(batches&(batches-1u))==0u))
-            fprintf(stderr,"Acoustic dt%.9g batch%u residual%.9g error%u tiles%u advected%u sweeps%u group%u\n",dt,batches,residual,
-                ((uint32_t *)stats->mapped)[FR_GAS_ERROR_WORD],((uint32_t *)t->indirect.mapped)[0],((uint32_t *)t->indirect.mapped)[8],batch_sweeps,batch_group);
+            fprintf(stderr,"Acoustic dt%.9g batch%u residual%.9g error%u tiles%u advected%u sweeps%u group%u large%u\n",dt,batches,residual,
+                ((uint32_t *)stats->mapped)[FR_GAS_ERROR_WORD],((uint32_t *)t->indirect.mapped)[0],((uint32_t *)t->indirect.mapped)[8],batch_sweeps,batch_group,t->large_transport?1u:0u);
         if(trace) {
             uint64_t times[4];
             if(vkGetQueryPoolResults(g->device,g->timestamp_pool,0,4,sizeof(times),times,sizeof(uint64_t),VK_QUERY_RESULT_64_BIT)==VK_SUCCESS)
