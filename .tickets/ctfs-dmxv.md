@@ -51,3 +51,7 @@ Sparse Vulkan numerical checkpoint:6/6 actual Wayland cases pass with core AND s
 **2026-10-25T12:59:32Z**
 
 Heat milestone remains closed. Smoke runtime now has finite colored reservoirs, real GPU face valves, molecular-O2 overlay, and automatic physical-clock advancement. Eleven native Vulkan gas/reference/conservation cases pass, and the actual placement scene test passes. Pushed f3e00bf includes dry cold-scene factory and cached implicit thermodynamics. Full-frame performance is still RED: short real-display probes ~33–48ms at 1/60s and 265–420ms for 0.25s catch-up. GPU-only activity compaction is under validation; no changed clock, state truncation, fixed cap or reduced solver tolerance. Remaining current-module work includes required performance, supported edit/ownership geometry, persistence/streaming and final repeated displayed acceptance; bonfire has not started.
+
+**2026-10-25T16:12:22Z**
+
+Pushed18261fe adds exact GPU dependency footprints for RHS/activity/convergence classification. Actual native14/14 pass, including20-step byte-exact dense/sparse comparison across gravity and valve changes; displayed enclosure1/1. Core+synchronization validation14/14 also passes with DC_VK_VALIDATE=1 VK_VALIDATION_VALIDATE_SYNC=1 and zero VUID/SYNC errors. Best short16x2 sweep diagnostic23.782ms mean34.348ms worst remains RED; strict repeated1000-frame acceptance is NOT met. Current optimization removes a redundant finish-submission wait using GPU residual/error guards. No bonfire work or clock/resolution/stock/tolerance changes.

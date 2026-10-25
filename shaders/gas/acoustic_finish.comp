@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "acoustic.glsl"
 void main() {
+    if(!(uintBitsToFloat(stats[FR_GAS_RESIDUAL_WORD])<=1e-7)) return;
     uint index=gas_sparse_index(3u);if(index>=params.width*params.height) return;
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
     Primitive primitive=gas_empty_primitive();

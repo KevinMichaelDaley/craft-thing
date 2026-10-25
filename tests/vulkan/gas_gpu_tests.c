@@ -319,7 +319,7 @@ static void test_native_sparse_footprints_match_dense_after_gravity_and_valve_ch
         }
         ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,path?out:dense,4096,err,sizeof(err)));
     }
-    for(uint32_t k=0;k<3;k++) {ASSERT_EQ(SDL_setenv(names[k],saved[k]?saved[k]:"0",1),0);SDL_free(saved[k]);}
+    for(uint32_t k=0;k<3;k++) {ASSERT_EQ(SDL_setenv(names[k],saved[k]?saved[k]:"1",1),0);SDL_free(saved[k]);}
     ASSERT_EQ(memcmp(dense,out,4096*sizeof(*out)),0);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(input);free(dense);free(out);free(volume);free(c);dc_gpu_destroy(g);PASS();
 }

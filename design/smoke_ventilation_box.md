@@ -289,3 +289,24 @@ one global rebuild. Within pressure iteration, nonzero defects are confined to
 the accumulated advection/residual footprint; classification visits that GPU
 list and clears the remaining mask bits. This is a dependency bound, not an
 activity threshold: small velocities and all material stocks remain authoritative.
+
+The combined footprint path18261fe passes14 native cases, including a20-step
+byte-exact dense/sparse comparison across gravity and valve changes, and the
+displayed enclosure test. Core and synchronization validation also pass14/14
+with `DC_VK_VALIDATE=1 VK_VALIDATION_VALIDATE_SYNC=1`, with no VUID or hazard
+messages. Short displayed sweep-group probes remain diagnostic failures:
+16x2=23.782/34.348ms,32x1=28.046/46.257ms,128x1=23.776/46.459ms.
+
+The16x2 path now defaults to dependency-bounded setup. Setting an individual
+`DC_GAS_SPARSE_RHS`, `DC_GAS_SPARSE_ACTIVITY` or `DC_GAS_SPARSE_CLASSIFY` to0
+selects its dense diagnostic path. `DC_GAS_PRESSURE_SWEEPS` and
+`DC_GAS_PRESSURE_GROUP` change only submission granularity; convergence still
+requires the same tolerance and there is no total iteration/time cap.
+
+Finish and sparse commit are recorded in the pressure submission itself. Finish
+is predicated on the reduced residual; commit additionally waits for all candidate
+validation and checks the error word. A nonconverged or invalid candidate cannot
+modify the working source. This removes one queue-wide completion wait per
+substep. All14 native cases and the displayed enclosure pass; the complete
+four-run1000-frame displayed battery is now being measured, without validation
+or builds overlapping its measured frames. No acceptance result is claimed yet.
