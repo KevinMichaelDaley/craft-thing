@@ -233,6 +233,18 @@ static void test_native_oxygen_and_valve_feedback_are_visible_and_do_not_advance
     ASSERT_EQ(SDL_SaveBMP(image,"build/screenshots/gas_oxygen_feedback.bmp"),0);SDL_FreeSurface(image);
     free(input);free(out);free(volumes);free(smoke);free(oxygen);free(closed);free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_native_gas_automatically_follows_full_tick_clock_and_present_pause(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_gas_model_t m=reference_model();ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_IMPLICIT,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_tick_seconds(g,1.f/120.f)&&dc_gpu_tick_step(g,err,sizeof(err)));
+    fr_gas_gpu_clock_t clock,paused;ASSERT_TRUE(fr_gas_gpu_clock(g,&clock));
+    ASSERT_EQ(clock.physical_steps,1u);ASSERT_TRUE(fabs(clock.advanced_seconds-1./120.)<1e-8);
+    ASSERT_TRUE(dc_gpu_present_chunks_steps(g,2,err,sizeof(err))&&fr_gas_gpu_clock(g,&clock));
+    ASSERT_EQ(clock.physical_steps,3u);ASSERT_TRUE(fabs(clock.advanced_seconds-3./120.)<1e-8);
+    ASSERT_TRUE(present(g,err,sizeof(err))&&fr_gas_gpu_clock(g,&paused));ASSERT_EQ(memcmp(&clock,&paused,sizeof(clock)),0);
+    free(c);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
@@ -244,5 +256,6 @@ int main(void) {
     RUN(test_native_closed_gate_retains_stock_then_opens_real_hllc_flow);
     RUN(test_native_closed_gate_retains_stock_then_opens_real_implicit_flow);
     RUN(test_native_oxygen_and_valve_feedback_are_visible_and_do_not_advance_stock);
+    RUN(test_native_gas_automatically_follows_full_tick_clock_and_present_pause);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
