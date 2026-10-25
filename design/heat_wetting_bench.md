@@ -84,11 +84,12 @@ gameplay draws the values directly on the GPU. Actual captures show 317.1 K /
 The saturated test fixture derives water quantity from the profile's actual
 moisture capacity (wood is 0.5, not the mistaken initial 0.35 assumption).
 
-`tools/with-vulkan make test_heat_bench` builds/runs six reference checks and
-twelve displayed Vulkan checks serially. These visual cases also belong to
+`tools/with-vulkan make test_heat_bench` now builds/runs six reference checks and
+thirteen displayed Vulkan checks serially. These visual cases also belong to
 `test_ui` and `test_quarter_native`; the CPU reference belongs to `test`.
-All 18 pass with core/synchronization validation in
-`build/thermal_feedback_module_display.log`. Performance and the remaining
+The first 18-case run passes with core/synchronization validation in
+`build/thermal_feedback_module_display.log`; the additional placement pour passes
+with the original bench case in `build/thermal_pour_red_display.log`. Remaining
 ownership/edit/save interactions are still acceptance work, not waived gates.
 
 The placement-path pour case also passes: a radius-three water brush above
@@ -101,6 +102,34 @@ capture shows about 294.7 K / 3.8% and water flowing into the basin:
 `build/screenshots/thermal_bench_water_pour.bmp`. The cold snapshot helper passes
 the explicit logical chunk coordinates required by the physical download/export
 API. This adds one integration case to the standalone/display batteries.
+
+## Current complete-frame display evidence
+
+`tools/bench_heat_bench 1000` is the permanent reproducible tool. It builds before
+timing, then runs two dry-control trials and two trials with one finite placement
+water pour at measured frame 8. It creates fresh worlds and serializes all four
+real Wayland Vulkan jobs; no builds run during measurement. The existing repeated
+air-erosion input is preserved. Three RED/GREEN input tests lock strict visible
+bounds, unchanged output on malformed input, and exactly one pour versus repeated
+erosion after the unchanged eight-frame warmup.
+
+Current results (`build/heat_bench_measurements_aaT6PO`, with aggregate log
+`build/thermal_repeated_display_benchmark.log`):
+
+| Trial | Frames | Mean ms | Worst ms |
+|---|---:|---:|---:|
+| Dry 1 | 1000 | 13.771 | 15.309 |
+| Dry 2 | 1000 | 13.712 | 15.252 |
+| Finite pour 1 | 1000 | 14.183 | 15.553 |
+| Finite pour 2 | 1000 | 14.163 | 16.039 |
+
+All four satisfy strict complete-frame mean and worst below 30 ms, and each
+reports four identical paused captures. Visible physics/render remain 480x270,
+active halo 640x448, eight rigid substeps/eight Jacobi iterations/two MPM steps.
+Propagated lighting is off. Two earlier current dry runs also pass
+(13.612/17.986 and 13.644/15.788 ms); the historical prototype failures above
+remain recorded. These measurements cover the heat bench, not the epic's later
+bonfire/launcher/Greek-fire scenarios and not unfinished ownership/save behavior.
 
 Remaining in this milestone: complete liquid regression/interaction coverage,
 temperature/wetness inspection, natural edits/owner admission and the persistence

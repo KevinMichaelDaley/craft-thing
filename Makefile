@@ -623,6 +623,7 @@ build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h
 
 test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests
 	./build/thermal_tests
+	./build/benchmark_brush_tests
 	./build/appearance_tests
 	./build/brush_region_tests
 	./build/mpm_swap_tests
@@ -1769,6 +1770,9 @@ build/thermal_tests: tests/fire/thermal_tests.c src/fire/thermal.c $(REACTIVE_ST
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/thermal.c $(REACTIVE_STATE_SRC) -o $@ -lm
 build/benchmark_brush_tests: tests/app/benchmark_brush_tests.c src/app/benchmark_brush.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+test: build/benchmark_brush_tests
+build/dungeoncraft build/controls_tests: src/app/benchmark_brush.h
+$(QUARTER_APP_OBJ): src/app/benchmark_brush.h
 test: build/thermal_tests
 build/thermal_gpu.o: src/vulkan/thermal_gpu.c include/ferrum/fire/thermal_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@

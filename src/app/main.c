@@ -11,6 +11,7 @@
 #include <SDL.h>
 
 #include "dungeoncraft/chunk.h"
+#include "benchmark_brush.h"
 #include "level.h"
 #include "prop_scene.h"
 #include "session.h"
@@ -1155,14 +1156,15 @@ int main(int argc, char **argv) {
         if(!mkdtemp(heat_directory)) {perror("mkdtemp");return 1;}
         directory=heat_directory;
     }
-    unsigned benchmark_brush[3]={0};
+    dc_benchmark_brush_t benchmark_brush={0},benchmark_pour={0};
     const char *brush_setting=benchmark_frames?getenv("DC_BENCHMARK_AIR_BRUSH"):NULL;
-    char brush_tail;
-    if(brush_setting&&(sscanf(brush_setting,"%u,%u,%u%c",&benchmark_brush[0],
-        &benchmark_brush[1],&benchmark_brush[2],&brush_tail)!=3||
-        benchmark_brush[0]>=VIEW_WIDTH||benchmark_brush[1]>=VIEW_HEIGHT||benchmark_brush[2]>32u)) {
+    const char *pour_setting=benchmark_frames?getenv("DC_BENCHMARK_WATER_POUR"):NULL;
+    if(brush_setting&&!dc_benchmark_brush_parse(brush_setting,VIEW_WIDTH,VIEW_HEIGHT,&benchmark_brush)) {
         fprintf(stderr,"DC_BENCHMARK_AIR_BRUSH requires visible x,y,radius (radius <=32)\n");
         return 1;
+    }
+    if(pour_setting&&!dc_benchmark_brush_parse(pour_setting,VIEW_WIDTH,VIEW_HEIGHT,&benchmark_pour)) {
+        fprintf(stderr,"DC_BENCHMARK_WATER_POUR requires visible x,y,radius (radius <=32)\n");return 1;
     }
     char err[256] = {0};
     dc_level_view_t *view = scene_path ? dc_prop_scene_create(directory,seed,scene_path,err,sizeof(err)) :
@@ -1175,7 +1177,7 @@ int main(int argc, char **argv) {
     if(heat_bench&&!dc_level_view_setup_heat_bench(view,err,sizeof(err))) {
         fprintf(stderr,"Heat bench setup: %s\n",err);dc_level_view_destroy(view,err,sizeof(err));return 1;
     }
-    if(heat_bench) printf("Heat bench: %s | finite350K stone/probe, dry and pre-wet wood controls | H+LMB probe, F7 view | free-water coupling/restore still under development\n",directory);
+    if(heat_bench) printf("Heat bench: %s | finite350K stone/probe, dry and pre-wet wood controls | H+LMB probe/hover, F7 view | ownership/restore still under development\n",directory);
     if (lighting && !dc_level_view_renderer_mode(view,FR_RENDERER_LIT)) {
         fprintf(stderr,"Cannot enable propagated lighting\n");
         dc_level_view_destroy(view,err,sizeof(err));return 1;
@@ -1396,10 +1398,15 @@ int main(int argc, char **argv) {
         if (!probing&&!paint_held(view, material, err, sizeof(err))) {
             failed = true; running = false;
         }
-        if(running&&brush_setting&&scripted_frame>=8u&&
-           !dc_level_view_paint(view,benchmark_brush[0],benchmark_brush[1],
-               benchmark_brush[2],DC_MATERIAL_AIR,err,sizeof(err))) {
+        if(running&&brush_setting&&dc_benchmark_brush_due(true,scripted_frame)&&
+            !dc_level_view_paint(view,benchmark_brush.x,benchmark_brush.y,
+                benchmark_brush.radius,DC_MATERIAL_AIR,err,sizeof(err))) {
             failed=true;running=false;
+        }
+        if(running&&pour_setting&&dc_benchmark_brush_due(false,scripted_frame)) {
+            if(!dc_level_view_paint(view,benchmark_pour.x,benchmark_pour.y,benchmark_pour.radius,
+                DC_MATERIAL_WATER,err,sizeof(err))) {failed=true;running=false;}
+            else printf("Finite benchmark water pour at frame%u: %u,%u radius%u\n",scripted_frame,benchmark_pour.x,benchmark_pour.y,benchmark_pour.radius);
         }
         uint64_t paint_done=benchmark_timings?SDL_GetPerformanceCounter():0;
         if (running && !dc_level_view_tick(view, err, sizeof(err))) {
@@ -1411,7 +1418,7 @@ int main(int argc, char **argv) {
             snprintf(err, sizeof(err), "Cannot update world status");
             failed = true; running = false;
         }
-        if (benchmark_frames && scripted_frame >= 8u && running) {
+        if (benchmark_frames && scripted_frame >= DC_BENCHMARK_WARMUP_FRAMES && running) {
             double ms = (SDL_GetPerformanceCounter() - frame_start) * 1000. /
                         (double)SDL_GetPerformanceFrequency();
             if(benchmark_timings) printf("app-frame,%u,%.3fms\n",scripted_frame,ms);
