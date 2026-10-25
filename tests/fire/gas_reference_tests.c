@@ -190,6 +190,26 @@ static void test_cfl_violation_and_invalid_volume_or_admission_are_transactional
     ASSERT_TRUE(!fr_gas_thermodynamics(&m,&s,0,&t,err,sizeof(err)));ASSERT_EQ(memcmp(&t,&copy,sizeof(t)),0);
     ASSERT_TRUE(fr_gas_reference_step(&m,&s,&volume,1,1,1,0,FR_GAS_FLUX_HLLC,&out,err,sizeof(err)));ASSERT_EQ(memcmp(&out,&s,sizeof(s)),0);PASS();
 }
+static void test_buoyancy_uses_temperature_and_composition_and_records_external_work(void) {
+    char err[256]={0};fr_gas_model_t m=model();fr_gas_state_t ambient=air(m,1,300,0),out;
+    double reference=0,work=0;
+    for(uint32_t k=0;k<5;k++) reference+=ambient.species[k]*m.gas_constant[k]*300;
+    ASSERT_TRUE(fr_gas_reference_buoyancy(&m,&ambient,1,reference,900,.01,&out,&work,err,sizeof(err)));
+    ASSERT_EQ(memcmp(&ambient,&out,sizeof(out)),0);ASSERT_EQ(work,0.);
+    fr_gas_state_t hot=air(m,.5,600,0);hot.momentum[1]=2.;hot.energy+=.5*m.kinetic_scale*4./.5;
+    ASSERT_TRUE(fr_gas_reference_buoyancy(&m,&hot,1,reference,900,.01,&out,&work,err,sizeof(err)));
+    ASSERT_TRUE(fabs(out.momentum[1]+2.5)<1e-12);
+    ASSERT_TRUE(fabs(out.energy-hot.energy-work)<1e-12&&fabs(work-2.25)<1e-12);
+    ASSERT_EQ(memcmp(out.species,hot.species,sizeof(out.species)),0);
+    fr_gas_state_t heavy={0};heavy.species[FR_GAS_EXHAUST]=1.;heavy.energy=m.heat_capacity_cv[FR_GAS_EXHAUST]*300;
+    ASSERT_TRUE(fr_gas_reference_buoyancy(&m,&heavy,1,reference,900,.01,&out,&work,err,sizeof(err)));
+    ASSERT_TRUE(out.momentum[1]>0&&work>0);
+    fr_gas_state_t saved=out;double previous=work;
+    ASSERT_TRUE(!fr_gas_reference_buoyancy(&m,&hot,1,0,900,.01,&out,&work,err,sizeof(err)));
+    ASSERT_EQ(memcmp(&saved,&out,sizeof(out)),0);ASSERT_EQ(work,previous);
+    ASSERT_TRUE(fr_gas_reference_buoyancy(&m,&hot,1,reference,900,0,&out,&work,err,sizeof(err)));
+    ASSERT_EQ(memcmp(&hot,&out,sizeof(out)),0);ASSERT_EQ(work,0.);PASS();
+}
 int main(void) {
     RUN(test_sealed_heating_stores_energy_and_raises_pressure_without_losing_oxygen);
     RUN(test_reversible_compression_and_expansion_close_mass_energy_and_boundary_work);
@@ -199,5 +219,6 @@ int main(void) {
     RUN(test_cfl_violation_and_invalid_volume_or_admission_are_transactional);
     RUN(test_two_dimensional_wall_and_open_vent_preserve_closed_inventory);
     RUN(test_both_fluxes_converge_to_an_independent_exact_pressure_release);
+    RUN(test_buoyancy_uses_temperature_and_composition_and_records_external_work);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

@@ -28,6 +28,12 @@ bool fr_gas_thermodynamics(const fr_gas_model_t *model,const fr_gas_state_t *sta
 bool fr_gas_reference_compress(const fr_gas_model_t *model,const fr_gas_state_t *state,
     double old_volume,double new_volume,fr_gas_state_t *out,double *work,
     char *err_buf,uint32_t err_cap);
+/** Reference-atmosphere buoyancy impulse. Ambient gas has zero acceleration;
+ * composition and temperature determine density at reference pressure. Work is
+ * the exact kinetic energy admitted by the external gravitational field. */
+bool fr_gas_reference_buoyancy(const fr_gas_model_t *model,const fr_gas_state_t *state,
+    double volume,double ambient_specific_RT,double gravity,double seconds,
+    fr_gas_state_t *out,double *work,char *err_buf,uint32_t err_cap);
 /** Debit an admitted fraction of a finite packet and mix its conserved fields.
  * Invalid requests change neither output; no inventory is silently discarded. */
 bool fr_gas_admit(const fr_gas_model_t *model,const fr_gas_state_t *source,

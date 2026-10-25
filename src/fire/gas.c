@@ -68,3 +68,9 @@ bool fr_gas_admit(const fr_gas_model_t *m,const fr_gas_state_t *s,const fr_gas_s
     if(!fr_gas_thermodynamics(m,&left,1,&checked,err,cap)||!fr_gas_thermodynamics(m,&right,1,&checked,err,cap)) return false;
     *so=left;*to=right;return true;
 }
+bool fr_gas_reference_buoyancy(const fr_gas_model_t *m,const fr_gas_state_t *s,
+    double volume,double ambient_specific_RT,double gravity,double seconds,
+    fr_gas_state_t *out,double *work,char *err,uint32_t cap) {
+    (void)m;(void)s;(void)volume;(void)ambient_specific_RT;(void)gravity;(void)seconds;
+    (void)out;(void)work;return gas_error(err,cap,"Buoyancy not implemented");
+}
