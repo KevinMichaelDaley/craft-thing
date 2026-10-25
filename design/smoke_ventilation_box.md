@@ -347,3 +347,14 @@ the composed oracle at CFL4 in one accepted0.4s step with closed budgets. The
 smoke demo still selects the previous policy until seam, valve,2D, displayed
 enclosure and full performance checks establish the new gate. No speed claim
 or final acceptance is inferred from these reference tests.
+
+The independent balanced-counterflow gate subsequently rejected the directional
+bidiagonal split: equal opposing velocities artificially compressed uniform gas.
+Checkpoint2d663c3 replaces it with an unsplit tridiagonal system per axis.
+Normalized matrix-prefix factors and affine forward/backward subgroup scans
+solve each line in parallel; conservative shared face differences still update
+the authoritative field. The corrected cold transport oracle passes6 cases,
+the original implicit oracle4, and actual displayed native tests19, including
+analytic stationary density/energy with decaying opposing momentum, chunk and
+subgroup seams, closed/open valves and a concave2D wall. This numerical
+checkpoint does not establish performance or promote the experimental policy.

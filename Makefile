@@ -1763,6 +1763,13 @@ build/gas_transport_tests: tests/fire/gas_transport_tests.c src/fire/gas.c src/f
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c src/fire/gas_transport_reference.c src/fire/gas_implicit_reference.c -o $@ -lm
 build/smoke_box_fixture_tests: tests/app/smoke_box_fixture_tests.c src/app/smoke_box.c src/app/smoke_box.h src/fire/gas.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/smoke_box.c src/fire/gas.c -o $@ -lm
+.PHONY: test_gas_numerics
+test: test_gas_numerics
+test_gas_numerics: build/gas_reference_tests build/gas_implicit_tests build/gas_transport_tests build/smoke_box_fixture_tests
+	./build/gas_reference_tests
+	./build/gas_implicit_tests
+	./build/gas_transport_tests
+	./build/smoke_box_fixture_tests
 build/smoke_box_display_tests: tests/app/smoke_box_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level.c src/app/level_internal.h src/app/smoke_box.c src/app/smoke_level.c $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< src/app/smoke_box.c src/app/smoke_level.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 build/diagnostics/smoke_box_frame: tools/diagnostics/smoke_box_frame.c src/app/level.c src/app/level_internal.h src/app/smoke_box.c src/app/smoke_level.c $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
