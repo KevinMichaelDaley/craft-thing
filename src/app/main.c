@@ -973,13 +973,13 @@ static int smoke_camera_velocity(void) {
 static bool restart_demo(dc_level_view_t **view, const char *base_directory,
                          uint64_t seed, uint32_t *run, uint32_t zoom,
                          dc_gpu_overlay_t overlay, bool spring_enabled,
-                         bool marker_overlay, const char *scene_path, char *err, uint32_t cap) {
+                         bool marker_overlay, const char *scene_path,bool smoke_box,char *err, uint32_t cap) {
     if (*run == UINT32_MAX) {
         snprintf(err, cap, "Too many world restarts");
         return false;
     }
     ++*run;
-    if (scene_path) {
+    if (scene_path||smoke_box) {
         char path[928];
         int length=snprintf(path,sizeof(path),"%s_run_%u_XXXXXX",base_directory,*run);
         if (length<0 || (size_t)length>=sizeof(path) || !mkdtemp(path)) {
@@ -987,8 +987,8 @@ static bool restart_demo(dc_level_view_t **view, const char *base_directory,
         }
         bool saved=dc_level_view_destroy(*view,err,cap);*view=NULL;
         if (!saved) return false;
-        *view=dc_prop_scene_create(path,seed,scene_path,err,cap);
-        if (!*view || !dc_prop_scene_load(*view,scene_path,err,cap)) return false;
+        *view=smoke_box?dc_level_view_create_smoke_box(path,seed,err,cap):dc_prop_scene_create(path,seed,scene_path,err,cap);
+        if (!*view || (scene_path&&!dc_prop_scene_load(*view,scene_path,err,cap))) return false;
     } else if (!dc_app_restart_view(view, base_directory, seed, *run, err, cap)) return false;
     if (!dc_level_view_set_zoom(*view, zoom) ||
         !dc_level_view_set_overlay(*view, overlay) ||
@@ -1178,7 +1178,7 @@ int main(int argc, char **argv) {
     }
     char err[256] = {0};
     dc_level_view_t *view = scene_path ? dc_prop_scene_create(directory,seed,scene_path,err,sizeof(err)) :
-        dc_level_view_create(directory, seed, err, sizeof(err));
+        (smoke_box?dc_level_view_create_smoke_box(directory,seed,err,sizeof(err)):dc_level_view_create(directory, seed, err, sizeof(err)));
     if (!view) { fprintf(stderr, "Level create: %s\n", err); return 1; }
     if (scene_path && !dc_prop_scene_load(view,scene_path,err,sizeof(err))) {
         fprintf(stderr,"Scene load: %s\n",err);
@@ -1280,7 +1280,7 @@ int main(int argc, char **argv) {
                             seed_error = true;
                         } else if (!restart_demo(&view, directory, (uint64_t)parsed,
                                                  &run, zoom, overlay, spring_enabled,
-                                                 marker_overlay, scene_path, err, sizeof(err))||
+                                                 marker_overlay, scene_path,smoke_box,err, sizeof(err))||
                                   (heat_bench&&!dc_level_view_setup_heat_bench(view,err,sizeof(err)))||
                                   (smoke_box&&!dc_level_view_setup_smoke_box(view,err,sizeof(err)))) {
                             failed = true; running = false;
@@ -1338,7 +1338,7 @@ int main(int argc, char **argv) {
                     if (!event.key.repeat) {
                         if (!restart_demo(&view, directory, seed, &run, zoom,
                                           overlay, spring_enabled, marker_overlay,
-                                          scene_path, err, sizeof(err))||
+                                          scene_path,smoke_box,err, sizeof(err))||
                             (heat_bench&&!dc_level_view_setup_heat_bench(view,err,sizeof(err)))||
                             (smoke_box&&!dc_level_view_setup_smoke_box(view,err,sizeof(err)))) {
                             failed = true; running = false;

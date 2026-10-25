@@ -8,7 +8,7 @@
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);char err[256]={0},directory[]="build/smoke_stage_probe_XXXXXX";
     if(!mkdtemp(directory)) return 2;
-    dc_level_view_t *view=dc_level_view_create(directory,314,err,sizeof(err));
+    dc_level_view_t *view=dc_level_view_create_smoke_box(directory,314,err,sizeof(err));
     if(!view||!dc_level_view_setup_smoke_box(view,err,sizeof(err))) {fprintf(stderr,"Smoke setup: %s\n",err);return 1;}
     fr_gas_gpu_clock_t before={0},after={0};bool okay=true;
     for(uint32_t frame=0;okay&&frame<8;frame++) {

@@ -6,7 +6,12 @@
 #include "view_config.h"
 static bool error(char *err,uint32_t cap,const char *message) {if(err&&cap) snprintf(err,cap,"%s",message);return false;}
 dc_level_view_t *dc_level_view_create_smoke_box(const char *directory,uint64_t seed,char *err,uint32_t cap) {
-    (void)directory;(void)seed;error(err,cap,"Cold smoke fixture factory not implemented");return NULL;
+    const uint32_t surface=96;
+    dc_ground_profile_t ground={.width=1,.soil_depth=1,.surface=&surface};
+    dc_level_view_t *view=dc_level_view_create_ground(directory,seed,&ground,err,cap);
+    if(view&&dc_level_view_setup_smoke_box(view,err,cap)) return view;
+    if(view) {char cleanup[256];dc_level_view_destroy(view,cleanup,sizeof(cleanup));}
+    return NULL;
 }
 static bool valve(dc_level_view_t *view,uint32_t index,bool closed,char *err,uint32_t cap) {
     static const int32_t rectangle[3][5]={{124,47,8,1,1},{324,47,8,1,1},{399,-48,1,16,0}};
@@ -23,7 +28,7 @@ bool dc_level_view_setup_smoke_box(dc_level_view_t *view,char *err,uint32_t cap)
     if(view->smoke_box) return true;
     if(view->restored) return error(err,cap,"Smoke fixture checkpoint admission is not implemented yet");
     if(view->origin.x!=0||view->origin.y!=INITIAL_CHUNK_Y) return error(err,cap,"Fresh smoke box requires the initial world origin");
-    if(!dc_level_view_wait_visible(view,120000,err,cap)) return false;
+    if(!dc_level_view_set_spring_enabled(view,false)||!dc_level_view_wait_visible(view,120000,err,cap)) return false;
     uint32_t count=view->table.capacity;dc_chunk_coord_t *coords=calloc(count,sizeof(*coords));
     dc_smoke_box_chunk_t *chunks=calloc(count,sizeof(*chunks));
     if(!coords||!chunks) {free(coords);free(chunks);return error(err,cap,"Cannot preflight smoke box");}
@@ -32,7 +37,7 @@ bool dc_level_view_setup_smoke_box(dc_level_view_t *view,char *err,uint32_t cap)
     for(uint32_t i=0;okay&&i<count;i++) okay=dc_gpu_upload_chunk(view->gpu,i,chunks[i].chunk,err,cap)&&
         fr_renderer_upload_chunk_colors(view->gpu,i,chunks[i].colors,err,cap)&&dc_chunk_table_mark_dirty(&view->table,i);
     fr_gas_model_t model=dc_smoke_box_model();
-    if(okay) okay=dc_level_view_set_spring_enabled(view,false)&&dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO)&&
+    if(okay) okay=dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO)&&dc_gpu_render_chunks(view->gpu,err,cap)&&
         fr_gas_gpu_enable(view->gpu,&model,.0012f,293.15f,err,cap)&&
         fr_gas_gpu_set_pressure_policy(view->gpu,FR_GAS_PRESSURE_IMPLICIT,err,cap)&&fr_gas_gpu_set_gravity(view->gpu,900,err,cap);
     for(uint32_t i=0;okay&&i<count;i++) okay=fr_gas_gpu_seed_chunk(view->gpu,i,chunks[i].gas,chunks[i].void_fractions,4096,err,cap);
