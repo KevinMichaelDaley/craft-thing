@@ -4,8 +4,8 @@
 void main() {
     uint tile=gas_index(),width=(params.width+7u)/8u,height=(params.height+7u)/8u;
     if(tile>=width*height) return;
-    ivec2 p=ivec2(int(tile%width),int(tile/width));bool needed=false;
-    for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++) {
+    ivec2 p=ivec2(int(tile%width),int(tile/width));bool needed=(params.bank&2048u)!=0u;
+    if(!needed) for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++) {
         ivec2 q=p+ivec2(x,y);
         if(all(greaterThanEqual(q,ivec2(0)))&&all(lessThan(q,ivec2(width,height)))&&activity[uint(q.y)*width+uint(q.x)]!=0u) needed=true;
     }

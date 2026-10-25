@@ -1,0 +1,19 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "acoustic.glsl"
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
+    if(atlas==0xffffffffu) {acoustic[index]=vec4(0);provisional[index]=vec4(0);force[index]=vec2(0);return;}
+    Gas old=gas_source(p),transported=gas_provisional(atlas);Primitive center=gas_cached(p);bool valid=false;
+    Primitive moved=gas_primitive(transported,valid);if(!valid) gas_error(index);
+    float dt=uintBitsToFloat(params.seconds),work=0.,impulse=0.;Gas value=transported;
+    if(valid) value=gas_buoyancy_cached(transported,moved,dt,work,impulse);
+    float mass=gas_mass(transported);force[index]=vec2(impulse,mass>0.?transported.dynamics.w/mass:0.);
+    value.geometry.w=transported.geometry.w;
+    acoustic[index]=vec4(center.metric.x,center.hydro.w,moved.metric.y,center.metric.y);
+    provisional[index]=vec4(value.dynamics.zw,work,old.geometry.x);
+    vec2 difference=gas_two_sum(transported.dynamics.y,-old.dynamics.y);
+    correction_data[index].w=difference.x+(difference.y+(transported.visual.w-old.visual.w)+(transported.geometry.z-old.geometry.z));
+    gas_write_provisional(atlas,value);
+}

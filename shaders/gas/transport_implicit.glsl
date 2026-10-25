@@ -1,0 +1,27 @@
+#include "acoustic.glsl"
+layout(set=0,binding=24,std430) restrict buffer TransportFlux {Gas transport_flux[];};
+uint transport_axis() {return (params.bank>>3u)&1u;}
+int transport_direction() {return (params.bank&16u)!=0u?-1:1;}
+ivec2 transport_step() {return transport_axis()==0u?ivec2(transport_direction(),0):ivec2(0,transport_direction());}
+vec2 transport_rates(ivec2 p) {
+    ivec2 q=p+transport_step();Primitive own=gas_cached(p),other=gas_cached(q);
+    if(own.metric.w<=0.||other.metric.w<=0.||!gas_gate_open(transport_direction()>0?p:q,transport_axis())) return vec2(0);
+    float u=own.hydro[transport_axis()+1u],v=other.hydro[transport_axis()+1u],speed=max(abs(u),abs(v));
+    float area=.5*min(own.metric.w,other.metric.w)/own.metric.w;
+    return area*vec2(speed+float(transport_direction())*u,speed);
+}
+GasFlux transport_add(GasFlux a,GasFlux b) {
+    a.species+=b.species;a.dynamics+=b.dynamics;a.pigment+=b.pigment;return a;
+}
+GasFlux transport_scale(GasFlux a,vec2 factor) {
+    float energy=a.dynamics.y*factor.y;a.species*=factor.x;a.dynamics*=factor.x;a.dynamics.y=energy;a.pigment*=factor.x;return a;
+}
+GasFlux transport_state(Gas value) {return GasFlux(value.species,vec4(value.dynamics.x,gas_energy(value),value.dynamics.zw),value.visual.rgb);}
+GasFlux transport_flux_at(ivec2 p) {
+    uint at=gas_atlas(p);return at==0xffffffffu?gas_empty_flux():transport_state(transport_flux[at]);
+}
+ivec2 transport_point(uint line,uint ordered) {
+    uint length=transport_axis()==0u?params.width:params.height;
+    uint cell=transport_direction()>0?ordered:length-1u-ordered;
+    return transport_axis()==0u?ivec2(int(cell),int(line)):ivec2(int(line),int(cell));
+}

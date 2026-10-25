@@ -80,7 +80,7 @@ static bool shader_ok(struct fr_gas_gpu *t,char *err,uint32_t cap) {
 }
 static float rate(struct fr_gas_gpu *t) {
     float value=0;uint32_t *words=t->stats.mapped;
-    if(t->policy==FR_GAS_PRESSURE_IMPLICIT) {
+    if(t->policy!=FR_GAS_PRESSURE_HLLC) {
         float x=0,y=0;memcpy(&x,words+FR_GAS_RATE_X_WORD,4);memcpy(&y,words+FR_GAS_RATE_Y_WORD,4);return x+y;
     }
     memcpy(&value,words+FR_GAS_RATE_WORD,4);return value;
@@ -154,13 +154,14 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     double remaining=seconds;uint64_t accepted=0;
     while(remaining>0) {
         if(!isfinite(speed)||speed<0) return error(err,cap,"Invalid reduced gas CFL metadata");
-        double courant=t->policy==FR_GAS_PRESSURE_IMPLICIT?FR_GAS_ADVECTIVE_COURANT:FR_GAS_COURANT;
-        double allowed=speed>0?courant/speed:remaining;float dt=(float)fmin(remaining,allowed);
+        double courant=t->policy!=FR_GAS_PRESSURE_HLLC?FR_GAS_ADVECTIVE_COURANT:FR_GAS_COURANT;
+        double allowed=speed>0&&t->policy!=FR_GAS_PRESSURE_LARGE_CFL?courant/speed:remaining;float dt=(float)fmin(remaining,allowed);
         if(dt>allowed) dt=nextafterf(dt,0.f);
         for(;;) {
             if(!(dt>0)||remaining-(double)dt==remaining) return error(err,cap,"Gas interval is below clock precision");
             clear_stats(t);
-            if(t->policy==FR_GAS_PRESSURE_IMPLICIT) {
+            if(t->policy!=FR_GAS_PRESSURE_HLLC) {
+                t->acoustic.large_transport=t->policy==FR_GAS_PRESSURE_LARGE_CFL&&(double)dt*speed>FR_GAS_ADVECTIVE_COURANT;
                 if(!fr_gas_acoustic_step(g,&t->acoustic,t->groups_x,t->groups_y,dt,bank,&t->stats,err,cap)) return false;
             } else {
                 if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas substep");
@@ -225,9 +226,9 @@ bool fr_gas_gpu_set_gravity(dc_gpu_t *g,float gravity,char *err,uint32_t cap) {
     ((float *)g->gas->parameters.mapped)[FR_GAS_GRAVITY_WORD]=gravity;g->gas->acoustic.matrix_valid=false;return true;
 }
 bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32_t cap) {
-    if(!g||!g->gas||policy>FR_GAS_PRESSURE_IMPLICIT) return error(err,cap,"Invalid gas acoustic policy");
+    if(!g||!g->gas||policy>FR_GAS_PRESSURE_LARGE_CFL) return error(err,cap,"Invalid gas acoustic policy");
     struct fr_gas_gpu *t=g->gas;
-    if(policy==FR_GAS_PRESSURE_IMPLICIT&&!t->acoustic.ready) {
+    if(policy!=FR_GAS_PRESSURE_HLLC&&!t->acoustic.ready) {
         VkDescriptorBufferInfo buffers[12];
         for(uint32_t i=0;i<3;i++) buffers[i]=(VkDescriptorBufferInfo){t->state[i].buffer,0,t->state[i].bytes};
         for(uint32_t i=0;i<2;i++) buffers[3+i]=(VkDescriptorBufferInfo){t->cache[i].buffer,0,t->cache[i].bytes};
@@ -237,6 +238,7 @@ bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32
         buffers[11]=(VkDescriptorBufferInfo){t->gates.buffer,0,t->gates.bytes};
         if(!fr_gas_acoustic_create(g,&t->acoustic,buffers,err,cap)) return false;
     }
+    if(policy==FR_GAS_PRESSURE_LARGE_CFL&&!t->acoustic.supports_large_transport) return error(err,cap,"Large-CFL transport requires compute subgroup shuffle support");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot configure acoustic policy");
     if(t->policy!=policy) fr_gas_gpu_invalidate_cache(g);
     ((float *)t->parameters.mapped)[FR_GAS_POLICY_WORD]=(float)policy;t->policy=policy;return true;

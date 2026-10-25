@@ -24,16 +24,25 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->commit);
     fr_renderer_compute_destroy(g,&t->clear_pressure);fr_renderer_compute_destroy(g,&t->prepare_pressure);
     fr_renderer_compute_destroy(g,&t->activity_candidates);
+    fr_renderer_compute_destroy(g,&t->transport_prefix);fr_renderer_compute_destroy(g,&t->transport_apply);
+    fr_renderer_compute_destroy(g,&t->transport_metadata);dc_gpu_address_buffer_destroy(g,&t->transport_flux);
     for(uint32_t i=0;i<11;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
     dc_gpu_address_buffer_destroy(g,&t->indirect);
     memset(t,0,sizeof(*t));
 }
 bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescriptorBufferInfo source[12],char *err,uint32_t cap) {
     if(t->ready) return true;
-    VkDescriptorBufferInfo buffers[24];memcpy(buffers,source,12*sizeof(*source));
+    VkDescriptorBufferInfo buffers[25];memcpy(buffers,source,12*sizeof(*source));
+    t->state_bank[0]=source[1].buffer;t->state_bank[1]=source[2].buffer;t->state_bytes=source[1].range;
     VkDeviceSize bytes=(VkDeviceSize)g->width*g->height*16u;
     VkDeviceSize tiles=(VkDeviceSize)((g->width+7u)/8u)*((g->height+7u)/8u);
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(g->physical,&properties);
+    VkPhysicalDeviceSubgroupProperties subgroup={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES};
+    VkPhysicalDeviceProperties2 details={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,.pNext=&subgroup};
+    vkGetPhysicalDeviceProperties2(g->physical,&details);
+    t->supports_large_transport=(subgroup.supportedStages&VK_SHADER_STAGE_COMPUTE_BIT)!=0u&&
+        (subgroup.supportedOperations&VK_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT)!=0u&&subgroup.subgroupSize>0u&&
+        subgroup.subgroupSize<=64u&&64u%subgroup.subgroupSize==0u;
     if(tiles>properties.limits.maxComputeWorkGroupCount[0]) return error(err,cap,"Gas pressure work exceeds device indirect dispatch range");
     for(uint32_t i=0;i<11;i++) {
         VkDeviceSize field_bytes=i==10?bytes:(i==9?tiles*8u:(i==8?bytes/2u:(i>=6?tiles*(i==7?16u:4u):(i==4?bytes/4u:bytes))));
@@ -43,11 +52,14 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     if(!dc_gpu_address_buffer_create(g,64,true,&t->indirect,err,cap)) goto fail;
     for(uint32_t i=0;i<4;i++) {((uint32_t *)t->indirect.mapped)[i*4]=0u;((uint32_t *)t->indirect.mapped)[i*4+1]=1u;((uint32_t *)t->indirect.mapped)[i*4+2]=1u;}
     buffers[23]=(VkDescriptorBufferInfo){t->indirect.buffer,0,64};
-    fr_renderer_compute_t *pipelines[]={&t->advect,&t->initialize,&t->rhs,&t->classify,&t->compact,&t->sor,&t->correct,&t->residual,&t->finish,&t->activity,&t->activity_compact,&t->final_compact,&t->commit,&t->clear_pressure,&t->prepare_pressure,&t->activity_candidates};
-    const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_classify","pressure_compact","pressure_sor","pressure_correct","pressure_residual","acoustic_finish","activity","activity_compact","final_compact","sparse_commit","pressure_clear","pressure_prepare","activity_candidates"};
-    for(uint32_t i=0;i<16;i++) {
+    if(!dc_gpu_address_buffer_create(g,t->state_bytes,true,&t->transport_flux,err,cap)) goto fail;
+    buffers[24]=(VkDescriptorBufferInfo){t->transport_flux.buffer,0,t->transport_flux.bytes};
+    fr_renderer_compute_t *pipelines[]={&t->advect,&t->initialize,&t->rhs,&t->classify,&t->compact,&t->sor,&t->correct,&t->residual,&t->finish,&t->activity,&t->activity_compact,&t->final_compact,&t->commit,&t->clear_pressure,&t->prepare_pressure,&t->activity_candidates,&t->transport_prefix,&t->transport_apply,&t->transport_metadata};
+    const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_classify","pressure_compact","pressure_sor","pressure_correct","pressure_residual","acoustic_finish","activity","activity_compact","final_compact","sparse_commit","pressure_clear","pressure_prepare","activity_candidates","transport_prefix","transport_apply","transport_metadata"};
+    for(uint32_t i=0;i<19;i++) {
+        if(i>=16u&&!t->supports_large_transport) continue;
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",paths[i]);
-        if(!fr_renderer_compute_init(g,pipelines[i],buffers,24,16,path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,pipelines[i],buffers,25,16,path,err,cap)) goto fail;
     }
     t->ready=true;return true;
 fail:
@@ -86,12 +98,13 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     float dt,uint32_t bank,dc_gpu_address_buffer_t *stats,char *err,uint32_t cap) {
     bool trace=getenv("DC_GAS_TRACE")!=NULL&&g->timestamp_bits;
     uint32_t sweeps=budget("DC_GAS_PRESSURE_SWEEPS",GAS_PRESSURE_SWEEPS),group=budget("DC_GAS_PRESSURE_GROUP",GAS_PRESSURE_GROUP);
-    bool sparse=enabled("DC_GAS_SPARSE_RHS")&&t->matrix_valid;
-    bool sparse_activity=enabled("DC_GAS_SPARSE_ACTIVITY")&&t->matrix_valid;
+    bool sparse=enabled("DC_GAS_SPARSE_RHS")&&t->matrix_valid&&!t->large_transport;
+    bool sparse_activity=enabled("DC_GAS_SPARSE_ACTIVITY")&&t->matrix_valid&&!t->large_transport;
     bool sparse_classify=enabled("DC_GAS_SPARSE_CLASSIFY");
     if(sparse) bank|=256u;
     if(sparse_activity) bank|=512u;
     if(sparse_classify) bank|=1024u;
+    if(t->large_transport) bank|=2048u;
     if(!t->matrix_valid) bank|=4u;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin acoustic advection");
     if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,4);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);}
@@ -104,9 +117,18 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         vkCmdFillBuffer(g->command,t->indirect.buffer,0,4,0);
         dispatch(g,&t->activity_candidates,(tiles+63u)/64u,1u,dt,bank);
         indirect_dispatch(g,t,&t->activity,dt,bank,0);
-    } else dispatch(g,&t->activity,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
+    } else if(!t->large_transport) dispatch(g,&t->activity,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
     dispatch(g,&t->activity_compact,(tiles+63u)/64u,1u,dt,bank);
-    indirect_dispatch(g,t,&t->advect,dt,bank,32);
+    if(t->large_transport) {
+        barrier(g);VkBufferCopy copy={.size=t->state_bytes};
+        vkCmdCopyBuffer(g->command,t->state_bank[bank&1u],t->state_bank[(bank&1u)^1u],1,&copy);
+        for(uint32_t axis=0;axis<2;axis++) for(uint32_t reverse=0;reverse<2;reverse++) {
+            uint32_t flags=bank|(axis<<3u)|(reverse<<4u);
+            dispatch(g,&t->transport_prefix,axis==0?g->height:g->width,1u,dt,flags);
+            dispatch(g,&t->transport_apply,gx,gy,dt,flags);
+        }
+        dispatch(g,&t->transport_metadata,gx,gy,dt,bank);
+    } else indirect_dispatch(g,t,&t->advect,dt,bank,32);
     if(sparse) indirect_dispatch(g,t,&t->rhs,dt,bank,32);else dispatch(g,&t->rhs,gx,gy,dt,bank);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,1);
     uint32_t stalled=0,batches=0;float best=INFINITY;
