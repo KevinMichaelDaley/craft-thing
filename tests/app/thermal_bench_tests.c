@@ -105,9 +105,14 @@ static void test_placement_water_pour_cools_and_wets_wood_with_closed_reference_
     ASSERT_TRUE(fabs(final_energy-initial_energy-injected)<.02);
     for(uint32_t i=0;i<60;i++) {
         ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
-        printf("Pour reference step%u\n",i+2u);
-        ASSERT_TRUE(bench_budget(view,&final_water,&final_energy,err,sizeof(err)));
+        bool balanced=bench_budget(view,&final_water,&final_energy,err,sizeof(err));
+        if(!balanced) printf("Pour reference step%u\n",i+2u);
+        ASSERT_TRUE(balanced);
     }
+    printf("Settled pour: mass%llu/%u, energy error%.9f\n",
+        (unsigned long long)(final_water-initial_water),cells*65536u,final_energy-initial_energy-injected);
+    ASSERT_EQ(final_water-initial_water,(uint64_t)cells*65536u);
+    ASSERT_TRUE(fabs(final_energy-initial_energy-injected)<.02);
     uint32_t *pixels=malloc(480u*270u*4u);ASSERT_TRUE(pixels);
     ASSERT_TRUE(dc_level_view_heat_overlay(view,2)&&dc_level_view_tick(view,err,sizeof(err))&&dc_level_view_pixels(view,pixels,480u*270u,err,sizeof(err)));
     mkdir("build/screenshots",0777);ASSERT_TRUE(bench_capture(pixels,"build/screenshots/thermal_bench_water_pour.bmp"));
