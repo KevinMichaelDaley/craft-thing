@@ -1,6 +1,6 @@
 ---
 id: ctfs-dmxv
-status: open
+status: in_progress
 deps: [ctfs-2hu1]
 links: [ctlo-r2ap, ctlo-h9of]
 created: 2026-10-25T02:54:23Z
@@ -27,3 +27,7 @@ RED-GREEN-REFACTOR. The placement demo can inject finite colored smoke into an e
 **2026-10-25T02:56:00Z**
 
 Start after the interactive heat/wetting system is runnable, displayed-tested and pushed. Deliver a real smoke/ventilation system before adding combustion; keep future submerged Greek-fire coupling explicitly open in the broader gas ticket.
+
+**2026-10-25T07:57:31Z**
+
+Starting only this visible module after ctfs-2hu1 delivered/pushed7626e67: finite colored smoke enclosure with real vent and oxygen feedback. First RED tests will lock sealed heating/compression/expansion and CFL pressure policy against a small reference before Vulkan production. Broad gas/render tickets remain open for combustion and submerged Greek-fire scope; no future chemistry/owner expansion in this slice.
