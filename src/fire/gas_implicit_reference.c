@@ -39,19 +39,24 @@ static bool implicit_reference_step(const fr_gas_model_t *m,const fr_gas_state_t
     double advective_step=(axis_rate[0]+axis_rate[1])*dt;
     if(!large&&advective_step>FR_GAS_ADVECTIVE_COURANT) {gas_error(err,cap,"Implicit gas violates advective axis CFL");goto done;}
     if(large&&advective_step<=FR_GAS_ADVECTIVE_COURANT) large=false;
-    if(large) for(size_t i=0;i<count;i++) {
-        double mass=0;for(uint32_t k=0;k<5;k++) mass+=s[i].species[k];
-        if(mass>0) cells[i].enthalpy=((1.-FR_GAS_LARGE_ENERGY_ADVECTION)*s[i].energy+m->kinetic_scale*cells[i].pressure*v[i])/mass;
-    }
     if(dt==0) {memcpy(out,s,count*sizeof(*s));okay=true;goto done;}
     if(large&&!fr_gas_large_energy_transport_reference_step(m,s,v,width,height,dt,star,err,cap)) goto done;
+    if(large) for(size_t i=0;i<count;i++) {
+        double mass=0;for(uint32_t k=0;k<5;k++) mass+=star[i].species[k];
+        if(mass>0) cells[i].enthalpy=((1.-FR_GAS_LARGE_ENERGY_ADVECTION)*star[i].energy+m->kinetic_scale*cells[i].pressure*v[i])/mass;
+    }
     for(size_t i=0;i<count;i++) for(uint32_t axis=0;axis<2;axis++) {
         if((axis==0&&i%width+1>=width)||(axis==1&&i+width>=count)) continue;
         size_t j=i+(axis?width:1);double area=fmin(v[i],v[j]);if(area<=0) continue;
         fr_gas_state_t flux=advective_flux(s+i,s+j,v[i],v[j],area,axis);
         double ma=0,mb=0;for(uint32_t k=0;k<5;k++) {ma+=s[i].species[k];mb+=s[j].species[k];}
         double speed=fmax(ma?fabs(s[i].momentum[axis])/ma:0,mb?fabs(s[j].momentum[axis])/mb:0);
-        face_t face={.a=i,.b=j,.axis=axis,.area=area,.enthalpy=.5*(cells[i].enthalpy+cells[j].enthalpy),
+        double enthalpy=.5*(cells[i].enthalpy+cells[j].enthalpy);
+        if(large) {
+            double ra=0,rb=0;for(uint32_t k=0;k<5;k++) {ra+=star[i].species[k]/v[i];rb+=star[j].species[k]/v[j];}
+            enthalpy=ra+rb>0?(ra*cells[i].enthalpy+rb*cells[j].enthalpy)/(ra+rb):0;
+        }
+        face_t face={.a=i,.b=j,.axis=axis,.area=area,.enthalpy=enthalpy,
             .energy_diffusion=large?0:-.5*area*speed*(s[j].energy/v[j]-s[i].energy/v[i])};
         faces[face_count++]=face;
         if(!large) {flux.energy=0;star[i]=gas_combine(star+i,1,&flux,-dt);star[j]=gas_combine(star+j,1,&flux,dt);}
