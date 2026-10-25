@@ -38,7 +38,7 @@ static void destroy(dc_gpu_t *g,struct fr_gas_gpu *t) {
     dc_gpu_address_buffer_destroy(g,&t->parameters);dc_gpu_address_buffer_destroy(g,&t->stats);free(t);
 }
 void fr_gas_gpu_destroy(dc_gpu_t *g) {if(g) {destroy(g,g->gas);g->gas=NULL;}}
-void fr_gas_gpu_invalidate_cache(dc_gpu_t *g) {if(g&&g->gas) g->gas->cache_valid=false;}
+void fr_gas_gpu_invalidate_cache(dc_gpu_t *g) {if(g&&g->gas) {g->gas->cache_valid=false;g->gas->acoustic.matrix_valid=false;}}
 static void barrier(dc_gpu_t *g) {
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT|VK_ACCESS_2_TRANSFER_WRITE_BIT,
@@ -223,6 +223,7 @@ bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32
 bool fr_gas_gpu_gate(dc_gpu_t *g,uint32_t x,uint32_t y,uint32_t width,uint32_t height,uint32_t axis,bool closed,char *err,uint32_t cap) {
     if(!g||!g->gas||x>=g->width||y>=g->height||!width||!height||width>g->width-x||height>g->height-y||axis>1u)
         return error(err,cap,"Invalid gas valve rectangle");
+    g->gas->acoustic.matrix_valid=false;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas valve command");
     barrier(g);uint32_t push[8]={g->width,g->height,x,y,width,height,axis,closed};
     fr_renderer_compute_t *pipeline=&g->gas->gate;
