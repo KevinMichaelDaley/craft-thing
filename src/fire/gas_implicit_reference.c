@@ -36,9 +36,15 @@ static bool implicit_reference_step(const fr_gas_model_t *m,const fr_gas_state_t
         cells[i].pressure=t.pressure;cells[i].enthalpy=(s[i].energy+m->kinetic_scale*t.pressure*v[i])/t.mass;
         cells[i].kinetic=.5*m->kinetic_scale*(s[i].momentum[0]*s[i].momentum[0]+s[i].momentum[1]*s[i].momentum[1])/t.mass;
     }
-    if(!large&&(axis_rate[0]+axis_rate[1])*dt>FR_GAS_ADVECTIVE_COURANT) {gas_error(err,cap,"Implicit gas violates advective axis CFL");goto done;}
+    double advective_step=(axis_rate[0]+axis_rate[1])*dt;
+    if(!large&&advective_step>FR_GAS_ADVECTIVE_COURANT) {gas_error(err,cap,"Implicit gas violates advective axis CFL");goto done;}
+    if(large&&advective_step<=FR_GAS_ADVECTIVE_COURANT) large=false;
+    if(large) for(size_t i=0;i<count;i++) {
+        double mass=0;for(uint32_t k=0;k<5;k++) mass+=s[i].species[k];
+        if(mass>0) cells[i].enthalpy=((1.-FR_GAS_LARGE_ENERGY_ADVECTION)*s[i].energy+m->kinetic_scale*cells[i].pressure*v[i])/mass;
+    }
     if(dt==0) {memcpy(out,s,count*sizeof(*s));okay=true;goto done;}
-    if(large&&!fr_gas_transport_reference_step(m,s,v,width,height,dt,star,err,cap)) goto done;
+    if(large&&!fr_gas_large_energy_transport_reference_step(m,s,v,width,height,dt,star,err,cap)) goto done;
     for(size_t i=0;i<count;i++) for(uint32_t axis=0;axis<2;axis++) {
         if((axis==0&&i%width+1>=width)||(axis==1&&i+width>=count)) continue;
         size_t j=i+(axis?width:1);double area=fmin(v[i],v[j]);if(area<=0) continue;
