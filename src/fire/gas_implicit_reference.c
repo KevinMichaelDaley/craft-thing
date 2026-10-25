@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "gas_internal.h"
@@ -65,6 +66,7 @@ static bool implicit_reference_step(const fr_gas_model_t *m,const fr_gas_state_t
     }
     double *neighbor=calloc(count,sizeof(*neighbor));if(!neighbor) {gas_error(err,cap,"Cannot allocate pressure oracle");goto done;}
     double error=1.;
+    uint64_t iterations=0;bool trace=getenv("DC_GAS_ORACLE_TRACE")!=NULL;
     while(error>1e-11) {
         memset(neighbor,0,count*sizeof(*neighbor));
         for(size_t f=0;f<face_count;f++) {
@@ -73,11 +75,13 @@ static bool implicit_reference_step(const fr_gas_model_t *m,const fr_gas_state_t
         }
         error=0;
         for(size_t i=0;i<count;i++) if(diagonal[i]>0) {
-            double next=(rhs[i]+neighbor[i])/diagonal[i];
+            double next=.5*p[i]+.5*((rhs[i]+neighbor[i])/diagonal[i]);
             if(!isfinite(next)||next<=0) {free(neighbor);gas_error(err,cap,"Implicit gas pressure is not positive");goto done;}
             double residual=fabs(diagonal[i]*p[i]-rhs[i]-neighbor[i])/fmax(1.,fabs(rhs[i]));
             error=fmax(error,residual);p[i]=next;
         }
+        iterations++;
+        if(trace&&(iterations&(iterations-1u))==0u) fprintf(stderr,"Cold pressure n%zu iteration%llu residual%.17g p0%.17g rhs0%.17g diagonal0%.17g\n",count,(unsigned long long)iterations,error,p[0],rhs[0],diagonal[0]);
     }
     free(neighbor);memcpy(result,star,count*sizeof(*star));
     if(!large) for(size_t i=0;i<count;i++) result[i].energy=s[i].energy;
