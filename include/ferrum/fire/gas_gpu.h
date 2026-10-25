@@ -4,7 +4,7 @@
 #include "ferrum/fire/gas.h"
 
 typedef struct {uint64_t physical_steps,substeps;double advanced_seconds;} fr_gas_gpu_clock_t;
-enum {FR_GAS_PRESSURE_HLLC,FR_GAS_PRESSURE_IMPLICIT,FR_GAS_PRESSURE_LARGE_CFL};
+enum {FR_GAS_PRESSURE_HLLC,FR_GAS_PRESSURE_IMPLICIT,FR_GAS_PRESSURE_LARGE_CFL,FR_GAS_PRESSURE_PRACTICAL};
 /** Enable one authoritative Vulkan gas field. Coefficients and initial ambient
  * stock are explicit; repeated configuration must not replenish existing gas. */
 bool fr_gas_gpu_enable(dc_gpu_t *gpu,const fr_gas_model_t *model,

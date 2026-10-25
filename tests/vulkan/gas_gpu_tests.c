@@ -375,6 +375,7 @@ static void test_native_large_cfl_packet_matches_composed_oracle_in_one_step(voi
     free(input);free(expected);free(out);free(volume);free(c);dc_gpu_destroy(g);PASS();
 }
 #include "gas_large_cfl_cases.h"
+#include "gas_practical_cases.h"
 static void test_native_subnormal_colored_stock_is_valid_and_retained_at_rest(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));
     fr_gas_state_t *input=calloc(4096,sizeof(*input)),*out=calloc(4096,sizeof(*out));double *volume=malloc(4096*sizeof(*volume));
@@ -418,5 +419,7 @@ int main(void) {
     RUN(test_native_prototype_sparse_large_footprints_match_dense);
     RUN(test_native_explicit_sustained_gravity_control);
     RUN(test_native_moving_density_contact_keeps_pressure_and_velocity);
+    RUN(test_native_practical_policy_rejects_unresolved_gravity_without_advancing);
+    RUN(test_native_practical_variable_intervals_stay_finite_without_retry_stalls);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0||g_pass==0;
 }
