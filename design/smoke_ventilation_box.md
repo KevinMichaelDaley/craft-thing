@@ -71,3 +71,25 @@ error is 0.0000343876891 and red-pigment error -0.0000000210703321. The displaye
 capture is `build/screenshots/gas_reference_transport.bmp`. Two existing thermal
 feedback display tests also pass after adding the optional renderer hook. This
 is a transport checkpoint, not the interactive or buoyant smoke-box acceptance.
+
+## Buoyancy and calibrated prototype
+
+The reference-atmosphere force uses composition and temperature, with downward
+acceleration `g * (1 - R_mix*T / (R_air*T_ambient))`. This is a filtered buoyancy
+approximation: acoustic density fluctuations do not create a second gravity
+force or an artificial hydrostatic density gradient from the reduced acoustic
+speed. Hot air rises, cold heavy exhaust sinks, and canonical ambient gas stays
+exactly stationary within floating-point roundoff. The impulse retains species
+and pigment; its exact kinetic-energy work is added to total energy and tracked
+separately as external work. It is not a combustion energy source.
+
+Nine CPU reference and three actual-display Vulkan cases pass, including the
+hot impulse against the independent reference and energy-minus-work closure.
+The permanent `build/diagnostics/gas_frame` probe measures events, unchanged
+mechanics, gas and actual presentation at 480x270 with all 640x448 cells mapped.
+Initial prototype coefficients are R={.25984,.29680,.18892,.46152,0},
+Cv={.65816,.74320,.65508,1.40248,.71}, kinetic scale1/512, ambient density.0012,
+temperature293.15K and gravity900 cells/s². These are explicit game calibration
+parameters, not a claim of SI acoustics. The CFL bound and budget tolerances
+remain unchanged. Whole-frame measurements must decide whether this prototype
+is viable before the interactive module is accepted.

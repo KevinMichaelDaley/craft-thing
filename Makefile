@@ -1759,6 +1759,9 @@ build/gas_reference_tests: tests/fire/gas_reference_tests.c src/fire/gas.c src/f
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c src/fire/gas_reference.c -o $@ -lm
 build/gas_display_tests: tests/vulkan/gas_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/fire/gas_reference.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< src/fire/gas_reference.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/diagnostics/gas_frame: tools/diagnostics/gas_frame.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+	mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/gas_gpu.o: src/vulkan/gas_gpu.c src/vulkan/gas_gpu_internal.h include/ferrum/fire/gas_gpu.h include/dungeoncraft/gas_layout.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/gas_feedback_gpu.o: src/vulkan/gas_feedback_gpu.c src/vulkan/gas_feedback_gpu.h
