@@ -27,6 +27,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->transport_factor);fr_renderer_compute_destroy(g,&t->transport_prefix);fr_renderer_compute_destroy(g,&t->transport_apply);
     fr_renderer_compute_destroy(g,&t->transport_metadata);dc_gpu_address_buffer_destroy(g,&t->transport_work);
     fr_renderer_compute_destroy(g,&t->restrict_pressure);fr_renderer_compute_destroy(g,&t->coarse_sor);fr_renderer_compute_destroy(g,&t->prolong_pressure);
+    fr_renderer_compute_destroy(g,&t->stage_transport);
     for(uint32_t i=0;i<11;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
     dc_gpu_address_buffer_destroy(g,&t->indirect);
     memset(t,0,sizeof(*t));
@@ -74,6 +75,7 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",coarse_paths[i]);
         if(!fr_renderer_compute_init(g,coarse_pipelines[i],buffers,25,16,path,err,cap)) goto fail;
     }
+    if(t->supports_large_transport&&!fr_renderer_compute_init(g,&t->stage_transport,buffers,25,16,"build/shaders/gas_transport_stage.comp.spv",err,cap)) goto fail;
     t->ready=true;return true;
 fail:
     fr_gas_acoustic_destroy(g,t);return false;
@@ -145,6 +147,10 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,4);
         for(uint32_t axis=0;axis<2;axis++) {
             uint32_t flags=bank|(axis<<3u),lines=axis==0?g->height:g->width;
+            if(getenv("DC_GAS_STAGED_RATES")) {
+                flags|=FR_GAS_STAGED_RATES_BIT;
+                dispatch(g,&t->stage_transport,gx,gy,dt,flags);
+            }
             dispatch(g,&t->transport_factor,lines,1u,dt,flags);
             if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,5u+axis*4u);
             dispatch(g,&t->transport_prefix,lines,1u,dt,flags);

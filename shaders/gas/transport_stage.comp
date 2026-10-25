@@ -1,0 +1,9 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "transport_implicit.glsl"
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));
+    vec2 plus=transport_rates(p,1),minus=transport_rates(p,-1);
+    stencil[index]=vec4(plus.x,minus.x,plus.y,minus.y);
+}

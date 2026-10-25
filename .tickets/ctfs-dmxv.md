@@ -83,3 +83,7 @@ Actual Wayland/Vulkan supported native battery27/27 PASS with DC_VK_VALIDATE=1 a
 **2026-10-25T21:35:14Z**
 
 Offset sealed-wall regression GREEN: restricting coarse correction to fully open aggregates reduces sealed-neighbor density disturbance11.6% to2.53e-8, with exactly zero escaped smoke. All4 actual displayed practical cases pass, including checkerboard damping and12-second variable-clock/no-retry/stock/finite-state gate (worst gas call20.456ms). Coarse blocks with internal gates/solids retain fine-grid wall topology. Full regression764 passes plus exactly2 known ctr-ojvy failures. Next sustained untraced real-scene timing; performance/module remain open.
+
+**2026-10-25T21:37:45Z**
+
+Sustained actual-display1000-frame elapsed-clock open/vent run (no GPU trace, staged-rate experiment off) completes without numerical failure:55.239ms mean64.393ms worst.100-frame blocks settle55.7–56.1ms after first48.9ms block; no delayed tail runaway. Four paused captures identical; final capture inspected: smoke mixes and escapes vent, reservoir checkerboard gone. Original retry stall removed; steady gas cost remains over30ms. Next smaller bounded coarse budget and practical transport work reduction; no stock/time/resolution drop and no module closure.
