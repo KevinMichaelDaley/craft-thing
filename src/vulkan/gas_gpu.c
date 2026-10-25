@@ -131,6 +131,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     uint32_t bank=cached?t->cached_bank:0;float speed=t->cached_rate;
     VkBufferCopy copy={.size=t->state[0].bytes};
     if(!cached) {
+        t->acoustic.matrix_valid=false;
         if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas working copy");
         barrier(g);vkCmdCopyBuffer(g->command,t->state[0].buffer,t->state[1].buffer,1,&copy);
         if(t->policy==FR_GAS_PRESSURE_HLLC) vkCmdCopyBuffer(g->command,t->state[0].buffer,t->state[2].buffer,1,&copy);
@@ -155,7 +156,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
                 if(!submit(g,err,cap)) return false;
             }
             if(!((uint32_t *)t->stats.mapped)[FR_GAS_ERROR_WORD]) break;
-            dt*=.5f;
+            t->acoustic.matrix_valid=false;dt*=.5f;
         }
         remaining-=dt;accepted++;if(t->policy==FR_GAS_PRESSURE_HLLC) bank^=1u;speed=rate(t);
     }

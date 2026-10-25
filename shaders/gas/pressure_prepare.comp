@@ -1,0 +1,14 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "acoustic.glsl"
+void main() {
+    uint index=gas_sparse_index(1u);if(index>=params.width*params.height) return;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));Primitive own=gas_cached(p);
+    float dt=uintBitsToFloat(params.seconds);vec4 coefficients=own.metric.w>0.?matrix[index]*(dt*dt):vec4(0);
+    float diagonal=own.metric.w>0.?(gas_advected(index)?acoustic[index].w:own.metric.y):0.;
+    for(uint d=0u;d<4u;d++) diagonal+=coefficients[d];
+    stencil[index]=coefficients;pressure[index].z=diagonal;pressure[index].w=max(abs(own.metric.y*own.hydro.w),1e-20);
+    float ratio=diagonal>0.?min(dot(coefficients,vec4(1))/diagonal,.99999994):0.;
+    correction_data[index].y=diagonal>0.?1./diagonal:0.;
+    correction_data[index].z=2./(1.+sqrt(max(0.,1.-ratio*ratio)));
+}
