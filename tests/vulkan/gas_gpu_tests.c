@@ -139,6 +139,51 @@ static void test_native_implicit_acoustics_match_reference_beyond_explicit_acous
     ASSERT_TRUE(fabs(energy_error)<.02&&present(g,err,sizeof(err)));
     free(input);free(out);free(expected);free(volumes);free(c);dc_gpu_destroy(g);PASS();
 }
+static bool seam_snapshot(dc_gpu_t *g,fr_gas_state_t *global,fr_gas_state_t *local,char *err,uint32_t cap) {
+    for(uint32_t chunk=0;chunk<2;chunk++) {
+        if(!fr_gas_gpu_read_chunk(g,chunk,local,4096,err,cap)) return false;
+        for(uint32_t y=0;y<64;y++) memcpy(global+y*128+chunk*64,local+y*64,64*sizeof(*local));
+    }
+    return true;
+}
+static void test_native_implicit_sparse_pressure_and_color_cross_chunk_seams_without_stock_loss(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    ASSERT_TRUE(context(&g,err,sizeof(err)));
+    for(uint32_t slot=0;slot<2;slot++) {c->coord.x=slot;ASSERT_TRUE(dc_gpu_upload_chunk(g,slot,c,err,sizeof(err))&&dc_gpu_set_page(g,slot,0,slot,err,sizeof(err)));}
+    fr_gas_model_t m=reference_model();ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_IMPLICIT,err,sizeof(err)));
+    fr_gas_state_t *input=malloc(8192*sizeof(*input)),*out=malloc(8192*sizeof(*out)),*expected=malloc(8192*sizeof(*expected)),*local=malloc(4096*sizeof(*local));
+    double *volumes=malloc(8192*sizeof(*volumes));ASSERT_TRUE(input&&out&&expected&&local&&volumes);
+    for(uint32_t y=0;y<64;y++) for(uint32_t x=0;x<128;x++) {
+        uint32_t i=y*128+x;volumes[i]=1;input[i]=reference_air(m,1,300,0);
+        if(x>=60&&x<68&&y>=28&&y<36) {
+            input[i].species[2]=.1;input[i].energy+=.1*m.heat_capacity_cv[2]*330+.5*m.kinetic_scale*1.1*20*20;
+            input[i].momentum[0]=1.1*20;input[i].pigment[x<64?0:2]=.1;
+        }
+    }
+    for(uint32_t slot=0;slot<2;slot++) {
+        for(uint32_t y=0;y<64;y++) memcpy(local+y*64,input+y*128+slot*64,64*sizeof(*local));
+        ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,slot,local,volumes,4096,err,sizeof(err)));
+    }
+    ASSERT_TRUE(seam_snapshot(g,input,local,err,sizeof(err)));
+    double before_mass[5]={0},before_energy=0,before_color=0;
+    for(uint32_t i=0;i<8192;i++) {for(uint32_t k=0;k<5;k++) before_mass[k]+=input[i].species[k];before_energy+=input[i].energy;before_color+=input[i].pigment[0];}
+    float interval=.001f;ASSERT_TRUE(fr_gas_implicit_reference_step(&m,input,volumes,128,64,interval,expected,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_step(g,interval,err,sizeof(err))&&seam_snapshot(g,out,local,err,sizeof(err)));
+    for(uint32_t i=0;i<8192;i++) {
+        for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(out[i].species[k]-expected[i].species[k])<2e-6);
+        ASSERT_TRUE(fabs(out[i].energy-expected[i].energy)<.002);
+        for(uint32_t k=0;k<2;k++) ASSERT_TRUE(fabs(out[i].momentum[k]-expected[i].momentum[k])<2e-5);
+    }
+    for(uint32_t step=1;step<20;step++) ASSERT_TRUE(fr_gas_gpu_step(g,interval,err,sizeof(err)));
+    ASSERT_TRUE(seam_snapshot(g,out,local,err,sizeof(err)));double mass[5]={0},energy=0,color=0;
+    for(uint32_t i=0;i<8192;i++) {for(uint32_t k=0;k<5;k++) mass[k]+=out[i].species[k];energy+=out[i].energy;color+=out[i].pigment[0];}
+    for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(mass[k]-before_mass[k])<.0002);
+    ASSERT_TRUE(fabs(energy-before_energy)<.02&&fabs(color-before_color)<2e-5);
+    printf("Native gas seam: red-right%.9g blue-right%.9g energy error%.9g pigment error%.9g\n",
+        out[32*128+64].pigment[0],out[32*128+64].pigment[2],energy-before_energy,color-before_color);
+    ASSERT_TRUE(out[32*128+64].pigment[0]>1e-5&&out[32*128+64].pigment[2]>1e-5&&present(g,err,sizeof(err)));
+    free(input);free(out);free(expected);free(local);free(volumes);free(c);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
@@ -146,5 +191,6 @@ int main(void) {
     RUN(test_native_buoyancy_matches_reference_and_accounts_for_external_work);
     RUN(test_native_implicit_acoustics_match_reference_beyond_explicit_acoustic_cfl);
     RUN(test_native_implicit_colored_transport_matches_reference_and_retains_closed_budgets);
+    RUN(test_native_implicit_sparse_pressure_and_color_cross_chunk_seams_without_stock_loss);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

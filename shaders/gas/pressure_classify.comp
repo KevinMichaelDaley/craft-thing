@@ -1,0 +1,13 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "acoustic.glsl"
+shared uint needed;
+void main() {
+    uint lane=gl_LocalInvocationIndex;if(lane==0u) needed=0u;barrier();
+    uvec2 p=gl_WorkGroupID.xy*8u+uvec2(lane%8u,lane/8u);
+    if(p.x<params.width&&p.y<params.height) {
+        uint at=p.y*params.width+p.x;
+        if(correction_data[at].y>0.&&abs(correction_data[at].x)/pressure[at].w>1e-7) atomicOr(needed,1u);
+    }
+    barrier();if(lane==0u) active_mask[gl_WorkGroupID.y*((params.width+7u)/8u)+gl_WorkGroupID.x]=needed;
+}

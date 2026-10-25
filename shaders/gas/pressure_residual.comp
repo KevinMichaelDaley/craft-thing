@@ -2,8 +2,11 @@
 #extension GL_GOOGLE_include_directive : require
 #include "acoustic.glsl"
 void main() {
-    uint index=gas_index();float residual=0.;
-    if(index<params.width*params.height&&pressure[index].z>0.) {
+    uint tiles_x=(params.width+7u)/8u,tiles_y=(params.height+7u)/8u,lane=gl_LocalInvocationIndex;
+    uint tile=active_tiles[tiles_x*tiles_y+gl_WorkGroupID.x];
+    uvec2 p=uvec2(tile%tiles_x,tile/tiles_x)*8u+uvec2(lane%8u,lane/8u);
+    uint index=p.y*params.width+p.x;float residual=0.;
+    if(p.x<params.width&&p.y<params.height&&pressure[index].z>0.) {
         float difference=gas_pressure_residual(index);
         correction_data[index].x=difference;correction[index]=0.;
         residual=abs(difference)/pressure[index].w;

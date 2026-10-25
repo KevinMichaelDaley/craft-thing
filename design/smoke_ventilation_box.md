@@ -159,3 +159,36 @@ full-field timing to83.998/101.533ms. Compact scalar correction storage and cach
 relaxation coefficients reduced it further to58.875/73.470ms over30 frames. The
 target remains unmet; next is GPU-discovered pressure work with full residual
 checks, preserving every gas cell and avoiding CPU field/list readback.
+
+## Sparse pressure-work invariant
+
+For each staged physical substep, the pressure matrix and source remain fixed
+through its correction iterations. The GPU classifies retained row defects using
+the same normalized1e-7 criterion as the convergence check. It constructs a solve
+list with two tiles of neighborhood and a residual list with one additional tile.
+Each list has storage for every grid tile; each tile appends at most once. There
+is no truncation, fixed activity quota or CPU list construction/readback.
+
+Inner correction sweeps and compensated accumulation modify pressure only in
+the solve list. The matrix has four-neighbor support. Consequently, any row whose
+defect can change is inside the extra residual neighborhood and is recomputed.
+Outside it, the pressure row and all four neighbors are unchanged, so the retained
+defect is unchanged and already within tolerance. The global convergence criterion
+therefore includes both recomputed defects and proven unchanged defects. All gas
+stock remains stored; this work scheduling does not erase gas, pigment or energy.
+Every iteration rebuilds discovery, so changed defects wake neighboring work.
+
+The first indirect-sweep timing was46.552/76.110ms; hoisted advection43.102/83.599ms;
+sparse correction/residual coverage40.809/58.540ms over30 frames. These remain
+failed performance results, not acceptance. Cross-chunk coverage additionally
+compares an8192-cell two-chunk case against the cold oracle and checks a colored
+packet crossing the seam, preserving closed species/energy/pigment budgets.
+
+All6 native cases now pass with core and synchronization validation enabled,
+including the two-chunk oracle comparison: red0.0332255736 and blue0.0667648464
+coexist immediately across the seam, closed energy error -0.00000950787216,
+red-pigment error0.0000000998786254. Zero VUID/synchronization errors were logged.
+Per-cell advection and acoustic metadata are now computed together; the pending
+full-field measurement checks whether avoiding that extra read pass is enough.
+This remains a numerical/optimization checkpoint, with the smoke-box interaction,
+ownership/persistence and final repeated1000-frame gate still outstanding.

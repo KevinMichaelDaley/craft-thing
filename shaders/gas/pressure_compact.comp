@@ -1,0 +1,16 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "acoustic.glsl"
+void main() {
+    uint tile=gas_index(),width=(params.width+7u)/8u,height=(params.height+7u)/8u;
+    if(tile>=width*height) return;
+    ivec2 p=ivec2(int(tile%width),int(tile/width));bool needed=false,residual_needed=false;
+    for(int y=-3;y<=3;y++) for(int x=-3;x<=3;x++) {
+        ivec2 q=p+ivec2(x,y);
+        if(all(greaterThanEqual(q,ivec2(0)))&&all(lessThan(q,ivec2(width,height)))&&active_mask[uint(q.y)*width+uint(q.x)]!=0u) {
+            residual_needed=true;if(abs(x)<=2&&abs(y)<=2) needed=true;
+        }
+    }
+    if(needed) {uint slot=atomicAdd(indirect[0],1u);active_tiles[slot]=tile;}
+    if(residual_needed) {uint slot=atomicAdd(indirect[4],1u);active_tiles[width*height+slot]=tile;}
+}

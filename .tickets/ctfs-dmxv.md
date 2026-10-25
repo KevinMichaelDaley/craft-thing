@@ -43,3 +43,7 @@ Vulkan transport GREEN checkpoint: actual Wayland2/2 cases pass with subgroup CF
 **2026-10-25T10:22:59Z**
 
 Implicit acoustic numerical checkpoint: CPU3/3 reference cases and actual Wayland4/4 GPU cases pass, keeping original HLLC tests. Compensated pressure removes a float residual floor at unchanged1e-7 tolerance; reduced scalar convergence feedback only, no runtime CPU field solve. Full-field performance is still RED (first compensated diagnostic193.265ms), with precomputed-stencil/converged-row optimization under test. Interactive controls, vacuum/geometry admission, persistence/streaming and final repeated1000frame performance remain unfinished; no ticket completion claim.
+
+**2026-10-25T10:58:51Z**
+
+Sparse Vulkan numerical checkpoint:6/6 actual Wayland cases pass with core AND synchronization validation enabled, no VUID/SYNC errors. Includes exact resting state under both policies, reference-matched implicit colored transport, and8192-cell cross-chunk color/pressure transport. Seam energy error-9.50787216e-06 and red error9.98786254e-08. GPU compaction has capacity for every tile, no CPU list/cell readback or discarded stock. Last measured full-frame40.809/58.540ms remains RED; fused advection/metadata performance is under measurement. Interactive box, vacuum/geometry admission, streaming/persistence, long timing runs remain open.
