@@ -5,6 +5,7 @@
 #include "dungeoncraft/gas_layout.h"
 #include "gas_acoustic_gpu.h"
 enum { GAS_PRESSURE_SWEEPS=64, GAS_PRESSURE_GROUP=1 };
+static bool enabled(const char *name) {const char *value=getenv(name);return value&&strcmp(value,"0")!=0;}
 static bool error(char *err,uint32_t cap,const char *message) {if(err&&cap) snprintf(err,cap,"%s",message);return false;}
 void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->advect);fr_renderer_compute_destroy(g,&t->initialize);
@@ -16,6 +17,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->final_compact);
     fr_renderer_compute_destroy(g,&t->commit);
     fr_renderer_compute_destroy(g,&t->clear_pressure);fr_renderer_compute_destroy(g,&t->prepare_pressure);
+    fr_renderer_compute_destroy(g,&t->activity_candidates);
     for(uint32_t i=0;i<11;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
     dc_gpu_address_buffer_destroy(g,&t->indirect);
     memset(t,0,sizeof(*t));
@@ -35,9 +37,9 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     if(!dc_gpu_address_buffer_create(g,64,true,&t->indirect,err,cap)) goto fail;
     for(uint32_t i=0;i<4;i++) {((uint32_t *)t->indirect.mapped)[i*4]=0u;((uint32_t *)t->indirect.mapped)[i*4+1]=1u;((uint32_t *)t->indirect.mapped)[i*4+2]=1u;}
     buffers[23]=(VkDescriptorBufferInfo){t->indirect.buffer,0,64};
-    fr_renderer_compute_t *pipelines[]={&t->advect,&t->initialize,&t->rhs,&t->classify,&t->compact,&t->sor,&t->correct,&t->residual,&t->finish,&t->activity,&t->activity_compact,&t->final_compact,&t->commit,&t->clear_pressure,&t->prepare_pressure};
-    const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_classify","pressure_compact","pressure_sor","pressure_correct","pressure_residual","acoustic_finish","activity","activity_compact","final_compact","sparse_commit","pressure_clear","pressure_prepare"};
-    for(uint32_t i=0;i<15;i++) {
+    fr_renderer_compute_t *pipelines[]={&t->advect,&t->initialize,&t->rhs,&t->classify,&t->compact,&t->sor,&t->correct,&t->residual,&t->finish,&t->activity,&t->activity_compact,&t->final_compact,&t->commit,&t->clear_pressure,&t->prepare_pressure,&t->activity_candidates};
+    const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_classify","pressure_compact","pressure_sor","pressure_correct","pressure_residual","acoustic_finish","activity","activity_compact","final_compact","sparse_commit","pressure_clear","pressure_prepare","activity_candidates"};
+    for(uint32_t i=0;i<16;i++) {
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",paths[i]);
         if(!fr_renderer_compute_init(g,pipelines[i],buffers,24,16,path,err,cap)) goto fail;
     }
@@ -77,8 +79,12 @@ static bool submit(dc_gpu_t *g,char *err,uint32_t cap) {
 bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint32_t gy,
     float dt,uint32_t bank,dc_gpu_address_buffer_t *stats,char *err,uint32_t cap) {
     bool trace=getenv("DC_GAS_TRACE")!=NULL&&g->timestamp_bits;
-    bool sparse=getenv("DC_GAS_SPARSE_RHS")!=NULL&&t->matrix_valid;
+    bool sparse=enabled("DC_GAS_SPARSE_RHS")&&t->matrix_valid;
+    bool sparse_activity=enabled("DC_GAS_SPARSE_ACTIVITY")&&t->matrix_valid;
+    bool sparse_classify=enabled("DC_GAS_SPARSE_CLASSIFY");
     if(sparse) bank|=256u;
+    if(sparse_activity) bank|=512u;
+    if(sparse_classify) bank|=1024u;
     if(!t->matrix_valid) bank|=4u;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin acoustic advection");
     if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,4);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);}
@@ -86,7 +92,12 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     barrier(g);
     vkCmdFillBuffer(g->command,t->indirect.buffer,32,4,0);vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
     uint32_t tiles=((g->width+7u)/8u)*((g->height+7u)/8u);
-    dispatch(g,&t->activity,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
+    if(sparse_activity) {
+        barrier(g);vkCmdFillBuffer(g->command,t->fields[9].buffer,0,tiles*4u,0);
+        vkCmdFillBuffer(g->command,t->indirect.buffer,0,4,0);
+        dispatch(g,&t->activity_candidates,(tiles+63u)/64u,1u,dt,bank);
+        indirect_dispatch(g,t,&t->activity,dt,bank,0);
+    } else dispatch(g,&t->activity,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
     dispatch(g,&t->activity_compact,(tiles+63u)/64u,1u,dt,bank);
     indirect_dispatch(g,t,&t->advect,dt,bank,32);
     if(sparse) indirect_dispatch(g,t,&t->rhs,dt,bank,32);else dispatch(g,&t->rhs,gx,gy,dt,bank);
@@ -96,7 +107,12 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         for(uint32_t batch=0;batch<GAS_PRESSURE_GROUP;batch++) {
         barrier(g);vkCmdFillBuffer(g->command,t->indirect.buffer,0,4,0);
         vkCmdFillBuffer(g->command,t->indirect.buffer,16,4,0);
-        dispatch(g,&t->classify,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
+        if(sparse_classify) {
+            barrier(g);vkCmdFillBuffer(g->command,t->fields[6].buffer,0,tiles*4u,0);
+            vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
+            dispatch(g,&t->final_compact,(tiles+63u)/64u,1u,dt,bank);
+            indirect_dispatch(g,t,&t->classify,dt,bank,48);
+        } else dispatch(g,&t->classify,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
         dispatch(g,&t->compact,(tiles+63u)/64u,1u,dt,bank);
         if(sparse) indirect_dispatch(g,t,&t->prepare_pressure,dt,bank,16);
         for(uint32_t sweep=0;sweep<GAS_PRESSURE_SWEEPS;sweep++) {
@@ -128,6 +144,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
             vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,1);}
     }
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot finish acoustic pressure solve");
+    barrier(g);vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
     dispatch(g,&t->final_compact,(tiles+63u)/64u,1u,dt,bank);
     indirect_dispatch(g,t,&t->finish,dt,bank,48);
     indirect_dispatch(g,t,&t->commit,dt,bank,48);

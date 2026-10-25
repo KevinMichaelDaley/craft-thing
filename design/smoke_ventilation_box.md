@@ -270,3 +270,22 @@ numerical cases, but cost838.521/963.679ms in that scene. It is rejected; the
 shared-memory line barriers are too expensive on this machine. The method's
 background is [Peaceman and Rachford](https://epubs.siam.org/doi/10.1137/0103003).
 All experimental source is retained in history, not enabled in production.
+
+Lazy row setup checkpoint4d5510e passes13 native cases and the displayed enclosure
+test, with a24.243/42.891ms short elapsed-clock result (still RED). Only the exact
+advection footprint gets a fresh RHS. Before each pressure batch, its residual
+halo gets current diagonal/normalization/relaxation data from cached source
+primitives and unchanged normalized face coefficients. The previous final
+footprint is cleared first; rejected candidates force a full rebuild on retry.
+The finish kernel obtains unchanged neighbor thermodynamics from the source
+cache rather than stale transient metadata.
+
+The next exact activity optimization uses the invariant that source state can
+change only inside the previous final footprint. New nonzero velocity/force is
+inside that footprint; a new pressure gradient can additionally wake its neighbor
+tile. A GPU candidate list therefore covers that footprint plus one tile, with
+all other raw activity bits cleared. Seed, page, gate and gravity changes force
+one global rebuild. Within pressure iteration, nonzero defects are confined to
+the accumulated advection/residual footprint; classification visits that GPU
+list and clears the remaining mask bits. This is a dependency bound, not an
+activity threshold: small velocities and all material stocks remain authoritative.

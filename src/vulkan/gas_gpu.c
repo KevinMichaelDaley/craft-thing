@@ -210,7 +210,7 @@ void fr_gas_record_overlay(dc_gpu_t *g) {
 bool fr_gas_gpu_set_gravity(dc_gpu_t *g,float gravity,char *err,uint32_t cap) {
     if(!g||!g->gas||!isfinite(gravity)||gravity<0) return error(err,cap,"Invalid gas gravity");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot configure gas gravity");
-    ((float *)g->gas->parameters.mapped)[FR_GAS_GRAVITY_WORD]=gravity;return true;
+    ((float *)g->gas->parameters.mapped)[FR_GAS_GRAVITY_WORD]=gravity;g->gas->acoustic.matrix_valid=false;return true;
 }
 bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32_t cap) {
     if(!g||!g->gas||policy>FR_GAS_PRESSURE_IMPLICIT) return error(err,cap,"Invalid gas acoustic policy");
