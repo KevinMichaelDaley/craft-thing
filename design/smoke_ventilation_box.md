@@ -482,3 +482,31 @@ The two extreme kinetic_scale1/gravity900 diagnostic cases remain available
 through `DC_GAS_EXTREME_STRESS=1`; they are unresolved, explicitly unsupported
 by practical scale-height admission, and are no longer gameplay gates under the
 user's revised numerical scope. They are not claimed to pass or called baseline.
+
+## Sustained practical audit
+
+The practical transport uses64-byte scratch records because mass and thermal
+energy share one operator. `DC_GAS_FUSED_AXIS=1` keeps each line's factorization,
+forward/back substitutions and conservative face update in one workgroup. The
+bounded coarse budget is now32 sweeps at relaxation1.8. The passing fine smoother
+remains16 global pre-sweeps and32 global post-sweeps. Shared-block smoothing was
+rejected because it disturbed a sealed neighboring chamber; its experiment was
+removed without weakening the isolation gate.
+
+`--benchmark-gas-audit` adds cold parallel GPU reductions before the loop clock
+starts and after all measured frames. Only32 summary scalars reach the CPU; no
+runtime field/list readback or CPU solve is introduced. The displayed test covers
+ambient and moving colored exhaust stocks, temperature, velocity bins, and exact
+state/clock preservation; core/synchronization validation reports zero errors.
+
+The latest actual elapsed-clock1000-frame open-vent run measured44.721ms mean /
+54.353ms worst, still over budget. Its full-field audit finds no invalid cells,
+species drift at most6.31e-5 relative, pigment drift2.05e-7, and energy-minus-work
+drift-4.67e-5 relative. Final temperatures293.1497..367.3988K, peak pressure64.595
+versus initial51.907, and peak speed41.49 cells/s show bounded behavior. Of179072
+gas cells,33548 move below0.05 cells/s,29103 below1,86486 below10, and29935 above10.
+The net-force wake count exceeds the raw wake count, so simply sleeping
+gravity/pressure-balanced cells is not supported by this data. Next evaluate
+GPU-classified local explicit transport with a positive CFL and bounded stage
+count, retaining implicit fallback for stiff lines. No quality or frame gate is
+claimed complete.

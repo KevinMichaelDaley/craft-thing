@@ -16,6 +16,7 @@
 #include "level.h"
 #include "prop_scene.h"
 #include "session.h"
+#include "smoke_audit.h"
 #include "structural_demo.h"
 #include "view_config.h"
 
@@ -1103,6 +1104,7 @@ int main(int argc, char **argv) {
     uint32_t benchmark_frames = 0;
     const char *benchmark_capture = NULL;
     bool benchmark_world = false;
+    bool benchmark_gas_audit=false;
 #if defined(DC_QUARTER_NATIVE_VIEW)
     const char *directory = scripted_input ? scripted_directory : "world_chunks_quarter_native";
 #elif defined(DC_HALF_NATIVE_VIEW)
@@ -1148,6 +1150,7 @@ int main(int argc, char **argv) {
         }
         else if (strcmp(argv[i], "--benchmark-capture") == 0 && i + 1 < argc)
             benchmark_capture = argv[++i];
+        else if(strcmp(argv[i],"--benchmark-gas-audit")==0) benchmark_gas_audit=true;
         else {
             fprintf(stderr, "Usage: %s [--seed number] [--world-dir path] [--scene asset.cprop|--heat-bench|--smoke-box] [--lighting] [--demo-coupled|--demo-sifting]\n", argv[0]);
             return 1;
@@ -1156,6 +1159,9 @@ int main(int argc, char **argv) {
     if (benchmark_frames && !benchmark_world) {
         fprintf(stderr, "A bounded benchmark requires an explicit --world-dir\n");
         return 1;
+    }
+    if(benchmark_gas_audit&&(!benchmark_frames||!smoke_box)) {
+        fprintf(stderr,"Cold gas audit requires --smoke-box and --benchmark-frames\n");return 1;
     }
     if(heat_bench&&scene_path) {fprintf(stderr,"Choose --heat-bench or --scene\n");return 1;}
     if(smoke_box&&(heat_bench||scene_path)) {fprintf(stderr,"Choose one authored fixture\n");return 1;}
@@ -1229,6 +1235,10 @@ int main(int argc, char **argv) {
     char seed_text[21] = {0}, previous_title[192] = {0};
     size_t seed_length = 0;
     double pan_carry_x = 0.0, pan_carry_y = 0.0;
+    fr_gas_gpu_audit_t audit_before={0};
+    if(benchmark_gas_audit&&!dc_smoke_audit_capture(view,"initial",&audit_before,err,sizeof(err))) {
+        fprintf(stderr,"Smoke audit setup: %s\n",err);dc_level_view_destroy(view,err,sizeof(err));return 1;
+    }
     uint64_t previous = SDL_GetPerformanceCounter();
     double accumulator = 0.0;
     const double tick_seconds = 1.0 / 60.0;
@@ -1476,6 +1486,11 @@ int main(int argc, char **argv) {
         printf("Displayed full frame %ux%u physics/render (active region %ux%u incl. halo): mean %.3fms worst %.3fms, %u frames\n",
                VIEW_WIDTH, VIEW_HEIGHT, SIM_WIDTH, SIM_HEIGHT,
                benchmark_sum / measured_frames, benchmark_worst, measured_frames);
+        if(benchmark_gas_audit) {
+            fr_gas_gpu_audit_t audit_after;
+            if(!dc_smoke_audit_capture(view,"final",&audit_after,err,sizeof(err))||
+               !dc_smoke_audit_compare(&audit_before,&audit_after,err,sizeof(err))) failed=true;
+        }
         if (benchmark_capture) {
             size_t count = (size_t)VIEW_WIDTH * VIEW_HEIGHT;
             uint32_t *pixels = malloc(count * sizeof(*pixels));
@@ -1492,7 +1507,7 @@ int main(int argc, char **argv) {
             if (!stable) { snprintf(err, sizeof(err), "Benchmark paused capture changed"); failed = true; }
             else printf("Four paused pixels identical; captured %s\n", benchmark_capture);
         }
-        if (benchmark_worst >= 30.) {
+        if (benchmark_worst >= 30. && !failed) {
             snprintf(err, sizeof(err), "Displayed total frame budget exceeds 30ms");
             failed = true;
         }

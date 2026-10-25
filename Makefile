@@ -221,7 +221,7 @@ build/rigid_solver_tests: tests/vulkan/rigid_solver_tests.c $(GPU_OBJ) $(CHUNK_O
 all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
 
 THERMAL_BENCH_SRC = src/app/thermal_bench.c
-NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/smoke_box.c src/app/smoke_level.c $(THERMAL_BENCH_SRC) $(GPU_SRC) src/world/chunk.c src/world/stream.c src/world/generate.c
+NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(THERMAL_BENCH_SRC) $(GPU_SRC) src/world/chunk.c src/world/stream.c src/world/generate.c
 build/rigid_dynamics_visual_tests: tests/app/rigid_dynamics_visual_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 
@@ -620,7 +620,7 @@ build/stream_tests: tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENE
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c src/fire/thermal_checkpoint.c $(REACTIVE_STATE_SRC) -o $@ -pthread -lm
 
 build/dungeoncraft: src/app/structural_demo.c src/app/structural_demo.h src/app/main.c src/app/level.c src/app/level.h src/app/view_config.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/smoke_box.c src/app/smoke_level.c $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 
 build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/controls_tests.c src/app/level.c src/app/session.c $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
@@ -1795,6 +1795,8 @@ GAS_SHADERS += build/shaders/gas_transport_factor_wide.comp.spv
 GAS_SHADERS += build/shaders/gas_transport_stage.comp.spv
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_factor_compact transport_factor_compact_wide transport_prefix_compact transport_prefix_compact_wide transport_apply_compact)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_axis_compact transport_axis_compact_wide)
+GAS_SHADERS += build/shaders/gas_audit.comp.spv
+build/shaders/gas_audit.comp.spv: include/dungeoncraft/gas_audit_layout.h
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_restrict pressure_coarse_sor pressure_prolong)
 build/gas_acoustic_gpu.o: src/vulkan/gas_acoustic_gpu.c src/vulkan/gas_acoustic_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@

@@ -10,6 +10,7 @@
 #include "ferrum/structural/gpu.h"
 #include "ferrum/assets/prop.h"
 #include "ferrum/renderer/gpu.h"
+#include "ferrum/fire/gas_gpu.h"
 
 typedef struct dc_level_view dc_level_view_t;
 /** Whether a persisted world checkpoint was restored at view creation. */
@@ -55,6 +56,8 @@ dc_level_view_t *dc_level_view_create_smoke_box(const char *directory,uint64_t s
 bool dc_level_view_smoke_valve(dc_level_view_t *view,uint32_t valve,char *err,uint32_t err_cap);
 /** Select smoke pigment or oxygen molecular-fraction feedback. */
 bool dc_level_view_smoke_overlay(dc_level_view_t *view,uint32_t mode);
+/** Cold benchmark summary; never advances the scene or reads field lists. */
+bool dc_level_view_smoke_audit(dc_level_view_t *view,fr_gas_gpu_audit_t *out,char *err,uint32_t err_cap);
 /** Author explicitly placed structural members in the streamed world. */
 bool dc_level_view_place_structure(dc_level_view_t *view,
                                    const fr_structural_gpu_graph_t *graph,

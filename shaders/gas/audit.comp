@@ -1,0 +1,79 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "storage.glsl"
+#include "../../include/dungeoncraft/gas_audit_layout.h"
+shared float values[64u*FR_GAS_AUDIT_WORDS];
+void audit_add(uint word,float value) {
+    uint old=atomicAdd(stats[word],0u);
+    for(;;) {
+        uint found=atomicCompSwap(stats[word],old,floatBitsToUint(uintBitsToFloat(old)+value));
+        if(found==old) return;old=found;
+    }
+}
+void main() {
+    uint lane=gl_LocalInvocationIndex,index=gas_index();float metrics[FR_GAS_AUDIT_WORDS];
+    for(uint k=0u;k<FR_GAS_AUDIT_WORDS;k++) metrics[k]=0.;
+    metrics[FR_GAS_AUDIT_MIN_TEMPERATURE]=3.402823466e38;
+    if(index<params.width*params.height) {
+        ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
+        if(atlas!=0xffffffffu) {
+            Gas s=world[atlas];bool okay=false;Primitive own=gas_primitive(s,okay);
+            if(!okay||!gas_finite(s.geometry.w)) metrics[FR_GAS_AUDIT_INVALID]=1.;
+            else {
+                for(uint k=0u;k<4u;k++) metrics[k]=s.species[k];metrics[4]=s.dynamics.x;
+                for(uint k=0u;k<3u;k++) metrics[FR_GAS_AUDIT_PIGMENT+k]=s.visual[k];
+                metrics[FR_GAS_AUDIT_ENERGY]=gas_energy(s);metrics[FR_GAS_AUDIT_WORK]=s.geometry.w;
+                metrics[FR_GAS_AUDIT_KINETIC]=gas_kinetic_energy(s);metrics[FR_GAS_AUDIT_THERMAL]=gas_thermal_energy(s);
+                metrics[FR_GAS_AUDIT_MASS]=gas_mass(s);metrics[FR_GAS_AUDIT_VOLUME]=s.geometry.x;
+                if(own.metric.z>0.) {
+                    float speed=length(own.hydro.yz),cv=dot(s.species,vec4(gas_parameter(5u),gas_parameter(6u),gas_parameter(7u),gas_parameter(8u)))+s.dynamics.x*gas_parameter(9u);
+                    float temperature=gas_thermal_energy(s)/cv;
+                    uint bin=speed<.05?0u:(speed<1.?1u:(speed<10.?2u:3u));
+                    metrics[FR_GAS_AUDIT_CELLS]=1.;metrics[FR_GAS_AUDIT_VELOCITY_BINS+bin]=1.;
+                    metrics[FR_GAS_AUDIT_MAX_SPEED]=speed;metrics[FR_GAS_AUDIT_MAX_PRESSURE]=own.hydro.w;
+                    metrics[FR_GAS_AUDIT_MAX_TEMPERATURE]=temperature;metrics[FR_GAS_AUDIT_MIN_TEMPERATURE]=temperature;
+                    float fraction=gas_parameter(FR_GAS_OXYGEN_WORD);
+                    float oxygen=(fraction/gas_parameter(0u))/(fraction/gas_parameter(0u)+(1.-fraction)/gas_parameter(1u));
+                    float reference=(oxygen*gas_parameter(0u)+(1.-oxygen)*gas_parameter(1u))*gas_parameter(FR_GAS_AMBIENT_WORD);
+                    float ratio=gas_parameter(FR_GAS_KINETIC_WORD)*own.hydro.w/(own.hydro.x*reference);
+                    float gravity=gas_parameter(FR_GAS_GRAVITY_WORD);vec4 neighbors=vec4(own.hydro.w);uint walls=0u;bool pressure_awake=false;
+                    for(uint d=0u;d<4u;d++) {
+                        ivec2 delta=d==0u?ivec2(1,0):(d==1u?ivec2(-1,0):(d==2u?ivec2(0,1):ivec2(0,-1)));
+                        ivec2 q=p+delta;uint other_at=gas_atlas(q);bool open=other_at!=0xffffffffu&&gas_gate_open((d&1u)==0u?p:q,d/2u);
+                        if(open) {
+                            bool valid=false;Primitive other=gas_primitive(world[other_at],valid);
+                            open=valid&&other.metric.w>0.;if(open) neighbors[d]=other.hydro.w;
+                        }
+                        if(!open&&d>=2u) walls++;
+                        if(abs(neighbors[d]-own.hydro.w)>.001*max(abs(neighbors[d]),abs(own.hydro.w))) pressure_awake=true;
+                    }
+                    vec2 acceleration=-.5*vec2(neighbors.x-neighbors.y,neighbors.z-neighbors.w)/own.hydro.x;
+                    acceleration.y+=gravity*(1.-ratio)*(1.-.5*float(walls));
+                    bool velocity_awake=any(greaterThan(abs(own.hydro.yz),vec2(.05)));
+                    bool gravity_awake=gravity!=0.&&abs(ratio-1.)>.001,balanced=length(acceleration)>.5;
+                    metrics[FR_GAS_AUDIT_VELOCITY_AWAKE]=velocity_awake?1.:0.;metrics[FR_GAS_AUDIT_GRAVITY_AWAKE]=gravity_awake?1.:0.;
+                    metrics[FR_GAS_AUDIT_PRESSURE_AWAKE]=pressure_awake?1.:0.;metrics[FR_GAS_AUDIT_BALANCED_AWAKE]=balanced?1.:0.;
+                    metrics[FR_GAS_AUDIT_CARRIER_AWAKE]=(s.species.z+s.dynamics.x)>own.metric.z*.0001?1.:0.;
+                    metrics[FR_GAS_AUDIT_RAW_AWAKE]=velocity_awake||gravity_awake||pressure_awake?1.:0.;
+                    metrics[FR_GAS_AUDIT_NET_AWAKE]=velocity_awake||balanced?1.:0.;metrics[FR_GAS_AUDIT_MAX_ACCELERATION]=length(acceleration);
+                }
+            }
+        }
+    }
+    for(uint k=0u;k<FR_GAS_AUDIT_WORDS;k++) values[k*64u+lane]=metrics[k];barrier();
+    for(uint stride=32u;stride>0u;stride/=2u) {
+        if(lane<stride) for(uint k=0u;k<FR_GAS_AUDIT_WORDS;k++) {
+            float other=values[k*64u+lane+stride];
+            if(k==FR_GAS_AUDIT_MIN_TEMPERATURE) values[k*64u+lane]=min(values[k*64u+lane],other);
+            else if((k>=20u&&k<=22u)||k==31u) values[k*64u+lane]=max(values[k*64u+lane],other);
+            else values[k*64u+lane]+=other;
+        }
+        barrier();
+    }
+    if(lane==0u) for(uint k=0u;k<FR_GAS_AUDIT_WORDS;k++) {
+        float value=values[k*64u];
+        if(k==FR_GAS_AUDIT_MIN_TEMPERATURE) atomicMin(stats[k],floatBitsToUint(value));
+        else if((k>=20u&&k<=22u)||k==31u) atomicMax(stats[k],floatBitsToUint(value));
+        else if(value!=0.) audit_add(k,value);
+    }
+}

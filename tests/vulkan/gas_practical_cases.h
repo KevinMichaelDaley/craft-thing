@@ -15,6 +15,19 @@ static void test_native_cold_audit_reduces_stock_and_does_not_advance_physics(vo
     fr_gas_state_t air=reference_air(m,1,300,0);
     for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(audit.metrics[FR_GAS_AUDIT_SPECIES+k]-air.species[k]*4096)<.04);
     ASSERT_TRUE(fabs(audit.metrics[FR_GAS_AUDIT_ENERGY]-air.energy*4096)<air.energy*.1);
+    fr_gas_state_t *input=calloc(4096,sizeof(*input)),*copy=malloc(4096*sizeof(*copy));double *volume=malloc(4096*sizeof(*volume));ASSERT_TRUE(input&&copy&&volume);
+    for(uint32_t i=0;i<4096;i++) {
+        volume[i]=1;input[i]=(fr_gas_state_t){.species={0,0,1,0,0},.energy=m.heat_capacity_cv[FR_GAS_EXHAUST]*650+.5*m.kinetic_scale*400,
+            .momentum={20,0},.pigment={.8,.2,.1}};
+    }
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,input,4096,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_audit(g,&audit,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,copy,4096,err,sizeof(err)));
+    ASSERT_TRUE(memcmp(input,copy,4096*sizeof(*input))==0);
+    ASSERT_EQ(audit.metrics[FR_GAS_AUDIT_SPECIES+FR_GAS_EXHAUST],4096.f);
+    for(uint32_t k=0;k<3;k++) ASSERT_TRUE(fabs(audit.metrics[FR_GAS_AUDIT_PIGMENT+k]-input[0].pigment[k]*4096)<.04);
+    ASSERT_EQ(audit.metrics[FR_GAS_AUDIT_MAX_SPEED],20.f);ASSERT_EQ(audit.metrics[FR_GAS_AUDIT_VELOCITY_BINS+3],4096.f);
+    ASSERT_TRUE(fr_gas_gpu_clock(g,&after)&&memcmp(&before,&after,sizeof(before))==0);
+    free(input);free(copy);free(volume);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
 }
 static void test_native_practical_offset_wall_does_not_drive_sealed_neighbor(void) {

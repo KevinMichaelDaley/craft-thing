@@ -11,8 +11,8 @@
 
 typedef struct {float words[FR_GAS_CELL_WORDS];} gas_packet_t;
 struct fr_gas_gpu {
-    fr_renderer_compute_t initialize,prepare,transport,feedback,gate;
-    dc_gpu_address_buffer_t state[3],cache[2],parameters,stats,gates;
+    fr_renderer_compute_t initialize,prepare,transport,feedback,gate,audit;
+    dc_gpu_address_buffer_t state[3],cache[2],parameters,stats,gates,audit_summary;
     fr_gas_model_t model;
     float density,temperature;
     uint32_t groups_x,groups_y;
@@ -37,6 +37,7 @@ static void destroy(dc_gpu_t *g,struct fr_gas_gpu *t) {
     fr_renderer_compute_destroy(g,&t->initialize);fr_renderer_compute_destroy(g,&t->prepare);
     fr_renderer_compute_destroy(g,&t->transport);fr_renderer_compute_destroy(g,&t->feedback);
     fr_renderer_compute_destroy(g,&t->gate);dc_gpu_address_buffer_destroy(g,&t->gates);
+    fr_renderer_compute_destroy(g,&t->audit);dc_gpu_address_buffer_destroy(g,&t->audit_summary);
     for(uint32_t i=0;i<3;i++) dc_gpu_address_buffer_destroy(g,t->state+i);
     for(uint32_t i=0;i<2;i++) dc_gpu_address_buffer_destroy(g,t->cache+i);
     dc_gpu_address_buffer_destroy(g,&t->parameters);dc_gpu_address_buffer_destroy(g,&t->stats);
@@ -107,7 +108,8 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     for(uint32_t i=0;i<2;i++) if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,true,t->cache+i,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*4u,true,&t->gates,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,FR_GAS_MODEL_WORDS*4u,true,&t->parameters,err,cap)||
-       !dc_gpu_address_buffer_create(g,64,true,&t->stats,err,cap)) return false;
+       !dc_gpu_address_buffer_create(g,64,true,&t->stats,err,cap)||
+       !dc_gpu_address_buffer_create(g,FR_GAS_AUDIT_WORDS*4u,true,&t->audit_summary,err,cap)) return false;
     float *parameters=t->parameters.mapped;
     for(uint32_t i=0;i<5;i++) {parameters[i]=(float)t->model.gas_constant[i];parameters[5+i]=(float)t->model.heat_capacity_cv[i];}
     parameters[10]=(float)t->model.kinetic_scale;parameters[11]=t->density;parameters[12]=t->temperature;
@@ -119,11 +121,14 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     buffers[7]=(VkDescriptorBufferInfo){g->page_buffer,0,VK_WHOLE_SIZE};buffers[8]=(VkDescriptorBufferInfo){g->chunk_buffer,0,VK_WHOLE_SIZE};
     buffers[9]=(VkDescriptorBufferInfo){g->occupancy_buffer,0,VK_WHOLE_SIZE};buffers[10]=(VkDescriptorBufferInfo){g->mpm_grid_buffer,0,VK_WHOLE_SIZE};
     buffers[11]=(VkDescriptorBufferInfo){t->gates.buffer,0,t->gates.bytes};
-    return fr_renderer_compute_init(g,&t->initialize,buffers,12,16,"build/shaders/gas_init.comp.spv",err,cap)&&
+    bool okay=fr_renderer_compute_init(g,&t->initialize,buffers,12,16,"build/shaders/gas_init.comp.spv",err,cap)&&
         fr_renderer_compute_init(g,&t->prepare,buffers,12,16,"build/shaders/gas_prepare.comp.spv",err,cap)&&
         fr_renderer_compute_init(g,&t->transport,buffers,12,16,"build/shaders/gas_transport.comp.spv",err,cap)&&
         fr_renderer_compute_init(g,&t->gate,buffers,12,32,"build/shaders/gas_gate.comp.spv",err,cap)&&
         fr_gas_feedback_init(g,&t->feedback,buffers[0],buffers[5],buffers[11],err,cap);
+    if(!okay) return false;
+    buffers[6]=(VkDescriptorBufferInfo){t->audit_summary.buffer,0,t->audit_summary.bytes};
+    return fr_renderer_compute_init(g,&t->audit,buffers,12,16,"build/shaders/gas_audit.comp.spv",err,cap);
 }
 bool fr_gas_gpu_enable(dc_gpu_t *g,const fr_gas_model_t *model,float density,float temperature,char *err,uint32_t cap) {
     fr_gas_state_t empty={0};fr_gas_thermo_t check;
@@ -200,7 +205,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(t->policy==FR_GAS_PRESSURE_LARGE_CFL) t->large_step_hint=hint;
     t->clock.physical_steps++;t->clock.substeps+=accepted;t->clock.advanced_seconds+=seconds;
     if(t->trace) {
-        VkDeviceSize bytes=t->parameters.bytes+t->stats.bytes+t->gates.bytes+t->acoustic.indirect.bytes+t->acoustic.transport_work.bytes;
+        VkDeviceSize bytes=t->parameters.bytes+t->stats.bytes+t->gates.bytes+t->audit_summary.bytes+t->acoustic.indirect.bytes+t->acoustic.transport_work.bytes;
         for(uint32_t i=0;i<3;i++) bytes+=t->state[i].bytes;
         for(uint32_t i=0;i<2;i++) bytes+=t->cache[i].bytes;
         for(uint32_t i=0;i<11;i++) bytes+=t->acoustic.fields[i].bytes;
@@ -250,7 +255,14 @@ bool fr_gas_gpu_clock(const dc_gpu_t *g,fr_gas_gpu_clock_t *out) {
     *out=g->gas->clock;return true;
 }
 bool fr_gas_gpu_audit(dc_gpu_t *g,fr_gas_gpu_audit_t *out,char *err,uint32_t cap) {
-    (void)g;(void)out;return error(err,cap,"Cold gas audit is not implemented");
+    if(!g||!g->gas||!out) return error(err,cap,"Invalid cold gas audit");
+    struct fr_gas_gpu *t=g->gas;
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g)) return error(err,cap,"Cannot begin cold gas audit");
+    barrier(g);vkCmdFillBuffer(g->command,t->audit_summary.buffer,0,t->audit_summary.bytes,0);barrier(g);
+    vkCmdFillBuffer(g->command,t->audit_summary.buffer,FR_GAS_AUDIT_MIN_TEMPERATURE*4u,4u,0x7f7fffffu);
+    dispatch(g,t,&t->audit,0,0);
+    if(!submit(g,err,cap)) return false;
+    memcpy(out->metrics,t->audit_summary.mapped,sizeof(out->metrics));return true;
 }
 void fr_gas_record_overlay(dc_gpu_t *g) {
     if(g->gas) fr_gas_feedback_record(g,&g->gas->feedback,g->gas->groups_x,g->gas->groups_y);

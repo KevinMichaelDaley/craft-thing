@@ -99,3 +99,7 @@ Opt-in whole-axis practical transport fusion passes all4 actual displayed practi
 **2026-10-25T21:56:31Z**
 
 Rejected optional shared-block smoothing experiment:4 inner over-relaxed sweeps failed isolated-neighbor density20% and pressure bound; monotone2-inner also failed; global pre-smoothing plus2-inner post-smoothing passed long pressure bound but still disturbed sealed neighbor2.5% vs locked1% gate. Removed experimental path; retained passing global48-fine V-cycle. No gate weakened. Next cold end-of-benchmark velocity/inventory audit to target actual sustained active-state cost rather than further blind variants.
+
+**2026-10-25T22:16:48Z**
+
+Cold parallel GPU audit GREEN: actual ambient+moving-color test proves totals/velocity bins and exact state+clock preservation; core+sync audit case zero VUID. Permanent --benchmark-gas-audit runs before loop clock and after measured frames, reads32 scalar summaries only. Audited1000 displayed frames44.721/54.353ms; invalid0, species max drift6.303e-5 relative, pigment2.046e-7, energy-minus-work−4.666e-5; T293.15..367.40K, Pmax64.59 vs51.91 initial, vmax41.49.179072 gas cells:33548 below.05,29103 below1,86486 below10,29935 above10 cells/s. Net-force wake count167200 exceeds raw149345, so balance-sleep is not justified. Next CFL-safe bounded explicit per-line path with implicit fallback;30ms still RED.

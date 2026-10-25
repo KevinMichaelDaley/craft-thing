@@ -57,3 +57,6 @@ bool dc_level_view_smoke_valve(dc_level_view_t *view,uint32_t index,char *err,ui
 bool dc_level_view_smoke_overlay(dc_level_view_t *view,uint32_t mode) {
     return view&&view->smoke_box&&fr_gas_gpu_overlay(view->gpu,mode);
 }
+bool dc_level_view_smoke_audit(dc_level_view_t *view,fr_gas_gpu_audit_t *out,char *err,uint32_t cap) {
+    return view&&view->smoke_box&&fr_gas_gpu_audit(view->gpu,out,err,cap);
+}
