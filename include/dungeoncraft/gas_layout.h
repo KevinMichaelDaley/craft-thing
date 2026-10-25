@@ -6,6 +6,14 @@
 /* Practical Rusanov floor gives two cells squared/second of mixing. */
 #define FR_GAS_PRACTICAL_MIXING_RATE 4.0
 #define FR_GAS_STAGED_RATES_BIT 65536u
+#define FR_GAS_HYBRID_LINES_BIT 131072u
+/* Fast-path workspace and stage budget; longer/stiffer lines stay implicit. */
+#define FR_GAS_EXPLICIT_LINE_CAPACITY 640u
+#define FR_GAS_EXPLICIT_MAX_STAGES 3u
+#define FR_GAS_EXPLICIT_LINE_COUNT_WORD 9u
+#define FR_GAS_EXPLICIT_STAGE_COUNT_WORD 10u
+#define FR_GAS_IMPLICIT_LINE_COUNT_WORD 12u
+#define FR_GAS_INACTIVE_LINE_COUNT_WORD 13u
 #define FR_GAS_R_WORD 0u
 #define FR_GAS_CV_WORD 5u
 #define FR_GAS_KINETIC_WORD 10u

@@ -30,6 +30,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->stage_transport);
     fr_renderer_compute_destroy(g,&t->practical_factor);fr_renderer_compute_destroy(g,&t->practical_prefix);fr_renderer_compute_destroy(g,&t->practical_apply);
     fr_renderer_compute_destroy(g,&t->practical_axis);
+    fr_renderer_compute_destroy(g,&t->practical_explicit);
     for(uint32_t i=0;i<11;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
     dc_gpu_address_buffer_destroy(g,&t->indirect);
     memset(t,0,sizeof(*t));
@@ -89,6 +90,10 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         }
         const char *axis_path=use_wide?"build/shaders/gas_transport_axis_compact_wide.comp.spv":"build/shaders/gas_transport_axis_compact.comp.spv";
         if(!fr_renderer_compute_init(g,&t->practical_axis,buffers,25,16,axis_path,err,cap)) goto fail;
+        if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_EXPLICIT_LINE_CAPACITY*48u+64u*4u) {
+            const char *explicit_path=use_wide?"build/shaders/gas_transport_explicit_wide.comp.spv":"build/shaders/gas_transport_explicit.comp.spv";
+            if(!fr_renderer_compute_init(g,&t->practical_explicit,buffers,25,16,explicit_path,err,cap)) goto fail;
+        }
     }
     t->ready=true;return true;
 fail:
@@ -164,6 +169,11 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
             if(getenv("DC_GAS_STAGED_RATES")) {
                 flags|=FR_GAS_STAGED_RATES_BIT;
                 dispatch(g,&t->stage_transport,gx,gy,dt,flags);
+            }
+            const char *hybrid_setting=getenv("DC_GAS_HYBRID_LINES");
+            if(t->practical&&t->practical_explicit.pipeline&&hybrid_setting&&strcmp(hybrid_setting,"0")!=0&&
+               (bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) {
+                flags|=FR_GAS_HYBRID_LINES_BIT;dispatch(g,&t->practical_explicit,lines,1u,dt,flags);
             }
             if(t->practical&&getenv("DC_GAS_FUSED_AXIS")) {
                 dispatch(g,&t->practical_axis,lines,1u,dt,flags);

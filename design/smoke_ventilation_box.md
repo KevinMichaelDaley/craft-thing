@@ -510,3 +510,16 @@ gravity/pressure-balanced cells is not supported by this data. Next evaluate
 GPU-classified local explicit transport with a positive CFL and bounded stage
 count, retaining implicit fallback for stiff lines. No quality or frame gate is
 claimed complete.
+
+`DC_GAS_HYBRID_LINES=1` now classifies each line on the GPU. Up to3 local
+explicit advection stages are selected only when their axis CFL is at most0.9;
+other lines retain the implicit solve. All cells of a line use the same stage
+count, so each shared face has matching conservative transfers. This numerical
+staging advances the same full interval and does not add a CPU scheduling wait.
+Shared workspace holds640 cells; longer lines and devices without sufficient
+shared memory use the implicit path, so this is not a simulation capacity limit.
+The independent safe-line flux test passes inside a globally stiff interval,
+along with all5 practical displayed gates. Latest audited1000-frame actual run:
+38.763ms mean /49.387ms worst, zero invalid cells, species drift5.28e-5 relative,
+pigment drift1.04e-6, energy-minus-work drift-2.84e-5, and temperatures293..367K.
+Complete-frame acceptance remains RED; the module stays open.

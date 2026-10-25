@@ -26,6 +26,9 @@ void FR_GAS_FACTOR_ENTRY() {
     uint lane=gl_SubgroupInvocationID,rank=gl_SubgroupID*gl_SubgroupSize+lane;
     uint length=transport_axis()==0u?params.width:params.height,span=(length+FR_GAS_LOCAL_SIZE-1u)/FR_GAS_LOCAL_SIZE;
     uint begin=rank*span,end=min(begin+span,length),line=gl_WorkGroupID.x;float dt=uintBitsToFloat(params.seconds);
+#ifdef FR_GAS_COMPACT_WORK
+    if((params.bank&FR_GAS_HYBRID_LINES_BIT)!=0u&&transport_work[line*length].mass.w<0.) return;
+#endif
     bool practical=(params.bank&FR_GAS_PRACTICAL_BIT)!=0u;
     float maximum_speed=0.;
     for(uint cell=begin;cell<end;cell++) maximum_speed=max(maximum_speed,abs(gas_cached(transport_point(line,cell)).hydro[transport_axis()+1u]));

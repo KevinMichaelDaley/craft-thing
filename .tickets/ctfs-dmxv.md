@@ -103,3 +103,7 @@ Rejected optional shared-block smoothing experiment:4 inner over-relaxed sweeps 
 **2026-10-25T22:16:48Z**
 
 Cold parallel GPU audit GREEN: actual ambient+moving-color test proves totals/velocity bins and exact state+clock preservation; core+sync audit case zero VUID. Permanent --benchmark-gas-audit runs before loop clock and after measured frames, reads32 scalar summaries only. Audited1000 displayed frames44.721/54.353ms; invalid0, species max drift6.303e-5 relative, pigment2.046e-7, energy-minus-work−4.666e-5; T293.15..367.40K, Pmax64.59 vs51.91 initial, vmax41.49.179072 gas cells:33548 below.05,29103 below1,86486 below10,29935 above10 cells/s. Net-force wake count167200 exceeds raw149345, so balance-sleep is not justified. Next CFL-safe bounded explicit per-line path with implicit fallback;30ms still RED.
+
+**2026-10-25T22:26:09Z**
+
+Hybrid local-CFL transport GREEN: independent safe-line explicit flux oracle passes inside stiff global interval; all5 practical actual-display gates pass. GPU chooses at most3 CFL<=.9 stages per line, implicit fallback for stiff/long/hardware-ineligible lines;640-cell shared workspace is a fast-path threshold, never a simulation cap. Audited1000 actual untraced frames38.763ms mean49.387ms worst (previous44.721/54.353); invalid0, species5.28e-5/pigment1.04e-6/energy-minus-work−2.84e-5 relative drift. T293..367K. No stock/time/resolution loss.30ms still RED; profiling remaining steady-state stages next.

@@ -82,6 +82,7 @@ static void clear_stats(struct fr_gas_gpu *t) {
     words[FR_GAS_NEGATIVE_PIGMENT_WORD]=0;words[FR_GAS_EXCESS_PIGMENT_WORD]=0;
     words[FR_GAS_ROW_DIFF_WORD]=0;words[FR_GAS_ROW_DIFF_COUNT_WORD]=0;words[FR_GAS_ROW_DIFF_AT_WORD]=UINT32_MAX;
     words[FR_GAS_RATE_X_WORD]=0;words[FR_GAS_RATE_Y_WORD]=0;
+    for(uint32_t i=12;i<16;i++) words[i]=0;
 }
 static bool shader_ok(struct fr_gas_gpu *t,char *err,uint32_t cap) {
     const uint32_t *words=t->stats.mapped;if(!words[FR_GAS_ERROR_WORD]) return true;
@@ -205,6 +206,12 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(t->policy==FR_GAS_PRESSURE_LARGE_CFL) t->large_step_hint=hint;
     t->clock.physical_steps++;t->clock.substeps+=accepted;t->clock.advanced_seconds+=seconds;
     if(t->trace) {
+        const char *hybrid=getenv("DC_GAS_HYBRID_LINES");
+        if(t->policy==FR_GAS_PRESSURE_PRACTICAL&&hybrid&&strcmp(hybrid,"0")!=0) {
+            const uint32_t *words=t->stats.mapped;
+            fprintf(stderr,"Gas transport lines explicit%u stages%u implicit%u inactive%u\n",words[FR_GAS_EXPLICIT_LINE_COUNT_WORD],
+                words[FR_GAS_EXPLICIT_STAGE_COUNT_WORD],words[FR_GAS_IMPLICIT_LINE_COUNT_WORD],words[FR_GAS_INACTIVE_LINE_COUNT_WORD]);
+        }
         VkDeviceSize bytes=t->parameters.bytes+t->stats.bytes+t->gates.bytes+t->audit_summary.bytes+t->acoustic.indirect.bytes+t->acoustic.transport_work.bytes;
         for(uint32_t i=0;i<3;i++) bytes+=t->state[i].bytes;
         for(uint32_t i=0;i<2;i++) bytes+=t->cache[i].bytes;
