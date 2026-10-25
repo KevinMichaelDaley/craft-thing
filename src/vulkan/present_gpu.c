@@ -32,6 +32,10 @@ static void image_barrier(VkCommandBuffer command, VkImage image,
 static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
                           char *err, uint32_t cap) {
     if (!gpu || !gpu->swapchain) return error(err, cap, "GPU window is not initialized");
+    if(gpu->gas) {
+        for(uint32_t i=0;i<steps;i++) if(!dc_gpu_tick_step(gpu,err,cap)) return false;
+        steps=0;
+    }
     if(!dc_gpu_runtime_bodies_service(gpu,err,cap)) return false;
     SDL_PumpEvents();
     uint32_t index = 0;

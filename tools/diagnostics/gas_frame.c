@@ -49,15 +49,14 @@ int main(int argc,char **argv) {
         uint64_t begin=SDL_GetPerformanceCounter();SDL_Event event;while(SDL_PollEvent(&event))
             if(event.type==SDL_QUIT) {snprintf(err,sizeof(err),"Display closed");okay=false;}
         if(!okay) break;
-        okay=dc_gpu_tick_step(g,err,sizeof(err));uint64_t gas_begin=SDL_GetPerformanceCounter();
-        if(okay) okay=fr_gas_gpu_step(g,1.f/60.f,err,sizeof(err));
+        uint64_t gas_begin=SDL_GetPerformanceCounter();okay=dc_gpu_tick_step(g,err,sizeof(err));
         uint64_t gas_end=SDL_GetPerformanceCounter();
         if(okay) okay=dc_gpu_present_chunks(g,err,sizeof(err));
         double ms=(SDL_GetPerformanceCounter()-begin)*1000./SDL_GetPerformanceFrequency();
         if(i>=20&&okay) {total+=ms;gas_total+=(gas_end-gas_begin)*1000./SDL_GetPerformanceFrequency();if(ms>worst) worst=ms;measured++;}
     }
     fr_gas_gpu_clock_t clock={0};if(g) fr_gas_gpu_clock(g,&clock);
-    if(measured) printf("Displayed gas full frame: %u frames mean%.3f worst%.3f gas%.3f ms; %llu substeps\n",
+    if(measured) printf("Displayed gas full frame: %u frames mean%.3f worst%.3f simulation%.3f ms; %llu substeps\n",
         measured,total/measured,worst,gas_total/measured,(unsigned long long)clock.substeps);
     if(!okay) fprintf(stderr,"Gas frame failed: %s\n",err);
     dc_gpu_destroy(g);return !okay?1:(total/measured>=30.||worst>=30.?3:0);

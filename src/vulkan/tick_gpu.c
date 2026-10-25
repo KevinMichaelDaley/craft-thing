@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "gpu_internal.h"
+#include "ferrum/fire/gas_gpu.h"
 #include "runtime_body_gpu.h"
 #include "thermal_gpu_internal.h"
 
@@ -178,11 +179,13 @@ static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
 bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
                          char *err, uint32_t cap) {
     if (!capture) return error(err, cap, "Invalid GPU tick capture");
-    return tick_submit(gpu, capture, err, cap);
+    if(!tick_submit(gpu,capture,err,cap)) return false;
+    return !gpu->gas||fr_gas_gpu_step(gpu,(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f,err,cap);
 }
 
 bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    return tick_submit(gpu, NULL, err, cap);
+    if(!tick_submit(gpu,NULL,err,cap)) return false;
+    return !gpu->gas||fr_gas_gpu_step(gpu,(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f,err,cap);
 }
 
 bool dc_gpu_set_fluid_interval(dc_gpu_t *gpu, uint32_t interval) {
