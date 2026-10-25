@@ -398,6 +398,7 @@ int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);
 #ifdef FR_GAS_PUBLICATION_TEST
     RUN(test_native_publication_uses_one_submission_and_preserves_rejected_state);
+    RUN(test_native_temporal_sor_matches_global_and_bounds_dispatches);
 #endif
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
     RUN(test_native_colored_transport_matches_reference_and_retains_closed_budgets);
