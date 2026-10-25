@@ -1,0 +1,22 @@
+#ifndef FERRUM_FIRE_GAS_GPU_H
+#define FERRUM_FIRE_GAS_GPU_H
+#include "dungeoncraft/gpu.h"
+#include "ferrum/fire/gas.h"
+
+typedef struct {uint64_t physical_steps,substeps;double advanced_seconds;} fr_gas_gpu_clock_t;
+/** Enable one authoritative Vulkan gas field. Coefficients and initial ambient
+ * stock are explicit; repeated configuration must not replenish existing gas. */
+bool fr_gas_gpu_enable(dc_gpu_t *gpu,const fr_gas_model_t *model,
+    float ambient_density,float ambient_K,char *err_buf,uint32_t err_cap);
+/** Advance the complete requested interval using reference-validated CFL steps.
+ * Runtime reads only reduced scalar scheduling metadata, never field lists. */
+bool fr_gas_gpu_step(dc_gpu_t *gpu,float seconds,char *err_buf,uint32_t err_cap);
+/** Completed-queue fixture/import of immutable logical chunk data. */
+bool fr_gas_gpu_seed_chunk(dc_gpu_t *gpu,uint32_t slot,const fr_gas_state_t *states,
+    const double *void_fractions,uint32_t count,char *err_buf,uint32_t err_cap);
+/** Cold diagnostic/checkpoint snapshot; never a per-frame CPU gas solver. */
+bool fr_gas_gpu_read_chunk(dc_gpu_t *gpu,uint32_t slot,fr_gas_state_t *states,
+    uint32_t capacity,char *err_buf,uint32_t err_cap);
+/** Read accepted clock counters without reading simulation cells. */
+bool fr_gas_gpu_clock(const dc_gpu_t *gpu,fr_gas_gpu_clock_t *out);
+#endif
