@@ -8,7 +8,9 @@
 #include "dungeoncraft/stream.h"
 #include "ferrum/assets/prop_gpu.h"
 #include "ferrum/fire/gpu.h"
+#include "ferrum/fire/thermal_gpu.h"
 #include "level.h"
+#include "thermal_bench.h"
 #include "view_config.h"
 
 _Static_assert(DC_GPU_CHUNK_SLOTS >= SIM_CHUNKS_X * SIM_CHUNKS_Y,
@@ -65,13 +67,31 @@ bool dc_level_view_toggle_lighting(dc_level_view_t *view) {
         view->renderer_mode==FR_RENDERER_LIT?FR_RENDERER_ALBEDO:FR_RENDERER_LIT);
 }
 bool dc_level_view_setup_heat_bench(dc_level_view_t *view,char *err,uint32_t cap) {
-    (void)view;(void)err;(void)cap;return false;
+    if(!view||VIEW_WIDTH!=480||VIEW_HEIGHT!=270||view->restored||view->origin.x!=0||view->origin.y!=INITIAL_CHUNK_Y)
+        return error(err,cap,"Heat bench prototype requires a fresh quarter-native placement world");
+    if(!dc_level_view_wait_visible(view,120000,err,cap)) return false;
+    uint32_t count=view->table.capacity;
+    dc_chunk_coord_t *coords=calloc(count,sizeof(*coords));
+    dc_thermal_bench_chunk_t *chunks=calloc(count,sizeof(*chunks));
+    if(!coords||!chunks) {free(coords);free(chunks);return error(err,cap,"Cannot preflight heat bench scene");}
+    for(uint32_t i=0;i<count;i++) coords[i]=view->table.slots[i].coord;
+    bool okay=dc_thermal_bench_build(coords,count,chunks,err,cap);free(coords);
+    for(uint32_t i=0;okay&&i<count;i++) {
+        okay=dc_gpu_upload_chunk(view->gpu,i,chunks[i].chunk,err,cap)&&
+            fr_renderer_upload_chunk_colors(view->gpu,i,chunks[i].colors,err,cap)&&
+            fr_gpu_reactive_import_chunk(view->gpu,i,chunks[i].chunk,&chunks[i].reactive,err,cap)&&
+            dc_chunk_table_mark_dirty(&view->table,i);
+    }
+    dc_thermal_bench_release(chunks,count);
+    return okay&&dc_level_view_set_spring_enabled(view,false)&&
+        dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO)&&fr_thermal_gpu_enable(view->gpu,err,cap);
 }
 bool dc_level_view_heat_probe(dc_level_view_t *view,uint32_t x,uint32_t y,bool active) {
-    (void)view;(void)x;(void)y;(void)active;return false;
+    return view&&x<VIEW_WIDTH&&y<VIEW_HEIGHT&&fr_thermal_gpu_probe(view->gpu,
+        x+DC_CHUNK_SIDE+view->camera_offset_x,y+DC_CHUNK_SIDE+view->camera_offset_y,active);
 }
 bool dc_level_view_heat_overlay(dc_level_view_t *view,uint32_t mode) {
-    (void)view;(void)mode;return false;
+    return view&&fr_thermal_gpu_overlay(view->gpu,mode);
 }
 static bool place_prop(dc_level_view_t *view, const fr_prop_asset_t *asset,
                               dc_chunk_coord_t chunk, uint32_t local_x, uint32_t local_y,

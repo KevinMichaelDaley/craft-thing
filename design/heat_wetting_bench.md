@@ -27,3 +27,30 @@ preserved parcel/hazard history and transactional invalid-input/pause behavior.
 The runtime module must additionally pass GPU parity, real display interaction,
 capture, whole-frame measurements and the edits/persistence it exposes. A passing
 CPU reference alone does not complete the visible milestone.
+
+## Current interactive prototype
+
+`tools/with-vulkan ./build/dungeoncraft_quarter_native --heat-bench` starts a
+fresh placement world. Hold H and the left mouse button for finite probe contact;
+F7 cycles temperature, wetness and authored color. Existing material brushes,
+camera controls, pause/single-step and reset remain available. The left wood
+control is dry; the right starts with real material-derived bound water. These
+controls currently demonstrate conductive heat and wet heat capacity, not yet
+free-water absorption/transport. The prototype refuses restored worlds until
+the required thermal checkpoint path is validated, rather than silently
+discarding their heat history. This restriction must be resolved for acceptance.
+
+The native bench test passes probe heating, pre-wet state, overlay switches and
+four identical paused frames. Actual captures are
+`build/screenshots/thermal_bench_temperature.bmp` and
+`build/screenshots/thermal_bench_wetness.bmp`. The normal executable also ran on
+the real Wayland display and produced `build/screenshots/thermal_cli_proto.bmp`.
+Its first 120 complete frames measured **10.808 ms mean / 36.530 ms worst**;
+a traced 180-frame run measured **10.574 / 45.921 ms**. Both **fail** the 30 ms
+worst-frame target. The largest traced tail included 20.553 ms input processing
+and 25.342 ms presentation/physical work. These failures remain part of the
+record; no module or epic performance acceptance is claimed.
+
+Remaining in this milestone: conservative free-water cooling/wetting/advection,
+temperature/wetness inspection, natural edits/owner admission and the persistence
+the exposed scene needs, plus reference budgets and passing displayed timing.

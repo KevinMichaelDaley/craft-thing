@@ -5,6 +5,12 @@
 #include <math.h>
 #include "../../src/app/level.c"
 #include "ferrum/fire/thermal_gpu.h"
+#include <sys/stat.h>
+
+static bool bench_capture(uint32_t *pixels,const char *path) {
+    SDL_Surface *surface=SDL_CreateRGBSurfaceWithFormatFrom(pixels,480,270,32,480*4,SDL_PIXELFORMAT_ABGR8888);
+    bool okay=surface&&SDL_SaveBMP(surface,path)==0;if(surface) SDL_FreeSurface(surface);return okay;
+}
 
 static void test_interactive_bench_has_finite_sources_wet_control_probe_and_stable_pause(void) {
     char err[256]={0},directory[]="build/thermal_bench_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
@@ -25,11 +31,14 @@ static void test_interactive_bench_has_finite_sources_wet_control_probe_and_stab
     ASSERT_TRUE(heated.state.thermal_energy>dry.state.thermal_energy);
     uint32_t *before=malloc(480u*270u*4u),*after=malloc(480u*270u*4u);ASSERT_TRUE(before&&after);
     ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err))&&dc_level_view_pixels(view,before,480u*270u,err,sizeof(err)));
+    mkdir("build/screenshots",0777);ASSERT_TRUE(bench_capture(before,"build/screenshots/thermal_bench_temperature.bmp"));
     for(uint32_t frame=0;frame<4;frame++) {
         ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err))&&dc_level_view_pixels(view,after,480u*270u,err,sizeof(err)));
         ASSERT_TRUE(memcmp(before,after,480u*270u*4u)==0);
     }
     ASSERT_TRUE(dc_level_view_heat_overlay(view,2)&&dc_level_view_tick(view,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pixels(view,after,480u*270u,err,sizeof(err)));
+    ASSERT_TRUE(bench_capture(after,"build/screenshots/thermal_bench_wetness.bmp"));
     ASSERT_TRUE(dc_level_view_heat_overlay(view,0)&&dc_level_view_tick(view,err,sizeof(err)));
     free(before);free(after);ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));PASS();
 }

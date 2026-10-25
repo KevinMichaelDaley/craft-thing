@@ -35,3 +35,7 @@ Thermal reference GREEN:6 RED tests now pass for composition-derived capacity, s
 **2026-10-25T03:36:46Z**
 
 First Vulkan thermal field GREEN: both native Wayland cases pass with core/sync validation (8 presented frames). GPU face exchange matches CPU energy within1e-4, paused presentation leaves parcel bytes unchanged, and the real8x8 rigid/2-substep MPM tick applies one thermal interval. Displayed framebuffer capture: build/screenshots/thermal_reference_pair.bmp (converted PNG inspected). This is a two-cell functional field check, NOT the interactive bench or completed milestone. Water/admission/bench controls and full-frame acceptance remain underway.
+
+**2026-10-25T04:08:34Z**
+
+Interactive prototype GREEN: native placement bench case passes finite probe heating, actual dry/pre-wet inventories, overlay switching and4 identical paused frames; the2 core Vulkan field/clock checks pass again. Permanent --heat-bench entry uses existing placement controls,4-worker immutable scene construction and real shader feedback. Native dependency RED caught stale thermal SPIR-V; fixed native objects to depend on runtime module shaders. Inspected real temperature/wetness and normal CLI captures. Performance remains FAILED:120frames10.808mean/36.530worst;180 traced10.574/45.921, largest input20.553+present25.342. Free-water coupling, inspection, edits/admission, restore and passing frame gate are still required. Do not close from this prototype.

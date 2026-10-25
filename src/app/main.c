@@ -1002,14 +1002,18 @@ static bool restart_demo(dc_level_view_t **view, const char *base_directory,
 static bool update_demo_title(dc_level_view_t *view, uint64_t seed,
                               uint32_t zoom, bool paused, bool entering_seed,
                               bool seed_error, const char *seed_text,
-                              char previous[192]) {
+                              char previous[192],bool heat_bench,uint32_t heat_mode) {
     dc_level_view_status_t status;
     if (!dc_level_view_status(view, &status)) return false;
     char title[192];
     if (entering_seed)
         snprintf(title, sizeof(title), "%sSeed: %s  |  Enter to load, Esc to cancel",
                  seed_error ? "Invalid seed  |  " : "", seed_text);
-    else
+    else if(heat_bench) {
+        const char *modes[]={"authored color","temperature","wetness"};
+        snprintf(title,sizeof(title),"Heat bench prototype | %s | H+LMB finite probe | F7 view | 0-6 materials | P pause, N step, R reset%s",
+            modes[heat_mode],paused?" | paused":"");
+    } else
         snprintf(title, sizeof(title),
                  "Dungeoncraft  |  seed %" PRIu64 "  |  chunk (%" PRId64 ",%" PRId64
                  ") + (%u,%u)  |  loaded %u/%u  |  %ux%s",
@@ -1081,7 +1085,8 @@ int main(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "--smoke-motion-long") == 0)
         return smoke_moving_water_long();
     bool scripted_input = argc > 1 && strcmp(argv[1], "--smoke-controls-ui") == 0;
-    bool demo_coupled = false, demo_sifting = false, lighting = false;
+    bool demo_coupled = false, demo_sifting = false, lighting = false,heat_bench=false;
+    char heat_directory[]="build/heat_bench_interactive_XXXXXX";
     char scripted_directory[] = "build/ui_input_XXXXXX";
     if (scripted_input && !mkdtemp(scripted_directory)) {
         perror("mkdtemp");
@@ -1112,6 +1117,7 @@ int main(int argc, char **argv) {
             lighting = true;
             continue;
         }
+        if(strcmp(argv[i],"--heat-bench")==0) {heat_bench=true;continue;}
         if (strcmp(argv[i], "--demo-sifting") == 0) {
             demo_sifting = true;
             continue;
@@ -1136,13 +1142,18 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--benchmark-capture") == 0 && i + 1 < argc)
             benchmark_capture = argv[++i];
         else {
-            fprintf(stderr, "Usage: %s [--seed number] [--world-dir path] [--scene asset.cprop] [--lighting] [--demo-coupled|--demo-sifting]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [--seed number] [--world-dir path] [--scene asset.cprop|--heat-bench] [--lighting] [--demo-coupled|--demo-sifting]\n", argv[0]);
             return 1;
         }
     }
     if (benchmark_frames && !benchmark_world) {
         fprintf(stderr, "A bounded benchmark requires an explicit --world-dir\n");
         return 1;
+    }
+    if(heat_bench&&scene_path) {fprintf(stderr,"Choose --heat-bench or --scene\n");return 1;}
+    if(heat_bench&&!benchmark_world) {
+        if(!mkdtemp(heat_directory)) {perror("mkdtemp");return 1;}
+        directory=heat_directory;
     }
     unsigned benchmark_brush[3]={0};
     const char *brush_setting=benchmark_frames?getenv("DC_BENCHMARK_AIR_BRUSH"):NULL;
@@ -1161,6 +1172,10 @@ int main(int argc, char **argv) {
         fprintf(stderr,"Scene load: %s\n",err);
         dc_level_view_destroy(view,err,sizeof(err));return 1;
     }
+    if(heat_bench&&!dc_level_view_setup_heat_bench(view,err,sizeof(err))) {
+        fprintf(stderr,"Heat bench setup: %s\n",err);dc_level_view_destroy(view,err,sizeof(err));return 1;
+    }
+    if(heat_bench) printf("Heat bench: %s | finite350K stone/probe, dry and pre-wet wood controls | H+LMB probe, F7 view | free-water coupling/restore still under development\n",directory);
     if (lighting && !dc_level_view_renderer_mode(view,FR_RENDERER_LIT)) {
         fprintf(stderr,"Cannot enable propagated lighting\n");
         dc_level_view_destroy(view,err,sizeof(err));return 1;
@@ -1185,7 +1200,8 @@ int main(int argc, char **argv) {
     bool running = true;
     bool failed = false;
     bool paused = false;
-    bool spring_enabled = !(demo_coupled || demo_sifting || scene_path);
+    bool spring_enabled = !(demo_coupled || demo_sifting || scene_path || heat_bench);
+    uint32_t heat_mode=1;
     bool marker_overlay = false;
     bool single_step = false;
     uint32_t zoom = WINDOW_SCALE;
@@ -1247,7 +1263,8 @@ int main(int argc, char **argv) {
                             seed_error = true;
                         } else if (!restart_demo(&view, directory, (uint64_t)parsed,
                                                  &run, zoom, overlay, spring_enabled,
-                                                 marker_overlay, scene_path, err, sizeof(err))) {
+                                                 marker_overlay, scene_path, err, sizeof(err))||
+                                  (heat_bench&&!dc_level_view_setup_heat_bench(view,err,sizeof(err)))) {
                             failed = true; running = false;
                         } else {
                             seed = (uint64_t)parsed;
@@ -1256,6 +1273,7 @@ int main(int argc, char **argv) {
                             accumulator = 0.0;
                             previous = SDL_GetPerformanceCounter();
                             previous_title[0] = '\0';
+                            if(heat_bench) dc_level_view_heat_overlay(view,heat_mode);
                         }
                     }
                     continue;
@@ -1271,6 +1289,9 @@ int main(int argc, char **argv) {
                 case SDLK_6: material = DC_MATERIAL_WOOD; break;
                 case SDLK_F8:
                     if (scene_path && !event.key.repeat) dc_level_view_toggle_lighting(view);
+                    break;
+                case SDLK_F7:
+                    if(heat_bench&&!event.key.repeat) {heat_mode=(heat_mode+1u)%3u;dc_level_view_heat_overlay(view,heat_mode);}
                     break;
                 case SDLK_p: paused = !paused; break;
                 case SDLK_n: single_step = true; break;
@@ -1291,13 +1312,15 @@ int main(int argc, char **argv) {
                     if (!event.key.repeat) {
                         if (!restart_demo(&view, directory, seed, &run, zoom,
                                           overlay, spring_enabled, marker_overlay,
-                                          scene_path, err, sizeof(err))) {
+                                          scene_path, err, sizeof(err))||
+                            (heat_bench&&!dc_level_view_setup_heat_bench(view,err,sizeof(err)))) {
                             failed = true; running = false;
                         }
                         accumulator = 0.0;
                         single_step = false;
                         previous = SDL_GetPerformanceCounter();
                         previous_title[0] = '\0';
+                        if(heat_bench&&running) dc_level_view_heat_overlay(view,heat_mode);
                     }
                     break;
                 case SDLK_MINUS:
@@ -1363,7 +1386,14 @@ int main(int argc, char **argv) {
             accumulator = 0.0;
         }
         uint64_t prepare_done=benchmark_timings?SDL_GetPerformanceCounter():0;
-        if (!paint_held(view, material, err, sizeof(err))) {
+        bool probing=false;
+        if(heat_bench) {
+            int mx=0,my=0;uint32_t x=0,y=0,buttons=SDL_GetMouseState(&mx,&my);
+            bool inside=mx>=0&&my>=0&&dc_level_view_screen_cell(view,(uint32_t)mx,(uint32_t)my,&x,&y);
+            probing=inside&&SDL_GetKeyboardState(NULL)[SDL_SCANCODE_H]&&(buttons&SDL_BUTTON(SDL_BUTTON_LEFT));
+            if(!dc_level_view_heat_probe(view,inside?x:0u,inside?y:0u,probing)) {failed=true;running=false;}
+        }
+        if (!probing&&!paint_held(view, material, err, sizeof(err))) {
             failed = true; running = false;
         }
         if(running&&brush_setting&&scripted_frame>=8u&&
@@ -1377,7 +1407,7 @@ int main(int argc, char **argv) {
         }
         uint64_t present_done=benchmark_timings?SDL_GetPerformanceCounter():0;
         if (running && !update_demo_title(view, seed, zoom, paused, entering_seed,
-                                          seed_error, seed_text, previous_title)) {
+                                          seed_error, seed_text, previous_title,heat_bench,heat_mode)) {
             snprintf(err, sizeof(err), "Cannot update world status");
             failed = true; running = false;
         }
