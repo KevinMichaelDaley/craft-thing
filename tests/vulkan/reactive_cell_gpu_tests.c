@@ -64,6 +64,11 @@ static void test_extraction_and_next_arena_flip_keep_exact_state(void) {
     ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,1,1,&record,&found,err,sizeof(err)));
     ASSERT_TRUE(found);ASSERT_TRUE(memcmp(&record.state,&state,sizeof(state))==0);
+    ASSERT_TRUE(dc_gpu_paint_material(g,10,11,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    uint32_t remaining=0;ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,NULL,0,&remaining,err,sizeof(err)));
+    ASSERT_EQ(remaining,15u);
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,1,1,&record,&found,err,sizeof(err)));
+    ASSERT_TRUE(found);ASSERT_TRUE(memcmp(&record.state,&state,sizeof(state))==0);
     free(c);dc_gpu_destroy(g);PASS();
 }
 int main(void) {
