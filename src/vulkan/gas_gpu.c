@@ -21,7 +21,6 @@ struct fr_gas_gpu {
     uint32_t policy;
     uint32_t cached_bank;
     float cached_rate;
-    float cached_mach;
     bool cache_valid;
     VkFence completion;
     double large_step_hint;
@@ -74,7 +73,6 @@ static bool submit(dc_gpu_t *g,char *err,uint32_t cap) {
 static void clear_stats(struct fr_gas_gpu *t) {
     uint32_t *words=t->stats.mapped;words[FR_GAS_RATE_WORD]=0;words[FR_GAS_ERROR_WORD]=0;words[FR_GAS_ERROR_AT_WORD]=UINT32_MAX;words[FR_GAS_REJECT_STAGE_WORD]=0;
     words[FR_GAS_NEGATIVE_PIGMENT_WORD]=0;words[FR_GAS_EXCESS_PIGMENT_WORD]=0;
-    words[FR_GAS_MACH_WORD]=0;
     words[FR_GAS_RATE_X_WORD]=0;words[FR_GAS_RATE_Y_WORD]=0;
 }
 static bool shader_ok(struct fr_gas_gpu *t,char *err,uint32_t cap) {
@@ -139,21 +137,12 @@ bool fr_gas_gpu_enable(dc_gpu_t *g,const fr_gas_model_t *model,float density,flo
     if(!submit(g,err,cap)) {destroy(g,t);return false;}
     g->gas=t;return true;
 }
-static float mach_bound(struct fr_gas_gpu *t) {float value=0;memcpy(&value,(uint32_t *)t->stats.mapped+FR_GAS_MACH_WORD,4);return value;}
-static bool explicit_regime_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
-    struct fr_gas_gpu *t=g->gas;uint32_t policy=t->policy;
-    if(getenv("DC_GAS_TRACE")) fprintf(stderr,"Gas explicit regime fallback for full interval%.9g\n",seconds);
-    t->policy=FR_GAS_PRESSURE_HLLC;((float *)t->parameters.mapped)[FR_GAS_POLICY_WORD]=FR_GAS_PRESSURE_HLLC;
-    fr_gas_gpu_invalidate_cache(g);bool okay=fr_gas_gpu_step(g,seconds,err,cap);
-    t->policy=policy;((float *)t->parameters.mapped)[FR_GAS_POLICY_WORD]=(float)policy;
-    fr_gas_gpu_invalidate_cache(g);t->large_step_hint=0;return okay;
-}
 bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(!g||!g->gas||!isfinite(seconds)||seconds<0) return error(err,cap,"Invalid Vulkan gas interval");
     if(seconds==0) return true;
     struct fr_gas_gpu *t=g->gas;clear_stats(t);
     bool cached=t->cache_valid;t->cache_valid=false;
-    uint32_t bank=cached?t->cached_bank:0;float speed=t->cached_rate,mach=t->cached_mach;
+    uint32_t bank=cached?t->cached_bank:0;float speed=t->cached_rate;
     VkBufferCopy copy={.size=t->state[0].bytes};
     if(!cached) {
         t->acoustic.matrix_valid=false;
@@ -163,11 +152,9 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
         dispatch(g,t,&t->prepare,0,0);
         if(!submit(g,err,cap)||!shader_ok(t,err,cap)) return false;
         speed=rate(t);
-        mach=mach_bound(t);
     }
     double remaining=seconds,hint=t->large_step_hint>0?t->large_step_hint:seconds;uint64_t accepted=0;
     while(remaining>0) {
-        if(t->policy==FR_GAS_PRESSURE_LARGE_CFL&&mach>=1.f) return explicit_regime_step(g,seconds,err,cap);
         if(!isfinite(speed)||speed<0) return error(err,cap,"Invalid reduced gas CFL metadata");
         double courant=t->policy!=FR_GAS_PRESSURE_HLLC?FR_GAS_ADVECTIVE_COURANT:FR_GAS_COURANT;
         double allowed=t->policy==FR_GAS_PRESSURE_LARGE_CFL?hint:(speed>0?courant/speed:remaining);
@@ -191,13 +178,12 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
             if(t->policy==FR_GAS_PRESSURE_LARGE_CFL) hint=dt;
         }
         if(t->policy==FR_GAS_PRESSURE_LARGE_CFL&&!rejected&&(double)dt>=hint*.9) hint*=1.25;
-        remaining-=dt;accepted++;if(t->policy==FR_GAS_PRESSURE_HLLC) bank^=1u;speed=rate(t);mach=mach_bound(t);
+        remaining-=dt;accepted++;if(t->policy==FR_GAS_PRESSURE_HLLC) bank^=1u;speed=rate(t);
     }
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot publish gas interval");
     barrier(g);vkCmdCopyBuffer(g->command,t->state[1u+bank].buffer,t->state[0].buffer,1,&copy);
     if(!submit(g,err,cap)) return false;
     t->cached_bank=bank;t->cached_rate=speed;t->cache_valid=true;
-    t->cached_mach=mach;
     if(t->policy==FR_GAS_PRESSURE_LARGE_CFL) t->large_step_hint=hint;
     t->clock.physical_steps++;t->clock.substeps+=accepted;t->clock.advanced_seconds+=seconds;return true;
 }
@@ -225,7 +211,7 @@ bool fr_gas_gpu_seed_chunk(dc_gpu_t *g,uint32_t slot,const fr_gas_state_t *state
         okay=fr_gas_thermodynamics(&g->gas->model,&rounded,p[12],&t,err,cap);
     }
     if(okay) okay=vkQueueWaitIdle(g->queue)==VK_SUCCESS;
-    if(okay) {memcpy((gas_packet_t *)g->gas->state[0].mapped+(size_t)slot*4096u,packets,count*sizeof(*packets));fr_gas_gpu_invalidate_cache(g);g->gas->large_step_hint=0;}
+    if(okay) {memcpy((gas_packet_t *)g->gas->state[0].mapped+(size_t)slot*4096u,packets,count*sizeof(*packets));fr_gas_gpu_invalidate_cache(g);}
     free(packets);return okay;
 }
 bool fr_gas_gpu_read_chunk(dc_gpu_t *g,uint32_t slot,fr_gas_state_t *states,uint32_t count,char *err,uint32_t cap) {
