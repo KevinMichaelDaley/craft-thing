@@ -66,7 +66,9 @@ GLSLANG ?= glslangValidator
 
 GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/broadphase_gpu.o build/contact_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
 GPU_OBJ += build/runtime_body_gpu.o build/runtime_geometry_gpu.o build/body_address_gpu.o build/body_storage_gpu.o
-GPU_OBJ += build/mpm_swap_gpu.o
+GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o
+build/reactive_gpu.o: src/vulkan/reactive_gpu.c include/ferrum/fire/gpu.h include/ferrum/fire/reactive_state.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/mpm_swap_gpu.o: src/vulkan/mpm_swap_gpu.c src/vulkan/gpu_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/runtime_geometry_gpu.o: src/vulkan/runtime_geometry_gpu.c src/vulkan/runtime_body_internal.h
@@ -1659,3 +1661,5 @@ build/diagnostics/reactive_state_probe.spv: tests/vulkan/reactive_state_probe.co
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/reactive_state_gpu_tests: tests/vulkan/reactive_state_gpu_tests.c tools/diagnostics/vulkan_probe.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_state.h build/diagnostics/reactive_state_probe.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/reactive_state_gpu_tests.c $(REACTIVE_STATE_SRC) -o $@ $(LDLIBS)
+build/reactive_cell_gpu_tests: tests/vulkan/reactive_cell_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(REACTIVE_STATE_SRC) build/shaders/pattern.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) $(REACTIVE_STATE_SRC) -o $@ $(LDLIBS)
