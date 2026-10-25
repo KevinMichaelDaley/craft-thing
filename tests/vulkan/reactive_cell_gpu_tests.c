@@ -111,9 +111,41 @@ static void test_mpm_pool_swaps_preserve_parcel_and_leaf_pigment(void) {
     ASSERT_TRUE(fr_gpu_reactive_read_particle(g,source,&record,&found,err,sizeof(err)));ASSERT_TRUE(!found);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_broken_leaf_keeps_composition_heat_and_history_as_a_leaf_bit(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    for(uint32_t x=20;x<28;x++) {
+        c->cells[20*64+x].material=DC_MATERIAL_LEAVES;
+        c->cells[21*64+x].material=DC_MATERIAL_WOOD;
+    }
+    ASSERT_TRUE(context(&g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t state;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_LEAVES,13107,300,800,601,&state,err,sizeof(err)));
+    state.coating_oil_fuel_fp=900;state.ignition_threshold=.8f;state.ignition_integral=.5f;
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,20*64+20,&state,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g)&&dc_gpu_rigid_step(g,err,sizeof(err)));
+    dc_gpu_body_record_t *body=g->body_mapped;
+    body->body.x_fp=body->local_x_fp=20*65536;body->body.y_fp=body->local_y_fp=20*65536;
+    body->body.vx_fp=body->body.vy_fp=0;body->angular_velocity=body->angle=0;
+    ASSERT_TRUE(dc_gpu_paint_material(g,23,20,1,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,c,err,sizeof(err)));
+    uint32_t target=UINT32_MAX,leaves=0;
+    for(uint32_t i=0;i<DC_MPM_PARTICLES_PER_CHUNK;i++) if(c->particles[i].mass_fp) {
+        ASSERT_EQ(c->particles[i].material,DC_MATERIAL_LEAF_DEBRIS);leaves++;
+        if(c->particles[i].id_lo==0x80000001u&&c->particles[i].id_hi==0x80000001u) target=i;
+    }
+    ASSERT_EQ(leaves,5u);ASSERT_TRUE(target!=UINT32_MAX);
+    fr_reactive_record_t record;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_particle(g,target,&record,&found,err,sizeof(err)));ASSERT_TRUE(found);
+    state.material=DC_MATERIAL_LEAF_DEBRIS;
+    ASSERT_TRUE(memcmp(&record.state,&state,sizeof(state))==0);
+    ASSERT_EQ(record.owner.kind,FR_REACTIVE_OWNER_PARTICLE);ASSERT_EQ(record.owner.key[0],0x80000001u);
+    ASSERT_EQ(record.owner.key[1],0x80000001u);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     RUN(test_cells_retain_sparse_state_and_brush_replacement_retires_it);
     RUN(test_extraction_and_next_arena_flip_keep_exact_state);
     RUN(test_mpm_pool_swaps_preserve_parcel_and_leaf_pigment);
+    RUN(test_broken_leaf_keeps_composition_heat_and_history_as_a_leaf_bit);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
