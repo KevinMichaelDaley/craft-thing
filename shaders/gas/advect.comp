@@ -6,6 +6,7 @@ GasFlux gas_advective_neighbor(Gas own,Primitive center,float energy,ivec2 p,ive
     Primitive neighbor=gas_cached(q);float volume=center.metric.w,other_volume=neighbor.metric.w;
     if(volume==0.||other_volume==0.) return gas_empty_flux();
     float u=center.hydro[axis+1u],v=neighbor.hydro[axis+1u],speed=max(abs(u),abs(v));
+    if((params.bank&FR_GAS_PRACTICAL_BIT)!=0u) speed=max(speed,FR_GAS_PRACTICAL_MIXING_RATE);
     if(speed==0.) return gas_empty_flux();
     float area=.5*min(volume,other_volume);Gas other=gas_source(q);
     float first=-area*(normal*u+speed)/volume,second=-area*(normal*v-speed)/other_volume;

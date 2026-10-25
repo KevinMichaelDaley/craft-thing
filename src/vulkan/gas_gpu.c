@@ -172,7 +172,8 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
             if(!(dt>0)||remaining-(double)dt==remaining) return error(err,cap,"Gas interval is below clock precision");
             clear_stats(t);
             if(t->policy!=FR_GAS_PRESSURE_HLLC) {
-                t->acoustic.large_transport=t->policy>=FR_GAS_PRESSURE_LARGE_CFL&&(double)dt*speed>FR_GAS_ADVECTIVE_COURANT;
+                double transport_rate=t->policy==FR_GAS_PRESSURE_PRACTICAL?fmax(speed,2.*FR_GAS_PRACTICAL_MIXING_RATE):speed;
+                t->acoustic.large_transport=t->policy>=FR_GAS_PRESSURE_LARGE_CFL&&(double)dt*transport_rate>FR_GAS_ADVECTIVE_COURANT;
                 if(!fr_gas_acoustic_step(g,&t->acoustic,t->groups_x,t->groups_y,dt,bank,&t->stats,err,cap)) return false;
             } else {
                 if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas substep");
