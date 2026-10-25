@@ -6,6 +6,9 @@
 #include "runtime_body_internal.h"
 
 #define REACTIVE_ROOT_MAGIC 0x46525331u
+bool fr_gpu_reactive_read_stats(dc_gpu_t *g,fr_gpu_reactive_stats_t *out,char *err,uint32_t cap) {
+    (void)g;(void)out;(void)err;(void)cap;return false;
+}
 struct fr_reactive_gpu {
     dc_gpu_address_buffer_t root,entries,cells,shapes,particles;
     uint64_t high_id;

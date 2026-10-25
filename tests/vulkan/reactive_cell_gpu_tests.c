@@ -166,11 +166,40 @@ static void test_reused_body_slot_and_carving_keep_actual_owner_generation(void)
     ASSERT_EQ(record.owner.key[1],2u);ASSERT_TRUE(memcmp(&record.state,&state,sizeof(state))==0);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_live_pool_reuses_entries_instead_of_growing_with_retired_history(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    c->coord=(dc_chunk_coord_t){-9,3};
+    for(uint32_t y=8;y<16;y++) for(uint32_t x=8;x<16;x++) c->cells[y*64+x].material=DC_MATERIAL_WOOD;
+    ASSERT_TRUE(context(&g,err,sizeof(err)));
+    fr_gpu_reactive_stats_t stats;ASSERT_TRUE(fr_gpu_reactive_read_stats(g,&stats,err,sizeof(err)));
+    ASSERT_EQ(stats.capacity,0u);ASSERT_EQ(stats.live,0u);
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t state;
+    for(uint32_t i=0;i<64;i++) {
+        ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,700,i+1,&state,err,sizeof(err)));
+        ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,(8+i/8)*64+8+i%8,&state,err,sizeof(err)));
+    }
+    ASSERT_TRUE(fr_gpu_reactive_read_stats(g,&stats,err,sizeof(err)));ASSERT_EQ(stats.capacity,64u);ASSERT_EQ(stats.live,64u);
+    for(uint32_t i=0;i<128;i++) {
+        ASSERT_TRUE(dc_gpu_paint_material(g,8,8,0,DC_MATERIAL_AIR,err,sizeof(err)));
+        ASSERT_TRUE(fr_gpu_reactive_read_stats(g,&stats,err,sizeof(err)));ASSERT_EQ(stats.live,63u);ASSERT_EQ(stats.free,1u);
+        ASSERT_TRUE(dc_gpu_paint_material(g,8,8,0,DC_MATERIAL_WOOD,err,sizeof(err)));
+        ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,800+i,65+i,&state,err,sizeof(err)));
+        ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,8*64+8,&state,err,sizeof(err)));
+    }
+    ASSERT_TRUE(fr_gpu_reactive_read_stats(g,&stats,err,sizeof(err)));
+    ASSERT_EQ(stats.capacity,64u);ASSERT_EQ(stats.live,64u);ASSERT_EQ(stats.free,0u);ASSERT_EQ(stats.retired,0u);
+    fr_reactive_record_t record;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,8*64+8,&record,&found,err,sizeof(err)));ASSERT_TRUE(found);
+    ASSERT_TRUE(memcmp(&record.state,&state,sizeof(state))==0);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     RUN(test_cells_retain_sparse_state_and_brush_replacement_retires_it);
     RUN(test_extraction_and_next_arena_flip_keep_exact_state);
     RUN(test_mpm_pool_swaps_preserve_parcel_and_leaf_pigment);
     RUN(test_broken_leaf_keeps_composition_heat_and_history_as_a_leaf_bit);
     RUN(test_reused_body_slot_and_carving_keep_actual_owner_generation);
+    RUN(test_live_pool_reuses_entries_instead_of_growing_with_retired_history);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
