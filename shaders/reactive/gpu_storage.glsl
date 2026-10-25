@@ -4,8 +4,9 @@
 #ifdef DC_RUNTIME_BODY_STORAGE
 bool reactive_enabled() {return DC_RUNTIME_WORK(64u)==0x46525331u;}
 layout(buffer_reference,std430,buffer_reference_align=4) coherent buffer ReactiveWords {uint words[];};
+layout(buffer_reference,std430,buffer_reference_align=4) readonly restrict buffer ReactiveRootWords {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=8) coherent buffer ReactiveHandles {uvec2 values[];};
-#define FR_GPU_ROOT ReactiveWords(uvec2(DC_RUNTIME_WORK(65u),DC_RUNTIME_WORK(66u)))
+#define FR_GPU_ROOT ReactiveRootWords(uvec2(DC_RUNTIME_WORK(65u),DC_RUNTIME_WORK(66u)))
 uint reactive_entry_capacity() {return FR_GPU_ROOT.words[2];}
 uint reactive_entry_read(uint entry,uint field) {
     return ReactiveWords(uvec2(FR_GPU_ROOT.words[4],FR_GPU_ROOT.words[5])).words[entry*FR_ENTRY_WORDS+field];
@@ -36,6 +37,36 @@ void reactive_shape_copy(uint target,uint source,uint capacity) {
 void reactive_shape_clear(uint relative,uint nibble,uint capacity) {
     if(reactive_enabled()) reactive_shape_write(relative,nibble,capacity,uvec2(0));
 }
+void reactive_shape_stage(uint target,uint source,uint capacity) {
+    if(reactive_enabled()) reactive_shape_write(target,0u,capacity,uvec2(source==0xffffffffu?source:source+1u,0u));
+}
+void reactive_shape_resolve(uint target,uint capacity,uint packed) {
+    if(!reactive_enabled()) return;
+    uvec2 marker=reactive_shape_read(target,0u,capacity);
+    if(marker.y!=0u||marker.x==0u) return;
+    for(uint nibble=0u;nibble<8u;nibble++) {
+        uvec2 handle=marker.x==0xffffffffu||((packed>>(nibble*4u))&15u)==0u?
+            uvec2(0):reactive_shape_read(marker.x-1u,nibble,capacity);
+        reactive_shape_write(target,nibble,capacity,handle);
+    }
+}
+void reactive_shape_reown(uint relative,uint nibble,uint capacity,uint id,uint generation,uvec2 rest) {
+    uvec2 handle=reactive_shape_read(relative,nibble,capacity);
+    if(!reactive_handle_valid(handle)) return;
+    reactive_entry_write(handle.x,FR_ENTRY_OWNER,2u);
+    reactive_entry_write(handle.x,FR_ENTRY_OWNER+1u,id);
+    reactive_entry_write(handle.x,FR_ENTRY_OWNER+2u,generation);
+    reactive_entry_write(handle.x,FR_ENTRY_OWNER+3u,rest.x);
+    reactive_entry_write(handle.x,FR_ENTRY_OWNER+4u,rest.y);
+    reactive_entry_write(handle.x,FR_ENTRY_OWNER+5u,0u);
+}
+void reactive_shape_erase(uint relative,uint nibble,uint capacity) {
+    uvec2 handle=reactive_shape_read(relative,nibble,capacity);
+    if(!reactive_handle_valid(handle)) return;
+    reactive_entry_write(handle.x,FR_ENTRY_OWNER,0u);
+    reactive_entry_write(handle.x,FR_ENTRY_GENERATION,min(handle.y,0xfffffffeu)+1u);
+    reactive_shape_write(relative,nibble,capacity,uvec2(0));
+}
 void reactive_extract_cell(uint cell,uint relative,uint nibble,uint capacity,uint id,uint generation,uvec2 rest) {
     if(!reactive_enabled()) return;
     uvec2 handle=reactive_handle_read(cell);
@@ -50,9 +81,12 @@ void reactive_extract_cell(uint cell,uint relative,uint nibble,uint capacity,uin
     reactive_handle_write(cell,uvec2(0));
 }
 #else
+bool reactive_enabled() {return false;}
 void reactive_forget_cell(uint cell) {}
 void reactive_shape_copy(uint target,uint source,uint capacity) {}
 void reactive_shape_clear(uint relative,uint nibble,uint capacity) {}
 void reactive_extract_cell(uint cell,uint relative,uint nibble,uint capacity,uint id,uint generation,uvec2 rest) {}
+void reactive_shape_stage(uint target,uint source,uint capacity) {}
+void reactive_shape_resolve(uint target,uint capacity,uint packed) {}
 #endif
 #endif
