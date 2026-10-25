@@ -61,13 +61,20 @@ static bool submit(dc_gpu_t *g,char *err,uint32_t cap) {
 }
 static void clear_stats(struct fr_gas_gpu *t) {
     uint32_t *words=t->stats.mapped;words[FR_GAS_RATE_WORD]=0;words[FR_GAS_ERROR_WORD]=0;words[FR_GAS_ERROR_AT_WORD]=UINT32_MAX;
+    words[FR_GAS_RATE_X_WORD]=0;words[FR_GAS_RATE_Y_WORD]=0;
 }
 static bool shader_ok(struct fr_gas_gpu *t,char *err,uint32_t cap) {
     const uint32_t *words=t->stats.mapped;if(!words[FR_GAS_ERROR_WORD]) return true;
     if(err&&cap) snprintf(err,cap,"Invalid Vulkan gas state at physical cell%u",words[FR_GAS_ERROR_AT_WORD]);
     return false;
 }
-static float rate(struct fr_gas_gpu *t) {float value=0;memcpy(&value,(uint32_t *)t->stats.mapped+FR_GAS_RATE_WORD,4);return value;}
+static float rate(struct fr_gas_gpu *t) {
+    float value=0;uint32_t *words=t->stats.mapped;
+    if(t->policy==FR_GAS_PRESSURE_IMPLICIT) {
+        float x=0,y=0;memcpy(&x,words+FR_GAS_RATE_X_WORD,4);memcpy(&y,words+FR_GAS_RATE_Y_WORD,4);return x+y;
+    }
+    memcpy(&value,words+FR_GAS_RATE_WORD,4);return value;
+}
 static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     uint32_t count=g->width*g->height;VkDeviceSize states=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*sizeof(gas_packet_t);
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(g->physical,&properties);
@@ -134,7 +141,8 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     double remaining=seconds;uint64_t accepted=0;
     while(remaining>0) {
         if(!isfinite(speed)||speed<0) return error(err,cap,"Invalid reduced gas CFL metadata");
-        double allowed=speed>0?FR_GAS_COURANT/speed:remaining;float dt=(float)fmin(remaining,allowed);
+        double courant=t->policy==FR_GAS_PRESSURE_IMPLICIT?FR_GAS_ADVECTIVE_COURANT:FR_GAS_COURANT;
+        double allowed=speed>0?courant/speed:remaining;float dt=(float)fmin(remaining,allowed);
         if(dt>allowed) dt=nextafterf(dt,0.f);
         for(;;) {
             if(!(dt>0)||remaining-(double)dt==remaining) return error(err,cap,"Gas interval is below clock precision");

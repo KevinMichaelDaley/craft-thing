@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "gas_internal.h"
+#include "ferrum/fire/gas_constants.h"
 
 typedef struct {size_t a,b;uint32_t axis;double area,enthalpy,momentum,energy_diffusion;} face_t;
 typedef struct {double pressure,capacity,enthalpy,kinetic;} cell_t;
@@ -24,16 +25,17 @@ bool fr_gas_implicit_reference_step(const fr_gas_model_t *m,const fr_gas_state_t
     cell_t *cells=calloc(count,sizeof(*cells));face_t *faces=calloc(count*2,sizeof(*faces));
     double *p=calloc(count,sizeof(*p)),*rhs=calloc(count,sizeof(*rhs)),*diagonal=calloc(count,sizeof(*diagonal));
     if(!star||!result||!cells||!faces||!p||!rhs||!diagonal) {gas_error(err,cap,"Cannot allocate cold implicit oracle");goto done;}
-    memcpy(star,s,count*sizeof(*s));
+    memcpy(star,s,count*sizeof(*s));double axis_rate[2]={0};
     for(size_t i=0;i<count;i++) {
         fr_gas_thermo_t t;
         if(!isfinite(v[i])||v[i]<0||v[i]>1||!fr_gas_thermodynamics(m,s+i,v[i],&t,err,cap)) goto done;
         if(!t.mass) continue;
-        double advective=(width>1?fabs(s[i].momentum[0]):0)+(height>1?fabs(s[i].momentum[1]):0);
-        if(advective*dt>t.mass*.4) {gas_error(err,cap,"Implicit gas violates advective CFL");goto done;}
+        if(width>1) axis_rate[0]=fmax(axis_rate[0],fabs(s[i].momentum[0])/t.mass);
+        if(height>1) axis_rate[1]=fmax(axis_rate[1],fabs(s[i].momentum[1])/t.mass);
         cells[i].pressure=t.pressure;cells[i].enthalpy=(s[i].energy+m->kinetic_scale*t.pressure*v[i])/t.mass;
         cells[i].kinetic=.5*m->kinetic_scale*(s[i].momentum[0]*s[i].momentum[0]+s[i].momentum[1]*s[i].momentum[1])/t.mass;
     }
+    if((axis_rate[0]+axis_rate[1])*dt>FR_GAS_ADVECTIVE_COURANT) {gas_error(err,cap,"Implicit gas violates advective axis CFL");goto done;}
     if(dt==0) {memcpy(out,s,count*sizeof(*s));okay=true;goto done;}
     for(size_t i=0;i<count;i++) for(uint32_t axis=0;axis<2;axis++) {
         if((axis==0&&i%width+1>=width)||(axis==1&&i+width>=count)) continue;

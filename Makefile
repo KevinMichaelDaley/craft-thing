@@ -1781,7 +1781,7 @@ build/gpu.o build/present_gpu.o: src/vulkan/gas_gpu_internal.h
 GAS_SHADERS = build/shaders/gas_init.comp.spv build/shaders/gas_prepare.comp.spv build/shaders/gas_transport.comp.spv build/shaders/gas_gate.comp.spv build/shaders/gas_overlay.comp.spv $(patsubst %,build/shaders/gas_%.comp.spv,activity activity_compact final_compact sparse_commit advect acoustic_init pressure_rhs pressure_classify pressure_compact pressure_sor pressure_tile pressure_correct pressure_residual acoustic_finish)
 build/gas_acoustic_gpu.o: src/vulkan/gas_acoustic_gpu.c src/vulkan/gas_acoustic_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-build/shaders/gas_%.comp.spv: shaders/gas/%.comp $(wildcard shaders/gas/*.glsl) include/dungeoncraft/gas_layout.h include/dungeoncraft/terrain_flags.h
+build/shaders/gas_%.comp.spv: shaders/gas/%.comp $(wildcard shaders/gas/*.glsl) include/dungeoncraft/gas_layout.h include/ferrum/fire/gas_constants.h include/dungeoncraft/terrain_flags.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/shaders/gas_overlay.comp.spv: shaders/renderer/gas_overlay.comp shaders/gas/types.glsl include/dungeoncraft/gas_layout.h

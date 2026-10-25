@@ -236,3 +236,23 @@ but is rejected on actual scene cost: approximately4ms per pressure cycle and
 regions across thin walls and reduce this fixture's residual too slowly. It does
 not change the physical operator or tolerance, but is not a production speedup.
 Its source is archived in git history; the runtime keeps the validated SOR path.
+
+Grouping four compensated refinement batches in one GPU submission passes the
+twelve native cases. Once converged, classification emits empty work lists; the
+additional batches do not alter pressure. The same residual tolerance decides
+acceptance. A30-frame real elapsed-clock CLI diagnostic improved to41.889ms mean,
+73.953ms worst, so the complete-frame performance requirement remains RED.
+
+The implicit advective policy now has a separately validated positivity bound.
+For one axis, each Rusanov outgoing coefficient is
+`dt * area * (s +/- u) / (2 * own_volume)`, with `s <= global_max_abs_velocity`.
+Both coefficients are nonnegative, and each face area is at most own volume.
+Their sum is therefore at most `dt * global_max_abs_velocity`; summing axes gives
+`dt * (max_abs_vx + max_abs_vy)`. A0.9 safety factor leaves a positive own-cell
+weight. Two GPU scalar maxima supply this bound without field readback. This
+replaces the implicit policy's overly conservative acoustic-era0.4 coefficient;
+explicit HLLC retains its original bound. Invalid thermodynamic candidates still
+halve and retry without publishing state or losing time. The cold reference has
+a new locked diagonal-flow positivity/budget case and transactional rejection
+outside this bound (RED6384ec2); it now passes4/4. Physical clock, source fixtures,
+pressure operator and compensated residual tolerance are unchanged.

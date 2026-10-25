@@ -1,5 +1,6 @@
 #ifndef DC_GAS_LAYOUT_H
 #define DC_GAS_LAYOUT_H
+#include "../ferrum/fire/gas_constants.h"
 #define FR_GAS_CELL_WORDS 16u
 #define FR_GAS_MODEL_WORDS 20u
 #define FR_GAS_R_WORD 0u
@@ -16,5 +17,7 @@
 #define FR_GAS_RATE_WORD 0u
 #define FR_GAS_ERROR_WORD 1u
 #define FR_GAS_ERROR_AT_WORD 2u
+#define FR_GAS_RATE_X_WORD 4u
+#define FR_GAS_RATE_Y_WORD 5u
 #define FR_GAS_COURANT 0.4
 #endif

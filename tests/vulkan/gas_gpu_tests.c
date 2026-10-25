@@ -274,6 +274,27 @@ static void test_native_derived_cache_rebuilds_after_seed_and_page_remap(void) {
     ASSERT_EQ(memcmp(first,out,4096*sizeof(*out)),0);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(input);free(first);free(out);free(volume);free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_native_implicit_axis_cfl_matches_cold_oracle_in_one_positive_step(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    fr_gas_model_t m=reference_model();fr_gas_state_t *input=malloc(4096*sizeof(*input)),*expected=malloc(4096*sizeof(*expected)),*out=malloc(4096*sizeof(*out));
+    double *volume=malloc(4096*sizeof(*volume));ASSERT_TRUE(input&&expected&&out&&volume);
+    for(uint32_t i=0;i<4096;i++) {input[i]=reference_air(m,1,300,2);input[i].momentum[1]=1;input[i].energy+=.5;volume[i]=1;}
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_IMPLICIT,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,input,4096,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_implicit_reference_step(&m,input,volume,64,64,.25,expected,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_step(g,.25f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+    fr_gas_gpu_clock_t clock;ASSERT_TRUE(fr_gas_gpu_clock(g,&clock));ASSERT_EQ(clock.substeps,1u);
+    double before=0,after=0,mass=0;
+    for(uint32_t i=0;i<4096;i++) {
+        for(uint32_t k=0;k<5;k++) {ASSERT_TRUE(out[i].species[k]>=0&&fabs(out[i].species[k]-expected[i].species[k])<2e-6);mass+=out[i].species[k];}
+        ASSERT_TRUE(fabs(out[i].energy-expected[i].energy)<.005);
+        for(uint32_t k=0;k<2;k++) ASSERT_TRUE(fabs(out[i].momentum[k]-expected[i].momentum[k])<.0002);
+        before+=input[i].energy;after+=out[i].energy;
+    }
+    ASSERT_TRUE(fabs(mass-4096.)<.0002&&fabs(after-before)<.02);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(input);free(expected);free(out);free(volume);free(c);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
@@ -288,5 +309,6 @@ int main(void) {
     RUN(test_native_gas_automatically_follows_full_tick_clock_and_present_pause);
     RUN(test_native_sealed_hot_cell_cannot_gain_heat_from_wall_blocked_buoyancy);
     RUN(test_native_derived_cache_rebuilds_after_seed_and_page_remap);
+    RUN(test_native_implicit_axis_cfl_matches_cold_oracle_in_one_positive_step);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
