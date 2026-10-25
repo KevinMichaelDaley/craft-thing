@@ -2,11 +2,12 @@
 #extension GL_GOOGLE_include_directive : require
 #include "acoustic.glsl"
 void main() {
-    uint index=gas_index();if(index>=params.width*params.height) return;
+    uint index=gas_sparse_index(3u);if(index>=params.width*params.height) return;
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
     Primitive primitive=gas_empty_primitive();
     if(atlas!=0xffffffffu) {
-        Gas value=gas_provisional(atlas);float dt=uintBitsToFloat(params.seconds),volume=value.geometry.x;
+        Gas value=gas_advected(index)?gas_provisional(atlas):gas_source(p);
+        float dt=uintBitsToFloat(params.seconds),volume=value.geometry.x;
         GasFlux change=gas_empty_flux();uint vertical_walls=0u;
         if(volume>0.) for(uint d=0u;d<4u;d++) {
             uint j=0u;if(!gas_neighbor(p,d,j)) {if(d>=2u) vertical_walls++;continue;}

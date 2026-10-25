@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "gpu_internal.h"
+#include "gas_gpu_internal.h"
 #include "reactive_gpu_internal.h"
 #include "thermal_gpu_internal.h"
 #include "reactive_checkpoint_gpu.h"
@@ -384,6 +385,7 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
         if (slot != UINT32_MAX) gpu->preserve_shifted_slot[slot] = false;
         return true;
     }
+    fr_gas_gpu_invalidate_cache(gpu);
     gpu->body_refresh_pending = true;
     if (slot != UINT32_MAX && gpu->slot_page[slot] != UINT32_MAX &&
         gpu->slot_page[slot] != tile)

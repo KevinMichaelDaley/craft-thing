@@ -8,7 +8,19 @@ layout(set=0,binding=17,std430) restrict buffer CorrectionData {vec4 correction_
 layout(set=0,binding=18,std430) restrict buffer ActiveMask {uint active_mask[];};
 layout(set=0,binding=19,std430) restrict buffer ActiveTiles {uint active_tiles[];};
 layout(set=0,binding=20,std430) restrict buffer Force {vec2 force[];};
-layout(set=0,binding=21,std430) restrict buffer Indirect {uint indirect[];};
+layout(set=0,binding=21,std430) restrict buffer Activity {uint activity[];};
+layout(set=0,binding=22,std430) restrict buffer Indirect {uint indirect[];};
+uint gas_tile_count() {return ((params.width+7u)/8u)*((params.height+7u)/8u);}
+bool gas_advected(uint index) {
+    uint tile=(index/params.width/8u)*((params.width+7u)/8u)+(index%params.width/8u);
+    return (activity[gas_tile_count()+tile]&1u)!=0u;
+}
+uint gas_sparse_index(uint section) {
+    uint tile=active_tiles[section*gas_tile_count()+gl_WorkGroupID.x],lane=gl_LocalInvocationIndex;
+    uint width=(params.width+7u)/8u;
+    uvec2 p=uvec2(tile%width,tile/width)*8u+uvec2(lane%8u,lane/8u);
+    return p.x<params.width&&p.y<params.height?p.y*params.width+p.x:0xffffffffu;
+}
 Gas gas_provisional(uint atlas) {return (params.bank&1u)==0u?bank1[atlas]:bank0[atlas];}
 void gas_write_provisional(uint atlas,Gas value) {
     if((params.bank&1u)==0u) bank1[atlas]=value;else bank0[atlas]=value;

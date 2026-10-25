@@ -12,5 +12,5 @@ void main() {
         }
     }
     if(needed) {uint slot=atomicAdd(indirect[0],1u);active_tiles[slot]=tile;}
-    if(residual_needed) {uint slot=atomicAdd(indirect[4],1u);active_tiles[width*height+slot]=tile;}
+    if(residual_needed) {uint slot=atomicAdd(indirect[4],1u);active_tiles[width*height+slot]=tile;activity[width*height+tile]|=2u;}
 }

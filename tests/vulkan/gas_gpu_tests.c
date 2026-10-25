@@ -259,6 +259,21 @@ static void test_native_sealed_hot_cell_cannot_gain_heat_from_wall_blocked_buoya
     ASSERT_EQ(memcmp(input,out,4096*sizeof(*input)),0);ASSERT_EQ(work[hot],0.);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(input);free(out);free(volumes);free(work);free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_native_derived_cache_rebuilds_after_seed_and_page_remap(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    fr_gas_model_t m=reference_model();
+    fr_gas_state_t *input=malloc(4096*sizeof(*input)),*first=malloc(4096*sizeof(*first)),*out=malloc(4096*sizeof(*out));
+    double *volume=malloc(4096*sizeof(*volume));ASSERT_TRUE(input&&first&&out&&volume);
+    for(uint32_t i=0;i<4096;i++) {input[i]=reference_air(m,1,300,(i%64>=24&&i%64<32)?2:0);volume[i]=1;}
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_IMPLICIT,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_step(g,.001f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,first,4096,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_step(g,.001f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+    ASSERT_EQ(memcmp(first,out,4096*sizeof(*out)),0);
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&dc_gpu_set_page(g,1,0,0,err,sizeof(err))&&fr_gas_gpu_step(g,.001f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+    ASSERT_EQ(memcmp(first,out,4096*sizeof(*out)),0);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(input);free(first);free(out);free(volume);free(c);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
@@ -272,5 +287,6 @@ int main(void) {
     RUN(test_native_oxygen_and_valve_feedback_are_visible_and_do_not_advance_stock);
     RUN(test_native_gas_automatically_follows_full_tick_clock_and_present_pause);
     RUN(test_native_sealed_hot_cell_cannot_gain_heat_from_wall_blocked_buoyancy);
+    RUN(test_native_derived_cache_rebuilds_after_seed_and_page_remap);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

@@ -5,7 +5,8 @@
 #include "renderer_internal.h"
 typedef struct {
     fr_renderer_compute_t advect,initialize,rhs,classify,compact,sor,correct,residual,finish;
-    dc_gpu_address_buffer_t fields[9],indirect;
+    fr_renderer_compute_t activity,activity_compact,final_compact,commit;
+    dc_gpu_address_buffer_t fields[10],indirect;
     bool ready;
 } fr_gas_acoustic_gpu_t;
 /** Lazily create only the selected optional acoustic module. */

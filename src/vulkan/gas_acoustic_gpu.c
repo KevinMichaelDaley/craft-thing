@@ -11,31 +11,33 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->correct);
     fr_renderer_compute_destroy(g,&t->classify);fr_renderer_compute_destroy(g,&t->compact);
     fr_renderer_compute_destroy(g,&t->residual);fr_renderer_compute_destroy(g,&t->finish);
-    for(uint32_t i=0;i<9;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
+    fr_renderer_compute_destroy(g,&t->activity);fr_renderer_compute_destroy(g,&t->activity_compact);
+    fr_renderer_compute_destroy(g,&t->final_compact);
+    fr_renderer_compute_destroy(g,&t->commit);
+    for(uint32_t i=0;i<10;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
     dc_gpu_address_buffer_destroy(g,&t->indirect);
     memset(t,0,sizeof(*t));
 }
 bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescriptorBufferInfo source[12],char *err,uint32_t cap) {
     if(t->ready) return true;
-    VkDescriptorBufferInfo buffers[22];memcpy(buffers,source,12*sizeof(*source));
+    VkDescriptorBufferInfo buffers[23];memcpy(buffers,source,12*sizeof(*source));
     VkDeviceSize bytes=(VkDeviceSize)g->width*g->height*16u;
     VkDeviceSize tiles=(VkDeviceSize)((g->width+7u)/8u)*((g->height+7u)/8u);
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(g->physical,&properties);
     if(tiles>properties.limits.maxComputeWorkGroupCount[0]) return error(err,cap,"Gas pressure work exceeds device indirect dispatch range");
-    for(uint32_t i=0;i<9;i++) {
-        VkDeviceSize field_bytes=i==8?bytes/2u:(i>=6?tiles*(i==7?8u:4u):(i==4?bytes/4u:bytes));
+    for(uint32_t i=0;i<10;i++) {
+        VkDeviceSize field_bytes=i==9?tiles*8u:(i==8?bytes/2u:(i>=6?tiles*(i==7?16u:4u):(i==4?bytes/4u:bytes)));
         if(!dc_gpu_address_buffer_create(g,field_bytes,true,t->fields+i,err,cap)) goto fail;
         buffers[12+i]=(VkDescriptorBufferInfo){t->fields[i].buffer,0,field_bytes};
     }
-    if(!dc_gpu_address_buffer_create(g,32,true,&t->indirect,err,cap)) goto fail;
-    ((uint32_t *)t->indirect.mapped)[1]=1u;((uint32_t *)t->indirect.mapped)[2]=1u;
-    ((uint32_t *)t->indirect.mapped)[5]=1u;((uint32_t *)t->indirect.mapped)[6]=1u;
-    buffers[21]=(VkDescriptorBufferInfo){t->indirect.buffer,0,32};
-    fr_renderer_compute_t *pipelines[]={&t->advect,&t->initialize,&t->rhs,&t->classify,&t->compact,&t->sor,&t->correct,&t->residual,&t->finish};
-    const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_classify","pressure_compact","pressure_sor","pressure_correct","pressure_residual","acoustic_finish"};
-    for(uint32_t i=0;i<9;i++) {
+    if(!dc_gpu_address_buffer_create(g,64,true,&t->indirect,err,cap)) goto fail;
+    for(uint32_t i=0;i<4;i++) {((uint32_t *)t->indirect.mapped)[i*4+1]=1u;((uint32_t *)t->indirect.mapped)[i*4+2]=1u;}
+    buffers[22]=(VkDescriptorBufferInfo){t->indirect.buffer,0,64};
+    fr_renderer_compute_t *pipelines[]={&t->advect,&t->initialize,&t->rhs,&t->classify,&t->compact,&t->sor,&t->correct,&t->residual,&t->finish,&t->activity,&t->activity_compact,&t->final_compact,&t->commit};
+    const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_classify","pressure_compact","pressure_sor","pressure_correct","pressure_residual","acoustic_finish","activity","activity_compact","final_compact","sparse_commit"};
+    for(uint32_t i=0;i<13;i++) {
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",paths[i]);
-        if(!fr_renderer_compute_init(g,pipelines[i],buffers,22,16,path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,pipelines[i],buffers,23,16,path,err,cap)) goto fail;
     }
     t->ready=true;return true;
 fail:
@@ -45,7 +47,7 @@ static void barrier(dc_gpu_t *g) {
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT|VK_ACCESS_2_TRANSFER_WRITE_BIT,
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-        VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_TRANSFER_WRITE_BIT);
+        VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_TRANSFER_READ_BIT|VK_ACCESS_2_TRANSFER_WRITE_BIT);
 }
 static void dispatch(dc_gpu_t *g,const fr_renderer_compute_t *pipeline,uint32_t gx,uint32_t gy,float dt,uint32_t bank) {
     uint32_t bits=0;memcpy(&bits,&dt,4);uint32_t push[4]={g->width,g->height,bits,bank};barrier(g);
@@ -75,14 +77,18 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     bool trace=getenv("DC_GAS_TRACE")!=NULL&&g->timestamp_bits;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin acoustic advection");
     if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,4);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);}
-    dispatch(g,&t->advect,gx,gy,dt,bank);dispatch(g,&t->rhs,gx,gy,dt,bank);
+    barrier(g);
+    vkCmdFillBuffer(g->command,t->indirect.buffer,32,4,0);vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
+    uint32_t tiles=((g->width+7u)/8u)*((g->height+7u)/8u);
+    dispatch(g,&t->activity,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
+    dispatch(g,&t->activity_compact,(tiles+63u)/64u,1u,dt,bank);
+    indirect_dispatch(g,t,&t->advect,dt,bank,32);dispatch(g,&t->rhs,gx,gy,dt,bank);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,1);
     uint32_t stalled=0,batches=0;float best=INFINITY;
     for(;;) {
         barrier(g);vkCmdFillBuffer(g->command,t->indirect.buffer,0,4,0);
         vkCmdFillBuffer(g->command,t->indirect.buffer,16,4,0);
         dispatch(g,&t->classify,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
-        uint32_t tiles=((g->width+7u)/8u)*((g->height+7u)/8u);
         dispatch(g,&t->compact,(tiles+63u)/64u,1u,dt,bank);
         for(uint32_t sweep=0;sweep<8;sweep++) {
             indirect_dispatch(g,t,&t->sor,dt,bank,0);indirect_dispatch(g,t,&t->sor,dt,bank|2u,0);
@@ -111,5 +117,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
             vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,1);}
     }
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot finish acoustic pressure solve");
-    dispatch(g,&t->finish,gx,gy,dt,bank);return submit(g,err,cap);
+    dispatch(g,&t->final_compact,(tiles+63u)/64u,1u,dt,bank);
+    indirect_dispatch(g,t,&t->finish,dt,bank,48);
+    indirect_dispatch(g,t,&t->commit,dt,bank,48);return submit(g,err,cap);
 }

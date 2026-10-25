@@ -47,3 +47,7 @@ Implicit acoustic numerical checkpoint: CPU3/3 reference cases and actual Waylan
 **2026-10-25T10:58:51Z**
 
 Sparse Vulkan numerical checkpoint:6/6 actual Wayland cases pass with core AND synchronization validation enabled, no VUID/SYNC errors. Includes exact resting state under both policies, reference-matched implicit colored transport, and8192-cell cross-chunk color/pressure transport. Seam energy error-9.50787216e-06 and red error9.98786254e-08. GPU compaction has capacity for every tile, no CPU list/cell readback or discarded stock. Last measured full-frame40.809/58.540ms remains RED; fused advection/metadata performance is under measurement. Interactive box, vacuum/geometry admission, streaming/persistence, long timing runs remain open.
+
+**2026-10-25T12:59:32Z**
+
+Heat milestone remains closed. Smoke runtime now has finite colored reservoirs, real GPU face valves, molecular-O2 overlay, and automatic physical-clock advancement. Eleven native Vulkan gas/reference/conservation cases pass, and the actual placement scene test passes. Pushed f3e00bf includes dry cold-scene factory and cached implicit thermodynamics. Full-frame performance is still RED: short real-display probes ~33–48ms at 1/60s and 265–420ms for 0.25s catch-up. GPU-only activity compaction is under validation; no changed clock, state truncation, fixed cap or reduced solver tolerance. Remaining current-module work includes required performance, supported edit/ownership geometry, persistence/streaming and final repeated displayed acceptance; bonfire has not started.

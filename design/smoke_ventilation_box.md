@@ -218,3 +218,14 @@ fluid work before being replaced by the dry fixture. Gas catch-up also remains
 costly. The next cold-authoring optimization avoids generating unrelated water
 and prepares static metadata before starting the physical clock. It does not
 disable water painting, alter substeps or change the clock.
+
+The dry-scene factory and implicit thermodynamic cache are committed at
+f3e00bf. All11 native Vulkan tests and the actual placement enclosure test pass.
+GPU activity compaction now stages strict nonzero velocity, force or open-face
+pressure differences with an advection halo. Pressure's accumulated residual
+coverage adds final affected tiles. Quiet cells remain copied exactly between
+transactional banks; the field remains full resolution and every stock survives.
+There is no activity threshold, CPU work-list construction or capacity truncation.
+The existing eleven native reference/conservation tests pass this sparse path.
+The short actual-display probe remains RED: steady1/60 frames33--48ms and
+0.25s catch-up265--420ms. These short diagnostics are not final benchmark passes.

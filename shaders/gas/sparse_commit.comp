@@ -1,0 +1,12 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "acoustic.glsl"
+void main() {
+    if(stats[FR_GAS_ERROR_WORD]!=0u) return;
+    uint index=gas_sparse_index(3u);if(index>=params.width*params.height) return;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
+    if(atlas!=0xffffffffu) {
+        if((params.bank&1u)==0u) bank0[atlas]=bank1[atlas];else bank1[atlas]=bank0[atlas];
+    }
+    if((params.bank&1u)==0u) cache0[index]=cache1[index];else cache1[index]=cache0[index];
+}

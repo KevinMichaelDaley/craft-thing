@@ -16,7 +16,7 @@ GasFlux gas_advective_neighbor(Gas own,Primitive center,float energy,ivec2 p,ive
         own.visual.rgb*first+other.visual.rgb*second);
 }
 void main() {
-    uint index=gas_index();if(index>=params.width*params.height) return;
+    uint index=gas_sparse_index(2u);if(index>=params.width*params.height) return;
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
     if(atlas==0xffffffffu) {acoustic[index]=vec4(0);provisional[index]=vec4(0);force[index]=vec2(0);return;}
     Gas own=gas_source(p);Primitive center=gas_cached(p);float energy=gas_energy(own);GasFlux net=gas_empty_flux();
