@@ -1,7 +1,9 @@
 #include "transport_float_controls.glsl"
 #include "acoustic.glsl"
-layout(set=0,binding=24,std430) restrict buffer TransportWork {Gas transport_work[];};
+struct TransportCell {vec4 species,dynamics,visual,mass,energy;};
+layout(set=0,binding=24,std430) restrict buffer TransportWork {TransportCell transport_work[];};
 uint transport_axis() {return (params.bank>>3u)&1u;}
+uint transport_position(ivec2 p) {return transport_axis()==0u?uint(p.y)*params.width+uint(p.x):uint(p.x)*params.height+uint(p.y);}
 int transport_direction() {return (params.bank&16u)!=0u?-1:1;}
 ivec2 transport_step() {return transport_axis()==0u?ivec2(transport_direction(),0):ivec2(0,transport_direction());}
 vec2 transport_rates(ivec2 p,int direction) {
@@ -20,7 +22,8 @@ GasFlux transport_scale(GasFlux a,vec2 factor) {
 }
 GasFlux transport_state(Gas value) {return GasFlux(value.species,vec4(value.dynamics.x,gas_energy(value),value.dynamics.zw),value.visual.rgb);}
 GasFlux transport_work_at(ivec2 p) {
-    uint at=gas_atlas(p);return at==0xffffffffu?gas_empty_flux():transport_state(transport_work[at]);
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return gas_empty_flux();
+    TransportCell value=transport_work[transport_position(p)];return GasFlux(value.species,value.dynamics,value.visual.rgb);
 }
 vec4 transport_face_rates(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return vec4(0);

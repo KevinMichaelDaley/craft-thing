@@ -7,7 +7,7 @@ void main() {
     ivec2 step=transport_axis()==0u?ivec2(1,0):ivec2(0,1);
     GasFlux incoming=transport_face_flux(p-step),outgoing=transport_face_flux(p);
     float energy_in=incoming.dynamics.y,energy_out=outgoing.dynamics.y;
-    Gas source=gas_provisional(atlas);float trace_scale=acoustic[index].w;
+    Gas source=gas_provisional(atlas);float trace_scale=transport_work[transport_position(p)].mass.w;
     precise vec2 carrier=vec2(source.species.z,source.dynamics.x)*trace_scale+vec2(incoming.species.z,incoming.dynamics.x)-vec2(outgoing.species.z,outgoing.dynamics.x);
     precise vec3 pigment=source.visual.rgb*trace_scale+incoming.pigment-outgoing.pigment;
     GasFlux net=GasFlux(incoming.species-outgoing.species,incoming.dynamics-outgoing.dynamics,vec3(0));net.dynamics.y=0.;net.species.z=0.;net.dynamics.x=0.;

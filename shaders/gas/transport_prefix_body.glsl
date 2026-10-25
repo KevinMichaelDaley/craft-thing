@@ -8,14 +8,10 @@ GasFlux shuffle_up(GasFlux value,uint offset) {
     return GasFlux(subgroupShuffleUp(value.species,offset),subgroupShuffleUp(value.dynamics,offset),subgroupShuffleUp(value.pigment,offset));
 }
 void cell_map(ivec2 p,out vec2 factor,out GasFlux value,out bool moving) {
-    uint index=uint(p.y)*params.width+uint(p.x),atlas=gas_atlas(p);bool backward=transport_direction()<0;
-    vec4 mass=acoustic[index],energy=provisional[index];
+    TransportCell source=transport_work[transport_position(p)];bool backward=transport_direction()<0;
+    vec4 mass=source.mass,energy=source.energy;
     factor=backward?vec2(mass.z,energy.z):vec2(mass.x,energy.x);
-    value=gas_empty_flux();moving=any(notEqual(stencil[index],vec4(0)));
-    if(atlas==0xffffffffu) return;
-    Gas source=backward?transport_work[atlas]:gas_provisional(atlas);
-    value=transport_state(source);
-    if(!backward) {value.species.z*=mass.w;value.dynamics.x*=mass.w;value.pigment*=mass.w;}
+    moving=energy.w!=0.;value=GasFlux(source.species,source.dynamics,source.visual.rgb);
     value=transport_scale(value,backward?vec2(1):vec2(mass.y,energy.y));
 }
 void main() {
@@ -32,7 +28,10 @@ void main() {
     barrier();bool any_moving=false;
     for(uint group=0;group<gl_NumSubgroups;group++) any_moving=any_moving||group_moving[group]!=0u;
     if(!any_moving) {
-        for(uint cell=begin;cell<end;cell++) {uint atlas=gas_atlas(transport_point(line,cell));if(atlas!=0xffffffffu) transport_work[atlas]=gas_empty();}
+        for(uint cell=begin;cell<end;cell++) {
+            uint index=transport_position(transport_point(line,cell));
+            transport_work[index].species=vec4(0);transport_work[index].dynamics=vec4(0);transport_work[index].visual=vec4(0);
+        }
         return;
     }
     for(uint offset=1u;offset<gl_SubgroupSize;offset*=2u) {
@@ -54,6 +53,7 @@ void main() {
     for(uint cell=begin;cell<end;cell++) {
         ivec2 p=transport_point(line,cell);vec2 own_factor;GasFlux own_value;bool own_moving;cell_map(p,own_factor,own_value,own_moving);
         prefix=transport_add(own_value,transport_scale(prefix,own_factor));
-        uint atlas=gas_atlas(p);if(atlas!=0xffffffffu) transport_work[atlas]=Gas(prefix.species,prefix.dynamics,vec4(prefix.pigment,0),vec4(0));
+        uint index=transport_position(p);transport_work[index].species=prefix.species;
+        transport_work[index].dynamics=prefix.dynamics;transport_work[index].visual=vec4(prefix.pigment,0);
     }
 }

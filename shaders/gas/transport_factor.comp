@@ -50,8 +50,11 @@ void main() {
         vec2 upper=vec2(saved_mass.z,saved_energy.z),previous=vec2(saved_mass.w,saved_energy.w);
         vec2 inverse=vec2(1)/(diagonal-lower*previous*prior_inverse);
         if(any(lessThanEqual(inverse,vec2(0)))||any(isnan(inverse))||any(isinf(inverse))) {gas_error(index);atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],FR_GAS_REJECT_FACTOR);inverse=vec2(0);}
-        acoustic[index]=vec4(lower.x*inverse.x,inverse.x,upper.x*inverse.x,trace_scale);
-        provisional[index]=vec4(lower.y*inverse.y,inverse.y,upper.y*inverse.y,0);
+        uint atlas=gas_atlas(p);GasFlux value=atlas==0xffffffffu?gas_empty_flux():transport_state(gas_provisional(atlas));
+        value.species.z*=trace_scale;value.dynamics.x*=trace_scale;value.pigment*=trace_scale;
+        transport_work[transport_position(p)]=TransportCell(value.species,value.dynamics,vec4(value.pigment,0),
+            vec4(lower.x*inverse.x,inverse.x,upper.x*inverse.x,trace_scale),
+            vec4(lower.y*inverse.y,inverse.y,upper.y*inverse.y,any(notEqual(stencil[index],vec4(0)))?1.:0.));
         prior_inverse=inverse;
     }
 }
