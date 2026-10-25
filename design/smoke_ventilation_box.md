@@ -327,3 +327,23 @@ probe to773.476/1109.057ms; that default is rejected. Current experiments retain
 the normal sweep budget, compile implicit-only shader branches statically, and
 wait for a per-gas submission fence rather than queue-wide idle. These remain
 under displayed/reference/performance validation and are not a completion claim.
+
+The global advective CFL is now a separate numerical gate. The cold directional
+implicit transport oracle passes3 tests, including an independent geometric
+packet at CFL4, closed2D wall budgets, and transactional invalid/pause requests.
+Its acoustic composition passes5 tests; the existing4 implicit oracle cases
+still pass, including a bit-identical acoustic mode at zero bulk velocity.
+
+Experimental `FR_GAS_PRESSURE_LARGE_CFL` uses the same authoritative field and
+pressure acceptance test. For large advective steps, frozen Rusanov directional
+rates form positive bidiagonal systems. Subgroup affine prefix scans solve
+independent lines in parallel, then shared face-flux differences update species,
+momentum, pigment and compensated energy conservatively. Gates reset the chain;
+the CPU oracle remains validation-only. Small advective steps retain the existing
+explicit transport. Invalid candidates halve and retry from the untouched source.
+
+Checkpoint2f82397 passes15 actual displayed native cases. Its new case matches
+the composed oracle at CFL4 in one accepted0.4s step with closed budgets. The
+smoke demo still selects the previous policy until seam, valve,2D, displayed
+enclosure and full performance checks establish the new gate. No speed claim
+or final acceptance is inferred from these reference tests.

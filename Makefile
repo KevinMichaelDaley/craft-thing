@@ -1768,7 +1768,7 @@ build/smoke_box_display_tests: tests/app/smoke_box_tests.c tests/vulkan/reactive
 build/diagnostics/smoke_box_frame: tools/diagnostics/smoke_box_frame.c src/app/level.c src/app/level_internal.h src/app/smoke_box.c src/app/smoke_level.c $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< src/app/smoke_box.c src/app/smoke_level.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
-build/gas_display_tests: tests/vulkan/gas_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/fire/gas_reference.c src/fire/gas_implicit_reference.c src/fire/gas_transport_reference.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+build/gas_display_tests: tests/vulkan/gas_gpu_tests.c tests/vulkan/gas_large_cfl_cases.h tests/vulkan/reactive_cell_gpu_tests.c src/fire/gas_reference.c src/fire/gas_implicit_reference.c src/fire/gas_transport_reference.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< src/fire/gas_reference.c src/fire/gas_implicit_reference.c src/fire/gas_transport_reference.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/diagnostics/gas_frame: tools/diagnostics/gas_frame.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	mkdir -p $(dir $@)

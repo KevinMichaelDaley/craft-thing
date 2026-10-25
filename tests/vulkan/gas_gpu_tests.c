@@ -351,6 +351,7 @@ static void test_native_large_cfl_packet_matches_composed_oracle_in_one_step(voi
     ASSERT_TRUE(fabs(energy-original)<.02&&present(g,err,sizeof(err)));
     free(input);free(expected);free(out);free(volume);free(c);dc_gpu_destroy(g);PASS();
 }
+#include "gas_large_cfl_cases.h"
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
@@ -368,5 +369,8 @@ int main(void) {
     RUN(test_native_implicit_axis_cfl_matches_cold_oracle_in_one_positive_step);
     RUN(test_native_sparse_footprints_match_dense_after_gravity_and_valve_changes);
     RUN(test_native_large_cfl_packet_matches_composed_oracle_in_one_step);
+    RUN(test_native_large_cfl_crosses_chunk_and_subgroup_seams_with_mixed_color);
+    RUN(test_native_large_cfl_closed_valve_matches_two_independent_chambers);
+    RUN(test_native_large_cfl_two_dimensional_concave_wall_matches_oracle);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
