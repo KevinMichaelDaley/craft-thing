@@ -43,7 +43,7 @@ static bool resources(dc_gpu_t *g,char *err,uint32_t cap) {
 static bool dispatch(dc_gpu_t *g,uint32_t slot,uint32_t count,uint32_t first,uint32_t last,char *err,uint32_t cap) {
     struct fr_reactive_gpu *r=g->reactive;fr_renderer_compute_t *compute=&r->stream_compute;
     uint32_t maximum=ROWS;
-    if(first==1u&&r->arena.capacity>maximum) maximum=r->arena.capacity;
+    if((first==1u||first==5u)&&r->arena.capacity>maximum) maximum=r->arena.capacity;
     uint32_t groups=(maximum-1u)/64u+1u;VkPhysicalDeviceProperties props;vkGetPhysicalDeviceProperties(g->physical,&props);
     uint32_t x=groups<props.limits.maxComputeWorkGroupCount[0]?groups:props.limits.maxComputeWorkGroupCount[0];
     uint32_t y=(groups-1u)/x+1u;
@@ -73,6 +73,10 @@ bool fr_gpu_reactive_clear_chunk(dc_gpu_t *g,uint32_t slot,char *err,uint32_t ca
     if(!g->reactive) return true;
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!resources(g,err,cap)) return false;
     return dispatch(g,slot,0,3,3,err,cap);
+}
+bool fr_gpu_reactive_export_bodies(dc_gpu_t *g,fr_reactive_record_t **records,
+    uint32_t *count,uint64_t *next,char *err,uint32_t cap) {
+    (void)g;(void)records;(void)count;(void)next;(void)err;(void)cap;return false;
 }
 bool fr_gpu_reactive_export_chunk(dc_gpu_t *g,uint32_t slot,const dc_chunk_t *chunk,
     fr_reactive_chunk_t *out,char *err,uint32_t cap) {

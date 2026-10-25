@@ -1744,3 +1744,5 @@ build/reactive_checkpoint_display_tests: tests/vulkan/reactive_checkpoint_gpu_te
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/reactive_archive_tests: tests/fire/reactive_archive_tests.c src/fire/reactive_archive.c src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_archive.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/reactive_archive.c src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) -o $@ -lm
+build/reactive_body_snapshot_display_tests: tests/vulkan/reactive_body_snapshot_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
