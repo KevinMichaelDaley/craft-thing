@@ -417,5 +417,6 @@ int main(void) {
     RUN(test_native_receding_gate_matches_real_reflecting_wall);
     RUN(test_native_prototype_sparse_large_footprints_match_dense);
     RUN(test_native_explicit_sustained_gravity_control);
+    RUN(test_native_moving_density_contact_keeps_pressure_and_velocity);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0||g_pass==0;
 }
