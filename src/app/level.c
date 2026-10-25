@@ -10,36 +10,12 @@
 #include "ferrum/fire/gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "level.h"
+#include "level_internal.h"
 #include "thermal_bench.h"
 #include "view_config.h"
 
 _Static_assert(DC_GPU_CHUNK_SLOTS >= SIM_CHUNKS_X * SIM_CHUNKS_Y,
                "GPU chunk pool must cover viewport and halo");
-
-struct dc_level_view {
-    dc_gpu_t *gpu;
-    dc_streamer_t *stream;
-    dc_chunk_table_t table;
-    dc_chunk_coord_t origin;
-    dc_chunk_coord_t mapped_origin;
-    uint32_t camera_offset_x, camera_offset_y;
-    int32_t pending_chunk_dx, pending_chunk_dy;
-    uint32_t pending_steps;
-    char body_path[1024];
-    float pending_seconds;
-    bool marker_overlay;
-    bool lighting_initialized;
-    fr_renderer_mode_t renderer_mode;
-    bool spring_enabled;
-    bool restored;
-    bool transfer_pending, transfer_complete;
-    dc_gpu_transfer_state_t transfer_state;
-    dc_chunk_coord_t transfer_from, transfer_to;
-    uint32_t from_x, from_y, to_x, to_y, transfer_amount, transfer_kind;
-    uint32_t from_slot, to_slot;
-    uint64_t from_generation, to_generation;
-    bool destination_bound;
-};
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -100,13 +76,6 @@ bool dc_level_view_heat_probe(dc_level_view_t *view,uint32_t x,uint32_t y,bool a
 bool dc_level_view_heat_overlay(dc_level_view_t *view,uint32_t mode) {
     return view&&fr_thermal_gpu_overlay(view->gpu,mode);
 }
-bool dc_level_view_setup_smoke_box(dc_level_view_t *view,char *err,uint32_t cap) {
-    (void)view;return error(err,cap,"Smoke box placement adapter not implemented");
-}
-bool dc_level_view_smoke_valve(dc_level_view_t *view,uint32_t valve,char *err,uint32_t cap) {
-    (void)view;(void)valve;return error(err,cap,"Smoke box valve adapter not implemented");
-}
-bool dc_level_view_smoke_overlay(dc_level_view_t *view,uint32_t mode) {(void)view;(void)mode;return false;}
 static bool place_prop(dc_level_view_t *view, const fr_prop_asset_t *asset,
                               dc_chunk_coord_t chunk, uint32_t local_x, uint32_t local_y,
                               bool restore_bonds,char *err, uint32_t cap) {
