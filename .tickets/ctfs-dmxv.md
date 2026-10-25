@@ -115,3 +115,7 @@ Completed tail timing instrumentation: parser4/4 passes, actual200-frame trace a
 **2026-10-25T22:45:05Z**
 
 Rejected ordinary-float energy update experiment:5 practical cases passed and audited1000 stock/finite bounds passed, but39.005/46.708ms did not show a clear mean gain vs38.763/49.387; restored compensated updates. Rejected two smaller pressure V-cycles(32 total fine vs48): offset chamber disturbed7.29% and long pressure bound failed atstep119; restored passing one-cycle48-fine configuration. No acceptance thresholds weakened. Next eliminate redundant publication copies via transactional buffer ownership rotation, preserving numerical method and locking rejection/policy roundtrips first.
+
+**2026-10-25T22:59:36Z**
+
+Direct guarded publication GREEN: warm practical interval uses1 GPU submission vs2; exact state+clock preserved after rejected huge interval, successful recovery and exact practical/implicit/HLLC policy roundtrips pass. All5 practical displayed gates pass. Audited1000 actual untraced frames36.344ms mean45.945ms worst, zero invalid cells; species7.36e-5/pigment1.13e-6/energy-ledger−5.25e-5 relative drift, T293..362K. Canonical ownership transfers cold to guarded working bank in practical mode; final redundant bank copy+fence removed without numerical changes.30ms still RED. Next32-lane checkerboard SOR mapping removes half-idle SIMD work, same cells/arithmetic/sweeps.

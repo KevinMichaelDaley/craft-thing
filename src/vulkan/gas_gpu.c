@@ -21,7 +21,7 @@ struct fr_gas_gpu {
     uint32_t policy;
     uint32_t cached_bank;
     float cached_rate;
-    bool cache_valid;
+    bool cache_valid,direct_publish;
     VkFence completion;
     double large_step_hint;
     bool trace;
@@ -76,6 +76,23 @@ static bool submit(dc_gpu_t *g,char *err,uint32_t cap) {
         VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_HOST_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
     return fr_gas_submit(g)||error(err,cap,"Cannot complete Vulkan gas transaction");
+}
+static void bind_canonical(dc_gpu_t *g,struct fr_gas_gpu *t) {
+    uint32_t at=t->direct_publish?1u:0u;
+    VkDescriptorBufferInfo buffer={t->state[at].buffer,0,t->state[at].bytes};
+    const VkDescriptorSet sets[]={t->initialize.descriptor,t->feedback.descriptor,t->audit.descriptor};
+    VkWriteDescriptorSet writes[3];
+    for(uint32_t i=0;i<3;i++) writes[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet=sets[i],.dstBinding=0,.descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&buffer};
+    vkUpdateDescriptorSets(g->device,3,writes,0,NULL);
+}
+static bool set_direct_publish(dc_gpu_t *g,struct fr_gas_gpu *t,bool direct,char *err,uint32_t cap) {
+    if(t->direct_publish==direct) return true;
+    if(!fr_renderer_begin(g)) return error(err,cap,"Cannot transfer canonical gas ownership");
+    VkBufferCopy copy={.size=t->state[0].bytes};barrier(g);
+    vkCmdCopyBuffer(g->command,t->state[t->direct_publish?1u:0u].buffer,t->state[direct?1u:0u].buffer,1,&copy);
+    if(!submit(g,err,cap)) return false;
+    t->direct_publish=direct;bind_canonical(g,t);fr_gas_gpu_invalidate_cache(g);return true;
 }
 static void clear_stats(struct fr_gas_gpu *t) {
     uint32_t *words=t->stats.mapped;words[FR_GAS_RATE_WORD]=0;words[FR_GAS_ERROR_WORD]=0;words[FR_GAS_ERROR_AT_WORD]=UINT32_MAX;words[FR_GAS_REJECT_STAGE_WORD]=0;
@@ -161,8 +178,10 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(!cached) {
         t->acoustic.matrix_valid=false;
         if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas working copy");
-        barrier(g);vkCmdCopyBuffer(g->command,t->state[0].buffer,t->state[1].buffer,1,&copy);
-        if(t->policy==FR_GAS_PRESSURE_HLLC) vkCmdCopyBuffer(g->command,t->state[0].buffer,t->state[2].buffer,1,&copy);
+        if(!t->direct_publish) {
+            barrier(g);vkCmdCopyBuffer(g->command,t->state[0].buffer,t->state[1].buffer,1,&copy);
+            if(t->policy==FR_GAS_PRESSURE_HLLC) vkCmdCopyBuffer(g->command,t->state[0].buffer,t->state[2].buffer,1,&copy);
+        }
         dispatch(g,t,&t->prepare,0,0);
         if(!submit(g,err,cap)||!shader_ok(t,err,cap)) return false;
         speed=rate(t);
@@ -199,9 +218,11 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
         if(t->policy==FR_GAS_PRESSURE_LARGE_CFL&&!rejected&&(double)dt>=hint*.9) hint*=1.25;
         remaining-=dt;accepted++;if(t->policy==FR_GAS_PRESSURE_HLLC) bank^=1u;speed=rate(t);
     }
-    if(!fr_renderer_begin(g)) return error(err,cap,"Cannot publish gas interval");
-    barrier(g);vkCmdCopyBuffer(g->command,t->state[1u+bank].buffer,t->state[0].buffer,1,&copy);
-    if(!submit(g,err,cap)) return false;
+    if(!t->direct_publish) {
+        if(!fr_renderer_begin(g)) return error(err,cap,"Cannot publish gas interval");
+        barrier(g);vkCmdCopyBuffer(g->command,t->state[1u+bank].buffer,t->state[0].buffer,1,&copy);
+        if(!submit(g,err,cap)) return false;
+    }
     t->cached_bank=bank;t->cached_rate=speed;t->cache_valid=true;
     if(t->policy==FR_GAS_PRESSURE_LARGE_CFL) t->large_step_hint=hint;
     t->clock.physical_steps++;t->clock.substeps+=accepted;t->clock.advanced_seconds+=seconds;
@@ -247,13 +268,13 @@ bool fr_gas_gpu_seed_chunk(dc_gpu_t *g,uint32_t slot,const fr_gas_state_t *state
         okay=fr_gas_thermodynamics(&g->gas->model,&rounded,p[12],&t,err,cap);
     }
     if(okay) okay=vkQueueWaitIdle(g->queue)==VK_SUCCESS;
-    if(okay) {memcpy((gas_packet_t *)g->gas->state[0].mapped+(size_t)slot*4096u,packets,count*sizeof(*packets));fr_gas_gpu_invalidate_cache(g);g->gas->large_step_hint=0;}
+    if(okay) {memcpy((gas_packet_t *)g->gas->state[g->gas->direct_publish?1u:0u].mapped+(size_t)slot*4096u,packets,count*sizeof(*packets));fr_gas_gpu_invalidate_cache(g);g->gas->large_step_hint=0;}
     free(packets);return okay;
 }
 bool fr_gas_gpu_read_chunk(dc_gpu_t *g,uint32_t slot,fr_gas_state_t *states,uint32_t count,char *err,uint32_t cap) {
     if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!states||count<4096u) return error(err,cap,"Invalid cold gas snapshot");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas snapshot");
-    const gas_packet_t *packets=(const gas_packet_t *)g->gas->state[0].mapped+(size_t)slot*4096u;
+    const gas_packet_t *packets=(const gas_packet_t *)g->gas->state[g->gas->direct_publish?1u:0u].mapped+(size_t)slot*4096u;
     for(uint32_t i=0;i<4096u;i++) states[i]=unpack(packets+i);
     return true;
 }
@@ -301,6 +322,8 @@ bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32
     }
     if(policy>=FR_GAS_PRESSURE_LARGE_CFL&&!t->acoustic.supports_large_transport) return error(err,cap,"Large-CFL transport requires compute subgroup shuffle and float32 denormal preservation");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot configure acoustic policy");
+    const char *direct_setting=getenv("DC_GAS_ROTATE_PUBLISH");
+    if(!set_direct_publish(g,t,policy==FR_GAS_PRESSURE_PRACTICAL&&direct_setting&&strcmp(direct_setting,"0")!=0,err,cap)) return false;
     if(t->policy!=policy) fr_gas_gpu_invalidate_cache(g);
     ((float *)t->parameters.mapped)[FR_GAS_POLICY_WORD]=(float)policy;t->policy=policy;t->acoustic.practical=policy==FR_GAS_PRESSURE_PRACTICAL;return true;
 }
@@ -324,7 +347,7 @@ bool fr_gas_gpu_overlay(dc_gpu_t *g,uint32_t mode) {
 bool fr_gas_gpu_read_work_chunk(dc_gpu_t *g,uint32_t slot,double *work,uint32_t count,char *err,uint32_t cap) {
     if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!work||count<4096u) return error(err,cap,"Invalid gas work snapshot");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas work snapshot");
-    const gas_packet_t *packets=(const gas_packet_t *)g->gas->state[0].mapped+(size_t)slot*4096u;
+    const gas_packet_t *packets=(const gas_packet_t *)g->gas->state[g->gas->direct_publish?1u:0u].mapped+(size_t)slot*4096u;
     for(uint32_t i=0;i<4096u;i++) work[i]=packets[i].words[15];
     return true;
 }
