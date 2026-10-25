@@ -11,6 +11,7 @@
 #include "gpu_internal.h"
 #include "reactive_gpu_internal.h"
 #include "thermal_gpu_internal.h"
+#include "gas_gpu_internal.h"
 #include "reactive_checkpoint_gpu.h"
 
 static bool error(char *buf, uint32_t cap, const char *message) {
@@ -24,6 +25,7 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu->device) vkDeviceWaitIdle(gpu->device);
     dc_gpu_solver_commands_destroy(gpu);
     if (gpu->device) fr_thermal_gpu_destroy(gpu);
+    if (gpu->device) fr_gas_gpu_destroy(gpu);
     if (gpu->device) fr_gpu_reactive_destroy(gpu);
     if (gpu->device) fr_renderer_destroy(gpu);
     if (gpu->device) dc_gpu_authored_destroy(gpu);

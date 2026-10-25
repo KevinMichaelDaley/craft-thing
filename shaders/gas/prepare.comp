@@ -1,0 +1,13 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "storage.glsl"
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
+    Primitive value=gas_empty_primitive();
+    if(atlas!=0xffffffffu) {
+        bool okay=false;value=gas_primitive(gas_source(p),okay);
+        if(!okay) gas_error(index);else gas_rate(value);
+    }
+    if(params.bank==0u) cache0[index]=value;else cache1[index]=value;
+}

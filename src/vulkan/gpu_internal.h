@@ -61,6 +61,7 @@ typedef struct {
 struct dc_gpu {
     struct fr_reactive_gpu *reactive;
     struct fr_thermal_gpu *thermal;
+    struct fr_gas_gpu *gas;
     struct dc_gpu_authored_stage *authored_stage;
     VkInstance instance;
     VkPhysicalDevice physical;

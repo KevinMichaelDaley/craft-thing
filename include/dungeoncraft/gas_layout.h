@@ -1,0 +1,17 @@
+#ifndef DC_GAS_LAYOUT_H
+#define DC_GAS_LAYOUT_H
+#define FR_GAS_CELL_WORDS 16u
+#define FR_GAS_MODEL_WORDS 16u
+#define FR_GAS_R_WORD 0u
+#define FR_GAS_CV_WORD 5u
+#define FR_GAS_KINETIC_WORD 10u
+#define FR_GAS_DENSITY_WORD 11u
+#define FR_GAS_AMBIENT_WORD 12u
+#define FR_GAS_OXYGEN_WORD 13u
+#define FR_GAS_GRAVITY_WORD 14u
+#define FR_GAS_OPACITY_WORD 15u
+#define FR_GAS_RATE_WORD 0u
+#define FR_GAS_ERROR_WORD 1u
+#define FR_GAS_ERROR_AT_WORD 2u
+#define FR_GAS_COURANT 0.4
+#endif

@@ -68,6 +68,7 @@ GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/b
 GPU_OBJ += build/runtime_body_gpu.o build/runtime_geometry_gpu.o build/body_address_gpu.o build/body_storage_gpu.o
 GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o build/reactive_chunk_gpu.o
 GPU_OBJ += build/thermal_gpu.o build/thermal_feedback_gpu.o build/thermal_model.o
+GPU_OBJ += build/gas_gpu.o build/gas_feedback_gpu.o build/gas_model.o
 GPU_OBJ += build/reactive_checkpoint_gpu.o build/structural_store_channels.o build/reactive_archive_model.o build/thermal_checkpoint_model.o
 build/reactive_arena_gpu.o: src/vulkan/reactive_arena_gpu.c src/vulkan/reactive_arena_gpu.h include/dungeoncraft/reactive_arena_layout.h include/dungeoncraft/reactive_state_layout.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
@@ -103,7 +104,7 @@ GPU_OBJ += build/window_gpu.o
 GPU_OBJ += build/structural_gpu.o build/structural_material.o
 GPU_OBJ += build/scene_gpu.o build/renderer_resource.o build/occlusion_gpu.o build/lighting_gpu.o
 RENDERER_SHADERS = build/shaders/lighting_subgroup.comp.spv build/shaders/scene.comp.spv build/shaders/occlusion.comp.spv build/shaders/lighting.comp.spv
-$(GPU_OBJ): $(RENDERER_SHADERS)
+$(GPU_OBJ): $(RENDERER_SHADERS) src/vulkan/gpu_internal.h
 build/scene_gpu.o: src/vulkan/scene_gpu.c src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h include/ferrum/renderer/gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/renderer_resource.o: src/vulkan/renderer_resource.c src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h
@@ -135,7 +136,7 @@ build/pressure_work_gpu.o: src/vulkan/pressure_work_gpu.c src/vulkan/gpu_interna
 build/shaders/pressure_work.comp.spv: shaders/sim/pressure_work.comp
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
-GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o build/authored_request.o build/prop_asset.o build/reactive_state.o build/reactive_snapshot.o build/reactive_material.o build/reactive_chunk.o build/thermal_model.o build/reactive_archive_model.o build/thermal_checkpoint_model.o,$(GPU_OBJ))) src/structural/material.c src/structural/authoring.c src/assets/prop.c src/fire/reactive_chunk.c src/fire/thermal.c src/fire/reactive_archive.c src/fire/thermal_checkpoint.c $(REACTIVE_STATE_SRC)
+GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o build/authored_request.o build/prop_asset.o build/reactive_state.o build/reactive_snapshot.o build/reactive_material.o build/reactive_chunk.o build/thermal_model.o build/gas_model.o build/reactive_archive_model.o build/thermal_checkpoint_model.o,$(GPU_OBJ))) src/structural/material.c src/structural/authoring.c src/assets/prop.c src/fire/reactive_chunk.c src/fire/thermal.c src/fire/gas.c src/fire/reactive_archive.c src/fire/thermal_checkpoint.c $(REACTIVE_STATE_SRC)
 build/authored_stage_tests: tests/vulkan/authored_stage_tests.c build/compound_body_tests $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/authored_stage_tests
@@ -1756,8 +1757,23 @@ build/thermal_precision_tests: tests/fire/thermal_precision_tests.c $(REACTIVE_S
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(REACTIVE_STATE_SRC) -o $@ -lm
 build/gas_reference_tests: tests/fire/gas_reference_tests.c src/fire/gas.c src/fire/gas_reference.c src/fire/gas_internal.h include/ferrum/fire/gas.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c src/fire/gas_reference.c -o $@ -lm
-build/gas_display_tests: tests/vulkan/gas_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/vulkan/gas_gpu.c src/fire/gas.c src/fire/gas_reference.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< src/vulkan/gas_gpu.c src/fire/gas.c src/fire/gas_reference.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/gas_display_tests: tests/vulkan/gas_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/fire/gas_reference.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< src/fire/gas_reference.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/gas_gpu.o: src/vulkan/gas_gpu.c src/vulkan/gas_gpu_internal.h include/ferrum/fire/gas_gpu.h include/dungeoncraft/gas_layout.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/gas_feedback_gpu.o: src/vulkan/gas_feedback_gpu.c src/vulkan/gas_feedback_gpu.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/gas_model.o: src/fire/gas.c src/fire/gas_internal.h include/ferrum/fire/gas.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/gpu.o build/present_gpu.o: src/vulkan/gas_gpu_internal.h
+GAS_SHADERS = build/shaders/gas_init.comp.spv build/shaders/gas_prepare.comp.spv build/shaders/gas_transport.comp.spv build/shaders/gas_overlay.comp.spv
+build/shaders/gas_%.comp.spv: shaders/gas/%.comp $(wildcard shaders/gas/*.glsl) include/dungeoncraft/gas_layout.h include/dungeoncraft/terrain_flags.h
+	mkdir -p $(dir $@)
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/shaders/gas_overlay.comp.spv: shaders/renderer/gas_overlay.comp shaders/gas/types.glsl include/dungeoncraft/gas_layout.h
+	mkdir -p $(dir $@)
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/gas_gpu.o build/performance/src/vulkan/gas_gpu.o: $(GAS_SHADERS)
 test: build/thermal_precision_tests
 build/stream.o: include/ferrum/fire/thermal_checkpoint.h
 build/reactive_chunk.o: src/fire/reactive_chunk.c include/ferrum/fire/reactive_chunk.h include/ferrum/fire/reactive_state.h

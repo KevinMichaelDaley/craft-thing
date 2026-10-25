@@ -42,7 +42,8 @@ energy and pigment. Exact-wave mean absolute errors at 128/256 cells:
 All meet the predeclared 0.025 density/pressure and 0.05 velocity bounds, and
 both refine toward the independent solution. HLLC is the initial GPU transport
 choice because it preserves stationary contacts instead of mixing colors at the
-acoustic speed. Actual calibrated sound/substep cost, buoyancy, geometry changes,+the displayed scene and persistence remain acceptance work. No smoke module is
+acoustic speed. Actual calibrated sound/substep cost, buoyancy, geometry changes,
+the displayed scene and persistence remain acceptance work. No smoke module is
 complete from these CPU results.
 
 The reference equations and independent wave-curve construction are checked
@@ -52,3 +53,21 @@ An expansion-aware low-Mach alternative would require evolving closed-chamber
 pressure, as described in the primary
 [PeleLMeX model](https://github.com/Pele-Suite/PeleLMeX/blob/development/Docs/sphinx/manual/Model.rst).
 Reusing water's zero-divergence projection would not satisfy that contract.
+
+## Vulkan transport checkpoint
+
+The optional Vulkan backend now uses parallel HLLC transport, compensated energy
+and transactional scratch banks. It completes requested time with adaptive CFL
+substeps; only reduced scheduling scalars return to the CPU, never a runtime
+cell field or component list. Subgroup reduction avoids a global atomic per cell.
+An invalid interval leaves authoritative stock and its physical clock unchanged.
+The renderer composites conserved pigment from the gas buffer without scanning
+lights or advancing simulation, and the disabled path allocates no gas storage.
+
+Two actual Wayland/Vulkan tests pass at 480x270 physics/render with a 640x448
+halo, including exact resting/pause invariance and colored transport through a
+wall opening against the independent CPU oracle. The closed transport energy
+error is 0.0000343876891 and red-pigment error -0.0000000210703321. The displayed
+capture is `build/screenshots/gas_reference_transport.bmp`. Two existing thermal
+feedback display tests also pass after adding the optional renderer hook. This
+is a transport checkpoint, not the interactive or buoyant smoke-box acceptance.

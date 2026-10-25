@@ -3,6 +3,7 @@
 #include "gpu_internal.h"
 #include "runtime_body_gpu.h"
 #include "thermal_gpu_internal.h"
+#include "gas_gpu_internal.h"
 
 static const uint64_t ACQUIRE_TIMEOUT_NS = 1000000000ull;
 
@@ -63,6 +64,7 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
                                  gpu->view_x, gpu->view_y };
             dc_gpu_record_draw(gpu, push);
         }
+        fr_gas_record_overlay(gpu);
         fr_thermal_record_overlay(gpu);
     }
     VkBufferMemoryBarrier2 buffer_barrier = { .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,

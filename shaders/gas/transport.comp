@@ -1,0 +1,22 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "storage.glsl"
+#include "riemann.glsl"
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
+    Primitive primitive=gas_empty_primitive();
+    if(atlas!=0xffffffffu) {
+        Gas value=gas_source(p);float dt=uintBitsToFloat(params.seconds);
+        if(value.geometry.x>0.) {
+            GasFlux net=gas_flux_combine(gas_face(p-ivec2(1,0),p,0u),1.,gas_face(p,p+ivec2(1,0),0u),-1.);
+            net=gas_flux_combine(net,1.,gas_face(p-ivec2(0,1),p,1u),1.);
+            net=gas_flux_combine(net,1.,gas_face(p,p+ivec2(0,1),1u),-1.);
+            value=gas_add_flux(value,net,dt);
+        }
+        bool okay=false;primitive=gas_primitive(value,okay);
+        if(!okay) gas_error(index);else gas_rate(primitive);
+        if(params.bank==0u) bank1[atlas]=value;else bank0[atlas]=value;
+    }
+    if(params.bank==0u) cache1[index]=primitive;else cache0[index]=primitive;
+}
