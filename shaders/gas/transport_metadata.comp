@@ -21,7 +21,7 @@ void main() {
     if(valid) value=gas_buoyancy_cached(transported,moved,dt,work,impulse);
     float mass=gas_mass(transported);force[index]=vec2(impulse,mass>0.?transported.dynamics.w/mass:0.);
     value.geometry.w=transported.geometry.w;
-    acoustic[index]=vec4(center.metric.x,center.hydro.w,moved.metric.y,center.metric.y);
+    acoustic[index]=vec4(gas_pressure_enthalpy(center),center.hydro.w,moved.metric.y,center.metric.y);
     provisional[index]=vec4(value.dynamics.zw,work,old.geometry.x);
     vec2 difference=gas_two_sum(transported.dynamics.y,-old.dynamics.y);
     correction_data[index].w=difference.x+(difference.y+(transported.visual.w-old.visual.w)+(transported.geometry.z-old.geometry.z));

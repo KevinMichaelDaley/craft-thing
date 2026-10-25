@@ -12,7 +12,7 @@ typedef struct {
     dc_gpu_address_buffer_t transport_work;
     VkBuffer state_bank[2];VkDeviceSize state_bytes;
     dc_gpu_address_buffer_t fields[11],indirect;
-    bool ready,matrix_valid,large_transport,supports_large_transport;
+    bool ready,matrix_valid,matrix_large,large_transport,supports_large_transport;
 } fr_gas_acoustic_gpu_t;
 /** Lazily create only the selected optional acoustic module. */
 bool fr_gas_acoustic_create(dc_gpu_t *gpu,fr_gas_acoustic_gpu_t *module,

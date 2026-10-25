@@ -13,7 +13,7 @@ vec2 transport_rates(ivec2 p,int direction) {
     if(own.metric.w<=0.||other.metric.w<=0.||!gas_gate_open(direction>0?p:q,transport_axis())) return vec2(0);
     float u=own.hydro[transport_axis()+1u],v=other.hydro[transport_axis()+1u],speed=max(abs(u),abs(v));
     float area=.5*min(own.metric.w,other.metric.w)/own.metric.w;
-    return area*vec2(speed+float(direction)*u,speed);
+    return area*vec2(speed+float(direction)*u,speed+FR_GAS_LARGE_ENERGY_ADVECTION*float(direction)*u);
 }
 GasFlux transport_add(GasFlux a,GasFlux b) {
     a.species+=b.species;a.dynamics+=b.dynamics;a.pigment+=b.pigment;return a;

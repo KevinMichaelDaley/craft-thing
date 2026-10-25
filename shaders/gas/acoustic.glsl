@@ -13,6 +13,13 @@ layout(set=0,binding=21,std430) restrict buffer Activity {uint activity[];};
 layout(set=0,binding=22,std430) restrict buffer Matrix {vec4 matrix[];};
 layout(set=0,binding=23,std430) restrict buffer Indirect {uint indirect[];};
 uint gas_tile_count() {return ((params.width+7u)/8u)*((params.height+7u)/8u);}
+float gas_pressure_enthalpy(Primitive own) {
+    if((params.bank&FR_GAS_LARGE_ENERGY_BIT)==0u) return own.metric.x;
+    if(own.hydro.x<=0.) return 0.;
+    precise float pressure_part=gas_parameter(FR_GAS_KINETIC_WORD)*own.hydro.w/own.hydro.x;
+    precise float result=(1.-FR_GAS_LARGE_ENERGY_ADVECTION)*own.metric.x+FR_GAS_LARGE_ENERGY_ADVECTION*pressure_part;
+    return result;
+}
 float gas_pressure_relaxation(vec4 coefficients,float diagonal) {
     precise float total=((coefficients.x+coefficients.y)+coefficients.z)+coefficients.w;
     precise float ratio=diagonal>0.?min(total/diagonal,.99999994):0.;

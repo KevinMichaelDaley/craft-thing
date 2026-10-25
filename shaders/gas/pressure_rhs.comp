@@ -8,7 +8,7 @@ void main() {
     bool advected=gas_advected(index);
     if(!advected) {
         Primitive own=gas_cached(p);
-        acoustic[index]=vec4(own.metric.x,own.hydro.w,own.metric.y,own.metric.y);
+        acoustic[index]=vec4(gas_pressure_enthalpy(own),own.hydro.w,own.metric.y,own.metric.y);
         provisional[index]=vec4(own.hydro.yz*own.metric.z,0.,own.metric.w);
         correction_data[index]=vec4(0);force[index]=vec2(0);
     }
@@ -32,7 +32,7 @@ void main() {
         if(owner!=0xffffffffu&&(gates[owner]&(1u<<(d/2u)))!=0u) continue;
         uint j=uint(q.y)*params.width+uint(q.x);bool moved=gas_advected(j);
         vec4 neighbor=moved?provisional[j]:vec4(other.hydro.yz*other.metric.z,0.,other.metric.w);
-        float area=min(volume,neighbor.w),enthalpy=.5*(acoustic[index].x+other.metric.x);
+        float area=min(volume,neighbor.w),enthalpy=.5*(acoustic[index].x+gas_pressure_enthalpy(other));
         float coefficient=(dt*dt)*(area*enthalpy);
         normalized[d]=area*enthalpy;
         float flux=.5*(provisional[index][d/2u]/volume+neighbor[d/2u]/neighbor.w)*area;
