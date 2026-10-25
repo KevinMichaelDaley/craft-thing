@@ -25,6 +25,7 @@ void main() {
         net.species+=face.species;net.dynamics+=face.dynamics;net.pigment+=face.pigment;
     }
     float dt=uintBitsToFloat(params.seconds),work=0.,impulse=0.;Gas transported=gas_add_flux(own,net,dt);
+    if((params.bank&FR_GAS_PRACTICAL_BIT)!=0u) transported=gas_practical_state(transported);
     bool valid=false;Primitive moved=gas_primitive(transported,valid);Gas value=transported;
     if(valid) value=gas_buoyancy_cached(transported,moved,dt,work,impulse);
     float transported_mass=gas_mass(transported);

@@ -6,7 +6,12 @@ void main() {
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
     Primitive value=gas_empty_primitive();
     if(atlas!=0xffffffffu) {
-        bool okay=false;value=gas_primitive(gas_source(p),okay);
+        Gas source=gas_source(p);
+        if(gas_parameter(FR_GAS_POLICY_WORD)==3.) {
+            source=gas_practical_state(source);
+            if(params.bank==0u) bank0[atlas]=source;else bank1[atlas]=source;
+        }
+        bool okay=false;value=gas_primitive(source,okay);
         if(!okay) gas_error(index);else gas_rate(value);
     }
     if(params.bank==0u) cache0[index]=value;else cache1[index]=value;

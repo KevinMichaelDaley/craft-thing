@@ -9,10 +9,11 @@ typedef struct {
     fr_renderer_compute_t clear_pressure,prepare_pressure;
     fr_renderer_compute_t activity_candidates;
     fr_renderer_compute_t transport_factor,transport_prefix,transport_apply,transport_metadata;
+    fr_renderer_compute_t energy_limit;
     dc_gpu_address_buffer_t transport_work;
     VkBuffer state_bank[2];VkDeviceSize state_bytes;
     dc_gpu_address_buffer_t fields[11],indirect;
-    bool ready,matrix_valid,matrix_large,large_transport,supports_large_transport;
+    bool ready,matrix_valid,matrix_large,large_transport,supports_large_transport,practical;
 } fr_gas_acoustic_gpu_t;
 /** Lazily create only the selected optional acoustic module. */
 bool fr_gas_acoustic_create(dc_gpu_t *gpu,fr_gas_acoustic_gpu_t *module,

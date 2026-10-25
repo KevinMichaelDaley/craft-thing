@@ -165,14 +165,14 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     while(remaining>0) {
         if(!isfinite(speed)||speed<0) return error(err,cap,"Invalid reduced gas CFL metadata");
         double courant=t->policy!=FR_GAS_PRESSURE_HLLC?FR_GAS_ADVECTIVE_COURANT:FR_GAS_COURANT;
-        double allowed=t->policy==FR_GAS_PRESSURE_LARGE_CFL?hint:(speed>0?courant/speed:remaining);
+        double allowed=t->policy==FR_GAS_PRESSURE_PRACTICAL?remaining:(t->policy==FR_GAS_PRESSURE_LARGE_CFL?hint:(speed>0?courant/speed:remaining));
         float dt=(float)fmin(remaining,allowed);bool rejected=false;
         if(dt>allowed) dt=nextafterf(dt,0.f);
         for(;;) {
             if(!(dt>0)||remaining-(double)dt==remaining) return error(err,cap,"Gas interval is below clock precision");
             clear_stats(t);
             if(t->policy!=FR_GAS_PRESSURE_HLLC) {
-                t->acoustic.large_transport=t->policy==FR_GAS_PRESSURE_LARGE_CFL&&(double)dt*speed>FR_GAS_ADVECTIVE_COURANT;
+                t->acoustic.large_transport=t->policy>=FR_GAS_PRESSURE_LARGE_CFL&&(double)dt*speed>FR_GAS_ADVECTIVE_COURANT;
                 if(!fr_gas_acoustic_step(g,&t->acoustic,t->groups_x,t->groups_y,dt,bank,&t->stats,err,cap)) return false;
             } else {
                 if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas substep");
@@ -180,6 +180,10 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
                 if(!submit(g,err,cap)) return false;
             }
             if(!((uint32_t *)t->stats.mapped)[FR_GAS_ERROR_WORD]) break;
+            if(t->policy==FR_GAS_PRESSURE_PRACTICAL) {
+                if(t->trace) fprintf(stderr,"Practical gas rejected interval%.9g flags%u cell%u\n",seconds,((uint32_t *)t->stats.mapped)[FR_GAS_REJECT_STAGE_WORD],((uint32_t *)t->stats.mapped)[FR_GAS_ERROR_AT_WORD]);
+                return shader_ok(t,err,cap);
+            }
             if(getenv("DC_GAS_TRACE")) fprintf(stderr,"Gas retry dt%.9g speed%.9g large%u stages%u cell%u\n",dt,speed,t->acoustic.large_transport?1u:0u,((uint32_t *)t->stats.mapped)[FR_GAS_REJECT_STAGE_WORD],((uint32_t *)t->stats.mapped)[FR_GAS_ERROR_AT_WORD]);
             if(getenv("DC_GAS_TRACE")) {float negative=0,excess=0;memcpy(&negative,(uint32_t *)t->stats.mapped+FR_GAS_NEGATIVE_PIGMENT_WORD,4);memcpy(&excess,(uint32_t *)t->stats.mapped+FR_GAS_EXCESS_PIGMENT_WORD,4);fprintf(stderr,"Gas pigment reject negative%.9g excess%.9g\n",negative,excess);}
             t->acoustic.matrix_valid=false;dt*=.5f;rejected=true;retries++;
@@ -247,14 +251,21 @@ bool fr_gas_gpu_clock(const dc_gpu_t *g,fr_gas_gpu_clock_t *out) {
 void fr_gas_record_overlay(dc_gpu_t *g) {
     if(g->gas) fr_gas_feedback_record(g,&g->gas->feedback,g->gas->groups_x,g->gas->groups_y);
 }
+static bool gravity_resolved(const struct fr_gas_gpu *t,float gravity) {
+    double first=t->model.gas_constant[0],second=t->model.gas_constant[1];
+    double oxygen=(.21/first)/(.21/first+.79/second),reference=(oxygen*first+(1.-oxygen)*second)*t->temperature;
+    return t->model.kinetic_scale*gravity<=reference;
+}
 bool fr_gas_gpu_set_gravity(dc_gpu_t *g,float gravity,char *err,uint32_t cap) {
     if(!g||!g->gas||!isfinite(gravity)||gravity<0) return error(err,cap,"Invalid gas gravity");
+    if(g->gas->policy==FR_GAS_PRESSURE_PRACTICAL&&!gravity_resolved(g->gas,gravity)) return error(err,cap,"Gas gravitational scale height is below one physics cell");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot configure gas gravity");
     ((float *)g->gas->parameters.mapped)[FR_GAS_GRAVITY_WORD]=gravity;g->gas->acoustic.matrix_valid=false;return true;
 }
 bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32_t cap) {
-    if(!g||!g->gas||policy>FR_GAS_PRESSURE_LARGE_CFL) return error(err,cap,"Invalid gas acoustic policy");
+    if(!g||!g->gas||policy>FR_GAS_PRESSURE_PRACTICAL) return error(err,cap,"Invalid gas acoustic policy");
     struct fr_gas_gpu *t=g->gas;
+    if(policy==FR_GAS_PRESSURE_PRACTICAL&&!gravity_resolved(t,((float *)t->parameters.mapped)[FR_GAS_GRAVITY_WORD])) return error(err,cap,"Gas gravitational scale height is below one physics cell");
     if(policy!=FR_GAS_PRESSURE_HLLC&&!t->acoustic.ready) {
         VkDescriptorBufferInfo buffers[12];
         for(uint32_t i=0;i<3;i++) buffers[i]=(VkDescriptorBufferInfo){t->state[i].buffer,0,t->state[i].bytes};
@@ -265,10 +276,10 @@ bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32
         buffers[11]=(VkDescriptorBufferInfo){t->gates.buffer,0,t->gates.bytes};
         if(!fr_gas_acoustic_create(g,&t->acoustic,buffers,err,cap)) return false;
     }
-    if(policy==FR_GAS_PRESSURE_LARGE_CFL&&!t->acoustic.supports_large_transport) return error(err,cap,"Large-CFL transport requires compute subgroup shuffle and float32 denormal preservation");
+    if(policy>=FR_GAS_PRESSURE_LARGE_CFL&&!t->acoustic.supports_large_transport) return error(err,cap,"Large-CFL transport requires compute subgroup shuffle and float32 denormal preservation");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot configure acoustic policy");
     if(t->policy!=policy) fr_gas_gpu_invalidate_cache(g);
-    ((float *)t->parameters.mapped)[FR_GAS_POLICY_WORD]=(float)policy;t->policy=policy;return true;
+    ((float *)t->parameters.mapped)[FR_GAS_POLICY_WORD]=(float)policy;t->policy=policy;t->acoustic.practical=policy==FR_GAS_PRESSURE_PRACTICAL;return true;
 }
 bool fr_gas_gpu_gate(dc_gpu_t *g,uint32_t x,uint32_t y,uint32_t width,uint32_t height,uint32_t axis,bool closed,char *err,uint32_t cap) {
     if(!g||!g->gas||x>=g->width||y>=g->height||!width||!height||width>g->width-x||height>g->height-y||axis>1u)

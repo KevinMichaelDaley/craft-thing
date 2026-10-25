@@ -36,7 +36,9 @@ static void test_native_practical_variable_intervals_stay_finite_without_retry_s
     for(uint32_t step=0;step<120;step++) {
         if(step==60) ASSERT_TRUE(fr_gas_gpu_gate(g,31,0,1,64,0,false,err,sizeof(err)));
         float dt=intervals[step%4u];uint64_t begin=SDL_GetPerformanceCounter();
-        ASSERT_TRUE(fr_gas_gpu_step(g,dt,err,sizeof(err)));seconds+=dt;
+        bool advanced=fr_gas_gpu_step(g,dt,err,sizeof(err));
+        if(!advanced) printf("Practical failed step%u dt%.9g\n",step,dt);
+        ASSERT_TRUE(advanced);seconds+=dt;
         double elapsed=(SDL_GetPerformanceCounter()-begin)*1000./SDL_GetPerformanceFrequency();worst=fmax(worst,elapsed);
         ASSERT_TRUE(elapsed<500.);
         if(step%10u==0u||step==119u) {

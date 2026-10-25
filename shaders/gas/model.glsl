@@ -57,6 +57,33 @@ Gas gas_add_flux(Gas s,GasFlux flux,float dt) {
     result.dynamics.y=top.x;result.visual.w=tail.x;result.geometry.z=tail.y;
     return result;
 }
+Gas gas_practical_state(Gas value) {
+    float scale=dot(abs(value.species),vec4(1))+abs(value.dynamics.x);
+    if(!gas_finite(scale)) return value;
+    float tolerance=max(scale*0.000003814697265625,1.17549435e-38);uint repaired=0u;
+    for(uint k=0u;k<4u;k++) if(value.species[k]<0.&&value.species[k]>=-tolerance) {value.species[k]=0.;repaired|=FR_GAS_RECONCILED_ROUNDOFF;}
+    if(value.dynamics.x<0.&&value.dynamics.x>=-tolerance) {value.dynamics.x=0.;repaired|=FR_GAS_RECONCILED_ROUNDOFF;}
+    float carrier=value.species.z+value.dynamics.x;
+    for(uint k=0u;k<3u;k++) {
+        if(value.visual[k]<0.&&value.visual[k]>=-tolerance) {value.visual[k]=0.;repaired|=FR_GAS_RECONCILED_ROUNDOFF;}
+        if(value.visual[k]>carrier&&value.visual[k]-carrier<=tolerance) {value.visual[k]=carrier;repaired|=FR_GAS_RECONCILED_ROUNDOFF;}
+    }
+    float mass=gas_mass(value),energy=gas_energy(value);
+    if(mass>0.&&gas_finite(energy)) {
+        float minimum=mass*0.000001;
+        if(energy<minimum&&energy>=-minimum) {
+            GasFlux fix=gas_empty_flux();fix.dynamics.y=minimum-energy;value=gas_add_flux(value,fix,1.);energy=gas_energy(value);repaired|=FR_GAS_FLOORED_ENERGY;
+        }
+        float largest=max(abs(value.dynamics.z),abs(value.dynamics.w));
+        if(energy>0.&&largest>0.&&gas_finite(largest)) {
+            vec2 direction=value.dynamics.zw/largest;
+            float factor=(sqrt(energy)*sqrt(mass)/largest)*sqrt(1.98/gas_parameter(FR_GAS_KINETIC_WORD))/sqrt(dot(direction,direction));
+            if(factor<1.) {value.dynamics.zw*=factor;repaired|=FR_GAS_LIMITED_KINETIC;}
+        }
+    } else if(mass==0.&&all(equal(value.species,vec4(0)))&&value.dynamics.x==0.) value.dynamics.zw=vec2(0);
+    if(repaired!=0u) atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],repaired);
+    return value;
+}
 Gas gas_buoyancy_cached(Gas s,Primitive primitive,float dt,out float admitted_work,out float admitted_impulse) {
     admitted_work=0.;admitted_impulse=0.;
     float gravity=gas_parameter(FR_GAS_GRAVITY_WORD),mass=gas_mass(s);

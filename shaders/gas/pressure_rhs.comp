@@ -40,7 +40,9 @@ void main() {
             precise float density=own_stage.hydro.x+other_stage.hydro.x;
             precise float energy=own_stage.hydro.x*own_stage.metric.x+other_stage.hydro.x*other_stage.metric.x;
             enthalpy=density>0.?energy/density:0.;
+            if((params.bank&FR_GAS_PRACTICAL_BIT)!=0u&&(own_stage.hydro.x<=0.||other_stage.hydro.x<=0.)) enthalpy=0.;
         }
+        if(!large_energy&&(params.bank&FR_GAS_PRACTICAL_BIT)!=0u&&(gas_cached(p).hydro.x<=0.||other.hydro.x<=0.)) enthalpy=0.;
         float coefficient=(dt*dt)*(area*enthalpy);
         normalized[d]=area*enthalpy;
         float flux=.5*(provisional[index][d/2u]/volume+neighbor[d/2u]/neighbor.w)*area;
