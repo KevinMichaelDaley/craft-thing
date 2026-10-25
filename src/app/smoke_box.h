@@ -15,6 +15,6 @@ fr_gas_model_t dc_smoke_box_model(void);
 /** Build independent cold scene chunks in parallel, including finite reservoirs. */
 bool dc_smoke_box_build(const dc_chunk_coord_t *coords,uint32_t count,
     dc_smoke_box_chunk_t *out,char *err,uint32_t cap);
-/** Release all immutable staging copies after publication or failed preflight. */
+/** Release immutable staging payloads; the caller retains ownership of the array. */
 void dc_smoke_box_release(dc_smoke_box_chunk_t *chunks,uint32_t count);
 #endif

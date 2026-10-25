@@ -91,7 +91,7 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
         fr_renderer_compute_init(g,&t->prepare,buffers,12,16,"build/shaders/gas_prepare.comp.spv",err,cap)&&
         fr_renderer_compute_init(g,&t->transport,buffers,12,16,"build/shaders/gas_transport.comp.spv",err,cap)&&
         fr_renderer_compute_init(g,&t->gate,buffers,12,32,"build/shaders/gas_gate.comp.spv",err,cap)&&
-        fr_gas_feedback_init(g,&t->feedback,buffers[0],buffers[5],err,cap);
+        fr_gas_feedback_init(g,&t->feedback,buffers[0],buffers[5],buffers[11],err,cap);
 }
 bool fr_gas_gpu_enable(dc_gpu_t *g,const fr_gas_model_t *model,float density,float temperature,char *err,uint32_t cap) {
     fr_gas_state_t empty={0};fr_gas_thermo_t check;
@@ -220,7 +220,10 @@ bool fr_gas_gpu_gate(dc_gpu_t *g,uint32_t x,uint32_t y,uint32_t width,uint32_t h
     uint32_t groups=(width*height+63u)/64u,gx=groups<g->gas->groups_x?groups:g->gas->groups_x;
     vkCmdDispatch(g->command,gx,(groups+gx-1u)/gx,1);return submit(g,err,cap);
 }
-bool fr_gas_gpu_overlay(dc_gpu_t *g,uint32_t mode) {(void)g;(void)mode;return false;}
+bool fr_gas_gpu_overlay(dc_gpu_t *g,uint32_t mode) {
+    if(!g||!g->gas||mode>1u||vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return false;
+    ((float *)g->gas->parameters.mapped)[FR_GAS_VIEW_WORD]=(float)mode;return true;
+}
 bool fr_gas_gpu_read_work_chunk(dc_gpu_t *g,uint32_t slot,double *work,uint32_t count,char *err,uint32_t cap) {
     if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!work||count<4096u) return error(err,cap,"Invalid gas work snapshot");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas work snapshot");
