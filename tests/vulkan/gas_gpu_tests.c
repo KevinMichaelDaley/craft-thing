@@ -423,6 +423,7 @@ int main(void) {
     RUN(test_native_moving_density_contact_keeps_pressure_and_velocity);
     RUN(test_native_practical_policy_rejects_unresolved_gravity_without_advancing);
     RUN(test_native_practical_checkerboard_pressure_relaxes_conservatively);
+    RUN(test_native_practical_offset_wall_does_not_drive_sealed_neighbor);
     RUN(test_native_practical_variable_intervals_stay_finite_without_retry_stalls);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0||g_pass==0;
 }

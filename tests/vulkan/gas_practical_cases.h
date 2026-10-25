@@ -1,5 +1,29 @@
 #ifndef GAS_PRACTICAL_CASES_H
 #define GAS_PRACTICAL_CASES_H
+static void test_native_practical_offset_wall_does_not_drive_sealed_neighbor(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));
+    fr_gas_state_t *input=malloc(4096*sizeof(*input)),*out=malloc(4096*sizeof(*out));
+    double *volume=malloc(4096*sizeof(*volume));ASSERT_TRUE(c&&input&&out&&volume);
+    fr_gas_model_t m=reference_model();m.kinetic_scale=1./512.;
+    for(uint32_t i=0;i<4096;i++) {
+        volume[i]=1;input[i]=reference_air(m,.0012,300,0);
+        if(i%64>=20&&i%64<28&&i/64>=20&&i/64<28)
+            input[i]=(fr_gas_state_t){.species={0,0,.0012,0,0},.energy=.0012*m.heat_capacity_cv[FR_GAS_EXHAUST]*650,.pigment={.0012,0,0}};
+    }
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&m,.0012,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_gate(g,29,0,1,64,0,true,err,sizeof(err)));
+    for(uint32_t step=0;step<12;step++) ASSERT_TRUE(fr_gas_gpu_step(g,.05f,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+    double worst_density=0,escaped=0;
+    for(uint32_t i=0;i<4096;i++) if(i%64>=30) {
+        fr_gas_thermo_t t;ASSERT_TRUE(fr_gas_thermodynamics(&m,out+i,1,&t,err,sizeof(err)));
+        worst_density=fmax(worst_density,fabs(t.mass/.0012-1.));escaped+=out[i].species[FR_GAS_EXHAUST];
+    }
+    printf("Offset sealed wall: neighbor density deviation%.9g escaped smoke%.9g\n",worst_density,escaped);
+    ASSERT_TRUE(worst_density<.01&&escaped<1e-9&&present(g,err,sizeof(err)));
+    free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
+}
 static void test_native_practical_checkerboard_pressure_relaxes_conservatively(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));
     fr_gas_state_t *input=malloc(4096*sizeof(*input)),*out=malloc(4096*sizeof(*out));
