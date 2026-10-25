@@ -48,3 +48,10 @@ GasFlux gas_face(ivec2 a,ivec2 b,uint axis) {
     result=gas_flux_combine(fl,hi/(hi-lo),fr,-lo/(hi-lo));result=gas_flux_combine(result,1.,jump,lo*hi/(hi-lo));
     return gas_flux_combine(result,area,fl,0.);
 }
+GasFlux gas_cell_face(ivec2 a,ivec2 b,ivec2 own,uint axis,float normal) {
+    if(gas_gate_open(a,axis)) return gas_face(a,b,axis);
+    Primitive p=gas_cached(own);float u=normal*p.hydro[axis+1u];
+    GasFlux result=gas_empty_flux();
+    result.dynamics[axis+2u]=(p.hydro.w+p.hydro.x*u*(abs(u)+p.metric.x+u))*p.metric.w;
+    return result;
+}

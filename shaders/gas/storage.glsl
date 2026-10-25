@@ -13,6 +13,7 @@ layout(set=0,binding=7,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=8,std430) readonly buffer Cells {uvec2 cells[];};
 layout(set=0,binding=9,std430) readonly buffer Occupancy {uint occupancy[];};
 layout(set=0,binding=10,std430) readonly buffer Mpm {vec4 mpm[];};
+layout(set=0,binding=11,std430) readonly buffer Gates {uint gates[];};
 layout(push_constant) uniform Params {uint width,height,seconds,bank;} params;
 #include "model.glsl"
 uint gas_index() {return gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;}
@@ -20,6 +21,9 @@ uint gas_atlas(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0xffffffffu;
     uint page=pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
     return page==0u?0xffffffffu:(page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);
+}
+bool gas_gate_open(ivec2 a,uint axis) {
+    uint at=gas_atlas(a);return at==0xffffffffu||(gates[at]&(1u<<axis))==0u;
 }
 Gas gas_source(ivec2 p) {
     uint at=gas_atlas(p);if(at==0xffffffffu) return gas_empty();

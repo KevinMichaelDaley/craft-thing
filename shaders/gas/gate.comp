@@ -1,0 +1,13 @@
+#version 460
+layout(local_size_x=64) in;
+layout(set=0,binding=7,std430) readonly buffer Pages {uint pages[];};
+layout(set=0,binding=11,std430) buffer Gates {uint gates[];};
+layout(push_constant) uniform Params {uint width,height,x,y,rect_width,rect_height,axis,closed;} params;
+void main() {
+    uint i=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
+    if(i>=params.rect_width*params.rect_height) return;
+    uint x=params.x+i%params.rect_width,y=params.y+i/params.rect_width;
+    uint page=pages[(y/64u)*((params.width+63u)/64u)+x/64u];if(page==0u) return;
+    uint at=(page-1u)*4096u+(y%64u)*64u+x%64u,bit=1u<<params.axis;
+    if(params.closed!=0u) atomicOr(gates[at],bit);else atomicAnd(gates[at],~bit);
+}

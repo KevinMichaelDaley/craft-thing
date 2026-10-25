@@ -1,13 +1,13 @@
 #include "storage.glsl"
-layout(set=0,binding=11,std430) restrict buffer Acoustic {vec4 acoustic[];};
-layout(set=0,binding=12,std430) restrict buffer Pressure {vec4 pressure[];};
-layout(set=0,binding=13,std430) restrict buffer Stencil {vec4 stencil[];};
-layout(set=0,binding=14,std430) restrict buffer Provisional {vec4 provisional[];};
-layout(set=0,binding=15,std430) restrict buffer Correction {float correction[];};
-layout(set=0,binding=16,std430) restrict buffer CorrectionData {vec4 correction_data[];};
-layout(set=0,binding=17,std430) restrict buffer ActiveMask {uint active_mask[];};
-layout(set=0,binding=18,std430) restrict buffer ActiveTiles {uint active_tiles[];};
-layout(set=0,binding=19,std430) restrict buffer Indirect {uint indirect[];};
+layout(set=0,binding=12,std430) restrict buffer Acoustic {vec4 acoustic[];};
+layout(set=0,binding=13,std430) restrict buffer Pressure {vec4 pressure[];};
+layout(set=0,binding=14,std430) restrict buffer Stencil {vec4 stencil[];};
+layout(set=0,binding=15,std430) restrict buffer Provisional {vec4 provisional[];};
+layout(set=0,binding=16,std430) restrict buffer Correction {float correction[];};
+layout(set=0,binding=17,std430) restrict buffer CorrectionData {vec4 correction_data[];};
+layout(set=0,binding=18,std430) restrict buffer ActiveMask {uint active_mask[];};
+layout(set=0,binding=19,std430) restrict buffer ActiveTiles {uint active_tiles[];};
+layout(set=0,binding=20,std430) restrict buffer Indirect {uint indirect[];};
 Gas gas_provisional(uint atlas) {return (params.bank&1u)==0u?bank1[atlas]:bank0[atlas];}
 void gas_write_provisional(uint atlas,Gas value) {
     if((params.bank&1u)==0u) bank1[atlas]=value;else bank0[atlas]=value;
@@ -16,6 +16,7 @@ ivec2 gas_direction(uint i) {return i==0u?ivec2(1,0):(i==1u?ivec2(-1,0):(i==2u?i
 bool gas_neighbor(ivec2 p,uint direction,out uint at) {
     ivec2 q=p+gas_direction(direction);uint atlas=gas_atlas(q);
     if(atlas==0xffffffffu) return false;
+    if(!gas_gate_open((direction&1u)==0u?p:q,direction/2u)) return false;
     at=uint(q.y)*params.width+uint(q.x);return gas_cached(q).metric.w>0.;
 }
 float gas_specific_capacity(Gas s) {

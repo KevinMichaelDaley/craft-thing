@@ -11,8 +11,8 @@
 
 typedef struct {float words[FR_GAS_CELL_WORDS];} gas_packet_t;
 struct fr_gas_gpu {
-    fr_renderer_compute_t initialize,prepare,transport,feedback;
-    dc_gpu_address_buffer_t state[3],cache[2],parameters,stats;
+    fr_renderer_compute_t initialize,prepare,transport,feedback,gate;
+    dc_gpu_address_buffer_t state[3],cache[2],parameters,stats,gates;
     fr_gas_model_t model;
     float density,temperature;
     uint32_t groups_x,groups_y;
@@ -29,6 +29,7 @@ static void destroy(dc_gpu_t *g,struct fr_gas_gpu *t) {
     fr_gas_acoustic_destroy(g,&t->acoustic);
     fr_renderer_compute_destroy(g,&t->initialize);fr_renderer_compute_destroy(g,&t->prepare);
     fr_renderer_compute_destroy(g,&t->transport);fr_renderer_compute_destroy(g,&t->feedback);
+    fr_renderer_compute_destroy(g,&t->gate);dc_gpu_address_buffer_destroy(g,&t->gates);
     for(uint32_t i=0;i<3;i++) dc_gpu_address_buffer_destroy(g,t->state+i);
     for(uint32_t i=0;i<2;i++) dc_gpu_address_buffer_destroy(g,t->cache+i);
     dc_gpu_address_buffer_destroy(g,&t->parameters);dc_gpu_address_buffer_destroy(g,&t->stats);free(t);
@@ -72,21 +73,24 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
        t->groups_y>properties.limits.maxComputeWorkGroupCount[1]) return error(err,cap,"Gas field exceeds Vulkan address limits");
     for(uint32_t i=0;i<3;i++) if(!dc_gpu_address_buffer_create(g,states,true,t->state+i,err,cap)) return false;
     for(uint32_t i=0;i<2;i++) if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,true,t->cache+i,err,cap)) return false;
+    if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*4u,true,&t->gates,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,FR_GAS_MODEL_WORDS*4u,true,&t->parameters,err,cap)||
        !dc_gpu_address_buffer_create(g,64,true,&t->stats,err,cap)) return false;
     float *parameters=t->parameters.mapped;
     for(uint32_t i=0;i<5;i++) {parameters[i]=(float)t->model.gas_constant[i];parameters[5+i]=(float)t->model.heat_capacity_cv[i];}
     parameters[10]=(float)t->model.kinetic_scale;parameters[11]=t->density;parameters[12]=t->temperature;
     parameters[13]=.21f;parameters[14]=0;parameters[15]=6;
-    VkDescriptorBufferInfo buffers[11];
+    VkDescriptorBufferInfo buffers[12];
     for(uint32_t i=0;i<3;i++) buffers[i]=(VkDescriptorBufferInfo){t->state[i].buffer,0,t->state[i].bytes};
     for(uint32_t i=0;i<2;i++) buffers[3+i]=(VkDescriptorBufferInfo){t->cache[i].buffer,0,t->cache[i].bytes};
     buffers[5]=(VkDescriptorBufferInfo){t->parameters.buffer,0,t->parameters.bytes};buffers[6]=(VkDescriptorBufferInfo){t->stats.buffer,0,t->stats.bytes};
     buffers[7]=(VkDescriptorBufferInfo){g->page_buffer,0,VK_WHOLE_SIZE};buffers[8]=(VkDescriptorBufferInfo){g->chunk_buffer,0,VK_WHOLE_SIZE};
     buffers[9]=(VkDescriptorBufferInfo){g->occupancy_buffer,0,VK_WHOLE_SIZE};buffers[10]=(VkDescriptorBufferInfo){g->mpm_grid_buffer,0,VK_WHOLE_SIZE};
-    return fr_renderer_compute_init(g,&t->initialize,buffers,11,16,"build/shaders/gas_init.comp.spv",err,cap)&&
-        fr_renderer_compute_init(g,&t->prepare,buffers,11,16,"build/shaders/gas_prepare.comp.spv",err,cap)&&
-        fr_renderer_compute_init(g,&t->transport,buffers,11,16,"build/shaders/gas_transport.comp.spv",err,cap)&&
+    buffers[11]=(VkDescriptorBufferInfo){t->gates.buffer,0,t->gates.bytes};
+    return fr_renderer_compute_init(g,&t->initialize,buffers,12,16,"build/shaders/gas_init.comp.spv",err,cap)&&
+        fr_renderer_compute_init(g,&t->prepare,buffers,12,16,"build/shaders/gas_prepare.comp.spv",err,cap)&&
+        fr_renderer_compute_init(g,&t->transport,buffers,12,16,"build/shaders/gas_transport.comp.spv",err,cap)&&
+        fr_renderer_compute_init(g,&t->gate,buffers,12,32,"build/shaders/gas_gate.comp.spv",err,cap)&&
         fr_gas_feedback_init(g,&t->feedback,buffers[0],buffers[5],err,cap);
 }
 bool fr_gas_gpu_enable(dc_gpu_t *g,const fr_gas_model_t *model,float density,float temperature,char *err,uint32_t cap) {
@@ -192,20 +196,29 @@ bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32
     if(!g||!g->gas||policy>FR_GAS_PRESSURE_IMPLICIT) return error(err,cap,"Invalid gas acoustic policy");
     struct fr_gas_gpu *t=g->gas;
     if(policy==FR_GAS_PRESSURE_IMPLICIT&&!t->acoustic.ready) {
-        VkDescriptorBufferInfo buffers[11];
+        VkDescriptorBufferInfo buffers[12];
         for(uint32_t i=0;i<3;i++) buffers[i]=(VkDescriptorBufferInfo){t->state[i].buffer,0,t->state[i].bytes};
         for(uint32_t i=0;i<2;i++) buffers[3+i]=(VkDescriptorBufferInfo){t->cache[i].buffer,0,t->cache[i].bytes};
         buffers[5]=(VkDescriptorBufferInfo){t->parameters.buffer,0,t->parameters.bytes};buffers[6]=(VkDescriptorBufferInfo){t->stats.buffer,0,t->stats.bytes};
         buffers[7]=(VkDescriptorBufferInfo){g->page_buffer,0,VK_WHOLE_SIZE};buffers[8]=(VkDescriptorBufferInfo){g->chunk_buffer,0,VK_WHOLE_SIZE};
         buffers[9]=(VkDescriptorBufferInfo){g->occupancy_buffer,0,VK_WHOLE_SIZE};buffers[10]=(VkDescriptorBufferInfo){g->mpm_grid_buffer,0,VK_WHOLE_SIZE};
+        buffers[11]=(VkDescriptorBufferInfo){t->gates.buffer,0,t->gates.bytes};
         if(!fr_gas_acoustic_create(g,&t->acoustic,buffers,err,cap)) return false;
     }
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot configure acoustic policy");
     ((float *)t->parameters.mapped)[FR_GAS_POLICY_WORD]=(float)policy;t->policy=policy;return true;
 }
 bool fr_gas_gpu_gate(dc_gpu_t *g,uint32_t x,uint32_t y,uint32_t width,uint32_t height,uint32_t axis,bool closed,char *err,uint32_t cap) {
-    (void)g;(void)x;(void)y;(void)width;(void)height;(void)axis;(void)closed;
-    return error(err,cap,"Gas gate not implemented");
+    if(!g||!g->gas||x>=g->width||y>=g->height||!width||!height||width>g->width-x||height>g->height-y||axis>1u)
+        return error(err,cap,"Invalid gas valve rectangle");
+    if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas valve command");
+    barrier(g);uint32_t push[8]={g->width,g->height,x,y,width,height,axis,closed};
+    fr_renderer_compute_t *pipeline=&g->gas->gate;
+    vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline->pipeline);
+    vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline->pipeline_layout,0,1,&pipeline->descriptor,0,NULL);
+    vkCmdPushConstants(g->command,pipeline->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
+    uint32_t groups=(width*height+63u)/64u,gx=groups<g->gas->groups_x?groups:g->gas->groups_x;
+    vkCmdDispatch(g->command,gx,(groups+gx-1u)/gx,1);return submit(g,err,cap);
 }
 bool fr_gas_gpu_read_work_chunk(dc_gpu_t *g,uint32_t slot,double *work,uint32_t count,char *err,uint32_t cap) {
     if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!work||count<4096u) return error(err,cap,"Invalid gas work snapshot");

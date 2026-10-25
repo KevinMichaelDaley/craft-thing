@@ -15,9 +15,9 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     dc_gpu_address_buffer_destroy(g,&t->indirect);
     memset(t,0,sizeof(*t));
 }
-bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescriptorBufferInfo source[11],char *err,uint32_t cap) {
+bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescriptorBufferInfo source[12],char *err,uint32_t cap) {
     if(t->ready) return true;
-    VkDescriptorBufferInfo buffers[20];memcpy(buffers,source,11*sizeof(*source));
+    VkDescriptorBufferInfo buffers[21];memcpy(buffers,source,12*sizeof(*source));
     VkDeviceSize bytes=(VkDeviceSize)g->width*g->height*16u;
     VkDeviceSize tiles=(VkDeviceSize)((g->width+7u)/8u)*((g->height+7u)/8u);
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(g->physical,&properties);
@@ -25,17 +25,17 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     for(uint32_t i=0;i<8;i++) {
         VkDeviceSize field_bytes=i>=6?tiles*(i==7?8u:4u):(i==4?bytes/4u:bytes);
         if(!dc_gpu_address_buffer_create(g,field_bytes,true,t->fields+i,err,cap)) goto fail;
-        buffers[11+i]=(VkDescriptorBufferInfo){t->fields[i].buffer,0,field_bytes};
+        buffers[12+i]=(VkDescriptorBufferInfo){t->fields[i].buffer,0,field_bytes};
     }
     if(!dc_gpu_address_buffer_create(g,32,true,&t->indirect,err,cap)) goto fail;
     ((uint32_t *)t->indirect.mapped)[1]=1u;((uint32_t *)t->indirect.mapped)[2]=1u;
     ((uint32_t *)t->indirect.mapped)[5]=1u;((uint32_t *)t->indirect.mapped)[6]=1u;
-    buffers[19]=(VkDescriptorBufferInfo){t->indirect.buffer,0,32};
+    buffers[20]=(VkDescriptorBufferInfo){t->indirect.buffer,0,32};
     fr_renderer_compute_t *pipelines[]={&t->advect,&t->initialize,&t->rhs,&t->classify,&t->compact,&t->sor,&t->correct,&t->residual,&t->finish};
     const char *paths[]={"advect","acoustic_init","pressure_rhs","pressure_classify","pressure_compact","pressure_sor","pressure_correct","pressure_residual","acoustic_finish"};
     for(uint32_t i=0;i<9;i++) {
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",paths[i]);
-        if(!fr_renderer_compute_init(g,pipelines[i],buffers,20,16,path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,pipelines[i],buffers,21,16,path,err,cap)) goto fail;
     }
     t->ready=true;return true;
 fail:

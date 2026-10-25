@@ -10,7 +10,7 @@ typedef struct {
 } fr_gas_acoustic_gpu_t;
 /** Lazily create only the selected optional acoustic module. */
 bool fr_gas_acoustic_create(dc_gpu_t *gpu,fr_gas_acoustic_gpu_t *module,
-    const VkDescriptorBufferInfo source[11],char *err,uint32_t cap);
+    const VkDescriptorBufferInfo source[12],char *err,uint32_t cap);
 /** Release all optional acoustic resources. */
 void fr_gas_acoustic_destroy(dc_gpu_t *gpu,fr_gas_acoustic_gpu_t *module);
 /** Complete one staged pressure/advection step, reading reduced residual only. */

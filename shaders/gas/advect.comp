@@ -1,7 +1,8 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #include "acoustic.glsl"
-GasFlux gas_advective_neighbor(Gas own,Primitive center,float energy,ivec2 q,uint axis,float normal) {
+GasFlux gas_advective_neighbor(Gas own,Primitive center,float energy,ivec2 p,ivec2 q,uint axis,float normal) {
+    if(!gas_gate_open(normal>0.?p:q,axis)) return gas_empty_flux();
     Primitive neighbor=gas_cached(q);float volume=center.metric.w,other_volume=neighbor.metric.w;
     if(volume==0.||other_volume==0.) return gas_empty_flux();
     float u=center.hydro[axis+1u],v=neighbor.hydro[axis+1u],speed=max(abs(u),abs(v));
@@ -20,7 +21,7 @@ void main() {
     if(atlas==0xffffffffu) {acoustic[index]=vec4(0);provisional[index]=vec4(0);return;}
     Gas own=gas_source(p);Primitive center=gas_cached(p);float energy=gas_energy(own);GasFlux net=gas_empty_flux();
     if(own.geometry.x>0.) for(uint d=0u;d<4u;d++) {
-        GasFlux face=gas_advective_neighbor(own,center,energy,p+gas_direction(d),d/2u,(d&1u)==0u?1.:-1.);
+        GasFlux face=gas_advective_neighbor(own,center,energy,p,p+gas_direction(d),d/2u,(d&1u)==0u?1.:-1.);
         net.species+=face.species;net.dynamics+=face.dynamics;net.pigment+=face.pigment;
     }
     float dt=uintBitsToFloat(params.seconds),work=0.;Gas value=gas_buoyancy(gas_add_flux(own,net,dt),dt,work);

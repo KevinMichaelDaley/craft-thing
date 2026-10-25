@@ -192,3 +192,12 @@ Per-cell advection and acoustic metadata are now computed together; the pending
 full-field measurement checks whether avoiding that extra read pass is enough.
 This remains a numerical/optimization checkpoint, with the smoke-box interaction,
 ownership/persistence and final repeated1000-frame gate still outstanding.
+
+The controllable valve is a gas-face boundary condition, not a smoke animation or
+permanent emitter. Parallel rectangle commands open/close arbitrary right/lower
+faces without changing volume or stock. Closed faces supply the appropriate wall
+reaction independently to each chamber; opening restores conservative transport.
+Both HLLC and implicit policies retain bit-exact closed chamber state, then move
+finite colored gas when opened. The native battery now passes8 cases. The scene
+will use precharged hot colored reservoirs and a controlled enclosure vent; this
+fixture valve does not yet claim a constructed mechanical-door implementation.
