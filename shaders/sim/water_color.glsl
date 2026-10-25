@@ -1,12 +1,14 @@
 #ifndef DC_WATER_COLOR_GLSL
 #define DC_WATER_COLOR_GLSL
+#include "../reactive/thermal_water.glsl"
 layout(constant_id=2) const bool WATER_COLOR_ENABLED=false;
 layout(set=0,binding=32,std430) coherent buffer WaterColors {vec4 water_colors[];};
 const vec3 DEFAULT_WATER_COLOR=vec3(.035,.193,.666);
 vec3 water_color_at(uint index) {
     return water_colors[index].w>0.?water_colors[index].rgb:DEFAULT_WATER_COLOR;
 }
-void water_color_move(uint source,uint target,uint receiving,uint flux) {
+void water_color_move(uint source,uint target,uint receiving,uint flux,uint available) {
+    thermal_water_move(source,target,flux,available);
     if(!WATER_COLOR_ENABLED||flux==0u) return;
     vec3 color=(water_color_at(target)*float(receiving)+water_color_at(source)*float(flux))/
         (float(receiving)+float(flux));

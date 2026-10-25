@@ -26,8 +26,8 @@ bool dc_gpu_mpm_swap_init(dc_gpu_t *g,char *err,uint32_t cap) {
 
 void dc_gpu_mpm_swap_descriptors(dc_gpu_t *g) {
     if(!g->mpm_swap_buffers||g->mpm_swap_descriptor_revision==g->descriptor_revision) return;
-    VkCopyDescriptorSet copies[34];uint32_t count=0;
-    for(uint32_t binding=0;binding<36;binding++) {
+    VkCopyDescriptorSet copies[DC_GPU_DESCRIPTOR_BINDINGS-2];uint32_t count=0;
+    for(uint32_t binding=0;binding<DC_GPU_DESCRIPTOR_BINDINGS;binding++) {
         if(binding==19u||binding==22u) continue;
         copies[count++]=(VkCopyDescriptorSet){.sType=VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET,
             .srcSet=g->descriptor,.srcBinding=binding,.dstSet=g->mpm_swapped_descriptor,

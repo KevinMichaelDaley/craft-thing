@@ -29,6 +29,8 @@ typedef struct {
     VkPipelineLayout layout;
     VkShaderModule shader;
     VkPipeline pipeline;
+    VkBuffer thermal_control;
+    VkDeviceMemory thermal_control_memory;
 } probe_t;
 
 static int check(VkResult result, const char *stage) {

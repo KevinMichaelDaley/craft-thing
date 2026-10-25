@@ -35,8 +35,14 @@ fresh placement world. Hold H and the left mouse button for finite probe contact
 F7 cycles temperature, wetness and authored color. Existing material brushes,
 camera controls, pause/single-step and reset remain available. The left wood
 control is dry; the right starts with real material-derived bound water. These
-controls currently demonstrate conductive heat and wet heat capacity, not yet
-free-water absorption/transport. The prototype refuses restored worlds until
+controls demonstrate conductive heat and wet heat capacity. The liquid extension
+now stores excess enthalpy separately from pigment and solid parcel state. Its
+displayed reference checks pass exact Q16 uptake, conductive cooling, and heat
+and pigment conservation during actual water movement. Wetting is committed
+before a fresh conduction snapshot, avoiding simultaneous-transfer overshoot.
+Both ordinary fan-out and subgroup prefix transport carry the same channel;
+default-disabled shader fixtures bind an explicit zeroed thermal control.
+Natural edits and persistence remain under development. The prototype refuses restored worlds until
 the required thermal checkpoint path is validated, rather than silently
 discarding their heat history. This restriction must be resolved for acceptance.
 
@@ -51,6 +57,6 @@ worst-frame target. The largest traced tail included 20.553 ms input processing
 and 25.342 ms presentation/physical work. These failures remain part of the
 record; no module or epic performance acceptance is claimed.
 
-Remaining in this milestone: conservative free-water cooling/wetting/advection,
+Remaining in this milestone: complete liquid regression/interaction coverage,
 temperature/wetness inspection, natural edits/owner admission and the persistence
 the exposed scene needs, plus reference budgets and passing displayed timing.

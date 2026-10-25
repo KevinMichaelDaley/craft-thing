@@ -119,7 +119,8 @@ void move_line(ivec2 source, ivec2 direction, bool vertical) {
         uint capacity=receiving_capacity(destination);
         uint flux = min(min(allowance, available), receiving < capacity ? capacity - receiving : 0u);
         if (flux != 0u) {
-            water_color_move(source_index,destination_index,receiving,flux);
+            water_color_move(source_index,destination_index,receiving,flux,source_cell.y);
+            thermal_water_resize(source_index,source_cell.y,available-flux);
             water_color_clear(source_index,available-flux);
             chunk_cells[destination_index].y = receiving + flux;
             chunk_cells[source_index].y = available - flux;
@@ -143,10 +144,10 @@ void move_line(ivec2 source, ivec2 direction, bool vertical) {
         uint allowance = uint(floor(fraction * float(FULL)*path_aperture));
         uint flux = min(min(allowance, available), capacity - receiving);
         available -= flux;
-        water_color_move(source_index,destination_index,receiving,flux);
+        water_color_move(source_index,destination_index,receiving,flux,source_cell.y);
         chunk_cells[destination_index].y = receiving + flux;
     }
-    if (available != source_cell.y) {chunk_cells[source_index].y = available;water_color_clear(source_index,available);}
+    if (available != source_cell.y) {thermal_water_resize(source_index,source_cell.y,available);chunk_cells[source_index].y = available;water_color_clear(source_index,available);}
 }
 
 void scan_line(uint line) {
@@ -190,12 +191,13 @@ void displace_column(uint x) {
             uint receiving = chunk_cells[destination_index].y;
             uint capacity=receiving_capacity(destination);
             uint flux = min(remaining, receiving < capacity ? capacity - receiving : 0u);
-            water_color_move(source_index,destination_index,receiving,flux);
+            water_color_move(source_index,destination_index,receiving,flux,chunk_cells[source_index].y);
             chunk_cells[destination_index].y = receiving + flux;
             remaining -= flux;
         }
         /* Retain unresolved water at its original world cell. It is explicitly
            reported as overflow and remains authoritative through streaming. */
+        thermal_water_resize(source_index,chunk_cells[source_index].y,retained+remaining);
         chunk_cells[source_index].y = retained+remaining;
         water_color_clear(source_index,retained+remaining);
     }
@@ -221,11 +223,12 @@ void displace_row(uint y) {
                 }
                 uint capacity=receiving_capacity(destination),receiving=chunk_cells[target].y;
                 uint flux=min(remaining,receiving<capacity?capacity-receiving:0u);
-                water_color_move(source_index,target,receiving,flux);
+                water_color_move(source_index,target,receiving,flux,water);
                 chunk_cells[target].y=receiving+flux;remaining-=flux;
             }
             if(!left_open&&!right_open) break;
         }
+        thermal_water_resize(source_index,water,retained+remaining);
         chunk_cells[source_index].y=retained+remaining;
         water_color_clear(source_index,retained+remaining);
     }
@@ -277,7 +280,8 @@ void correct_pair(ivec2 p) {
                     receiving < capacity ? capacity - receiving : 0u);
     if(sender) {
         uint source=atlas_index(p,own_page),target=atlas_index(neighbor,other_page);
-        water_color_move(source,target,receiving,flux);
+        water_color_move(source,target,receiving,flux,own);
+        thermal_water_resize(source,own,own-flux);
         water_color_clear(source,own-flux);
     }
     write_mass(index, sender ? own - flux : own + flux);

@@ -42,6 +42,7 @@ uint water_at(ivec2 p) {
     return position<CACHE_CELLS?cached[position].x:chunk_cells[atlas_index(p,page_at(p))].y;
 }
 void put_water(ivec2 p,uint value) {
+    thermal_water_resize(atlas_index(p,page_at(p)),water_at(p),value);
     water_color_clear(atlas_index(p,page_at(p)),value);
     uint position=coordinate(p);
     if(position<CACHE_CELLS) cached[position].x=value;
@@ -90,7 +91,7 @@ bool displace_source(ivec2 source) {
     uint remaining=available>prior?available-prior:0u;
     for(uint order=first;order<last&&remaining!=0u;order++) {
         uint flux=min(remaining,request_at(source,order,left,right));remaining-=flux;
-        if(flux!=0u) {ivec2 target=target_at(source,order);water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),water_at(target),flux);put_water(target,water_at(target)+flux);}
+        if(flux!=0u) {ivec2 target=target_at(source,order);water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),water_at(target),flux,water);put_water(target,water_at(target)+flux);}
     }
     subgroupMemoryBarrierBuffer();subgroupBarrier();
     uint sent=min(available,total);

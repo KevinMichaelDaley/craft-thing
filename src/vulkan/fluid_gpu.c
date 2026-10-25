@@ -46,6 +46,9 @@ bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if(!dc_gpu_make_mapped_buffer(gpu,color_bytes,&gpu->water_color_buffer,
         &gpu->water_color_memory,&gpu->water_color_mapped,err,cap)) return false;
     memset(gpu->water_color_mapped,0,(size_t)color_bytes);
+    if(!dc_gpu_make_mapped_buffer(gpu,128,&gpu->thermal_control_buffer,
+        &gpu->thermal_control_memory,&gpu->thermal_control_mapped,err,cap)) return false;
+    memset(gpu->thermal_control_mapped,0,128);
     if(!dc_gpu_colors_init(gpu,err,cap)) return false;
     return dc_gpu_make_device_buffer(gpu, bytes, &gpu->fluid_a_buffer,
                &gpu->fluid_a_memory, err, cap) &&
@@ -105,8 +108,10 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
         .sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO,
         .requiredSubgroupSize=required_size};
     if(required_size) info.stage.pNext=&required;
+    if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"fluid pipeline begin %s phase%u\n",load_path,phase);
     VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE,
                                                 1, &info, NULL, pipeline);
+    if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"fluid pipeline end %s phase%u result%d\n",load_path,phase,result);
     vkDestroyShaderModule(gpu->device, shader, NULL);
     if (result != VK_SUCCESS) return error(err, cap, "Cannot create Eulerian fluid pipeline");
     return true;
@@ -157,6 +162,9 @@ static void bind_fluid_mode(dc_gpu_t *gpu,uint32_t mode,bool projection) {
 }
 
 void dc_gpu_fluid_destroy(dc_gpu_t *gpu) {
+    if(gpu->thermal_control_mapped) vkUnmapMemory(gpu->device,gpu->thermal_control_memory);
+    if(gpu->thermal_control_buffer) vkDestroyBuffer(gpu->device,gpu->thermal_control_buffer,NULL);
+    if(gpu->thermal_control_memory) vkFreeMemory(gpu->device,gpu->thermal_control_memory,NULL);
     dc_gpu_colors_destroy(gpu);
     if(gpu->water_color_mapped) vkUnmapMemory(gpu->device,gpu->water_color_memory);
     if(gpu->water_color_buffer) vkDestroyBuffer(gpu->device,gpu->water_color_buffer,NULL);

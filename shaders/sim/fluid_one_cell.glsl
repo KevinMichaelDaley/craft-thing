@@ -32,6 +32,15 @@ uint one_cell_block(int first,bool positive) {
     if(subgroupOr(outgoing)==0u) return count;
     uint incoming=subgroupShuffleDown(outgoing,1u);
     if(lane+1u>=count) incoming=0u;
+    float own_heat=0.,out_heat=0.,terminal_heat=0.;
+    if(thermal_water_on()) {
+        if(valid&&page_at(point_at(position))!=0u) own_heat=thermal_water_at(atlas_index(point_at(position),page_at(point_at(position))));
+        out_heat=mass!=0u?own_heat*(float(outgoing)/float(mass)):0.;
+        if(lane==0u&&page_at(point_at(target))!=0u) terminal_heat=thermal_water_at(atlas_index(point_at(target),page_at(point_at(target))));
+    }
+    float incoming_heat=subgroupShuffleDown(out_heat,1u);
+    if(lane+1u>=count) incoming_heat=0.;
+    transport_color_publish();
     vec3 color=DEFAULT_WATER_COLOR,lower_color=DEFAULT_WATER_COLOR,terminal_color=DEFAULT_WATER_COLOR;
     if(WATER_COLOR_ENABLED) {
         if(valid&&page_at(point_at(position))!=0u) color=water_color_at(atlas_index(point_at(position),page_at(point_at(position))));
@@ -42,11 +51,13 @@ uint one_cell_block(int first,bool positive) {
     if(lane<count&&(outgoing!=0u||incoming!=0u)) {
         uint remaining=mass-outgoing;
         put_water(point_at(position),remaining+incoming);
+        thermal_water_set(atlas_index(point_at(position),page_at(point_at(position))),own_heat-out_heat+incoming_heat);
         if(WATER_COLOR_ENABLED&&incoming!=0u) water_colors[atlas_index(point_at(position),page_at(point_at(position)))]=
             vec4((color*float(remaining)+lower_color*float(incoming))/(float(remaining)+float(incoming)),1.);
     }
     if(lane==0u&&outgoing!=0u) {
         put_water(point_at(target),next_mass+outgoing);
+        thermal_water_set(atlas_index(point_at(target),page_at(point_at(target))),terminal_heat+out_heat);
         if(WATER_COLOR_ENABLED) water_colors[atlas_index(point_at(target),page_at(point_at(target)))]=
             vec4((terminal_color*float(next_mass)+color*float(outgoing))/(float(next_mass)+float(outgoing)),1.);
     }

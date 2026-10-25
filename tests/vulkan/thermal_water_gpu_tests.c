@@ -31,7 +31,9 @@ static void test_wetting_moves_exact_water_and_enthalpy_into_wood_before_conduct
 }
 static void test_actual_parallel_water_transport_preserves_excess_heat_and_custom_pigment(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));dc_chunk_colors_t *colors=calloc(1,sizeof(*colors));ASSERT_TRUE(c&&colors);
-    uint32_t source=12*64+20;c->cells[source]=(dc_cell_t){.material=DC_MATERIAL_WATER,.fluid_mass=65536};c->face_velocity[source].y=1.f;
+    /* Runtime liquid volume occupies permeable AIR cells; material WATER is
+     * an authoring/brush command, not the post-import substrate. */
+    uint32_t source=12*64+20;c->cells[source]=(dc_cell_t){.material=DC_MATERIAL_AIR,.fluid_mass=65536};c->face_velocity[source].y=1.f;
     float pigment[4]={.7f,.15f,.4f,1.f};memcpy(colors->water[source],pigment,sizeof(pigment));
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     ASSERT_TRUE(fr_renderer_upload_chunk_colors(g,0,colors,err,sizeof(err))&&fr_thermal_gpu_enable(g,err,sizeof(err)));
@@ -52,6 +54,7 @@ static void test_actual_parallel_water_transport_preserves_excess_heat_and_custo
     ASSERT_TRUE(present(g,err,sizeof(err)));free(colors);free(c);dc_gpu_destroy(g);PASS();
 }
 int main(void) {
+    setvbuf(stdout,NULL,_IOLBF,0);
     RUN(test_wetting_moves_exact_water_and_enthalpy_into_wood_before_conduction);
     RUN(test_actual_parallel_water_transport_preserves_excess_heat_and_custom_pigment);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;

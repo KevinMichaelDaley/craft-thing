@@ -39,3 +39,11 @@ First Vulkan thermal field GREEN: both native Wayland cases pass with core/sync 
 **2026-10-25T04:08:34Z**
 
 Interactive prototype GREEN: native placement bench case passes finite probe heating, actual dry/pre-wet inventories, overlay switching and4 identical paused frames; the2 core Vulkan field/clock checks pass again. Permanent --heat-bench entry uses existing placement controls,4-worker immutable scene construction and real shader feedback. Native dependency RED caught stale thermal SPIR-V; fixed native objects to depend on runtime module shaders. Inspected real temperature/wetness and normal CLI captures. Performance remains FAILED:120frames10.808mean/36.530worst;180 traced10.574/45.921, largest input20.553+present25.342. Free-water coupling, inspection, edits/admission, restore and passing frame gate are still required. Do not close from this prototype.
+
+**2026-10-25T04:31:43Z**
+
+Water stage RED6af74f9 now locally GREEN: actual Wayland/core+sync2 cases pass for exact16-quanta wetting, CPU enthalpy reference, moving liquid excess-energy conservation and custom pigment. Separate thermal volume channel follows existing fan-out and subgroup prefix paths. Runtime liquid fixture corrected to canonical AIR substrate plus fluid_mass; assertions unchanged. Existing thermal/fluid regressions underway. No milestone completion or frame-gate pass claimed.
+
+**2026-10-25T04:35:07Z**
+
+Water GREEN regression:20 existing cases pass across native thermal2, native interactive bench1, transport10, subgroup scan1 (56 internal direction/variant cases), pigment4 and partial-recipient2. Core+sync logs contain no validation errors after enabling BDA in the minimal fluid fixture and binding zero thermal control. New displayed water2 also pass. Startup tracing is opt-in DC_PIPELINE_TRACE; no temporary tools. Full module acceptance remains pending.

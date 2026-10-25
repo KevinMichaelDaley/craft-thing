@@ -1,4 +1,5 @@
 #define main bounded_probe_main
+#define DC_PROBE_BUFFER_DEVICE_ADDRESS
 #include "../../tools/diagnostics/vulkan_probe.c"
 #undef main
 #include "../../tools/diagnostics/shader_fixture.h"

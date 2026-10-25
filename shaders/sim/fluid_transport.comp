@@ -70,7 +70,7 @@ void transport_buffer_barrier() {
 #endif
 }
 void transport_color_publish() {
-    if(WATER_COLOR_ENABLED) {transport_buffer_barrier();subgroupBarrier();}
+    if(WATER_COLOR_ENABLED||thermal_water_on()) {transport_buffer_barrier();subgroupBarrier();}
 }
 bool permeable_material(uint m) {return m==0u||m==2u||m==4u||m==5u||m==6u||m==10u;}
 uint cell_meta(ivec2 p) {
@@ -101,6 +101,7 @@ uint water_at(ivec2 p) {
     return position<CACHE_CELLS?cached[position].x:chunk_cells[atlas_index(p,page_at(p))].y;
 }
 void put_water(ivec2 p,uint value) {
+    thermal_water_resize(atlas_index(p,page_at(p)),water_at(p),value);
     water_color_clear(atlas_index(p,page_at(p)),value);
     uint position=uint(vertical?p.y:p.x);
     if(position<CACHE_CELLS) {
@@ -233,7 +234,7 @@ uint move_cached_recipients(ivec2 source,ivec2 direction,uint reach,float travel
             uint request=cached_requests[position];
 #endif
             uint flux=min(request,remaining);remaining-=flux;
-            if(flux!=0u) {ivec2 target=point_at(position);water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),water_at(target),flux);put_water(target,water_at(target)+flux);}
+            if(flux!=0u) {ivec2 target=point_at(position);water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),water_at(target),flux,available);put_water(target,water_at(target)+flux);}
             mask&=~(1u<<bit);
         }
     }
@@ -271,7 +272,7 @@ bool move_source(ivec2 source,ivec2 direction) {
         uint moved=0u;
         if(lane==0u) {
             moved=min(min(allowance,available),capacity-receiving);
-            if(moved!=0u) {water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),receiving,moved);put_water(target,receiving+moved);put_water(source,available-moved);}
+            if(moved!=0u) {water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),receiving,moved,available);put_water(target,receiving+moved);put_water(source,available-moved);}
         }
         return subgroupBroadcastFirst(moved)!=0u;
     }
@@ -318,7 +319,7 @@ bool move_source(ivec2 source,ivec2 direction) {
         uint request=order<CACHE_CELLS?cached_requests[order]:request_at(source,direction,offset,travel);
 #endif
         uint flux=min(request,remaining);remaining-=flux;
-        if(flux!=0u) {ivec2 target=source+direction*int(offset);water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),water_at(target),flux);put_water(target,water_at(target)+flux);}
+        if(flux!=0u) {ivec2 target=source+direction*int(offset);water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),water_at(target),flux,available);put_water(target,water_at(target)+flux);}
     }
     subgroupMemoryBarrierShared();transport_buffer_barrier();subgroupBarrier();
     uint sent=min(available,total);

@@ -63,18 +63,18 @@ static bool make_cells(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t ca
 
 static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
                           char *err, uint32_t cap) {
-    VkDescriptorSetLayoutBinding bindings[36] = {0};
-    for (uint32_t i = 0; i < 36; ++i) {
+    VkDescriptorSetLayoutBinding bindings[DC_GPU_DESCRIPTOR_BINDINGS] = {0};
+    for (uint32_t i = 0; i < DC_GPU_DESCRIPTOR_BINDINGS; ++i) {
         bindings[i].binding = i;
         bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         bindings[i].descriptorCount = 1;
         bindings[i].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
     }
     VkDescriptorSetLayoutCreateInfo layout_info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 36, .pBindings = bindings };
+        .bindingCount = DC_GPU_DESCRIPTOR_BINDINGS, .pBindings = bindings };
     if (vkCreateDescriptorSetLayout(gpu->device, &layout_info, NULL, &gpu->set_layout) != VK_SUCCESS)
         return error(err, cap, "Cannot create descriptor layout");
-    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 72 };
+    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, DC_GPU_DESCRIPTOR_BINDINGS*2 };
     VkDescriptorPoolCreateInfo pool_info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .maxSets = 2, .poolSizeCount = 1, .pPoolSizes = &size };
     if (vkCreateDescriptorPool(gpu->device, &pool_info, NULL, &gpu->descriptor_pool) != VK_SUCCESS)
@@ -87,7 +87,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
     if(vkAllocateDescriptorSets(gpu->device,&set_info,&gpu->mpm_swapped_descriptor)!=VK_SUCCESS)
         return error(err,cap,"Cannot allocate alternating particle descriptors");
     VkDeviceSize terrain_colors=dc_gpu_color_terrain_bytes(),bank_colors=dc_gpu_color_bank_bytes(gpu);
-    VkDescriptorBufferInfo buffers[36] = {
+    VkDescriptorBufferInfo buffers[DC_GPU_DESCRIPTOR_BINDINGS] = {
         { gpu->cells, 0, bytes },
         { gpu->chunk_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t) },
         { gpu->page_buffer, 0, (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t) },
@@ -123,10 +123,11 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         { gpu->water_color_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS*16 },
         { gpu->shape_color_buffer,0,terrain_colors },
         { gpu->shape_color_buffer,gpu->runtime_body_consumers?0:terrain_colors,gpu->runtime_body_consumers?16:bank_colors },
-        { gpu->shape_color_buffer,gpu->runtime_body_consumers?0:terrain_colors+bank_colors,gpu->runtime_body_consumers?16:bank_colors }
+        { gpu->shape_color_buffer,gpu->runtime_body_consumers?0:terrain_colors+bank_colors,gpu->runtime_body_consumers?16:bank_colors },
+        { gpu->thermal_control_buffer,0,128 }
     };
-    VkWriteDescriptorSet writes[36] = {0};
-    for (uint32_t i = 0; i < 36; ++i) {
+    VkWriteDescriptorSet writes[DC_GPU_DESCRIPTOR_BINDINGS] = {0};
+    for (uint32_t i = 0; i < DC_GPU_DESCRIPTOR_BINDINGS; ++i) {
         writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes[i].dstSet = gpu->descriptor;
         writes[i].dstBinding = i;
@@ -134,7 +135,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         writes[i].pBufferInfo = &buffers[i];
     }
-    vkUpdateDescriptorSets(gpu->device, 36, writes, 0, NULL);
+    vkUpdateDescriptorSets(gpu->device, DC_GPU_DESCRIPTOR_BINDINGS, writes, 0, NULL);
     gpu->descriptor_revision++;
     VkPushConstantRange range = { .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .size = 32 };
     VkPipelineLayoutCreateInfo pipeline_layout_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,

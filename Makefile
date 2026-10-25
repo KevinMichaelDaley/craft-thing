@@ -1033,6 +1033,7 @@ test: build/water_color_tests
 
 $(FLUID_SHADER) build/shaders/fluid_transport.comp.spv build/shaders/fluid_aperture.comp.spv build/diagnostics/fluid_transport_profile.comp.spv: shaders/sim/hydraulic_face.glsl
 $(FLUID_SHADER) build/shaders/fluid_transport.comp.spv build/shaders/fluid_displacement.comp.spv build/diagnostics/fluid_transport_profile.comp.spv: shaders/sim/water_color.glsl
+$(FLUID_SHADER) build/shaders/fluid_transport_recompute_16.comp.spv build/shaders/fluid_transport_recompute.comp.spv build/diagnostics/fluid_transport_recompute_profile.comp.spv build/diagnostics/fluid_transport_profile_16.comp.spv build/diagnostics/fluid_transport_color_reference.comp.spv build/diagnostics/fluid_displacement_profile.comp.spv: shaders/reactive/thermal_water.glsl include/dungeoncraft/thermal_water_layout.h
 
 build/fluid_transport_long_tests: tests/vulkan/fluid_transport_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_transport.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DTRANSPORT_TEST_WIDTH=2113 -DTRANSPORT_TEST_HEIGHT=3 $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)

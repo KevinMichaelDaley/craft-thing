@@ -5,10 +5,10 @@
  * Other flows retain the general ordered path. */
 void short_run_publish() {
     subgroupMemoryBarrierShared();
-    if(WATER_COLOR_ENABLED) transport_buffer_barrier();
+    if(WATER_COLOR_ENABLED||thermal_water_on()) transport_buffer_barrier();
     subgroupBarrier();
 }
-void short_run_add(uint position,uint amount,vec3 pigment) {
+void short_run_add(uint position,uint amount,vec3 pigment,float heat_density) {
     if(amount==0u) return;
     ivec2 point=point_at(position);uint receiving=water_at(point);
     if(WATER_COLOR_ENABLED) {
@@ -17,19 +17,21 @@ void short_run_add(uint position,uint amount,vec3 pigment) {
             (float(receiving)+float(amount)),1.);
     }
     put_water(point,receiving+amount);
+    thermal_water_add(atlas_index(point,page_at(point)),heat_density*float(amount));
 }
 void short_run_front(int first,int direction,uint distance,uint count,
-                     uint amount,vec3 pigment,bool far) {
+                     uint amount,vec3 pigment,float heat_density,bool far) {
     uint lane=gl_SubgroupInvocationID,team=transport_team_size();
     for(uint block=0u;block<distance;block+=team) {
         uint offset=block+lane+1u;
         int source=int(distance)-int(offset)-(far?0:1);
         uint index=uint(clamp(source,0,int(team)-1));
         uint incoming=subgroupShuffle(amount,index);
+        float density=subgroupShuffle(heat_density,index);
         vec3 color=DEFAULT_WATER_COLOR;
         if(WATER_COLOR_ENABLED) color=subgroupShuffle(pigment,index);
         if(offset<=distance&&source>=0&&source<int(count))
-            short_run_add(uint(first+direction*int(offset)),incoming,color);
+            short_run_add(uint(first+direction*int(offset)),incoming,color,density);
     }
 }
 uint short_run_block(int first,bool positive) {
@@ -84,6 +86,8 @@ uint short_run_block(int first,bool positive) {
     uint far_flux=lane<count?min(value.x,value.y):0u;
     uint near_flux=lane<count?mass-far_flux:0u;
     vec3 pigment=DEFAULT_WATER_COLOR;
+    float heat_density=0.;
+    if(thermal_water_on()&&lane<count&&mass!=0u) heat_density=thermal_water_at(atlas_index(point_at(position),page_at(point_at(position))))/float(mass);
     if(WATER_COLOR_ENABLED&&lane<count) pigment=water_color_at(atlas_index(point_at(position),page_at(point_at(position))));
     short_run_publish();
     if(lane<count&&mass!=0u) put_water(point_at(position),0u);
@@ -94,14 +98,16 @@ uint short_run_block(int first,bool positive) {
     uint near_in=subgroupShuffleDown(near_flux,min(distance-1u,team-1u));
     vec3 near_color=DEFAULT_WATER_COLOR;
     if(WATER_COLOR_ENABLED) near_color=subgroupShuffleDown(pigment,min(distance-1u,team-1u));
-    if(lane<count&&lane+distance-1u<count) short_run_add(position,near_in,near_color);
-    short_run_front(first,direction,distance,count,near_flux,pigment,false);
+    float near_heat=subgroupShuffleDown(heat_density,min(distance-1u,team-1u));
+    if(lane<count&&lane+distance-1u<count) short_run_add(position,near_in,near_color,near_heat);
+    short_run_front(first,direction,distance,count,near_flux,pigment,heat_density,false);
     short_run_publish();
     uint far_in=subgroupShuffleDown(far_flux,min(distance,team-1u));
     vec3 far_color=DEFAULT_WATER_COLOR;
     if(WATER_COLOR_ENABLED) far_color=subgroupShuffleDown(pigment,min(distance,team-1u));
-    if(lane<count&&lane+distance<count) short_run_add(position,far_in,far_color);
-    short_run_front(first,direction,distance,count,far_flux,pigment,true);
+    float far_heat=subgroupShuffleDown(heat_density,min(distance,team-1u));
+    if(lane<count&&lane+distance<count) short_run_add(position,far_in,far_color,far_heat);
+    short_run_front(first,direction,distance,count,far_flux,pigment,heat_density,true);
     short_run_publish();
     return count;
 }
