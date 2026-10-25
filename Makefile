@@ -1740,3 +1740,7 @@ build/reactive_chunk_gpu_tests: tests/vulkan/reactive_chunk_gpu_tests.c tests/vu
 test: build/reactive_arena_gpu_tests build/reactive_address_gpu_tests build/reactive_chunk_gpu_tests build/reactive_chunk_tests build/reactive_stream_tests
 build/reactive_stream_view_display_tests: tests/app/reactive_stream_view_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level.c $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
+build/reactive_checkpoint_display_tests: tests/vulkan/reactive_checkpoint_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/reactive_archive_tests: tests/fire/reactive_archive_tests.c src/fire/reactive_archive.c src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_archive.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/reactive_archive.c src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) -o $@ -lm
