@@ -4,7 +4,7 @@
 #include <string.h>
 #include "dungeoncraft/gas_layout.h"
 #include "gas_acoustic_gpu.h"
-enum { GAS_PRESSURE_SWEEPS=32, GAS_PRESSURE_GROUP=1 };
+enum { GAS_PRESSURE_SWEEPS=64, GAS_PRESSURE_GROUP=1 };
 static bool error(char *err,uint32_t cap,const char *message) {if(err&&cap) snprintf(err,cap,"%s",message);return false;}
 void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->advect);fr_renderer_compute_destroy(g,&t->initialize);
