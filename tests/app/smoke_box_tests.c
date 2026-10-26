@@ -79,8 +79,34 @@ static void test_native_saved_smoke_box_restores_stock_and_valves_without_refill
     ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err))&&dc_level_view_destroy(view,err,sizeof(err)));
     free(saved);free(restored);free(coords);PASS();
 }
+static uint64_t smoke_file_hash(const char *path) {
+    FILE *file=fopen(path,"rb");if(!file) return 0;
+    uint64_t hash=UINT64_C(14695981039346656037);uint8_t bytes[4096];size_t count;
+    while((count=fread(bytes,1,sizeof(bytes),file))!=0u) hash=dc_color_hash(hash,bytes,count);
+    bool okay=!ferror(file)&&fclose(file)==0;return okay?hash:0;
+}
+static void test_native_incomplete_smoke_admission_fails_without_overwriting_saved_world(void) {
+    char err[256]={0},directory[]="build/smoke_box_missing_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view=dc_level_view_create_smoke_box(directory,314,err,sizeof(err));ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));
+    dc_streamer_t *stream=dc_stream_create(directory,314,4);ASSERT_TRUE(stream);
+    ASSERT_TRUE(dc_stream_request_load(stream,(dc_chunk_coord_t){1,0},1));dc_stream_result_t result={0};
+    uint64_t deadline=SDL_GetTicks64()+10000u;
+    while(!dc_stream_poll(stream,&result)&&SDL_GetTicks64()<deadline) SDL_Delay(1);
+    ASSERT_EQ(result.kind,DC_STREAM_LOADED);ASSERT_TRUE(result.chunk&&result.gas);
+    ASSERT_TRUE(dc_stream_request_save_thermal(stream,result.chunk,result.colors,result.reactive,result.water_excess,2));
+    dc_stream_result_release(&result);deadline=SDL_GetTicks64()+10000u;
+    while(!dc_stream_poll(stream,&result)&&SDL_GetTicks64()<deadline) SDL_Delay(1);
+    ASSERT_EQ(result.kind,DC_STREAM_SAVED);dc_stream_result_release(&result);dc_stream_destroy(stream);
+    char chunk_path[512],body_path[512];snprintf(chunk_path,sizeof(chunk_path),"%s/chunk_%016llx_%016llx.bin",directory,1ull,0ull);
+    snprintf(body_path,sizeof(body_path),"%s/rigid_bodies.bin",directory);
+    uint64_t chunk_hash=smoke_file_hash(chunk_path),body_hash=smoke_file_hash(body_path);ASSERT_TRUE(chunk_hash&&body_hash);
+    view=dc_level_view_create_smoke_box(directory,314,err,sizeof(err));ASSERT_TRUE(!view);
+    ASSERT_EQ(smoke_file_hash(chunk_path),chunk_hash);ASSERT_EQ(smoke_file_hash(body_path),body_hash);PASS();
+}
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);RUN(test_native_placement_box_has_finite_sources_real_controls_rising_smoke_and_stable_pause);
     RUN(test_native_saved_smoke_box_restores_stock_and_valves_without_refilling);
+    RUN(test_native_incomplete_smoke_admission_fails_without_overwriting_saved_world);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
