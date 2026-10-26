@@ -427,6 +427,7 @@ int main(void) {
     RUN(test_native_device_work_memory_preserves_state_initialization_and_stock);
     RUN(test_native_device_state_memory_preserves_checkpoint_initialization_owners_and_clock);
     RUN(test_native_local_geometry_repairs_keep_quiet_owners_and_avoid_full_cache_rebuilds);
+    RUN(test_native_fused_geometry_keeps_edited_stock_and_removes_completion_wait);
 #endif
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
     RUN(test_native_colored_transport_matches_reference_and_retains_closed_budgets);
