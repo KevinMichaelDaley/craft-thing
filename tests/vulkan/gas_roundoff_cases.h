@@ -17,11 +17,12 @@ static void test_native_massless_underflow_energy_reconciles_without_erasing_tin
     fr_gas_state_t trace=reference_air(m,.0012,300,0);
     for(uint32_t i=0;i<5u;i++) packets[2][i]=(float)trace.species[i];
     packets[2][2]=1e-39f;packets[2][5]=(float)trace.energy;packets[2][8]=9e-40f;
-    packets[3][5]=1e-6f;
+    packets[3][5]=1e-3f;
     fr_gas_state_t air=reference_air(m,.0012,300,2);
     for(uint32_t i=0;i<5u;i++) packets[4][i]=(float)air.species[i];
     packets[4][5]=(float)air.energy;packets[4][6]=(float)air.momentum[0];
-    packets[5][5]=64.f*FLT_MIN;packets[6][5]=32.f*FLT_MIN;packets[7][5]=1e-37f;packets[7][11]=-1e-37f;
+    float envelope=.0012f*300.f*(float)fmax(m.heat_capacity_cv[0],m.heat_capacity_cv[1])*(8.f*FLT_EPSILON);
+    packets[5][5]=2.f*envelope;packets[6][5]=.5f*envelope;packets[7][5]=1e-37f;packets[7][11]=-1e-37f;
     float *parameters=model.mapped;
     for(uint32_t i=0;i<5u;i++) {parameters[i]=(float)m.gas_constant[i];parameters[5u+i]=(float)m.heat_capacity_cv[i];}
     parameters[10]=(float)m.kinetic_scale;parameters[11]=.0012f;parameters[12]=300.f;parameters[16]=3.f;
