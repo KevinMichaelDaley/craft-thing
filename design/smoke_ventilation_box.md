@@ -8,6 +8,11 @@ component list, per-flame light scan or global gas/fire quota is introduced.
 
 ## Displayed bounded-work checkpoint, 2026-10-26
 
+Run `tools/run_smoke_box --world-dir build/my_smoke_box` for the measured bounded
+profile; `tools/bench_smoke_box 1000` uses the same profile automatically. Explicit
+`DC_GAS_*` overrides remain available for diagnostics. The raw binary's legacy
+diagnostic policy remains separately selectable.
+
 The original delayed stall came from activity expansion feeding strict pressure
 retries and elapsed-time catch-up: a diagnostic frame reached723ms with50
 submissions. The practical policy accepts one bounded candidate for the full

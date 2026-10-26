@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source tools/smoke_profile
 frames=${1:-1000}
 if [[ ! $frames =~ ^[0-9]+$ ]] || ((frames<1000||frames>100000)); then
     echo 'Expected 1000..100000 complete displayed frames per run' >&2
