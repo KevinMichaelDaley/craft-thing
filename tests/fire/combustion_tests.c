@@ -93,6 +93,16 @@ static void test_fractional_reaction_survives_checkpoint_and_split(void) {
     ASSERT_TRUE(fr_reactive_state_split(&next,32768,49,50,&left,&right,err,sizeof(err)));
     ASSERT_TRUE(fabsf(left.reaction_fraction+right.reaction_fraction-next.reaction_fraction)<1e-7f);PASS();
 }
+static void test_retained_char_remains_finite_combustible_fuel(void) {
+    char err[256]={0};fr_reactive_state_t s,out;fr_combustion_products_t p;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_CHAR,65536,0,900,53,&s,err,sizeof(err)));
+    s.flags|=FR_REACTIVE_FLAMING;
+    ASSERT_TRUE(fr_combustion_reference(&s,65536,.23f,1,.1f,&out,&p,err,sizeof(err)));
+    ASSERT_TRUE(out.char_mass_fp<s.char_mass_fp&&p.ash_fp>0);
+    ASSERT_EQ(s.char_mass_fp-out.char_mass_fp,p.fuel_fp);
+    ASSERT_EQ((uint64_t)p.fuel_fp+p.oxygen_fp,(uint64_t)p.ash_fp+p.soot_fp+p.exhaust_fp);
+    ASSERT_TRUE(fr_reactive_state_valid(&out,err,sizeof(err)));PASS();
+}
 int main(void) {
     RUN(test_finite_oxygen_and_products);
     RUN(test_starved_wet_and_buried_do_not_burn);
@@ -101,5 +111,6 @@ int main(void) {
     RUN(test_competing_parcels_cannot_overdraw_oxygen);
     RUN(test_short_frames_retain_fractional_burn_progress);
     RUN(test_fractional_reaction_survives_checkpoint_and_split);
+    RUN(test_retained_char_remains_finite_combustible_fuel);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
