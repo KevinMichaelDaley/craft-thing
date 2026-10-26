@@ -23,5 +23,6 @@ struct dc_level_view {
     uint64_t from_generation,to_generation;
     bool destination_bound,smoke_box;
     uint32_t smoke_closed;
+    bool gas_admitted[DC_GPU_CHUNK_SLOTS];
 };
 #endif

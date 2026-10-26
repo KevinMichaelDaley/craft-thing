@@ -212,6 +212,7 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
             if(result.gas&&!fr_gas_gpu_import_checkpoint(view->gpu,index,result.gas,err,cap)) {
                 dc_stream_result_release(&result);return false;
             }
+            view->gas_admitted[index]=result.gas!=NULL;
             if(!dc_chunk_table_finish_load(&view->table,index,result.generation)) {
                 dc_stream_result_release(&result);return error(err,cap,"Cannot finish loaded chunk publication");
             }

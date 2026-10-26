@@ -11,7 +11,10 @@ dc_level_view_t *dc_level_view_create_smoke_box(const char *directory,uint64_t s
     dc_ground_profile_t ground={.width=1,.soil_depth=1,.surface=&surface};
     dc_level_view_t *view=dc_level_view_create_ground(directory,seed,&ground,err,cap);
     if(view&&dc_level_view_setup_smoke_box(view,err,cap)) return view;
-    if(view) {char cleanup[256];dc_level_view_destroy(view,cleanup,sizeof(cleanup));}
+    if(view) {
+        dc_stream_destroy(view->stream);dc_gpu_destroy(view->gpu);
+        dc_chunk_table_destroy(&view->table);free(view);
+    }
     return NULL;
 }
 static bool valve(dc_level_view_t *view,uint32_t index,bool closed,char *err,uint32_t cap) {
@@ -49,8 +52,10 @@ bool dc_level_view_setup_smoke_box(dc_level_view_t *view,char *err,uint32_t cap)
     if(view->restored) {
         if(!configure_gas(view,err,cap)) return false;
         view->smoke_box=true;
-        return dc_level_view_set_spring_enabled(view,false)&&dc_level_view_wait_visible(view,120000,err,cap)&&
-            dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO)&&restore_valve_state(view,err,cap);
+        if(!dc_level_view_set_spring_enabled(view,false)||!dc_level_view_wait_visible(view,120000,err,cap)) return false;
+        for(uint32_t i=0;i<view->table.capacity;i++) if(!view->gas_admitted[i])
+            return error(err,cap,"Saved smoke scene is missing an authoritative gas chunk");
+        return dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO)&&restore_valve_state(view,err,cap);
     }
     if(view->origin.x!=0||view->origin.y!=INITIAL_CHUNK_Y) return error(err,cap,"Fresh smoke box requires the initial world origin");
     if(!dc_level_view_set_spring_enabled(view,false)||!dc_level_view_wait_visible(view,120000,err,cap)) return false;
@@ -63,7 +68,10 @@ bool dc_level_view_setup_smoke_box(dc_level_view_t *view,char *err,uint32_t cap)
         fr_renderer_upload_chunk_colors(view->gpu,i,chunks[i].colors,err,cap)&&dc_chunk_table_mark_dirty(&view->table,i);
     if(okay) okay=dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO)&&dc_gpu_render_chunks(view->gpu,err,cap)&&
         configure_gas(view,err,cap);
-    for(uint32_t i=0;okay&&i<count;i++) okay=fr_gas_gpu_seed_chunk(view->gpu,i,chunks[i].gas,chunks[i].void_fractions,4096,err,cap);
+    for(uint32_t i=0;okay&&i<count;i++) {
+        okay=fr_gas_gpu_seed_chunk(view->gpu,i,chunks[i].gas,chunks[i].void_fractions,4096,err,cap);
+        view->gas_admitted[i]=okay;
+    }
     dc_smoke_box_release(chunks,count);free(chunks);
     for(uint32_t i=0;okay&&i<3;i++) okay=valve(view,i,true,err,cap);
     if(okay) view->smoke_box=true;
