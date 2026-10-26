@@ -59,10 +59,11 @@ Gas gas_add_flux(Gas s,GasFlux flux,float dt) {
     result.dynamics.zw+=flux.dynamics.zw*dt;
     result.visual.rgb+=flux.pigment*dt;
 #ifdef FR_GAS_FORCE_IMPLICIT
-    if(gas_practical_policy()&&(params.bank&FR_GAS_SCALAR_ENERGY_BIT)!=0u) {
+    if(gas_practical_policy()&&(params.bank&FR_GAS_PAIRED_ENERGY_BIT)!=0u) {
         if(flux.dynamics.y!=0.) {
-            result.dynamics.y=gas_energy(s)+flux.dynamics.y*dt;
-            result.visual.w=0.;result.geometry.z=0.;
+            vec2 head=gas_two_sum(s.dynamics.y,flux.dynamics.y*dt);
+            vec2 total=gas_two_sum(head.x,(s.visual.w+s.geometry.z)+head.y);
+            result.dynamics.y=total.x;result.visual.w=total.y;result.geometry.z=0.;
         }
         return result;
     }

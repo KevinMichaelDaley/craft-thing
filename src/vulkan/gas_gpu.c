@@ -14,7 +14,7 @@ bool fr_gas_gpu_reused_line_rate(dc_gpu_t *g,bool *used) {
     if(!g||!g->gas||!used) return false;
     *used=(((uint32_t *)g->gas->stats.mapped)[15]&4u)!=0u;return true;
 }
-bool fr_gas_gpu_scalar_energy(dc_gpu_t *g,bool *used) {
+bool fr_gas_gpu_paired_energy(dc_gpu_t *g,bool *used) {
     if(!g||!g->gas||!used) return false;
     *used=(((uint32_t *)g->gas->stats.mapped)[15]&256u)!=0u;return true;
 }

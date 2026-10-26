@@ -11,7 +11,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     bool device_work=strcmp(setting,"DC_GAS_DEVICE_WORK")==0;
     bool device_state=strcmp(setting,"DC_GAS_DEVICE_STATE")==0;
     bool reuse_rate=strcmp(setting,"DC_GAS_REUSE_LINE_RATE")==0;
-    bool scalar_energy=strcmp(setting,"DC_GAS_SCALAR_ENERGY")==0;
+    bool scalar_energy=strcmp(setting,"DC_GAS_PAIRED_ENERGY")==0;
     bool all_slots=direct_first||quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state||reuse_rate||scalar_energy;uint32_t field_count=all_slots?12288u:4096u;
     for(uint32_t k=0;k<4;k++) {const char *value=getenv(names[k]);saved[k]=value?SDL_strdup(value):NULL;}
     ASSERT_EQ(SDL_setenv(names[0],"1",1),0);
@@ -57,7 +57,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
             g_previous_compute_pipeline=VK_NULL_HANDLE;g_repeated_compute_bindings=0;
             ASSERT_TRUE(fr_gas_gpu_step(g,metadata?.04f:.02f,err,sizeof(err)));
             if(reuse_rate&&step==0u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_reused_line_rate(g,&used));ASSERT_EQ(used,path!=0u);}
-            if(scalar_energy&&step==0u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_scalar_energy(g,&used));ASSERT_EQ(used,path!=0u);}
+            if(scalar_energy&&step==0u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_paired_energy(g,&used));ASSERT_EQ(used,path!=0u);}
             if(cached_neighbors&&step==0u) ASSERT_TRUE(fr_gas_gpu_activity_metadata(g,activity_modes+path));
             if(zero_energy&&step==0u) ASSERT_TRUE(fr_gas_gpu_zero_energy_metadata(g,zero_energy_used+path));
         }
@@ -214,8 +214,8 @@ static void test_native_large_hybrid_workgroups_preserve_state_and_clock(void) {
 static void test_native_zero_energy_transfers_preserve_state_stock_and_clock(void) {
     check_native_gas_dispatch_fusion("DC_GAS_ZERO_ENERGY",false,UINT32_MAX);
 }
-static void test_native_scalar_practical_energy_preserves_stock_flow_owners_and_clock(void) {
-    check_native_gas_dispatch_fusion("DC_GAS_SCALAR_ENERGY",true,UINT32_MAX);
+static void test_native_paired_practical_energy_preserves_stock_flow_owners_and_clock(void) {
+    check_native_gas_dispatch_fusion("DC_GAS_PAIRED_ENERGY",true,UINT32_MAX);
 }
 static void test_native_reused_line_rate_preserves_stiff_packet_and_owners(void) {
     char err[256]={0};const char *names[]={"DC_GAS_HYBRID_LINES","DC_GAS_FUSED_HYBRID"};char *saved[2];
