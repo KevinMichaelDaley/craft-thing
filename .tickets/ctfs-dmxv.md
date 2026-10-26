@@ -259,3 +259,7 @@ Tiled explicit transport RED d1a175c implemented and tested on actual Wayland: r
 **2026-10-26T17:25:24Z**
 
 Rejected shorter multigrid fine smoothing without weakening quality gates.4/4 omega1 failed reference flow;8/8 omega1.5 passed flow/checkerboard but sealed-neighbor density deviation.02523 exceeded.01;8/12 omega1.5 worsened neighbor.19188;8/12 original1.8 grew checkerboard variance7.61e-6 vs5.90e-7initial. Default12/12 control wall deviation.000638 passes. Experiment history preserved then reverted. Next remove duplicate line-rate work while retaining accepted numerics.
+
+**2026-10-26T17:33:59Z**
+
+Actual Wayland core+synchronization validation3/3 passes: valve-only opening releases previously trapped gas; route-only refresh preserves restored partial physical void and clock; optional duplicate-rate scan elimination preserves eight-step stiff snapshots and dormant owners byte-for-byte. Gate fix uses a separate route-dirty flag, without forcing material-volume resampling on valve-only edits. Native GREEN pushed checkpoint. Complete-frame performance still RED: optional reuse carved1000 34.785/37.370ms; cached-neighbor trial35.107/37.681ms. Neither promoted into selected launcher; no numerical/resolution/clock concessions.
