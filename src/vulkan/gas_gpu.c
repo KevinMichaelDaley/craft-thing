@@ -31,6 +31,11 @@ bool fr_gas_gpu_pressure_tiles(const dc_gpu_t *g,uint32_t *tiles) {
     if(!g||!g->gas||!g->gas->acoustic.ready||!tiles) return false;
     *tiles=((const uint32_t *)g->gas->acoustic.indirect.mapped)[0];return true;
 }
+bool fr_gas_gpu_source_tile_awake(const dc_gpu_t *g,uint32_t x,uint32_t y,bool *awake) {
+    if(!g||!g->gas||!g->gas->acoustic.ready||!awake||x>=g->width||y>=g->height) return false;
+    uint32_t tile=(y/8u)*((g->width+7u)/8u)+x/8u;
+    *awake=((const uint32_t *)g->gas->acoustic.fields[9].mapped)[tile]!=0u;return true;
+}
 bool fr_gas_gpu_rate_metadata(const dc_gpu_t *g,float rates[3],uint32_t *width) {
     if(!g||!g->gas||!rates||!width) return false;
     const uint32_t *words=g->gas->stats.mapped;

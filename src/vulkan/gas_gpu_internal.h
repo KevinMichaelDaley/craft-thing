@@ -11,6 +11,8 @@ bool fr_gas_submit(dc_gpu_t *gpu);
 bool fr_gas_gpu_pressure_tiles(const dc_gpu_t *gpu,uint32_t *tiles);
 /** Read completed CFL scalars and reduction width; cold diagnostics only. */
 bool fr_gas_gpu_rate_metadata(const dc_gpu_t *gpu,float rates[3],uint32_t *width);
+/** Read one completed source activity flag for cold tests; never runtime scheduling. */
+bool fr_gas_gpu_source_tile_awake(const dc_gpu_t *gpu,uint32_t x,uint32_t y,bool *awake);
 /** Composite read-only gas pigment; presentation never advances gas. */
 void fr_gas_record_overlay(dc_gpu_t *gpu);
 #endif
