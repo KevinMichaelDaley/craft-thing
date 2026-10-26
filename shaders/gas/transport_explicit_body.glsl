@@ -1,4 +1,5 @@
 #define FR_GAS_COMPACT_WORK 1
+#define FR_GAS_FORCE_PRACTICAL 1
 #include "transport_implicit.glsl"
 #include "transport_apply_body.glsl"
 #ifndef FR_GAS_REUSE_LINE_SHARED
