@@ -94,6 +94,7 @@ struct dc_gpu {
     VkSemaphore acquire_sem;
     VkSemaphore *present_sems;
     VkFence render_fence;
+    VkFence tick_fence;
     VkBuffer chunk_buffer;
     VkBuffer chunk_staging_buffer;
     VkDeviceMemory chunk_memory;

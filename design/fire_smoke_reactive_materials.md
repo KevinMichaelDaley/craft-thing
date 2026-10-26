@@ -48,6 +48,10 @@ ranges fall back per row to the original storage. The sixteen-byte rows occupy
 unused transport scratch and require one GPU packing pass. This is approximate,
 so stock/flow/stability checks replace byte identity for this option; exact
 storage and exact-reference modes remain available.
+Standalone physics ticks use their own Vulkan completion fence. They wait for
+all recorded physics work before gas/capture handoff, without draining unrelated
+presentation-queue operations. Stepping and capture retain the same kernel
+schedule and elapsed-clock accounting.
 
 ## Modular delivery sequence
 

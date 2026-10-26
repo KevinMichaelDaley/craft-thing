@@ -45,6 +45,9 @@ bool dc_gpu_tick_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         .queryType = VK_QUERY_TYPE_TIMESTAMP, .queryCount = 34 };
     if (vkCreateQueryPool(gpu->device, &query_info, NULL, &gpu->timestamp_pool) != VK_SUCCESS)
         return error(err, cap, "Cannot create GPU timestamp pool");
+    VkFenceCreateInfo fence_info={.sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+    if(vkCreateFence(gpu->device,&fence_info,NULL,&gpu->tick_fence)!=VK_SUCCESS)
+        return error(err,cap,"Cannot create GPU tick completion fence");
     return make_probe_pipeline(gpu, err, cap) &&
            dc_gpu_fluid_pipeline_init(gpu, err, cap) &&
            dc_gpu_marker_pipeline_init(gpu, err, cap) &&
@@ -52,6 +55,7 @@ bool dc_gpu_tick_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
 }
 
 void dc_gpu_tick_destroy(dc_gpu_t *gpu) {
+    if(gpu->tick_fence) vkDestroyFence(gpu->device,gpu->tick_fence,NULL);
     if (gpu->probe_pipeline) vkDestroyPipeline(gpu->device, gpu->probe_pipeline, NULL);
     dc_gpu_mpm_pipeline_destroy(gpu);
     if (gpu->timestamp_pool) vkDestroyQueryPool(gpu->device, gpu->timestamp_pool, NULL);
@@ -158,8 +162,9 @@ static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
         return error(err, cap, "Cannot end tick command buffer");
     VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .commandBufferCount = 1, .pCommandBuffers = &gpu->command };
-    if (vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
-        vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
+    if (vkResetFences(gpu->device,1,&gpu->tick_fence)!=VK_SUCCESS||
+        vkQueueSubmit(gpu->queue, 1, &submit, gpu->tick_fence) != VK_SUCCESS ||
+        vkWaitForFences(gpu->device,1,&gpu->tick_fence,VK_TRUE,UINT64_MAX) != VK_SUCCESS)
         return error(err, cap, "GPU tick submission failed");
     if (!capture) return true;
     uint64_t timestamps[4] = {0};

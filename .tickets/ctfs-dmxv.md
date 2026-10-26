@@ -155,3 +155,7 @@ Experimental partial coarse topology/short smoothing WIP: fixed4-node GPU connec
 **2026-10-26T01:28:18Z**
 
 Short-solve relaxation1.7 failed flow RMS4.38;1.6 passed flow(.277RMS) but still failed sealed-neighbor/long-run stability. Viscous stabilization passed approximate flow but failed same stability gates and all viscosity code was discarded. Retain validated24-fine-sweep backend; partial-topology/short solve remains explicit WIP, not enabled. Next compress only derived pressure rows with original iteration schedule, preserving original physical gas state precision and capacity.
+
+**2026-10-26T01:59:05Z**
+
+Compressed rows27a342e: actual native39/39 and core+sync1/1 clean; audited1000 actual display29.171mean38.003worst, invalid0 and small stock/work drift. Mean now below30, strict worst RED. Tick-fence REDb38a3e1 confirmed queue-wide wait1 per standalone tick; dedicated-fence implementation native tick/capture1/1 passes queue-idle0 and exact+2 physical intervals. Full repo regression162groups764passes plus exactly2known ctr-ojvy authored-stage failures; all Python including new6-case trace suite pass. Quarter-native display rebuild/test in progress before new timing.
