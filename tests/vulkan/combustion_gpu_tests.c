@@ -50,7 +50,20 @@ static void terrain_combustion(bool practical,bool char_stage) {
     for(uint32_t step=0;step<20;step++) ASSERT_TRUE(fr_combustion_gpu_step(g,.001f,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&result,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(result.state.fuel_mass_fp+result.state.char_mass_fp<fuel_before_short_steps&&result.state.char_mass_fp>0);
+    if(char_stage) {
+        result.state.thermal_energy=(float)(fr_reactive_state_heat_capacity(&result.state)*350.);
+        result.state.thermal_energy_residual=result.state.thermal_energy_correction=0;
+        ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,at,&result.state,err,sizeof(err))&&fr_combustion_gpu_step(g,.001f,err,sizeof(err)));
+        ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&result,&found,err,sizeof(err))&&found);
+        ASSERT_TRUE(fr_thermal_gpu_overlay(g,0));
+    }
     ASSERT_TRUE(present(g,err,sizeof(err)));
+    if(char_stage) {
+        uint32_t *pixels=malloc(480u*270u*4u);ASSERT_TRUE(pixels);
+        ASSERT_TRUE(dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
+        uint32_t color=pixels[20u*480u+20u];free(pixels);
+        ASSERT_TRUE((color&255u)+((color>>8)&255u)+((color>>16)&255u)<100u);
+    }
     fr_reactive_record_t paused;ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&paused,&found,err,sizeof(err))&&found);
     ASSERT_EQ(memcmp(&result,&paused,sizeof(result)),0);
     free(before);free(after);free(chunk);dc_gpu_destroy(g);PASS();
