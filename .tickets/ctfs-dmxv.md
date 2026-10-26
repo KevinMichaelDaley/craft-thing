@@ -303,3 +303,7 @@ Post-remap complete regression finished: actual native65/65, placement5/5; full 
 **2026-10-26T19:59:08Z**
 
 Practical weak-pressure floor opt-in GREEN e11cdab: actual native66/66 plus core/sync1/1; carved1000 finite stock/pause passes27.915mean46.373worst, strict worst stillRED. Marker confirms25vs90solve tiles in weak perturbation, densityL1=0. No profile promotion. Next bounded8/8 smoother trial uses omega1.5 and explicitly practical sealed-neighbor density allowance3percent (no species leakage, no stock/clock relaxation), consistent with user-authorized approximate numerics; exact diagnostic profile retains1percent. Existing checkerboard/reference-flow/finite/inventory gates remain.
+
+**2026-10-26T20:10:55Z**
+
+Subsequent trials rejected/restored: eight-sweep omega1.5 solver62/66native with reference/stability failures; local-stage transport exact native/core but28.917/41.402ms no gain;3e-2pressure floor66/66 but28.917/44.612 no gain; four explicit stages67-case suite66/67 due long-interval pressure12.2xambient (gate10x), still failed with extended stages limitedto<=.05seconds. No gates weakened; stable12/12SOR,threeexplicitstages and1e-2optional floor retained. All measured runs meaningful stock/clock/pause retained. Module remainsperformanceRED; continuing current-stage time-series profiling.
