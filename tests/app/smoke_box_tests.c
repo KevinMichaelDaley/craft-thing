@@ -39,6 +39,8 @@ static void test_native_placement_box_has_finite_sources_real_controls_rising_sm
     for(uint32_t i=0;i<30;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_clock(view->gpu,&after));ASSERT_EQ(after.physical_steps,30u);ASSERT_TRUE(fabs(after.advanced_seconds-.5)<1e-7);
     ASSERT_TRUE(smoke_budget(view,moved,&moved_energy,moved_pigment,&moved_work,&moved_height,err,sizeof(err)));
+    for(uint32_t k=0;k<5;k++) printf("Enclosure species%u stock%.12g drift%.12g relative%.12g\n",k,stock[k],moved[k]-stock[k],stock[k]>0?(moved[k]-stock[k])/stock[k]:0.);
+    printf("Enclosure energy%.12g ledger drift%.12g relative%.12g\n",energy,(moved_energy-energy)-(moved_work-work),((moved_energy-energy)-(moved_work-work))/energy);
     for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(moved[k]-stock[k])<2e-5);
     for(uint32_t k=0;k<3;k++) ASSERT_TRUE(fabs(moved_pigment[k]-pigment[k])<2e-5);
     ASSERT_TRUE(fabs((moved_energy-energy)-(moved_work-work))<.02);
