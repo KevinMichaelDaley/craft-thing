@@ -36,6 +36,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->practical_hybrid);
     for(uint32_t i=0;i<2;i++) fr_renderer_compute_destroy(g,&t->practical_hybrid_axis[i]);
     fr_renderer_compute_destroy(g,&t->temporal_sor);
+    fr_renderer_compute_destroy(g,&t->fine_jacobi);
     fr_renderer_compute_destroy(g,&t->coarse_group);
     fr_renderer_compute_destroy(g,&t->rhs_fused);
     fr_renderer_compute_destroy(g,&t->metadata_lean);fr_renderer_compute_destroy(g,&t->rhs_lean);
@@ -133,6 +134,8 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     }
     if(properties.limits.maxComputeWorkGroupInvocations>=128u&&properties.limits.maxComputeWorkGroupSize[0]>=128u&&
        !fr_renderer_compute_init(g,&t->temporal_sor,buffers,25,16,"build/shaders/gas_pressure_temporal.comp.spv",err,cap)) goto fail;
+    if(properties.limits.maxComputeWorkGroupInvocations>=256u&&properties.limits.maxComputeWorkGroupSize[0]>=256u&&
+       !fr_renderer_compute_init(g,&t->fine_jacobi,buffers,25,16,"build/shaders/gas_pressure_jacobi_temporal.comp.spv",err,cap)) goto fail;
     if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_COARSE_GROUP_CAPACITY*4u&&
        properties.limits.maxComputeWorkGroupInvocations>=128u&&properties.limits.maxComputeWorkGroupSize[0]>=128u) {
         const char *path=use_wide?"build/shaders/gas_pressure_coarse_group_wide.comp.spv":"build/shaders/gas_pressure_coarse_group.comp.spv";
@@ -236,6 +239,13 @@ static void multigrid_dispatch(dc_gpu_t *g,const fr_renderer_compute_t *pipeline
 }
 static void multigrid_smooth(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank,uint32_t level,bool post) {
     bool boundary=(bank&FR_GAS_MG_BOUNDARY_BIT)!=0u;
+    if(level==0u&&(bank&FR_GAS_MG_JACOBI_BIT)!=0u) {
+        VkBufferCopy copy={.size=(VkDeviceSize)g->width*g->height*4u};barrier(g);
+        vkCmdCopyBuffer(g->command,t->fields[4].buffer,t->transport_work.buffer,1,&copy);
+        for(uint32_t pair=0u;pair<4u;pair++) indirect_dispatch(g,t,&t->fine_jacobi,dt,
+            bank|((pair&1u)!=0u?FR_GAS_TEMPORAL_SOURCE_BIT:0u),0);
+        return;
+    }
     if(level==0u) {pressure_sweeps(g,t,dt,bank,boundary?(post?12u:6u):12u);return;}
     uint32_t coarse_sweeps=boundary&&level==2u&&!post?2u:4u;
     const char *setting=getenv("DC_GAS_MG_TEMPORAL");
@@ -299,6 +309,9 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(multigrid_enabled(g,t,dt,bank)) bank|=FR_GAS_MULTIGRID_BIT;
     const char *boundary_setting=getenv("DC_GAS_MG_BOUNDARY");
     if((bank&FR_GAS_MULTIGRID_BIT)!=0u&&boundary_setting&&strcmp(boundary_setting,"0")!=0) bank|=FR_GAS_MG_BOUNDARY_BIT;
+    const char *jacobi_setting=getenv("DC_GAS_MG_JACOBI");
+    if((bank&FR_GAS_MULTIGRID_BIT)!=0u&&(bank&FR_GAS_MG_BOUNDARY_BIT)==0u&&t->fine_jacobi.pipeline&&
+       jacobi_setting&&strcmp(jacobi_setting,"0")!=0) bank|=FR_GAS_MG_JACOBI_BIT;
     const char *metadata_setting=getenv("DC_GAS_FUSED_METADATA");
     if(t->large_transport&&t->practical&&metadata_setting&&strcmp(metadata_setting,"0")!=0&&
        (bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) bank|=FR_GAS_FUSED_METADATA_BIT;
