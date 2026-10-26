@@ -236,10 +236,7 @@ static void multigrid_dispatch(dc_gpu_t *g,const fr_renderer_compute_t *pipeline
 }
 static void multigrid_smooth(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank,uint32_t level,bool post) {
     bool boundary=(bank&FR_GAS_MG_BOUNDARY_BIT)!=0u;
-    if(level==0u) {
-        uint32_t sweeps=(bank&FR_GAS_PRESSURE_NOISE_BIT)!=0u?8u:(boundary?(post?12u:6u):12u);
-        pressure_sweeps(g,t,dt,bank,sweeps);return;
-    }
+    if(level==0u) {pressure_sweeps(g,t,dt,bank,boundary?(post?12u:6u):12u);return;}
     uint32_t coarse_sweeps=boundary&&level==2u&&!post?2u:4u;
     const char *setting=getenv("DC_GAS_MG_TEMPORAL");
     if(coarse_sweeps==4u&&setting&&strcmp(setting,"0")!=0) {
