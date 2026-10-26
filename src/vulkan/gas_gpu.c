@@ -323,10 +323,27 @@ bool fr_gas_gpu_clock(const dc_gpu_t *g,fr_gas_gpu_clock_t *out) {
     *out=g->gas->clock;return true;
 }
 bool fr_gas_gpu_export_checkpoint(dc_gpu_t *g,uint32_t slot,fr_gas_checkpoint_chunk_t *out,char *err,uint32_t cap) {
-    (void)g;(void)slot;(void)out;return error(err,cap,"Checkpoint export not implemented");
+    if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!out) return error(err,cap,"Invalid cold gas checkpoint export");
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas checkpoint export");
+    struct fr_gas_gpu *t=g->gas;
+    memcpy(out->cells,(gas_packet_t *)t->state[t->direct_publish?1u:0u].mapped+(size_t)slot*4096u,sizeof(out->cells));
+    memcpy(out->gates,(uint32_t *)t->gates.mapped+(size_t)slot*4096u,sizeof(out->gates));return true;
 }
 bool fr_gas_gpu_import_checkpoint(dc_gpu_t *g,uint32_t slot,const fr_gas_checkpoint_chunk_t *input,char *err,uint32_t cap) {
-    (void)g;(void)slot;(void)input;return error(err,cap,"Checkpoint import not implemented");
+    if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!input) return error(err,cap,"Invalid cold gas checkpoint import");
+    struct fr_gas_gpu *t=g->gas;
+    for(uint32_t i=0;i<4096u;i++) {
+        const float *p=input->cells[i];
+        for(uint32_t word=0;word<16u;word++) if(!isfinite(p[word])) return error(err,cap,"Nonfinite gas checkpoint");
+        if(p[12]<0.f||p[12]>1.f||p[13]<0.f||p[13]>1.f||(input->gates[i]&~3u)!=0u)
+            return error(err,cap,"Invalid gas checkpoint geometry or face valves");
+        gas_packet_t packet;memcpy(packet.words,p,sizeof(packet));fr_gas_state_t state=unpack(&packet);fr_gas_thermo_t thermo;
+        if(!fr_gas_thermodynamics(&t->model,&state,p[12],&thermo,err,cap)) return false;
+    }
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas checkpoint import");
+    memcpy((gas_packet_t *)t->state[t->direct_publish?1u:0u].mapped+(size_t)slot*4096u,input->cells,sizeof(input->cells));
+    memcpy((uint32_t *)t->gates.mapped+(size_t)slot*4096u,input->gates,sizeof(input->gates));
+    fr_gas_gpu_invalidate_cache(g);t->large_step_hint=0;return true;
 }
 bool fr_gas_gpu_audit(dc_gpu_t *g,fr_gas_gpu_audit_t *out,char *err,uint32_t cap) {
     if(!g||!g->gas||!out) return error(err,cap,"Invalid cold gas audit");
