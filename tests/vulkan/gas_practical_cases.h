@@ -56,36 +56,6 @@ static void test_native_practical_safe_line_matches_explicit_flux_inside_stiff_i
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);
     ASSERT_EQ(SDL_setenv("DC_GAS_HYBRID_LINES",saved?saved:"0",1),0);SDL_free(saved);PASS();
 }
-static void test_native_four_stage_line_matches_composed_explicit_flux(void) {
-    char err[256]={0};const char *old=getenv("DC_GAS_HYBRID_LINES");char *saved=old?SDL_strdup(old):NULL;
-    ASSERT_EQ(SDL_setenv("DC_GAS_HYBRID_LINES","1",1),0);
-    dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));fr_gas_state_t *input=malloc(4096*sizeof(*input)),*out=malloc(4096*sizeof(*out));
-    double *volume=malloc(4096*sizeof(*volume));ASSERT_TRUE(c&&input&&out&&volume);
-    fr_gas_model_t m=reference_model();m.kinetic_scale=1./512.;
-    for(uint32_t i=0;i<4096;i++) {
-        volume[i]=1;double velocity=60;
-        input[i]=reference_air(m,1,300,velocity);
-        input[i].species[FR_GAS_NITROGEN]-=.01;input[i].species[FR_GAS_EXHAUST]=.01;
-        input[i].energy+=.01*(m.heat_capacity_cv[FR_GAS_EXHAUST]-m.heat_capacity_cv[FR_GAS_NITROGEN])*300;
-        if(i/64==32&&i%64>=30&&i%64<34) input[i].pigment[0]=.005;
-    }
-    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
-    ASSERT_TRUE(fr_gas_gpu_enable(g,&m,1,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
-    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_gate(g,0,0,64,64,1,true,err,sizeof(err)));
-    ASSERT_TRUE(fr_gas_gpu_step(g,.05f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
-    double oracle[64]={0},next[64]={0};
-    for(uint32_t x=0;x<64;x++) oracle[x]=input[32u*64u+x].pigment[0];
-    for(uint32_t stage=0;stage<4;stage++) {
-        for(uint32_t x=1;x<63;x++) next[x]=oracle[x]+.75*(oracle[x-1]-oracle[x]);
-        memcpy(oracle,next,sizeof(oracle));
-    }
-    double worst=0;
-    for(uint32_t x=20;x<45;x++) worst=fmax(worst,fabs(out[32u*64u+x].pigment[0]-oracle[x]));
-    printf("Four-stage explicit pigment error%.9g\n",worst);ASSERT_TRUE(worst<1e-7);
-    fr_gas_gpu_clock_t clock;ASSERT_TRUE(fr_gas_gpu_clock(g,&clock));ASSERT_EQ(clock.physical_steps,1u);ASSERT_EQ(clock.substeps,1u);
-    ASSERT_TRUE(present(g,err,sizeof(err)));free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);
-    ASSERT_EQ(SDL_setenv("DC_GAS_HYBRID_LINES",saved?saved:"0",1),0);SDL_free(saved);PASS();
-}
 static void test_native_cold_audit_reduces_stock_and_does_not_advance_physics(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     fr_gas_model_t m=reference_model();

@@ -41,8 +41,7 @@ void FR_GAS_EXPLICIT_ENTRY() {
     }
     float seconds=uintBitsToFloat(params.seconds);
     float courant=seconds*max(speed,FR_GAS_PRACTICAL_MIXING_RATE);
-    uint maximum_stages=seconds<=.05?FR_GAS_EXPLICIT_MAX_STAGES:3u;
-    if(!(courant<=.9*float(maximum_stages))) {if(rank==0u) atomicAdd(stats[FR_GAS_IMPLICIT_LINE_COUNT_WORD],1u);return;}
+    if(!(courant<=.9*float(FR_GAS_EXPLICIT_MAX_STAGES))) {if(rank==0u) atomicAdd(stats[FR_GAS_IMPLICIT_LINE_COUNT_WORD],1u);return;}
     uint stages=uint(ceil(courant/.9));
     stages=max(stages,1u);float peak=0.;
     for(uint cell=rank;cell<length;cell+=FR_GAS_LOCAL_SIZE) {
