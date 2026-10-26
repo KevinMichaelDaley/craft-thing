@@ -8,6 +8,7 @@
 #include "dungeoncraft/stream.h"
 #include "ferrum/assets/prop_gpu.h"
 #include "ferrum/fire/gpu.h"
+#include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "level.h"
 #include "level_internal.h"
@@ -208,6 +209,9 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
                 (result.water_excess&&!fr_thermal_gpu_import_water_chunk(view->gpu,index,result.chunk,result.water_excess,err,cap)))) {
                 dc_stream_result_release(&result);return false;
             }
+            if(result.gas&&!fr_gas_gpu_import_checkpoint(view->gpu,index,result.gas,err,cap)) {
+                dc_stream_result_release(&result);return false;
+            }
             if(!dc_chunk_table_finish_load(&view->table,index,result.generation)) {
                 dc_stream_result_release(&result);return error(err,cap,"Cannot finish loaded chunk publication");
             }
@@ -252,7 +256,15 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
             fr_reactive_chunk_release(&reactive);
             return error(err, cap, "Cannot begin dirty chunk save");
         }
-        bool queued=dc_stream_request_save_thermal(view->stream,&chunk,&colors,channel,liquid,generation);
+        fr_gas_checkpoint_chunk_t *gas=NULL;
+        if(view->smoke_box) {
+            gas=malloc(sizeof(*gas));
+            if(!gas||!fr_gas_gpu_export_checkpoint(view->gpu,i,gas,err,cap)) {
+                free(gas);fr_reactive_chunk_release(&reactive);return false;
+            }
+        }
+        bool queued=dc_stream_request_save_gas(view->stream,&chunk,&colors,channel,liquid,gas,generation);
+        free(gas);
         fr_reactive_chunk_release(&reactive);
         if(!queued)
             return error(err, cap, "Cannot queue dirty chunk save");
