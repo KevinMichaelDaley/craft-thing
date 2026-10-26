@@ -1,5 +1,23 @@
 #ifndef GAS_PUBLICATION_CASES_H
 #define GAS_PUBLICATION_CASES_H
+#include <stdarg.h>
+static bool g_delay_present_setup_log;
+static uint32_t g_present_log_delay_count;
+static double g_reported_fence_peak;
+static int publication_test_log(FILE *stream,const char *format,va_list args) {
+    if(g_delay_present_setup_log&&strncmp(format,"Present setup ",14)==0) {SDL_Delay(100);g_present_log_delay_count++;}
+    if(g_delay_present_setup_log&&strncmp(format,"Present waits ",14)==0) {
+        va_list copy;va_copy(copy,args);(void)va_arg(copy,double);double fence=va_arg(copy,double);va_end(copy);
+        g_reported_fence_peak=fmax(g_reported_fence_peak,fence);
+    }
+    return vfprintf(stream,format,args);
+}
+int __wrap_fprintf(FILE *stream,const char *format,...) {
+    va_list args;va_start(args,format);int result=publication_test_log(stream,format,args);va_end(args);return result;
+}
+int __wrap___fprintf_chk(FILE *stream,int flag,const char *format,...) {
+    (void)flag;va_list args;va_start(args,format);int result=publication_test_log(stream,format,args);va_end(args);return result;
+}
 static uint32_t g_publication_submits;
 static uint32_t g_pressure_dispatches;
 static uint32_t g_direct_dispatches;
@@ -80,6 +98,18 @@ static void test_native_tick_waits_its_fence_without_draining_presentation_queue
     ASSERT_TRUE(fr_gas_gpu_clock(g,&after)&&after.physical_steps==before.physical_steps+2u&&
         fabs(after.advanced_seconds-before.advanced_seconds-2.*(1.f/60.f))<1e-7);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
+}
+static void test_native_fence_trace_excludes_slow_log_output(void) {
+    char err[256]={0};const char *value=getenv("DC_FRAME_TIMINGS");char *saved=value?SDL_strdup(value):NULL;
+    ASSERT_EQ(SDL_setenv("DC_FRAME_TIMINGS","1",1),0);
+    dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    g_present_log_delay_count=0;g_reported_fence_peak=0.;g_delay_present_setup_log=true;
+    bool okay=present(g,err,sizeof(err));g_delay_present_setup_log=false;
+    printf("Injected slow setup logs%u, reported fence peak%.3fms\n",g_present_log_delay_count,g_reported_fence_peak);
+    ASSERT_TRUE(okay&&g_present_log_delay_count==4u&&g_reported_fence_peak<80.);
+    dc_gpu_destroy(g);free(c);
+    ASSERT_EQ(SDL_setenv("DC_FRAME_TIMINGS",saved?saved:"0",1),0);SDL_free(saved);PASS();
 }
 static void test_native_temporal_sor_matches_global_and_bounds_dispatches(void) {
     char err[256]={0};const char *old=getenv("DC_GAS_TEMPORAL_SOR");char *saved=old?SDL_strdup(old):NULL;
