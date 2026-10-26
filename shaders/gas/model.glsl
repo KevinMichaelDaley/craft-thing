@@ -52,12 +52,6 @@ vec2 gas_two_sum(float a,float b) {
     precise float error=(a-(sum-recovered))+(b-recovered);
     return vec2(sum,error);
 }
-#ifndef FR_GAS_FLAGS_UPDATE
-#define FR_GAS_FLAGS_UPDATE(value) atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],value)
-#endif
-void gas_report_repair_flags(uint value) {
-    if(value!=0u) FR_GAS_FLAGS_UPDATE(value);
-}
 Gas gas_add_flux(Gas s,GasFlux flux,float dt) {
     Gas result=s;
     result.species+=flux.species*dt;
