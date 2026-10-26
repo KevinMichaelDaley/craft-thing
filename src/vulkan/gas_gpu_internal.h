@@ -34,6 +34,8 @@ bool fr_gas_gpu_sparse_owner_metadata(const dc_gpu_t *gpu,bool *selected);
 /** Cold completed GPU geometry-activity route marker. */
 bool fr_gas_gpu_geometry_activity_metadata(const dc_gpu_t *gpu,bool *selected);
 /** Cold completed practical pressure-noise admission marker. */
+/** Read the completed exact large-SOR-tile route marker for cold diagnostics. */
+bool fr_gas_gpu_sor_tile_metadata(const dc_gpu_t *gpu,bool *selected);
 bool fr_gas_gpu_pressure_noise_metadata(const dc_gpu_t *gpu,bool *selected);
 /** Count requested mapped/device-only gas working bytes; cold resource diagnostics only. */
 bool fr_gas_gpu_work_memory(const dc_gpu_t *gpu,uint64_t *mapped_bytes,uint64_t *device_bytes);

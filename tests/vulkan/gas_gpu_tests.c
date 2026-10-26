@@ -385,6 +385,7 @@ static void test_native_large_cfl_packet_matches_composed_oracle_in_one_step(voi
 #include "gas_multigrid_cases.h"
 #include "gas_geometry_cache_cases.h"
 #include "gas_pressure_noise_cases.h"
+#include "gas_sor_tile_cases.h"
 #endif
 static void test_native_subnormal_colored_stock_is_valid_and_retained_at_rest(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));
@@ -432,6 +433,7 @@ int main(void) {
     RUN(test_native_device_state_memory_preserves_checkpoint_initialization_owners_and_clock);
     RUN(test_native_local_geometry_repairs_keep_quiet_owners_and_avoid_full_cache_rebuilds);
     RUN(test_native_pressure_noise_admission_defers_weak_rows_with_stable_inventory);
+    RUN(test_native_larger_sor_tiles_keep_exact_fields_with_fewer_dispatches);
     RUN(test_native_fused_geometry_keeps_edited_stock_and_removes_completion_wait);
     RUN(test_native_fused_physics_tick_keeps_packets_clock_and_removes_completion_wait);
 #endif
