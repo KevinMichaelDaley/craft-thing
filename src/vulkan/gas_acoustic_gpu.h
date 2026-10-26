@@ -17,6 +17,7 @@ typedef struct {
     fr_renderer_compute_t temporal_sor;
     fr_renderer_compute_t coarse_group;
     fr_renderer_compute_t mg_relax[2],mg_restrict[3],mg_prolong[3];
+    fr_renderer_compute_t mg_temporal[2];
     dc_gpu_address_buffer_t transport_work;
     VkBuffer state_bank[2];VkDeviceSize state_bytes;
     dc_gpu_address_buffer_t fields[11],indirect;

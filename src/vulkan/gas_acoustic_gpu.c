@@ -35,7 +35,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->temporal_sor);
     fr_renderer_compute_destroy(g,&t->coarse_group);
     for(uint32_t i=0;i<3;i++) {
-        if(i<2u) fr_renderer_compute_destroy(g,&t->mg_relax[i]);
+        if(i<2u) {fr_renderer_compute_destroy(g,&t->mg_relax[i]);fr_renderer_compute_destroy(g,&t->mg_temporal[i]);}
         fr_renderer_compute_destroy(g,&t->mg_restrict[i]);fr_renderer_compute_destroy(g,&t->mg_prolong[i]);
     }
     for(uint32_t i=0;i<11;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
@@ -115,6 +115,10 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",mg_names[i]);
         if(!fr_renderer_compute_init(g,multigrid[i],buffers,25,16,path,err,cap)) goto fail;
     }
+    for(uint32_t i=0;i<2;i++) {
+        char path[128];snprintf(path,sizeof(path),"build/shaders/gas_mg_temporal%u.comp.spv",i+1u);
+        if(!fr_renderer_compute_init(g,&t->mg_temporal[i],buffers,25,16,path,err,cap)) goto fail;
+    }
     t->ready=true;return true;
 fail:
     fr_gas_acoustic_destroy(g,t);return false;
@@ -168,6 +172,13 @@ static void multigrid_dispatch(dc_gpu_t *g,const fr_renderer_compute_t *pipeline
 }
 static void multigrid_smooth(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank,uint32_t level) {
     if(level==0u) {pressure_sweeps(g,t,dt,bank,12u);return;}
+    const char *setting=getenv("DC_GAS_MG_TEMPORAL");
+    if(setting&&strcmp(setting,"0")!=0) {
+        uint32_t scale=1u<<level,width=(g->width+scale-1u)/scale,height=(g->height+scale-1u)/scale;
+        for(uint32_t pair=0;pair<2u;pair++) dispatch(g,&t->mg_temporal[level-1u],(width+7u)/8u,(height+7u)/8u,
+            dt,bank|((pair&1u)!=0u?1u<<24u:0u));
+        return;
+    }
     for(uint32_t i=0;i<4u;i++) multigrid_dispatch(g,&t->mg_relax[level-1u],dt,bank|((i&1u)!=0u?1u<<24u:0u),level);
 }
 static void multigrid_cycle(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank,uint32_t tiles) {
