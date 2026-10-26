@@ -21,8 +21,6 @@ bool fr_gas_gpu_source_tile_awake(const dc_gpu_t *gpu,uint32_t x,uint32_t y,bool
 bool fr_gas_gpu_activity_metadata(const dc_gpu_t *gpu,uint32_t *mode);
 /** Read configured hybrid line workgroup width for cold diagnostics. */
 bool fr_gas_gpu_hybrid_line_group(const dc_gpu_t *gpu,uint32_t *width);
-/** Read configured and GPU-observed transport subgroup widths; cold diagnostics. */
-bool fr_gas_gpu_transport_subgroup(const dc_gpu_t *gpu,uint32_t *configured,uint32_t *actual);
 /** Read the completed GPU zero-energy policy marker; cold diagnostics only. */
 bool fr_gas_gpu_zero_energy_metadata(const dc_gpu_t *gpu,bool *selected);
 /** Count requested mapped/device-only gas working bytes; cold resource diagnostics only. */

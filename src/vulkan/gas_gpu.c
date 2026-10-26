@@ -27,10 +27,6 @@ bool fr_gas_gpu_hybrid_line_group(const dc_gpu_t *g,uint32_t *width) {
     if(!g||!g->gas||!g->gas->acoustic.practical_hybrid.pipeline||!width) return false;
     *width=g->gas->acoustic.hybrid_line_group;return true;
 }
-bool fr_gas_gpu_transport_subgroup(const dc_gpu_t *g,uint32_t *configured,uint32_t *actual) {
-    if(!g||!g->gas||!configured||!actual) return false;
-    *configured=0u;*actual=(((const uint32_t *)g->gas->stats.mapped)[FR_GAS_ROW_NORM_AFTER_WORD]>>8u)&255u;return true;
-}
 bool fr_gas_gpu_zero_energy_metadata(const dc_gpu_t *g,bool *selected) {
     if(!g||!g->gas||!g->gas->acoustic.ready||!selected) return false;
     *selected=(((const uint32_t *)g->gas->stats.mapped)[FR_GAS_ROW_NORM_AFTER_WORD]&2u)!=0u;return true;
