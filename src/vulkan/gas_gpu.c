@@ -38,11 +38,15 @@ bool fr_gas_gpu_source_tile_awake(const dc_gpu_t *g,uint32_t x,uint32_t y,bool *
 }
 bool fr_gas_gpu_activity_metadata(const dc_gpu_t *g,uint32_t *mode) {
     if(!g||!g->gas||!g->gas->acoustic.ready||!mode) return false;
-    *mode=((const uint32_t *)g->gas->stats.mapped)[FR_GAS_ROW_NORM_AFTER_WORD];return true;
+    *mode=((const uint32_t *)g->gas->stats.mapped)[FR_GAS_ROW_NORM_AFTER_WORD]&1u;return true;
 }
 bool fr_gas_gpu_hybrid_line_group(const dc_gpu_t *g,uint32_t *width) {
     if(!g||!g->gas||!g->gas->acoustic.practical_hybrid.pipeline||!width) return false;
     *width=g->gas->acoustic.hybrid_line_group;return true;
+}
+bool fr_gas_gpu_zero_energy_metadata(const dc_gpu_t *g,bool *selected) {
+    if(!g||!g->gas||!g->gas->acoustic.ready||!selected) return false;
+    *selected=(((const uint32_t *)g->gas->stats.mapped)[FR_GAS_ROW_NORM_AFTER_WORD]&2u)!=0u;return true;
 }
 bool fr_gas_gpu_rate_metadata(const dc_gpu_t *g,float rates[3],uint32_t *width) {
     if(!g||!g->gas||!rates||!width) return false;

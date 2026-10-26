@@ -7,7 +7,8 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     bool cached_neighbors=strcmp(setting,"DC_GAS_CACHED_NEIGHBORS")==0;
     bool lean_metadata=strcmp(setting,"DC_GAS_LEAN_METADATA")==0;
     bool line_group=strcmp(setting,"DC_GAS_LINE_GROUP")==0;
-    bool all_slots=direct_first||quiet_publication||cached_neighbors||lean_metadata;uint32_t field_count=all_slots?12288u:4096u;
+    bool zero_energy=strcmp(setting,"DC_GAS_ZERO_ENERGY")==0;
+    bool all_slots=direct_first||quiet_publication||cached_neighbors||lean_metadata||zero_energy;uint32_t field_count=all_slots?12288u:4096u;
     for(uint32_t k=0;k<4;k++) {const char *value=getenv(names[k]);saved[k]=value?SDL_strdup(value):NULL;}
     ASSERT_EQ(SDL_setenv(names[0],"1",1),0);
     ASSERT_EQ(SDL_setenv(names[2],"1",1),0);
@@ -15,18 +16,19 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     fr_gas_state_t *input=malloc(4096*sizeof(*input)),*reference=malloc(field_count*sizeof(*reference)),*out=malloc(field_count*sizeof(*out));
     fr_gas_state_t *dormant=all_slots?malloc(4096*sizeof(*dormant)):NULL;ASSERT_TRUE(!all_slots||dormant);
     double *volume=malloc(4096*sizeof(*volume));dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(input&&reference&&out&&volume&&c);
-    fr_gas_state_t *quiet=quiet_publication||cached_neighbors||lean_metadata?malloc(4096*sizeof(*quiet)):NULL;
-    ASSERT_TRUE(!(quiet_publication||cached_neighbors||lean_metadata)||quiet);
+    fr_gas_state_t *quiet=quiet_publication||cached_neighbors||lean_metadata||zero_energy?malloc(4096*sizeof(*quiet)):NULL;
+    ASSERT_TRUE(!(quiet_publication||cached_neighbors||lean_metadata||zero_energy)||quiet);
     fr_gas_model_t m=reference_model();m.kinetic_scale=1./512.;
     if(quiet) for(uint32_t i=0;i<4096;i++) quiet[i]=reference_air(m,.0012,300,.001);
     for(uint32_t i=0;i<4096;i++) {volume[i]=1;input[i]=reference_air(m,.0012,300,
-        cached_neighbors?0:(all_slots||strcmp(setting,"DC_GAS_FUSED_HYBRID")==0||strcmp(setting,"DC_GAS_FIXED_AXIS")==0?100:(metadata?40:2)));}
+        cached_neighbors?0:(zero_energy?2:(all_slots||strcmp(setting,"DC_GAS_FUSED_HYBRID")==0||strcmp(setting,"DC_GAS_FIXED_AXIS")==0?100:(metadata?40:2))));}
     for(uint32_t y=24;y<32;y++) for(uint32_t x=20;x<28;x++) {
         fr_gas_state_t *s=input+y*64+x;s->species[1]-=.00001;s->species[2]=.00001;
         s->energy+=.00001*(m.heat_capacity_cv[2]-m.heat_capacity_cv[1])*300;s->pigment[0]=.000005;
     }
     uint32_t work[2]={0},tiles[2]={0},widths[2]={0},transfer_barriers[2]={0},repeated[2]={0};float rates[2][3]={{0}};uint64_t copy_bytes[2]={0};
     uint32_t activity_modes[2]={0};
+    bool zero_energy_used[2]={false,false};
     bool empty_tiles=strcmp(setting,"DC_GAS_SKIP_EMPTY_PRESSURE")==0,group_rate=strcmp(setting,"DC_GAS_GROUP_RATE")==0;
     uint32_t requested_width=group_rate&&saved[1]&&strcmp(saved[1],"256")==0?256u:128u;
     for(uint32_t path=0;path<2;path++) {
@@ -49,6 +51,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
             g_previous_compute_pipeline=VK_NULL_HANDLE;g_repeated_compute_bindings=0;
             ASSERT_TRUE(fr_gas_gpu_step(g,metadata?.04f:.02f,err,sizeof(err)));
             if(cached_neighbors&&step==0u) ASSERT_TRUE(fr_gas_gpu_activity_metadata(g,activity_modes+path));
+            if(zero_energy&&step==0u) ASSERT_TRUE(fr_gas_gpu_zero_energy_metadata(g,zero_energy_used+path));
         }
         work[path]=g_pressure_dispatches+g_direct_dispatches;
         copy_bytes[path]=g_copy_bytes;
@@ -108,6 +111,10 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         ASSERT_TRUE(isfinite(rates[1][k])&&fabs(rates[1][k]-rates[0][k])<fmax(1e-7,fabs(rates[0][k])*1e-5));
     }
     if(line_group) {printf("Hybrid line width%u vs%u\n",widths[1],widths[0]);ASSERT_TRUE(widths[0]==256u&&widths[1]==512u);}
+    if(zero_energy) {
+        printf("GPU zero-energy policy selected%u vs%u\n",zero_energy_used[1],zero_energy_used[0]);
+        ASSERT_TRUE(!zero_energy_used[0]&&zero_energy_used[1]&&memcmp(rates[0],rates[1],sizeof(rates[0]))==0);
+    }
     if(cached_neighbors) {
         printf("GPU activity route%u vs%u\n",activity_modes[1],activity_modes[0]);
         ASSERT_TRUE(activity_modes[0]==0u&&activity_modes[1]==1u&&memcmp(rates[0],rates[1],sizeof(rates[0]))==0);
@@ -181,6 +188,9 @@ static void test_native_large_hybrid_workgroups_preserve_state_and_clock(void) {
     for(uint32_t i=0;i<3;i++) {const char *value=getenv(names[i]);saved[i]=value?SDL_strdup(value):NULL;ASSERT_EQ(SDL_setenv(names[i],"1",1),0);}
     check_native_gas_dispatch_fusion("DC_GAS_LINE_GROUP",false,UINT32_MAX);
     for(uint32_t i=0;i<3;i++) {ASSERT_EQ(SDL_setenv(names[i],saved[i]?saved[i]:"0",1),0);SDL_free(saved[i]);}
+}
+static void test_native_zero_energy_transfers_preserve_state_stock_and_clock(void) {
+    check_native_gas_dispatch_fusion("DC_GAS_ZERO_ENERGY",false,UINT32_MAX);
 }
 static void check_native_multigrid_reference_flow(uint32_t dispatch_budget,bool partial_fixture) {
     char err[256]={0};const char *names[]={"DC_GAS_MULTIGRID","DC_GAS_TEMPORAL_SOR","DC_GAS_COARSE_WG"};char *saved[3];
