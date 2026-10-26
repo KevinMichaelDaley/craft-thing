@@ -251,3 +251,7 @@ Confirmed and fixed intermittent vacuum rejection: last accepted cell had all sp
 **2026-10-26T17:12:42Z**
 
 Rejected optional subgroup16 trial: configured and actual native subgroup16 verified, but stiff eight-step field-quality diagnostic failed (density relative L1 .01275, pigment .01898) and actual displayed carved1000 was slower, 36.754ms mean /70.119ms worst. Trial preserved in c0ef623 and reverted with RED diagnostic; selected runtime restored to 7fc7e48. No acceptance thresholds weakened. Edited dynamic-scene performance remains RED; next narrow experiment is tiled explicit transport with existing implicit fallback.
+
+**2026-10-26T17:18:50Z**
+
+Tiled explicit transport RED d1a175c implemented and tested on actual Wayland: reference packet byte-identical, complete clock/stock pass. Rejected for performance: 8x8/64threads 46.935/52.387ms; 8x8/256threads45.359/51.576;64x2/256threads37.063/40.403 (carved100 actual complete frames). Shared memory and halo duplication outweighed smaller shader. Full experiment and reversals preserved in git; selected transport unchanged. Next investigate multigrid smoothing, rather than enabling a slower transport.
