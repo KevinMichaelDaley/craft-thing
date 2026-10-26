@@ -466,6 +466,7 @@ int main(void) {
     RUN(test_native_checkpoint_preserves_compensation_geometry_valves_and_ownership);
     RUN(test_native_new_streamed_slot_initializes_once_without_refilling_existing_or_dormant_stock);
     RUN(test_native_geometry_carving_displacement_and_trapped_pockets_keep_finite_stock);
+    RUN(test_native_valve_only_refresh_preserves_restored_physical_void);
     RUN(test_native_massless_underflow_energy_reconciles_without_erasing_tiny_colored_gas);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0||g_pass==0;
 }
