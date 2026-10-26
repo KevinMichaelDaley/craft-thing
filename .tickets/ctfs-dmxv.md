@@ -255,3 +255,7 @@ Rejected optional subgroup16 trial: configured and actual native subgroup16 veri
 **2026-10-26T17:18:50Z**
 
 Tiled explicit transport RED d1a175c implemented and tested on actual Wayland: reference packet byte-identical, complete clock/stock pass. Rejected for performance: 8x8/64threads 46.935/52.387ms; 8x8/256threads45.359/51.576;64x2/256threads37.063/40.403 (carved100 actual complete frames). Shared memory and halo duplication outweighed smaller shader. Full experiment and reversals preserved in git; selected transport unchanged. Next investigate multigrid smoothing, rather than enabling a slower transport.
+
+**2026-10-26T17:25:24Z**
+
+Rejected shorter multigrid fine smoothing without weakening quality gates.4/4 omega1 failed reference flow;8/8 omega1.5 passed flow/checkerboard but sealed-neighbor density deviation.02523 exceeded.01;8/12 omega1.5 worsened neighbor.19188;8/12 original1.8 grew checkerboard variance7.61e-6 vs5.90e-7initial. Default12/12 control wall deviation.000638 passes. Experiment history preserved then reverted. Next remove duplicate line-rate work while retaining accepted numerics.
