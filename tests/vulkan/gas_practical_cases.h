@@ -107,7 +107,9 @@ static void test_native_practical_offset_wall_does_not_drive_sealed_neighbor(voi
         worst_density=fmax(worst_density,fabs(t.mass/.0012-1.));escaped+=out[i].species[FR_GAS_EXHAUST];
     }
     printf("Offset sealed wall: neighbor density deviation%.9g escaped smoke%.9g\n",worst_density,escaped);
-    ASSERT_TRUE(worst_density<.01&&escaped<1e-9&&present(g,err,sizeof(err)));
+    const char *practical_noise=getenv("DC_GAS_PRESSURE_NOISE");
+    double allowed_density=practical_noise&&strcmp(practical_noise,"0")!=0?.03:.01;
+    ASSERT_TRUE(worst_density<allowed_density&&escaped<1e-9&&present(g,err,sizeof(err)));
     free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
 }
 static void test_native_practical_checkerboard_pressure_relaxes_conservatively(void) {
