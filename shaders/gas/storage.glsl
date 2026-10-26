@@ -10,13 +10,21 @@ layout(set=0,binding=1,std430) restrict buffer Bank0 {Gas bank0[];};
 layout(set=0,binding=2,std430) restrict buffer Bank1 {Gas bank1[];};
 layout(set=0,binding=3,std430) restrict buffer Cache0 {Primitive cache0[];};
 layout(set=0,binding=4,std430) restrict buffer Cache1 {Primitive cache1[];};
+#ifdef FR_GAS_WRITABLE_MODEL
+layout(set=0,binding=5,std430) buffer Model {uint parameters[];};
+#else
 layout(set=0,binding=5,std430) readonly buffer Model {uint parameters[];};
+#endif
 layout(set=0,binding=6,std430) coherent buffer Stats {uint stats[];};
 layout(set=0,binding=7,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=8,std430) readonly buffer Cells {uvec2 cells[];};
 layout(set=0,binding=9,std430) readonly buffer Occupancy {uint occupancy[];};
 layout(set=0,binding=10,std430) readonly buffer Mpm {vec4 mpm[];};
+#ifdef FR_GAS_WRITABLE_GATES
+layout(set=0,binding=11,std430) buffer Gates {uint gates[];};
+#else
 layout(set=0,binding=11,std430) readonly buffer Gates {uint gates[];};
+#endif
 layout(push_constant) uniform Params {uint width,height,seconds,bank;} params;
 #include "model.glsl"
 uint gas_index() {return gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;}

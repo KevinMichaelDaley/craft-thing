@@ -1,15 +1,19 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
+#define FR_GAS_WRITABLE_MODEL 1
+#define FR_GAS_WRITABLE_GATES 1
 #include "storage.glsl"
 #include "../../include/dungeoncraft/terrain_flags.h"
 void main() {
     uint index=gas_index();if(index>=params.width*params.height) return;
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);if(atlas==0xffffffffu) return;
+    bool pending=(params.bank&0x80000000u)!=0u;uint slot=atlas/4096u;
+    if(pending&&(parameters[FR_GAS_MODEL_WORDS+slot]&1u)==0u) return;
     uint packed=cells[atlas].x,material=packed&65535u;
     bool fixed_solid=material!=0u&&material!=3u&&((packed&(DC_CELL_LOADED_TERRAIN<<DC_CELL_FLAGS_SHIFT))!=0u||
         material==1u||material==6u||material==7u||material==8u||material==9u);
-    float volume=fixed_solid?0.:max(0.,1.-float(min(65536u,occupancy[2u*params.width*params.height+index]))/65536.-
-        clamp(mpm[index].w,0.,1.)-float(cells[atlas].y)/65536.);
+    float displaced=pending?0.:float(min(65536u,occupancy[2u*params.width*params.height+index]))/65536.+clamp(mpm[index].w,0.,1.);
+    float volume=fixed_solid?0.:max(0.,1.-displaced-float(cells[atlas].y)/65536.);
     Gas s=gas_empty();s.geometry.xy=vec2(volume);
     if(volume>0.) {
         float fraction=gas_parameter(FR_GAS_OXYGEN_WORD);
@@ -19,4 +23,8 @@ void main() {
         s.dynamics.y=capacity*gas_parameter(FR_GAS_AMBIENT_WORD);
     }
     world[atlas]=s;
+    if(pending) {
+        gates[atlas]=0u;
+        if(atlas%4096u==0u) atomicOr(parameters[FR_GAS_MODEL_WORDS+slot],2u);
+    }
 }

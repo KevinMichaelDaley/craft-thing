@@ -21,7 +21,7 @@ struct fr_gas_gpu {
     uint32_t policy;
     uint32_t cached_bank;
     float cached_rate;
-    bool cache_valid,direct_publish;
+    bool cache_valid,direct_publish,initialization_pending;
     VkFence completion;
     double large_step_hint;
     bool trace;
@@ -163,7 +163,7 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     bool mapped_work=!device_work||strcmp(device_work,"0")==0;
     for(uint32_t i=0;i<2;i++) if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,mapped_work,t->cache+i,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*4u,true,&t->gates,err,cap)) return false;
-    if(!dc_gpu_address_buffer_create(g,FR_GAS_MODEL_WORDS*4u,true,&t->parameters,err,cap)||
+    if(!dc_gpu_address_buffer_create(g,(FR_GAS_MODEL_WORDS+DC_GPU_CHUNK_SLOTS)*4u,true,&t->parameters,err,cap)||
        !dc_gpu_address_buffer_create(g,64,true,&t->stats,err,cap)||
        !dc_gpu_address_buffer_create(g,FR_GAS_AUDIT_WORDS*4u,true,&t->audit_summary,err,cap)) return false;
     float *parameters=t->parameters.mapped;
@@ -323,10 +323,22 @@ bool fr_gas_gpu_clock(const dc_gpu_t *g,fr_gas_gpu_clock_t *out) {
     *out=g->gas->clock;return true;
 }
 bool fr_gas_gpu_queue_ambient_chunk(dc_gpu_t *g,uint32_t slot,char *err,uint32_t cap) {
-    (void)g;(void)slot;return error(err,cap,"Queued ambient initialization not implemented");
+    if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS) return error(err,cap,"Invalid new gas chunk admission");
+    ((uint32_t *)g->gas->parameters.mapped)[FR_GAS_MODEL_WORDS+slot]=1u;
+    g->gas->initialization_pending=true;return true;
 }
 bool fr_gas_gpu_initialize_queued(dc_gpu_t *g,char *err,uint32_t cap) {
-    (void)g;return error(err,cap,"Queued ambient initialization not implemented");
+    if(!g||!g->gas) return error(err,cap,"Gas module is not enabled");
+    struct fr_gas_gpu *t=g->gas;if(!t->initialization_pending) return true;
+    if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin new gas chunk admission");
+    dispatch(g,t,&t->initialize,0,0x80000000u);
+    if(!submit(g,err,cap)) return false;
+    uint32_t *flags=(uint32_t *)t->parameters.mapped+FR_GAS_MODEL_WORDS;t->initialization_pending=false;
+    for(uint32_t i=0;i<DC_GPU_CHUNK_SLOTS;i++) {
+        if((flags[i]&2u)!=0u) flags[i]=0u;
+        else if(flags[i]!=0u) t->initialization_pending=true;
+    }
+    fr_gas_gpu_invalidate_cache(g);t->large_step_hint=0;return true;
 }
 bool fr_gas_gpu_export_checkpoint(dc_gpu_t *g,uint32_t slot,fr_gas_checkpoint_chunk_t *out,char *err,uint32_t cap) {
     if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!out) return error(err,cap,"Invalid cold gas checkpoint export");
@@ -352,6 +364,7 @@ bool fr_gas_gpu_import_checkpoint(dc_gpu_t *g,uint32_t slot,const fr_gas_checkpo
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas checkpoint import");
     memcpy((gas_packet_t *)t->state[t->direct_publish?1u:0u].mapped+(size_t)slot*4096u,input->cells,sizeof(input->cells));
     memcpy((uint32_t *)t->gates.mapped+(size_t)slot*4096u,input->gates,sizeof(input->gates));
+    ((uint32_t *)t->parameters.mapped)[FR_GAS_MODEL_WORDS+slot]=0u;
     if(input->clock.advanced_seconds>t->clock.advanced_seconds) t->clock=input->clock;
     fr_gas_gpu_invalidate_cache(g);t->large_step_hint=0;return true;
 }

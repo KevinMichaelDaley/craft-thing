@@ -5,7 +5,8 @@ static void test_native_new_streamed_slot_initializes_once_without_refilling_exi
     fr_gas_checkpoint_chunk_t *old=malloc(sizeof(*old)),*out=malloc(sizeof(*out)),*fresh=malloc(sizeof(*fresh));
     ASSERT_TRUE(chunk&&old&&out&&fresh&&context(&g,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
-    fr_gas_model_t model=reference_model();ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err)));
+    fr_gas_model_t model=reference_model();model.kinetic_scale=1./512.;ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_export_checkpoint(g,0,old,err,sizeof(err)));
     chunk->coord.x=1;chunk->cells[0].material=DC_MATERIAL_STONE;
     ASSERT_TRUE(dc_gpu_upload_chunk(g,1,chunk,err,sizeof(err))&&dc_gpu_set_page(g,1,0,1,err,sizeof(err)));
