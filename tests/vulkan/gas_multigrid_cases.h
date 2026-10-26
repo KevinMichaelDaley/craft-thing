@@ -6,6 +6,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     bool direct_first=strcmp(setting,"DC_GAS_DIRECT_FIRST_AXIS")==0,quiet_publication=strcmp(setting,"DC_GAS_ROTATE_PUBLISH")==0;
     bool cached_neighbors=strcmp(setting,"DC_GAS_CACHED_NEIGHBORS")==0;
     bool lean_metadata=strcmp(setting,"DC_GAS_LEAN_METADATA")==0;
+    bool rhs_tile_cache=strcmp(setting,"DC_GAS_RHS_TILE_CACHE")==0;
     bool line_group=strcmp(setting,"DC_GAS_LINE_GROUP")==0;
     bool zero_energy=strcmp(setting,"DC_GAS_ZERO_ENERGY")==0;
     bool device_work=strcmp(setting,"DC_GAS_DEVICE_WORK")==0;
@@ -61,6 +62,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
             g_pressure_dispatches=0;g_direct_dispatches=0;g_copy_bytes=0;g_transfer_scope_barriers=0;
             g_previous_compute_pipeline=VK_NULL_HANDLE;g_repeated_compute_bindings=0;
             ASSERT_TRUE(fr_gas_gpu_step(g,metadata?.04f:.02f,err,sizeof(err)));
+            if(rhs_tile_cache&&step==1u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_rhs_tile_metadata(g,&used));ASSERT_EQ(used,path!=0u);}
             if(reuse_rate&&step==0u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_reused_line_rate(g,&used));ASSERT_EQ(used,path!=0u);}
             if(cell_owners&&step==0u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_sparse_owner_metadata(g,&used));ASSERT_EQ(used,path!=0u);}
             if(geometry_activity&&step==1u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_geometry_activity_metadata(g,&used));ASSERT_EQ(used,path!=0u);}
@@ -323,5 +325,11 @@ static void test_native_partial_coarse_cells_preserve_walls_with_short_smoothing
     char err[256]={0};const char *old=getenv("DC_GAS_MG_BOUNDARY");char *saved=old?SDL_strdup(old):NULL;
     ASSERT_EQ(SDL_setenv("DC_GAS_MG_BOUNDARY","1",1),0);check_native_multigrid_reference_flow(80u,true);
     ASSERT_EQ(SDL_setenv("DC_GAS_MG_BOUNDARY",saved?saved:"0",1),0);SDL_free(saved);
+}
+static void test_native_rhs_neighbor_tile_cache_preserves_fused_fields(void) {
+    char err[256]={0};const char *old=getenv("DC_GAS_FUSED_METADATA");char *saved=old?SDL_strdup(old):NULL;
+    ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_METADATA","1",1),0);
+    check_native_gas_dispatch_fusion("DC_GAS_RHS_TILE_CACHE",true,UINT32_MAX);
+    ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_METADATA",saved?saved:"0",1),0);SDL_free(saved);
 }
 #endif
