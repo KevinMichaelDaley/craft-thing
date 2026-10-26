@@ -61,6 +61,7 @@ static void destroy(dc_gpu_t *g,struct fr_gas_gpu *t) {
     for(uint32_t i=0;i<3;i++) dc_gpu_address_buffer_destroy(g,t->state+i);
     for(uint32_t i=0;i<2;i++) dc_gpu_address_buffer_destroy(g,t->cache+i);
     dc_gpu_address_buffer_destroy(g,&t->parameters);dc_gpu_address_buffer_destroy(g,&t->stats);
+    dc_gpu_address_buffer_destroy(g,&t->checkpoint_staging);
     if(t->completion) vkDestroyFence(g->device,t->completion,NULL);
     free(t);
 }
@@ -156,7 +157,9 @@ static bool shader_ok(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
         if(index<g->width*g->height) {
             uint32_t x=index%g->width,y=index/g->width,page=((const uint32_t *)g->page_mapped)[(y/64u)*g->page_width+x/64u];
             if(page&&page<=DC_GPU_CHUNK_SLOTS) for(uint32_t bank=0;bank<3u;bank++) {
-                const gas_packet_t *packet=(const gas_packet_t *)t->state[bank].mapped+(size_t)(page-1u)*4096u+(y%64u)*64u+x%64u;
+                const gas_packet_t *packets=NULL;char snapshot_error[128];
+                if(!fr_gas_gpu_checkpoint_packets(g,bank,page-1u,&packets,snapshot_error,sizeof(snapshot_error))) continue;
+                const gas_packet_t *packet=packets+(y%64u)*64u+x%64u;
                 fprintf(stderr,"Gas failure bank%u packet",bank);for(uint32_t k=0;k<16u;k++) fprintf(stderr," %.9g",packet->words[k]);fprintf(stderr,"\n");
             }
         }
@@ -181,7 +184,9 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
        t->groups_y>properties.limits.maxComputeWorkGroupCount[1]) return error(err,cap,"Gas field exceeds Vulkan address limits");
     VkFenceCreateInfo fence={.sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
     if(vkCreateFence(g->device,&fence,NULL,&t->completion)!=VK_SUCCESS) return error(err,cap,"Cannot create gas completion fence");
-    for(uint32_t i=0;i<3;i++) if(!dc_gpu_address_buffer_create(g,states,true,t->state+i,err,cap)) return false;
+    const char *device_state=getenv("DC_GAS_DEVICE_STATE");bool mapped_state=!device_state||strcmp(device_state,"0")==0;
+    for(uint32_t i=0;i<3;i++) if(!dc_gpu_address_buffer_create(g,states,mapped_state,t->state+i,err,cap)) return false;
+    if(!mapped_state&&!dc_gpu_address_buffer_create(g,4096u*sizeof(gas_packet_t),true,&t->checkpoint_staging,err,cap)) return false;
     const char *device_work=getenv("DC_GAS_DEVICE_WORK");
     bool mapped_work=!device_work||strcmp(device_work,"0")==0;
     for(uint32_t i=0;i<2;i++) if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,mapped_work,t->cache+i,err,cap)) return false;
@@ -231,6 +236,7 @@ bool fr_gas_gpu_enable(dc_gpu_t *g,const fr_gas_model_t *model,float density,flo
     struct fr_gas_gpu *t=calloc(1,sizeof(*t));if(!t) return error(err,cap,"Cannot allocate gas module");
     t->model=rounded;t->density=density;t->temperature=temperature;
     if(!create(g,t,err,cap)||!fr_renderer_begin(g)) {destroy(g,t);return false;}
+    for(uint32_t i=0;i<3;i++) if(!t->state[i].host_visible) vkCmdFillBuffer(g->command,t->state[i].buffer,0,t->state[i].bytes,0);
     for(uint32_t i=0;i<2;i++) if(!t->cache[i].host_visible)
         vkCmdFillBuffer(g->command,t->cache[i].buffer,0,t->cache[i].bytes,0);
     dispatch(g,t,&t->initialize,0,0);
@@ -305,7 +311,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
             fprintf(stderr,"Gas transport lines explicit%u stages%u implicit%u inactive%u\n",words[FR_GAS_EXPLICIT_LINE_COUNT_WORD],
                 words[FR_GAS_EXPLICIT_STAGE_COUNT_WORD],words[FR_GAS_IMPLICIT_LINE_COUNT_WORD],words[FR_GAS_INACTIVE_LINE_COUNT_WORD]);
         }
-        VkDeviceSize bytes=t->parameters.bytes+t->stats.bytes+t->gates.bytes+t->audit_summary.bytes+t->acoustic.indirect.bytes+t->acoustic.transport_work.bytes;
+        VkDeviceSize bytes=t->parameters.bytes+t->stats.bytes+t->gates.bytes+t->audit_summary.bytes+t->acoustic.indirect.bytes+t->acoustic.transport_work.bytes+t->checkpoint_staging.bytes;
         for(uint32_t i=0;i<3;i++) bytes+=t->state[i].bytes;
         for(uint32_t i=0;i<2;i++) bytes+=t->cache[i].bytes;
         for(uint32_t i=0;i<11;i++) bytes+=t->acoustic.fields[i].bytes;
