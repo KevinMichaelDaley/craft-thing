@@ -12,7 +12,7 @@
 #include "gas_gpu_state.h"
 bool fr_gas_gpu_tiled_metadata(dc_gpu_t *g,uint32_t *metadata) {
     if(!g||!g->gas||!metadata) return false;
-    *metadata=((uint32_t *)g->gas->stats.mapped)[15]&0xff0cu;return true;
+    *metadata=0u;return true;
 }
 bool fr_gas_gpu_pressure_tiles(const dc_gpu_t *g,uint32_t *tiles) {
     if(!g||!g->gas||!g->gas->acoustic.ready||!tiles) return false;
@@ -131,7 +131,6 @@ bool fr_gas_gpu_refresh_geometry(dc_gpu_t *g,char *err,uint32_t cap) {
     if(words[FR_GAS_ROW_NORM_BEFORE_WORD]!=0u) {
         if(local&&t->cache_valid) {
             float bound=0.;memcpy(&bound,words+FR_GAS_RATE_WORD,4);t->cached_rate=fmaxf(t->cached_rate,bound);t->acoustic.geometry_changed=true;
-            for(uint32_t axis=0;axis<2;axis++) {memcpy(&bound,words+FR_GAS_RATE_X_WORD+axis,4);t->acoustic.axis_rate[axis]=fmaxf(t->acoustic.axis_rate[axis],bound);}
         } else fr_gas_gpu_invalidate_cache(g);
         t->large_step_hint=0;
     }
@@ -175,8 +174,7 @@ static bool shader_ok(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
 static float rate(struct fr_gas_gpu *t) {
     float value=0;uint32_t *words=t->stats.mapped;
     if(t->policy!=FR_GAS_PRESSURE_HLLC) {
-        float x=0,y=0;memcpy(&x,words+FR_GAS_RATE_X_WORD,4);memcpy(&y,words+FR_GAS_RATE_Y_WORD,4);
-        t->acoustic.axis_rate[0]=x;t->acoustic.axis_rate[1]=y;return x+y;
+        float x=0,y=0;memcpy(&x,words+FR_GAS_RATE_X_WORD,4);memcpy(&y,words+FR_GAS_RATE_Y_WORD,4);return x+y;
     }
     memcpy(&value,words+FR_GAS_RATE_WORD,4);return value;
 }
@@ -389,7 +387,6 @@ bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot configure acoustic policy");
     const char *direct_setting=getenv("DC_GAS_ROTATE_PUBLISH");
     if(!set_direct_publish(g,t,policy==FR_GAS_PRESSURE_PRACTICAL&&direct_setting&&strcmp(direct_setting,"0")!=0,err,cap)) return false;
-    t->acoustic.direct_publication=t->direct_publish;
     if(t->policy!=policy) fr_gas_gpu_invalidate_cache(g);
     ((float *)t->parameters.mapped)[FR_GAS_POLICY_WORD]=(float)policy;t->policy=policy;t->acoustic.practical=policy==FR_GAS_PRESSURE_PRACTICAL;return true;
 }
