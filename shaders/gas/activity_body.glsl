@@ -1,8 +1,8 @@
 #define FR_GAS_WRITABLE_GATES 1
 #include "acoustic.glsl"
-shared uint needed;
+#include "group_mask.glsl"
 void main() {
-    uint lane=gl_LocalInvocationIndex;if(lane==0u) needed=0u;barrier();
+    uint lane=gl_LocalInvocationIndex,local_needed=0u;
     uint width=(params.width+7u)/8u;
     uint tile=(params.bank&512u)!=0u?active_tiles[gl_WorkGroupID.x]:gl_WorkGroupID.y*width+gl_WorkGroupID.x;
     uvec2 p=uvec2(tile%width,tile/width)*8u+uvec2(lane%8u,lane/8u);
@@ -45,9 +45,9 @@ void main() {
             }
 #endif
         }
-        if(awake) atomicOr(needed,1u);
+        if(awake) local_needed=1u;
     }
-    barrier();if(lane==0u) {
+    uint needed=gas_group_mask(local_needed);if(lane==0u) {
         activity[tile]=needed;
 #ifdef FR_GAS_CACHED_NEIGHBORS
         if(gl_WorkGroupID.x==0u&&gl_WorkGroupID.y==0u) stats[FR_GAS_ROW_NORM_AFTER_WORD]=1u;
