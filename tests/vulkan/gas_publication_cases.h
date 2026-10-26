@@ -5,6 +5,13 @@ static uint32_t g_pressure_dispatches;
 static uint32_t g_direct_dispatches;
 static uint32_t g_queue_idle_calls;
 static uint64_t g_copy_bytes;
+static uint32_t g_transfer_scope_barriers;
+VKAPI_ATTR void VKAPI_CALL __real_vkCmdPipelineBarrier2(VkCommandBuffer command,const VkDependencyInfo *dependency);
+VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdPipelineBarrier2(VkCommandBuffer command,const VkDependencyInfo *dependency) {
+    for(uint32_t i=0;i<dependency->memoryBarrierCount;i++)
+        if((dependency->pMemoryBarriers[i].dstStageMask&VK_PIPELINE_STAGE_2_TRANSFER_BIT)!=0u) g_transfer_scope_barriers++;
+    __real_vkCmdPipelineBarrier2(command,dependency);
+}
 VKAPI_ATTR void VKAPI_CALL __real_vkCmdCopyBuffer(VkCommandBuffer command,VkBuffer source,VkBuffer destination,uint32_t count,const VkBufferCopy *regions);
 VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdCopyBuffer(VkCommandBuffer command,VkBuffer source,VkBuffer destination,uint32_t count,const VkBufferCopy *regions) {
     for(uint32_t i=0;i<count;i++) g_copy_bytes+=regions[i].size;

@@ -18,7 +18,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         fr_gas_state_t *s=input+y*64+x;s->species[1]-=.00001;s->species[2]=.00001;
         s->energy+=.00001*(m.heat_capacity_cv[2]-m.heat_capacity_cv[1])*300;s->pigment[0]=.000005;
     }
-    uint32_t work[2]={0},tiles[2]={0},widths[2]={0};float rates[2][3]={{0}};uint64_t copy_bytes[2]={0};
+    uint32_t work[2]={0},tiles[2]={0},widths[2]={0},transfer_barriers[2]={0};float rates[2][3]={{0}};uint64_t copy_bytes[2]={0};
     bool empty_tiles=strcmp(setting,"DC_GAS_SKIP_EMPTY_PRESSURE")==0,group_rate=strcmp(setting,"DC_GAS_GROUP_RATE")==0;
     uint32_t requested_width=group_rate&&saved[1]&&strcmp(saved[1],"256")==0?256u:128u;
     for(uint32_t path=0;path<2;path++) {
@@ -35,10 +35,12 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
             }
             if(step==0||step==6) ASSERT_TRUE(fr_gas_gpu_gate(g,29,0,1,64,0,true,err,sizeof(err)));
             if(step==3) ASSERT_TRUE(fr_gas_gpu_gate(g,29,0,1,64,0,false,err,sizeof(err)));
-            g_pressure_dispatches=0;g_direct_dispatches=0;g_copy_bytes=0;ASSERT_TRUE(fr_gas_gpu_step(g,metadata?.04f:.02f,err,sizeof(err)));
+            g_pressure_dispatches=0;g_direct_dispatches=0;g_copy_bytes=0;g_transfer_scope_barriers=0;
+            ASSERT_TRUE(fr_gas_gpu_step(g,metadata?.04f:.02f,err,sizeof(err)));
         }
         work[path]=g_pressure_dispatches+g_direct_dispatches;
         copy_bytes[path]=g_copy_bytes;
+        transfer_barriers[path]=g_transfer_scope_barriers;
         fr_gas_gpu_clock_t clock;ASSERT_TRUE(fr_gas_gpu_clock(g,&clock)&&clock.physical_steps==8u&&fabs(clock.advanced_seconds-8.*(metadata?.04f:.02f))<1e-7);
         if(group_rate||direct_first) ASSERT_TRUE(fr_gas_gpu_rate_metadata(g,rates[path],widths+path));
         if(empty_tiles) ASSERT_TRUE(fr_gas_gpu_pressure_tiles(g,tiles+path));
@@ -75,6 +77,10 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         ASSERT_TRUE(copy_bytes[1]<copy_bytes[0]&&memcmp(rates[0],rates[1],sizeof(rates[0]))==0);
     }
     if(empty_tiles) {printf("Pressure tile work%u vs%u\n",tiles[1],tiles[0]);ASSERT_TRUE(tiles[1]<tiles[0]);}
+    if(strcmp(setting,"DC_GAS_COMPUTE_BARRIERS")==0) {
+        printf("Transfer destination barrier scopes%u vs%u\n",transfer_barriers[1],transfer_barriers[0]);
+        ASSERT_TRUE(transfer_barriers[1]<transfer_barriers[0]);
+    }
     for(uint32_t k=0;k<4;k++) {ASSERT_EQ(SDL_setenv(names[k],saved[k]?saved[k]:"0",1),0);SDL_free(saved[k]);}
     free(input);free(reference);free(out);free(volume);free(c);free(dormant);PASS();
 }
@@ -114,6 +120,9 @@ static void test_native_hybrid_axis_fusion_preserves_state_with_fewer_dispatches
     ASSERT_EQ(SDL_setenv("DC_GAS_HYBRID_LINES","1",1),0);
     check_native_gas_dispatch_fusion("DC_GAS_FUSED_HYBRID",true,0);
     ASSERT_EQ(SDL_setenv("DC_GAS_HYBRID_LINES",saved?saved:"0",1),0);SDL_free(saved);
+}
+static void test_native_compute_dependencies_preserve_state_without_transfer_scopes(void) {
+    check_native_gas_dispatch_fusion("DC_GAS_COMPUTE_BARRIERS",true,UINT32_MAX);
 }
 static void check_native_multigrid_reference_flow(uint32_t dispatch_budget,bool partial_fixture) {
     char err[256]={0};const char *names[]={"DC_GAS_MULTIGRID","DC_GAS_TEMPORAL_SOR","DC_GAS_COARSE_WG"};char *saved[3];
