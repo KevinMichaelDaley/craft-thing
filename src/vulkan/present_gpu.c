@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "gpu_internal.h"
 #include "runtime_body_gpu.h"
@@ -33,7 +34,8 @@ static void image_barrier(VkCommandBuffer command, VkImage image,
 static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
                           char *err, uint32_t cap) {
     if (!gpu || !gpu->swapchain) return error(err, cap, "GPU window is not initialized");
-    bool trace_waits=getenv("DC_FRAME_TIMINGS")!=NULL;
+    const char *trace_setting=getenv("DC_FRAME_TIMINGS");
+    bool trace_waits=trace_setting&&strcmp(trace_setting,"0")!=0;
     uint64_t setup_begin=trace_waits?SDL_GetPerformanceCounter():0;
     if(gpu->gas) {
         for(uint32_t i=0;i<steps;i++) if(!dc_gpu_tick_step(gpu,err,cap)) return false;
@@ -158,12 +160,13 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
     /* Wait for command and host-visible physics completion, not compositor display. */
     if (vkWaitForFences(gpu->device, 1, &gpu->render_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
         return error(err, cap, "Vulkan present wait failed");
+    uint64_t fence_done=trace_waits?SDL_GetPerformanceCounter():0;
     if(trace_waits) {
         double scale=1000./SDL_GetPerformanceFrequency();
         fprintf(stderr,"Present setup tick%.3f service%.3f pump%.3f\n",(tick_done-setup_begin)*scale,
             (service_done-tick_done)*scale,(acquire_begin-service_done)*scale);
         fprintf(stderr,"Present waits acquire%.3f fence%.3f present%.3f\n",(acquire_done-acquire_begin)*scale,
-            (SDL_GetPerformanceCounter()-present_done)*scale,(present_done-present_begin)*scale);
+            (fence_done-present_done)*scale,(present_done-present_begin)*scale);
     }
     return true;
 }
