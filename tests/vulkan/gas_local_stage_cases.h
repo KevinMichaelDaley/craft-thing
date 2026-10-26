@@ -1,8 +1,8 @@
 #ifndef GAS_LOCAL_STAGE_CASES_H
 #define GAS_LOCAL_STAGE_CASES_H
 static void test_native_unrolled_local_stages_preserve_exact_packets_and_clock(void) {
-    char err[256]={0};const char *names[]={"DC_GAS_LOCAL_STAGES","DC_GAS_WIDE_SCAN","DC_GAS_FIXED_AXIS","DC_GAS_FUSED_HYBRID","DC_GAS_FUSED_AXIS","DC_GAS_LINE_GROUP"};char *saved[6];
-    for(uint32_t k=0;k<6u;k++) {const char *p=getenv(names[k]);saved[k]=p?SDL_strdup(p):NULL;ASSERT_EQ(SDL_setenv(names[k],"1",1),0);}
+    char err[256]={0};const char *names[]={"DC_GAS_LOCAL_STAGES","DC_GAS_WIDE_SCAN","DC_GAS_FIXED_AXIS","DC_GAS_FUSED_HYBRID","DC_GAS_FUSED_AXIS","DC_GAS_LINE_GROUP","DC_GAS_HYBRID_LINES","DC_GAS_MULTIGRID","DC_GAS_TEMPORAL_SOR","DC_GAS_COARSE_WG","DC_GAS_HALF_PRESSURE"};char *saved[11];
+    for(uint32_t k=0;k<11u;k++) {const char *p=getenv(names[k]);saved[k]=p?SDL_strdup(p):NULL;ASSERT_EQ(SDL_setenv(names[k],"1",1),0);}
     dc_chunk_t *chunk=calloc(1,sizeof(*chunk));fr_gas_state_t *input=malloc(4096*sizeof(*input)),*reference=malloc(4096*sizeof(*reference)),*out=malloc(4096*sizeof(*out));
     double *volume=malloc(4096*sizeof(*volume));ASSERT_TRUE(chunk&&input&&reference&&out&&volume);
     fr_gas_model_t model=reference_model();model.kinetic_scale=1./512.;
@@ -28,7 +28,7 @@ static void test_native_unrolled_local_stages_preserve_exact_packets_and_clock(v
     printf("Unrolled local stages tiles%u/%u densityL1%.9g\n",tiles[1],tiles[0],error/mass);
     ASSERT_TRUE(memcmp(out,reference,4096*sizeof(*out))==0&&error/mass==0.);
     for(uint32_t k=0;k<5u;k++) ASSERT_TRUE(fabs(stock_after[k]-stock_before[k])<fmax(1e-10,stock_before[k]*1e-6));
-    for(uint32_t k=0;k<6u;k++) {ASSERT_EQ(SDL_setenv(names[k],saved[k]?saved[k]:"0",1),0);SDL_free(saved[k]);}
+    for(uint32_t k=0;k<11u;k++) {ASSERT_EQ(SDL_setenv(names[k],saved[k]?saved[k]:"0",1),0);SDL_free(saved[k]);}
     free(chunk);free(input);free(reference);free(out);free(volume);PASS();
 }
 #endif

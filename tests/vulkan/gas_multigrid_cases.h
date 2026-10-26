@@ -7,6 +7,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     bool cached_neighbors=strcmp(setting,"DC_GAS_CACHED_NEIGHBORS")==0;
     bool lean_metadata=strcmp(setting,"DC_GAS_LEAN_METADATA")==0;
     bool rhs_tile_cache=strcmp(setting,"DC_GAS_RHS_TILE_CACHE")==0;
+    bool lazy_clear=strcmp(setting,"DC_GAS_LAZY_CLEAR")==0;
     bool line_group=strcmp(setting,"DC_GAS_LINE_GROUP")==0;
     bool zero_energy=strcmp(setting,"DC_GAS_ZERO_ENERGY")==0;
     bool device_work=strcmp(setting,"DC_GAS_DEVICE_WORK")==0;
@@ -14,7 +15,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     bool reuse_rate=strcmp(setting,"DC_GAS_REUSE_LINE_RATE")==0;
     bool cell_owners=strcmp(setting,"DC_GAS_SPARSE_OWNERS")==0;
     bool geometry_activity=strcmp(setting,"DC_GAS_LOCAL_GEOMETRY_ACTIVITY")==0;
-    bool all_slots=direct_first||quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state||reuse_rate||cell_owners||geometry_activity;uint32_t field_count=all_slots?12288u:4096u;
+    bool all_slots=direct_first||quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state||reuse_rate||cell_owners||geometry_activity||lazy_clear;uint32_t field_count=all_slots?12288u:4096u;
     for(uint32_t k=0;k<4;k++) {const char *value=getenv(names[k]);saved[k]=value?SDL_strdup(value):NULL;}
     ASSERT_EQ(SDL_setenv(names[0],"1",1),0);
     ASSERT_EQ(SDL_setenv(names[2],"1",1),0);
@@ -22,8 +23,8 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     fr_gas_state_t *input=malloc(4096*sizeof(*input)),*reference=malloc(field_count*sizeof(*reference)),*out=malloc(field_count*sizeof(*out));
     fr_gas_state_t *dormant=all_slots?malloc(4096*sizeof(*dormant)):NULL;ASSERT_TRUE(!all_slots||dormant);
     double *volume=malloc(4096*sizeof(*volume));dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(input&&reference&&out&&volume&&c);
-    fr_gas_state_t *quiet=quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state||cell_owners||geometry_activity?malloc(4096*sizeof(*quiet)):NULL;
-    ASSERT_TRUE(!(quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state||cell_owners||geometry_activity)||quiet);
+    fr_gas_state_t *quiet=quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state||cell_owners||geometry_activity||lazy_clear?malloc(4096*sizeof(*quiet)):NULL;
+    ASSERT_TRUE(!(quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state||cell_owners||geometry_activity||lazy_clear)||quiet);
     fr_gas_model_t m=reference_model();m.kinetic_scale=1./512.;
     if(quiet) for(uint32_t i=0;i<4096;i++) quiet[i]=reference_air(m,.0012,300,.001);
     for(uint32_t i=0;i<4096;i++) {volume[i]=1;input[i]=reference_air(m,.0012,300,
@@ -62,6 +63,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
             g_pressure_dispatches=0;g_direct_dispatches=0;g_copy_bytes=0;g_transfer_scope_barriers=0;
             g_previous_compute_pipeline=VK_NULL_HANDLE;g_repeated_compute_bindings=0;
             ASSERT_TRUE(fr_gas_gpu_step(g,metadata?.04f:.02f,err,sizeof(err)));
+            if(lazy_clear&&step==1u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_lazy_clear_metadata(g,&used));ASSERT_EQ(used,path!=0u);}
             if(rhs_tile_cache&&step==1u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_rhs_tile_metadata(g,&used));ASSERT_EQ(used,path!=0u);}
             if(reuse_rate&&step==0u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_reused_line_rate(g,&used));ASSERT_EQ(used,path!=0u);}
             if(cell_owners&&step==0u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_sparse_owner_metadata(g,&used));ASSERT_EQ(used,path!=0u);}
@@ -331,5 +333,8 @@ static void test_native_rhs_neighbor_tile_cache_preserves_fused_fields(void) {
     ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_METADATA","1",1),0);
     check_native_gas_dispatch_fusion("DC_GAS_RHS_TILE_CACHE",true,UINT32_MAX);
     ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_METADATA",saved?saved:"0",1),0);SDL_free(saved);
+}
+static void test_native_lazy_clear_keeps_active_quiet_and_dormant_fields(void) {
+    check_native_gas_dispatch_fusion("DC_GAS_LAZY_CLEAR",true,UINT32_MAX);
 }
 #endif
