@@ -32,6 +32,10 @@ class ShaderMemoryTests(unittest.TestCase):
                 self.assertGreater(size, 0)
                 self.assertLessEqual(size, 32768)
 
+    def test_selected_y_axis_scratch_allows_three_groups_in_64kib(self):
+        data = (ROOT / "build/shaders/gas_transport_hybrid_y_wide.comp.spv").read_bytes()
+        self.assertLessEqual(module.workgroup_bytes(data), 65536 // 3)
+
     def test_large_hybrid_binary_uses_512_threads(self):
         for name in ("transport_hybrid_large", "transport_hybrid_x_large", "transport_hybrid_y_large"):
             with self.subTest(shader=name):
