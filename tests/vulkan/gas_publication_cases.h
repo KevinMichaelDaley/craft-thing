@@ -4,6 +4,12 @@ static uint32_t g_publication_submits;
 static uint32_t g_pressure_dispatches;
 static uint32_t g_direct_dispatches;
 static uint32_t g_queue_idle_calls;
+static uint64_t g_copy_bytes;
+VKAPI_ATTR void VKAPI_CALL __real_vkCmdCopyBuffer(VkCommandBuffer command,VkBuffer source,VkBuffer destination,uint32_t count,const VkBufferCopy *regions);
+VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdCopyBuffer(VkCommandBuffer command,VkBuffer source,VkBuffer destination,uint32_t count,const VkBufferCopy *regions) {
+    for(uint32_t i=0;i<count;i++) g_copy_bytes+=regions[i].size;
+    __real_vkCmdCopyBuffer(command,source,destination,count,regions);
+}
 VKAPI_ATTR VkResult VKAPI_CALL __real_vkQueueWaitIdle(VkQueue queue);
 VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkQueueWaitIdle(VkQueue queue) {
     g_queue_idle_calls++;return __real_vkQueueWaitIdle(queue);
