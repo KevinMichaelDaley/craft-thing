@@ -203,3 +203,7 @@ Axis-specialized transport afterREDc876882: actual bind comparison22vs23 repeate
 **2026-10-26T05:18:15Z**
 
 Rejected uncommitted full-atlas publication: slower27.456/31.824 and new quiet-mapped assertion reproduces illegal inactive candidate publication. Unsafe backend removed entirely; source runtime restored to917a1bf. Permanent stronger ownership regression27313db verifies active plume changes while disjoint quiet mapped and dormant stock stay byte-identical, with mid-run admission and both canonical publication modes; native1/1 pluscore+sync1/1 pass. No unsafe backend implementation was pushed; RED history records the experiment. Existing46-case runtime suite was alreadypassing unchanged production code. Next quiet-air policy trial keeps all existing quality assertions.
+
+**2026-10-26T05:31:35Z**
+
+Rejected quiet-air0.1 trial afteree659fb: wake controls1/1, practical5/5, enclosure1/1 and core+sync1/1 passed, but actual1000 26.879/31.052 had no gain and more drift (species6.62e-5, energy-ledger-4.74e-5, short enclosure8.6ppm). All runtime policy changes removed; original0.05 retained. New wake regression is explicitly for that ORIGINAL policy:0.025sleeps/.075wakes plusindependent heat/pressure wake, finite10ppm mass and unchangedclock; actualnative1/1 passes. Existing assertions unchanged. Cold single-scalar activity diagnostic is test-only, never runtime scheduling. Next exact activity lookup reuse; performance target remains RED.

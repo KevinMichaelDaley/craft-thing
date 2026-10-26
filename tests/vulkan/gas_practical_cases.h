@@ -2,8 +2,7 @@
 #define GAS_PRACTICAL_CASES_H
 #include "../../src/vulkan/gas_gpu_internal.h"
 static void test_native_quiet_air_sleeps_but_motion_heat_and_pressure_still_wake(void) {
-    char err[256]={0};const char *old=getenv("DC_GAS_QUIET_AIR");char *saved=old?SDL_strdup(old):NULL;
-    ASSERT_EQ(SDL_setenv("DC_GAS_QUIET_AIR","1",1),0);
+    char err[256]={0};
     dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));
     fr_gas_state_t *input=malloc(4096*sizeof(*input)),*out=malloc(4096*sizeof(*out));
     double *volume=malloc(4096*sizeof(*volume));ASSERT_TRUE(c&&input&&out&&volume);
@@ -11,7 +10,7 @@ static void test_native_quiet_air_sleeps_but_motion_heat_and_pressure_still_wake
     fr_gas_model_t m=reference_model();m.kinetic_scale=1./512.;
     ASSERT_TRUE(fr_gas_gpu_enable(g,&m,.0012,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
     for(uint32_t scenario=0;scenario<4;scenario++) {
-        double velocity=scenario==0?.075:(scenario==1?.125:0.),temperature=scenario==2?400:300;
+        double velocity=scenario==0?.025:(scenario==1?.075:0.),temperature=scenario==2?400:300;
         for(uint32_t i=0;i<4096;i++) {volume[i]=1;input[i]=reference_air(m,.0012,temperature,velocity);}
         if(scenario==3) input[32u*64u+32u]=reference_air(m,.0012,330,0);
         ASSERT_TRUE(fr_gas_gpu_set_gravity(g,scenario==2?900:0,err,sizeof(err))&&
@@ -29,7 +28,7 @@ static void test_native_quiet_air_sleeps_but_motion_heat_and_pressure_still_wake
         fr_gas_gpu_clock_t clock;ASSERT_TRUE(fr_gas_gpu_clock(g,&clock)&&clock.physical_steps==scenario+1u&&fabs(clock.advanced_seconds-(scenario+1u)*.02)<1e-7);
     }
     ASSERT_TRUE(present(g,err,sizeof(err)));dc_gpu_destroy(g);free(c);free(input);free(out);free(volume);
-    ASSERT_EQ(SDL_setenv("DC_GAS_QUIET_AIR",saved?saved:"0",1),0);SDL_free(saved);PASS();
+    PASS();
 }
 static void test_native_practical_safe_line_matches_explicit_flux_inside_stiff_interval(void) {
     char err[256]={0};const char *old=getenv("DC_GAS_HYBRID_LINES");char *saved=old?SDL_strdup(old):NULL;
