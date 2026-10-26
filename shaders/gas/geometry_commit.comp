@@ -8,6 +8,8 @@ void main() {
     float changed=gas_cache_candidate(index).metric.z;if(changed==0.) return;
     uint atlas=gas_atlas(ivec2(int(index%params.width),int(index/params.width)));if(atlas==0xffffffffu) return;
     Gas value=geometry_candidate(atlas);gas_write_world(atlas,value);
+    uint tile=(index/params.width/8u)*((params.width+7u)/8u)+(index%params.width/8u);
+    atomicOr(owner_tiles[gas_dirty_tile(tile)],FR_GAS_GEOMETRY_DIRTY_TILE_BIT);
     if((params.bank&FR_GAS_GEOMETRY_CACHE_BIT)!=0u) {
         if(!gas_cell_owners()&&(params.bank&FR_GAS_GEOMETRY_DIRECT_BIT)==0u&&(params.bank&1u)==0u) bank0[atlas]=value;
         bool okay=false;Primitive primitive=gas_primitive(value,okay);

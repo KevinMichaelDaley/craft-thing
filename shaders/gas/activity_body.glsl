@@ -1,15 +1,32 @@
 #define FR_GAS_WRITABLE_GATES 1
 #include "acoustic.glsl"
 shared uint needed;
+shared uint geometry_needed;
 void main() {
-    uint lane=gl_LocalInvocationIndex;if(lane==0u) needed=0u;barrier();
+    uint lane=gl_LocalInvocationIndex;
     uint width=(params.width+7u)/8u;
     uint tile=(params.bank&512u)!=0u?active_tiles[gl_WorkGroupID.x]:gl_WorkGroupID.y*width+gl_WorkGroupID.x;
     uvec2 p=uvec2(tile%width,tile/width)*8u+uvec2(lane%8u,lane/8u);
+    if(lane==0u) {
+        needed=0u;
+        geometry_needed=(params.bank&FR_GAS_LOCAL_GEOMETRY_ACTIVITY_BIT)!=0u?(owner_tiles[gas_dirty_tile(tile)]&FR_GAS_GEOMETRY_DIRTY_TILE_BIT):0u;
+#ifdef FR_GAS_CACHED_NEIGHBORS
+        if(gl_WorkGroupID.x==0u&&gl_WorkGroupID.y==0u) atomicOr(stats[FR_GAS_ROW_NORM_AFTER_WORD],1u);
+#endif
+    }
+    barrier();
+    if(geometry_needed!=0u) {
+        if(p.x<params.width&&p.y<params.height) {
+            uint at=gas_atlas(ivec2(p));
+            if(at!=0xffffffffu&&(gates[at]&FR_GAS_GEOMETRY_GATE_BIT)!=0u) atomicAnd(gates[at],~FR_GAS_GEOMETRY_GATE_BIT);
+        }
+        if(lane==0u) {activity[tile]=1u;owner_tiles[gas_dirty_tile(tile)]&=~FR_GAS_GEOMETRY_DIRTY_TILE_BIT;}
+        return;
+    }
     if(p.x<params.width&&p.y<params.height) {
         Primitive own=gas_cached(ivec2(p));bool practical=(params.bank&FR_GAS_PRACTICAL_BIT)!=0u;
         bool awake=practical?any(greaterThan(abs(own.hydro.yz),vec2(.05))):any(notEqual(own.hydro.yz,vec2(0)));
-        if((params.bank&FR_GAS_GEOMETRY_WAKE_BIT)!=0u) {
+        if((params.bank&FR_GAS_GEOMETRY_WAKE_BIT)!=0u&&(params.bank&FR_GAS_LOCAL_GEOMETRY_ACTIVITY_BIT)==0u) {
             uint at=gas_atlas(ivec2(p));
             if(at!=0xffffffffu&&(gates[at]&FR_GAS_GEOMETRY_GATE_BIT)!=0u) {
                 atomicAnd(gates[at],~FR_GAS_GEOMETRY_GATE_BIT);awake=true;
@@ -49,8 +66,6 @@ void main() {
     }
     barrier();if(lane==0u) {
         activity[tile]=needed;
-#ifdef FR_GAS_CACHED_NEIGHBORS
-        if(gl_WorkGroupID.x==0u&&gl_WorkGroupID.y==0u) stats[FR_GAS_ROW_NORM_AFTER_WORD]=1u;
-#endif
+        owner_tiles[gas_dirty_tile(tile)]&=~FR_GAS_GEOMETRY_DIRTY_TILE_BIT;
     }
 }

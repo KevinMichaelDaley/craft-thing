@@ -4,11 +4,15 @@
 void main() {
     uint tile=gas_index(),width=(params.width+7u)/8u,height=(params.height+7u)/8u;
     if(tile>=width*height) return;
+    bool local_geometry=(params.bank&FR_GAS_LOCAL_GEOMETRY_ACTIVITY_BIT)!=0u;
+    if(local_geometry&&(params.bank&FR_GAS_GEOMETRY_WAKE_BIT)!=0u&&tile==0u) atomicOr(stats[15],32u);
     ivec2 p=ivec2(int(tile%width),int(tile/width));bool needed=false;
     for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++) {
         ivec2 q=p+ivec2(x,y);
-        if(all(greaterThanEqual(q,ivec2(0)))&&all(lessThan(q,ivec2(width,height)))&&
-            (activity[width*height+uint(q.y)*width+uint(q.x)]&2u)!=0u) needed=true;
+        if(all(greaterThanEqual(q,ivec2(0)))&&all(lessThan(q,ivec2(width,height)))) {
+            uint other=uint(q.y)*width+uint(q.x);
+            if((activity[width*height+other]&2u)!=0u||(local_geometry&&(owner_tiles[gas_dirty_tile(other)]&FR_GAS_GEOMETRY_DIRTY_TILE_BIT)!=0u)) needed=true;
+        }
     }
     if(needed) {uint slot=atomicAdd(indirect[0],1u);active_tiles[slot]=tile;}
 }

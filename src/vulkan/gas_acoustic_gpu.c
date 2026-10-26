@@ -280,7 +280,10 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     uint32_t sweeps=budget("DC_GAS_PRESSURE_SWEEPS",GAS_PRESSURE_SWEEPS),group=budget("DC_GAS_PRESSURE_GROUP",GAS_PRESSURE_GROUP);
     bool compact_large=t->large_transport&&enabled("DC_GAS_SPARSE_LARGE");
     bool sparse=enabled("DC_GAS_SPARSE_RHS")&&t->matrix_valid&&(!t->large_transport||compact_large);
-    bool sparse_activity=enabled("DC_GAS_SPARSE_ACTIVITY")&&t->matrix_valid&&!t->geometry_changed&&(!t->large_transport||compact_large);
+    const char *geometry_activity_setting=getenv("DC_GAS_LOCAL_GEOMETRY_ACTIVITY");
+    bool local_geometry_activity=geometry_activity_setting&&strcmp(geometry_activity_setting,"0")!=0;
+    bool sparse_activity=enabled("DC_GAS_SPARSE_ACTIVITY")&&t->matrix_valid&&(!t->geometry_changed||local_geometry_activity)&&(!t->large_transport||compact_large);
+    if(local_geometry_activity) bank|=FR_GAS_LOCAL_GEOMETRY_ACTIVITY_BIT;
     if(t->geometry_changed) bank|=FR_GAS_GEOMETRY_WAKE_BIT;
     bool sparse_classify=enabled("DC_GAS_SPARSE_CLASSIFY");
     const char *empty_setting=getenv("DC_GAS_SKIP_EMPTY_PRESSURE");

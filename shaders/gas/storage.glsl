@@ -34,6 +34,7 @@ bool gas_gate_open(ivec2 a,uint axis) {
     uint at=gas_atlas(a);return at==0xffffffffu||(gates[at]&(1u<<axis))==0u;
 }
 bool gas_cell_owners() {return parameters[FR_GAS_CELL_OWNER_WORD]!=0u;}
+uint gas_dirty_tile(uint tile) {return ((params.width+7u)/8u)*((params.height+7u)/8u)+tile;}
 uint gas_owner(uint atlas) {return gas_cell_owners()?(gates[atlas]&FR_GAS_CELL_OWNER_BIT)/FR_GAS_CELL_OWNER_BIT:params.bank&1u;}
 Gas gas_source_at(uint atlas) {return gas_owner(atlas)==0u?bank0[atlas]:bank1[atlas];}
 Gas gas_provisional(uint atlas) {return gas_owner(atlas)==0u?bank1[atlas]:bank0[atlas];}

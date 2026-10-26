@@ -41,7 +41,7 @@ bool fr_gas_gpu_sparse_owner_metadata(const dc_gpu_t *g,bool *selected) {
 }
 bool fr_gas_gpu_geometry_activity_metadata(const dc_gpu_t *g,bool *selected) {
     if(!g||!g->gas||!selected) return false;
-    *selected=false;return true;
+    *selected=(((const uint32_t *)g->gas->stats.mapped)[15]&32u)!=0u;return true;
 }
 bool fr_gas_gpu_work_memory(const dc_gpu_t *g,uint64_t *mapped_bytes,uint64_t *device_bytes) {
     if(!g||!g->gas||!mapped_bytes||!device_bytes) return false;
@@ -218,7 +218,7 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     bool mapped_work=!device_work||strcmp(device_work,"0")==0;
     for(uint32_t i=0;i<2;i++) if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,mapped_work,t->cache+i,err,cap)) return false;
     VkDeviceSize tiles=(VkDeviceSize)((g->width+7u)/8u)*((g->height+7u)/8u);
-    if(!dc_gpu_address_buffer_create(g,tiles*4u,mapped_work,&t->owner_tiles,err,cap)) return false;
+    if(!dc_gpu_address_buffer_create(g,tiles*8u,mapped_work,&t->owner_tiles,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*4u,true,&t->gates,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(FR_GAS_MODEL_WORDS+DC_GPU_CHUNK_SLOTS)*4u,true,&t->parameters,err,cap)||
        !dc_gpu_address_buffer_create(g,64,true,&t->stats,err,cap)||
