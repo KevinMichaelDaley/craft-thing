@@ -27,6 +27,11 @@ bool fr_thermal_gpu_source_state(dc_gpu_t *gpu,fr_thermal_probe_t *out,
 bool fr_thermal_gpu_mark_bench_world(dc_gpu_t *gpu);
 /** True only for a module carrying the persisted heat-bench world tag. */
 bool fr_thermal_gpu_is_bench_world(const dc_gpu_t *gpu);
+/** Cold fresh-scene admission of the bonfire's finite1500K ignition probe.
+ * Repeating the call on that world preserves its remaining charge. */
+bool fr_thermal_gpu_mark_bonfire_world(dc_gpu_t *gpu);
+/** Query the persisted authored-world tag without reading simulation fields. */
+bool fr_thermal_gpu_is_bonfire_world(const dc_gpu_t *gpu);
 /** Cold fixture/import of liquid enthalpy above ambient, independent of pigment
  * and solid parcel state. Validate against actual authoritative water volume. */
 bool fr_thermal_gpu_seed_water(dc_gpu_t *gpu,uint32_t slot,uint32_t local_cell,

@@ -28,6 +28,7 @@ static void terrain_combustion(bool practical) {
     fr_reactive_record_t result;bool found=false;
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&result,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(result.state.fuel_mass_fp<wood.fuel_mass_fp);
+    ASSERT_TRUE(fr_reactive_state_valid(&result.state,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
     double oxygen=0,products=0,mass_before=fr_reactive_state_mass_fp(&wood)/65536.,
         mass_after=fr_reactive_state_mass_fp(&result.state)/65536.;

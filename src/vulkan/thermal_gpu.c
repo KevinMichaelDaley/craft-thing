@@ -127,6 +127,17 @@ bool fr_thermal_gpu_mark_bench_world(dc_gpu_t *g) {
 bool fr_thermal_gpu_is_bench_world(const dc_gpu_t *g) {
     return g&&g->thermal&&g->thermal->purpose==FR_THERMAL_WORLD_HEAT_BENCH;
 }
+bool fr_thermal_gpu_mark_bonfire_world(dc_gpu_t *g) {
+    if(!g||!g->thermal) return false;
+    struct fr_thermal_gpu *t=g->thermal;
+    if(t->purpose==FR_THERMAL_WORLD_BONFIRE) return true;
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return false;
+    ((float *)t->probe.mapped)[0]=200.f*(1500.f-FR_THERMAL_AMBIENT_K);
+    ((float *)t->probe.mapped)[1]=200.f;t->purpose=FR_THERMAL_WORLD_BONFIRE;return true;
+}
+bool fr_thermal_gpu_is_bonfire_world(const dc_gpu_t *g) {
+    return g&&g->thermal&&g->thermal->purpose==FR_THERMAL_WORLD_BONFIRE;
+}
 static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
     struct fr_thermal_gpu *t=g->thermal;uint32_t bits=0;memcpy(&bits,&seconds,sizeof(bits));
     uint32_t push[8]={g->width,g->height,mode,bits,0,0,0,t->profile_count};

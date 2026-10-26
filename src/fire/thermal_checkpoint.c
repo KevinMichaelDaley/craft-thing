@@ -37,7 +37,7 @@ static bool unique_chunks(const dc_chunk_t *chunks,uint32_t count) {
     free(coords);return okay;
 }
 static bool valid(const fr_thermal_checkpoint_t *state,const dc_chunk_t *chunks,uint32_t count,char *err,uint32_t cap) {
-    if(!state||state->chunk_count!=count||state->purpose>FR_THERMAL_WORLD_HEAT_BENCH||
+    if(!state||state->chunk_count!=count||state->purpose>FR_THERMAL_WORLD_BONFIRE||
        !isfinite(state->source.excess_energy)||state->source.excess_energy<0||
        state->source.capacity!=(float)FR_THERMAL_PROBE_CAPACITY||
        (count&&(!chunks||!state->water_excess))||!unique_chunks(chunks,count))

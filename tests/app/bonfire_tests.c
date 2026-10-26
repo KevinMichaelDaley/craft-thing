@@ -14,10 +14,13 @@ static void test_bonfire_is_a_playable_finite_terrain_scene(void) {
     ASSERT_TRUE(fr_gpu_reactive_read_cell(view->gpu,slot,cell,&original,&found,err,sizeof(err))&&found);
     ASSERT_EQ(original.state.material,DC_MATERIAL_WOOD);ASSERT_TRUE(original.state.fuel_mass_fp>0);
     ASSERT_TRUE(dc_level_view_heat_probe(view,160,208,true));
-    for(uint32_t i=0;i<360;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)));
+    for(uint32_t i=0;i<360;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
     ASSERT_TRUE(dc_level_view_heat_probe(view,160,208,false));
     fr_reactive_record_t burned;
     ASSERT_TRUE(fr_gpu_reactive_read_cell(view->gpu,slot,cell,&burned,&found,err,sizeof(err))&&found);
+    float temperature=0;ASSERT_TRUE(fr_reactive_state_temperature(&burned.state,&temperature,err,sizeof(err)));
+    printf("Bonfire contact: temperature %.3f K fuel %u -> %u hazard %.5f / %.5f\n",temperature,
+        original.state.fuel_mass_fp,burned.state.fuel_mass_fp,burned.state.ignition_integral,burned.state.ignition_threshold);
     ASSERT_TRUE(burned.state.fuel_mass_fp<original.state.fuel_mass_fp);
     ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
     ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));PASS();

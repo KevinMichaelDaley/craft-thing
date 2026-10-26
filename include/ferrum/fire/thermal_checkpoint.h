@@ -2,7 +2,7 @@
 #define FERRUM_FIRE_THERMAL_CHECKPOINT_H
 #include <stddef.h>
 #include "ferrum/fire/thermal.h"
-enum {FR_THERMAL_WORLD_GENERIC=0u,FR_THERMAL_WORLD_HEAT_BENCH=1u};
+enum {FR_THERMAL_WORLD_GENERIC=0u,FR_THERMAL_WORLD_HEAT_BENCH=1u,FR_THERMAL_WORLD_BONFIRE=2u};
 /** Immutable cold checkpoint: liquid arrays follow the physical chunk order.
  * Probe contact/input is transient; only its finite inventory is persistent. */
 typedef struct {

@@ -59,15 +59,16 @@ void burn(ivec2 position,uint gas_at,inout Gas gas) {
     float mass=dot(gas.species,vec4(1))+gas.dynamics.x;
     float oxygen=mass>0.?gas.species.x/mass:0.;
     float dt=uintBitsToFloat(params.seconds),dry=1.-wet;
-    float threshold=uintBitsToFloat(entry.words[s+21u]);
+    float threshold=uintBitsToFloat(entry.words[s+20u]);
     if(threshold==0.) threshold=ignition_threshold(entry.words[s+4u],entry.words[s+5u]);
     float rate=temperature>=coefficient(m,7u)?coefficient(m,8u)*
-        (dry*dry+wet*coefficient(m,22u))*clamp((oxygen-.12)/(.21-.12),0.,1.):0.;
-    float integral=min(1e20,uintBitsToFloat(entry.words[s+22u])+rate*dt);
+        (dry*dry+wet*coefficient(m,22u))*(1.+uintBitsToFloat(entry.words[s+18u])*(coefficient(m,20u)-1.))*
+        clamp((oxygen-.12)/(.21-.12),0.,1.):0.;
+    float integral=min(1e20,uintBitsToFloat(entry.words[s+21u])+rate*dt);
     uint flags=entry.words[s+1u];
     bool viable=temperature>=coefficient(m,7u)&&oxygen>.12&&wet<.8;
     if(!viable) flags&=~2u;else if(integral>=threshold) flags|=2u;
-    entry.words[s+21u]=floatBitsToUint(threshold);entry.words[s+22u]=floatBitsToUint(integral);
+    entry.words[s+20u]=floatBitsToUint(threshold);entry.words[s+21u]=floatBitsToUint(integral);
     entry.words[s+1u]=flags;
     if(!viable||(flags&2u)==0u) return;
     float demand=coefficient(m,12u);

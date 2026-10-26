@@ -976,13 +976,13 @@ static int smoke_camera_velocity(void) {
 static bool restart_demo(dc_level_view_t **view, const char *base_directory,
                          uint64_t seed, uint32_t *run, uint32_t zoom,
                          dc_gpu_overlay_t overlay, bool spring_enabled,
-                         bool marker_overlay, const char *scene_path,bool smoke_box,char *err, uint32_t cap) {
+                         bool marker_overlay, const char *scene_path,bool smoke_box,bool bonfire,char *err, uint32_t cap) {
     if (*run == UINT32_MAX) {
         snprintf(err, cap, "Too many world restarts");
         return false;
     }
     ++*run;
-    if (scene_path||smoke_box) {
+    if (scene_path||smoke_box||bonfire) {
         char path[928];
         int length=snprintf(path,sizeof(path),"%s_run_%u_XXXXXX",base_directory,*run);
         if (length<0 || (size_t)length>=sizeof(path) || !mkdtemp(path)) {
@@ -990,7 +990,8 @@ static bool restart_demo(dc_level_view_t **view, const char *base_directory,
         }
         bool saved=dc_level_view_destroy(*view,err,cap);*view=NULL;
         if (!saved) return false;
-        *view=smoke_box?dc_level_view_create_smoke_box(path,seed,err,cap):dc_prop_scene_create(path,seed,scene_path,err,cap);
+        *view=bonfire?dc_level_view_create_bonfire(path,seed,err,cap):
+            (smoke_box?dc_level_view_create_smoke_box(path,seed,err,cap):dc_prop_scene_create(path,seed,scene_path,err,cap));
         if (!*view || (scene_path&&!dc_prop_scene_load(*view,scene_path,err,cap))) return false;
     } else if (!dc_app_restart_view(view, base_directory, seed, *run, err, cap)) return false;
     if (!dc_level_view_set_zoom(*view, zoom) ||
@@ -1006,17 +1007,17 @@ static bool restart_demo(dc_level_view_t **view, const char *base_directory,
 static bool update_demo_title(dc_level_view_t *view, uint64_t seed,
                               uint32_t zoom, bool paused, bool entering_seed,
                               bool seed_error, const char *seed_text,
-                              char previous[192],bool heat_bench,uint32_t heat_mode,bool smoke_box,uint32_t smoke_mode) {
+                              char previous[192],bool heat_bench,uint32_t heat_mode,bool smoke_box,uint32_t smoke_mode,bool bonfire) {
     dc_level_view_status_t status;
     if (!dc_level_view_status(view, &status)) return false;
     char title[192];
     if (entering_seed)
         snprintf(title, sizeof(title), "%sSeed: %s  |  Enter to load, Esc to cancel",
                  seed_error ? "Invalid seed  |  " : "", seed_text);
-    else if(heat_bench) {
+    else if(heat_bench||bonfire) {
         const char *modes[]={"authored color","temperature","wetness"};
-        snprintf(title,sizeof(title),"Heat bench prototype | %s | H+LMB finite probe | F7 view | 0-6 materials | P pause, N step, R reset%s",
-            modes[heat_mode],paused?" | paused":"");
+        snprintf(title,sizeof(title),"%s | %s | H+LMB finite probe | F7 view | 0-6 materials | P pause, N step, R reset%s",
+            bonfire?"Ordinary bonfire: dry left, wet right":"Heat bench prototype",modes[heat_mode],paused?" | paused":"");
     } else if(smoke_box) {
         snprintf(title,sizeof(title),"Smoke box prototype | %s | F9 red, F10 blue, F11 vent | F7 view | P pause, N step, R reset%s",
             smoke_mode?"oxygen: cyan21%, red0%":"finite smoke pigment",paused?" | paused":"");
@@ -1092,9 +1093,10 @@ int main(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "--smoke-motion-long") == 0)
         return smoke_moving_water_long();
     bool scripted_input = argc > 1 && strcmp(argv[1], "--smoke-controls-ui") == 0;
-    bool demo_coupled = false, demo_sifting = false, lighting = false,heat_bench=false,smoke_box=false;
+    bool demo_coupled = false, demo_sifting = false, lighting = false,heat_bench=false,smoke_box=false,bonfire=false;
     char heat_directory[]="build/heat_bench_interactive_XXXXXX";
     char smoke_directory[]="build/smoke_box_interactive_XXXXXX";
+    char bonfire_directory[]="build/bonfire_interactive_XXXXXX";
     char scripted_directory[] = "build/ui_input_XXXXXX";
     if (scripted_input && !mkdtemp(scripted_directory)) {
         perror("mkdtemp");
@@ -1128,6 +1130,7 @@ int main(int argc, char **argv) {
         }
         if(strcmp(argv[i],"--heat-bench")==0) {heat_bench=true;continue;}
         if(strcmp(argv[i],"--smoke-box")==0) {smoke_box=true;continue;}
+        if(strcmp(argv[i],"--bonfire")==0) {bonfire=true;continue;}
         if (strcmp(argv[i], "--demo-sifting") == 0) {
             demo_sifting = true;
             continue;
@@ -1166,6 +1169,11 @@ int main(int argc, char **argv) {
     }
     if(heat_bench&&scene_path) {fprintf(stderr,"Choose --heat-bench or --scene\n");return 1;}
     if(smoke_box&&(heat_bench||scene_path)) {fprintf(stderr,"Choose one authored fixture\n");return 1;}
+    if(bonfire&&(heat_bench||smoke_box||scene_path)) {fprintf(stderr,"Choose one authored fixture\n");return 1;}
+    if(bonfire&&!benchmark_world) {
+        if(!mkdtemp(bonfire_directory)) {perror("mkdtemp");return 1;}
+        directory=bonfire_directory;
+    }
     if(heat_bench&&!benchmark_world) {
         if(!mkdtemp(heat_directory)) {perror("mkdtemp");return 1;}
         directory=heat_directory;
@@ -1186,7 +1194,8 @@ int main(int argc, char **argv) {
     }
     char err[256] = {0};
     dc_level_view_t *view = scene_path ? dc_prop_scene_create(directory,seed,scene_path,err,sizeof(err)) :
-        (smoke_box?dc_level_view_create_smoke_box(directory,seed,err,sizeof(err)):dc_level_view_create(directory, seed, err, sizeof(err)));
+        (bonfire?dc_level_view_create_bonfire(directory,seed,err,sizeof(err)):
+        (smoke_box?dc_level_view_create_smoke_box(directory,seed,err,sizeof(err)):dc_level_view_create(directory, seed, err, sizeof(err))));
     if (!view) { fprintf(stderr, "Level create: %s\n", err); return 1; }
     if (scene_path && !dc_prop_scene_load(view,scene_path,err,sizeof(err))) {
         fprintf(stderr,"Scene load: %s\n",err);
@@ -1200,6 +1209,7 @@ int main(int argc, char **argv) {
         fprintf(stderr,"Smoke box setup: %s\n",err);dc_level_view_destroy(view,err,sizeof(err));return 1;
     }
     if(smoke_box) printf("Smoke box prototype: %s | finite650K reservoirs | F9 red, F10 blue, F11 vent; F7 oxygen view\n",directory);
+    if(bonfire) printf("Ordinary bonfire: %s | dry left, saturated right | H+LMB finite ignition probe; F7 heat/wetness; 3 water, 6 wood\n",directory);
     if (lighting && !dc_level_view_renderer_mode(view,FR_RENDERER_LIT)) {
         fprintf(stderr,"Cannot enable propagated lighting\n");
         dc_level_view_destroy(view,err,sizeof(err));return 1;
@@ -1224,8 +1234,8 @@ int main(int argc, char **argv) {
     bool running = true;
     bool failed = false;
     bool paused = false;
-    bool spring_enabled = !(demo_coupled || demo_sifting || scene_path || heat_bench || smoke_box);
-    uint32_t heat_mode=1;
+    bool spring_enabled = !(demo_coupled || demo_sifting || scene_path || heat_bench || smoke_box || bonfire);
+    uint32_t heat_mode=bonfire?0u:1u;
     uint32_t smoke_mode=0;
     bool marker_overlay = false;
     bool single_step = false;
@@ -1296,7 +1306,7 @@ int main(int argc, char **argv) {
                             seed_error = true;
                         } else if (!restart_demo(&view, directory, (uint64_t)parsed,
                                                  &run, zoom, overlay, spring_enabled,
-                                                 marker_overlay, scene_path,smoke_box,err, sizeof(err))||
+                                                 marker_overlay, scene_path,smoke_box,bonfire,err, sizeof(err))||
                                   (heat_bench&&!dc_level_view_setup_heat_bench(view,err,sizeof(err)))||
                                   (smoke_box&&!dc_level_view_setup_smoke_box(view,err,sizeof(err)))) {
                             failed = true; running = false;
@@ -1307,7 +1317,7 @@ int main(int argc, char **argv) {
                             accumulator = 0.0;
                             previous = SDL_GetPerformanceCounter();
                             previous_title[0] = '\0';
-                            if(heat_bench) dc_level_view_heat_overlay(view,heat_mode);
+                            if(heat_bench||bonfire) dc_level_view_heat_overlay(view,heat_mode);
                             if(smoke_box) dc_level_view_smoke_overlay(view,smoke_mode);
                         }
                     }
@@ -1326,7 +1336,7 @@ int main(int argc, char **argv) {
                     if (scene_path && !event.key.repeat) dc_level_view_toggle_lighting(view);
                     break;
                 case SDLK_F7:
-                    if(heat_bench&&!event.key.repeat) {heat_mode=(heat_mode+1u)%3u;dc_level_view_heat_overlay(view,heat_mode);}
+                    if((heat_bench||bonfire)&&!event.key.repeat) {heat_mode=(heat_mode+1u)%3u;dc_level_view_heat_overlay(view,heat_mode);}
                     if(smoke_box&&!event.key.repeat) {smoke_mode=(smoke_mode+1u)%2u;dc_level_view_smoke_overlay(view,smoke_mode);}
                     break;
                 case SDLK_F9: case SDLK_F10: case SDLK_F11:
@@ -1354,7 +1364,7 @@ int main(int argc, char **argv) {
                     if (!event.key.repeat) {
                         if (!restart_demo(&view, directory, seed, &run, zoom,
                                           overlay, spring_enabled, marker_overlay,
-                                          scene_path,smoke_box,err, sizeof(err))||
+                                          scene_path,smoke_box,bonfire,err, sizeof(err))||
                             (heat_bench&&!dc_level_view_setup_heat_bench(view,err,sizeof(err)))||
                             (smoke_box&&!dc_level_view_setup_smoke_box(view,err,sizeof(err)))) {
                             failed = true; running = false;
@@ -1363,7 +1373,7 @@ int main(int argc, char **argv) {
                         single_step = false;
                         previous = SDL_GetPerformanceCounter();
                         previous_title[0] = '\0';
-                        if(heat_bench&&running) dc_level_view_heat_overlay(view,heat_mode);
+                        if((heat_bench||bonfire)&&running) dc_level_view_heat_overlay(view,heat_mode);
                         if(smoke_box&&running) dc_level_view_smoke_overlay(view,smoke_mode);
                     }
                     break;
@@ -1432,7 +1442,7 @@ int main(int argc, char **argv) {
         }
         uint64_t prepare_done=benchmark_timings?SDL_GetPerformanceCounter():0;
         bool probing=false;
-        if(heat_bench) {
+        if(heat_bench||bonfire) {
             int mx=0,my=0;uint32_t x=0,y=0,buttons=SDL_GetMouseState(&mx,&my);
             bool inside=mx>=0&&my>=0&&dc_level_view_screen_cell(view,(uint32_t)mx,(uint32_t)my,&x,&y);
             probing=inside&&SDL_GetKeyboardState(NULL)[SDL_SCANCODE_H]&&(buttons&SDL_BUTTON(SDL_BUTTON_LEFT));
@@ -1467,7 +1477,7 @@ int main(int argc, char **argv) {
         }
         uint64_t present_done=benchmark_timings?SDL_GetPerformanceCounter():0;
         if (running && !update_demo_title(view, seed, zoom, paused, entering_seed,
-                                          seed_error, seed_text, previous_title,heat_bench,heat_mode,smoke_box,smoke_mode)) {
+                                          seed_error, seed_text, previous_title,heat_bench,heat_mode,smoke_box,smoke_mode,bonfire)) {
             snprintf(err, sizeof(err), "Cannot update world status");
             failed = true; running = false;
         }

@@ -10,13 +10,52 @@
 #include "ferrum/fire/gpu.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
+#include "ferrum/fire/combustion_gpu.h"
+#include "bonfire.h"
 #include "level.h"
 #include "level_internal.h"
 #include "thermal_bench.h"
 #include "view_config.h"
 
+static bool error(char *buf,uint32_t cap,const char *message);
 bool dc_level_view_setup_bonfire(dc_level_view_t *view,char *err,uint32_t cap) {
-    (void)view;(void)err;(void)cap;return false;
+    if(!view||VIEW_WIDTH!=480||VIEW_HEIGHT!=270) return false;
+    if(view->restored) {
+        if(!fr_thermal_gpu_is_bonfire_world(view->gpu)) return error(err,cap,"Saved world is not an ordinary bonfire");
+        if(!dc_level_view_wait_visible(view,120000,err,cap)) return false;
+    } else if(!fr_thermal_gpu_is_bonfire_world(view->gpu)) {
+        if(!dc_level_view_wait_visible(view,120000,err,cap)) return false;
+        uint32_t count=view->table.capacity;
+        dc_chunk_coord_t *coords=calloc(count,sizeof(*coords));
+        dc_thermal_bench_chunk_t *chunks=calloc(count,sizeof(*chunks));
+        if(!coords||!chunks) {free(coords);free(chunks);return error(err,cap,"Cannot preflight bonfire fixture");}
+        for(uint32_t i=0;i<count;i++) coords[i]=view->table.slots[i].coord;
+        bool okay=dc_bonfire_build(coords,count,chunks,err,cap);free(coords);
+        for(uint32_t i=0;i<count&&okay;i++) okay=dc_gpu_upload_chunk(view->gpu,i,chunks[i].chunk,err,cap)&&
+            fr_renderer_upload_chunk_colors(view->gpu,i,chunks[i].colors,err,cap)&&
+            fr_gpu_reactive_import_chunk(view->gpu,i,chunks[i].chunk,&chunks[i].reactive,err,cap)&&
+            dc_chunk_table_mark_dirty(&view->table,i);
+        dc_thermal_bench_release(chunks,count);
+        if(!okay||!fr_thermal_gpu_enable(view->gpu,err,cap)||!fr_thermal_gpu_mark_bonfire_world(view->gpu)) return false;
+    }
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    if(!fr_gas_gpu_enable(view->gpu,&model,.0012f,293.15f,err,cap)||
+       !fr_gas_gpu_set_pressure_policy(view->gpu,FR_GAS_PRESSURE_PRACTICAL,err,cap)||
+       !fr_gas_gpu_set_gravity(view->gpu,900,err,cap)||!fr_combustion_gpu_enable(view->gpu,err,cap)) return false;
+    if(view->restored) {
+        for(uint32_t i=0;i<view->table.capacity;i++) if(!view->gas_admitted[i])
+            return error(err,cap,"Saved bonfire is missing authoritative gas stock");
+    } else {
+        for(uint32_t i=0;i<view->table.capacity;i++) if(!view->gas_admitted[i]) {
+            if(!fr_gas_gpu_queue_ambient_chunk(view->gpu,i,err,cap)) return false;
+            view->gas_admitted[i]=true;
+        }
+        if(!fr_gas_gpu_initialize_queued(view->gpu,err,cap)) return false;
+    }
+    view->smoke_box=view->smoke_ready=true;
+    return dc_level_view_set_spring_enabled(view,false)&&fr_thermal_gpu_overlay(view->gpu,0)&&
+        dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO);
 }
 dc_level_view_t *dc_level_view_create_bonfire(const char *directory,uint64_t seed,char *err,uint32_t cap) {
     const uint32_t surface=96;dc_ground_profile_t ground={.width=1,.soil_depth=1,.surface=&surface};
