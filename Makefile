@@ -45,6 +45,7 @@ tools-offline:
 	python3 tools/bootstrap_vulkan.py bootstrap --offline
 test_tools:
 	python3 tests/tools/toolchain_tests.py
+	python3 tests/tools/test_prerequisite_build_tests.py
 	python3 tests/tools/gpu_frequency_tests.py
 	python3 tests/tools/smoke_trace_tests.py
 	python3 tests/tools/smoke_profile_tests.py
