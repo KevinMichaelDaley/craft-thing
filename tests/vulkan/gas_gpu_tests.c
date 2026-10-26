@@ -465,6 +465,7 @@ int main(void) {
     RUN(test_native_practical_policy_rejects_unresolved_gravity_without_advancing);
     RUN(test_native_quiet_air_sleeps_but_motion_heat_and_pressure_still_wake);
     RUN(test_native_practical_safe_line_matches_explicit_flux_inside_stiff_interval);
+    RUN(test_native_four_stage_line_matches_composed_explicit_flux);
     RUN(test_native_cold_audit_reduces_stock_and_does_not_advance_physics);
     RUN(test_native_practical_checkerboard_pressure_relaxes_conservatively);
     RUN(test_native_practical_offset_wall_does_not_drive_sealed_neighbor);
