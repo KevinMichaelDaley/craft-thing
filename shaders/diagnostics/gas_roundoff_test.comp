@@ -1,0 +1,8 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "../gas/storage.glsl"
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    Gas value=gas_practical_state(world[index]);bank0[index]=value;
+    bool valid=false;gas_primitive(value,valid);if(valid) atomicOr(stats[0],1u<<index);
+}
