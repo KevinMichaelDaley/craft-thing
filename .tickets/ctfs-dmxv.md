@@ -199,3 +199,7 @@ Broad regression completed aftertracefix:162 C groups764passes and exactly2known
 **2026-10-26T04:56:33Z**
 
 Axis-specialized transport afterREDc876882: actual bind comparison22vs23 repeated pipelines proves distinct X/Y kernels; state/clock exact and dispatchcount unchanged. Full selected256-thread native46/46, core+sync1/1, sharedstorage gate2/2 acrosssix variants. Audited open1000 improves26.466mean30.572worst; invalid0, stock/work drift small, fourpausedcapturesidentical. Still strict worstRED; no clock/resolution/pressure-schedule changes.
+
+**2026-10-26T05:18:15Z**
+
+Rejected uncommitted full-atlas publication: slower27.456/31.824 and new quiet-mapped assertion reproduces illegal inactive candidate publication. Unsafe backend removed entirely; source runtime restored to917a1bf. Permanent stronger ownership regression27313db verifies active plume changes while disjoint quiet mapped and dormant stock stay byte-identical, with mid-run admission and both canonical publication modes; native1/1 pluscore+sync1/1 pass. No unsafe backend implementation was pushed; RED history records the experiment. Existing46-case runtime suite was alreadypassing unchanged production code. Next quiet-air policy trial keeps all existing quality assertions.

@@ -71,10 +71,22 @@ newly admitted chunks, dormant stock, exact state, CFL scalars and elapsed time.
 `DC_GAS_FUSED_HYBRID=1` combines each line's explicit transport and implicit
 fallback in one workgroup when shared-memory limits permit. It retains the
 existing line algorithms and source/cache ownership. Native state is identical
-with two fewer dispatches; synchronization validation passes. These are still
-opt-in optimizations: the latest audited open-box display run measured
-28.339 ms mean and 32.363 ms worst over 1,000 frames, so the strict complete-frame
-performance requirement remains unmet.
+with two fewer dispatches; synchronization validation passes. `DC_GAS_FIXED_AXIS=1`
+selects distinct X/Y kernels to remove uniform axis branches while preserving
+byte-identical state, CFL values and elapsed time. Their shared scratch fits in
+30,976 bytes. These are still opt-in optimizations: the selected axis-specialized
+open-box display run measured 26.466 ms mean and 30.572 ms worst over 1,000 frames,
+so the strict complete-frame performance requirement remains unmet.
+
+Publication retains its sparse physical-state and cache handoff. The full-atlas
+copy experiment was slower (27.456 ms mean, 31.824 ms worst in its displayed
+1,000-frame run) and was rejected before its implementation was committed.
+Transport candidates outside the accepted active footprint can differ from the
+canonical state; publishing those candidates while leaving their caches asleep
+breaks ownership consistency. A permanent displayed regression checks an active
+plume beside a disjoint quiet mapped component, mid-run chunk admission, and
+dormant stock under both canonical ownership modes. The quiet mapped and dormant
+states must stay byte-identical while the active plume advances its full clock.
 
 ## Modular delivery sequence
 
