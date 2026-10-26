@@ -43,7 +43,7 @@ void cell_map(ivec2 p,out vec2 factor,out GasFlux value,out bool moving) {
 void FR_GAS_PREFIX_ENTRY() {
     uint lane=gl_SubgroupInvocationID,rank=gl_SubgroupID*gl_SubgroupSize+lane;
     uint length=transport_axis()==0u?params.width:params.height,span=(length+FR_GAS_LOCAL_SIZE-1u)/FR_GAS_LOCAL_SIZE;
-    uint begin=rank*span,end=min(begin+span,length),line=gl_WorkGroupID.x;
+    uint begin=rank*span,end=min(begin+span,length),line=transport_line();
     if(transport_work[line*length].mass.w<0.) return;
     vec2 factor=vec2(1);GasFlux value=gas_empty_flux();bool moving=false;
     for(uint cell=begin;cell<end;cell++) {

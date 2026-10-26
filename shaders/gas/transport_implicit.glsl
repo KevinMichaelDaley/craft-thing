@@ -8,6 +8,13 @@ struct TransportCell {vec4 species,dynamics,visual,mass;};
 struct TransportCell {vec4 species,dynamics,visual,mass,energy;};
 #endif
 layout(set=0,binding=24,std430) restrict buffer TransportWork {TransportCell transport_work[];};
+uint transport_line() {
+#ifdef FR_GAS_COMPACT_IMPLICIT_LINES
+    return active_tiles[gl_WorkGroupID.x];
+#else
+    return gl_WorkGroupID.x;
+#endif
+}
 uint transport_axis() {
 #ifdef FR_GAS_FIXED_AXIS
     return uint(FR_GAS_FIXED_AXIS);

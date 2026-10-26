@@ -25,23 +25,41 @@ GasFlux line_face_flux(ivec2 p,float seconds) {
     vec2 own=transport_rates(p,1),neighbor=transport_rates(p+step,-1);
     return transport_add(transport_scale(line_source(p),seconds*own),transport_scale(line_source(p+step),-seconds*neighbor));
 }
+void explicit_implicit_line(uint line) {
+    atomicAdd(stats[FR_GAS_IMPLICIT_LINE_COUNT_WORD],1u);
+#ifdef FR_GAS_COMPACT_EXPLICIT_LINES
+    uint at=atomicAdd(indirect[0],1u);active_tiles[at]=line;
+#endif
+}
 #ifndef FR_GAS_EXPLICIT_ENTRY
 #define FR_GAS_EXPLICIT_ENTRY main
 #endif
 void FR_GAS_EXPLICIT_ENTRY() {
     uint rank=gl_LocalInvocationIndex,length=transport_axis()==0u?params.width:params.height,line=gl_WorkGroupID.x;
-    if(rank==0u) transport_work[line*length].mass.w=0.;
-    if(length>FR_GAS_EXPLICIT_LINE_CAPACITY) {if(rank==0u) atomicAdd(stats[FR_GAS_IMPLICIT_LINE_COUNT_WORD],1u);return;}
+    if(rank==0u) {
+        transport_work[line*length].mass.w=0.;
+#ifdef FR_GAS_COMPACT_EXPLICIT_LINES
+        if(line==0u) atomicOr(stats[15],128u);
+#endif
+    }
+    if(length>FR_GAS_EXPLICIT_LINE_CAPACITY) {if(rank==0u) explicit_implicit_line(line);return;}
     float speed=0.;
     for(uint cell=rank;cell<length;cell+=FR_GAS_LOCAL_SIZE)
         speed=max(speed,abs(gas_cached(transport_point(line,cell)).hydro[transport_axis()+1u]));
     speed=line_maximum(speed);
     if(speed==0.) {
-        if(rank==0u) {transport_work[line*length].mass.w=-1.;atomicAdd(stats[FR_GAS_INACTIVE_LINE_COUNT_WORD],1u);}return;
+        if(rank==0u) {transport_work[line*length].mass.w=-1.;atomicAdd(stats[FR_GAS_INACTIVE_LINE_COUNT_WORD],1u);}
+#ifdef FR_GAS_COMPACT_EXPLICIT_LINES
+        if(transport_direct_first_axis()) for(uint cell=rank;cell<length;cell+=FR_GAS_LOCAL_SIZE) {
+            uint atlas=gas_atlas(transport_point(line,cell));
+            if(atlas!=0xffffffffu) gas_write_provisional(atlas,transport_axis_input(atlas));
+        }
+#endif
+        return;
     }
     float seconds=uintBitsToFloat(params.seconds);
     float courant=seconds*max(speed,FR_GAS_PRACTICAL_MIXING_RATE);
-    if(!(courant<=.9*float(FR_GAS_EXPLICIT_MAX_STAGES))) {if(rank==0u) atomicAdd(stats[FR_GAS_IMPLICIT_LINE_COUNT_WORD],1u);return;}
+    if(!(courant<=.9*float(FR_GAS_EXPLICIT_MAX_STAGES))) {if(rank==0u) explicit_implicit_line(line);return;}
     uint stages=uint(ceil(courant/.9));
     stages=max(stages,1u);float peak=0.;
     for(uint cell=rank;cell<length;cell+=FR_GAS_LOCAL_SIZE) {

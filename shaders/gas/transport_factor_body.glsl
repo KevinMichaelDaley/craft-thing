@@ -34,7 +34,7 @@ void coefficients(ivec2 p,float dt,out vec2 lower,out vec2 diagonal,out vec2 upp
 void FR_GAS_FACTOR_ENTRY() {
     uint lane=gl_SubgroupInvocationID,rank=gl_SubgroupID*gl_SubgroupSize+lane;
     uint length=transport_axis()==0u?params.width:params.height,span=(length+FR_GAS_LOCAL_SIZE-1u)/FR_GAS_LOCAL_SIZE;
-    uint begin=rank*span,end=min(begin+span,length),line=gl_WorkGroupID.x;float dt=uintBitsToFloat(params.seconds);
+    uint begin=rank*span,end=min(begin+span,length),line=transport_line();float dt=uintBitsToFloat(params.seconds);
 #ifdef FR_GAS_COMPACT_WORK
     if((params.bank&FR_GAS_HYBRID_LINES_BIT)!=0u&&transport_work[line*length].mass.w<0.) return;
 #endif
