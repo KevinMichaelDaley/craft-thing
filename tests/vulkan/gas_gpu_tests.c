@@ -414,6 +414,7 @@ int main(void) {
     RUN(test_native_compute_dependencies_preserve_state_without_transfer_scopes);
     RUN(test_native_fence_trace_excludes_slow_log_output);
     RUN(test_native_axis_specialization_uses_distinct_kernels_with_identical_state);
+    RUN(test_native_linear_publication_preserves_mapped_new_and_dormant_stock);
 #endif
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
     RUN(test_native_colored_transport_matches_reference_and_retains_closed_budgets);
