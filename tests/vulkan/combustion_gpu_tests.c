@@ -6,7 +6,7 @@
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 
-static void terrain_combustion(bool practical) {
+static void terrain_combustion(bool practical,bool char_stage) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     uint32_t at=20u*64u+20u;
     chunk->cells[at]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
@@ -14,6 +14,10 @@ static void terrain_combustion(bool practical) {
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     fr_reactive_state_t wood;
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,800,100,&wood,err,sizeof(err)));
+    if(char_stage) {
+        wood.char_mass_fp=wood.fuel_mass_fp;wood.fuel_mass_fp=0;
+        wood.thermal_energy=(float)(fr_reactive_state_heat_capacity(&wood)*800.);
+    }
     wood.flags|=FR_REACTIVE_FLAMING;
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,at,&wood,err,sizeof(err)));
     fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
@@ -27,7 +31,7 @@ static void terrain_combustion(bool practical) {
     ASSERT_TRUE(fr_combustion_gpu_step(g,.05f,err,sizeof(err)));
     fr_reactive_record_t result;bool found=false;
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&result,&found,err,sizeof(err))&&found);
-    ASSERT_TRUE(result.state.fuel_mass_fp<wood.fuel_mass_fp);
+    ASSERT_TRUE(result.state.fuel_mass_fp+result.state.char_mass_fp<wood.fuel_mass_fp+wood.char_mass_fp);
     ASSERT_TRUE(fr_reactive_state_valid(&result.state,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
     double oxygen=0,products=0,mass_before=fr_reactive_state_mass_fp(&wood)/65536.,
@@ -41,19 +45,21 @@ static void terrain_combustion(bool practical) {
     }
     ASSERT_TRUE(oxygen>0&&products>oxygen);
     ASSERT_TRUE(fabs(mass_before-mass_after)<1e-7);
-    uint32_t fuel_before_short_steps=result.state.fuel_mass_fp;
+    uint32_t fuel_before_short_steps=result.state.fuel_mass_fp+result.state.char_mass_fp;
     for(uint32_t step=0;step<20;step++) ASSERT_TRUE(fr_combustion_gpu_step(g,.001f,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&result,&found,err,sizeof(err))&&found);
-    ASSERT_TRUE(result.state.fuel_mass_fp<fuel_before_short_steps&&result.state.char_mass_fp>0);
+    ASSERT_TRUE(result.state.fuel_mass_fp+result.state.char_mass_fp<fuel_before_short_steps&&result.state.char_mass_fp>0);
     ASSERT_TRUE(present(g,err,sizeof(err)));
     fr_reactive_record_t paused;ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&paused,&found,err,sizeof(err))&&found);
     ASSERT_EQ(memcmp(&result,&paused,sizeof(result)),0);
     free(before);free(after);free(chunk);dc_gpu_destroy(g);PASS();
 }
-static void test_displayed_terrain_combustion_debits_real_fuel_and_oxygen(void) {terrain_combustion(false);}
-static void test_sparse_owner_combustion_uses_the_live_gas_bank(void) {terrain_combustion(true);}
+static void test_displayed_terrain_combustion_debits_real_fuel_and_oxygen(void) {terrain_combustion(false,false);}
+static void test_sparse_owner_combustion_uses_the_live_gas_bank(void) {terrain_combustion(true,false);}
+static void test_retained_char_can_finish_burning_on_the_gpu(void) {terrain_combustion(true,true);}
 int main(void) {
     RUN(test_displayed_terrain_combustion_debits_real_fuel_and_oxygen);
     RUN(test_sparse_owner_combustion_uses_the_live_gas_bank);
+    RUN(test_retained_char_can_finish_burning_on_the_gpu);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
