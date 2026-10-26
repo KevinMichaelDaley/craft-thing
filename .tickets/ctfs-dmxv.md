@@ -299,3 +299,7 @@ Partial-cut-cell physics fix GREEN: native RED1998ea4 proved half blockage doubl
 **2026-10-26T19:52:22Z**
 
 Post-remap complete regression finished: actual native65/65, placement5/5; full repository163Cgroups765passes with only2pre-existing ctr-ojvy authored-stage failures at67/135, Python checks clean. Source clean at35af42b. Next opt-in practical noise-floor trial is locked before GREEN:1e-2 normalized RHS-energy admission (existing1e-3), same12/12sweeps/clock/resolution; retain unchanged reference-flow, sealed-neighbor, checkerboard, long-run inventory/finite-state and full-display frame gates. This defers weak pressure corrections; it cannot erase stock/time or change strong-disturbance solver work.
+
+**2026-10-26T19:59:08Z**
+
+Practical weak-pressure floor opt-in GREEN e11cdab: actual native66/66 plus core/sync1/1; carved1000 finite stock/pause passes27.915mean46.373worst, strict worst stillRED. Marker confirms25vs90solve tiles in weak perturbation, densityL1=0. No profile promotion. Next bounded8/8 smoother trial uses omega1.5 and explicitly practical sealed-neighbor density allowance3percent (no species leakage, no stock/clock relaxation), consistent with user-authorized approximate numerics; exact diagnostic profile retains1percent. Existing checkerboard/reference-flow/finite/inventory gates remain.
