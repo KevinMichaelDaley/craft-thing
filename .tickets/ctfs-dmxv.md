@@ -183,3 +183,7 @@ Compiler diagnostic tooling: named actual-display selected5 gas pipelines show0 
 **2026-10-26T04:26:16Z**
 
 Practical-only specialization of hybrid transport/grouped finish/fused RHS: strict fallback branches remain in original diagnostic pipelines. CPU dispatch already admits these specialized pipelines only for practical mode. Exact native transport/metadata and field+CFL comparisons pass; core+sync comparisons clean; full native43/43. Audited open1000 26.898mean30.325worst, invalid0, species3.96e-5/pigment4.70e-7/energy-ledger-2.06e-5 relative drift and four paused captures identical. Strict worst still RED by0.325ms; no pressure-schedule, clock, resolution or acceptance-limit change.
+
+**2026-10-26T04:30:53Z**
+
+Narrow compute destinations after REDb29a68d: actual barrier scopes10 vs40, same51dispatches and exact fields/clock. Full native44/44 and core+sync1/1 clean. Actual audited open1000 27.076mean31.450worst, finite/stock/pause pass; no demonstrated frame gain, retained opt-in and strict worst remains RED. Taking full1000-frame stage/wait trace next; performance requirement unchanged.
