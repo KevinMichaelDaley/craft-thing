@@ -35,7 +35,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->practical_explicit);
     fr_renderer_compute_destroy(g,&t->practical_hybrid);
     for(uint32_t i=0;i<2;i++) fr_renderer_compute_destroy(g,&t->practical_hybrid_axis[i]);
-    fr_renderer_compute_destroy(g,&t->temporal_sor);fr_renderer_compute_destroy(g,&t->fine_jacobi);
+    fr_renderer_compute_destroy(g,&t->temporal_sor);
     fr_renderer_compute_destroy(g,&t->coarse_group);
     fr_renderer_compute_destroy(g,&t->rhs_fused);
     fr_renderer_compute_destroy(g,&t->metadata_lean);fr_renderer_compute_destroy(g,&t->rhs_lean);
@@ -133,10 +133,6 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     }
     if(properties.limits.maxComputeWorkGroupInvocations>=128u&&properties.limits.maxComputeWorkGroupSize[0]>=128u&&
        !fr_renderer_compute_init(g,&t->temporal_sor,buffers,27,16,"build/shaders/gas_pressure_temporal.comp.spv",err,cap)) goto fail;
-    const char *jacobi_mode=getenv("DC_GAS_MG_JACOBI");
-    const char *jacobi_path=jacobi_mode&&strncmp(jacobi_mode,"cheb",4)==0?"build/shaders/gas_pressure_chebyshev_temporal.comp.spv":"build/shaders/gas_pressure_jacobi_temporal.comp.spv";
-    if(properties.limits.maxComputeWorkGroupInvocations>=256u&&properties.limits.maxComputeWorkGroupSize[0]>=256u&&
-       !fr_renderer_compute_init(g,&t->fine_jacobi,buffers,27,16,jacobi_path,err,cap)) goto fail;
     if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_COARSE_GROUP_CAPACITY*4u&&
        properties.limits.maxComputeWorkGroupInvocations>=128u&&properties.limits.maxComputeWorkGroupSize[0]>=128u) {
         const char *path=use_wide?"build/shaders/gas_pressure_coarse_group_wide.comp.spv":"build/shaders/gas_pressure_coarse_group.comp.spv";
@@ -240,15 +236,6 @@ static void multigrid_dispatch(dc_gpu_t *g,const fr_renderer_compute_t *pipeline
 }
 static void multigrid_smooth(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank,uint32_t level,bool post) {
     bool boundary=(bank&FR_GAS_MG_BOUNDARY_BIT)!=0u;
-    const char *jacobi=getenv("DC_GAS_MG_JACOBI");
-    if(level==0u&&t->fine_jacobi.pipeline&&jacobi&&strcmp(jacobi,"0")!=0) {
-        VkBufferCopy copy={.size=(VkDeviceSize)g->width*g->height*4u};barrier(g);
-        vkCmdCopyBuffer(g->command,t->fields[4].buffer,t->transport_work.buffer,1,&copy);
-        uint32_t pairs=strstr(jacobi,"16")!=NULL?4u:2u;
-        for(uint32_t pair=0u;pair<pairs;pair++) indirect_dispatch(g,t,&t->fine_jacobi,dt,
-            bank|((pair&1u)!=0u?FR_GAS_TEMPORAL_SOURCE_BIT:0u),0);
-        return;
-    }
     if(level==0u) {pressure_sweeps(g,t,dt,bank,boundary?(post?12u:6u):12u);return;}
     uint32_t coarse_sweeps=boundary&&level==2u&&!post?2u:4u;
     const char *setting=getenv("DC_GAS_MG_TEMPORAL");
