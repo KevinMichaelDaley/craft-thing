@@ -1,10 +1,15 @@
 #include "acoustic.glsl"
 #ifdef FR_GAS_FUSED_METADATA_RHS
 #include "transport_metadata_body.glsl"
-vec4 gas_rhs_neighbor(ivec2 p) {
-    Gas transported=gas_practical_state(gas_provisional(gas_atlas(p)));bool valid=false;Primitive moved=gas_primitive(transported,valid);
-    float work=0.,impulse=0.;Gas value=valid?gas_buoyancy_cached(transported,moved,uintBitsToFloat(params.seconds),work,impulse):transported;
-    return vec4(value.dynamics.zw,work,gas_source(p).geometry.x);
+vec4 gas_rhs_neighbor(Primitive source,Gas transported) {
+    float mass=gas_mass(transported);if(mass<=0.) return vec4(transported.dynamics.zw,0.,source.metric.w);
+    float capacity=dot(transported.species,vec4(gas_parameter(5u),gas_parameter(6u),gas_parameter(7u),gas_parameter(8u)))+transported.dynamics.x*gas_parameter(9u);
+    float moles=dot(transported.species,vec4(gas_parameter(0u),gas_parameter(1u),gas_parameter(2u),gas_parameter(3u)))+transported.dynamics.x*gas_parameter(4u);
+    float temperature=gas_thermal_energy(transported)/capacity;
+    float pressure=moles*temperature/(transported.geometry.x*gas_parameter(FR_GAS_KINETIC_WORD));
+    Primitive moved=gas_empty_primitive();moved.hydro.x=mass/transported.geometry.x;moved.hydro.w=pressure;
+    float work=0.,impulse=0.;Gas value=gas_buoyancy_cached(transported,moved,uintBitsToFloat(params.seconds),work,impulse);
+    return vec4(value.dynamics.zw,work,source.metric.w);
 }
 #endif
 Primitive gas_rhs_stage(ivec2 p,uint index) {
@@ -52,13 +57,17 @@ void main() {
         if(owner!=0xffffffffu&&(gates[owner]&(1u<<(d/2u)))!=0u) continue;
         uint j=uint(q.y)*params.width+uint(q.x);bool moved=gas_advected(j);
 #ifdef FR_GAS_FUSED_METADATA_RHS
-        vec4 neighbor=moved?gas_rhs_neighbor(q):vec4(other.hydro.yz*other.metric.z,0.,other.metric.w);
+        Gas neighbor_state=moved?gas_practical_state(gas_provisional(gas_atlas(q))):gas_empty();
+        vec4 neighbor=moved?gas_rhs_neighbor(other,neighbor_state):vec4(other.hydro.yz*other.metric.z,0.,other.metric.w);
 #else
         vec4 neighbor=moved?provisional[j]:vec4(other.hydro.yz*other.metric.z,0.,other.metric.w);
 #endif
         float area=min(volume,neighbor.w),enthalpy=.5*(acoustic[index].x+other.metric.x);
         if(large_energy) {
             Primitive other_stage=gas_rhs_stage(q,j);
+#ifdef FR_GAS_FUSED_METADATA_RHS
+            if(moved) {vec2 head=gas_large_pressure_state(neighbor_state,other.hydro.w);other_stage=other;other_stage.hydro.x=head.x;other_stage.metric.x=head.y;}
+#endif
             precise float density=own_stage.hydro.x+other_stage.hydro.x;
             precise float energy=own_stage.hydro.x*own_stage.metric.x+other_stage.hydro.x*other_stage.metric.x;
             enthalpy=density>0.?energy/density:0.;
