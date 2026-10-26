@@ -72,16 +72,19 @@ void feedback(uint index,ivec2 p,uint at) {
     pixels[index]=packUnorm4x8(vec4(mix(base,flame,1.-float(depth-1u)*.13),1.));
 }
 void loose_ash(ivec2 position,uint at,uvec2 handle,Words entry,inout Gas gas) {
-    uint s=FR_ENTRY_STATE,mass=entry.words[s+11u]+entry.words[s+12u];
+    uint s=FR_ENTRY_STATE;
+    if(entry.words[s+11u]>0xffffffffu-entry.words[s+12u]) return;
+    uint mass=entry.words[s+11u]+entry.words[s+12u];
     if(mass==0u) {
-        gas.dynamics.y+=uintBitsToFloat(entry.words[s+17u])+uintBitsToFloat(entry.words[s+25u])+uintBitsToFloat(entry.words[s+26u]);
+        gas.dynamics.y+=uintBitsToFloat(entry.words[s+17u])+uintBitsToFloat(entry.words[s+25u])+
+            uintBitsToFloat(entry.words[s+26u])+uintBitsToFloat(entry.words[s+24u]);
         entry.words[FR_ENTRY_OWNER]=0u;uint generation=min(handle.y,0xfffffffeu)+1u;
         entry.words[FR_ENTRY_GENERATION]=generation;
         Words mailbox=Words(uvec2(root[20],root[21]));atomicAdd(mailbox.words[FR_ARENA_MAIL_LIVE],0xffffffffu);
         if(generation==0xffffffffu) atomicAdd(mailbox.words[FR_ARENA_MAIL_RETIRED],1u);
         else {
             memoryBarrierBuffer();atomicOr(Words(uvec2(root[18],root[19])).words[handle.x/32u],1u<<(handle.x%32u));
-            atomicAdd(mailbox.words[FR_ARENA_MAIL_FREE],1u);
+            memoryBarrierBuffer();atomicAdd(mailbox.words[FR_ARENA_MAIL_FREE],1u);
         }
         Handles(uvec2(root[6],root[7])).values[at]=uvec2(0);cells[at].x=0u;return;
     }
@@ -110,6 +113,7 @@ void burn(ivec2 position,uint gas_at,inout Gas gas) {
     Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
     if(entry.words[FR_ENTRY_GENERATION]!=handle.y||entry.words[FR_ENTRY_OWNER]!=1u) return;
     uint s=FR_ENTRY_STATE,m=entry.words[s],wood_fuel=entry.words[s+9u];
+    if((entry.words[s+13u]|entry.words[s+14u]|entry.words[s+15u]|entry.words[s+16u])!=0u) return;
     bool char_stage=wood_fuel==0u;uint fuel=char_stage?entry.words[s+10u]:wood_fuel;
     uint profile=char_stage?12u:m;
     if(m!=7u&&m!=8u&&m!=12u) return;
