@@ -73,6 +73,8 @@ Gas gas_practical_momentum(Gas value,float thermal) {
         float molecular=dot(value.species,vec4(gas_parameter(0u),gas_parameter(1u),gas_parameter(2u),gas_parameter(3u)))+value.dynamics.x*gas_parameter(4u);
         float gamma=cv>0.?1.+molecular/cv:1.;
         float budget=max(0.,.125*gamma*(gamma-1.)*thermal);vec2 direction=value.dynamics.zw/largest;
+        float kinetic=gas_kinetic_energy(value);
+        if(budget>0.&&gas_finite(kinetic)&&kinetic<.98*budget) return value;
         float factor=(sqrt(budget)*sqrt(mass)/largest)*sqrt(2./gas_parameter(FR_GAS_KINETIC_WORD))/sqrt(dot(direction,direction));
         if(factor<1.) {value.dynamics.zw*=factor;atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],FR_GAS_LIMITED_KINETIC);}
     }
@@ -97,6 +99,11 @@ Gas gas_practical_state(Gas value) {
         }
         float largest=max(abs(value.dynamics.z),abs(value.dynamics.w));
         if(energy>0.&&largest>0.&&gas_finite(largest)) {
+            float kinetic=gas_kinetic_energy(value);
+            if(gas_finite(kinetic)&&kinetic<.98*energy) {
+                if(repaired!=0u) atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],repaired);
+                return value;
+            }
             vec2 direction=value.dynamics.zw/largest;
             float factor=(sqrt(energy)*sqrt(mass)/largest)*sqrt(1.98/gas_parameter(FR_GAS_KINETIC_WORD))/sqrt(dot(direction,direction));
             if(factor<1.) {value.dynamics.zw*=factor;repaired|=FR_GAS_LIMITED_KINETIC;}

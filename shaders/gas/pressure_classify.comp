@@ -9,7 +9,7 @@ void main() {
     uvec2 p=uvec2(tile%width,tile/width)*8u+uvec2(lane%8u,lane/8u);
     if(p.x<params.width&&p.y<params.height) {
         uint at=p.y*params.width+p.x;
-        float tolerance=(params.bank&FR_GAS_MULTIGRID_BIT)!=0u?1e-4:1e-7;
+        float tolerance=(params.bank&FR_GAS_MULTIGRID_BIT)!=0u?1e-3:1e-7;
         if(correction_data[at].y>0.&&abs(correction_data[at].x)/pressure[at].w>tolerance) atomicOr(needed,1u);
     }
     barrier();if(lane==0u) active_mask[tile]=needed;

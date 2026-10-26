@@ -31,9 +31,14 @@ retry, extra submit or physical-time reduction is involved. Intervals above
 work cycle failed the long-interval stability test and is not admitted there.
 This opt-in backend must pass sustained displayed measurements before promotion.
 Its pressure activity threshold is a relative right-hand-side disturbance of
-`1e-4` (0.01 percent of the local pressure-energy scale); strict and long-interval
+`1e-3` (0.1 percent of the local pressure-energy scale); strict and long-interval
 fallback paths retain `1e-7`. This defers imperceptible corrections rather than
 iterating to exact convergence, while preserving full elapsed time and stock.
+The optional fused metadata/RHS path reads an immutable transported candidate
+for all neighbor predictors. Each owning cell retains full EOS validation;
+buoyancy is applied during finalization before the same guarded commit. Kinetic
+guards can skip their scaled square roots only below a conservative 98-percent
+energy comparison; the existing limiter handles the boundary and extreme values.
 
 ## Modular delivery sequence
 
