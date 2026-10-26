@@ -27,6 +27,10 @@ struct fr_gas_gpu {
     bool trace;
     uint64_t trace_submits,trace_queue_ticks,trace_wait_ticks;
 };
+bool fr_gas_gpu_pressure_tiles(const dc_gpu_t *g,uint32_t *tiles) {
+    if(!g||!g->gas||!g->gas->acoustic.ready||!tiles) return false;
+    *tiles=((const uint32_t *)g->gas->acoustic.indirect.mapped)[0];return true;
+}
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
     return false;
