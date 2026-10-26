@@ -7,7 +7,7 @@ void main() {
     if(!practical&&!(uintBitsToFloat(stats[FR_GAS_RESIDUAL_WORD])<=1e-7)) return;
     if((params.bank&FR_GAS_ZERO_ENERGY_BIT)!=0u&&gl_WorkGroupID.x==0u&&gl_WorkGroupID.y==0u&&gl_LocalInvocationIndex==0u)
         atomicOr(stats[FR_GAS_ROW_NORM_AFTER_WORD],2u);
-    if((params.bank&FR_GAS_PAIRED_ENERGY_BIT)!=0u&&gl_WorkGroupID.x==0u&&gl_WorkGroupID.y==0u&&gl_LocalInvocationIndex==0u)
+    if((params.bank&FR_GAS_SCALAR_ENERGY_BIT)!=0u&&gl_WorkGroupID.x==0u&&gl_WorkGroupID.y==0u&&gl_LocalInvocationIndex==0u)
         atomicOr(stats[FR_GAS_ROW_NORM_AFTER_WORD],256u);
 #ifdef FR_GAS_GROUP_RATE
     uint tiles_per_group=FR_GAS_LOCAL_SIZE/64u,rank=gl_WorkGroupID.x*tiles_per_group+gl_LocalInvocationIndex/64u;
