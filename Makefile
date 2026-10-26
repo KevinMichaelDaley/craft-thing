@@ -1801,6 +1801,7 @@ GAS_SHADERS += build/shaders/gas_pressure_temporal.comp.spv
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_pack pressure_temporal_packed)
 GAS_SHADERS += build/shaders/gas_pressure_rhs_fused.comp.spv
 GAS_SHADERS += build/shaders/gas_pressure_mask_reset.comp.spv
+GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,mg_reconcile1 mg_reconcile2 mg_reconcile3)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,mg_temporal1 mg_temporal2)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,mg_relax1 mg_relax2 mg_restrict1 mg_restrict2 mg_restrict3 mg_prolong0 mg_prolong1 mg_prolong2)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_coarse_group pressure_coarse_group_wide)

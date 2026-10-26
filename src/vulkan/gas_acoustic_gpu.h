@@ -21,6 +21,7 @@ typedef struct {
     fr_renderer_compute_t rhs_fused;
     fr_renderer_compute_t pack_pressure,packed_sor;
     fr_renderer_compute_t reset_pressure_mask;
+    fr_renderer_compute_t mg_reconcile[3];
     dc_gpu_address_buffer_t transport_work;
     VkBuffer state_bank[2];VkDeviceSize state_bytes;
     dc_gpu_address_buffer_t fields[11],indirect;

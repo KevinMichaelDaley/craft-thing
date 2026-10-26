@@ -40,6 +40,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     for(uint32_t i=0;i<3;i++) {
         if(i<2u) {fr_renderer_compute_destroy(g,&t->mg_relax[i]);fr_renderer_compute_destroy(g,&t->mg_temporal[i]);}
         fr_renderer_compute_destroy(g,&t->mg_restrict[i]);fr_renderer_compute_destroy(g,&t->mg_prolong[i]);
+        fr_renderer_compute_destroy(g,&t->mg_reconcile[i]);
     }
     for(uint32_t i=0;i<11;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
     dc_gpu_address_buffer_destroy(g,&t->indirect);
@@ -128,6 +129,10 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
            !fr_renderer_compute_init(g,&t->packed_sor,buffers,25,16,"build/shaders/gas_pressure_temporal_packed.comp.spv",err,cap)) goto fail;
     }
     if(!fr_renderer_compute_init(g,&t->reset_pressure_mask,buffers,25,16,"build/shaders/gas_pressure_mask_reset.comp.spv",err,cap)) goto fail;
+    for(uint32_t i=0;i<3;i++) {
+        char path[128];snprintf(path,sizeof(path),"build/shaders/gas_mg_reconcile%u.comp.spv",i+1u);
+        if(!fr_renderer_compute_init(g,&t->mg_reconcile[i],buffers,25,16,path,err,cap)) goto fail;
+    }
     t->ready=true;return true;
 fail:
     fr_gas_acoustic_destroy(g,t);return false;
@@ -180,28 +185,31 @@ static void multigrid_dispatch(dc_gpu_t *g,const fr_renderer_compute_t *pipeline
     uint32_t x=count<max_x?count:max_x;
     dispatch(g,pipeline,x,(count+x-1u)/x,dt,bank|(level<<20u));
 }
-static void multigrid_smooth(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank,uint32_t level) {
-    if(level==0u) {pressure_sweeps(g,t,dt,bank,12u);return;}
+static void multigrid_smooth(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank,uint32_t level,bool post) {
+    bool boundary=(bank&FR_GAS_MG_BOUNDARY_BIT)!=0u;
+    if(level==0u) {pressure_sweeps(g,t,dt,bank,boundary?(post?12u:6u):12u);return;}
+    uint32_t coarse_sweeps=boundary&&level==2u&&!post?2u:4u;
     const char *setting=getenv("DC_GAS_MG_TEMPORAL");
-    if(setting&&strcmp(setting,"0")!=0) {
+    if(coarse_sweeps==4u&&setting&&strcmp(setting,"0")!=0) {
         uint32_t scale=1u<<level,width=(g->width+scale-1u)/scale,height=(g->height+scale-1u)/scale;
         for(uint32_t pair=0;pair<2u;pair++) dispatch(g,&t->mg_temporal[level-1u],(width+7u)/8u,(height+7u)/8u,
             dt,bank|((pair&1u)!=0u?1u<<24u:0u));
         return;
     }
-    for(uint32_t i=0;i<4u;i++) multigrid_dispatch(g,&t->mg_relax[level-1u],dt,bank|((i&1u)!=0u?1u<<24u:0u),level);
+    for(uint32_t i=0;i<coarse_sweeps;i++) multigrid_dispatch(g,&t->mg_relax[level-1u],dt,bank|((i&1u)!=0u?1u<<24u:0u),level);
 }
 static void multigrid_cycle(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank,uint32_t tiles) {
     for(uint32_t level=0u;level<3u;level++) {
-        multigrid_smooth(g,t,dt,bank,level);
+        multigrid_smooth(g,t,dt,bank,level,false);
         multigrid_dispatch(g,&t->mg_restrict[level],dt,bank,level+1u);
+        if((bank&FR_GAS_MG_BOUNDARY_BIT)!=0u) multigrid_dispatch(g,&t->mg_reconcile[level],dt,bank,level+1u);
     }
     if(t->coarse_group.pipeline&&tiles<=FR_GAS_COARSE_GROUP_CAPACITY) dispatch(g,&t->coarse_group,1u,1u,dt,bank);
     else for(uint32_t i=0u;i<32u;i++) {
         dispatch(g,&t->coarse_sor,(tiles+63u)/64u,1u,dt,bank);dispatch(g,&t->coarse_sor,(tiles+63u)/64u,1u,dt,bank|2u);
     }
     for(uint32_t reverse=3u;reverse>0u;reverse--) {
-        uint32_t level=reverse-1u;multigrid_dispatch(g,&t->mg_prolong[level],dt,bank,level);multigrid_smooth(g,t,dt,bank,level);
+        uint32_t level=reverse-1u;multigrid_dispatch(g,&t->mg_prolong[level],dt,bank,level);multigrid_smooth(g,t,dt,bank,level,true);
     }
 }
 static bool multigrid_enabled(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank) {
@@ -234,6 +242,8 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(skip_empty) bank|=FR_GAS_SKIP_EMPTY_PRESSURE_BIT;
     if(getenv("DC_GAS_COMPARE_ROW_SETUP")) bank|=FR_GAS_COMPARE_ROW_SETUP_BIT;
     if(multigrid_enabled(g,t,dt,bank)) bank|=FR_GAS_MULTIGRID_BIT;
+    const char *boundary_setting=getenv("DC_GAS_MG_BOUNDARY");
+    if((bank&FR_GAS_MULTIGRID_BIT)!=0u&&boundary_setting&&strcmp(boundary_setting,"0")!=0) bank|=FR_GAS_MG_BOUNDARY_BIT;
     const char *metadata_setting=getenv("DC_GAS_FUSED_METADATA");
     if(t->large_transport&&t->practical&&metadata_setting&&strcmp(metadata_setting,"0")!=0&&
        (bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) bank|=FR_GAS_FUSED_METADATA_BIT;

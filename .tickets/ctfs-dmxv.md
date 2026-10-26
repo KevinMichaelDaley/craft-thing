@@ -147,3 +147,7 @@ Latest displayed1000: specialized hierarchy31.706/51.371; practical pressure thr
 **2026-10-26T00:46:44Z**
 
 Packed pressurec09442f is numerically exact(native36/36), but audited1000 scalar32.819/39.777 and vector-pair32.923/56.424 are slower than30.922/37.864 unpacked; vector experiment discarded and packing stays opt-in/off. Next skip pressure halo tiles with no gas, caching only GPU tile occupancy across valid geometry; lock exact-state and reduced tile-work comparison before enabling.
+
+**2026-10-26T01:15:30Z**
+
+Experimental partial coarse topology/short smoothing WIP: fixed4-node GPU connectivity and child-mask face reconciliation prevent false wall links. Concave reference/work gate passes77vs179dispatches,.172%massL1,.581%pigment,.540velocityRMS; practical stability remains RED(3/5: sealed neighbor6.48% and long-interval pressure bound fail). Not enabled by default/not baseline. Next conservative pairwise viscous stabilization, preserving physical clock, finite inventory and mechanical/thermal accounting; existing stability thresholds unchanged.

@@ -15,5 +15,6 @@ void main() {
         uint j=d==0u?index+1u:(d==1u?index-1u:(d==2u?index+params.width:index-params.width));
         rhs+=coefficients[d]*correction[j];
     }
-    correction[index]+=data.z*(rhs*data.y-correction[index]);
+    float relaxation=(params.bank&FR_GAS_MG_BOUNDARY_BIT)!=0u?1.5:data.z;
+    correction[index]+=relaxation*(rhs*data.y-correction[index]);
 }

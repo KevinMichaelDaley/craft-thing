@@ -43,7 +43,10 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     free(input);free(reference);free(out);free(volume);free(c);PASS();
 }
 static void test_native_multigrid_temporal_preserves_steps_with_fewer_dispatches(void) {
+    char err[256]={0};const char *old=getenv("DC_GAS_MG_BOUNDARY");char *saved=old?SDL_strdup(old):NULL;
+    ASSERT_EQ(SDL_setenv("DC_GAS_MG_BOUNDARY","0",1),0);
     check_native_gas_dispatch_fusion("DC_GAS_MG_TEMPORAL",false,0);
+    ASSERT_EQ(SDL_setenv("DC_GAS_MG_BOUNDARY",saved?saved:"0",1),0);SDL_free(saved);
 }
 static void test_native_fused_transport_metadata_preserves_state_with_fewer_dispatches(void) {
     check_native_gas_dispatch_fusion("DC_GAS_FUSED_METADATA",true,0);
@@ -88,7 +91,12 @@ static void check_native_multigrid_reference_flow(uint32_t dispatch_budget,bool 
     double mass=0,mass_error=0,color=0,color_error=0,velocity_error=0,velocity_reference=0;
     double before[5]={0},after[5]={0};
     for(uint32_t i=0;i<4096;i++) {
-        if(volume[i]==0) {ASSERT_TRUE(out[i].energy==0&&out[i].momentum[0]==0&&out[i].momentum[1]==0);continue;}
+        if(volume[i]==0) {
+            ASSERT_TRUE(out[i].energy==0&&out[i].momentum[0]==0&&out[i].momentum[1]==0);
+            for(uint32_t k=0;k<5;k++) ASSERT_TRUE(out[i].species[k]==0&&reference[i].species[k]==0);
+            for(uint32_t k=0;k<3;k++) ASSERT_TRUE(out[i].pigment[k]==0&&reference[i].pigment[k]==0);
+            continue;
+        }
         fr_gas_thermo_t a,b;ASSERT_TRUE(fr_gas_thermodynamics(&m,reference+i,1,&a,err,sizeof(err))&&fr_gas_thermodynamics(&m,out+i,1,&b,err,sizeof(err)));
         ASSERT_TRUE(b.temperature_K>0&&b.temperature_K<5000&&b.pressure<1e5);
         mass+=a.mass;mass_error+=fabs(a.mass-b.mass);

@@ -37,7 +37,8 @@ void main() {
                 uint neighbor=d==0u?slot+1u:(d==1u?slot-1u:(d==2u?slot+16u:slot-16u));
                 rhs+=weights[d]*values[neighbor];
             }
-            values[slot]+=cell.z*(rhs*cell.y-values[slot]);
+            float relaxation=(params.bank&FR_GAS_MG_BOUNDARY_BIT)!=0u?1.5:cell.z;
+            values[slot]+=relaxation*(rhs*cell.y-values[slot]);
         }
         barrier();
     }
