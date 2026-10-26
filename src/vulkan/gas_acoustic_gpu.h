@@ -6,7 +6,7 @@
 typedef struct {
     fr_renderer_compute_t advect,initialize,rhs,classify,compact,sor,correct,residual,finish;
     fr_renderer_compute_t activity,activity_compact,final_compact,commit;
-    fr_renderer_compute_t clear_pressure,prepare_pressure;
+    fr_renderer_compute_t clear_pressure,clear_pressure_lazy,prepare_pressure;
     fr_renderer_compute_t activity_candidates;
     fr_renderer_compute_t activity_cached;
     fr_renderer_compute_t transport_factor,transport_prefix,transport_apply,transport_metadata;

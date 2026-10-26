@@ -23,7 +23,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->activity);fr_renderer_compute_destroy(g,&t->activity_compact);
     fr_renderer_compute_destroy(g,&t->final_compact);
     fr_renderer_compute_destroy(g,&t->commit);
-    fr_renderer_compute_destroy(g,&t->clear_pressure);fr_renderer_compute_destroy(g,&t->prepare_pressure);
+    fr_renderer_compute_destroy(g,&t->clear_pressure);fr_renderer_compute_destroy(g,&t->clear_pressure_lazy);fr_renderer_compute_destroy(g,&t->prepare_pressure);
     fr_renderer_compute_destroy(g,&t->activity_candidates);
     fr_renderer_compute_destroy(g,&t->activity_cached);
     fr_renderer_compute_destroy(g,&t->transport_factor);fr_renderer_compute_destroy(g,&t->transport_prefix);fr_renderer_compute_destroy(g,&t->transport_apply);
@@ -103,6 +103,7 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     }
     if(!fr_renderer_compute_init(g,&t->activity_cached,buffers,27,16,"build/shaders/gas_activity_cached.comp.spv",err,cap)) goto fail;
     fr_renderer_compute_t *coarse_pipelines[]={&t->restrict_pressure,&t->coarse_sor,&t->prolong_pressure};
+    if(!fr_renderer_compute_init(g,&t->clear_pressure_lazy,buffers,27,16,"build/shaders/gas_pressure_clear_lazy.comp.spv",err,cap)) goto fail;
     const char *coarse_paths[]={"pressure_restrict","pressure_coarse_sor","pressure_prolong"};
     for(uint32_t i=0;i<3;i++) {
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",coarse_paths[i]);
@@ -344,15 +345,17 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
        temporal_setting&&strcmp(temporal_setting,"0")!=0&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) bank=(bank&~FR_GAS_PACKED_PRESSURE_BIT)|FR_GAS_HALF_PRESSURE_BIT;
     if(!t->matrix_valid) bank|=4u;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin acoustic advection");
-    if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,20u);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,16);}
+    if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,22u);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,16);}
     fr_gas_gpu_record_pending_tick(g);
     if(trace) {vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,17);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);}
     fr_gas_gpu_record_pending_geometry(g);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,18);
-    if(sparse) indirect_dispatch(g,t,&t->clear_pressure,dt,bank,48);
+    const char *clear_setting=getenv("DC_GAS_LAZY_CLEAR");
+    bool lazy_clear=t->practical&&sparse&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u&&clear_setting&&strcmp(clear_setting,"0")!=0;
+    if(sparse&&!lazy_clear) indirect_dispatch(g,t,&t->clear_pressure,dt,bank,48);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,19);
     barrier(g);
-    vkCmdFillBuffer(g->command,t->indirect.buffer,32,4,0);vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
+    vkCmdFillBuffer(g->command,t->indirect.buffer,32,4,0);if(!lazy_clear) vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
     uint32_t tiles=((g->width+7u)/8u)*((g->height+7u)/8u);
     const char *cached_neighbors=getenv("DC_GAS_CACHED_NEIGHBORS");
     const fr_renderer_compute_t *activity=t->practical&&cached_neighbors&&strcmp(cached_neighbors,"0")!=0&&
@@ -364,6 +367,12 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         indirect_dispatch(g,t,activity,dt,bank,0);
     } else if(!t->large_transport||compact_large) dispatch(g,activity,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
     dispatch(g,&t->activity_compact,(tiles+63u)/64u,1u,dt,bank);
+    if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,20);
+    if(lazy_clear) {
+        indirect_dispatch(g,t,&t->clear_pressure_lazy,dt,bank,48);
+        barrier(g);vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
+    }
+    if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,21);
     if(t->large_transport) {
         const char *reuse_rate=getenv("DC_GAS_REUSE_LINE_RATE");
         if(t->practical&&reuse_rate&&strcmp(reuse_rate,"0")!=0) bank|=FR_GAS_REUSE_LINE_RATE_BIT;

@@ -1,7 +1,3 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
-#include "acoustic.glsl"
-void main() {
-    uint index=gas_sparse_index(3u);if(index>=params.width*params.height) return;
-    pressure[index]=vec4(0);acoustic[index].z=0.;correction[index]=0.;correction_data[index]=vec4(0);
-}
+#include "pressure_clear_body.glsl"

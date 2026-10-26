@@ -1821,6 +1821,7 @@ GAS_SHADERS += build/shaders/gas_audit.comp.spv
 GAS_SHADERS += build/shaders/gas_pressure_temporal.comp.spv build/shaders/gas_pressure_temporal_tile16.comp.spv build/shaders/gas_pressure_group16.comp.spv build/shaders/gas_pressure_group32.comp.spv build/shaders/gas_pressure_temporal_tile32.comp.spv
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_pack pressure_temporal_packed)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_pack_half pressure_temporal_half)
+GAS_SHADERS += build/shaders/gas_pressure_clear_lazy.comp.spv
 GAS_SHADERS += build/shaders/gas_pressure_rhs_fused.comp.spv build/shaders/gas_pressure_rhs_cached.comp.spv
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,acoustic_finish_group128 acoustic_finish_group256)
 GAS_SHADERS += build/shaders/gas_pressure_mask_reset.comp.spv
