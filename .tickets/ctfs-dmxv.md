@@ -279,3 +279,7 @@ Rejected energy simplification trials, preserved then reverted. Scalar FP32 viol
 **2026-10-26T18:15:35Z**
 
 Weighted-Jacobi fine smoother rejected by unchanged reference-flow checks:8 pre/post gave densityL1.5967/velocityRMS194.5;16 pre/post still.2102/66.7. No parameter/quality weakening and no performance pass claimed. Full experiment retained then reverted. Original12/12SOR remains selected. Profiling shows finish+transactional commit move full64-byte packets plus32-byte caches; next exact optimization target is sparse per-cell GPU bank ownership, retaining quiet/dormant owners and rejection atomicity while eliminating publication copies. This is internal current-module optimization, not future chemistry or bonfire expansion.
+
+**2026-10-26T18:43:25Z**
+
+Exact sparse-owner backend GREEN: actual native63/63 and displayed placement5/5 pass with owners+fused geometry, including cold policy transitions, failed-interval atomicity, offscreen new slots, pan/save/reopen, trapped gas and airbrush extraction. Focused core+sync gates clean. Tiny proportional tile-owner table avoids page lookups/strided cache tags; runtime performs guarded GPU owner flips, cold GPU gather preserves existing save packets. Actual carved1000 mean29.651/worst43.272ms: mean now under30, strict worst still RED, backend remains opt-in. Compiler diagnostics show selected hybrids~5.6-5.9k instructions SIMD8 and0 spills; no speculative spill claim. Next reduce diagnostic flag contention / inspect tails without changing accepted numerics.
