@@ -58,6 +58,11 @@ static void test_bonfire_is_a_playable_finite_terrain_scene(void) {
     ASSERT_TRUE(fr_gpu_reactive_read_cell(view->gpu,wet_slot,cell,&restored,&found,err,sizeof(err))&&found);
     ASSERT_EQ(original.state.fuel_mass_fp,restored.state.fuel_mass_fp);
     ASSERT_EQ(restored.state.flags&FR_REACTIVE_FLAMING,0);
+    ASSERT_TRUE(dc_level_view_paint(view,160,202,3,DC_MATERIAL_WATER,err,sizeof(err)));
+    for(uint32_t i=0;i<360;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(view->gpu,slot,cell,&restored,&found,err,sizeof(err))&&found);
+    printf("Doused wood: water %u flags %u fuel %u\n",restored.state.bound_water_fp,restored.state.flags,restored.state.fuel_mass_fp);
+    ASSERT_TRUE(restored.state.bound_water_fp>0);ASSERT_EQ(restored.state.flags&FR_REACTIVE_FLAMING,0);
     ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));PASS();
 }
 int main(void) {RUN(test_bonfire_is_a_playable_finite_terrain_scene);

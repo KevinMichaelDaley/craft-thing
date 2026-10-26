@@ -35,3 +35,7 @@ Starting immediately after user-accepted smoke delivery3495f65. ONLY this visibl
 **2026-10-26T22:25:58Z**
 
 Pushed RED 955b0bf and GREEN 684ef60: ordinary combustion reference contract, finite substrate fuel/O2, char/ash/soot/exhaust ledger, retained sensible and released chemical heat, seeded persistent hazard, wet/starved/buried controls and transactional invalid input. New 5/5 tests; existing reactive state 9/9, profiles 9/9, thermal 6/6. Runtime GPU connection, visible bonfire, loose ash, controls and displayed acceptance remain in progress; no gameplay completion claimed.
+
+**2026-10-26T23:09:39Z**
+
+Runtime checkpoints pushed through d35b1d7: actual GPU wood and char burning, finite shared oxygen/products, persistent sub-Q16 progress (ABI4 same28-word layout, legacy1-3 migration), displayed state-driven flame and actual gas warmth, dry/wet stone-pit scene and tools/run_bonfire. Displayed6s ignition heats293.15->836.264K and fuel39322->39186; air warmth464.158K. Exact paused capture; fuel/hazard/probe charge survive full save/reopen; wet control loses no fuel. Loose ash native4/4: exact2000-Q16 mass, actual MPM fall, full DCS restore/re-admission; focused core/sync4/4 before the small unsupported-reservoir guard, and current native4/4 after it. Latest placement water pour also extinguishes the dry starter (water576, flags0, fuel39016). Remaining acceptance: char appearance, containment/fuel-bridge evidence and complete displayed frame timings; milestone remains in progress.
