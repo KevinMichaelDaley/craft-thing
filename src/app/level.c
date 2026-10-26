@@ -22,7 +22,6 @@ bool dc_level_view_setup_bonfire(dc_level_view_t *view,char *err,uint32_t cap) {
     if(!view||VIEW_WIDTH!=480||VIEW_HEIGHT!=270) return false;
     if(view->restored) {
         if(!fr_thermal_gpu_is_bonfire_world(view->gpu)) return error(err,cap,"Saved world is not an ordinary bonfire");
-        if(!dc_level_view_wait_visible(view,120000,err,cap)) return false;
     } else if(!fr_thermal_gpu_is_bonfire_world(view->gpu)) {
         if(!dc_level_view_wait_visible(view,120000,err,cap)) return false;
         uint32_t count=view->table.capacity;
@@ -44,6 +43,7 @@ bool dc_level_view_setup_bonfire(dc_level_view_t *view,char *err,uint32_t cap) {
        !fr_gas_gpu_set_pressure_policy(view->gpu,FR_GAS_PRESSURE_PRACTICAL,err,cap)||
        !fr_gas_gpu_set_gravity(view->gpu,900,err,cap)||!fr_combustion_gpu_enable(view->gpu,err,cap)) return false;
     if(view->restored) {
+        if(!dc_level_view_wait_visible(view,120000,err,cap)) return false;
         for(uint32_t i=0;i<view->table.capacity;i++) if(!view->gas_admitted[i])
             return error(err,cap,"Saved bonfire is missing authoritative gas stock");
     } else {
