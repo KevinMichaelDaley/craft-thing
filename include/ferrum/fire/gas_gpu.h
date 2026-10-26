@@ -5,7 +5,6 @@
 #include "ferrum/fire/gas.h"
 #include "ferrum/fire/gas_checkpoint.h"
 
-typedef struct {uint64_t physical_steps,substeps;double advanced_seconds;} fr_gas_gpu_clock_t;
 typedef struct {float metrics[FR_GAS_AUDIT_WORDS];} fr_gas_gpu_audit_t;
 /** Cold GPU reduction after queue completion; reads only32 scalar diagnostics.
  * Never invoked by normal simulation frames and never advances physical time. */

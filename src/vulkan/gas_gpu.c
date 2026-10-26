@@ -327,11 +327,14 @@ bool fr_gas_gpu_export_checkpoint(dc_gpu_t *g,uint32_t slot,fr_gas_checkpoint_ch
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas checkpoint export");
     struct fr_gas_gpu *t=g->gas;
     memcpy(out->cells,(gas_packet_t *)t->state[t->direct_publish?1u:0u].mapped+(size_t)slot*4096u,sizeof(out->cells));
-    memcpy(out->gates,(uint32_t *)t->gates.mapped+(size_t)slot*4096u,sizeof(out->gates));return true;
+    memcpy(out->gates,(uint32_t *)t->gates.mapped+(size_t)slot*4096u,sizeof(out->gates));out->clock=t->clock;return true;
 }
 bool fr_gas_gpu_import_checkpoint(dc_gpu_t *g,uint32_t slot,const fr_gas_checkpoint_chunk_t *input,char *err,uint32_t cap) {
     if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!input) return error(err,cap,"Invalid cold gas checkpoint import");
     struct fr_gas_gpu *t=g->gas;
+    if(!isfinite(input->clock.advanced_seconds)||input->clock.advanced_seconds<0.||
+       input->clock.substeps<input->clock.physical_steps||
+       (input->clock.physical_steps==0u&&input->clock.advanced_seconds!=0.)) return error(err,cap,"Invalid gas checkpoint clock");
     for(uint32_t i=0;i<4096u;i++) {
         const float *p=input->cells[i];
         for(uint32_t word=0;word<16u;word++) if(!isfinite(p[word])) return error(err,cap,"Nonfinite gas checkpoint");
@@ -343,6 +346,7 @@ bool fr_gas_gpu_import_checkpoint(dc_gpu_t *g,uint32_t slot,const fr_gas_checkpo
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas checkpoint import");
     memcpy((gas_packet_t *)t->state[t->direct_publish?1u:0u].mapped+(size_t)slot*4096u,input->cells,sizeof(input->cells));
     memcpy((uint32_t *)t->gates.mapped+(size_t)slot*4096u,input->gates,sizeof(input->gates));
+    if(input->clock.advanced_seconds>t->clock.advanced_seconds) t->clock=input->clock;
     fr_gas_gpu_invalidate_cache(g);t->large_step_hint=0;return true;
 }
 bool fr_gas_gpu_audit(dc_gpu_t *g,fr_gas_gpu_audit_t *out,char *err,uint32_t cap) {

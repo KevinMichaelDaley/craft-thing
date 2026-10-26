@@ -4,6 +4,9 @@
 #include "ferrum/fire/gas_checkpoint.h"
 static bool gas_checkpoint_valid(const fr_gas_checkpoint_chunk_t *gas) {
     if(!gas) return true;
+    if(!isfinite(gas->clock.advanced_seconds)||gas->clock.advanced_seconds<0.||
+       gas->clock.substeps<gas->clock.physical_steps||
+       (gas->clock.physical_steps==0u&&gas->clock.advanced_seconds!=0.)) return false;
     for(uint32_t i=0;i<4096u;i++) {
         const float *p=gas->cells[i];
         for(uint32_t k=0;k<16u;k++) if(!isfinite(p[k])) return false;

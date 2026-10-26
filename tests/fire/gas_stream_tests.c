@@ -16,6 +16,7 @@ static void test_gas_atomic_stream_preserves_private_stock_geometry_and_valves(v
     dc_stream_result_release(&r);ASSERT_TRUE(!r.gas);
     expected->cells[4095][0]=-1;ASSERT_TRUE(!dc_stream_request_save_gas(s,c,NULL,NULL,NULL,expected,3));expected->cells[4095][0]=0;
     expected->cells[4095][5]=NAN;ASSERT_TRUE(!dc_stream_request_save_gas(s,c,NULL,NULL,NULL,expected,4));expected->cells[4095][5]=0;
+    expected->clock.advanced_seconds=NAN;ASSERT_TRUE(!dc_stream_request_save_gas(s,c,NULL,NULL,NULL,expected,4));expected->clock.advanced_seconds=0.;
     ASSERT_TRUE(dc_stream_request_load(s,c->coord,5)&&wait_result(s,&r));ASSERT_EQ(r.kind,DC_STREAM_LOADED);
     ASSERT_TRUE(r.gas&&memcmp(expected,r.gas,sizeof(*expected))==0);dc_stream_result_release(&r);
     char path[256];snprintf(path,sizeof(path),"%s/chunk_%016llx_%016llx.bin",directory,(unsigned long long)c->coord.x,(unsigned long long)c->coord.y);

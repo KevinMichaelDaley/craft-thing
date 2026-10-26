@@ -22,6 +22,12 @@ static void test_native_checkpoint_preserves_compensation_geometry_valves_and_ow
     ASSERT_TRUE(fr_gas_gpu_export_checkpoint(g,1,after,err,sizeof(err)));
     ASSERT_EQ(memcmp(before,after,sizeof(*before)),0);
     before->gates[4095]=4u;ASSERT_TRUE(!fr_gas_gpu_import_checkpoint(g,1,before,err,sizeof(err)));
+    before->gates[4095]=0u;before->clock.advanced_seconds=INFINITY;
+    ASSERT_TRUE(!fr_gas_gpu_import_checkpoint(g,1,before,err,sizeof(err)));before->clock=after->clock;
+    ASSERT_TRUE(fr_gas_gpu_step(g,.01f,err,sizeof(err)));
+    fr_gas_gpu_clock_t current,reimported;ASSERT_TRUE(fr_gas_gpu_clock(g,&current));
+    ASSERT_TRUE(fr_gas_gpu_import_checkpoint(g,1,before,err,sizeof(err))&&fr_gas_gpu_clock(g,&reimported));
+    ASSERT_EQ(memcmp(&current,&reimported,sizeof(current)),0);
     ASSERT_TRUE(present(g,err,sizeof(err)));dc_gpu_destroy(g);free(c);free(before);free(after);free(input);free(volume);PASS();
 }
 #endif

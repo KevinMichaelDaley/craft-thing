@@ -583,7 +583,7 @@ build/chunk.o: src/world/chunk.c include/dungeoncraft/chunk.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-build/stream.o: src/world/stream.c include/dungeoncraft/stream.h include/dungeoncraft/chunk.h
+build/stream.o: src/world/stream.c src/world/stream_gas.h include/dungeoncraft/stream.h include/dungeoncraft/chunk.h include/ferrum/fire/gas_checkpoint.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
