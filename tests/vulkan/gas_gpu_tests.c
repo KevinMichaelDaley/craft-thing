@@ -399,6 +399,7 @@ int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);
 #ifdef FR_GAS_PUBLICATION_TEST
     RUN(test_native_publication_uses_one_submission_and_preserves_rejected_state);
+    RUN(test_native_tick_waits_its_fence_without_draining_presentation_queue);
     RUN(test_native_temporal_sor_matches_global_and_bounds_dispatches);
     RUN(test_native_multigrid_bounds_work_and_preserves_reference_flow);
     RUN(test_native_multigrid_temporal_preserves_steps_with_fewer_dispatches);

@@ -3,6 +3,11 @@
 static uint32_t g_publication_submits;
 static uint32_t g_pressure_dispatches;
 static uint32_t g_direct_dispatches;
+static uint32_t g_queue_idle_calls;
+VKAPI_ATTR VkResult VKAPI_CALL __real_vkQueueWaitIdle(VkQueue queue);
+VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkQueueWaitIdle(VkQueue queue) {
+    g_queue_idle_calls++;return __real_vkQueueWaitIdle(queue);
+}
 VKAPI_ATTR void VKAPI_CALL __real_vkCmdDispatch(VkCommandBuffer command,uint32_t x,uint32_t y,uint32_t z);
 VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdDispatch(VkCommandBuffer command,uint32_t x,uint32_t y,uint32_t z) {
     g_direct_dispatches++;__real_vkCmdDispatch(command,x,y,z);
@@ -46,6 +51,22 @@ static void test_native_publication_uses_one_submission_and_preserves_rejected_s
     }
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);
     ASSERT_EQ(SDL_setenv("DC_GAS_ROTATE_PUBLISH",saved?saved:"0",1),0);SDL_free(saved);PASS();
+}
+static void test_native_tick_waits_its_fence_without_draining_presentation_queue(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    fr_gas_model_t m=reference_model();m.kinetic_scale=1./512.;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&m,.0012,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_tick_seconds(g,1.f/60.f)&&dc_gpu_tick_step(g,err,sizeof(err))&&present(g,err,sizeof(err)));
+    fr_gas_gpu_clock_t before,after;ASSERT_TRUE(fr_gas_gpu_clock(g,&before));
+    g_queue_idle_calls=0;ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+    printf("Standalone native tick queue-idle calls%u\n",g_queue_idle_calls);ASSERT_EQ(g_queue_idle_calls,0u);
+    dc_gpu_tick_capture_t capture={0};g_queue_idle_calls=0;
+    ASSERT_TRUE(dc_gpu_tick_capture(g,&capture,err,sizeof(err)));ASSERT_EQ(g_queue_idle_calls,0u);
+    ASSERT_TRUE(capture.stages[0].gpu_ns>0&&capture.stages[1].gpu_ns>0&&capture.stages[2].gpu_ns>0);
+    ASSERT_TRUE(fr_gas_gpu_clock(g,&after)&&after.physical_steps==before.physical_steps+2u&&
+        fabs(after.advanced_seconds-before.advanced_seconds-2.*(1.f/60.f))<1e-7);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
 }
 static void test_native_temporal_sor_matches_global_and_bounds_dispatches(void) {
     char err[256]={0};const char *old=getenv("DC_GAS_TEMPORAL_SOR");char *saved=old?SDL_strdup(old):NULL;
