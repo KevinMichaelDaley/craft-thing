@@ -57,7 +57,7 @@ static void test_old_chunks_have_ambient_liquid_and_future_or_corrupt_chunks_fai
     ASSERT_EQ(fseek(file,-1,SEEK_END),0);ASSERT_TRUE(fputc(value^1,file)!=EOF);ASSERT_EQ(fclose(file),0);
     ASSERT_TRUE(dc_stream_request_load(s,c->coord,10)&&wait_result(s,&result));ASSERT_EQ(result.kind,DC_STREAM_FAILED);dc_stream_result_release(&result);
     ASSERT_TRUE(dc_stream_request_save_thermal(s,c,NULL,&channel,heat,11)&&wait_result(s,&result));ASSERT_EQ(result.kind,DC_STREAM_SAVED);dc_stream_result_release(&result);
-    file=fopen(path,"r+b");ASSERT_TRUE(file);uint32_t future=9;ASSERT_EQ(fseek(file,4,SEEK_SET),0);ASSERT_EQ(fwrite(&future,4,1,file),1u);ASSERT_EQ(fclose(file),0);
+    file=fopen(path,"r+b");ASSERT_TRUE(file);uint32_t future=10;ASSERT_EQ(fseek(file,4,SEEK_SET),0);ASSERT_EQ(fwrite(&future,4,1,file),1u);ASSERT_EQ(fclose(file),0);
     ASSERT_TRUE(dc_stream_request_load(s,c->coord,12)&&wait_result(s,&result));ASSERT_EQ(result.kind,DC_STREAM_FAILED);dc_stream_result_release(&result);
     dc_stream_destroy(s);free(c);PASS();
 }
