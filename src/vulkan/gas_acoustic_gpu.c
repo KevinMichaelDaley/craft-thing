@@ -34,10 +34,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->practical_axis);
     fr_renderer_compute_destroy(g,&t->practical_explicit);
     fr_renderer_compute_destroy(g,&t->practical_hybrid);
-    for(uint32_t i=0;i<2;i++) {
-        fr_renderer_compute_destroy(g,&t->practical_hybrid_axis[i]);
-        fr_renderer_compute_destroy(g,&t->compact_explicit[i]);fr_renderer_compute_destroy(g,&t->compact_implicit[i]);
-    }
+    for(uint32_t i=0;i<2;i++) fr_renderer_compute_destroy(g,&t->practical_hybrid_axis[i]);
     fr_renderer_compute_destroy(g,&t->temporal_sor);
     fr_renderer_compute_destroy(g,&t->coarse_group);
     fr_renderer_compute_destroy(g,&t->rhs_fused);
@@ -130,13 +127,6 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
                 for(uint32_t axis=0;axis<2;axis++) {
                     char path[128];snprintf(path,sizeof(path),"build/shaders/gas_transport_hybrid_%c%s.comp.spv",axis?'y':'x',line_suffix);
                     if(!fr_renderer_compute_init(g,&t->practical_hybrid_axis[axis],buffers,27,16,path,err,cap)) goto fail;
-                    const char *compact_setting=getenv("DC_GAS_COMPACT_LINES");
-                    if(use_wide&&!large_group&&compact_setting&&strcmp(compact_setting,"0")!=0) {
-                        snprintf(path,sizeof(path),"build/shaders/gas_transport_explicit_%c_compact.comp.spv",axis?'y':'x');
-                        if(!fr_renderer_compute_init(g,&t->compact_explicit[axis],buffers,27,16,path,err,cap)) goto fail;
-                        snprintf(path,sizeof(path),"build/shaders/gas_transport_axis_%c_compact.comp.spv",axis?'y':'x');
-                        if(!fr_renderer_compute_init(g,&t->compact_implicit[axis],buffers,27,16,path,err,cap)) goto fail;
-                    }
                 }
             }
         }
@@ -371,13 +361,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
                 const char *fixed_axis_setting=getenv("DC_GAS_FIXED_AXIS");
                 bool fixed_axis=fused_hybrid&&fixed_axis_setting&&strcmp(fixed_axis_setting,"0")!=0;
                 const fr_renderer_compute_t *hybrid=fixed_axis?&t->practical_hybrid_axis[axis]:&t->practical_hybrid;
-                const char *compact_setting=getenv("DC_GAS_COMPACT_LINES");
-                bool compact=fixed_axis&&t->compact_explicit[axis].pipeline&&lines<=tiles&&compact_setting&&strcmp(compact_setting,"0")!=0;
-                if(compact) {
-                    barrier(g);vkCmdFillBuffer(g->command,t->indirect.buffer,0,4,0);
-                    dispatch(g,&t->compact_explicit[axis],lines,1u,dt,flags);
-                    indirect_dispatch(g,t,&t->compact_implicit[axis],dt,flags,0);
-                } else dispatch(g,fused_hybrid?hybrid:&t->practical_axis,lines,1u,dt,flags);
+                dispatch(g,fused_hybrid?hybrid:&t->practical_axis,lines,1u,dt,flags);
                 if(trace) for(uint32_t stamp=5u;stamp<=8u;stamp++)
                     vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,stamp+axis*4u);
                 continue;

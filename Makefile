@@ -1771,7 +1771,7 @@ build/gas_display_tests: tests/vulkan/gas_practical_cases.h
 build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_geometry_cases.h
 build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_partial_void_cases.h
 build/gas_publication_display_tests: tests/vulkan/gas_geometry_cache_cases.h
-build/gas_publication_display_tests: tests/vulkan/gas_pressure_noise_cases.h tests/vulkan/gas_compact_line_cases.h
+build/gas_publication_display_tests: tests/vulkan/gas_pressure_noise_cases.h
 build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_roundoff_cases.h build/shaders/gas_roundoff_test.comp.spv
 build/shaders/gas_roundoff_test.comp.spv: shaders/diagnostics/gas_roundoff_test.comp $(wildcard shaders/gas/*.glsl) include/dungeoncraft/gas_layout.h
 	mkdir -p $(dir $@)
@@ -1831,7 +1831,6 @@ GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_coarse_group p
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_explicit transport_explicit_wide)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid transport_hybrid_wide)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid_x transport_hybrid_y transport_hybrid_x_wide transport_hybrid_y_wide)
-GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_explicit_x_compact transport_explicit_y_compact transport_axis_x_compact transport_axis_y_compact)
 GAS_SHADERS += build/shaders/gas_activity_cached.comp.spv
 GAS_SHADERS += build/shaders/gas_owner_gather.comp.spv
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_transfer geometry_commit)
