@@ -1,13 +1,14 @@
 #ifndef GAS_MULTIGRID_CASES_H
 #define GAS_MULTIGRID_CASES_H
-static void test_native_multigrid_temporal_preserves_steps_with_fewer_dispatches(void) {
-    char err[256]={0};const char *names[]={"DC_GAS_MULTIGRID","DC_GAS_MG_TEMPORAL"};char *saved[2];
-    for(uint32_t k=0;k<2;k++) {const char *value=getenv(names[k]);saved[k]=value?SDL_strdup(value):NULL;}
+static void check_native_gas_dispatch_fusion(const char *setting,bool metadata) {
+    char err[256]={0};const char *names[]={"DC_GAS_MULTIGRID",setting,"DC_GAS_FUSED_AXIS"};char *saved[3];
+    for(uint32_t k=0;k<3;k++) {const char *value=getenv(names[k]);saved[k]=value?SDL_strdup(value):NULL;}
     ASSERT_EQ(SDL_setenv(names[0],"1",1),0);
+    ASSERT_EQ(SDL_setenv(names[2],"1",1),0);
     fr_gas_state_t *input=malloc(4096*sizeof(*input)),*reference=malloc(4096*sizeof(*reference)),*out=malloc(4096*sizeof(*out));
     double *volume=malloc(4096*sizeof(*volume));dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(input&&reference&&out&&volume&&c);
     fr_gas_model_t m=reference_model();m.kinetic_scale=1./512.;
-    for(uint32_t i=0;i<4096;i++) {volume[i]=1;input[i]=reference_air(m,.0012,300,2);}
+    for(uint32_t i=0;i<4096;i++) {volume[i]=1;input[i]=reference_air(m,.0012,300,metadata?40:2);}
     for(uint32_t y=24;y<32;y++) for(uint32_t x=20;x<28;x++) {
         fr_gas_state_t *s=input+y*64+x;s->species[1]-=.00001;s->species[2]=.00001;
         s->energy+=.00001*(m.heat_capacity_cv[2]-m.heat_capacity_cv[1])*300;s->pigment[0]=.000005;
@@ -21,15 +22,21 @@ static void test_native_multigrid_temporal_preserves_steps_with_fewer_dispatches
         for(uint32_t step=0;step<8;step++) {
             if(step==0||step==6) ASSERT_TRUE(fr_gas_gpu_gate(g,29,0,1,64,0,true,err,sizeof(err)));
             if(step==3) ASSERT_TRUE(fr_gas_gpu_gate(g,29,0,1,64,0,false,err,sizeof(err)));
-            g_pressure_dispatches=0;g_direct_dispatches=0;ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err)));
+            g_pressure_dispatches=0;g_direct_dispatches=0;ASSERT_TRUE(fr_gas_gpu_step(g,metadata?.04f:.02f,err,sizeof(err)));
         }
         work[path]=g_pressure_dispatches+g_direct_dispatches;
         ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,path?out:reference,4096,err,sizeof(err))&&present(g,err,sizeof(err)));dc_gpu_destroy(g);
     }
-    printf("Multigrid temporal dispatches%u vs%u exact snapshot%s\n",work[1],work[0],memcmp(out,reference,4096*sizeof(*out))==0?" yes":" no");
+    printf("%s dispatches%u vs%u exact snapshot%s\n",setting,work[1],work[0],memcmp(out,reference,4096*sizeof(*out))==0?" yes":" no");
     ASSERT_TRUE(memcmp(out,reference,4096*sizeof(*out))==0&&work[1]<work[0]);
-    for(uint32_t k=0;k<2;k++) {ASSERT_EQ(SDL_setenv(names[k],saved[k]?saved[k]:"0",1),0);SDL_free(saved[k]);}
+    for(uint32_t k=0;k<3;k++) {ASSERT_EQ(SDL_setenv(names[k],saved[k]?saved[k]:"0",1),0);SDL_free(saved[k]);}
     free(input);free(reference);free(out);free(volume);free(c);PASS();
+}
+static void test_native_multigrid_temporal_preserves_steps_with_fewer_dispatches(void) {
+    check_native_gas_dispatch_fusion("DC_GAS_MG_TEMPORAL",false);
+}
+static void test_native_fused_transport_metadata_preserves_state_with_fewer_dispatches(void) {
+    check_native_gas_dispatch_fusion("DC_GAS_FUSED_METADATA",true);
 }
 static void test_native_multigrid_bounds_work_and_preserves_reference_flow(void) {
     char err[256]={0};const char *names[]={"DC_GAS_MULTIGRID","DC_GAS_TEMPORAL_SOR","DC_GAS_COARSE_WG"};char *saved[3];
