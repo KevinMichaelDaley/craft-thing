@@ -20,7 +20,8 @@ void main() {
         valid[color]=all(greaterThanEqual(p,ivec2(0)))&&all(lessThan(p,ivec2(params.width,params.height)));
         uint at=valid[color]?uint(p.y)*params.width+uint(p.x):0u;indices[color]=at;
         values[slot]=valid[color]?source_value(at):0.;awake[color]=false;coefficients[color]=vec4(0);data[color]=vec4(0);
-        if(valid[color]) {
+        uint first_margin=color+1u,x=slot%16u,y=slot/16u;
+        if(valid[color]&&x>=first_margin&&x<16u-first_margin&&y>=first_margin&&y<16u-first_margin) {
             uint own_tile=(uint(p.y)/8u)*width+uint(p.x)/8u;
             awake[color]=(activity[gas_tile_count()+own_tile]&FR_GAS_SOLVE_TILE_BIT)!=0u;
             if(awake[color]) {

@@ -163,3 +163,7 @@ Compressed rows27a342e: actual native39/39 and core+sync1/1 clean; audited1000 a
 **2026-10-26T03:49:53Z**
 
 Direct-source transport6a40303 pushed:42/42 native and1/1 core+sync, exact fields/CFL/clock, warm copies2.29MB vs20.64MB. Actual audited open1000:28.770mean33.292worst, invalid0 and species2.99e-5/pigment5.12e-7/energy-ledger-9.93e-6 relative drift, four paused captures identical. Strict worst remains RED; copy optimization has no demonstrated frame gain. Next hybrid explicit/fallback fusion RED74cef9a: baseline53 dispatches; local native51 vs53 byte-identical, sync and full-frame measurement underway. No change to pressure iteration schedule or physical clock.
+
+**2026-10-26T03:55:54Z**
+
+Hybrid fusion40739da pushed:43/43 native, core+sync1/1; audited open1000 28.339mean32.363worst, invalid0, stocks/paused checks pass. Halo-row loading refactor also43/43 but28.351/32.181, no material gain. Trial12-pre/8-post smoothing fails checkerboard damping and sealed-neighbor4.05% gate (3/5 practical); discarded immediately, retained12+12 and existing thresholds. Strict complete-frame worst remains RED.

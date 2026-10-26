@@ -63,6 +63,18 @@ stock, finite-state, wall, clock and complete-frame gates remain in place.
 GPU-compacted tile list, retains every cell, and uses only a constant-size cold
 metadata getter for validation. Field state, CFL values and clock remain
 byte-identical to subgroup reduction; hardware limits retain the original path.
+`DC_GAS_DIRECT_FIRST_AXIS=1` lets the first transport axis read the canonical
+owner directly, avoiding the warm full-state staging copy. Inactive lines still
+copy their canonical cells into the candidate; cold invalidation retains the
+full initialization copy, including dormant physical slots. Native checks cover
+newly admitted chunks, dormant stock, exact state, CFL scalars and elapsed time.
+`DC_GAS_FUSED_HYBRID=1` combines each line's explicit transport and implicit
+fallback in one workgroup when shared-memory limits permit. It retains the
+existing line algorithms and source/cache ownership. Native state is identical
+with two fewer dispatches; synchronization validation passes. These are still
+opt-in optimizations: the latest audited open-box display run measured
+28.339 ms mean and 32.363 ms worst over 1,000 frames, so the strict complete-frame
+performance requirement remains unmet.
 
 ## Modular delivery sequence
 
