@@ -47,7 +47,8 @@ bool burning(uint at) {
     if(handle.y==0u||handle.x>=root[2]) return false;
     Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
     return entry.words[FR_ENTRY_GENERATION]==handle.y&&entry.words[FR_ENTRY_OWNER]==1u&&
-        (entry.words[FR_ENTRY_STATE+1u]&2u)!=0u&&entry.words[FR_ENTRY_STATE+9u]!=0u;
+        (entry.words[FR_ENTRY_STATE+1u]&2u)!=0u&&
+        (entry.words[FR_ENTRY_STATE+9u]!=0u||entry.words[FR_ENTRY_STATE+10u]!=0u);
 }
 void feedback(uint index,ivec2 p,uint at) {
     uint depth=0u;
@@ -76,9 +77,11 @@ void burn(ivec2 position,uint gas_at,inout Gas gas) {
     if(handle.y==0u||handle.x>=root[2]) return;
     Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
     if(entry.words[FR_ENTRY_GENERATION]!=handle.y||entry.words[FR_ENTRY_OWNER]!=1u) return;
-    uint s=FR_ENTRY_STATE,m=entry.words[s],fuel=entry.words[s+9u];
-    if((m!=7u&&m!=8u)||fuel==0u) return;
-    float capacity=(float(fuel+entry.words[s+11u])*coefficient(m,5u)+
+    uint s=FR_ENTRY_STATE,m=entry.words[s],wood_fuel=entry.words[s+9u];
+    bool char_stage=wood_fuel==0u;uint fuel=char_stage?entry.words[s+10u]:wood_fuel;
+    uint profile=char_stage?12u:m;
+    if((m!=7u&&m!=8u&&m!=12u)||fuel==0u) return;
+    float capacity=(float(wood_fuel+entry.words[s+11u])*coefficient(m,5u)+
         float(entry.words[s+10u])*coefficient(12u,5u)+float(entry.words[s+12u])*coefficient(3u,5u))/65536.;
     if(capacity<=0.) return;
     float energy=uintBitsToFloat(entry.words[s+17u]),temperature=energy/capacity;
@@ -89,33 +92,35 @@ void burn(ivec2 position,uint gas_at,inout Gas gas) {
     float dt=uintBitsToFloat(params.seconds),dry=1.-wet;
     float threshold=uintBitsToFloat(entry.words[s+20u]);
     if(threshold==0.) threshold=ignition_threshold(entry.words[s+4u],entry.words[s+5u]);
-    float rate=temperature>=coefficient(m,7u)?coefficient(m,8u)*
-        (dry*dry+wet*coefficient(m,22u))*(1.+uintBitsToFloat(entry.words[s+18u])*(coefficient(m,20u)-1.))*
+    float rate=temperature>=coefficient(profile,7u)?coefficient(profile,8u)*
+        (dry*dry+wet*coefficient(profile,22u))*(1.+uintBitsToFloat(entry.words[s+18u])*(coefficient(profile,20u)-1.))*
         clamp((oxygen-.12)/(.21-.12),0.,1.):0.;
     float integral=min(1e20,uintBitsToFloat(entry.words[s+21u])+rate*dt);
     uint flags=entry.words[s+1u];
-    bool viable=temperature>=coefficient(m,7u)&&oxygen>.12&&wet<.8;
+    bool viable=temperature>=coefficient(profile,7u)&&oxygen>.12&&wet<.8;
     if(!viable) flags&=~2u;else if(integral>=threshold) flags|=2u;
     entry.words[s+20u]=floatBitsToUint(threshold);entry.words[s+21u]=floatBitsToUint(integral);
     entry.words[s+1u]=flags;
     if(!viable||(flags&2u)==0u) return;
-    float demand=coefficient(m,12u);
+    float demand=coefficient(profile,12u);
     uint oxygen_fp=uint(floor(max(0.,gas.species.x)*65536.));
-    float requested=float(entry.words[s+8u])*coefficient(m,31u)*dt*dry*dry+uintBitsToFloat(entry.words[s+27u]);
+    float requested=float(entry.words[s+8u])*coefficient(profile,31u)*dt*dry*dry+uintBitsToFloat(entry.words[s+27u]);
     entry.words[s+27u]=floatBitsToUint(min(requested-floor(requested),.99999994));
     uint reacted=uint(floor(min(min(float(fuel),requested),float(oxygen_fp)/demand)));
     uint used=uint(ceil(float(reacted)*demand));if(reacted==0u||used>oxygen_fp) return;
-    uint initial=uint(round(float(entry.words[s+8u])*coefficient(m,9u))),consumed=initial>=fuel?initial-fuel:0u;
-    uvec3 products=solid_products(consumed+reacted,m)-solid_products(consumed,m);
+    uint initial=uint(round(float(entry.words[s+8u])*coefficient(profile,9u))),consumed=initial>=fuel?initial-fuel:0u;
+    uvec3 products=solid_products(consumed+reacted,profile)-solid_products(consumed,profile);
     uint char_mass=products.x,ash=products.y,soot=products.z;
     uint exhaust=reacted-char_mass-ash-soot+used;
-    float heat=float(reacted)/65536.*coefficient(m,11u);
-    float removed=float(reacted)/65536.*coefficient(m,5u)*temperature;
+    float heat=float(reacted)/65536.*coefficient(profile,11u);
+    float removed=float(reacted)/65536.*coefficient(profile,5u)*temperature;
     float retained=float(char_mass)/65536.*coefficient(12u,5u)*temperature;
     /* Ash remains finite in the parcel until the loose-residue publication
      * stage admits its physical particle; no product is discarded here. */
     retained+=float(ash)/65536.*coefficient(m,5u)*temperature;
-    entry.words[s+9u]=fuel-reacted;entry.words[s+10u]+=char_mass;entry.words[s+11u]+=ash;
+    if(char_stage) entry.words[s+10u]=fuel-reacted+char_mass;
+    else {entry.words[s+9u]=fuel-reacted;entry.words[s+10u]+=char_mass;}
+    entry.words[s+11u]+=ash;
     entry.words[s+17u]=floatBitsToUint(max(0.,energy+.7*heat-removed+retained));
     gas.species.x-=float(used)/65536.;gas.species.z+=float(exhaust)/65536.;gas.dynamics.x+=float(soot)/65536.;
     gas.dynamics.y+=.3*heat+removed-retained;

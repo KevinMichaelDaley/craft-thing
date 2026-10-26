@@ -29,7 +29,9 @@ bool fr_combustion_reference(const fr_reactive_state_t *source,uint32_t oxygen_f
        !fr_reactive_state_valid(source,err_buf,err_cap))
         return error(err_buf,err_cap,"Invalid ordinary combustion input");
     fr_reactive_state_t s=*source;fr_combustion_products_t p={0};
-    const fr_reactive_profile_t *profile=fr_reactive_profile(s.material);
+    bool char_burn=s.fuel_mass_fp==0&&s.char_mass_fp>0;
+    uint32_t fuel=char_burn?s.char_mass_fp:s.fuel_mass_fp;
+    const fr_reactive_profile_t *profile=fr_reactive_profile(char_burn?DC_MATERIAL_CHAR:s.material);
     if(profile->bound_oxidizer_fraction||s.coating_oil_fuel_fp||s.coating_jelly_fuel_fp)
         return error(err_buf,err_cap,"Ordinary substrate reference does not admit coatings or bound oxidizer");
     float temperature;
@@ -42,7 +44,7 @@ bool fr_combustion_reference(const fr_reactive_state_t *source,uint32_t oxygen_f
     if(!fr_reactive_ignition_rates(profile,NULL,&exposure,&rates,err_buf,err_cap)) return false;
     if(s.ignition_threshold==0) s.ignition_threshold=threshold(&s);
     s.ignition_integral=fminf(1e20f,s.ignition_integral+rates.substrate*exposed_fraction*seconds);
-    bool viable=s.fuel_mass_fp&&oxygen_fp&&oxygen_fraction>.12f&&
+    bool viable=fuel&&oxygen_fp&&oxygen_fraction>.12f&&
         temperature>=profile->ignition_K&&saturation<.8f&&exposed_fraction>0;
     if(!viable) s.flags&=~FR_REACTIVE_FLAMING;
     else if(s.ignition_integral>=s.ignition_threshold) s.flags|=FR_REACTIVE_FLAMING;
@@ -52,12 +54,12 @@ bool fr_combustion_reference(const fr_reactive_state_t *source,uint32_t oxygen_f
             seconds*exposed_fraction*wet+s.reaction_fraction;
         s.reaction_fraction=(float)(requested-floor(requested));
         if(s.reaction_fraction>=1) s.reaction_fraction=nextafterf(1,0);
-        double admitted=fmin(s.fuel_mass_fp,requested);
+        double admitted=fmin(fuel,requested);
         if(profile->oxygen_per_fuel>0) admitted=fmin(admitted,oxygen_fp/(double)profile->oxygen_per_fuel);
         p.fuel_fp=(uint32_t)floor(admitted);
         p.oxygen_fp=(uint32_t)ceil(p.fuel_fp*(double)profile->oxygen_per_fuel);
         uint32_t initial=(uint32_t)llround(s.dry_mass_fp*(double)profile->fuel_fraction);
-        uint32_t consumed=initial>=s.fuel_mass_fp?initial-s.fuel_mass_fp:0;
+        uint32_t consumed=initial>=fuel?initial-fuel:0;
         uint32_t before[3],after[3];
         solid_products(consumed,profile,before);solid_products(consumed+p.fuel_fp,profile,after);
         uint32_t char_fp=after[0]-before[0];
@@ -67,9 +69,10 @@ bool fr_combustion_reference(const fr_reactive_state_t *source,uint32_t oxygen_f
         double sensible=p.fuel_fp/65536.0*profile->heat_capacity*temperature;
         double retained=char_fp/65536.0*fr_reactive_profile(DC_MATERIAL_CHAR)->heat_capacity*temperature;
         p.exported_energy=sensible-retained+.3*p.released_heat;
-        s.fuel_mass_fp-=p.fuel_fp;s.char_mass_fp+=char_fp;
+        if(char_burn) s.char_mass_fp-=p.fuel_fp;else s.fuel_mass_fp-=p.fuel_fp;
+        s.char_mass_fp+=char_fp;
         if(!fr_reactive_state_add_heat(&s,.7*p.released_heat-sensible+retained,err_buf,err_cap)) return false;
-        if(!s.fuel_mass_fp) s.flags&=~FR_REACTIVE_FLAMING;
+        if(!s.fuel_mass_fp&&!s.char_mass_fp) s.flags&=~FR_REACTIVE_FLAMING;
     }
     if(!fr_reactive_state_valid(&s,err_buf,err_cap)) return false;
     *out=s;*products=p;return true;
