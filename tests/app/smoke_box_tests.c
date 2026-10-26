@@ -41,9 +41,12 @@ static void test_native_placement_box_has_finite_sources_real_controls_rising_sm
     ASSERT_TRUE(smoke_budget(view,moved,&moved_energy,moved_pigment,&moved_work,&moved_height,err,sizeof(err)));
     for(uint32_t k=0;k<5;k++) printf("Enclosure species%u stock%.12g drift%.12g relative%.12g\n",k,stock[k],moved[k]-stock[k],stock[k]>0?(moved[k]-stock[k])/stock[k]:0.);
     printf("Enclosure energy%.12g ledger drift%.12g relative%.12g\n",energy,(moved_energy-energy)-(moved_work-work),((moved_energy-energy)-(moved_work-work))/energy);
-    for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(moved[k]-stock[k])<2e-5);
-    for(uint32_t k=0;k<3;k++) ASSERT_TRUE(fabs(moved_pigment[k]-pigment[k])<2e-5);
-    ASSERT_TRUE(fabs((moved_energy-energy)-(moved_work-work))<.02);
+    for(uint32_t k=0;k<5;k++) {
+        if(stock[k]==0.) ASSERT_EQ(moved[k],0.);
+        else ASSERT_TRUE(fabs(moved[k]-stock[k])<fmax(1e-9,stock[k]*1e-5));
+    }
+    for(uint32_t k=0;k<3;k++) ASSERT_TRUE(fabs(moved_pigment[k]-pigment[k])<fmax(1e-9,pigment[k]*1e-5));
+    ASSERT_TRUE(fabs((moved_energy-energy)-(moved_work-work))<energy*1e-5);
     ASSERT_TRUE(moved_height<height-.01);
     ASSERT_TRUE(dc_level_view_smoke_overlay(view,1)&&dc_level_view_tick(view,err,sizeof(err))&&dc_gpu_readback(view->gpu,second,480u*270u,err,sizeof(err)));
     ASSERT_TRUE(memcmp(first,second,480u*270u*4u)!=0);mkdir("build/screenshots",0777);

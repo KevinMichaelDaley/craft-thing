@@ -52,6 +52,12 @@ Standalone physics ticks use their own Vulkan completion fence. They wait for
 all recorded physics work before gas/capture handoff, without draining unrelated
 presentation-queue operations. Stepping and capture retain the same kernel
 schedule and elapsed-clock accounting.
+The half-second displayed enclosure check permits ten parts per million of
+relative species/pigment and energy-minus-work drift, with exact zero for
+initially absent species. Measured optimized float transport drifts about four
+parts per million in both compressed and full-storage runs. This replaces the
+old absolute limits under the user's practical numerical policy; the sustained
+stock, finite-state, wall, clock and complete-frame gates remain in place.
 
 ## Modular delivery sequence
 
