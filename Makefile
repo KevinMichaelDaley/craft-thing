@@ -1771,7 +1771,7 @@ build/gas_display_tests: tests/vulkan/gas_practical_cases.h
 build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_geometry_cases.h
 build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_partial_void_cases.h
 build/gas_publication_display_tests: tests/vulkan/gas_geometry_cache_cases.h
-build/gas_publication_display_tests: tests/vulkan/gas_pressure_noise_cases.h
+build/gas_publication_display_tests: tests/vulkan/gas_pressure_noise_cases.h tests/vulkan/gas_local_stage_cases.h
 build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_roundoff_cases.h build/shaders/gas_roundoff_test.comp.spv
 build/shaders/gas_roundoff_test.comp.spv: shaders/diagnostics/gas_roundoff_test.comp $(wildcard shaders/gas/*.glsl) include/dungeoncraft/gas_layout.h
 	mkdir -p $(dir $@)
