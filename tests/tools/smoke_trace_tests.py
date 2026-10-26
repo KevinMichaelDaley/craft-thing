@@ -9,6 +9,15 @@ SPEC.loader.exec_module(TRACE)
 
 
 class SmokeTraceTests(unittest.TestCase):
+    def test_input_cpu_time_distinguishes_event_work_from_wall_wait(self):
+        rows = TRACE.frames([
+            "app-input,9,events0,wall17.239,cpu0.051\n",
+            "app-frame,9,51.371ms\n",
+        ])
+        self.assertEqual(rows[0]["input_events"], 0)
+        self.assertAlmostEqual(rows[0]["input_cpu_ms"], .051)
+        self.assertAlmostEqual(rows[0]["input_wait_ms"], 17.188)
+
     def test_finish_and_commit_are_gpu_work_not_unexplained_frame_time(self):
         rows = TRACE.frames([
             "Acoustic GPU init4 pressure-group3 residual0.5 ms\n",
