@@ -9,6 +9,15 @@ SPEC.loader.exec_module(TRACE)
 
 
 class SmokeTraceTests(unittest.TestCase):
+    def test_present_setup_accounts_tick_service_and_second_event_pump(self):
+        rows = TRACE.frames([
+            "Present setup tick31.0 service0.2 pump17.0\n",
+            "app-frame,9,50.0ms\n",
+        ])
+        self.assertAlmostEqual(rows[0]["present_tick_ms"], 31.)
+        self.assertAlmostEqual(rows[0]["body_service_ms"], .2)
+        self.assertAlmostEqual(rows[0]["event_pump_ms"], 17.)
+
     def test_input_cpu_time_distinguishes_event_work_from_wall_wait(self):
         rows = TRACE.frames([
             "app-input,9,events0,wall17.239,cpu0.051\n",
