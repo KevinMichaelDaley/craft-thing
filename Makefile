@@ -1815,6 +1815,7 @@ GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_coarse_group p
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_explicit transport_explicit_wide)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid transport_hybrid_wide)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid_x transport_hybrid_y transport_hybrid_x_wide transport_hybrid_y_wide)
+GAS_SHADERS += build/shaders/gas_activity_cached.comp.spv
 build/shaders/gas_audit.comp.spv: include/dungeoncraft/gas_audit_layout.h
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_restrict pressure_coarse_sor pressure_prolong)
 build/gas_acoustic_gpu.o: src/vulkan/gas_acoustic_gpu.c src/vulkan/gas_acoustic_gpu.h

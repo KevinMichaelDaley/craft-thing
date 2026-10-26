@@ -25,6 +25,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->commit);
     fr_renderer_compute_destroy(g,&t->clear_pressure);fr_renderer_compute_destroy(g,&t->prepare_pressure);
     fr_renderer_compute_destroy(g,&t->activity_candidates);
+    fr_renderer_compute_destroy(g,&t->activity_cached);
     fr_renderer_compute_destroy(g,&t->transport_factor);fr_renderer_compute_destroy(g,&t->transport_prefix);fr_renderer_compute_destroy(g,&t->transport_apply);
     fr_renderer_compute_destroy(g,&t->transport_metadata);dc_gpu_address_buffer_destroy(g,&t->transport_work);
     fr_renderer_compute_destroy(g,&t->restrict_pressure);fr_renderer_compute_destroy(g,&t->coarse_sor);fr_renderer_compute_destroy(g,&t->prolong_pressure);
@@ -88,6 +89,7 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",paths[i]);
         if(!fr_renderer_compute_init(g,pipelines[i],buffers,25,16,path,err,cap)) goto fail;
     }
+    if(!fr_renderer_compute_init(g,&t->activity_cached,buffers,25,16,"build/shaders/gas_activity_cached.comp.spv",err,cap)) goto fail;
     fr_renderer_compute_t *coarse_pipelines[]={&t->restrict_pressure,&t->coarse_sor,&t->prolong_pressure};
     const char *coarse_paths[]={"pressure_restrict","pressure_coarse_sor","pressure_prolong"};
     for(uint32_t i=0;i<3;i++) {
@@ -288,12 +290,15 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     barrier(g);
     vkCmdFillBuffer(g->command,t->indirect.buffer,32,4,0);vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
     uint32_t tiles=((g->width+7u)/8u)*((g->height+7u)/8u);
+    const char *cached_neighbors=getenv("DC_GAS_CACHED_NEIGHBORS");
+    const fr_renderer_compute_t *activity=t->practical&&cached_neighbors&&strcmp(cached_neighbors,"0")!=0&&
+        (bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u?&t->activity_cached:&t->activity;
     if(sparse_activity) {
         barrier(g);vkCmdFillBuffer(g->command,t->fields[9].buffer,0,tiles*4u,0);
         vkCmdFillBuffer(g->command,t->indirect.buffer,0,4,0);
         dispatch(g,&t->activity_candidates,(tiles+63u)/64u,1u,dt,bank);
-        indirect_dispatch(g,t,&t->activity,dt,bank,0);
-    } else if(!t->large_transport||compact_large) dispatch(g,&t->activity,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
+        indirect_dispatch(g,t,activity,dt,bank,0);
+    } else if(!t->large_transport||compact_large) dispatch(g,activity,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
     dispatch(g,&t->activity_compact,(tiles+63u)/64u,1u,dt,bank);
     if(t->large_transport) {
         const char *fused_setting=getenv("DC_GAS_FUSED_APPLY");bool fused=fused_setting&&strcmp(fused_setting,"0")!=0;

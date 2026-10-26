@@ -8,6 +8,7 @@ typedef struct {
     fr_renderer_compute_t activity,activity_compact,final_compact,commit;
     fr_renderer_compute_t clear_pressure,prepare_pressure;
     fr_renderer_compute_t activity_candidates;
+    fr_renderer_compute_t activity_cached;
     fr_renderer_compute_t transport_factor,transport_prefix,transport_apply,transport_metadata;
     fr_renderer_compute_t restrict_pressure,coarse_sor,prolong_pressure;
     fr_renderer_compute_t stage_transport;

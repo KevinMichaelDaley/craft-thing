@@ -207,3 +207,7 @@ Rejected uncommitted full-atlas publication: slower27.456/31.824 and new quiet-m
 **2026-10-26T05:31:35Z**
 
 Rejected quiet-air0.1 trial afteree659fb: wake controls1/1, practical5/5, enclosure1/1 and core+sync1/1 passed, but actual1000 26.879/31.052 had no gain and more drift (species6.62e-5, energy-ledger-4.74e-5, short enclosure8.6ppm). All runtime policy changes removed; original0.05 retained. New wake regression is explicitly for that ORIGINAL policy:0.025sleeps/.075wakes plusindependent heat/pressure wake, finite10ppm mass and unchangedclock; actualnative1/1 passes. Existing assertions unchanged. Cold single-scalar activity diagnostic is test-only, never runtime scheduling. Next exact activity lookup reuse; performance target remains RED.
+
+**2026-10-26T05:45:40Z**
+
+Exact activity lookup variant afterRED2bc7f55:49/49 selected native tests and core+sync1/1 clean; pressure-only comparison usesvelocity0/gravity0, gates, pageadmission, disjointquiet+dormant stock, exactfields/CFL/clock andGPUroute1vs0. Original0.05/.001 criteria unchanged. Actual1000 26.711/31.381 gives no demonstrated frame gain; remains opt-in/off in selected profile. Next lean metadata preparation targets repeated neighbor EOS work while keeping source/candidate/cache ownership unchanged.
