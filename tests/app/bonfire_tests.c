@@ -5,6 +5,7 @@
 #include "../../src/app/level.c"
 #include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
+#include <sys/stat.h>
 static void test_bonfire_is_a_playable_finite_terrain_scene(void) {
     char err[256]={0},directory[]="build/bonfire_display_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t *view=dc_level_view_create_bonfire(directory,7,err,sizeof(err));ASSERT_TRUE(view);
@@ -23,6 +24,14 @@ static void test_bonfire_is_a_playable_finite_terrain_scene(void) {
         original.state.fuel_mass_fp,burned.state.fuel_mass_fp,burned.state.ignition_integral,burned.state.ignition_threshold);
     ASSERT_TRUE(burned.state.fuel_mass_fp<original.state.fuel_mass_fp);
     ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
+    uint32_t *pixels=malloc(480u*270u*4u);ASSERT_TRUE(pixels);
+    ASSERT_TRUE(dc_gpu_readback(view->gpu,pixels,480u*270u,err,sizeof(err)));
+    uint32_t flame=pixels[207u*480u+160u];
+    ASSERT_TRUE((flame&255u)>180u&&((flame>>16)&255u)<100u);
+    mkdir("build/screenshots",0777);
+    SDL_Surface *image=SDL_CreateRGBSurfaceWithFormatFrom(pixels,480,270,32,480*4,SDL_PIXELFORMAT_ABGR8888);
+    ASSERT_TRUE(image&&SDL_SaveBMP(image,"build/screenshots/ordinary_bonfire.bmp")==0);
+    SDL_FreeSurface(image);free(pixels);
     ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));PASS();
 }
 int main(void) {RUN(test_bonfire_is_a_playable_finite_terrain_scene);
