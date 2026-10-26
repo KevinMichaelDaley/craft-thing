@@ -35,6 +35,10 @@ bool fr_gas_gpu_zero_energy_metadata(const dc_gpu_t *g,bool *selected) {
     if(!g||!g->gas||!g->gas->acoustic.ready||!selected) return false;
     *selected=(((const uint32_t *)g->gas->stats.mapped)[FR_GAS_ROW_NORM_AFTER_WORD]&2u)!=0u;return true;
 }
+bool fr_gas_gpu_sparse_owner_metadata(const dc_gpu_t *g,bool *selected) {
+    if(!g||!g->gas||!selected) return false;
+    *selected=false;return true;
+}
 bool fr_gas_gpu_work_memory(const dc_gpu_t *g,uint64_t *mapped_bytes,uint64_t *device_bytes) {
     if(!g||!g->gas||!mapped_bytes||!device_bytes) return false;
     const struct fr_gas_gpu *t=g->gas;uint64_t mapped=0,device=0;

@@ -11,7 +11,8 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     bool device_work=strcmp(setting,"DC_GAS_DEVICE_WORK")==0;
     bool device_state=strcmp(setting,"DC_GAS_DEVICE_STATE")==0;
     bool reuse_rate=strcmp(setting,"DC_GAS_REUSE_LINE_RATE")==0;
-    bool all_slots=direct_first||quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state||reuse_rate;uint32_t field_count=all_slots?12288u:4096u;
+    bool cell_owners=strcmp(setting,"DC_GAS_SPARSE_OWNERS")==0;
+    bool all_slots=direct_first||quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state||reuse_rate||cell_owners;uint32_t field_count=all_slots?12288u:4096u;
     for(uint32_t k=0;k<4;k++) {const char *value=getenv(names[k]);saved[k]=value?SDL_strdup(value):NULL;}
     ASSERT_EQ(SDL_setenv(names[0],"1",1),0);
     ASSERT_EQ(SDL_setenv(names[2],"1",1),0);
@@ -19,8 +20,8 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     fr_gas_state_t *input=malloc(4096*sizeof(*input)),*reference=malloc(field_count*sizeof(*reference)),*out=malloc(field_count*sizeof(*out));
     fr_gas_state_t *dormant=all_slots?malloc(4096*sizeof(*dormant)):NULL;ASSERT_TRUE(!all_slots||dormant);
     double *volume=malloc(4096*sizeof(*volume));dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(input&&reference&&out&&volume&&c);
-    fr_gas_state_t *quiet=quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state?malloc(4096*sizeof(*quiet)):NULL;
-    ASSERT_TRUE(!(quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state)||quiet);
+    fr_gas_state_t *quiet=quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state||cell_owners?malloc(4096*sizeof(*quiet)):NULL;
+    ASSERT_TRUE(!(quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state||cell_owners)||quiet);
     fr_gas_model_t m=reference_model();m.kinetic_scale=1./512.;
     if(quiet) for(uint32_t i=0;i<4096;i++) quiet[i]=reference_air(m,.0012,300,.001);
     for(uint32_t i=0;i<4096;i++) {volume[i]=1;input[i]=reference_air(m,.0012,300,
@@ -56,6 +57,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
             g_previous_compute_pipeline=VK_NULL_HANDLE;g_repeated_compute_bindings=0;
             ASSERT_TRUE(fr_gas_gpu_step(g,metadata?.04f:.02f,err,sizeof(err)));
             if(reuse_rate&&step==0u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_reused_line_rate(g,&used));ASSERT_EQ(used,path!=0u);}
+            if(cell_owners&&step==0u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_sparse_owner_metadata(g,&used));ASSERT_EQ(used,path!=0u);}
             if(cached_neighbors&&step==0u) ASSERT_TRUE(fr_gas_gpu_activity_metadata(g,activity_modes+path));
             if(zero_energy&&step==0u) ASSERT_TRUE(fr_gas_gpu_zero_energy_metadata(g,zero_energy_used+path));
         }
@@ -75,6 +77,15 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
             ASSERT_TRUE(fr_gas_gpu_read_chunk(g,1,destination+4096,4096,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,2,destination+8192,4096,err,sizeof(err)));
             ASSERT_TRUE(memcmp(destination+8192,dormant,4096*sizeof(*dormant))==0);
             if(quiet) ASSERT_TRUE(memcmp(destination+4096,quiet,4096*sizeof(*quiet))==0);
+        }
+        if(cell_owners) {
+            fr_gas_state_t *destination=path?out:reference,*transition=malloc(4096*sizeof(*transition));ASSERT_TRUE(transition);
+            const uint32_t policies[]={FR_GAS_PRESSURE_HLLC,FR_GAS_PRESSURE_PRACTICAL};
+            for(uint32_t k=0;k<2u;k++) {
+                ASSERT_TRUE(fr_gas_gpu_set_pressure_policy(g,policies[k],err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,transition,4096,err,sizeof(err)));
+                ASSERT_EQ(memcmp(destination,transition,4096*sizeof(*transition)),0);
+            }
+            free(transition);
         }
         dc_gpu_destroy(g);
     }
@@ -211,6 +222,12 @@ static void test_native_large_hybrid_workgroups_preserve_state_and_clock(void) {
 }
 static void test_native_zero_energy_transfers_preserve_state_stock_and_clock(void) {
     check_native_gas_dispatch_fusion("DC_GAS_ZERO_ENERGY",false,UINT32_MAX);
+}
+static void test_native_sparse_bank_owners_preserve_checkpoints_dormant_cells_and_policy_changes(void) {
+    char err[256]={0};const char *names[]={"DC_GAS_DIRECT_FIRST_AXIS","DC_GAS_ROTATE_PUBLISH"};char *saved[2];
+    for(uint32_t k=0;k<2u;k++) {const char *p=getenv(names[k]);saved[k]=p?SDL_strdup(p):NULL;ASSERT_EQ(SDL_setenv(names[k],"1",1),0);}
+    check_native_gas_dispatch_fusion("DC_GAS_SPARSE_OWNERS",true,UINT32_MAX);
+    for(uint32_t k=0;k<2u;k++) {ASSERT_EQ(SDL_setenv(names[k],saved[k]?saved[k]:"0",1),0);SDL_free(saved[k]);}
 }
 static void test_native_reused_line_rate_preserves_stiff_packet_and_owners(void) {
     char err[256]={0};const char *names[]={"DC_GAS_HYBRID_LINES","DC_GAS_FUSED_HYBRID"};char *saved[2];
