@@ -6,7 +6,7 @@
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 
-static void test_displayed_terrain_combustion_debits_real_fuel_and_oxygen(void) {
+static void terrain_combustion(bool practical) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     uint32_t at=20u*64u+20u;
     chunk->cells[at]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
@@ -20,6 +20,7 @@ static void test_displayed_terrain_combustion_debits_real_fuel_and_oxygen(void) 
         .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
     ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err)));
+    if(practical) ASSERT_TRUE(fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
     ASSERT_TRUE(fr_combustion_gpu_enable(g,err,sizeof(err)));
     fr_gas_state_t *before=calloc(4096,sizeof(*before)),*after=calloc(4096,sizeof(*after));ASSERT_TRUE(before&&after);
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,before,4096,err,sizeof(err)));
@@ -28,18 +29,26 @@ static void test_displayed_terrain_combustion_debits_real_fuel_and_oxygen(void) 
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&result,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(result.state.fuel_mass_fp<wood.fuel_mass_fp&&result.state.char_mass_fp>0);
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
-    double oxygen=0,products=0;
+    double oxygen=0,products=0,mass_before=fr_reactive_state_mass_fp(&wood)/65536.,
+        mass_after=fr_reactive_state_mass_fp(&result.state)/65536.;
     for(uint32_t i=0;i<4096;i++) {
         oxygen+=before[i].species[FR_GAS_OXYGEN]-after[i].species[FR_GAS_OXYGEN];
         products+=after[i].species[FR_GAS_EXHAUST]+after[i].species[FR_GAS_SOOT];
+        for(uint32_t species=0;species<FR_GAS_SPECIES;species++) {
+            mass_before+=before[i].species[species];mass_after+=after[i].species[species];
+        }
     }
     ASSERT_TRUE(oxygen>0&&products>oxygen);
+    ASSERT_TRUE(fabs(mass_before-mass_after)<1e-7);
     ASSERT_TRUE(present(g,err,sizeof(err)));
     fr_reactive_record_t paused;ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&paused,&found,err,sizeof(err))&&found);
     ASSERT_EQ(memcmp(&result,&paused,sizeof(result)),0);
     free(before);free(after);free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_displayed_terrain_combustion_debits_real_fuel_and_oxygen(void) {terrain_combustion(false);}
+static void test_sparse_owner_combustion_uses_the_live_gas_bank(void) {terrain_combustion(true);}
 int main(void) {
     RUN(test_displayed_terrain_combustion_debits_real_fuel_and_oxygen);
+    RUN(test_sparse_owner_combustion_uses_the_live_gas_bank);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }

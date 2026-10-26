@@ -1,0 +1,102 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+#include "address.glsl"
+#include "../gas/types.glsl"
+layout(local_size_x=64) in;
+layout(set=0,binding=0,std430) readonly buffer Root {uint root[];};
+layout(set=0,binding=1,std430) readonly buffer Pages {uint pages[];};
+layout(set=0,binding=2,std430) readonly buffer Profiles {uint profiles[];};
+layout(set=0,binding=3,std430) readonly buffer Cells {uvec2 cells[];};
+layout(push_constant) uniform Params {
+    uint width,height,seconds,sparse;
+    uvec2 world_address,alternate_address,gates_address,model_address;
+    uvec4 unused;
+} params;
+layout(buffer_reference,std430,buffer_reference_align=4) buffer Words {uint words[];};
+layout(buffer_reference,std430,buffer_reference_align=8) readonly buffer Handles {uvec2 values[];};
+layout(buffer_reference,std430,buffer_reference_align=16) buffer GasField {Gas values[];};
+float coefficient(uint material,uint field) {return uintBitsToFloat(profiles[material*32u+field]);}
+uint atlas(ivec2 p) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0xffffffffu;
+    uint page=pages[(uint(p.y)/64u)*((params.width+63u)/64u)+uint(p.x)/64u];
+    return page==0u?0xffffffffu:(page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);
+}
+const ivec2 directions[4]=ivec2[4](ivec2(0,-1),ivec2(-1,0),ivec2(1,0),ivec2(0,1));
+bool gas_cell(uint at) {return at!=0xffffffffu&&(cells[at].x&255u)==0u&&cells[at].y==0u;}
+uint target(ivec2 p) {
+    for(uint i=0u;i<4u;i++) {uint at=atlas(p+directions[i]);if(gas_cell(at)) return at;}
+    return 0xffffffffu;
+}
+float ignition_threshold(uint low,uint high) {
+    uint h=low^(high*0x9e3779b9u);h^=h>>16;h*=0x7feb352du;h^=h>>15;h*=0x846ca68bu;h^=h>>16;
+    return -log(clamp((float(h>>8)+.5)/16777216.,0.0000000298023224,.99999994));
+}
+uvec3 solid_products(uint consumed,uint material) {
+    uint char_mass=uint(floor(float(consumed)*coefficient(material,14u))),rest=consumed-char_mass;
+    uint ash=uint(floor(float(rest)*coefficient(material,15u)/(1.-coefficient(material,14u))));rest-=ash;
+    uint soot=uint(floor(float(rest)*coefficient(material,16u)/(1.-coefficient(material,14u)-coefficient(material,15u))));
+    return uvec3(char_mass,ash,soot);
+}
+/* Each parcel chooses one neighboring gas cell. The owning gas invocation
+ * gathers at most four surfaces, reserving shared oxygen locally before commit.
+ * There is no field scan, atomic float race or global flame capacity. */
+void burn(ivec2 position,uint gas_at,inout Gas gas) {
+    uint at=atlas(position);if(at==0xffffffffu||target(position)!=gas_at) return;
+    uvec2 handle=Handles(uvec2(root[6],root[7])).values[at];
+    if(handle.y==0u||handle.x>=root[2]) return;
+    Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
+    if(entry.words[FR_ENTRY_GENERATION]!=handle.y||entry.words[FR_ENTRY_OWNER]!=1u) return;
+    uint s=FR_ENTRY_STATE,m=entry.words[s],fuel=entry.words[s+9u];
+    if((m!=7u&&m!=8u)||fuel==0u) return;
+    float capacity=(float(fuel+entry.words[s+11u])*coefficient(m,5u)+
+        float(entry.words[s+10u])*coefficient(12u,5u)+float(entry.words[s+12u])*coefficient(3u,5u))/65536.;
+    if(capacity<=0.) return;
+    float energy=uintBitsToFloat(entry.words[s+17u]),temperature=energy/capacity;
+    float wet_capacity=float(entry.words[s+8u])*coefficient(m,19u);
+    float wet=wet_capacity>0.?clamp(float(entry.words[s+12u])/wet_capacity,0.,1.):0.;
+    float mass=dot(gas.species,vec4(1))+gas.dynamics.x;
+    float oxygen=mass>0.?gas.species.x/mass:0.;
+    float dt=uintBitsToFloat(params.seconds),dry=1.-wet;
+    float threshold=uintBitsToFloat(entry.words[s+21u]);
+    if(threshold==0.) threshold=ignition_threshold(entry.words[s+4u],entry.words[s+5u]);
+    float rate=temperature>=coefficient(m,7u)?coefficient(m,8u)*
+        (dry*dry+wet*coefficient(m,22u))*clamp((oxygen-.12)/(.21-.12),0.,1.):0.;
+    float integral=min(1e20,uintBitsToFloat(entry.words[s+22u])+rate*dt);
+    uint flags=entry.words[s+1u];
+    bool viable=temperature>=coefficient(m,7u)&&oxygen>.12&&wet<.8;
+    if(!viable) flags&=~2u;else if(integral>=threshold) flags|=2u;
+    entry.words[s+21u]=floatBitsToUint(threshold);entry.words[s+22u]=floatBitsToUint(integral);
+    entry.words[s+1u]=flags;
+    if(!viable||(flags&2u)==0u) return;
+    float demand=coefficient(m,12u);
+    uint oxygen_fp=uint(floor(max(0.,gas.species.x)*65536.));
+    uint reacted=uint(floor(min(min(float(fuel),float(entry.words[s+8u])*coefficient(m,31u)*dt*dry*dry),float(oxygen_fp)/demand)));
+    uint used=uint(ceil(float(reacted)*demand));if(reacted==0u||used>oxygen_fp) return;
+    uint initial=uint(round(float(entry.words[s+8u])*coefficient(m,9u))),consumed=initial>=fuel?initial-fuel:0u;
+    uvec3 products=solid_products(consumed+reacted,m)-solid_products(consumed,m);
+    uint char_mass=products.x,ash=products.y,soot=products.z;
+    uint exhaust=reacted-char_mass-ash-soot+used;
+    float heat=float(reacted)/65536.*coefficient(m,11u);
+    float removed=float(reacted)/65536.*coefficient(m,5u)*temperature;
+    float retained=float(char_mass)/65536.*coefficient(12u,5u)*temperature;
+    /* Ash remains finite in the parcel until the loose-residue publication
+     * stage admits its physical particle; no product is discarded here. */
+    retained+=float(ash)/65536.*coefficient(m,5u)*temperature;
+    entry.words[s+9u]=fuel-reacted;entry.words[s+10u]+=char_mass;entry.words[s+11u]+=ash;
+    entry.words[s+17u]=floatBitsToUint(max(0.,energy+.7*heat-removed+retained));
+    gas.species.x-=float(used)/65536.;gas.species.z+=float(exhaust)/65536.;gas.dynamics.x+=float(soot)/65536.;
+    gas.dynamics.y+=.3*heat+removed-retained;
+    gas.visual.rgb+=vec3(.18,.16,.14)*float(exhaust+soot)/65536.;
+}
+void main() {
+    uint i=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
+    if(i>=params.width*params.height) return;
+    ivec2 p=ivec2(i%params.width,i/params.width);uint at=atlas(p);if(!gas_cell(at)) return;
+    bool alternate=params.sparse!=0u&&(Words(params.gates_address).words[at]&8u)!=0u;
+    GasField field=GasField(alternate?params.alternate_address:params.world_address);Gas gas=field.values[at];
+    if(gas.geometry.y<=0.) return;
+    for(uint face=0u;face<4u;face++) burn(p+directions[face],at,gas);
+    field.values[at]=gas;
+}

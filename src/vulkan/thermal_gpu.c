@@ -9,9 +9,10 @@
 #include "reactive_storage_gpu.h"
 #include "thermal_feedback_gpu.h"
 #include "thermal_gpu_internal.h"
+#include "gas_gpu_state.h"
 
 struct fr_thermal_gpu {
-    fr_renderer_compute_t compute,feedback;
+    fr_renderer_compute_t compute,feedback,combustion;
     dc_gpu_address_buffer_t profiles,samples,fluxes,probe,water;
     uint32_t groups_x,groups_y,profile_count,overlay;
     uint32_t purpose,pending_count;
@@ -19,10 +20,44 @@ struct fr_thermal_gpu {
     bool probe_active;
 };
 bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
-    (void)g;if(err&&cap) snprintf(err,cap,"Terrain combustion is not connected yet");return false;
+    if(!g||!g->thermal||!g->gas) {
+        if(err&&cap) snprintf(err,cap,"Combustion requires existing thermal and gas owners");
+        return false;
+    }
+    struct fr_thermal_gpu *t=g->thermal;
+    if(t->combustion.pipeline) return true;
+    VkDescriptorBufferInfo buffers[4]={{g->reactive->arena.root.buffer,0,g->reactive->arena.root.bytes},
+        {g->page_buffer,0,VK_WHOLE_SIZE},{t->profiles.buffer,0,t->profiles.bytes},{g->chunk_buffer,0,VK_WHOLE_SIZE}};
+    return fr_renderer_compute_init(g,&t->combustion,buffers,4,64,"build/shaders/combustion.comp.spv",err,cap);
+}
+bool fr_combustion_gpu_enabled(const dc_gpu_t *g) {
+    return g&&g->thermal&&g->thermal->combustion.pipeline!=VK_NULL_HANDLE;
+}
+static void record_combustion(dc_gpu_t *g,float seconds) {
+    if(!g||!g->thermal||!g->thermal->combustion.pipeline||!g->gas||seconds<=0) return;
+    struct fr_thermal_gpu *t=g->thermal;struct fr_gas_gpu *gas=g->gas;
+    uint32_t push[16]={g->width,g->height,0,gas->sparse_owners?1u:0u};memcpy(push+2,&seconds,4);
+    VkDeviceAddress addresses[4]={gas->state[gas->direct_publish?1u:0u].address,
+        gas->state[2].address,gas->gates.address,gas->parameters.address};
+    memcpy(push+4,addresses,sizeof(addresses));
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,t->combustion.pipeline);
+    vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,t->combustion.pipeline_layout,0,1,&t->combustion.descriptor,0,NULL);
+    vkCmdPushConstants(g->command,t->combustion.pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
+    vkCmdDispatch(g->command,t->groups_x,t->groups_y,1);
+    fr_gas_gpu_invalidate_cache(g);
 }
 bool fr_combustion_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
-    (void)g;(void)seconds;(void)err;(void)cap;return false;
+    if(!g||!g->thermal||!g->thermal->combustion.pipeline||!isfinite(seconds)||seconds<0) return false;
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g)) return false;
+    record_combustion(g,seconds);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
+    if(fr_renderer_submit(g)) return true;
+    if(err&&cap) snprintf(err,cap,"Cannot complete terrain combustion transaction");
+    return false;
 }
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
@@ -32,6 +67,7 @@ static void destroy(dc_gpu_t *g,struct fr_thermal_gpu *t) {
     if(!t) return;
     fr_renderer_compute_destroy(g,&t->compute);
     fr_renderer_compute_destroy(g,&t->feedback);
+    fr_renderer_compute_destroy(g,&t->combustion);
     dc_gpu_address_buffer_destroy(g,&t->profiles);dc_gpu_address_buffer_destroy(g,&t->samples);
     dc_gpu_address_buffer_destroy(g,&t->fluxes);dc_gpu_address_buffer_destroy(g,&t->probe);
     dc_gpu_address_buffer_destroy(g,&t->water);free(t->pending_water);free(t);
@@ -107,6 +143,7 @@ void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
     if(g->thermal->probe_active) phase(g,4,seconds);
     phase(g,0,seconds);phase(g,5,seconds);phase(g,6,seconds);
     phase(g,0,seconds);phase(g,1,seconds);phase(g,2,seconds);
+    record_combustion(g,seconds);
 }
 void fr_thermal_record_overlay(dc_gpu_t *g) {
     if(!g->thermal||g->thermal->overlay==0u) return;

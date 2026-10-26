@@ -12,6 +12,13 @@ static float threshold(const fr_reactive_state_t *s) {
     h^=h>>16;h*=0x7feb352du;h^=h>>15;h*=0x846ca68bu;h^=h>>16;
     return (float)-log(((double)(h>>8)+.5)/16777216.0);
 }
+static void solid_products(uint32_t consumed,const fr_reactive_profile_t *p,uint32_t out[3]) {
+    out[0]=(uint32_t)floor(consumed*(double)p->fuel_yields[0]);
+    uint32_t rest=consumed-out[0];
+    out[1]=(uint32_t)floor(rest*(double)p->fuel_yields[1]/(1-p->fuel_yields[0]));
+    rest-=out[1];
+    out[2]=(uint32_t)floor(rest*(double)p->fuel_yields[2]/(1-p->fuel_yields[0]-p->fuel_yields[1]));
+}
 bool fr_combustion_reference(const fr_reactive_state_t *source,uint32_t oxygen_fp,
     float oxygen_fraction,float exposed_fraction,float seconds,
     fr_reactive_state_t *out,fr_combustion_products_t *products,
@@ -47,9 +54,12 @@ bool fr_combustion_reference(const fr_reactive_state_t *source,uint32_t oxygen_f
         if(profile->oxygen_per_fuel>0) admitted=fmin(admitted,oxygen_fp/(double)profile->oxygen_per_fuel);
         p.fuel_fp=(uint32_t)floor(admitted);
         p.oxygen_fp=(uint32_t)ceil(p.fuel_fp*(double)profile->oxygen_per_fuel);
-        uint32_t char_fp=(uint32_t)floor(p.fuel_fp*(double)profile->fuel_yields[0]);
-        p.ash_fp=(uint32_t)floor(p.fuel_fp*(double)profile->fuel_yields[1]);
-        p.soot_fp=(uint32_t)floor(p.fuel_fp*(double)profile->fuel_yields[2]);
+        uint32_t initial=(uint32_t)llround(s.dry_mass_fp*(double)profile->fuel_fraction);
+        uint32_t consumed=initial>=s.fuel_mass_fp?initial-s.fuel_mass_fp:0;
+        uint32_t before[3],after[3];
+        solid_products(consumed,profile,before);solid_products(consumed+p.fuel_fp,profile,after);
+        uint32_t char_fp=after[0]-before[0];
+        p.ash_fp=after[1]-before[1];p.soot_fp=after[2]-before[2];
         p.exhaust_fp=p.fuel_fp-char_fp-p.ash_fp-p.soot_fp+p.oxygen_fp;
         p.released_heat=p.fuel_fp/65536.0*profile->primary_heat;
         double sensible=p.fuel_fp/65536.0*profile->heat_capacity*temperature;

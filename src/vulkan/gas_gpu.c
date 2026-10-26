@@ -4,6 +4,7 @@
 #include <string.h>
 #include "dungeoncraft/gas_layout.h"
 #include "ferrum/fire/gas_gpu.h"
+#include "ferrum/fire/combustion_gpu.h"
 #include "body_address_gpu.h"
 #include "gas_feedback_gpu.h"
 #include "gas_acoustic_gpu.h"
@@ -119,7 +120,7 @@ bool fr_gas_submit(dc_gpu_t *g) {
 }
 static bool tick_can_fuse(const dc_gpu_t *g) {
     const char *tick=getenv("DC_GAS_FUSED_TICK"),*geometry=getenv("DC_GAS_FUSED_GEOMETRY"),*local=getenv("DC_GAS_LOCAL_GEOMETRY");
-    return g&&g->gas&&g->gas->cache_valid&&g->gas->direct_publish&&g->gas->policy==FR_GAS_PRESSURE_PRACTICAL&&
+    return g&&g->gas&&!fr_combustion_gpu_enabled(g)&&g->gas->cache_valid&&g->gas->direct_publish&&g->gas->policy==FR_GAS_PRESSURE_PRACTICAL&&
         tick&&strcmp(tick,"0")!=0&&geometry&&strcmp(geometry,"0")!=0&&local&&strcmp(local,"0")!=0;
 }
 bool fr_gas_gpu_try_fused_tick(dc_gpu_t *g,float seconds,bool *handled,char *err,uint32_t cap) {
