@@ -317,6 +317,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
        temporal_setting&&strcmp(temporal_setting,"0")!=0&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) bank=(bank&~FR_GAS_PACKED_PRESSURE_BIT)|FR_GAS_HALF_PRESSURE_BIT;
     if(!t->matrix_valid) bank|=4u;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin acoustic advection");
+    fr_gas_gpu_record_pending_tick(g);
     if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,tail_query+2u);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);}
     fr_gas_gpu_record_pending_geometry(g);
     if(sparse) indirect_dispatch(g,t,&t->clear_pressure,dt,bank,48);

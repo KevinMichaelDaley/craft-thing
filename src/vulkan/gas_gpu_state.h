@@ -21,6 +21,7 @@ struct fr_gas_gpu {
     uint32_t cached_bank;
     float cached_rate;
     bool cache_valid,direct_publish,initialization_pending,sparse_owners;
+    bool tick_pending;
     bool geometry_dirty,geometry_dynamic,geometry_routes_dirty,geometry_deferred;
     VkFence completion;
     double large_step_hint;

@@ -8,6 +8,7 @@
 #include "gas_feedback_gpu.h"
 #include "gas_acoustic_gpu.h"
 #include "gas_gpu_internal.h"
+#include "runtime_body_gpu.h"
 
 #include "gas_gpu_state.h"
 bool fr_gas_gpu_reused_line_rate(dc_gpu_t *g,bool *used) {
@@ -95,6 +96,24 @@ bool fr_gas_submit(dc_gpu_t *g) {
     VkResult completed=queued==VK_SUCCESS?vkWaitForFences(g->device,1,&fence,VK_TRUE,UINT64_MAX):queued;
     if(t->trace) {t->trace_submits++;t->trace_queue_ticks+=queued_at-begin;t->trace_wait_ticks+=SDL_GetPerformanceCounter()-queued_at;}
     return queued==VK_SUCCESS&&completed==VK_SUCCESS;
+}
+static bool tick_can_fuse(const dc_gpu_t *g) {
+    const char *tick=getenv("DC_GAS_FUSED_TICK"),*geometry=getenv("DC_GAS_FUSED_GEOMETRY"),*local=getenv("DC_GAS_LOCAL_GEOMETRY");
+    return g&&g->gas&&g->gas->cache_valid&&g->gas->direct_publish&&g->gas->policy==FR_GAS_PRESSURE_PRACTICAL&&
+        tick&&strcmp(tick,"0")!=0&&geometry&&strcmp(geometry,"0")!=0&&local&&strcmp(local,"0")!=0;
+}
+bool fr_gas_gpu_try_fused_tick(dc_gpu_t *g,float seconds,bool *handled,char *err,uint32_t cap) {
+    if(!handled) return error(err,cap,"Invalid fused gas tick result");
+    *handled=false;if(!tick_can_fuse(g)) return true;
+    if(!dc_gpu_runtime_bodies_service(g,err,cap)) return false;
+    if(!tick_can_fuse(g)) return true;
+    *handled=true;g->gas->tick_pending=true;
+    bool okay=fr_gas_gpu_step(g,seconds,err,cap);g->gas->tick_pending=false;return okay;
+}
+void fr_gas_gpu_record_pending_tick(dc_gpu_t *g) {
+    if(g&&g->gas&&g->gas->tick_pending) {
+        g->gas->tick_pending=false;dc_gpu_record_tick_step(g);
+    }
 }
 void fr_gas_gpu_invalidate_cache(dc_gpu_t *g) {if(g&&g->gas) {g->gas->cache_valid=false;g->gas->acoustic.matrix_valid=false;}}
 void fr_gas_gpu_geometry_changed(dc_gpu_t *g,bool dynamic) {

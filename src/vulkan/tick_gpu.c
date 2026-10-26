@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "gpu_internal.h"
+#include "gas_gpu_internal.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "runtime_body_gpu.h"
 #include "thermal_gpu_internal.h"
@@ -189,6 +190,9 @@ bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
 }
 
 bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    bool handled=false;
+    if(!fr_gas_gpu_try_fused_tick(gpu,gpu?(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f:0.f,&handled,err,cap)) return false;
+    if(handled) return true;
     if(!tick_submit(gpu,NULL,err,cap)) return false;
     return !gpu->gas||fr_gas_gpu_step(gpu,(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f,err,cap);
 }

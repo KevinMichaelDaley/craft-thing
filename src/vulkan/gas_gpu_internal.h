@@ -9,6 +9,10 @@ void fr_gas_gpu_invalidate_cache(dc_gpu_t *gpu);
 void fr_gas_gpu_geometry_changed(dc_gpu_t *gpu,bool dynamic);
 /** Refresh physical voids and conservatively displace stock on the GPU. */
 bool fr_gas_gpu_refresh_geometry(dc_gpu_t *gpu,char *err_buf,uint32_t err_cap);
+/** Attempt one warm practical physics/gas interval; cold paths report unhandled. */
+bool fr_gas_gpu_try_fused_tick(dc_gpu_t *gpu,float seconds,bool *handled,char *err_buf,uint32_t err_cap);
+/** Append an admitted physical tick before gas work in the current command buffer. */
+void fr_gas_gpu_record_pending_tick(dc_gpu_t *gpu);
 /** Append a scheduled warm geometry repair to the current gas command buffer. */
 void fr_gas_gpu_record_pending_geometry(dc_gpu_t *gpu);
 /** Submit one gas command buffer and wait for its completion fence only. */
