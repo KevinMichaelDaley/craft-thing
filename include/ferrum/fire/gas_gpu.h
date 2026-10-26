@@ -6,6 +6,8 @@
 #include "ferrum/fire/gas_checkpoint.h"
 
 typedef struct {float metrics[FR_GAS_AUDIT_WORDS];} fr_gas_gpu_audit_t;
+/** Cold constant-size diagnostic of the completed tiled transport route. */
+bool fr_gas_gpu_tiled_metadata(dc_gpu_t *gpu,uint32_t *metadata);
 /** Cold GPU reduction after queue completion; reads only32 scalar diagnostics.
  * Never invoked by normal simulation frames and never advances physical time. */
 bool fr_gas_gpu_audit(dc_gpu_t *gpu,fr_gas_gpu_audit_t *out,char *err_buf,uint32_t err_cap);
