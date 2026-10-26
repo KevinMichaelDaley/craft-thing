@@ -10,6 +10,7 @@ layout(set=0,binding=1,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=2,std430) readonly buffer Profiles {uint profiles[];};
 layout(set=0,binding=3,std430) readonly buffer Cells {uvec2 cells[];};
 layout(set=0,binding=4,std430) buffer Pixels {uint pixels[];};
+layout(set=0,binding=5,std430) buffer Samples {vec4 samples[];};
 layout(push_constant) uniform Params {
     uint width,height,seconds,sparse;
     uvec2 world_address,alternate_address,gates_address,model_address;
@@ -129,6 +130,20 @@ void main() {
     bool alternate=params.sparse!=0u&&(Words(params.gates_address).words[at]&8u)!=0u;
     GasField field=GasField(alternate?params.alternate_address:params.world_address);Gas gas=field.values[at];
     if(gas.geometry.y<=0.) return;
+    if(params.unused.x==2u) {
+        Words model=Words(params.model_address);
+        vec4 cv=vec4(uintBitsToFloat(model.words[5]),uintBitsToFloat(model.words[6]),
+            uintBitsToFloat(model.words[7]),uintBitsToFloat(model.words[8]));
+        float mass=dot(gas.species,vec4(1))+gas.dynamics.x;
+        float capacity=dot(gas.species,cv)+gas.dynamics.x*uintBitsToFloat(model.words[9]);
+        if(mass>0.&&capacity>0.) {
+            float kinetic=.5*uintBitsToFloat(model.words[10])*dot(gas.dynamics.zw,gas.dynamics.zw)/mass;
+            float energy=max(0.,gas.dynamics.y+gas.visual.w+gas.geometry.z-kinetic);
+            samples[i]=vec4(energy,capacity,.02,0.);
+            samples[i+params.width*params.height]=vec4(uintBitsToFloat(3u),0.,0.,0.);
+        }
+        return;
+    }
     for(uint face=0u;face<4u;face++) burn(p+directions[face],at,gas);
     field.values[at]=gas;
 }
