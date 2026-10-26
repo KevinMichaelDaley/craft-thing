@@ -143,3 +143,7 @@ Multilevel checkpoint077eb1e: native33/33 and practical5/5 pass; audited1000 act
 **2026-10-26T00:25:14Z**
 
 Latest displayed1000: specialized hierarchy31.706/51.371; practical pressure threshold1e-4 improves31.111/49.407; coarse temporal fusion31.876/48.933 no clear gain, kept opt-in. All stock/finite audits pass. Y-axis metadata fusion33.215/55.897 was slower and discarded. RHS+metadata fusion now BYTE-identical52vs53 dispatches; full35 and core+sync comparison underway before timing. Permanent input wall/thread-CPU/event diagnostics6d87f75, parser5/5. Strict complete-frame budget remains RED.
+
+**2026-10-26T00:46:44Z**
+
+Packed pressurec09442f is numerically exact(native36/36), but audited1000 scalar32.819/39.777 and vector-pair32.923/56.424 are slower than30.922/37.864 unpacked; vector experiment discarded and packing stays opt-in/off. Next skip pressure halo tiles with no gas, caching only GPU tile occupancy across valid geometry; lock exact-state and reduced tile-work comparison before enabling.
