@@ -23,6 +23,9 @@ static void test_bonfire_is_a_playable_finite_terrain_scene(void) {
     printf("Bonfire contact: temperature %.3f K fuel %u -> %u hazard %.5f / %.5f\n",temperature,
         original.state.fuel_mass_fp,burned.state.fuel_mass_fp,burned.state.ignition_integral,burned.state.ignition_threshold);
     ASSERT_TRUE(burned.state.fuel_mass_fp<original.state.fuel_mass_fp);
+    fr_thermal_inspection_t warmth;
+    ASSERT_TRUE(fr_thermal_gpu_inspect(view->gpu,224,271,&warmth,err,sizeof(err)));
+    ASSERT_TRUE(warmth.occupied&&warmth.material==DC_MATERIAL_AIR&&warmth.temperature_K>293.16f);
     ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
     uint32_t *pixels=malloc(480u*270u*4u);ASSERT_TRUE(pixels);
     ASSERT_TRUE(dc_gpu_readback(view->gpu,pixels,480u*270u,err,sizeof(err)));
