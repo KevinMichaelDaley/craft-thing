@@ -295,3 +295,7 @@ GPU-local geometry activity GREEN: actual native64/64 plus displayed placement5/
 **2026-10-26T19:45:54Z**
 
 Partial-cut-cell physics fix GREEN: native RED1998ea4 proved half blockage doubled density; RED16457c0 also locks full/cached geometry conservation. Both modes now retain density.0012 and temperature300 at void.5 and1/65536, conserving mixture/color/energy without advancing geometry clock. Four actual core+sync gates clean including trapped pockets and exact fusion/local activity. Actual650K moving-stone1000 finite/inventory/pause checks pass;29.716mean34.413worst still performance RED, max final pressure131.97 versus prior359.38. Pressure tolerance/sweep policy unchanged. Previous full repository run163groups765passes plus only2known ctr-ojvy,zero build warnings; full native/UI regression is being rerun after this physical remap change.
+
+**2026-10-26T19:52:22Z**
+
+Post-remap complete regression finished: actual native65/65, placement5/5; full repository163Cgroups765passes with only2pre-existing ctr-ojvy authored-stage failures at67/135, Python checks clean. Source clean at35af42b. Next opt-in practical noise-floor trial is locked before GREEN:1e-2 normalized RHS-energy admission (existing1e-3), same12/12sweeps/clock/resolution; retain unchanged reference-flow, sealed-neighbor, checkerboard, long-run inventory/finite-state and full-display frame gates. This defers weak pressure corrections; it cannot erase stock/time or change strong-disturbance solver work.
