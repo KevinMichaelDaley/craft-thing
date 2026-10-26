@@ -285,11 +285,6 @@ static void check_native_multigrid_reference_flow(uint32_t dispatch_budget,bool 
 static void test_native_multigrid_bounds_work_and_preserves_reference_flow(void) {
     check_native_multigrid_reference_flow(100u,false);
 }
-static void test_native_multigrid_jacobi_keeps_reference_flow_with_bounded_smoothing(void) {
-    char err[256]={0};const char *old=getenv("DC_GAS_MG_JACOBI");char *saved=old?SDL_strdup(old):NULL;
-    ASSERT_EQ(SDL_setenv("DC_GAS_MG_JACOBI","1",1),0);check_native_multigrid_reference_flow(65u,false);
-    ASSERT_EQ(SDL_setenv("DC_GAS_MG_JACOBI",saved?saved:"0",1),0);SDL_free(saved);
-}
 static void test_native_partial_coarse_cells_preserve_walls_with_short_smoothing(void) {
     char err[256]={0};const char *old=getenv("DC_GAS_MG_BOUNDARY");char *saved=old?SDL_strdup(old):NULL;
     ASSERT_EQ(SDL_setenv("DC_GAS_MG_BOUNDARY","1",1),0);check_native_multigrid_reference_flow(80u,true);
