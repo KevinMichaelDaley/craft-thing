@@ -1926,6 +1926,8 @@ build/thermal_checkpoint_display_tests: tests/vulkan/thermal_checkpoint_gpu_test
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_address_buffer_create
 .PHONY: test_heat_bench
 THERMAL_DISPLAY_TESTS = build/thermal_gpu_display_tests build/thermal_water_display_tests build/thermal_admission_display_tests build/thermal_feedback_display_tests build/thermal_bench_display_tests build/thermal_checkpoint_display_tests build/reactive_checkpoint_display_tests
+build/combustion_gpu_display_tests: tests/vulkan/combustion_gpu_tests.c $(PERFORMANCE_OBJ) build/shaders/pattern.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 test_ui test_quarter_native: $(THERMAL_DISPLAY_TESTS)
 test_heat_bench: build/thermal_tests build/thermal_stream_tests build/thermal_precision_tests $(THERMAL_DISPLAY_TESTS)
 	./build/thermal_tests

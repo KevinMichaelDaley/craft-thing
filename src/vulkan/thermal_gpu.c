@@ -4,6 +4,7 @@
 #include <string.h>
 #include "dungeoncraft/thermal_water_layout.h"
 #include "ferrum/fire/material_profile.h"
+#include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "reactive_storage_gpu.h"
 #include "thermal_feedback_gpu.h"
@@ -17,6 +18,12 @@ struct fr_thermal_gpu {
     float *pending_water;
     bool probe_active;
 };
+bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
+    (void)g;if(err&&cap) snprintf(err,cap,"Terrain combustion is not connected yet");return false;
+}
+bool fr_combustion_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
+    (void)g;(void)seconds;(void)err;(void)cap;return false;
+}
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
     return false;
