@@ -3,6 +3,9 @@
 #define FR_GAS_FACTOR_ENTRY gas_factor_run
 #define FR_GAS_PREFIX_ENTRY gas_prefix_run
 #define FR_GAS_EXPLICIT_ENTRY gas_explicit_run
+#define FR_GAS_REUSE_LINE_SHARED 1
+#include "transport_implicit.glsl"
+shared vec4 line_species[FR_GAS_EXPLICIT_LINE_CAPACITY];
 #include "transport_factor_body.glsl"
 #include "transport_prefix_body.glsl"
 #include "transport_explicit_body.glsl"

@@ -47,6 +47,9 @@ test_tools:
 	python3 tests/tools/toolchain_tests.py
 	python3 tests/tools/gpu_frequency_tests.py
 	python3 tests/tools/smoke_trace_tests.py
+test_shader_memory: build/shaders/gas_transport_hybrid.comp.spv build/shaders/gas_transport_hybrid_wide.comp.spv
+	python3 tests/tools/shader_memory_tests.py
+test: test_shader_memory
 test: test_tools
 STRUCTURAL_REFERENCE = tests/structural/reference_solver.c src/structural/material.c
 build/structural_failure_tests: tests/structural/failure_tests.c tests/structural/placement_tests.c build/compound_body_tests

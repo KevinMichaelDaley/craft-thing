@@ -107,7 +107,7 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_EXPLICIT_LINE_CAPACITY*48u+64u*4u) {
             const char *explicit_path=use_wide?"build/shaders/gas_transport_explicit_wide.comp.spv":"build/shaders/gas_transport_explicit.comp.spv";
             if(!fr_renderer_compute_init(g,&t->practical_explicit,buffers,25,16,explicit_path,err,cap)) goto fail;
-            if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_EXPLICIT_LINE_CAPACITY*48u+64u*104u) {
+            if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_EXPLICIT_LINE_CAPACITY*48u+64u*4u) {
                 const char *hybrid_path=use_wide?"build/shaders/gas_transport_hybrid_wide.comp.spv":"build/shaders/gas_transport_hybrid.comp.spv";
                 if(!fr_renderer_compute_init(g,&t->practical_hybrid,buffers,25,16,hybrid_path,err,cap)) goto fail;
             }

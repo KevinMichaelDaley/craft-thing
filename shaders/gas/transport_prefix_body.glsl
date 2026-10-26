@@ -4,9 +4,24 @@
 #endif
 #include "transport_implicit.glsl"
 #include "transport_apply_body.glsl"
+#ifdef FR_GAS_REUSE_LINE_SHARED
+#define GROUP_FACTOR(i) line_species[i].xy
+#define GROUP_SPECIES(i) line_species[64u+(i)]
+#define GROUP_DYNAMICS(i) line_species[128u+(i)]
+#define GROUP_VISUAL(i) line_species[192u+(i)]
+#define GROUP_MOVING(i) line_species[256u+(i)].x
+#define GROUP_MOVING_TYPE float
+#else
 shared vec2 group_factor[64];
 shared vec4 group_species[64],group_dynamics[64],group_visual[64];
 shared uint group_moving[64];
+#define GROUP_FACTOR(i) group_factor[i]
+#define GROUP_SPECIES(i) group_species[i]
+#define GROUP_DYNAMICS(i) group_dynamics[i]
+#define GROUP_VISUAL(i) group_visual[i]
+#define GROUP_MOVING(i) group_moving[i]
+#define GROUP_MOVING_TYPE uint
+#endif
 GasFlux shuffle_up(GasFlux value,uint offset) {
     return GasFlux(subgroupShuffleUp(value.species,offset),subgroupShuffleUp(value.dynamics,offset),subgroupShuffleUp(value.pigment,offset));
 }
@@ -36,9 +51,9 @@ void FR_GAS_PREFIX_ENTRY() {
         moving=moving||own_moving;value=transport_add(own_value,transport_scale(value,own_factor));factor*=own_factor;
     }
     uint moving_mask=subgroupOr(moving?1u:0u);
-    if(lane+1u==gl_SubgroupSize) group_moving[gl_SubgroupID]=moving_mask;
+    if(lane+1u==gl_SubgroupSize) GROUP_MOVING(gl_SubgroupID)=GROUP_MOVING_TYPE(moving_mask);
     barrier();bool any_moving=false;
-    for(uint group=0;group<gl_NumSubgroups;group++) any_moving=any_moving||group_moving[group]!=0u;
+    for(uint group=0;group<gl_NumSubgroups;group++) any_moving=any_moving||GROUP_MOVING(group)!=GROUP_MOVING_TYPE(0);
     if(!any_moving) {
         for(uint cell=begin;cell<end;cell++) {
             uint index=transport_position(transport_point(line,cell));
@@ -51,15 +66,15 @@ void FR_GAS_PREFIX_ENTRY() {
         if(lane>=offset) {value=transport_add(value,transport_scale(prior,factor));factor*=previous;}
     }
     if(lane+1u==gl_SubgroupSize) {
-        group_factor[gl_SubgroupID]=factor;group_species[gl_SubgroupID]=value.species;
-        group_dynamics[gl_SubgroupID]=value.dynamics;group_visual[gl_SubgroupID]=vec4(value.pigment,0);
+        GROUP_FACTOR(gl_SubgroupID)=factor;GROUP_SPECIES(gl_SubgroupID)=value.species;
+        GROUP_DYNAMICS(gl_SubgroupID)=value.dynamics;GROUP_VISUAL(gl_SubgroupID)=vec4(value.pigment,0);
     }
     vec2 exclusive_factor=subgroupShuffleUp(factor,1u);GasFlux exclusive_value=shuffle_up(value,1u);
     if(lane==0u) {exclusive_factor=vec2(1);exclusive_value=gas_empty_flux();}
     barrier();GasFlux prefix=gas_empty_flux();
     for(uint group=0;group<gl_SubgroupID;group++) {
-        GasFlux prior=GasFlux(group_species[group],group_dynamics[group],group_visual[group].rgb);
-        prefix=transport_add(prior,transport_scale(prefix,group_factor[group]));
+        GasFlux prior=GasFlux(GROUP_SPECIES(group),GROUP_DYNAMICS(group),GROUP_VISUAL(group).rgb);
+        prefix=transport_add(prior,transport_scale(prefix,GROUP_FACTOR(group)));
     }
     prefix=transport_add(exclusive_value,transport_scale(prefix,exclusive_factor));
     for(uint cell=begin;cell<end;cell++) {

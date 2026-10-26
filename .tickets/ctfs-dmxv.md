@@ -167,3 +167,7 @@ Direct-source transport6a40303 pushed:42/42 native and1/1 core+sync, exact field
 **2026-10-26T03:55:54Z**
 
 Hybrid fusion40739da pushed:43/43 native, core+sync1/1; audited open1000 28.339mean32.363worst, invalid0, stocks/paused checks pass. Halo-row loading refactor also43/43 but28.351/32.181, no material gain. Trial12-pre/8-post smoothing fails checkerboard damping and sealed-neighbor4.05% gate (3/5 practical); discarded immediately, retained12+12 and existing thresholds. Strict complete-frame worst remains RED.
+
+**2026-10-26T04:03:03Z**
+
+Shared scratch GREEN after523f1bc: fused hybrid SPIR-V37120->30976bytes, permanent32KiB gate2/2 and full native43/43, core+sync1/1. Explicit, factor and prefix phases reuse barrier-separated shared memory with identical state/clock. Audited open1000 27.844mean33.534worst, invalid0 and small stock/work drift; strict worst RED. Separate metadata dispatch trial28.923/34.639 slower; retain fused metadata for next diagnostics.

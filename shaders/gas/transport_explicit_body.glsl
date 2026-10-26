@@ -1,7 +1,9 @@
 #define FR_GAS_COMPACT_WORK 1
 #include "transport_implicit.glsl"
 #include "transport_apply_body.glsl"
+#ifndef FR_GAS_REUSE_LINE_SHARED
 shared vec4 line_species[FR_GAS_EXPLICIT_LINE_CAPACITY];
+#endif
 shared vec4 line_dynamics[FR_GAS_EXPLICIT_LINE_CAPACITY];
 shared vec4 line_visual[FR_GAS_EXPLICIT_LINE_CAPACITY];
 shared float explicit_group_peak[64];

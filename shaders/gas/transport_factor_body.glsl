@@ -1,8 +1,17 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_KHR_shader_subgroup_shuffle_relative : require
 #include "transport_implicit.glsl"
+#ifdef FR_GAS_REUSE_LINE_SHARED
+#define GROUP_MASS(i) line_species[i]
+#define GROUP_ENERGY(i) line_species[64u+(i)]
+#define GROUP_PEAK(i) line_species[128u+(i)].x
+#else
 shared vec4 group_mass[64],group_energy[64];
 shared float group_peak[64];
+#define GROUP_MASS(i) group_mass[i]
+#define GROUP_ENERGY(i) group_energy[i]
+#define GROUP_PEAK(i) group_peak[i]
+#endif
 vec4 matrix_product(vec4 a,vec4 b) {
     precise vec4 value=vec4(fma(a.x,b.x,a.y*b.z),fma(a.x,b.y,a.y*b.w),fma(a.z,b.x,a.w*b.z),fma(a.z,b.y,a.w*b.w));
     float scale=max(max(abs(value.x),abs(value.y)),max(abs(value.z),abs(value.w)));
@@ -33,9 +42,9 @@ void FR_GAS_FACTOR_ENTRY() {
     float maximum_speed=0.;
     for(uint cell=begin;cell<end;cell++) maximum_speed=max(maximum_speed,abs(gas_cached(transport_point(line,cell)).hydro[transport_axis()+1u]));
     float subgroup_speed=subgroupMax(maximum_speed);
-    if(lane+1u==gl_SubgroupSize) group_peak[gl_SubgroupID]=subgroup_speed;
+    if(lane+1u==gl_SubgroupSize) GROUP_PEAK(gl_SubgroupID)=subgroup_speed;
     barrier();maximum_speed=0.;
-    for(uint group=0u;group<gl_NumSubgroups;group++) maximum_speed=max(maximum_speed,group_peak[group]);
+    for(uint group=0u;group<gl_NumSubgroups;group++) maximum_speed=max(maximum_speed,GROUP_PEAK(group));
     if(maximum_speed==0.) {if(rank==0u) transport_work[line*length].mass.w=-1.;return;}
     barrier();
     vec4 mass=vec4(1,0,0,1),energy=mass;float peak=0.;
@@ -61,13 +70,13 @@ void FR_GAS_FACTOR_ENTRY() {
         if(lane>=offset) {mass=matrix_product(mass,prior_mass);energy=practical?mass:matrix_product(energy,prior_energy);}
     }
     float subgroup_peak=subgroupMax(peak);
-    if(lane+1u==gl_SubgroupSize) {group_mass[gl_SubgroupID]=mass;group_energy[gl_SubgroupID]=energy;group_peak[gl_SubgroupID]=subgroup_peak;}
+    if(lane+1u==gl_SubgroupSize) {GROUP_MASS(gl_SubgroupID)=mass;GROUP_ENERGY(gl_SubgroupID)=energy;GROUP_PEAK(gl_SubgroupID)=subgroup_peak;}
     vec4 exclusive_mass=subgroupShuffleUp(mass,1u),exclusive_energy=subgroupShuffleUp(energy,1u);
     if(lane==0u) {exclusive_mass=vec4(1,0,0,1);exclusive_energy=exclusive_mass;}
     barrier();mass=vec4(1,0,0,1);energy=mass;
-    peak=0.;for(uint group=0u;group<gl_NumSubgroups;group++) peak=max(peak,group_peak[group]);
+    peak=0.;for(uint group=0u;group<gl_NumSubgroups;group++) peak=max(peak,GROUP_PEAK(group));
     float trace_scale=peak<=3.402823466e38/(float(length+1u)*4294967296.*16.)?4294967296.:1.;
-    for(uint group=0u;group<gl_SubgroupID;group++) {mass=matrix_product(group_mass[group],mass);energy=practical?mass:matrix_product(group_energy[group],energy);}
+    for(uint group=0u;group<gl_SubgroupID;group++) {mass=matrix_product(GROUP_MASS(group),mass);energy=practical?mass:matrix_product(GROUP_ENERGY(group),energy);}
     mass=matrix_product(exclusive_mass,mass);energy=practical?mass:matrix_product(exclusive_energy,energy);
     vec2 prior_inverse=vec2(mass.z/mass.x,energy.z/energy.x);
     for(uint cell=begin;cell<end;cell++) {
