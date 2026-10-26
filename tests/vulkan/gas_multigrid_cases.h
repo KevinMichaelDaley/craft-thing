@@ -22,6 +22,11 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         ASSERT_TRUE(fr_gas_gpu_enable(g,&m,.0012,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&fr_gas_gpu_set_gravity(g,900,err,sizeof(err)));
         ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
         for(uint32_t step=0;step<8;step++) {
+            if(empty_tiles&&step==4u) {
+                c->coord.x=1;
+                ASSERT_TRUE(dc_gpu_upload_chunk(g,1,c,err,sizeof(err))&&dc_gpu_set_page(g,1,0,1,err,sizeof(err))&&
+                    fr_gas_gpu_seed_chunk(g,1,input,volume,4096,err,sizeof(err)));c->coord.x=0;
+            }
             if(step==0||step==6) ASSERT_TRUE(fr_gas_gpu_gate(g,29,0,1,64,0,true,err,sizeof(err)));
             if(step==3) ASSERT_TRUE(fr_gas_gpu_gate(g,29,0,1,64,0,false,err,sizeof(err)));
             g_pressure_dispatches=0;g_direct_dispatches=0;ASSERT_TRUE(fr_gas_gpu_step(g,metadata?.04f:.02f,err,sizeof(err)));

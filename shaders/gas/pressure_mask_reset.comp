@@ -1,0 +1,6 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "acoustic.glsl"
+void main() {
+    uint tile=gas_index();if(tile<gas_tile_count()) active_mask[tile]&=2u;
+}

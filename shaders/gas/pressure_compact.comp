@@ -7,10 +7,11 @@ void main() {
     ivec2 p=ivec2(int(tile%width),int(tile/width));bool needed=false,residual_needed=false;
     for(int y=-3;y<=3;y++) for(int x=-3;x<=3;x++) {
         ivec2 q=p+ivec2(x,y);
-        if(all(greaterThanEqual(q,ivec2(0)))&&all(lessThan(q,ivec2(width,height)))&&active_mask[uint(q.y)*width+uint(q.x)]!=0u) {
+        if(all(greaterThanEqual(q,ivec2(0)))&&all(lessThan(q,ivec2(width,height)))&&(active_mask[uint(q.y)*width+uint(q.x)]&1u)!=0u) {
             residual_needed=true;if(abs(x)<=2&&abs(y)<=2) needed=true;
         }
     }
+    if((params.bank&FR_GAS_SKIP_EMPTY_PRESSURE_BIT)!=0u&&(active_mask[tile]&2u)==0u) needed=false;
     activity[width*height+tile]=(activity[width*height+tile]&~FR_GAS_SOLVE_TILE_BIT)|(needed?FR_GAS_SOLVE_TILE_BIT:0u);
     if(needed) {uint slot=atomicAdd(indirect[0],1u);active_tiles[slot]=tile;}
     if(residual_needed) {uint slot=atomicAdd(indirect[4],1u);active_tiles[width*height+slot]=tile;activity[width*height+tile]|=2u;}

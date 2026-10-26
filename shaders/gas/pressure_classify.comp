@@ -9,6 +9,7 @@ void main() {
     uvec2 p=uvec2(tile%width,tile/width)*8u+uvec2(lane%8u,lane/8u);
     if(p.x<params.width&&p.y<params.height) {
         uint at=p.y*params.width+p.x;
+        if((params.bank&FR_GAS_SKIP_EMPTY_PRESSURE_BIT)!=0u&&gas_cached(ivec2(p)).metric.w>0.) atomicOr(needed,2u);
         float tolerance=(params.bank&FR_GAS_MULTIGRID_BIT)!=0u?1e-3:1e-7;
         if(correction_data[at].y>0.&&abs(correction_data[at].x)/pressure[at].w>tolerance) atomicOr(needed,1u);
     }

@@ -36,6 +36,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->coarse_group);
     fr_renderer_compute_destroy(g,&t->rhs_fused);
     fr_renderer_compute_destroy(g,&t->pack_pressure);fr_renderer_compute_destroy(g,&t->packed_sor);
+    fr_renderer_compute_destroy(g,&t->reset_pressure_mask);
     for(uint32_t i=0;i<3;i++) {
         if(i<2u) {fr_renderer_compute_destroy(g,&t->mg_relax[i]);fr_renderer_compute_destroy(g,&t->mg_temporal[i]);}
         fr_renderer_compute_destroy(g,&t->mg_restrict[i]);fr_renderer_compute_destroy(g,&t->mg_prolong[i]);
@@ -126,6 +127,7 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         if(!fr_renderer_compute_init(g,&t->pack_pressure,buffers,25,16,"build/shaders/gas_pressure_pack.comp.spv",err,cap)||
            !fr_renderer_compute_init(g,&t->packed_sor,buffers,25,16,"build/shaders/gas_pressure_temporal_packed.comp.spv",err,cap)) goto fail;
     }
+    if(!fr_renderer_compute_init(g,&t->reset_pressure_mask,buffers,25,16,"build/shaders/gas_pressure_mask_reset.comp.spv",err,cap)) goto fail;
     t->ready=true;return true;
 fail:
     fr_gas_acoustic_destroy(g,t);return false;
@@ -220,12 +222,16 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     bool sparse=enabled("DC_GAS_SPARSE_RHS")&&t->matrix_valid&&(!t->large_transport||compact_large);
     bool sparse_activity=enabled("DC_GAS_SPARSE_ACTIVITY")&&t->matrix_valid&&(!t->large_transport||compact_large);
     bool sparse_classify=enabled("DC_GAS_SPARSE_CLASSIFY");
+    const char *empty_setting=getenv("DC_GAS_SKIP_EMPTY_PRESSURE");
+    bool skip_empty=t->practical&&empty_setting&&strcmp(empty_setting,"0")!=0;
+    if(skip_empty&&!t->matrix_valid) sparse_classify=false;
     if(sparse) bank|=256u;
     if(sparse_activity) bank|=512u;
     if(sparse_classify) bank|=1024u;
     if(t->large_transport&&!compact_large) bank|=2048u;
     if(matrix_large) bank|=FR_GAS_LARGE_ENERGY_BIT;
     if(t->practical) bank|=FR_GAS_PRACTICAL_BIT;
+    if(skip_empty) bank|=FR_GAS_SKIP_EMPTY_PRESSURE_BIT;
     if(getenv("DC_GAS_COMPARE_ROW_SETUP")) bank|=FR_GAS_COMPARE_ROW_SETUP_BIT;
     if(multigrid_enabled(g,t,dt,bank)) bank|=FR_GAS_MULTIGRID_BIT;
     const char *metadata_setting=getenv("DC_GAS_FUSED_METADATA");
@@ -295,7 +301,8 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         barrier(g);vkCmdFillBuffer(g->command,t->indirect.buffer,0,4,0);
         vkCmdFillBuffer(g->command,t->indirect.buffer,16,4,0);
         if(sparse_classify) {
-            barrier(g);vkCmdFillBuffer(g->command,t->fields[6].buffer,0,tiles*4u,0);
+            if(skip_empty) dispatch(g,&t->reset_pressure_mask,(tiles+63u)/64u,1u,dt,bank);
+            else {barrier(g);vkCmdFillBuffer(g->command,t->fields[6].buffer,0,tiles*4u,0);}
             vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
             dispatch(g,&t->final_compact,(tiles+63u)/64u,1u,dt,bank);
             indirect_dispatch(g,t,&t->classify,dt,bank,48);

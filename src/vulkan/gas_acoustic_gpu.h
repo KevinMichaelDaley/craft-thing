@@ -20,6 +20,7 @@ typedef struct {
     fr_renderer_compute_t mg_temporal[2];
     fr_renderer_compute_t rhs_fused;
     fr_renderer_compute_t pack_pressure,packed_sor;
+    fr_renderer_compute_t reset_pressure_mask;
     dc_gpu_address_buffer_t transport_work;
     VkBuffer state_bank[2];VkDeviceSize state_bytes;
     dc_gpu_address_buffer_t fields[11],indirect;
