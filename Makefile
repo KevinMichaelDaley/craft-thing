@@ -659,6 +659,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/reactive_chunk_tests
 	./build/reactive_stream_tests
 	./build/thermal_stream_tests
+	./build/gas_stream_tests
 	./build/thermal_precision_tests
 	./build/reactive_body_snapshot_tests
 	./build/reactive_archive_tests
@@ -1758,7 +1759,9 @@ build/reactive_stream_tests: tests/fire/reactive_stream_tests.c tests/world/stre
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c src/fire/thermal_checkpoint.c $(REACTIVE_STATE_SRC) -o $@ -pthread -lm
 build/thermal_stream_tests: tests/fire/thermal_stream_tests.c tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c src/fire/thermal_checkpoint.c $(REACTIVE_STATE_SRC)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c src/fire/thermal_checkpoint.c $(REACTIVE_STATE_SRC) -o $@ -pthread -lm
-test: build/thermal_stream_tests
+build/gas_stream_tests: tests/fire/gas_stream_tests.c tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c src/fire/thermal_checkpoint.c $(REACTIVE_STATE_SRC)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c src/fire/thermal_checkpoint.c $(REACTIVE_STATE_SRC) -o $@ -pthread -lm
+test: build/thermal_stream_tests build/gas_stream_tests
 build/thermal_precision_tests: tests/fire/thermal_precision_tests.c $(REACTIVE_STATE_SRC)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(REACTIVE_STATE_SRC) -o $@ -lm
 build/gas_transport_tests build/gas_implicit_tests build/gas_display_tests: include/ferrum/fire/gas_constants.h
@@ -1784,7 +1787,7 @@ build/diagnostics/smoke_box_frame: tools/diagnostics/smoke_box_frame.c src/app/l
 	mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< src/app/smoke_box.c src/app/smoke_level.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 GAS_PUBLICATION_LINK = -Wl,--wrap=vkQueueSubmit -Wl,--wrap=vkCmdDispatchIndirect -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkQueueWaitIdle -Wl,--wrap=vkCmdCopyBuffer -Wl,--wrap=vkCmdPipelineBarrier2 -Wl,--wrap=fprintf -Wl,--wrap=__fprintf_chk -Wl,--wrap=vkCmdBindPipeline
-build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_gpu_tests.c tests/vulkan/gas_large_cfl_cases.h tests/vulkan/gas_practical_cases.h tests/vulkan/gas_publication_cases.h tests/vulkan/gas_multigrid_cases.h tests/vulkan/reactive_cell_gpu_tests.c src/fire/gas_reference.c src/fire/gas_implicit_reference.c src/fire/gas_transport_reference.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_gpu_tests.c tests/vulkan/gas_checkpoint_cases.h tests/vulkan/gas_large_cfl_cases.h tests/vulkan/gas_practical_cases.h tests/vulkan/gas_publication_cases.h tests/vulkan/gas_multigrid_cases.h tests/vulkan/reactive_cell_gpu_tests.c src/fire/gas_reference.c src/fire/gas_implicit_reference.c src/fire/gas_transport_reference.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $(if $(filter build/gas_publication_display_tests,$@),-DFR_GAS_PUBLICATION_TEST,) $< src/fire/gas_reference.c src/fire/gas_implicit_reference.c src/fire/gas_transport_reference.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) $(if $(filter build/gas_publication_display_tests,$@),$(GAS_PUBLICATION_LINK),)
 build/diagnostics/gas_frame: tools/diagnostics/gas_frame.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	mkdir -p $(dir $@)
