@@ -307,3 +307,7 @@ Practical weak-pressure floor opt-in GREEN e11cdab: actual native66/66 plus core
 **2026-10-26T20:10:55Z**
 
 Subsequent trials rejected/restored: eight-sweep omega1.5 solver62/66native with reference/stability failures; local-stage transport exact native/core but28.917/41.402ms no gain;3e-2pressure floor66/66 but28.917/44.612 no gain; four explicit stages67-case suite66/67 due long-interval pressure12.2xambient (gate10x), still failed with extended stages limitedto<=.05seconds. No gates weakened; stable12/12SOR,threeexplicitstages and1e-2optional floor retained. All measured runs meaningful stock/clock/pause retained. Module remainsperformanceRED; continuing current-stage time-series profiling.
+
+**2026-10-26T20:41:25Z**
+
+Exact larger SOR tile GREEN2252004: actual native68/68 and core/sync1/1; same12/12sweeps, byte-identical packets,10vs16pressure dispatches. First actual carved1000 is29.226mean33.591worst; finite/inventory/pause pass, strictworst stillRED. Fused physics tick also placement5/5. PlainJacobi/Chebyshev were rejected for practical pressure/motion and performance, not simply exact convergence. Next exact trial extends output tile to32 with40x40scratch/800invocations and2sweeps perdispatch, reducing redundanthalo reads/updates while retaining12/12schedule and original fallback.

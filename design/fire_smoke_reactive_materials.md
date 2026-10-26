@@ -55,6 +55,9 @@ Its pressure activity threshold is a relative right-hand-side disturbance of
 `1e-3` (0.1 percent of the local pressure-energy scale); strict and long-interval
 fallback paths retain `1e-7`. This defers imperceptible corrections rather than
 iterating to exact convergence, while preserving full elapsed time and stock.
+The separate `DC_GAS_PRESSURE_NOISE=1` trial uses a `1e-2` practical threshold
+with the same sweep schedule. It passed the native stability/inventory checks,
+but remains off by default because strict displayed worst-frame timing is RED.
 The optional fused metadata/RHS path reads an immutable transported candidate
 for all neighbor predictors. Each owning cell retains full EOS validation;
 buoyancy is applied during finalization before the same guarded commit. Kinetic
@@ -73,6 +76,25 @@ Standalone physics ticks use their own Vulkan completion fence. They wait for
 all recorded physics work before gas/capture handoff, without draining unrelated
 presentation-queue operations. Stepping and capture retain the same kernel
 schedule and elapsed-clock accounting.
+`DC_GAS_FUSED_TICK=1` can append an admitted warm practical physical tick to the
+gas command buffer before geometry repair. Existing rigid/fluid/MPM/thermal
+recording and elapsed time are unchanged; cold and capture paths retain their
+ordinary scheduling. Body-service preflight runs first and eligibility is
+checked again after it. Native edited-field A/B checks retain identical packets
+and clocks with eight submissions instead of sixteen; core/synchronization and
+the five placement/edit/save/stream checks pass. The displayed carved run was
+29.613 ms mean / 35.930 ms worst, so this remains an optional optimization.
+
+`DC_GAS_SOR_TILE16=1` is an exact temporal blocking trial for half-row multigrid
+on hardware supporting 512 invocations per workgroup. GPU compaction groups
+active 8-pixel tiles into 16-pixel output tiles with an 8-pixel halo. Three
+four-sweep dispatches retain the twelve fine sweeps on each side of the V-cycle;
+an odd-pass copy restores the existing correction owner. The temporary group
+list borrows the final-publication list only after its prior use completes and
+before final compaction rebuilds it. No CPU lists or new state limits are used.
+Native field/clock comparison is byte-identical with ten pressure dispatches
+instead of sixteen; all 68 native checks and focused synchronization validation
+pass. Displayed timing acceptance is still pending.
 The half-second displayed enclosure check permits ten parts per million of
 relative species/pigment and energy-minus-work drift, with exact zero for
 initially absent species. Measured optimized float transport drifts about four
