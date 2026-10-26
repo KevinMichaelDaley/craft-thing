@@ -47,6 +47,7 @@ test_tools:
 	python3 tests/tools/toolchain_tests.py
 	python3 tests/tools/gpu_frequency_tests.py
 	python3 tests/tools/smoke_trace_tests.py
+	python3 tests/tools/shader_stats_tests.py
 test_shader_memory: build/shaders/gas_transport_hybrid.comp.spv build/shaders/gas_transport_hybrid_wide.comp.spv
 	python3 tests/tools/shader_memory_tests.py
 test: test_shader_memory

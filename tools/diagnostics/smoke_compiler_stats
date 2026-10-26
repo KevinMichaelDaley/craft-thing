@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Compilation diagnostics only: debug output/cache misses invalidate frame timings.
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+tools/with-vulkan make -j4 build/dungeoncraft_quarter_native
+output=$(mktemp -d build/smoke_shader_stats_XXXXXX)
+targets=(transport_hybrid_wide pressure_rhs_fused pressure_temporal_half acoustic_finish_group128 sparse_commit)
+restore() {
+    for name in "${targets[@]}"; do
+        if [[ -f "$output/$name.original.spv" ]]; then
+            cp -p "$output/$name.original.spv" "build/shaders/gas_$name.comp.spv"
+        fi
+    done
+}
+trap restore EXIT
+for name in "${targets[@]}"; do
+    shader="build/shaders/gas_$name.comp.spv"
+    cp -p "$shader" "$output/$name.original.spv"
+    tools/with-vulkan spirv-opt --strip-debug "$shader" -o "$output/$name.stripped.spv"
+    cp "$output/$name.stripped.spv" "$shader"
+done
+result=0
+env SDL_VIDEODRIVER=wayland INTEL_DEBUG=cs MESA_SHADER_CACHE_DISABLE=false \
+    DC_SHADER_COMPILER_DIAGNOSTICS=1 DC_GAS_PRACTICAL=1 \
+    DC_GAS_COARSE=1 DC_GAS_COARSE_WG=1 DC_GAS_MULTIGRID=1 \
+    DC_GAS_TEMPORAL_SOR=1 DC_GAS_HALF_PRESSURE=1 DC_GAS_GROUP_RATE=1 \
+    DC_GAS_FUSED_METADATA=1 DC_GAS_ROTATE_PUBLISH=1 DC_GAS_HYBRID_LINES=1 \
+    DC_GAS_FUSED_AXIS=1 DC_GAS_FUSED_HYBRID=1 DC_GAS_DIRECT_FIRST_AXIS=1 \
+    DC_GAS_FUSED_APPLY=1 DC_GAS_WIDE_SCAN=1 DC_BENCHMARK_SMOKE_OPEN=1 \
+    tools/with-vulkan ./build/dungeoncraft_quarter_native --smoke-box \
+    --world-dir "$output/world" --benchmark-frames 30 --benchmark-gas-audit \
+    > "$output/display.log" 2>&1 || result=$?
+python3 tools/diagnostics/shader_stats.py "$output/display.log" > "$output/shaders.csv"
+echo "Compiler diagnostic evidence (not a performance gate): $output"
+if ((result!=0)) && ! rg -q '^Displayed full frame' "$output/display.log"; then
+    exit "$result"
+fi
+test -s "$output/shaders.csv"

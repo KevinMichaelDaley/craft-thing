@@ -175,3 +175,7 @@ Shared scratch GREEN after523f1bc: fused hybrid SPIR-V37120->30976bytes, permane
 **2026-10-26T04:06:04Z**
 
 Fused RHS refactor reuses owning metadata pressure head and avoids computing then overwriting moved-neighbor stage. Exact metadata comparison1/1, core+sync1/1, full native43/43. Audited open1000 improves27.278mean31.436worst; invalid0, species3.18e-5/pigment2.97e-7/energy ledger-1.09e-5 relative drift, four paused captures identical. No pressure-schedule or quality-limit change. Strict worst remains RED.
+
+**2026-10-26T04:17:58Z**
+
+Compiler diagnostic tooling: named actual-display selected5 gas pipelines show0 spills/fills; hybrid is SIMD8,6185instructions/19loops, fused RHS SIMD8/2184instructions, finish SIMD8/2438instructions, fine pressure SIMD16/499instructions. Earlier unnamed dump included huge spills in OTHER startup pipelines and was interrupted, not a test pass. Permanent wrapper strips only debug metadata for selected cache misses, retains arithmetic, restores built SPIR-V byte-for-byte; captured evidence build/smoke_shader_stats_YDfYng.2/2 parser tests. Diagnostic timing is excluded from performance claims. Crossover1/4/6 trials offered no clear gain; restored validated3stage.
