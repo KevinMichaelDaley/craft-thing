@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include <SDL.h>
 
@@ -1248,6 +1249,8 @@ int main(int argc, char **argv) {
     bool benchmark_timings=benchmark_frames&&getenv("DC_FRAME_TIMINGS")!=NULL;
     while (running) {
         uint64_t frame_start = SDL_GetPerformanceCounter();
+        struct timespec input_cpu_start={0},input_cpu_end={0};uint32_t input_events=0;
+        bool input_cpu_valid=benchmark_timings&&clock_gettime(CLOCK_THREAD_CPUTIME_ID,&input_cpu_start)==0;
         if (scripted_input && scripted_frame == 0) {
             SDL_Event key = { .type = SDL_KEYDOWN };
             key.key.keysym.sym = SDLK_F2;
@@ -1266,6 +1269,7 @@ int main(int argc, char **argv) {
         }
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
+            input_events++;
             if (event.type == SDL_QUIT) running = false;
             if (entering_seed && event.type == SDL_TEXTINPUT) {
                 for (const char *p = event.text.text; *p; ++p)
@@ -1401,6 +1405,7 @@ int main(int argc, char **argv) {
             }
         }
         uint64_t input_done=benchmark_timings?SDL_GetPerformanceCounter():0;
+        if(input_cpu_valid) input_cpu_valid=clock_gettime(CLOCK_THREAD_CPUTIME_ID,&input_cpu_end)==0;
         uint64_t now = SDL_GetPerformanceCounter();
         double elapsed = (double)(now - previous) / (double)SDL_GetPerformanceFrequency();
         previous = now;
@@ -1466,6 +1471,9 @@ int main(int argc, char **argv) {
             if(benchmark_timings) {
                 struct rusage usage={0};
                 if(getrusage(RUSAGE_SELF,&usage)==0) printf("app-memory,%u,rss_kb%ld,minflt%ld,majflt%ld\n",scripted_frame,usage.ru_maxrss,usage.ru_minflt,usage.ru_majflt);
+                if(input_cpu_valid) printf("app-input,%u,events%u,wall%.3f,cpu%.3f\n",scripted_frame,input_events,
+                    (input_done-frame_start)*1000./SDL_GetPerformanceFrequency(),
+                    (input_cpu_end.tv_sec-input_cpu_start.tv_sec)*1000.+(input_cpu_end.tv_nsec-input_cpu_start.tv_nsec)/1e6);
                 printf("app-frame,%u,%.3fms\n",scripted_frame,ms);
             }
             if(benchmark_timings) {

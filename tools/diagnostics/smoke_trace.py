@@ -17,6 +17,7 @@ ACOUSTIC = re.compile(r"Acoustic dt([\deE.+-]+) batch(\d+) residual([\deE.+-]+).
 INTERVAL = re.compile(r"Gas interval dt([\deE.+-]+) accepted(\d+) retries(\d+) submits(\d+) queue([\d.]+) wait([\d.]+) storage(\d+)")
 WAITS = re.compile(r"Present waits acquire([\d.]+) fence([\d.]+)")
 MEMORY = re.compile(r"app-memory,\d+,rss_kb(\d+),minflt(\d+),majflt(\d+)")
+INPUT = re.compile(r"app-input,\d+,events(\d+),wall([\d.]+),cpu([\d.]+)")
 
 
 def counters():
@@ -25,7 +26,8 @@ def counters():
                 storage_bytes=0, acquire_ms=0.0, present_fence_ms=0.0,
                 solve_tiles_peak=0, advection_tiles_peak=0,
                 residual_peak=0.0, pressure_batches_peak=0,
-                rss_kb=0, minor_faults=0, major_faults=0)
+                rss_kb=0, minor_faults=0, major_faults=0,
+                input_events=0, input_cpu_ms=0.0, input_wait_ms=0.0)
 
 
 def frames(lines):
@@ -35,6 +37,11 @@ def frames(lines):
     extra = counters()
     intervals = 0
     for line in lines:
+        match = INPUT.search(line)
+        if match:
+            extra["input_events"] += int(match[1])
+            extra["input_cpu_ms"] += float(match[3])
+            extra["input_wait_ms"] += max(0.0, float(match[2]) - float(match[3]))
         match = TAIL.search(line)
         if match:
             finish += float(match[1])
