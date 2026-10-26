@@ -10,6 +10,10 @@
 #include "gas_gpu_internal.h"
 
 #include "gas_gpu_state.h"
+bool fr_gas_gpu_reused_line_rate(dc_gpu_t *g,bool *used) {
+    if(!g||!g->gas||!used) return false;
+    *used=false;return true;
+}
 bool fr_gas_gpu_pressure_tiles(const dc_gpu_t *g,uint32_t *tiles) {
     if(!g||!g->gas||!g->gas->acoustic.ready||!tiles) return false;
     *tiles=((const uint32_t *)g->gas->acoustic.indirect.mapped)[0];return true;

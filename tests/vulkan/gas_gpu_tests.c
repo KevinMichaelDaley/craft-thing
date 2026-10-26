@@ -423,6 +423,7 @@ int main(void) {
     RUN(test_native_lean_metadata_preserves_state_with_one_preparation_pass);
     RUN(test_native_large_hybrid_workgroups_preserve_state_and_clock);
     RUN(test_native_zero_energy_transfers_preserve_state_stock_and_clock);
+    RUN(test_native_reused_line_rate_preserves_stiff_packet_and_owners);
     RUN(test_native_device_work_memory_preserves_state_initialization_and_stock);
     RUN(test_native_device_state_memory_preserves_checkpoint_initialization_owners_and_clock);
     RUN(test_native_local_geometry_repairs_keep_quiet_owners_and_avoid_full_cache_rebuilds);
