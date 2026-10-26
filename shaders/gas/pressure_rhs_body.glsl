@@ -1,18 +1,14 @@
 #include "acoustic.glsl"
 #ifdef FR_GAS_FUSED_METADATA_RHS
 #include "transport_metadata_body.glsl"
-vec4 gas_rhs_neighbor(Primitive source,Gas transported) {
-    float mass=gas_mass(transported);if(mass<=0.) return vec4(transported.dynamics.zw,0.,source.metric.w);
-    float capacity=dot(transported.species,vec4(gas_parameter(5u),gas_parameter(6u),gas_parameter(7u),gas_parameter(8u)))+transported.dynamics.x*gas_parameter(9u);
-    float moles=dot(transported.species,vec4(gas_parameter(0u),gas_parameter(1u),gas_parameter(2u),gas_parameter(3u)))+transported.dynamics.x*gas_parameter(4u);
-    float temperature=gas_thermal_energy(transported)/capacity;
-    float pressure=moles*temperature/(transported.geometry.x*gas_parameter(FR_GAS_KINETIC_WORD));
-    Primitive moved=gas_empty_primitive();moved.hydro.x=mass/transported.geometry.x;moved.hydro.w=pressure;
-    float work=0.,impulse=0.;Gas value=gas_buoyancy_cached(transported,moved,uintBitsToFloat(params.seconds),work,impulse);
-    return vec4(value.dynamics.zw,work,source.metric.w);
-}
+#include "metadata_predictor.glsl"
 #endif
 Primitive gas_rhs_stage(ivec2 p,uint index) {
+#ifdef FR_GAS_LEAN_METADATA_RHS
+    if(gas_advected(index)) {
+        Primitive value=gas_cached(p);value.hydro.x=provisional[index].w;value.metric.x=acoustic[index].x;return value;
+    }
+#endif
 #ifdef FR_GAS_FUSED_METADATA_RHS
     if(gas_advected(index)) {
         Primitive value=gas_cached(p);Gas transported=gas_practical_state(gas_provisional(gas_atlas(p)));
@@ -39,7 +35,11 @@ void main() {
     float energy_delta=correction_data[index].w;
     pressure[index]=vec4(0);stencil[index]=vec4(0);correction[index]=0.;correction_data[index]=vec4(0);
     if(atlas==0xffffffffu) return;
+#ifdef FR_GAS_LEAN_METADATA_RHS
+    float volume=gas_cached(p).metric.w;
+#else
     float volume=provisional[index].w;
+#endif
     if(volume<=0.) return;
     float capacity=acoustic[index].z,old_capacity=acoustic[index].w;
     float internal=old_capacity*acoustic[index].y;
@@ -66,6 +66,10 @@ void main() {
         vec4 neighbor=moved?gas_rhs_neighbor(other,neighbor_state):vec4(other.hydro.yz*other.metric.z,0.,other.metric.w);
 #else
         vec4 neighbor=moved?provisional[j]:vec4(other.hydro.yz*other.metric.z,0.,other.metric.w);
+#endif
+#ifdef FR_GAS_LEAN_METADATA_RHS
+        neighbor.w=other.metric.w;
+        if(moved) neighbor.y=force[j].y;
 #endif
         float area=min(volume,neighbor.w),enthalpy=.5*(acoustic[index].x+other.metric.x);
         if(large_energy) {

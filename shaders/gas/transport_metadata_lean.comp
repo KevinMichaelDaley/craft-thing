@@ -1,0 +1,18 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#define FR_GAS_FORCE_PRACTICAL 1
+#define FR_GAS_FUSED_METADATA_RHS 1
+#define FR_GAS_LEAN_METADATA 1
+#define FR_GAS_COMPACT_WORK 1
+#include "transport_float_controls.glsl"
+#include "acoustic.glsl"
+#include "transport_metadata_body.glsl"
+#include "metadata_predictor.glsl"
+void main() {
+    uint index=gas_sparse_index(2u);
+    if(index<params.width*params.height&&gas_advected(index)) {
+        gas_transport_metadata(index);
+        ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
+        if(atlas!=0xffffffffu) force[index].y=gas_rhs_neighbor(gas_cached(p),gas_practical_state(gas_provisional(atlas))).y;
+    }
+}

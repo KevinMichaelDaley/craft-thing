@@ -4,6 +4,8 @@ layout(set=0,binding=12,std430) restrict buffer Acoustic {vec4 acoustic[];};
 layout(set=0,binding=13,std430) restrict buffer Pressure {vec4 pressure[];};
 layout(set=0,binding=14,std430) restrict buffer Stencil {vec4 stencil[];};
 layout(set=0,binding=15,std430) restrict buffer Provisional {vec4 provisional[];};
+/* Lean advected cells use provisional.w for density; source cache retains volume. */
+/* Lean force.y is the neighbor y-momentum forecast; finish recovers incoming velocity. */
 layout(set=0,binding=16,std430) restrict buffer Correction {float correction[];};
 layout(set=0,binding=17,std430) restrict buffer CorrectionData {vec4 correction_data[];};
 layout(set=0,binding=18,std430) restrict buffer ActiveMask {uint active_mask[];};

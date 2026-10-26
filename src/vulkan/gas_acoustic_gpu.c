@@ -38,6 +38,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->temporal_sor);
     fr_renderer_compute_destroy(g,&t->coarse_group);
     fr_renderer_compute_destroy(g,&t->rhs_fused);
+    fr_renderer_compute_destroy(g,&t->metadata_lean);fr_renderer_compute_destroy(g,&t->rhs_lean);
     fr_renderer_compute_destroy(g,&t->pack_pressure);fr_renderer_compute_destroy(g,&t->packed_sor);
     fr_renderer_compute_destroy(g,&t->reset_pressure_mask);
     fr_renderer_compute_destroy(g,&t->pack_half_pressure);fr_renderer_compute_destroy(g,&t->half_sor);
@@ -138,6 +139,8 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         if(!fr_renderer_compute_init(g,&t->mg_temporal[i],buffers,25,16,path,err,cap)) goto fail;
     }
     if(!fr_renderer_compute_init(g,&t->rhs_fused,buffers,25,16,"build/shaders/gas_pressure_rhs_fused.comp.spv",err,cap)) goto fail;
+    if(!fr_renderer_compute_init(g,&t->metadata_lean,buffers,25,16,"build/shaders/gas_transport_metadata_lean.comp.spv",err,cap)||
+       !fr_renderer_compute_init(g,&t->rhs_lean,buffers,25,16,"build/shaders/gas_pressure_rhs_lean.comp.spv",err,cap)) goto fail;
     if(t->temporal_sor.pipeline) {
         if(!fr_renderer_compute_init(g,&t->pack_pressure,buffers,25,16,"build/shaders/gas_pressure_pack.comp.spv",err,cap)||
            !fr_renderer_compute_init(g,&t->packed_sor,buffers,25,16,"build/shaders/gas_pressure_temporal_packed.comp.spv",err,cap)) goto fail;
@@ -277,6 +280,8 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     const char *metadata_setting=getenv("DC_GAS_FUSED_METADATA");
     if(t->large_transport&&t->practical&&metadata_setting&&strcmp(metadata_setting,"0")!=0&&
        (bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) bank|=FR_GAS_FUSED_METADATA_BIT;
+    const char *lean_setting=getenv("DC_GAS_LEAN_METADATA");
+    if((bank&FR_GAS_FUSED_METADATA_BIT)!=0u&&lean_setting&&strcmp(lean_setting,"0")!=0) bank|=FR_GAS_LEAN_METADATA_BIT;
     const char *packed_setting=getenv("DC_GAS_PACKED_PRESSURE"),*temporal_setting=getenv("DC_GAS_TEMPORAL_SOR");
     if(t->practical&&t->packed_sor.pipeline&&packed_setting&&strcmp(packed_setting,"0")!=0&&
        temporal_setting&&strcmp(temporal_setting,"0")!=0&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) bank|=FR_GAS_PACKED_PRESSURE_BIT;
@@ -341,9 +346,10 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
             if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,8u+axis*4u);
         }
         if((bank&FR_GAS_FUSED_METADATA_BIT)==0u) indirect_dispatch(g,t,&t->transport_metadata,dt,bank,32);
+        else if((bank&FR_GAS_LEAN_METADATA_BIT)!=0u) indirect_dispatch(g,t,&t->metadata_lean,dt,bank,32);
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,13);
     } else indirect_dispatch(g,t,&t->advect,dt,bank,32);
-    const fr_renderer_compute_t *rhs=(bank&FR_GAS_FUSED_METADATA_BIT)!=0u?&t->rhs_fused:&t->rhs;
+    const fr_renderer_compute_t *rhs=(bank&FR_GAS_LEAN_METADATA_BIT)!=0u?&t->rhs_lean:((bank&FR_GAS_FUSED_METADATA_BIT)!=0u?&t->rhs_fused:&t->rhs);
     if(sparse&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) indirect_dispatch(g,t,rhs,dt,bank,32);
     else dispatch(g,rhs,gx,gy,dt,bank&~256u);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,1);

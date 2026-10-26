@@ -26,6 +26,9 @@ void main() {
         vec2 own_force=advected?force[index]:vec2(0);
         if(advected&&(params.bank&FR_GAS_FUSED_METADATA_BIT)!=0u) {
             value=gas_practical_state(value);GasFlux gravity=gas_empty_flux();
+            if((params.bank&FR_GAS_LEAN_METADATA_BIT)!=0u) {
+                float incoming_mass=gas_mass(value);own_force.y=incoming_mass>0.?value.dynamics.w/incoming_mass:0.;
+            }
             gravity.dynamics.y=own_provisional.z;gravity.dynamics.w=own_force.x;value=gas_add_flux(value,gravity,1.);
         }
         float stage_kinetic=practical?gas_kinetic_energy(value):0.,thermal=practical?gas_thermal_energy(value):0.;
@@ -40,6 +43,7 @@ void main() {
             uint j=0u;if(!gas_neighbor(p,d,j)) {if(d>=2u) vertical_walls++;continue;}
             Primitive other=gas_cached(p+gas_direction(d));
             vec4 neighbor=gas_advected(j)?provisional[j]:vec4(other.hydro.yz*other.metric.z,0.,other.metric.w);
+            if((params.bank&FR_GAS_LEAN_METADATA_BIT)!=0u) neighbor.w=other.metric.w;
             float area=min(volume,neighbor.w);
             float difference=((other.hydro.w-center.hydro.w)+(pressure[j].x-pressure[index].x))+(acoustic[j].z-acoustic[index].z);
             float sign=(d&1u)==0u?-1.:1.;

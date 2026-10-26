@@ -31,7 +31,8 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     for(uint32_t path=0;path<2;path++) {
         ASSERT_EQ(SDL_setenv(names[1],path?(group_rate&&requested_width==256u?"256":"1"):"0",1),0);dc_gpu_t *g=NULL;
         ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
-        ASSERT_TRUE(fr_gas_gpu_enable(g,&m,.0012,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&fr_gas_gpu_set_gravity(g,cached_neighbors?0:900,err,sizeof(err)));
+        double gravity=cached_neighbors||(lean_metadata&&getenv("DC_GAS_DIAG_ZERO_GRAVITY"))?0:900;
+        ASSERT_TRUE(fr_gas_gpu_enable(g,&m,.0012,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&fr_gas_gpu_set_gravity(g,gravity,err,sizeof(err)));
         ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
         if(all_slots) ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,2,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,2,dormant,4096,err,sizeof(err)));
         for(uint32_t step=0;step<8;step++) {
@@ -65,19 +66,21 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         dc_gpu_destroy(g);
     }
     printf("%s dispatches%u vs%u exact snapshot%s\n",setting,work[1],work[0],memcmp(out,reference,field_count*sizeof(*out))==0?" yes":" no");
-    if(strcmp(setting,"DC_GAS_HALF_PRESSURE")==0) {
-        double mass=0,mass_error=0,pigment=0,pigment_error=0,velocity_error=0,stock_before[5]={0},stock_after[5]={0};
+    if(strcmp(setting,"DC_GAS_HALF_PRESSURE")==0||lean_metadata) {
+        double mass=0,mass_error=0,pigment=0,pigment_error=0,velocity_error=0,energy=0,energy_error=0,stock_before[5]={0},stock_after[5]={0};
         for(uint32_t i=0;i<4096;i++) {
             fr_gas_thermo_t a,b;ASSERT_TRUE(fr_gas_thermodynamics(&m,reference+i,1,&a,err,sizeof(err))&&fr_gas_thermodynamics(&m,out+i,1,&b,err,sizeof(err)));
             ASSERT_TRUE(b.temperature_K>0&&b.temperature_K<5000&&b.pressure<1e5);
             mass+=a.mass;mass_error+=fabs(a.mass-b.mass);
+            energy+=fabs(reference[i].energy);energy_error+=fabs(out[i].energy-reference[i].energy);
             for(uint32_t k=0;k<5;k++) {stock_before[k]+=input[i].species[k];stock_after[k]+=out[i].species[k];}
             for(uint32_t k=0;k<3;k++) {pigment+=reference[i].pigment[k];pigment_error+=fabs(out[i].pigment[k]-reference[i].pigment[k]);}
             for(uint32_t k=0;k<2;k++) {double difference=out[i].momentum[k]/b.mass-reference[i].momentum[k]/a.mass;velocity_error+=a.mass*difference*difference;}
         }
-        printf("Compressed pressure densityL1%.9g pigmentL1%.9g velocityRMS%.9g\n",mass_error/mass,pigment_error/pigment,sqrt(velocity_error/mass));
-        ASSERT_TRUE(mass_error/mass<.03&&pigment_error/pigment<.10&&sqrt(velocity_error/mass)<1.);
-        for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(stock_after[k]-stock_before[k])<fmax(1e-9,.003*stock_before[k]));
+        printf("Derived backend densityL1%.9g pigmentL1%.9g velocityRMS%.9g energyL1%.9g\n",mass_error/mass,pigment_error/pigment,sqrt(velocity_error/mass),energy_error/energy);
+        ASSERT_TRUE(mass_error/mass<(lean_metadata?1e-5:.03)&&pigment_error/pigment<(lean_metadata?1e-4:.10)&&sqrt(velocity_error/mass)<(lean_metadata?.01:1.));
+        if(lean_metadata) ASSERT_TRUE(energy_error/energy<1e-5);
+        for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(stock_after[k]-stock_before[k])<fmax(1e-9,(lean_metadata?1e-4:.003)*stock_before[k]));
     } else ASSERT_TRUE(memcmp(out,reference,field_count*sizeof(*out))==0);
     ASSERT_TRUE(added_dispatches==UINT32_MAX?work[1]==work[0]:(added_dispatches?work[1]==work[0]+added_dispatches:work[1]<work[0]));
     if(group_rate) {
@@ -98,7 +101,10 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         ASSERT_TRUE(repeated[1]+1u==repeated[0]);
     }
     if(quiet_publication) ASSERT_TRUE(memcmp(rates[0],rates[1],sizeof(rates[0]))==0&&memcmp(out,input,4096*sizeof(*out))!=0);
-    if(lean_metadata) ASSERT_TRUE(memcmp(rates[0],rates[1],sizeof(rates[0]))==0);
+    if(lean_metadata) for(uint32_t k=0;k<3;k++) {
+        printf("Lean CFL channel%u %.9g vs%.9g\n",k,rates[1][k],rates[0][k]);
+        ASSERT_TRUE(isfinite(rates[1][k])&&fabs(rates[1][k]-rates[0][k])<fmax(1e-7,fabs(rates[0][k])*1e-5));
+    }
     if(cached_neighbors) {
         printf("GPU activity route%u vs%u\n",activity_modes[1],activity_modes[0]);
         ASSERT_TRUE(activity_modes[0]==0u&&activity_modes[1]==1u&&memcmp(rates[0],rates[1],sizeof(rates[0]))==0);
@@ -113,7 +119,10 @@ static void test_native_multigrid_temporal_preserves_steps_with_fewer_dispatches
     ASSERT_EQ(SDL_setenv("DC_GAS_MG_BOUNDARY",saved?saved:"0",1),0);SDL_free(saved);
 }
 static void test_native_fused_transport_metadata_preserves_state_with_fewer_dispatches(void) {
+    char err[256]={0};const char *old=getenv("DC_GAS_LEAN_METADATA");char *saved=old?SDL_strdup(old):NULL;
+    ASSERT_EQ(SDL_setenv("DC_GAS_LEAN_METADATA","0",1),0);
     check_native_gas_dispatch_fusion("DC_GAS_FUSED_METADATA",true,0);
+    ASSERT_EQ(SDL_setenv("DC_GAS_LEAN_METADATA",saved?saved:"0",1),0);SDL_free(saved);
 }
 static void test_native_packed_pressure_rows_preserve_state_with_one_pack_pass(void) {
     char err[256]={0};const char *old=getenv("DC_GAS_HALF_PRESSURE");char *saved=old?SDL_strdup(old):NULL;

@@ -22,6 +22,7 @@ typedef struct {
     fr_renderer_compute_t mg_relax[2],mg_restrict[3],mg_prolong[3];
     fr_renderer_compute_t mg_temporal[2];
     fr_renderer_compute_t rhs_fused;
+    fr_renderer_compute_t metadata_lean,rhs_lean;
     fr_renderer_compute_t pack_pressure,packed_sor;
     fr_renderer_compute_t reset_pressure_mask;
     fr_renderer_compute_t mg_reconcile[3];

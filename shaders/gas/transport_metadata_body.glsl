@@ -25,7 +25,11 @@ Primitive gas_transport_metadata(uint index) {
     if((params.bank&1u)==0u) cache1[index]=pressure_stage;else cache0[index]=pressure_stage;
 #endif
     acoustic[index]=vec4(head.y,center.hydro.w,moved.metric.y,center.metric.y);
+#ifdef FR_GAS_LEAN_METADATA
+    provisional[index]=vec4(value.dynamics.zw,work,head.x);
+#else
     provisional[index]=vec4(value.dynamics.zw,work,old.geometry.x);
+#endif
     vec2 difference=gas_two_sum(transported.dynamics.y,-old.dynamics.y);
     correction_data[index].w=difference.x+(difference.y+(transported.visual.w-old.visual.w)+(transported.geometry.z-old.geometry.z));
     if(gas_practical_policy()) correction_data[index].w=gas_thermal_energy(transported)-gas_thermal_energy(old);

@@ -211,3 +211,7 @@ Rejected quiet-air0.1 trial afteree659fb: wake controls1/1, practical5/5, enclos
 **2026-10-26T05:45:40Z**
 
 Exact activity lookup variant afterRED2bc7f55:49/49 selected native tests and core+sync1/1 clean; pressure-only comparison usesvelocity0/gravity0, gates, pageadmission, disjointquiet+dormant stock, exactfields/CFL/clock andGPUroute1vs0. Original0.05/.001 criteria unchanged. Actual1000 26.711/31.381 gives no demonstrated frame gain; remains opt-in/off in selected profile. Next lean metadata preparation targets repeated neighbor EOS work while keeping source/candidate/cache ownership unchanged.
+
+**2026-10-26T06:18:10Z**
+
+Lean metadata afterRED045b7ed:50/50 native, practical5/5, enclosure1/1 and core+sync1/1. Initial shortcut failedtightgates(.5%density,.325velocityRMS); zero-gravitydiagwasexact, isolating owningEOS vscompactneighbor buoyancy evaluation. Retaining BOTH forecasts once/cell makes gravitycase BYTE-identical,52vs51dispatches, exactquiet/dormant/CFL/clock. Existing fusion testpinsLEAN0 tokeepitsoriginal one-fewer-dispatch assertion; newleancomparison retains tightdensity/energy1e-5,pigment1e-4,velocity.01,stock1e-4 bounds plusexactownership. Actual1000 27.489/31.925 slower, stocks/finite/pause pass; leanbackendremains opt-in/off. Next remeasureexisting64threadconfiguration before adding newalgorithm knobs.

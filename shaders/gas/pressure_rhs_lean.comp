@@ -1,0 +1,5 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#define FR_GAS_FORCE_PRACTICAL 1
+#define FR_GAS_LEAN_METADATA_RHS 1
+#include "pressure_rhs_body.glsl"
