@@ -43,10 +43,6 @@ bool fr_gas_gpu_geometry_activity_metadata(const dc_gpu_t *g,bool *selected) {
     if(!g||!g->gas||!selected) return false;
     *selected=(((const uint32_t *)g->gas->stats.mapped)[15]&32u)!=0u;return true;
 }
-bool fr_gas_gpu_local_stage_metadata(const dc_gpu_t *g,bool *selected) {
-    if(!g||!g->gas||!selected) return false;
-    *selected=(((const uint32_t *)g->gas->stats.mapped)[15]&128u)!=0u;return true;
-}
 bool fr_gas_gpu_pressure_noise_metadata(const dc_gpu_t *g,bool *selected) {
     if(!g||!g->gas||!selected) return false;
     *selected=(((const uint32_t *)g->gas->stats.mapped)[15]&64u)!=0u;return true;
