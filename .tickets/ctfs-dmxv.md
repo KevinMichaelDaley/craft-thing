@@ -263,3 +263,7 @@ Rejected shorter multigrid fine smoothing without weakening quality gates.4/4 om
 **2026-10-26T17:33:59Z**
 
 Actual Wayland core+synchronization validation3/3 passes: valve-only opening releases previously trapped gas; route-only refresh preserves restored partial physical void and clock; optional duplicate-rate scan elimination preserves eight-step stiff snapshots and dormant owners byte-for-byte. Gate fix uses a separate route-dirty flag, without forcing material-volume resampling on valve-only edits. Native GREEN pushed checkpoint. Complete-frame performance still RED: optional reuse carved1000 34.785/37.370ms; cached-neighbor trial35.107/37.681ms. Neither promoted into selected launcher; no numerical/resolution/clock concessions.
+
+**2026-10-26T17:47:53Z**
+
+Latest actual six-run Wayland battery (build/smoke_box_measurements_EnEWi4): closed11.653/18.909 and11.377/20.135 PASS; open25.787/31.647 and25.837/31.173 worst-frame RED; carved32.687/38.953 and32.575/40.150 RED. All6000 frames finite/meaningful inventory drift and all24 paused captures identical. LOCAL_GEOMETRY now selected by permanent launcher after61/61 native plus core/sync gates; improves edited mean from earlier43.8ms to32.6ms, but is NOT final performance acceptance. Practical-only implicit shader specialization4/4 binary+1/1 exact native passes, pure-implicit remains slower/off. Group-mask trial61/61 but35.762/40.187; preserved/reverted. Working next on warm geometry+gas submission fusion and tail attribution; no numerical thresholds relaxed.
