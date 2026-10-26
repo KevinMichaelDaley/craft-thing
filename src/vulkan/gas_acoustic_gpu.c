@@ -42,6 +42,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->pack_pressure);fr_renderer_compute_destroy(g,&t->packed_sor);
     fr_renderer_compute_destroy(g,&t->reset_pressure_mask);
     fr_renderer_compute_destroy(g,&t->pack_half_pressure);fr_renderer_compute_destroy(g,&t->half_sor);
+    fr_renderer_compute_destroy(g,&t->full_row_sor);
     for(uint32_t i=0;i<2;i++) fr_renderer_compute_destroy(g,&t->finish_group[i]);
     for(uint32_t i=0;i<3;i++) {
         if(i<2u) {fr_renderer_compute_destroy(g,&t->mg_relax[i]);fr_renderer_compute_destroy(g,&t->mg_temporal[i]);}
@@ -101,6 +102,8 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         if(!fr_renderer_compute_init(g,pipelines[i],buffers,27,16,path,err,cap)) goto fail;
     }
     if(!fr_renderer_compute_init(g,&t->activity_cached,buffers,27,16,"build/shaders/gas_activity_cached.comp.spv",err,cap)) goto fail;
+    if(properties.limits.maxComputeWorkGroupInvocations>=256u&&properties.limits.maxComputeWorkGroupSize[0]>=256u&&
+       !fr_renderer_compute_init(g,&t->full_row_sor,buffers,27,16,"build/shaders/gas_pressure_temporal_half_full.comp.spv",err,cap)) goto fail;
     fr_renderer_compute_t *coarse_pipelines[]={&t->restrict_pressure,&t->coarse_sor,&t->prolong_pressure};
     const char *coarse_paths[]={"pressure_restrict","pressure_coarse_sor","pressure_prolong"};
     for(uint32_t i=0;i<3;i++) {
@@ -219,10 +222,13 @@ static void pressure_sweeps(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32
     const char *setting=getenv("DC_GAS_TEMPORAL_SOR");
     bool temporal=t->temporal_sor.pipeline&&setting&&strcmp(setting,"0")!=0&&count%4u==0u&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u;
     if(temporal) {
+        const char *full_setting=getenv("DC_GAS_FULL_ROW_SOR");
+        bool full=t->full_row_sor.pipeline&&full_setting&&strcmp(full_setting,"0")!=0;
+        const fr_renderer_compute_t *half=full?&t->full_row_sor:&t->half_sor;
         VkBufferCopy copy={.size=(VkDeviceSize)g->width*g->height*4u};barrier(g);
         vkCmdCopyBuffer(g->command,t->fields[4].buffer,t->transport_work.buffer,1,&copy);
         for(uint32_t pair=0;pair<count/2u;pair++)
-            indirect_dispatch(g,t,(bank&FR_GAS_HALF_PRESSURE_BIT)!=0u?&t->half_sor:((bank&FR_GAS_PACKED_PRESSURE_BIT)!=0u?&t->packed_sor:&t->temporal_sor),
+            indirect_dispatch(g,t,(bank&FR_GAS_HALF_PRESSURE_BIT)!=0u?half:((bank&FR_GAS_PACKED_PRESSURE_BIT)!=0u?&t->packed_sor:&t->temporal_sor),
                 dt,bank|((pair&1u)!=0u?FR_GAS_TEMPORAL_SOURCE_BIT:0u),0);
     } else for(uint32_t sweep=0;sweep<count;sweep++) {
         indirect_dispatch(g,t,&t->sor,dt,bank,0);indirect_dispatch(g,t,&t->sor,dt,bank|2u,0);

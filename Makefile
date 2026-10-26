@@ -1830,6 +1830,7 @@ GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_explicit tran
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid transport_hybrid_wide)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid_x transport_hybrid_y transport_hybrid_x_wide transport_hybrid_y_wide)
 GAS_SHADERS += build/shaders/gas_activity_cached.comp.spv
+GAS_SHADERS += build/shaders/gas_pressure_temporal_half_full.comp.spv
 GAS_SHADERS += build/shaders/gas_owner_gather.comp.spv
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_transfer geometry_commit)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_metadata_lean pressure_rhs_lean)
