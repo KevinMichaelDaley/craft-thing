@@ -152,7 +152,8 @@ static float rate(struct fr_gas_gpu *t) {
 static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     uint32_t count=g->width*g->height;VkDeviceSize states=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*sizeof(gas_packet_t);
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(g->physical,&properties);
-    uint32_t groups=(count-1u)/64u+1u;t->groups_x=groups<properties.limits.maxComputeWorkGroupCount[0]?groups:properties.limits.maxComputeWorkGroupCount[0];
+    uint32_t scan=count>DC_GPU_CHUNK_SLOTS*4096u?count:DC_GPU_CHUNK_SLOTS*4096u;
+    uint32_t groups=(scan-1u)/64u+1u;t->groups_x=groups<properties.limits.maxComputeWorkGroupCount[0]?groups:properties.limits.maxComputeWorkGroupCount[0];
     t->groups_y=(groups-1u)/t->groups_x+1u;
     if(states>properties.limits.maxStorageBufferRange||(VkDeviceSize)count*32u>properties.limits.maxStorageBufferRange||
        t->groups_y>properties.limits.maxComputeWorkGroupCount[1]) return error(err,cap,"Gas field exceeds Vulkan address limits");
@@ -170,6 +171,7 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     for(uint32_t i=0;i<5;i++) {parameters[i]=(float)t->model.gas_constant[i];parameters[5+i]=(float)t->model.heat_capacity_cv[i];}
     parameters[10]=(float)t->model.kinetic_scale;parameters[11]=t->density;parameters[12]=t->temperature;
     parameters[13]=.21f;parameters[14]=0;parameters[15]=6;
+    ((uint32_t *)t->parameters.mapped)[FR_GAS_SLOT_COUNT_WORD]=DC_GPU_CHUNK_SLOTS;
     VkDescriptorBufferInfo buffers[12];
     for(uint32_t i=0;i<3;i++) buffers[i]=(VkDescriptorBufferInfo){t->state[i].buffer,0,t->state[i].bytes};
     for(uint32_t i=0;i<2;i++) buffers[3+i]=(VkDescriptorBufferInfo){t->cache[i].buffer,0,t->cache[i].bytes};
@@ -333,11 +335,8 @@ bool fr_gas_gpu_initialize_queued(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin new gas chunk admission");
     dispatch(g,t,&t->initialize,0,0x80000000u);
     if(!submit(g,err,cap)) return false;
-    uint32_t *flags=(uint32_t *)t->parameters.mapped+FR_GAS_MODEL_WORDS;t->initialization_pending=false;
-    for(uint32_t i=0;i<DC_GPU_CHUNK_SLOTS;i++) {
-        if((flags[i]&2u)!=0u) flags[i]=0u;
-        else if(flags[i]!=0u) t->initialization_pending=true;
-    }
+    memset((uint32_t *)t->parameters.mapped+FR_GAS_MODEL_WORDS,0,DC_GPU_CHUNK_SLOTS*sizeof(uint32_t));
+    t->initialization_pending=false;
     fr_gas_gpu_invalidate_cache(g);t->large_step_hint=0;return true;
 }
 bool fr_gas_gpu_export_checkpoint(dc_gpu_t *g,uint32_t slot,fr_gas_checkpoint_chunk_t *out,char *err,uint32_t cap) {

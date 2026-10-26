@@ -3,6 +3,7 @@
 #include "../ferrum/fire/gas_constants.h"
 #define FR_GAS_CELL_WORDS 16u
 #define FR_GAS_MODEL_WORDS 20u
+#define FR_GAS_SLOT_COUNT_WORD 18u
 /* Practical Rusanov floor gives two cells squared/second of mixing. */
 #define FR_GAS_PRACTICAL_MIXING_RATE 4.0
 #define FR_GAS_ZERO_ENERGY_BIT 32u

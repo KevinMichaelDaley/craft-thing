@@ -231,3 +231,7 @@ Device-only working storage after REDb244b0d:53/53 actual native, core+sync1/1, 
 **2026-10-26T13:48:24Z**
 
 Cold checkpoint subset GREEN: native exact packet/geometry/work/valve roundtrip1/1 and core+sync1/1; invalid final-cell input leaves canonical stock unchanged. Atomic chunk format9 adds gas inside the existing prefix checksum/rename transaction, immutable queue copy, no sidecar authority. New gas-stream1/1 plus legacy stream7/7, reactive3/3 and thermal3/3 pass. Future-version rejection now correctly tests10; versions1..8 remain supported. App save/load/stream ownership and geometry edits are still unfinished; no completion claim.
+
+**2026-10-26T14:44:57Z**
+
+Placement persistence/streaming now GREEN: actual displayed4/4 includes exact all-chunk/valve/clock reopen,20-chunk pan-away/back and new-slot ambient without stale pigment/valves, plus missing gas admission rejection with saved chunk/body hashes unchanged. Cold GPU new-slot initialization now works in offscreen atlas slots too, without page dependency or GPU metadata readback; focused core+sync1/1, full native55/55, placement4/4. Canonical clock import never rewinds newer accepted time. Pushed through326b340; committing offscreen refinement next. Geometry edits remain active work; performance repeat after integration still required.

@@ -10,11 +10,7 @@ layout(set=0,binding=1,std430) restrict buffer Bank0 {Gas bank0[];};
 layout(set=0,binding=2,std430) restrict buffer Bank1 {Gas bank1[];};
 layout(set=0,binding=3,std430) restrict buffer Cache0 {Primitive cache0[];};
 layout(set=0,binding=4,std430) restrict buffer Cache1 {Primitive cache1[];};
-#ifdef FR_GAS_WRITABLE_MODEL
-layout(set=0,binding=5,std430) buffer Model {uint parameters[];};
-#else
 layout(set=0,binding=5,std430) readonly buffer Model {uint parameters[];};
-#endif
 layout(set=0,binding=6,std430) coherent buffer Stats {uint stats[];};
 layout(set=0,binding=7,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=8,std430) readonly buffer Cells {uvec2 cells[];};
