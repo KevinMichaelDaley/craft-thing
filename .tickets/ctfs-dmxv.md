@@ -287,3 +287,7 @@ Exact sparse-owner backend GREEN: actual native63/63 and displayed placement5/5 
 **2026-10-26T18:53:37Z**
 
 Grouped repair diagnostics preserved flags and passed core/sync but worsened actual carved1000 to33.906/170.681; reverted complete trial. Standalone explicit shader policy specialization now passes compiled-shader checks and exact native/core split/fused checks; split transport30.326/56.450 still does not beat selected hybrid, so split not promoted. Next exact pressure optimization keeps12/12 sweeps and halo but assigns one row per invocation instead of two dynamically indexed rows, targeting register/code overhead without numerical-policy changes.
+
+**2026-10-26T19:26:54Z**
+
+GPU-local geometry activity GREEN: actual native64/64 plus displayed placement5/5 pass with sparse owners+fused geometry+local activity; focused core/sync4cases clean. Dirty flags live in separate GPU words from owner tags, preserve per-cell valves, include affected halos, and bypass broad geometry wake scans without CPU lists/readback. Exact A/B54vs53dispatches. Actual carved1000 30.127/37.055ms remains RED; not promoted. Prior volume-cache lookup actual30.503/36.744; one-row SOR exact but33.365/44.066, rejected/reverted. Full repository serialized regression is currently running after parallel prerequisite build; no other measured/GPU jobs overlap.
