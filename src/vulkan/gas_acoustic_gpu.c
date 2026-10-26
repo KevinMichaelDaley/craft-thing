@@ -183,6 +183,13 @@ static void multigrid_cycle(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32
         uint32_t level=reverse-1u;multigrid_dispatch(g,&t->mg_prolong[level],dt,bank,level);multigrid_smooth(g,t,dt,bank,level);
     }
 }
+static bool multigrid_enabled(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank) {
+    const char *setting=getenv("DC_GAS_MULTIGRID");
+    if(!t->practical||dt>gas_multigrid_max_interval||!setting||strcmp(setting,"0")==0||(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)!=0u) return false;
+    uint64_t cells=0;
+    for(uint32_t level=1u;level<=3u;level++) {uint32_t scale=1u<<level;cells+=(uint64_t)((g->width+scale-1u)/scale)*((g->height+scale-1u)/scale);}
+    return cells*32u+(uint64_t)g->width*g->height*4u<=t->transport_work.bytes;
+}
 bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint32_t gy,
     float dt,uint32_t bank,dc_gpu_address_buffer_t *stats,char *err,uint32_t cap) {
     bool trace=getenv("DC_GAS_TRACE")!=NULL&&g->timestamp_bits;
@@ -201,6 +208,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(matrix_large) bank|=FR_GAS_LARGE_ENERGY_BIT;
     if(t->practical) bank|=FR_GAS_PRACTICAL_BIT;
     if(getenv("DC_GAS_COMPARE_ROW_SETUP")) bank|=FR_GAS_COMPARE_ROW_SETUP_BIT;
+    if(multigrid_enabled(g,t,dt,bank)) bank|=FR_GAS_MULTIGRID_BIT;
     if(!t->matrix_valid) bank|=4u;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin acoustic advection");
     if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,tail_query+2u);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);}
@@ -268,11 +276,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         } else dispatch(g,&t->classify,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
         dispatch(g,&t->compact,(tiles+63u)/64u,1u,dt,bank);
         if(sparse) indirect_dispatch(g,t,&t->prepare_pressure,dt,bank,16);
-        const char *mg_setting=getenv("DC_GAS_MULTIGRID");
-        uint64_t mg_cells=0;
-        for(uint32_t level=1u;level<=3u;level++) {uint32_t scale=1u<<level;mg_cells+=(uint64_t)((g->width+scale-1u)/scale)*((g->height+scale-1u)/scale);}
-        bool multigrid=t->practical&&dt<=gas_multigrid_max_interval&&mg_setting&&strcmp(mg_setting,"0")!=0&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u&&
-            mg_cells*32u+(uint64_t)g->width*g->height*4u<=t->transport_work.bytes;
+        bool multigrid=(bank&FR_GAS_MULTIGRID_BIT)!=0u;
         if(multigrid) multigrid_cycle(g,t,dt,bank,tiles);
         else if(coarse) {
             pressure_sweeps(g,t,dt,bank,16u);

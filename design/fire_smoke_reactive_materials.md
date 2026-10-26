@@ -30,6 +30,10 @@ retry, extra submit or physical-time reduction is involved. Intervals above
 50 ms retain the established bounded forty-eight-fine-sweep path: the reduced
 work cycle failed the long-interval stability test and is not admitted there.
 This opt-in backend must pass sustained displayed measurements before promotion.
+Its pressure activity threshold is a relative right-hand-side disturbance of
+`1e-4` (0.01 percent of the local pressure-energy scale); strict and long-interval
+fallback paths retain `1e-7`. This defers imperceptible corrections rather than
+iterating to exact convergence, while preserving full elapsed time and stock.
 
 ## Modular delivery sequence
 
