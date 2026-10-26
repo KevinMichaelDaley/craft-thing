@@ -3,6 +3,7 @@
 #undef main
 #include <math.h>
 #include "ferrum/fire/combustion_gpu.h"
+#include "ferrum/fire/combustion.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/structural/gpu.h"
@@ -119,10 +120,39 @@ static void test_spent_terrain_becomes_loose_saved_ash_without_losing_mass(void)
     ASSERT_EQ(record.state.material,DC_MATERIAL_ASH);ASSERT_EQ(fr_reactive_state_mass_fp(&record.state),2000);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_flame_emission_requires_local_transported_hot_fuel_and_oxygen(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err)));
+    ASSERT_TRUE(fr_combustion_gpu_enable(g,err,sizeof(err))&&fr_thermal_gpu_overlay(g,0));
+    fr_gas_state_t *input=calloc(4096,sizeof(*input)),*output=calloc(4096,sizeof(*output));
+    double *volumes=malloc(4096*sizeof(*volumes));uint32_t *pixels=malloc(480u*270u*4u);
+    ASSERT_TRUE(input&&output&&volumes&&pixels);for(uint32_t i=0;i<4096;i++) volumes[i]=1;
+    uint32_t at=20u*64u+20u;
+    for(uint32_t control=0;control<4;control++) {
+        fr_gas_state_t source={0};source.species[FR_GAS_OXYGEN]=control==3?0:.00028;
+        source.species[FR_GAS_NITROGEN]=.00072;source.species[control==1?FR_GAS_EXHAUST:FR_GAS_SOOT]=.0002;
+        for(uint32_t i=0;i<FR_GAS_SPECIES;i++) source.energy+=source.species[i]*model.heat_capacity_cv[i]*(control==2?300:1100);
+        input[at]=source;fr_gas_state_t expected;double reacted=0;
+        ASSERT_TRUE(fr_combustion_gas_reference(&model,&source,1,.001,&expected,&reacted,err,sizeof(err)));
+        ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volumes,4096,err,sizeof(err))&&fr_combustion_gpu_step(g,.001f,err,sizeof(err)));
+        ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,output,4096,err,sizeof(err)));
+        ASSERT_TRUE(fabs(output[at].species[FR_GAS_SOOT]-expected.species[FR_GAS_SOOT])<1e-9);
+        ASSERT_TRUE(fabs(output[at].energy-expected.energy)<1e-5);
+        ASSERT_TRUE(present(g,err,sizeof(err))&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
+        uint32_t red=pixels[20u*480u+20u]&255u;
+        if(control==0) {ASSERT_TRUE(reacted>0&&red>180u);}
+        else {ASSERT_EQ(reacted,0);ASSERT_TRUE(red<100u);}
+    }
+    free(input);free(output);free(volumes);free(pixels);free(chunk);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     RUN(test_displayed_terrain_combustion_debits_real_fuel_and_oxygen);
     RUN(test_sparse_owner_combustion_uses_the_live_gas_bank);
     RUN(test_retained_char_can_finish_burning_on_the_gpu);
     RUN(test_spent_terrain_becomes_loose_saved_ash_without_losing_mass);
+    RUN(test_flame_emission_requires_local_transported_hot_fuel_and_oxygen);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
