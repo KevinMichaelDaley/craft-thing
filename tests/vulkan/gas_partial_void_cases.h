@@ -1,6 +1,6 @@
 #ifndef GAS_PARTIAL_VOID_CASES_H
 #define GAS_PARTIAL_VOID_CASES_H
-static void test_native_partial_void_contraction_displaces_mixture_without_cut_cell_pressure_spikes(void) {
+static void check_native_partial_void_contraction(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_gas_state_t *input=malloc(4096*sizeof(*input)),*out=malloc(4096*sizeof(*out));double *volume=malloc(4096*sizeof(*volume));
     fr_gas_checkpoint_chunk_t *before=malloc(sizeof(*before)),*after=malloc(sizeof(*after));ASSERT_TRUE(chunk&&input&&out&&volume&&before&&after);
@@ -28,6 +28,16 @@ static void test_native_partial_void_contraction_displaces_mixture_without_cut_c
         for(uint32_t i=0;i<4096u;i++) {old_energy+=(double)before->cells[i][5]+before->cells[i][11]+before->cells[i][14];new_energy+=(double)after->cells[i][5]+after->cells[i][11]+after->cells[i][14];}
         ASSERT_TRUE(fabs(new_energy-old_energy)<old_energy*1e-6&&after->clock.physical_steps==1u);
     }
-    ASSERT_TRUE(present(g,err,sizeof(err)));dc_gpu_destroy(g);free(chunk);free(input);free(out);free(volume);free(before);free(after);PASS();
+    ASSERT_TRUE(present(g,err,sizeof(err)));dc_gpu_destroy(g);free(chunk);free(input);free(out);free(volume);free(before);free(after);
+}
+static void test_native_partial_void_contraction_displaces_mixture_without_cut_cell_pressure_spikes(void) {
+    char err[256]={0};const char *old=getenv("DC_GAS_LOCAL_GEOMETRY");char *saved=old?SDL_strdup(old):NULL;
+    int failures=g_fail;
+    for(uint32_t local=0;local<2u;local++) {
+        ASSERT_EQ(SDL_setenv("DC_GAS_LOCAL_GEOMETRY",local?"1":"0",1),0);check_native_partial_void_contraction();
+        if(g_fail!=failures) break;
+    }
+    ASSERT_EQ(SDL_setenv("DC_GAS_LOCAL_GEOMETRY",saved?saved:"0",1),0);SDL_free(saved);
+    if(g_fail==failures) PASS();
 }
 #endif
