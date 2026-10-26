@@ -1798,6 +1798,7 @@ GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_factor_compac
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_axis_compact transport_axis_compact_wide)
 GAS_SHADERS += build/shaders/gas_audit.comp.spv
 GAS_SHADERS += build/shaders/gas_pressure_temporal.comp.spv
+GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,mg_relax mg_restrict mg_prolong)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_coarse_group pressure_coarse_group_wide)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_explicit transport_explicit_wide)
 build/shaders/gas_audit.comp.spv: include/dungeoncraft/gas_audit_layout.h

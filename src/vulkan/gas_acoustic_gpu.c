@@ -6,6 +6,7 @@
 #include "gas_acoustic_gpu.h"
 #include "gas_gpu_internal.h"
 enum { GAS_PRESSURE_SWEEPS=16, GAS_PRESSURE_GROUP=2, GAS_PRACTICAL_SWEEPS=256 };
+static const float gas_multigrid_max_interval=.05f;
 static bool enabled(const char *name) {const char *value=getenv(name);return !value||strcmp(value,"0")!=0;}
 static uint32_t budget(const char *name,uint32_t fallback) {
     const char *value=getenv(name);if(!value) return fallback;
@@ -33,6 +34,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->practical_explicit);
     fr_renderer_compute_destroy(g,&t->temporal_sor);
     fr_renderer_compute_destroy(g,&t->coarse_group);
+    fr_renderer_compute_destroy(g,&t->mg_relax);fr_renderer_compute_destroy(g,&t->mg_restrict);fr_renderer_compute_destroy(g,&t->mg_prolong);
     for(uint32_t i=0;i<11;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
     dc_gpu_address_buffer_destroy(g,&t->indirect);
     memset(t,0,sizeof(*t));
@@ -104,6 +106,12 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         const char *path=use_wide?"build/shaders/gas_pressure_coarse_group_wide.comp.spv":"build/shaders/gas_pressure_coarse_group.comp.spv";
         if(!fr_renderer_compute_init(g,&t->coarse_group,buffers,25,16,path,err,cap)) goto fail;
     }
+    fr_renderer_compute_t *multigrid[]={&t->mg_relax,&t->mg_restrict,&t->mg_prolong};
+    const char *mg_names[]={"mg_relax","mg_restrict","mg_prolong"};
+    for(uint32_t i=0;i<3;i++) {
+        char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",mg_names[i]);
+        if(!fr_renderer_compute_init(g,multigrid[i],buffers,25,16,path,err,cap)) goto fail;
+    }
     t->ready=true;return true;
 fail:
     fr_gas_acoustic_destroy(g,t);return false;
@@ -147,6 +155,29 @@ static void pressure_sweeps(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32
             indirect_dispatch(g,t,&t->temporal_sor,dt,bank|((pair&1u)!=0u?FR_GAS_TEMPORAL_SOURCE_BIT:0u),0);
     } else for(uint32_t sweep=0;sweep<count;sweep++) {
         indirect_dispatch(g,t,&t->sor,dt,bank,0);indirect_dispatch(g,t,&t->sor,dt,bank|2u,0);
+    }
+}
+static void multigrid_dispatch(dc_gpu_t *g,const fr_renderer_compute_t *pipeline,float dt,uint32_t bank,uint32_t level) {
+    uint32_t scale=1u<<level,width=(g->width+scale-1u)/scale,height=(g->height+scale-1u)/scale;
+    uint32_t count=(width*height+63u)/64u,max_x=(g->width+7u)/8u;
+    uint32_t x=count<max_x?count:max_x;
+    dispatch(g,pipeline,x,(count+x-1u)/x,dt,bank|(level<<20u));
+}
+static void multigrid_smooth(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank,uint32_t level) {
+    if(level==0u) {pressure_sweeps(g,t,dt,bank,12u);return;}
+    for(uint32_t i=0;i<4u;i++) multigrid_dispatch(g,&t->mg_relax,dt,bank|((i&1u)!=0u?1u<<24u:0u),level);
+}
+static void multigrid_cycle(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank,uint32_t tiles) {
+    for(uint32_t level=0u;level<3u;level++) {
+        multigrid_smooth(g,t,dt,bank,level);
+        multigrid_dispatch(g,&t->mg_restrict,dt,bank,level+1u);
+    }
+    if(t->coarse_group.pipeline&&tiles<=FR_GAS_COARSE_GROUP_CAPACITY) dispatch(g,&t->coarse_group,1u,1u,dt,bank);
+    else for(uint32_t i=0u;i<32u;i++) {
+        dispatch(g,&t->coarse_sor,(tiles+63u)/64u,1u,dt,bank);dispatch(g,&t->coarse_sor,(tiles+63u)/64u,1u,dt,bank|2u);
+    }
+    for(uint32_t reverse=3u;reverse>0u;reverse--) {
+        uint32_t level=reverse-1u;multigrid_dispatch(g,&t->mg_prolong,dt,bank,level);multigrid_smooth(g,t,dt,bank,level);
     }
 }
 bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint32_t gy,
@@ -234,7 +265,13 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         } else dispatch(g,&t->classify,(g->width+7u)/8u,(g->height+7u)/8u,dt,bank);
         dispatch(g,&t->compact,(tiles+63u)/64u,1u,dt,bank);
         if(sparse) indirect_dispatch(g,t,&t->prepare_pressure,dt,bank,16);
-        if(coarse) {
+        const char *mg_setting=getenv("DC_GAS_MULTIGRID");
+        uint64_t mg_cells=0;
+        for(uint32_t level=1u;level<=3u;level++) {uint32_t scale=1u<<level;mg_cells+=(uint64_t)((g->width+scale-1u)/scale)*((g->height+scale-1u)/scale);}
+        bool multigrid=t->practical&&dt<=gas_multigrid_max_interval&&mg_setting&&strcmp(mg_setting,"0")!=0&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u&&
+            mg_cells*32u+(uint64_t)g->width*g->height*4u<=t->transport_work.bytes;
+        if(multigrid) multigrid_cycle(g,t,dt,bank,tiles);
+        else if(coarse) {
             pressure_sweeps(g,t,dt,bank,16u);
             dispatch(g,&t->restrict_pressure,tiles,1u,dt,bank);
             const char *coarse_setting=getenv("DC_GAS_COARSE_WG");
@@ -246,7 +283,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
             }
             indirect_dispatch(g,t,&t->prolong_pressure,dt,bank,0);
         }
-        pressure_sweeps(g,t,dt,bank,batch_sweeps);
+        if(!multigrid) pressure_sweeps(g,t,dt,bank,batch_sweeps);
         indirect_dispatch(g,t,&t->correct,dt,bank,0);
         if(trace&&batch+1u==batch_group) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,2);
         barrier(g);vkCmdFillBuffer(g->command,stats->buffer,FR_GAS_RESIDUAL_WORD*4u,4,0);

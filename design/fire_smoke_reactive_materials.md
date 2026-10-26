@@ -19,6 +19,18 @@ diagnostics must be distinguished at admission. The complete-frame target and
 sustained actual Vulkan/Wayland validation remain required, including the
 delayed onset, retries, waits, activity expansion and resource growth.
 
+The experimental `DC_GAS_MULTIGRID=1` practical pressure backend uses one fixed
+h1/h2/h4/h8 V-cycle: twelve red/black fine sweeps before and after, four weighted
+Jacobi sweeps before and after at h2/h4, and thirty-two coarse sweeps at h8.
+Restriction sums residuals and boundary conductances (piecewise-constant
+Galerkin aggregation); it refuses to aggregate through a closed face or invalid
+cell. Prolongation adds the parent correction without crossing those barriers.
+All hierarchy storage reuses GPU transport scratch; no field readback, residual
+retry, extra submit or physical-time reduction is involved. Intervals above
+50 ms retain the established bounded forty-eight-fine-sweep path: the reduced
+work cycle failed the long-interval stability test and is not admitted there.
+This opt-in backend must pass sustained displayed measurements before promotion.
+
 ## Modular delivery sequence
 
 Latest user direction: develop one visually testable gameplay feature or system
