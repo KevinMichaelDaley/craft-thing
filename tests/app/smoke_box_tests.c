@@ -57,7 +57,28 @@ static void test_native_placement_box_has_finite_sources_real_controls_rising_sm
     ASSERT_EQ(SDL_SaveBMP(image,"build/screenshots/smoke_box_color.bmp"),0);SDL_FreeSurface(image);
     free(first);free(second);ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));PASS();
 }
+static void test_native_saved_smoke_box_restores_stock_and_valves_without_refilling(void) {
+    char err[256]={0},directory[]="build/smoke_box_reload_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view=dc_level_view_create_smoke_box(directory,314,err,sizeof(err));ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_smoke_valve(view,0,err,sizeof(err)));
+    for(uint32_t i=0;i<2u;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
+    uint32_t count=view->table.capacity;
+    fr_gas_checkpoint_chunk_t *saved=calloc(count,sizeof(*saved)),*restored=malloc(sizeof(*restored));
+    dc_chunk_coord_t *coords=malloc(count*sizeof(*coords));ASSERT_TRUE(saved&&restored&&coords);
+    for(uint32_t i=0;i<count;i++) {coords[i]=view->table.slots[i].coord;ASSERT_TRUE(fr_gas_gpu_export_checkpoint(view->gpu,i,saved+i,err,sizeof(err)));}
+    ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));
+    view=dc_level_view_create_smoke_box(directory,314,err,sizeof(err));ASSERT_TRUE(view);
+    ASSERT_EQ(view->smoke_closed,6u);
+    for(uint32_t i=0;i<count;i++) {
+        uint32_t slot;ASSERT_TRUE(dc_chunk_table_find(&view->table,coords[i],&slot));
+        ASSERT_TRUE(fr_gas_gpu_export_checkpoint(view->gpu,slot,restored,err,sizeof(err)));
+        ASSERT_EQ(memcmp(saved+i,restored,sizeof(*restored)),0);
+    }
+    ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err))&&dc_level_view_destroy(view,err,sizeof(err)));
+    free(saved);free(restored);free(coords);PASS();
+}
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);RUN(test_native_placement_box_has_finite_sources_real_controls_rising_smoke_and_stable_pause);
+    RUN(test_native_saved_smoke_box_restores_stock_and_valves_without_refilling);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
