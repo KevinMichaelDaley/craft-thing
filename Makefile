@@ -1770,6 +1770,10 @@ build/gas_display_tests: tests/vulkan/gas_practical_cases.h
 build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_geometry_cases.h
 build/gas_publication_display_tests: tests/vulkan/gas_geometry_cache_cases.h
 build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_roundoff_cases.h build/shaders/gas_roundoff_test.comp.spv
+build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_flags_cases.h build/shaders/gas_flags_test.comp.spv
+build/shaders/gas_flags_test.comp.spv: shaders/diagnostics/gas_flags_test.comp $(wildcard shaders/gas/*.glsl) include/dungeoncraft/gas_layout.h
+	mkdir -p $(dir $@)
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/shaders/gas_roundoff_test.comp.spv: shaders/diagnostics/gas_roundoff_test.comp $(wildcard shaders/gas/*.glsl) include/dungeoncraft/gas_layout.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@

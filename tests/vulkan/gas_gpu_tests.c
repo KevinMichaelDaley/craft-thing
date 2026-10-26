@@ -24,6 +24,7 @@ static fr_gas_state_t reference_air(fr_gas_model_t m,double mass,double temperat
 #include "gas_checkpoint_cases.h"
 #include "gas_geometry_cases.h"
 #include "gas_roundoff_cases.h"
+#include "gas_flags_cases.h"
 static void test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
@@ -470,5 +471,6 @@ int main(void) {
     RUN(test_native_geometry_carving_displacement_and_trapped_pockets_keep_finite_stock);
     RUN(test_native_valve_only_refresh_preserves_restored_physical_void);
     RUN(test_native_massless_underflow_energy_reconciles_without_erasing_tiny_colored_gas);
+    RUN(test_native_repair_flags_preserve_divergent_masks_with_bounded_global_updates);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0||g_pass==0;
 }
