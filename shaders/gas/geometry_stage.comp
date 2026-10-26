@@ -3,12 +3,12 @@
 #include "geometry_common.glsl"
 void main() {
     uint index=gas_index();if(index>=params.width*params.height) return;
-    uint atlas=gas_atlas(ivec2(int(index%params.width),int(index/params.width)));
-    float available=atlas==0xffffffffu?0.:((params.bank&FR_GAS_GEOMETRY_ROUTES_ONLY_BIT)!=0u?gas_world(atlas).geometry.y:geometry_void(index,atlas));
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);float previous=0.;
+    if(atlas!=0xffffffffu&&(params.bank&(FR_GAS_GEOMETRY_LOCAL_BIT|FR_GAS_GEOMETRY_ROUTES_ONLY_BIT))!=0u)
+        previous=(params.bank&FR_GAS_GEOMETRY_CACHE_BIT)!=0u?gas_cached_volume(p):gas_world(atlas).geometry.y;
+    float available=atlas==0xffffffffu?0.:((params.bank&FR_GAS_GEOMETRY_ROUTES_ONLY_BIT)!=0u?previous:geometry_void(index,atlas));
     Primitive value=Primitive(vec4(available,0,0,0),vec4(0,0,0,available));
     if((params.bank&FR_GAS_GEOMETRY_LOCAL_BIT)!=0u) {
-        float previous=0.;
-        if(atlas!=0xffffffffu) previous=gas_world(atlas).geometry.y;
         value.hydro.y=value.hydro.x!=previous?1.:0.;uint changed=subgroupMax(value.hydro.y>0.?1u:0u);
         if(subgroupElect()&&changed!=0u) atomicOr(stats[FR_GAS_ROW_NORM_BEFORE_WORD],1u);
     }

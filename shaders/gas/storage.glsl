@@ -57,6 +57,11 @@ Primitive gas_cached(ivec2 p) {
     if(gas_cell_owners()) owner=owner_tiles[(uint(p.y)/8u)*((params.width+7u)/8u)+uint(p.x)/8u]&1u;
     return owner==0u?cache0[at]:cache1[at];
 }
+float gas_cached_volume(ivec2 p) {
+    uint index=uint(p.y)*params.width+uint(p.x),owner=params.bank&1u;
+    if(gas_cell_owners()) owner=owner_tiles[(uint(p.y)/8u)*((params.width+7u)/8u)+uint(p.x)/8u]&1u;
+    return owner==0u?cache0[index].metric.w:cache1[index].metric.w;
+}
 void gas_error(uint at) {atomicOr(stats[FR_GAS_ERROR_WORD],1u);atomicMin(stats[FR_GAS_ERROR_AT_WORD],at);}
 void gas_rate(Primitive p) {
     float rate=abs(p.hydro.y)+abs(p.hydro.z)+(!gas_implicit_policy()?2.*p.metric.x:0.);
