@@ -9,26 +9,7 @@
 #include "gas_acoustic_gpu.h"
 #include "gas_gpu_internal.h"
 
-typedef struct {float words[FR_GAS_CELL_WORDS];} gas_packet_t;
-struct fr_gas_gpu {
-    fr_renderer_compute_t initialize,prepare,transport,feedback,gate,audit;
-    fr_renderer_compute_t geometry_stage,geometry_transfer,geometry_commit;
-    dc_gpu_address_buffer_t state[3],cache[2],parameters,stats,gates,audit_summary;
-    fr_gas_model_t model;
-    float density,temperature;
-    uint32_t groups_x,groups_y;
-    fr_gas_gpu_clock_t clock;
-    fr_gas_acoustic_gpu_t acoustic;
-    uint32_t policy;
-    uint32_t cached_bank;
-    float cached_rate;
-    bool cache_valid,direct_publish,initialization_pending;
-    bool geometry_dirty,geometry_dynamic;
-    VkFence completion;
-    double large_step_hint;
-    bool trace;
-    uint64_t trace_submits,trace_queue_ticks,trace_wait_ticks;
-};
+#include "gas_gpu_state.h"
 bool fr_gas_gpu_pressure_tiles(const dc_gpu_t *g,uint32_t *tiles) {
     if(!g||!g->gas||!g->gas->acoustic.ready||!tiles) return false;
     *tiles=((const uint32_t *)g->gas->acoustic.indirect.mapped)[0];return true;
@@ -133,11 +114,21 @@ bool fr_gas_gpu_refresh_geometry(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!g||!g->gas) return true;
     struct fr_gas_gpu *t=g->gas;if(!t->geometry_dirty&&!t->geometry_dynamic) return true;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas geometry refresh");
-    ((uint32_t *)t->stats.mapped)[FR_GAS_ROW_NORM_BEFORE_WORD]=0u;
-    uint32_t bank=t->cache_valid?t->cached_bank:0u;
+    const char *option=getenv("DC_GAS_LOCAL_GEOMETRY");bool local=t->policy==FR_GAS_PRESSURE_PRACTICAL&&option&&strcmp(option,"0")!=0;
+    uint32_t *words=t->stats.mapped;words[FR_GAS_ERROR_WORD]=0u;
+    words[FR_GAS_ROW_NORM_BEFORE_WORD]=local&&t->geometry_dirty?1u:0u;
+    uint32_t bank=(t->cache_valid?t->cached_bank:0u)|(t->direct_publish?FR_GAS_GEOMETRY_DIRECT_BIT:0u)|
+        (local?FR_GAS_GEOMETRY_LOCAL_BIT:0u)|(local&&t->cache_valid?FR_GAS_GEOMETRY_CACHE_BIT:0u)|
+        (local&&t->geometry_dirty?FR_GAS_GEOMETRY_FORCE_BIT:0u);
     dispatch(g,t,&t->geometry_stage,0,bank);dispatch(g,t,&t->geometry_transfer,0,bank);dispatch(g,t,&t->geometry_commit,0,bank);
     if(!submit(g,err,cap)) return false;
-    if(((uint32_t *)t->stats.mapped)[FR_GAS_ROW_NORM_BEFORE_WORD]!=0u) {fr_gas_gpu_invalidate_cache(g);t->large_step_hint=0;}
+    if(words[FR_GAS_ERROR_WORD]!=0u) return error(err,cap,"Gas geometry candidate is not numerically valid");
+    if(words[FR_GAS_ROW_NORM_BEFORE_WORD]!=0u) {
+        if(local&&t->cache_valid) {
+            float bound=0.;memcpy(&bound,words+FR_GAS_RATE_WORD,4);t->cached_rate=fmaxf(t->cached_rate,bound);t->acoustic.geometry_changed=true;
+        } else fr_gas_gpu_invalidate_cache(g);
+        t->large_step_hint=0;
+    }
     t->geometry_dirty=false;return true;
 }
 static bool set_direct_publish(dc_gpu_t *g,struct fr_gas_gpu *t,bool direct,char *err,uint32_t cap) {
@@ -155,8 +146,21 @@ static void clear_stats(struct fr_gas_gpu *t) {
     words[FR_GAS_RATE_X_WORD]=0;words[FR_GAS_RATE_Y_WORD]=0;
     for(uint32_t i=12;i<16;i++) words[i]=0;
 }
-static bool shader_ok(struct fr_gas_gpu *t,char *err,uint32_t cap) {
+static bool shader_ok(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     const uint32_t *words=t->stats.mapped;if(!words[FR_GAS_ERROR_WORD]) return true;
+    if(getenv("DC_GAS_FAILURE_DIAGNOSTICS")) {
+        uint32_t index=words[FR_GAS_ERROR_AT_WORD];float negative=0.,excess=0.;
+        memcpy(&negative,words+FR_GAS_NEGATIVE_PIGMENT_WORD,4);memcpy(&excess,words+FR_GAS_EXCESS_PIGMENT_WORD,4);
+        fprintf(stderr,"Gas failure steps%llu seconds%.9g flags%u cell%u negative%.9g excess%.9g\n",
+            (unsigned long long)t->clock.physical_steps,t->clock.advanced_seconds,words[FR_GAS_REJECT_STAGE_WORD],index,negative,excess);
+        if(index<g->width*g->height) {
+            uint32_t x=index%g->width,y=index/g->width,page=((const uint32_t *)g->page_mapped)[(y/64u)*g->page_width+x/64u];
+            if(page&&page<=DC_GPU_CHUNK_SLOTS) for(uint32_t bank=0;bank<3u;bank++) {
+                const gas_packet_t *packet=(const gas_packet_t *)t->state[bank].mapped+(size_t)(page-1u)*4096u+(y%64u)*64u+x%64u;
+                fprintf(stderr,"Gas failure bank%u packet",bank);for(uint32_t k=0;k<16u;k++) fprintf(stderr," %.9g",packet->words[k]);fprintf(stderr,"\n");
+            }
+        }
+    }
     if(err&&cap) snprintf(err,cap,"Invalid Vulkan gas state at physical cell%u",words[FR_GAS_ERROR_AT_WORD]);
     return false;
 }
@@ -251,7 +255,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
             if(t->policy==FR_GAS_PRESSURE_HLLC) vkCmdCopyBuffer(g->command,t->state[0].buffer,t->state[2].buffer,1,&copy);
         }
         dispatch(g,t,&t->prepare,0,0);
-        if(!submit(g,err,cap)||!shader_ok(t,err,cap)) return false;
+        if(!submit(g,err,cap)||!shader_ok(g,t,err,cap)) return false;
         speed=rate(t);
     }
     double remaining=seconds,hint=t->large_step_hint>0?t->large_step_hint:seconds;uint64_t accepted=0,retries=0;
@@ -276,7 +280,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
             if(!((uint32_t *)t->stats.mapped)[FR_GAS_ERROR_WORD]) break;
             if(t->policy==FR_GAS_PRESSURE_PRACTICAL) {
                 if(t->trace) fprintf(stderr,"Practical gas rejected interval%.9g flags%u cell%u\n",seconds,((uint32_t *)t->stats.mapped)[FR_GAS_REJECT_STAGE_WORD],((uint32_t *)t->stats.mapped)[FR_GAS_ERROR_AT_WORD]);
-                return shader_ok(t,err,cap);
+                return shader_ok(g,t,err,cap);
             }
             if(getenv("DC_GAS_TRACE")) fprintf(stderr,"Gas retry dt%.9g speed%.9g large%u stages%u cell%u\n",dt,speed,t->acoustic.large_transport?1u:0u,((uint32_t *)t->stats.mapped)[FR_GAS_REJECT_STAGE_WORD],((uint32_t *)t->stats.mapped)[FR_GAS_ERROR_AT_WORD]);
             if(getenv("DC_GAS_TRACE")) {float negative=0,excess=0;memcpy(&negative,(uint32_t *)t->stats.mapped+FR_GAS_NEGATIVE_PIGMENT_WORD,4);memcpy(&excess,(uint32_t *)t->stats.mapped+FR_GAS_EXCESS_PIGMENT_WORD,4);fprintf(stderr,"Gas pigment reject negative%.9g excess%.9g\n",negative,excess);}
@@ -291,7 +295,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
         barrier(g);vkCmdCopyBuffer(g->command,t->state[1u+bank].buffer,t->state[0].buffer,1,&copy);
         if(!submit(g,err,cap)) return false;
     }
-    t->cached_bank=bank;t->cached_rate=speed;t->cache_valid=true;
+    t->cached_bank=bank;t->cached_rate=speed;t->cache_valid=true;t->acoustic.geometry_changed=false;
     if(t->policy==FR_GAS_PRESSURE_LARGE_CFL) t->large_step_hint=hint;
     t->clock.physical_steps++;t->clock.substeps+=accepted;t->clock.advanced_seconds+=seconds;
     if(t->trace) {
@@ -312,40 +316,6 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     }
     return true;
 }
-static fr_gas_state_t unpack(const gas_packet_t *packet) {
-    const float *p=packet->words;fr_gas_state_t s={0};
-    for(uint32_t i=0;i<5;i++) s.species[i]=p[i];
-    s.energy=(double)p[5]+p[11]+p[14];s.momentum[0]=p[6];s.momentum[1]=p[7];
-    for(uint32_t i=0;i<3;i++) s.pigment[i]=p[8+i];
-    return s;
-}
-bool fr_gas_gpu_seed_chunk(dc_gpu_t *g,uint32_t slot,const fr_gas_state_t *states,
-    const double *volumes,uint32_t count,char *err,uint32_t cap) {
-    if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!states||!volumes||count!=4096u) return error(err,cap,"Invalid immutable gas import");
-    gas_packet_t *packets=calloc(count,sizeof(*packets));if(!packets) return error(err,cap,"Cannot stage gas import");
-    bool okay=true;
-    for(uint32_t i=0;okay&&i<count;i++) {
-        fr_gas_thermo_t t;okay=volumes[i]>=0&&volumes[i]<=1&&fr_gas_thermodynamics(&g->gas->model,states+i,volumes[i],&t,err,cap);
-        if(!okay) break;
-        float *p=packets[i].words;
-        for(uint32_t k=0;k<5;k++) p[k]=(float)states[i].species[k];
-        p[5]=(float)states[i].energy;double residual=states[i].energy-p[5];p[11]=(float)residual;p[14]=(float)(residual-p[11]);
-        p[6]=(float)states[i].momentum[0];p[7]=(float)states[i].momentum[1];
-        for(uint32_t k=0;k<3;k++) p[8+k]=(float)states[i].pigment[k];
-        p[12]=p[13]=(float)volumes[i];fr_gas_state_t rounded=unpack(packets+i);
-        okay=fr_gas_thermodynamics(&g->gas->model,&rounded,p[12],&t,err,cap);
-    }
-    if(okay) okay=vkQueueWaitIdle(g->queue)==VK_SUCCESS;
-    if(okay) {memcpy((gas_packet_t *)g->gas->state[g->gas->direct_publish?1u:0u].mapped+(size_t)slot*4096u,packets,count*sizeof(*packets));fr_gas_gpu_invalidate_cache(g);g->gas->large_step_hint=0;}
-    free(packets);return okay;
-}
-bool fr_gas_gpu_read_chunk(dc_gpu_t *g,uint32_t slot,fr_gas_state_t *states,uint32_t count,char *err,uint32_t cap) {
-    if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!states||count<4096u) return error(err,cap,"Invalid cold gas snapshot");
-    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas snapshot");
-    const gas_packet_t *packets=(const gas_packet_t *)g->gas->state[g->gas->direct_publish?1u:0u].mapped+(size_t)slot*4096u;
-    for(uint32_t i=0;i<4096u;i++) states[i]=unpack(packets+i);
-    return true;
-}
 bool fr_gas_gpu_clock(const dc_gpu_t *g,fr_gas_gpu_clock_t *out) {
     if(!g||!g->gas||!out) return false;
     *out=g->gas->clock;return true;
@@ -363,34 +333,6 @@ bool fr_gas_gpu_initialize_queued(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!submit(g,err,cap)) return false;
     memset((uint32_t *)t->parameters.mapped+FR_GAS_MODEL_WORDS,0,DC_GPU_CHUNK_SLOTS*sizeof(uint32_t));
     t->initialization_pending=false;
-    fr_gas_gpu_invalidate_cache(g);t->large_step_hint=0;return true;
-}
-bool fr_gas_gpu_export_checkpoint(dc_gpu_t *g,uint32_t slot,fr_gas_checkpoint_chunk_t *out,char *err,uint32_t cap) {
-    if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!out) return error(err,cap,"Invalid cold gas checkpoint export");
-    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas checkpoint export");
-    struct fr_gas_gpu *t=g->gas;
-    memcpy(out->cells,(gas_packet_t *)t->state[t->direct_publish?1u:0u].mapped+(size_t)slot*4096u,sizeof(out->cells));
-    memcpy(out->gates,(uint32_t *)t->gates.mapped+(size_t)slot*4096u,sizeof(out->gates));out->clock=t->clock;return true;
-}
-bool fr_gas_gpu_import_checkpoint(dc_gpu_t *g,uint32_t slot,const fr_gas_checkpoint_chunk_t *input,char *err,uint32_t cap) {
-    if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!input) return error(err,cap,"Invalid cold gas checkpoint import");
-    struct fr_gas_gpu *t=g->gas;
-    if(!isfinite(input->clock.advanced_seconds)||input->clock.advanced_seconds<0.||
-       input->clock.substeps<input->clock.physical_steps||
-       (input->clock.physical_steps==0u&&input->clock.advanced_seconds!=0.)) return error(err,cap,"Invalid gas checkpoint clock");
-    for(uint32_t i=0;i<4096u;i++) {
-        const float *p=input->cells[i];
-        for(uint32_t word=0;word<16u;word++) if(!isfinite(p[word])) return error(err,cap,"Nonfinite gas checkpoint");
-        if(p[12]<0.f||p[12]>1.f||p[13]<0.f||p[13]>1.f||(input->gates[i]&~3u)!=0u)
-            return error(err,cap,"Invalid gas checkpoint geometry or face valves");
-        gas_packet_t packet;memcpy(packet.words,p,sizeof(packet));fr_gas_state_t state=unpack(&packet);fr_gas_thermo_t thermo;
-        if(!fr_gas_thermodynamics(&t->model,&state,p[12],&thermo,err,cap)) return false;
-    }
-    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas checkpoint import");
-    memcpy((gas_packet_t *)t->state[t->direct_publish?1u:0u].mapped+(size_t)slot*4096u,input->cells,sizeof(input->cells));
-    memcpy((uint32_t *)t->gates.mapped+(size_t)slot*4096u,input->gates,sizeof(input->gates));
-    ((uint32_t *)t->parameters.mapped)[FR_GAS_MODEL_WORDS+slot]=0u;
-    if(input->clock.advanced_seconds>t->clock.advanced_seconds) t->clock=input->clock;
     fr_gas_gpu_invalidate_cache(g);t->large_step_hint=0;return true;
 }
 bool fr_gas_gpu_audit(dc_gpu_t *g,fr_gas_gpu_audit_t *out,char *err,uint32_t cap) {
@@ -454,11 +396,4 @@ bool fr_gas_gpu_gate(dc_gpu_t *g,uint32_t x,uint32_t y,uint32_t width,uint32_t h
 bool fr_gas_gpu_overlay(dc_gpu_t *g,uint32_t mode) {
     if(!g||!g->gas||mode>1u||vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return false;
     ((float *)g->gas->parameters.mapped)[FR_GAS_VIEW_WORD]=(float)mode;return true;
-}
-bool fr_gas_gpu_read_work_chunk(dc_gpu_t *g,uint32_t slot,double *work,uint32_t count,char *err,uint32_t cap) {
-    if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!work||count<4096u) return error(err,cap,"Invalid gas work snapshot");
-    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas work snapshot");
-    const gas_packet_t *packets=(const gas_packet_t *)g->gas->state[g->gas->direct_publish?1u:0u].mapped+(size_t)slot*4096u;
-    for(uint32_t i=0;i<4096u;i++) work[i]=packets[i].words[15];
-    return true;
 }

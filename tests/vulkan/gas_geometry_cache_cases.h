@@ -11,7 +11,7 @@ static void test_native_local_geometry_repairs_keep_quiet_owners_and_avoid_full_
     for(uint32_t i=20u*64u+20u;i<20u*64u+28u;i++) {input[i].species[1]-=.00001;input[i].species[2]=.00001;input[i].pigment[0]=.00001;
         input[i].energy+=.00001*(model.heat_capacity_cv[2]-model.heat_capacity_cv[1])*300;}
     for(uint32_t publication=0;publication<2u;publication++) {
-        ASSERT_EQ(SDL_setenv(names[1],publication?"1":"0",1),0);uint32_t work[2]={0};
+        ASSERT_EQ(SDL_setenv(names[1],publication?"1":"0",1),0);uint32_t work[2]={0},submits[2]={0};uint64_t copies[2]={0};
         for(uint32_t path=0;path<2u;path++) {
             ASSERT_EQ(SDL_setenv(names[0],path?"1":"0",1),0);dc_gpu_t *g=NULL;memset(chunk,0,sizeof(*chunk));
             ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
@@ -23,9 +23,10 @@ static void test_native_local_geometry_repairs_keep_quiet_owners_and_avoid_full_
             ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,1,still,volume,4096,err,sizeof(err))&&fr_gas_gpu_export_checkpoint(g,1,quiet,err,sizeof(err)));free(still);
             ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err)));
             for(uint32_t step=0;step<8u;step++) {
-                g_direct_dispatches=g_pressure_dispatches=0;
+                g_direct_dispatches=g_pressure_dispatches=g_publication_submits=0;g_copy_bytes=0;
                 ASSERT_TRUE(dc_gpu_paint_material(g,32,32,0,(step&1u)?DC_MATERIAL_AIR:DC_MATERIAL_STONE,err,sizeof(err))&&fr_gas_gpu_step(g,.02f,err,sizeof(err)));
                 work[path]+=g_direct_dispatches+g_pressure_dispatches;
+                submits[path]+=g_publication_submits;copies[path]+=g_copy_bytes;
             }
             ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,path?out:reference,4096,err,sizeof(err))&&fr_gas_gpu_export_checkpoint(g,1,check,err,sizeof(err)));
             ASSERT_EQ(memcmp(quiet->cells,check->cells,sizeof(quiet->cells)),0);ASSERT_EQ(memcmp(quiet->gates,check->gates,sizeof(quiet->gates)),0);
@@ -38,9 +39,9 @@ static void test_native_local_geometry_repairs_keep_quiet_owners_and_avoid_full_
             density_error+=fabs(a-b);mass+=a;energy_error+=fabs(reference[i].energy-out[i].energy);energy+=reference[i].energy;
             for(uint32_t k=0;k<2u;k++) {double delta=(b>0?out[i].momentum[k]/b:0)-(a>0?reference[i].momentum[k]/a:0);velocity+=delta*delta;}
         }
-        printf("Local geometry publication%u dispatches%u/%u densityL1%.9g energyL1%.9g velocityRMS%.9g\n",publication,work[1],work[0],density_error/mass,energy_error/energy,sqrt(velocity/8192.));
+        printf("Local geometry publication%u dispatches%u/%u submits%u/%u copies%llu/%llu densityL1%.9g energyL1%.9g velocityRMS%.9g\n",publication,work[1],work[0],submits[1],submits[0],(unsigned long long)copies[1],(unsigned long long)copies[0],density_error/mass,energy_error/energy,sqrt(velocity/8192.));
         ASSERT_TRUE(density_error/mass<.003&&energy_error/energy<.003&&sqrt(velocity/8192.)<.15);
-        ASSERT_TRUE(work[1]<work[0]);
+        ASSERT_TRUE(submits[1]<submits[0]);if(!publication) ASSERT_TRUE(copies[1]<copies[0]);
     }
     for(uint32_t i=0;i<2u;i++) {SDL_setenv(names[i],saved[i]?saved[i]:"0",1);SDL_free(saved[i]);}
     free(input);free(reference);free(out);free(volume);free(chunk);free(quiet);free(check);PASS();

@@ -2,8 +2,15 @@
 #extension GL_GOOGLE_include_directive : require
 #include "geometry_common.glsl"
 void main() {
+    if((params.bank&FR_GAS_GEOMETRY_LOCAL_BIT)!=0u&&stats[FR_GAS_ROW_NORM_BEFORE_WORD]==0u) return;
     uint index=gas_index();if(index>=params.width*params.height) return;
-    ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);if(atlas==0xffffffffu) return;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));
+    if((params.bank&FR_GAS_GEOMETRY_LOCAL_BIT)!=0u&&(params.bank&FR_GAS_GEOMETRY_FORCE_BIT)==0u) {
+        bool nearby=geometry_metadata(index).y>0.;
+        for(uint d=0u;d<4u&&!nearby;d++) nearby=geometry_metadata_at(p+geometry_direction(d)).y>0.;
+        if(!nearby) return;
+    }
+    uint atlas=gas_atlas(p);if(atlas==0xffffffffu) return;
     Gas original=world[atlas],value=original;float available=geometry_metadata(index).x;
     bool changed=available!=original.geometry.y;
     if(available<=0.) {
@@ -14,8 +21,8 @@ void main() {
     } else {
         value.geometry.xy=vec2(available);
         for(uint d=0u;d<4u;d++) {
-            ivec2 q=p+geometry_direction(d);uint other=gas_atlas(q);
-            if(other==0xffffffffu||!geometry_open(p,d)||geometry_available(q)>0.) continue;
+            ivec2 q=p+geometry_direction(d);if(geometry_available(q)>0.) continue;
+            uint other=gas_atlas(q);if(other==0xffffffffu||!geometry_open(p,d)) continue;
             Gas donor=world[other];if(gas_mass(donor)<=0.) continue;
             float route=geometry_route(q);if(route<=0.) continue;
             float fraction=available/route;
@@ -23,7 +30,7 @@ void main() {
             value=gas_add_flux(value,incoming,1.);value.geometry.w+=donor.geometry.w*fraction;changed=true;
         }
     }
-    if(changed) bank1[atlas]=value;
+    if(changed) {bool okay=false;gas_primitive(value,okay);if(!okay) gas_error(index);else bank1[atlas]=value;}
     geometry_mark(index,changed);
     uint any_changed=subgroupMax(changed?1u:0u);if(subgroupElect()&&any_changed!=0u) atomicOr(stats[FR_GAS_ROW_NORM_BEFORE_WORD],1u);
 }

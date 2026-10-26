@@ -9,10 +9,11 @@ float geometry_void(uint index,uint atlas) {
         clamp(mpm[index].w,0.,1.)-float(cells[atlas].y)/65536.);
 }
 vec4 geometry_metadata(uint index) {return (params.bank&1u)==0u?cache1[index].hydro:cache0[index].hydro;}
-float geometry_available(ivec2 p) {
-    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))||gas_atlas(p)==0xffffffffu) return 0.;
-    return geometry_metadata(uint(p.y)*params.width+uint(p.x)).x;
+vec4 geometry_metadata_at(ivec2 p) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return vec4(0);
+    return geometry_metadata(uint(p.y)*params.width+uint(p.x));
 }
+float geometry_available(ivec2 p) {return geometry_metadata_at(p).x;}
 ivec2 geometry_direction(uint d) {return d==0u?ivec2(1,0):(d==1u?ivec2(-1,0):(d==2u?ivec2(0,1):ivec2(0,-1)));}
 bool geometry_open(ivec2 p,uint d) {return gas_gate_open((d&1u)==0u?p:p+geometry_direction(d),d/2u);}
 float geometry_route(ivec2 p) {

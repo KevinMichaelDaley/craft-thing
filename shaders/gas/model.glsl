@@ -26,7 +26,7 @@ Primitive gas_primitive(Gas s,out bool okay) {
         gas_finite(mass)&&gas_finite(gas_energy(s))&&all(not(isnan(s.dynamics.zw)))&&all(not(isinf(s.dynamics.zw)));
     if(mass==0.) {
         okay=okay&&gas_energy(s)==0.&&all(equal(s.dynamics.zw,vec2(0)));
-        return Primitive(vec4(0),vec4(0,0,0,volume));
+        return Primitive(vec4(0),vec4(0,0,0,s.geometry.y));
     }
     okay=okay&&volume>0.&&gas_finite(volume);
     if(!okay) return gas_empty_primitive();

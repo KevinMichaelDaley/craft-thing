@@ -1,3 +1,4 @@
+#define FR_GAS_WRITABLE_GATES 1
 #include "acoustic.glsl"
 shared uint needed;
 void main() {
@@ -8,6 +9,12 @@ void main() {
     if(p.x<params.width&&p.y<params.height) {
         Primitive own=gas_cached(ivec2(p));bool practical=(params.bank&FR_GAS_PRACTICAL_BIT)!=0u;
         bool awake=practical?any(greaterThan(abs(own.hydro.yz),vec2(.05))):any(notEqual(own.hydro.yz,vec2(0)));
+        if((params.bank&FR_GAS_GEOMETRY_WAKE_BIT)!=0u) {
+            uint at=gas_atlas(ivec2(p));
+            if(at!=0xffffffffu&&(gates[at]&FR_GAS_GEOMETRY_GATE_BIT)!=0u) {
+                atomicAnd(gates[at],~FR_GAS_GEOMETRY_GATE_BIT);awake=true;
+            }
+        }
 #ifdef FR_GAS_CACHED_NEIGHBORS
         if(own.metric.w>0.&&!awake) {
 #else
