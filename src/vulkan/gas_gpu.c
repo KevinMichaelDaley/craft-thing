@@ -10,10 +10,6 @@
 #include "gas_gpu_internal.h"
 
 #include "gas_gpu_state.h"
-bool fr_gas_gpu_tiled_metadata(dc_gpu_t *g,uint32_t *metadata) {
-    if(!g||!g->gas||!metadata) return false;
-    *metadata=0u;return true;
-}
 bool fr_gas_gpu_pressure_tiles(const dc_gpu_t *g,uint32_t *tiles) {
     if(!g||!g->gas||!g->gas->acoustic.ready||!tiles) return false;
     *tiles=((const uint32_t *)g->gas->acoustic.indirect.mapped)[0];return true;
