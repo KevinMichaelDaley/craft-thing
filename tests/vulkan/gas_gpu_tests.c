@@ -419,6 +419,7 @@ int main(void) {
     RUN(test_native_lean_metadata_preserves_state_with_one_preparation_pass);
     RUN(test_native_large_hybrid_workgroups_preserve_state_and_clock);
     RUN(test_native_zero_energy_transfers_preserve_state_stock_and_clock);
+    RUN(test_native_device_work_memory_preserves_state_initialization_and_stock);
 #endif
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
     RUN(test_native_colored_transport_matches_reference_and_retains_closed_budgets);

@@ -48,6 +48,15 @@ bool fr_gas_gpu_zero_energy_metadata(const dc_gpu_t *g,bool *selected) {
     if(!g||!g->gas||!g->gas->acoustic.ready||!selected) return false;
     *selected=(((const uint32_t *)g->gas->stats.mapped)[FR_GAS_ROW_NORM_AFTER_WORD]&2u)!=0u;return true;
 }
+bool fr_gas_gpu_work_memory(const dc_gpu_t *g,uint64_t *mapped_bytes,uint64_t *device_bytes) {
+    if(!g||!g->gas||!mapped_bytes||!device_bytes) return false;
+    const struct fr_gas_gpu *t=g->gas;uint64_t mapped=0,device=0;
+    for(uint32_t i=0;i<14;i++) {
+        const dc_gpu_address_buffer_t *buffer=i<2u?t->cache+i:(i==2u?&t->acoustic.transport_work:t->acoustic.fields+i-3u);
+        if(buffer->host_visible) mapped+=buffer->bytes;else device+=buffer->bytes;
+    }
+    *mapped_bytes=mapped;*device_bytes=device;return true;
+}
 bool fr_gas_gpu_rate_metadata(const dc_gpu_t *g,float rates[3],uint32_t *width) {
     if(!g||!g->gas||!rates||!width) return false;
     const uint32_t *words=g->gas->stats.mapped;

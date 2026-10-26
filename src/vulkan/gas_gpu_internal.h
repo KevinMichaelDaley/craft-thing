@@ -19,6 +19,8 @@ bool fr_gas_gpu_activity_metadata(const dc_gpu_t *gpu,uint32_t *mode);
 bool fr_gas_gpu_hybrid_line_group(const dc_gpu_t *gpu,uint32_t *width);
 /** Read the completed GPU zero-energy policy marker; cold diagnostics only. */
 bool fr_gas_gpu_zero_energy_metadata(const dc_gpu_t *gpu,bool *selected);
+/** Count requested mapped/device-only gas working bytes; cold resource diagnostics only. */
+bool fr_gas_gpu_work_memory(const dc_gpu_t *gpu,uint64_t *mapped_bytes,uint64_t *device_bytes);
 /** Composite read-only gas pigment; presentation never advances gas. */
 void fr_gas_record_overlay(dc_gpu_t *gpu);
 #endif
