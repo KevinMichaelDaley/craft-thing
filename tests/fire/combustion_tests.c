@@ -1,0 +1,52 @@
+#include <math.h>
+#include <stdio.h>
+#include <string.h>
+#include "ferrum/fire/combustion.h"
+#include "ferrum/fire/material_profile.h"
+static int g_pass,g_fail;
+#define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
+#define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s [%s]\n",__LINE__,#e,err);g_fail++;return;}} while(0)
+#define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
+#define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
+#define PASS() g_pass++
+static void test_finite_oxygen_and_products(void) {
+    char err[256]={0};fr_reactive_state_t s,out;fr_combustion_products_t p;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,0,800,17,&s,err,sizeof(err)));
+    s.flags|=FR_REACTIVE_FLAMING;
+    ASSERT_TRUE(fr_combustion_reference(&s,64,.23f,1,1,&out,&p,err,sizeof(err)));
+    ASSERT_TRUE(p.fuel_fp>0&&p.fuel_fp<65536&&p.oxygen_fp<=64);
+    ASSERT_EQ(s.fuel_mass_fp-out.fuel_mass_fp,p.fuel_fp);
+    ASSERT_EQ((uint64_t)p.fuel_fp+p.oxygen_fp,
+        (uint64_t)out.char_mass_fp+p.ash_fp+p.soot_fp+p.exhaust_fp);
+    ASSERT_TRUE(p.released_heat>0&&isfinite(p.exported_energy));PASS();
+}
+static void test_starved_wet_and_buried_do_not_burn(void) {
+    char err[256]={0};fr_reactive_state_t s,out;fr_combustion_products_t p;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,32768,800,19,&s,err,sizeof(err)));
+    s.flags|=FR_REACTIVE_FLAMING;
+    ASSERT_TRUE(fr_combustion_reference(&s,65536,.23f,1,1,&out,&p,err,sizeof(err)));
+    ASSERT_EQ(p.fuel_fp,0);
+    s.bound_water_fp=0;
+    ASSERT_TRUE(fr_combustion_reference(&s,0,0,1,1,&out,&p,err,sizeof(err)));
+    ASSERT_EQ(p.fuel_fp,0);
+    ASSERT_TRUE(fr_combustion_reference(&s,65536,.23f,0,1,&out,&p,err,sizeof(err)));
+    ASSERT_EQ(p.fuel_fp,0);PASS();
+}
+static void test_ignition_hazard_survives_equal_time_scheduling(void) {
+    char err[256]={0};fr_reactive_state_t a,b,tmp;fr_combustion_products_t p;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,0,800,29,&a,err,sizeof(err)));
+    b=a;
+    ASSERT_TRUE(fr_combustion_reference(&a,65536,.23f,1,.125f,&tmp,&p,err,sizeof(err)));a=tmp;
+    for(int i=0;i<8;i++) {
+        ASSERT_TRUE(fr_combustion_reference(&b,65536,.23f,1,.015625f,&tmp,&p,err,sizeof(err)));b=tmp;
+    }
+    ASSERT_EQ(a.ignition_threshold,b.ignition_threshold);
+    ASSERT_TRUE(fabsf(a.ignition_integral-b.ignition_integral)<1e-6f);
+    ASSERT_EQ(a.flags&FR_REACTIVE_FLAMING,b.flags&FR_REACTIVE_FLAMING);PASS();
+}
+int main(void) {
+    RUN(test_finite_oxygen_and_products);
+    RUN(test_starved_wet_and_buried_do_not_burn);
+    RUN(test_ignition_hazard_survives_equal_time_scheduling);
+    printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+}
