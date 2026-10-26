@@ -24,6 +24,16 @@ static uint32_t g_direct_dispatches;
 static uint32_t g_queue_idle_calls;
 static uint64_t g_copy_bytes;
 static uint32_t g_transfer_scope_barriers;
+static VkPipeline g_previous_compute_pipeline;
+static uint32_t g_repeated_compute_bindings;
+VKAPI_ATTR void VKAPI_CALL __real_vkCmdBindPipeline(VkCommandBuffer command,VkPipelineBindPoint point,VkPipeline pipeline);
+VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdBindPipeline(VkCommandBuffer command,VkPipelineBindPoint point,VkPipeline pipeline) {
+    if(point==VK_PIPELINE_BIND_POINT_COMPUTE) {
+        if(pipeline==g_previous_compute_pipeline) g_repeated_compute_bindings++;
+        g_previous_compute_pipeline=pipeline;
+    }
+    __real_vkCmdBindPipeline(command,point,pipeline);
+}
 VKAPI_ATTR void VKAPI_CALL __real_vkCmdPipelineBarrier2(VkCommandBuffer command,const VkDependencyInfo *dependency);
 VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdPipelineBarrier2(VkCommandBuffer command,const VkDependencyInfo *dependency) {
     for(uint32_t i=0;i<dependency->memoryBarrierCount;i++)

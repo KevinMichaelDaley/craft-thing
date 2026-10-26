@@ -191,3 +191,7 @@ Narrow compute destinations after REDb29a68d: actual barrier scopes10 vs40, same
 **2026-10-26T04:48:33Z**
 
 Trace-boundary GREEN after6cd6a82: four injected100ms setup-log delays incorrectly counted as~101ms fence in RED; fixed capture immediately aftervkWaitForFences reports0.5-4.4ms despite delays. Full actual native45/45. Corrected1000 trace largest65ms frame hasgasGPU23.469ms/renderfence1.181ms, with~36ms in post-fence trace-output region, not evidence of compositor stall. One accepted interval/0retries/fixedstorage-RSS/0majorfaults. Full-frame timer retains all elapsed cost; traced runs are diagnostic only. Broad serialized make-i test stillrunning after parallel CPU builds; exactlythetwo known ctr-ojvy authored-stage failures observed sofar, finalcounts pending. Best uninstrumented26.898/30.325 remains strict-worst RED.
+
+**2026-10-26T04:50:45Z**
+
+Broad regression completed aftertracefix:162 C groups764passes and exactly2known ctr-ojvy authored-stage failures; all Python checks pass, zero compiler warnings/errors. Axis-specialization RED validates same state/clock/dispatch count but requires distinct actual X/Y pipeline binds: baseline repeated23vs23 fails expected22vs23. No current performance completion claim.
