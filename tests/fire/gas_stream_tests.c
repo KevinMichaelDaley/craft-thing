@@ -12,7 +12,7 @@ static void test_gas_atomic_stream_preserves_private_stock_geometry_and_valves(v
     ASSERT_TRUE(dc_stream_request_save_gas(s,c,NULL,NULL,NULL,gas,1));memset(gas,0,sizeof(*gas));
     dc_stream_result_t r={0};ASSERT_TRUE(wait_result(s,&r));ASSERT_EQ(r.kind,DC_STREAM_SAVED);dc_stream_result_release(&r);
     ASSERT_TRUE(dc_stream_request_load(s,c->coord,2)&&wait_result(s,&r));ASSERT_EQ(r.kind,DC_STREAM_LOADED);
-    ASSERT_TRUE(r.gas&&r.water_excess&&r.reactive&&memcmp(expected,r.gas,sizeof(*expected))==0);
+    ASSERT_TRUE(r.gas&&!r.water_excess&&r.reactive&&memcmp(expected,r.gas,sizeof(*expected))==0);
     dc_stream_result_release(&r);ASSERT_TRUE(!r.gas);
     expected->cells[4095][0]=-1;ASSERT_TRUE(!dc_stream_request_save_gas(s,c,NULL,NULL,NULL,expected,3));expected->cells[4095][0]=0;
     expected->cells[4095][5]=NAN;ASSERT_TRUE(!dc_stream_request_save_gas(s,c,NULL,NULL,NULL,expected,4));expected->cells[4095][5]=0;

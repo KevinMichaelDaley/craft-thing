@@ -55,7 +55,8 @@ bool dc_level_view_setup_smoke_box(dc_level_view_t *view,char *err,uint32_t cap)
         if(!dc_level_view_set_spring_enabled(view,false)||!dc_level_view_wait_visible(view,120000,err,cap)) return false;
         for(uint32_t i=0;i<view->table.capacity;i++) if(!view->gas_admitted[i])
             return error(err,cap,"Saved smoke scene is missing an authoritative gas chunk");
-        return dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO)&&restore_valve_state(view,err,cap);
+        bool okay=dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO)&&restore_valve_state(view,err,cap);
+        view->smoke_ready=okay;return okay;
     }
     if(view->origin.x!=0||view->origin.y!=INITIAL_CHUNK_Y) return error(err,cap,"Fresh smoke box requires the initial world origin");
     if(!dc_level_view_set_spring_enabled(view,false)||!dc_level_view_wait_visible(view,120000,err,cap)) return false;
@@ -74,7 +75,7 @@ bool dc_level_view_setup_smoke_box(dc_level_view_t *view,char *err,uint32_t cap)
     }
     dc_smoke_box_release(chunks,count);free(chunks);
     for(uint32_t i=0;okay&&i<3;i++) okay=valve(view,i,true,err,cap);
-    if(okay) view->smoke_box=true;
+    if(okay) view->smoke_box=view->smoke_ready=true;
     return okay;
 }
 bool dc_level_view_smoke_valve(dc_level_view_t *view,uint32_t index,char *err,uint32_t cap) {

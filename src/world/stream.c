@@ -117,10 +117,10 @@ static bool save_chunk(const dc_streamer_t *stream,const dc_chunk_t *chunk,
         uint64_t length=size,hash=0;
         if(okay) okay=fwrite(&length,sizeof(length),1,file)==1&&fwrite(bytes,size,1,file)==1;
         free(bytes);
-        if(okay&&thermal) {
+        if(okay&&(thermal||gas)) {
             uint64_t liquid_length=thermal_bytes;
             okay=fwrite(&liquid_length,sizeof(liquid_length),1,file)==1&&
-                fwrite(thermal,thermal_bytes,1,file)==1;
+                (!thermal_bytes||fwrite(thermal,thermal_bytes,1,file)==1);
         }
         if(okay&&gas) okay=fwrite(gas,sizeof(*gas),1,file)==1;
         long end=okay?ftell(file):-1;
@@ -202,8 +202,9 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,dc_chunk_coord_t coord
         uint64_t liquid_length=0;uint8_t *liquid=NULL;
         if(okay&&header.version>=8) {
             enum { LIQUID_CHUNK_BYTES=48+16+DC_CHUNK_CELLS*4 };
-            okay=fread(&liquid_length,sizeof(liquid_length),1,file)==1&&liquid_length==LIQUID_CHUNK_BYTES;
-            if(okay) okay=(liquid=malloc((size_t)liquid_length))!=NULL&&fread(liquid,(size_t)liquid_length,1,file)==1;
+            okay=fread(&liquid_length,sizeof(liquid_length),1,file)==1&&
+                (liquid_length==LIQUID_CHUNK_BYTES||(header.version==9&&liquid_length==0u));
+            if(okay&&liquid_length) okay=(liquid=malloc((size_t)liquid_length))!=NULL&&fread(liquid,(size_t)liquid_length,1,file)==1;
         }
         if(okay&&header.version==9) okay=(*gas=malloc(sizeof(**gas)))!=NULL&&
             fread(*gas,sizeof(**gas),1,file)==1&&gas_checkpoint_valid(*gas);
@@ -356,9 +357,7 @@ bool dc_stream_request_save_gas(dc_streamer_t *stream,const dc_chunk_t *chunk,
     const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
     const float *water_excess,const fr_gas_checkpoint_chunk_t *gas,uint64_t generation) {
     fr_reactive_chunk_t empty={.next_id=1};
-    float ambient_water[4096]={0};
-    if(gas&&!water_excess) water_excess=ambient_water;
-    if(water_excess&&!reactive) reactive=&empty;
+    if((water_excess||gas)&&!reactive) reactive=&empty;
     if (!stream || !chunk || !generation) return false;
     if(!gas_checkpoint_valid(gas)) return false;
     if(colors && !dc_color_records_valid((const float*)colors,DC_CHUNK_CELLS*2)) return false;

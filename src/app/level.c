@@ -213,10 +213,14 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
                 dc_stream_result_release(&result);return false;
             }
             view->gas_admitted[index]=result.gas!=NULL;
+            if(!result.gas&&view->smoke_ready) {
+                if(!fr_gas_gpu_queue_ambient_chunk(view->gpu,index,err,cap)) {dc_stream_result_release(&result);return false;}
+                view->gas_admitted[index]=true;
+            }
             if(!dc_chunk_table_finish_load(&view->table,index,result.generation)) {
                 dc_stream_result_release(&result);return error(err,cap,"Cannot finish loaded chunk publication");
             }
-            if(restored) dc_chunk_table_mark_dirty(&view->table,index);
+            if(restored||(!result.gas&&view->smoke_ready)) dc_chunk_table_mark_dirty(&view->table,index);
         } else if (!dc_chunk_table_finish_save(&view->table, index, result.generation)) {
             dc_stream_result_release(&result);
             return error(err, cap, "Cannot complete chunk save");
@@ -253,16 +257,16 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
             }
             liquid=water_excess;
         }
-        if (!dc_chunk_table_begin_save(&view->table, i, &generation)) {
-            fr_reactive_chunk_release(&reactive);
-            return error(err, cap, "Cannot begin dirty chunk save");
-        }
         fr_gas_checkpoint_chunk_t *gas=NULL;
         if(view->smoke_box) {
             gas=malloc(sizeof(*gas));
             if(!gas||!fr_gas_gpu_export_checkpoint(view->gpu,i,gas,err,cap)) {
                 free(gas);fr_reactive_chunk_release(&reactive);return false;
             }
+        }
+        if (!dc_chunk_table_begin_save(&view->table, i, &generation)) {
+            free(gas);fr_reactive_chunk_release(&reactive);
+            return error(err, cap, "Cannot begin dirty chunk save");
         }
         bool queued=dc_stream_request_save_gas(view->stream,&chunk,&colors,channel,liquid,gas,generation);
         free(gas);
@@ -425,6 +429,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     view->pending_chunk_dx = 0;
     view->pending_chunk_dy = 0;
     view->mapped_origin = view->origin;
+    if(view->smoke_ready&&!fr_gas_gpu_initialize_queued(view->gpu,err,cap)) return false;
     dc_chunk_coord_t body_origin={view->origin.x-HALO_CHUNKS,view->origin.y-HALO_CHUNKS};
     bool ticking=all_resident&&view->pending_steps!=0u&&!view->transfer_pending;
     if(!(ticking?dc_gpu_prepare_body_origin(view->gpu,body_origin,err,cap):

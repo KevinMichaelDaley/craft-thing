@@ -21,7 +21,7 @@ struct dc_level_view {
     uint32_t from_x,from_y,to_x,to_y,transfer_amount,transfer_kind;
     uint32_t from_slot,to_slot;
     uint64_t from_generation,to_generation;
-    bool destination_bound,smoke_box;
+    bool destination_bound,smoke_box,smoke_ready;
     uint32_t smoke_closed;
     bool gas_admitted[DC_GPU_CHUNK_SLOTS];
 };
