@@ -1,6 +1,6 @@
 #include "acoustic.glsl"
 layout(set=0,binding=24,std430) restrict buffer MultigridWork {uint mg_words[];};
-uint mg_level() {return (params.bank>>20u)&15u;}
+uint mg_level() {return FR_MG_LEVEL;}
 uvec2 mg_size(uint level) {uint scale=1u<<level;return (uvec2(params.width,params.height)+scale-1u)/scale;}
 uint mg_count(uint level) {uvec2 size=mg_size(level);return size.x*size.y;}
 uint mg_base(uint level) {return level==3u?0u:(level==2u?mg_count(3u)*8u:(mg_count(3u)+mg_count(2u))*8u);}

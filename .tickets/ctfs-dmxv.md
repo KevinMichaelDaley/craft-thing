@@ -135,3 +135,7 @@ Coarse workgroup implementation preserves BYTE-identical reference snapshot,7 di
 **2026-10-25T23:57:07Z**
 
 Discarded larger temporal tile variants after full audited runs:AoS36.534/42.727 andSoA37.262/43.252, both slower despite reference equality. Practical compact normal float mode improves audited1000 to33.500mean39.247worst, invalid0/species4.72e-5/pigment7.16e-7/energy-ledger−2.45e-5 relative drift. All30 displayed native and transactional publication tests pass; strict denormal-preserving modes unchanged. Still over30ms. Next bounded GPU h2/h4/h8 pressure hierarchy; lock flow-error/stock/finite/clock and dispatch-budget tests first, no exact residual loop or CPU field solver.
+
+**2026-10-26T00:09:33Z**
+
+Multilevel checkpoint077eb1e: native33/33 and practical5/5 pass; audited1000 actual display32.348mean38.016worst, invalid0 and small stock/energy-ledger drift; still budget RED. Fine8+8 failed stability; damped1.4 failed wall/long-run gates; coarse2 sweeps failed late recovery atstep110. All reductions discarded; retain12fine pre/post and4Jacobi per intermediate level. Next specialize level shaders without changing numerical schedule.

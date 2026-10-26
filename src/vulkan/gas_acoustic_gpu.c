@@ -34,7 +34,10 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->practical_explicit);
     fr_renderer_compute_destroy(g,&t->temporal_sor);
     fr_renderer_compute_destroy(g,&t->coarse_group);
-    fr_renderer_compute_destroy(g,&t->mg_relax);fr_renderer_compute_destroy(g,&t->mg_restrict);fr_renderer_compute_destroy(g,&t->mg_prolong);
+    for(uint32_t i=0;i<3;i++) {
+        if(i<2u) fr_renderer_compute_destroy(g,&t->mg_relax[i]);
+        fr_renderer_compute_destroy(g,&t->mg_restrict[i]);fr_renderer_compute_destroy(g,&t->mg_prolong[i]);
+    }
     for(uint32_t i=0;i<11;i++) dc_gpu_address_buffer_destroy(g,t->fields+i);
     dc_gpu_address_buffer_destroy(g,&t->indirect);
     memset(t,0,sizeof(*t));
@@ -106,9 +109,9 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         const char *path=use_wide?"build/shaders/gas_pressure_coarse_group_wide.comp.spv":"build/shaders/gas_pressure_coarse_group.comp.spv";
         if(!fr_renderer_compute_init(g,&t->coarse_group,buffers,25,16,path,err,cap)) goto fail;
     }
-    fr_renderer_compute_t *multigrid[]={&t->mg_relax,&t->mg_restrict,&t->mg_prolong};
-    const char *mg_names[]={"mg_relax","mg_restrict","mg_prolong"};
-    for(uint32_t i=0;i<3;i++) {
+    fr_renderer_compute_t *multigrid[]={&t->mg_relax[0],&t->mg_relax[1],&t->mg_restrict[0],&t->mg_restrict[1],&t->mg_restrict[2],&t->mg_prolong[0],&t->mg_prolong[1],&t->mg_prolong[2]};
+    const char *mg_names[]={"mg_relax1","mg_relax2","mg_restrict1","mg_restrict2","mg_restrict3","mg_prolong0","mg_prolong1","mg_prolong2"};
+    for(uint32_t i=0;i<8;i++) {
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",mg_names[i]);
         if(!fr_renderer_compute_init(g,multigrid[i],buffers,25,16,path,err,cap)) goto fail;
     }
@@ -165,19 +168,19 @@ static void multigrid_dispatch(dc_gpu_t *g,const fr_renderer_compute_t *pipeline
 }
 static void multigrid_smooth(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank,uint32_t level) {
     if(level==0u) {pressure_sweeps(g,t,dt,bank,12u);return;}
-    for(uint32_t i=0;i<4u;i++) multigrid_dispatch(g,&t->mg_relax,dt,bank|((i&1u)!=0u?1u<<24u:0u),level);
+    for(uint32_t i=0;i<4u;i++) multigrid_dispatch(g,&t->mg_relax[level-1u],dt,bank|((i&1u)!=0u?1u<<24u:0u),level);
 }
 static void multigrid_cycle(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank,uint32_t tiles) {
     for(uint32_t level=0u;level<3u;level++) {
         multigrid_smooth(g,t,dt,bank,level);
-        multigrid_dispatch(g,&t->mg_restrict,dt,bank,level+1u);
+        multigrid_dispatch(g,&t->mg_restrict[level],dt,bank,level+1u);
     }
     if(t->coarse_group.pipeline&&tiles<=FR_GAS_COARSE_GROUP_CAPACITY) dispatch(g,&t->coarse_group,1u,1u,dt,bank);
     else for(uint32_t i=0u;i<32u;i++) {
         dispatch(g,&t->coarse_sor,(tiles+63u)/64u,1u,dt,bank);dispatch(g,&t->coarse_sor,(tiles+63u)/64u,1u,dt,bank|2u);
     }
     for(uint32_t reverse=3u;reverse>0u;reverse--) {
-        uint32_t level=reverse-1u;multigrid_dispatch(g,&t->mg_prolong,dt,bank,level);multigrid_smooth(g,t,dt,bank,level);
+        uint32_t level=reverse-1u;multigrid_dispatch(g,&t->mg_prolong[level],dt,bank,level);multigrid_smooth(g,t,dt,bank,level);
     }
 }
 bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint32_t gy,

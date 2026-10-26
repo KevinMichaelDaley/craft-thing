@@ -1,5 +1,3 @@
-#version 460
-#extension GL_GOOGLE_include_directive : require
 #include "multigrid.glsl"
 void main() {
     uint level=mg_level(),at=mg_index();if(at>=mg_count(level)||!mg_valid(level,at)) return;
