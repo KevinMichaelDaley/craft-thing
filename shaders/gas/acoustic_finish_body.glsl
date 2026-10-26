@@ -41,7 +41,7 @@ void main() {
         }
         float dt=uintBitsToFloat(params.seconds),volume=value.geometry.x;
         GasFlux change=gas_empty_flux();uint vertical_walls=0u;
-        if(volume>0.) for(uint d=0u;d<4u;d++) {
+        if(value.geometry.y>0.) for(uint d=0u;d<4u;d++) {
             uint j=0u;if(!gas_neighbor(p,d,j)) {if(d>=2u) vertical_walls++;continue;}
             Primitive other=gas_cached(p+gas_direction(d));
             vec4 neighbor=gas_advected(j)?provisional[j]:vec4(other.hydro.yz*other.metric.z,0.,other.metric.w);

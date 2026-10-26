@@ -12,6 +12,7 @@
 typedef struct {float words[FR_GAS_CELL_WORDS];} gas_packet_t;
 struct fr_gas_gpu {
     fr_renderer_compute_t initialize,prepare,transport,feedback,gate,audit;
+    fr_renderer_compute_t geometry_stage,geometry_transfer,geometry_commit;
     dc_gpu_address_buffer_t state[3],cache[2],parameters,stats,gates,audit_summary;
     fr_gas_model_t model;
     float density,temperature;
@@ -22,6 +23,7 @@ struct fr_gas_gpu {
     uint32_t cached_bank;
     float cached_rate;
     bool cache_valid,direct_publish,initialization_pending;
+    bool geometry_dirty,geometry_dynamic;
     VkFence completion;
     double large_step_hint;
     bool trace;
@@ -71,6 +73,7 @@ static void destroy(dc_gpu_t *g,struct fr_gas_gpu *t) {
     if(!t) return;
     fr_gas_acoustic_destroy(g,&t->acoustic);
     fr_renderer_compute_destroy(g,&t->initialize);fr_renderer_compute_destroy(g,&t->prepare);
+    fr_renderer_compute_destroy(g,&t->geometry_stage);fr_renderer_compute_destroy(g,&t->geometry_transfer);fr_renderer_compute_destroy(g,&t->geometry_commit);
     fr_renderer_compute_destroy(g,&t->transport);fr_renderer_compute_destroy(g,&t->feedback);
     fr_renderer_compute_destroy(g,&t->gate);dc_gpu_address_buffer_destroy(g,&t->gates);
     fr_renderer_compute_destroy(g,&t->audit);dc_gpu_address_buffer_destroy(g,&t->audit_summary);
@@ -93,9 +96,8 @@ bool fr_gas_submit(dc_gpu_t *g) {
     return queued==VK_SUCCESS&&completed==VK_SUCCESS;
 }
 void fr_gas_gpu_invalidate_cache(dc_gpu_t *g) {if(g&&g->gas) {g->gas->cache_valid=false;g->gas->acoustic.matrix_valid=false;}}
-void fr_gas_gpu_geometry_changed(dc_gpu_t *g,bool dynamic) {(void)g;(void)dynamic;}
-bool fr_gas_gpu_refresh_geometry(dc_gpu_t *g,char *err,uint32_t cap) {
-    (void)g;return error(err,cap,"Gas geometry refresh not implemented");
+void fr_gas_gpu_geometry_changed(dc_gpu_t *g,bool dynamic) {
+    if(g&&g->gas) {g->gas->geometry_dirty=true;g->gas->geometry_dynamic|=dynamic;}
 }
 static void barrier(dc_gpu_t *g) {
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_TRANSFER_BIT,
@@ -120,11 +122,23 @@ static bool submit(dc_gpu_t *g,char *err,uint32_t cap) {
 static void bind_canonical(dc_gpu_t *g,struct fr_gas_gpu *t) {
     uint32_t at=t->direct_publish?1u:0u;
     VkDescriptorBufferInfo buffer={t->state[at].buffer,0,t->state[at].bytes};
-    const VkDescriptorSet sets[]={t->initialize.descriptor,t->feedback.descriptor,t->audit.descriptor};
-    VkWriteDescriptorSet writes[3];
-    for(uint32_t i=0;i<3;i++) writes[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+    const VkDescriptorSet sets[]={t->initialize.descriptor,t->feedback.descriptor,t->audit.descriptor,
+        t->geometry_stage.descriptor,t->geometry_transfer.descriptor,t->geometry_commit.descriptor};
+    VkWriteDescriptorSet writes[6];
+    for(uint32_t i=0;i<6;i++) writes[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet=sets[i],.dstBinding=0,.descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&buffer};
-    vkUpdateDescriptorSets(g->device,3,writes,0,NULL);
+    vkUpdateDescriptorSets(g->device,6,writes,0,NULL);
+}
+bool fr_gas_gpu_refresh_geometry(dc_gpu_t *g,char *err,uint32_t cap) {
+    if(!g||!g->gas) return true;
+    struct fr_gas_gpu *t=g->gas;if(!t->geometry_dirty&&!t->geometry_dynamic) return true;
+    if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas geometry refresh");
+    ((uint32_t *)t->stats.mapped)[FR_GAS_ROW_NORM_BEFORE_WORD]=0u;
+    uint32_t bank=t->cache_valid?t->cached_bank:0u;
+    dispatch(g,t,&t->geometry_stage,0,bank);dispatch(g,t,&t->geometry_transfer,0,bank);dispatch(g,t,&t->geometry_commit,0,bank);
+    if(!submit(g,err,cap)) return false;
+    if(((uint32_t *)t->stats.mapped)[FR_GAS_ROW_NORM_BEFORE_WORD]!=0u) {fr_gas_gpu_invalidate_cache(g);t->large_step_hint=0;}
+    t->geometry_dirty=false;return true;
 }
 static bool set_direct_publish(dc_gpu_t *g,struct fr_gas_gpu *t,bool direct,char *err,uint32_t cap) {
     if(t->direct_publish==direct) return true;
@@ -189,6 +203,12 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
         fr_renderer_compute_init(g,&t->gate,buffers,12,32,"build/shaders/gas_gate.comp.spv",err,cap)&&
         fr_gas_feedback_init(g,&t->feedback,buffers[0],buffers[5],buffers[11],err,cap);
     if(!okay) return false;
+    fr_renderer_compute_t *geometry[]={&t->geometry_stage,&t->geometry_transfer,&t->geometry_commit};
+    const char *names[]={"stage","transfer","commit"};
+    for(uint32_t i=0;i<3;i++) {
+        char path[96];snprintf(path,sizeof(path),"build/shaders/gas_geometry_%s.comp.spv",names[i]);
+        if(!fr_renderer_compute_init(g,geometry[i],buffers,12,16,path,err,cap)) return false;
+    }
     buffers[6]=(VkDescriptorBufferInfo){t->audit_summary.buffer,0,t->audit_summary.bytes};
     return fr_renderer_compute_init(g,&t->audit,buffers,12,16,"build/shaders/gas_audit.comp.spv",err,cap);
 }
@@ -218,6 +238,8 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(seconds==0) return true;
     struct fr_gas_gpu *t=g->gas;t->trace=getenv("DC_GAS_TRACE")!=NULL;clear_stats(t);
     uint64_t start_submits=t->trace_submits,start_queue=t->trace_queue_ticks,start_wait=t->trace_wait_ticks;
+    if(g->fluid_work_possible||g->body_count>0u) g->gas->geometry_dynamic=true;
+    if(!fr_gas_gpu_refresh_geometry(g,err,cap)) return false;
     bool cached=t->cache_valid;t->cache_valid=false;
     uint32_t bank=cached?t->cached_bank:0;float speed=t->cached_rate;
     VkBufferCopy copy={.size=t->state[0].bytes};

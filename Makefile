@@ -1766,6 +1766,7 @@ build/thermal_precision_tests: tests/fire/thermal_precision_tests.c $(REACTIVE_S
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(REACTIVE_STATE_SRC) -o $@ -lm
 build/gas_transport_tests build/gas_implicit_tests build/gas_display_tests: include/ferrum/fire/gas_constants.h
 build/gas_display_tests: tests/vulkan/gas_practical_cases.h
+build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_geometry_cases.h
 build/gas_reference_tests: tests/fire/gas_reference_tests.c src/fire/gas.c src/fire/gas_reference.c src/fire/gas_internal.h include/ferrum/fire/gas.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c src/fire/gas_reference.c -o $@ -lm
 build/gas_implicit_tests: tests/fire/gas_implicit_tests.c src/fire/gas.c src/fire/gas_implicit_reference.c src/fire/gas_transport_reference.c src/fire/gas_internal.h include/ferrum/fire/gas.h
@@ -1820,6 +1821,7 @@ GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_explicit tran
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid transport_hybrid_wide)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid_x transport_hybrid_y transport_hybrid_x_wide transport_hybrid_y_wide)
 GAS_SHADERS += build/shaders/gas_activity_cached.comp.spv
+GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_transfer geometry_commit)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_metadata_lean pressure_rhs_lean)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_factor_compact_large transport_prefix_compact_large transport_axis_compact_large transport_explicit_large transport_hybrid_large transport_hybrid_x_large transport_hybrid_y_large)
 build/shaders/gas_audit.comp.spv: include/dungeoncraft/gas_audit_layout.h

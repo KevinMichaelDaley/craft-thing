@@ -1,0 +1,29 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "geometry_common.glsl"
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);if(atlas==0xffffffffu) return;
+    Gas original=world[atlas],value=original;float available=geometry_metadata(index).x;
+    bool changed=available!=original.geometry.y;
+    if(available<=0.) {
+        float mass=gas_mass(original),route=mass>0.?geometry_route(p):0.;
+        if(mass>0.&&route>0.) {value=gas_empty();changed=true;}
+        else if(mass==0.) value.geometry.x=0.;
+        value.geometry.y=0.;
+    } else {
+        value.geometry.xy=vec2(available);
+        for(uint d=0u;d<4u;d++) {
+            ivec2 q=p+geometry_direction(d);uint other=gas_atlas(q);
+            if(other==0xffffffffu||!geometry_open(p,d)||geometry_available(q)>0.) continue;
+            Gas donor=world[other];if(gas_mass(donor)<=0.) continue;
+            float route=geometry_route(q);if(route<=0.) continue;
+            float fraction=available/route;
+            GasFlux incoming=GasFlux(donor.species*fraction,vec4(donor.dynamics.x,gas_energy(donor),donor.dynamics.zw)*fraction,donor.visual.rgb*fraction);
+            value=gas_add_flux(value,incoming,1.);value.geometry.w+=donor.geometry.w*fraction;changed=true;
+        }
+    }
+    if(changed) bank1[atlas]=value;
+    geometry_mark(index,changed);
+    uint any_changed=subgroupMax(changed?1u:0u);if(subgroupElect()&&any_changed!=0u) atomicOr(stats[FR_GAS_ROW_NORM_BEFORE_WORD],1u);
+}

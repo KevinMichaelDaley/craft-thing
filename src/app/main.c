@@ -1456,6 +1456,11 @@ int main(int argc, char **argv) {
             for(uint32_t valve=0;running&&valve<3;valve++) if(!dc_level_view_smoke_valve(view,valve,err,sizeof(err))) {failed=true;running=false;}
             if(running) printf("Finite benchmark smoke valves opened at frame%u\n",scripted_frame);
         }
+        if(running&&smoke_box&&benchmark_frames&&scripted_frame==DC_BENCHMARK_WARMUP_FRAMES&&
+            getenv("DC_BENCHMARK_SMOKE_CARVE")&&strcmp(getenv("DC_BENCHMARK_SMOKE_CARVE"),"1")==0) {
+            if(!dc_level_view_paint(view,328,49,4,DC_MATERIAL_AIR,err,sizeof(err))) {failed=true;running=false;}
+            else printf("Finite benchmark smoke roof carved at frame%u\n",scripted_frame);
+        }
         if (running && !dc_level_view_tick(view, err, sizeof(err))) {
             failed = true; running = false;
         }

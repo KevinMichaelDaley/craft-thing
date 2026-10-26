@@ -1,0 +1,9 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "geometry_common.glsl"
+void main() {
+    if(stats[FR_GAS_ROW_NORM_BEFORE_WORD]==0u) return;
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    float changed=(params.bank&1u)==0u?cache1[index].metric.w:cache0[index].metric.w;if(changed==0.) return;
+    uint atlas=gas_atlas(ivec2(int(index%params.width),int(index/params.width)));if(atlas!=0xffffffffu) world[atlas]=bank1[atlas];
+}

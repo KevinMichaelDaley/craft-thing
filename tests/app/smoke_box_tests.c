@@ -129,10 +129,34 @@ static void test_native_incomplete_smoke_admission_fails_without_overwriting_sav
     view=dc_level_view_create_smoke_box(directory,314,err,sizeof(err));ASSERT_TRUE(!view);
     ASSERT_EQ(smoke_file_hash(chunk_path),chunk_hash);ASSERT_EQ(smoke_file_hash(body_path),body_hash);PASS();
 }
+static void test_native_air_brush_opens_a_real_roof_vent_for_rising_smoke(void) {
+    char err[256]={0},directory[]="build/smoke_box_carved_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view=dc_level_view_create_smoke_box(directory,314,err,sizeof(err));ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_smoke_valve(view,0,err,sizeof(err))&&dc_level_view_smoke_valve(view,1,err,sizeof(err)));
+    for(uint32_t i=0;i<120u;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view,328,49,4,DC_MATERIAL_AIR,err,sizeof(err)));
+    uint32_t slot;fr_gas_checkpoint_chunk_t *snapshot=malloc(sizeof(*snapshot));ASSERT_TRUE(snapshot);
+    ASSERT_TRUE(dc_chunk_table_find(&view->table,(dc_chunk_coord_t){5,-2},&slot)&&fr_gas_gpu_export_checkpoint(view->gpu,slot,snapshot,err,sizeof(err)));
+    ASSERT_EQ(snapshot->cells[49u*64u+8u][13],1.f);ASSERT_EQ(snapshot->cells[49u*64u+8u][0],0.f);
+    for(uint32_t i=0;i<60u;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
+    double escaped=0.;
+    for(int64_t x=4;x<=5;x++) {
+        ASSERT_TRUE(dc_chunk_table_find(&view->table,(dc_chunk_coord_t){x,-2},&slot)&&fr_gas_gpu_export_checkpoint(view->gpu,slot,snapshot,err,sizeof(err)));
+        for(uint32_t row=24;row<47u;row++) for(uint32_t column=0;column<64u;column++) {
+            int64_t world_x=x*64+column;if(world_x>=312&&world_x<344) escaped+=snapshot->cells[row*64u+column][2];
+        }
+    }
+    printf("Air-brush roof vent escaped exhaust%.9g\n",escaped);ASSERT_TRUE(escaped>1e-9);
+    uint32_t *pixels=malloc(480u*270u*4u);ASSERT_TRUE(pixels&&dc_level_view_pixels(view,pixels,480u*270u,err,sizeof(err)));
+    SDL_Surface *image=SDL_CreateRGBSurfaceWithFormatFrom(pixels,480,270,32,480*4,SDL_PIXELFORMAT_ABGR8888);ASSERT_TRUE(image);
+    ASSERT_EQ(SDL_SaveBMP(image,"build/screenshots/smoke_box_carved_vent.bmp"),0);SDL_FreeSurface(image);free(pixels);free(snapshot);
+    ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));PASS();
+}
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);RUN(test_native_placement_box_has_finite_sources_real_controls_rising_smoke_and_stable_pause);
     RUN(test_native_saved_smoke_box_restores_stock_and_valves_without_refilling);
     RUN(test_native_incomplete_smoke_admission_fails_without_overwriting_saved_world);
     RUN(test_native_smoke_streaming_restores_sleeping_stock_and_initializes_new_slots);
+    RUN(test_native_air_brush_opens_a_real_roof_vent_for_rising_smoke);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

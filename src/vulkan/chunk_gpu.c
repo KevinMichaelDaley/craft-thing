@@ -236,6 +236,7 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
         particle_count += chunk->particles[i].mass_fp != 0u;
     if (particle_count != chunk->particle_count)
         return error(err, cap, "Chunk particle count does not match active records");
+    fr_gas_gpu_geometry_changed(gpu,particle_count!=0u);
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
         uint32_t material = chunk->cells[i].material;
         if (seed && (material == DC_MATERIAL_SAND || material == DC_MATERIAL_DIRT ||

@@ -1,0 +1,9 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "geometry_common.glsl"
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    uint atlas=gas_atlas(ivec2(int(index%params.width),int(index/params.width)));if(atlas==0xffffffffu) return;
+    Primitive value=Primitive(vec4(geometry_void(index,atlas),0,0,0),vec4(0));
+    if((params.bank&1u)==0u) cache1[index]=value;else cache0[index]=value;
+}

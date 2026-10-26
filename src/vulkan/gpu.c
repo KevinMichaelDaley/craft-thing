@@ -448,6 +448,11 @@ bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
         if (material == DC_MATERIAL_WATER) gpu->fluid_work_possible=true;
         if((state[DC_STRUCTURAL_BRUSH_RESULT_WORD]&2u)!=0u) state[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]=1u;
     }
+    if(okay&&gpu->gas) {
+        fr_gas_gpu_geometry_changed(gpu,gpu->fluid_work_possible||gpu->body_refresh_pending||
+            (material!=DC_MATERIAL_AIR&&material!=DC_MATERIAL_STONE));
+        okay=fr_gas_gpu_refresh_geometry(gpu,err,cap);
+    }
     return okay;
 }
 

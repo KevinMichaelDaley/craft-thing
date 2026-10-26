@@ -10,17 +10,18 @@ fi
 tools/with-vulkan make -j8 build/dungeoncraft_quarter_native
 root=$(mktemp -d build/smoke_box_measurements_XXXXXX)
 failed=0
-for scenario in closed open; do
+for scenario in closed open carved; do
     for repetition in 1 2; do
         world="$root/${scenario}_${repetition}"
         mkdir "$world"
         log="$root/${scenario}_${repetition}.log"
-        opened=0
-        if [[ $scenario == open ]]; then opened=1; fi
+        opened=0;carved=0
+        if [[ $scenario != closed ]]; then opened=1; fi
+        if [[ $scenario == carved ]]; then carved=1; fi
         result=0
         env -u DC_BENCHMARK_AIR_BRUSH -u DC_BENCHMARK_WATER_POUR -u DC_FRAME_TIMINGS \
             SDL_VIDEODRIVER=wayland DC_VK_VALIDATE=0 VK_INSTANCE_LAYERS= VK_LAYER_ENABLES= \
-            DC_BENCHMARK_SMOKE_OPEN="$opened" tools/with-vulkan ./build/dungeoncraft_quarter_native \
+            DC_BENCHMARK_SMOKE_OPEN="$opened" DC_BENCHMARK_SMOKE_CARVE="$carved" tools/with-vulkan ./build/dungeoncraft_quarter_native \
             --smoke-box --world-dir "$world" --benchmark-frames "$frames" \
             --benchmark-gas-audit \
             --benchmark-capture "$root/${scenario}_${repetition}.bmp" > "$log" 2>&1 || result=$?

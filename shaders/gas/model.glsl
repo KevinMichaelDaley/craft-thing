@@ -40,11 +40,11 @@ Primitive gas_primitive(Gas s,out bool okay) {
         float enthalpy=(gas_energy(s)+gas_parameter(FR_GAS_KINETIC_WORD)*pressure*volume)/mass;
         float pressure_capacity=moles>0.?gas_parameter(FR_GAS_KINETIC_WORD)*volume*capacity/moles:0.;
         okay=okay&&gas_finite(enthalpy)&&gas_finite(pressure_capacity);
-        return Primitive(vec4(mass/volume,s.dynamics.zw/mass,pressure),vec4(enthalpy,pressure_capacity,mass,volume));
+        return Primitive(vec4(mass/volume,s.dynamics.zw/mass,pressure),vec4(enthalpy,pressure_capacity,mass,s.geometry.y));
     }
     float sound=sqrt((1.+moles/capacity)*pressure*volume/mass);
     okay=okay&&temperature>0.&&gas_finite(temperature)&&gas_finite(pressure)&&gas_finite(sound);
-    return Primitive(vec4(mass/volume,s.dynamics.zw/mass,pressure),vec4(sound,temperature,mass,volume));
+    return Primitive(vec4(mass/volume,s.dynamics.zw/mass,pressure),vec4(sound,temperature,mass,s.geometry.y));
 }
 vec2 gas_two_sum(float a,float b) {
     precise float sum=a+b;
