@@ -38,7 +38,7 @@
 #define FR_GAS_COARSE_GROUP_CAPACITY 8192u
 /* Fast-path workspace and stage budget; longer/stiffer lines stay implicit. */
 #define FR_GAS_EXPLICIT_LINE_CAPACITY 640u
-#define FR_GAS_EXPLICIT_MAX_STAGES 3u
+#define FR_GAS_EXPLICIT_MAX_STAGES 4u
 #define FR_GAS_EXPLICIT_LINE_COUNT_WORD 9u
 #define FR_GAS_EXPLICIT_STAGE_COUNT_WORD 10u
 #define FR_GAS_IMPLICIT_LINE_COUNT_WORD 12u
