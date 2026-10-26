@@ -18,6 +18,7 @@ INTERVAL = re.compile(r"Gas interval dt([\deE.+-]+) accepted(\d+) retries(\d+) s
 WAITS = re.compile(r"Present waits acquire([\d.]+) fence([\d.]+)")
 MEMORY = re.compile(r"app-memory,\d+,rss_kb(\d+),minflt(\d+),majflt(\d+)")
 INPUT = re.compile(r"app-input,\d+,events(\d+),wall([\d.]+),cpu([\d.]+)")
+SETUP = re.compile(r"Present setup tick([\d.]+) service([\d.]+) pump([\d.]+)")
 
 
 def counters():
@@ -27,7 +28,8 @@ def counters():
                 solve_tiles_peak=0, advection_tiles_peak=0,
                 residual_peak=0.0, pressure_batches_peak=0,
                 rss_kb=0, minor_faults=0, major_faults=0,
-                input_events=0, input_cpu_ms=0.0, input_wait_ms=0.0)
+                input_events=0, input_cpu_ms=0.0, input_wait_ms=0.0,
+                present_tick_ms=0.0, body_service_ms=0.0, event_pump_ms=0.0)
 
 
 def frames(lines):
@@ -37,6 +39,11 @@ def frames(lines):
     extra = counters()
     intervals = 0
     for line in lines:
+        match = SETUP.search(line)
+        if match:
+            extra["present_tick_ms"] += float(match[1])
+            extra["body_service_ms"] += float(match[2])
+            extra["event_pump_ms"] += float(match[3])
         match = INPUT.search(line)
         if match:
             extra["input_events"] += int(match[1])
