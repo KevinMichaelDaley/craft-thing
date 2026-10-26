@@ -59,13 +59,6 @@ Gas gas_add_flux(Gas s,GasFlux flux,float dt) {
     result.dynamics.zw+=flux.dynamics.zw*dt;
     result.visual.rgb+=flux.pigment*dt;
 #ifdef FR_GAS_FORCE_IMPLICIT
-    if(gas_practical_policy()&&(params.bank&FR_GAS_SCALAR_ENERGY_BIT)!=0u) {
-        if(flux.dynamics.y!=0.) {
-            result.dynamics.y=gas_energy(s)+flux.dynamics.y*dt;
-            result.visual.w=0.;result.geometry.z=0.;
-        }
-        return result;
-    }
     /* A zero exchange retains the existing compensated energy expansion. */
     if((params.bank&FR_GAS_ZERO_ENERGY_BIT)!=0u&&flux.dynamics.y==0.) return result;
 #endif
