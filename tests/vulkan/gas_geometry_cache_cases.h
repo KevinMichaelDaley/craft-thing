@@ -31,6 +31,37 @@ static void test_native_fused_geometry_keeps_edited_stock_and_removes_completion
     for(uint32_t k=0;k<3u;k++) {SDL_setenv(names[k],saved[k]?saved[k]:"0",1);SDL_free(saved[k]);}
     free(chunk);free(input);free(volume);free(reference);free(out);free(quiet);free(check);PASS();
 }
+static void test_native_fused_physics_tick_keeps_packets_clock_and_removes_completion_wait(void) {
+    char err[256]={0};const char *names[]={"DC_GAS_FUSED_TICK","DC_GAS_LOCAL_GEOMETRY","DC_GAS_ROTATE_PUBLISH","DC_GAS_FUSED_GEOMETRY"};char *saved[4];
+    for(uint32_t k=0;k<4u;k++) {const char *p=getenv(names[k]);saved[k]=p?SDL_strdup(p):NULL;SDL_setenv(names[k],"1",1);}
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));fr_gas_state_t *input=malloc(4096*sizeof(*input));double *volume=malloc(4096*sizeof(*volume));
+    fr_gas_checkpoint_chunk_t *reference=malloc(sizeof(*reference)),*out=malloc(sizeof(*out)),*quiet=malloc(sizeof(*quiet)),*check=malloc(sizeof(*check));
+    ASSERT_TRUE(chunk&&input&&volume&&reference&&out&&quiet&&check);fr_gas_model_t model=reference_model();model.kinetic_scale=1./512.;
+    uint32_t submissions[2]={0};
+    for(uint32_t path=0;path<2u;path++) {
+        SDL_setenv(names[0],path?"1":"0",1);dc_gpu_t *g=NULL;memset(chunk,0,sizeof(*chunk));
+        for(uint32_t i=0;i<4096u;i++) {input[i]=reference_air(model,.0012,300,60);volume[i]=1.;}
+        ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+        ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
+        chunk->coord.x=8;ASSERT_TRUE(dc_gpu_upload_chunk(g,1,chunk,err,sizeof(err))&&dc_gpu_set_page(g,8,0,1,err,sizeof(err)));
+        for(uint32_t i=0;i<4096u;i++) input[i]=reference_air(model,.0012,300,.001);
+        ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,1,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_export_checkpoint(g,1,quiet,err,sizeof(err)));
+        chunk->coord.x=0;ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err))&&dc_gpu_set_tick_seconds(g,.02f));
+        for(uint32_t step=0;step<8u;step++) {
+            chunk->cells[32u*64u+32u]=(dc_cell_t){.material=(step&1u)?DC_MATERIAL_AIR:DC_MATERIAL_STONE,.flags=(step&1u)?0u:DC_CELL_LOADED_TERRAIN};
+            ASSERT_TRUE(dc_gpu_upload_chunk_exact(g,0,chunk,false,err,sizeof(err)));
+            g_publication_submits=0;ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));submissions[path]+=g_publication_submits;
+        }
+        ASSERT_TRUE(fr_gas_gpu_export_checkpoint(g,0,path?out:reference,err,sizeof(err))&&fr_gas_gpu_export_checkpoint(g,1,check,err,sizeof(err)));
+        ASSERT_EQ(memcmp(quiet->cells,check->cells,sizeof(quiet->cells)),0);ASSERT_EQ(check->clock.physical_steps,9u);
+        ASSERT_TRUE(present(g,err,sizeof(err)));dc_gpu_destroy(g);
+    }
+    printf("Fused tick submissions%u/%u exact packet%s\n",submissions[1],submissions[0],memcmp(reference->cells,out->cells,sizeof(out->cells))==0?" yes":" no");
+    ASSERT_EQ(memcmp(reference->cells,out->cells,sizeof(out->cells)),0);ASSERT_EQ(memcmp(&reference->clock,&out->clock,sizeof(out->clock)),0);
+    ASSERT_TRUE(submissions[1]==8u&&submissions[0]==16u);
+    for(uint32_t k=0;k<4u;k++) {SDL_setenv(names[k],saved[k]?saved[k]:"0",1);SDL_free(saved[k]);}
+    free(chunk);free(input);free(volume);free(reference);free(out);free(quiet);free(check);PASS();
+}
 static void test_native_local_geometry_repairs_keep_quiet_owners_and_avoid_full_cache_rebuilds(void) {
     char err[256]={0};const char *names[]={"DC_GAS_LOCAL_GEOMETRY","DC_GAS_ROTATE_PUBLISH"};char *saved[2];
     for(uint32_t i=0;i<2u;i++) {const char *v=getenv(names[i]);saved[i]=v?SDL_strdup(v):NULL;}
