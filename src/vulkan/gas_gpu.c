@@ -322,6 +322,12 @@ bool fr_gas_gpu_clock(const dc_gpu_t *g,fr_gas_gpu_clock_t *out) {
     if(!g||!g->gas||!out) return false;
     *out=g->gas->clock;return true;
 }
+bool fr_gas_gpu_export_checkpoint(dc_gpu_t *g,uint32_t slot,fr_gas_checkpoint_chunk_t *out,char *err,uint32_t cap) {
+    (void)g;(void)slot;(void)out;return error(err,cap,"Checkpoint export not implemented");
+}
+bool fr_gas_gpu_import_checkpoint(dc_gpu_t *g,uint32_t slot,const fr_gas_checkpoint_chunk_t *input,char *err,uint32_t cap) {
+    (void)g;(void)slot;(void)input;return error(err,cap,"Checkpoint import not implemented");
+}
 bool fr_gas_gpu_audit(dc_gpu_t *g,fr_gas_gpu_audit_t *out,char *err,uint32_t cap) {
     if(!g||!g->gas||!out) return error(err,cap,"Invalid cold gas audit");
     struct fr_gas_gpu *t=g->gas;

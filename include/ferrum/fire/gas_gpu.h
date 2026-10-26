@@ -3,6 +3,7 @@
 #include "dungeoncraft/gpu.h"
 #include "dungeoncraft/gas_audit_layout.h"
 #include "ferrum/fire/gas.h"
+#include "ferrum/fire/gas_checkpoint.h"
 
 typedef struct {uint64_t physical_steps,substeps;double advanced_seconds;} fr_gas_gpu_clock_t;
 typedef struct {float metrics[FR_GAS_AUDIT_WORDS];} fr_gas_gpu_audit_t;
@@ -39,4 +40,10 @@ bool fr_gas_gpu_read_chunk(dc_gpu_t *gpu,uint32_t slot,fr_gas_state_t *states,
     uint32_t capacity,char *err_buf,uint32_t err_cap);
 /** Read accepted clock counters without reading simulation cells. */
 bool fr_gas_gpu_clock(const dc_gpu_t *gpu,fr_gas_gpu_clock_t *out);
+/** Cold completed-queue export; never part of the simulation loop. */
+bool fr_gas_gpu_export_checkpoint(dc_gpu_t *gpu,uint32_t slot,
+    fr_gas_checkpoint_chunk_t *out,char *err_buf,uint32_t err_cap);
+/** Validate the complete immutable checkpoint before publishing any stock. */
+bool fr_gas_gpu_import_checkpoint(dc_gpu_t *gpu,uint32_t slot,
+    const fr_gas_checkpoint_chunk_t *input,char *err_buf,uint32_t err_cap);
 #endif
