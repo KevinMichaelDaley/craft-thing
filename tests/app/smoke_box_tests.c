@@ -85,6 +85,31 @@ static uint64_t smoke_file_hash(const char *path) {
     while((count=fread(bytes,1,sizeof(bytes),file))!=0u) hash=dc_color_hash(hash,bytes,count);
     bool okay=!ferror(file)&&fclose(file)==0;return okay?hash:0;
 }
+static void test_native_smoke_streaming_restores_sleeping_stock_and_initializes_new_slots(void) {
+    char err[256]={0},directory[]="build/smoke_box_stream_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view=dc_level_view_create_smoke_box(directory,314,err,sizeof(err));ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_smoke_valve(view,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
+    fr_gas_checkpoint_chunk_t *before=malloc(sizeof(*before)),*out=malloc(sizeof(*out));ASSERT_TRUE(before&&out);
+    uint32_t slot;ASSERT_TRUE(dc_chunk_table_find(&view->table,(dc_chunk_coord_t){1,0},&slot));
+    ASSERT_TRUE(fr_gas_gpu_export_checkpoint(view->gpu,slot,before,err,sizeof(err)));
+    for(uint32_t i=0;i<20u;i++) ASSERT_TRUE(dc_level_view_move(view,1,0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view,120000,err,sizeof(err)));
+    ASSERT_TRUE(!dc_chunk_table_find(&view->table,(dc_chunk_coord_t){1,0},&slot));
+    double ambient_mass=0.;
+    for(uint32_t i=0;i<view->table.capacity;i++) {
+        ASSERT_TRUE(fr_gas_gpu_export_checkpoint(view->gpu,i,out,err,sizeof(err)));
+        for(uint32_t cell=0;cell<4096u;cell++) {
+            ASSERT_EQ(out->cells[cell][2],0.f);ASSERT_EQ(out->cells[cell][8],0.f);ASSERT_EQ(out->cells[cell][10],0.f);ASSERT_EQ(out->gates[cell],0u);
+            ambient_mass+=out->cells[cell][0]+out->cells[cell][1];
+        }
+    }
+    ASSERT_TRUE(ambient_mass>10.);
+    for(uint32_t i=0;i<20u;i++) ASSERT_TRUE(dc_level_view_move(view,-1,0));
+    ASSERT_TRUE(dc_level_view_wait_visible(view,120000,err,sizeof(err))&&dc_chunk_table_find(&view->table,(dc_chunk_coord_t){1,0},&slot));
+    ASSERT_TRUE(fr_gas_gpu_export_checkpoint(view->gpu,slot,out,err,sizeof(err)));ASSERT_EQ(memcmp(before,out,sizeof(*before)),0);
+    ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));free(before);free(out);PASS();
+}
 static void test_native_incomplete_smoke_admission_fails_without_overwriting_saved_world(void) {
     char err[256]={0},directory[]="build/smoke_box_missing_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t *view=dc_level_view_create_smoke_box(directory,314,err,sizeof(err));ASSERT_TRUE(view);
@@ -108,5 +133,6 @@ int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);RUN(test_native_placement_box_has_finite_sources_real_controls_rising_smoke_and_stable_pause);
     RUN(test_native_saved_smoke_box_restores_stock_and_valves_without_refilling);
     RUN(test_native_incomplete_smoke_admission_fails_without_overwriting_saved_world);
+    RUN(test_native_smoke_streaming_restores_sleeping_stock_and_initializes_new_slots);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
