@@ -17,6 +17,10 @@ typedef struct {
     fr_renderer_compute_t practical_explicit;
     fr_renderer_compute_t practical_hybrid;
     fr_renderer_compute_t practical_hybrid_axis[2];
+    fr_renderer_compute_t practical_tiled[2];
+    float axis_rate[2];
+    VkBuffer spare_state;
+    bool direct_publication;
     uint32_t hybrid_line_group;
     fr_renderer_compute_t temporal_sor;
     fr_renderer_compute_t coarse_group;

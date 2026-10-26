@@ -35,6 +35,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->practical_explicit);
     fr_renderer_compute_destroy(g,&t->practical_hybrid);
     for(uint32_t i=0;i<2;i++) fr_renderer_compute_destroy(g,&t->practical_hybrid_axis[i]);
+    for(uint32_t i=0;i<2;i++) fr_renderer_compute_destroy(g,&t->practical_tiled[i]);
     fr_renderer_compute_destroy(g,&t->temporal_sor);
     fr_renderer_compute_destroy(g,&t->coarse_group);
     fr_renderer_compute_destroy(g,&t->rhs_fused);
@@ -58,6 +59,7 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     bool device_work=device_option&&strcmp(device_option,"0")!=0;
     VkDescriptorBufferInfo buffers[25];memcpy(buffers,source,12*sizeof(*source));
     t->state_bank[0]=source[1].buffer;t->state_bank[1]=source[2].buffer;t->state_bytes=source[1].range;
+    t->spare_state=source[0].buffer;
     VkDeviceSize bytes=(VkDeviceSize)g->width*g->height*16u;
     VkDeviceSize tiles=(VkDeviceSize)((g->width+7u)/8u)*((g->height+7u)/8u);
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(g->physical,&properties);
@@ -101,6 +103,10 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         if(!fr_renderer_compute_init(g,pipelines[i],buffers,25,16,path,err,cap)) goto fail;
     }
     if(!fr_renderer_compute_init(g,&t->activity_cached,buffers,25,16,"build/shaders/gas_activity_cached.comp.spv",err,cap)) goto fail;
+    for(uint32_t axis=0;axis<2;axis++) {
+        char path[128];snprintf(path,sizeof(path),"build/shaders/gas_transport_tiled_%c.comp.spv",axis?'y':'x');
+        if(!fr_renderer_compute_init(g,&t->practical_tiled[axis],buffers,25,16,path,err,cap)) goto fail;
+    }
     fr_renderer_compute_t *coarse_pipelines[]={&t->restrict_pressure,&t->coarse_sor,&t->prolong_pressure};
     const char *coarse_paths[]={"pressure_restrict","pressure_coarse_sor","pressure_prolong"};
     for(uint32_t i=0;i<3;i++) {
@@ -334,6 +340,18 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,4);
         for(uint32_t axis=0;axis<2;axis++) {
             uint32_t flags=bank|(axis<<3u)|(direct_first?FR_GAS_DIRECT_FIRST_AXIS_BIT:0u),lines=axis==0?g->height:g->width;
+            const char *tiled_option=getenv("DC_GAS_TILED_TRANSPORT");
+            float stages_float=ceilf(dt*fmaxf(t->axis_rate[axis],FR_GAS_PRACTICAL_MIXING_RATE)/.875f);
+            if(t->practical&&t->direct_publication&&bank%2u==0u&&tiled_option&&strcmp(tiled_option,"0")!=0&&
+               (bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u&&t->axis_rate[axis]>0.f&&stages_float>=1.f&&stages_float<=8.f) {
+                uint32_t stages=(uint32_t)stages_float;
+                uint32_t tile_x=axis==0u?64u:2u,tile_y=axis==0u?2u:64u;
+                dispatch(g,&t->practical_tiled[axis],(g->width+tile_x-1u)/tile_x,(g->height+tile_y-1u)/tile_y,dt,flags|(stages<<20u));
+                if(axis!=0u) {barrier(g);vkCmdCopyBuffer(g->command,t->spare_state,t->state_bank[1],1,&copy);}
+                if(trace) for(uint32_t stamp=5u;stamp<=8u;stamp++)
+                    vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,stamp+axis*4u);
+                continue;
+            }
             if(getenv("DC_GAS_STAGED_RATES")) {
                 flags|=FR_GAS_STAGED_RATES_BIT;
                 dispatch(g,&t->stage_transport,gx,gy,dt,flags);

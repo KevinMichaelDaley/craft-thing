@@ -10,8 +10,8 @@ static void test_native_tiled_transport_keeps_stock_clock_and_reference_packet(v
         fr_gas_state_t *s=input+y*64+x;s->species[1]-=.00001;s->species[2]=.00001;
         s->energy+=.00001*(model.heat_capacity_cv[2]-model.heat_capacity_cv[1])*300;s->pigment[0]=.000007;
     }
-    const char *names[]={"DC_GAS_TILED_TRANSPORT","DC_GAS_ROTATE_PUBLISH","DC_GAS_DIRECT_FIRST_AXIS"};char *saved[3];
-    for(uint32_t i=0;i<3;i++) {const char *p=getenv(names[i]);saved[i]=p?SDL_strdup(p):NULL;ASSERT_EQ(SDL_setenv(names[i],"1",1),0);}
+    const char *names[]={"DC_GAS_TILED_TRANSPORT","DC_GAS_ROTATE_PUBLISH","DC_GAS_DIRECT_FIRST_AXIS","DC_GAS_HYBRID_LINES","DC_GAS_FUSED_HYBRID","DC_GAS_FUSED_AXIS"};char *saved[6];
+    for(uint32_t i=0;i<6;i++) {const char *p=getenv(names[i]);saved[i]=p?SDL_strdup(p):NULL;ASSERT_EQ(SDL_setenv(names[i],"1",1),0);}
     uint32_t metadata[2]={0};
     for(uint32_t path=0;path<2;path++) {
         ASSERT_EQ(SDL_setenv(names[0],path?"1":"0",1),0);dc_gpu_t *gpu=NULL;
@@ -31,7 +31,7 @@ static void test_native_tiled_transport_keeps_stock_clock_and_reference_packet(v
     ASSERT_TRUE(metadata[0]==0u&&(metadata[1]&4u)!=0u&&((metadata[1]>>8u)&15u)==2u);
     ASSERT_TRUE(error/mass<1e-5&&color_error/pigment<1e-4);
     for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(stock[0][k]-stock[1][k])<fmax(1e-10,stock[0][k]*1e-5));
-    for(uint32_t i=0;i<3;i++) {ASSERT_EQ(SDL_setenv(names[i],saved[i]?saved[i]:"0",1),0);SDL_free(saved[i]);}
+    for(uint32_t i=0;i<6;i++) {ASSERT_EQ(SDL_setenv(names[i],saved[i]?saved[i]:"0",1),0);SDL_free(saved[i]);}
     free(chunk);free(input);free(reference);free(actual);free(volume);PASS();
 }
 #endif
