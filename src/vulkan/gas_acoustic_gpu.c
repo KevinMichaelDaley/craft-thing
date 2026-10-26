@@ -34,6 +34,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->practical_explicit);
     fr_renderer_compute_destroy(g,&t->temporal_sor);
     fr_renderer_compute_destroy(g,&t->coarse_group);
+    fr_renderer_compute_destroy(g,&t->rhs_fused);
     for(uint32_t i=0;i<3;i++) {
         if(i<2u) {fr_renderer_compute_destroy(g,&t->mg_relax[i]);fr_renderer_compute_destroy(g,&t->mg_temporal[i]);}
         fr_renderer_compute_destroy(g,&t->mg_restrict[i]);fr_renderer_compute_destroy(g,&t->mg_prolong[i]);
@@ -119,6 +120,7 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_mg_temporal%u.comp.spv",i+1u);
         if(!fr_renderer_compute_init(g,&t->mg_temporal[i],buffers,25,16,path,err,cap)) goto fail;
     }
+    if(!fr_renderer_compute_init(g,&t->rhs_fused,buffers,25,16,"build/shaders/gas_pressure_rhs_fused.comp.spv",err,cap)) goto fail;
     t->ready=true;return true;
 fail:
     fr_gas_acoustic_destroy(g,t);return false;
@@ -220,6 +222,9 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(t->practical) bank|=FR_GAS_PRACTICAL_BIT;
     if(getenv("DC_GAS_COMPARE_ROW_SETUP")) bank|=FR_GAS_COMPARE_ROW_SETUP_BIT;
     if(multigrid_enabled(g,t,dt,bank)) bank|=FR_GAS_MULTIGRID_BIT;
+    const char *metadata_setting=getenv("DC_GAS_FUSED_METADATA");
+    if(t->large_transport&&t->practical&&metadata_setting&&strcmp(metadata_setting,"0")!=0&&
+       (bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) bank|=FR_GAS_FUSED_METADATA_BIT;
     if(!t->matrix_valid) bank|=4u;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin acoustic advection");
     if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,tail_query+2u);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);}
@@ -265,11 +270,12 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
             if(!fused) dispatch(g,t->practical?&t->practical_apply:&t->transport_apply,gx,gy,dt,flags);
             if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,8u+axis*4u);
         }
-        indirect_dispatch(g,t,&t->transport_metadata,dt,bank,32);
+        if((bank&FR_GAS_FUSED_METADATA_BIT)==0u) indirect_dispatch(g,t,&t->transport_metadata,dt,bank,32);
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,13);
     } else indirect_dispatch(g,t,&t->advect,dt,bank,32);
-    if(sparse&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) indirect_dispatch(g,t,&t->rhs,dt,bank,32);
-    else dispatch(g,&t->rhs,gx,gy,dt,bank&~256u);
+    const fr_renderer_compute_t *rhs=(bank&FR_GAS_FUSED_METADATA_BIT)!=0u?&t->rhs_fused:&t->rhs;
+    if(sparse&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) indirect_dispatch(g,t,rhs,dt,bank,32);
+    else dispatch(g,rhs,gx,gy,dt,bank&~256u);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,1);
     uint32_t stalled=0,batches=0;float best=INFINITY;
     for(;;) {

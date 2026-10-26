@@ -12,6 +12,10 @@ void main() {
         Gas value=advected?gas_provisional(atlas):gas_source(p);
         vec4 own_provisional=advected?provisional[index]:vec4(center.hydro.yz*center.metric.z,0.,center.metric.w);
         vec2 own_force=advected?force[index]:vec2(0);
+        if(advected&&(params.bank&FR_GAS_FUSED_METADATA_BIT)!=0u) {
+            value=gas_practical_state(value);GasFlux gravity=gas_empty_flux();
+            gravity.dynamics.y=own_provisional.z;gravity.dynamics.w=own_force.x;value=gas_add_flux(value,gravity,1.);
+        }
         float stage_kinetic=practical?gas_kinetic_energy(value):0.,thermal=practical?gas_thermal_energy(value):0.;
         float transported_kinetic=0.;
         if(practical&&gas_mass(value)>0.) {

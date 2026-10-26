@@ -2,34 +2,5 @@
 #extension GL_GOOGLE_include_directive : require
 #include "transport_float_controls.glsl"
 #include "acoustic.glsl"
-void main() {
-    uint index=gas_sparse_index(2u);if(index>=params.width*params.height) return;
-    ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
-    if(atlas==0xffffffffu) {acoustic[index]=vec4(0);provisional[index]=vec4(0);force[index]=vec2(0);return;}
-    Gas old=gas_source(p),transported=gas_provisional(atlas);Primitive center=gas_cached(p);bool valid=false;
-    if((params.bank&FR_GAS_PRACTICAL_BIT)!=0u) transported=gas_practical_state(transported);
-    Primitive moved=gas_primitive(transported,valid);if(!valid) {
-        gas_error(index);uint reason=FR_GAS_REJECT_TRANSPORT;
-        if(any(lessThan(transported.species,vec4(0)))||transported.dynamics.x<0.) reason|=FR_GAS_REJECT_NEGATIVE_SPECIES;
-        if(any(lessThan(transported.visual.rgb,vec3(0)))||any(greaterThan(transported.visual.rgb,vec3((transported.species.z+transported.dynamics.x)*1.000001)))) reason|=FR_GAS_REJECT_PIGMENT;
-        uint negative_bits=0u;
-        for(uint channel=0u;channel<3u;channel++) {uint bits=floatBitsToUint(transported.visual[channel]);if((bits&0x80000000u)!=0u) negative_bits=max(negative_bits,bits&0x7fffffffu);}
-        float excess=max(0.,max(max(transported.visual.r,transported.visual.g),transported.visual.b)-(transported.species.z+transported.dynamics.x));
-        atomicMax(stats[FR_GAS_NEGATIVE_PIGMENT_WORD],negative_bits);atomicMax(stats[FR_GAS_EXCESS_PIGMENT_WORD],floatBitsToUint(excess));
-        atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],reason);
-    }
-    float dt=uintBitsToFloat(params.seconds),work=0.,impulse=0.;Gas value=transported;
-    if(valid) value=gas_buoyancy_cached(transported,moved,dt,work,impulse);
-    float mass=gas_mass(transported);force[index]=vec2(impulse,mass>0.?transported.dynamics.w/mass:0.);
-    value.geometry.w=transported.geometry.w;
-    /* The opposite cache is pressure scratch until finish writes final EOS. */
-    vec2 head=gas_large_pressure_state(transported,center.hydro.w);Primitive pressure_stage=moved;
-    pressure_stage.hydro.x=head.x;pressure_stage.metric.x=head.y;
-    if((params.bank&1u)==0u) cache1[index]=pressure_stage;else cache0[index]=pressure_stage;
-    acoustic[index]=vec4(head.y,center.hydro.w,moved.metric.y,center.metric.y);
-    provisional[index]=vec4(value.dynamics.zw,work,old.geometry.x);
-    vec2 difference=gas_two_sum(transported.dynamics.y,-old.dynamics.y);
-    correction_data[index].w=difference.x+(difference.y+(transported.visual.w-old.visual.w)+(transported.geometry.z-old.geometry.z));
-    if((params.bank&FR_GAS_PRACTICAL_BIT)!=0u) correction_data[index].w=gas_thermal_energy(transported)-gas_thermal_energy(old);
-    gas_write_provisional(atlas,value);
-}
+#include "transport_metadata_body.glsl"
+void main() {gas_transport_metadata(gas_sparse_index(2u));}

@@ -139,3 +139,7 @@ Discarded larger temporal tile variants after full audited runs:AoS36.534/42.727
 **2026-10-26T00:09:33Z**
 
 Multilevel checkpoint077eb1e: native33/33 and practical5/5 pass; audited1000 actual display32.348mean38.016worst, invalid0 and small stock/energy-ledger drift; still budget RED. Fine8+8 failed stability; damped1.4 failed wall/long-run gates; coarse2 sweeps failed late recovery atstep110. All reductions discarded; retain12fine pre/post and4Jacobi per intermediate level. Next specialize level shaders without changing numerical schedule.
+
+**2026-10-26T00:25:14Z**
+
+Latest displayed1000: specialized hierarchy31.706/51.371; practical pressure threshold1e-4 improves31.111/49.407; coarse temporal fusion31.876/48.933 no clear gain, kept opt-in. All stock/finite audits pass. Y-axis metadata fusion33.215/55.897 was slower and discarded. RHS+metadata fusion now BYTE-identical52vs53 dispatches; full35 and core+sync comparison underway before timing. Permanent input wall/thread-CPU/event diagnostics6d87f75, parser5/5. Strict complete-frame budget remains RED.
