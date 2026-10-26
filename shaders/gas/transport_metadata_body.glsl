@@ -1,7 +1,7 @@
-void gas_transport_metadata(uint index) {
-    if(index>=params.width*params.height) return;
+Primitive gas_transport_metadata(uint index) {
+    if(index>=params.width*params.height) return gas_empty_primitive();
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
-    if(atlas==0xffffffffu) {acoustic[index]=vec4(0);provisional[index]=vec4(0);force[index]=vec2(0);return;}
+    if(atlas==0xffffffffu) {acoustic[index]=vec4(0);provisional[index]=vec4(0);force[index]=vec2(0);return gas_empty_primitive();}
     Gas old=gas_source(p),transported=gas_provisional(atlas);Primitive center=gas_cached(p);bool valid=false;
     if((params.bank&FR_GAS_PRACTICAL_BIT)!=0u) transported=gas_practical_state(transported);
     Primitive moved=gas_primitive(transported,valid);if(!valid) {
@@ -32,4 +32,5 @@ void gas_transport_metadata(uint index) {
 #ifndef FR_GAS_FUSED_METADATA_RHS
     gas_write_provisional(atlas,value);
 #endif
+    return pressure_stage;
 }

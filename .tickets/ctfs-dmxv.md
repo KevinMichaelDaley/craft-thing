@@ -171,3 +171,7 @@ Hybrid fusion40739da pushed:43/43 native, core+sync1/1; audited open1000 28.339m
 **2026-10-26T04:03:03Z**
 
 Shared scratch GREEN after523f1bc: fused hybrid SPIR-V37120->30976bytes, permanent32KiB gate2/2 and full native43/43, core+sync1/1. Explicit, factor and prefix phases reuse barrier-separated shared memory with identical state/clock. Audited open1000 27.844mean33.534worst, invalid0 and small stock/work drift; strict worst RED. Separate metadata dispatch trial28.923/34.639 slower; retain fused metadata for next diagnostics.
+
+**2026-10-26T04:06:04Z**
+
+Fused RHS refactor reuses owning metadata pressure head and avoids computing then overwriting moved-neighbor stage. Exact metadata comparison1/1, core+sync1/1, full native43/43. Audited open1000 improves27.278mean31.436worst; invalid0, species3.18e-5/pigment2.97e-7/energy ledger-1.09e-5 relative drift, four paused captures identical. No pressure-schedule or quality-limit change. Strict worst remains RED.

@@ -27,7 +27,8 @@ void main() {
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
     bool advected=gas_advected(index);
 #ifdef FR_GAS_FUSED_METADATA_RHS
-    if(advected) gas_transport_metadata(index);
+    Primitive metadata_stage=gas_empty_primitive();
+    if(advected) metadata_stage=gas_transport_metadata(index);
 #endif
     if(!advected) {
         Primitive own=gas_cached(p);
@@ -46,7 +47,11 @@ void main() {
         (old_capacity>0.?internal*(1.-capacity/old_capacity):internal);
     float dt=uintBitsToFloat(params.seconds),diagonal=capacity;vec4 coefficients=vec4(0);
     bool large_energy=(params.bank&FR_GAS_LARGE_ENERGY_BIT)!=0u;
+#ifdef FR_GAS_FUSED_METADATA_RHS
+    Primitive own_stage=large_energy?(advected?metadata_stage:gas_rhs_stage(p,index)):gas_empty_primitive();
+#else
     Primitive own_stage=large_energy?gas_rhs_stage(p,index):gas_empty_primitive();
+#endif
     bool rebuild=advected||(params.bank&4u)!=0u;
     if(!rebuild) {coefficients=matrix[index]*(dt*dt);for(uint d=0u;d<4u;d++) diagonal+=coefficients[d];}
     vec4 normalized=vec4(0);
@@ -64,9 +69,12 @@ void main() {
 #endif
         float area=min(volume,neighbor.w),enthalpy=.5*(acoustic[index].x+other.metric.x);
         if(large_energy) {
-            Primitive other_stage=gas_rhs_stage(q,j);
 #ifdef FR_GAS_FUSED_METADATA_RHS
-            if(moved) {vec2 head=gas_large_pressure_state(neighbor_state,other.hydro.w);other_stage=other;other_stage.hydro.x=head.x;other_stage.metric.x=head.y;}
+            Primitive other_stage=other;
+            if(moved) {vec2 head=gas_large_pressure_state(neighbor_state,other.hydro.w);other_stage.hydro.x=head.x;other_stage.metric.x=head.y;}
+            else other_stage=gas_rhs_stage(q,j);
+#else
+            Primitive other_stage=gas_rhs_stage(q,j);
 #endif
             precise float density=own_stage.hydro.x+other_stage.hydro.x;
             precise float energy=own_stage.hydro.x*own_stage.metric.x+other_stage.hydro.x*other_stage.metric.x;
