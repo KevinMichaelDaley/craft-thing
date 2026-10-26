@@ -1,0 +1,4 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#define FR_GAS_GROUP_TILE_SIZE 32u
+#include "pressure_group_body.glsl"
