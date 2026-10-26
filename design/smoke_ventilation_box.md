@@ -6,6 +6,43 @@ sideways/buoyant flow and oxygen feedback. Combustion and submerged Greek-fire
 coupling remain in the broad gas/render tickets. No runtime CPU field solver,
 component list, per-flame light scan or global gas/fire quota is introduced.
 
+## Displayed bounded-work checkpoint, 2026-10-26
+
+The original delayed stall came from activity expansion feeding strict pressure
+retries and elapsed-time catch-up: a diagnostic frame reached723ms with50
+submissions. The practical policy accepts one bounded candidate for the full
+requested interval, without residual retries. It preserves the physical clock;
+exact residual/energy/byte comparisons remain diagnostics rather than gameplay
+convergence barriers. State must remain finite and inventory drift small.
+
+GPU-only derived caches and acoustic scratch can use device-local, unmapped
+storage (`DC_GAS_DEVICE_WORK=1`); cold transfer fills explicitly initialize it.
+Canonical gas stock stays authoritative and mapped for cold checkpoints. The
+actual allocation diagnostic reports72,343,040device bytes and35,840mapped
+activity bytes instead of72,378,880mapped working bytes. This is a memory-type
+choice on the same integrated-GPU heap, not a claim of separate physical VRAM.
+No per-frame submission, readback, allocation or dispatch was added.
+
+Actual Wayland Vulkan,480x270 simulation/display with640x448halo, selected
+256-thread transport profile, lighting off, uninstrumented elapsed-clock loop:
+
+|1000 displayed frames|Mean ms|Worst ms|
+|---|---:|---:|
+|Closed1|11.749|19.406|
+|Closed2|11.781|15.921|
+|Open1|26.354|29.011|
+|Open2|26.411|29.714|
+
+All four runs pass the strict mean AND worst<30ms gate, finite-state/stock audit
+and four identical paused captures. Open-run maximum species drift is below
+4e-5 relative; energy-minus-work drift is below1.6e-5 relative. Logs/captures:
+`build/smoke_box_measurements_lxOmeu`; the captured open plume visibly mixes
+sideways and exits the real upper vent. Native suite53/53 and focused core plus
+synchronization validation1/1 pass, with no new compiler warnings. Zero-energy,
+512-thread, lean-metadata and cached-neighbor experiments remain OFF because
+they did not improve measured frame time. This performance checkpoint does not
+complete the module's remaining edit/checkpoint/usability integration.
+
 ## Numerical reference gate
 
 Gas state holds five species (oxygen, nitrogen, exhaust, vapor and soot), total

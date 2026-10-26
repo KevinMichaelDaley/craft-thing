@@ -223,3 +223,7 @@ Lean metadata afterRED045b7ed:50/50 native, practical5/5, enclosure1/1 and core+
 **2026-10-26T13:34:18Z**
 
 Zero-energy opt-in after RED934f81f: full actual Wayland native52/52, practical5/5, enclosure1/1 and core+sync1/1 clean. Exact state/CFL/clock retained; nonzero exchanges retain compensated energy. Audited open1000 27.190mean32.115worst provides no frame gain, so remains OFF in selected profile. Strict performance remains RED; investigating device-local GPU-only work storage next.
+
+**2026-10-26T13:40:37Z**
+
+Device-only working storage after REDb244b0d:53/53 actual native, core+sync1/1, same51 dispatches and exact ownership/CFL/clock. Explicit cold GPU zero initialization; canonical stock unchanged. Permanent closed2/open2 x1000 actual Wayland battery PASSES strict mean AND worst<30ms:11.749/19.406,11.781/15.921,26.354/29.011,26.411/29.714ms. All finite/stock/pause gates pass; evidence build/smoke_box_measurements_lxOmeu and design/smoke_ventilation_box.md. Selected256 profile adds DEVICE_WORK1; all slower experiments stayoff. Remaining smoke edit/checkpoint/usability integration still open.

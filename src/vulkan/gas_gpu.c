@@ -159,7 +159,9 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     VkFenceCreateInfo fence={.sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
     if(vkCreateFence(g->device,&fence,NULL,&t->completion)!=VK_SUCCESS) return error(err,cap,"Cannot create gas completion fence");
     for(uint32_t i=0;i<3;i++) if(!dc_gpu_address_buffer_create(g,states,true,t->state+i,err,cap)) return false;
-    for(uint32_t i=0;i<2;i++) if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,true,t->cache+i,err,cap)) return false;
+    const char *device_work=getenv("DC_GAS_DEVICE_WORK");
+    bool mapped_work=!device_work||strcmp(device_work,"0")==0;
+    for(uint32_t i=0;i<2;i++) if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,mapped_work,t->cache+i,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*4u,true,&t->gates,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,FR_GAS_MODEL_WORDS*4u,true,&t->parameters,err,cap)||
        !dc_gpu_address_buffer_create(g,64,true,&t->stats,err,cap)||
@@ -199,6 +201,8 @@ bool fr_gas_gpu_enable(dc_gpu_t *g,const fr_gas_model_t *model,float density,flo
     struct fr_gas_gpu *t=calloc(1,sizeof(*t));if(!t) return error(err,cap,"Cannot allocate gas module");
     t->model=rounded;t->density=density;t->temperature=temperature;
     if(!create(g,t,err,cap)||!fr_renderer_begin(g)) {destroy(g,t);return false;}
+    for(uint32_t i=0;i<2;i++) if(!t->cache[i].host_visible)
+        vkCmdFillBuffer(g->command,t->cache[i].buffer,0,t->cache[i].bytes,0);
     dispatch(g,t,&t->initialize,0,0);
     if(!submit(g,err,cap)) {destroy(g,t);return false;}
     g->gas=t;return true;
