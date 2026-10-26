@@ -1769,6 +1769,7 @@ build/thermal_precision_tests: tests/fire/thermal_precision_tests.c $(REACTIVE_S
 build/gas_transport_tests build/gas_implicit_tests build/gas_display_tests: include/ferrum/fire/gas_constants.h
 build/gas_display_tests: tests/vulkan/gas_practical_cases.h
 build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_geometry_cases.h
+build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_partial_void_cases.h
 build/gas_publication_display_tests: tests/vulkan/gas_geometry_cache_cases.h
 build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_roundoff_cases.h build/shaders/gas_roundoff_test.comp.spv
 build/shaders/gas_roundoff_test.comp.spv: shaders/diagnostics/gas_roundoff_test.comp $(wildcard shaders/gas/*.glsl) include/dungeoncraft/gas_layout.h
