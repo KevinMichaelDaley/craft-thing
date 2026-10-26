@@ -54,6 +54,18 @@ bool burning(uint at) {
         (entry.words[FR_ENTRY_STATE+9u]!=0u||entry.words[FR_ENTRY_STATE+10u]!=0u);
 }
 void feedback(uint index,ivec2 p,uint at) {
+    if(at!=0xffffffffu&&!gas_cell(at)) {
+        uvec2 handle=Handles(uvec2(root[6],root[7])).values[at];
+        if(handle.y!=0u&&handle.x<root[2]) {
+            Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));uint s=FR_ENTRY_STATE;
+            if(entry.words[FR_ENTRY_GENERATION]==handle.y&&entry.words[FR_ENTRY_OWNER]==1u&&
+               (entry.words[s]==7u||entry.words[s]==8u||entry.words[s]==12u)&&entry.words[s+8u]!=0u) {
+                float charred=clamp(4.*float(entry.words[s+10u])/float(entry.words[s+8u]),0.,1.);
+                vec3 color=unpackUnorm4x8(pixels[index]).rgb;
+                pixels[index]=packUnorm4x8(vec4(color*(1.-.9*charred),1.));
+            }
+        }
+    }
     uint depth=0u;
     if(burning(at)) depth=1u;
     else if(gas_cell(at)) {
