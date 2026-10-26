@@ -33,7 +33,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     }
     uint32_t work[2]={0},tiles[2]={0},widths[2]={0},transfer_barriers[2]={0},repeated[2]={0};float rates[2][3]={{0}};uint64_t copy_bytes[2]={0};
     uint32_t activity_modes[2]={0};
-    bool zero_energy_used[2]={false,false};
+    bool zero_energy_used[2]={false,false},large_sor_used[2]={false,false};
     uint64_t mapped_bytes[2]={0},device_bytes[2]={0};
     uint64_t state_mapped[2]={0},state_device[2]={0},staging_bytes[2]={0};
     bool empty_tiles=strcmp(setting,"DC_GAS_SKIP_EMPTY_PRESSURE")==0,group_rate=strcmp(setting,"DC_GAS_GROUP_RATE")==0;
@@ -68,6 +68,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
             if(zero_energy&&step==0u) ASSERT_TRUE(fr_gas_gpu_zero_energy_metadata(g,zero_energy_used+path));
         }
         work[path]=g_pressure_dispatches+g_direct_dispatches;
+        ASSERT_TRUE(fr_gas_gpu_sor_tile_metadata(g,large_sor_used+path));
         copy_bytes[path]=g_copy_bytes;
         transfer_barriers[path]=g_transfer_scope_barriers;
         repeated[path]=g_repeated_compute_bindings;
@@ -112,7 +113,10 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         if(lean_metadata) ASSERT_TRUE(energy_error/energy<1e-5);
         for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(stock_after[k]-stock_before[k])<fmax(1e-9,(lean_metadata?1e-4:.003)*stock_before[k]));
     } else ASSERT_TRUE(memcmp(out,reference,field_count*sizeof(*out))==0);
-    ASSERT_TRUE(added_dispatches==UINT32_MAX?work[1]==work[0]:(added_dispatches?work[1]==work[0]+added_dispatches:work[1]<work[0]));
+    if(strcmp(setting,"DC_GAS_HALF_PRESSURE")==0&&large_sor_used[1]&&!large_sor_used[0]) {
+        /* The half-row route also saves six fine dispatches and adds one group compaction. */
+        ASSERT_TRUE((int64_t)work[1]-(int64_t)work[0]==(int64_t)added_dispatches-5);
+    } else ASSERT_TRUE(added_dispatches==UINT32_MAX?work[1]==work[0]:(added_dispatches?work[1]==work[0]+added_dispatches:work[1]<work[0]));
     if(group_rate) {
         printf("CFL reduction width%u vs%u rates %.9g %.9g %.9g\n",widths[1],widths[0],rates[1][0],rates[1][1],rates[1][2]);
         ASSERT_TRUE(widths[0]==0u&&widths[1]==requested_width&&memcmp(rates[0],rates[1],sizeof(rates[0]))==0);

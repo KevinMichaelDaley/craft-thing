@@ -1,0 +1,8 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#define FR_GAS_LOCAL_SIZE 512
+#define FR_GAS_HALF_PRESSURE 1
+#define FR_GAS_TEMPORAL_TILE_SIZE 16u
+#define FR_GAS_TEMPORAL_HALO 8u
+#define FR_GAS_TEMPORAL_LIST_BASE (3u*gas_tile_count())
+#include "pressure_temporal_body.glsl"
