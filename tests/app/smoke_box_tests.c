@@ -63,11 +63,13 @@ static void test_native_saved_smoke_box_restores_stock_and_valves_without_refill
     ASSERT_TRUE(dc_level_view_smoke_valve(view,0,err,sizeof(err)));
     for(uint32_t i=0;i<2u;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
     uint32_t count=view->table.capacity;
+    fr_gas_gpu_clock_t saved_clock,restored_clock;ASSERT_TRUE(fr_gas_gpu_clock(view->gpu,&saved_clock));
     fr_gas_checkpoint_chunk_t *saved=calloc(count,sizeof(*saved)),*restored=malloc(sizeof(*restored));
     dc_chunk_coord_t *coords=malloc(count*sizeof(*coords));ASSERT_TRUE(saved&&restored&&coords);
     for(uint32_t i=0;i<count;i++) {coords[i]=view->table.slots[i].coord;ASSERT_TRUE(fr_gas_gpu_export_checkpoint(view->gpu,i,saved+i,err,sizeof(err)));}
     ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));
     view=dc_level_view_create_smoke_box(directory,314,err,sizeof(err));ASSERT_TRUE(view);
+    ASSERT_TRUE(fr_gas_gpu_clock(view->gpu,&restored_clock));ASSERT_EQ(memcmp(&saved_clock,&restored_clock,sizeof(saved_clock)),0);
     ASSERT_EQ(view->smoke_closed,6u);
     for(uint32_t i=0;i<count;i++) {
         uint32_t slot;ASSERT_TRUE(dc_chunk_table_find(&view->table,coords[i],&slot));
