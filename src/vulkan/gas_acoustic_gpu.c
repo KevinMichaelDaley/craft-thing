@@ -231,6 +231,9 @@ static bool multigrid_enabled(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint
 bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint32_t gy,
     float dt,uint32_t bank,dc_gpu_address_buffer_t *stats,char *err,uint32_t cap) {
     bool trace=getenv("DC_GAS_TRACE")!=NULL&&g->timestamp_bits;
+    const char *direct_first_setting=getenv("DC_GAS_DIRECT_FIRST_AXIS");
+    bool direct_first=t->practical&&getenv("DC_GAS_FUSED_AXIS")&&direct_first_setting&&strcmp(direct_first_setting,"0")!=0;
+    if(t->direct_first_axis!=direct_first) {t->matrix_valid=false;t->direct_first_axis=direct_first;}
     uint32_t tail_query=t->large_transport?14u:4u;
     bool matrix_large=t->large_transport||t->practical;
     if(t->matrix_valid&&t->matrix_large!=matrix_large) t->matrix_valid=false;
@@ -279,10 +282,10 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(t->large_transport) {
         const char *fused_setting=getenv("DC_GAS_FUSED_APPLY");bool fused=fused_setting&&strcmp(fused_setting,"0")!=0;
         barrier(g);VkBufferCopy copy={.size=t->state_bytes};
-        vkCmdCopyBuffer(g->command,t->state_bank[bank&1u],t->state_bank[(bank&1u)^1u],1,&copy);
+        if(!direct_first||!t->matrix_valid) vkCmdCopyBuffer(g->command,t->state_bank[bank&1u],t->state_bank[(bank&1u)^1u],1,&copy);
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,4);
         for(uint32_t axis=0;axis<2;axis++) {
-            uint32_t flags=bank|(axis<<3u),lines=axis==0?g->height:g->width;
+            uint32_t flags=bank|(axis<<3u)|(direct_first?FR_GAS_DIRECT_FIRST_AXIS_BIT:0u),lines=axis==0?g->height:g->width;
             if(getenv("DC_GAS_STAGED_RATES")) {
                 flags|=FR_GAS_STAGED_RATES_BIT;
                 dispatch(g,&t->stage_transport,gx,gy,dt,flags);

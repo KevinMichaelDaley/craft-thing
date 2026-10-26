@@ -39,7 +39,7 @@ void main() {
     uint stages=uint(ceil(courant/.9));
     stages=max(stages,1u);float peak=0.;
     for(uint cell=rank;cell<length;cell+=FR_GAS_LOCAL_SIZE) {
-        uint atlas=gas_atlas(transport_point(line,cell));GasFlux value=atlas==0xffffffffu?gas_empty_flux():transport_state(gas_provisional(atlas));
+        uint atlas=gas_atlas(transport_point(line,cell));GasFlux value=atlas==0xffffffffu?gas_empty_flux():transport_state(transport_axis_input(atlas));
         line_species[cell]=value.species;line_dynamics[cell]=value.dynamics;line_visual[cell]=vec4(value.pigment,0);
         peak=max(peak,max(value.species.z,value.dynamics.x));
     }
@@ -62,7 +62,8 @@ void main() {
             ivec2 p=transport_point(line,cell),step=transport_axis()==0u?ivec2(1,0):ivec2(0,1);uint atlas=gas_atlas(p);
             if(atlas==0xffffffffu) continue;
             GasFlux incoming=line_face_flux(p-step,seconds/float(stages)),outgoing=line_face_flux(p,seconds/float(stages));
-            gas_write_provisional(atlas,transport_update_state(gas_provisional(atlas),incoming,outgoing,scale));
+            Gas previous=stage==0u?transport_axis_input(atlas):gas_provisional(atlas);
+            gas_write_provisional(atlas,transport_update_state(previous,incoming,outgoing,scale));
         }
         memoryBarrierBuffer();barrier();
     }

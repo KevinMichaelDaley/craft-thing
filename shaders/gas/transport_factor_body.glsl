@@ -43,7 +43,7 @@ void FR_GAS_FACTOR_ENTRY() {
         ivec2 p=transport_point(line,cell);vec2 lower,diagonal,upper,previous;vec4 face;coefficients(p,dt,lower,diagonal,upper,previous,face);
         uint index=uint(p.y)*params.width+uint(p.x);
         if((params.bank&FR_GAS_STAGED_RATES_BIT)==0u) stencil[index]=face;
-        uint atlas=gas_atlas(p);GasFlux value=atlas==0xffffffffu?gas_empty_flux():transport_state(gas_provisional(atlas));
+        uint atlas=gas_atlas(p);GasFlux value=atlas==0xffffffffu?gas_empty_flux():transport_state(transport_axis_input(atlas));
         peak=max(peak,max(value.species.z,value.dynamics.x));
 #ifdef FR_GAS_COMPACT_WORK
         transport_work[transport_position(p)]=TransportCell(value.species,value.dynamics,

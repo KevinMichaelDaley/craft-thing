@@ -14,6 +14,7 @@
 #define FR_GAS_SKIP_EMPTY_PRESSURE_BIT 268435456u
 #define FR_GAS_MG_BOUNDARY_BIT 536870912u
 #define FR_GAS_HALF_PRESSURE_BIT 1073741824u
+#define FR_GAS_DIRECT_FIRST_AXIS_BIT 2147483648u
 #define FR_GAS_SOLVE_TILE_BIT 4u
 #define FR_GAS_COARSE_GROUP_CAPACITY 8192u
 /* Fast-path workspace and stage budget; longer/stiffer lines stay implicit. */

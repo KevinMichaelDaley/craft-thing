@@ -18,6 +18,6 @@ void transport_apply_cell(ivec2 p) {
     uint atlas=gas_atlas(p);if(atlas==0xffffffffu||transport_work[transport_line_start(p)].mass.w<0.) return;
     ivec2 step=transport_axis()==0u?ivec2(1,0):ivec2(0,1);
     GasFlux incoming=transport_face_flux(p-step),outgoing=transport_face_flux(p);
-    gas_write_provisional(atlas,transport_update_state(gas_provisional(atlas),incoming,outgoing,transport_work[transport_position(p)].mass.w));
+    gas_write_provisional(atlas,transport_update_state(transport_axis_input(atlas),incoming,outgoing,transport_work[transport_position(p)].mass.w));
 }
 #endif

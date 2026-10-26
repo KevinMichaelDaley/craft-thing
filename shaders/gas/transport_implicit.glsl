@@ -9,6 +9,11 @@ struct TransportCell {vec4 species,dynamics,visual,mass,energy;};
 #endif
 layout(set=0,binding=24,std430) restrict buffer TransportWork {TransportCell transport_work[];};
 uint transport_axis() {return (params.bank>>3u)&1u;}
+bool transport_direct_first_axis() {return (params.bank&FR_GAS_DIRECT_FIRST_AXIS_BIT)!=0u&&transport_axis()==0u;}
+Gas transport_axis_input(uint atlas) {
+    if(transport_direct_first_axis()) return (params.bank&1u)==0u?bank0[atlas]:bank1[atlas];
+    return gas_provisional(atlas);
+}
 uint transport_position(ivec2 p) {return transport_axis()==0u?uint(p.y)*params.width+uint(p.x):uint(p.x)*params.height+uint(p.y);}
 uint transport_line_start(ivec2 p) {return transport_axis()==0u?uint(p.y)*params.width:uint(p.x)*params.height;}
 #ifdef FR_GAS_FUSED_AXIS
