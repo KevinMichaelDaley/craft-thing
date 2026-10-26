@@ -405,6 +405,7 @@ int main(void) {
     RUN(test_native_fused_transport_metadata_preserves_state_with_fewer_dispatches);
     RUN(test_native_packed_pressure_rows_preserve_state_with_one_pack_pass);
     RUN(test_native_empty_pressure_tiles_are_skipped_without_changing_state);
+    RUN(test_native_partial_coarse_cells_preserve_walls_with_short_smoothing);
 #endif
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
     RUN(test_native_colored_transport_matches_reference_and_retains_closed_budgets);

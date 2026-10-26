@@ -54,7 +54,7 @@ static void test_native_packed_pressure_rows_preserve_state_with_one_pack_pass(v
 static void test_native_empty_pressure_tiles_are_skipped_without_changing_state(void) {
     check_native_gas_dispatch_fusion("DC_GAS_SKIP_EMPTY_PRESSURE",false,1);
 }
-static void test_native_multigrid_bounds_work_and_preserves_reference_flow(void) {
+static void check_native_multigrid_reference_flow(uint32_t dispatch_budget,bool partial_fixture) {
     char err[256]={0};const char *names[]={"DC_GAS_MULTIGRID","DC_GAS_TEMPORAL_SOR","DC_GAS_COARSE_WG"};char *saved[3];
     for(uint32_t k=0;k<3;k++) {const char *value=getenv(names[k]);saved[k]=value?SDL_strdup(value):NULL;}
     fr_gas_state_t *input=malloc(4096*sizeof(*input)),*reference=malloc(4096*sizeof(*reference)),*out=malloc(4096*sizeof(*out));
@@ -66,6 +66,11 @@ static void test_native_multigrid_bounds_work_and_preserves_reference_flow(void)
     for(uint32_t y=32;y<40;y++) for(uint32_t x=20;x<28;x++) input[y*64+x]=(fr_gas_state_t){
         .species={0,0,hot_mass,0,0},.energy=hot_mass*m.heat_capacity_cv[FR_GAS_EXHAUST]*650+.5*m.kinetic_scale*hot_mass*4,
         .momentum={2*hot_mass,0},.pigment={.85*hot_mass,.15*hot_mass,.03*hot_mass}};
+    if(partial_fixture) for(uint32_t y=0;y<64;y++) for(uint32_t x=0;x<64;x++) {
+        bool wall=(y>=16&&y<=28&&((x>=12&&x<=13)||(x>=19&&x<=20)))||
+            (y>=27&&y<=28&&x>=12&&x<=20)||(x>=45&&x<=55&&y>=40&&y<=42);
+        if(wall) {input[y*64+x]=(fr_gas_state_t){0};volume[y*64+x]=0;}
+    }
     uint32_t baseline_work=0,new_work=0;
     for(uint32_t path=0;path<2;path++) {
         ASSERT_EQ(SDL_setenv(names[0],path?"1":"0",1),0);ASSERT_EQ(SDL_setenv(names[1],"0",1),0);ASSERT_EQ(SDL_setenv(names[2],"0",1),0);
@@ -83,6 +88,7 @@ static void test_native_multigrid_bounds_work_and_preserves_reference_flow(void)
     double mass=0,mass_error=0,color=0,color_error=0,velocity_error=0,velocity_reference=0;
     double before[5]={0},after[5]={0};
     for(uint32_t i=0;i<4096;i++) {
+        if(volume[i]==0) {ASSERT_TRUE(out[i].energy==0&&out[i].momentum[0]==0&&out[i].momentum[1]==0);continue;}
         fr_gas_thermo_t a,b;ASSERT_TRUE(fr_gas_thermodynamics(&m,reference+i,1,&a,err,sizeof(err))&&fr_gas_thermodynamics(&m,out+i,1,&b,err,sizeof(err)));
         ASSERT_TRUE(b.temperature_K>0&&b.temperature_K<5000&&b.pressure<1e5);
         mass+=a.mass;mass_error+=fabs(a.mass-b.mass);
@@ -97,8 +103,16 @@ static void test_native_multigrid_bounds_work_and_preserves_reference_flow(void)
     double rms=sqrt(velocity_error/mass),reference_rms=sqrt(velocity_reference/mass);
     printf("Multigrid dispatches%u vs%u mass L1%.9g color L1%.9g velocity RMS%.9g reference%.9g\n",new_work,baseline_work,mass_error/mass,color_error/color,rms,reference_rms);
     ASSERT_TRUE(mass_error/mass<.03&&color_error/color<.10&&rms<fmax(1.,reference_rms*.1));
-    ASSERT_TRUE(new_work<100u&&new_work<baseline_work);
+    ASSERT_TRUE(new_work<dispatch_budget&&new_work<baseline_work);
     for(uint32_t k=0;k<3;k++) {ASSERT_EQ(SDL_setenv(names[k],saved[k]?saved[k]:"0",1),0);SDL_free(saved[k]);}
     free(input);free(reference);free(out);free(volume);free(c);PASS();
+}
+static void test_native_multigrid_bounds_work_and_preserves_reference_flow(void) {
+    check_native_multigrid_reference_flow(100u,false);
+}
+static void test_native_partial_coarse_cells_preserve_walls_with_short_smoothing(void) {
+    char err[256]={0};const char *old=getenv("DC_GAS_MG_BOUNDARY");char *saved=old?SDL_strdup(old):NULL;
+    ASSERT_EQ(SDL_setenv("DC_GAS_MG_BOUNDARY","1",1),0);check_native_multigrid_reference_flow(80u,true);
+    ASSERT_EQ(SDL_setenv("DC_GAS_MG_BOUNDARY",saved?saved:"0",1),0);SDL_free(saved);
 }
 #endif
