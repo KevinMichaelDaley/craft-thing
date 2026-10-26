@@ -10,6 +10,7 @@ import csv
 import re
 import sys
 
+SETUP_GPU = re.compile(r"Gas setup GPU tick([\d.]+) geometry([\d.]+) clear([\d.]+) activity([\d.]+) rhs([\d.]+) ms")
 GPU = re.compile(r"Acoustic GPU init([\d.]+) pressure-group([\d.]+) residual([\d.]+) ms")
 TAIL = re.compile(r"Acoustic GPU tail finish([\d.]+) commit([\d.]+) ms")
 FRAME = re.compile(r"app-frame,(\d+),([\d.]+)ms")
@@ -29,7 +30,9 @@ def counters():
                 residual_peak=0.0, pressure_batches_peak=0,
                 rss_kb=0, minor_faults=0, major_faults=0,
                 input_events=0, input_cpu_ms=0.0, input_wait_ms=0.0,
-                present_tick_ms=0.0, body_service_ms=0.0, event_pump_ms=0.0)
+                present_tick_ms=0.0, body_service_ms=0.0, event_pump_ms=0.0,
+                physical_gpu_ms=0.0, geometry_gpu_ms=0.0, clear_gpu_ms=0.0,
+                activity_gpu_ms=0.0, rhs_gpu_ms=0.0)
 
 
 def frames(lines):
@@ -39,6 +42,10 @@ def frames(lines):
     extra = counters()
     intervals = 0
     for line in lines:
+        match = SETUP_GPU.search(line)
+        if match:
+            for index, name in enumerate(("physical_gpu_ms", "geometry_gpu_ms", "clear_gpu_ms", "activity_gpu_ms", "rhs_gpu_ms"), 1):
+                extra[name] += float(match[index])
         match = SETUP.search(line)
         if match:
             extra["present_tick_ms"] += float(match[1])

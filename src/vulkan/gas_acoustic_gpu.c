@@ -343,10 +343,13 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
        temporal_setting&&strcmp(temporal_setting,"0")!=0&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) bank=(bank&~FR_GAS_PACKED_PRESSURE_BIT)|FR_GAS_HALF_PRESSURE_BIT;
     if(!t->matrix_valid) bank|=4u;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin acoustic advection");
+    if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,20u);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,16);}
     fr_gas_gpu_record_pending_tick(g);
-    if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,tail_query+2u);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);}
+    if(trace) {vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,17);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);}
     fr_gas_gpu_record_pending_geometry(g);
+    if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,18);
     if(sparse) indirect_dispatch(g,t,&t->clear_pressure,dt,bank,48);
+    if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,19);
     barrier(g);
     vkCmdFillBuffer(g->command,t->indirect.buffer,32,4,0);vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
     uint32_t tiles=((g->width+7u)/8u)*((g->height+7u)/8u);
@@ -476,27 +479,12 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
             uint32_t *words=stats->mapped;float values[4];memcpy(values,words+FR_GAS_ROW_DIAGONAL_BEFORE_WORD,sizeof(values));
             fprintf(stderr,"Gas row compare flags%u count%u first%u cell0 diagonal%.9g/%.9g norm%.9g/%.9g\n",words[FR_GAS_ROW_DIFF_WORD],words[FR_GAS_ROW_DIFF_COUNT_WORD],words[FR_GAS_ROW_DIFF_AT_WORD],values[0],values[1],values[2],values[3]);
         }
-        if(trace&&t->large_transport&&batches==0u) {
-            uint64_t phases[10];
-            if(vkGetQueryPoolResults(g->device,g->timestamp_pool,4,10,sizeof(phases),phases,sizeof(uint64_t),VK_QUERY_RESULT_64_BIT)==VK_SUCCESS) {
-                fprintf(stderr,"Gas transport GPU ms:");
-                for(uint32_t i=1;i<10;i++) fprintf(stderr," %.3f",(phases[i]-phases[i-1u])*g->timestamp_period/1e6);
-                fprintf(stderr," (X factor/forward/back/apply, Y factor/forward/back/apply, metadata)\n");
-            }
-        }
+        if(trace&&t->large_transport&&batches==0u) fr_gas_acoustic_trace_transport(g);
         uint32_t bits=((uint32_t *)stats->mapped)[FR_GAS_RESIDUAL_WORD];float residual=0;memcpy(&residual,&bits,4);
         batches+=batch_group;if(trace)
             fprintf(stderr,"Acoustic dt%.9g batch%u residual%.9g error%u tiles%u advected%u sweeps%u group%u large%u\n",dt,batches,residual,
                 ((uint32_t *)stats->mapped)[FR_GAS_ERROR_WORD],((uint32_t *)t->indirect.mapped)[0],((uint32_t *)t->indirect.mapped)[8],batch_sweeps,batch_group,t->large_transport?1u:0u);
-        if(trace) {
-            uint64_t times[4],tail[2];
-            if(vkGetQueryPoolResults(g->device,g->timestamp_pool,0,4,sizeof(times),times,sizeof(uint64_t),VK_QUERY_RESULT_64_BIT)==VK_SUCCESS) {
-                fprintf(stderr,"Acoustic GPU init%.3f pressure-group%.3f residual%.3f ms\n",(times[1]-times[0])*g->timestamp_period/1e6,
-                    (times[2]-times[1])*g->timestamp_period/1e6,(times[3]-times[2])*g->timestamp_period/1e6);
-                if(vkGetQueryPoolResults(g->device,g->timestamp_pool,tail_query,2,sizeof(tail),tail,sizeof(uint64_t),VK_QUERY_RESULT_64_BIT)==VK_SUCCESS)
-                    fprintf(stderr,"Acoustic GPU tail finish%.3f commit%.3f ms\n",(tail[0]-times[3])*g->timestamp_period/1e6,(tail[1]-tail[0])*g->timestamp_period/1e6);
-            }
-        }
+        if(trace) fr_gas_acoustic_trace_times(g,tail_query);
         if(((uint32_t *)stats->mapped)[FR_GAS_ERROR_WORD]) return true;
         if(t->practical) break;
         if(residual<=1e-7f) break;
