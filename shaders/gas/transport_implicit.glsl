@@ -8,7 +8,13 @@ struct TransportCell {vec4 species,dynamics,visual,mass;};
 struct TransportCell {vec4 species,dynamics,visual,mass,energy;};
 #endif
 layout(set=0,binding=24,std430) restrict buffer TransportWork {TransportCell transport_work[];};
-uint transport_axis() {return (params.bank>>3u)&1u;}
+uint transport_axis() {
+#ifdef FR_GAS_FIXED_AXIS
+    return uint(FR_GAS_FIXED_AXIS);
+#else
+    return (params.bank>>3u)&1u;
+#endif
+}
 bool transport_direct_first_axis() {return (params.bank&FR_GAS_DIRECT_FIRST_AXIS_BIT)!=0u&&transport_axis()==0u;}
 Gas transport_axis_input(uint atlas) {
     if(transport_direct_first_axis()) return (params.bank&1u)==0u?bank0[atlas]:bank1[atlas];

@@ -16,7 +16,7 @@ class ShaderMemoryTests(unittest.TestCase):
             module.workgroup_bytes(b"invalid")
 
     def test_hybrid_transport_shared_storage_fits_two_groups(self):
-        for name in ("transport_hybrid", "transport_hybrid_wide"):
+        for name in ("transport_hybrid", "transport_hybrid_wide", "transport_hybrid_x", "transport_hybrid_y", "transport_hybrid_x_wide", "transport_hybrid_y_wide"):
             with self.subTest(shader=name):
                 size = module.workgroup_bytes((ROOT / f"build/shaders/gas_{name}.comp.spv").read_bytes())
                 self.assertGreater(size, 0)

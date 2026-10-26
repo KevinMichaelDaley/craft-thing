@@ -48,7 +48,7 @@ test_tools:
 	python3 tests/tools/gpu_frequency_tests.py
 	python3 tests/tools/smoke_trace_tests.py
 	python3 tests/tools/shader_stats_tests.py
-test_shader_memory: build/shaders/gas_transport_hybrid.comp.spv build/shaders/gas_transport_hybrid_wide.comp.spv
+test_shader_memory: $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid transport_hybrid_wide transport_hybrid_x transport_hybrid_y transport_hybrid_x_wide transport_hybrid_y_wide)
 	python3 tests/tools/shader_memory_tests.py
 test: test_shader_memory
 test: test_tools
@@ -1814,6 +1814,7 @@ GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,mg_relax1 mg_relax2 mg_
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_coarse_group pressure_coarse_group_wide)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_explicit transport_explicit_wide)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid transport_hybrid_wide)
+GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid_x transport_hybrid_y transport_hybrid_x_wide transport_hybrid_y_wide)
 build/shaders/gas_audit.comp.spv: include/dungeoncraft/gas_audit_layout.h
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_restrict pressure_coarse_sor pressure_prolong)
 build/gas_acoustic_gpu.o: src/vulkan/gas_acoustic_gpu.c src/vulkan/gas_acoustic_gpu.h

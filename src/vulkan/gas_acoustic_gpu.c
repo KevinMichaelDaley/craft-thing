@@ -33,6 +33,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->practical_axis);
     fr_renderer_compute_destroy(g,&t->practical_explicit);
     fr_renderer_compute_destroy(g,&t->practical_hybrid);
+    for(uint32_t i=0;i<2;i++) fr_renderer_compute_destroy(g,&t->practical_hybrid_axis[i]);
     fr_renderer_compute_destroy(g,&t->temporal_sor);
     fr_renderer_compute_destroy(g,&t->coarse_group);
     fr_renderer_compute_destroy(g,&t->rhs_fused);
@@ -110,6 +111,10 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
             if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_EXPLICIT_LINE_CAPACITY*48u+64u*4u) {
                 const char *hybrid_path=use_wide?"build/shaders/gas_transport_hybrid_wide.comp.spv":"build/shaders/gas_transport_hybrid.comp.spv";
                 if(!fr_renderer_compute_init(g,&t->practical_hybrid,buffers,25,16,hybrid_path,err,cap)) goto fail;
+                for(uint32_t axis=0;axis<2;axis++) {
+                    char path[128];snprintf(path,sizeof(path),"build/shaders/gas_transport_hybrid_%c%s.comp.spv",axis?'y':'x',use_wide?"_wide":"");
+                    if(!fr_renderer_compute_init(g,&t->practical_hybrid_axis[axis],buffers,25,16,path,err,cap)) goto fail;
+                }
             }
         }
     }
@@ -313,7 +318,10 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
                 flags|=FR_GAS_HYBRID_LINES_BIT;dispatch(g,&t->practical_explicit,lines,1u,dt,flags);
             }
             if(t->practical&&getenv("DC_GAS_FUSED_AXIS")) {
-                dispatch(g,fused_hybrid?&t->practical_hybrid:&t->practical_axis,lines,1u,dt,flags);
+                const char *fixed_axis_setting=getenv("DC_GAS_FIXED_AXIS");
+                bool fixed_axis=fused_hybrid&&fixed_axis_setting&&strcmp(fixed_axis_setting,"0")!=0;
+                const fr_renderer_compute_t *hybrid=fixed_axis?&t->practical_hybrid_axis[axis]:&t->practical_hybrid;
+                dispatch(g,fused_hybrid?hybrid:&t->practical_axis,lines,1u,dt,flags);
                 if(trace) for(uint32_t stamp=5u;stamp<=8u;stamp++)
                     vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,stamp+axis*4u);
                 continue;

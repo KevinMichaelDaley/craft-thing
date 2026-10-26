@@ -1,0 +1,4 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#define FR_GAS_FIXED_AXIS 1
+#include "transport_hybrid_body.glsl"

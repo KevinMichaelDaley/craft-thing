@@ -195,3 +195,7 @@ Trace-boundary GREEN after6cd6a82: four injected100ms setup-log delays incorrect
 **2026-10-26T04:50:45Z**
 
 Broad regression completed aftertracefix:162 C groups764passes and exactly2known ctr-ojvy authored-stage failures; all Python checks pass, zero compiler warnings/errors. Axis-specialization RED validates same state/clock/dispatch count but requires distinct actual X/Y pipeline binds: baseline repeated23vs23 fails expected22vs23. No current performance completion claim.
+
+**2026-10-26T04:56:33Z**
+
+Axis-specialized transport afterREDc876882: actual bind comparison22vs23 repeated pipelines proves distinct X/Y kernels; state/clock exact and dispatchcount unchanged. Full selected256-thread native46/46, core+sync1/1, sharedstorage gate2/2 acrosssix variants. Audited open1000 improves26.466mean30.572worst; invalid0, stock/work drift small, fourpausedcapturesidentical. Still strict worstRED; no clock/resolution/pressure-schedule changes.
