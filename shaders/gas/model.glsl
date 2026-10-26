@@ -58,6 +58,10 @@ Gas gas_add_flux(Gas s,GasFlux flux,float dt) {
     result.dynamics.x+=flux.dynamics.x*dt;
     result.dynamics.zw+=flux.dynamics.zw*dt;
     result.visual.rgb+=flux.pigment*dt;
+#ifdef FR_GAS_FORCE_IMPLICIT
+    /* A zero exchange retains the existing compensated energy expansion. */
+    if((params.bank&FR_GAS_ZERO_ENERGY_BIT)!=0u&&flux.dynamics.y==0.) return result;
+#endif
     vec2 first=gas_two_sum(s.dynamics.y,flux.dynamics.y*dt),second=gas_two_sum(s.visual.w,first.y);
     precise float last=s.geometry.z+second.y;
     vec2 middle=gas_two_sum(second.x,last),top=gas_two_sum(first.x,middle.x),tail=gas_two_sum(top.y,middle.y);

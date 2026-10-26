@@ -5,6 +5,7 @@
 #define FR_GAS_MODEL_WORDS 20u
 /* Practical Rusanov floor gives two cells squared/second of mixing. */
 #define FR_GAS_PRACTICAL_MIXING_RATE 4.0
+#define FR_GAS_ZERO_ENERGY_BIT 32u
 #define FR_GAS_STAGED_RATES_BIT 65536u
 #define FR_GAS_HYBRID_LINES_BIT 131072u
 #define FR_GAS_TEMPORAL_SOURCE_BIT 262144u

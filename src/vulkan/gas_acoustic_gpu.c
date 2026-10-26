@@ -282,6 +282,8 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(t->practical) bank|=FR_GAS_PRACTICAL_BIT;
     if(skip_empty) bank|=FR_GAS_SKIP_EMPTY_PRESSURE_BIT;
     if(getenv("DC_GAS_COMPARE_ROW_SETUP")) bank|=FR_GAS_COMPARE_ROW_SETUP_BIT;
+    const char *zero_energy=getenv("DC_GAS_ZERO_ENERGY");
+    if(t->practical&&zero_energy&&strcmp(zero_energy,"0")!=0&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) bank|=FR_GAS_ZERO_ENERGY_BIT;
     if(multigrid_enabled(g,t,dt,bank)) bank|=FR_GAS_MULTIGRID_BIT;
     const char *boundary_setting=getenv("DC_GAS_MG_BOUNDARY");
     if((bank&FR_GAS_MULTIGRID_BIT)!=0u&&boundary_setting&&strcmp(boundary_setting,"0")!=0) bank|=FR_GAS_MG_BOUNDARY_BIT;

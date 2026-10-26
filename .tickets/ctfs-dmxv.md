@@ -219,3 +219,7 @@ Lean metadata afterRED045b7ed:50/50 native, practical5/5, enclosure1/1 and core+
 **2026-10-26T06:55:44Z**
 
 512-thread line variant afterRED276065f:deviceeligible(minsubgroup8,maxinvocations1024), compiledlocal512/scratch30976 static3/3, core+sync1/1, practical5/5 andfullnative51/51. Actualfused51229.224/32.805 andsplit51229.468/33.956 are slower; staysopt-in/off. Remeasuredsplit25626.976/31.213 also slowerthanselectedfused25626.466/30.572. No time/resolution/physics-schedule change. Next exactzero-energy exchange fastpath; preparedtestscaffolding remainsunstaged untilREDcheck.
+
+**2026-10-26T13:34:18Z**
+
+Zero-energy opt-in after RED934f81f: full actual Wayland native52/52, practical5/5, enclosure1/1 and core+sync1/1 clean. Exact state/CFL/clock retained; nonzero exchanges retain compensated energy. Audited open1000 27.190mean32.115worst provides no frame gain, so remains OFF in selected profile. Strict performance remains RED; investigating device-local GPU-only work storage next.
