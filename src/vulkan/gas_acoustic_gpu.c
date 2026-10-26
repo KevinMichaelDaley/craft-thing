@@ -125,7 +125,9 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
                 const char *hybrid_path=large_group?"build/shaders/gas_transport_hybrid_large.comp.spv":(use_wide?"build/shaders/gas_transport_hybrid_wide.comp.spv":"build/shaders/gas_transport_hybrid.comp.spv");
                 if(!fr_renderer_compute_init(g,&t->practical_hybrid,buffers,27,16,hybrid_path,err,cap)) goto fail;
                 for(uint32_t axis=0;axis<2;axis++) {
-                    char path[128];snprintf(path,sizeof(path),"build/shaders/gas_transport_hybrid_%c%s.comp.spv",axis?'y':'x',line_suffix);
+                    const char *local_setting=getenv("DC_GAS_LOCAL_STAGES");
+                    bool local_stages=use_wide&&!large_group&&local_setting&&strcmp(local_setting,"0")!=0;
+                    char path[128];snprintf(path,sizeof(path),"build/shaders/gas_transport_hybrid_%c%s%s.comp.spv",axis?'y':'x',line_suffix,local_stages?"_local":"");
                     if(!fr_renderer_compute_init(g,&t->practical_hybrid_axis[axis],buffers,27,16,path,err,cap)) goto fail;
                 }
             }
