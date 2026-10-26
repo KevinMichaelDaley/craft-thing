@@ -15,6 +15,8 @@ bool fr_gas_gpu_rate_metadata(const dc_gpu_t *gpu,float rates[3],uint32_t *width
 bool fr_gas_gpu_source_tile_awake(const dc_gpu_t *gpu,uint32_t x,uint32_t y,bool *awake);
 /** Read the completed GPU activity-route marker; cold diagnostics only. */
 bool fr_gas_gpu_activity_metadata(const dc_gpu_t *gpu,uint32_t *mode);
+/** Read configured hybrid line workgroup width for cold diagnostics. */
+bool fr_gas_gpu_hybrid_line_group(const dc_gpu_t *gpu,uint32_t *width);
 /** Composite read-only gas pigment; presentation never advances gas. */
 void fr_gas_record_overlay(dc_gpu_t *gpu);
 #endif

@@ -40,6 +40,10 @@ bool fr_gas_gpu_activity_metadata(const dc_gpu_t *g,uint32_t *mode) {
     if(!g||!g->gas||!g->gas->acoustic.ready||!mode) return false;
     *mode=((const uint32_t *)g->gas->stats.mapped)[FR_GAS_ROW_NORM_AFTER_WORD];return true;
 }
+bool fr_gas_gpu_hybrid_line_group(const dc_gpu_t *g,uint32_t *width) {
+    if(!g||!g->gas||!g->gas->acoustic.practical_hybrid.pipeline||!width) return false;
+    *width=g->gas->acoustic.hybrid_line_group;return true;
+}
 bool fr_gas_gpu_rate_metadata(const dc_gpu_t *g,float rates[3],uint32_t *width) {
     if(!g||!g->gas||!rates||!width) return false;
     const uint32_t *words=g->gas->stats.mapped;

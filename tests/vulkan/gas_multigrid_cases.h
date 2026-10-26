@@ -6,6 +6,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     bool direct_first=strcmp(setting,"DC_GAS_DIRECT_FIRST_AXIS")==0,quiet_publication=strcmp(setting,"DC_GAS_ROTATE_PUBLISH")==0;
     bool cached_neighbors=strcmp(setting,"DC_GAS_CACHED_NEIGHBORS")==0;
     bool lean_metadata=strcmp(setting,"DC_GAS_LEAN_METADATA")==0;
+    bool line_group=strcmp(setting,"DC_GAS_LINE_GROUP")==0;
     bool all_slots=direct_first||quiet_publication||cached_neighbors||lean_metadata;uint32_t field_count=all_slots?12288u:4096u;
     for(uint32_t k=0;k<4;k++) {const char *value=getenv(names[k]);saved[k]=value?SDL_strdup(value):NULL;}
     ASSERT_EQ(SDL_setenv(names[0],"1",1),0);
@@ -29,7 +30,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     bool empty_tiles=strcmp(setting,"DC_GAS_SKIP_EMPTY_PRESSURE")==0,group_rate=strcmp(setting,"DC_GAS_GROUP_RATE")==0;
     uint32_t requested_width=group_rate&&saved[1]&&strcmp(saved[1],"256")==0?256u:128u;
     for(uint32_t path=0;path<2;path++) {
-        ASSERT_EQ(SDL_setenv(names[1],path?(group_rate&&requested_width==256u?"256":"1"):"0",1),0);dc_gpu_t *g=NULL;
+        ASSERT_EQ(SDL_setenv(names[1],path?(line_group?"512":(group_rate&&requested_width==256u?"256":"1")):"0",1),0);dc_gpu_t *g=NULL;
         ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
         double gravity=cached_neighbors||(lean_metadata&&getenv("DC_GAS_DIAG_ZERO_GRAVITY"))?0:900;
         ASSERT_TRUE(fr_gas_gpu_enable(g,&m,.0012,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&fr_gas_gpu_set_gravity(g,gravity,err,sizeof(err)));
@@ -55,6 +56,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         repeated[path]=g_repeated_compute_bindings;
         fr_gas_gpu_clock_t clock;ASSERT_TRUE(fr_gas_gpu_clock(g,&clock)&&clock.physical_steps==8u&&fabs(clock.advanced_seconds-8.*(metadata?.04f:.02f))<1e-7);
         if(group_rate||all_slots) ASSERT_TRUE(fr_gas_gpu_rate_metadata(g,rates[path],widths+path));
+        if(line_group) ASSERT_TRUE(fr_gas_gpu_hybrid_line_group(g,widths+path));
         if(empty_tiles) ASSERT_TRUE(fr_gas_gpu_pressure_tiles(g,tiles+path));
         ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,path?out:reference,4096,err,sizeof(err))&&present(g,err,sizeof(err)));
         if(all_slots) {
@@ -105,6 +107,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         printf("Lean CFL channel%u %.9g vs%.9g\n",k,rates[1][k],rates[0][k]);
         ASSERT_TRUE(isfinite(rates[1][k])&&fabs(rates[1][k]-rates[0][k])<fmax(1e-7,fabs(rates[0][k])*1e-5));
     }
+    if(line_group) {printf("Hybrid line width%u vs%u\n",widths[1],widths[0]);ASSERT_TRUE(widths[0]==256u&&widths[1]==512u);}
     if(cached_neighbors) {
         printf("GPU activity route%u vs%u\n",activity_modes[1],activity_modes[0]);
         ASSERT_TRUE(activity_modes[0]==0u&&activity_modes[1]==1u&&memcmp(rates[0],rates[1],sizeof(rates[0]))==0);
@@ -172,6 +175,12 @@ static void test_native_lean_metadata_preserves_state_with_one_preparation_pass(
     ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_METADATA","1",1),0);
     check_native_gas_dispatch_fusion("DC_GAS_LEAN_METADATA",true,1u);
     ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_METADATA",saved?saved:"0",1),0);SDL_free(saved);
+}
+static void test_native_large_hybrid_workgroups_preserve_state_and_clock(void) {
+    char err[256]={0};const char *names[]={"DC_GAS_WIDE_SCAN","DC_GAS_HYBRID_LINES","DC_GAS_FUSED_HYBRID"};char *saved[3];
+    for(uint32_t i=0;i<3;i++) {const char *value=getenv(names[i]);saved[i]=value?SDL_strdup(value):NULL;ASSERT_EQ(SDL_setenv(names[i],"1",1),0);}
+    check_native_gas_dispatch_fusion("DC_GAS_LINE_GROUP",false,UINT32_MAX);
+    for(uint32_t i=0;i<3;i++) {ASSERT_EQ(SDL_setenv(names[i],saved[i]?saved[i]:"0",1),0);SDL_free(saved[i]);}
 }
 static void check_native_multigrid_reference_flow(uint32_t dispatch_budget,bool partial_fixture) {
     char err[256]={0};const char *names[]={"DC_GAS_MULTIGRID","DC_GAS_TEMPORAL_SOR","DC_GAS_COARSE_WG"};char *saved[3];
