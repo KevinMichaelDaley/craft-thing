@@ -408,6 +408,7 @@ int main(void) {
     RUN(test_native_empty_pressure_tiles_are_skipped_without_changing_state);
     RUN(test_native_partial_coarse_cells_preserve_walls_with_short_smoothing);
     RUN(test_native_compressed_pressure_rows_keep_stock_and_reference_flow);
+    RUN(test_native_group_rate_reduction_preserves_field_cfl_and_clock);
 #endif
     RUN(test_native_resting_ambient_and_pause_preserve_exact_stock_and_clock);
     RUN(test_native_colored_transport_matches_reference_and_retains_closed_budgets);
