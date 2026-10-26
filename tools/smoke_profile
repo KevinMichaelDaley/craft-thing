@@ -1,9 +1,16 @@
 # Source this file to select the displayed, bounded-work smoke profile.
+# Selected after two displayed 1000-frame passes for closed/open/carved boxes.
 # Explicit caller overrides remain available for diagnostics.
+if [[ ! -v DC_GAS_EXPLICIT_RATE_CACHE && -v DC_GAS_LOCAL_STAGES ]]; then
+    export DC_GAS_EXPLICIT_RATE_CACHE="$DC_GAS_LOCAL_STAGES"
+fi
 for smoke_option in PRACTICAL DEVICE_WORK FIXED_AXIS FUSED_HYBRID DIRECT_FIRST_AXIS \
     GROUP_RATE HALF_PRESSURE MULTIGRID FUSED_METADATA TEMPORAL_SOR COARSE_WG \
-    COARSE ROTATE_PUBLISH HYBRID_LINES FUSED_AXIS FUSED_APPLY WIDE_SCAN LOCAL_GEOMETRY; do
+    COARSE ROTATE_PUBLISH HYBRID_LINES FUSED_AXIS FUSED_APPLY WIDE_SCAN LOCAL_GEOMETRY \
+    SPARSE_OWNERS FUSED_GEOMETRY LOCAL_GEOMETRY_ACTIVITY FUSED_TICK PRESSURE_NOISE \
+    RHS_TILE_CACHE EXPLICIT_RATE_CACHE LAZY_CLEAR; do
     smoke_variable="DC_GAS_$smoke_option"
     if [[ ! -v $smoke_variable ]]; then export "$smoke_variable=1"; fi
 done
+if [[ ! -v DC_GAS_SOR_TILE ]]; then export DC_GAS_SOR_TILE=32; fi
 unset smoke_option smoke_variable

@@ -35,7 +35,7 @@ bool fr_gas_gpu_sparse_owner_metadata(const dc_gpu_t *gpu,bool *selected);
 bool fr_gas_gpu_geometry_activity_metadata(const dc_gpu_t *gpu,bool *selected);
 /** Read the completed deferred scratch-clear marker for cold diagnostics. */
 bool fr_gas_gpu_lazy_clear_metadata(const dc_gpu_t *gpu,bool *selected);
-/** Read the completed unrolled private-stage route marker for cold diagnostics. */
+/** Read the completed explicit face-rate cache marker for cold diagnostics. */
 bool fr_gas_gpu_local_stage_metadata(const dc_gpu_t *gpu,bool *selected);
 /** Read the completed shared-neighbor RHS marker for cold diagnostics. */
 bool fr_gas_gpu_rhs_tile_metadata(const dc_gpu_t *gpu,bool *selected);

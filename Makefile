@@ -1842,7 +1842,7 @@ build/shaders/gas_audit.comp.spv: include/dungeoncraft/gas_audit_layout.h
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_restrict pressure_coarse_sor pressure_prolong)
 build/gas_acoustic_trace_gpu.o: src/vulkan/gas_acoustic_trace_gpu.c src/vulkan/gas_acoustic_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-build/gas_acoustic_gpu.o: src/vulkan/gas_acoustic_gpu.c src/vulkan/gas_acoustic_gpu.h
+build/gas_acoustic_gpu.o: src/vulkan/gas_acoustic_gpu.c src/vulkan/gas_acoustic_gpu.h src/vulkan/gas_acoustic_policy.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/shaders/gas_%.comp.spv: shaders/gas/%.comp $(wildcard shaders/gas/*.glsl) include/dungeoncraft/gas_layout.h include/ferrum/fire/gas_constants.h include/dungeoncraft/terrain_flags.h
 	mkdir -p $(dir $@)

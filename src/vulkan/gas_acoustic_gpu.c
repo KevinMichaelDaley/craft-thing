@@ -4,9 +4,9 @@
 #include <string.h>
 #include "dungeoncraft/gas_layout.h"
 #include "gas_acoustic_gpu.h"
+#include "gas_acoustic_policy.h"
 #include "gas_gpu_internal.h"
 enum { GAS_PRESSURE_SWEEPS=16, GAS_PRESSURE_GROUP=2, GAS_PRACTICAL_SWEEPS=256 };
-static const float gas_multigrid_max_interval=.05f;
 static bool enabled(const char *name) {const char *value=getenv(name);return !value||strcmp(value,"0")!=0;}
 static uint32_t budget(const char *name,uint32_t fallback) {
     const char *value=getenv(name);if(!value) return fallback;
@@ -127,7 +127,7 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
                 const char *hybrid_path=large_group?"build/shaders/gas_transport_hybrid_large.comp.spv":(use_wide?"build/shaders/gas_transport_hybrid_wide.comp.spv":"build/shaders/gas_transport_hybrid.comp.spv");
                 if(!fr_renderer_compute_init(g,&t->practical_hybrid,buffers,27,16,hybrid_path,err,cap)) goto fail;
                 for(uint32_t axis=0;axis<2;axis++) {
-                    const char *local=getenv("DC_GAS_LOCAL_STAGES");bool private_stages=use_wide&&!large_group&&local&&strcmp(local,"0")!=0;
+                    const char *local=getenv("DC_GAS_EXPLICIT_RATE_CACHE");if(!local) local=getenv("DC_GAS_LOCAL_STAGES");bool private_stages=use_wide&&!large_group&&local&&strcmp(local,"0")!=0;
                     char path[128];snprintf(path,sizeof(path),"build/shaders/gas_transport_hybrid_%c%s%s.comp.spv",axis?'y':'x',line_suffix,private_stages?"_local":"");
                     if(!fr_renderer_compute_init(g,&t->practical_hybrid_axis[axis],buffers,27,16,path,err,cap)) goto fail;
                 }
@@ -248,14 +248,9 @@ static void multigrid_dispatch(dc_gpu_t *g,const fr_renderer_compute_t *pipeline
     uint32_t x=count<max_x?count:max_x;
     dispatch(g,pipeline,x,(count+x-1u)/x,dt,bank|(level<<20u));
 }
-static bool large_sor_enabled(const fr_gas_acoustic_gpu_t *t,uint32_t bank) {
-    const char *setting=getenv("DC_GAS_SOR_TILE");
-    return t->sor_tiled.pipeline&&setting&&strcmp(setting,"0")!=0&&(bank&FR_GAS_HALF_PRESSURE_BIT)!=0u&&
-        (bank&(FR_GAS_MG_BOUNDARY_BIT|FR_GAS_COMPARE_ROW_SETUP_BIT))==0u;
-}
 static void multigrid_smooth(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank,uint32_t level,bool post) {
     bool boundary=(bank&FR_GAS_MG_BOUNDARY_BIT)!=0u;
-    if(level==0u&&large_sor_enabled(t,bank)) {
+    if(level==0u&&fr_gas_acoustic_large_sor_enabled(t,bank)) {
         VkBufferCopy copy={.size=(VkDeviceSize)g->width*g->height*4u};barrier(g);
         vkCmdCopyBuffer(g->command,t->fields[4].buffer,t->transport_work.buffer,1,&copy);
         uint32_t passes=t->fine_tile_size==32u?6u:3u;
@@ -289,13 +284,6 @@ static void multigrid_cycle(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32
         uint32_t level=reverse-1u;multigrid_dispatch(g,&t->mg_prolong[level],dt,bank,level);multigrid_smooth(g,t,dt,bank,level,true);
     }
 }
-static bool multigrid_enabled(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank) {
-    const char *setting=getenv("DC_GAS_MULTIGRID");
-    if(!t->practical||dt>gas_multigrid_max_interval||!setting||strcmp(setting,"0")==0||(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)!=0u) return false;
-    uint64_t cells=0;
-    for(uint32_t level=1u;level<=3u;level++) {uint32_t scale=1u<<level;cells+=(uint64_t)((g->width+scale-1u)/scale)*((g->height+scale-1u)/scale);}
-    return cells*32u+(uint64_t)g->width*g->height*4u<=t->transport_work.bytes;
-}
 bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint32_t gy,
     float dt,uint32_t bank,dc_gpu_address_buffer_t *stats,char *err,uint32_t cap) {
     bool trace=getenv("DC_GAS_TRACE")!=NULL&&g->timestamp_bits;
@@ -327,7 +315,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(getenv("DC_GAS_COMPARE_ROW_SETUP")) bank|=FR_GAS_COMPARE_ROW_SETUP_BIT;
     const char *zero_energy=getenv("DC_GAS_ZERO_ENERGY");
     if(t->practical&&zero_energy&&strcmp(zero_energy,"0")!=0&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) bank|=FR_GAS_ZERO_ENERGY_BIT;
-    if(multigrid_enabled(g,t,dt,bank)) bank|=FR_GAS_MULTIGRID_BIT;
+    if(fr_gas_acoustic_multigrid_enabled(g,t,dt,bank)) bank|=FR_GAS_MULTIGRID_BIT;
     const char *noise_setting=getenv("DC_GAS_PRESSURE_NOISE");
     if((bank&FR_GAS_MULTIGRID_BIT)!=0u&&noise_setting&&strcmp(noise_setting,"0")!=0) bank|=FR_GAS_PRESSURE_NOISE_BIT;
     const char *boundary_setting=getenv("DC_GAS_MG_BOUNDARY");
@@ -446,7 +434,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         if((bank&FR_GAS_HALF_PRESSURE_BIT)!=0u) indirect_dispatch(g,t,&t->pack_half_pressure,dt,bank,0);
         bool multigrid=(bank&FR_GAS_MULTIGRID_BIT)!=0u;
         if(multigrid) {
-            if(large_sor_enabled(t,bank)) {
+            if(fr_gas_acoustic_large_sor_enabled(t,bank)) {
                 barrier(g);vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
                 uint32_t size=t->fine_tile_size,groups=((g->width+size-1u)/size)*((g->height+size-1u)/size);
                 dispatch(g,&t->group_tiled,(groups+63u)/64u,1u,dt,bank);
