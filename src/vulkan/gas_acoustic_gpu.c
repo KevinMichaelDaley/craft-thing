@@ -37,6 +37,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->rhs_fused);
     fr_renderer_compute_destroy(g,&t->pack_pressure);fr_renderer_compute_destroy(g,&t->packed_sor);
     fr_renderer_compute_destroy(g,&t->reset_pressure_mask);
+    fr_renderer_compute_destroy(g,&t->pack_half_pressure);fr_renderer_compute_destroy(g,&t->half_sor);
     for(uint32_t i=0;i<3;i++) {
         if(i<2u) {fr_renderer_compute_destroy(g,&t->mg_relax[i]);fr_renderer_compute_destroy(g,&t->mg_temporal[i]);}
         fr_renderer_compute_destroy(g,&t->mg_restrict[i]);fr_renderer_compute_destroy(g,&t->mg_prolong[i]);
@@ -127,6 +128,8 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     if(t->temporal_sor.pipeline) {
         if(!fr_renderer_compute_init(g,&t->pack_pressure,buffers,25,16,"build/shaders/gas_pressure_pack.comp.spv",err,cap)||
            !fr_renderer_compute_init(g,&t->packed_sor,buffers,25,16,"build/shaders/gas_pressure_temporal_packed.comp.spv",err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,&t->pack_half_pressure,buffers,25,16,"build/shaders/gas_pressure_pack_half.comp.spv",err,cap)||
+           !fr_renderer_compute_init(g,&t->half_sor,buffers,25,16,"build/shaders/gas_pressure_temporal_half.comp.spv",err,cap)) goto fail;
     }
     if(!fr_renderer_compute_init(g,&t->reset_pressure_mask,buffers,25,16,"build/shaders/gas_pressure_mask_reset.comp.spv",err,cap)) goto fail;
     for(uint32_t i=0;i<3;i++) {
@@ -173,7 +176,7 @@ static void pressure_sweeps(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32
         VkBufferCopy copy={.size=(VkDeviceSize)g->width*g->height*4u};barrier(g);
         vkCmdCopyBuffer(g->command,t->fields[4].buffer,t->transport_work.buffer,1,&copy);
         for(uint32_t pair=0;pair<count/2u;pair++)
-            indirect_dispatch(g,t,(bank&FR_GAS_PACKED_PRESSURE_BIT)!=0u?&t->packed_sor:&t->temporal_sor,
+            indirect_dispatch(g,t,(bank&FR_GAS_HALF_PRESSURE_BIT)!=0u?&t->half_sor:((bank&FR_GAS_PACKED_PRESSURE_BIT)!=0u?&t->packed_sor:&t->temporal_sor),
                 dt,bank|((pair&1u)!=0u?FR_GAS_TEMPORAL_SOURCE_BIT:0u),0);
     } else for(uint32_t sweep=0;sweep<count;sweep++) {
         indirect_dispatch(g,t,&t->sor,dt,bank,0);indirect_dispatch(g,t,&t->sor,dt,bank|2u,0);
@@ -250,6 +253,9 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     const char *packed_setting=getenv("DC_GAS_PACKED_PRESSURE"),*temporal_setting=getenv("DC_GAS_TEMPORAL_SOR");
     if(t->practical&&t->packed_sor.pipeline&&packed_setting&&strcmp(packed_setting,"0")!=0&&
        temporal_setting&&strcmp(temporal_setting,"0")!=0&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) bank|=FR_GAS_PACKED_PRESSURE_BIT;
+    const char *half_setting=getenv("DC_GAS_HALF_PRESSURE");
+    if((bank&FR_GAS_MULTIGRID_BIT)!=0u&&(bank&FR_GAS_MG_BOUNDARY_BIT)==0u&&t->half_sor.pipeline&&half_setting&&strcmp(half_setting,"0")!=0&&
+       temporal_setting&&strcmp(temporal_setting,"0")!=0&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) bank=(bank&~FR_GAS_PACKED_PRESSURE_BIT)|FR_GAS_HALF_PRESSURE_BIT;
     if(!t->matrix_valid) bank|=4u;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin acoustic advection");
     if(trace) {vkCmdResetQueryPool(g->command,g->timestamp_pool,0,tail_query+2u);vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,0);}
@@ -320,6 +326,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         dispatch(g,&t->compact,(tiles+63u)/64u,1u,dt,bank);
         if(sparse) indirect_dispatch(g,t,&t->prepare_pressure,dt,bank,16);
         if((bank&FR_GAS_PACKED_PRESSURE_BIT)!=0u) indirect_dispatch(g,t,&t->pack_pressure,dt,bank,0);
+        if((bank&FR_GAS_HALF_PRESSURE_BIT)!=0u) indirect_dispatch(g,t,&t->pack_half_pressure,dt,bank,0);
         bool multigrid=(bank&FR_GAS_MULTIGRID_BIT)!=0u;
         if(multigrid) multigrid_cycle(g,t,dt,bank,tiles);
         else if(coarse) {

@@ -39,6 +39,15 @@ for all neighbor predictors. Each owning cell retains full EOS validation;
 buoyancy is applied during finalization before the same guarded commit. Kinetic
 guards can skip their scaled square roots only below a conservative 98-percent
 energy comparison; the existing limiter handles the boundary and extreme values.
+`DC_GAS_HALF_PRESSURE=1` is a separate experimental storage backend for the
+validated sweep schedule. It rounds only derived off-diagonal coefficients down
+to half precision, keeps the right-hand side and reconstructed diagonal in full
+precision, and retains the original capacity term when rebuilding that diagonal.
+The authoritative gas state remains full precision. Unsupported coefficient
+ranges fall back per row to the original storage. The sixteen-byte rows occupy
+unused transport scratch and require one GPU packing pass. This is approximate,
+so stock/flow/stability checks replace byte identity for this option; exact
+storage and exact-reference modes remain available.
 
 ## Modular delivery sequence
 

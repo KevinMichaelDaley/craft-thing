@@ -1,0 +1,23 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "acoustic.glsl"
+layout(set=0,binding=24,std430) restrict buffer HalfPressureWork {uvec4 half_rows[];};
+uint half_floor_pair(vec2 value) {
+    uint bits=packHalf2x16(value);vec2 rounded=unpackHalf2x16(bits);
+    if(rounded.x>value.x&&(bits&65535u)!=0u) bits-=1u;
+    if(rounded.y>value.y&&(bits>>16u)!=0u) bits-=65536u;
+    return bits;
+}
+void main() {
+    uint at=gas_sparse_index(0u);if(at>=params.width*params.height) return;
+    uint row=4u*params.width*params.height+at;vec4 coefficients=stencil[at];vec4 data=correction_data[at];
+    if(data.y<=0.) {half_rows[row]=uvec4(0);return;}
+    if(any(isnan(coefficients))||any(isinf(coefficients))||any(lessThan(coefficients,vec4(0)))||any(greaterThan(coefficients,vec4(65504.)))) {
+        half_rows[row]=uvec4(0u,0u,0u,floatBitsToUint(-1.));return;
+    }
+    uint x=half_floor_pair(coefficients.xy),y=half_floor_pair(coefficients.zw);
+    vec4 quantized=vec4(unpackHalf2x16(x),unpackHalf2x16(y));
+    float capacity=max(0.,pressure[at].z-dot(coefficients,vec4(1))),diagonal=capacity+dot(quantized,vec4(1));
+    float inverse=diagonal>0.?1./diagonal:0.;if(!gas_finite(inverse)) inverse=-1.;
+    half_rows[row]=uvec4(x,y,floatBitsToUint(data.x),floatBitsToUint(inverse));
+}

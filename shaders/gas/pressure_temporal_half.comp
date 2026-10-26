@@ -1,0 +1,5 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#define FR_GAS_LOCAL_SIZE 128
+#define FR_GAS_HALF_PRESSURE 1
+#include "pressure_temporal_body.glsl"

@@ -1,7 +1,15 @@
 #include "acoustic.glsl"
+#ifdef FR_GAS_HALF_PRESSURE
+layout(set=0,binding=24,std430) restrict buffer TemporalWork {uvec4 half_work[];};
+float temporal_value(uint at) {return uintBitsToFloat(half_work[at/4u][at%4u]);}
+void temporal_write(uint at,float value) {half_work[at/4u][at%4u]=floatBitsToUint(value);}
+#else
 layout(set=0,binding=24,std430) restrict buffer TemporalWork {float temporal[];};
+float temporal_value(uint at) {return temporal[at];}
+void temporal_write(uint at,float value) {temporal[at]=value;}
+#endif
 shared float values[256];
-float source_value(uint at) {return (params.bank&FR_GAS_TEMPORAL_SOURCE_BIT)!=0u?temporal[at]:correction[at];}
+float source_value(uint at) {return (params.bank&FR_GAS_TEMPORAL_SOURCE_BIT)!=0u?temporal_value(at):correction[at];}
 void main() {
     uint tile=active_tiles[gl_WorkGroupID.x],width=(params.width+7u)/8u,lane=gl_LocalInvocationIndex;
     ivec2 origin=ivec2(int(tile%width),int(tile/width))*8-4;
@@ -16,7 +24,11 @@ void main() {
             uint own_tile=(uint(p.y)/8u)*width+uint(p.x)/8u;
             awake[color]=(activity[gas_tile_count()+own_tile]&FR_GAS_SOLVE_TILE_BIT)!=0u;
             if(awake[color]) {
-#ifdef FR_GAS_PACKED_PRESSURE
+#ifdef FR_GAS_HALF_PRESSURE
+                uvec4 encoded=half_work[4u*params.width*params.height+at];float inverse=uintBitsToFloat(encoded.w);
+                if(inverse<0.) {coefficients[color]=stencil[at];data[color]=correction_data[at];}
+                else {coefficients[color]=vec4(unpackHalf2x16(encoded.x),unpackHalf2x16(encoded.y));data[color]=vec4(uintBitsToFloat(encoded.z),inverse,1.8,0);}
+#elif defined(FR_GAS_PACKED_PRESSURE)
                 uint base=14u*params.width*params.height+6u*at;
                 coefficients[color]=vec4(temporal[base],temporal[base+1u],temporal[base+2u],temporal[base+3u]);
                 data[color]=vec4(temporal[base+4u],temporal[base+5u],1.8,0);
@@ -46,7 +58,7 @@ void main() {
         uint slot=slots[color],x=slot%16u,y=slot/16u;
         if(valid[color]&&x>=4u&&x<12u&&y>=4u&&y<12u) {
             if((params.bank&FR_GAS_TEMPORAL_SOURCE_BIT)!=0u) correction[indices[color]]=values[slot];
-            else temporal[indices[color]]=values[slot];
+            else temporal_write(indices[color],values[slot]);
         }
     }
 }
