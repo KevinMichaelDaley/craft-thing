@@ -1246,6 +1246,7 @@ int main(int argc, char **argv) {
     uint32_t scripted_frame = 0;
     uint32_t measured_frames = 0;
     double benchmark_sum = 0, benchmark_worst = 0;
+    uint32_t benchmark_worst_frame=0;double benchmark_action_ms=0.;
     bool benchmark_timings=benchmark_frames&&getenv("DC_FRAME_TIMINGS")!=NULL;
     while (running) {
         uint64_t frame_start = SDL_GetPerformanceCounter();
@@ -1489,7 +1490,8 @@ int main(int argc, char **argv) {
                     (SDL_GetPerformanceCounter()-present_done)*scale);
             }
             benchmark_sum += ms;
-            if (ms > benchmark_worst) benchmark_worst = ms;
+            if (ms > benchmark_worst) {benchmark_worst = ms;benchmark_worst_frame=scripted_frame;}
+            if(scripted_frame==DC_BENCHMARK_WARMUP_FRAMES) benchmark_action_ms=ms;
             if (++measured_frames == benchmark_frames) running = false;
         }
         if (!benchmark_frames) SDL_Delay(1);
@@ -1499,6 +1501,8 @@ int main(int argc, char **argv) {
         printf("Displayed full frame %ux%u physics/render (active region %ux%u incl. halo): mean %.3fms worst %.3fms, %u frames\n",
                VIEW_WIDTH, VIEW_HEIGHT, SIM_WIDTH, SIM_HEIGHT,
                benchmark_sum / measured_frames, benchmark_worst, measured_frames);
+        printf("Displayed timing details: worst frame%u; scripted action frame%u %.3fms\n",
+            benchmark_worst_frame,DC_BENCHMARK_WARMUP_FRAMES,benchmark_action_ms);
         if(benchmark_gas_audit) {
             fr_gas_gpu_audit_t audit_after;
             if(!dc_smoke_audit_capture(view,"final",&audit_after,err,sizeof(err))||

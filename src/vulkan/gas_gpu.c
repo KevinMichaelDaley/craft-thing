@@ -115,19 +115,29 @@ static void bind_canonical(dc_gpu_t *g,struct fr_gas_gpu *t) {
         .dstSet=sets[i],.dstBinding=0,.descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&buffer};
     vkUpdateDescriptorSets(g->device,6,writes,0,NULL);
 }
+static void record_geometry(dc_gpu_t *g,struct fr_gas_gpu *t,bool local,bool cached) {
+    uint32_t *words=t->stats.mapped;words[FR_GAS_ERROR_WORD]=0u;
+    bool force=t->geometry_dirty||t->geometry_routes_dirty;
+    words[FR_GAS_ROW_NORM_BEFORE_WORD]=local&&force?1u:0u;
+    uint32_t bank=(cached?t->cached_bank:0u)|(t->direct_publish?FR_GAS_GEOMETRY_DIRECT_BIT:0u)|
+        (local?FR_GAS_GEOMETRY_LOCAL_BIT:0u)|(local&&cached?FR_GAS_GEOMETRY_CACHE_BIT:0u)|
+        (local&&force?FR_GAS_GEOMETRY_FORCE_BIT:0u)|
+        (t->geometry_routes_dirty&&!t->geometry_dirty&&!t->geometry_dynamic?FR_GAS_GEOMETRY_ROUTES_ONLY_BIT:0u);
+    dispatch(g,t,&t->geometry_stage,0,bank);dispatch(g,t,&t->geometry_transfer,0,bank);dispatch(g,t,&t->geometry_commit,0,bank);
+}
+void fr_gas_gpu_record_pending_geometry(dc_gpu_t *g) {
+    struct fr_gas_gpu *t=g->gas;if(!t||!t->geometry_deferred) return;
+    record_geometry(g,t,true,true);barrier(g);
+    vkCmdFillBuffer(g->command,t->stats.buffer,FR_GAS_RATE_WORD*4u,4u,0u);
+    vkCmdFillBuffer(g->command,t->stats.buffer,FR_GAS_RATE_X_WORD*4u,8u,0u);
+    t->geometry_deferred=false;
+}
 bool fr_gas_gpu_refresh_geometry(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!g||!g->gas) return true;
     struct fr_gas_gpu *t=g->gas;if(!t->geometry_dirty&&!t->geometry_dynamic&&!t->geometry_routes_dirty) return true;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas geometry refresh");
     const char *option=getenv("DC_GAS_LOCAL_GEOMETRY");bool local=t->policy==FR_GAS_PRESSURE_PRACTICAL&&option&&strcmp(option,"0")!=0;
-    uint32_t *words=t->stats.mapped;words[FR_GAS_ERROR_WORD]=0u;
-    bool force=t->geometry_dirty||t->geometry_routes_dirty;
-    words[FR_GAS_ROW_NORM_BEFORE_WORD]=local&&force?1u:0u;
-    uint32_t bank=(t->cache_valid?t->cached_bank:0u)|(t->direct_publish?FR_GAS_GEOMETRY_DIRECT_BIT:0u)|
-        (local?FR_GAS_GEOMETRY_LOCAL_BIT:0u)|(local&&t->cache_valid?FR_GAS_GEOMETRY_CACHE_BIT:0u)|
-        (local&&force?FR_GAS_GEOMETRY_FORCE_BIT:0u)|
-        (t->geometry_routes_dirty&&!t->geometry_dirty&&!t->geometry_dynamic?FR_GAS_GEOMETRY_ROUTES_ONLY_BIT:0u);
-    dispatch(g,t,&t->geometry_stage,0,bank);dispatch(g,t,&t->geometry_transfer,0,bank);dispatch(g,t,&t->geometry_commit,0,bank);
+    record_geometry(g,t,local,t->cache_valid);uint32_t *words=t->stats.mapped;
     if(!submit(g,err,cap)) return false;
     if(words[FR_GAS_ERROR_WORD]!=0u) return error(err,cap,"Gas geometry candidate is not numerically valid");
     if(words[FR_GAS_ROW_NORM_BEFORE_WORD]!=0u) {
@@ -255,7 +265,12 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     struct fr_gas_gpu *t=g->gas;t->trace=getenv("DC_GAS_TRACE")!=NULL;clear_stats(t);
     uint64_t start_submits=t->trace_submits,start_queue=t->trace_queue_ticks,start_wait=t->trace_wait_ticks;
     if(g->fluid_work_possible||g->body_count>0u) g->gas->geometry_dynamic=true;
-    if(!fr_gas_gpu_refresh_geometry(g,err,cap)) return false;
+    const char *fusion=getenv("DC_GAS_FUSED_GEOMETRY"),*local=getenv("DC_GAS_LOCAL_GEOMETRY");
+    bool fused=t->cache_valid&&t->direct_publish&&t->policy==FR_GAS_PRESSURE_PRACTICAL&&local&&strcmp(local,"0")!=0&&
+        fusion&&strcmp(fusion,"0")!=0&&(t->geometry_dirty||t->geometry_dynamic||t->geometry_routes_dirty);
+    t->geometry_deferred=fused;
+    if(fused) t->acoustic.geometry_changed=true;
+    else if(!fr_gas_gpu_refresh_geometry(g,err,cap)) return false;
     bool cached=t->cache_valid;t->cache_valid=false;
     uint32_t bank=cached?t->cached_bank:0;float speed=t->cached_rate;
     VkBufferCopy copy={.size=t->state[0].bytes};
@@ -308,6 +323,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
         if(!submit(g,err,cap)) return false;
     }
     t->cached_bank=bank;t->cached_rate=speed;t->cache_valid=true;t->acoustic.geometry_changed=false;
+    if(fused) {t->geometry_dirty=false;t->geometry_routes_dirty=false;}
     if(t->policy==FR_GAS_PRESSURE_LARGE_CFL) t->large_step_hint=hint;
     t->clock.physical_steps++;t->clock.substeps+=accepted;t->clock.advanced_seconds+=seconds;
     if(t->trace) {

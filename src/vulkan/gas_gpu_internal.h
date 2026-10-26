@@ -9,6 +9,8 @@ void fr_gas_gpu_invalidate_cache(dc_gpu_t *gpu);
 void fr_gas_gpu_geometry_changed(dc_gpu_t *gpu,bool dynamic);
 /** Refresh physical voids and conservatively displace stock on the GPU. */
 bool fr_gas_gpu_refresh_geometry(dc_gpu_t *gpu,char *err_buf,uint32_t err_cap);
+/** Append a scheduled warm geometry repair to the current gas command buffer. */
+void fr_gas_gpu_record_pending_geometry(dc_gpu_t *gpu);
 /** Submit one gas command buffer and wait for its completion fence only. */
 bool fr_gas_submit(dc_gpu_t *gpu);
 /** Read completed scalar pressure dispatch size; diagnostic only, no field scan. */
