@@ -311,3 +311,7 @@ Subsequent trials rejected/restored: eight-sweep omega1.5 solver62/66native with
 **2026-10-26T20:41:25Z**
 
 Exact larger SOR tile GREEN2252004: actual native68/68 and core/sync1/1; same12/12sweeps, byte-identical packets,10vs16pressure dispatches. First actual carved1000 is29.226mean33.591worst; finite/inventory/pause pass, strictworst stillRED. Fused physics tick also placement5/5. PlainJacobi/Chebyshev were rejected for practical pressure/motion and performance, not simply exact convergence. Next exact trial extends output tile to32 with40x40scratch/800invocations and2sweeps perdispatch, reducing redundanthalo reads/updates while retaining12/12schedule and original fallback.
+
+**2026-10-26T22:09:05Z**
+
+Final default-profile repeat is RED, not accepted: closed2 has35.474ms worst; open1/2 show maxpressure1.90e6/5.46e6 and existing10x pressure audit rejects them; carved1/2 also timing failures. Earlier CsXeZB six passes are retained but are not substituted for this failed repeat. Investigating explicit rate-cache buffer visibility; restoring the per-stage buffer-memory ordering before a sustained2000-frame open-box regression. All physical time/stock/quality bounds unchanged.
