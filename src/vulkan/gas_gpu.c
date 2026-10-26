@@ -93,6 +93,10 @@ bool fr_gas_submit(dc_gpu_t *g) {
     return queued==VK_SUCCESS&&completed==VK_SUCCESS;
 }
 void fr_gas_gpu_invalidate_cache(dc_gpu_t *g) {if(g&&g->gas) {g->gas->cache_valid=false;g->gas->acoustic.matrix_valid=false;}}
+void fr_gas_gpu_geometry_changed(dc_gpu_t *g,bool dynamic) {(void)g;(void)dynamic;}
+bool fr_gas_gpu_refresh_geometry(dc_gpu_t *g,char *err,uint32_t cap) {
+    (void)g;return error(err,cap,"Gas geometry refresh not implemented");
+}
 static void barrier(dc_gpu_t *g) {
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT|VK_ACCESS_2_TRANSFER_WRITE_BIT,

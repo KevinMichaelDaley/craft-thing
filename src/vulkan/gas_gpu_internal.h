@@ -5,6 +5,10 @@
 void fr_gas_gpu_destroy(dc_gpu_t *gpu);
 /** Invalidate derived flat caches when atlas contents or page coordinates change. */
 void fr_gas_gpu_invalidate_cache(dc_gpu_t *gpu);
+/** Notify changed terrain or potentially moving solid/liquid occupancy. */
+void fr_gas_gpu_geometry_changed(dc_gpu_t *gpu,bool dynamic);
+/** Refresh physical voids and conservatively displace stock on the GPU. */
+bool fr_gas_gpu_refresh_geometry(dc_gpu_t *gpu,char *err_buf,uint32_t err_cap);
 /** Submit one gas command buffer and wait for its completion fence only. */
 bool fr_gas_submit(dc_gpu_t *gpu);
 /** Read completed scalar pressure dispatch size; diagnostic only, no field scan. */
