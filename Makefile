@@ -50,6 +50,7 @@ test_tools:
 	python3 tests/tools/smoke_profile_tests.py
 	python3 tests/tools/shader_stats_tests.py
 test_shader_memory: $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid transport_hybrid_wide transport_hybrid_x transport_hybrid_y transport_hybrid_x_wide transport_hybrid_y_wide transport_hybrid_large transport_hybrid_x_large transport_hybrid_y_large)
+test_shader_memory: $(patsubst %,build/shaders/gas_%.comp.spv,transport_axis_compact transport_axis_compact_wide transport_axis_compact_large)
 	python3 tests/tools/shader_memory_tests.py
 test: test_shader_memory
 test: test_tools

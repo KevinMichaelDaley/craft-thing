@@ -11,6 +11,15 @@ spec.loader.exec_module(module)
 
 
 class ShaderMemoryTests(unittest.TestCase):
+    def test_practical_only_axis_binaries_do_not_branch_on_runtime_policy(self):
+        for name in ("transport_axis_compact", "transport_axis_compact_wide", "transport_axis_compact_large"):
+            with self.subTest(shader=name):
+                instructions = list(module._instructions((ROOT / f"build/shaders/gas_{name}.comp.spv").read_bytes()))
+                policy_constants = {args[1] for opcode, args in instructions if opcode == 43 and args[2] == 32768}
+                tests_policy = any(opcode == 199 and any(value in policy_constants for value in args[-2:])
+                                   for opcode, args in instructions)
+                self.assertFalse(tests_policy, "A practical-only backend must specialize its uniform policy branches")
+
     def test_invalid_spirv_rejected(self):
         with self.assertRaises(ValueError):
             module.workgroup_bytes(b"invalid")
