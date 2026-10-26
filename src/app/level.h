@@ -44,6 +44,10 @@ bool dc_level_view_renderer_mode(dc_level_view_t *view, fr_renderer_mode_t mode)
 bool dc_level_view_toggle_lighting(dc_level_view_t *view);
 /** Create or resume the finite heat bench in a fully resident placement world. */
 bool dc_level_view_setup_heat_bench(dc_level_view_t *view,char *err,uint32_t err_cap);
+/** Create or restore the ordinary dry/wet terrain bonfire placement scene. */
+dc_level_view_t *dc_level_view_create_bonfire(const char *directory,uint64_t seed,char *err,uint32_t err_cap);
+/** Configure the authored bonfire without replenishing restored inventories. */
+bool dc_level_view_setup_bonfire(dc_level_view_t *view,char *err,uint32_t err_cap);
 /** Contact the finite probe at a visible cell; input does not advance physics. */
 bool dc_level_view_heat_probe(dc_level_view_t *view,uint32_t x,uint32_t y,bool active);
 /** Thermal feedback: 0 authored color, 1 temperature, 2 material wetness. */
