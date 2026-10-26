@@ -22,7 +22,7 @@ class SmokeProfileTests(unittest.TestCase):
                        "DIRECT_FIRST_AXIS", "GROUP_RATE", "HALF_PRESSURE",
                        "MULTIGRID", "FUSED_METADATA", "TEMPORAL_SOR", "COARSE_WG",
                        "COARSE", "ROTATE_PUBLISH", "HYBRID_LINES", "FUSED_AXIS",
-                       "FUSED_APPLY", "WIDE_SCAN"):
+                       "FUSED_APPLY", "WIDE_SCAN", "LOCAL_GEOMETRY"):
             self.assertEqual(env.get("DC_GAS_" + option), "1", option)
         for option in ("ZERO_ENERGY", "LEAN_METADATA", "CACHED_NEIGHBORS",
                        "COMPUTE_BARRIERS", "PACKED_PRESSURE", "MG_BOUNDARY"):
@@ -30,9 +30,10 @@ class SmokeProfileTests(unittest.TestCase):
         self.assertNotIn("DC_GAS_LINE_GROUP", env)
 
     def test_diagnostic_overrides_remain_explicit(self):
-        env = self.environment({"DC_GAS_DEVICE_WORK": "0", "DC_GAS_LINE_GROUP": "512"})
+        env = self.environment({"DC_GAS_DEVICE_WORK": "0", "DC_GAS_LINE_GROUP": "512", "DC_GAS_LOCAL_GEOMETRY": "0"})
         self.assertEqual(env["DC_GAS_DEVICE_WORK"], "0")
         self.assertEqual(env["DC_GAS_LINE_GROUP"], "512")
+        self.assertEqual(env["DC_GAS_LOCAL_GEOMETRY"], "0")
 
 
 if __name__ == "__main__":
