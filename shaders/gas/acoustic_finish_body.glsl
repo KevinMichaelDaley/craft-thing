@@ -3,7 +3,7 @@
 #include "group_rate.glsl"
 #endif
 void main() {
-    bool practical=(params.bank&FR_GAS_PRACTICAL_BIT)!=0u;
+    bool practical=gas_practical_policy();
     if(!practical&&!(uintBitsToFloat(stats[FR_GAS_RESIDUAL_WORD])<=1e-7)) return;
 #ifdef FR_GAS_GROUP_RATE
     uint tiles_per_group=FR_GAS_LOCAL_SIZE/64u,rank=gl_WorkGroupID.x*tiles_per_group+gl_LocalInvocationIndex/64u;

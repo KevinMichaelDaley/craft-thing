@@ -1,6 +1,13 @@
 #ifndef FR_GAS_MODEL_GLSL
 #define FR_GAS_MODEL_GLSL
 float gas_parameter(uint word) {return uintBitsToFloat(parameters[word]);}
+bool gas_practical_policy() {
+#ifdef FR_GAS_FORCE_PRACTICAL
+    return true;
+#else
+    return (params.bank&FR_GAS_PRACTICAL_BIT)!=0u;
+#endif
+}
 bool gas_implicit_policy() {
 #ifdef FR_GAS_FORCE_IMPLICIT
     return true;

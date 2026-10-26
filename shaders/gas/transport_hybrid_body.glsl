@@ -1,4 +1,5 @@
 #define FR_GAS_COMPACT_WORK 1
+#define FR_GAS_FORCE_PRACTICAL 1
 #define FR_GAS_FUSED_AXIS 1
 #define FR_GAS_FACTOR_ENTRY gas_factor_run
 #define FR_GAS_PREFIX_ENTRY gas_prefix_run

@@ -3,7 +3,7 @@ Primitive gas_transport_metadata(uint index) {
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
     if(atlas==0xffffffffu) {acoustic[index]=vec4(0);provisional[index]=vec4(0);force[index]=vec2(0);return gas_empty_primitive();}
     Gas old=gas_source(p),transported=gas_provisional(atlas);Primitive center=gas_cached(p);bool valid=false;
-    if((params.bank&FR_GAS_PRACTICAL_BIT)!=0u) transported=gas_practical_state(transported);
+    if(gas_practical_policy()) transported=gas_practical_state(transported);
     Primitive moved=gas_primitive(transported,valid);if(!valid) {
         gas_error(index);uint reason=FR_GAS_REJECT_TRANSPORT;
         if(any(lessThan(transported.species,vec4(0)))||transported.dynamics.x<0.) reason|=FR_GAS_REJECT_NEGATIVE_SPECIES;
@@ -28,7 +28,7 @@ Primitive gas_transport_metadata(uint index) {
     provisional[index]=vec4(value.dynamics.zw,work,old.geometry.x);
     vec2 difference=gas_two_sum(transported.dynamics.y,-old.dynamics.y);
     correction_data[index].w=difference.x+(difference.y+(transported.visual.w-old.visual.w)+(transported.geometry.z-old.geometry.z));
-    if((params.bank&FR_GAS_PRACTICAL_BIT)!=0u) correction_data[index].w=gas_thermal_energy(transported)-gas_thermal_energy(old);
+    if(gas_practical_policy()) correction_data[index].w=gas_thermal_energy(transported)-gas_thermal_energy(old);
 #ifndef FR_GAS_FUSED_METADATA_RHS
     gas_write_provisional(atlas,value);
 #endif

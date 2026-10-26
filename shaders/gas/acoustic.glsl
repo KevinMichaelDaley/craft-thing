@@ -16,20 +16,20 @@ uint gas_tile_count() {return ((params.width+7u)/8u)*((params.height+7u)/8u);}
 vec2 gas_large_pressure_state(Gas value,float old_pressure) {
     precise float mass=(((value.species.x+value.species.y)+value.species.z)+value.species.w)+value.dynamics.x;
     precise float energy=(value.dynamics.y+value.visual.w)+value.geometry.z;
-    if((params.bank&FR_GAS_PRACTICAL_BIT)!=0u) energy=gas_thermal_energy(value);
-    float fraction=(params.bank&FR_GAS_PRACTICAL_BIT)!=0u?1.:1.-FR_GAS_LARGE_ENERGY_ADVECTION;
+    if(gas_practical_policy()) energy=gas_thermal_energy(value);
+    float fraction=gas_practical_policy()?1.:1.-FR_GAS_LARGE_ENERGY_ADVECTION;
     precise float numerator=fraction*energy+gas_parameter(FR_GAS_KINETIC_WORD)*old_pressure*value.geometry.x;
     return mass>0.?vec2(mass/value.geometry.x,numerator/mass):vec2(0);
 }
 float gas_pressure_relaxation(vec4 coefficients,float diagonal) {
-    if((params.bank&FR_GAS_PRACTICAL_BIT)!=0u) return 1.8;
+    if(gas_practical_policy()) return 1.8;
     precise float total=((coefficients.x+coefficients.y)+coefficients.z)+coefficients.w;
     precise float ratio=diagonal>0.?min(total/diagonal,.99999994):0.;
     precise float remainder=1.-ratio*ratio;
     precise float denominator=1.+sqrt(max(0.,remainder));
     return 2./denominator;
 }
-bool gas_pressure_accepted() {return stats[FR_GAS_ERROR_WORD]==0u&&((params.bank&FR_GAS_PRACTICAL_BIT)!=0u||uintBitsToFloat(stats[FR_GAS_RESIDUAL_WORD])<=1e-7);}
+bool gas_pressure_accepted() {return stats[FR_GAS_ERROR_WORD]==0u&&(gas_practical_policy()||uintBitsToFloat(stats[FR_GAS_RESIDUAL_WORD])<=1e-7);}
 bool gas_advected(uint index) {
     uint tile=(index/params.width/8u)*((params.width+7u)/8u)+(index%params.width/8u);
     return (activity[gas_tile_count()+tile]&1u)!=0u;

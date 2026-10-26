@@ -38,7 +38,7 @@ void FR_GAS_FACTOR_ENTRY() {
 #ifdef FR_GAS_COMPACT_WORK
     if((params.bank&FR_GAS_HYBRID_LINES_BIT)!=0u&&transport_work[line*length].mass.w<0.) return;
 #endif
-    bool practical=(params.bank&FR_GAS_PRACTICAL_BIT)!=0u;
+    bool practical=gas_practical_policy();
     float maximum_speed=0.;
     for(uint cell=begin;cell<end;cell++) maximum_speed=max(maximum_speed,abs(gas_cached(transport_point(line,cell)).hydro[transport_axis()+1u]));
     float subgroup_speed=subgroupMax(maximum_speed);

@@ -179,3 +179,7 @@ Fused RHS refactor reuses owning metadata pressure head and avoids computing the
 **2026-10-26T04:17:58Z**
 
 Compiler diagnostic tooling: named actual-display selected5 gas pipelines show0 spills/fills; hybrid is SIMD8,6185instructions/19loops, fused RHS SIMD8/2184instructions, finish SIMD8/2438instructions, fine pressure SIMD16/499instructions. Earlier unnamed dump included huge spills in OTHER startup pipelines and was interrupted, not a test pass. Permanent wrapper strips only debug metadata for selected cache misses, retains arithmetic, restores built SPIR-V byte-for-byte; captured evidence build/smoke_shader_stats_YDfYng.2/2 parser tests. Diagnostic timing is excluded from performance claims. Crossover1/4/6 trials offered no clear gain; restored validated3stage.
+
+**2026-10-26T04:26:16Z**
+
+Practical-only specialization of hybrid transport/grouped finish/fused RHS: strict fallback branches remain in original diagnostic pipelines. CPU dispatch already admits these specialized pipelines only for practical mode. Exact native transport/metadata and field+CFL comparisons pass; core+sync comparisons clean; full native43/43. Audited open1000 26.898mean30.325worst, invalid0, species3.96e-5/pigment4.70e-7/energy-ledger-2.06e-5 relative drift and four paused captures identical. Strict worst still RED by0.325ms; no pressure-schedule, clock, resolution or acceptance-limit change.

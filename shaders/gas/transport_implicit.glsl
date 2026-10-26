@@ -28,9 +28,9 @@ vec2 transport_rates(ivec2 p,int direction) {
     ivec2 q=p+step;Primitive own=gas_cached(p),other=gas_cached(q);
     if(own.metric.w<=0.||other.metric.w<=0.||!gas_gate_open(direction>0?p:q,transport_axis())) return vec2(0);
     float u=own.hydro[transport_axis()+1u],v=other.hydro[transport_axis()+1u],speed=max(abs(u),abs(v));
-    if((params.bank&FR_GAS_PRACTICAL_BIT)!=0u) speed=max(speed,FR_GAS_PRACTICAL_MIXING_RATE);
+    if(gas_practical_policy()) speed=max(speed,FR_GAS_PRACTICAL_MIXING_RATE);
     float area=.5*min(own.metric.w,other.metric.w)/own.metric.w;
-    float energy_fraction=(params.bank&FR_GAS_PRACTICAL_BIT)!=0u?1.:FR_GAS_LARGE_ENERGY_ADVECTION;
+    float energy_fraction=gas_practical_policy()?1.:FR_GAS_LARGE_ENERGY_ADVECTION;
     return area*vec2(speed+float(direction)*u,speed+energy_fraction*float(direction)*u);
 }
 GasFlux transport_add(GasFlux a,GasFlux b) {
@@ -40,7 +40,7 @@ GasFlux transport_scale(GasFlux a,vec2 factor) {
     float energy=a.dynamics.y*factor.y;a.species*=factor.x;a.dynamics*=factor.x;a.dynamics.y=energy;a.pigment*=factor.x;return a;
 }
 GasFlux transport_state(Gas value) {
-    float energy=(params.bank&FR_GAS_PRACTICAL_BIT)!=0u?gas_thermal_energy(value):gas_energy(value);
+    float energy=gas_practical_policy()?gas_thermal_energy(value):gas_energy(value);
     return GasFlux(value.species,vec4(value.dynamics.x,energy,value.dynamics.zw),value.visual.rgb);
 }
 GasFlux transport_work_at(ivec2 p) {

@@ -46,7 +46,7 @@ void main() {
     float rhs=energy_delta+
         (old_capacity>0.?internal*(1.-capacity/old_capacity):internal);
     float dt=uintBitsToFloat(params.seconds),diagonal=capacity;vec4 coefficients=vec4(0);
-    bool large_energy=(params.bank&FR_GAS_LARGE_ENERGY_BIT)!=0u;
+    bool large_energy=gas_practical_policy()||(params.bank&FR_GAS_LARGE_ENERGY_BIT)!=0u;
 #ifdef FR_GAS_FUSED_METADATA_RHS
     Primitive own_stage=large_energy?(advected?metadata_stage:gas_rhs_stage(p,index)):gas_empty_primitive();
 #else
@@ -79,9 +79,9 @@ void main() {
             precise float density=own_stage.hydro.x+other_stage.hydro.x;
             precise float energy=own_stage.hydro.x*own_stage.metric.x+other_stage.hydro.x*other_stage.metric.x;
             enthalpy=density>0.?energy/density:0.;
-            if((params.bank&FR_GAS_PRACTICAL_BIT)!=0u&&(own_stage.hydro.x<=0.||other_stage.hydro.x<=0.)) enthalpy=0.;
+            if(gas_practical_policy()&&(own_stage.hydro.x<=0.||other_stage.hydro.x<=0.)) enthalpy=0.;
         }
-        if(!large_energy&&(params.bank&FR_GAS_PRACTICAL_BIT)!=0u&&(gas_cached(p).hydro.x<=0.||other.hydro.x<=0.)) enthalpy=0.;
+        if(!large_energy&&gas_practical_policy()&&(gas_cached(p).hydro.x<=0.||other.hydro.x<=0.)) enthalpy=0.;
         float coefficient=(dt*dt)*(area*enthalpy);
         normalized[d]=area*enthalpy;
         float flux=.5*(provisional[index][d/2u]/volume+neighbor[d/2u]/neighbor.w)*area;

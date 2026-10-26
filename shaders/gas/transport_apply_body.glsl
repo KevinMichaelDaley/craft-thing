@@ -2,7 +2,7 @@
 #define FR_GAS_TRANSPORT_APPLY_BODY_GLSL
 Gas transport_update_state(Gas source,GasFlux incoming,GasFlux outgoing,float trace_scale) {
     float energy_in=incoming.dynamics.y,energy_out=outgoing.dynamics.y;
-    bool practical=(params.bank&FR_GAS_PRACTICAL_BIT)!=0u;float old_kinetic=practical?gas_kinetic_energy(source):0.;
+    bool practical=gas_practical_policy();float old_kinetic=practical?gas_kinetic_energy(source):0.;
     if(practical) {GasFlux remove=gas_empty_flux();remove.dynamics.y=-old_kinetic;source=gas_add_flux(source,remove,1.);}
     precise vec2 carrier=vec2(source.species.z,source.dynamics.x)*trace_scale+vec2(incoming.species.z,incoming.dynamics.x)-vec2(outgoing.species.z,outgoing.dynamics.x);
     precise vec3 pigment=source.visual.rgb*trace_scale+incoming.pigment-outgoing.pigment;
