@@ -18,7 +18,7 @@ typedef struct {
     fr_renderer_compute_t practical_hybrid;
     fr_renderer_compute_t practical_hybrid_axis[2];
     uint32_t hybrid_line_group,fine_tile_size;
-    fr_renderer_compute_t temporal_sor,sor_tile16,group_tile16;
+    fr_renderer_compute_t temporal_sor,sor_tiled,group_tiled;
     fr_renderer_compute_t coarse_group;
     fr_renderer_compute_t mg_relax[2],mg_restrict[3],mg_prolong[3];
     fr_renderer_compute_t mg_temporal[2];

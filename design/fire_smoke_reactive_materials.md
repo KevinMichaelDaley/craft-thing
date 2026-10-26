@@ -85,7 +85,7 @@ and clocks with eight submissions instead of sixteen; core/synchronization and
 the five placement/edit/save/stream checks pass. The displayed carved run was
 29.613 ms mean / 35.930 ms worst, so this remains an optional optimization.
 
-`DC_GAS_SOR_TILE16=1` is an exact temporal blocking trial for half-row multigrid
+`DC_GAS_SOR_TILE=1` is an exact temporal blocking trial for half-row multigrid
 on hardware supporting 512 invocations per workgroup. GPU compaction groups
 active 8-pixel tiles into 16-pixel output tiles with an 8-pixel halo. Three
 four-sweep dispatches retain the twelve fine sweeps on each side of the V-cycle;

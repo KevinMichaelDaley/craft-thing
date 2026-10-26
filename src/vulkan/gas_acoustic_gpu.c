@@ -36,7 +36,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->practical_hybrid);
     for(uint32_t i=0;i<2;i++) fr_renderer_compute_destroy(g,&t->practical_hybrid_axis[i]);
     fr_renderer_compute_destroy(g,&t->temporal_sor);
-    fr_renderer_compute_destroy(g,&t->sor_tile16);fr_renderer_compute_destroy(g,&t->group_tile16);
+    fr_renderer_compute_destroy(g,&t->sor_tiled);fr_renderer_compute_destroy(g,&t->group_tiled);
     fr_renderer_compute_destroy(g,&t->coarse_group);
     fr_renderer_compute_destroy(g,&t->rhs_fused);
     fr_renderer_compute_destroy(g,&t->metadata_lean);fr_renderer_compute_destroy(g,&t->rhs_lean);
@@ -134,15 +134,15 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     }
     if(properties.limits.maxComputeWorkGroupInvocations>=128u&&properties.limits.maxComputeWorkGroupSize[0]>=128u&&
        !fr_renderer_compute_init(g,&t->temporal_sor,buffers,27,16,"build/shaders/gas_pressure_temporal.comp.spv",err,cap)) goto fail;
-    const char *tile_setting=getenv("DC_GAS_SOR_TILE16");
+    const char *tile_setting=getenv("DC_GAS_SOR_TILE");
     uint32_t fine_tile=tile_setting&&strcmp(tile_setting,"32")==0?32u:16u,invocations=fine_tile==32u?800u:512u;
     if(properties.limits.maxComputeWorkGroupInvocations>=invocations&&properties.limits.maxComputeWorkGroupSize[0]>=invocations&&
        properties.limits.maxComputeSharedMemorySize>=(fine_tile==32u?6400u:4096u)) {
         char path[128];t->fine_tile_size=fine_tile;
         snprintf(path,sizeof(path),"build/shaders/gas_pressure_temporal_tile%u.comp.spv",fine_tile);
-        if(!fr_renderer_compute_init(g,&t->sor_tile16,buffers,27,16,path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,&t->sor_tiled,buffers,27,16,path,err,cap)) goto fail;
         snprintf(path,sizeof(path),"build/shaders/gas_pressure_group%u.comp.spv",fine_tile);
-        if(!fr_renderer_compute_init(g,&t->group_tile16,buffers,27,16,path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,&t->group_tiled,buffers,27,16,path,err,cap)) goto fail;
     }
     if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_COARSE_GROUP_CAPACITY*4u&&
        properties.limits.maxComputeWorkGroupInvocations>=128u&&properties.limits.maxComputeWorkGroupSize[0]>=128u) {
@@ -246,8 +246,8 @@ static void multigrid_dispatch(dc_gpu_t *g,const fr_renderer_compute_t *pipeline
     dispatch(g,pipeline,x,(count+x-1u)/x,dt,bank|(level<<20u));
 }
 static bool large_sor_enabled(const fr_gas_acoustic_gpu_t *t,uint32_t bank) {
-    const char *setting=getenv("DC_GAS_SOR_TILE16");
-    return t->sor_tile16.pipeline&&setting&&strcmp(setting,"0")!=0&&(bank&FR_GAS_HALF_PRESSURE_BIT)!=0u&&
+    const char *setting=getenv("DC_GAS_SOR_TILE");
+    return t->sor_tiled.pipeline&&setting&&strcmp(setting,"0")!=0&&(bank&FR_GAS_HALF_PRESSURE_BIT)!=0u&&
         (bank&(FR_GAS_MG_BOUNDARY_BIT|FR_GAS_COMPARE_ROW_SETUP_BIT))==0u;
 }
 static void multigrid_smooth(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32_t bank,uint32_t level,bool post) {
@@ -256,7 +256,7 @@ static void multigrid_smooth(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint3
         VkBufferCopy copy={.size=(VkDeviceSize)g->width*g->height*4u};barrier(g);
         vkCmdCopyBuffer(g->command,t->fields[4].buffer,t->transport_work.buffer,1,&copy);
         uint32_t passes=t->fine_tile_size==32u?6u:3u;
-        for(uint32_t pass=0u;pass<passes;pass++) indirect_dispatch(g,t,&t->sor_tile16,dt,
+        for(uint32_t pass=0u;pass<passes;pass++) indirect_dispatch(g,t,&t->sor_tiled,dt,
             bank|((pass&1u)!=0u?FR_GAS_TEMPORAL_SOURCE_BIT:0u),48);
         if((passes&1u)!=0u) {barrier(g);vkCmdCopyBuffer(g->command,t->transport_work.buffer,t->fields[4].buffer,1,&copy);}
         return;
@@ -433,7 +433,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
             if(large_sor_enabled(t,bank)) {
                 barrier(g);vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
                 uint32_t size=t->fine_tile_size,groups=((g->width+size-1u)/size)*((g->height+size-1u)/size);
-                dispatch(g,&t->group_tile16,(groups+63u)/64u,1u,dt,bank);
+                dispatch(g,&t->group_tiled,(groups+63u)/64u,1u,dt,bank);
             }
             multigrid_cycle(g,t,dt,bank,tiles);
         }
