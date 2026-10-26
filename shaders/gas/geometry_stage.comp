@@ -4,7 +4,8 @@
 void main() {
     uint index=gas_index();if(index>=params.width*params.height) return;
     uint atlas=gas_atlas(ivec2(int(index%params.width),int(index/params.width)));
-    Primitive value=Primitive(vec4(atlas!=0xffffffffu?geometry_void(index,atlas):0.,0,0,0),vec4(0));
+    float available=atlas==0xffffffffu?0.:((params.bank&FR_GAS_GEOMETRY_ROUTES_ONLY_BIT)!=0u?world[atlas].geometry.y:geometry_void(index,atlas));
+    Primitive value=Primitive(vec4(available,0,0,0),vec4(0));
     if((params.bank&FR_GAS_GEOMETRY_LOCAL_BIT)!=0u) {
         float previous=0.;
         if(atlas!=0xffffffffu) previous=world[atlas].geometry.y;

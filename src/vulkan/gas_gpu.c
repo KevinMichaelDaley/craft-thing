@@ -12,7 +12,7 @@
 #include "gas_gpu_state.h"
 bool fr_gas_gpu_reused_line_rate(dc_gpu_t *g,bool *used) {
     if(!g||!g->gas||!used) return false;
-    *used=false;return true;
+    *used=(((uint32_t *)g->gas->stats.mapped)[15]&4u)!=0u;return true;
 }
 bool fr_gas_gpu_pressure_tiles(const dc_gpu_t *g,uint32_t *tiles) {
     if(!g||!g->gas||!g->gas->acoustic.ready||!tiles) return false;
@@ -117,14 +117,16 @@ static void bind_canonical(dc_gpu_t *g,struct fr_gas_gpu *t) {
 }
 bool fr_gas_gpu_refresh_geometry(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!g||!g->gas) return true;
-    struct fr_gas_gpu *t=g->gas;if(!t->geometry_dirty&&!t->geometry_dynamic) return true;
+    struct fr_gas_gpu *t=g->gas;if(!t->geometry_dirty&&!t->geometry_dynamic&&!t->geometry_routes_dirty) return true;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas geometry refresh");
     const char *option=getenv("DC_GAS_LOCAL_GEOMETRY");bool local=t->policy==FR_GAS_PRESSURE_PRACTICAL&&option&&strcmp(option,"0")!=0;
     uint32_t *words=t->stats.mapped;words[FR_GAS_ERROR_WORD]=0u;
-    words[FR_GAS_ROW_NORM_BEFORE_WORD]=local&&t->geometry_dirty?1u:0u;
+    bool force=t->geometry_dirty||t->geometry_routes_dirty;
+    words[FR_GAS_ROW_NORM_BEFORE_WORD]=local&&force?1u:0u;
     uint32_t bank=(t->cache_valid?t->cached_bank:0u)|(t->direct_publish?FR_GAS_GEOMETRY_DIRECT_BIT:0u)|
         (local?FR_GAS_GEOMETRY_LOCAL_BIT:0u)|(local&&t->cache_valid?FR_GAS_GEOMETRY_CACHE_BIT:0u)|
-        (local&&t->geometry_dirty?FR_GAS_GEOMETRY_FORCE_BIT:0u);
+        (local&&force?FR_GAS_GEOMETRY_FORCE_BIT:0u)|
+        (t->geometry_routes_dirty&&!t->geometry_dirty&&!t->geometry_dynamic?FR_GAS_GEOMETRY_ROUTES_ONLY_BIT:0u);
     dispatch(g,t,&t->geometry_stage,0,bank);dispatch(g,t,&t->geometry_transfer,0,bank);dispatch(g,t,&t->geometry_commit,0,bank);
     if(!submit(g,err,cap)) return false;
     if(words[FR_GAS_ERROR_WORD]!=0u) return error(err,cap,"Gas geometry candidate is not numerically valid");
@@ -134,7 +136,7 @@ bool fr_gas_gpu_refresh_geometry(dc_gpu_t *g,char *err,uint32_t cap) {
         } else fr_gas_gpu_invalidate_cache(g);
         t->large_step_hint=0;
     }
-    t->geometry_dirty=false;return true;
+    t->geometry_dirty=false;t->geometry_routes_dirty=false;return true;
 }
 static bool set_direct_publish(dc_gpu_t *g,struct fr_gas_gpu *t,bool direct,char *err,uint32_t cap) {
     if(t->direct_publish==direct) return true;
@@ -394,6 +396,7 @@ bool fr_gas_gpu_gate(dc_gpu_t *g,uint32_t x,uint32_t y,uint32_t width,uint32_t h
     if(!g||!g->gas||x>=g->width||y>=g->height||!width||!height||width>g->width-x||height>g->height-y||axis>1u)
         return error(err,cap,"Invalid gas valve rectangle");
     g->gas->acoustic.matrix_valid=false;
+    g->gas->geometry_routes_dirty=true;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas valve command");
     barrier(g);uint32_t push[8]={g->width,g->height,x,y,width,height,axis,closed};
     fr_renderer_compute_t *pipeline=&g->gas->gate;

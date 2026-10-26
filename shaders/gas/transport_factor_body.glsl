@@ -39,6 +39,9 @@ void FR_GAS_FACTOR_ENTRY() {
     if((params.bank&FR_GAS_HYBRID_LINES_BIT)!=0u&&transport_work[line*length].mass.w<0.) return;
 #endif
     bool practical=gas_practical_policy();
+    bool reused_rate=(params.bank&FR_GAS_REUSE_LINE_RATE_BIT)!=0u&&(params.bank&FR_GAS_HYBRID_LINES_BIT)!=0u&&length<=FR_GAS_EXPLICIT_LINE_CAPACITY;
+    if(reused_rate&&rank==0u) atomicOr(stats[FR_GAS_ROW_NORM_AFTER_WORD],4u);
+    if(!reused_rate) {
     float maximum_speed=0.;
     for(uint cell=begin;cell<end;cell++) maximum_speed=max(maximum_speed,abs(gas_cached(transport_point(line,cell)).hydro[transport_axis()+1u]));
     float subgroup_speed=subgroupMax(maximum_speed);
@@ -47,6 +50,7 @@ void FR_GAS_FACTOR_ENTRY() {
     for(uint group=0u;group<gl_NumSubgroups;group++) maximum_speed=max(maximum_speed,GROUP_PEAK(group));
     if(maximum_speed==0.) {if(rank==0u) transport_work[line*length].mass.w=-1.;return;}
     barrier();
+    }
     vec4 mass=vec4(1,0,0,1),energy=mass;float peak=0.;
     for(uint cell=begin;cell<end;cell++) {
         ivec2 p=transport_point(line,cell);vec2 lower,diagonal,upper,previous;vec4 face;coefficients(p,dt,lower,diagonal,upper,previous,face);
