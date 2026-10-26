@@ -9,6 +9,18 @@ SPEC.loader.exec_module(TRACE)
 
 
 class SmokeTraceTests(unittest.TestCase):
+    def test_gpu_setup_scopes_separate_physics_geometry_and_rhs(self):
+        rows = TRACE.frames([
+            "Gas setup GPU tick1.0 geometry2.0 clear0.5 activity0.25 rhs3.0 ms\n",
+            "Gas setup GPU tick0.0 geometry0.5 clear0.1 activity0.1 rhs1.0 ms\n",
+            "app-frame,9,15.0ms\n",
+        ])
+        self.assertAlmostEqual(rows[0]["physical_gpu_ms"], 1.)
+        self.assertAlmostEqual(rows[0]["geometry_gpu_ms"], 2.5)
+        self.assertAlmostEqual(rows[0]["clear_gpu_ms"], .6)
+        self.assertAlmostEqual(rows[0]["activity_gpu_ms"], .35)
+        self.assertAlmostEqual(rows[0]["rhs_gpu_ms"], 4.)
+
     def test_present_setup_accounts_tick_service_and_second_event_pump(self):
         rows = TRACE.frames([
             "Present setup tick31.0 service0.2 pump17.0\n",
