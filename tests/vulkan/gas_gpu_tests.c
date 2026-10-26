@@ -458,5 +458,6 @@ int main(void) {
     RUN(test_native_practical_offset_wall_does_not_drive_sealed_neighbor);
     RUN(test_native_practical_variable_intervals_stay_finite_without_retry_stalls);
     RUN(test_native_checkpoint_preserves_compensation_geometry_valves_and_ownership);
+    RUN(test_native_new_streamed_slot_initializes_once_without_refilling_existing_or_dormant_stock);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0||g_pass==0;
 }

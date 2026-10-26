@@ -45,4 +45,10 @@ bool fr_gas_gpu_export_checkpoint(dc_gpu_t *gpu,uint32_t slot,
 /** Validate the complete immutable checkpoint before publishing any stock. */
 bool fr_gas_gpu_import_checkpoint(dc_gpu_t *gpu,uint32_t slot,
     const fr_gas_checkpoint_chunk_t *input,char *err_buf,uint32_t err_cap);
+/** Mark a genuinely new streamed chunk for GPU ambient initialization. Never
+ * use for a restored chunk; admission metadata is independent of cell stock. */
+bool fr_gas_gpu_queue_ambient_chunk(dc_gpu_t *gpu,uint32_t slot,char *err_buf,uint32_t err_cap);
+/** Initialize all newly mapped marked chunks in one cold GPU transaction.
+ * Unmapped marks stay pending; existing stock and physical clock are untouched. */
+bool fr_gas_gpu_initialize_queued(dc_gpu_t *gpu,char *err_buf,uint32_t err_cap);
 #endif

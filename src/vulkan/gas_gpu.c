@@ -322,6 +322,12 @@ bool fr_gas_gpu_clock(const dc_gpu_t *g,fr_gas_gpu_clock_t *out) {
     if(!g||!g->gas||!out) return false;
     *out=g->gas->clock;return true;
 }
+bool fr_gas_gpu_queue_ambient_chunk(dc_gpu_t *g,uint32_t slot,char *err,uint32_t cap) {
+    (void)g;(void)slot;return error(err,cap,"Queued ambient initialization not implemented");
+}
+bool fr_gas_gpu_initialize_queued(dc_gpu_t *g,char *err,uint32_t cap) {
+    (void)g;return error(err,cap,"Queued ambient initialization not implemented");
+}
 bool fr_gas_gpu_export_checkpoint(dc_gpu_t *g,uint32_t slot,fr_gas_checkpoint_chunk_t *out,char *err,uint32_t cap) {
     if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!out) return error(err,cap,"Invalid cold gas checkpoint export");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas checkpoint export");
