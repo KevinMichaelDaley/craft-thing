@@ -50,12 +50,25 @@ complete the module's remaining edit/checkpoint/usability integration.
 
 ## Numerical reference gate
 
+The moving carved-stone case exposed a genuine vacuum edge: an accepted packet
+had exactly zero gas mass/energy, but its transport candidate retained
+`1.14107925e-37` (and in a second run `6.43374195e-37`) energy with every species,
+momentum and pigment still zero. Rejecting this empty-cell arithmetic residue
+stopped an otherwise stable simulation. Practical reconciliation now clears only
+zero-mass energy within eight FP32 epsilons of the ambient full-cell energy
+reference. It records the existing roundoff-repair flag and never erases positive
+species or color. The displayed Vulkan regression preserves positive subnormal
+colored traces, ordinary gas and compensated zero-energy packets exactly, while
+rejecting energy above that bounded envelope. Core plus synchronization
+validation passes; no residual retry loop or physical-time reduction is involved.
+
 Gas state holds five species (oxygen, nitrogen, exhaust, vapor and soot), total
 energy, momentum and RGB weighted by admitted exhaust/soot mass. Pigment is not
 another mass inventory. Oxygen feedback uses molecular fraction; inert injection
 dilutes it while preserving oxygen stock. Solid surfaces close flux and fixed
-walls perform no boundary work. Opening a vent creates empty available volume,
-rather than an unexplained fresh-air source.
+walls perform no boundary work. Carving creates empty available volume rather
+than an unexplained fresh-air source; opening a valve only changes face
+connectivity.
 
 The isolated double-precision CPU oracle implements mixture Euler thermodynamics,
 conservative HLLE and contact-preserving HLLC with a positivity fallback. Runtime

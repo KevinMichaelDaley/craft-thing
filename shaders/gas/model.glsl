@@ -119,7 +119,16 @@ Gas gas_practical_state(Gas value) {
             float factor=(sqrt(energy)*sqrt(mass)/largest)*sqrt(1.98/gas_parameter(FR_GAS_KINETIC_WORD))/sqrt(dot(direction,direction));
             if(factor<1.) {value.dynamics.zw*=factor;repaired|=FR_GAS_LIMITED_KINETIC;}
         }
-    } else if(mass==0.&&all(equal(value.species,vec4(0)))&&value.dynamics.x==0.) value.dynamics.zw=vec2(0);
+    } else if(mass==0.&&all(equal(value.species,vec4(0)))&&value.dynamics.x==0.) {
+        value.dynamics.zw=vec2(0);
+        if(energy!=0.) {
+            float tolerance=FR_GAS_MASSLESS_ENERGY_RELATIVE*gas_parameter(FR_GAS_DENSITY_WORD)*gas_parameter(FR_GAS_AMBIENT_WORD)*
+                max(gas_parameter(FR_GAS_CV_WORD),gas_parameter(FR_GAS_CV_WORD+1u));
+            if(gas_finite(tolerance)&&abs(energy)<=tolerance) {
+                value.dynamics.y=0.;value.visual.w=0.;value.geometry.z=0.;repaired|=FR_GAS_RECONCILED_ROUNDOFF;
+            }
+        }
+    }
     if(repaired!=0u) atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],repaired);
     return value;
 }
