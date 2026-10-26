@@ -159,3 +159,7 @@ Short-solve relaxation1.7 failed flow RMS4.38;1.6 passed flow(.277RMS) but still
 **2026-10-26T01:59:05Z**
 
 Compressed rows27a342e: actual native39/39 and core+sync1/1 clean; audited1000 actual display29.171mean38.003worst, invalid0 and small stock/work drift. Mean now below30, strict worst RED. Tick-fence REDb38a3e1 confirmed queue-wide wait1 per standalone tick; dedicated-fence implementation native tick/capture1/1 passes queue-idle0 and exact+2 physical intervals. Full repo regression162groups764passes plus exactly2known ctr-ojvy authored-stage failures; all Python including new6-case trace suite pass. Quarter-native display rebuild/test in progress before new timing.
+
+**2026-10-26T03:49:53Z**
+
+Direct-source transport6a40303 pushed:42/42 native and1/1 core+sync, exact fields/CFL/clock, warm copies2.29MB vs20.64MB. Actual audited open1000:28.770mean33.292worst, invalid0 and species2.99e-5/pigment5.12e-7/energy-ledger-9.93e-6 relative drift, four paused captures identical. Strict worst remains RED; copy optimization has no demonstrated frame gain. Next hybrid explicit/fallback fusion RED74cef9a: baseline53 dispatches; local native51 vs53 byte-identical, sync and full-frame measurement underway. No change to pressure iteration schedule or physical clock.

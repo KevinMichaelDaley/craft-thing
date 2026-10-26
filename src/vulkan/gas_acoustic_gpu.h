@@ -14,6 +14,7 @@ typedef struct {
     fr_renderer_compute_t practical_factor,practical_prefix,practical_apply;
     fr_renderer_compute_t practical_axis;
     fr_renderer_compute_t practical_explicit;
+    fr_renderer_compute_t practical_hybrid;
     fr_renderer_compute_t temporal_sor;
     fr_renderer_compute_t coarse_group;
     fr_renderer_compute_t mg_relax[2],mg_restrict[3],mg_prolong[3];

@@ -12,7 +12,8 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     fr_gas_state_t *dormant=direct_first?malloc(4096*sizeof(*dormant)):NULL;ASSERT_TRUE(!direct_first||dormant);
     double *volume=malloc(4096*sizeof(*volume));dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(input&&reference&&out&&volume&&c);
     fr_gas_model_t m=reference_model();m.kinetic_scale=1./512.;
-    for(uint32_t i=0;i<4096;i++) {volume[i]=1;input[i]=reference_air(m,.0012,300,direct_first?100:(metadata?40:2));}
+    for(uint32_t i=0;i<4096;i++) {volume[i]=1;input[i]=reference_air(m,.0012,300,
+        direct_first||strcmp(setting,"DC_GAS_FUSED_HYBRID")==0?100:(metadata?40:2));}
     for(uint32_t y=24;y<32;y++) for(uint32_t x=20;x<28;x++) {
         fr_gas_state_t *s=input+y*64+x;s->species[1]-=.00001;s->species[2]=.00001;
         s->energy+=.00001*(m.heat_capacity_cv[2]-m.heat_capacity_cv[1])*300;s->pigment[0]=.000005;

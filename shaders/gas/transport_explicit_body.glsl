@@ -4,12 +4,12 @@
 shared vec4 line_species[FR_GAS_EXPLICIT_LINE_CAPACITY];
 shared vec4 line_dynamics[FR_GAS_EXPLICIT_LINE_CAPACITY];
 shared vec4 line_visual[FR_GAS_EXPLICIT_LINE_CAPACITY];
-shared float group_peak[64];
+shared float explicit_group_peak[64];
 float line_maximum(float value) {
     float peak=subgroupMax(value);
-    if(gl_SubgroupInvocationID==0u) group_peak[gl_SubgroupID]=peak;
+    if(gl_SubgroupInvocationID==0u) explicit_group_peak[gl_SubgroupID]=peak;
     barrier();peak=0.;
-    for(uint group=0u;group<gl_NumSubgroups;group++) peak=max(peak,group_peak[group]);
+    for(uint group=0u;group<gl_NumSubgroups;group++) peak=max(peak,explicit_group_peak[group]);
     barrier();return peak;
 }
 GasFlux line_source(ivec2 p) {
@@ -22,7 +22,10 @@ GasFlux line_face_flux(ivec2 p,float seconds) {
     vec2 own=transport_rates(p,1),neighbor=transport_rates(p+step,-1);
     return transport_add(transport_scale(line_source(p),seconds*own),transport_scale(line_source(p+step),-seconds*neighbor));
 }
-void main() {
+#ifndef FR_GAS_EXPLICIT_ENTRY
+#define FR_GAS_EXPLICIT_ENTRY main
+#endif
+void FR_GAS_EXPLICIT_ENTRY() {
     uint rank=gl_LocalInvocationIndex,length=transport_axis()==0u?params.width:params.height,line=gl_WorkGroupID.x;
     if(rank==0u) transport_work[line*length].mass.w=0.;
     if(length>FR_GAS_EXPLICIT_LINE_CAPACITY) {if(rank==0u) atomicAdd(stats[FR_GAS_IMPLICIT_LINE_COUNT_WORD],1u);return;}

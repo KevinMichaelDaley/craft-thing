@@ -32,6 +32,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->practical_factor);fr_renderer_compute_destroy(g,&t->practical_prefix);fr_renderer_compute_destroy(g,&t->practical_apply);
     fr_renderer_compute_destroy(g,&t->practical_axis);
     fr_renderer_compute_destroy(g,&t->practical_explicit);
+    fr_renderer_compute_destroy(g,&t->practical_hybrid);
     fr_renderer_compute_destroy(g,&t->temporal_sor);
     fr_renderer_compute_destroy(g,&t->coarse_group);
     fr_renderer_compute_destroy(g,&t->rhs_fused);
@@ -106,6 +107,10 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_EXPLICIT_LINE_CAPACITY*48u+64u*4u) {
             const char *explicit_path=use_wide?"build/shaders/gas_transport_explicit_wide.comp.spv":"build/shaders/gas_transport_explicit.comp.spv";
             if(!fr_renderer_compute_init(g,&t->practical_explicit,buffers,25,16,explicit_path,err,cap)) goto fail;
+            if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_EXPLICIT_LINE_CAPACITY*48u+64u*104u) {
+                const char *hybrid_path=use_wide?"build/shaders/gas_transport_hybrid_wide.comp.spv":"build/shaders/gas_transport_hybrid.comp.spv";
+                if(!fr_renderer_compute_init(g,&t->practical_hybrid,buffers,25,16,hybrid_path,err,cap)) goto fail;
+            }
         }
     }
     if(properties.limits.maxComputeWorkGroupInvocations>=128u&&properties.limits.maxComputeWorkGroupSize[0]>=128u&&
@@ -291,12 +296,18 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
                 dispatch(g,&t->stage_transport,gx,gy,dt,flags);
             }
             const char *hybrid_setting=getenv("DC_GAS_HYBRID_LINES");
-            if(t->practical&&t->practical_explicit.pipeline&&hybrid_setting&&strcmp(hybrid_setting,"0")!=0&&
+            bool hybrid=t->practical&&t->practical_explicit.pipeline&&hybrid_setting&&strcmp(hybrid_setting,"0")!=0&&
+                (bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u;
+            const char *fused_hybrid_setting=getenv("DC_GAS_FUSED_HYBRID");
+            bool fused_hybrid=hybrid&&getenv("DC_GAS_FUSED_AXIS")&&t->practical_hybrid.pipeline&&
+                fused_hybrid_setting&&strcmp(fused_hybrid_setting,"0")!=0;
+            if(fused_hybrid) flags|=FR_GAS_HYBRID_LINES_BIT;
+            if(!fused_hybrid&&t->practical&&t->practical_explicit.pipeline&&hybrid_setting&&strcmp(hybrid_setting,"0")!=0&&
                (bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) {
                 flags|=FR_GAS_HYBRID_LINES_BIT;dispatch(g,&t->practical_explicit,lines,1u,dt,flags);
             }
             if(t->practical&&getenv("DC_GAS_FUSED_AXIS")) {
-                dispatch(g,&t->practical_axis,lines,1u,dt,flags);
+                dispatch(g,fused_hybrid?&t->practical_hybrid:&t->practical_axis,lines,1u,dt,flags);
                 if(trace) for(uint32_t stamp=5u;stamp<=8u;stamp++)
                     vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,stamp+axis*4u);
                 continue;
