@@ -17,8 +17,14 @@ Primitive gas_rhs_stage(ivec2 p,uint index) {
 #endif
     return gas_pressure_stage(p,index);
 }
+#ifdef FR_GAS_RHS_TILE_CACHE
+#include "rhs_neighbor_cache.glsl"
+#endif
 layout(set=0,binding=24,std430) restrict buffer RowBaseline {vec4 row_baseline[];};
 void main() {
+#ifdef FR_GAS_RHS_TILE_CACHE
+    gas_rhs_cache_prepare();
+#endif
     uint index=(params.bank&256u)!=0u?gas_sparse_index(2u):gas_index();if(index>=params.width*params.height) return;
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
     bool advected=gas_advected(index);
@@ -62,8 +68,12 @@ void main() {
         if(owner!=0xffffffffu&&(gates[owner]&(1u<<(d/2u)))!=0u) continue;
         uint j=uint(q.y)*params.width+uint(q.x);bool moved=gas_advected(j);
 #ifdef FR_GAS_FUSED_METADATA_RHS
+#ifdef FR_GAS_RHS_TILE_CACHE
+        uint neighbor_slot=gas_rhs_neighbor_slot(d);vec4 neighbor=rhs_neighbor_forecast[neighbor_slot];
+#else
         Gas neighbor_state=moved?gas_practical_state(gas_provisional(gas_atlas(q))):gas_empty();
         vec4 neighbor=moved?gas_rhs_neighbor(other,neighbor_state):vec4(other.hydro.yz*other.metric.z,0.,other.metric.w);
+#endif
 #else
         vec4 neighbor=moved?provisional[j]:vec4(other.hydro.yz*other.metric.z,0.,other.metric.w);
 #endif
@@ -75,8 +85,12 @@ void main() {
         if(large_energy) {
 #ifdef FR_GAS_FUSED_METADATA_RHS
             Primitive other_stage=other;
+#ifdef FR_GAS_RHS_TILE_CACHE
+            vec2 head=rhs_neighbor_head[neighbor_slot];other_stage.hydro.x=head.x;other_stage.metric.x=head.y;
+#else
             if(moved) {vec2 head=gas_large_pressure_state(neighbor_state,other.hydro.w);other_stage.hydro.x=head.x;other_stage.metric.x=head.y;}
             else other_stage=gas_rhs_stage(q,j);
+#endif
 #else
             Primitive other_stage=gas_rhs_stage(q,j);
 #endif

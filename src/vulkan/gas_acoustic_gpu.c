@@ -38,7 +38,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->temporal_sor);
     fr_renderer_compute_destroy(g,&t->sor_tiled);fr_renderer_compute_destroy(g,&t->group_tiled);
     fr_renderer_compute_destroy(g,&t->coarse_group);
-    fr_renderer_compute_destroy(g,&t->rhs_fused);
+    fr_renderer_compute_destroy(g,&t->rhs_fused);fr_renderer_compute_destroy(g,&t->rhs_cached);
     fr_renderer_compute_destroy(g,&t->metadata_lean);fr_renderer_compute_destroy(g,&t->rhs_lean);
     fr_renderer_compute_destroy(g,&t->pack_pressure);fr_renderer_compute_destroy(g,&t->packed_sor);
     fr_renderer_compute_destroy(g,&t->reset_pressure_mask);
@@ -159,7 +159,8 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_mg_temporal%u.comp.spv",i+1u);
         if(!fr_renderer_compute_init(g,&t->mg_temporal[i],buffers,27,16,path,err,cap)) goto fail;
     }
-    if(!fr_renderer_compute_init(g,&t->rhs_fused,buffers,27,16,"build/shaders/gas_pressure_rhs_fused.comp.spv",err,cap)) goto fail;
+    if(!fr_renderer_compute_init(g,&t->rhs_fused,buffers,27,16,"build/shaders/gas_pressure_rhs_fused.comp.spv",err,cap)||
+       !fr_renderer_compute_init(g,&t->rhs_cached,buffers,27,16,"build/shaders/gas_pressure_rhs_cached.comp.spv",err,cap)) goto fail;
     if(!fr_renderer_compute_init(g,&t->metadata_lean,buffers,27,16,"build/shaders/gas_transport_metadata_lean.comp.spv",err,cap)||
        !fr_renderer_compute_init(g,&t->rhs_lean,buffers,27,16,"build/shaders/gas_pressure_rhs_lean.comp.spv",err,cap)) goto fail;
     if(t->temporal_sor.pipeline) {
@@ -406,6 +407,8 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,13);
     } else indirect_dispatch(g,t,&t->advect,dt,bank,32);
     const fr_renderer_compute_t *rhs=(bank&FR_GAS_LEAN_METADATA_BIT)!=0u?&t->rhs_lean:((bank&FR_GAS_FUSED_METADATA_BIT)!=0u?&t->rhs_fused:&t->rhs);
+    const char *rhs_cache=getenv("DC_GAS_RHS_TILE_CACHE");
+    if(rhs==&t->rhs_fused&&sparse&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u&&rhs_cache&&strcmp(rhs_cache,"0")!=0) rhs=&t->rhs_cached;
     if(sparse&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) indirect_dispatch(g,t,rhs,dt,bank,32);
     else dispatch(g,rhs,gx,gy,dt,bank&~256u);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,1);
