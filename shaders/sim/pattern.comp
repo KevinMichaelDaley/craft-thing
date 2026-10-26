@@ -93,6 +93,7 @@ uint material_color(uint material, uint flags) {
     if (material == 5u) return 0xff808090u;
     if (material == 9u || material == 10u) return 0xff248228u;
     if (material == 6u) return 0xffa0a8b0u;
+    if (material == 13u) return 0xff999b9cu;
     return 0xff707070u;
 }
 
@@ -165,9 +166,10 @@ DensitySample material_density(ivec2 p) {
     uint material = cell.x & 0xffffu;
     float solid = 0.0;
     vec3 solid_color = vec3(0.0);
-    if (material == 2u || material == 4u || material == 5u || material == 6u || material == 10u) {
+    if (material == 2u || material == 4u || material == 5u || material == 6u || material == 10u || material == 13u) {
         uint first = (page - 1u) * 8192u + index % 4096u;
         float particle_mass = 0.0;
+        float particle_volume = 0.0;
         for (uint layer = 0u; layer < 2u; ++layer) {
             Particle particle = particles[first + layer * 4096u];
             if (particle.mass_fp == 0u) continue;
@@ -175,9 +177,10 @@ DensitySample material_density(ivec2 p) {
             solid_color += mass * linear_color(material_color(particle.material,
                                                                particle.flags));
             particle_mass += mass;
+            particle_volume += mass/(particle.material==13u?DC_DENSITY_ASH:1.);
         }
         if (particle_mass > 0.0) {
-            solid = min(particle_mass, 1.0);
+            solid = min(particle_volume, 1.0);
             solid_color /= particle_mass;
         } else {
             solid = 1.0;

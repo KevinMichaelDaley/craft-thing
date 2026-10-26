@@ -5,6 +5,7 @@
 #include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
+#include "ferrum/structural/gpu.h"
 
 static void terrain_combustion(bool practical,bool char_stage) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
@@ -86,9 +87,15 @@ static void test_spent_terrain_becomes_loose_saved_ash_without_losing_mass(void)
     ASSERT_TRUE(particle!=UINT32_MAX&&chunk->particles[particle].y_fp>20*65536+32768);
     ASSERT_TRUE(fr_gpu_reactive_read_particle(g,particle,&record,&found,err,sizeof(err))&&found);
     ASSERT_EQ(fr_reactive_state_mass_fp(&record.state),2000);
-    ASSERT_TRUE(dc_gpu_save_bodies(g,"build/combustion_loose_ash.bin",err,sizeof(err)));
+    fr_reactive_chunk_t channel={0};ASSERT_TRUE(fr_gpu_reactive_export_chunk(g,0,chunk,&channel,err,sizeof(err)));
+    printf("Ash save channel: %u records particle %u\n",channel.count,particle);
+    ASSERT_EQ(channel.count,1);fr_reactive_chunk_release(&channel);
+    ASSERT_TRUE(fr_gpu_save_structure(g,"build/combustion_loose_ash.bin",err,sizeof(err)));
     dc_gpu_destroy(g);g=NULL;ASSERT_TRUE(context(&g,err,sizeof(err)));
-    ASSERT_TRUE(dc_gpu_load_bodies(g,"build/combustion_loose_ash.bin",err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_load_structure(g,"build/combustion_loose_ash.bin",err,sizeof(err)));
+    fr_gpu_reactive_stats_t stats;ASSERT_TRUE(fr_gpu_reactive_read_stats(g,&stats,err,sizeof(err)));
+    printf("Ash restore: %u live entries, %u pending chunks\n",stats.live,g->checkpoint_chunk_count);
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_reactive_read_particle(g,particle,&record,&found,err,sizeof(err))&&found);
     ASSERT_EQ(record.state.material,DC_MATERIAL_ASH);ASSERT_EQ(fr_reactive_state_mass_fp(&record.state),2000);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(chunk);dc_gpu_destroy(g);PASS();

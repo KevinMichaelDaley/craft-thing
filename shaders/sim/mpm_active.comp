@@ -41,7 +41,7 @@ void scan_tile() {
             uint index = (page - 1u) * 4096u + (cell.y % 64u) * 64u + cell.x % 64u;
             uint material = chunk_cells[index].x & 0xffffu;
             if (params.unused0 != 0u ? (material==1u || material==7u || material==8u || material==9u) :
-                (material == 2u || material == 4u || material == 5u || material == 6u || material == 10u))
+                (material == 2u || material == 4u || material == 5u || material == 6u || material == 10u || material == 13u))
                 atomicOr(has_grain, 1u);
         }
     }

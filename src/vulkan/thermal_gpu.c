@@ -26,10 +26,12 @@ bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
     }
     struct fr_thermal_gpu *t=g->thermal;
     if(t->combustion.pipeline) return true;
-    VkDescriptorBufferInfo buffers[6]={{g->reactive->arena.root.buffer,0,g->reactive->arena.root.bytes},
+    if(!fr_gpu_reactive_particle_storage(g,err,cap)) return false;
+    VkDescriptorBufferInfo buffers[8]={{g->reactive->arena.root.buffer,0,g->reactive->arena.root.bytes},
         {g->page_buffer,0,VK_WHOLE_SIZE},{t->profiles.buffer,0,t->profiles.bytes},{g->chunk_buffer,0,VK_WHOLE_SIZE},
-        {g->cells,0,VK_WHOLE_SIZE},{t->samples.buffer,0,t->samples.bytes}};
-    return fr_renderer_compute_init(g,&t->combustion,buffers,6,64,"build/shaders/combustion.comp.spv",err,cap);
+        {g->cells,0,VK_WHOLE_SIZE},{t->samples.buffer,0,t->samples.bytes},
+        {g->particle_buffer,0,VK_WHOLE_SIZE},{g->particle_count_buffer,0,VK_WHOLE_SIZE}};
+    return fr_renderer_compute_init(g,&t->combustion,buffers,8,64,"build/shaders/combustion.comp.spv",err,cap);
 }
 bool fr_combustion_gpu_enabled(const dc_gpu_t *g) {
     return g&&g->thermal&&g->thermal->combustion.pipeline!=VK_NULL_HANDLE;
@@ -49,7 +51,7 @@ static void record_combustion(dc_gpu_t *g,float seconds,uint32_t mode) {
     vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,t->combustion.pipeline_layout,0,1,&t->combustion.descriptor,0,NULL);
     vkCmdPushConstants(g->command,t->combustion.pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
     vkCmdDispatch(g->command,t->groups_x,t->groups_y,1);
-    if(mode==0u) fr_gas_gpu_invalidate_cache(g);
+    if(mode==0u) {fr_gas_gpu_invalidate_cache(g);fr_gas_gpu_geometry_changed(g,true);}
 }
 bool fr_combustion_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(!g||!g->thermal||!g->thermal->combustion.pipeline||!isfinite(seconds)||seconds<0) return false;

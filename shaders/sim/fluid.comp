@@ -60,7 +60,7 @@ void write_mass(uint index, uint mass) {
 }
 
 bool permeable_material(uint material) {
-    return material == 0u || material == 2u || material == 4u || material == 5u || material == 6u || material == 10u;
+    return material == 0u || material == 2u || material == 4u || material == 5u || material == 6u || material == 10u || material == 13u;
 }
 
 bool open_cell(ivec2 p) {

@@ -8,16 +8,19 @@ layout(local_size_x=64) in;
 layout(set=0,binding=0,std430) readonly buffer Root {uint root[];};
 layout(set=0,binding=1,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=2,std430) readonly buffer Profiles {uint profiles[];};
-layout(set=0,binding=3,std430) readonly buffer Cells {uvec2 cells[];};
+layout(set=0,binding=3,std430) buffer Cells {uvec2 cells[];};
 layout(set=0,binding=4,std430) buffer Pixels {uint pixels[];};
 layout(set=0,binding=5,std430) buffer Samples {vec4 samples[];};
+struct Particle {int x_fp,y_fp,vx_fp,vy_fp;float f00,f01,f10,f11;uint id_lo,id_hi,mass_fp,grain_fp,material,flags;};
+layout(set=0,binding=6,std430) buffer Particles {Particle particles[];};
+layout(set=0,binding=7,std430) buffer Counts {uint counts[];};
 layout(push_constant) uniform Params {
     uint width,height,seconds,sparse;
     uvec2 world_address,alternate_address,gates_address,model_address;
     uvec4 unused;
 } params;
 layout(buffer_reference,std430,buffer_reference_align=4) buffer Words {uint words[];};
-layout(buffer_reference,std430,buffer_reference_align=8) readonly buffer Handles {uvec2 values[];};
+layout(buffer_reference,std430,buffer_reference_align=8) buffer Handles {uvec2 values[];};
 layout(buffer_reference,std430,buffer_reference_align=16) buffer GasField {Gas values[];};
 float coefficient(uint material,uint field) {return uintBitsToFloat(profiles[material*32u+field]);}
 uint atlas(ivec2 p) {
@@ -68,6 +71,35 @@ void feedback(uint index,ivec2 p,uint at) {
     vec3 base=unpackUnorm4x8(pixels[index]).rgb;
     pixels[index]=packUnorm4x8(vec4(mix(base,flame,1.-float(depth-1u)*.13),1.));
 }
+void loose_ash(ivec2 position,uint at,uvec2 handle,Words entry,inout Gas gas) {
+    uint s=FR_ENTRY_STATE,mass=entry.words[s+11u]+entry.words[s+12u];
+    if(mass==0u) {
+        gas.dynamics.y+=uintBitsToFloat(entry.words[s+17u])+uintBitsToFloat(entry.words[s+25u])+uintBitsToFloat(entry.words[s+26u]);
+        entry.words[FR_ENTRY_OWNER]=0u;uint generation=min(handle.y,0xfffffffeu)+1u;
+        entry.words[FR_ENTRY_GENERATION]=generation;
+        Words mailbox=Words(uvec2(root[20],root[21]));atomicAdd(mailbox.words[FR_ARENA_MAIL_LIVE],0xffffffffu);
+        if(generation==0xffffffffu) atomicAdd(mailbox.words[FR_ARENA_MAIL_RETIRED],1u);
+        else {
+            memoryBarrierBuffer();atomicOr(Words(uvec2(root[18],root[19])).words[handle.x/32u],1u<<(handle.x%32u));
+            atomicAdd(mailbox.words[FR_ARENA_MAIL_FREE],1u);
+        }
+        Handles(uvec2(root[6],root[7])).values[at]=uvec2(0);cells[at].x=0u;return;
+    }
+    uint particle=(at/4096u)*8192u+at%4096u;
+    if(particles[particle].mass_fp!=0u||particles[particle+4096u].mass_fp!=0u||(root[14]|root[15])==0u) return;
+    Handles canonical=Handles(uvec2(root[14],root[15])),alternate=Handles(uvec2(root[16],root[17]));
+    if(canonical.values[particle].y!=0u||canonical.values[particle+4096u].y!=0u) return;
+    uvec2 identity=uvec2(entry.words[s+2u],entry.words[s+3u]);
+    uint radius=max(1u,uint(sqrt(float(mass)/65536./.25/3.14159265)*65536.));
+    particles[particle]=Particle(int((uint(position.x)%64u)*65536u+32768u),
+        int((uint(position.y)%64u)*65536u+32768u),0,0,1.,0.,0.,1.,identity.x,identity.y,mass,radius,13u,0u);
+    entry.words[s]=13u;entry.words[s+1u]=16u;entry.words[s+8u]=entry.words[s+11u];
+    entry.words[FR_ENTRY_OWNER]=3u;entry.words[FR_ENTRY_OWNER+1u]=identity.x;entry.words[FR_ENTRY_OWNER+2u]=identity.y;
+    entry.words[FR_ENTRY_OWNER+3u]=identity.x;entry.words[FR_ENTRY_OWNER+4u]=identity.y;entry.words[FR_ENTRY_OWNER+5u]=0u;
+    canonical.values[particle]=handle;alternate.values[particle]=uvec2(0);
+    Handles(uvec2(root[6],root[7])).values[at]=uvec2(0);
+    cells[at].x=13u;atomicAdd(counts[at/4096u],1u);
+}
 /* Each parcel chooses one neighboring gas cell. The owning gas invocation
  * gathers at most four surfaces, reserving shared oxygen locally before commit.
  * There is no field scan, atomic float race or global flame capacity. */
@@ -80,7 +112,8 @@ void burn(ivec2 position,uint gas_at,inout Gas gas) {
     uint s=FR_ENTRY_STATE,m=entry.words[s],wood_fuel=entry.words[s+9u];
     bool char_stage=wood_fuel==0u;uint fuel=char_stage?entry.words[s+10u]:wood_fuel;
     uint profile=char_stage?12u:m;
-    if((m!=7u&&m!=8u&&m!=12u)||fuel==0u) return;
+    if(m!=7u&&m!=8u&&m!=12u) return;
+    if(fuel==0u) {loose_ash(position,at,handle,entry,gas);return;}
     float capacity=(float(wood_fuel+entry.words[s+11u])*coefficient(m,5u)+
         float(entry.words[s+10u])*coefficient(12u,5u)+float(entry.words[s+12u])*coefficient(3u,5u))/65536.;
     if(capacity<=0.) return;
