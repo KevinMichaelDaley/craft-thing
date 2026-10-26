@@ -7,6 +7,15 @@ static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
     return false;
 }
+bool fr_gas_gpu_state_memory(const dc_gpu_t *g,uint64_t *mapped,uint64_t *device,uint64_t *staging) {
+    if(!g||!g->gas||!mapped||!device||!staging) return false;
+    *mapped=*device=*staging=0;
+    for(uint32_t i=0;i<3u;i++) {
+        const dc_gpu_address_buffer_t *buffer=g->gas->state+i;
+        if(buffer->host_visible) *mapped+=buffer->bytes;else *device+=buffer->bytes;
+    }
+    return true;
+}
 static fr_gas_state_t unpack(const gas_packet_t *packet) {
     const float *p=packet->words;fr_gas_state_t s={0};
     for(uint32_t i=0;i<5;i++) s.species[i]=p[i];
