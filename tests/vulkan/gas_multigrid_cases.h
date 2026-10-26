@@ -107,6 +107,13 @@ static void test_native_group_rate_reduction_preserves_field_cfl_and_clock(void)
 static void test_native_first_axis_reads_owner_and_preserves_mapped_and_dormant_stock(void) {
     check_native_gas_dispatch_fusion("DC_GAS_DIRECT_FIRST_AXIS",true,UINT32_MAX);
 }
+static void test_native_hybrid_axis_fusion_preserves_state_with_fewer_dispatches(void) {
+    char err[256]={0};
+    const char *value=getenv("DC_GAS_HYBRID_LINES");char *saved=value?SDL_strdup(value):NULL;
+    ASSERT_EQ(SDL_setenv("DC_GAS_HYBRID_LINES","1",1),0);
+    check_native_gas_dispatch_fusion("DC_GAS_FUSED_HYBRID",true,0);
+    ASSERT_EQ(SDL_setenv("DC_GAS_HYBRID_LINES",saved?saved:"0",1),0);SDL_free(saved);
+}
 static void check_native_multigrid_reference_flow(uint32_t dispatch_budget,bool partial_fixture) {
     char err[256]={0};const char *names[]={"DC_GAS_MULTIGRID","DC_GAS_TEMPORAL_SOR","DC_GAS_COARSE_WG"};char *saved[3];
     for(uint32_t k=0;k<3;k++) {const char *value=getenv(names[k]);saved[k]=value?SDL_strdup(value):NULL;}
