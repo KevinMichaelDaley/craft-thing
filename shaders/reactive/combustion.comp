@@ -66,22 +66,8 @@ void feedback(uint index,ivec2 p,uint at) {
             }
         }
     }
-    uint depth=0u;
-    if(burning(at)) depth=1u;
-    else if(gas_cell(at)) {
-        for(uint distance=1u;distance<=5u;distance++) {
-            uint below=atlas(p+ivec2(0,int(distance)));
-            if(burning(below)) {depth=distance;break;}
-            if(!gas_cell(below)) break;
-        }
-    }
-    if(depth==0u) return;
-    uint noise=uint(p.x)*1973u+uint(p.y)*9277u+params.unused.y*26699u;
-    noise=(noise^(noise>>13))*1274126177u;
-    float flicker=float(noise&255u)/255.;
-    vec3 flame=mix(vec3(1.,.18,.015),vec3(1.,.77,.13),flicker);
-    vec3 base=unpackUnorm4x8(pixels[index]).rgb;
-    pixels[index]=packUnorm4x8(vec4(mix(base,flame,1.-float(depth-1u)*.13),1.));
+    /* Flame emission is supplied by local transported gas reaction state.
+     * No screen-space trail or predetermined height is admissible. */
 }
 void loose_ash(ivec2 position,uint at,uvec2 handle,Words entry,inout Gas gas) {
     uint s=FR_ENTRY_STATE;

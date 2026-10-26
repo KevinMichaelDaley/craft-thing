@@ -4,6 +4,7 @@
 #include <string.h>
 #include "ferrum/fire/combustion.h"
 #include "ferrum/fire/material_profile.h"
+#include "dungeoncraft/combustion_parameters.h"
 static int g_pass,g_fail;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s [%s]\n",__LINE__,#e,err);g_fail++;return;}} while(0)
@@ -103,6 +104,43 @@ static void test_retained_char_remains_finite_combustible_fuel(void) {
     ASSERT_EQ((uint64_t)p.fuel_fp+p.oxygen_fp,(uint64_t)p.ash_fp+p.soot_fp+p.exhaust_fp);
     ASSERT_TRUE(fr_reactive_state_valid(&out,err,sizeof(err)));PASS();
 }
+static fr_gas_model_t gas_model(void) {
+    return (fr_gas_model_t){.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+}
+static fr_gas_state_t airborne_fuel(fr_gas_model_t model,double temperature,bool fuel,bool oxygen) {
+    fr_gas_state_t s={0};s.species[FR_GAS_OXYGEN]=oxygen?.00028:0;
+    s.species[FR_GAS_NITROGEN]=.00072;s.species[fuel?FR_GAS_SOOT:FR_GAS_EXHAUST]=.0002;
+    for(uint32_t i=0;i<FR_GAS_SPECIES;i++) s.energy+=s.species[i]*model.heat_capacity_cv[i]*temperature;
+    return s;
+}
+static void test_airborne_reaction_requires_transported_fuel_heat_and_oxygen(void) {
+    char err[256]={0};fr_gas_model_t model=gas_model();
+    for(uint32_t control=0;control<4;control++) {
+        fr_gas_state_t before=airborne_fuel(model,control==2?300:1100,control!=1,control!=3),after;
+        double reacted=-1;
+        ASSERT_TRUE(fr_combustion_gas_reference(&model,&before,1,.02,&after,&reacted,err,sizeof(err)));
+        if(control==0) {
+            ASSERT_TRUE(reacted>0&&reacted<before.species[FR_GAS_SOOT]);
+            ASSERT_TRUE(after.species[FR_GAS_OXYGEN]<before.species[FR_GAS_OXYGEN]);
+            ASSERT_TRUE(after.species[FR_GAS_EXHAUST]>0);
+            double mass_before=0,mass_after=0;
+            for(uint32_t i=0;i<FR_GAS_SPECIES;i++) {mass_before+=before.species[i];mass_after+=after.species[i];}
+            ASSERT_TRUE(fabs(mass_before-mass_after)<1e-14);
+            ASSERT_TRUE(fabs(after.energy-before.energy-reacted*FR_COMBUSTION_AIRBORNE_ENERGY)<1e-12);
+        } else {ASSERT_EQ(reacted,0);ASSERT_EQ(memcmp(&before,&after,sizeof(before)),0);}
+    }
+    PASS();
+}
+static void test_surface_reserves_airborne_chemical_heat_instead_of_creating_it(void) {
+    char err[256]={0};fr_reactive_state_t s,out;fr_combustion_products_t p;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,0,900,59,&s,err,sizeof(err)));
+    s.flags|=FR_REACTIVE_FLAMING;
+    ASSERT_TRUE(fr_combustion_reference(&s,65536,.23f,1,1,&out,&p,err,sizeof(err)));
+    ASSERT_TRUE(p.soot_fp>0&&p.reserved_airborne_heat>0);
+    ASSERT_TRUE(fabs(p.released_heat+p.reserved_airborne_heat-
+        p.fuel_fp/65536.*fr_reactive_profile(DC_MATERIAL_WOOD)->primary_heat)<1e-10);PASS();
+}
 int main(void) {
     RUN(test_finite_oxygen_and_products);
     RUN(test_starved_wet_and_buried_do_not_burn);
@@ -112,5 +150,7 @@ int main(void) {
     RUN(test_short_frames_retain_fractional_burn_progress);
     RUN(test_fractional_reaction_survives_checkpoint_and_split);
     RUN(test_retained_char_remains_finite_combustible_fuel);
+    RUN(test_airborne_reaction_requires_transported_fuel_heat_and_oxygen);
+    RUN(test_surface_reserves_airborne_chemical_heat_instead_of_creating_it);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }

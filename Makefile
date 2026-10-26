@@ -232,6 +232,10 @@ all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests bui
 THERMAL_BENCH_SRC = src/app/thermal_bench.c src/app/bonfire_scene.c
 build/bonfire_scene_tests: tests/app/bonfire_scene_tests.c $(THERMAL_BENCH_SRC) src/fire/reactive_state.c src/fire/reactive_snapshot.c src/fire/material_profile.c src/fire/reactive_chunk.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm -pthread
+.PHONY: test_bonfire_scene
+test: test_bonfire_scene
+test_bonfire_scene: build/bonfire_scene_tests
+	./build/bonfire_scene_tests
 NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(THERMAL_BENCH_SRC) $(GPU_SRC) src/world/chunk.c src/world/stream.c src/world/generate.c
 build/rigid_dynamics_visual_tests: tests/app/rigid_dynamics_visual_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
@@ -1703,9 +1707,9 @@ test_reactive_gpu_profiles: build/reactive_profile_gpu_tests
 	./build/reactive_profile_gpu_tests
 
 REACTIVE_STATE_SRC = src/fire/reactive_state.c src/fire/reactive_snapshot.c src/fire/material_profile.c
-build/combustion_tests: tests/fire/combustion_tests.c src/fire/combustion.c $(REACTIVE_STATE_SRC) include/ferrum/fire/combustion.h
+build/combustion_tests: tests/fire/combustion_tests.c src/fire/combustion.c src/fire/combustion_gas.c src/fire/gas.c $(REACTIVE_STATE_SRC) include/ferrum/fire/combustion.h
 	mkdir -p build
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/combustion_tests.c src/fire/combustion.c $(REACTIVE_STATE_SRC) -o $@ -lm
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/combustion_tests.c src/fire/combustion.c src/fire/combustion_gas.c src/fire/gas.c $(REACTIVE_STATE_SRC) -o $@ -lm
 .PHONY: test_combustion
 test: test_combustion
 test_combustion: build/combustion_tests
@@ -1952,6 +1956,15 @@ build/shaders/combustion.comp.spv: shaders/reactive/combustion.comp shaders/reac
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/combustion_gpu_display_tests: build/shaders/combustion.comp.spv
+build/thermal_gpu.o build/performance/src/vulkan/thermal_gpu.o: build/shaders/combustion.comp.spv
+.PHONY: test_bonfire
+test_ui test_quarter_native: test_bonfire
+test_bonfire: build/combustion_tests build/bonfire_scene_tests build/combustion_gpu_display_tests build/bonfire_display_tests build/dungeoncraft_quarter_native
+	./build/combustion_tests
+	./build/bonfire_scene_tests
+	./build/combustion_gpu_display_tests
+	./build/bonfire_display_tests
+	python3 tests/app/bonfire_probe_cli_tests.py
 $(GPU_OBJ) build/thermal_gpu_display_tests: build/shaders/thermal.comp.spv
 build/shaders/thermal_overlay.comp.spv: shaders/renderer/thermal_overlay.comp include/dungeoncraft/thermal_parameters.h
 	mkdir -p $(dir $@)
