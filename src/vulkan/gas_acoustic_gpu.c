@@ -61,6 +61,7 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(g->physical,&properties);
     VkPhysicalDeviceSubgroupProperties subgroup={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES};
     VkPhysicalDeviceFloatControlsProperties floats={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES};subgroup.pNext=&floats;
+    VkPhysicalDeviceSubgroupSizeControlProperties sizes={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES};floats.pNext=&sizes;
     VkPhysicalDeviceProperties2 details={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,.pNext=&subgroup};
     vkGetPhysicalDeviceProperties2(g->physical,&details);
     t->supports_large_transport=(subgroup.supportedStages&VK_SHADER_STAGE_COMPUTE_BIT)!=0u&&
@@ -82,6 +83,12 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     const char *wide=getenv("DC_GAS_WIDE_SCAN");
     bool use_wide=wide&&strcmp(wide,"0")!=0&&subgroup.subgroupSize>=4u&&properties.limits.maxComputeWorkGroupInvocations>=256u&&properties.limits.maxComputeWorkGroupSize[0]>=256u;
     t->hybrid_line_group=use_wide?256u:64u;
+    const char *line_group=getenv("DC_GAS_LINE_GROUP");
+    uint32_t minimum_subgroup=sizes.minSubgroupSize?sizes.minSubgroupSize:subgroup.subgroupSize;
+    bool large_group=line_group&&strcmp(line_group,"512")==0&&minimum_subgroup>=8u&&
+        properties.limits.maxComputeWorkGroupInvocations>=512u&&properties.limits.maxComputeWorkGroupSize[0]>=512u;
+    if(large_group) t->hybrid_line_group=512u;
+    const char *line_suffix=large_group?"_large":(use_wide?"_wide":"");
     if(use_wide) {
         paths[17]="transport_prefix_wide";
         paths[16]="transport_factor_wide";
@@ -101,22 +108,22 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     if(t->supports_large_transport&&!fr_renderer_compute_init(g,&t->stage_transport,buffers,25,16,"build/shaders/gas_transport_stage.comp.spv",err,cap)) goto fail;
     if(t->supports_large_transport) {
         fr_renderer_compute_t *practical[]={&t->practical_factor,&t->practical_prefix,&t->practical_apply};
-        const char *names[]={use_wide?"transport_factor_compact_wide":"transport_factor_compact",
-            use_wide?"transport_prefix_compact_wide":"transport_prefix_compact","transport_apply_compact"};
+        const char *names[]={large_group?"transport_factor_compact_large":(use_wide?"transport_factor_compact_wide":"transport_factor_compact"),
+            large_group?"transport_prefix_compact_large":(use_wide?"transport_prefix_compact_wide":"transport_prefix_compact"),"transport_apply_compact"};
         for(uint32_t i=0;i<3;i++) {
             char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",names[i]);
             if(!fr_renderer_compute_init(g,practical[i],buffers,25,16,path,err,cap)) goto fail;
         }
-        const char *axis_path=use_wide?"build/shaders/gas_transport_axis_compact_wide.comp.spv":"build/shaders/gas_transport_axis_compact.comp.spv";
+        const char *axis_path=large_group?"build/shaders/gas_transport_axis_compact_large.comp.spv":(use_wide?"build/shaders/gas_transport_axis_compact_wide.comp.spv":"build/shaders/gas_transport_axis_compact.comp.spv");
         if(!fr_renderer_compute_init(g,&t->practical_axis,buffers,25,16,axis_path,err,cap)) goto fail;
         if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_EXPLICIT_LINE_CAPACITY*48u+64u*4u) {
-            const char *explicit_path=use_wide?"build/shaders/gas_transport_explicit_wide.comp.spv":"build/shaders/gas_transport_explicit.comp.spv";
+            const char *explicit_path=large_group?"build/shaders/gas_transport_explicit_large.comp.spv":(use_wide?"build/shaders/gas_transport_explicit_wide.comp.spv":"build/shaders/gas_transport_explicit.comp.spv");
             if(!fr_renderer_compute_init(g,&t->practical_explicit,buffers,25,16,explicit_path,err,cap)) goto fail;
             if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_EXPLICIT_LINE_CAPACITY*48u+64u*4u) {
-                const char *hybrid_path=use_wide?"build/shaders/gas_transport_hybrid_wide.comp.spv":"build/shaders/gas_transport_hybrid.comp.spv";
+                const char *hybrid_path=large_group?"build/shaders/gas_transport_hybrid_large.comp.spv":(use_wide?"build/shaders/gas_transport_hybrid_wide.comp.spv":"build/shaders/gas_transport_hybrid.comp.spv");
                 if(!fr_renderer_compute_init(g,&t->practical_hybrid,buffers,25,16,hybrid_path,err,cap)) goto fail;
                 for(uint32_t axis=0;axis<2;axis++) {
-                    char path[128];snprintf(path,sizeof(path),"build/shaders/gas_transport_hybrid_%c%s.comp.spv",axis?'y':'x',use_wide?"_wide":"");
+                    char path[128];snprintf(path,sizeof(path),"build/shaders/gas_transport_hybrid_%c%s.comp.spv",axis?'y':'x',line_suffix);
                     if(!fr_renderer_compute_init(g,&t->practical_hybrid_axis[axis],buffers,25,16,path,err,cap)) goto fail;
                 }
             }

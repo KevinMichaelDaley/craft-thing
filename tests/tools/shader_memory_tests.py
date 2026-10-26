@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The fused hybrid transport must fit two groups in a 64-KiB shared budget."""
+"""Bound hybrid scratch; actual occupancy also depends on hardware/registers."""
 import importlib.util
 import unittest
 from pathlib import Path
@@ -15,12 +15,17 @@ class ShaderMemoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             module.workgroup_bytes(b"invalid")
 
-    def test_hybrid_transport_shared_storage_fits_two_groups(self):
-        for name in ("transport_hybrid", "transport_hybrid_wide", "transport_hybrid_x", "transport_hybrid_y", "transport_hybrid_x_wide", "transport_hybrid_y_wide"):
+    def test_hybrid_transport_shared_storage_stays_below_32kib(self):
+        for name in ("transport_hybrid", "transport_hybrid_wide", "transport_hybrid_x", "transport_hybrid_y", "transport_hybrid_x_wide", "transport_hybrid_y_wide", "transport_hybrid_large", "transport_hybrid_x_large", "transport_hybrid_y_large"):
             with self.subTest(shader=name):
                 size = module.workgroup_bytes((ROOT / f"build/shaders/gas_{name}.comp.spv").read_bytes())
                 self.assertGreater(size, 0)
                 self.assertLessEqual(size, 32768)
+
+    def test_large_hybrid_binary_uses_512_threads(self):
+        for name in ("transport_hybrid_large", "transport_hybrid_x_large", "transport_hybrid_y_large"):
+            with self.subTest(shader=name):
+                self.assertEqual(module.local_size((ROOT / f"build/shaders/gas_{name}.comp.spv").read_bytes()), (512, 1, 1))
 
 
 if __name__ == "__main__":
