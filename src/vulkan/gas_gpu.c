@@ -45,7 +45,7 @@ bool fr_gas_gpu_geometry_activity_metadata(const dc_gpu_t *g,bool *selected) {
 }
 bool fr_gas_gpu_pressure_noise_metadata(const dc_gpu_t *g,bool *selected) {
     if(!g||!g->gas||!selected) return false;
-    *selected=false;return true;
+    *selected=(((const uint32_t *)g->gas->stats.mapped)[15]&64u)!=0u;return true;
 }
 bool fr_gas_gpu_work_memory(const dc_gpu_t *g,uint64_t *mapped_bytes,uint64_t *device_bytes) {
     if(!g||!g->gas||!mapped_bytes||!device_bytes) return false;

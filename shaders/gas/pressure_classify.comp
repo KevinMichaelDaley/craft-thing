@@ -10,8 +10,11 @@ void main() {
     if(p.x<params.width&&p.y<params.height) {
         uint at=p.y*params.width+p.x;
         if((params.bank&FR_GAS_SKIP_EMPTY_PRESSURE_BIT)!=0u&&gas_cached(ivec2(p)).metric.w>0.) atomicOr(needed,2u);
-        float tolerance=(params.bank&FR_GAS_MULTIGRID_BIT)!=0u?1e-3:1e-7;
+        float tolerance=(params.bank&FR_GAS_MULTIGRID_BIT)!=0u?((params.bank&FR_GAS_PRESSURE_NOISE_BIT)!=0u?1e-2:1e-3):1e-7;
         if(correction_data[at].y>0.&&abs(correction_data[at].x)/pressure[at].w>tolerance) atomicOr(needed,1u);
     }
-    barrier();if(lane==0u) active_mask[tile]=needed;
+    barrier();if(lane==0u) {
+        active_mask[tile]=needed;
+        if((params.bank&FR_GAS_PRESSURE_NOISE_BIT)!=0u&&gl_WorkGroupID.x==0u&&gl_WorkGroupID.y==0u) atomicOr(stats[15],64u);
+    }
 }

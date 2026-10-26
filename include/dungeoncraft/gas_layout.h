@@ -11,6 +11,7 @@
 #define FR_GAS_CELL_OWNER_BIT 8u
 #define FR_GAS_GEOMETRY_DIRTY_TILE_BIT 2u
 #define FR_GAS_LOCAL_GEOMETRY_ACTIVITY_BIT 8388608u
+#define FR_GAS_PRESSURE_NOISE_BIT 4194304u
 /* Practical Rusanov floor gives two cells squared/second of mixing. */
 #define FR_GAS_PRACTICAL_MIXING_RATE 4.0
 #define FR_GAS_ZERO_ENERGY_BIT 32u
