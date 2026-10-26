@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "ferrum/fire/combustion.h"
 #include "ferrum/fire/material_profile.h"
@@ -66,11 +67,24 @@ static void test_competing_parcels_cannot_overdraw_oxygen(void) {
     }
     ASSERT_EQ(used+remaining,80);ASSERT_TRUE(remaining<2);PASS();
 }
+static void test_short_frames_retain_fractional_burn_progress(void) {
+    char err[256]={0};fr_reactive_state_t a,b,tmp;fr_combustion_products_t p;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,800,43,&a,err,sizeof(err)));
+    a.flags|=FR_REACTIVE_FLAMING;b=a;
+    ASSERT_TRUE(fr_combustion_reference(&a,65536,.23f,1,1,&tmp,&p,err,sizeof(err)));a=tmp;
+    for(int i=0;i<240;i++) {
+        ASSERT_TRUE(fr_combustion_reference(&b,65536,.23f,1,1.f/240.f,&tmp,&p,err,sizeof(err)));b=tmp;
+    }
+    ASSERT_TRUE(b.fuel_mass_fp<39322);
+    ASSERT_TRUE(abs((int)a.fuel_mass_fp-(int)b.fuel_mass_fp)<=1);
+    ASSERT_TRUE(abs((int)a.char_mass_fp-(int)b.char_mass_fp)<=1);PASS();
+}
 int main(void) {
     RUN(test_finite_oxygen_and_products);
     RUN(test_starved_wet_and_buried_do_not_burn);
     RUN(test_ignition_hazard_survives_equal_time_scheduling);
     RUN(test_energy_ledger_and_invalid_transaction);
     RUN(test_competing_parcels_cannot_overdraw_oxygen);
+    RUN(test_short_frames_retain_fractional_burn_progress);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
