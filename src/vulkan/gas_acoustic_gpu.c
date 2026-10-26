@@ -38,6 +38,7 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     fr_renderer_compute_destroy(g,&t->pack_pressure);fr_renderer_compute_destroy(g,&t->packed_sor);
     fr_renderer_compute_destroy(g,&t->reset_pressure_mask);
     fr_renderer_compute_destroy(g,&t->pack_half_pressure);fr_renderer_compute_destroy(g,&t->half_sor);
+    for(uint32_t i=0;i<2;i++) fr_renderer_compute_destroy(g,&t->finish_group[i]);
     for(uint32_t i=0;i<3;i++) {
         if(i<2u) {fr_renderer_compute_destroy(g,&t->mg_relax[i]);fr_renderer_compute_destroy(g,&t->mg_temporal[i]);}
         fr_renderer_compute_destroy(g,&t->mg_restrict[i]);fr_renderer_compute_destroy(g,&t->mg_prolong[i]);
@@ -135,6 +136,11 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     for(uint32_t i=0;i<3;i++) {
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_mg_reconcile%u.comp.spv",i+1u);
         if(!fr_renderer_compute_init(g,&t->mg_reconcile[i],buffers,25,16,path,err,cap)) goto fail;
+    }
+    for(uint32_t i=0;i<2;i++) {
+        uint32_t size=128u<<i;if(properties.limits.maxComputeWorkGroupInvocations<size||properties.limits.maxComputeWorkGroupSize[0]<size||properties.limits.maxComputeSharedMemorySize<size*16u) continue;
+        char path[128];snprintf(path,sizeof(path),"build/shaders/gas_acoustic_finish_group%u.comp.spv",size);
+        if(!fr_renderer_compute_init(g,&t->finish_group[i],buffers,25,16,path,err,cap)) goto fail;
     }
     t->ready=true;return true;
 fail:
@@ -350,7 +356,13 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,3);
         barrier(g);vkCmdFillBuffer(g->command,t->indirect.buffer,48,4,0);
         dispatch(g,&t->final_compact,(tiles+63u)/64u,1u,dt,bank);
-        indirect_dispatch(g,t,&t->finish,dt,bank,48);
+        const char *group_rate_setting=getenv("DC_GAS_GROUP_RATE");
+        uint32_t group_rate_index=group_rate_setting&&strcmp(group_rate_setting,"256")==0?1u:0u;
+        if(!t->finish_group[group_rate_index].pipeline) group_rate_index=0u;
+        if(t->practical&&group_rate_setting&&strcmp(group_rate_setting,"0")!=0&&
+           (bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u&&t->finish_group[group_rate_index].pipeline)
+            dispatch(g,&t->finish_group[group_rate_index],(tiles+(2u<<group_rate_index)-1u)/(2u<<group_rate_index),1u,dt,bank);
+        else indirect_dispatch(g,t,&t->finish,dt,bank,48);
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,tail_query);
         indirect_dispatch(g,t,&t->commit,dt,bank,48);
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,tail_query+1u);

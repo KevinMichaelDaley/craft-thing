@@ -1,0 +1,5 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#define FR_GAS_LOCAL_SIZE 128
+#define FR_GAS_GROUP_RATE 1
+#include "acoustic_finish_body.glsl"

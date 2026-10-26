@@ -58,6 +58,11 @@ initially absent species. Measured optimized float transport drifts about four
 parts per million in both compressed and full-storage runs. This replaces the
 old absolute limits under the user's practical numerical policy; the sustained
 stock, finite-state, wall, clock and complete-frame gates remain in place.
+`DC_GAS_GROUP_RATE=1` or `256` reduces completed-cell CFL bounds over 128 or
+256 cells before updating the global scalar maxima. It consumes the existing
+GPU-compacted tile list, retains every cell, and uses only a constant-size cold
+metadata getter for validation. Field state, CFL values and clock remain
+byte-identical to subgroup reduction; hardware limits retain the original path.
 
 ## Modular delivery sequence
 
