@@ -2,5 +2,4 @@
 #extension GL_GOOGLE_include_directive : require
 #define FR_GAS_LOCAL_SIZE 256
 #define FR_GAS_FIXED_AXIS 1
-#define FR_GAS_EXPLICIT_LINE_CAPACITY 448u
 #include "transport_hybrid_body.glsl"
