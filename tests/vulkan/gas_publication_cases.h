@@ -126,6 +126,8 @@ static void test_native_temporal_sor_matches_global_and_bounds_dispatches(void) 
     const char *old_mg=getenv("DC_GAS_MULTIGRID");char *saved_mg=old_mg?SDL_strdup(old_mg):NULL;
     ASSERT_EQ(SDL_setenv("DC_GAS_MULTIGRID","0",1),0);
     const char *old_coarse=getenv("DC_GAS_COARSE_WG");char *saved_coarse=old_coarse?SDL_strdup(old_coarse):NULL;
+    const char *old_cycle=getenv("DC_GAS_COARSE");char *saved_cycle=old_cycle?SDL_strdup(old_cycle):NULL;
+    ASSERT_EQ(SDL_setenv("DC_GAS_COARSE","1",1),0);
     fr_gas_state_t *input=malloc(4096*sizeof(*input)),*reference=malloc(4096*sizeof(*reference)),*out=malloc(4096*sizeof(*out));
     double *volume=malloc(4096*sizeof(*volume));dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(input&&reference&&out&&volume&&c);
     fr_gas_model_t m=reference_model();m.kinetic_scale=1./512.;
@@ -162,6 +164,7 @@ static void test_native_temporal_sor_matches_global_and_bounds_dispatches(void) 
     printf("Coarse direct dispatches%u vs global%u\n",temporal_direct,baseline_direct);ASSERT_TRUE(temporal_direct<40u&&temporal_direct<baseline_direct);
     ASSERT_EQ(SDL_setenv("DC_GAS_MULTIGRID",saved_mg?saved_mg:"0",1),0);SDL_free(saved_mg);
     ASSERT_EQ(SDL_setenv("DC_GAS_COARSE_WG",saved_coarse?saved_coarse:"0",1),0);SDL_free(saved_coarse);
+    ASSERT_EQ(SDL_setenv("DC_GAS_COARSE",saved_cycle?saved_cycle:"0",1),0);SDL_free(saved_cycle);
     ASSERT_EQ(SDL_setenv("DC_GAS_TEMPORAL_SOR",saved?saved:"0",1),0);SDL_free(saved);free(input);free(reference);free(out);free(volume);free(c);PASS();
 }
 #endif
