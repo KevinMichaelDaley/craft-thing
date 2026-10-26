@@ -283,3 +283,7 @@ Weighted-Jacobi fine smoother rejected by unchanged reference-flow checks:8 pre/
 **2026-10-26T18:43:25Z**
 
 Exact sparse-owner backend GREEN: actual native63/63 and displayed placement5/5 pass with owners+fused geometry, including cold policy transitions, failed-interval atomicity, offscreen new slots, pan/save/reopen, trapped gas and airbrush extraction. Focused core+sync gates clean. Tiny proportional tile-owner table avoids page lookups/strided cache tags; runtime performs guarded GPU owner flips, cold GPU gather preserves existing save packets. Actual carved1000 mean29.651/worst43.272ms: mean now under30, strict worst still RED, backend remains opt-in. Compiler diagnostics show selected hybrids~5.6-5.9k instructions SIMD8 and0 spills; no speculative spill claim. Next reduce diagnostic flag contention / inspect tails without changing accepted numerics.
+
+**2026-10-26T18:53:37Z**
+
+Grouped repair diagnostics preserved flags and passed core/sync but worsened actual carved1000 to33.906/170.681; reverted complete trial. Standalone explicit shader policy specialization now passes compiled-shader checks and exact native/core split/fused checks; split transport30.326/56.450 still does not beat selected hybrid, so split not promoted. Next exact pressure optimization keeps12/12 sweeps and halo but assigns one row per invocation instead of two dynamically indexed rows, targeting register/code overhead without numerical-policy changes.
