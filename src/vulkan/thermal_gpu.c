@@ -26,20 +26,22 @@ bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
     }
     struct fr_thermal_gpu *t=g->thermal;
     if(t->combustion.pipeline) return true;
-    VkDescriptorBufferInfo buffers[4]={{g->reactive->arena.root.buffer,0,g->reactive->arena.root.bytes},
-        {g->page_buffer,0,VK_WHOLE_SIZE},{t->profiles.buffer,0,t->profiles.bytes},{g->chunk_buffer,0,VK_WHOLE_SIZE}};
-    return fr_renderer_compute_init(g,&t->combustion,buffers,4,64,"build/shaders/combustion.comp.spv",err,cap);
+    VkDescriptorBufferInfo buffers[5]={{g->reactive->arena.root.buffer,0,g->reactive->arena.root.bytes},
+        {g->page_buffer,0,VK_WHOLE_SIZE},{t->profiles.buffer,0,t->profiles.bytes},{g->chunk_buffer,0,VK_WHOLE_SIZE},
+        {g->cells,0,VK_WHOLE_SIZE}};
+    return fr_renderer_compute_init(g,&t->combustion,buffers,5,64,"build/shaders/combustion.comp.spv",err,cap);
 }
 bool fr_combustion_gpu_enabled(const dc_gpu_t *g) {
     return g&&g->thermal&&g->thermal->combustion.pipeline!=VK_NULL_HANDLE;
 }
-static void record_combustion(dc_gpu_t *g,float seconds) {
-    if(!g||!g->thermal||!g->thermal->combustion.pipeline||!g->gas||seconds<=0) return;
+static void record_combustion(dc_gpu_t *g,float seconds,bool overlay) {
+    if(!g||!g->thermal||!g->thermal->combustion.pipeline||!g->gas||(!overlay&&seconds<=0)) return;
     struct fr_thermal_gpu *t=g->thermal;struct fr_gas_gpu *gas=g->gas;
     uint32_t push[16]={g->width,g->height,0,gas->sparse_owners?1u:0u};memcpy(push+2,&seconds,4);
     VkDeviceAddress addresses[4]={gas->state[gas->direct_publish?1u:0u].address,
         gas->state[2].address,gas->gates.address,gas->parameters.address};
     memcpy(push+4,addresses,sizeof(addresses));
+    push[12]=overlay?1u:0u;push[13]=(uint32_t)fmod(gas->clock.advanced_seconds*60.,65536.);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
@@ -47,12 +49,12 @@ static void record_combustion(dc_gpu_t *g,float seconds) {
     vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,t->combustion.pipeline_layout,0,1,&t->combustion.descriptor,0,NULL);
     vkCmdPushConstants(g->command,t->combustion.pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
     vkCmdDispatch(g->command,t->groups_x,t->groups_y,1);
-    fr_gas_gpu_invalidate_cache(g);
+    if(!overlay) fr_gas_gpu_invalidate_cache(g);
 }
 bool fr_combustion_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(!g||!g->thermal||!g->thermal->combustion.pipeline||!isfinite(seconds)||seconds<0) return false;
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g)) return false;
-    record_combustion(g,seconds);
+    record_combustion(g,seconds,false);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
     if(fr_renderer_submit(g)) return true;
@@ -154,10 +156,11 @@ void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
     if(g->thermal->probe_active) phase(g,4,seconds);
     phase(g,0,seconds);phase(g,5,seconds);phase(g,6,seconds);
     phase(g,0,seconds);phase(g,1,seconds);phase(g,2,seconds);
-    record_combustion(g,seconds);
+    record_combustion(g,seconds,false);
 }
 void fr_thermal_record_overlay(dc_gpu_t *g) {
-    if(!g->thermal||g->thermal->overlay==0u) return;
+    if(!g->thermal) return;
+    if(g->thermal->overlay==0u) {record_combustion(g,0,true);return;}
     phase(g,0,0);fr_thermal_feedback_record(g,&g->thermal->feedback,g->thermal->overlay,
         g->thermal->groups_x,g->thermal->groups_y);
 }

@@ -9,6 +9,7 @@ layout(set=0,binding=0,std430) readonly buffer Root {uint root[];};
 layout(set=0,binding=1,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=2,std430) readonly buffer Profiles {uint profiles[];};
 layout(set=0,binding=3,std430) readonly buffer Cells {uvec2 cells[];};
+layout(set=0,binding=4,std430) buffer Pixels {uint pixels[];};
 layout(push_constant) uniform Params {
     uint width,height,seconds,sparse;
     uvec2 world_address,alternate_address,gates_address,model_address;
@@ -38,6 +39,32 @@ uvec3 solid_products(uint consumed,uint material) {
     uint ash=uint(floor(float(rest)*coefficient(material,15u)/(1.-coefficient(material,14u))));rest-=ash;
     uint soot=uint(floor(float(rest)*coefficient(material,16u)/(1.-coefficient(material,14u)-coefficient(material,15u))));
     return uvec3(char_mass,ash,soot);
+}
+bool burning(uint at) {
+    if(at==0xffffffffu) return false;
+    uvec2 handle=Handles(uvec2(root[6],root[7])).values[at];
+    if(handle.y==0u||handle.x>=root[2]) return false;
+    Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
+    return entry.words[FR_ENTRY_GENERATION]==handle.y&&entry.words[FR_ENTRY_OWNER]==1u&&
+        (entry.words[FR_ENTRY_STATE+1u]&2u)!=0u&&entry.words[FR_ENTRY_STATE+9u]!=0u;
+}
+void feedback(uint index,ivec2 p,uint at) {
+    uint depth=0u;
+    if(burning(at)) depth=1u;
+    else if(gas_cell(at)) {
+        for(uint distance=1u;distance<=5u;distance++) {
+            uint below=atlas(p+ivec2(0,int(distance)));
+            if(burning(below)) {depth=distance;break;}
+            if(!gas_cell(below)) break;
+        }
+    }
+    if(depth==0u) return;
+    uint noise=uint(p.x)*1973u+uint(p.y)*9277u+params.unused.y*26699u;
+    noise=(noise^(noise>>13))*1274126177u;
+    float flicker=float(noise&255u)/255.;
+    vec3 flame=mix(vec3(1.,.18,.015),vec3(1.,.77,.13),flicker);
+    vec3 base=unpackUnorm4x8(pixels[index]).rgb;
+    pixels[index]=packUnorm4x8(vec4(mix(base,flame,1.-float(depth-1u)*.13),1.));
 }
 /* Each parcel chooses one neighboring gas cell. The owning gas invocation
  * gathers at most four surfaces, reserving shared oxygen locally before commit.
@@ -96,7 +123,9 @@ void burn(ivec2 position,uint gas_at,inout Gas gas) {
 void main() {
     uint i=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
     if(i>=params.width*params.height) return;
-    ivec2 p=ivec2(i%params.width,i/params.width);uint at=atlas(p);if(!gas_cell(at)) return;
+    ivec2 p=ivec2(i%params.width,i/params.width);uint at=atlas(p);
+    if(params.unused.x==1u) {feedback(i,p,at);return;}
+    if(!gas_cell(at)) return;
     bool alternate=params.sparse!=0u&&(Words(params.gates_address).words[at]&8u)!=0u;
     GasField field=GasField(alternate?params.alternate_address:params.world_address);Gas gas=field.values[at];
     if(gas.geometry.y<=0.) return;
