@@ -1,0 +1,10 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "acoustic.glsl"
+layout(set=0,binding=24,std430) restrict buffer PackedPressureWork {float packed_rows[];};
+void main() {
+    uint at=gas_sparse_index(0u);if(at>=params.width*params.height) return;
+    uint base=14u*params.width*params.height+6u*at;vec4 coefficients=stencil[at];vec2 data=correction_data[at].xy;
+    for(uint d=0u;d<4u;d++) packed_rows[base+d]=coefficients[d];
+    packed_rows[base+4u]=data.x;packed_rows[base+5u]=data.y;
+}

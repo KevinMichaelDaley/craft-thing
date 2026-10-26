@@ -1,46 +1,4 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #define FR_GAS_LOCAL_SIZE 128
-#include "acoustic.glsl"
-layout(set=0,binding=24,std430) restrict buffer TemporalWork {float temporal[];};
-shared float values[256];
-float source_value(uint at) {return (params.bank&FR_GAS_TEMPORAL_SOURCE_BIT)!=0u?temporal[at]:correction[at];}
-void main() {
-    uint tile=active_tiles[gl_WorkGroupID.x],width=(params.width+7u)/8u,lane=gl_LocalInvocationIndex;
-    ivec2 origin=ivec2(int(tile%width),int(tile/width))*8-4;
-    uint row=lane/8u,red=row*16u+2u*(lane%8u)+(row&1u),black=row*16u+2u*(lane%8u)+((row+1u)&1u);
-    uint slots[2]=uint[2](red,black);uint indices[2];bool valid[2],awake[2];vec4 coefficients[2],data[2];
-    for(uint color=0u;color<2u;color++) {
-        uint slot=slots[color];ivec2 p=origin+ivec2(int(slot%16u),int(slot/16u));
-        valid[color]=all(greaterThanEqual(p,ivec2(0)))&&all(lessThan(p,ivec2(params.width,params.height)));
-        uint at=valid[color]?uint(p.y)*params.width+uint(p.x):0u;indices[color]=at;
-        values[slot]=valid[color]?source_value(at):0.;awake[color]=false;coefficients[color]=vec4(0);data[color]=vec4(0);
-        if(valid[color]) {
-            uint own_tile=(uint(p.y)/8u)*width+uint(p.x)/8u;
-            awake[color]=(activity[gas_tile_count()+own_tile]&FR_GAS_SOLVE_TILE_BIT)!=0u;
-            if(awake[color]) {coefficients[color]=stencil[at];data[color]=correction_data[at];}
-        }
-    }
-    barrier();
-    for(uint phase=0u;phase<4u;phase++) {
-        uint color=phase&1u,slot=slots[color],x=slot%16u,y=slot/16u,margin=phase+1u;
-        vec4 weights=coefficients[color],cell=data[color];
-        if(awake[color]&&cell.y>0.&&x>=margin&&x<16u-margin&&y>=margin&&y<16u-margin) {
-            float rhs=cell.x;
-            for(uint d=0u;d<4u;d++) {
-                if(weights[d]==0.) continue;
-                uint neighbor=d==0u?slot+1u:(d==1u?slot-1u:(d==2u?slot+16u:slot-16u));
-                rhs+=weights[d]*values[neighbor];
-            }
-            values[slot]+=cell.z*(rhs*cell.y-values[slot]);
-        }
-        barrier();
-    }
-    for(uint color=0u;color<2u;color++) {
-        uint slot=slots[color],x=slot%16u,y=slot/16u;
-        if(valid[color]&&x>=4u&&x<12u&&y>=4u&&y<12u) {
-            if((params.bank&FR_GAS_TEMPORAL_SOURCE_BIT)!=0u) correction[indices[color]]=values[slot];
-            else temporal[indices[color]]=values[slot];
-        }
-    }
-}
+#include "pressure_temporal_body.glsl"
