@@ -247,3 +247,7 @@ Local-cache optimization after RED94a03c5: both publication modes produce byte-i
 **2026-10-26T16:36:33Z**
 
 Confirmed and fixed intermittent vacuum rejection: last accepted cell had all species/soot/momentum/pigment/E zero; candidate only retainedE1.141e-37 or6.434e-37. Practical zero-mass cleanup uses8 FP32 eps of ambient full-cell energy, not an exact-underflow chase. Vulkan RED masks148/151 vs215; GREEN215, core+sync1/1, positive subnormal colors/ordinary gas/compensated-zero unchanged and larger invalid energy retained/rejected. Device-only state55,050,240bytes +262,144cold staging has exact active/new/quiet/dormant state/CFL/clock, checkpoint/rejected-state core checks and placement5/5; combined full actual native59/59. New edited1000 is finite/audit/pause pass34.119mean62.878worst; device-state gave no demonstrated performance gain and remains opt-in/off. LOCAL_GEOMETRY also stays opt-in; strict frame budget RED. Comparing existing split transport backend under the dynamic workload next.
+
+**2026-10-26T17:12:42Z**
+
+Rejected optional subgroup16 trial: configured and actual native subgroup16 verified, but stiff eight-step field-quality diagnostic failed (density relative L1 .01275, pigment .01898) and actual displayed carved1000 was slower, 36.754ms mean /70.119ms worst. Trial preserved in c0ef623 and reverted with RED diagnostic; selected runtime restored to 7fc7e48. No acceptance thresholds weakened. Edited dynamic-scene performance remains RED; next narrow experiment is tiled explicit transport with existing implicit fallback.
