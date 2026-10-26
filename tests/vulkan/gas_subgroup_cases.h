@@ -44,8 +44,11 @@ static void test_native_sixteen_lane_transport_preserves_stock_owners_clock_and_
     }
     printf("Transport subgroup configured%u/%u actual%u/%u dispatches%u/%u densityL1%.9g energyL1%.9g pigmentL1%.9g velocityRMS%.9g\n",
         configured[1],configured[0],actual[1],actual[0],work[1],work[0],density/mass,energy_error/energy,color_error/pigment,sqrt(velocity/mass));
+    for(uint32_t k=0;k<5u;k++) {
+        printf("Subgroup stock%u drift%.9g relative%.9g\n",k,final[k]-stock[k],stock[k]>0.?(final[k]-stock[k])/stock[k]:0.);
+        ASSERT_TRUE(fabs(final[k]-stock[k])<fmax(1e-9,stock[k]*.0002));
+    }
     ASSERT_TRUE(density/mass<1e-3&&energy_error/energy<1e-3&&color_error/pigment<.003&&sqrt(velocity/mass)<.1);
-    for(uint32_t k=0;k<5u;k++) ASSERT_TRUE(fabs(final[k]-stock[k])<fmax(1e-9,stock[k]*.0002));
     ASSERT_TRUE(work[0]==work[1]&&configured[0]==0u&&actual[0]==0u&&configured[1]==16u&&actual[1]==16u);
     SDL_setenv("DC_GAS_SUBGROUP16",saved?saved:"0",1);SDL_free(saved);free(chunk);free(volume);free(input);free(quiet);free(dormant);free(reference);free(out);PASS();
 }

@@ -44,6 +44,8 @@ void FR_GAS_PREFIX_ENTRY() {
     uint lane=gl_SubgroupInvocationID,rank=gl_SubgroupID*gl_SubgroupSize+lane;
     uint length=transport_axis()==0u?params.width:params.height,span=(length+FR_GAS_LOCAL_SIZE-1u)/FR_GAS_LOCAL_SIZE;
     uint begin=rank*span,end=min(begin+span,length),line=gl_WorkGroupID.x;
+    if(line==0u&&rank==0u&&(params.bank&FR_GAS_SUBGROUP_MARKER_BIT)!=0u&&(params.bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u)
+        atomicOr(stats[FR_GAS_ROW_NORM_AFTER_WORD],gl_SubgroupSize<<8u);
     if(transport_work[line*length].mass.w<0.) return;
     vec2 factor=vec2(1);GasFlux value=gas_empty_flux();bool moving=false;
     for(uint cell=begin;cell<end;cell++) {

@@ -17,6 +17,11 @@ bool fr_renderer_compute_init(dc_gpu_t *gpu, fr_renderer_compute_t *compute,
                               const VkDescriptorBufferInfo *buffers,
                               uint32_t count, uint32_t push_bytes,
                               const char *shader, char *err, uint32_t cap);
+/** Create a compute pipeline with a previously validated subgroup width;
+ * zero retains driver selection. Callers must enable subgroupSizeControl. */
+bool fr_renderer_compute_init_subgroup(dc_gpu_t *gpu,fr_renderer_compute_t *compute,
+    const VkDescriptorBufferInfo *buffers,uint32_t count,uint32_t push_bytes,
+    const char *shader,uint32_t subgroup,char *err,uint32_t cap);
 void fr_renderer_compute_destroy(dc_gpu_t *gpu, fr_renderer_compute_t *compute);
 void fr_renderer_barrier(VkCommandBuffer command, VkPipelineStageFlags2 source,
                          VkAccessFlags2 source_access,

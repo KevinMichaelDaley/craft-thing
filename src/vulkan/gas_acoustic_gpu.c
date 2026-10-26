@@ -5,6 +5,7 @@
 #include "dungeoncraft/gas_layout.h"
 #include "gas_acoustic_gpu.h"
 #include "gas_gpu_internal.h"
+#include "subgroup_gpu.h"
 enum { GAS_PRESSURE_SWEEPS=16, GAS_PRESSURE_GROUP=2, GAS_PRACTICAL_SWEEPS=256 };
 static const float gas_multigrid_max_interval=.05f;
 static bool enabled(const char *name) {const char *value=getenv(name);return !value||strcmp(value,"0")!=0;}
@@ -85,6 +86,8 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     const char *wide=getenv("DC_GAS_WIDE_SCAN");
     bool use_wide=wide&&strcmp(wide,"0")!=0&&subgroup.subgroupSize>=4u&&properties.limits.maxComputeWorkGroupInvocations>=256u&&properties.limits.maxComputeWorkGroupSize[0]>=256u;
     t->hybrid_line_group=use_wide?256u:64u;
+    const char *subgroup_setting=getenv("DC_GAS_SUBGROUP16");
+    t->transport_subgroup=subgroup_setting&&strcmp(subgroup_setting,"0")!=0?dc_gpu_transport_subgroup_size(g->physical):0u;
     const char *line_group=getenv("DC_GAS_LINE_GROUP");
     uint32_t minimum_subgroup=sizes.minSubgroupSize?sizes.minSubgroupSize:subgroup.subgroupSize;
     bool large_group=line_group&&strcmp(line_group,"512")==0&&minimum_subgroup>=8u&&
@@ -98,7 +101,7 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     for(uint32_t i=0;i<20;i++) {
         if(i>=16u&&!t->supports_large_transport) continue;
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",paths[i]);
-        if(!fr_renderer_compute_init(g,pipelines[i],buffers,25,16,path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init_subgroup(g,pipelines[i],buffers,25,16,path,i>=16u&&i<=18u?t->transport_subgroup:0u,err,cap)) goto fail;
     }
     if(!fr_renderer_compute_init(g,&t->activity_cached,buffers,25,16,"build/shaders/gas_activity_cached.comp.spv",err,cap)) goto fail;
     fr_renderer_compute_t *coarse_pipelines[]={&t->restrict_pressure,&t->coarse_sor,&t->prolong_pressure};
@@ -114,19 +117,19 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
             large_group?"transport_prefix_compact_large":(use_wide?"transport_prefix_compact_wide":"transport_prefix_compact"),"transport_apply_compact"};
         for(uint32_t i=0;i<3;i++) {
             char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",names[i]);
-            if(!fr_renderer_compute_init(g,practical[i],buffers,25,16,path,err,cap)) goto fail;
+            if(!fr_renderer_compute_init_subgroup(g,practical[i],buffers,25,16,path,t->transport_subgroup,err,cap)) goto fail;
         }
         const char *axis_path=large_group?"build/shaders/gas_transport_axis_compact_large.comp.spv":(use_wide?"build/shaders/gas_transport_axis_compact_wide.comp.spv":"build/shaders/gas_transport_axis_compact.comp.spv");
-        if(!fr_renderer_compute_init(g,&t->practical_axis,buffers,25,16,axis_path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init_subgroup(g,&t->practical_axis,buffers,25,16,axis_path,t->transport_subgroup,err,cap)) goto fail;
         if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_EXPLICIT_LINE_CAPACITY*48u+64u*4u) {
             const char *explicit_path=large_group?"build/shaders/gas_transport_explicit_large.comp.spv":(use_wide?"build/shaders/gas_transport_explicit_wide.comp.spv":"build/shaders/gas_transport_explicit.comp.spv");
-            if(!fr_renderer_compute_init(g,&t->practical_explicit,buffers,25,16,explicit_path,err,cap)) goto fail;
+            if(!fr_renderer_compute_init_subgroup(g,&t->practical_explicit,buffers,25,16,explicit_path,t->transport_subgroup,err,cap)) goto fail;
             if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_EXPLICIT_LINE_CAPACITY*48u+64u*4u) {
                 const char *hybrid_path=large_group?"build/shaders/gas_transport_hybrid_large.comp.spv":(use_wide?"build/shaders/gas_transport_hybrid_wide.comp.spv":"build/shaders/gas_transport_hybrid.comp.spv");
-                if(!fr_renderer_compute_init(g,&t->practical_hybrid,buffers,25,16,hybrid_path,err,cap)) goto fail;
+                if(!fr_renderer_compute_init_subgroup(g,&t->practical_hybrid,buffers,25,16,hybrid_path,t->transport_subgroup,err,cap)) goto fail;
                 for(uint32_t axis=0;axis<2;axis++) {
                     char path[128];snprintf(path,sizeof(path),"build/shaders/gas_transport_hybrid_%c%s.comp.spv",axis?'y':'x',line_suffix);
-                    if(!fr_renderer_compute_init(g,&t->practical_hybrid_axis[axis],buffers,25,16,path,err,cap)) goto fail;
+                    if(!fr_renderer_compute_init_subgroup(g,&t->practical_hybrid_axis[axis],buffers,25,16,path,t->transport_subgroup,err,cap)) goto fail;
                 }
             }
         }
@@ -292,6 +295,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(t->large_transport&&!compact_large) bank|=2048u;
     if(matrix_large) bank|=FR_GAS_LARGE_ENERGY_BIT;
     if(t->practical) bank|=FR_GAS_PRACTICAL_BIT;
+    if(t->transport_subgroup) bank|=FR_GAS_SUBGROUP_MARKER_BIT;
     if(skip_empty) bank|=FR_GAS_SKIP_EMPTY_PRESSURE_BIT;
     if(getenv("DC_GAS_COMPARE_ROW_SETUP")) bank|=FR_GAS_COMPARE_ROW_SETUP_BIT;
     const char *zero_energy=getenv("DC_GAS_ZERO_ENERGY");

@@ -29,6 +29,8 @@ GasFlux line_face_flux(ivec2 p,float seconds) {
 #endif
 void FR_GAS_EXPLICIT_ENTRY() {
     uint rank=gl_LocalInvocationIndex,length=transport_axis()==0u?params.width:params.height,line=gl_WorkGroupID.x;
+    if(line==0u&&rank==0u&&(params.bank&FR_GAS_SUBGROUP_MARKER_BIT)!=0u&&(params.bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u)
+        atomicOr(stats[FR_GAS_ROW_NORM_AFTER_WORD],gl_SubgroupSize<<8u);
     if(rank==0u) transport_work[line*length].mass.w=0.;
     if(length>FR_GAS_EXPLICIT_LINE_CAPACITY) {if(rank==0u) atomicAdd(stats[FR_GAS_IMPLICIT_LINE_COUNT_WORD],1u);return;}
     float speed=0.;

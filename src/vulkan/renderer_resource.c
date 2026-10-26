@@ -2,10 +2,10 @@
 
 #include "renderer_internal.h"
 
-bool fr_renderer_compute_init(dc_gpu_t *g, fr_renderer_compute_t *c,
+bool fr_renderer_compute_init_subgroup(dc_gpu_t *g, fr_renderer_compute_t *c,
                               const VkDescriptorBufferInfo *buffers, uint32_t n,
                               uint32_t push_bytes, const char *shader,
-                              char *err, uint32_t cap) {
+                              uint32_t subgroup,char *err, uint32_t cap) {
   if (!g || !c || !buffers || !n || n > 36)
     return false;
   VkDescriptorSetLayoutBinding bindings[36] = {0};
@@ -66,10 +66,19 @@ bool fr_renderer_compute_init(dc_gpu_t *g, fr_renderer_compute_t *c,
                 .module = module,
                 .pName = "main"},
       .layout = c->pipeline_layout};
+  VkPipelineShaderStageRequiredSubgroupSizeCreateInfo required={
+      .sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO,
+      .requiredSubgroupSize=subgroup};
+  if(subgroup) pi.stage.pNext=&required;
   VkResult result = vkCreateComputePipelines(g->device, VK_NULL_HANDLE, 1, &pi,
                                              NULL, &c->pipeline);
   vkDestroyShaderModule(g->device, module, NULL);
   return result == VK_SUCCESS;
+}
+bool fr_renderer_compute_init(dc_gpu_t *g,fr_renderer_compute_t *c,
+    const VkDescriptorBufferInfo *buffers,uint32_t n,uint32_t push_bytes,
+    const char *shader,char *err,uint32_t cap) {
+  return fr_renderer_compute_init_subgroup(g,c,buffers,n,push_bytes,shader,0u,err,cap);
 }
 void fr_renderer_compute_destroy(dc_gpu_t *g, fr_renderer_compute_t *c) {
   if (c->pipeline)
