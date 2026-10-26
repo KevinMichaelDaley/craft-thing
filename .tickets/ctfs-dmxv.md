@@ -151,3 +151,7 @@ Packed pressurec09442f is numerically exact(native36/36), but audited1000 scalar
 **2026-10-26T01:15:30Z**
 
 Experimental partial coarse topology/short smoothing WIP: fixed4-node GPU connectivity and child-mask face reconciliation prevent false wall links. Concave reference/work gate passes77vs179dispatches,.172%massL1,.581%pigment,.540velocityRMS; practical stability remains RED(3/5: sealed neighbor6.48% and long-interval pressure bound fail). Not enabled by default/not baseline. Next conservative pairwise viscous stabilization, preserving physical clock, finite inventory and mechanical/thermal accounting; existing stability thresholds unchanged.
+
+**2026-10-26T01:28:18Z**
+
+Short-solve relaxation1.7 failed flow RMS4.38;1.6 passed flow(.277RMS) but still failed sealed-neighbor/long-run stability. Viscous stabilization passed approximate flow but failed same stability gates and all viscosity code was discarded. Retain validated24-fine-sweep backend; partial-topology/short solve remains explicit WIP, not enabled. Next compress only derived pressure rows with original iteration schedule, preserving original physical gas state precision and capacity.
