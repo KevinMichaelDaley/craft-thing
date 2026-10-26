@@ -406,6 +406,7 @@ int main(void) {
     RUN(test_native_tick_waits_its_fence_without_draining_presentation_queue);
     RUN(test_native_temporal_sor_matches_global_and_bounds_dispatches);
     RUN(test_native_multigrid_bounds_work_and_preserves_reference_flow);
+    RUN(test_native_multigrid_jacobi_keeps_reference_flow_with_bounded_smoothing);
     RUN(test_native_multigrid_temporal_preserves_steps_with_fewer_dispatches);
     RUN(test_native_fused_transport_metadata_preserves_state_with_fewer_dispatches);
     RUN(test_native_packed_pressure_rows_preserve_state_with_one_pack_pass);
