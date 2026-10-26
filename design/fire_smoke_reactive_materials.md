@@ -17,6 +17,15 @@ Non-aligned view dimensions retain conventional publication. This backend has
 passed native ownership, rejection, geometry, streaming and displayed placement
 checks, but remains opt-in until repeated complete-frame budgets pass.
 
+Moving solid, powder and water occupancy conservatively remaps gas when a
+cell's physical void contracts, including partial cut cells. The retained
+fraction follows the remaining volume; extensive mixture, pigment, momentum,
+energy and work are gathered into accessible neighbors in parallel. Closed
+pockets retain their stock, and newly exposed volume does not create ambient
+gas. This avoids pinning a full gas packet in an arbitrarily tiny open volume
+before complete blockage, while leaving subsequent compressible gas dynamics
+and the existing pressure policy unchanged.
+
 Latest user direction supersedes earlier exact per-frame convergence, bitwise
 identity and perfect-energy requirements. Diagnose delayed stalls with frame
 time series, not only averages. Gameplay pressure work must be bounded; it must

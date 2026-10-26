@@ -21,6 +21,16 @@ bool geometry_open(ivec2 p,uint d) {return gas_gate_open((d&1u)==0u?p:p+geometry
 float geometry_route(ivec2 p) {
     float total=0.;for(uint d=0u;d<4u;d++) if(geometry_open(p,d)) total+=geometry_available(p+geometry_direction(d));return total;
 }
+/* Retain density during boundary remapping; sealed pockets retain all stock. */
+vec2 geometry_retention(ivec2 p,Gas original,float available) {
+    if(gas_mass(original)<=0.||available>=original.geometry.x) return vec2(1,0);
+    float route=geometry_route(p);if(route<=0.) return vec2(1,0);
+    return vec2(clamp(available/original.geometry.x,0.,1.),route);
+}
+Gas geometry_scale_packet(Gas original,float fraction) {
+    original.species*=fraction;original.dynamics*=fraction;original.visual*=fraction;
+    original.geometry.zw*=fraction;return original;
+}
 void geometry_mark(uint index,bool changed) {
     if(gas_cache_owner(index)==0u) cache1[index].metric.z=changed?1.:0.;else cache0[index].metric.z=changed?1.:0.;
 }

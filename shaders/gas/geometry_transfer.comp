@@ -12,24 +12,28 @@ void main() {
     }
     uint atlas=gas_atlas(p);if(atlas==0xffffffffu) return;
     Gas original=gas_world(atlas),value=original;float available=geometry_metadata(index).x;
-    bool changed=available!=original.geometry.y;
+    vec2 retention=available<=0.||geometry_metadata(index).y>0.?geometry_retention(p,original,available):vec2(1,0);
+    bool changed=available!=original.geometry.y||retention.x<1.;
+    if(retention.x<=0.) value=gas_empty();
+    else if(retention.x<1.) value=geometry_scale_packet(original,retention.x);
     if(available<=0.) {
-        float mass=gas_mass(original),route=mass>0.?geometry_route(p):0.;
-        if(mass>0.&&route>0.) {value=gas_empty();changed=true;}
-        else if(mass==0.) value.geometry.x=0.;
+        if(gas_mass(value)==0.) value.geometry.x=0.;
         value.geometry.y=0.;
     } else {
         value.geometry.xy=vec2(available);
         for(uint d=0u;d<4u;d++) {
-            ivec2 q=p+geometry_direction(d);if(geometry_available(q)>0.) continue;
+            ivec2 q=p+geometry_direction(d);vec4 metadata=geometry_metadata_at(q);
+            if(metadata.x>0.&&metadata.y==0.) continue;
             uint other=gas_atlas(q);if(other==0xffffffffu||!geometry_open(p,d)) continue;
             Gas donor=gas_world(other);if(gas_mass(donor)<=0.) continue;
-            float route=geometry_route(q);if(route<=0.) continue;
-            float fraction=available/route;
+            vec2 donor_retention=geometry_retention(q,donor,metadata.x);
+            if(donor_retention.x>=1.||donor_retention.y<=0.) continue;
+            float fraction=(1.-donor_retention.x)*available/donor_retention.y;
             GasFlux incoming=GasFlux(donor.species*fraction,vec4(donor.dynamics.x,gas_energy(donor),donor.dynamics.zw)*fraction,donor.visual.rgb*fraction);
             value=gas_add_flux(value,incoming,1.);value.geometry.w+=donor.geometry.w*fraction;changed=true;
         }
     }
+    if(gas_parameter(FR_GAS_POLICY_WORD)==3.) value=gas_practical_state(value);
     if(changed) {bool okay=false;gas_primitive(value,okay);if(!okay) gas_error(index);else geometry_write_candidate(atlas,value);}
     geometry_mark(index,changed);
     uint any_changed=subgroupMax(changed?1u:0u);if(subgroupElect()&&any_changed!=0u) atomicOr(stats[FR_GAS_ROW_NORM_BEFORE_WORD],1u);
