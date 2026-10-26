@@ -49,7 +49,9 @@ bool fr_combustion_reference(const fr_reactive_state_t *source,uint32_t oxygen_f
     if(viable&&(s.flags&FR_REACTIVE_FLAMING)) {
         double wet=(1-saturation)*(1-saturation);
         double requested=(double)s.dry_mass_fp*profile->surface_burn_per_second*
-            seconds*exposed_fraction*wet;
+            seconds*exposed_fraction*wet+s.reaction_fraction;
+        s.reaction_fraction=(float)(requested-floor(requested));
+        if(s.reaction_fraction>=1) s.reaction_fraction=nextafterf(1,0);
         double admitted=fmin(s.fuel_mass_fp,requested);
         if(profile->oxygen_per_fuel>0) admitted=fmin(admitted,oxygen_fp/(double)profile->oxygen_per_fuel);
         p.fuel_fp=(uint32_t)floor(admitted);

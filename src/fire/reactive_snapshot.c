@@ -67,6 +67,10 @@ static bool legacy_owners_valid(const fr_reactive_record_t *records,uint32_t cou
         if(bits!=0u)
             return error(err,cap,"Reserved legacy thermal remainder bits are nonzero");
     }
+    for(uint32_t i=0;version<4u&&i<count;i++) {
+        uint32_t bits=0;memcpy(&bits,&records[i].state.reaction_fraction,sizeof(bits));
+        if(bits!=0u) return error(err,cap,"Reserved legacy reaction progress bits are nonzero");
+    }
     return true;
 }
 

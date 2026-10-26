@@ -86,8 +86,10 @@ bool fr_reactive_state_valid(const fr_reactive_state_t *s,char *err,uint32_t cap
     if(!s||!fr_reactive_profile(s->material)||(s->flags&~31u)!=0||
        identity(s->parcel_id_low,s->parcel_id_high)==0||identity(s->origin_id_low,s->origin_id_high)==0)
         return error(err,cap,"Invalid reactive identity/flags");
-    if(s->identity_reserved[0]||s->identity_reserved[1]||s->reserved[0])
+    if(s->identity_reserved[0]||s->identity_reserved[1])
         return error(err,cap,"Nonzero reactive reserved fields");
+    if(!isfinite(s->reaction_fraction)||s->reaction_fraction<0||s->reaction_fraction>=1)
+        return error(err,cap,"Invalid fractional reaction progress");
     float step=s->thermal_energy-nextafterf(s->thermal_energy,0.f);
     float next=nextafterf(s->thermal_energy,INFINITY);
     if(isfinite(next)) step=next-s->thermal_energy;
@@ -140,6 +142,8 @@ bool fr_reactive_state_split(const fr_reactive_state_t *s,uint32_t weight,uint64
         return error(err,cap,"Reactive split energy overflow");
     first.pending_shock_energy=(float)(s->pending_shock_energy*fraction);
     second.pending_shock_energy=s->pending_shock_energy-first.pending_shock_energy;
+    first.reaction_fraction=(float)(s->reaction_fraction*weight/65536.0);
+    second.reaction_fraction=s->reaction_fraction-first.reaction_fraction;
     if(!fr_reactive_state_valid(&first,err,cap)||!fr_reactive_state_valid(&second,err,cap)) return false;
     *left=first;*right=second;return true;
 }

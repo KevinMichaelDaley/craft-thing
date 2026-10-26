@@ -7,7 +7,7 @@
 
 #include "dungeoncraft/chunk.h"
 
-#define FR_REACTIVE_STATE_ABI 3u
+#define FR_REACTIVE_STATE_ABI 4u
 #define FR_REACTIVE_STATE_WORDS 28u
 #define FR_REACTIVE_OWNER_WORDS 6u
 enum {
@@ -35,7 +35,7 @@ typedef struct {
     float coating_threshold, coating_integral, pending_shock_energy;
     float thermal_energy_residual; /**< Signed low-order extensive heat. */
     float thermal_energy_correction; /**< Retained residual accumulation error. */
-    uint32_t reserved[1];
+    float reaction_fraction; /**< Uncommitted sub-Q16 substrate reaction progress. */
 } fr_reactive_state_t;
 
 enum { FR_REACTIVE_OWNER_CELL=1u, FR_REACTIVE_OWNER_BODY=2u,

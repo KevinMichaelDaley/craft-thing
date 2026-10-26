@@ -24,10 +24,10 @@ static void terrain_combustion(bool practical) {
     ASSERT_TRUE(fr_combustion_gpu_enable(g,err,sizeof(err)));
     fr_gas_state_t *before=calloc(4096,sizeof(*before)),*after=calloc(4096,sizeof(*after));ASSERT_TRUE(before&&after);
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,before,4096,err,sizeof(err)));
-    ASSERT_TRUE(fr_combustion_gpu_step(g,.25f,err,sizeof(err)));
+    ASSERT_TRUE(fr_combustion_gpu_step(g,.05f,err,sizeof(err)));
     fr_reactive_record_t result;bool found=false;
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&result,&found,err,sizeof(err))&&found);
-    ASSERT_TRUE(result.state.fuel_mass_fp<wood.fuel_mass_fp&&result.state.char_mass_fp>0);
+    ASSERT_TRUE(result.state.fuel_mass_fp<wood.fuel_mass_fp);
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
     double oxygen=0,products=0,mass_before=fr_reactive_state_mass_fp(&wood)/65536.,
         mass_after=fr_reactive_state_mass_fp(&result.state)/65536.;
@@ -40,6 +40,10 @@ static void terrain_combustion(bool practical) {
     }
     ASSERT_TRUE(oxygen>0&&products>oxygen);
     ASSERT_TRUE(fabs(mass_before-mass_after)<1e-7);
+    uint32_t fuel_before_short_steps=result.state.fuel_mass_fp;
+    for(uint32_t step=0;step<20;step++) ASSERT_TRUE(fr_combustion_gpu_step(g,.001f,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&result,&found,err,sizeof(err))&&found);
+    ASSERT_TRUE(result.state.fuel_mass_fp<fuel_before_short_steps&&result.state.char_mass_fp>0);
     ASSERT_TRUE(present(g,err,sizeof(err)));
     fr_reactive_record_t paused;ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&paused,&found,err,sizeof(err))&&found);
     ASSERT_EQ(memcmp(&result,&paused,sizeof(result)),0);

@@ -72,7 +72,9 @@ void burn(ivec2 position,uint gas_at,inout Gas gas) {
     if(!viable||(flags&2u)==0u) return;
     float demand=coefficient(m,12u);
     uint oxygen_fp=uint(floor(max(0.,gas.species.x)*65536.));
-    uint reacted=uint(floor(min(min(float(fuel),float(entry.words[s+8u])*coefficient(m,31u)*dt*dry*dry),float(oxygen_fp)/demand)));
+    float requested=float(entry.words[s+8u])*coefficient(m,31u)*dt*dry*dry+uintBitsToFloat(entry.words[s+27u]);
+    entry.words[s+27u]=floatBitsToUint(min(requested-floor(requested),.99999994));
+    uint reacted=uint(floor(min(min(float(fuel),requested),float(oxygen_fp)/demand)));
     uint used=uint(ceil(float(reacted)*demand));if(reacted==0u||used>oxygen_fp) return;
     uint initial=uint(round(float(entry.words[s+8u])*coefficient(m,9u))),consumed=initial>=fuel?initial-fuel:0u;
     uvec3 products=solid_products(consumed+reacted,m)-solid_products(consumed,m);

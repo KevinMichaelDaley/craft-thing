@@ -79,6 +79,20 @@ static void test_short_frames_retain_fractional_burn_progress(void) {
     ASSERT_TRUE(abs((int)a.fuel_mass_fp-(int)b.fuel_mass_fp)<=1);
     ASSERT_TRUE(abs((int)a.char_mass_fp-(int)b.char_mass_fp)<=1);PASS();
 }
+static void test_fractional_reaction_survives_checkpoint_and_split(void) {
+    char err[256]={0};fr_reactive_record_t record={.owner=fr_reactive_cell_owner((dc_chunk_coord_t){0,0},0)},restored;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,800,47,&record.state,err,sizeof(err)));
+    record.state.flags|=FR_REACTIVE_FLAMING;fr_reactive_state_t next;fr_combustion_products_t products;
+    ASSERT_TRUE(fr_combustion_reference(&record.state,65536,.23f,1,.001f,&next,&products,err,sizeof(err)));
+    ASSERT_TRUE(next.reaction_fraction>0&&next.reaction_fraction<1);record.state=next;
+    uint8_t bytes[512];size_t written=0;uint32_t count=0,required=0;uint64_t id=0;
+    ASSERT_TRUE(fr_reactive_snapshot_encode(&record,1,48,bytes,sizeof(bytes),&written,err,sizeof(err)));
+    ASSERT_TRUE(fr_reactive_snapshot_decode(bytes,written,&restored,1,&count,&id,&required,err,sizeof(err)));
+    ASSERT_EQ(count,1);ASSERT_EQ(restored.state.reaction_fraction,next.reaction_fraction);
+    fr_reactive_state_t left,right;
+    ASSERT_TRUE(fr_reactive_state_split(&next,32768,49,50,&left,&right,err,sizeof(err)));
+    ASSERT_TRUE(fabsf(left.reaction_fraction+right.reaction_fraction-next.reaction_fraction)<1e-7f);PASS();
+}
 int main(void) {
     RUN(test_finite_oxygen_and_products);
     RUN(test_starved_wet_and_buried_do_not_burn);
@@ -86,5 +100,6 @@ int main(void) {
     RUN(test_energy_ledger_and_invalid_transaction);
     RUN(test_competing_parcels_cannot_overdraw_oxygen);
     RUN(test_short_frames_retain_fractional_burn_progress);
+    RUN(test_fractional_reaction_survives_checkpoint_and_split);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }

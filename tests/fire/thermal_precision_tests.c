@@ -13,7 +13,7 @@ static int g_pass,g_fail;
 #define PASS() g_pass++
 static void test_sub_ulp_heat_is_retained_and_temperature_uses_full_inventory(void) {
     char err[256]={0};fr_reactive_state_t s;
-    ASSERT_EQ(FR_REACTIVE_STATE_ABI,3u);
+    ASSERT_EQ(FR_REACTIVE_STATE_ABI,4u);
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,176947,0,350,1,&s,err,sizeof(err)));
     double before=fr_reactive_state_energy(&s);
     for(uint32_t i=0;i<100000;i++) ASSERT_TRUE(fr_reactive_state_add_heat(&s,1e-6,err,sizeof(err)));
