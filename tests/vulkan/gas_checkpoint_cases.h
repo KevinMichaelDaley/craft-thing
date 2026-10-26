@@ -11,9 +11,11 @@ static void test_native_new_streamed_slot_initializes_once_without_refilling_exi
     chunk->coord.x=1;chunk->cells[0].material=DC_MATERIAL_STONE;
     ASSERT_TRUE(dc_gpu_upload_chunk(g,1,chunk,err,sizeof(err))&&dc_gpu_set_page(g,1,0,1,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_import_checkpoint(g,1,old,err,sizeof(err))&&fr_gas_gpu_gate(g,65,0,1,64,0,true,err,sizeof(err)));
+    chunk->coord.x=2;chunk->cells[0].material=0;ASSERT_TRUE(dc_gpu_upload_chunk(g,2,chunk,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_queue_ambient_chunk(g,1,err,sizeof(err))&&fr_gas_gpu_queue_ambient_chunk(g,2,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_initialize_queued(g,err,sizeof(err))&&fr_gas_gpu_export_checkpoint(g,1,fresh,err,sizeof(err)));
     ASSERT_EQ(fresh->cells[0][12],0.f);ASSERT_EQ(fresh->cells[1][12],1.f);ASSERT_TRUE(fresh->cells[1][0]>0.f&&fresh->gates[1]==0u);
+    ASSERT_TRUE(fr_gas_gpu_export_checkpoint(g,2,out,err,sizeof(err))&&out->cells[0][0]>0.f);
     ASSERT_TRUE(fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err)));ASSERT_EQ(memcmp(old,out,sizeof(*old)),0);
     fresh->cells[1][1]*=.5f;fresh->cells[1][5]*=.5f;
     ASSERT_TRUE(fr_gas_gpu_import_checkpoint(g,1,fresh,err,sizeof(err))&&fr_gas_gpu_initialize_queued(g,err,sizeof(err))&&
