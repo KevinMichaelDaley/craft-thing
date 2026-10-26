@@ -37,7 +37,7 @@ bool fr_gas_gpu_zero_energy_metadata(const dc_gpu_t *g,bool *selected) {
 }
 bool fr_gas_gpu_sparse_owner_metadata(const dc_gpu_t *g,bool *selected) {
     if(!g||!g->gas||!selected) return false;
-    *selected=false;return true;
+    *selected=(((const uint32_t *)g->gas->stats.mapped)[15]&8u)!=0u;return true;
 }
 bool fr_gas_gpu_work_memory(const dc_gpu_t *g,uint64_t *mapped_bytes,uint64_t *device_bytes) {
     if(!g||!g->gas||!mapped_bytes||!device_bytes) return false;
@@ -46,6 +46,7 @@ bool fr_gas_gpu_work_memory(const dc_gpu_t *g,uint64_t *mapped_bytes,uint64_t *d
         const dc_gpu_address_buffer_t *buffer=i<2u?t->cache+i:(i==2u?&t->acoustic.transport_work:t->acoustic.fields+i-3u);
         if(buffer->host_visible) mapped+=buffer->bytes;else device+=buffer->bytes;
     }
+    if(t->owner_tiles.host_visible) mapped+=t->owner_tiles.bytes;else device+=t->owner_tiles.bytes;
     *mapped_bytes=mapped;*device_bytes=device;return true;
 }
 bool fr_gas_gpu_rate_metadata(const dc_gpu_t *g,float rates[3],uint32_t *width) {
@@ -63,6 +64,8 @@ static void destroy(dc_gpu_t *g,struct fr_gas_gpu *t) {
     fr_gas_acoustic_destroy(g,&t->acoustic);
     fr_renderer_compute_destroy(g,&t->initialize);fr_renderer_compute_destroy(g,&t->prepare);
     fr_renderer_compute_destroy(g,&t->geometry_stage);fr_renderer_compute_destroy(g,&t->geometry_transfer);fr_renderer_compute_destroy(g,&t->geometry_commit);
+    fr_renderer_compute_destroy(g,&t->owner_gather);
+    dc_gpu_address_buffer_destroy(g,&t->owner_tiles);
     fr_renderer_compute_destroy(g,&t->transport);fr_renderer_compute_destroy(g,&t->feedback);
     fr_renderer_compute_destroy(g,&t->gate);dc_gpu_address_buffer_destroy(g,&t->gates);
     fr_renderer_compute_destroy(g,&t->audit);dc_gpu_address_buffer_destroy(g,&t->audit_summary);
@@ -210,6 +213,8 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     const char *device_work=getenv("DC_GAS_DEVICE_WORK");
     bool mapped_work=!device_work||strcmp(device_work,"0")==0;
     for(uint32_t i=0;i<2;i++) if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,mapped_work,t->cache+i,err,cap)) return false;
+    VkDeviceSize tiles=(VkDeviceSize)((g->width+7u)/8u)*((g->height+7u)/8u);
+    if(!dc_gpu_address_buffer_create(g,tiles*4u,mapped_work,&t->owner_tiles,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*4u,true,&t->gates,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(FR_GAS_MODEL_WORDS+DC_GPU_CHUNK_SLOTS)*4u,true,&t->parameters,err,cap)||
        !dc_gpu_address_buffer_create(g,64,true,&t->stats,err,cap)||
@@ -219,27 +224,31 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     parameters[10]=(float)t->model.kinetic_scale;parameters[11]=t->density;parameters[12]=t->temperature;
     parameters[13]=.21f;parameters[14]=0;parameters[15]=6;
     ((uint32_t *)t->parameters.mapped)[FR_GAS_SLOT_COUNT_WORD]=DC_GPU_CHUNK_SLOTS;
-    VkDescriptorBufferInfo buffers[12];
+    ((uint32_t *)t->parameters.mapped)[FR_GAS_CELL_OWNER_WORD]=0u;
+    VkDescriptorBufferInfo buffers[27];
+    for(uint32_t i=12u;i<27u;i++) buffers[i]=(VkDescriptorBufferInfo){t->parameters.buffer,0,t->parameters.bytes};
+    buffers[26]=(VkDescriptorBufferInfo){t->owner_tiles.buffer,0,t->owner_tiles.bytes};
     for(uint32_t i=0;i<3;i++) buffers[i]=(VkDescriptorBufferInfo){t->state[i].buffer,0,t->state[i].bytes};
     for(uint32_t i=0;i<2;i++) buffers[3+i]=(VkDescriptorBufferInfo){t->cache[i].buffer,0,t->cache[i].bytes};
     buffers[5]=(VkDescriptorBufferInfo){t->parameters.buffer,0,t->parameters.bytes};buffers[6]=(VkDescriptorBufferInfo){t->stats.buffer,0,t->stats.bytes};
     buffers[7]=(VkDescriptorBufferInfo){g->page_buffer,0,VK_WHOLE_SIZE};buffers[8]=(VkDescriptorBufferInfo){g->chunk_buffer,0,VK_WHOLE_SIZE};
     buffers[9]=(VkDescriptorBufferInfo){g->occupancy_buffer,0,VK_WHOLE_SIZE};buffers[10]=(VkDescriptorBufferInfo){g->mpm_grid_buffer,0,VK_WHOLE_SIZE};
     buffers[11]=(VkDescriptorBufferInfo){t->gates.buffer,0,t->gates.bytes};
-    bool okay=fr_renderer_compute_init(g,&t->initialize,buffers,12,16,"build/shaders/gas_init.comp.spv",err,cap)&&
-        fr_renderer_compute_init(g,&t->prepare,buffers,12,16,"build/shaders/gas_prepare.comp.spv",err,cap)&&
-        fr_renderer_compute_init(g,&t->transport,buffers,12,16,"build/shaders/gas_transport.comp.spv",err,cap)&&
-        fr_renderer_compute_init(g,&t->gate,buffers,12,32,"build/shaders/gas_gate.comp.spv",err,cap)&&
-        fr_gas_feedback_init(g,&t->feedback,buffers[0],buffers[5],buffers[11],err,cap);
+    bool okay=fr_renderer_compute_init(g,&t->initialize,buffers,27,16,"build/shaders/gas_init.comp.spv",err,cap)&&
+        fr_renderer_compute_init(g,&t->prepare,buffers,27,16,"build/shaders/gas_prepare.comp.spv",err,cap)&&
+        fr_renderer_compute_init(g,&t->transport,buffers,27,16,"build/shaders/gas_transport.comp.spv",err,cap)&&
+        fr_renderer_compute_init(g,&t->gate,buffers,27,32,"build/shaders/gas_gate.comp.spv",err,cap)&&
+        fr_gas_feedback_init(g,&t->feedback,buffers[0],buffers[2],buffers[5],buffers[11],err,cap)&&
+        fr_renderer_compute_init(g,&t->owner_gather,buffers,27,16,"build/shaders/gas_owner_gather.comp.spv",err,cap);
     if(!okay) return false;
     fr_renderer_compute_t *geometry[]={&t->geometry_stage,&t->geometry_transfer,&t->geometry_commit};
     const char *names[]={"stage","transfer","commit"};
     for(uint32_t i=0;i<3;i++) {
         char path[96];snprintf(path,sizeof(path),"build/shaders/gas_geometry_%s.comp.spv",names[i]);
-        if(!fr_renderer_compute_init(g,geometry[i],buffers,12,16,path,err,cap)) return false;
+        if(!fr_renderer_compute_init(g,geometry[i],buffers,27,16,path,err,cap)) return false;
     }
     buffers[6]=(VkDescriptorBufferInfo){t->audit_summary.buffer,0,t->audit_summary.bytes};
-    return fr_renderer_compute_init(g,&t->audit,buffers,12,16,"build/shaders/gas_audit.comp.spv",err,cap);
+    return fr_renderer_compute_init(g,&t->audit,buffers,27,16,"build/shaders/gas_audit.comp.spv",err,cap);
 }
 bool fr_gas_gpu_enable(dc_gpu_t *g,const fr_gas_model_t *model,float density,float temperature,char *err,uint32_t cap) {
     fr_gas_state_t empty={0};fr_gas_thermo_t check;
@@ -256,6 +265,7 @@ bool fr_gas_gpu_enable(dc_gpu_t *g,const fr_gas_model_t *model,float density,flo
     struct fr_gas_gpu *t=calloc(1,sizeof(*t));if(!t) return error(err,cap,"Cannot allocate gas module");
     t->model=rounded;t->density=density;t->temperature=temperature;
     if(!create(g,t,err,cap)||!fr_renderer_begin(g)) {destroy(g,t);return false;}
+    vkCmdFillBuffer(g->command,t->owner_tiles.buffer,0,t->owner_tiles.bytes,0u);
     for(uint32_t i=0;i<3;i++) if(!t->state[i].host_visible) vkCmdFillBuffer(g->command,t->state[i].buffer,0,t->state[i].bytes,0);
     for(uint32_t i=0;i<2;i++) if(!t->cache[i].host_visible)
         vkCmdFillBuffer(g->command,t->cache[i].buffer,0,t->cache[i].bytes,0);
@@ -337,7 +347,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
             fprintf(stderr,"Gas transport lines explicit%u stages%u implicit%u inactive%u\n",words[FR_GAS_EXPLICIT_LINE_COUNT_WORD],
                 words[FR_GAS_EXPLICIT_STAGE_COUNT_WORD],words[FR_GAS_IMPLICIT_LINE_COUNT_WORD],words[FR_GAS_INACTIVE_LINE_COUNT_WORD]);
         }
-        VkDeviceSize bytes=t->parameters.bytes+t->stats.bytes+t->gates.bytes+t->audit_summary.bytes+t->acoustic.indirect.bytes+t->acoustic.transport_work.bytes+t->checkpoint_staging.bytes;
+        VkDeviceSize bytes=t->parameters.bytes+t->stats.bytes+t->gates.bytes+t->audit_summary.bytes+t->acoustic.indirect.bytes+t->acoustic.transport_work.bytes+t->checkpoint_staging.bytes+t->owner_tiles.bytes;
         for(uint32_t i=0;i<3;i++) bytes+=t->state[i].bytes;
         for(uint32_t i=0;i<2;i++) bytes+=t->cache[i].bytes;
         for(uint32_t i=0;i<11;i++) bytes+=t->acoustic.fields[i].bytes;
@@ -403,12 +413,22 @@ bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32
         buffers[7]=(VkDescriptorBufferInfo){g->page_buffer,0,VK_WHOLE_SIZE};buffers[8]=(VkDescriptorBufferInfo){g->chunk_buffer,0,VK_WHOLE_SIZE};
         buffers[9]=(VkDescriptorBufferInfo){g->occupancy_buffer,0,VK_WHOLE_SIZE};buffers[10]=(VkDescriptorBufferInfo){g->mpm_grid_buffer,0,VK_WHOLE_SIZE};
         buffers[11]=(VkDescriptorBufferInfo){t->gates.buffer,0,t->gates.bytes};
-        if(!fr_gas_acoustic_create(g,&t->acoustic,buffers,err,cap)) return false;
+        VkDescriptorBufferInfo owners={t->owner_tiles.buffer,0,t->owner_tiles.bytes};
+        if(!fr_gas_acoustic_create(g,&t->acoustic,buffers,owners,err,cap)) return false;
     }
     if(policy>=FR_GAS_PRESSURE_LARGE_CFL&&!t->acoustic.supports_large_transport) return error(err,cap,"Large-CFL transport requires compute subgroup shuffle and float32 denormal preservation");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot configure acoustic policy");
     const char *direct_setting=getenv("DC_GAS_ROTATE_PUBLISH");
+    const char *owner_setting=getenv("DC_GAS_SPARSE_OWNERS"),*first_setting=getenv("DC_GAS_DIRECT_FIRST_AXIS");
+    bool owners=policy==FR_GAS_PRESSURE_PRACTICAL&&g->width%8u==0u&&g->height%8u==0u&&direct_setting&&strcmp(direct_setting,"0")!=0&&
+        owner_setting&&strcmp(owner_setting,"0")!=0&&first_setting&&strcmp(first_setting,"0")!=0&&getenv("DC_GAS_FUSED_AXIS");
+    if(t->sparse_owners&&!owners) {
+        if(!fr_gas_gpu_materialize_owners(g,UINT32_MAX,true,err,cap)) return false;
+        t->sparse_owners=false;((uint32_t *)t->parameters.mapped)[FR_GAS_CELL_OWNER_WORD]=0u;fr_gas_gpu_invalidate_cache(g);
+    }
     if(!set_direct_publish(g,t,policy==FR_GAS_PRESSURE_PRACTICAL&&direct_setting&&strcmp(direct_setting,"0")!=0,err,cap)) return false;
+    if(owners&&!t->sparse_owners) {t->sparse_owners=true;((uint32_t *)t->parameters.mapped)[FR_GAS_CELL_OWNER_WORD]=1u;fr_gas_gpu_invalidate_cache(g);}
+    t->acoustic.sparse_owners=t->sparse_owners;
     if(t->policy!=policy) fr_gas_gpu_invalidate_cache(g);
     ((float *)t->parameters.mapped)[FR_GAS_POLICY_WORD]=(float)policy;t->policy=policy;t->acoustic.practical=policy==FR_GAS_PRESSURE_PRACTICAL;return true;
 }

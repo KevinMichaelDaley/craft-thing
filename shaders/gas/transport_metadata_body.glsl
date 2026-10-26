@@ -22,7 +22,7 @@ Primitive gas_transport_metadata(uint index) {
     vec2 head=gas_large_pressure_state(transported,center.hydro.w);Primitive pressure_stage=moved;
     pressure_stage.hydro.x=head.x;pressure_stage.metric.x=head.y;
 #ifndef FR_GAS_FUSED_METADATA_RHS
-    if((params.bank&1u)==0u) cache1[index]=pressure_stage;else cache0[index]=pressure_stage;
+    gas_cache_write_candidate(index,pressure_stage);
 #endif
     acoustic[index]=vec4(head.y,center.hydro.w,moved.metric.y,center.metric.y);
 #ifdef FR_GAS_LEAN_METADATA

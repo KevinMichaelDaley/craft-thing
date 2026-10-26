@@ -34,10 +34,11 @@ typedef struct {
     dc_gpu_address_buffer_t fields[11],indirect;
     bool ready,matrix_valid,matrix_large,large_transport,supports_large_transport,practical;
     bool direct_first_axis,geometry_changed;
+    bool sparse_owners;
 } fr_gas_acoustic_gpu_t;
 /** Lazily create only the selected optional acoustic module. */
 bool fr_gas_acoustic_create(dc_gpu_t *gpu,fr_gas_acoustic_gpu_t *module,
-    const VkDescriptorBufferInfo source[12],char *err,uint32_t cap);
+    const VkDescriptorBufferInfo source[12],VkDescriptorBufferInfo owners,char *err,uint32_t cap);
 /** Release all optional acoustic resources. */
 void fr_gas_acoustic_destroy(dc_gpu_t *gpu,fr_gas_acoustic_gpu_t *module);
 /** Complete one staged pressure/advection step, reading reduced residual only. */

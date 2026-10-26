@@ -5,6 +5,18 @@ Epic: `ctlo-d7vm`. Runtime progress and unfinished work are tracked in its ticke
 
 ## Practical interactive numerical policy
 
+`DC_GAS_SPARSE_OWNERS=1` is an optional exact publication backend for the
+practical, direct-first-axis profile. Gas packets retain a physical bank bit in
+their GPU face metadata; a small view-tile table selects the corresponding
+derived cache. The accepted publication footprint already consists of complete
+8×8 tiles, so guarded owner flips replace packet/cache copies after all candidate
+validation completes. Quiet and dormant owners are unchanged. Cold checkpoints
+gather logical packets on the GPU without changing the save format; policy
+transitions collapse owners before returning to the conventional backend.
+Non-aligned view dimensions retain conventional publication. This backend has
+passed native ownership, rejection, geometry, streaming and displayed placement
+checks, but remains opt-in until repeated complete-frame budgets pass.
+
 Latest user direction supersedes earlier exact per-frame convergence, bitwise
 identity and perfect-energy requirements. Diagnose delayed stalls with frame
 time series, not only averages. Gameplay pressure work must be bounded; it must

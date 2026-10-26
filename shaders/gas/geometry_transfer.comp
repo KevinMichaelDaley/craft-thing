@@ -11,7 +11,7 @@ void main() {
         if(!nearby) return;
     }
     uint atlas=gas_atlas(p);if(atlas==0xffffffffu) return;
-    Gas original=world[atlas],value=original;float available=geometry_metadata(index).x;
+    Gas original=gas_world(atlas),value=original;float available=geometry_metadata(index).x;
     bool changed=available!=original.geometry.y;
     if(available<=0.) {
         float mass=gas_mass(original),route=mass>0.?geometry_route(p):0.;
@@ -23,14 +23,14 @@ void main() {
         for(uint d=0u;d<4u;d++) {
             ivec2 q=p+geometry_direction(d);if(geometry_available(q)>0.) continue;
             uint other=gas_atlas(q);if(other==0xffffffffu||!geometry_open(p,d)) continue;
-            Gas donor=world[other];if(gas_mass(donor)<=0.) continue;
+            Gas donor=gas_world(other);if(gas_mass(donor)<=0.) continue;
             float route=geometry_route(q);if(route<=0.) continue;
             float fraction=available/route;
             GasFlux incoming=GasFlux(donor.species*fraction,vec4(donor.dynamics.x,gas_energy(donor),donor.dynamics.zw)*fraction,donor.visual.rgb*fraction);
             value=gas_add_flux(value,incoming,1.);value.geometry.w+=donor.geometry.w*fraction;changed=true;
         }
     }
-    if(changed) {bool okay=false;gas_primitive(value,okay);if(!okay) gas_error(index);else bank1[atlas]=value;}
+    if(changed) {bool okay=false;gas_primitive(value,okay);if(!okay) gas_error(index);else geometry_write_candidate(atlas,value);}
     geometry_mark(index,changed);
     uint any_changed=subgroupMax(changed?1u:0u);if(subgroupElect()&&any_changed!=0u) atomicOr(stats[FR_GAS_ROW_NORM_BEFORE_WORD],1u);
 }

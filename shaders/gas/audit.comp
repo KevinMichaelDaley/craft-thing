@@ -17,7 +17,7 @@ void main() {
     if(index<params.width*params.height) {
         ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
         if(atlas!=0xffffffffu) {
-            Gas s=world[atlas];bool okay=false;Primitive own=gas_primitive(s,okay);
+            Gas s=gas_world(atlas);bool okay=false;Primitive own=gas_primitive(s,okay);
             if(!okay||!gas_finite(s.geometry.w)) metrics[FR_GAS_AUDIT_INVALID]=1.;
             else {
                 for(uint k=0u;k<4u;k++) metrics[k]=s.species[k];metrics[4]=s.dynamics.x;
@@ -41,7 +41,7 @@ void main() {
                         ivec2 delta=d==0u?ivec2(1,0):(d==1u?ivec2(-1,0):(d==2u?ivec2(0,1):ivec2(0,-1)));
                         ivec2 q=p+delta;uint other_at=gas_atlas(q);bool open=other_at!=0xffffffffu&&gas_gate_open((d&1u)==0u?p:q,d/2u);
                         if(open) {
-                            bool valid=false;Primitive other=gas_primitive(world[other_at],valid);
+                            bool valid=false;Primitive other=gas_primitive(gas_world(other_at),valid);
                             open=valid&&other.metric.w>0.;if(open) neighbors[d]=other.hydro.w;
                         }
                         if(!open&&d>=2u) walls++;

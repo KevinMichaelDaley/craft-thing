@@ -52,11 +52,11 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     dc_gpu_address_buffer_destroy(g,&t->indirect);
     memset(t,0,sizeof(*t));
 }
-bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescriptorBufferInfo source[12],char *err,uint32_t cap) {
+bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescriptorBufferInfo source[12],VkDescriptorBufferInfo owners,char *err,uint32_t cap) {
     if(t->ready) return true;
     const char *device_option=getenv("DC_GAS_DEVICE_WORK");
     bool device_work=device_option&&strcmp(device_option,"0")!=0;
-    VkDescriptorBufferInfo buffers[25];memcpy(buffers,source,12*sizeof(*source));
+    VkDescriptorBufferInfo buffers[27];memcpy(buffers,source,12*sizeof(*source));buffers[25]=owners;buffers[26]=owners;
     t->state_bank[0]=source[1].buffer;t->state_bank[1]=source[2].buffer;t->state_bytes=source[1].range;
     VkDeviceSize bytes=(VkDeviceSize)g->width*g->height*16u;
     VkDeviceSize tiles=(VkDeviceSize)((g->width+7u)/8u)*((g->height+7u)/8u);
@@ -98,74 +98,74 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     for(uint32_t i=0;i<20;i++) {
         if(i>=16u&&!t->supports_large_transport) continue;
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",paths[i]);
-        if(!fr_renderer_compute_init(g,pipelines[i],buffers,25,16,path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,pipelines[i],buffers,27,16,path,err,cap)) goto fail;
     }
-    if(!fr_renderer_compute_init(g,&t->activity_cached,buffers,25,16,"build/shaders/gas_activity_cached.comp.spv",err,cap)) goto fail;
+    if(!fr_renderer_compute_init(g,&t->activity_cached,buffers,27,16,"build/shaders/gas_activity_cached.comp.spv",err,cap)) goto fail;
     fr_renderer_compute_t *coarse_pipelines[]={&t->restrict_pressure,&t->coarse_sor,&t->prolong_pressure};
     const char *coarse_paths[]={"pressure_restrict","pressure_coarse_sor","pressure_prolong"};
     for(uint32_t i=0;i<3;i++) {
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",coarse_paths[i]);
-        if(!fr_renderer_compute_init(g,coarse_pipelines[i],buffers,25,16,path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,coarse_pipelines[i],buffers,27,16,path,err,cap)) goto fail;
     }
-    if(t->supports_large_transport&&!fr_renderer_compute_init(g,&t->stage_transport,buffers,25,16,"build/shaders/gas_transport_stage.comp.spv",err,cap)) goto fail;
+    if(t->supports_large_transport&&!fr_renderer_compute_init(g,&t->stage_transport,buffers,27,16,"build/shaders/gas_transport_stage.comp.spv",err,cap)) goto fail;
     if(t->supports_large_transport) {
         fr_renderer_compute_t *practical[]={&t->practical_factor,&t->practical_prefix,&t->practical_apply};
         const char *names[]={large_group?"transport_factor_compact_large":(use_wide?"transport_factor_compact_wide":"transport_factor_compact"),
             large_group?"transport_prefix_compact_large":(use_wide?"transport_prefix_compact_wide":"transport_prefix_compact"),"transport_apply_compact"};
         for(uint32_t i=0;i<3;i++) {
             char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",names[i]);
-            if(!fr_renderer_compute_init(g,practical[i],buffers,25,16,path,err,cap)) goto fail;
+            if(!fr_renderer_compute_init(g,practical[i],buffers,27,16,path,err,cap)) goto fail;
         }
         const char *axis_path=large_group?"build/shaders/gas_transport_axis_compact_large.comp.spv":(use_wide?"build/shaders/gas_transport_axis_compact_wide.comp.spv":"build/shaders/gas_transport_axis_compact.comp.spv");
-        if(!fr_renderer_compute_init(g,&t->practical_axis,buffers,25,16,axis_path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,&t->practical_axis,buffers,27,16,axis_path,err,cap)) goto fail;
         if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_EXPLICIT_LINE_CAPACITY*48u+64u*4u) {
             const char *explicit_path=large_group?"build/shaders/gas_transport_explicit_large.comp.spv":(use_wide?"build/shaders/gas_transport_explicit_wide.comp.spv":"build/shaders/gas_transport_explicit.comp.spv");
-            if(!fr_renderer_compute_init(g,&t->practical_explicit,buffers,25,16,explicit_path,err,cap)) goto fail;
+            if(!fr_renderer_compute_init(g,&t->practical_explicit,buffers,27,16,explicit_path,err,cap)) goto fail;
             if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_EXPLICIT_LINE_CAPACITY*48u+64u*4u) {
                 const char *hybrid_path=large_group?"build/shaders/gas_transport_hybrid_large.comp.spv":(use_wide?"build/shaders/gas_transport_hybrid_wide.comp.spv":"build/shaders/gas_transport_hybrid.comp.spv");
-                if(!fr_renderer_compute_init(g,&t->practical_hybrid,buffers,25,16,hybrid_path,err,cap)) goto fail;
+                if(!fr_renderer_compute_init(g,&t->practical_hybrid,buffers,27,16,hybrid_path,err,cap)) goto fail;
                 for(uint32_t axis=0;axis<2;axis++) {
                     char path[128];snprintf(path,sizeof(path),"build/shaders/gas_transport_hybrid_%c%s.comp.spv",axis?'y':'x',line_suffix);
-                    if(!fr_renderer_compute_init(g,&t->practical_hybrid_axis[axis],buffers,25,16,path,err,cap)) goto fail;
+                    if(!fr_renderer_compute_init(g,&t->practical_hybrid_axis[axis],buffers,27,16,path,err,cap)) goto fail;
                 }
             }
         }
     }
     if(properties.limits.maxComputeWorkGroupInvocations>=128u&&properties.limits.maxComputeWorkGroupSize[0]>=128u&&
-       !fr_renderer_compute_init(g,&t->temporal_sor,buffers,25,16,"build/shaders/gas_pressure_temporal.comp.spv",err,cap)) goto fail;
+       !fr_renderer_compute_init(g,&t->temporal_sor,buffers,27,16,"build/shaders/gas_pressure_temporal.comp.spv",err,cap)) goto fail;
     if(properties.limits.maxComputeSharedMemorySize>=FR_GAS_COARSE_GROUP_CAPACITY*4u&&
        properties.limits.maxComputeWorkGroupInvocations>=128u&&properties.limits.maxComputeWorkGroupSize[0]>=128u) {
         const char *path=use_wide?"build/shaders/gas_pressure_coarse_group_wide.comp.spv":"build/shaders/gas_pressure_coarse_group.comp.spv";
-        if(!fr_renderer_compute_init(g,&t->coarse_group,buffers,25,16,path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,&t->coarse_group,buffers,27,16,path,err,cap)) goto fail;
     }
     fr_renderer_compute_t *multigrid[]={&t->mg_relax[0],&t->mg_relax[1],&t->mg_restrict[0],&t->mg_restrict[1],&t->mg_restrict[2],&t->mg_prolong[0],&t->mg_prolong[1],&t->mg_prolong[2]};
     const char *mg_names[]={"mg_relax1","mg_relax2","mg_restrict1","mg_restrict2","mg_restrict3","mg_prolong0","mg_prolong1","mg_prolong2"};
     for(uint32_t i=0;i<8;i++) {
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",mg_names[i]);
-        if(!fr_renderer_compute_init(g,multigrid[i],buffers,25,16,path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,multigrid[i],buffers,27,16,path,err,cap)) goto fail;
     }
     for(uint32_t i=0;i<2;i++) {
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_mg_temporal%u.comp.spv",i+1u);
-        if(!fr_renderer_compute_init(g,&t->mg_temporal[i],buffers,25,16,path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,&t->mg_temporal[i],buffers,27,16,path,err,cap)) goto fail;
     }
-    if(!fr_renderer_compute_init(g,&t->rhs_fused,buffers,25,16,"build/shaders/gas_pressure_rhs_fused.comp.spv",err,cap)) goto fail;
-    if(!fr_renderer_compute_init(g,&t->metadata_lean,buffers,25,16,"build/shaders/gas_transport_metadata_lean.comp.spv",err,cap)||
-       !fr_renderer_compute_init(g,&t->rhs_lean,buffers,25,16,"build/shaders/gas_pressure_rhs_lean.comp.spv",err,cap)) goto fail;
+    if(!fr_renderer_compute_init(g,&t->rhs_fused,buffers,27,16,"build/shaders/gas_pressure_rhs_fused.comp.spv",err,cap)) goto fail;
+    if(!fr_renderer_compute_init(g,&t->metadata_lean,buffers,27,16,"build/shaders/gas_transport_metadata_lean.comp.spv",err,cap)||
+       !fr_renderer_compute_init(g,&t->rhs_lean,buffers,27,16,"build/shaders/gas_pressure_rhs_lean.comp.spv",err,cap)) goto fail;
     if(t->temporal_sor.pipeline) {
-        if(!fr_renderer_compute_init(g,&t->pack_pressure,buffers,25,16,"build/shaders/gas_pressure_pack.comp.spv",err,cap)||
-           !fr_renderer_compute_init(g,&t->packed_sor,buffers,25,16,"build/shaders/gas_pressure_temporal_packed.comp.spv",err,cap)) goto fail;
-        if(!fr_renderer_compute_init(g,&t->pack_half_pressure,buffers,25,16,"build/shaders/gas_pressure_pack_half.comp.spv",err,cap)||
-           !fr_renderer_compute_init(g,&t->half_sor,buffers,25,16,"build/shaders/gas_pressure_temporal_half.comp.spv",err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,&t->pack_pressure,buffers,27,16,"build/shaders/gas_pressure_pack.comp.spv",err,cap)||
+           !fr_renderer_compute_init(g,&t->packed_sor,buffers,27,16,"build/shaders/gas_pressure_temporal_packed.comp.spv",err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,&t->pack_half_pressure,buffers,27,16,"build/shaders/gas_pressure_pack_half.comp.spv",err,cap)||
+           !fr_renderer_compute_init(g,&t->half_sor,buffers,27,16,"build/shaders/gas_pressure_temporal_half.comp.spv",err,cap)) goto fail;
     }
-    if(!fr_renderer_compute_init(g,&t->reset_pressure_mask,buffers,25,16,"build/shaders/gas_pressure_mask_reset.comp.spv",err,cap)) goto fail;
+    if(!fr_renderer_compute_init(g,&t->reset_pressure_mask,buffers,27,16,"build/shaders/gas_pressure_mask_reset.comp.spv",err,cap)) goto fail;
     for(uint32_t i=0;i<3;i++) {
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_mg_reconcile%u.comp.spv",i+1u);
-        if(!fr_renderer_compute_init(g,&t->mg_reconcile[i],buffers,25,16,path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,&t->mg_reconcile[i],buffers,27,16,path,err,cap)) goto fail;
     }
     for(uint32_t i=0;i<2;i++) {
         uint32_t size=128u<<i;if(properties.limits.maxComputeWorkGroupInvocations<size||properties.limits.maxComputeWorkGroupSize[0]<size||properties.limits.maxComputeSharedMemorySize<size*16u) continue;
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_acoustic_finish_group%u.comp.spv",size);
-        if(!fr_renderer_compute_init(g,&t->finish_group[i],buffers,25,16,path,err,cap)) goto fail;
+        if(!fr_renderer_compute_init(g,&t->finish_group[i],buffers,27,16,path,err,cap)) goto fail;
     }
     if(device_work) {
         if(!fr_renderer_begin(g)) goto fail;
@@ -272,7 +272,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     float dt,uint32_t bank,dc_gpu_address_buffer_t *stats,char *err,uint32_t cap) {
     bool trace=getenv("DC_GAS_TRACE")!=NULL&&g->timestamp_bits;
     const char *direct_first_setting=getenv("DC_GAS_DIRECT_FIRST_AXIS");
-    bool direct_first=t->practical&&getenv("DC_GAS_FUSED_AXIS")&&direct_first_setting&&strcmp(direct_first_setting,"0")!=0;
+    bool direct_first=t->sparse_owners||(t->practical&&getenv("DC_GAS_FUSED_AXIS")&&direct_first_setting&&strcmp(direct_first_setting,"0")!=0);
     if(t->direct_first_axis!=direct_first) {t->matrix_valid=false;t->direct_first_axis=direct_first;}
     uint32_t tail_query=t->large_transport?14u:4u;
     bool matrix_large=t->large_transport||t->practical;
@@ -333,7 +333,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         if(t->practical&&reuse_rate&&strcmp(reuse_rate,"0")!=0) bank|=FR_GAS_REUSE_LINE_RATE_BIT;
         const char *fused_setting=getenv("DC_GAS_FUSED_APPLY");bool fused=fused_setting&&strcmp(fused_setting,"0")!=0;
         barrier(g);VkBufferCopy copy={.size=t->state_bytes};
-        if(!direct_first||!t->matrix_valid) vkCmdCopyBuffer(g->command,t->state_bank[bank&1u],t->state_bank[(bank&1u)^1u],1,&copy);
+        if(!t->sparse_owners&&(!direct_first||!t->matrix_valid)) vkCmdCopyBuffer(g->command,t->state_bank[bank&1u],t->state_bank[(bank&1u)^1u],1,&copy);
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,4);
         for(uint32_t axis=0;axis<2;axis++) {
             uint32_t flags=bank|(axis<<3u)|(direct_first?FR_GAS_DIRECT_FIRST_AXIS_BIT:0u),lines=axis==0?g->height:g->width;

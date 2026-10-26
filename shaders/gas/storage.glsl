@@ -22,6 +22,7 @@ layout(set=0,binding=11,std430) buffer Gates {uint gates[];};
 layout(set=0,binding=11,std430) readonly buffer Gates {uint gates[];};
 #endif
 layout(push_constant) uniform Params {uint width,height,seconds,bank;} params;
+layout(set=0,binding=26,std430) buffer OwnerTiles {uint owner_tiles[];};
 #include "model.glsl"
 uint gas_index() {return gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;}
 uint gas_atlas(ivec2 p) {
@@ -32,13 +33,29 @@ uint gas_atlas(ivec2 p) {
 bool gas_gate_open(ivec2 a,uint axis) {
     uint at=gas_atlas(a);return at==0xffffffffu||(gates[at]&(1u<<axis))==0u;
 }
-Gas gas_source(ivec2 p) {
-    uint at=gas_atlas(p);if(at==0xffffffffu) return gas_empty();
-    return (params.bank&1u)==0u?bank0[at]:bank1[at];
+bool gas_cell_owners() {return parameters[FR_GAS_CELL_OWNER_WORD]!=0u;}
+uint gas_owner(uint atlas) {return gas_cell_owners()?(gates[atlas]&FR_GAS_CELL_OWNER_BIT)/FR_GAS_CELL_OWNER_BIT:params.bank&1u;}
+Gas gas_source_at(uint atlas) {return gas_owner(atlas)==0u?bank0[atlas]:bank1[atlas];}
+Gas gas_provisional(uint atlas) {return gas_owner(atlas)==0u?bank1[atlas]:bank0[atlas];}
+void gas_write_source(uint atlas,Gas value) {if(gas_owner(atlas)==0u) bank0[atlas]=value;else bank1[atlas]=value;}
+void gas_write_provisional(uint atlas,Gas value) {if(gas_owner(atlas)==0u) bank1[atlas]=value;else bank0[atlas]=value;}
+Gas gas_world(uint atlas) {return gas_cell_owners()?gas_source_at(atlas):world[atlas];}
+void gas_write_world(uint atlas,Gas value) {if(gas_cell_owners()) gas_write_source(atlas,value);else world[atlas]=value;}
+Gas gas_source(ivec2 p) {uint at=gas_atlas(p);return at==0xffffffffu?gas_empty():gas_source_at(at);}
+uint gas_cache_owner(uint index) {
+    if(!gas_cell_owners()) return params.bank&1u;
+    uint tile=(index/params.width/8u)*((params.width+7u)/8u)+(index%params.width/8u);
+    return owner_tiles[tile]&1u;
 }
+Primitive gas_cache_source(uint index) {return gas_cache_owner(index)==0u?cache0[index]:cache1[index];}
+Primitive gas_cache_candidate(uint index) {return gas_cache_owner(index)==0u?cache1[index]:cache0[index];}
+void gas_cache_write_source(uint index,Primitive value) {if(gas_cache_owner(index)==0u) cache0[index]=value;else cache1[index]=value;}
+void gas_cache_write_candidate(uint index,Primitive value) {if(gas_cache_owner(index)==0u) cache1[index]=value;else cache0[index]=value;}
 Primitive gas_cached(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return gas_empty_primitive();
-    uint at=uint(p.y)*params.width+uint(p.x);return (params.bank&1u)==0u?cache0[at]:cache1[at];
+    uint at=uint(p.y)*params.width+uint(p.x),owner=params.bank&1u;
+    if(gas_cell_owners()) owner=owner_tiles[(uint(p.y)/8u)*((params.width+7u)/8u)+uint(p.x)/8u]&1u;
+    return owner==0u?cache0[at]:cache1[at];
 }
 void gas_error(uint at) {atomicOr(stats[FR_GAS_ERROR_WORD],1u);atomicMin(stats[FR_GAS_ERROR_AT_WORD],at);}
 void gas_rate(Primitive p) {

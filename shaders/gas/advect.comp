@@ -42,7 +42,7 @@ void main() {
     if(practical) {
         vec2 head=gas_large_pressure_state(transported,center.hydro.w);Primitive pressure_stage=moved;
         pressure_stage.hydro.x=head.x;pressure_stage.metric.x=head.y;acoustic[index].x=head.y;
-        if((params.bank&1u)==0u) cache1[index]=pressure_stage;else cache0[index]=pressure_stage;
+        gas_cache_write_candidate(index,pressure_stage);
     }
     provisional[index]=vec4(value.dynamics.zw,work,own.geometry.x);
     correction_data[index].w=net.dynamics.y*dt;

@@ -8,8 +8,10 @@ typedef struct {float words[FR_GAS_CELL_WORDS];} gas_packet_t;
 struct fr_gas_gpu {
     fr_renderer_compute_t initialize,prepare,transport,feedback,gate,audit;
     fr_renderer_compute_t geometry_stage,geometry_transfer,geometry_commit;
+    fr_renderer_compute_t owner_gather;
     dc_gpu_address_buffer_t state[3],cache[2],parameters,stats,gates,audit_summary;
     dc_gpu_address_buffer_t checkpoint_staging;
+    dc_gpu_address_buffer_t owner_tiles;
     fr_gas_model_t model;
     float density,temperature;
     uint32_t groups_x,groups_y;
@@ -18,7 +20,7 @@ struct fr_gas_gpu {
     uint32_t policy;
     uint32_t cached_bank;
     float cached_rate;
-    bool cache_valid,direct_publish,initialization_pending;
+    bool cache_valid,direct_publish,initialization_pending,sparse_owners;
     bool geometry_dirty,geometry_dynamic,geometry_routes_dirty,geometry_deferred;
     VkFence completion;
     double large_step_hint;
@@ -29,4 +31,6 @@ struct fr_gas_gpu {
  * chunk. Never call from simulation kernels or per-frame scheduling. */
 bool fr_gas_gpu_checkpoint_packets(dc_gpu_t *gpu,uint32_t bank,uint32_t slot,
     const gas_packet_t **packets,char *err_buf,uint32_t err_cap);
+/** Cold logical gather, optionally collapsing every owner before a policy change. */
+bool fr_gas_gpu_materialize_owners(dc_gpu_t *gpu,uint32_t slot,bool collapse,char *err_buf,uint32_t err_cap);
 #endif

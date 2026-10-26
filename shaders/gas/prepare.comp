@@ -9,10 +9,14 @@ void main() {
         Gas source=gas_source(p);
         if(gas_parameter(FR_GAS_POLICY_WORD)==3.) {
             source=gas_practical_state(source);
-            if(params.bank==0u) bank0[atlas]=source;else bank1[atlas]=source;
+            gas_write_source(atlas,source);
         }
         bool okay=false;value=gas_primitive(source,okay);
         if(!okay) gas_error(index);else gas_rate(value);
     }
-    if(params.bank==0u) cache0[index]=value;else cache1[index]=value;
+    if(gas_cell_owners()) {
+        uint owner=atlas==0xffffffffu?0u:gas_owner(atlas);
+        if((p.x%8)==0&&(p.y%8)==0) owner_tiles[(uint(p.y)/8u)*((params.width+7u)/8u)+uint(p.x)/8u]=owner;
+        if(owner==0u) cache0[index]=value;else cache1[index]=value;
+    } else gas_cache_write_source(index,value);
 }

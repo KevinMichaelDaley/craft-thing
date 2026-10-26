@@ -7,6 +7,7 @@ layout(set=0,binding=1,std430) readonly buffer Model {uint parameters[];};
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=3,std430) buffer Frame {uint frame[];};
 layout(set=0,binding=4,std430) readonly buffer Gates {uint gates[];};
+layout(set=0,binding=5,std430) readonly buffer Alternate {Gas alternate[];};
 layout(push_constant) uniform Params {uint width,height,view_x,view_y,view_width,view_height;} params;
 void main() {
     uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
@@ -14,7 +15,8 @@ void main() {
     uint x=index%params.width,y=index/params.width;
     if(x<params.view_x||y<params.view_y||x>=params.view_x+params.view_width||y>=params.view_y+params.view_height) return;
     uint page=pages[(y/64u)*((params.width+63u)/64u)+x/64u];if(page==0u) return;
-    uint atlas=(page-1u)*4096u+(y%64u)*64u+x%64u;Gas s=world[atlas];uint gate=gates[atlas]&3u;
+    uint atlas=(page-1u)*4096u+(y%64u)*64u+x%64u;
+    Gas s=parameters[FR_GAS_CELL_OWNER_WORD]!=0u&&(gates[atlas]&FR_GAS_CELL_OWNER_BIT)!=0u?alternate[atlas]:world[atlas];uint gate=gates[atlas]&3u;
     bool oxygen_view=uintBitsToFloat(parameters[FR_GAS_VIEW_WORD])==1.;float carrier=s.species.z+s.dynamics.x;
     if(gate==0u&&(s.geometry.y<=0.||(!oxygen_view&&carrier<=0.))) return;
     vec3 color=unpackUnorm4x8(frame[index]).rgb;

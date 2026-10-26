@@ -7,6 +7,25 @@ static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
     return false;
 }
+bool fr_gas_gpu_materialize_owners(dc_gpu_t *g,uint32_t slot,bool collapse,char *err,uint32_t cap) {
+    struct fr_gas_gpu *t=g->gas;if(!t->sparse_owners) return true;
+    if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin cold logical gas gather");
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT|VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    uint32_t push[4]={g->width,g->height,collapse?1u:0u,slot};fr_renderer_compute_t *pipeline=&t->owner_gather;
+    vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline->pipeline);
+    vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline->pipeline_layout,0,1,&pipeline->descriptor,0,NULL);
+    vkCmdPushConstants(g->command,pipeline->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
+    vkCmdDispatch(g->command,slot==UINT32_MAX?t->groups_x:64u,slot==UINT32_MAX?t->groups_y:1u,1u);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_TRANSFER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_TRANSFER_READ_BIT|VK_ACCESS_2_HOST_READ_BIT);
+    if(collapse) {VkBufferCopy copy={.size=t->state[0].bytes};vkCmdCopyBuffer(g->command,t->state[0].buffer,t->state[1].buffer,1,&copy);}
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_TRANSFER_WRITE_BIT,VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_HOST_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    return fr_gas_submit(g)||error(err,cap,"Cannot complete cold logical gas gather");
+}
 bool fr_gas_gpu_state_memory(const dc_gpu_t *g,uint64_t *mapped,uint64_t *device,uint64_t *staging) {
     if(!g||!g->gas||!mapped||!device||!staging) return false;
     *mapped=*device=0;*staging=g->gas->checkpoint_staging.bytes;
@@ -33,12 +52,14 @@ static bool copy_state_chunk(dc_gpu_t *g,uint32_t bank,uint32_t slot,bool upload
 }
 bool fr_gas_gpu_checkpoint_packets(dc_gpu_t *g,uint32_t bank,uint32_t slot,const gas_packet_t **packets,char *err,uint32_t cap) {
     if(!g||!g->gas||bank>=3u||slot>=DC_GPU_CHUNK_SLOTS||!packets) return error(err,cap,"Invalid cold gas state request");
+    if(g->gas->sparse_owners&&bank==1u) {if(!fr_gas_gpu_materialize_owners(g,slot,false,err,cap)) return false;bank=0u;}
     if(g->gas->state[bank].mapped) {*packets=(const gas_packet_t *)g->gas->state[bank].mapped+(size_t)slot*4096u;return true;}
     if(!copy_state_chunk(g,bank,slot,false,err,cap)) return false;
     *packets=g->gas->checkpoint_staging.mapped;return true;
 }
 static bool write_chunk(dc_gpu_t *g,uint32_t slot,const void *packets,char *err,uint32_t cap) {
     struct fr_gas_gpu *t=g->gas;uint32_t bank=t->direct_publish?1u:0u;size_t bytes=4096u*sizeof(gas_packet_t);
+    if(t->sparse_owners) {uint32_t *gates=(uint32_t *)t->gates.mapped+(size_t)slot*4096u;for(uint32_t i=0;i<4096u;i++) gates[i]&=~FR_GAS_CELL_OWNER_BIT;}
     if(t->state[bank].mapped) {memcpy((gas_packet_t *)t->state[bank].mapped+(size_t)slot*4096u,packets,bytes);return true;}
     memcpy(t->checkpoint_staging.mapped,packets,bytes);return copy_state_chunk(g,bank,slot,true,err,cap);
 }

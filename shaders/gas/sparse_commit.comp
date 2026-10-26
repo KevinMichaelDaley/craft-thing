@@ -1,11 +1,19 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
+#define FR_GAS_WRITABLE_GATES 1
 #include "acoustic.glsl"
 void main() {
     if(!gas_pressure_accepted()) return;
     uint index=gas_sparse_index(3u);if(index>=params.width*params.height) return;
+    if(gas_cell_owners()&&gl_LocalInvocationIndex==0u) {
+        uint tile=(index/params.width/8u)*((params.width+7u)/8u)+(index%params.width/8u);owner_tiles[tile]^=1u;
+        if(gl_WorkGroupID.x==0u) atomicOr(stats[15],8u);
+    }
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));uint atlas=gas_atlas(p);
     if(atlas!=0xffffffffu) {
+        if(gas_cell_owners()) {
+            atomicXor(gates[atlas],FR_GAS_CELL_OWNER_BIT);return;
+        }
         if((params.bank&1u)==0u) bank0[atlas]=bank1[atlas];else bank1[atlas]=bank0[atlas];
     }
     if((params.bank&1u)==0u) cache0[index]=cache1[index];else cache1[index]=cache0[index];

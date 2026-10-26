@@ -4,13 +4,13 @@
 void main() {
     uint index=gas_index();if(index>=params.width*params.height) return;
     uint atlas=gas_atlas(ivec2(int(index%params.width),int(index/params.width)));
-    float available=atlas==0xffffffffu?0.:((params.bank&FR_GAS_GEOMETRY_ROUTES_ONLY_BIT)!=0u?world[atlas].geometry.y:geometry_void(index,atlas));
-    Primitive value=Primitive(vec4(available,0,0,0),vec4(0));
+    float available=atlas==0xffffffffu?0.:((params.bank&FR_GAS_GEOMETRY_ROUTES_ONLY_BIT)!=0u?gas_world(atlas).geometry.y:geometry_void(index,atlas));
+    Primitive value=Primitive(vec4(available,0,0,0),vec4(0,0,0,available));
     if((params.bank&FR_GAS_GEOMETRY_LOCAL_BIT)!=0u) {
         float previous=0.;
-        if(atlas!=0xffffffffu) previous=world[atlas].geometry.y;
+        if(atlas!=0xffffffffu) previous=gas_world(atlas).geometry.y;
         value.hydro.y=value.hydro.x!=previous?1.:0.;uint changed=subgroupMax(value.hydro.y>0.?1u:0u);
         if(subgroupElect()&&changed!=0u) atomicOr(stats[FR_GAS_ROW_NORM_BEFORE_WORD],1u);
     }
-    if((params.bank&1u)==0u) cache1[index]=value;else cache0[index]=value;
+    gas_cache_write_candidate(index,value);
 }

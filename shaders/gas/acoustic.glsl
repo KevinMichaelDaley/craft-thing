@@ -37,7 +37,7 @@ bool gas_advected(uint index) {
     return (activity[gas_tile_count()+tile]&1u)!=0u;
 }
 Primitive gas_pressure_stage(ivec2 p,uint index) {
-    if(gas_advected(index)) return (params.bank&1u)==0u?cache1[index]:cache0[index];
+    if(gas_advected(index)) return gas_cache_candidate(index);
     Primitive own=gas_cached(p);vec2 stage=gas_large_pressure_state(gas_source(p),own.hydro.w);
     own.hydro.x=stage.x;own.metric.x=stage.y;return own;
 }
@@ -46,10 +46,6 @@ uint gas_sparse_index(uint section) {
     uint width=(params.width+7u)/8u;
     uvec2 p=uvec2(tile%width,tile/width)*8u+uvec2(lane%8u,lane/8u);
     return p.x<params.width&&p.y<params.height?p.y*params.width+p.x:0xffffffffu;
-}
-Gas gas_provisional(uint atlas) {return (params.bank&1u)==0u?bank1[atlas]:bank0[atlas];}
-void gas_write_provisional(uint atlas,Gas value) {
-    if((params.bank&1u)==0u) bank1[atlas]=value;else bank0[atlas]=value;
 }
 ivec2 gas_direction(uint i) {return i==0u?ivec2(1,0):(i==1u?ivec2(-1,0):(i==2u?ivec2(0,1):ivec2(0,-1)));}
 bool gas_neighbor(ivec2 p,uint direction,out uint at) {

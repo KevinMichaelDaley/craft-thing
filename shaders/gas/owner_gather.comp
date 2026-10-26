@@ -1,0 +1,11 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#define FR_GAS_WRITABLE_GATES 1
+#include "storage.glsl"
+void main() {
+    uint index=gas_index(),count=params.bank==0xffffffffu?parameters[FR_GAS_SLOT_COUNT_WORD]*4096u:4096u;
+    if(index>=count) return;
+    uint atlas=params.bank==0xffffffffu?index:params.bank*4096u+index;
+    world[atlas]=gas_source_at(atlas);
+    if(params.seconds!=0u) atomicAnd(gates[atlas],~FR_GAS_CELL_OWNER_BIT);
+}

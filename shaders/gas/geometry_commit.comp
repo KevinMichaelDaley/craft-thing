@@ -5,13 +5,13 @@
 void main() {
     if(stats[FR_GAS_ROW_NORM_BEFORE_WORD]==0u||stats[FR_GAS_ERROR_WORD]!=0u) return;
     uint index=gas_index();if(index>=params.width*params.height) return;
-    float changed=(params.bank&1u)==0u?cache1[index].metric.w:cache0[index].metric.w;if(changed==0.) return;
+    float changed=gas_cache_candidate(index).metric.z;if(changed==0.) return;
     uint atlas=gas_atlas(ivec2(int(index%params.width),int(index/params.width)));if(atlas==0xffffffffu) return;
-    Gas value=bank1[atlas];world[atlas]=value;
+    Gas value=geometry_candidate(atlas);gas_write_world(atlas,value);
     if((params.bank&FR_GAS_GEOMETRY_CACHE_BIT)!=0u) {
-        if((params.bank&FR_GAS_GEOMETRY_DIRECT_BIT)==0u&&(params.bank&1u)==0u) bank0[atlas]=value;
+        if(!gas_cell_owners()&&(params.bank&FR_GAS_GEOMETRY_DIRECT_BIT)==0u&&(params.bank&1u)==0u) bank0[atlas]=value;
         bool okay=false;Primitive primitive=gas_primitive(value,okay);
-        if((params.bank&1u)==0u) cache0[index]=primitive;else cache1[index]=primitive;
+        gas_cache_write_source(index,primitive);
         atomicOr(gates[atlas],FR_GAS_GEOMETRY_GATE_BIT);gas_rate(primitive);
     }
 }

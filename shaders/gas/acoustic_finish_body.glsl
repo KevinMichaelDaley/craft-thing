@@ -80,7 +80,7 @@ void main() {
         }
         gas_write_provisional(atlas,value);
     }
-    if(inside) {if((params.bank&1u)==0u) cache1[index]=primitive;else cache0[index]=primitive;}
+    if(inside) gas_cache_write_candidate(index,primitive);
 #ifdef FR_GAS_GROUP_RATE
     gas_group_rate(rate_accepted?primitive:gas_empty_primitive());
 #endif

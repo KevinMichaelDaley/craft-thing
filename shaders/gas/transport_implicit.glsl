@@ -17,7 +17,7 @@ uint transport_axis() {
 }
 bool transport_direct_first_axis() {return (params.bank&FR_GAS_DIRECT_FIRST_AXIS_BIT)!=0u&&transport_axis()==0u;}
 Gas transport_axis_input(uint atlas) {
-    if(transport_direct_first_axis()) return (params.bank&1u)==0u?bank0[atlas]:bank1[atlas];
+    if(transport_direct_first_axis()) return gas_source_at(atlas);
     return gas_provisional(atlas);
 }
 uint transport_position(ivec2 p) {return transport_axis()==0u?uint(p.y)*params.width+uint(p.x):uint(p.x)*params.height+uint(p.y);}

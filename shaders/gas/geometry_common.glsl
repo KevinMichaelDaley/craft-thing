@@ -8,7 +8,9 @@ float geometry_void(uint index,uint atlas) {
     return max(0.,1.-float(min(65536u,occupancy[2u*params.width*params.height+index]))/65536.-
         clamp(mpm[index].w,0.,1.)-float(cells[atlas].y)/65536.);
 }
-vec4 geometry_metadata(uint index) {return (params.bank&1u)==0u?cache1[index].hydro:cache0[index].hydro;}
+vec4 geometry_metadata(uint index) {return gas_cache_candidate(index).hydro;}
+Gas geometry_candidate(uint atlas) {return gas_cell_owners()?gas_provisional(atlas):bank1[atlas];}
+void geometry_write_candidate(uint atlas,Gas value) {if(gas_cell_owners()) gas_write_provisional(atlas,value);else bank1[atlas]=value;}
 vec4 geometry_metadata_at(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return vec4(0);
     return geometry_metadata(uint(p.y)*params.width+uint(p.x));
@@ -20,5 +22,5 @@ float geometry_route(ivec2 p) {
     float total=0.;for(uint d=0u;d<4u;d++) if(geometry_open(p,d)) total+=geometry_available(p+geometry_direction(d));return total;
 }
 void geometry_mark(uint index,bool changed) {
-    if((params.bank&1u)==0u) cache1[index].metric.w=changed?1.:0.;else cache0[index].metric.w=changed?1.:0.;
+    if(gas_cache_owner(index)==0u) cache1[index].metric.z=changed?1.:0.;else cache0[index].metric.z=changed?1.:0.;
 }
