@@ -291,3 +291,7 @@ Grouped repair diagnostics preserved flags and passed core/sync but worsened act
 **2026-10-26T19:26:54Z**
 
 GPU-local geometry activity GREEN: actual native64/64 plus displayed placement5/5 pass with sparse owners+fused geometry+local activity; focused core/sync4cases clean. Dirty flags live in separate GPU words from owner tags, preserve per-cell valves, include affected halos, and bypass broad geometry wake scans without CPU lists/readback. Exact A/B54vs53dispatches. Actual carved1000 30.127/37.055ms remains RED; not promoted. Prior volume-cache lookup actual30.503/36.744; one-row SOR exact but33.365/44.066, rejected/reverted. Full repository serialized regression is currently running after parallel prerequisite build; no other measured/GPU jobs overlap.
+
+**2026-10-26T19:45:54Z**
+
+Partial-cut-cell physics fix GREEN: native RED1998ea4 proved half blockage doubled density; RED16457c0 also locks full/cached geometry conservation. Both modes now retain density.0012 and temperature300 at void.5 and1/65536, conserving mixture/color/energy without advancing geometry clock. Four actual core+sync gates clean including trapped pockets and exact fusion/local activity. Actual650K moving-stone1000 finite/inventory/pause checks pass;29.716mean34.413worst still performance RED, max final pressure131.97 versus prior359.38. Pressure tolerance/sweep policy unchanged. Previous full repository run163groups765passes plus only2known ctr-ojvy,zero build warnings; full native/UI regression is being rerun after this physical remap change.
