@@ -19,6 +19,12 @@ See the modular delivery section of design/fire_smoke_reactive_materials.md. Thi
 
 ## Acceptance Criteria
 
+Delivery override (2026-10-26): the user explicitly accepted the current smoke
+behavior and performance and requested wrap-up followed immediately by the
+ordinary bonfire. Further strict worst-frame `<30 ms` tuning is not a blocker
+for this milestone. Record actual results and possible user wall-edit
+contamination honestly; this does not close broader fire/siege gates.
+
 RED-GREEN-REFACTOR. The placement demo can inject finite colored smoke into an enclosure, open/close a real vent and show buoyant/sideways flow and oxygen concentration. Demonstrate variable-density/expansion behavior with a stable, bounded-work practical pressure policy. Preserve meaningful species/pigment inventory, measure reasonable long-run numerical/energy drift, and distinguish dilution from oxygen consumption. Exact residual convergence, perfect per-frame energy and dense/sparse byte identity are diagnostic modes, not gameplay acceptance blockers. Negligible roundoff reconciliation is allowed; it must not trigger endless retries. Diagnose and remove delayed stalls using actual elapsed-clock frame/substep/retry, GPU/wait, activity and resource time series. State must stay finite/nonnegative and look convincing without runaway pressure/energy/velocity. Walls and chunk edges behave correctly; renderer works with propagated lighting off. Actual displayed Vulkan tests, screenshots, pause/seed/reset checks and sustained full-frame timings remain mandatory. Do not drop simulated time, meaningful stock, resolution or hide a stall with an average. Reject/document unsupported extreme parameter combinations at admission when justified. No placeholder smoke animation, second authoritative gas solver or submerged Greek-fire coupling yet. Keep broad ctlo-r2ap/ctlo-h9of open for remaining scope; report/push this visible system before combustion.
 
 
@@ -315,3 +321,7 @@ Exact larger SOR tile GREEN2252004: actual native68/68 and core/sync1/1; same12/
 **2026-10-26T22:09:05Z**
 
 Final default-profile repeat is RED, not accepted: closed2 has35.474ms worst; open1/2 show maxpressure1.90e6/5.46e6 and existing10x pressure audit rejects them; carved1/2 also timing failures. Earlier CsXeZB six passes are retained but are not substituted for this failed repeat. Investigating explicit rate-cache buffer visibility; restoring the per-stage buffer-memory ordering before a sustained2000-frame open-box regression. All physical time/stock/quality bounds unchanged.
+
+**2026-10-26T22:18:04Z**
+
+Delivered by explicit user acceptance: stop smoke tuning and proceed to ordinary bonfire. Retained restored candidate-buffer memory fence; focused displayed1/1 and actual2000-frame open box bounded at maxpressure58.1263,20.569mean32.042worst; inventory/clock/pause checks pass. Prior full native72/72, placement/edit/save/stream5/5 and actual seed/reset UI pass. No strict<30ms claim. User reports deleting walls during displayed tests, so earlier bad repeat may have received legitimate wall edits; causal attribution remains uncertain. No further investigation/broad suite/long campaigns per explicit user override. Runnable: tools/run_smoke_box. Broad gas/render/fire owner tickets remain open.

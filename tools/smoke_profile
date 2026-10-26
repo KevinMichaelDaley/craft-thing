@@ -1,5 +1,5 @@
 # Source this file to select the displayed, bounded-work smoke profile.
-# Selected after two displayed 1000-frame passes for closed/open/carved boxes.
+# User-accepted profile; actual displayed results are recorded in the design.
 # Explicit caller overrides remain available for diagnostics.
 if [[ ! -v DC_GAS_EXPLICIT_RATE_CACHE && -v DC_GAS_LOCAL_STAGES ]]; then
     export DC_GAS_EXPLICIT_RATE_CACHE="$DC_GAS_LOCAL_STAGES"

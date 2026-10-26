@@ -43,7 +43,7 @@ void FR_GAS_EXPLICIT_ENTRY() {
             Gas previous=stage==0u?transport_axis_input(atlas):gas_provisional(atlas);
             gas_write_provisional(atlas,transport_update_state(previous,incoming,outgoing,scale));
         }
-        /* Each cell retains its invocation; only shared face data crosses invocations. */
-        barrier();
+        /* Order candidate-buffer reloads before the next shared transport stage. */
+        memoryBarrierBuffer();barrier();
     }
 }

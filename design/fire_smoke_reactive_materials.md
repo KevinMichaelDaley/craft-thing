@@ -40,6 +40,28 @@ diagnostics must be distinguished at admission. The complete-frame target and
 sustained actual Vulkan/Wayland validation remain required, including the
 delayed onset, retries, waits, activity expansion and resource growth.
 
+### Smoke delivery acceptance, 2026-10-26
+
+The user explicitly accepted the current smoke visuals, stability and performance
+and requested that smoke be wrapped up and work proceed to the ordinary bonfire.
+For `ctfs-dmxv`, further strict worst-frame `<30 ms` tuning is not a delivery
+blocker. This override is scoped to this smoke milestone; it does not claim that
+all later fire/siege performance gates have passed.
+
+The delivered explicit-rate cache retains its per-stage candidate-buffer memory
+fence. Its last actual displayed 2,000-frame open-box check measured 20.569 ms
+mean / 32.042 ms worst, with bounded maximum pressure 58.1263, meaningful
+inventory/energy drift and identical paused captures. The prior full native
+battery passed 72/72, placement/edit/save/stream passed 5/5, and the actual seed
+and reset UI check passed; the restored-fence focused check passed 1/1.
+These results are not a strict `<30 ms` claim.
+
+Earlier repeat runs that reported extreme pressure and timing failures remain
+recorded. The user subsequently reported deleting walls while interacting with
+the displayed interface, so those runs are potentially input-contaminated;
+their cause is not established as spontaneous solver instability. No further
+investigation or optional smoke tuning is part of this accepted delivery.
+
 The experimental `DC_GAS_MULTIGRID=1` practical pressure backend uses one fixed
 h1/h2/h4/h8 V-cycle: twelve red/black fine sweeps before and after, four weighted
 Jacobi sweeps before and after at h2/h4, and thirty-two coarse sweeps at h8.
@@ -55,9 +77,10 @@ Its pressure activity threshold is a relative right-hand-side disturbance of
 `1e-3` (0.1 percent of the local pressure-energy scale); strict and long-interval
 fallback paths retain `1e-7`. This defers imperceptible corrections rather than
 iterating to exact convergence, while preserving full elapsed time and stock.
-The separate `DC_GAS_PRESSURE_NOISE=1` trial uses a `1e-2` practical threshold
+The separate `DC_GAS_PRESSURE_NOISE=1` option uses a `1e-2` practical threshold
 with the same sweep schedule. It passed the native stability/inventory checks,
-but remains off by default because strict displayed worst-frame timing is RED.
+and is selected by the user-accepted launcher profile. Direct API options and
+explicit diagnostic overrides remain available.
 The optional fused metadata/RHS path reads an immutable transported candidate
 for all neighbor predictors. Each owning cell retains full EOS validation;
 buoyancy is applied during finalization before the same guarded commit. Kinetic
@@ -83,9 +106,10 @@ ordinary scheduling. Body-service preflight runs first and eligibility is
 checked again after it. Native edited-field A/B checks retain identical packets
 and clocks with eight submissions instead of sixteen; core/synchronization and
 the five placement/edit/save/stream checks pass. The displayed carved run was
-29.613 ms mean / 35.930 ms worst, so this remains an optional optimization.
+29.613 ms mean / 35.930 ms worst in that intermediate measurement. The accepted
+launcher now selects this option; direct API callers can still disable it.
 
-`DC_GAS_SOR_TILE=1` is an exact temporal blocking trial for half-row multigrid
+`DC_GAS_SOR_TILE=16` is exact temporal blocking for half-row multigrid
 on hardware supporting 512 invocations per workgroup. GPU compaction groups
 active 8-pixel tiles into 16-pixel output tiles with an 8-pixel halo. Three
 four-sweep dispatches retain the twelve fine sweeps on each side of the V-cycle;
@@ -94,7 +118,16 @@ list borrows the final-publication list only after its prior use completes and
 before final compaction rebuilds it. No CPU lists or new state limits are used.
 Native field/clock comparison is byte-identical with ten pressure dispatches
 instead of sixteen; all 68 native checks and focused synchronization validation
-pass. Displayed timing acceptance is still pending.
+pass. The selected `32` variant uses 800 invocations, a 32-pixel output tile and
+four-pixel halo, with six two-sweep dispatches and no odd-pass copy. Both retain
+the twelve pre/post sweeps. Unsupported hardware retains the original path.
+
+The launcher also selects immutable face-rate caching
+(`DC_GAS_EXPLICIT_RATE_CACHE`), shared neighbor forecasts
+(`DC_GAS_RHS_TILE_CACHE`) and deferred derived-scratch clearing
+(`DC_GAS_LAZY_CLEAR`). Candidate packets retain their storage-buffer ordering;
+owning-cell EOS validation, physical time and meaningful stock are unchanged.
+Cold, dense, unsupported and diagnostic routes retain their existing fallback.
 The half-second displayed enclosure check permits ten parts per million of
 relative species/pigment and energy-minus-work drift, with exact zero for
 initially absent species. Measured optimized float transport drifts about four
