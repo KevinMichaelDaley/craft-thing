@@ -5,7 +5,8 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     char err[256]={0};const char *names[]={"DC_GAS_MULTIGRID",setting,"DC_GAS_FUSED_AXIS","DC_GAS_TEMPORAL_SOR"};char *saved[4];
     bool direct_first=strcmp(setting,"DC_GAS_DIRECT_FIRST_AXIS")==0,quiet_publication=strcmp(setting,"DC_GAS_ROTATE_PUBLISH")==0;
     bool cached_neighbors=strcmp(setting,"DC_GAS_CACHED_NEIGHBORS")==0;
-    bool all_slots=direct_first||quiet_publication||cached_neighbors;uint32_t field_count=all_slots?12288u:4096u;
+    bool lean_metadata=strcmp(setting,"DC_GAS_LEAN_METADATA")==0;
+    bool all_slots=direct_first||quiet_publication||cached_neighbors||lean_metadata;uint32_t field_count=all_slots?12288u:4096u;
     for(uint32_t k=0;k<4;k++) {const char *value=getenv(names[k]);saved[k]=value?SDL_strdup(value):NULL;}
     ASSERT_EQ(SDL_setenv(names[0],"1",1),0);
     ASSERT_EQ(SDL_setenv(names[2],"1",1),0);
@@ -13,7 +14,8 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     fr_gas_state_t *input=malloc(4096*sizeof(*input)),*reference=malloc(field_count*sizeof(*reference)),*out=malloc(field_count*sizeof(*out));
     fr_gas_state_t *dormant=all_slots?malloc(4096*sizeof(*dormant)):NULL;ASSERT_TRUE(!all_slots||dormant);
     double *volume=malloc(4096*sizeof(*volume));dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(input&&reference&&out&&volume&&c);
-    fr_gas_state_t *quiet=quiet_publication||cached_neighbors?malloc(4096*sizeof(*quiet)):NULL;ASSERT_TRUE(!(quiet_publication||cached_neighbors)||quiet);
+    fr_gas_state_t *quiet=quiet_publication||cached_neighbors||lean_metadata?malloc(4096*sizeof(*quiet)):NULL;
+    ASSERT_TRUE(!(quiet_publication||cached_neighbors||lean_metadata)||quiet);
     fr_gas_model_t m=reference_model();m.kinetic_scale=1./512.;
     if(quiet) for(uint32_t i=0;i<4096;i++) quiet[i]=reference_air(m,.0012,300,.001);
     for(uint32_t i=0;i<4096;i++) {volume[i]=1;input[i]=reference_air(m,.0012,300,
@@ -96,6 +98,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         ASSERT_TRUE(repeated[1]+1u==repeated[0]);
     }
     if(quiet_publication) ASSERT_TRUE(memcmp(rates[0],rates[1],sizeof(rates[0]))==0&&memcmp(out,input,4096*sizeof(*out))!=0);
+    if(lean_metadata) ASSERT_TRUE(memcmp(rates[0],rates[1],sizeof(rates[0]))==0);
     if(cached_neighbors) {
         printf("GPU activity route%u vs%u\n",activity_modes[1],activity_modes[0]);
         ASSERT_TRUE(activity_modes[0]==0u&&activity_modes[1]==1u&&memcmp(rates[0],rates[1],sizeof(rates[0]))==0);
@@ -154,6 +157,12 @@ static void test_native_publication_keeps_quiet_mapped_and_dormant_stock(void) {
 }
 static void test_native_cached_activity_neighbors_preserve_pressure_wake_and_stock(void) {
     check_native_gas_dispatch_fusion("DC_GAS_CACHED_NEIGHBORS",true,UINT32_MAX);
+}
+static void test_native_lean_metadata_preserves_state_with_one_preparation_pass(void) {
+    char err[256]={0};const char *old=getenv("DC_GAS_FUSED_METADATA");char *saved=old?SDL_strdup(old):NULL;
+    ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_METADATA","1",1),0);
+    check_native_gas_dispatch_fusion("DC_GAS_LEAN_METADATA",true,1u);
+    ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_METADATA",saved?saved:"0",1),0);SDL_free(saved);
 }
 static void check_native_multigrid_reference_flow(uint32_t dispatch_budget,bool partial_fixture) {
     char err[256]={0};const char *names[]={"DC_GAS_MULTIGRID","DC_GAS_TEMPORAL_SOR","DC_GAS_COARSE_WG"};char *saved[3];
