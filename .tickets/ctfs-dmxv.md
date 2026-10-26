@@ -1,6 +1,6 @@
 ---
 id: ctfs-dmxv
-status: in_progress
+status: closed
 deps: [ctfs-2hu1]
 links: [ctlo-r2ap, ctlo-h9of]
 created: 2026-10-25T02:54:23Z

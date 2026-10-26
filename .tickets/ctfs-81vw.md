@@ -1,6 +1,6 @@
 ---
 id: ctfs-81vw
-status: open
+status: in_progress
 deps: [ctfs-dmxv]
 links: [ctlo-3ndt, ctlo-ehqj, ctlo-8b67]
 created: 2026-10-25T02:54:23Z
@@ -27,3 +27,7 @@ RED-GREEN-REFACTOR. Player can ignite the pile, see actual flame/smoke, feel mea
 **2026-10-25T02:56:00Z**
 
 Start after the smoke/ventilation box is delivered. This is the first contained gameplay fire, not a claim that arbitrary-body combustion, all forest scenarios, oil or siege mechanics are complete.
+
+**2026-10-26T22:18:17Z**
+
+Starting immediately after user-accepted smoke delivery3495f65. ONLY this visible slice: terrain wood/sticks bonfire in stone containment, real finite fuel/O2/heat/products, visible flame/smoke/warmth and dry/wet controls. Reuse delivered thermal/gas/persistence adapters and add only needed prerequisites; no return to smoke microoptimization or future oil/siege/Greek-fire scope.
