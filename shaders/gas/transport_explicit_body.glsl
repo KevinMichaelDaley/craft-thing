@@ -28,6 +28,9 @@ GasFlux line_face_flux(ivec2 p,float seconds) {
 #ifndef FR_GAS_EXPLICIT_ENTRY
 #define FR_GAS_EXPLICIT_ENTRY main
 #endif
+#ifdef FR_GAS_LOCAL_STAGES
+#include "transport_explicit_local_body.glsl"
+#else
 void FR_GAS_EXPLICIT_ENTRY() {
     uint rank=gl_LocalInvocationIndex,length=transport_axis()==0u?params.width:params.height,line=gl_WorkGroupID.x;
     if(rank==0u) transport_work[line*length].mass.w=0.;
@@ -74,3 +77,5 @@ void FR_GAS_EXPLICIT_ENTRY() {
         memoryBarrierBuffer();barrier();
     }
 }
+
+#endif

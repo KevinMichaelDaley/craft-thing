@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 tools/with-vulkan make -j8 build/dungeoncraft_quarter_native
 output=$(mktemp -d build/smoke_shader_stats_XXXXXX)
-targets=(transport_hybrid_wide transport_hybrid_x_wide transport_hybrid_y_wide activity pressure_classify pressure_rhs_fused pressure_rhs_cached pressure_temporal_half pressure_temporal_tile16 pressure_temporal_tile32 pressure_group32 acoustic_finish_group128 sparse_commit)
+targets=(transport_hybrid_wide transport_hybrid_x_wide transport_hybrid_y_wide transport_hybrid_x_wide_local transport_hybrid_y_wide_local activity pressure_classify pressure_rhs_fused pressure_rhs_cached pressure_temporal_half pressure_temporal_tile16 pressure_temporal_tile32 pressure_group32 acoustic_finish_group128 sparse_commit)
 restore() {
     for name in "${targets[@]}"; do
         if [[ -f "$output/$name.original.spv" ]]; then

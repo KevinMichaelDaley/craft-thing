@@ -1831,6 +1831,7 @@ GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_coarse_group p
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_explicit transport_explicit_wide)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid transport_hybrid_wide)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid_x transport_hybrid_y transport_hybrid_x_wide transport_hybrid_y_wide)
+GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid_x_wide_local transport_hybrid_y_wide_local)
 GAS_SHADERS += build/shaders/gas_activity_cached.comp.spv
 GAS_SHADERS += build/shaders/gas_owner_gather.comp.spv
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_transfer geometry_commit)
