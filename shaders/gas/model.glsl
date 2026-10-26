@@ -56,7 +56,7 @@ vec2 gas_two_sum(float a,float b) {
 #define FR_GAS_FLAGS_UPDATE(value) atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],value)
 #endif
 void gas_report_repair_flags(uint value) {
-    if(value!=0u) FR_GAS_FLAGS_UPDATE(value);
+    if(value!=0u) {uint combined=subgroupOr(value);if(subgroupElect()) FR_GAS_FLAGS_UPDATE(combined);}
 }
 Gas gas_add_flux(Gas s,GasFlux flux,float dt) {
     Gas result=s;
@@ -82,7 +82,7 @@ float gas_thermal_energy(Gas value) {return gas_energy(value)-gas_kinetic_energy
 Gas gas_practical_momentum(Gas value,float thermal) {
     float mass=gas_mass(value),largest=max(abs(value.dynamics.z),abs(value.dynamics.w));
     if(mass<=0.||any(isnan(value.dynamics.zw))||any(isinf(value.dynamics.zw))) {
-        if(mass>0.) atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],FR_GAS_LIMITED_KINETIC);
+        if(mass>0.) gas_report_repair_flags(FR_GAS_LIMITED_KINETIC);
         value.dynamics.zw=vec2(0);return value;
     }
     if(largest>0.) {
@@ -93,7 +93,7 @@ Gas gas_practical_momentum(Gas value,float thermal) {
         float kinetic=gas_kinetic_energy(value);
         if(budget>0.&&gas_finite(kinetic)&&kinetic<.98*budget) return value;
         float factor=(sqrt(budget)*sqrt(mass)/largest)*sqrt(2./gas_parameter(FR_GAS_KINETIC_WORD))/sqrt(dot(direction,direction));
-        if(factor<1.) {value.dynamics.zw*=factor;atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],FR_GAS_LIMITED_KINETIC);}
+        if(factor<1.) {value.dynamics.zw*=factor;gas_report_repair_flags(FR_GAS_LIMITED_KINETIC);}
     }
     return value;
 }
@@ -118,7 +118,7 @@ Gas gas_practical_state(Gas value) {
         if(energy>0.&&largest>0.&&gas_finite(largest)) {
             float kinetic=gas_kinetic_energy(value);
             if(gas_finite(kinetic)&&kinetic<.98*energy) {
-                if(repaired!=0u) atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],repaired);
+                gas_report_repair_flags(repaired);
                 return value;
             }
             vec2 direction=value.dynamics.zw/largest;
@@ -135,7 +135,7 @@ Gas gas_practical_state(Gas value) {
             }
         }
     }
-    if(repaired!=0u) atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],repaired);
+    gas_report_repair_flags(repaired);
     return value;
 }
 Gas gas_buoyancy_cached(Gas s,Primitive primitive,float dt,out float admitted_work,out float admitted_impulse) {
