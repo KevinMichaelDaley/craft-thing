@@ -44,6 +44,9 @@ bool fr_gas_gpu_geometry_activity_metadata(const dc_gpu_t *g,bool *selected) {
     if(!g||!g->gas||!selected) return false;
     *selected=(((const uint32_t *)g->gas->stats.mapped)[15]&32u)!=0u;return true;
 }
+bool fr_gas_gpu_sor_tile_size(const dc_gpu_t *g,uint32_t *size) {
+    (void)g;if(!size)return false;*size=0;return true;
+}
 bool fr_gas_gpu_sor_tile_metadata(const dc_gpu_t *g,bool *selected) {
     if(!g||!g->gas||!selected) return false;
     *selected=(((const uint32_t *)g->gas->stats.mapped)[15]&128u)!=0u;return true;

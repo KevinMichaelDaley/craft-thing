@@ -434,6 +434,7 @@ int main(void) {
     RUN(test_native_local_geometry_repairs_keep_quiet_owners_and_avoid_full_cache_rebuilds);
     RUN(test_native_pressure_noise_admission_defers_weak_rows_with_stable_inventory);
     RUN(test_native_larger_sor_tiles_keep_exact_fields_with_fewer_dispatches);
+    RUN(test_native_wide_sor_tiles_keep_exact_fields_and_report_gpu_tile_size);
     RUN(test_native_fused_geometry_keeps_edited_stock_and_removes_completion_wait);
     RUN(test_native_fused_physics_tick_keeps_packets_clock_and_removes_completion_wait);
 #endif
