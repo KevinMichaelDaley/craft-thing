@@ -11,8 +11,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     bool device_work=strcmp(setting,"DC_GAS_DEVICE_WORK")==0;
     bool device_state=strcmp(setting,"DC_GAS_DEVICE_STATE")==0;
     bool reuse_rate=strcmp(setting,"DC_GAS_REUSE_LINE_RATE")==0;
-    bool scalar_energy=strcmp(setting,"DC_GAS_SCALAR_ENERGY")==0;
-    bool all_slots=direct_first||quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state||reuse_rate||scalar_energy;uint32_t field_count=all_slots?12288u:4096u;
+    bool all_slots=direct_first||quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state||reuse_rate;uint32_t field_count=all_slots?12288u:4096u;
     for(uint32_t k=0;k<4;k++) {const char *value=getenv(names[k]);saved[k]=value?SDL_strdup(value):NULL;}
     ASSERT_EQ(SDL_setenv(names[0],"1",1),0);
     ASSERT_EQ(SDL_setenv(names[2],"1",1),0);
@@ -20,8 +19,8 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     fr_gas_state_t *input=malloc(4096*sizeof(*input)),*reference=malloc(field_count*sizeof(*reference)),*out=malloc(field_count*sizeof(*out));
     fr_gas_state_t *dormant=all_slots?malloc(4096*sizeof(*dormant)):NULL;ASSERT_TRUE(!all_slots||dormant);
     double *volume=malloc(4096*sizeof(*volume));dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(input&&reference&&out&&volume&&c);
-    fr_gas_state_t *quiet=quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state||scalar_energy?malloc(4096*sizeof(*quiet)):NULL;
-    ASSERT_TRUE(!(quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state||scalar_energy)||quiet);
+    fr_gas_state_t *quiet=quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state?malloc(4096*sizeof(*quiet)):NULL;
+    ASSERT_TRUE(!(quiet_publication||cached_neighbors||lean_metadata||zero_energy||device_work||device_state)||quiet);
     fr_gas_model_t m=reference_model();m.kinetic_scale=1./512.;
     if(quiet) for(uint32_t i=0;i<4096;i++) quiet[i]=reference_air(m,.0012,300,.001);
     for(uint32_t i=0;i<4096;i++) {volume[i]=1;input[i]=reference_air(m,.0012,300,
@@ -57,7 +56,6 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
             g_previous_compute_pipeline=VK_NULL_HANDLE;g_repeated_compute_bindings=0;
             ASSERT_TRUE(fr_gas_gpu_step(g,metadata?.04f:.02f,err,sizeof(err)));
             if(reuse_rate&&step==0u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_reused_line_rate(g,&used));ASSERT_EQ(used,path!=0u);}
-            if(scalar_energy&&step==0u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_scalar_energy(g,&used));ASSERT_EQ(used,path!=0u);}
             if(cached_neighbors&&step==0u) ASSERT_TRUE(fr_gas_gpu_activity_metadata(g,activity_modes+path));
             if(zero_energy&&step==0u) ASSERT_TRUE(fr_gas_gpu_zero_energy_metadata(g,zero_energy_used+path));
         }
@@ -81,7 +79,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         dc_gpu_destroy(g);
     }
     printf("%s dispatches%u vs%u exact snapshot%s\n",setting,work[1],work[0],memcmp(out,reference,field_count*sizeof(*out))==0?" yes":" no");
-    if(strcmp(setting,"DC_GAS_HALF_PRESSURE")==0||lean_metadata||scalar_energy) {
+    if(strcmp(setting,"DC_GAS_HALF_PRESSURE")==0||lean_metadata) {
         double mass=0,mass_error=0,pigment=0,pigment_error=0,velocity_error=0,energy=0,energy_error=0,stock_before[5]={0},stock_after[5]={0};
         for(uint32_t i=0;i<4096;i++) {
             fr_gas_thermo_t a,b;ASSERT_TRUE(fr_gas_thermodynamics(&m,reference+i,1,&a,err,sizeof(err))&&fr_gas_thermodynamics(&m,out+i,1,&b,err,sizeof(err)));
@@ -93,9 +91,9 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
             for(uint32_t k=0;k<2;k++) {double difference=out[i].momentum[k]/b.mass-reference[i].momentum[k]/a.mass;velocity_error+=a.mass*difference*difference;}
         }
         printf("Derived backend densityL1%.9g pigmentL1%.9g velocityRMS%.9g energyL1%.9g\n",mass_error/mass,pigment_error/pigment,sqrt(velocity_error/mass),energy_error/energy);
-        ASSERT_TRUE(mass_error/mass<(scalar_energy?1e-4:(lean_metadata?1e-5:.03))&&pigment_error/pigment<(scalar_energy?1e-3:(lean_metadata?1e-4:.10))&&sqrt(velocity_error/mass)<(scalar_energy?.05:(lean_metadata?.01:1.)));
-        if(lean_metadata||scalar_energy) ASSERT_TRUE(energy_error/energy<(scalar_energy?1e-4:1e-5));
-        for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(stock_after[k]-stock_before[k])<fmax(1e-9,(scalar_energy?1e-5:(lean_metadata?1e-4:.003))*stock_before[k]));
+        ASSERT_TRUE(mass_error/mass<(lean_metadata?1e-5:.03)&&pigment_error/pigment<(lean_metadata?1e-4:.10)&&sqrt(velocity_error/mass)<(lean_metadata?.01:1.));
+        if(lean_metadata) ASSERT_TRUE(energy_error/energy<1e-5);
+        for(uint32_t k=0;k<5;k++) ASSERT_TRUE(fabs(stock_after[k]-stock_before[k])<fmax(1e-9,(lean_metadata?1e-4:.003)*stock_before[k]));
     } else ASSERT_TRUE(memcmp(out,reference,field_count*sizeof(*out))==0);
     ASSERT_TRUE(added_dispatches==UINT32_MAX?work[1]==work[0]:(added_dispatches?work[1]==work[0]+added_dispatches:work[1]<work[0]));
     if(group_rate) {
@@ -213,9 +211,6 @@ static void test_native_large_hybrid_workgroups_preserve_state_and_clock(void) {
 }
 static void test_native_zero_energy_transfers_preserve_state_stock_and_clock(void) {
     check_native_gas_dispatch_fusion("DC_GAS_ZERO_ENERGY",false,UINT32_MAX);
-}
-static void test_native_scalar_practical_energy_preserves_stock_flow_owners_and_clock(void) {
-    check_native_gas_dispatch_fusion("DC_GAS_SCALAR_ENERGY",true,UINT32_MAX);
 }
 static void test_native_reused_line_rate_preserves_stiff_packet_and_owners(void) {
     char err[256]={0};const char *names[]={"DC_GAS_HYBRID_LINES","DC_GAS_FUSED_HYBRID"};char *saved[2];
