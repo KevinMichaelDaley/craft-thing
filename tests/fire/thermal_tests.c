@@ -3,6 +3,7 @@
 #include <string.h>
 #include "ferrum/fire/material_profile.h"
 #include "ferrum/fire/thermal.h"
+#include "dungeoncraft/thermal_surface.h"
 
 static int g_pass,g_fail;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
@@ -75,7 +76,22 @@ static void test_pause_and_invalid_operations_leave_state_unchanged(void) {
     ASSERT_TRUE(fr_thermal_pair_flux(sample,sample,0,&flux,err,sizeof(err)));ASSERT_EQ(flux,0.f);
     sample.capacity=0;flux=99;ASSERT_TRUE(!fr_thermal_pair_flux(sample,sample,1,&flux,err,sizeof(err)));ASSERT_EQ(flux,99.f);PASS();
 }
+static void test_finite_radiance_heats_the_boundary_without_requiring_a_hot_bulk(void) {
+    char err[256]={0};float coefficient=1e-12f;
+    float surface=fr_thermal_surface_K(293.15f,620,.0024f,.001f,coefficient,coefficient*1400.f*1400.f*1400.f*1400.f);
+    ASSERT_TRUE(surface>600&&surface<1400);
+    float residual=coefficient*surface*surface*surface*surface+.0034f*surface-
+        (coefficient*1400.f*1400.f*1400.f*1400.f+.0024f*293.15f+.001f*620);
+    ASSERT_TRUE(fabsf(residual)<.01f);PASS();
+}
+static void test_equilibrium_boundary_cannot_invent_a_hot_surface(void) {
+    char err[256]={0};float coefficient=1e-12f;
+    ASSERT_TRUE(fabsf(fr_thermal_surface_K(300,300,.0024f,.001f,coefficient,coefficient*300.f*300.f*300.f*300.f)-300)<.1f);
+    ASSERT_TRUE(fabsf(fr_thermal_surface_K(300,300,.0024f,.001f,0,0)-300)<.1f);PASS();
+}
 int main(void) {
+    RUN(test_finite_radiance_heats_the_boundary_without_requiring_a_hot_bulk);
+    RUN(test_equilibrium_boundary_cannot_invent_a_hot_surface);
     RUN(test_sample_uses_actual_composition_and_keeps_wet_wood_capacity);
     RUN(test_pair_exchange_matches_face_conductance_and_conserves_energy);
     RUN(test_four_face_update_cannot_overshoot_even_for_large_time_steps);
