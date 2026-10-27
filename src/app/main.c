@@ -1182,9 +1182,13 @@ int main(int argc, char **argv) {
         if(!mkdtemp(smoke_directory)) {perror("mkdtemp");return 1;}
         directory=smoke_directory;
     }
-    dc_benchmark_brush_t benchmark_brush={0},benchmark_pour={0};
+    dc_benchmark_brush_t benchmark_brush={0},benchmark_pour={0},benchmark_heat={0};
     const char *brush_setting=benchmark_frames?getenv("DC_BENCHMARK_AIR_BRUSH"):NULL;
     const char *pour_setting=benchmark_frames?getenv("DC_BENCHMARK_WATER_POUR"):NULL;
+    const char *heat_setting=benchmark_frames?getenv("DC_BENCHMARK_HEAT_PROBE"):NULL;
+    if(heat_setting&&(!bonfire||!dc_benchmark_brush_parse(heat_setting,VIEW_WIDTH,VIEW_HEIGHT,&benchmark_heat)||benchmark_heat.radius!=0u)) {
+        fprintf(stderr,"DC_BENCHMARK_HEAT_PROBE requires --bonfire and visible x,y,0\n");return 1;
+    }
     if(brush_setting&&!dc_benchmark_brush_parse(brush_setting,VIEW_WIDTH,VIEW_HEIGHT,&benchmark_brush)) {
         fprintf(stderr,"DC_BENCHMARK_AIR_BRUSH requires visible x,y,radius (radius <=32)\n");
         return 1;
@@ -1446,7 +1450,9 @@ int main(int argc, char **argv) {
             int mx=0,my=0;uint32_t x=0,y=0,buttons=SDL_GetMouseState(&mx,&my);
             bool inside=mx>=0&&my>=0&&dc_level_view_screen_cell(view,(uint32_t)mx,(uint32_t)my,&x,&y);
             probing=inside&&SDL_GetKeyboardState(NULL)[SDL_SCANCODE_H]&&(buttons&SDL_BUTTON(SDL_BUTTON_LEFT));
+            if(heat_setting) {x=benchmark_heat.x;y=benchmark_heat.y;inside=true;probing=true;}
             if(!dc_level_view_heat_probe(view,inside?x:0u,inside?y:0u,probing)) {failed=true;running=false;}
+            if(heat_setting&&scripted_frame==0u) printf("Finite benchmark ignition probe held at %u,%u\n",x,y);
         }
         if (!probing&&!paint_held(view, material, err, sizeof(err))) {
             failed = true; running = false;

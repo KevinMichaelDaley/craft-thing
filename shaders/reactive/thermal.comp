@@ -96,6 +96,7 @@ float wet_energy(uint first,uint second,float amount) {
 float exchange(vec4 a,vec4 b) {
     if(a.y<=0.||b.y<=0.||a.z<=0.||b.z<=0.) return 0.;
     float difference=a.x/a.y-b.x/b.y,conductance=2.*a.z*b.z/(a.z+b.z);
+    if(params.mode==1u&&params.phase==1u) conductance*=float(FR_THERMAL_GAMEPLAY_FACE_METERS);
     float requested=conductance*difference*uintBitsToFloat(params.seconds);
     float bound=min(a.y,b.y)*abs(difference)/float(FR_THERMAL_NEIGHBORS);
     return sign(requested)*min(abs(requested),bound);

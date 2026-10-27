@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdio.h>
+#include "dungeoncraft/combustion_parameters.h"
 #include "ferrum/fire/combustion.h"
 #include "ferrum/fire/material_profile.h"
 
@@ -65,7 +66,8 @@ bool fr_combustion_reference(const fr_reactive_state_t *source,uint32_t oxygen_f
         uint32_t char_fp=after[0]-before[0];
         p.ash_fp=after[1]-before[1];p.soot_fp=after[2]-before[2];
         p.exhaust_fp=p.fuel_fp-char_fp-p.ash_fp-p.soot_fp+p.oxygen_fp;
-        p.released_heat=p.fuel_fp/65536.0*profile->primary_heat;
+        p.reserved_airborne_heat=p.soot_fp/65536.0*FR_COMBUSTION_AIRBORNE_ENERGY;
+        p.released_heat=p.fuel_fp/65536.0*profile->primary_heat-p.reserved_airborne_heat;
         double sensible=p.fuel_fp/65536.0*profile->heat_capacity*temperature;
         double retained=char_fp/65536.0*fr_reactive_profile(DC_MATERIAL_CHAR)->heat_capacity*temperature;
         p.exported_energy=sensible-retained+.3*p.released_heat;

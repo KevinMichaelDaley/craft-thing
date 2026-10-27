@@ -95,7 +95,10 @@ static void test_spent_terrain_becomes_loose_saved_ash_without_losing_mass(void)
     fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
         .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
     ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err)));
-    ASSERT_TRUE(fr_combustion_gpu_enable(g,err,sizeof(err))&&fr_combustion_gpu_step(g,.01f,err,sizeof(err)));
+    ASSERT_TRUE(fr_combustion_gpu_enable(g,err,sizeof(err)));
+    dc_gpu_structural_data(g)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]=0;
+    ASSERT_TRUE(fr_combustion_gpu_step(g,.01f,err,sizeof(err)));
+    ASSERT_EQ(dc_gpu_structural_data(g)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD],1);
     fr_reactive_record_t record;bool found=true;
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,protected_at,&record,&found,err,sizeof(err))&&found);
     ASSERT_EQ(record.state.coating_oil_fuel_fp,200);
@@ -145,7 +148,12 @@ static void test_flame_emission_requires_local_transported_hot_fuel_and_oxygen(v
         for(uint32_t i=0;i<FR_GAS_SPECIES;i++) source.energy+=source.species[i]*model.heat_capacity_cv[i]*(control==2?300:control==4?480:1100);
         input[at]=source;fr_gas_state_t expected;double reacted=0;
         ASSERT_TRUE(fr_combustion_gas_reference(&model,&source,1,.001,&expected,&reacted,err,sizeof(err)));
-        ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volumes,4096,err,sizeof(err))&&fr_combustion_gpu_step(g,.001f,err,sizeof(err)));
+        ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volumes,4096,err,sizeof(err)));
+        if(control==1u) {
+            ASSERT_TRUE(present(g,err,sizeof(err))&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
+            ASSERT_TRUE((pixels[20u*480u+20u]&255u)<100u);
+        }
+        ASSERT_TRUE(fr_combustion_gpu_step(g,.001f,err,sizeof(err)));
         ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,output,4096,err,sizeof(err)));
         ASSERT_TRUE(fabs(output[at].species[FR_GAS_SOOT]-expected.species[FR_GAS_SOOT])<1e-9);
         ASSERT_TRUE(fabs(output[at].energy-expected.energy)<1e-5);

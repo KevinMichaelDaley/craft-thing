@@ -116,8 +116,8 @@ static fr_gas_state_t airborne_fuel(fr_gas_model_t model,double temperature,bool
 }
 static void test_airborne_reaction_requires_transported_fuel_heat_and_oxygen(void) {
     char err[256]={0};fr_gas_model_t model=gas_model();
-    for(uint32_t control=0;control<4;control++) {
-        fr_gas_state_t before=airborne_fuel(model,control==2?300:1100,control!=1,control!=3),after;
+    for(uint32_t control=0;control<5;control++) {
+        fr_gas_state_t before=airborne_fuel(model,control==2?300:control==4?480:1100,control!=1,control!=3),after;
         double reacted=-1;
         ASSERT_TRUE(fr_combustion_gas_reference(&model,&before,1,.02,&after,&reacted,err,sizeof(err)));
         if(control==0) {

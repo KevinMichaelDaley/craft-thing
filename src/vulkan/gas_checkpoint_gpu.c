@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "gas_gpu_state.h"
+#include "thermal_gpu_internal.h"
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
     return false;
@@ -60,8 +61,12 @@ bool fr_gas_gpu_checkpoint_packets(dc_gpu_t *g,uint32_t bank,uint32_t slot,const
 static bool write_chunk(dc_gpu_t *g,uint32_t slot,const void *packets,char *err,uint32_t cap) {
     struct fr_gas_gpu *t=g->gas;uint32_t bank=t->direct_publish?1u:0u;size_t bytes=4096u*sizeof(gas_packet_t);
     if(t->sparse_owners) {uint32_t *gates=(uint32_t *)t->gates.mapped+(size_t)slot*4096u;for(uint32_t i=0;i<4096u;i++) gates[i]&=~FR_GAS_CELL_OWNER_BIT;}
-    if(t->state[bank].mapped) {memcpy((gas_packet_t *)t->state[bank].mapped+(size_t)slot*4096u,packets,bytes);return true;}
-    memcpy(t->checkpoint_staging.mapped,packets,bytes);return copy_state_chunk(g,bank,slot,true,err,cap);
+    if(t->state[bank].mapped) {
+        memcpy((gas_packet_t *)t->state[bank].mapped+(size_t)slot*4096u,packets,bytes);
+        return fr_combustion_clear_emission_chunk(g,slot,err,cap);
+    }
+    memcpy(t->checkpoint_staging.mapped,packets,bytes);
+    return copy_state_chunk(g,bank,slot,true,err,cap)&&fr_combustion_clear_emission_chunk(g,slot,err,cap);
 }
 static fr_gas_state_t unpack(const gas_packet_t *packet) {
     const float *p=packet->words;fr_gas_state_t s={0};

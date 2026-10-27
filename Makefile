@@ -1952,7 +1952,7 @@ build/dungeoncraft build/controls_tests build/reactive_stream_view_display_tests
 build/shaders/thermal.comp.spv: shaders/reactive/thermal.comp shaders/reactive/address.glsl include/dungeoncraft/thermal_parameters.h include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/reactive_profile_layout.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
-build/shaders/combustion.comp.spv: shaders/reactive/combustion.comp shaders/reactive/address.glsl shaders/gas/types.glsl
+build/shaders/combustion.comp.spv: shaders/reactive/combustion.comp shaders/reactive/address.glsl shaders/gas/types.glsl include/dungeoncraft/combustion_parameters.h include/dungeoncraft/thermal_parameters.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/combustion_gpu_display_tests: build/shaders/combustion.comp.spv

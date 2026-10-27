@@ -9,5 +9,8 @@
 #define FR_THERMAL_PROBE_CONDUCTIVITY 20.0
 #define FR_THERMAL_WETTING_PER_SECOND 0.06
 #define FR_THERMAL_NEIGHBORS 4u
+/* Gameplay pixels represent centimeter cubes: face area / face separation
+ * is one centimeter. The delivered laboratory bench keeps unit geometry. */
+#define FR_THERMAL_GAMEPLAY_FACE_METERS 0.01
 
 #endif

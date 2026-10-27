@@ -4,6 +4,8 @@
 #extension GL_EXT_buffer_reference_uvec2 : require
 #include "address.glsl"
 #include "../gas/types.glsl"
+#include "../../include/dungeoncraft/combustion_parameters.h"
+#include "../../include/dungeoncraft/thermal_parameters.h"
 layout(local_size_x=64) in;
 layout(set=0,binding=0,std430) readonly buffer Root {uint root[];};
 layout(set=0,binding=1,std430) readonly buffer Pages {uint pages[];};
@@ -14,6 +16,7 @@ layout(set=0,binding=5,std430) buffer Samples {vec4 samples[];};
 struct Particle {int x_fp,y_fp,vx_fp,vy_fp;float f00,f01,f10,f11;uint id_lo,id_hi,mass_fp,grain_fp,material,flags;};
 layout(set=0,binding=6,std430) buffer Particles {Particle particles[];};
 layout(set=0,binding=7,std430) buffer Counts {uint counts[];};
+layout(set=0,binding=8,std430) buffer Emission {vec4 emission[];};
 layout(push_constant) uniform Params {
     uint width,height,seconds,sparse;
     uvec2 world_address,alternate_address,gates_address,model_address;
@@ -30,6 +33,76 @@ uint atlas(ivec2 p) {
 }
 const ivec2 directions[4]=ivec2[4](ivec2(0,-1),ivec2(-1,0),ivec2(1,0),ivec2(0,1));
 bool gas_cell(uint at) {return at!=0xffffffffu&&(cells[at].x&255u)==0u&&cells[at].y==0u;}
+uint slot_generation(uint at) {
+    if((params.unused.z|params.unused.w)==0u) return 0u;
+    return Words(params.unused.zw).words[32u+(at/4096u)*8u+4u];
+}
+void terrain_changed() {
+    if((params.unused.z|params.unused.w)!=0u) atomicOr(Words(params.unused.zw).words[20u],1u);
+}
+Gas local_gas(uint at) {
+    bool alternate=params.sparse!=0u&&(Words(params.gates_address).words[at]&8u)!=0u;
+    return GasField(alternate?params.alternate_address:params.world_address).values[at];
+}
+float gas_mass(Gas gas) {return dot(gas.species,vec4(1))+gas.dynamics.x;}
+float gas_capacity(Gas gas) {
+    Words model=Words(params.model_address);
+    return dot(gas.species,vec4(uintBitsToFloat(model.words[5]),uintBitsToFloat(model.words[6]),
+        uintBitsToFloat(model.words[7]),uintBitsToFloat(model.words[8])))+gas.dynamics.x*uintBitsToFloat(model.words[9]);
+}
+float gas_internal(Gas gas) {
+    float mass=gas_mass(gas);
+    float kinetic=mass>0.?.5*uintBitsToFloat(Words(params.model_address).words[10])*dot(gas.dynamics.zw,gas.dynamics.zw)/mass:0.;
+    return max(0.,gas.dynamics.y+gas.visual.w+gas.geometry.z-kinetic);
+}
+float carbon_activity(Gas gas) {
+    float mass=gas_mass(gas),capacity=gas_capacity(gas);
+    if(gas.dynamics.x<=0.||mass<=0.||capacity<=0.||gas.geometry.y<=0.) return 0.;
+    float temperature=gas_internal(gas)/capacity,oxygen=gas.species.x/mass;
+    float thermal=clamp((temperature-float(FR_COMBUSTION_AIRBORNE_IGNITION_K))/
+        float(FR_COMBUSTION_AIRBORNE_FULL_RATE_K-FR_COMBUSTION_AIRBORNE_IGNITION_K),0.,1.);
+    float supply=clamp((oxygen-float(FR_COMBUSTION_EXTINGUISH_OXYGEN))/
+        float(FR_COMBUSTION_AMBIENT_OXYGEN-FR_COMBUSTION_EXTINGUISH_OXYGEN),0.,1.);
+    return float(FR_COMBUSTION_AIRBORNE_RATE)*thermal*supply;
+}
+float oxidize_carbon(inout Gas gas) {
+    float activity=carbon_activity(gas);if(activity<=0.) return 0.;
+    float extent=min(gas.dynamics.x*(1.-exp(-activity*uintBitsToFloat(params.seconds))),
+        gas.species.x/float(FR_COMBUSTION_AIRBORNE_OXYGEN));
+    float oxygen=min(gas.species.x,extent*float(FR_COMBUSTION_AIRBORNE_OXYGEN));
+    gas.dynamics.x-=extent;gas.species.x-=oxygen;gas.species.z+=extent+oxygen;
+    gas.dynamics.y+=extent*float(FR_COMBUSTION_AIRBORNE_ENERGY);
+    return extent*float(FR_COMBUSTION_AIRBORNE_ENERGY);
+}
+vec2 two_sum(float a,float b) {
+    precise float sum=a+b,recovered=sum-a;
+    precise float error=(a-(sum-recovered))+(b-recovered);return vec2(sum,error);
+}
+void add_energy(Words entry,float delta) {
+    vec2 first=two_sum(uintBitsToFloat(entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY]),delta);
+    vec2 second=two_sum(uintBitsToFloat(entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY_RESIDUAL]),first.y);
+    precise float last=uintBitsToFloat(entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY_CORRECTION])+second.y;
+    vec2 middle=two_sum(second.x,last),top=two_sum(first.x,middle.x),tail=two_sum(top.y,middle.y);
+    entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY]=floatBitsToUint(top.x);
+    entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY_RESIDUAL]=floatBitsToUint(tail.x);
+    entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY_CORRECTION]=floatBitsToUint(tail.y);
+}
+void heat_contact(Words entry,float capacity,inout Gas gas) {
+    float gas_cap=gas_capacity(gas),mass=gas_mass(gas);if(capacity<=0.||gas_cap<=0.||mass<=0.) return;
+    float energy=uintBitsToFloat(entry.words[FR_ENTRY_STATE+17u])+uintBitsToFloat(entry.words[FR_ENTRY_STATE+25u])+
+        uintBitsToFloat(entry.words[FR_ENTRY_STATE+26u]);
+    float difference=energy/capacity-gas_internal(gas)/gas_cap;
+    if(abs(difference)<.001) return;
+    float speed=length(gas.dynamics.zw)/mass,density=mass*1000./max(gas.geometry.x,.000001);
+    float length_m=float(FR_THERMAL_GAMEPLAY_FACE_METERS);
+    float reynolds=density*speed*length_m*length_m/float(FR_COMBUSTION_AIR_VISCOSITY);
+    float nusselt=2.+.6*sqrt(max(reynolds,0.))*pow(float(FR_COMBUSTION_AIR_PRANDTL),1./3.);
+    float conductance=nusselt*float(FR_COMBUSTION_AIR_CONDUCTIVITY)*length_m;
+    float requested=conductance*difference*uintBitsToFloat(params.seconds);
+    float bound=capacity*gas_cap/(capacity+gas_cap)*abs(difference);
+    float flux=sign(requested)*min(abs(requested),bound);
+    add_energy(entry,-flux);gas.dynamics.y+=flux;
+}
 uint target(ivec2 p) {
     for(uint i=0u;i<4u;i++) {uint at=atlas(p+directions[i]);if(gas_cell(at)) return at;}
     return 0xffffffffu;
@@ -68,6 +141,27 @@ void feedback(uint index,ivec2 p,uint at) {
     }
     /* Flame emission is supplied by local transported gas reaction state.
      * No screen-space trail or predetermined height is admissible. */
+    if(!gas_cell(at)) return;
+    vec4 source=emission[at];if(source.x<=0.||floatBitsToUint(source.z)!=slot_generation(at)) return;
+    Gas gas=local_gas(at);float capacity=gas_capacity(gas);
+    if(capacity<=0.||gas.geometry.y<=0.) return;
+    if((floatBitsToUint(source.w)&1u)==0u&&gas_internal(gas)/capacity<float(FR_COMBUSTION_AIRBORNE_IGNITION_K)) return;
+    vec3 color=mix(vec3(1.,.3,.008),vec3(1.,.85,.2),clamp((source.y-650.)/1150.,0.,1.));
+    float alpha=1.-exp(-source.x*float(FR_COMBUSTION_EMISSION_EXPOSURE));
+    pixels[index]=packUnorm4x8(vec4(mix(unpackUnorm4x8(pixels[index]).rgb,color,alpha),1.));
+}
+void extinguish_unexposed(ivec2 p,uint at) {
+    if(at==0xffffffffu) return;
+    uvec2 handle=Handles(uvec2(root[6],root[7])).values[at];if(handle.y==0u||handle.x>=root[2]) return;
+    Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
+    if(entry.words[FR_ENTRY_GENERATION]!=handle.y||entry.words[FR_ENTRY_OWNER]!=1u||
+       (entry.words[FR_ENTRY_STATE+1u]&2u)==0u) return;
+    for(uint direction=0u;direction<4u;direction++) {
+        uint neighbor=atlas(p+directions[direction]);if(!gas_cell(neighbor)) continue;
+        Gas gas=local_gas(neighbor);float mass=gas_mass(gas);
+        if(gas.geometry.y>0.&&mass>0.&&gas.species.x/mass>float(FR_COMBUSTION_EXTINGUISH_OXYGEN)) return;
+    }
+    entry.words[FR_ENTRY_STATE+1u]&=~2u;
 }
 void loose_ash(ivec2 position,uint at,uvec2 handle,Words entry,inout Gas gas) {
     uint s=FR_ENTRY_STATE;
@@ -84,7 +178,7 @@ void loose_ash(ivec2 position,uint at,uvec2 handle,Words entry,inout Gas gas) {
             memoryBarrierBuffer();atomicOr(Words(uvec2(root[18],root[19])).words[handle.x/32u],1u<<(handle.x%32u));
             memoryBarrierBuffer();atomicAdd(mailbox.words[FR_ARENA_MAIL_FREE],1u);
         }
-        Handles(uvec2(root[6],root[7])).values[at]=uvec2(0);cells[at].x=0u;return;
+        Handles(uvec2(root[6],root[7])).values[at]=uvec2(0);cells[at].x=0u;terrain_changed();return;
     }
     uint particle=(at/4096u)*8192u+at%4096u;
     if(particles[particle].mass_fp!=0u||particles[particle+4096u].mass_fp!=0u||(root[14]|root[15])==0u) return;
@@ -99,12 +193,12 @@ void loose_ash(ivec2 position,uint at,uvec2 handle,Words entry,inout Gas gas) {
     entry.words[FR_ENTRY_OWNER+3u]=identity.x;entry.words[FR_ENTRY_OWNER+4u]=identity.y;entry.words[FR_ENTRY_OWNER+5u]=0u;
     canonical.values[particle]=handle;alternate.values[particle]=uvec2(0);
     Handles(uvec2(root[6],root[7])).values[at]=uvec2(0);
-    cells[at].x=13u;atomicAdd(counts[at/4096u],1u);
+    cells[at].x=13u;atomicAdd(counts[at/4096u],1u);terrain_changed();
 }
 /* Each parcel chooses one neighboring gas cell. The owning gas invocation
  * gathers at most four surfaces, reserving shared oxygen locally before commit.
  * There is no field scan, atomic float race or global flame capacity. */
-void burn(ivec2 position,uint gas_at,inout Gas gas) {
+void burn(ivec2 position,uint gas_at,inout Gas gas,inout float admitted,inout float source_temperature,inout uint sources) {
     uint at=atlas(position);if(at==0xffffffffu||target(position)!=gas_at) return;
     uvec2 handle=Handles(uvec2(root[6],root[7])).values[at];
     if(handle.y==0u||handle.x>=root[2]) return;
@@ -114,10 +208,11 @@ void burn(ivec2 position,uint gas_at,inout Gas gas) {
     if((entry.words[s+13u]|entry.words[s+14u]|entry.words[s+15u]|entry.words[s+16u])!=0u) return;
     bool char_stage=wood_fuel==0u;uint fuel=char_stage?entry.words[s+10u]:wood_fuel;
     uint profile=char_stage?12u:m;
+    float capacity=((float(wood_fuel)+float(entry.words[s+11u]))*coefficient(m,5u)+
+        float(entry.words[s+10u])*coefficient(12u,5u)+float(entry.words[s+12u])*coefficient(3u,5u))/65536.;
+    heat_contact(entry,capacity,gas);
     if(m!=7u&&m!=8u&&m!=12u) return;
     if(fuel==0u) {loose_ash(position,at,handle,entry,gas);return;}
-    float capacity=(float(wood_fuel+entry.words[s+11u])*coefficient(m,5u)+
-        float(entry.words[s+10u])*coefficient(12u,5u)+float(entry.words[s+12u])*coefficient(3u,5u))/65536.;
     if(capacity<=0.) return;
     float energy=uintBitsToFloat(entry.words[s+17u]),temperature=energy/capacity;
     float wet_capacity=float(entry.words[s+8u])*coefficient(m,19u);
@@ -147,7 +242,8 @@ void burn(ivec2 position,uint gas_at,inout Gas gas) {
     uvec3 products=solid_products(consumed+reacted,profile)-solid_products(consumed,profile);
     uint char_mass=products.x,ash=products.y,soot=products.z;
     uint exhaust=reacted-char_mass-ash-soot+used;
-    float heat=float(reacted)/65536.*coefficient(profile,11u);
+    float heat=(float(reacted)*coefficient(profile,11u)-float(soot)*float(FR_COMBUSTION_AIRBORNE_ENERGY))/65536.;
+    admitted+=heat;source_temperature=max(source_temperature,temperature);sources|=1u;
     float removed=float(reacted)/65536.*coefficient(profile,5u)*temperature;
     float retained=float(char_mass)/65536.*coefficient(12u,5u)*temperature;
     /* Ash remains finite in the parcel until the loose-residue publication
@@ -156,7 +252,7 @@ void burn(ivec2 position,uint gas_at,inout Gas gas) {
     if(char_stage) entry.words[s+10u]=fuel-reacted+char_mass;
     else {entry.words[s+9u]=fuel-reacted;entry.words[s+10u]+=char_mass;}
     entry.words[s+11u]+=ash;
-    entry.words[s+17u]=floatBitsToUint(max(0.,energy+.7*heat-removed+retained));
+    add_energy(entry,.7*heat-removed+retained);
     gas.species.x-=float(used)/65536.;gas.species.z+=float(exhaust)/65536.;gas.dynamics.x+=float(soot)/65536.;
     gas.dynamics.y+=.3*heat+removed-retained;
     gas.visual.rgb+=vec3(.18,.16,.14)*float(exhaust+soot)/65536.;
@@ -165,6 +261,10 @@ void main() {
     uint i=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
     if(i>=params.width*params.height) return;
     ivec2 p=ivec2(i%params.width,i/params.width);uint at=atlas(p);
+    if(params.unused.x==3u) {
+        if(at!=0xffffffffu) emission[at]=vec4(0.,0.,uintBitsToFloat(slot_generation(at)),0.);
+        extinguish_unexposed(p,at);return;
+    }
     if(params.unused.x==1u) {feedback(i,p,at);return;}
     if(!gas_cell(at)) return;
     bool alternate=params.sparse!=0u&&(Words(params.gates_address).words[at]&8u)!=0u;
@@ -184,6 +284,10 @@ void main() {
         }
         return;
     }
-    for(uint face=0u;face<4u;face++) burn(p+directions[face],at,gas);
+    float admitted=oxidize_carbon(gas),temperature=gas_capacity(gas)>0.?gas_internal(gas)/gas_capacity(gas):0.;
+    uint sources=admitted>0.?2u:0u;
+    for(uint face=0u;face<4u;face++) burn(p+directions[face],at,gas,admitted,temperature,sources);
+    emission[at]=vec4(admitted/uintBitsToFloat(params.seconds),temperature,
+        uintBitsToFloat(slot_generation(at)),uintBitsToFloat(sources));
     field.values[at]=gas;
 }
