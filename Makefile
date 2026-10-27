@@ -1935,7 +1935,7 @@ build/thermal_checkpoint_display_tests: tests/vulkan/thermal_checkpoint_gpu_test
 .PHONY: test_heat_bench
 THERMAL_DISPLAY_TESTS = build/thermal_gpu_display_tests build/thermal_water_display_tests build/thermal_admission_display_tests build/thermal_feedback_display_tests build/thermal_bench_display_tests build/thermal_checkpoint_display_tests build/reactive_checkpoint_display_tests
 build/combustion_gpu_display_tests: tests/vulkan/combustion_gpu_tests.c tests/vulkan/combustion_vent_cases.h src/fire/combustion_gas.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< src/fire/combustion_gas.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< src/fire/combustion_gas.c src/app/bonfire_scene.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 test_ui test_quarter_native: $(THERMAL_DISPLAY_TESTS)
 test_heat_bench: build/thermal_tests build/thermal_stream_tests build/thermal_precision_tests $(THERMAL_DISPLAY_TESTS)
 	./build/thermal_tests
@@ -1958,6 +1958,7 @@ build/shaders/combustion.comp.spv: shaders/reactive/combustion.comp shaders/reac
 build/combustion_gpu_display_tests: build/shaders/combustion.comp.spv
 build/combustion_gpu_display_tests: tests/vulkan/combustion_containment_cases.h
 build/combustion_gpu_display_tests: tests/vulkan/combustion_contact_cases.h
+build/combustion_gpu_display_tests: tests/vulkan/bonfire_autostart_cases.h src/app/bonfire_scene.c
 build/thermal_gpu.o build/performance/src/vulkan/thermal_gpu.o: build/shaders/combustion.comp.spv
 .PHONY: test_bonfire
 test_ui test_quarter_native: test_bonfire
