@@ -97,6 +97,8 @@ static void test_blackbody_temperature_power_and_magic_override(void) {
     fr_blackbody_rgb(6500.f,0.f,0,override,dark);
     fr_blackbody_rgb(1000.f,.5f,1,override,magic);
     ASSERT_TRUE(red[0]>red[1]&&red[1]>red[2]);
+    ASSERT_TRUE((FR_FIRE_EMISSION_AIRBORNE&FR_FIRE_EMISSION_MAGIC)==0u);
+    ASSERT_TRUE((FR_FIRE_EMISSION_SURFACE&FR_FIRE_EMISSION_MAGIC)==0u);
     ASSERT_TRUE(white[2]>red[2]+.4f&&white[1]>.6f);
     ASSERT_TRUE(dark[0]==0.f&&dark[1]==0.f&&dark[2]==0.f);
     ASSERT_TRUE(fabsf(magic[0]-.05f)<1e-6f&&fabsf(magic[2]-.5f)<1e-6f);

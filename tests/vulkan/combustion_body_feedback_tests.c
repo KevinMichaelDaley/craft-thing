@@ -66,5 +66,30 @@ static void test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_
     ASSERT_EQ(memcmp(&moved.state,&dry.state,sizeof(dry.state)),0);
     free(before);free(after);free(paused);free(gas);free(volumes);free(colors);free(chunk);dc_gpu_destroy(g);PASS();
 }
-int main(void) {RUN(test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_authored_grain);
+static void test_hot_face_ignites_when_another_face_has_more_oxygen(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    chunk->cells[20u*64u+20u].material=DC_MATERIAL_WOOD;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t state;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,450,4100,&state,err,sizeof(err)));
+    state.ignition_threshold=.001f;
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,20u*64u+20u,&state,err,sizeof(err))&&
+        dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err))&&fr_thermal_gpu_enable(g,err,sizeof(err)));
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},.heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.01f,293.15f,err,sizeof(err))&&fr_combustion_gpu_enable(g,err,sizeof(err)));
+    fr_gas_state_t *gas=calloc(4096,sizeof(*gas));double *volume=calloc(4096,sizeof(*volume));ASSERT_TRUE(gas&&volume);
+    for(uint32_t i=0;i<4096;i++) {
+        volume[i]=chunk->cells[i].material?0.:1.;if(volume[i]==0.) continue;
+        gas[i].species[FR_GAS_OXYGEN]=.0023;gas[i].species[FR_GAS_NITROGEN]=.0077;
+        gas[i].energy=(.0023*model.heat_capacity_cv[0]+.0077*model.heat_capacity_cv[1])*293.15;
+    }
+    uint32_t hot=20u*64u+19u;
+    gas[hot].species[FR_GAS_OXYGEN]=.0005;gas[hot].species[FR_GAS_NITROGEN]=.0095;
+    gas[hot].energy=(.0005*model.heat_capacity_cv[0]+.0095*model.heat_capacity_cv[1])*1800.;
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,gas,volume,4096,err,sizeof(err))&&fr_combustion_gpu_step(g,.25f,err,sizeof(err)));
+    fr_reactive_record_t result;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0,0,&result,&found,err,sizeof(err))&&found);
+    ASSERT_TRUE(result.state.fuel_mass_fp<state.fuel_mass_fp&&(result.state.flags&FR_REACTIVE_FLAMING));
+    free(gas);free(volume);free(chunk);dc_gpu_destroy(g);PASS();
+}
+int main(void) {RUN(test_hot_face_ignites_when_another_face_has_more_oxygen);RUN(test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_authored_grain);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}

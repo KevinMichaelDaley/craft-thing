@@ -1,5 +1,8 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_spirv_intrinsics : require
+/* Exercise the compact transport path's native flush-to-zero arithmetic. */
+spirv_execution_mode(extensions=["SPV_KHR_float_controls"],capabilities=[4465],4460,32);
 #include "../gas/storage.glsl"
 void main() {
     uint index=gas_index();if(index>=params.width*params.height) return;
