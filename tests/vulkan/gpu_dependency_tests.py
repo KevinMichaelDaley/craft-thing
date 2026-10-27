@@ -69,6 +69,17 @@ class GpuDependencyTests(unittest.TestCase):
                          if "tools/diagnostics/vulkan_probe.c" not in deps)
         self.assertEqual(missing, [])
 
+    def test_thermal_objects_recompile_when_their_source_changes(self):
+        for name in ("thermal_gpu", "constructed_thermal_gpu"):
+            source = f"src/vulkan/{name}.c"
+            target = f"build/{name}.o"
+            result = subprocess.run(["make", "-n", "-W", source, target],
+                                    cwd=ROOT, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            commands = result.stdout.splitlines()
+            self.assertTrue(any(" -c " in line and source in line and target in line
+                                for line in commands), (target, result.stdout))
+
 
 if __name__ == "__main__":
     unittest.main()
