@@ -1,7 +1,9 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "ferrum/fire/material_profile.h"
+#include "dungeoncraft/material_density.h"
 #include "reactive_checkpoint_gpu.h"
 #include "reactive_gpu_internal.h"
 #include "reactive_storage_gpu.h"
@@ -108,10 +110,68 @@ static bool body_binding(const fr_reactive_record_t *record,const identity_t *id
     if(!profile||profile->material!=record->state.material) return false;
     *out=(binding_t){FR_REACTIVE_OWNER_BODY,source+(uint32_t)word,cell%8u};return true;
 }
+typedef struct {double mass,x,y,moment;} checkpoint_mass_t;
+static void checkpoint_mass_add(checkpoint_mass_t *out,double mass,double x,double y) {
+    out->mass+=mass;out->x+=mass*x;out->y+=mass*y;out->moment+=mass*(x*x+y*y+1./6.);
+}
+bool fr_gpu_reactive_checkpoint_mass_valid(const fr_reactive_archive_t *archive,
+    const dc_structural_store_payload_t *payload,const uint32_t *pixels,uint32_t words,char *err,uint32_t cap) {
+    if(!payload||(payload->body_count&&!payload->bodies)||(words&&!pixels)) return error(err,cap,"Invalid reactive mass validation input");
+    bool needed=false;for(uint32_t i=0;i<payload->body_count;i++) {
+        const dc_gpu_body_record_t *body=payload->bodies+i;
+        needed|=(body->body.active||body->reserved[0])&&(body->motion_flags&DC_GPU_BODY_REACTIVE_MASS)!=0;
+    }
+    if(!needed) return true;
+    if(!archive) return error(err,cap,"Inventory-derived rigid mass has no reactive checkpoint channel");
+    if(archive->body_count&&!archive->bodies) return error(err,cap,"Reactive mass channel has no parcel records");
+    checkpoint_mass_t *mass=calloc(payload->body_count,sizeof(*mass));
+    identity_t *ids=malloc((size_t)payload->body_count*sizeof(*ids));
+    if(!mass||!ids) {free(mass);free(ids);return error(err,cap,"Cannot validate reactive body mass");}
+    bool okay=true;
+    for(uint32_t i=0;i<payload->body_count&&okay;i++) {
+        const dc_gpu_body_record_t *body=payload->bodies+i;ids[i]=(identity_t){body->body.id,i};
+        if((!body->body.active&&!body->reserved[0])||!(body->motion_flags&DC_GPU_BODY_REACTIVE_MASS)) continue;
+        float density=0;
+        okay=(body->piece_count&DC_GPU_PIXEL_BODY_FLAG)&&body->compound_reserved<words&&
+            dc_gpu_pixel_geometry_valid(body,pixels+body->compound_reserved,words-body->compound_reserved,&density);
+        if(!okay) break;
+        const uint32_t *shape=pixels+body->compound_reserved;uint64_t directory=(uint64_t)shape[2]*shape[3];
+        for(uint32_t tile=0;tile<shape[1];tile++) {
+            uint64_t at=8u+directory+(uint64_t)tile*33u;uint32_t tx=shape[at]&65535u,ty=shape[at]>>16;
+            for(uint32_t pixel=0;pixel<256;pixel++) {
+                uint32_t material=(shape[at+1u+pixel/8u]>>((pixel%8u)*4u))&15u;if(!material) continue;
+                checkpoint_mass_add(mass+i,DC_BODY_DENSITY(material),tx*16u+pixel%16u+.5,ty*16u+pixel/16u+.5);
+            }
+        }
+    }
+    if(okay) qsort(ids,payload->body_count,sizeof(*ids),identity_order);
+    for(uint32_t i=0;i<archive->body_count&&okay;i++) {
+        const fr_reactive_record_t *record=archive->bodies+i;identity_t key={.id=record->owner.key[0]};
+        const identity_t *match=bsearch(&key,ids,payload->body_count,sizeof(*ids),identity_order);
+        if(!match) {okay=false;break;}
+        if(!(payload->bodies[match->slot].motion_flags&DC_GPU_BODY_REACTIVE_MASS)) continue;
+        binding_t binding;okay=body_binding(record,ids,payload->body_count,payload,pixels,words,&binding);if(!okay) break;
+        uint32_t material=(pixels[binding.word]>>(binding.nibble*4u))&15u;
+        double delta=(double)fr_reactive_state_mass_fp(&record->state)/65536.-DC_BODY_DENSITY(material);
+        checkpoint_mass_add(mass+match->slot,delta,record->owner.key[2]+.5,record->owner.key[3]+.5);
+    }
+    for(uint32_t i=0;i<payload->body_count&&okay;i++) {
+        const dc_gpu_body_record_t *body=payload->bodies+i;
+        if((!body->body.active&&!body->reserved[0])||!(body->motion_flags&DC_GPU_BODY_REACTIVE_MASS)) continue;
+        checkpoint_mass_t value=mass[i];double x=value.x/value.mass,y=value.y/value.mass;
+        double inertia=fmax(1e-12,value.moment-value.mass*(x*x+y*y));
+        double center_tolerance=fmax(1e-4,fmax(body->body.width,body->body.height)*2e-6);
+        okay=value.mass>0&&fabs(body->mass-value.mass)<=fmax(5e-5,value.mass*1e-5)&&
+            fabs(body->center[0]-x)<=center_tolerance&&fabs(body->center[1]-y)<=center_tolerance&&
+            fabs(body->inertia-inertia)<=fmax(.005,inertia*2e-4);
+    }
+    free(mass);free(ids);return okay||error(err,cap,"Rigid mass or inertia disagrees with authoritative parcel inventory");
+}
 bool fr_gpu_reactive_checkpoint_prepare(dc_gpu_t *g,const fr_reactive_archive_t *archive,
     const dc_chunk_t *chunks,const dc_structural_store_payload_t *payload,const uint32_t *pixels,uint32_t pixel_words,
     struct fr_reactive_gpu **out,uint32_t ***out_handles,char *err,uint32_t cap) {
     if(!g||!payload||!out||!out_handles) return error(err,cap,"Invalid checkpoint reaction transaction");
+    if(!fr_gpu_reactive_checkpoint_mass_valid(archive,payload,pixels,pixel_words,err,cap)) return false;
     if(!archive) {*out=NULL;*out_handles=NULL;return true;}
     if(archive->chunk_count&&!chunks) return error(err,cap,"Missing checkpoint physical chunks");
     uint32_t *slots=archive->chunk_count?malloc((size_t)archive->chunk_count*sizeof(*slots)):NULL;

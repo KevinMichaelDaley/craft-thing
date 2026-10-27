@@ -49,6 +49,10 @@ static bool pixel_valid(const dc_gpu_body_record_t *b, const uint32_t *pixels,
                                      words - b->compound_reserved, density))
         return false;
     double mass = *density * (double)(b->piece_count & ~DC_GPU_PIXEL_BODY_FLAG);
+    if(b->motion_flags&DC_GPU_BODY_REACTIVE_MASS) {
+        *density=b->mass/(float)(b->piece_count&~DC_GPU_PIXEL_BODY_FLAG);
+        return isfinite(*density)&&*density>0;
+    }
     return !b->motion_ready || fabs(b->mass - mass) < fmax(.002, mass * 1e-6);
 }
 
@@ -64,7 +68,7 @@ static bool body_valid(const dc_gpu_body_record_t *b, const uint32_t *pixels,
         b->local_x_fp < 0 || b->local_y_fp < 0 || b->local_x_fp >= 64 * 65536 ||
         b->local_y_fp >= 64 * 65536 || !isfinite(b->angle) ||
         fabsf(b->angle) > 3.141593f || !isfinite(b->angular_velocity) ||
-        fabsf(b->angular_velocity) > .5f || (b->motion_flags & ~3u) ||
+        fabsf(b->angular_velocity) > .5f || (b->motion_flags & ~7u) ||
         b->motion_ready > 1 || (!pixel && b->piece_count > DC_GPU_BODY_PIECES))
         return false;
     if (b->reserved[0] != 0 && b->reserved[0] != DC_GPU_STRUCTURAL_TAG &&

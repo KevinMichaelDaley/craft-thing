@@ -208,6 +208,8 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
         okay=dc_color_records_valid((const float*)(colors+c),DC_CHUNK_CELLS*2);
     dc_checkpoint_channels_t channels={0};
     if(okay) okay=dc_checkpoint_channels_collect(gpu,chunks,header.reserved[0],&channels,err,cap);
+    if(okay) okay=fr_gpu_reactive_checkpoint_mass_valid(channels.reactive_length?&channels.reactive:NULL,
+        payload,pixels,header.reserved[1],err,cap);
     if (okay)
         header.checksum = checksum(header, payload, pixels, chunks,body_colors,colors,&channels);
     FILE *file = okay ? fopen(temporary, "wb") : NULL;
