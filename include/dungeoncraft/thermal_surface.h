@@ -26,6 +26,13 @@ float fr_thermal_surface_K(float bulk,float gas,float core,float convection,floa
     }
     return .5*(low+high);
 }
+#ifdef __STDC_VERSION__
+static inline
+#endif
+float fr_surface_reaction_power(float previous,float energy,float seconds) {
+    (void)previous;
+    return energy/seconds;
+}
 #undef FR_SURFACE_MAX
 #undef FR_SURFACE_SQRT
 #endif

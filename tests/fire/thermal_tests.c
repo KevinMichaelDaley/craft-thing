@@ -102,7 +102,16 @@ static void test_blackbody_temperature_power_and_magic_override(void) {
     ASSERT_TRUE(fabsf(magic[0]-.05f)<1e-6f&&fabsf(magic[2]-.5f)<1e-6f);
     PASS();
 }
+static void test_surface_reaction_power_survives_subquantum_frames_and_decays(void) {
+    char err[256]={0};float power=fr_surface_reaction_power(0.f,.1f,.01f);
+    ASSERT_TRUE(power>0.f&&power<10.f);
+    float next=fr_surface_reaction_power(power,0.f,.01f);
+    ASSERT_TRUE(next>0.f&&next<power);
+    for(int i=0;i<1000;i++) next=fr_surface_reaction_power(next,0.f,.01f);
+    ASSERT_TRUE(next<1e-8f);PASS();
+}
 int main(void) {
+    RUN(test_surface_reaction_power_survives_subquantum_frames_and_decays);
     RUN(test_blackbody_temperature_power_and_magic_override);
     RUN(test_finite_radiance_heats_the_boundary_without_requiring_a_hot_bulk);
     RUN(test_equilibrium_boundary_cannot_invent_a_hot_surface);
