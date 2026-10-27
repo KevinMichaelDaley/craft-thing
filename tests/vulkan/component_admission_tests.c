@@ -2,6 +2,8 @@
 #include "reactive_cell_gpu_tests.c"
 #undef main
 #include "ferrum/fire/thermal_gpu.h"
+#include "ferrum/fire/combustion_gpu.h"
+#include "ferrum/fire/gas_gpu.h"
 static void test_cold_rigid_admission_retains_pose_and_reactive_ownership(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     for(uint32_t y=10;y<12;y++) for(uint32_t x=10;x<13;x++) chunk->cells[y*64+x].material=DC_MATERIAL_WOOD;
@@ -63,4 +65,22 @@ static void test_rigid_terrain_contact_exchanges_a_paired_heat_budget(void) {
     ASSERT_TRUE(fabs((double)a.state.thermal_energy+(double)b.state.thermal_energy-(double)hot.thermal_energy-(double)cold.thermal_energy)<.01);
     free(chunk);dc_gpu_destroy(g);PASS();
 }
-int main(void) {RUN(test_cold_rigid_admission_retains_pose_and_reactive_ownership);RUN(test_rigid_terrain_contact_exchanges_a_paired_heat_budget);printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
+static void test_rigid_ember_transfers_real_heat_into_surrounding_gas(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    chunk->cells[650].material=DC_MATERIAL_WOOD;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t hot;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,700,950,&hot,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,650,&hot,err,sizeof(err))&&dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err)));
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},.heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&fr_combustion_gpu_enable(g,err,sizeof(err)));
+    ASSERT_TRUE(fr_combustion_gpu_step(g,1.f/60.f,err,sizeof(err)));
+    fr_reactive_record_t a;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0,0,&a,&found,err,sizeof(err))&&found);
+    float temperature=0;ASSERT_TRUE(fr_reactive_state_temperature(&a.state,&temperature,err,sizeof(err)));
+    ASSERT_TRUE(temperature<700&&temperature>293.15f);
+    fr_gas_state_t *gas=calloc(4096,sizeof(*gas));ASSERT_TRUE(gas&&fr_gas_gpu_read_chunk(g,0,gas,4096,err,sizeof(err)));
+    fr_gas_thermo_t air;ASSERT_TRUE(fr_gas_thermodynamics(&model,gas+651,1,&air,err,sizeof(err)));
+    ASSERT_TRUE(air.temperature_K>293.15);
+    free(gas);free(chunk);dc_gpu_destroy(g);PASS();
+}
+int main(void) {RUN(test_cold_rigid_admission_retains_pose_and_reactive_ownership);RUN(test_rigid_terrain_contact_exchanges_a_paired_heat_budget);RUN(test_rigid_ember_transfers_real_heat_into_surrounding_gas);printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
