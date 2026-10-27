@@ -259,6 +259,7 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
     uint s=FR_ENTRY_STATE,m=entry.words[s],wood_fuel=entry.words[s+9u];
     if((entry.words[s+13u]|entry.words[s+14u]|entry.words[s+15u]|entry.words[s+16u])!=0u) return;
     bool char_stage=wood_fuel==0u;uint fuel=char_stage?entry.words[s+10u]:wood_fuel;
+    if(owner==2u&&char_stage&&fuel>0u) atomicAdd(hud[25],1u);
     uint profile=char_stage?12u:m;
     float capacity=((float(wood_fuel)+float(entry.words[s+11u]))*coefficient(m,5u)+
         float(entry.words[s+10u])*coefficient(12u,5u)+float(entry.words[s+12u])*coefficient(3u,5u))/65536.;
@@ -289,6 +290,7 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
     entry.words[s+27u]=floatBitsToUint(min(requested-floor(requested),.99999994));
     uint reacted=uint(floor(min(min(float(fuel),requested),oxygen_fp/demand)));
     float used=float(reacted)*demand;if(reacted==0u||used>oxygen_fp) return;
+    if(owner==2u&&char_stage) atomicAdd(hud[26],reacted);
     uint initial=uint(round(float(entry.words[s+8u])*coefficient(profile,9u))),consumed=initial>=fuel?initial-fuel:0u;
     uvec3 products=solid_products(consumed+reacted,profile)-solid_products(consumed,profile);
     uint char_mass=products.x,ash=products.y,soot=products.z;
@@ -330,14 +332,19 @@ void choose_body_target(uint index) {
     ivec2 p=body_parcel_cell(body,piece);float best=-1.;uint chosen=0xffffffffu;
     for(uint d=0u;d<4u;d++) {
         ivec2 q=p+directions[d];uint at=atlas(q);if(!gas_cell(at)) continue;
-        uint screen=uint(q.y)*params.width+uint(q.x);
-        if(floatBitsToUint(samples[screen+params.width*params.height].x)==4u) continue;
         Gas gas=local_gas(at);float mass=gas_mass(gas);if(mass<=0.||gas.geometry.y<=0.) continue;
         float fraction=gas.species.x/mass,supply=gas.species.x*clamp((fraction-float(FR_COMBUSTION_EXTINGUISH_OXYGEN))/
             float(FR_COMBUSTION_AMBIENT_OXYGEN-FR_COMBUSTION_EXTINGUISH_OXYGEN),0.,1.);
         if(supply>best) {best=supply;chosen=at;}
     }
     scratch.words[target_word]=chosen;
+    if(e.words[FR_ENTRY_STATE+10u]>0u&&e.words[FR_ENTRY_STATE+9u]==0u) {
+        if(chosen!=0xffffffffu) {atomicAdd(hud[22],1u);Gas gas=local_gas(chosen);float mass=gas_mass(gas);
+            if(mass>0.&&gas.species.x/mass>.12) atomicAdd(hud[23],1u);
+            atomicMax(hud[27],floatBitsToUint(max(gas.species.x,0.)));}
+        if(all(greaterThanEqual(p,ivec2(0)))&&all(lessThan(p,ivec2(params.width,params.height)))&&
+            thermal_occupancy[uint(p.y)*params.width+uint(p.x)]==body.id) atomicAdd(hud[24],1u);
+    }
     if(chosen==0xffffffffu) e.words[FR_ENTRY_STATE+1u]&=~2u;
 }
 void burn_body_neighbor(ivec2 p,uint gas_at,inout Gas gas,inout float admitted,inout float temperature,inout uint sources) {
@@ -392,6 +399,7 @@ void main() {
     }
     if(params.unused.x==5u) {contact_apply(i,at);return;}
     if(params.unused.x==3u) {
+        if(i==0u) for(uint j=22u;j<32u;j++) hud[j]=0u;
         if(at!=0xffffffffu) emission[at]=vec4(0.,0.,uintBitsToFloat(slot_generation(at)),0.);
         uvec2 address;uint chosen=0xffffffffu;
         if(solid_address(at,address)) {

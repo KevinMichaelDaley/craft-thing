@@ -1,6 +1,9 @@
 #ifndef FERRUM_FIRE_COMBUSTION_GPU_H
 #define FERRUM_FIRE_COMBUSTION_GPU_H
 #include "dungeoncraft/gpu.h"
+/** Cold bounded diagnostic: copies14 GPU counters for authored bonfire progress
+ * and selected BODY exposure. Does not read parcel, cell or component lists. */
+bool fr_combustion_gpu_bonfire_counters(dc_gpu_t *gpu,uint32_t out[14]);
 /** Enable readable bonfire presentation feedback without CPU field readback. */
 bool fr_combustion_gpu_hud(dc_gpu_t *gpu,bool enabled,bool wet,bool paused,uint32_t x,uint32_t y);
 /** Enable ordinary terrain combustion against existing thermal and gas owners.
