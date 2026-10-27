@@ -17,7 +17,7 @@ static void test_real_structural_pits_and_independent_rigid_stack(void) {
         const dc_bonfire_piece_t *b=p.pieces+i;uint32_t side=b->wet?1:0;
         ASSERT_TRUE(b->width>0&&b->height>0&&b->x>=142+side*192&&b->x+b->width<=178+side*192&&b->y+b->height<93);
         if(b->kind==DC_BONFIRE_LOG) {logs[side]++;ASSERT_TRUE(b->temperature_K<294&&b->y<88);}
-        else if(b->kind==DC_BONFIRE_STARTER) {starters[side]++;ASSERT_TRUE(b->temperature_K>1000&&b->width*b->height<=4);}
+        else if(b->kind==DC_BONFIRE_STARTER) {starters[side]++;ASSERT_TRUE(b->temperature_K>1000&&b->width*b->height>=8&&b->width*b->height<=12);}
         else {sticks[side]++;ASSERT_TRUE(b->temperature_K<294&&b->width*b->height>=6&&b->height<=2&&b->y>=89);}
         for(uint32_t j=0;j<i;j++) {
             const dc_bonfire_piece_t *a=p.pieces+j;ASSERT_TRUE(a->object!=b->object);
