@@ -10,14 +10,20 @@ float radiant_available(uint index) {
 }
 float radiant_coefficient(uint first,uint second) {
     ivec2 a=ivec2(first%params.width,first/params.width),b=ivec2(second%params.width,second/params.width);
-    float distance=float(abs(a.x-b.x)+abs(a.y-b.y));
-    return float(FR_THERMAL_STEFAN_BOLTZMANN*FR_THERMAL_FACE_AREA*FR_THERMAL_SURFACE_EMISSIVITY)/(3.14159265*distance*distance);
+    vec2 displacement=vec2(a-b);float projection=a.x!=b.x&&a.y!=b.y?.5:1.;
+    return projection*float(FR_THERMAL_STEFAN_BOLTZMANN*FR_THERMAL_FACE_AREA*FR_THERMAL_SURFACE_EMISSIVITY)/(3.14159265*dot(displacement,displacement));
 }
 vec2 radiant_ray(uint index,ivec2 direction) {
     if(samples[index].y<=0.) return vec2(0);
     ivec2 p=ivec2(index%params.width,index/params.width);
     for(uint distance=1u;distance<=FR_THERMAL_RADIATION_RADIUS;distance++) {
         ivec2 q=p+direction*int(distance);if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(params.width,params.height)))) break;
+        if(dot(vec2(q-p),vec2(q-p))>float(FR_THERMAL_RADIATION_RADIUS*FR_THERMAL_RADIATION_RADIUS)) break;
+        if(direction.x!=0&&direction.y!=0) {
+            ivec2 previous=q-direction,a=previous+ivec2(direction.x,0),b=previous+ivec2(0,direction.y);
+            uint ai=uint(a.y)*params.width+uint(a.x),bi=uint(b.y)*params.width+uint(b.x);
+            if((samples[ai].y>0.||thermal_occupancy[ai]!=0u)&&(samples[bi].y>0.||thermal_occupancy[bi]!=0u)) break;
+        }
         uint other=uint(q.y)*params.width+uint(q.x);
         if(samples[other].y<=0.) {if(thermal_occupancy[other]!=0u) break;continue;}
         if(distance==1u&&thermal_occupancy[index]==thermal_occupancy[other]) break;
@@ -37,15 +43,18 @@ void radiant_add_pair(uint first,uint second,float heat,inout float outgoing,ino
 }
 void radiant_apply(uint index) {
     if(samples[index].y<=0.) return;
-    float heat=-fluxes[index].x-fluxes[index].y,outgoing=0.,incoming=0.;
-    for(uint axis=0u;axis<2u;axis++) {
-        uint endpoint=floatBitsToUint(fluxes[index][axis+2u]);
-        if(endpoint>0u) radiant_add_pair(index,endpoint-1u,fluxes[index][axis],outgoing,incoming);
-        uint coordinate=axis==0u?index%params.width:index/params.width,stride=axis==0u?1u:params.width;
-        for(uint distance=1u;distance<=min(coordinate,FR_THERMAL_RADIATION_RADIUS);distance++) {
-            uint other=index-distance*stride;
-            if(floatBitsToUint(fluxes[other][axis+2u])!=index+1u) continue;
-            heat+=fluxes[other][axis];radiant_add_pair(index,other,fluxes[other][axis],outgoing,incoming);
+    float heat=0.,outgoing=0.,incoming=0.;ivec2 p=ivec2(index%params.width,index/params.width);
+    const ivec2 directions[4]=ivec2[4](ivec2(1,0),ivec2(0,1),ivec2(1,1),ivec2(-1,1));
+    for(uint axis=0u;axis<4u;axis++) {
+        uint bank=(axis/2u)*params.width*params.height,component=axis%2u;vec4 own=fluxes[index+bank];
+        heat-=own[component];uint endpoint=floatBitsToUint(own[component+2u]);
+        if(endpoint>0u) radiant_add_pair(index,endpoint-1u,own[component],outgoing,incoming);
+        for(uint distance=1u;distance<=FR_THERMAL_RADIATION_RADIUS;distance++) {
+            ivec2 q=p-directions[axis]*int(distance);
+            if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(params.width,params.height)))) break;
+            uint other=uint(q.y)*params.width+uint(q.x);vec4 pair=fluxes[other+bank];
+            if(floatBitsToUint(pair[component+2u])!=index+1u) continue;
+            heat+=pair[component];radiant_add_pair(index,other,pair[component],outgoing,incoming);
         }
     }
     uint kind=floatBitsToUint(samples[index+params.width*params.height].x);

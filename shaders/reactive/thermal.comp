@@ -165,7 +165,11 @@ void main() {
             vec4 surface=cache.values[floatBitsToUint(metadata.y)*3u+2u];
             if(floatBitsToUint(surface.x)==floatBitsToUint(metadata.w)&&surface.y>0.) value.x=surface.y*value.y;}
         samples[index]=value;samples[index+params.width*params.height]=metadata;}return;}
-    if(params.phase==16u) {vec2 xray=radiant_ray(index,ivec2(1,0)),yray=radiant_ray(index,ivec2(0,1));fluxes[index]=vec4(xray.x,yray.x,xray.y,yray.y);return;}
+    if(params.phase==16u) {
+        vec2 xray=radiant_ray(index,ivec2(1,0)),yray=radiant_ray(index,ivec2(0,1));fluxes[index]=vec4(xray.x,yray.x,xray.y,yray.y);
+        vec2 right=radiant_ray(index,ivec2(1,1)),left=radiant_ray(index,ivec2(-1,1));
+        fluxes[index+params.width*params.height]=vec4(right.x,left.x,right.y,left.y);return;
+    }
     if(params.phase==17u) {radiant_apply(index);return;}
     if(params.phase==0u) {samples[index]=sample_at(index);samples[index+params.width*params.height]=metadata_at(index);}
     if(params.phase==5u) {

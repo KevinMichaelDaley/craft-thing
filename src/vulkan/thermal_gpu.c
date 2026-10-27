@@ -184,7 +184,7 @@ static bool create(dc_gpu_t *g,struct fr_reactive_gpu *reactive,struct fr_therma
     if(t->groups_y>props.limits.maxComputeWorkGroupCount[1]||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)t->profile_count*sizeof(fr_reactive_profile_t),true,&t->profiles,err,cap)||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,true,&t->samples,err,cap)||
-       !dc_gpu_address_buffer_create(g,(VkDeviceSize)count*16u,true,&t->fluxes,err,cap)||
+       !dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,true,&t->fluxes,err,cap)||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*4u,true,&t->water,err,cap)||
        !dc_gpu_address_buffer_create(g,16,true,&t->probe,err,cap)) {destroy(g,t);return false;}
     ((float *)t->probe.mapped)[0]=FR_THERMAL_PROBE_CAPACITY*(FR_THERMAL_PROBE_K-FR_THERMAL_AMBIENT_K);
