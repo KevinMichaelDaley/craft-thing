@@ -11,14 +11,14 @@
 #include "ferrum/structural/gpu.h"
 #include "../../src/vulkan/gas_gpu_state.h"
 
-static void terrain_combustion(bool practical,bool char_stage) {
+static void terrain_combustion(bool practical,bool char_stage,uint32_t material) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     uint32_t at=20u*64u+20u;
-    chunk->cells[at]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
+    chunk->cells[at]=(dc_cell_t){.material=material,.flags=DC_CELL_LOADED_TERRAIN};
     ASSERT_TRUE(context(&g,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     fr_reactive_state_t wood;
-    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,800,100,&wood,err,sizeof(err)));
+    ASSERT_TRUE(fr_reactive_state_default(material,39322,0,800,100,&wood,err,sizeof(err)));
     if(char_stage) {
         wood.char_mass_fp=wood.fuel_mass_fp;wood.fuel_mass_fp=0;
         wood.thermal_energy=(float)(fr_reactive_state_heat_capacity(&wood)*800.);
@@ -80,9 +80,10 @@ static void terrain_combustion(bool practical,bool char_stage) {
     ASSERT_EQ(memcmp(&result,&paused,sizeof(result)),0);
     free(before);free(after);free(chunk);dc_gpu_destroy(g);PASS();
 }
-static void test_displayed_terrain_combustion_debits_real_fuel_and_oxygen(void) {terrain_combustion(false,false);}
-static void test_sparse_owner_combustion_uses_the_live_gas_bank(void) {terrain_combustion(true,false);}
-static void test_retained_char_can_finish_burning_on_the_gpu(void) {terrain_combustion(true,true);}
+static void test_displayed_terrain_combustion_debits_real_fuel_and_oxygen(void) {terrain_combustion(false,false,DC_MATERIAL_WOOD);}
+static void test_sparse_owner_combustion_uses_the_live_gas_bank(void) {terrain_combustion(true,false,DC_MATERIAL_WOOD);}
+static void test_retained_char_can_finish_burning_on_the_gpu(void) {terrain_combustion(true,true,DC_MATERIAL_WOOD);}
+static void test_dry_leaf_tinder_uses_the_existing_finite_material_profile(void) {terrain_combustion(true,false,DC_MATERIAL_LEAVES);}
 static void test_spent_terrain_becomes_loose_saved_ash_without_losing_mass(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     uint32_t at=20u*64u+20u;
@@ -234,6 +235,10 @@ static void test_roof_blocks_and_side_vent_routes_the_physical_flame(void) {
 #include "combustion_contact_cases.h"
 #include "bonfire_autostart_cases.h"
 int main(int argc,char **argv) {
+    if(argc==2&&strcmp(argv[1],"--tinder")==0) {
+        RUN(test_dry_leaf_tinder_uses_the_existing_finite_material_profile);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
     if(argc==2&&strcmp(argv[1],"--autostart")==0) {
         RUN(test_finite_ember_automatically_establishes_the_dry_bonfire);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
@@ -256,6 +261,7 @@ int main(int argc,char **argv) {
     }
     RUN(test_displayed_terrain_combustion_debits_real_fuel_and_oxygen);
     RUN(test_sparse_owner_combustion_uses_the_live_gas_bank);
+    RUN(test_dry_leaf_tinder_uses_the_existing_finite_material_profile);
     RUN(test_retained_char_can_finish_burning_on_the_gpu);
     RUN(test_spent_terrain_becomes_loose_saved_ash_without_losing_mass);
     RUN(test_flame_emission_requires_local_transported_hot_fuel_and_oxygen);
