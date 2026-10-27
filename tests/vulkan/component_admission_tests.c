@@ -201,6 +201,7 @@ static void test_thin_water_contact_accumulates_subquantum_wetting(void) {
     free(chunk);dc_gpu_destroy(g);PASS();
 }
 #include "body_ash_cases.h"
+#include "constructed_heat_cases.h"
 int main(int argc,char **argv) {
     if(argc==2&&strcmp(argv[1],"--burn")==0) RUN(test_rigid_combustion_consumes_authoritative_body_fuel);
     else if(argc==2&&strcmp(argv[1],"--radiation")==0) RUN(test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_heat);
@@ -209,6 +210,7 @@ int main(int argc,char **argv) {
     else if(argc==2&&strcmp(argv[1],"--thin-water")==0) RUN(test_thin_water_contact_accumulates_subquantum_wetting);
     else if(argc==2&&strcmp(argv[1],"--ash")==0) RUN(test_spent_rigid_rest_becomes_loose_ash_and_splits_supported_geometry);
     else if(argc==2&&strcmp(argv[1],"--ash-blocked")==0) RUN(test_full_particle_slots_retain_spent_rigid_inventory);
+    else if(argc==2&&strcmp(argv[1],"--stone")==0) RUN(test_constructed_stone_owns_heat_without_changing_its_collider_or_support);
     else {
         RUN(test_cold_rigid_admission_retains_pose_and_reactive_ownership);
         RUN(test_rigid_terrain_contact_exchanges_a_paired_heat_budget);
