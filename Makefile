@@ -1973,6 +1973,7 @@ build/component_admission_tests: tests/vulkan/component_admission_tests.c $(GPU_
 build/bonfire_mechanics_tests: tests/vulkan/bonfire_mechanics_tests.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/shaders/combustion.comp.spv: shaders/reactive/bonfire_hud.glsl
+build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: shaders/reactive/body_surface_feedback.glsl
 build/shaders/body_combustion.comp.spv: shaders/reactive/combustion.comp shaders/reactive/world_body.glsl shaders/reactive/bonfire_hud.glsl
 	$(GLSLANG) -DFR_BODY_REACTIONS=1 -V --target-env vulkan1.3 $< -o $@
 build/thermal_gpu.o build/performance/src/vulkan/thermal_gpu.o: build/shaders/body_combustion.comp.spv

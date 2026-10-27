@@ -76,7 +76,7 @@ static bool inspect_logs(dc_level_view_t *view,fixture_log_t logs[6],bool initia
 }
 static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
     char err[256]={0},directory[]="build/rigid_bonfire_acceptance_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
-    printf("FULLSCREEN rigid bonfire: 30s wall bound; finite ember; no probe or scripted ignition\n");fflush(stdout);
+    printf("FULLSCREEN rigid bonfire: %.0fs wall bound; finite ember; no probe or scripted ignition\n",wall_bound);fflush(stdout);
     dc_level_view_t *view=dc_level_view_create_bonfire(directory,7,err,sizeof(err));ASSERT_TRUE(view);
     signal(SIGINT,stop_run);signal(SIGTERM,stop_run);
     fixture_log_t logs[6]={0};float ember=0;

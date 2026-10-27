@@ -183,7 +183,9 @@ bool burning(uint at) {
         (entry.words[FR_ENTRY_STATE+1u]&2u)!=0u&&
         (entry.words[FR_ENTRY_STATE+9u]!=0u||entry.words[FR_ENTRY_STATE+10u]!=0u);
 }
+#include "body_surface_feedback.glsl"
 void feedback(uint index,ivec2 p,uint at) {
+    body_surface_feedback(index);
     if(at!=0xffffffffu&&!gas_cell(at)) {
         uvec2 handle=Handles(uvec2(root[6],root[7])).values[at];
         if(handle.y!=0u&&handle.x<root[2]) {
