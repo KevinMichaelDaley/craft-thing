@@ -235,7 +235,7 @@ build/rigid_solver_tests: tests/vulkan/rigid_solver_tests.c $(GPU_OBJ) $(CHUNK_O
 .PHONY: all test test_ui test_ui_long test_rigid_dynamics test_presentation clean shaders
 all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
 
-THERMAL_BENCH_SRC = src/app/thermal_bench.c src/app/bonfire_scene.c
+THERMAL_BENCH_SRC = src/app/thermal_bench.c src/app/bonfire_scene.c src/app/bonfire_plan.c
 build/bonfire_plan_tests: tests/app/bonfire_plan_tests.c src/app/bonfire_plan.c src/app/bonfire.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/bonfire_plan.c -o $@ $(LDLIBS)
 build/bonfire_scene_tests: tests/app/bonfire_scene_tests.c $(THERMAL_BENCH_SRC) src/fire/reactive_state.c src/fire/reactive_snapshot.c src/fire/material_profile.c src/fire/reactive_chunk.c
@@ -1943,7 +1943,7 @@ build/thermal_checkpoint_display_tests: tests/vulkan/thermal_checkpoint_gpu_test
 .PHONY: test_heat_bench
 THERMAL_DISPLAY_TESTS = build/thermal_gpu_display_tests build/thermal_water_display_tests build/thermal_admission_display_tests build/thermal_feedback_display_tests build/thermal_bench_display_tests build/thermal_checkpoint_display_tests build/reactive_checkpoint_display_tests
 build/combustion_gpu_display_tests: tests/vulkan/combustion_gpu_tests.c tests/vulkan/combustion_vent_cases.h src/fire/combustion_gas.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< src/fire/combustion_gas.c src/app/bonfire_scene.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< src/fire/combustion_gas.c src/app/bonfire_scene.c src/app/bonfire_plan.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 test_ui test_quarter_native: $(THERMAL_DISPLAY_TESTS)
 test_heat_bench: build/thermal_tests build/thermal_stream_tests build/thermal_precision_tests $(THERMAL_DISPLAY_TESTS)
 	./build/thermal_tests

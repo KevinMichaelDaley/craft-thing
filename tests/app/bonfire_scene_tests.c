@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "../../src/app/bonfire.h"
@@ -7,73 +8,40 @@ static int g_pass,g_fail;
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() g_pass++
-static void test_dry_and_wet_piles_have_real_fuel_loaded_flags_and_colors(void) {
+static void test_only_ground_is_terrain_and_all_fuel_is_rigid_staging(void) {
     char err[256]={0};dc_chunk_coord_t coords[2]={{2,1},{5,1}};
     dc_thermal_bench_chunk_t *chunks=calloc(2,sizeof(*chunks));ASSERT_TRUE(chunks);
     ASSERT_TRUE(dc_bonfire_build(coords,2,chunks,err,sizeof(err)));
-    uint32_t wood[2]={0},wet[2]={0},stone[2]={0};
-    for(uint32_t side=0;side<2;side++) for(uint32_t i=0;i<4096;i++) {
-        dc_cell_t cell=chunks[side].chunk->cells[i];if(!cell.material) continue;
-        ASSERT_TRUE((cell.flags&DC_CELL_LOADED_TERRAIN)!=0);
-        ASSERT_TRUE(chunks[side].colors->terrain[i][3]>0);
-        if(cell.material==DC_MATERIAL_WOOD) wood[side]++;
-        if(cell.material==DC_MATERIAL_STONE) stone[side]++;
-    }
-    for(uint32_t side=0;side<2;side++) for(uint32_t i=0;i<chunks[side].reactive.count;i++) {
-        fr_reactive_state_t state=chunks[side].reactive.attachments[i].record.state;
-        if(state.material==DC_MATERIAL_WOOD) {
-            ASSERT_TRUE(state.fuel_mass_fp>0);if(state.bound_water_fp>0) wet[side]++;
+    for(uint32_t side=0;side<2;side++) {
+        uint32_t wood=0;
+        for(uint32_t i=0;i<4096;i++) {
+            dc_cell_t cell=chunks[side].chunk->cells[i];uint32_t y=64+i/64;
+            if(!cell.material) continue;
+            ASSERT_TRUE(chunks[side].colors->terrain[i][3]>0);
+            if(y>=96) {ASSERT_EQ(cell.material,DC_MATERIAL_STONE);ASSERT_TRUE(cell.flags&DC_CELL_LOADED_TERRAIN);}
+            else {ASSERT_EQ(cell.material,DC_MATERIAL_WOOD);ASSERT_EQ(cell.flags,0);wood++;}
         }
+        ASSERT_EQ(wood,123);
     }
-    ASSERT_TRUE(wood[0]>0&&wood[1]>0&&stone[0]>0&&stone[1]>0);
-    ASSERT_EQ(wet[0],0);ASSERT_EQ(wet[1],wood[1]);
     dc_thermal_bench_release(chunks,2);PASS();
 }
-static void test_kindling_has_airflow_and_one_finite_ember_but_no_lit_logs(void) {
-    char err[256]={0};dc_chunk_coord_t coord={2,1};
-    dc_thermal_bench_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
-    ASSERT_TRUE(dc_bonfire_build(&coord,1,chunk,err,sizeof(err)));
-    uint32_t embers=0,tinder=0,contacting_tinder=0,kindling_faces=0;double starting_energy=0;
-    uint8_t reachable[4096]={0};uint32_t queue[4096],head=0,tail=0;
-    for(uint32_t x=0;x<64;x++) if(chunk->chunk->cells[x].material==DC_MATERIAL_AIR) {queue[tail++]=x;reachable[x]=1;}
-    while(head<tail) {
-        uint32_t at=queue[head++];int x=at%64,y=at/64;
-        const int dx[4]={-1,1,0,0},dy[4]={0,0,-1,1};
-        for(uint32_t face=0;face<4;face++) {
-            int xx=x+dx[face],yy=y+dy[face];if(xx<0||xx>=64||yy<0||yy>=64) continue;
-            uint32_t next=(uint32_t)(yy*64+xx);
-            if(!reachable[next]&&chunk->chunk->cells[next].material==DC_MATERIAL_AIR) {reachable[next]=1;queue[tail++]=next;}
-        }
+static void test_cold_logs_wet_control_and_finite_starter_retain_real_state(void) {
+    char err[256]={0};dc_chunk_coord_t coords[2]={{2,1},{5,1}};dc_bonfire_plan_t plan;ASSERT_TRUE(dc_bonfire_plan(&plan));
+    dc_thermal_bench_chunk_t *chunks=calloc(2,sizeof(*chunks));ASSERT_TRUE(chunks&&dc_bonfire_build(coords,2,chunks,err,sizeof(err)));
+    uint32_t hot[2]={0},wet[2]={0};
+    for(uint32_t side=0;side<2;side++) for(uint32_t j=0;j<chunks[side].reactive.count;j++) {
+        fr_reactive_attachment_t *a=chunks[side].reactive.attachments+j;fr_reactive_state_t *s=&a->record.state;
+        if(s->material!=DC_MATERIAL_WOOD) continue;
+        uint32_t x=(uint32_t)coords[side].x*64+a->local_index%64,y=64+a->local_index/64;const dc_bonfire_piece_t *piece=NULL;
+        for(uint32_t k=0;k<plan.count;k++) if(x>=plan.pieces[k].x&&x<plan.pieces[k].x+plan.pieces[k].width&&y>=plan.pieces[k].y&&y<plan.pieces[k].y+plan.pieces[k].height) piece=plan.pieces+k;
+        ASSERT_TRUE(piece&&s->fuel_mass_fp>0&&!(s->flags&FR_REACTIVE_FLAMING));float temperature=0;
+        ASSERT_TRUE(fr_reactive_state_temperature(s,&temperature,err,sizeof(err))&&fabsf(temperature-piece->temperature_K)<.001f);
+        if(piece->kind==DC_BONFIRE_STARTER) {hot[side]++;ASSERT_EQ(s->bound_water_fp,0);}
+        else if(side) {ASSERT_TRUE(s->bound_water_fp>0);wet[side]++;}
+        else ASSERT_EQ(s->bound_water_fp,0);
     }
-    for(uint32_t i=0;i<chunk->reactive.count;i++) {
-        fr_reactive_attachment_t *a=chunk->reactive.attachments+i;fr_reactive_state_t *s=&a->record.state;
-        float temperature=0;ASSERT_TRUE(fr_reactive_state_temperature(s,&temperature,err,sizeof(err)));
-        ASSERT_TRUE(!(s->flags&FR_REACTIVE_FLAMING));
-        if(s->material==DC_MATERIAL_WOOD) ASSERT_TRUE(temperature<294);
-        if(s->material==DC_MATERIAL_LEAVES) {
-            tinder++;ASSERT_TRUE(temperature<294&&s->bound_water_fp==0);
-            uint32_t at=a->local_index;bool air=false,wood=false;
-            const int neighbors[4]={(int)at-1,(int)at+1,(int)at-64,(int)at+64};
-            for(uint32_t face=0;face<4;face++) if(neighbors[face]>=0&&neighbors[face]<4096) {
-                uint32_t neighbor=(uint32_t)neighbors[face];
-                if(reachable[neighbor]) air=true;
-                if(chunk->chunk->cells[neighbor].material==DC_MATERIAL_WOOD) wood=true;
-            }
-            ASSERT_TRUE(air);if(wood) contacting_tinder++;
-        }
-        if(s->material==DC_MATERIAL_CHAR) {
-            embers++;ASSERT_TRUE(s->char_mass_fp>0&&temperature>1000&&temperature<1600);
-            starting_energy+=s->thermal_energy;
-        }
-    }
-    for(uint32_t y=26;y<28;y++) for(uint32_t x=24;x<40;x++) {
-        uint32_t at=y*64+x;
-        if(chunk->chunk->cells[at].material==DC_MATERIAL_WOOD&&
-           (chunk->chunk->cells[at-1].material==DC_MATERIAL_AIR||chunk->chunk->cells[at+1].material==DC_MATERIAL_AIR)) kindling_faces++;
-    }
-    ASSERT_EQ(embers,6);ASSERT_TRUE(tinder>=4&&contacting_tinder>=2&&starting_energy>0&&starting_energy<4000&&kindling_faces>=4);
-    dc_thermal_bench_release(chunk,1);PASS();
+    ASSERT_EQ(hot[0],3);ASSERT_EQ(hot[1],3);ASSERT_EQ(wet[1],120);
+    dc_thermal_bench_release(chunks,2);PASS();
 }
-int main(void) {RUN(test_dry_and_wet_piles_have_real_fuel_loaded_flags_and_colors);
-    RUN(test_kindling_has_airflow_and_one_finite_ember_but_no_lit_logs);
+int main(void) {RUN(test_only_ground_is_terrain_and_all_fuel_is_rigid_staging);RUN(test_cold_logs_wet_control_and_finite_starter_retain_real_state);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
