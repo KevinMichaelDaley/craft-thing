@@ -183,7 +183,7 @@ build/shaders/structural_carve.comp.spv: shaders/sim/structural.comp $(wildcard 
 build/shaders/runtime/structural_carve.comp.spv: shaders/sim/structural.comp $(wildcard shaders/sim/*.glsl)
 	mkdir -p build/shaders/runtime
 	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -DDC_CARVE_MODULE=1 -DDC_STRUCTURAL_LANES=128 -V --target-env vulkan1.3 $< -o $@
-build/shaders/structural_carve.comp.spv build/shaders/runtime/structural_carve.comp.spv: include/dungeoncraft/body_storage_layout.h include/dungeoncraft/material_density.h include/dungeoncraft/terrain_flags.h include/dungeoncraft/leaf_material.h
+build/shaders/structural_carve.comp.spv build/shaders/runtime/structural_carve.comp.spv: include/dungeoncraft/body_storage_layout.h include/dungeoncraft/material_density.h include/dungeoncraft/terrain_flags.h include/dungeoncraft/leaf_material.h include/dungeoncraft/body_ash_layout.h
 build/shaders/structural.comp.spv: shaders/sim/leaf_debris.glsl
 build/shaders/structural.comp.spv build/shaders/scene.comp.spv: shaders/sim/leaf_color.glsl include/dungeoncraft/leaf_material.h
 build/shaders/mpm.comp.spv: shaders/sim/mpm_terrain_support.glsl shaders/sim/rigid_body.glsl include/dungeoncraft/terrain_flags.h
@@ -1968,12 +1968,13 @@ build/combustion_gpu_display_tests: tests/vulkan/combustion_containment_cases.h
 build/combustion_gpu_display_tests: tests/vulkan/combustion_contact_cases.h
 build/combustion_gpu_display_tests: tests/vulkan/bonfire_autostart_cases.h src/app/bonfire_scene.c
 build/combustion_gpu_display_tests: tests/vulkan/combustion_oxygen_cases.h
-build/component_admission_tests: tests/vulkan/component_admission_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(REACTIVE_STATE_SRC) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
+build/component_admission_tests: tests/vulkan/component_admission_tests.c tests/vulkan/body_ash_cases.h $(GPU_OBJ) $(CHUNK_OBJ) $(REACTIVE_STATE_SRC) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/bonfire_mechanics_tests: tests/vulkan/bonfire_mechanics_tests.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/shaders/combustion.comp.spv: shaders/reactive/bonfire_hud.glsl
 build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: shaders/reactive/body_surface_feedback.glsl
+build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: include/dungeoncraft/body_ash_layout.h
 build/shaders/body_combustion.comp.spv: shaders/reactive/combustion.comp shaders/reactive/world_body.glsl shaders/reactive/bonfire_hud.glsl
 	$(GLSLANG) -DFR_BODY_REACTIONS=1 -V --target-env vulkan1.3 $< -o $@
 build/thermal_gpu.o build/performance/src/vulkan/thermal_gpu.o: build/shaders/body_combustion.comp.spv
@@ -1986,7 +1987,7 @@ build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: includ
 build/thermal_tests: include/dungeoncraft/thermal_surface.h
 build/combustion_body_feedback_display_tests: tests/vulkan/combustion_body_feedback_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
-build/rigid_thermal_display_tests: tests/vulkan/component_admission_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
+build/rigid_thermal_display_tests: tests/vulkan/component_admission_tests.c tests/vulkan/body_ash_cases.h $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/thermal_gpu.o build/performance/src/vulkan/thermal_gpu.o: build/shaders/combustion.comp.spv
 .PHONY: test_bonfire

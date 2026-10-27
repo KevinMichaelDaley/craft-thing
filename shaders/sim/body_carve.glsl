@@ -1,4 +1,6 @@
 /* Brush transactions reuse the fracture reservation/publication gate. */
+shared uint carve_changed,carve_pending,carve_hits,carve_leaf_hits,carve_cursor,carve_candidate;
+#include "body_ash.glsl"
 #ifndef DC_CARVE_REUSE_CLASSIFICATION
 #define DC_CARVE_REUSE_CLASSIFICATION 1
 #endif
@@ -91,7 +93,6 @@ void carve_retire_member(uint slot) {
         if(DC_DATA(m+7u)==slot) DC_DATA(m+6u)|=2u;
     }
 }
-shared uint carve_changed,carve_pending,carve_hits,carve_leaf_hits,carve_cursor,carve_candidate;
 #ifndef DC_RUNTIME_BODY_STORAGE
 shared uint carve_ids[64];
 #endif
@@ -111,6 +112,7 @@ void carve_bodies() {
         for(uint candidate=carve_cursor+lane;candidate<BODY_CAPACITY;candidate+=gl_WorkGroupSize.x) {
             Body b=DC_BODY(candidate);
             if(b.enabled==0u||b.id!=DC_CARVE_ID(candidate)) continue;
+            if(body_ash_mode()) {if(pixel_body(b)) atomicMin(carve_candidate,candidate);continue;}
             vec2 low,high;body_bounds(b,low,high);
             vec2 position=vec2(b.x_fp,b.y_fp)/65536.;
             vec2 point=clamp(vec2(params.origin_x)+.5,position+low,position+high);
@@ -139,7 +141,7 @@ void carve_bodies() {
         }
         memoryBarrierBuffer();barrier();
 #if DC_CARVE_REUSE_CLASSIFICATION
-        if(carve_pending!=0u) {
+        if(carve_pending!=0u&&!body_ash_mode()) {
             vec2 position=vec2(carve_source.x_fp,carve_source.y_fp)/65536.;
             vec2 radius=vec2(float(params.origin_y.x));
             vec2 low=vec2(params.origin_x)-radius-position;
@@ -155,13 +157,13 @@ void carve_bodies() {
             }
         }
         memoryBarrierBuffer();barrier();
-        if(lane==0u&&carve_hits==0u) carve_pending=0u;
+        if(lane==0u&&carve_hits==0u&&!body_ash_mode()) carve_pending=0u;
         memoryBarrierBuffer();barrier();
 #endif
         if(carve_pending!=0u) {
             for(uint pixel=lane;pixel<body_pieces(carve_source);pixel+=gl_WorkGroupSize.x) {
                 uint material=carve_mask_material(carve_source,pixel);
-                bool hit=material!=0u&&carve_pixel(carve_source,pixel);
+                bool hit=!body_ash_mode()&&material!=0u&&carve_pixel(carve_source,pixel);
                 bool blocked=hit||(DC_CARVE_REUSE_CLASSIFICATION!=0&&material==0u);
                 DC_FRAGMENT_LABEL(pixel)=blocked?0xffffffffu:0u;
                 if(hit) atomicOr(carve_hits,1u);
@@ -169,7 +171,8 @@ void carve_bodies() {
             }
         }
         memoryBarrierBuffer();barrier();
-        if(carve_leaf_hits!=0u) leaf_reserve(carve_source);
+        if(body_ash_mode()&&carve_pending!=0u) body_ash_reserve(carve_source);
+        if(!body_ash_mode()&&carve_leaf_hits!=0u) leaf_reserve(carve_source);
         memoryBarrierBuffer();barrier();
         if(carve_hits!=0u) {
 #ifdef DC_RUNTIME_BODY_STORAGE
@@ -182,7 +185,8 @@ void carve_bodies() {
 #endif
         }
         memoryBarrierBuffer();barrier();
-        if(carve_leaf_hits!=0u) leaf_finish(carve_source,carve_changed!=0u);
+        if(body_ash_mode()&&carve_hits!=0u) body_ash_finish(carve_source,carve_changed!=0u);
+        if(!body_ash_mode()&&carve_leaf_hits!=0u) leaf_finish(carve_source,carve_changed!=0u);
         memoryBarrierBuffer();barrier();
         if(carve_changed!=0u) {
             if(lane==0u) atomicOr(DC_DATA(base()+STRUCTURAL_BRUSH_RESULT_WORD),1u);

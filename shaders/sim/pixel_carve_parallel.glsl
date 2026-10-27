@@ -98,7 +98,8 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
         if(lane==0u) {DC_BODY(slot).enabled=0u;DC_BODY(slot).reserved0=0u;}
         if(reactive_enabled()) for(uint pixel=lane;pixel<area;pixel+=DC_STRUCTURAL_LANES) {
             uint material=piece_material(source,pixel);
-            if(material!=0u&&(material!=5u||DC_FRAGMENT_LABEL(pixel)==0xffffffffu)) {
+            bool ash_reserved=body_ash_mode()&&DC_FRAGMENT_LABEL(pixel)!=0xffffffffu&&(DC_FRAGMENT_LABEL(pixel)&LEAF_RESERVATION)!=0u;
+            if(material!=0u&&!ash_reserved&&(material!=5u||DC_FRAGMENT_LABEL(pixel)==0xffffffffu)) {
                 uint word=source.compound_reserved+pixel_tile_offset(source,pixel/256u)+1u+(pixel%256u)/8u;
                 reactive_shape_erase(word-color_pool_word(),pixel%8u,color_capacity());
             }
@@ -250,7 +251,7 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
         if(label>0u&&label<=pc_count)
             reactive_shape_reown(word-color_pool_word(),pixel%8u,color_capacity(),PF_ID(label-1u),
                 reactive_body_generation(PF_SLOT(label-1u),PF_ID(label-1u)),uvec2(pixel_piece_cell(source,pixel)));
-        else if(material!=5u||label==0xffffffffu) reactive_shape_erase(word-color_pool_word(),pixel%8u,color_capacity());
+        else if((!body_ash_mode()||label==0xffffffffu)&&(material!=5u||label==0xffffffffu)) reactive_shape_erase(word-color_pool_word(),pixel%8u,color_capacity());
     }
     memoryBarrierBuffer();barrier();return true;
 }

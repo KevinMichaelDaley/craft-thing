@@ -144,11 +144,12 @@ static void record_combustion(dc_gpu_t *g,float seconds,uint32_t mode) {
 bool fr_combustion_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(!g||!g->thermal||!g->thermal->combustion.pipeline||!isfinite(seconds)||seconds<0) return false;
     if(seconds==0) return true;
-    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g)) return false;
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!dc_gpu_runtime_prepare_fragments(g,err,cap)||!fr_renderer_begin(g)) return false;
     phase(g,8,seconds);phase(g,0,seconds);phase(g,7,seconds);
     record_combustion(g,seconds,4);record_combustion(g,seconds,5);
     phase(g,13,seconds);phase(g,11,seconds);
-    record_combustion(g,seconds,3);record_combustion(g,seconds,9);record_combustion(g,seconds,0);record_combustion(g,seconds,10);phase(g,14,seconds);
+    record_combustion(g,seconds,3);record_combustion(g,seconds,9);record_combustion(g,seconds,0);record_combustion(g,seconds,10);
+    dc_gpu_record_body_ash(g,g->thermal->hud.buffer);phase(g,14,seconds);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
     if(fr_renderer_submit(g)) return true;
@@ -265,7 +266,9 @@ void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
     phase(g,0,seconds);phase(g,7,seconds);
     record_combustion(g,seconds,4);record_combustion(g,seconds,5);
     phase(g,13,seconds);phase(g,11,seconds);
-    record_combustion(g,seconds,3);record_combustion(g,seconds,9);record_combustion(g,seconds,0);record_combustion(g,seconds,10);phase(g,14,seconds);
+    record_combustion(g,seconds,3);record_combustion(g,seconds,9);record_combustion(g,seconds,0);record_combustion(g,seconds,10);
+    if(g->thermal->combustion.pipeline) dc_gpu_record_body_ash(g,g->thermal->hud.buffer);
+    phase(g,14,seconds);
 }
 void fr_thermal_record_overlay(dc_gpu_t *g) {
     if(!g->thermal) return;
@@ -372,7 +375,9 @@ bool fr_thermal_gpu_import_water_chunk(dc_gpu_t *g,uint32_t slot,
 bool fr_thermal_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(!g||!g->thermal||!isfinite(seconds)||seconds<0)
         return error(err,cap,"Invalid standalone thermal interval");
-    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g)) return error(err,cap,"Cannot begin thermal interval");
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||
+       (g->thermal->combustion.pipeline&&!dc_gpu_runtime_prepare_fragments(g,err,cap))||!fr_renderer_begin(g))
+        return error(err,cap,"Cannot begin thermal interval");
     fr_thermal_record_step(g,seconds);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);

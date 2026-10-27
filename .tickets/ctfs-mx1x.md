@@ -30,3 +30,7 @@ BODY wetting/probe checkpoint: actual fullscreen Vulkan/Wayland core+sync --wet1
 **2026-10-27T15:41:46Z**
 
 Fractional wetting RED01d9d40: eight-Q16 thin contact stayed dry after64steps. GREEN retains <1Q16 exposure in generation-validated device scratch, never inventing/transferring water until source mass is atomically reserved. Resetting derived scratch loses <1Q16 uncommitted kinetic exposure, not physical inventory. Focused actual fullscreen core+sync thin-water1/1; current native admission battery8/8 passes. Combined native-display battery bounded at55s during repeated SDL context setup, incomplete/not a pass; focused actual-display checks pass.
+
+**2026-10-27T15:52:26Z**
+
+Rigid ash GREEN after RED47ceff5: GPU-only reservation/publication now hands actual spent rest residue to loose ASH particles with mass/heat/origin intact, splits live connected fragments via existing cooperative carve transaction, then recomputes actual species mass/inertia. GPU indirect gate reuses existing BODY target traversal; no per-frame CPU lists or full geometry transaction when no spent parcel exists. Fullscreen Vulkan/Wayland core+sync ash1/1 and full-slots1/1 pass; ash DCS roundtrip exact, live ends split into2bodies, occupied slots preserve residue and both existing particles. Native admission10/10 passes. Zero-mass/energy-only residue is retained pending dedicated gas handoff rather than discarded; analytic constructed stone heat remains pending. Ticket stays in_progress.
