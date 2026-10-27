@@ -227,7 +227,11 @@ static void test_roof_blocks_and_side_vent_routes_the_physical_flame(void) {
     ASSERT_TRUE(above[0]>.02&&above[1]<.001&&above[2]>.02);PASS();
 }
 #include "combustion_vent_cases.h"
-int main(void) {
+int main(int argc,char **argv) {
+    if(argc==2&&strcmp(argv[1],"--vent")==0) {
+        RUN(test_oxygen_starvation_and_finite_vented_recovery);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
     RUN(test_displayed_terrain_combustion_debits_real_fuel_and_oxygen);
     RUN(test_sparse_owner_combustion_uses_the_live_gas_bank);
     RUN(test_retained_char_can_finish_burning_on_the_gpu);
