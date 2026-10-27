@@ -407,5 +407,8 @@ void dc_gpu_destroy(dc_gpu_t *gpu);
 
 /** Enable GPU extraction of isolated resident rigid-material components. */
 bool dc_gpu_enable_automatic_components(dc_gpu_t *gpu);
+/** Cold authored nonterrain-cell admission using the GPU component producer.
+ * Preserves physical time and poses; ordinary terrain keeps its load baseline. */
+bool dc_gpu_admit_authored_rigid_cells(dc_gpu_t *gpu,char *err_buf,uint32_t err_cap);
 
 #endif
