@@ -297,6 +297,11 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
             uintBitsToFloat(cache.words[handle.x*12u+10u]),uintBitsToFloat(cache.words[handle.x*12u+11u])+reaction_power);
         cache.words[handle.x*12u+9u]=floatBitsToUint(temperature);
         if(!char_stage) atomicMax(hud[29],floatBitsToUint(max(temperature,0.)));
+        uint origin=(entry.words[s+4u]-1u)&4095u,x=origin%64u,y=origin/64u,category=0xffffffffu;
+        if(y==26u&&(x<30u||x>33u)) category=0u;
+        if(y>=16u&&y<=18u) category=1u;
+        if(y>=21u&&y<=23u) category=x<32u?2u:3u;
+        if(category<4u) atomicMax(hud[(position.x>=320?14u:8u)+category],floatBitsToUint(max(temperature,0.)));
     }
 #endif
     float dt=uintBitsToFloat(params.seconds),dry=1.-wet;
@@ -430,7 +435,8 @@ void main() {
     }
     if(params.unused.x==5u) {contact_apply(i,at);return;}
     if(params.unused.x==3u) {
-        if(i==0u) for(uint j=22u;j<32u;j++) hud[j]=0u;
+        if(i==0u) {for(uint j=22u;j<32u;j++) hud[j]=0u;
+            for(uint j=8u;j<12u;j++) hud[j]=0u;for(uint j=14u;j<18u;j++) hud[j]=0u;}
         if(at!=0xffffffffu) emission[at]=vec4(0.,0.,uintBitsToFloat(slot_generation(at)),0.);
         uvec2 address;uint chosen=0xffffffffu;
         if(solid_address(at,address)) {

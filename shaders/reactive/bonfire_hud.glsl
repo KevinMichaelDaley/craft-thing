@@ -42,7 +42,7 @@ void bonfire_hud(uint mode,uint i,ivec2 p,uint at) {
             if(y>=16&&y<=18) atomicOr(hud[18u+side],1u);
             if(y>=21&&y<=23) atomicOr(hud[18u+side],1u<<uint(x<32?1:2));
             if(y==26) {
-                int stick=x>=20&&x<=22?0:(x>=26&&x<=28?1:(x>=34&&x<=36?2:(x>=40&&x<=42?3:-1)));
+                int stick=x>=20&&x<=22?0:(x>=26&&x<=28?1:(x>=35&&x<=37?2:(x>=40&&x<=42?3:-1)));
                 if(stick>=0) atomicOr(hud[20u+side],1u<<uint(stick));
             }
         }

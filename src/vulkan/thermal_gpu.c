@@ -54,9 +54,9 @@ bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
 bool fr_combustion_gpu_enabled(const dc_gpu_t *g) {
     return g&&g->thermal&&g->thermal->combustion.pipeline!=VK_NULL_HANDLE;
 }
-bool fr_combustion_gpu_bonfire_counters(dc_gpu_t *g,uint32_t out[14]) {
+bool fr_combustion_gpu_bonfire_counters(dc_gpu_t *g,uint32_t out[32]) {
     if(!fr_combustion_gpu_enabled(g)||!out||vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return false;
-    memcpy(out,(uint32_t *)g->thermal->hud.mapped+18u,14u*sizeof(uint32_t));return true;
+    memcpy(out,g->thermal->hud.mapped,32u*sizeof(uint32_t));return true;
 }
 bool fr_combustion_gpu_hud(dc_gpu_t *g,bool enabled,bool wet,bool paused,uint32_t x,uint32_t y) {
     if(!fr_combustion_gpu_enabled(g)) return false;

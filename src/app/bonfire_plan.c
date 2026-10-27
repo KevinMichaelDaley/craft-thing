@@ -6,7 +6,7 @@ static fr_structural_gpu_node_t node(uint32_t id,int32_t x,int32_t y) {
 static void piece(dc_bonfire_plan_t *out,uint32_t side,uint32_t kind,uint32_t x,uint32_t y,uint32_t width,uint32_t height) {
     uint32_t index=out->count++;
     out->pieces[index]=(dc_bonfire_piece_t){.object=index+1,.kind=kind,.x=x+side*192,.y=y,
-        .width=width,.height=height,.wet=side!=0,.temperature_K=kind==DC_BONFIRE_STARTER?1400.f:293.15f};
+        .width=width,.height=height,.wet=side!=0,.temperature_K=kind==DC_BONFIRE_STARTER?DC_BONFIRE_STARTER_K:293.15f};
 }
 bool dc_bonfire_plan(dc_bonfire_plan_t *out) {
     if(!out) return false;
@@ -29,8 +29,8 @@ bool dc_bonfire_plan(dc_bonfire_plan_t *out) {
                 .bearing_capacity=1e7,.pullout_capacity=1e7,.shear_capacity=1e7,.moment_capacity=1e7,.friction=.6f,.normal_angle=-1.57079632679f};
         }
         piece(out,side,DC_BONFIRE_KINDLING,148,90,3,1);piece(out,side,DC_BONFIRE_KINDLING,154,90,3,1);
-        piece(out,side,DC_BONFIRE_STARTER,158,90,3,1);
-        piece(out,side,DC_BONFIRE_KINDLING,162,90,3,1);piece(out,side,DC_BONFIRE_KINDLING,168,90,3,1);
+        piece(out,side,DC_BONFIRE_STARTER,158,90,4,1);
+        piece(out,side,DC_BONFIRE_KINDLING,163,90,3,1);piece(out,side,DC_BONFIRE_KINDLING,168,90,3,1);
         piece(out,side,DC_BONFIRE_LOG,146,85,10,3);piece(out,side,DC_BONFIRE_LOG,164,85,10,3);
         piece(out,side,DC_BONFIRE_LOG,146,80,16,3);
     }
