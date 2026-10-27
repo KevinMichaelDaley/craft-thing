@@ -10,7 +10,7 @@ void main() {
     if(params.phase==4u) {
         if(i>=BODY_CAPACITY) return;
         Body b=DC_BODY(i);
-        if(pixel_body(b)&&(b.enabled!=0u||b.reserved0!=0u)&&b.compound_reserved>=params.legacy_state) {
+        if(pixel_storage(b)&&(b.enabled!=0u||b.reserved0!=0u)&&b.compound_reserved>=params.legacy_state) {
             uint relative=b.compound_reserved-params.legacy_state;
             DC_BODY(i).compound_reserved=params.reserved+(relative/params.graph)*DC_RUNTIME_WORK(29u)+relative%params.graph;
         }

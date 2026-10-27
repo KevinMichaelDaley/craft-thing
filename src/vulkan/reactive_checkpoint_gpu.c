@@ -93,7 +93,7 @@ static bool body_binding(const fr_reactive_record_t *record,const identity_t *id
     identity_t key={.id=record->owner.key[0]};const identity_t *match=bsearch(&key,ids,count,sizeof(*ids),identity_order);
     if(!match) return false;
     const dc_gpu_body_record_t *body=payload->bodies+match->slot;
-    if((!body->body.active&&!body->reserved[0])||!(body->piece_count&DC_GPU_PIXEL_BODY_FLAG)||
+    if((!body->body.active&&!body->reserved[0])||(!(body->piece_count&DC_GPU_PIXEL_BODY_FLAG)&&!(body->motion_flags&DC_BODY_MOTION_THERMAL_GRID))||
        payload->states[match->slot].owner.generation!=record->owner.key[1]||
        payload->states[match->slot].owner.runtime_id!=record->owner.key[0]) return false;
     uint32_t source=body->compound_reserved,x=record->owner.key[2],y=record->owner.key[3];
@@ -119,10 +119,10 @@ bool fr_gpu_reactive_checkpoint_mass_valid(const fr_reactive_archive_t *archive,
     if(!payload||(payload->body_count&&!payload->bodies)||(words&&!pixels)) return error(err,cap,"Invalid reactive mass validation input");
     bool needed=false;for(uint32_t i=0;i<payload->body_count;i++) {
         const dc_gpu_body_record_t *body=payload->bodies+i;
-        needed|=(body->body.active||body->reserved[0])&&(body->motion_flags&DC_GPU_BODY_REACTIVE_MASS)!=0;
+        needed|=(body->body.active||body->reserved[0])&&(body->motion_flags&(DC_GPU_BODY_REACTIVE_MASS|DC_BODY_MOTION_THERMAL_GRID))!=0;
     }
     if(!needed) return true;
-    if(!archive) return error(err,cap,"Inventory-derived rigid mass has no reactive checkpoint channel");
+    if(!archive) return error(err,cap,"Inventory-derived body mass or heat has no reactive checkpoint channel");
     if(archive->body_count&&!archive->bodies) return error(err,cap,"Reactive mass channel has no parcel records");
     checkpoint_mass_t *mass=calloc(payload->body_count,sizeof(*mass));
     identity_t *ids=malloc((size_t)payload->body_count*sizeof(*ids));
@@ -149,7 +149,12 @@ bool fr_gpu_reactive_checkpoint_mass_valid(const fr_reactive_archive_t *archive,
         const fr_reactive_record_t *record=archive->bodies+i;identity_t key={.id=record->owner.key[0]};
         const identity_t *match=bsearch(&key,ids,payload->body_count,sizeof(*ids),identity_order);
         if(!match) {okay=false;break;}
-        if(!(payload->bodies[match->slot].motion_flags&DC_GPU_BODY_REACTIVE_MASS)) continue;
+        uint32_t flags=payload->bodies[match->slot].motion_flags;
+        if(flags&DC_BODY_MOTION_THERMAL_GRID) {
+            binding_t binding;okay=body_binding(record,ids,payload->body_count,payload,pixels,words,&binding);
+            mass[match->slot].mass+=1.;continue;
+        }
+        if(!(flags&DC_GPU_BODY_REACTIVE_MASS)) continue;
         binding_t binding;okay=body_binding(record,ids,payload->body_count,payload,pixels,words,&binding);if(!okay) break;
         uint32_t material=(pixels[binding.word]>>(binding.nibble*4u))&15u;
         double delta=(double)fr_reactive_state_mass_fp(&record->state)/65536.-DC_BODY_DENSITY(material);
@@ -157,7 +162,11 @@ bool fr_gpu_reactive_checkpoint_mass_valid(const fr_reactive_archive_t *archive,
     }
     for(uint32_t i=0;i<payload->body_count&&okay;i++) {
         const dc_gpu_body_record_t *body=payload->bodies+i;
-        if((!body->body.active&&!body->reserved[0])||!(body->motion_flags&DC_GPU_BODY_REACTIVE_MASS)) continue;
+        if(!body->body.active&&!body->reserved[0]) continue;
+        if(body->motion_flags&DC_BODY_MOTION_THERMAL_GRID) {
+            okay=mass[i].mass==(double)body->body.width*body->body.height;continue;
+        }
+        if(!(body->motion_flags&DC_GPU_BODY_REACTIVE_MASS)) continue;
         checkpoint_mass_t value=mass[i];double x=value.x/value.mass,y=value.y/value.mass;
         double inertia=fmax(1e-12,value.moment-value.mass*(x*x+y*y));
         double center_tolerance=fmax(1e-4,fmax(body->body.width,body->body.height)*2e-6);

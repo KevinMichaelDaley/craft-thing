@@ -32,7 +32,7 @@ uvec2 fr_body_reactive_handle(Body body,uint slot,uint piece) {
 bool fr_body_sample(uint index,out vec4 node_value,out vec4 metadata) {
     uint id=thermal_occupancy[index],slot=runtime_body_find(id);node_value=vec4(0);metadata=vec4(0);
     if(slot>=BODY_CAPACITY) return false;
-    Body body=DC_BODY(slot);if(!pixel_body(body)) return false;
+    Body body=body_thermal_grid(DC_BODY(slot));if(!pixel_body(body)) return false;
     ivec2 cell=ivec2(index%params.width,index/params.width);
     vec2 low=vec2(cell)-vec2(body.x_fp,body.y_fp)/65536.;uvec4 query=body_piece_query(body,low,low+1.);
     float total=0.,dominant=0.;
@@ -61,7 +61,7 @@ void fr_body_atomic_heat(Words scratch,uint word,float heat) {
 void fr_body_deposit_radiance(uint index,float heat,float outgoing,float incoming) {
     if(heat==0.&&outgoing==0.&&incoming==0.) return;
     uint slot=runtime_body_find(thermal_occupancy[index]);if(slot>=BODY_CAPACITY) return;
-    Body body=DC_BODY(slot);if(!pixel_body(body)) return;
+    Body body=body_thermal_grid(DC_BODY(slot));if(!pixel_body(body)) return;
     ivec2 cell=ivec2(index%params.width,index/params.width);
     vec2 low=vec2(cell)-vec2(body.x_fp,body.y_fp)/65536.;uvec4 query=body_piece_query(body,low,low+1.);
     float total=0.;

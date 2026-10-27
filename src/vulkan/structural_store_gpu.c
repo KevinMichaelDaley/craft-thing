@@ -145,7 +145,7 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
     for (unsigned i = 0; okay && i < payload->body_count; i++) {
         dc_gpu_body_record_t *b = payload->bodies + i;
         if ((!b->body.active && !b->reserved[0]) ||
-            !(b->piece_count & DC_GPU_PIXEL_BODY_FLAG))
+            (!(b->piece_count & DC_GPU_PIXEL_BODY_FLAG)&&!(b->motion_flags&DC_BODY_MOTION_THERMAL_GRID)))
             continue;
         okay = b->compound_reserved >= dc_gpu_pixel_pool_word_offset(gpu) +
                                            DC_GPU_PIXEL_POOL_HEADER_WORDS &&
@@ -288,7 +288,7 @@ static void install(dc_gpu_t *gpu, const dc_structural_store_header_t *header,
         dc_gpu_body_record_t *b = dc_gpu_body_record(gpu,i);
         if (!b->body.active && !b->reserved[0])
             memset(b, 0, sizeof(*b));
-        else if (b->piece_count & DC_GPU_PIXEL_BODY_FLAG)
+        else if ((b->piece_count & DC_GPU_PIXEL_BODY_FLAG)||(b->motion_flags&DC_BODY_MOTION_THERMAL_GRID))
             b->compound_reserved += offset + DC_GPU_PIXEL_POOL_HEADER_WORDS;
     }
     memcpy(data + dc_gpu_structural_graph_offset(), payload->graph,

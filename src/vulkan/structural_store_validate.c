@@ -68,7 +68,7 @@ static bool body_valid(const dc_gpu_body_record_t *b, const uint32_t *pixels,
         b->local_x_fp < 0 || b->local_y_fp < 0 || b->local_x_fp >= 64 * 65536 ||
         b->local_y_fp >= 64 * 65536 || !isfinite(b->angle) ||
         fabsf(b->angle) > 3.141593f || !isfinite(b->angular_velocity) ||
-        fabsf(b->angular_velocity) > .5f || (b->motion_flags & ~7u) ||
+        fabsf(b->angular_velocity) > .5f || (b->motion_flags & ~15u) ||
         b->motion_ready > 1 || (!pixel && b->piece_count > DC_GPU_BODY_PIECES))
         return false;
     if (b->reserved[0] != 0 && b->reserved[0] != DC_GPU_STRUCTURAL_TAG &&
@@ -81,6 +81,13 @@ static bool body_valid(const dc_gpu_body_record_t *b, const uint32_t *pixels,
     if (b->shape.count > DC_GPU_CONVEX_VERTICES ||
         b->shape.material > DC_BODY_MATERIAL_MAX)
         return false;
+    if(b->motion_flags&DC_BODY_MOTION_THERMAL_GRID) {
+        if(pixel||b->piece_count||(b->motion_flags&DC_GPU_BODY_REACTIVE_MASS)||b->shape.material!=DC_GPU_BODY_STONE) return false;
+        dc_gpu_body_record_t grid=*b;grid.piece_count=DC_GPU_PIXEL_BODY_FLAG|b->body.width*b->body.height;
+        float ignored=0;
+        if(!pixels||b->compound_reserved>words||!dc_gpu_pixel_geometry_valid(&grid,pixels+b->compound_reserved,
+            words-b->compound_reserved,&ignored)) return false;
+    }
     if (pixel) {
         if (!pixel_valid(b, pixels, words, &density))
             return false;

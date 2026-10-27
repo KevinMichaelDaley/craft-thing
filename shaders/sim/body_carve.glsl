@@ -55,6 +55,9 @@ uint carve_rest_material(Body b,vec2 point) {
 bool carve_raster_source(Body original,out Body source) {
     source=original;
     if(pixel_body(source)) return true;
+    if((source.motion_flags&DC_BODY_MOTION_THERMAL_GRID)!=0u) {
+        source=body_thermal_grid(source);source.motion_flags&=~DC_BODY_MOTION_THERMAL_GRID;return true;
+    }
     uint dw=(source.width+15u)/16u,dh=(source.height+15u)/16u;
     uint pool=graph()+40000u,capacity=DC_DATA(pool+2u),used=DC_DATA(pool+1u);
     uint tiles=dw*dh,length=8u+tiles+tiles*33u;

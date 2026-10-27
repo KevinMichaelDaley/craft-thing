@@ -346,19 +346,19 @@ void main() {
 #ifdef DC_RUNTIME_BODY_STORAGE
         if(i>=BODY_CAPACITY) return;
         Body b=DC_BODY(i);
-        uint words=pixel_body(b)&&(b.enabled!=0u||b.reserved0!=0u)?pixel_shape_words(b):0u;
+        uint words=pixel_storage(b)&&(b.enabled!=0u||b.reserved0!=0u)?pixel_shape_words(b):0u;
         uint scan=DC_RUNTIME_WORK(9u);
         DC_RUNTIME_WORK(scan+2u*i)=words;DC_RUNTIME_WORK(scan+2u*i+1u)=0u;
         if(i==0u) DC_DATA(g+36262u)=1u-DC_DATA(pool());
         return;
 #else
-        uint words=lane<64u&&pixel_body(DC_BODY(lane))&&(DC_BODY(lane).enabled!=0u||DC_BODY(lane).reserved0!=0u)?pixel_shape_words(DC_BODY(lane)):0u;
+        uint words=lane<64u&&pixel_storage(DC_BODY(lane))&&(DC_BODY(lane).enabled!=0u||DC_BODY(lane).reserved0!=0u)?pixel_shape_words(DC_BODY(lane)):0u;
         values[lane]=words;scan_values();if(lane<64u) sizes[lane]=values[lane]-words;
         if(lane==0u) {DC_DATA(g+36261u)=values[127];DC_DATA(g+36262u)=1u-DC_DATA(pool());}return;
 #endif
     }
     if(EXTRACTION_PHASE==17u) {
-        uint s=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x;if(s>=BODY_CAPACITY) return;Body b=DC_BODY(s);if(!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) return;
+        uint s=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x;if(s>=BODY_CAPACITY) return;Body b=DC_BODY(s);if(!pixel_storage(b)||(b.enabled==0u&&b.reserved0==0u)) return;
 #ifdef DC_RUNTIME_BODY_STORAGE
         uint offset=DC_RUNTIME_WORK(DC_RUNTIME_WORK(9u)+2u*s)-pixel_shape_words(b);
 #else
@@ -372,7 +372,7 @@ void main() {
     }
     if(EXTRACTION_PHASE==18u) {
 #ifdef DC_RUNTIME_BODY_STORAGE
-        if(i<BODY_CAPACITY&&pixel_body(DC_BODY(i))&&(DC_BODY(i).enabled!=0u||DC_BODY(i).reserved0!=0u)) {
+        if(i<BODY_CAPACITY&&pixel_storage(DC_BODY(i))&&(DC_BODY(i).enabled!=0u||DC_BODY(i).reserved0!=0u)) {
             uint words=pixel_shape_words(DC_BODY(i));
             DC_BODY(i).compound_reserved=BODY_STORAGE_WORDS+pool()+16u+DC_DATA(g+36262u)*capacity()+
                 DC_RUNTIME_WORK(DC_RUNTIME_WORK(9u)+2u*i)-words;

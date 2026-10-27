@@ -214,8 +214,8 @@ static void bind_control(dc_gpu_t *g,const struct fr_thermal_gpu *t) {
 bool fr_thermal_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!g||!g->runtime_body_consumers||(uint64_t)g->width*g->height>UINT32_MAX)
         return error(err,cap,"Invalid thermal grid context");
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_gpu_reactive_admit_constructed_stone(g,err,cap)) return false;
     if(g->thermal) return true;
-    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_gpu_reactive_initialize(g,err,cap)) return false;
     struct fr_thermal_gpu *t=NULL;
     if(!create(g,g->reactive,&t,err,cap)) return false;
     g->thermal=t;bind_control(g,t);return true;

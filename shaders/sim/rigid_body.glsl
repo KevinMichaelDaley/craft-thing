@@ -1,6 +1,7 @@
 #ifndef DC_RIGID_BODY_GLSL
 #define DC_RIGID_BODY_GLSL
 #include "../../include/dungeoncraft/material_density.h"
+#include "../../include/dungeoncraft/body_storage_layout.h"
 
 #ifndef DC_RUNTIME_BODY_STORAGE
 const uint BODY_CAPACITY = 64u;
@@ -68,6 +69,11 @@ bool pixel_body(Body b) {
     if(DC_RIGID_PIXEL_ONLY) return true;
 #endif
     return (b.piece_count&PIXEL_BODY_FLAG)!=0u;
+}
+bool pixel_storage(Body b) {return pixel_body(b)||(b.motion_flags&DC_BODY_MOTION_THERMAL_GRID)!=0u;}
+Body body_thermal_grid(Body b) {
+    if((b.motion_flags&DC_BODY_MOTION_THERMAL_GRID)!=0u) b.piece_count=PIXEL_BODY_FLAG|b.width*b.height;
+    return b;
 }
 uint pixel_shape_words(Body b) {return pixel_word_at(b.compound_reserved);}
 uint pixel_tile_count(Body b) {return pixel_word_at(b.compound_reserved+1u);}

@@ -110,7 +110,7 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
     uint directory=pixel_directory_words(source);
     if(lane==0u) {
         pc_used=0u;pc_total=0u;
-        for(uint i=0u;i<BODY_CAPACITY;i++) if(i!=slot&&pixel_body(DC_BODY(i))&&
+        for(uint i=0u;i<BODY_CAPACITY;i++) if(i!=slot&&pixel_storage(DC_BODY(i))&&
             (DC_BODY(i).enabled!=0u||DC_BODY(i).reserved0!=0u)) pc_used+=pixel_shape_words(DC_BODY(i));
     }
 #if DC_CARVE_PARALLEL_TILES
@@ -151,7 +151,7 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
     memoryBarrierBuffer();barrier();if(pc_failed!=0u) return false;
     uint target=pool+16u+bank*capacity,other_used=0u;
     for(uint i=0u;i<BODY_CAPACITY;i++) {
-        Body b=DC_BODY(i);if(i==slot||!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) continue;
+        Body b=DC_BODY(i);if(i==slot||!pixel_storage(b)||(b.enabled==0u&&b.reserved0==0u)) continue;
         uint length=pixel_shape_words(b);
         for(uint word=lane;word<length;word+=DC_STRUCTURAL_LANES) {
             DC_DATA(target+other_used+word)=pixel_word_at(b.compound_reserved+word);
@@ -222,7 +222,7 @@ bool pixel_carve_parallel(uint slot,Body source,uint generation) {
     if(lane==0u) {
         other_used=0u;
         for(uint i=0u;i<BODY_CAPACITY;i++) {
-            Body b=DC_BODY(i);if(i==slot||!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) continue;
+            Body b=DC_BODY(i);if(i==slot||!pixel_storage(b)||(b.enabled==0u&&b.reserved0==0u)) continue;
             uint length=pixel_shape_words(b);b.compound_reserved=BODY_STORAGE_WORDS+target+other_used;
             other_used+=length;DC_BODY(i)=b;
         }

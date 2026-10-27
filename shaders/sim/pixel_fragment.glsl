@@ -84,7 +84,7 @@ bool pixel_fragment_source(uint slot,Body source,uint axis,float cut,uint genera
     if(!carving&&count<2u) return false;
     uint pool=graph()+40000u,capacity=DC_DATA(pool+2u),bank=1u-DC_DATA(pool),used=0u;
     uint directory=pixel_directory_words(source),total=0u;
-    for(uint i=0u;i<BODY_CAPACITY;i++) if(i!=slot&&pixel_body(DC_BODY(i))&&
+    for(uint i=0u;i<BODY_CAPACITY;i++) if(i!=slot&&pixel_storage(DC_BODY(i))&&
         (DC_BODY(i).enabled!=0u||DC_BODY(i).reserved0!=0u))
         used+=pixel_shape_words(DC_BODY(i));
     for(uint child=0u;child<count;child++) {
@@ -116,7 +116,7 @@ bool pixel_fragment_source(uint slot,Body source,uint axis,float cut,uint genera
     }
     uint target=pool+16u+bank*capacity,other_used=0u;
     for(uint i=0u;i<BODY_CAPACITY;i++) {
-        Body b=DC_BODY(i);if(i==slot||!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) continue;
+        Body b=DC_BODY(i);if(i==slot||!pixel_storage(b)||(b.enabled==0u&&b.reserved0==0u)) continue;
         uint length=pixel_shape_words(b);
         for(uint word=0u;word<length;word++) {
             DC_DATA(target+other_used+word)=pixel_word_at(b.compound_reserved+word);
@@ -191,7 +191,7 @@ bool pixel_fragment_source(uint slot,Body source,uint axis,float cut,uint genera
     }
     other_used=0u;
     for(uint i=0u;i<BODY_CAPACITY;i++) {
-        Body b=DC_BODY(i);if(i==slot||!pixel_body(b)||(b.enabled==0u&&b.reserved0==0u)) continue;
+        Body b=DC_BODY(i);if(i==slot||!pixel_storage(b)||(b.enabled==0u&&b.reserved0==0u)) continue;
         b.compound_reserved=BODY_STORAGE_WORDS+target+other_used;
         other_used+=pixel_shape_words(b);DC_BODY(i)=b;
     }

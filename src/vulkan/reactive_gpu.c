@@ -148,7 +148,7 @@ bool fr_gpu_reactive_read_body(dc_gpu_t *g,uint32_t id,uint32_t x,uint32_t y,
     for(uint32_t slot=0;slot<dc_gpu_body_capacity(g);slot++) {
         const dc_gpu_body_record_t *b=dc_gpu_body_record(g,slot);
         if(!b->body.active||b->body.id!=id) continue;
-        if(!(b->piece_count&DC_GPU_PIXEL_BODY_FLAG)) return true;
+        if(!(b->piece_count&DC_GPU_PIXEL_BODY_FLAG)&&!(b->motion_flags&DC_BODY_MOTION_THERMAL_GRID)) return true;
         const uint32_t *shape=(const uint32_t *)g->body_mapped+b->compound_reserved;
         if(x>=shape[6]||y>=shape[7]) return true;
         uint32_t tile=(y/16u)*shape[2]+x/16u,offset=shape[8u+tile];
