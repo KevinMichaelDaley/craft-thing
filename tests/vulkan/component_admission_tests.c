@@ -1,6 +1,7 @@
 #define main component_admission_fixture_main
 #include "reactive_cell_gpu_tests.c"
 #undef main
+#include "ferrum/fire/thermal_gpu.h"
 static void test_cold_rigid_admission_retains_pose_and_reactive_ownership(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     for(uint32_t y=10;y<12;y++) for(uint32_t x=10;x<13;x++) chunk->cells[y*64+x].material=DC_MATERIAL_WOOD;
@@ -15,6 +16,10 @@ static void test_cold_rigid_admission_retains_pose_and_reactive_ownership(void) 
     fr_reactive_record_t record;bool found=false;
     ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0,0,&record,&found,err,sizeof(err))&&found);
     ASSERT_EQ(record.owner.kind,FR_REACTIVE_OWNER_BODY);ASSERT_EQ(memcmp(&record.state,&original,sizeof(original)),0);
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err)));
+    fr_thermal_inspection_t inspection;
+    ASSERT_TRUE(fr_thermal_gpu_inspect(g,10,10,&inspection,err,sizeof(err)));
+    ASSERT_TRUE(inspection.occupied&&inspection.material==DC_MATERIAL_WOOD&&fabsf(inspection.temperature_K-700)<.01f);
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));ASSERT_EQ(chunk->cells[10*64+10].material,DC_MATERIAL_AIR);
     ASSERT_TRUE(dc_gpu_read_body_id(g,0x80000002u,&body,err,sizeof(err)));ASSERT_EQ(body.x_fp,20*65536);
     free(chunk);dc_gpu_destroy(g);PASS();
