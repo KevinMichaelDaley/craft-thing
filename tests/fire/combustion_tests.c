@@ -180,7 +180,18 @@ static void test_airborne_oxygen_has_no_former_cutoff(void) {
     }
     ASSERT_TRUE(extent[0]<=extent[1]&&extent[1]<=extent[2]&&extent[2]-extent[0]<extent[1]*.01);PASS();
 }
+static void test_hot_wood_reacts_faster_without_extra_fuel_or_oxygen(void) {
+    char err[256]={0};fr_reactive_state_t warm,hot,a,b;fr_combustion_products_t pa,pb;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,0,650,137,&warm,err,sizeof(err)));
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,0,900,139,&hot,err,sizeof(err)));
+    warm.flags|=FR_REACTIVE_FLAMING;hot.flags|=FR_REACTIVE_FLAMING;
+    ASSERT_TRUE(fr_combustion_reference(&warm,65536,.21f,1,1,&a,&pa,err,sizeof(err)));
+    ASSERT_TRUE(fr_combustion_reference(&hot,65536,.21f,1,1,&b,&pb,err,sizeof(err)));
+    ASSERT_TRUE(pb.fuel_fp>pa.fuel_fp*2u&&pb.fuel_fp<=525u);
+    ASSERT_TRUE(pb.oxygen_fp<=65536&&b.fuel_mass_fp+pb.fuel_fp==hot.fuel_mass_fp);PASS();
+}
 int main(void) {
+    RUN(test_hot_wood_reacts_faster_without_extra_fuel_or_oxygen);
     RUN(test_surface_oxygen_is_a_continuous_finite_reactant);
     RUN(test_airborne_oxygen_has_no_former_cutoff);
     RUN(test_finite_oxygen_and_products);
