@@ -4,6 +4,7 @@
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/gas_gpu.h"
+#include "ferrum/structural/gpu.h"
 static void test_cold_rigid_admission_retains_pose_and_reactive_ownership(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     for(uint32_t y=10;y<12;y++) for(uint32_t x=10;x<13;x++) chunk->cells[y*64+x].material=DC_MATERIAL_WOOD;
@@ -88,6 +89,18 @@ static void rigid_gas_case(bool burning) {
         ASSERT_TRUE(a.state.fuel_mass_fp<hot.fuel_mass_fp);
         dc_gpu_body_motion_t body;ASSERT_TRUE(dc_gpu_read_body_motion(g,0x80000001u,&body,err,sizeof(err)));
         ASSERT_TRUE(fabs((double)body.mass-(double)fr_reactive_state_mass_fp(&a.state)/65536.)<1e-7);
+        ASSERT_TRUE(body.flags&DC_GPU_BODY_REACTIVE_MASS);
+        ASSERT_TRUE(fr_gpu_save_structure(g,"build/reactive_burned_mass.dcs",err,sizeof(err)));
+        dc_gpu_t *restored=NULL;ASSERT_TRUE(context(&restored,err,sizeof(err))&&fr_gpu_load_structure(restored,"build/reactive_burned_mass.dcs",err,sizeof(err)));
+        fr_reactive_record_t saved;ASSERT_TRUE(fr_gpu_reactive_read_body(restored,0x80000001u,0,0,&saved,&found,err,sizeof(err))&&found);
+        ASSERT_EQ(memcmp(&saved.state,&a.state,sizeof(a.state)),0);
+        dc_gpu_body_motion_t motion;ASSERT_TRUE(dc_gpu_read_body_motion(restored,0x80000001u,&motion,err,sizeof(err)));
+        ASSERT_TRUE(fabs(motion.mass-body.mass)<1e-7f&&fabs(motion.inertia-body.inertia)<1e-7f);
+        dc_gpu_destroy(restored);
+        dc_gpu_body_record_t *physical=dc_gpu_body_record(g,0);ASSERT_TRUE(physical&&physical->body.id==0x80000001u);
+        dc_gpu_body_record_t intact=*physical;physical->mass*=2;physical->density*=2;physical->inertia*=2;
+        physical->inverse_mass*=.5f;physical->inverse_inertia*=.5f;
+        ASSERT_TRUE(!fr_gpu_save_structure(g,"build/reactive_burned_mass_invalid.dcs",err,sizeof(err)));*physical=intact;
     }
     free(gas);free(chunk);dc_gpu_destroy(g);PASS();
 }

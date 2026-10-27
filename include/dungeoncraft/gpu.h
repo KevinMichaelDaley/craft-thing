@@ -7,7 +7,8 @@
 
 #include "dungeoncraft/chunk.h"
 
-enum { DC_GPU_BODY_KINEMATIC = 1u, DC_GPU_BODY_LOCK_ROTATION = 2u };
+enum { DC_GPU_BODY_KINEMATIC = 1u, DC_GPU_BODY_LOCK_ROTATION = 2u,
+       DC_GPU_BODY_REACTIVE_MASS = 4u }; /**< Last bit is read-only derived inventory metadata. */
 /** Completed angular state and material-derived properties. Density is relative
  * to water (1); mass and inertia use cell area with unit out-of-plane thickness. */
 typedef struct {
