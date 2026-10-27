@@ -29,10 +29,12 @@ layout(buffer_reference,std430,buffer_reference_align=4) buffer Words {uint word
 layout(buffer_reference,std430,buffer_reference_align=8) buffer Handles {uvec2 values[];};
 layout(buffer_reference,std430,buffer_reference_align=16) buffer GasField {Gas values[];};
 float coefficient(uint material,uint field) {return uintBitsToFloat(profiles[material*32u+field]);}
+#ifdef FR_BODY_REACTIONS
 #define DC_RUNTIME_BODY_BINDING 11
 #define FR_THERMAL_OCCUPANCY_BINDING 12
 #define FR_BODY_POOL_WORD params.body_params.x
 #include "world_body.glsl"
+#endif
 uint atlas(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0xffffffffu;
     uint page=pages[(uint(p.y)/64u)*((params.width+63u)/64u)+uint(p.x)/64u];
@@ -311,6 +313,7 @@ void burn(ivec2 position,uint gas_at,inout Gas gas,inout float admitted,inout fl
     uvec2 handle=Handles(uvec2(root[6],root[7])).values[at];
     burn_entry(position,gas_at,handle,1u,gas,admitted,source_temperature,sources);
 }
+#ifdef FR_BODY_REACTIONS
 ivec2 body_parcel_cell(Body body,uint piece) {
     BodyQuad quad;if(!body_pixel_quad(body,piece,quad)) return ivec2(-1);
     return ivec2(floor(vec2(body.x_fp,body.y_fp)/65536.+.25*(quad.a+quad.b+quad.c+quad.d)));
@@ -349,10 +352,37 @@ void burn_body_neighbor(ivec2 p,uint gas_at,inout Gas gas,inout float admitted,i
         burn_entry(p,gas_at,h,2u,gas,admitted,temperature,sources);
     }
 }
+#endif
 #include "bonfire_hud.glsl"
 void main() {
     uint i=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
-    if(params.unused.x==9u) {choose_body_target(i);return;}
+#ifdef FR_BODY_REACTIONS
+    if(params.unused.x==9u) {
+        uint slot=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;if(slot>=BODY_CAPACITY) return;
+        Body body=DC_BODY(slot);if((body.enabled|body.reserved0)==0u||!pixel_body(body)) return;
+        for(uint piece=gl_LocalInvocationID.x;piece<body_pieces(body);piece+=64u) {
+            if(pixel_piece_material(body,piece)==0u) continue;
+            uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y!=0u) choose_body_target(h.x);
+        }
+        return;
+    }
+    if(i>=params.width*params.height) return;
+    ivec2 p=ivec2(i%params.width,i/params.width);uint at=atlas(p);
+    if(!gas_cell(at)) return;
+    bool near_body=false;
+    for(uint face=0u;face<4u;face++) {ivec2 q=p+directions[face];
+        if(all(greaterThanEqual(q,ivec2(0)))&&all(lessThan(q,ivec2(params.width,params.height))))
+            near_body=near_body||thermal_occupancy[uint(q.y)*params.width+uint(q.x)]!=0u;}
+    if(!near_body) return;
+    bool alternate=params.sparse!=0u&&(Words(params.gates_address).words[at]&8u)!=0u;
+    GasField field=GasField(alternate?params.alternate_address:params.world_address);Gas gas=field.values[at];
+    if(gas.geometry.y<=0.) return;
+    float admitted=0.,temperature=0.;uint sources=0u;
+    for(uint face=0u;face<4u;face++) burn_body_neighbor(p+directions[face],at,gas,admitted,temperature,sources);
+    vec4 previous=emission[at];emission[at]=vec4(previous.x+admitted/uintBitsToFloat(params.seconds),max(previous.y,temperature),
+        uintBitsToFloat(slot_generation(at)),uintBitsToFloat(floatBitsToUint(previous.w)|sources));
+    field.values[at]=gas;
+#else
     if(i>=params.width*params.height) return;
     ivec2 p=ivec2(i%params.width,i/params.width);uint at=atlas(p);
     if(params.unused.x>=6u) {bonfire_hud(params.unused.x,i,p,at);return;}
@@ -392,9 +422,9 @@ void main() {
     }
     float admitted=oxidize_carbon(gas),temperature=gas_capacity(gas)>0.?gas_internal(gas)/gas_capacity(gas):0.;
     uint sources=admitted>0.?2u:0u;
-    for(uint face=0u;face<4u;face++) {burn(p+directions[face],at,gas,admitted,temperature,sources);
-        burn_body_neighbor(p+directions[face],at,gas,admitted,temperature,sources);}
+    for(uint face=0u;face<4u;face++) burn(p+directions[face],at,gas,admitted,temperature,sources);
     emission[at]=vec4(admitted/uintBitsToFloat(params.seconds),temperature,
         uintBitsToFloat(slot_generation(at)),uintBitsToFloat(sources));
     field.values[at]=gas;
+#endif
 }

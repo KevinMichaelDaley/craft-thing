@@ -142,7 +142,15 @@ void body_conduction(uint index) {
 }
 void main() {
     uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
-    if(params.phase==8u||params.phase==9u||params.phase==11u) {if(index<root[2]) body_conduction(index);return;}
+    if(params.phase==8u||params.phase==9u||params.phase==11u) {
+        uint slot=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;if(slot>=BODY_CAPACITY) return;
+        Body body=DC_BODY(slot);if((body.enabled|body.reserved0)==0u||!pixel_body(body)) return;
+        for(uint piece=gl_LocalInvocationID.x;piece<body_pieces(body);piece+=64u) {
+            if(pixel_piece_material(body,piece)==0u) continue;
+            uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y!=0u) body_conduction(h.x);
+        }
+        return;
+    }
     if(index>=params.width*params.height) return;
     uint x=index%params.width,y=index/params.width;
     if(params.phase==7u) {vec4 value,metadata;if(fr_body_sample(index,value,metadata)) {samples[index]=value;samples[index+params.width*params.height]=metadata;}return;}

@@ -13,7 +13,7 @@
 #include "runtime_body_internal.h"
 
 struct fr_thermal_gpu {
-    fr_renderer_compute_t compute,feedback,combustion;
+    fr_renderer_compute_t compute,feedback,combustion,body_combustion;
     dc_gpu_address_buffer_t profiles,samples,fluxes,probe,water;
     dc_gpu_address_buffer_t emission,emission_snapshot,hud;
     bool hud_enabled;
@@ -40,14 +40,15 @@ bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
         {g->particle_buffer,0,VK_WHOLE_SIZE},{g->particle_count_buffer,0,VK_WHOLE_SIZE},
         {t->emission.buffer,0,t->emission.bytes},{t->fluxes.buffer,0,t->fluxes.bytes},{t->hud.buffer,0,t->hud.bytes},
         {g->runtime_bodies->root.buffer,0,g->runtime_bodies->root.bytes},{g->occupancy_buffer,0,VK_WHOLE_SIZE}};
-    bool okay=fr_renderer_compute_init(g,&t->combustion,buffers,13,80,"build/shaders/combustion.comp.spv",err,cap)&&fr_renderer_begin(g);
+    bool okay=fr_renderer_compute_init(g,&t->combustion,buffers,13,80,"build/shaders/combustion.comp.spv",err,cap)&&
+        fr_renderer_compute_init(g,&t->body_combustion,buffers,13,80,"build/shaders/body_combustion.comp.spv",err,cap)&&fr_renderer_begin(g);
     if(okay) {
         vkCmdFillBuffer(g->command,t->emission.buffer,0,t->emission.bytes,0);
         fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
         okay=fr_renderer_submit(g);
     }
-    if(!okay) {fr_renderer_compute_destroy(g,&t->combustion);dc_gpu_address_buffer_destroy(g,&t->emission);dc_gpu_address_buffer_destroy(g,&t->hud);}
+    if(!okay) {fr_renderer_compute_destroy(g,&t->combustion);fr_renderer_compute_destroy(g,&t->body_combustion);dc_gpu_address_buffer_destroy(g,&t->emission);dc_gpu_address_buffer_destroy(g,&t->hud);}
     return okay;
 }
 bool fr_combustion_gpu_enabled(const dc_gpu_t *g) {
@@ -120,13 +121,14 @@ static void record_combustion(dc_gpu_t *g,float seconds,uint32_t mode) {
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,t->combustion.pipeline);
-    vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,t->combustion.pipeline_layout,0,1,&t->combustion.descriptor,0,NULL);
-    vkCmdPushConstants(g->command,t->combustion.pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
+    fr_renderer_compute_t *pipeline=mode==9u||mode==10u?&t->body_combustion:&t->combustion;
+    vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline->pipeline);
+    vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline->pipeline_layout,0,1,&pipeline->descriptor,0,NULL);
+    vkCmdPushConstants(g->command,pipeline->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
     uint32_t x=t->groups_x,y=t->groups_y;
-    if(mode==9u) {uint32_t groups=(g->reactive->arena.capacity+63u)/64u;x=groups<65535u?groups:65535u;y=(groups+x-1u)/x;}
+    if(mode==9u) {uint32_t groups=g->runtime_bodies->store.slab_count*DC_BODY_SLAB_RECORDS;x=groups<65535u?groups:65535u;y=(groups+x-1u)/x;}
     vkCmdDispatch(g->command,x,y,1);
-    if(mode==0u) {
+    if(mode==0u||mode==10u) {
         /* Reactions preserve gas momentum and never decrease local gas mass.
          * Practical transport uses only the advective rate, so its previous
          * bound remains conservative. Explicit acoustic policies need a new
@@ -142,7 +144,7 @@ bool fr_combustion_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     phase(g,8,seconds);phase(g,0,seconds);phase(g,7,seconds);
     record_combustion(g,seconds,4);record_combustion(g,seconds,5);
     phase(g,13,seconds);phase(g,11,seconds);
-    record_combustion(g,seconds,3);record_combustion(g,seconds,9);record_combustion(g,seconds,0);
+    record_combustion(g,seconds,3);record_combustion(g,seconds,9);record_combustion(g,seconds,0);record_combustion(g,seconds,10);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
     if(fr_renderer_submit(g)) return true;
@@ -158,6 +160,7 @@ static void destroy(dc_gpu_t *g,struct fr_thermal_gpu *t) {
     fr_renderer_compute_destroy(g,&t->compute);
     fr_renderer_compute_destroy(g,&t->feedback);
     fr_renderer_compute_destroy(g,&t->combustion);
+    fr_renderer_compute_destroy(g,&t->body_combustion);
     dc_gpu_address_buffer_destroy(g,&t->profiles);dc_gpu_address_buffer_destroy(g,&t->samples);
     dc_gpu_address_buffer_destroy(g,&t->fluxes);dc_gpu_address_buffer_destroy(g,&t->probe);
     dc_gpu_address_buffer_destroy(g,&t->water);dc_gpu_address_buffer_destroy(g,&t->emission);
@@ -240,7 +243,7 @@ static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
     vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,t->compute.pipeline_layout,0,1,&t->compute.descriptor,0,NULL);
     vkCmdPushConstants(g->command,t->compute.pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
     uint32_t x=t->groups_x,y=t->groups_y;
-    if(mode==8u||mode==9u||mode==11u) {uint32_t groups=(g->reactive->arena.capacity+63u)/64u;
+    if(mode==8u||mode==9u||mode==11u) {uint32_t groups=g->runtime_bodies->store.slab_count*DC_BODY_SLAB_RECORDS;
         x=groups<65535u?groups:65535u;y=(groups+x-1u)/x;}
     vkCmdDispatch(g->command,mode==4u?1u:x,mode==4u?1u:y,1);
 }
@@ -253,12 +256,13 @@ void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
     phase(g,10,seconds);phase(g,11,seconds);
     record_combustion(g,seconds,4);record_combustion(g,seconds,5);
     phase(g,13,seconds);phase(g,11,seconds);
-    record_combustion(g,seconds,3);record_combustion(g,seconds,9);record_combustion(g,seconds,0);
+    record_combustion(g,seconds,3);record_combustion(g,seconds,9);record_combustion(g,seconds,0);record_combustion(g,seconds,10);
 }
 void fr_thermal_record_overlay(dc_gpu_t *g) {
     if(!g->thermal) return;
+    phase(g,0,0);record_combustion(g,0,2);phase(g,7,0);
     if(g->thermal->overlay==0u) record_combustion(g,0,1);
-    else {phase(g,0,0);record_combustion(g,0,2);phase(g,7,0);fr_thermal_feedback_record(g,&g->thermal->feedback,g->thermal->overlay,
+    else {fr_thermal_feedback_record(g,&g->thermal->feedback,g->thermal->overlay,
         g->thermal->groups_x,g->thermal->groups_y);}
     if(g->thermal->hud_enabled) {record_combustion(g,0,7);record_combustion(g,0,8);}
 }

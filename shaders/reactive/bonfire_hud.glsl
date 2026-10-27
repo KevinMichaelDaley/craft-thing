@@ -11,11 +11,12 @@ uint bonfire_character(uint c) {
     uint side=hud[3],value=0u,digit=0u;
     if(c>=1u&&c<=4u) {value=c<=2u?bitCount(hud[20u+side]):4u;digit=(c==1u||c==3u)?1u:0u;}
     else if(c>=5u&&c<=7u) {value=bitCount(hud[18u+side]);digit=7u-c;}
-    else if(c>=8u&&c<=10u) {value=6u;digit=10u-c;}
+    else if(c>=8u&&c<=10u) {value=3u;digit=10u-c;}
     else if(c>=11u&&c<=17u) {
         uint index=hud[12],at=atlas(ivec2(index%params.width,index/params.width));uvec2 address;
         float temperature=0.,oxygen=-1.;
-        if(solid_address(at,address)) {Words e=Words(address);float capacity=solid_capacity(e);
+        if(floatBitsToUint(samples[index+params.width*params.height].x)==4u&&samples[index].y>0.) temperature=samples[index].x/samples[index].y;
+        else if(solid_address(at,address)) {Words e=Words(address);float capacity=solid_capacity(e);
             if(capacity>0.) temperature=(uintBitsToFloat(e.words[FR_ENTRY_STATE+17u])+uintBitsToFloat(e.words[FR_ENTRY_STATE+25u])+uintBitsToFloat(e.words[FR_ENTRY_STATE+26u]))/capacity;}
         else if(gas_cell(at)) {Gas gas=local_gas(at);float capacity=gas_capacity(gas),mass=gas_mass(gas);
             if(capacity>0.) temperature=gas_internal(gas)/capacity;if(mass>0.) oxygen=100.*gas.species.x/mass;}
@@ -29,14 +30,22 @@ void bonfire_hud(uint mode,uint i,ivec2 p,uint at) {
     if(mode==6u) return;
     if(mode==7u) {
         if(abs(p.x-int(hud[4]))>28||p.y<int(hud[5])||p.y>int(hud[5])+16) return;
-        uvec2 address;if(!solid_address(at,address)) return;Words e=Words(address);uint s=FR_ENTRY_STATE,m=e.words[s];
+        vec4 meta=samples[i+params.width*params.height];if(floatBitsToUint(meta.x)!=4u) return;
+        uint entry_index=floatBitsToUint(meta.y);if(entry_index>=root[2]) return;
+        Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),entry_index));
+        if(e.words[FR_ENTRY_OWNER]!=2u||e.words[FR_ENTRY_GENERATION]!=floatBitsToUint(meta.w)) return;
+        uint s=FR_ENTRY_STATE,m=e.words[s];
         uint initial=uint(round(float(e.words[s+8u])*coefficient(m,9u)));
         if(e.words[s+9u]>=initial) return;
-        uint side=hud[3];int dy=p.y-int(hud[5]),dx=p.x-int(hud[4]);
+        uint side=hud[3],origin=(e.words[s+4u]-1u)&4095u;int y=int(origin/64u),x=int(origin%64u);
         if(m==7u||m==8u) {
-            int row=dy<2?0:(dy>=4&&dy<6?2:(dy>=8&&dy<10?4:-1));
-            if(row>=0) atomicOr(hud[18u+side],1u<<uint(row+(dx>0?1:0)));
-        } else if(m==9u&&abs(dx)==2&&dy>=9&&dy<=10) atomicOr(hud[20u+side],1u<<uint((dy-9)*2+(dx>0?1:0)));
+            if(y>=16&&y<=18) atomicOr(hud[18u+side],1u);
+            if(y>=21&&y<=23) atomicOr(hud[18u+side],1u<<uint(x<32?1:2));
+            if(y==26) {
+                int stick=x>=20&&x<=22?0:(x>=26&&x<=28?1:(x>=34&&x<=36?2:(x>=40&&x<=42?3:-1)));
+                if(stick>=0) atomicOr(hud[20u+side],1u<<uint(stick));
+            }
+        }
         return;
     }
     int x=p.x-int(hud[6]),y=p.y-int(hud[7]);if(x<0||x>=80||y<0||y>=42) return;
