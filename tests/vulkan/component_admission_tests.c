@@ -93,8 +93,39 @@ static void rigid_gas_case(bool burning) {
 }
 static void test_rigid_ember_transfers_real_heat_into_surrounding_gas(void) {rigid_gas_case(false);}
 static void test_rigid_combustion_consumes_authoritative_body_fuel(void) {rigid_gas_case(true);}
+static bool radiant_case(bool blocked,double *received,char *err,uint32_t cap) {
+    dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));if(!chunk) return false;
+    chunk->cells[650].material=DC_MATERIAL_WOOD;chunk->cells[653].material=DC_MATERIAL_WOOD;
+    fr_reactive_state_t hot,cold;bool okay=context(&g,err,cap)&&dc_gpu_upload_chunk(g,0,chunk,err,cap)&&dc_gpu_set_page(g,0,0,0,err,cap)&&
+        fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,1400,1100,&hot,err,cap)&&
+        fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,300,1101,&cold,err,cap);
+    if(okay) okay=fr_gpu_reactive_seed_cell(g,0,650,&hot,err,cap)&&fr_gpu_reactive_seed_cell(g,0,653,&cold,err,cap)&&dc_gpu_admit_authored_rigid_cells(g,err,cap);
+    if(okay&&blocked) {
+        chunk->cells[650].material=chunk->cells[653].material=DC_MATERIAL_AIR;
+        chunk->cells[651]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+        fr_reactive_state_t stone;okay=fr_reactive_state_default(DC_MATERIAL_STONE,176947,0,300,1102,&stone,err,cap)&&
+            dc_gpu_upload_chunk(g,0,chunk,err,cap)&&fr_gpu_reactive_seed_cell(g,0,651,&stone,err,cap)&&dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,cap);
+    }
+    if(okay) okay=fr_thermal_gpu_enable(g,err,cap)&&fr_thermal_gpu_mark_bonfire_world(g);
+    for(uint32_t i=0;i<20&&okay;i++) okay=fr_thermal_gpu_step(g,.05f,err,cap);
+    fr_reactive_record_t a,b;bool found=false;
+    if(okay) okay=fr_gpu_reactive_read_body(g,0x80000001u,0,0,&a,&found,err,cap)&&found&&
+        fr_gpu_reactive_read_body(g,0x80000002u,0,0,&b,&found,err,cap)&&found;
+    if(okay) {
+        *received=fr_reactive_state_energy(&b.state)-fr_reactive_state_energy(&cold);
+        if(!blocked) okay=fabs(fr_reactive_state_energy(&a.state)+fr_reactive_state_energy(&b.state)-fr_reactive_state_energy(&hot)-fr_reactive_state_energy(&cold))<.01;
+    }
+    free(chunk);dc_gpu_destroy(g);return okay;
+}
+static void test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_heat(void) {
+    char err[256]={0};double open=0,blocked=0;
+    ASSERT_TRUE(radiant_case(false,&open,err,sizeof(err))&&radiant_case(true,&blocked,err,sizeof(err)));
+    printf("Radiant received open%.9g blocked%.9g\n",open,blocked);
+    ASSERT_TRUE(open>.1&&blocked<open*.1);PASS();
+}
 int main(int argc,char **argv) {
     if(argc==2&&strcmp(argv[1],"--burn")==0) RUN(test_rigid_combustion_consumes_authoritative_body_fuel);
-    else {RUN(test_cold_rigid_admission_retains_pose_and_reactive_ownership);RUN(test_rigid_terrain_contact_exchanges_a_paired_heat_budget);RUN(test_rigid_ember_transfers_real_heat_into_surrounding_gas);RUN(test_rigid_combustion_consumes_authoritative_body_fuel);}
+    else if(argc==2&&strcmp(argv[1],"--radiation")==0) RUN(test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_heat);
+    else {RUN(test_cold_rigid_admission_retains_pose_and_reactive_ownership);RUN(test_rigid_terrain_contact_exchanges_a_paired_heat_budget);RUN(test_rigid_ember_transfers_real_heat_into_surrounding_gas);RUN(test_rigid_combustion_consumes_authoritative_body_fuel);RUN(test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_heat);}
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
