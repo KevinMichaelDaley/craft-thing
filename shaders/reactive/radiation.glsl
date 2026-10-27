@@ -60,5 +60,5 @@ void radiant_apply(uint index) {
     uint kind=floatBitsToUint(samples[index+params.width*params.height].x);
     if(kind==4u) fr_body_deposit_radiance(index,heat,outgoing,incoming);
     else if(kind==1u) {uvec2 h=handle_at(index);if(valid(h)) add_energy(Words(reactive_entry_address(uvec2(root[4],root[5]),h.x)),heat);}
-    else if(kind==2u) {uint at=atlas_at(index);if(at!=0xffffffffu) water_energy[at]+=heat;}
+    else if(kind==2u) {uint at=atlas_at(index);if(at!=0xffffffffu) water_energy_set(at,water_energy_at(at)+heat);}
 }

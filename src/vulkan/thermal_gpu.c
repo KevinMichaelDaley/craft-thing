@@ -247,7 +247,7 @@ static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
     vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,t->compute.pipeline_layout,0,1,&t->compute.descriptor,0,NULL);
     vkCmdPushConstants(g->command,t->compute.pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
     uint32_t x=t->groups_x,y=t->groups_y;
-    if(mode==8u||mode==9u||mode==11u||mode==14u) {uint32_t groups=g->runtime_bodies->store.slab_count*DC_BODY_SLAB_RECORDS;
+    if(mode==8u||mode==9u||mode==11u||mode==14u||mode==20u) {uint32_t groups=g->runtime_bodies->store.slab_count*DC_BODY_SLAB_RECORDS;
         x=groups<65535u?groups:65535u;y=(groups+x-1u)/x;}
     vkCmdDispatch(g->command,mode==4u?1u:x,mode==4u?1u:y,1);
 }
@@ -255,6 +255,7 @@ void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
     if(!g->thermal||seconds<=0) return;
     if(g->thermal->probe_active) phase(g,4,seconds);
     phase(g,0,seconds);phase(g,5,seconds);phase(g,6,seconds);
+    phase(g,21,seconds);phase(g,20,seconds);phase(g,23,seconds);
     phase(g,8,seconds);phase(g,9,seconds);
     phase(g,0,seconds);phase(g,7,seconds);phase(g,1,seconds);phase(g,2,seconds);
     phase(g,10,seconds);phase(g,11,seconds);

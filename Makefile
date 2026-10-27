@@ -1980,6 +1980,7 @@ build/thermal_gpu.o build/performance/src/vulkan/thermal_gpu.o: build/shaders/bo
 build/shaders/combustion.comp.spv: shaders/reactive/world_body.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl shaders/sim/rigid_clip.glsl shaders/sim/runtime_body_storage.glsl
 build/shaders/thermal.comp.spv: shaders/reactive/world_body.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl shaders/sim/rigid_clip.glsl shaders/sim/runtime_body_storage.glsl
 build/shaders/thermal.comp.spv: shaders/reactive/body_mass.glsl
+build/shaders/thermal.comp.spv: shaders/reactive/body_wetting.glsl
 build/shaders/thermal.comp.spv: shaders/reactive/radiation.glsl include/dungeoncraft/thermal_surface.h
 build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: include/dungeoncraft/thermal_surface.h
 build/thermal_tests: include/dungeoncraft/thermal_surface.h
