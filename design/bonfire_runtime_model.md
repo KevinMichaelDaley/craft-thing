@@ -130,3 +130,14 @@ permanently extinguishes a still-hot core.
 Delivery remains RED until the real transported flame field, water/oxygen
 controls, lateral-flow/roof/vent evidence, containment/bridge checks and displayed
 complete-frame measurements pass. Do not treat these notes as completion.
+# Final autonomous ignition gate
+
+Every one of the three intended dry main rigid logs must consume its own fuel
+in the normal autonomous displayed run. Track authored log identity through
+immutable parcel origins, including owner changes. Ember or kindling combustion
+and nearby flame pixels do not count. The HUD reports N/3 and the permanent
+bounded test requires 3/3; logs may ignite at different times. Main logs start
+cold and unlit, with a finite starter ember and naturally arranged rigid
+kindling. The saturated control remains separate. No scripted log ignition,
+forced per-log burning flags, infinite heaters or cosmetic flame masks qualify.
+

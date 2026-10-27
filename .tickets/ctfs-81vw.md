@@ -43,3 +43,7 @@ Runtime checkpoints pushed through d35b1d7: actual GPU wood and char burning, fi
 **2026-10-27T01:13:23Z**
 
 Pushed transported reaction-power flame checkpoint8ef1640: no vertical mask; displayed native7/7 plus core/sync validation. All-face gas/solid heat regression fixed1f0c553. Practical reaction cache regression fixed7c427be: four displayed1000-frame runs now dry21.354mean24.152worst and21.242/24.309; wet21.280/23.743 and21.242/23.880ms, versus old40.956-44.532mean49.258-85.320worst. User requires autonomous finite ember/kindling ignition with cold main logs, not whole-pile lit flags. Authoring/autostart is currently RED and in progress; containment/bridge spread also remains RED. No bonfire completion claimed.
+
+**2026-10-27T13:54:51Z**
+
+MANDATORY user final acceptance: ALL3 intended dry main rigid logs must undergo actual fuel-consuming combustion in the autonomous normal-clock test. Ember/kindling burning and nearby flame pixels do not count. Track stable authored log identity through parcel origin/ownership, display N/3 and require3/3 in the permanent bounded displayed test. Main logs start cold/unlit; no forced flags/timers/infinite heaters. Wet control stays separate. Current observed0/3: feature is not complete.
