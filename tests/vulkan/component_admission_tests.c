@@ -45,13 +45,15 @@ static void test_cold_rigid_admission_retains_pose_and_reactive_ownership(void) 
 static void test_rigid_terrain_contact_exchanges_a_paired_heat_budget(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     chunk->cells[650].material=DC_MATERIAL_WOOD;
-    chunk->cells[651]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     fr_reactive_state_t hot,cold;
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,700,900,&hot,err,sizeof(err)));
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,176947,0,300,901,&cold,err,sizeof(err)));
-    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,650,&hot,err,sizeof(err))&&fr_gpu_reactive_seed_cell(g,0,651,&cold,err,sizeof(err)));
-    ASSERT_TRUE(dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err))&&fr_thermal_gpu_enable(g,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,650,&hot,err,sizeof(err))&&dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err)));
+    chunk->cells[650].material=DC_MATERIAL_AIR;
+    chunk->cells[651]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&fr_gpu_reactive_seed_cell(g,0,651,&cold,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err))&&fr_thermal_gpu_enable(g,err,sizeof(err)));
     ASSERT_TRUE(fr_thermal_gpu_step(g,1.f/60.f,err,sizeof(err)));
     fr_reactive_record_t a,b;bool found=false;
     ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0,0,&a,&found,err,sizeof(err))&&found);
