@@ -23,11 +23,16 @@ layout(push_constant) uniform Params {
     uint width,height,seconds,sparse;
     uvec2 world_address,alternate_address,gates_address,model_address;
     uvec4 unused;
+    uvec4 body_params;
 } params;
 layout(buffer_reference,std430,buffer_reference_align=4) buffer Words {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=8) buffer Handles {uvec2 values[];};
 layout(buffer_reference,std430,buffer_reference_align=16) buffer GasField {Gas values[];};
 float coefficient(uint material,uint field) {return uintBitsToFloat(profiles[material*32u+field]);}
+#define DC_RUNTIME_BODY_BINDING 11
+#define FR_THERMAL_OCCUPANCY_BINDING 12
+#define FR_BODY_POOL_WORD params.body_params.x
+#include "world_body.glsl"
 uint atlas(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0xffffffffu;
     uint page=pages[(uint(p.y)/64u)*((params.width+63u)/64u)+uint(p.x)/64u];
@@ -245,12 +250,10 @@ void loose_ash(ivec2 position,uint at,uvec2 handle,Words entry,inout Gas gas) {
 /* Each parcel chooses one neighboring gas cell. The owning gas invocation
  * gathers at most four surfaces, reserving shared oxygen locally before commit.
  * There is no field scan, atomic float race or global flame capacity. */
-void burn(ivec2 position,uint gas_at,inout Gas gas,inout float admitted,inout float source_temperature,inout uint sources) {
-    uint at=atlas(position);if(at==0xffffffffu||target(position)!=gas_at) return;
-    uvec2 handle=Handles(uvec2(root[6],root[7])).values[at];
-    if(handle.y==0u||handle.x>=root[2]) return;
+void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas,inout float admitted,inout float source_temperature,inout uint sources) {
+    uint at=atlas(position);if(at==0xffffffffu||handle.y==0u||handle.x>=root[2]) return;
     Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
-    if(entry.words[FR_ENTRY_GENERATION]!=handle.y||entry.words[FR_ENTRY_OWNER]!=1u) return;
+    if(entry.words[FR_ENTRY_GENERATION]!=handle.y||entry.words[FR_ENTRY_OWNER]!=owner) return;
     uint s=FR_ENTRY_STATE,m=entry.words[s],wood_fuel=entry.words[s+9u];
     if((entry.words[s+13u]|entry.words[s+14u]|entry.words[s+15u]|entry.words[s+16u])!=0u) return;
     bool char_stage=wood_fuel==0u;uint fuel=char_stage?entry.words[s+10u]:wood_fuel;
@@ -258,7 +261,7 @@ void burn(ivec2 position,uint gas_at,inout Gas gas,inout float admitted,inout fl
     float capacity=((float(wood_fuel)+float(entry.words[s+11u]))*coefficient(m,5u)+
         float(entry.words[s+10u])*coefficient(12u,5u)+float(entry.words[s+12u])*coefficient(3u,5u))/65536.;
     if(m!=7u&&m!=8u&&m!=9u&&m!=12u) return;
-    if(fuel==0u) {loose_ash(position,at,handle,entry,gas);return;}
+    if(fuel==0u) {if(owner==1u) loose_ash(position,at,handle,entry,gas);return;}
     if(capacity<=0.) return;
     float energy=uintBitsToFloat(entry.words[s+17u]),temperature=energy/capacity;
     float wet_capacity=float(entry.words[s+8u])*coefficient(m,19u);
@@ -303,9 +306,53 @@ void burn(ivec2 position,uint gas_at,inout Gas gas,inout float admitted,inout fl
     gas.dynamics.y+=.3*heat+removed-retained;
     gas.visual.rgb+=vec3(.18,.16,.14)*(exhaust+float(soot))/65536.;
 }
+void burn(ivec2 position,uint gas_at,inout Gas gas,inout float admitted,inout float source_temperature,inout uint sources) {
+    uint at=atlas(position);if(at==0xffffffffu||target(position)!=gas_at) return;
+    uvec2 handle=Handles(uvec2(root[6],root[7])).values[at];
+    burn_entry(position,gas_at,handle,1u,gas,admitted,source_temperature,sources);
+}
+ivec2 body_parcel_cell(Body body,uint piece) {
+    BodyQuad quad;if(!body_pixel_quad(body,piece,quad)) return ivec2(-1);
+    return ivec2(floor(vec2(body.x_fp,body.y_fp)/65536.+.25*(quad.a+quad.b+quad.c+quad.d)));
+}
+void choose_body_target(uint index) {
+    if(index>=root[2]) return;
+    Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),index));if(e.words[FR_ENTRY_OWNER]!=2u) return;
+    Words scratch=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
+    uint target_word=index*8u+5u;scratch.words[target_word]=0xffffffffu;
+    uint slot=runtime_body_find(e.words[FR_ENTRY_OWNER+1u]);if(slot>=BODY_CAPACITY) return;
+    Body body=DC_BODY(slot);if(!pixel_body(body)) return;
+    uint piece=pixel_piece_at(body,ivec2(e.words[FR_ENTRY_OWNER+3u],e.words[FR_ENTRY_OWNER+4u]));
+    uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.x!=index||h.y!=e.words[FR_ENTRY_GENERATION]) return;
+    ivec2 p=body_parcel_cell(body,piece);float best=-1.;uint chosen=0xffffffffu;
+    for(uint d=0u;d<4u;d++) {
+        ivec2 q=p+directions[d];uint at=atlas(q);if(!gas_cell(at)) continue;
+        uint screen=uint(q.y)*params.width+uint(q.x);
+        if(floatBitsToUint(samples[screen+params.width*params.height].x)==4u) continue;
+        Gas gas=local_gas(at);float mass=gas_mass(gas);if(mass<=0.||gas.geometry.y<=0.) continue;
+        float fraction=gas.species.x/mass,supply=gas.species.x*clamp((fraction-float(FR_COMBUSTION_EXTINGUISH_OXYGEN))/
+            float(FR_COMBUSTION_AMBIENT_OXYGEN-FR_COMBUSTION_EXTINGUISH_OXYGEN),0.,1.);
+        if(supply>best) {best=supply;chosen=at;}
+    }
+    scratch.words[target_word]=chosen;
+    if(chosen==0xffffffffu) e.words[FR_ENTRY_STATE+1u]&=~2u;
+}
+void burn_body_neighbor(ivec2 p,uint gas_at,inout Gas gas,inout float admitted,inout float temperature,inout uint sources) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return;
+    uint slot=runtime_body_find(thermal_occupancy[uint(p.y)*params.width+uint(p.x)]);if(slot>=BODY_CAPACITY) return;
+    Body body=DC_BODY(slot);if(!pixel_body(body)) return;
+    vec2 low=vec2(p)-vec2(body.x_fp,body.y_fp)/65536.;uvec4 query=body_piece_query(body,low,low+1.);
+    Words scratch=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
+    for(uint n=0u;n<query.z*query.w;n++) {
+        uint piece=query_piece(body,query,n);if(pixel_piece_material(body,piece)==0u||body_parcel_cell(body,piece)!=p) continue;
+        uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y==0u||scratch.words[h.x*8u+5u]!=gas_at) continue;
+        burn_entry(p,gas_at,h,2u,gas,admitted,temperature,sources);
+    }
+}
 #include "bonfire_hud.glsl"
 void main() {
     uint i=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
+    if(params.unused.x==9u) {choose_body_target(i);return;}
     if(i>=params.width*params.height) return;
     ivec2 p=ivec2(i%params.width,i/params.width);uint at=atlas(p);
     if(params.unused.x>=6u) {bonfire_hud(params.unused.x,i,p,at);return;}
@@ -345,7 +392,8 @@ void main() {
     }
     float admitted=oxidize_carbon(gas),temperature=gas_capacity(gas)>0.?gas_internal(gas)/gas_capacity(gas):0.;
     uint sources=admitted>0.?2u:0u;
-    for(uint face=0u;face<4u;face++) burn(p+directions[face],at,gas,admitted,temperature,sources);
+    for(uint face=0u;face<4u;face++) {burn(p+directions[face],at,gas,admitted,temperature,sources);
+        burn_body_neighbor(p+directions[face],at,gas,admitted,temperature,sources);}
     emission[at]=vec4(admitted/uintBitsToFloat(params.seconds),temperature,
         uintBitsToFloat(slot_generation(at)),uintBitsToFloat(sources));
     field.values[at]=gas;

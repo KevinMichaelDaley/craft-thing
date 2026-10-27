@@ -1972,6 +1972,7 @@ build/component_admission_tests: tests/vulkan/component_admission_tests.c $(GPU_
 build/bonfire_mechanics_tests: tests/vulkan/bonfire_mechanics_tests.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/shaders/combustion.comp.spv: shaders/reactive/bonfire_hud.glsl
+build/shaders/combustion.comp.spv: shaders/reactive/world_body.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl shaders/sim/rigid_clip.glsl shaders/sim/runtime_body_storage.glsl
 build/shaders/thermal.comp.spv: shaders/reactive/world_body.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl shaders/sim/rigid_clip.glsl shaders/sim/runtime_body_storage.glsl
 build/thermal_gpu.o build/performance/src/vulkan/thermal_gpu.o: build/shaders/combustion.comp.spv
 .PHONY: test_bonfire
