@@ -12,5 +12,8 @@
 /* Gameplay pixels represent centimeter cubes: face area / face separation
  * is one centimeter. The delivered laboratory bench keeps unit geometry. */
 #define FR_THERMAL_GAMEPLAY_FACE_METERS 0.01
+/* A sealed 2D wood slice removes the 3D paths around logs. Effective gameplay
+ * transport compensates for those unresolved routes, not a literal SI k. */
+#define FR_THERMAL_2D_TRANSPORT_SCALE 1.0
 
 #endif
