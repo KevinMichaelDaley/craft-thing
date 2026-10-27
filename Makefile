@@ -1977,6 +1977,7 @@ build/shaders/body_combustion.comp.spv: shaders/reactive/combustion.comp shaders
 build/thermal_gpu.o build/performance/src/vulkan/thermal_gpu.o: build/shaders/body_combustion.comp.spv
 build/shaders/combustion.comp.spv: shaders/reactive/world_body.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl shaders/sim/rigid_clip.glsl shaders/sim/runtime_body_storage.glsl
 build/shaders/thermal.comp.spv: shaders/reactive/world_body.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl shaders/sim/rigid_clip.glsl shaders/sim/runtime_body_storage.glsl
+build/shaders/thermal.comp.spv: shaders/reactive/body_mass.glsl
 build/thermal_gpu.o build/performance/src/vulkan/thermal_gpu.o: build/shaders/combustion.comp.spv
 .PHONY: test_bonfire
 test_ui test_quarter_native: test_bonfire

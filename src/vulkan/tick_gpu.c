@@ -4,6 +4,7 @@
 #include "gpu_internal.h"
 #include "gas_gpu_internal.h"
 #include "ferrum/fire/gas_gpu.h"
+#include "ferrum/fire/combustion_gpu.h"
 #include "runtime_body_gpu.h"
 #include "thermal_gpu_internal.h"
 
@@ -190,6 +191,13 @@ bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
 }
 
 bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    if(gpu&&fr_combustion_gpu_enabled(gpu)&&getenv("DC_FRAME_TIMINGS")) {
+        dc_gpu_tick_capture_t capture;
+        if(!tick_submit(gpu,&capture,err,cap)) return false;
+        fprintf(stderr,"Reactive tick GPU rigid%.3f fluid%.3f mpm_heat%.3f ms\n",
+            capture.stages[0].gpu_ns/1e6,capture.stages[1].gpu_ns/1e6,capture.stages[2].gpu_ns/1e6);
+        return !gpu->gas||fr_gas_gpu_step(gpu,(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f,err,cap);
+    }
     bool handled=false;
     if(!fr_gas_gpu_try_fused_tick(gpu,gpu?(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f:0.f,&handled,err,cap)) return false;
     if(handled) return true;

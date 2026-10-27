@@ -91,4 +91,8 @@ static void rigid_gas_case(bool burning) {
 }
 static void test_rigid_ember_transfers_real_heat_into_surrounding_gas(void) {rigid_gas_case(false);}
 static void test_rigid_combustion_consumes_authoritative_body_fuel(void) {rigid_gas_case(true);}
-int main(void) {RUN(test_cold_rigid_admission_retains_pose_and_reactive_ownership);RUN(test_rigid_terrain_contact_exchanges_a_paired_heat_budget);RUN(test_rigid_ember_transfers_real_heat_into_surrounding_gas);RUN(test_rigid_combustion_consumes_authoritative_body_fuel);printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
+int main(int argc,char **argv) {
+    if(argc==2&&strcmp(argv[1],"--burn")==0) RUN(test_rigid_combustion_consumes_authoritative_body_fuel);
+    else {RUN(test_cold_rigid_admission_retains_pose_and_reactive_ownership);RUN(test_rigid_terrain_contact_exchanges_a_paired_heat_budget);RUN(test_rigid_ember_transfers_real_heat_into_surrounding_gas);RUN(test_rigid_combustion_consumes_authoritative_body_fuel);}
+    printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+}
