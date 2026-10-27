@@ -164,7 +164,7 @@ void feedback(uint index,ivec2 p,uint at) {
         if(handle.y!=0u&&handle.x<root[2]) {
             Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));uint s=FR_ENTRY_STATE;
             if(entry.words[FR_ENTRY_GENERATION]==handle.y&&entry.words[FR_ENTRY_OWNER]==1u&&
-               (entry.words[s]==7u||entry.words[s]==8u||entry.words[s]==12u)&&entry.words[s+8u]!=0u) {
+               (entry.words[s]==7u||entry.words[s]==8u||entry.words[s]==9u||entry.words[s]==12u)&&entry.words[s+8u]!=0u) {
                 float charred=clamp(4.*float(entry.words[s+10u])/float(entry.words[s+8u]),0.,1.);
                 vec3 color=unpackUnorm4x8(pixels[index]).rgb;
                 pixels[index]=packUnorm4x8(vec4(color*(1.-.9*charred),1.));
@@ -242,7 +242,7 @@ void burn(ivec2 position,uint gas_at,inout Gas gas,inout float admitted,inout fl
     uint profile=char_stage?12u:m;
     float capacity=((float(wood_fuel)+float(entry.words[s+11u]))*coefficient(m,5u)+
         float(entry.words[s+10u])*coefficient(12u,5u)+float(entry.words[s+12u])*coefficient(3u,5u))/65536.;
-    if(m!=7u&&m!=8u&&m!=12u) return;
+    if(m!=7u&&m!=8u&&m!=9u&&m!=12u) return;
     if(fuel==0u) {loose_ash(position,at,handle,entry,gas);return;}
     if(capacity<=0.) return;
     float energy=uintBitsToFloat(entry.words[s+17u]),temperature=energy/capacity;

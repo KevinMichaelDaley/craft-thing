@@ -15,7 +15,9 @@ static uint32_t material_at(int64_t x,int64_t y) {
         int64_t dx=x-center;
         if(y>=92&&dx>=-28&&dx<28) return DC_MATERIAL_STONE;
         if(y>=80&&((dx>=-28&&dx<-24)||(dx>=24&&dx<28))) return DC_MATERIAL_STONE;
-        if(y==91&&dx==0) return DC_MATERIAL_CHAR;
+        if(y>=90&&y<92&&dx>=-1&&dx<=1) return DC_MATERIAL_CHAR;
+        if(y>=80&&y<90&&dx>=-1&&dx<=1) return DC_MATERIAL_AIR;
+        if(y>=90&&y<92&&(dx==-2||dx==2)) return DC_MATERIAL_LEAVES;
         if(y>=90&&y<92&&dx>=-6&&dx<=6&&(dx%2)==0) return DC_MATERIAL_WOOD;
         if((y>=88&&y<90&&dx>=-20&&dx<20)||
            (y>=84&&y<86&&dx>=-16&&dx<16)||
@@ -41,16 +43,17 @@ static int worker(void *data) {
             out->chunk->cells[i]=(dc_cell_t){.material=material,.flags=DC_CELL_LOADED_TERRAIN};
             const fr_reactive_profile_t *p=fr_reactive_profile(material);
             uint32_t mass=(uint32_t)llround(p->density*65536.),water=0;
-            if(material==DC_MATERIAL_WOOD&&x>=300) water=(uint32_t)llround(mass*p->moisture_capacity);
+            if((material==DC_MATERIAL_WOOD||material==DC_MATERIAL_LEAVES)&&x>=300) water=(uint32_t)llround(mass*p->moisture_capacity);
             fr_reactive_attachment_t *a=out->reactive.attachments+out->reactive.count++;
             a->local_index=i;a->record.owner=fr_reactive_cell_owner(out->chunk->coord,i);
             out->valid=fr_reactive_state_default(material,mass,water,material==DC_MATERIAL_CHAR?1400.f:293.15f,1+(uint64_t)index*4096+i,
                 &a->record.state,out->error,sizeof(out->error));
             float grain=(float)(((uint64_t)x*3+(uint64_t)y*11)&15)/255.f;
             float *color=out->colors->terrain[i];
-            color[0]=(material==DC_MATERIAL_WOOD?.35f:.23f)+grain;
-            color[1]=(material==DC_MATERIAL_WOOD?.19f:.25f)+grain;
-            color[2]=(material==DC_MATERIAL_WOOD?.08f:.28f)+grain;color[3]=1;
+            bool organic=material==DC_MATERIAL_WOOD||material==DC_MATERIAL_LEAVES;
+            color[0]=(organic?.35f:.23f)+grain;
+            color[1]=(organic?.19f:.25f)+grain;
+            color[2]=(organic?.08f:.28f)+grain;color[3]=1;
         }
     }
     return 0;
