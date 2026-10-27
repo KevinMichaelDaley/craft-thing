@@ -40,7 +40,7 @@ static void test_gpu_profiles_match_cpu_rates_and_ignore_visual_pigment(void) {
     ASSERT_TRUE(create_pipeline(&p,"build/diagnostics/reactive_profile_probe.spv"));
     memset(p.mapped,0,PROBE_WORDS*sizeof(uint32_t));
     p.mapped[0]=CASES;p.mapped[1]=DC_MATERIAL_COUNT;
-    float oxygen[]={.12f,.21f};memcpy(p.mapped+2,oxygen,sizeof(oxygen));
+    float ambient_oxygen=.21f;memcpy(p.mapped+2,&ambient_oxygen,sizeof(ambient_oxygen));
     for(uint32_t id=0;id<DC_MATERIAL_COUNT;id++)
         memcpy(p.mapped+PROFILE_WORD+id*32u,fr_reactive_profile(id),sizeof(fr_reactive_profile_t));
     fr_reactive_ignition_rates_t expected[CASES];

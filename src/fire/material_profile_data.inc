@@ -184,4 +184,3 @@ static const char *const profile_names[] = {
     "magic_ingredient",
 };
 static const float ambient_oxygen_fraction = 0.21f;
-static const float extinguish_oxygen_fraction = 0.12f;

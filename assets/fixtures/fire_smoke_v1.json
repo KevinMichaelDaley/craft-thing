@@ -87,7 +87,6 @@
   "reaction_controls": {
     "wet_capacity_per_mass":0.5,
     "ordinary_wet_hazard_factor_at_full_saturation":0.001,
-    "ordinary_extinguish_oxygen_mass_fraction":0.12,
     "ambient_oxygen_mass_fraction":0.21,
     "oil_coating_hazard_factor_at_full_coverage":3,
     "shock_energy_to_heat_fraction":1,

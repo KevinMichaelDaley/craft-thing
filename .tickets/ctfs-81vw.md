@@ -47,3 +47,7 @@ Pushed transported reaction-power flame checkpoint8ef1640: no vertical mask; dis
 **2026-10-27T13:54:51Z**
 
 MANDATORY user final acceptance: ALL3 intended dry main rigid logs must undergo actual fuel-consuming combustion in the autonomous normal-clock test. Ember/kindling burning and nearby flame pixels do not count. Track stable authored log identity through parcel origin/ownership, display N/3 and require3/3 in the permanent bounded displayed test. Main logs start cold/unlit; no forced flags/timers/infinite heaters. Wet control stays separate. Current observed0/3: feature is not complete.
+
+**2026-10-27T14:46:46Z**
+
+User override: ordinary oxygen is a continuously consumed finite reactant, with NO12-percent ignition/extinction cutoff. Surface hazard/rate and airborne carbon kinetics scale continuously with O2; actual stoichiometric admitted mass caps reaction and reaches zero at zero usable O2. Hot ignition memory is independent of oxygen fraction; visible flame requires actual admitted reaction power. RED2b2fbf9/e9a5ad6 cover old-cutoff continuity, zero-O2/no-emission, no overconsumption and generic GPU hazard parity. Initial GREEN evidence CPU13/13, profiles9/9, GPU256-case parity1/1, actual fullscreen oxygen sweep1/1; final zero-emission assertion and vent regression next. All3-log acceptance remains incomplete; finite4-cell1800K starter calibration follows the corrected law.

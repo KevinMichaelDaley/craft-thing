@@ -36,8 +36,8 @@ def validate(data):
     if data.get("simulation") != [640, 448] or data.get("halo_cells") != 64:
         raise ValueError("Fixture simulation halo changed")
     controls=data["reaction_controls"]
-    if not 0<=controls["ordinary_extinguish_oxygen_mass_fraction"]<controls["ambient_oxygen_mass_fraction"]<=1:
-        raise ValueError("Invalid oxygen thresholds")
+    if not 0<controls["ambient_oxygen_mass_fraction"]<=1:
+        raise ValueError("Invalid ambient oxygen normalization")
     profiles = data["materials"]
     named={p["name"]:p for p in profiles}
     mix=controls["oil_jelly_mix_mass_fractions"]
@@ -217,7 +217,6 @@ def material_c(data):
     lines.extend('    "'+p["name"]+'",' for p in data["materials"])
     lines.append("};")
     lines.append("static const float ambient_oxygen_fraction = "+number(controls["ambient_oxygen_mass_fraction"])+";")
-    lines.append("static const float extinguish_oxygen_fraction = "+number(controls["ordinary_extinguish_oxygen_mass_fraction"])+";")
     return "\n".join(lines)+"\n"
 
 

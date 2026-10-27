@@ -485,8 +485,10 @@ transport, weather and ventilation. A sustained enclosed blaze may legitimately
 fill a room later. Reset, brush editing, chunk seams, offscreen travel, reload,
 pause and replay must preserve fuel, water, oxygen, damage and ownership.
 
-Add gas-specific controls: a sealed fire consumes oxygen and extinguishes before
-fuel is exhausted; opening a real vent restores oxygen and can reignite hot fuel.
+Add gas-specific controls: a sealed fire continuously consumes finite oxygen and
+its reaction tends to zero as usable oxygen runs out, without a concentration
+cutoff. Opening a real vent restores the oxygen reactant and hot fuel can react
+again. Thermal loss can extinguish ignition memory before fuel is exhausted.
 An inert colored-smoke injection dilutes oxygen fraction without inventing oxygen
 consumption. Cold or magic-colored smoke keeps its own density/color behavior.
 

@@ -61,8 +61,7 @@ static float profile_rate(const fr_reactive_profile_t *p,float temperature,float
     if(!p||(p->flags&FR_REACTIVE_FUEL)==0||temperature<p->ignition_K) return 0;
     float supply=(p->flags&FR_REACTIVE_BOUND_OXIDIZER)!=0?
         (p->oxygen_per_fuel>0?clamp01(e->bound_oxidizer_per_fuel/p->oxygen_per_fuel):1):
-        clamp01((e->oxygen_mass_fraction-extinguish_oxygen_fraction)/
-                (ambient_oxygen_fraction-extinguish_oxygen_fraction));
+        e->oxygen_mass_fraction/ambient_oxygen_fraction;
     float dry=1-wetness;
     float wet=(p->flags&FR_REACTIVE_WATER_DOUSEABLE)!=0?
         dry*dry+wetness*p->saturated_hazard_factor:1;

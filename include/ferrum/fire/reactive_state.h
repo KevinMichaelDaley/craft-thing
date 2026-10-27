@@ -12,7 +12,7 @@
 #define FR_REACTIVE_OWNER_WORDS 6u
 enum {
     FR_REACTIVE_WATER_MIRROR = 1u,
-    FR_REACTIVE_FLAMING = 2u,
+    FR_REACTIVE_FLAMING = 2u, /**< Hot ignition memory. Actual flame requires admitted reaction power. */
     FR_REACTIVE_COATING_FLAMING = 4u,
     FR_REACTIVE_SMOLDERING = 8u,
     FR_REACTIVE_SPENT = 16u

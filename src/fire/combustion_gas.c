@@ -14,8 +14,7 @@ bool fr_combustion_gas_reference(const fr_gas_model_t *model,const fr_gas_state_
     double oxygen=thermo.mass>0?source->species[FR_GAS_OXYGEN]/thermo.mass:0;
     double thermal=fmin(1,fmax(0,(thermo.temperature_K-FR_COMBUSTION_AIRBORNE_IGNITION_K)/
         (FR_COMBUSTION_AIRBORNE_FULL_RATE_K-FR_COMBUSTION_AIRBORNE_IGNITION_K)));
-    double supply=fmin(1,fmax(0,(oxygen-FR_COMBUSTION_EXTINGUISH_OXYGEN)/
-        (FR_COMBUSTION_AMBIENT_OXYGEN-FR_COMBUSTION_EXTINGUISH_OXYGEN)));
+    double supply=oxygen/FR_COMBUSTION_AMBIENT_OXYGEN;
     if(source->species[FR_GAS_SOOT]>0&&thermal>0&&supply>0&&seconds>0) {
         extent=source->species[FR_GAS_SOOT]*-expm1(-FR_COMBUSTION_AIRBORNE_RATE*thermal*supply*seconds);
         extent=fmin(extent,source->species[FR_GAS_OXYGEN]/FR_COMBUSTION_AIRBORNE_OXYGEN);

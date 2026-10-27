@@ -24,7 +24,13 @@ static void test_ordinary_gpu_oxygen_response_is_continuous_and_stoichiometric(v
         for(uint32_t i=0;i<4096;i++) {ASSERT_TRUE(after[i].species[FR_GAS_OXYGEN]>=0);oxygen+=before[i].species[FR_GAS_OXYGEN]-after[i].species[FR_GAS_OXYGEN];}
         printf("Oxygen fraction%.4f reacted%u consumed%.9g\n",fractions[run],reacted[run],oxygen);fflush(stdout);
         ASSERT_TRUE(fabs(oxygen-reacted[run]/65536.*1.2)<1e-7);
-        if(run==0) {ASSERT_EQ(reacted[run],0);ASSERT_TRUE(record.state.flags&FR_REACTIVE_FLAMING);}
+        if(run==0) {
+            ASSERT_EQ(reacted[run],0);ASSERT_TRUE(record.state.flags&FR_REACTIVE_FLAMING);
+            fr_combustion_emission_t *emission=calloc(4096,sizeof(*emission));ASSERT_TRUE(emission);
+            ASSERT_TRUE(fr_combustion_gpu_read_emission_chunk(g,0,emission,4096,err,sizeof(err)));
+            for(uint32_t i=0;i<4096;i++) ASSERT_EQ(emission[i].power,0);
+            free(emission);
+        }
         else ASSERT_TRUE(reacted[run]>0);
     }
     ASSERT_TRUE(reacted[2]<=reacted[3]&&reacted[3]<=reacted[4]&&reacted[4]-reacted[2]<3u);

@@ -110,7 +110,7 @@ static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
             printf("BODY exposure chosen%u viableO2%u occupancy%u gathered%u reacted%u targetO2mass%.9g surface%.1fK\n",
                 counters[22],counters[23],counters[24],counters[25],counters[26],target_oxygen,surface_temperature);fflush(stdout);
             float skin[4];for(uint32_t k=0;k<4;k++) memcpy(skin+k,counters+8u+k,sizeof(float));
-            printf("KINDLING dry fuel-used%llu flaming-cells%u hazard%.3f skin%.1fK; LOGS skin %.1f %.1f %.1f hazard %.3f %.3f %.3f flaming %u %u %u\n",
+            printf("KINDLING dry fuel-used%llu ignited-cells%u hazard%.3f skin%.1fK; LOGS skin %.1f %.1f %.1f hazard %.3f %.3f %.3f ignited %u %u %u\n",
                 (unsigned long long)(kindling_initial[0]-kindling_current[0]),kindling_flaming[0],kindling_hazard[0],skin[0],
                 skin[1],skin[2],skin[3],logs[0].hazard,logs[1].hazard,logs[2].hazard,logs[0].flaming,logs[1].flaming,logs[2].flaming);fflush(stdout);
             printf("STARTER settled dry %.1fK heat%.1fJ chemical%.1fJ; wet %.1fK heat%.1fJ chemical%.1fJ\n",

@@ -23,7 +23,7 @@ on exit; this supported save path must be diagnosed and fixed before delivery.
 Presentation is fullscreen, magnified without changing the simulation/render
 grid or brush coordinates. It shows physical elapsed time, ignition progress,
 inspection and pause/step/reset/exit controls. New automated diagnosis has a
-90-second wall bound and one-second progress output. Timeout is failure; no
+30-second final wall bound with3-second calibration and10-second diagnostic modes and one-second progress output. Timeout is failure; no
 multi-minute opaque native run is accepted. Any accelerated test must preserve
 the same physical steps and does not replace normal-clock visual validation.
 
@@ -43,8 +43,12 @@ and releases only the reserved energy. No extra species, transport solver or
 runtime CPU field readback is introduced. Nonfuel hot air/exhaust cannot burn;
 cooled or oxygen-starved smoke cannot emit a flame. The parameters are locked
 before GREEN in `include/dungeoncraft/combustion_parameters.h`: 500 K effective
-onset in a mixed voxel, 1100 K full activity, an 18/s maximum first-order rate,
-and oxygen mass fractions of 0.12 for extinction and 0.21 for full activity.
+onset in a mixed voxel, 1100 K thermal full activity, an18/s reference first-order rate,
+and mass-action oxygen scaling normalized at0.21. Ordinary reaction has no
+oxygen extinction or ignition cutoff; finite stoichiometric oxygen is consumed
+continuously, and actual reaction tends to zero with available oxygen. The hot
+ignition-memory flag is not a flame source: only admitted finite reaction power
+produces visible flame. Cooling or wetting can clear thermal ignition memory.
 These are practical game-model rates, not
 a claim of resolved combustion CFD. Rendering exposure is separate from physics.
 The initial 650 K bulk gate produced no flame in the actual bonfire: the 1254 K
@@ -140,4 +144,3 @@ bounded test requires 3/3; logs may ignite at different times. Main logs start
 cold and unlit, with a finite starter ember and naturally arranged rigid
 kindling. The saturated control remains separate. No scripted log ignition,
 forced per-log burning flags, infinite heaters or cosmetic flame masks qualify.
-

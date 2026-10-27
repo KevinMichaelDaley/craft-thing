@@ -71,8 +71,7 @@ float carbon_activity(Gas gas) {
     float temperature=gas_internal(gas)/capacity,oxygen=gas.species.x/mass;
     float thermal=clamp((temperature-float(FR_COMBUSTION_AIRBORNE_IGNITION_K))/
         float(FR_COMBUSTION_AIRBORNE_FULL_RATE_K-FR_COMBUSTION_AIRBORNE_IGNITION_K),0.,1.);
-    float supply=clamp((oxygen-float(FR_COMBUSTION_EXTINGUISH_OXYGEN))/
-        float(FR_COMBUSTION_AMBIENT_OXYGEN-FR_COMBUSTION_EXTINGUISH_OXYGEN),0.,1.);
+    float supply=max(oxygen,0.)/float(FR_COMBUSTION_AMBIENT_OXYGEN);
     return float(FR_COMBUSTION_AIRBORNE_RATE)*thermal*supply;
 }
 float oxidize_carbon(inout Gas gas) {
@@ -157,10 +156,7 @@ uint choose_target(ivec2 p) {
     uint chosen=0xffffffffu;float best=-1.;
     for(uint i=0u;i<4u;i++) {
         uint at=atlas(p+directions[i]);if(!gas_cell(at)) continue;
-        Gas gas=local_gas(at);float mass=gas_mass(gas);
-        float fraction=mass>0.?gas.species.x/mass:0.;
-        float supply=gas.species.x*clamp((fraction-float(FR_COMBUSTION_EXTINGUISH_OXYGEN))/
-            float(FR_COMBUSTION_AMBIENT_OXYGEN-FR_COMBUSTION_EXTINGUISH_OXYGEN),0.,1.);
+        Gas gas=local_gas(at);float supply=max(gas.species.x,0.);
         if(supply>best) {best=supply;chosen=at;}
     }
     return chosen;
@@ -211,18 +207,17 @@ void feedback(uint index,ivec2 p,uint at) {
     float alpha=1.-exp(-source.x*float(FR_COMBUSTION_EMISSION_EXPOSURE));
     pixels[index]=packUnorm4x8(vec4(mix(unpackUnorm4x8(pixels[index]).rgb,color,alpha),1.));
 }
-void extinguish_unexposed(ivec2 p,uint at) {
+void extinguish_thermally(uint at) {
     if(at==0xffffffffu) return;
     uvec2 handle=Handles(uvec2(root[6],root[7])).values[at];if(handle.y==0u||handle.x>=root[2]) return;
     Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
-    if(entry.words[FR_ENTRY_GENERATION]!=handle.y||entry.words[FR_ENTRY_OWNER]!=1u||
-       (entry.words[FR_ENTRY_STATE+1u]&2u)==0u) return;
-    for(uint direction=0u;direction<4u;direction++) {
-        uint neighbor=atlas(p+directions[direction]);if(!gas_cell(neighbor)) continue;
-        Gas gas=local_gas(neighbor);float mass=gas_mass(gas);
-        if(gas.geometry.y>0.&&mass>0.&&gas.species.x/mass>float(FR_COMBUSTION_EXTINGUISH_OXYGEN)) return;
-    }
-    entry.words[FR_ENTRY_STATE+1u]&=~2u;
+    if(entry.words[FR_ENTRY_GENERATION]!=handle.y||entry.words[FR_ENTRY_OWNER]!=1u) return;
+    uint s=FR_ENTRY_STATE,m=entry.words[s],profile=entry.words[s+9u]==0u?12u:m;
+    float capacity=solid_capacity(entry),temperature=capacity>0.?uintBitsToFloat(entry.words[s+17u])/capacity:0.;
+    float water_capacity=float(entry.words[s+8u])*coefficient(m,19u);
+    float wet=water_capacity>0.?float(entry.words[s+12u])/water_capacity:0.;
+    if((entry.words[s+9u]|entry.words[s+10u])==0u||temperature<coefficient(profile,7u)||wet>=.8)
+        entry.words[s+1u]&=~2u;
 }
 void loose_ash(ivec2 position,uint at,uvec2 handle,Words entry,inout Gas gas) {
     uint s=FR_ENTRY_STATE;
@@ -309,17 +304,17 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
     if(threshold==0.) threshold=ignition_threshold(entry.words[s+4u],entry.words[s+5u]);
     float rate=temperature>=coefficient(profile,7u)?coefficient(profile,8u)*
         (dry*dry+wet*coefficient(profile,22u))*(1.+uintBitsToFloat(entry.words[s+18u])*(coefficient(profile,20u)-1.))*
-        clamp((oxygen-.12)/(.21-.12),0.,1.):0.;
+        max(oxygen,0.)/float(FR_COMBUSTION_AMBIENT_OXYGEN):0.;
     float integral=min(1e20,uintBitsToFloat(entry.words[s+21u])+rate*dt);
     uint flags=entry.words[s+1u];
-    bool viable=temperature>=coefficient(profile,7u)&&oxygen>.12&&wet<.8;
+    bool viable=temperature>=coefficient(profile,7u)&&wet<.8;
     if(!viable) flags&=~2u;else if(integral>=threshold) flags|=2u;
     entry.words[s+20u]=floatBitsToUint(threshold);entry.words[s+21u]=floatBitsToUint(integral);
     entry.words[s+1u]=flags;
     if(!viable||(flags&2u)==0u) return;
     float demand=coefficient(profile,12u);
     float oxygen_fp=max(0.,gas.species.x)*65536.;
-    float requested=float(entry.words[s+8u])*coefficient(profile,31u)*dt*dry*dry+uintBitsToFloat(entry.words[s+27u]);
+    float requested=float(entry.words[s+8u])*coefficient(profile,31u)*dt*dry*dry*(max(oxygen,0.)/float(FR_COMBUSTION_AMBIENT_OXYGEN))+uintBitsToFloat(entry.words[s+27u]);
     entry.words[s+27u]=floatBitsToUint(min(requested-floor(requested),.99999994));
     uint reacted=uint(floor(min(min(float(fuel),requested),oxygen_fp/demand)));
     float used=float(reacted)*demand;if(reacted==0u||used>oxygen_fp) return;
@@ -369,19 +364,18 @@ void choose_body_target(uint index) {
     for(uint d=0u;d<4u;d++) {
         ivec2 q=p+directions[d];uint at=atlas(q);if(!gas_cell(at)) continue;
         Gas gas=local_gas(at);float mass=gas_mass(gas);if(mass<=0.||gas.geometry.y<=0.) continue;
-        float fraction=gas.species.x/mass,supply=gas.species.x*clamp((fraction-float(FR_COMBUSTION_EXTINGUISH_OXYGEN))/
-            float(FR_COMBUSTION_AMBIENT_OXYGEN-FR_COMBUSTION_EXTINGUISH_OXYGEN),0.,1.);
+        float supply=max(gas.species.x,0.);
         if(supply>best) {best=supply;chosen=at;}
     }
     scratch.words[target_word]=chosen;
     if(e.words[FR_ENTRY_STATE+10u]>0u&&e.words[FR_ENTRY_STATE+9u]==0u) {
         if(chosen!=0xffffffffu) {atomicAdd(hud[22],1u);Gas gas=local_gas(chosen);float mass=gas_mass(gas);
-            if(mass>0.&&gas.species.x/mass>.12) atomicAdd(hud[23],1u);
+            if(gas.species.x>0.) atomicAdd(hud[23],1u);
             atomicMax(hud[27],floatBitsToUint(max(gas.species.x,0.)));}
         if(all(greaterThanEqual(p,ivec2(0)))&&all(lessThan(p,ivec2(params.width,params.height)))&&
             thermal_occupancy[uint(p.y)*params.width+uint(p.x)]==body.id) atomicAdd(hud[24],1u);
     }
-    if(chosen==0xffffffffu) {e.words[FR_ENTRY_STATE+1u]&=~2u;scratch.words[index*12u+6u]=0u;}
+    if(chosen==0xffffffffu) scratch.words[index*12u+6u]=0u;
 }
 void burn_body_neighbor(ivec2 p,uint gas_at,inout Gas gas,inout float admitted,inout float temperature,inout uint sources) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return;
@@ -444,7 +438,7 @@ void main() {
             if(material==7u||material==8u||material==9u||material==12u) chosen=choose_target(p);
         }
         samples[i+params.width*params.height].w=uintBitsToFloat(chosen);
-        extinguish_unexposed(p,at);return;
+        extinguish_thermally(at);return;
     }
     if(params.unused.x==1u) {feedback(i,p,at);return;}
     if(!gas_cell(at)) return;

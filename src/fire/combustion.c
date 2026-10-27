@@ -45,14 +45,14 @@ bool fr_combustion_reference(const fr_reactive_state_t *source,double oxygen_fp,
     if(!fr_reactive_ignition_rates(profile,NULL,&exposure,&rates,err_buf,err_cap)) return false;
     if(s.ignition_threshold==0) s.ignition_threshold=threshold(&s);
     s.ignition_integral=fminf(1e20f,s.ignition_integral+rates.substrate*exposed_fraction*seconds);
-    bool viable=fuel&&oxygen_fp&&oxygen_fraction>.12f&&
+    bool viable=fuel&&
         temperature>=profile->ignition_K&&saturation<.8f&&exposed_fraction>0;
     if(!viable) s.flags&=~FR_REACTIVE_FLAMING;
     else if(s.ignition_integral>=s.ignition_threshold) s.flags|=FR_REACTIVE_FLAMING;
     if(viable&&(s.flags&FR_REACTIVE_FLAMING)) {
         double wet=(1-saturation)*(1-saturation);
         double requested=(double)s.dry_mass_fp*profile->surface_burn_per_second*
-            seconds*exposed_fraction*wet+s.reaction_fraction;
+            seconds*exposed_fraction*wet*(oxygen_fraction/FR_COMBUSTION_AMBIENT_OXYGEN)+s.reaction_fraction;
         s.reaction_fraction=(float)(requested-floor(requested));
         if(s.reaction_fraction>=1) s.reaction_fraction=nextafterf(1,0);
         double admitted=fmin(fuel,requested);
