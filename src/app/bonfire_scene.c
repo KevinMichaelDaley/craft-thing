@@ -16,7 +16,8 @@ static uint32_t material_at(int64_t x,int64_t y) {
         if(y>=92&&dx>=-28&&dx<28) return DC_MATERIAL_STONE;
         if(y>=80&&((dx>=-28&&dx<-24)||(dx>=24&&dx<28))) return DC_MATERIAL_STONE;
         if(y>=90&&y<92&&dx>=-1&&dx<=1) return DC_MATERIAL_CHAR;
-        if(y>=86&&y<90&&dx==0) return DC_MATERIAL_LEAVES;
+        if((y==84||y==85||y==88||y==89)&&dx==0) return DC_MATERIAL_LEAVES;
+        if((y==88&&dx>=1&&dx<=3)||(y==85&&dx>=-3&&dx<=-1)) return DC_MATERIAL_WOOD;
         if(y>=80&&y<90&&dx>=-3&&dx<=3) return DC_MATERIAL_AIR;
         if(y>=90&&y<92&&(dx==-2||dx==2)) return DC_MATERIAL_AIR;
         if(y>=90&&y<92&&dx>=-6&&dx<=6&&(dx%2)==0) return DC_MATERIAL_WOOD;
