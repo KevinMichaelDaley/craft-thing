@@ -9,6 +9,7 @@
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/structural/gpu.h"
+#include "../../src/vulkan/gas_gpu_state.h"
 
 static void terrain_combustion(bool practical,bool char_stage) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
@@ -30,9 +31,11 @@ static void terrain_combustion(bool practical,bool char_stage) {
     ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err)));
     if(practical) ASSERT_TRUE(fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
     ASSERT_TRUE(fr_combustion_gpu_enable(g,err,sizeof(err)));
+    if(practical) ASSERT_TRUE(fr_gas_gpu_step(g,.001f,err,sizeof(err)));
     fr_gas_state_t *before=calloc(4096,sizeof(*before)),*after=calloc(4096,sizeof(*after));ASSERT_TRUE(before&&after);
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,before,4096,err,sizeof(err)));
     ASSERT_TRUE(fr_combustion_gpu_step(g,.05f,err,sizeof(err)));
+    if(practical) ASSERT_TRUE(g->gas->cache_valid);
     fr_reactive_record_t result;bool found=false;
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&result,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(result.state.fuel_mass_fp+result.state.char_mass_fp<wood.fuel_mass_fp+wood.char_mass_fp);
@@ -228,7 +231,12 @@ static void test_roof_blocks_and_side_vent_routes_the_physical_flame(void) {
 }
 #include "combustion_vent_cases.h"
 #include "combustion_containment_cases.h"
+#include "combustion_contact_cases.h"
 int main(int argc,char **argv) {
+    if(argc==2&&strcmp(argv[1],"--contact")==0) {
+        RUN(test_hot_gas_heats_each_exposed_wood_face);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
     if(argc==2&&strcmp(argv[1],"--containment")==0) {
         RUN(test_stone_and_clearance_contain_while_a_fuel_bridge_spreads);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
@@ -246,5 +254,6 @@ int main(int argc,char **argv) {
     RUN(test_roof_blocks_and_side_vent_routes_the_physical_flame);
     RUN(test_oxygen_starvation_and_finite_vented_recovery);
     RUN(test_stone_and_clearance_contain_while_a_fuel_bridge_spreads);
+    RUN(test_hot_gas_heats_each_exposed_wood_face);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }

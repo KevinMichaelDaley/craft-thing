@@ -29,6 +29,11 @@ static void test_stone_and_clearance_contain_while_a_fuel_bridge_spreads(void) {
         ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&target,&found,err,sizeof(err))&&found);
         float temperature=0;ASSERT_TRUE(fr_reactive_state_temperature(&target.state,&temperature,err,sizeof(err)));
         fuel[lane]=target.state.fuel_mass_fp;printf("Containment lane%u target fuel%u temperature%.3fK\n",lane,fuel[lane],temperature);
+        for(uint32_t x=20;x<22;x++) if(chunk->cells[(12+lane*16)*64+x].material==DC_MATERIAL_WOOD) {
+            ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,(12+lane*16)*64+x,&target,&found,err,sizeof(err))&&found);
+            ASSERT_TRUE(fr_reactive_state_temperature(&target.state,&temperature,err,sizeof(err)));
+            printf("  wood x%u fuel%u temperature%.3fK\n",x,target.state.fuel_mass_fp,temperature);
+        }
     }
     ASSERT_TRUE(fuel[2]<39322&&fuel[0]==39322&&fuel[1]==39322);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(chunk);dc_gpu_destroy(g);PASS();
