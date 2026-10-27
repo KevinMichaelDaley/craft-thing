@@ -40,7 +40,7 @@ static void test_kindling_has_airflow_and_one_finite_ember_but_no_lit_logs(void)
         ASSERT_TRUE(!(s->flags&FR_REACTIVE_FLAMING));
         if(s->material==DC_MATERIAL_WOOD) ASSERT_TRUE(temperature<294);
         if(s->material==DC_MATERIAL_CHAR) {
-            embers++;ASSERT_TRUE(s->fuel_mass_fp>0&&temperature>1000&&temperature<1600);
+            embers++;ASSERT_TRUE(s->char_mass_fp>0&&temperature>1000&&temperature<1600);
             starting_energy+=s->thermal_energy;
         }
     }

@@ -15,9 +15,12 @@ static uint32_t material_at(int64_t x,int64_t y) {
         int64_t dx=x-center;
         if(y>=92&&dx>=-28&&dx<28) return DC_MATERIAL_STONE;
         if(y>=80&&((dx>=-28&&dx<-24)||(dx>=24&&dx<28))) return DC_MATERIAL_STONE;
-        if((y>=88&&y<92&&dx>=-20&&dx<20)||
-           (y>=84&&y<88&&dx>=-16&&dx<16)||
-           (y>=80&&y<84&&dx>=-12&&dx<12)) return DC_MATERIAL_WOOD;
+        if(y==91&&dx==0) return DC_MATERIAL_CHAR;
+        if(y>=90&&y<92&&dx>=-6&&dx<=6&&(dx%2)==0) return DC_MATERIAL_WOOD;
+        if((y>=88&&y<90&&dx>=-20&&dx<20)||
+           (y>=84&&y<86&&dx>=-16&&dx<16)||
+           (y>=80&&y<82&&dx>=-12&&dx<12)||
+           (y>=82&&y<88&&(dx==-4||dx==4))) return DC_MATERIAL_WOOD;
         if(y>=84&&dx>=52&&dx<56) return DC_MATERIAL_WOOD;
     }
     return DC_MATERIAL_AIR;
@@ -41,7 +44,7 @@ static int worker(void *data) {
             if(material==DC_MATERIAL_WOOD&&x>=300) water=(uint32_t)llround(mass*p->moisture_capacity);
             fr_reactive_attachment_t *a=out->reactive.attachments+out->reactive.count++;
             a->local_index=i;a->record.owner=fr_reactive_cell_owner(out->chunk->coord,i);
-            out->valid=fr_reactive_state_default(material,mass,water,293.15f,1+(uint64_t)index*4096+i,
+            out->valid=fr_reactive_state_default(material,mass,water,material==DC_MATERIAL_CHAR?1400.f:293.15f,1+(uint64_t)index*4096+i,
                 &a->record.state,out->error,sizeof(out->error));
             float grain=(float)(((uint64_t)x*3+(uint64_t)y*11)&15)/255.f;
             float *color=out->colors->terrain[i];
