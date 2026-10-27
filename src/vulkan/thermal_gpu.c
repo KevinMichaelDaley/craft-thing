@@ -36,6 +36,10 @@ bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
 bool fr_combustion_gpu_enabled(const dc_gpu_t *g) {
     return g&&g->thermal&&g->thermal->combustion.pipeline!=VK_NULL_HANDLE;
 }
+bool fr_combustion_gpu_read_emission_chunk(dc_gpu_t *g,uint32_t slot,
+    fr_combustion_emission_t *out,uint32_t capacity,char *err,uint32_t cap) {
+    (void)g;(void)slot;(void)out;(void)capacity;(void)err;(void)cap;return false;
+}
 static void record_combustion(dc_gpu_t *g,float seconds,uint32_t mode) {
     if(!g||!g->thermal||!g->thermal->combustion.pipeline||!g->gas||(mode==0u&&seconds<=0)) return;
     struct fr_thermal_gpu *t=g->thermal;struct fr_gas_gpu *gas=g->gas;

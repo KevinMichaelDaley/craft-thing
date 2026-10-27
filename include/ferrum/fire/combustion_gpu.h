@@ -9,4 +9,10 @@ bool fr_combustion_gpu_enabled(const dc_gpu_t *gpu);
 /** Standalone diagnostic interval using the production GPU transaction.
  * Gameplay records it once in the accepted physical tick. */
 bool fr_combustion_gpu_step(dc_gpu_t *gpu,float seconds,char *err_buf,uint32_t err_cap);
+/** Derived Eulerian source output, not another mass or energy inventory. */
+typedef struct {float power,temperature_K;uint32_t generation,sources;} fr_combustion_emission_t;
+/** Completed-queue diagnostic of admitted reaction power. Never used for a
+ * runtime CPU field solve or per-flame light list. */
+bool fr_combustion_gpu_read_emission_chunk(dc_gpu_t *gpu,uint32_t slot,
+    fr_combustion_emission_t *out,uint32_t capacity,char *err_buf,uint32_t err_cap);
 #endif

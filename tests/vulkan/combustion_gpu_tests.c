@@ -2,8 +2,10 @@
 #include "reactive_cell_gpu_tests.c"
 #undef main
 #include <math.h>
+#include <sys/stat.h>
 #include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/combustion.h"
+#include "dungeoncraft/combustion_parameters.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/structural/gpu.h"
@@ -35,6 +37,12 @@ static void terrain_combustion(bool practical,bool char_stage) {
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&result,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(result.state.fuel_mass_fp+result.state.char_mass_fp<wood.fuel_mass_fp+wood.char_mass_fp);
     ASSERT_TRUE(fr_reactive_state_valid(&result.state,err,sizeof(err)));
+    fr_combustion_emission_t *emission=calloc(4096,sizeof(*emission)),*zero_step=calloc(4096,sizeof(*zero_step));ASSERT_TRUE(emission&&zero_step);
+    ASSERT_TRUE(fr_combustion_gpu_read_emission_chunk(g,0,emission,4096,err,sizeof(err)));
+    double surface_power=0;for(uint32_t i=0;i<4096;i++) if(emission[i].sources&1u) surface_power+=emission[i].power;
+    ASSERT_TRUE(surface_power>0);
+    ASSERT_TRUE(fr_combustion_gpu_step(g,0,err,sizeof(err))&&fr_combustion_gpu_read_emission_chunk(g,0,zero_step,4096,err,sizeof(err)));
+    ASSERT_EQ(memcmp(emission,zero_step,4096*sizeof(*emission)),0);free(emission);free(zero_step);
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
     double oxygen=0,products=0,mass_before=fr_reactive_state_mass_fp(&wood)/65536.,
         mass_after=fr_reactive_state_mass_fp(&result.state)/65536.;
@@ -131,10 +139,10 @@ static void test_flame_emission_requires_local_transported_hot_fuel_and_oxygen(v
     double *volumes=malloc(4096*sizeof(*volumes));uint32_t *pixels=malloc(480u*270u*4u);
     ASSERT_TRUE(input&&output&&volumes&&pixels);for(uint32_t i=0;i<4096;i++) volumes[i]=1;
     uint32_t at=20u*64u+20u;
-    for(uint32_t control=0;control<4;control++) {
+    for(uint32_t control=0;control<5;control++) {
         fr_gas_state_t source={0};source.species[FR_GAS_OXYGEN]=control==3?0:.00028;
         source.species[FR_GAS_NITROGEN]=.00072;source.species[control==1?FR_GAS_EXHAUST:FR_GAS_SOOT]=.0002;
-        for(uint32_t i=0;i<FR_GAS_SPECIES;i++) source.energy+=source.species[i]*model.heat_capacity_cv[i]*(control==2?300:1100);
+        for(uint32_t i=0;i<FR_GAS_SPECIES;i++) source.energy+=source.species[i]*model.heat_capacity_cv[i]*(control==2?300:control==4?480:1100);
         input[at]=source;fr_gas_state_t expected;double reacted=0;
         ASSERT_TRUE(fr_combustion_gas_reference(&model,&source,1,.001,&expected,&reacted,err,sizeof(err)));
         ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volumes,4096,err,sizeof(err))&&fr_combustion_gpu_step(g,.001f,err,sizeof(err)));
@@ -148,11 +156,75 @@ static void test_flame_emission_requires_local_transported_hot_fuel_and_oxygen(v
     }
     free(input);free(output);free(volumes);free(pixels);free(chunk);dc_gpu_destroy(g);PASS();
 }
+/* Cold fixture/reference inspection only. Production never reads these lists. */
+static void transported_flame(uint32_t scenario,double *above,double *light_x) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    fr_gas_state_t *input=calloc(4096,sizeof(*input)),*output=calloc(4096,sizeof(*output));
+    double *volumes=malloc(4096*sizeof(*volumes));uint32_t *pixels=malloc(480u*270u*4u);
+    ASSERT_TRUE(input&&output&&volumes&&pixels);
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    for(uint32_t y=0;y<64;y++) for(uint32_t x=0;x<64;x++) {
+        uint32_t i=y*64+x;bool roof=scenario>=2&&y==24&&x>=16&&x<48&&!(scenario==3&&x>=32&&x<36);
+        volumes[i]=roof?0:1;if(roof) {chunk->cells[i]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};continue;}
+        fr_gas_state_t *s=input+i;s->species[FR_GAS_OXYGEN]=.00028;s->species[FR_GAS_NITROGEN]=.00092;
+        if(x>=28&&x<31&&y>=26&&y<29) s->species[FR_GAS_SOOT]=.000005;
+        double mass=0;
+        for(uint32_t species=0;species<FR_GAS_SPECIES;species++) {
+            mass+=s->species[species];s->energy+=s->species[species]*model.heat_capacity_cv[species]*1100.;
+        }
+        double vx=60,vy=scenario==0?0:-60;s->momentum[0]=mass*vx;s->momentum[1]=mass*vy;
+        s->energy+=.5*model.kinetic_scale*mass*(vx*vx+vy*vy);
+    }
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_gas_gpu_enable(g,&model,.0012f,1100,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
+    ASSERT_TRUE(fr_combustion_gpu_enable(g,err,sizeof(err))&&fr_thermal_gpu_overlay(g,0));
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volumes,4096,err,sizeof(err)));
+    for(uint32_t frame=0;frame<10;frame++) {
+        ASSERT_TRUE(fr_combustion_gpu_step(g,.01f,err,sizeof(err))&&fr_gas_gpu_step(g,.01f,err,sizeof(err)));
+        ASSERT_TRUE(present(g,err,sizeof(err)));
+    }
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,output,4096,err,sizeof(err))&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
+    double total=0,above_mass=0,weighted_x=0,light=0,light_weighted_x=0;
+    for(uint32_t y=0;y<64;y++) for(uint32_t x=0;x<64;x++) {
+        uint32_t i=y*64+x;double carbon=output[i].species[FR_GAS_SOOT];total+=carbon;weighted_x+=carbon*x;
+        if(y<24) above_mass+=carbon;
+        uint32_t pixel=pixels[y*480u+x],r=pixel&255u,green=(pixel>>8)&255u,b=(pixel>>16)&255u;
+        if(r>100u&&r>green+30u&&r>2u*b) {
+            fr_gas_thermo_t thermo;
+            ASSERT_TRUE(fr_gas_thermodynamics(&model,output+i,volumes[i],&thermo,err,sizeof(err)));
+            ASSERT_TRUE(carbon>0&&thermo.temperature_K>FR_COMBUSTION_AIRBORNE_IGNITION_K-1&&output[i].species[FR_GAS_OXYGEN]/thermo.mass>.1199);
+            ASSERT_TRUE(chunk->cells[i].material==DC_MATERIAL_AIR);
+            light+=r-100u;light_weighted_x+=(r-100u)*x;
+        }
+    }
+    ASSERT_TRUE(total>0&&light>0);
+    *above=above_mass/total;*light_x=light_weighted_x/light;
+    printf("Transported flame case%u: carbon x%.4f emission x%.4f above roof%.6f\n",scenario,weighted_x/total,*light_x,*above);
+    ASSERT_TRUE(weighted_x/total>29.5&&*light_x>29.5);
+    mkdir("build/screenshots",0777);char path[128];snprintf(path,sizeof(path),"build/screenshots/transported_flame_%u.bmp",scenario);
+    SDL_Surface *surface=SDL_CreateRGBSurfaceWithFormatFrom(pixels,480,270,32,480*4,SDL_PIXELFORMAT_ABGR8888);
+    ASSERT_TRUE(surface&&SDL_SaveBMP(surface,path)==0);SDL_FreeSurface(surface);
+    free(input);free(output);free(volumes);free(pixels);free(chunk);dc_gpu_destroy(g);
+}
+static void test_flame_moves_with_real_lateral_gas_transport(void) {
+    double above=0,x=0;int previous=g_fail;transported_flame(0,&above,&x);if(g_fail!=previous) return;PASS();
+}
+static void test_roof_blocks_and_side_vent_routes_the_physical_flame(void) {
+    char err[256]={0};double above[3]={0},x=0;
+    for(uint32_t scenario=1;scenario<=3;scenario++) {
+        int previous=g_fail;transported_flame(scenario,above+scenario-1,&x);if(g_fail!=previous) return;
+    }
+    ASSERT_TRUE(above[0]>.02&&above[1]<.001&&above[2]>.02);PASS();
+}
 int main(void) {
     RUN(test_displayed_terrain_combustion_debits_real_fuel_and_oxygen);
     RUN(test_sparse_owner_combustion_uses_the_live_gas_bank);
     RUN(test_retained_char_can_finish_burning_on_the_gpu);
     RUN(test_spent_terrain_becomes_loose_saved_ash_without_losing_mass);
     RUN(test_flame_emission_requires_local_transported_hot_fuel_and_oxygen);
+    RUN(test_flame_moves_with_real_lateral_gas_transport);
+    RUN(test_roof_blocks_and_side_vent_routes_the_physical_flame);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
