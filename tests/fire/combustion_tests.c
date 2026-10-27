@@ -148,7 +148,41 @@ static void test_surface_reserves_airborne_chemical_heat_instead_of_creating_it(
     ASSERT_TRUE(fabs(p.released_heat+p.reserved_airborne_heat-
         p.fuel_fp/65536.*fr_reactive_profile(DC_MATERIAL_WOOD)->primary_heat)<1e-10);PASS();
 }
+static void test_surface_oxygen_is_a_continuous_finite_reactant(void) {
+    char err[256]={0};fr_reactive_state_t source,out;fr_combustion_products_t p;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,1048576,0,900,1900,&source,err,sizeof(err)));
+    source.flags|=FR_REACTIVE_FLAMING;uint32_t near[3]={0};
+    const float fractions[6]={0,.02f,.1199f,.12f,.1201f,.21f};
+    for(uint32_t i=0;i<6;i++) {
+        double available=i?4096:0;
+        ASSERT_TRUE(fr_combustion_reference(&source,available,fractions[i],1,1,&out,&p,err,sizeof(err)));
+        ASSERT_TRUE(p.oxygen_fp<=available&&out.fuel_mass_fp<=source.fuel_mass_fp);
+        if(i==0) {ASSERT_EQ(p.fuel_fp,0);ASSERT_TRUE(out.flags&FR_REACTIVE_FLAMING);}
+        else ASSERT_TRUE(p.fuel_fp>0);
+        if(i>=2&&i<=4) near[i-2]=p.fuel_fp;
+        fr_reactive_exposure_t exposure={.temperature_K=900,.oxygen_mass_fraction=fractions[i]};
+        fr_reactive_ignition_rates_t rates;
+        ASSERT_TRUE(fr_reactive_ignition_rates(fr_reactive_profile(DC_MATERIAL_WOOD),NULL,&exposure,&rates,err,sizeof(err)));
+        if(i) ASSERT_TRUE(rates.substrate>0);else ASSERT_EQ(rates.substrate,0);
+    }
+    ASSERT_TRUE(near[0]<=near[1]&&near[1]<=near[2]&&near[2]-near[0]<8u);PASS();
+}
+static void test_airborne_oxygen_has_no_former_cutoff(void) {
+    char err[256]={0};fr_gas_model_t model=gas_model();double extent[3]={0};
+    const double fractions[4]={.1199,.12,.1201,0};
+    for(uint32_t i=0;i<4;i++) {
+        fr_gas_state_t before={0},after;before.species[FR_GAS_OXYGEN]=.0012*fractions[i];
+        before.species[FR_GAS_SOOT]=.0002;before.species[FR_GAS_NITROGEN]=.001-before.species[FR_GAS_OXYGEN];
+        for(uint32_t s=0;s<FR_GAS_SPECIES;s++) before.energy+=before.species[s]*model.heat_capacity_cv[s]*1100;
+        double reacted=0;ASSERT_TRUE(fr_combustion_gas_reference(&model,&before,1,.01,&after,&reacted,err,sizeof(err)));
+        ASSERT_TRUE(reacted*FR_COMBUSTION_AIRBORNE_OXYGEN<=before.species[FR_GAS_OXYGEN]+1e-14);
+        if(i<3) {ASSERT_TRUE(reacted>0);extent[i]=reacted;}else ASSERT_EQ(reacted,0);
+    }
+    ASSERT_TRUE(extent[0]<=extent[1]&&extent[1]<=extent[2]&&extent[2]-extent[0]<extent[1]*.01);PASS();
+}
 int main(void) {
+    RUN(test_surface_oxygen_is_a_continuous_finite_reactant);
+    RUN(test_airborne_oxygen_has_no_former_cutoff);
     RUN(test_finite_oxygen_and_products);
     RUN(test_starved_wet_and_buried_do_not_burn);
     RUN(test_ignition_hazard_survives_equal_time_scheduling);
