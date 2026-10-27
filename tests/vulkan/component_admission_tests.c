@@ -9,6 +9,11 @@ static void test_cold_rigid_admission_retains_pose_and_reactive_ownership(void) 
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     fr_reactive_state_t original;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,700,500,&original,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,10*64+10,&original,err,sizeof(err)));
+    uint32_t parcel=501;
+    for(uint32_t y=0;y<2;y++) for(uint32_t x=0;x<3;x++) if(x||y) {
+        fr_reactive_state_t cold;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,300,parcel++,&cold,err,sizeof(err)));
+        ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,(10+y)*64+10+x,&cold,err,sizeof(err)));
+    }
     ASSERT_TRUE(dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err)));
     dc_gpu_body_t body;ASSERT_TRUE(dc_gpu_read_body_id(g,0x80000001u,&body,err,sizeof(err)));
     ASSERT_EQ(body.x_fp,10*65536);ASSERT_EQ(body.y_fp,10*65536);
@@ -20,6 +25,12 @@ static void test_cold_rigid_admission_retains_pose_and_reactive_ownership(void) 
     fr_thermal_inspection_t inspection;
     ASSERT_TRUE(fr_thermal_gpu_inspect(g,10,10,&inspection,err,sizeof(err)));
     ASSERT_TRUE(inspection.occupied&&inspection.material==DC_MATERIAL_WOOD&&fabsf(inspection.temperature_K-700)<.01f);
+    ASSERT_TRUE(dc_gpu_set_body_motion(g,body.id,.6f,0,0,err,sizeof(err))&&dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+    ASSERT_TRUE(fr_thermal_gpu_inspect(g,10,10,&inspection,err,sizeof(err)));
+    printf("Rotated rigid heat sample %.3fK\n",inspection.temperature_K);
+    ASSERT_TRUE(inspection.occupied&&inspection.material==DC_MATERIAL_WOOD&&inspection.temperature_K>300&&inspection.temperature_K<700);
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,body.id,0,0,&record,&found,err,sizeof(err))&&found);
+    ASSERT_EQ(memcmp(&record.state,&original,sizeof(original)),0);
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));ASSERT_EQ(chunk->cells[10*64+10].material,DC_MATERIAL_AIR);
     ASSERT_TRUE(dc_gpu_read_body_id(g,0x80000002u,&body,err,sizeof(err)));ASSERT_EQ(body.x_fp,20*65536);
     free(chunk);dc_gpu_destroy(g);PASS();

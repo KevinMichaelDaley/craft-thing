@@ -15,10 +15,11 @@ layout(set=0,binding=4,std430) buffer Fluxes {vec4 fluxes[];};
 layout(set=0,binding=5,std430) buffer Probe {float probe_excess,probe_capacity;uint probe_index,probe_active;};
 layout(set=0,binding=6,std430) buffer Cells {uvec2 cells[];};
 layout(set=0,binding=7,std430) buffer WaterEnergy {float water_energy[];};
-layout(push_constant) uniform Params {uint width,height,phase,seconds,view_x,view_y,mode,unused;} params;
+layout(push_constant) uniform Params {uint width,height,phase,seconds,pool_word,unused_view,mode,unused;} params;
 layout(buffer_reference,std430,buffer_reference_align=4) buffer Words {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=8) readonly buffer Handles {uvec2 values[];};
 float coefficient(uint material,uint field) {return uintBitsToFloat(profiles[material*FR_PROFILE_WORDS+field]);}
+#include "world_body.glsl"
 uint atlas_at(uint index) {
     uint x=index%params.width,y=index/params.width,page=pages[(y/64u)*((params.width+63u)/64u)+x/64u];
     return page==0u?0xffffffffu:(page-1u)*4096u+(y%64u)*64u+x%64u;
@@ -105,6 +106,7 @@ void main() {
     uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
     if(index>=params.width*params.height) return;
     uint x=index%params.width,y=index/params.width;
+    if(params.phase==7u) {vec4 value,metadata;if(fr_body_sample(index,value,metadata)) {samples[index]=value;samples[index+params.width*params.height]=metadata;}return;}
     if(params.phase==0u) {samples[index]=sample_at(index);samples[index+params.width*params.height]=metadata_at(index);}
     if(params.phase==5u) {
         float mx=x+1u<params.width?wet_mass(index,index+1u):0.,my=y+1u<params.height?wet_mass(index,index+params.width):0.;

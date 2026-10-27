@@ -177,12 +177,13 @@ static bool create(dc_gpu_t *g,struct fr_reactive_gpu *reactive,struct fr_therma
     ((float *)t->probe.mapped)[1]=FR_THERMAL_PROBE_CAPACITY;t->overlay=1;
     for(uint32_t i=0;i<t->profile_count;i++) memcpy((fr_reactive_profile_t *)t->profiles.mapped+i,fr_reactive_profile(i),sizeof(fr_reactive_profile_t));
     memset(t->water.mapped,0,(size_t)t->water.bytes);
-    VkDescriptorBufferInfo buffers[8]={{reactive->arena.root.buffer,0,reactive->arena.root.bytes},
+    VkDescriptorBufferInfo buffers[10]={{reactive->arena.root.buffer,0,reactive->arena.root.bytes},
         {g->page_buffer,0,VK_WHOLE_SIZE},{t->profiles.buffer,0,t->profiles.bytes},
         {t->samples.buffer,0,t->samples.bytes},{t->fluxes.buffer,0,t->fluxes.bytes},
-        {t->probe.buffer,0,t->probe.bytes},{g->chunk_buffer,0,VK_WHOLE_SIZE},{t->water.buffer,0,t->water.bytes}};
+        {t->probe.buffer,0,t->probe.bytes},{g->chunk_buffer,0,VK_WHOLE_SIZE},{t->water.buffer,0,t->water.bytes},
+        {g->runtime_bodies->root.buffer,0,g->runtime_bodies->root.bytes},{g->occupancy_buffer,0,VK_WHOLE_SIZE}};
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"thermal pipeline begin\n");
-    if(!fr_renderer_compute_init(g,&t->compute,buffers,8,32,"build/shaders/thermal.comp.spv",err,cap)) {destroy(g,t);return false;}
+    if(!fr_renderer_compute_init(g,&t->compute,buffers,10,32,"build/shaders/thermal.comp.spv",err,cap)) {destroy(g,t);return false;}
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"thermal pipeline end\n");
     if(!fr_thermal_feedback_init(g,&t->feedback,buffers[3],buffers[5],err,cap)) {destroy(g,t);return false;}
     *out=t;return true;
@@ -224,7 +225,7 @@ bool fr_thermal_gpu_is_bonfire_world(const dc_gpu_t *g) {
 }
 static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
     struct fr_thermal_gpu *t=g->thermal;uint32_t bits=0;memcpy(&bits,&seconds,sizeof(bits));
-    uint32_t push[8]={g->width,g->height,mode,bits,0,0,t->purpose==FR_THERMAL_WORLD_BONFIRE?1u:0u,t->profile_count};
+    uint32_t push[8]={g->width,g->height,mode,bits,dc_gpu_pixel_pool_word_offset(g)+DC_GPU_PIXEL_POOL_HEADER_WORDS,0,t->purpose==FR_THERMAL_WORLD_BONFIRE?1u:0u,t->profile_count};
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
@@ -265,6 +266,7 @@ bool fr_thermal_gpu_inspect(dc_gpu_t *g,uint32_t x,uint32_t y,
         return error(err,cap,"Cannot begin thermal inspection snapshot");
     phase(g,0,0);
     record_combustion(g,0,2);
+    phase(g,7,0);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
     if(!fr_renderer_submit(g)) return error(err,cap,"Cannot complete thermal inspection snapshot");
