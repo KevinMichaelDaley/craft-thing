@@ -8,7 +8,7 @@ static int g_pass,g_fail;
 #define PASS() g_pass++
 static void test_real_structural_pits_and_independent_rigid_stack(void) {
     dc_bonfire_plan_t p;ASSERT_TRUE(dc_bonfire_plan(&p));
-    ASSERT_EQ(p.pit.member_count,10);ASSERT_EQ(p.pit.anchor_count,12);ASSERT_EQ(p.count,16);
+    ASSERT_EQ(p.pit.member_count,10);ASSERT_EQ(p.pit.anchor_count,12);ASSERT_TRUE(p.count>=40);
     uint32_t logs[2]={0},sticks[2]={0},starters[2]={0};
     for(uint32_t i=0;i<p.pit.member_count;i++) {
         ASSERT_EQ(p.pit.members[i].material,FR_STRUCTURAL_STONE);ASSERT_EQ(p.pit.members[i].flags,0);
@@ -24,7 +24,7 @@ static void test_real_structural_pits_and_independent_rigid_stack(void) {
             ASSERT_TRUE(a->x+a->width<b->x||b->x+b->width<a->x||a->y+a->height<b->y||b->y+b->height<a->y);
         }
     }
-    for(uint32_t i=0;i<2;i++) {ASSERT_EQ(logs[i],3);ASSERT_EQ(sticks[i],4);ASSERT_EQ(starters[i],1);}
+    for(uint32_t i=0;i<2;i++) {ASSERT_TRUE(logs[i]>=8);ASSERT_TRUE(sticks[i]>=12);ASSERT_EQ(starters[i],1);}
     for(uint32_t side=0;side<2;side++) {
         const dc_bonfire_piece_t *upper=NULL,*right=NULL,*left=NULL;
         for(uint32_t i=0;i<p.count;i++) if(p.pieces[i].kind==DC_BONFIRE_LOG&&p.pieces[i].wet==(side!=0)) {

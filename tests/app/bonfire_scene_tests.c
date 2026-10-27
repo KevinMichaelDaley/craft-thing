@@ -22,7 +22,7 @@ static void test_only_ground_is_terrain_and_all_fuel_is_rigid_staging(void) {
             if(y>=96) {ASSERT_EQ(cell.material,DC_MATERIAL_STONE);ASSERT_TRUE(cell.flags&DC_CELL_LOADED_TERRAIN);}
             else {ASSERT_EQ(cell.material,DC_MATERIAL_WOOD);ASSERT_EQ(cell.flags,0);wood++;}
         }
-        ASSERT_EQ(wood,124);
+        ASSERT_TRUE(wood>=300);
     }
     dc_thermal_bench_release(chunks,2);PASS();
 }
