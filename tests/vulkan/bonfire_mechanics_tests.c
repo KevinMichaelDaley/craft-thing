@@ -13,14 +13,14 @@ static void test_constructed_pit_supports_actual_independent_wood_bodies(void) {
     ASSERT_TRUE(dc_bonfire_admit(g,err,sizeof(err)));
     dc_gpu_extraction_stats_t stats;ASSERT_TRUE(dc_gpu_read_extraction_stats(g,&stats));ASSERT_EQ(stats.owned_bodies,26);
     fr_reactive_record_t *records=NULL;uint32_t count=0,hot=0,wet=0;uint64_t next=0;
-    ASSERT_TRUE(fr_gpu_reactive_export_bodies(g,&records,&count,&next,err,sizeof(err)));ASSERT_EQ(count,246);
+    ASSERT_TRUE(fr_gpu_reactive_export_bodies(g,&records,&count,&next,err,sizeof(err)));ASSERT_EQ(count,248);
     for(uint32_t i=0;i<count;i++) {
         float temperature=0;ASSERT_TRUE(records[i].owner.kind==FR_REACTIVE_OWNER_BODY&&fr_reactive_state_temperature(&records[i].state,&temperature,err,sizeof(err)));
         if(temperature>1000) {hot++;ASSERT_TRUE(records[i].state.flags&FR_REACTIVE_FLAMING);ASSERT_EQ(records[i].state.fuel_mass_fp,0);ASSERT_TRUE(records[i].state.char_mass_fp>0);}
         else ASSERT_EQ(records[i].state.flags&FR_REACTIVE_FLAMING,0);
         if(records[i].state.bound_water_fp) wet++;
     }
-    ASSERT_EQ(hot,6);ASSERT_EQ(wet,120);free(records);
+    ASSERT_EQ(hot,8);ASSERT_EQ(wet,120);free(records);
     dc_gpu_body_t before,after;dc_gpu_body_motion_t motion;
     ASSERT_TRUE(dc_gpu_read_body_id(g,0x80000001u,&before,err,sizeof(err))&&dc_gpu_read_body_motion(g,before.id,&motion,err,sizeof(err)));
     ASSERT_TRUE(!(motion.flags&DC_GPU_BODY_KINEMATIC));
