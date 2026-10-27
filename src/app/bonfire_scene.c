@@ -39,6 +39,13 @@ static int worker(void *data) {
             a->local_index=i;a->record.owner=fr_reactive_cell_owner(out->chunk->coord,i);
             out->valid=fr_reactive_state_default(material,mass,water,piece?piece->temperature_K:293.15f,1+(uint64_t)index*4096+i,
                 &a->record.state,out->error,sizeof(out->error));
+            if(out->valid&&piece&&piece->kind==DC_BONFIRE_STARTER) {
+                fr_reactive_state_t *state=&a->record.state;
+                state->char_mass_fp=state->fuel_mass_fp;state->fuel_mass_fp=0;
+                state->flags|=FR_REACTIVE_FLAMING;
+                state->thermal_energy=(float)(fr_reactive_state_heat_capacity(state)*piece->temperature_K);
+                out->valid=fr_reactive_state_valid(state,out->error,sizeof(out->error));
+            }
             float grain=(float)(((uint64_t)x*3+(uint64_t)y*11)&15)/255.f;
             float *color=out->colors->terrain[i];
             bool organic=material==DC_MATERIAL_WOOD||material==DC_MATERIAL_LEAVES;
