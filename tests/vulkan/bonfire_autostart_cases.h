@@ -23,17 +23,23 @@ static void test_finite_ember_automatically_establishes_the_dry_bonfire(void) {
     ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_set_gravity(g,900,err,sizeof(err))&&fr_combustion_gpu_enable(g,err,sizeof(err))&&fr_thermal_gpu_overlay(g,0));
     bool burned[4096]={0};uint32_t wood_count=0,ever_burned=0,removed_step=UINT32_MAX;
-    bool sustained=false,source_spent=false;
+    bool sustained=false,source_spent=false;uint64_t fuel_at_removal=0;
     fr_gas_state_t *diagnostic_gas=calloc(4096,sizeof(*diagnostic_gas));ASSERT_TRUE(diagnostic_gas);
+    uint64_t wall_start=SDL_GetPerformanceCounter(),wall_report=wall_start;
+    double wall_frequency=(double)SDL_GetPerformanceFrequency();
     for(uint32_t i=0;i<4096;i++) if(scene->chunk->cells[i].material==DC_MATERIAL_WOOD&&i%64<56) wood_count++;
     for(uint32_t step=0;step<36000&&!bonfire_interrupted;step++) {
+        uint64_t now=SDL_GetPerformanceCounter();
+        if((now-wall_start)/wall_frequency>=90.) {printf("Automatic ignition acceptance timeout:90 wall seconds; last simulated %.2fs. Not a pass.\n",step/60.);break;}
+        if((now-wall_report)/wall_frequency>=1.) {printf("Automatic fire:%.2fs simulated, %.1f/90s wall; %u/%u wood cells ignited\n",step/60.,(now-wall_start)/wall_frequency,ever_burned,wood_count);fflush(stdout);wall_report=now;}
         ASSERT_TRUE(fr_thermal_gpu_step(g,1.f/60.f,err,sizeof(err))&&fr_gas_gpu_step(g,1.f/60.f,err,sizeof(err)));
         if(step%600!=599) continue;
-        uint32_t flaming=0;float hottest=0;fr_reactive_record_t record;bool found=false;
+        uint32_t flaming=0;uint64_t remaining_fuel=0;float hottest=0;fr_reactive_record_t record;bool found=false;
         for(uint32_t i=0;i<4096;i++) if(scene->chunk->cells[i].material==DC_MATERIAL_WOOD&&i%64<56) {
             ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,i,&record,&found,err,sizeof(err)));
             if(!found||record.state.fuel_mass_fp<39322) {if(!burned[i]) {burned[i]=true;ever_burned++;}}
             if(found) {
+                remaining_fuel+=(uint64_t)record.state.fuel_mass_fp+record.state.char_mass_fp;
                 float temperature=0;ASSERT_TRUE(fr_reactive_state_temperature(&record.state,&temperature,err,sizeof(err)));
                 if(temperature>hottest) hottest=temperature;
                 if(record.state.flags&FR_REACTIVE_FLAMING) flaming++;
@@ -72,12 +78,14 @@ static void test_finite_ember_automatically_establishes_the_dry_bonfire(void) {
         if(removed_step==UINT32_MAX&&flaming>=4) {
             for(uint32_t y=26;y<=27;y++) for(uint32_t x=31;x<=33;x++)
                 ASSERT_TRUE(dc_gpu_paint_material(g,3*64+x,4*64+y,0,DC_MATERIAL_AIR,err,sizeof(err)));
-            removed_step=step;printf("Scripted player removes only the six starter-coal cells at %.1fs\n",(step+1)/60.);
+            removed_step=step;fuel_at_removal=remaining_fuel;
+            printf("Scripted player removes only the six starter-coal cells at %.1fs\n",(step+1)/60.);
         }
-        if(source_spent&&removed_step!=UINT32_MAX&&step>=removed_step+600&&flaming) sustained=true;
+        if(source_spent&&removed_step!=UINT32_MAX&&step>=removed_step+600&&flaming&&remaining_fuel<fuel_at_removal) sustained=true;
         printf("Automatic bonfire %.1fs: burned%u/%u flaming%u max%.2fK ember%s\n",(step+1)/60.,
             ever_burned,wood_count,flaming,hottest,source_spent?" spent":" active");fflush(stdout);
-        printf("  charcoal %uQ16 %.2fK, tinder %u flaming %.2fK\n",ember_fuel,ember_K,tinder_flaming,tinder_K);fflush(stdout);
+        printf("  charcoal %uQ16 %.2fK, tinder %u flaming %.2fK, wood fuel %lluQ16\n",
+            ember_fuel,ember_K,tinder_flaming,tinder_K,(unsigned long long)remaining_fuel);fflush(stdout);
         ASSERT_TRUE(present(g,err,sizeof(err)));
         if(step==599||step==3599||step==7199||step==11999) {
             uint32_t *pixels=malloc(480u*270u*4u);ASSERT_TRUE(pixels&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
