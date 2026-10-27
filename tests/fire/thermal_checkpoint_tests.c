@@ -48,7 +48,7 @@ static void test_bad_inventory_encode_preserves_the_previous_destination(void) {
     source.water_excess[0]=NAN;ASSERT_TRUE(!fr_thermal_checkpoint_encode(&source,chunks,2,&bytes,&length,err,sizeof(err)));
     source.water_excess[0]=0;source.source.excess_energy=-1;ASSERT_TRUE(!fr_thermal_checkpoint_encode(&source,chunks,2,&bytes,&length,err,sizeof(err)));
     source.source.excess_energy=0;source.source.capacity=0;ASSERT_TRUE(!fr_thermal_checkpoint_encode(&source,chunks,2,&bytes,&length,err,sizeof(err)));
-    source.source.capacity=200;source.purpose=2;ASSERT_TRUE(!fr_thermal_checkpoint_encode(&source,chunks,2,&bytes,&length,err,sizeof(err)));
+    source.source.capacity=200;source.purpose=FR_THERMAL_WORLD_BONFIRE+1u;ASSERT_TRUE(!fr_thermal_checkpoint_encode(&source,chunks,2,&bytes,&length,err,sizeof(err)));
     ASSERT_EQ((uintptr_t)bytes,1u);ASSERT_EQ(length,17u);
     fr_thermal_checkpoint_release(&source);free(chunks);PASS();
 }

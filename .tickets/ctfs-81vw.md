@@ -55,3 +55,7 @@ User override: ordinary oxygen is a continuously consumed finite reactant, with 
 **2026-10-27T15:01:19Z**
 
 BODY surface visibility: REDb2009df reproduced real dry fuel consumption79Q16/char19 with0/6 changed body pixels. Narrow BODY metadata adapter now actual fullscreen core+sync1/1: localized1/6 marked, unchanged unburnt/authored-grain neighbors, unchanged hot inert/nonreacting and wet controls, paused bit-identical pixels and rotated0.4rad rest-state/mark retention. Captures before/after/paused/rotated in build/screenshots/body_surface_*.bmp; permanent tools/diagnostics/body_surface_contact_sheet.py produces inspected close-up sheet. This is feedback from actual char/reaction power/temperature, not surrounding-flame or whole-body tint. All3-log autonomous gate still incomplete.
+
+**2026-10-27T16:01:47Z**
+
+Current actual fullscreen all-log acceptance after wetting adapters:3/3dry0/3wet at6.4simsec/6.6wall, fuel216/193/48Q16 and successful exit save. Obsolete all-terrain autostart diagnostic superseded by permanent body-based bonfire_display_tests/test_bonfire; its latest bounds/progress preserved in9d39bb9 before removal. Full serial make test exposed stale thermal checkpoint test rejecting purpose2, now validBONFIRE; invalid test updated to enumMAX+1 and focused6/6pass. Full regression remains in progress, not yet a pass.

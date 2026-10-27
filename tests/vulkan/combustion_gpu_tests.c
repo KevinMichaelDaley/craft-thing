@@ -237,7 +237,6 @@ static void test_roof_blocks_and_side_vent_routes_the_physical_flame(void) {
 #include "combustion_vent_cases.h"
 #include "combustion_containment_cases.h"
 #include "combustion_contact_cases.h"
-#include "bonfire_autostart_cases.h"
 #include "combustion_oxygen_cases.h"
 int main(int argc,char **argv) {
     if(argc==2&&strcmp(argv[1],"--oxygen")==0) {
@@ -253,8 +252,8 @@ int main(int argc,char **argv) {
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
     }
     if(argc==2&&strcmp(argv[1],"--autostart")==0) {
-        RUN(test_finite_ember_automatically_establishes_the_dry_bonfire);
-        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+        fprintf(stderr,"The terrain fixture was replaced by constructed stone and rigid logs. Run tools/with-vulkan make test_bonfire for the bounded fullscreen physical-clock acceptance.\n");
+        return 2;
     }
     if(argc==2&&strcmp(argv[1],"--surface")==0) {
         RUN(test_sparse_owner_combustion_uses_the_live_gas_bank);
@@ -286,6 +285,5 @@ int main(int argc,char **argv) {
     RUN(test_fresh_side_air_can_feed_a_surface_with_starved_air_above);
     if(!core) RUN(test_stone_and_clearance_contain_while_a_fuel_bridge_spreads);
     RUN(test_hot_gas_heats_each_exposed_wood_face);
-    if(!core) RUN(test_finite_ember_automatically_establishes_the_dry_bonfire);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
