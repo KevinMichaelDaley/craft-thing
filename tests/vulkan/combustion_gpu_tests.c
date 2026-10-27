@@ -233,6 +233,10 @@ static void test_roof_blocks_and_side_vent_routes_the_physical_flame(void) {
 #include "combustion_containment_cases.h"
 #include "combustion_contact_cases.h"
 int main(int argc,char **argv) {
+    if(argc==2&&strcmp(argv[1],"--surface")==0) {
+        RUN(test_sparse_owner_combustion_uses_the_live_gas_bank);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
     if(argc==2&&strcmp(argv[1],"--contact")==0) {
         RUN(test_hot_gas_heats_each_exposed_wood_face);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
