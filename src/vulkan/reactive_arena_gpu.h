@@ -14,7 +14,7 @@ typedef struct {
 } fr_reactive_arena_request_t;
 typedef struct {uint32_t capacity,live,free,retired;} fr_reactive_arena_stats_t;
 typedef struct {
-    dc_gpu_address_buffer_t root,entries,free_bits,mailbox,requests;
+    dc_gpu_address_buffer_t root,entries,free_bits,mailbox,requests,thermal_scratch;
     fr_renderer_compute_t compute;
     uint32_t capacity,request_capacity;
 } fr_reactive_arena_gpu_t;

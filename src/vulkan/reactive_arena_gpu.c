@@ -31,19 +31,21 @@ void fr_reactive_arena_destroy(dc_gpu_t *g,fr_reactive_arena_gpu_t *a) {
     fr_renderer_compute_destroy(g,&a->compute);
     dc_gpu_address_buffer_destroy(g,&a->root);dc_gpu_address_buffer_destroy(g,&a->entries);
     dc_gpu_address_buffer_destroy(g,&a->free_bits);dc_gpu_address_buffer_destroy(g,&a->mailbox);
-    dc_gpu_address_buffer_destroy(g,&a->requests);*a=(fr_reactive_arena_gpu_t){0};
+    dc_gpu_address_buffer_destroy(g,&a->requests);dc_gpu_address_buffer_destroy(g,&a->thermal_scratch);*a=(fr_reactive_arena_gpu_t){0};
 }
 bool fr_reactive_arena_create(dc_gpu_t *g,uint32_t initial,fr_reactive_arena_gpu_t *out,char *err,uint32_t cap) {
     if(!g||!initial||!out||out->root.buffer) return error(err,cap,"Invalid reactive arena destination");
     fr_reactive_arena_gpu_t a={.capacity=rounded(0,initial),.request_capacity=64};
     if(!dc_gpu_address_buffer_create(g,256,true,&a.root,err,cap)||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)a.capacity*FR_ENTRY_WORDS*4u,true,&a.entries,err,cap)||
+       !dc_gpu_address_buffer_create(g,(VkDeviceSize)a.capacity*16u,false,&a.thermal_scratch,err,cap)||
        !dc_gpu_address_buffer_create(g,bit_bytes(a.capacity),true,&a.free_bits,err,cap)||
        !dc_gpu_address_buffer_create(g,64,true,&a.mailbox,err,cap)||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)a.request_capacity*FR_ARENA_REQUEST_WORDS*4u,true,&a.requests,err,cap)) goto fail;
     uint32_t *root=a.root.mapped;root[0]=FR_ARENA_MAGIC;root[1]=FR_ARENA_GPU_ABI;root[2]=a.capacity;
     address(root+FR_ARENA_ENTRIES,a.entries.address);address(root+FR_ARENA_BITS,a.free_bits.address);
     address(root+FR_ARENA_MAILBOX,a.mailbox.address);address(root+FR_ARENA_REQUESTS,a.requests.address);
+    address(root+FR_ARENA_THERMAL_SCRATCH,a.thermal_scratch.address);
     ((uint32_t *)a.mailbox.mapped)[FR_ARENA_MAIL_FREE]=a.capacity;
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g)) goto fail;
     transfer_barrier(g);vkCmdFillBuffer(g->command,a.free_bits.buffer,0,a.free_bits.bytes,UINT32_MAX);
@@ -70,9 +72,10 @@ static bool grow_requests(dc_gpu_t *g,fr_reactive_arena_gpu_t *a,uint32_t count,
 }
 static bool grow_entries(dc_gpu_t *g,fr_reactive_arena_gpu_t *a,uint32_t required,char *err,uint32_t cap) {
     if(required<=a->capacity) return error(err,cap,"Reactive arena cannot grow beyond its address range");
-    uint32_t next=rounded(a->capacity,required);dc_gpu_address_buffer_t entries={0},bits={0};
+    uint32_t next=rounded(a->capacity,required);dc_gpu_address_buffer_t entries={0},bits={0},scratch={0};
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)next*FR_ENTRY_WORDS*4u,true,&entries,err,cap)||
-       !dc_gpu_address_buffer_create(g,bit_bytes(next),true,&bits,err,cap)) goto fail;
+       !dc_gpu_address_buffer_create(g,bit_bytes(next),true,&bits,err,cap)||
+       !dc_gpu_address_buffer_create(g,(VkDeviceSize)next*16u,false,&scratch,err,cap)) goto fail;
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g)) goto fail;
     transfer_barrier(g);
     VkBufferCopy region={0,0,a->entries.bytes};vkCmdCopyBuffer(g->command,a->entries.buffer,entries.buffer,1,&region);
@@ -88,12 +91,14 @@ static bool grow_entries(dc_gpu_t *g,fr_reactive_arena_gpu_t *a,uint32_t require
     vkCmdUpdateBuffer(g->command,a->mailbox.buffer,FR_ARENA_MAIL_FREE*4u,4,&free);
     publish_barrier(g);if(!fr_renderer_submit(g)) goto fail;
     dc_gpu_address_buffer_destroy(g,&a->entries);dc_gpu_address_buffer_destroy(g,&a->free_bits);
+    dc_gpu_address_buffer_destroy(g,&a->thermal_scratch);a->thermal_scratch=scratch;
     a->entries=entries;a->free_bits=bits;a->capacity=next;
     uint32_t *root=a->root.mapped;root[2]=next;
     address(root+FR_ARENA_ENTRIES,entries.address);address(root+FR_ARENA_BITS,bits.address);
+    address(root+FR_ARENA_THERMAL_SCRATCH,scratch.address);
     g->descriptor_revision++;return true;
 fail:
-    dc_gpu_address_buffer_destroy(g,&entries);dc_gpu_address_buffer_destroy(g,&bits);return false;
+    dc_gpu_address_buffer_destroy(g,&entries);dc_gpu_address_buffer_destroy(g,&bits);dc_gpu_address_buffer_destroy(g,&scratch);return false;
 }
 bool fr_reactive_arena_reserve_free(dc_gpu_t *g,fr_reactive_arena_gpu_t *a,uint32_t count,char *err,uint32_t cap) {
     if(!g||!a||!a->root.buffer) return error(err,cap,"Invalid GPU producer reservation");

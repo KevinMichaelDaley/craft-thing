@@ -18,6 +18,7 @@ layout(set=0,binding=7,std430) buffer WaterEnergy {float water_energy[];};
 layout(push_constant) uniform Params {uint width,height,phase,seconds,pool_word,unused_view,mode,unused;} params;
 layout(buffer_reference,std430,buffer_reference_align=4) buffer Words {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=8) readonly buffer Handles {uvec2 values[];};
+layout(buffer_reference,std430,buffer_reference_align=16) buffer ParcelSamples {vec4 values[];};
 float coefficient(uint material,uint field) {return uintBitsToFloat(profiles[material*FR_PROFILE_WORDS+field]);}
 #include "world_body.glsl"
 uint atlas_at(uint index) {
@@ -102,8 +103,45 @@ float exchange(vec4 a,vec4 b) {
     float bound=min(a.y,b.y)*abs(difference)/float(FR_THERMAL_NEIGHBORS);
     return sign(requested)*min(abs(requested),bound);
 }
+void body_conduction(uint index) {
+    Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),index));
+    ParcelSamples cache=ParcelSamples(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
+    if(params.phase==8u) {
+        vec4 value=vec4(0);
+        if(e.words[FR_ENTRY_OWNER]==2u&&e.words[FR_ENTRY_GENERATION]!=0u) {
+            uint s=FR_ENTRY_STATE,m=e.words[s];
+            float capacity=((float(e.words[s+9u])+float(e.words[s+11u])+float(e.words[s+15u]))*coefficient(m,5u)+
+                float(e.words[s+10u])*coefficient(12u,5u)+float(e.words[s+12u])*coefficient(3u,5u)+
+                float(e.words[s+13u])*coefficient(14u,5u)+(float(e.words[s+14u])+float(e.words[s+16u]))*coefficient(15u,5u))/65536.;
+            value=vec4(uintBitsToFloat(e.words[s+17u])+uintBitsToFloat(e.words[s+25u])+uintBitsToFloat(e.words[s+26u]),
+                capacity,coefficient(m,6u),uintBitsToFloat(e.words[FR_ENTRY_GENERATION]));
+        }
+        cache.values[index]=value;return;
+    }
+    vec4 a=cache.values[index];if(a.y<=0.||floatBitsToUint(a.w)!=e.words[FR_ENTRY_GENERATION]) return;
+    uint slot=runtime_body_find(e.words[FR_ENTRY_OWNER+1u]);if(slot>=BODY_CAPACITY) return;
+    Body body=DC_BODY(slot);if(!pixel_body(body)) return;
+    ivec2 rest=ivec2(e.words[FR_ENTRY_OWNER+3u],e.words[FR_ENTRY_OWNER+4u]);
+    const ivec2 directions[4]=ivec2[4](ivec2(-1,0),ivec2(1,0),ivec2(0,-1),ivec2(0,1));
+    float delta=0.;
+    for(uint d=0u;d<4u;d++) {
+        uint piece=pixel_piece_at(body,rest+directions[d]);
+        if(pixel_piece_material(body,piece)==0u) continue;
+        uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y==0u) continue;
+        vec4 b=cache.values[h.x];if(floatBitsToUint(b.w)!=h.y) continue;
+        float flux=exchange(a,b);
+        if(params.mode==1u) {
+            float difference=a.x/a.y-b.x/b.y;
+            float requested=2.*a.z*b.z/max(a.z+b.z,1e-20)*difference*uintBitsToFloat(params.seconds)*float(FR_THERMAL_GAMEPLAY_FACE_METERS);
+            flux=sign(requested)*min(abs(requested),min(a.y,b.y)*abs(difference)/float(FR_THERMAL_NEIGHBORS));
+        }
+        delta-=flux;
+    }
+    add_energy(e,delta);
+}
 void main() {
     uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
+    if(params.phase>=8u) {if(index<root[2]) body_conduction(index);return;}
     if(index>=params.width*params.height) return;
     uint x=index%params.width,y=index/params.width;
     if(params.phase==7u) {vec4 value,metadata;if(fr_body_sample(index,value,metadata)) {samples[index]=value;samples[index+params.width*params.height]=metadata;}return;}
