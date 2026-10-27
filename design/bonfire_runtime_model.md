@@ -3,6 +3,32 @@
 The current visible milestone is ctfs-81vw. Oil, Greek fire, siege weapons and
 combustion of other owners remain separate later work.
 
+## Current user override: constructed pit and rigid fuel
+
+The terrain-only fixture below is historical and rejected. Do not launch it as
+the requested bonfire. Current scope requires constructed structural stone
+members anchored to ordinary ground, with independent rigid logs and kindling
+stacked naturally inside the pit. The proposed small stack uses four short
+kindling sticks, one finite hot ember stick, two lower logs and a bridging upper
+log. The main logs begin cold/unlit and settle through real contacts and gravity.
+A matching saturated stack provides the wet control. No wooden body is pinned.
+
+ctfs-mx1x supplies only necessary BODY-owner thermal/contact/gas exchange,
+combustion, burned-rest-pixel collision/mass updates, residue/fracture and
+persistence adapters. Existing reactive rest handles and owner handoffs remain
+authoritative; CPU runtime ownership lists and fake terrain under rigid visuals
+are prohibited. The old fixture produced a validated-structure-snapshot rejection
+on exit; this supported save path must be diagnosed and fixed before delivery.
+
+Presentation is fullscreen, magnified without changing the simulation/render
+grid or brush coordinates. It shows physical elapsed time, ignition progress,
+inspection and pause/step/reset/exit controls. New automated diagnosis has a
+90-second wall bound and one-second progress output. Timeout is failure; no
+multi-minute opaque native run is accepted. Any accelerated test must preserve
+the same physical steps and does not replace normal-clock visual validation.
+
+## Historical terrain prototype evidence
+
 The first visual trail was a fixed five-cell column over burning terrain. The
 user rejected this on 2026-10-26. It is removed. Flame emission must come from a
 local thermochemical reaction field carried by the gas solver, never from
@@ -67,7 +93,7 @@ The authored automatic-start fixture uses cold, unlit main logs and thin wood
 kindling, four ambient-temperature dry-leaf tinder cells, and one connected
 six-voxel hot charcoal starter. Its approximately 2.1 g of charcoal carries about
 2940 J initial sensible heat and finite profile fuel; no source is replenished.
-Air channels and staggered contact twigs connect tinder to the logs. A CPU fixture
+Air channels and contact splints connect the tinder bundles to the logs. A CPU fixture
 audit requires tinder air faces connected to the sky and direct wood contact.
 The saturated control wets both wood and leaf tinder. Charcoal is the initial
 ignition source, not a flag painted onto every log. The displayed long test tracks
@@ -75,6 +101,14 @@ every intended wood pixel, records temperatures/ignition, and uses the existing
 air brush to remove only the six starter cells after four wood cells establish
 flame. Continued combustion after that removal remains a required acceptance
 check. Automatic whole-pile propagation is still RED at this checkpoint.
+
+Gas oxygen and exhaust amounts are continuous even though solid fuel uses Q16.
+Rounding each small oxygen debit upward had charged 2 quanta for a wood reaction
+requiring 1.2, an approximately 67% over-debit during one-quantum frames. It also
+overcharged charcoal's 1.5 ratio. The corrected reference and GPU transaction
+retain the material ratio and still reserve available oxygen before committing.
+This removes a substantial artificial starvation source; it is not an exact
+per-frame convergence requirement.
 
 Gameplay pixels use centimeter-cube thermal geometry: gram-scale cell masses,
 J/(g K) capacities and conductivity times face-area/separation of 0.01 m. The

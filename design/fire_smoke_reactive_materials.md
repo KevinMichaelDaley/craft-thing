@@ -180,7 +180,7 @@ interfaces, rather than growing a shared simulation monolith.
 | --- | --- | --- |
 | Next | `ctfs-2hu1` | Heat/wetting bench: finite heat source/brush, wood/stone, water cooling, and visible temperature/wetness feedback |
 | Then | `ctfs-dmxv` | Smoke/ventilation box: finite colored smoke, real enclosure/vent controls, flow and oxygen feedback |
-| First gameplay feature | `ctfs-81vw` | Terrain wood bonfire: ignition, gradual fuel/char/ash, visible flame/smoke, warmth and dry/wet containment controls |
+| First gameplay feature | `ctfs-81vw` | Constructed anchored stone pit with independent rigid logs/kindling, natural finite-starter ignition, gradual fuel/char/ash, transported flame/smoke, warmth and wet control |
 
 These are functional systems, not cosmetic substitutes for missing simulation.
 Each needs a permanent demo/test entry, real Vulkan/Wayland captures, appropriate

@@ -1,7 +1,7 @@
 ---
 id: ctfs-81vw
 status: in_progress
-deps: [ctfs-dmxv]
+deps: [ctfs-dmxv, ctfs-mx1x]
 links: [ctlo-3ndt, ctlo-ehqj, ctlo-8b67]
 created: 2026-10-25T02:54:23Z
 type: feature
@@ -9,9 +9,9 @@ priority: 1
 parent: ctlo-d7vm
 tags: [fire, smoke, modular, gameplay]
 ---
-# Deliver the first playable terrain wood bonfire with wet and containment controls
+# Deliver the first playable rigid-log bonfire in a constructed stone pit
 
-First gameplay vertical slice after visible thermal and smoke systems: stationary terrain wood/sticks inside a stone pit in the material-placement demo. Include only the prerequisites needed for ordinary finite-fuel fire, smoke/oxygen, gradual residue and wet controls; reuse existing safe ownership handoffs.
+First gameplay vertical slice after visible thermal and smoke systems. The user's latest instruction supersedes terrain-only scope: use constructed/anchored structural stone members and independent rigid wood logs and kindling naturally stacked inside/above the tinder. Ordinary ground is the only terrain anchor. No painted fixed-terrain pit/log substitutes, kinematic wood, fake rigid visuals, forced ignition or side-separated piles. Add only the real owner/contact/thermal/combustion/residue prerequisites this visible feature requires.
 
 ## Design
 
@@ -19,7 +19,7 @@ See the modular delivery section of design/fire_smoke_reactive_materials.md. Thi
 
 ## Acceptance Criteria
 
-RED-GREEN-REFACTOR. Player can ignite the pile, see actual flame/smoke, feel measured warmth, douse ordinary fuel and observe progressive char/ash. Finite fuel/oxygen/heat/product budgets, stable seeded ignition, oxygen starvation/vented recovery and maintained-wet controls are tested. Stone/cleared containment limits spread; a fuel bridge permits it. Ash stays loose and authored colors/loaded-terrain semantics remain correct. Provide a repeatable interactive demo, permanent displayed integration tests/captures and complete-frame performance evidence on this machine. No cosmetic-only fire, instant whole-component burning, future-material expansion or completion claim for all owners, forest scenario, Greek fire or siege features. Continue to the next visible feature only after this slice is usable, validated and pushed.
+RED-GREEN-REFACTOR. Constructed structural stone supports actual independent rigid logs/kindling via contacts, support and gravity. Cold/unlit main logs naturally ignite from enough kindling and one finite starter; no whole-pile burning flags or infinite heater. Actual flame follows thermochemical gas transport. Finite fuel/oxygen/heat/products, seeded ignition, starvation/vent recovery, saturated control and maintained wetting are tested. Burn damage updates real rigid collision/mass/inertia and safely hands ash/fracture to existing owners; save/reload retains supported state/colors. Fullscreen readable interactive presentation shows simulated time, ignition progress, hover inspection and pause/step/reset/exit controls. Automated runs have explicit wall-clock bounds and periodic progress; timeout is failure, not a prolonged silent wait. Preserve normal physical clock/resolution; any accelerated diagnostics must execute the same physical steps and cannot replace normal-clock displayed evidence. Stone/cleared containment limits spread and a fuel bridge permits it. No oil/Greek fire/siege expansion or broad owner-foundation completion claims. Deliver this feature before advancing.
 
 
 ## Notes
