@@ -18,6 +18,7 @@ layout(set=0,binding=6,std430) buffer Particles {Particle particles[];};
 layout(set=0,binding=7,std430) buffer Counts {uint counts[];};
 layout(set=0,binding=8,std430) buffer Emission {vec4 emission[];};
 layout(set=0,binding=9,std430) buffer Fluxes {vec4 fluxes[];};
+layout(set=0,binding=10,std430) buffer Hud {uint hud[];};
 layout(push_constant) uniform Params {
     uint width,height,seconds,sparse;
     uvec2 world_address,alternate_address,gates_address,model_address;
@@ -299,10 +300,12 @@ void burn(ivec2 position,uint gas_at,inout Gas gas,inout float admitted,inout fl
     gas.dynamics.y+=.3*heat+removed-retained;
     gas.visual.rgb+=vec3(.18,.16,.14)*(exhaust+float(soot))/65536.;
 }
+#include "bonfire_hud.glsl"
 void main() {
     uint i=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
     if(i>=params.width*params.height) return;
     ivec2 p=ivec2(i%params.width,i/params.width);uint at=atlas(p);
+    if(params.unused.x>=6u) {bonfire_hud(params.unused.x,i,p,at);return;}
     if(params.unused.x==4u) {
         fluxes[i].zw=vec2(p.x+1<int(params.width)?contact_flux(at,atlas(p+ivec2(1,0))):0.,
             p.y+1<int(params.height)?contact_flux(at,atlas(p+ivec2(0,1))):0.);return;

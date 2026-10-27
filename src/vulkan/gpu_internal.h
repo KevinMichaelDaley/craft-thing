@@ -271,6 +271,7 @@ struct dc_gpu {
     uint32_t width, height;
     uint32_t view_x, view_y, view_width, view_height;
     uint32_t display_zoom;
+    dc_presentation_focus_t presentation_focus;
     dc_gpu_overlay_t overlay;
     struct fr_scene_gpu *renderer;
 };

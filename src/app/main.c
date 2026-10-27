@@ -1240,6 +1240,7 @@ int main(int argc, char **argv) {
     bool paused = false;
     bool spring_enabled = !(demo_coupled || demo_sifting || scene_path || heat_bench || smoke_box || bonfire);
     uint32_t heat_mode=bonfire?0u:1u;
+    uint32_t bonfire_focus=0;
     uint32_t smoke_mode=0;
     bool marker_overlay = false;
     bool single_step = false;
@@ -1337,7 +1338,11 @@ int main(int argc, char **argv) {
                 case SDLK_5: material = DC_MATERIAL_GRAVEL; break;
                 case SDLK_6: material = DC_MATERIAL_WOOD; break;
                 case SDLK_F8:
+                    if(bonfire&&!event.key.repeat) bonfire_focus=bonfire_focus==2?0:2;
                     if (scene_path && !event.key.repeat) dc_level_view_toggle_lighting(view);
+                    break;
+                case SDLK_TAB:
+                    if(bonfire&&!event.key.repeat) bonfire_focus=bonfire_focus==0?1:0;
                     break;
                 case SDLK_F7:
                     if((heat_bench||bonfire)&&!event.key.repeat) {heat_mode=(heat_mode+1u)%3u;dc_level_view_heat_overlay(view,heat_mode);}
@@ -1482,6 +1487,9 @@ int main(int argc, char **argv) {
             failed = true; running = false;
         }
         uint64_t present_done=benchmark_timings?SDL_GetPerformanceCounter():0;
+        if(running&&bonfire&&!benchmark_frames&&!dc_level_view_bonfire_presentation(view,bonfire_focus,paused)) {
+            fprintf(stderr,"Cannot configure bonfire presentation\n");failed=true;running=false;
+        }
         if (running && !update_demo_title(view, seed, zoom, paused, entering_seed,
                                           seed_error, seed_text, previous_title,heat_bench,heat_mode,smoke_box,smoke_mode,bonfire)) {
             snprintf(err, sizeof(err), "Cannot update world status");

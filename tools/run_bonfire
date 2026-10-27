@@ -2,5 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source tools/smoke_profile
+export DC_FULLSCREEN=1
+export SDL_VIDEODRIVER=wayland
 tools/with-vulkan make -j8 build/dungeoncraft_quarter_native
 exec tools/with-vulkan ./build/dungeoncraft_quarter_native --bonfire "$@"

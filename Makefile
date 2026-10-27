@@ -5,7 +5,9 @@ build/appearance_tests: tests/renderer/appearance_tests.c src/renderer/appearanc
 test: build/appearance_tests
 build/presentation_focus_tests: tests/renderer/presentation_focus_tests.c include/dungeoncraft/presentation.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
-test: build/presentation_focus_tests
+test: test_presentation_focus
+.PHONY: test_presentation_focus
+test_presentation_focus: build/presentation_focus_tests
 	./build/presentation_focus_tests
 test: build/texture_tests build/texture_gpu_tests build/occlusion_gpu_tests build/lighting_gpu_tests build/shading_tests build/scene_gpu_tests
 build/texture_tests: tests/renderer/texture_tests.c src/renderer/appearance.c src/renderer/texture.c include/ferrum/renderer/texture.h
@@ -1963,6 +1965,7 @@ build/combustion_gpu_display_tests: build/shaders/combustion.comp.spv
 build/combustion_gpu_display_tests: tests/vulkan/combustion_containment_cases.h
 build/combustion_gpu_display_tests: tests/vulkan/combustion_contact_cases.h
 build/combustion_gpu_display_tests: tests/vulkan/bonfire_autostart_cases.h src/app/bonfire_scene.c
+build/shaders/combustion.comp.spv: shaders/reactive/bonfire_hud.glsl
 build/thermal_gpu.o build/performance/src/vulkan/thermal_gpu.o: build/shaders/combustion.comp.spv
 .PHONY: test_bonfire
 test_ui test_quarter_native: test_bonfire

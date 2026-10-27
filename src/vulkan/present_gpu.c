@@ -109,10 +109,11 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
     image_barrier(gpu->command, gpu->swap_images[index], VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, 0,
         VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-    uint32_t scaled_width = gpu->view_width * gpu->display_zoom;
-    uint32_t scaled_height = gpu->view_height * gpu->display_zoom;
-    uint32_t left = (gpu->swap_extent.width - scaled_width) / 2u;
-    uint32_t top = (gpu->swap_extent.height - scaled_height) / 2u;
+    dc_presentation_layout_t layout;
+    if(!dc_presentation_layout(gpu->view_width,gpu->view_height,gpu->swap_extent.width,gpu->swap_extent.height,
+        gpu->display_zoom,gpu->presentation_focus,&layout)) return error(err,cap,"Invalid presentation crop");
+    uint32_t scaled_width=layout.width*layout.scale,scaled_height=layout.height*layout.scale;
+    uint32_t left=layout.left,top=layout.top,source_x=gpu->view_x+layout.x,source_y=gpu->view_y+layout.y;
     if (scaled_width != gpu->swap_extent.width ||
         scaled_height != gpu->swap_extent.height) {
         VkClearColorValue background = { .float32 = {0.02f, 0.02f, 0.02f, 1.0f} };
@@ -125,9 +126,9 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
             VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
     }
     VkImageBlit blit = { .srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-        .srcOffsets = { {(int32_t)gpu->view_x, (int32_t)gpu->view_y, 0},
-                        {(int32_t)(gpu->view_x + gpu->view_width),
-                         (int32_t)(gpu->view_y + gpu->view_height), 1} },
+        .srcOffsets = { {(int32_t)source_x, (int32_t)source_y, 0},
+                        {(int32_t)(source_x + layout.width),
+                         (int32_t)(source_y + layout.height), 1} },
         .dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
         .dstOffsets = { {(int32_t)left, (int32_t)top, 0},
                         {(int32_t)(left + scaled_width),

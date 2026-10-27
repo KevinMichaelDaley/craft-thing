@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "dungeoncraft/presentation.h"
 
 #include "dungeoncraft/chunk.h"
 
@@ -134,6 +135,8 @@ bool dc_gpu_set_viewport(dc_gpu_t *gpu, uint32_t x, uint32_t y,
                          uint32_t width, uint32_t height);
 /** Set integer nearest-neighbor display scale within the Vulkan window. */
 bool dc_gpu_set_display_zoom(dc_gpu_t *gpu, uint32_t zoom);
+/** Magnify only presentation; zero width restores the complete visible grid. */
+bool dc_gpu_set_presentation_focus(dc_gpu_t *gpu,dc_presentation_focus_t focus);
 /** Convert a window pixel to a visible simulation cell; false in the letterbox. */
 bool dc_gpu_screen_cell(dc_gpu_t *gpu, uint32_t screen_x, uint32_t screen_y,
                         uint32_t *cell_x, uint32_t *cell_y);

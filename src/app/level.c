@@ -620,6 +620,12 @@ bool dc_level_view_toggle_marker_overlay(dc_level_view_t *view) {
 bool dc_level_view_set_zoom(dc_level_view_t *view, uint32_t zoom) {
     return view && dc_gpu_set_display_zoom(view->gpu, zoom);
 }
+bool dc_level_view_bonfire_presentation(dc_level_view_t *view,uint32_t focus,bool paused) {
+    if(!view) return false;
+    dc_presentation_focus_t crop=focus<2?(dc_presentation_focus_t){focus?312u:120u,144,80,96}:(dc_presentation_focus_t){0};
+    return dc_gpu_set_presentation_focus(view->gpu,crop)&&fr_combustion_gpu_hud(view->gpu,true,focus==1,paused,
+        focus<2?crop.x:4u,focus<2?crop.y:4u);
+}
 
 bool dc_level_view_screen_cell(dc_level_view_t *view, uint32_t screen_x,
                                uint32_t screen_y, uint32_t *cell_x,

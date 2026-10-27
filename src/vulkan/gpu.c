@@ -188,6 +188,8 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
             error(err, cap, SDL_GetError()); goto fail;
         }
         uint32_t flags = SDL_WINDOW_VULKAN;
+        const char *fullscreen=getenv("DC_FULLSCREEN");
+        if(fullscreen&&strcmp(fullscreen,"0")!=0) flags|=SDL_WINDOW_FULLSCREEN_DESKTOP;
 #ifdef DC_NATIVE_VIEW
         flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 #endif
@@ -324,15 +326,16 @@ bool dc_gpu_set_display_zoom(dc_gpu_t *gpu, uint32_t zoom) {
 bool dc_gpu_screen_cell(dc_gpu_t *gpu, uint32_t screen_x, uint32_t screen_y,
                         uint32_t *cell_x, uint32_t *cell_y) {
     if (!gpu || !gpu->swapchain || !cell_x || !cell_y) return false;
-    uint32_t image_width = gpu->view_width * gpu->display_zoom;
-    uint32_t image_height = gpu->view_height * gpu->display_zoom;
-    uint32_t left = (gpu->swap_extent.width - image_width) / 2u;
-    uint32_t top = (gpu->swap_extent.height - image_height) / 2u;
-    if (screen_x < left || screen_y < top || screen_x - left >= image_width ||
-        screen_y - top >= image_height) return false;
-    *cell_x = (screen_x - left) / gpu->display_zoom;
-    *cell_y = (screen_y - top) / gpu->display_zoom;
-    return true;
+    dc_presentation_layout_t layout;
+    return dc_presentation_layout(gpu->view_width,gpu->view_height,gpu->swap_extent.width,
+        gpu->swap_extent.height,gpu->display_zoom,gpu->presentation_focus,&layout)&&
+        dc_presentation_pick(layout,screen_x,screen_y,cell_x,cell_y);
+}
+bool dc_gpu_set_presentation_focus(dc_gpu_t *gpu,dc_presentation_focus_t focus) {
+    dc_presentation_layout_t layout;
+    if(!gpu||!dc_presentation_layout(gpu->view_width,gpu->view_height,gpu->swap_extent.width,
+        gpu->swap_extent.height,gpu->display_zoom,focus,&layout)) return false;
+    gpu->presentation_focus=focus;return true;
 }
 
 bool dc_gpu_set_overlay(dc_gpu_t *gpu, dc_gpu_overlay_t overlay) {
