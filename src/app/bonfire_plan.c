@@ -32,7 +32,7 @@ bool dc_bonfire_plan(dc_bonfire_plan_t *out) {
         piece(out,side,DC_BONFIRE_STARTER,158,90,3,1);
         piece(out,side,DC_BONFIRE_KINDLING,162,90,3,1);piece(out,side,DC_BONFIRE_KINDLING,168,90,3,1);
         piece(out,side,DC_BONFIRE_LOG,146,85,10,3);piece(out,side,DC_BONFIRE_LOG,164,85,10,3);
-        piece(out,side,DC_BONFIRE_LOG,152,80,16,3);
+        piece(out,side,DC_BONFIRE_LOG,146,80,16,3);
     }
     return true;
 }
