@@ -116,9 +116,10 @@ void body_conduction(uint index) {
             value=vec4(uintBitsToFloat(e.words[s+17u])+uintBitsToFloat(e.words[s+25u])+uintBitsToFloat(e.words[s+26u]),
                 capacity,coefficient(m,6u),uintBitsToFloat(e.words[FR_ENTRY_GENERATION]));
         }
-        cache.values[index]=value;return;
+        cache.values[index*2u]=value;cache.values[index*2u+1u]=vec4(0);return;
     }
-    vec4 a=cache.values[index];if(a.y<=0.||floatBitsToUint(a.w)!=e.words[FR_ENTRY_GENERATION]) return;
+    if(params.phase==11u) {if(e.words[FR_ENTRY_OWNER]==2u) add_energy(e,cache.values[index*2u+1u].x);return;}
+    vec4 a=cache.values[index*2u];if(a.y<=0.||floatBitsToUint(a.w)!=e.words[FR_ENTRY_GENERATION]) return;
     uint slot=runtime_body_find(e.words[FR_ENTRY_OWNER+1u]);if(slot>=BODY_CAPACITY) return;
     Body body=DC_BODY(slot);if(!pixel_body(body)) return;
     ivec2 rest=ivec2(e.words[FR_ENTRY_OWNER+3u],e.words[FR_ENTRY_OWNER+4u]);
@@ -128,7 +129,7 @@ void body_conduction(uint index) {
         uint piece=pixel_piece_at(body,rest+directions[d]);
         if(pixel_piece_material(body,piece)==0u) continue;
         uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y==0u) continue;
-        vec4 b=cache.values[h.x];if(floatBitsToUint(b.w)!=h.y) continue;
+        vec4 b=cache.values[h.x*2u];if(floatBitsToUint(b.w)!=h.y) continue;
         float flux=exchange(a,b);
         if(params.mode==1u) {
             float difference=a.x/a.y-b.x/b.y;
@@ -141,7 +142,7 @@ void body_conduction(uint index) {
 }
 void main() {
     uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
-    if(params.phase>=8u) {if(index<root[2]) body_conduction(index);return;}
+    if(params.phase==8u||params.phase==9u||params.phase==11u) {if(index<root[2]) body_conduction(index);return;}
     if(index>=params.width*params.height) return;
     uint x=index%params.width,y=index/params.width;
     if(params.phase==7u) {vec4 value,metadata;if(fr_body_sample(index,value,metadata)) {samples[index]=value;samples[index+params.width*params.height]=metadata;}return;}
@@ -171,9 +172,26 @@ void main() {
         vec4 b=x+1u<params.width?samples[index+1u]:vec4(0),c=y+1u<params.height?samples[index+params.width]:vec4(0);
         if(b.y>0.) b.x=temperature(b,index+1u)*b.y;
         if(c.y>0.) c.x=temperature(c,index+params.width)*c.y;
-        fluxes[index]=vec4(exchange(a,b),exchange(a,c),0.,0.);
+        float horizontal=exchange(a,b),vertical=exchange(a,c);
+        uint n=params.width*params.height;
+        bool rigid=floatBitsToUint(samples[index+n].x)==4u;
+        if(b.y>0.&&(rigid||floatBitsToUint(samples[index+1u+n].x)==4u))
+            horizontal=sign(horizontal)*min(abs(horizontal),min(a.y,b.y)*abs(a.x/a.y-b.x/b.y)/16.);
+        if(c.y>0.&&(rigid||floatBitsToUint(samples[index+params.width+n].x)==4u))
+            vertical=sign(vertical)*min(abs(vertical),min(a.y,c.y)*abs(a.x/a.y-c.x/c.y)/16.);
+        uint id=thermal_occupancy[index];
+        if(id!=0u&&x+1u<params.width&&thermal_occupancy[index+1u]==id) horizontal=0.;
+        if(id!=0u&&y+1u<params.height&&thermal_occupancy[index+params.width]==id) vertical=0.;
+        fluxes[index]=vec4(horizontal,vertical,0.,0.);
     }
-    if(params.phase==2u&&samples[index].y>0.) {
+    if(params.phase==10u) {
+        if(floatBitsToUint(samples[index+params.width*params.height].x)!=4u) return;
+        float heat=-fluxes[index].x-fluxes[index].y;
+        if(x>0u) heat+=fluxes[index-1u].x;
+        if(y>0u) heat+=fluxes[index-params.width].y;
+        fr_body_deposit(index,heat);return;
+    }
+    if(params.phase==2u&&samples[index].y>0.&&floatBitsToUint(samples[index+params.width*params.height].x)!=4u) {
         float energy=-fluxes[index].x-fluxes[index].y;
         if(x>0u) energy+=fluxes[index-1u].x;
         if(y>0u) energy+=fluxes[index-params.width].y;

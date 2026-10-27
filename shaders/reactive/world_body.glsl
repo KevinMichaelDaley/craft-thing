@@ -44,4 +44,27 @@ bool fr_body_sample(uint index,out vec4 node_value,out vec4 metadata) {
     if(total>0.) node_value.zw/=total;
     return node_value.y>0.;
 }
+void fr_body_deposit(uint index,float heat) {
+    if(heat==0.) return;
+    uint slot=runtime_body_find(thermal_occupancy[index]);if(slot>=BODY_CAPACITY) return;
+    Body body=DC_BODY(slot);if(!pixel_body(body)) return;
+    ivec2 cell=ivec2(index%params.width,index/params.width);
+    vec2 low=vec2(cell)-vec2(body.x_fp,body.y_fp)/65536.;uvec4 query=body_piece_query(body,low,low+1.);
+    float total=0.;
+    for(uint i=0u;i<query.z*query.w;i++) {
+        uint piece=query_piece(body,query,i);if(pixel_piece_material(body,piece)==0u) continue;
+        if(fr_body_reactive_handle(body,slot,piece).y==0u) continue;
+        vec2 center;total+=body_cell_volume(body,piece,cell,1.,center);
+    }
+    if(total<=0.) return;
+    Words scratch=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
+    for(uint i=0u;i<query.z*query.w;i++) {
+        uint piece=query_piece(body,query,i);if(pixel_piece_material(body,piece)==0u) continue;
+        uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y==0u) continue;
+        vec2 center;float share=body_cell_volume(body,piece,cell,1.,center)/total;if(share<=0.) continue;
+        uint word=h.x*8u+4u,old=atomicAdd(scratch.words[word],0u);
+        for(;;) {uint next=floatBitsToUint(uintBitsToFloat(old)+heat*share);
+            uint observed=atomicCompSwap(scratch.words[word],old,next);if(observed==old) break;old=observed;}
+    }
+}
 #endif
