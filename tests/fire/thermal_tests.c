@@ -4,6 +4,7 @@
 #include "ferrum/fire/material_profile.h"
 #include "ferrum/fire/thermal.h"
 #include "dungeoncraft/thermal_surface.h"
+#include "dungeoncraft/blackbody.h"
 
 static int g_pass,g_fail;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
@@ -89,7 +90,20 @@ static void test_equilibrium_boundary_cannot_invent_a_hot_surface(void) {
     ASSERT_TRUE(fabsf(fr_thermal_surface_K(300,300,.0024f,.001f,coefficient,coefficient*300.f*300.f*300.f*300.f)-300)<.1f);
     ASSERT_TRUE(fabsf(fr_thermal_surface_K(300,300,.0024f,.001f,0,0)-300)<.1f);PASS();
 }
+static void test_blackbody_temperature_power_and_magic_override(void) {
+    char err[256]={0};float red[3],white[3],dark[3],magic[3],override[3]={.1f,.2f,1.f};
+    fr_blackbody_rgb(1000.f,1.f,0,override,red);
+    fr_blackbody_rgb(6500.f,1.f,0,override,white);
+    fr_blackbody_rgb(6500.f,0.f,0,override,dark);
+    fr_blackbody_rgb(1000.f,.5f,1,override,magic);
+    ASSERT_TRUE(red[0]>red[1]&&red[1]>red[2]);
+    ASSERT_TRUE(white[2]>red[2]+.4f&&white[1]>.6f);
+    ASSERT_TRUE(dark[0]==0.f&&dark[1]==0.f&&dark[2]==0.f);
+    ASSERT_TRUE(fabsf(magic[0]-.05f)<1e-6f&&fabsf(magic[2]-.5f)<1e-6f);
+    PASS();
+}
 int main(void) {
+    RUN(test_blackbody_temperature_power_and_magic_override);
     RUN(test_finite_radiance_heats_the_boundary_without_requiring_a_hot_bulk);
     RUN(test_equilibrium_boundary_cannot_invent_a_hot_surface);
     RUN(test_sample_uses_actual_composition_and_keeps_wet_wood_capacity);
