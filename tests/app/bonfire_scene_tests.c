@@ -33,13 +33,34 @@ static void test_kindling_has_airflow_and_one_finite_ember_but_no_lit_logs(void)
     char err[256]={0};dc_chunk_coord_t coord={2,1};
     dc_thermal_bench_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     ASSERT_TRUE(dc_bonfire_build(&coord,1,chunk,err,sizeof(err)));
-    uint32_t embers=0,tinder=0,kindling_faces=0;double starting_energy=0;
+    uint32_t embers=0,tinder=0,contacting_tinder=0,kindling_faces=0;double starting_energy=0;
+    uint8_t reachable[4096]={0};uint32_t queue[4096],head=0,tail=0;
+    for(uint32_t x=0;x<64;x++) if(chunk->chunk->cells[x].material==DC_MATERIAL_AIR) {queue[tail++]=x;reachable[x]=1;}
+    while(head<tail) {
+        uint32_t at=queue[head++];int x=at%64,y=at/64;
+        const int dx[4]={-1,1,0,0},dy[4]={0,0,-1,1};
+        for(uint32_t face=0;face<4;face++) {
+            int xx=x+dx[face],yy=y+dy[face];if(xx<0||xx>=64||yy<0||yy>=64) continue;
+            uint32_t next=(uint32_t)(yy*64+xx);
+            if(!reachable[next]&&chunk->chunk->cells[next].material==DC_MATERIAL_AIR) {reachable[next]=1;queue[tail++]=next;}
+        }
+    }
     for(uint32_t i=0;i<chunk->reactive.count;i++) {
         fr_reactive_attachment_t *a=chunk->reactive.attachments+i;fr_reactive_state_t *s=&a->record.state;
         float temperature=0;ASSERT_TRUE(fr_reactive_state_temperature(s,&temperature,err,sizeof(err)));
         ASSERT_TRUE(!(s->flags&FR_REACTIVE_FLAMING));
         if(s->material==DC_MATERIAL_WOOD) ASSERT_TRUE(temperature<294);
-        if(s->material==DC_MATERIAL_LEAVES) {tinder++;ASSERT_TRUE(temperature<294&&s->bound_water_fp==0);}
+        if(s->material==DC_MATERIAL_LEAVES) {
+            tinder++;ASSERT_TRUE(temperature<294&&s->bound_water_fp==0);
+            uint32_t at=a->local_index;bool air=false,wood=false;
+            const int neighbors[4]={(int)at-1,(int)at+1,(int)at-64,(int)at+64};
+            for(uint32_t face=0;face<4;face++) if(neighbors[face]>=0&&neighbors[face]<4096) {
+                uint32_t neighbor=(uint32_t)neighbors[face];
+                if(reachable[neighbor]) air=true;
+                if(chunk->chunk->cells[neighbor].material==DC_MATERIAL_WOOD) wood=true;
+            }
+            ASSERT_TRUE(air);if(wood) contacting_tinder++;
+        }
         if(s->material==DC_MATERIAL_CHAR) {
             embers++;ASSERT_TRUE(s->char_mass_fp>0&&temperature>1000&&temperature<1600);
             starting_energy+=s->thermal_energy;
@@ -50,7 +71,7 @@ static void test_kindling_has_airflow_and_one_finite_ember_but_no_lit_logs(void)
         if(chunk->chunk->cells[at].material==DC_MATERIAL_WOOD&&
            (chunk->chunk->cells[at-1].material==DC_MATERIAL_AIR||chunk->chunk->cells[at+1].material==DC_MATERIAL_AIR)) kindling_faces++;
     }
-    ASSERT_EQ(embers,6);ASSERT_TRUE(tinder>=4&&starting_energy>0&&starting_energy<4000&&kindling_faces>=4);
+    ASSERT_EQ(embers,6);ASSERT_TRUE(tinder>=4&&contacting_tinder>=2&&starting_energy>0&&starting_energy<4000&&kindling_faces>=4);
     dc_thermal_bench_release(chunk,1);PASS();
 }
 int main(void) {RUN(test_dry_and_wet_piles_have_real_fuel_loaded_flags_and_colors);
