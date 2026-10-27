@@ -68,6 +68,13 @@ static void test_competing_parcels_cannot_overdraw_oxygen(void) {
     }
     ASSERT_EQ(used+remaining,80);ASSERT_TRUE(remaining<2);PASS();
 }
+static void test_continuous_gas_oxygen_is_not_rounded_up_per_solid_quantum(void) {
+    char err[256]={0};fr_reactive_state_t s,out;fr_combustion_products_t p;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,800,39,&s,err,sizeof(err)));
+    s.flags=FR_REACTIVE_FLAMING;s.ignition_threshold=.5;s.ignition_integral=.6;
+    ASSERT_TRUE(fr_combustion_reference(&s,65536,.23f,1,.02f,&out,&p,err,sizeof(err)));
+    ASSERT_EQ(p.fuel_fp,1);ASSERT_TRUE(fabs(p.oxygen_fp-1.2)<.00001);PASS();
+}
 static void test_short_frames_retain_fractional_burn_progress(void) {
     char err[256]={0};fr_reactive_state_t a,b,tmp;fr_combustion_products_t p;
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,800,43,&a,err,sizeof(err)));
@@ -147,6 +154,7 @@ int main(void) {
     RUN(test_ignition_hazard_survives_equal_time_scheduling);
     RUN(test_energy_ledger_and_invalid_transaction);
     RUN(test_competing_parcels_cannot_overdraw_oxygen);
+    RUN(test_continuous_gas_oxygen_is_not_rounded_up_per_solid_quantum);
     RUN(test_short_frames_retain_fractional_burn_progress);
     RUN(test_fractional_reaction_survives_checkpoint_and_split);
     RUN(test_retained_char_remains_finite_combustible_fuel);

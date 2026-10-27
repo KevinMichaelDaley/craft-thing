@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/combustion.h"
+#include "ferrum/fire/material_profile.h"
 #include "dungeoncraft/combustion_parameters.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
@@ -57,6 +58,9 @@ static void terrain_combustion(bool practical,bool char_stage,uint32_t material)
         }
     }
     ASSERT_TRUE(oxygen>0&&products>oxygen);
+    uint32_t reacted=char_stage?wood.char_mass_fp-result.state.char_mass_fp:wood.fuel_mass_fp-result.state.fuel_mass_fp;
+    double expected_oxygen=reacted/65536.*fr_reactive_profile(char_stage?DC_MATERIAL_CHAR:material)->oxygen_per_fuel;
+    ASSERT_TRUE(fabs(oxygen-expected_oxygen)<fmax(1e-8,expected_oxygen*.001));
     ASSERT_TRUE(fabs(mass_before-mass_after)<1e-7);
     uint32_t fuel_before_short_steps=result.state.fuel_mass_fp+result.state.char_mass_fp;
     for(uint32_t step=0;step<20;step++) ASSERT_TRUE(fr_combustion_gpu_step(g,.001f,err,sizeof(err)));
