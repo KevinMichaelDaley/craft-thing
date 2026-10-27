@@ -103,7 +103,14 @@ static void record_combustion(dc_gpu_t *g,float seconds,uint32_t mode) {
     vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,t->combustion.pipeline_layout,0,1,&t->combustion.descriptor,0,NULL);
     vkCmdPushConstants(g->command,t->combustion.pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
     vkCmdDispatch(g->command,t->groups_x,t->groups_y,1);
-    if(mode==0u) {fr_gas_gpu_invalidate_cache(g);fr_gas_gpu_geometry_changed(g,true);}
+    if(mode==0u) {
+        /* Reactions preserve gas momentum and never decrease local gas mass.
+         * Practical transport uses only the advective rate, so its previous
+         * bound remains conservative. Explicit acoustic policies need a new
+         * thermal wave-speed bound. Geometry still wakes/repairs ash openings. */
+        if(gas->policy!=FR_GAS_PRESSURE_PRACTICAL) fr_gas_gpu_invalidate_cache(g);
+        fr_gas_gpu_geometry_changed(g,true);
+    }
 }
 bool fr_combustion_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(!g||!g->thermal||!g->thermal->combustion.pipeline||!isfinite(seconds)||seconds<0) return false;
