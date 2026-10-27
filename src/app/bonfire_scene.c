@@ -7,25 +7,14 @@
 #include "bonfire.h"
 typedef struct {
     const dc_chunk_coord_t *coords;dc_thermal_bench_chunk_t *chunks;
-    uint32_t count;atomic_uint next;
+    uint32_t count;atomic_uint next;dc_bonfire_plan_t plan;
 } builder_t;
-static uint32_t material_at(int64_t x,int64_t y) {
+static uint32_t material_at(const builder_t *b,int64_t x,int64_t y,const dc_bonfire_piece_t **piece) {
+    *piece=NULL;
     if(y>=96) return DC_MATERIAL_STONE;
-    for(int64_t center=160;center<=352;center+=192) {
-        int64_t dx=x-center;
-        if(y>=92&&dx>=-28&&dx<28) return DC_MATERIAL_STONE;
-        if(y>=80&&((dx>=-28&&dx<-24)||(dx>=24&&dx<28))) return DC_MATERIAL_STONE;
-        if(y>=90&&y<92&&dx>=-1&&dx<=1) return DC_MATERIAL_CHAR;
-        if((y==89||y==90)&&(dx==-2||dx==2)) return DC_MATERIAL_LEAVES;
-        if(y==91&&((dx>=-3&&dx<=-2)||(dx>=2&&dx<=3))) return DC_MATERIAL_WOOD;
-        if(y>=80&&y<90&&dx>=-3&&dx<=3) return DC_MATERIAL_AIR;
-        if(y>=90&&y<92&&(dx==-2||dx==2)) return DC_MATERIAL_AIR;
-        if(y>=90&&y<92&&dx>=-6&&dx<=6&&(dx%2)==0) return DC_MATERIAL_WOOD;
-        if((y>=88&&y<90&&dx>=-20&&dx<20)||
-           (y>=84&&y<86&&dx>=-16&&dx<16)||
-           (y>=80&&y<82&&dx>=-12&&dx<12)||
-           (y>=82&&y<88&&(dx==-4||dx==4))) return DC_MATERIAL_WOOD;
-        if(y>=84&&dx>=52&&dx<56) return DC_MATERIAL_WOOD;
+    for(uint32_t i=0;i<b->plan.count;i++) {
+        const dc_bonfire_piece_t *p=b->plan.pieces+i;
+        if(x>=p->x&&x<p->x+p->width&&y>=p->y&&y<p->y+p->height) {*piece=p;return DC_MATERIAL_WOOD;}
     }
     return DC_MATERIAL_AIR;
 }
@@ -41,14 +30,14 @@ static int worker(void *data) {
         out->chunk->coord=b->coords[index];out->reactive.next_id=(uint64_t)b->count*4096+1;out->valid=true;
         for(uint32_t i=0;i<4096&&out->valid;i++) {
             int64_t x=out->chunk->coord.x*64+i%64,y=out->chunk->coord.y*64+i/64;
-            uint32_t material=material_at(x,y);if(!material) continue;
-            out->chunk->cells[i]=(dc_cell_t){.material=material,.flags=DC_CELL_LOADED_TERRAIN};
+            const dc_bonfire_piece_t *piece=NULL;uint32_t material=material_at(b,x,y,&piece);if(!material) continue;
+            out->chunk->cells[i]=(dc_cell_t){.material=material,.flags=piece?0:DC_CELL_LOADED_TERRAIN};
             const fr_reactive_profile_t *p=fr_reactive_profile(material);
             uint32_t mass=(uint32_t)llround(p->density*65536.),water=0;
-            if((material==DC_MATERIAL_WOOD||material==DC_MATERIAL_LEAVES)&&x>=300) water=(uint32_t)llround(mass*p->moisture_capacity);
+            if(piece&&piece->wet&&piece->kind!=DC_BONFIRE_STARTER) water=(uint32_t)llround(mass*p->moisture_capacity);
             fr_reactive_attachment_t *a=out->reactive.attachments+out->reactive.count++;
             a->local_index=i;a->record.owner=fr_reactive_cell_owner(out->chunk->coord,i);
-            out->valid=fr_reactive_state_default(material,mass,water,material==DC_MATERIAL_CHAR?1400.f:293.15f,1+(uint64_t)index*4096+i,
+            out->valid=fr_reactive_state_default(material,mass,water,piece?piece->temperature_K:293.15f,1+(uint64_t)index*4096+i,
                 &a->record.state,out->error,sizeof(out->error));
             float grain=(float)(((uint64_t)x*3+(uint64_t)y*11)&15)/255.f;
             float *color=out->colors->terrain[i];
@@ -64,6 +53,7 @@ bool dc_bonfire_build(const dc_chunk_coord_t *coords,uint32_t count,
     dc_thermal_bench_chunk_t *out,char *err,uint32_t cap) {
     if(!coords||!count||!out) return false;
     builder_t b={.coords=coords,.chunks=out,.count=count};atomic_init(&b.next,0);
+    if(!dc_bonfire_plan(&b.plan)) return false;
     thrd_t threads[3];uint32_t started=0;
     for(uint32_t i=0;i<3;i++) if(thrd_create(threads+started,worker,&b)==thrd_success) started++;
     worker(&b);for(uint32_t i=0;i<started;i++) thrd_join(threads[i],NULL);
