@@ -34,11 +34,13 @@ static void test_cold_logs_wet_control_and_finite_starter_retain_real_state(void
         if(s->material!=DC_MATERIAL_WOOD) continue;
         uint32_t x=(uint32_t)coords[side].x*64+a->local_index%64,y=64+a->local_index/64;const dc_bonfire_piece_t *piece=NULL;
         for(uint32_t k=0;k<plan.count;k++) if(x>=plan.pieces[k].x&&x<plan.pieces[k].x+plan.pieces[k].width&&y>=plan.pieces[k].y&&y<plan.pieces[k].y+plan.pieces[k].height) piece=plan.pieces+k;
-        ASSERT_TRUE(piece&&s->fuel_mass_fp>0&&!(s->flags&FR_REACTIVE_FLAMING));float temperature=0;
+        ASSERT_TRUE(piece);float temperature=0;
         ASSERT_TRUE(fr_reactive_state_temperature(s,&temperature,err,sizeof(err))&&fabsf(temperature-piece->temperature_K)<.001f);
-        if(piece->kind==DC_BONFIRE_STARTER) {hot[side]++;ASSERT_EQ(s->bound_water_fp,0);}
-        else if(side) {ASSERT_TRUE(s->bound_water_fp>0);wet[side]++;}
-        else ASSERT_EQ(s->bound_water_fp,0);
+        if(piece->kind==DC_BONFIRE_STARTER) {hot[side]++;ASSERT_EQ(s->bound_water_fp,0);
+            ASSERT_EQ(s->fuel_mass_fp,0);ASSERT_TRUE(s->char_mass_fp>0&&(s->flags&FR_REACTIVE_FLAMING));}
+        else {ASSERT_TRUE(s->fuel_mass_fp>0&&!(s->flags&FR_REACTIVE_FLAMING));
+            if(side) {ASSERT_TRUE(s->bound_water_fp>0);wet[side]++;}
+            else ASSERT_EQ(s->bound_water_fp,0);}
     }
     ASSERT_EQ(hot[0],3);ASSERT_EQ(hot[1],3);ASSERT_EQ(wet[1],120);
     dc_thermal_bench_release(chunks,2);PASS();

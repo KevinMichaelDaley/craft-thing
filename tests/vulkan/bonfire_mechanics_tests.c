@@ -16,8 +16,8 @@ static void test_constructed_pit_supports_actual_independent_wood_bodies(void) {
     ASSERT_TRUE(fr_gpu_reactive_export_bodies(g,&records,&count,&next,err,sizeof(err)));ASSERT_EQ(count,246);
     for(uint32_t i=0;i<count;i++) {
         float temperature=0;ASSERT_TRUE(records[i].owner.kind==FR_REACTIVE_OWNER_BODY&&fr_reactive_state_temperature(&records[i].state,&temperature,err,sizeof(err)));
-        ASSERT_EQ(records[i].state.flags&FR_REACTIVE_FLAMING,0);
-        if(temperature>1000) hot++;
+        if(temperature>1000) {hot++;ASSERT_TRUE(records[i].state.flags&FR_REACTIVE_FLAMING);ASSERT_EQ(records[i].state.fuel_mass_fp,0);ASSERT_TRUE(records[i].state.char_mass_fp>0);}
+        else ASSERT_EQ(records[i].state.flags&FR_REACTIVE_FLAMING,0);
         if(records[i].state.bound_water_fp) wet++;
     }
     ASSERT_EQ(hot,6);ASSERT_EQ(wet,120);free(records);
