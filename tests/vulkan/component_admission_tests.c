@@ -197,6 +197,7 @@ static void test_thin_water_contact_accumulates_subquantum_wetting(void) {
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
     printf("Thin contact wet%u remaining%u\n",wet.state.bound_water_fp,chunk->cells[651].fluid_mass);
     ASSERT_TRUE(wet.state.bound_water_fp>0);ASSERT_EQ(wet.state.bound_water_fp+chunk->cells[651].fluid_mass,8u);
+    ASSERT_TRUE(fr_thermal_gpu_overlay(g,2)&&present(g,err,sizeof(err)));
     free(chunk);dc_gpu_destroy(g);PASS();
 }
 int main(int argc,char **argv) {
@@ -205,6 +206,6 @@ int main(int argc,char **argv) {
     else if(argc==2&&strcmp(argv[1],"--wet")==0) RUN(test_water_wets_rigid_wood_without_losing_water_or_enthalpy);
     else if(argc==2&&strcmp(argv[1],"--probe")==0) RUN(test_finite_probe_heats_a_rigid_parcel_at_the_selected_pose);
     else if(argc==2&&strcmp(argv[1],"--thin-water")==0) RUN(test_thin_water_contact_accumulates_subquantum_wetting);
-    else {RUN(test_cold_rigid_admission_retains_pose_and_reactive_ownership);RUN(test_rigid_terrain_contact_exchanges_a_paired_heat_budget);RUN(test_rigid_ember_transfers_real_heat_into_surrounding_gas);RUN(test_rigid_combustion_consumes_authoritative_body_fuel);RUN(test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_heat);RUN(test_water_wets_rigid_wood_without_losing_water_or_enthalpy);RUN(test_finite_probe_heats_a_rigid_parcel_at_the_selected_pose);}
+    else {RUN(test_cold_rigid_admission_retains_pose_and_reactive_ownership);RUN(test_rigid_terrain_contact_exchanges_a_paired_heat_budget);RUN(test_rigid_ember_transfers_real_heat_into_surrounding_gas);RUN(test_rigid_combustion_consumes_authoritative_body_fuel);RUN(test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_heat);RUN(test_water_wets_rigid_wood_without_losing_water_or_enthalpy);RUN(test_finite_probe_heats_a_rigid_parcel_at_the_selected_pose);RUN(test_thin_water_contact_accumulates_subquantum_wetting);}
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }

@@ -120,11 +120,12 @@ void body_conduction(uint index) {
         }
         vec4 surface=cache.values[index*3u+2u];
         float reaction_power=floatBitsToUint(surface.x)==e.words[FR_ENTRY_GENERATION]?cache.values[index*3u+1u].z:0.;
-        cache.values[index*3u]=value;cache.values[index*3u+1u]=vec4(0,0,reaction_power,0);
+        float wet_fraction=floatBitsToUint(cache.values[index*3u].w)==e.words[FR_ENTRY_GENERATION]?cache.values[index*3u+1u].w:0.;
+        cache.values[index*3u]=value;cache.values[index*3u+1u]=vec4(0,0,reaction_power,wet_fraction);
         if(floatBitsToUint(surface.x)!=e.words[FR_ENTRY_GENERATION]) surface=vec4(uintBitsToFloat(e.words[FR_ENTRY_GENERATION]),value.y>0.?value.x/value.y:0.,0.,0.);
         surface.zw=vec2(0);cache.values[index*3u+2u]=surface;return;
     }
-    if(params.phase==11u) {if(e.words[FR_ENTRY_OWNER]==2u) add_energy(e,cache.values[index*3u+1u].x);cache.values[index*3u+1u].xyw=vec3(0);return;}
+    if(params.phase==11u) {if(e.words[FR_ENTRY_OWNER]==2u) add_energy(e,cache.values[index*3u+1u].x);cache.values[index*3u+1u].xy=vec2(0);return;}
     vec4 a=cache.values[index*3u];if(a.y<=0.||floatBitsToUint(a.w)!=e.words[FR_ENTRY_GENERATION]) return;
     uint slot=runtime_body_find(e.words[FR_ENTRY_OWNER+1u]);if(slot>=BODY_CAPACITY) return;
     Body body=DC_BODY(slot);if(!pixel_body(body)) return;

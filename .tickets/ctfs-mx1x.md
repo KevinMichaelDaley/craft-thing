@@ -26,3 +26,7 @@ Checkpoint3ae132b: constructed26-body fixture integrated in fullscreen app; uniq
 **2026-10-27T15:38:43Z**
 
 BODY wetting/probe checkpoint: actual fullscreen Vulkan/Wayland core+sync --wet1/1 and --probe1/1 pass. Actual finite WATER cells reserve mass atomically into pose-contacting rest parcels with paired enthalpy;975Q16 transferred,64561remaining, sum65536, heatdrift−2.1e−6J. Existing finite H-probe now targets real BODY coverage/handle and debits its charge; focus test presents fourframes. Tests registered in default admission battery. Remaining burned-rest ash/fracture, constructed analytic stone heat, small-contact wetting coverage and full regressions; ticket remains in_progress.
+
+**2026-10-27T15:41:46Z**
+
+Fractional wetting RED01d9d40: eight-Q16 thin contact stayed dry after64steps. GREEN retains <1Q16 exposure in generation-validated device scratch, never inventing/transferring water until source mass is atomically reserved. Resetting derived scratch loses <1Q16 uncommitted kinetic exposure, not physical inventory. Focused actual fullscreen core+sync thin-water1/1; current native admission battery8/8 passes. Combined native-display battery bounded at55s during repeated SDL context setup, incomplete/not a pass; focused actual-display checks pass.
