@@ -10,6 +10,7 @@ static void test_constructed_stone_owns_heat_without_changing_its_collider_or_su
         .x=10,.y=13,.width=1,.height=1,.terrain_material=DC_MATERIAL_STONE,
         .normal_stiffness=1e8,.shear_stiffness=1e8,.rotational_stiffness=1e8,
         .bearing_capacity=1e7,.pullout_capacity=1e7,.shear_capacity=1e7,.moment_capacity=1e7,.friction=.5};
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_place_structure(g,&graph,err,sizeof(err)));
     dc_gpu_body_motion_t before,after;ASSERT_TRUE(dc_gpu_read_body_motion(g,FR_STRUCTURAL_BODY_ID_BASE+1,&before,err,sizeof(err)));
     ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err)));
@@ -23,5 +24,25 @@ static void test_constructed_stone_owns_heat_without_changing_its_collider_or_su
     ASSERT_TRUE(after.mass==before.mass&&after.inertia==before.inertia&&after.angle==before.angle);
     uint32_t pixels=0;ASSERT_TRUE(!dc_gpu_read_pixel_shape(g,FR_STRUCTURAL_BODY_ID_BASE+1,NULL,0,&pixels,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_save_structure(g,"build/constructed_stone_heat.dcs",err,sizeof(err))&&present(g,err,sizeof(err)));
+    fr_reactive_state_t saved=stone.state;
+    ASSERT_TRUE(fr_gpu_load_structure(g,"build/constructed_stone_heat.dcs",err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,FR_STRUCTURAL_BODY_ID_BASE+1,5,0,&stone,&found,err,sizeof(err))&&found);
+    ASSERT_EQ(memcmp(&saved,&stone.state,sizeof(saved)),0);
+    ASSERT_TRUE(dc_gpu_paint_material(g,10,11,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    uint32_t parcels=0,retained=0;
+    for(uint32_t i=0;i<dc_gpu_body_capacity(g);i++) {
+        const dc_gpu_body_record_t *body=dc_gpu_body_record(g,i);
+        if(!body->body.active) continue;
+        for(uint32_t y=0;y<body->body.height;y++) for(uint32_t x=0;x<body->body.width;x++) {
+            ASSERT_TRUE(fr_gpu_reactive_read_body(g,body->body.id,x,y,&stone,&found,err,sizeof(err)));
+            if(!found) continue;
+            parcels++;
+            if(stone.state.parcel_id_low==saved.parcel_id_low&&stone.state.parcel_id_high==saved.parcel_id_high) {
+                retained++;ASSERT_EQ(memcmp(&saved,&stone.state,sizeof(saved)),0);
+            }
+        }
+    }
+    ASSERT_EQ(parcels,23u);ASSERT_EQ(retained,1u);
+    ASSERT_TRUE(fr_gpu_save_structure(g,"build/constructed_stone_carved_heat.dcs",err,sizeof(err)));
     free(chunk);dc_gpu_destroy(g);PASS();
 }
