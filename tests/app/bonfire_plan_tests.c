@@ -25,6 +25,14 @@ static void test_real_structural_pits_and_independent_rigid_stack(void) {
         }
     }
     for(uint32_t i=0;i<2;i++) {ASSERT_EQ(logs[i],3);ASSERT_EQ(sticks[i],4);ASSERT_EQ(starters[i],1);}
+    for(uint32_t side=0;side<2;side++) {
+        const dc_bonfire_piece_t *upper=NULL,*right=NULL;
+        for(uint32_t i=0;i<p.count;i++) if(p.pieces[i].kind==DC_BONFIRE_LOG&&p.pieces[i].wet==(side!=0)) {
+            if(p.pieces[i].width==16u) upper=p.pieces+i;
+            else if(!right||p.pieces[i].x>right->x) right=p.pieces+i;
+        }
+        ASSERT_TRUE(upper&&right&&upper->x+upper->width+2u<=right->x);
+    }
     PASS();
 }
 int main(void) {RUN(test_real_structural_pits_and_independent_rigid_stack);printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
