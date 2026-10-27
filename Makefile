@@ -235,11 +235,11 @@ build/rigid_solver_tests: tests/vulkan/rigid_solver_tests.c $(GPU_OBJ) $(CHUNK_O
 .PHONY: all test test_ui test_ui_long test_rigid_dynamics test_presentation clean shaders
 all: build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/chunk_tests build/generate_tests build/stream_tests build/dungeoncraft
 
-THERMAL_BENCH_SRC = src/app/thermal_bench.c src/app/bonfire_scene.c src/app/bonfire_plan.c
+THERMAL_BENCH_SRC = src/app/thermal_bench.c src/app/bonfire_scene.c src/app/bonfire_plan.c src/app/bonfire_admission.c
 build/bonfire_plan_tests: tests/app/bonfire_plan_tests.c src/app/bonfire_plan.c src/app/bonfire.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/bonfire_plan.c -o $@ $(LDLIBS)
 build/bonfire_scene_tests: tests/app/bonfire_scene_tests.c $(THERMAL_BENCH_SRC) src/fire/reactive_state.c src/fire/reactive_snapshot.c src/fire/material_profile.c src/fire/reactive_chunk.c
-	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm -pthread
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter-out src/app/bonfire_admission.c,$^) -o $@ -lm -pthread
 .PHONY: test_bonfire_scene
 test: test_bonfire_scene
 test_bonfire_scene: build/bonfire_scene_tests
@@ -1969,8 +1969,8 @@ build/combustion_gpu_display_tests: tests/vulkan/combustion_contact_cases.h
 build/combustion_gpu_display_tests: tests/vulkan/bonfire_autostart_cases.h src/app/bonfire_scene.c
 build/component_admission_tests: tests/vulkan/component_admission_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(REACTIVE_STATE_SRC) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
-build/bonfire_mechanics_tests: tests/vulkan/bonfire_mechanics_tests.c src/app/bonfire_admission.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< src/app/bonfire_admission.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/bonfire_mechanics_tests: tests/vulkan/bonfire_mechanics_tests.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/shaders/combustion.comp.spv: shaders/reactive/bonfire_hud.glsl
 build/shaders/thermal.comp.spv: shaders/reactive/world_body.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_shape.glsl shaders/sim/rigid_clip.glsl shaders/sim/runtime_body_storage.glsl
 build/thermal_gpu.o build/performance/src/vulkan/thermal_gpu.o: build/shaders/combustion.comp.spv

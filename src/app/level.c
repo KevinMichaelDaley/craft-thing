@@ -36,6 +36,7 @@ bool dc_level_view_setup_bonfire(dc_level_view_t *view,char *err,uint32_t cap) {
             dc_chunk_table_mark_dirty(&view->table,i);
         dc_thermal_bench_release(chunks,count);
         if(!okay||!fr_thermal_gpu_enable(view->gpu,err,cap)||!fr_thermal_gpu_mark_bonfire_world(view->gpu)) return false;
+        if(!dc_bonfire_admit(view->gpu,err,cap)) return false;
     }
     fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
         .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};

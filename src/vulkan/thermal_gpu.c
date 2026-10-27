@@ -57,7 +57,7 @@ bool fr_combustion_gpu_hud(dc_gpu_t *g,bool enabled,bool wet,bool paused,uint32_
     uint32_t *words=t->hud.mapped;fr_gas_gpu_clock_t clock={0};fr_gas_gpu_clock(g,&clock);
     words[3]=wet?1u:0u;words[4]=g->view_x+(wet?352u:160u);words[5]=g->view_y+208u;
     words[6]=g->view_x+x;words[7]=g->view_y+y;words[12]=((uint32_t *)t->probe.mapped)[2];
-    char lines[7][21]={"","","LOGS 0/6 LIT","P PAUSE N STEP","R RESET ESC EXIT","TAB WET F7HEAT F8ALL","HOVER 0000K O2 000%"};
+    char lines[7][21]={"","","LOGS 0/3 LIT","P PAUSE N STEP","R RESET ESC EXIT","TAB WET F7HEAT F8ALL","HOVER 0000K O2 000%"};
     snprintf(lines[0],21,"TIME %6us %s",(unsigned)clock.advanced_seconds,paused?"PAUSE":"RUN");
     snprintf(lines[1],21,"%s TINDER 00/00 LIT",wet?"WET":"DRY");
     lines[1][11]=1;lines[1][12]=2;lines[1][14]=3;lines[1][15]=4;lines[2][5]=7;
@@ -245,7 +245,7 @@ void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
 void fr_thermal_record_overlay(dc_gpu_t *g) {
     if(!g->thermal) return;
     if(g->thermal->overlay==0u) record_combustion(g,0,1);
-    else {phase(g,0,0);record_combustion(g,0,2);fr_thermal_feedback_record(g,&g->thermal->feedback,g->thermal->overlay,
+    else {phase(g,0,0);record_combustion(g,0,2);phase(g,7,0);fr_thermal_feedback_record(g,&g->thermal->feedback,g->thermal->overlay,
         g->thermal->groups_x,g->thermal->groups_y);}
     if(g->thermal->hud_enabled) {record_combustion(g,0,7);record_combustion(g,0,8);}
 }
