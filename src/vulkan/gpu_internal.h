@@ -126,6 +126,7 @@ struct dc_gpu {
     void *mpm_label_a_mapped, *mpm_label_b_mapped, *mpm_component_size_mapped;
     VkPipeline mpm_component_pipeline, component_extract_pipelines[38];
     bool automatic_components_enabled;
+    bool cold_component_admission;
     bool component_baseline_pending;
     VkBuffer page_buffer;
     VkDeviceMemory page_memory;

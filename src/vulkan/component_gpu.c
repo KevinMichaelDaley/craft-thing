@@ -1,8 +1,5 @@
 #include "gpu_internal.h"
 #include "runtime_body_gpu.h"
-bool dc_gpu_admit_authored_rigid_cells(dc_gpu_t *gpu,char *err_buf,uint32_t err_cap) {
-    (void)gpu;(void)err_buf;(void)err_cap;return false;
-}
 
 bool dc_gpu_read_extraction_stats(dc_gpu_t *gpu,dc_gpu_extraction_stats_t *stats) {
     if(!gpu||!stats||!gpu->body_mapped||vkQueueWaitIdle(gpu->queue)!=VK_SUCCESS) return false;

@@ -368,6 +368,15 @@ bool dc_gpu_read_world_body(dc_gpu_t *gpu, uint32_t id, dc_gpu_world_body_t *bod
 bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return submit_rigid(gpu, true, err, cap);
 }
+bool dc_gpu_admit_authored_rigid_cells(dc_gpu_t *gpu,char *err,uint32_t cap) {
+    if(!gpu||!dc_gpu_enable_automatic_components(gpu)) return error(err,cap,"Cannot prepare authored rigid admission");
+    gpu->cold_component_admission=true;
+    bool okay=submit_rigid(gpu,false,err,cap);
+    gpu->cold_component_admission=false;
+    if(okay&&dc_gpu_structural_data(gpu)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]!=0u)
+        return error(err,cap,"Authored rigid admission has unresolved resource or residency demand");
+    return okay;
+}
 
 static bool submit_rigid(dc_gpu_t *gpu, bool advance, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
@@ -426,7 +435,7 @@ static void record_rigid(dc_gpu_t *gpu, bool advance) {
     vkCmdPipelineBarrier2(gpu->command, &dep);
     dc_gpu_runtime_record_body_index(gpu);
     dc_gpu_record_component_baseline(gpu);
-    if (advance && gpu->automatic_components_enabled) dc_gpu_record_component_extraction(gpu);
+    if ((advance||gpu->cold_component_admission) && gpu->automatic_components_enabled) dc_gpu_record_component_extraction(gpu);
     if (advance) dc_gpu_record_structural_begin(gpu);
     dc_gpu_runtime_record_body_index(gpu);
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->rigid_prepare_pipeline);
