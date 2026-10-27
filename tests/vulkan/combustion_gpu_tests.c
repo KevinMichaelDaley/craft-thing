@@ -267,6 +267,8 @@ int main(int argc,char **argv) {
         RUN(test_oxygen_starvation_and_finite_vented_recovery);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
     }
+    bool core=argc==2&&strcmp(argv[1],"--core")==0;
+    if(argc!=1&&!core) {fprintf(stderr,"Unknown combustion test selection\n");return 2;}
     RUN(test_displayed_terrain_combustion_debits_real_fuel_and_oxygen);
     RUN(test_sparse_owner_combustion_uses_the_live_gas_bank);
     RUN(test_dry_leaf_tinder_uses_the_existing_finite_material_profile);
@@ -277,8 +279,8 @@ int main(int argc,char **argv) {
     RUN(test_roof_blocks_and_side_vent_routes_the_physical_flame);
     RUN(test_oxygen_starvation_and_finite_vented_recovery);
     RUN(test_fresh_side_air_can_feed_a_surface_with_starved_air_above);
-    RUN(test_stone_and_clearance_contain_while_a_fuel_bridge_spreads);
+    if(!core) RUN(test_stone_and_clearance_contain_while_a_fuel_bridge_spreads);
     RUN(test_hot_gas_heats_each_exposed_wood_face);
-    RUN(test_finite_ember_automatically_establishes_the_dry_bonfire);
+    if(!core) RUN(test_finite_ember_automatically_establishes_the_dry_bonfire);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }

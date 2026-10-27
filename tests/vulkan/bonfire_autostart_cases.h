@@ -1,8 +1,12 @@
 #include "../../src/app/bonfire.h"
+#include <signal.h>
+static volatile sig_atomic_t bonfire_interrupted;
+static void bonfire_interrupt(int signal_number) {(void)signal_number;bonfire_interrupted=1;}
 static void test_finite_ember_automatically_establishes_the_dry_bonfire(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_coord_t coord={2,1};
     dc_thermal_bench_chunk_t *scene=calloc(1,sizeof(*scene));ASSERT_TRUE(scene);
     ASSERT_TRUE(dc_bonfire_build(&coord,1,scene,err,sizeof(err))&&context(&g,err,sizeof(err)));
+    bonfire_interrupted=0;signal(SIGINT,bonfire_interrupt);signal(SIGTERM,bonfire_interrupt);
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,scene->chunk,err,sizeof(err))&&dc_gpu_set_page(g,3,4,0,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_viewport(g,64,64,480,270));
     ASSERT_TRUE(fr_gpu_reactive_import_chunk(g,0,scene->chunk,&scene->reactive,err,sizeof(err)));
@@ -20,8 +24,9 @@ static void test_finite_ember_automatically_establishes_the_dry_bonfire(void) {
     ASSERT_TRUE(fr_gas_gpu_set_gravity(g,900,err,sizeof(err))&&fr_combustion_gpu_enable(g,err,sizeof(err))&&fr_thermal_gpu_overlay(g,0));
     bool burned[4096]={0};uint32_t wood_count=0,ever_burned=0,removed_step=UINT32_MAX;
     bool sustained=false,source_spent=false;
+    fr_gas_state_t *diagnostic_gas=calloc(4096,sizeof(*diagnostic_gas));ASSERT_TRUE(diagnostic_gas);
     for(uint32_t i=0;i<4096;i++) if(scene->chunk->cells[i].material==DC_MATERIAL_WOOD&&i%64<56) wood_count++;
-    for(uint32_t step=0;step<36000;step++) {
+    for(uint32_t step=0;step<36000&&!bonfire_interrupted;step++) {
         ASSERT_TRUE(fr_thermal_gpu_step(g,1.f/60.f,err,sizeof(err))&&fr_gas_gpu_step(g,1.f/60.f,err,sizeof(err)));
         if(step%600!=599) continue;
         uint32_t flaming=0;float hottest=0;fr_reactive_record_t record;bool found=false;
@@ -43,11 +48,26 @@ static void test_finite_ember_automatically_establishes_the_dry_bonfire(void) {
                 ember_fuel+=record.state.char_mass_fp;source_spent=false;
             }
         }
-        for(uint32_t y=20;y<=25;y++) if(y!=22&&y!=23) {
-            ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,y*64+32,&record,&found,err,sizeof(err)));
+        for(uint32_t y=25;y<=26;y++) for(uint32_t x=30;x<=34;x+=4) {
+            ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,y*64+x,&record,&found,err,sizeof(err)));
             if(found) {float temperature=0;ASSERT_TRUE(fr_reactive_state_temperature(&record.state,&temperature,err,sizeof(err)));
                 if(temperature>tinder_K) tinder_K=temperature;
                 if(record.state.flags&FR_REACTIVE_FLAMING) tinder_flaming++;}
+        }
+        ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,diagnostic_gas,4096,err,sizeof(err)));
+        for(uint32_t y=25;y<=26;y++) for(uint32_t x=30;x<=34;x+=4) {
+            ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,y*64+x,&record,&found,err,sizeof(err)));
+            if(!found) continue;
+            double supply=0,temperature=0,speed=0;
+            const uint32_t adjacent[4]={y*64+x-1,y*64+x+1,(y-1)*64+x,(y+1)*64+x};
+            for(uint32_t face=0;face<4;face++) if(scene->chunk->cells[adjacent[face]].material==DC_MATERIAL_AIR) {
+                fr_gas_thermo_t thermo;ASSERT_TRUE(fr_gas_thermodynamics(&model,diagnostic_gas+adjacent[face],1,&thermo,err,sizeof(err)));
+                if(thermo.mass>0&&diagnostic_gas[adjacent[face]].species[FR_GAS_OXYGEN]/thermo.mass>supply)
+                    supply=diagnostic_gas[adjacent[face]].species[FR_GAS_OXYGEN]/thermo.mass;
+                if(thermo.temperature_K>temperature) temperature=thermo.temperature_K;
+                if(thermo.mass>0) speed=fmax(speed,hypot(diagnostic_gas[adjacent[face]].momentum[0],diagnostic_gas[adjacent[face]].momentum[1])/thermo.mass);
+            }
+            printf("  tinder %u,%u hazard%.4f/%.4f O2%.5f gas%.2fK speed%.3f\n",x,y,record.state.ignition_integral,record.state.ignition_threshold,supply,temperature,speed);
         }
         if(removed_step==UINT32_MAX&&flaming>=4) {
             for(uint32_t y=26;y<=27;y++) for(uint32_t x=31;x<=33;x++)
@@ -68,5 +88,5 @@ static void test_finite_ember_automatically_establishes_the_dry_bonfire(void) {
         if(sustained&&ever_burned==wood_count) break;
     }
     ASSERT_TRUE(ever_burned==wood_count&&source_spent&&sustained);
-    free(scene->chunk);free(scene->colors);fr_reactive_chunk_release(&scene->reactive);free(scene);dc_gpu_destroy(g);PASS();
+    free(diagnostic_gas);free(scene->chunk);free(scene->colors);fr_reactive_chunk_release(&scene->reactive);free(scene);dc_gpu_destroy(g);PASS();
 }

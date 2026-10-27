@@ -44,6 +44,38 @@ Slot generations and cold-import clearing prevent stale emissions on streaming.
 Zero physical time preserves the channel. Its cache is rebuilt by subsequent
 physical ticks after restore; chemical and authored state remain persistent.
 
+Each solid chooses its oxygen recipient from the best available exposed supply,
+in a separate existing lifecycle pass before any reaction writes gas. The frozen
+choice prevents two gas invocations racing to mutate one parcel. An earlier
+first-neighbor rule incorrectly preferred starved upper air over fresh side air;
+the permanent side-air test rejects that behavior. The sealed starvation fixture
+now genuinely seals the other three wood faces with stone. Heat transfer is
+independent of that chemistry owner: every gas/solid face has a bounded paired
+flux, computed then gathered once by each endpoint without float atomic races.
+
+Ordinary reactions preserve gas momentum and add or conserve local gas mass.
+The practical policy's prior advective speed bound therefore remains conservative;
+it can retain its warm transport route while geometry still repairs ash openings.
+Explicit acoustic policies refresh their temperature-dependent wave-speed bound.
+The original unconditional invalidation measured 40.956–44.532 ms mean and
+49.258–85.320 ms worst. After this fix, four actual displayed 1000-frame runs
+measured 21.354/24.152, 21.242/24.309, 21.280/23.743 and 21.242/23.880 ms
+mean/worst. These precede the final automatic-start fixture and are not claimed
+as its final mature-fire performance evidence.
+
+The authored automatic-start fixture uses cold, unlit main logs and thin wood
+kindling, four ambient-temperature dry-leaf tinder cells, and one connected
+six-voxel hot charcoal starter. Its approximately 2.1 g of charcoal carries about
+2940 J initial sensible heat and finite profile fuel; no source is replenished.
+Air channels and staggered contact twigs connect tinder to the logs. A CPU fixture
+audit requires tinder air faces connected to the sky and direct wood contact.
+The saturated control wets both wood and leaf tinder. Charcoal is the initial
+ignition source, not a flag painted onto every log. The displayed long test tracks
+every intended wood pixel, records temperatures/ignition, and uses the existing
+air brush to remove only the six starter cells after four wood cells establish
+flame. Continued combustion after that removal remains a required acceptance
+check. Automatic whole-pile propagation is still RED at this checkpoint.
+
 Gameplay pixels use centimeter-cube thermal geometry: gram-scale cell masses,
 J/(g K) capacities and conductivity times face-area/separation of 0.01 m. The
 delivered laboratory heat bench retains its prior unit-conductance calibration.
