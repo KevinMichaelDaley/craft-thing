@@ -22,6 +22,7 @@ struct fr_thermal_gpu {
     float *pending_water;
     bool probe_active;
 };
+static void phase(dc_gpu_t *g,uint32_t mode,float seconds);
 bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!g||!g->thermal||!g->gas) {
         if(err&&cap) snprintf(err,cap,"Combustion requires existing thermal and gas owners");
@@ -134,7 +135,9 @@ bool fr_combustion_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(!g||!g->thermal||!g->thermal->combustion.pipeline||!isfinite(seconds)||seconds<0) return false;
     if(seconds==0) return true;
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g)) return false;
+    phase(g,8,seconds);phase(g,0,seconds);phase(g,7,seconds);
     record_combustion(g,seconds,4);record_combustion(g,seconds,5);
+    phase(g,13,seconds);phase(g,11,seconds);
     record_combustion(g,seconds,3);record_combustion(g,seconds,0);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
@@ -245,6 +248,7 @@ void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
     phase(g,0,seconds);phase(g,7,seconds);phase(g,1,seconds);phase(g,2,seconds);
     phase(g,10,seconds);phase(g,11,seconds);
     record_combustion(g,seconds,4);record_combustion(g,seconds,5);
+    phase(g,13,seconds);phase(g,11,seconds);
     record_combustion(g,seconds,3);record_combustion(g,seconds,0);
 }
 void fr_thermal_record_overlay(dc_gpu_t *g) {

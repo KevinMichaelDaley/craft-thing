@@ -104,13 +104,15 @@ float solid_capacity(Words entry) {
         float(entry.words[s+13u])*coefficient(14u,5u)+
         (float(entry.words[s+14u])+float(entry.words[s+16u]))*coefficient(15u,5u))/65536.;
 }
-float contact_flux(uint a,uint b) {
-    bool from_solid=!gas_cell(a);uvec2 address;
-    if(gas_cell(a)==gas_cell(b)||!solid_address(from_solid?a:b,address)) return 0.;
-    Words entry=Words(address);float capacity=solid_capacity(entry);Gas gas=local_gas(from_solid?b:a);
+float contact_flux(uint first,uint second,uint a,uint b) {
+    uint n=params.width*params.height,ak=floatBitsToUint(samples[first+n].x),bk=floatBitsToUint(samples[second+n].x);
+    bool asolid=ak==1u||ak==4u,bsolid=bk==1u||bk==4u;
+    if(asolid==bsolid||!gas_cell(asolid?b:a)) return 0.;
+    uint i=asolid?first:second;
+    float capacity=samples[i].y;if(capacity<=0.) return 0.;
+    Gas gas=local_gas(asolid?b:a);
     float gas_cap=gas_capacity(gas),mass=gas_mass(gas);if(capacity<=0.||gas_cap<=0.||mass<=0.) return 0.;
-    float energy=uintBitsToFloat(entry.words[FR_ENTRY_STATE+17u])+uintBitsToFloat(entry.words[FR_ENTRY_STATE+25u])+
-        uintBitsToFloat(entry.words[FR_ENTRY_STATE+26u]);
+    float energy=samples[i].x;
     float difference=energy/capacity-gas_internal(gas)/gas_cap;
     if(abs(difference)<.001) return 0.;
     float speed=length(gas.dynamics.zw)/mass,density=mass*1000./max(gas.geometry.x,.000001);
@@ -119,11 +121,12 @@ float contact_flux(uint a,uint b) {
     float nusselt=2.+.6*sqrt(max(reynolds,0.))*pow(float(FR_COMBUSTION_AIR_PRANDTL),1./3.);
     float conductance=nusselt*float(FR_COMBUSTION_AIR_CONDUCTIVITY)*length_m;
     float requested=conductance*difference*uintBitsToFloat(params.seconds);
-    float bound=.25*capacity*gas_cap/(capacity+gas_cap)*abs(difference);
+    float bound=(floatBitsToUint(samples[i+n].x)==4u?.0625:.25)*capacity*gas_cap/(capacity+gas_cap)*abs(difference);
     float flux=sign(requested)*min(abs(requested),bound);
-    return from_solid?flux:-flux;
+    return asolid?flux:-flux;
 }
 void contact_apply(uint i,uint at) {
+    if(floatBitsToUint(samples[i+params.width*params.height].x)==4u) return;
     float heat=-fluxes[i].z-fluxes[i].w;
     if(i%params.width>0u) heat+=fluxes[i-1u].z;
     if(i>=params.width) heat+=fluxes[i-params.width].w;
@@ -307,8 +310,8 @@ void main() {
     ivec2 p=ivec2(i%params.width,i/params.width);uint at=atlas(p);
     if(params.unused.x>=6u) {bonfire_hud(params.unused.x,i,p,at);return;}
     if(params.unused.x==4u) {
-        fluxes[i].zw=vec2(p.x+1<int(params.width)?contact_flux(at,atlas(p+ivec2(1,0))):0.,
-            p.y+1<int(params.height)?contact_flux(at,atlas(p+ivec2(0,1))):0.);return;
+        fluxes[i].zw=vec2(p.x+1<int(params.width)?contact_flux(i,i+1u,at,atlas(p+ivec2(1,0))):0.,
+            p.y+1<int(params.height)?contact_flux(i,i+params.width,at,atlas(p+ivec2(0,1))):0.);return;
     }
     if(params.unused.x==5u) {contact_apply(i,at);return;}
     if(params.unused.x==3u) {
