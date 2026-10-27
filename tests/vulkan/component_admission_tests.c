@@ -5,6 +5,8 @@
 #include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/structural/gpu.h"
+#include "../../src/vulkan/reactive_storage_gpu.h"
+#include "dungeoncraft/reactive_state_layout.h"
 static void test_cold_rigid_admission_retains_pose_and_reactive_ownership(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     for(uint32_t y=10;y<12;y++) for(uint32_t x=10;x<13;x++) chunk->cells[y*64+x].material=DC_MATERIAL_WOOD;
@@ -202,8 +204,10 @@ static void test_thin_water_contact_accumulates_subquantum_wetting(void) {
 }
 #include "body_ash_cases.h"
 #include "constructed_heat_cases.h"
+#include "surface_radiation_cases.h"
 int main(int argc,char **argv) {
-    if(argc==2&&strcmp(argv[1],"--burn")==0) RUN(test_rigid_combustion_consumes_authoritative_body_fuel);
+    if(argc==2&&strcmp(argv[1],"--surface-radiation")==0) RUN(test_reacting_surface_radiates_even_when_the_wood_core_is_cool);
+    else if(argc==2&&strcmp(argv[1],"--burn")==0) RUN(test_rigid_combustion_consumes_authoritative_body_fuel);
     else if(argc==2&&strcmp(argv[1],"--radiation")==0) RUN(test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_heat);
     else if(argc==2&&strcmp(argv[1],"--wet")==0) RUN(test_water_wets_rigid_wood_without_losing_water_or_enthalpy);
     else if(argc==2&&strcmp(argv[1],"--probe")==0) RUN(test_finite_probe_heats_a_rigid_parcel_at_the_selected_pose);
@@ -217,6 +221,7 @@ int main(int argc,char **argv) {
         RUN(test_rigid_ember_transfers_real_heat_into_surrounding_gas);
         RUN(test_rigid_combustion_consumes_authoritative_body_fuel);
         RUN(test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_heat);
+        RUN(test_reacting_surface_radiates_even_when_the_wood_core_is_cool);
         RUN(test_water_wets_rigid_wood_without_losing_water_or_enthalpy);
         RUN(test_finite_probe_heats_a_rigid_parcel_at_the_selected_pose);
         RUN(test_thin_water_contact_accumulates_subquantum_wetting);

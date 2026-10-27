@@ -1991,6 +1991,7 @@ build/combustion_body_feedback_display_tests: tests/vulkan/combustion_body_feedb
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/rigid_thermal_display_tests: tests/vulkan/component_admission_tests.c tests/vulkan/body_ash_cases.h tests/vulkan/constructed_heat_cases.h $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/component_admission_tests build/rigid_thermal_display_tests: tests/vulkan/surface_radiation_cases.h
 build/thermal_gpu.o build/performance/src/vulkan/thermal_gpu.o: build/shaders/combustion.comp.spv
 .PHONY: test_bonfire
 test_ui test_quarter_native: test_bonfire

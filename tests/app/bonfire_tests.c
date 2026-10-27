@@ -11,7 +11,7 @@
 /* Six authored fixture identities; no gameplay owner lists or body quota. */
 typedef struct {uint32_t origins[48],count;uint64_t initial,current;float temperature,hazard;uint32_t flaming;} fixture_log_t;
 static volatile sig_atomic_t stopped;
-static double wall_bound=30.;
+static double wall_bound=60.;
 static uint64_t diagnostic_char;
 static float diagnostic_kindling;
 static uint32_t diagnostic_burning_char;
@@ -86,8 +86,9 @@ static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
         diagnostic_starter_fuel[0],diagnostic_starter_heat[1],diagnostic_starter_fuel[1]);fflush(stdout);
     for(uint32_t i=0;i<6;i++) ASSERT_TRUE(logs[i].count==(i%3u==0u?48u:30u)&&logs[i].initial>0);
     uint64_t began=SDL_GetPerformanceCounter(),previous=began,report=began;double frequency=SDL_GetPerformanceFrequency();
-    uint32_t dry=0,wet=0;double elapsed=0;
-    while(!stopped&&elapsed<wall_bound&&dry<3u) {
+    uint32_t dry=0,wet=0;double elapsed=0,ignited_at=-1.,late_at=-1.;
+    uint64_t late_fuel[3]={0};bool sustained=false;
+    while(!stopped&&elapsed<wall_bound&&!sustained) {
         uint64_t now=SDL_GetPerformanceCounter();float dt=(float)((now-previous)/frequency);
         if(dt<1.f/60.f) {SDL_Delay(1);continue;}previous=now;
         ASSERT_TRUE(dt<=.25f);
@@ -99,6 +100,17 @@ static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
             report=SDL_GetPerformanceCounter();ASSERT_TRUE(inspect_logs(view,logs,false,&ember,err,sizeof(err)));dry=wet=0;
             for(uint32_t i=0;i<6;i++) if(logs[i].initial>=logs[i].current+32u) {if(i<3u) dry++;else wet++;}
             fr_gas_gpu_clock_t clock={0};ASSERT_TRUE(fr_gas_gpu_clock(view->gpu,&clock));
+            if(dry==3u&&ignited_at<0.) ignited_at=clock.advanced_seconds;
+            if(ignited_at>=0.&&late_at<0.&&clock.advanced_seconds>=ignited_at+15.) {
+                late_at=clock.advanced_seconds;
+                for(uint32_t i=0;i<3;i++) late_fuel[i]=logs[i].current;
+            }
+            if(late_at>=0.&&clock.advanced_seconds>=late_at+5.) {
+                sustained=true;
+                for(uint32_t i=0;i<3;i++) sustained&=logs[i].current==0u||
+                    (logs[i].flaming>0u&&late_fuel[i]>=logs[i].current+32u);
+                if(!sustained) break;
+            }
             fr_gas_gpu_audit_t audit;ASSERT_TRUE(fr_gas_gpu_audit(view->gpu,&audit,err,sizeof(err)));
             uint32_t counters[32];ASSERT_TRUE(fr_combustion_gpu_bonfire_counters(view->gpu,counters));float target_oxygen=0,surface_temperature=0;
             memcpy(&target_oxygen,counters+27u,sizeof(target_oxygen));memcpy(&surface_temperature,counters+29u,sizeof(surface_temperature));
@@ -132,7 +144,7 @@ static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
     ASSERT_TRUE(image&&SDL_SaveBMP(image,"build/screenshots/rigid_bonfire_all_logs.bmp")==0);SDL_FreeSurface(image);free(pixels);
     bool saved=dc_level_view_destroy(view,err,sizeof(err));
     if(!saved) printf("Bonfire save also failed: %s\n",err);
-    ASSERT_TRUE(!stopped&&dry==3u&&wet==0u);ASSERT_TRUE(saved);PASS();
+    ASSERT_TRUE(!stopped&&dry==3u&&wet==0u&&sustained);ASSERT_TRUE(saved);PASS();
 }
 int main(int argc,char **argv) {
     if(argc==2&&strcmp(argv[1],"--diagnostic-10s")==0) wall_bound=10.;
