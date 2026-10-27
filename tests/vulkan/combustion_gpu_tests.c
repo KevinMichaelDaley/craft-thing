@@ -61,10 +61,7 @@ static void terrain_combustion(bool practical,bool char_stage,uint32_t material)
     uint32_t fuel_before_short_steps=result.state.fuel_mass_fp+result.state.char_mass_fp;
     for(uint32_t step=0;step<20;step++) ASSERT_TRUE(fr_combustion_gpu_step(g,.001f,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&result,&found,err,sizeof(err))&&found);
-    if(material==DC_MATERIAL_LEAVES) {
-        ASSERT_EQ(result.state.fuel_mass_fp+result.state.char_mass_fp,fuel_before_short_steps);
-        ASSERT_TRUE(!(result.state.flags&FR_REACTIVE_FLAMING));
-    } else ASSERT_TRUE(result.state.fuel_mass_fp+result.state.char_mass_fp<fuel_before_short_steps&&result.state.char_mass_fp>0);
+    ASSERT_TRUE(result.state.fuel_mass_fp+result.state.char_mass_fp<fuel_before_short_steps&&result.state.char_mass_fp>0);
     if(char_stage) {
         result.state.thermal_energy=(float)(fr_reactive_state_heat_capacity(&result.state)*350.);
         result.state.thermal_energy_residual=result.state.thermal_energy_correction=0;

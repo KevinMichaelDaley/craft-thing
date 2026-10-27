@@ -135,9 +135,20 @@ void contact_apply(uint i,uint at) {
         Gas gas=field.values[at];gas.dynamics.y+=heat;field.values[at]=gas;
     }
 }
+uint choose_target(ivec2 p) {
+    uint chosen=0xffffffffu;float best=-1.;
+    for(uint i=0u;i<4u;i++) {
+        uint at=atlas(p+directions[i]);if(!gas_cell(at)) continue;
+        Gas gas=local_gas(at);float mass=gas_mass(gas);
+        float fraction=mass>0.?gas.species.x/mass:0.;
+        float supply=gas.species.x*clamp((fraction-float(FR_COMBUSTION_EXTINGUISH_OXYGEN))/
+            float(FR_COMBUSTION_AMBIENT_OXYGEN-FR_COMBUSTION_EXTINGUISH_OXYGEN),0.,1.);
+        if(supply>best) {best=supply;chosen=at;}
+    }
+    return chosen;
+}
 uint target(ivec2 p) {
-    for(uint i=0u;i<4u;i++) {uint at=atlas(p+directions[i]);if(gas_cell(at)) return at;}
-    return 0xffffffffu;
+    return floatBitsToUint(samples[uint(p.y)*params.width+uint(p.x)+params.width*params.height].w);
 }
 float ignition_threshold(uint low,uint high) {
     uint h=low^(high*0x9e3779b9u);h^=h>>16;h*=0x7feb352du;h^=h>>15;h*=0x846ca68bu;h^=h>>16;
@@ -299,6 +310,12 @@ void main() {
     if(params.unused.x==5u) {contact_apply(i,at);return;}
     if(params.unused.x==3u) {
         if(at!=0xffffffffu) emission[at]=vec4(0.,0.,uintBitsToFloat(slot_generation(at)),0.);
+        uvec2 address;uint chosen=0xffffffffu;
+        if(solid_address(at,address)) {
+            uint material=Words(address).words[FR_ENTRY_STATE];
+            if(material==7u||material==8u||material==9u||material==12u) chosen=choose_target(p);
+        }
+        samples[i+params.width*params.height].w=uintBitsToFloat(chosen);
         extinguish_unexposed(p,at);return;
     }
     if(params.unused.x==1u) {feedback(i,p,at);return;}
