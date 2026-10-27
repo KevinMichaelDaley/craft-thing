@@ -138,9 +138,48 @@ static void test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_hea
     printf("Radiant received open%.9g blocked%.9g diagonal%.9g\n",open,blocked,diagonal);
     ASSERT_TRUE(open>.1&&blocked<open*.1&&diagonal>.1);PASS();
 }
+static void test_water_wets_rigid_wood_without_losing_water_or_enthalpy(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    chunk->cells[650].material=DC_MATERIAL_WOOD;
+    chunk->cells[651]=(dc_cell_t){.material=DC_MATERIAL_WATER,.fluid_mass=65536};
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t original;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,800,4000,&original,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,650,&original,err,sizeof(err))&&dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err))&&fr_thermal_gpu_enable(g,err,sizeof(err)));
+    for(uint32_t i=0;i<4;i++) ASSERT_TRUE(fr_thermal_gpu_step(g,.25f,err,sizeof(err)));
+    fr_reactive_record_t wet;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0,0,&wet,&found,err,sizeof(err))&&found);
+    ASSERT_TRUE(wet.state.bound_water_fp>0&&wet.state.bound_water_fp<19661);
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_EQ(wet.state.bound_water_fp+chunk->cells[651].fluid_mass,65536u);
+    float *water_energy=calloc(4096,sizeof(*water_energy));ASSERT_TRUE(water_energy);
+    ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(g,0,water_energy,4096,err,sizeof(err)));
+    double before=fr_reactive_state_energy(&original)+4.18*FR_THERMAL_AMBIENT_K;
+    double after=fr_reactive_state_energy(&wet.state)+chunk->cells[651].fluid_mass/65536.*4.18*FR_THERMAL_AMBIENT_K+water_energy[651];
+    printf("Rigid wetting water%u remaining%u enthalpy drift%.9gJ\n",wet.state.bound_water_fp,chunk->cells[651].fluid_mass,after-before);
+    ASSERT_TRUE(fabs(after-before)<.01);
+    fr_thermal_inspection_t sample;ASSERT_TRUE(fr_thermal_gpu_inspect(g,10,10,&sample,err,sizeof(err))&&sample.wetness>0&&sample.temperature_K<800);
+    ASSERT_TRUE(fr_thermal_gpu_overlay(g,2)&&dc_gpu_set_presentation_focus(g,(dc_presentation_focus_t){6,6,16,14})&&present(g,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_save_structure(g,"build/wet_rigid_body.dcs",err,sizeof(err)));
+    free(water_energy);free(chunk);dc_gpu_destroy(g);PASS();
+}
+static void test_finite_probe_heats_a_rigid_parcel_at_the_selected_pose(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    chunk->cells[650].material=DC_MATERIAL_WOOD;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t original;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,300,4100,&original,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,650,&original,err,sizeof(err))&&dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err))&&fr_thermal_gpu_enable(g,err,sizeof(err)));
+    fr_thermal_probe_t before,after;ASSERT_TRUE(fr_thermal_gpu_source_state(g,&before,err,sizeof(err))&&fr_thermal_gpu_probe(g,10,10,true)&&fr_thermal_gpu_step(g,.25f,err,sizeof(err)));
+    fr_reactive_record_t heated;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0,0,&heated,&found,err,sizeof(err))&&found&&fr_thermal_gpu_source_state(g,&after,err,sizeof(err)));
+    float temperature=0;ASSERT_TRUE(fr_reactive_state_temperature(&heated.state,&temperature,err,sizeof(err))&&temperature>300&&temperature<350);
+    ASSERT_TRUE(after.excess_energy<before.excess_energy&&fabs(fr_reactive_state_energy(&heated.state)-fr_reactive_state_energy(&original)+after.excess_energy-before.excess_energy)<.01);
+    free(chunk);dc_gpu_destroy(g);PASS();
+}
 int main(int argc,char **argv) {
     if(argc==2&&strcmp(argv[1],"--burn")==0) RUN(test_rigid_combustion_consumes_authoritative_body_fuel);
     else if(argc==2&&strcmp(argv[1],"--radiation")==0) RUN(test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_heat);
+    else if(argc==2&&strcmp(argv[1],"--wet")==0) RUN(test_water_wets_rigid_wood_without_losing_water_or_enthalpy);
+    else if(argc==2&&strcmp(argv[1],"--probe")==0) RUN(test_finite_probe_heats_a_rigid_parcel_at_the_selected_pose);
     else {RUN(test_cold_rigid_admission_retains_pose_and_reactive_ownership);RUN(test_rigid_terrain_contact_exchanges_a_paired_heat_budget);RUN(test_rigid_ember_transfers_real_heat_into_surrounding_gas);RUN(test_rigid_combustion_consumes_authoritative_body_fuel);RUN(test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_heat);}
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }

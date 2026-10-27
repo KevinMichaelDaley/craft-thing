@@ -1985,6 +1985,8 @@ build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: includ
 build/thermal_tests: include/dungeoncraft/thermal_surface.h
 build/combustion_body_feedback_display_tests: tests/vulkan/combustion_body_feedback_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/rigid_thermal_display_tests: tests/vulkan/component_admission_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/thermal_gpu.o build/performance/src/vulkan/thermal_gpu.o: build/shaders/combustion.comp.spv
 .PHONY: test_bonfire
 test_ui test_quarter_native: test_bonfire
