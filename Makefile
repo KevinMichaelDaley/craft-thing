@@ -1969,6 +1969,8 @@ build/combustion_gpu_display_tests: tests/vulkan/combustion_contact_cases.h
 build/combustion_gpu_display_tests: tests/vulkan/bonfire_autostart_cases.h src/app/bonfire_scene.c
 build/component_admission_tests: tests/vulkan/component_admission_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(REACTIVE_STATE_SRC) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/bonfire_mechanics_tests: tests/vulkan/bonfire_mechanics_tests.c src/app/bonfire_admission.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< src/app/bonfire_admission.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/shaders/combustion.comp.spv: shaders/reactive/bonfire_hud.glsl
 build/thermal_gpu.o build/performance/src/vulkan/thermal_gpu.o: build/shaders/combustion.comp.spv
 .PHONY: test_bonfire

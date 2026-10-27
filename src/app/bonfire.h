@@ -8,6 +8,8 @@ typedef struct {uint32_t object,kind,x,y,width,height;bool wet;float temperature
 typedef struct {fr_structural_gpu_graph_t pit;dc_bonfire_piece_t pieces[16];uint32_t count;} dc_bonfire_plan_t;
 /** Build two constructed pits and explicitly separate rigid fuel objects. */
 bool dc_bonfire_plan(dc_bonfire_plan_t *out);
+/** Place real anchored construction and admit the staged independent wood. */
+bool dc_bonfire_admit(dc_gpu_t *gpu,char *err,uint32_t cap);
 /** Cold staging for explicitly separate rigid fuel; only ground is terrain.
  * Publish through GPU rigid admission before any visible scene frame. */
 bool dc_bonfire_build(const dc_chunk_coord_t *coords,uint32_t count,
