@@ -21,6 +21,22 @@ static void test_constructed_pit_supports_actual_independent_wood_bodies(void) {
         if(records[i].state.bound_water_fp) wet++;
     }
     ASSERT_EQ(hot,6);ASSERT_EQ(wet,120);free(records);
+    dc_gpu_body_t before,after;dc_gpu_body_motion_t motion;
+    ASSERT_TRUE(dc_gpu_read_body_id(g,0x80000001u,&before,err,sizeof(err))&&dc_gpu_read_body_motion(g,before.id,&motion,err,sizeof(err)));
+    ASSERT_TRUE(!(motion.flags&DC_GPU_BODY_KINEMATIC));
+    ASSERT_TRUE(dc_gpu_set_tick_seconds(g,1.f/60.f));
+    for(uint32_t frame=0;frame<120;frame++) ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_id(g,before.id,&after,err,sizeof(err)));
+    printf("Real rigid stack: upper log y%.3f -> %.3f cells\n",before.y_fp/65536.,after.y_fp/65536.);
+    ASSERT_TRUE(after.y_fp>before.y_fp&&after.y_fp<(96+192)*65536);
+    fr_structural_gpu_node_state_t support;ASSERT_TRUE(fr_gpu_read_structure_node(g,1,&support));
+    printf("Pit support state%u valid%u unknown%u component%u\n",support.state,support.valid_anchors,support.unknown_anchors,support.component);
+    fr_structural_gpu_component_state_t diagnostic;ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&diagnostic));
+    printf("Structural diagnostic flags%u residual%.8g pivot%.8g geometry%.8g iterations%u active%u refine%u\n",
+        diagnostic.flags,diagnostic.relative_residual,diagnostic.minimum_pivot,diagnostic.geometry_minimum,
+        diagnostic.iterations,diagnostic.active_iterations,diagnostic.refinement_iterations);
+    ASSERT_EQ(support.state,FR_STRUCTURAL_SUPPORTED);
+    ASSERT_TRUE(fr_gpu_save_structure(g,"build/bonfire_mechanics.dcs",err,sizeof(err)));
     dc_chunk_t *physical=calloc(1,sizeof(*physical));ASSERT_TRUE(physical&&dc_gpu_download_chunk(g,43,physical,err,sizeof(err)));
     for(uint32_t i=0;i<4096;i++) ASSERT_TRUE(physical->cells[i].material!=DC_MATERIAL_WOOD);
     free(physical);dc_thermal_bench_release(chunks,70);dc_gpu_destroy(g);PASS();

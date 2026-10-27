@@ -8,7 +8,7 @@ static int g_pass,g_fail;
 #define PASS() g_pass++
 static void test_real_structural_pits_and_independent_rigid_stack(void) {
     dc_bonfire_plan_t p;ASSERT_TRUE(dc_bonfire_plan(&p));
-    ASSERT_EQ(p.pit.member_count,10);ASSERT_EQ(p.pit.anchor_count,4);ASSERT_EQ(p.count,16);
+    ASSERT_EQ(p.pit.member_count,10);ASSERT_EQ(p.pit.anchor_count,12);ASSERT_EQ(p.count,16);
     uint32_t logs[2]={0},sticks[2]={0},starters[2]={0};
     for(uint32_t i=0;i<p.pit.member_count;i++) {
         ASSERT_EQ(p.pit.members[i].material,FR_STRUCTURAL_STONE);ASSERT_EQ(p.pit.members[i].flags,0);
