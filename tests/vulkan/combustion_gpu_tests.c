@@ -227,7 +227,12 @@ static void test_roof_blocks_and_side_vent_routes_the_physical_flame(void) {
     ASSERT_TRUE(above[0]>.02&&above[1]<.001&&above[2]>.02);PASS();
 }
 #include "combustion_vent_cases.h"
+#include "combustion_containment_cases.h"
 int main(int argc,char **argv) {
+    if(argc==2&&strcmp(argv[1],"--containment")==0) {
+        RUN(test_stone_and_clearance_contain_while_a_fuel_bridge_spreads);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
     if(argc==2&&strcmp(argv[1],"--vent")==0) {
         RUN(test_oxygen_starvation_and_finite_vented_recovery);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
@@ -240,5 +245,6 @@ int main(int argc,char **argv) {
     RUN(test_flame_moves_with_real_lateral_gas_transport);
     RUN(test_roof_blocks_and_side_vent_routes_the_physical_flame);
     RUN(test_oxygen_starvation_and_finite_vented_recovery);
+    RUN(test_stone_and_clearance_contain_while_a_fuel_bridge_spreads);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }

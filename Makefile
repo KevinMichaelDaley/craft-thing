@@ -1956,6 +1956,7 @@ build/shaders/combustion.comp.spv: shaders/reactive/combustion.comp shaders/reac
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/combustion_gpu_display_tests: build/shaders/combustion.comp.spv
+build/combustion_gpu_display_tests: tests/vulkan/combustion_containment_cases.h
 build/thermal_gpu.o build/performance/src/vulkan/thermal_gpu.o: build/shaders/combustion.comp.spv
 .PHONY: test_bonfire
 test_ui test_quarter_native: test_bonfire
