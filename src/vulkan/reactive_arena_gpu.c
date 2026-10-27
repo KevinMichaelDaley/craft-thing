@@ -38,7 +38,7 @@ bool fr_reactive_arena_create(dc_gpu_t *g,uint32_t initial,fr_reactive_arena_gpu
     fr_reactive_arena_gpu_t a={.capacity=rounded(0,initial),.request_capacity=64};
     if(!dc_gpu_address_buffer_create(g,256,true,&a.root,err,cap)||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)a.capacity*FR_ENTRY_WORDS*4u,true,&a.entries,err,cap)||
-       !dc_gpu_address_buffer_create(g,(VkDeviceSize)a.capacity*32u,false,&a.thermal_scratch,err,cap)||
+       !dc_gpu_address_buffer_create(g,(VkDeviceSize)a.capacity*48u,false,&a.thermal_scratch,err,cap)||
        !dc_gpu_address_buffer_create(g,bit_bytes(a.capacity),true,&a.free_bits,err,cap)||
        !dc_gpu_address_buffer_create(g,64,true,&a.mailbox,err,cap)||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)a.request_capacity*FR_ARENA_REQUEST_WORDS*4u,true,&a.requests,err,cap)) goto fail;
@@ -49,6 +49,7 @@ bool fr_reactive_arena_create(dc_gpu_t *g,uint32_t initial,fr_reactive_arena_gpu
     ((uint32_t *)a.mailbox.mapped)[FR_ARENA_MAIL_FREE]=a.capacity;
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g)) goto fail;
     transfer_barrier(g);vkCmdFillBuffer(g->command,a.free_bits.buffer,0,a.free_bits.bytes,UINT32_MAX);
+    vkCmdFillBuffer(g->command,a.thermal_scratch.buffer,0,a.thermal_scratch.bytes,0);
     if(a.capacity%32u) {
         fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
             VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT);
@@ -75,9 +76,10 @@ static bool grow_entries(dc_gpu_t *g,fr_reactive_arena_gpu_t *a,uint32_t require
     uint32_t next=rounded(a->capacity,required);dc_gpu_address_buffer_t entries={0},bits={0},scratch={0};
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)next*FR_ENTRY_WORDS*4u,true,&entries,err,cap)||
        !dc_gpu_address_buffer_create(g,bit_bytes(next),true,&bits,err,cap)||
-       !dc_gpu_address_buffer_create(g,(VkDeviceSize)next*32u,false,&scratch,err,cap)) goto fail;
+       !dc_gpu_address_buffer_create(g,(VkDeviceSize)next*48u,false,&scratch,err,cap)) goto fail;
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g)) goto fail;
     transfer_barrier(g);
+    vkCmdFillBuffer(g->command,scratch.buffer,0,scratch.bytes,0);
     VkBufferCopy region={0,0,a->entries.bytes};vkCmdCopyBuffer(g->command,a->entries.buffer,entries.buffer,1,&region);
     region.size=a->free_bits.bytes;vkCmdCopyBuffer(g->command,a->free_bits.buffer,bits.buffer,1,&region);
     if(bits.bytes>a->free_bits.bytes)

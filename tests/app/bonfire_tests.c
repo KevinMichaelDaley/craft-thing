@@ -73,14 +73,15 @@ static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
             for(uint32_t i=0;i<6;i++) if(logs[i].initial>=logs[i].current+32u) {if(i<3u) dry++;else wet++;}
             fr_gas_gpu_clock_t clock={0};ASSERT_TRUE(fr_gas_gpu_clock(view->gpu,&clock));
             fr_gas_gpu_audit_t audit;ASSERT_TRUE(fr_gas_gpu_audit(view->gpu,&audit,err,sizeof(err)));
-            uint32_t counters[14];ASSERT_TRUE(fr_combustion_gpu_bonfire_counters(view->gpu,counters));float target_oxygen=0;memcpy(&target_oxygen,counters+9u,sizeof(target_oxygen));
+            uint32_t counters[14];ASSERT_TRUE(fr_combustion_gpu_bonfire_counters(view->gpu,counters));float target_oxygen=0,surface_temperature=0;
+            memcpy(&target_oxygen,counters+9u,sizeof(target_oxygen));memcpy(&surface_temperature,counters+11u,sizeof(surface_temperature));
             printf("BONFIRE wall%.1fs sim%.1fs dry%u/3 wet%u/3 max-log-K %.1f %.1f %.1f ember%.1fK fuel-used %llu %llu %llu\n",
                 elapsed,clock.advanced_seconds,dry,wet,logs[0].temperature,logs[1].temperature,logs[2].temperature,ember,
                 (unsigned long long)(logs[0].initial-logs[0].current),(unsigned long long)(logs[1].initial-logs[1].current),(unsigned long long)(logs[2].initial-logs[2].current));fflush(stdout);
             printf("THERMAL kindling%.1fK max-gas%.1fK remaining-char%llu burning-char%u\n",diagnostic_kindling,
                 audit.metrics[FR_GAS_AUDIT_MAX_TEMPERATURE],(unsigned long long)diagnostic_char,diagnostic_burning_char);fflush(stdout);
-            printf("BODY exposure chosen%u viableO2%u occupancy%u gathered%u reacted%u targetO2mass%.9g\n",
-                counters[4],counters[5],counters[6],counters[7],counters[8],target_oxygen);fflush(stdout);
+            printf("BODY exposure chosen%u viableO2%u occupancy%u gathered%u reacted%u targetO2mass%.9g surface%.1fK\n",
+                counters[4],counters[5],counters[6],counters[7],counters[8],target_oxygen,surface_temperature);fflush(stdout);
         }
     }
     mkdir("build/screenshots",0777);uint32_t *pixels=malloc(480u*270u*4u);ASSERT_TRUE(pixels);

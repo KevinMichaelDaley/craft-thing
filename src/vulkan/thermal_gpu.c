@@ -239,7 +239,7 @@ bool fr_thermal_gpu_is_bonfire_world(const dc_gpu_t *g) {
 }
 static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
     struct fr_thermal_gpu *t=g->thermal;uint32_t bits=0;memcpy(&bits,&seconds,sizeof(bits));
-    uint32_t push[8]={g->width,g->height,mode,bits,dc_gpu_pixel_pool_word_offset(g)+DC_GPU_PIXEL_POOL_HEADER_WORDS,0,t->purpose==FR_THERMAL_WORLD_BONFIRE?1u:0u,t->profile_count};
+    uint32_t push[8]={g->width,g->height,mode,bits,dc_gpu_pixel_pool_word_offset(g)+DC_GPU_PIXEL_POOL_HEADER_WORDS,t->combustion.pipeline?1u:0u,t->purpose==FR_THERMAL_WORLD_BONFIRE?1u:0u,t->profile_count};
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
@@ -258,6 +258,10 @@ void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
     phase(g,8,seconds);phase(g,9,seconds);
     phase(g,0,seconds);phase(g,7,seconds);phase(g,1,seconds);phase(g,2,seconds);
     phase(g,10,seconds);phase(g,11,seconds);
+    if(g->thermal->purpose==FR_THERMAL_WORLD_BONFIRE) {
+        phase(g,0,seconds);phase(g,19,seconds);phase(g,16,seconds);phase(g,17,seconds);phase(g,11,seconds);
+    }
+    phase(g,0,seconds);phase(g,7,seconds);
     record_combustion(g,seconds,4);record_combustion(g,seconds,5);
     phase(g,13,seconds);phase(g,11,seconds);
     record_combustion(g,seconds,3);record_combustion(g,seconds,9);record_combustion(g,seconds,0);record_combustion(g,seconds,10);phase(g,14,seconds);

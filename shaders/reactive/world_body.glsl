@@ -52,8 +52,14 @@ bool fr_body_sample(uint index,out vec4 node_value,out vec4 metadata) {
     if(total>0.) node_value.zw/=total;
     return node_value.y>0.;
 }
-void fr_body_deposit(uint index,float heat) {
+void fr_body_atomic_heat(Words scratch,uint word,float heat) {
     if(heat==0.) return;
+    uint old=atomicAdd(scratch.words[word],0u);
+    for(;;) {uint next=floatBitsToUint(uintBitsToFloat(old)+heat);
+        uint observed=atomicCompSwap(scratch.words[word],old,next);if(observed==old) break;old=observed;}
+}
+void fr_body_deposit_radiance(uint index,float heat,float outgoing,float incoming) {
+    if(heat==0.&&outgoing==0.&&incoming==0.) return;
     uint slot=runtime_body_find(thermal_occupancy[index]);if(slot>=BODY_CAPACITY) return;
     Body body=DC_BODY(slot);if(!pixel_body(body)) return;
     ivec2 cell=ivec2(index%params.width,index/params.width);
@@ -70,9 +76,10 @@ void fr_body_deposit(uint index,float heat) {
         uint piece=query_piece(body,query,i);if(pixel_piece_material(body,piece)==0u) continue;
         uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y==0u) continue;
         vec2 center;float share=body_cell_volume(body,piece,cell,1.,center)/total;if(share<=0.) continue;
-        uint word=h.x*8u+4u,old=atomicAdd(scratch.words[word],0u);
-        for(;;) {uint next=floatBitsToUint(uintBitsToFloat(old)+heat*share);
-            uint observed=atomicCompSwap(scratch.words[word],old,next);if(observed==old) break;old=observed;}
+        fr_body_atomic_heat(scratch,h.x*12u+4u,heat*share);
+        fr_body_atomic_heat(scratch,h.x*12u+10u,outgoing*share);
+        fr_body_atomic_heat(scratch,h.x*12u+11u,incoming*share);
     }
 }
+void fr_body_deposit(uint index,float heat) {fr_body_deposit_radiance(index,heat,0.,0.);}
 #endif
