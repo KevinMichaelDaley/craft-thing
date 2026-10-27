@@ -35,6 +35,9 @@ def main():
     if placement.is_file():
         with Image.open(placement) as frame:
             frame.save(placement.with_suffix(".png"))
+    for capture in arguments.captures.glob("bonfire_automatic_*s.bmp"):
+        with Image.open(capture) as frame:
+            frame.save(capture.with_suffix(".png"))
 
 
 if __name__ == "__main__":

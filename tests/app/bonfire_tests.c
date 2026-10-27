@@ -12,12 +12,12 @@ static void test_bonfire_is_a_playable_finite_terrain_scene(void) {
     dc_level_view_t *view=dc_level_view_create_bonfire(directory,7,err,sizeof(err));ASSERT_TRUE(view);
     ASSERT_TRUE(fr_combustion_gpu_enabled(view->gpu));
     uint32_t slot;ASSERT_TRUE(dc_chunk_table_find(&view->table,(dc_chunk_coord_t){2,1},&slot));
-    uint32_t cell=16u*64u+32u;fr_reactive_record_t original;bool found=false;
+    uint32_t cell=16u*64u+28u;fr_reactive_record_t original;bool found=false;
     ASSERT_TRUE(fr_gpu_reactive_read_cell(view->gpu,slot,cell,&original,&found,err,sizeof(err))&&found);
     ASSERT_EQ(original.state.material,DC_MATERIAL_WOOD);ASSERT_TRUE(original.state.fuel_mass_fp>0);
-    ASSERT_TRUE(dc_level_view_heat_probe(view,160,208,true));
+    ASSERT_TRUE(dc_level_view_heat_probe(view,156,208,true));
     for(uint32_t i=0;i<360;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
-    ASSERT_TRUE(dc_level_view_heat_probe(view,160,208,false));
+    ASSERT_TRUE(dc_level_view_heat_probe(view,156,208,false));
     for(uint32_t i=0;i<300;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
     fr_reactive_record_t burned;
     ASSERT_TRUE(fr_gpu_reactive_read_cell(view->gpu,slot,cell,&burned,&found,err,sizeof(err))&&found);
@@ -27,7 +27,7 @@ static void test_bonfire_is_a_playable_finite_terrain_scene(void) {
     ASSERT_TRUE(burned.state.fuel_mass_fp<original.state.fuel_mass_fp);
     ASSERT_TRUE((burned.state.flags&FR_REACTIVE_FLAMING)!=0u);
     fr_thermal_inspection_t warmth;
-    ASSERT_TRUE(fr_thermal_gpu_inspect(view->gpu,224,271,&warmth,err,sizeof(err)));
+    ASSERT_TRUE(fr_thermal_gpu_inspect(view->gpu,220,271,&warmth,err,sizeof(err)));
     ASSERT_TRUE(warmth.occupied&&warmth.material==DC_MATERIAL_AIR&&warmth.temperature_K>293.16f);
     printf("Measured air warmth %.3f K\n",warmth.temperature_K);
     ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
@@ -84,15 +84,15 @@ static void test_bonfire_is_a_playable_finite_terrain_scene(void) {
     uint32_t wet_slot;ASSERT_TRUE(dc_chunk_table_find(&view->table,(dc_chunk_coord_t){5,1},&wet_slot));
     ASSERT_TRUE(fr_gpu_reactive_read_cell(view->gpu,wet_slot,cell,&original,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(original.state.bound_water_fp>0);
-    ASSERT_TRUE(dc_level_view_heat_probe(view,352,208,true));
+    ASSERT_TRUE(dc_level_view_heat_probe(view,348,208,true));
     for(uint32_t i=0;i<360;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
-    ASSERT_TRUE(dc_level_view_heat_probe(view,352,208,false));
+    ASSERT_TRUE(dc_level_view_heat_probe(view,348,208,false));
     ASSERT_TRUE(fr_gpu_reactive_read_cell(view->gpu,wet_slot,cell,&restored,&found,err,sizeof(err))&&found);
     ASSERT_EQ(original.state.fuel_mass_fp,restored.state.fuel_mass_fp);
     ASSERT_EQ(restored.state.flags&FR_REACTIVE_FLAMING,0);
-    ASSERT_TRUE(dc_level_view_paint(view,160,202,3,DC_MATERIAL_WATER,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view,156,202,3,DC_MATERIAL_WATER,err,sizeof(err)));
     for(uint32_t i=0;i<360;i++) {
-        ASSERT_TRUE(dc_level_view_paint(view,160,207,0,DC_MATERIAL_WATER,err,sizeof(err)));
+        ASSERT_TRUE(dc_level_view_paint(view,156,207,0,DC_MATERIAL_WATER,err,sizeof(err)));
         ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
     }
     ASSERT_TRUE(fr_gpu_reactive_read_cell(view->gpu,slot,cell,&restored,&found,err,sizeof(err))&&found);

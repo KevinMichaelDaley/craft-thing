@@ -238,6 +238,10 @@ static void test_roof_blocks_and_side_vent_routes_the_physical_flame(void) {
 #include "combustion_contact_cases.h"
 #include "bonfire_autostart_cases.h"
 int main(int argc,char **argv) {
+    if(argc==2&&strcmp(argv[1],"--side-air")==0) {
+        RUN(test_fresh_side_air_can_feed_a_surface_with_starved_air_above);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
     if(argc==2&&strcmp(argv[1],"--tinder")==0) {
         RUN(test_dry_leaf_tinder_uses_the_existing_finite_material_profile);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
@@ -271,6 +275,7 @@ int main(int argc,char **argv) {
     RUN(test_flame_moves_with_real_lateral_gas_transport);
     RUN(test_roof_blocks_and_side_vent_routes_the_physical_flame);
     RUN(test_oxygen_starvation_and_finite_vented_recovery);
+    RUN(test_fresh_side_air_can_feed_a_surface_with_starved_air_above);
     RUN(test_stone_and_clearance_contain_while_a_fuel_bridge_spreads);
     RUN(test_hot_gas_heats_each_exposed_wood_face);
     RUN(test_finite_ember_automatically_establishes_the_dry_bonfire);
