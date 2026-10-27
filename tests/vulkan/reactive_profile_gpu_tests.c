@@ -52,7 +52,7 @@ static void test_gpu_profiles_match_cpu_rates_and_ignore_visual_pigment(void) {
             .saturation=(float)(i%5u)/4,.coating_coverage=.5f,
             .substrate_oxidation=(float)(i%4u)/3,.coating_oxidation=.25f,
             .shock_energy_per_mass=i%7u==0?600:0,
-            .oxygen_mass_fraction=i%4u==0?0:.21f,
+            .oxygen_mass_fraction=(float[]){0,.119f,.12f,.121f,.21f}[i%5u],
             .bound_oxidizer_per_fuel=i%2u?.43f:0};
         uint32_t *record=p.mapped+CASE_WORD+i*10u;
         record[0]=material;record[1]=coat;memcpy(record+2,&e,sizeof(e));
