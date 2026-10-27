@@ -271,7 +271,12 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
     float capacity=((float(wood_fuel)+float(entry.words[s+11u]))*coefficient(m,5u)+
         float(entry.words[s+10u])*coefficient(12u,5u)+float(entry.words[s+12u])*coefficient(3u,5u))/65536.;
     if(m!=7u&&m!=8u&&m!=9u&&m!=12u) return;
-    if(fuel==0u) {if(owner==1u) loose_ash(position,at,handle,entry,gas);return;}
+    if(fuel==0u) {
+#ifdef FR_BODY_REACTIONS
+        if(owner==2u) Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u])).words[handle.x*12u+6u]=0u;
+#endif
+        if(owner==1u) loose_ash(position,at,handle,entry,gas);return;
+    }
     if(capacity<=0.) return;
     float energy=uintBitsToFloat(entry.words[s+17u]),bulk_temperature=energy/capacity,temperature=bulk_temperature;
     float wet_capacity=float(entry.words[s+8u])*coefficient(m,19u);
@@ -286,9 +291,10 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
         float nusselt=2.+.6*sqrt(max(reynolds,0.))*pow(float(FR_COMBUSTION_AIR_PRANDTL),1./3.);
         float convection=nusselt*float(FR_COMBUSTION_AIR_CONDUCTIVITY)*face;
         Words cache=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
+        float reaction_power=uintBitsToFloat(cache.words[handle.x*12u+6u]);cache.words[handle.x*12u+6u]=0u;
         temperature=fr_thermal_surface_K(bulk_temperature,gas_temperature,
             coefficient(profile,6u)*float(FR_THERMAL_FACE_AREA/FR_THERMAL_CORE_DISTANCE),convection,
-            uintBitsToFloat(cache.words[handle.x*12u+10u]),uintBitsToFloat(cache.words[handle.x*12u+11u]));
+            uintBitsToFloat(cache.words[handle.x*12u+10u]),uintBitsToFloat(cache.words[handle.x*12u+11u])+reaction_power);
         cache.words[handle.x*12u+9u]=floatBitsToUint(temperature);
         if(!char_stage) atomicMax(hud[29],floatBitsToUint(max(temperature,0.)));
     }
@@ -318,6 +324,9 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
     uint char_mass=products.x,ash=products.y,soot=products.z;
     float exhaust=float(reacted-char_mass-ash-soot)+used;
     float heat=(float(reacted)*coefficient(profile,11u)-float(soot)*float(FR_COMBUSTION_AIRBORNE_ENERGY))/65536.;
+#ifdef FR_BODY_REACTIONS
+    if(owner==2u) Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u])).words[handle.x*12u+6u]=floatBitsToUint(.7*heat/dt);
+#endif
     admitted+=heat;source_temperature=max(source_temperature,temperature);sources|=1u;
     float removed=float(reacted)/65536.*coefficient(profile,5u)*bulk_temperature;
     float retained=float(char_mass)/65536.*coefficient(12u,5u)*bulk_temperature;
@@ -367,7 +376,7 @@ void choose_body_target(uint index) {
         if(all(greaterThanEqual(p,ivec2(0)))&&all(lessThan(p,ivec2(params.width,params.height)))&&
             thermal_occupancy[uint(p.y)*params.width+uint(p.x)]==body.id) atomicAdd(hud[24],1u);
     }
-    if(chosen==0xffffffffu) e.words[FR_ENTRY_STATE+1u]&=~2u;
+    if(chosen==0xffffffffu) {e.words[FR_ENTRY_STATE+1u]&=~2u;scratch.words[index*12u+6u]=0u;}
 }
 void burn_body_neighbor(ivec2 p,uint gas_at,inout Gas gas,inout float admitted,inout float temperature,inout uint sources) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return;
