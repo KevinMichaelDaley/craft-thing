@@ -31,6 +31,13 @@ static void test_cold_rigid_admission_retains_pose_and_reactive_ownership(void) 
     ASSERT_TRUE(inspection.occupied&&inspection.material==DC_MATERIAL_WOOD&&inspection.temperature_K>300&&inspection.temperature_K<700);
     ASSERT_TRUE(fr_gpu_reactive_read_body(g,body.id,0,0,&record,&found,err,sizeof(err))&&found);
     ASSERT_EQ(memcmp(&record.state,&original,sizeof(original)),0);
+    ASSERT_TRUE(fr_thermal_gpu_step(g,1.f/60.f,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,body.id,0,0,&record,&found,err,sizeof(err))&&found);
+    float hot_K=0;ASSERT_TRUE(fr_reactive_state_temperature(&record.state,&hot_K,err,sizeof(err)));
+    ASSERT_TRUE(hot_K<700&&hot_K>300);
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,body.id,1,0,&record,&found,err,sizeof(err))&&found);
+    float cold_K=0;ASSERT_TRUE(fr_reactive_state_temperature(&record.state,&cold_K,err,sizeof(err)));
+    ASSERT_TRUE(cold_K>300&&cold_K<700);
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));ASSERT_EQ(chunk->cells[10*64+10].material,DC_MATERIAL_AIR);
     ASSERT_TRUE(dc_gpu_read_body_id(g,0x80000002u,&body,err,sizeof(err)));ASSERT_EQ(body.x_fp,20*65536);
     free(chunk);dc_gpu_destroy(g);PASS();
