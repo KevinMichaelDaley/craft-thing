@@ -275,15 +275,15 @@ void burn(ivec2 position,uint gas_at,inout Gas gas,inout float admitted,inout fl
     entry.words[s+1u]=flags;
     if(!viable||(flags&2u)==0u) return;
     float demand=coefficient(profile,12u);
-    uint oxygen_fp=uint(floor(max(0.,gas.species.x)*65536.));
+    float oxygen_fp=max(0.,gas.species.x)*65536.;
     float requested=float(entry.words[s+8u])*coefficient(profile,31u)*dt*dry*dry+uintBitsToFloat(entry.words[s+27u]);
     entry.words[s+27u]=floatBitsToUint(min(requested-floor(requested),.99999994));
-    uint reacted=uint(floor(min(min(float(fuel),requested),float(oxygen_fp)/demand)));
-    uint used=uint(ceil(float(reacted)*demand));if(reacted==0u||used>oxygen_fp) return;
+    uint reacted=uint(floor(min(min(float(fuel),requested),oxygen_fp/demand)));
+    float used=float(reacted)*demand;if(reacted==0u||used>oxygen_fp) return;
     uint initial=uint(round(float(entry.words[s+8u])*coefficient(profile,9u))),consumed=initial>=fuel?initial-fuel:0u;
     uvec3 products=solid_products(consumed+reacted,profile)-solid_products(consumed,profile);
     uint char_mass=products.x,ash=products.y,soot=products.z;
-    uint exhaust=reacted-char_mass-ash-soot+used;
+    float exhaust=float(reacted-char_mass-ash-soot)+used;
     float heat=(float(reacted)*coefficient(profile,11u)-float(soot)*float(FR_COMBUSTION_AIRBORNE_ENERGY))/65536.;
     admitted+=heat;source_temperature=max(source_temperature,temperature);sources|=1u;
     float removed=float(reacted)/65536.*coefficient(profile,5u)*temperature;
@@ -295,9 +295,9 @@ void burn(ivec2 position,uint gas_at,inout Gas gas,inout float admitted,inout fl
     else {entry.words[s+9u]=fuel-reacted;entry.words[s+10u]+=char_mass;}
     entry.words[s+11u]+=ash;
     add_energy(entry,.7*heat-removed+retained);
-    gas.species.x-=float(used)/65536.;gas.species.z+=float(exhaust)/65536.;gas.dynamics.x+=float(soot)/65536.;
+    gas.species.x-=used/65536.;gas.species.z+=exhaust/65536.;gas.dynamics.x+=float(soot)/65536.;
     gas.dynamics.y+=.3*heat+removed-retained;
-    gas.visual.rgb+=vec3(.18,.16,.14)*float(exhaust+soot)/65536.;
+    gas.visual.rgb+=vec3(.18,.16,.14)*(exhaust+float(soot))/65536.;
 }
 void main() {
     uint i=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;

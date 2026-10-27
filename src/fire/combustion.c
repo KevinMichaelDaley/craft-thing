@@ -20,11 +20,11 @@ static void solid_products(uint32_t consumed,const fr_reactive_profile_t *p,uint
     rest-=out[1];
     out[2]=(uint32_t)floor(rest*(double)p->fuel_yields[2]/(1-p->fuel_yields[0]-p->fuel_yields[1]));
 }
-bool fr_combustion_reference(const fr_reactive_state_t *source,uint32_t oxygen_fp,
+bool fr_combustion_reference(const fr_reactive_state_t *source,double oxygen_fp,
     float oxygen_fraction,float exposed_fraction,float seconds,
     fr_reactive_state_t *out,fr_combustion_products_t *products,
     char *err_buf,uint32_t err_cap) {
-    if(!out||!products||!isfinite(seconds)||seconds<0||!isfinite(exposed_fraction)||
+    if(!out||!products||!isfinite(oxygen_fp)||oxygen_fp<0||!isfinite(seconds)||seconds<0||!isfinite(exposed_fraction)||
        exposed_fraction<0||exposed_fraction>1||!isfinite(oxygen_fraction)||
        oxygen_fraction<0||oxygen_fraction>1||
        !fr_reactive_state_valid(source,err_buf,err_cap))
@@ -58,7 +58,7 @@ bool fr_combustion_reference(const fr_reactive_state_t *source,uint32_t oxygen_f
         double admitted=fmin(fuel,requested);
         if(profile->oxygen_per_fuel>0) admitted=fmin(admitted,oxygen_fp/(double)profile->oxygen_per_fuel);
         p.fuel_fp=(uint32_t)floor(admitted);
-        p.oxygen_fp=(uint32_t)ceil(p.fuel_fp*(double)profile->oxygen_per_fuel);
+        p.oxygen_fp=p.fuel_fp*(double)profile->oxygen_per_fuel;
         uint32_t initial=(uint32_t)llround(s.dry_mass_fp*(double)profile->fuel_fraction);
         uint32_t consumed=initial>=fuel?initial-fuel:0;
         uint32_t before[3],after[3];

@@ -61,7 +61,7 @@ static void test_energy_ledger_and_invalid_transaction(void) {
 static void test_competing_parcels_cannot_overdraw_oxygen(void) {
     char err[256]={0};fr_reactive_state_t s,out;fr_combustion_products_t p;
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,0,800,37,&s,err,sizeof(err)));
-    s.flags|=FR_REACTIVE_FLAMING;uint32_t remaining=80,used=0;
+    s.flags|=FR_REACTIVE_FLAMING;double remaining=80,used=0;
     for(int i=0;i<8;i++) {
         ASSERT_TRUE(fr_combustion_reference(&s,remaining,.23f,1,1,&out,&p,err,sizeof(err)));
         ASSERT_TRUE(p.oxygen_fp<=remaining);remaining-=p.oxygen_fp;used+=p.oxygen_fp;
