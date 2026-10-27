@@ -3,6 +3,10 @@ build/appearance_tests: tests/renderer/appearance_tests.c src/renderer/appearanc
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/renderer/appearance_tests.c src/renderer/appearance.c -o $@ -lm
 test: build/appearance_tests
+build/presentation_focus_tests: tests/renderer/presentation_focus_tests.c include/dungeoncraft/presentation.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+test: build/presentation_focus_tests
+	./build/presentation_focus_tests
 test: build/texture_tests build/texture_gpu_tests build/occlusion_gpu_tests build/lighting_gpu_tests build/shading_tests build/scene_gpu_tests
 build/texture_tests: tests/renderer/texture_tests.c src/renderer/appearance.c src/renderer/texture.c include/ferrum/renderer/texture.h
 	mkdir -p build
