@@ -64,6 +64,8 @@ static void test_mixed_concavities_keep_exact_role_object_connectivity(void) {
     ASSERT_EQ(labels[34], FR_AUTHORED_INVALID_OUTPUT);
     fr_authored_component_plan_t plans[3];
     uint32_t count = 0;
+    ASSERT_TRUE(!fr_gpu_read_authored_components(gpu, plans, 2, &count, err, sizeof(err)));
+    ASSERT_EQ(count, 3u);
     ASSERT_TRUE(fr_gpu_read_authored_components(gpu, plans, 3, &count, err, sizeof(err)));
     ASSERT_EQ(count, 3u); ASSERT_EQ(plans[0].source_root, 9u);
     ASSERT_EQ(plans[0].object, 7u); ASSERT_EQ(plans[0].occupied, 4u);
