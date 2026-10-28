@@ -12,10 +12,10 @@
 #include "catapult_scene.h"
 
 enum {
-    CATAPULT_ARM_ID = 2u,
+    CATAPULT_ARM_ID = 0x80000001u,
     CATAPULT_PIVOT_ID = 1u,
     CATAPULT_LATCH_ID = 2u,
-    CATAPULT_COAL_ID = 0x80000001u,
+    CATAPULT_COAL_ID = 0x80000002u,
     CATAPULT_COAL_SLOT = 3u
 };
 
@@ -46,15 +46,15 @@ static fr_structural_gpu_graph_t support_graph(void) {
 }
 
 static bool coal_load(dc_gpu_t *gpu, bool hot, char *err, uint32_t cap) {
-    if (!dc_gpu_paint_material(gpu, 70, 77, 1, DC_MATERIAL_COAL, err, cap))
+    if (!dc_gpu_paint_material(gpu, 70, 76, 1, DC_MATERIAL_COAL, err, cap))
         return false;
     const fr_reactive_profile_t *profile = fr_reactive_profile(DC_MATERIAL_COAL);
     if (!profile) return scene_error(err, cap, "Missing coal profile");
     uint32_t mass = (uint32_t)lroundf(profile->density * 65536.f);
-    for (uint32_t y = 12; y < 15; y++)
+    for (uint32_t y = 11; y < 14; y++)
         for (uint32_t x = 5; x < 8; x++) {
-            if ((x == 5 || x == 7) && y != 13) continue;
-            if (y != 13 && x != 6) continue;
+            if ((x == 5 || x == 7) && y != 12) continue;
+            if (y != 12 && x != 6) continue;
             fr_reactive_state_t state;
             uint32_t local = y * DC_CHUNK_SIDE + x;
             if (!fr_reactive_state_default(DC_MATERIAL_COAL, mass, 0,
@@ -65,6 +65,27 @@ static bool coal_load(dc_gpu_t *gpu, bool hot, char *err, uint32_t cap) {
                                             &state, err, cap)) return false;
         }
     return true;
+}
+
+static bool wooden_arm(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    const fr_reactive_profile_t *profile = fr_reactive_profile(DC_MATERIAL_WOOD);
+    if (!profile) return scene_error(err, cap, "Missing wood profile");
+    uint32_t mass = (uint32_t)lroundf(profile->density * 65536.f);
+    for (uint32_t y = 78; y < 80; y++)
+        for (uint32_t x = 56; x < 72; x++) {
+            uint32_t slot = 2u + x / DC_CHUNK_SIDE;
+            uint32_t local = (y - DC_CHUNK_SIDE) * DC_CHUNK_SIDE +
+                             x % DC_CHUNK_SIDE;
+            fr_reactive_state_t state;
+            if (!dc_gpu_paint_material(gpu, x, y, 0, DC_MATERIAL_WOOD,
+                                       err, cap) ||
+                !fr_reactive_state_default(DC_MATERIAL_WOOD, mass, 0,
+                    293.15f, 0xA0000000u + ((uint64_t)y << 16) + x,
+                    &state, err, cap) ||
+                !fr_gpu_reactive_seed_cell(gpu, slot, local, &state,
+                                            err, cap)) return false;
+        }
+    return dc_gpu_admit_authored_rigid_cells(gpu, err, cap);
 }
 
 bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
@@ -78,17 +99,10 @@ bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
         !dc_gpu_set_rigid_solver(gpu, true)) return false;
     for (uint32_t tick = 0; tick < 5; tick++)
         if (!dc_gpu_rigid_step(gpu, err_buf, err_cap)) return false;
-    if (!coal_load(gpu, hot, err_buf, err_cap) ||
+    if (!wooden_arm(gpu, err_buf, err_cap) ||
+        !coal_load(gpu, hot, err_buf, err_cap) ||
         !dc_gpu_admit_authored_rigid_cells(gpu, err_buf, err_cap)) return false;
-    dc_gpu_world_body_t arm = {.chunk = {0, 1},
-        .body = {.x_fp = 56 * 65536, .y_fp = 15 * 65536,
-                 .width = 16, .height = 2,
-                 .id = CATAPULT_ARM_ID, .active = 1}};
-    dc_gpu_body_shape_t shape = {.count = 4, .material = DC_GPU_BODY_WOOD,
-        .vertices = {{0, 0}, {16 * 65536, 0},
-                     {16 * 65536, 2 * 65536}, {0, 2 * 65536}}};
-    if (!dc_gpu_spawn_convex_body(gpu, arm, &shape, err_buf, err_cap) ||
-        !dc_gpu_set_body_origin(gpu, (dc_chunk_coord_t){0, 0},
+    if (!dc_gpu_set_body_origin(gpu, (dc_chunk_coord_t){0, 0},
                                  err_buf, err_cap)) return false;
     fr_revolute_joint_t pivot = {.id = CATAPULT_PIVOT_ID,
         .body_a = FR_STRUCTURAL_BODY_ID_BASE + 1u, .body_b = CATAPULT_ARM_ID,
@@ -98,7 +112,7 @@ bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
         .spring_stiffness = 150.f, .spring_rest_angle = .5f};
     fr_revolute_joint_t latch = {.id = CATAPULT_LATCH_ID,
         .body_a = CATAPULT_ARM_ID, .body_b = CATAPULT_COAL_ID,
-        .anchor_a = {6.5f, -2.5f}, .anchor_b = {0.f, 0.f}};
+        .anchor_a = {13.f, -3.f}, .anchor_b = {0.f, 0.f}};
     if (!fr_gpu_revolute_add(gpu, &pivot, err_buf, err_cap) ||
         !fr_gpu_revolute_add(gpu, &latch, err_buf, err_cap)) return false;
     fr_gas_model_t gas = {.gas_constant = {.25984, .29680, .18892,

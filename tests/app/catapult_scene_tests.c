@@ -57,7 +57,7 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
     dc_gpu_body_motion_t arm_motion;
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&impact,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_body_motion(g,scene.arm_body,&arm_motion,err,sizeof(err)));
-    ASSERT_TRUE(xof(impact)<xof(flight)-3.f&&yof(impact)>90.f);
+    ASSERT_TRUE(xof(impact)>xof(flight)+3.f&&yof(impact)>90.f);
     ASSERT_TRUE(fabsf(impact.body.vx_fp/65536.f)<launch_speed);
     ASSERT_TRUE(isfinite(arm_motion.angular_velocity));
     ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&support));
