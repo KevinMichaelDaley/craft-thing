@@ -28,13 +28,24 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
                                         err,sizeof(err)));
     ASSERT_EQ(count,5u);
     for(uint32_t i=0;i<count;i++) ASSERT_EQ(coal[i].material,DC_GPU_BODY_COAL);
+    for(uint32_t tick=0;tick<15;tick++)
+        ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     dc_gpu_world_body_t before,after;
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&before,err,sizeof(err)));
+    float launch_speed=hypotf(before.body.vx_fp/65536.f,
+                              before.body.vy_fp/65536.f);
     ASSERT_TRUE(dc_catapult_scene_release(g,&scene,err,sizeof(err)));
     ASSERT_TRUE(scene.released);
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&after,err,sizeof(err)));
     ASSERT_EQ(memcmp(&before,&after,sizeof(before)),0);
-    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    for(uint32_t tick=0;tick<8;tick++)
+        ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    dc_gpu_world_body_t flight;
+    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&flight,err,sizeof(err)));
+    float travel=hypotf(xof(flight)-xof(before),yof(flight)-yof(before));
+    printf("coal release speed %.3f travel %.3f from %.2f %.2f to %.2f %.2f\n",
+           launch_speed,travel,xof(before),yof(before),xof(flight),yof(flight));
+    ASSERT_TRUE(launch_speed>.5f&&travel>2.f);
     dc_gpu_destroy(g);PASS();
 }
 
