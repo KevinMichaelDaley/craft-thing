@@ -35,6 +35,32 @@ static bool capture(dc_gpu_t *gpu, const char *path, char *err,
     return okay;
 }
 
+static void test_render_moving_arm_without_fire_occlusion(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = grid();
+    ASSERT_TRUE(gpu);
+    dc_catapult_scene_t scene = {0};
+    ASSERT_TRUE(dc_catapult_scene_build(gpu, false, &scene, err, sizeof(err)));
+    mkdir("build/screenshots", 0777);
+    ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_cold_loaded.bmp",
+                        err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 20; tick++)
+        ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_cold_cocked.bmp",
+                        err, sizeof(err)));
+    uint32_t pixels[128u * 128u];
+    ASSERT_TRUE(dc_gpu_readback(gpu, pixels, 128u * 128u, err, sizeof(err)));
+    uint32_t arm_red = pixels[78u * 128u + 60u] & 255u;
+    ASSERT_TRUE(arm_red > 70u);
+    ASSERT_TRUE(dc_catapult_scene_release(gpu, &scene, err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 8; tick++)
+        ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_cold_flight.bmp",
+                        err, sizeof(err)));
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 static void test_render_real_loaded_flight_and_impact(void) {
     char err[256] = {0};
     dc_gpu_t *gpu = grid();
@@ -71,6 +97,7 @@ int main(void) {
         RUN(test_prompt_hot_launch_keeps_sound_wood_arm_unignited);
         RUN(test_equal_elapsed_cadences_keep_launcher_flight_and_gas_clock);
     }
+    RUN(test_render_moving_arm_without_fire_occlusion);
     RUN(test_render_real_loaded_flight_and_impact);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
