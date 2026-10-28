@@ -12,6 +12,23 @@ enum { JOINT_WORDS=24, JOINT_WORK_HEADER=96 };
 _Static_assert(sizeof(fr_revolute_joint_t)==60u&&offsetof(fr_revolute_joint_t,lower_angle)==32u,
                "Revolute settings layout changed");
 struct fr_revolute_gpu {dc_gpu_address_buffer_t records;uint32_t span,capacity;};
+static uint32_t hash_capacity(uint32_t capacity) {
+    uint32_t size=1;while(size<2u*(uint64_t)capacity) size*=2u;return size;
+}
+static uint32_t pair_hash(uint32_t a,uint32_t b) {
+    uint32_t x=a*0x9e3779b9u^b*0x85ebca6bu;x^=x>>16u;return x;
+}
+static void rebuild_hash(struct fr_revolute_gpu *r) {
+    uint32_t *words=r->records.mapped,*table=words+r->capacity*JOINT_WORDS;
+    uint32_t count=hash_capacity(r->capacity);memset(table,0,(size_t)count*16u);
+    for(uint32_t i=0;i<r->span;i++) {
+        uint32_t *p=words+i*JOINT_WORDS;if(!p[1]||(p[12]&FR_REVOLUTE_COLLIDE_CONNECTED)) continue;
+        uint32_t a=p[2]<p[5]?p[2]:p[5],b=p[2]>p[5]?p[2]:p[5];
+        uint32_t hash=pair_hash(a,b)&(count-1u);
+        while(table[hash*4u+2u]) hash=(hash+1u)&(count-1u);
+        table[hash*4u]=a;table[hash*4u+1u]=b;table[hash*4u+2u]=i+1u;
+    }
+}
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
     return false;
@@ -22,6 +39,8 @@ void fr_gpu_revolute_bind_work(dc_gpu_t *g,uint32_t *h) {
     VkDeviceAddress address=r?r->records.address:0;
     h[JOINT_WORK_HEADER]=(uint32_t)address;h[JOINT_WORK_HEADER+1u]=(uint32_t)(address>>32u);
     h[JOINT_WORK_HEADER+2u]=r?r->span:0;
+    h[JOINT_WORK_HEADER+3u]=r?r->capacity*JOINT_WORDS:0;
+    h[JOINT_WORK_HEADER+4u]=r?hash_capacity(r->capacity):0;
 }
 void fr_gpu_revolute_destroy(dc_gpu_t *g) {
     if(!g||!g->revolute) return;
@@ -39,9 +58,10 @@ static bool reserve(dc_gpu_t *g,uint32_t required,char *err,uint32_t cap) {
     if(required<=r->capacity) return true;
     uint64_t next=r->capacity?r->capacity:8u;
     while(next<required) next*=2u;
-    if(next>UINT32_MAX/JOINT_WORDS) return error(err,cap,"Joint resource size overflow");
+    if(next>UINT32_MAX/(JOINT_WORDS+16u)) return error(err,cap,"Joint resource size overflow");
     dc_gpu_address_buffer_t pending={0};
-    if(!dc_gpu_address_buffer_create(g,next*JOINT_WORDS*4u,true,&pending,err,cap)) return false;
+    uint64_t words=next*JOINT_WORDS+(uint64_t)hash_capacity((uint32_t)next)*4u;
+    if(!dc_gpu_address_buffer_create(g,words*4u,true,&pending,err,cap)) return false;
     if(r->span) {
         if(!fr_renderer_begin(g)) {dc_gpu_address_buffer_destroy(g,&pending);return error(err,cap,"Cannot begin joint growth");}
         VkBufferCopy copy={.size=(VkDeviceSize)r->span*JOINT_WORDS*4u};
@@ -54,7 +74,7 @@ static bool reserve(dc_gpu_t *g,uint32_t required,char *err,uint32_t cap) {
 static uint32_t find_body(dc_gpu_t *g,uint32_t id) {
     for(uint32_t i=0;i<dc_gpu_body_capacity(g);i++) {
         dc_gpu_body_record_t *b=dc_gpu_body_record(g,i);
-        if(b->body.id==id&&b->body.active) return i;
+        if(b->body.id==id&&(b->body.active||b->reserved[0]==DC_GPU_STRUCTURAL_TAG)) return i;
     }
     return DC_BODY_SLOT_NONE;
 }
@@ -70,7 +90,7 @@ static bool joint_valid(const fr_revolute_joint_t *joint,char *err,uint32_t cap)
     for(unsigned i=0;i<sizeof(settings)/sizeof(*settings);i++)
         if(!isfinite(settings[i])||fabsf(settings[i])>1000000.f)
             return error(err,cap,"Invalid revolute mechanical settings");
-    if((joint->flags&~3u)||joint->spring_stiffness<0||joint->friction_torque<0||
+    if((joint->flags&~7u)||joint->spring_stiffness<0||joint->friction_torque<0||
        joint->max_force<0||joint->max_torque<0||
        ((joint->flags&FR_REVOLUTE_LIMITS)&&joint->lower_angle>joint->upper_angle))
         return error(err,cap,"Invalid revolute limits or capacity");
@@ -101,6 +121,7 @@ bool fr_gpu_revolute_add(dc_gpu_t *g,const fr_revolute_joint_t *joint,char *err,
     memcpy(p+8,joint->anchor_a,8);memcpy(p+10,joint->anchor_b,8);
     p[12]=joint->flags;memcpy(p+13,&joint->lower_angle,7u*sizeof(float));
     if(index==r->span) r->span++;
+    rebuild_hash(r);
     fr_gpu_revolute_bind_work(g,g->runtime_bodies->work.mapped);
     g->descriptor_revision++;
     return true;
@@ -115,7 +136,7 @@ static bool record_live(dc_gpu_t *g,const uint32_t *p) {
         if(slot>=dc_gpu_body_capacity(g)) return false;
         dc_body_storage_owner_t *owner=dc_gpu_body_owner(g,slot);
         if(owner->state!=DC_BODY_OWNER_LIVE||owner->generation!=p[at+1u]||owner->runtime_id!=p[at+2u]||
-           !dc_gpu_body_record(g,slot)->body.active) return false;
+           (!dc_gpu_body_record(g,slot)->body.active&&dc_gpu_body_record(g,slot)->reserved[0]!=DC_GPU_STRUCTURAL_TAG)) return false;
     }
     return true;
 }
@@ -158,7 +179,7 @@ bool fr_gpu_revolute_prepare(dc_gpu_t *g,const uint8_t *bytes,size_t length,
             uint32_t at=endpoint?5u:2u,slot=p[at];
             dc_body_storage_owner_t owner=payload->states[slot].owner;
             valid=owner.state==DC_BODY_OWNER_LIVE&&owner.generation==p[at+1u]&&
-                owner.runtime_id==p[at+2u]&&payload->bodies[slot].body.active&&
+                owner.runtime_id==p[at+2u]&&(payload->bodies[slot].body.active||payload->bodies[slot].reserved[0]==DC_GPU_STRUCTURAL_TAG)&&
                 payload->bodies[slot].body.id==p[at+2u];
         }
     }
@@ -170,8 +191,11 @@ bool fr_gpu_revolute_prepare(dc_gpu_t *g,const uint8_t *bytes,size_t length,
     if(!dc_gpu_solver_revolute_prepare(g,err,cap)) return false;
     struct fr_revolute_gpu *r=calloc(1,sizeof(*r));
     if(!r) return error(err,cap,"Cannot prepare pivot checkpoint");
-    if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*JOINT_WORDS*4u,true,&r->records,err,cap)) {free(r);return false;}
+    if(count>UINT32_MAX/(JOINT_WORDS+16u)) {free(r);return error(err,cap,"Pivot checkpoint resource overflow");}
+    VkDeviceSize words=(VkDeviceSize)count*JOINT_WORDS+(VkDeviceSize)hash_capacity(count)*4u;
+    if(!dc_gpu_address_buffer_create(g,words*4u,true,&r->records,err,cap)) {free(r);return false;}
     memcpy(r->records.mapped,input+4u,(size_t)count*JOINT_WORDS*4u);r->span=r->capacity=count;
+    rebuild_hash(r);
     *prepared=r;return true;
 }
 bool fr_gpu_revolute_remove(dc_gpu_t *g,uint32_t id,char *err,uint32_t cap) {

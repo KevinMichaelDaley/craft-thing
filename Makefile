@@ -284,6 +284,7 @@ $(CONTACT_SHADER): shaders/sim/contacts.comp $(wildcard shaders/sim/*.glsl) incl
 $(BROADPHASE_SHADER): shaders/sim/broadphase.comp
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
+$(BROADPHASE_SHADER) build/shaders/runtime/broadphase.comp.spv: shaders/sim/revolute_collision.glsl
 build/broadphase_gpu.o: src/vulkan/broadphase_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@

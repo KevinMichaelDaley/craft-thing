@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "runtime_body_gpu.h"
+#include "revolute_gpu_internal.h"
 #include <string.h>
 
 #include "gpu_internal.h"
@@ -43,6 +44,8 @@ bool dc_gpu_save_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap
     if (!gpu || !path || !*path) return error(err, cap, "Invalid body snapshot path");
     if (gpu->structural_enabled)
         return error(err, cap, "Structural sources require a graph-aware snapshot transaction");
+    if (fr_gpu_revolute_span(gpu))
+        return error(err, cap, "Rigid constraints require a graph-aware snapshot transaction");
     char temporary[1024];
     int length = snprintf(temporary, sizeof(temporary), "%s.tmp", path);
     if (length < 0 || (size_t)length >= sizeof(temporary))
@@ -127,6 +130,7 @@ bool dc_gpu_load_bodies(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap
     }
     if (!okay) {free(bodies);return error(err, cap, "Invalid or truncated body snapshot");}
     if(!dc_gpu_runtime_bodies_reserve(gpu,header.count,err,cap)) {free(bodies);return false;}
+    fr_gpu_revolute_publish(gpu,NULL);
     for(uint32_t i=0;i<dc_gpu_body_capacity(gpu);i++)
         memset(dc_gpu_body_record(gpu,i),0,sizeof(dc_gpu_body_record_t));
     memset(gpu->body_ids, 0, (size_t)dc_gpu_body_capacity(gpu)*sizeof(*gpu->body_ids));

@@ -1,6 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 #include "rigid_body.glsl"
+#include "revolute_collision.glsl"
 layout(local_size_x = 64) in;
 
 layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
@@ -45,6 +46,7 @@ void bucket_bounds(Body body, out ivec2 low, out ivec2 high) {
 }
 
 void emit_pair(uint a, uint b, uint kind, ivec2 chunk) {
+    if(kind==PAIR_BODY&&revolute_suppresses_collision(a,b)) return;
     uvec2 x, y;
     if (!shifted_chunk(params.origin_x, chunk.x, x) ||
         !shifted_chunk(params.origin_y, chunk.y, y)) {

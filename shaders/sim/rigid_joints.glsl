@@ -68,6 +68,17 @@ void solve_revolute(uint index,uint phase) {
         joints.words[p+21u]=floatBitsToUint(accumulated.y);
         joints.words[p+22u]=floatBitsToUint(angular_total);
     } else if(max_torque>0.) angular_impulse=clamp(angular_impulse,-max_torque*DT,max_torque*DT);
+    vec2 point_a=position(a)+a.center+ra,point_b=position(b)+b.center+rb;
+    float conversion=phase==23u?1./DT:1.;
+    structural_capture(ai,bi,point_a,-impulse*conversion);
+    structural_capture(bi,ai,point_b,impulse*conversion);
+    if(angular_impulse!=0.) {
+        vec2 couple=vec2(0,angular_impulse*conversion),offset=vec2(.5,0);
+        structural_capture(ai,bi,point_a+offset,-couple);
+        structural_capture(ai,bi,point_a-offset,couple);
+        structural_capture(bi,ai,point_b+offset,couple);
+        structural_capture(bi,ai,point_b-offset,-couple);
+    }
     add_correction(ai,-a.inverse_mass*impulse,-a.inverse_inertia*body_cross(ra,impulse));
     add_correction(bi,b.inverse_mass*impulse,b.inverse_inertia*body_cross(rb,impulse));
     add_correction(ai,vec2(0),-a.inverse_inertia*angular_impulse);

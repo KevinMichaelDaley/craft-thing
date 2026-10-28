@@ -1,9 +1,11 @@
 #include "dungeoncraft/gpu.h"
 #ifdef FR_REVOLUTE_PRESENTATION_TEST
 #include <SDL.h>
+#include <sys/stat.h>
 static bool pivot_window(dc_gpu_t **g,uint32_t w,uint32_t h,const char *shader,char *err,uint32_t cap) {
     return dc_gpu_create_window(g,w,h,1280,720,shader,err,cap)&&
-        dc_gpu_set_presentation_focus(*g,(dc_presentation_focus_t){42,30,54,42});
+        dc_gpu_set_presentation_focus(*g,(dc_presentation_focus_t){42,30,54,42})&&
+        dc_gpu_set_overlay(*g,DC_GPU_OVERLAY_RIGID_IDS);
 }
 #define dc_gpu_create pivot_window
 #endif
@@ -42,6 +44,15 @@ static void test_pivot_keeps_anchors_together_while_arm_rotates(void) {
 #ifdef FR_REVOLUTE_PRESENTATION_TEST
         ASSERT_TRUE(dc_gpu_present_chunks_steps(g,0,err,sizeof(err)));
         SDL_Event event;while(SDL_PollEvent(&event)) ASSERT_TRUE(event.type!=SDL_QUIT);
+        if(tick==10u) {
+            uint32_t *pixels=calloc((size_t)SIM_WIDTH*SIM_HEIGHT,sizeof(*pixels));ASSERT_TRUE(pixels);
+            ASSERT_TRUE(dc_gpu_readback(g,pixels,SIM_WIDTH*SIM_HEIGHT,err,sizeof(err)));
+            SDL_Surface *source=SDL_CreateRGBSurfaceWithFormatFrom(pixels+30u*SIM_WIDTH+42u,54,42,32,SIM_WIDTH*4,SDL_PIXELFORMAT_ABGR8888);
+            SDL_Surface *image=SDL_CreateRGBSurfaceWithFormat(0,864,672,32,SDL_PIXELFORMAT_ABGR8888);
+            ASSERT_TRUE(source&&image&&SDL_BlitScaled(source,NULL,image,NULL)==0);
+            mkdir("build/screenshots",0777);ASSERT_TRUE(SDL_SaveBMP(image,"build/screenshots/revolute_pivot.bmp")==0);
+            SDL_FreeSurface(source);SDL_FreeSurface(image);free(pixels);
+        }
         SDL_Delay(16);
 #endif
     }
