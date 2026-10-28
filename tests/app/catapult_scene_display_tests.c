@@ -41,20 +41,21 @@ static void test_render_real_loaded_flight_and_impact(void) {
     ASSERT_TRUE(gpu);
     dc_catapult_scene_t scene = {0};
     ASSERT_TRUE(dc_catapult_scene_build(gpu, true, &scene, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_tick_seconds(gpu, 1.f / 30.f));
     mkdir("build/screenshots", 0777);
-    for (uint32_t tick = 0; tick < 5; tick++)
-        ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 3; tick++)
+        ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
     ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_loaded.bmp",
                         err, sizeof(err)));
-    for (uint32_t tick = 0; tick < 20; tick++)
-        ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 10; tick++)
+        ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
     ASSERT_TRUE(dc_catapult_scene_release(gpu, &scene, err, sizeof(err)));
-    for (uint32_t tick = 0; tick < 8; tick++)
-        ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 4; tick++)
+        ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
     ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_flight.bmp",
                         err, sizeof(err)));
-    for (uint32_t tick = 0; tick < 10; tick++)
-        ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    for (uint32_t tick = 0; tick < 5; tick++)
+        ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
     ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_impact.bmp",
                         err, sizeof(err)));
     dc_gpu_destroy(gpu);

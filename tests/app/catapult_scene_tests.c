@@ -26,6 +26,7 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
            support.state,support.flags,support.relative_residual,
            support.external[0],support.external[1]);
     ASSERT_EQ(support.state,FR_STRUCTURAL_SUPPORTED);
+    ASSERT_TRUE(support.external[1]>0.f);
     dc_gpu_body_pixel_t coal[8];uint32_t count=0;
     ASSERT_TRUE(dc_gpu_read_pixel_shape(g,scene.coal_body,coal,8,&count,
                                         err,sizeof(err)));
@@ -34,7 +35,9 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
     for(uint32_t tick=0;tick<15;tick++)
         ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     dc_gpu_world_body_t before,after;
+    dc_gpu_body_motion_t arm_before;
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&before,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,scene.arm_body,&arm_before,err,sizeof(err)));
     float launch_speed=hypotf(before.body.vx_fp/65536.f,
                               before.body.vy_fp/65536.f);
     ASSERT_TRUE(dc_catapult_scene_release(g,&scene,err,sizeof(err)));
@@ -44,11 +47,14 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
     for(uint32_t tick=0;tick<8;tick++)
         ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     dc_gpu_world_body_t flight;
+    dc_gpu_body_motion_t arm_flight;
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&flight,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,scene.arm_body,&arm_flight,err,sizeof(err)));
     float travel=hypotf(xof(flight)-xof(before),yof(flight)-yof(before));
     printf("coal release speed %.3f travel %.3f from %.2f %.2f to %.2f %.2f\n",
            launch_speed,travel,xof(before),yof(before),xof(flight),yof(flight));
     ASSERT_TRUE(launch_speed>.5f&&travel>2.f);
+    ASSERT_TRUE(arm_before.angular_velocity>0.f&&arm_flight.angular_velocity<0.f);
     ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&support));
     ASSERT_EQ(support.state,FR_STRUCTURAL_SUPPORTED);
     for(uint32_t tick=0;tick<10;tick++) {
@@ -58,9 +64,13 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
     dc_gpu_body_motion_t arm_motion;
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&impact,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_body_motion(g,scene.arm_body,&arm_motion,err,sizeof(err)));
+    printf("catapult arm angular speed %.3f held, %.3f flight, %.3f impact\n",
+        arm_before.angular_velocity,arm_flight.angular_velocity,
+        arm_motion.angular_velocity);
     ASSERT_TRUE(xof(impact)>xof(flight)+3.f&&yof(impact)>90.f);
     ASSERT_TRUE(fabsf(impact.body.vx_fp/65536.f)<launch_speed);
     ASSERT_TRUE(isfinite(arm_motion.angular_velocity));
+    ASSERT_TRUE(arm_motion.mass>0.f&&arm_motion.inertia>0.f);
     ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&support));
     ASSERT_EQ(support.state,FR_STRUCTURAL_SUPPORTED);
     ASSERT_TRUE(isfinite(support.external[0])&&isfinite(support.external[1]));
@@ -190,13 +200,15 @@ static void test_prompt_hot_launch_keeps_sound_wood_arm_unignited(void) {
 
 static void test_equal_elapsed_cadences_keep_launcher_flight_and_gas_clock(void) {
     char err[256]={0};
-    float position[2][2],angle[2];
-    for(uint32_t cadence=0;cadence<2;cadence++) {
+    float position[3][2],angle[3];
+    for(uint32_t cadence=0;cadence<3;cadence++) {
         dc_gpu_t *g=grid();ASSERT_TRUE(g);
         dc_catapult_scene_t scene={0};
         ASSERT_TRUE(dc_catapult_scene_build(g,false,&scene,err,sizeof(err)));
-        ASSERT_TRUE(dc_gpu_set_tick_seconds(g,(cadence?2.f:1.f)/60.f));
-        uint32_t held=cadence?10u:20u,flight=cadence?10u:20u;
+        float scale=cadence==1u?2.f:cadence==2u?.5f:1.f;
+        ASSERT_TRUE(dc_gpu_set_tick_seconds(g,scale/60.f));
+        uint32_t held=cadence==1u?10u:cadence==2u?40u:20u;
+        uint32_t flight=held;
         for(uint32_t tick=0;tick<held;tick++)
             ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
         ASSERT_TRUE(dc_catapult_scene_release(g,&scene,err,sizeof(err)));
@@ -212,11 +224,13 @@ static void test_equal_elapsed_cadences_keep_launcher_flight_and_gas_clock(void)
         ASSERT_TRUE(fabs(gas.advanced_seconds-2./3.)<1e-4);
         dc_gpu_destroy(g);
     }
-    float separation=hypotf(position[0][0]-position[1][0],
-                             position[0][1]-position[1][1]);
-    printf("elapsed launcher separation %.3f, arm angles %.3f %.3f\n",
-        separation,angle[0],angle[1]);
-    ASSERT_TRUE(separation<2.f&&fabsf(angle[0]-angle[1])<.2f);
+    for(uint32_t cadence=1;cadence<3;cadence++) {
+        float separation=hypotf(position[0][0]-position[cadence][0],
+                                 position[0][1]-position[cadence][1]);
+        printf("elapsed launcher cadence %u separation %.3f, arm angles %.3f %.3f\n",
+            cadence,separation,angle[0],angle[cadence]);
+        ASSERT_TRUE(separation<2.f&&fabsf(angle[0]-angle[cadence])<.2f);
+    }
     PASS();
 }
 
