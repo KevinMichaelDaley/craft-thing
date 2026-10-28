@@ -136,7 +136,14 @@ static void test_mixing_oil_and_jelly_does_not_create_chemical_energy(void) {
     printf("mixture energy input %.6f output %.6f\n",input,output);
     ASSERT_TRUE(output<=input+.01f);PASS();
 }
+static void test_two_dimensional_fire_has_a_sufficient_finite_heat_budget(void) {
+    const fr_reactive_profile_t *wood=fr_reactive_profile(DC_MATERIAL_WOOD),*carbon=fr_reactive_profile(DC_MATERIAL_CHAR);
+    ASSERT_TRUE(wood->chemical_energy>=18000.f&&carbon->chemical_energy>=24000.f);
+    ASSERT_TRUE(wood->primary_heat+wood->fuel_yields[0]*carbon->chemical_energy<=wood->chemical_energy);
+    PASS();
+}
 int main(void) {
+    RUN(test_two_dimensional_fire_has_a_sufficient_finite_heat_budget);
     _Static_assert(sizeof(fr_reactive_profile_t)==128,"GPU profile stride changed");
     _Static_assert(offsetof(fr_reactive_profile_t,fuel_yields)==56,"GPU yield offset changed");
     RUN(test_registered_profiles_keep_old_ids_and_density_defaults);
