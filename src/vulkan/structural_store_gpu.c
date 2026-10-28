@@ -132,7 +132,7 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
     clear_transients(payload->graph);
     dc_structural_store_header_t header = {
         .magic = {'D', 'C', 'S', '1'},
-        .version = 8,
+        .version = fr_gpu_revolute_span(gpu)?9u:8u,
         .body_words = payload->body_count * (sizeof(dc_gpu_body_record_t)/4u),
         .graph_words = DC_STRUCTURAL_RESERVE_WORDS,
         .flags = 1u | (gpu->impact_fracture_enabled ? 2u : 0u) |
@@ -340,7 +340,7 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
     bool okay =
         framed && fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCS1", 4) == 0 && header.version >= 1 &&
-        header.version <= 8 && header.body_words &&
+        header.version <= 9 && header.body_words &&
         header.body_words%(sizeof(dc_gpu_body_record_t)/4u)==0 &&
         (header.version>=7 || header.body_words==STORE_BODY_WORDS) &&
         header.graph_words == DC_STRUCTURAL_RESERVE_WORDS &&
@@ -375,7 +375,7 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
     if(okay && header.version>=6)
         okay=fread(body_colors,128,header.reserved[1],file)==header.reserved[1] &&
             fread(colors,sizeof(*colors),header.reserved[0],file)==header.reserved[0];
-    if(okay&&header.version>=8) okay=dc_checkpoint_channels_read(file,&channels);
+    if(okay&&header.version>=8) okay=dc_checkpoint_channels_read(file,header.version,&channels);
     okay=okay && fgetc(file)==EOF && !ferror(file);
     okay=okay && dc_color_records_valid(body_colors,(size_t)header.reserved[1]*8);
     for(unsigned c=0;okay&&c<header.reserved[0];c++)

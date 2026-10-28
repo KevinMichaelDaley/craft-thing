@@ -188,6 +188,10 @@ bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                : error(err, cap, "Cannot create GPU rigid solver pipeline");
 }
 bool dc_gpu_solver_revolute_prepare(dc_gpu_t *gpu,char *err,uint32_t cap) {
+    bool ready=true;
+    for(uint32_t phase=SOLVER_JOINT_PREPARE;phase<=SOLVER_JOINT_VELOCITY;phase++)
+        ready=ready&&gpu->solver_pipelines[phase]!=VK_NULL_HANDLE;
+    if(ready) return true;
     VkShaderModule module=VK_NULL_HANDLE;
     if(!dc_gpu_load_shader_module(gpu,"build/shaders/rigid_solver.comp.spv",&module,err,cap)) return false;
     VkResult result=VK_SUCCESS;

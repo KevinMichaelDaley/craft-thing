@@ -3,7 +3,11 @@
 #include "dungeoncraft/gpu.h"
 enum { FR_REVOLUTE_LIMITS=1u, FR_REVOLUTE_SPRING=2u };
 
-/** Local anchors are relative to each body's rest-space center of mass. */
+/** Local anchors are relative to each body's rest-space center of mass.
+ * Distances use cells, masses use solver material units, and time uses rigid
+ * ticks. Spring energy is k*angle_error^2/2; no motor supplies additional work.
+ * Zero force/torque capacity disables breaking for that channel.
+ */
 typedef struct {
     uint32_t id, body_a, body_b;
     float anchor_a[2], anchor_b[2];
