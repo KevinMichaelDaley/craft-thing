@@ -336,6 +336,7 @@ build/diagnostics/quarter_app_frame_trace: tools/diagnostics/frame_trace.c $(QUA
 
 build/frame_trace_tests: tests/tools/frame_trace_tests.c tools/diagnostics/frame_trace.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections $< -Wl,--gc-sections -o $@ -lm
+build/thermal_gpu.o build/performance/src/vulkan/thermal_gpu.o: src/vulkan/thermal_gpu_state.h
 .PHONY: test_frame_trace
 test: test_frame_trace
 test_frame_trace: build/frame_trace_tests

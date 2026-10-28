@@ -7,6 +7,7 @@
 #include <time.h>
 
 #include "../../src/vulkan/gpu_internal.h"
+#include "../../src/vulkan/thermal_gpu_state.h"
 #include "frame_api_trace.h"
 
 bool __real_dc_gpu_set_tick_seconds(dc_gpu_t *,float);
@@ -34,7 +35,9 @@ enum { QUERY_CAPACITY = 4096, RIGID = 0, FLUID = 1, MPM = 2,
        DISPLACEMENT_KERNEL = PROJECTION_KERNEL + 7, HEAD_KERNEL = DISPLACEMENT_KERNEL + 2,
        APERTURE_KERNEL = HEAD_KERNEL + 1, MPM_PHASE = APERTURE_KERNEL + 1,
        MPM_COMPONENT_PHASE = MPM_PHASE + 8, CONTACT_KERNEL = MPM_COMPONENT_PHASE + 6,
-       MPM_ACTIVITY_KERNEL = CONTACT_KERNEL + 7, LABEL_COUNT = MPM_ACTIVITY_KERNEL + 1 };
+       MPM_ACTIVITY_KERNEL = CONTACT_KERNEL + 7, THERMAL_PHASE = MPM_ACTIVITY_KERNEL + 1,
+       COMBUSTION_PHASE = THERMAL_PHASE + 24, BODY_COMBUSTION_PHASE = COMBUSTION_PHASE + 11,
+       LABEL_COUNT = BODY_COMBUSTION_PHASE + 11 };
 static dc_gpu_t *traced;
 static VkCommandBuffer traced_primary;
 static bool coarse,component_detail;
@@ -43,7 +46,7 @@ static unsigned query_count, frame;
 static unsigned labels[QUERY_CAPACITY / 2];
 static bool overflow;
 static VkPipeline bound;
-static uint32_t pushed_mode;
+static uint32_t pushed_mode,pushed_reactive_mode;
 
 VkResult __real_vkBeginCommandBuffer(VkCommandBuffer,
                                      const VkCommandBufferBeginInfo *);
@@ -71,6 +74,8 @@ void __wrap_vkCmdPushConstants(VkCommandBuffer command,VkPipelineLayout layout,
     }
     if(traced&&command==traced->command&&(stages&VK_SHADER_STAGE_COMPUTE_BIT)&&offset<=8u&&bytes>=12u-offset)
         memcpy(&pushed_mode,(const unsigned char *)submitted+8u-offset,sizeof(pushed_mode));
+    if(traced&&command==traced->command&&(stages&VK_SHADER_STAGE_COMPUTE_BIT)&&offset==0u&&bytes>=52u)
+        memcpy(&pushed_reactive_mode,(const unsigned char *)submitted+48u,sizeof(pushed_reactive_mode));
     __real_vkCmdPushConstants(command,layout,stages,offset,bytes,submitted);
 }
 void __real_vkCmdDispatchIndirect(VkCommandBuffer, VkBuffer, VkDeviceSize);
@@ -190,8 +195,7 @@ static bool profile_contact_pairs(dc_gpu_t *gpu) {
 VkResult __wrap_vkBeginCommandBuffer(VkCommandBuffer command,
                                      const VkCommandBufferBeginInfo *begin) {
     VkResult result = __real_vkBeginCommandBuffer(command, begin);
-    if (result == VK_SUCCESS && traced && command == traced_primary) {
-        query_count = 0;
+    if (result == VK_SUCCESS && traced && command == traced_primary && query_count == 0u) {
         vkCmdResetQueryPool(command, pool, 0, QUERY_CAPACITY);
     }
     return result;
@@ -268,6 +272,17 @@ void __wrap_vkCmdBindPipeline(VkCommandBuffer command, VkPipelineBindPoint point
 static unsigned hydro_begin(VkCommandBuffer command) {
     if (!traced || command != traced->command)
         return QUERY_CAPACITY;
+    if(traced->thermal&&command==traced_primary) {
+        struct fr_thermal_gpu *t=traced->thermal;unsigned label=LABEL_COUNT;
+        if(bound==t->compute.pipeline&&pushed_mode<24u) label=THERMAL_PHASE+pushed_mode;
+        if(bound==t->combustion.pipeline&&pushed_reactive_mode<11u) label=COMBUSTION_PHASE+pushed_reactive_mode;
+        if(bound==t->body_combustion.pipeline&&pushed_reactive_mode<11u) label=BODY_COMBUSTION_PHASE+pushed_reactive_mode;
+        if(label!=LABEL_COUNT) {
+            if(query_count+2>QUERY_CAPACITY) {overflow=true;return QUERY_CAPACITY;}
+            unsigned at=query_count;labels[at/2]=label;query_count+=2;
+            vkCmdWriteTimestamp2(command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,pool,at);return at;
+        }
+    }
     if(coarse) {
         if(!component_detail||command!=traced_primary) return QUERY_CAPACITY;
         for(unsigned phase=0;phase<38;phase++) {
@@ -376,6 +391,7 @@ bool __wrap_dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
         .queryType = VK_QUERY_TYPE_TIMESTAMP, .queryCount = QUERY_CAPACITY};
     if (vkCreateQueryPool(gpu->device, &info, NULL, &pool) != VK_SUCCESS)
         return false;
+    query_count=0;
     traced = gpu;traced_primary=gpu->command;coarse=getenv("DC_FRAME_TRACE_COARSE")!=NULL;
     component_detail=getenv("DC_FRAME_TRACE_COMPONENTS")!=NULL;
     overflow = false;
@@ -418,6 +434,10 @@ bool __wrap_dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
         printf(",p%u=%.3f",phase,total[SOLVER_PHASE+phase]);
     for(unsigned phase=0;phase<4;phase++)
         printf(",transport%u=%.3f",phase,total[TRANSPORT_PHASE+phase]);
+    putchar('\n');
+    printf("thermal-phases,%u",number);
+    for(unsigned phase=0;phase<24;phase++) printf(",t%u=%.3f",phase,total[THERMAL_PHASE+phase]);
+    for(unsigned phase=0;phase<11;phase++) printf(",c%u=%.3f,b%u=%.3f",phase,total[COMBUSTION_PHASE+phase],phase,total[BODY_COMBUSTION_PHASE+phase]);
     putchar('\n');
     printf("fluid-kernels,%u",number);
     for(unsigned phase=0;phase<13;phase++) printf(",f%u=%.3f",phase,total[FLUID_KERNEL+phase]);

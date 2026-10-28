@@ -9,19 +9,10 @@
 #include "reactive_storage_gpu.h"
 #include "thermal_feedback_gpu.h"
 #include "thermal_gpu_internal.h"
+#include "thermal_gpu_state.h"
 #include "gas_gpu_state.h"
 #include "runtime_body_internal.h"
 
-struct fr_thermal_gpu {
-    fr_renderer_compute_t compute,feedback,combustion,body_combustion;
-    dc_gpu_address_buffer_t profiles,samples,fluxes,probe,water;
-    dc_gpu_address_buffer_t emission,emission_snapshot,hud;
-    bool hud_enabled;
-    uint32_t groups_x,groups_y,profile_count,overlay;
-    uint32_t purpose,pending_count;
-    float *pending_water;
-    bool probe_active;
-};
 static void phase(dc_gpu_t *g,uint32_t mode,float seconds);
 bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!g||!g->thermal||!g->gas) {
