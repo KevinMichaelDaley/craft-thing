@@ -4,6 +4,7 @@
 #undef main
 #include "../../src/app/level.c"
 #include "../../src/vulkan/reactive_storage_gpu.h"
+#include "bonfire_progress.h"
 #include "ferrum/fire/material_profile.h"
 #include <signal.h>
 #include <sys/stat.h>
@@ -102,9 +103,9 @@ static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
         ASSERT_TRUE(logs[i].count==rect[2]*rect[3]&&logs[i].initial>0);
     }
     uint64_t began=SDL_GetPerformanceCounter(),previous=began,report=began;double frequency=SDL_GetPerformanceFrequency();
-    uint32_t dry=0,wet=0;double elapsed=0,ignited_at=-1.,late_at=-1.;
-    double late_chemical=0.,previous_chemical=0.;bool sustained=false,continuous=true;
-    while(!stopped&&elapsed<wall_bound&&!sustained) {
+    uint32_t dry=0,wet=0;double elapsed=0.;bool sustained=false,captured=false;
+    bonfire_progress_t progress=bonfire_progress_init();
+    while(!stopped&&elapsed<wall_bound&&!(sustained&&dry==DC_BONFIRE_LOG_COUNT)) {
         uint64_t now=SDL_GetPerformanceCounter();float dt=(float)((now-previous)/frequency);
         if(dt<1.f/60.f) {SDL_Delay(1);continue;}previous=now;
         ASSERT_TRUE(dt<=.25f);
@@ -117,22 +118,14 @@ static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
             for(uint32_t i=0;i<2u*DC_BONFIRE_LOG_COUNT;i++) if(logs[i].caught) {if(i<DC_BONFIRE_LOG_COUNT) dry++;else wet++;}
             double chemical=0.;uint32_t active=0;
             for(uint32_t i=0;i<DC_BONFIRE_LOG_COUNT;i++) {chemical+=logs[i].chemical;active+=logs[i].flaming;}
-            if(ignited_at>=0.&&previous_chemical>0.&&chemical>=previous_chemical-.000001) continuous=false;
-            previous_chemical=chemical;
             fr_gas_gpu_clock_t clock={0};ASSERT_TRUE(fr_gas_gpu_clock(view->gpu,&clock));
-            if(dry==DC_BONFIRE_LOG_COUNT&&ignited_at<0.) {
-                ignited_at=clock.advanced_seconds;
+            if(dry==DC_BONFIRE_LOG_COUNT&&!captured) {
+                captured=true;
                 ASSERT_TRUE(capture_bonfire(view,"build/screenshots/rigid_bonfire_visible_ignition.bmp",err,sizeof(err)));
             }
-            if(ignited_at>=0.&&late_at<0.&&clock.advanced_seconds>=ignited_at+15.) {
-                late_at=clock.advanced_seconds;
-                late_chemical=chemical;
-            }
-            if(late_at>=0.&&clock.advanced_seconds>=late_at+5.) {
-                /* Whole-pile activity only: flames may move between arbitrary parcels. */
-                sustained=continuous&&active>0u&&late_chemical-chemical>=10.;
-                if(!sustained) break;
-            }
+            bonfire_progress_observe(&progress,clock.advanced_seconds,chemical,active,dry==DC_BONFIRE_LOG_COUNT);
+            sustained=progress.sustained;
+            if(!progress.continuous) break;
             fr_gas_gpu_audit_t audit;ASSERT_TRUE(fr_gas_gpu_audit(view->gpu,&audit,err,sizeof(err)));
             uint32_t counters[32];ASSERT_TRUE(fr_combustion_gpu_bonfire_counters(view->gpu,counters));float target_oxygen=0,surface_temperature=0;
             memcpy(&target_oxygen,counters+27u,sizeof(target_oxygen));memcpy(&surface_temperature,counters+29u,sizeof(surface_temperature));

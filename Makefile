@@ -268,6 +268,7 @@ build/bonfire_progress_tests: tests/app/bonfire_progress_tests.c tests/app/bonfi
 test: test_bonfire_progress
 test_bonfire_progress: build/bonfire_progress_tests
 	./build/bonfire_progress_tests
+build/bonfire_display_tests: tests/app/bonfire_progress.h
 build/bonfire_plan_tests: tests/app/bonfire_plan_tests.c src/app/bonfire_plan.c src/app/bonfire.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/bonfire_plan.c -o $@ $(LDLIBS)
 build/bonfire_scene_tests: tests/app/bonfire_scene_tests.c $(THERMAL_BENCH_SRC) src/fire/reactive_state.c src/fire/reactive_snapshot.c src/fire/material_profile.c src/fire/reactive_chunk.c

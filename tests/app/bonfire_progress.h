@@ -13,7 +13,7 @@ static inline bool bonfire_progress_observe(bonfire_progress_t *p,double seconds
     if(p->started>=0.&&p->previous_chemical>0.&&chemical>=p->previous_chemical-.000001)
         p->continuous=false;
     p->previous_chemical=chemical;
-    if(p->started<0.&&all_ignited) p->started=seconds;
+    if(p->started<0.&&active>0u) p->started=seconds;
     if(p->started>=0.&&p->late<0.&&seconds>=p->started+15.) {
         p->late=seconds;p->late_chemical=chemical;
     }
