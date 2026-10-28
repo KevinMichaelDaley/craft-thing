@@ -110,6 +110,11 @@ bool fr_reactive_state_valid(const fr_reactive_state_t *s,char *err,uint32_t cap
        (c>0&&s->thermal_energy<=0)) return error(err,cap,"Reactive energy has no valid heat capacity");
     return true;
 }
+double fr_reactive_state_pending_oxygen_fp(const fr_reactive_state_t *s) {
+    if(!s||s->reaction_fraction<=0.f) return 0.;
+    const fr_reactive_profile_t *p=fr_reactive_profile(s->fuel_mass_fp?s->material:DC_MATERIAL_CHAR);
+    return (double)s->reaction_fraction*p->oxygen_per_fuel;
+}
 uint64_t fr_reactive_state_mass_fp(const fr_reactive_state_t *s) {
     if(!s) return 0;
     uint32_t values[9];memcpy(values,&s->dry_mass_fp,sizeof(values));
@@ -142,7 +147,10 @@ bool fr_reactive_state_split(const fr_reactive_state_t *s,uint32_t weight,uint64
         return error(err,cap,"Reactive split energy overflow");
     first.pending_shock_energy=(float)(s->pending_shock_energy*fraction);
     second.pending_shock_energy=s->pending_shock_energy-first.pending_shock_energy;
-    first.reaction_fraction=(float)(s->reaction_fraction*weight/65536.0);
+    uint32_t first_active=s->fuel_mass_fp?first.fuel_mass_fp:first.char_mass_fp;
+    uint32_t second_active=s->fuel_mass_fp?second.fuel_mass_fp:second.char_mass_fp;
+    double active=(double)first_active+second_active;
+    first.reaction_fraction=active>0.?(float)(s->reaction_fraction*first_active/active):0.f;
     second.reaction_fraction=s->reaction_fraction-first.reaction_fraction;
     if(!fr_reactive_state_valid(&first,err,cap)||!fr_reactive_state_valid(&second,err,cap)) return false;
     *left=first;*right=second;return true;

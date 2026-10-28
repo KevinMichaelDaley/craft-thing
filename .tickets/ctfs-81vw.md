@@ -71,3 +71,11 @@ User clarification: wood should transmit heat sensibly; investigate actual coupl
 **2026-10-28T01:59:51Z**
 
 Inline implementation checkpoint: 8 cold rigid logs + 12 cold kindling per pit; finite ember only. Current compensation is 2x solid-solid conduction only, not gas, liquid or gas-surface transfer. Removed blanket chemical amplification; wood18kJ/g including retained char, char28kJ/g, airborne reservation back to4000J/g. Added temperature-dependent Planck/CIE visible efficiency, explicit magic-color flag, bounded gray-soot radiative heat exchange, real-inventory flux limits, energy-weighted outgoing and capacity-weighted incoming raster heat allocation. Native focused energy/covered-wood/diagonal tests pass. Full make test completed with only two pre-existing authored_stage failures tracked ctr-ojvy. All-log sustained bonfire acceptance is still IN_PROGRESS; needs a fresh displayed run with the corrected generated-material build dependency before completion can be claimed.
+
+**2026-10-28T02:33:13Z**
+
+Acceptance clarification: sustained combustion is measured over the whole dry pile by continued aggregate chemical-energy consumption. No fixed screen coordinate, rest parcel, spatial overlap, or minimum eight simultaneous flaming parcels is required; flames may move freely. Per-log caught history only establishes that each authored log eventually ignites. Current native all-eight ignition/sustained test passed; final sequential displayed battery and full regression are being repeated after oxygen-credit persistence changes.
+
+**2026-10-28T02:34:17Z**
+
+Final sequential real-display Vulkan battery passed: owner heat/combustion 6/6, covered wood 1/1, bounded vorticity 1/1, optimized stationary diagonal heat 1/1, autonomous eight-log bonfire 1/1. All eight dry logs ignite naturally; zero wet logs ignite; aggregate burning continues for 20 simulated seconds after all logs catch. No spatial flame-coherence condition. Full regression remains running; containment/fuel-bridge acceptance remains separate unfinished work.

@@ -57,7 +57,7 @@ static bool records_valid(fr_reactive_record_t *records,uint32_t count,uint64_t 
         return error(err,cap,"Duplicate reactive owner");
     return true;
 }
-static bool legacy_owners_valid(const fr_reactive_record_t *records,uint32_t count,
+static bool legacy_owners_valid(fr_reactive_record_t *records,uint32_t count,
                                 uint32_t version,char *err,uint32_t cap) {
     for(uint32_t i=0;version==1u&&i<count;i++)
         if(records[i].owner.kind==FR_REACTIVE_OWNER_PARTICLE&&records[i].owner.key[3]!=0u)
@@ -71,6 +71,8 @@ static bool legacy_owners_valid(const fr_reactive_record_t *records,uint32_t cou
         uint32_t bits=0;memcpy(&bits,&records[i].state.reaction_fraction,sizeof(bits));
         if(bits!=0u) return error(err,cap,"Reserved legacy reaction progress bits are nonzero");
     }
+    /* ABI 4 stored unfunded demand. It must not become reserved oxygen. */
+    for(uint32_t i=0;version<5u&&i<count;i++) records[i].state.reaction_fraction=0.f;
     return true;
 }
 

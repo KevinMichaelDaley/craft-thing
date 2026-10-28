@@ -13,7 +13,7 @@ static int g_pass,g_fail;
 #define PASS() g_pass++
 static void test_sub_ulp_heat_is_retained_and_temperature_uses_full_inventory(void) {
     char err[256]={0};fr_reactive_state_t s;
-    ASSERT_EQ(FR_REACTIVE_STATE_ABI,4u);
+    ASSERT_EQ(FR_REACTIVE_STATE_ABI,5u);
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,176947,0,350,1,&s,err,sizeof(err)));
     double before=fr_reactive_state_energy(&s);
     for(uint32_t i=0;i<100000;i++) ASSERT_TRUE(fr_reactive_state_add_heat(&s,1e-6,err,sizeof(err)));
@@ -46,6 +46,25 @@ static void test_abi_two_migrates_zero_remainder_but_rejects_nonzero_old_reserve
     }
     free(bytes);PASS();
 }
+static void test_abi_four_unfunded_demand_does_not_create_reserved_oxygen(void) {
+    char err[256]={0};fr_reactive_record_t record={.owner={.kind=FR_REACTIVE_OWNER_CELL,.key={0,0,0,0,3}}},out;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,350,1,&record.state,err,sizeof(err)));
+    record.state.reaction_fraction=.75f;size_t length=0,written=0;
+    ASSERT_TRUE(fr_reactive_snapshot_size(1,&length));uint8_t *bytes=malloc(length);ASSERT_TRUE(bytes);
+    ASSERT_TRUE(fr_reactive_snapshot_encode(&record,1,2,bytes,length,&written,err,sizeof(err)));
+    bytes[4]=4;rehash(bytes,length);uint32_t count=0,required=0;uint64_t next=0;
+    ASSERT_TRUE(fr_reactive_snapshot_decode(bytes,length,&out,1,&count,&next,&required,err,sizeof(err)));
+    ASSERT_EQ(out.state.reaction_fraction,0.f);ASSERT_EQ(fr_reactive_state_pending_oxygen_fp(&out.state),0.);
+    ASSERT_EQ(fr_reactive_state_energy(&out.state),fr_reactive_state_energy(&record.state));free(bytes);PASS();
+}
+static void test_final_fuel_quantum_keeps_its_funded_oxygen_when_split(void) {
+    char err[256]={0};fr_reactive_state_t source,left,right;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,1,0,800,51,&source,err,sizeof(err)));
+    source.reaction_fraction=.75f;
+    ASSERT_TRUE(fr_reactive_state_split(&source,32768,52,53,&left,&right,err,sizeof(err)));
+    ASSERT_TRUE(left.fuel_mass_fp==0u&&left.reaction_fraction==0.f);
+    ASSERT_TRUE(fabs(fr_reactive_state_pending_oxygen_fp(&left)+fr_reactive_state_pending_oxygen_fp(&right)-fr_reactive_state_pending_oxygen_fp(&source))<1e-8);PASS();
+}
 static void test_splits_and_snapshots_preserve_the_full_energy_expansion(void) {
     char err[256]={0};fr_reactive_record_t record={.owner={.kind=FR_REACTIVE_OWNER_BODY,.key={7,1,2,3,0}}},out;
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,1000,350,1,&record.state,err,sizeof(err)));
@@ -72,6 +91,8 @@ static void test_invalid_heat_or_residual_leaves_state_unchanged(void) {
     s.thermal_energy_correction=1;ASSERT_TRUE(!fr_reactive_state_valid(&s,err,sizeof(err)));PASS();
 }
 int main(void) {
+    RUN(test_abi_four_unfunded_demand_does_not_create_reserved_oxygen);
+    RUN(test_final_fuel_quantum_keeps_its_funded_oxygen_when_split);
     RUN(test_sub_ulp_heat_is_retained_and_temperature_uses_full_inventory);
     RUN(test_splits_and_snapshots_preserve_the_full_energy_expansion);
     RUN(test_invalid_heat_or_residual_leaves_state_unchanged);

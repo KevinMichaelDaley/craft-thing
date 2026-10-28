@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Bounded native feature battery; run GPU cases sequentially on the real display.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+export SDL_VIDEODRIVER=wayland
+export DC_FULLSCREEN=1
+printf 'Building the displayed bonfire battery...\n'
+tools/with-vulkan make -j8 build/gas_display_tests build/rigid_thermal_display_tests \
+    build/combustion_body_feedback_display_tests build/bonfire_display_tests \
+    >build/bonfire_battery_build.log 2>&1
+tools/with-vulkan ./build/combustion_body_feedback_display_tests
+tools/with-vulkan ./build/rigid_thermal_display_tests --covered-wood
+DC_GAS_TEST_FILTER=vorticity tools/with-vulkan ./build/gas_display_tests
+DC_GAS_TEST_FILTER=stationary_heat DC_GAS_HYBRID_LINES=1 DC_GAS_FUSED_AXIS=1 \
+    DC_GAS_FUSED_HYBRID=1 DC_GAS_FIXED_AXIS=1 tools/with-vulkan ./build/gas_display_tests
+source tools/smoke_profile
+printf 'Running the autonomous bonfire: 60s acceptance bound, 95s external bound.\n'
+exec timeout --signal=INT --kill-after=3s 95s tools/with-vulkan \
+    stdbuf -oL -eL ./build/bonfire_display_tests

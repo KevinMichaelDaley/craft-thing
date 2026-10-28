@@ -9,6 +9,7 @@ typedef struct {
     uint32_t fuel_fp,ash_fp,soot_fp;
     /** Gas amounts use Q16 units but retain fractional quanta. */
     double oxygen_fp,exhaust_fp;
+    double pending_oxygen_fp; /**< Change in parcel-held fractional oxygen. */
     double released_heat,exported_energy,reserved_airborne_heat;
 } fr_combustion_products_t;
 /** Cold reference for an exposed terrain parcel. Stable identity seeds its

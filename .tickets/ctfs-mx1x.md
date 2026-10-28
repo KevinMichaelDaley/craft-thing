@@ -38,3 +38,7 @@ Rigid ash GREEN after RED47ceff5: GPU-only reservation/publication now hands act
 **2026-10-27T19:37:37Z**
 
 Primary took over after user stopped subagent to reduce credits. Constructed-stone thermal grids now pass focused headless and actual Wayland core/sync checks, including late admission, exact thermal state restore and carving into23 preserved parcels. Found/fixed missing thermal object compile recipe and bonfire admission order. Original analytic collider/support retained. Current autonomous pile with real pit heat sink is2/3 in30s, so bonfire is NOT complete; user now explicitly requires sustained burning while usable fuel remains.
+
+**2026-10-28T02:34:17Z**
+
+Thin oxygen now funds persistent fractional reaction progress rather than requiring a whole fuel quantum in a single frame. Native conservation test: gas oxygen plus pending oxygen remains 0.4 Q16, with no premature chemical heat; old ABI4 unfunded progress migrates to zero in ABI5. Split/save retain funded oxygen. Sequential native owner tests 6/6 pass.

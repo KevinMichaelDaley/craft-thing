@@ -53,20 +53,19 @@ bool fr_combustion_reference(const fr_reactive_state_t *source,double oxygen_fp,
         double wet=(1-saturation)*(1-saturation);
         double requested=(double)s.dry_mass_fp*profile->surface_burn_per_second*
             seconds*exposed_fraction*wet*(oxygen_fraction/FR_COMBUSTION_AMBIENT_OXYGEN)*
-            fr_combustion_hot_rate(temperature,profile->ignition_K)+s.reaction_fraction;
-        s.reaction_fraction=(float)(requested-floor(requested));
-        if(s.reaction_fraction>=1) s.reaction_fraction=nextafterf(1,0);
-        double admitted=fmin(fuel,requested);
-        if(profile->oxygen_per_fuel>0) admitted=fmin(admitted,oxygen_fp/(double)profile->oxygen_per_fuel);
-        p.fuel_fp=(uint32_t)floor(admitted);
-        p.oxygen_fp=p.fuel_fp*(double)profile->oxygen_per_fuel;
+            fr_combustion_hot_rate(temperature,profile->ignition_K);
+        double credit=s.reaction_fraction,funded=fmin(fmax(0.,fuel-credit),requested);
+        if(profile->oxygen_per_fuel>0) funded=fmin(funded,oxygen_fp/profile->oxygen_per_fuel);
+        double total=credit+funded;p.fuel_fp=(uint32_t)floor(total);
+        s.reaction_fraction=fminf((float)(total-p.fuel_fp),nextafterf(1.f,0.f));
+        p.oxygen_fp=funded*profile->oxygen_per_fuel;
         uint32_t initial=(uint32_t)llround(s.dry_mass_fp*(double)profile->fuel_fraction);
         uint32_t consumed=initial>=fuel?initial-fuel:0;
         uint32_t before[3],after[3];
         solid_products(consumed,profile,before);solid_products(consumed+p.fuel_fp,profile,after);
         uint32_t char_fp=after[0]-before[0];
         p.ash_fp=after[1]-before[1];p.soot_fp=after[2]-before[2];
-        p.exhaust_fp=p.fuel_fp-char_fp-p.ash_fp-p.soot_fp+p.oxygen_fp;
+        p.exhaust_fp=p.fuel_fp-char_fp-p.ash_fp-p.soot_fp+p.fuel_fp*(double)profile->oxygen_per_fuel;
         p.reserved_airborne_heat=p.soot_fp/65536.0*FR_COMBUSTION_AIRBORNE_ENERGY;
         p.released_heat=p.fuel_fp/65536.0*profile->primary_heat-p.reserved_airborne_heat;
         double sensible=p.fuel_fp/65536.0*profile->heat_capacity*temperature;
@@ -77,6 +76,7 @@ bool fr_combustion_reference(const fr_reactive_state_t *source,double oxygen_fp,
         if(!fr_reactive_state_add_heat(&s,.7*p.released_heat-sensible+retained,err_buf,err_cap)) return false;
         if(!s.fuel_mass_fp&&!s.char_mass_fp) s.flags&=~FR_REACTIVE_FLAMING;
     }
+    p.pending_oxygen_fp=fr_reactive_state_pending_oxygen_fp(&s)-fr_reactive_state_pending_oxygen_fp(source);
     if(!fr_reactive_state_valid(&s,err_buf,err_cap)) return false;
     *out=s;*products=p;return true;
 }

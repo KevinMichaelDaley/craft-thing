@@ -18,8 +18,7 @@ static void test_finite_oxygen_and_products(void) {
     ASSERT_TRUE(fr_combustion_reference(&s,64,.23f,1,1,&out,&p,err,sizeof(err)));
     ASSERT_TRUE(p.fuel_fp>0&&p.fuel_fp<65536&&p.oxygen_fp<=64);
     ASSERT_EQ(s.fuel_mass_fp-out.fuel_mass_fp,p.fuel_fp);
-    ASSERT_EQ((uint64_t)p.fuel_fp+p.oxygen_fp,
-        (uint64_t)out.char_mass_fp+p.ash_fp+p.soot_fp+p.exhaust_fp);
+    ASSERT_TRUE(fabs(p.fuel_fp+p.oxygen_fp-out.char_mass_fp-p.ash_fp-p.soot_fp-p.exhaust_fp-p.pending_oxygen_fp)<.00001);
     ASSERT_TRUE(p.released_heat>0&&isfinite(p.exported_energy));PASS();
 }
 static void test_starved_wet_and_buried_do_not_burn(void) {
@@ -73,7 +72,7 @@ static void test_continuous_gas_oxygen_is_not_rounded_up_per_solid_quantum(void)
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,800,39,&s,err,sizeof(err)));
     s.flags=FR_REACTIVE_FLAMING;s.ignition_threshold=.5;s.ignition_integral=.6;
     ASSERT_TRUE(fr_combustion_reference(&s,65536,.23f,1,.02f,&out,&p,err,sizeof(err)));
-    ASSERT_TRUE(p.fuel_fp>0);ASSERT_TRUE(fabs(p.oxygen_fp-p.fuel_fp*1.2)<.00001);PASS();
+    ASSERT_TRUE(p.fuel_fp>0);ASSERT_TRUE(fabs(p.oxygen_fp-p.fuel_fp*1.2-p.pending_oxygen_fp)<.00001);PASS();
 }
 static void test_short_frames_retain_fractional_burn_progress(void) {
     char err[256]={0};fr_reactive_state_t a,b,tmp;fr_combustion_products_t p;
@@ -108,7 +107,7 @@ static void test_retained_char_remains_finite_combustible_fuel(void) {
     ASSERT_TRUE(fr_combustion_reference(&s,65536,.23f,1,.1f,&out,&p,err,sizeof(err)));
     ASSERT_TRUE(out.char_mass_fp<s.char_mass_fp&&p.ash_fp>0);
     ASSERT_EQ(s.char_mass_fp-out.char_mass_fp,p.fuel_fp);
-    ASSERT_EQ((uint64_t)p.fuel_fp+p.oxygen_fp,(uint64_t)p.ash_fp+p.soot_fp+p.exhaust_fp);
+    ASSERT_TRUE(fabs(p.fuel_fp+p.oxygen_fp-p.ash_fp-p.soot_fp-p.exhaust_fp-p.pending_oxygen_fp)<.00001);
     ASSERT_TRUE(fr_reactive_state_valid(&out,err,sizeof(err)));PASS();
 }
 static fr_gas_model_t gas_model(void) {

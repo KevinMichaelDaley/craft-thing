@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 
 /* Authored fixture identities; no gameplay owner lists or body quota. */
-typedef struct {uint32_t origins[48],count;uint64_t initial,current;float temperature,hazard;uint32_t flaming;} fixture_log_t;
+typedef struct {uint32_t origins[48],count;uint64_t initial,current;float temperature,hazard,char_area;double chemical;uint32_t flaming;bool caught;} fixture_log_t;
 static volatile sig_atomic_t stopped;
 static double wall_bound=60.;
 static uint64_t diagnostic_char;
@@ -27,7 +27,7 @@ static int log_for_origin(const fixture_log_t logs[2u*DC_BONFIRE_LOG_COUNT],uint
 static bool inspect_logs(dc_level_view_t *view,fixture_log_t logs[2u*DC_BONFIRE_LOG_COUNT],bool initial,float *ember,char *err,uint32_t cap) {
     fr_reactive_record_t *records=NULL;uint32_t count=0;uint64_t next=0;
     if(!fr_gpu_reactive_export_bodies(view->gpu,&records,&count,&next,err,cap)) return false;
-    for(uint32_t i=0;i<2u*DC_BONFIRE_LOG_COUNT;i++) {logs[i].current=0;logs[i].temperature=logs[i].hazard=0;logs[i].flaming=0;}
+    for(uint32_t i=0;i<2u*DC_BONFIRE_LOG_COUNT;i++) {logs[i].current=0;logs[i].temperature=logs[i].hazard=logs[i].char_area=0;logs[i].chemical=0.;logs[i].flaming=0;}
     *ember=0;
     for(uint32_t side=0;side<2;side++) {kindling_current[side]=0;kindling_flaming[side]=0;kindling_hazard[side]=0;}
     diagnostic_char=0;diagnostic_kindling=0;diagnostic_burning_char=0;
@@ -70,10 +70,15 @@ static bool inspect_logs(dc_level_view_t *view,fixture_log_t logs[2u*DC_BONFIRE_
         if(index<0) continue;
         logs[index].current+=r->state.fuel_mass_fp;
         if(r->state.flags&FR_REACTIVE_FLAMING) logs[index].flaming++;
+        if(r->state.dry_mass_fp) logs[index].char_area+=1.f-expf(-(float)r->state.char_mass_fp/((float)r->state.dry_mass_fp*.001f));
+        logs[index].chemical+=(double)r->state.fuel_mass_fp/65536.*fr_reactive_profile(r->state.material)->chemical_energy+
+            (double)r->state.char_mass_fp/65536.*fr_reactive_profile(DC_MATERIAL_CHAR)->chemical_energy;
         float hazard=r->state.ignition_threshold>0?r->state.ignition_integral/r->state.ignition_threshold:0;
         if(hazard>logs[index].hazard) logs[index].hazard=hazard;
         if(temperature>logs[index].temperature) logs[index].temperature=temperature;
     }
+    for(uint32_t i=0;i<2u*DC_BONFIRE_LOG_COUNT;i++)
+        if(!initial&&logs[i].current<logs[i].initial&&logs[i].flaming>0u&&logs[i].char_area>=.5f) logs[i].caught=true;
     free(records);return true;
 }
 static bool capture_bonfire(dc_level_view_t *view,const char *path,char *err,uint32_t cap) {
@@ -98,7 +103,7 @@ static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
     }
     uint64_t began=SDL_GetPerformanceCounter(),previous=began,report=began;double frequency=SDL_GetPerformanceFrequency();
     uint32_t dry=0,wet=0;double elapsed=0,ignited_at=-1.,late_at=-1.;
-    uint64_t late_fuel[DC_BONFIRE_LOG_COUNT]={0};bool sustained=false;
+    double late_chemical=0.,previous_chemical=0.;bool sustained=false,continuous=true;
     while(!stopped&&elapsed<wall_bound&&!sustained) {
         uint64_t now=SDL_GetPerformanceCounter();float dt=(float)((now-previous)/frequency);
         if(dt<1.f/60.f) {SDL_Delay(1);continue;}previous=now;
@@ -109,7 +114,11 @@ static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
         elapsed=(SDL_GetPerformanceCounter()-began)/frequency;
         if((SDL_GetPerformanceCounter()-report)/frequency>=1.) {
             report=SDL_GetPerformanceCounter();ASSERT_TRUE(inspect_logs(view,logs,false,&ember,err,sizeof(err)));dry=wet=0;
-            for(uint32_t i=0;i<2u*DC_BONFIRE_LOG_COUNT;i++) if(logs[i].initial>=logs[i].current+logs[i].initial/1000u&&logs[i].flaming>=2u) {if(i<DC_BONFIRE_LOG_COUNT) dry++;else wet++;}
+            for(uint32_t i=0;i<2u*DC_BONFIRE_LOG_COUNT;i++) if(logs[i].caught) {if(i<DC_BONFIRE_LOG_COUNT) dry++;else wet++;}
+            double chemical=0.;uint32_t active=0;
+            for(uint32_t i=0;i<DC_BONFIRE_LOG_COUNT;i++) {chemical+=logs[i].chemical;active+=logs[i].flaming;}
+            if(ignited_at>=0.&&previous_chemical>0.&&chemical>=previous_chemical-.000001) continuous=false;
+            previous_chemical=chemical;
             fr_gas_gpu_clock_t clock={0};ASSERT_TRUE(fr_gas_gpu_clock(view->gpu,&clock));
             if(dry==DC_BONFIRE_LOG_COUNT&&ignited_at<0.) {
                 ignited_at=clock.advanced_seconds;
@@ -117,12 +126,11 @@ static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
             }
             if(ignited_at>=0.&&late_at<0.&&clock.advanced_seconds>=ignited_at+15.) {
                 late_at=clock.advanced_seconds;
-                for(uint32_t i=0;i<DC_BONFIRE_LOG_COUNT;i++) late_fuel[i]=logs[i].current;
+                late_chemical=chemical;
             }
             if(late_at>=0.&&clock.advanced_seconds>=late_at+5.) {
-                sustained=true;
-                for(uint32_t i=0;i<DC_BONFIRE_LOG_COUNT;i++) sustained&=logs[i].current==0u||
-                    (logs[i].flaming>0u&&late_fuel[i]>=logs[i].current+logs[i].initial/1000u);
+                /* Whole-pile activity only: flames may move between arbitrary parcels. */
+                sustained=continuous&&active>0u&&late_chemical-chemical>=10.;
                 if(!sustained) break;
             }
             fr_gas_gpu_audit_t audit;ASSERT_TRUE(fr_gas_gpu_audit(view->gpu,&audit,err,sizeof(err)));

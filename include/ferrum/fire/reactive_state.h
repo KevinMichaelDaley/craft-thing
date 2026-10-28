@@ -7,7 +7,7 @@
 
 #include "dungeoncraft/chunk.h"
 
-#define FR_REACTIVE_STATE_ABI 4u
+#define FR_REACTIVE_STATE_ABI 5u
 #define FR_REACTIVE_STATE_WORDS 28u
 #define FR_REACTIVE_OWNER_WORDS 6u
 enum {
@@ -35,7 +35,7 @@ typedef struct {
     float coating_threshold, coating_integral, pending_shock_energy;
     float thermal_energy_residual; /**< Signed low-order extensive heat. */
     float thermal_energy_correction; /**< Retained residual accumulation error. */
-    float reaction_fraction; /**< Uncommitted sub-Q16 substrate reaction progress. */
+    float reaction_fraction; /**< Oxygen-funded sub-Q16 reaction progress, ABI 5. */
 } fr_reactive_state_t;
 
 enum { FR_REACTIVE_OWNER_CELL=1u, FR_REACTIVE_OWNER_BODY=2u,
@@ -74,7 +74,11 @@ bool fr_reactive_state_from_particle(const dc_mpm_particle_t *particle,
 /** Reject malformed identity, flags, quantities and ignition progress. */
 bool fr_reactive_state_valid(const fr_reactive_state_t *state,
                               char *err_buf, uint32_t err_cap);
-/** Sum only physical species mass, excluding dry reference metadata. */
+/** Fractional oxygen held for an incomplete reaction, in Q16 mass units.
+ * This finite stock supplements the integer species inventory. */
+double fr_reactive_state_pending_oxygen_fp(const fr_reactive_state_t *state);
+/** Sum integer species mass, excluding dry reference metadata and fractional
+ * pending oxygen returned separately by fr_reactive_state_pending_oxygen_fp(). */
 uint64_t fr_reactive_state_mass_fp(const fr_reactive_state_t *state);
 /** Derive temperature from extensive energy and composition heat capacities. */
 bool fr_reactive_state_temperature(const fr_reactive_state_t *state, float *out_K,
