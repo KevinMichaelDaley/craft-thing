@@ -7,7 +7,7 @@
 #include "revolute_gpu_internal.h"
 #include "runtime_body_internal.h"
 
-enum { JOINT_WORDS=16, JOINT_WORK_HEADER=96 };
+enum { JOINT_WORDS=24, JOINT_WORK_HEADER=96 };
 struct fr_revolute_gpu {dc_gpu_address_buffer_t records;uint32_t span,capacity;};
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
@@ -53,8 +53,18 @@ bool fr_gpu_revolute_add(dc_gpu_t *g,const fr_revolute_joint_t *joint,char *err,
     if(!g||!g->runtime_bodies||!joint||!joint->id||!joint->body_a||!joint->body_b||joint->body_a==joint->body_b)
         return error(err,cap,"Invalid revolute joint identities");
     for(unsigned axis=0;axis<2;axis++)
-        if(!isfinite(joint->anchor_a[axis])||!isfinite(joint->anchor_b[axis]))
+        if(!isfinite(joint->anchor_a[axis])||!isfinite(joint->anchor_b[axis])||
+           fabsf(joint->anchor_a[axis])>1000000.f||fabsf(joint->anchor_b[axis])>1000000.f)
             return error(err,cap,"Invalid revolute anchor");
+    const float settings[]={joint->lower_angle,joint->upper_angle,joint->spring_stiffness,
+        joint->spring_rest_angle,joint->friction_torque,joint->max_force,joint->max_torque};
+    for(unsigned i=0;i<sizeof(settings)/sizeof(*settings);i++)
+        if(!isfinite(settings[i])||fabsf(settings[i])>1000000.f)
+            return error(err,cap,"Invalid revolute mechanical settings");
+    if((joint->flags&~3u)||joint->spring_stiffness<0||joint->friction_torque<0||
+       joint->max_force<0||joint->max_torque<0||
+       ((joint->flags&FR_REVOLUTE_LIMITS)&&joint->lower_angle>joint->upper_angle))
+        return error(err,cap,"Invalid revolute limits or capacity");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot reach joint authoring boundary");
     uint32_t a=find_body(g,joint->body_a),b=find_body(g,joint->body_b);
     if(a==DC_BODY_SLOT_NONE||b==DC_BODY_SLOT_NONE) return error(err,cap,"Revolute endpoint is absent");
@@ -76,6 +86,7 @@ bool fr_gpu_revolute_add(dc_gpu_t *g,const fr_revolute_joint_t *joint,char *err,
     p[0]=joint->id;p[1]=1;p[2]=a;p[3]=dc_gpu_body_owner(g,a)->generation;p[4]=joint->body_a;
     p[5]=b;p[6]=dc_gpu_body_owner(g,b)->generation;p[7]=joint->body_b;
     memcpy(p+8,joint->anchor_a,8);memcpy(p+10,joint->anchor_b,8);
+    p[12]=joint->flags;memcpy(p+13,settings,sizeof(settings));
     if(index==r->span) r->span++;
     fr_gpu_revolute_bind_work(g,g->runtime_bodies->work.mapped);
     g->descriptor_revision++;
