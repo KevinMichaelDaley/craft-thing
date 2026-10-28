@@ -10,6 +10,43 @@
 #include "ferrum/physics/revolute_gpu.h"
 #include "ferrum/structural/gpu.h"
 
+static void test_grounded_triangular_frame_and_tension_release(void) {
+    char err[256]={0};dc_gpu_t *g=grid();ASSERT_TRUE(g);
+    dc_catapult_scene_t scene={0};
+    ASSERT_TRUE(dc_catapult_scene_build(g,false,&scene,err,sizeof(err)));
+    ASSERT_TRUE(scene.pouch_joint&&scene.latch_joint);
+    dc_gpu_world_body_t left,top,right,wall,coal_before,coal_after;
+    ASSERT_TRUE(dc_gpu_read_world_body(g,FR_STRUCTURAL_BODY_ID_BASE+4u,
+        &left,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(g,FR_STRUCTURAL_BODY_ID_BASE+7u,
+        &right,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.frame_body,&top,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.wall_body,&wall,err,sizeof(err)));
+    ASSERT_TRUE(xof(left)<xof(top)-5.f&&xof(right)>xof(top)+5.f);
+    ASSERT_TRUE(yof(left)>yof(top)+5.f&&yof(right)>yof(top)+5.f);
+    ASSERT_TRUE(xof(wall)>xof(right)+5.f);
+    dc_gpu_body_motion_t arm_held,arm_launched;
+    for(uint32_t tick=0;tick<20;tick++)
+        ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,scene.arm_body,&arm_held,
+        err,sizeof(err)));
+    ASSERT_TRUE(fabsf(arm_held.angular_velocity)<.05f);
+    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&coal_before,
+        err,sizeof(err)));
+    ASSERT_TRUE(dc_catapult_scene_release(g,&scene,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&coal_after,
+        err,sizeof(err)));
+    ASSERT_EQ(memcmp(&coal_before,&coal_after,sizeof(coal_before)),0);
+    for(uint32_t tick=0;tick<5;tick++)
+        ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,scene.arm_body,&arm_launched,
+        err,sizeof(err)));
+    ASSERT_TRUE(fabsf(arm_launched.angular_velocity)>.1f);
+    ASSERT_TRUE(dc_catapult_scene_release_projectile(g,&scene,err,sizeof(err)));
+    ASSERT_TRUE(scene.projectile_released);
+    dc_gpu_destroy(g);PASS();
+}
+
 static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
     char err[256]={0};dc_gpu_t *g=grid();ASSERT_TRUE(g);
     dc_catapult_scene_t scene={0};
@@ -265,6 +302,7 @@ static void test_equal_elapsed_cadences_keep_launcher_flight_and_gas_clock(void)
 
 #ifndef DC_CATAPULT_DISPLAY_INCLUDE
 int main(void) {
+    RUN(test_grounded_triangular_frame_and_tension_release);
     RUN(test_cold_launcher_has_supported_frame_and_real_latch);
     RUN(test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint);
     RUN(test_hot_coal_emits_finite_reaction_without_igniting_cold_control);

@@ -13,7 +13,9 @@ typedef struct {
     uint32_t coal_body;
     uint32_t pivot_joint;
     uint32_t latch_joint;
+    uint32_t pouch_joint;
     bool released;
+    bool projectile_released;
 } dc_catapult_scene_t;
 
 /** Build a supported launcher, stone target wall, and finite coal load in a
@@ -22,8 +24,13 @@ bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
                              dc_catapult_scene_t *scene,
                              char *err_buf, uint32_t err_cap);
 
-/** Open the physical coal latch without changing the projectile pose or velocity. */
+/** Release the cocked arm without changing any body pose or velocity. */
 bool dc_catapult_scene_release(dc_gpu_t *gpu, dc_catapult_scene_t *scene,
                                char *err_buf, uint32_t err_cap);
+
+/** Open the coal pouch after arm acceleration, preserving its current motion. */
+bool dc_catapult_scene_release_projectile(dc_gpu_t *gpu,
+                                          dc_catapult_scene_t *scene,
+                                          char *err_buf, uint32_t err_cap);
 
 #endif

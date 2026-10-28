@@ -1,12 +1,14 @@
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 
-#include "ferrum/fire/gpu.h"
 #include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/gas_gpu.h"
+#include "ferrum/fire/gpu.h"
 #include "ferrum/fire/material_profile.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/physics/revolute_gpu.h"
+#include "ferrum/renderer/gpu.h"
 #include "ferrum/structural/gpu.h"
 
 #include "catapult_scene.h"
@@ -96,6 +98,26 @@ static bool wooden_arm(dc_gpu_t *gpu, char *err, uint32_t cap) {
                 !fr_gpu_reactive_seed_cell(gpu, slot, local, &state,
                                             err, cap)) return false;
         }
+    dc_chunk_colors_t *colors = calloc(1, sizeof(*colors));
+    if (!colors) return scene_error(err, cap, "Cannot allocate arm color map");
+    bool colored = true;
+    for (uint32_t slot = 2; slot <= 3 && colored; slot++) {
+        colored = fr_renderer_download_chunk_colors(gpu, slot, colors,
+                                                    err, cap);
+        for (uint32_t y = 78; y < 80 && colored; y++)
+            for (uint32_t x = slot == 2 ? 56u : 64u;
+                 x < (slot == 2 ? 64u : 72u); x++) {
+                uint32_t local = (y - 64u) * DC_CHUNK_SIDE + x % 64u;
+                colors->terrain[local][0] = .58f;
+                colors->terrain[local][1] = .33f;
+                colors->terrain[local][2] = .14f;
+                colors->terrain[local][3] = 1.f;
+            }
+        if (colored) colored = fr_renderer_upload_chunk_colors(gpu, slot,
+                                                               colors, err, cap);
+    }
+    free(colors);
+    if (!colored) return false;
     return dc_gpu_admit_authored_rigid_cells(gpu, err, cap);
 }
 
@@ -147,4 +169,12 @@ bool dc_catapult_scene_release(dc_gpu_t *gpu, dc_catapult_scene_t *scene,
         return false;
     scene->released = true;
     return true;
+}
+
+bool dc_catapult_scene_release_projectile(dc_gpu_t *gpu,
+                                          dc_catapult_scene_t *scene,
+                                          char *err_buf, uint32_t err_cap) {
+    (void)gpu;
+    (void)scene;
+    return scene_error(err_buf, err_cap, "Projectile release not implemented");
 }
