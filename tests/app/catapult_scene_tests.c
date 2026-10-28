@@ -16,8 +16,11 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
     bool built=dc_catapult_scene_build(g,false,&scene,err,sizeof(err));
     if(!built) printf("cold scene: %s\n",err);
     ASSERT_TRUE(built);
-    ASSERT_TRUE(scene.frame_body&&scene.arm_body&&scene.coal_body&&
+    ASSERT_TRUE(scene.frame_body&&scene.wall_body&&scene.arm_body&&scene.coal_body&&
                 scene.pivot_joint&&scene.latch_joint&&!scene.released);
+    dc_gpu_world_body_t wall;
+    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.wall_body,&wall,err,sizeof(err)));
+    ASSERT_TRUE(wall.body.active);
     for(uint32_t tick=0;tick<5;tick++)
         ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     fr_structural_gpu_component_state_t support;
