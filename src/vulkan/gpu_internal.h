@@ -254,7 +254,8 @@ struct dc_gpu {
     float fluid_phase_budget;
     bool timed_fluid;
     bool fluid_snapshot_valid;
-    bool fluid_work_possible; /* Conservative latch: never clear after water/velocity may exist. */
+    bool fluid_work_possible;
+    uint8_t fluid_uploaded_state[DC_GPU_CHUNK_SLOTS]; /* 0 unknown, 1 dry, 2 active. */
     VkDeviceSize mapped_local_bytes;
     VkDeviceSize mapped_system_bytes;
     VkDeviceSize device_only_bytes;
@@ -424,6 +425,8 @@ bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
                                char *err, uint32_t cap);
 bool dc_gpu_make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                VkDeviceMemory *memory, char *err, uint32_t cap);
+void dc_gpu_fluid_uploads_invalidate(dc_gpu_t *gpu);
+void dc_gpu_fluid_uploads_recheck(dc_gpu_t *gpu);
 bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
                              bool particles, char *err, uint32_t cap);
 bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);

@@ -130,6 +130,7 @@ void dc_gpu_record_mpm(dc_gpu_t *g) {
 }
 
 void dc_gpu_record_fluid_phase(dc_gpu_t *g,uint32_t phase) {
+    dc_gpu_fluid_uploads_invalidate(g);
     if(phase>=5u||!execute_cached(g,FLUID_PROGRAM+phase*2u+(g->fluid_tick&1u))) {
         dc_gpu_record_fluid_phase_uncached(g,phase);
         return;

@@ -106,16 +106,25 @@ static void test_complete_dry_replacement_retires_old_water_work(void) {
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,chunk,g_error,sizeof(g_error)));
     ASSERT_TRUE(dc_gpu_tick_step(gpu,g_error,sizeof(g_error)));
     *chunk=(dc_chunk_t){0};
+    ASSERT_TRUE(dc_gpu_set_tick_water_source(gpu,true,8,8));
     for(uint32_t slot=0;slot<DC_GPU_CHUNK_SLOTS;slot++) {
         chunk->coord=(dc_chunk_coord_t){slot,0};
         ASSERT_TRUE(dc_gpu_upload_chunk(gpu,slot,chunk,g_error,sizeof(g_error)));
     }
+    ASSERT_TRUE(gpu->fluid_work_possible);
+    ASSERT_TRUE(dc_gpu_set_tick_water_source(gpu,false,0,0));
     ASSERT_TRUE(!gpu->fluid_work_possible);
     g_fluid_phases=0;
     ASSERT_TRUE(dc_gpu_tick_step(gpu,g_error,sizeof(g_error)));
     ASSERT_EQ(g_fluid_phases,0u);
     ASSERT_TRUE(dc_gpu_paint_material(gpu,10,10,1,DC_MATERIAL_WATER,g_error,sizeof(g_error)));
     ASSERT_TRUE(gpu->fluid_work_possible);
+    for(uint32_t slot=1;slot<DC_GPU_CHUNK_SLOTS;slot++) {
+        chunk->coord=(dc_chunk_coord_t){slot,0};
+        ASSERT_TRUE(dc_gpu_upload_chunk(gpu,slot,chunk,g_error,sizeof(g_error)));
+    }
+    ASSERT_TRUE(gpu->fluid_work_possible);
+    ASSERT_TRUE(water_mass(gpu)>0u);
     ASSERT_TRUE(dc_gpu_tick_step(gpu,g_error,sizeof(g_error)));
     ASSERT_TRUE(g_fluid_phases>0u);
     free(chunk);dc_gpu_destroy(gpu);PASS();

@@ -448,6 +448,7 @@ bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
         if(state[DC_STRUCTURAL_BRUSH_RESULT_WORD]&16u)
             return error(err,cap,"Thermal brush admission exceeded its preflight reservation");
         gpu->body_refresh_pending|=(state[DC_STRUCTURAL_BRUSH_RESULT_WORD]&3u)!=0u;
+        dc_gpu_fluid_uploads_invalidate(gpu);
         if (material == DC_MATERIAL_WATER) gpu->fluid_work_possible=true;
         if((state[DC_STRUCTURAL_BRUSH_RESULT_WORD]&2u)!=0u) state[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]=1u;
     }
@@ -463,7 +464,8 @@ bool dc_gpu_set_tick_water_source(dc_gpu_t *gpu, bool enabled,
                                   uint32_t x, uint32_t y) {
     if (!gpu || (enabled && (x >= gpu->width || y >= gpu->height))) return false;
     gpu->tick_water_source = enabled;
-    if (enabled) gpu->fluid_work_possible = true;
+    if(!enabled) dc_gpu_fluid_uploads_recheck(gpu);
+    if (enabled) {dc_gpu_fluid_uploads_invalidate(gpu);gpu->fluid_work_possible = true;}
     gpu->tick_water_x = x;
     gpu->tick_water_y = y;
     return true;
@@ -479,6 +481,7 @@ bool dc_gpu_memory_stats(const dc_gpu_t *gpu, dc_gpu_memory_stats_t *stats) {
 
 void dc_gpu_record_tick_water_source(dc_gpu_t *gpu) {
     if (!gpu->tick_water_source) return;
+    dc_gpu_fluid_uploads_invalidate(gpu);
     VkMemoryBarrier2 upload = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
         .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,

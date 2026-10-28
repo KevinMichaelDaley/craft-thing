@@ -145,6 +145,7 @@ bool fr_gpu_prepare_authored(dc_gpu_t *gpu, const fr_authored_request_t *r,
         s = gpu->authored_stage;
     }
     s->ready = false;
+    dc_gpu_fluid_uploads_invalidate(gpu);
     memset(s->mapped, 0, STAGE_HEADER_WORDS * sizeof(uint32_t));
     s->mapped[FR_AUTHORED_TX_LO] = (uint32_t)r->transaction_id;
     s->mapped[FR_AUTHORED_TX_HI] = (uint32_t)(r->transaction_id >> 32);

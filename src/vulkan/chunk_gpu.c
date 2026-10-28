@@ -161,11 +161,42 @@ void dc_gpu_chunks_destroy(dc_gpu_t *gpu) {
     if (gpu->page_memory) vkFreeMemory(gpu->device, gpu->page_memory, NULL);
 }
 
+void dc_gpu_fluid_uploads_invalidate(dc_gpu_t *gpu) {
+    memset(gpu->fluid_uploaded_state,0,sizeof(gpu->fluid_uploaded_state));
+}
+
+void dc_gpu_fluid_uploads_recheck(dc_gpu_t *gpu) {
+    bool active=gpu->tick_water_source;
+    for(uint32_t s=0;s<DC_GPU_CHUNK_SLOTS;s++) {
+        if(gpu->fluid_uploaded_state[s]==0u) return;
+        active|=gpu->fluid_uploaded_state[s]==2u;
+    }
+    gpu->fluid_work_possible=active;
+}
+
+static void fluid_upload_completed(dc_gpu_t *gpu,uint32_t slot) {
+    uint32_t first=slot==UINT32_MAX?0u:slot;
+    uint32_t last=slot==UINT32_MAX?DC_GPU_CHUNK_SLOTS:slot+1u;
+    const dc_cell_t *cells=gpu->chunk_mapped;
+    const uint32_t *markers=gpu->marker_count_a_mapped;
+    for(uint32_t s=first;s<last;s++) {
+        bool active=markers[s]!=0u;
+        for(uint32_t i=0;i<DC_CHUNK_CELLS&&!active;i++) {
+            uint32_t at=s*DC_CHUNK_CELLS+i;
+            active=cells[at].fluid_mass!=0u||gpu->chunk_velocity[at].x!=0.f||gpu->chunk_velocity[at].y!=0.f;
+        }
+        gpu->fluid_uploaded_state[s]=active?2u:1u;
+        gpu->fluid_work_possible|=active;
+    }
+    dc_gpu_fluid_uploads_recheck(gpu);
+}
+
 bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
                              bool particles, char *err, uint32_t cap) {
     if (!gpu || (slot >= DC_GPU_CHUNK_SLOTS && slot != UINT32_MAX) ||
         (particles && slot == UINT32_MAX))
         return error(err, cap, "Invalid chunk transfer slot");
+    if(upload&&!particles) dc_gpu_fluid_uploads_invalidate(gpu);
     if (upload && !gpu->fluid_work_possible) {
         const dc_cell_t *cells = gpu->chunk_mapped;
         uint32_t begin = slot == UINT32_MAX ? 0u : slot * DC_CHUNK_CELLS;
@@ -222,6 +253,7 @@ bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
     if (vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
         vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
         return error(err, cap, "Chunk transfer submission failed");
+    if(upload&&particles) fluid_upload_completed(gpu,slot);
     return true;
 }
 
