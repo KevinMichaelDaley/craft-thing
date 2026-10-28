@@ -250,6 +250,7 @@ struct dc_gpu {
     uint32_t fluid_interval;
     uint32_t fluid_phase;
     float tick_time_scale;
+    double rigid_step_budget;
     float fluid_step_scale;
     float fluid_phase_budget;
     bool timed_fluid;
@@ -438,6 +439,7 @@ bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *shader_path,
                                 char *err, uint32_t cap);
 void dc_gpu_rigid_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_rigid(dc_gpu_t *gpu);
+void dc_gpu_record_rigid_refresh(dc_gpu_t *gpu);
 bool dc_gpu_broadphase_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_broadphase(dc_gpu_t *gpu);
 /** Reconcile GPU-born owners only at explicit authoring/diagnostic checkpoints. */

@@ -414,6 +414,10 @@ void dc_gpu_record_rigid(dc_gpu_t *gpu) {
     record_rigid(gpu, true);
 }
 
+void dc_gpu_record_rigid_refresh(dc_gpu_t *gpu) {
+    record_rigid(gpu, false);
+}
+
 static void record_raster(dc_gpu_t *gpu,uint32_t push[8],bool conditional) {
     push[2]=(push[2]&~RIGID_CONDITIONAL_REFRESH)|(conditional?RIGID_CONDITIONAL_REFRESH:0u);
     vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->rigid_classify_pipeline);

@@ -95,11 +95,27 @@ static void record_scheduled_fluid(dc_gpu_t *gpu) {
     }
 }
 
+static void record_scheduled_rigid(dc_gpu_t *gpu) {
+    gpu->rigid_step_budget += gpu->timed_fluid ? gpu->tick_time_scale : 1.0;
+    uint32_t steps = 0;
+    bool profile = gpu->component_profile;
+    while (gpu->rigid_step_budget + 1e-6 >= 1.0) {
+        /* Detailed query slots are written once per displayed frame. */
+        if (steps) gpu->component_profile = false;
+        dc_gpu_record_rigid(gpu);
+        gpu->rigid_step_budget -= 1.0;
+        steps++;
+    }
+    gpu->component_profile = profile;
+    if (gpu->rigid_step_budget < 0.0) gpu->rigid_step_budget = 0.0;
+    if (steps == 0) dc_gpu_record_rigid_refresh(gpu);
+}
+
 void dc_gpu_record_tick_step(dc_gpu_t *gpu) {
     stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                   VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     dc_gpu_record_tick_water_source(gpu);
-    dc_gpu_record_rigid(gpu);
+    record_scheduled_rigid(gpu);
     record_scheduled_fluid(gpu);
     stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                   VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
@@ -139,7 +155,7 @@ static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
                              gpu->timestamp_pool, 0);
     }
     dc_gpu_record_tick_water_source(gpu);
-    dc_gpu_record_rigid(gpu);
+    record_scheduled_rigid(gpu);
     if (capture) {
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
                              gpu->timestamp_pool, 1);
