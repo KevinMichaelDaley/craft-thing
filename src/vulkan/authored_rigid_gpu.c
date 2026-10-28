@@ -13,7 +13,6 @@ static bool error(char *err,uint32_t cap,const char *message) {
 void fr_gpu_authored_objects_bind(dc_gpu_t *g,uint32_t *h) {
     h[104]=(uint32_t)g->authored_objects_address;h[105]=(uint32_t)(g->authored_objects_address>>32u);
     h[106]=(uint32_t)g->authored_objects_transaction;h[107]=(uint32_t)(g->authored_objects_transaction>>32u);
-    h[108]=0;
 }
 static bool validate_objects(dc_gpu_t *g,const dc_gpu_address_buffer_t *channel,char *err,uint32_t cap) {
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin rigid-object validation");
