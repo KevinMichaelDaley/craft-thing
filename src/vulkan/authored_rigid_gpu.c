@@ -1,15 +1,10 @@
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "ferrum/physics/authored_rigid_gpu.h"
 #include "authored_rigid_gpu_internal.h"
 #include "runtime_body_internal.h"
-
-bool fr_gpu_pose_authored_rigid(dc_gpu_t *gpu,uint32_t body_id,dc_chunk_coord_t chunk,
-    int32_t x_fp,int32_t y_fp,float angle,char *err,uint32_t cap) {
-    (void)gpu;(void)body_id;(void)chunk;(void)x_fp;(void)y_fp;(void)angle;(void)err;(void)cap;
-    return false;
-}
 
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
@@ -61,4 +56,28 @@ bool fr_gpu_admit_rigid_objects(dc_gpu_t *g,uint64_t transaction,
     bool detached=detach_objects(g,okay?err:NULL,okay?cap:0u);
     dc_gpu_address_buffer_destroy(g,&channel);
     return okay&&detached;
+}
+bool fr_gpu_pose_authored_rigid(dc_gpu_t *g,uint32_t body_id,dc_chunk_coord_t chunk,
+    int32_t x_fp,int32_t y_fp,float angle,char *err,uint32_t cap) {
+    if(!g||!g->runtime_bodies||!body_id||x_fp<0||y_fp<0||x_fp>=64*65536||y_fp>=64*65536||
+       !isfinite(angle)||fabsf(angle)>1000000.f)
+        return error(err,cap,"Invalid initial authored rigid transform");
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot reach authored transform boundary");
+    for(uint32_t slot=0;slot<dc_gpu_body_capacity(g);slot++) {
+        dc_gpu_body_record_t *b=dc_gpu_body_record(g,slot);
+        dc_body_storage_owner_t *owner=dc_gpu_body_owner(g,slot);
+        if(!b->body.active||b->body.id!=body_id||owner->state!=DC_BODY_OWNER_LIVE||
+           owner->runtime_id!=body_id||!owner->source_object||
+           (!owner->source_transaction.low&&!owner->source_transaction.high)) continue;
+        dc_gpu_body_record_t previous=*b;
+        uint64_t x=(uint64_t)chunk.x,y=(uint64_t)chunk.y;
+        b->chunk_x[0]=(uint32_t)x;b->chunk_x[1]=(uint32_t)(x>>32u);
+        b->chunk_y[0]=(uint32_t)y;b->chunk_y[1]=(uint32_t)(y>>32u);
+        b->local_x_fp=x_fp;b->local_y_fp=y_fp;
+        b->angle=remainderf(angle,6.283185307179586f);b->rest_ticks=0;
+        g->body_refresh_pending=true;
+        if(dc_gpu_set_body_origin(g,g->body_origin,err,cap)) return true;
+        *dc_gpu_body_record(g,slot)=previous;g->body_refresh_pending=true;return false;
+    }
+    return error(err,cap,"Transform target is not a live explicitly authored rigid object");
 }
