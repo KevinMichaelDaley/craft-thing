@@ -5,6 +5,7 @@
 #include "../../src/app/catapult_scene.h"
 #include "ferrum/fire/gpu.h"
 #include "ferrum/fire/combustion_gpu.h"
+#include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/physics/revolute_gpu.h"
 #include "ferrum/structural/gpu.h"
@@ -86,6 +87,12 @@ static void test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint(void) {
     ASSERT_TRUE(fr_gpu_reactive_read_body(copy,scene.coal_body,1,1,&restored,
                                            &found,err,sizeof(err))&&found);
     ASSERT_EQ(memcmp(&coal.state,&restored.state,sizeof(coal.state)),0);
+    fr_reactive_record_t arm,arm_restored;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,scene.arm_body,13,0,&arm,&found,
+        err,sizeof(err))&&found);
+    ASSERT_TRUE(fr_gpu_reactive_read_body(copy,scene.arm_body,13,0,
+        &arm_restored,&found,err,sizeof(err))&&found);
+    ASSERT_EQ(memcmp(&arm.state,&arm_restored.state,sizeof(arm.state)),0);
     ASSERT_TRUE(dc_catapult_scene_release(copy,&scene,err,sizeof(err)));
     dc_gpu_destroy(copy);dc_gpu_destroy(g);PASS();
 }
@@ -157,12 +164,70 @@ static void test_wooden_arm_has_finite_reactive_ownership(void) {
     dc_gpu_destroy(g);PASS();
 }
 
+static void test_prompt_hot_launch_keeps_sound_wood_arm_unignited(void) {
+    char err[256]={0};dc_gpu_t *g=grid();ASSERT_TRUE(g);
+    dc_catapult_scene_t scene={0};
+    ASSERT_TRUE(dc_catapult_scene_build(g,true,&scene,err,sizeof(err)));
+    for(uint32_t tick=0;tick<20;tick++)
+        ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_catapult_scene_release(g,&scene,err,sizeof(err)));
+    for(uint32_t tick=0;tick<8;tick++)
+        ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+    fr_reactive_record_t arm;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,scene.arm_body,13,0,&arm,&found,
+        err,sizeof(err))&&found);
+    float temperature=0.f;
+    ASSERT_TRUE(fr_reactive_state_temperature(&arm.state,&temperature,
+        err,sizeof(err)));
+    printf("hot launcher arm %.1fK flags %u fuel %u\n",temperature,
+        arm.state.flags,arm.state.fuel_mass_fp);
+    ASSERT_TRUE((arm.state.flags&FR_REACTIVE_FLAMING)==0u);
+    fr_structural_gpu_component_state_t support;
+    ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&support));
+    ASSERT_EQ(support.state,FR_STRUCTURAL_SUPPORTED);
+    dc_gpu_destroy(g);PASS();
+}
+
+static void test_equal_elapsed_cadences_keep_launcher_flight_and_gas_clock(void) {
+    char err[256]={0};
+    float position[2][2],angle[2];
+    for(uint32_t cadence=0;cadence<2;cadence++) {
+        dc_gpu_t *g=grid();ASSERT_TRUE(g);
+        dc_catapult_scene_t scene={0};
+        ASSERT_TRUE(dc_catapult_scene_build(g,false,&scene,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_tick_seconds(g,(cadence?2.f:1.f)/60.f));
+        uint32_t held=cadence?10u:20u,flight=cadence?10u:20u;
+        for(uint32_t tick=0;tick<held;tick++)
+            ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+        ASSERT_TRUE(dc_catapult_scene_release(g,&scene,err,sizeof(err)));
+        for(uint32_t tick=0;tick<flight;tick++)
+            ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+        dc_gpu_world_body_t coal;dc_gpu_body_motion_t arm;
+        fr_gas_gpu_clock_t gas;
+        ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&coal,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_read_body_motion(g,scene.arm_body,&arm,err,sizeof(err)));
+        ASSERT_TRUE(fr_gas_gpu_clock(g,&gas));
+        position[cadence][0]=xof(coal);position[cadence][1]=yof(coal);
+        angle[cadence]=arm.angle;
+        ASSERT_TRUE(fabs(gas.advanced_seconds-2./3.)<1e-4);
+        dc_gpu_destroy(g);
+    }
+    float separation=hypotf(position[0][0]-position[1][0],
+                             position[0][1]-position[1][1]);
+    printf("elapsed launcher separation %.3f, arm angles %.3f %.3f\n",
+        separation,angle[0],angle[1]);
+    ASSERT_TRUE(separation<2.f&&fabsf(angle[0]-angle[1])<.2f);
+    PASS();
+}
+
 #ifndef DC_CATAPULT_DISPLAY_INCLUDE
 int main(void) {
     RUN(test_cold_launcher_has_supported_frame_and_real_latch);
     RUN(test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint);
     RUN(test_hot_coal_emits_finite_reaction_without_igniting_cold_control);
     RUN(test_wooden_arm_has_finite_reactive_ownership);
+    RUN(test_prompt_hot_launch_keeps_sound_wood_arm_unignited);
+    RUN(test_equal_elapsed_cadences_keep_launcher_flight_and_gas_clock);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail?1:0;
 }

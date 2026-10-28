@@ -67,6 +67,8 @@ int main(void) {
         RUN(test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint);
         RUN(test_hot_coal_emits_finite_reaction_without_igniting_cold_control);
         RUN(test_wooden_arm_has_finite_reactive_ownership);
+        RUN(test_prompt_hot_launch_keeps_sound_wood_arm_unignited);
+        RUN(test_equal_elapsed_cadences_keep_launcher_flight_and_gas_clock);
     }
     RUN(test_render_real_loaded_flight_and_impact);
     printf("%d passed, %d failed\n", g_pass, g_fail);
