@@ -5,6 +5,7 @@
 
 #include "gpu_internal.h"
 #include "runtime_body_gpu.h"
+#include "authored_rigid_gpu_internal.h"
 
 _Static_assert(sizeof(dc_gpu_body_t) == 32, "GPU body layout must match SPIR-V");
 _Static_assert(sizeof(dc_gpu_body_record_t) == 544, "GPU body record must match SPIR-V");
@@ -373,11 +374,15 @@ bool dc_gpu_read_world_body(dc_gpu_t *gpu, uint32_t id, dc_gpu_world_body_t *bod
 bool dc_gpu_rigid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return submit_rigid(gpu, true, err, cap);
 }
-bool dc_gpu_admit_authored_rigid_cells(dc_gpu_t *gpu,char *err,uint32_t cap) {
+bool dc_gpu_admit_authored_rigid_batch(dc_gpu_t *gpu,char *err,uint32_t cap) {
     if(!gpu||!dc_gpu_enable_automatic_components(gpu)) return error(err,cap,"Cannot prepare authored rigid admission");
     gpu->cold_component_admission=true;
     bool okay=submit_rigid(gpu,false,err,cap);
     gpu->cold_component_admission=false;
+    return okay;
+}
+bool dc_gpu_admit_authored_rigid_cells(dc_gpu_t *gpu,char *err,uint32_t cap) {
+    bool okay=dc_gpu_admit_authored_rigid_batch(gpu,err,cap);
     if(okay&&dc_gpu_structural_data(gpu)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]!=0u)
         return error(err,cap,"Authored rigid admission has unresolved resource or residency demand");
     return okay;

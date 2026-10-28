@@ -15,7 +15,7 @@ void fr_gpu_authored_objects_bind(dc_gpu_t *g,uint32_t *h) {
     h[106]=(uint32_t)g->authored_objects_transaction;h[107]=(uint32_t)(g->authored_objects_transaction>>32u);
     h[108]=0;
 }
-static bool validate_objects(dc_gpu_t *g,char *err,uint32_t cap) {
+static bool validate_objects(dc_gpu_t *g,const dc_gpu_address_buffer_t *channel,char *err,uint32_t cap) {
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin rigid-object validation");
     vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,g->pipeline_layout,0,1,&g->descriptor,0,NULL);
     vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,g->component_object_pipelines[38]);
@@ -28,7 +28,7 @@ static bool validate_objects(dc_gpu_t *g,char *err,uint32_t cap) {
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
     if(!fr_renderer_submit(g)) return error(err,cap,"Cannot validate rigid-object ownership");
-    return ((uint32_t *)g->runtime_bodies->work.mapped)[108]==0u||
+    return ((uint32_t *)channel->mapped)[2]==0u||
         error(err,cap,"Authored rigid object selects terrain, absent, fluid or loose material");
 }
 static bool detach_objects(dc_gpu_t *g,char *err,uint32_t cap) {
@@ -48,11 +48,20 @@ bool fr_gpu_admit_rigid_objects(dc_gpu_t *g,uint64_t transaction,
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot reach rigid-object admission boundary");
     if(!dc_gpu_component_objects_prepare(g,err,cap)) return false;
     dc_gpu_address_buffer_t channel={0};
-    if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)object_cells*4u,true,&channel,err,cap)) return false;
-    memcpy(channel.mapped,objects,(size_t)object_cells*4u);
+    if(!dc_gpu_address_buffer_create(g,((VkDeviceSize)object_cells+4u)*4u,true,&channel,err,cap)) return false;
+    memcpy((uint32_t *)channel.mapped+4u,objects,(size_t)object_cells*4u);
     g->authored_objects_address=channel.address;g->authored_objects_transaction=transaction;
     fr_gpu_authored_objects_bind(g,g->runtime_bodies->work.mapped);g->descriptor_revision++;
-    bool okay=validate_objects(g,err,cap)&&dc_gpu_admit_authored_rigid_cells(g,err,cap);
+    bool okay=validate_objects(g,&channel,err,cap);
+    while(okay&&((uint32_t *)channel.mapped)[1]) {
+        uint32_t previous=((uint32_t *)channel.mapped)[1],requests[16];
+        uint64_t revision=g->descriptor_revision;
+        memcpy(requests,g->runtime_bodies->mailbox.mapped,sizeof(requests));
+        okay=dc_gpu_admit_authored_rigid_batch(g,err,cap);
+        if(okay&&previous==((uint32_t *)channel.mapped)[1]&&revision==g->descriptor_revision&&
+           memcmp(requests,g->runtime_bodies->mailbox.mapped,sizeof(requests))==0)
+            okay=error(err,cap,"Authored object admission made no progress and has no resource demand");
+    }
     bool detached=detach_objects(g,okay?err:NULL,okay?cap:0u);
     dc_gpu_address_buffer_destroy(g,&channel);
     return okay&&detached;

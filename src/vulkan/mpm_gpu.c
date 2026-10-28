@@ -149,7 +149,7 @@ static bool component_pipelines(dc_gpu_t *gpu, char *err, uint32_t cap) {
            error(err, cap, "Cannot create extraction pipelines");
 }
 bool dc_gpu_component_objects_prepare(dc_gpu_t *gpu,char *err,uint32_t cap) {
-    const uint32_t modes[]={7u,10u,12u,23u,24u,38u};
+    const uint32_t modes[]={7u,10u,12u,14u,23u,24u,38u};
     bool ready=true;
     for(unsigned i=0;i<sizeof(modes)/sizeof(*modes);i++) ready=ready&&gpu->component_object_pipelines[modes[i]]!=VK_NULL_HANDLE;
     if(ready) return true;
