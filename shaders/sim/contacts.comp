@@ -111,11 +111,32 @@ uint contact_feature(Body body,uint piece,uint feature) {
     return pixel_body(body)?(feature&0x80000007u)|(piece<<3u):feature|(piece<<28u);
 }
 
+bool filled_rectangle(Body body) {
+    if(!pixel_body(body)) return false;
+    uvec2 extent=uvec2(pixel_high(body)-pixel_low(body));
+    uint count=body.piece_count&0x7fffffffu;
+    return extent.y!=0u&&extent.x==count/extent.y&&count%extent.y==0u;
+}
+Polygon rectangle_polygon(Body body,vec2 offset) {
+    Polygon p;p.count=4u;vec2 low=pixel_low(body),high=pixel_high(body);
+    for(uint i=0u;i<4u;i++) {
+        vec2 rest=vec2(i==1u||i==2u?high.x:low.x,i>=2u?high.y:low.y);
+        p.vertices[i]=offset+body.center+body_rotate(rest-body.center,body.angle);
+    }
+    return p;
+}
+uint rectangle_witness_piece(Body body,vec2 point,vec2 offset) {
+    vec2 rest=body.center+body_rotate(point-offset-body.center,-body.angle);
+    ivec2 cell=clamp(ivec2(floor(rest)),ivec2(pixel_low(body)),ivec2(pixel_high(body))-1);
+    return pixel_piece_at(body,cell);
+}
+
 bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_feature,
                   uvec2 feature_x, uvec2 feature_y, Polygon pa, Polygon pb,uint piece_a,uint piece_b,uint particle_ref) {
     vec2 normal; float depth;
     if (!polygon_contact(pa, pb, normal, depth)) return false;
-    if(pixel_body(a)) {
+    bool outer_face=piece_a>=0xfffffffeu&&piece_b>=0xfffffffeu;
+    if(pixel_body(a)&&!outer_face) {
         vec2 outward=body_rotate(-normal,-a.angle);ivec2 p=pixel_piece_cell(a,piece_a);
         bool exposed=(abs(outward.x)>1e-5&&pixel_material(a,p+ivec2(outward.x>0?1:-1,0))==0u)||
             (abs(outward.y)>1e-5&&pixel_material(a,p+ivec2(0,outward.y>0?1:-1))==0u);
@@ -125,7 +146,7 @@ bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_fea
     Body other=a;
     if(other_slot<BODY_CAPACITY) {
         other=DC_BODY(other_slot);
-        if(pixel_body(other)) {
+        if(pixel_body(other)&&!outer_face) {
             vec2 outward=body_rotate(normal,-other.angle);ivec2 p=pixel_piece_cell(other,piece_b);
             bool exposed=(abs(outward.x)>1e-5&&pixel_material(other,p+ivec2(outward.x>0?1:-1,0))==0u)||
                 (abs(outward.y)>1e-5&&pixel_material(other,p+ivec2(0,outward.y>0?1:-1))==0u);
@@ -134,6 +155,21 @@ bool emit_contact(Body a, uint body_b, uint kind, uint material_b, uint cell_fea
     }
     vec2 point_a, point_b; uint feature_a, feature_b;
     contact_witnesses(pa, pb, normal, point_a, point_b, feature_a, feature_b);
+    if(outer_face) {
+        vec2 tangent=vec2(-normal.y,normal.x),span_a,span_b;float plane_a,plane_b;uint unused;
+        support_face(pa,-normal,tangent,plane_a,span_a,unused);
+        support_face(pb,normal,tangent,plane_b,span_b,unused);
+        float low=max(span_a.x,span_b.x),high=min(span_a.y,span_b.y);
+        if(piece_a==0xfffffffeu&&high-low<=FEATURE_EPSILON) return false;
+        if(low<=high) {
+            float t=piece_a==0xffffffffu?low:high;
+            point_a=-normal*plane_a+tangent*t;point_b=normal*plane_b+tangent*t;
+        }
+        vec2 delta;relative_body(a,other,delta);
+        piece_a=rectangle_witness_piece(a,point_a,vec2(0));
+        piece_b=rectangle_witness_piece(other,point_b,delta);
+        material_b=piece_material(other,piece_b);
+    }
     uvec2 ax, ay, bx, by; ivec2 alocal, blocal;
     uint base = contact_base();
     if (!world_point(a, point_a, ax, ay, alocal) || !world_point(a, point_b, bx, by, blocal)) {
@@ -418,6 +454,10 @@ void main() {
         uvec4 scan;bool rectangle,single_tile;
         uint count=kind==BODY_CONTACT?body_contact_scan(a,scan,rectangle,single_tile):
             0u;
+        if(kind==BODY_CONTACT&&filled_rectangle(a)) {
+            uint other=body_slot(DC_DATA(offset+1u));
+            if(other<BODY_CAPACITY&&filled_rectangle(DC_BODY(other))) count=1u;
+        }
         if(kind!=BODY_CONTACT) {scan=terrain_contact_scan(a,offset);count=scan.z*scan.w;}
         uint groups=count==0u?0u:min(DC_CONTACT_PIXEL_GROUPS,(count-1u)/CONTACT_GROUP_SIZE+1u);
         if(lane==0u) {
@@ -441,6 +481,14 @@ void main() {
         uint other = body_slot(DC_DATA(offset + 1u)); vec2 delta;
         if (other != BODY_CAPACITY && relative_body(a, DC_BODY(other), delta)) {
             Body b = DC_BODY(other);
+            if(filled_rectangle(a)&&filled_rectangle(b)) {
+                if(lane<2u&&(!CONTACT_PIXEL_ONLY||pair_group==0u)) {
+                    Polygon pa=rectangle_polygon(a,vec2(0)),pb=rectangle_polygon(b,delta);
+                    uint endpoint=0xffffffffu-lane;
+                    found=emit_contact(a,b.id,BODY_CONTACT,0u,0u,uvec2(0),uvec2(0),pa,pb,endpoint,endpoint);
+                    if((params.mode&256u)!=0u&&lane==0u) atomicAdd(DC_DATA(base+9u),2u);
+                }
+            } else {
             bool distribute_b=cooperative&&!pixel_body(a)&&pixel_body(b);
             uvec4 scan;bool rectangle,single_tile;
             uint work_count=body_contact_scan(a,scan,rectangle,single_tile);
@@ -465,6 +513,7 @@ void main() {
                     0u, uvec2(0), uvec2(0), pa, body_polygon(b,bp,delta),ap,bp);
                 found=found || emitted;
                 }
+            }
             }
         }
     } else {
