@@ -142,7 +142,20 @@ static void test_ordinary_fuels_have_finite_calibrated_heat_budgets(void) {
     ASSERT_TRUE(wood->primary_heat+wood->fuel_yields[0]*carbon->chemical_energy<=wood->chemical_energy);
     PASS();
 }
+static void test_coal_and_char_body_mapping_has_distinct_density(void) {
+    const uint32_t terrain[2]={DC_MATERIAL_COAL,DC_MATERIAL_CHAR};
+    const uint32_t body[2]={10u,11u};
+    for(unsigned i=0;i<2;i++) {
+        ASSERT_EQ(DC_TERRAIN_TO_BODY(terrain[i]),body[i]);
+        ASSERT_EQ(DC_BODY_TO_TERRAIN(body[i]),terrain[i]);
+        ASSERT_EQ(fr_reactive_profile_for_body(body[i])->material,terrain[i]);
+        ASSERT_TRUE(fabsf((float)DC_BODY_DENSITY(body[i])-
+                          fr_reactive_profile(terrain[i])->density)<.0001f);
+    }
+    PASS();
+}
 int main(void) {
+    RUN(test_coal_and_char_body_mapping_has_distinct_density);
     RUN(test_ordinary_fuels_have_finite_calibrated_heat_budgets);
     _Static_assert(sizeof(fr_reactive_profile_t)==128,"GPU profile stride changed");
     _Static_assert(offsetof(fr_reactive_profile_t,fuel_yields)==56,"GPU yield offset changed");

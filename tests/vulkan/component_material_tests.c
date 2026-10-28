@@ -3,6 +3,8 @@
 #include <stdlib.h>
 
 #include "dungeoncraft/gpu.h"
+#include "dungeoncraft/material_density.h"
+#include "ferrum/fire/material_profile.h"
 #include "ferrum/structural/gpu.h"
 
 static int g_pass, g_fail;
@@ -161,10 +163,55 @@ test_graph_checkpoint_retains_component_composition_and_next_tick(void) {
     PASS();
 }
 
+static void test_coal_and_char_keep_identity_mass_and_checkpoint(void) {
+    char err[256];
+    const uint32_t terrain[2] = {DC_MATERIAL_COAL, DC_MATERIAL_CHAR};
+    const uint32_t body_material[2] = {10u, 11u};
+    for (uint32_t i = 0; i < 2; i++) {
+        ASSERT_EQ(DC_TERRAIN_TO_BODY(terrain[i]), body_material[i]);
+        ASSERT_EQ(DC_BODY_TO_TERRAIN(body_material[i]), terrain[i]);
+        ASSERT_EQ(fr_reactive_profile_for_body(body_material[i])->material,
+                  terrain[i]);
+        dc_gpu_t *gpu = grid(false);
+        ASSERT_TRUE(gpu);
+        dc_gpu_world_body_t body = {.body = {.x_fp = 20 << 16,
+                                             .y_fp = 20 << 16,
+                                             .width = 4,
+                                             .height = 4,
+                                             .id = 201 + i,
+                                             .active = 1}};
+        dc_gpu_body_shape_t shape = {.count = 4, .material = body_material[i],
+            .vertices = {{0, 0}, {4 << 16, 0},
+                         {4 << 16, 4 << 16}, {0, 4 << 16}}};
+        ASSERT_TRUE(dc_gpu_spawn_convex_body(gpu, body, &shape, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_body_origin(gpu, (dc_chunk_coord_t){0, 0}, err,
+                                            sizeof(err)));
+        dc_gpu_body_motion_t motion;
+        ASSERT_TRUE(dc_gpu_read_body_motion(gpu, body.body.id, &motion, err, sizeof(err)));
+        ASSERT_TRUE(fabsf(motion.mass - 16.f *
+                          fr_reactive_profile(terrain[i])->density) < .0001f);
+        ASSERT_TRUE(dc_gpu_enable_impact_fracture(gpu));
+        ASSERT_TRUE(fr_gpu_save_structure(gpu, "build/coal_char_snapshot.bin", err,
+                                          sizeof(err)));
+        dc_gpu_t *copy = grid(false);
+        ASSERT_TRUE(copy);
+        ASSERT_TRUE(fr_gpu_load_structure(copy, "build/coal_char_snapshot.bin", err,
+                                          sizeof(err)));
+        dc_gpu_body_shape_t restored;
+        ASSERT_TRUE(dc_gpu_read_body_shape(copy, body.body.id, &restored, err,
+                                           sizeof(err)));
+        ASSERT_EQ(restored.material, body_material[i]);
+        dc_gpu_destroy(copy);
+        dc_gpu_destroy(gpu);
+    }
+    PASS();
+}
+
 int main(void) {
     RUN(test_component_mass_center_inertia_and_density_follow_piece_materials);
     RUN(test_mixed_component_sinks_and_turns_heavy_material_downward);
     RUN(test_graph_checkpoint_retains_component_composition_and_next_tick);
+    RUN(test_coal_and_char_keep_identity_mass_and_checkpoint);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
