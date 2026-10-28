@@ -7,6 +7,8 @@
 #include "ferrum/fire/material_profile.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/renderer/gpu.h"
+#include "dungeoncraft/reactive_state_layout.h"
+#include "../../src/vulkan/reactive_storage_gpu.h"
 
 static bool capture_body_feedback(dc_gpu_t *g,uint32_t *pixels,const char *name,char *err,uint32_t cap) {
     if(!dc_gpu_present_chunks(g,err,cap)||!dc_gpu_readback(g,pixels,480u*270u,err,cap)) return false;
@@ -91,5 +93,36 @@ static void test_hot_face_ignites_when_another_face_has_more_oxygen(void) {
     ASSERT_TRUE(result.state.fuel_mass_fp<state.fuel_mass_fp&&(result.state.flags&FR_REACTIVE_FLAMING));
     free(gas);free(volume);free(chunk);dc_gpu_destroy(g);PASS();
 }
-int main(void) {RUN(test_hot_face_ignites_when_another_face_has_more_oxygen);RUN(test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_authored_grain);
+static void test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    uint32_t cell=20u*64u+20u;chunk->cells[cell].material=DC_MATERIAL_STONE;
+    fr_reactive_state_t stone;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,176947,0,300,6100,&stone,err,sizeof(err)));
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&
+        fr_gpu_reactive_seed_cell(g,0,cell,&stone,err,sizeof(err))&&dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err))&&fr_thermal_gpu_enable(g,err,sizeof(err)));
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},.heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&fr_combustion_gpu_enable(g,err,sizeof(err))&&fr_thermal_gpu_step(g,.001f,err,sizeof(err)));
+    fr_reactive_record_t before,after;bool found=false;ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0,0,&before,&found,err,sizeof(err))&&found);
+    fr_gas_state_t *gas=calloc(4096,sizeof(*gas));double *volume=calloc(4096,sizeof(*volume));ASSERT_TRUE(gas&&volume);
+    for(uint32_t i=0;i<4096;i++) volume[i]=i==cell?0.:1.;
+    const uint32_t neighbors[4]={cell-1u,cell+1u,cell-64u,cell+64u};double initial=fr_reactive_state_energy(&before.state);
+    for(uint32_t k=0;k<4;k++) {
+        fr_gas_state_t *air=gas+neighbors[k];air->species[0]=.23;air->species[1]=.77;air->momentum[0]=20.;
+        air->energy=(.23*model.heat_capacity_cv[0]+.77*model.heat_capacity_cv[1])*293.15+.5*model.kinetic_scale*400.;initial+=air->energy;
+    }
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,gas,volume,4096,err,sizeof(err)));
+    const uint32_t *entry=g->reactive->arena.entries.mapped;
+    uint32_t skin[4]={entry[FR_ENTRY_GENERATION],0,0,0};float hot=100000.f;memcpy(skin+1,&hot,4);
+    ASSERT_EQ(vkResetCommandBuffer(g->command,0),VK_SUCCESS);
+    VkCommandBufferBeginInfo begin={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};ASSERT_EQ(vkBeginCommandBuffer(g->command,&begin),VK_SUCCESS);
+    vkCmdUpdateBuffer(g->command,g->reactive->arena.thermal_scratch.buffer,32,sizeof(skin),skin);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    ASSERT_EQ(vkEndCommandBuffer(g->command),VK_SUCCESS);VkSubmitInfo submit={.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,.commandBufferCount=1,.pCommandBuffers=&g->command};
+    ASSERT_EQ(vkQueueSubmit(g->queue,1,&submit,VK_NULL_HANDLE),VK_SUCCESS);ASSERT_EQ(vkQueueWaitIdle(g->queue),VK_SUCCESS);
+    ASSERT_TRUE(fr_thermal_gpu_step(g,.25f,err,sizeof(err))&&fr_gpu_reactive_read_body(g,0x80000001u,0,0,&after,&found,err,sizeof(err))&&found&&fr_gas_gpu_read_chunk(g,0,gas,4096,err,sizeof(err)));
+    double final=fr_reactive_state_energy(&after.state);for(uint32_t i=0;i<4096;i++) final+=gas[i].energy;
+    printf("Finite skin exchange body energy%.6fJ total drift%.9gJ\n",fr_reactive_state_energy(&after.state),final-initial);
+    ASSERT_TRUE(fr_reactive_state_energy(&after.state)>=0.&&fabs(final-initial)<.02);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(gas);free(volume);free(chunk);dc_gpu_destroy(g);PASS();
+}
+int main(void) {RUN(test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory);RUN(test_hot_face_ignites_when_another_face_has_more_oxygen);RUN(test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_authored_grain);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
