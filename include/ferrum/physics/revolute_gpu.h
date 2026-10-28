@@ -1,11 +1,16 @@
 #ifndef FERRUM_PHYSICS_REVOLUTE_GPU_H
 #define FERRUM_PHYSICS_REVOLUTE_GPU_H
 #include "dungeoncraft/gpu.h"
+enum { FR_REVOLUTE_LIMITS=1u, FR_REVOLUTE_SPRING=2u };
 
 /** Local anchors are relative to each body's rest-space center of mass. */
 typedef struct {
     uint32_t id, body_a, body_b;
     float anchor_a[2], anchor_b[2];
+    uint32_t flags;
+    float lower_angle, upper_angle;
+    float spring_stiffness, spring_rest_angle, friction_torque;
+    float max_force, max_torque;
 } fr_revolute_joint_t;
 
 /** Admit a generation-bound two-body pivot at an idle authoring boundary. */
