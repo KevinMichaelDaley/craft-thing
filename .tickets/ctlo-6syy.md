@@ -21,3 +21,9 @@ Follow design/fire_smoke_reactive_materials.md. Runtime implementation must use 
 
 Dry cold mechanism cycles without collapsing; a burning-coal load launched promptly does not ignite a sound launcher. Launch velocity follows constrained mechanical work and contact/release, without teleporting projectile or welding the arm to terrain. Record flight/impact/recoil and per-part loads; persist mechanism state. Displayed fixture uses real rigid bodies and support graph, not a visual animation.
 
+
+## Notes
+
+**2026-10-28T02:40:35Z**
+
+User-approved next visible module after ordinary bonfire regression is green and code is pushed: assembled catapult and constructed-wall demo, then Greek fire. Implement real generation-safe two-body pivot prerequisite first, then supported mechanism, real release and finite burning coal shot against dry/wet constructed walls. No fake arm animation or projectile teleport. Work inline; no subagent requested.

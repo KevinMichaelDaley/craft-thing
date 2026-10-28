@@ -79,3 +79,7 @@ Acceptance clarification: sustained combustion is measured over the whole dry pi
 **2026-10-28T02:34:17Z**
 
 Final sequential real-display Vulkan battery passed: owner heat/combustion 6/6, covered wood 1/1, bounded vorticity 1/1, optimized stationary diagonal heat 1/1, autonomous eight-log bonfire 1/1. All eight dry logs ignite naturally; zero wet logs ignite; aggregate burning continues for 20 simulated seconds after all logs catch. No spatial flame-coherence condition. Full regression remains running; containment/fuel-bridge acceptance remains separate unfinished work.
+
+**2026-10-28T02:41:58Z**
+
+Full default make -j1 test passed with zero failures after fixing the pre-existing authored-stage regressions (ctr-ojvy). Final displayed bonfire battery also passed all cases. Sustained flame acceptance has no fixed-position/overlap requirement. Remaining broader forest containment/fuel-bridge checks stay open; user now explicitly prioritizes the catapult/constructed-wall module, then Greek fire.
