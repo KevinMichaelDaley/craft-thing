@@ -10,23 +10,20 @@ source tools/smoke_profile
 tools/with-vulkan make -j8 build/dungeoncraft_quarter_native
 root=$(mktemp -d build/bonfire_measurements_XXXXXX)
 failed=0
-for scenario in dry wet; do
-    x=160
-    if [[ $scenario == wet ]]; then x=352; fi
-    for repetition in 1 2; do
-        world="$root/${scenario}_${repetition}"
-        mkdir "$world"
-        log="$root/${scenario}_${repetition}.log"
-        result=0
-        env -u DC_BENCHMARK_AIR_BRUSH -u DC_BENCHMARK_WATER_POUR \
-            SDL_VIDEODRIVER=wayland DC_VK_VALIDATE=0 VK_INSTANCE_LAYERS= VK_LAYER_ENABLES= \
-            DC_BENCHMARK_HEAT_PROBE="$x,208,0" \
-            tools/with-vulkan ./build/dungeoncraft_quarter_native --bonfire \
-            --world-dir "$world" --benchmark-frames "$frames" \
-            --benchmark-capture "$root/${scenario}_${repetition}.bmp" > "$log" 2>&1 || result=$?
-        cat "$log"
-        if ((result!=0)); then failed=1; fi
-    done
+# Both pits ignite autonomously in each run; never inject a benchmark heater.
+for repetition in 1 2; do
+    world="$root/autonomous_$repetition"
+    mkdir "$world"
+    log="$root/autonomous_$repetition.log"
+    result=0
+    env -u DC_BENCHMARK_AIR_BRUSH -u DC_BENCHMARK_WATER_POUR -u DC_BENCHMARK_HEAT_PROBE \
+        SDL_VIDEODRIVER=wayland DC_FULLSCREEN=1 DC_VK_VALIDATE=0 VK_INSTANCE_LAYERS= VK_LAYER_ENABLES= \
+        timeout --signal=INT --kill-after=3s 120s tools/with-vulkan \
+        ./build/dungeoncraft_quarter_native --bonfire \
+        --world-dir "$world" --benchmark-frames "$frames" \
+        --benchmark-capture "$root/autonomous_$repetition.bmp" > "$log" 2>&1 || result=$?
+    cat "$log"
+    if ((result!=0)); then failed=1; fi
 done
 echo "Bonfire display evidence: $root"
 exit "$failed"

@@ -5,6 +5,7 @@
 #include "../../include/dungeoncraft/reactive_state_layout.h"
 #include "../../include/dungeoncraft/reactive_profile_layout.h"
 #include "../../include/dungeoncraft/thermal_parameters.h"
+#include "../../include/dungeoncraft/thermal_surface.h"
 #include "address.glsl"
 layout(local_size_x=64) in;
 layout(set=0,binding=0,std430) readonly buffer Root {uint root[];};
@@ -97,10 +98,21 @@ float wet_energy(uint first,uint second,float amount) {
     uint mass=floatBitsToUint(samples[water+params.width*params.height].y);
     return mass==0u?0.:samples[water].x*(amount/float(mass));
 }
-float exchange(vec4 a,vec4 b) {
+bool thermal_solid_material(uint material) {
+    return material<params.unused&&profiles[material*FR_PROFILE_WORDS+FR_PROFILE_PHASE_WORD]<FR_PROFILE_PHASE_LIQUID;
+}
+float solid_transport_scale(uint first,uint second) {
+    if(params.mode!=1u) return 1.;
+    uint n=params.width*params.height;vec4 a=samples[first+n],b=samples[second+n];
+    uint ak=floatBitsToUint(a.x),bk=floatBitsToUint(b.x);
+    bool solids=(ak==1u||ak==4u)&&(bk==1u||bk==4u)&&
+        thermal_solid_material(floatBitsToUint(a.z))&&thermal_solid_material(floatBitsToUint(b.z));
+    return solids?float(FR_THERMAL_2D_TRANSPORT_SCALE):1.;
+}
+float exchange(vec4 a,vec4 b,float scale) {
     if(a.y<=0.||b.y<=0.||a.z<=0.||b.z<=0.) return 0.;
-    float difference=a.x/a.y-b.x/b.y,conductance=2.*a.z*b.z/(a.z+b.z);
-    if(params.mode==1u&&params.phase==1u) conductance*=float(FR_THERMAL_GAMEPLAY_FACE_METERS);
+    float difference=a.x/a.y-b.x/b.y,conductance=scale*2.*a.z*b.z/(a.z+b.z);
+    if(params.mode==1u) conductance*=float(FR_THERMAL_GAMEPLAY_FACE_METERS);
     float requested=conductance*difference*uintBitsToFloat(params.seconds);
     float bound=min(a.y,b.y)*abs(difference)/float(FR_THERMAL_NEIGHBORS);
     return sign(requested)*min(abs(requested),bound);
@@ -137,12 +149,9 @@ void body_conduction(uint index) {
         if(pixel_piece_material(body,piece)==0u) continue;
         uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y==0u) continue;
         vec4 b=cache.values[h.x*3u];if(floatBitsToUint(b.w)!=h.y) continue;
-        float flux=exchange(a,b);
-        if(params.mode==1u) {
-            float difference=a.x/a.y-b.x/b.y;
-            float requested=2.*a.z*b.z/max(a.z+b.z,1e-20)*difference*uintBitsToFloat(params.seconds)*float(FR_THERMAL_GAMEPLAY_FACE_METERS);
-            flux=sign(requested)*min(abs(requested),min(a.y,b.y)*abs(difference)/float(FR_THERMAL_NEIGHBORS));
-        }
+        uint other_material=Words(reactive_entry_address(uvec2(root[4],root[5]),h.x)).words[FR_ENTRY_STATE];
+        float scale=params.mode==1u&&thermal_solid_material(e.words[FR_ENTRY_STATE])&&thermal_solid_material(other_material)?float(FR_THERMAL_2D_TRANSPORT_SCALE):1.;
+        float flux=exchange(a,b,scale);
         delta-=flux;
     }
     add_energy(e,delta);
@@ -168,6 +177,7 @@ void main() {
     if(index>=params.width*params.height) return;
     uint x=index%params.width,y=index/params.width;
     if(params.phase==7u||params.phase==19u) {vec4 value,metadata;if(fr_body_sample(index,value,metadata)) {
+        if(params.phase==19u) value.w=value.x;
         if(params.phase==19u&&params.unused_view!=0u) {ParcelSamples cache=ParcelSamples(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
             vec4 surface=cache.values[floatBitsToUint(metadata.y)*3u+2u];
             if(floatBitsToUint(surface.x)==floatBitsToUint(metadata.w)&&surface.y>0.) value.x=surface.y*value.y;}
@@ -209,7 +219,8 @@ void main() {
         vec4 b=x+1u<params.width?samples[index+1u]:vec4(0),c=y+1u<params.height?samples[index+params.width]:vec4(0);
         if(b.y>0.) b.x=temperature(b,index+1u)*b.y;
         if(c.y>0.) c.x=temperature(c,index+params.width)*c.y;
-        float horizontal=exchange(a,b),vertical=exchange(a,c);
+        float horizontal=exchange(a,b,x+1u<params.width?solid_transport_scale(index,index+1u):1.),
+            vertical=exchange(a,c,y+1u<params.height?solid_transport_scale(index,index+params.width):1.);
         uint n=params.width*params.height;
         bool rigid=floatBitsToUint(samples[index+n].x)==4u;
         if(b.y>0.&&(rigid||floatBitsToUint(samples[index+1u+n].x)==4u))
@@ -246,7 +257,7 @@ void main() {
             bool liquid=!rigid&&!valid(handle_at(probe_index));
             float stored=target.x;if(liquid) target.x+=target.y*float(FR_THERMAL_AMBIENT_K);
             vec4 source=vec4(probe_capacity*float(FR_THERMAL_AMBIENT_K)+probe_excess,probe_capacity,float(FR_THERMAL_PROBE_CONDUCTIVITY),0.);
-            float flux=min(exchange(source,target),probe_excess);
+            float flux=min(exchange(source,target,1.),probe_excess);
             uvec2 handle=rigid?uvec2(floatBitsToUint(body_metadata.y),floatBitsToUint(body_metadata.w)):handle_at(probe_index);
             if(liquid) water_energy_set(atlas_at(probe_index),stored+flux);
             else {Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));add_energy(e,flux);}

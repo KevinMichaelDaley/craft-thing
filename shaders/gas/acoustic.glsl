@@ -55,6 +55,7 @@ bool gas_neighbor(ivec2 p,uint direction,out uint at) {
     at=uint(q.y)*params.width+uint(q.x);return gas_cached(q).metric.w>0.;
 }
 float gas_specific_capacity(Gas s) {
+    float mass=gas_mass(s);if(mass>0.&&mass<1e-20) {s.species*=1e20;s.dynamics.x*=1e20;}
     float cv=dot(s.species,vec4(gas_parameter(5u),gas_parameter(6u),gas_parameter(7u),gas_parameter(8u)))+s.dynamics.x*gas_parameter(9u);
     float molecular=dot(s.species,vec4(gas_parameter(0u),gas_parameter(1u),gas_parameter(2u),gas_parameter(3u)))+s.dynamics.x*gas_parameter(4u);
     return molecular>0.?gas_parameter(FR_GAS_KINETIC_WORD)*s.geometry.x*cv/molecular:0.;

@@ -20,6 +20,26 @@ Gas transport_axis_input(uint atlas) {
     if(transport_direct_first_axis()) return gas_source_at(atlas);
     return gas_provisional(atlas);
 }
+/* Quiet velocity is not quiet transport when adjacent gas differs. In the
+ * second split sweep inspect its input, which already includes the first sweep;
+ * source velocity caches alone would miss newly reached diagonal cells. */
+float transport_activity_speed(ivec2 p) {
+    float speed=abs(gas_cached(p).hydro[transport_axis()+1u]);
+    if(speed>0.||!gas_practical_policy()) return speed;
+    ivec2 step=transport_axis()==0u?ivec2(1,0):ivec2(0,1),q=p+step;
+    uint own=gas_atlas(p),other=gas_atlas(q);
+    if(own==0xffffffffu||other==0xffffffffu||!gas_gate_open(p,transport_axis())) return 0.;
+    Gas a=transport_axis_input(own),b=transport_axis_input(other);
+    if(a.geometry.y<=0.||b.geometry.y<=0.||a.geometry.x<=0.||b.geometry.x<=0.) return 0.;
+    float ia=1./a.geometry.x,ib=1./b.geometry.x;
+    float mass_scale=max(max(gas_mass(a)*ia,gas_mass(b)*ib),1e-30),tolerance=mass_scale*.000001;
+    bool different=any(greaterThan(abs(a.species*ia-b.species*ib),vec4(tolerance)))||
+        abs(a.dynamics.x*ia-b.dynamics.x*ib)>tolerance||
+        any(greaterThan(abs(a.visual.rgb*ia-b.visual.rgb*ib),vec3(tolerance)));
+    float ea=gas_energy(a)*ia,eb=gas_energy(b)*ib;
+    different=different||abs(ea-eb)>max(max(abs(ea),abs(eb)),1e-30)*.000001;
+    return different?float(FR_GAS_PRACTICAL_MIXING_RATE):0.;
+}
 uint transport_position(ivec2 p) {return transport_axis()==0u?uint(p.y)*params.width+uint(p.x):uint(p.x)*params.height+uint(p.y);}
 uint transport_line_start(ivec2 p) {return transport_axis()==0u?uint(p.y)*params.width:uint(p.x)*params.height;}
 #ifdef FR_GAS_FUSED_AXIS

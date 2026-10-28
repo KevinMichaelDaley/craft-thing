@@ -18,4 +18,18 @@
 #define FR_COMBUSTION_AIR_CONDUCTIVITY 0.02
 #define FR_COMBUSTION_AIR_PRANDTL 0.71
 #define FR_COMBUSTION_EMISSION_EXPOSURE 200.0
+/* Effective soot density for a gray, centimeter-cell optical path. */
+#define FR_COMBUSTION_SOOT_OPTICAL_DENSITY 0.00001
+/* Bounded gameplay Arrhenius response, normalized at ignition. Fuel/O2 and
+ * primary heat remain authoritative; no temperature clamp creates energy. */
+#ifdef __STDC_VERSION__
+#include <math.h>
+static inline float fr_combustion_hot_rate(float temperature,float ignition) {
+    return expf(fminf(1.38629436112f,6000.f*(1.f/ignition-1.f/fmaxf(temperature,1.f))));
+}
+#else
+float fr_combustion_hot_rate(float temperature,float ignition) {
+    return exp(min(1.38629436112,6000.*(1./ignition-1./max(temperature,1.))));
+}
+#endif
 #endif

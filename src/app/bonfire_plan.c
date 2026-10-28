@@ -28,11 +28,11 @@ bool dc_bonfire_plan(dc_bonfire_plan_t *out) {
                 .terrain_material=DC_MATERIAL_STONE,.normal_stiffness=1e8,.shear_stiffness=1e8,.rotational_stiffness=1e8,
                 .bearing_capacity=1e7,.pullout_capacity=1e7,.shear_capacity=1e7,.moment_capacity=1e7,.friction=.6f,.normal_angle=-1.57079632679f};
         }
-        piece(out,side,DC_BONFIRE_KINDLING,148,90,3,1);piece(out,side,DC_BONFIRE_KINDLING,154,90,3,1);
-        piece(out,side,DC_BONFIRE_STARTER,158,90,4,1);
-        piece(out,side,DC_BONFIRE_KINDLING,163,90,3,1);piece(out,side,DC_BONFIRE_KINDLING,168,90,3,1);
-        piece(out,side,DC_BONFIRE_LOG,146,85,10,3);piece(out,side,DC_BONFIRE_LOG,164,85,10,3);
-        piece(out,side,DC_BONFIRE_LOG,146,80,16,3);
+        for(uint32_t i=0;i<DC_BONFIRE_PIECE_COUNT;i++) {
+            uint32_t kind=i<DC_BONFIRE_KINDLING_COUNT?DC_BONFIRE_KINDLING:
+                (i<DC_BONFIRE_LOG_FIRST?DC_BONFIRE_STARTER:DC_BONFIRE_LOG);
+            const uint32_t *r=dc_bonfire_rects[i];piece(out,side,kind,r[0],r[1],r[2],r[3]);
+        }
     }
     return true;
 }

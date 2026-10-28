@@ -22,6 +22,6 @@ void body_surface_feedback(uint index) {
     float thermal=clamp((temperature-float(FR_COMBUSTION_SURFACE_GLOW_K))/850.,0.,1.);
     float reaction=1.-exp(-power*float(FR_COMBUSTION_SURFACE_EXPOSURE));
     float glow=thermal*max(reaction,.25*char_opacity)*coverage;
-    vec3 ember=mix(vec3(1.,.035,.001),vec3(1.,.55,.08),clamp((temperature-800.)/1000.,0.,1.));
+    vec3 ember=fr_blackbody_rgb(temperature,1.,false,vec3(0.));
     color+=ember*glow;pixels[index]=packUnorm4x8(vec4(clamp(color,0.,1.),1.));
 }

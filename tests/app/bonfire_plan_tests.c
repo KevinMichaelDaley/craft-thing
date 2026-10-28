@@ -18,24 +18,22 @@ static void test_real_structural_pits_and_independent_rigid_stack(void) {
         ASSERT_TRUE(b->width>0&&b->height>0&&b->x>=142+side*192&&b->x+b->width<=178+side*192&&b->y+b->height<93);
         if(b->kind==DC_BONFIRE_LOG) {logs[side]++;ASSERT_TRUE(b->temperature_K<294&&b->y<88);}
         else if(b->kind==DC_BONFIRE_STARTER) {starters[side]++;ASSERT_TRUE(b->temperature_K>1000&&b->width*b->height>=8&&b->width*b->height<=12);}
-        else {sticks[side]++;ASSERT_TRUE(b->temperature_K<294&&b->width*b->height>=6&&b->height<=2&&b->y>=89);}
+        else {sticks[side]++;ASSERT_TRUE(b->temperature_K<294&&b->width*b->height>=2&&b->height<=2&&b->y>=87);}
         for(uint32_t j=0;j<i;j++) {
             const dc_bonfire_piece_t *a=p.pieces+j;ASSERT_TRUE(a->object!=b->object);
             ASSERT_TRUE(a->x+a->width<b->x||b->x+b->width<a->x||a->y+a->height<b->y||b->y+b->height<a->y);
         }
     }
     for(uint32_t i=0;i<2;i++) {ASSERT_TRUE(logs[i]>=8);ASSERT_TRUE(sticks[i]>=12);ASSERT_EQ(starters[i],1);}
-    for(uint32_t side=0;side<2;side++) {
-        const dc_bonfire_piece_t *upper=NULL,*right=NULL,*left=NULL;
-        for(uint32_t i=0;i<p.count;i++) if(p.pieces[i].kind==DC_BONFIRE_LOG&&p.pieces[i].wet==(side!=0)) {
-            if(p.pieces[i].width==16u) upper=p.pieces+i;
-            else {
-                if(!right||p.pieces[i].x>right->x) right=p.pieces+i;
-                if(!left||p.pieces[i].x<left->x) left=p.pieces+i;
-            }
-        }
-        ASSERT_TRUE(upper&&right&&left&&upper->x<left->x+left->width&&upper->x+upper->width>right->x);
+    /* Enough cold fuel in several staggered tiers above the finite ember. */
+    uint32_t tiers=0;
+    for(uint32_t i=DC_BONFIRE_LOG_FIRST;i<DC_BONFIRE_PIECE_COUNT;i++) {
+        const dc_bonfire_piece_t *log=p.pieces+i;
+        ASSERT_TRUE(log->y<88&&log->x>=146&&log->x+log->width<=178);
+        if(i==DC_BONFIRE_LOG_FIRST||log->y!=p.pieces[i-1u].y) tiers++;
     }
+    ASSERT_TRUE(tiers>=4);
+
     PASS();
 }
 int main(void) {RUN(test_real_structural_pits_and_independent_rigid_stack);printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}

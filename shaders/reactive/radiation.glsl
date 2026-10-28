@@ -1,12 +1,18 @@
 #include "../../include/dungeoncraft/thermal_surface.h"
 float radiant_fourth(float temperature_K) {float square=temperature_K*temperature_K;return square*square;}
-float radiant_temperature(uint index) {return temperature(samples[index],index);}
+float radiant_temperature(uint index) {
+    vec4 meta=samples[index+params.width*params.height];
+    if(floatBitsToUint(meta.x)==4u) {
+        ParcelSamples cache=ParcelSamples(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
+        vec4 skin=cache.values[floatBitsToUint(meta.y)*3u+2u];
+        if(floatBitsToUint(skin.x)==floatBitsToUint(meta.w)&&skin.y>0.) return skin.y;
+    }
+    return temperature(samples[index],index);
+}
 float radiant_available(uint index) {
     vec4 meta=samples[index+params.width*params.height];
     if(floatBitsToUint(meta.x)!=4u) return radiant_temperature(index)*samples[index].y;
-    ParcelSamples cache=ParcelSamples(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
-    vec4 parcel=cache.values[floatBitsToUint(meta.y)*3u];
-    return parcel.y>0.?max(0.,parcel.x)*samples[index].y/parcel.y:0.;
+    return max(0.,samples[index].w);
 }
 float radiant_coefficient(uint first,uint second) {
     ivec2 a=ivec2(first%params.width,first/params.width),b=ivec2(second%params.width,second/params.width);

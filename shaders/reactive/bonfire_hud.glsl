@@ -9,9 +9,9 @@ uint bonfire_glyph(uint c) {
 }
 uint bonfire_character(uint c) {
     uint side=hud[3],value=0u,digit=0u;
-    if(c>=1u&&c<=4u) {value=c<=2u?bitCount(hud[20u+side]):4u;digit=(c==1u||c==3u)?1u:0u;}
+    if(c>=1u&&c<=4u) {value=c<=2u?bitCount(hud[20u+side]):DC_BONFIRE_KINDLING_COUNT;digit=(c==1u||c==3u)?1u:0u;}
     else if(c>=5u&&c<=7u) {value=bitCount(hud[18u+side]);digit=7u-c;}
-    else if(c>=8u&&c<=10u) {value=3u;digit=10u-c;}
+    else if(c>=8u&&c<=10u) {value=DC_BONFIRE_LOG_COUNT;digit=10u-c;}
     else if(c>=11u&&c<=17u) {
         uint index=hud[12],at=atlas(ivec2(index%params.width,index/params.width));uvec2 address;
         float temperature=0.,oxygen=-1.;
@@ -29,7 +29,7 @@ uint bonfire_character(uint c) {
 void bonfire_hud(uint mode,uint i,ivec2 p,uint at) {
     if(mode==6u) return;
     if(mode==7u) {
-        if(abs(p.x-int(hud[4]))>28||p.y<int(hud[5])||p.y>int(hud[5])+16) return;
+        if(abs(p.x-int(hud[4]))>28||p.y<int(hud[5])-20||p.y>int(hud[5])+16) return;
         vec4 meta=samples[i+params.width*params.height];if(floatBitsToUint(meta.x)!=4u) return;
         uint entry_index=floatBitsToUint(meta.y);if(entry_index>=root[2]) return;
         Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),entry_index));
@@ -39,12 +39,9 @@ void bonfire_hud(uint mode,uint i,ivec2 p,uint at) {
         if(e.words[s+9u]>=initial) return;
         uint side=hud[3],origin=(e.words[s+4u]-1u)&4095u;int y=int(origin/64u),x=int(origin%64u);
         if(m==7u||m==8u) {
-            if(y>=16&&y<=18) atomicOr(hud[18u+side],1u);
-            if(y>=21&&y<=23) atomicOr(hud[18u+side],1u<<uint(x<32?1:2));
-            if(y==26) {
-                int stick=x>=20&&x<=22?0:(x>=26&&x<=28?1:(x>=35&&x<=37?2:(x>=40&&x<=42?3:-1)));
-                if(stick>=0) atomicOr(hud[20u+side],1u<<uint(stick));
-            }
+            int piece=dc_bonfire_fixture_piece(uint(x)+128u,uint(y)+64u);
+            if(piece>=int(DC_BONFIRE_LOG_FIRST)) atomicOr(hud[18u+side],1u<<uint(piece-int(DC_BONFIRE_LOG_FIRST)));
+            else if(piece>=0&&piece<int(DC_BONFIRE_KINDLING_COUNT)) atomicOr(hud[20u+side],1u<<uint(piece));
         }
         return;
     }

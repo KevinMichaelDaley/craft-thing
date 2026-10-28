@@ -37,7 +37,7 @@ void FR_GAS_EXPLICIT_ENTRY() {
     if(length>FR_GAS_EXPLICIT_LINE_CAPACITY) {if(rank==0u) atomicAdd(stats[FR_GAS_IMPLICIT_LINE_COUNT_WORD],1u);return;}
     float speed=0.;
     for(uint cell=rank;cell<length;cell+=FR_GAS_LOCAL_SIZE)
-        speed=max(speed,abs(gas_cached(transport_point(line,cell)).hydro[transport_axis()+1u]));
+        speed=max(speed,transport_activity_speed(transport_point(line,cell)));
     speed=line_maximum(speed);
     if(speed==0.) {
         if(rank==0u) {transport_work[line*length].mass.w=-1.;atomicAdd(stats[FR_GAS_INACTIVE_LINE_COUNT_WORD],1u);}return;

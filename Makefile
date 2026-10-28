@@ -1,3 +1,4 @@
+REACTIVE_STATE_SRC = src/fire/reactive_state.c src/fire/reactive_snapshot.c src/fire/material_profile.c
 CC ?= cc
 build/appearance_tests: tests/renderer/appearance_tests.c src/renderer/appearance.c include/ferrum/renderer/appearance.h
 	mkdir -p build
@@ -239,7 +240,7 @@ THERMAL_BENCH_SRC = src/app/thermal_bench.c src/app/bonfire_scene.c src/app/bonf
 build/bonfire_plan_tests: tests/app/bonfire_plan_tests.c src/app/bonfire_plan.c src/app/bonfire.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/bonfire_plan.c -o $@ $(LDLIBS)
 build/bonfire_scene_tests: tests/app/bonfire_scene_tests.c $(THERMAL_BENCH_SRC) src/fire/reactive_state.c src/fire/reactive_snapshot.c src/fire/material_profile.c src/fire/reactive_chunk.c
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter-out src/app/bonfire_admission.c,$^) -o $@ -lm -pthread
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter %.c,$(filter-out src/app/bonfire_admission.c,$(filter %.c %.o %.a,$^))) -o $@ -lm -pthread
 .PHONY: test_bonfire_scene
 test: test_bonfire_scene
 test_bonfire_scene: build/bonfire_scene_tests
@@ -1714,7 +1715,6 @@ test: build/reactive_profile_gpu_tests
 test_reactive_gpu_profiles: build/reactive_profile_gpu_tests
 	./build/reactive_profile_gpu_tests
 
-REACTIVE_STATE_SRC = src/fire/reactive_state.c src/fire/reactive_snapshot.c src/fire/material_profile.c
 build/combustion_tests: tests/fire/combustion_tests.c src/fire/combustion.c src/fire/combustion_gas.c src/fire/gas.c $(REACTIVE_STATE_SRC) include/ferrum/fire/combustion.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/combustion_tests.c src/fire/combustion.c src/fire/combustion_gas.c src/fire/gas.c $(REACTIVE_STATE_SRC) -o $@ -lm
@@ -2011,3 +2011,17 @@ build/shaders/pattern.comp.spv build/shaders/runtime/pattern.comp.spv: shaders/r
 build/shaders/pattern.comp.spv build/shaders/runtime/pattern.comp.spv: shaders/reactive/thermal_brush.glsl include/dungeoncraft/thermal_parameters.h include/dungeoncraft/reactive_profile_layout.h
 build/thermal_gpu.o build/tick_gpu.o build/present_gpu.o build/gpu.o: src/vulkan/thermal_gpu_internal.h
 build/thermal_gpu.o build/thermal_feedback_gpu.o: src/vulkan/thermal_feedback_gpu.h
+
+# Shared generated thermal chromaticity for CPU regression and both GPU owners.
+build/thermal_tests build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: include/dungeoncraft/blackbody.h
+
+# Shared authored bonfire layout drives fixture, acceptance and GPU HUD.
+build/bonfire_plan_tests build/bonfire_scene_tests build/bonfire_display_tests build/dungeoncraft_quarter_native build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: include/dungeoncraft/bonfire_layout.h
+
+build/component_admission_tests build/rigid_thermal_display_tests: tests/vulkan/covered_wood_heat_cases.h
+
+# Generated material coefficients are inputs to direct-source test binaries too.
+build/bonfire_scene_tests build/combustion_tests build/component_admission_tests build/gas_stream_tests build/reactive_archive_tests build/reactive_arena_gpu_tests build/reactive_cell_gpu_tests build/reactive_chunk_tests build/reactive_material_tests build/reactive_packet_tests build/reactive_profile_gpu_tests build/reactive_state_gpu_tests build/reactive_state_tests build/reactive_stream_tests build/stream_tests build/thermal_checkpoint_tests build/thermal_precision_tests build/thermal_stream_tests build/thermal_tests: src/fire/material_profile_data.inc
+
+# Direct native/diagnostic source consumers share the generated fuel data.
+build/component_world_tests build/diagnostics/body_support build/diagnostics/native360_fluid_trace build/diagnostics/native360_frame_trace build/diagnostics/native360_mpm_variants build/dungeoncraft_half_native build/dungeoncraft_native build/dungeoncraft_quarter_native build/dynamic_body_capacity_tests build/level03_support_tests build/marker_slot_tests build/material_cut_buoyancy_tests build/native_360_performance_tests build/native_720_component_tests build/native_720_performance_tests build/native_bench build/pixel_dynamics_visual_tests build/pixel_performance_tests build/quarter_native_bench build/quarter_native_buoyancy_tests build/quarter_native_component_acceptance_tests build/quarter_native_component_extraction_tests build/quarter_native_component_material_tests build/quarter_native_fluid_tests build/quarter_native_rigid_solver_tests build/quarter_native_rigid_tests build/quarter_native_solver_tests build/quarter_native_structural_buckling_tests build/quarter_native_structural_equilibrium_tests build/quarter_native_structural_failure_tests build/quarter_native_structural_fracture_tests build/quarter_native_structural_impact_tests build/quarter_native_structural_particle_identity_tests build/quarter_native_structural_placement_tests build/quarter_native_structural_root_identity_tests build/quarter_native_structural_store_tests build/quarter_native_structural_streaming_tests build/quarter_native_structural_submerged_load_tests build/renderer_performance_tests build/renderer_visual_tests build/structural_bench build/structural_cadence_tests build/structural_material_visual_tests build/structural_visual_scene_tests build/structural_world_tests: src/fire/material_profile_data.inc

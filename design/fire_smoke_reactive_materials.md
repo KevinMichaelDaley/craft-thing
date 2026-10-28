@@ -421,6 +421,62 @@ projectile through an actual latch/contact transaction; position/velocity cannot
 be teleported to fake a throw. Drive/work or stored spring energy is accounted for.
 Recoil, off-center load and repeated operation must not collapse a sound frame.
 
+The bonfire fixture uses eight cold rigid logs and twelve cold kindling pieces
+per constructed pit, in staggered tiers above one finite charcoal ember bed.
+The shared C/GLSL `bonfire_layout.h` defines authoring and HUD identities; its
+fixture counts do not impose runtime body limits. The wet control has matching
+geometry and saturated wood. No probe or repeated ignition is injected.
+
+Missing out-of-plane routes are approximated by a modest 2x solid-to-solid
+conduction factor in gameplay mode. Gas, liquid and gas/surface exchanges do not
+receive that factor. Ordinary fuel heating values remain finite material data:
+wood/dense wood use 18 kJ/g including retained char, and char uses 28 kJ/g;
+primary heat and retained char cannot exceed the parent chemical inventory.
+These nominal values follow the [FAO fuel table](https://www.fao.org/4/ah810e/ah810e13.htm).
+The earlier blanket 3x fuel amplification is removed, including the airborne
+fuel boost. Existing profiles which retain char include that finite stock in
+their chemical budget.
+
+The optical skin is an equilibrium boundary estimate, not stored heat. Outgoing
+exchange is bounded by current authoritative parcel energy and gas energy.
+Raster overlap withdrawals are energy-weighted; deposits are heat-capacity
+weighted. Radiant transfer budgets use the actual sampled energy before skin
+temperature is substituted. A minimum emitting area keeps open-air skin estimates
+finite. Gray luminous soot contributes radiation to wood through the same finite
+paired exchange as convection, with no extra heat source.
+
+Ordinary flame and ember chromaticity follows the simulated gas reaction or
+rest-parcel skin temperature in kelvin. `tools/generate_blackbody.py` integrates
+Planck spectra against the Wyman/Sloan/Shirley analytic CIE observer and generates
+a shared 500–12000 K linear-RGB lookup; rendering interpolates the table rather
+than integrating spectra per pixel. Admitted reaction power still controls flame
+opacity, with photopic visible efficiency derived from the same Planck/CIE
+spectrum; cool reacting gas cannot become bright red flame merely through RGB
+normalization. Finite surface power/temperature controls ember brightness. Color
+never credits energy. The shared helper takes an explicit magical RGB override;
+the gas emission record reserves flag bit 2 and RGB8 in bits 8–31 of its final
+word for future magical reaction producers. Existing bit 0 remains the surface
+source marker and bit 1 marks airborne combustion. Ordinary reaction producers leave the override disabled.
+
+The practical smoke profile enables local vorticity confinement
+(`DC_GAS_VORTICITY=1`) to restore rolling motion damped by grid transport. Curl
+and its magnitude gradient come from the immutable source velocity cache with
+wall-aware local samples. The force is bounded to a tenth of local speed (or
+one cell/second for quiet flow) per step. It redistributes the existing total gas
+energy between internal and kinetic forms and adds no mass, oxygen, total energy
+or external work. There is no random wind or flame-only sideways animation.
+Reference solver comparisons can explicitly leave the optional flag disabled.
+
+Optimized row/column transport must not sleep solely because its axial velocity
+is zero: composition or heat differences still require mixing. The second split
+sweep reads the first sweep's result when deciding whether a line is quiet.
+Activity tiles also wake for density/enthalpy gradients at balanced pressure.
+This restores diagonal transport while uniform resting air remains asleep.
+Entire gas packets below 1e-30 mass units and 1e-24 energy/momentum units may be
+reconciled to vacuum; geometry and external-work bookkeeping are retained.
+Resolved gas still retains arbitrarily small smoke/pigment tracers.
+
+
 Fire emission aggregates into the existing emissive/directional light buffer;
 never scan every individual fire pixel as a point light. Smoke contributes colored
 extinction and scattering independently of its fuel/temperature. Magical flame

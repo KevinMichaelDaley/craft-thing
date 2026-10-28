@@ -5,6 +5,8 @@
 #define FR_GAS_MODEL_WORDS 20u
 /* Exactly zero gas mass cannot carry internal energy. Bound its roundoff
  * cleanup by eight FP32 epsilons of an ambient full-cell energy reference. */
+#define FR_GAS_NEGLIGIBLE_MASS 1e-30
+#define FR_GAS_NEGLIGIBLE_ENERGY 1e-24
 #define FR_GAS_MASSLESS_ENERGY_RELATIVE 0.00000095367431640625
 #define FR_GAS_SLOT_COUNT_WORD 18u
 #define FR_GAS_CELL_OWNER_WORD 19u
@@ -27,6 +29,7 @@
 #define FR_GAS_HYBRID_LINES_BIT 131072u
 #define FR_GAS_TEMPORAL_SOURCE_BIT 262144u
 #define FR_GAS_LEAN_METADATA_BIT 524288u
+#define FR_GAS_VORTICITY_BIT 1048576u
 #define FR_GAS_MULTIGRID_BIT 33554432u
 #define FR_GAS_FUSED_METADATA_BIT 67108864u
 #define FR_GAS_PACKED_PRESSURE_BIT 134217728u

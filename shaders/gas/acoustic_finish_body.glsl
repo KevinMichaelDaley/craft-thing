@@ -1,4 +1,5 @@
 #include "acoustic.glsl"
+#include "vorticity.glsl"
 #ifdef FR_GAS_GROUP_RATE
 #include "group_rate.glsl"
 #endif
@@ -67,6 +68,13 @@ void main() {
             float work=mass>0.?gas_parameter(FR_GAS_KINETIC_WORD)*own_force.x*.5*(own_force.y+value.dynamics.w/mass):0.;
             GasFlux correction=gas_empty_flux();correction.dynamics.y=-own_provisional.z;value=gas_add_flux(value,correction,1.);
             correction.dynamics.y=work;value=gas_add_flux(value,correction,1.);value.geometry.w+=work;
+        }
+        if(practical&&(params.bank&FR_GAS_VORTICITY_BIT)!=0u&&gas_mass(value)>0.) {
+            float mass=gas_mass(value);vec2 velocity=value.dynamics.zw/mass;
+            value.dynamics.zw+=mass*gas_vorticity_velocity(p,dt,velocity);
+            /* Convert the existing energy between internal/kinetic forms;
+             * confinement adds neither stock, total energy nor external work. */
+            value=gas_practical_momentum(value,gas_thermal_energy(value));
         }
         if(practical) value=gas_practical_state(value);
         bool okay=false;primitive=gas_primitive(value,okay);

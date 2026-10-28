@@ -1,5 +1,11 @@
 #define FR_GAS_WRITABLE_GATES 1
 #include "acoustic.glsl"
+bool gas_activity_difference(Primitive own,Primitive other,bool practical) {
+    if(!practical) return other.hydro.w!=own.hydro.w;
+    if(abs(other.hydro.w-own.hydro.w)>.001*max(abs(other.hydro.w),abs(own.hydro.w))) return true;
+    vec2 a=vec2(own.hydro.x,own.metric.x),b=vec2(other.hydro.x,other.metric.x);
+    return any(greaterThan(abs(a-b),max(max(abs(a),abs(b)),vec2(1e-30))*.0001));
+}
 shared uint needed;
 shared uint geometry_needed;
 void main() {
@@ -50,14 +56,14 @@ void main() {
                     /* Completed source caches encode missing pages with zero volume. */
                     if(other.metric.w<=0.) continue;
                     bool open=(d&1u)==0u?(own_gate&(1u<<(d/2u)))==0u:gas_gate_open(q,d/2u);
-                    if(open) awake=practical?abs(other.hydro.w-own.hydro.w)>.001*max(abs(other.hydro.w),abs(own.hydro.w)):other.hydro.w!=own.hydro.w;
+                    if(open) awake=gas_activity_difference(own,other,practical);
                 }
             }
 #else
             for(uint d=0u;d<4u;d++) {
                 uint j=0u;if(gas_neighbor(ivec2(p),d,j)) {
-                    float other=gas_cached(ivec2(p)+gas_direction(d)).hydro.w;
-                    if(practical?abs(other-own.hydro.w)>.001*max(abs(other),abs(own.hydro.w)):other!=own.hydro.w) awake=true;
+                    Primitive other=gas_cached(ivec2(p)+gas_direction(d));
+                    if(gas_activity_difference(own,other,practical)) awake=true;
                 }
             }
 #endif

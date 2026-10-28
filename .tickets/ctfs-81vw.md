@@ -59,3 +59,15 @@ BODY surface visibility: REDb2009df reproduced real dry fuel consumption79Q16/ch
 **2026-10-27T16:01:47Z**
 
 Current actual fullscreen all-log acceptance after wetting adapters:3/3dry0/3wet at6.4simsec/6.6wall, fuel216/193/48Q16 and successful exit save. Obsolete all-terrain autostart diagnostic superseded by permanent body-based bonfire_display_tests/test_bonfire; its latest bounds/progress preserved in9d39bb9 before removal. Full serial make test exposed stale thermal checkpoint test rejecting purpose2, now validBONFIRE; invalid test updated to enumMAX+1 and focused6/6pass. Full regression remains in progress, not yet a pass.
+
+**2026-10-27T19:49:36Z**
+
+Inline takeover: ordinary flame and rest-mapped ember color now use a generated Planck/CIE temperature lookup with power-controlled brightness and an explicit magical RGB override path; CPU color/power/override tests and both Vulkan shader builds pass. Sustained all-log ignition remains in progress: real heated stone pit reduced ignition to 2/3; hot skin radiation fixed and bounded feedback averaging under displayed validation. Do not close this feature on a transient flare.
+
+**2026-10-27T20:22:13Z**
+
+User clarification: wood should transmit heat sensibly; investigate actual coupling and physical thermal penetration before introducing an arbitrary gameplay speed multiplier. Current fixture expanded to 8 logs and 12 cold kindling pieces per pit (300 cold wood pixels plus 8 finite ember pixels), shared CPU/GLSL layout. All-log sustained acceptance remains failing; do not claim completion from trace reaction or transient flares.
+
+**2026-10-28T01:59:51Z**
+
+Inline implementation checkpoint: 8 cold rigid logs + 12 cold kindling per pit; finite ember only. Current compensation is 2x solid-solid conduction only, not gas, liquid or gas-surface transfer. Removed blanket chemical amplification; wood18kJ/g including retained char, char28kJ/g, airborne reservation back to4000J/g. Added temperature-dependent Planck/CIE visible efficiency, explicit magic-color flag, bounded gray-soot radiative heat exchange, real-inventory flux limits, energy-weighted outgoing and capacity-weighted incoming raster heat allocation. Native focused energy/covered-wood/diagonal tests pass. Full make test completed with only two pre-existing authored_stage failures tracked ctr-ojvy. All-log sustained bonfire acceptance is still IN_PROGRESS; needs a fresh displayed run with the corrected generated-material build dependency before completion can be claimed.

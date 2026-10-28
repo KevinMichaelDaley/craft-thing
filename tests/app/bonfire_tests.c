@@ -8,7 +8,7 @@
 #include <signal.h>
 #include <sys/stat.h>
 
-/* Six authored fixture identities; no gameplay owner lists or body quota. */
+/* Authored fixture identities; no gameplay owner lists or body quota. */
 typedef struct {uint32_t origins[48],count;uint64_t initial,current;float temperature,hazard;uint32_t flaming;} fixture_log_t;
 static volatile sig_atomic_t stopped;
 static double wall_bound=60.;
@@ -128,9 +128,10 @@ static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
             fr_gas_gpu_audit_t audit;ASSERT_TRUE(fr_gas_gpu_audit(view->gpu,&audit,err,sizeof(err)));
             uint32_t counters[32];ASSERT_TRUE(fr_combustion_gpu_bonfire_counters(view->gpu,counters));float target_oxygen=0,surface_temperature=0;
             memcpy(&target_oxygen,counters+27u,sizeof(target_oxygen));memcpy(&surface_temperature,counters+29u,sizeof(surface_temperature));
-            printf("BONFIRE wall%.1fs sim%.1fs dry%u/8 wet%u/8 max-log-K %.1f %.1f %.1f ember%.1fK fuel-used %llu %llu %llu\n",
-                elapsed,clock.advanced_seconds,dry,wet,logs[0].temperature,logs[1].temperature,logs[2].temperature,ember,
-                (unsigned long long)(logs[0].initial-logs[0].current),(unsigned long long)(logs[1].initial-logs[1].current),(unsigned long long)(logs[2].initial-logs[2].current));fflush(stdout);
+            printf("BONFIRE wall%.1fs sim%.1fs dry%u/%u wet%u/%u ember%.1fK; dry log fuel-used/flaming:",
+                elapsed,clock.advanced_seconds,dry,DC_BONFIRE_LOG_COUNT,wet,DC_BONFIRE_LOG_COUNT,ember);
+            for(uint32_t i=0;i<DC_BONFIRE_LOG_COUNT;i++) printf(" %llu/%u",(unsigned long long)(logs[i].initial-logs[i].current),logs[i].flaming);
+            printf("\n");fflush(stdout);
             printf("THERMAL kindling%.1fK max-gas%.1fK remaining-char%llu burning-char%u\n",diagnostic_kindling,
                 audit.metrics[FR_GAS_AUDIT_MAX_TEMPERATURE],(unsigned long long)diagnostic_char,diagnostic_burning_char);fflush(stdout);
             printf("BODY exposure chosen%u viableO2%u occupancy%u gathered%u reacted%u targetO2mass%.9g surface%.1fK\n",

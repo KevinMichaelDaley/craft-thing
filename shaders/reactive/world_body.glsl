@@ -58,17 +58,25 @@ void fr_body_atomic_heat(Words scratch,uint word,float heat) {
     for(;;) {uint next=floatBitsToUint(uintBitsToFloat(old)+heat);
         uint observed=atomicCompSwap(scratch.words[word],old,next);if(observed==old) break;old=observed;}
 }
+float fr_body_heat_weight(uvec2 handle,float coverage,float heat) {
+    Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));uint state=FR_ENTRY_STATE;
+    float energy=uintBitsToFloat(entry.words[state+17u])+uintBitsToFloat(entry.words[state+25u])+uintBitsToFloat(entry.words[state+26u]);
+    Words scratch=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
+    float capacity=uintBitsToFloat(scratch.words[handle.x*12u+1u]);
+    return fr_thermal_heat_weight(coverage,capacity,energy,heat);
+}
 void fr_body_deposit_radiance(uint index,float heat,float outgoing,float incoming) {
     if(heat==0.&&outgoing==0.&&incoming==0.) return;
     uint slot=runtime_body_find(thermal_occupancy[index]);if(slot>=BODY_CAPACITY) return;
     Body body=body_thermal_grid(DC_BODY(slot));if(!pixel_body(body)) return;
     ivec2 cell=ivec2(index%params.width,index/params.width);
     vec2 low=vec2(cell)-vec2(body.x_fp,body.y_fp)/65536.;uvec4 query=body_piece_query(body,low,low+1.);
-    float total=0.;
+    float total=0.,heat_total=0.;
     for(uint i=0u;i<query.z*query.w;i++) {
         uint piece=query_piece(body,query,i);if(pixel_piece_material(body,piece)==0u) continue;
         if(fr_body_reactive_handle(body,slot,piece).y==0u) continue;
-        vec2 center;total+=body_cell_volume(body,piece,cell,1.,center);
+        vec2 center;float coverage=body_cell_volume(body,piece,cell,1.,center);total+=coverage;
+        heat_total+=fr_body_heat_weight(fr_body_reactive_handle(body,slot,piece),coverage,heat);
     }
     if(total<=0.) return;
     Words scratch=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
@@ -76,7 +84,8 @@ void fr_body_deposit_radiance(uint index,float heat,float outgoing,float incomin
         uint piece=query_piece(body,query,i);if(pixel_piece_material(body,piece)==0u) continue;
         uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y==0u) continue;
         vec2 center;float share=body_cell_volume(body,piece,cell,1.,center)/total;if(share<=0.) continue;
-        fr_body_atomic_heat(scratch,h.x*12u+4u,heat*share);
+        float weight=fr_body_heat_weight(h,share*total,heat);
+        if(heat_total>0.) fr_body_atomic_heat(scratch,h.x*12u+4u,heat*weight/heat_total);
         fr_body_atomic_heat(scratch,h.x*12u+10u,outgoing*share);
         fr_body_atomic_heat(scratch,h.x*12u+11u,incoming*share);
     }

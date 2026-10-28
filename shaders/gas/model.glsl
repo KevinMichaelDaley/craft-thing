@@ -19,7 +19,14 @@ float gas_mass(Gas s) {return dot(s.species,vec4(1))+s.dynamics.x;}
 float gas_energy(Gas s) {return s.dynamics.y+s.visual.w+s.geometry.z;}
 bool gas_finite(float x) {return !isnan(x)&&!isinf(x);}
 Primitive gas_primitive(Gas s,out bool okay) {
-    float mass=gas_mass(s),volume=s.geometry.x;
+    float mass=gas_mass(s),physical_mass=mass,volume=s.geometry.x;
+    /* Evaluate trace cut-cell thermodynamics at a representable scale. This
+     * changes no stored stock, energy, pigment, work or physical density. */
+    float scale=mass>0.&&mass<1e-20?1e20:1.;
+    if(scale>1.) {
+        s.species*=scale;s.dynamics*=scale;s.visual*=scale;s.geometry.z*=scale;
+        mass=gas_mass(s);
+    }
     okay=all(greaterThanEqual(s.species,vec4(0)))&&s.dynamics.x>=0.&&
         all(greaterThanEqual(s.visual.rgb,vec3(0)))&&
         all(lessThanEqual(s.visual.rgb,vec3((s.species.z+s.dynamics.x)*1.000001)))&&
@@ -34,17 +41,18 @@ Primitive gas_primitive(Gas s,out bool okay) {
     float moles=dot(s.species,vec4(gas_parameter(0u),gas_parameter(1u),gas_parameter(2u),gas_parameter(3u)))+s.dynamics.x*gas_parameter(4u);
     float kinetic=.5*gas_parameter(FR_GAS_KINETIC_WORD)*dot(s.dynamics.zw,s.dynamics.zw)/mass;
     float temperature=(gas_energy(s)-kinetic)/capacity;
-    float pressure=moles*temperature/(volume*gas_parameter(FR_GAS_KINETIC_WORD));
+    float scaled_pressure=moles*temperature/(volume*gas_parameter(FR_GAS_KINETIC_WORD));
+    float pressure=scaled_pressure/scale;
     okay=okay&&temperature>0.&&gas_finite(temperature)&&gas_finite(pressure);
     if(gas_implicit_policy()) {
-        float enthalpy=(gas_energy(s)+gas_parameter(FR_GAS_KINETIC_WORD)*pressure*volume)/mass;
+        float enthalpy=(gas_energy(s)+gas_parameter(FR_GAS_KINETIC_WORD)*scaled_pressure*volume)/mass;
         float pressure_capacity=moles>0.?gas_parameter(FR_GAS_KINETIC_WORD)*volume*capacity/moles:0.;
         okay=okay&&gas_finite(enthalpy)&&gas_finite(pressure_capacity);
-        return Primitive(vec4(mass/volume,s.dynamics.zw/mass,pressure),vec4(enthalpy,pressure_capacity,mass,s.geometry.y));
+        return Primitive(vec4(physical_mass/volume,s.dynamics.zw/mass,pressure),vec4(enthalpy,pressure_capacity,physical_mass,s.geometry.y));
     }
-    float sound=sqrt((1.+moles/capacity)*pressure*volume/mass);
+    float sound=sqrt((1.+moles/capacity)*scaled_pressure*volume/mass);
     okay=okay&&temperature>0.&&gas_finite(temperature)&&gas_finite(pressure)&&gas_finite(sound);
-    return Primitive(vec4(mass/volume,s.dynamics.zw/mass,pressure),vec4(sound,temperature,mass,s.geometry.y));
+    return Primitive(vec4(physical_mass/volume,s.dynamics.zw/mass,pressure),vec4(sound,temperature,physical_mass,s.geometry.y));
 }
 vec2 gas_two_sum(float a,float b) {
     precise float sum=a+b;
@@ -70,7 +78,9 @@ Gas gas_add_flux(Gas s,GasFlux flux,float dt) {
 }
 float gas_kinetic_energy(Gas value) {
     float mass=gas_mass(value);
-    return mass>0.?.5*gas_parameter(FR_GAS_KINETIC_WORD)*dot(value.dynamics.zw,value.dynamics.zw)/mass:0.;
+    if(mass<=0.) return 0.;
+    if(mass<1e-20) return .5*gas_parameter(FR_GAS_KINETIC_WORD)*dot(value.dynamics.zw/mass,value.dynamics.zw);
+    return .5*gas_parameter(FR_GAS_KINETIC_WORD)*dot(value.dynamics.zw,value.dynamics.zw)/mass;
 }
 float gas_thermal_energy(Gas value) {return gas_energy(value)-gas_kinetic_energy(value);}
 Gas gas_practical_momentum(Gas value,float thermal) {
@@ -94,6 +104,13 @@ Gas gas_practical_momentum(Gas value,float thermal) {
 Gas gas_practical_state(Gas value) {
     float scale=dot(abs(value.species),vec4(1))+abs(value.dynamics.x);
     if(!gas_finite(scale)) return value;
+    /* These whole packets are far below any representable gameplay inventory.
+     * Preserve geometry/work, and never remove trace pigment from normal gas. */
+    if(scale>0.&&scale<float(FR_GAS_NEGLIGIBLE_MASS)&&abs(gas_energy(value))<float(FR_GAS_NEGLIGIBLE_ENERGY)&&
+       all(lessThan(abs(value.dynamics.zw),vec2(float(FR_GAS_NEGLIGIBLE_ENERGY))))) {
+        value.species=vec4(0.);value.dynamics=vec4(0.);value.visual=vec4(0.);value.geometry.z=0.;
+        atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],FR_GAS_RECONCILED_ROUNDOFF);return value;
+    }
     float tolerance=max(scale*0.000003814697265625,1.17549435e-38);uint repaired=0u;
     for(uint k=0u;k<4u;k++) if(value.species[k]<0.&&value.species[k]>=-tolerance) {value.species[k]=0.;repaired|=FR_GAS_RECONCILED_ROUNDOFF;}
     if(value.dynamics.x<0.&&value.dynamics.x>=-tolerance) {value.dynamics.x=0.;repaired|=FR_GAS_RECONCILED_ROUNDOFF;}

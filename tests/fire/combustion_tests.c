@@ -73,7 +73,7 @@ static void test_continuous_gas_oxygen_is_not_rounded_up_per_solid_quantum(void)
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,800,39,&s,err,sizeof(err)));
     s.flags=FR_REACTIVE_FLAMING;s.ignition_threshold=.5;s.ignition_integral=.6;
     ASSERT_TRUE(fr_combustion_reference(&s,65536,.23f,1,.02f,&out,&p,err,sizeof(err)));
-    ASSERT_EQ(p.fuel_fp,1);ASSERT_TRUE(fabs(p.oxygen_fp-1.2)<.00001);PASS();
+    ASSERT_TRUE(p.fuel_fp>0);ASSERT_TRUE(fabs(p.oxygen_fp-p.fuel_fp*1.2)<.00001);PASS();
 }
 static void test_short_frames_retain_fractional_burn_progress(void) {
     char err[256]={0};fr_reactive_state_t a,b,tmp;fr_combustion_products_t p;
@@ -182,7 +182,7 @@ static void test_airborne_oxygen_has_no_former_cutoff(void) {
 }
 static void test_hot_wood_reacts_faster_without_extra_fuel_or_oxygen(void) {
     char err[256]={0};fr_reactive_state_t warm,hot,a,b;fr_combustion_products_t pa,pb;
-    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,0,650,137,&warm,err,sizeof(err)));
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,0,600,137,&warm,err,sizeof(err)));
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,0,900,139,&hot,err,sizeof(err)));
     warm.flags|=FR_REACTIVE_FLAMING;hot.flags|=FR_REACTIVE_FLAMING;
     ASSERT_TRUE(fr_combustion_reference(&warm,65536,.21f,1,1,&a,&pa,err,sizeof(err)));

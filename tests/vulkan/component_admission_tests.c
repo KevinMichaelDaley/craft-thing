@@ -205,8 +205,10 @@ static void test_thin_water_contact_accumulates_subquantum_wetting(void) {
 #include "body_ash_cases.h"
 #include "constructed_heat_cases.h"
 #include "surface_radiation_cases.h"
+#include "covered_wood_heat_cases.h"
 int main(int argc,char **argv) {
-    if(argc==2&&strcmp(argv[1],"--surface-radiation")==0) RUN(test_reacting_surface_radiates_even_when_the_wood_core_is_cool);
+    if(argc==2&&strcmp(argv[1],"--covered-wood")==0) RUN(test_covered_wood_conducts_to_its_outer_face_without_leaking_fire);
+    else if(argc==2&&strcmp(argv[1],"--surface-radiation")==0) RUN(test_reacting_surface_radiates_even_when_the_wood_core_is_cool);
     else if(argc==2&&strcmp(argv[1],"--burn")==0) RUN(test_rigid_combustion_consumes_authoritative_body_fuel);
     else if(argc==2&&strcmp(argv[1],"--radiation")==0) RUN(test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_heat);
     else if(argc==2&&strcmp(argv[1],"--wet")==0) RUN(test_water_wets_rigid_wood_without_losing_water_or_enthalpy);
@@ -216,6 +218,7 @@ int main(int argc,char **argv) {
     else if(argc==2&&strcmp(argv[1],"--ash-blocked")==0) RUN(test_full_particle_slots_retain_spent_rigid_inventory);
     else if(argc==2&&strcmp(argv[1],"--stone")==0) RUN(test_constructed_stone_owns_heat_without_changing_its_collider_or_support);
     else {
+        RUN(test_covered_wood_conducts_to_its_outer_face_without_leaking_fire);
         RUN(test_cold_rigid_admission_retains_pose_and_reactive_ownership);
         RUN(test_rigid_terrain_contact_exchanges_a_paired_heat_budget);
         RUN(test_rigid_ember_transfers_real_heat_into_surrounding_gas);

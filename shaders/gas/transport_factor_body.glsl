@@ -43,7 +43,7 @@ void FR_GAS_FACTOR_ENTRY() {
     if(reused_rate&&rank==0u) atomicOr(stats[FR_GAS_ROW_NORM_AFTER_WORD],4u);
     if(!reused_rate) {
     float maximum_speed=0.;
-    for(uint cell=begin;cell<end;cell++) maximum_speed=max(maximum_speed,abs(gas_cached(transport_point(line,cell)).hydro[transport_axis()+1u]));
+    for(uint cell=begin;cell<end;cell++) maximum_speed=max(maximum_speed,transport_activity_speed(transport_point(line,cell)));
     float subgroup_speed=subgroupMax(maximum_speed);
     if(lane+1u==gl_SubgroupSize) GROUP_PEAK(gl_SubgroupID)=subgroup_speed;
     barrier();maximum_speed=0.;

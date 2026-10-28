@@ -30,8 +30,25 @@ float fr_thermal_surface_K(float bulk,float gas,float core,float convection,floa
 static inline
 #endif
 float fr_surface_reaction_power(float previous,float energy,float seconds) {
-    (void)previous;
-    return energy/seconds;
+    /* Optical skin response averages quantized, already debited reaction heat.
+     * This is feedback only; it never credits the bulk energy reservoir. */
+    return (previous*.25+energy)/(.25+seconds);
+}
+#ifdef __STDC_VERSION__
+static inline
+#endif
+float fr_thermal_exposed_surface_K(float bulk,float gas,float core,float convection,float linked_radiation,float incident,float ambient) {
+    /* Open air must not remove the emitting area from the boundary balance.
+     * This estimates skin temperature only; transfers still debit real energy. */
+    float missing=FR_SURFACE_MAX(0.,FR_THERMAL_STEFAN_BOLTZMANN*FR_THERMAL_FACE_AREA*FR_THERMAL_SURFACE_EMISSIVITY-linked_radiation);
+    float square=ambient*ambient;
+    return fr_thermal_surface_K(bulk,gas,core,convection,linked_radiation+missing,incident+missing*square*square);
+}
+#ifdef __STDC_VERSION__
+static inline
+#endif
+float fr_thermal_heat_weight(float coverage,float capacity,float energy,float heat) {
+    return coverage*FR_SURFACE_MAX(0.,heat<0.?energy:capacity);
 }
 #undef FR_SURFACE_MAX
 #undef FR_SURFACE_SQRT

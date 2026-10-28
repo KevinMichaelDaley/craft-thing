@@ -46,10 +46,10 @@ static void test_cold_logs_wet_control_and_finite_starter_retain_real_state(void
             if(side) {ASSERT_TRUE(s->bound_water_fp>0);wet[side]++;}
             else ASSERT_EQ(s->bound_water_fp,0);}
     }
-    ASSERT_EQ(hot[0],4);ASSERT_EQ(hot[1],4);ASSERT_EQ(wet[1],120);
+    ASSERT_EQ(hot[0],8);ASSERT_EQ(hot[1],8);ASSERT_TRUE(wet[1]>=300);
     for(uint32_t side=0;side<2;side++) {
-        ASSERT_TRUE(ember_heat[side]>4000&&ember_heat[side]<4500);
-        ASSERT_TRUE(ember_fuel[side]>19000&&ember_fuel[side]<20000);
+        ASSERT_TRUE(ember_heat[side]>8000&&ember_heat[side]<9000);
+        ASSERT_TRUE(ember_fuel[side]>130000&&ember_fuel[side]<140000);
     }
     dc_thermal_bench_release(chunks,2);PASS();
 }

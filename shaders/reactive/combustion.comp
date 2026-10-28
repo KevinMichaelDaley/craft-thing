@@ -8,6 +8,8 @@
 #include "../../include/dungeoncraft/combustion_parameters.h"
 #include "../../include/dungeoncraft/thermal_parameters.h"
 #include "../../include/dungeoncraft/thermal_surface.h"
+#include "../../include/dungeoncraft/blackbody.h"
+#include "../../include/dungeoncraft/bonfire_layout.h"
 layout(local_size_x=64) in;
 layout(set=0,binding=0,std430) readonly buffer Root {uint root[];};
 layout(set=0,binding=1,std430) readonly buffer Pages {uint pages[];};
@@ -65,6 +67,10 @@ float gas_internal(Gas gas) {
     float mass=gas_mass(gas);
     float kinetic=mass>0.?.5*uintBitsToFloat(Words(params.model_address).words[10])*dot(gas.dynamics.zw,gas.dynamics.zw)/mass:0.;
     return max(0.,gas.dynamics.y+gas.visual.w+gas.geometry.z-kinetic);
+}
+float flame_emissivity(Gas gas) {
+    float density=max(gas.dynamics.x,0.)/max(gas.geometry.x,.000001);
+    return 1.-exp(-density/float(FR_COMBUSTION_SOOT_OPTICAL_DENSITY));
 }
 float carbon_activity(Gas gas) {
     float mass=gas_mass(gas),capacity=gas_capacity(gas);
@@ -127,16 +133,23 @@ float contact_flux(uint first,uint second,uint a,uint b) {
         if(cache.words[index*12u+8u]==floatBitsToUint(samples[i+n].w)&&uintBitsToFloat(cache.words[index*12u+9u])>0.)
             energy=uintBitsToFloat(cache.words[index*12u+9u])*capacity;
     }
-    float difference=energy/capacity-gas_internal(gas)/gas_cap;
+    float skin=energy/capacity,gas_temperature=gas_internal(gas)/gas_cap;
+    float difference=skin-gas_temperature;
     if(abs(difference)<.001) return 0.;
     float speed=length(gas.dynamics.zw)/mass,density=mass*1000./max(gas.geometry.x,.000001);
     float length_m=float(FR_THERMAL_GAMEPLAY_FACE_METERS);
     float reynolds=density*speed*length_m*length_m/float(FR_COMBUSTION_AIR_VISCOSITY);
     float nusselt=2.+.6*sqrt(max(reynolds,0.))*pow(float(FR_COMBUSTION_AIR_PRANDTL),1./3.);
     float conductance=nusselt*float(FR_COMBUSTION_AIR_CONDUCTIVITY)*length_m;
+    /* The same finite pair owns convection and luminous-soot radiation. */
+    conductance+=float(FR_THERMAL_STEFAN_BOLTZMANN*FR_THERMAL_FACE_AREA*FR_THERMAL_SURFACE_EMISSIVITY)*
+        flame_emissivity(gas)*(skin+gas_temperature)*(skin*skin+gas_temperature*gas_temperature);
     float requested=conductance*difference*uintBitsToFloat(params.seconds);
     float bound=(floatBitsToUint(samples[i+n].x)==4u?.0625:.25)*capacity*gas_cap/(capacity+gas_cap)*abs(difference);
-    float flux=sign(requested)*min(abs(requested),bound);
+    /* The optical skin is not an independent energy reservoir. Four faces
+     * and overlapping raster samples share a finite authoritative inventory. */
+    float available=requested>0.?max(0.,samples[i].x)/16.:gas_internal(gas)/4.;
+    float flux=sign(requested)*min(abs(requested),min(bound,available));
     return asolid?flux:-flux;
 }
 void contact_apply(uint i,uint at) {
@@ -206,8 +219,13 @@ void feedback(uint index,ivec2 p,uint at) {
     Gas gas=local_gas(at);float capacity=gas_capacity(gas);
     if(capacity<=0.||gas.geometry.y<=0.) return;
     if((floatBitsToUint(source.w)&1u)==0u&&gas_internal(gas)/capacity<float(FR_COMBUSTION_AIRBORNE_IGNITION_K)) return;
-    vec3 color=mix(vec3(1.,.3,.008),vec3(1.,.85,.2),clamp((source.y-650.)/1150.,0.,1.));
-    float alpha=1.-exp(-source.x*float(FR_COMBUSTION_EMISSION_EXPOSURE));
+    /* Bits 8..31 optionally carry RGB8 magic chromaticity; bit 2 enables it.
+     * Ordinary reaction writes leave this override disabled. */
+    uint visual_flags=floatBitsToUint(source.w);
+    vec3 magic=unpackUnorm4x8(visual_flags>>8u).rgb;
+    vec3 color=fr_blackbody_rgb(source.y,1.,(visual_flags&FR_FIRE_EMISSION_MAGIC)!=0u,magic);
+    float visible=(visual_flags&FR_FIRE_EMISSION_MAGIC)!=0u?1.:fr_blackbody_visible_efficiency(source.y);
+    float alpha=1.-exp(-source.x*visible*float(FR_COMBUSTION_EMISSION_EXPOSURE));
     pixels[index]=packUnorm4x8(vec4(mix(unpackUnorm4x8(pixels[index]).rgb,color,alpha),1.));
 }
 void extinguish_thermally(uint at) {
@@ -283,20 +301,11 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
     float oxygen=mass>0.?gas.species.x/mass:0.;
 #ifdef FR_BODY_REACTIONS
     if(owner==2u) {
-        float gas_cap=gas_capacity(gas),gas_temperature=gas_cap>0.?gas_internal(gas)/gas_cap:bulk_temperature;
-        float speed=mass>0.?length(gas.dynamics.zw)/mass:0.,density=mass*1000./max(gas.geometry.x,.000001);
-        float face=float(FR_THERMAL_GAMEPLAY_FACE_METERS),reynolds=density*speed*face*face/float(FR_COMBUSTION_AIR_VISCOSITY);
-        float nusselt=2.+.6*sqrt(max(reynolds,0.))*pow(float(FR_COMBUSTION_AIR_PRANDTL),1./3.);
-        float convection=nusselt*float(FR_COMBUSTION_AIR_CONDUCTIVITY)*face;
         Words cache=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
-        float reaction_power=uintBitsToFloat(cache.words[handle.x*12u+6u]);cache.words[handle.x*12u+6u]=0u;
-        temperature=fr_thermal_surface_K(bulk_temperature,gas_temperature,
-            coefficient(profile,6u)*float(FR_THERMAL_FACE_AREA/FR_THERMAL_CORE_DISTANCE),convection,
-            uintBitsToFloat(cache.words[handle.x*12u+10u]),uintBitsToFloat(cache.words[handle.x*12u+11u])+reaction_power);
-        cache.words[handle.x*12u+9u]=floatBitsToUint(temperature);
+        temperature=uintBitsToFloat(cache.words[handle.x*12u+9u]);
         if(!char_stage) atomicMax(hud[29],floatBitsToUint(max(temperature,0.)));
         uint origin=(entry.words[s+4u]-1u)&4095u,x=origin%64u,y=origin/64u,category=0xffffffffu;
-        if(y==26u&&(x<30u||x>33u)) category=0u;
+        if(y==26u&&(x<28u||x>35u)) category=0u;
         if(y>=16u&&y<=18u) category=1u;
         if(y>=21u&&y<=23u) category=x<32u?2u:3u;
         if(category<4u) atomicMax(hud[(position.x>=320?14u:8u)+category],floatBitsToUint(max(temperature,0.)));
@@ -317,7 +326,8 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
     if(!viable||(flags&2u)==0u) return;
     float demand=coefficient(profile,12u);
     float oxygen_fp=max(0.,gas.species.x)*65536.;
-    float requested=float(entry.words[s+8u])*coefficient(profile,31u)*dt*dry*dry*(max(oxygen,0.)/float(FR_COMBUSTION_AMBIENT_OXYGEN))+uintBitsToFloat(entry.words[s+27u]);
+    float requested=float(entry.words[s+8u])*coefficient(profile,31u)*dt*dry*dry*(max(oxygen,0.)/float(FR_COMBUSTION_AMBIENT_OXYGEN))*
+        fr_combustion_hot_rate(temperature,coefficient(profile,7u))+uintBitsToFloat(entry.words[s+27u]);
     entry.words[s+27u]=floatBitsToUint(min(requested-floor(requested),.99999994));
     uint reacted=uint(floor(min(min(float(fuel),requested),oxygen_fp/demand)));
     float used=float(reacted)*demand;if(reacted==0u||used>oxygen_fp) return;
@@ -328,9 +338,11 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
     float exhaust=float(reacted-char_mass-ash-soot)+used;
     float heat=(float(reacted)*coefficient(profile,11u)-float(soot)*float(FR_COMBUSTION_AIRBORNE_ENERGY))/65536.;
 #ifdef FR_BODY_REACTIONS
-    if(owner==2u) Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u])).words[handle.x*12u+6u]=floatBitsToUint(.7*heat/dt);
+    if(owner==2u) Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u])).words[handle.x*12u+6u]=floatBitsToUint(
+        uintBitsToFloat(Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u])).words[handle.x*12u+6u])+
+        fr_surface_reaction_power(0.,.7*heat,dt));
 #endif
-    admitted+=heat;source_temperature=max(source_temperature,temperature);sources|=1u;
+    admitted+=heat;source_temperature=max(source_temperature,temperature);sources|=FR_FIRE_EMISSION_SURFACE;
     float removed=float(reacted)/65536.*coefficient(profile,5u)*bulk_temperature;
     float retained=float(char_mass)/65536.*coefficient(12u,5u)*bulk_temperature;
     /* Ash remains finite in the parcel until the loose-residue publication
@@ -368,12 +380,30 @@ void choose_body_target(uint index) {
        (e.words[s+9u]|e.words[s+10u]|e.words[s+13u]|e.words[s+14u]|e.words[s+15u]|e.words[s+16u])==0u&&
        (e.words[s+11u]|e.words[s+12u])!=0u) atomicOr(hud[DC_BODY_ASH_DISPATCH_WORD],1u);
     ivec2 p=body_parcel_cell(body,piece);float best=-1.;uint chosen=0xffffffffu;
+    float capacity=solid_capacity(e),bulk=capacity>0.?uintBitsToFloat(e.words[s+17u])/capacity:0.;
+    uint profile=e.words[s+9u]==0u&&e.words[s+10u]>0u?12u:m;
+    float reaction_power=fr_surface_reaction_power(uintBitsToFloat(scratch.words[index*12u+6u]),0.,uintBitsToFloat(params.seconds));
+    float skin=0.;
     for(uint d=0u;d<4u;d++) {
         ivec2 q=p+directions[d];uint at=atlas(q);if(!gas_cell(at)) continue;
         Gas gas=local_gas(at);float mass=gas_mass(gas);if(mass<=0.||gas.geometry.y<=0.) continue;
         float supply=max(gas.species.x,0.);
         if(supply>best) {best=supply;chosen=at;}
+        float gas_cap=gas_capacity(gas),gas_temperature=gas_cap>0.?gas_internal(gas)/gas_cap:bulk;
+        float speed=length(gas.dynamics.zw)/mass,density=mass*1000./max(gas.geometry.x,.000001);
+        float face=float(FR_THERMAL_GAMEPLAY_FACE_METERS),reynolds=density*speed*face*face/float(FR_COMBUSTION_AIR_VISCOSITY);
+        float nusselt=2.+.6*sqrt(max(reynolds,0.))*pow(float(FR_COMBUSTION_AIR_PRANDTL),1./3.);
+        float convection=nusselt*float(FR_COMBUSTION_AIR_CONDUCTIVITY)*face;
+        /* The hottest exposed face can ignite even when a different face owns
+         * the oxygen reservation. Read all gas here, before any reaction writes. */
+        float ambient=float(FR_THERMAL_AMBIENT_K),ambient_square=ambient*ambient,gas_square=gas_temperature*gas_temperature;
+        float surroundings=sqrt(sqrt(mix(ambient_square*ambient_square,gas_square*gas_square,flame_emissivity(gas))));
+        skin=max(skin,fr_thermal_exposed_surface_K(bulk,gas_temperature,
+            coefficient(profile,6u)*float(FR_THERMAL_FACE_AREA/FR_THERMAL_CORE_DISTANCE),convection,
+            uintBitsToFloat(scratch.words[index*12u+10u]),uintBitsToFloat(scratch.words[index*12u+11u])+reaction_power,surroundings));
     }
+    scratch.words[index*12u+9u]=floatBitsToUint(skin>0.?skin:bulk);
+    scratch.words[index*12u+6u]=floatBitsToUint(reaction_power);
     scratch.words[target_word]=chosen;
     if(e.words[FR_ENTRY_STATE+10u]>0u&&e.words[FR_ENTRY_STATE+9u]==0u) {
         if(chosen!=0xffffffffu) {atomicAdd(hud[22],1u);Gas gas=local_gas(chosen);float mass=gas_mass(gas);
@@ -468,7 +498,7 @@ void main() {
         return;
     }
     float admitted=oxidize_carbon(gas),temperature=gas_capacity(gas)>0.?gas_internal(gas)/gas_capacity(gas):0.;
-    uint sources=admitted>0.?2u:0u;
+    uint sources=admitted>0.?FR_FIRE_EMISSION_AIRBORNE:0u;
     for(uint face=0u;face<4u;face++) burn(p+directions[face],at,gas,admitted,temperature,sources);
     emission[at]=vec4(admitted/uintBitsToFloat(params.seconds),temperature,
         uintBitsToFloat(slot_generation(at)),uintBitsToFloat(sources));
