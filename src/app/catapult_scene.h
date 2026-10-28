@@ -16,7 +16,8 @@ typedef struct {
     bool released;
 } dc_catapult_scene_t;
 
-/** Build a supported launcher and a finite coal load in a 128-cell test world. */
+/** Build a supported launcher, stone target wall, and finite coal load in a
+ * 128-cell test world with a stone floor at y=96. */
 bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
                              dc_catapult_scene_t *scene,
                              char *err_buf, uint32_t err_cap);

@@ -883,9 +883,12 @@ build/component_material_tests: tests/vulkan/component_material_tests.c build/fl
 test: build/component_material_tests
 build/catapult_scene_tests: tests/app/catapult_scene_tests.c src/app/catapult_scene.c src/app/catapult_scene.h build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/catapult_scene_tests.c src/app/catapult_scene.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
-build/catapult_scene_display_tests: tests/app/catapult_scene_display_tests.c src/app/catapult_scene.c src/app/catapult_scene.h build/fluid_tests
+build/catapult_scene_display_tests: tests/app/catapult_scene_display_tests.c tests/app/catapult_scene_tests.c src/app/catapult_scene.c src/app/catapult_scene.h build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/catapult_scene_display_tests.c src/app/catapult_scene.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/catapult_scene_tests
+.PHONY: catapult-scene-display
+catapult-scene-display: build/catapult_scene_display_tests
+	./build/catapult_scene_display_tests
 test_quarter_native: build/quarter_native_component_material_tests
 build/quarter_native_component_material_tests: tests/vulkan/component_material_tests.c Makefile build/quarter_native_solver_tests $(GPU_SRC) src/world/chunk.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)

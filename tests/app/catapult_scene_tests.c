@@ -34,6 +34,9 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
            support.external[0],support.external[1]);
     ASSERT_EQ(support.state,FR_STRUCTURAL_SUPPORTED);
     ASSERT_TRUE(support.external[1]>0.f);
+    fr_structural_gpu_component_state_t wall_rest;
+    ASSERT_TRUE(fr_gpu_read_structure_component(g,3,&wall_rest));
+    ASSERT_EQ(wall_rest.state,FR_STRUCTURAL_SUPPORTED);
     dc_gpu_body_pixel_t coal[8];uint32_t count=0;
     ASSERT_TRUE(dc_gpu_read_pixel_shape(g,scene.coal_body,coal,8,&count,
                                         err,sizeof(err)));
@@ -70,7 +73,7 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
         wall_support.state,wall_support.flags,wall_support.external[0],
         wall_support.external[1]);
     ASSERT_EQ(wall_support.state,FR_STRUCTURAL_SUPPORTED);
-    ASSERT_TRUE(wall_support.external[1]>150000.f);
+    ASSERT_TRUE(wall_support.external[1]>wall_rest.external[1]*1.1f);
     for(uint32_t tick=0;tick<10;tick++) {
         ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     }
