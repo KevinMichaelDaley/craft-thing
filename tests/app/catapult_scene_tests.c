@@ -4,6 +4,7 @@
 
 #include "../../src/app/catapult_scene.h"
 #include "ferrum/fire/gpu.h"
+#include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/physics/revolute_gpu.h"
 #include "ferrum/structural/gpu.h"
 
@@ -75,9 +76,34 @@ static void test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint(void) {
     dc_gpu_destroy(copy);dc_gpu_destroy(g);PASS();
 }
 
+static void test_hot_coal_emits_finite_reaction_without_igniting_cold_control(void) {
+    char err[256]={0};
+    for(uint32_t hot=0;hot<2;hot++) {
+        dc_gpu_t *g=grid();ASSERT_TRUE(g);
+        dc_catapult_scene_t scene={0};
+        ASSERT_TRUE(dc_catapult_scene_build(g,hot!=0,&scene,err,sizeof(err)));
+        fr_reactive_record_t before,after;bool found=false;
+        ASSERT_TRUE(fr_gpu_reactive_read_body(g,scene.coal_body,1,1,&before,&found,
+                                               err,sizeof(err))&&found);
+        ASSERT_TRUE(fr_combustion_gpu_step(g,1.f/60.f,err,sizeof(err)));
+        ASSERT_TRUE(fr_gpu_reactive_read_body(g,scene.coal_body,1,1,&after,&found,
+                                               err,sizeof(err))&&found);
+        if(hot) {
+            ASSERT_TRUE(after.state.fuel_mass_fp<before.state.fuel_mass_fp);
+            ASSERT_TRUE(after.state.char_mass_fp>before.state.char_mass_fp);
+        } else {
+            ASSERT_EQ(after.state.fuel_mass_fp,before.state.fuel_mass_fp);
+            ASSERT_EQ(after.state.char_mass_fp,before.state.char_mass_fp);
+        }
+        dc_gpu_destroy(g);
+    }
+    PASS();
+}
+
 int main(void) {
     RUN(test_cold_launcher_has_supported_frame_and_real_latch);
     RUN(test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint);
+    RUN(test_hot_coal_emits_finite_reaction_without_igniting_cold_control);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail?1:0;
 }
