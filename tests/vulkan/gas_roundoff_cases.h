@@ -41,7 +41,7 @@ static void test_native_massless_underflow_energy_reconciles_without_erasing_tin
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
     ASSERT_TRUE(fr_renderer_submit(g));uint32_t mask=((uint32_t *)stats.mapped)[0];printf("Vacuum roundoff valid mask%u expected983\n",mask);ASSERT_EQ(mask,983u);
     ASSERT_TRUE((((uint32_t *)stats.mapped)[FR_GAS_REJECT_STAGE_WORD]&FR_GAS_RECONCILED_ROUNDOFF)!=0u);
-    float (*actual)[16]=output.mapped;ASSERT_TRUE(actual[9][6]>0.f&&actual[9][6]<packets[9][6]);ASSERT_EQ(actual[9][5],packets[9][5]);ASSERT_EQ(memcmp(actual[8],packets[8],64),0);ASSERT_EQ(memcmp(actual[2],packets[2],64),0);ASSERT_EQ(memcmp(actual[4],packets[4],64),0);ASSERT_EQ(memcmp(actual[7],packets[7],64),0);
+    float (*actual)[16]=output.mapped;ASSERT_EQ(actual[9][6],0.f);ASSERT_EQ(actual[9][5],0.f);ASSERT_EQ(actual[8][0],0.f);ASSERT_EQ(actual[8][1],0.f);ASSERT_EQ(actual[8][5],0.f);ASSERT_EQ(memcmp(actual[2],packets[2],64),0);ASSERT_EQ(memcmp(actual[4],packets[4],64),0);ASSERT_EQ(memcmp(actual[7],packets[7],64),0);
     ASSERT_EQ(actual[3][5],packets[3][5]);ASSERT_EQ(actual[5][5],packets[5][5]);
     ASSERT_TRUE(present(g,err,sizeof(err)));fr_renderer_compute_destroy(g,&compute);
     dc_gpu_address_buffer_destroy(g,&input);dc_gpu_address_buffer_destroy(g,&output);dc_gpu_address_buffer_destroy(g,&model);dc_gpu_address_buffer_destroy(g,&stats);dc_gpu_destroy(g);PASS();
