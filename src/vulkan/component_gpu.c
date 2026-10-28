@@ -41,7 +41,8 @@ bool dc_gpu_enable_automatic_components(dc_gpu_t *gpu) {
 static void extraction_stage(dc_gpu_t *gpu, uint32_t push[8], uint32_t mode,
                              uint32_t stride, uint32_t groups) {
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
-                      gpu->component_extract_pipelines[mode]);
+                      gpu->authored_objects_address&&gpu->component_object_pipelines[mode]?
+                      gpu->component_object_pipelines[mode]:gpu->component_extract_pipelines[mode]);
     push[2] = mode;
     push[3] = stride;
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,

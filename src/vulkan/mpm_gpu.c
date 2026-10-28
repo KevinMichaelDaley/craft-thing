@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "gpu_internal.h"
+#include "authored_rigid_gpu_internal.h"
 
 enum {
     DC_MPM_SUBSTEPS = 2,
@@ -147,6 +148,30 @@ static bool component_pipelines(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return result == VK_SUCCESS ||
            error(err, cap, "Cannot create extraction pipelines");
 }
+bool dc_gpu_component_objects_prepare(dc_gpu_t *gpu,char *err,uint32_t cap) {
+    const uint32_t modes[]={7u,10u,12u,23u,24u,38u};
+    bool ready=true;
+    for(unsigned i=0;i<sizeof(modes)/sizeof(*modes);i++) ready=ready&&gpu->component_object_pipelines[modes[i]]!=VK_NULL_HANDLE;
+    if(ready) return true;
+    VkShaderModule module=VK_NULL_HANDLE,local=VK_NULL_HANDLE;
+    if(!dc_gpu_load_shader_module(gpu,"build/shaders/component_extract.comp.spv",&module,err,cap)) return false;
+    if(!dc_gpu_load_shader_module(gpu,"build/shaders/component_local.comp.spv",&local,err,cap)) {
+        vkDestroyShaderModule(gpu->device,module,NULL);return false;
+    }
+    VkSpecializationMapEntry entries[]={{0u,0u,4u},{1u,4u,4u}};
+    VkResult result=VK_SUCCESS;
+    for(unsigned i=0;i<sizeof(modes)/sizeof(*modes)&&result==VK_SUCCESS;i++) {
+        uint32_t mode=modes[i];if(gpu->component_object_pipelines[mode]) continue;
+        uint32_t values[]={mode,1u};
+        VkSpecializationInfo specialization={.mapEntryCount=2,.pMapEntries=entries,.dataSize=sizeof(values),.pData=values};
+        VkComputePipelineCreateInfo pipeline={.sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+            .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_COMPUTE_BIT,
+                .module=mode==10u?local:module,.pName="main",.pSpecializationInfo=&specialization},.layout=gpu->pipeline_layout};
+        result=vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&pipeline,NULL,&gpu->component_object_pipelines[mode]);
+    }
+    vkDestroyShaderModule(gpu->device,module,NULL);vkDestroyShaderModule(gpu->device,local,NULL);
+    return result==VK_SUCCESS||error(err,cap,"Cannot prepare authored rigid-object pipelines");
+}
 
 bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     const char *fused=getenv("DC_MPM_FUSED_GRID");
@@ -172,6 +197,8 @@ bool dc_gpu_mpm_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
 }
 
 void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu) {
+    for(unsigned mode=0;mode<39;mode++) if(gpu->component_object_pipelines[mode])
+        vkDestroyPipeline(gpu->device,gpu->component_object_pipelines[mode],NULL);
     if(gpu->mpm_swap_commit_pipeline) vkDestroyPipeline(gpu->device,gpu->mpm_swap_commit_pipeline,NULL);
     dc_gpu_mpm_compaction_pipeline_destroy(gpu);
     for (unsigned mode = 0; mode < 38; ++mode)

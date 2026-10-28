@@ -215,6 +215,8 @@ build/revolute_gpu.o: src/vulkan/revolute_gpu.c include/ferrum/physics/revolute_
 build/authored_rigid_gpu.o: src/vulkan/authored_rigid_gpu.c include/ferrum/physics/authored_rigid_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
+build/shaders/component_extract.comp.spv build/shaders/component_local.comp.spv build/shaders/runtime/component_extract.comp.spv build/shaders/runtime/component_local.comp.spv: shaders/sim/authored_objects.glsl
+
 build/authored_rigid_tests: tests/vulkan/authored_rigid_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/authored_rigid_tests
@@ -2011,6 +2013,8 @@ build/combustion_body_feedback_display_tests: tests/vulkan/combustion_body_feedb
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/revolute_display_tests: tests/vulkan/revolute_tests.c tests/vulkan/rigid_solver_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(SOLVER_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REVOLUTE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/authored_rigid_display_tests: tests/vulkan/authored_rigid_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/rigid_thermal_display_tests: tests/vulkan/component_admission_tests.c tests/vulkan/body_ash_cases.h tests/vulkan/constructed_heat_cases.h $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/component_admission_tests build/rigid_thermal_display_tests: tests/vulkan/surface_radiation_cases.h

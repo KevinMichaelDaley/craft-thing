@@ -7,6 +7,7 @@
  * Distinct nonzero object IDs cannot merge, even when their material pixels
  * touch. The GPU derives connectivity and allocates real variable-size bodies.
  * Source transaction/object identities are checkpointed with each body's owner.
+ * Selected texels must be untagged rigid-capable solids, not terrain or fluids.
  */
 bool fr_gpu_admit_rigid_objects(dc_gpu_t *gpu,uint64_t transaction,
     const uint32_t *objects,uint32_t object_cells,char *err_buf,uint32_t err_cap);

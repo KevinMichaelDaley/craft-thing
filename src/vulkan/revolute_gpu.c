@@ -66,6 +66,9 @@ static bool reserve(dc_gpu_t *g,uint32_t required,char *err,uint32_t cap) {
         if(!fr_renderer_begin(g)) {dc_gpu_address_buffer_destroy(g,&pending);return error(err,cap,"Cannot begin joint growth");}
         VkBufferCopy copy={.size=(VkDeviceSize)r->span*JOINT_WORDS*4u};
         vkCmdCopyBuffer(g->command,r->records.buffer,pending.buffer,1,&copy);
+        fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_HOST_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
         if(!fr_renderer_submit(g)) {dc_gpu_address_buffer_destroy(g,&pending);return error(err,cap,"Cannot copy joint storage");}
     }
     dc_gpu_address_buffer_destroy(g,&r->records);r->records=pending;r->capacity=(uint32_t)next;

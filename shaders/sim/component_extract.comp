@@ -4,6 +4,7 @@
 #extension GL_KHR_shader_subgroup_arithmetic : require
 #include "rigid_body.glsl"
 #include "../../include/dungeoncraft/terrain_flags.h"
+#include "authored_objects.glsl"
 #include "../reactive/particle_storage.glsl"
 #include "mpm_particle_mirror.glsl"
 layout(local_size_x=128) in;
@@ -73,6 +74,7 @@ uint terrain_bonds(uint i) {
 }
 const uint RELEASE_EXPLICIT=1u,RELEASE_SUPPORT_CHANGED=2u;
 uint terrain_release_state(uint i,uint bonds) {
+    if(AUTHORED_RIGID_OBJECTS) return authored_source_object(i)!=0u?RELEASE_EXPLICIT:0u;
     uint flags=cells[i].x;
     if((flags&LOADED_TERRAIN)==0u) {
         uint material=flags&65535u;
@@ -128,6 +130,10 @@ void initialize_body(uint r) {
     vec2 hi=vec2(extent);b.radius=max(max(length(b.center),length(vec2(hi.x,0)-b.center)),max(length(vec2(0,hi.y)-b.center),length(hi-b.center)));
     body_cache_bounds(b);DC_BODY(slot)=b;
 #ifdef DC_RUNTIME_BODY_STORAGE
+    BodyStorageOwner source_owner=DC_BODY_OWNER(runtime_body_root,slot);
+    source_owner.source_transaction=AUTHORED_RIGID_OBJECTS?uvec2(DC_RUNTIME_WORK(106u),DC_RUNTIME_WORK(107u)):uvec2(0);
+    source_owner.source_object=authored_source_object(root);
+    DC_BODY_OWNER(runtime_body_root,slot)=source_owner;
     for(uint word=0u;word<64u;word++) DC_SOLVER_DATA(DC_RUNTIME_BODY_STATE(slot)+word)=0u;
     uint owner=DC_RUNTIME_BODY_STATE(slot)+60u;
 #else
@@ -136,6 +142,14 @@ void initialize_body(uint r) {
     DC_SOLVER_DATA(owner)=b.id;DC_SOLVER_DATA(owner+1u)=1u;DC_SOLVER_DATA(owner+2u)=DC_DATA(r+13u);DC_SOLVER_DATA(owner+3u)=1u;
 }
 void main() {
+#ifdef DC_RUNTIME_BODY_STORAGE
+    if(EXTRACTION_PHASE==38u) {
+        uint i=gl_GlobalInvocationID.x;
+        if(i<total()&&authored_source_object(i)!=0u&&
+           (!solid(i)||(cells[i].x&(LOADED_TERRAIN))!=0u)) atomicOr(DC_RUNTIME_WORK(108u),1u);
+        return;
+    }
+#endif
     if(EXTRACTION_PHASE==26u) {
         uint lane=gl_LocalInvocationID.x,enabled=uint(DC_DATA(base()+STRUCTURAL_COMPONENT_DIRTY_WORD)!=0u);
 #ifdef DC_RUNTIME_BODY_STORAGE
@@ -189,7 +203,7 @@ void main() {
         if(!solid(index)) return;
         for(uint direction=0u;direction<3u;direction++) {
         uint axis=lane<64u?(direction==0u?1u:direction==1u?5u:7u):(direction==0u?3u:direction==1u?6u:7u);
-        uint other=neighbor(index,axis);if(other==0xffffffffu||!solid(other)) continue;
+        uint other=neighbor(index,axis);if(other==0xffffffffu||!solid(other)||!authored_objects_compatible(index,other)) continue;
         for(;;) {
             uint a=component_root(index),b=component_root(other);if(a==b) break;
             uint hi=max(a,b),lo=min(a,b);

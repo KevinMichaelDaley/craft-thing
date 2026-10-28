@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "rigid_body.glsl"
 #include "../../include/dungeoncraft/terrain_flags.h"
+#include "authored_objects.glsl"
 layout(local_size_x=128) in;
 layout(constant_id=0) const uint EXTRACTION_PHASE=0u;
 layout(set=0,binding=1,std430) buffer Cells { uvec2 cells[]; };
@@ -50,7 +51,7 @@ void main() {
 #ifdef DC_RUNTIME_BODY_STORAGE
         if(runtime_component_anchors_enabled()) DC_COMPONENT_ANCHOR_BITS(slot*128u+lane)=0u;
 #endif
-        uint count=0u,changed=0u;
+        uint count=0u,changed=uint(AUTHORED_RIGID_OBJECTS);
         for(uint cell=lane;cell<4096u;cell+=128u) {
             bool occupied=solid(slot*4096u+cell);chunk_roots[cell]=occupied?cell:0xffffffffu;count+=uint(occupied);
 #ifdef DC_RUNTIME_BODY_STORAGE
@@ -90,7 +91,9 @@ void main() {
                     if((axis==0u||axis==3u)&&cell%64u==63u) continue;
                     if(axis>0u&&cell>=4032u) continue;
                     if(axis==2u&&cell%64u==0u) continue;
-                    uint b=atomicAdd(chunk_roots[cell+(axis==0u?1u:axis==1u?64u:axis==2u?63u:65u)],0u);
+                    uint adjacent=cell+(axis==0u?1u:axis==1u?64u:axis==2u?63u:65u);
+                    if(!authored_objects_compatible(slot*4096u+cell,slot*4096u+adjacent)) continue;
+                    uint b=atomicAdd(chunk_roots[adjacent],0u);
                     if(b!=0xffffffffu) {uint old=atomicMin(chunk_roots[max(a,b)],min(a,b));changed|=uint(old>min(a,b));}
                 }
             }
