@@ -217,4 +217,23 @@ static void test_native_vorticity_rolls_a_rising_plume_sideways_without_creating
     ASSERT_TRUE(lateral[1]>lateral[0]*1.01+1e-6);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(chunk);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
 }
+static void test_native_stationary_heat_mixes_diagonally_in_the_optimized_path(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_gas_state_t *input=calloc(4096,sizeof(*input)),*out=calloc(4096,sizeof(*out));double *volume=calloc(4096,sizeof(*volume));
+    ASSERT_TRUE(chunk&&input&&out&&volume&&context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_gas_model_t model=reference_model();model.kinetic_scale=1./512.;
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0036,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
+    double before_mass=0.,before_energy=0.;
+    for(uint32_t i=0;i<4096;i++) {
+        volume[i]=1.;input[i]=reference_air(model,i==32u*64u+32u?.0012:.0036,i==32u*64u+32u?900:300,0);
+        for(uint32_t k=0;k<5;k++) {before_mass+=input[i].species[k];}
+        before_energy+=input[i].energy;
+    }
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_step(g,.02f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+    fr_gas_thermo_t diagonal;ASSERT_TRUE(fr_gas_thermodynamics(&model,out+33u*64u+33u,1,&diagonal,err,sizeof(err)));
+    double mass=0.,energy=0.;for(uint32_t i=0;i<4096;i++) {for(uint32_t k=0;k<5;k++) mass+=out[i].species[k];energy+=out[i].energy;}
+    printf("Stationary hot spot diagonal %.6fK; mass drift%.9g energy drift%.9g\n",diagonal.temperature_K,mass-before_mass,energy-before_energy);
+    ASSERT_TRUE(diagonal.temperature_K>300.01&&fabs(mass-before_mass)<1e-4&&fabs(energy-before_energy)<.01);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(chunk);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
+}
 #endif
