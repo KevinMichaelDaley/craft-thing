@@ -242,6 +242,28 @@ static void test_pivot_load_reaches_the_constructed_support_graph(void) {
     ASSERT_TRUE(after.state==FR_STRUCTURAL_SUPPORTED||after.state==FR_STRUCTURAL_OVERLOADED);
     dc_gpu_destroy(g);PASS();
 }
+static void test_mass_center_changes_do_not_move_the_material_anchor(void) {
+    dc_gpu_t *g=grid();char err[256];ASSERT_TRUE(g);
+    ASSERT_TRUE(dc_gpu_set_rigid_solver(g,true));
+    ASSERT_TRUE(dc_gpu_spawn_world_body(g,box(1,60,20,4,4),err,sizeof(err)));
+    dc_gpu_body_shape_t shape=rectangle(DC_MATERIAL_WOOD,2,12);
+    ASSERT_TRUE(dc_gpu_spawn_convex_body(g,box(2,61,36,2,12),&shape,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(g,1,0,0,DC_GPU_BODY_KINEMATIC,err,sizeof(err)));
+    fr_revolute_joint_t joint={.id=1,.body_a=1,.body_b=2,.anchor_a={0,20}};
+    ASSERT_TRUE(fr_gpu_revolute_add(g,&joint,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    shape=rectangle(DC_MATERIAL_WOOD,4,12);
+    ASSERT_TRUE(dc_gpu_spawn_convex_body(g,box(2,61,36,4,12),&shape,err,sizeof(err)));
+    for(unsigned tick=0;tick<5;tick++) ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    dc_gpu_world_body_t body;dc_gpu_body_motion_t m;
+    ASSERT_TRUE(dc_gpu_read_world_body(g,2,&body,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,2,&m,err,sizeof(err)));
+    float dx=1.f-m.center_x,dy=6.f-m.center_y,c=cosf(m.angle),s=sinf(m.angle);
+    float x=xof(body)+m.center_x+c*dx-s*dy,y=yof(body)+m.center_y+s*dx+c*dy;
+    printf("material anchor after COM change %.6f %.6f\n",x,y);
+    ASSERT_TRUE(hypotf(x-62.f,y-42.f)<.01f);
+    dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     RUN(test_pivot_keeps_anchors_together_while_arm_rotates);
     RUN(test_reused_body_identity_cannot_rebind_old_pivot);
@@ -252,5 +274,6 @@ int main(void) {
     RUN(test_free_frame_receives_recoil_without_net_horizontal_impulse);
     RUN(test_hinge_can_overlap_its_frame_without_self_collision);
     RUN(test_pivot_load_reaches_the_constructed_support_graph);
+    RUN(test_mass_center_changes_do_not_move_the_material_anchor);
     printf("%d passed, %d failed\n",g_pass,g_fail); return g_fail?1:0;
 }
