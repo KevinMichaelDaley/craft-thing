@@ -15,8 +15,8 @@ bool dc_bonfire_plan(dc_bonfire_plan_t *out) {
         uint32_t x=142+side*192,n=side*8,m=side*5;
         int32_t floor_y=94*65536+32768,left_x=(int32_t)x*65536-98304,right_x=(int32_t)(x+36)*65536+98304;
         for(uint32_t i=0;i<4;i++) out->pit.nodes[n+i]=node(n+i+1,(x+12*i)*65536,floor_y);
-        out->pit.nodes[n+4]=node(n+5,left_x,82*65536);out->pit.nodes[n+5]=node(n+6,left_x,96*65536-16);
-        out->pit.nodes[n+6]=node(n+7,right_x,82*65536);out->pit.nodes[n+7]=node(n+8,right_x,96*65536-16);
+        out->pit.nodes[n+4]=node(n+5,left_x,90*65536);out->pit.nodes[n+5]=node(n+6,left_x,96*65536-16);
+        out->pit.nodes[n+6]=node(n+7,right_x,90*65536);out->pit.nodes[n+7]=node(n+8,right_x,96*65536-16);
         for(uint32_t i=0;i<3;i++) out->pit.members[m+i]=(fr_structural_gpu_member_t){
             .id=m+i+1,.generation=1,.a=n+i+1,.b=n+i+2,.material=FR_STRUCTURAL_STONE,.depth_fp=3*65536};
         out->pit.members[m+3]=(fr_structural_gpu_member_t){.id=m+4,.generation=1,.a=n+5,.b=n+6,.material=FR_STRUCTURAL_STONE,.depth_fp=3*65536};
