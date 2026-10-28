@@ -203,6 +203,7 @@ vec2 contact_start_anchor(uint slot,Body body,vec2 local) {
 #include "grain_bed.glsl"
 #include "solver_contacts.glsl"
 #include "rigid_bonds.glsl"
+#include "rigid_joints.glsl"
 void main() {
 #ifdef DC_SOLVER_CAPACITY_PROFILE
     atomicAdd(capacity_profile[1],1u);
@@ -212,6 +213,7 @@ void main() {
     solver_contact_capacity=solver_capacity_read(37u);
 #endif
     uint i = gl_GlobalInvocationID.x, h = sb();
+    if(PHASE>=22u) {solve_revolute(i,PHASE);return;}
     if(PHASE==GRAIN_BED_PLAN) {grain_bed_plan();return;}
     if(PHASE>=GRAIN_BED_INIT) {grain_bed_phase(i);return;}
     if(PHASE>=GRAIN_PREPARE) {grain_phase(i,PHASE);return;}

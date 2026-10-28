@@ -202,6 +202,7 @@ $(SOLVER_SHADER): shaders/sim/rigid_solver.comp shaders/sim/rigid_body.glsl shad
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 
 $(SOLVER_SHADER) build/diagnostics/solver_motion_profile.comp.spv: shaders/sim/solver_contact_metadata.glsl shaders/sim/solver_body_state.glsl shaders/sim/solver_layout.glsl shaders/sim/solver_contacts.glsl
+$(SOLVER_SHADER) build/shaders/runtime/rigid_solver.comp.spv: shaders/sim/rigid_joints.glsl
 build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_tests build/quarter_native_bench build/dungeoncraft_quarter_native build/marker_slot_tests build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench: $(SOLVER_SHADER)
 
 build/solver_gpu.o: src/vulkan/solver_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
@@ -1998,6 +1999,8 @@ build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: includ
 build/thermal_tests: include/dungeoncraft/thermal_surface.h
 build/combustion_body_feedback_display_tests: tests/vulkan/combustion_body_feedback_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/revolute_display_tests: tests/vulkan/revolute_tests.c tests/vulkan/rigid_solver_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(SOLVER_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REVOLUTE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/rigid_thermal_display_tests: tests/vulkan/component_admission_tests.c tests/vulkan/body_ash_cases.h tests/vulkan/constructed_heat_cases.h $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/component_admission_tests build/rigid_thermal_display_tests: tests/vulkan/surface_radiation_cases.h

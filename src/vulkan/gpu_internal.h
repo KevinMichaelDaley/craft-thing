@@ -32,7 +32,7 @@ enum {
     DC_GPU_CONTACT_PHASE_COUNT = 3,
     DC_GPU_SOLVER_BODY_WORDS = 32,
     DC_GPU_SOLVER_CONTACT_WORDS = 16,
-    DC_GPU_SOLVER_PHASE_COUNT = 22,
+    DC_GPU_SOLVER_PHASE_COUNT = 25,
     DC_GPU_MPM_PHASE_COUNT = 8,
     DC_GPU_STRUCTURAL_PHASE_COUNT = 7
 };
@@ -60,6 +60,7 @@ typedef struct {
 
 struct dc_gpu {
     struct fr_reactive_gpu *reactive;
+    struct fr_revolute_gpu *revolute;
     struct fr_thermal_gpu *thermal;
     struct fr_gas_gpu *gas;
     struct dc_gpu_authored_stage *authored_stage;

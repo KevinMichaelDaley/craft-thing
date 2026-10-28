@@ -4,6 +4,7 @@
 #include <string.h>
 #include "gpu_internal.h"
 #include "runtime_body_gpu.h"
+#include "revolute_gpu_internal.h"
 
 enum { SOLVER_ITERATIONS = 8, SOLVER_SUBSTEPS = 8, SOLVER_DISPATCH_WORD = 6,
        SOLVER_GRAIN_DISPATCH_WORD = 13, SOLVER_PHASE_MASK = 255 };
@@ -29,9 +30,12 @@ typedef enum {
     SOLVER_GRAIN_BED_INIT,
     SOLVER_GRAIN_BED_JUMP,
     SOLVER_GRAIN_BED_PLAN,
-    SOLVER_GRAIN_BED_PUBLISH
+    SOLVER_GRAIN_BED_PUBLISH,
+    SOLVER_JOINT_PREPARE,
+    SOLVER_JOINT_POSITION,
+    SOLVER_JOINT_VELOCITY
 } solver_phase_t;
-_Static_assert(SOLVER_GRAIN_BED_PUBLISH + 1 == DC_GPU_SOLVER_PHASE_COUNT,
+_Static_assert(SOLVER_JOINT_VELOCITY + 1 == DC_GPU_SOLVER_PHASE_COUNT,
                "GPU solver phase count changed");
 static bool error(char *err, uint32_t cap, const char *message) {
     if (err && cap)
@@ -171,6 +175,7 @@ bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     gpu->solver_skip_zero_reductions=!zero||strcmp(zero,"1")==0;
     for (uint32_t mode = 0;
          mode < DC_GPU_SOLVER_PHASE_COUNT && result == VK_SUCCESS; ++mode) {
+        if(mode>=SOLVER_JOINT_PREPARE) continue;
         if(graph_only_phase(mode)&&!gpu->structural_graph_possible) continue;
         result=solver_phase_pipeline(gpu,module,mode,true,&gpu->solver_pipelines[mode]);
     }
@@ -181,6 +186,16 @@ bool dc_gpu_solver_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return result == VK_SUCCESS
                ? pixel_hydro_pipeline_init(gpu, err, cap)
                : error(err, cap, "Cannot create GPU rigid solver pipeline");
+}
+bool dc_gpu_solver_revolute_prepare(dc_gpu_t *gpu,char *err,uint32_t cap) {
+    VkShaderModule module=VK_NULL_HANDLE;
+    if(!dc_gpu_load_shader_module(gpu,"build/shaders/rigid_solver.comp.spv",&module,err,cap)) return false;
+    VkResult result=VK_SUCCESS;
+    for(uint32_t phase=SOLVER_JOINT_PREPARE;phase<=SOLVER_JOINT_VELOCITY&&result==VK_SUCCESS;phase++)
+        if(!gpu->solver_pipelines[phase])
+            result=solver_phase_pipeline(gpu,module,phase,false,&gpu->solver_pipelines[phase]);
+    vkDestroyShaderModule(gpu->device,module,NULL);
+    return result==VK_SUCCESS||error(err,cap,"Cannot create revolute constraint pipelines");
 }
 bool dc_gpu_solver_graph_prepare(dc_gpu_t *gpu,char *err,uint32_t cap) {
     const uint32_t phases[]={SOLVER_SOLVE,SOLVER_IMPULSE,SOLVER_BOND_POSITION,
@@ -267,7 +282,9 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     uint32_t phase = mode & SOLVER_PHASE_MASK;
-    if (phase == SOLVER_GRAIN_BED_PLAN || phase == SOLVER_GRAIN_BED_PUBLISH) {
+    if (phase >= SOLVER_JOINT_PREPARE) {
+        vkCmdDispatch(gpu->command,(fr_gpu_revolute_span(gpu)+63u)/64u,1,1);
+    } else if (phase == SOLVER_GRAIN_BED_PLAN || phase == SOLVER_GRAIN_BED_PUBLISH) {
         vkCmdDispatch(gpu->command, 1, 1, 1);
     } else if (phase >= SOLVER_GRAIN_BED_INIT) {
         vkCmdDispatchIndirect(gpu->command, gpu->mpm_activity_buffer,
@@ -356,10 +373,12 @@ void dc_gpu_record_solver_uncached(dc_gpu_t *gpu) {
         dispatch(gpu, SOLVER_PREPARE, false);
         dispatch(gpu, SOLVER_GRAIN_PREPARE, true);
         dispatch(gpu, SOLVER_INIT_CONTACTS, true);
+        if(fr_gpu_revolute_span(gpu)) dispatch(gpu,SOLVER_JOINT_PREPARE,false);
         dispatch(gpu, SOLVER_CLEAR, false);
         for (uint32_t iteration = 0; iteration < SOLVER_ITERATIONS;
              ++iteration) {
             dispatch(gpu, SOLVER_SOLVE, true);
+            if(fr_gpu_revolute_span(gpu)) dispatch(gpu,SOLVER_JOINT_POSITION,false);
             dispatch(gpu, SOLVER_APPLY | ((iteration + 1u) << 8u), false);
             if(!gpu->solver_fused_grain) dispatch(gpu, SOLVER_GRAIN_POSITION | ((iteration + 1u) << 8u), true);
             if (gpu->structural_enabled && gpu->structural_graph_possible)
@@ -367,6 +386,7 @@ void dc_gpu_record_solver_uncached(dc_gpu_t *gpu) {
         }
         dispatch(gpu, SOLVER_DERIVE_VELOCITY, false);
         dispatch(gpu, SOLVER_IMPULSE, true);
+        if(fr_gpu_revolute_span(gpu)) dispatch(gpu,SOLVER_JOINT_VELOCITY,false);
         dispatch(gpu, SOLVER_APPLY_VELOCITY | ((SOLVER_ITERATIONS + 1u) << 8u), false);
         if(!gpu->solver_fused_grain) dispatch(gpu, SOLVER_GRAIN_VELOCITY | ((SOLVER_ITERATIONS + 1u) << 8u), true);
         if (gpu->structural_enabled && gpu->structural_graph_possible)

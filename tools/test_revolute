@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+tools/with-vulkan make -j8 build/revolute_display_tests >build/revolute_display_build.log 2>&1
+exec env SDL_VIDEODRIVER=wayland DC_FULLSCREEN=1 timeout --signal=INT --kill-after=3s 30s \
+    tools/with-vulkan stdbuf -oL -eL ./build/revolute_display_tests

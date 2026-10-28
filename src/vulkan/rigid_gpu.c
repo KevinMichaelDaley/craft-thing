@@ -272,6 +272,11 @@ bool dc_gpu_remove_body(dc_gpu_t *gpu, uint32_t id, char *err, uint32_t cap) {
            sizeof(dc_gpu_body_record_t));
     memset(journal, 0, 4u * sizeof(uint32_t));
     gpu->body_ids[slot] = 0;
+    if(gpu->runtime_body_consumers) {
+        dc_body_storage_owner_t *owner=dc_gpu_body_owner(gpu,slot);
+        owner->runtime_id=0;
+        owner->state=owner->generation==UINT32_MAX?DC_BODY_OWNER_RETIRED:DC_BODY_OWNER_FREE;
+    }
     gpu->body_refresh_pending = true;
     while (gpu->body_count && !gpu->body_ids[gpu->body_count - 1]) --gpu->body_count;
     return true;
