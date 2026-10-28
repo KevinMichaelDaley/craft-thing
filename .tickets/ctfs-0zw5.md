@@ -1,6 +1,6 @@
 ---
 id: ctfs-0zw5
-status: in_progress
+status: closed
 deps: []
 links: [ctpf-iueo]
 created: 2026-10-28T03:33:23Z
@@ -23,3 +23,7 @@ RED-GREEN-REFACTOR. Two touching wood components tagged as distinct objects beco
 **2026-10-28T04:07:25Z**
 
 Narrow fresh-scene helper is implemented: object-aware specialization only for cold GPU admission; default simulation kernels specialize the object path off. Source transaction/object metadata is retained through DCS and body growth. GPU counter drains all pending component batches and services actual allocation requests; 100 touching singleton objects pass without a 64-body cap. Explicit complete object masks at resident boundaries do not require surrounding terrain visibility. Malformed tags validate before publication. General all-role atomic live placement/capacity rollback remains on linked parent ctpf-iueo; this helper is restricted to disposable fresh-scene construction if a resource failure occurs.
+
+**2026-10-28T04:14:52Z**
+
+Final real-display Vulkan battery passed6/6 (build/authored_objects_final_display.log): touching IDs, invalid-mask rejection, cross-chunk identity, 42-cell concave arm/pouch and touching load, 100-body growth, and explicit resident-boundary object. Cold placement preserves geometry and velocities; parcel state remains bit-identical; DCS retains transaction/object IDs; ordinary extraction reuses released authored slots without stale provenance. Full make -j1 test passed with zero failures (build/authored_objects_all_regression.log).

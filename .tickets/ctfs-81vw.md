@@ -1,6 +1,6 @@
 ---
 id: ctfs-81vw
-status: in_progress
+status: open
 deps: [ctfs-dmxv, ctfs-mx1x]
 links: [ctlo-3ndt, ctlo-ehqj, ctlo-8b67]
 created: 2026-10-25T02:54:23Z
@@ -83,3 +83,7 @@ Final sequential real-display Vulkan battery passed: owner heat/combustion 6/6, 
 **2026-10-28T02:41:58Z**
 
 Full default make -j1 test passed with zero failures after fixing the pre-existing authored-stage regressions (ctr-ojvy). Final displayed bonfire battery also passed all cases. Sustained flame acceptance has no fixed-position/overlap requirement. Remaining broader forest containment/fuel-bridge checks stay open; user now explicitly prioritizes the catapult/constructed-wall module, then Greek fire.
+
+**2026-10-28T04:14:52Z**
+
+User accepted the ordinary bonfire and explicitly directed progression to catapult/constructed-wall gameplay, then Greek fire. Do not continue ignition/pressure/numerical refinement of the accepted bonfire. Broader forest containment/fuel-bridge and180s warmth acceptance remains on ctlo-ehqj; leave those broader requirements open while the next visible module proceeds.
