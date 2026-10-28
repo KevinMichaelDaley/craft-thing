@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #define DC_CONTACT_SCALING_NO_MAIN
 #include "../../tools/diagnostics/contact_scaling.c"
 #undef RUN
@@ -35,6 +36,7 @@ static void test_disabled_profile_keeps_contacts_without_counter_atomics(void) {
     ASSERT_EQ(last_plain_emitted,last_emitted);PASS();
 }
 int main(void) {
+    if(setenv("DC_CONTACT_RECTANGLES","1",1)!=0) return 1;
     RUN(test_filled_rectangle_pair_uses_two_outer_face_constraints);
     RUN(test_disabled_profile_keeps_contacts_without_counter_atomics);
     RUN(test_small_pixel_pairs_do_not_scan_unused_tile_padding);

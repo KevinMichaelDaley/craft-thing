@@ -113,3 +113,56 @@ solver, buoyancy, component extraction, structural cases, equal-time cadence
 and graphical checks. The final quarter-native smoke reports 83.6 MiB mapped
 VRAM and 111.6 MiB device-only VRAM. Its short startup-inclusive timing is a
 different fixture from the warmed, saved-scene full-frame replay above.
+
+## Bonfire continuation, 2026-10-28
+
+The fullscreen bonfire has a separate failing total-frame acceptance ticket,
+`ctfs-5gil`. Corrected diagnostic timestamps now retain all physical and gas
+submissions through presentation. Short, real-clock coarse profiles on this
+machine measured approximately111ms before thermal specialization,95.552ms mean
+and98.797ms worst after specialization, and93.875/96.911ms after sharing each
+fresh thermal sample's parcel lookup with its metadata lookup. Neither boundary
+caching nor grouped solver reductions improved the full frame, so both retain
+their existing defaults. No flame history is reused.
+
+Complete scene replacement previously left the water-work latch enabled by
+generated water that no longer existed. The replacement now retires that work
+only when every physical slot has a known dry upload, with no intervening fluid
+simulation or authoring mutation. Markers, face velocity, free water, and enabled
+sources keep work active. Painting water invalidates the dry evidence and wakes
+the solver. The native coarse profile then measured81.136ms mean/83.613ms worst
+at unchanged480x270 display/physics with640x448 halo. These32-frame diagnostic
+runs are not the1000-frame performance acceptance and do not meet30ms.
+
+Filled rectangular pixel-body pairs now use their exact outer faces with up to
+two endpoint constraints. The occupied-count/bounds-area equality proves there
+are no holes; concave bodies keep their pixel collision path. Witness pixels
+still supply each material and feature identity. A64x64 filled pair changed from
+64 constraints/16 workgroups to2 constraints/1 workgroup, while the corresponding
+concave fixture retained64 constraints/16 workgroups. Focused contact tests pass
+12/12 and rotated scalar-reference comparisons7/7. The real-clock fullscreen
+profile improved to74.580ms mean/76.701ms worst over32 frames. The displayed
+bonfire initially passed, but subsequent displayed repeats failed the all8-log
+ignition requirement. Consequently the rectangle path is experimental and off
+by default (`DC_CONTACT_RECTANGLES=1` enables it for investigation). It is not
+accepted as a default performance improvement. The full manifold remains the
+default. A later thermal scheduling skip also failed the graphical requirement
+and was discarded. Performance acceptance remains open.
+
+Repeating with the original manifold also exposed deep-pit ignition sensitivity.
+The authored structural rim is now shallow enough to admit side air above the
+kindling, preserving the wood, starter, floor, and combustion coefficients.
+Two shallow-rim runs ignited all8 dry logs and no wet logs by approximately31s
+and44s. The latter exposed an additional test-ordering error: the scorer required
+20s after the last log ignited, rather than20s of aggregate burning anywhere in
+the pile. The new scorer observes that window independently, while still
+requiring every log's existing fuel/flaming/visible-char checks, monotone chemical
+consumption, at least10J consumed in the final5s, and active flames at completion.
+Its regression first failed2/3, then passed3/3. The corrected native battery
+passed with all8 logs at21.8s. Rigid versus thermal/gas clock coupling is separately
+tracked in `ctfs-b6cz`; it has not been fixed by these optimizations.
+
+The final default32-frame fullscreen profile is79.871ms mean/81.297ms worst,
+with rectangle contacts disabled. The complete regression suite and native
+water4/4 pass, alongside the corrected displayed bonfire battery. `ctfs-6t7k`
+is closed; `ctfs-5gil` remains open because the30ms budget is still unmet.

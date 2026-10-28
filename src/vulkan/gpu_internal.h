@@ -425,7 +425,9 @@ bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
                                char *err, uint32_t cap);
 bool dc_gpu_make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                VkDeviceMemory *memory, char *err, uint32_t cap);
+/** Forget upload evidence after a fluid simulation or authoring mutation. */
 void dc_gpu_fluid_uploads_invalidate(dc_gpu_t *gpu);
+/** Retire fluid work only when every slot has current upload evidence. */
 void dc_gpu_fluid_uploads_recheck(dc_gpu_t *gpu);
 bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
                              bool particles, char *err, uint32_t cap);

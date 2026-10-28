@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "contact_shader_contract.h"
@@ -53,11 +54,13 @@ bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         .layout = gpu->pipeline_layout };
     VkResult result = VK_SUCCESS;
     uint32_t cache_enabled=gpu->contact_boundary_cache_enabled;
+    const char *rectangle_setting=getenv("DC_CONTACT_RECTANGLES");
+    uint32_t rectangles=rectangle_setting&&strcmp(rectangle_setting,"0")!=0;
     VkSpecializationMapEntry generic_entries[]={{.constantID=0,.offset=0,.size=4},
-        {.constantID=33,.offset=4,.size=4}};
+        {.constantID=33,.offset=4,.size=4},{.constantID=34,.offset=8,.size=4}};
     for (uint32_t phase=0; phase<DC_GPU_CONTACT_PHASE_COUNT && result==VK_SUCCESS; ++phase) {
-        uint32_t values[]={phase,cache_enabled};
-        VkSpecializationInfo specialization = {.mapEntryCount=2, .pMapEntries=generic_entries,
+        uint32_t values[]={phase,cache_enabled,rectangles};
+        VkSpecializationInfo specialization = {.mapEntryCount=3, .pMapEntries=generic_entries,
             .dataSize=sizeof(values), .pData=values};
         info.stage.pSpecializationInfo=&specialization;
         result = vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,&gpu->contact_pipelines[phase]);
@@ -74,11 +77,12 @@ bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         &gpu->contact_terrain_pipeline,&gpu->contact_boundary_pipeline};
     for(unsigned i=0;i<6u&&result==VK_SUCCESS;i++) {
         if(pixel_phases[i]==7u&&!cache_enabled) continue;
-        uint32_t values[]={pixel_phases[i],1u,cache_enabled};
+        uint32_t values[]={pixel_phases[i],1u,cache_enabled,rectangles};
         VkSpecializationMapEntry entries[]={{.constantID=0,.size=sizeof(uint32_t)},
             {.constantID=1,.offset=sizeof(uint32_t),.size=sizeof(uint32_t)},
-            {.constantID=33,.offset=2*sizeof(uint32_t),.size=sizeof(uint32_t)}};
-        VkSpecializationInfo specialization={.mapEntryCount=3,.pMapEntries=entries,
+            {.constantID=33,.offset=2*sizeof(uint32_t),.size=sizeof(uint32_t)},
+            {.constantID=34,.offset=3*sizeof(uint32_t),.size=sizeof(uint32_t)}};
+        VkSpecializationInfo specialization={.mapEntryCount=4,.pMapEntries=entries,
             .dataSize=sizeof(values),.pData=values};
         info.stage.pSpecializationInfo=&specialization;
         result=vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,pixel_pipelines[i]);
