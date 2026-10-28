@@ -27,3 +27,7 @@ Dry cold mechanism cycles without collapsing; a burning-coal load launched promp
 **2026-10-28T02:40:35Z**
 
 User-approved next visible module after ordinary bonfire regression is green and code is pushed: assembled catapult and constructed-wall demo, then Greek fire. Implement real generation-safe two-body pivot prerequisite first, then supported mechanism, real release and finite burning coal shot against dry/wet constructed walls. No fake arm animation or projectile teleport. Work inline; no subagent requested.
+
+**2026-10-28T21:17:40Z**
+
+2026-10-28 resumed branch. Coal/char body mapping and extracted reactive parcel admission now GREEN on ctfs-ermw, including GPU mass and checkpoint tests. Supported catapult frame, real load/release, rigid elapsed clock, burn damage and displayed dry/wet wall fixture remain outstanding under existing child/blocker tickets.
