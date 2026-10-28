@@ -91,7 +91,7 @@ bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
         .anchor_a = {8.f, 0.f}, .anchor_b = {0.f, 0.f},
         .flags = FR_REVOLUTE_SPRING | FR_REVOLUTE_LIMITS,
         .lower_angle = .3f, .upper_angle = 1.9f,
-        .spring_stiffness = 50.f, .spring_rest_angle = .5f};
+        .spring_stiffness = 150.f, .spring_rest_angle = .5f};
     fr_revolute_joint_t latch = {.id = CATAPULT_LATCH_ID,
         .body_a = CATAPULT_ARM_ID, .body_b = CATAPULT_COAL_ID,
         .anchor_a = {6.5f, -2.5f}, .anchor_b = {0.f, 0.f}};

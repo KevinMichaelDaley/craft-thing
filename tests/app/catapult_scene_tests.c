@@ -46,6 +46,8 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
     printf("coal release speed %.3f travel %.3f from %.2f %.2f to %.2f %.2f\n",
            launch_speed,travel,xof(before),yof(before),xof(flight),yof(flight));
     ASSERT_TRUE(launch_speed>.5f&&travel>2.f);
+    ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&support));
+    ASSERT_EQ(support.state,FR_STRUCTURAL_SUPPORTED);
     dc_gpu_destroy(g);PASS();
 }
 
