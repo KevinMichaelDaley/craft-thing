@@ -192,6 +192,43 @@ static void test_hinge_can_overlap_its_frame_without_self_collision(void) {
     printf("overlapping hinge rotation %.6f pose %.6f %.6f\n",motion.angle,xof(body),yof(body));
     ASSERT_TRUE(fabsf(motion.angle-.6f)<.002f);
     ASSERT_TRUE(hypotf(xof(body)-61.f,yof(body)-36.f)<.01f);
+    ASSERT_TRUE(fr_gpu_revolute_remove(g,1,err,sizeof(err)));
+    joint.flags=FR_REVOLUTE_COLLIDE_CONNECTED;
+    ASSERT_TRUE(fr_gpu_revolute_add(g,&joint,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    dc_gpu_broadphase_pair_t pairs[16];dc_gpu_broadphase_stats_t stats;
+    ASSERT_TRUE(dc_gpu_read_broadphase(g,&stats,pairs,16,err,sizeof(err)));
+    bool found=false;
+    for(uint32_t i=0;i<stats.count;i++) if(pairs[i].kind==DC_GPU_CONTACT_BODY) found=true;
+    ASSERT_TRUE(found);
+    dc_gpu_destroy(g);PASS();
+}
+static void test_pivot_load_reaches_the_constructed_support_graph(void) {
+    dc_gpu_t *g=grid();char err[256];ASSERT_TRUE(g);
+    fr_structural_gpu_graph_t graph={.node_count=2,.member_count=1,.anchor_count=1};
+    graph.nodes[0]=(fr_structural_gpu_node_t){.id=1,.generation=1,.chunk={1,1},.x_fp=0,.y_fp=32*65536};
+    graph.nodes[1]=(fr_structural_gpu_node_t){.id=2,.generation=1,.chunk={1,1},.x_fp=0,.y_fp=16*65536};
+    graph.members[0]=(fr_structural_gpu_member_t){.id=1,.generation=1,.a=1,.b=2,.material=FR_STRUCTURAL_WOOD,.depth_fp=4*65536};
+    graph.anchors[0]=(fr_structural_gpu_anchor_t){.id=1,.generation=1,.node=1,.kind=FR_JOINT_MOMENT,
+        .chunk={1,1},.x=0,.y=32,.width=2,.height=1,.terrain_material=DC_MATERIAL_STONE,
+        .normal_stiffness=1e8f,.shear_stiffness=1e8f,.rotational_stiffness=1e8f,
+        .bearing_capacity=1e7f,.pullout_capacity=1e7f,.shear_capacity=1e7f,.moment_capacity=1e7f,
+        .friction=.6f,.normal_angle=-1.57079632679f};
+    ASSERT_TRUE(fr_gpu_place_structure(g,&graph,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_rigid_solver(g,true));
+    for(unsigned tick=0;tick<5;tick++) ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    fr_structural_gpu_component_state_t before,after;
+    ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&before));
+    dc_gpu_body_shape_t wood=rectangle(DC_MATERIAL_WOOD,2,12);
+    ASSERT_TRUE(dc_gpu_spawn_convex_body(g,box(2,65,82,2,12),&wood,err,sizeof(err)));
+    fr_revolute_joint_t joint={.id=1,.body_a=FR_STRUCTURAL_BODY_ID_BASE+1u,.body_b=2,
+        .anchor_a={8,0},.anchor_b={-2,-8}};
+    ASSERT_TRUE(fr_gpu_revolute_add(g,&joint,err,sizeof(err)));
+    for(unsigned tick=0;tick<5;tick++) ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&after));
+    printf("constructed pivot external load %.3f -> %.3f\n",before.external[1],after.external[1]);
+    ASSERT_TRUE(after.external[1]>before.external[1]+100.f);
+    ASSERT_TRUE(after.state==FR_STRUCTURAL_SUPPORTED||after.state==FR_STRUCTURAL_OVERLOADED);
     dc_gpu_destroy(g);PASS();
 }
 int main(void) {
@@ -203,5 +240,6 @@ int main(void) {
     RUN(test_joint_growth_and_body_growth_preserve_existing_pivot);
     RUN(test_free_frame_receives_recoil_without_net_horizontal_impulse);
     RUN(test_hinge_can_overlap_its_frame_without_self_collision);
+    RUN(test_pivot_load_reaches_the_constructed_support_graph);
     printf("%d passed, %d failed\n",g_pass,g_fail); return g_fail?1:0;
 }

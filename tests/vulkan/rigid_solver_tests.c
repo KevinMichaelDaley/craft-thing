@@ -42,6 +42,7 @@ static dc_gpu_t *grid(void) {
         dc_gpu_create(&gpu, width, height, "build/shaders/pattern.comp.spv", err, sizeof(err));
     for (uint32_t s = 0; okay && s < cols * rows; ++s) {
         memset(chunk, 0, sizeof(*chunk));
+        chunk->coord=(dc_chunk_coord_t){s%cols,s/cols};
         if (s / cols == 1)
             for (uint32_t x = 0; x < 64; ++x)
                 chunk->cells[32 * 64 + x].material = DC_MATERIAL_STONE;

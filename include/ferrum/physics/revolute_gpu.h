@@ -1,7 +1,7 @@
 #ifndef FERRUM_PHYSICS_REVOLUTE_GPU_H
 #define FERRUM_PHYSICS_REVOLUTE_GPU_H
 #include "dungeoncraft/gpu.h"
-enum { FR_REVOLUTE_LIMITS=1u, FR_REVOLUTE_SPRING=2u };
+enum { FR_REVOLUTE_LIMITS=1u, FR_REVOLUTE_SPRING=2u, FR_REVOLUTE_COLLIDE_CONNECTED=4u };
 
 /** Local anchors are relative to each body's rest-space center of mass.
  * Distances use cells, masses use solver material units, and time uses rigid
