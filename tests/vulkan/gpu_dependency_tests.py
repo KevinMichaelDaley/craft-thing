@@ -80,6 +80,23 @@ class GpuDependencyTests(unittest.TestCase):
             self.assertTrue(any(" -c " in line and source in line and target in line
                                 for line in commands), (target, result.stdout))
 
+    def test_generated_material_coefficients_rebuild_every_direct_consumer(self):
+        users = {target: deps for target, deps in self.rules.items()
+                 if "src/fire/material_profile.c" in deps and not target.endswith(".o")}
+        self.assertTrue(users)
+        missing = sorted(target for target, deps in users.items()
+                         if "src/fire/material_profile_data.inc" not in deps)
+        self.assertEqual(missing, [])
+
+    def test_display_material_object_rebuilds_when_generated_coefficients_change(self):
+        target = "build/performance/src/fire/material_profile.o"
+        source = "src/fire/material_profile_data.inc"
+        result = subprocess.run(["make", "-n", "-W", source, target], cwd=ROOT,
+                                text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(any(" -c " in line and "src/fire/material_profile.c" in line
+                            and target in line for line in result.stdout.splitlines()), result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
