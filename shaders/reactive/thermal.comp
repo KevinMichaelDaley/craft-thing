@@ -8,6 +8,7 @@
 #include "../../include/dungeoncraft/thermal_surface.h"
 #include "address.glsl"
 layout(local_size_x=64) in;
+layout(constant_id=0) const uint SPECIALIZED_PHASE=0xffffffffu;
 layout(set=0,binding=0,std430) readonly buffer Root {uint root[];};
 layout(set=0,binding=1,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=2,std430) readonly buffer Profiles {uint profiles[];};
@@ -19,6 +20,7 @@ layout(set=0,binding=7,std430) coherent buffer WaterEnergy {uint water_heat_word
 float water_energy_at(uint at) {return uintBitsToFloat(water_heat_words[at]);}
 void water_energy_set(uint at,float energy) {water_heat_words[at]=floatBitsToUint(energy);}
 layout(push_constant) uniform Params {uint width,height,phase,seconds,pool_word,unused_view,mode,unused;} params;
+uint active_phase() {return SPECIALIZED_PHASE==0xffffffffu?params.phase:SPECIALIZED_PHASE;}
 layout(buffer_reference,std430,buffer_reference_align=4) buffer Words {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=8) readonly buffer Handles {uvec2 values[];};
 layout(buffer_reference,std430,buffer_reference_align=16) buffer ParcelSamples {vec4 values[];};
@@ -52,14 +54,18 @@ void add_energy(Words entry,float delta) {
     entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY_RESIDUAL]=floatBitsToUint(tail.x);
     entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY_CORRECTION]=floatBitsToUint(tail.y);
 }
-vec4 sample_at(uint index) {
+vec4 sample_with_metadata(uint index,out vec4 metadata) {
+    metadata=vec4(0);
     uvec2 handle=handle_at(index);
     if(!valid(handle)) {
         uint atlas=atlas_at(index);
         if(atlas==0xffffffffu||cells[atlas].y==0u) return vec4(0);
+        metadata=vec4(uintBitsToFloat(2u),uintBitsToFloat(cells[atlas].y),uintBitsToFloat(3u),0.);
         return vec4(water_energy_at(atlas),float(cells[atlas].y)/65536.*coefficient(3u,5u),coefficient(3u,6u),1.);
     }
     Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));uint at=FR_ENTRY_STATE,m=e.words[at];
+    metadata=vec4(uintBitsToFloat(1u),uintBitsToFloat(e.words[at+12u]),uintBitsToFloat(m),
+        round(float(e.words[at+8u])*coefficient(m,19u)));
     if(m>=params.unused) return vec4(0);
     float core=float(e.words[at+9u])+float(e.words[at+11u])+float(e.words[at+15u]);
     float capacity=(core*coefficient(m,5u)+float(e.words[at+10u])*coefficient(12u,5u)+
@@ -69,15 +75,9 @@ vec4 sample_at(uint index) {
     return vec4(uintBitsToFloat(e.words[at+17u]),capacity,coefficient(m,6u),
         wet_capacity>0.?clamp(float(e.words[at+12u])/wet_capacity,0.,1.):0.);
 }
-vec4 metadata_at(uint index) {
-    uvec2 handle=handle_at(index);
-    if(valid(handle)) {
-        Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));uint at=FR_ENTRY_STATE,m=e.words[at];
-        return vec4(uintBitsToFloat(1u),uintBitsToFloat(e.words[at+12u]),uintBitsToFloat(m),
-            round(float(e.words[at+8u])*coefficient(m,19u)));
-    }
-    uint atlas=atlas_at(index);
-    return atlas==0xffffffffu||cells[atlas].y==0u?vec4(0):vec4(uintBitsToFloat(2u),uintBitsToFloat(cells[atlas].y),uintBitsToFloat(3u),0.);
+vec4 sample_at(uint index) {
+    vec4 metadata;
+    return sample_with_metadata(index,metadata);
 }
 float temperature(vec4 node,uint index) {
     return node.x/node.y+(floatBitsToUint(samples[index+params.width*params.height].x)==2u?float(FR_THERMAL_AMBIENT_K):0.);
@@ -120,7 +120,7 @@ float exchange(vec4 a,vec4 b,float scale) {
 void body_conduction(uint index) {
     Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),index));
     ParcelSamples cache=ParcelSamples(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
-    if(params.phase==8u) {
+    if(active_phase()==8u) {
         vec4 value=vec4(0);
         if(e.words[FR_ENTRY_OWNER]==2u&&e.words[FR_ENTRY_GENERATION]!=0u) {
             uint s=FR_ENTRY_STATE,m=e.words[s];
@@ -137,7 +137,7 @@ void body_conduction(uint index) {
         if(floatBitsToUint(surface.x)!=e.words[FR_ENTRY_GENERATION]) surface=vec4(uintBitsToFloat(e.words[FR_ENTRY_GENERATION]),value.y>0.?value.x/value.y:0.,0.,0.);
         surface.zw=vec2(0);cache.values[index*3u+2u]=surface;return;
     }
-    if(params.phase==11u) {if(e.words[FR_ENTRY_OWNER]==2u) add_energy(e,cache.values[index*3u+1u].x);cache.values[index*3u+1u].xy=vec2(0);return;}
+    if(active_phase()==11u) {if(e.words[FR_ENTRY_OWNER]==2u) add_energy(e,cache.values[index*3u+1u].x);cache.values[index*3u+1u].xy=vec2(0);return;}
     vec4 a=cache.values[index*3u];if(a.y<=0.||floatBitsToUint(a.w)!=e.words[FR_ENTRY_GENERATION]) return;
     uint slot=runtime_body_find(e.words[FR_ENTRY_OWNER+1u]);if(slot>=BODY_CAPACITY) return;
     Body body=body_thermal_grid(DC_BODY(slot));if(!pixel_body(body)) return;
@@ -161,44 +161,45 @@ void body_conduction(uint index) {
 #include "radiation.glsl"
 void main() {
     uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
-    if(params.phase==8u||params.phase==9u||params.phase==11u||params.phase==14u||params.phase==20u) {
+    if(active_phase()==8u||active_phase()==9u||active_phase()==11u||active_phase()==14u||active_phase()==20u) {
         uint slot=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;if(slot>=BODY_CAPACITY) return;
         Body body=DC_BODY(slot);if((body.enabled|body.reserved0)==0u||!pixel_storage(body)) return;
-        if(params.phase==14u) {if(pixel_body(body)) body_thermal_mass(slot,body);return;}
+        if(active_phase()==14u) {if(pixel_body(body)) body_thermal_mass(slot,body);return;}
         body=body_thermal_grid(body);
         for(uint piece=gl_LocalInvocationID.x;piece<body_pieces(body);piece+=64u) {
             if(pixel_piece_material(body,piece)==0u) continue;
             uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y!=0u) {
-                if(params.phase==20u) body_wet_parcel(body,piece,h);else body_conduction(h.x);
+                if(active_phase()==20u) body_wet_parcel(body,piece,h);else body_conduction(h.x);
             }
         }
         return;
     }
     if(index>=params.width*params.height) return;
     uint x=index%params.width,y=index/params.width;
-    if(params.phase==7u||params.phase==19u) {vec4 value,metadata;if(fr_body_sample(index,value,metadata)) {
-        if(params.phase==19u) value.w=value.x;
-        if(params.phase==19u&&params.unused_view!=0u) {ParcelSamples cache=ParcelSamples(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
+    if(active_phase()==7u||active_phase()==19u) {vec4 value,metadata;if(fr_body_sample(index,value,metadata)) {
+        if(active_phase()==19u) value.w=value.x;
+        if(active_phase()==19u&&params.unused_view!=0u) {ParcelSamples cache=ParcelSamples(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
             vec4 surface=cache.values[floatBitsToUint(metadata.y)*3u+2u];
             if(floatBitsToUint(surface.x)==floatBitsToUint(metadata.w)&&surface.y>0.) value.x=surface.y*value.y;}
         samples[index]=value;samples[index+params.width*params.height]=metadata;}return;}
-    if(params.phase==16u) {
+    if(active_phase()==16u) {
         vec2 xray=radiant_ray(index,ivec2(1,0)),yray=radiant_ray(index,ivec2(0,1));fluxes[index]=vec4(xray.x,yray.x,xray.y,yray.y);
         vec2 right=radiant_ray(index,ivec2(1,1)),left=radiant_ray(index,ivec2(-1,1));
         fluxes[index+params.width*params.height]=vec4(right.x,left.x,right.y,left.y);return;
     }
-    if(params.phase==17u) {radiant_apply(index);return;}
-    if(params.phase==21u) {uint at=atlas_at(index);
+    if(active_phase()==17u) {radiant_apply(index);return;}
+    if(active_phase()==21u) {uint at=atlas_at(index);
         fluxes[index+params.width*params.height]=at==0xffffffffu?vec4(0):vec4(water_energy_at(at),uintBitsToFloat(cells[at].y),0.,0.);return;}
-    if(params.phase==0u||params.phase==23u) {
-        if(params.phase==23u) {uint at=atlas_at(index);if(at!=0xffffffffu&&cells[at].y==0u) water_energy_set(at,0.);}
-        samples[index]=sample_at(index);samples[index+params.width*params.height]=metadata_at(index);
+    if(active_phase()==0u||active_phase()==23u) {
+        if(active_phase()==23u) {uint at=atlas_at(index);if(at!=0xffffffffu&&cells[at].y==0u) water_energy_set(at,0.);}
+        vec4 metadata;
+        samples[index]=sample_with_metadata(index,metadata);samples[index+params.width*params.height]=metadata;
     }
-    if(params.phase==5u) {
+    if(active_phase()==5u) {
         float mx=x+1u<params.width?wet_mass(index,index+1u):0.,my=y+1u<params.height?wet_mass(index,index+params.width):0.;
         fluxes[index]=vec4(mx,my,mx!=0.?wet_energy(index,index+1u,mx):0.,my!=0.?wet_energy(index,index+params.width,my):0.);
     }
-    if(params.phase==6u) {
+    if(active_phase()==6u) {
         vec4 net=-fluxes[index];
         if(x>0u) {net.x+=fluxes[index-1u].x;net.z+=fluxes[index-1u].z;}
         if(y>0u) {net.y+=fluxes[index-params.width].y;net.w+=fluxes[index-params.width].w;}
@@ -214,7 +215,7 @@ void main() {
             if(cells[atlas].y==0u&&(cells[atlas].x&65535u)==3u) cells[atlas].x&=0xffff0000u;
         }
     }
-    if(params.phase==1u) {
+    if(active_phase()==1u) {
         vec4 a=samples[index];if(a.y>0.) a.x=temperature(a,index)*a.y;
         vec4 b=x+1u<params.width?samples[index+1u]:vec4(0),c=y+1u<params.height?samples[index+params.width]:vec4(0);
         if(b.y>0.) b.x=temperature(b,index+1u)*b.y;
@@ -232,15 +233,15 @@ void main() {
         if(id!=0u&&y+1u<params.height&&thermal_occupancy[index+params.width]==id) vertical=0.;
         fluxes[index]=vec4(horizontal,vertical,0.,0.);
     }
-    if(params.phase==10u||params.phase==13u) {
+    if(active_phase()==10u||active_phase()==13u) {
         if(floatBitsToUint(samples[index+params.width*params.height].x)!=4u) return;
-        uint c=params.phase==13u?2u:0u;
+        uint c=active_phase()==13u?2u:0u;
         float heat=-fluxes[index][c]-fluxes[index][c+1u];
         if(x>0u) heat+=fluxes[index-1u][c];
         if(y>0u) heat+=fluxes[index-params.width][c+1u];
         fr_body_deposit(index,heat);return;
     }
-    if(params.phase==2u&&samples[index].y>0.&&floatBitsToUint(samples[index+params.width*params.height].x)!=4u) {
+    if(active_phase()==2u&&samples[index].y>0.&&floatBitsToUint(samples[index+params.width*params.height].x)!=4u) {
         float energy=-fluxes[index].x-fluxes[index].y;
         if(x>0u) energy+=fluxes[index-1u].x;
         if(y>0u) energy+=fluxes[index-params.width].y;
@@ -250,7 +251,7 @@ void main() {
             add_energy(e,energy);samples[index].x=uintBitsToFloat(e.words[FR_ENTRY_STATE+FR_STATE_ENERGY]);
         } else {uint atlas=atlas_at(index);if(atlas!=0xffffffffu) water_energy_set(atlas,samples[index].x+energy);}
     }
-    if(params.phase==4u&&index==0u&&probe_active!=0u) {
+    if(active_phase()==4u&&index==0u&&probe_active!=0u) {
         vec4 target=sample_at(probe_index),body_value,body_metadata;
         bool rigid=fr_body_sample(probe_index,body_value,body_metadata);if(rigid) target=body_value;
         if(target.y>0.) {

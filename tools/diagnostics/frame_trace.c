@@ -274,7 +274,7 @@ static unsigned hydro_begin(VkCommandBuffer command) {
         return QUERY_CAPACITY;
     if(traced->thermal&&command==traced_primary) {
         struct fr_thermal_gpu *t=traced->thermal;unsigned label=LABEL_COUNT;
-        if(bound==t->compute.pipeline&&pushed_mode<24u) label=THERMAL_PHASE+pushed_mode;
+        if(pushed_mode<24u&&(bound==t->compute.pipeline||bound==t->phase_pipelines[pushed_mode])) label=THERMAL_PHASE+pushed_mode;
         if(bound==t->combustion.pipeline&&pushed_reactive_mode<11u) label=COMBUSTION_PHASE+pushed_reactive_mode;
         if(bound==t->body_combustion.pipeline&&pushed_reactive_mode<11u) label=BODY_COMBUSTION_PHASE+pushed_reactive_mode;
         if(label!=LABEL_COUNT) {
