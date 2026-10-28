@@ -1,14 +1,114 @@
+#include <math.h>
+#include <stdio.h>
+
+#include "ferrum/fire/gpu.h"
+#include "ferrum/fire/material_profile.h"
+#include "ferrum/physics/revolute_gpu.h"
+#include "ferrum/structural/gpu.h"
+
 #include "catapult_scene.h"
+
+enum {
+    CATAPULT_ARM_ID = 2u,
+    CATAPULT_PIVOT_ID = 1u,
+    CATAPULT_LATCH_ID = 2u,
+    CATAPULT_COAL_ID = 0x80000001u,
+    CATAPULT_COAL_SLOT = 3u
+};
+
+static bool scene_error(char *err, uint32_t cap, const char *message) {
+    if (err && cap) snprintf(err, cap, "%s", message);
+    return false;
+}
+
+static fr_structural_gpu_graph_t support_graph(void) {
+    fr_structural_gpu_graph_t graph = {.node_count = 2, .member_count = 1,
+                                       .anchor_count = 1};
+    graph.nodes[0] = (fr_structural_gpu_node_t){.id = 1, .generation = 1,
+        .chunk = {1, 1}, .x_fp = 0, .y_fp = 32 * 65536};
+    graph.nodes[1] = (fr_structural_gpu_node_t){.id = 2, .generation = 1,
+        .chunk = {1, 1}, .x_fp = 0, .y_fp = 16 * 65536};
+    graph.members[0] = (fr_structural_gpu_member_t){.id = 1, .generation = 1,
+        .a = 1, .b = 2, .material = FR_STRUCTURAL_WOOD, .depth_fp = 4 * 65536};
+    graph.anchors[0] = (fr_structural_gpu_anchor_t){
+        .id = 1, .generation = 1, .node = 1, .kind = FR_JOINT_MOMENT,
+        .chunk = {1, 1}, .x = 0, .y = 32, .width = 2, .height = 1,
+        .terrain_material = DC_MATERIAL_STONE,
+        .normal_stiffness = 1e8f, .shear_stiffness = 1e8f,
+        .rotational_stiffness = 1e8f, .bearing_capacity = 1e7f,
+        .pullout_capacity = 1e7f, .shear_capacity = 1e7f,
+        .moment_capacity = 1e7f, .friction = .6f,
+        .normal_angle = -1.57079632679f};
+    return graph;
+}
+
+static bool coal_load(dc_gpu_t *gpu, bool hot, char *err, uint32_t cap) {
+    if (!dc_gpu_paint_material(gpu, 70, 77, 1, DC_MATERIAL_COAL, err, cap))
+        return false;
+    const fr_reactive_profile_t *profile = fr_reactive_profile(DC_MATERIAL_COAL);
+    if (!profile) return scene_error(err, cap, "Missing coal profile");
+    uint32_t mass = (uint32_t)lroundf(profile->density * 65536.f);
+    for (uint32_t y = 12; y < 15; y++)
+        for (uint32_t x = 5; x < 8; x++) {
+            if ((x == 5 || x == 7) && y != 13) continue;
+            if (y != 13 && x != 6) continue;
+            fr_reactive_state_t state;
+            uint32_t local = y * DC_CHUNK_SIDE + x;
+            if (!fr_reactive_state_default(DC_MATERIAL_COAL, mass, 0,
+                    hot ? 1000.f : 293.15f, 0xC0000000u + local,
+                    &state, err, cap)) return false;
+            if (hot) state.flags |= FR_REACTIVE_FLAMING;
+            if (!fr_gpu_reactive_seed_cell(gpu, CATAPULT_COAL_SLOT, local,
+                                            &state, err, cap)) return false;
+        }
+    return true;
+}
 
 bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
                              dc_catapult_scene_t *scene,
                              char *err_buf, uint32_t err_cap) {
-    (void)gpu;(void)hot;(void)scene;(void)err_buf;(void)err_cap;
-    return false;
+    if (!gpu || !scene) return scene_error(err_buf, err_cap,
+                                           "Missing catapult context or output");
+    fr_structural_gpu_graph_t graph = support_graph();
+    if (!fr_gpu_place_structure(gpu, &graph, err_buf, err_cap) ||
+        !dc_gpu_set_rigid_solver(gpu, true)) return false;
+    for (uint32_t tick = 0; tick < 5; tick++)
+        if (!dc_gpu_rigid_step(gpu, err_buf, err_cap)) return false;
+    if (!coal_load(gpu, hot, err_buf, err_cap) ||
+        !dc_gpu_admit_authored_rigid_cells(gpu, err_buf, err_cap)) return false;
+    dc_gpu_world_body_t arm = {.chunk = {0, 1},
+        .body = {.x_fp = 56 * 65536, .y_fp = 15 * 65536,
+                 .width = 16, .height = 2,
+                 .id = CATAPULT_ARM_ID, .active = 1}};
+    dc_gpu_body_shape_t shape = {.count = 4, .material = DC_GPU_BODY_WOOD,
+        .vertices = {{0, 0}, {16 * 65536, 0},
+                     {16 * 65536, 2 * 65536}, {0, 2 * 65536}}};
+    if (!dc_gpu_spawn_convex_body(gpu, arm, &shape, err_buf, err_cap) ||
+        !dc_gpu_set_body_origin(gpu, (dc_chunk_coord_t){0, 0},
+                                 err_buf, err_cap)) return false;
+    fr_revolute_joint_t pivot = {.id = CATAPULT_PIVOT_ID,
+        .body_a = FR_STRUCTURAL_BODY_ID_BASE + 1u, .body_b = CATAPULT_ARM_ID,
+        .anchor_a = {8.f, 0.f}, .anchor_b = {0.f, 0.f},
+        .flags = FR_REVOLUTE_SPRING | FR_REVOLUTE_LIMITS,
+        .lower_angle = .3f, .upper_angle = 1.9f,
+        .spring_stiffness = 50.f, .spring_rest_angle = .5f};
+    fr_revolute_joint_t latch = {.id = CATAPULT_LATCH_ID,
+        .body_a = CATAPULT_ARM_ID, .body_b = CATAPULT_COAL_ID,
+        .anchor_a = {6.5f, -2.5f}, .anchor_b = {0.f, 0.f}};
+    if (!fr_gpu_revolute_add(gpu, &pivot, err_buf, err_cap) ||
+        !fr_gpu_revolute_add(gpu, &latch, err_buf, err_cap)) return false;
+    *scene = (dc_catapult_scene_t){.frame_body = pivot.body_a,
+        .arm_body = pivot.body_b, .coal_body = latch.body_b,
+        .pivot_joint = pivot.id, .latch_joint = latch.id};
+    return true;
 }
 
 bool dc_catapult_scene_release(dc_gpu_t *gpu, dc_catapult_scene_t *scene,
                                char *err_buf, uint32_t err_cap) {
-    (void)gpu;(void)scene;(void)err_buf;(void)err_cap;
-    return false;
+    if (!gpu || !scene || scene->released || !scene->latch_joint)
+        return scene_error(err_buf, err_cap, "Invalid catapult latch release");
+    if (!fr_gpu_revolute_remove(gpu, scene->latch_joint, err_buf, err_cap))
+        return false;
+    scene->released = true;
+    return true;
 }
