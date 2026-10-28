@@ -124,7 +124,8 @@ static void test_two_dimensional_timber_transfers_heat_on_a_gameplay_timescale(v
         }
         energy[0]-=flux[0];energy[1]+=flux[0]-flux[1];energy[2]+=flux[1];
     }
-    ASSERT_TRUE(energy[2]/.9f>400.f);
+    ASSERT_TRUE(FR_THERMAL_2D_TRANSPORT_SCALE>1.f&&FR_THERMAL_2D_TRANSPORT_SCALE<=2.f);
+    ASSERT_TRUE(energy[2]/.9f>301.5f&&energy[2]/.9f<306.f);
     ASSERT_TRUE(fabsf(energy[0]+energy[1]+energy[2]-initial)<.01f);PASS();
 }
 static void test_exposed_skin_has_a_finite_radiating_boundary(void) {
@@ -139,7 +140,17 @@ static void test_warm_reacting_gas_does_not_render_as_full_brightness_flame(void
     ASSERT_TRUE(fr_blackbody_visible_efficiency(1200.f)<fr_blackbody_visible_efficiency(1500.f));
     ASSERT_TRUE(fr_blackbody_visible_efficiency(0.f)==0.f);PASS();
 }
+static void test_mixed_temperature_outflow_preserves_each_parcel_and_total_heat(void) {
+    char err[256]={0};float energy[2]={2.f,200.f},weight[2],heat=-100.f;
+    for(int i=0;i<2;i++) weight[i]=fr_thermal_heat_weight(.5f,1.f,energy[i],heat);
+    float total=weight[0]+weight[1],before=energy[0]+energy[1];
+    for(int i=0;i<2;i++) energy[i]+=heat*weight[i]/total;
+    ASSERT_TRUE(energy[0]>=0&&energy[1]>=0);
+    ASSERT_TRUE(fabsf(energy[0]+energy[1]-before-heat)<.0001f);
+    ASSERT_TRUE(fr_thermal_heat_weight(.5f,2.f,0.f,10.f)>0.f);PASS();
+}
 int main(void) {
+    RUN(test_mixed_temperature_outflow_preserves_each_parcel_and_total_heat);
     RUN(test_warm_reacting_gas_does_not_render_as_full_brightness_flame);
     RUN(test_exposed_skin_has_a_finite_radiating_boundary);
     RUN(test_two_dimensional_timber_transfers_heat_on_a_gameplay_timescale);
