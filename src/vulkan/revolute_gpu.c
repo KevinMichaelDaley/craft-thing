@@ -99,6 +99,7 @@ static bool joint_valid(const fr_revolute_joint_t *joint,char *err,uint32_t cap)
 bool fr_gpu_revolute_add(dc_gpu_t *g,const fr_revolute_joint_t *joint,char *err,uint32_t cap) {
     if(!g||!g->runtime_bodies||!joint_valid(joint,err,cap)) return false;
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot reach joint authoring boundary");
+    if(!dc_gpu_set_body_origin(g,g->body_origin,err,cap)) return false;
     uint32_t a=find_body(g,joint->body_a),b=find_body(g,joint->body_b);
     if(a==DC_BODY_SLOT_NONE||b==DC_BODY_SLOT_NONE) return error(err,cap,"Revolute endpoint is absent");
     if(!dc_gpu_solver_revolute_prepare(g,err,cap)) return false;
@@ -118,7 +119,11 @@ bool fr_gpu_revolute_add(dc_gpu_t *g,const fr_revolute_joint_t *joint,char *err,
     memset(p,0,JOINT_WORDS*4u);
     p[0]=joint->id;p[1]=1;p[2]=a;p[3]=dc_gpu_body_owner(g,a)->generation;p[4]=joint->body_a;
     p[5]=b;p[6]=dc_gpu_body_owner(g,b)->generation;p[7]=joint->body_b;
-    memcpy(p+8,joint->anchor_a,8);memcpy(p+10,joint->anchor_b,8);
+    for(uint32_t axis=0;axis<2;axis++) {
+        float first=joint->anchor_a[axis]+dc_gpu_body_record(g,a)->center[axis];
+        float second=joint->anchor_b[axis]+dc_gpu_body_record(g,b)->center[axis];
+        memcpy(p+8u+axis,&first,sizeof(first));memcpy(p+10u+axis,&second,sizeof(second));
+    }
     p[12]=joint->flags;memcpy(p+13,&joint->lower_angle,7u*sizeof(float));
     if(index==r->span) r->span++;
     rebuild_hash(r);
@@ -149,7 +154,7 @@ bool fr_gpu_revolute_collect(dc_gpu_t *g,uint8_t **bytes,size_t *length,char *er
     if(!count) return true;
     size_t size=16u+(size_t)count*JOINT_WORDS*4u;
     uint32_t *out=calloc(1,size);if(!out) return error(err,cap,"Cannot allocate pivot checkpoint");
-    out[0]=0x314a4344u;out[1]=1;out[2]=JOINT_WORDS;out[3]=count;
+    out[0]=0x314a4344u;out[1]=2;out[2]=JOINT_WORDS;out[3]=count;
     count=0;
     for(uint32_t i=0;i<r->span;i++) if(record_live(g,source+i*JOINT_WORDS)) {
         uint32_t *p=out+4u+count++*JOINT_WORDS;memcpy(p,source+i*JOINT_WORDS,JOINT_WORDS*4u);
@@ -163,7 +168,7 @@ bool fr_gpu_revolute_prepare(dc_gpu_t *g,const uint8_t *bytes,size_t length,
     if(length<16u||length%4u) return error(err,cap,"Invalid pivot checkpoint envelope");
     const uint32_t *input=(const uint32_t *)bytes;
     uint32_t count=input[3];
-    if(input[0]!=0x314a4344u||input[1]!=1u||input[2]!=JOINT_WORDS||!count||
+    if(input[0]!=0x314a4344u||(input[1]!=1u&&input[1]!=2u)||input[2]!=JOINT_WORDS||!count||
        (uint64_t)count*JOINT_WORDS*4u+16u!=length)
         return error(err,cap,"Invalid pivot checkpoint layout");
     uint32_t *ids=calloc(count,sizeof(*ids));if(!ids) return error(err,cap,"Cannot validate pivot identities");
@@ -195,6 +200,14 @@ bool fr_gpu_revolute_prepare(dc_gpu_t *g,const uint8_t *bytes,size_t length,
     VkDeviceSize words=(VkDeviceSize)count*JOINT_WORDS+(VkDeviceSize)hash_capacity(count)*4u;
     if(!dc_gpu_address_buffer_create(g,words*4u,true,&r->records,err,cap)) {free(r);return false;}
     memcpy(r->records.mapped,input+4u,(size_t)count*JOINT_WORDS*4u);r->span=r->capacity=count;
+    if(input[1]==1u) for(uint32_t i=0;i<count;i++) {
+        uint32_t *p=(uint32_t *)r->records.mapped+i*JOINT_WORDS;
+        for(uint32_t endpoint=0;endpoint<2;endpoint++) for(uint32_t axis=0;axis<2;axis++) {
+            uint32_t word=8u+endpoint*2u+axis,slot=p[endpoint?5u:2u];float anchor;
+            memcpy(&anchor,p+word,sizeof(anchor));anchor+=payload->bodies[slot].center[axis];
+            memcpy(p+word,&anchor,sizeof(anchor));
+        }
+    }
     rebuild_hash(r);
     *prepared=r;return true;
 }

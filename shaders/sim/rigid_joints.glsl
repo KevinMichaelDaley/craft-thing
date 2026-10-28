@@ -22,8 +22,8 @@ void solve_revolute(uint index,uint phase) {
         return;
     }
     Body a=contact_body(ai),b=contact_body(bi);
-    vec2 ra=body_rotate(vec2(joint_float(joints,p+8u),joint_float(joints,p+9u)),a.angle);
-    vec2 rb=body_rotate(vec2(joint_float(joints,p+10u),joint_float(joints,p+11u)),b.angle);
+    vec2 ra=body_rotate(vec2(joint_float(joints,p+8u),joint_float(joints,p+9u))-a.center,a.angle);
+    vec2 rb=body_rotate(vec2(joint_float(joints,p+10u),joint_float(joints,p+11u))-b.center,b.angle);
     vec2 delta=position(b)+b.center+rb-position(a)-a.center-ra;
     if(phase==24u) delta=velocity(b)+b.angular_velocity*vec2(-rb.y,rb.x)-
         velocity(a)-a.angular_velocity*vec2(-ra.y,ra.x);
