@@ -35,3 +35,7 @@ User-approved next visible module after ordinary bonfire regression is green and
 **2026-10-28T23:36:17Z**
 
 Grounded triangular wood base, supported upright, distinct stone target wall, centered rigid pivot, balanced cocking tension latch, separate pouch release, finite hot/cold coal and wall-impact fixture implemented. Release changes no body pose/velocity; first rigid step advances arm about 0.15 rad with ~0.25 rad/tick angular velocity, projectile reaches target and increases wall load. Headless 7/7 and display 2/2 pass. Renderer arm appearance defect filed as ct-xuqp; progressive burn damage remains ctlo-3ndt. Full make test reaches Intel-only reactive_profile_gpu_tests and stops because this host has no Intel compute device; continue-mode suite is running.
+
+**2026-10-28T23:47:20Z**
+
+Final verification: build/catapult_scene_tests 7/7 and build/catapult_scene_display_tests 2/2 pass. Standard make test passed through catapult and renderer tests, then failed at reactive_profile_gpu_tests because device enumeration reported no Intel hardware compute device. An optional make -i continuation passed later reactive/terrain/body-color targets, with only additional Intel-only initialization failures through body_carve_tests; it was stopped because the hardware-gated full suite cannot pass on this host. Branch changes pushed to origin.
