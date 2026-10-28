@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "ferrum/structural/authoring.h"
@@ -143,12 +144,35 @@ static void test_absent_normal_uses_renderer_default_not_raw_placeholder(void) {
     dc_gpu_destroy(gpu); PASS();
 }
 
+static void test_parallel_plans_span_workgroups_and_sparse_tiles(void) {
+    fr_authored_request_t r = request();
+    uint8_t *p = calloc(576u, 8u), *a = calloc(576u, 64u);
+    ASSERT_TRUE(p && a);
+    r.width = 64; r.height = 9; r.physical = p; r.appearance = a;
+    r.physical_bytes = 576u * 8u; r.appearance_bytes = 576u * 64u;
+    for (unsigned x = 1; x <= 17; x++) {
+        p[(64u + x) * 8u] = 1; p[(64u + x) * 8u + 2u] = 3;
+    }
+    p[(5u * 64u + 60u) * 8u] = 2; p[(5u * 64u + 60u) * 8u + 2u] = 3;
+    dc_gpu_t *gpu = context(); ASSERT_TRUE(gpu); char err[256];
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu, &r, err, sizeof(err)));
+    fr_authored_component_plan_t plans[2]; uint32_t count = 0;
+    ASSERT_TRUE(fr_gpu_read_authored_components(gpu, plans, 2, &count, err, sizeof(err)));
+    ASSERT_EQ(count, 2u); ASSERT_EQ(plans[0].source_root, 65u);
+    ASSERT_EQ(plans[0].occupied, 17u); ASSERT_EQ(plans[0].width, 17u);
+    ASSERT_EQ(plans[0].height, 1u); ASSERT_EQ(plans[0].tiles, 3u);
+    ASSERT_EQ(plans[0].geometry_words, 110u);
+    ASSERT_EQ(plans[1].source_root, 380u); ASSERT_EQ(plans[1].body_slot, 1u);
+    dc_gpu_destroy(gpu); free(p); free(a); PASS();
+}
+
 int main(void) {
     RUN(test_mixed_concavities_keep_exact_role_object_connectivity);
     RUN(test_diagonal_pixels_remain_independent);
     RUN(test_invalid_role_material_and_fabricated_structure_are_diagnosed);
     RUN(test_staging_resize_releases_allocation_and_bad_envelope_keeps_prior);
     RUN(test_absent_normal_uses_renderer_default_not_raw_placeholder);
+    RUN(test_parallel_plans_span_workgroups_and_sparse_tiles);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }

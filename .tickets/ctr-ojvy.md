@@ -22,3 +22,7 @@ Final inline optimization full headless regression again reproduces only the two
 **2026-10-24T19:27:40Z**
 
 Final inline performance regression rerun still reproduces the same two authored_stage_tests failures at67 (component-plan getter stub) and135 (absent-normal default). These predate this optimization work; no assertions relaxed. All newly corrected fluid/contact and color/albedo tests pass in the rerun so far.
+
+**2026-10-28T02:40:02Z**
+
+Implemented GPU-only staged bounds/count reductions, bounded 8x8 sparse tile election and logarithmic parallel prefix compaction into canonical-root ordered plans. Host readback is one memcpy of completed plans, with required-count reporting on insufficient capacity; no host connectivity/geometry scan. Absent normal override now uses renderer default while explicitly supplied invalid normals still reject. Native tests 6/6, including non-power-of-two 576-pixel input spanning workgroups and three sparse tiles. Full default suite rerun without ignored failures is in progress.

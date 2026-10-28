@@ -4,12 +4,17 @@ layout(constant_id=0) const uint PHASE=0u;
 layout(set=0,binding=0,std430) buffer Staging { uint words[]; };
 layout(push_constant) uniform Params { uint width,height,has_graph,padding; } params;
 const uint INVALID=0xffffffffu;
+const uint GRAPH_WORDS=2320u;
 uint pixels() {return params.width*params.height;}
 uint physical(uint i) {return 24u+i*2u;}
 uint appearance(uint i) {return 24u+pixels()*2u+i*16u;}
 uint members(uint i) {return 24u+pixels()*18u+i;}
 uint label(uint i) {return 24u+pixels()*19u+i;}
 uint graph() {return 24u+pixels()*20u;}
+uint plans() {return graph()+GRAPH_WORDS;}
+uint plan(uint i) {return plans()+i*10u;}
+uint scan(uint parity,uint i) {return plans()+pixels()*10u+parity*pixels()+i;}
+uint output_plan(uint i) {return plans()+pixels()*12u+i*10u;}
 void reject(uint i) {atomicOr(words[2],1u);atomicMin(words[20],i);}
 bool terrain_material(uint m) {return m>=1u&&m<=10u&&m!=3u;}
 bool body_material(uint m) {return (m>=1u&&m<=4u)||m==10u;}
@@ -21,7 +26,7 @@ bool appearance_valid(uint index) {
     float roughness=uintBitsToFloat(words[a+3u]),relief=uintBitsToFloat(words[a+7u]),alpha=uintBitsToFloat(words[a+12u]);
     if(roughness<0.||roughness>1.||relief<0.||alpha<0.||alpha>1.||words[a+11u]!=0u||words[a+13u]!=0u||words[a+14u]!=0u||(words[a+15u]&~7u)!=0u) return false;
     vec3 normal=vec3(uintBitsToFloat(words[a+4u]),uintBitsToFloat(words[a+5u]),uintBitsToFloat(words[a+6u]));
-    return abs(dot(normal,normal)-1.)<=.001;
+    return (words[a+15u]&1u)==0u||abs(dot(normal,normal)-1.)<=.001;
 }
 bool member_valid(uint index,uint material) {
     if(params.has_graph==0u) return false;
@@ -68,12 +73,54 @@ void main() {
         }
         return;
     }
-    if(atomicAdd(words[label(i)],0u)==INVALID) return;
+    uint owner=atomicAdd(words[label(i)],0u);
+    if(PHASE==3u) {
+        uint p=plan(i);
+        words[p]=i;words[p+1u]=words[physical(i)+1u];words[p+2u]=0u;
+        words[p+3u]=INVALID;words[p+4u]=INVALID;
+        for(uint k=5u;k<10u;k++) words[p+k]=0u;
+        words[scan(0u,i)]=uint(owner==i);
+        if(owner==i) atomicAdd(words[4],1u);
+        return;
+    }
+    if(PHASE==6u) {
+        uint offset=params.padding>>1u,parity=params.padding&1u;
+        uint sum=words[scan(parity,i)];
+        if(i>=offset) sum+=words[scan(parity,i-offset)];
+        words[scan(parity^1u,i)]=sum;
+        return;
+    }
+    if(owner==INVALID) return;
     if(PHASE==1u) {
         if(i%params.width+1u<params.width) join(i,i+1u);
         if(i/params.width+1u<params.height) join(i,i+params.width);
         return;
     }
-    if(PHASE==2u) {uint owner=root(i);atomicMin(words[label(i)],owner);return;}
-    if(i==words[label(i)]) atomicAdd(words[4],1u);
+    if(PHASE==2u) {uint canonical=root(i);atomicMin(words[label(i)],canonical);return;}
+    uint p=plan(owner),x=i%params.width,y=i/params.width;
+    if(PHASE==4u) {
+        atomicAdd(words[p+2u],1u);
+        atomicMin(words[p+3u],x);atomicMin(words[p+4u],y);
+        atomicMax(words[p+5u],x);atomicMax(words[p+6u],y);
+        return;
+    }
+    if(PHASE==5u) {
+        uint low_x=words[p+3u],low_y=words[p+4u];
+        uint tx=low_x+((x-low_x)/8u)*8u,ty=low_y+((y-low_y)/8u)*8u;
+        /* One occupied texel elects each sparse tile; at most 64 local reads. */
+        for(uint yy=ty;yy<=y;yy++) for(uint xx=tx;xx<min(tx+8u,params.width);xx++) {
+            uint candidate=yy*params.width+xx;
+            if(candidate>=i) break;
+            if(words[label(candidate)]==owner) return;
+        }
+        atomicAdd(words[p+7u],1u);return;
+    }
+    if(PHASE==7u&&owner==i) {
+        uint rank=words[scan(params.padding,i)]-1u,d=output_plan(rank);
+        uint width=words[p+5u]-words[p+3u]+1u,height=words[p+6u]-words[p+4u]+1u;
+        for(uint k=0u;k<5u;k++) words[d+k]=words[p+k];
+        words[d+5u]=width;words[d+6u]=height;words[d+7u]=words[p+7u];
+        words[d+8u]=8u+((width+7u)/8u)*((height+7u)/8u)+words[p+7u]*33u;
+        words[d+9u]=rank;
+    }
 }

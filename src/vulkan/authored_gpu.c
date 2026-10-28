@@ -6,7 +6,10 @@
 #include "ferrum/structural/authoring.h"
 #include "gpu_internal.h"
 
-enum { STAGE_HEADER_WORDS = 24, STAGE_WORDS_PER_PIXEL = 20, STAGE_PHASES = 4 };
+enum { STAGE_HEADER_WORDS = 24, STAGE_WORDS_PER_PIXEL = 20,
+       STAGE_PLAN_PREFIX_WORDS = 12, STAGE_PLAN_WORDS = 22, STAGE_PHASES = 8 };
+_Static_assert(sizeof(fr_authored_component_plan_t) == 10u * sizeof(uint32_t),
+               "Authored component plan GPU layout changed");
 struct dc_gpu_authored_stage {
     VkBuffer buffer;
     VkDeviceMemory memory;
@@ -45,7 +48,7 @@ void dc_gpu_authored_destroy(dc_gpu_t *gpu) {
 
 static bool stage_init(dc_gpu_t *gpu, uint32_t count, char *err, uint32_t cap) {
     VkDeviceSize bytes = ((VkDeviceSize)STAGE_HEADER_WORDS +
-                          (VkDeviceSize)count * STAGE_WORDS_PER_PIXEL +
+                          (VkDeviceSize)count * (STAGE_WORDS_PER_PIXEL + STAGE_PLAN_WORDS) +
                           DC_STRUCTURAL_GRAPH_WORDS) * sizeof(uint32_t);
     VkPhysicalDeviceProperties properties;
     vkGetPhysicalDeviceProperties(gpu->physical, &properties);
@@ -173,8 +176,21 @@ bool fr_gpu_prepare_authored(dc_gpu_t *gpu, const fr_authored_request_t *r,
     vkCmdPushConstants(gpu->command, s->layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     for (uint32_t phase = 0; phase < STAGE_PHASES; phase++) {
         vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, s->pipelines[phase]);
-        vkCmdDispatch(gpu->command, (count + 127u) / 128u, 1, 1);
-        stage_barrier(gpu, false);
+        if (phase == 6u) {
+            uint32_t parity = 0;
+            for (uint32_t offset = 1; offset < count; offset *= 2u) {
+                push[3] = offset * 2u + parity;
+                vkCmdPushConstants(gpu->command, s->layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+                vkCmdDispatch(gpu->command, (count + 127u) / 128u, 1, 1);
+                stage_barrier(gpu, false);
+                parity ^= 1u;
+            }
+            push[3] = parity;
+            vkCmdPushConstants(gpu->command, s->layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+        } else {
+            vkCmdDispatch(gpu->command, (count + 127u) / 128u, 1, 1);
+            stage_barrier(gpu, false);
+        }
     }
     if (vkEndCommandBuffer(gpu->command) != VK_SUCCESS)
         return error(err, cap, "Cannot end authored command buffer");
@@ -206,6 +222,17 @@ bool fr_gpu_read_authored_components(dc_gpu_t *gpu,
                                      fr_authored_component_plan_t *components,
                                      uint32_t capacity, uint32_t *count,
                                      char *err_buf, uint32_t err_cap) {
-    (void)gpu; (void)components; (void)capacity; (void)count;
-    return error(err_buf, err_cap, "Authored component plans are not implemented");
+    struct dc_gpu_authored_stage *s = gpu ? gpu->authored_stage : NULL;
+    if (!s || !s->ready || !count)
+        return error(err_buf, err_cap, "Invalid authored component readback");
+    if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
+        return error(err_buf, err_cap, "Cannot read authored component plans");
+    *count = s->mapped[4];
+    if (s->mapped[2]) return error(err_buf, err_cap, "Authored staging contains invalid input");
+    if (capacity < *count || (*count && !components))
+        return error(err_buf, err_cap, "Authored component readback capacity is insufficient");
+    size_t offset = STAGE_HEADER_WORDS + (size_t)s->pixels *
+        (STAGE_WORDS_PER_PIXEL + STAGE_PLAN_PREFIX_WORDS) + DC_STRUCTURAL_GRAPH_WORDS;
+    if (*count) memcpy(components, s->mapped + offset, (size_t)*count * sizeof(*components));
+    return true;
 }
