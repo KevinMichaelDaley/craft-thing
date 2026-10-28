@@ -1,6 +1,6 @@
 ---
 id: ctfs-b6cz
-status: open
+status: closed
 deps: []
 links: [ctfs-5gil]
 created: 2026-10-28T19:12:27Z
@@ -17,3 +17,9 @@ dc_gpu_set_tick_seconds updates tick_time_scale used by fluid/thermal/gas, but r
 
 Equal physical elapsed time at multiple displayed cadences produces equivalent rigid trajectories/contacts and elapsed thermal/gas clocks; include a real displayed launcher or bonfire case, with no clock cap hiding lost time.
 
+
+## Notes
+
+**2026-10-28T23:35:05Z**
+
+Rigid scheduler now spends the full elapsed tick budget. Cold launcher regression runs equal elapsed time at 30/60/120 Hz and checks matching arm angles, coal positions, and gas time; all pass. Display fixture uses real rigid release. Frame budget optimization remains tracked by linked ctfs-5gil.

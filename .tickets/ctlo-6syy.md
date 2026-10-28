@@ -1,7 +1,7 @@
 ---
 id: ctlo-6syy
 status: in_progress
-deps: [ctlo-x5gv, ctlo-3ndt, ctfs-0zw5, ctfs-ermw, ctfs-b6cz]
+deps: [ctlo-x5gv, ctlo-3ndt, ctfs-0zw5, ctfs-ermw, ctfs-b6cz, ct-xuqp]
 links: []
 created: 2026-10-24T22:06:19Z
 type: feature
@@ -31,3 +31,7 @@ User-approved next visible module after ordinary bonfire regression is green and
 **2026-10-28T21:17:40Z**
 
 2026-10-28 resumed branch. Coal/char body mapping and extracted reactive parcel admission now GREEN on ctfs-ermw, including GPU mass and checkpoint tests. Supported catapult frame, real load/release, rigid elapsed clock, burn damage and displayed dry/wet wall fixture remain outstanding under existing child/blocker tickets.
+
+**2026-10-28T23:36:17Z**
+
+Grounded triangular wood base, supported upright, distinct stone target wall, centered rigid pivot, balanced cocking tension latch, separate pouch release, finite hot/cold coal and wall-impact fixture implemented. Release changes no body pose/velocity; first rigid step advances arm about 0.15 rad with ~0.25 rad/tick angular velocity, projectile reaches target and increases wall load. Headless 7/7 and display 2/2 pass. Renderer arm appearance defect filed as ct-xuqp; progressive burn damage remains ctlo-3ndt. Full make test reaches Intel-only reactive_profile_gpu_tests and stops because this host has no Intel compute device; continue-mode suite is running.
