@@ -1,6 +1,6 @@
 ---
 id: ctlo-6syy
-status: open
+status: in_progress
 deps: [ctlo-x5gv, ctlo-3ndt]
 links: []
 created: 2026-10-24T22:06:19Z
