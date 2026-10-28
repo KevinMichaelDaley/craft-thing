@@ -25,14 +25,21 @@ static bool scene_error(char *err, uint32_t cap, const char *message) {
 }
 
 static fr_structural_gpu_graph_t support_graph(void) {
-    fr_structural_gpu_graph_t graph = {.node_count = 2, .member_count = 1,
-                                       .anchor_count = 1};
+    fr_structural_gpu_graph_t graph = {.node_count = 4, .member_count = 2,
+                                       .anchor_count = 2};
     graph.nodes[0] = (fr_structural_gpu_node_t){.id = 1, .generation = 1,
         .chunk = {1, 1}, .x_fp = 0, .y_fp = 32 * 65536};
     graph.nodes[1] = (fr_structural_gpu_node_t){.id = 2, .generation = 1,
         .chunk = {1, 1}, .x_fp = 0, .y_fp = 16 * 65536};
+    graph.nodes[2] = (fr_structural_gpu_node_t){.id = 3, .generation = 1,
+        .chunk = {1, 1}, .x_fp = 14 * 65536, .y_fp = 32 * 65536};
+    graph.nodes[3] = (fr_structural_gpu_node_t){.id = 4, .generation = 1,
+        .chunk = {1, 1}, .x_fp = 14 * 65536, .y_fp = 18 * 65536};
     graph.members[0] = (fr_structural_gpu_member_t){.id = 1, .generation = 1,
         .a = 1, .b = 2, .material = FR_STRUCTURAL_WOOD, .depth_fp = 4 * 65536};
+    graph.members[1] = (fr_structural_gpu_member_t){.id = 2, .generation = 1,
+        .a = 3, .b = 4, .material = FR_STRUCTURAL_STONE,
+        .depth_fp = 4 * 65536};
     graph.anchors[0] = (fr_structural_gpu_anchor_t){
         .id = 1, .generation = 1, .node = 1, .kind = FR_JOINT_MOMENT,
         .chunk = {1, 1}, .x = 0, .y = 32, .width = 2, .height = 1,
@@ -42,6 +49,10 @@ static fr_structural_gpu_graph_t support_graph(void) {
         .pullout_capacity = 1e7f, .shear_capacity = 1e7f,
         .moment_capacity = 1e7f, .friction = .6f,
         .normal_angle = -1.57079632679f};
+    graph.anchors[1] = graph.anchors[0];
+    graph.anchors[1].id = 2;
+    graph.anchors[1].node = 3;
+    graph.anchors[1].x = 14;
     return graph;
 }
 
@@ -109,7 +120,7 @@ bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
         .anchor_a = {8.f, 0.f}, .anchor_b = {0.f, 0.f},
         .flags = FR_REVOLUTE_SPRING | FR_REVOLUTE_LIMITS,
         .lower_angle = .3f, .upper_angle = 1.9f,
-        .spring_stiffness = 150.f, .spring_rest_angle = .5f};
+        .spring_stiffness = 200.f, .spring_rest_angle = .5f};
     fr_revolute_joint_t latch = {.id = CATAPULT_LATCH_ID,
         .body_a = CATAPULT_ARM_ID, .body_b = CATAPULT_COAL_ID,
         .anchor_a = {13.f, -3.f}, .anchor_b = {0.f, 0.f}};
@@ -122,6 +133,7 @@ bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
     if (!fr_gas_gpu_enable(gpu, &gas, .0012f, 293.15f, err_buf, err_cap) ||
         !fr_combustion_gpu_enable(gpu, err_buf, err_cap)) return false;
     *scene = (dc_catapult_scene_t){.frame_body = pivot.body_a,
+        .wall_body = FR_STRUCTURAL_BODY_ID_BASE + 2u,
         .arm_body = pivot.body_b, .coal_body = latch.body_b,
         .pivot_joint = pivot.id, .latch_joint = latch.id};
     return true;

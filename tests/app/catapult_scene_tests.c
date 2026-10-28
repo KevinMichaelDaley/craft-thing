@@ -21,6 +21,10 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
     dc_gpu_world_body_t wall;
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.wall_body,&wall,err,sizeof(err)));
     ASSERT_TRUE(wall.body.active);
+    dc_gpu_body_shape_t wall_shape;
+    ASSERT_TRUE(dc_gpu_read_body_shape(g,scene.wall_body,&wall_shape,
+        err,sizeof(err)));
+    ASSERT_EQ(wall_shape.material,DC_GPU_BODY_STONE);
     for(uint32_t tick=0;tick<5;tick++)
         ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     fr_structural_gpu_component_state_t support;
@@ -57,9 +61,16 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
     printf("coal release speed %.3f travel %.3f from %.2f %.2f to %.2f %.2f\n",
            launch_speed,travel,xof(before),yof(before),xof(flight),yof(flight));
     ASSERT_TRUE(launch_speed>.5f&&travel>2.f);
-    ASSERT_TRUE(arm_before.angular_velocity>0.f&&arm_flight.angular_velocity<0.f);
+    ASSERT_TRUE(isfinite(arm_flight.angular_velocity));
     ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&support));
     ASSERT_EQ(support.state,FR_STRUCTURAL_SUPPORTED);
+    fr_structural_gpu_component_state_t wall_support;
+    ASSERT_TRUE(fr_gpu_read_structure_component(g,3,&wall_support));
+    printf("wall support state %u flags %u load %.2f %.2f\n",
+        wall_support.state,wall_support.flags,wall_support.external[0],
+        wall_support.external[1]);
+    ASSERT_EQ(wall_support.state,FR_STRUCTURAL_SUPPORTED);
+    ASSERT_TRUE(wall_support.external[1]>150000.f);
     for(uint32_t tick=0;tick<10;tick++) {
         ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     }
@@ -70,13 +81,25 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
     printf("catapult arm angular speed %.3f held, %.3f flight, %.3f impact\n",
         arm_before.angular_velocity,arm_flight.angular_velocity,
         arm_motion.angular_velocity);
-    ASSERT_TRUE(xof(impact)>xof(flight)+3.f&&yof(impact)>90.f);
+    ASSERT_TRUE(arm_before.angular_velocity>0.f&&arm_flight.angular_velocity<0.f);
+    printf("coal wall impact at %.2f %.2f, velocity %.2f %.2f\n",
+        xof(impact),yof(impact),impact.body.vx_fp/65536.f,
+        impact.body.vy_fp/65536.f);
+    ASSERT_TRUE(xof(impact)>xof(flight)+1.f&&yof(impact)>78.f&&
+                yof(impact)<82.f);
+    ASSERT_TRUE(fabsf(impact.body.vy_fp/65536.f)<.1f);
     ASSERT_TRUE(fabsf(impact.body.vx_fp/65536.f)<launch_speed);
     ASSERT_TRUE(isfinite(arm_motion.angular_velocity));
     ASSERT_TRUE(arm_motion.mass>0.f&&arm_motion.inertia>0.f);
     ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&support));
     ASSERT_EQ(support.state,FR_STRUCTURAL_SUPPORTED);
     ASSERT_TRUE(isfinite(support.external[0])&&isfinite(support.external[1]));
+    fr_structural_gpu_component_state_t wall_after;
+    ASSERT_TRUE(fr_gpu_read_structure_component(g,3,&wall_after));
+    printf("wall after state %u flags %u load %.2f %.2f\n",
+        wall_after.state,wall_after.flags,wall_after.external[0],
+        wall_after.external[1]);
+    ASSERT_EQ(wall_after.state,FR_STRUCTURAL_SUPPORTED);
     dc_gpu_destroy(g);PASS();
 }
 
