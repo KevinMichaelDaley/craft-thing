@@ -14,6 +14,7 @@ static bool pivot_window(dc_gpu_t **g,uint32_t w,uint32_t h,const char *shader,c
 #undef dc_gpu_create
 #endif
 #include "ferrum/physics/revolute_gpu.h"
+#include "ferrum/structural/gpu.h"
 
 static void test_pivot_keeps_anchors_together_while_arm_rotates(void) {
     dc_gpu_t *g = grid(); char err[256]; ASSERT_TRUE(g);
@@ -84,9 +85,35 @@ static void test_finite_spring_drives_arm_without_inventing_energy(void) {
     ASSERT_TRUE(rotation>.1f);ASSERT_TRUE(peak_energy<.082f);
     dc_gpu_destroy(g);PASS();
 }
+static void test_checkpoint_restores_joint_and_remaining_spring_work(void) {
+    dc_gpu_t *g=grid();char err[256];ASSERT_TRUE(g);
+    ASSERT_TRUE(dc_gpu_set_rigid_solver(g,true));
+    ASSERT_TRUE(dc_gpu_spawn_world_body(g,box(1,60,20,4,4),err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_spawn_world_body(g,box(2,61,36,2,12),err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_motion(g,1,0,0,DC_GPU_BODY_KINEMATIC,err,sizeof(err)));
+    fr_revolute_joint_t joint={.id=1,.body_a=1,.body_b=2,.anchor_a={0,20},
+        .flags=FR_REVOLUTE_SPRING,.spring_stiffness=1,.spring_rest_angle=.4f};
+    ASSERT_TRUE(fr_gpu_revolute_add(g,&joint,err,sizeof(err)));
+    for(unsigned tick=0;tick<5;tick++) ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_save_structure(g,"build/revolute_checkpoint.dcs",err,sizeof(err)));
+    dc_gpu_t *restored=grid();ASSERT_TRUE(restored);
+    ASSERT_TRUE(fr_gpu_load_structure(restored,"build/revolute_checkpoint.dcs",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_rigid_solver(restored,true));
+    for(unsigned tick=0;tick<20;tick++) {
+        ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_rigid_step(restored,err,sizeof(err)));
+    }
+    dc_gpu_body_motion_t a,b;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,2,&a,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(restored,2,&b,err,sizeof(err)));
+    printf("restored spring arm angles %.6f %.6f\n",a.angle,b.angle);
+    ASSERT_TRUE(fabsf(a.angle-b.angle)<.001f&&fabsf(a.angular_velocity-b.angular_velocity)<.001f);
+    dc_gpu_destroy(g);dc_gpu_destroy(restored);PASS();
+}
 int main(void) {
     RUN(test_pivot_keeps_anchors_together_while_arm_rotates);
     RUN(test_reused_body_identity_cannot_rebind_old_pivot);
     RUN(test_finite_spring_drives_arm_without_inventing_energy);
+    RUN(test_checkpoint_restores_joint_and_remaining_spring_work);
     printf("%d passed, %d failed\n",g_pass,g_fail); return g_fail?1:0;
 }
