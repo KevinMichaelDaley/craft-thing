@@ -109,6 +109,7 @@ build/body_storage_gpu.o: src/vulkan/body_storage_gpu.c src/vulkan/body_storage_
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/solver_gpu.o build/solver_commands_gpu.o
 GPU_OBJ += build/revolute_gpu.o
+GPU_OBJ += build/authored_rigid_gpu.o
 GPU_OBJ += build/draw_gpu.o
 GPU_OBJ += build/compound_gpu.o build/component_gpu.o build/pixel_gpu.o
 GPU_OBJ += build/structural_store_gpu.o
@@ -210,6 +211,14 @@ build/solver_gpu.o: src/vulkan/solver_gpu.c src/vulkan/gpu_internal.h include/du
 
 build/revolute_gpu.o: src/vulkan/revolute_gpu.c include/ferrum/physics/revolute_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+build/authored_rigid_gpu.o: src/vulkan/authored_rigid_gpu.c include/ferrum/physics/authored_rigid_gpu.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+build/authored_rigid_tests: tests/vulkan/authored_rigid_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+test: build/authored_rigid_tests
+	./build/authored_rigid_tests
 
 build/revolute_tests: tests/vulkan/revolute_tests.c tests/vulkan/rigid_solver_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SOLVER_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)

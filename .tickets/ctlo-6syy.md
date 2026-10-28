@@ -1,7 +1,7 @@
 ---
 id: ctlo-6syy
 status: in_progress
-deps: [ctlo-x5gv, ctlo-3ndt]
+deps: [ctlo-x5gv, ctlo-3ndt, ctfs-0zw5, ctfs-ermw]
 links: []
 created: 2026-10-24T22:06:19Z
 type: feature
