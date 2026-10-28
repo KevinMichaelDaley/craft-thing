@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "ferrum/fire/gpu.h"
+#include "ferrum/fire/material_profile.h"
 #include "../../src/vulkan/gpu_internal.h"
 #include "../../src/vulkan/runtime_body_gpu.h"
 
@@ -194,7 +196,36 @@ static void test_live_pool_reuses_entries_instead_of_growing_with_retired_histor
     ASSERT_TRUE(memcmp(&record.state,&state,sizeof(state))==0);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_coal_and_char_extract_with_finite_reactive_stock(void) {
+    char err[256]={0};
+    const uint32_t materials[2]={DC_MATERIAL_COAL,DC_MATERIAL_CHAR};
+    for(uint32_t trial=0;trial<2;trial++) {
+        dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+        for(uint32_t y=10;y<14;y++) for(uint32_t x=10;x<14;x++)
+            c->cells[y*64+x].material=materials[trial];
+        ASSERT_TRUE(context(&g,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&
+                    dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+        uint32_t mass=(uint32_t)lroundf(fr_reactive_profile(materials[trial])->density*65536.f);
+        fr_reactive_state_t state;
+        ASSERT_TRUE(fr_reactive_state_default(materials[trial],mass,0,
+                    trial?900.f:293.15f,91+trial,&state,err,sizeof(err)));
+        ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,11*64+11,&state,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_enable_automatic_components(g)&&
+                    dc_gpu_rigid_step(g,err,sizeof(err)));
+        fr_reactive_record_t record;bool found=false;
+        ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,1,1,&record,&found,
+                                               err,sizeof(err)));
+        ASSERT_TRUE(found);
+        ASSERT_EQ(record.state.material,materials[trial]);
+        ASSERT_EQ(record.state.fuel_mass_fp+record.state.char_mass_fp,mass);
+        ASSERT_TRUE(memcmp(&record.state,&state,sizeof(state))==0);
+        free(c);dc_gpu_destroy(g);
+    }
+    PASS();
+}
 int main(void) {
+    RUN(test_coal_and_char_extract_with_finite_reactive_stock);
     RUN(test_cells_retain_sparse_state_and_brush_replacement_retires_it);
     RUN(test_extraction_and_next_arena_flip_keep_exact_state);
     RUN(test_mpm_pool_swaps_preserve_parcel_and_leaf_pigment);
