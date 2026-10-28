@@ -1387,6 +1387,7 @@ $(GPU_OBJ): src/vulkan/runtime_body_gpu.h src/vulkan/runtime_body_internal.h
 build/shaders/runtime/%.comp.spv: shaders/sim/%.comp $(wildcard shaders/sim/*.glsl) include/dungeoncraft/body_storage_layout.h
 	@mkdir -p $(dir $@)
 	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -V --target-env vulkan1.3 $< -o $@
+build/shaders/runtime/component_extract.comp.spv build/shaders/runtime/component_local.comp.spv build/shaders/runtime/pattern.comp.spv: include/dungeoncraft/terrain_flags.h
 build/shaders/runtime/scene.comp.spv: shaders/renderer/scene.comp $(wildcard shaders/renderer/*.glsl) $(wildcard shaders/sim/*.glsl) include/dungeoncraft/body_storage_layout.h
 	@mkdir -p $(dir $@)
 	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -V --target-env vulkan1.3 $< -o $@

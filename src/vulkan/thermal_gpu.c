@@ -332,7 +332,8 @@ bool fr_thermal_prepare_paint(dc_gpu_t *g,uint32_t x,uint32_t y,uint32_t radius,
     uint32_t material,char *err,uint32_t cap) {
     if(!g||!g->thermal) return true;
     uint32_t *control=g->thermal_control_mapped;control[DC_THERMAL_BRUSH_MATERIAL_WORD]=0u;
-    if(material!=DC_MATERIAL_WOOD&&material!=DC_MATERIAL_STONE) return true;
+    if(material!=DC_MATERIAL_WOOD&&material!=DC_MATERIAL_STONE&&
+       material!=DC_MATERIAL_COAL&&material!=DC_MATERIAL_CHAR) return true;
     uint64_t left=x>radius?x-radius:0u,top=y>radius?y-radius:0u;
     uint64_t right=(uint64_t)x+radius+1u,bottom=(uint64_t)y+radius+1u;
     if(right>g->width) right=g->width;

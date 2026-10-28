@@ -36,7 +36,8 @@ float thermal_brush_coefficient(uint material,uint field) {
 bool thermal_brush_begin(uint index,uint old_material,uint material,uvec2 point,out uvec2 prepared) {
     prepared=uvec2(0);
     if(!thermal_water_on()||thermal_control[DC_THERMAL_BRUSH_MATERIAL_WORD]!=material||
-       (material!=1u&&material!=7u)||!reactive_enabled()) return true;
+       (material!=1u&&material!=7u&&material!=11u&&material!=12u)||
+       !reactive_enabled()) return true;
     uvec2 existing=reactive_handle_read(index);
     if(old_material==material&&reactive_handle_valid(existing)) return true;
     if(!thermal_quota()) return false;

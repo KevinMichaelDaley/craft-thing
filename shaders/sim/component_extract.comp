@@ -78,7 +78,8 @@ uint terrain_release_state(uint i,uint bonds) {
     uint flags=cells[i].x;
     if((flags&LOADED_TERRAIN)==0u) {
         uint material=flags&65535u;
-        return material==1u||material==7u||material==8u||material==9u?RELEASE_EXPLICIT:0u;
+        return material==1u||material==7u||material==8u||material==9u||
+            material==11u||material==12u?RELEASE_EXPLICIT:0u;
     }
     uint state=(flags&RELEASED_TERRAIN)!=0u?RELEASE_SUPPORT_CHANGED:0u;
     bool changed=

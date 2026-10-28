@@ -3,7 +3,8 @@
 float geometry_void(uint index,uint atlas) {
     uint packed=cells[atlas].x,material=packed&65535u;
     bool solid=material!=0u&&material!=3u&&((packed&(DC_CELL_LOADED_TERRAIN<<DC_CELL_FLAGS_SHIFT))!=0u||
-        material==1u||material==6u||material==7u||material==8u||material==9u);
+        material==1u||material==6u||material==7u||material==8u||material==9u||
+        material==11u||material==12u);
     if(solid) return 0.;
     return max(0.,1.-float(min(65536u,occupancy[2u*params.width*params.height+index]))/65536.-
         clamp(mpm[index].w,0.,1.)-float(cells[atlas].y)/65536.);

@@ -33,6 +33,8 @@ Appearance texture_sample(ivec2 rest,uint identity,uint material,uint style) {
     Appearance a=Appearance(vec4(.2,.2,.2,.85),vec4(0,0,1,0));
     if(material==0u) return a;
     if(material==9u || material==10u) a.color_roughness.rgb=vec3(.08,.3,.025);
+    else if(material==11u) a.color_roughness.rgb=vec3(.025,.028,.032);
+    else if(material==12u) a.color_roughness.rgb=vec3(.065,.061,.058);
     else if(material==7u || material==8u) a.color_roughness.rgb=vec3(.35,.16,.045);
     else if(material==4u) a.color_roughness.rgb=vec3(.28,.14,.05);
     else if(material==6u) a.color_roughness.rgb=vec3(.42,.39,.34);
