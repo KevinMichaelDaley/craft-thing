@@ -8,6 +8,7 @@
 
 typedef struct {
     uint32_t frame_body;
+    uint32_t base_body;
     uint32_t wall_body;
     uint32_t arm_body;
     uint32_t coal_body;

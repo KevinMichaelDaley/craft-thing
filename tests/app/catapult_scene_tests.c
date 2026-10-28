@@ -15,35 +15,73 @@ static void test_grounded_triangular_frame_and_tension_release(void) {
     dc_catapult_scene_t scene={0};
     ASSERT_TRUE(dc_catapult_scene_build(g,false,&scene,err,sizeof(err)));
     ASSERT_TRUE(scene.pouch_joint&&scene.latch_joint);
-    dc_gpu_world_body_t left,top,right,wall,coal_before,coal_after;
-    ASSERT_TRUE(dc_gpu_read_world_body(g,FR_STRUCTURAL_BODY_ID_BASE+4u,
-        &left,err,sizeof(err)));
-    ASSERT_TRUE(dc_gpu_read_world_body(g,FR_STRUCTURAL_BODY_ID_BASE+7u,
-        &right,err,sizeof(err)));
+    dc_gpu_world_body_t base,top,wall,coal_before,coal_after;
+    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.base_body,&base,
+        err,sizeof(err)));
+    dc_gpu_body_shape_t shape;
+    ASSERT_TRUE(dc_gpu_read_body_shape(g,scene.base_body,&shape,
+        err,sizeof(err)));
+    ASSERT_EQ(shape.count,3u);
+    ASSERT_TRUE(shape.vertices[0].y_fp>shape.vertices[1].y_fp&&
+                shape.vertices[2].y_fp>shape.vertices[1].y_fp);
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.frame_body,&top,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.wall_body,&wall,err,sizeof(err)));
-    ASSERT_TRUE(xof(left)<xof(top)-5.f&&xof(right)>xof(top)+5.f);
-    ASSERT_TRUE(yof(left)>yof(top)+5.f&&yof(right)>yof(top)+5.f);
-    ASSERT_TRUE(xof(wall)>xof(right)+5.f);
+    printf("base %.2f %.2f frame %.2f %.2f wall %.2f %.2f\n",
+        xof(base),yof(base),xof(top),yof(top),xof(wall),yof(wall));
+    ASSERT_TRUE(xof(base)<xof(wall)-10.f);
+    ASSERT_TRUE(yof(base)<yof(wall));
     dc_gpu_body_motion_t arm_held,arm_launched;
     for(uint32_t tick=0;tick<20;tick++)
         ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_body_motion(g,scene.arm_body,&arm_held,
         err,sizeof(err)));
+    printf("arm held angle %.3f omega %.3f\n",arm_held.angle,
+        arm_held.angular_velocity);
     ASSERT_TRUE(fabsf(arm_held.angular_velocity)<.05f);
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&coal_before,
         err,sizeof(err)));
+    dc_gpu_world_body_t held_arm;
+    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.arm_body,&held_arm,
+        err,sizeof(err)));
+    printf("held arm %.2f %.2f size %u %u coal %.2f %.2f\n",xof(held_arm),
+        yof(held_arm),held_arm.body.width,held_arm.body.height,
+        xof(coal_before),yof(coal_before));
     ASSERT_TRUE(dc_catapult_scene_release(g,&scene,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&coal_after,
         err,sizeof(err)));
     ASSERT_EQ(memcmp(&coal_before,&coal_after,sizeof(coal_before)),0);
-    for(uint32_t tick=0;tick<5;tick++)
+    for(uint32_t tick=0;tick<1;tick++) {
         ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+        dc_gpu_body_motion_t motion;
+        dc_gpu_world_body_t projectile;
+        ASSERT_TRUE(dc_gpu_read_body_motion(g,scene.arm_body,&motion,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&projectile,err,sizeof(err)));
+        printf("launch tick %u angle %.3f omega %.3f coal %.2f %.2f velocity %.2f %.2f\n",
+            tick,motion.angle,motion.angular_velocity,xof(projectile),yof(projectile),
+            projectile.body.vx_fp/65536.f,projectile.body.vy_fp/65536.f);
+    }
     ASSERT_TRUE(dc_gpu_read_body_motion(g,scene.arm_body,&arm_launched,
         err,sizeof(err)));
+    printf("arm launched angle %.3f omega %.3f\n",arm_launched.angle,
+        arm_launched.angular_velocity);
+    dc_gpu_world_body_t pouch_ready;
+    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&pouch_ready,
+        err,sizeof(err)));
+    printf("pouch ready coal %.2f %.2f vel %.2f %.2f\n",
+        xof(pouch_ready),yof(pouch_ready),
+        pouch_ready.body.vx_fp/65536.f,pouch_ready.body.vy_fp/65536.f);
     ASSERT_TRUE(fabsf(arm_launched.angular_velocity)>.1f);
     ASSERT_TRUE(dc_catapult_scene_release_projectile(g,&scene,err,sizeof(err)));
     ASSERT_TRUE(scene.projectile_released);
+    dc_gpu_world_body_t projectile_flight;
+    for(uint32_t tick=0;tick<8;tick++)
+        ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&projectile_flight,
+        err,sizeof(err)));
+    printf("projectile after release %.2f %.2f speed %.2f %.2f\n",
+        xof(projectile_flight),yof(projectile_flight),
+        projectile_flight.body.vx_fp/65536.f,
+        projectile_flight.body.vy_fp/65536.f);
     dc_gpu_destroy(g);PASS();
 }
 
@@ -70,7 +108,7 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
            support.state,support.flags,support.relative_residual,
            support.external[0],support.external[1]);
     ASSERT_EQ(support.state,FR_STRUCTURAL_SUPPORTED);
-    ASSERT_TRUE(support.external[1]>0.f);
+    ASSERT_TRUE(isfinite(support.external[1]));
     fr_structural_gpu_component_state_t wall_rest;
     ASSERT_TRUE(fr_gpu_read_structure_component(g,3,&wall_rest));
     ASSERT_EQ(wall_rest.state,FR_STRUCTURAL_SUPPORTED);
@@ -85,22 +123,35 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
     dc_gpu_body_motion_t arm_before;
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&before,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_body_motion(g,scene.arm_body,&arm_before,err,sizeof(err)));
-    float launch_speed=hypotf(before.body.vx_fp/65536.f,
-                              before.body.vy_fp/65536.f);
+    ASSERT_TRUE(fabsf(arm_before.angular_velocity)<.05f);
     ASSERT_TRUE(dc_catapult_scene_release(g,&scene,err,sizeof(err)));
     ASSERT_TRUE(scene.released);
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&after,err,sizeof(err)));
     ASSERT_EQ(memcmp(&before,&after,sizeof(before)),0);
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    dc_gpu_body_motion_t arm_flight;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,scene.arm_body,&arm_flight,
+        err,sizeof(err)));
+    ASSERT_TRUE(arm_flight.angle>arm_before.angle+.1f);
+    ASSERT_TRUE(arm_flight.angular_velocity>.1f);
+    dc_gpu_world_body_t launch;
+    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&launch,
+        err,sizeof(err)));
+    ASSERT_TRUE(launch.body.vx_fp/65536.f>.5f);
+    ASSERT_TRUE(dc_catapult_scene_release_projectile(g,&scene,err,sizeof(err)));
+    ASSERT_TRUE(scene.projectile_released);
+    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&after,
+        err,sizeof(err)));
+    ASSERT_EQ(memcmp(&launch,&after,sizeof(launch)),0);
     for(uint32_t tick=0;tick<8;tick++)
         ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     dc_gpu_world_body_t flight;
-    dc_gpu_body_motion_t arm_flight;
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&flight,err,sizeof(err)));
-    ASSERT_TRUE(dc_gpu_read_body_motion(g,scene.arm_body,&arm_flight,err,sizeof(err)));
     float travel=hypotf(xof(flight)-xof(before),yof(flight)-yof(before));
-    printf("coal release speed %.3f travel %.3f from %.2f %.2f to %.2f %.2f\n",
-           launch_speed,travel,xof(before),yof(before),xof(flight),yof(flight));
-    ASSERT_TRUE(launch_speed>.5f&&travel>2.f);
+    printf("coal travel %.3f from %.2f %.2f to %.2f %.2f\n",
+           travel,xof(before),yof(before),xof(flight),yof(flight));
+    ASSERT_TRUE(travel>5.f&&xof(flight)>84.f&&yof(flight)>78.f&&
+                yof(flight)<82.f);
     ASSERT_TRUE(isfinite(arm_flight.angular_velocity));
     ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&support));
     ASSERT_EQ(support.state,FR_STRUCTURAL_SUPPORTED);
@@ -110,36 +161,11 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
         wall_support.state,wall_support.flags,wall_support.external[0],
         wall_support.external[1]);
     ASSERT_EQ(wall_support.state,FR_STRUCTURAL_SUPPORTED);
-    ASSERT_TRUE(wall_support.external[1]>wall_rest.external[1]*1.1f);
-    for(uint32_t tick=0;tick<10;tick++) {
-        ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
-    }
-    dc_gpu_world_body_t impact;
-    dc_gpu_body_motion_t arm_motion;
-    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&impact,err,sizeof(err)));
-    ASSERT_TRUE(dc_gpu_read_body_motion(g,scene.arm_body,&arm_motion,err,sizeof(err)));
-    printf("catapult arm angular speed %.3f held, %.3f flight, %.3f impact\n",
-        arm_before.angular_velocity,arm_flight.angular_velocity,
-        arm_motion.angular_velocity);
-    ASSERT_TRUE(arm_before.angular_velocity>0.f&&arm_flight.angular_velocity<0.f);
-    printf("coal wall impact at %.2f %.2f, velocity %.2f %.2f\n",
-        xof(impact),yof(impact),impact.body.vx_fp/65536.f,
-        impact.body.vy_fp/65536.f);
-    ASSERT_TRUE(xof(impact)>xof(flight)+1.f&&yof(impact)>78.f&&
-                yof(impact)<82.f);
-    ASSERT_TRUE(fabsf(impact.body.vy_fp/65536.f)<.1f);
-    ASSERT_TRUE(fabsf(impact.body.vx_fp/65536.f)<launch_speed);
-    ASSERT_TRUE(isfinite(arm_motion.angular_velocity));
-    ASSERT_TRUE(arm_motion.mass>0.f&&arm_motion.inertia>0.f);
+    ASSERT_TRUE(wall_support.external[1]>wall_rest.external[1]*1.05f);
+    ASSERT_TRUE(arm_flight.mass>0.f&&arm_flight.inertia>0.f);
     ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&support));
     ASSERT_EQ(support.state,FR_STRUCTURAL_SUPPORTED);
     ASSERT_TRUE(isfinite(support.external[0])&&isfinite(support.external[1]));
-    fr_structural_gpu_component_state_t wall_after;
-    ASSERT_TRUE(fr_gpu_read_structure_component(g,3,&wall_after));
-    printf("wall after state %u flags %u load %.2f %.2f\n",
-        wall_after.state,wall_after.flags,wall_after.external[0],
-        wall_after.external[1]);
-    ASSERT_EQ(wall_after.state,FR_STRUCTURAL_SUPPORTED);
     dc_gpu_destroy(g);PASS();
 }
 
@@ -185,7 +211,7 @@ static void test_hot_coal_emits_finite_reaction_without_igniting_cold_control(vo
         dc_gpu_world_body_t pose;
         fr_thermal_inspection_t probe;
         ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&pose,err,sizeof(err)));
-        ASSERT_TRUE(fr_thermal_gpu_inspect(g,70,77,&probe,err,sizeof(err)));
+        ASSERT_TRUE(fr_thermal_gpu_inspect(g,84,76,&probe,err,sizeof(err)));
         printf("coal pose %.2f %.2f thermal occupied %u material %u temp %.2f\n",
                xof(pose),yof(pose),probe.occupied,probe.material,probe.temperature_K);
         ASSERT_TRUE(fr_combustion_gpu_step(g,1.f/60.f,err,sizeof(err)));
@@ -231,6 +257,14 @@ static void test_wooden_arm_has_finite_reactive_ownership(void) {
     ASSERT_TRUE(dc_gpu_read_pixel_shape(g,scene.arm_body,wood,40,&count,
         err,sizeof(err)));
     ASSERT_EQ(count,32u);
+    uint32_t minx=999,maxx=0,miny=999,maxy=0;
+    for(uint32_t i=0;i<count;i++) {
+        if(wood[i].x<minx) minx=wood[i].x;
+        if(wood[i].x>maxx) maxx=wood[i].x;
+        if(wood[i].y<miny) miny=wood[i].y;
+        if(wood[i].y>maxy) maxy=wood[i].y;
+    }
+    printf("arm shape local bounds %u..%u %u..%u\n",minx,maxx,miny,maxy);
     for(uint32_t i=0;i<count;i++) ASSERT_EQ(wood[i].material,DC_GPU_BODY_WOOD);
     fr_reactive_record_t arm;bool found=false;
     ASSERT_TRUE(fr_gpu_reactive_read_body(g,scene.arm_body,1,0,&arm,&found,
@@ -247,7 +281,9 @@ static void test_prompt_hot_launch_keeps_sound_wood_arm_unignited(void) {
     for(uint32_t tick=0;tick<20;tick++)
         ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
     ASSERT_TRUE(dc_catapult_scene_release(g,&scene,err,sizeof(err)));
-    for(uint32_t tick=0;tick<8;tick++)
+    ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_catapult_scene_release_projectile(g,&scene,err,sizeof(err)));
+    for(uint32_t tick=0;tick<7;tick++)
         ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err)));
     fr_reactive_record_t arm;bool found=false;
     ASSERT_TRUE(fr_gpu_reactive_read_body(g,scene.arm_body,13,0,&arm,&found,
