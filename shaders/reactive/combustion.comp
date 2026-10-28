@@ -254,7 +254,7 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
     uint profile=char_stage?12u:m;
     float capacity=((float(wood_fuel)+float(entry.words[s+11u]))*coefficient(m,5u)+
         float(entry.words[s+10u])*coefficient(12u,5u)+float(entry.words[s+12u])*coefficient(3u,5u))/65536.;
-    if(m!=7u&&m!=8u&&m!=9u&&m!=12u) return;
+    if(m!=7u&&m!=8u&&m!=9u&&m!=11u&&m!=12u) return;
     if(fuel==0u) {
 #ifdef FR_BODY_REACTIONS
         if(owner==2u) Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u])).words[handle.x*12u+6u]=0u;
@@ -346,7 +346,7 @@ void choose_body_target(uint index) {
     uint piece=pixel_piece_at(body,ivec2(e.words[FR_ENTRY_OWNER+3u],e.words[FR_ENTRY_OWNER+4u]));
     uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.x!=index||h.y!=e.words[FR_ENTRY_GENERATION]) return;
     uint s=FR_ENTRY_STATE,m=e.words[s];
-    if((m==7u||m==8u||m==9u||m==12u)&&
+    if((m==7u||m==8u||m==9u||m==11u||m==12u)&&
        (e.words[s+9u]|e.words[s+10u]|e.words[s+13u]|e.words[s+14u]|e.words[s+15u]|e.words[s+16u])==0u&&
        (e.words[s+11u]|e.words[s+12u])!=0u) atomicOr(hud[DC_BODY_ASH_DISPATCH_WORD],1u);
     ivec2 p=body_parcel_cell(body,piece);float best=-1.;uint chosen=0xffffffffu;
@@ -443,7 +443,8 @@ void main() {
         uvec2 address;uint chosen=0xffffffffu;
         if(solid_address(at,address)) {
             uint material=Words(address).words[FR_ENTRY_STATE];
-            if(material==7u||material==8u||material==9u||material==12u) chosen=choose_target(p);
+            if(material==7u||material==8u||material==9u||material==11u||material==12u)
+                chosen=choose_target(p);
         }
         samples[i+params.width*params.height].w=uintBitsToFloat(chosen);
         extinguish_thermally(at);return;

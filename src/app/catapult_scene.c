@@ -2,7 +2,10 @@
 #include <stdio.h>
 
 #include "ferrum/fire/gpu.h"
+#include "ferrum/fire/combustion_gpu.h"
+#include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/material_profile.h"
+#include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/physics/revolute_gpu.h"
 #include "ferrum/structural/gpu.h"
 
@@ -55,7 +58,7 @@ static bool coal_load(dc_gpu_t *gpu, bool hot, char *err, uint32_t cap) {
             fr_reactive_state_t state;
             uint32_t local = y * DC_CHUNK_SIDE + x;
             if (!fr_reactive_state_default(DC_MATERIAL_COAL, mass, 0,
-                    hot ? 1000.f : 293.15f, 0xC0000000u + local,
+                    hot ? 1300.f : 293.15f, 0xC0000000u + local,
                     &state, err, cap)) return false;
             if (hot) state.flags |= FR_REACTIVE_FLAMING;
             if (!fr_gpu_reactive_seed_cell(gpu, CATAPULT_COAL_SLOT, local,
@@ -70,7 +73,8 @@ bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
     if (!gpu || !scene) return scene_error(err_buf, err_cap,
                                            "Missing catapult context or output");
     fr_structural_gpu_graph_t graph = support_graph();
-    if (!fr_gpu_place_structure(gpu, &graph, err_buf, err_cap) ||
+    if (!fr_thermal_gpu_enable(gpu, err_buf, err_cap) ||
+        !fr_gpu_place_structure(gpu, &graph, err_buf, err_cap) ||
         !dc_gpu_set_rigid_solver(gpu, true)) return false;
     for (uint32_t tick = 0; tick < 5; tick++)
         if (!dc_gpu_rigid_step(gpu, err_buf, err_cap)) return false;
@@ -97,6 +101,12 @@ bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
         .anchor_a = {6.5f, -2.5f}, .anchor_b = {0.f, 0.f}};
     if (!fr_gpu_revolute_add(gpu, &pivot, err_buf, err_cap) ||
         !fr_gpu_revolute_add(gpu, &latch, err_buf, err_cap)) return false;
+    fr_gas_model_t gas = {.gas_constant = {.25984, .29680, .18892,
+                                           .46152, 0},
+        .heat_capacity_cv = {.65816, .74320, .65508, 1.40248, .71},
+        .kinetic_scale = 1. / 512.};
+    if (!fr_gas_gpu_enable(gpu, &gas, .0012f, 293.15f, err_buf, err_cap) ||
+        !fr_combustion_gpu_enable(gpu, err_buf, err_cap)) return false;
     *scene = (dc_catapult_scene_t){.frame_body = pivot.body_a,
         .arm_body = pivot.body_b, .coal_body = latch.body_b,
         .pivot_joint = pivot.id, .latch_joint = latch.id};

@@ -4,7 +4,7 @@ void body_surface_feedback(uint index) {
     if(handle.x>=root[2]||handle.y==0u) return;
     Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));uint s=FR_ENTRY_STATE,m=entry.words[s];
     if(entry.words[FR_ENTRY_GENERATION]!=handle.y||entry.words[FR_ENTRY_OWNER]!=2u||
-        (m!=7u&&m!=8u&&m!=9u&&m!=12u)||entry.words[s+8u]==0u) return;
+        (m!=7u&&m!=8u&&m!=9u&&m!=11u&&m!=12u)||entry.words[s+8u]==0u) return;
     float capacity=solid_capacity(entry);if(capacity<=0.) return;
     float coverage=clamp(samples[index].y/capacity,0.,1.);
     float char_ratio=float(entry.words[s+10u])/float(entry.words[s+8u]);
