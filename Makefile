@@ -219,12 +219,16 @@ build/shaders/component_extract.comp.spv build/shaders/component_local.comp.spv 
 
 build/authored_rigid_tests: tests/vulkan/authored_rigid_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
-test: build/authored_rigid_tests
+.PHONY: test_authored_rigid
+test: test_authored_rigid
+test_authored_rigid: build/authored_rigid_tests
 	./build/authored_rigid_tests
 
 build/revolute_tests: tests/vulkan/revolute_tests.c tests/vulkan/rigid_solver_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SOLVER_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
-test: build/revolute_tests
+.PHONY: test_revolute
+test: test_revolute
+test_revolute: build/revolute_tests
 	./build/revolute_tests
 
 build/draw_gpu.o: src/vulkan/draw_gpu.c src/vulkan/gpu_internal.h
@@ -329,6 +333,13 @@ FRAME_TRACE_LINK += -Wl,--wrap=dc_gpu_set_tick_seconds
 build/diagnostics/quarter_app_frame_trace: tools/diagnostics/frame_trace.c $(QUARTER_APP_OBJ) $(PERFORMANCE_OBJ) $(RENDERER_SHADERS) build/dungeoncraft_quarter_native
 	mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(QUARTER_APP_OBJ) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) $(FRAME_TRACE_LINK)
+
+build/frame_trace_tests: tests/tools/frame_trace_tests.c tools/diagnostics/frame_trace.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections $< -Wl,--gc-sections -o $@ -lm
+.PHONY: test_frame_trace
+test: test_frame_trace
+test_frame_trace: build/frame_trace_tests
+	./build/frame_trace_tests
 NATIVE360_OBJ = $(patsubst %.c,build/native360/%.o,$(NATIVE_SRC))
 build/native360/%.o: %.c Makefile
 	mkdir -p $(dir $@)
