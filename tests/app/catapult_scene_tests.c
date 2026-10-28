@@ -140,11 +140,29 @@ static void test_hot_coal_emits_finite_reaction_without_igniting_cold_control(vo
     PASS();
 }
 
+static void test_wooden_arm_has_finite_reactive_ownership(void) {
+    char err[256]={0};dc_gpu_t *g=grid();ASSERT_TRUE(g);
+    dc_catapult_scene_t scene={0};
+    ASSERT_TRUE(dc_catapult_scene_build(g,false,&scene,err,sizeof(err)));
+    dc_gpu_body_pixel_t wood[40];uint32_t count=0;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,scene.arm_body,wood,40,&count,
+        err,sizeof(err)));
+    ASSERT_EQ(count,32u);
+    for(uint32_t i=0;i<count;i++) ASSERT_EQ(wood[i].material,DC_GPU_BODY_WOOD);
+    fr_reactive_record_t arm;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,scene.arm_body,1,0,&arm,&found,
+        err,sizeof(err))&&found);
+    ASSERT_EQ(arm.state.material,DC_MATERIAL_WOOD);
+    ASSERT_TRUE(arm.state.fuel_mass_fp>0u);
+    dc_gpu_destroy(g);PASS();
+}
+
 #ifndef DC_CATAPULT_DISPLAY_INCLUDE
 int main(void) {
     RUN(test_cold_launcher_has_supported_frame_and_real_latch);
     RUN(test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint);
     RUN(test_hot_coal_emits_finite_reaction_without_igniting_cold_control);
+    RUN(test_wooden_arm_has_finite_reactive_ownership);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail?1:0;
 }
