@@ -109,18 +109,27 @@ static void test_large_concave_arm_and_touching_load_keep_exact_geometry(void) {
     }
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_admit_rigid_objects(g,45,objects,cells,err,sizeof(err)));
-    uint32_t seen=0;
+    uint32_t seen=0,arm=0;
     for(uint32_t slot=0;slot<dc_gpu_body_capacity(g);slot++) {
         dc_body_storage_owner_t *owner=dc_gpu_body_owner(g,slot);
         if(owner->state!=DC_BODY_OWNER_LIVE||owner->source_transaction.low!=45u) continue;
         dc_gpu_body_pixel_t pixels[90];uint32_t count=0;
         ASSERT_TRUE(dc_gpu_read_pixel_shape(g,owner->runtime_id,pixels,90,&count,err,sizeof(err)));
         ASSERT_EQ(count,owner->source_object==1u?90u:4u);
+        if(owner->source_object==1u) arm=owner->runtime_id;
         if(owner->source_object==1u) for(uint32_t i=0;i<count;i++)
             ASSERT_TRUE(!(pixels[i].x>=1u&&pixels[i].x<=2u&&pixels[i].y>=3u&&pixels[i].y<=4u));
         seen++;
     }
-    ASSERT_EQ(seen,2u);free(chunk);free(objects);dc_gpu_destroy(g);PASS();
+    ASSERT_EQ(seen,2u);ASSERT_TRUE(arm);
+    ASSERT_TRUE(fr_gpu_pose_authored_rigid(g,arm,(dc_chunk_coord_t){0,0},30*65536,10*65536,.4f,err,sizeof(err)));
+    dc_gpu_world_body_t body;dc_gpu_body_motion_t motion;uint32_t count=0;
+    ASSERT_TRUE(dc_gpu_read_world_body(g,arm,&body,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,arm,&motion,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,arm,NULL,0,&count,err,sizeof(err)));
+    ASSERT_EQ(count,90u);ASSERT_EQ(body.body.x_fp,30*65536);ASSERT_EQ(body.body.y_fp,10*65536);
+    ASSERT_EQ(body.body.vx_fp,0);ASSERT_EQ(body.body.vy_fp,0);ASSERT_TRUE(fabsf(motion.angle-.4f)<.00001f);
+    free(chunk);free(objects);dc_gpu_destroy(g);PASS();
 }
 int main(void) {
     RUN(test_touching_authored_objects_remain_independent_real_bodies);

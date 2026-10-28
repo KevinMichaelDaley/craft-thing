@@ -5,6 +5,12 @@
 #include "authored_rigid_gpu_internal.h"
 #include "runtime_body_internal.h"
 
+bool fr_gpu_pose_authored_rigid(dc_gpu_t *gpu,uint32_t body_id,dc_chunk_coord_t chunk,
+    int32_t x_fp,int32_t y_fp,float angle,char *err,uint32_t cap) {
+    (void)gpu;(void)body_id;(void)chunk;(void)x_fp;(void)y_fp;(void)angle;(void)err;(void)cap;
+    return false;
+}
+
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
     return false;
