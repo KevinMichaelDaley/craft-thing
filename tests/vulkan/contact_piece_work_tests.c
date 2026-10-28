@@ -8,8 +8,15 @@ static void test_small_pixel_pairs_do_not_scan_unused_tile_padding(void) {
         measure(8,shape,2);
         ASSERT_TRUE(last_emitted>0u);
         ASSERT_TRUE(last_visited<=200u);
-        ASSERT_EQ(last_workgroups,4u);
+        ASSERT_EQ(last_workgroups,shape==0u?1u:4u);
     }
+    PASS();
+}
+static void test_filled_rectangle_pair_uses_two_outer_face_constraints(void) {
+    measure(64,0,2);
+    ASSERT_EQ(last_emitted,2u);
+    ASSERT_EQ(last_workgroups,1u);
+    ASSERT_TRUE(last_visited<=4u);
     PASS();
 }
 static void test_empty_work_list_still_completes_negative_candidates(void) {
@@ -28,6 +35,7 @@ static void test_disabled_profile_keeps_contacts_without_counter_atomics(void) {
     ASSERT_EQ(last_plain_emitted,last_emitted);PASS();
 }
 int main(void) {
+    RUN(test_filled_rectangle_pair_uses_two_outer_face_constraints);
     RUN(test_disabled_profile_keeps_contacts_without_counter_atomics);
     RUN(test_small_pixel_pairs_do_not_scan_unused_tile_padding);
     RUN(test_empty_work_list_still_completes_negative_candidates);
