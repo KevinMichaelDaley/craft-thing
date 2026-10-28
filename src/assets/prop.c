@@ -30,11 +30,12 @@ static bool prop_error(char *buffer, uint32_t capacity, const char *message) {
     return false;
 }
 uint32_t fr_prop_terrain_material(uint32_t material) {
-    static const uint8_t registry[] = {0, 1, 7, 0, 8, 2, 3, 4, 5, 6, 9};
+    static const uint8_t registry[] = {0, 1, 7, 0, 8, 2, 3, 4, 5, 6, 9, 11, 12};
     return material < sizeof(registry) ? registry[material] : 0;
 }
 uint32_t fr_prop_body_material(uint32_t material) {
-    return material == 10 ? 5 : material >= 1 && material <= 4 ? material : 0;
+    return material == 10 ? 5 : material == 11 ? 10 : material == 12 ? 11 :
+           material >= 1 && material <= 4 ? material : 0;
 }
 bool fr_prop_asset_open(fr_prop_asset_t *asset, const void *bytes, size_t size,
                         char *err_buf, uint32_t err_cap) {
@@ -68,7 +69,7 @@ bool fr_prop_asset_open(fr_prop_asset_t *asset, const void *bytes, size_t size,
             const uint8_t *record = map + pixel * PROP_MAP;
             uint32_t material = (uint32_t)record[0] | (uint32_t)record[1] << 8;
             uint32_t role = record[2];
-            if (material > 10 || role > 4 || record[3] > 1 || prop_u32(record + 4) > 0xffffff ||
+            if (material > 12 || role > 4 || record[3] > 1 || prop_u32(record + 4) > 0xffffff ||
                 (record[3] && role != 2) || (!material && role >= 1 && role <= 3) ||
                 (material && (role < 1 || role > 3 ||
                  !(role == 1 ? fr_prop_terrain_material(material) : fr_prop_body_material(material)))))

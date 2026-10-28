@@ -12,10 +12,11 @@ const uint BODY_VERTEX_CAPACITY = 8u;
 const uint BODY_MAX_SIDE = 16u;
 const uint BODY_PIECES = 4u;
 float body_material_density(uint material) {
-    const float densities[10]=float[10](0.,DC_DENSITY_STONE,DC_DENSITY_WOOD,
+    const float densities[12]=float[12](0.,DC_DENSITY_STONE,DC_DENSITY_WOOD,
         DC_DENSITY_MORTAR,DC_DENSITY_DENSE_WOOD,DC_DENSITY_LEAVES,
-        DC_DENSITY_SAND,DC_DENSITY_DIRT,DC_DENSITY_STONE,DC_DENSITY_LEAVES);
-    return densities[clamp(material,1u,9u)];
+        DC_DENSITY_SAND,DC_DENSITY_DIRT,DC_DENSITY_STONE,DC_DENSITY_LEAVES,
+        DC_DENSITY_COAL,DC_DENSITY_CHAR);
+    return densities[clamp(material,1u,11u)];
 }
 struct Shape { uint count, material; ivec2 vertices[BODY_VERTEX_CAPACITY]; };
 

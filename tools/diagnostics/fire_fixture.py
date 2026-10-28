@@ -180,7 +180,7 @@ def export_maps(data, output):
 def material_c(data):
     """Generate only physical/chemical coefficients; pigment is a separate channel."""
     legacy={"stone":1,"wood":2,"mortar_debris":3,"dense_wood":4,"leaves":5,
-            "sand":6,"dirt":7,"gravel":8,"leaf_debris":9}
+            "sand":6,"dirt":7,"gravel":8,"leaf_debris":9,"coal":10,"char":11}
     granular={"sand","dirt","gravel","mortar_debris","leaf_debris","ash","corrosion_residue"}
     liquid={"water","oil","red_slime_jelly","greek_fire"}
     controls=data["reaction_controls"]

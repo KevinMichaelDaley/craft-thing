@@ -20,7 +20,7 @@ layout(set=0,binding=9,std430) readonly buffer Registry {uint registry[];};
 layout(set=0,binding=10,std430) readonly buffer Occupancy {uint occupancy[];};
 layout(push_constant) uniform Params {uint width,height,x,y,asset_width,asset_height,phase,registry_base;} p;
 uint terrain(uint m) {
-    return m==1u?1u:m==2u?7u:m==4u?8u:m==5u?2u:m==6u?0u:m==7u?4u:m==8u?5u:m==9u?6u:m==10u?9u:0xffffffffu;
+    return m==1u?1u:m==2u?7u:m==4u?8u:m==5u?2u:m==6u?0u:m==7u?4u:m==8u?5u:m==9u?6u:m==10u?9u:m==11u?11u:m==12u?12u:0xffffffffu;
 }
 bool rigid_material(uint m) {return m!=0u&&m!=3u&&m!=0xffffffffu;}
 void restore_bonds(uint i,uvec2 position,uint page,uint mapped) {

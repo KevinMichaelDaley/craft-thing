@@ -23,7 +23,8 @@ const fr_reactive_profile_t *fr_reactive_profile(uint32_t material) {
 const fr_reactive_profile_t *fr_reactive_profile_for_body(uint32_t material) {
     static const uint8_t terrain[]={0,DC_MATERIAL_STONE,DC_MATERIAL_WOOD,
         DC_MATERIAL_MORTAR_DEBRIS,DC_MATERIAL_DENSE_WOOD,DC_MATERIAL_LEAVES,
-        DC_MATERIAL_SAND,DC_MATERIAL_DIRT,DC_MATERIAL_GRAVEL,DC_MATERIAL_LEAF_DEBRIS};
+        DC_MATERIAL_SAND,DC_MATERIAL_DIRT,DC_MATERIAL_GRAVEL,DC_MATERIAL_LEAF_DEBRIS,
+        DC_MATERIAL_COAL,DC_MATERIAL_CHAR};
     return material>0&&material<sizeof(terrain)?fr_reactive_profile(terrain[material]):NULL;
 }
 const char *fr_reactive_material_name(uint32_t material) {
