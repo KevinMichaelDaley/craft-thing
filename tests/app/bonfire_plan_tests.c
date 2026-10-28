@@ -36,4 +36,20 @@ static void test_real_structural_pits_and_independent_rigid_stack(void) {
 
     PASS();
 }
-int main(void) {RUN(test_real_structural_pits_and_independent_rigid_stack);printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
+static void test_shallow_stone_rim_leaves_side_air_above_the_kindling(void) {
+    dc_bonfire_plan_t p;ASSERT_TRUE(dc_bonfire_plan(&p));
+    uint32_t walls=0;
+    for(uint32_t i=0;i<p.pit.member_count;i++) {
+        const fr_structural_gpu_member_t *m=p.pit.members+i;
+        const fr_structural_gpu_node_t *a=p.pit.nodes+m->a-1,*b=p.pit.nodes+m->b-1;
+        int64_t ax=(int64_t)a->chunk.x*64*65536+a->x_fp,bx=(int64_t)b->chunk.x*64*65536+b->x_fp;
+        if(ax!=bx) continue;
+        int64_t ay=(int64_t)a->chunk.y*64*65536+a->y_fp,by=(int64_t)b->chunk.y*64*65536+b->y_fp;
+        int64_t top=ay<by?ay:by,bottom=ay>by?ay:by;
+        ASSERT_TRUE(top>=90*65536&&bottom>=95*65536);
+        ASSERT_TRUE(bottom-top>=4*65536);
+        walls++;
+    }
+    ASSERT_EQ(walls,4u);PASS();
+}
+int main(void) {RUN(test_real_structural_pits_and_independent_rigid_stack);RUN(test_shallow_stone_rim_leaves_side_air_above_the_kindling);printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
