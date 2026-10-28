@@ -885,7 +885,10 @@ build/catapult_scene_tests: tests/app/catapult_scene_tests.c src/app/catapult_sc
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/catapult_scene_tests.c src/app/catapult_scene.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/catapult_scene_display_tests: tests/app/catapult_scene_display_tests.c tests/app/catapult_scene_tests.c src/app/catapult_scene.c src/app/catapult_scene.h build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/catapult_scene_display_tests.c src/app/catapult_scene.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
-test: build/catapult_scene_tests
+.PHONY: test_catapult_scene
+test: test_catapult_scene
+test_catapult_scene: build/catapult_scene_tests
+	./build/catapult_scene_tests
 .PHONY: catapult-scene-display
 catapult-scene-display: build/catapult_scene_display_tests
 	./build/catapult_scene_display_tests
