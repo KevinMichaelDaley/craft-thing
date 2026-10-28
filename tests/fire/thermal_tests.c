@@ -127,7 +127,21 @@ static void test_two_dimensional_timber_transfers_heat_on_a_gameplay_timescale(v
     ASSERT_TRUE(energy[2]/.9f>400.f);
     ASSERT_TRUE(fabsf(energy[0]+energy[1]+energy[2]-initial)<.01f);PASS();
 }
+static void test_exposed_skin_has_a_finite_radiating_boundary(void) {
+    char err[256]={0};float temperature=fr_thermal_exposed_surface_K(300,300,.0024f,.0004f,0,10,293.15f);
+    float coefficient=FR_THERMAL_STEFAN_BOLTZMANN*FR_THERMAL_FACE_AREA*FR_THERMAL_SURFACE_EMISSIVITY;
+    float balance=.0028f*(temperature-300)+coefficient*(powf(temperature,4)-powf(293.15f,4));
+    ASSERT_TRUE(temperature>800&&temperature<1400&&fabsf(balance-10)<.01f);PASS();
+}
+static void test_warm_reacting_gas_does_not_render_as_full_brightness_flame(void) {
+    char err[256]={0};float warm=fr_blackbody_visible_efficiency(700.f),hot=fr_blackbody_visible_efficiency(1800.f);
+    ASSERT_TRUE(warm<hot*.0001f&&hot>.9f&&hot<1.1f);
+    ASSERT_TRUE(fr_blackbody_visible_efficiency(1200.f)<fr_blackbody_visible_efficiency(1500.f));
+    ASSERT_TRUE(fr_blackbody_visible_efficiency(0.f)==0.f);PASS();
+}
 int main(void) {
+    RUN(test_warm_reacting_gas_does_not_render_as_full_brightness_flame);
+    RUN(test_exposed_skin_has_a_finite_radiating_boundary);
     RUN(test_two_dimensional_timber_transfers_heat_on_a_gameplay_timescale);
     RUN(test_surface_reaction_power_survives_subquantum_frames_and_decays);
     RUN(test_blackbody_temperature_power_and_magic_override);
