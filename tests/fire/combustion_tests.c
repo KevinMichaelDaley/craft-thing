@@ -190,7 +190,20 @@ static void test_hot_wood_reacts_faster_without_extra_fuel_or_oxygen(void) {
     ASSERT_TRUE(pb.fuel_fp>pa.fuel_fp*2u&&pb.fuel_fp<=525u);
     ASSERT_TRUE(pb.oxygen_fp<=65536&&b.fuel_mass_fp+pb.fuel_fp==hot.fuel_mass_fp);PASS();
 }
+static void test_subquantum_oxygen_is_consumed_continuously_and_eventually_burns_fuel(void) {
+    char err[256]={0};fr_reactive_state_t state,next;fr_combustion_products_t p;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,800,131,&state,err,sizeof(err)));
+    state.flags|=FR_REACTIVE_FLAMING;uint32_t fuel=state.fuel_mass_fp;double oxygen=0.;
+    for(uint32_t step=0;step<64;step++) {
+        ASSERT_TRUE(fr_combustion_reference(&state,.1,.21f,1,.01f,&next,&p,err,sizeof(err)));
+        ASSERT_TRUE(p.oxygen_fp>=0.&&p.oxygen_fp<=.10000001);oxygen+=p.oxygen_fp;state=next;
+    }
+    ASSERT_TRUE(state.fuel_mass_fp<fuel&&oxygen>6.);
+    double pending=state.reaction_fraction*fr_reactive_profile(DC_MATERIAL_WOOD)->oxygen_per_fuel;
+    ASSERT_TRUE(fabs(oxygen-(fuel-state.fuel_mass_fp)*1.2-pending)<.00001);PASS();
+}
 int main(void) {
+    RUN(test_subquantum_oxygen_is_consumed_continuously_and_eventually_burns_fuel);
     RUN(test_hot_wood_reacts_faster_without_extra_fuel_or_oxygen);
     RUN(test_surface_oxygen_is_a_continuous_finite_reactant);
     RUN(test_airborne_oxygen_has_no_former_cutoff);
