@@ -31,7 +31,7 @@ static dc_gpu_t *catapult_grid(void) {
     return gpu;
 }
 
-static void test_hot_coal_strikes_and_ignites_wooden_inner_battlement(void) {
+static void test_hot_coal_clears_wall_and_ignites_wooden_inner_battlement(void) {
     char err[256] = {0};
     dc_gpu_t *g = catapult_grid();
     ASSERT_TRUE(g);
@@ -39,10 +39,20 @@ static void test_hot_coal_strikes_and_ignites_wooden_inner_battlement(void) {
     ASSERT_TRUE(dc_catapult_scene_build(g, true, &scene, err, sizeof(err)));
     fr_reactive_record_t before, after;
     bool found = false;
-    uint32_t wood_cell = (90u - 64u) * DC_CHUNK_SIDE + (123u - 64u);
-    ASSERT_TRUE(fr_gpu_reactive_read_cell(g, 5u, wood_cell, &before, &found,
+    dc_gpu_world_body_t frame, wall;
+    ASSERT_TRUE(dc_gpu_read_world_body(g, scene.frame_body, &frame,
+                                       err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(g, scene.wall_body, &wall,
+                                       err, sizeof(err)));
+    ASSERT_TRUE(xof(wall) - xof(frame) >= 100.f);
+    ASSERT_TRUE(wall.body.width >= 28u);
+    uint32_t wood_cell = (94u - 64u) * DC_CHUNK_SIDE + (198u - 192u);
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g, 7u, wood_cell, &before, &found,
                                            err, sizeof(err)) && found);
     ASSERT_EQ(before.state.material, DC_MATERIAL_WOOD);
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g, 5u,
+        (94u - 64u) * DC_CHUNK_SIDE + (118u - 64u), &after, &found,
+        err, sizeof(err)) && !found);
     for (uint32_t tick = 0; tick < 20u; tick++)
         ASSERT_TRUE(dc_gpu_tick_step(g, err, sizeof(err)));
     ASSERT_TRUE(dc_catapult_scene_release(g, &scene, err, sizeof(err)));
@@ -50,18 +60,28 @@ static void test_hot_coal_strikes_and_ignites_wooden_inner_battlement(void) {
     ASSERT_TRUE(dc_catapult_scene_release_projectile(g, &scene,
                                                        err, sizeof(err)));
     float farthest = 0.f;
-    for (uint32_t tick = 0; tick < 55u; tick++) {
+    bool cleared_wall = false;
+    for (uint32_t tick = 0; tick < 120u; tick++) {
         ASSERT_TRUE(dc_gpu_tick_step(g, err, sizeof(err)));
         dc_gpu_world_body_t coal;
         ASSERT_TRUE(dc_gpu_read_world_body(g, scene.coal_body, &coal,
                                            err, sizeof(err)));
         if (xof(coal) > farthest) farthest = xof(coal);
+        if (xof(coal) > xof(wall) + 4.f && yof(coal) < 80.f)
+            cleared_wall = true;
     }
-    ASSERT_TRUE(farthest >= 117.f);
-    ASSERT_TRUE(fr_gpu_reactive_read_cell(g, 5u, wood_cell, &after, &found,
+    ASSERT_TRUE(cleared_wall && farthest >= 190.f);
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g, 7u, wood_cell, &after, &found,
                                            err, sizeof(err)) && found);
-    ASSERT_TRUE((after.state.flags & FR_REACTIVE_FLAMING) != 0u ||
-                after.state.fuel_mass_fp < before.state.fuel_mass_fp);
+    float wood_temperature = 0.f;
+    ASSERT_TRUE(fr_reactive_state_temperature(&after.state,
+                                              &wood_temperature, err,
+                                              sizeof(err)));
+    printf("far-side battlement strike x %.2f plank %.1fK fuel %u -> %u\n",
+           farthest, wood_temperature, before.state.fuel_mass_fp,
+           after.state.fuel_mass_fp);
+    ASSERT_TRUE((after.state.flags & FR_REACTIVE_FLAMING) != 0u);
+    ASSERT_TRUE(after.state.fuel_mass_fp < before.state.fuel_mass_fp);
     dc_gpu_destroy(g);
     PASS();
 }
@@ -73,7 +93,7 @@ static void test_projectile_crosses_a_chunk_before_wall_contact(void) {
     dc_gpu_world_body_t launcher,wall,coal;
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.frame_body,&launcher,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.wall_body,&wall,err,sizeof(err)));
-    ASSERT_TRUE(xof(wall)-xof(launcher)>=64.f);
+    ASSERT_TRUE(xof(wall)-xof(launcher)>=100.f);
     for(uint32_t tick=0;tick<20;tick++)
         ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
     ASSERT_TRUE(dc_catapult_scene_release(g,&scene,err,sizeof(err)));
@@ -82,10 +102,10 @@ static void test_projectile_crosses_a_chunk_before_wall_contact(void) {
     ASSERT_TRUE(coal.body.vx_fp/65536.f>=2.5f);
     ASSERT_TRUE(dc_catapult_scene_release_projectile(g,&scene,err,sizeof(err)));
     bool reached=false,slowed=false;
-    for(uint32_t tick=0;tick<32;tick++) {
+    for(uint32_t tick=0;tick<80;tick++) {
         ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
         ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&coal,err,sizeof(err)));
-        if(xof(coal)>=xof(wall)-2.f&&yof(coal)>81.f&&yof(coal)<96.f)
+        if(xof(coal)>=190.f&&yof(coal)>80.f&&yof(coal)<96.f)
             reached=true;
         if(reached&&coal.body.vx_fp/65536.f<1.f) slowed=true;
     }
@@ -420,7 +440,7 @@ static void test_equal_elapsed_cadences_keep_launcher_flight_and_gas_clock(void)
 
 #ifndef DC_CATAPULT_DISPLAY_INCLUDE
 int main(void) {
-    RUN(test_hot_coal_strikes_and_ignites_wooden_inner_battlement);
+    RUN(test_hot_coal_clears_wall_and_ignites_wooden_inner_battlement);
     RUN(test_projectile_crosses_a_chunk_before_wall_contact);
     RUN(test_grounded_triangular_frame_and_tension_release);
     RUN(test_cold_launcher_has_supported_frame_and_real_latch);

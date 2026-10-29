@@ -121,13 +121,25 @@ static void test_render_real_loaded_flight_and_impact(void) {
     ASSERT_TRUE(dc_gpu_read_world_body(gpu, scene.wall_body, &wall,
                                        err, sizeof(err)));
     printf("rendered impact coal %.2f wall %.2f\n", xof(coal), xof(wall));
-    ASSERT_TRUE(xof(coal) >= xof(wall) - 8.f);
+    ASSERT_TRUE(xof(coal) >= 118.f);
+    for (uint32_t tick = 0; tick < 50; tick++)
+        ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
+    ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_battlement_fire.bmp",
+                        err, sizeof(err)));
+    fr_reactive_record_t burning;
+    bool found = false;
+    uint32_t wood_cell = (94u - 64u) * DC_CHUNK_SIDE + (118u - 64u);
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(gpu, 5u, wood_cell, &burning,
+                                          &found, err, sizeof(err)) && found);
+    ASSERT_TRUE((burning.state.flags & FR_REACTIVE_FLAMING) != 0u ||
+                burning.state.char_mass_fp > 0u);
     dc_gpu_destroy(gpu);
     PASS();
 }
 
 int main(void) {
     if (getenv("CATAPULT_DISPLAY_REPEAT_HEADLESS")) {
+        RUN(test_hot_coal_clears_wall_and_ignites_wooden_inner_battlement);
         RUN(test_projectile_crosses_a_chunk_before_wall_contact);
         RUN(test_grounded_triangular_frame_and_tension_release);
         RUN(test_cold_launcher_has_supported_frame_and_real_latch);
