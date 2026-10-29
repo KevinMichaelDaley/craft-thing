@@ -85,8 +85,10 @@ static void test_constructed_wood_burns_to_loose_ash_after_capacity_retry(void) 
     ASSERT_EQ(wood.state.material, DC_MATERIAL_WOOD);
     ASSERT_TRUE(wood.state.fuel_mass_fp > 0);
     dc_gpu_body_motion_t initial_motion, burning_motion;
+    fr_structural_gpu_member_state_t sound_member, burned_member;
     ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1,
-        &initial_motion, err, sizeof(err)));
+        &initial_motion, err, sizeof(err)) &&
+        fr_gpu_read_structure_member(g, 1, &sound_member));
     uint32_t *entries = g->reactive->arena.entries.mapped;
     uint32_t allocated = ((uint32_t *)g->reactive->arena.root.mapped)[12];
     uint32_t *target_state = NULL;
@@ -111,6 +113,9 @@ static void test_constructed_wood_burns_to_loose_ash_after_capacity_retry(void) 
         &burning_motion, err, sizeof(err)));
     ASSERT_TRUE(burning_motion.mass < initial_motion.mass - .1f);
     ASSERT_TRUE(burning_motion.center_x > initial_motion.center_x);
+    ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)) &&
+        fr_gpu_read_structure_member(g, 1, &burned_member));
+    ASSERT_TRUE(burned_member.damage > sound_member.damage + .1f);
     memcpy(target_state, &wood.state, sizeof(wood.state));
     target_state[11] = target_state[9];
     target_state[9] = 0;
