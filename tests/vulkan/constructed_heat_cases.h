@@ -85,7 +85,7 @@ static void test_constructed_wood_burns_to_loose_ash_after_capacity_retry(void) 
     ASSERT_EQ(wood.state.material, DC_MATERIAL_WOOD);
     ASSERT_TRUE(wood.state.fuel_mass_fp > 0);
     dc_gpu_body_motion_t initial_motion, burning_motion;
-    fr_structural_gpu_member_state_t sound_member, burned_member;
+    fr_structural_gpu_member_state_t sound_member, heated_member, burned_member;
     ASSERT_TRUE(dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1,
         &initial_motion, err, sizeof(err)) &&
         fr_gpu_read_structure_member(g, 1, &sound_member));
@@ -107,7 +107,16 @@ static void test_constructed_wood_burns_to_loose_ash_after_capacity_retry(void) 
         .kinetic_scale = 1./512.};
     ASSERT_TRUE(fr_gas_gpu_enable(g, &model, .0012f, 293.15f,
         err, sizeof(err)) && fr_combustion_gpu_enable(g, err, sizeof(err)));
+    float hot_energy = wood.state.thermal_energy * (650.f / 293.15f);
+    memcpy(target_state + FR_STATE_ENERGY, &hot_energy, sizeof(hot_energy));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)) &&
+        fr_gpu_read_structure_member(g, 1, &heated_member));
+    ASSERT_TRUE(heated_member.damage > sound_member.damage + .1f);
+    memcpy(target_state, &wood.state, sizeof(wood.state));
     target_state[9] /= 2u;
+    float reduced_energy = wood.state.thermal_energy * .5f;
+    memcpy(target_state + FR_STATE_ENERGY, &reduced_energy,
+        sizeof(reduced_energy));
     ASSERT_TRUE(fr_combustion_gpu_step(g, .01f, err, sizeof(err)) &&
         dc_gpu_read_body_motion(g, FR_STRUCTURAL_BODY_ID_BASE + 1,
         &burning_motion, err, sizeof(err)));
@@ -115,7 +124,7 @@ static void test_constructed_wood_burns_to_loose_ash_after_capacity_retry(void) 
     ASSERT_TRUE(burning_motion.center_x > initial_motion.center_x);
     ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)) &&
         fr_gpu_read_structure_member(g, 1, &burned_member));
-    ASSERT_TRUE(burned_member.damage > sound_member.damage + .1f);
+    ASSERT_TRUE(burned_member.damage > heated_member.damage + .1f);
     memcpy(target_state, &wood.state, sizeof(wood.state));
     target_state[11] = target_state[9];
     target_state[9] = 0;
