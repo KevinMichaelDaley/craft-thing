@@ -217,6 +217,7 @@ int main(int argc,char **argv) {
     else if(argc==2&&strcmp(argv[1],"--ash")==0) RUN(test_spent_rigid_rest_becomes_loose_ash_and_splits_supported_geometry);
     else if(argc==2&&strcmp(argv[1],"--ash-blocked")==0) RUN(test_full_particle_slots_retain_spent_rigid_inventory);
     else if(argc==2&&strcmp(argv[1],"--stone")==0) RUN(test_constructed_stone_owns_heat_without_changing_its_collider_or_support);
+    else if(argc==2&&strcmp(argv[1],"--constructed-wood")==0) RUN(test_constructed_wood_member_owns_reactive_pixels);
     else {
         RUN(test_covered_wood_conducts_to_its_outer_face_without_leaking_fire);
         RUN(test_cold_rigid_admission_retains_pose_and_reactive_ownership);
@@ -230,6 +231,7 @@ int main(int argc,char **argv) {
         RUN(test_thin_water_contact_accumulates_subquantum_wetting);
         RUN(test_spent_rigid_rest_becomes_loose_ash_and_splits_supported_geometry);
         RUN(test_full_particle_slots_retain_spent_rigid_inventory);
+        RUN(test_constructed_wood_member_owns_reactive_pixels);
     }
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }

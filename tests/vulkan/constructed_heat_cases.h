@@ -46,3 +46,44 @@ static void test_constructed_stone_owns_heat_without_changing_its_collider_or_su
     ASSERT_TRUE(fr_gpu_save_structure(g,"build/constructed_stone_carved_heat.dcs",err,sizeof(err)));
     free(chunk);dc_gpu_destroy(g);PASS();
 }
+
+static void test_constructed_wood_member_owns_reactive_pixels(void) {
+    char err[256] = {0};
+    dc_gpu_t *g = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    chunk->cells[13 * 64 + 10] = (dc_cell_t){.material = DC_MATERIAL_STONE,
+        .flags = DC_CELL_LOADED_TERRAIN};
+    ASSERT_TRUE(context(&g, err, sizeof(err)) &&
+        dc_gpu_upload_chunk(g, 0, chunk, err, sizeof(err)) &&
+        dc_gpu_set_page(g, 0, 0, 0, err, sizeof(err)));
+    fr_structural_gpu_graph_t graph = {.node_count = 2, .member_count = 1,
+        .anchor_count = 1};
+    graph.nodes[0] = (fr_structural_gpu_node_t){.id = 1, .generation = 1,
+        .x_fp = 10 * 65536, .y_fp = 12 * 65536};
+    graph.nodes[1] = graph.nodes[0];
+    graph.nodes[1].id = 2;
+    graph.nodes[1].x_fp = 22 * 65536;
+    graph.members[0] = (fr_structural_gpu_member_t){1, 1, 1, 2,
+        FR_STRUCTURAL_WOOD, 2 * 65536, 0, 0};
+    graph.anchors[0] = (fr_structural_gpu_anchor_t){.id = 1,
+        .generation = 1, .node = 1, .kind = FR_JOINT_MOMENT,
+        .x = 10, .y = 13, .width = 1, .height = 1,
+        .terrain_material = DC_MATERIAL_STONE,
+        .normal_stiffness = 1e8, .shear_stiffness = 1e8,
+        .rotational_stiffness = 1e8, .bearing_capacity = 1e7,
+        .pullout_capacity = 1e7, .shear_capacity = 1e7,
+        .moment_capacity = 1e7, .friction = .5};
+    ASSERT_TRUE(fr_gpu_place_structure(g, &graph, err, sizeof(err)) &&
+        fr_thermal_gpu_enable(g, err, sizeof(err)));
+    fr_reactive_record_t wood;
+    bool found = false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g, FR_STRUCTURAL_BODY_ID_BASE + 1,
+        5, 0, &wood, &found, err, sizeof(err)) && found);
+    ASSERT_EQ(wood.owner.kind, FR_REACTIVE_OWNER_BODY);
+    ASSERT_EQ(wood.state.material, DC_MATERIAL_WOOD);
+    ASSERT_TRUE(wood.state.fuel_mass_fp > 0);
+    free(chunk);
+    dc_gpu_destroy(g);
+    PASS();
+}
