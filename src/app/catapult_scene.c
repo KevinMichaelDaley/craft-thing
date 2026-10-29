@@ -25,8 +25,8 @@ enum {
     CATAPULT_WALL_TOP_Y = 68u,
     CATAPULT_BATTLEMENT_LEFT = 198u,
     CATAPULT_BATTLEMENT_RIGHT = 240u,
-    CATAPULT_BATTLEMENT_TOP_Y = 86u,
-    CATAPULT_BATTLEMENT_DECK_Y = 94u,
+    CATAPULT_BATTLEMENT_TOP_Y = 87u,
+    CATAPULT_BATTLEMENT_DECK_Y = 95u,
     CATAPULT_BATTLEMENT_WOOD_MASS_DIVISOR = 10u
 };
 
@@ -55,8 +55,8 @@ static fr_structural_gpu_member_t scene_member(uint32_t id, uint32_t a,
 }
 
 static fr_structural_gpu_graph_t support_graph(void) {
-    fr_structural_gpu_graph_t graph = {.node_count = 23, .member_count = 13,
-                                       .anchor_count = 2};
+    fr_structural_gpu_graph_t graph = {.node_count = 21, .member_count = 12,
+                                       .anchor_count = 9};
     graph.nodes[0] = scene_node(1, 72, CATAPULT_FLOOR_Y);
     graph.nodes[1] = scene_node(2, 72, 80);
     graph.nodes[2] = scene_node(3, CATAPULT_WALL_X, CATAPULT_FLOOR_Y);
@@ -65,45 +65,31 @@ static fr_structural_gpu_graph_t support_graph(void) {
     graph.nodes[4] = scene_node(5, CATAPULT_WALL_X, CATAPULT_WALL_TOP_Y);
     graph.nodes[5] = scene_node(6, 72, 64);
     graph.nodes[6] = scene_node(7, 72, 56);
-    graph.nodes[7] = scene_node(8, CATAPULT_BATTLEMENT_LEFT,
-                                CATAPULT_BATTLEMENT_DECK_Y);
-    graph.nodes[8] = scene_node(9, CATAPULT_BATTLEMENT_LEFT + 10u,
-                                CATAPULT_BATTLEMENT_DECK_Y);
-    graph.nodes[9] = scene_node(10, CATAPULT_BATTLEMENT_LEFT + 18u,
-                                CATAPULT_BATTLEMENT_DECK_Y);
-    graph.nodes[10] = scene_node(11, CATAPULT_BATTLEMENT_RIGHT - 6u,
-                                 CATAPULT_BATTLEMENT_DECK_Y);
-    graph.nodes[11] = scene_node(12, CATAPULT_BATTLEMENT_RIGHT,
-                                 CATAPULT_BATTLEMENT_DECK_Y);
-    graph.nodes[12] = scene_node(13, CATAPULT_BATTLEMENT_LEFT + 10u,
-                                 CATAPULT_BATTLEMENT_TOP_Y);
-    graph.nodes[13] = scene_node(14, CATAPULT_BATTLEMENT_LEFT + 18u,
-                                 CATAPULT_BATTLEMENT_TOP_Y);
-    graph.nodes[14] = scene_node(15, CATAPULT_BATTLEMENT_RIGHT - 6u,
-                                 CATAPULT_BATTLEMENT_TOP_Y);
-    graph.nodes[15] = scene_node(16, CATAPULT_BATTLEMENT_LEFT,
-                                 CATAPULT_FLOOR_Y);
-    graph.nodes[16] = scene_node(17, CATAPULT_BATTLEMENT_LEFT + 26u,
-                                 CATAPULT_BATTLEMENT_DECK_Y);
-    graph.nodes[17] = scene_node(18, CATAPULT_BATTLEMENT_LEFT + 10u, 92u);
-    graph.nodes[18] = scene_node(19, CATAPULT_BATTLEMENT_LEFT + 10u, 84u);
-    graph.nodes[19] = scene_node(20, CATAPULT_BATTLEMENT_LEFT + 18u, 92u);
-    graph.nodes[20] = scene_node(21, CATAPULT_BATTLEMENT_LEFT + 18u, 84u);
-    graph.nodes[21] = scene_node(22, CATAPULT_BATTLEMENT_RIGHT - 6u, 92u);
-    graph.nodes[22] = scene_node(23, CATAPULT_BATTLEMENT_RIGHT - 6u, 84u);
+    const uint32_t deck_x[] = {198u, 207u, 209u, 215u,
+                               217u, 233u, 235u, 240u};
+    for (uint32_t i = 0; i < 8u; i++)
+        graph.nodes[7u + i] = scene_node(8u + i, deck_x[i],
+                                          CATAPULT_BATTLEMENT_DECK_Y);
+    const uint32_t post_x[] = {208u, 216u, 234u};
+    for (uint32_t i = 0; i < 3u; i++) {
+        graph.nodes[15u + i * 2u] = scene_node(16u + i * 2u, post_x[i],
+                                                CATAPULT_BATTLEMENT_DECK_Y);
+        graph.nodes[16u + i * 2u] = scene_node(17u + i * 2u, post_x[i],
+                                                CATAPULT_BATTLEMENT_TOP_Y);
+    }
     graph.members[0] = scene_member(1, 1, 2, FR_STRUCTURAL_WOOD, 4);
     graph.members[1] = scene_member(2, 3, 4, FR_STRUCTURAL_STONE, 4);
     graph.members[2] = scene_member(3, 4, 5, FR_STRUCTURAL_STONE, 4);
     graph.members[3] = scene_member(4, 2, 6, FR_STRUCTURAL_WOOD, 4);
     graph.members[4] = scene_member(5, 6, 7, FR_STRUCTURAL_WOOD, 4);
-    graph.members[5] = scene_member(6, 8, 9, FR_STRUCTURAL_WOOD, 2);
-    graph.members[6] = scene_member(7, 9, 10, FR_STRUCTURAL_WOOD, 2);
-    graph.members[7] = scene_member(8, 10, 17, FR_STRUCTURAL_WOOD, 2);
-    graph.members[8] = scene_member(9, 11, 12, FR_STRUCTURAL_WOOD, 2);
-    graph.members[9] = scene_member(10, 18, 19, FR_STRUCTURAL_WOOD, 2);
-    graph.members[10] = scene_member(11, 20, 21, FR_STRUCTURAL_WOOD, 2);
-    graph.members[11] = scene_member(12, 22, 23, FR_STRUCTURAL_WOOD, 2);
-    graph.members[12] = scene_member(13, 17, 11, FR_STRUCTURAL_WOOD, 2);
+    for (uint32_t i = 0; i < 4u; i++)
+        graph.members[5u + i] = scene_member(6u + i, 8u + i * 2u,
+                                              9u + i * 2u,
+                                              FR_STRUCTURAL_WOOD, 2);
+    for (uint32_t i = 0; i < 3u; i++)
+        graph.members[9u + i] = scene_member(10u + i, 16u + i * 2u,
+                                              17u + i * 2u,
+                                              FR_STRUCTURAL_WOOD, 2);
     graph.anchors[0] = (fr_structural_gpu_anchor_t){
         .id = 1, .generation = 1, .node = 1, .kind = FR_JOINT_MOMENT,
         .chunk = {1, 1}, .x = 8, .y = 32, .width = 2, .height = 1,
@@ -118,11 +104,17 @@ static fr_structural_gpu_graph_t support_graph(void) {
     graph.anchors[1].node = 3;
     graph.anchors[1].chunk.x = CATAPULT_WALL_X / DC_CHUNK_SIDE;
     graph.anchors[1].x = CATAPULT_WALL_X % DC_CHUNK_SIDE;
-    graph.anchors[2] = graph.anchors[0];
-    graph.anchors[2].id = 3;
-    graph.anchors[2].node = 16;
-    graph.anchors[2].chunk.x = CATAPULT_BATTLEMENT_LEFT / DC_CHUNK_SIDE;
-    graph.anchors[2].x = CATAPULT_BATTLEMENT_LEFT % DC_CHUNK_SIDE;
+    const uint32_t anchor_nodes[] = {8u, 10u, 12u, 14u,
+                                     16u, 18u, 20u};
+    const uint32_t anchor_x[] = {198u, 209u, 217u, 235u,
+                                 208u, 216u, 234u};
+    for (uint32_t i = 0; i < 7u; i++) {
+        graph.anchors[2u + i] = graph.anchors[0];
+        graph.anchors[2u + i].id = 3u + i;
+        graph.anchors[2u + i].node = anchor_nodes[i];
+        graph.anchors[2u + i].chunk.x = anchor_x[i] / DC_CHUNK_SIDE;
+        graph.anchors[2u + i].x = anchor_x[i] % DC_CHUNK_SIDE;
+    }
     return graph;
 }
 
@@ -154,7 +146,7 @@ static bool coal_load(dc_gpu_t *gpu, bool hot, char *err, uint32_t cap) {
             fr_reactive_state_t state;
             uint32_t local = y * DC_CHUNK_SIDE + x;
             if (!fr_reactive_state_default(DC_MATERIAL_COAL, mass, 0,
-                    hot ? 1800.f : 293.15f, 0xC0000000u + local,
+                    hot ? 1300.f : 293.15f, 0xC0000000u + local,
                     &state, err, cap)) return false;
             if (hot) state.flags |= FR_REACTIVE_FLAMING;
             if (!fr_gpu_reactive_seed_cell(gpu, CATAPULT_COAL_SLOT, local,
@@ -185,7 +177,7 @@ static bool wooden_arm(dc_gpu_t *gpu, char *err, uint32_t cap) {
 }
 
 static bool thin_battlement_wood(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    for (uint32_t member = 6u; member <= 13u; member++) {
+    for (uint32_t member = 6u; member <= 12u; member++) {
         uint32_t id = FR_STRUCTURAL_BODY_ID_BASE + member;
         dc_gpu_world_body_t body;
         if (!dc_gpu_read_world_body(gpu, id, &body, err, cap)) return false;

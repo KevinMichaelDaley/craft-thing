@@ -78,7 +78,7 @@ static void test_hot_coal_clears_wall_and_ignites_wooden_inner_battlement(void) 
         if (xof(coal) > farthest) farthest = xof(coal);
         if (xof(coal) > xof(wall) + 4.f && yof(coal) < 80.f)
             cleared_wall = true;
-        for (uint32_t member = 6u; member <= 13u; member++) {
+        for (uint32_t member = 6u; member <= 12u; member++) {
             if (!fr_gpu_reactive_read_body(g,
                     FR_STRUCTURAL_BODY_ID_BASE + member, 1u, 0u,
                     &after, &found, err, sizeof(err)) || !found) continue;
@@ -489,6 +489,10 @@ static void test_far_side_battlement_is_constructed_wood(void) {
                 found);
     ASSERT_EQ(wood.state.material, DC_MATERIAL_WOOD);
     ASSERT_TRUE(wood.state.fuel_mass_fp > 0u);
+    fr_reactive_record_t painted;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g, 7u,
+        (91u - 64u) * DC_CHUNK_SIDE + (208u - 192u),
+        &painted, &found, err, sizeof(err)) && !found);
     fr_structural_gpu_member_state_t member;
     fr_structural_gpu_component_state_t support;
     ASSERT_TRUE(fr_gpu_read_structure_member(g, 10u, &member));
