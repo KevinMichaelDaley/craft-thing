@@ -230,10 +230,12 @@ void main() {
             vertical=exchange(a,c,y+1u<params.height?solid_transport_scale(index,index+params.width):1.);
         uint n=params.width*params.height;
         bool rigid=floatBitsToUint(samples[index+n].x)==4u;
-        if(b.y>0.&&(rigid||floatBitsToUint(samples[index+1u+n].x)==4u))
-            horizontal=sign(horizontal)*min(abs(horizontal),min(a.y,b.y)*abs(a.x/a.y-b.x/b.y)/16.);
-        if(c.y>0.&&(rigid||floatBitsToUint(samples[index+params.width+n].x)==4u))
-            vertical=sign(vertical)*min(abs(vertical),min(a.y,c.y)*abs(a.x/a.y-c.x/c.y)/16.);
+        bool right_body=x+1u<params.width&&floatBitsToUint(samples[index+1u+n].x)==4u;
+        bool below_body=y+1u<params.height&&floatBitsToUint(samples[index+params.width+n].x)==4u;
+        if(b.y>0.&&(rigid||right_body))
+            horizontal=sign(horizontal)*min(abs(horizontal),min(a.y,b.y)*abs(a.x/a.y-b.x/b.y)/(rigid&&right_body?4.:16.));
+        if(c.y>0.&&(rigid||below_body))
+            vertical=sign(vertical)*min(abs(vertical),min(a.y,c.y)*abs(a.x/a.y-c.x/c.y)/(rigid&&below_body?4.:16.));
         uint id=thermal_occupancy[index];
         if(id!=0u&&x+1u<params.width&&thermal_occupancy[index+1u]==id) horizontal=0.;
         if(id!=0u&&y+1u<params.height&&thermal_occupancy[index+params.width]==id) vertical=0.;

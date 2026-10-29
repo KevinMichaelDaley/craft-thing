@@ -24,6 +24,10 @@ bool fr_gpu_reactive_read_cell(dc_gpu_t *gpu,uint32_t slot,uint32_t local_cell,
 /** Explicit diagnostic by stable body identity and canonical rest-grid texel. */
 bool fr_gpu_reactive_read_body(dc_gpu_t *gpu,uint32_t body_id,uint32_t x,uint32_t y,
     fr_reactive_record_t *out,bool *found,char *err_buf,uint32_t err_cap);
+/** Cold import for an existing body parcel at its canonical rest-grid texel.
+ * The parcel and owner identities must be preserved. */
+bool fr_gpu_reactive_seed_body(dc_gpu_t *gpu,uint32_t body_id,uint32_t x,uint32_t y,
+    const fr_reactive_state_t *state,char *err_buf,uint32_t err_cap);
 /** Cold import for one existing loose particle in the canonical A pool. */
 bool fr_gpu_reactive_seed_particle(dc_gpu_t *gpu,uint32_t particle,
     const fr_reactive_state_t *state,char *err_buf,uint32_t err_cap);

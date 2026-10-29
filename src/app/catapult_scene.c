@@ -27,13 +27,12 @@ enum {
     CATAPULT_BATTLEMENT_RIGHT = 240u,
     CATAPULT_BATTLEMENT_TOP_Y = 86u,
     CATAPULT_BATTLEMENT_DECK_Y = 94u,
-    CATAPULT_SPLINTER_MASS_DIVISOR = 10u,
-    CATAPULT_IMPACT_FACING_MASS_DIVISOR = 50u
+    CATAPULT_BATTLEMENT_WOOD_MASS_DIVISOR = 10u
 };
 
 static const float CATAPULT_COCKED_ANGLE = -2.45f;
 static const float CATAPULT_FRAME_ANGLE = -1.57079632679f;
-static const float CATAPULT_SPLINTER_IGNITION_THRESHOLD = .02f;
+static const float CATAPULT_BATTLEMENT_IGNITION_THRESHOLD = .005f;
 
 static bool scene_error(char *err, uint32_t cap, const char *message) {
     if (err && cap) snprintf(err, cap, "%s", message);
@@ -56,7 +55,7 @@ static fr_structural_gpu_member_t scene_member(uint32_t id, uint32_t a,
 }
 
 static fr_structural_gpu_graph_t support_graph(void) {
-    fr_structural_gpu_graph_t graph = {.node_count = 7, .member_count = 5,
+    fr_structural_gpu_graph_t graph = {.node_count = 23, .member_count = 13,
                                        .anchor_count = 2};
     graph.nodes[0] = scene_node(1, 72, CATAPULT_FLOOR_Y);
     graph.nodes[1] = scene_node(2, 72, 80);
@@ -66,11 +65,45 @@ static fr_structural_gpu_graph_t support_graph(void) {
     graph.nodes[4] = scene_node(5, CATAPULT_WALL_X, CATAPULT_WALL_TOP_Y);
     graph.nodes[5] = scene_node(6, 72, 64);
     graph.nodes[6] = scene_node(7, 72, 56);
+    graph.nodes[7] = scene_node(8, CATAPULT_BATTLEMENT_LEFT,
+                                CATAPULT_BATTLEMENT_DECK_Y);
+    graph.nodes[8] = scene_node(9, CATAPULT_BATTLEMENT_LEFT + 10u,
+                                CATAPULT_BATTLEMENT_DECK_Y);
+    graph.nodes[9] = scene_node(10, CATAPULT_BATTLEMENT_LEFT + 18u,
+                                CATAPULT_BATTLEMENT_DECK_Y);
+    graph.nodes[10] = scene_node(11, CATAPULT_BATTLEMENT_RIGHT - 6u,
+                                 CATAPULT_BATTLEMENT_DECK_Y);
+    graph.nodes[11] = scene_node(12, CATAPULT_BATTLEMENT_RIGHT,
+                                 CATAPULT_BATTLEMENT_DECK_Y);
+    graph.nodes[12] = scene_node(13, CATAPULT_BATTLEMENT_LEFT + 10u,
+                                 CATAPULT_BATTLEMENT_TOP_Y);
+    graph.nodes[13] = scene_node(14, CATAPULT_BATTLEMENT_LEFT + 18u,
+                                 CATAPULT_BATTLEMENT_TOP_Y);
+    graph.nodes[14] = scene_node(15, CATAPULT_BATTLEMENT_RIGHT - 6u,
+                                 CATAPULT_BATTLEMENT_TOP_Y);
+    graph.nodes[15] = scene_node(16, CATAPULT_BATTLEMENT_LEFT,
+                                 CATAPULT_FLOOR_Y);
+    graph.nodes[16] = scene_node(17, CATAPULT_BATTLEMENT_LEFT + 26u,
+                                 CATAPULT_BATTLEMENT_DECK_Y);
+    graph.nodes[17] = scene_node(18, CATAPULT_BATTLEMENT_LEFT + 10u, 92u);
+    graph.nodes[18] = scene_node(19, CATAPULT_BATTLEMENT_LEFT + 10u, 84u);
+    graph.nodes[19] = scene_node(20, CATAPULT_BATTLEMENT_LEFT + 18u, 92u);
+    graph.nodes[20] = scene_node(21, CATAPULT_BATTLEMENT_LEFT + 18u, 84u);
+    graph.nodes[21] = scene_node(22, CATAPULT_BATTLEMENT_RIGHT - 6u, 92u);
+    graph.nodes[22] = scene_node(23, CATAPULT_BATTLEMENT_RIGHT - 6u, 84u);
     graph.members[0] = scene_member(1, 1, 2, FR_STRUCTURAL_WOOD, 4);
     graph.members[1] = scene_member(2, 3, 4, FR_STRUCTURAL_STONE, 4);
     graph.members[2] = scene_member(3, 4, 5, FR_STRUCTURAL_STONE, 4);
     graph.members[3] = scene_member(4, 2, 6, FR_STRUCTURAL_WOOD, 4);
     graph.members[4] = scene_member(5, 6, 7, FR_STRUCTURAL_WOOD, 4);
+    graph.members[5] = scene_member(6, 8, 9, FR_STRUCTURAL_WOOD, 2);
+    graph.members[6] = scene_member(7, 9, 10, FR_STRUCTURAL_WOOD, 2);
+    graph.members[7] = scene_member(8, 10, 17, FR_STRUCTURAL_WOOD, 2);
+    graph.members[8] = scene_member(9, 11, 12, FR_STRUCTURAL_WOOD, 2);
+    graph.members[9] = scene_member(10, 18, 19, FR_STRUCTURAL_WOOD, 2);
+    graph.members[10] = scene_member(11, 20, 21, FR_STRUCTURAL_WOOD, 2);
+    graph.members[11] = scene_member(12, 22, 23, FR_STRUCTURAL_WOOD, 2);
+    graph.members[12] = scene_member(13, 17, 11, FR_STRUCTURAL_WOOD, 2);
     graph.anchors[0] = (fr_structural_gpu_anchor_t){
         .id = 1, .generation = 1, .node = 1, .kind = FR_JOINT_MOMENT,
         .chunk = {1, 1}, .x = 8, .y = 32, .width = 2, .height = 1,
@@ -85,6 +118,11 @@ static fr_structural_gpu_graph_t support_graph(void) {
     graph.anchors[1].node = 3;
     graph.anchors[1].chunk.x = CATAPULT_WALL_X / DC_CHUNK_SIDE;
     graph.anchors[1].x = CATAPULT_WALL_X % DC_CHUNK_SIDE;
+    graph.anchors[2] = graph.anchors[0];
+    graph.anchors[2].id = 3;
+    graph.anchors[2].node = 16;
+    graph.anchors[2].chunk.x = CATAPULT_BATTLEMENT_LEFT / DC_CHUNK_SIDE;
+    graph.anchors[2].x = CATAPULT_BATTLEMENT_LEFT % DC_CHUNK_SIDE;
     return graph;
 }
 
@@ -116,7 +154,7 @@ static bool coal_load(dc_gpu_t *gpu, bool hot, char *err, uint32_t cap) {
             fr_reactive_state_t state;
             uint32_t local = y * DC_CHUNK_SIDE + x;
             if (!fr_reactive_state_default(DC_MATERIAL_COAL, mass, 0,
-                    hot ? 1300.f : 293.15f, 0xC0000000u + local,
+                    hot ? 1800.f : 293.15f, 0xC0000000u + local,
                     &state, err, cap)) return false;
             if (hot) state.flags |= FR_REACTIVE_FLAMING;
             if (!fr_gpu_reactive_seed_cell(gpu, CATAPULT_COAL_SLOT, local,
@@ -146,52 +184,33 @@ static bool wooden_arm(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return dc_gpu_admit_authored_rigid_cells(gpu, err, cap);
 }
 
-static bool wooden_battlement(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    const fr_reactive_profile_t *profile = fr_reactive_profile(DC_MATERIAL_WOOD);
-    if (!profile) return scene_error(err, cap, "Missing wood profile");
-    uint32_t mass = (uint32_t)lroundf(profile->density * 65536.f);
-    for (uint32_t y = CATAPULT_BATTLEMENT_TOP_Y;
-         y < CATAPULT_FLOOR_Y; y++)
-        for (uint32_t x = CATAPULT_BATTLEMENT_LEFT;
-             x < CATAPULT_BATTLEMENT_RIGHT; x++) {
-            /* Expose the thin contact face to air after the coal lands. */
-            if (y == CATAPULT_BATTLEMENT_DECK_Y &&
-                x == CATAPULT_BATTLEMENT_LEFT + 9u) continue;
-            bool post = (x >= CATAPULT_BATTLEMENT_LEFT + 2u &&
-                         x <= CATAPULT_BATTLEMENT_LEFT + 4u && y >= 87u) ||
-                        (x == CATAPULT_BATTLEMENT_LEFT + 10u) ||
-                        (x >= CATAPULT_BATTLEMENT_LEFT + 14u &&
-                         x <= CATAPULT_BATTLEMENT_LEFT + 16u && y >= 87u) ||
-                        (x >= CATAPULT_BATTLEMENT_RIGHT - 6u &&
-                         x <= CATAPULT_BATTLEMENT_RIGHT - 4u);
-            if (y < CATAPULT_BATTLEMENT_DECK_Y && !post) continue;
-            uint32_t slot = 4u + x / DC_CHUNK_SIDE;
-            uint32_t local = (y % DC_CHUNK_SIDE) * DC_CHUNK_SIDE +
-                             x % DC_CHUNK_SIDE;
-            fr_reactive_state_t state;
-            bool impact_facing = x == CATAPULT_BATTLEMENT_LEFT + 14u &&
-                                 y >= 87u && y < CATAPULT_BATTLEMENT_DECK_Y;
-            bool thin_wood = x == CATAPULT_BATTLEMENT_LEFT + 10u &&
-                             y < CATAPULT_BATTLEMENT_DECK_Y;
-            bool thin_plank = y == CATAPULT_BATTLEMENT_DECK_Y &&
-                              x >= CATAPULT_BATTLEMENT_LEFT + 4u &&
-                              x <= CATAPULT_BATTLEMENT_LEFT + 12u;
-            uint32_t parcel_mass = mass;
-            if (impact_facing)
-                parcel_mass /= CATAPULT_IMPACT_FACING_MASS_DIVISOR;
-            else if (thin_wood || thin_plank)
-                parcel_mass /= CATAPULT_SPLINTER_MASS_DIVISOR;
-            if (!fr_reactive_state_default(DC_MATERIAL_WOOD, parcel_mass, 0,
-                    293.15f, 0xD0000000ull + y * 256u + x, &state,
-                    err, cap)) return false;
-            if (impact_facing || thin_wood || thin_plank)
+static bool thin_battlement_wood(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    for (uint32_t member = 6u; member <= 13u; member++) {
+        uint32_t id = FR_STRUCTURAL_BODY_ID_BASE + member;
+        dc_gpu_world_body_t body;
+        if (!dc_gpu_read_world_body(gpu, id, &body, err, cap)) return false;
+        for (uint32_t y = 0; y < body.body.height; y++)
+            for (uint32_t x = 0; x < body.body.width; x++) {
+                fr_reactive_record_t record;
+                bool found = false;
+                if (!fr_gpu_reactive_read_body(gpu, id, x, y, &record,
+                                                &found, err, cap)) return false;
+                if (!found) continue;
+                uint64_t parcel = ((uint64_t)record.state.parcel_id_high << 32) |
+                                   record.state.parcel_id_low;
+                uint32_t mass = record.state.dry_mass_fp /
+                                CATAPULT_BATTLEMENT_WOOD_MASS_DIVISOR;
+                if (!mass) mass = 1u;
+                fr_reactive_state_t state;
+                if (!fr_reactive_state_default(DC_MATERIAL_WOOD, mass, 0u,
+                                                293.15f, parcel, &state,
+                                                err, cap)) return false;
                 state.ignition_threshold =
-                    CATAPULT_SPLINTER_IGNITION_THRESHOLD;
-            if (!dc_gpu_paint_material(gpu, x, y, 0, DC_MATERIAL_WOOD,
-                                       err, cap) ||
-                !fr_gpu_reactive_seed_cell(gpu, slot, local, &state,
-                                            err, cap)) return false;
-        }
+                    CATAPULT_BATTLEMENT_IGNITION_THRESHOLD;
+                if (!fr_gpu_reactive_seed_body(gpu, id, x, y, &state,
+                                                err, cap)) return false;
+            }
+    }
     return true;
 }
 
@@ -205,6 +224,7 @@ bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
         !fr_thermal_gpu_overlay(gpu, 0) ||
         !fr_gpu_place_structure(gpu, &graph, err_buf, err_cap) ||
         !fr_thermal_gpu_enable(gpu, err_buf, err_cap) ||
+        !thin_battlement_wood(gpu, err_buf, err_cap) ||
         !dc_gpu_set_rigid_solver(gpu, true)) return false;
     for (uint32_t tick = 0; tick < 5; tick++)
         if (!dc_gpu_rigid_step(gpu, err_buf, err_cap)) return false;
@@ -214,8 +234,7 @@ bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
                                 0.f, 0,
                                 err_buf, err_cap) ||
         !coal_load(gpu, hot, err_buf, err_cap) ||
-        !dc_gpu_admit_authored_rigid_cells(gpu, err_buf, err_cap) ||
-        !wooden_battlement(gpu, err_buf, err_cap)) return false;
+        !dc_gpu_admit_authored_rigid_cells(gpu, err_buf, err_cap)) return false;
     if (!dc_gpu_set_body_origin(gpu, (dc_chunk_coord_t){0, 0},
                                  err_buf, err_cap)) return false;
     fr_revolute_joint_t pivot = {.id = CATAPULT_PIVOT_ID,

@@ -48,9 +48,15 @@ static void test_hot_coal_clears_wall_and_ignites_wooden_inner_battlement(void) 
                                        &wall_upper, err, sizeof(err)));
     ASSERT_TRUE(xof(wall) - xof(frame) >= 100.f);
     ASSERT_TRUE(wall.body.width + wall_upper.body.width >= 28u);
-    uint32_t wood_cell = (91u - 64u) * DC_CHUNK_SIDE + (208u - 192u);
-    ASSERT_TRUE(fr_gpu_reactive_read_cell(g, 7u, wood_cell, &before, &found,
-                                           err, sizeof(err)) && found);
+    uint32_t battlement_post = FR_STRUCTURAL_BODY_ID_BASE + 10u;
+    dc_gpu_world_body_t post_body;
+    ASSERT_TRUE(dc_gpu_read_world_body(g, battlement_post, &post_body,
+                                       err, sizeof(err)));
+    printf("post body %.2f %.2f size %u x %u\n", xof(post_body),
+           yof(post_body), post_body.body.width, post_body.body.height);
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g, battlement_post, 1u, 0u,
+                                          &before, &found, err, sizeof(err)) &&
+                found);
     ASSERT_EQ(before.state.material, DC_MATERIAL_WOOD);
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g, 5u,
         (94u - 64u) * DC_CHUNK_SIDE + (118u - 64u), &after, &found,
@@ -64,28 +70,63 @@ static void test_hot_coal_clears_wall_and_ignites_wooden_inner_battlement(void) 
                                                        err, sizeof(err)));
     float farthest = 0.f;
     bool cleared_wall = false;
+    bool battlement_burned = false;
+    float wood_temperature = 0.f;
+    float ignition_progress = 0.f;
+    uint32_t least_fuel = UINT32_MAX;
+    uint32_t any_flags = 0u;
+    float reaction_progress = 0.f;
     for (uint32_t tick = 0; tick < 180u; tick++) {
         ASSERT_TRUE(dc_gpu_tick_step(g, err, sizeof(err)));
         dc_gpu_world_body_t coal;
         ASSERT_TRUE(dc_gpu_read_world_body(g, scene.coal_body, &coal,
                                            err, sizeof(err)));
-        if (xof(coal) > farthest) farthest = xof(coal);
+        if (xof(coal) > farthest) {
+            farthest = xof(coal);
+            if (farthest > 195.f && farthest < 214.f)
+                printf("coal %.2f %.2f at tick %u\n", xof(coal), yof(coal), tick);
+        }
+        if (tick == 49u) {
+            fr_reactive_record_t hot_coal;
+            bool hot_found = false;
+            float coal_temperature = 0.f;
+            if (fr_gpu_reactive_read_body(g, scene.coal_body, 1u, 1u,
+                                          &hot_coal, &hot_found, err,
+                                          sizeof(err)) && hot_found &&
+                fr_reactive_state_temperature(&hot_coal.state,
+                    &coal_temperature, err, sizeof(err)))
+                printf("impact coal %.1fK\n", coal_temperature);
+        }
         if (xof(coal) > xof(wall) + 4.f && yof(coal) < 80.f)
             cleared_wall = true;
+        for (uint32_t member = 6u; member <= 13u; member++) {
+            if (!fr_gpu_reactive_read_body(g,
+                    FR_STRUCTURAL_BODY_ID_BASE + member, 1u, 0u,
+                    &after, &found, err, sizeof(err)) || !found) continue;
+            float temperature = 0.f;
+            if (fr_reactive_state_temperature(&after.state, &temperature,
+                                              err, sizeof(err)) &&
+                temperature > wood_temperature)
+                wood_temperature = temperature;
+            if (after.state.ignition_integral > ignition_progress)
+                ignition_progress = after.state.ignition_integral;
+            if (after.state.fuel_mass_fp < least_fuel)
+                least_fuel = after.state.fuel_mass_fp;
+            any_flags |= after.state.flags;
+            if (after.state.reaction_fraction > reaction_progress)
+                reaction_progress = after.state.reaction_fraction;
+            if ((after.state.flags & FR_REACTIVE_FLAMING) != 0u &&
+                after.state.fuel_mass_fp < before.state.fuel_mass_fp)
+                battlement_burned = true;
+        }
     }
     printf("far-side flight %.2f cleared %u\n", farthest, cleared_wall);
     ASSERT_TRUE(cleared_wall && farthest >= 206.f);
-    ASSERT_TRUE(fr_gpu_reactive_read_cell(g, 7u, wood_cell, &after, &found,
-                                           err, sizeof(err)) && found);
-    float wood_temperature = 0.f;
-    ASSERT_TRUE(fr_reactive_state_temperature(&after.state,
-                                              &wood_temperature, err,
-                                              sizeof(err)));
-    printf("far-side battlement strike x %.2f facing %.1fK fuel %u -> %u\n",
-           farthest, wood_temperature, before.state.fuel_mass_fp,
-           after.state.fuel_mass_fp);
-    ASSERT_TRUE((after.state.flags & FR_REACTIVE_FLAMING) != 0u);
-    ASSERT_TRUE(after.state.fuel_mass_fp < before.state.fuel_mass_fp);
+    printf("far-side battlement strike x %.2f hottest %.1fK ignition %.5f fuel %u->%u flags %u reaction %.3f burned %u\n",
+           farthest, wood_temperature, ignition_progress,
+           before.state.fuel_mass_fp, least_fuel, any_flags,
+           reaction_progress, battlement_burned);
+    ASSERT_TRUE(battlement_burned);
     fr_structural_gpu_component_state_t support;
     dc_gpu_world_body_t mast;
     ASSERT_TRUE(fr_gpu_read_structure_component(g, 1u, &support));

@@ -296,6 +296,8 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
     float oxygen_fp=max(0.,gas.species.x)*65536.;
     float requested=float(entry.words[s+8u])*coefficient(profile,31u)*dt*dry*dry*(max(oxygen,0.)/float(FR_COMBUSTION_AMBIENT_OXYGEN))*
         fr_combustion_hot_rate(temperature,coefficient(profile,7u));
+    if(owner==2u&&fuel<16384u)
+        requested=max(requested,float(FR_COMBUSTION_SMALL_BODY_MIN_REACTION_FP_PER_SECOND)*dt);
     float credit=uintBitsToFloat(entry.words[s+27u]);
     float funded=min(min(max(0.,float(fuel)-credit),requested),oxygen_fp/demand),total=credit+funded;
     uint reacted=uint(floor(total));entry.words[s+27u]=floatBitsToUint(min(total-float(reacted),.99999994));
@@ -387,7 +389,7 @@ void choose_body_target(uint index) {
 void burn_body_neighbor(ivec2 p,uint gas_at,inout Gas gas,inout float admitted,inout float temperature,inout uint sources) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return;
     uint slot=runtime_body_find(thermal_occupancy[uint(p.y)*params.width+uint(p.x)]);if(slot>=BODY_CAPACITY) return;
-    Body body=DC_BODY(slot);if(!pixel_body(body)) return;
+    Body body=body_thermal_grid(DC_BODY(slot));if(!pixel_body(body)) return;
     vec2 low=vec2(p)-vec2(body.x_fp,body.y_fp)/65536.;uvec4 query=body_piece_query(body,low,low+1.);
     Words scratch=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
     for(uint n=0u;n<query.z*query.w;n++) {

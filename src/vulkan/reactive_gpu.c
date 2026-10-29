@@ -69,7 +69,7 @@ bool fr_gpu_reactive_particle_storage(dc_gpu_t *g,char *err,uint32_t cap) {
     return fr_gpu_reactive_storage_particles(g,g->reactive,err,cap);
 }
 static uint32_t *entry(dc_gpu_t *g,const uint32_t *handle) {
-    if(!g->reactive||!handle[1]) return NULL;
+    if(!g->reactive||!handle||!handle[1]) return NULL;
     const uint32_t *h=g->reactive->arena.root.mapped;
     if(handle[0]>=h[2]) return NULL;
     uint32_t *e=(uint32_t *)g->reactive->arena.entries.mapped+(size_t)handle[0]*FR_ENTRY_WORDS;
@@ -139,32 +139,56 @@ bool fr_gpu_reactive_read_cell(dc_gpu_t *g,uint32_t slot,uint32_t local,
     if(e) {memcpy(&out->owner,e+FR_ENTRY_OWNER,sizeof(out->owner));memcpy(&out->state,e+FR_ENTRY_STATE,sizeof(out->state));}
     *found=e!=NULL;return true;
 }
+static uint32_t *body_handle(dc_gpu_t *g,uint32_t id,uint32_t x,uint32_t y,
+    char *err,uint32_t cap) {
+    if(!g->reactive) return NULL;
+    for(uint32_t slot=0;slot<dc_gpu_body_capacity(g);slot++) {
+        const dc_gpu_body_record_t *b=dc_gpu_body_record(g,slot);
+        if(!b->body.active||b->body.id!=id) continue;
+        if(!(b->piece_count&DC_GPU_PIXEL_BODY_FLAG)&&!(b->motion_flags&DC_BODY_MOTION_THERMAL_GRID)) return NULL;
+        const uint32_t *shape=(const uint32_t *)g->body_mapped+b->compound_reserved;
+        if(x>=shape[6]||y>=shape[7]) return NULL;
+        uint32_t tile=(y/16u)*shape[2]+x/16u,offset=shape[8u+tile];
+        if(!offset) return NULL;
+        uint32_t cell=(y%16u)*16u+x%16u;
+        if(((shape[offset+1u+cell/8u]>>((cell%8u)*4u))&15u)==0u) return NULL;
+        uint32_t word=b->compound_reserved+offset+1u+cell/8u;
+        uint32_t first=dc_gpu_pixel_pool_word_offset(g)+DC_GPU_PIXEL_POOL_HEADER_WORDS;
+        if(word<first) return NULL;
+        uint32_t relative=word-first;
+        uint32_t capacity=dc_gpu_pixel_pool_capacity(g),allocated=((uint32_t *)g->reactive->arena.root.mapped)[12];
+        if(relative>=2u*capacity) {error(err,cap,"Reactive shape address is invalid");return NULL;}
+        size_t location=(size_t)(relative/capacity)*allocated*8u+(relative%capacity)*8u+cell%8u;
+        if((location*2u+1u)*sizeof(uint32_t)>g->reactive->shapes.bytes) return NULL;
+        return (uint32_t *)g->reactive->shapes.mapped+location*2u;
+    }
+    return NULL;
+}
 bool fr_gpu_reactive_read_body(dc_gpu_t *g,uint32_t id,uint32_t x,uint32_t y,
     fr_reactive_record_t *out,bool *found,char *err,uint32_t cap) {
     if(!g||!id||!out||!found) return error(err,cap,"Invalid reactive body diagnostic");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Reactive body wait failed");
     dc_gpu_refresh_body_registry(g);*found=false;
-    if(!g->reactive) return true;
-    for(uint32_t slot=0;slot<dc_gpu_body_capacity(g);slot++) {
-        const dc_gpu_body_record_t *b=dc_gpu_body_record(g,slot);
-        if(!b->body.active||b->body.id!=id) continue;
-        if(!(b->piece_count&DC_GPU_PIXEL_BODY_FLAG)&&!(b->motion_flags&DC_BODY_MOTION_THERMAL_GRID)) return true;
-        const uint32_t *shape=(const uint32_t *)g->body_mapped+b->compound_reserved;
-        if(x>=shape[6]||y>=shape[7]) return true;
-        uint32_t tile=(y/16u)*shape[2]+x/16u,offset=shape[8u+tile];
-        if(!offset) return true;
-        uint32_t cell=(y%16u)*16u+x%16u;
-        if(((shape[offset+1u+cell/8u]>>((cell%8u)*4u))&15u)==0u) return true;
-        uint32_t word=b->compound_reserved+offset+1u+cell/8u;
-        uint32_t relative=word-dc_gpu_pixel_pool_word_offset(g)-DC_GPU_PIXEL_POOL_HEADER_WORDS;
-        uint32_t capacity=dc_gpu_pixel_pool_capacity(g),allocated=((uint32_t *)g->reactive->arena.root.mapped)[12];
-        if(relative>=2u*capacity) return error(err,cap,"Reactive shape address is invalid");
-        size_t location=(size_t)(relative/capacity)*allocated*8u+(relative%capacity)*8u+cell%8u;
-        uint32_t *e=entry(g,(uint32_t *)g->reactive->shapes.mapped+location*2u);
-        if(e) {memcpy(&out->owner,e+FR_ENTRY_OWNER,sizeof(out->owner));memcpy(&out->state,e+FR_ENTRY_STATE,sizeof(out->state));*found=true;}
-        return true;
-    }
+    uint32_t *handle=body_handle(g,id,x,y,err,cap);
+    uint32_t *e=entry(g,handle);
+    if(e) {memcpy(&out->owner,e+FR_ENTRY_OWNER,sizeof(out->owner));memcpy(&out->state,e+FR_ENTRY_STATE,sizeof(out->state));*found=true;}
     return true;
+}
+bool fr_gpu_reactive_seed_body(dc_gpu_t *g,uint32_t id,uint32_t x,uint32_t y,
+    const fr_reactive_state_t *state,char *err,uint32_t cap) {
+    if(!g||!id||!fr_reactive_state_valid(state,err,cap))
+        return error(err,cap,"Invalid reactive body import");
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Reactive body import wait failed");
+    dc_gpu_refresh_body_registry(g);
+    uint32_t *handle=body_handle(g,id,x,y,err,cap);
+    uint32_t *e=entry(g,handle);
+    if(!e||e[FR_ENTRY_STATE]!=state->material||
+       e[FR_ENTRY_STATE+2u]!=state->parcel_id_low||
+       e[FR_ENTRY_STATE+3u]!=state->parcel_id_high)
+        return error(err,cap,"Reactive body parcel is absent or changed");
+    fr_reactive_owner_t owner;
+    memcpy(&owner,e+FR_ENTRY_OWNER,sizeof(owner));
+    return admit(g,handle,&owner,state,err,cap);
 }
 bool fr_gpu_reactive_seed_particle(dc_gpu_t *g,uint32_t particle,
     const fr_reactive_state_t *state,char *err,uint32_t cap) {
