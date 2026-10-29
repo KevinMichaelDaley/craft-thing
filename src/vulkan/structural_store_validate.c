@@ -82,7 +82,8 @@ static bool body_valid(const dc_gpu_body_record_t *b, const uint32_t *pixels,
         b->shape.material > DC_BODY_MATERIAL_MAX)
         return false;
     if(b->motion_flags&DC_BODY_MOTION_THERMAL_GRID) {
-        if(pixel||b->piece_count||(b->motion_flags&DC_GPU_BODY_REACTIVE_MASS)||b->shape.material!=DC_GPU_BODY_STONE) return false;
+        if(pixel||b->piece_count||
+           (b->shape.material!=DC_GPU_BODY_STONE&&b->shape.material!=DC_GPU_BODY_WOOD)) return false;
         dc_gpu_body_record_t grid=*b;grid.piece_count=DC_GPU_PIXEL_BODY_FLAG|b->body.width*b->body.height;
         float ignored=0;
         if(!pixels||b->compound_reserved>words||!dc_gpu_pixel_geometry_valid(&grid,pixels+b->compound_reserved,
@@ -103,7 +104,10 @@ static bool body_valid(const dc_gpu_body_record_t *b, const uint32_t *pixels,
         return false;
     if (b->motion_ready) {
         if (!pixel)
-            density = composition_density(b);
+            density = (b->motion_flags&DC_BODY_MOTION_THERMAL_GRID)&&
+                      (b->motion_flags&DC_GPU_BODY_REACTIVE_MASS) ?
+                b->mass/(float)(b->body.width*b->body.height) :
+                composition_density(b);
         if (b->mass <= 0 || b->inertia <= 0 || !isfinite(b->density) ||
             fabsf(b->density - density) > 1e-6f ||
             !floats_valid(&b->inverse_mass, 2) || !isfinite(b->center[0]) ||

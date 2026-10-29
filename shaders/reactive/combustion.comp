@@ -342,7 +342,7 @@ void choose_body_target(uint index) {
     Words scratch=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
     uint target_word=index*12u+5u;scratch.words[target_word]=0xffffffffu;
     uint slot=runtime_body_find(e.words[FR_ENTRY_OWNER+1u]);if(slot>=BODY_CAPACITY) return;
-    Body body=DC_BODY(slot);if(!pixel_body(body)) return;
+    Body body=body_thermal_grid(DC_BODY(slot));if(!pixel_body(body)) return;
     uint piece=pixel_piece_at(body,ivec2(e.words[FR_ENTRY_OWNER+3u],e.words[FR_ENTRY_OWNER+4u]));
     uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.x!=index||h.y!=e.words[FR_ENTRY_GENERATION]) return;
     uint s=FR_ENTRY_STATE,m=e.words[s];
@@ -403,7 +403,7 @@ void main() {
 #ifdef FR_BODY_REACTIONS
     if(params.unused.x==9u) {
         uint slot=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;if(slot>=BODY_CAPACITY) return;
-        Body body=DC_BODY(slot);if((body.enabled|body.reserved0)==0u||!pixel_body(body)) return;
+        Body body=body_thermal_grid(DC_BODY(slot));if((body.enabled|body.reserved0)==0u||!pixel_body(body)) return;
         for(uint piece=gl_LocalInvocationID.x;piece<body_pieces(body);piece+=64u) {
             if(pixel_piece_material(body,piece)==0u) continue;
             uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y!=0u) choose_body_target(h.x);

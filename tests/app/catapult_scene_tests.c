@@ -297,7 +297,9 @@ static void test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint(void) {
     ASSERT_EQ(coal.state.material,DC_MATERIAL_COAL);
     ASSERT_TRUE(coal.state.fuel_mass_fp>0u);
     ASSERT_TRUE(coal.state.thermal_energy>0.f);
-    ASSERT_TRUE(fr_gpu_save_structure(g,"build/catapult_scene.dcs",err,sizeof(err)));
+    bool saved=fr_gpu_save_structure(g,"build/catapult_scene.dcs",err,sizeof(err));
+    if(!saved) printf("catapult checkpoint: %s\n",err);
+    ASSERT_TRUE(saved);
     dc_gpu_t *copy=catapult_grid();ASSERT_TRUE(copy);
     ASSERT_TRUE(fr_gpu_load_structure(copy,"build/catapult_scene.dcs",err,
                                       sizeof(err)));
@@ -449,6 +451,7 @@ static void test_equal_elapsed_cadences_keep_launcher_flight_and_gas_clock(void)
     PASS();
 }
 
+#ifndef DC_CATAPULT_DISPLAY_INCLUDE
 static void test_constructed_launcher_mast_has_finite_wood_fuel(void) {
     char err[256] = {0};
     dc_gpu_t *g = catapult_grid();
@@ -464,9 +467,14 @@ static void test_constructed_launcher_mast_has_finite_wood_fuel(void) {
     dc_gpu_destroy(g);
     PASS();
 }
+#endif
 
 #ifndef DC_CATAPULT_DISPLAY_INCLUDE
-int main(void) {
+int main(int argc, char **argv) {
+    if(argc==2&&strcmp(argv[1],"--checkpoint")==0) {
+        RUN(test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint);
+        return g_fail?1:0;
+    }
     RUN(test_hot_coal_clears_wall_and_ignites_wooden_inner_battlement);
     RUN(test_projectile_crosses_a_chunk_before_wall_contact);
     RUN(test_grounded_triangular_frame_and_tension_release);

@@ -46,5 +46,6 @@ void body_thermal_mass(uint slot,Body body) {
     body.density=moments.x/float(body_thermal_counts[0]);
     body.inverse_mass=(body.motion_flags&1u)==0u?1./body.mass:0.;
     body.inverse_inertia=(body.motion_flags&3u)==0u?1./body.inertia:0.;
+    if((body.motion_flags&DC_BODY_MOTION_THERMAL_GRID)!=0u) body.piece_count=0u;
     body.motion_ready=1u;body.rest_ticks=0u;DC_BODY(slot)=body;
 }

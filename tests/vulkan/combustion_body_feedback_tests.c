@@ -44,6 +44,8 @@ static void test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_
     }
     ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,gas,volumes,4096,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_presentation_focus(g,(dc_presentation_focus_t){16,14,32,20}));
+    dc_gpu_body_motion_t mass_before,mass_after;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,0x80000001u,&mass_before,err,sizeof(err)));
     uint32_t *before=malloc(480u*270u*4u),*after=malloc(480u*270u*4u),*paused=malloc(480u*270u*4u);ASSERT_TRUE(before&&after&&paused);
     ASSERT_TRUE(capture_body_feedback(g,before,"before",err,sizeof(err)));
     for(uint32_t i=0;i<4;i++) ASSERT_TRUE(fr_combustion_gpu_step(g,.25f,err,sizeof(err)));
@@ -52,6 +54,10 @@ static void test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_
     ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000002u,1,0,&inert,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000003u,1,0,&wet,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(dry.state.fuel_mass_fp<39322&&dry.state.char_mass_fp>0);
+    ASSERT_TRUE(dc_gpu_read_body_motion(g,0x80000001u,&mass_after,err,sizeof(err)));
+    ASSERT_TRUE(mass_after.mass<mass_before.mass);
+    ASSERT_TRUE(mass_after.center_x>mass_before.center_x);
+    ASSERT_TRUE(mass_after.inertia<mass_before.inertia);
     ASSERT_TRUE(wet.state.fuel_mass_fp==39322&&wet.state.char_mass_fp==0&&inert.state.fuel_mass_fp==39322&&inert.state.char_mass_fp==0);
     ASSERT_TRUE(capture_body_feedback(g,after,"after",err,sizeof(err)));
     uint32_t changed=0;for(uint32_t y=20;y<22;y++) for(uint32_t x=20;x<23;x++) changed+=before[y*480u+x]!=after[y*480u+x];

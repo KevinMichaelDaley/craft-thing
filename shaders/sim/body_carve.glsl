@@ -115,7 +115,11 @@ void carve_bodies() {
         for(uint candidate=carve_cursor+lane;candidate<BODY_CAPACITY;candidate+=gl_WorkGroupSize.x) {
             Body b=DC_BODY(candidate);
             if(b.enabled==0u||b.id!=DC_CARVE_ID(candidate)) continue;
-            if(body_ash_mode()) {if(pixel_body(b)) atomicMin(carve_candidate,candidate);continue;}
+            if(body_ash_mode()) {
+                if(pixel_body(b)||((b.motion_flags&DC_BODY_MOTION_THERMAL_GRID)!=0u&&
+                   b.material==2u)) atomicMin(carve_candidate,candidate);
+                continue;
+            }
             vec2 low,high;body_bounds(b,low,high);
             vec2 position=vec2(b.x_fp,b.y_fp)/65536.;
             vec2 point=clamp(vec2(params.origin_x)+.5,position+low,position+high);

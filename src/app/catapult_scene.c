@@ -204,6 +204,7 @@ bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
     if (!fr_thermal_gpu_enable(gpu, err_buf, err_cap) ||
         !fr_thermal_gpu_overlay(gpu, 0) ||
         !fr_gpu_place_structure(gpu, &graph, err_buf, err_cap) ||
+        !fr_thermal_gpu_enable(gpu, err_buf, err_cap) ||
         !dc_gpu_set_rigid_solver(gpu, true)) return false;
     for (uint32_t tick = 0; tick < 5; tick++)
         if (!dc_gpu_rigid_step(gpu, err_buf, err_cap)) return false;

@@ -9,7 +9,8 @@
 #include "runtime_body_internal.h"
 
 static bool candidate(const dc_gpu_body_record_t *b) {
-    return b->reserved[0]==DC_GPU_STRUCTURAL_TAG&&b->shape.material==DC_GPU_BODY_STONE&&
+    return b->reserved[0]==DC_GPU_STRUCTURAL_TAG&&
+        (b->shape.material==DC_GPU_BODY_STONE||b->shape.material==DC_GPU_BODY_WOOD)&&
         b->piece_count==0u&&(b->motion_flags&DC_BODY_MOTION_THERMAL_GRID)==0u;
 }
 static bool error(char *err,uint32_t cap,const char *text) {
@@ -33,13 +34,15 @@ bool fr_gpu_reactive_admit_constructed_stone(dc_gpu_t *g,char *err,uint32_t cap)
     uint32_t n=0;uint64_t identity=g->reactive->high_id;bool okay=true;
     for(uint32_t i=0;i<capacity&&okay;i++) {const dc_gpu_body_record_t *b=dc_gpu_body_record(g,i);if(!candidate(b)) continue;
         double length=b->shape.vertices[1].x_fp/65536.,depth=b->shape.vertices[2].y_fp/65536.;
+        uint32_t material=DC_BODY_TO_TERRAIN(b->shape.material);
+        double density=DC_BODY_DENSITY(b->shape.material);
         if(b->body.width>16u||b->body.height>16u||length<=0||depth<=0) {okay=false;break;}
         for(uint32_t y=0;y<b->body.height&&okay;y++) for(uint32_t x=0;x<b->body.width&&okay;x++) {
             double area=fmin(1.,length-x)*fmin(1.,depth-y);
-            uint32_t mass=(uint32_t)llround(area*DC_DENSITY_STONE*65536.);
+            uint32_t mass=(uint32_t)llround(area*density*65536.);
             fr_reactive_arena_request_t *r=requests+n++;r->operation=FR_REACTIVE_ARENA_ALLOCATE;
             r->record.owner=(fr_reactive_owner_t){FR_REACTIVE_OWNER_BODY,{b->body.id,dc_gpu_body_owner(g,i)->generation,x,y,0}};
-            okay=mass&&fr_reactive_state_default(DC_MATERIAL_STONE,mass,0,FR_THERMAL_AMBIENT_K,++identity,&r->record.state,err,cap);
+            okay=mass&&fr_reactive_state_default(material,mass,0,FR_THERMAL_AMBIENT_K,++identity,&r->record.state,err,cap);
         }
     }
     uint32_t demand=0;
@@ -54,7 +57,7 @@ bool fr_gpu_reactive_admit_constructed_stone(dc_gpu_t *g,char *err,uint32_t cap)
             shape[0]=42;shape[1]=shape[2]=shape[3]=1;shape[6]=b->body.width;shape[7]=b->body.height;shape[8]=9;
             memset(dc_gpu_shape_colors(g,absolute),0,42u*128u);
             for(uint32_t y=0;y<b->body.height;y++) for(uint32_t x=0;x<b->body.width;x++) {
-                uint32_t cell=y*16u+x,word=10u+cell/8u;shape[word]|=DC_GPU_BODY_STONE<<((cell%8u)*4u);
+                uint32_t cell=y*16u+x,word=10u+cell/8u;shape[word]|=b->shape.material<<((cell%8u)*4u);
                 size_t at=((size_t)bank*allocated+used+word)*8u+cell%8u;
                 reactive[at*2u]=handles[n].index;reactive[at*2u+1u]=handles[n].generation;n++;
             }

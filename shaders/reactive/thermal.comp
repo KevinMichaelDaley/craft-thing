@@ -164,7 +164,12 @@ void main() {
     if(active_phase()==8u||active_phase()==9u||active_phase()==11u||active_phase()==14u||active_phase()==20u) {
         uint slot=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;if(slot>=BODY_CAPACITY) return;
         Body body=DC_BODY(slot);if((body.enabled|body.reserved0)==0u||!pixel_storage(body)) return;
-        if(active_phase()==14u) {if(pixel_body(body)) body_thermal_mass(slot,body);return;}
+        if(active_phase()==14u) {
+            if(pixel_body(body)) body_thermal_mass(slot,body);
+            else if((body.motion_flags&DC_BODY_MOTION_THERMAL_GRID)!=0u&&body.material==2u)
+                body_thermal_mass(slot,body_thermal_grid(body));
+            return;
+        }
         body=body_thermal_grid(body);
         for(uint piece=gl_LocalInvocationID.x;piece<body_pieces(body);piece+=64u) {
             if(pixel_piece_material(body,piece)==0u) continue;
