@@ -1,6 +1,6 @@
 ---
 id: ct-xuqp
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-28T23:31:04Z

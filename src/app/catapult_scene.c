@@ -22,11 +22,18 @@ enum {
     CATAPULT_WALL_X = 180u,
     CATAPULT_FLOOR_Y = 96u,
     CATAPULT_BASE_HEIGHT = 16u,
-    CATAPULT_WALL_TOP_Y = 68u
+    CATAPULT_WALL_TOP_Y = 68u,
+    CATAPULT_BATTLEMENT_LEFT = 198u,
+    CATAPULT_BATTLEMENT_RIGHT = 240u,
+    CATAPULT_BATTLEMENT_TOP_Y = 86u,
+    CATAPULT_BATTLEMENT_DECK_Y = 94u,
+    CATAPULT_SPLINTER_MASS_DIVISOR = 10u,
+    CATAPULT_IMPACT_FACING_MASS_DIVISOR = 50u
 };
 
 static const float CATAPULT_COCKED_ANGLE = -2.45f;
 static const float CATAPULT_FRAME_ANGLE = -1.57079632679f;
+static const float CATAPULT_SPLINTER_IGNITION_THRESHOLD = .02f;
 
 static bool scene_error(char *err, uint32_t cap, const char *message) {
     if (err && cap) snprintf(err, cap, "%s", message);
@@ -143,29 +150,43 @@ static bool wooden_battlement(dc_gpu_t *gpu, char *err, uint32_t cap) {
     const fr_reactive_profile_t *profile = fr_reactive_profile(DC_MATERIAL_WOOD);
     if (!profile) return scene_error(err, cap, "Missing wood profile");
     uint32_t mass = (uint32_t)lroundf(profile->density * 65536.f);
-    for (uint32_t y = 86u; y < CATAPULT_FLOOR_Y; y++)
-        for (uint32_t x = 198u; x < 240u; x++) {
-            if (y == 94u && x == 207u) continue;
-            bool post = (x >= 200u && x <= 202u && y >= 87u) ||
-                        (x == 208u && y >= 86u) ||
-                        (x >= 212u && x <= 214u && y >= 87u) ||
-                        (x >= 234u && x <= 236u);
-            if (y < 94u && !post) continue;
+    for (uint32_t y = CATAPULT_BATTLEMENT_TOP_Y;
+         y < CATAPULT_FLOOR_Y; y++)
+        for (uint32_t x = CATAPULT_BATTLEMENT_LEFT;
+             x < CATAPULT_BATTLEMENT_RIGHT; x++) {
+            /* Expose the thin contact face to air after the coal lands. */
+            if (y == CATAPULT_BATTLEMENT_DECK_Y &&
+                x == CATAPULT_BATTLEMENT_LEFT + 9u) continue;
+            bool post = (x >= CATAPULT_BATTLEMENT_LEFT + 2u &&
+                         x <= CATAPULT_BATTLEMENT_LEFT + 4u && y >= 87u) ||
+                        (x == CATAPULT_BATTLEMENT_LEFT + 10u) ||
+                        (x >= CATAPULT_BATTLEMENT_LEFT + 14u &&
+                         x <= CATAPULT_BATTLEMENT_LEFT + 16u && y >= 87u) ||
+                        (x >= CATAPULT_BATTLEMENT_RIGHT - 6u &&
+                         x <= CATAPULT_BATTLEMENT_RIGHT - 4u);
+            if (y < CATAPULT_BATTLEMENT_DECK_Y && !post) continue;
             uint32_t slot = 4u + x / DC_CHUNK_SIDE;
             uint32_t local = (y % DC_CHUNK_SIDE) * DC_CHUNK_SIDE +
                              x % DC_CHUNK_SIDE;
             fr_reactive_state_t state;
-            bool impact_facing = x == 212u && y >= 87u && y <= 93u;
-            bool thin_wood = x == 208u && y < 94u;
-            bool thin_plank = y == 94u && x >= 202u && x <= 210u;
+            bool impact_facing = x == CATAPULT_BATTLEMENT_LEFT + 14u &&
+                                 y >= 87u && y < CATAPULT_BATTLEMENT_DECK_Y;
+            bool thin_wood = x == CATAPULT_BATTLEMENT_LEFT + 10u &&
+                             y < CATAPULT_BATTLEMENT_DECK_Y;
+            bool thin_plank = y == CATAPULT_BATTLEMENT_DECK_Y &&
+                              x >= CATAPULT_BATTLEMENT_LEFT + 4u &&
+                              x <= CATAPULT_BATTLEMENT_LEFT + 12u;
             uint32_t parcel_mass = mass;
-            if (impact_facing) parcel_mass /= 50u;
-            else if (thin_wood || thin_plank) parcel_mass /= 10u;
+            if (impact_facing)
+                parcel_mass /= CATAPULT_IMPACT_FACING_MASS_DIVISOR;
+            else if (thin_wood || thin_plank)
+                parcel_mass /= CATAPULT_SPLINTER_MASS_DIVISOR;
             if (!fr_reactive_state_default(DC_MATERIAL_WOOD, parcel_mass, 0,
                     293.15f, 0xD0000000ull + y * 256u + x, &state,
                     err, cap)) return false;
             if (impact_facing || thin_wood || thin_plank)
-                state.ignition_threshold = .02f;
+                state.ignition_threshold =
+                    CATAPULT_SPLINTER_IGNITION_THRESHOLD;
             if (!dc_gpu_paint_material(gpu, x, y, 0, DC_MATERIAL_WOOD,
                                        err, cap) ||
                 !fr_gpu_reactive_seed_cell(gpu, slot, local, &state,

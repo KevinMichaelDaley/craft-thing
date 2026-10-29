@@ -39,3 +39,15 @@ Grounded triangular wood base, supported upright, distinct stone target wall, ce
 **2026-10-28T23:47:20Z**
 
 Final verification: build/catapult_scene_tests 7/7 and build/catapult_scene_display_tests 2/2 pass. Standard make test passed through catapult and renderer tests, then failed at reactive_profile_gpu_tests because device enumeration reported no Intel hardware compute device. An optional make -i continuation passed later reactive/terrain/body-color targets, with only additional Intel-only initialization failures through body_carve_tests; it was stopped because the hardware-gated full suite cannot pass on this host. Branch changes pushed to origin.
+
+**2026-10-29T01:55:22Z**
+
+2026-10-28: Thermal overlay disabled for normal ALBEDO view, resolving plasma air and hidden arm. Cocked arm now launches hot coal rightward at ~2.98 cells/tick; projectile crosses one chunk and contacts wall. 256x128 game-view display regression and 1024x512 live replay pass. Progressive burn damage remains ctlo-3ndt.
+
+**2026-10-29T06:55:06Z**
+
+Corrected final game-resolution fixture: wall is at x=180, 28 cells tall (twice prior 14-cell target), with wood battlements only on its far/interior side at x=198..239 near the ground. Grounded triangular launcher releases via latch and pouch; finite hot coal clears the wall and strikes wood at x≈209. Far-side wood reaches 1061.5 K, burning flag set, fuel 3932→3921 over 180 ticks. Normal LIT 256x128 view scaled to a 1024x512 window played through to completion without thermal debug overlay; scene tests 9/9 and display tests 2/2 pass. Launcher remains intact through the burn; progressive structural burn damage is still tracked by ctlo-3ndt.
+
+**2026-10-29T06:57:28Z**
+
+Final make test after refactor passed all preceding suites, including catapult scene 9/9 and game-view display 2/2, then stopped at reactive_profile_gpu_tests: device enumeration found no Intel hardware compute device on this host. This is the same host hardware gate previously recorded; no catapult regression was observed.

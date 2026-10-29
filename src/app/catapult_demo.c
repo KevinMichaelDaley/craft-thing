@@ -9,6 +9,12 @@
 #include "catapult_scene.h"
 #include "view_config.h"
 
+enum {
+    CATAPULT_DEMO_FRAMES = 205u,
+    CATAPULT_DEMO_RELEASE_FRAME = 8u,
+    CATAPULT_DEMO_POUCH_FRAME = 11u
+};
+
 static bool make_ground(dc_gpu_t *gpu, char *err, uint32_t cap) {
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     if (!chunk) return false;
@@ -50,19 +56,20 @@ int main(void) {
                      dc_gpu_set_tick_seconds(gpu, 1.f / 60.f) &&
                      dc_gpu_set_window_title(gpu, "Flaming catapult");
     if (okay) fprintf(stderr, "Catapult demo: 256x128 game view ready\n");
-    for (uint32_t frame = 0; okay && frame < 205u; frame++) {
+    for (uint32_t frame = 0; okay && frame < CATAPULT_DEMO_FRAMES; frame++) {
         uint32_t start = SDL_GetTicks();
         SDL_Event event;
         while (SDL_PollEvent(&event))
             if (event.type == SDL_QUIT) goto done;
-        if (frame == 8u)
+        if (frame == CATAPULT_DEMO_RELEASE_FRAME)
             okay = dc_catapult_scene_release(gpu, &scene, err, sizeof(err));
-        if (frame == 11u)
+        if (frame == CATAPULT_DEMO_POUCH_FRAME)
             okay = dc_catapult_scene_release_projectile(gpu, &scene,
                                                          err, sizeof(err));
         if (okay) okay = dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err));
         if (okay && frame % 10u == 0u)
-            fprintf(stderr, "Catapult demo: frame %u/205\n", frame + 1u);
+            fprintf(stderr, "Catapult demo: frame %u/%u\n", frame + 1u,
+                    CATAPULT_DEMO_FRAMES);
         uint32_t spent = SDL_GetTicks() - start;
         if (okay && spent < 16u) SDL_Delay(16u - spent);
     }
