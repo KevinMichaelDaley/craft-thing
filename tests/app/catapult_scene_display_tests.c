@@ -51,6 +51,12 @@ static void test_render_moving_arm_without_fire_occlusion(void) {
         ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
     ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_cold_cocked.bmp",
                         err, sizeof(err)));
+    uint32_t pixels[128u * 128u];
+    ASSERT_TRUE(dc_gpu_readback(gpu,pixels,128u*128u,err,sizeof(err)));
+    uint32_t rear_red=pixels[78u*128u+68u]&255u;
+    uint32_t tip_red=pixels[78u*128u+76u]&255u;
+    printf("cocked arm red channels rear %u tip %u\n",rear_red,tip_red);
+    ASSERT_TRUE(rear_red>70u&&tip_red>70u);
     dc_gpu_body_motion_t held,launched;
     ASSERT_TRUE(dc_gpu_read_body_motion(gpu,scene.arm_body,&held,err,sizeof(err)));
     ASSERT_TRUE(dc_catapult_scene_release(gpu, &scene, err, sizeof(err)));
@@ -63,6 +69,8 @@ static void test_render_moving_arm_without_fire_occlusion(void) {
         ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
     ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_cold_flight.bmp",
                         err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_readback(gpu,pixels,128u*128u,err,sizeof(err)));
+    ASSERT_TRUE((pixels[79u*128u+76u]&255u)>70u);
     dc_gpu_destroy(gpu);
     PASS();
 }
