@@ -11,8 +11,8 @@ struct fr_reactive_gpu {
 };
 /** Lazy cold-boundary resource creation. */
 bool fr_gpu_reactive_initialize(dc_gpu_t *gpu,char *err,uint32_t cap);
-/** Cold admission of finite rest heat on constructed stone, preserving analytic collision. */
-bool fr_gpu_reactive_admit_constructed_stone(dc_gpu_t *gpu,char *err,uint32_t cap);
+/** Cold admission of constructed stone and wood parcels, preserving analytic collision. */
+bool fr_gpu_reactive_admit_constructed_members(dc_gpu_t *gpu,char *err,uint32_t cap);
 /** Preflight canonical and alternate particle handles before admission. */
 bool fr_gpu_reactive_particle_storage(dc_gpu_t *gpu,char *err,uint32_t cap);
 /** Preflight detached storage without changing the live work root. */

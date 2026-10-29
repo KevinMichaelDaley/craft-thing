@@ -117,7 +117,7 @@ void carve_bodies() {
             if(b.enabled==0u||b.id!=DC_CARVE_ID(candidate)) continue;
             if(body_ash_mode()) {
                 if(pixel_body(b)||((b.motion_flags&DC_BODY_MOTION_THERMAL_GRID)!=0u&&
-                   b.material==2u)) atomicMin(carve_candidate,candidate);
+                   b.material==DC_BODY_WOOD_MATERIAL)) atomicMin(carve_candidate,candidate);
                 continue;
             }
             vec2 low,high;body_bounds(b,low,high);

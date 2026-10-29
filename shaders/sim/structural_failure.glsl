@@ -54,11 +54,18 @@ void release_member(uint member) {
 #include "structural_debris.glsl"
 #include "rigid_fragment.glsl"
 #include "pixel_fragment.glsl"
+const float WOOD_CHAR_SECTION_FACTOR=.35;
+const float WOOD_HEAT_CAPACITY=1.5;
+const float WOOD_WATER_HEAT_CAPACITY=4.18;
+const float WOOD_SOFTEN_START_K=400.0;
+const float WOOD_SOFTEN_SPAN_K=200.0;
+const float WOOD_HOT_STRENGTH_LOSS=.3;
 float member_wood_section(uint slot) {
 #ifdef DC_RUNTIME_BODY_STORAGE
     if(slot>=BODY_CAPACITY) return 1.0;
     Body body=DC_BODY(slot);
-    if(body.material!=2u||(body.motion_flags&DC_BODY_MOTION_THERMAL_GRID)==0u||
+    if(body.material!=DC_BODY_WOOD_MATERIAL||
+       (body.motion_flags&DC_BODY_MOTION_THERMAL_GRID)==0u||
        !reactive_enabled()) return 1.0;
     Body grid=body_thermal_grid(body);
     float section=1.0;
@@ -79,13 +86,15 @@ float member_wood_section(uint slot) {
         float char_mass=float(parcel.words[state+10u]);
         float inert=float(parcel.words[state+11u]);
         float water=float(parcel.words[state+12u]);
-        float capacity=((fuel+inert)*1.5+char_mass+water*4.18)/65536.0;
+        float capacity=((fuel+inert)*WOOD_HEAT_CAPACITY+char_mass+
+                        water*WOOD_WATER_HEAT_CAPACITY)/65536.0;
         float energy=uintBitsToFloat(parcel.words[state+17u])+
                      uintBitsToFloat(parcel.words[state+25u])+
                      uintBitsToFloat(parcel.words[state+26u]);
         float temperature=capacity>0.0?energy/capacity:293.15;
-        float heat_strength=1.0-.3*clamp((temperature-400.0)/200.0,0.0,1.0);
-        float load_bearing=fuel+.35*char_mass;
+        float heat_strength=1.0-WOOD_HOT_STRENGTH_LOSS*
+            clamp((temperature-WOOD_SOFTEN_START_K)/WOOD_SOFTEN_SPAN_K,0.0,1.0);
+        float load_bearing=fuel+WOOD_CHAR_SECTION_FACTOR*char_mass;
         section=min(section,clamp(load_bearing/original,0.0,1.0)*heat_strength);
     }
     return section;

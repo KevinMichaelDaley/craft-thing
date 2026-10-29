@@ -74,7 +74,7 @@ static void rigid_gas_case(bool burning) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     chunk->cells[650].material=DC_MATERIAL_WOOD;
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
-    fr_reactive_state_t hot;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,700,950,&hot,err,sizeof(err)));
+    fr_reactive_state_t hot;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,burning?1000:700,950,&hot,err,sizeof(err)));
     if(burning) hot.flags|=FR_REACTIVE_FLAMING;
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,650,&hot,err,sizeof(err))&&dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err)));
     if(burning) ASSERT_TRUE(dc_gpu_set_body_motion(g,0x80000001u,.6f,0,0,err,sizeof(err))&&

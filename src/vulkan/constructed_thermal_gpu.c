@@ -17,7 +17,7 @@ static bool error(char *err,uint32_t cap,const char *text) {
     if(err&&cap) snprintf(err,cap,"%s",text);
     return false;
 }
-bool fr_gpu_reactive_admit_constructed_stone(dc_gpu_t *g,char *err,uint32_t cap) {
+bool fr_gpu_reactive_admit_constructed_members(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!g||!g->runtime_bodies||!fr_gpu_reactive_initialize(g,err,cap)||vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return false;
     dc_gpu_refresh_body_registry(g);uint32_t capacity=dc_gpu_body_capacity(g),parts=0;uint64_t cells=0;
     for(uint32_t i=0;i<capacity;i++) {const dc_gpu_body_record_t *b=dc_gpu_body_record(g,i);
@@ -26,11 +26,11 @@ bool fr_gpu_reactive_admit_constructed_stone(dc_gpu_t *g,char *err,uint32_t cap)
     uint32_t pool_word=dc_gpu_pixel_pool_word_offset(g),*pool=(uint32_t *)g->body_mapped+pool_word;
     uint64_t required=(uint64_t)pool[1]+(uint64_t)parts*42u;
     if(cells>UINT32_MAX||required>UINT32_MAX||g->reactive->high_id>UINT64_MAX-cells)
-        return error(err,cap,"Constructed stone thermal address range exhausted");
+        return error(err,cap,"Constructed member thermal address range exhausted");
     if(!dc_gpu_runtime_geometry_reserve(g,(uint32_t)required,err,cap)) return false;
     fr_reactive_arena_request_t *requests=calloc((size_t)cells,sizeof(*requests));
     fr_reactive_handle_t *handles=calloc((size_t)cells,sizeof(*handles));
-    if(!requests||!handles) {free(requests);free(handles);return error(err,cap,"Cannot stage constructed stone heat");}
+    if(!requests||!handles) {free(requests);free(handles);return error(err,cap,"Cannot stage constructed member heat");}
     uint32_t n=0;uint64_t identity=g->reactive->high_id;bool okay=true;
     for(uint32_t i=0;i<capacity&&okay;i++) {const dc_gpu_body_record_t *b=dc_gpu_body_record(g,i);if(!candidate(b)) continue;
         double length=b->shape.vertices[1].x_fp/65536.,depth=b->shape.vertices[2].y_fp/65536.;
@@ -65,5 +65,5 @@ bool fr_gpu_reactive_admit_constructed_stone(dc_gpu_t *g,char *err,uint32_t cap)
         }
         pool[1]=used;pool[2]=geometry_capacity;g->reactive->high_id=identity;
     }
-    free(requests);free(handles);return okay||error(err,cap,"Cannot admit constructed stone thermal grid");
+    free(requests);free(handles);return okay||error(err,cap,"Cannot admit constructed member thermal grid");
 }
