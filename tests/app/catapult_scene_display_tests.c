@@ -53,8 +53,8 @@ static void test_render_moving_arm_without_fire_occlusion(void) {
                         err, sizeof(err)));
     uint32_t pixels[128u * 128u];
     ASSERT_TRUE(dc_gpu_readback(gpu,pixels,128u*128u,err,sizeof(err)));
-    uint32_t rear_red=pixels[78u*128u+68u]&255u;
-    uint32_t tip_red=pixels[78u*128u+76u]&255u;
+    uint32_t rear_red=pixels[79u*128u+68u]&255u;
+    uint32_t tip_red=pixels[79u*128u+76u]&255u;
     printf("cocked arm red channels rear %u tip %u\n",rear_red,tip_red);
     ASSERT_TRUE(rear_red>70u&&tip_red>70u);
     dc_gpu_body_motion_t held,launched;
@@ -108,6 +108,7 @@ static void test_render_real_loaded_flight_and_impact(void) {
 
 int main(void) {
     if (getenv("CATAPULT_DISPLAY_REPEAT_HEADLESS")) {
+        RUN(test_projectile_crosses_a_chunk_before_wall_contact);
         RUN(test_grounded_triangular_frame_and_tension_release);
         RUN(test_cold_launcher_has_supported_frame_and_real_latch);
         RUN(test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint);

@@ -10,8 +10,54 @@
 #include "ferrum/physics/revolute_gpu.h"
 #include "ferrum/structural/gpu.h"
 
+static dc_gpu_t *catapult_grid(void) {
+    dc_gpu_t *gpu=NULL;
+    char err[256]={0};
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    if(!chunk) return NULL;
+    bool okay=dc_gpu_create(&gpu,256,128,"build/shaders/pattern.comp.spv",
+                              err,sizeof(err));
+    for(uint32_t slot=0;okay&&slot<8u;slot++) {
+        memset(chunk,0,sizeof(*chunk));
+        chunk->coord=(dc_chunk_coord_t){slot%4u,slot/4u};
+        if(slot>=4u)
+            for(uint32_t x=0;x<DC_CHUNK_SIDE;x++)
+                chunk->cells[32u*DC_CHUNK_SIDE+x].material=DC_MATERIAL_STONE;
+        okay=dc_gpu_upload_chunk(gpu,slot,chunk,err,sizeof(err))&&
+             dc_gpu_set_page(gpu,slot%4u,slot/4u,slot,err,sizeof(err));
+    }
+    free(chunk);
+    if(!okay) {fprintf(stderr,"catapult grid: %s\n",err);dc_gpu_destroy(gpu);return NULL;}
+    return gpu;
+}
+
+static void test_projectile_crosses_a_chunk_before_wall_contact(void) {
+    char err[256]={0};dc_gpu_t *g=catapult_grid();ASSERT_TRUE(g);
+    dc_catapult_scene_t scene={0};
+    ASSERT_TRUE(dc_catapult_scene_build(g,false,&scene,err,sizeof(err)));
+    dc_gpu_world_body_t launcher,wall,coal;
+    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.frame_body,&launcher,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.wall_body,&wall,err,sizeof(err)));
+    ASSERT_TRUE(xof(wall)-xof(launcher)>=64.f);
+    for(uint32_t tick=0;tick<20;tick++)
+        ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_catapult_scene_release(g,&scene,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&coal,err,sizeof(err)));
+    ASSERT_TRUE(coal.body.vx_fp/65536.f>=2.5f);
+    ASSERT_TRUE(dc_catapult_scene_release_projectile(g,&scene,err,sizeof(err)));
+    bool reached=false;
+    for(uint32_t tick=0;tick<32;tick++) {
+        ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&coal,err,sizeof(err)));
+        if(xof(coal)>=xof(wall)-2.f) reached=true;
+    }
+    ASSERT_TRUE(reached);
+    dc_gpu_destroy(g);PASS();
+}
+
 static void test_grounded_triangular_frame_and_tension_release(void) {
-    char err[256]={0};dc_gpu_t *g=grid();ASSERT_TRUE(g);
+    char err[256]={0};dc_gpu_t *g=catapult_grid();ASSERT_TRUE(g);
     dc_catapult_scene_t scene={0};
     ASSERT_TRUE(dc_catapult_scene_build(g,false,&scene,err,sizeof(err)));
     ASSERT_TRUE(scene.pouch_joint&&scene.latch_joint);
@@ -86,7 +132,7 @@ static void test_grounded_triangular_frame_and_tension_release(void) {
 }
 
 static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
-    char err[256]={0};dc_gpu_t *g=grid();ASSERT_TRUE(g);
+    char err[256]={0};dc_gpu_t *g=catapult_grid();ASSERT_TRUE(g);
     dc_catapult_scene_t scene={0};
     bool built=dc_catapult_scene_build(g,false,&scene,err,sizeof(err));
     if(!built) printf("cold scene: %s\n",err);
@@ -170,7 +216,7 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
 }
 
 static void test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint(void) {
-    char err[256]={0};dc_gpu_t *g=grid();ASSERT_TRUE(g);
+    char err[256]={0};dc_gpu_t *g=catapult_grid();ASSERT_TRUE(g);
     dc_catapult_scene_t scene={0};
     bool built=dc_catapult_scene_build(g,true,&scene,err,sizeof(err));
     if(!built) printf("hot scene: %s\n",err);
@@ -182,7 +228,7 @@ static void test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint(void) {
     ASSERT_TRUE(coal.state.fuel_mass_fp>0u);
     ASSERT_TRUE(coal.state.thermal_energy>0.f);
     ASSERT_TRUE(fr_gpu_save_structure(g,"build/catapult_scene.dcs",err,sizeof(err)));
-    dc_gpu_t *copy=grid();ASSERT_TRUE(copy);
+    dc_gpu_t *copy=catapult_grid();ASSERT_TRUE(copy);
     ASSERT_TRUE(fr_gpu_load_structure(copy,"build/catapult_scene.dcs",err,
                                       sizeof(err)));
     fr_reactive_record_t restored;
@@ -202,7 +248,7 @@ static void test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint(void) {
 static void test_hot_coal_emits_finite_reaction_without_igniting_cold_control(void) {
     char err[256]={0};
     for(uint32_t hot=0;hot<2;hot++) {
-        dc_gpu_t *g=grid();ASSERT_TRUE(g);
+        dc_gpu_t *g=catapult_grid();ASSERT_TRUE(g);
         dc_catapult_scene_t scene={0};
         ASSERT_TRUE(dc_catapult_scene_build(g,hot!=0,&scene,err,sizeof(err)));
         fr_reactive_record_t before,after;bool found=false;
@@ -250,7 +296,7 @@ static void test_hot_coal_emits_finite_reaction_without_igniting_cold_control(vo
 }
 
 static void test_wooden_arm_has_finite_reactive_ownership(void) {
-    char err[256]={0};dc_gpu_t *g=grid();ASSERT_TRUE(g);
+    char err[256]={0};dc_gpu_t *g=catapult_grid();ASSERT_TRUE(g);
     dc_catapult_scene_t scene={0};
     ASSERT_TRUE(dc_catapult_scene_build(g,false,&scene,err,sizeof(err)));
     dc_gpu_body_pixel_t wood[40];uint32_t count=0;
@@ -275,7 +321,7 @@ static void test_wooden_arm_has_finite_reactive_ownership(void) {
 }
 
 static void test_prompt_hot_launch_keeps_sound_wood_arm_unignited(void) {
-    char err[256]={0};dc_gpu_t *g=grid();ASSERT_TRUE(g);
+    char err[256]={0};dc_gpu_t *g=catapult_grid();ASSERT_TRUE(g);
     dc_catapult_scene_t scene={0};
     ASSERT_TRUE(dc_catapult_scene_build(g,true,&scene,err,sizeof(err)));
     for(uint32_t tick=0;tick<20;tick++)
@@ -304,7 +350,7 @@ static void test_equal_elapsed_cadences_keep_launcher_flight_and_gas_clock(void)
     char err[256]={0};
     float position[3][2],angle[3];
     for(uint32_t cadence=0;cadence<3;cadence++) {
-        dc_gpu_t *g=grid();ASSERT_TRUE(g);
+        dc_gpu_t *g=catapult_grid();ASSERT_TRUE(g);
         dc_catapult_scene_t scene={0};
         ASSERT_TRUE(dc_catapult_scene_build(g,false,&scene,err,sizeof(err)));
         float scale=cadence==1u?2.f:cadence==2u?.5f:1.f;
@@ -338,6 +384,7 @@ static void test_equal_elapsed_cadences_keep_launcher_flight_and_gas_clock(void)
 
 #ifndef DC_CATAPULT_DISPLAY_INCLUDE
 int main(void) {
+    RUN(test_projectile_crosses_a_chunk_before_wall_contact);
     RUN(test_grounded_triangular_frame_and_tension_release);
     RUN(test_cold_launcher_has_supported_frame_and_real_latch);
     RUN(test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint);
