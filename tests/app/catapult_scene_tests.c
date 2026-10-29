@@ -467,6 +467,27 @@ static void test_constructed_launcher_mast_has_finite_wood_fuel(void) {
     dc_gpu_destroy(g);
     PASS();
 }
+
+static void test_far_side_battlement_is_constructed_wood(void) {
+    char err[256] = {0};
+    dc_gpu_t *g = catapult_grid();
+    ASSERT_TRUE(g);
+    dc_catapult_scene_t scene = {0};
+    ASSERT_TRUE(dc_catapult_scene_build(g, false, &scene, err, sizeof(err)));
+    dc_gpu_world_body_t battlement;
+    ASSERT_TRUE(dc_gpu_read_world_body(g, FR_STRUCTURAL_BODY_ID_BASE + 6u,
+                                      &battlement, err, sizeof(err)));
+    ASSERT_TRUE(battlement.body.active);
+    fr_reactive_record_t wood;
+    bool found = false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g, battlement.body.id, 1u, 0u,
+                                          &wood, &found, err, sizeof(err)) &&
+                found);
+    ASSERT_EQ(wood.state.material, DC_MATERIAL_WOOD);
+    ASSERT_TRUE(wood.state.fuel_mass_fp > 0u);
+    dc_gpu_destroy(g);
+    PASS();
+}
 #endif
 
 #ifndef DC_CATAPULT_DISPLAY_INCLUDE
@@ -485,6 +506,7 @@ int main(int argc, char **argv) {
     RUN(test_prompt_hot_launch_keeps_sound_wood_arm_unignited);
     RUN(test_equal_elapsed_cadences_keep_launcher_flight_and_gas_clock);
     RUN(test_constructed_launcher_mast_has_finite_wood_fuel);
+    RUN(test_far_side_battlement_is_constructed_wood);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail?1:0;
 }
