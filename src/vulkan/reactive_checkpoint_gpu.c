@@ -131,7 +131,9 @@ bool fr_gpu_reactive_checkpoint_mass_valid(const fr_reactive_archive_t *archive,
     bool okay=true;
     for(uint32_t i=0;i<payload->body_count&&okay;i++) {
         const dc_gpu_body_record_t *body=payload->bodies+i;ids[i]=(identity_t){body->body.id,i};
-        if((!body->body.active&&!body->reserved[0])||!(body->motion_flags&DC_GPU_BODY_REACTIVE_MASS)) continue;
+        if((!body->body.active&&!body->reserved[0])||
+           !(body->motion_flags&DC_GPU_BODY_REACTIVE_MASS)||
+           (body->motion_flags&DC_BODY_MOTION_THERMAL_GRID)) continue;
         float density=0;
         okay=(body->piece_count&DC_GPU_PIXEL_BODY_FLAG)&&body->compound_reserved<words&&
             dc_gpu_pixel_geometry_valid(body,pixels+body->compound_reserved,words-body->compound_reserved,&density);

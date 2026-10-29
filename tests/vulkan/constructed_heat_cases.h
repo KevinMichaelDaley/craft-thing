@@ -125,6 +125,22 @@ static void test_constructed_wood_burns_to_loose_ash_after_capacity_retry(void) 
     ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)) &&
         fr_gpu_read_structure_member(g, 1, &burned_member));
     ASSERT_TRUE(burned_member.damage > heated_member.damage + .1f);
+    ASSERT_TRUE(fr_gpu_save_structure(g, "build/constructed_wood_burning.dcs",
+        err, sizeof(err)));
+    dc_gpu_t *copy = NULL;
+    ASSERT_TRUE(context(&copy, err, sizeof(err)) &&
+        fr_gpu_load_structure(copy, "build/constructed_wood_burning.dcs",
+        err, sizeof(err)));
+    dc_gpu_body_motion_t restored_motion;
+    fr_reactive_record_t restored_wood;
+    bool restored = false;
+    ASSERT_TRUE(dc_gpu_read_body_motion(copy, FR_STRUCTURAL_BODY_ID_BASE + 1,
+        &restored_motion, err, sizeof(err)) &&
+        fr_gpu_reactive_read_body(copy, FR_STRUCTURAL_BODY_ID_BASE + 1,
+        5, 0, &restored_wood, &restored, err, sizeof(err)) && restored);
+    ASSERT_TRUE(fabsf(restored_motion.mass - burning_motion.mass) < .001f);
+    ASSERT_EQ(restored_wood.state.fuel_mass_fp, wood.state.fuel_mass_fp / 2u);
+    dc_gpu_destroy(copy);
     memcpy(target_state, &wood.state, sizeof(wood.state));
     target_state[11] = target_state[9];
     target_state[9] = 0;

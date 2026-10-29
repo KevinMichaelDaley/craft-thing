@@ -54,17 +54,58 @@ void release_member(uint member) {
 #include "structural_debris.glsl"
 #include "rigid_fragment.glsl"
 #include "pixel_fragment.glsl"
+float member_wood_section(uint slot) {
+#ifdef DC_RUNTIME_BODY_STORAGE
+    if(slot>=BODY_CAPACITY) return 1.0;
+    Body body=DC_BODY(slot);
+    if(body.material!=2u||(body.motion_flags&DC_BODY_MOTION_THERMAL_GRID)==0u||
+       !reactive_enabled()) return 1.0;
+    Body grid=body_thermal_grid(body);
+    float section=1.0;
+    for(uint pixel=0u;pixel<body_pieces(grid);pixel++) {
+        if(pixel_piece_material(grid,pixel)==0u) continue;
+        uint word=grid.compound_reserved+pixel_tile_offset(grid,pixel/256u)+
+                  1u+(pixel%256u)/8u;
+        uvec2 handle=reactive_shape_read(word-color_pool_word(),pixel%8u,
+                                         color_capacity());
+        if(!reactive_handle_valid(handle)) continue;
+        ReactiveWords parcel=reactive_entry_buffer(handle.x);
+        uint state=FR_ENTRY_STATE;
+        if(parcel.words[FR_ENTRY_OWNER]!=2u||
+           parcel.words[FR_ENTRY_OWNER+1u]!=body.id||
+           parcel.words[state+8u]==0u) continue;
+        float original=float(parcel.words[state+8u]);
+        float fuel=float(parcel.words[state+9u]);
+        float char_mass=float(parcel.words[state+10u]);
+        float inert=float(parcel.words[state+11u]);
+        float water=float(parcel.words[state+12u]);
+        float capacity=((fuel+inert)*1.5+char_mass+water*4.18)/65536.0;
+        float energy=uintBitsToFloat(parcel.words[state+17u])+
+                     uintBitsToFloat(parcel.words[state+25u])+
+                     uintBitsToFloat(parcel.words[state+26u]);
+        float temperature=capacity>0.0?energy/capacity:293.15;
+        float heat_strength=1.0-.3*clamp((temperature-400.0)/200.0,0.0,1.0);
+        float load_bearing=fuel+.35*char_mass;
+        section=min(section,clamp(load_bearing/original,0.0,1.0)*heat_strength);
+    }
+    return section;
+#else
+    return 1.0;
+#endif
+}
 void damage_members() {
     uint g=graph();bool cut=false;
     for(uint member=0u;member<DC_DATA(g+1u);member++) if(member_active(member)) {
         uint m=g+MEMBERS+member*8u,st=member_state(member);
         if(DC_DATA(st+3u)>=2u) continue;
-        float excess=max(eq_get(st+7u)-1.0,0);
+        uint slot=DC_DATA(m+7u);
+        float section=member_wood_section(slot);
+        float excess=max(eq_get(st+7u)/max(section,.05)-1.0,0);
         uint profile=g+29000u+DC_DATA(m+4u)*12u;
-        float damage=min(1.0,eq_get(st+10u)+excess*excess/(60.0*eq_get(profile+8u)));
+        float damage=min(1.0,max(eq_get(st+10u),1.0-section)+
+                         excess*excess/(60.0*eq_get(profile+8u)));
         eq_put(st+10u,damage);
         if(damage<1.0) continue;
-        uint slot=DC_DATA(m+7u);
         if(slot>=BODY_CAPACITY||DC_BODY(slot).reserved0!=STRUCTURAL_SOURCE||
            DC_BODY(slot).reserved1!=member+1u||DC_BODY(slot).enabled==0u) {
             DC_DATA(st+3u)=4u;continue;
