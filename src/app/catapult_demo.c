@@ -41,24 +41,28 @@ int main(void) {
     if (okay) okay = make_ground(gpu, err, sizeof(err));
     if (okay) okay = dc_catapult_scene_build(gpu, true, &scene,
                                              err, sizeof(err));
+    fr_renderer_sun_t sun = {.direction = {-.4f, -.8f, .45f},
+        .intensity = 1.8f, .color = {1.f, .95f, .85f},
+        .known_sky = FR_SKY_TOP | FR_SKY_LEFT};
     if (okay) okay = fr_renderer_enable(gpu, err, sizeof(err)) &&
-                     fr_renderer_set_mode(gpu, FR_RENDERER_ALBEDO) &&
+                     fr_renderer_set_sources(gpu, NULL, 0, sun) &&
+                     fr_renderer_set_mode(gpu, FR_RENDERER_LIT) &&
                      dc_gpu_set_tick_seconds(gpu, 1.f / 60.f) &&
                      dc_gpu_set_window_title(gpu, "Flaming catapult");
     if (okay) fprintf(stderr, "Catapult demo: 256x128 game view ready\n");
-    for (uint32_t frame = 0; okay && frame < 42u; frame++) {
+    for (uint32_t frame = 0; okay && frame < 205u; frame++) {
         uint32_t start = SDL_GetTicks();
         SDL_Event event;
         while (SDL_PollEvent(&event))
             if (event.type == SDL_QUIT) goto done;
         if (frame == 8u)
             okay = dc_catapult_scene_release(gpu, &scene, err, sizeof(err));
-        if (frame == 9u)
+        if (frame == 11u)
             okay = dc_catapult_scene_release_projectile(gpu, &scene,
                                                          err, sizeof(err));
         if (okay) okay = dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err));
         if (okay && frame % 10u == 0u)
-            fprintf(stderr, "Catapult demo: frame %u/42\n", frame + 1u);
+            fprintf(stderr, "Catapult demo: frame %u/205\n", frame + 1u);
         uint32_t spent = SDL_GetTicks() - start;
         if (okay && spent < 16u) SDL_Delay(16u - spent);
     }

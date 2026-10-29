@@ -18,8 +18,15 @@ enum {
     CATAPULT_POUCH_ID = 3u,
     CATAPULT_COAL_ID = 0x80000002u,
     CATAPULT_BASE_ID = 0x80000003u,
-    CATAPULT_COAL_SLOT = 5u
+    CATAPULT_COAL_SLOT = 5u,
+    CATAPULT_WALL_X = 180u,
+    CATAPULT_FLOOR_Y = 96u,
+    CATAPULT_BASE_HEIGHT = 16u,
+    CATAPULT_WALL_TOP_Y = 68u
 };
+
+static const float CATAPULT_COCKED_ANGLE = -2.45f;
+static const float CATAPULT_FRAME_ANGLE = -1.57079632679f;
 
 static bool scene_error(char *err, uint32_t cap, const char *message) {
     if (err && cap) snprintf(err, cap, "%s", message);
@@ -42,14 +49,21 @@ static fr_structural_gpu_member_t scene_member(uint32_t id, uint32_t a,
 }
 
 static fr_structural_gpu_graph_t support_graph(void) {
-    fr_structural_gpu_graph_t graph = {.node_count = 4, .member_count = 2,
+    fr_structural_gpu_graph_t graph = {.node_count = 7, .member_count = 5,
                                        .anchor_count = 2};
-    graph.nodes[0] = scene_node(1, 72, 96);
+    graph.nodes[0] = scene_node(1, 72, CATAPULT_FLOOR_Y);
     graph.nodes[1] = scene_node(2, 72, 80);
-    graph.nodes[2] = scene_node(3, 136, 96);
-    graph.nodes[3] = scene_node(4, 136, 82);
+    graph.nodes[2] = scene_node(3, CATAPULT_WALL_X, CATAPULT_FLOOR_Y);
+    graph.nodes[3] = scene_node(4, CATAPULT_WALL_X,
+                                CATAPULT_WALL_TOP_Y + 16u);
+    graph.nodes[4] = scene_node(5, CATAPULT_WALL_X, CATAPULT_WALL_TOP_Y);
+    graph.nodes[5] = scene_node(6, 72, 64);
+    graph.nodes[6] = scene_node(7, 72, 56);
     graph.members[0] = scene_member(1, 1, 2, FR_STRUCTURAL_WOOD, 4);
     graph.members[1] = scene_member(2, 3, 4, FR_STRUCTURAL_STONE, 4);
+    graph.members[2] = scene_member(3, 4, 5, FR_STRUCTURAL_STONE, 4);
+    graph.members[3] = scene_member(4, 2, 6, FR_STRUCTURAL_WOOD, 4);
+    graph.members[4] = scene_member(5, 6, 7, FR_STRUCTURAL_WOOD, 4);
     graph.anchors[0] = (fr_structural_gpu_anchor_t){
         .id = 1, .generation = 1, .node = 1, .kind = FR_JOINT_MOMENT,
         .chunk = {1, 1}, .x = 8, .y = 32, .width = 2, .height = 1,
@@ -62,19 +76,21 @@ static fr_structural_gpu_graph_t support_graph(void) {
     graph.anchors[1] = graph.anchors[0];
     graph.anchors[1].id = 2;
     graph.anchors[1].node = 3;
-    graph.anchors[1].chunk.x = 2;
-    graph.anchors[1].x = 8;
+    graph.anchors[1].chunk.x = CATAPULT_WALL_X / DC_CHUNK_SIDE;
+    graph.anchors[1].x = CATAPULT_WALL_X % DC_CHUNK_SIDE;
     return graph;
 }
 
 static bool triangular_base(dc_gpu_t *gpu, char *err, uint32_t cap) {
     dc_gpu_world_body_t base = {.chunk = {1, 1}, .body = {
-        .id = CATAPULT_BASE_ID, .x_fp = 0, .y_fp = 24 * 65536,
-        .width = 16, .height = 8, .active = 1}};
+        .id = CATAPULT_BASE_ID, .x_fp = 0,
+        .y_fp = (CATAPULT_FLOOR_Y - DC_CHUNK_SIDE - CATAPULT_BASE_HEIGHT) * 65536,
+        .width = 16, .height = CATAPULT_BASE_HEIGHT, .active = 1}};
     dc_gpu_body_shape_t shape = {.count = 3, .material = DC_GPU_BODY_WOOD,
-        .vertices = {{.x_fp = 0, .y_fp = 8 * 65536},
+        .vertices = {{.x_fp = 0, .y_fp = CATAPULT_BASE_HEIGHT * 65536},
                      {.x_fp = 8 * 65536, .y_fp = 0},
-                     {.x_fp = 16 * 65536, .y_fp = 8 * 65536}}};
+                     {.x_fp = 16 * 65536,
+                      .y_fp = CATAPULT_BASE_HEIGHT * 65536}}};
     return dc_gpu_spawn_convex_body(gpu, base, &shape, err, cap) &&
            dc_gpu_set_body_motion(gpu, CATAPULT_BASE_ID, 0.f, 0.f,
                                   DC_GPU_BODY_KINEMATIC, err, cap);
@@ -123,6 +139,41 @@ static bool wooden_arm(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return dc_gpu_admit_authored_rigid_cells(gpu, err, cap);
 }
 
+static bool wooden_battlement(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    const fr_reactive_profile_t *profile = fr_reactive_profile(DC_MATERIAL_WOOD);
+    if (!profile) return scene_error(err, cap, "Missing wood profile");
+    uint32_t mass = (uint32_t)lroundf(profile->density * 65536.f);
+    for (uint32_t y = 86u; y < CATAPULT_FLOOR_Y; y++)
+        for (uint32_t x = 198u; x < 240u; x++) {
+            if (y == 94u && x == 207u) continue;
+            bool post = (x >= 200u && x <= 202u && y >= 87u) ||
+                        (x == 208u && y >= 86u) ||
+                        (x >= 212u && x <= 214u && y >= 87u) ||
+                        (x >= 234u && x <= 236u);
+            if (y < 94u && !post) continue;
+            uint32_t slot = 4u + x / DC_CHUNK_SIDE;
+            uint32_t local = (y % DC_CHUNK_SIDE) * DC_CHUNK_SIDE +
+                             x % DC_CHUNK_SIDE;
+            fr_reactive_state_t state;
+            bool impact_facing = x == 212u && y >= 87u && y <= 93u;
+            bool thin_wood = x == 208u && y < 94u;
+            bool thin_plank = y == 94u && x >= 202u && x <= 210u;
+            uint32_t parcel_mass = mass;
+            if (impact_facing) parcel_mass /= 50u;
+            else if (thin_wood || thin_plank) parcel_mass /= 10u;
+            if (!fr_reactive_state_default(DC_MATERIAL_WOOD, parcel_mass, 0,
+                    293.15f, 0xD0000000ull + y * 256u + x, &state,
+                    err, cap)) return false;
+            if (impact_facing || thin_wood || thin_plank)
+                state.ignition_threshold = .02f;
+            if (!dc_gpu_paint_material(gpu, x, y, 0, DC_MATERIAL_WOOD,
+                                       err, cap) ||
+                !fr_gpu_reactive_seed_cell(gpu, slot, local, &state,
+                                            err, cap)) return false;
+        }
+    return true;
+}
+
 bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
                              dc_catapult_scene_t *scene,
                              char *err_buf, uint32_t err_cap) {
@@ -137,28 +188,31 @@ bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
         if (!dc_gpu_rigid_step(gpu, err_buf, err_cap)) return false;
     if (!triangular_base(gpu, err_buf, err_cap)) return false;
     if (!wooden_arm(gpu, err_buf, err_cap) ||
-        !dc_gpu_set_body_motion(gpu, CATAPULT_ARM_ID, -2.f, 0.f, 0,
+        !dc_gpu_set_body_motion(gpu, CATAPULT_ARM_ID, CATAPULT_COCKED_ANGLE,
+                                0.f, 0,
                                 err_buf, err_cap) ||
         !coal_load(gpu, hot, err_buf, err_cap) ||
-        !dc_gpu_admit_authored_rigid_cells(gpu, err_buf, err_cap)) return false;
+        !dc_gpu_admit_authored_rigid_cells(gpu, err_buf, err_cap) ||
+        !wooden_battlement(gpu, err_buf, err_cap)) return false;
     if (!dc_gpu_set_body_origin(gpu, (dc_chunk_coord_t){0, 0},
                                  err_buf, err_cap)) return false;
     fr_revolute_joint_t pivot = {.id = CATAPULT_PIVOT_ID,
-        .body_a = FR_STRUCTURAL_BODY_ID_BASE + 1u, .body_b = CATAPULT_ARM_ID,
-        .anchor_a = {8.f, 0.f}, .anchor_b = {0.f, 0.f},
+        .body_a = FR_STRUCTURAL_BODY_ID_BASE + 5u, .body_b = CATAPULT_ARM_ID,
+        .anchor_a = {4.f, 0.f}, .anchor_b = {0.f, 0.f},
         .flags = FR_REVOLUTE_SPRING | FR_REVOLUTE_LIMITS,
-        .lower_angle = -.6f, .upper_angle = 1.1f,
+        .lower_angle = -1.2f, .upper_angle = 1.1f,
         .spring_stiffness = 20000.f, .spring_rest_angle = .6f};
+    float held_angle = CATAPULT_COCKED_ANGLE - CATAPULT_FRAME_ANGLE;
     fr_revolute_joint_t latch = {.id = CATAPULT_LATCH_ID,
         .body_a = pivot.body_a, .body_b = CATAPULT_ARM_ID,
         .anchor_a = {8.f, 0.f}, .anchor_b = {0.f, 0.f},
         .flags = FR_REVOLUTE_LIMITS | FR_REVOLUTE_SPRING,
-        .lower_angle = -.42920367321f, .upper_angle = -.42920367321f,
+        .lower_angle = held_angle, .upper_angle = held_angle,
         .spring_stiffness = 20000.f,
-        .spring_rest_angle = -1.45840734642f};
+        .spring_rest_angle = 2.f * held_angle - pivot.spring_rest_angle};
     fr_revolute_joint_t pouch = {.id = CATAPULT_POUCH_ID,
         .body_a = CATAPULT_ARM_ID, .body_b = CATAPULT_COAL_ID,
-        .anchor_a = {16.f, 0.f}, .anchor_b = {0.f, 0.f}};
+        .anchor_a = {36.f, 0.f}, .anchor_b = {0.f, 0.f}};
     if (!fr_gpu_revolute_add(gpu, &pivot, err_buf, err_cap) ||
         !fr_gpu_revolute_add(gpu, &latch, err_buf, err_cap) ||
         !fr_gpu_revolute_add(gpu, &pouch, err_buf, err_cap)) return false;
@@ -168,8 +222,9 @@ bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
         .kinetic_scale = 1. / 512.};
     if (!fr_gas_gpu_enable(gpu, &gas, .0012f, 293.15f, err_buf, err_cap) ||
         !fr_combustion_gpu_enable(gpu, err_buf, err_cap)) return false;
-    *scene = (dc_catapult_scene_t){.frame_body = pivot.body_a,
+    *scene = (dc_catapult_scene_t){.frame_body = FR_STRUCTURAL_BODY_ID_BASE + 1u,
         .wall_body = FR_STRUCTURAL_BODY_ID_BASE + 2u,
+        .wall_upper_body = FR_STRUCTURAL_BODY_ID_BASE + 3u,
         .base_body = CATAPULT_BASE_ID,
         .arm_body = pivot.body_b, .coal_body = pouch.body_b,
         .pivot_joint = pivot.id, .latch_joint = latch.id,

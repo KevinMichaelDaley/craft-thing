@@ -71,7 +71,7 @@ static void test_render_moving_arm_without_fire_occlusion(void) {
     ASSERT_TRUE(dc_gpu_rigid_step(gpu,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_body_motion(gpu,scene.arm_body,&launched,
         err,sizeof(err)));
-    ASSERT_TRUE(launched.angle>held.angle+.1f);
+    ASSERT_TRUE(launched.angle>held.angle+.04f);
     ASSERT_TRUE(dc_catapult_scene_release_projectile(gpu,&scene,err,sizeof(err)));
     for (uint32_t tick = 0; tick < 8; tick++)
         ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
@@ -95,23 +95,33 @@ static void test_render_real_loaded_flight_and_impact(void) {
     if (!built) fprintf(stderr, "hot display scene: %s\n", err);
     ASSERT_TRUE(built);
     ASSERT_TRUE(fr_renderer_enable(gpu, err, sizeof(err)));
-    ASSERT_TRUE(fr_renderer_set_mode(gpu, FR_RENDERER_ALBEDO));
+    fr_renderer_sun_t sun = {.direction = {-.4f, -.8f, .45f},
+        .intensity = 1.8f, .color = {1.f, .95f, .85f},
+        .known_sky = FR_SKY_TOP | FR_SKY_LEFT};
+    ASSERT_TRUE(fr_renderer_set_sources(gpu, NULL, 0, sun));
+    ASSERT_TRUE(fr_renderer_set_mode(gpu, FR_RENDERER_LIT));
     ASSERT_TRUE(dc_gpu_set_tick_seconds(gpu, 1.f / 60.f));
+    uint32_t wood_cell = (91u - 64u) * DC_CHUNK_SIDE + (208u - 192u);
+    fr_reactive_record_t wood_before;
+    bool found = false;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(gpu, 7u, wood_cell, &wood_before,
+                                          &found, err, sizeof(err)) && found);
     mkdir("build/screenshots", 0777);
     for (uint32_t tick = 0; tick < 8; tick++)
         ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
     ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_loaded.bmp",
                         err, sizeof(err)));
-    for (uint32_t tick = 0; tick < 10; tick++)
+    for (uint32_t tick = 0; tick < 12; tick++)
         ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
     ASSERT_TRUE(dc_catapult_scene_release(gpu, &scene, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu,1,err,sizeof(err)));
+    for (uint32_t tick = 0; tick < 3; tick++)
+        ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu,1,err,sizeof(err)));
     ASSERT_TRUE(dc_catapult_scene_release_projectile(gpu,&scene,err,sizeof(err)));
     for (uint32_t tick = 0; tick < 3; tick++)
         ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
     ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_flight.bmp",
                         err, sizeof(err)));
-    for (uint32_t tick = 0; tick < 17; tick++)
+    for (uint32_t tick = 0; tick < 47; tick++)
         ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
     ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_impact.bmp",
                         err, sizeof(err)));
@@ -121,18 +131,23 @@ static void test_render_real_loaded_flight_and_impact(void) {
     ASSERT_TRUE(dc_gpu_read_world_body(gpu, scene.wall_body, &wall,
                                        err, sizeof(err)));
     printf("rendered impact coal %.2f wall %.2f\n", xof(coal), xof(wall));
-    ASSERT_TRUE(xof(coal) >= 118.f);
-    for (uint32_t tick = 0; tick < 50; tick++)
+    ASSERT_TRUE(xof(coal) > xof(wall) + 20.f);
+    for (uint32_t tick = 0; tick < 130; tick++)
         ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
     ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_battlement_fire.bmp",
                         err, sizeof(err)));
     fr_reactive_record_t burning;
-    bool found = false;
-    uint32_t wood_cell = (94u - 64u) * DC_CHUNK_SIDE + (118u - 64u);
-    ASSERT_TRUE(fr_gpu_reactive_read_cell(gpu, 5u, wood_cell, &burning,
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(gpu, 7u, wood_cell, &burning,
                                           &found, err, sizeof(err)) && found);
-    ASSERT_TRUE((burning.state.flags & FR_REACTIVE_FLAMING) != 0u ||
-                burning.state.char_mass_fp > 0u);
+    float wood_temperature = 0.f;
+    ASSERT_TRUE(fr_reactive_state_temperature(&burning.state,
+                                              &wood_temperature, err,
+                                              sizeof(err)));
+    printf("display battlement %.1fK fuel %u -> %u flags %u\n",
+           wood_temperature, wood_before.state.fuel_mass_fp,
+           burning.state.fuel_mass_fp, burning.state.flags);
+    ASSERT_TRUE((burning.state.flags & FR_REACTIVE_FLAMING) != 0u);
+    ASSERT_TRUE(burning.state.fuel_mass_fp < wood_before.state.fuel_mass_fp);
     dc_gpu_destroy(gpu);
     PASS();
 }

@@ -10,6 +10,7 @@ typedef struct {
     uint32_t frame_body;
     uint32_t base_body;
     uint32_t wall_body;
+    uint32_t wall_upper_body;
     uint32_t arm_body;
     uint32_t coal_body;
     uint32_t pivot_joint;
@@ -19,8 +20,8 @@ typedef struct {
     bool projectile_released;
 } dc_catapult_scene_t;
 
-/** Build a supported launcher, stone target wall, and finite coal load in a
- * 128-cell test world with a stone floor at y=96. */
+/** Build a supported launcher, tall stone wall, wooden interior battlement,
+ * and finite coal load in a 256x128 world with a stone floor at y=96. */
 bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
                              dc_catapult_scene_t *scene,
                              char *err_buf, uint32_t err_cap);
