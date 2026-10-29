@@ -449,6 +449,22 @@ static void test_equal_elapsed_cadences_keep_launcher_flight_and_gas_clock(void)
     PASS();
 }
 
+static void test_constructed_launcher_mast_has_finite_wood_fuel(void) {
+    char err[256] = {0};
+    dc_gpu_t *g = catapult_grid();
+    ASSERT_TRUE(g);
+    dc_catapult_scene_t scene = {0};
+    ASSERT_TRUE(dc_catapult_scene_build(g, false, &scene, err, sizeof(err)));
+    fr_reactive_record_t mast;
+    bool found = false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g, FR_STRUCTURAL_BODY_ID_BASE + 5u,
+        0, 0, &mast, &found, err, sizeof(err)) && found);
+    ASSERT_EQ(mast.state.material, DC_MATERIAL_WOOD);
+    ASSERT_TRUE(mast.state.fuel_mass_fp > 0u);
+    dc_gpu_destroy(g);
+    PASS();
+}
+
 #ifndef DC_CATAPULT_DISPLAY_INCLUDE
 int main(void) {
     RUN(test_hot_coal_clears_wall_and_ignites_wooden_inner_battlement);
@@ -460,6 +476,7 @@ int main(void) {
     RUN(test_wooden_arm_has_finite_reactive_ownership);
     RUN(test_prompt_hot_launch_keeps_sound_wood_arm_unignited);
     RUN(test_equal_elapsed_cadences_keep_launcher_flight_and_gas_clock);
+    RUN(test_constructed_launcher_mast_has_finite_wood_fuel);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail?1:0;
 }
