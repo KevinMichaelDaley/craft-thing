@@ -3,13 +3,15 @@
 
 #include "dungeoncraft/gpu.h"
 #include "ferrum/renderer/gpu.h"
+#include "../../src/app/view_config.h"
 
 static bool catapult_window(dc_gpu_t **gpu, uint32_t width, uint32_t height,
                             const char *shader, char *err, uint32_t cap) {
-    return dc_gpu_create_window(gpu, width, height, 1280, 720,
+    return dc_gpu_create_window(gpu, width, height,
+                                VIEW_WIDTH * WINDOW_SCALE,
+                                VIEW_HEIGHT * WINDOW_SCALE,
                                 shader, err, cap) &&
-           dc_gpu_set_presentation_focus(*gpu,
-        (dc_presentation_focus_t){45, 64, 50, 36});
+           dc_gpu_set_display_zoom(*gpu, WINDOW_SCALE);
 }
 
 #define dc_gpu_create catapult_window
@@ -20,14 +22,15 @@ static bool catapult_window(dc_gpu_t **gpu, uint32_t width, uint32_t height,
 static bool capture(dc_gpu_t *gpu, const char *path, char *err,
                     uint32_t cap) {
     if (!dc_gpu_present_chunks_steps(gpu, 0, err, cap)) return false;
-    uint32_t *pixels = calloc(128u * 128u, sizeof(*pixels));
+    uint32_t *pixels = calloc(VIEW_WIDTH * VIEW_HEIGHT, sizeof(*pixels));
     if (!pixels) return false;
-    bool okay = dc_gpu_readback(gpu, pixels, 128u * 128u, err, cap);
+    bool okay = dc_gpu_readback(gpu, pixels, VIEW_WIDTH * VIEW_HEIGHT, err, cap);
     SDL_Surface *source = okay ? SDL_CreateRGBSurfaceWithFormatFrom(
-        pixels + 64u * 128u + 45u, 50, 36, 32, 128 * 4,
+        pixels, VIEW_WIDTH, VIEW_HEIGHT, 32, VIEW_WIDTH * 4,
         SDL_PIXELFORMAT_ABGR8888) : NULL;
     SDL_Surface *image = source ? SDL_CreateRGBSurfaceWithFormat(
-        0, 1000, 720, 32, SDL_PIXELFORMAT_ABGR8888) : NULL;
+        0, VIEW_WIDTH * WINDOW_SCALE, VIEW_HEIGHT * WINDOW_SCALE,
+        32, SDL_PIXELFORMAT_ABGR8888) : NULL;
     okay = image && SDL_BlitScaled(source, NULL, image, NULL) == 0 &&
            SDL_SaveBMP(image, path) == 0;
     if (image) SDL_FreeSurface(image);
@@ -38,10 +41,12 @@ static bool capture(dc_gpu_t *gpu, const char *path, char *err,
 
 static void test_render_moving_arm_without_fire_occlusion(void) {
     char err[256] = {0};
-    dc_gpu_t *gpu = grid();
+    dc_gpu_t *gpu = catapult_grid();
     ASSERT_TRUE(gpu);
     dc_catapult_scene_t scene = {0};
-    ASSERT_TRUE(dc_catapult_scene_build(gpu, false, &scene, err, sizeof(err)));
+    bool built = dc_catapult_scene_build(gpu, false, &scene, err, sizeof(err));
+    if (!built) fprintf(stderr, "cold display scene: %s\n", err);
+    ASSERT_TRUE(built);
     ASSERT_TRUE(fr_renderer_enable(gpu, err, sizeof(err)));
     ASSERT_TRUE(fr_renderer_set_mode(gpu, FR_RENDERER_ALBEDO));
     mkdir("build/screenshots", 0777);
@@ -51,12 +56,15 @@ static void test_render_moving_arm_without_fire_occlusion(void) {
         ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
     ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_cold_cocked.bmp",
                         err, sizeof(err)));
-    uint32_t pixels[128u * 128u];
-    ASSERT_TRUE(dc_gpu_readback(gpu,pixels,128u*128u,err,sizeof(err)));
-    uint32_t rear_red=pixels[79u*128u+68u]&255u;
-    uint32_t tip_red=pixels[79u*128u+76u]&255u;
-    printf("cocked arm red channels rear %u tip %u\n",rear_red,tip_red);
-    ASSERT_TRUE(rear_red>70u&&tip_red>70u);
+    uint32_t pixels[VIEW_WIDTH * VIEW_HEIGHT];
+    ASSERT_TRUE(dc_gpu_readback(gpu,pixels,VIEW_WIDTH*VIEW_HEIGHT,err,sizeof(err)));
+    uint32_t air = pixels[40u * VIEW_WIDTH + 100u];
+    ASSERT_TRUE(((air >> 8u) & 255u) < 40u &&
+                ((air >> 16u) & 255u) < 40u);
+    uint32_t cocked_wood=0;
+    for(uint32_t y=60;y<80;y++) for(uint32_t x=60;x<85;x++)
+        if((pixels[y*VIEW_WIDTH+x]&255u)>70u) cocked_wood++;
+    ASSERT_TRUE(cocked_wood>10u);
     dc_gpu_body_motion_t held,launched;
     ASSERT_TRUE(dc_gpu_read_body_motion(gpu,scene.arm_body,&held,err,sizeof(err)));
     ASSERT_TRUE(dc_catapult_scene_release(gpu, &scene, err, sizeof(err)));
@@ -69,23 +77,28 @@ static void test_render_moving_arm_without_fire_occlusion(void) {
         ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
     ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_cold_flight.bmp",
                         err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_readback(gpu,pixels,128u*128u,err,sizeof(err)));
-    ASSERT_TRUE((pixels[79u*128u+76u]&255u)>70u);
+    ASSERT_TRUE(dc_gpu_readback(gpu,pixels,VIEW_WIDTH*VIEW_HEIGHT,err,sizeof(err)));
+    uint32_t flight_wood=0;
+    for(uint32_t y=60;y<80;y++) for(uint32_t x=60;x<85;x++)
+        if((pixels[y*VIEW_WIDTH+x]&255u)>70u) flight_wood++;
+    ASSERT_TRUE(flight_wood>10u);
     dc_gpu_destroy(gpu);
     PASS();
 }
 
 static void test_render_real_loaded_flight_and_impact(void) {
     char err[256] = {0};
-    dc_gpu_t *gpu = grid();
+    dc_gpu_t *gpu = catapult_grid();
     ASSERT_TRUE(gpu);
     dc_catapult_scene_t scene = {0};
-    ASSERT_TRUE(dc_catapult_scene_build(gpu, true, &scene, err, sizeof(err)));
+    bool built = dc_catapult_scene_build(gpu, true, &scene, err, sizeof(err));
+    if (!built) fprintf(stderr, "hot display scene: %s\n", err);
+    ASSERT_TRUE(built);
     ASSERT_TRUE(fr_renderer_enable(gpu, err, sizeof(err)));
     ASSERT_TRUE(fr_renderer_set_mode(gpu, FR_RENDERER_ALBEDO));
     ASSERT_TRUE(dc_gpu_set_tick_seconds(gpu, 1.f / 60.f));
     mkdir("build/screenshots", 0777);
-    for (uint32_t tick = 0; tick < 3; tick++)
+    for (uint32_t tick = 0; tick < 8; tick++)
         ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
     ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_loaded.bmp",
                         err, sizeof(err)));
@@ -98,10 +111,17 @@ static void test_render_real_loaded_flight_and_impact(void) {
         ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
     ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_flight.bmp",
                         err, sizeof(err)));
-    for (uint32_t tick = 0; tick < 5; tick++)
+    for (uint32_t tick = 0; tick < 17; tick++)
         ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
     ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_impact.bmp",
                         err, sizeof(err)));
+    dc_gpu_world_body_t coal, wall;
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu, scene.coal_body, &coal,
+                                       err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu, scene.wall_body, &wall,
+                                       err, sizeof(err)));
+    printf("rendered impact coal %.2f wall %.2f\n", xof(coal), xof(wall));
+    ASSERT_TRUE(xof(coal) >= xof(wall) - 8.f);
     dc_gpu_destroy(gpu);
     PASS();
 }

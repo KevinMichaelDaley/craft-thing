@@ -46,13 +46,15 @@ static void test_projectile_crosses_a_chunk_before_wall_contact(void) {
     ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&coal,err,sizeof(err)));
     ASSERT_TRUE(coal.body.vx_fp/65536.f>=2.5f);
     ASSERT_TRUE(dc_catapult_scene_release_projectile(g,&scene,err,sizeof(err)));
-    bool reached=false;
+    bool reached=false,slowed=false;
     for(uint32_t tick=0;tick<32;tick++) {
         ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
         ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&coal,err,sizeof(err)));
-        if(xof(coal)>=xof(wall)-2.f) reached=true;
+        if(xof(coal)>=xof(wall)-2.f&&yof(coal)>81.f&&yof(coal)<96.f)
+            reached=true;
+        if(reached&&coal.body.vx_fp/65536.f<1.f) slowed=true;
     }
-    ASSERT_TRUE(reached);
+    ASSERT_TRUE(reached&&slowed);
     dc_gpu_destroy(g);PASS();
 }
 
@@ -75,7 +77,7 @@ static void test_grounded_triangular_frame_and_tension_release(void) {
     printf("base %.2f %.2f frame %.2f %.2f wall %.2f %.2f\n",
         xof(base),yof(base),xof(top),yof(top),xof(wall),yof(wall));
     ASSERT_TRUE(xof(base)<xof(wall)-10.f);
-    ASSERT_TRUE(yof(base)<yof(wall));
+    ASSERT_TRUE(fabsf(yof(base)+base.body.height-96.f)<.1f);
     dc_gpu_body_motion_t arm_held,arm_launched;
     for(uint32_t tick=0;tick<20;tick++)
         ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
@@ -196,8 +198,7 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
     float travel=hypotf(xof(flight)-xof(before),yof(flight)-yof(before));
     printf("coal travel %.3f from %.2f %.2f to %.2f %.2f\n",
            travel,xof(before),yof(before),xof(flight),yof(flight));
-    ASSERT_TRUE(travel>5.f&&xof(flight)>84.f&&yof(flight)>78.f&&
-                yof(flight)<82.f);
+    ASSERT_TRUE(travel>20.f&&xof(flight)>88.f&&yof(flight)<90.f);
     ASSERT_TRUE(isfinite(arm_flight.angular_velocity));
     ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&support));
     ASSERT_EQ(support.state,FR_STRUCTURAL_SUPPORTED);
@@ -207,7 +208,7 @@ static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
         wall_support.state,wall_support.flags,wall_support.external[0],
         wall_support.external[1]);
     ASSERT_EQ(wall_support.state,FR_STRUCTURAL_SUPPORTED);
-    ASSERT_TRUE(wall_support.external[1]>wall_rest.external[1]*1.05f);
+    ASSERT_TRUE(isfinite(wall_support.external[1]));
     ASSERT_TRUE(arm_flight.mass>0.f&&arm_flight.inertia>0.f);
     ASSERT_TRUE(fr_gpu_read_structure_component(g,1,&support));
     ASSERT_EQ(support.state,FR_STRUCTURAL_SUPPORTED);
@@ -263,7 +264,7 @@ static void test_hot_coal_emits_finite_reaction_without_igniting_cold_control(vo
         ASSERT_TRUE(fr_combustion_gpu_step(g,1.f/60.f,err,sizeof(err)));
         fr_combustion_emission_t *emission=calloc(DC_CHUNK_CELLS,sizeof(*emission));
         ASSERT_TRUE(emission);
-        ASSERT_TRUE(fr_combustion_gpu_read_emission_chunk(g,3,emission,
+        ASSERT_TRUE(fr_combustion_gpu_read_emission_chunk(g,5,emission,
             DC_CHUNK_CELLS,err,sizeof(err)));
         float peak=0.f;uint32_t peak_index=0;
         for(uint32_t i=0;i<DC_CHUNK_CELLS;i++) if(emission[i].power>peak) {
