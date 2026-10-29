@@ -31,6 +31,41 @@ static dc_gpu_t *catapult_grid(void) {
     return gpu;
 }
 
+static void test_hot_coal_strikes_and_ignites_wooden_inner_battlement(void) {
+    char err[256] = {0};
+    dc_gpu_t *g = catapult_grid();
+    ASSERT_TRUE(g);
+    dc_catapult_scene_t scene = {0};
+    ASSERT_TRUE(dc_catapult_scene_build(g, true, &scene, err, sizeof(err)));
+    fr_reactive_record_t before, after;
+    bool found = false;
+    uint32_t wood_cell = (90u - 64u) * DC_CHUNK_SIDE + (123u - 64u);
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g, 5u, wood_cell, &before, &found,
+                                           err, sizeof(err)) && found);
+    ASSERT_EQ(before.state.material, DC_MATERIAL_WOOD);
+    for (uint32_t tick = 0; tick < 20u; tick++)
+        ASSERT_TRUE(dc_gpu_tick_step(g, err, sizeof(err)));
+    ASSERT_TRUE(dc_catapult_scene_release(g, &scene, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_step(g, err, sizeof(err)));
+    ASSERT_TRUE(dc_catapult_scene_release_projectile(g, &scene,
+                                                       err, sizeof(err)));
+    float farthest = 0.f;
+    for (uint32_t tick = 0; tick < 55u; tick++) {
+        ASSERT_TRUE(dc_gpu_tick_step(g, err, sizeof(err)));
+        dc_gpu_world_body_t coal;
+        ASSERT_TRUE(dc_gpu_read_world_body(g, scene.coal_body, &coal,
+                                           err, sizeof(err)));
+        if (xof(coal) > farthest) farthest = xof(coal);
+    }
+    ASSERT_TRUE(farthest >= 117.f);
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g, 5u, wood_cell, &after, &found,
+                                           err, sizeof(err)) && found);
+    ASSERT_TRUE((after.state.flags & FR_REACTIVE_FLAMING) != 0u ||
+                after.state.fuel_mass_fp < before.state.fuel_mass_fp);
+    dc_gpu_destroy(g);
+    PASS();
+}
+
 static void test_projectile_crosses_a_chunk_before_wall_contact(void) {
     char err[256]={0};dc_gpu_t *g=catapult_grid();ASSERT_TRUE(g);
     dc_catapult_scene_t scene={0};
@@ -258,7 +293,7 @@ static void test_hot_coal_emits_finite_reaction_without_igniting_cold_control(vo
         dc_gpu_world_body_t pose;
         fr_thermal_inspection_t probe;
         ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&pose,err,sizeof(err)));
-        ASSERT_TRUE(fr_thermal_gpu_inspect(g,84,76,&probe,err,sizeof(err)));
+        ASSERT_TRUE(fr_thermal_gpu_inspect(g,65,65,&probe,err,sizeof(err)));
         printf("coal pose %.2f %.2f thermal occupied %u material %u temp %.2f\n",
                xof(pose),yof(pose),probe.occupied,probe.material,probe.temperature_K);
         ASSERT_TRUE(fr_combustion_gpu_step(g,1.f/60.f,err,sizeof(err)));
@@ -385,6 +420,7 @@ static void test_equal_elapsed_cadences_keep_launcher_flight_and_gas_clock(void)
 
 #ifndef DC_CATAPULT_DISPLAY_INCLUDE
 int main(void) {
+    RUN(test_hot_coal_strikes_and_ignites_wooden_inner_battlement);
     RUN(test_projectile_crosses_a_chunk_before_wall_contact);
     RUN(test_grounded_triangular_frame_and_tension_release);
     RUN(test_cold_launcher_has_supported_frame_and_real_latch);
