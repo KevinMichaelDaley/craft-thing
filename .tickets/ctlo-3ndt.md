@@ -35,3 +35,7 @@ Tests preserve painted appearance and reactive state while burning arbitrary mix
 **2026-10-29T17:36:17Z**
 
 2026-10-29 continuation: ct-79vm completed the far-side battlement conversion to supported constructed wood. Body combustion neighbor lookup now uses constructed thermal grids, brief body-body contact transfers heat, and small ignited parcels produce finite fixed-point reaction. Scene/display/component/feedback suites pass. Broad mixed-concave/support extraction acceptance remains open. Full make test stops only at the no-Intel-device reactive_profile_gpu_tests host gate.
+
+**2026-10-29T17:41:30Z**
+
+2026-10-29 handoff: Existing mixed-concave pixel component suite passed 13/13; body carve and terrain support extraction suite passed 12/12 on retry. Its first full run had a transient 39.838 ms result against the 30 ms large-brush timing gate; isolated and full retries measured 8.470 ms and 8.293 ms. Separate suites now cover mixed geometry, support extraction, ash, rollback, mass, and constructed wood, but a single combined mixed-concave combustion regression remains to be authored after the ctlo-8b67 ignition/fuel dependency. Keep ctlo-3ndt in_progress.
