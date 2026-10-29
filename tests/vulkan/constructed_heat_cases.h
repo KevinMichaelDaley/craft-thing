@@ -83,6 +83,42 @@ static void test_constructed_wood_member_owns_reactive_pixels(void) {
     ASSERT_EQ(wood.owner.kind, FR_REACTIVE_OWNER_BODY);
     ASSERT_EQ(wood.state.material, DC_MATERIAL_WOOD);
     ASSERT_TRUE(wood.state.fuel_mass_fp > 0);
+    uint32_t *entries = g->reactive->arena.entries.mapped;
+    uint32_t allocated = ((uint32_t *)g->reactive->arena.root.mapped)[12];
+    bool marked = false;
+    for(uint32_t index = 1; index < allocated; index++) {
+        uint32_t *entry = entries + (size_t)index * FR_ENTRY_WORDS;
+        if(entry[FR_ENTRY_OWNER] != FR_REACTIVE_OWNER_BODY ||
+           entry[FR_ENTRY_OWNER + 1] != FR_STRUCTURAL_BODY_ID_BASE + 1 ||
+           entry[FR_ENTRY_OWNER + 3] != 5 || entry[FR_ENTRY_OWNER + 4] != 0)
+            continue;
+        uint32_t *state = entry + FR_ENTRY_STATE;
+        state[11] = state[9];
+        state[9] = 0;
+        state[1] = FR_REACTIVE_SPENT;
+        marked = true;
+        break;
+    }
+    ASSERT_TRUE(marked);
+    fr_gas_model_t model = {.gas_constant = {.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv = {.65816,.74320,.65508,1.40248,.71},
+        .kinetic_scale = 1./512.};
+    ASSERT_TRUE(fr_gas_gpu_enable(g, &model, .0012f, 293.15f,
+        err, sizeof(err)) && fr_combustion_gpu_enable(g, err, sizeof(err)) &&
+        fr_combustion_gpu_step(g, .01f, err, sizeof(err)));
+    dc_gpu_body_pixel_t pixels[256];
+    uint32_t count = 0;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g, FR_STRUCTURAL_BODY_ID_BASE + 1,
+        pixels, 256, &count, err, sizeof(err)));
+    ASSERT_EQ(count, 23u);
+    for(uint32_t i = 0; i < count; i++)
+        ASSERT_TRUE(pixels[i].x != 5u || pixels[i].y != 0u);
+    ASSERT_TRUE(dc_gpu_download_chunk(g, 0, chunk, err, sizeof(err)));
+    bool ash = false;
+    for(uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; i++)
+        if(chunk->particles[i].material == DC_MATERIAL_ASH &&
+           chunk->particles[i].mass_fp == wood.state.fuel_mass_fp) ash = true;
+    ASSERT_TRUE(ash);
     free(chunk);
     dc_gpu_destroy(g);
     PASS();
