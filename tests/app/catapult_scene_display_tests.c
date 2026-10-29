@@ -101,11 +101,11 @@ static void test_render_real_loaded_flight_and_impact(void) {
     ASSERT_TRUE(fr_renderer_set_sources(gpu, NULL, 0, sun));
     ASSERT_TRUE(fr_renderer_set_mode(gpu, FR_RENDERER_LIT));
     ASSERT_TRUE(dc_gpu_set_tick_seconds(gpu, 1.f / 60.f));
-    uint32_t wood_cell = (91u - 64u) * DC_CHUNK_SIDE + (208u - 192u);
     fr_reactive_record_t wood_before;
     bool found = false;
-    ASSERT_TRUE(fr_gpu_reactive_read_cell(gpu, 7u, wood_cell, &wood_before,
-                                          &found, err, sizeof(err)) && found);
+    ASSERT_TRUE(fr_gpu_reactive_read_body(gpu,
+        FR_STRUCTURAL_BODY_ID_BASE + 10u, 1u, 0u, &wood_before,
+        &found, err, sizeof(err)) && found);
     mkdir("build/screenshots", 0777);
     for (uint32_t tick = 0; tick < 8; tick++)
         ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
@@ -132,22 +132,22 @@ static void test_render_real_loaded_flight_and_impact(void) {
                                        err, sizeof(err)));
     printf("rendered impact coal %.2f wall %.2f\n", xof(coal), xof(wall));
     ASSERT_TRUE(xof(coal) > xof(wall) + 20.f);
-    for (uint32_t tick = 0; tick < 130; tick++)
+    bool battlement_burned = false;
+    for (uint32_t tick = 0; tick < 130; tick++) {
         ASSERT_TRUE(dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err)));
+        for (uint32_t member = 6u; member <= 12u; member++) {
+            fr_reactive_record_t burning;
+            if (!fr_gpu_reactive_read_body(gpu,
+                    FR_STRUCTURAL_BODY_ID_BASE + member, 1u, 0u,
+                    &burning, &found, err, sizeof(err)) || !found) continue;
+            if ((burning.state.flags & FR_REACTIVE_FLAMING) != 0u &&
+                burning.state.fuel_mass_fp < wood_before.state.fuel_mass_fp)
+                battlement_burned = true;
+        }
+    }
     ASSERT_TRUE(capture(gpu, "build/screenshots/catapult_battlement_fire.bmp",
                         err, sizeof(err)));
-    fr_reactive_record_t burning;
-    ASSERT_TRUE(fr_gpu_reactive_read_cell(gpu, 7u, wood_cell, &burning,
-                                          &found, err, sizeof(err)) && found);
-    float wood_temperature = 0.f;
-    ASSERT_TRUE(fr_reactive_state_temperature(&burning.state,
-                                              &wood_temperature, err,
-                                              sizeof(err)));
-    printf("display battlement %.1fK fuel %u -> %u flags %u\n",
-           wood_temperature, wood_before.state.fuel_mass_fp,
-           burning.state.fuel_mass_fp, burning.state.flags);
-    ASSERT_TRUE((burning.state.flags & FR_REACTIVE_FLAMING) != 0u);
-    ASSERT_TRUE(burning.state.fuel_mass_fp < wood_before.state.fuel_mass_fp);
+    ASSERT_TRUE(battlement_burned);
     dc_gpu_destroy(gpu);
     PASS();
 }

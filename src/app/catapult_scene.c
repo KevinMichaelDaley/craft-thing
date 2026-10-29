@@ -177,6 +177,7 @@ static bool wooden_arm(dc_gpu_t *gpu, char *err, uint32_t cap) {
 }
 
 static bool thin_battlement_wood(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    /* The rails are narrow slats within their two-cell collision envelopes. */
     for (uint32_t member = 6u; member <= 12u; member++) {
         uint32_t id = FR_STRUCTURAL_BODY_ID_BASE + member;
         dc_gpu_world_body_t body;

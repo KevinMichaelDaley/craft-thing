@@ -31,3 +31,7 @@ Tests preserve painted appearance and reactive state while burning arbitrary mix
 **2026-10-29T16:29:01Z**
 
 2026-10-29 verification: constructed wood reactive ownership, partial heat/fuel weakening, mass/COM/inertia feedback, checkpoint, capacity-safe carve and loose ash handoff pass focused component admission (13/13), scene (10/10), display (2/2); normal lit 256x128 demo completed 205/205 frames, exit 0. Full make test passed all suites before reactive_profile_gpu_tests, which cannot run on this host because no Intel hardware compute device is available. Ticket remains in progress for broader mixed-concave/support extraction acceptance; ct-79vm tracks converting scene battlements from painted terrain to constructed assembly.
+
+**2026-10-29T17:36:17Z**
+
+2026-10-29 continuation: ct-79vm completed the far-side battlement conversion to supported constructed wood. Body combustion neighbor lookup now uses constructed thermal grids, brief body-body contact transfers heat, and small ignited parcels produce finite fixed-point reaction. Scene/display/component/feedback suites pass. Broad mixed-concave/support extraction acceptance remains open. Full make test stops only at the no-Intel-device reactive_profile_gpu_tests host gate.
