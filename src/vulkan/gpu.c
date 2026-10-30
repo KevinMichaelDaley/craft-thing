@@ -57,21 +57,21 @@ static void pipeline_cache_load(dc_gpu_t *gpu) {
         length=0u;
     }
     gpu->pipeline_cache_loaded=result==VK_SUCCESS&&length>0u;
+    if(getenv("DC_PIPELINE_CACHE_TRACE"))
+        fprintf(stderr,"Pipeline cache load result%d bytes%zu loaded%d\n",
+                (int)result,length,gpu->pipeline_cache_loaded);
     if(result!=VK_SUCCESS) gpu->pipeline_cache_path[0]=0;
     free(bytes);
 }
 static void pipeline_cache_save(dc_gpu_t *gpu) {
     if(!gpu->pipeline_cache) return;
     size_t length=0u;
-    if(getenv("DC_PIPELINE_CACHE_TRACE")) {
-        size_t measured=0u;
-        VkResult measured_result=vkGetPipelineCacheData(gpu->device,gpu->pipeline_cache,&measured,NULL);
+    VkResult query_result=gpu->pipeline_cache_path[0]?
+        vkGetPipelineCacheData(gpu->device,gpu->pipeline_cache,&length,NULL):VK_ERROR_INITIALIZATION_FAILED;
+    if(getenv("DC_PIPELINE_CACHE_TRACE"))
         fprintf(stderr,"Pipeline cache save query result%d bytes%zu limit%u\n",
-                (int)measured_result,measured,(unsigned)DC_PIPELINE_CACHE_MAX_BYTES);
-    }
-    if(gpu->pipeline_cache_path[0]&&
-       vkGetPipelineCacheData(gpu->device,gpu->pipeline_cache,&length,NULL)==VK_SUCCESS&&
-       length>0u&&length<=DC_PIPELINE_CACHE_MAX_BYTES) {
+                (int)query_result,length,(unsigned)DC_PIPELINE_CACHE_MAX_BYTES);
+    if(query_result==VK_SUCCESS&&length>0u&&length<=DC_PIPELINE_CACHE_MAX_BYTES) {
         void *bytes=malloc(length);
         if(bytes&&vkGetPipelineCacheData(gpu->device,gpu->pipeline_cache,
                                           &length,bytes)==VK_SUCCESS) {
