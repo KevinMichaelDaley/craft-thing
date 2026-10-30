@@ -7,6 +7,8 @@
 
 static int g_pass,g_fail;
 static bool supported,requested;
+static uint32_t mock_vendor=0x8086;
+static VkPhysicalDeviceType mock_device_type=VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
 #ifdef DC_PROBE_BUFFER_DEVICE_ADDRESS
 static bool address_supported=true,address_requested,int64_requested;
 #endif
@@ -24,7 +26,7 @@ VKAPI_ATTR VkResult VKAPI_CALL vkEnumeratePhysicalDevices(VkInstance i,uint32_t 
     (void)i;*count=1;if(out)out[0]=(VkPhysicalDevice)(uintptr_t)2;return VK_SUCCESS;
 }
 VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceProperties(VkPhysicalDevice d,VkPhysicalDeviceProperties *p) {
-    (void)d;memset(p,0,sizeof(*p));p->vendorID=0x8086;p->deviceType=VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+    (void)d;memset(p,0,sizeof(*p));p->vendorID=mock_vendor;p->deviceType=mock_device_type;
     p->apiVersion=VK_API_VERSION_1_3;snprintf(p->deviceName,sizeof(p->deviceName),"CPU-only mock");
 }
 VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice d,uint32_t *count,VkQueueFamilyProperties *p) {
@@ -76,6 +78,23 @@ static void test_probe_rejects_missing_sync2_before_device_creation(void) {
     supported=false;requested=false;device_calls=0;probe_t p={0};
     ASSERT_TRUE(!initialize_device(&p));ASSERT_EQ(device_calls,0u);PASS();
 }
+static void test_probe_accepts_non_intel_hardware_compute(void) {
+    mock_vendor=0x10de;mock_device_type=VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+    supported=true;requested=false;device_calls=0;probe_t p={0};
+    ASSERT_TRUE(!initialize_device(&p));
+    ASSERT_EQ(device_calls,1u);
+    ASSERT_TRUE(requested);
+    mock_vendor=0x8086;mock_device_type=VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+    PASS();
+}
+static void test_probe_rejects_cpu_compute(void) {
+    mock_vendor=0x10005;mock_device_type=VK_PHYSICAL_DEVICE_TYPE_CPU;
+    supported=true;requested=false;device_calls=0;probe_t p={0};
+    ASSERT_TRUE(!initialize_device(&p));
+    ASSERT_EQ(device_calls,0u);
+    mock_vendor=0x8086;mock_device_type=VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+    PASS();
+}
 #ifdef DC_PROBE_BUFFER_DEVICE_ADDRESS
 static void test_address_probe_explicitly_enables_address_without_int64(void) {
     supported=true;address_supported=true;address_requested=false;device_calls=0;
@@ -90,6 +109,8 @@ static void test_address_probe_rejects_missing_address_before_device_creation(vo
 int main(void) {
     RUN(test_probe_explicitly_enables_supported_sync2);
     RUN(test_probe_rejects_missing_sync2_before_device_creation);
+    RUN(test_probe_accepts_non_intel_hardware_compute);
+    RUN(test_probe_rejects_cpu_compute);
 #ifdef DC_PROBE_BUFFER_DEVICE_ADDRESS
     RUN(test_address_probe_explicitly_enables_address_without_int64);
     RUN(test_address_probe_rejects_missing_address_before_device_creation);
