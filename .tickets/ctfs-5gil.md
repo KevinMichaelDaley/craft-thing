@@ -35,3 +35,7 @@ Experimental exact rectangle path is now behind DC_CONTACT_RECTANGLES=1 and OFF 
 **2026-10-28T19:35:58Z**
 
 Current DEFAULT fullscreen real-clock32-frame diagnostic after gating rectangle prototype OFF:79.871ms mean81.297ms worst at unchanged480x270 with640x448 halo. Complete regression and native water4/4 pass; native corrected bonfire8/8 dry0 wet sustained passes. Target below30ms remains unmet. Next investigate shared-memory storage for small structural equilibrium matrices with exact global fallback and no solver/numerical-policy change.
+
+**2026-10-30T09:35:11Z**
+
+2026-10-30 NVIDIA X11 half-native continuation: persistent device/driver/UUID Vulkan pipeline cache cut repeated GPU window creation from about 74s cold to 1.9-2.6s warm; full bonfire setup reached gas enable in 8.1s warm. Fixture upload is 7.2s (1.4s terrain, 0.05s colors, 5.0s reactive imports). A 32-frame real-clock 960x540 displayed run measured 1133.923ms mean and 1153.675ms worst; first thermal/MPM stage alone about 655ms. Half-native is not within frame acceptance; ticket stays open. Captured image at /tmp/ct_half_bonfire.bmp.
