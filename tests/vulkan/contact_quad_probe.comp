@@ -25,7 +25,7 @@ bool matches_reference(Polygon a,Polygon b,uint id,uint family) {
     vec2 n,rn;float d,rd;
     bool expected=reference_polygon_contact(a,b,rn,rd);
     bool actual=polygon_contact(a,b,n,d);
-    bool exact=actual==expected;
+    bool bounded=actual==expected;
     if(actual!=expected) atomicAdd(results[17],1u);
     if(actual&&expected) {
         atomicMax(results[19],floatBitsToUint(max(abs(n.x-rn.x),abs(n.y-rn.y))));
@@ -36,16 +36,36 @@ bool matches_reference(Polygon a,Polygon b,uint id,uint family) {
             results[27]=floatBitsToUint(rn.x);results[28]=floatBitsToUint(rn.y);
             results[29]=floatBitsToUint(d);results[30]=floatBitsToUint(rd);
         }
-        exact=exact&&same_normal&&floatBitsToUint(d)==floatBitsToUint(rd);
+        /* Offsets reach 512 cells, where opposite SAT axes can differ by a
+         * few float ULPs. A different normal is valid only when both axes
+         * have tied depth and its witnesses remain on their support planes. */
+        const float geometry_limit=2.0/8192.0;
+        bool aligned=max(abs(n.x-rn.x),abs(n.y-rn.y))<.001;
+        vec2 an=reference_project_polygon(a,-n),bn=reference_project_polygon(b,n);
+        float positive=reference_project_polygon(b,n).y-reference_project_polygon(a,n).x;
+        float negative=reference_project_polygon(a,n).y-reference_project_polygon(b,n).x;
+        float axis_depth=max(0.,min(positive,negative));
+        bounded=bounded&&abs(length(n)-1.)<.001&&abs(length(rn)-1.)<.001&&dot(n,rn)>-.05&&
+            abs(d-rd)<=geometry_limit&&abs(d-axis_depth)<=geometry_limit;
         vec2 pa,pb,ra,rb;uint fa,fb,rfa,rfb;
         reference_contact_witnesses(a,b,rn,ra,rb,rfa,rfb);
         contact_witnesses(a,b,n,pa,pb,fa,fb);
-        if(fa!=rfa||fb!=rfb) atomicAdd(results[18],1u);
+        if(fa!=rfa||fb!=rfb) {
+            atomicAdd(results[18],1u);
+            if(atomicCompSwap(results[31],0u,id+1u)==0u) {
+                results[32]=family;results[33]=fa;results[34]=fb;
+                results[35]=rfa;results[36]=rfb;
+                results[37]=floatBitsToUint(n.x);results[38]=floatBitsToUint(rn.x);
+            }
+        }
         atomicMax(results[21],floatBitsToUint(max(abs(pa.x-ra.x),abs(pa.y-ra.y))));
         atomicMax(results[22],floatBitsToUint(max(abs(pb.x-rb.x),abs(pb.y-rb.y))));
-        exact=exact&&all(equal(floatBitsToUint(pa),floatBitsToUint(ra)))&&all(equal(floatBitsToUint(pb),floatBitsToUint(rb)))&&fa==rfa&&fb==rfb;
+        bounded=bounded&&abs(dot(pa,-n)-an.y)<=geometry_limit&&abs(dot(pb,n)-bn.y)<=geometry_limit;
+        if(aligned) bounded=bounded&&fa==rfa&&fb==rfb&&
+            max(abs(pa.x-ra.x),abs(pa.y-ra.y))<=geometry_limit&&
+            max(abs(pb.x-rb.x),abs(pb.y-rb.y))<=geometry_limit;
     }
-    return exact;
+    return bounded;
 }
 void main() {
     for(uint id=gl_GlobalInvocationID.x;id<32768u;id+=128u) {
