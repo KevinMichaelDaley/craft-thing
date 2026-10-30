@@ -32,3 +32,15 @@ RED test reproduces 60s all-log failure on NVIDIA normal displayed cadence; GREE
 **2026-10-30T17:47:04Z**
 
 Closer nonoverlapping logs experiment (lower-right x170->166, upper-right x166->162) worsened 60s result to 4/8 dry; wet0/8. Reverted. Gas near starter row26-29 had near-zero O2 by 60s, suggesting ventilation/exposure, not mere initial geometry distance. Per-log RED test now asserts saved checkpoint first, then each dry log caught.
+
+**2026-10-30T17:59:44Z**
+
+Additional NVIDIA 60s fixture trials, all reverted: 32-cell coal bed + middle-right x164->160 passed 8/8 at21s, wet0/8, but max gas reached 9122K (plasma-like, unacceptable). 16-cell right bed + shift reached7/8 with max gas~1691K; 24-cell bed + shift reached7/8 with max gas~2948K. Lowering middle-right y78->80 gave2/8; raising y78->76 gave5/8. Core heat/oxygen transport needs correction; do not ship brute-force fuel.
+
+**2026-10-30T18:15:02Z**
+
+Corner-path TDD: focused rigid-body feedback RED for diagonal hot gas and diagonal-only oxygen; GREEN8/8 tests with finite oxygen/energy and wet controls. Original 8-cell starter fixture passed 8/8 dry0 wet twice at21s, but third run stopped7/8 by60s with one log zero fuel, so overall reliability remains RED. Wider starter with same total fuel passed once but failed repeat7/8 and max gas~5021K; reverted. Shader corner path retained, scene fixture unchanged. Half-native performance after corner heat before oxygen change was32.740ms mean42.003ms worst; full regression underway.
+
+**2026-10-30T18:31:57Z**
+
+Final corner-path checkpoint: full make test PASS and focused combustion_body_feedback_display_tests8/8 with diagonal-only oxygen. Original 8-cell fixture repeated displayed runs PASS8/8 at21s twice, FAIL7/8 at60s once; wet0/8 all. The body-to-gas corner path is physically bounded but not sufficient for deterministic all-log ignition. Full-width coals at unchanged total fuel also passed once and failed repeat7/8 with max gas~5021K; reverted. Keep ticket in_progress and original fixture unchanged.
