@@ -44,3 +44,7 @@ Corner-path TDD: focused rigid-body feedback RED for diagonal hot gas and diagon
 **2026-10-30T18:31:57Z**
 
 Final corner-path checkpoint: full make test PASS and focused combustion_body_feedback_display_tests8/8 with diagonal-only oxygen. Original 8-cell fixture repeated displayed runs PASS8/8 at21s twice, FAIL7/8 at60s once; wet0/8 all. The body-to-gas corner path is physically bounded but not sufficient for deterministic all-log ignition. Full-width coals at unchanged total fuel also passed once and failed repeat7/8 with max gas~5021K; reverted. Keep ticket in_progress and original fixture unchanged.
+
+**2026-10-30T21:02:07Z**
+
+2026-10-30 RTX A2000 X11 baseline 64-lane build, tools/smoke_profile, three consecutive full displayed bonfire_display_tests runs PASS8/8 dry0/8 wet at58.5,55.5,55.5 simulated seconds. Max gas about1560K,1372K,1165K, no plasma. Earlier identical-layout runs intermittently failed7/8, so this is reassuring but no root-cause change; keep ticket open pending deterministic coverage or stronger repeated evidence.

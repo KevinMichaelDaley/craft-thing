@@ -95,3 +95,19 @@ Correction to 20:09 workgroup sweep: apparent 512-lane 19.816/25.679ms result wa
 **2026-10-30T20:18:32Z**
 
 Full regression on 512-lane thermal failed catapult scene 2/12: battlement did not burn and hot coal did not consume fuel. Cause found in shaders/reactive/body_mass.glsl: its shared arrays and reduction are fixed at 64 lanes, so 512-lane execution indexes beyond shared storage. Reverted wide thermal kernel; normal 64-lane dispatch also satisfies new far-edge feedback test. No performance gain is claimed from this experiment.
+
+**2026-10-30T20:36:44Z**
+
+After full make test PASS at restored 64 lanes, clean X11 half-native 960x540 32-frame normal-clock runs varied with warm GPU state: base22.752/29.511ms then19.839/26.363ms mean/worst; DC_GAS_SKIP_EMPTY_PRESSURE=1 gave20.008/29.196ms then20.102/26.205ms. The option has no repeatable improvement and was not enabled. Earlier 30-32ms 512-lane runs were invalid as noted. Next verify sustained autonomous workload and all-log ignition, not just short 32-frame timing.
+
+**2026-10-30T20:39:08Z**
+
+Sustained clean X11 half-native normal-clock 3000-frame autonomous bonfire at restored64 lanes: 29.061ms mean, 32.870ms worst (frame1910), 960x540 active1088x704. This fails the ticket worst-frame gate despite warm 32-frame runs below30. A corrected wide thermal kernel needs body_mass.glsl shared arrays and reduction strides sized to its workgroup; then retest catapult and sustained run.
+
+**2026-10-30T20:48:50Z**
+
+Wide 512-lane thermal experiment fully rejected. Separate 64-lane dispatch for combustion, thermal feedback and body phases restored catapult12/12 and feedback3/3, but corrected half-native 32-frame run measured35.681/44.261ms mean/worst versus restored64 warm runs19.839/26.363ms; no gain. All experimental shader/source/Makefile changes reverted. The initial apparent gain was missing 64-lane work. Sustained 64-lane 3000-frame result29.061/32.870ms remains the legitimate target baseline.
+
+**2026-10-30T20:52:51Z**
+
+Sustained DC_GAS_SKIP_EMPTY_PRESSURE=1 trial at restored64 lanes (same displayed 960x540, normal clock, 3000 frames) was much slower:42.676ms mean48.747ms worst vs baseline29.061/32.870ms. Leave option disabled; short 32-frame results concealed sustained cost.
