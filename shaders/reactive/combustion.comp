@@ -356,14 +356,19 @@ void choose_body_target(uint index) {
     uint profile=e.words[s+9u]==0u&&e.words[s+10u]>0u?12u:m;
     float reaction_power=fr_surface_reaction_power(uintBitsToFloat(scratch.words[index*12u+6u]),0.,uintBitsToFloat(params.seconds));
     float skin=0.;
-    for(uint d=0u;d<4u;d++) {
-        ivec2 q=p+directions[d];uint at=atlas(q);if(!gas_cell(at)) continue;
+    const ivec2 corner_directions[4]=ivec2[4](ivec2(-1,-1),ivec2(1,-1),ivec2(-1,1),ivec2(1,1));
+    for(uint d=0u;d<8u;d++) {
+        ivec2 direction=d<4u?directions[d]:corner_directions[d-4u];
+        ivec2 q=p+direction;uint at=atlas(q);if(!gas_cell(at)) continue;
+        if(d>=4u&&!gas_cell(atlas(p+ivec2(direction.x,0)))&&
+            !gas_cell(atlas(p+ivec2(0,direction.y)))) continue;
         Gas gas=local_gas(at);float mass=gas_mass(gas);if(mass<=0.||gas.geometry.y<=0.) continue;
         float supply=max(gas.species.x,0.);
-        if(supply>best) {best=supply;chosen=at;}
+        if(d<4u&&supply>best) {best=supply;chosen=at;}
         float gas_cap=gas_capacity(gas),gas_temperature=gas_cap>0.?gas_internal(gas)/gas_cap:bulk;
         float speed=length(gas.dynamics.zw)/mass,density=mass*1000./max(gas.geometry.x,.000001);
-        float face=float(FR_THERMAL_GAMEPLAY_FACE_METERS),reynolds=density*speed*face*face/float(FR_COMBUSTION_AIR_VISCOSITY);
+        float face=float(FR_THERMAL_GAMEPLAY_FACE_METERS)*(d<4u?1.:.5);
+        float reynolds=density*speed*face*face/float(FR_COMBUSTION_AIR_VISCOSITY);
         float nusselt=2.+.6*sqrt(max(reynolds,0.))*pow(float(FR_COMBUSTION_AIR_PRANDTL),1./3.);
         float convection=nusselt*float(FR_COMBUSTION_AIR_CONDUCTIVITY)*face;
         /* The hottest exposed face can ignite even when a different face owns
@@ -371,7 +376,7 @@ void choose_body_target(uint index) {
         float ambient=float(FR_THERMAL_AMBIENT_K),ambient_square=ambient*ambient,gas_square=gas_temperature*gas_temperature;
         float surroundings=sqrt(sqrt(mix(ambient_square*ambient_square,gas_square*gas_square,flame_emissivity(gas))));
         skin=max(skin,fr_thermal_exposed_surface_K(bulk,gas_temperature,
-            coefficient(profile,6u)*float(FR_THERMAL_FACE_AREA/FR_THERMAL_CORE_DISTANCE),convection,
+            coefficient(profile,6u)*float(FR_THERMAL_FACE_AREA/FR_THERMAL_CORE_DISTANCE)*(d<4u?1.:.5),convection,
             uintBitsToFloat(scratch.words[index*12u+10u]),uintBitsToFloat(scratch.words[index*12u+11u])+reaction_power,surroundings));
     }
     scratch.words[index*12u+9u]=floatBitsToUint(skin>0.?skin:bulk);
