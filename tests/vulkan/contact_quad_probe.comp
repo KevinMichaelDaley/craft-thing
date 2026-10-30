@@ -21,7 +21,7 @@ Polygon rectangle(vec2 low,vec2 size) {
     for(uint vertex=0u;vertex<4u;vertex++) p.vertices[vertex]=low+(p.vertices[vertex]-low)*size;
     return p;
 }
-bool matches_reference(Polygon a,Polygon b) {
+bool matches_reference(Polygon a,Polygon b,uint id,uint family) {
     vec2 n,rn;float d,rd;
     bool expected=reference_polygon_contact(a,b,rn,rd);
     bool actual=polygon_contact(a,b,n,d);
@@ -30,7 +30,13 @@ bool matches_reference(Polygon a,Polygon b) {
     if(actual&&expected) {
         atomicMax(results[19],floatBitsToUint(max(abs(n.x-rn.x),abs(n.y-rn.y))));
         atomicMax(results[20],floatBitsToUint(abs(d-rd)));
-        exact=exact&&all(equal(floatBitsToUint(n),floatBitsToUint(rn)))&&floatBitsToUint(d)==floatBitsToUint(rd);
+        bool same_normal=all(equal(floatBitsToUint(n),floatBitsToUint(rn)));
+        if(max(abs(n.x-rn.x),abs(n.y-rn.y))>.001&&atomicCompSwap(results[23],0u,id+1u)==0u) {
+            results[24]=family;results[25]=floatBitsToUint(n.x);results[26]=floatBitsToUint(n.y);
+            results[27]=floatBitsToUint(rn.x);results[28]=floatBitsToUint(rn.y);
+            results[29]=floatBitsToUint(d);results[30]=floatBitsToUint(rd);
+        }
+        exact=exact&&same_normal&&floatBitsToUint(d)==floatBitsToUint(rd);
         vec2 pa,pb,ra,rb;uint fa,fb,rfa,rfb;
         reference_contact_witnesses(a,b,rn,ra,rb,rfa,rfb);
         contact_witnesses(a,b,n,pa,pb,fa,fb);
@@ -48,30 +54,30 @@ void main() {
         vec2 low=vec2(int((id/31u)%17u)-8,int((id/527u)%17u)-8)*.25;
         Polygon b=quad(low,float((id/7u)%29u)*-.117,.75);
         contact_dynamic_iterations=0u;
-        atomicAdd(results[0],uint(!matches_reference(a,b)));atomicAdd(results[1],1u);
+        atomicAdd(results[0],uint(!matches_reference(a,b,id,0u)));atomicAdd(results[1],1u);
         atomicMax(results[2],contact_dynamic_iterations);
         a.count=5u;
         for(uint vertex=0u;vertex<5u;vertex++) {
             float phase=float(vertex)*1.2566370614359172+angle;
             a.vertices[vertex]=vec2(-.375,.125)+vec2(cos(phase),sin(phase));
         }
-        atomicAdd(results[3],uint(!matches_reference(a,b)));atomicAdd(results[4],1u);
+        atomicAdd(results[3],uint(!matches_reference(a,b,id,1u)));atomicAdd(results[4],1u);
         vec2 offset=vec2(float(int((id/1024u)%3u)-1)*256.,float(int((id/256u)%3u)-1)*512.);
         a=quad(offset+vec2(-.375,.125),angle,.5+float(id%5u)*.25);
         b=rectangle(offset+low+vec2(float(id%11u)/65536.),
             vec2(float(4096u+id%65000u)/65536.,float(4096u+(id*7u)%65000u)/65536.));
         contact_axis_invocations=0u;
-        atomicAdd(results[5],uint(!matches_reference(a,b)));atomicAdd(results[6],1u);
+        atomicAdd(results[5],uint(!matches_reference(a,b,id,2u)));atomicAdd(results[6],1u);
         atomicMax(results[7],contact_axis_invocations);
         a=rectangle(offset+vec2(-.375,.125),vec2(.75,.625));contact_axis_invocations=0u;
-        atomicAdd(results[8],uint(!matches_reference(a,b)));atomicAdd(results[9],1u);
+        atomicAdd(results[8],uint(!matches_reference(a,b,id,3u)));atomicAdd(results[9],1u);
         atomicMax(results[10],contact_axis_invocations);
         a=quad(offset+vec2(-.375,.125),angle,.5+float(id%5u)*.25);
         b=cell_polygon(offset+low);contact_axis_invocations=0u;
-        atomicAdd(results[11],uint(!matches_reference(a,b)));atomicAdd(results[12],1u);
+        atomicAdd(results[11],uint(!matches_reference(a,b,id,4u)));atomicAdd(results[12],1u);
         atomicMax(results[13],contact_axis_invocations);
         a=cell_polygon(offset+vec2(-.375,.125));contact_axis_invocations=0u;
-        atomicAdd(results[14],uint(!matches_reference(a,b)));atomicAdd(results[15],1u);
+        atomicAdd(results[14],uint(!matches_reference(a,b,id,5u)));atomicAdd(results[15],1u);
         atomicMax(results[16],contact_axis_invocations);
     }
 }

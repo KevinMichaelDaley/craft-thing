@@ -24,6 +24,10 @@ static void test_quad_contacts_match_frozen_ordered_sat_without_dynamic_loops(vo
         f.probe.mapped[17],f.probe.mapped[18],differences[0],differences[1],differences[2],differences[3]);
     printf("unit rectangle cases %u errors %u axes %u; unit pairs %u errors %u axes %u\n",
         unit_cases,unit_errors,unit_axes,unit_pair_cases,unit_pair_errors,unit_pair_axes);
+    float first_normal[6];for(unsigned i=0;i<6;i++) memcpy(first_normal+i,&f.probe.mapped[25+i],sizeof(float));
+    printf("first normal mismatch case %u family %u optimized (%.9g,%.9g) reference (%.9g,%.9g) depths %.9g %.9g\n",
+        f.probe.mapped[23]?f.probe.mapped[23]-1u:UINT32_MAX,f.probe.mapped[24],
+        first_normal[0],first_normal[1],first_normal[2],first_normal[3],first_normal[4],first_normal[5]);
     fixture_stop(&f);ASSERT_EQ(cases,32768u);ASSERT_EQ(errors,0u);ASSERT_EQ(loops,0u);
     ASSERT_EQ(general_cases,cases);ASSERT_EQ(general_errors,0u);
     ASSERT_EQ(rectangle_cases,cases);ASSERT_EQ(pair_cases,cases);
