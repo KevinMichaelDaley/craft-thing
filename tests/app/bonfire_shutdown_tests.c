@@ -18,13 +18,15 @@ static void test_half_native_bonfire_flushes_queued_saves(void) {
     ASSERT_TRUE(mkdtemp(directory) != NULL);
     char command[1024];
     int budget = getenv("DC_ASSERT_HALF_NATIVE_FRAME_BUDGET") != NULL;
+    int single_save = getenv("DC_ASSERT_SINGLE_STRUCTURE_SAVE") != NULL;
     ASSERT_TRUE(snprintf(command, sizeof(command),
-        "bash -c 'source tools/smoke_profile; exec ./build/dungeoncraft_half_native --bonfire --world-dir %s --benchmark-frames %d' 2>&1",
-        directory, budget ? 32 : 8) < (int)sizeof(command));
+        "bash -c 'source tools/smoke_profile; %sexec ./build/dungeoncraft_half_native --bonfire --world-dir %s --benchmark-frames %d' 2>&1",
+        single_save ? "export DC_SAVE_TRACE=1; " : "", directory, budget ? 32 : 8) < (int)sizeof(command));
     FILE *process = popen(command, "r");
     ASSERT_TRUE(process != NULL);
     char line[1024];
     int saw_frame = 0, saw_cleanup_error = 0;
+    int repeated_structure_save = 0;
     double mean_ms = 0.0, worst_ms = 0.0;
     while (fgets(line, sizeof(line), process)) {
         if (strstr(line, "Displayed full frame 960x540")) {
@@ -33,11 +35,15 @@ static void test_half_native_bonfire_flushes_queued_saves(void) {
             if (time) (void)sscanf(time, ": mean %lfms worst %lfms", &mean_ms, &worst_ms);
         }
         if (strstr(line, "Dungeoncraft cleanup:")) saw_cleanup_error = 1;
+        unsigned long long structure_ms = 0;
+        if (sscanf(line, "Save schedule structure%llums", &structure_ms) == 1 && structure_ms > 0)
+            repeated_structure_save = 1;
     }
     int status = pclose(process);
     ASSERT_TRUE(status != -1 && WIFEXITED(status));
     ASSERT_INT_EQ(saw_frame, 1);
     ASSERT_INT_EQ(saw_cleanup_error, 0);
+    if (single_save) ASSERT_INT_EQ(repeated_structure_save, 0);
     if (budget) ASSERT_TRUE(mean_ms > 0.0 && mean_ms < 30.0 && worst_ms < 30.0);
     PASS();
 }

@@ -24,3 +24,7 @@ Focused solver/catapult/bonfire physics tests pass with zero validation errors; 
 **2026-10-30T18:38:19Z**
 
 Half-native detailed trace (diagnostic command reuse OFF) found phase6 solve2.65ms, phase7 apply0.85ms per frame, contact kernels ~8.7ms with instrumentation; coarse trace (reuse ON) rigid11.2ms total, solver6.7-7.0ms, contacts0.34-0.58ms, renderer1.6-1.75ms. Fused-grain32-frame mean35.130ms, grouped+skip-zero36.556ms (worse); skip-zero alone31.752ms mean35.610ms worst vs default32.467/41.708, still misses <30. Temporary half trace build target reverted; quarter trace tool already present. Need exact solver work reduction without changing substeps/clock.
+
+**2026-10-30T19:12:03Z**
+
+Trial fused CLEAR into PREPARE: focused rigid/command/grain tests passed, half-native 32-frame runs 35.762/42.586ms and 32.021/41.994ms mean/worst versus baseline32.467/41.708; no reliable gain, reverted. Trial skipped empty-grain phases based on mapped particle counts: grain work3/3 passed but rigid_solver_tests deterministically failed streamed-support and reproducible-stack exact-state cases (11/13); reverted. Solver remains open pending a semantics-preserving optimization.
