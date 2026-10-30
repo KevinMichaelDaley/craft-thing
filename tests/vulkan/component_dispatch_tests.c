@@ -50,7 +50,7 @@ static bool initializes_owned_triplets(bool dirty) {
     dc_gpu_structural_data(&gpu)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD] = dirty;
     for (unsigned i = 0; i < 39; i++)
         p.mapped[i] = 4369u;
-    const uint32_t bindings[] = {1, 4, 27, 28, 29, 30};
+    const uint32_t bindings[] = {1, 4, 19, 20, 22, 27, 28, 29, 30, 33, 34, 35};
     enum { BINDING_COUNT = sizeof(bindings) / sizeof(bindings[0]) };
     if (BINDING_COUNT != 12) return false;
     if (!fixture_body_pipeline(&p, &gpu, body,
