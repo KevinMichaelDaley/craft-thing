@@ -1,8 +1,8 @@
+#include <errno.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
 #include <SDL.h>
@@ -27,6 +27,11 @@ static void gpu_startup_trace(const char *stage, Uint64 started) {
                 (unsigned long long)(SDL_GetTicks64()-started));
 }
 enum { DC_PIPELINE_CACHE_MAX_BYTES = 128u * 1024u * 1024u };
+static bool pipeline_cache_directory_ready(const char *path) {
+    if(mkdir(path,0700)==0) return true;
+    struct stat info;
+    return errno==EEXIST&&stat(path,&info)==0&&S_ISDIR(info.st_mode);
+}
 static void pipeline_cache_load(dc_gpu_t *gpu) {
     VkPhysicalDeviceProperties properties;
     vkGetPhysicalDeviceProperties(gpu->physical,&properties);
@@ -46,12 +51,12 @@ static void pipeline_cache_load(dc_gpu_t *gpu) {
             directory=home&&snprintf(root,sizeof(root),"%s/.cache",home)<(int)sizeof(root)?root:NULL;
         }
         if(directory&&directory[0]=='/'&&
-           (mkdir(directory,0700)==0||errno==EEXIST)&&
+           pipeline_cache_directory_ready(directory)&&
            snprintf(user_directory,sizeof(user_directory),"%s/dungeoncraft",directory)<(int)sizeof(user_directory))
             directory=user_directory;
         else directory=NULL;
     }
-    if(!directory||(mkdir(directory,0700)!=0&&errno!=EEXIST)||
+    if(!directory||!pipeline_cache_directory_ready(directory)||
        snprintf(gpu->pipeline_cache_path,sizeof(gpu->pipeline_cache_path),"%s/%s",directory,name)>=
            (int)sizeof(gpu->pipeline_cache_path))
         snprintf(gpu->pipeline_cache_path,sizeof(gpu->pipeline_cache_path),"%s",legacy);
