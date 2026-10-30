@@ -71,14 +71,16 @@ static int initialize_device(probe_t *p) {
         return 0;
     VkPhysicalDevice devices[16];
     uint32_t count = 16;
+    const char *intel_only=getenv("DC_VK_PROBE_INTEL_ONLY");
     if (!check(vkEnumeratePhysicalDevices(p->instance, &count, devices),
                "devices"))
         return 0;
     for (uint32_t i = 0; i < count && !p->physical; ++i) {
         VkPhysicalDeviceProperties properties;
         vkGetPhysicalDeviceProperties(devices[i], &properties);
-        if (properties.vendorID != 0x8086 ||
-            properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU)
+        if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU ||
+            (intel_only && strcmp(intel_only,"0")!=0 &&
+             properties.vendorID != 0x8086))
             continue;
         VkQueueFamilyProperties families[32];
         uint32_t family_count = 32;
@@ -98,7 +100,9 @@ static int initialize_device(probe_t *p) {
             }
     }
     if (!p->physical) {
-        puts("No Intel hardware compute device");
+        puts(intel_only && strcmp(intel_only,"0")!=0 ?
+             "No Intel hardware compute device" :
+             "No hardware compute device");
         return 0;
     }
     float priority = 1;
@@ -310,7 +314,7 @@ static int create_pipeline(probe_t *p, const char *path) {
 int main(void) {
     probe_t p = {0};
     setvbuf(stdout, NULL, _IOLBF, 0);
-    puts("Bounded Intel hardware probe: empty queue, 16-word fill, "
+    puts("Bounded hardware probe: empty queue, 16-word fill, "
          "16-invocation compute");
     if (!initialize(&p) || !allocate_buffer(&p) || !begin(&p))
         return 2;
