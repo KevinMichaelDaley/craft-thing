@@ -321,6 +321,29 @@ static void test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint(void) {
     dc_gpu_destroy(copy);dc_gpu_destroy(g);PASS();
 }
 
+static void test_released_latch_checkpoint_can_resume_pouch_release(void) {
+    char err[256] = {0};
+    dc_gpu_t *g = catapult_grid();
+    ASSERT_TRUE(g);
+    dc_catapult_scene_t scene = {0};
+    ASSERT_TRUE(dc_catapult_scene_build(g, false, &scene, err, sizeof(err)));
+    ASSERT_TRUE(dc_catapult_scene_release(g, &scene, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g, err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_save_structure(g, "build/catapult_released.dcs",
+                                      err, sizeof(err)));
+    dc_gpu_t *copy = catapult_grid();
+    ASSERT_TRUE(copy);
+    ASSERT_TRUE(fr_gpu_load_structure(copy, "build/catapult_released.dcs",
+                                      err, sizeof(err)));
+    scene.released = false;
+    ASSERT_TRUE(dc_catapult_scene_release_projectile(copy, &scene,
+                                                      err, sizeof(err)));
+    ASSERT_TRUE(scene.released && scene.projectile_released);
+    dc_gpu_destroy(copy);
+    dc_gpu_destroy(g);
+    PASS();
+}
+
 static void test_hot_coal_emits_finite_reaction_without_igniting_cold_control(void) {
     char err[256]={0};
     for(uint32_t hot=0;hot<2;hot++) {
@@ -515,6 +538,7 @@ int main(int argc, char **argv) {
     RUN(test_grounded_triangular_frame_and_tension_release);
     RUN(test_cold_launcher_has_supported_frame_and_real_latch);
     RUN(test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint);
+    RUN(test_released_latch_checkpoint_can_resume_pouch_release);
     RUN(test_hot_coal_emits_finite_reaction_without_igniting_cold_control);
     RUN(test_wooden_arm_has_finite_reactive_ownership);
     RUN(test_prompt_hot_launch_keeps_sound_wood_arm_unignited);
