@@ -2027,6 +2027,9 @@ build/dungeoncraft build/controls_tests build/reactive_stream_view_display_tests
 build/shaders/thermal.comp.spv: shaders/reactive/thermal.comp shaders/reactive/address.glsl include/dungeoncraft/thermal_parameters.h include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/reactive_profile_layout.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/shaders/thermal_64.comp.spv: shaders/reactive/thermal.comp build/shaders/thermal.comp.spv
+	mkdir -p $(dir $@)
+	$(GLSLANG) -V --target-env vulkan1.3 -DDC_THERMAL_GROUP_SIZE=64 $< -o $@
 build/shaders/combustion.comp.spv: shaders/reactive/combustion.comp shaders/reactive/address.glsl shaders/gas/types.glsl include/dungeoncraft/combustion_parameters.h include/dungeoncraft/thermal_parameters.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
@@ -2071,6 +2074,7 @@ test_bonfire: build/combustion_tests build/bonfire_scene_tests build/combustion_
 	./build/bonfire_display_tests
 	python3 tests/app/bonfire_probe_cli_tests.py
 $(GPU_OBJ) build/thermal_gpu_display_tests: build/shaders/thermal.comp.spv
+$(GPU_OBJ) $(PERFORMANCE_OBJ) build/dungeoncraft build/dungeoncraft_half_native build/dungeoncraft_quarter_native build/dungeoncraft_native: build/shaders/thermal_64.comp.spv
 build/shaders/thermal_overlay.comp.spv: shaders/renderer/thermal_overlay.comp include/dungeoncraft/thermal_parameters.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@

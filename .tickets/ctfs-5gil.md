@@ -87,3 +87,7 @@ Mapped-VRAM trace false positive corrected: 68 MiB allocation belongs to fr_gpu_
 **2026-10-30T20:09:07Z**
 
 Half-native thermal workgroup sweep on RTX A2000, normal clock 32 displayed 960x540 frames: 64 lanes32.590/42.229ms mean/worst; 128 lanes23.709/32.943ms; 256 lanes20.392/31.300ms; 512 lanes19.816/25.679ms. Focused thermal2/2 water4/4 feedback2/2 combustion feedback8/8 rigid thermal17/17 passed at512. Review found overlay shader still 64 lanes but receiving thermal512 group count; new far-cell RED test reproduces missing overlay near bottom of view. Fix overlay dispatch and portable device-limit fallback before GREEN commit/full suite.
+
+**2026-10-30T20:14:24Z**
+
+Correction to 20:09 workgroup sweep: apparent 512-lane 19.816/25.679ms result was invalid because 64-lane thermal feedback overlay received 512-lane dispatch counts, leaving most pixels unwritten. A new far-edge overlay regression caught this. Separate 64-lane overlay dispatch restores full coverage; subsequent normal-clock half-native 32-frame runs were 30.030/33.554ms and 29.853/34.420ms mean/worst. Thermal 512 selection has a 64-lane device fallback. Frame acceptance remains RED; rigid and gas work dominate.

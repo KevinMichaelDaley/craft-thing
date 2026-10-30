@@ -7,7 +7,10 @@
 #include "../../include/dungeoncraft/thermal_parameters.h"
 #include "../../include/dungeoncraft/thermal_surface.h"
 #include "address.glsl"
-layout(local_size_x=64) in;
+#ifndef DC_THERMAL_GROUP_SIZE
+#define DC_THERMAL_GROUP_SIZE 512
+#endif
+layout(local_size_x=DC_THERMAL_GROUP_SIZE) in;
 layout(constant_id=0) const uint SPECIALIZED_PHASE=0xffffffffu;
 layout(set=0,binding=0,std430) readonly buffer Root {uint root[];};
 layout(set=0,binding=1,std430) readonly buffer Pages {uint pages[];};
@@ -160,7 +163,7 @@ void body_conduction(uint index) {
 #include "body_mass.glsl"
 #include "radiation.glsl"
 void main() {
-    uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
+    uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*DC_THERMAL_GROUP_SIZE;
     if(active_phase()==8u||active_phase()==9u||active_phase()==11u||active_phase()==14u||active_phase()==20u) {
         uint slot=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;if(slot>=BODY_CAPACITY) return;
         Body body=DC_BODY(slot);if((body.enabled|body.reserved0)==0u||!pixel_storage(body)) return;
@@ -172,7 +175,7 @@ void main() {
             return;
         }
         body=body_thermal_grid(body);
-        for(uint piece=gl_LocalInvocationID.x;piece<body_pieces(body);piece+=64u) {
+        for(uint piece=gl_LocalInvocationID.x;piece<body_pieces(body);piece+=DC_THERMAL_GROUP_SIZE) {
             if(pixel_piece_material(body,piece)==0u) continue;
             uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y!=0u) {
                 if(active_phase()==20u) body_wet_parcel(body,piece,h);else body_conduction(h.x);
