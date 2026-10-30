@@ -4,6 +4,7 @@
 #include <math.h>
 #include <sys/stat.h>
 #include "ferrum/fire/gas_gpu.h"
+#include "../../src/vulkan/gas_gpu_state.h"
 #undef RUN
 #define RUN(fn) do {const char *filter=getenv("DC_GAS_TEST_FILTER");if(!filter||strstr(#fn,filter)) {printf("RUN %s\n",#fn);fn();}} while(0)
 
@@ -20,6 +21,26 @@ static fr_gas_state_t reference_air(fr_gas_model_t m,double mass,double temperat
     s.species[0]=mass*oxygen;s.species[1]=mass-s.species[0];
     for(uint32_t i=0;i<5;i++) s.energy+=s.species[i]*m.heat_capacity_cv[i]*temperature;
     s.momentum[0]=mass*vx;s.energy+=.5*m.kinetic_scale*mass*vx*vx;return s;
+}
+static void test_unsupported_policy_rejects_before_acoustic_setup(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    ASSERT_TRUE(context(&g,err,sizeof(err)));
+    VkPhysicalDeviceFloatControlsProperties floats={
+        .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES};
+    VkPhysicalDeviceProperties2 properties={
+        .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+        .pNext=&floats};
+    vkGetPhysicalDeviceProperties2(g->physical,&properties);
+    if(floats.shaderDenormPreserveFloat32) {
+        dc_gpu_destroy(g);PASS();return;
+    }
+    fr_gas_model_t model=reference_model();
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012f,300.f,err,sizeof(err)));
+    ASSERT_TRUE(!g->gas->acoustic.ready);
+    ASSERT_TRUE(!fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,
+                                                err,sizeof(err)));
+    ASSERT_TRUE(!g->gas->acoustic.ready);
+    dc_gpu_destroy(g);PASS();
 }
 #include "gas_checkpoint_cases.h"
 #include "gas_geometry_cases.h"
@@ -404,6 +425,7 @@ static void test_native_subnormal_colored_stock_is_valid_and_retained_at_rest(vo
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
 }
 int main(void) {
+    RUN(test_unsupported_policy_rejects_before_acoustic_setup);
     setvbuf(stdout,NULL,_IOLBF,0);
 #ifdef FR_GAS_PUBLICATION_TEST
     RUN(test_native_publication_uses_one_submission_and_preserves_rejected_state);
