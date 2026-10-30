@@ -74,7 +74,7 @@ static void test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_
     ASSERT_EQ(memcmp(&moved.state,&dry.state,sizeof(dry.state)),0);
     free(before);free(after);free(paused);free(gas);free(volumes);free(colors);free(chunk);dc_gpu_destroy(g);PASS();
 }
-static void hot_face_case(bool draft,bool diagonal) {
+static void hot_face_case(bool draft,bool diagonal,bool corner_oxygen) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     chunk->cells[20u*64u+20u].material=DC_MATERIAL_WOOD;
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
@@ -91,13 +91,22 @@ static void hot_face_case(bool draft,bool diagonal) {
         gas[i].energy=(.0023*model.heat_capacity_cv[0]+.0077*model.heat_capacity_cv[1])*293.15;
     }
     uint32_t hot=(diagonal?19u:20u)*64u+19u;
-    gas[hot].species[FR_GAS_OXYGEN]=.0005;gas[hot].species[FR_GAS_NITROGEN]=.0095;
+    gas[hot].species[FR_GAS_OXYGEN]=corner_oxygen?.0023:.0005;
+    gas[hot].species[FR_GAS_NITROGEN]=corner_oxygen?.0077:.0095;
+    if(corner_oxygen) {
+        const uint32_t faces[]={19u*64u+20u,20u*64u+19u,20u*64u+21u,21u*64u+20u};
+        for(uint32_t i=0;i<4;i++) {
+            gas[faces[i]].species[FR_GAS_OXYGEN]=0.;
+            gas[faces[i]].species[FR_GAS_NITROGEN]=.01;
+            gas[faces[i]].energy=.01*model.heat_capacity_cv[FR_GAS_NITROGEN]*293.15;
+        }
+    }
     if(draft) {
         gas[hot].momentum[1]=-.2;
         gas[hot].energy=(.0005*model.heat_capacity_cv[0]+.0095*model.heat_capacity_cv[1])*1800.+.5*model.kinetic_scale*.01*400.;
     } else {
         gas[hot].species[FR_GAS_NITROGEN]-=.0001;gas[hot].species[FR_GAS_SOOT]=.0001;
-        gas[hot].energy=(.0005*model.heat_capacity_cv[0]+.0094*model.heat_capacity_cv[1]+.0001*model.heat_capacity_cv[4])*1800.;
+        gas[hot].energy=((corner_oxygen?.0023:.0005)*model.heat_capacity_cv[0]+(corner_oxygen?.0076:.0094)*model.heat_capacity_cv[1]+.0001*model.heat_capacity_cv[4])*1800.;
     }
     ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,gas,volume,4096,err,sizeof(err))&&fr_combustion_gpu_step(g,.25f,err,sizeof(err)));
     fr_reactive_record_t result;bool found=false;
@@ -105,9 +114,10 @@ static void hot_face_case(bool draft,bool diagonal) {
     ASSERT_TRUE(result.state.fuel_mass_fp<state.fuel_mass_fp&&(result.state.flags&FR_REACTIVE_FLAMING));
     free(gas);free(volume);free(chunk);dc_gpu_destroy(g);PASS();
 }
-static void test_hot_face_ignites_when_another_face_has_more_oxygen(void) {hot_face_case(true,false);}
-static void test_radiating_flame_heats_a_surface_even_without_a_draft(void) {hot_face_case(false,false);}
-static void test_diagonal_hot_gas_heats_a_body_corner(void) {hot_face_case(false,true);}
+static void test_hot_face_ignites_when_another_face_has_more_oxygen(void) {hot_face_case(true,false,false);}
+static void test_radiating_flame_heats_a_surface_even_without_a_draft(void) {hot_face_case(false,false,false);}
+static void test_diagonal_hot_gas_heats_a_body_corner(void) {hot_face_case(false,true,false);}
+static void test_diagonal_oxygen_reaches_an_exposed_body_corner(void) {hot_face_case(false,true,true);}
 static void hot_skin_budget_case(bool rotated) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     uint32_t cell=20u*64u+20u;chunk->cells[cell].material=DC_MATERIAL_STONE;
@@ -175,5 +185,5 @@ static void test_thin_oxygen_is_reserved_without_creating_heat_or_consuming_unfu
 }
 static void test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory(void) {hot_skin_budget_case(false);}
 static void test_rotated_mixed_temperature_heat_cannot_overdraw_a_cold_parcel(void) {hot_skin_budget_case(true);}
-int main(void) {RUN(test_thin_oxygen_is_reserved_without_creating_heat_or_consuming_unfunded_fuel);RUN(test_rotated_mixed_temperature_heat_cannot_overdraw_a_cold_parcel);RUN(test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory);RUN(test_radiating_flame_heats_a_surface_even_without_a_draft);RUN(test_hot_face_ignites_when_another_face_has_more_oxygen);RUN(test_diagonal_hot_gas_heats_a_body_corner);RUN(test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_authored_grain);
+int main(void) {RUN(test_thin_oxygen_is_reserved_without_creating_heat_or_consuming_unfunded_fuel);RUN(test_rotated_mixed_temperature_heat_cannot_overdraw_a_cold_parcel);RUN(test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory);RUN(test_radiating_flame_heats_a_surface_even_without_a_draft);RUN(test_hot_face_ignites_when_another_face_has_more_oxygen);RUN(test_diagonal_hot_gas_heats_a_body_corner);RUN(test_diagonal_oxygen_reaches_an_exposed_body_corner);RUN(test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_authored_grain);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
