@@ -111,3 +111,7 @@ Wide 512-lane thermal experiment fully rejected. Separate 64-lane dispatch for c
 **2026-10-30T20:52:51Z**
 
 Sustained DC_GAS_SKIP_EMPTY_PRESSURE=1 trial at restored64 lanes (same displayed 960x540, normal clock, 3000 frames) was much slower:42.676ms mean48.747ms worst vs baseline29.061/32.870ms. Leave option disabled; short 32-frame results concealed sustained cost.
+
+**2026-10-30T21:30:09Z**
+
+Post cache-fix clean X11 RTX A2000 normal-clock half-native 960x540 bonfire: 3000 displayed frames mean41.093ms worst48.447ms, benchmark exits1 on >30ms. Short 32-frame repeats mean33.562/worst41.301 and33.002/worst41.765ms. Same smoke profile quarter-native 480x270 mean16.568/worst36.128ms. Clock monitor saw P0 graphics1770-1875MHz during active run, so lower clock does not explain. Frame budget remains RED; need sustained solver/gas/thermal reduction.

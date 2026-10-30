@@ -26,3 +26,11 @@ Half-native RTX A2000 warm-cache startup after monotonic-ID fast path and one ar
 **2026-10-30T10:31:59Z**
 
 Final wrapped make test after reservation changes passed all preceding tests, including bonfire fixture and reactive chunk cases, then stopped at NVIDIA contact_quad_tests bitwise geometry assertion (ct-4gtu). Targeted bonfire_display_tests on X11 fails frame dt<=0.25f guard, tracked ctfs-5gil. Startup measurements are from the actual 960x540 displayed executable.
+
+**2026-10-30T21:09:24Z**
+
+RTX A2000 generated pipeline cache grew to 70,030,174 bytes, above old 64 MiB save cap; every shutdown silently skipped persistence. Increased device-bound cap to 128 MiB. Opt-in persistence regression RED before fix and GREEN after. Warm displayed 960x540 bonfire now reaches gas enable at 3.074s (GPU window 1.041s; fixture uploaded 2.975s), with complete cache saved. Cold compile remains open.
+
+**2026-10-30T21:30:09Z**
+
+After cap fix and query refactor, full tools/with-vulkan make -j8 test PASS. Subsequent actual displayed 960x540 bonfire loaded 70,334,447-byte cache (loaded1), GPU window1.054s, gas enabled2.972s. Cache save query 70,334,447 bytes within128MiB. Cold first launch still requires pipeline compilation and remains open.
