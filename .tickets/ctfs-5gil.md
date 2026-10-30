@@ -43,3 +43,7 @@ Current DEFAULT fullscreen real-clock32-frame diagnostic after gating rectangle 
 **2026-10-30T09:56:39Z**
 
 Full make test on NVIDIA advanced through catapult 12/12 and most GPU cases, then stopped at pixel_boundary_tests due cross-driver bitwise face roundoff. ct-towz now enforces 1e-5 bounded numerical agreement and passes all four patterns. Subsequent suffix contact_quad_tests remains RED on NVIDIA with one witness feature mismatch and large tied-normal differences; tracked ct-4gtu. Focused gas/practical/cache tests pass, but full regression is not green and frame-budget acceptance remains open.
+
+**2026-10-30T10:11:23Z**
+
+After startup import optimization, X11 quarter-native bonfire_display_tests starts and verifies finite 1800K starter but fails its dt<=0.25f frame guard before autonomous log coverage. Half-native displayed one-frame diagnostic remains 1097.147ms. This is an unresolved real frame performance failure on NVIDIA, not an initialization failure.
