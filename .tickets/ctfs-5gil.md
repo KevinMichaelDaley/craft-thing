@@ -55,3 +55,19 @@ Final tools/with-vulkan make test after startup changes reached contact_quad_tes
 **2026-10-30T10:42:27Z**
 
 Half-native DC_THERMAL_PHASE_TRACE on RTX A2000 grouped one tick GPU thermal work: sample 82.9ms, prep 77.3ms, transfer 172.2ms, exchange 1.2ms, bonfire-specific 127.3ms, ignition 92.6ms, reaction 120.0ms, finish ~0ms. Cost is spread across repeated full-grid passes; no single buffer relocation can meet 30ms. Device-local samples/fluxes trial passed validation but left stage 650-682ms, so reverted. Trace tool retained in repository.
+
+**2026-10-30T15:50:59Z**
+
+2026-10-30 RTX A2000 X11 same bonfire fixture: rebuilt quarter-native 480x270 real-clock 8-frame mean406.309ms worst409.017ms; temporary fixed 1/60s diagnostic mean303.713ms. Half-native 960x540 fixed-step diagnostic mean912.269ms (real clock previous1133.923ms). Thus elapsed-clock feedback adds ~100/220ms but full-grid GPU work dominates. Quarter trace rigid88ms, thermal192ms, remaining gas/present ~130ms; half thermal ~650ms. The reported 30ms quarter figure is not reproduced by current autonomous bonfire workload. Diagnostic override removed. Next step must reduce grid-wide thermal and rigid work; do not cap simulation clock or report fixed-step as acceptance.
+
+**2026-10-30T16:12:02Z**
+
+2026-10-30 RTX A2000 X11 root cause was host-visible buffer placement. NVIDIA exposes 246MiB mapped VRAM after host system memory in type order; address allocator took system first. RED/GREEN tests now prefer mapped VRAM for large address buffers, route chunk/particle and MPM staging plus component scratch to system, and smoke profile selects existing tested DC_GAS_DEVICE_STATE=1. Rebuilt quarter bonfire 8 frames 17.755ms mean/19.688ms worst, down from406.309ms. Rebuilt half bonfire 8 frames 28.863ms mean/31.409ms worst; 32 frames 32.056ms mean/41.731ms worst at normal clock and 960x540 with1088x704 halo. Device-state gas queue about11-12ms at sustained dt~0.035s; thermal GPU ~13ms in traced slower path. Target below30ms mean+worst over sustained fire remains RED. Cleanup also reports timed-out dirty chunk saves (new ticket).
+
+**2026-10-30T16:27:49Z**
+
+Focused long bonfire_display_tests under smoke profile failed all-eight-log assertion at 60 simulated seconds: 5/8 dry with DC_GAS_DEVICE_STATE=1, 4/8 with mapped state override; wet0/8 both. This is cadence/combustion robustness still RED and is tracked in new child ticket. General gas_display_tests 32 pass/9 fail solely because Large-CFL tests assume unavailable float32 denormal preservation on NVIDIA (ct-xqgz). Full make test stopped earlier at ct-4gtu contact witness divergence.
+
+**2026-10-30T16:28:44Z**
+
+Final quarter-native 32-frame X11 smoke-profile run after all placement changes: 17.007ms mean, 45.122ms worst (frame13), 480x270 active640x448. Half-native 32-frame normal-clock run: 32.056ms mean, 41.731ms worst, 960x540 active1088x704. Gas device-state separate trace run 32.075ms mean35.339ms worst, accepted1 per frame at dt~0.035s and gas wait~11-12ms. Full make test run for ~12min passed through pixel_boundary_tests, then stopped at known NVIDIA contact_quad_tests ct-4gtu. Focused gas_display_tests:32 passed9 failed only on unsupported Large-CFL denorm requirement (ct-xqgz). Focused bonfire_display_tests: all-log assertion failed5/8 dry device-state and4/8 mapped-state at60s (ct-wgqu). Benchmark cleanup dirty-save timeout tracked ct-2k7p. No claim of full acceptance.

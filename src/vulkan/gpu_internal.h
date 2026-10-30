@@ -427,6 +427,7 @@ void dc_gpu_chunks_destroy(dc_gpu_t *gpu);
 bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                VkDeviceMemory *memory, void **mapped,
                                char *err, uint32_t cap);
+/** Prefer host system memory for transfer staging to reserve mapped VRAM for physics. */
 bool dc_gpu_make_staging_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                 VkDeviceMemory *memory, void **mapped,
                                 char *err, uint32_t cap);

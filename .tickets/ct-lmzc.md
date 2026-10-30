@@ -17,3 +17,9 @@ RTX A2000 half-native GPU timestamp trace shows ~82ms sample, 77ms preparation, 
 
 RED tests cover dormant air tiles, newly painted heat/wet tiles, rigid/constructed wood moving between tiles, and exact reaction stock across chunk seams. GPU dispatch count and displayed X11 half-native frame timing improve materially without lowering clock or render/physics resolution; full relevant tests pass.
 
+
+## Notes
+
+**2026-10-30T16:12:02Z**
+
+GPU memory placement reduced traced half-native thermal from ~650ms to ~13ms per tick. Active tile work may still provide sustained frame headroom, but is no longer first bottleneck; gas ~11-12ms and rigid work now dominate near-30ms frame. Do not implement tile scheduler based on pre-placement timings.

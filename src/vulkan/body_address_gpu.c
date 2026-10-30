@@ -8,6 +8,7 @@ static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
     return false;
 }
+/* Preserve the small host-visible VRAM aperture for large simulation arrays. */
 enum { DC_MAPPED_LOCAL_MIN_BYTES = 1048576u };
 static void release_partial(dc_gpu_t *gpu,dc_gpu_address_buffer_t *buffer) {
     if(buffer->mapped) vkUnmapMemory(gpu->device,buffer->memory);
