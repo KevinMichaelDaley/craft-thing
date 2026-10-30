@@ -23,6 +23,8 @@ struct dc_level_view {
     uint64_t from_generation,to_generation;
     bool destination_bound,smoke_box,smoke_ready;
     bool closing,closing_structure_saved;
+    dc_chunk_colors_t *save_colors;
+    bool save_color_stale[DC_GPU_CHUNK_SLOTS];
     uint32_t smoke_closed;
     bool gas_admitted[DC_GPU_CHUNK_SLOTS];
 };

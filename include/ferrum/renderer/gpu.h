@@ -35,6 +35,9 @@ bool fr_renderer_set_material_style(dc_gpu_t *gpu, uint32_t material,
 /** Read colors at an explicit streaming/checkpoint boundary, never per physics tick. */
 bool fr_renderer_download_chunk_colors(dc_gpu_t *gpu,uint32_t slot,
     dc_chunk_colors_t *colors,char *err,uint32_t cap);
+/** Snapshot all resident color slots through host staging at a save boundary. */
+bool fr_renderer_capture_chunk_colors(dc_gpu_t *gpu,dc_chunk_colors_t *colors,
+    uint32_t slots,char *err,uint32_t cap);
 /** Publish a validated saved color map into an already loaded physical slot. */
 bool fr_renderer_upload_chunk_colors(dc_gpu_t *gpu,uint32_t slot,
     const dc_chunk_colors_t *colors,char *err,uint32_t cap);

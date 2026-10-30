@@ -311,6 +311,7 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
             }
             if(view->closing) {
                 view->closing_structure_saved=false;
+                view->save_color_stale[index]=true;
                 if(getenv("DC_SAVE_TRACE")) fprintf(stderr,"Save late load slot%u\n",index);
             }
             if(restored||(!result.gas&&view->smoke_ready)) dc_chunk_table_mark_dirty(&view->table,index);
@@ -349,7 +350,8 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
         if(trace) stage=SDL_GetTicks64();
         if (!dc_gpu_download_chunk(view->gpu, i, &chunk, err, cap)) return false;
         if(trace) {parts[0]+=SDL_GetTicks64()-stage;stage=SDL_GetTicks64();}
-        if(!fr_renderer_download_chunk_colors(view->gpu,i,&colors,err,cap)) return false;
+        if(view->save_colors&&!view->save_color_stale[i]) colors=view->save_colors[i];
+        else if(!fr_renderer_download_chunk_colors(view->gpu,i,&colors,err,cap)) return false;
         if(trace) {parts[1]+=SDL_GetTicks64()-stage;stage=SDL_GetTicks64();}
         fr_reactive_chunk_t reactive={0};
         if(!fr_gpu_reactive_export_chunk(view->gpu,i,&chunk,&reactive,err,cap)) return false;
@@ -858,6 +860,12 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     else view->closing_structure_saved=true;
     if(getenv("DC_SAVE_TRACE")) fprintf(stderr,"Save final structure%llums\n",
         (unsigned long long)(SDL_GetTicks64()-save_start));
+    view->save_colors=malloc((size_t)view->table.capacity*sizeof(*view->save_colors));
+    if(view->save_colors&&!fr_renderer_capture_chunk_colors(view->gpu,view->save_colors,
+        view->table.capacity,err,cap)) {
+        free(view->save_colors);view->save_colors=NULL;
+        if(err&&cap) err[0]='\0';
+    }
     if (view->transfer_pending) {
         view->table.slots[view->from_slot].pinned = false;
         if (view->destination_bound)
@@ -887,6 +895,7 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     if(okay&&!view->closing_structure_saved)
         okay=fr_gpu_save_structure(view->gpu,view->body_path,err,cap);
     dc_stream_destroy(view->stream);
+    free(view->save_colors);
     if(getenv("DC_SAVE_TRACE")) fprintf(stderr,"Save flushed%llums\n",
         (unsigned long long)(SDL_GetTicks64()-save_start));
     dc_gpu_destroy(view->gpu);

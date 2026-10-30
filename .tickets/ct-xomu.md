@@ -18,3 +18,9 @@ After removing the duplicate body checkpoint, shutdown still spends ~8.3s schedu
 
 One-frame half-native bonfire save flush materially below13s with identical restored chunks, color, reactive, water, and gas; full regression and validation pass; no runtime frame regression.
 
+
+## Notes
+
+**2026-10-30T19:41:44Z**
+
+GREEN: bulk terrain color snapshot uses host staging once at shutdown; per-chunk water colors remain coherent CPU reads. Late loads invalidate only their slot snapshot. Focused body color test compares both chunks against direct readback (2/2); displayed half-native fast-color save test passes. Eight-frame trace: color stage4ms vs prior2499ms, chunk scheduling5.833s vs8.278s, save flush11.279s vs12.890s, wall16.63s vs17.77s. Full regression pending.

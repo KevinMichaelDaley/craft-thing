@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "../../src/vulkan/gpu_internal.h"
 #include "../../src/vulkan/runtime_body_gpu.h"
 #include "ferrum/renderer/gpu.h"
@@ -75,7 +76,35 @@ static void test_two_pixel_fractures_relocate_colors_and_restore_them(void) {
     dc_gpu_destroy(g);free(chunk);free(colors);
     ASSERT_TRUE(fractured);ASSERT_TRUE(restored);PASS();
 }
+static void test_bulk_color_snapshot_matches_each_chunk_readback(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    dc_chunk_colors_t *saved=calloc(2,sizeof(*saved));
+    dc_chunk_colors_t *paint=calloc(1,sizeof(*paint));
+    dc_chunk_colors_t *direct=calloc(1,sizeof(*direct));
+    ASSERT_TRUE(saved&&paint&&direct);
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    for(uint32_t slot=0;slot<2u;slot++) {
+        for(uint32_t cell=0;cell<DC_CHUNK_CELLS;cell++) {
+            paint->terrain[cell][0]=(float)(cell%64u)/64.f;
+            paint->terrain[cell][1]=(float)slot/2.f;
+            paint->terrain[cell][2]=.25f;
+            paint->terrain[cell][3]=1.f;
+            paint->water[cell][0]=(float)(cell%7u)/7.f;
+            paint->water[cell][1]=.125f;
+            paint->water[cell][2]=.5f;
+            paint->water[cell][3]=1.f;
+        }
+        ASSERT_TRUE(fr_renderer_upload_chunk_colors(g,slot,paint,err,sizeof(err)));
+    }
+    ASSERT_TRUE(fr_renderer_capture_chunk_colors(g,saved,2u,err,sizeof(err)));
+    for(uint32_t slot=0;slot<2u;slot++) {
+        ASSERT_TRUE(fr_renderer_download_chunk_colors(g,slot,direct,err,sizeof(err)));
+        ASSERT_TRUE(memcmp(saved+slot,direct,sizeof(*direct))==0);
+    }
+    dc_gpu_destroy(g);free(saved);free(paint);free(direct);PASS();
+}
 int main(void) {
     RUN(test_two_pixel_fractures_relocate_colors_and_restore_them);
+    RUN(test_bulk_color_snapshot_matches_each_chunk_readback);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
