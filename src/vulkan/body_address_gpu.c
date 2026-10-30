@@ -27,13 +27,17 @@ bool dc_gpu_address_buffer_create(dc_gpu_t *gpu,VkDeviceSize bytes,bool host_vis
     VkMemoryPropertyFlags needed=host_visible?VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT:VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     VkMemoryAllocateFlagsInfo flags={.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,.flags=VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT};
     VkMemoryAllocateInfo allocation={.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,.pNext=&flags,.allocationSize=requirements.size};
-    for(uint32_t type=0;type<properties.memoryTypeCount;type++) {
-        VkMemoryPropertyFlags available=properties.memoryTypes[type].propertyFlags;
-        if((requirements.memoryTypeBits&(1u<<type))==0u||(available&needed)!=needed) continue;
-        VkDeviceMemory memory=VK_NULL_HANDLE;allocation.memoryTypeIndex=type;
-        if(vkAllocateMemory(gpu->device,&allocation,NULL,&memory)!=VK_SUCCESS) continue;
-        pending.memory=memory;pending.device_local=(available&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)!=0;
-        break;
+    for(uint32_t pass=0;pass<(host_visible?2u:1u)&&!pending.memory;pass++) {
+        for(uint32_t type=0;type<properties.memoryTypeCount;type++) {
+            VkMemoryPropertyFlags available=properties.memoryTypes[type].propertyFlags;
+            if((requirements.memoryTypeBits&(1u<<type))==0u||(available&needed)!=needed) continue;
+            bool local=(available&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)!=0;
+            if(host_visible&&local!=(pass==0u)) continue;
+            VkDeviceMemory memory=VK_NULL_HANDLE;allocation.memoryTypeIndex=type;
+            if(vkAllocateMemory(gpu->device,&allocation,NULL,&memory)!=VK_SUCCESS) continue;
+            pending.memory=memory;pending.device_local=local;
+            break;
+        }
     }
     if(!pending.memory) {release_partial(gpu,&pending);return error(err,cap,"Cannot allocate addressable GPU memory");}
     if(vkBindBufferMemory(gpu->device,pending.buffer,pending.memory,0)!=VK_SUCCESS) {
