@@ -47,13 +47,13 @@ bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                                      &gpu->mpm_grid_mapped, err, cap) &&
            dc_gpu_make_device_buffer(gpu, grid * 16u, &gpu->mpm_force_buffer,
                                      &gpu->mpm_force_memory, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, grid * 16u,
+           dc_gpu_make_staging_buffer(gpu, grid * 16u,
                                      &gpu->mpm_force_staging_buffer,
                                      &gpu->mpm_force_staging_memory,
                                      &gpu->mpm_force_mapped, err, cap) &&
            dc_gpu_make_device_buffer(gpu, grid * 8u, &gpu->mpm_velocity_buffer,
                                      &gpu->mpm_velocity_memory, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, grid * 8u,
+           dc_gpu_make_staging_buffer(gpu, grid * 8u,
                                      &gpu->mpm_velocity_staging_buffer,
                                      &gpu->mpm_velocity_staging_memory,
                                      &gpu->mpm_velocity_mapped, err, cap) &&
