@@ -24,7 +24,7 @@ static void gpu_startup_trace(const char *stage, Uint64 started) {
         fprintf(stderr,"GPU startup %s: %llums\n",stage,
                 (unsigned long long)(SDL_GetTicks64()-started));
 }
-enum { DC_PIPELINE_CACHE_MAX_BYTES = 64u * 1024u * 1024u };
+enum { DC_PIPELINE_CACHE_MAX_BYTES = 128u * 1024u * 1024u };
 static void pipeline_cache_load(dc_gpu_t *gpu) {
     VkPhysicalDeviceProperties properties;
     vkGetPhysicalDeviceProperties(gpu->physical,&properties);
@@ -63,6 +63,12 @@ static void pipeline_cache_load(dc_gpu_t *gpu) {
 static void pipeline_cache_save(dc_gpu_t *gpu) {
     if(!gpu->pipeline_cache) return;
     size_t length=0u;
+    if(getenv("DC_PIPELINE_CACHE_TRACE")) {
+        size_t measured=0u;
+        VkResult measured_result=vkGetPipelineCacheData(gpu->device,gpu->pipeline_cache,&measured,NULL);
+        fprintf(stderr,"Pipeline cache save query result%d bytes%zu limit%u\n",
+                (int)measured_result,measured,(unsigned)DC_PIPELINE_CACHE_MAX_BYTES);
+    }
     if(gpu->pipeline_cache_path[0]&&
        vkGetPipelineCacheData(gpu->device,gpu->pipeline_cache,&length,NULL)==VK_SUCCESS&&
        length>0u&&length<=DC_PIPELINE_CACHE_MAX_BYTES) {
