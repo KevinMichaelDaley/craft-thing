@@ -24,3 +24,7 @@ Profile stage timings; reduce one-frame bonfire exit wall time materially with i
 **2026-10-30T19:14:46Z**
 
 Startup trace one-frame half-native: gas enabled3.015s, wall28.97s. DC_SAVE_TRACE: final body structure5.828s, schedule_saves repeats body structure9.247s, chunk export/queue8.857s, total flush23.947s. RED opt-in test catches repeated structure checkpoint. The same structure is saved twice during destroy when dirty chunks are queued.
+
+**2026-10-30T19:19:02Z**
+
+GREEN: shutdown reuses the first structure checkpoint, invalidating only when a late load is published. Direct eight-frame half-native run had final structure4.447s, repeat schedule0ms, chunk saves9.057s, total save flush13.522s and process wall18.74s versus baseline28.97s. Opt-in displayed shutdown test now counts late loads and passes. Full regression and stage cleanup pending.

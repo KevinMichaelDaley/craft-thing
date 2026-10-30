@@ -309,6 +309,10 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
             if(!dc_chunk_table_finish_load(&view->table,index,result.generation)) {
                 dc_stream_result_release(&result);return error(err,cap,"Cannot finish loaded chunk publication");
             }
+            if(view->closing) {
+                view->closing_structure_saved=false;
+                if(getenv("DC_SAVE_TRACE")) fprintf(stderr,"Save late load slot%u\n",index);
+            }
             if(restored||(!result.gas&&view->smoke_ready)) dc_chunk_table_mark_dirty(&view->table,index);
         } else if (!dc_chunk_table_finish_save(&view->table, index, result.generation)) {
             dc_stream_result_release(&result);
@@ -328,7 +332,10 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
             const dc_chunk_slot_t *slot = &view->table.slots[i];
             pending |= slot->state == DC_SLOT_SLEEPING && slot->dirty && !slot->pinned;
         }
-        if (pending && !fr_gpu_save_structure(view->gpu, view->body_path, err, cap)) return false;
+        if (pending && (!view->closing || !view->closing_structure_saved)) {
+            if(!fr_gpu_save_structure(view->gpu, view->body_path, err, cap)) return false;
+            if(view->closing) view->closing_structure_saved=true;
+        }
     }
     structure_ms=SDL_GetTicks64()-stage;
     stage=SDL_GetTicks64();
@@ -834,8 +841,10 @@ bool dc_level_view_transfer_result(dc_level_view_t *view,
 bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return true;
     bool okay = true;
+    view->closing=true;
     uint64_t save_start=SDL_GetTicks64();
     if (!fr_gpu_save_structure(view->gpu, view->body_path, err, cap)) okay = false;
+    else view->closing_structure_saved=true;
     if(getenv("DC_SAVE_TRACE")) fprintf(stderr,"Save final structure%llums\n",
         (unsigned long long)(SDL_GetTicks64()-save_start));
     if (view->transfer_pending) {
@@ -864,6 +873,8 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
         }
         SDL_Delay(1);
     }
+    if(okay&&!view->closing_structure_saved)
+        okay=fr_gpu_save_structure(view->gpu,view->body_path,err,cap);
     dc_stream_destroy(view->stream);
     if(getenv("DC_SAVE_TRACE")) fprintf(stderr,"Save flushed%llums\n",
         (unsigned long long)(SDL_GetTicks64()-save_start));

@@ -26,7 +26,7 @@ static void test_half_native_bonfire_flushes_queued_saves(void) {
     ASSERT_TRUE(process != NULL);
     char line[1024];
     int saw_frame = 0, saw_cleanup_error = 0;
-    int repeated_structure_save = 0;
+    int repeated_structure_saves = 0, late_loads = 0;
     double mean_ms = 0.0, worst_ms = 0.0;
     while (fgets(line, sizeof(line), process)) {
         if (strstr(line, "Displayed full frame 960x540")) {
@@ -37,13 +37,14 @@ static void test_half_native_bonfire_flushes_queued_saves(void) {
         if (strstr(line, "Dungeoncraft cleanup:")) saw_cleanup_error = 1;
         unsigned long long structure_ms = 0;
         if (sscanf(line, "Save schedule structure%llums", &structure_ms) == 1 && structure_ms > 0)
-            repeated_structure_save = 1;
+            repeated_structure_saves++;
+        if (strstr(line, "Save late load slot")) late_loads++;
     }
     int status = pclose(process);
     ASSERT_TRUE(status != -1 && WIFEXITED(status));
     ASSERT_INT_EQ(saw_frame, 1);
     ASSERT_INT_EQ(saw_cleanup_error, 0);
-    if (single_save) ASSERT_INT_EQ(repeated_structure_save, 0);
+    if (single_save) ASSERT_TRUE(repeated_structure_saves <= late_loads);
     if (budget) ASSERT_TRUE(mean_ms > 0.0 && mean_ms < 30.0 && worst_ms < 30.0);
     PASS();
 }
