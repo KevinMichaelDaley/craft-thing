@@ -1,6 +1,6 @@
 ---
 id: ct-kpxz
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-30T09:21:01Z
@@ -23,3 +23,7 @@ X11 half-native bonfire presents complete frames at normal physical clock with p
 **2026-10-30T09:35:11Z**
 
 Compact practical gas transport admitted on RTX A2000 without shaderDenormPreserveFloat32; X11 displayed bonfire reaches 32 frames at 960x540. Focused NVIDIA tests for practical safe line, colored subnormal stock, massless underflow energy, and vorticity plume pass. Vulkan validation layer and spirv-val are absent from this machine, so formal shader validation remains unverified; frame budget also remains open in parent ticket.
+
+**2026-10-30T10:34:12Z**
+
+Correction to prior note: tools/with-vulkan supplies VK_LAYER_KHRONOS_validation even though the bare shell does not. On RTX A2000 X11, DC_VK_VALIDATE=1 with the smoke profile passes compact practical admission 1/1 and displayed vorticity plume 1/1 with no validation errors. Earlier focused subnormal colored stock, massless underflow, practical safe line, and 32-frame half-native displayed bonfire runs also passed; half-native frame timing 1133.923ms mean remains a parent performance failure.
