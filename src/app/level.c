@@ -18,30 +18,44 @@
 #include "view_config.h"
 
 static bool error(char *buf,uint32_t cap,const char *message);
+static void bonfire_startup_trace(const char *stage, Uint64 started) {
+    if(getenv("DC_BONFIRE_STARTUP_TRACE"))
+        fprintf(stderr,"Bonfire startup %s: %llums\n",stage,
+                (unsigned long long)(SDL_GetTicks64()-started));
+}
 bool dc_level_view_setup_bonfire(dc_level_view_t *view,char *err,uint32_t cap) {
-    if(!view||VIEW_WIDTH!=480||VIEW_HEIGHT!=270) return false;
+    Uint64 started=SDL_GetTicks64();
+    if(!view) return error(err,cap,"Missing bonfire level view");
+    if(!((VIEW_WIDTH==480&&VIEW_HEIGHT==270)||
+         (VIEW_WIDTH==960&&VIEW_HEIGHT==540)))
+        return error(err,cap,"Bonfire view requires quarter or half native resolution");
     if(view->restored) {
         if(!fr_thermal_gpu_is_bonfire_world(view->gpu)) return error(err,cap,"Saved world is not an ordinary bonfire");
     } else if(!fr_thermal_gpu_is_bonfire_world(view->gpu)) {
         if(!dc_level_view_wait_visible(view,120000,err,cap)) return false;
+        bonfire_startup_trace("visible chunks",started);
         uint32_t count=view->table.capacity;
         dc_chunk_coord_t *coords=calloc(count,sizeof(*coords));
         dc_thermal_bench_chunk_t *chunks=calloc(count,sizeof(*chunks));
         if(!coords||!chunks) {free(coords);free(chunks);return error(err,cap,"Cannot preflight bonfire fixture");}
         for(uint32_t i=0;i<count;i++) coords[i]=view->table.slots[i].coord;
         bool okay=dc_bonfire_build(coords,count,chunks,err,cap);free(coords);
+        bonfire_startup_trace("fixture built",started);
         for(uint32_t i=0;i<count&&okay;i++) okay=dc_gpu_upload_chunk(view->gpu,i,chunks[i].chunk,err,cap)&&
             fr_renderer_upload_chunk_colors(view->gpu,i,chunks[i].colors,err,cap)&&
             fr_gpu_reactive_import_chunk(view->gpu,i,chunks[i].chunk,&chunks[i].reactive,err,cap)&&
             dc_chunk_table_mark_dirty(&view->table,i);
         dc_thermal_bench_release(chunks,count);
+        bonfire_startup_trace("fixture uploaded",started);
         if(!okay||!fr_thermal_gpu_enable(view->gpu,err,cap)||!fr_thermal_gpu_mark_bonfire_world(view->gpu)) return false;
         if(!dc_bonfire_admit(view->gpu,err,cap)) return false;
+        bonfire_startup_trace("rigid admission",started);
     }
     fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
         .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
-    if(!fr_gas_gpu_enable(view->gpu,&model,.0012f,293.15f,err,cap)||
-       !fr_gas_gpu_set_pressure_policy(view->gpu,FR_GAS_PRESSURE_PRACTICAL,err,cap)||
+    if(!fr_gas_gpu_enable(view->gpu,&model,.0012f,293.15f,err,cap)) return false;
+    bonfire_startup_trace("gas enabled",started);
+    if(!fr_gas_gpu_set_pressure_policy(view->gpu,FR_GAS_PRESSURE_PRACTICAL,err,cap)||
        !fr_gas_gpu_set_gravity(view->gpu,900,err,cap)||!fr_combustion_gpu_enable(view->gpu,err,cap)) return false;
     if(view->restored) {
         if(!dc_level_view_wait_visible(view,120000,err,cap)) return false;
@@ -402,23 +416,28 @@ dc_level_view_t *dc_level_view_create(const char *directory, uint64_t seed,
 dc_level_view_t *dc_level_view_create_ground(const char *directory, uint64_t seed,
                                             const dc_ground_profile_t *ground,
                                             char *err, uint32_t cap) {
+    Uint64 started=SDL_GetTicks64();
     dc_level_view_t *view = calloc(1, sizeof(*view));
     if (!view) { error(err, cap, "Out of memory creating level view"); return NULL; }
     view->origin.y = INITIAL_CHUNK_Y;
     view->mapped_origin.y = INITIAL_CHUNK_Y;
-    if (!dc_chunk_table_init(&view->table, DC_GPU_CHUNK_SLOTS) ||
-        !dc_gpu_create_window(&view->gpu, SIM_WIDTH, SIM_HEIGHT,
+    if (!dc_chunk_table_init(&view->table, DC_GPU_CHUNK_SLOTS)) goto fail;
+    bonfire_startup_trace("chunk table",started);
+    if (!dc_gpu_create_window(&view->gpu, SIM_WIDTH, SIM_HEIGHT,
             VIEW_WIDTH * WINDOW_SCALE, VIEW_HEIGHT * WINDOW_SCALE,
-            "build/shaders/pattern.comp.spv", err, cap) ||
-        !dc_gpu_set_viewport(view->gpu, DC_CHUNK_SIDE, DC_CHUNK_SIDE,
+            "build/shaders/pattern.comp.spv", err, cap)) goto fail;
+    bonfire_startup_trace("GPU window",started);
+    if (!dc_gpu_set_viewport(view->gpu, DC_CHUNK_SIDE, DC_CHUNK_SIDE,
                              VIEW_WIDTH, VIEW_HEIGHT) ||
         !dc_gpu_set_display_zoom(view->gpu, WINDOW_SCALE) ||
         !dc_gpu_set_fluid_interval(view->gpu, FLUID_INTERVAL) ||
         !dc_gpu_set_rigid_solver(view->gpu, true)) goto fail;
+    bonfire_startup_trace("rigid solver",started);
     view->spring_enabled = true;
     view->stream = dc_stream_create_ground(directory, seed,
                                     DC_GPU_CHUNK_SLOTS * 2u, ground);
     if (!view->stream) { error(err, cap, "Cannot start chunk streaming worker"); goto fail; }
+    bonfire_startup_trace("stream worker",started);
     int length = snprintf(view->body_path, sizeof(view->body_path), "%s/rigid_bodies.bin", directory);
     if (length < 0 || (size_t)length >= sizeof(view->body_path)) {
         error(err, cap, "World directory path is too long"); goto fail;
@@ -429,6 +448,7 @@ dc_level_view_t *dc_level_view_create_ground(const char *directory, uint64_t see
             view->origin.x - HALO_CHUNKS, view->origin.y - HALO_CHUNKS }, err, cap) ||
         !fr_gpu_load_structure(view->gpu, view->body_path, err, cap) ||
         !dc_gpu_enable_automatic_components(view->gpu)) goto fail;
+    bonfire_startup_trace("base level ready",started);
     return view;
 fail:
     dc_stream_destroy(view->stream);
