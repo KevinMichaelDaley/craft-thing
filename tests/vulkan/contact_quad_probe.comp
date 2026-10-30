@@ -26,11 +26,17 @@ bool matches_reference(Polygon a,Polygon b) {
     bool expected=reference_polygon_contact(a,b,rn,rd);
     bool actual=polygon_contact(a,b,n,d);
     bool exact=actual==expected;
+    if(actual!=expected) atomicAdd(results[17],1u);
     if(actual&&expected) {
+        atomicMax(results[19],floatBitsToUint(max(abs(n.x-rn.x),abs(n.y-rn.y))));
+        atomicMax(results[20],floatBitsToUint(abs(d-rd)));
         exact=exact&&all(equal(floatBitsToUint(n),floatBitsToUint(rn)))&&floatBitsToUint(d)==floatBitsToUint(rd);
         vec2 pa,pb,ra,rb;uint fa,fb,rfa,rfb;
         reference_contact_witnesses(a,b,rn,ra,rb,rfa,rfb);
         contact_witnesses(a,b,n,pa,pb,fa,fb);
+        if(fa!=rfa||fb!=rfb) atomicAdd(results[18],1u);
+        atomicMax(results[21],floatBitsToUint(max(abs(pa.x-ra.x),abs(pa.y-ra.y))));
+        atomicMax(results[22],floatBitsToUint(max(abs(pb.x-rb.x),abs(pb.y-rb.y))));
         exact=exact&&all(equal(floatBitsToUint(pa),floatBitsToUint(ra)))&&all(equal(floatBitsToUint(pb),floatBitsToUint(rb)))&&fa==rfa&&fb==rfb;
     }
     return exact;

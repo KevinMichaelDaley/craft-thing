@@ -19,6 +19,9 @@ static void test_quad_contacts_match_frozen_ordered_sat_without_dynamic_loops(vo
         rectangle_cases,rectangle_errors,rectangle_axes,pair_cases,pair_errors,pair_axes);
     unsigned unit_errors=f.probe.mapped[11],unit_cases=f.probe.mapped[12],unit_axes=f.probe.mapped[13];
     unsigned unit_pair_errors=f.probe.mapped[14],unit_pair_cases=f.probe.mapped[15],unit_pair_axes=f.probe.mapped[16];
+    float differences[4];for(unsigned i=0;i<4;i++) memcpy(differences+i,&f.probe.mapped[19+i],sizeof(float));
+    printf("contact decision mismatches %u feature mismatches %u max normal %.9g depth %.9g witness A %.9g B %.9g\n",
+        f.probe.mapped[17],f.probe.mapped[18],differences[0],differences[1],differences[2],differences[3]);
     printf("unit rectangle cases %u errors %u axes %u; unit pairs %u errors %u axes %u\n",
         unit_cases,unit_errors,unit_axes,unit_pair_cases,unit_pair_errors,unit_pair_axes);
     fixture_stop(&f);ASSERT_EQ(cases,32768u);ASSERT_EQ(errors,0u);ASSERT_EQ(loops,0u);
