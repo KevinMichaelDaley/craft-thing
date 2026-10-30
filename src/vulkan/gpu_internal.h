@@ -67,6 +67,9 @@ struct dc_gpu {
     VkInstance instance;
     VkPhysicalDevice physical;
     VkDevice device;
+    VkPipelineCache pipeline_cache;
+    char pipeline_cache_path[256];
+    bool pipeline_cache_loaded;
     VkQueue queue;
     uint32_t family;
     VkBuffer cells;

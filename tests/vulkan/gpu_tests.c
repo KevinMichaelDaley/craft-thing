@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "dungeoncraft/gpu.h"
 #include "../../src/vulkan/gpu_internal.h"
@@ -29,6 +30,23 @@ static void test_gpu_pattern_readback(void) {
     ASSERT_EQ(cells[4], 0xff4040c0u);
     ASSERT_EQ(cells[15], 0xff202020u);
     dc_gpu_destroy(gpu);
+    PASS();
+}
+static void test_pipeline_cache_persists_across_contexts(void) {
+    char err[256]={0};dc_gpu_t *first=NULL,*second=NULL;
+    ASSERT_TRUE(dc_gpu_create(&first,4,4,"build/shaders/pattern.comp.spv",
+                              err,sizeof(err)));
+    ASSERT_TRUE(first->pipeline_cache!=VK_NULL_HANDLE);
+    ASSERT_TRUE(first->pipeline_cache_path[0]!=0);
+    char path[sizeof(first->pipeline_cache_path)];
+    memcpy(path,first->pipeline_cache_path,sizeof(path));
+    dc_gpu_destroy(first);
+    struct stat info;
+    ASSERT_TRUE(stat(path,&info)==0&&info.st_size>32);
+    ASSERT_TRUE(dc_gpu_create(&second,4,4,"build/shaders/pattern.comp.spv",
+                              err,sizeof(err)));
+    ASSERT_TRUE(second->pipeline_cache_loaded);
+    dc_gpu_destroy(second);
     PASS();
 }
 
@@ -289,8 +307,13 @@ static void test_tick_capture_orders_gpu_stages_and_handoffs(void) {
     PASS();
 }
 
-int main(void) {
+int main(int argc,char **argv) {
+    if(argc==2&&strcmp(argv[1],"--pipeline-cache")==0) {
+        RUN(test_pipeline_cache_persists_across_contexts);
+        return g_fail?1:0;
+    }
     RUN(test_gpu_pattern_readback);
+    RUN(test_pipeline_cache_persists_across_contexts);
     RUN(test_rejects_invalid_dimensions);
     RUN(test_host_visible_vram_is_preferred_for_mapped_buffers);
     RUN(test_chunk_and_particle_state_use_separate_stream_staging);
