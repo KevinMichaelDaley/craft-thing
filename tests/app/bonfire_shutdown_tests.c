@@ -18,7 +18,7 @@ static void test_half_native_bonfire_flushes_queued_saves(void) {
     ASSERT_TRUE(mkdtemp(directory) != NULL);
     char command[1024];
     ASSERT_TRUE(snprintf(command, sizeof(command),
-        "./build/dungeoncraft_half_native --bonfire --world-dir %s --benchmark-frames 8 2>&1",
+        "bash -c 'source tools/smoke_profile; exec ./build/dungeoncraft_half_native --bonfire --world-dir %s --benchmark-frames 8' 2>&1",
         directory) < (int)sizeof(command));
     FILE *process = popen(command, "r");
     ASSERT_TRUE(process != NULL);
