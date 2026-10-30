@@ -13,6 +13,15 @@ static unsigned mode,terrain_builds,boundary_builds;
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() g_pass++
 
+bool dc_gpu_set_body_origin(dc_gpu_t *gpu, dc_chunk_coord_t origin,
+                            char *err, uint32_t cap) {
+    (void)gpu;
+    (void)origin;
+    (void)err;
+    (void)cap;
+    return true;
+}
+
 VKAPI_ATTR void VKAPI_CALL vkCmdBindDescriptorSets(VkCommandBuffer c,VkPipelineBindPoint p,VkPipelineLayout l,uint32_t first,uint32_t count,const VkDescriptorSet *s,uint32_t dynamic_count,const uint32_t *offsets) {
     (void)c;(void)p;(void)l;(void)first;(void)count;(void)s;(void)dynamic_count;(void)offsets;
 }
