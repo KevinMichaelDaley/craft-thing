@@ -224,3 +224,14 @@ bool fr_gpu_revolute_remove(dc_gpu_t *g,uint32_t id,char *err,uint32_t cap) {
     }
     return error(err,cap,"Live revolute joint was not found");
 }
+bool fr_gpu_revolute_active(dc_gpu_t *g,uint32_t id,bool *active,char *err,uint32_t cap) {
+    if(!g||!g->revolute||!id||!active) return error(err,cap,"Invalid revolute state query");
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot reach joint state boundary");
+    struct fr_revolute_gpu *r=g->revolute;
+    for(uint32_t i=0;i<r->span;i++) {
+        const uint32_t *p=(const uint32_t *)r->records.mapped+i*JOINT_WORDS;
+        if(p[0]==id) {*active=p[1]!=0;return true;}
+    }
+    *active=false;
+    return true;
+}

@@ -529,6 +529,10 @@ static void test_far_side_battlement_is_constructed_wood(void) {
 
 #ifndef DC_CATAPULT_DISPLAY_INCLUDE
 int main(int argc, char **argv) {
+    if(argc==2&&strcmp(argv[1],"--checkpoint-resume")==0) {
+        RUN(test_released_latch_checkpoint_can_resume_pouch_release);
+        return g_fail?1:0;
+    }
     if(argc==2&&strcmp(argv[1],"--checkpoint")==0) {
         RUN(test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint);
         return g_fail?1:0;

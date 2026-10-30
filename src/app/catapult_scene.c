@@ -279,8 +279,16 @@ bool dc_catapult_scene_release(dc_gpu_t *gpu, dc_catapult_scene_t *scene,
 bool dc_catapult_scene_release_projectile(dc_gpu_t *gpu,
                                           dc_catapult_scene_t *scene,
                                           char *err_buf, uint32_t err_cap) {
-    if (!gpu || !scene || !scene->released || scene->projectile_released ||
-        !scene->pouch_joint)
+    if (!gpu || !scene || !scene->pouch_joint || !scene->latch_joint)
+        return scene_error(err_buf, err_cap, "Invalid coal pouch release");
+    bool latch_active = false, pouch_active = false;
+    if (!fr_gpu_revolute_active(gpu, scene->latch_joint, &latch_active,
+                                err_buf, err_cap) ||
+        !fr_gpu_revolute_active(gpu, scene->pouch_joint, &pouch_active,
+                                err_buf, err_cap)) return false;
+    scene->released = !latch_active;
+    scene->projectile_released = !pouch_active;
+    if (!scene->released || scene->projectile_released)
         return scene_error(err_buf, err_cap, "Invalid coal pouch release");
     if (!fr_gpu_revolute_remove(gpu, scene->pouch_joint, err_buf, err_cap))
         return false;

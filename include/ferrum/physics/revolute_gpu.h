@@ -23,4 +23,9 @@ bool fr_gpu_revolute_add(dc_gpu_t *gpu, const fr_revolute_joint_t *joint,
 /** Release a pivot without changing either body's pose or velocity. */
 bool fr_gpu_revolute_remove(dc_gpu_t *gpu, uint32_t id,
                             char *err_buf, uint32_t err_cap);
+
+/** Read whether a pivot is active at an idle authoring boundary.
+ * A removed pivot, including one omitted from a checkpoint, reports false. */
+bool fr_gpu_revolute_active(dc_gpu_t *gpu, uint32_t id, bool *active,
+                            char *err_buf, uint32_t err_cap);
 #endif
