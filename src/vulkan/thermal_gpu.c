@@ -167,12 +167,11 @@ static void destroy(dc_gpu_t *g,struct fr_thermal_gpu *t) {
 void fr_thermal_gpu_destroy(dc_gpu_t *g) {
     if(g) {if(g->thermal_control_mapped) memset(g->thermal_control_mapped,0,128);destroy(g,g->thermal);g->thermal=NULL;}
 }
-static bool specialize_phases(dc_gpu_t *g,struct fr_thermal_gpu *t,const char *shader,
-                              char *err,uint32_t cap) {
+static bool specialize_phases(dc_gpu_t *g,struct fr_thermal_gpu *t,char *err,uint32_t cap) {
     const char *setting=getenv("DC_THERMAL_SPECIALIZED_PHASES");
     if(setting&&strcmp(setting,"0")==0) return true;
     VkShaderModule module=VK_NULL_HANDLE;
-    if(!dc_gpu_load_shader_module(g,shader,&module,err,cap)) return false;
+    if(!dc_gpu_load_shader_module(g,"build/shaders/thermal.comp.spv",&module,err,cap)) return false;
     VkSpecializationMapEntry entry={.constantID=0,.size=sizeof(uint32_t)};
     VkResult result=VK_SUCCESS;
     for(uint32_t phase=0;phase<24&&result==VK_SUCCESS;phase++) {
@@ -190,19 +189,10 @@ static bool create(dc_gpu_t *g,struct fr_reactive_gpu *reactive,struct fr_therma
     if(!t) return error(err,cap,"Cannot allocate thermal module");
     uint32_t count=g->width*g->height;t->profile_count=fr_reactive_profile_count();
     VkPhysicalDeviceProperties props;vkGetPhysicalDeviceProperties(g->physical,&props);
-    bool wide=props.limits.maxComputeWorkGroupInvocations>=512u&&
-        props.limits.maxComputeWorkGroupSize[0]>=512u;
-    uint32_t group_size=wide?512u:64u;
-    const char *shader=wide?"build/shaders/thermal.comp.spv":"build/shaders/thermal_64.comp.spv";
-    uint32_t groups=(count-1u)/group_size+1u;
+    uint32_t groups=(count-1u)/64u+1u;
     t->groups_x=groups<props.limits.maxComputeWorkGroupCount[0]?groups:props.limits.maxComputeWorkGroupCount[0];
     t->groups_y=(groups-1u)/t->groups_x+1u;
-    uint32_t overlay_groups=(count-1u)/64u+1u;
-    t->overlay_groups_x=overlay_groups<props.limits.maxComputeWorkGroupCount[0]?
-        overlay_groups:props.limits.maxComputeWorkGroupCount[0];
-    t->overlay_groups_y=(overlay_groups-1u)/t->overlay_groups_x+1u;
     if(t->groups_y>props.limits.maxComputeWorkGroupCount[1]||
-       t->overlay_groups_y>props.limits.maxComputeWorkGroupCount[1]||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)t->profile_count*sizeof(fr_reactive_profile_t),true,&t->profiles,err,cap)||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,true,&t->samples,err,cap)||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,true,&t->fluxes,err,cap)||
@@ -218,8 +208,8 @@ static bool create(dc_gpu_t *g,struct fr_reactive_gpu *reactive,struct fr_therma
         {t->probe.buffer,0,t->probe.bytes},{g->chunk_buffer,0,VK_WHOLE_SIZE},{t->water.buffer,0,t->water.bytes},
         {g->runtime_bodies->root.buffer,0,g->runtime_bodies->root.bytes},{g->occupancy_buffer,0,VK_WHOLE_SIZE}};
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"thermal pipeline begin\n");
-    if(!fr_renderer_compute_init(g,&t->compute,buffers,10,32,shader,err,cap)) {destroy(g,t);return false;}
-    if(!specialize_phases(g,t,shader,err,cap)) {destroy(g,t);return false;}
+    if(!fr_renderer_compute_init(g,&t->compute,buffers,10,32,"build/shaders/thermal.comp.spv",err,cap)) {destroy(g,t);return false;}
+    if(!specialize_phases(g,t,err,cap)) {destroy(g,t);return false;}
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"thermal pipeline end\n");
     if(!fr_thermal_feedback_init(g,&t->feedback,buffers[3],buffers[5],err,cap)) {destroy(g,t);return false;}
     *out=t;return true;
@@ -307,7 +297,7 @@ void fr_thermal_record_overlay(dc_gpu_t *g) {
     phase(g,0,0);record_combustion(g,0,2);phase(g,7,0);
     if(g->thermal->overlay==0u) record_combustion(g,0,1);
     else {fr_thermal_feedback_record(g,&g->thermal->feedback,g->thermal->overlay,
-        g->thermal->overlay_groups_x,g->thermal->overlay_groups_y);}
+        g->thermal->groups_x,g->thermal->groups_y);}
     if(g->thermal->hud_enabled) {record_combustion(g,0,7);record_combustion(g,0,8);}
 }
 bool fr_thermal_gpu_probe(dc_gpu_t *g,uint32_t x,uint32_t y,bool active) {

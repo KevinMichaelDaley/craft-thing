@@ -8,7 +8,7 @@ struct fr_thermal_gpu {
     dc_gpu_address_buffer_t profiles,samples,fluxes,probe,water;
     dc_gpu_address_buffer_t emission,emission_snapshot,hud;
     bool hud_enabled;
-    uint32_t groups_x,groups_y,overlay_groups_x,overlay_groups_y,profile_count,overlay;
+    uint32_t groups_x,groups_y,profile_count,overlay;
     uint32_t purpose,pending_count;
     float *pending_water;
     bool probe_active;
