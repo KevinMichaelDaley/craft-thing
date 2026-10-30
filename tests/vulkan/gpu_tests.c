@@ -86,6 +86,20 @@ static void test_chunk_and_particle_state_use_separate_stream_staging(void) {
     ASSERT_TRUE(gpu->mpm_velocity_staging_buffer != VK_NULL_HANDLE);
     ASSERT_TRUE(gpu->mpm_force_buffer != gpu->mpm_force_staging_buffer);
     ASSERT_TRUE(gpu->mpm_velocity_buffer != gpu->mpm_velocity_staging_buffer);
+    VkPhysicalDeviceMemoryProperties props;
+    vkGetPhysicalDeviceMemoryProperties(gpu->physical,&props);
+    bool has_system_host=false,has_local_host=false;
+    for(uint32_t i=0;i<props.memoryTypeCount;i++) {
+        VkMemoryPropertyFlags flags=props.memoryTypes[i].propertyFlags;
+        bool mapped=(flags&(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))==
+            (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        if(mapped) {if(flags&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) has_local_host=true;else has_system_host=true;}
+    }
+    if(has_system_host&&has_local_host) {
+        uint64_t staging_bytes=(uint64_t)DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS*sizeof(dc_cell_t)+
+            (uint64_t)DC_GPU_CHUNK_SLOTS*DC_MPM_PARTICLES_PER_CHUNK*sizeof(dc_mpm_particle_t);
+        ASSERT_TRUE(gpu->mapped_system_bytes>=staging_bytes);
+    }
     dc_gpu_destroy(gpu);
     PASS();
 }
