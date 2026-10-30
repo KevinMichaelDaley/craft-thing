@@ -45,6 +45,9 @@ static void test_packed_boundary_matches_sparse_concave_reference_with_bounded_r
         unsigned face_reads=f.probe.mapped[10],face_errors=f.probe.mapped[11],clips=f.probe.mapped[12];
         printf("%u exact clipping cases: volume reads %u errors %u, face reads %u errors %u\n",
             clips,volume_reads,volume_errors,face_reads,face_errors);
+        float max_face_difference=0;memcpy(&max_face_difference,&f.probe.mapped[15],sizeof(float));
+        printf("face maximum difference %.9g, above tolerance %u\n",
+            max_face_difference,f.probe.mapped[16]);
         unsigned overlap_reads=f.probe.mapped[13],overlap_errors=f.probe.mapped[14];
         printf("SAT overlap geometry reads%u, exact boolean mismatches%u\n",overlap_reads,overlap_errors);
         fixture_stop(&f);

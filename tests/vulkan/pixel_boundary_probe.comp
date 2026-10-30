@@ -51,7 +51,11 @@ void main() {
                 float expected_face=reference_face_coverage(body,piece,start,stop);
                 reads=0u;float actual_face=body_face_coverage(body,piece,start,stop);
                 atomicMax(results[10],reads);
-                if(floatBitsToUint(actual_face)!=floatBitsToUint(expected_face)) atomicAdd(results[11],1u);
+                if(floatBitsToUint(actual_face)!=floatBitsToUint(expected_face)) {
+                    atomicAdd(results[11],1u);
+                    atomicMax(results[15],floatBitsToUint(abs(actual_face-expected_face)));
+                    if(abs(actual_face-expected_face)>1e-6) atomicAdd(results[16],1u);
+                }
                 bool expected_overlap=reference_piece_cell_overlap(body,piece,cell);
                 reads=0u;bool actual_overlap=piece_cell_overlap(body,piece,cell);
                 atomicMax(results[13],reads);
