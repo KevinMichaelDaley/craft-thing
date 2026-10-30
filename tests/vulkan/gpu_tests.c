@@ -98,7 +98,8 @@ static void test_chunk_and_particle_state_use_separate_stream_staging(void) {
     if(has_system_host&&has_local_host) {
         uint64_t staging_bytes=(uint64_t)DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS*sizeof(dc_cell_t)+
             (uint64_t)DC_GPU_CHUNK_SLOTS*DC_MPM_PARTICLES_PER_CHUNK*sizeof(dc_mpm_particle_t)+
-            (uint64_t)gpu->width*gpu->height*24u;
+            (uint64_t)gpu->width*gpu->height*24u+
+            dc_gpu_component_storage_bytes(gpu)*3u;
         ASSERT_TRUE(gpu->mapped_system_bytes>=staging_bytes);
     }
     dc_gpu_destroy(gpu);
