@@ -60,17 +60,18 @@ static void test_motion_phases_preserve_every_body_word_with_narrow_writes(void)
     data[BODY_STATE+8]=float_bits(.12f);
     p.buffer=storage;p.mapped=mapped;
     uint32_t bindings[]={1,2,3,4,10,19,20,21,23,24,25,27,31};
-    ASSERT_INT_EQ(sizeof(bindings)/sizeof(bindings[0]),13);
-    ASSERT_TRUE(fixture_body_pipeline(&p,&gpu,storage,"build/diagnostics/solver_motion_profile.comp.spv",bindings,13,7));
-    VkDescriptorBufferInfo buffers[13];
-    VkWriteDescriptorSet writes[13];
-    for(unsigned i=0;i<13;i++) {
-        buffers[i]=(VkDescriptorBufferInfo){i==12?profile:storage,0,i==12?16:bytes};
+    enum { BINDING_COUNT = sizeof(bindings)/sizeof(bindings[0]) };
+    ASSERT_INT_EQ(BINDING_COUNT,13);
+    ASSERT_TRUE(fixture_body_pipeline(&p,&gpu,storage,"build/diagnostics/solver_motion_profile.comp.spv",bindings,BINDING_COUNT,7));
+    VkDescriptorBufferInfo buffers[BINDING_COUNT];
+    VkWriteDescriptorSet writes[BINDING_COUNT];
+    for(unsigned i=0;i<BINDING_COUNT;i++) {
+        buffers[i]=(VkDescriptorBufferInfo){bindings[i]==31?profile:storage,0,bindings[i]==31?16:bytes};
         writes[i]=(VkWriteDescriptorSet){
         .sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=p.descriptor,.dstBinding=bindings[i],
         .descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.descriptorCount=1,.pBufferInfo=buffers+i};
     }
-    vkUpdateDescriptorSets(p.device,13,writes,0,NULL);
+    vkUpdateDescriptorSets(p.device,BINDING_COUNT,writes,0,NULL);
     bool exact=true,narrow=true;
     const uint32_t phases[]={2,7,8,10};
     for(unsigned phase=0;phase<4;phase++) for(unsigned variant=0;variant<2;variant++) {
