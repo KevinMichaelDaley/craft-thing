@@ -56,7 +56,7 @@ static void test_compact_practical_profile_admits_without_denorm_control(void) {
     }
     ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_AXIS","1",1),0);
     ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_METADATA","1",1),0);
-    ASSERT_EQ(SDL_unsetenv("DC_GAS_STAGED_RATES"),0);
+    ASSERT_TRUE(!getenv("DC_GAS_STAGED_RATES"));
     fr_gas_model_t model=reference_model();
     ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012f,300.f,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,

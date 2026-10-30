@@ -453,6 +453,9 @@ bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32
     if(!g||!g->gas||policy>FR_GAS_PRESSURE_PRACTICAL) return error(err,cap,"Invalid gas acoustic policy");
     struct fr_gas_gpu *t=g->gas;
     if(policy==FR_GAS_PRESSURE_PRACTICAL&&!gravity_resolved(t,((float *)t->parameters.mapped)[FR_GAS_GRAVITY_WORD])) return error(err,cap,"Gas gravitational scale height is below one physics cell");
+    if(policy>=FR_GAS_PRESSURE_LARGE_CFL&&
+       !fr_gas_acoustic_supports_large_transport(g,policy))
+        return error(err,cap,"Large-CFL transport requires compute subgroup shuffle and float32 denormal preservation");
     if(policy!=FR_GAS_PRESSURE_HLLC&&!t->acoustic.ready) {
         VkDescriptorBufferInfo buffers[12];
         for(uint32_t i=0;i<3;i++) buffers[i]=(VkDescriptorBufferInfo){t->state[i].buffer,0,t->state[i].bytes};

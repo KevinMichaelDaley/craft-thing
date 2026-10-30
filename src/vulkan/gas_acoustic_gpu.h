@@ -32,11 +32,12 @@ typedef struct {
     dc_gpu_address_buffer_t transport_work;
     VkBuffer state_bank[2];VkDeviceSize state_bytes;
     dc_gpu_address_buffer_t fields[11],indirect;
-    bool ready,matrix_valid,matrix_large,large_transport,supports_large_transport,practical;
+    bool ready,matrix_valid,matrix_large,large_transport,supports_large_transport,compact_only,practical;
     bool direct_first_axis,geometry_changed;
     bool sparse_owners;
 } fr_gas_acoustic_gpu_t;
 /** Lazily create only the selected optional acoustic module. */
+bool fr_gas_acoustic_supports_large_transport(dc_gpu_t *gpu,uint32_t policy);
 bool fr_gas_acoustic_create(dc_gpu_t *gpu,fr_gas_acoustic_gpu_t *module,
     const VkDescriptorBufferInfo source[12],VkDescriptorBufferInfo owners,char *err,uint32_t cap);
 /** Release all optional acoustic resources. */

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "ferrum/fire/gas_gpu.h"
 #include "dungeoncraft/gas_layout.h"
 #include "gas_acoustic_gpu.h"
 #include "gas_acoustic_policy.h"
@@ -53,6 +54,28 @@ void fr_gas_acoustic_destroy(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t) {
     dc_gpu_address_buffer_destroy(g,&t->indirect);
     memset(t,0,sizeof(*t));
 }
+static bool large_transport_features(const VkPhysicalDeviceSubgroupProperties *subgroup) {
+    return (subgroup->supportedStages&VK_SHADER_STAGE_COMPUTE_BIT)!=0u&&
+        (subgroup->supportedOperations&VK_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT)!=0u&&
+        subgroup->subgroupSize>0u&&subgroup->subgroupSize<=64u&&
+        64u%subgroup->subgroupSize==0u;
+}
+static bool compact_profile(void) {
+    return getenv("DC_GAS_FUSED_AXIS")&&enabled("DC_GAS_FUSED_AXIS")&&
+        getenv("DC_GAS_FUSED_METADATA")&&enabled("DC_GAS_FUSED_METADATA")&&
+        !getenv("DC_GAS_STAGED_RATES")&&!getenv("DC_GAS_COMPARE_ROW_SETUP");
+}
+bool fr_gas_acoustic_supports_large_transport(dc_gpu_t *g,uint32_t policy) {
+    if(!g) return false;
+    VkPhysicalDeviceSubgroupProperties subgroup={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES};
+    VkPhysicalDeviceFloatControlsProperties floats={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES};
+    VkPhysicalDeviceProperties2 details={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,.pNext=&subgroup};
+    subgroup.pNext=&floats;
+    vkGetPhysicalDeviceProperties2(g->physical,&details);
+    return large_transport_features(&subgroup)&&
+        (floats.shaderDenormPreserveFloat32||
+         (policy==FR_GAS_PRESSURE_PRACTICAL&&compact_profile()));
+}
 bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescriptorBufferInfo source[12],VkDescriptorBufferInfo owners,char *err,uint32_t cap) {
     if(t->ready) return true;
     const char *device_option=getenv("DC_GAS_DEVICE_WORK");
@@ -67,9 +90,8 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
     VkPhysicalDeviceSubgroupSizeControlProperties sizes={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES};floats.pNext=&sizes;
     VkPhysicalDeviceProperties2 details={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,.pNext=&subgroup};
     vkGetPhysicalDeviceProperties2(g->physical,&details);
-    t->supports_large_transport=(subgroup.supportedStages&VK_SHADER_STAGE_COMPUTE_BIT)!=0u&&
-        (subgroup.supportedOperations&VK_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT)!=0u&&subgroup.subgroupSize>0u&&
-        subgroup.subgroupSize<=64u&&64u%subgroup.subgroupSize==0u&&floats.shaderDenormPreserveFloat32;
+    t->supports_large_transport=large_transport_features(&subgroup);
+    t->compact_only=t->supports_large_transport&&!floats.shaderDenormPreserveFloat32;
     if(tiles>properties.limits.maxComputeWorkGroupCount[0]) return error(err,cap,"Gas pressure work exceeds device indirect dispatch range");
     for(uint32_t i=0;i<11;i++) {
         VkDeviceSize field_bytes=i==10?bytes:(i==9?tiles*8u:(i==8?bytes/2u:(i>=6?tiles*(i==7?16u:4u):(i==4?bytes/4u:bytes))));
@@ -97,7 +119,7 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         paths[16]="transport_factor_wide";
     }
     for(uint32_t i=0;i<20;i++) {
-        if(i>=16u&&!t->supports_large_transport) continue;
+        if(i>=16u&&(!t->supports_large_transport||t->compact_only)) continue;
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",paths[i]);
         if(!fr_renderer_compute_init(g,pipelines[i],buffers,27,16,path,err,cap)) goto fail;
     }
@@ -109,7 +131,8 @@ bool fr_gas_acoustic_create(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,const VkDescrip
         char path[128];snprintf(path,sizeof(path),"build/shaders/gas_%s.comp.spv",coarse_paths[i]);
         if(!fr_renderer_compute_init(g,coarse_pipelines[i],buffers,27,16,path,err,cap)) goto fail;
     }
-    if(t->supports_large_transport&&!fr_renderer_compute_init(g,&t->stage_transport,buffers,27,16,"build/shaders/gas_transport_stage.comp.spv",err,cap)) goto fail;
+    if(t->supports_large_transport&&!t->compact_only&&
+       !fr_renderer_compute_init(g,&t->stage_transport,buffers,27,16,"build/shaders/gas_transport_stage.comp.spv",err,cap)) goto fail;
     if(t->supports_large_transport) {
         fr_renderer_compute_t *practical[]={&t->practical_factor,&t->practical_prefix,&t->practical_apply};
         const char *names[]={large_group?"transport_factor_compact_large":(use_wide?"transport_factor_compact_wide":"transport_factor_compact"),
@@ -313,7 +336,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(t->practical) bank|=FR_GAS_PRACTICAL_BIT;
     if(t->practical&&getenv("DC_GAS_VORTICITY")&&enabled("DC_GAS_VORTICITY")) bank|=FR_GAS_VORTICITY_BIT;
     if(skip_empty) bank|=FR_GAS_SKIP_EMPTY_PRESSURE_BIT;
-    if(getenv("DC_GAS_COMPARE_ROW_SETUP")) bank|=FR_GAS_COMPARE_ROW_SETUP_BIT;
+    if(!t->compact_only&&getenv("DC_GAS_COMPARE_ROW_SETUP")) bank|=FR_GAS_COMPARE_ROW_SETUP_BIT;
     const char *zero_energy=getenv("DC_GAS_ZERO_ENERGY");
     if(t->practical&&zero_energy&&strcmp(zero_energy,"0")!=0&&(bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) bank|=FR_GAS_ZERO_ENERGY_BIT;
     if(fr_gas_acoustic_multigrid_enabled(g,t,dt,bank)) bank|=FR_GAS_MULTIGRID_BIT;
@@ -322,7 +345,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     const char *boundary_setting=getenv("DC_GAS_MG_BOUNDARY");
     if((bank&FR_GAS_MULTIGRID_BIT)!=0u&&boundary_setting&&strcmp(boundary_setting,"0")!=0) bank|=FR_GAS_MG_BOUNDARY_BIT;
     const char *metadata_setting=getenv("DC_GAS_FUSED_METADATA");
-    if(t->large_transport&&t->practical&&metadata_setting&&strcmp(metadata_setting,"0")!=0&&
+    if(t->large_transport&&t->practical&&(t->compact_only||(metadata_setting&&strcmp(metadata_setting,"0")!=0))&&
        (bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) bank|=FR_GAS_FUSED_METADATA_BIT;
     const char *lean_setting=getenv("DC_GAS_LEAN_METADATA");
     if((bank&FR_GAS_FUSED_METADATA_BIT)!=0u&&lean_setting&&strcmp(lean_setting,"0")!=0) bank|=FR_GAS_LEAN_METADATA_BIT;
@@ -371,7 +394,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,4);
         for(uint32_t axis=0;axis<2;axis++) {
             uint32_t flags=bank|(axis<<3u)|(direct_first?FR_GAS_DIRECT_FIRST_AXIS_BIT:0u),lines=axis==0?g->height:g->width;
-            if(getenv("DC_GAS_STAGED_RATES")) {
+            if(!t->compact_only&&getenv("DC_GAS_STAGED_RATES")) {
                 flags|=FR_GAS_STAGED_RATES_BIT;
                 dispatch(g,&t->stage_transport,gx,gy,dt,flags);
             }
@@ -386,7 +409,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
                (bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) {
                 flags|=FR_GAS_HYBRID_LINES_BIT;dispatch(g,&t->practical_explicit,lines,1u,dt,flags);
             }
-            if(t->practical&&getenv("DC_GAS_FUSED_AXIS")) {
+            if(t->practical&&(t->compact_only||getenv("DC_GAS_FUSED_AXIS"))) {
                 const char *fixed_axis_setting=getenv("DC_GAS_FIXED_AXIS");
                 bool fixed_axis=fused_hybrid&&fixed_axis_setting&&strcmp(fixed_axis_setting,"0")!=0;
                 const fr_renderer_compute_t *hybrid=fixed_axis?&t->practical_hybrid_axis[axis]:&t->practical_hybrid;
