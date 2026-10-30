@@ -13,8 +13,9 @@ static bool error(char *err,uint32_t cap,const char *message) {
     return false;
 }
 bool fr_gpu_reactive_reserve_import(dc_gpu_t *g,uint32_t count,char *err,uint32_t cap) {
-    (void)g;(void)count;
-    return error(err,cap,"Reactive bulk reservation is not implemented");
+    if(!g||!count) return error(err,cap,"Invalid reactive import reservation");
+    if(!fr_gpu_reactive_initialize(g,err,cap)) return false;
+    return fr_reactive_arena_reserve_free(g,&g->reactive->arena,count,err,cap);
 }
 bool fr_gpu_reactive_read_stats(dc_gpu_t *g,fr_gpu_reactive_stats_t *out,char *err,uint32_t cap) {
     if(!g||!out) return error(err,cap,"Invalid reactive allocation diagnostic");

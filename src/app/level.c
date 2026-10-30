@@ -41,7 +41,8 @@ bool dc_level_view_setup_bonfire(dc_level_view_t *view,char *err,uint32_t cap) {
         for(uint32_t i=0;i<count;i++) coords[i]=view->table.slots[i].coord;
         bool okay=dc_bonfire_build(coords,count,chunks,err,cap);free(coords);
         bonfire_startup_trace("fixture built",started);
-        Uint64 upload_ms=0,color_ms=0,reactive_ms=0;
+        Uint64 upload_ms=0,color_ms=0,reactive_ms=0,reserve_ms=0;
+        uint64_t reactive_count=0;
         for(uint32_t i=0;i<count&&okay;i++) {
             Uint64 stage=SDL_GetTicks64();
             okay=dc_gpu_upload_chunk(view->gpu,i,chunks[i].chunk,err,cap);
@@ -50,16 +51,24 @@ bool dc_level_view_setup_bonfire(dc_level_view_t *view,char *err,uint32_t cap) {
             stage=SDL_GetTicks64();
             okay=fr_renderer_upload_chunk_colors(view->gpu,i,chunks[i].colors,err,cap);
             color_ms+=SDL_GetTicks64()-stage;
-            if(!okay) break;
-            stage=SDL_GetTicks64();
+            reactive_count+=chunks[i].reactive.count;
+        }
+        if(okay&&reactive_count>UINT32_MAX) okay=error(err,cap,"Bonfire reactive import exceeds address range");
+        if(okay&&reactive_count) {
+            Uint64 stage=SDL_GetTicks64();
+            okay=fr_gpu_reactive_reserve_import(view->gpu,(uint32_t)reactive_count,err,cap);
+            reserve_ms=SDL_GetTicks64()-stage;
+        }
+        for(uint32_t i=0;i<count&&okay;i++) {
+            Uint64 stage=SDL_GetTicks64();
             okay=fr_gpu_reactive_import_chunk(view->gpu,i,chunks[i].chunk,&chunks[i].reactive,err,cap)&&
                 dc_chunk_table_mark_dirty(&view->table,i);
             reactive_ms+=SDL_GetTicks64()-stage;
         }
         if(getenv("DC_BONFIRE_STARTUP_TRACE"))
-            fprintf(stderr,"Bonfire fixture upload chunks%u terrain%llums colors%llums reactive%llums\n",
+            fprintf(stderr,"Bonfire fixture upload chunks%u terrain%llums colors%llums reserve%llums reactive%llums\n",
                     count,(unsigned long long)upload_ms,(unsigned long long)color_ms,
-                    (unsigned long long)reactive_ms);
+                    (unsigned long long)reserve_ms,(unsigned long long)reactive_ms);
         dc_thermal_bench_release(chunks,count);
         bonfire_startup_trace("fixture uploaded",started);
         if(!okay||!fr_thermal_gpu_enable(view->gpu,err,cap)||!fr_thermal_gpu_mark_bonfire_world(view->gpu)) return false;
