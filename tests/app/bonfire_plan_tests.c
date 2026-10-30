@@ -52,4 +52,19 @@ static void test_shallow_stone_rim_leaves_side_air_above_the_kindling(void) {
     }
     ASSERT_EQ(walls,4u);PASS();
 }
-int main(void) {RUN(test_real_structural_pits_and_independent_rigid_stack);RUN(test_shallow_stone_rim_leaves_side_air_above_the_kindling);printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
+static void test_finite_starter_reaches_the_open_kindling_channel(void) {
+    dc_bonfire_plan_t p;ASSERT_TRUE(dc_bonfire_plan(&p));
+    for(uint32_t side=0;side<2u;side++) {
+        uint32_t cells=0,highest=UINT32_MAX;
+        for(uint32_t i=0;i<p.count;i++) {
+            const dc_bonfire_piece_t *piece=p.pieces+i;
+            if(piece->kind!=DC_BONFIRE_STARTER||piece->wet!=(side!=0u)) continue;
+            cells+=piece->width*piece->height;
+            if(piece->y<highest) highest=piece->y;
+        }
+        ASSERT_EQ(cells,8u);
+        ASSERT_TRUE(highest<=88u);
+    }
+    PASS();
+}
+int main(void) {RUN(test_real_structural_pits_and_independent_rigid_stack);RUN(test_shallow_stone_rim_leaves_side_air_above_the_kindling);RUN(test_finite_starter_reaches_the_open_kindling_channel);printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
