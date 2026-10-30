@@ -79,3 +79,7 @@ Final quarter-native 32-frame X11 smoke-profile run after all placement changes:
 **2026-10-30T18:31:57Z**
 
 After validated diagonal rigid-body heat/oxygen path: full make test PASS, focused body feedback8/8; idle-GPU half-native X11 32 frames normal clock 960x540/1088x704 measured32.467ms mean41.708ms worst, no cleanup failure, screenshot build/screenshots/half_corner_final.bmp. Fused-grain solver diagnostic worsened mean to35.130ms; left disabled. Rigid GPU ~11ms half, gas wait~8-9ms, thermal GPU groups~6ms. Mean/worst below30 remains RED.
+
+**2026-10-30T19:00:32Z**
+
+Mapped-VRAM trace false positive corrected: 68 MiB allocation belongs to fr_gpu_reactive_export_bodies during shutdown checkpoint collection, after measured frames. Host placement there does not cause steady frame cost. Temporary relocation trials for arena entries and thermal samples were reverted; the arena-host trial made first frame ~721ms. Continue per-frame solver/thermal/gas analysis.
