@@ -42,6 +42,27 @@ static void test_unsupported_policy_rejects_before_acoustic_setup(void) {
     ASSERT_TRUE(!g->gas->acoustic.ready);
     dc_gpu_destroy(g);PASS();
 }
+static void test_compact_practical_profile_admits_without_denorm_control(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    ASSERT_TRUE(context(&g,err,sizeof(err)));
+    VkPhysicalDeviceFloatControlsProperties floats={
+        .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES};
+    VkPhysicalDeviceProperties2 properties={
+        .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+        .pNext=&floats};
+    vkGetPhysicalDeviceProperties2(g->physical,&properties);
+    if(floats.shaderDenormPreserveFloat32) {
+        dc_gpu_destroy(g);PASS();return;
+    }
+    ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_AXIS","1",1),0);
+    ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_METADATA","1",1),0);
+    ASSERT_EQ(SDL_unsetenv("DC_GAS_STAGED_RATES"),0);
+    fr_gas_model_t model=reference_model();
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012f,300.f,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,
+                                                err,sizeof(err)));
+    dc_gpu_destroy(g);PASS();
+}
 #include "gas_checkpoint_cases.h"
 #include "gas_geometry_cases.h"
 #include "gas_partial_void_cases.h"
@@ -507,5 +528,6 @@ int main(void) {
     RUN(test_native_partial_void_contraction_displaces_mixture_without_cut_cell_pressure_spikes);
     RUN(test_native_valve_only_refresh_preserves_restored_physical_void);
     RUN(test_native_massless_underflow_energy_reconciles_without_erasing_tiny_colored_gas);
+    RUN(test_compact_practical_profile_admits_without_denorm_control);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0||g_pass==0;
 }
