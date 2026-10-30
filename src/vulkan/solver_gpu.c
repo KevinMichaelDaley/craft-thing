@@ -130,7 +130,7 @@ static bool pixel_hydro_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                                                .pData = &phase};
         info.stage.pSpecializationInfo = &specialization;
         result =
-            vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1, &info,
+            vkCreateComputePipelines(gpu->device, gpu->pipeline_cache, 1, &info,
                                      NULL, &gpu->pixel_hydro_pipelines[phase]);
     }
     vkDestroyShaderModule(gpu->device, module, NULL);
@@ -154,7 +154,7 @@ static VkResult solver_phase_pipeline(dc_gpu_t *gpu,VkShaderModule module,uint32
                   .module = module,
                   .pName = "main",.pSpecializationInfo=&phase},
         .layout = gpu->pipeline_layout};
-    return vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,pipeline);
+    return vkCreateComputePipelines(gpu->device,gpu->pipeline_cache,1,&info,NULL,pipeline);
 }
 static bool graph_only_phase(uint32_t phase) {
     return phase==SOLVER_SOLVE||phase==SOLVER_IMPULSE||

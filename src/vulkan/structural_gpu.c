@@ -244,7 +244,7 @@ bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
             .dataSize = sizeof(phase), .pData = &phase};
         info.stage.pSpecializationInfo = &specialization;
         info.stage.module=phase==6u?carve_shader:shader;
-        r = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1, &info,
+        r = vkCreateComputePipelines(gpu->device, gpu->pipeline_cache, 1, &info,
                                      NULL, &gpu->structural_pipelines[phase]);
     }
     vkDestroyShaderModule(gpu->device, shader, NULL);

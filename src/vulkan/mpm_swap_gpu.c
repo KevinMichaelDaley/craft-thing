@@ -18,7 +18,7 @@ bool dc_gpu_mpm_swap_init(dc_gpu_t *g,char *err,uint32_t cap) {
         .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage=VK_SHADER_STAGE_COMPUTE_BIT,.module=module,.pName="main",.pSpecializationInfo=&spec},
         .layout=g->pipeline_layout};
-    VkResult result=vkCreateComputePipelines(g->device,VK_NULL_HANDLE,1,&info,NULL,&g->mpm_swap_commit_pipeline);
+    VkResult result=vkCreateComputePipelines(g->device,g->pipeline_cache,1,&info,NULL,&g->mpm_swap_commit_pipeline);
     vkDestroyShaderModule(g->device,module,NULL);
     if(result!=VK_SUCCESS&&err&&cap) snprintf(err,cap,"Cannot create metadata-only granular commit");
     return result==VK_SUCCESS;

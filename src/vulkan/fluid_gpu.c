@@ -109,7 +109,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
         .requiredSubgroupSize=required_size};
     if(required_size) info.stage.pNext=&required;
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"fluid pipeline begin %s phase%u\n",load_path,phase);
-    VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE,
+    VkResult result = vkCreateComputePipelines(gpu->device, gpu->pipeline_cache,
                                                 1, &info, NULL, pipeline);
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"fluid pipeline end %s phase%u result%d\n",load_path,phase,result);
     vkDestroyShaderModule(gpu->device, shader, NULL);

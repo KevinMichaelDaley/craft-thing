@@ -165,7 +165,7 @@ bool dc_gpu_rigid_pipeline_init(dc_gpu_t *gpu, const char *path,
         VkSpecializationInfo specialization = {.mapEntryCount=2, .pMapEntries=entries,
             .dataSize=sizeof(values), .pData=values};
         info.stage.pSpecializationInfo=&specialization;
-        result = vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,pipelines[index]);
+        result = vkCreateComputePipelines(gpu->device,gpu->pipeline_cache,1,&info,NULL,pipelines[index]);
     }
     vkDestroyShaderModule(gpu->device, shader, NULL);
     if (result != VK_SUCCESS) return error(err, cap, "Cannot create rigid pipeline");

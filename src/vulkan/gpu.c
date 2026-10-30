@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <SDL.h>
 #include <SDL_vulkan.h>
@@ -18,11 +19,78 @@ static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
     return false;
 }
+static void gpu_startup_trace(const char *stage, Uint64 started) {
+    if(getenv("DC_BONFIRE_STARTUP_TRACE"))
+        fprintf(stderr,"GPU startup %s: %llums\n",stage,
+                (unsigned long long)(SDL_GetTicks64()-started));
+}
+enum { DC_PIPELINE_CACHE_MAX_BYTES = 64u * 1024u * 1024u };
+static void pipeline_cache_load(dc_gpu_t *gpu) {
+    VkPhysicalDeviceProperties properties;
+    vkGetPhysicalDeviceProperties(gpu->physical,&properties);
+    char uuid[VK_UUID_SIZE*2u+1u];
+    for(uint32_t i=0;i<VK_UUID_SIZE;i++)
+        snprintf(uuid+i*2u,3u,"%02x",properties.pipelineCacheUUID[i]);
+    snprintf(gpu->pipeline_cache_path,sizeof(gpu->pipeline_cache_path),
+             "build/pipeline_cache_%04x_%04x_%08x_%s.bin",
+             properties.vendorID,properties.deviceID,properties.driverVersion,uuid);
+    void *bytes=NULL;size_t length=0u;
+    FILE *file=fopen(gpu->pipeline_cache_path,"rb");
+    if(file) {
+        if(fseek(file,0,SEEK_END)==0) {
+            long size=ftell(file);
+            if(size>0&&(unsigned long)size<=DC_PIPELINE_CACHE_MAX_BYTES&&
+               fseek(file,0,SEEK_SET)==0) {
+                bytes=malloc((size_t)size);
+                if(bytes&&fread(bytes,1u,(size_t)size,file)==(size_t)size)
+                    length=(size_t)size;
+            }
+        }
+        fclose(file);
+    }
+    VkPipelineCacheCreateInfo info={.sType=VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
+        .initialDataSize=length,.pInitialData=length?bytes:NULL};
+    VkResult result=vkCreatePipelineCache(gpu->device,&info,NULL,&gpu->pipeline_cache);
+    if(result!=VK_SUCCESS&&length) {
+        info.initialDataSize=0u;info.pInitialData=NULL;
+        result=vkCreatePipelineCache(gpu->device,&info,NULL,&gpu->pipeline_cache);
+        length=0u;
+    }
+    gpu->pipeline_cache_loaded=result==VK_SUCCESS&&length>0u;
+    if(result!=VK_SUCCESS) gpu->pipeline_cache_path[0]=0;
+    free(bytes);
+}
+static void pipeline_cache_save(dc_gpu_t *gpu) {
+    if(!gpu->pipeline_cache) return;
+    size_t length=0u;
+    if(gpu->pipeline_cache_path[0]&&
+       vkGetPipelineCacheData(gpu->device,gpu->pipeline_cache,&length,NULL)==VK_SUCCESS&&
+       length>0u&&length<=DC_PIPELINE_CACHE_MAX_BYTES) {
+        void *bytes=malloc(length);
+        if(bytes&&vkGetPipelineCacheData(gpu->device,gpu->pipeline_cache,
+                                          &length,bytes)==VK_SUCCESS) {
+            char temporary[sizeof(gpu->pipeline_cache_path)+32u];
+            snprintf(temporary,sizeof(temporary),"%s.tmp.%ld",
+                     gpu->pipeline_cache_path,(long)getpid());
+            FILE *file=fopen(temporary,"wb");
+            if(file) {
+                bool written=fwrite(bytes,1u,length,file)==length;
+                if(fclose(file)!=0) written=false;
+                if(!written||rename(temporary,gpu->pipeline_cache_path)!=0)
+                    remove(temporary);
+            }
+        }
+        free(bytes);
+    }
+    vkDestroyPipelineCache(gpu->device,gpu->pipeline_cache,NULL);
+    gpu->pipeline_cache=VK_NULL_HANDLE;
+}
 
 void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu) {fr_gpu_reactive_checkpoint_clear_pending(gpu);free(gpu->checkpoint_chunks);}
     if (!gpu) return;
     if (gpu->device) vkDeviceWaitIdle(gpu->device);
+    if (gpu->device) pipeline_cache_save(gpu);
     dc_gpu_solver_commands_destroy(gpu);
     if (gpu->device) fr_thermal_gpu_destroy(gpu);
     if (gpu->device) fr_gas_gpu_destroy(gpu);
@@ -152,7 +220,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         .stage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = shader, .pName = "main" },
         .layout = gpu->pipeline_layout };
-    VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &gpu->pipeline);
+    VkResult result = vkCreateComputePipelines(gpu->device, gpu->pipeline_cache, 1, &pipeline_info, NULL, &gpu->pipeline);
     bool draw_ready=true;
     if(result==VK_SUCCESS&&strcmp(path,"build/shaders/pattern.comp.spv")==0)
         draw_ready=dc_gpu_draw_pipeline_init(gpu,shader,err,cap);
@@ -164,6 +232,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
 static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
                        uint32_t window_width, uint32_t window_height,
                        const char *shader_path, char *err, uint32_t cap) {
+    Uint64 started=SDL_GetTicks64();
     if (out) *out = NULL;
     if (!out || !width || !height || !shader_path ||
         (uint64_t)width * height > UINT32_MAX / sizeof(uint32_t))
@@ -196,6 +265,7 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
         gpu->window = SDL_CreateWindow("Dungeoncraft GPU testbed", SDL_WINDOWPOS_CENTERED,
             SDL_WINDOWPOS_CENTERED, (int)window_width, (int)window_height, flags);
         if (!gpu->window) { error(err, cap, SDL_GetError()); SDL_QuitSubSystem(SDL_INIT_VIDEO); goto fail; }
+        gpu_startup_trace("SDL window",started);
     }
     VkApplicationInfo app = { .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pApplicationName = "dungeoncraft", .apiVersion = VK_API_VERSION_1_3 };
@@ -235,6 +305,7 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     if (instance_result != VK_SUCCESS) {
         error(err, cap, "Cannot create Vulkan 1.3 instance"); goto fail;
     }
+    gpu_startup_trace("Vulkan instance",started);
     if (gpu->window && !SDL_Vulkan_CreateSurface(gpu->window, gpu->instance, &gpu->surface)) {
         error(err, cap, SDL_GetError()); goto fail;
     }
@@ -257,16 +328,26 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
         error(err, cap, "Cannot create Vulkan compute device"); goto fail;
     }
     vkGetDeviceQueue(gpu->device, gpu->family, 0, &gpu->queue);
+    pipeline_cache_load(gpu);
+    gpu_startup_trace("Vulkan device",started);
     if (!make_cells(gpu, bytes, err, cap) || !dc_gpu_chunks_init(gpu, err, cap) ||
         !dc_gpu_rigid_buffers_init(gpu, err, cap) ||
         !make_pipeline(gpu, shader_path, bytes, err, cap)) goto fail;
-    if (!dc_gpu_rigid_pipeline_init(gpu, "build/shaders/rigid.comp.spv", err, cap) ||
-        !dc_gpu_broadphase_pipeline_init(gpu, err, cap) ||
-        !dc_gpu_contact_pipeline_init(gpu, err, cap) ||
-        !dc_gpu_solver_pipeline_init(gpu, err, cap) ||
-        !dc_gpu_structural_pipeline_init(gpu, err, cap) ||
-        !dc_gpu_tick_init(gpu, err, cap) ||
-        !dc_gpu_halo_pipeline_init(gpu, err, cap)) goto fail;
+    gpu_startup_trace("core buffers and draw",started);
+    if (!dc_gpu_rigid_pipeline_init(gpu, "build/shaders/rigid.comp.spv", err, cap)) goto fail;
+    gpu_startup_trace("rigid pipeline",started);
+    if (!dc_gpu_broadphase_pipeline_init(gpu, err, cap)) goto fail;
+    gpu_startup_trace("broadphase pipeline",started);
+    if (!dc_gpu_contact_pipeline_init(gpu, err, cap)) goto fail;
+    gpu_startup_trace("contact pipeline",started);
+    if (!dc_gpu_solver_pipeline_init(gpu, err, cap)) goto fail;
+    gpu_startup_trace("solver pipeline",started);
+    if (!dc_gpu_structural_pipeline_init(gpu, err, cap)) goto fail;
+    gpu_startup_trace("structural pipeline",started);
+    if (!dc_gpu_tick_init(gpu, err, cap)) goto fail;
+    gpu_startup_trace("tick pipeline",started);
+    if (!dc_gpu_halo_pipeline_init(gpu, err, cap)) goto fail;
+    gpu_startup_trace("physics pipelines",started);
     VkCommandPoolCreateInfo pool_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, .queueFamilyIndex = gpu->family };
     if (vkCreateCommandPool(gpu->device, &pool_info, NULL, &gpu->command_pool) != VK_SUCCESS) {
@@ -280,7 +361,9 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     }
     if (!dc_gpu_solver_commands_init(gpu,err,cap) ||
         !dc_gpu_clear_fluid_scratch(gpu, err, cap)) goto fail;
+    gpu_startup_trace("solver scratch",started);
     if (gpu->window && !dc_gpu_window_init(gpu, window_width, window_height, err, cap)) goto fail;
+    gpu_startup_trace("swapchain",started);
     *out = gpu;
     return true;
 fail:

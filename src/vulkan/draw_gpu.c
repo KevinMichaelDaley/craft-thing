@@ -15,7 +15,7 @@ bool dc_gpu_draw_pipeline_init(dc_gpu_t *gpu,VkShaderModule module,char *err,uin
             .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                 .stage=VK_SHADER_STAGE_COMPUTE_BIT,.module=module,.pName="main",
                 .pSpecializationInfo=&constants},.layout=gpu->pipeline_layout};
-        VkResult result=vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,outputs[i]);
+        VkResult result=vkCreateComputePipelines(gpu->device,gpu->pipeline_cache,1,&info,NULL,outputs[i]);
         if(result!=VK_SUCCESS) {
             if(err&&cap) snprintf(err,cap,"Cannot create draw variant%u: %d",i,result);
             return false;

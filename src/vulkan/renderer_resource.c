@@ -66,7 +66,7 @@ bool fr_renderer_compute_init(dc_gpu_t *g, fr_renderer_compute_t *c,
                 .module = module,
                 .pName = "main"},
       .layout = c->pipeline_layout};
-  VkResult result = vkCreateComputePipelines(g->device, VK_NULL_HANDLE, 1, &pi,
+  VkResult result = vkCreateComputePipelines(g->device, g->pipeline_cache, 1, &pi,
                                              NULL, &c->pipeline);
   vkDestroyShaderModule(g->device, module, NULL);
   return result == VK_SUCCESS;

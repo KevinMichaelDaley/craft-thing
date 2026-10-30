@@ -43,7 +43,7 @@ bool dc_gpu_marker_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         .stage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = module, .pName = "main" },
         .layout = gpu->pipeline_layout };
-    VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE,
+    VkResult result = vkCreateComputePipelines(gpu->device, gpu->pipeline_cache,
                                                 1, &info, NULL, &gpu->marker_pipeline);
     vkDestroyShaderModule(gpu->device, module, NULL);
     if (result != VK_SUCCESS) return error(err, cap, "Cannot create marker pipeline");

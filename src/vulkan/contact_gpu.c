@@ -65,7 +65,7 @@ bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         VkSpecializationInfo specialization = {.mapEntryCount=3, .pMapEntries=generic_entries,
             .dataSize=sizeof(values), .pData=values};
         info.stage.pSpecializationInfo=&specialization;
-        result = vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,&gpu->contact_pipelines[phase]);
+        result = vkCreateComputePipelines(gpu->device,gpu->pipeline_cache,1,&info,NULL,&gpu->contact_pipelines[phase]);
     }
     vkDestroyShaderModule(gpu->device,module,NULL);
     if(result!=VK_SUCCESS) return error(err,cap,"Cannot create generic contact pipelines");
@@ -87,7 +87,7 @@ bool dc_gpu_contact_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         VkSpecializationInfo specialization={.mapEntryCount=4,.pMapEntries=entries,
             .dataSize=sizeof(values),.pData=values};
         info.stage.pSpecializationInfo=&specialization;
-        result=vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,pixel_pipelines[i]);
+        result=vkCreateComputePipelines(gpu->device,gpu->pipeline_cache,1,&info,NULL,pixel_pipelines[i]);
     }
     vkDestroyShaderModule(gpu->device, module, NULL);
     return result == VK_SUCCESS ? true : error(err, cap, "Cannot create GPU contact pipeline");

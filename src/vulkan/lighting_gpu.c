@@ -269,7 +269,7 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
                   .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = module,
                   .pName = "main", .pSpecializationInfo = &specialization},
         .layout = l->compute.pipeline_layout};
-    if (vkCreateComputePipelines(g->device, VK_NULL_HANDLE, 1, &info, NULL,
+    if (vkCreateComputePipelines(g->device, g->pipeline_cache, 1, &info, NULL,
         &l->specialized[compact][pass.iteration][pass.phase]) != VK_SUCCESS) {
       vkDestroyShaderModule(g->device, module, NULL);
       goto fail;

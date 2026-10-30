@@ -112,7 +112,7 @@ static bool stage_init(dc_gpu_t *gpu, uint32_t count, char *err, uint32_t cap) {
                       .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = module,
                       .pName = "main", .pSpecializationInfo = &specialization},
             .layout = s->layout};
-        result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1, &pipeline, NULL, &s->pipelines[phase]);
+        result = vkCreateComputePipelines(gpu->device, gpu->pipeline_cache, 1, &pipeline, NULL, &s->pipelines[phase]);
     }
     vkDestroyShaderModule(gpu->device, module, NULL);
     return result == VK_SUCCESS || error(err, cap, "Cannot create authored compute pipelines");

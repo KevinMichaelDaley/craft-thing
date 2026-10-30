@@ -12,7 +12,7 @@ bool dc_gpu_mpm_compaction_pipeline_init(dc_gpu_t *gpu,char *err,uint32_t cap) {
         VkComputePipelineCreateInfo info={.sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
             .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_COMPUTE_BIT,
                 .module=module,.pName="main",.pSpecializationInfo=&constants},.layout=gpu->pipeline_layout};
-        result=vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,&gpu->mpm_compaction_pipelines[phase]);
+        result=vkCreateComputePipelines(gpu->device,gpu->pipeline_cache,1,&info,NULL,&gpu->mpm_compaction_pipelines[phase]);
     }
     vkDestroyShaderModule(gpu->device,module,NULL);
     if(result!=VK_SUCCESS&&err&&cap) snprintf(err,cap,"Cannot create MPM compaction pipelines");

@@ -55,7 +55,7 @@ bool dc_gpu_pressure_work_init(dc_gpu_t *g,char *err,uint32_t cap) {
             .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                 .stage=VK_SHADER_STAGE_COMPUTE_BIT,.module=module,.pName="main",
                 .pSpecializationInfo=&specialization},.layout=g->pressure_pipeline_layout};
-        okay=vkCreateComputePipelines(g->device,VK_NULL_HANDLE,1,&info,NULL,
+        okay=vkCreateComputePipelines(g->device,g->pipeline_cache,1,&info,NULL,
             &g->pressure_work_pipelines[phase])==VK_SUCCESS;
     }
     vkDestroyShaderModule(g->device,module,NULL);

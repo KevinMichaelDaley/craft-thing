@@ -179,7 +179,7 @@ static bool specialize_phases(dc_gpu_t *g,struct fr_thermal_gpu *t,char *err,uin
         VkComputePipelineCreateInfo info={.sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
             .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_COMPUTE_BIT,
                 .module=module,.pName="main",.pSpecializationInfo=&specialization},.layout=t->compute.pipeline_layout};
-        result=vkCreateComputePipelines(g->device,VK_NULL_HANDLE,1,&info,NULL,&t->phase_pipelines[phase]);
+        result=vkCreateComputePipelines(g->device,g->pipeline_cache,1,&info,NULL,&t->phase_pipelines[phase]);
     }
     vkDestroyShaderModule(g->device,module,NULL);
     return result==VK_SUCCESS||error(err,cap,"Cannot specialize thermal phases");

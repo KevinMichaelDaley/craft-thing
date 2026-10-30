@@ -81,7 +81,7 @@ static bool scene_pipelines(dc_gpu_t *g, char *err, uint32_t cap) {
                   .pName = "main",
                   .pSpecializationInfo = &specialization},
         .layout = s->compute.pipeline_layout};
-    if (vkCreateComputePipelines(g->device, VK_NULL_HANDLE, 1, &info, NULL,
+    if (vkCreateComputePipelines(g->device, g->pipeline_cache, 1, &info, NULL,
                                  &s->phases[phase]) != VK_SUCCESS) {
       okay = false;
       break;

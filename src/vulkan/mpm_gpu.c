@@ -102,7 +102,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
     VkSpecializationMapEntry entries[]={{2u,0u,4u},{1u,4u,4u},{3u,8u,4u},{4u,12u,4u}};
     VkSpecializationInfo specialization={4u,entries,sizeof(values),values};
     if(phase!=UINT32_MAX||mpm) info.stage.pSpecializationInfo=&specialization;
-    VkResult result = vkCreateComputePipelines(gpu->device, VK_NULL_HANDLE, 1,
+    VkResult result = vkCreateComputePipelines(gpu->device, gpu->pipeline_cache, 1,
                                                &info, NULL, pipeline);
     vkDestroyShaderModule(gpu->device, module, NULL);
     if (result != VK_SUCCESS)
@@ -140,7 +140,7 @@ static bool component_pipelines(dc_gpu_t *gpu, char *err, uint32_t cap) {
         info.stage.pSpecializationInfo = &phase;
         info.stage.module = mode == 10 ? local : module;
         result = vkCreateComputePipelines(
-            gpu->device, VK_NULL_HANDLE, 1, &info, NULL,
+            gpu->device, gpu->pipeline_cache, 1, &info, NULL,
             &gpu->component_extract_pipelines[mode]);
     }
     vkDestroyShaderModule(gpu->device, module, NULL);
@@ -167,7 +167,7 @@ bool dc_gpu_component_objects_prepare(dc_gpu_t *gpu,char *err,uint32_t cap) {
         VkComputePipelineCreateInfo pipeline={.sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
             .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_COMPUTE_BIT,
                 .module=mode==10u?local:module,.pName="main",.pSpecializationInfo=&specialization},.layout=gpu->pipeline_layout};
-        result=vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&pipeline,NULL,&gpu->component_object_pipelines[mode]);
+        result=vkCreateComputePipelines(gpu->device,gpu->pipeline_cache,1,&pipeline,NULL,&gpu->component_object_pipelines[mode]);
     }
     vkDestroyShaderModule(gpu->device,module,NULL);vkDestroyShaderModule(gpu->device,local,NULL);
     return result==VK_SUCCESS||error(err,cap,"Cannot prepare authored rigid-object pipelines");
