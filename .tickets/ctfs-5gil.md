@@ -51,3 +51,7 @@ After startup import optimization, X11 quarter-native bonfire_display_tests star
 **2026-10-30T10:31:59Z**
 
 Final tools/with-vulkan make test after startup changes reached contact_quad_tests and failed its NVIDIA bitwise geometry assertion (ct-4gtu); pixel_boundary_tests passed with strict bounded tolerance. No full-suite green claim. Startup fixture work reduced warm gas-enable time to 5.810s; displayed half-native frame remains about 1097ms.
+
+**2026-10-30T10:42:27Z**
+
+Half-native DC_THERMAL_PHASE_TRACE on RTX A2000 grouped one tick GPU thermal work: sample 82.9ms, prep 77.3ms, transfer 172.2ms, exchange 1.2ms, bonfire-specific 127.3ms, ignition 92.6ms, reaction 120.0ms, finish ~0ms. Cost is spread across repeated full-grid passes; no single buffer relocation can meet 30ms. Device-local samples/fluxes trial passed validation but left stage 650-682ms, so reverted. Trace tool retained in repository.

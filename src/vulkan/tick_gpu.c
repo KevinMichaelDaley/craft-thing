@@ -212,6 +212,17 @@ bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
         if(!tick_submit(gpu,&capture,err,cap)) return false;
         fprintf(stderr,"Reactive tick GPU rigid%.3f fluid%.3f mpm_heat%.3f ms\n",
             capture.stages[0].gpu_ns/1e6,capture.stages[1].gpu_ns/1e6,capture.stages[2].gpu_ns/1e6);
+        if(getenv("DC_THERMAL_PHASE_TRACE")) {
+            uint64_t stamp[9]={0};
+            if(vkGetQueryPoolResults(gpu->device,gpu->timestamp_pool,4,9,sizeof(stamp),
+                stamp,sizeof(uint64_t),VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WAIT_BIT)==VK_SUCCESS) {
+                fprintf(stderr,"Thermal GPU groups sample%.3f prep%.3f transfer%.3f exchange%.3f bonfire%.3f ignition%.3f reaction%.3f finish%.3f ms\n",
+                    elapsed_ns(gpu,stamp[0],stamp[1])/1e6,elapsed_ns(gpu,stamp[1],stamp[2])/1e6,
+                    elapsed_ns(gpu,stamp[2],stamp[3])/1e6,elapsed_ns(gpu,stamp[3],stamp[4])/1e6,
+                    elapsed_ns(gpu,stamp[4],stamp[5])/1e6,elapsed_ns(gpu,stamp[5],stamp[6])/1e6,
+                    elapsed_ns(gpu,stamp[6],stamp[7])/1e6,elapsed_ns(gpu,stamp[7],stamp[8])/1e6);
+            }
+        }
         return !gpu->gas||fr_gas_gpu_step(gpu,(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f,err,cap);
     }
     bool handled=false;

@@ -152,6 +152,10 @@ application stalls from time inside the GPU presentation function. Logging and
 query instrumentation can perturb timing; use the ordinary application with
 these flags unset for final performance acceptance.
 
+Set `DC_THERMAL_PHASE_TRACE=1` alongside `DC_FRAME_TIMINGS=1` to print GPU time
+for eight groups of thermal and combustion passes during displayed bonfire
+frames. The phase trace shares the tick query pool and is diagnostic only.
+
 Water transport normally recomputes each recipient's request instead of keeping
 a separate shared-memory request array. Each lane owns disjoint recipients and
 reads a recipient before its own write, preserving the original request and

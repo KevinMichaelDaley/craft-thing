@@ -266,21 +266,31 @@ static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
 }
 void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
     if(!g->thermal||seconds<=0) return;
+    bool trace=getenv("DC_THERMAL_PHASE_TRACE")&&getenv("DC_FRAME_TIMINGS")&&g->timestamp_pool;
+    if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,4);
     if(g->thermal->probe_active) phase(g,4,seconds);
     phase(g,0,seconds);phase(g,5,seconds);phase(g,6,seconds);
+    if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,5);
     phase(g,21,seconds);phase(g,20,seconds);phase(g,23,seconds);
+    if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,6);
     phase(g,8,seconds);phase(g,9,seconds);
     phase(g,0,seconds);phase(g,7,seconds);phase(g,1,seconds);phase(g,2,seconds);
+    if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,7);
     phase(g,10,seconds);phase(g,11,seconds);
+    if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,8);
     if(g->thermal->purpose==FR_THERMAL_WORLD_BONFIRE) {
         phase(g,0,seconds);phase(g,19,seconds);phase(g,16,seconds);phase(g,17,seconds);phase(g,11,seconds);
     }
+    if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,9);
     phase(g,0,seconds);phase(g,7,seconds);
     record_combustion(g,seconds,4);record_combustion(g,seconds,5);
+    if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,10);
     phase(g,13,seconds);phase(g,11,seconds);
     record_combustion(g,seconds,3);record_combustion(g,seconds,9);record_combustion(g,seconds,0);record_combustion(g,seconds,10);
+    if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,11);
     if(g->thermal->combustion.pipeline) dc_gpu_record_body_ash(g,g->thermal->hud.buffer);
     phase(g,14,seconds);
+    if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,12);
 }
 void fr_thermal_record_overlay(dc_gpu_t *g) {
     if(!g->thermal) return;
