@@ -62,6 +62,34 @@ static void test_cavity_excludes_terrain_and_body_contacts(void) {
     ASSERT_EQ(stats.overflow,0u);
     dc_gpu_destroy(g);PASS();
 }
+static void test_paused_terrain_brush_refreshes_compound_contacts(void) {
+    char err[256] = {0};
+    dc_gpu_t *g = grid();
+    ASSERT_TRUE(g);
+    dc_gpu_compound_shape_t u = fixture_u();
+    ASSERT_TRUE(dc_gpu_spawn_compound_body(g, fixture_body(2, 60, 20),
+                                            &u, err, sizeof(err)) &&
+                dc_gpu_set_body_origin(g, (dc_chunk_coord_t){0, 0},
+                                       err, sizeof(err)));
+    dc_gpu_contact_stats_t stats;
+    dc_gpu_contact_t contacts[8];
+    ASSERT_TRUE(dc_gpu_read_contacts(g, &stats, contacts, 8,
+                                     err, sizeof(err)));
+    ASSERT_EQ(stats.count, 0u);
+    ASSERT_TRUE(dc_gpu_paint_material(g, 61, 24, 0, DC_MATERIAL_STONE,
+                                      err, sizeof(err)) &&
+                dc_gpu_read_contacts(g, &stats, contacts, 8,
+                                     err, sizeof(err)));
+    ASSERT_EQ(stats.count, 1u);
+    ASSERT_EQ(contacts[0].body_a, 2u);
+    ASSERT_TRUE(dc_gpu_paint_material(g, 61, 24, 0, DC_MATERIAL_WATER,
+                                      err, sizeof(err)) &&
+                dc_gpu_read_contacts(g, &stats, contacts, 8,
+                                     err, sizeof(err)));
+    ASSERT_EQ(stats.count, 0u);
+    dc_gpu_destroy(g);
+    PASS();
+}
 static void test_invalid_compounds_leave_existing_body_unchanged(void) {
     char err[256];dc_gpu_t *g=grid();ASSERT_TRUE(g);dc_gpu_compound_shape_t l=fixture_l(),bad=l,after;
     ASSERT_TRUE(dc_gpu_spawn_compound_body(g,fixture_body(1,20,20),&l,err,sizeof(err)));
@@ -165,12 +193,17 @@ static void test_stationary_kinematic_support_stops_passenger_drift(void) {
     }
     dc_gpu_destroy(g);PASS();
 }
-int main(void) {
+int main(int argc, char **argv) {
+    if (argc == 2 && strcmp(argv[1], "--paused-brush") == 0) {
+        RUN(test_paused_terrain_brush_refreshes_compound_contacts);
+        return g_fail ? 1 : 0;
+    }
     RUN(test_stationary_kinematic_support_stops_passenger_drift);
     RUN(test_supported_compounds_stop_changing_pose);
     RUN(test_slow_kinematic_support_does_not_freeze_passenger);
     RUN(test_compounds_preserve_cavities_and_material_mass);
     RUN(test_cavity_excludes_terrain_and_body_contacts);
+    RUN(test_paused_terrain_brush_refreshes_compound_contacts);
     RUN(test_invalid_compounds_leave_existing_body_unchanged);
     RUN(test_compound_snapshot_preserves_pieces_and_angular_state);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail ? 1 : 0;
