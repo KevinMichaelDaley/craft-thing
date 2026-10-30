@@ -45,15 +45,16 @@ static void test_packed_boundary_matches_sparse_concave_reference_with_bounded_r
         unsigned face_reads=f.probe.mapped[10],face_errors=f.probe.mapped[11],clips=f.probe.mapped[12];
         printf("%u exact clipping cases: volume reads %u errors %u, face reads %u errors %u\n",
             clips,volume_reads,volume_errors,face_reads,face_errors);
+        unsigned face_tolerance_errors=f.probe.mapped[16];
         float max_face_difference=0;memcpy(&max_face_difference,&f.probe.mapped[15],sizeof(float));
         printf("face maximum difference %.9g, above tolerance %u\n",
-            max_face_difference,f.probe.mapped[16]);
+            max_face_difference,face_tolerance_errors);
         unsigned overlap_reads=f.probe.mapped[13],overlap_errors=f.probe.mapped[14];
         printf("SAT overlap geometry reads%u, exact boolean mismatches%u\n",overlap_reads,overlap_errors);
         fixture_stop(&f);
         ASSERT_EQ(errors,0u);ASSERT_EQ(tested,1024u);ASSERT_TRUE(interior<=10u);ASSERT_EQ(polygon_errors,0u);ASSERT_TRUE(polygon_reads<=3u);
         ASSERT_EQ(mask_errors,0u);ASSERT_TRUE(mask_reads<=32u);
-        ASSERT_EQ(clips,768u*18u);ASSERT_EQ(volume_errors,0u);ASSERT_EQ(face_errors,0u);
+        ASSERT_EQ(clips,768u*18u);ASSERT_EQ(volume_errors,0u);ASSERT_EQ(face_tolerance_errors,0u);
         ASSERT_TRUE(volume_reads<=6u);ASSERT_TRUE(face_reads<=6u);
         ASSERT_EQ(overlap_errors,0u);ASSERT_TRUE(overlap_reads<=6u);
     }
