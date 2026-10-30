@@ -4,6 +4,16 @@
 
 #include "ferrum/fire/reactive_chunk.h"
 
+static void test_cold_import_reserves_full_batch_before_first_parcel(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    ASSERT_TRUE(context(&g,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_reserve_import(g,8192u,err,sizeof(err)));
+    fr_gpu_reactive_stats_t stats={0};
+    ASSERT_TRUE(fr_gpu_reactive_read_stats(g,&stats,err,sizeof(err)));
+    ASSERT_TRUE(stats.capacity>=8192u&&stats.live==0u&&stats.free>=8192u);
+    dc_gpu_destroy(g);PASS();
+}
+
 static void test_gpu_compaction_exports_negative_chunk_cells_and_particle_rows(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     c->coord=(dc_chunk_coord_t){-5,-7};c->cells[0].material=DC_MATERIAL_WOOD;
@@ -73,6 +83,7 @@ static void test_reusing_a_physical_chunk_slot_does_not_reuse_its_old_reactions(
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
 }
 int main(void) {
+    RUN(test_cold_import_reserves_full_batch_before_first_parcel);
     RUN(test_gpu_compaction_exports_negative_chunk_cells_and_particle_rows);
     RUN(test_import_replaces_old_slot_state_and_retains_high_water_without_reusing_ids);
     RUN(test_import_rejects_duplicate_resident_identity_and_rolls_back_all_source_state);

@@ -10,6 +10,9 @@ typedef struct {uint32_t capacity,live,free,retired;} fr_gpu_reactive_stats_t;
  * zero counters without allocating any reactive storage. */
 bool fr_gpu_reactive_read_stats(dc_gpu_t *gpu,fr_gpu_reactive_stats_t *out,
     char *err_buf,uint32_t err_cap);
+/** Reserve storage once before a known cold import batch. */
+bool fr_gpu_reactive_reserve_import(dc_gpu_t *gpu,uint32_t count,
+    char *err_buf,uint32_t err_cap);
 
 /** Cold fixture/import boundary only: attach validated state to a resident cell.
  * Runtime reaction and mechanical movement never call this CPU admission API.

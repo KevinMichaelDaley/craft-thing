@@ -12,6 +12,10 @@ static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
     return false;
 }
+bool fr_gpu_reactive_reserve_import(dc_gpu_t *g,uint32_t count,char *err,uint32_t cap) {
+    (void)g;(void)count;
+    return error(err,cap,"Reactive bulk reservation is not implemented");
+}
 bool fr_gpu_reactive_read_stats(dc_gpu_t *g,fr_gpu_reactive_stats_t *out,char *err,uint32_t cap) {
     if(!g||!out) return error(err,cap,"Invalid reactive allocation diagnostic");
     if(!g->reactive) {*out=(fr_gpu_reactive_stats_t){0};return true;}
