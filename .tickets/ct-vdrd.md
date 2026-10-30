@@ -18,3 +18,9 @@ RTX A2000 half-native bonfire frame trace shows rigid GPU about 11ms, with posit
 
 Focused solver/catapult/bonfire physics tests pass with zero validation errors; displayed half-native 32-frame normal-clock timing improves mean and worst on this GPU; no fixed body counts or numeric-policy shortcuts.
 
+
+## Notes
+
+**2026-10-30T18:38:19Z**
+
+Half-native detailed trace (diagnostic command reuse OFF) found phase6 solve2.65ms, phase7 apply0.85ms per frame, contact kernels ~8.7ms with instrumentation; coarse trace (reuse ON) rigid11.2ms total, solver6.7-7.0ms, contacts0.34-0.58ms, renderer1.6-1.75ms. Fused-grain32-frame mean35.130ms, grouped+skip-zero36.556ms (worse); skip-zero alone31.752ms mean35.610ms worst vs default32.467/41.708, still misses <30. Temporary half trace build target reverted; quarter trace tool already present. Need exact solver work reduction without changing substeps/clock.
