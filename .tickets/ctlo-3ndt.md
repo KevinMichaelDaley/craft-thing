@@ -1,7 +1,7 @@
 ---
 id: ctlo-3ndt
-status: in_progress
-deps: [ctlo-8b67]
+status: closed
+deps: []
 links: [ctfs-81vw, ctlo-ehqj, ctlo-8b67]
 created: 2026-10-24T22:06:19Z
 type: feature
@@ -39,3 +39,7 @@ Tests preserve painted appearance and reactive state while burning arbitrary mix
 **2026-10-29T17:41:30Z**
 
 2026-10-29 handoff: Existing mixed-concave pixel component suite passed 13/13; body carve and terrain support extraction suite passed 12/12 on retry. Its first full run had a transient 39.838 ms result against the 30 ms large-brush timing gate; isolated and full retries measured 8.470 ms and 8.293 ms. Separate suites now cover mixed geometry, support extraction, ash, rollback, mass, and constructed wood, but a single combined mixed-concave combustion regression remains to be authored after the ctlo-8b67 ignition/fuel dependency. Keep ctlo-3ndt in_progress.
+
+**2026-10-30T03:02:10Z**
+
+2026-10-29 completion: Added combined mixed concave combustion regression preserving painted color, parcel state, exact mass, geometry split, occupancy publication and loose ash. Capacity-full path verifies atomic retry. Loaded terrain burn extracts and drops an unsupported remnant; constructed burned anchor enters fracture grace and cannot remain supported. Component admission 17/17, body carve 12/12, pixel component 13/13. make test reaches component admission 17/17 then stops at reactive_profile_gpu_tests because this host has no Intel hardware compute device. Existing production implementation already satisfied the new cases; no production edits were needed. ctlo-8b67 retains the separate stochastic ignition/finite fuel acceptance, which is not required for this geometry ticket.

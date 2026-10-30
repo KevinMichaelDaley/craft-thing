@@ -183,3 +183,75 @@ static void test_constructed_wood_burns_to_loose_ash_after_capacity_retry(void) 
     dc_gpu_destroy(g);
     PASS();
 }
+
+static void test_burned_anchor_cannot_keep_constructed_remnant_supported(void) {
+    char err[256] = {0};
+    dc_gpu_t *g = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    chunk->cells[13u * 64u + 10u] = (dc_cell_t){
+        .material = DC_MATERIAL_STONE, .flags = DC_CELL_LOADED_TERRAIN};
+    ASSERT_TRUE(context(&g, err, sizeof(err)) &&
+        dc_gpu_upload_chunk(g, 0, chunk, err, sizeof(err)) &&
+        dc_gpu_set_page(g, 0, 0, 0, err, sizeof(err)));
+    fr_structural_gpu_graph_t graph = {.node_count = 2u,
+        .member_count = 1u, .anchor_count = 1u};
+    graph.nodes[0] = (fr_structural_gpu_node_t){.id = 1u,
+        .generation = 1u, .x_fp = 10 * 65536, .y_fp = 12 * 65536};
+    graph.nodes[1] = graph.nodes[0];
+    graph.nodes[1].id = 2u;
+    graph.nodes[1].x_fp = 22 * 65536;
+    graph.members[0] = (fr_structural_gpu_member_t){1u, 1u, 1u, 2u,
+        FR_STRUCTURAL_WOOD, 2u * 65536u, 0u, 0u};
+    graph.anchors[0] = (fr_structural_gpu_anchor_t){.id = 1u,
+        .generation = 1u, .node = 1u, .kind = FR_JOINT_MOMENT,
+        .x = 10u, .y = 13u, .width = 1u, .height = 1u,
+        .terrain_material = DC_MATERIAL_STONE,
+        .normal_stiffness = 1e8f, .shear_stiffness = 1e8f,
+        .rotational_stiffness = 1e8f, .bearing_capacity = 1e7f,
+        .pullout_capacity = 1e7f, .shear_capacity = 1e7f,
+        .moment_capacity = 1e7f, .friction = .5f};
+    ASSERT_TRUE(fr_gpu_place_structure(g, &graph, err, sizeof(err)) &&
+        fr_thermal_gpu_enable(g, err, sizeof(err)) &&
+        dc_gpu_rigid_step(g, err, sizeof(err)));
+    uint32_t id = FR_STRUCTURAL_BODY_ID_BASE + 1u;
+    fr_structural_gpu_member_state_t sound, remnant;
+    ASSERT_TRUE(fr_gpu_read_structure_member(g, 1u, &sound));
+    ASSERT_TRUE(sound.state <= FR_STRUCTURAL_OVERLOADED);
+    for (uint32_t y = 0u; y < 2u; y++)
+        for (uint32_t x = 0u; x < 2u; x++) {
+            fr_reactive_record_t record;
+            bool found = false;
+            ASSERT_TRUE(fr_gpu_reactive_read_body(g, id, x, y,
+                &record, &found, err, sizeof(err)) && found);
+            fr_reactive_state_t spent = record.state;
+            spent.inert_mass_fp += spent.fuel_mass_fp;
+            spent.fuel_mass_fp = 0u;
+            spent.flags = FR_REACTIVE_SPENT;
+            ASSERT_TRUE(fr_gpu_reactive_seed_body(g, id, x, y,
+                &spent, err, sizeof(err)));
+        }
+    fr_gas_model_t model = {.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},
+        .kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_gas_gpu_enable(g, &model, .0012f, 293.15f,
+        err, sizeof(err)) && fr_combustion_gpu_enable(g, err, sizeof(err)) &&
+        fr_combustion_gpu_step(g, .01f, err, sizeof(err)) &&
+        dc_gpu_rigid_step(g, err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_structure_member(g, 1u, &remnant));
+    ASSERT_EQ(remnant.state, FR_STRUCTURAL_PENDING_CONVERSION);
+    for (uint32_t retry = 0u; retry < 4u; retry++)
+        ASSERT_TRUE(fr_combustion_gpu_step(g, .01f, err, sizeof(err)) &&
+                    dc_gpu_rigid_step(g, err, sizeof(err)));
+    dc_gpu_body_pixel_t pixels[24];
+    uint32_t count = 0u;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g, id, pixels, 24u,
+        &count, err, sizeof(err)));
+    ASSERT_EQ(count, 20u);
+    ASSERT_TRUE(fr_gpu_read_structure_member(g, 1u, &remnant));
+    ASSERT_TRUE(remnant.state != FR_STRUCTURAL_SUPPORTED &&
+                remnant.state != FR_STRUCTURAL_OVERLOADED);
+    free(chunk);
+    dc_gpu_destroy(g);
+    PASS();
+}

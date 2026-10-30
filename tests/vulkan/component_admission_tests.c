@@ -4,6 +4,7 @@
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/gas_gpu.h"
+#include "ferrum/renderer/gpu.h"
 #include "ferrum/structural/gpu.h"
 #include "../../src/vulkan/reactive_storage_gpu.h"
 #include "../../src/vulkan/runtime_body_internal.h"
@@ -218,8 +219,12 @@ int main(int argc,char **argv) {
     else if(argc==2&&strcmp(argv[1],"--thin-water")==0) RUN(test_thin_water_contact_accumulates_subquantum_wetting);
     else if(argc==2&&strcmp(argv[1],"--ash")==0) RUN(test_spent_rigid_rest_becomes_loose_ash_and_splits_supported_geometry);
     else if(argc==2&&strcmp(argv[1],"--ash-blocked")==0) RUN(test_full_particle_slots_retain_spent_rigid_inventory);
+    else if(argc==2&&strcmp(argv[1],"--mixed-ash")==0) RUN(test_mixed_concave_burn_preserves_color_state_and_loose_ash);
+    else if(argc==2&&strcmp(argv[1],"--mixed-ash-blocked")==0) RUN(test_mixed_concave_burn_retries_geometry_and_ash_together);
+    else if(argc==2&&strcmp(argv[1],"--terrain-support")==0) RUN(test_burning_terrain_support_extracts_remnant_without_ash_support);
     else if(argc==2&&strcmp(argv[1],"--stone")==0) RUN(test_constructed_stone_owns_heat_without_changing_its_collider_or_support);
     else if(argc==2&&strcmp(argv[1],"--constructed-wood")==0) RUN(test_constructed_wood_burns_to_loose_ash_after_capacity_retry);
+    else if(argc==2&&strcmp(argv[1],"--burned-anchor")==0) RUN(test_burned_anchor_cannot_keep_constructed_remnant_supported);
     else {
         RUN(test_covered_wood_conducts_to_its_outer_face_without_leaking_fire);
         RUN(test_cold_rigid_admission_retains_pose_and_reactive_ownership);
@@ -233,7 +238,11 @@ int main(int argc,char **argv) {
         RUN(test_thin_water_contact_accumulates_subquantum_wetting);
         RUN(test_spent_rigid_rest_becomes_loose_ash_and_splits_supported_geometry);
         RUN(test_full_particle_slots_retain_spent_rigid_inventory);
+        RUN(test_mixed_concave_burn_preserves_color_state_and_loose_ash);
+        RUN(test_mixed_concave_burn_retries_geometry_and_ash_together);
+        RUN(test_burning_terrain_support_extracts_remnant_without_ash_support);
         RUN(test_constructed_wood_burns_to_loose_ash_after_capacity_retry);
+        RUN(test_burned_anchor_cannot_keep_constructed_remnant_supported);
     }
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
