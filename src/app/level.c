@@ -837,10 +837,12 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     for (uint32_t i = 0; i < view->table.capacity; ++i)
         if (view->table.slots[i].state == DC_SLOT_ACTIVE)
             dc_chunk_table_set_active(&view->table, i, false);
-    uint64_t deadline = SDL_GetTicks64() +
-                        (uint64_t)view->table.capacity * 50u + 5000u;
+    uint64_t deadline = 0;
     for (;;) {
         if (!process_results(view, err, cap) || !schedule_saves(view, err, cap)) { okay = false; break; }
+        if (!deadline) deadline = SDL_GetTicks64() +
+                        (uint64_t)view->table.capacity * 50u + 5000u;
+        if (!process_results(view, err, cap)) { okay = false; break; }
         bool pending = false;
         for (uint32_t i = 0; i < view->table.capacity; ++i) {
             dc_chunk_slot_t *slot = &view->table.slots[i];
