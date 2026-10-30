@@ -47,3 +47,7 @@ Full make test on NVIDIA advanced through catapult 12/12 and most GPU cases, the
 **2026-10-30T10:11:23Z**
 
 After startup import optimization, X11 quarter-native bonfire_display_tests starts and verifies finite 1800K starter but fails its dt<=0.25f frame guard before autonomous log coverage. Half-native displayed one-frame diagnostic remains 1097.147ms. This is an unresolved real frame performance failure on NVIDIA, not an initialization failure.
+
+**2026-10-30T10:31:59Z**
+
+Final tools/with-vulkan make test after startup changes reached contact_quad_tests and failed its NVIDIA bitwise geometry assertion (ct-4gtu); pixel_boundary_tests passed with strict bounded tolerance. No full-suite green claim. Startup fixture work reduced warm gas-enable time to 5.810s; displayed half-native frame remains about 1097ms.
