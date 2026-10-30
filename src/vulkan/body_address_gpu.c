@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "body_address_gpu.h"
@@ -7,6 +8,7 @@ static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
     return false;
 }
+enum { DC_MAPPED_LOCAL_MIN_BYTES = 1048576u };
 static void release_partial(dc_gpu_t *gpu,dc_gpu_address_buffer_t *buffer) {
     if(buffer->mapped) vkUnmapMemory(gpu->device,buffer->memory);
     if(buffer->buffer) vkDestroyBuffer(gpu->device,buffer->buffer,NULL);
@@ -27,12 +29,13 @@ bool dc_gpu_address_buffer_create(dc_gpu_t *gpu,VkDeviceSize bytes,bool host_vis
     VkMemoryPropertyFlags needed=host_visible?VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT:VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     VkMemoryAllocateFlagsInfo flags={.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,.flags=VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT};
     VkMemoryAllocateInfo allocation={.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,.pNext=&flags,.allocationSize=requirements.size};
+    bool prefer_local=host_visible&&bytes>=DC_MAPPED_LOCAL_MIN_BYTES;
     for(uint32_t pass=0;pass<(host_visible?2u:1u)&&!pending.memory;pass++) {
         for(uint32_t type=0;type<properties.memoryTypeCount;type++) {
             VkMemoryPropertyFlags available=properties.memoryTypes[type].propertyFlags;
             if((requirements.memoryTypeBits&(1u<<type))==0u||(available&needed)!=needed) continue;
             bool local=(available&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)!=0;
-            if(host_visible&&local!=(pass==0u)) continue;
+            if(host_visible&&local!=(pass==0u?prefer_local:!prefer_local)) continue;
             VkDeviceMemory memory=VK_NULL_HANDLE;allocation.memoryTypeIndex=type;
             if(vkAllocateMemory(gpu->device,&allocation,NULL,&memory)!=VK_SUCCESS) continue;
             pending.memory=memory;pending.device_local=local;
@@ -55,6 +58,10 @@ bool dc_gpu_address_buffer_create(dc_gpu_t *gpu,VkDeviceSize bytes,bool host_vis
         if(pending.device_local) gpu->mapped_local_bytes+=requirements.size;
         else gpu->mapped_system_bytes+=requirements.size;
     } else gpu->device_only_bytes+=requirements.size;
+    if(getenv("DC_ADDRESS_MEMORY_TRACE")&&bytes>=1048576u)
+        fprintf(stderr,"Address allocation %.1fMiB %s type%u mapped-local%.1fMiB mapped-system%.1fMiB\n",
+            (double)bytes/1048576.,pending.device_local?"local":"system",allocation.memoryTypeIndex,
+            (double)gpu->mapped_local_bytes/1048576.,(double)gpu->mapped_system_bytes/1048576.);
     *out=pending;return true;
 }
 void dc_gpu_address_buffer_destroy(dc_gpu_t *gpu,dc_gpu_address_buffer_t *buffer) {

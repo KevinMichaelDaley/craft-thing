@@ -33,9 +33,9 @@ uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
     return fallback;
 }
 
-bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
+static bool make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                VkDeviceMemory *memory, void **mapped,
-                               char *err, uint32_t cap) {
+                               bool staging, char *err, uint32_t cap) {
     VkBufferCreateInfo info = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = bytes, .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                 VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
@@ -49,6 +49,13 @@ bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
     VkPhysicalDeviceMemoryProperties props;
     vkGetPhysicalDeviceMemoryProperties(gpu->physical, &props);
     uint32_t type = dc_gpu_host_memory_type(&props, req.memoryTypeBits);
+    if(staging) for(uint32_t i=0;i<props.memoryTypeCount;i++) {
+        VkMemoryPropertyFlags flags=props.memoryTypes[i].propertyFlags;
+        if((req.memoryTypeBits&(1u<<i))&&
+            (flags&(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))==
+                (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)&&
+            !(flags&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {type=i;break;}
+    }
     if (type == UINT32_MAX) return error(err, cap, "No host-coherent GPU chunk memory");
     VkMemoryAllocateInfo alloc = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .allocationSize = req.size, .memoryTypeIndex = type };
@@ -75,6 +82,16 @@ bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
     else gpu->mapped_system_bytes += req.size;
     memset(*mapped, 0, (size_t)bytes);
     return true;
+}
+bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
+                               VkDeviceMemory *memory, void **mapped,
+                               char *err, uint32_t cap) {
+    return make_mapped_buffer(gpu,bytes,buffer,memory,mapped,false,err,cap);
+}
+bool dc_gpu_make_staging_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
+                                VkDeviceMemory *memory, void **mapped,
+                                char *err, uint32_t cap) {
+    return make_mapped_buffer(gpu,bytes,buffer,memory,mapped,true,err,cap);
 }
 
 bool dc_gpu_make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
@@ -120,11 +137,11 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t);
     return dc_gpu_make_device_buffer(gpu, chunk_bytes, &gpu->chunk_buffer,
                &gpu->chunk_memory, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, chunk_bytes, &gpu->chunk_staging_buffer,
+           dc_gpu_make_staging_buffer(gpu, chunk_bytes, &gpu->chunk_staging_buffer,
                &gpu->chunk_staging_memory, &gpu->chunk_mapped, err, cap) &&
            dc_gpu_make_device_buffer(gpu, particle_bytes, &gpu->particle_buffer,
                &gpu->particle_memory, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, particle_bytes, &gpu->particle_staging_buffer,
+           dc_gpu_make_staging_buffer(gpu, particle_bytes, &gpu->particle_staging_buffer,
                &gpu->particle_staging_memory, &gpu->particle_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t),
                &gpu->particle_count_buffer, &gpu->particle_count_memory,
