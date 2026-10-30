@@ -160,7 +160,9 @@ static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
     ASSERT_TRUE(image&&SDL_SaveBMP(image,"build/screenshots/rigid_bonfire_all_logs.bmp")==0);SDL_FreeSurface(image);free(pixels);
     bool saved=dc_level_view_destroy(view,err,sizeof(err));
     if(!saved) printf("Bonfire save also failed: %s\n",err);
-    ASSERT_TRUE(!stopped&&dry==DC_BONFIRE_LOG_COUNT&&wet==0u&&sustained);ASSERT_TRUE(saved);PASS();
+    ASSERT_TRUE(saved);
+    for(uint32_t i=0;i<DC_BONFIRE_LOG_COUNT;i++) ASSERT_TRUE(logs[i].caught);
+    ASSERT_TRUE(!stopped&&dry==DC_BONFIRE_LOG_COUNT&&wet==0u&&sustained);PASS();
 }
 int main(int argc,char **argv) {
     if(argc==2&&strcmp(argv[1],"--diagnostic-10s")==0) wall_bound=10.;
