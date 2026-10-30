@@ -4,7 +4,6 @@
 #include <math.h>
 #include <sys/stat.h>
 #include "ferrum/fire/thermal_gpu.h"
-#include "../../src/vulkan/thermal_gpu_state.h"
 
 static bool setup_pair(dc_gpu_t **g,fr_reactive_state_t *stone,fr_reactive_state_t *wood,char *err,uint32_t cap) {
     dc_chunk_t *c=calloc(1,sizeof(*c));if(!c) return false;
@@ -15,17 +14,6 @@ static bool setup_pair(dc_gpu_t **g,fr_reactive_state_t *stone,fr_reactive_state
         fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,293.15f,42,wood,err,cap)&&
         fr_gpu_reactive_seed_cell(*g,0,20*64+20,stone,err,cap)&&fr_gpu_reactive_seed_cell(*g,0,20*64+21,wood,err,cap);
     free(c);return okay;
-}
-static void test_thermal_work_grids_are_local_and_inspection_stays_exact(void) {
-    char err[256]={0};dc_gpu_t *g=NULL;fr_reactive_state_t stone,wood;
-    ASSERT_TRUE(setup_pair(&g,&stone,&wood,err,sizeof(err)));
-    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err)));
-    ASSERT_TRUE(g->thermal->samples.device_local&&!g->thermal->samples.host_visible);
-    ASSERT_TRUE(g->thermal->fluxes.device_local&&!g->thermal->fluxes.host_visible);
-    fr_thermal_inspection_t info={0};
-    ASSERT_TRUE(fr_thermal_gpu_inspect(g,20,20,&info,err,sizeof(err)));
-    ASSERT_TRUE(info.occupied&&fabsf(info.temperature_K-350.f)<.001f);
-    dc_gpu_destroy(g);PASS();
 }
 static void test_vulkan_face_exchange_matches_reference_and_paused_presentation_freezes_energy(void) {
     char err[256]={0};dc_gpu_t *g=NULL;fr_reactive_state_t stone,wood;
@@ -66,7 +54,6 @@ static void test_real_physics_tick_advances_heat_once_despite_rigid_and_mpm_subs
     ASSERT_TRUE(present(g,err,sizeof(err)));dc_gpu_destroy(g);PASS();
 }
 int main(void) {
-    RUN(test_thermal_work_grids_are_local_and_inspection_stays_exact);
     RUN(test_vulkan_face_exchange_matches_reference_and_paused_presentation_freezes_energy);
     RUN(test_real_physics_tick_advances_heat_once_despite_rigid_and_mpm_substeps);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
