@@ -51,9 +51,11 @@ static bool initializes_owned_triplets(bool dirty) {
     for (unsigned i = 0; i < 39; i++)
         p.mapped[i] = 4369u;
     const uint32_t bindings[] = {1, 4, 27, 28, 29, 30};
+    enum { BINDING_COUNT = sizeof(bindings) / sizeof(bindings[0]) };
+    if (BINDING_COUNT != 12) return false;
     if (!fixture_body_pipeline(&p, &gpu, body,
                                "build/diagnostics/component_extract_probe.spv",
-                               bindings, 6, 26) ||
+                               bindings, BINDING_COUNT, 26) ||
         !begin(&p))
         exit(2);
     VkMemoryBarrier barrier = {.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
