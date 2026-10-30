@@ -32,3 +32,7 @@ Trial fused CLEAR into PREPARE: focused rigid/command/grain tests passed, half-n
 **2026-10-30T20:56:55Z**
 
 2026-10-30 late 2000-frame instrumented bonfire trace: rigid GPU increased from mean16.03ms at frames100-400 to17.84ms at1850-2000; thermal ~7.46->7.71ms. Gas GPU stayed ~14.1ms. This is trace-mode overhead, not uninstrumented acceptance. No solver change made; thermal512, gas line512, skip-empty gas trials were slower and reverted/disabled. Ticket remains open.
+
+**2026-10-30T21:31:19Z**
+
+Current normal-clock scheduler in src/vulkan/tick_gpu.c accumulates seconds*60 into rigid_step_budget and records each whole rigid step. At 33ms displayed frame it schedules about2 rigid ticks/frame; at sustained41ms about2.5, amplifying solver cost. 2026-10-30 actual half-native32-frame mean33.0ms at P0 1770-1875MHz, long3000-frame41.1ms. Quarter mean16.6ms. Preserve clock; performance fix must reduce per-step rigid cost enough to escape this feedback.
