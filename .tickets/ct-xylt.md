@@ -34,3 +34,7 @@ RTX A2000 generated pipeline cache grew to 70,030,174 bytes, above old 64 MiB sa
 **2026-10-30T21:30:09Z**
 
 After cap fix and query refactor, full tools/with-vulkan make -j8 test PASS. Subsequent actual displayed 960x540 bonfire loaded 70,334,447-byte cache (loaded1), GPU window1.054s, gas enabled2.972s. Cache save query 70,334,447 bytes within128MiB. Cold first launch still requires pipeline compilation and remains open.
+
+**2026-10-30T21:55:29Z**
+
+2026-10-30 cache survives make clean: default device/driver/UUID file moved to XDG_CACHE_HOME/dungeoncraft (or HOME/.cache/dungeoncraft), with one-time legacy build/ file load and bounded128MiB save. Explicit DC_PIPELINE_CACHE_DIR supports isolated test path. RED opt-in outside-build test failed old code; GREEN test passed. A second actual 960x540 displayed launch loaded 70,334,447-byte user cache, GPU window1.046s and gas enabled3.006s. Full tools/with-vulkan make -j8 test PASS after refactor; focused outside-build and persistence1/1 each, displayed catapult2/2. Cold first-ever compile remains unresolved.

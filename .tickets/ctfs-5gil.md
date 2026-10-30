@@ -115,3 +115,7 @@ Sustained DC_GAS_SKIP_EMPTY_PRESSURE=1 trial at restored64 lanes (same displayed
 **2026-10-30T21:30:09Z**
 
 Post cache-fix clean X11 RTX A2000 normal-clock half-native 960x540 bonfire: 3000 displayed frames mean41.093ms worst48.447ms, benchmark exits1 on >30ms. Short 32-frame repeats mean33.562/worst41.301 and33.002/worst41.765ms. Same smoke profile quarter-native 480x270 mean16.568/worst36.128ms. Clock monitor saw P0 graphics1770-1875MHz during active run, so lower clock does not explain. Frame budget remains RED; need sustained solver/gas/thermal reduction.
+
+**2026-10-30T21:55:29Z**
+
+Gas profile switch diagnostics at actual 960x540 32 displayed frames normal clock: VORTICITY=0 mean32.093/worst35.233ms, PRESSURE_NOISE=0 32.387/35.861, HALF_PRESSURE=0 32.793/41.837, MULTIGRID=0 33.241/43.298. None meets30ms mean+worst; retained accepted smoke profile unchanged.
