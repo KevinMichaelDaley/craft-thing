@@ -5,6 +5,7 @@
 #include <glob.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
 static int g_pass = 0;
 static int g_fail = 0;
@@ -27,7 +28,11 @@ static void test_half_native_bonfire_flushes_queued_saves(void) {
     char home_directory[] = "build/pipeline_cache_home_XXXXXX";
     if (cache_home) {
         ASSERT_TRUE(mkdtemp(home_directory) != NULL);
-        ASSERT_INT_EQ(setenv("XDG_CACHE_HOME", home_directory, 1), 0);
+        char current_directory[512], absolute_home[sizeof(current_directory) + sizeof(home_directory)];
+        ASSERT_TRUE(getcwd(current_directory, sizeof(current_directory)) != NULL);
+        ASSERT_TRUE(snprintf(absolute_home, sizeof(absolute_home), "%s/%s",
+                             current_directory, home_directory) < (int)sizeof(absolute_home));
+        ASSERT_INT_EQ(setenv("XDG_CACHE_HOME", absolute_home, 1), 0);
     }
     struct stat cache_before = {0};
     char cache_path[512] = {0};

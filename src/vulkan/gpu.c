@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <SDL.h>
@@ -31,11 +33,31 @@ static void pipeline_cache_load(dc_gpu_t *gpu) {
     char uuid[VK_UUID_SIZE*2u+1u];
     for(uint32_t i=0;i<VK_UUID_SIZE;i++)
         snprintf(uuid+i*2u,3u,"%02x",properties.pipelineCacheUUID[i]);
-    snprintf(gpu->pipeline_cache_path,sizeof(gpu->pipeline_cache_path),
-             "build/pipeline_cache_%04x_%04x_%08x_%s.bin",
+    char name[96],legacy[sizeof(gpu->pipeline_cache_path)];
+    snprintf(name,sizeof(name),"pipeline_cache_%04x_%04x_%08x_%s.bin",
              properties.vendorID,properties.deviceID,properties.driverVersion,uuid);
+    snprintf(legacy,sizeof(legacy),"build/%s",name);
+    const char *directory=getenv("DC_PIPELINE_CACHE_DIR");
+    char root[sizeof(gpu->pipeline_cache_path)],user_directory[sizeof(gpu->pipeline_cache_path)];
+    if(!directory||!directory[0]) {
+        directory=getenv("XDG_CACHE_HOME");
+        if(!directory||directory[0]!='/') {
+            const char *home=getenv("HOME");
+            directory=home&&snprintf(root,sizeof(root),"%s/.cache",home)<(int)sizeof(root)?root:NULL;
+        }
+        if(directory&&directory[0]=='/'&&
+           (mkdir(directory,0700)==0||errno==EEXIST)&&
+           snprintf(user_directory,sizeof(user_directory),"%s/dungeoncraft",directory)<(int)sizeof(user_directory))
+            directory=user_directory;
+        else directory=NULL;
+    }
+    if(!directory||(mkdir(directory,0700)!=0&&errno!=EEXIST)||
+       snprintf(gpu->pipeline_cache_path,sizeof(gpu->pipeline_cache_path),"%s/%s",directory,name)>=
+           (int)sizeof(gpu->pipeline_cache_path))
+        snprintf(gpu->pipeline_cache_path,sizeof(gpu->pipeline_cache_path),"%s",legacy);
     void *bytes=NULL;size_t length=0u;
     FILE *file=fopen(gpu->pipeline_cache_path,"rb");
+    if(!file&&strcmp(gpu->pipeline_cache_path,legacy)!=0) file=fopen(legacy,"rb");
     if(file) {
         if(fseek(file,0,SEEK_END)==0) {
             long size=ftell(file);
