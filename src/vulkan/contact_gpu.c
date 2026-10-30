@@ -32,6 +32,8 @@ bool dc_gpu_read_contacts(dc_gpu_t *gpu, dc_gpu_contact_stats_t *stats,
                           char *err, uint32_t cap) {
     if (!gpu || !stats || (!contacts && contact_cap))
         return error(err, cap, "Invalid contact readback");
+    if (gpu->body_refresh_pending &&
+        !dc_gpu_set_body_origin(gpu, gpu->body_origin, err, cap)) return false;
     const uint32_t *data = dc_gpu_contact_data(gpu);
     dc_gpu_contact_stats_t completed;
     memcpy(&completed, data, sizeof(completed));

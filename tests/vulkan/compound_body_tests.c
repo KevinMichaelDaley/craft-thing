@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "compound_fixture.h"
+#include "../../src/vulkan/gpu_internal.h"
 static int g_pass,g_fail;
 #define RUN(fn) do { printf("RUN  %s\n",#fn); fn(); printf("OK   %s\n",#fn); } while(0)
 #define ASSERT_TRUE(e) do { if(!(e)) { printf("FAIL %s:%d: %s\n",__FILE__,__LINE__,#e); ++g_fail; return; } } while(0)
@@ -76,10 +77,16 @@ static void test_paused_terrain_brush_refreshes_compound_contacts(void) {
     ASSERT_TRUE(dc_gpu_read_contacts(g, &stats, contacts, 8,
                                      err, sizeof(err)));
     ASSERT_EQ(stats.count, 0u);
+    ASSERT_TRUE(!g->body_refresh_pending);
+    ASSERT_TRUE(dc_gpu_paint_material(g, 200, 200, 0, DC_MATERIAL_STONE,
+                                      err, sizeof(err)));
+    ASSERT_TRUE(!g->body_refresh_pending);
     ASSERT_TRUE(dc_gpu_paint_material(g, 61, 24, 0, DC_MATERIAL_STONE,
-                                      err, sizeof(err)) &&
-                dc_gpu_read_contacts(g, &stats, contacts, 8,
+                                      err, sizeof(err)));
+    ASSERT_TRUE(g->body_refresh_pending);
+    ASSERT_TRUE(dc_gpu_read_contacts(g, &stats, contacts, 8,
                                      err, sizeof(err)));
+    ASSERT_TRUE(!g->body_refresh_pending);
     ASSERT_EQ(stats.count, 1u);
     ASSERT_EQ(contacts[0].body_a, 2u);
     ASSERT_TRUE(dc_gpu_paint_material(g, 61, 24, 0, DC_MATERIAL_WATER,
