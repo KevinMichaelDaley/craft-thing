@@ -326,6 +326,7 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
 static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
     bool trace=getenv("DC_SAVE_TRACE")!=NULL;
     uint64_t stage=SDL_GetTicks64(),structure_ms=0,chunk_ms=0;
+    uint64_t parts[6]={0};
     if (fr_gpu_structure_checkpoint_required(view->gpu)) {
         bool pending = false;
         for (unsigned i = 0; i < view->table.capacity; i++) {
@@ -338,17 +339,21 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
         }
     }
     structure_ms=SDL_GetTicks64()-stage;
-    stage=SDL_GetTicks64();
+    uint64_t chunk_start=SDL_GetTicks64();
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         dc_chunk_slot_t *slot = &view->table.slots[i];
         if (slot->state != DC_SLOT_SLEEPING || !slot->dirty || slot->pinned) continue;
         dc_chunk_t chunk = { .coord = slot->coord };
         dc_chunk_colors_t colors;
         uint64_t generation;
+        if(trace) stage=SDL_GetTicks64();
         if (!dc_gpu_download_chunk(view->gpu, i, &chunk, err, cap)) return false;
+        if(trace) {parts[0]+=SDL_GetTicks64()-stage;stage=SDL_GetTicks64();}
         if(!fr_renderer_download_chunk_colors(view->gpu,i,&colors,err,cap)) return false;
+        if(trace) {parts[1]+=SDL_GetTicks64()-stage;stage=SDL_GetTicks64();}
         fr_reactive_chunk_t reactive={0};
         if(!fr_gpu_reactive_export_chunk(view->gpu,i,&chunk,&reactive,err,cap)) return false;
+        if(trace) {parts[2]+=SDL_GetTicks64()-stage;stage=SDL_GetTicks64();}
         const fr_reactive_chunk_t *channel=reactive.count||reactive.next_id>1u?&reactive:NULL;
         float water_excess[4096];const float *liquid=NULL;
         if(fr_thermal_gpu_enabled(view->gpu)) {
@@ -357,6 +362,7 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
             }
             liquid=water_excess;
         }
+        if(trace) {parts[3]+=SDL_GetTicks64()-stage;stage=SDL_GetTicks64();}
         fr_gas_checkpoint_chunk_t *gas=NULL;
         if(view->smoke_box) {
             gas=malloc(sizeof(*gas));
@@ -364,6 +370,7 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
                 free(gas);fr_reactive_chunk_release(&reactive);return false;
             }
         }
+        if(trace) {parts[4]+=SDL_GetTicks64()-stage;stage=SDL_GetTicks64();}
         if (!dc_chunk_table_begin_save(&view->table, i, &generation)) {
             free(gas);fr_reactive_chunk_release(&reactive);
             return error(err, cap, "Cannot begin dirty chunk save");
@@ -371,12 +378,16 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
         bool queued=dc_stream_request_save_gas(view->stream,&chunk,&colors,channel,liquid,gas,generation);
         free(gas);
         fr_reactive_chunk_release(&reactive);
+        if(trace) parts[5]+=SDL_GetTicks64()-stage;
         if(!queued)
             return error(err, cap, "Cannot queue dirty chunk save");
     }
-    chunk_ms=SDL_GetTicks64()-stage;
+    chunk_ms=SDL_GetTicks64()-chunk_start;
     if(trace) fprintf(stderr,"Save schedule structure%llums chunks%llums\n",
         (unsigned long long)structure_ms,(unsigned long long)chunk_ms);
+    if(trace&&chunk_ms) fprintf(stderr,"Save chunk stages download%llums colors%llums reactive%llums water%llums gas%llums queue%llums\n",
+        (unsigned long long)parts[0],(unsigned long long)parts[1],(unsigned long long)parts[2],
+        (unsigned long long)parts[3],(unsigned long long)parts[4],(unsigned long long)parts[5]);
     return true;
 }
 
