@@ -23,6 +23,12 @@ static void test_half_native_bonfire_flushes_queued_saves(void) {
     int single_save = getenv("DC_ASSERT_SINGLE_STRUCTURE_SAVE") != NULL;
     int fast_colors = getenv("DC_ASSERT_FAST_COLOR_SAVE") != NULL;
     int cache_persist = getenv("DC_ASSERT_PIPELINE_CACHE_PERSIST") != NULL;
+    int cache_home = getenv("DC_ASSERT_CACHE_OUTSIDE_BUILD") != NULL;
+    char home_directory[] = "build/pipeline_cache_home_XXXXXX";
+    if (cache_home) {
+        ASSERT_TRUE(mkdtemp(home_directory) != NULL);
+        ASSERT_INT_EQ(setenv("XDG_CACHE_HOME", home_directory, 1), 0);
+    }
     struct stat cache_before = {0};
     char cache_path[512] = {0};
     if (cache_persist) {
@@ -71,6 +77,15 @@ static void test_half_native_bonfire_flushes_queued_saves(void) {
         ASSERT_TRUE(cache_after.st_mtim.tv_sec > cache_before.st_mtim.tv_sec ||
             (cache_after.st_mtim.tv_sec == cache_before.st_mtim.tv_sec &&
              cache_after.st_mtim.tv_nsec > cache_before.st_mtim.tv_nsec));
+    }
+    if (cache_home) {
+        char pattern[512];
+        ASSERT_TRUE(snprintf(pattern, sizeof(pattern), "%s/dungeoncraft/pipeline_cache_*.bin",
+                             home_directory) < (int)sizeof(pattern));
+        glob_t matches = {0};
+        ASSERT_INT_EQ(glob(pattern, 0, NULL, &matches), 0);
+        ASSERT_TRUE(matches.gl_pathc == 1u);
+        globfree(&matches);
     }
     PASS();
 }
