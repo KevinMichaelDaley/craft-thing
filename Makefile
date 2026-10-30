@@ -502,6 +502,12 @@ build/quarter_native_bench: tests/vulkan/native_bench.c Makefile tests/vulkan/na
 native: build/dungeoncraft_native
 
 .PHONY: half_native test_half_native
+build/bonfire_shutdown_tests: tests/app/bonfire_shutdown_tests.c build/dungeoncraft_half_native
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+
+.PHONY: test_bonfire_shutdown
+test_bonfire_shutdown: build/bonfire_shutdown_tests
+	./build/bonfire_shutdown_tests
 build/quarter_native_config_tests: tests/app/quarter_native_config_tests.c Makefile src/app/view_config.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< -o $@
 
