@@ -18,7 +18,7 @@ class SmokeProfileTests(unittest.TestCase):
 
     def test_runnable_profile_uses_bounded_measured_backend(self):
         env = self.environment()
-        for option in ("PRACTICAL", "DEVICE_WORK", "FIXED_AXIS", "FUSED_HYBRID",
+        for option in ("PRACTICAL", "DEVICE_WORK", "DEVICE_STATE", "FIXED_AXIS", "FUSED_HYBRID",
                        "DIRECT_FIRST_AXIS", "GROUP_RATE", "HALF_PRESSURE",
                        "MULTIGRID", "FUSED_METADATA", "TEMPORAL_SOR", "COARSE_WG",
                        "COARSE", "ROTATE_PUBLISH", "HYBRID_LINES", "FUSED_AXIS",
@@ -37,8 +37,9 @@ class SmokeProfileTests(unittest.TestCase):
         self.assertEqual(self.environment({"DC_GAS_LOCAL_STAGES": "0", "DC_GAS_EXPLICIT_RATE_CACHE": "1"}).get("DC_GAS_EXPLICIT_RATE_CACHE"), "1")
 
     def test_diagnostic_overrides_remain_explicit(self):
-        env = self.environment({"DC_GAS_DEVICE_WORK": "0", "DC_GAS_LINE_GROUP": "512", "DC_GAS_LOCAL_GEOMETRY": "0", "DC_GAS_EXPLICIT_RATE_CACHE": "0", "DC_GAS_LAZY_CLEAR": "0", "DC_GAS_SOR_TILE": "16"})
+        env = self.environment({"DC_GAS_DEVICE_WORK": "0", "DC_GAS_DEVICE_STATE": "0", "DC_GAS_LINE_GROUP": "512", "DC_GAS_LOCAL_GEOMETRY": "0", "DC_GAS_EXPLICIT_RATE_CACHE": "0", "DC_GAS_LAZY_CLEAR": "0", "DC_GAS_SOR_TILE": "16"})
         self.assertEqual(env["DC_GAS_DEVICE_WORK"], "0")
+        self.assertEqual(env["DC_GAS_DEVICE_STATE"], "0")
         self.assertEqual(env["DC_GAS_LINE_GROUP"], "512")
         self.assertEqual(env["DC_GAS_LOCAL_GEOMETRY"], "0")
         self.assertEqual(env["DC_GAS_EXPLICIT_RATE_CACHE"], "0")
