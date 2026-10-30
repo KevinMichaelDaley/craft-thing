@@ -18,20 +18,28 @@ static void test_half_native_bonfire_flushes_queued_saves(void) {
     ASSERT_TRUE(mkdtemp(directory) != NULL);
     char command[1024];
     ASSERT_TRUE(snprintf(command, sizeof(command),
-        "bash -c 'source tools/smoke_profile; exec ./build/dungeoncraft_half_native --bonfire --world-dir %s --benchmark-frames 8' 2>&1",
+        "bash -c 'source tools/smoke_profile; export DC_ADDRESS_MEMORY_TRACE=1; exec ./build/dungeoncraft_half_native --bonfire --world-dir %s --benchmark-frames 8' 2>&1",
         directory) < (int)sizeof(command));
     FILE *process = popen(command, "r");
     ASSERT_TRUE(process != NULL);
     char line[1024];
-    int saw_frame = 0, saw_cleanup_error = 0;
+    int saw_frame = 0, saw_cleanup_error = 0, saw_large_color = 0, color_local = 0;
     while (fgets(line, sizeof(line), process)) {
         if (strstr(line, "Displayed full frame 960x540")) saw_frame = 1;
         if (strstr(line, "Dungeoncraft cleanup:")) saw_cleanup_error = 1;
+        if (strstr(line, "Address allocation 68.0MiB")) {
+            saw_large_color = 1;
+            color_local = strstr(line, " local type") != NULL;
+        }
     }
     int status = pclose(process);
     ASSERT_TRUE(status != -1 && WIFEXITED(status));
     ASSERT_INT_EQ(saw_frame, 1);
     ASSERT_INT_EQ(saw_cleanup_error, 0);
+    if (getenv("DC_ASSERT_MAPPED_COLOR_LOCAL")) {
+        ASSERT_INT_EQ(saw_large_color, 1);
+        ASSERT_INT_EQ(color_local, 1);
+    }
     PASS();
 }
 
