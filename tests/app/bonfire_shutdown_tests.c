@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <glob.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 static int g_pass = 0;
@@ -20,6 +22,17 @@ static void test_half_native_bonfire_flushes_queued_saves(void) {
     int budget = getenv("DC_ASSERT_HALF_NATIVE_FRAME_BUDGET") != NULL;
     int single_save = getenv("DC_ASSERT_SINGLE_STRUCTURE_SAVE") != NULL;
     int fast_colors = getenv("DC_ASSERT_FAST_COLOR_SAVE") != NULL;
+    int cache_persist = getenv("DC_ASSERT_PIPELINE_CACHE_PERSIST") != NULL;
+    struct stat cache_before = {0};
+    char cache_path[512] = {0};
+    if (cache_persist) {
+        glob_t matches = {0};
+        ASSERT_INT_EQ(glob("build/pipeline_cache_*.bin", 0, NULL, &matches), 0);
+        ASSERT_TRUE(matches.gl_pathc == 1u);
+        ASSERT_TRUE(snprintf(cache_path, sizeof(cache_path), "%s", matches.gl_pathv[0]) < (int)sizeof(cache_path));
+        globfree(&matches);
+        ASSERT_INT_EQ(stat(cache_path, &cache_before), 0);
+    }
     ASSERT_TRUE(snprintf(command, sizeof(command),
         "bash -c 'source tools/smoke_profile; %sexec ./build/dungeoncraft_half_native --bonfire --world-dir %s --benchmark-frames %d' 2>&1",
         single_save || fast_colors ? "export DC_SAVE_TRACE=1; " : "", directory, budget ? 32 : 8) < (int)sizeof(command));
@@ -52,6 +65,13 @@ static void test_half_native_bonfire_flushes_queued_saves(void) {
     if (single_save) ASSERT_TRUE(repeated_structure_saves <= late_loads);
     if (fast_colors) ASSERT_TRUE(color_save_ms > 0 && color_save_ms < 500);
     if (budget) ASSERT_TRUE(mean_ms > 0.0 && mean_ms < 30.0 && worst_ms < 30.0);
+    if (cache_persist) {
+        struct stat cache_after = {0};
+        ASSERT_INT_EQ(stat(cache_path, &cache_after), 0);
+        ASSERT_TRUE(cache_after.st_mtim.tv_sec > cache_before.st_mtim.tv_sec ||
+            (cache_after.st_mtim.tv_sec == cache_before.st_mtim.tv_sec &&
+             cache_after.st_mtim.tv_nsec > cache_before.st_mtim.tv_nsec));
+    }
     PASS();
 }
 
