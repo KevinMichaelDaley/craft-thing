@@ -83,3 +83,7 @@ After validated diagonal rigid-body heat/oxygen path: full make test PASS, focus
 **2026-10-30T19:00:32Z**
 
 Mapped-VRAM trace false positive corrected: 68 MiB allocation belongs to fr_gpu_reactive_export_bodies during shutdown checkpoint collection, after measured frames. Host placement there does not cause steady frame cost. Temporary relocation trials for arena entries and thermal samples were reverted; the arena-host trial made first frame ~721ms. Continue per-frame solver/thermal/gas analysis.
+
+**2026-10-30T20:09:07Z**
+
+Half-native thermal workgroup sweep on RTX A2000, normal clock 32 displayed 960x540 frames: 64 lanes32.590/42.229ms mean/worst; 128 lanes23.709/32.943ms; 256 lanes20.392/31.300ms; 512 lanes19.816/25.679ms. Focused thermal2/2 water4/4 feedback2/2 combustion feedback8/8 rigid thermal17/17 passed at512. Review found overlay shader still 64 lanes but receiving thermal512 group count; new far-cell RED test reproduces missing overlay near bottom of view. Fix overlay dispatch and portable device-limit fallback before GREEN commit/full suite.
