@@ -71,3 +71,7 @@ Focused long bonfire_display_tests under smoke profile failed all-eight-log asse
 **2026-10-30T16:28:44Z**
 
 Final quarter-native 32-frame X11 smoke-profile run after all placement changes: 17.007ms mean, 45.122ms worst (frame13), 480x270 active640x448. Half-native 32-frame normal-clock run: 32.056ms mean, 41.731ms worst, 960x540 active1088x704. Gas device-state separate trace run 32.075ms mean35.339ms worst, accepted1 per frame at dt~0.035s and gas wait~11-12ms. Full make test run for ~12min passed through pixel_boundary_tests, then stopped at known NVIDIA contact_quad_tests ct-4gtu. Focused gas_display_tests:32 passed9 failed only on unsupported Large-CFL denorm requirement (ct-xqgz). Focused bonfire_display_tests: all-log assertion failed5/8 dry device-state and4/8 mapped-state at60s (ct-wgqu). Benchmark cleanup dirty-save timeout tracked ct-2k7p. No claim of full acceptance.
+
+**2026-10-30T17:44:46Z**
+
+2026-10-30 after save flush fix and full make test PASS: fresh idle-GPU half-native X11 960x540 (1088x704 halo) normal-clock 32-frame bonfire measured 32.748ms mean, 41.465ms worst. Capture build/screenshots/half_bonfire_final.bmp; cleanup succeeded with no dirty-save timeout. Frame-budget acceptance remains RED.
