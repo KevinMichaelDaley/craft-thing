@@ -41,10 +41,25 @@ bool dc_level_view_setup_bonfire(dc_level_view_t *view,char *err,uint32_t cap) {
         for(uint32_t i=0;i<count;i++) coords[i]=view->table.slots[i].coord;
         bool okay=dc_bonfire_build(coords,count,chunks,err,cap);free(coords);
         bonfire_startup_trace("fixture built",started);
-        for(uint32_t i=0;i<count&&okay;i++) okay=dc_gpu_upload_chunk(view->gpu,i,chunks[i].chunk,err,cap)&&
-            fr_renderer_upload_chunk_colors(view->gpu,i,chunks[i].colors,err,cap)&&
-            fr_gpu_reactive_import_chunk(view->gpu,i,chunks[i].chunk,&chunks[i].reactive,err,cap)&&
-            dc_chunk_table_mark_dirty(&view->table,i);
+        Uint64 upload_ms=0,color_ms=0,reactive_ms=0;
+        for(uint32_t i=0;i<count&&okay;i++) {
+            Uint64 stage=SDL_GetTicks64();
+            okay=dc_gpu_upload_chunk(view->gpu,i,chunks[i].chunk,err,cap);
+            upload_ms+=SDL_GetTicks64()-stage;
+            if(!okay) break;
+            stage=SDL_GetTicks64();
+            okay=fr_renderer_upload_chunk_colors(view->gpu,i,chunks[i].colors,err,cap);
+            color_ms+=SDL_GetTicks64()-stage;
+            if(!okay) break;
+            stage=SDL_GetTicks64();
+            okay=fr_gpu_reactive_import_chunk(view->gpu,i,chunks[i].chunk,&chunks[i].reactive,err,cap)&&
+                dc_chunk_table_mark_dirty(&view->table,i);
+            reactive_ms+=SDL_GetTicks64()-stage;
+        }
+        if(getenv("DC_BONFIRE_STARTUP_TRACE"))
+            fprintf(stderr,"Bonfire fixture upload chunks%u terrain%llums colors%llums reactive%llums\n",
+                    count,(unsigned long long)upload_ms,(unsigned long long)color_ms,
+                    (unsigned long long)reactive_ms);
         dc_thermal_bench_release(chunks,count);
         bonfire_startup_trace("fixture uploaded",started);
         if(!okay||!fr_thermal_gpu_enable(view->gpu,err,cap)||!fr_thermal_gpu_mark_bonfire_world(view->gpu)) return false;
