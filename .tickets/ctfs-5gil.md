@@ -39,3 +39,7 @@ Current DEFAULT fullscreen real-clock32-frame diagnostic after gating rectangle 
 **2026-10-30T09:35:11Z**
 
 2026-10-30 NVIDIA X11 half-native continuation: persistent device/driver/UUID Vulkan pipeline cache cut repeated GPU window creation from about 74s cold to 1.9-2.6s warm; full bonfire setup reached gas enable in 8.1s warm. Fixture upload is 7.2s (1.4s terrain, 0.05s colors, 5.0s reactive imports). A 32-frame real-clock 960x540 displayed run measured 1133.923ms mean and 1153.675ms worst; first thermal/MPM stage alone about 655ms. Half-native is not within frame acceptance; ticket stays open. Captured image at /tmp/ct_half_bonfire.bmp.
+
+**2026-10-30T09:56:39Z**
+
+Full make test on NVIDIA advanced through catapult 12/12 and most GPU cases, then stopped at pixel_boundary_tests due cross-driver bitwise face roundoff. ct-towz now enforces 1e-5 bounded numerical agreement and passes all four patterns. Subsequent suffix contact_quad_tests remains RED on NVIDIA with one witness feature mismatch and large tied-normal differences; tracked ct-4gtu. Focused gas/practical/cache tests pass, but full regression is not green and frame-budget acceptance remains open.
