@@ -65,9 +65,13 @@ static void test_hot_coal_clears_wall_and_ignites_wooden_inner_battlement(void) 
     ASSERT_TRUE(dc_catapult_scene_release(g, &scene, err, sizeof(err)));
     for (uint32_t tick = 0; tick < 3u; tick++)
         ASSERT_TRUE(dc_gpu_tick_step(g, err, sizeof(err)));
+    dc_gpu_body_motion_t arm_launch;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, scene.arm_body, &arm_launch,
+                                        err, sizeof(err)));
     ASSERT_TRUE(dc_catapult_scene_release_projectile(g, &scene,
                                                        err, sizeof(err)));
     float farthest = 0.f;
+    float mast_peak = 0.f, battlement_peak = 0.f;
     bool cleared_wall = false;
     bool battlement_burned = false;
     for (uint32_t tick = 0; tick < 180u; tick++) {
@@ -78,6 +82,26 @@ static void test_hot_coal_clears_wall_and_ignites_wooden_inner_battlement(void) 
         if (xof(coal) > farthest) farthest = xof(coal);
         if (xof(coal) > xof(wall) + 4.f && yof(coal) < 80.f)
             cleared_wall = true;
+        if (xof(coal) > 160.f) {
+            fr_structural_gpu_member_state_t mast_load, post_load;
+            ASSERT_TRUE(fr_gpu_read_structure_member(g, 5u, &mast_load) &&
+                        fr_gpu_read_structure_member(g, 10u, &post_load));
+            ASSERT_TRUE(isfinite(mast_load.axial) &&
+                        isfinite(mast_load.shear) &&
+                        isfinite(mast_load.moment) &&
+                        isfinite(post_load.axial) &&
+                        isfinite(post_load.shear) &&
+                        isfinite(post_load.moment));
+            float mast_load_size = fabsf(mast_load.axial) +
+                                   fabsf(mast_load.shear) +
+                                   fabsf(mast_load.moment);
+            float post_load_size = fabsf(post_load.axial) +
+                                   fabsf(post_load.shear) +
+                                   fabsf(post_load.moment);
+            if (mast_load_size > mast_peak) mast_peak = mast_load_size;
+            if (post_load_size > battlement_peak)
+                battlement_peak = post_load_size;
+        }
         for (uint32_t member = 6u; member <= 12u; member++) {
             if (!fr_gpu_reactive_read_body(g,
                     FR_STRUCTURAL_BODY_ID_BASE + member, 1u, 0u,
@@ -88,6 +112,15 @@ static void test_hot_coal_clears_wall_and_ignites_wooden_inner_battlement(void) 
         }
     }
     printf("far-side flight %.2f cleared %u\n", farthest, cleared_wall);
+    dc_gpu_body_motion_t arm_after;
+    ASSERT_TRUE(dc_gpu_read_body_motion(g, scene.arm_body, &arm_after,
+                                        err, sizeof(err)));
+    printf("launcher recoil omega %.3f -> %.3f; mast load %.2f, "
+           "battlement load %.2f\n", arm_launch.angular_velocity,
+           arm_after.angular_velocity, mast_peak, battlement_peak);
+    ASSERT_TRUE(arm_launch.angular_velocity > .1f &&
+                arm_after.angular_velocity < arm_launch.angular_velocity &&
+                mast_peak > 0.f && battlement_peak > 0.f);
     ASSERT_TRUE(cleared_wall && farthest >= 206.f);
     ASSERT_TRUE(battlement_burned);
     fr_structural_gpu_component_state_t support;
@@ -339,6 +372,27 @@ static void test_released_latch_checkpoint_can_resume_pouch_release(void) {
     ASSERT_TRUE(dc_catapult_scene_release_projectile(copy, &scene,
                                                       err, sizeof(err)));
     ASSERT_TRUE(scene.released && scene.projectile_released);
+    ASSERT_TRUE(fr_gpu_save_structure(copy, "build/catapult_flight.dcs",
+                                      err, sizeof(err)));
+    dc_gpu_t *flight = catapult_grid();
+    ASSERT_TRUE(flight);
+    ASSERT_TRUE(fr_gpu_load_structure(flight, "build/catapult_flight.dcs",
+                                      err, sizeof(err)));
+    bool pivot_active = false, latch_active = true, pouch_active = true;
+    ASSERT_TRUE(fr_gpu_revolute_active(flight, scene.pivot_joint,
+                                      &pivot_active, err, sizeof(err)) &&
+                fr_gpu_revolute_active(flight, scene.latch_joint,
+                                      &latch_active, err, sizeof(err)) &&
+                fr_gpu_revolute_active(flight, scene.pouch_joint,
+                                      &pouch_active, err, sizeof(err)));
+    ASSERT_TRUE(pivot_active && !latch_active && !pouch_active);
+    dc_gpu_world_body_t before, after;
+    ASSERT_TRUE(dc_gpu_read_world_body(copy, scene.coal_body, &before,
+                                       err, sizeof(err)) &&
+                dc_gpu_read_world_body(flight, scene.coal_body, &after,
+                                       err, sizeof(err)));
+    ASSERT_EQ(memcmp(&before, &after, sizeof(before)), 0);
+    dc_gpu_destroy(flight);
     dc_gpu_destroy(copy);
     dc_gpu_destroy(g);
     PASS();
@@ -529,6 +583,10 @@ static void test_far_side_battlement_is_constructed_wood(void) {
 
 #ifndef DC_CATAPULT_DISPLAY_INCLUDE
 int main(int argc, char **argv) {
+    if(argc==2&&strcmp(argv[1],"--hot-impact")==0) {
+        RUN(test_hot_coal_clears_wall_and_ignites_wooden_inner_battlement);
+        return g_fail?1:0;
+    }
     if(argc==2&&strcmp(argv[1],"--checkpoint-resume")==0) {
         RUN(test_released_latch_checkpoint_can_resume_pouch_release);
         return g_fail?1:0;

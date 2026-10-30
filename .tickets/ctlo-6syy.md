@@ -1,6 +1,6 @@
 ---
 id: ctlo-6syy
-status: in_progress
+status: closed
 deps: [ctlo-x5gv, ctlo-3ndt, ctfs-0zw5, ctfs-ermw, ctfs-b6cz, ct-xuqp]
 links: []
 created: 2026-10-24T22:06:19Z
@@ -51,3 +51,7 @@ Corrected final game-resolution fixture: wall is at x=180, 28 cells tall (twice 
 **2026-10-29T06:57:28Z**
 
 Final make test after refactor passed all preceding suites, including catapult scene 9/9 and game-view display 2/2, then stopped at reactive_profile_gpu_tests: device enumeration found no Intel hardware compute device on this host. This is the same host hardware gate previously recorded; no catapult regression was observed.
+
+**2026-10-30T03:35:25Z**
+
+2026-10-29 completion: Added RED checkpoint regression for latch released before save; the loaded GPU correctly omits released pivots but the transient scene flag blocked pouch release. GREEN adds idle-boundary pivot-active query and refreshes latch/pouch flags from authoritative saved joint state. After second save/load, pivot remains active, latch/pouch remain released, and coal body pose is exact. Flight/impact test records arm recoil omega 0.248 to 0.000, mast peak load 36492.90, far battlement peak load 60259.68, coal farthest x 212.01 and far-side burn. Catapult scene 12/12, display 2/2, component admission 17/17. Full make test reaches those suites and stops only at reactive_profile_gpu_tests because this host has no Intel hardware compute device. Remaining wet-wall damage balance is tracked by ctlo-ao7l, separate from launcher mechanism.
