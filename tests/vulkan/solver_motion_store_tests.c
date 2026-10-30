@@ -60,6 +60,7 @@ static void test_motion_phases_preserve_every_body_word_with_narrow_writes(void)
     data[BODY_STATE+8]=float_bits(.12f);
     p.buffer=storage;p.mapped=mapped;
     uint32_t bindings[]={1,2,3,4,10,19,20,21,23,24,27,31};
+    ASSERT_INT_EQ(sizeof(bindings)/sizeof(bindings[0]),13);
     ASSERT_TRUE(fixture_body_pipeline(&p,&gpu,storage,"build/diagnostics/solver_motion_profile.comp.spv",bindings,12,7));
     VkDescriptorBufferInfo buffers[12];
     VkWriteDescriptorSet writes[12];
