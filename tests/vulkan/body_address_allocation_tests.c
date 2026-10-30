@@ -8,7 +8,7 @@ static VkBufferUsageFlags usage;
 static VkMemoryAllocateFlags allocation_flags;
 static uint32_t selected_type;
 static bool separate_host_heap,fail_local;
-static unsigned char mapped_words[4096];
+static unsigned char mapped_words[1048576];
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -40,14 +40,20 @@ void __wrap_vkUnmapMemory(VkDevice d,VkDeviceMemory m) {(void)d;(void)m;}
 static void reset(void) {created=destroyed=freed=0;usage=0;allocation_flags=0;selected_type=0;fail_allocate=fail_bind=separate_host_heap=fail_local=false;}
 static void test_mapped_buffers_prefer_local_heap_and_fall_back_to_system(void) {
     reset();separate_host_heap=true;dc_gpu_t gpu={0};dc_gpu_address_buffer_t out={0};char err[128];
-    ASSERT_TRUE(dc_gpu_address_buffer_create(&gpu,2048,true,&out,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_address_buffer_create(&gpu,sizeof(mapped_words),true,&out,err,sizeof(err)));
     ASSERT_EQ(selected_type,1u);ASSERT_TRUE(out.device_local);
     dc_gpu_address_buffer_destroy(&gpu,&out);
     fail_local=true;
-    ASSERT_TRUE(dc_gpu_address_buffer_create(&gpu,2048,true,&out,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_address_buffer_create(&gpu,sizeof(mapped_words),true,&out,err,sizeof(err)));
     ASSERT_EQ(selected_type,0u);ASSERT_TRUE(!out.device_local);
     dc_gpu_address_buffer_destroy(&gpu,&out);
     ASSERT_EQ(gpu.mapped_local_bytes+gpu.mapped_system_bytes,0u);PASS();
+}
+static void test_small_mapped_buffers_reserve_local_aperture_for_large_hot_buffers(void) {
+    reset();separate_host_heap=true;dc_gpu_t gpu={0};dc_gpu_address_buffer_t out={0};char err[128];
+    ASSERT_TRUE(dc_gpu_address_buffer_create(&gpu,2048,true,&out,err,sizeof(err)));
+    ASSERT_EQ(selected_type,0u);ASSERT_TRUE(!out.device_local);
+    dc_gpu_address_buffer_destroy(&gpu,&out);PASS();
 }
 static void test_resource_enables_real_address_usage_and_releases_allocation(void) {
     reset();dc_gpu_t gpu={0};dc_gpu_address_buffer_t out={0};char err[128];
@@ -72,6 +78,7 @@ static void test_bind_failure_releases_memory_without_publishing(void) {
 }
 int main(void) {
     RUN(test_mapped_buffers_prefer_local_heap_and_fall_back_to_system);
+    RUN(test_small_mapped_buffers_reserve_local_aperture_for_large_hot_buffers);
     RUN(test_resource_enables_real_address_usage_and_releases_allocation);
     RUN(test_memory_failure_leaves_previous_destination_untouched);
     RUN(test_bind_failure_releases_memory_without_publishing);
