@@ -80,7 +80,7 @@ void main() {
     }
     if(params.phase==2u) {
         if(index<params.count) validate_physical(index);
-        if(index<root[2]&&MARKS.words[index]==0u) {
+        if(PACKET.words[2]==0u&&index<root[2]&&MARKS.words[index]==0u) {
             Words e=entry(index);uint kind=e.words[FR_ENTRY_OWNER];
             if(kind>=1u&&kind<=3u) {
                 uvec2 id=uvec2(e.words[FR_ENTRY_STATE+FR_STATE_PARCEL_LOW],e.words[FR_ENTRY_STATE+FR_STATE_PARCEL_LOW+1u]);

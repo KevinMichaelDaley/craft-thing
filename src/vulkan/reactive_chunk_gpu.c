@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <SDL.h>
 #include "dungeoncraft/reactive_state_layout.h"
 #include "reactive_gpu_internal.h"
 #include "reactive_storage_gpu.h"
@@ -46,7 +47,8 @@ static bool resources(dc_gpu_t *g,char *err,uint32_t cap) {
 static bool dispatch(dc_gpu_t *g,uint32_t slot,uint32_t count,uint32_t first,uint32_t last,char *err,uint32_t cap) {
     struct fr_reactive_gpu *r=g->reactive;fr_renderer_compute_t *compute=&r->stream_compute;
     uint32_t maximum=ROWS;
-    if((first==1u||first==5u)&&r->arena.capacity>maximum) maximum=r->arena.capacity;
+    if(((first==1u&&((uint32_t *)r->stream.mapped)[2]==0u)||first==5u)&&
+       r->arena.capacity>maximum) maximum=r->arena.capacity;
     uint32_t groups=(maximum-1u)/64u+1u;VkPhysicalDeviceProperties props;vkGetPhysicalDeviceProperties(g->physical,&props);
     uint32_t x=groups<props.limits.maxComputeWorkGroupCount[0]?groups:props.limits.maxComputeWorkGroupCount[0];
     uint32_t y=(groups-1u)/x+1u;
@@ -54,7 +56,8 @@ static bool dispatch(dc_gpu_t *g,uint32_t slot,uint32_t count,uint32_t first,uin
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_MEMORY_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         VK_ACCESS_2_TRANSFER_WRITE_BIT);
-    if(first==1u) vkCmdFillBuffer(g->command,r->stream_marks.buffer,0,r->stream_marks.bytes,0);
+    if(first==1u&&((uint32_t *)r->stream.mapped)[2]==0u)
+        vkCmdFillBuffer(g->command,r->stream_marks.buffer,0,r->stream_marks.bytes,0);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_MEMORY_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
@@ -141,10 +144,12 @@ bool fr_gpu_reactive_bind_prepared_chunk(dc_gpu_t *g,uint32_t slot,
 }
 bool fr_gpu_reactive_import_chunk(dc_gpu_t *g,uint32_t slot,const dc_chunk_t *chunk,
     const fr_reactive_chunk_t *channel,char *err,uint32_t cap) {
+    Uint64 started=SDL_GetTicks64(),validated=0,prepared=0,checked=0,allocated=0;
     if(!resident(g,slot,chunk,err,cap)) return false;
     fr_reactive_chunk_t ambient={.next_id=g->reactive?g->reactive->high_id+1u:1u};
     if(!channel) channel=&ambient;
     if(!fr_reactive_chunk_valid(channel,chunk,err,cap)) return false;
+    validated=SDL_GetTicks64();
     if(!g->reactive&&channel->count==0u&&channel->next_id==1u) return true;
     if(!fr_gpu_reactive_initialize(g,err,cap)) return false;
     struct fr_reactive_gpu *r=g->reactive;
@@ -153,6 +158,7 @@ bool fr_gpu_reactive_import_chunk(dc_gpu_t *g,uint32_t slot,const dc_chunk_t *ch
             channel->attachments[i].record.state.material==DC_MATERIAL_LEAVES)&&
            !fr_gpu_reactive_particle_storage(g,err,cap)) return false;
     if(!resources(g,err,cap)) return false;
+    prepared=SDL_GetTicks64();
     uint32_t count=channel->count;fr_reactive_attachment_t *sorted=NULL;
     fr_reactive_arena_request_t *requests=NULL;fr_reactive_handle_t *handles=NULL;
     if(count) {
@@ -163,18 +169,34 @@ bool fr_gpu_reactive_import_chunk(dc_gpu_t *g,uint32_t slot,const dc_chunk_t *ch
         for(uint32_t i=0;i<count;i++) requests[i]=(fr_reactive_arena_request_t){.operation=FR_REACTIVE_ARENA_ALLOCATE,.record=sorted[i].record};
     }
     memset(r->stream.mapped,0,16);
+    ((uint32_t *)r->stream.mapped)[2]=1u;
+    if(count) {
+        const fr_reactive_attachment_t *first=sorted;
+        uint64_t first_id=(uint64_t)first->record.state.parcel_id_low|
+            ((uint64_t)first->record.state.parcel_id_high<<32u);
+        ((uint32_t *)r->stream.mapped)[2]=first_id>r->high_id?1u:0u;
+    }
     if(count) memcpy((uint32_t *)r->stream.mapped+4,sorted,(size_t)count*sizeof(*sorted));
     free(sorted);
     bool okay=dispatch(g,slot,count,1,2,err,cap);
+    checked=SDL_GetTicks64();
     uint32_t status=((uint32_t *)r->stream.mapped)[1];
     if(okay&&status) okay=error(err,cap,status&1u?"Reactive import duplicates a resident parcel identity":"Reactive import differs from actual GPU physics");
     uint32_t required=0;
     if(okay&&count) okay=fr_reactive_arena_apply(g,&r->arena,requests,count,handles,&required,err,cap);
+    allocated=SDL_GetTicks64();
     free(requests);
     if(okay) {
         if(count) memcpy((uint32_t *)r->stream.mapped+HANDLE_OFFSET,handles,(size_t)count*sizeof(*handles));
         okay=dispatch(g,slot,count,3,4,err,cap);
         if(okay&&channel->next_id-1u>r->high_id) r->high_id=channel->next_id-1u;
     }
-    free(handles);return okay;
+    free(handles);
+    if(getenv("DC_REACTIVE_IMPORT_TRACE")) fprintf(stderr,
+        "Reactive import slot%u count%u disjoint%u valid%llums prep%llums check%llums arena%llums bind%llums\n",
+        slot,count,((uint32_t *)r->stream.mapped)[2],
+        (unsigned long long)(validated-started),(unsigned long long)(prepared-validated),
+        (unsigned long long)(checked-prepared),(unsigned long long)(allocated-checked),
+        (unsigned long long)(SDL_GetTicks64()-allocated));
+    return okay;
 }

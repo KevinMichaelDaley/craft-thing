@@ -27,7 +27,7 @@ static int worker(void *data) {
         if(!out->chunk||!out->colors||!out->reactive.attachments) {
             snprintf(out->error,sizeof(out->error),"Cannot allocate finite bonfire fixture");continue;
         }
-        out->chunk->coord=b->coords[index];out->reactive.next_id=(uint64_t)b->count*4096+1;out->valid=true;
+        out->chunk->coord=b->coords[index];out->reactive.next_id=((uint64_t)index+1u)*4096u+1u;out->valid=true;
         for(uint32_t i=0;i<4096&&out->valid;i++) {
             int64_t x=out->chunk->coord.x*64+i%64,y=out->chunk->coord.y*64+i/64;
             const dc_bonfire_piece_t *piece=NULL;uint32_t material=material_at(b,x,y,&piece);if(!material) continue;
