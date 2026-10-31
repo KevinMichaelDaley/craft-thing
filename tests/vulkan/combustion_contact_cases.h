@@ -45,12 +45,18 @@ static void test_still_air_conducts_heat_without_transporting_mass(void) {
     for(uint32_t i=0;i<4096;i++) before_energy+=gas[i].energy;
     ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,gas,volume,4096,err,sizeof(err))&&fr_combustion_gpu_step(g,.001f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
     for(uint32_t i=0;i<4096;i++) after_energy+=after[i].energy;
-    double capacity=before_mass*model.heat_capacity_cv[FR_GAS_NITROGEN];
+    double capacity=gas[cold].species[FR_GAS_OXYGEN]*model.heat_capacity_cv[FR_GAS_OXYGEN]+
+        before_mass*model.heat_capacity_cv[FR_GAS_NITROGEN];
     double four_face_heat=4.*.02*.0001/.01*.001*(900.-300.);
     ASSERT_TRUE(fabs(after[hot].energy-(gas[hot].energy-four_face_heat))<1e-6);
     ASSERT_TRUE(fabs(after[cold].energy-(gas[cold].energy+four_face_heat/4.))<1e-6);
     ASSERT_TRUE(after[cold].species[FR_GAS_NITROGEN]==gas[cold].species[FR_GAS_NITROGEN]);
-    ASSERT_TRUE(fabs((after[cold].energy-gas[cold].energy)/capacity-.135)<.01);
+    ASSERT_TRUE(fabs((after[cold].energy-gas[cold].energy)/capacity-(four_face_heat/4.)/capacity)<.01);
     ASSERT_TRUE(fabs(after_energy-before_energy)<1e-5);
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,gas,volume,4096,err,sizeof(err))&&
+        fr_gas_gpu_gate(g,32,32,1,1,0,true,err,sizeof(err))&&
+        fr_combustion_gpu_step(g,.001f,err,sizeof(err))&&
+        fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
+    ASSERT_TRUE(fabs(after[cold].energy-gas[cold].energy)<1e-7);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(gas);free(after);free(volume);free(chunk);dc_gpu_destroy(g);PASS();
 }

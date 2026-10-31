@@ -94,6 +94,19 @@ float solid_capacity(Words entry) {
         (float(entry.words[s+14u])+float(entry.words[s+16u]))*coefficient(15u,5u))/65536.;
 }
 float contact_flux(uint first,uint second,uint a,uint b) {
+    if(gas_cell(a)&&gas_cell(b)) {
+        uint axis=second==first+1u?0u:1u;
+        if((Words(params.gates_address).words[a]&(1u<<axis))!=0u) return 0.;
+        Gas left=local_gas(a),right=local_gas(b);
+        float left_cap=gas_capacity(left),right_cap=gas_capacity(right);
+        if(left_cap<=0.||right_cap<=0.||left.geometry.y<=0.||right.geometry.y<=0.) return 0.;
+        float difference=gas_internal(left)/left_cap-gas_internal(right)/right_cap;
+        float aperture=min(min(left.geometry.y,right.geometry.y),1.);
+        float conductance=float(FR_COMBUSTION_AIR_CONDUCTIVITY*FR_THERMAL_FACE_AREA/FR_THERMAL_GAMEPLAY_FACE_METERS)*aperture;
+        float requested=conductance*difference*uintBitsToFloat(params.seconds);
+        float stable=.25*left_cap*right_cap/(left_cap+right_cap)*abs(difference);
+        return sign(requested)*min(abs(requested),stable);
+    }
     uint n=params.width*params.height,ak=floatBitsToUint(samples[first+n].x),bk=floatBitsToUint(samples[second+n].x);
     bool asolid=ak==1u||ak==4u,bsolid=bk==1u||bk==4u;
     if(asolid==bsolid||!gas_cell(asolid?b:a)) return 0.;
