@@ -1,6 +1,6 @@
 ---
 id: ct-0ap7
-status: in_progress
+status: closed
 deps: [ct-d3oz]
 links: [ct-d3oz]
 created: 2026-10-31T04:55:31Z
@@ -31,3 +31,7 @@ Finite-volume gas Fourier flux now runs in fire and gas-only worlds after transp
 **2026-10-31T08:04:01Z**
 
 Gas heat transport and five displayed ignition runs are verified and pushed; full make -j8 test passes after benchmark/present changes. X11 opt-in immediate present improves mean ~15ms and passed two manual 1000-frame runs, but integrated wrapper still produced one 30.353ms worst outlier from vkQueuePresentKHR wait. Dependency ct-d3oz remains unresolved, so keep gas conduction ticket open until strict displayed gate is reliable.
+
+**2026-10-31T08:28:23Z**
+
+2026-10-31: Dependency ct-d3oz closed after tear-free latest-ready present mode passed two actual displayed X11 quarter-native 1000-frame bonfire runs (worst 28.706ms and 28.365ms), with unchanged <30ms gate. Full make -j8 test passes; prior gas-only still-air, closed-gate, cut-cell, conservation, and displayed ignition tests passed. Fourier conduction now meets all acceptance criteria.

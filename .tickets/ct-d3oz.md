@@ -1,6 +1,6 @@
 ---
 id: ct-d3oz
-status: in_progress
+status: closed
 deps: []
 links: [ct-0ap7]
 created: 2026-10-31T07:31:14Z
@@ -27,3 +27,7 @@ Two actual displayed 1000-frame quarter-native X11 bonfire runs exit successfull
 **2026-10-31T08:04:01Z**
 
 Post-GREEN full make -j8 test passes. Integrated tools/bench_bonfire now auto-selects X11 and opts into DC_LOW_LATENCY_PRESENT=1; two runs measured mean14.859/worst30.353ms (failed by0.353ms) and mean15.031/worst24.691ms (pass). Separate manual immediate runs passed worst20.109 and27.694ms. Low-latency X11 trace at frame38: 14.885ms tick, 13.748ms vkQueuePresentKHR wait, 28.956ms total; gas retry count0. Current surface offers FIFO, FIFO_RELAXED, IMMEDIATE, FIFO_LATEST_READY but no MAILBOX. Default remains FIFO; strict worst gate still flaky from X11 present wait, so ticket remains in_progress.
+
+**2026-10-31T08:28:13Z**
+
+2026-10-31: VK_EXT_present_mode_fifo_latest_ready is available and enabled on this RTX A2000; the actual selected mode is 1000361000 (confirmed with DC_PRESENT_TRACE). Full make -j8 test passes. After refactor, two actual displayed X11 quarter-native 1000-frame bonfire runs passed the unchanged <30ms worst-frame gate: mean15.070/worst28.706ms and mean15.141/worst28.365ms. Both captured paused pixels identically. Previous implementation pair measured worst22.701/23.673ms. Feature and extension checks fall back to immediate when latest-ready is unavailable.
