@@ -14,8 +14,15 @@
 enum {
     CATAPULT_DEMO_FRAMES = 205u,
     CATAPULT_DEMO_RELEASE_FRAME = 8u,
-    CATAPULT_DEMO_POUCH_FRAME = 11u
+    CATAPULT_DEMO_POUCH_FRAME = 11u,
+    CATAPULT_BATTLEMENT_FIRST_MEMBER = 6u,
+    CATAPULT_BATTLEMENT_LAST_MEMBER = 12u,
+    CATAPULT_BATTLEMENT_REFERENCE_MEMBER = 10u
 };
+
+static float world_x(dc_gpu_world_body_t body) {
+    return (float)body.chunk.x * DC_CHUNK_SIDE + body.body.x_fp / 65536.f;
+}
 
 static bool make_ground(dc_gpu_t *gpu, char *err, uint32_t cap) {
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
@@ -62,8 +69,13 @@ int main(void) {
     fr_reactive_record_t battlement_initial = {0};
     bool battlement_found = false;
     if (okay) okay = fr_gpu_reactive_read_body(gpu,
-        FR_STRUCTURAL_BODY_ID_BASE + 10u, 1u, 0u, &battlement_initial,
+        FR_STRUCTURAL_BODY_ID_BASE + CATAPULT_BATTLEMENT_REFERENCE_MEMBER,
+        1u, 0u, &battlement_initial,
         &battlement_found, err, sizeof(err)) && battlement_found;
+    dc_gpu_world_body_t wall = {0};
+    if (okay) okay = dc_gpu_read_world_body(gpu, scene.wall_body, &wall,
+                                            err, sizeof(err));
+    float wall_clear_x = world_x(wall) + 4.f;
     bool wall_cleared = false, battlement_ignited = false;
     for (uint32_t frame = 0; okay && frame < CATAPULT_DEMO_FRAMES; frame++) {
         uint32_t start = SDL_GetTicks();
@@ -80,11 +92,11 @@ int main(void) {
             dc_gpu_world_body_t coal;
             okay = dc_gpu_read_world_body(gpu, scene.coal_body, &coal,
                                            err, sizeof(err));
-            if (okay && (float)coal.chunk.x * DC_CHUNK_SIDE +
-                coal.body.x_fp / 65536.f > 184.f) wall_cleared = true;
+            if (okay && world_x(coal) > wall_clear_x) wall_cleared = true;
         }
         if (okay && frame % 5u == 0u) {
-            for (uint32_t member = 6u; member <= 12u; member++) {
+            for (uint32_t member = CATAPULT_BATTLEMENT_FIRST_MEMBER;
+                 member <= CATAPULT_BATTLEMENT_LAST_MEMBER; member++) {
                 fr_reactive_record_t wood;
                 bool found = false;
                 okay = fr_gpu_reactive_read_body(gpu,
