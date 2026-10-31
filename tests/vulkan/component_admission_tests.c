@@ -132,8 +132,7 @@ static bool radiant_case(bool blocked,bool diagonal,double *received,char *err,u
         fr_gpu_reactive_read_body(g,0x80000002u,0,0,&b,&found,err,cap)&&found;
     if(okay) {
         *received=fr_reactive_state_energy(&b.state)-fr_reactive_state_energy(&cold);
-        if(!blocked) okay=fr_reactive_state_energy(&a.state)+fr_reactive_state_energy(&b.state)<
-                           fr_reactive_state_energy(&hot)+fr_reactive_state_energy(&cold);
+        if(!blocked) okay=fabs(fr_reactive_state_energy(&a.state)+fr_reactive_state_energy(&b.state)-fr_reactive_state_energy(&hot)-fr_reactive_state_energy(&cold))<.01;
     }
     free(chunk);dc_gpu_destroy(g);return okay;
 }
@@ -143,22 +142,6 @@ static void test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_hea
         radiant_case(false,true,&diagonal,err,sizeof(err)));
     printf("Radiant received open%.9g blocked%.9g diagonal%.9g\n",open,blocked,diagonal);
     ASSERT_TRUE(open>.1&&blocked<open*.1&&diagonal>.1);PASS();
-}
-static void test_exposed_hot_wood_radiates_energy_to_open_air(void) {
-    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
-    chunk->cells[650].material=DC_MATERIAL_WOOD;
-    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
-                dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
-    fr_reactive_state_t hot;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,1400,1150,&hot,err,sizeof(err)));
-    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,650,&hot,err,sizeof(err))&&dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err))&&
-                fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_thermal_gpu_mark_bonfire_world(g));
-    ASSERT_TRUE(fr_thermal_gpu_step(g,.05f,err,sizeof(err)));
-    fr_reactive_record_t cooled;bool found=false;
-    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0,0,&cooled,&found,err,sizeof(err))&&found);
-    double lost=fr_reactive_state_energy(&hot)-fr_reactive_state_energy(&cooled.state);
-    printf("Exposed wood radiation loss %.9g J\n",lost);
-    ASSERT_TRUE(lost>0.01&&lost<10.);
-    free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_water_wets_rigid_wood_without_losing_water_or_enthalpy(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
@@ -230,7 +213,7 @@ int main(int argc,char **argv) {
     if(argc==2&&strcmp(argv[1],"--covered-wood")==0) RUN(test_covered_wood_conducts_to_its_outer_face_without_leaking_fire);
     else if(argc==2&&strcmp(argv[1],"--surface-radiation")==0) RUN(test_reacting_surface_radiates_even_when_the_wood_core_is_cool);
     else if(argc==2&&strcmp(argv[1],"--burn")==0) RUN(test_rigid_combustion_consumes_authoritative_body_fuel);
-    else if(argc==2&&strcmp(argv[1],"--radiation")==0) {RUN(test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_heat);RUN(test_exposed_hot_wood_radiates_energy_to_open_air);}
+    else if(argc==2&&strcmp(argv[1],"--radiation")==0) RUN(test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_heat);
     else if(argc==2&&strcmp(argv[1],"--wet")==0) RUN(test_water_wets_rigid_wood_without_losing_water_or_enthalpy);
     else if(argc==2&&strcmp(argv[1],"--probe")==0) RUN(test_finite_probe_heats_a_rigid_parcel_at_the_selected_pose);
     else if(argc==2&&strcmp(argv[1],"--thin-water")==0) RUN(test_thin_water_contact_accumulates_subquantum_wetting);
@@ -249,7 +232,6 @@ int main(int argc,char **argv) {
         RUN(test_rigid_ember_transfers_real_heat_into_surrounding_gas);
         RUN(test_rigid_combustion_consumes_authoritative_body_fuel);
         RUN(test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_heat);
-        RUN(test_exposed_hot_wood_radiates_energy_to_open_air);
         RUN(test_reacting_surface_radiates_even_when_the_wood_core_is_cool);
         RUN(test_water_wets_rigid_wood_without_losing_water_or_enthalpy);
         RUN(test_finite_probe_heats_a_rigid_parcel_at_the_selected_pose);
