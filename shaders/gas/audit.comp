@@ -28,6 +28,10 @@ void main() {
                 if(own.metric.z>0.) {
                     float speed=length(own.hydro.yz),cv=dot(s.species,vec4(gas_parameter(5u),gas_parameter(6u),gas_parameter(7u),gas_parameter(8u)))+s.dynamics.x*gas_parameter(9u);
                     float temperature=gas_thermal_energy(s)/cv;
+                    if(temperature>=float(FR_GAS_AUDIT_HOT_MIN_K)) {
+                        metrics[FR_GAS_AUDIT_HOT_THERMAL]=gas_thermal_energy(s);
+                        metrics[FR_GAS_AUDIT_HOT_CAPACITY]=cv;
+                    }
                     uint bin=speed<.05?0u:(speed<1.?1u:(speed<10.?2u:3u));
                     metrics[FR_GAS_AUDIT_CELLS]=1.;metrics[FR_GAS_AUDIT_VELOCITY_BINS+bin]=1.;
                     metrics[FR_GAS_AUDIT_MAX_SPEED]=speed;metrics[FR_GAS_AUDIT_MAX_PRESSURE]=own.hydro.w;
