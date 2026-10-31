@@ -56,7 +56,7 @@ bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t requested_width,
     const char *low_latency_setting=getenv("DC_LOW_LATENCY_PRESENT");
     bool low_latency=low_latency_setting&&strcmp(low_latency_setting,"0")!=0;
     VkPresentModeKHR mode=mode_result==VK_SUCCESS?
-        dc_present_mode_select(modes,mode_count,low_latency):VK_PRESENT_MODE_FIFO_KHR;
+        dc_present_mode_select(modes,mode_count,low_latency,gpu->latest_ready_enabled):VK_PRESENT_MODE_FIFO_KHR;
     free(modes);
     if (mode_result != VK_SUCCESS) return error(err, cap, "Cannot list Vulkan presentation modes");
     VkSwapchainCreateInfoKHR swap_info = { .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,

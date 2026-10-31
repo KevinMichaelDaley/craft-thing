@@ -70,6 +70,7 @@ struct dc_gpu {
     VkPipelineCache pipeline_cache;
     char pipeline_cache_path[256];
     bool pipeline_cache_loaded;
+    bool latest_ready_enabled;
     VkQueue queue;
     uint32_t family;
     VkBuffer cells;

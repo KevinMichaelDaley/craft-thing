@@ -10,6 +10,7 @@
 #include <vulkan/vulkan.h>
 
 #include "body_features_gpu.h"
+#include "present_mode_latest_ready.h"
 #include "runtime_body_gpu.h"
 #include "gpu_internal.h"
 #include "reactive_gpu_internal.h"
@@ -20,6 +21,22 @@
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
     return false;
+}
+static bool gpu_supports_latest_ready(VkPhysicalDevice physical) {
+    uint32_t count=0;
+    if(vkEnumerateDeviceExtensionProperties(physical,NULL,&count,NULL)!=VK_SUCCESS||!count) return false;
+    VkExtensionProperties *extensions=calloc(count,sizeof(*extensions));
+    if(!extensions) return false;
+    VkResult result=vkEnumerateDeviceExtensionProperties(physical,NULL,&count,extensions);
+    bool supported=false;
+    if(result==VK_SUCCESS) for(uint32_t i=0;i<count;i++) {
+        if(strcmp(extensions[i].extensionName,DC_VK_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION)==0) {
+            supported=true;
+            break;
+        }
+    }
+    free(extensions);
+    return supported;
 }
 static void gpu_startup_trace(const char *stage, Uint64 started) {
     if(getenv("DC_BONFIRE_STARTUP_TRACE"))
@@ -347,15 +364,29 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     if (!dc_gpu_pick_device(gpu, bytes > atlas_bytes ? bytes : atlas_bytes, err, cap)) goto fail;
     dc_gpu_body_features_t body_features;
     if (!dc_gpu_body_features_query(gpu->physical, &body_features, err, cap)) goto fail;
+    const char *latency_setting=getenv("DC_LOW_LATENCY_PRESENT");
+    bool request_low_latency=latency_setting&&strcmp(latency_setting,"0")!=0;
+    dc_vk_present_mode_fifo_latest_ready_features_t latest_ready={
+        .sType=DC_VK_PRESENT_MODE_FIFO_LATEST_READY_FEATURES};
+    if(gpu->window&&request_low_latency&&gpu_supports_latest_ready(gpu->physical)) {
+        VkPhysicalDeviceFeatures2 available={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+            .pNext=&latest_ready};
+        vkGetPhysicalDeviceFeatures2(gpu->physical,&available);
+        if(latest_ready.presentModeFifoLatestReady) {
+            gpu->latest_ready_enabled=true;
+            body_features.subgroups.pNext=&latest_ready;
+        }
+    }
     float priority = 1.0f;
     VkDeviceQueueCreateInfo queue_info = { .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         .queueFamilyIndex = gpu->family, .queueCount = 1, .pQueuePriorities = &priority };
     VkDeviceCreateInfo device_info = { .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .pNext = &body_features.synchronization, .queueCreateInfoCount = 1, .pQueueCreateInfos = &queue_info };
-    const char *swap_extension = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+    const char *swap_extensions[]={VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        DC_VK_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION};
     if (gpu->window) {
-        device_info.enabledExtensionCount = 1;
-        device_info.ppEnabledExtensionNames = &swap_extension;
+        device_info.enabledExtensionCount = gpu->latest_ready_enabled?2u:1u;
+        device_info.ppEnabledExtensionNames = swap_extensions;
     }
     if (vkCreateDevice(gpu->physical, &device_info, NULL, &gpu->device) != VK_SUCCESS) {
         error(err, cap, "Cannot create Vulkan compute device"); goto fail;
