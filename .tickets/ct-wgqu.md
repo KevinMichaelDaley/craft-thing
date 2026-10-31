@@ -2,7 +2,7 @@
 id: ct-wgqu
 status: in_progress
 deps: []
-links: []
+links: [ct-sqpj]
 created: 2026-10-30T16:27:49Z
 type: bug
 priority: 0
