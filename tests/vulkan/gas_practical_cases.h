@@ -86,6 +86,36 @@ static void test_native_cold_audit_reduces_stock_and_does_not_advance_physics(vo
     free(input);free(copy);free(volume);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_native_hot_gas_audit_weights_tiny_spikes_by_heat_capacity(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_gas_state_t *gas=malloc(4096*sizeof(*gas));
+    double *volume=malloc(4096*sizeof(*volume));
+    ASSERT_TRUE(chunk&&gas&&volume);
+    fr_gas_model_t model=reference_model();
+    for(uint32_t i=0;i<4096;i++) {
+        gas[i]=reference_air(model,1.,300.,0.);
+        volume[i]=1.;
+    }
+    gas[20u*64u+20u]=reference_air(model,1.,1000.,0.);
+    gas[20u*64u+21u]=reference_air(model,.001,3600.,0.);
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&
+        fr_gas_gpu_enable(g,&model,1.,300.,err,sizeof(err))&&
+        fr_gas_gpu_seed_chunk(g,0,gas,volume,4096,err,sizeof(err)));
+    fr_gas_gpu_audit_t audit;
+    ASSERT_TRUE(fr_gas_gpu_audit(g,&audit,err,sizeof(err)));
+    ASSERT_TRUE(audit.metrics[FR_GAS_AUDIT_HOT_CAPACITY]>0.f);
+    float average=audit.metrics[FR_GAS_AUDIT_HOT_THERMAL]/
+                  audit.metrics[FR_GAS_AUDIT_HOT_CAPACITY];
+    printf("Hot gas average %.2fK, peak %.2fK\n",average,
+        audit.metrics[FR_GAS_AUDIT_MAX_TEMPERATURE]);
+    ASSERT_TRUE(fabsf(average-(1000.f+3.6f)/1.001f)<1.f);
+    ASSERT_TRUE(fabsf(audit.metrics[FR_GAS_AUDIT_MAX_TEMPERATURE]-3600.f)<1.f);
+    ASSERT_TRUE(present(g,err,sizeof(err)));
+    free(volume);free(gas);free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_native_practical_offset_wall_does_not_drive_sealed_neighbor(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));
     fr_gas_state_t *input=malloc(4096*sizeof(*input)),*out=malloc(4096*sizeof(*out));

@@ -559,6 +559,7 @@ int main(void) {
     RUN(test_native_quiet_air_sleeps_but_motion_heat_and_pressure_still_wake);
     RUN(test_native_practical_safe_line_matches_explicit_flux_inside_stiff_interval);
     RUN(test_native_cold_audit_reduces_stock_and_does_not_advance_physics);
+    RUN(test_native_hot_gas_audit_weights_tiny_spikes_by_heat_capacity);
     RUN(test_native_practical_checkerboard_pressure_relaxes_conservatively);
     RUN(test_native_practical_offset_wall_does_not_drive_sealed_neighbor);
     RUN(test_native_practical_variable_intervals_stay_finite_without_retry_stalls);
