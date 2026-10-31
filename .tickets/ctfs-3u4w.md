@@ -2,7 +2,7 @@
 id: ctfs-3u4w
 status: closed
 deps: []
-links: []
+links: [ct-8vqy]
 created: 2026-10-27T20:07:05Z
 type: bug
 priority: 1
