@@ -27,10 +27,18 @@ static void test_mailbox_wins_without_tearing(void) {
     PASS();
 }
 
+static void test_low_latency_prefers_tear_free_latest_ready(void) {
+    const VkPresentModeKHR latest_ready=(VkPresentModeKHR)1000361000;
+    const VkPresentModeKHR modes[]={VK_PRESENT_MODE_FIFO_KHR,VK_PRESENT_MODE_IMMEDIATE_KHR,latest_ready};
+    ASSERT_EQ(dc_present_mode_select(modes,3,true),latest_ready);
+    PASS();
+}
+
 int main(void) {
     RUN(test_default_prefers_tear_free_fifo);
     RUN(test_low_latency_uses_supported_immediate_mode);
     RUN(test_mailbox_wins_without_tearing);
+    RUN(test_low_latency_prefers_tear_free_latest_ready);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);
     return g_fail?1:0;
 }
