@@ -894,6 +894,13 @@ build/catapult_scene_display_tests: tests/app/catapult_scene_display_tests.c tes
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/catapult_scene_display_tests.c src/app/catapult_scene.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/catapult_demo: src/app/catapult_demo.c src/app/catapult_scene.c src/app/catapult_scene.h build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/catapult_demo.c src/app/catapult_scene.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/catapult_demo_quarter_native: src/app/catapult_demo.c src/app/catapult_scene.c src/app/catapult_scene.h build/fluid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) src/app/catapult_demo.c src/app/catapult_scene.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/catapult_quarter_demo_tests: tests/app/catapult_quarter_demo_tests.c build/catapult_demo_quarter_native
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+.PHONY: test_catapult_quarter_demo
+test_catapult_quarter_demo: build/catapult_quarter_demo_tests
+	./build/catapult_quarter_demo_tests
 .PHONY: catapult-demo
 catapult-demo: build/catapult_demo
 	./build/catapult_demo
