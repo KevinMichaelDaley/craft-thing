@@ -48,3 +48,11 @@ Final corner-path checkpoint: full make test PASS and focused combustion_body_fe
 **2026-10-30T21:02:07Z**
 
 2026-10-30 RTX A2000 X11 baseline 64-lane build, tools/smoke_profile, three consecutive full displayed bonfire_display_tests runs PASS8/8 dry0/8 wet at58.5,55.5,55.5 simulated seconds. Max gas about1560K,1372K,1165K, no plasma. Earlier identical-layout runs intermittently failed7/8, so this is reassuring but no root-cause change; keep ticket open pending deterministic coverage or stronger repeated evidence.
+
+**2026-10-31T02:11:12Z**
+
+2026-10-30 three consecutive actual displayed quarter-native runs failed7/8 dry at60s, wet0/8, with lower-right or upper-right log missing/late. Existing fixture has one-cell air gap from right upper kindling y87 to lower log ending y86, and two-cell vertical gap from upper-right log ending y76 to middle log starting y78. Added deterministic geometry RED test for a continuous right-side contact path; displayed all-log test remains the acceptance gate.
+
+**2026-10-31T02:22:28Z**
+
+Rejected two no-extra-fuel contact-path fixture trials. First moved right kindling/upper log to touch: 4/5 displayed runs passed, 1/5 failed7/8, max gas 2118-4614K. Second connected finite starter through three right floor sticks and a 1x4 vertical bridge to lower-right log, same total wood cells: 5/5 displayed runs passed8/8 dry by~21s, wet0/8, but max gas 2331-4299.6K, a plasma-like regression. Restored original layout and plan tests; RED experiment commits remain in history. The unresolved issue is balancing right-side ignition with energy-conserving gas heat/oxygen transport, not simply adding fuel or contact.
