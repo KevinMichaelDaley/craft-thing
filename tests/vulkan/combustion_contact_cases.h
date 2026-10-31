@@ -81,13 +81,13 @@ static void test_partial_body_cell_exchanges_heat_with_its_own_gas(void) {
     gas[at].species[FR_GAS_NITROGEN]=.00001;
     gas[at].energy=.00001*model.heat_capacity_cv[FR_GAS_NITROGEN]*3000.;
     ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,gas,volume,4096,err,sizeof(err))&&
-        fr_combustion_gpu_step(g,.001f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
+        fr_combustion_gpu_step(g,.02f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
     fr_reactive_record_t result;bool found=false;float wood_temperature=0;
     ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0,0,&result,&found,err,sizeof(err))&&found&&
         fr_reactive_state_temperature(&result.state,&wood_temperature,err,sizeof(err)));
     printf("Partial-body contact wood %.5fK gas energy %.8g -> %.8gJ\n",
         wood_temperature,gas[at].energy,after[at].energy);
-    ASSERT_TRUE(after[at].energy<gas[at].energy&&wood_temperature>300.f);
+    ASSERT_TRUE(after[at].energy<gas[at].energy*.8&&wood_temperature>300.f);
     double transferred=gas[at].energy-after[at].energy;
     ASSERT_TRUE(fabs(fr_reactive_state_energy(&result.state)-fr_reactive_state_energy(&wood)-transferred)<1e-5);
     free(volume);free(after);free(gas);free(chunk);dc_gpu_destroy(g);PASS();
@@ -112,6 +112,8 @@ static void test_partly_flooded_cell_exchanges_heat_between_gas_and_water(void) 
         fr_thermal_gpu_read_water_chunk(g,0,water,4096,err,sizeof(err)));
     printf("Partial-water contact gas %.8g -> %.8gJ water %.8gJ\n",gas[at].energy,after[at].energy,water[at]);
     ASSERT_TRUE(after[at].energy<gas[at].energy&&water[at]>0.f);
-    ASSERT_TRUE(fabs((gas[at].energy-after[at].energy)-water[at])<1e-5);
+    double gas_before=0.,gas_after=0.;
+    for(uint32_t i=0;i<4096;i++) {gas_before+=gas[i].energy;gas_after+=after[i].energy;}
+    ASSERT_TRUE(fabs((gas_before-gas_after)-water[at])<1e-5);
     free(water);free(volume);free(after);free(gas);free(chunk);dc_gpu_destroy(g);PASS();
 }
