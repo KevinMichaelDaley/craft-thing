@@ -102,6 +102,8 @@ static void test_compact_practical_profile_admits_without_denorm_control(void) {
 static void test_practical_policy_does_not_require_large_cfl_transport(void) {
     char err[256]={0};dc_gpu_t *g=NULL;
     ASSERT_TRUE(context(&g,err,sizeof(err)));
+    ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_AXIS","1",1),0);
+    ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_METADATA","1",1),0);
     fr_gas_model_t model=reference_model();
     ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012f,300.f,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_IMPLICIT,err,sizeof(err)));

@@ -453,8 +453,12 @@ bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32
     if(!g||!g->gas||policy>FR_GAS_PRESSURE_PRACTICAL) return error(err,cap,"Invalid gas acoustic policy");
     struct fr_gas_gpu *t=g->gas;
     if(policy==FR_GAS_PRESSURE_PRACTICAL&&!gravity_resolved(t,((float *)t->parameters.mapped)[FR_GAS_GRAVITY_WORD])) return error(err,cap,"Gas gravitational scale height is below one physics cell");
-    if(policy>=FR_GAS_PRESSURE_LARGE_CFL&&
-       !fr_gas_acoustic_supports_large_transport(g,policy))
+    bool compact_practical=policy==FR_GAS_PRESSURE_PRACTICAL&&
+        getenv("DC_GAS_FUSED_AXIS")&&strcmp(getenv("DC_GAS_FUSED_AXIS"),"0")!=0&&
+        getenv("DC_GAS_FUSED_METADATA")&&strcmp(getenv("DC_GAS_FUSED_METADATA"),"0")!=0&&
+        !getenv("DC_GAS_STAGED_RATES")&&!getenv("DC_GAS_COMPARE_ROW_SETUP");
+    if(policy>=FR_GAS_PRESSURE_LARGE_CFL&&!compact_practical&&
+        !fr_gas_acoustic_supports_large_transport(g,policy))
         return error(err,cap,"Large-CFL transport requires compute subgroup shuffle and float32 denormal preservation");
     if(policy!=FR_GAS_PRESSURE_HLLC&&!t->acoustic.ready) {
         VkDescriptorBufferInfo buffers[12];
@@ -467,7 +471,7 @@ bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32
         VkDescriptorBufferInfo owners={t->owner_tiles.buffer,0,t->owner_tiles.bytes};
         if(!fr_gas_acoustic_create(g,&t->acoustic,buffers,owners,err,cap)) return false;
     }
-    if(policy>=FR_GAS_PRESSURE_LARGE_CFL&&!t->acoustic.supports_large_transport) return error(err,cap,"Large-CFL transport requires compute subgroup shuffle and float32 denormal preservation");
+    if(policy==FR_GAS_PRESSURE_LARGE_CFL&&!t->acoustic.supports_large_transport) return error(err,cap,"Large-CFL transport requires compute subgroup shuffle and float32 denormal preservation");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot configure acoustic policy");
     const char *direct_setting=getenv("DC_GAS_ROTATE_PUBLISH");
     const char *owner_setting=getenv("DC_GAS_SPARSE_OWNERS"),*first_setting=getenv("DC_GAS_DIRECT_FIRST_AXIS");
