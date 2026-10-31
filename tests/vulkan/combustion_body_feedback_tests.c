@@ -185,5 +185,58 @@ static void test_thin_oxygen_is_reserved_without_creating_heat_or_consuming_unfu
 }
 static void test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory(void) {hot_skin_budget_case(false);}
 static void test_rotated_mixed_temperature_heat_cannot_overdraw_a_cold_parcel(void) {hot_skin_budget_case(true);}
-int main(void) {RUN(test_thin_oxygen_is_reserved_without_creating_heat_or_consuming_unfunded_fuel);RUN(test_rotated_mixed_temperature_heat_cannot_overdraw_a_cold_parcel);RUN(test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory);RUN(test_radiating_flame_heats_a_surface_even_without_a_draft);RUN(test_hot_face_ignites_when_another_face_has_more_oxygen);RUN(test_diagonal_hot_gas_heats_a_body_corner);RUN(test_diagonal_oxygen_reaches_an_exposed_body_corner);RUN(test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_authored_grain);
+static void test_reacting_wood_does_not_overheat_thin_adjacent_air(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_gas_state_t *gas=calloc(4096,sizeof(*gas));
+    double *volumes=calloc(4096,sizeof(*volumes));
+    ASSERT_TRUE(chunk&&gas&&volumes);
+    const uint32_t cell=20u*64u+20u;
+    chunk->cells[cell].material=DC_MATERIAL_WOOD;
+    fr_reactive_state_t wood;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,1000.f,
+        9200,&wood,err,sizeof(err)));
+    wood.flags|=FR_REACTIVE_FLAMING;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&
+        fr_gpu_reactive_seed_cell(g,0,cell,&wood,err,sizeof(err))&&
+        dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err))&&
+        fr_thermal_gpu_enable(g,err,sizeof(err)));
+    const fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},
+        .kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&
+        fr_combustion_gpu_enable(g,err,sizeof(err)));
+    for(uint32_t i=0;i<4096;i++) volumes[i]=i==cell?0.:1.;
+    const uint32_t neighbors[4]={cell-1u,cell+1u,cell-64u,cell+64u};
+    for(uint32_t k=0;k<4;k++) {
+        fr_gas_state_t *air=gas+neighbors[k];
+        air->species[FR_GAS_OXYGEN]=.000021;
+        air->species[FR_GAS_NITROGEN]=.000079;
+        air->energy=(.000021*model.heat_capacity_cv[FR_GAS_OXYGEN]+
+            .000079*model.heat_capacity_cv[FR_GAS_NITROGEN])*1700.;
+    }
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,gas,volumes,4096,err,sizeof(err)));
+    for(uint32_t step=0;step<4;step++)
+        ASSERT_TRUE(fr_combustion_gpu_step(g,.25f,err,sizeof(err)));
+    fr_reactive_record_t after;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0,0,&after,&found,
+        err,sizeof(err))&&found&&
+        fr_gas_gpu_read_chunk(g,0,gas,4096,err,sizeof(err)));
+    double peak=0.;
+    for(uint32_t k=0;k<4;k++) {
+        fr_gas_thermo_t thermo;
+        ASSERT_TRUE(fr_gas_thermodynamics(&model,gas+neighbors[k],1.,
+            &thermo,err,sizeof(err)));
+        if(thermo.temperature_K>peak) peak=thermo.temperature_K;
+    }
+    printf("Thin-air reaction consumed%u peak%.1fK\n",
+        wood.fuel_mass_fp-after.state.fuel_mass_fp,peak);
+    ASSERT_TRUE(after.state.fuel_mass_fp<wood.fuel_mass_fp);
+    ASSERT_TRUE(peak<=2300.);
+    ASSERT_TRUE(present(g,err,sizeof(err)));
+    free(volumes);free(gas);free(chunk);dc_gpu_destroy(g);PASS();
+}
+int main(void) {RUN(test_reacting_wood_does_not_overheat_thin_adjacent_air);RUN(test_thin_oxygen_is_reserved_without_creating_heat_or_consuming_unfunded_fuel);RUN(test_rotated_mixed_temperature_heat_cannot_overdraw_a_cold_parcel);RUN(test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory);RUN(test_radiating_flame_heats_a_surface_even_without_a_draft);RUN(test_hot_face_ignites_when_another_face_has_more_oxygen);RUN(test_diagonal_hot_gas_heats_a_body_corner);RUN(test_diagonal_oxygen_reaches_an_exposed_body_corner);RUN(test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_authored_grain);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
