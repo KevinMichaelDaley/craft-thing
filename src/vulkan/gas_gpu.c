@@ -12,6 +12,7 @@
 #include "runtime_body_gpu.h"
 
 #include "gas_gpu_state.h"
+/* Optical depth ln(4) for 2e-6 soot mass in 1.2e-3 ambient gas mass. */
 #define FR_GAS_SMOKE_DISPLAY_OPACITY 832.f
 bool fr_gas_gpu_reused_line_rate(dc_gpu_t *g,bool *used) {
     if(!g||!g->gas||!used) return false;
