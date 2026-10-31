@@ -135,13 +135,18 @@ static void record_combustion(dc_gpu_t *g,float seconds,uint32_t mode) {
         fr_gas_gpu_geometry_changed(g,true);
     }
 }
+static void record_flame_radiation(dc_gpu_t *g,float seconds) {
+    record_combustion(g,seconds,13);
+    record_combustion(g,seconds,14);
+    record_combustion(g,seconds,15);
+    phase(g,11,seconds);
+}
 bool fr_combustion_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(!g||!g->thermal||!g->thermal->combustion.pipeline||!isfinite(seconds)||seconds<0) return false;
     if(seconds==0) return true;
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!dc_gpu_runtime_prepare_fragments(g,err,cap)||!fr_renderer_begin(g)) return false;
     phase(g,8,seconds);phase(g,0,seconds);phase(g,7,seconds);
-    record_combustion(g,seconds,13);record_combustion(g,seconds,14);
-    record_combustion(g,seconds,15);phase(g,11,seconds);
+    record_flame_radiation(g,seconds);
     record_combustion(g,seconds,4);record_combustion(g,seconds,5);
     phase(g,13,seconds);phase(g,11,seconds);
     record_combustion(g,seconds,3);record_combustion(g,seconds,9);record_combustion(g,seconds,0);record_combustion(g,seconds,10);
@@ -288,10 +293,7 @@ void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
     if(g->thermal->purpose==FR_THERMAL_WORLD_BONFIRE) {
         phase(g,0,seconds);phase(g,19,seconds);
         phase(g,16,seconds);phase(g,17,seconds);phase(g,11,seconds);
-        if(g->thermal->combustion.pipeline) {
-            record_combustion(g,seconds,13);record_combustion(g,seconds,14);
-            record_combustion(g,seconds,15);phase(g,11,seconds);
-        }
+        if(g->thermal->combustion.pipeline) record_flame_radiation(g,seconds);
     }
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,9);
     phase(g,0,seconds);phase(g,7,seconds);
