@@ -29,3 +29,28 @@ static void test_hot_gas_heats_each_exposed_wood_face(void) {
     }
     ASSERT_TRUE(present(g,err,sizeof(err)));free(input);free(volumes);free(chunk);dc_gpu_destroy(g);PASS();
 }
+
+static void test_still_air_conducts_heat_without_transporting_mass(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_gas_gpu_enable(g,&model,.0012f,300,err,sizeof(err))&&fr_combustion_gpu_enable(g,err,sizeof(err)));
+    fr_gas_state_t *gas=calloc(4096,sizeof(*gas)),*after=calloc(4096,sizeof(*after));double *volume=calloc(4096,sizeof(*volume));ASSERT_TRUE(gas&&after&&volume);
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,gas,4096,err,sizeof(err)));
+    for(uint32_t i=0;i<4096;i++) volume[i]=1.;
+    uint32_t hot=32u*64u+32u,cold=hot+1u;
+    gas[hot].energy*=900./300.;
+    double before_energy=0,after_energy=0,before_mass=gas[cold].species[FR_GAS_NITROGEN];
+    for(uint32_t i=0;i<4096;i++) before_energy+=gas[i].energy;
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,gas,volume,4096,err,sizeof(err))&&fr_combustion_gpu_step(g,.001f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
+    for(uint32_t i=0;i<4096;i++) after_energy+=after[i].energy;
+    double capacity=before_mass*model.heat_capacity_cv[FR_GAS_NITROGEN];
+    double four_face_heat=4.*.02*.0001/.01*.001*(900.-300.);
+    ASSERT_TRUE(fabs(after[hot].energy-(gas[hot].energy-four_face_heat))<1e-6);
+    ASSERT_TRUE(fabs(after[cold].energy-(gas[cold].energy+four_face_heat/4.))<1e-6);
+    ASSERT_TRUE(after[cold].species[FR_GAS_NITROGEN]==gas[cold].species[FR_GAS_NITROGEN]);
+    ASSERT_TRUE(fabs((after[cold].energy-gas[cold].energy)/capacity-.135)<.01);
+    ASSERT_TRUE(fabs(after_energy-before_energy)<1e-5);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(gas);free(after);free(volume);free(chunk);dc_gpu_destroy(g);PASS();
+}

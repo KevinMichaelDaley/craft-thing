@@ -261,6 +261,7 @@ int main(int argc,char **argv) {
     }
     if(argc==2&&strcmp(argv[1],"--contact")==0) {
         RUN(test_hot_gas_heats_each_exposed_wood_face);
+        RUN(test_still_air_conducts_heat_without_transporting_mass);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
     }
     if(argc==2&&strcmp(argv[1],"--containment")==0) {
@@ -285,5 +286,6 @@ int main(int argc,char **argv) {
     RUN(test_fresh_side_air_can_feed_a_surface_with_starved_air_above);
     if(!core) RUN(test_stone_and_clearance_contain_while_a_fuel_bridge_spreads);
     RUN(test_hot_gas_heats_each_exposed_wood_face);
+    RUN(test_still_air_conducts_heat_without_transporting_mass);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
