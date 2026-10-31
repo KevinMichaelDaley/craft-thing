@@ -12,7 +12,7 @@
 #include "runtime_body_gpu.h"
 
 #include "gas_gpu_state.h"
-#define FR_GAS_SMOKE_DISPLAY_OPACITY 2000.f
+#define FR_GAS_SMOKE_DISPLAY_OPACITY 832.f
 bool fr_gas_gpu_reused_line_rate(dc_gpu_t *g,bool *used) {
     if(!g||!g->gas||!used) return false;
     *used=(((uint32_t *)g->gas->stats.mapped)[15]&4u)!=0u;return true;
