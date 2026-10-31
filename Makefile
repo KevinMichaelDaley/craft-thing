@@ -700,6 +700,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/thermal_tests
 	./build/thermal_checkpoint_tests
 	./build/benchmark_brush_tests
+	./build/benchmark_clock_tests
 	./build/appearance_tests
 	./build/brush_region_tests
 	./build/mpm_swap_tests
@@ -1987,8 +1988,13 @@ test: build/thermal_checkpoint_tests
 build/benchmark_brush_tests: tests/app/benchmark_brush_tests.c src/app/benchmark_brush.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
 test: build/benchmark_brush_tests
+build/benchmark_clock_tests: tests/app/benchmark_clock_tests.c src/app/benchmark_clock.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+test: build/benchmark_clock_tests
 build/dungeoncraft build/controls_tests: src/app/benchmark_brush.h
 $(QUARTER_APP_OBJ): src/app/benchmark_brush.h
+build/dungeoncraft build/controls_tests: src/app/benchmark_clock.h
+$(QUARTER_APP_OBJ): src/app/benchmark_clock.h
 test: build/thermal_tests
 build/thermal_gpu.o: src/vulkan/thermal_gpu.c include/ferrum/fire/thermal_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@

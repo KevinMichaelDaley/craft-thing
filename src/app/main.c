@@ -14,6 +14,7 @@
 
 #include "dungeoncraft/chunk.h"
 #include "benchmark_brush.h"
+#include "benchmark_clock.h"
 #include "level.h"
 #include "prop_scene.h"
 #include "session.h"
@@ -1441,7 +1442,7 @@ int main(int argc, char **argv) {
             float step_seconds = single_step ? (float)tick_seconds :
                                  (float)accumulator;
             if (benchmark_frames)
-                step_seconds = (float)(elapsed > tick_seconds ? elapsed : tick_seconds);
+                step_seconds = dc_benchmark_step_seconds((float)elapsed,(float)tick_seconds);
             if (step_seconds > 0.25f) step_seconds = 0.25f;
             if (!dc_level_view_step_timed(view, step_seconds, err, sizeof(err))) {
                 failed = true; running = false;
