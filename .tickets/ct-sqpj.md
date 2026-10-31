@@ -28,3 +28,7 @@ Initial heat-path audit after quarter-native catapult delivery: shaders/reactive
 **2026-10-31T03:06:00Z**
 
 2026-10-31 displayed quarter-native diagnostic on temporary connected no-extra-fuel layout: run passed dry8/8 wet0/8 by21s, but peak audit3343.7K; another run peaked4602.4K. Full-view GPU readback showed hot cells at wet-side starter edge (e.g. world x361 y92, T2281.6K, mass3.179e-7, O2=2.601e-9, soot6.591e-10, energy5.171e-4). These are thin low-capacity gas pockets. The diagnostic readback matched GPU audit when scanning the whole view. Likely issue is thermal/air mixing or heat coupling around moving/partially occupied cells; neither energy coefficient changes nor audit masking is justified yet. Temporary connected geometry and test diagnostic were restored; original fixture unchanged. Logs: ignored build/bonfire_connected_full_trial.log and build/bonfire_hotspot_global_trial_10s.log.
+
+**2026-10-31T03:10:37Z**
+
+A focused thin-air combustion test with gas preheated to1700K measured2351K after four wood fuel units reacted; starting at293K gave1227K. This does not reproduce the full-scene 4602K pocket or isolate a defect, so the artificial2300K test was reverted rather than imposing a temperature ceiling. Conservative gas transport applies energy flux alongside mass; no direct evidence of stranded transport energy. Next step is capture gas-cell geometry/volume and per-step reaction/thermal flux at the wet-side starter edge around world x361 y92.
