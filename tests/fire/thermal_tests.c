@@ -112,7 +112,7 @@ static void test_surface_reaction_power_survives_subquantum_frames_and_decays(vo
     for(int i=0;i<1000;i++) next=fr_surface_reaction_power(next,0.f,.01f);
     ASSERT_TRUE(next<1e-8f);PASS();
 }
-static void test_two_dimensional_timber_transfers_heat_on_a_gameplay_timescale(void) {
+static void test_timber_fourier_flux_uses_material_conductivity_without_multiplier(void) {
     char err[256]={0};float energy[3]={.9f*1200.f,.9f*300.f,.9f*300.f};
     float initial=energy[0]+energy[1]+energy[2];
     for(int step=0;step<600;step++) {
@@ -124,8 +124,8 @@ static void test_two_dimensional_timber_transfers_heat_on_a_gameplay_timescale(v
         }
         energy[0]-=flux[0];energy[1]+=flux[0]-flux[1];energy[2]+=flux[1];
     }
-    ASSERT_TRUE(FR_THERMAL_2D_TRANSPORT_SCALE>1.f&&FR_THERMAL_2D_TRANSPORT_SCALE<=2.f);
-    ASSERT_TRUE(energy[2]/.9f>301.5f&&energy[2]/.9f<306.f);
+    ASSERT_TRUE(FR_THERMAL_2D_TRANSPORT_SCALE==1.f);
+    ASSERT_TRUE(energy[2]/.9f>300.4f&&energy[2]/.9f<302.f);
     ASSERT_TRUE(fabsf(energy[0]+energy[1]+energy[2]-initial)<.01f);PASS();
 }
 static void test_exposed_skin_has_a_finite_radiating_boundary(void) {
@@ -153,7 +153,7 @@ int main(void) {
     RUN(test_mixed_temperature_outflow_preserves_each_parcel_and_total_heat);
     RUN(test_warm_reacting_gas_does_not_render_as_full_brightness_flame);
     RUN(test_exposed_skin_has_a_finite_radiating_boundary);
-    RUN(test_two_dimensional_timber_transfers_heat_on_a_gameplay_timescale);
+    RUN(test_timber_fourier_flux_uses_material_conductivity_without_multiplier);
     RUN(test_surface_reaction_power_survives_subquantum_frames_and_decays);
     RUN(test_blackbody_temperature_power_and_magic_override);
     RUN(test_finite_radiance_heats_the_boundary_without_requiring_a_hot_bulk);
