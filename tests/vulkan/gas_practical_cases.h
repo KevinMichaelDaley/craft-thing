@@ -284,6 +284,30 @@ static void test_native_vorticity_rolls_a_rising_plume_sideways_without_creating
     ASSERT_TRUE(lateral[1]>lateral[0]*1.04+1e-6);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(chunk);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
 }
+static void test_transported_low_density_smoke_is_readable_on_the_dark_display(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_gas_state_t *input=calloc(4096,sizeof(*input));double *volume=calloc(4096,sizeof(*volume));
+    uint32_t *pixels=malloc(480u*270u*sizeof(*pixels));
+    ASSERT_TRUE(chunk&&input&&volume&&pixels&&context(&g,err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_gas_model_t model=reference_model();
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err)));
+    for(uint32_t i=0;i<4096;i++) volume[i]=1.;
+    uint32_t at=20u*64u+20u;
+    input[at].species[FR_GAS_NITROGEN]=.001198;
+    input[at].species[FR_GAS_SOOT]=.000002;
+    for(uint32_t k=0;k<FR_GAS_SPECIES;k++)
+        input[at].energy+=input[at].species[k]*model.heat_capacity_cv[k]*300.;
+    input[at].pigment[0]=.18*.000002;input[at].pigment[1]=.16*.000002;
+    input[at].pigment[2]=.14*.000002;
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&
+        present(g,err,sizeof(err))&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
+    uint32_t smoke=pixels[20u*480u+20u],clear=pixels[20u*480u+21u];
+    int red_delta=abs((int)(smoke&255u)-(int)(clear&255u));
+    printf("Low-density smoke red contrast %d levels\n",red_delta);
+    ASSERT_TRUE(red_delta>=10);
+    free(pixels);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_native_stationary_heat_mixes_diagonally_in_the_optimized_path(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_gas_state_t *input=calloc(4096,sizeof(*input)),*out=calloc(4096,sizeof(*out));double *volume=calloc(4096,sizeof(*volume));
