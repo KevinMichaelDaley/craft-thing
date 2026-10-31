@@ -228,6 +228,7 @@ void main() {
         fluxes[index]=vec4(horizontal,vertical,0.,0.);
     }
     if(active_phase()==10u||active_phase()==13u) {
+        if(active_phase()==13u&&params.unused_view==0u) return;
         if(floatBitsToUint(samples[index+params.width*params.height].x)!=4u) return;
         uint c=active_phase()==13u?2u:0u;
         float heat=-fluxes[index][c]-fluxes[index][c+1u];
