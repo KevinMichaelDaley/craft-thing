@@ -32,3 +32,7 @@ Initial heat-path audit after quarter-native catapult delivery: shaders/reactive
 **2026-10-31T03:10:37Z**
 
 A focused thin-air combustion test with gas preheated to1700K measured2351K after four wood fuel units reacted; starting at293K gave1227K. This does not reproduce the full-scene 4602K pocket or isolate a defect, so the artificial2300K test was reverted rather than imposing a temperature ceiling. Conservative gas transport applies energy flux alongside mass; no direct evidence of stranded transport energy. Next step is capture gas-cell geometry/volume and per-step reaction/thermal flux at the wet-side starter edge around world x361 y92.
+
+**2026-10-31T03:12:07Z**
+
+Checkpoint geometry follow-up on temporary connected layout: hottest wet-side starter cells were (361,92) T2436.1K volume0.0024719 mass1.0344e-7 O2=1.0526e-9 and (362,91) T3591.4K volume0.0051422 mass2.5989e-6 O2=6.2177e-10. At a separate report (362,91) T2662.2K volume0.7024 mass8.3817e-5, showing low density as well as small volume. shaders/gas/geometry_transfer.comp retains gas stock when volume expands and relies on later transport to refill; the rarefied cut-cell heat/air mixing path is the concrete next target. Temporary fixture/diagnostic source restored. Existing conserved transport carries energy with mass; do not apply an arbitrary heat clamp.
