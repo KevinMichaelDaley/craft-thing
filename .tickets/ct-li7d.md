@@ -1,6 +1,6 @@
 ---
 id: ct-li7d
-status: open
+status: in_progress
 deps: []
 links: [ct-sqpj, ct-42nt]
 created: 2026-10-31T21:02:16Z

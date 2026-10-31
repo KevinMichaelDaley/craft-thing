@@ -74,6 +74,45 @@ static void test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_
     ASSERT_EQ(memcmp(&moved.state,&dry.state,sizeof(dry.state)),0);
     free(before);free(after);free(paused);free(gas);free(volumes);free(colors);free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_small_body_char_reaction_keeps_a_finite_temperature_ledger(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_gas_state_t *gas=calloc(4096,sizeof(*gas));double *volume=calloc(4096,sizeof(*volume));
+    ASSERT_TRUE(chunk&&gas&&volume&&context(&g,err,sizeof(err)));
+    uint32_t at=20u*64u+20u;chunk->cells[at].material=DC_MATERIAL_WOOD;
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t charred;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,500,0,1400,5200,&charred,err,sizeof(err)));
+    charred.char_mass_fp=charred.fuel_mass_fp;charred.fuel_mass_fp=0;
+    charred.thermal_energy=(float)(fr_reactive_state_heat_capacity(&charred)*1400.);
+    charred.ignition_threshold=.001f;charred.flags|=FR_REACTIVE_FLAMING;
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,at,&charred,err,sizeof(err))&&
+        dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err))&&fr_thermal_gpu_enable(g,err,sizeof(err)));
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.05f,293.15f,err,sizeof(err))&&fr_combustion_gpu_enable(g,err,sizeof(err)));
+    for(uint32_t i=0;i<4096;i++) {
+        volume[i]=i==at?0.:1.;if(i==at) continue;
+        gas[i].species[FR_GAS_OXYGEN]=.01;gas[i].species[FR_GAS_NITROGEN]=.04;
+        gas[i].energy=(.01*model.heat_capacity_cv[FR_GAS_OXYGEN]+.04*model.heat_capacity_cv[FR_GAS_NITROGEN])*293.15;
+    }
+    double initial_gas_heat=0.;for(uint32_t i=0;i<4096;i++) initial_gas_heat+=gas[i].energy;
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,gas,volume,4096,err,sizeof(err)));
+    float peak=0.;fr_reactive_record_t record={0};bool found=false;
+    for(uint32_t step=0;step<10;step++) {
+        ASSERT_TRUE(fr_combustion_gpu_step(g,1.f,err,sizeof(err))&&
+            fr_gpu_reactive_read_body(g,0x80000001u,0,0,&record,&found,err,sizeof(err))&&found);
+        float temperature=0.;ASSERT_TRUE(fr_reactive_state_temperature(&record.state,&temperature,err,sizeof(err)));
+        if(temperature>peak) peak=temperature;
+    }
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,gas,4096,err,sizeof(err)));
+    double gas_heat=0.;for(uint32_t i=0;i<4096;i++) gas_heat+=gas[i].energy;
+    printf("Small char ledger: initial char %u remaining %u capacity %.9g solid heat %.9g gas heat change %.9g peak %.1fK\n",
+        charred.char_mass_fp,record.state.char_mass_fp,fr_reactive_state_heat_capacity(&record.state),
+        fr_reactive_state_energy(&record.state),gas_heat-initial_gas_heat,peak);
+    ASSERT_TRUE(record.state.char_mass_fp<charred.char_mass_fp);
+    ASSERT_TRUE(peak<=2500.f);
+    free(volume);free(gas);free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void hot_face_case(bool draft,bool diagonal,bool corner_oxygen) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     chunk->cells[20u*64u+20u].material=DC_MATERIAL_WOOD;
@@ -185,5 +224,7 @@ static void test_thin_oxygen_is_reserved_without_creating_heat_or_consuming_unfu
 }
 static void test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory(void) {hot_skin_budget_case(false);}
 static void test_rotated_mixed_temperature_heat_cannot_overdraw_a_cold_parcel(void) {hot_skin_budget_case(true);}
-int main(void) {RUN(test_thin_oxygen_is_reserved_without_creating_heat_or_consuming_unfunded_fuel);RUN(test_rotated_mixed_temperature_heat_cannot_overdraw_a_cold_parcel);RUN(test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory);RUN(test_radiating_flame_heats_a_surface_even_without_a_draft);RUN(test_hot_face_ignites_when_another_face_has_more_oxygen);RUN(test_diagonal_hot_gas_heats_a_body_corner);RUN(test_diagonal_oxygen_reaches_an_exposed_body_corner);RUN(test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_authored_grain);
+int main(void) {
+    if(getenv("DC_CHAR_LEDGER_ONLY")) RUN(test_small_body_char_reaction_keeps_a_finite_temperature_ledger);
+    else {RUN(test_thin_oxygen_is_reserved_without_creating_heat_or_consuming_unfunded_fuel);RUN(test_rotated_mixed_temperature_heat_cannot_overdraw_a_cold_parcel);RUN(test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory);RUN(test_radiating_flame_heats_a_surface_even_without_a_draft);RUN(test_hot_face_ignites_when_another_face_has_more_oxygen);RUN(test_diagonal_hot_gas_heats_a_body_corner);RUN(test_diagonal_oxygen_reaches_an_exposed_body_corner);RUN(test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_authored_grain);RUN(test_small_body_char_reaction_keeps_a_finite_temperature_ledger);}
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
