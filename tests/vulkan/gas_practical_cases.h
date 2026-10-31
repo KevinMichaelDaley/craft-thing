@@ -132,6 +132,7 @@ static void test_native_gas_only_still_air_conducts_without_mass_transport(void)
         fr_gas_gpu_step(g,.001f,err,sizeof(err))&&
         fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
     ASSERT_TRUE(after[cold].energy>before[cold].energy+1e-5);
+    double full_face_heat=after[cold].energy-before[cold].energy;
     ASSERT_TRUE(fabs(after[cold].species[FR_GAS_NITROGEN]-before[cold].species[FR_GAS_NITROGEN])<1e-7);
     double sum_before=0,sum_after=0;
     for(uint32_t i=0;i<4096;i++) {sum_before+=before[i].energy;sum_after+=after[i].energy;}
@@ -141,6 +142,13 @@ static void test_native_gas_only_still_air_conducts_without_mass_transport(void)
         fr_gas_gpu_step(g,.001f,err,sizeof(err))&&
         fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
     ASSERT_TRUE(fabs(after[cold].energy-before[cold].energy)<1e-6);
+    volume[hot]=.5;before[hot]=reference_air(model,.0002,900,0);
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,before,volume,4096,err,sizeof(err))&&
+        fr_gas_gpu_gate(g,32,32,1,1,0,false,err,sizeof(err))&&
+        fr_gas_gpu_step(g,.001f,err,sizeof(err))&&
+        fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
+    double partial_face_heat=after[cold].energy-before[cold].energy;
+    ASSERT_TRUE(partial_face_heat>0&&fabs(partial_face_heat/full_face_heat-sqrt(.5))<.1);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(before);free(after);free(volume);free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_native_practical_offset_wall_does_not_drive_sealed_neighbor(void) {
