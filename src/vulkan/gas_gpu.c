@@ -12,6 +12,7 @@
 #include "runtime_body_gpu.h"
 
 #include "gas_gpu_state.h"
+#define FR_GAS_SMOKE_DISPLAY_OPACITY 2000.f
 bool fr_gas_gpu_reused_line_rate(dc_gpu_t *g,bool *used) {
     if(!g||!g->gas||!used) return false;
     *used=(((uint32_t *)g->gas->stats.mapped)[15]&4u)!=0u;return true;
@@ -273,7 +274,8 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     float *parameters=t->parameters.mapped;
     for(uint32_t i=0;i<5;i++) {parameters[i]=(float)t->model.gas_constant[i];parameters[5+i]=(float)t->model.heat_capacity_cv[i];}
     parameters[10]=(float)t->model.kinetic_scale;parameters[11]=t->density;parameters[12]=t->temperature;
-    parameters[13]=.21f;parameters[14]=0;parameters[15]=6;
+    parameters[13]=.21f;parameters[14]=0;
+    parameters[FR_GAS_OPACITY_WORD]=FR_GAS_SMOKE_DISPLAY_OPACITY;
     ((uint32_t *)t->parameters.mapped)[FR_GAS_SLOT_COUNT_WORD]=DC_GPU_CHUNK_SLOTS;
     ((uint32_t *)t->parameters.mapped)[FR_GAS_CELL_OWNER_WORD]=0u;
     VkDescriptorBufferInfo buffers[28];
