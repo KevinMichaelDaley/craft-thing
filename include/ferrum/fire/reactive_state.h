@@ -56,9 +56,10 @@ bool fr_reactive_state_default(uint32_t material, uint32_t dry_mass_fp,
                                 uint32_t bound_water_fp, float temperature_K,
                                 uint64_t parcel_id, fr_reactive_state_t *out,
                                 char *err_buf, uint32_t err_cap);
-/** Sum actual species heat capacities; dry reference mass is excluded. Missing
- * state or unknown material returns zero. This reference has no runtime readback. */
+/** Return energy divided by material temperature for an initialized parcel. */
 double fr_reactive_state_heat_capacity(const fr_reactive_state_t *state);
+/** Compute extensive thermal energy for the parcel at a specified temperature. */
+double fr_reactive_state_energy_at_temperature(const fr_reactive_state_t *state,float temperature_K);
 /** Read extensive energy including its persisted low-order remainder. */
 double fr_reactive_state_energy(const fr_reactive_state_t *state);
 /** Transactional cold/reference heat addition with compensated storage.

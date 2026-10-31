@@ -106,10 +106,15 @@ static void test_small_body_char_reaction_keeps_a_finite_temperature_ledger(void
     }
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,gas,4096,err,sizeof(err)));
     double gas_heat=0.;for(uint32_t i=0;i<4096;i++) gas_heat+=gas[i].energy;
+    double reaction_heat=(double)(charred.char_mass_fp-record.state.char_mass_fp)/65536.*
+        fr_reactive_profile(DC_MATERIAL_CHAR)->primary_heat;
+    double stored_heat=fr_reactive_state_energy(&record.state)-fr_reactive_state_energy(&charred)+
+        gas_heat-initial_gas_heat;
     printf("Small char ledger: initial char %u remaining %u capacity %.9g solid heat %.9g gas heat change %.9g peak %.1fK\n",
         charred.char_mass_fp,record.state.char_mass_fp,fr_reactive_state_heat_capacity(&record.state),
         fr_reactive_state_energy(&record.state),gas_heat-initial_gas_heat,peak);
     ASSERT_TRUE(record.state.char_mass_fp<charred.char_mass_fp);
+    ASSERT_TRUE(fabs(stored_heat-reaction_heat)<1.);
     ASSERT_TRUE(peak<=2500.f);
     free(volume);free(gas);free(chunk);dc_gpu_destroy(g);PASS();
 }

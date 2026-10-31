@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "dungeoncraft/char_enthalpy.h"
 #include "dungeoncraft/reactive_state_layout.h"
 #include "ferrum/fire/material_profile.h"
 #include "ferrum/fire/reactive_state.h"
@@ -30,7 +31,16 @@ static double capacity(const fr_reactive_state_t *s) {
             fr_reactive_profile(DC_MATERIAL_RED_SLIME_JELLY)->heat_capacity)/DC_FLUID_FULL;
 }
 double fr_reactive_state_heat_capacity(const fr_reactive_state_t *s) {
-    return s&&fr_reactive_profile(s->material)?capacity(s):0;
+    if(!s||!fr_reactive_profile(s->material)) return 0;
+    double base=capacity(s),energy=fr_reactive_state_energy(s);
+    return energy>0&&base>0?fr_char_mixture_secant_capacity((float)energy,(float)base,
+        (float)s->char_mass_fp/DC_FLUID_FULL):base;
+}
+double fr_reactive_state_energy_at_temperature(const fr_reactive_state_t *s,float temperature) {
+    if(!s||!fr_reactive_profile(s->material)||!isfinite(temperature)||temperature<=0) return 0;
+    double char_mass=(double)s->char_mass_fp/DC_FLUID_FULL;
+    return capacity(s)*temperature+char_mass*(fr_char_specific_enthalpy(temperature)-
+        FR_CHAR_BASE_HEAT_CAPACITY*temperature);
 }
 double fr_reactive_state_energy(const fr_reactive_state_t *s) {
     return s?(double)s->thermal_energy+s->thermal_energy_residual+s->thermal_energy_correction:0;
@@ -65,7 +75,7 @@ bool fr_reactive_state_default(uint32_t material,uint32_t mass,uint32_t water,
     if(oxidizer>mass-fuel) oxidizer=mass-fuel;
     if(material==DC_MATERIAL_CHAR) s.char_mass_fp=fuel;else s.fuel_mass_fp=fuel;
     s.core_oxidizer_fp=oxidizer;s.inert_mass_fp=mass-fuel-oxidizer;
-    s.thermal_energy=(float)(capacity(&s)*temperature);
+    s.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&s,temperature);
     if(!fr_reactive_state_valid(&s,err,cap)) return false;
     *out=s;return true;
 }
@@ -124,7 +134,8 @@ bool fr_reactive_state_temperature(const fr_reactive_state_t *s,float *out,char 
     if(!out||!fr_reactive_state_valid(s,err,cap)) return false;
     double c=capacity(s);
     if(c<=0) return error(err,cap,"An empty parcel has no material temperature");
-    float t=(float)(fr_reactive_state_energy(s)/c);
+    float t=fr_char_mixture_temperature((float)fr_reactive_state_energy(s),(float)c,
+        (float)s->char_mass_fp/DC_FLUID_FULL);
     if(!isfinite(t)) return error(err,cap,"Reactive temperature overflow");
     *out=t;return true;
 }

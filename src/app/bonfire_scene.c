@@ -43,7 +43,7 @@ static int worker(void *data) {
                 fr_reactive_state_t *state=&a->record.state;
                 state->char_mass_fp=state->fuel_mass_fp;state->fuel_mass_fp=0;
                 state->flags|=FR_REACTIVE_FLAMING;
-                state->thermal_energy=(float)(fr_reactive_state_heat_capacity(state)*piece->temperature_K);
+                state->thermal_energy=(float)fr_reactive_state_energy_at_temperature(state,piece->temperature_K);
                 out->valid=fr_reactive_state_valid(state,out->error,sizeof(out->error));
             }
             float grain=(float)(((uint64_t)x*3+(uint64_t)y*11)&15)/255.f;

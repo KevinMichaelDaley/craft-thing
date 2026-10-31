@@ -128,6 +128,21 @@ static void test_snapshot_counter_cannot_reuse_a_preserved_origin_identity(void)
     ASSERT_TRUE(fr_reactive_snapshot_write(path,&record,1,101,err,sizeof(err)));
     remove(path);PASS();
 }
+static void test_hot_char_enthalpy_rises_without_clamping_temperature(void) {
+    char err[128]={0};fr_reactive_state_t warm,hot,hotter;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_CHAR,65536u,0,1800.f,200,&warm,err,sizeof(err)));
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_CHAR,65536u,0,2500.f,201,&hot,err,sizeof(err)));
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_CHAR,65536u,0,3000.f,202,&hotter,err,sizeof(err)));
+    float temperature=0.;ASSERT_TRUE(fr_reactive_state_temperature(&warm,&temperature,err,sizeof(err)));
+    ASSERT_TRUE(fabsf(temperature-1800.f)<.01f);
+    ASSERT_TRUE(fr_reactive_state_temperature(&hot,&temperature,err,sizeof(err)));
+    ASSERT_TRUE(fabsf(temperature-2500.f)<.01f);
+    ASSERT_TRUE(fr_reactive_state_temperature(&hotter,&temperature,err,sizeof(err)));
+    ASSERT_TRUE(fabsf(temperature-3000.f)<.01f);
+    ASSERT_TRUE(fr_reactive_state_energy(&hot)>fr_reactive_state_energy(&warm)+700.);
+    ASSERT_TRUE(fr_reactive_state_energy(&hotter)>fr_reactive_state_energy(&hot)+500.);
+    PASS();
+}
 int main(void) {
     _Static_assert(sizeof(fr_reactive_state_t)==FR_REACTIVE_STATE_WORDS*4u,"Reactive state ABI changed");
     _Static_assert(offsetof(fr_reactive_state_t,thermal_energy)==68u,"Reactive energy offset changed");
@@ -140,5 +155,6 @@ int main(void) {
     RUN(test_corrupt_or_future_snapshot_cannot_publish_partial_state);
     RUN(test_duplicate_owners_or_parcel_ids_are_not_saved);
     RUN(test_snapshot_counter_cannot_reuse_a_preserved_origin_identity);
+    RUN(test_hot_char_enthalpy_rises_without_clamping_temperature);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

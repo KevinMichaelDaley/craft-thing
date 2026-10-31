@@ -1,6 +1,7 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #include "../../include/dungeoncraft/body_ash_layout.h"
+#include "../../include/dungeoncraft/char_enthalpy.h"
 #extension GL_EXT_buffer_reference : require
 #extension GL_EXT_buffer_reference_uvec2 : require
 #include "address.glsl"
@@ -89,10 +90,12 @@ bool solid_address(uint at,out uvec2 address) {
 }
 float solid_capacity(Words entry) {
     uint s=FR_ENTRY_STATE,m=entry.words[s];
-    return ((float(entry.words[s+9u])+float(entry.words[s+11u])+float(entry.words[s+15u]))*coefficient(m,5u)+
+    float base=((float(entry.words[s+9u])+float(entry.words[s+11u])+float(entry.words[s+15u]))*coefficient(m,5u)+
         float(entry.words[s+10u])*coefficient(12u,5u)+float(entry.words[s+12u])*coefficient(3u,5u)+
         float(entry.words[s+13u])*coefficient(14u,5u)+
         (float(entry.words[s+14u])+float(entry.words[s+16u]))*coefficient(15u,5u))/65536.;
+    float energy=uintBitsToFloat(entry.words[s+17u])+uintBitsToFloat(entry.words[s+25u])+uintBitsToFloat(entry.words[s+26u]);
+    return fr_char_mixture_secant_capacity(energy,base,float(entry.words[s+10u])/65536.);
 }
 float gas_conduction_flux(uint first,uint second,uint a,uint b) {
     if(gas_cell(a)&&gas_cell(b)) {
@@ -322,7 +325,7 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
     bool char_stage=wood_fuel==0u;uint fuel=char_stage?entry.words[s+10u]:wood_fuel;
     if(owner==2u&&char_stage&&fuel>0u) atomicAdd(hud[25],1u);
     uint profile=char_stage?12u:m;
-    float capacity=((float(wood_fuel)+float(entry.words[s+11u]))*coefficient(m,5u)+
+    float base=((float(wood_fuel)+float(entry.words[s+11u]))*coefficient(m,5u)+
         float(entry.words[s+10u])*coefficient(12u,5u)+float(entry.words[s+12u])*coefficient(3u,5u))/65536.;
     if(m!=7u&&m!=8u&&m!=9u&&m!=11u&&m!=12u) return;
     if(fuel==0u) {
@@ -331,8 +334,10 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
 #endif
         if(owner==1u) loose_ash(position,at,handle,entry,gas);return;
     }
-    if(capacity<=0.) return;
-    float energy=uintBitsToFloat(entry.words[s+17u]),bulk_temperature=energy/capacity,temperature=bulk_temperature;
+    if(base<=0.) return;
+    float energy=uintBitsToFloat(entry.words[s+17u]),
+        bulk_temperature=fr_char_mixture_temperature(energy,base,float(entry.words[s+10u])/65536.),
+        temperature=bulk_temperature;
     float wet_capacity=float(entry.words[s+8u])*coefficient(m,19u);
     float wet=wet_capacity>0.?clamp(float(entry.words[s+12u])/wet_capacity,0.,1.):0.;
     float mass=dot(gas.species,vec4(1))+gas.dynamics.x;
@@ -366,7 +371,7 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
     float oxygen_fp=max(0.,gas.species.x)*65536.;
     float requested=float(entry.words[s+8u])*coefficient(profile,31u)*dt*dry*dry*(max(oxygen,0.)/float(FR_COMBUSTION_AMBIENT_OXYGEN))*
         fr_combustion_hot_rate(temperature,coefficient(profile,7u));
-    if(owner==2u&&fuel<FR_COMBUSTION_SMALL_BODY_FUEL_FP_LIMIT)
+    if(owner==2u&&!char_stage&&fuel<FR_COMBUSTION_SMALL_BODY_FUEL_FP_LIMIT)
         requested=max(requested,float(FR_COMBUSTION_SMALL_BODY_MIN_REACTION_FP_PER_SECOND)*dt);
     float credit=uintBitsToFloat(entry.words[s+27u]);
     float funded=min(min(max(0.,float(fuel)-credit),requested),oxygen_fp/demand),total=credit+funded;
@@ -385,8 +390,9 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
         fr_surface_reaction_power(0.,.7*heat,dt));
 #endif
     admitted+=heat;source_temperature=max(source_temperature,temperature);sources|=FR_FIRE_EMISSION_SURFACE;
-    float removed=float(reacted)/65536.*coefficient(profile,5u)*bulk_temperature;
-    float retained=float(char_mass)/65536.*coefficient(12u,5u)*bulk_temperature;
+    float removed=float(reacted)/65536.*(char_stage?fr_char_specific_enthalpy(bulk_temperature):
+        coefficient(profile,5u)*bulk_temperature);
+    float retained=float(char_mass)/65536.*fr_char_specific_enthalpy(bulk_temperature);
     /* Ash remains finite in the parcel until the loose-residue publication
      * stage admits its physical particle; no product is discarded here. */
     retained+=float(ash)/65536.*coefficient(m,5u)*bulk_temperature;

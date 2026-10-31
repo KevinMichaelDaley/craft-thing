@@ -3,6 +3,7 @@
 #extension GL_EXT_buffer_reference : require
 #extension GL_EXT_buffer_reference_uvec2 : require
 #include "../../include/dungeoncraft/reactive_state_layout.h"
+#include "../../include/dungeoncraft/char_enthalpy.h"
 #include "../../include/dungeoncraft/reactive_profile_layout.h"
 #include "../../include/dungeoncraft/thermal_parameters.h"
 #include "../../include/dungeoncraft/thermal_surface.h"
@@ -68,9 +69,11 @@ vec4 sample_with_metadata(uint index,out vec4 metadata) {
         round(float(e.words[at+8u])*coefficient(m,19u)));
     if(m>=params.unused) return vec4(0);
     float core=float(e.words[at+9u])+float(e.words[at+11u])+float(e.words[at+15u]);
-    float capacity=(core*coefficient(m,5u)+float(e.words[at+10u])*coefficient(12u,5u)+
+    float base=(core*coefficient(m,5u)+float(e.words[at+10u])*coefficient(12u,5u)+
         float(e.words[at+12u])*coefficient(3u,5u)+float(e.words[at+13u])*coefficient(14u,5u)+
         (float(e.words[at+14u])+float(e.words[at+16u]))*coefficient(15u,5u))/65536.;
+    float energy=uintBitsToFloat(e.words[at+17u]);
+    float capacity=fr_char_mixture_secant_capacity(energy,base,float(e.words[at+10u])/65536.);
     float wet_capacity=float(e.words[at+8u])*coefficient(m,19u);
     return vec4(uintBitsToFloat(e.words[at+17u]),capacity,coefficient(m,6u),
         wet_capacity>0.?clamp(float(e.words[at+12u])/wet_capacity,0.,1.):0.);
@@ -113,11 +116,12 @@ void body_conduction(uint index) {
         vec4 value=vec4(0);
         if(e.words[FR_ENTRY_OWNER]==2u&&e.words[FR_ENTRY_GENERATION]!=0u) {
             uint s=FR_ENTRY_STATE,m=e.words[s];
-            float capacity=((float(e.words[s+9u])+float(e.words[s+11u])+float(e.words[s+15u]))*coefficient(m,5u)+
+            float base=((float(e.words[s+9u])+float(e.words[s+11u])+float(e.words[s+15u]))*coefficient(m,5u)+
                 float(e.words[s+10u])*coefficient(12u,5u)+float(e.words[s+12u])*coefficient(3u,5u)+
                 float(e.words[s+13u])*coefficient(14u,5u)+(float(e.words[s+14u])+float(e.words[s+16u]))*coefficient(15u,5u))/65536.;
-            value=vec4(uintBitsToFloat(e.words[s+17u])+uintBitsToFloat(e.words[s+25u])+uintBitsToFloat(e.words[s+26u]),
-                capacity,coefficient(m,6u),uintBitsToFloat(e.words[FR_ENTRY_GENERATION]));
+            float energy=uintBitsToFloat(e.words[s+17u])+uintBitsToFloat(e.words[s+25u])+uintBitsToFloat(e.words[s+26u]);
+            float capacity=fr_char_mixture_secant_capacity(energy,base,float(e.words[s+10u])/65536.);
+            value=vec4(energy,capacity,coefficient(m,6u),uintBitsToFloat(e.words[FR_ENTRY_GENERATION]));
         }
         vec4 surface=cache.values[index*3u+2u];
         float reaction_power=floatBitsToUint(surface.x)==e.words[FR_ENTRY_GENERATION]?cache.values[index*3u+1u].z:0.;
