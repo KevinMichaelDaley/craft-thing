@@ -2,7 +2,7 @@
 id: ct-42nt
 status: closed
 deps: []
-links: [ct-sqpj]
+links: [ct-sqpj, ct-li7d]
 created: 2026-10-31T06:54:24Z
 type: bug
 priority: 2
