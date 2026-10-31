@@ -62,3 +62,33 @@ static void test_still_air_conducts_heat_without_transporting_mass(void) {
     ASSERT_TRUE(fabs(after[cold].energy-gas[cold].energy)<1e-7);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(gas);free(after);free(volume);free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_partial_body_cell_exchanges_heat_with_its_own_gas(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    uint32_t at=20u*64u+20u;chunk->cells[at].material=DC_MATERIAL_WOOD;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t wood;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,300,7000,&wood,err,sizeof(err))&&
+        fr_gpu_reactive_seed_cell(g,0,at,&wood,err,sizeof(err))&&dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err))&&
+        fr_thermal_gpu_enable(g,err,sizeof(err)));
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err))&&fr_combustion_gpu_enable(g,err,sizeof(err)));
+    fr_gas_state_t *gas=calloc(4096,sizeof(*gas)),*after=calloc(4096,sizeof(*after));
+    double *volume=calloc(4096,sizeof(*volume));ASSERT_TRUE(gas&&after&&volume);
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,gas,4096,err,sizeof(err)));
+    for(uint32_t i=0;i<4096;i++) volume[i]=1.;
+    volume[at]=.01;gas[at]=(fr_gas_state_t){0};
+    gas[at].species[FR_GAS_NITROGEN]=.00001;
+    gas[at].energy=.00001*model.heat_capacity_cv[FR_GAS_NITROGEN]*3000.;
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,gas,volume,4096,err,sizeof(err))&&
+        fr_combustion_gpu_step(g,.001f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
+    fr_reactive_record_t result;bool found=false;float wood_temperature=0;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0,0,&result,&found,err,sizeof(err))&&found&&
+        fr_reactive_state_temperature(&result.state,&wood_temperature,err,sizeof(err)));
+    printf("Partial-body contact wood %.5fK gas energy %.8g -> %.8gJ\n",
+        wood_temperature,gas[at].energy,after[at].energy);
+    ASSERT_TRUE(after[at].energy<gas[at].energy&&wood_temperature>300.f);
+    double transferred=gas[at].energy-after[at].energy;
+    ASSERT_TRUE(fabs(fr_reactive_state_energy(&result.state)-fr_reactive_state_energy(&wood)-transferred)<1e-5);
+    free(volume);free(after);free(gas);free(chunk);dc_gpu_destroy(g);PASS();
+}

@@ -264,10 +264,11 @@ int main(int argc,char **argv) {
     if(argc==2&&strcmp(argv[1],"--contact")==0) {
         RUN(test_hot_gas_heats_each_exposed_wood_face);
         RUN(test_still_air_conducts_heat_without_transporting_mass);
+        RUN(test_partial_body_cell_exchanges_heat_with_its_own_gas);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
     }
     if(argc==2&&strcmp(argv[1],"--containment")==0) {
-        RUN(test_stone_and_clearance_contain_while_a_fuel_bridge_spreads);
+        RUN(test_stone_and_clearance_contain_while_a_wood_bridge_conducts);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
     }
     if(argc==2&&strcmp(argv[1],"--vent")==0) {
@@ -286,8 +287,9 @@ int main(int argc,char **argv) {
     RUN(test_roof_blocks_and_side_vent_routes_the_physical_flame);
     RUN(test_oxygen_starvation_and_finite_vented_recovery);
     RUN(test_fresh_side_air_can_feed_a_surface_with_starved_air_above);
-    if(!core) RUN(test_stone_and_clearance_contain_while_a_fuel_bridge_spreads);
+    if(!core) RUN(test_stone_and_clearance_contain_while_a_wood_bridge_conducts);
     RUN(test_hot_gas_heats_each_exposed_wood_face);
     RUN(test_still_air_conducts_heat_without_transporting_mass);
+    RUN(test_partial_body_cell_exchanges_heat_with_its_own_gas);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
