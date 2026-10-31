@@ -52,4 +52,19 @@ static void test_shallow_stone_rim_leaves_side_air_above_the_kindling(void) {
     }
     ASSERT_EQ(walls,4u);PASS();
 }
-int main(void) {RUN(test_real_structural_pits_and_independent_rigid_stack);RUN(test_shallow_stone_rim_leaves_side_air_above_the_kindling);printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
+static void test_right_wood_stack_has_continuous_contact_path(void) {
+    dc_bonfire_plan_t p;ASSERT_TRUE(dc_bonfire_plan(&p));
+    for(uint32_t side=0;side<2;side++) {
+        uint32_t offset=side*DC_BONFIRE_PIECE_COUNT;
+        const dc_bonfire_piece_t *stick=p.pieces+offset+11u;
+        const dc_bonfire_piece_t *lower=p.pieces+offset+DC_BONFIRE_LOG_FIRST+2u;
+        const dc_bonfire_piece_t *middle=p.pieces+offset+DC_BONFIRE_LOG_FIRST+4u;
+        const dc_bonfire_piece_t *upper=p.pieces+offset+DC_BONFIRE_LOG_FIRST+6u;
+        ASSERT_INT_EQ(lower->y+lower->height,stick->y);
+        ASSERT_INT_EQ(upper->y+upper->height,middle->y);
+        ASSERT_TRUE(stick->x<lower->x+lower->width&&lower->x<stick->x+stick->width);
+        ASSERT_TRUE(upper->x<middle->x+middle->width&&middle->x<upper->x+upper->width);
+    }
+    PASS();
+}
+int main(void) {RUN(test_real_structural_pits_and_independent_rigid_stack);RUN(test_shallow_stone_rim_leaves_side_air_above_the_kindling);RUN(test_right_wood_stack_has_continuous_contact_path);printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
