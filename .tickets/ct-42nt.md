@@ -2,7 +2,7 @@
 id: ct-42nt
 status: open
 deps: []
-links: []
+links: [ct-sqpj]
 created: 2026-10-31T06:54:24Z
 type: bug
 priority: 2

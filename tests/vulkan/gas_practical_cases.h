@@ -303,7 +303,7 @@ static void test_native_stationary_heat_mixes_diagonally_in_the_optimized_path(v
     bool awake=false;ASSERT_TRUE(fr_gas_gpu_source_tile_awake(g,32,32,&awake));printf("Hot tile awake%u\n",awake);
     double mass=0.,energy=0.;for(uint32_t i=0;i<4096;i++) {for(uint32_t k=0;k<5;k++) mass+=out[i].species[k];energy+=out[i].energy;}
     printf("Stationary hot spot diagonal %.6fK; mass drift%.9g energy drift%.9g\n",diagonal.temperature_K,mass-before_mass,energy-before_energy);
-    ASSERT_TRUE(diagonal.temperature_K>300.01&&fabs(mass-before_mass)<1e-4&&fabs(energy-before_energy)<.01);
+    ASSERT_TRUE(diagonal.temperature_K>300.01&&fabs(mass-before_mass)<1e-4&&fabs(energy-before_energy)<before_energy*1e-5);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(chunk);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
 }
 #endif

@@ -1,8 +1,8 @@
 ---
 id: ct-0ap7
 status: in_progress
-deps: []
-links: []
+deps: [ct-d3oz]
+links: [ct-d3oz]
 created: 2026-10-31T04:55:31Z
 type: feature
 priority: 2
@@ -17,3 +17,13 @@ Current gas-only solver transports total energy by Euler flux and uses practical
 
 RED gas-only GPU test shows stationary temperature gradient exchanges heat without corresponding species mass exchange, including closed gates and partial cells. GREEN finite-volume Fourier term runs in all gas policies, conserves total energy and mass, uses the shared air conductivity and cell geometry, remains stable for thin cells, passes make test and displayed performance gate.
 
+
+## Notes
+
+**2026-10-31T05:43:55Z**
+
+Finite-volume gas Fourier flux now runs in fire and gas-only worlds after transport/reaction, with temperature-dependent dry-air conductivity, equal/opposite energy transfer, species-weighted heat capacity and explicit four-face stability. Solid conduction no longer uses the 2x gameplay multiplier. GPU still-air, closed-gate and energy tests pass; full regression rerunning after physical-rate assertions were corrected.
+
+**2026-10-31T07:33:39Z**
+
+2026-10-31: full make test passes, gas display 37 passed/8 capability skips, cut-cell contact4/4, containment1/1. Five displayed bonfire runs passed8/8 dry0/8 wet with gas peaks below1900K. X11 quarter-native 1000-frame benchmark mean16.702 and16.695ms, but worst43.612 and39.760ms at frame108/109, so strict <30ms worst-frame gate fails. Thermal GPU phases remain stable; intermittent broad rigid GPU stage scheduling/presentation spike tracked as ct-d3oz. Keep this ticket in progress until existing strict frame gate passes.
