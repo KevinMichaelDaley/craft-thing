@@ -92,3 +92,26 @@ static void test_partial_body_cell_exchanges_heat_with_its_own_gas(void) {
     ASSERT_TRUE(fabs(fr_reactive_state_energy(&result.state)-fr_reactive_state_energy(&wood)-transferred)<1e-5);
     free(volume);free(after);free(gas);free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_partly_flooded_cell_exchanges_heat_between_gas_and_water(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    uint32_t at=20u*64u+20u;chunk->cells[at].material=DC_MATERIAL_WATER;
+    chunk->cells[at].fluid_mass=64000u;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&fr_thermal_gpu_enable(g,err,sizeof(err)));
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err))&&fr_combustion_gpu_enable(g,err,sizeof(err)));
+    fr_gas_state_t *gas=calloc(4096,sizeof(*gas)),*after=calloc(4096,sizeof(*after));
+    double *volume=calloc(4096,sizeof(*volume));float *water=calloc(4096,sizeof(*water));
+    ASSERT_TRUE(gas&&after&&volume&&water&&fr_gas_gpu_read_chunk(g,0,gas,4096,err,sizeof(err)));
+    for(uint32_t i=0;i<4096;i++) volume[i]=i==at?.0234375:1.;
+    gas[at]=(fr_gas_state_t){0};gas[at].species[FR_GAS_NITROGEN]=.00002;
+    gas[at].energy=.00002*model.heat_capacity_cv[FR_GAS_NITROGEN]*3000.;
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,gas,volume,4096,err,sizeof(err))&&
+        fr_combustion_gpu_step(g,.001f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err))&&
+        fr_thermal_gpu_read_water_chunk(g,0,water,4096,err,sizeof(err)));
+    printf("Partial-water contact gas %.8g -> %.8gJ water %.8gJ\n",gas[at].energy,after[at].energy,water[at]);
+    ASSERT_TRUE(after[at].energy<gas[at].energy&&water[at]>0.f);
+    ASSERT_TRUE(fabs((gas[at].energy-after[at].energy)-water[at])<1e-5);
+    free(water);free(volume);free(after);free(gas);free(chunk);dc_gpu_destroy(g);PASS();
+}

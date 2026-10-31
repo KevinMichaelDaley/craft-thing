@@ -265,6 +265,7 @@ int main(int argc,char **argv) {
         RUN(test_hot_gas_heats_each_exposed_wood_face);
         RUN(test_still_air_conducts_heat_without_transporting_mass);
         RUN(test_partial_body_cell_exchanges_heat_with_its_own_gas);
+        RUN(test_partly_flooded_cell_exchanges_heat_between_gas_and_water);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
     }
     if(argc==2&&strcmp(argv[1],"--containment")==0) {
@@ -291,5 +292,6 @@ int main(int argc,char **argv) {
     RUN(test_hot_gas_heats_each_exposed_wood_face);
     RUN(test_still_air_conducts_heat_without_transporting_mass);
     RUN(test_partial_body_cell_exchanges_heat_with_its_own_gas);
+    RUN(test_partly_flooded_cell_exchanges_heat_between_gas_and_water);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
