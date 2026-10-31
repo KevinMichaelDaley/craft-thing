@@ -18,10 +18,10 @@ static void test_real_structural_pits_and_independent_rigid_stack(void) {
         ASSERT_TRUE(b->width>0&&b->height>0&&b->x>=142+side*192&&b->x+b->width<=178+side*192&&b->y+b->height<93);
         if(b->kind==DC_BONFIRE_LOG) {logs[side]++;ASSERT_TRUE(b->temperature_K<294&&b->y<88);}
         else if(b->kind==DC_BONFIRE_STARTER) {starters[side]++;ASSERT_TRUE(b->temperature_K>1000&&b->width*b->height>=8&&b->width*b->height<=12);}
-        else {sticks[side]++;ASSERT_TRUE(b->temperature_K<294&&b->width*b->height>=2&&b->height<=2&&b->y>=87);}
+        else {sticks[side]++;ASSERT_TRUE(b->temperature_K<294&&b->width*b->height>=2&&b->height<=2&&b->y>=86);}
         for(uint32_t j=0;j<i;j++) {
             const dc_bonfire_piece_t *a=p.pieces+j;ASSERT_TRUE(a->object!=b->object);
-            ASSERT_TRUE(a->x+a->width<b->x||b->x+b->width<a->x||a->y+a->height<b->y||b->y+b->height<a->y);
+            ASSERT_TRUE(a->x+a->width<=b->x||b->x+b->width<=a->x||a->y+a->height<=b->y||b->y+b->height<=a->y);
         }
     }
     for(uint32_t i=0;i<2;i++) {ASSERT_TRUE(logs[i]>=8);ASSERT_TRUE(sticks[i]>=12);ASSERT_EQ(starters[i],1);}
@@ -57,11 +57,20 @@ static void test_right_wood_stack_has_continuous_contact_path(void) {
     for(uint32_t side=0;side<2;side++) {
         uint32_t offset=side*DC_BONFIRE_PIECE_COUNT;
         const dc_bonfire_piece_t *stick=p.pieces+offset+11u;
+        const dc_bonfire_piece_t *starter=p.pieces+offset+DC_BONFIRE_KINDLING_COUNT;
+        const dc_bonfire_piece_t *floor_left=p.pieces+offset+3u;
+        const dc_bonfire_piece_t *floor_middle=p.pieces+offset+4u;
+        const dc_bonfire_piece_t *floor_right=p.pieces+offset+5u;
         const dc_bonfire_piece_t *lower=p.pieces+offset+DC_BONFIRE_LOG_FIRST+2u;
         const dc_bonfire_piece_t *middle=p.pieces+offset+DC_BONFIRE_LOG_FIRST+4u;
         const dc_bonfire_piece_t *upper=p.pieces+offset+DC_BONFIRE_LOG_FIRST+6u;
         ASSERT_INT_EQ(lower->y+lower->height,stick->y);
         ASSERT_INT_EQ(upper->y+upper->height,middle->y);
+        ASSERT_INT_EQ(starter->x+starter->width,floor_left->x);
+        ASSERT_INT_EQ(floor_left->x+floor_left->width,floor_middle->x);
+        ASSERT_INT_EQ(floor_middle->x+floor_middle->width,floor_right->x);
+        ASSERT_INT_EQ(stick->y+stick->height,floor_right->y);
+        ASSERT_TRUE(stick->x<floor_right->x+floor_right->width&&floor_right->x<stick->x+stick->width);
         ASSERT_TRUE(stick->x<lower->x+lower->width&&lower->x<stick->x+stick->width);
         ASSERT_TRUE(upper->x<middle->x+middle->width&&middle->x<upper->x+upper->width);
     }
