@@ -1,5 +1,7 @@
 #ifndef FR_GAS_VORTICITY_GLSL
 #define FR_GAS_VORTICITY_GLSL
+#define FR_GAS_VORTICITY_STRENGTH 2.
+#define FR_GAS_VORTICITY_STEP_FRACTION .1
 /* A local confinement force restores rotation damped by grid advection.
  * Source caches are immutable throughout finish; walls use free-slip velocity.
  * No random wind, flame mask, extra field scan or solver iteration is involved. */
@@ -19,8 +21,8 @@ vec2 gas_vorticity_velocity(ivec2 p,float dt,vec2 velocity) {
     }
     vec2 gradient=.5*vec2(magnitude[0]-magnitude[1],magnitude[2]-magnitude[3]);
     float size=length(gradient);if(size<.0001) return vec2(0.);
-    vec2 normal=gradient/size,delta=2.*dt*curl*vec2(normal.y,-normal.x);
-    float limit=.1*max(length(velocity),1.),change=length(delta);
+    vec2 normal=gradient/size,delta=FR_GAS_VORTICITY_STRENGTH*dt*curl*vec2(normal.y,-normal.x);
+    float limit=FR_GAS_VORTICITY_STEP_FRACTION*max(length(velocity),1.),change=length(delta);
     return change>limit?delta*(limit/change):delta;
 }
 #endif

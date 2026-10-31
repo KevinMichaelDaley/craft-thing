@@ -304,7 +304,7 @@ static void test_transported_low_density_smoke_is_readable_on_the_dark_display(v
         present(g,err,sizeof(err))&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
     uint32_t smoke=pixels[20u*480u+20u],clear=pixels[20u*480u+21u];
     int red_delta=abs((int)(smoke&255u)-(int)(clear&255u));
-    printf("Low-density smoke red contrast %d levels\n",red_delta);
+    printf("Low-density smoke red contrast %d levels (smoke %08x clear %08x)\n",red_delta,smoke,clear);
     ASSERT_TRUE(red_delta>=10);
     free(pixels);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
 }
