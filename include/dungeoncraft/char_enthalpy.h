@@ -1,8 +1,9 @@
 #ifndef DC_CHAR_ENTHALPY_H
 #define DC_CHAR_ENTHALPY_H
 
-/* Effective char heat capacity rises above 1800 K to 2.08 J/(g K)
- * at 2500 K. Energy is the integral of that capacity, never a temperature cap. */
+/* Graphite is a hot-char heat-capacity proxy. The effective curve rises above
+ * 1800 K to 2.08 J/(g K) at 2500 K, within measured high-temperature values.
+ * Energy is its integral, never a temperature cap. */
 #define FR_CHAR_BASE_HEAT_CAPACITY 1.0f
 #define FR_CHAR_HEAT_CAPACITY_TRANSITION_K 1800.0f
 #define FR_CHAR_HEAT_CAPACITY_SLOPE (1.0f/650.0f)
@@ -14,6 +15,7 @@ static inline
 #else
 #define FR_CHAR_SQRT sqrt
 #endif
+/** Specific sensible enthalpy of hot char on the game energy scale. */
 float fr_char_specific_enthalpy(float temperature) {
     float above=temperature>FR_CHAR_HEAT_CAPACITY_TRANSITION_K?
         temperature-FR_CHAR_HEAT_CAPACITY_TRANSITION_K:0.f;
@@ -24,6 +26,7 @@ float fr_char_specific_enthalpy(float temperature) {
 #ifdef __STDC_VERSION__
 static inline
 #endif
+/** Invert the conserved mixture energy to obtain its material temperature. */
 float fr_char_mixture_temperature(float energy,float base_capacity,float char_mass) {
     if(base_capacity<=0.f) return 0.f;
     float transition=FR_CHAR_HEAT_CAPACITY_TRANSITION_K;
@@ -37,6 +40,7 @@ float fr_char_mixture_temperature(float energy,float base_capacity,float char_ma
 #ifdef __STDC_VERSION__
 static inline
 #endif
+/** Return the secant heat capacity used by finite thermal exchanges. */
 float fr_char_mixture_secant_capacity(float energy,float base_capacity,float char_mass) {
     float temperature=fr_char_mixture_temperature(energy,base_capacity,char_mass);
     return temperature>0.f?energy/temperature:base_capacity;
