@@ -233,6 +233,7 @@ void main() {
         float heat=-fluxes[index][c]-fluxes[index][c+1u];
         if(x>0u) heat+=fluxes[index-1u][c];
         if(y>0u) heat+=fluxes[index-params.width][c+1u];
+        if(active_phase()==13u) heat-=fluxes[index].x;
         fr_body_deposit(index,heat);return;
     }
     if(active_phase()==2u&&samples[index].y>0.&&floatBitsToUint(samples[index+params.width*params.height].x)!=4u) {

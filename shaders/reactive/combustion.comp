@@ -24,6 +24,7 @@ layout(set=0,binding=7,std430) buffer Counts {uint counts[];};
 layout(set=0,binding=8,std430) buffer Emission {vec4 emission[];};
 layout(set=0,binding=9,std430) buffer Fluxes {vec4 fluxes[];};
 layout(set=0,binding=10,std430) buffer Hud {uint hud[];};
+layout(set=0,binding=13,std430) buffer WaterEnergy {uint water_heat_words[];};
 layout(push_constant) uniform Params {
     uint width,height,seconds,sparse;
     uvec2 world_address,alternate_address,gates_address,model_address;
@@ -46,7 +47,7 @@ uint atlas(ivec2 p) {
     return page==0u?0xffffffffu:(page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);
 }
 const ivec2 directions[4]=ivec2[4](ivec2(0,-1),ivec2(-1,0),ivec2(1,0),ivec2(0,1));
-bool gas_cell(uint at) {return at!=0xffffffffu&&(cells[at].x&255u)==0u&&cells[at].y==0u;}
+bool gas_cell(uint at) {return at!=0xffffffffu&&(cells[at].x&255u)==0u;}
 #ifdef FR_BODY_REACTIONS
 const ivec2 body_directions[8]=ivec2[8](ivec2(0,-1),ivec2(-1,0),ivec2(1,0),ivec2(0,1),
     ivec2(-1,-1),ivec2(1,-1),ivec2(-1,1),ivec2(1,1));
@@ -141,11 +142,74 @@ float contact_flux(uint first,uint second,uint a,uint b) {
     float flux=sign(requested)*min(abs(requested),min(bound,available));
     return asolid?flux:-flux;
 }
+float body_cut_cell_flux(uint i,uint at) {
+    uint n=params.width*params.height;
+    if(at==0xffffffffu||!gas_cell(at)||floatBitsToUint(samples[i+n].x)!=4u) return 0.;
+    Gas gas=local_gas(at);
+    float void_fraction=gas.geometry.y;
+    if(void_fraction<=0.||void_fraction>=1.) return 0.;
+    float capacity=samples[i].y,gas_cap=gas_capacity(gas),mass=gas_mass(gas);
+    if(capacity<=0.||gas_cap<=0.||mass<=0.) return 0.;
+    float energy=samples[i].x;
+    uint index=floatBitsToUint(samples[i+n].y);
+    Words cache=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
+    if(cache.words[index*12u+8u]==floatBitsToUint(samples[i+n].w)&&uintBitsToFloat(cache.words[index*12u+9u])>0.)
+        energy=uintBitsToFloat(cache.words[index*12u+9u])*capacity;
+    float skin=energy/capacity,gas_temperature=gas_internal(gas)/gas_cap;
+    float difference=skin-gas_temperature;
+    if(abs(difference)<.001) return 0.;
+    float aperture=sqrt(min(void_fraction,1.-void_fraction));
+    float length_m=float(FR_THERMAL_GAMEPLAY_FACE_METERS);
+    float speed=length(gas.dynamics.zw)/mass,density=mass*1000./max(gas.geometry.x,.000001);
+    float reynolds=density*speed*length_m*length_m/float(FR_COMBUSTION_AIR_VISCOSITY);
+    float nusselt=2.+.6*sqrt(max(reynolds,0.))*pow(float(FR_COMBUSTION_AIR_PRANDTL),1./3.);
+    float conductance=aperture*nusselt*gas_air_conductivity(.5*(skin+gas_temperature))*length_m;
+    conductance+=aperture*float(FR_THERMAL_STEFAN_BOLTZMANN*FR_THERMAL_FACE_AREA*FR_THERMAL_SURFACE_EMISSIVITY)*
+        flame_emissivity(gas)*(skin+gas_temperature)*(skin*skin+gas_temperature*gas_temperature);
+    float requested=conductance*difference*uintBitsToFloat(params.seconds);
+    float bound=capacity*gas_cap/(capacity+gas_cap)*abs(difference);
+    float available=requested>0.?max(0.,samples[i].x)/16.:gas_internal(gas);
+    return sign(requested)*min(abs(requested),min(bound,available));
+}
+float liquid_cut_cell_flux(uint at) {
+    if(at==0xffffffffu||!gas_cell(at)||cells[at].y==0u) return 0.;
+    Gas gas=local_gas(at);
+    if(gas.geometry.y<=0.) return 0.;
+    float water_capacity=float(cells[at].y)/65536.*coefficient(3u,5u);
+    float gas_cap=gas_capacity(gas),mass=gas_mass(gas);
+    if(water_capacity<=0.||gas_cap<=0.||mass<=0.) return 0.;
+    float water_temperature=float(FR_THERMAL_AMBIENT_K)+uintBitsToFloat(water_heat_words[at])/water_capacity;
+    float gas_temperature=gas_internal(gas)/gas_cap;
+    float difference=water_temperature-gas_temperature;
+    if(abs(difference)<.001) return 0.;
+    float length_m=float(FR_THERMAL_GAMEPLAY_FACE_METERS);
+    float speed=length(gas.dynamics.zw)/mass,density=mass*1000./max(gas.geometry.x,.000001);
+    float reynolds=density*speed*length_m*length_m/float(FR_COMBUSTION_AIR_VISCOSITY);
+    float nusselt=2.+.6*sqrt(max(reynolds,0.))*pow(float(FR_COMBUSTION_AIR_PRANDTL),1./3.);
+    float conductance=nusselt*gas_air_conductivity(.5*(water_temperature+gas_temperature))*length_m;
+    float requested=conductance*difference*uintBitsToFloat(params.seconds);
+    float bound=.25*water_capacity*gas_cap/(water_capacity+gas_cap)*abs(difference);
+    float available=requested>0.?max(0.,water_capacity*water_temperature)/4.:gas_internal(gas)/4.;
+    return sign(requested)*min(abs(requested),min(bound,available));
+}
 void contact_apply(uint i,uint at) {
-    if(floatBitsToUint(samples[i+params.width*params.height].x)==4u) return;
+    if(floatBitsToUint(samples[i+params.width*params.height].x)==4u) {
+        float internal_heat=fluxes[i].x;
+        if(internal_heat!=0.&&gas_cell(at)) {
+            bool alternate=params.sparse!=0u&&(Words(params.gates_address).words[at]&8u)!=0u;
+            GasField field=GasField(alternate?params.alternate_address:params.world_address);
+            Gas gas=field.values[at];gas.dynamics.y+=internal_heat;field.values[at]=gas;
+        }
+        return;
+    }
     float heat=-fluxes[i].z-fluxes[i].w;
     if(i%params.width>0u) heat+=fluxes[i-1u].z;
     if(i>=params.width) heat+=fluxes[i-params.width].w;
+    float liquid_heat=fluxes[i].y;
+    if(liquid_heat!=0.&&at!=0xffffffffu) {
+        water_heat_words[at]=floatBitsToUint(uintBitsToFloat(water_heat_words[at])-liquid_heat);
+        heat+=liquid_heat;
+    }
     if(heat==0.) return;
     uvec2 address;
     if(solid_address(at,address)) add_energy(Words(address),heat);
@@ -461,11 +525,14 @@ void main() {
     if(i>=params.width*params.height) return;
     ivec2 p=ivec2(i%params.width,i/params.width);uint at=atlas(p);
     if(params.unused.x==12u) {
+        fluxes[i].xy=vec2(0.);
         fluxes[i].zw=vec2(p.x+1<int(params.width)?gas_conduction_flux(i,i+1u,at,atlas(p+ivec2(1,0))):0.,
             p.y+1<int(params.height)?gas_conduction_flux(i,i+params.width,at,atlas(p+ivec2(0,1))):0.);return;
     }
     if(params.unused.x>=6u) {bonfire_hud(params.unused.x,i,p,at);return;}
     if(params.unused.x==4u) {
+        fluxes[i].x=body_cut_cell_flux(i,at);
+        fluxes[i].y=liquid_cut_cell_flux(at);
         fluxes[i].zw=vec2(p.x+1<int(params.width)?contact_flux(i,i+1u,at,atlas(p+ivec2(1,0))):0.,
             p.y+1<int(params.height)?contact_flux(i,i+params.width,at,atlas(p+ivec2(0,1))):0.);return;
     }
