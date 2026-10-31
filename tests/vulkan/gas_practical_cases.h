@@ -284,6 +284,53 @@ static void test_native_vorticity_rolls_a_rising_plume_sideways_without_creating
     ASSERT_TRUE(lateral[1]>lateral[0]*1.04+1e-6);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(chunk);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
 }
+static void test_native_subgrid_smoke_gains_detail_without_stock_or_mean_impulse(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_gas_state_t *input=calloc(4096,sizeof(*input)),*out=calloc(4096,sizeof(*out)),*replay=calloc(4096,sizeof(*replay));
+    double *volume=calloc(4096,sizeof(*volume));
+    ASSERT_TRUE(chunk&&input&&out&&replay&&volume&&context(&g,err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_gas_model_t model=reference_model();model.kinetic_scale=1./512.;
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err))&&
+        fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&
+        fr_gas_gpu_set_gravity(g,0,err,sizeof(err)));
+    for(uint32_t y=0;y<64;y++) for(uint32_t x=0;x<64;x++) {
+        uint32_t i=y*64u+x;double dx=(double)x-32.,dy=(double)y-32.;
+        double plume=exp(-(dx*dx+dy*dy)/80.),velocity=-12.*plume,soot=.000008*plume;
+        volume[i]=1.;input[i]=reference_air(model,.0012,300.+400.*plume,0);
+        input[i].species[FR_GAS_NITROGEN]-=soot;input[i].species[FR_GAS_SOOT]+=soot;
+        input[i].energy+=soot*(model.heat_capacity_cv[FR_GAS_SOOT]-model.heat_capacity_cv[FR_GAS_NITROGEN])*(300.+400.*plume);
+        input[i].momentum[1]=.0012*velocity;
+        input[i].energy+=.5*model.kinetic_scale*.0012*velocity*velocity;
+        input[i].pigment[0]=.18*soot;input[i].pigment[1]=.16*soot;input[i].pigment[2]=.14*soot;
+    }
+    const char *setting=getenv("DC_GAS_SUBGRID");char *saved=setting?SDL_strdup(setting):NULL;
+    double detail[3]={0},momentum[3][2]={{0}},energy[3]={0},species[3][FR_GAS_SPECIES]={{0}};
+    for(uint32_t mode=0;mode<3;mode++) {
+        ASSERT_EQ(SDL_setenv("DC_GAS_SUBGRID",mode?"1":"0",1),0);
+        ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
+        for(uint32_t step=0;step<10u;step++) ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err)));
+        ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+        for(uint32_t i=0;i<4096;i++) {
+            fr_gas_thermo_t thermo;ASSERT_TRUE(fr_gas_thermodynamics(&model,out+i,1,&thermo,err,sizeof(err)));
+            ASSERT_TRUE(thermo.temperature_K>0&&thermo.temperature_K<3000);
+            for(uint32_t k=0;k<FR_GAS_SPECIES;k++) species[mode][k]+=out[i].species[k];
+            energy[mode]+=out[i].energy;momentum[mode][0]+=out[i].momentum[0];momentum[mode][1]+=out[i].momentum[1];
+            if(i/64u>=16u&&i/64u<48u&&i%64u>=16u&&i%64u<48u)
+                detail[mode]+=fabs(out[i].momentum[0]-out[i+1].momentum[0]);
+        }
+        if(mode==1) memcpy(replay,out,4096*sizeof(*out));
+        if(mode==2) ASSERT_EQ(memcmp(replay,out,4096*sizeof(*out)),0);
+    }
+    for(uint32_t k=0;k<FR_GAS_SPECIES;k++) ASSERT_TRUE(fabs(species[1][k]-species[0][k])<1e-5);
+    ASSERT_TRUE(fabs(energy[1]-energy[0])<fabs(energy[0])*1e-5);
+    ASSERT_TRUE(fabs(momentum[1][0]-momentum[0][0])<1e-5);
+    ASSERT_TRUE(fabs(momentum[1][1]-momentum[0][1])<1e-5);
+    printf("Subgrid smoke detail control %.9g enabled %.9g\n",detail[0],detail[1]);
+    ASSERT_TRUE(detail[1]>detail[0]*1.02+1e-6);
+    ASSERT_EQ(SDL_setenv("DC_GAS_SUBGRID",saved?saved:"0",1),0);SDL_free(saved);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(chunk);free(input);free(out);free(replay);free(volume);dc_gpu_destroy(g);PASS();
+}
 static void test_transported_low_density_smoke_is_readable_on_the_dark_display(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_gas_state_t *input=calloc(4096,sizeof(*input));double *volume=calloc(4096,sizeof(*volume));
