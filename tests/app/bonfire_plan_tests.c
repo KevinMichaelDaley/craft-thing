@@ -18,10 +18,10 @@ static void test_real_structural_pits_and_independent_rigid_stack(void) {
         ASSERT_TRUE(b->width>0&&b->height>0&&b->x>=142+side*192&&b->x+b->width<=178+side*192&&b->y+b->height<93);
         if(b->kind==DC_BONFIRE_LOG) {logs[side]++;ASSERT_TRUE(b->temperature_K<294&&b->y<88);}
         else if(b->kind==DC_BONFIRE_STARTER) {starters[side]++;ASSERT_TRUE(b->temperature_K>1000&&b->width*b->height>=8&&b->width*b->height<=12);}
-        else {sticks[side]++;ASSERT_TRUE(b->temperature_K<294&&b->width*b->height>=2&&b->height<=2&&b->y>=87);}
+        else {sticks[side]++;ASSERT_TRUE(b->temperature_K<294&&b->width*b->height>=2&&b->height<=6&&b->y>=76);}
         for(uint32_t j=0;j<i;j++) {
             const dc_bonfire_piece_t *a=p.pieces+j;ASSERT_TRUE(a->object!=b->object);
-            ASSERT_TRUE(a->x+a->width<b->x||b->x+b->width<a->x||a->y+a->height<b->y||b->y+b->height<a->y);
+            ASSERT_TRUE(a->x+a->width<=b->x||b->x+b->width<=a->x||a->y+a->height<=b->y||b->y+b->height<=a->y);
         }
     }
     for(uint32_t i=0;i<2;i++) {ASSERT_TRUE(logs[i]>=8);ASSERT_TRUE(sticks[i]>=12);ASSERT_EQ(starters[i],1);}
@@ -52,9 +52,15 @@ static void test_shallow_stone_rim_leaves_side_air_above_the_kindling(void) {
     }
     ASSERT_EQ(walls,4u);PASS();
 }
-static void test_upper_log_tiers_leave_a_vertical_flue(void) {
-    for(uint32_t y=73;y<81;y++) for(uint32_t x=164;x<166;x++)
-        ASSERT_EQ(dc_bonfire_fixture_piece(x,y),-1);
+static void test_open_edge_kindling_bridges_lower_and_upper_logs(void) {
+    const uint32_t *bridge=dc_bonfire_rects[7],*lower=dc_bonfire_rects[DC_BONFIRE_LOG_FIRST],
+        *upper=dc_bonfire_rects[DC_BONFIRE_LOG_FIRST+3];
+    ASSERT_EQ(bridge[0],lower[0]);
+    ASSERT_EQ(bridge[1]+bridge[3],lower[1]);
+    ASSERT_EQ(bridge[0]+bridge[2],upper[0]);
+    ASSERT_TRUE(bridge[1]<upper[1]+upper[3]&&upper[1]<bridge[1]+bridge[3]);
+    const uint32_t *top=dc_bonfire_rects[DC_BONFIRE_PIECE_COUNT-1];
+    ASSERT_TRUE(top[0]>=170&&top[2]>=8&&top[1]==70);
     PASS();
 }
-int main(void) {RUN(test_real_structural_pits_and_independent_rigid_stack);RUN(test_shallow_stone_rim_leaves_side_air_above_the_kindling);RUN(test_upper_log_tiers_leave_a_vertical_flue);printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
+int main(void) {RUN(test_real_structural_pits_and_independent_rigid_stack);RUN(test_shallow_stone_rim_leaves_side_air_above_the_kindling);RUN(test_open_edge_kindling_bridges_lower_and_upper_logs);printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}

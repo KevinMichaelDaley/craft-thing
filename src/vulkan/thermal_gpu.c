@@ -24,23 +24,25 @@ bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!fr_gpu_reactive_particle_storage(g,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*16u,false,&t->emission,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,192u*4u,true,&t->hud,err,cap)) {dc_gpu_address_buffer_destroy(g,&t->emission);return false;}
+    if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)g->width*g->height*4u,false,&t->radiation_scratch,err,cap)) {
+        dc_gpu_address_buffer_destroy(g,&t->emission);dc_gpu_address_buffer_destroy(g,&t->hud);return false;}
     memset(t->hud.mapped,0,192u*4u);
-    VkDescriptorBufferInfo buffers[14]={{g->reactive->arena.root.buffer,0,g->reactive->arena.root.bytes},
+    VkDescriptorBufferInfo buffers[15]={{g->reactive->arena.root.buffer,0,g->reactive->arena.root.bytes},
         {g->page_buffer,0,VK_WHOLE_SIZE},{t->profiles.buffer,0,t->profiles.bytes},{g->chunk_buffer,0,VK_WHOLE_SIZE},
         {g->cells,0,VK_WHOLE_SIZE},{t->samples.buffer,0,t->samples.bytes},
         {g->particle_buffer,0,VK_WHOLE_SIZE},{g->particle_count_buffer,0,VK_WHOLE_SIZE},
         {t->emission.buffer,0,t->emission.bytes},{t->fluxes.buffer,0,t->fluxes.bytes},{t->hud.buffer,0,t->hud.bytes},
         {g->runtime_bodies->root.buffer,0,g->runtime_bodies->root.bytes},{g->occupancy_buffer,0,VK_WHOLE_SIZE},
-        {t->water.buffer,0,t->water.bytes}};
-    bool okay=fr_renderer_compute_init(g,&t->combustion,buffers,14,80,"build/shaders/combustion.comp.spv",err,cap)&&
-        fr_renderer_compute_init(g,&t->body_combustion,buffers,14,80,"build/shaders/body_combustion.comp.spv",err,cap)&&fr_renderer_begin(g);
+        {t->water.buffer,0,t->water.bytes},{t->radiation_scratch.buffer,0,t->radiation_scratch.bytes}};
+    bool okay=fr_renderer_compute_init(g,&t->combustion,buffers,15,80,"build/shaders/combustion.comp.spv",err,cap)&&
+        fr_renderer_compute_init(g,&t->body_combustion,buffers,15,80,"build/shaders/body_combustion.comp.spv",err,cap)&&fr_renderer_begin(g);
     if(okay) {
         vkCmdFillBuffer(g->command,t->emission.buffer,0,t->emission.bytes,0);
         fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
         okay=fr_renderer_submit(g);
     }
-    if(!okay) {fr_renderer_compute_destroy(g,&t->combustion);fr_renderer_compute_destroy(g,&t->body_combustion);dc_gpu_address_buffer_destroy(g,&t->emission);dc_gpu_address_buffer_destroy(g,&t->hud);}
+    if(!okay) {fr_renderer_compute_destroy(g,&t->combustion);fr_renderer_compute_destroy(g,&t->body_combustion);dc_gpu_address_buffer_destroy(g,&t->emission);dc_gpu_address_buffer_destroy(g,&t->hud);dc_gpu_address_buffer_destroy(g,&t->radiation_scratch);}
     return okay;
 }
 bool fr_combustion_gpu_enabled(const dc_gpu_t *g) {
@@ -138,6 +140,8 @@ bool fr_combustion_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(seconds==0) return true;
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!dc_gpu_runtime_prepare_fragments(g,err,cap)||!fr_renderer_begin(g)) return false;
     phase(g,8,seconds);phase(g,0,seconds);phase(g,7,seconds);
+    record_combustion(g,seconds,13);record_combustion(g,seconds,14);
+    record_combustion(g,seconds,15);phase(g,11,seconds);
     record_combustion(g,seconds,4);record_combustion(g,seconds,5);
     phase(g,13,seconds);phase(g,11,seconds);
     record_combustion(g,seconds,3);record_combustion(g,seconds,9);record_combustion(g,seconds,0);record_combustion(g,seconds,10);
@@ -164,7 +168,8 @@ static void destroy(dc_gpu_t *g,struct fr_thermal_gpu *t) {
     dc_gpu_address_buffer_destroy(g,&t->profiles);dc_gpu_address_buffer_destroy(g,&t->samples);
     dc_gpu_address_buffer_destroy(g,&t->fluxes);dc_gpu_address_buffer_destroy(g,&t->probe);
     dc_gpu_address_buffer_destroy(g,&t->water);dc_gpu_address_buffer_destroy(g,&t->emission);
-    dc_gpu_address_buffer_destroy(g,&t->emission_snapshot);dc_gpu_address_buffer_destroy(g,&t->hud);free(t->pending_water);free(t);
+    dc_gpu_address_buffer_destroy(g,&t->emission_snapshot);dc_gpu_address_buffer_destroy(g,&t->hud);
+    dc_gpu_address_buffer_destroy(g,&t->radiation_scratch);free(t->pending_water);free(t);
 }
 void fr_thermal_gpu_destroy(dc_gpu_t *g) {
     if(g) {if(g->thermal_control_mapped) memset(g->thermal_control_mapped,0,128);destroy(g,g->thermal);g->thermal=NULL;}
@@ -281,7 +286,12 @@ void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
     phase(g,10,seconds);phase(g,11,seconds);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,8);
     if(g->thermal->purpose==FR_THERMAL_WORLD_BONFIRE) {
-        phase(g,0,seconds);phase(g,19,seconds);phase(g,16,seconds);phase(g,17,seconds);phase(g,11,seconds);
+        phase(g,0,seconds);phase(g,19,seconds);
+        phase(g,16,seconds);phase(g,17,seconds);phase(g,11,seconds);
+        if(g->thermal->combustion.pipeline) {
+            record_combustion(g,seconds,13);record_combustion(g,seconds,14);
+            record_combustion(g,seconds,15);phase(g,11,seconds);
+        }
     }
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,9);
     phase(g,0,seconds);phase(g,7,seconds);

@@ -25,6 +25,7 @@ layout(set=0,binding=8,std430) buffer Emission {vec4 emission[];};
 layout(set=0,binding=9,std430) buffer Fluxes {vec4 fluxes[];};
 layout(set=0,binding=10,std430) buffer Hud {uint hud[];};
 layout(set=0,binding=13,std430) buffer WaterEnergy {uint water_heat_words[];};
+layout(set=0,binding=14,std430) buffer RadiationScratch {uint radiation_heat[];};
 layout(push_constant) uniform Params {
     uint width,height,seconds,sparse;
     uvec2 world_address,alternate_address,gates_address,model_address;
@@ -35,12 +36,10 @@ layout(buffer_reference,std430,buffer_reference_align=4) buffer Words {uint word
 layout(buffer_reference,std430,buffer_reference_align=8) buffer Handles {uvec2 values[];};
 layout(buffer_reference,std430,buffer_reference_align=16) buffer GasField {Gas values[];};
 float coefficient(uint material,uint field) {return uintBitsToFloat(profiles[material*32u+field]);}
-#ifdef FR_BODY_REACTIONS
 #define DC_RUNTIME_BODY_BINDING 11
 #define FR_THERMAL_OCCUPANCY_BINDING 12
 #define FR_BODY_POOL_WORD params.body_params.x
 #include "world_body.glsl"
-#endif
 uint atlas(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0xffffffffu;
     uint page=pages[(uint(p.y)/64u)*((params.width+63u)/64u)+uint(p.x)/64u];
@@ -108,6 +107,7 @@ float gas_conduction_flux(uint first,uint second,uint a,uint b) {
     }
     return 0.;
 }
+#include "flame_radiation.glsl"
 float solid_gas_pair_flux(uint i,Gas gas,float aperture,float stability_share,float gas_energy_share) {
     uint n=params.width*params.height;
     float capacity=samples[i].y,gas_cap=gas_capacity(gas),mass=gas_mass(gas);
@@ -509,6 +509,11 @@ void main() {
 #else
     if(i>=params.width*params.height) return;
     ivec2 p=ivec2(i%params.width,i/params.width);uint at=atlas(p);
+    if(params.unused.x==13u) {
+        radiation_heat[i]=floatBitsToUint(0.);return;
+    }
+    if(params.unused.x==14u) {flame_emit(i,at);return;}
+    if(params.unused.x==15u) {flame_apply(i,at);return;}
     if(params.unused.x==12u) {
         fluxes[i].xy=vec2(0.);
         fluxes[i].zw=vec2(p.x+1<int(params.width)?gas_conduction_flux(i,i+1u,at,atlas(p+ivec2(1,0))):0.,

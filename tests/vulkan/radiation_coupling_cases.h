@@ -18,17 +18,22 @@ static void test_isolated_hot_wood_radiates_to_open_sky(void) {
     double expected=4.*FR_THERMAL_STEFAN_BOLTZMANN*FR_THERMAL_FACE_AREA*
         FR_THERMAL_SURFACE_EMISSIVITY*(pow(1400.,4.)-pow(FR_THERMAL_AMBIENT_K,4.))*.05;
     printf("Open-sky radiation lost %.6f J, expected %.6f J\n",lost,expected);
-    ASSERT_TRUE(lost>expected*.7&&lost<expected*1.3);
+    ASSERT_TRUE(fabs(lost-expected)<.01);
     free(chunk);dc_gpu_destroy(g);PASS();
 }
 
 static void test_soot_flame_radiates_to_distant_wood_with_a_paired_ledger(void) {
+    for(int blocked=0;blocked<2;blocked++) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     ASSERT_TRUE(chunk&&context(&g,err,sizeof(err)));
     chunk->cells[653].material=DC_MATERIAL_WOOD;
+    if(blocked) chunk->cells[651].material=DC_MATERIAL_STONE;
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
-    fr_reactive_state_t cold;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,300,7200,&cold,err,sizeof(err))&&
-        fr_gpu_reactive_seed_cell(g,0,653,&cold,err,sizeof(err))&&dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err)));
+    fr_reactive_state_t cold,stone;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,300,7200,&cold,err,sizeof(err))&&
+        fr_reactive_state_default(DC_MATERIAL_STONE,176947,0,300,7201,&stone,err,sizeof(err))&&
+        fr_gpu_reactive_seed_cell(g,0,653,&cold,err,sizeof(err)));
+    if(blocked) ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,651,&stone,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err)));
     fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
         .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
     ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&
@@ -43,12 +48,22 @@ static void test_soot_flame_radiates_to_distant_wood_with_a_paired_ledger(void) 
         fr_combustion_gpu_step(g,.05f,err,sizeof(err))&&
         fr_gas_gpu_read_chunk(g,0,output,4096,err,sizeof(err)));
     fr_reactive_record_t wood;bool found=false;
-    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0,0,&wood,&found,err,sizeof(err))&&found);
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,blocked?0x80000002u:0x80000001u,0,0,&wood,&found,err,sizeof(err))&&found);
     double gained=fr_reactive_state_energy(&wood.state)-fr_reactive_state_energy(&cold);
     double lost=input[650].energy-output[650].energy;
-    printf("Flame radiation delivered %.9g J, gas debit %.9g J\n",gained,lost);
-    ASSERT_TRUE(gained>.001&&fabs(gained-lost)<.01);
-    free(volumes);free(input);free(output);free(chunk);dc_gpu_destroy(g);PASS();
+    if(blocked) {
+        fr_reactive_record_t wall;
+        ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0,0,&wall,&found,err,sizeof(err))&&found);
+        double wall_gained=fr_reactive_state_energy(&wall.state)-fr_reactive_state_energy(&stone);
+        printf("Shadowed wood gained %.9g J, blocker gained %.9g J, gas debit %.9g J\n",gained,wall_gained,lost);
+        ASSERT_TRUE(gained<.001&&wall_gained>0.&&fabs(gained+wall_gained-lost)<.0001);
+    } else {
+        printf("Flame radiation delivered %.9g J, gas debit %.9g J\n",gained,lost);
+        ASSERT_TRUE(gained>.001&&fabs(gained-lost)<.0001);
+    }
+    free(volumes);free(input);free(output);free(chunk);dc_gpu_destroy(g);
+    }
+    PASS();
 }
 
 #endif

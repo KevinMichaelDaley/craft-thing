@@ -47,6 +47,29 @@ void radiant_add_pair(uint first,uint second,float heat,inout float outgoing,ino
     if(abs(difference)>0.&&dt>0.) coefficient=min(coefficient,abs(heat)/(dt*abs(difference)));
     outgoing+=coefficient;incoming+=coefficient*radiant_fourth(b);
 }
+float radiant_open_sky_angle(uint index,vec2 direction) {
+    ivec2 p=ivec2(index%params.width,index/params.width);
+    vec2 origin=vec2(p)+vec2(.5)+direction*.5;
+    ivec2 previous=p;
+    for(uint step=1u;step<=2u*FR_THERMAL_RADIATION_RADIUS;step++) {
+        ivec2 q=ivec2(floor(origin+direction*(.5*float(step))));
+        if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(params.width,params.height)))) return 1.;
+        if(all(equal(q,previous))) continue;
+        previous=q;
+        uint other=uint(q.y)*params.width+uint(q.x);
+        if(samples[other].y>0.||thermal_occupancy[other]!=0u) return 0.;
+    }
+    return 1.;
+}
+float radiant_sky_view(uint index,ivec2 normal) {
+    vec2 side=normal.x!=0?vec2(0,1):vec2(1,0);
+    const float slopes[5]=float[5](-2.,-.75,0.,.75,2.);
+    const float weights[5]=float[5](.1,.2,.4,.2,.1);
+    float view=0.;
+    for(uint ray=0u;ray<5u;ray++)
+        view+=weights[ray]*radiant_open_sky_angle(index,normalize(vec2(normal)+side*slopes[ray]));
+    return view;
+}
 void radiant_apply(uint index) {
     if(samples[index].y<=0.) return;
     float heat=0.,outgoing=0.,incoming=0.;ivec2 p=ivec2(index%params.width,index/params.width);
@@ -62,6 +85,19 @@ void radiant_apply(uint index) {
             if(floatBitsToUint(pair[component+2u])!=index+1u) continue;
             heat+=pair[component];radiant_add_pair(index,other,pair[component],outgoing,incoming);
         }
+    }
+    const ivec2 sky_directions[4]=ivec2[4](ivec2(1,0),ivec2(-1,0),ivec2(0,1),ivec2(0,-1));
+    float sky_coefficient=float(FR_THERMAL_STEFAN_BOLTZMANN*FR_THERMAL_FACE_AREA*FR_THERMAL_SURFACE_EMISSIVITY);
+    float fourth=radiant_fourth(radiant_temperature(index));
+    float ambient_fourth=radiant_fourth(float(FR_THERMAL_AMBIENT_K));
+    for(uint face=0u;face<4u;face++) {
+        float view=radiant_sky_view(index,sky_directions[face]);
+        if(view<=0.) continue;
+        float coefficient=sky_coefficient*view;
+        float requested=coefficient*(fourth-ambient_fourth)*uintBitsToFloat(params.seconds);
+        float limited=sign(requested)*min(abs(requested),radiant_available(index)/4.);
+        heat-=limited;
+        outgoing+=coefficient;incoming+=coefficient*ambient_fourth;
     }
     uint kind=floatBitsToUint(samples[index+params.width*params.height].x);
     if(kind==4u) fr_body_deposit_radiance(index,heat,outgoing,incoming);

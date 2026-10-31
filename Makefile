@@ -2121,3 +2121,4 @@ build/component_world_tests build/diagnostics/body_support build/diagnostics/nat
 
 # Shared local gas/optical helpers for both reaction owners.
 build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: shaders/reactive/flame_gas.glsl
+build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: shaders/reactive/flame_radiation.glsl

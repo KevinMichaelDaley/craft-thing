@@ -13,6 +13,9 @@ static void test_only_ground_is_terrain_and_all_fuel_is_rigid_staging(void) {
     char err[256]={0};dc_chunk_coord_t coords[2]={{2,1},{5,1}};
     dc_thermal_bench_chunk_t *chunks=calloc(2,sizeof(*chunks));ASSERT_TRUE(chunks);
     ASSERT_TRUE(dc_bonfire_build(coords,2,chunks,err,sizeof(err)));
+    uint32_t expected_wood=0;
+    for(uint32_t i=0;i<DC_BONFIRE_PIECE_COUNT;i++)
+        expected_wood+=dc_bonfire_rects[i][2]*dc_bonfire_rects[i][3];
     for(uint32_t side=0;side<2;side++) {
         uint32_t wood=0;
         for(uint32_t i=0;i<4096;i++) {
@@ -22,7 +25,7 @@ static void test_only_ground_is_terrain_and_all_fuel_is_rigid_staging(void) {
             if(y>=96) {ASSERT_EQ(cell.material,DC_MATERIAL_STONE);ASSERT_TRUE(cell.flags&DC_CELL_LOADED_TERRAIN);}
             else {ASSERT_EQ(cell.material,DC_MATERIAL_WOOD);ASSERT_EQ(cell.flags,0);wood++;}
         }
-        ASSERT_TRUE(wood>=300);
+        ASSERT_EQ(wood,expected_wood);
     }
     dc_thermal_bench_release(chunks,2);PASS();
 }
@@ -46,7 +49,11 @@ static void test_cold_logs_wet_control_and_finite_starter_retain_real_state(void
             if(side) {ASSERT_TRUE(s->bound_water_fp>0);wet[side]++;}
             else ASSERT_EQ(s->bound_water_fp,0);}
     }
-    ASSERT_EQ(hot[0],8);ASSERT_EQ(hot[1],8);ASSERT_TRUE(wet[1]>=300);
+    uint32_t expected_wet=0;
+    for(uint32_t i=0;i<DC_BONFIRE_PIECE_COUNT;i++)
+        expected_wet+=dc_bonfire_rects[i][2]*dc_bonfire_rects[i][3];
+    expected_wet-=dc_bonfire_rects[12][2]*dc_bonfire_rects[12][3];
+    ASSERT_EQ(hot[0],8);ASSERT_EQ(hot[1],8);ASSERT_EQ(wet[1],expected_wet);
     for(uint32_t side=0;side<2;side++) {
         ASSERT_TRUE(ember_heat[side]>8000&&ember_heat[side]<9000);
         ASSERT_TRUE(ember_fuel[side]>130000&&ember_fuel[side]<140000);
@@ -65,7 +72,7 @@ static void test_right_starter_contacts_all_three_right_logs_without_extra_wood(
     char err[1]={0};
     uint32_t starter_area=0;
     for(uint32_t i=0;i<DC_BONFIRE_KINDLING_COUNT;i++) starter_area+=dc_bonfire_rects[i][2]*dc_bonfire_rects[i][3];
-    ASSERT_EQ(starter_area,48u);
+    ASSERT_EQ(starter_area,50u);
     const uint32_t chain[]={12u,0u,4u,5u,11u,15u,10u,17u,9u,19u,20u};
     for(uint32_t i=1;i<sizeof(chain)/sizeof(chain[0]);i++) ASSERT_TRUE(bonfire_rect_contact(chain[i-1],chain[i]));
     PASS();

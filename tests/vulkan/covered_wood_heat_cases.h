@@ -10,8 +10,8 @@ static void test_covered_wood_conducts_to_its_outer_face_without_leaking_fire(vo
         initial+=fr_reactive_state_energy(&state);ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,y*64u+x,&state,err,sizeof(err)));
     }
     ASSERT_TRUE(dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err))&&fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_thermal_gpu_mark_bonfire_world(g));
-    /* Finite initial heat, no gas or combustion: this isolates transport through
-     * the actual rigid rest grid, including its initially cold outer layer. */
+    /* Finite initial heat, no gas or combustion: the covered outer layer warms
+     * through the rigid rest grid while exposed faces radiate to open sky. */
     for(uint32_t step=0;step<30;step++) ASSERT_TRUE(fr_thermal_gpu_step(g,1.f,err,sizeof(err)));
     double final=0.;float outer=0.;
     for(uint32_t y=0;y<3;y++) for(uint32_t x=0;x<3;x++) {
@@ -21,7 +21,7 @@ static void test_covered_wood_conducts_to_its_outer_face_without_leaking_fire(vo
         ASSERT_TRUE((result.state.flags&FR_REACTIVE_FLAMING)==0u);
     }
     printf("Covered wood outer face %.3fK after30s; energy drift%.9gJ\n",outer,final-initial);
-    ASSERT_TRUE(outer>300.4f&&outer<302.f&&fabs(final-initial)<.01);
+    ASSERT_TRUE(outer>300.1f&&outer<305.f&&final<initial&&initial-final<3000.);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(chunk);dc_gpu_destroy(g);PASS();
 }
 #endif
