@@ -22,6 +22,36 @@ bool geometry_open(ivec2 p,uint d) {return gas_gate_open((d&1u)==0u?p:p+geometry
 float geometry_route(ivec2 p) {
     float total=0.;for(uint d=0u;d<4u;d++) if(geometry_open(p,d)) total+=geometry_available(p+geometry_direction(d));return total;
 }
+float geometry_growth(ivec2 p) {
+    vec4 metadata=geometry_metadata_at(p);
+    if(metadata.y<=0.||metadata.x<=0.) return 0.;
+    uint at=gas_atlas(p);if(at==0xffffffffu) return 0.;
+    return max(0.,metadata.x-gas_world(at).geometry.x);
+}
+float geometry_stable_donor_volume(ivec2 p) {
+    vec4 metadata=geometry_metadata_at(p);
+    if(metadata.x<=0.||metadata.y>0.) return 0.;
+    uint at=gas_atlas(p);if(at==0xffffffffu) return 0.;
+    Gas donor=gas_world(at);
+    return donor.geometry.x==metadata.x&&gas_mass(donor)>0.?donor.geometry.x:0.;
+}
+float geometry_stable_capacity(ivec2 p) {
+    float total=0.;
+    for(uint d=0u;d<4u;d++)
+        if(geometry_open(p,d)) total+=geometry_stable_donor_volume(p+geometry_direction(d));
+    return total;
+}
+float geometry_stable_demand(ivec2 p,float donor_volume) {
+    float demand=0.;
+    for(uint d=0u;d<4u;d++) {
+        if(!geometry_open(p,d)) continue;
+        ivec2 q=p+geometry_direction(d);
+        float growth=geometry_growth(q);if(growth<=0.) continue;
+        float capacity=geometry_stable_capacity(q);
+        if(capacity>0.) demand+=growth*donor_volume/capacity;
+    }
+    return demand;
+}
 /* Retain density during boundary remapping; sealed pockets retain all stock. */
 vec2 geometry_retention(ivec2 p,Gas original,float available) {
     if(gas_mass(original)<=0.||available>=original.geometry.x) return vec2(1,0);

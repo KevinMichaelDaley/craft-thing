@@ -16,6 +16,14 @@ void main() {
     bool changed=available!=original.geometry.y||retention.x<1.;
     if(retention.x<=0.) value=gas_empty();
     else if(retention.x<1.) value=geometry_scale_packet(original,retention.x);
+    float stable_volume=geometry_stable_donor_volume(p);
+    if(stable_volume>0.) {
+        float demand=geometry_stable_demand(p,stable_volume);
+        if(demand>0.) {
+            value=geometry_scale_packet(value,stable_volume/(stable_volume+demand));
+            changed=true;
+        }
+    }
     if(available<=0.) {
         if(gas_mass(value)==0.) value.geometry.x=0.;
         value.geometry.y=0.;
@@ -31,6 +39,22 @@ void main() {
             float fraction=(1.-donor_retention.x)*available/donor_retention.y;
             GasFlux incoming=GasFlux(donor.species*fraction,vec4(donor.dynamics.x,gas_energy(donor),donor.dynamics.zw)*fraction,donor.visual.rgb*fraction);
             value=gas_add_flux(value,incoming,1.);value.geometry.w+=donor.geometry.w*fraction;changed=true;
+        }
+        float growth=geometry_growth(p),capacity=geometry_stable_capacity(p);
+        if(growth>0.&&capacity>0.) for(uint d=0u;d<4u;d++) {
+            if(!geometry_open(p,d)) continue;
+            ivec2 q=p+geometry_direction(d);
+            float donor_volume=geometry_stable_donor_volume(q);
+            if(donor_volume<=0.) continue;
+            uint other=gas_atlas(q);Gas donor=gas_world(other);
+            float demand=geometry_stable_demand(q,donor_volume);
+            float fraction=(growth*donor_volume/capacity)/(donor_volume+demand);
+            GasFlux incoming=GasFlux(donor.species*fraction,
+                vec4(donor.dynamics.x,gas_energy(donor),donor.dynamics.zw)*fraction,
+                donor.visual.rgb*fraction);
+            value=gas_add_flux(value,incoming,1.);
+            value.geometry.w+=donor.geometry.w*fraction;
+            changed=true;
         }
     }
     if(gas_parameter(FR_GAS_POLICY_WORD)==3.) value=gas_practical_state(value);
