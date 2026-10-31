@@ -210,9 +210,12 @@ static void test_thin_water_contact_accumulates_subquantum_wetting(void) {
 #include "body_ash_cases.h"
 #include "constructed_heat_cases.h"
 #include "surface_radiation_cases.h"
+#include "radiation_coupling_cases.h"
 #include "covered_wood_heat_cases.h"
 int main(int argc,char **argv) {
-    if(argc==2&&strcmp(argv[1],"--covered-wood")==0) RUN(test_covered_wood_conducts_to_its_outer_face_without_leaking_fire);
+    if(argc==2&&strcmp(argv[1],"--sky-radiation")==0) RUN(test_isolated_hot_wood_radiates_to_open_sky);
+    else if(argc==2&&strcmp(argv[1],"--flame-radiation")==0) RUN(test_soot_flame_radiates_to_distant_wood_with_a_paired_ledger);
+    else if(argc==2&&strcmp(argv[1],"--covered-wood")==0) RUN(test_covered_wood_conducts_to_its_outer_face_without_leaking_fire);
     else if(argc==2&&strcmp(argv[1],"--surface-radiation")==0) RUN(test_reacting_surface_radiates_even_when_the_wood_core_is_cool);
     else if(argc==2&&strcmp(argv[1],"--burn")==0) RUN(test_rigid_combustion_consumes_authoritative_body_fuel);
     else if(argc==2&&strcmp(argv[1],"--radiation")==0) RUN(test_rigid_radiance_crosses_air_is_shadowed_and_transfers_finite_heat);

@@ -1,6 +1,6 @@
 ---
 id: ct-42nt
-status: open
+status: in_progress
 deps: []
 links: [ct-sqpj]
 created: 2026-10-31T06:54:24Z
