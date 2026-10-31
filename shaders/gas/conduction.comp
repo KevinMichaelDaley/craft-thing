@@ -1,9 +1,7 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #include "storage.glsl"
-#include "../../include/dungeoncraft/combustion_parameters.h"
-#include "../../include/dungeoncraft/thermal_parameters.h"
-#include "../../include/dungeoncraft/thermal_surface.h"
+#include "conduction_physics.glsl"
 layout(set=0,binding=27,std430) buffer ConductionFaces {vec2 face_heat[];};
 
 float conductive_face(ivec2 p,ivec2 step,uint axis,float seconds) {
@@ -15,14 +13,9 @@ float conductive_face(ivec2 p,ivec2 step,uint axis,float seconds) {
     float right_cap=dot(right.species,vec4(gas_parameter(5u),gas_parameter(6u),gas_parameter(7u),gas_parameter(8u)))+
         right.dynamics.x*gas_parameter(9u);
     if(left_cap<=0.||right_cap<=0.||left.geometry.y<=0.||right.geometry.y<=0.) return 0.;
-    float left_temperature=gas_thermal_energy(left)/left_cap,right_temperature=gas_thermal_energy(right)/right_cap;
-    float difference=left_temperature-right_temperature;
-    if(abs(difference)<=max(abs(left_temperature),abs(right_temperature))*1e-6) return 0.;
-    float aperture=min(min(left.geometry.y,right.geometry.y),1.);
-    float conductance=float(FR_COMBUSTION_AIR_CONDUCTIVITY*FR_THERMAL_FACE_AREA/FR_THERMAL_GAMEPLAY_FACE_METERS)*aperture;
-    float requested=conductance*difference*seconds;
-    float stable=.25*left_cap*right_cap/(left_cap+right_cap)*abs(difference);
-    return sign(requested)*min(abs(requested),stable);
+    float aperture=sqrt(min(min(left.geometry.y,right.geometry.y),1.));
+    return gas_fourier_face_heat(gas_thermal_energy(left)/left_cap,gas_thermal_energy(right)/right_cap,
+        left_cap,right_cap,aperture,seconds);
 }
 void main() {
     uint index=gas_index();if(index>=params.width*params.height) return;

@@ -5,6 +5,7 @@
 #extension GL_EXT_buffer_reference_uvec2 : require
 #include "address.glsl"
 #include "../gas/types.glsl"
+#include "../gas/conduction_physics.glsl"
 #include "../../include/dungeoncraft/combustion_parameters.h"
 #include "../../include/dungeoncraft/thermal_parameters.h"
 #include "../../include/dungeoncraft/thermal_surface.h"
@@ -100,16 +101,9 @@ float gas_conduction_flux(uint first,uint second,uint a,uint b) {
         Gas left=local_gas(a),right=local_gas(b);
         float left_cap=gas_capacity(left),right_cap=gas_capacity(right);
         if(left_cap<=0.||right_cap<=0.||left.geometry.y<=0.||right.geometry.y<=0.) return 0.;
-        float left_temperature=gas_internal(left)/left_cap,right_temperature=gas_internal(right)/right_cap;
-        float difference=left_temperature-right_temperature;
-        if(abs(difference)<=max(abs(left_temperature),abs(right_temperature))*1e-6) return 0.;
-        float aperture=min(min(left.geometry.y,right.geometry.y),1.);
-        /* Fourier face flux, k A (T_left - T_right) / dx.  The bound is
-         * the four-face explicit CFL limit for each cell's finite capacity. */
-        float conductance=float(FR_COMBUSTION_AIR_CONDUCTIVITY*FR_THERMAL_FACE_AREA/FR_THERMAL_GAMEPLAY_FACE_METERS)*aperture;
-        float requested=conductance*difference*uintBitsToFloat(params.seconds);
-        float stable=.25*left_cap*right_cap/(left_cap+right_cap)*abs(difference);
-        return sign(requested)*min(abs(requested),stable);
+        float aperture=sqrt(min(min(left.geometry.y,right.geometry.y),1.));
+        return gas_fourier_face_heat(gas_internal(left)/left_cap,gas_internal(right)/right_cap,
+            left_cap,right_cap,aperture,uintBitsToFloat(params.seconds));
     }
     return 0.;
 }
@@ -135,7 +129,7 @@ float contact_flux(uint first,uint second,uint a,uint b) {
     float length_m=float(FR_THERMAL_GAMEPLAY_FACE_METERS);
     float reynolds=density*speed*length_m*length_m/float(FR_COMBUSTION_AIR_VISCOSITY);
     float nusselt=2.+.6*sqrt(max(reynolds,0.))*pow(float(FR_COMBUSTION_AIR_PRANDTL),1./3.);
-    float conductance=nusselt*float(FR_COMBUSTION_AIR_CONDUCTIVITY)*length_m;
+    float conductance=nusselt*gas_air_conductivity(.5*(skin+gas_temperature))*length_m;
     /* The same finite pair owns convection and luminous-soot radiation. */
     conductance+=float(FR_THERMAL_STEFAN_BOLTZMANN*FR_THERMAL_FACE_AREA*FR_THERMAL_SURFACE_EMISSIVITY)*
         flame_emissivity(gas)*(skin+gas_temperature)*(skin*skin+gas_temperature*gas_temperature);
@@ -395,7 +389,7 @@ void choose_body_target(uint index) {
         float face=float(FR_THERMAL_GAMEPLAY_FACE_METERS)*(d<4u?1.:.5);
         float reynolds=density*speed*face*face/float(FR_COMBUSTION_AIR_VISCOSITY);
         float nusselt=2.+.6*sqrt(max(reynolds,0.))*pow(float(FR_COMBUSTION_AIR_PRANDTL),1./3.);
-        float convection=nusselt*float(FR_COMBUSTION_AIR_CONDUCTIVITY)*face;
+        float convection=nusselt*gas_air_conductivity(.5*(bulk+gas_temperature))*face;
         /* The hottest exposed face can ignite even when a different face owns
          * the oxygen reservation. Read all gas here, before any reaction writes. */
         float ambient=float(FR_THERMAL_AMBIENT_K),ambient_square=ambient*ambient,gas_square=gas_temperature*gas_temperature;

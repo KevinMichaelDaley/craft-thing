@@ -1939,6 +1939,7 @@ GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_metadata_lean
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_factor_compact_large transport_prefix_compact_large transport_axis_compact_large transport_explicit_large transport_hybrid_large transport_hybrid_x_large transport_hybrid_y_large)
 build/shaders/gas_audit.comp.spv: include/dungeoncraft/gas_audit_layout.h
 build/shaders/gas_conduction.comp.spv: include/dungeoncraft/combustion_parameters.h include/dungeoncraft/thermal_parameters.h include/dungeoncraft/thermal_surface.h
+build/shaders/gas_conduction.comp.spv build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: shaders/gas/conduction_physics.glsl
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_restrict pressure_coarse_sor pressure_prolong)
 build/gas_acoustic_trace_gpu.o: src/vulkan/gas_acoustic_trace_gpu.c src/vulkan/gas_acoustic_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
