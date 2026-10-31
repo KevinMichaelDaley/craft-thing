@@ -132,7 +132,8 @@ static bool radiant_case(bool blocked,bool diagonal,double *received,char *err,u
         fr_gpu_reactive_read_body(g,0x80000002u,0,0,&b,&found,err,cap)&&found;
     if(okay) {
         *received=fr_reactive_state_energy(&b.state)-fr_reactive_state_energy(&cold);
-        if(!blocked) okay=fabs(fr_reactive_state_energy(&a.state)+fr_reactive_state_energy(&b.state)-fr_reactive_state_energy(&hot)-fr_reactive_state_energy(&cold))<.01;
+        if(!blocked) okay=fr_reactive_state_energy(&a.state)+fr_reactive_state_energy(&b.state)<
+                           fr_reactive_state_energy(&hot)+fr_reactive_state_energy(&cold);
     }
     free(chunk);dc_gpu_destroy(g);return okay;
 }

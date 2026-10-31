@@ -63,6 +63,19 @@ void radiant_apply(uint index) {
             heat+=pair[component];radiant_add_pair(index,other,pair[component],outgoing,incoming);
         }
     }
+    const ivec2 faces[4]=ivec2[4](ivec2(1,0),ivec2(-1,0),ivec2(0,1),ivec2(0,-1));
+    float exposed=0.;
+    for(uint side=0u;side<4u;side++) {
+        ivec2 q=p+faces[side];
+        if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(params.width,params.height)))) {exposed+=1.;continue;}
+        uint other=uint(q.y)*params.width+uint(q.x);
+        if(samples[other].y<=0.&&thermal_occupancy[other]==0u) exposed+=1.;
+    }
+    float sky=max(0.,exposed*float(FR_THERMAL_STEFAN_BOLTZMANN*FR_THERMAL_FACE_AREA*FR_THERMAL_SURFACE_EMISSIVITY)-outgoing);
+    float ambient_fourth=radiant_fourth(293.15),surface_fourth=radiant_fourth(radiant_temperature(index));
+    float sky_heat=sky*(surface_fourth-ambient_fourth)*uintBitsToFloat(params.seconds);
+    if(sky_heat>0.) sky_heat=min(sky_heat,min(radiant_available(index),samples[index].y*max(0.,radiant_temperature(index)-293.15)));
+    heat-=sky_heat;outgoing+=sky;incoming+=sky*ambient_fourth;
     uint kind=floatBitsToUint(samples[index+params.width*params.height].x);
     if(kind==4u) fr_body_deposit_radiance(index,heat,outgoing,incoming);
     else if(kind==1u) {uvec2 h=handle_at(index);if(valid(h)) add_energy(Words(reactive_entry_address(uvec2(root[4],root[5]),h.x)),heat);}
