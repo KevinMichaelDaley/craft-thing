@@ -7,6 +7,16 @@
 #include "../../src/vulkan/gas_gpu_state.h"
 #undef RUN
 #define RUN(fn) do {const char *filter=getenv("DC_GAS_TEST_FILTER");if(!filter||strstr(#fn,filter)) {printf("RUN %s\n",#fn);fn();}} while(0)
+static bool g_large_cfl_capable = true;
+
+static void test_large_cfl_gate_matches_device_capability(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    ASSERT_TRUE(context(&g,err,sizeof(err)));
+    bool supported=fr_gas_acoustic_supports_large_transport(g,FR_GAS_PRESSURE_LARGE_CFL);
+    dc_gpu_destroy(g);
+    ASSERT_EQ(g_large_cfl_capable,supported);
+    PASS();
+}
 
 static fr_gas_model_t reference_model(void) {
     fr_gas_model_t m={.kinetic_scale=1};double molecular[5]={32,28,44,18,0};
@@ -446,6 +456,7 @@ static void test_native_subnormal_colored_stock_is_valid_and_retained_at_rest(vo
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
 }
 int main(void) {
+    RUN(test_large_cfl_gate_matches_device_capability);
     RUN(test_unsupported_policy_rejects_before_acoustic_setup);
     setvbuf(stdout,NULL,_IOLBF,0);
 #ifdef FR_GAS_PUBLICATION_TEST
