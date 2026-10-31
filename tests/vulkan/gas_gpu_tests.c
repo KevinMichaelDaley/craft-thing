@@ -8,12 +8,34 @@
 #undef RUN
 #define RUN(fn) do {const char *filter=getenv("DC_GAS_TEST_FILTER");if(!filter||strstr(#fn,filter)) {printf("RUN %s\n",#fn);fn();}} while(0)
 static bool g_large_cfl_capable = true;
+static int g_skip = 0;
+#define RUN_LARGE(fn) do { \
+    const char *filter=getenv("DC_GAS_TEST_FILTER"); \
+    if(!filter||strstr(#fn,filter)) { \
+        if(g_large_cfl_capable) RUN(fn); \
+        else {printf("SKIP %s: Large-CFL transport unsupported on this GPU\n",#fn);g_skip++;} \
+    } \
+} while(0)
+#define RUN_DENORM_COMPARISON(fn) do { \
+    const char *filter=getenv("DC_GAS_TEST_FILTER"); \
+    if(!filter||strstr(#fn,filter)) { \
+        if(g_large_cfl_capable) RUN(fn); \
+        else {printf("SKIP %s: comparison disables compact practical transport and requires float32 denormal preservation\n",#fn);g_skip++;} \
+    } \
+} while(0)
+
+static bool large_cfl_device_capability(bool *supported) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    if(!supported||!context(&g,err,sizeof(err))) return false;
+    *supported=fr_gas_acoustic_supports_large_transport(g,FR_GAS_PRESSURE_LARGE_CFL);
+    dc_gpu_destroy(g);
+    return true;
+}
 
 static void test_large_cfl_gate_matches_device_capability(void) {
-    char err[256]={0};dc_gpu_t *g=NULL;
-    ASSERT_TRUE(context(&g,err,sizeof(err)));
-    bool supported=fr_gas_acoustic_supports_large_transport(g,FR_GAS_PRESSURE_LARGE_CFL);
-    dc_gpu_destroy(g);
+    char err[256]={0};
+    bool supported=false;
+    ASSERT_TRUE(large_cfl_device_capability(&supported));
     ASSERT_EQ(g_large_cfl_capable,supported);
     PASS();
 }
@@ -44,11 +66,19 @@ static void test_unsupported_policy_rejects_before_acoustic_setup(void) {
     if(floats.shaderDenormPreserveFloat32) {
         dc_gpu_destroy(g);PASS();return;
     }
+    const char *axis=getenv("DC_GAS_FUSED_AXIS"),*metadata=getenv("DC_GAS_FUSED_METADATA");
+    char *saved_axis=axis?SDL_strdup(axis):NULL,*saved_metadata=metadata?SDL_strdup(metadata):NULL;
+    ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_AXIS","0",1),0);
+    ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_METADATA","0",1),0);
     fr_gas_model_t model=reference_model();
     ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012f,300.f,err,sizeof(err)));
     ASSERT_TRUE(!g->gas->acoustic.ready);
-    ASSERT_TRUE(!fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,
-                                                err,sizeof(err)));
+    bool rejected=!fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,
+                                                  err,sizeof(err));
+    ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_AXIS",saved_axis?saved_axis:"",1),0);
+    ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_METADATA",saved_metadata?saved_metadata:"",1),0);
+    SDL_free(saved_axis);SDL_free(saved_metadata);
+    ASSERT_TRUE(rejected);
     ASSERT_TRUE(!g->gas->acoustic.ready);
     dc_gpu_destroy(g);PASS();
 }
@@ -456,6 +486,9 @@ static void test_native_subnormal_colored_stock_is_valid_and_retained_at_rest(vo
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
 }
 int main(void) {
+    if(!large_cfl_device_capability(&g_large_cfl_capable)) {
+        fprintf(stderr,"Cannot query Large-CFL GPU capability\n");return 1;
+    }
     RUN(test_large_cfl_gate_matches_device_capability);
     RUN(test_unsupported_policy_rejects_before_acoustic_setup);
     setvbuf(stdout,NULL,_IOLBF,0);
@@ -465,14 +498,14 @@ int main(void) {
     RUN(test_native_temporal_sor_matches_global_and_bounds_dispatches);
     RUN(test_native_multigrid_bounds_work_and_preserves_reference_flow);
     RUN(test_native_multigrid_temporal_preserves_steps_with_fewer_dispatches);
-    RUN(test_native_fused_transport_metadata_preserves_state_with_fewer_dispatches);
+    RUN_DENORM_COMPARISON(test_native_fused_transport_metadata_preserves_state_with_fewer_dispatches);
     RUN(test_native_packed_pressure_rows_preserve_state_with_one_pack_pass);
     RUN(test_native_empty_pressure_tiles_are_skipped_without_changing_state);
     RUN(test_native_partial_coarse_cells_preserve_walls_with_short_smoothing);
     RUN(test_native_compressed_pressure_rows_keep_stock_and_reference_flow);
     RUN(test_native_group_rate_reduction_preserves_field_cfl_and_clock);
     RUN(test_native_first_axis_reads_owner_and_preserves_mapped_and_dormant_stock);
-    RUN(test_native_hybrid_axis_fusion_preserves_state_with_fewer_dispatches);
+    RUN_DENORM_COMPARISON(test_native_hybrid_axis_fusion_preserves_state_with_fewer_dispatches);
     RUN(test_native_compute_dependencies_preserve_state_without_transfer_scopes);
     RUN(test_native_fence_trace_excludes_slow_log_output);
     RUN(test_native_axis_specialization_uses_distinct_kernels_with_identical_state);
@@ -510,20 +543,20 @@ int main(void) {
     RUN(test_native_derived_cache_rebuilds_after_seed_and_page_remap);
     RUN(test_native_implicit_axis_cfl_matches_cold_oracle_in_one_positive_step);
     RUN(test_native_sparse_footprints_match_dense_after_gravity_and_valve_changes);
-    RUN(test_native_large_cfl_packet_matches_composed_oracle_in_one_step);
-    RUN(test_native_large_cfl_crosses_chunk_and_subgroup_seams_with_mixed_color);
-    RUN(test_native_large_cfl_closed_valve_matches_two_independent_chambers);
-    RUN(test_native_large_cfl_two_dimensional_concave_wall_matches_oracle);
-    RUN(test_native_large_cfl_balanced_counterflow_has_no_artificial_compression);
+    RUN_LARGE(test_native_large_cfl_packet_matches_composed_oracle_in_one_step);
+    RUN_LARGE(test_native_large_cfl_crosses_chunk_and_subgroup_seams_with_mixed_color);
+    RUN_LARGE(test_native_large_cfl_closed_valve_matches_two_independent_chambers);
+    RUN_LARGE(test_native_large_cfl_two_dimensional_concave_wall_matches_oracle);
+    RUN_LARGE(test_native_large_cfl_balanced_counterflow_has_no_artificial_compression);
     RUN(test_native_subnormal_colored_stock_is_valid_and_retained_at_rest);
-    RUN(test_native_large_cfl_subnormal_packet_keeps_one_step_and_closed_stock);
+    RUN_LARGE(test_native_large_cfl_subnormal_packet_keeps_one_step_and_closed_stock);
     RUN(test_native_receding_gate_matches_real_reflecting_wall);
-    RUN(test_native_prototype_sparse_large_footprints_match_dense);
+    RUN_LARGE(test_native_prototype_sparse_large_footprints_match_dense);
     if(getenv("DC_GAS_EXTREME_STRESS")) {
-        RUN(test_native_large_cfl_sparse_footprints_match_dense_after_gravity_and_valve_changes);
+        RUN_LARGE(test_native_large_cfl_sparse_footprints_match_dense_after_gravity_and_valve_changes);
         RUN(test_native_explicit_sustained_gravity_control);
     } else printf("Extreme unresolved-gravity diagnostic cases require DC_GAS_EXTREME_STRESS=1; practical admission rejects that regime.\n");
-    RUN(test_native_moving_density_contact_keeps_pressure_and_velocity);
+    RUN_LARGE(test_native_moving_density_contact_keeps_pressure_and_velocity);
     RUN(test_native_practical_policy_rejects_unresolved_gravity_without_advancing);
     RUN(test_native_stationary_heat_mixes_diagonally_in_the_optimized_path);
     RUN(test_native_vorticity_rolls_a_rising_plume_sideways_without_creating_stock);
@@ -540,5 +573,5 @@ int main(void) {
     RUN(test_native_valve_only_refresh_preserves_restored_physical_void);
     RUN(test_native_massless_underflow_energy_reconciles_without_erasing_tiny_colored_gas);
     RUN(test_compact_practical_profile_admits_without_denorm_control);
-    printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0||g_pass==0;
+    printf("%d passed, %d failed, %d skipped\n",g_pass,g_fail,g_skip);return g_fail!=0||g_pass==0;
 }
