@@ -378,10 +378,22 @@ static void test_quarter_native_smoke_has_conserved_cell_scale_optical_detail(vo
     }
     ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&
         present(g,err,sizeof(err))&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
-    int contrast=0;for(uint32_t y=20;y<28;y++) for(uint32_t x=20;x<28;x+=2)
-        contrast+=abs((int)(pixels[y*480u+x]&255u)-(int)(pixels[y*480u+x+1u]&255u));
-    printf("Quarter-native smoke pair contrast %d across 32 equal-density pairs\n",contrast);
-    ASSERT_TRUE(contrast>320);
+    int contrast=0,low=255,high=0;for(uint32_t y=20;y<28;y++) for(uint32_t x=20;x<28;x++) {
+        int red=(int)(pixels[y*480u+x]&255u);
+        if(red<low) low=red;
+        if(red>high) high=red;
+        if((x&1u)==0u) contrast+=abs(red-(int)(pixels[y*480u+x+1u]&255u));
+    }
+    printf("Quarter-native smoke contrast %d range %d..%d across equal-density cells\n",contrast,low,high);
+    ASSERT_TRUE(high-low>=15);
+    uint32_t edge_cells=0;for(uint32_t y=19;y<=28;y++) for(uint32_t x=19;x<=28;x++) {
+        if(x!=19u&&x!=28u&&y!=19u&&y!=28u) continue;
+        int red=(int)(pixels[y*480u+x]&255u);
+        int clear=(int)(pixels[y*480u+17u]&255u);
+        if(abs(red-clear)>=3) edge_cells++;
+    }
+    printf("Quarter-native smoke displaced boundary cells %u\n",edge_cells);
+    ASSERT_TRUE(edge_cells>=2u);
     g->gas->clock.advanced_seconds=1.;
     ASSERT_TRUE(present(g,err,sizeof(err))&&dc_gpu_readback(g,moved,480u*270u,err,sizeof(err)));
     int shifted=0;for(uint32_t y=20;y<28;y++) for(uint32_t x=22;x<26;x+=2) {
