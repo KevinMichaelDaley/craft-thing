@@ -304,8 +304,11 @@ static void test_transported_low_density_smoke_is_readable_on_the_dark_display(v
         present(g,err,sizeof(err))&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
     uint32_t smoke=pixels[20u*480u+20u],clear=pixels[20u*480u+21u];
     int red_delta=abs((int)(smoke&255u)-(int)(clear&255u));
-    printf("Low-density smoke red contrast %d levels (smoke %08x clear %08x)\n",red_delta,smoke,clear);
+    float red_alpha=((float)(smoke&255u)-(float)(clear&255u))/(.18f*255.f-(float)(clear&255u));
+    printf("Low-density smoke red contrast %d levels, alpha %.3f (smoke %08x clear %08x)\n",
+        red_delta,red_alpha,smoke,clear);
     ASSERT_TRUE(red_delta>=10);
+    ASSERT_TRUE(red_alpha>=.70f&&red_alpha<=.80f);
     free(pixels);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_native_stationary_heat_mixes_diagonally_in_the_optimized_path(void) {
