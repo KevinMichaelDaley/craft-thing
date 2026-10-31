@@ -99,6 +99,16 @@ static void test_compact_practical_profile_admits_without_denorm_control(void) {
                                                 err,sizeof(err)));
     dc_gpu_destroy(g);PASS();
 }
+static void test_practical_policy_does_not_require_large_cfl_transport(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    ASSERT_TRUE(context(&g,err,sizeof(err)));
+    fr_gas_model_t model=reference_model();
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012f,300.f,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_IMPLICIT,err,sizeof(err)));
+    g->gas->acoustic.supports_large_transport=false;
+    ASSERT_TRUE(fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
+    dc_gpu_destroy(g);PASS();
+}
 #include "gas_checkpoint_cases.h"
 #include "gas_geometry_cases.h"
 #include "gas_partial_void_cases.h"
@@ -570,5 +580,6 @@ int main(void) {
     RUN(test_native_valve_only_refresh_preserves_restored_physical_void);
     RUN(test_native_massless_underflow_energy_reconciles_without_erasing_tiny_colored_gas);
     RUN(test_compact_practical_profile_admits_without_denorm_control);
+    RUN(test_practical_policy_does_not_require_large_cfl_transport);
     printf("%d passed, %d failed, %d skipped\n",g_pass,g_fail,g_skip);return g_fail!=0||g_pass==0;
 }
