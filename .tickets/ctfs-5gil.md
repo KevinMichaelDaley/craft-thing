@@ -1,6 +1,6 @@
 ---
 id: ctfs-5gil
-status: in_progress
+status: closed
 deps: []
 links: [ctfs-6t7k, ctfs-b6cz]
 created: 2026-10-28T04:18:38Z
@@ -119,3 +119,11 @@ Post cache-fix clean X11 RTX A2000 normal-clock half-native 960x540 bonfire: 300
 **2026-10-30T21:55:29Z**
 
 Gas profile switch diagnostics at actual 960x540 32 displayed frames normal clock: VORTICITY=0 mean32.093/worst35.233ms, PRESSURE_NOISE=0 32.387/35.861, HALF_PRESSURE=0 32.793/41.837, MULTIGRID=0 33.241/43.298. None meets30ms mean+worst; retained accepted smoke profile unchanged.
+
+**2026-10-31T01:47:15Z**
+
+User explicitly accepted trying quarter-native with current optimizations on 2026-10-30. Actual X11 RTX A2000 quarter-native 480x270 physics/render (640x448 halo), tools/smoke_profile, normal-clock autonomous bonfire 3000 displayed frames: mean16.666ms, worst40.360ms at frame2706, gas enabled1.241s; benchmark exits1 only because old strict worst<30ms gate. Half-native sustained was41.093/48.447ms. Quarter average meets30ms comfortably; isolated tail remains open pending user-accepted ticket criteria review.
+
+**2026-10-31T02:06:45Z**
+
+Final user-accepted quarter-native evidence: optimized 480x270 normal-clock 3000-frame displayed bonfire mean16.666ms, worst40.360ms isolated frame2706. Quarter-native bonfire_display_tests passed8/8 dry,0/8 wet by57.5 simulated seconds and saved; displayed catapult2/2. User explicitly said quarter native is good enough, superseding prior half-native target. Strict old worst<30 gate is not met and recorded; remaining tail-frame work tracked by child performance tickets.

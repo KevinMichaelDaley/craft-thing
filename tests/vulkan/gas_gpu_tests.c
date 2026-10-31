@@ -9,20 +9,16 @@
 #define RUN(fn) do {const char *filter=getenv("DC_GAS_TEST_FILTER");if(!filter||strstr(#fn,filter)) {printf("RUN %s\n",#fn);fn();}} while(0)
 static bool g_large_cfl_capable = true;
 static int g_skip = 0;
-#define RUN_LARGE(fn) do { \
+#define RUN_WITH_LARGE_CAPABILITY(fn, reason) do { \
     const char *filter=getenv("DC_GAS_TEST_FILTER"); \
     if(!filter||strstr(#fn,filter)) { \
         if(g_large_cfl_capable) RUN(fn); \
-        else {printf("SKIP %s: Large-CFL transport unsupported on this GPU\n",#fn);g_skip++;} \
+        else {printf("SKIP %s: %s\n",#fn,reason);g_skip++;} \
     } \
 } while(0)
-#define RUN_DENORM_COMPARISON(fn) do { \
-    const char *filter=getenv("DC_GAS_TEST_FILTER"); \
-    if(!filter||strstr(#fn,filter)) { \
-        if(g_large_cfl_capable) RUN(fn); \
-        else {printf("SKIP %s: comparison disables compact practical transport and requires float32 denormal preservation\n",#fn);g_skip++;} \
-    } \
-} while(0)
+#define RUN_LARGE(fn) RUN_WITH_LARGE_CAPABILITY(fn,"Large-CFL transport unsupported on this GPU")
+#define RUN_DENORM_COMPARISON(fn) RUN_WITH_LARGE_CAPABILITY(fn, \
+    "comparison disables compact practical transport and requires float32 denormal preservation")
 
 static bool large_cfl_device_capability(bool *supported) {
     char err[256]={0};dc_gpu_t *g=NULL;
