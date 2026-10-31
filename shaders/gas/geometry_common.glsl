@@ -42,6 +42,8 @@ float geometry_stable_capacity(ivec2 p) {
     return total;
 }
 float geometry_stable_demand(ivec2 p,float donor_volume) {
+    /* Divide each new void among its open, unchanged neighbors. A donor's
+     * total demand determines one retained fraction shared by all recipients. */
     float demand=0.;
     for(uint d=0u;d<4u;d++) {
         if(!geometry_open(p,d)) continue;

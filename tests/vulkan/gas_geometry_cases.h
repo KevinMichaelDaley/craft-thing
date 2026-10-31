@@ -4,6 +4,12 @@
 static double gas_checkpoint_stock(const fr_gas_checkpoint_chunk_t *snapshot,uint32_t species) {
     double total=0.;for(uint32_t i=0;i<4096u;i++) total+=snapshot->cells[i][species];return total;
 }
+static double gas_checkpoint_energy(const fr_gas_checkpoint_chunk_t *snapshot) {
+    double total=0.;
+    for(uint32_t i=0;i<4096u;i++)
+        total+=(double)snapshot->cells[i][5]+snapshot->cells[i][11]+snapshot->cells[i][14];
+    return total;
+}
 static void test_native_valve_only_refresh_preserves_restored_physical_void(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_gas_state_t *input=malloc(4096*sizeof(*input));double *volume=malloc(4096*sizeof(*volume));
@@ -36,6 +42,7 @@ static void test_native_geometry_carving_displacement_and_trapped_pockets_keep_f
     ASSERT_EQ(out->cells[32u*64u+32u][12],1.f);
     ASSERT_TRUE(out->cells[32u*64u+32u][0]>0.f);
     ASSERT_TRUE(out->cells[32u*64u+31u][0]<before->cells[32u*64u+31u][0]);
+    ASSERT_TRUE(fabs(gas_checkpoint_energy(out)-gas_checkpoint_energy(before))<1e-5);
     for(uint32_t k=0;k<5u;k++) ASSERT_TRUE(fabs(gas_checkpoint_stock(out,k)-gas_checkpoint_stock(before,k))<1e-8);
     for(uint32_t i=0;i<20u;i++) ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err))&&out->cells[32u*64u+32u][0]>0.f);

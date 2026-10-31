@@ -18,6 +18,7 @@ void main() {
     else if(retention.x<1.) value=geometry_scale_packet(original,retention.x);
     float stable_volume=geometry_stable_donor_volume(p);
     if(stable_volume>0.) {
+        /* The matching recipient fractions below sum to this donation. */
         float demand=geometry_stable_demand(p,stable_volume);
         if(demand>0.) {
             value=geometry_scale_packet(value,stable_volume/(stable_volume+demand));
