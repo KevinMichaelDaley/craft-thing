@@ -39,6 +39,7 @@ static void test_reacting_surface_radiates_even_when_the_wood_core_is_cool(void)
         fr_gpu_reactive_read_body(g,0x80000002u,0,0,&b,&found,err,sizeof(err))&&found);
     double received=fr_reactive_state_energy(&b.state)-fr_reactive_state_energy(&cold);
     printf("Hot-skin radiance delivered %.9g J from finite cool-core inventory\n",received);
+    printf("Hot-skin total drift %.9g J\n",fr_reactive_state_energy(&a.state)+fr_reactive_state_energy(&b.state)-initial);
     ASSERT_TRUE(received>.001&&fr_reactive_state_energy(&a.state)<fr_reactive_state_energy(&cold));
     ASSERT_TRUE(fabs(fr_reactive_state_energy(&a.state)+fr_reactive_state_energy(&b.state)-initial)<.01);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(chunk);dc_gpu_destroy(g);PASS();
