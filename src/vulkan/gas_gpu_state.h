@@ -11,6 +11,10 @@ struct fr_gas_gpu {
     fr_renderer_compute_t owner_gather;
     dc_gpu_address_buffer_t state[3],cache[2],parameters,stats,gates,audit_summary;
     dc_gpu_address_buffer_t checkpoint_staging;
+    dc_gpu_address_buffer_t smoke_coordinates[2];
+    float smoke_coordinate_time;
+    uint32_t smoke_coordinate_bank;
+    bool smoke_coordinate_reset;
     dc_gpu_address_buffer_t owner_tiles,conduction_faces;
     fr_gas_model_t model;
     float density,temperature;

@@ -360,7 +360,7 @@ static void test_transported_low_density_smoke_is_readable_on_the_dark_display(v
     ASSERT_TRUE(red_alpha>=.70f&&red_alpha<=.80f);
     free(pixels);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
 }
-static void test_quarter_native_smoke_has_conserved_cell_scale_optical_detail(void) {
+static void test_quarter_native_smoke_wavelet_advects_and_displaces_boundary(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_gas_state_t *input=calloc(4096,sizeof(*input));double *volume=calloc(4096,sizeof(*volume));
     uint32_t *pixels=malloc(480u*270u*sizeof(*pixels)),*moved=malloc(480u*270u*sizeof(*moved));
@@ -396,13 +396,14 @@ static void test_quarter_native_smoke_has_conserved_cell_scale_optical_detail(vo
     ASSERT_TRUE(edge_cells>=2u);
     g->gas->clock.advanced_seconds=1.;
     ASSERT_TRUE(present(g,err,sizeof(err))&&dc_gpu_readback(g,moved,480u*270u,err,sizeof(err)));
-    int shifted=0;for(uint32_t y=20;y<28;y++) for(uint32_t x=22;x<26;x+=2) {
-        int before=(int)(pixels[y*480u+x]&255u)-(int)(pixels[y*480u+x+1u]&255u);
-        int after=(int)(moved[y*480u+x+2u]&255u)-(int)(moved[y*480u+x+3u]&255u);
-        if((before>0)==(after>0)) shifted++;
+    int shifted_error=0,stationary_error=0;
+    for(uint32_t y=21;y<27;y++) for(uint32_t x=22;x<26;x++) {
+        int before=(int)(pixels[y*480u+x]&255u);
+        shifted_error+=abs(before-(int)(moved[y*480u+x+2u]&255u));
+        stationary_error+=abs(before-(int)(moved[y*480u+x]&255u));
     }
-    printf("Quarter-native smoke advected optical pairs %d/16\n",shifted);
-    ASSERT_TRUE(shifted>=15);
+    printf("Quarter-native smoke advected error %d stationary error %d\n",shifted_error,stationary_error);
+    ASSERT_TRUE(shifted_error<stationary_error);
     free(moved);free(pixels);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_native_stationary_heat_mixes_diagonally_in_the_optimized_path(void) {

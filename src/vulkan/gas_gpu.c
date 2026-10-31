@@ -101,6 +101,7 @@ static void destroy(dc_gpu_t *g,struct fr_gas_gpu *t) {
     dc_gpu_address_buffer_destroy(g,&t->owner_tiles);
     fr_renderer_compute_destroy(g,&t->conduction);dc_gpu_address_buffer_destroy(g,&t->conduction_faces);
     fr_renderer_compute_destroy(g,&t->transport);fr_renderer_compute_destroy(g,&t->feedback);
+    for(uint32_t i=0;i<2;i++) dc_gpu_address_buffer_destroy(g,t->smoke_coordinates+i);
     fr_renderer_compute_destroy(g,&t->gate);dc_gpu_address_buffer_destroy(g,&t->gates);
     fr_renderer_compute_destroy(g,&t->audit);dc_gpu_address_buffer_destroy(g,&t->audit_summary);
     for(uint32_t i=0;i<3;i++) dc_gpu_address_buffer_destroy(g,t->state+i);
@@ -272,6 +273,9 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     if(!dc_gpu_address_buffer_create(g,(FR_GAS_MODEL_WORDS+DC_GPU_CHUNK_SLOTS)*4u,true,&t->parameters,err,cap)||
        !dc_gpu_address_buffer_create(g,64,true,&t->stats,err,cap)||
        !dc_gpu_address_buffer_create(g,FR_GAS_AUDIT_WORDS*4u,true,&t->audit_summary,err,cap)) return false;
+    for(uint32_t i=0;i<2;i++)
+        if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)g->width*g->height*8u,false,t->smoke_coordinates+i,err,cap)) return false;
+    t->smoke_coordinate_reset=true;
     float *parameters=t->parameters.mapped;
     for(uint32_t i=0;i<5;i++) {parameters[i]=(float)t->model.gas_constant[i];parameters[5+i]=(float)t->model.heat_capacity_cv[i];}
     parameters[10]=(float)t->model.kinetic_scale;parameters[11]=t->density;parameters[12]=t->temperature;
@@ -293,7 +297,9 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
         fr_renderer_compute_init(g,&t->prepare,buffers,27,16,"build/shaders/gas_prepare.comp.spv",err,cap)&&
         fr_renderer_compute_init(g,&t->transport,buffers,27,16,"build/shaders/gas_transport.comp.spv",err,cap)&&
         fr_renderer_compute_init(g,&t->gate,buffers,27,32,"build/shaders/gas_gate.comp.spv",err,cap)&&
-        fr_gas_feedback_init(g,&t->feedback,buffers[0],buffers[2],buffers[5],buffers[11],err,cap)&&
+        fr_gas_feedback_init(g,&t->feedback,buffers[0],buffers[2],buffers[5],buffers[11],
+            (VkDescriptorBufferInfo){t->smoke_coordinates[0].buffer,0,t->smoke_coordinates[0].bytes},
+            (VkDescriptorBufferInfo){t->smoke_coordinates[1].buffer,0,t->smoke_coordinates[1].bytes},err,cap)&&
         fr_renderer_compute_init(g,&t->owner_gather,buffers,27,16,"build/shaders/gas_owner_gather.comp.spv",err,cap)&&
         fr_renderer_compute_init(g,&t->conduction,buffers,28,16,"build/shaders/gas_conduction.comp.spv",err,cap);
     if(!okay) return false;
@@ -452,7 +458,11 @@ bool fr_gas_gpu_audit(dc_gpu_t *g,fr_gas_gpu_audit_t *out,char *err,uint32_t cap
     memcpy(out->metrics,t->audit_summary.mapped,sizeof(out->metrics));return true;
 }
 void fr_gas_record_overlay(dc_gpu_t *g) {
-    if(g->gas) fr_gas_feedback_record(g,&g->gas->feedback,g->gas->groups_x,g->gas->groups_y,(float)g->gas->clock.advanced_seconds);
+    if(!g->gas) return;
+    struct fr_gas_gpu *t=g->gas;float seconds=(float)t->clock.advanced_seconds;
+    float dt=t->smoke_coordinate_reset?0.f:fmaxf(0.f,seconds-t->smoke_coordinate_time);
+    fr_gas_feedback_record(g,&t->feedback,t->groups_x,t->groups_y,dt,t->smoke_coordinate_bank,t->smoke_coordinate_reset);
+    t->smoke_coordinate_time=seconds;t->smoke_coordinate_bank^=1u;t->smoke_coordinate_reset=false;
 }
 static bool gravity_resolved(const struct fr_gas_gpu *t,float gravity) {
     double first=t->model.gas_constant[0],second=t->model.gas_constant[1];

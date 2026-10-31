@@ -93,7 +93,7 @@ bool fr_gas_gpu_seed_chunk(dc_gpu_t *g,uint32_t slot,const fr_gas_state_t *state
     }
     if(okay) okay=vkQueueWaitIdle(g->queue)==VK_SUCCESS;
     if(okay) okay=write_chunk(g,slot,packets,err,cap);
-    if(okay) {fr_gas_gpu_invalidate_cache(g);g->gas->large_step_hint=0;}
+    if(okay) {fr_gas_gpu_invalidate_cache(g);g->gas->large_step_hint=0;g->gas->smoke_coordinate_reset=true;}
     free(packets);return okay;
 }
 bool fr_gas_gpu_read_chunk(dc_gpu_t *g,uint32_t slot,fr_gas_state_t *states,uint32_t count,char *err,uint32_t cap) {
@@ -132,7 +132,7 @@ bool fr_gas_gpu_import_checkpoint(dc_gpu_t *g,uint32_t slot,const fr_gas_checkpo
     memcpy((uint32_t *)t->gates.mapped+(size_t)slot*4096u,input->gates,sizeof(input->gates));
     ((uint32_t *)t->parameters.mapped)[FR_GAS_MODEL_WORDS+slot]=0u;
     if(input->clock.advanced_seconds>t->clock.advanced_seconds) t->clock=input->clock;
-    fr_gas_gpu_invalidate_cache(g);t->large_step_hint=0;return true;
+    fr_gas_gpu_invalidate_cache(g);t->large_step_hint=0;t->smoke_coordinate_reset=true;return true;
 }
 bool fr_gas_gpu_read_work_chunk(dc_gpu_t *g,uint32_t slot,double *work,uint32_t count,char *err,uint32_t cap) {
     if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!work||count<4096u) return error(err,cap,"Invalid gas work snapshot");
