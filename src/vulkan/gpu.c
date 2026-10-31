@@ -365,10 +365,10 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     dc_gpu_body_features_t body_features;
     if (!dc_gpu_body_features_query(gpu->physical, &body_features, err, cap)) goto fail;
     const char *latency_setting=getenv("DC_LOW_LATENCY_PRESENT");
-    bool request_low_latency=latency_setting&&strcmp(latency_setting,"0")!=0;
+    gpu->low_latency_present=latency_setting&&strcmp(latency_setting,"0")!=0;
     dc_vk_present_mode_fifo_latest_ready_features_t latest_ready={
         .sType=DC_VK_PRESENT_MODE_FIFO_LATEST_READY_FEATURES};
-    if(gpu->window&&request_low_latency&&gpu_supports_latest_ready(gpu->physical)) {
+    if(gpu->window&&gpu->low_latency_present&&gpu_supports_latest_ready(gpu->physical)) {
         VkPhysicalDeviceFeatures2 available={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
             .pNext=&latest_ready};
         vkGetPhysicalDeviceFeatures2(gpu->physical,&available);

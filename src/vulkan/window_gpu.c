@@ -53,10 +53,12 @@ bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t requested_width,
     VkPresentModeKHR *modes = calloc(mode_count, sizeof(*modes));
     if (!modes) return error(err, cap, "Out of memory listing presentation modes");
     VkResult mode_result = vkGetPhysicalDeviceSurfacePresentModesKHR(gpu->physical, gpu->surface, &mode_count, modes);
-    const char *low_latency_setting=getenv("DC_LOW_LATENCY_PRESENT");
-    bool low_latency=low_latency_setting&&strcmp(low_latency_setting,"0")!=0;
     VkPresentModeKHR mode=mode_result==VK_SUCCESS?
-        dc_present_mode_select(modes,mode_count,low_latency,gpu->latest_ready_enabled):VK_PRESENT_MODE_FIFO_KHR;
+        dc_present_mode_select(modes,mode_count,gpu->low_latency_present,
+                               gpu->latest_ready_enabled):VK_PRESENT_MODE_FIFO_KHR;
+    if(getenv("DC_PRESENT_TRACE"))
+        fprintf(stderr,"Present mode %d; latest-ready feature %d\n",
+                (int)mode,gpu->latest_ready_enabled);
     free(modes);
     if (mode_result != VK_SUCCESS) return error(err, cap, "Cannot list Vulkan presentation modes");
     VkSwapchainCreateInfoKHR swap_info = { .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
