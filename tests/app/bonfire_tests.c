@@ -4,6 +4,8 @@
 #undef main
 #include "../../src/app/level.c"
 #include "../../src/vulkan/reactive_storage_gpu.h"
+#include "../../src/vulkan/gas_gpu_state.h"
+#include "../../src/vulkan/thermal_gpu_state.h"
 #include "bonfire_progress.h"
 #include "ferrum/fire/material_profile.h"
 #include <signal.h>
@@ -20,6 +22,71 @@ static uint64_t kindling_initial[2],kindling_current[2];
 static uint32_t kindling_flaming[2];
 static float kindling_hazard[2];
 static double diagnostic_starter_heat[2],diagnostic_starter_fuel[2],diagnostic_starter_capacity[2];
+static void trace_hottest_gas(dc_level_view_t *view,char *err,uint32_t cap) {
+    const fr_gas_model_t *model=&view->gpu->gas->model;
+    double hottest=0.;uint32_t hot_slot=0,hot_cell=0;
+    uint32_t slot_x[DC_GPU_CHUNK_SLOTS],slot_y[DC_GPU_CHUNK_SLOTS];
+    for(uint32_t slot=0;slot<DC_GPU_CHUNK_SLOTS;slot++) slot_x[slot]=slot_y[slot]=UINT32_MAX;
+    const uint32_t *pages=view->gpu->page_mapped;
+    for(uint32_t y=0;y<(view->gpu->height+63u)/64u;y++)
+        for(uint32_t x=0;x<view->gpu->page_width;x++) {
+            uint32_t page=pages[y*view->gpu->page_width+x];
+            if(page>0u&&page<=DC_GPU_CHUNK_SLOTS) {slot_x[page-1u]=x;slot_y[page-1u]=y;}
+        }
+    for(uint32_t slot=0;slot<DC_GPU_CHUNK_SLOTS;slot++) {
+        if(slot_x[slot]==UINT32_MAX) continue;
+        const gas_packet_t *packets=NULL;
+        if(!fr_gas_gpu_checkpoint_packets(view->gpu,view->gpu->gas->direct_publish?1u:0u,slot,&packets,err,cap)) return;
+        for(uint32_t i=0;i<4096u;i++) {
+            const float *p=packets[i].words;double mass=p[0]+p[1]+p[2]+p[3]+p[4];
+            double capacity=p[0]*model->heat_capacity_cv[0]+p[1]*model->heat_capacity_cv[1]+p[2]*model->heat_capacity_cv[2]+
+                p[3]*model->heat_capacity_cv[3]+p[4]*model->heat_capacity_cv[4];
+            if(mass<=0||capacity<=0||p[13]<=0) continue;
+            double kinetic=.5*model->kinetic_scale*((double)p[6]*p[6]+(double)p[7]*p[7])/mass;
+            double temperature=((double)p[5]+p[11]+p[14]-kinetic)/capacity;
+            if(temperature>hottest) {hottest=temperature;hot_slot=slot;hot_cell=i;}
+        }
+    }
+    const gas_packet_t *packets=NULL;
+    if(!fr_gas_gpu_checkpoint_packets(view->gpu,view->gpu->gas->direct_publish?1u:0u,hot_slot,&packets,err,cap)) return;
+    const float *p=packets[hot_cell].words;double mass=p[0]+p[1]+p[2]+p[3]+p[4];
+    printf("HOTSPOT %.1fK slot%u world(%lld,%lld) mass%.9g void%.9g volume%.9g O2%.9g soot%.9g energy%.9g\n",
+        hottest,hot_slot,(long long)(slot_x[hot_slot]*64u+hot_cell%64u),
+        (long long)(slot_y[hot_slot]*64u+hot_cell/64u),mass,p[13],p[12],p[0],p[4],(double)p[5]+p[11]+p[14]);
+    const int offsets[4]={-1,1,-64,64};
+    for(uint32_t side=0;side<4;side++) {
+        int neighbor=(int)hot_cell+offsets[side];
+        if(neighbor<0||neighbor>=4096||((side<2)&&neighbor/64!=(int)hot_cell/64)) continue;
+        const float *q=packets[neighbor].words;double qmass=q[0]+q[1]+q[2]+q[3]+q[4];
+        double qcapacity=q[0]*model->heat_capacity_cv[0]+q[1]*model->heat_capacity_cv[1]+
+            q[2]*model->heat_capacity_cv[2]+q[3]*model->heat_capacity_cv[3]+q[4]*model->heat_capacity_cv[4];
+        double qkinetic=qmass>0?.5*model->kinetic_scale*((double)q[6]*q[6]+(double)q[7]*q[7])/qmass:0.;
+        printf("HOTSPOT neighbor%u %.1fK mass%.9g void%.9g energy%.9g\n",side,
+            qcapacity>0?((double)q[5]+q[11]+q[14]-qkinetic)/qcapacity:0.,qmass,q[13],(double)q[5]+q[11]+q[14]);
+    }
+    uint32_t world_x=slot_x[hot_slot]*64u+hot_cell%64u;
+    uint32_t world_y=slot_y[hot_slot]*64u+hot_cell/64u;
+    uint32_t page=((const uint32_t *)view->gpu->page_mapped)[(world_y/64u)*view->gpu->page_width+world_x/64u];
+    printf("HOTSPOT page%u expected-slot%u view(%u,%u)\n",page,hot_slot,view->gpu->view_x,view->gpu->view_y);
+    dc_chunk_t *terrain=calloc(1,sizeof(*terrain));
+    if(terrain&&dc_gpu_download_chunk(view->gpu,hot_slot,terrain,err,cap))
+        printf("HOTSPOT cell material%u fluid%u\n",terrain->cells[hot_cell].material,terrain->cells[hot_cell].fluid_mass);
+    free(terrain);
+    const int offset_x[5]={0,-1,1,0,0},offset_y[5]={0,0,0,-1,1};
+    for(uint32_t side=0;side<5;side++) {
+        fr_thermal_inspection_t solid={0};
+        if(!fr_thermal_gpu_inspect(view->gpu,world_x+offset_x[side],world_y+offset_y[side],&solid,err,cap)) continue;
+        uint32_t index=(world_y+offset_y[side])*view->gpu->width+world_x+offset_x[side];
+        uint32_t count=view->gpu->width*view->gpu->height;
+        const uint32_t *meta=(const uint32_t *)view->gpu->thermal->samples.mapped+(index+count)*4u;
+        const uint32_t *occupancy=view->gpu->occupancy_mapped;
+        const float *mpm=view->gpu->mpm_grid_mapped;
+        printf("HOTSPOT solid%u kind%u body%u coverage%.6f mpm%.6f occupied%u material%u temperature%.1fK capacity%.9g\n",
+            side,meta[0],occupancy?occupancy[index]:0u,occupancy?(double)occupancy[2u*count+index]/65536.:0.,
+            mpm?mpm[index*4u+3u]:0.f,solid.occupied,solid.material,solid.temperature_K,solid.heat_capacity);
+    }
+    fflush(stdout);
+}
 static void stop_run(int signal_number) {(void)signal_number;stopped=1;}
 static int log_for_origin(const fixture_log_t logs[2u*DC_BONFIRE_LOG_COUNT],uint32_t origin) {
     for(uint32_t i=0;i<2u*DC_BONFIRE_LOG_COUNT;i++) for(uint32_t j=0;j<logs[i].count;j++) if(logs[i].origins[j]==origin) return (int)i;
@@ -103,7 +170,7 @@ static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
         ASSERT_TRUE(logs[i].count==rect[2]*rect[3]&&logs[i].initial>0);
     }
     uint64_t began=SDL_GetPerformanceCounter(),previous=began,report=began;double frequency=SDL_GetPerformanceFrequency();
-    uint32_t dry=0,wet=0;double elapsed=0.;bool sustained=false,captured=false;
+    uint32_t dry=0,wet=0;double elapsed=0.;bool sustained=false,captured=false,traced=false;
     bonfire_progress_t progress=bonfire_progress_init();
     while(!stopped&&elapsed<wall_bound&&!(sustained&&dry==DC_BONFIRE_LOG_COUNT)) {
         uint64_t now=SDL_GetPerformanceCounter();float dt=(float)((now-previous)/frequency);
@@ -127,6 +194,9 @@ static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
             sustained=progress.sustained;
             if(!progress.continuous) break;
             fr_gas_gpu_audit_t audit;ASSERT_TRUE(fr_gas_gpu_audit(view->gpu,&audit,err,sizeof(err)));
+            if(getenv("DC_BONFIRE_HOTSPOT_TRACE")&&!traced&&audit.metrics[FR_GAS_AUDIT_MAX_TEMPERATURE]>3000.f) {
+                trace_hottest_gas(view,err,sizeof(err));traced=true;
+            }
             uint32_t counters[32];ASSERT_TRUE(fr_combustion_gpu_bonfire_counters(view->gpu,counters));float target_oxygen=0,surface_temperature=0;
             memcpy(&target_oxygen,counters+27u,sizeof(target_oxygen));memcpy(&surface_temperature,counters+29u,sizeof(surface_temperature));
             printf("BONFIRE wall%.1fs sim%.1fs dry%u/%u wet%u/%u ember%.1fK; dry log fuel-used/flaming:",
@@ -146,6 +216,7 @@ static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
             printf("STARTER settled dry %.1fK heat%.1fJ chemical%.1fJ; wet %.1fK heat%.1fJ chemical%.1fJ\n",
                 diagnostic_starter_heat[0]/diagnostic_starter_capacity[0],diagnostic_starter_heat[0],diagnostic_starter_fuel[0],
                 diagnostic_starter_heat[1]/diagnostic_starter_capacity[1],diagnostic_starter_heat[1],diagnostic_starter_fuel[1]);fflush(stdout);
+            if(traced) previous=SDL_GetPerformanceCounter();
         }
     }
     mkdir("build/screenshots",0777);uint32_t *pixels=malloc(480u*270u*4u);ASSERT_TRUE(pixels);

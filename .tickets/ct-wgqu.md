@@ -1,6 +1,6 @@
 ---
 id: ct-wgqu
-status: in_progress
+status: closed
 deps: []
 links: [ct-sqpj]
 created: 2026-10-30T16:27:49Z
@@ -60,3 +60,19 @@ Rejected two no-extra-fuel contact-path fixture trials. First moved right kindli
 **2026-10-31T03:06:00Z**
 
 2026-10-31 repeated connected-layout diagnostic: 8/8 dry and0/8 wet at21s, but gas audit peaked3343.7K; full-view readback found extreme temperature in tiny gas pockets on wet-side starter edge. Layout was restored. Follow child ct-sqpj for conservative gas mixing/heat coupling before accepting the contact bridge.
+
+**2026-10-31T05:43:55Z**
+
+No-extra-fuel fixture starter now has face-connected paths to first logs on both sides; geometry tests pass. Displayed 60s ignition still needs rerun after conductivity and fixture changes.
+
+**2026-10-31T06:40:27Z**
+
+2026-10-31: RED/GREEN graph test establishes every log has a nonoverlapping face-contact path from finite starter. Centered pile keeps gaps for oxygen; displayed quarter-native runs passed8/8 dry 0/8 wet twice by~22s, failed5/8 once by60s. A compact fully touching pile choked oxygen and was discarded. Current layout is incremental, not acceptance-complete.
+
+**2026-10-31T07:01:26Z**
+
+2026-10-31: widened right kindling contact under lowest right log and compensated two left floor sticks so starter remains exactly 48 cells. Scene graph/no-overlap tests pass. Five consecutive displayed quarter-native runs: 8/8 dry and 0/8 wet by about 20-24 simulated seconds; sampled gas maxima all below 1900 K. Full suite and frame-time gate pending.
+
+**2026-10-31T07:33:39Z**
+
+Final validation: five consecutive displayed quarter-native runs with right contact bridge at unchanged 48-cell finite starter all passed8/8 dry0/8 wet; sampled peaks 1689-1869K. Full make test passed. X11 benchmark average16.7ms; rare worst-frame spike tracked ct-d3oz.

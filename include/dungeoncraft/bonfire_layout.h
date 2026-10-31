@@ -14,26 +14,26 @@ static const uint32_t dc_bonfire_rects[DC_BONFIRE_PIECE_COUNT][4]={
 const uvec4 dc_bonfire_rects[DC_BONFIRE_PIECE_COUNT]=uvec4[DC_BONFIRE_PIECE_COUNT](
 #endif
     DC_BONFIRE_RECT(166u,90u,2u,2u),
-    DC_BONFIRE_RECT(154u,90u,2u,2u),
-    DC_BONFIRE_RECT(152u,90u,2u,2u),
+    DC_BONFIRE_RECT(154u,90u,1u,2u),
+    DC_BONFIRE_RECT(152u,90u,1u,2u),
     DC_BONFIRE_RECT(156u,90u,2u,2u),
     DC_BONFIRE_RECT(168u,90u,2u,2u),
-    DC_BONFIRE_RECT(170u,88u,2u,4u),
-    DC_BONFIRE_RECT(151u,86u,2u,2u),
-    DC_BONFIRE_RECT(151u,88u,2u,2u),
-    DC_BONFIRE_RECT(156u,87u,2u,2u),
+    DC_BONFIRE_RECT(170u,86u,2u,6u),
+    DC_BONFIRE_RECT(158u,86u,1u,4u),
+    DC_BONFIRE_RECT(156u,81u,2u,2u),
+    DC_BONFIRE_RECT(160u,86u,1u,4u),
     DC_BONFIRE_RECT(171u,76u,1u,2u),
     DC_BONFIRE_RECT(171u,81u,1u,2u),
-    DC_BONFIRE_RECT(170u,86u,2u,2u),
-    DC_BONFIRE_RECT(158u,91u,8u,1u),
-    DC_BONFIRE_RECT(146u,83u,8u,3u),
-    DC_BONFIRE_RECT(158u,83u,8u,3u),
+    DC_BONFIRE_RECT(172u,86u,2u,2u),
+    DC_BONFIRE_RECT(158u,90u,8u,1u),
+    DC_BONFIRE_RECT(152u,83u,8u,3u),
+    DC_BONFIRE_RECT(160u,83u,8u,3u),
     DC_BONFIRE_RECT(170u,83u,8u,3u),
-    DC_BONFIRE_RECT(150u,78u,10u,3u),
+    DC_BONFIRE_RECT(154u,78u,10u,3u),
     DC_BONFIRE_RECT(164u,78u,10u,3u),
-    DC_BONFIRE_RECT(146u,73u,12u,3u),
+    DC_BONFIRE_RECT(154u,73u,12u,3u),
     DC_BONFIRE_RECT(166u,73u,12u,3u),
-    DC_BONFIRE_RECT(154u,68u,16u,3u)
+    DC_BONFIRE_RECT(154u,70u,16u,3u)
 #ifdef __STDC_VERSION__
 };
 static inline int dc_bonfire_fixture_piece(uint32_t x,uint32_t y) {
