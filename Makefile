@@ -901,6 +901,9 @@ build/catapult_quarter_demo_tests: tests/app/catapult_quarter_demo_tests.c build
 .PHONY: test_catapult_quarter_demo
 test_catapult_quarter_demo: build/catapult_quarter_demo_tests
 	./build/catapult_quarter_demo_tests
+.PHONY: catapult-demo-quarter-native
+catapult-demo-quarter-native: build/catapult_demo_quarter_native
+	./build/catapult_demo_quarter_native
 .PHONY: catapult-demo
 catapult-demo: build/catapult_demo
 	./build/catapult_demo

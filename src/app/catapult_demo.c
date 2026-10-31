@@ -4,7 +4,9 @@
 #include <string.h>
 
 #include "dungeoncraft/gpu.h"
+#include "ferrum/fire/gpu.h"
 #include "ferrum/renderer/gpu.h"
+#include "ferrum/structural/gpu.h"
 
 #include "catapult_scene.h"
 #include "view_config.h"
@@ -45,8 +47,8 @@ int main(void) {
         "build/shaders/pattern.comp.spv", err, sizeof(err));
     if (okay) okay = dc_gpu_set_display_zoom(gpu, WINDOW_SCALE);
     if (okay) okay = make_ground(gpu, err, sizeof(err));
-    if (okay) okay = dc_catapult_scene_build(gpu, true, &scene,
-                                             err, sizeof(err));
+    if (okay) okay = dc_catapult_scene_build_with_chunk_stride(gpu, true,
+        VIEW_CHUNKS_X, &scene, err, sizeof(err));
     fr_renderer_sun_t sun = {.direction = {-.4f, -.8f, .45f},
         .intensity = 1.8f, .color = {1.f, .95f, .85f},
         .known_sky = FR_SKY_TOP | FR_SKY_LEFT};
@@ -55,7 +57,14 @@ int main(void) {
                      fr_renderer_set_mode(gpu, FR_RENDERER_LIT) &&
                      dc_gpu_set_tick_seconds(gpu, 1.f / 60.f) &&
                      dc_gpu_set_window_title(gpu, "Flaming catapult");
-    if (okay) fprintf(stderr, "Catapult demo: 256x128 game view ready\n");
+    if (okay) fprintf(stderr, "Catapult demo: %dx%d game view ready\n",
+                      VIEW_WIDTH, VIEW_HEIGHT);
+    fr_reactive_record_t battlement_initial = {0};
+    bool battlement_found = false;
+    if (okay) okay = fr_gpu_reactive_read_body(gpu,
+        FR_STRUCTURAL_BODY_ID_BASE + 10u, 1u, 0u, &battlement_initial,
+        &battlement_found, err, sizeof(err)) && battlement_found;
+    bool wall_cleared = false, battlement_ignited = false;
     for (uint32_t frame = 0; okay && frame < CATAPULT_DEMO_FRAMES; frame++) {
         uint32_t start = SDL_GetTicks();
         SDL_Event event;
@@ -67,6 +76,27 @@ int main(void) {
             okay = dc_catapult_scene_release_projectile(gpu, &scene,
                                                          err, sizeof(err));
         if (okay) okay = dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err));
+        if (okay) {
+            dc_gpu_world_body_t coal;
+            okay = dc_gpu_read_world_body(gpu, scene.coal_body, &coal,
+                                           err, sizeof(err));
+            if (okay && (float)coal.chunk.x * DC_CHUNK_SIDE +
+                coal.body.x_fp / 65536.f > 184.f) wall_cleared = true;
+        }
+        if (okay && frame % 5u == 0u) {
+            for (uint32_t member = 6u; member <= 12u; member++) {
+                fr_reactive_record_t wood;
+                bool found = false;
+                okay = fr_gpu_reactive_read_body(gpu,
+                    FR_STRUCTURAL_BODY_ID_BASE + member, 1u, 0u,
+                    &wood, &found, err, sizeof(err));
+                if (!okay) break;
+                if (found && (wood.state.flags & FR_REACTIVE_FLAMING) != 0u &&
+                    wood.state.fuel_mass_fp <
+                    battlement_initial.state.fuel_mass_fp)
+                    battlement_ignited = true;
+            }
+        }
         if (okay && frame % 10u == 0u)
             fprintf(stderr, "Catapult demo: frame %u/%u\n", frame + 1u,
                     CATAPULT_DEMO_FRAMES);
@@ -76,7 +106,9 @@ int main(void) {
     if (okay) SDL_Delay(2000);
 done:
     if (!okay) fprintf(stderr, "Catapult demo: %s\n", err);
-    else fprintf(stderr, "Catapult demo: playback complete\n");
+    else fprintf(stderr, "Catapult demo: playback complete; wall cleared %u, "
+                         "battlement ignited %u\n",
+                 wall_cleared, battlement_ignited);
     dc_gpu_destroy(gpu);
     return okay ? 0 : 1;
 }

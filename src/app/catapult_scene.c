@@ -18,7 +18,6 @@ enum {
     CATAPULT_POUCH_ID = 3u,
     CATAPULT_COAL_ID = 0x80000002u,
     CATAPULT_BASE_ID = 0x80000003u,
-    CATAPULT_COAL_SLOT = 5u,
     CATAPULT_WALL_X = 180u,
     CATAPULT_FLOOR_Y = 96u,
     CATAPULT_BASE_HEIGHT = 16u,
@@ -133,7 +132,8 @@ static bool triangular_base(dc_gpu_t *gpu, char *err, uint32_t cap) {
                                   DC_GPU_BODY_KINEMATIC, err, cap);
 }
 
-static bool coal_load(dc_gpu_t *gpu, bool hot, char *err, uint32_t cap) {
+static bool coal_load(dc_gpu_t *gpu, bool hot, uint32_t chunk_stride,
+                      char *err, uint32_t cap) {
     if (!dc_gpu_paint_material(gpu, 65, 65, 1, DC_MATERIAL_COAL, err, cap))
         return false;
     const fr_reactive_profile_t *profile = fr_reactive_profile(DC_MATERIAL_COAL);
@@ -149,19 +149,20 @@ static bool coal_load(dc_gpu_t *gpu, bool hot, char *err, uint32_t cap) {
                     hot ? 1300.f : 293.15f, 0xC0000000u + local,
                     &state, err, cap)) return false;
             if (hot) state.flags |= FR_REACTIVE_FLAMING;
-            if (!fr_gpu_reactive_seed_cell(gpu, CATAPULT_COAL_SLOT, local,
+            if (!fr_gpu_reactive_seed_cell(gpu, chunk_stride + 1u, local,
                                             &state, err, cap)) return false;
         }
     return true;
 }
 
-static bool wooden_arm(dc_gpu_t *gpu, char *err, uint32_t cap) {
+static bool wooden_arm(dc_gpu_t *gpu, uint32_t chunk_stride,
+                       char *err, uint32_t cap) {
     const fr_reactive_profile_t *profile = fr_reactive_profile(DC_MATERIAL_WOOD);
     if (!profile) return scene_error(err, cap, "Missing wood profile");
     uint32_t mass = (uint32_t)lroundf(profile->density * 65536.f);
     for (uint32_t y = 78; y < 80; y++)
         for (uint32_t x = 64; x < 80; x++) {
-            uint32_t slot = 4u + x / DC_CHUNK_SIDE;
+            uint32_t slot = chunk_stride + x / DC_CHUNK_SIDE;
             uint32_t local = (y - DC_CHUNK_SIDE) * DC_CHUNK_SIDE +
                              x % DC_CHUNK_SIDE;
             fr_reactive_state_t state;
@@ -207,9 +208,11 @@ static bool thin_battlement_wood(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return true;
 }
 
-bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
-                             dc_catapult_scene_t *scene,
-                             char *err_buf, uint32_t err_cap) {
+bool dc_catapult_scene_build_with_chunk_stride(dc_gpu_t *gpu, bool hot,
+                                                uint32_t chunk_stride,
+                                                dc_catapult_scene_t *scene,
+                                                char *err_buf,
+                                                uint32_t err_cap) {
     if (!gpu || !scene) return scene_error(err_buf, err_cap,
                                            "Missing catapult context or output");
     fr_structural_gpu_graph_t graph = support_graph();
@@ -222,11 +225,11 @@ bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
     for (uint32_t tick = 0; tick < 5; tick++)
         if (!dc_gpu_rigid_step(gpu, err_buf, err_cap)) return false;
     if (!triangular_base(gpu, err_buf, err_cap)) return false;
-    if (!wooden_arm(gpu, err_buf, err_cap) ||
+    if (!wooden_arm(gpu, chunk_stride, err_buf, err_cap) ||
         !dc_gpu_set_body_motion(gpu, CATAPULT_ARM_ID, CATAPULT_COCKED_ANGLE,
                                 0.f, 0,
                                 err_buf, err_cap) ||
-        !coal_load(gpu, hot, err_buf, err_cap) ||
+        !coal_load(gpu, hot, chunk_stride, err_buf, err_cap) ||
         !dc_gpu_admit_authored_rigid_cells(gpu, err_buf, err_cap)) return false;
     if (!dc_gpu_set_body_origin(gpu, (dc_chunk_coord_t){0, 0},
                                  err_buf, err_cap)) return false;
@@ -264,6 +267,13 @@ bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
         .pivot_joint = pivot.id, .latch_joint = latch.id,
         .pouch_joint = pouch.id};
     return true;
+}
+
+bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,
+                             dc_catapult_scene_t *scene,
+                             char *err_buf, uint32_t err_cap) {
+    return dc_catapult_scene_build_with_chunk_stride(gpu, hot, 4u, scene,
+                                                      err_buf, err_cap);
 }
 
 bool dc_catapult_scene_release(dc_gpu_t *gpu, dc_catapult_scene_t *scene,
