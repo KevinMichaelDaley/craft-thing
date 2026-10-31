@@ -571,6 +571,7 @@ int main(void) {
     RUN(test_native_stationary_heat_mixes_diagonally_in_the_optimized_path);
     RUN(test_native_vorticity_rolls_a_rising_plume_sideways_without_creating_stock);
     RUN(test_native_subgrid_smoke_gains_detail_without_stock_or_mean_impulse);
+    RUN(test_quarter_native_smoke_has_conserved_cell_scale_optical_detail);
     RUN(test_transported_low_density_smoke_is_readable_on_the_dark_display);
     RUN(test_native_quiet_air_sleeps_but_motion_heat_and_pressure_still_wake);
     RUN(test_native_practical_safe_line_matches_explicit_flux_inside_stiff_interval);
