@@ -69,7 +69,7 @@ static void test_unsupported_policy_rejects_before_acoustic_setup(void) {
     fr_gas_model_t model=reference_model();
     ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012f,300.f,err,sizeof(err)));
     ASSERT_TRUE(!g->gas->acoustic.ready);
-    bool rejected=!fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,
+    bool rejected=!fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_LARGE_CFL,
                                                   err,sizeof(err));
     ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_AXIS",saved_axis?saved_axis:"",1),0);
     ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_METADATA",saved_metadata?saved_metadata:"",1),0);
@@ -572,6 +572,7 @@ int main(void) {
     RUN(test_native_practical_safe_line_matches_explicit_flux_inside_stiff_interval);
     RUN(test_native_cold_audit_reduces_stock_and_does_not_advance_physics);
     RUN(test_native_hot_gas_audit_weights_tiny_spikes_by_heat_capacity);
+    RUN(test_native_gas_only_still_air_conducts_without_mass_transport);
     RUN(test_native_practical_checkerboard_pressure_relaxes_conservatively);
     RUN(test_native_practical_offset_wall_does_not_drive_sealed_neighbor);
     RUN(test_native_practical_variable_intervals_stay_finite_without_retry_stalls);
