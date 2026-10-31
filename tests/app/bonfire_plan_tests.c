@@ -52,4 +52,9 @@ static void test_shallow_stone_rim_leaves_side_air_above_the_kindling(void) {
     }
     ASSERT_EQ(walls,4u);PASS();
 }
-int main(void) {RUN(test_real_structural_pits_and_independent_rigid_stack);RUN(test_shallow_stone_rim_leaves_side_air_above_the_kindling);printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
+static void test_upper_log_tiers_leave_a_vertical_flue(void) {
+    for(uint32_t y=73;y<81;y++) for(uint32_t x=164;x<166;x++)
+        ASSERT_EQ(dc_bonfire_fixture_piece(x,y),-1);
+    PASS();
+}
+int main(void) {RUN(test_real_structural_pits_and_independent_rigid_stack);RUN(test_shallow_stone_rim_leaves_side_air_above_the_kindling);RUN(test_upper_log_tiers_leave_a_vertical_flue);printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
