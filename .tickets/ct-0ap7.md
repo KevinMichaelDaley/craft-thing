@@ -27,3 +27,7 @@ Finite-volume gas Fourier flux now runs in fire and gas-only worlds after transp
 **2026-10-31T07:33:39Z**
 
 2026-10-31: full make test passes, gas display 37 passed/8 capability skips, cut-cell contact4/4, containment1/1. Five displayed bonfire runs passed8/8 dry0/8 wet with gas peaks below1900K. X11 quarter-native 1000-frame benchmark mean16.702 and16.695ms, but worst43.612 and39.760ms at frame108/109, so strict <30ms worst-frame gate fails. Thermal GPU phases remain stable; intermittent broad rigid GPU stage scheduling/presentation spike tracked as ct-d3oz. Keep this ticket in progress until existing strict frame gate passes.
+
+**2026-10-31T08:04:01Z**
+
+Gas heat transport and five displayed ignition runs are verified and pushed; full make -j8 test passes after benchmark/present changes. X11 opt-in immediate present improves mean ~15ms and passed two manual 1000-frame runs, but integrated wrapper still produced one 30.353ms worst outlier from vkQueuePresentKHR wait. Dependency ct-d3oz remains unresolved, so keep gas conduction ticket open until strict displayed gate is reliable.
