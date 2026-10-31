@@ -66,7 +66,7 @@ static void test_right_starter_contacts_all_three_right_logs_without_extra_wood(
     uint32_t starter_area=0;
     for(uint32_t i=0;i<DC_BONFIRE_KINDLING_COUNT;i++) starter_area+=dc_bonfire_rects[i][2]*dc_bonfire_rects[i][3];
     ASSERT_EQ(starter_area,48u);
-    const uint32_t chain[]={4u,5u,11u,15u,10u,17u,9u,19u};
+    const uint32_t chain[]={12u,3u,4u,5u,11u,15u,10u,17u,9u,19u};
     for(uint32_t i=1;i<sizeof(chain)/sizeof(chain[0]);i++) ASSERT_TRUE(bonfire_rect_contact(chain[i-1],chain[i]));
     PASS();
 }
