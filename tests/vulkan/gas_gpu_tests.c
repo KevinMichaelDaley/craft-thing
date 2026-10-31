@@ -494,6 +494,8 @@ static void test_native_subnormal_colored_stock_is_valid_and_retained_at_rest(vo
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
 }
 int main(void) {
+    if(getenv("DC_GAS_FOURIER_ONLY")) {RUN(test_native_gas_only_still_air_conducts_without_mass_transport);
+        printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;}
     if(!large_cfl_device_capability(&g_large_cfl_capable)) {
         fprintf(stderr,"Cannot query Large-CFL GPU capability\n");return 1;
     }

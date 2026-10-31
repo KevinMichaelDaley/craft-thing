@@ -118,13 +118,16 @@ static void test_native_hot_gas_audit_weights_tiny_spikes_by_heat_capacity(void)
 }
 static void test_native_gas_only_still_air_conducts_without_mass_transport(void) {
     char err[256]={0};dc_gpu_t *g=NULL;ASSERT_TRUE(context(&g,err,sizeof(err)));
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     fr_gas_model_t model=reference_model();
     fr_gas_state_t *before=calloc(4096,sizeof(*before)),*after=calloc(4096,sizeof(*after));
     double *volume=calloc(4096,sizeof(*volume));ASSERT_TRUE(before&&after&&volume);
     for(uint32_t i=0;i<4096;i++) {before[i]=reference_air(model,.0012,300,0);volume[i]=1.;}
     uint32_t hot=32u*64u+32u,cold=hot+1u;
     before[hot]=reference_air(model,.0004,900,0);
-    ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012f,300,err,sizeof(err))&&
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&
+        fr_gas_gpu_enable(g,&model,.0012f,300,err,sizeof(err))&&
         fr_gas_gpu_seed_chunk(g,0,before,volume,4096,err,sizeof(err))&&
         fr_gas_gpu_step(g,.001f,err,sizeof(err))&&
         fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
@@ -133,7 +136,12 @@ static void test_native_gas_only_still_air_conducts_without_mass_transport(void)
     double sum_before=0,sum_after=0;
     for(uint32_t i=0;i<4096;i++) {sum_before+=before[i].energy;sum_after+=after[i].energy;}
     ASSERT_TRUE(fabs(sum_after-sum_before)<1e-5);
-    ASSERT_TRUE(present(g,err,sizeof(err)));free(before);free(after);free(volume);dc_gpu_destroy(g);PASS();
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,before,volume,4096,err,sizeof(err))&&
+        fr_gas_gpu_gate(g,32,32,1,1,0,true,err,sizeof(err))&&
+        fr_gas_gpu_step(g,.001f,err,sizeof(err))&&
+        fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
+    ASSERT_TRUE(fabs(after[cold].energy-before[cold].energy)<1e-6);
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(before);free(after);free(volume);free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_native_practical_offset_wall_does_not_drive_sealed_neighbor(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));

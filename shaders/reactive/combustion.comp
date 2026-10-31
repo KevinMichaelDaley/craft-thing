@@ -93,20 +93,27 @@ float solid_capacity(Words entry) {
         float(entry.words[s+13u])*coefficient(14u,5u)+
         (float(entry.words[s+14u])+float(entry.words[s+16u]))*coefficient(15u,5u))/65536.;
 }
-float contact_flux(uint first,uint second,uint a,uint b) {
+float gas_conduction_flux(uint first,uint second,uint a,uint b) {
     if(gas_cell(a)&&gas_cell(b)) {
         uint axis=second==first+1u?0u:1u;
         if((Words(params.gates_address).words[a]&(1u<<axis))!=0u) return 0.;
         Gas left=local_gas(a),right=local_gas(b);
         float left_cap=gas_capacity(left),right_cap=gas_capacity(right);
         if(left_cap<=0.||right_cap<=0.||left.geometry.y<=0.||right.geometry.y<=0.) return 0.;
-        float difference=gas_internal(left)/left_cap-gas_internal(right)/right_cap;
+        float left_temperature=gas_internal(left)/left_cap,right_temperature=gas_internal(right)/right_cap;
+        float difference=left_temperature-right_temperature;
+        if(abs(difference)<=max(abs(left_temperature),abs(right_temperature))*1e-6) return 0.;
         float aperture=min(min(left.geometry.y,right.geometry.y),1.);
+        /* Fourier face flux, k A (T_left - T_right) / dx.  The bound is
+         * the four-face explicit CFL limit for each cell's finite capacity. */
         float conductance=float(FR_COMBUSTION_AIR_CONDUCTIVITY*FR_THERMAL_FACE_AREA/FR_THERMAL_GAMEPLAY_FACE_METERS)*aperture;
         float requested=conductance*difference*uintBitsToFloat(params.seconds);
         float stable=.25*left_cap*right_cap/(left_cap+right_cap)*abs(difference);
         return sign(requested)*min(abs(requested),stable);
     }
+    return 0.;
+}
+float contact_flux(uint first,uint second,uint a,uint b) {
     uint n=params.width*params.height,ak=floatBitsToUint(samples[first+n].x),bk=floatBitsToUint(samples[second+n].x);
     bool asolid=ak==1u||ak==4u,bsolid=bk==1u||bk==4u;
     if(asolid==bsolid||!gas_cell(asolid?b:a)) return 0.;
@@ -459,6 +466,10 @@ void main() {
 #else
     if(i>=params.width*params.height) return;
     ivec2 p=ivec2(i%params.width,i/params.width);uint at=atlas(p);
+    if(params.unused.x==12u) {
+        fluxes[i].zw=vec2(p.x+1<int(params.width)?gas_conduction_flux(i,i+1u,at,atlas(p+ivec2(1,0))):0.,
+            p.y+1<int(params.height)?gas_conduction_flux(i,i+params.width,at,atlas(p+ivec2(0,1))):0.);return;
+    }
     if(params.unused.x>=6u) {bonfire_hud(params.unused.x,i,p,at);return;}
     if(params.unused.x==4u) {
         fluxes[i].zw=vec2(p.x+1<int(params.width)?contact_flux(i,i+1u,at,atlas(p+ivec2(1,0))):0.,

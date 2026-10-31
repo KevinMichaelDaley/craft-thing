@@ -133,8 +133,10 @@ static void test_every_cold_dry_rigid_log_autonomously_consumes_fuel(void) {
                 elapsed,clock.advanced_seconds,dry,DC_BONFIRE_LOG_COUNT,wet,DC_BONFIRE_LOG_COUNT,ember);
             for(uint32_t i=0;i<DC_BONFIRE_LOG_COUNT;i++) printf(" %llu/%u",(unsigned long long)(logs[i].initial-logs[i].current),logs[i].flaming);
             printf("\n");fflush(stdout);
-            printf("THERMAL kindling%.1fK max-gas%.1fK remaining-char%llu burning-char%u\n",diagnostic_kindling,
-                audit.metrics[FR_GAS_AUDIT_MAX_TEMPERATURE],(unsigned long long)diagnostic_char,diagnostic_burning_char);fflush(stdout);
+            float hot_mean=audit.metrics[FR_GAS_AUDIT_HOT_CAPACITY]>0.f?
+                audit.metrics[FR_GAS_AUDIT_HOT_THERMAL]/audit.metrics[FR_GAS_AUDIT_HOT_CAPACITY]:0.f;
+            printf("THERMAL kindling%.1fK max-gas%.1fK hot-mean%.1fK remaining-char%llu burning-char%u\n",diagnostic_kindling,
+                audit.metrics[FR_GAS_AUDIT_MAX_TEMPERATURE],hot_mean,(unsigned long long)diagnostic_char,diagnostic_burning_char);fflush(stdout);
             printf("BODY exposure chosen%u viableO2%u occupancy%u gathered%u reacted%u targetO2mass%.9g surface%.1fK\n",
                 counters[22],counters[23],counters[24],counters[25],counters[26],target_oxygen,surface_temperature);fflush(stdout);
             float skin[4];for(uint32_t k=0;k<4;k++) memcpy(skin+k,counters+8u+k,sizeof(float));

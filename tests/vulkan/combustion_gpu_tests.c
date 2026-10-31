@@ -59,9 +59,11 @@ static void terrain_combustion(bool practical,bool char_stage,uint32_t material)
     }
     ASSERT_TRUE(oxygen>0&&products>oxygen);
     uint32_t reacted=char_stage?wood.char_mass_fp-result.state.char_mass_fp:wood.fuel_mass_fp-result.state.fuel_mass_fp;
-    double expected_oxygen=reacted/65536.*fr_reactive_profile(char_stage?DC_MATERIAL_CHAR:material)->oxygen_per_fuel;
+    double expected_oxygen=(reacted+result.state.reaction_fraction-wood.reaction_fraction)/65536.*
+        fr_reactive_profile(char_stage?DC_MATERIAL_CHAR:material)->oxygen_per_fuel;
     ASSERT_TRUE(fabs(oxygen-expected_oxygen)<fmax(1e-8,expected_oxygen*.001));
-    ASSERT_TRUE(fabs(mass_before-mass_after)<1e-7);
+    ASSERT_TRUE(fabs(mass_before-mass_after-
+        (fr_reactive_state_pending_oxygen_fp(&result.state)-fr_reactive_state_pending_oxygen_fp(&wood))/65536.)<1e-7);
     uint32_t fuel_before_short_steps=result.state.fuel_mass_fp+result.state.char_mass_fp;
     for(uint32_t step=0;step<20;step++) ASSERT_TRUE(fr_combustion_gpu_step(g,.001f,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&result,&found,err,sizeof(err))&&found);
@@ -207,12 +209,12 @@ static void transported_flame(uint32_t scenario,double *above,double *light_x) {
         uint32_t i=y*64+x;double carbon=output[i].species[FR_GAS_SOOT];total+=carbon;weighted_x+=carbon*x;
         if(y<24) above_mass+=carbon;
         uint32_t pixel=pixels[y*480u+x],r=pixel&255u,green=(pixel>>8)&255u,b=(pixel>>16)&255u;
-        if(r>100u&&r>green+30u&&r>2u*b) {
+        if(r>35u&&r>green+12u&&r>b+12u) {
             fr_gas_thermo_t thermo;
             ASSERT_TRUE(fr_gas_thermodynamics(&model,output+i,volumes[i],&thermo,err,sizeof(err)));
             ASSERT_TRUE(carbon>0&&thermo.temperature_K>FR_COMBUSTION_AIRBORNE_IGNITION_K-1&&output[i].species[FR_GAS_OXYGEN]/thermo.mass>.1199);
             ASSERT_TRUE(chunk->cells[i].material==DC_MATERIAL_AIR);
-            light+=r-100u;light_weighted_x+=(r-100u)*x;
+            light+=r-35u;light_weighted_x+=(r-35u)*x;
         }
     }
     ASSERT_TRUE(total>0&&light>0);

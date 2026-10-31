@@ -1,0 +1,45 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "storage.glsl"
+#include "../../include/dungeoncraft/combustion_parameters.h"
+#include "../../include/dungeoncraft/thermal_parameters.h"
+#include "../../include/dungeoncraft/thermal_surface.h"
+layout(set=0,binding=27,std430) buffer ConductionFaces {vec2 face_heat[];};
+
+float conductive_face(ivec2 p,ivec2 step,uint axis,float seconds) {
+    uint a=gas_atlas(p),b=gas_atlas(p+step);
+    if(a==0xffffffffu||b==0xffffffffu||!gas_gate_open(p,axis)) return 0.;
+    Gas left=gas_world(a),right=gas_world(b);
+    float left_cap=dot(left.species,vec4(gas_parameter(5u),gas_parameter(6u),gas_parameter(7u),gas_parameter(8u)))+
+        left.dynamics.x*gas_parameter(9u);
+    float right_cap=dot(right.species,vec4(gas_parameter(5u),gas_parameter(6u),gas_parameter(7u),gas_parameter(8u)))+
+        right.dynamics.x*gas_parameter(9u);
+    if(left_cap<=0.||right_cap<=0.||left.geometry.y<=0.||right.geometry.y<=0.) return 0.;
+    float left_temperature=gas_thermal_energy(left)/left_cap,right_temperature=gas_thermal_energy(right)/right_cap;
+    float difference=left_temperature-right_temperature;
+    if(abs(difference)<=max(abs(left_temperature),abs(right_temperature))*1e-6) return 0.;
+    float aperture=min(min(left.geometry.y,right.geometry.y),1.);
+    float conductance=float(FR_COMBUSTION_AIR_CONDUCTIVITY*FR_THERMAL_FACE_AREA/FR_THERMAL_GAMEPLAY_FACE_METERS)*aperture;
+    float requested=conductance*difference*seconds;
+    float stable=.25*left_cap*right_cap/(left_cap+right_cap)*abs(difference);
+    return sign(requested)*min(abs(requested),stable);
+}
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));
+    if((params.bank&1u)==0u) {
+        float seconds=uintBitsToFloat(params.seconds);
+        vec2 heat=vec2(conductive_face(p,ivec2(1,0),0u,seconds),
+            conductive_face(p,ivec2(0,1),1u,seconds));
+        face_heat[index]=heat;
+        if(any(notEqual(heat,vec2(0)))) atomicOr(stats[FR_GAS_ROW_NORM_AFTER_WORD],FR_GAS_CONDUCTION_ACTIVITY_BIT);
+        return;
+    }
+    uint at=gas_atlas(p);if(at==0xffffffffu) return;
+    vec2 own=face_heat[index];float heat=-own.x-own.y;
+    if(p.x>0) heat+=face_heat[index-1u].x;
+    if(p.y>0) heat+=face_heat[index-params.width].y;
+    if(heat==0.) return;
+    Gas value=gas_world(at);GasFlux flux=gas_empty_flux();flux.dynamics.y=heat;
+    gas_write_world(at,gas_add_flux(value,flux,1.));
+}

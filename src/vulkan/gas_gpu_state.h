@@ -6,12 +6,12 @@
 #include "gas_gpu_internal.h"
 typedef struct {float words[FR_GAS_CELL_WORDS];} gas_packet_t;
 struct fr_gas_gpu {
-    fr_renderer_compute_t initialize,prepare,transport,feedback,gate,audit;
+    fr_renderer_compute_t initialize,prepare,transport,feedback,gate,audit,conduction;
     fr_renderer_compute_t geometry_stage,geometry_transfer,geometry_commit;
     fr_renderer_compute_t owner_gather;
     dc_gpu_address_buffer_t state[3],cache[2],parameters,stats,gates,audit_summary;
     dc_gpu_address_buffer_t checkpoint_staging;
-    dc_gpu_address_buffer_t owner_tiles;
+    dc_gpu_address_buffer_t owner_tiles,conduction_faces;
     fr_gas_model_t model;
     float density,temperature;
     uint32_t groups_x,groups_y;

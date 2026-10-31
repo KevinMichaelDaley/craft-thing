@@ -77,6 +77,7 @@ bool fr_gas_gpu_work_memory(const dc_gpu_t *g,uint64_t *mapped_bytes,uint64_t *d
         if(buffer->host_visible) mapped+=buffer->bytes;else device+=buffer->bytes;
     }
     if(t->owner_tiles.host_visible) mapped+=t->owner_tiles.bytes;else device+=t->owner_tiles.bytes;
+    if(t->conduction_faces.host_visible) mapped+=t->conduction_faces.bytes;else device+=t->conduction_faces.bytes;
     *mapped_bytes=mapped;*device_bytes=device;return true;
 }
 bool fr_gas_gpu_rate_metadata(const dc_gpu_t *g,float rates[3],uint32_t *width) {
@@ -96,6 +97,7 @@ static void destroy(dc_gpu_t *g,struct fr_gas_gpu *t) {
     fr_renderer_compute_destroy(g,&t->geometry_stage);fr_renderer_compute_destroy(g,&t->geometry_transfer);fr_renderer_compute_destroy(g,&t->geometry_commit);
     fr_renderer_compute_destroy(g,&t->owner_gather);
     dc_gpu_address_buffer_destroy(g,&t->owner_tiles);
+    fr_renderer_compute_destroy(g,&t->conduction);dc_gpu_address_buffer_destroy(g,&t->conduction_faces);
     fr_renderer_compute_destroy(g,&t->transport);fr_renderer_compute_destroy(g,&t->feedback);
     fr_renderer_compute_destroy(g,&t->gate);dc_gpu_address_buffer_destroy(g,&t->gates);
     fr_renderer_compute_destroy(g,&t->audit);dc_gpu_address_buffer_destroy(g,&t->audit_summary);
@@ -263,6 +265,7 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     for(uint32_t i=0;i<2;i++) if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,mapped_work,t->cache+i,err,cap)) return false;
     VkDeviceSize tiles=(VkDeviceSize)((g->width+7u)/8u)*((g->height+7u)/8u);
     if(!dc_gpu_address_buffer_create(g,tiles*8u,mapped_work,&t->owner_tiles,err,cap)) return false;
+    if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*8u,mapped_work,&t->conduction_faces,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*4u,true,&t->gates,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(FR_GAS_MODEL_WORDS+DC_GPU_CHUNK_SLOTS)*4u,true,&t->parameters,err,cap)||
        !dc_gpu_address_buffer_create(g,64,true,&t->stats,err,cap)||
@@ -273,9 +276,10 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     parameters[13]=.21f;parameters[14]=0;parameters[15]=6;
     ((uint32_t *)t->parameters.mapped)[FR_GAS_SLOT_COUNT_WORD]=DC_GPU_CHUNK_SLOTS;
     ((uint32_t *)t->parameters.mapped)[FR_GAS_CELL_OWNER_WORD]=0u;
-    VkDescriptorBufferInfo buffers[27];
-    for(uint32_t i=12u;i<27u;i++) buffers[i]=(VkDescriptorBufferInfo){t->parameters.buffer,0,t->parameters.bytes};
+    VkDescriptorBufferInfo buffers[28];
+    for(uint32_t i=12u;i<28u;i++) buffers[i]=(VkDescriptorBufferInfo){t->parameters.buffer,0,t->parameters.bytes};
     buffers[26]=(VkDescriptorBufferInfo){t->owner_tiles.buffer,0,t->owner_tiles.bytes};
+    buffers[27]=(VkDescriptorBufferInfo){t->conduction_faces.buffer,0,t->conduction_faces.bytes};
     for(uint32_t i=0;i<3;i++) buffers[i]=(VkDescriptorBufferInfo){t->state[i].buffer,0,t->state[i].bytes};
     for(uint32_t i=0;i<2;i++) buffers[3+i]=(VkDescriptorBufferInfo){t->cache[i].buffer,0,t->cache[i].bytes};
     buffers[5]=(VkDescriptorBufferInfo){t->parameters.buffer,0,t->parameters.bytes};buffers[6]=(VkDescriptorBufferInfo){t->stats.buffer,0,t->stats.bytes};
@@ -287,7 +291,8 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
         fr_renderer_compute_init(g,&t->transport,buffers,27,16,"build/shaders/gas_transport.comp.spv",err,cap)&&
         fr_renderer_compute_init(g,&t->gate,buffers,27,32,"build/shaders/gas_gate.comp.spv",err,cap)&&
         fr_gas_feedback_init(g,&t->feedback,buffers[0],buffers[2],buffers[5],buffers[11],err,cap)&&
-        fr_renderer_compute_init(g,&t->owner_gather,buffers,27,16,"build/shaders/gas_owner_gather.comp.spv",err,cap);
+        fr_renderer_compute_init(g,&t->owner_gather,buffers,27,16,"build/shaders/gas_owner_gather.comp.spv",err,cap)&&
+        fr_renderer_compute_init(g,&t->conduction,buffers,28,16,"build/shaders/gas_conduction.comp.spv",err,cap);
     if(!okay) return false;
     fr_renderer_compute_t *geometry[]={&t->geometry_stage,&t->geometry_transfer,&t->geometry_commit};
     const char *names[]={"stage","transfer","commit"};
@@ -328,11 +333,19 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     uint64_t start_submits=t->trace_submits,start_queue=t->trace_queue_ticks,start_wait=t->trace_wait_ticks;
     if(g->fluid_work_possible||g->body_count>0u) g->gas->geometry_dynamic=true;
     const char *fusion=getenv("DC_GAS_FUSED_GEOMETRY"),*local=getenv("DC_GAS_LOCAL_GEOMETRY");
-    bool fused=t->cache_valid&&t->direct_publish&&t->policy==FR_GAS_PRESSURE_PRACTICAL&&local&&strcmp(local,"0")!=0&&
+    bool fused=fr_combustion_gpu_enabled(g)&&t->cache_valid&&t->direct_publish&&t->policy==FR_GAS_PRESSURE_PRACTICAL&&local&&strcmp(local,"0")!=0&&
         fusion&&strcmp(fusion,"0")!=0&&(t->geometry_dirty||t->geometry_dynamic||t->geometry_routes_dirty);
     t->geometry_deferred=fused;
     if(fused) t->acoustic.geometry_changed=true;
     else if(!fr_gas_gpu_refresh_geometry(g,err,cap)) return false;
+    if(!fr_combustion_gpu_enabled(g)) {
+        if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas heat diffusion");
+        dispatch(g,t,&t->conduction,seconds,0u);
+        dispatch(g,t,&t->conduction,seconds,1u);
+        if(!submit(g,err,cap)) return false;
+        if(((uint32_t *)t->stats.mapped)[FR_GAS_ROW_NORM_AFTER_WORD]&FR_GAS_CONDUCTION_ACTIVITY_BIT)
+            fr_gas_gpu_invalidate_cache(g);
+    }
     bool cached=t->cache_valid;t->cache_valid=false;
     uint32_t bank=cached?t->cached_bank:0;float speed=t->cached_rate;
     VkBufferCopy copy={.size=t->state[0].bytes};
@@ -395,7 +408,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
             fprintf(stderr,"Gas transport lines explicit%u stages%u implicit%u inactive%u\n",words[FR_GAS_EXPLICIT_LINE_COUNT_WORD],
                 words[FR_GAS_EXPLICIT_STAGE_COUNT_WORD],words[FR_GAS_IMPLICIT_LINE_COUNT_WORD],words[FR_GAS_INACTIVE_LINE_COUNT_WORD]);
         }
-        VkDeviceSize bytes=t->parameters.bytes+t->stats.bytes+t->gates.bytes+t->audit_summary.bytes+t->acoustic.indirect.bytes+t->acoustic.transport_work.bytes+t->checkpoint_staging.bytes+t->owner_tiles.bytes;
+        VkDeviceSize bytes=t->parameters.bytes+t->stats.bytes+t->gates.bytes+t->audit_summary.bytes+t->acoustic.indirect.bytes+t->acoustic.transport_work.bytes+t->checkpoint_staging.bytes+t->owner_tiles.bytes+t->conduction_faces.bytes;
         for(uint32_t i=0;i<3;i++) bytes+=t->state[i].bytes;
         for(uint32_t i=0;i<2;i++) bytes+=t->cache[i].bytes;
         for(uint32_t i=0;i<11;i++) bytes+=t->acoustic.fields[i].bytes;
@@ -453,11 +466,7 @@ bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32
     if(!g||!g->gas||policy>FR_GAS_PRESSURE_PRACTICAL) return error(err,cap,"Invalid gas acoustic policy");
     struct fr_gas_gpu *t=g->gas;
     if(policy==FR_GAS_PRESSURE_PRACTICAL&&!gravity_resolved(t,((float *)t->parameters.mapped)[FR_GAS_GRAVITY_WORD])) return error(err,cap,"Gas gravitational scale height is below one physics cell");
-    bool compact_practical=policy==FR_GAS_PRESSURE_PRACTICAL&&
-        getenv("DC_GAS_FUSED_AXIS")&&strcmp(getenv("DC_GAS_FUSED_AXIS"),"0")!=0&&
-        getenv("DC_GAS_FUSED_METADATA")&&strcmp(getenv("DC_GAS_FUSED_METADATA"),"0")!=0&&
-        !getenv("DC_GAS_STAGED_RATES")&&!getenv("DC_GAS_COMPARE_ROW_SETUP");
-    if(policy>=FR_GAS_PRESSURE_LARGE_CFL&&!compact_practical&&
+    if(policy==FR_GAS_PRESSURE_LARGE_CFL&&
         !fr_gas_acoustic_supports_large_transport(g,policy))
         return error(err,cap,"Large-CFL transport requires compute subgroup shuffle and float32 denormal preservation");
     if(policy!=FR_GAS_PRESSURE_HLLC&&!t->acoustic.ready) {

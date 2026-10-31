@@ -1915,6 +1915,7 @@ GAS_SHADERS += build/shaders/gas_transport_stage.comp.spv
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_factor_compact transport_factor_compact_wide transport_prefix_compact transport_prefix_compact_wide transport_apply_compact)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_axis_compact transport_axis_compact_wide)
 GAS_SHADERS += build/shaders/gas_audit.comp.spv
+GAS_SHADERS += build/shaders/gas_conduction.comp.spv
 GAS_SHADERS += build/shaders/gas_pressure_temporal.comp.spv build/shaders/gas_pressure_temporal_tile16.comp.spv build/shaders/gas_pressure_group16.comp.spv build/shaders/gas_pressure_group32.comp.spv build/shaders/gas_pressure_temporal_tile32.comp.spv
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_pack pressure_temporal_packed)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_pack_half pressure_temporal_half)
@@ -1937,6 +1938,7 @@ $(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_transfer geome
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_metadata_lean pressure_rhs_lean)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_factor_compact_large transport_prefix_compact_large transport_axis_compact_large transport_explicit_large transport_hybrid_large transport_hybrid_x_large transport_hybrid_y_large)
 build/shaders/gas_audit.comp.spv: include/dungeoncraft/gas_audit_layout.h
+build/shaders/gas_conduction.comp.spv: include/dungeoncraft/combustion_parameters.h include/dungeoncraft/thermal_parameters.h include/dungeoncraft/thermal_surface.h
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_restrict pressure_coarse_sor pressure_prolong)
 build/gas_acoustic_trace_gpu.o: src/vulkan/gas_acoustic_trace_gpu.c src/vulkan/gas_acoustic_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@

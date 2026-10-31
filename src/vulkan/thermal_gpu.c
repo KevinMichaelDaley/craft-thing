@@ -140,6 +140,7 @@ bool fr_combustion_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     record_combustion(g,seconds,4);record_combustion(g,seconds,5);
     phase(g,13,seconds);phase(g,11,seconds);
     record_combustion(g,seconds,3);record_combustion(g,seconds,9);record_combustion(g,seconds,0);record_combustion(g,seconds,10);
+    record_combustion(g,seconds,12);record_combustion(g,seconds,5);
     dc_gpu_record_body_ash(g,g->thermal->hud.buffer);phase(g,14,seconds);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
@@ -287,6 +288,7 @@ void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,10);
     phase(g,13,seconds);phase(g,11,seconds);
     record_combustion(g,seconds,3);record_combustion(g,seconds,9);record_combustion(g,seconds,0);record_combustion(g,seconds,10);
+    record_combustion(g,seconds,12);record_combustion(g,seconds,5);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,11);
     if(g->thermal->combustion.pipeline) dc_gpu_record_body_ash(g,g->thermal->hud.buffer);
     phase(g,14,seconds);
