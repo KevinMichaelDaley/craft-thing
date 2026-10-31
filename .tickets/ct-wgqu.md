@@ -56,3 +56,7 @@ Final corner-path checkpoint: full make test PASS and focused combustion_body_fe
 **2026-10-31T02:22:28Z**
 
 Rejected two no-extra-fuel contact-path fixture trials. First moved right kindling/upper log to touch: 4/5 displayed runs passed, 1/5 failed7/8, max gas 2118-4614K. Second connected finite starter through three right floor sticks and a 1x4 vertical bridge to lower-right log, same total wood cells: 5/5 displayed runs passed8/8 dry by~21s, wet0/8, but max gas 2331-4299.6K, a plasma-like regression. Restored original layout and plan tests; RED experiment commits remain in history. The unresolved issue is balancing right-side ignition with energy-conserving gas heat/oxygen transport, not simply adding fuel or contact.
+
+**2026-10-31T03:06:00Z**
+
+2026-10-31 repeated connected-layout diagnostic: 8/8 dry and0/8 wet at21s, but gas audit peaked3343.7K; full-view readback found extreme temperature in tiny gas pockets on wet-side starter edge. Layout was restored. Follow child ct-sqpj for conservative gas mixing/heat coupling before accepting the contact bridge.
