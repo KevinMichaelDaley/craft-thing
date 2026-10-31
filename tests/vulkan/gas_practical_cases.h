@@ -270,7 +270,9 @@ static void test_native_vorticity_rolls_a_rising_plume_sideways_without_creating
     double lateral[2]={0};const char *setting=getenv("DC_GAS_VORTICITY");char *saved=setting?SDL_strdup(setting):NULL;
     for(uint32_t mode=0;mode<2;mode++) {
         ASSERT_EQ(SDL_setenv("DC_GAS_VORTICITY",mode?"1":"0",1),0);
-        ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_step(g,.02f,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+        ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
+        for(uint32_t step=0;step<20u;step++) ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err)));
+        ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
         double mass=0.,oxygen=0.;for(uint32_t i=0;i<4096;i++) {
             fr_gas_thermo_t thermo;ASSERT_TRUE(fr_gas_thermodynamics(&model,out+i,1,&thermo,err,sizeof(err)));
             lateral[mode]+=fabs(out[i].momentum[0]);mass+=thermo.mass;oxygen+=out[i].species[FR_GAS_OXYGEN];
@@ -279,7 +281,7 @@ static void test_native_vorticity_rolls_a_rising_plume_sideways_without_creating
     }
     printf("Plume lateral momentum control%.9g vorticity%.9g\n",lateral[0],lateral[1]);
     ASSERT_EQ(SDL_setenv("DC_GAS_VORTICITY",saved?saved:"0",1),0);SDL_free(saved);
-    ASSERT_TRUE(lateral[1]>lateral[0]*1.001+1e-6);
+    ASSERT_TRUE(lateral[1]>lateral[0]*1.04+1e-6);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(chunk);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
 }
 static void test_native_stationary_heat_mixes_diagonally_in_the_optimized_path(void) {
