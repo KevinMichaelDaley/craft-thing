@@ -76,6 +76,10 @@ void main() {
              * confinement adds neither stock, total energy nor external work. */
             value=gas_practical_momentum(value,gas_thermal_energy(value));
         }
+        if(practical&&(params.bank&FR_GAS_SUBGRID_BIT)!=0u&&gas_mass(value)>0.) {
+            value.dynamics.zw+=gas_subgrid_momentum(p,dt);
+            value=gas_practical_momentum(value,gas_thermal_energy(value));
+        }
         if(practical) value=gas_practical_state(value);
         bool okay=false;primitive=gas_primitive(value,okay);
         if(!okay) {gas_error(index);atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],FR_GAS_REJECT_FINISH);}

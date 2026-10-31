@@ -335,6 +335,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     if(matrix_large) bank|=FR_GAS_LARGE_ENERGY_BIT;
     if(t->practical) bank|=FR_GAS_PRACTICAL_BIT;
     if(t->practical&&getenv("DC_GAS_VORTICITY")&&enabled("DC_GAS_VORTICITY")) bank|=FR_GAS_VORTICITY_BIT;
+    if(t->practical&&getenv("DC_GAS_SUBGRID")&&enabled("DC_GAS_SUBGRID")) bank|=FR_GAS_SUBGRID_BIT;
     if(skip_empty) bank|=FR_GAS_SKIP_EMPTY_PRESSURE_BIT;
     if(!t->compact_only&&getenv("DC_GAS_COMPARE_ROW_SETUP")) bank|=FR_GAS_COMPARE_ROW_SETUP_BIT;
     const char *zero_energy=getenv("DC_GAS_ZERO_ENERGY");
