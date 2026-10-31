@@ -363,8 +363,8 @@ static void test_transported_low_density_smoke_is_readable_on_the_dark_display(v
 static void test_quarter_native_smoke_has_conserved_cell_scale_optical_detail(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_gas_state_t *input=calloc(4096,sizeof(*input));double *volume=calloc(4096,sizeof(*volume));
-    uint32_t *pixels=malloc(480u*270u*sizeof(*pixels));
-    ASSERT_TRUE(chunk&&input&&volume&&pixels&&context(&g,err,sizeof(err))&&
+    uint32_t *pixels=malloc(480u*270u*sizeof(*pixels)),*moved=malloc(480u*270u*sizeof(*moved));
+    ASSERT_TRUE(chunk&&input&&volume&&pixels&&moved&&context(&g,err,sizeof(err))&&
         dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     fr_gas_model_t model=reference_model();
     ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err)));
@@ -374,6 +374,7 @@ static void test_quarter_native_smoke_has_conserved_cell_scale_optical_detail(vo
         input[i].species[FR_GAS_NITROGEN]-=soot;input[i].species[FR_GAS_SOOT]+=soot;
         input[i].energy+=soot*(model.heat_capacity_cv[FR_GAS_SOOT]-model.heat_capacity_cv[FR_GAS_NITROGEN])*300.;
         input[i].pigment[0]=.18*soot;input[i].pigment[1]=.16*soot;input[i].pigment[2]=.14*soot;
+        input[i].momentum[0]=.0012*2.;input[i].energy+=.5*model.kinetic_scale*.0012*4.;
     }
     ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&
         present(g,err,sizeof(err))&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
@@ -381,7 +382,16 @@ static void test_quarter_native_smoke_has_conserved_cell_scale_optical_detail(vo
         contrast+=abs((int)(pixels[y*480u+x]&255u)-(int)(pixels[y*480u+x+1u]&255u));
     printf("Quarter-native smoke pair contrast %d across 32 equal-density pairs\n",contrast);
     ASSERT_TRUE(contrast>320);
-    free(pixels);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
+    g->gas->clock.advanced_seconds=1.;
+    ASSERT_TRUE(present(g,err,sizeof(err))&&dc_gpu_readback(g,moved,480u*270u,err,sizeof(err)));
+    int shifted=0;for(uint32_t y=20;y<28;y++) for(uint32_t x=22;x<26;x+=2) {
+        int before=(int)(pixels[y*480u+x]&255u)-(int)(pixels[y*480u+x+1u]&255u);
+        int after=(int)(moved[y*480u+x+2u]&255u)-(int)(moved[y*480u+x+3u]&255u);
+        if((before>0)==(after>0)) shifted++;
+    }
+    printf("Quarter-native smoke advected optical pairs %d/16\n",shifted);
+    ASSERT_TRUE(shifted>=15);
+    free(moved);free(pixels);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_native_stationary_heat_mixes_diagonally_in_the_optimized_path(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));

@@ -8,7 +8,7 @@ layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=3,std430) buffer Frame {uint frame[];};
 layout(set=0,binding=4,std430) readonly buffer Gates {uint gates[];};
 layout(set=0,binding=5,std430) readonly buffer Alternate {Gas alternate[];};
-layout(push_constant) uniform Params {uint width,height,view_x,view_y,view_width,view_height;} params;
+layout(push_constant) uniform Params {uint width,height,view_x,view_y,view_width,view_height,seconds;} params;
 Gas smoke_at(uint x,uint y) {
     uint page=pages[(y/64u)*((params.width+63u)/64u)+x/64u];
     if(page==0u) return gas_empty();
@@ -46,7 +46,14 @@ void main() {
                 Gas pair=smoke_at(pair_x,y);
                 if(pair.geometry.y>0.) {
                     float pair_depth=smoke_optical_depth(pair,opacity,density);
-                    uint phase=(x/2u)*1664525u+y*1013904223u;
+                    float mass=dot(s.species,vec4(1.))+s.dynamics.x;
+                    float pair_mass=dot(pair.species,vec4(1.))+pair.dynamics.x;
+                    vec2 velocity=.5*(mass>0.?s.dynamics.zw/mass:vec2(0.))+
+                                  .5*(pair_mass>0.?pair.dynamics.zw/pair_mass:vec2(0.));
+                    vec2 source=vec2(float(x/2u),float(y))-
+                        vec2(.5*velocity.x,velocity.y)*uintBitsToFloat(params.seconds);
+                    ivec2 advected=ivec2(floor(source));
+                    uint phase=uint(advected.x)*1664525u+uint(advected.y)*1013904223u;
                     phase^=phase>>16u;phase*=2246822519u;phase^=phase>>13u;
                     float transfer=.94*min(depth,pair_depth)*((phase&1u)==0u?1.:-1.);
                     depth+=(x&1u)==0u?transfer:-transfer;

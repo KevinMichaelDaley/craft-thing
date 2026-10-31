@@ -452,7 +452,7 @@ bool fr_gas_gpu_audit(dc_gpu_t *g,fr_gas_gpu_audit_t *out,char *err,uint32_t cap
     memcpy(out->metrics,t->audit_summary.mapped,sizeof(out->metrics));return true;
 }
 void fr_gas_record_overlay(dc_gpu_t *g) {
-    if(g->gas) fr_gas_feedback_record(g,&g->gas->feedback,g->gas->groups_x,g->gas->groups_y);
+    if(g->gas) fr_gas_feedback_record(g,&g->gas->feedback,g->gas->groups_x,g->gas->groups_y,(float)g->gas->clock.advanced_seconds);
 }
 static bool gravity_resolved(const struct fr_gas_gpu *t,float gravity) {
     double first=t->model.gas_constant[0],second=t->model.gas_constant[1];
