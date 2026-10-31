@@ -33,7 +33,9 @@ static void test_native_geometry_carving_displacement_and_trapped_pockets_keep_f
     ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_export_checkpoint(g,0,before,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_paint_material(g,32,32,0,DC_MATERIAL_AIR,err,sizeof(err)));fr_gas_gpu_geometry_changed(g,false);
     ASSERT_TRUE(fr_gas_gpu_refresh_geometry(g,err,sizeof(err))&&fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err)));
-    ASSERT_EQ(out->cells[32u*64u+32u][12],1.f);ASSERT_EQ(out->cells[32u*64u+32u][0],0.f);
+    ASSERT_EQ(out->cells[32u*64u+32u][12],1.f);
+    ASSERT_TRUE(out->cells[32u*64u+32u][0]>0.f);
+    ASSERT_TRUE(out->cells[32u*64u+31u][0]<before->cells[32u*64u+31u][0]);
     for(uint32_t k=0;k<5u;k++) ASSERT_TRUE(fabs(gas_checkpoint_stock(out,k)-gas_checkpoint_stock(before,k))<1e-8);
     for(uint32_t i=0;i<20u;i++) ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err))&&out->cells[32u*64u+32u][0]>0.f);
