@@ -192,7 +192,7 @@ build/shaders/structural.comp.spv build/shaders/scene.comp.spv: shaders/sim/leaf
 build/shaders/mpm.comp.spv: shaders/sim/mpm_terrain_support.glsl shaders/sim/rigid_body.glsl include/dungeoncraft/terrain_flags.h
 $(GPU_OBJ): build/shaders/structural.comp.spv
 build/dungeoncraft_native build/dungeoncraft_half_native build/native_bench build/marker_slot_tests build/quarter_native_fluid_tests build/quarter_native_solver_tests build/quarter_native_rigid_solver_tests build/quarter_native_bench build/dungeoncraft_quarter_native: build/shaders/structural.comp.spv
-build/window_gpu.o: src/vulkan/window_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
+build/window_gpu.o: src/vulkan/window_gpu.c src/vulkan/gpu_internal.h src/vulkan/present_mode_select.h include/dungeoncraft/gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/compound_gpu.o: src/vulkan/compound_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
@@ -701,6 +701,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/thermal_checkpoint_tests
 	./build/benchmark_brush_tests
 	./build/benchmark_clock_tests
+	./build/present_mode_tests
 	./build/appearance_tests
 	./build/brush_region_tests
 	./build/mpm_swap_tests
@@ -1991,6 +1992,9 @@ test: build/benchmark_brush_tests
 build/benchmark_clock_tests: tests/app/benchmark_clock_tests.c src/app/benchmark_clock.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
 test: build/benchmark_clock_tests
+build/present_mode_tests: tests/vulkan/present_mode_tests.c src/vulkan/present_mode_select.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+test: build/present_mode_tests
 build/dungeoncraft build/controls_tests: src/app/benchmark_brush.h
 $(QUARTER_APP_OBJ): src/app/benchmark_brush.h
 build/dungeoncraft build/controls_tests: src/app/benchmark_clock.h

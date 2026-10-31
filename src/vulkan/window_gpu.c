@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "gpu_internal.h"
+#include "present_mode_select.h"
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -51,10 +53,10 @@ bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t requested_width,
     VkPresentModeKHR *modes = calloc(mode_count, sizeof(*modes));
     if (!modes) return error(err, cap, "Out of memory listing presentation modes");
     VkResult mode_result = vkGetPhysicalDeviceSurfacePresentModesKHR(gpu->physical, gpu->surface, &mode_count, modes);
-    VkPresentModeKHR mode = VK_PRESENT_MODE_FIFO_KHR;
-    /* FIFO can wait indefinitely for a Wayland callback when the window is occluded. */
-    for (uint32_t i = 0; mode_result == VK_SUCCESS && i < mode_count; ++i)
-        if (modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) mode = VK_PRESENT_MODE_MAILBOX_KHR;
+    const char *low_latency_setting=getenv("DC_LOW_LATENCY_PRESENT");
+    bool low_latency=low_latency_setting&&strcmp(low_latency_setting,"0")!=0;
+    VkPresentModeKHR mode=mode_result==VK_SUCCESS?
+        dc_present_mode_select(modes,mode_count,low_latency):VK_PRESENT_MODE_FIFO_KHR;
     free(modes);
     if (mode_result != VK_SUCCESS) return error(err, cap, "Cannot list Vulkan presentation modes");
     VkSwapchainCreateInfoKHR swap_info = { .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,

@@ -7,6 +7,20 @@ if [[ ! $frames =~ ^[0-9]+$ ]] || ((frames<1000||frames>100000)); then
     exit 2
 fi
 source tools/smoke_profile
+video_driver=${SDL_VIDEODRIVER:-}
+if [[ -z $video_driver ]]; then
+    if [[ -n ${WAYLAND_DISPLAY:-} && -S ${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/${WAYLAND_DISPLAY} ]]; then
+        video_driver=wayland
+    elif [[ -n ${DISPLAY:-} ]]; then
+        video_driver=x11
+    else
+        echo 'No displayed SDL session available' >&2
+        exit 1
+    fi
+fi
+present_latency=${DC_LOW_LATENCY_PRESENT:-0}
+if [[ $video_driver == x11 && ! -v DC_LOW_LATENCY_PRESENT ]]; then present_latency=1; fi
+printf 'Bonfire benchmark: SDL %s, low-latency present %s\n' "$video_driver" "$present_latency"
 tools/with-vulkan make -j8 build/dungeoncraft_quarter_native
 root=$(mktemp -d build/bonfire_measurements_XXXXXX)
 failed=0
@@ -17,7 +31,7 @@ for repetition in 1 2; do
     log="$root/autonomous_$repetition.log"
     result=0
     env -u DC_BENCHMARK_AIR_BRUSH -u DC_BENCHMARK_WATER_POUR -u DC_BENCHMARK_HEAT_PROBE \
-        SDL_VIDEODRIVER=wayland DC_FULLSCREEN=1 DC_VK_VALIDATE=0 VK_INSTANCE_LAYERS= VK_LAYER_ENABLES= \
+        SDL_VIDEODRIVER="$video_driver" DC_LOW_LATENCY_PRESENT="$present_latency" DC_FULLSCREEN=1 DC_VK_VALIDATE=0 VK_INSTANCE_LAYERS= VK_LAYER_ENABLES= \
         timeout --signal=INT --kill-after=3s 120s tools/with-vulkan \
         ./build/dungeoncraft_quarter_native --bonfire \
         --world-dir "$world" --benchmark-frames "$frames" \
