@@ -1,6 +1,6 @@
 ---
 id: ct-42nt
-status: in_progress
+status: closed
 deps: []
 links: [ct-sqpj]
 created: 2026-10-31T06:54:24Z
@@ -17,3 +17,9 @@ A focused GPU test shows isolated 1400 K wood should debit about 3.7 J per 0.05 
 
 RED tests for flame-to-solid energy transfer, open-sky loss, shadowing, and total energy ledger; GREEN no temperature clamp, displayed quarter-native 8/8 dry and 0/8 wet on repeated runs with plausible gas peak and full make test.
 
+
+## Notes
+
+**2026-10-31T20:41:34Z**
+
+Implemented geometric open-sky loss and paired soot-flame/solid exchange with occlusion and finite source budgets. GPU tests: isolated 1400 K wood lost 3.696044 J per 0.05 s; gas-to-wood and blocker ledgers match within 0.0001 J. Displayed quarter-native bonfire passed twice: 8/8 dry and 0/8 wet at 45.1 s and 21.6 s, with gas peaks below plasma range. Repeated 1000-frame benchmark passed at mean 17.44/17.41 ms and worst 27.76/27.46 ms. Full make test passed on final refactored source.
