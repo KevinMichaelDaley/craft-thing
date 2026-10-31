@@ -53,6 +53,23 @@ static void test_cold_logs_wet_control_and_finite_starter_retain_real_state(void
     }
     dc_thermal_bench_release(chunks,2);PASS();
 }
+static bool bonfire_rect_contact(uint32_t a,uint32_t b) {
+    const uint32_t *r=dc_bonfire_rects[a],*s=dc_bonfire_rects[b];
+    bool horizontal=(r[0]+r[2]==s[0]||s[0]+s[2]==r[0])&&
+        r[1]<s[1]+s[3]&&s[1]<r[1]+r[3];
+    bool vertical=(r[1]+r[3]==s[1]||s[1]+s[3]==r[1])&&
+        r[0]<s[0]+s[2]&&s[0]<r[0]+r[2];
+    return horizontal||vertical;
+}
+static void test_right_starter_contacts_all_three_right_logs_without_extra_wood(void) {
+    char err[1]={0};
+    uint32_t starter_area=0;
+    for(uint32_t i=0;i<DC_BONFIRE_KINDLING_COUNT;i++) starter_area+=dc_bonfire_rects[i][2]*dc_bonfire_rects[i][3];
+    ASSERT_EQ(starter_area,48u);
+    const uint32_t chain[]={4u,5u,11u,15u,10u,17u,9u,19u};
+    for(uint32_t i=1;i<sizeof(chain)/sizeof(chain[0]);i++) ASSERT_TRUE(bonfire_rect_contact(chain[i-1],chain[i]));
+    PASS();
+}
 static void test_chunk_reservations_advance_with_fixture_import_order(void) {
     char err[256]={0};dc_chunk_coord_t coords[2]={{2,1},{5,1}};
     dc_thermal_bench_chunk_t *chunks=calloc(2,sizeof(*chunks));ASSERT_TRUE(chunks);
@@ -61,6 +78,6 @@ static void test_chunk_reservations_advance_with_fixture_import_order(void) {
     ASSERT_EQ(chunks[1].reactive.next_id,8193u);
     dc_thermal_bench_release(chunks,2);PASS();
 }
-int main(void) {RUN(test_only_ground_is_terrain_and_all_fuel_is_rigid_staging);RUN(test_cold_logs_wet_control_and_finite_starter_retain_real_state);
+int main(void) {RUN(test_only_ground_is_terrain_and_all_fuel_is_rigid_staging);RUN(test_cold_logs_wet_control_and_finite_starter_retain_real_state);RUN(test_right_starter_contacts_all_three_right_logs_without_extra_wood);
     RUN(test_chunk_reservations_advance_with_fixture_import_order);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
