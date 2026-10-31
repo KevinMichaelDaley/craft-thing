@@ -108,14 +108,10 @@ float gas_conduction_flux(uint first,uint second,uint a,uint b) {
     }
     return 0.;
 }
-float contact_flux(uint first,uint second,uint a,uint b) {
-    uint n=params.width*params.height,ak=floatBitsToUint(samples[first+n].x),bk=floatBitsToUint(samples[second+n].x);
-    bool asolid=ak==1u||ak==4u,bsolid=bk==1u||bk==4u;
-    if(asolid==bsolid||!gas_cell(asolid?b:a)) return 0.;
-    uint i=asolid?first:second;
-    float capacity=samples[i].y;if(capacity<=0.) return 0.;
-    Gas gas=local_gas(asolid?b:a);
-    float gas_cap=gas_capacity(gas),mass=gas_mass(gas);if(capacity<=0.||gas_cap<=0.||mass<=0.) return 0.;
+float solid_gas_pair_flux(uint i,Gas gas,float aperture,float stability_share,float gas_energy_share) {
+    uint n=params.width*params.height;
+    float capacity=samples[i].y,gas_cap=gas_capacity(gas),mass=gas_mass(gas);
+    if(capacity<=0.||gas_cap<=0.||mass<=0.||aperture<=0.||gas.geometry.y<=0.) return 0.;
     float energy=samples[i].x;
     if(floatBitsToUint(samples[i+n].x)==4u) {
         uint index=floatBitsToUint(samples[i+n].y);
@@ -130,16 +126,24 @@ float contact_flux(uint first,uint second,uint a,uint b) {
     float length_m=float(FR_THERMAL_GAMEPLAY_FACE_METERS);
     float reynolds=density*speed*length_m*length_m/float(FR_COMBUSTION_AIR_VISCOSITY);
     float nusselt=2.+.6*sqrt(max(reynolds,0.))*pow(float(FR_COMBUSTION_AIR_PRANDTL),1./3.);
-    float conductance=nusselt*gas_air_conductivity(.5*(skin+gas_temperature))*length_m;
+    float conductance=aperture*nusselt*gas_air_conductivity(.5*(skin+gas_temperature))*length_m;
     /* The same finite pair owns convection and luminous-soot radiation. */
-    conductance+=float(FR_THERMAL_STEFAN_BOLTZMANN*FR_THERMAL_FACE_AREA*FR_THERMAL_SURFACE_EMISSIVITY)*
+    conductance+=aperture*float(FR_THERMAL_STEFAN_BOLTZMANN*FR_THERMAL_FACE_AREA*FR_THERMAL_SURFACE_EMISSIVITY)*
         flame_emissivity(gas)*(skin+gas_temperature)*(skin*skin+gas_temperature*gas_temperature);
     float requested=conductance*difference*uintBitsToFloat(params.seconds);
-    float bound=(floatBitsToUint(samples[i+n].x)==4u?.0625:.25)*capacity*gas_cap/(capacity+gas_cap)*abs(difference);
+    float bound=stability_share*capacity*gas_cap/(capacity+gas_cap)*abs(difference);
     /* The optical skin is not an independent energy reservoir. Four faces
      * and overlapping raster samples share a finite authoritative inventory. */
-    float available=requested>0.?max(0.,samples[i].x)/16.:gas_internal(gas)/4.;
-    float flux=sign(requested)*min(abs(requested),min(bound,available));
+    float available=requested>0.?max(0.,samples[i].x)/16.:gas_internal(gas)*gas_energy_share;
+    return sign(requested)*min(abs(requested),min(bound,available));
+}
+float contact_flux(uint first,uint second,uint a,uint b) {
+    uint n=params.width*params.height,ak=floatBitsToUint(samples[first+n].x),bk=floatBitsToUint(samples[second+n].x);
+    bool asolid=ak==1u||ak==4u,bsolid=bk==1u||bk==4u;
+    if(asolid==bsolid||!gas_cell(asolid?b:a)) return 0.;
+    uint i=asolid?first:second;
+    float flux=solid_gas_pair_flux(i,local_gas(asolid?b:a),1.,
+        floatBitsToUint(samples[i+n].x)==4u?.0625:.25,.25);
     return asolid?flux:-flux;
 }
 float body_cut_cell_flux(uint i,uint at) {
@@ -148,28 +152,8 @@ float body_cut_cell_flux(uint i,uint at) {
     Gas gas=local_gas(at);
     float void_fraction=gas.geometry.y;
     if(void_fraction<=0.||void_fraction>=1.) return 0.;
-    float capacity=samples[i].y,gas_cap=gas_capacity(gas),mass=gas_mass(gas);
-    if(capacity<=0.||gas_cap<=0.||mass<=0.) return 0.;
-    float energy=samples[i].x;
-    uint index=floatBitsToUint(samples[i+n].y);
-    Words cache=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
-    if(cache.words[index*12u+8u]==floatBitsToUint(samples[i+n].w)&&uintBitsToFloat(cache.words[index*12u+9u])>0.)
-        energy=uintBitsToFloat(cache.words[index*12u+9u])*capacity;
-    float skin=energy/capacity,gas_temperature=gas_internal(gas)/gas_cap;
-    float difference=skin-gas_temperature;
-    if(abs(difference)<.001) return 0.;
     float aperture=sqrt(min(void_fraction,1.-void_fraction));
-    float length_m=float(FR_THERMAL_GAMEPLAY_FACE_METERS);
-    float speed=length(gas.dynamics.zw)/mass,density=mass*1000./max(gas.geometry.x,.000001);
-    float reynolds=density*speed*length_m*length_m/float(FR_COMBUSTION_AIR_VISCOSITY);
-    float nusselt=2.+.6*sqrt(max(reynolds,0.))*pow(float(FR_COMBUSTION_AIR_PRANDTL),1./3.);
-    float conductance=aperture*nusselt*gas_air_conductivity(.5*(skin+gas_temperature))*length_m;
-    conductance+=aperture*float(FR_THERMAL_STEFAN_BOLTZMANN*FR_THERMAL_FACE_AREA*FR_THERMAL_SURFACE_EMISSIVITY)*
-        flame_emissivity(gas)*(skin+gas_temperature)*(skin*skin+gas_temperature*gas_temperature);
-    float requested=conductance*difference*uintBitsToFloat(params.seconds);
-    float bound=capacity*gas_cap/(capacity+gas_cap)*abs(difference);
-    float available=requested>0.?max(0.,samples[i].x)/16.:gas_internal(gas);
-    return sign(requested)*min(abs(requested),min(bound,available));
+    return solid_gas_pair_flux(i,gas,aperture,1.,1.);
 }
 float liquid_cut_cell_flux(uint at) {
     if(at==0xffffffffu||!gas_cell(at)||cells[at].y==0u) return 0.;
@@ -223,7 +207,8 @@ uint choose_target(ivec2 p) {
     uint chosen=0xffffffffu;float best=-1.;
     for(uint i=0u;i<4u;i++) {
         uint at=atlas(p+directions[i]);if(!gas_cell(at)) continue;
-        Gas gas=local_gas(at);float supply=max(gas.species.x,0.);
+        Gas gas=local_gas(at);if(gas.geometry.y<=0.) continue;
+        float supply=max(gas.species.x,0.);
         if(supply>best) {best=supply;chosen=at;}
     }
     return chosen;

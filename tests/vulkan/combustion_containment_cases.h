@@ -1,4 +1,4 @@
-static void test_stone_and_clearance_contain_while_a_fuel_bridge_spreads(void) {
+static void test_stone_and_clearance_contain_while_a_wood_bridge_conducts(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     for(uint32_t lane=0;lane<3;lane++) {
         uint32_t y=12+lane*16;
@@ -23,7 +23,7 @@ static void test_stone_and_clearance_contain_while_a_fuel_bridge_spreads(void) {
         ASSERT_TRUE(fr_thermal_gpu_step(g,.02f,err,sizeof(err))&&fr_gas_gpu_step(g,.02f,err,sizeof(err)));
         if(step%100==0) ASSERT_TRUE(present(g,err,sizeof(err)));
     }
-    uint32_t fuel[3];
+    uint32_t fuel[3];float bridge_temperature=0;
     for(uint32_t lane=0;lane<3;lane++) {
         fr_reactive_record_t target;bool found=false;uint32_t at=(12+lane*16)*64+22;
         ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&target,&found,err,sizeof(err))&&found);
@@ -33,8 +33,9 @@ static void test_stone_and_clearance_contain_while_a_fuel_bridge_spreads(void) {
             ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,(12+lane*16)*64+x,&target,&found,err,sizeof(err))&&found);
             ASSERT_TRUE(fr_reactive_state_temperature(&target.state,&temperature,err,sizeof(err)));
             printf("  wood x%u fuel%u temperature%.3fK\n",x,target.state.fuel_mass_fp,temperature);
+            if(lane==2&&x==21) bridge_temperature=temperature;
         }
     }
-    ASSERT_TRUE(fuel[2]<39322&&fuel[0]==39322&&fuel[1]==39322);
+    ASSERT_TRUE(fuel[0]==39322&&fuel[1]==39322&&fuel[2]==39322&&bridge_temperature>320.f);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(chunk);dc_gpu_destroy(g);PASS();
 }

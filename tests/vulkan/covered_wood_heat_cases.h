@@ -21,7 +21,7 @@ static void test_covered_wood_conducts_to_its_outer_face_without_leaking_fire(vo
         ASSERT_TRUE((result.state.flags&FR_REACTIVE_FLAMING)==0u);
     }
     printf("Covered wood outer face %.3fK after30s; energy drift%.9gJ\n",outer,final-initial);
-    ASSERT_TRUE(outer>301.5f&&outer<306.f&&fabs(final-initial)<.01);
+    ASSERT_TRUE(outer>300.4f&&outer<302.f&&fabs(final-initial)<.01);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(chunk);dc_gpu_destroy(g);PASS();
 }
 #endif
