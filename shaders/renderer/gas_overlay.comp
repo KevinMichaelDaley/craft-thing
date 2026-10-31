@@ -9,6 +9,16 @@ layout(set=0,binding=3,std430) buffer Frame {uint frame[];};
 layout(set=0,binding=4,std430) readonly buffer Gates {uint gates[];};
 layout(set=0,binding=5,std430) readonly buffer Alternate {Gas alternate[];};
 layout(push_constant) uniform Params {uint width,height,view_x,view_y,view_width,view_height;} params;
+Gas smoke_at(uint x,uint y) {
+    uint page=pages[(y/64u)*((params.width+63u)/64u)+x/64u];
+    if(page==0u) return gas_empty();
+    uint at=(page-1u)*4096u+(y%64u)*64u+x%64u;
+    return parameters[FR_GAS_CELL_OWNER_WORD]!=0u&&(gates[at]&FR_GAS_CELL_OWNER_BIT)!=0u?alternate[at]:world[at];
+}
+float smoke_optical_depth(Gas s,float opacity,float density) {
+    float carrier=s.species.z+s.dynamics.x;
+    return s.geometry.x>0.?opacity*max(carrier,0.)/(s.geometry.x*density):0.;
+}
 void main() {
     uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
     if(index>=params.width*params.height) return;
@@ -27,7 +37,23 @@ void main() {
         color=mix(vec3(.72,.12,.08),vec3(.08,.65,.88),clamp(oxygen/.21,0.,1.));
     } else if(s.geometry.y>0.&&carrier>0.) {
         float opacity=uintBitsToFloat(parameters[FR_GAS_OPACITY_WORD]),density=uintBitsToFloat(parameters[FR_GAS_DENSITY_WORD]);
-        float alpha=(1.-exp(-opacity*carrier/(s.geometry.x*density)))*clamp(s.geometry.y,0.,1.);
+        float depth=smoke_optical_depth(s,opacity,density);
+        uint pair_x=x^1u;
+        if(pair_x<params.width) {
+            uint pair_page=pages[(y/64u)*((params.width+63u)/64u)+pair_x/64u];
+            uint pair_at=pair_page==0u?0u:(pair_page-1u)*4096u+(y%64u)*64u+pair_x%64u;
+            if(pair_page!=0u&&(gates[pair_at]&3u)==0u) {
+                Gas pair=smoke_at(pair_x,y);
+                if(pair.geometry.y>0.) {
+                    float pair_depth=smoke_optical_depth(pair,opacity,density);
+                    uint phase=(x/2u)*1664525u+y*1013904223u;
+                    phase^=phase>>16u;phase*=2246822519u;phase^=phase>>13u;
+                    float transfer=.94*min(depth,pair_depth)*((phase&1u)==0u?1.:-1.);
+                    depth+=(x&1u)==0u?transfer:-transfer;
+                }
+            }
+        }
+        float alpha=(1.-exp(-depth))*clamp(s.geometry.y,0.,1.);
         color=mix(color,clamp(s.visual.rgb/carrier,vec3(0),vec3(1)),alpha);
     }
     if(gate!=0u) color=vec3(.62,.32,.07);
