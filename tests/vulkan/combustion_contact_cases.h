@@ -94,7 +94,7 @@ static void test_partial_body_cell_exchanges_heat_with_its_own_gas(void) {
 }
 static void test_partly_flooded_cell_exchanges_heat_between_gas_and_water(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
-    uint32_t at=20u*64u+20u;chunk->cells[at].material=DC_MATERIAL_WATER;
+    uint32_t at=20u*64u+20u;chunk->cells[at].material=DC_MATERIAL_AIR;
     chunk->cells[at].fluid_mass=64000u;
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
         dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&fr_thermal_gpu_enable(g,err,sizeof(err)));
