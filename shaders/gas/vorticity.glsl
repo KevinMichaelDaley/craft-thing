@@ -19,7 +19,7 @@ vec2 gas_vorticity_velocity(ivec2 p,float dt,vec2 velocity) {
     }
     vec2 gradient=.5*vec2(magnitude[0]-magnitude[1],magnitude[2]-magnitude[3]);
     float size=length(gradient);if(size<.0001) return vec2(0.);
-    vec2 normal=gradient/size,delta=1.*dt*curl*vec2(normal.y,-normal.x);
+    vec2 normal=gradient/size,delta=2.*dt*curl*vec2(normal.y,-normal.x);
     float limit=.1*max(length(velocity),1.),change=length(delta);
     return change>limit?delta*(limit/change):delta;
 }
