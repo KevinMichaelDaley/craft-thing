@@ -47,7 +47,9 @@ static void test_still_air_conducts_heat_without_transporting_mass(void) {
     for(uint32_t i=0;i<4096;i++) after_energy+=after[i].energy;
     double capacity=gas[cold].species[FR_GAS_OXYGEN]*model.heat_capacity_cv[FR_GAS_OXYGEN]+
         before_mass*model.heat_capacity_cv[FR_GAS_NITROGEN];
-    double four_face_heat=4.*.02*.0001/.01*.001*(900.-300.);
+    double film_temperature=600.;
+    double conductivity=5.9776e-6*pow(film_temperature,1.5)/(film_temperature+194.4)*418.4;
+    double four_face_heat=4.*conductivity*.0001/.01*.001*(900.-300.);
     ASSERT_TRUE(fabs(after[hot].energy-(gas[hot].energy-four_face_heat))<1e-6);
     ASSERT_TRUE(fabs(after[cold].energy-(gas[cold].energy+four_face_heat/4.))<1e-6);
     ASSERT_TRUE(after[cold].species[FR_GAS_NITROGEN]==gas[cold].species[FR_GAS_NITROGEN]);
