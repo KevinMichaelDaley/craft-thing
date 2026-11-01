@@ -391,6 +391,7 @@ static void test_dilute_exhaust_does_not_leave_a_soot_dark_catapult_arc(void) {
     ASSERT_TRUE(abs(soot-clear)>=10);
     free(pixels);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
 }
+static bool read_smoke_detail(dc_gpu_t *g,float *out,char *err,uint32_t cap);
 static void test_smoke_wavelet_does_not_draw_across_solid_wall(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_gas_state_t *input=calloc(4096,sizeof(*input)),*readback=calloc(4096,sizeof(*readback));
@@ -459,11 +460,40 @@ static void test_smoke_wavelet_does_not_draw_across_solid_wall(void) {
     for(uint32_t y=18u;y<=30u;y++) changed+=clear[y*480u+28u]!=smoky[y*480u+28u];
     printf("Smoke wavelet solid-wall changed pixels %u\n",changed);
     ASSERT_EQ(changed,0u);
+    float *detail=calloc((size_t)g->width*g->height,sizeof(float));
+    ASSERT_TRUE(detail&&read_smoke_detail(g,detail,err,sizeof(err)));
+    float leaked=0.f;
+    for(uint32_t y=19u;y<29u;y++) for(uint32_t x=28u;x<32u;x++)
+        leaked=fmaxf(leaked,fabsf(detail[y*g->width+x]));
+    printf("Smoke wavelet solid-wall leaked fine density %.9g\n",leaked);
+    ASSERT_TRUE(leaked<1e-12f);
+    free(detail);
     for(uint32_t y=18u;y<=30u;y++) {
         uint32_t i=y*64u+28u;
         ASSERT_EQ(readback[i].species[FR_GAS_SOOT],0.);
     }
     free(smoky);free(clear);free(volume);free(readback);free(input);free(chunk);dc_gpu_destroy(g);PASS();
+}
+static bool read_smoke_detail(dc_gpu_t *g,float *out,char *err,uint32_t cap) {
+    dc_gpu_address_buffer_t staging={0};
+    VkDeviceSize bytes=(VkDeviceSize)g->width*g->height*sizeof(float);
+    if(!dc_gpu_address_buffer_create(g,bytes,true,&staging,err,cap)) return false;
+    bool okay=fr_renderer_begin(g);
+    if(okay) {
+        fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            VK_ACCESS_2_TRANSFER_READ_BIT);
+        uint32_t bank=g->gas->smoke_coordinate_bank;
+        vkCmdCopyBuffer(g->command,g->gas->smoke_detail[bank].buffer,staging.buffer,1,
+            &(VkBufferCopy){.size=bytes});
+        fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            VK_ACCESS_2_TRANSFER_WRITE_BIT,VK_PIPELINE_STAGE_2_HOST_BIT,
+            VK_ACCESS_2_HOST_READ_BIT);
+        okay=fr_renderer_submit(g);
+    }
+    if(okay) memcpy(out,staging.mapped,(size_t)bytes);
+    dc_gpu_address_buffer_destroy(g,&staging);
+    return okay;
 }
 static void test_quarter_native_smoke_wavelet_advects_and_displaces_boundary(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
@@ -472,6 +502,9 @@ static void test_quarter_native_smoke_wavelet_advects_and_displaces_boundary(voi
     uint32_t *pixels=malloc(480u*270u*sizeof(*pixels)),*moved=malloc(480u*270u*sizeof(*moved));
     ASSERT_TRUE(chunk&&input&&volume&&before&&after&&pixels&&moved&&context(&g,err,sizeof(err))&&
         dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    float *detail_before=calloc((size_t)g->width*g->height,sizeof(float));
+    float *detail_after=calloc((size_t)g->width*g->height,sizeof(float));
+    ASSERT_TRUE(detail_before&&detail_after);
     fr_gas_model_t model=reference_model();
     ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err)));
     for(uint32_t i=0;i<4096;i++) {volume[i]=1.;input[i]=reference_air(model,.0012,300,0);}
@@ -537,7 +570,8 @@ static void test_quarter_native_smoke_wavelet_advects_and_displaces_boundary(voi
         fr_gas_gpu_read_chunk(g,0,before,4096,err,sizeof(err))&&
         present(g,err,sizeof(err)));
     g->gas->clock.advanced_seconds=1.;
-    ASSERT_TRUE(present(g,err,sizeof(err))&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
+    ASSERT_TRUE(present(g,err,sizeof(err))&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err))&&
+        read_smoke_detail(g,detail_before,err,sizeof(err)));
     interior_low=255;interior_high=0;
     for(uint32_t y=20;y<28;y++) for(uint32_t x=20;x<28;x++) {
         int red=(int)(pixels[y*480u+x]&255u);
@@ -547,16 +581,32 @@ static void test_quarter_native_smoke_wavelet_advects_and_displaces_boundary(voi
     printf("Quarter-native strong shear smoke interior range %d..%d\n",interior_low,interior_high);
     ASSERT_TRUE(interior_high-interior_low>=2);
     g->gas->clock.advanced_seconds=2.;
-    ASSERT_TRUE(present(g,err,sizeof(err))&&dc_gpu_readback(g,moved,480u*270u,err,sizeof(err)));
-    int shifted_error=0,stationary_error=0;
+    ASSERT_TRUE(present(g,err,sizeof(err))&&dc_gpu_readback(g,moved,480u*270u,err,sizeof(err))&&
+        read_smoke_detail(g,detail_after,err,sizeof(err)));
+    int stationary_error=0;
     for(uint32_t y=21;y<27;y++) for(uint32_t x=22;x<26;x++) {
         int before=(int)(pixels[y*480u+x]&255u);
-        shifted_error+=abs(before-(int)(moved[y*480u+x+1u]&255u));
         stationary_error+=abs(before-(int)(moved[y*480u+x]&255u));
     }
-    printf("Quarter-native smoke advected error %d stationary error %d\n",shifted_error,stationary_error);
+    printf("Quarter-native smoke changed pixels error %d\n",stationary_error);
     ASSERT_TRUE(stationary_error>=4);
-    ASSERT_TRUE(shifted_error*2<stationary_error);
+    int moving_edge=0;
+    for(uint32_t y=19u;y<=28u;y++) for(uint32_t x=19u;x<=28u;x++) {
+        if(x!=19u&&x!=28u&&y!=19u&&y!=28u) continue;
+        moving_edge+=pixels[y*480u+x]!=moved[y*480u+x];
+    }
+    printf("Quarter-native moving smoke edge pixels %d\n",moving_edge);
+    ASSERT_TRUE(moving_edge>=2);
+    double total_before=0.,total_after=0.,change=0.;
+    for(uint32_t i=0u;i<g->width*g->height;i++) {
+        ASSERT_TRUE(isfinite(detail_before[i])&&isfinite(detail_after[i]));
+        total_before+=detail_before[i];total_after+=detail_after[i];
+        change+=fabs((double)detail_after[i]-detail_before[i]);
+    }
+    printf("Quarter-native advected fine smoke sum %.9g -> %.9g, changed %.9g\n",
+        total_before,total_after,change);
+    ASSERT_TRUE(fabs(total_before)<1e-9&&fabs(total_after)<1e-9);
+    ASSERT_TRUE(change>1e-8);
     ASSERT_TRUE(present(g,err,sizeof(err))&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err))&&
         fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
     ASSERT_EQ(memcmp(pixels,moved,480u*270u*sizeof(*pixels)),0);
@@ -577,7 +627,8 @@ static void test_quarter_native_smoke_wavelet_advects_and_displaces_boundary(voi
     }
     printf("Quarter-native dense smoke interior range %d..%d\n",interior_low,interior_high);
     ASSERT_TRUE(interior_high-interior_low<=8);
-    free(after);free(before);free(moved);free(pixels);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
+    free(detail_after);free(detail_before);free(after);free(before);free(moved);free(pixels);
+    free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_native_stationary_heat_mixes_diagonally_in_the_optimized_path(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));

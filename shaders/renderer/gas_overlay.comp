@@ -12,6 +12,7 @@
 /* Effective scattering from unresolved condensate in transported exhaust. */
 #define FR_SMOKE_EXHAUST_OPTICAL_WEIGHT .05
 #define FR_SMOKE_CLEAR_FACE_VOID .999
+#define FR_SMOKE_MAX_FACE_CFL .18
 layout(local_size_x=64) in;
 layout(set=0,binding=0,std430) readonly buffer World {Gas world[];};
 layout(set=0,binding=1,std430) readonly buffer Model {uint parameters[];};
@@ -22,6 +23,8 @@ layout(set=0,binding=5,std430) readonly buffer Alternate {Gas alternate[];};
 layout(set=0,binding=6,std430) buffer SmokeCoordinates0 {vec2 coordinates0[];};
 layout(set=0,binding=7,std430) buffer SmokeCoordinates1 {vec2 coordinates1[];};
 layout(set=0,binding=8,std430) buffer SmokePotential {float potentials[];};
+layout(set=0,binding=9,std430) buffer SmokeDetail0 {float detail0[];};
+layout(set=0,binding=10,std430) buffer SmokeDetail1 {float detail1[];};
 layout(push_constant) uniform Params {uint width,height,view_x,view_y,view_width,view_height,seconds,bank,reset;} params;
 vec2 smoke_coordinate(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return vec2(p);
@@ -46,6 +49,19 @@ Gas smoke_at(uint x,uint y) {
 float smoke_optical_depth(Gas s,float opacity,float density) {
     float aerosol=max(s.dynamics.x,0.)+FR_SMOKE_EXHAUST_OPTICAL_WEIGHT*max(s.species.z,0.);
     return s.geometry.x>0.?opacity*aerosol/(s.geometry.x*density):0.;
+}
+float smoke_aerosol(Gas s) {
+    return max(s.dynamics.x,0.)+FR_SMOKE_EXHAUST_OPTICAL_WEIGHT*max(s.species.z,0.);
+}
+float smoke_detail_old(ivec2 p) {
+    if(params.reset!=0u||any(lessThan(p,ivec2(0)))||
+        any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0.;
+    uint index=uint(p.y)*params.width+uint(p.x);
+    return params.bank==0u?detail1[index]:detail0[index];
+}
+float smoke_aerosol_at(ivec2 p) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0.;
+    return smoke_aerosol(smoke_at(uint(p.x),uint(p.y)));
 }
 float smoke_hash(ivec2 p) {
     uint phase=uint(p.x)*1664525u+uint(p.y)*1013904223u;
@@ -92,7 +108,9 @@ vec2 smoke_advect_velocity(ivec2 p,Gas s) {
 bool smoke_wavelet_open_face(ivec2 p,uint direction) {
     ivec2 q=p+(direction==0u?ivec2(1,0):direction==1u?ivec2(-1,0):
         direction==2u?ivec2(0,1):ivec2(0,-1));
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return false;
     if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(params.width,params.height)))) return false;
+    if(smoke_at(uint(p.x),uint(p.y)).geometry.y<FR_SMOKE_CLEAR_FACE_VOID) return false;
     if(smoke_at(uint(q.x),uint(q.y)).geometry.y<FR_SMOKE_CLEAR_FACE_VOID) return false;
     ivec2 low=(direction&1u)==0u?p:q;
     uint x=uint(low.x),y=uint(low.y),page=pages[(y/64u)*((params.width+63u)/64u)+x/64u];
@@ -137,6 +155,35 @@ vec2 smoke_wavelet_velocity(ivec2 p) {
     float l=any(lessThan(left,ivec2(0)))?0.:potentials[uint(left.y)*params.width+uint(left.x)];
     float r=any(greaterThanEqual(right,ivec2(params.width,params.height)))?0.:potentials[uint(right.y)*params.width+uint(right.x)];
     return .5*vec2(d-u,l-r);
+}
+float smoke_potential_at(ivec2 p) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0.;
+    return potentials[uint(p.y)*params.width+uint(p.x)];
+}
+float smoke_detail_face_flux(ivec2 low,bool horizontal,float dt) {
+    if(!smoke_wavelet_open_face(low,horizontal?0u:2u)) return 0.;
+    ivec2 high=low+(horizontal?ivec2(1,0):ivec2(0,1));
+    float wavelet=horizontal?
+        smoke_potential_at(low+ivec2(1,1))-smoke_potential_at(low+ivec2(1,0)):
+        smoke_potential_at(low)-smoke_potential_at(low+ivec2(1,0));
+    float coarse=.5*(smoke_velocity_at(low,vec2(0.))[horizontal?0:1]+
+        smoke_velocity_at(high,vec2(0.))[horizontal?0:1]);
+    float d0=smoke_detail_old(low),d1=smoke_detail_old(high);
+    float a0=max(0.,smoke_aerosol_at(low)+d0),a1=max(0.,smoke_aerosol_at(high)+d1);
+    float fine_rate=clamp(dt*wavelet,-FR_SMOKE_MAX_FACE_CFL,FR_SMOKE_MAX_FACE_CFL);
+    float coarse_rate=clamp(dt*coarse,-FR_SMOKE_MAX_FACE_CFL,FR_SMOKE_MAX_FACE_CFL);
+    return fine_rate*(fine_rate>=0.?a0:a1)+coarse_rate*(coarse_rate>=0.?d0:d1);
+}
+float smoke_advected_detail(ivec2 p,float dt) {
+    if(dt<=0.||params.reset!=0u) return smoke_detail_old(p);
+    if(smoke_aerosol_at(p)+abs(smoke_detail_old(p))<=0.&&
+        smoke_aerosol_at(p+ivec2(1,0))+abs(smoke_detail_old(p+ivec2(1,0)))<=0.&&
+        smoke_aerosol_at(p-ivec2(1,0))+abs(smoke_detail_old(p-ivec2(1,0)))<=0.&&
+        smoke_aerosol_at(p+ivec2(0,1))+abs(smoke_detail_old(p+ivec2(0,1)))<=0.&&
+        smoke_aerosol_at(p-ivec2(0,1))+abs(smoke_detail_old(p-ivec2(0,1)))<=0.) return 0.;
+    return smoke_detail_old(p)+
+        smoke_detail_face_flux(p-ivec2(1,0),true,dt)-smoke_detail_face_flux(p,true,dt)+
+        smoke_detail_face_flux(p-ivec2(0,1),false,dt)-smoke_detail_face_flux(p,false,dt);
 }
 bool smoke_coordinate_scattered(ivec2 p) {
     vec2 dx=.5*(smoke_coordinate(p+ivec2(1,0))-smoke_coordinate(p-ivec2(1,0)));
@@ -187,9 +234,6 @@ void main() {
     uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
     if(index>=params.width*params.height) return;
     uint x=index%params.width,y=index/params.width;
-#ifndef FR_SMOKE_COORDINATE_ONLY
-    if(x<params.view_x||y<params.view_y||x>=params.view_x+params.view_width||y>=params.view_y+params.view_height) return;
-#endif
     uint page=pages[(y/64u)*((params.width+63u)/64u)+x/64u];
     uint atlas=page==0u?0u:(page-1u)*4096u+(y%64u)*64u+x%64u;
     Gas s=page==0u?gas_empty():(parameters[FR_GAS_CELL_OWNER_WORD]!=0u&&(gates[atlas]&FR_GAS_CELL_OWNER_BIT)!=0u?alternate[atlas]:world[atlas]);
@@ -211,10 +255,16 @@ void main() {
 #elif defined(FR_SMOKE_POTENTIAL_ONLY)
     potentials[index]=smoke_stream_potential(cell);
 #else
+    if(page==0u) {
+        if(params.bank==0u) detail0[index]=0.;else detail1[index]=0.;
+        return;
+    }
+    float transported_detail=smoke_advected_detail(cell,uintBitsToFloat(params.seconds));
+    if(params.bank==0u) detail0[index]=transported_detail;else detail1[index]=transported_detail;
+    if(x<params.view_x||y<params.view_y||x>=params.view_x+params.view_width||y>=params.view_y+params.view_height) return;
     vec2 coordinate=smoke_coordinate(cell);
-    if(page==0u) return;
     bool oxygen_view=uintBitsToFloat(parameters[FR_GAS_VIEW_WORD])==1.;
-    if(!oxygen_view&&gate==0u&&s.species.z+s.dynamics.x<=0.) {
+    if(!oxygen_view&&gate==0u&&s.species.z+s.dynamics.x<=0.&&transported_detail<=0.) {
         bool near_smoke=false;
         for(uint d=0u;d<4u;d++) {
             ivec2 q=cell+(d==0u?ivec2(1,0):(d==1u?ivec2(-1,0):(d==2u?ivec2(0,1):ivec2(0,-1))));
@@ -240,6 +290,13 @@ void main() {
         vec4 original=smoke_visual_gas(s,opacity,density);
         vec4 warped=dot(curl,curl)>1e-8?smoke_visual_sample(vec2(x,y)-curl,opacity,density):original;
         vec4 smoke=mix(original,warped,smoke_edge_weight(original.x,warped.x));
+        if(s.geometry.x>0.) {
+            float optical_change=opacity*transported_detail/(s.geometry.x*density);
+            float depth=max(0.,smoke.x+optical_change);
+            if(smoke.x>0.) smoke.yzw*=depth/smoke.x;
+            else if(depth>0.) smoke.yzw=depth*vec3(.18,.16,.14);
+            smoke.x=depth;
+        }
         if(smoke.x<=0.) return;
         float visual_energy=.5*energy_band*energy_band;
         float visual_weight=visual_energy/(visual_energy+FR_SMOKE_DETAIL_ENERGY)*smoke_scattering_weight(cell);

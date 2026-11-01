@@ -107,6 +107,7 @@ static void destroy(dc_gpu_t *g,struct fr_gas_gpu *t) {
     fr_renderer_compute_destroy(g,&t->potential_feedback);
     for(uint32_t i=0;i<2;i++) dc_gpu_address_buffer_destroy(g,t->smoke_coordinates+i);
     dc_gpu_address_buffer_destroy(g,&t->smoke_potential);
+    for(uint32_t i=0;i<2;i++) dc_gpu_address_buffer_destroy(g,t->smoke_detail+i);
     fr_renderer_compute_destroy(g,&t->gate);dc_gpu_address_buffer_destroy(g,&t->gates);
     fr_renderer_compute_destroy(g,&t->audit);dc_gpu_address_buffer_destroy(g,&t->audit_summary);
     for(uint32_t i=0;i<3;i++) dc_gpu_address_buffer_destroy(g,t->state+i);
@@ -289,6 +290,8 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     for(uint32_t i=0;i<2;i++)
         if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)g->width*g->height*8u,false,t->smoke_coordinates+i,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)g->width*g->height*4u,false,&t->smoke_potential,err,cap)) return false;
+    for(uint32_t i=0;i<2;i++)
+        if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)g->width*g->height*4u,false,t->smoke_detail+i,err,cap)) return false;
     t->smoke_coordinate_reset=true;
     float *parameters=t->parameters.mapped;
     for(uint32_t i=0;i<5;i++) {parameters[i]=(float)t->model.gas_constant[i];parameters[5+i]=(float)t->model.heat_capacity_cv[i];}
@@ -321,7 +324,9 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
             buffers[0],buffers[2],buffers[5],buffers[11],
             (VkDescriptorBufferInfo){t->smoke_coordinates[0].buffer,0,t->smoke_coordinates[0].bytes},
             (VkDescriptorBufferInfo){t->smoke_coordinates[1].buffer,0,t->smoke_coordinates[1].bytes},
-            (VkDescriptorBufferInfo){t->smoke_potential.buffer,0,t->smoke_potential.bytes},err,cap)&&
+            (VkDescriptorBufferInfo){t->smoke_potential.buffer,0,t->smoke_potential.bytes},
+            (VkDescriptorBufferInfo){t->smoke_detail[0].buffer,0,t->smoke_detail[0].bytes},
+            (VkDescriptorBufferInfo){t->smoke_detail[1].buffer,0,t->smoke_detail[1].bytes},err,cap)&&
         fr_renderer_compute_init(g,&t->owner_gather,buffers,27,16,"build/shaders/gas_owner_gather.comp.spv",err,cap)&&
         fr_renderer_compute_init(g,&t->conduction,buffers,28,16,"build/shaders/gas_conduction.comp.spv",err,cap)&&
         fr_renderer_compute_init(g,&t->mpm_pressure,buffers,40,16,

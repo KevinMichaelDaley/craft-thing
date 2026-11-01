@@ -14,6 +14,7 @@ struct fr_gas_gpu {
     dc_gpu_address_buffer_t checkpoint_staging;
     dc_gpu_address_buffer_t smoke_coordinates[2];
     dc_gpu_address_buffer_t smoke_potential;
+    dc_gpu_address_buffer_t smoke_detail[2];
     float smoke_coordinate_time;
     uint32_t smoke_coordinate_bank;
     bool smoke_coordinate_reset;

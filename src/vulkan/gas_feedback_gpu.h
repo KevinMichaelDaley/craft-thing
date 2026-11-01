@@ -6,7 +6,8 @@ bool fr_gas_feedback_init(dc_gpu_t *gpu,fr_renderer_compute_t *out,fr_renderer_c
     fr_renderer_compute_t *potential,
     VkDescriptorBufferInfo world,VkDescriptorBufferInfo alternate,VkDescriptorBufferInfo model,VkDescriptorBufferInfo gates,
     VkDescriptorBufferInfo coordinates0,VkDescriptorBufferInfo coordinates1,
-    VkDescriptorBufferInfo potential_buffer,char *err,uint32_t cap);
+    VkDescriptorBufferInfo potential_buffer,VkDescriptorBufferInfo detail0,VkDescriptorBufferInfo detail1,
+    char *err,uint32_t cap);
 /** Composite the current gas field without changing its inventories. */
 void fr_gas_feedback_record(dc_gpu_t *gpu,const fr_renderer_compute_t *feedback,
     const fr_renderer_compute_t *coordinates,const fr_renderer_compute_t *potential,
