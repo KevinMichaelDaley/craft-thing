@@ -513,6 +513,30 @@ static void test_phase_momentum_biases_bulk_flux_direction(void) {
     ASSERT_TRUE(positive_bias>negative_bias);
     dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
 }
+static void test_mixing_phase_flux_deposits_lost_kinetic_energy(void) {
+    char err[256]={0};dc_gpu_t *gpu=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *bulk=calloc(1,sizeof(*bulk)),*out=calloc(1,sizeof(*out));
+    ASSERT_TRUE(chunk&&bulk&&out);
+    const uint32_t source=20u*64u+30u,target=source+1u;
+    for(uint32_t x=29u;x<=32u;x++) {
+        chunk->cells[19u*64u+x].material=DC_MATERIAL_STONE;
+        chunk->cells[21u*64u+x].material=DC_MATERIAL_STONE;
+    }
+    chunk->cells[source-1u].material=DC_MATERIAL_STONE;
+    chunk->cells[target+1u].material=DC_MATERIAL_STONE;
+    bulk->oil_fp[source]=32768u;bulk->oil_fp[target]=16384u;
+    bulk->oil_momentum_x[source]=5.5f;bulk->oil_momentum_x[target]=-2.75f;
+    ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+        dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(gpu,0,0,0,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,bulk,err,sizeof(err))&&
+        fr_bulk_phase_gpu_step(gpu,1.f/60.f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
+    ASSERT_TRUE(out->oil_fp[target]>16384u);
+    ASSERT_TRUE(out->oil_excess[source]+out->oil_excess[target]>0.f);
+    ASSERT_EQ((uint64_t)out->oil_fp[source]+out->oil_fp[target],49152u);
+    dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
+}
 int main(void) {
     RUN(test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot);
     RUN(test_water_solver_respects_full_oil_cell_capacity);
@@ -533,5 +557,6 @@ int main(void) {
     RUN(test_gpu_import_rejects_orphan_phase_momentum);
     RUN(test_water_drag_exchanges_equal_opposite_phase_momentum);
     RUN(test_phase_momentum_biases_bulk_flux_direction);
+    RUN(test_mixing_phase_flux_deposits_lost_kinetic_energy);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
