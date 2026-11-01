@@ -3,6 +3,8 @@
 #include "ferrum/fire/coating.h"
 #include "ferrum/fire/material_profile.h"
 
+#define FR_COATING_SOFTENING_SPAN_K 100.f
+
 static bool valid_host(const fr_coating_host_t *host) {
     if(!host||host->kind<FR_COATING_TERRAIN||host->kind>FR_COATING_ACTOR)
         return false;
@@ -16,6 +18,14 @@ static bool valid_bulk(const fr_bulk_cell_t *bulk) {
     uint64_t occupied=0u;
     for(uint32_t i=0u;i<FR_BULK_PHASES;i++) occupied+=bulk->volume_fp[i];
     return occupied<=bulk->capacity_fp;
+}
+
+static float adhesion_at_temperature(const fr_reactive_profile_t *profile,
+    float temperature_K) {
+    float blend=fminf(1.f,fmaxf(0.f,
+        (temperature_K-profile->softening_K)/FR_COATING_SOFTENING_SPAN_K));
+    return profile->cold_adhesion+blend*
+        (profile->hot_adhesion-profile->cold_adhesion);
 }
 
 bool fr_coating_contact_wet(const fr_bulk_cell_t *bulk,
@@ -72,8 +82,7 @@ bool fr_coating_release(const fr_coating_film_t *film,
     if(!oil||!slime||profile->consistency<=0.f||profile->shear_exponent<=0.f||
        (film->oil_fp==0u&&film->slime_fp==0u&&film->excess_heat!=0.))
         return false;
-    float adhesion=temperature_K>=profile->softening_K?
-        profile->hot_adhesion:profile->cold_adhesion;
+    float adhesion=adhesion_at_temperature(profile,temperature_K);
     double drive=fmax(0.,(double)traction-adhesion)/profile->consistency;
     double mobile=stock*fmin(1.,pow(drive,1./profile->shear_exponent)*seconds);
     uint32_t requested=(uint32_t)fmin((double)stock,floor(mobile));

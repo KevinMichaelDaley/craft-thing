@@ -105,6 +105,31 @@ static void test_full_receiver_does_not_erase_dripping_film(void) {
     ASSERT_EQ(bulk_after.volume_fp[FR_BULK_WATER],65536u);PASS();
 }
 
+static void test_softening_increases_drip_continuously(void) {
+    fr_coating_film_t film=rigid_film(),after={0};film.oil_fp=30000u;
+    fr_bulk_cell_t receiver={.capacity_fp=65536u},bulk_after={0};
+    double heat=0.;uint32_t cold=0u,warm=0u,hot=0u;
+    ASSERT_TRUE(fr_coating_release(&film,&receiver,0.,FR_BULK_OIL,
+        300.f,6.f,.1f,&after,&bulk_after,&heat,&cold));
+    ASSERT_TRUE(fr_coating_release(&film,&receiver,0.,FR_BULK_OIL,
+        410.f,6.f,.1f,&after,&bulk_after,&heat,&warm));
+    ASSERT_TRUE(fr_coating_release(&film,&receiver,0.,FR_BULK_OIL,
+        460.f,6.f,.1f,&after,&bulk_after,&heat,&hot));
+    ASSERT_EQ(cold,0u);ASSERT_TRUE(warm>cold&&hot>warm);PASS();
+}
+
+static void test_mixed_film_releases_phase_heat_by_thermal_capacity(void) {
+    fr_coating_film_t film=rigid_film(),after={0};
+    film.oil_fp=10000u;film.slime_fp=10000u;film.excess_heat=47.f;
+    fr_bulk_cell_t receiver={.capacity_fp=65536u},bulk_after={0};
+    double heat=0.;uint32_t moved=0u;
+    ASSERT_TRUE(fr_coating_release(&film,&receiver,0.,FR_BULK_OIL,
+        460.f,100.f,1.f,&after,&bulk_after,&heat,&moved));
+    ASSERT_EQ(moved,10000u);ASSERT_EQ(after.slime_fp,10000u);
+    ASSERT_TRUE(heat>0.&&heat<film.excess_heat);
+    ASSERT_EQ(after.excess_heat+heat,film.excess_heat);PASS();
+}
+
 int main(void) {
     RUN(test_wetting_debits_mobile_oil_and_preserves_heat);
     RUN(test_retained_slime_does_not_wet_and_existing_film_accumulates);
@@ -113,6 +138,8 @@ int main(void) {
     RUN(test_water_cannot_become_combustible_coating);
     RUN(test_hot_film_drips_under_traction_while_cold_film_holds);
     RUN(test_full_receiver_does_not_erase_dripping_film);
+    RUN(test_softening_increases_drip_continuously);
+    RUN(test_mixed_film_releases_phase_heat_by_thermal_capacity);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail>0?1:0;
 }

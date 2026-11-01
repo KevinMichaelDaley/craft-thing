@@ -1898,7 +1898,7 @@ build/gas_reference_tests: tests/fire/gas_reference_tests.c src/fire/gas.c src/f
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c src/fire/gas_reference.c -o $@ -lm
 build/bulk_phase_tests: tests/fire/bulk_phase_tests.c src/fire/bulk_phase.c src/fire/bulk_phase_packet.c include/ferrum/fire/bulk_phase.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/bulk_phase_tests.c src/fire/bulk_phase.c src/fire/bulk_phase_packet.c -o $@ -lm
-build/coating_tests: tests/fire/coating_tests.c src/fire/coating.c src/fire/material_profile.c include/ferrum/fire/coating.h include/ferrum/fire/bulk_phase.h
+build/coating_tests: tests/fire/coating_tests.c src/fire/coating.c src/fire/material_profile.c src/fire/material_profile_data.inc include/ferrum/fire/coating.h include/ferrum/fire/bulk_phase.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/coating_tests.c src/fire/coating.c src/fire/material_profile.c -o $@ -lm
 .PHONY: test_coating
 test: test_coating
