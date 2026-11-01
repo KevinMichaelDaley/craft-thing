@@ -100,6 +100,34 @@ static void test_displayed_terrain_combustion_debits_real_fuel_and_oxygen(void) 
 static void test_sparse_owner_combustion_uses_the_live_gas_bank(void) {terrain_combustion(true,false,DC_MATERIAL_WOOD);}
 static void test_retained_char_can_finish_burning_on_the_gpu(void) {terrain_combustion(true,true,DC_MATERIAL_WOOD);}
 static void test_dry_leaf_tinder_uses_the_existing_finite_material_profile(void) {terrain_combustion(true,false,DC_MATERIAL_LEAVES);}
+static void test_oiled_wood_ignites_before_dry_control_without_spending_film(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    const uint32_t dry_at=20u*64u+20u,oil_at=20u*64u+30u;
+    chunk->cells[dry_at]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
+    chunk->cells[oil_at]=chunk->cells[dry_at];
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t dry,oil;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,0,800,2902,&dry,err,sizeof(err)));
+    dry.ignition_threshold=.06f;
+    oil=dry;oil.parcel_id_low=oil.origin_id_low=2903;oil.coating_oil_fuel_fp=65536;
+    oil.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&oil,800);
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,dry_at,&dry,err,sizeof(err))&&
+        fr_gpu_reactive_seed_cell(g,0,oil_at,&oil,err,sizeof(err)));
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&
+        fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&
+        fr_combustion_gpu_enable(g,err,sizeof(err))&&
+        fr_combustion_gpu_step(g,.03f,err,sizeof(err)));
+    fr_reactive_record_t dry_after,oil_after;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,dry_at,&dry_after,&found,err,sizeof(err))&&found);
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,oil_at,&oil_after,&found,err,sizeof(err))&&found);
+    ASSERT_EQ(dry_after.state.fuel_mass_fp,dry.fuel_mass_fp);
+    ASSERT_TRUE(oil_after.state.fuel_mass_fp<oil.fuel_mass_fp);
+    ASSERT_EQ(oil_after.state.coating_oil_fuel_fp,oil.coating_oil_fuel_fp);
+    free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_spent_terrain_becomes_loose_saved_ash_without_losing_mass(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     uint32_t at=20u*64u+20u;
@@ -251,6 +279,10 @@ static void test_roof_blocks_and_side_vent_routes_the_physical_flame(void) {
 #include "combustion_contact_cases.h"
 #include "combustion_oxygen_cases.h"
 int main(int argc,char **argv) {
+    if(argc==2&&strcmp(argv[1],"--oiled")==0) {
+        RUN(test_oiled_wood_ignites_before_dry_control_without_spending_film);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
     if(argc==2&&strcmp(argv[1],"--roof")==0) {
         RUN(test_roof_blocks_and_side_vent_routes_the_physical_flame);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
@@ -295,6 +327,7 @@ int main(int argc,char **argv) {
     RUN(test_displayed_terrain_combustion_debits_real_fuel_and_oxygen);
     RUN(test_sparse_owner_combustion_uses_the_live_gas_bank);
     RUN(test_dry_leaf_tinder_uses_the_existing_finite_material_profile);
+    RUN(test_oiled_wood_ignites_before_dry_control_without_spending_film);
     RUN(test_retained_char_can_finish_burning_on_the_gpu);
     RUN(test_spent_terrain_becomes_loose_saved_ash_without_losing_mass);
     RUN(test_flame_emission_requires_local_transported_hot_fuel_and_oxygen);
