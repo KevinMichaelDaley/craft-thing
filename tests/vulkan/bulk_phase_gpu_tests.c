@@ -1,8 +1,10 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "ferrum/fire/bulk_phase_gpu.h"
+#include "ferrum/fire/thermal_gpu.h"
 
 static int g_pass=0,g_fail=0;
 #define RUN(fn) do {printf("RUN  %s\n",#fn);fn();printf("OK   %s\n",#fn);} while(0)
@@ -93,6 +95,31 @@ static void test_dense_oil_exchanges_with_water_in_sealed_vertical_pair(void) {
     ASSERT_EQ((uint64_t)out->oil_fp[lower]+after->cells[lower].fluid_mass,
         FR_BULK_CELL_FULL_FP);
     dc_gpu_destroy(gpu);free(chunk);free(after);free(bulk);free(out);PASS();
+}
+static void test_water_heat_follows_water_exchanged_with_oil(void) {
+    char err[256]={0};dc_gpu_t *gpu=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    dc_chunk_t *after=calloc(1,sizeof(*after));
+    fr_bulk_phase_chunk_t *bulk=calloc(1,sizeof(*bulk));
+    float *water_heat=calloc(4096u,sizeof(*water_heat));
+    ASSERT_TRUE(chunk&&after&&bulk&&water_heat);
+    const uint32_t upper=20u*64u+30u,lower=upper+64u;
+    for(uint32_t y=19u;y<=22u;y++) for(uint32_t x=29u;x<=31u;x++)
+        if(x!=30u||y==19u||y==22u) chunk->cells[y*64u+x].material=DC_MATERIAL_STONE;
+    chunk->cells[lower].fluid_mass=FR_BULK_CELL_FULL_FP;
+    bulk->oil_fp[upper]=FR_BULK_CELL_FULL_FP;
+    ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+        dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(gpu,0,0,0,err,sizeof(err))&&
+        fr_thermal_gpu_enable(gpu,err,sizeof(err))&&
+        fr_thermal_gpu_seed_water(gpu,0,lower,100.f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,bulk,err,sizeof(err))&&
+        fr_bulk_phase_gpu_step(gpu,1.f/60.f,err,sizeof(err))&&
+        dc_gpu_download_chunk(gpu,0,after,err,sizeof(err))&&
+        fr_thermal_gpu_read_water_chunk(gpu,0,water_heat,4096u,err,sizeof(err)));
+    ASSERT_TRUE(after->cells[upper].fluid_mass>0u&&after->cells[lower].fluid_mass>0u);
+    ASSERT_TRUE(water_heat[upper]>0.f&&water_heat[lower]>0.f);
+    ASSERT_TRUE(fabsf(water_heat[upper]+water_heat[lower]-100.f)<.001f);
+    dc_gpu_destroy(gpu);free(chunk);free(after);free(bulk);free(water_heat);PASS();
 }
 static void test_normal_tick_moves_imported_oil(void) {
     char err[256]={0};dc_gpu_t *gpu=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
@@ -196,6 +223,7 @@ int main(void) {
     RUN(test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot);
     RUN(test_water_solver_respects_full_oil_cell_capacity);
     RUN(test_dense_oil_exchanges_with_water_in_sealed_vertical_pair);
+    RUN(test_water_heat_follows_water_exchanged_with_oil);
     RUN(test_normal_tick_moves_imported_oil);
     RUN(test_oil_crosses_horizontal_chunk_seam_conservatively);
     RUN(test_rigid_body_displaces_oil_upward_without_loss);
