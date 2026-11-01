@@ -83,6 +83,10 @@ bool fr_reactive_state_default(uint32_t material,uint32_t mass,uint32_t water,
     if(oxidizer>mass-fuel) oxidizer=mass-fuel;
     if(material==DC_MATERIAL_CHAR) s.char_mass_fp=fuel;else s.fuel_mass_fp=fuel;
     s.core_oxidizer_fp=oxidizer;s.inert_mass_fp=mass-fuel-oxidizer;
+    if(material==DC_MATERIAL_CORROSION_RESIDUE) {
+        s.corroded_fraction=1.f;
+        s.flags|=FR_REACTIVE_SPENT;
+    }
     s.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&s,temperature);
     if(!fr_reactive_state_valid(&s,err,cap)) return false;
     *out=s;return true;
@@ -135,6 +139,13 @@ bool fr_reactive_state_valid(const fr_reactive_state_t *s,char *err,uint32_t cap
        (s->ignition_threshold==0&&s->ignition_integral!=0)||
        (s->coating_threshold==0&&s->coating_integral!=0))
         return error(err,cap,"Invalid oxidation/ignition progress");
+    if((s->material==DC_MATERIAL_CORROSION_RESIDUE&&
+        (s->corroded_fraction!=1.f||(s->flags&FR_REACTIVE_SPENT)==0u))||
+       ((s->material==DC_MATERIAL_GOLD||s->material==DC_MATERIAL_MAGIC_INGREDIENT)&&
+        s->corroded_fraction>=1.f)||
+       (s->material==DC_MATERIAL_ASH&&s->corroded_fraction>0.f&&
+        (s->corroded_fraction!=1.f||(s->flags&FR_REACTIVE_SPENT)==0u)))
+        return error(err,cap,"Invalid spent corrosion lineage");
     double c=capacity(s);
     if((c==0&&(s->thermal_energy!=0||s->pending_shock_energy!=0))||
        (c>0&&s->thermal_energy<=0)) return error(err,cap,"Reactive energy has no valid heat capacity");
