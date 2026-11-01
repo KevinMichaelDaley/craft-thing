@@ -31,3 +31,7 @@ Initial RED-GREEN-REFACTOR increment 898e116/d6d6931, a8cec42, e9a184f: profile-
 **2026-11-01T07:59:48Z**
 
 Additional RED a975dff, GREEN 252016b, REFACTOR test pending: reference quadrature regenerates exact Q16 weights and derived mass from the authoritative mobile volume after flux and resampling, including zero-volume clearing; full make test under Xephyr :92 passed. Still need runtime MPM sample coupling, action-reaction, owner transfer, displayed stress and frame budget.
+
+**2026-11-01T08:05:00Z**
+
+GPU shear RED 2391186, GREEN 32d2765 and REFACTOR just committed: matched loaded slime columns remain volume-conservative while transverse coarse velocity gradient increases flow through profile shear thinning. Persistent Xephyr :92 full make test passed. Remaining runtime momentum/deformation quadrature, water/rigid action-reaction, owner transfers, and displayed stress/frame budget.
