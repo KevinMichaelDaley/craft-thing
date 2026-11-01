@@ -51,3 +51,7 @@ Momentum-guided flux RED e10eb47, mixing heat RED 7152171, GREEN 8b5c802, REFACT
 **2026-11-01T08:36:48Z**
 
 Displayed stress benchmark RED c63111f, GREEN e7a33e1, REFACTOR just committed: optional DC_BENCH_SLUDGE fills 10720 Q16 slime cells in a central basin without double water occupancy, runs full physics/render at 480x270 quarter-native and 1920x1080 display. Normal Wayland display, 180 samples: warm sludge runs 1.937 and 1.969 ms/frame versus baseline 1.209 ms/frame; GPU fluid stage 2.126/1.765 vs baseline 0.715 ms. First cold sludge process took 13.1 s, warm second 2.15 s, indicating separate driver initialization cost. Native scene tests 4 pass and full make test under Xephyr :92 passed. Remaining rigid action-reaction and deformation sample guidance.
+
+**2026-11-01T08:43:39Z**
+
+Deformation RED 4929336/a8b32a8, GREEN 6fb7b46/e4c221c, REFACTOR just committed: symmetric 2D deformation-rate shear sample distinguishes physical shear from rigid rotation in CPU reference and GPU flux. 21 GPU and 8 CPU targeted tests passed, full make test under Xephyr :92 passed. Native Wayland 480x270/1920x1080 180-frame sludge stress repeat 1.967 ms displayed frame, GPU fluid 1.778 ms, within prior warm-run variance and below 30 ms frame budget. Remaining rigid action-reaction and integration audit before closure.
