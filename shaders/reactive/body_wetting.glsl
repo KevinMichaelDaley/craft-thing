@@ -190,7 +190,8 @@ uint coating_jelly_release_limit(Words entry,uint stock_numerator,
     }
     return low;
 }
-void coating_release_cell(Words entry,uint receiver,float temperature,uint phase) {
+void coating_release_cell(Words entry,uint receiver,float temperature,
+    float external_traction,uint phase) {
     if(receiver==0xffffffffu||temperature<=0.) return;
     uint receiver_material=cells[receiver].x&65535u;
     if(receiver_material!=0u&&receiver_material!=FR_PROFILE_WATER_MATERIAL) return;
@@ -214,7 +215,7 @@ void coating_release_cell(Words entry,uint receiver,float temperature,uint phase
     float blend=clamp((temperature-softening)/100.,0.,1.);
     float adhesion=mix(coefficient(coating,FR_PROFILE_COLD_ADHESION_WORD),
         coefficient(coating,FR_PROFILE_HOT_ADHESION_WORD),blend);
-    float traction=9.81*density*float(stock_volume)/65536.;
+    float traction=9.81*density*float(stock_volume)/65536.+external_traction;
     float drive=max(0.,traction-adhesion)/consistency;
     uint requested=uint(min(float(stock_volume),floor(float(stock_volume)*
         min(1.,pow(drive,1./exponent)*uintBitsToFloat(params.seconds)))));
@@ -266,8 +267,8 @@ void terrain_phase_release_parcel(uint index) {
        !coating_has_stock(entry)) return;
     uint receiver=atlas_at(index+params.width);
     float temperature=coating_parcel_temperature(entry);
-    coating_release_cell(entry,receiver,temperature,1u);
-    coating_release_cell(entry,receiver,temperature,2u);
+    coating_release_cell(entry,receiver,temperature,0.,1u);
+    coating_release_cell(entry,receiver,temperature,0.,2u);
 }
 void body_phase_release_parcel(Body body,uint piece,uvec2 handle,uint phase) {
     Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
@@ -279,6 +280,13 @@ void body_phase_release_parcel(Body body,uint piece,uvec2 handle,uint phase) {
     ivec2 target=ivec2(floor(x),floor(bottom+.0001));
     if(any(lessThan(target,ivec2(0)))||
        any(greaterThanEqual(target,ivec2(params.width,params.height)))) return;
-    coating_release_cell(entry,atlas_at(uint(target.y)*params.width+uint(target.x)),
-        coating_parcel_temperature(entry),phase);
+    uint receiver=atlas_at(uint(target.y)*params.width+uint(target.x));
+    if(receiver==0xffffffffu) return;
+    vec2 velocity=vec2(body.vx_fp,body.vy_fp)/65536.;
+    float water_fraction=clamp(float(cells[receiver].y)/65536.,0.,1.);
+    float water_drag=.5*float(FR_COATING_WATER_DRAG_COEFFICIENT)*
+        coefficient(FR_PROFILE_WATER_MATERIAL,FR_PROFILE_DENSITY_WORD)*
+        water_fraction*dot(velocity,velocity);
+    coating_release_cell(entry,receiver,coating_parcel_temperature(entry),
+        water_drag,phase);
 }
