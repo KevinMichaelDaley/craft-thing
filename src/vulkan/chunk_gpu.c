@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ferrum/fire/bulk_phase.h"
 #include "gpu_internal.h"
 #include "gas_gpu_internal.h"
 #include "reactive_gpu_internal.h"
@@ -303,6 +304,7 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
     }
     dc_cell_t *cells = gpu->chunk_mapped;
     memcpy(cells + (size_t)slot * DC_CHUNK_CELLS, chunk->cells, sizeof(chunk->cells));
+    memset((fr_bulk_phase_chunk_t *)gpu->bulk_phase_mapped+slot,0,sizeof(fr_bulk_phase_chunk_t));
     memset((float*)gpu->water_color_mapped+(size_t)slot*DC_CHUNK_CELLS*4,0,DC_CHUNK_CELLS*16);
     memset((float*)gpu->shape_color_mapped+(size_t)slot*DC_CHUNK_CELLS*4,0,DC_CHUNK_CELLS*16);
     for (uint32_t i=0;i<DC_CHUNK_CELLS;i++)

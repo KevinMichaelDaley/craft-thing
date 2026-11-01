@@ -14,6 +14,7 @@
 #include "present_mode_select.h"
 #include "runtime_body_gpu.h"
 #include "gpu_internal.h"
+#include "ferrum/fire/bulk_phase.h"
 #include "reactive_gpu_internal.h"
 #include "thermal_gpu_internal.h"
 #include "gas_gpu_internal.h"
@@ -246,7 +247,8 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         { gpu->shape_color_buffer,0,terrain_colors },
         { gpu->shape_color_buffer,gpu->runtime_body_consumers?0:terrain_colors,gpu->runtime_body_consumers?16:bank_colors },
         { gpu->shape_color_buffer,gpu->runtime_body_consumers?0:terrain_colors+bank_colors,gpu->runtime_body_consumers?16:bank_colors },
-        { gpu->thermal_control_buffer,0,128 }
+        { gpu->thermal_control_buffer,0,128 },
+        { gpu->bulk_phase_buffer,0,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*sizeof(fr_bulk_phase_chunk_t) }
     };
     VkWriteDescriptorSet writes[DC_GPU_DESCRIPTOR_BINDINGS] = {0};
     for (uint32_t i = 0; i < DC_GPU_DESCRIPTOR_BINDINGS; ++i) {

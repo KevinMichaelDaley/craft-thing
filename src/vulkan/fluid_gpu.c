@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "fluid_transport_limits.h"
+#include "ferrum/fire/bulk_phase.h"
 #include "gpu_internal.h"
 #include "subgroup_gpu.h"
 
@@ -46,6 +47,10 @@ bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if(!dc_gpu_make_mapped_buffer(gpu,color_bytes,&gpu->water_color_buffer,
         &gpu->water_color_memory,&gpu->water_color_mapped,err,cap)) return false;
     memset(gpu->water_color_mapped,0,(size_t)color_bytes);
+    VkDeviceSize bulk_bytes=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*sizeof(fr_bulk_phase_chunk_t);
+    if(!dc_gpu_make_mapped_buffer(gpu,bulk_bytes,&gpu->bulk_phase_buffer,
+        &gpu->bulk_phase_memory,&gpu->bulk_phase_mapped,err,cap)) return false;
+    memset(gpu->bulk_phase_mapped,0,(size_t)bulk_bytes);
     if(!dc_gpu_make_mapped_buffer(gpu,128,&gpu->thermal_control_buffer,
         &gpu->thermal_control_memory,&gpu->thermal_control_mapped,err,cap)) return false;
     memset(gpu->thermal_control_mapped,0,128);
@@ -162,6 +167,9 @@ static void bind_fluid_mode(dc_gpu_t *gpu,uint32_t mode,bool projection) {
 }
 
 void dc_gpu_fluid_destroy(dc_gpu_t *gpu) {
+    if(gpu->bulk_phase_mapped) vkUnmapMemory(gpu->device,gpu->bulk_phase_memory);
+    if(gpu->bulk_phase_buffer) vkDestroyBuffer(gpu->device,gpu->bulk_phase_buffer,NULL);
+    if(gpu->bulk_phase_memory) vkFreeMemory(gpu->device,gpu->bulk_phase_memory,NULL);
     if(gpu->thermal_control_mapped) vkUnmapMemory(gpu->device,gpu->thermal_control_memory);
     if(gpu->thermal_control_buffer) vkDestroyBuffer(gpu->device,gpu->thermal_control_buffer,NULL);
     if(gpu->thermal_control_memory) vkFreeMemory(gpu->device,gpu->thermal_control_memory,NULL);

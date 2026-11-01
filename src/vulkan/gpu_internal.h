@@ -12,7 +12,7 @@
 #include "mpm_activity_layout.h"
 
 enum {
-    DC_GPU_DESCRIPTOR_BINDINGS = 37,
+    DC_GPU_DESCRIPTOR_BINDINGS = 38,
     DC_GPU_STRUCTURAL_TAG = 0x53545231u,
     DC_STRUCTURAL_HEADER_WORDS = 32,
     DC_GPU_PIXEL_BODY_FLAG = 0x80000000u,
@@ -214,6 +214,9 @@ struct dc_gpu {
     VkBuffer water_color_buffer;
     VkDeviceMemory water_color_memory;
     void *water_color_mapped;
+    VkBuffer bulk_phase_buffer;
+    VkDeviceMemory bulk_phase_memory;
+    void *bulk_phase_mapped;
     VkBuffer thermal_control_buffer;
     VkDeviceMemory thermal_control_memory;
     void *thermal_control_mapped;

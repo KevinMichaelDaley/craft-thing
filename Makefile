@@ -85,6 +85,7 @@ GPU_OBJ += build/runtime_body_gpu.o build/runtime_geometry_gpu.o build/body_addr
 GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o build/reactive_chunk_gpu.o
 GPU_OBJ += build/thermal_gpu.o build/thermal_feedback_gpu.o build/constructed_thermal_gpu.o build/thermal_model.o
 GPU_OBJ += build/gas_gpu.o build/gas_feedback_gpu.o build/gas_acoustic_gpu.o build/gas_acoustic_trace_gpu.o build/gas_checkpoint_gpu.o build/gas_model.o
+GPU_OBJ += build/bulk_phase_gpu.o
 GPU_OBJ += build/reactive_checkpoint_gpu.o build/structural_store_channels.o build/reactive_archive_model.o build/thermal_checkpoint_model.o
 build/reactive_arena_gpu.o: src/vulkan/reactive_arena_gpu.c src/vulkan/reactive_arena_gpu.h include/dungeoncraft/reactive_arena_layout.h include/dungeoncraft/reactive_state_layout.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
@@ -652,6 +653,9 @@ build/stream.o: src/world/stream.c src/world/stream_gas.h include/dungeoncraft/s
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/bulk_phase_packet.o: src/fire/bulk_phase_packet.c include/ferrum/fire/bulk_phase.h
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/bulk_phase_gpu.o: src/vulkan/bulk_phase_gpu.c src/vulkan/gpu_internal.h include/ferrum/fire/bulk_phase_gpu.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
@@ -1882,8 +1886,8 @@ build/gas_reference_tests: tests/fire/gas_reference_tests.c src/fire/gas.c src/f
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c src/fire/gas_reference.c -o $@ -lm
 build/bulk_phase_tests: tests/fire/bulk_phase_tests.c src/fire/bulk_phase.c src/fire/bulk_phase_packet.c include/ferrum/fire/bulk_phase.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/bulk_phase_tests.c src/fire/bulk_phase.c src/fire/bulk_phase_packet.c -o $@ -lm
-build/bulk_phase_gpu_tests: tests/vulkan/bulk_phase_gpu_tests.c tests/vulkan/bulk_phase_gpu_red_stub.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/bulk_phase_gpu_tests.c tests/vulkan/bulk_phase_gpu_red_stub.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/bulk_phase_gpu_tests: tests/vulkan/bulk_phase_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/bulk_phase_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_bulk_phase
 test: test_bulk_phase build/bulk_phase_gpu_tests
 test_bulk_phase: build/bulk_phase_tests
