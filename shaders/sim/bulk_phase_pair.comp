@@ -176,7 +176,14 @@ void main() {
                 (reverse?-1.:1.)):
             params.gravity*float(max(0,int(used(top))-int(used(bottom))))/float(FULL);
         float drag=water_drag_speed(water_flow,reverse,top[0],used(top));
-        float speed=sqrt(2.*buoyancy)+drag;
+        float advective_speed=0.;
+        if(heavy>0u) {
+            uint component=params.axis==0u?1u:0u;
+            float mass=density[heavy]*float(top[heavy])/float(FULL);
+            float signed_speed=bulk_momentum_at(top_at,heavy,component)/mass;
+            advective_speed=reverse?-signed_speed:signed_speed;
+        }
+        float speed=max(0.,sqrt(2.*buoyancy)+drag+advective_speed);
         float mobility=1.;
         uint rheology_phase=heavy==0u?light:heavy;
         if(rheology_phase<3u) {
@@ -206,13 +213,13 @@ void main() {
     else if(bottom[0]>bottom_before.x)
         move_water_heat(top_at,bottom_at,top_before.x,top[0]);
     for(uint phase=1u;phase<3u;phase++) {
-        uint source=0u,target=0u,before=0u,moved=0u;
+        uint source=0u,target=0u,before=0u,moved=0u,target_after=0u;
         if(top[phase]>top_before[phase]) {
             source=bottom_at;target=top_at;before=bottom_before[phase];
-            moved=top[phase]-top_before[phase];
+            moved=top[phase]-top_before[phase];target_after=top[phase];
         } else if(bottom[phase]>bottom_before[phase]) {
             source=top_at;target=bottom_at;before=top_before[phase];
-            moved=bottom[phase]-bottom_before[phase];
+            moved=bottom[phase]-bottom_before[phase];target_after=bottom[phase];
         }
         if(moved>0u&&before>0u) {
             float carried=bulk_heat_at(source,phase)*float(moved)/float(before);
@@ -221,9 +228,22 @@ void main() {
             for(uint component=0u;component<2u;component++) {
                 float momentum=bulk_momentum_at(source,phase,component);
                 float transfer=momentum*float(moved)/float(before);
+                float target_momentum=bulk_momentum_at(target,phase,component);
+                uint target_before=target_after-moved;
+                if(target_before>0u) {
+                    float moved_mass=density[phase]*float(moved)/float(FULL);
+                    float target_mass=density[phase]*float(target_before)/float(FULL);
+                    float total_momentum=target_momentum+transfer;
+                    float kinetic_loss=0.5*(transfer*transfer/moved_mass+
+                        target_momentum*target_momentum/target_mass-
+                        total_momentum*total_momentum/(moved_mass+target_mass))*
+                        FR_BULK_KINETIC_TO_KJ;
+                    bulk_heat_write(target,phase,bulk_heat_at(target,phase)+
+                        max(0.,kinetic_loss));
+                }
                 bulk_momentum_write(source,phase,component,momentum-transfer);
                 bulk_momentum_write(target,phase,component,
-                    bulk_momentum_at(target,phase,component)+transfer);
+                    target_momentum+transfer);
             }
         }
     }
