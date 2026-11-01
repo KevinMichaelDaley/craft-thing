@@ -42,6 +42,11 @@ static void test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot(void
         fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
     ASSERT_EQ(out->oil_excess[17],10.f);
     phase->oil_excess[17]=10.f;
+    phase->slime_excess[18]=1.f;
+    ASSERT_TRUE(!fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,phase,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
+    ASSERT_EQ(out->slime_excess[18],0.f);
+    phase->slime_excess[18]=0.f;
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
         fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
     ASSERT_INT_EQ(out->oil_fp[17],0);ASSERT_INT_EQ(out->slime_fp[17],0);
@@ -327,6 +332,50 @@ static void test_closed_rigid_displacement_retains_oil_overflow(void) {
     ASSERT_EQ(out->oil_retained_fp[source],FR_BULK_CELL_FULL_FP);
     dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
 }
+static void test_moving_rigid_crosses_chunk_seam_without_oil_or_heat_loss(void) {
+    char err[256]={0};dc_gpu_t *gpu=NULL;
+    dc_chunk_t *left=calloc(1,sizeof(*left)),*right=calloc(1,sizeof(*right));
+    fr_bulk_phase_chunk_t *source=calloc(1,sizeof(*source));
+    fr_bulk_phase_chunk_t *out_left=calloc(1,sizeof(*out_left));
+    fr_bulk_phase_chunk_t *out_right=calloc(1,sizeof(*out_right));
+    ASSERT_TRUE(left&&right&&source&&out_left&&out_right);
+    const uint32_t at=30u*64u+63u;
+    source->oil_fp[at]=FR_BULK_CELL_FULL_FP;
+    source->oil_excess[at]=25.f;
+    ASSERT_TRUE(dc_gpu_create(&gpu,128,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+        dc_gpu_upload_chunk(gpu,0,left,err,sizeof(err))&&
+        dc_gpu_upload_chunk(gpu,1,right,err,sizeof(err))&&
+        dc_gpu_set_page(gpu,0,0,0,err,sizeof(err))&&
+        dc_gpu_set_page(gpu,1,0,1,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(gpu,0,left,source,err,sizeof(err))&&
+        dc_gpu_set_rigid_solver(gpu,true));
+    dc_gpu_body_t body={.x_fp=63*(int32_t)FR_BULK_CELL_FULL_FP,
+        .y_fp=30*(int32_t)FR_BULK_CELL_FULL_FP,.width=1,.height=1,.id=307,.active=1};
+    ASSERT_TRUE(dc_gpu_spawn_body(gpu,body,err,sizeof(err))&&
+        dc_gpu_set_body_motion(gpu,307,0,0,DC_GPU_BODY_KINEMATIC,err,sizeof(err))&&
+        dc_gpu_rigid_step(gpu,err,sizeof(err))&&
+        fr_bulk_phase_gpu_step(gpu,1.f/60.f,err,sizeof(err)));
+    body.x_fp=64*(int32_t)FR_BULK_CELL_FULL_FP;
+    ASSERT_TRUE(dc_gpu_spawn_body(gpu,body,err,sizeof(err))&&
+        dc_gpu_set_body_motion(gpu,307,0,0,DC_GPU_BODY_KINEMATIC,err,sizeof(err))&&
+        dc_gpu_rigid_step(gpu,err,sizeof(err))&&
+        fr_bulk_phase_gpu_step(gpu,1.f/60.f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,0,out_left,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,1,out_right,err,sizeof(err)));
+    dc_gpu_body_t moved_body={0};
+    ASSERT_TRUE(dc_gpu_read_body_id(gpu,307,&moved_body,err,sizeof(err)));
+    ASSERT_EQ(moved_body.x_fp,64*(int32_t)FR_BULK_CELL_FULL_FP);
+    uint64_t oil=0u,right_oil=0u;double heat=0.;
+    for(uint32_t i=0;i<DC_CHUNK_CELLS;i++) {
+        oil+=(uint64_t)out_left->oil_fp[i]+out_right->oil_fp[i];
+        right_oil+=out_right->oil_fp[i];
+        heat+=(double)out_left->oil_excess[i]+out_right->oil_excess[i];
+    }
+    ASSERT_EQ(oil,FR_BULK_CELL_FULL_FP);
+    ASSERT_TRUE(right_oil>0u);
+    ASSERT_TRUE(fabs(heat-25.)<.001);
+    dc_gpu_destroy(gpu);free(left);free(right);free(source);free(out_left);free(out_right);PASS();
+}
 int main(void) {
     RUN(test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot);
     RUN(test_water_solver_respects_full_oil_cell_capacity);
@@ -340,5 +389,6 @@ int main(void) {
     RUN(test_oil_crosses_horizontal_chunk_seam_conservatively);
     RUN(test_rigid_body_displaces_oil_upward_without_loss);
     RUN(test_closed_rigid_displacement_retains_oil_overflow);
+    RUN(test_moving_rigid_crosses_chunk_seam_without_oil_or_heat_loss);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
