@@ -43,6 +43,9 @@ typedef struct {
     uint32_t oil_retained_fp[DC_CHUNK_CELLS],slime_retained_fp[DC_CHUNK_CELLS];
     /** Per-phase thermal energy relative to the ambient-temperature baseline. */
     float oil_excess[DC_CHUNK_CELLS],slime_excess[DC_CHUNK_CELLS];
+    /** Phase momentum quadrature. Mass is always derived from oil_fp/slime_fp. */
+    float oil_momentum_x[DC_CHUNK_CELLS],oil_momentum_y[DC_CHUNK_CELLS];
+    float slime_momentum_x[DC_CHUNK_CELLS],slime_momentum_y[DC_CHUNK_CELLS];
 } fr_bulk_phase_chunk_t;
 
 /** Size of the fixed versioned chunk packet. */
