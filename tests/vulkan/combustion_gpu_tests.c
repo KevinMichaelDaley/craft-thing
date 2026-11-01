@@ -7,6 +7,7 @@
 #include "ferrum/fire/combustion.h"
 #include "ferrum/fire/material_profile.h"
 #include "dungeoncraft/combustion_parameters.h"
+#include "dungeoncraft/terrain_flags.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/structural/gpu.h"
@@ -36,7 +37,16 @@ static void terrain_combustion(bool practical,bool char_stage,uint32_t material)
     fr_gas_state_t *before=calloc(4096,sizeof(*before)),*after=calloc(4096,sizeof(*after));ASSERT_TRUE(before&&after);
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,before,4096,err,sizeof(err)));
     ASSERT_TRUE(fr_combustion_gpu_step(g,.05f,err,sizeof(err)));
-    if(practical) ASSERT_TRUE(g->gas->cache_valid);
+    if(material==DC_MATERIAL_WOOD&&!char_stage) {
+        ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+        ASSERT_TRUE((chunk->cells[at].flags&DC_CELL_BURNING_SMOKE_PASS)!=0u);
+        fr_gas_checkpoint_chunk_t *snapshot=malloc(sizeof(*snapshot));ASSERT_TRUE(snapshot);
+        ASSERT_TRUE(fr_gas_gpu_refresh_geometry(g,err,sizeof(err))&&
+            fr_gas_gpu_export_checkpoint(g,0,snapshot,err,sizeof(err)));
+        ASSERT_TRUE(snapshot->cells[at][12]>.05f&&snapshot->cells[at][12]<.25f);
+        free(snapshot);
+    }
+    if(practical) ASSERT_EQ(g->gas->cache_valid,material!=DC_MATERIAL_WOOD);
     fr_reactive_record_t result;bool found=false;
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&result,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(result.state.fuel_mass_fp+result.state.char_mass_fp<wood.fuel_mass_fp+wood.char_mass_fp);

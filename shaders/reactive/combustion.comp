@@ -12,6 +12,7 @@
 #include "../../include/dungeoncraft/thermal_surface.h"
 #include "../../include/dungeoncraft/blackbody.h"
 #include "../../include/dungeoncraft/bonfire_layout.h"
+#include "../../include/dungeoncraft/terrain_flags.h"
 layout(local_size_x=64) in;
 layout(set=0,binding=0,std430) readonly buffer Root {uint root[];};
 layout(set=0,binding=1,std430) readonly buffer Pages {uint pages[];};
@@ -532,7 +533,19 @@ void main() {
         Body body=body_thermal_grid(DC_BODY(slot));if((body.enabled|body.reserved0)==0u||!pixel_body(body)) return;
         for(uint piece=gl_LocalInvocationID.x;piece<body_pieces(body);piece+=64u) {
             if(pixel_piece_material(body,piece)==0u) continue;
-            uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y!=0u) choose_body_target(h.x);
+            uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y==0u) continue;
+            choose_body_target(h.x);
+            Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),h.x));
+            uint s=FR_ENTRY_STATE,material=entry.words[s];
+            if(entry.words[FR_ENTRY_GENERATION]!=h.y||entry.words[FR_ENTRY_OWNER]!=2u||
+               !DC_CELL_SMOKE_PASS_WOOD(material)||
+               (entry.words[s+1u]&2u)==0u||(entry.words[s+9u]|entry.words[s+10u])==0u) continue;
+            ivec2 parcel=body_parcel_cell(body,piece);
+            uint at=atlas(parcel);
+            uint index=uint(parcel.y)*params.width+uint(parcel.x);
+            if(at!=0xffffffffu&&thermal_occupancy[index]==body.id&&
+               (cells[at].x&65535u)==0u)
+                atomicOr(cells[at].x,DC_CELL_BURNING_SMOKE_PASS<<DC_CELL_FLAGS_SHIFT);
         }
         return;
     }
@@ -590,7 +603,16 @@ void main() {
                 chosen=choose_target(p);
         }
         samples[i+params.width*params.height].w=uintBitsToFloat(chosen);
-        extinguish_thermally(at);return;
+        extinguish_thermally(at);
+        if(at!=0xffffffffu) {
+            uint material=cells[at].x&65535u;
+            if(DC_CELL_SMOKE_PASS_WOOD(material)) {
+                uint bit=DC_CELL_BURNING_SMOKE_PASS<<DC_CELL_FLAGS_SHIFT;
+                bool pass=burning(at);
+                cells[at].x=(cells[at].x&~bit)|(pass?bit:0u);
+            } else cells[at].x&=~(DC_CELL_BURNING_SMOKE_PASS<<DC_CELL_FLAGS_SHIFT);
+        }
+        return;
     }
     if(params.unused.x==1u) {feedback(i,p,at);return;}
     if(!gas_cell(at)) return;

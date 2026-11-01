@@ -180,14 +180,24 @@ static void test_burning_wood_has_small_conservative_smoke_bypass(void) {
         dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&
         fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err))&&
         fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&
-        fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&
-        fr_gas_gpu_refresh_geometry(g,err,sizeof(err))&&
+        fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
+    fr_gas_gpu_geometry_changed(g,true);
+    ASSERT_TRUE(fr_gas_gpu_refresh_geometry(g,err,sizeof(err))&&
         fr_gas_gpu_export_checkpoint(g,0,snapshot,err,sizeof(err)));
     ASSERT_TRUE(snapshot->cells[wood][12]>.05f&&snapshot->cells[wood][12]<.25f);
     double initial=input[left].species[FR_GAS_SOOT];
     for(uint32_t frame=0;frame<60u;frame++) ASSERT_TRUE(fr_gas_gpu_step(g,1.f/60.f,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
     ASSERT_TRUE(out[right].species[FR_GAS_SOOT]>0.);
+    ASSERT_TRUE(fabs(out[left].species[FR_GAS_SOOT]+out[wood].species[FR_GAS_SOOT]+
+        out[right].species[FR_GAS_SOOT]-initial)<1e-7);
+    chunk->cells[wood].flags=0u;
+    ASSERT_TRUE(dc_gpu_upload_chunk_exact(g,0,chunk,false,err,sizeof(err)));
+    fr_gas_gpu_geometry_changed(g,true);
+    ASSERT_TRUE(fr_gas_gpu_refresh_geometry(g,err,sizeof(err))&&
+        fr_gas_gpu_export_checkpoint(g,0,snapshot,err,sizeof(err))&&
+        fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+    ASSERT_EQ(snapshot->cells[wood][12],0.f);
     ASSERT_TRUE(fabs(out[left].species[FR_GAS_SOOT]+out[wood].species[FR_GAS_SOOT]+
         out[right].species[FR_GAS_SOOT]-initial)<1e-7);
     dc_gpu_destroy(g);free(chunk);free(input);free(out);free(volume);free(snapshot);PASS();
