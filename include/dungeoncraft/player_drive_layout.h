@@ -1,0 +1,15 @@
+#ifndef DUNGEONCRAFT_PLAYER_DRIVE_LAYOUT_H
+#define DUNGEONCRAFT_PLAYER_DRIVE_LAYOUT_H
+
+/** C/GLSL command-plane offsets; last sequence is owned exclusively by GPU. */
+#define FR_PLAYER_DRIVE_WORDS 16u
+#define FR_PLAYER_DRIVE_BODY 0u
+#define FR_PLAYER_DRIVE_GENERATION 1u
+#define FR_PLAYER_DRIVE_PREVIOUS 2u
+#define FR_PLAYER_DRIVE_SEQUENCE 4u
+#define FR_PLAYER_DRIVE_MOVE 6u
+#define FR_PLAYER_DRIVE_JUMP 7u
+#define FR_PLAYER_DRIVE_SPEED 8u
+#define FR_PLAYER_DRIVE_JUMP_SPEED 9u
+
+#endif

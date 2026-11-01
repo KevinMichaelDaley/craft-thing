@@ -3,11 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "dungeoncraft/player_drive_layout.h"
 #include "ferrum/player/drive_gpu.h"
 #include "runtime_body_internal.h"
-
-enum { PLAYER_DRIVE_WORDS=16, PLAYER_DRIVE_SEQUENCE=4, PLAYER_DRIVE_MOVE=6,
-       PLAYER_DRIVE_JUMP=7, PLAYER_DRIVE_SPEED=8, PLAYER_DRIVE_JUMP_SPEED=9 };
 
 struct fr_player_drive_gpu {
     dc_gpu_t *gpu;
@@ -34,9 +32,14 @@ bool fr_player_drive_gpu_create(dc_gpu_t *g,const fr_player_body_binding_t *bind
     uint32_t count,float speed,float jump,fr_player_drive_gpu_t **out,char *err,uint32_t cap) {
     uint64_t allocation=sizeof(fr_player_drive_gpu_t)+(uint64_t)count*sizeof(*bindings);
     if (!g || !g->runtime_bodies || !g->runtime_body_consumers || !bindings || !count || !out ||
-        allocation>SIZE_MAX || count>UINT32_MAX/PLAYER_DRIVE_WORDS ||
+        allocation>SIZE_MAX || count>UINT32_MAX/FR_PLAYER_DRIVE_WORDS ||
         !isfinite(speed) || !isfinite(jump) || speed<0 || jump<0 || speed>4 || jump>4)
         return player_drive_error(err,cap,"Invalid player body bindings or fixed-tick motion tuning");
+    VkPhysicalDeviceProperties properties;
+    vkGetPhysicalDeviceProperties(g->physical,&properties);
+    if ((uint64_t)count*FR_PLAYER_DRIVE_WORDS*4>properties.limits.maxStorageBufferRange ||
+        ((uint64_t)count+63u)/64u>properties.limits.maxComputeWorkGroupCount[0])
+        return player_drive_error(err,cap,"Player input storage exceeds device limits");
     for (uint32_t i=0;i<count;i++) {
         if (!bindings[i].identity || !bindings[i].body_id || !bindings[i].generation)
             return player_drive_error(err,cap,"Player and generation-bearing body identities must be nonzero");
@@ -48,15 +51,16 @@ bool fr_player_drive_gpu_create(dc_gpu_t *g,const fr_player_body_binding_t *bind
     if (!d) return player_drive_error(err,cap,"Cannot allocate player drive owner");
     d->gpu=g;d->count=count;
     memcpy(d->bindings,bindings,(size_t)count*sizeof(*bindings));
-    if (!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*PLAYER_DRIVE_WORDS*4,true,&d->commands,err,cap))
+    if (!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*FR_PLAYER_DRIVE_WORDS*4,true,&d->commands,err,cap))
         goto fail;
     uint32_t *words=d->commands.mapped;
-    memset(words,0,(size_t)count*PLAYER_DRIVE_WORDS*4);
+    memset(words,0,(size_t)count*FR_PLAYER_DRIVE_WORDS*4);
     for (uint32_t i=0;i<count;i++) {
-        uint32_t *w=words+i*PLAYER_DRIVE_WORDS;
-        w[0]=bindings[i].body_id;w[1]=bindings[i].generation;
-        w[PLAYER_DRIVE_SPEED]=(uint32_t)lroundf(speed*65536.f);
-        w[PLAYER_DRIVE_JUMP_SPEED]=(uint32_t)lroundf(jump*65536.f);
+        uint32_t *w=words+i*FR_PLAYER_DRIVE_WORDS;
+        w[FR_PLAYER_DRIVE_BODY]=bindings[i].body_id;
+        w[FR_PLAYER_DRIVE_GENERATION]=bindings[i].generation;
+        w[FR_PLAYER_DRIVE_SPEED]=(uint32_t)lroundf(speed*65536.f);
+        w[FR_PLAYER_DRIVE_JUMP_SPEED]=(uint32_t)lroundf(jump*65536.f);
     }
     VkDescriptorBufferInfo buffers[]={dc_gpu_runtime_bodies_binding(g),
         {d->commands.buffer,0,d->commands.bytes}};
@@ -82,12 +86,12 @@ bool fr_player_drive_gpu_submit(fr_player_drive_gpu_t *d,
         return player_drive_error(err,cap,"Cannot reach player input boundary");
     uint32_t *words=d->commands.mapped;
     for (uint32_t i=0;i<count;i++) {
-        uint32_t *w=words+i*PLAYER_DRIVE_WORDS;
-        w[PLAYER_DRIVE_SEQUENCE]=(uint32_t)inputs[i].sequence;
-        w[PLAYER_DRIVE_SEQUENCE+1]=(uint32_t)(inputs[i].sequence>>32);
+        uint32_t *w=words+i*FR_PLAYER_DRIVE_WORDS;
+        w[FR_PLAYER_DRIVE_SEQUENCE]=(uint32_t)inputs[i].sequence;
+        w[FR_PLAYER_DRIVE_SEQUENCE+1]=(uint32_t)(inputs[i].sequence>>32);
         int32_t move=(int32_t)lroundf(inputs[i].move_x*65536.f);
-        memcpy(w+PLAYER_DRIVE_MOVE,&move,sizeof(move));
-        w[PLAYER_DRIVE_JUMP]=inputs[i].jump_pressed;
+        memcpy(w+FR_PLAYER_DRIVE_MOVE,&move,sizeof(move));
+        w[FR_PLAYER_DRIVE_JUMP]=inputs[i].jump_pressed;
     }
     VkDescriptorBufferInfo root=dc_gpu_runtime_bodies_binding(g);
     VkWriteDescriptorSet update={.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,

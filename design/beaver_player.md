@@ -38,6 +38,20 @@ validated wood availability/reach, and advances animation once per simulation
 step. It does not mutate wood. Repeated held ticks preserve entry/loop time;
 recovery completes before re-entry. Other animation consumers use
 `fr_player_advance`; do not advance a player twice in the same step.
+If a valid target returns during recovery, complete the recovery and carry any
+remaining elapsed time into a new entry. This remains independent of tick size.
+
+`fr_player_drive_gpu_create` binds unique session player identities to actual
+body IDs/generations. `fr_player_drive_gpu_submit` dispatches normalized horizontal
+input and press-only jumps against GPU-owned bodies. Fixed-tick speed/jump tuning
+is explicit and bounded by the existing solver's four-cell velocity contract.
+Jump uses the solver's real support flag and consumes that support immediately.
+Monotonic 64-bit input sequences suppress retries; stale/missing bodies are
+GPU no-ops. The adapter never reads body state to CPU or edits transforms.
+Its five Vulkan tests exercise real support/movement, independent players,
+sequence retries, invalid batches and stale generations. Application spawning,
+SDL routing, fixed-step scheduling and animated material binding still need
+integration; this backend alone is not playable acceptance.
 
 Keyboard: A/D movement, Space press jump, Q press fire bolt, E press targeted ice
 storm. C held is the provisional chew input. Keyboard targeting uses the mouse

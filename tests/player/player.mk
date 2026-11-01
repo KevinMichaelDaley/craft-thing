@@ -11,8 +11,8 @@ test_beaver_assets: build/beaver_asset_tests
 	./build/beaver_asset_tests
 test_player: test_beaver_assets
 
-build/player_drive_gpu_tests: tests/player/drive_gpu_tests.c src/vulkan/player_drive_gpu.c include/ferrum/player/drive_gpu.h build/fluid_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/player_drive_gpu.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/player_drive_gpu_tests: tests/player/drive_gpu_tests.c src/vulkan/player_drive_gpu.c include/ferrum/player/drive_gpu.h build/fluid_tests $(BEAVER_SRC) $(PLAYER_SRC) src/player/beaver_imported.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/player_drive_gpu.c $(BEAVER_SRC) $(PLAYER_SRC) $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_player_drive_gpu
 test_player_drive_gpu: build/player_drive_gpu_tests
 	./build/player_drive_gpu_tests
@@ -21,6 +21,8 @@ build/shaders/player_drive.comp.spv: shaders/sim/player_drive.comp shaders/sim/r
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/player_drive_gpu_tests: build/shaders/player_drive.comp.spv
+build/shaders/player_drive.comp.spv: shaders/sim/rigid_storage.glsl include/dungeoncraft/body_storage_layout.h include/dungeoncraft/material_density.h include/dungeoncraft/player_drive_layout.h
+build/player_drive_gpu_tests: include/dungeoncraft/player_drive_layout.h src/vulkan/runtime_body_internal.h src/vulkan/runtime_body_gpu.h src/vulkan/gpu_internal.h src/vulkan/renderer_internal.h
 
 build/beaver_atlas: tools/diagnostics/beaver_atlas.c $(BEAVER_SRC) $(PLAYER_SRC) src/assets/prop.c include/ferrum/player/beaver.h src/player/beaver_internal.h
 	mkdir -p build
