@@ -61,6 +61,16 @@ static void test_quadrature_rejects_invalid_volume_transactionally(void) {
     ASSERT_TRUE(!fr_bulk_rheology_quadrature(100u,1.3f,5u,sample));
     ASSERT_INT_EQ(sample[0].volume_fp,77u);PASS();
 }
+static void test_empty_phase_resample_clears_all_sample_mass(void) {
+    fr_bulk_rheology_quadrature_t sample[4]={{.volume_fp=77u,.mass=7.f},
+        {.volume_fp=77u,.mass=7.f},{.volume_fp=77u,.mass=7.f},
+        {.volume_fp=77u,.mass=7.f}};
+    ASSERT_TRUE(fr_bulk_rheology_quadrature(0u,1.3f,4u,sample));
+    for(uint32_t i=0;i<4u;i++) {
+        ASSERT_INT_EQ(sample[i].volume_fp,0u);ASSERT_EQ(sample[i].mass,0.f);
+    }
+    PASS();
+}
 int main(void) {
     RUN(test_small_load_does_not_yield_cold_sludge);
     RUN(test_larger_load_yields_and_hot_sludge_softens);
@@ -68,5 +78,6 @@ int main(void) {
     RUN(test_invalid_samples_are_transactional);
     RUN(test_quadrature_mass_reconciles_after_flux_and_resample);
     RUN(test_quadrature_rejects_invalid_volume_transactionally);
+    RUN(test_empty_phase_resample_clears_all_sample_mass);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail>0?1:0;
 }
