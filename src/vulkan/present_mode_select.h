@@ -10,9 +10,7 @@
 
 static inline bool dc_present_low_latency_requested(const char *setting,
                                                      bool latest_ready_available) {
-    (void)setting;
-    (void)latest_ready_available;
-    return false;
+    return setting?strcmp(setting,"0")!=0:latest_ready_available;
 }
 
 static inline VkPresentModeKHR dc_present_mode_select(const VkPresentModeKHR *modes,

@@ -11,6 +11,7 @@
 
 #include "body_features_gpu.h"
 #include "present_mode_latest_ready.h"
+#include "present_mode_select.h"
 #include "runtime_body_gpu.h"
 #include "gpu_internal.h"
 #include "reactive_gpu_internal.h"
@@ -365,10 +366,11 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     dc_gpu_body_features_t body_features;
     if (!dc_gpu_body_features_query(gpu->physical, &body_features, err, cap)) goto fail;
     const char *latency_setting=getenv("DC_LOW_LATENCY_PRESENT");
-    gpu->low_latency_present=latency_setting&&strcmp(latency_setting,"0")!=0;
+    bool latest_ready_available=gpu->window&&gpu_supports_latest_ready(gpu->physical);
+    gpu->low_latency_present=dc_present_low_latency_requested(latency_setting,latest_ready_available);
     dc_vk_present_mode_fifo_latest_ready_features_t latest_ready={
         .sType=DC_VK_PRESENT_MODE_FIFO_LATEST_READY_FEATURES};
-    if(gpu->window&&gpu->low_latency_present&&gpu_supports_latest_ready(gpu->physical)) {
+    if(gpu->window&&gpu->low_latency_present&&latest_ready_available) {
         VkPhysicalDeviceFeatures2 available={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
             .pNext=&latest_ready};
         vkGetPhysicalDeviceFeatures2(gpu->physical,&available);
@@ -377,6 +379,7 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
             body_features.subgroups.pNext=&latest_ready;
         }
     }
+    if(!latency_setting&&!gpu->latest_ready_enabled) gpu->low_latency_present=false;
     float priority = 1.0f;
     VkDeviceQueueCreateInfo queue_info = { .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         .queueFamilyIndex = gpu->family, .queueCount = 1, .pQueuePriorities = &priority };
