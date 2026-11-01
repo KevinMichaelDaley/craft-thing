@@ -10,6 +10,7 @@
 #include "dungeoncraft/terrain_flags.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
+#include "ferrum/renderer/gpu.h"
 #include "ferrum/structural/gpu.h"
 #include "../../src/vulkan/gas_gpu_state.h"
 
@@ -350,6 +351,37 @@ static void test_submerged_mixed_film_uses_bound_oxidizer_without_deleting_water
     ASSERT_EQ(water,4u*(uint64_t)DC_FLUID_FULL);
     free(gas);free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_fire_emission_enters_directional_light_without_point_sources(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    uint32_t at=20u*64u+20u;
+    chunk->cells[at]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&fr_renderer_enable(g,err,sizeof(err))&&
+        fr_renderer_set_mode(g,FR_RENDERER_LIT)&&
+        fr_renderer_set_sources(g,NULL,0,(fr_renderer_sun_t){0}));
+    fr_reactive_state_t wood;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322u,0u,1000.f,
+        701000u,&wood,err,sizeof(err)));
+    wood.flags|=FR_REACTIVE_FLAMING;
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,at,&wood,err,sizeof(err)));
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&
+        fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&
+        fr_combustion_gpu_enable(g,err,sizeof(err))&&
+        fr_combustion_gpu_step(g,.1f,err,sizeof(err)));
+    fr_combustion_emission_t *emission=calloc(4096u,sizeof(*emission));ASSERT_TRUE(emission);
+    ASSERT_TRUE(fr_combustion_gpu_read_emission_chunk(g,0,emission,4096u,err,sizeof(err)));
+    const uint32_t neighbors[]={at-64u,at-1u,at+1u,at+64u};
+    float power=0.f;for(uint32_t i=0u;i<4u;i++) power+=emission[neighbors[i]].power;
+    ASSERT_TRUE(power>0.f);
+    ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+    fr_renderer_light_field_t near,far;
+    ASSERT_TRUE(fr_renderer_read_light(g,21u,20u,&near)&&
+        fr_renderer_read_light(g,50u,50u,&far));
+    ASSERT_TRUE(near.l0[0]>far.l0[0]&&near.l0[0]>0.f);
+    free(emission);free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_flame_emission_requires_local_transported_hot_fuel_and_oxygen(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
@@ -472,6 +504,10 @@ int main(int argc,char **argv) {
     }
     if(argc==2&&strcmp(argv[1],"--greek-submerged")==0) {
         RUN(test_submerged_mixed_film_uses_bound_oxidizer_without_deleting_water);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
+    if(argc==2&&strcmp(argv[1],"--fire-light")==0) {
+        RUN(test_fire_emission_enters_directional_light_without_point_sources);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
     }
     if(argc==2&&strcmp(argv[1],"--roof")==0) {

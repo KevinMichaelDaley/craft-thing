@@ -24,6 +24,9 @@ bool fr_renderer_set_sources(dc_gpu_t *gpu,
 /** Render current physics coverage through the separated channels without
  * advancing it. */
 bool fr_renderer_render(dc_gpu_t *gpu, char *err, uint32_t cap);
+/** Read the directional RGB field after rendering for diagnostics. */
+bool fr_renderer_read_light(dc_gpu_t *gpu,uint32_t x,uint32_t y,
+                            fr_renderer_light_field_t *field);
 /** Diagnostic optical query after rendering; never reads back during simulation. */
 bool fr_renderer_read_opacity(dc_gpu_t *gpu,uint32_t x,uint32_t y,
                               fr_occlusion_node_t *node);
