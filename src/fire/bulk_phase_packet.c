@@ -40,15 +40,18 @@ static uint32_t *mutable_channel(fr_bulk_phase_chunk_t *phase,uint32_t index) {
 size_t fr_bulk_phase_chunk_bytes(void) {
     return BULK_HEADER_BYTES+BULK_PAYLOAD_BYTES+BULK_HASH_BYTES;
 }
-static bool valid_cell(const dc_chunk_t *chunk,uint32_t index,uint32_t oil,uint32_t slime) {
-    return (uint64_t)chunk->cells[index].fluid_mass+oil+slime<=FR_BULK_CELL_FULL_FP;
+static bool valid_cell(const dc_chunk_t *chunk,uint32_t index,uint32_t oil,uint32_t slime,
+                       uint32_t oil_retained,uint32_t slime_retained) {
+    return (uint64_t)chunk->cells[index].fluid_mass+oil+slime<=FR_BULK_CELL_FULL_FP&&
+        oil_retained<=oil&&slime_retained<=slime;
 }
 bool fr_bulk_phase_chunk_encode(const dc_chunk_t *chunk,
     const fr_bulk_phase_chunk_t *phase,uint8_t *bytes,size_t capacity) {
     size_t length=fr_bulk_phase_chunk_bytes();
     if(!chunk||!phase||!bytes||capacity<length) return false;
     for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
-        if(!valid_cell(chunk,i,phase->oil_fp[i],phase->slime_fp[i])) return false;
+        if(!valid_cell(chunk,i,phase->oil_fp[i],phase->slime_fp[i],
+            phase->oil_retained_fp[i],phase->slime_retained_fp[i])) return false;
     memcpy(bytes,"BLP1",4);put32(bytes+4,1u);put32(bytes+8,DC_CHUNK_CELLS);put32(bytes+12,0u);
     for(uint32_t k=0;k<4u;k++) for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
         put32(bytes+payload_offset(k,i),channel(phase,k)[i]);
@@ -67,7 +70,9 @@ bool fr_bulk_phase_chunk_decode(const dc_chunk_t *chunk,const uint8_t *bytes,
     for(uint32_t i=0;i<DC_CHUNK_CELLS;i++) {
         uint32_t oil=get32(bytes+payload_offset(0u,i));
         uint32_t slime=get32(bytes+payload_offset(1u,i));
-        if(!valid_cell(chunk,i,oil,slime)) return false;
+        uint32_t oil_retained=get32(bytes+payload_offset(2u,i));
+        uint32_t slime_retained=get32(bytes+payload_offset(3u,i));
+        if(!valid_cell(chunk,i,oil,slime,oil_retained,slime_retained)) return false;
     }
     for(uint32_t k=0;k<4u;k++) for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
         mutable_channel(out,k)[i]=get32(bytes+payload_offset(k,i));

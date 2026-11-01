@@ -36,7 +36,7 @@ bool fr_bulk_phase_set_capacity(const fr_bulk_cell_t *source,uint32_t capacity_f
     const float density[FR_BULK_PHASES],fr_bulk_cell_t *out);
 
 /** Cold chunk channel. Water remains authoritative in dc_cell_t.fluid_mass;
- * these arrays hold only the two added bulk liquids and retained overflow. */
+ * retained arrays mark the part of each phase stock blocked by solid occupancy. */
 typedef struct {
     uint32_t oil_fp[DC_CHUNK_CELLS],slime_fp[DC_CHUNK_CELLS];
     uint32_t oil_retained_fp[DC_CHUNK_CELLS],slime_retained_fp[DC_CHUNK_CELLS];
