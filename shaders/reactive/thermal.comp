@@ -59,6 +59,14 @@ void add_energy(Words entry,float delta) {
     entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY_RESIDUAL]=floatBitsToUint(tail.x);
     entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY_CORRECTION]=floatBitsToUint(tail.y);
 }
+void settle_shock(Words entry) {
+    uint at=FR_ENTRY_STATE+FR_STATE_SHOCK;
+    float shock=uintBitsToFloat(entry.words[at]);
+    if(shock>0.) {
+        add_energy(entry,shock);
+        entry.words[at]=floatBitsToUint(0.);
+    }
+}
 vec4 sample_with_metadata(uint index,out vec4 metadata) {
     metadata=vec4(0);
     uvec2 handle=handle_at(index);
@@ -69,6 +77,7 @@ vec4 sample_with_metadata(uint index,out vec4 metadata) {
         return vec4(water_energy_at(atlas),float(cells[atlas].y)/65536.*coefficient(3u,5u),coefficient(3u,6u),1.);
     }
     Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));uint at=FR_ENTRY_STATE,m=e.words[at];
+    settle_shock(e);
     metadata=vec4(uintBitsToFloat(1u),uintBitsToFloat(e.words[at+12u]),uintBitsToFloat(m),
         round(float(e.words[at+8u])*coefficient(m,19u)));
     if(m>=params.unused) return vec4(0);
@@ -115,6 +124,7 @@ void body_conduction(uint index) {
     if(active_phase()==8u) {
         vec4 value=vec4(0);
         if(e.words[FR_ENTRY_OWNER]==2u&&e.words[FR_ENTRY_GENERATION]!=0u) {
+            settle_shock(e);
             uint s=FR_ENTRY_STATE,m=e.words[s];
             float base=((float(e.words[s+9u])+float(e.words[s+11u])+float(e.words[s+15u]))*coefficient(m,5u)+
                 float(e.words[s+10u])*coefficient(12u,5u)+
