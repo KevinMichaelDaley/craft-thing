@@ -195,6 +195,26 @@ void coating_release_cell(Words entry,uint receiver,float temperature,uint phase
     float drive=max(0.,traction-adhesion)/consistency;
     uint requested=uint(min(float(stock_volume),floor(float(stock_volume)*
         min(1.,pow(drive,1./exponent)*uintBitsToFloat(params.seconds)))));
+    if(phase==2u&&requested>0u) {
+        uint fuel_numerator=entry.words[state+FR_STATE_COATING_JELLY]*
+            FR_COATING_JELLY_FUEL_DEN+
+            ((old_remainder>>FR_COATING_JELLY_FUEL_REM_SHIFT)&FR_COATING_FUEL_REM_MASK);
+        uint low=0u,high=requested;
+        while(low<high) {
+            uint middle=(low+high+1u)/2u;
+            uint next_mass=(stock_numerator-middle*mass_num)/FR_COATING_MASS_DEN;
+            uint removed_mass=old_mass-next_mass;
+            bool feasible=fuel_numerator>=removed_mass*FR_COATING_JELLY_FUEL_NUM;
+            if(feasible) {
+                uint next_fuel=(fuel_numerator-removed_mass*FR_COATING_JELLY_FUEL_NUM)/
+                    FR_COATING_JELLY_FUEL_DEN;
+                feasible=next_fuel<=next_mass;
+            }
+            if(feasible) low=middle;
+            else high=middle-1u;
+        }
+        requested=low;
+    }
     if(requested==0u) return;
     uint base=(receiver/4096u)*FR_BULK_CHUNK_CHANNELS*4096u+receiver%4096u;
     uint volume_at=base+(phase-1u)*4096u;
