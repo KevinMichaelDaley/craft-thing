@@ -79,6 +79,10 @@ static void test_symmetric_deformation_distinguishes_shear_from_rotation(void) {
     ASSERT_TRUE(fr_bulk_rheology_shear_rate(rotation,&rotation_rate));
     ASSERT_EQ(shear_rate,10.f);
     ASSERT_EQ(rotation_rate,0.f);
+    float invalid[4]={0.f,NAN,0.f,0.f};
+    float unchanged=7.f;
+    ASSERT_TRUE(!fr_bulk_rheology_shear_rate(invalid,&unchanged));
+    ASSERT_EQ(unchanged,7.f);
     PASS();
 }
 int main(void) {
