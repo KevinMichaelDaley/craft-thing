@@ -1,23 +1,16 @@
 #ifndef FERRUM_RENDERER_LIGHT_TRANSPORT_H
 #define FERRUM_RENDERER_LIGHT_TRANSPORT_H
-/** Optical properties are independent of collision occupancy. */
+
 #define FR_LEAF_OPACITY .08
 #define FR_LEAF_DEBRIS_OPACITY .04
-#define FR_TRANSPORT_AIR_TRANSMISSION .999
-#define FR_TRANSPORT_FORWARD_FRACTION .995
-#define FR_TRANSPORT_DIFFUSE_FORWARD .99
-#define FR_TRANSPORT_DIFFUSE_INJECTION .01
-#define FR_TRANSPORT_SOURCE_ITERATIONS 3u
-#define FR_TRANSPORT_TILE 32u
-#define FR_TRANSPORT_BEAM_BYTES 20u
-/** Shared CPU/GPU layout of the persistent source-injection buffer. */
-#define FR_TRANSPORT_AGGREGATE_BASE 17u
-#define FR_TRANSPORT_SOURCE_RECORDS 33u
-#define FR_TRANSPORT_SOURCE_RECTS 9u
-#define FR_TRANSPORT_SOURCE_REVISION 73u
-#define FR_TRANSPORT_FIRE_ADDRESS_WORD 74u
-/* Display exposure from finite emitted kW; never feeds thermal inventory. */
+/* Fire samples are aggregated per tile, then gathered radially at each cell. */
+#define FR_TRANSPORT_FIRE_TILE 8u
+#define FR_TRANSPORT_FIRE_RANGE 48u
+#define FR_TRANSPORT_FIRE_SOFTNESS 8.0
+#define FR_TRANSPORT_SOURCE_REVISION 7u
+#define FR_TRANSPORT_FIRE_ADDRESS_WORD 8u
 #define FR_TRANSPORT_FIRE_RADIANCE_PER_KW 4.0
 #define FR_RENDERER_SURFACE_BYTES 28u
 #define FR_RENDERER_FIELD_BYTES 24u
+
 #endif

@@ -5,54 +5,33 @@
 #include "../../include/ferrum/renderer/light_transport.h"
 #include "../../include/dungeoncraft/blackbody.h"
 #include "directional_storage.glsl"
-#ifdef FR_SUBGROUP_SCAN
-#extension GL_KHR_shader_subgroup_basic : require
-#extension GL_KHR_shader_subgroup_shuffle_relative : require
-#endif
-layout(local_size_x=FR_TRANSPORT_TILE) in;
+layout(local_size_x=64) in;
+
 struct OpticalCell {float opacity;uint known;};
 layout(set=0,binding=0,std430) readonly buffer Optics {OpticalCell nodes[];};
 layout(set=0,binding=1,std430) readonly buffer Parameters {uint metadata[];};
 struct Light {vec4 position_radius;vec4 color_intensity;};
 layout(set=0,binding=2,std430) readonly buffer Sources {Light sources[];};
 layout(set=0,binding=3,std430) buffer Fields {PackedField fields[];};
-layout(constant_id=2) const bool SINGLE_VERTICAL=false;
-const uint BEAM_WORDS=SINGLE_VERTICAL?4u:5u;
-const uint REACH_SKY_OR_POINT=1u,REACH_FIRE=2u;
-/* RGB incoming radiance, affine transmission, and RGB vertical moments. */
-struct Beam {vec4 light;vec4 vertical;};
-/* Energy/transmission retain FP32 range. Bounded vertical direction ratios
-   use signed ten-bit components, avoiding half-float overflow for HDR sources. */
-struct PackedBeam {uint r,g,b,t,z;};
-vec4 unpack_direction(uint packed) {
-    return vec4(vec3(bitfieldExtract(int(packed),0,10),
-                     bitfieldExtract(int(packed),10,10),
-                     bitfieldExtract(int(packed),20,10))/511.,float(packed>>30u));
+struct FireTile {vec4 radiance;vec4 center;};
+layout(set=0,binding=4,std430) buffer FireTiles {FireTile fire_tiles[];};
+layout(set=0,binding=5,std430) readonly buffer Pages {uint pages[];};
+layout(set=0,binding=6,std430) buffer Work {uint work[];};
+layout(buffer_reference,std430,buffer_reference_align=16)
+    readonly buffer FireEmission {vec4 values[];};
+layout(push_constant) uniform Push {uint phase;} p;
+
+uint cell_index(ivec2 cell) {return uint(cell.y)*metadata[0]+uint(cell.x);}
+bool inside(ivec2 cell) {
+    return all(greaterThanEqual(cell,ivec2(0)))&&
+           all(lessThan(cell,ivec2(metadata[0],metadata[1])));
 }
-uint pack_direction(vec4 ratio) {
-    uvec3 value=uvec3(ivec3(round(ratio.rgb*511.)))&1023u;
-    return value.x|(value.y<<10u)|(value.z<<20u)|((uint(ratio.a)&3u)<<30u);
+float opacity_at(vec2 point) {
+    ivec2 cell=ivec2(floor(point));
+    if(!inside(cell)) return 1.;
+    uint at=cell_index(cell);
+    return nodes[at].known==0u?1.:clamp(nodes[at].opacity,0.,1.);
 }
-Beam unpack_beam(PackedBeam packed) {
-    vec4 light=uintBitsToFloat(uvec4(packed.r,packed.g,packed.b,packed.t));
-    if(SINGLE_VERTICAL) return Beam(light,vec4(0,0,0,float(packed.z>>30u)));
-    vec4 ratio=unpack_direction(packed.z);
-    return Beam(light,vec4(ratio.rgb*light.rgb,ratio.a));
-}
-PackedBeam pack_beam(Beam beam) {
-    uvec4 light=floatBitsToUint(beam.light);
-    if(SINGLE_VERTICAL) return PackedBeam(light.r,light.g,light.b,light.a,(uint(beam.vertical.a)&3u)<<30u);
-    vec3 ratio=clamp(beam.vertical.rgb/max(beam.light.rgb,vec3(1e-30)),-1.,1.);
-    return PackedBeam(light.r,light.g,light.b,light.a,
-                       pack_direction(vec4(ratio,beam.vertical.a)));
-}
-layout(set=0,binding=4,std430) buffer Local {uint local_words[];};
-layout(set=0,binding=5,std430) buffer Previous {uint previous_words[];};
-layout(set=0,binding=6,std430) buffer Totals {uint total_words[];};
-layout(set=0,binding=7,std430) buffer Work {uint work[];};
-layout(set=0,binding=8,std430) buffer Seeds {PackedBeam seeds[];};
-layout(set=0,binding=9,std430) readonly buffer Pages {uint pages[];};
-layout(buffer_reference,std430,buffer_reference_align=16) readonly buffer FireEmission {vec4 values[];};
 vec3 local_fire(uint index) {
     uvec2 address=uvec2(metadata[FR_TRANSPORT_FIRE_ADDRESS_WORD],
         metadata[FR_TRANSPORT_FIRE_ADDRESS_WORD+1u]);
@@ -70,308 +49,142 @@ vec3 local_fire(uint index) {
     float power=max(0.,source.x)*visible*float(FR_TRANSPORT_FIRE_RADIANCE_PER_KW);
     return fr_blackbody_rgb(source.y,power,magical,magic);
 }
-Beam read_local(uint index) {
-    uint at=index*BEAM_WORDS;
-    return unpack_beam(PackedBeam(local_words[at],local_words[at+1u],local_words[at+2u],local_words[at+3u],SINGLE_VERTICAL?0u:local_words[at+4u]));
+float radial_falloff(float distance_to_source,float range) {
+    if(distance_to_source>=range) return 0.;
+    float scale=max(1.,range/6.);
+    float squared=distance_to_source*distance_to_source/(scale*scale);
+    float edge=clamp((range-distance_to_source)/max(1.,range*.25),0.,1.);
+    return edge*edge*(3.-2.*edge)/(1.+squared);
 }
-void write_local(uint index,Beam beam) {
-    uint at=index*BEAM_WORDS;PackedBeam p=pack_beam(beam);
-    local_words[at]=p.r;local_words[at+1u]=p.g;local_words[at+2u]=p.b;local_words[at+3u]=p.t;
-    if(!SINGLE_VERTICAL) local_words[at+4u]=p.z;
-}
-Beam read_previous(uint index) {
-    uint at=index*BEAM_WORDS;
-    return unpack_beam(PackedBeam(previous_words[at],previous_words[at+1u],previous_words[at+2u],previous_words[at+3u],SINGLE_VERTICAL?0u:previous_words[at+4u]));
-}
-void write_previous(uint index,Beam beam) {
-    uint at=index*BEAM_WORDS;PackedBeam p=pack_beam(beam);
-    previous_words[at]=p.r;previous_words[at+1u]=p.g;previous_words[at+2u]=p.b;previous_words[at+3u]=p.t;
-    if(!SINGLE_VERTICAL) previous_words[at+4u]=p.z;
-}
-Beam read_total(uint index) {
-    uint at=index*BEAM_WORDS;
-    return unpack_beam(PackedBeam(total_words[at],total_words[at+1u],total_words[at+2u],total_words[at+3u],SINGLE_VERTICAL?0u:total_words[at+4u]));
-}
-void write_total(uint index,Beam beam) {
-    uint at=index*BEAM_WORDS;PackedBeam p=pack_beam(beam);
-    total_words[at]=p.r;total_words[at+1u]=p.g;total_words[at+2u]=p.b;total_words[at+3u]=p.t;
-    if(!SINGLE_VERTICAL) total_words[at+4u]=p.z;
-}
-layout(push_constant) uniform Push {uint phase,level,iteration,commands;} p;
-layout(constant_id=0) const uint TRANSPORT_PHASE=99u;
-layout(constant_id=1) const uint TRANSPORT_ITERATION=99u;
-#define PHASE (TRANSPORT_PHASE==99u?p.phase:TRANSPORT_PHASE)
-#define ITERATION (TRANSPORT_ITERATION==99u?p.iteration:TRANSPORT_ITERATION)
-#ifdef FR_SUBGROUP_SCAN
-shared vec4 prefix_light[8];
-shared vec4 prefix_vertical[8];
-#else
-shared vec4 prefix_light[FR_TRANSPORT_TILE];
-shared vec4 prefix_vertical[FR_TRANSPORT_TILE];
-#endif
-Beam read_prefix(uint index) {
-    return Beam(prefix_light[index],SINGLE_VERTICAL?vec4(0):prefix_vertical[index]);
-}
-void write_prefix(uint index,Beam beam) {
-    prefix_light[index]=beam.light;
-    if(!SINGLE_VERTICAL) prefix_vertical[index]=beam.vertical;
-}
-Beam identity() {return Beam(vec4(0,0,0,1),vec4(0));}
-Beam compose(Beam current,Beam preceding) {
-    if(!SINGLE_VERTICAL) current.vertical.rgb+=current.light.a*preceding.vertical.rgb;
-    current.vertical.a=float(uint(current.vertical.a)|uint(preceding.vertical.a));
-    current.light.rgb+=current.light.a*preceding.light.rgb;
-    current.light.a*=preceding.light.a;return current;
-}
-#ifdef FR_SUBGROUP_SCAN
-Beam subgroup_scan(Beam value) {
-    for(uint stride=1u;stride<gl_SubgroupSize;stride*=2u) {
-        vec4 vertical=vec4(0);
-        if(!SINGLE_VERTICAL) vertical=subgroupShuffleUp(value.vertical,stride);
-        Beam before=Beam(subgroupShuffleUp(value.light,stride),vertical);
-        if(gl_SubgroupInvocationID>=stride) value=compose(value,before);
-    }
-    return value;
-}
-Beam scan(Beam value) {
-    value=subgroup_scan(value);
-    if(gl_NumSubgroups==1u) return value;
-    if(gl_SubgroupInvocationID==gl_SubgroupSize-1u)
-        write_prefix(gl_SubgroupID,value);
-    barrier();
-    if(gl_SubgroupID==0u) {
-        Beam total=gl_SubgroupInvocationID<gl_NumSubgroups?
-            read_prefix(gl_SubgroupInvocationID):identity();
-        total=subgroup_scan(total);
-        if(gl_SubgroupInvocationID<gl_NumSubgroups)
-            write_prefix(gl_SubgroupInvocationID,total);
-    }
-    barrier();
-    if(gl_SubgroupID>0u) value=compose(value,read_prefix(gl_SubgroupID-1u));
-    return value;
-}
-#else
-Beam scan(Beam value) {
-    uint lane=gl_LocalInvocationIndex;write_prefix(lane,value);barrier();
-    for(uint stride=1u;stride<FR_TRANSPORT_TILE;stride*=2u) {
-        Beam current=read_prefix(lane),preceding=read_prefix(lane>=stride?lane-stride:lane);
-        barrier();
-        if(lane>=stride) current=compose(current,preceding);
-        write_prefix(lane,current);barrier();
-    }
-    return read_prefix(lane);
-}
-#endif
-uint length_at(uint direction,uint level) {
-    uint length=ITERATION==1u?min(metadata[0],metadata[1]):direction<2u?metadata[0]:metadata[1];
-    for(uint step=0u;step<=level;step++) length=(length+(FR_TRANSPORT_TILE-1u))/FR_TRANSPORT_TILE;
-    return length;
-}
-uint line_count(uint direction) {return ITERATION==1u?metadata[0]+metadata[1]-1u:direction<2u?metadata[1]:metadata[0];}
-uint block_offset(uint direction,uint level,uint line,uint index) {
-    uint base=direction==0u?0u:direction==1u?metadata[6]:2u*metadata[6]+(direction==3u?metadata[7]:0u);
-    if(ITERATION==1u) {
-        uint count=length_at(direction,0u),total=count;
-        while(count>1u) {count=(count+(FR_TRANSPORT_TILE-1u))/FR_TRANSPORT_TILE;total+=count;}
-        base=direction*total*line_count(direction);
-    }
-    for(uint step=0u;step<level;step++) base+=length_at(direction,step)*line_count(direction);
-    return base+line*length_at(direction,level)+index;
-}
-ivec2 travel(uint direction) {
-    if(ITERATION==1u) return ivec2((direction&1u)==0u?1:-1,direction<2u?1:-1);
-    return direction==0u?ivec2(1,0):direction==1u?ivec2(-1,0):direction==2u?ivec2(0,1):ivec2(0,-1);
-}
-ivec2 scan_cell(uint direction,uint line,uint along) {
-    if(ITERATION==1u) {
-        ivec2 cell=line<metadata[0]?ivec2(line,0):ivec2(0,line-metadata[0]+1u);
-        cell+=ivec2(along);
-        if((direction&1u)!=0u) cell.x=int(metadata[0])-1-cell.x;
-        if(direction>=2u) cell.y=int(metadata[1])-1-cell.y;
-        return cell;
-    }
-    uint length=direction<2u?metadata[0]:metadata[1];
-    uint coordinate=(direction&1u)==0u?along:length-1u-along;
-    return direction<2u?ivec2(coordinate,line):ivec2(line,coordinate);
-}
-uvec2 scan_address(ivec2 cell,uint direction) {
-    if(ITERATION==1u) {
-        if((direction&1u)!=0u) cell.x=int(metadata[0])-1-cell.x;
-        if(direction>=2u) cell.y=int(metadata[1])-1-cell.y;
-        return cell.x>=cell.y?uvec2(cell.x-cell.y,cell.y):uvec2(int(metadata[0])+cell.y-cell.x-1,cell.x);
-    }
-    uint length=direction<2u?metadata[0]:metadata[1],coordinate=uint(direction<2u?cell.x:cell.y);
-    return uvec2(direction<2u?cell.y:cell.x,(direction&1u)==0u?coordinate:length-1u-coordinate);
-}
-bool inside(ivec2 cell) {return all(greaterThanEqual(cell,ivec2(0)))&&all(lessThan(cell,ivec2(metadata[0],metadata[1])));}
-uint index_at(ivec2 cell) {return uint(cell.y)*metadata[0]+uint(cell.x);}
-Beam inject(ivec2 cell,uint direction) {
-    uint index=index_at(cell);
-    if(nodes[index].known==0u) return Beam(vec4(0),vec4(0));
-    vec3 z=vec3(0),energy=vec3(0);float fire_marker=0.;
-    if(ITERATION<=1u) {
-        Beam seed=unpack_beam(seeds[index]);energy=seed.light.rgb;z=seed.vertical.rgb;
-        fire_marker=(uint(seed.vertical.a)&REACH_FIRE)!=0u?float(REACH_FIRE):0.;
-        if(ITERATION==1u) {energy*=.5;z*=.5;}
-    }
-    ivec2 preceding=cell-travel(direction);float transmission=0.;
-    if(inside(preceding)) {
-        uint before=index_at(preceding);
-        if(nodes[before].known!=0u) {
-            transmission=1.-nodes[before].opacity;
-            if(ITERATION<=1u&&uintBitsToFloat(seeds[before].t)>0.) transmission=1.;
-            transmission*=ITERATION==1u?FR_TRANSPORT_AIR_TRANSMISSION*FR_TRANSPORT_AIR_TRANSMISSION:FR_TRANSPORT_AIR_TRANSMISSION;
-            if(ITERATION!=0u) {
-                vec3 scatter=vec3(0),scatter_z=vec3(0);
-                Beam incoming=read_previous(before);scatter=incoming.light.rgb;scatter_z=incoming.vertical.rgb;
-                float weight=transmission*FR_TRANSPORT_DIFFUSE_INJECTION*.25;
-                energy+=weight*scatter;z+=weight*scatter_z;
-            }
+/* Five weighted rays approximate an area emitter. Their overlapping
+   penumbrae soften contact shadows without extending them past range. */
+float soft_visibility(vec2 source,vec2 destination) {
+    vec2 delta=destination-source;
+    float distance_to_source=length(delta);
+    if(distance_to_source<=1.5) return 1.;
+    vec2 side=vec2(-delta.y,delta.x)/distance_to_source;
+    int steps=clamp(int(ceil(distance_to_source)),1,48);
+    float total=0.;
+    for(int ray=-2;ray<=2;ray++) {
+        float transmission=1.;
+        vec2 offset=side*float(ray)*.75;
+        for(int i=1;i<=48;i++) {
+            if(i>=steps) break;
+            float t=float(i)/float(steps);
+            float opacity=opacity_at(mix(source+offset,destination,t));
+            transmission*=1.-opacity;
+            if(transmission<.001) break;
         }
-    } else if(ITERATION<=1u) {
-        Light sun=sources[metadata[3]];
-        uint bit=direction==0u?1u:direction==1u?2u:direction==2u?4u:8u;
-        vec2 incoming=sun.position_radius.xy;
-        float weight=max(0.,-dot(vec2(travel(direction)),incoming));
-        if(length(incoming)<1e-6&&direction==2u) weight=1.;
-        if(ITERATION==1u) {
-            bit=0u;
-            if(preceding.x<0) bit|=1u;if(preceding.x>=int(metadata[0])) bit|=2u;
-            if(preceding.y<0) bit|=4u;if(preceding.y>=int(metadata[1])) bit|=8u;
-            weight=.35;
-        }
-        if((metadata[5]&bit)!=0u) {
-            vec3 sky=sun.color_intensity.rgb*sun.color_intensity.a*weight;
-            energy+=sky;z+=sky*sun.position_radius.z;
+        total+=transmission*float(3-abs(ray));
+    }
+    return total/9.;
+}
+float local_ambient_visibility(vec2 destination) {
+    const vec2 offsets[8]=vec2[8](
+        vec2(2,0),vec2(-2,0),vec2(0,2),vec2(0,-2),
+        vec2(4,4),vec2(-4,4),vec2(4,-4),vec2(-4,-4));
+    float blocked=0.;
+    for(int i=0;i<8;i++) blocked+=opacity_at(destination+offsets[i]);
+    return clamp(1.-blocked/8.,0.,1.);
+}
+void add_source(inout vec3 energy,inout vec3 mx,inout vec3 my,inout vec3 mz,
+                vec3 radiance,vec2 source,vec2 destination,
+                float height,float range) {
+    vec2 delta=destination-source;
+    float distance_to_source=length(vec3(delta,height));
+    float falloff=radial_falloff(distance_to_source,range);
+    if(falloff<=0.) return;
+    vec3 amount=radiance*falloff*soft_visibility(source,destination);
+    energy+=amount;
+    vec3 direction=normalize(vec3(-delta,height)+vec3(0.,0.,1e-6));
+    mx+=amount*direction.x;
+    my+=amount*direction.y;
+    mz+=amount*direction.z;
+}
+void aggregate_fire_tile(uint tile_index) {
+    if(tile_index>=metadata[2]*metadata[3]) return;
+    uint tx=tile_index%metadata[2],ty=tile_index/metadata[2];
+    vec3 radiance=vec3(0.);
+    vec2 weighted_position=vec2(0.);
+    float weight=0.;
+    for(uint y=0u;y<FR_TRANSPORT_FIRE_TILE;y++)
+    for(uint x=0u;x<FR_TRANSPORT_FIRE_TILE;x++) {
+        ivec2 cell=ivec2(tx*FR_TRANSPORT_FIRE_TILE+x,ty*FR_TRANSPORT_FIRE_TILE+y);
+        if(!inside(cell)) continue;
+        uint at=cell_index(cell);
+        if(nodes[at].known==0u) continue;
+        vec3 color=local_fire(at);
+        float luminous=max(color.r,max(color.g,color.b));
+        radiance+=color;
+        weighted_position+=(vec2(cell)+.5)*luminous;
+        weight+=luminous;
+    }
+    vec2 center=weight>0.?weighted_position/weight:
+        (vec2(tx,ty)+.5)*float(FR_TRANSPORT_FIRE_TILE);
+    fire_tiles[tile_index]=FireTile(vec4(radiance,weight),vec4(center,0.,0.));
+}
+void shade_cell(uint index) {
+    if(index>=metadata[0]*metadata[1]) return;
+    if(nodes[index].known==0u) {
+        fields[index]=renderer_pack_field(Field(vec4(0),vec4(0),vec4(0),vec4(0)));
+        return;
+    }
+    vec2 destination=vec2(index%metadata[0],index/metadata[0])+.5;
+    vec3 energy=vec3(0.),mx=vec3(0.),my=vec3(0.),mz=vec3(0.);
+    Light sun=sources[16];
+    if(metadata[6]!=0u&&sun.color_intensity.a>0.) {
+        float boundary=float(metadata[5]);
+        if((metadata[6]&1u)!=0u) boundary=min(boundary,destination.x);
+        if((metadata[6]&2u)!=0u) boundary=min(boundary,float(metadata[0])-destination.x);
+        if((metadata[6]&4u)!=0u) boundary=min(boundary,destination.y);
+        if((metadata[6]&8u)!=0u) boundary=min(boundary,float(metadata[1])-destination.y);
+        float ambient=.25+.75*local_ambient_visibility(destination);
+        vec3 amount=sun.color_intensity.rgb*sun.color_intensity.a*ambient*
+            radial_falloff(boundary,float(metadata[5]));
+        energy+=amount;
+        vec3 incoming=normalize(sun.position_radius.xyz+vec3(0.,0.,1e-6));
+        mx-=amount*incoming.x;
+        my-=amount*incoming.y;
+        mz+=amount*incoming.z;
+    }
+    for(uint i=0u;i<metadata[4];i++) {
+        Light point=sources[i];
+        float range=min(point.position_radius.w,float(metadata[5]));
+        if(point.color_intensity.a<=0.||range<=0.) continue;
+        add_source(energy,mx,my,mz,
+            point.color_intensity.rgb*point.color_intensity.a,
+            point.position_radius.xy,destination,point.position_radius.z,range);
+    }
+    if((metadata[FR_TRANSPORT_FIRE_ADDRESS_WORD]|
+        metadata[FR_TRANSPORT_FIRE_ADDRESS_WORD+1u])!=0u) {
+        int tile_x=int(floor(destination.x/float(FR_TRANSPORT_FIRE_TILE)));
+        int tile_y=int(floor(destination.y/float(FR_TRANSPORT_FIRE_TILE)));
+        int reach=int(ceil(float(FR_TRANSPORT_FIRE_RANGE)/float(FR_TRANSPORT_FIRE_TILE)))+1;
+        for(int dy=-reach;dy<=reach;dy++)
+        for(int dx=-reach;dx<=reach;dx++) {
+            ivec2 tile=ivec2(tile_x+dx,tile_y+dy);
+            if(any(lessThan(tile,ivec2(0)))||
+               any(greaterThanEqual(tile,ivec2(metadata[2],metadata[3])))) continue;
+            FireTile fire=fire_tiles[uint(tile.y)*metadata[2]+uint(tile.x)];
+            if(fire.radiance.a<=0.) continue;
+            add_source(energy,mx,my,mz,fire.radiance.rgb,fire.center.xy,
+                destination,0.,float(FR_TRANSPORT_FIRE_RANGE));
         }
     }
-    float forward=ITERATION<=1u?FR_TRANSPORT_FORWARD_FRACTION:FR_TRANSPORT_DIFFUSE_FORWARD;
-    return Beam(vec4(energy,transmission*forward),vec4(z,fire_marker));
-}
-bool sky_reachable(ivec2 cell) {
-    float budget=float(metadata[4]);
-    if(sources[metadata[3]].color_intensity.a<=0.) return false;
-    return ((metadata[5]&1u)!=0u&&float(cell.x)<=budget)||
-           ((metadata[5]&2u)!=0u&&float(int(metadata[0])-1-cell.x)<=budget)||
-           ((metadata[5]&4u)!=0u&&float(cell.y)<=budget)||
-           ((metadata[5]&8u)!=0u&&float(int(metadata[1])-1-cell.y)<=budget);
+    fields[index]=renderer_pack_field(Field(vec4(energy,0.),
+        vec4(mx,0.),vec4(my,0.),vec4(mz,0.)));
 }
 void main() {
-    uint lane=gl_LocalInvocationIndex;
-    uint group=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x;
-    uint global=group*FR_TRANSPORT_TILE+lane;
-    if(PHASE==4u) {
-        if(global<p.commands) {
-            bool enabled=work[0]!=0u&&(global>=2u||work[1]!=metadata[FR_TRANSPORT_SOURCE_REVISION]);
-            work[4u+global*4u]=enabled?work[7u+global*4u]:0u;
+    uint index=gl_GlobalInvocationID.x;
+    if(p.phase==2u) {
+        if(index==0u) {
+            bool enabled=work[0]!=0u;
+            work[1]=enabled?(metadata[2]*metadata[3]+63u)/64u:0u;
+            work[2]=1u;work[3]=1u;
+            work[4]=enabled?(metadata[0]*metadata[1]+63u)/64u:0u;
+            work[5]=1u;work[6]=1u;
+            if(enabled) atomicAdd(work[7],1u);
         }
-        return;
-    }
-    if(work[0]==0u) return;
-    if(PHASE==5u) {
-        if(global>=metadata[0]*metadata[1]) return;
-        if(global==0u) {work[1]=metadata[FR_TRANSPORT_SOURCE_REVISION];work[2]++;}
-        ivec2 cell=ivec2(global%metadata[0],global/metadata[0]);
-        vec3 fire=nodes[global].known!=0u?local_fire(global):vec3(0.);
-        bool lit=any(greaterThan(fire,vec3(0.)));
-        PackedBeam seed=pack_beam(Beam(vec4(fire,lit?1.:0.),
-            vec4(0.,0.,0.,lit?float(REACH_FIRE):0.)));
-        seed.z|=(sky_reachable(cell)?REACH_SKY_OR_POINT:0u)<<30u;
-        seeds[global]=seed;
-        return;
-    }
-    if(PHASE==6u) {
-        uint source=gl_WorkGroupID.z,at=FR_TRANSPORT_SOURCE_RECTS+4u*source;
-        uvec2 size=uvec2(metadata[at+2u],metadata[at+3u]);
-        if(global>=size.x*size.y) return;
-        ivec2 cell=ivec2(metadata[at],metadata[at+1u])+ivec2(global%size.x,global/size.x);
-        uint index=index_at(cell);
-        Light light=sources[source];
-        bool reaches=light.color_intensity.a>0.&&distance(vec2(cell)+.5,light.position_radius.xy)<=min(float(metadata[4]),light.position_radius.w);
-        uint bits=uint(reaches)<<30u;
-        if(all(equal(vec2(cell),floor(light.position_radius.xy)))) {
-            Light aggregate=sources[FR_TRANSPORT_AGGREGATE_BASE+source];
-            vec3 energy=aggregate.position_radius.rgb;
-            if(any(greaterThan(energy,vec3(0)))) {
-                Beam prior=unpack_beam(seeds[index]);
-                PackedBeam seed=pack_beam(Beam(vec4(prior.light.rgb+energy,1.),
-                    vec4(prior.vertical.rgb+aggregate.color_intensity.rgb,prior.vertical.a)));
-                seeds[index].r=seed.r;seeds[index].g=seed.g;
-                seeds[index].b=seed.b;seeds[index].t=seed.t;
-                bits|=seed.z;
-            }
-        }
-        atomicOr(seeds[index].z,bits);
-        return;
-    }
-    uint direction=gl_WorkGroupID.z;
-    if(PHASE==0u) {
-        uint length=ITERATION==1u?min(metadata[0],metadata[1]):direction<2u?metadata[0]:metadata[1],blocks=(length+(FR_TRANSPORT_TILE-1u))/FR_TRANSPORT_TILE;
-        uint line=group/blocks,tile=group%blocks,along=tile*FR_TRANSPORT_TILE+lane;
-        if(ITERATION==1u) {
-            uint count=metadata.length();
-            if(136u+2u*group+1u>=count) return;
-            line=metadata[136u+2u*group];tile=metadata[137u+2u*group];
-            along=tile*FR_TRANSPORT_TILE+lane;
-        }
-        if(line>=line_count(direction)) return;
-        /* Diagonals have different lengths. Padded tiles carry identity, but
-           must not run a full shared/subgroup scan over absent pixels. */
-        if(!inside(scan_cell(direction,line,tile*FR_TRANSPORT_TILE))) {
-            if(lane==0u) write_total(block_offset(direction,0u,line,tile),identity());
-            return;
-        }
-        ivec2 cell=scan_cell(direction,line,along);bool valid=along<length&&inside(cell);
-        Beam scanned=scan(valid?inject(cell,direction):identity());
-        if(valid) write_local(direction*metadata[0]*metadata[1]+index_at(cell),scanned);
-        if(lane==(FR_TRANSPORT_TILE-1u)) write_total(block_offset(direction,0u,line,tile),scanned);
-        return;
-    }
-    if(PHASE==1u) {
-        uint length=length_at(direction,p.level),blocks=(length+(FR_TRANSPORT_TILE-1u))/FR_TRANSPORT_TILE;
-        uint line=group/blocks,tile=group%blocks,along=tile*FR_TRANSPORT_TILE+lane;
-        if(length<=1u||line>=line_count(direction)) return;
-        bool present=along<length;
-        if(ITERATION==1u&&p.level==0u)
-            present=present&&inside(scan_cell(direction,line,along*FR_TRANSPORT_TILE));
-        Beam scanned=scan(present?read_total(block_offset(direction,p.level,line,along)):identity());
-        if(along<length) write_total(block_offset(direction,p.level,line,along),scanned);
-        if(lane==(FR_TRANSPORT_TILE-1u)) write_total(block_offset(direction,p.level+1u,line,tile),scanned);
-        return;
-    }
-    if(PHASE==2u) {
-        uint length=length_at(direction,p.level),line=global/length,along=global%length,tile=along/FR_TRANSPORT_TILE;
-        if(length<=FR_TRANSPORT_TILE||line>=line_count(direction)||tile==0u) return;
-        uint at=block_offset(direction,p.level,line,along);
-        write_total(at,compose(read_total(at),read_total(block_offset(direction,p.level+1u,line,tile-1u))));return;
-    }
-    if(global>=metadata[0]*metadata[1]) return;
-    ivec2 cell=ivec2(global%metadata[0],global/metadata[0]);
-    bool valid=nodes[global].known!=0u;
-    bool known=valid&&(seeds[global].z&(REACH_SKY_OR_POINT<<30u))!=0u;
-    bool fire_reached=false;
-    vec3 energy=vec3(0),mx=vec3(0),my=vec3(0),mz=vec3(0);
-    for(uint d=0u;d<4u;d++) {
-        uvec2 address=scan_address(cell,d);uint line=address.x,tile=address.y/FR_TRANSPORT_TILE;
-        Beam beam=read_local(d*metadata[0]*metadata[1]+global);
-        if(tile>0u) beam=compose(beam,read_total(block_offset(d,0u,line,tile-1u)));
-        if(!valid) beam=Beam(vec4(0),vec4(0));
-        fire_reached=fire_reached||
-            ((uint(beam.vertical.a)&REACH_FIRE)!=0u&&
-             any(greaterThan(beam.light.rgb,vec3(0.))));
-
-        vec3 vertical=SINGLE_VERTICAL?beam.light.rgb*sources[metadata[3]].position_radius.w:
-            clamp(beam.vertical.rgb,-beam.light.rgb,beam.light.rgb);
-        vec3 planar=SINGLE_VERTICAL?beam.light.rgb*uintBitsToFloat(metadata[8]):
-            sqrt(max(vec3(0),beam.light.rgb*beam.light.rgb-vertical*vertical));
-        vec2 axis=normalize(vec2(travel(d)));energy+=beam.light.rgb;mx-=axis.x*planar;my-=axis.y*planar;mz+=vertical;
-    }
-    if(!known&&!fire_reached) energy=mx=my=mz=vec3(0.);
-    write_previous(global,Beam(vec4(energy,0),vec4(mz,0)));
-    if(ITERATION!=0u) {
-        Field prior=renderer_unpack_field(fields[global]);
-        energy+=prior.l0.rgb;mx+=prior.lx.rgb;
-        my+=prior.ly.rgb;mz+=prior.lz.rgb;
-    }
-    fields[global]=renderer_pack_field(Field(vec4(energy,0),vec4(mx,0),vec4(my,0),vec4(mz,0)));
+    } else if(p.phase==0u) aggregate_fire_tile(index);
+    else shade_cell(index);
 }

@@ -30,22 +30,13 @@ typedef struct {
 } fr_renderer_light_field_t;
 typedef struct fr_lighting_gpu fr_lighting_gpu_t;
 
-/** Allocate a directional field coupled to the authoritative optical cells. */
+/** Allocate a radial light field coupled to the authoritative optical cells. */
 bool fr_lighting_gpu_create(dc_gpu_t *gpu, fr_occlusion_gpu_t *occlusion,
                             fr_lighting_gpu_t **out, char *err, uint32_t cap);
 /** Release field resources before releasing the referenced hierarchy/context.
  */
 void fr_lighting_gpu_destroy(fr_lighting_gpu_t *lighting);
-/** Planned scan workgroups per direction, without GPU synchronization. */
-uint32_t fr_lighting_gpu_scan_groups(const fr_lighting_gpu_t *lighting,
-                                      uint32_t iteration);
-/** Working beam byte stride; seed storage and maximum allocation are separate. */
-uint32_t fr_lighting_gpu_beam_stride(const fr_lighting_gpu_t *lighting);
-/** Number of independent affine scan values, including transmission. */
-uint32_t fr_lighting_gpu_scan_channels(const fr_lighting_gpu_t *lighting);
-/** Planned point-source injection cells; excludes the parallel buffer clear. */
-uint32_t fr_lighting_gpu_source_cells(const fr_lighting_gpu_t *lighting);
-/** Completed source-buffer builds; read only after GPU completion. */
+/** Completed field builds; read only after GPU completion. */
 uint32_t fr_lighting_gpu_source_builds(const fr_lighting_gpu_t *lighting);
 /** Explicit light edit. Propagation reach is measured in scene cells;
  * unknown residency blocks transport. */
@@ -53,9 +44,7 @@ bool fr_lighting_gpu_set_sources(fr_lighting_gpu_t *lighting,
                                  const fr_renderer_point_light_t *points,
                                  uint32_t count, fr_renderer_sun_t sun,
                                  uint32_t propagation_reach);
-/** Read current optical cells directly; no hierarchy rebuild is required.
- * Inject sky/emitter radiance, propagate directional beams with parallel
- * affine scans, then aggregate deterministic RGB energy and first moments. */
+/** Gather finite-range local sources with radial falloff and soft occlusion. */
 bool fr_lighting_gpu_generate(fr_lighting_gpu_t *lighting, char *err,
                               uint32_t cap);
 /** Diagnostic access to HDR moments, independent of material/color. */
