@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "dungeoncraft/gpu.h"
 #include "ferrum/fire/bulk_phase_gpu.h"
@@ -484,7 +485,13 @@ static void test_material_mass_controls_velocity_relaxation_toward_flow(void) {
     PASS();
 }
 
-int main(void) {
+int main(int argc,char **argv) {
+    if(argc==2&&strcmp(argv[1],"--slime-validation")==0) {
+        RUN(test_slime_buoys_wood_and_receives_opposite_impulse);
+        RUN(test_slime_flow_drags_wood_with_balanced_horizontal_momentum);
+        RUN(test_retained_only_slime_does_not_buoy_a_body);
+        printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
     RUN(test_dry_wood_falls);
     RUN(test_submerged_wood_accelerates_from_material_density);
     RUN(test_slime_buoys_wood_and_receives_opposite_impulse);

@@ -36,3 +36,7 @@ Trial fused CLEAR into PREPARE: focused rigid/command/grain tests passed, half-n
 **2026-10-30T21:31:19Z**
 
 Current normal-clock scheduler in src/vulkan/tick_gpu.c accumulates seconds*60 into rigid_step_budget and records each whole rigid step. At 33ms displayed frame it schedules about2 rigid ticks/frame; at sustained41ms about2.5, amplifying solver cost. 2026-10-30 actual half-native32-frame mean33.0ms at P0 1770-1875MHz, long3000-frame41.1ms. Quarter mean16.6ms. Preserve clock; performance fix must reduce per-step rigid cost enough to escape this feedback.
+
+**2026-11-01T09:38:07Z**
+
+2026-11-01 quarter-native Wayland displayed 480x270 physics / 1920x1080 output, 180 samples, eight 4x4 wood rigid bodies: dry basin 47.281 ms/frame, water basin 48.565 ms/frame, dense slime basin 49.687 ms/frame; GPU rigid 32.171/39.686/27.385 ms respectively. Repeated water and slime runs were 48.829 and 48.062 ms/frame, respectively, so the phase difference is within run variance. All eight-body scenarios miss 30 ms. Fixture is DC_BENCH_DRY_BODIES, DC_BENCH_WATER_BODIES, or DC_BENCH_SLUDGE_BODIES with build/quarter_native_bench.

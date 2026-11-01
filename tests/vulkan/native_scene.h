@@ -70,7 +70,7 @@ static inline uint32_t native_scene_sludge(dc_chunk_t *chunk,
 /** Position one of eight independent rigid stress bodies inside the slime basin. */
 static inline bool native_scene_sludge_body(uint32_t index,uint32_t width,
     uint32_t height,uint32_t *x,uint32_t *y) {
-    if(index>=8u||width<128u||height<64u||!x||!y) return false;
+    if(index>=8u||width<256u||height<128u||!x||!y) return false;
     uint32_t spacing=(width/3u-16u)/8u;
     *x=width/3u+8u+index*spacing;
     *y=height*2u/3u;

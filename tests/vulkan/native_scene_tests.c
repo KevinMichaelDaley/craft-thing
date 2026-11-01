@@ -95,6 +95,7 @@ static void test_sludge_stress_bodies_fit_inside_basin(void) {
     }
     uint32_t x=0u,y=0u;
     ASSERT_TRUE(!native_scene_sludge_body(8u,480u,270u,&x,&y));
+    ASSERT_TRUE(!native_scene_sludge_body(0u,128u,270u,&x,&y));
     PASS();
 }
 

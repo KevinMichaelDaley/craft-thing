@@ -174,7 +174,7 @@ int main(int argc, char **argv) {
     printf("samples=%u initial_grains=%u initial_water_cells=%.2f\n",
            samples, particles, (double)water / DC_FLUID_FULL);
     if(sludge) printf("initial_slime_cells=%" PRIu64 "\n",slime);
-    if(body_benchmark) printf("initial_liquid_bodies=8\n");
+    if(body_benchmark) printf("initial_rigid_bodies=8\n");
 #ifdef DC_QUARTER_NATIVE_VIEW
     printf("fluid_interval=%u physics_seconds=%.6f display=%ux%u\n",
            FLUID_INTERVAL, 1.0 / 60.0, VIEW_WIDTH * WINDOW_SCALE,
