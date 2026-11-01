@@ -144,12 +144,12 @@ static void test_bulk_packet_rejects_retained_volume_larger_than_stock(void) {
 static void test_bulk_packet_reserves_oil_and_slime_heat_channels(void) {
     dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_bulk_phase_chunk_t *phase=calloc(1,sizeof(*phase));
-    size_t expected=16u+6u*DC_CHUNK_CELLS*sizeof(uint32_t)+8u;
+    size_t expected=16u+10u*DC_CHUNK_CELLS*sizeof(uint32_t)+8u;
     uint8_t *bytes=malloc(expected);
     ASSERT_TRUE(chunk&&phase&&bytes);
     ASSERT_EQ(fr_bulk_phase_chunk_bytes(),expected);
     ASSERT_TRUE(fr_bulk_phase_chunk_encode(chunk,phase,bytes,expected));
-    ASSERT_TRUE(memcmp(bytes,"BLP2",4u)==0);
+    ASSERT_TRUE(memcmp(bytes,"BLP3",4u)==0);
     free(bytes);free(phase);free(chunk);PASS();
 }
 static void test_bulk_packet_rejects_nonfinite_phase_heat_transactionally(void) {
