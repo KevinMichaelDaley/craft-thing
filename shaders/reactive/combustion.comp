@@ -369,8 +369,9 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
     if(entry.words[FR_ENTRY_GENERATION]!=handle.y||entry.words[FR_ENTRY_OWNER]!=owner) return;
     evaporate_entry(entry,gas);
     uint s=FR_ENTRY_STATE,m=entry.words[s],wood_fuel=entry.words[s+9u];
-    if((entry.words[s+FR_STATE_COATING_REMAINDERS]|entry.words[s+13u]|
-        entry.words[s+14u]|entry.words[s+15u]|entry.words[s+16u])!=0u) return;
+    uint coating_remainders=entry.words[s+FR_STATE_COATING_REMAINDERS];
+    if(((coating_remainders&~FR_COATING_REM_MASK)|entry.words[s+14u]|
+        entry.words[s+15u]|entry.words[s+16u])!=0u) return;
     bool char_stage=wood_fuel==0u;uint fuel=char_stage?entry.words[s+10u]:wood_fuel;
     if(owner==2u&&char_stage&&fuel>0u) atomicAdd(hud[25],1u);
     uint profile=char_stage?12u:m;
@@ -381,6 +382,8 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
 #ifdef FR_BODY_REACTIONS
         if(owner==2u) Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u])).words[handle.x*12u+6u]=0u;
 #endif
+        if(entry.words[s+FR_STATE_COATING_OIL]!=0u||
+           (coating_remainders&FR_COATING_REM_MASK)!=0u) return;
         if(owner==1u) loose_ash(position,at,handle,entry,gas);return;
     }
     if(base<=0.) return;
@@ -409,6 +412,10 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
     float rate=temperature>=coefficient(profile,7u)?coefficient(profile,8u)*
         (dry*dry+wet*coefficient(profile,22u))*(1.+uintBitsToFloat(entry.words[s+18u])*(coefficient(profile,20u)-1.))*
         max(oxygen,0.)/float(FR_COMBUSTION_AMBIENT_OXYGEN):0.;
+    float oil_mass=float(entry.words[s+FR_STATE_COATING_OIL])+
+        float(coating_remainders&FR_COATING_REM_MASK)/float(FR_COATING_MASS_DEN);
+    float coverage=min(1.,oil_mass/max(1.,float(entry.words[s+8u])));
+    rate*=1.+coverage*max(0.,coefficient(FR_COATING_OIL_MATERIAL,FR_PROFILE_OIL_HAZARD_WORD)-1.);
     float integral=min(1e20,uintBitsToFloat(entry.words[s+21u])+rate*dt);
     uint flags=entry.words[s+1u];
     bool viable=temperature>=coefficient(profile,7u)&&wet<.8;

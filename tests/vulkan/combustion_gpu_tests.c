@@ -283,6 +283,10 @@ int main(int argc,char **argv) {
         RUN(test_oiled_wood_ignites_before_dry_control_without_spending_film);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
     }
+    if(argc==2&&strcmp(argv[1],"--ash")==0) {
+        RUN(test_spent_terrain_becomes_loose_saved_ash_without_losing_mass);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
     if(argc==2&&strcmp(argv[1],"--roof")==0) {
         RUN(test_roof_blocks_and_side_vent_routes_the_physical_flame);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
