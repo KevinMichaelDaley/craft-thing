@@ -96,7 +96,11 @@ int main(int argc, char **argv) {
     char err[256] = {0};
     dc_gpu_t *gpu = NULL;
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
-    bool sludge=getenv("DC_BENCH_SLUDGE")!=NULL;
+    bool sludge_bodies=getenv("DC_BENCH_SLUDGE_BODIES")!=NULL;
+    bool water_bodies=getenv("DC_BENCH_WATER_BODIES")!=NULL;
+    bool dry_bodies=getenv("DC_BENCH_DRY_BODIES")!=NULL;
+    bool body_benchmark=sludge_bodies||water_bodies||dry_bodies;
+    bool sludge=getenv("DC_BENCH_SLUDGE")!=NULL||sludge_bodies;
     fr_bulk_phase_chunk_t *phase=sludge?calloc(1,sizeof(*phase)):NULL;
     if (!chunk || (sludge&&!phase)) {free(phase);free(chunk);return 1;}
     if (!dc_gpu_create(&gpu, width, height, "build/shaders/pattern.comp.spv",
@@ -121,6 +125,24 @@ int main(int argc, char **argv) {
                              err, sizeof(err))) goto fail;
         if(slime_in_chunk>0u&&
            !fr_bulk_phase_gpu_import_chunk(gpu,slot,chunk,phase,err,sizeof(err))) goto fail;
+    }
+    if(body_benchmark) {
+        dc_gpu_body_shape_t shape={.count=4u,.material=DC_GPU_BODY_WOOD,
+            .vertices={{0,0},{4<<16,0},{4<<16,4<<16},{0,4<<16}}};
+        if(!dc_gpu_set_rigid_solver(gpu,true)||
+           !dc_gpu_set_body_origin(gpu,(dc_chunk_coord_t){0,0},err,sizeof(err))) goto fail;
+        for(uint32_t i=0u;i<8u;i++) {
+            uint32_t x=0u,y=0u;
+            if(!native_scene_sludge_body(i,width,height,&x,&y)) goto fail;
+            if(dry_bodies) y=height/3u;
+            dc_gpu_world_body_t body={.chunk={(int64_t)(x/DC_CHUNK_SIDE),
+                (int64_t)(y/DC_CHUNK_SIDE)},
+                .body={.x_fp=(int32_t)((x%DC_CHUNK_SIDE)<<16u),
+                    .y_fp=(int32_t)((y%DC_CHUNK_SIDE)<<16u),
+                    .width=4u,.height=4u,.id=1000u+i,.active=1u}};
+            if(!dc_gpu_spawn_convex_body(gpu,body,
+                &shape,err,sizeof(err))) goto fail;
+        }
     }
     for (uint32_t i = 0; i < 3; ++i)
         if (!dc_gpu_tick_step(gpu, err, sizeof(err))) goto fail;
@@ -152,6 +174,7 @@ int main(int argc, char **argv) {
     printf("samples=%u initial_grains=%u initial_water_cells=%.2f\n",
            samples, particles, (double)water / DC_FLUID_FULL);
     if(sludge) printf("initial_slime_cells=%" PRIu64 "\n",slime);
+    if(body_benchmark) printf("initial_liquid_bodies=8\n");
 #ifdef DC_QUARTER_NATIVE_VIEW
     printf("fluid_interval=%u physics_seconds=%.6f display=%ux%u\n",
            FLUID_INTERVAL, 1.0 / 60.0, VIEW_WIDTH * WINDOW_SCALE,
