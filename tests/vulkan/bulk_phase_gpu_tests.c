@@ -376,6 +376,27 @@ static void test_moving_rigid_crosses_chunk_seam_without_oil_or_heat_loss(void) 
     ASSERT_TRUE(fabs(heat-25.)<.001);
     dc_gpu_destroy(gpu);free(left);free(right);free(source);free(out_left);free(out_right);PASS();
 }
+static void test_slime_flux_yields_under_load_and_softens_when_hot(void) {
+    char err[256]={0};dc_gpu_t *gpu=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *bulk=calloc(1,sizeof(*bulk)),*out=calloc(1,sizeof(*out));
+    ASSERT_TRUE(chunk&&bulk&&out);
+    const uint32_t cold_low=20u*64u+10u,cold_high=20u*64u+20u;
+    const uint32_t hot_low=20u*64u+30u;
+    bulk->slime_fp[cold_low]=4096u;
+    bulk->slime_fp[cold_high]=32768u;
+    bulk->slime_fp[hot_low]=4096u;
+    bulk->slime_excess[hot_low]=2.5f*(4096.f/65536.f)*80.f;
+    ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+        dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(gpu,0,0,0,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,bulk,err,sizeof(err))&&
+        fr_bulk_phase_gpu_step(gpu,1.f/60.f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
+    ASSERT_EQ(out->slime_fp[cold_low],4096u);
+    ASSERT_TRUE(out->slime_fp[cold_high]<32768u);
+    ASSERT_TRUE(out->slime_fp[hot_low]<4096u);
+    dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
+}
 int main(void) {
     RUN(test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot);
     RUN(test_water_solver_respects_full_oil_cell_capacity);
@@ -390,5 +411,6 @@ int main(void) {
     RUN(test_rigid_body_displaces_oil_upward_without_loss);
     RUN(test_closed_rigid_displacement_retains_oil_overflow);
     RUN(test_moving_rigid_crosses_chunk_seam_without_oil_or_heat_loss);
+    RUN(test_slime_flux_yields_under_load_and_softens_when_hot);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
