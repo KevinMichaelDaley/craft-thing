@@ -284,8 +284,10 @@ void main() {
         Field field=renderer_unpack_field(fields[index]);
         color=max(vec3(0),.5*(surface.albedo.rgb*field.l0.rgb+surface.nx.rgb*field.lx.rgb+surface.ny.rgb*field.ly.rgb+surface.nz.rgb*field.lz.rgb));
     }
-    vec3 background=surface.weights.y*vec3(.035,.193,.666)+surface.weights.z*vec3(.00886);
-    color+=lit?background*uintBitsToFloat(uvec3(fields[index].r,fields[index].g,fields[index].b)):background;
+    vec3 water_background=surface.weights.y*vec3(.035,.193,.666);
+    vec3 air_background=surface.weights.z*vec3(.00886);
+    color+=air_background+(lit?water_background*
+        uintBitsToFloat(uvec3(fields[index].r,fields[index].g,fields[index].b)):water_background);
     uint packed=pack_display(color,lit);
     if((params.flags&1u)!=0u) {
         uint page=pages[(cell.y/64u)*((params.width+63u)/64u)+cell.x/64u];

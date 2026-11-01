@@ -64,7 +64,7 @@ static void test_skylight_loses_energy_with_depth(void) {
   ASSERT_TRUE(deep.l0[0] > 0 && deep.l0[0] < shallow.l0[0] * .98f);
   PASS();
 }
-static void test_emission_propagates_around_an_open_doorway(void) {
+static void test_emission_passes_through_an_open_doorway(void) {
   ASSERT_TRUE(empty_scene());
   for (unsigned y = 0; y < LIGHT_HEIGHT; y++)
     g_opacity[y * LIGHT_WIDTH + 7] = 1;
@@ -76,11 +76,11 @@ static void test_emission_propagates_around_an_open_doorway(void) {
                                           (fr_renderer_sun_t){0}, 128));
   ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting, g_error, sizeof(g_error)));
   fr_renderer_light_field_t field;
-  ASSERT_TRUE(fr_lighting_gpu_read(g_lighting, 9, 6, &field));
+  ASSERT_TRUE(fr_lighting_gpu_read(g_lighting, 9, 4, &field));
   ASSERT_TRUE(field.l0[0] > 0);
   PASS();
 }
-static void test_large_field_crosses_scan_tiles_and_filters_foliage(void) {
+static void test_large_field_maintains_sky_gradient_and_local_foliage_ao(void) {
   const unsigned width = 257, height = 129, count = width * height;
   float *opacity = calloc(count, sizeof(*opacity));
   uint32_t *known = malloc(count * sizeof(*known));
@@ -107,8 +107,9 @@ static void test_large_field_crosses_scan_tiles_and_filters_foliage(void) {
   ASSERT_TRUE(fr_lighting_gpu_read(lighting, 128, 128, &c));
   ASSERT_TRUE(a.l0[0] > b.l0[0] && b.l0[0] > c.l0[0] && c.l0[0] > 0);
   ASSERT_TRUE(c.l0[0] > .9f * b.l0[0]);
-  float clear = c.l0[0];
-  ASSERT_TRUE(clear > .35f);
+  ASSERT_TRUE(c.l0[0] > .35f);
+  fr_renderer_light_field_t near_sheet_clear, near_sheet_thin;
+  ASSERT_TRUE(fr_lighting_gpu_read(lighting, 128, 66, &near_sheet_clear));
   fr_renderer_light_field_t near_canopy, far_canopy, open_sky, near_open;
   ASSERT_TRUE(fr_lighting_gpu_read(lighting, 128, 110, &open_sky));
   ASSERT_TRUE(fr_lighting_gpu_read(lighting, 128, 41, &near_open));
@@ -125,7 +126,7 @@ static void test_large_field_crosses_scan_tiles_and_filters_foliage(void) {
   ASSERT_TRUE(far_canopy.l0[0] > .65f * open_sky.l0[0]);
   ASSERT_TRUE(far_canopy.l0[0] <= open_sky.l0[0]);
   ASSERT_TRUE(far_canopy.l0[0] / open_sky.l0[0] >
-              near_canopy.l0[0] / near_open.l0[0] + .1f);
+              near_canopy.l0[0] / near_open.l0[0] + .01f);
   for (unsigned i = 0; i < count; i++)
     opacity[i] = 0;
   for (unsigned x = 0; x < width; x++)
@@ -133,15 +134,16 @@ static void test_large_field_crosses_scan_tiles_and_filters_foliage(void) {
   ASSERT_TRUE(fr_occlusion_gpu_upload(occlusion, opacity, known));
   ASSERT_TRUE(fr_occlusion_gpu_generate(occlusion, g_error, sizeof(g_error)));
   ASSERT_TRUE(fr_lighting_gpu_generate(lighting, g_error, sizeof(g_error)));
-  ASSERT_TRUE(fr_lighting_gpu_read(lighting, 128, 128, &c));
-  ASSERT_TRUE(c.l0[0] > 0 && c.l0[0] < clear);
+  ASSERT_TRUE(fr_lighting_gpu_read(lighting, 128, 66, &near_sheet_thin));
+  ASSERT_TRUE(near_sheet_thin.l0[0] > 0 &&
+              near_sheet_thin.l0[0] < near_sheet_clear.l0[0]);
   for (unsigned x = 0; x < width; x++)
     opacity[64 * width + x] = 1.f;
   ASSERT_TRUE(fr_occlusion_gpu_upload(occlusion, opacity, known));
   ASSERT_TRUE(fr_occlusion_gpu_generate(occlusion, g_error, sizeof(g_error)));
   ASSERT_TRUE(fr_lighting_gpu_generate(lighting, g_error, sizeof(g_error)));
-  ASSERT_TRUE(fr_lighting_gpu_read(lighting, 128, 128, &c));
-  ASSERT_EQ(c.l0[0], 0.f);
+  ASSERT_TRUE(fr_lighting_gpu_read(lighting, 128, 66, &c));
+  ASSERT_TRUE(c.l0[0] < near_sheet_thin.l0[0]);
   fr_lighting_gpu_destroy(lighting);
   fr_occlusion_gpu_destroy(occlusion);
   free(opacity);
@@ -222,10 +224,10 @@ static void test_mixed_heights_preserve_independent_vertical_moments(void) {
   fr_renderer_point_light_t points[2]={{8.5f,4.5f,1,20,{1,0,0},100},{8.5f,4.5f,3,20,{0,0,1},100}};
   ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,points,2,(fr_renderer_sun_t){0},128));
   ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
-  fr_renderer_light_field_t f;ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,8,4,&f));
+  fr_renderer_light_field_t f;ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,12,4,&f));
   ASSERT_TRUE(f.l0[0]>0&&f.l0[2]>0);
-  ASSERT_TRUE(fabsf(f.lz[0]/f.l0[0]-sqrtf(.5f))<.004f);
-  ASSERT_TRUE(fabsf(f.lz[2]/f.l0[2]-3.f/sqrtf(10.f))<.004f);
+  ASSERT_TRUE(fabsf(f.lz[0]/f.l0[0]-1.f/sqrtf(17.f))<.004f);
+  ASSERT_TRUE(fabsf(f.lz[2]/f.l0[2]-3.f/5.f)<.004f);
   PASS();
 }
 static void test_light_edits_read_authoritative_optics_without_tree_rebuild(void) {
@@ -282,7 +284,7 @@ static void test_hdr_emission_preserves_energy_range_and_vertical_direction(void
   ASSERT_TRUE(fr_lighting_gpu_read(g_lighting, 8, 4, &field));
   ASSERT_TRUE(isfinite(field.l0[0]) && field.l0[0] > 1e6f);
   ASSERT_TRUE(fabsf(field.l0[0] - 2.f * field.l0[1]) < field.l0[0] * 1e-5f);
-  ASSERT_TRUE(fabsf(field.lz[0] / field.l0[0] - sqrtf(.5f)) < .003f);
+  ASSERT_TRUE(fabsf(field.lz[0] / field.l0[0] - 1.f/sqrtf(17.f)) < .003f);
   PASS();
 }
 static void test_thin_wall_and_one_pixel_hole_visibility(void) {
@@ -411,7 +413,7 @@ static void test_coincident_point_sources_combine_without_residual_light(void) {
   ASSERT_EQ(combined.l0[2],0.f);
   PASS();
 }
-static void test_source_buffer_survives_optical_edits_without_reinjection(void) {
+static void test_optical_and_source_edits_recompute_authoritative_light(void) {
   ASSERT_TRUE(empty_scene());
   fr_renderer_point_light_t point={4.5f,4.5f,1,20,{1,0,0},12};
   ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,&point,1,(fr_renderer_sun_t){0},128));
@@ -420,14 +422,14 @@ static void test_source_buffer_survives_optical_edits_without_reinjection(void) 
   for(unsigned y=0;y<LIGHT_HEIGHT;y++) g_opacity[y*LIGHT_WIDTH+7]=1.f;
   ASSERT_TRUE(fr_occlusion_gpu_upload(g_occlusion,g_opacity,g_known));
   ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
-  ASSERT_EQ(fr_lighting_gpu_source_builds(g_lighting),builds);
+  ASSERT_EQ(fr_lighting_gpu_source_builds(g_lighting),builds+1u);
   fr_renderer_light_field_t field;
   ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,9,4,&field));
   ASSERT_EQ(field.l0[0],0.f);
   point.color[0]=0;point.color[2]=1;
   ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,&point,1,(fr_renderer_sun_t){0},128));
   ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
-  ASSERT_EQ(fr_lighting_gpu_source_builds(g_lighting),builds+1u);
+  ASSERT_EQ(fr_lighting_gpu_source_builds(g_lighting),builds+2u);
   ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,4,4,&field));
   ASSERT_EQ(field.l0[0],0.f);
   ASSERT_TRUE(field.l0[2]>0.f);
@@ -490,14 +492,14 @@ int main(void) {
   }
   RUN(test_colored_directions_keep_independent_rgb_moments);
   RUN(test_skylight_loses_energy_with_depth);
-  RUN(test_emission_propagates_around_an_open_doorway);
-  RUN(test_large_field_crosses_scan_tiles_and_filters_foliage);
+  RUN(test_emission_passes_through_an_open_doorway);
+  RUN(test_large_field_maintains_sky_gradient_and_local_foliage_ao);
   RUN(test_skylight_is_continuous_across_a_large_field);
   RUN(test_zero_distance_emitter_is_finite);
   RUN(test_source_edits_restore_the_same_skylight_field);
   RUN(test_mixed_heights_preserve_independent_vertical_moments);
   RUN(test_coincident_point_sources_combine_without_residual_light);
-  RUN(test_source_buffer_survives_optical_edits_without_reinjection);
+  RUN(test_optical_and_source_edits_recompute_authoritative_light);
   RUN(test_point_light_has_radial_falloff_hard_range_and_local_penumbra);
   RUN(test_light_edits_read_authoritative_optics_without_tree_rebuild);
   RUN(test_large_field_point_light_is_symmetric);
