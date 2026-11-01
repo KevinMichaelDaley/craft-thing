@@ -29,6 +29,12 @@ static float adhesion_at_temperature(const fr_reactive_profile_t *profile,
         (profile->hot_adhesion-profile->cold_adhesion);
 }
 
+static double film_capacity(const fr_coating_film_t *film,
+    const fr_reactive_profile_t *oil,const fr_reactive_profile_t *slime) {
+    return (double)film->oil_fp*oil->density*oil->heat_capacity+
+        (double)film->slime_fp*slime->density*slime->heat_capacity;
+}
+
 bool fr_coating_contact_wet(const fr_bulk_cell_t *bulk,
     double bulk_excess_heat,const fr_coating_film_t *film,
     uint32_t phase,uint32_t requested_fp,fr_bulk_cell_t *bulk_out,
@@ -76,9 +82,8 @@ bool fr_coating_release(const fr_coating_film_t *film,
        !film_out||!receiver_out||!receiver_excess_out||!released_fp)
         return false;
     uint32_t stock=phase==FR_BULK_OIL?film->oil_fp:film->slime_fp;
-    uint32_t oil_material=DC_MATERIAL_OIL,slime_material=DC_MATERIAL_RED_SLIME_JELLY;
-    const fr_reactive_profile_t *oil=fr_reactive_profile(oil_material);
-    const fr_reactive_profile_t *slime=fr_reactive_profile(slime_material);
+    const fr_reactive_profile_t *oil=fr_reactive_profile(DC_MATERIAL_OIL);
+    const fr_reactive_profile_t *slime=fr_reactive_profile(DC_MATERIAL_RED_SLIME_JELLY);
     const fr_reactive_profile_t *profile=phase==FR_BULK_OIL?oil:slime;
     if(!oil||!slime||profile->consistency<=0.f||profile->shear_exponent<=0.f||
        (film->oil_fp==0u&&film->slime_fp==0u&&film->excess_heat!=0.))
@@ -91,10 +96,8 @@ bool fr_coating_release(const fr_coating_film_t *film,
     for(uint32_t i=0u;i<FR_BULK_PHASES;i++) occupied+=receiver->volume_fp[i];
     uint32_t room=receiver->capacity_fp-(uint32_t)occupied;
     uint32_t released=requested<room?requested:room;
-    double oil_capacity=(double)film->oil_fp*oil->density*oil->heat_capacity;
-    double slime_capacity=(double)film->slime_fp*slime->density*slime->heat_capacity;
     double transfer_capacity=(double)released*profile->density*profile->heat_capacity;
-    double total_capacity=oil_capacity+slime_capacity;
+    double total_capacity=film_capacity(film,oil,slime);
     double heat=total_capacity>0.?film->excess_heat*transfer_capacity/total_capacity:0.;
     double next_film_heat=film->excess_heat-heat;
     double next_receiver_heat=receiver_excess_heat+heat;
@@ -133,10 +136,8 @@ bool fr_coating_film_split(const fr_coating_film_t *source,
     const fr_reactive_profile_t *oil=fr_reactive_profile(DC_MATERIAL_OIL);
     const fr_reactive_profile_t *slime=fr_reactive_profile(DC_MATERIAL_RED_SLIME_JELLY);
     if(!oil||!slime) return false;
-    double source_capacity=(double)source->oil_fp*oil->density*oil->heat_capacity+
-        (double)source->slime_fp*slime->density*slime->heat_capacity;
-    double left_capacity=(double)a.oil_fp*oil->density*oil->heat_capacity+
-        (double)a.slime_fp*slime->density*slime->heat_capacity;
+    double source_capacity=film_capacity(source,oil,slime);
+    double left_capacity=film_capacity(&a,oil,slime);
     a.excess_heat=source_capacity>0.?
         source->excess_heat*left_capacity/source_capacity:0.;
     b.excess_heat=source->excess_heat-a.excess_heat;

@@ -152,6 +152,17 @@ static void test_fracture_rejects_duplicate_child_owner_transactionally(void) {
     ASSERT_EQ(left.oil_fp,91u);ASSERT_EQ(right.oil_fp,92u);PASS();
 }
 
+static void test_one_quantum_fracture_stays_with_one_child(void) {
+    fr_coating_film_t source=rigid_film(),left={0},right={0};
+    source.oil_fp=1u;source.excess_heat=2.;
+    fr_coating_host_t left_host={FR_COATING_RIGID,51u,0u,9u,3u,4u};
+    fr_coating_host_t right_host={FR_COATING_RIGID,52u,0u,10u,7u,8u};
+    ASSERT_TRUE(fr_coating_film_split(&source,32768u,&left_host,&right_host,
+        &left,&right));
+    ASSERT_EQ(left.oil_fp,0u);ASSERT_EQ(right.oil_fp,1u);
+    ASSERT_EQ(left.excess_heat,0.);ASSERT_EQ(right.excess_heat,2.);PASS();
+}
+
 int main(void) {
     RUN(test_wetting_debits_mobile_oil_and_preserves_heat);
     RUN(test_retained_slime_does_not_wet_and_existing_film_accumulates);
@@ -164,6 +175,7 @@ int main(void) {
     RUN(test_mixed_film_releases_phase_heat_by_thermal_capacity);
     RUN(test_fracture_splits_each_phase_and_heat_without_duplication);
     RUN(test_fracture_rejects_duplicate_child_owner_transactionally);
+    RUN(test_one_quantum_fracture_stays_with_one_child);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail>0?1:0;
 }
