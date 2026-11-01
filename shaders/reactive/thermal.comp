@@ -8,6 +8,7 @@
 #include "../../include/dungeoncraft/thermal_parameters.h"
 #include "../../include/dungeoncraft/thermal_surface.h"
 #include "../../include/dungeoncraft/bulk_phase_layout.h"
+#include "../../include/dungeoncraft/coating_layout.h"
 #include "address.glsl"
 layout(local_size_x=64) in;
 layout(constant_id=0) const uint SPECIALIZED_PHASE=0xffffffffu;

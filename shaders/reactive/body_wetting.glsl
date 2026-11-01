@@ -76,13 +76,14 @@ void body_phase_coat_parcel(Body body,uint piece,uvec2 handle,uint phase) {
     uint oil=entry.words[s+FR_STATE_COATING_OIL];
     uint jelly=entry.words[s+FR_STATE_COATING_JELLY];
     uint oxidizer=entry.words[s+FR_STATE_COATING_OXIDIZER];
+    uint remainder=entry.words[s+FR_STATE_COATING_REMAINDERS];
     if(oil>=65536u||jelly>=65536u||oxidizer>=65536u||
        oil+jelly+oxidizer>=65536u||density<=0.||capacity<=0.) return;
     BodyQuad quad;if(!body_pixel_quad(body,piece,quad)) return;
     vec2 origin=vec2(body.x_fp,body.y_fp)/65536.;
     ivec2 low=ivec2(floor(origin+min(min(quad.a,quad.b),min(quad.c,quad.d))-.0001));
     ivec2 high=ivec2(floor(origin+max(max(quad.a,quad.b),max(quad.c,quad.d))+.0001));
-    uint gained=0u;float heat=0.;
+    uint gained=0u,gained_fuel=0u,gained_oxidizer=0u;float heat=0.;
     for(int y=low.y;y<=high.y;y++) for(int x=low.x;x<=high.x;x++) {
         ivec2 cell=ivec2(x,y);
         if(any(lessThan(cell,ivec2(0)))||any(greaterThanEqual(cell,ivec2(params.width,params.height)))) continue;
@@ -95,26 +96,46 @@ void body_phase_coat_parcel(Body body,uint piece,uvec2 handle,uint phase) {
         float contact=body_water_contact(body,piece,cell,min(1.,float(available)/65536.));
         if(contact<=0.) continue;
         uint room=65536u-oil-jelly-oxidizer-gained;
+        if(room==0u) continue;
         uint request=uint(floor(float(FR_THERMAL_WETTING_PER_SECOND)*
             uintBitsToFloat(params.seconds)*65536.*contact/4.));
-        request=min(request,uint(floor(float(room)/density)));
+        uint mass_rem=phase==1u?
+            ((remainder>>FR_COATING_OIL_REM_SHIFT)&FR_COATING_REM_MASK):
+            ((remainder>>FR_COATING_JELLY_REM_SHIFT)&FR_COATING_REM_MASK);
+        uint mass_num=phase==1u?FR_COATING_OIL_MASS_NUM:FR_COATING_JELLY_MASS_NUM;
+        request=min(request,(room*FR_COATING_MASS_DEN-mass_rem)/mass_num);
         uint taken=body_phase_reserve(volume_at,request);
         if(taken==0u) continue;
-        uint mass=uint(round(float(taken)*density));
+        uint total=taken*mass_num+mass_rem;
+        uint mass=total/FR_COATING_MASS_DEN;
+        if(phase==1u) {
+            remainder=(remainder&~FR_COATING_REM_MASK)|
+                (total%FR_COATING_MASS_DEN);
+            gained_fuel+=mass;
+        } else {
+            remainder=(remainder&~(FR_COATING_REM_MASK<<FR_COATING_JELLY_REM_SHIFT))|
+                ((total%FR_COATING_MASS_DEN)<<FR_COATING_JELLY_REM_SHIFT);
+            uint fuel_rem=(remainder>>FR_COATING_JELLY_FUEL_REM_SHIFT)&FR_COATING_FUEL_REM_MASK;
+            uint fuel_total=mass*FR_COATING_JELLY_FUEL_NUM+fuel_rem;
+            uint fuel=fuel_total/FR_COATING_JELLY_FUEL_DEN;
+            remainder=(remainder&~(FR_COATING_FUEL_REM_MASK<<FR_COATING_JELLY_FUEL_REM_SHIFT))|
+                ((fuel_total%FR_COATING_JELLY_FUEL_DEN)<<FR_COATING_JELLY_FUEL_REM_SHIFT);
+            gained_fuel+=fuel;gained_oxidizer+=mass-fuel;
+        }
         uint heat_at=base+(phase+3u)*4096u;
         float excess=uintBitsToFloat(atomicAdd(bulk_phase_words[heat_at],0u))*
             float(taken)/float(available);
         body_phase_heat_add(heat_at,-excess);
-        heat+=excess+float(mass)/65536.*capacity*float(FR_THERMAL_AMBIENT_K);
+        heat+=excess+float(taken*mass_num)/float(FR_COATING_MASS_DEN*65536u)*
+            capacity*float(FR_THERMAL_AMBIENT_K);
         gained+=mass;
     }
     if(gained>0u) {
-        if(phase==1u) entry.words[s+FR_STATE_COATING_OIL]+=gained;
+        entry.words[s+FR_STATE_COATING_REMAINDERS]=remainder;
+        if(phase==1u) entry.words[s+FR_STATE_COATING_OIL]+=gained_fuel;
         else {
-            float fraction=coefficient(material,FR_PROFILE_FUEL_FRACTION_WORD);
-            uint fuel=uint(round(float(gained)*fraction));
-            entry.words[s+FR_STATE_COATING_JELLY]+=fuel;
-            entry.words[s+FR_STATE_COATING_OXIDIZER]+=gained-fuel;
+            entry.words[s+FR_STATE_COATING_JELLY]+=gained_fuel;
+            entry.words[s+FR_STATE_COATING_OXIDIZER]+=gained_oxidizer;
         }
         add_energy(entry,heat);
     }
