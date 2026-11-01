@@ -55,3 +55,7 @@ Displayed stress benchmark RED c63111f, GREEN e7a33e1, REFACTOR just committed: 
 **2026-11-01T08:43:39Z**
 
 Deformation RED 4929336/a8b32a8, GREEN 6fb7b46/e4c221c, REFACTOR just committed: symmetric 2D deformation-rate shear sample distinguishes physical shear from rigid rotation in CPU reference and GPU flux. 21 GPU and 8 CPU targeted tests passed, full make test under Xephyr :92 passed. Native Wayland 480x270/1920x1080 180-frame sludge stress repeat 1.967 ms displayed frame, GPU fluid 1.778 ms, within prior warm-run variance and below 30 ms frame budget. Remaining rigid action-reaction and integration audit before closure.
+
+**2026-11-01T08:58:40Z**
+
+Vulkan push ABI regression: validation RED showed VUID-07987 because common layout exposed 36 bytes but bulk phase shader requires 84. RED 55e3dbe added focused validation smoke; GREEN f83a909 widened common compute range to 128 bytes; REFACTOR just committed named range and C struct size assert. Khronos validation smoke with Xephyr :92 passes 2 phase cases and zero Validation Error; normal full make test passed. Full fluid-path validation separately reports descriptor binding VUID-08600, tracked as ct-20i5.
