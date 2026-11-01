@@ -102,6 +102,14 @@ static void test_native_fully_submerged_pocket_retains_stock_against_adjacent_wa
         fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err)));
     ASSERT_EQ(out->cells[at][13],0.f);
     for(uint32_t k=0;k<5u;k++) ASSERT_TRUE(fabs(out->cells[at][k]-input[at].species[k])<1e-9);
+    ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err))&&
+        dc_gpu_download_chunk(g,0,chunk,err,sizeof(err))&&
+        fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err)));
+    ASSERT_TRUE(chunk->cells[at].fluid_mass<DC_FLUID_FULL);
+    ASSERT_TRUE(chunk->cells[at+1u].fluid_mass>DC_FLUID_FULL/2u);
+    ASSERT_EQ(chunk->cells[at].fluid_mass+chunk->cells[at+1u].fluid_mass,
+        DC_FLUID_FULL+DC_FLUID_FULL/2u);
+    ASSERT_TRUE(gas_checkpoint_stock(out,FR_GAS_OXYGEN)>0.);
     free(out);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
 }
 #endif
