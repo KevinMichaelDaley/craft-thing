@@ -33,6 +33,7 @@ layout(push_constant) uniform Params {
     uint width,height,mode,tick_parity,unused1,step_scale_bits,elapsed_time_mode;
 } params;
 const uint FULL=65536u,PERMEABLE=1u<<17u,KNOWN=1u<<18u;
+#include "bulk_phase.glsl"
 const float TRANSPORT_FUDGE=1.001;
 /* Shared metadata reserves the upper thirteen bits for a directional segment
    endpoint. Global occupancy and material storage never contain this cache. */
@@ -78,7 +79,7 @@ uint cell_meta(ivec2 p) {
     uint position=uint(vertical?p.y:p.x);
     if(position<CACHE_CELLS) return cached[position].y;
     uint page=page_at(p);if(page==0u) return 0u;
-    uint capacity=FULL-min(FULL,occupancy[2u*params.width*params.height+uint(p.y)*params.width+uint(p.x)]);
+    uint capacity=bulk_water_capacity(p,page_at(p),occupancy[2u*params.width*params.height+uint(p.y)*params.width+uint(p.x)]);
     return capacity|KNOWN|(permeable_material(chunk_cells[atlas_index(p,page)].x&65535u)?PERMEABLE:0u);
 }
 bool open_cell(ivec2 p) {
@@ -159,7 +160,7 @@ uint request_at(ivec2 source,ivec2 direction,uint offset,float travel) {
     } else {
         uint page=pages[uint(target.y/64)*((params.width+63u)/64u)+uint(target.x/64)];
         receiving=chunk_cells[atlas_index(target,page)].y;
-        capacity=FULL-min(FULL,occupancy[2u*params.width*params.height+uint(target.y)*params.width+uint(target.x)]);
+        capacity=bulk_water_capacity(target,page,occupancy[2u*params.width*params.height+uint(target.y)*params.width+uint(target.x)]);
     }
     if(receiving>=capacity) return 0u;
     float fraction=clamp(travel-float(offset-1u),0.,1.);
@@ -378,7 +379,7 @@ void main() {
         ivec2 p=point_at(position);uint page=page_at(p);uvec4 value=uvec4(0);
         if(page!=0u) {
             uint index=uint(p.y)*params.width+uint(p.x);uvec2 cell=chunk_cells[atlas_index(p,page)];
-            uint capacity=FULL-min(FULL,occupancy[2u*params.width*params.height+index]);
+            uint capacity=bulk_water_capacity(p,page,occupancy[2u*params.width*params.height+index]);
             uint aperture=FULL-min(FULL,occupancy[(vertical?4u:3u)*params.width*params.height+index]);
             aperture=hydraulic_aperture(aperture,p,vertical?ivec2(0,1):ivec2(1,0));
             float speed=vertical?face_velocity[index].y:face_velocity[index].x;

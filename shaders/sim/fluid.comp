@@ -29,6 +29,7 @@ uint dispatch_mode() {return FLUID_PHASE==0xffffffffu?params.mode:FLUID_PHASE;}
 const uint SIDE = 64u;
 const uint CELLS_PER_CHUNK = 4096u;
 const uint FULL = 65536u;
+#include "bulk_phase.glsl"
 const uint DISPLACEMENT_MODE = 11u;
 const uint LATERAL_DISPLACEMENT_MODE = 12u;
 const int DISPLACEMENT_REACH = 64;
@@ -68,12 +69,14 @@ bool open_cell(ivec2 p) {
     if (page == 0u) return false;
     uint index = uint(p.y) * params.width + uint(p.x);
     uint material = chunk_cells[atlas_index(p, page)].x & 0xffffu;
-    return permeable_material(material) && occupancy[2u*params.width*params.height+index] < FULL;
+    return permeable_material(material) &&
+        bulk_water_capacity(p,page,occupancy[2u*params.width*params.height+index])>0u;
 }
 
 uint receiving_capacity(ivec2 p) {
     uint index=uint(p.y)*params.width+uint(p.x);
-    return FULL-min(FULL,occupancy[2u*params.width*params.height+index]);
+    uint page=page_at(p);
+    return page==0u?0u:bulk_water_capacity(p,page,occupancy[2u*params.width*params.height+index]);
 }
 
 float face_aperture(ivec2 p,ivec2 direction) {

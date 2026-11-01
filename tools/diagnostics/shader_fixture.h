@@ -30,8 +30,8 @@ static int fixture_body_pipeline(probe_t *p, dc_gpu_t *gpu, VkBuffer body,
     if (count > 32u)
         return 0;
     fixture_release_pipeline(p);
-    uint32_t extended[33];memcpy(extended,indices,count*sizeof(*indices));
-    extended[count++]=36u;indices=extended;
+    uint32_t extended[34];memcpy(extended,indices,count*sizeof(*indices));
+    extended[count++]=36u;extended[count++]=37u;indices=extended;
     void *control=NULL;
     if(!dc_gpu_make_mapped_buffer(gpu,128,&p->thermal_control,&p->thermal_control_memory,&control,err,sizeof(err))) return 0;
     memset(control,0,128);vkUnmapMemory(p->device,p->thermal_control_memory);
@@ -40,7 +40,7 @@ static int fixture_body_pipeline(probe_t *p, dc_gpu_t *gpu, VkBuffer body,
         printf("shader failure: %s\n", err);
         return 0;
     }
-    VkDescriptorSetLayoutBinding bindings[33] = {0};
+    VkDescriptorSetLayoutBinding bindings[34] = {0};
     for (unsigned i = 0; i < count; i++)
         bindings[i] = (VkDescriptorSetLayoutBinding){
             .binding = indices[i],
@@ -110,14 +110,15 @@ static int fixture_body_pipeline(probe_t *p, dc_gpu_t *gpu, VkBuffer body,
     if (!check(vkAllocateDescriptorSets(p->device, &allocation, &p->descriptor),
                "descriptor allocate"))
         return 0;
-    VkDescriptorBufferInfo buffers[33];
-    VkWriteDescriptorSet writes[33];
+    VkDescriptorBufferInfo buffers[34];
+    VkWriteDescriptorSet writes[34];
     for (unsigned i = 0; i < count; i++) {
         bool is_body = indices[i] == 4u;
         buffers[i] = (VkDescriptorBufferInfo){
             is_body ? body : p->buffer, 0,
             is_body ? dc_gpu_body_storage_bytes(gpu) : 39u * sizeof(uint32_t)};
         if(indices[i]==36u) buffers[i]=(VkDescriptorBufferInfo){p->thermal_control,0,128};
+        if(indices[i]==37u) buffers[i]=(VkDescriptorBufferInfo){gpu->bulk_phase_buffer,0,VK_WHOLE_SIZE};
         writes[i] = (VkWriteDescriptorSet){
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = p->descriptor,

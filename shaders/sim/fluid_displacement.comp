@@ -11,6 +11,7 @@ layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
 #include "water_color.glsl"
 layout(push_constant) uniform Params {uint width,height,mode;} params;
 const uint FULL=65536u,PERMEABLE=1u<<17u,KNOWN=1u<<18u,OCCUPIED=1u<<19u;
+#include "bulk_phase.glsl"
 shared uvec2 cached[CACHE_CELLS];
 shared uint source_bits[(CACHE_CELLS+31u)/32u];
 #ifdef DC_DISPLACEMENT_PROFILE
@@ -27,7 +28,7 @@ uint atlas_index(ivec2 p,uint page) {return (page-1u)*4096u+uint(p.y%64)*64u+uin
 bool permeable(uint material) {return material==0u||material==2u||material==4u||material==5u||material==6u||material==10u;}
 uint global_meta(ivec2 p,uint page) {
     uint index=uint(p.y)*params.width+uint(p.x),cells=params.width*params.height;
-    uint capacity=FULL-min(FULL,occupancy[2u*cells+index]);
+    uint capacity=bulk_water_capacity(p,page,occupancy[2u*cells+index]);
     return capacity|KNOWN|(permeable(chunk_cells[atlas_index(p,page)].x&65535u)?PERMEABLE:0u)|
         (occupancy[index]!=0u?OCCUPIED:0u);
 }
