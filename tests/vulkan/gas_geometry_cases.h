@@ -132,6 +132,17 @@ static void test_native_fully_submerged_pocket_retains_stock_against_adjacent_wa
         dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
     ASSERT_EQ(chunk->cells[at].fluid_mass,source_water);
     ASSERT_EQ(chunk->cells[at+1u].fluid_mass,receiver_water);
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,input,4096,err,sizeof(err)));
+    for(uint32_t i=0;i<4096u;i++) volume[i]=out->cells[i][12];
+    input[at].species[FR_GAS_EXHAUST]+=.001;
+    input[at].energy+=.001*model.heat_capacity_cv[FR_GAS_EXHAUST]*500.;
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
+    fr_gas_gpu_geometry_changed(g,true);
+    ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err))&&
+        dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(chunk->cells[at].fluid_mass<source_water);
+    ASSERT_EQ(chunk->cells[at].fluid_mass+chunk->cells[at+1u].fluid_mass,
+        DC_FLUID_FULL+DC_FLUID_FULL/2u);
     free(water_heat);free(out);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
 }
 #endif
