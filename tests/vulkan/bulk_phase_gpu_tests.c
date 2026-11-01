@@ -546,6 +546,30 @@ static void test_mixing_phase_flux_deposits_lost_kinetic_energy(void) {
     ASSERT_TRUE(fabsf(after_energy-before_energy)<1e-11f);
     dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
 }
+static void test_rigid_rotation_does_not_shear_thin_slime(void) {
+    char err[256]={0};dc_gpu_t *gpu=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *bulk=calloc(1,sizeof(*bulk)),*out=calloc(1,sizeof(*out));
+    ASSERT_TRUE(chunk&&bulk&&out);
+    const uint32_t still=20u*64u+10u,rotating=20u*64u+20u;
+    for(uint32_t y=19u;y<=22u;y++) for(uint32_t x=9u;x<=21u;x++)
+        if((x!=10u&&x!=20u)||y==19u||y==22u)
+            chunk->cells[y*64u+x].material=DC_MATERIAL_STONE;
+    bulk->slime_fp[still]=FR_BULK_CELL_FULL_FP;
+    bulk->slime_fp[rotating]=FR_BULK_CELL_FULL_FP;
+    chunk->face_velocity[rotating+64u].x=-10.f;
+    chunk->face_velocity[rotating-1u].y=-10.f;
+    chunk->face_velocity[rotating+1u].y=10.f;
+    chunk->face_velocity[rotating+64u-1u].y=-10.f;
+    chunk->face_velocity[rotating+64u+1u].y=10.f;
+    ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+        dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(gpu,0,0,0,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,bulk,err,sizeof(err))&&
+        fr_bulk_phase_gpu_step(gpu,1.f/60.f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
+    ASSERT_EQ(out->slime_fp[rotating],out->slime_fp[still]);
+    dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
+}
 int main(void) {
     RUN(test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot);
     RUN(test_water_solver_respects_full_oil_cell_capacity);
@@ -567,5 +591,6 @@ int main(void) {
     RUN(test_water_drag_exchanges_equal_opposite_phase_momentum);
     RUN(test_phase_momentum_biases_bulk_flux_direction);
     RUN(test_mixing_phase_flux_deposits_lost_kinetic_energy);
+    RUN(test_rigid_rotation_does_not_shear_thin_slime);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
