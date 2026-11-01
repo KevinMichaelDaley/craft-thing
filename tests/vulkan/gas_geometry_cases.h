@@ -155,6 +155,42 @@ static void test_dense_granular_mpm_retains_connected_pore_volume(void) {
         input[0].species[FR_GAS_OXYGEN]*4096.)<1e-5);
     dc_gpu_destroy(g);free(chunk);free(input);free(volume);free(out);PASS();
 }
+static void test_rigid_sweep_routes_gas_through_newly_covered_cells(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_gas_state_t *input=calloc(4096,sizeof(*input));double *volume=calloc(4096,sizeof(*volume));
+    fr_gas_checkpoint_chunk_t *out=malloc(sizeof(*out));
+    ASSERT_TRUE(chunk&&input&&volume&&out);
+    fr_gas_model_t model=reference_model();model.kinetic_scale=1./512.;
+    for(uint32_t i=0u;i<4096u;i++) chunk->cells[i].material=DC_MATERIAL_STONE;
+    for(uint32_t x=20u;x<=26u;x++) {
+        uint32_t i=32u*64u+x;
+        chunk->cells[i].material=DC_MATERIAL_AIR;
+        input[i]=reference_air(model,.0012,300,0);
+        volume[i]=1.;
+    }
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&
+        fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err))&&
+        fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&
+        fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
+    uint32_t cells=g->width*g->height;
+    for(uint32_t x=22u;x<=24u;x++)
+        ((uint32_t *)g->occupancy_mapped)[2u*cells+32u*g->width+x]=65536u;
+    fr_gas_gpu_geometry_changed(g,true);
+    ASSERT_TRUE(fr_gas_gpu_refresh_geometry(g,err,sizeof(err))&&
+        fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err)));
+    double oxygen=0.;
+    for(uint32_t x=20u;x<=26u;x++) oxygen+=out->cells[32u*64u+x][FR_GAS_OXYGEN];
+    uint32_t center=32u*64u+23u;
+    printf("Rigid sweep center stock %.9g volume %.9g oxygen drift %.9g\n",
+        out->cells[center][FR_GAS_OXYGEN],out->cells[center][12],
+        oxygen-7.*input[center].species[FR_GAS_OXYGEN]);
+    ASSERT_TRUE(fabs(oxygen-7.*input[center].species[FR_GAS_OXYGEN])<1e-7);
+    ASSERT_TRUE(out->cells[center][FR_GAS_OXYGEN]<1e-10f);
+    ASSERT_TRUE(out->cells[center][12]<1e-7f);
+    dc_gpu_destroy(g);free(chunk);free(input);free(volume);free(out);PASS();
+}
 static void test_burning_wood_has_small_conservative_smoke_bypass(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_gas_state_t *input=calloc(4096,sizeof(*input)),*out=calloc(4096,sizeof(*out));

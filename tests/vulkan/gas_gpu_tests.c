@@ -594,6 +594,7 @@ int main(void) {
     RUN(test_pressurized_pocket_pushes_mobile_sand_without_losing_oxygen);
     RUN(test_sealed_mpm_compression_records_reversible_gas_work);
     RUN(test_dense_granular_mpm_retains_connected_pore_volume);
+    RUN(test_rigid_sweep_routes_gas_through_newly_covered_cells);
     RUN(test_burning_wood_has_small_conservative_smoke_bypass);
     RUN(test_native_fully_submerged_pocket_retains_stock_against_adjacent_water);
     RUN(test_native_partial_void_contraction_displaces_mixture_without_cut_cell_pressure_spikes);
