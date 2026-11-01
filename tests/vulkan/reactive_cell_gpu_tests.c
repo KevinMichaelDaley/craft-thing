@@ -70,6 +70,7 @@ static void test_cell_admission_rejects_wrong_physical_material_atomically(void)
     c->cells[9].material=DC_MATERIAL_WOOD;
     ASSERT_TRUE(context(&g,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     fr_reactive_state_t wood,stone;
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,500,1,&wood,err,sizeof(err)));
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,39322,0,500,2,&stone,err,sizeof(err)));
@@ -81,6 +82,11 @@ static void test_cell_admission_rejects_wrong_physical_material_atomically(void)
     ASSERT_TRUE(found&&memcmp(&record.state,&wood,sizeof(wood))==0);
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,10,&record,&found,err,sizeof(err)));
     ASSERT_TRUE(!found);
+    ASSERT_TRUE(dc_gpu_paint_material(g,9,0,0,DC_MATERIAL_STONE,err,sizeof(err)));
+    ASSERT_TRUE(!fr_gpu_reactive_seed_cell(g,0,9,&wood,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,9,&stone,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,9,&record,&found,err,sizeof(err)));
+    ASSERT_TRUE(found&&memcmp(&record.state,&stone,sizeof(stone))==0);
     free(c);dc_gpu_destroy(g);PASS();
 }
 static void test_extraction_and_next_arena_flip_keep_exact_state(void) {

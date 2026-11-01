@@ -128,7 +128,15 @@ bool fr_gpu_reactive_seed_cell(dc_gpu_t *g,uint32_t slot,uint32_t local,
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Reactive import wait failed");
     const uint32_t *registry=dc_gpu_structural_data(g)+DC_STRUCTURAL_HEADER_WORDS+slot*8u;
     if(!registry[5]) return error(err,cap,"Reactive cell owner is not resident");
-    if(!dc_gpu_copy_chunk_state(g,slot,false,false,err,cap)) return false;
+    if(!fr_renderer_begin(g)) return error(err,cap,"Cannot inspect reactive cell owner");
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,VK_ACCESS_2_MEMORY_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_READ_BIT);
+    VkDeviceSize offset=((VkDeviceSize)slot*DC_CHUNK_CELLS+local)*sizeof(dc_cell_t);
+    VkBufferCopy copy={offset,offset,sizeof(dc_cell_t)};
+    vkCmdCopyBuffer(g->command,g->chunk_buffer,g->chunk_staging_buffer,1,&copy);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
+    if(!fr_renderer_submit(g)) return error(err,cap,"Cannot inspect reactive cell owner");
     const dc_cell_t *cells=g->chunk_mapped;
     if(cells[(size_t)slot*DC_CHUNK_CELLS+local].material!=state->material)
         return error(err,cap,"Reactive cell material does not match physical owner");
