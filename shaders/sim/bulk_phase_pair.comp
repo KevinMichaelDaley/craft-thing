@@ -18,12 +18,20 @@ uint page_at(ivec2 p) {
 }
 uint atlas_at(ivec2 p,uint page) {return (page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);}
 uint bulk_at(uint atlas,uint phase) {
-    uint base=(atlas/4096u)*4u*4096u+atlas%4096u;
+    uint base=(atlas/4096u)*6u*4096u+atlas%4096u;
     return bulk[base+(phase-1u)*4096u];
 }
 void bulk_write(uint atlas,uint phase,uint value) {
-    uint base=(atlas/4096u)*4u*4096u+atlas%4096u;
+    uint base=(atlas/4096u)*6u*4096u+atlas%4096u;
     bulk[base+(phase-1u)*4096u]=value;
+}
+float bulk_heat_at(uint atlas,uint phase) {
+    uint base=(atlas/4096u)*6u*4096u+atlas%4096u;
+    return uintBitsToFloat(bulk[base+(phase+3u)*4096u]);
+}
+void bulk_heat_write(uint atlas,uint phase,float energy) {
+    uint base=(atlas/4096u)*6u*4096u+atlas%4096u;
+    bulk[base+(phase+3u)*4096u]=floatBitsToUint(energy);
 }
 bool permeable(uint material) {
     return material==0u||material==2u||material==4u||material==5u||material==6u||
@@ -77,7 +85,8 @@ void main() {
             uint swap_volume=top[phase];top[phase]=bottom[phase];bottom[phase]=swap_volume;
         }
     }
-    uint top_water_before=top[0],bottom_water_before=bottom[0];
+    uvec3 top_before=uvec3(top[0],top[1],top[2]);
+    uvec3 bottom_before=uvec3(bottom[0],bottom[1],bottom[2]);
     uint excess=used(top)>top_capacity?used(top)-top_capacity:0u;
     if(excess>0u) face_open=FULL;
     if(face_open==0u) return;
@@ -119,10 +128,25 @@ void main() {
         changed=true;
     }
     if(!changed) return;
-    if(top[0]>top_water_before)
-        move_water_heat(bottom_at,top_at,bottom_water_before,bottom[0]);
-    else if(bottom[0]>bottom_water_before)
-        move_water_heat(top_at,bottom_at,top_water_before,top[0]);
+    if(top[0]>top_before.x)
+        move_water_heat(bottom_at,top_at,bottom_before.x,bottom[0]);
+    else if(bottom[0]>bottom_before.x)
+        move_water_heat(top_at,bottom_at,top_before.x,top[0]);
+    for(uint phase=1u;phase<3u;phase++) {
+        uint source=0u,target=0u,before=0u,moved=0u;
+        if(top[phase]>top_before[phase]) {
+            source=bottom_at;target=top_at;before=bottom_before[phase];
+            moved=top[phase]-top_before[phase];
+        } else if(bottom[phase]>bottom_before[phase]) {
+            source=top_at;target=bottom_at;before=top_before[phase];
+            moved=bottom[phase]-bottom_before[phase];
+        }
+        if(moved>0u&&before>0u) {
+            float carried=bulk_heat_at(source,phase)*float(moved)/float(before);
+            bulk_heat_write(source,phase,bulk_heat_at(source,phase)-carried);
+            bulk_heat_write(target,phase,bulk_heat_at(target,phase)+carried);
+        }
+    }
     cells[top_at].y=top[0];cells[bottom_at].y=bottom[0];
     for(uint phase=1u;phase<3u;phase++) {
         bulk_write(top_at,phase,top[phase]);bulk_write(bottom_at,phase,bottom[phase]);

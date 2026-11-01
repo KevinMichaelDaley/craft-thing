@@ -14,7 +14,7 @@ void main() {
     if(page==0u) return;
     uint local=(y%64u)*64u+x%64u;
     uint atlas=(page-1u)*4096u+local;
-    uint base=(page-1u)*4u*4096u+local;
+    uint base=(page-1u)*6u*4096u+local;
     uint oil=bulk[base],slime=bulk[base+4096u];
     uint capacity=FULL-min(FULL,occupancy[2u*params.width*params.height+index]);
     uint used=cells[atlas].y+oil+slime;

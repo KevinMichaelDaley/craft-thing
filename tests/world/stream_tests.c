@@ -270,6 +270,7 @@ static void test_bulk_liquid_chunk_roundtrip_keeps_water_and_distinct_oil_slime(
     chunk->coord=(dc_chunk_coord_t){2,-3};chunk->cells[100].fluid_mass=30000;
     bulk->oil_fp[100]=20000;bulk->slime_fp[100]=15536;
     bulk->oil_retained_fp[100]=1234;bulk->slime_retained_fp[100]=4321;
+    bulk->oil_excess[100]=17.5f;bulk->slime_excess[100]=-3.25f;
     ASSERT_TRUE(dc_stream_request_save_bulk(stream,chunk,NULL,NULL,NULL,NULL,bulk,7));
     dc_stream_result_t result={0};ASSERT_TRUE(wait_result(stream,&result));
     ASSERT_EQ(result.kind,DC_STREAM_SAVED);dc_stream_result_release(&result);
@@ -281,6 +282,8 @@ static void test_bulk_liquid_chunk_roundtrip_keeps_water_and_distinct_oil_slime(
     ASSERT_INT_EQ(result.bulk->oil_fp[100],20000);ASSERT_INT_EQ(result.bulk->slime_fp[100],15536);
     ASSERT_INT_EQ(result.bulk->oil_retained_fp[100],1234);
     ASSERT_INT_EQ(result.bulk->slime_retained_fp[100],4321);
+    ASSERT_EQ(result.bulk->oil_excess[100],17.5f);
+    ASSERT_EQ(result.bulk->slime_excess[100],-3.25f);
     dc_stream_result_release(&result);dc_stream_destroy(stream);free(chunk);free(bulk);PASS();
 }
 int main(void) {

@@ -226,7 +226,7 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,dc_chunk_coord_t coord
             if(okay&&gas_length) okay=(*gas=malloc(sizeof(**gas)))!=NULL&&
                 fread(*gas,sizeof(**gas),1,file)==1&&gas_checkpoint_valid(*gas);
             if(okay) okay=fread(&bulk_length,sizeof(bulk_length),1,file)==1&&
-                bulk_length==fr_bulk_phase_chunk_bytes();
+                bulk_length>0u&&bulk_length<=fr_bulk_phase_chunk_bytes();
             if(okay) okay=(packet=malloc((size_t)bulk_length))!=NULL&&
                 fread(packet,(size_t)bulk_length,1,file)==1&&
                 (*bulk=malloc(sizeof(**bulk)))!=NULL&&

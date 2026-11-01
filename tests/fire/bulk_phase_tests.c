@@ -81,6 +81,7 @@ static void test_bulk_packet_roundtrip_and_rejects_overfull_water_pair(void) {
     uint8_t *bytes=malloc(length);ASSERT_TRUE(chunk&&source&&out&&bytes&&length>sizeof(*source));
     chunk->cells[17].fluid_mass=30000;source->oil_fp[17]=20000;source->slime_fp[17]=15536;
     source->oil_retained_fp[17]=1234;source->slime_retained_fp[17]=4321;
+    source->oil_excess[17]=17.5f;source->slime_excess[17]=-3.25f;
     ASSERT_TRUE(fr_bulk_phase_chunk_encode(chunk,source,bytes,length));
     ASSERT_TRUE(fr_bulk_phase_chunk_decode(chunk,bytes,length,out));
     ASSERT_EQ(memcmp(out,source,sizeof(*out)),0);
@@ -88,6 +89,24 @@ static void test_bulk_packet_roundtrip_and_rejects_overfull_water_pair(void) {
     ASSERT_TRUE(!fr_bulk_phase_chunk_decode(chunk,bytes,length,out));
     ASSERT_EQ(memcmp(out,source,sizeof(*out)),0);
     free(bytes);free(out);free(source);free(chunk);PASS();
+}
+static void test_legacy_bulk_packet_loads_with_ambient_phase_heat(void) {
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));fr_bulk_phase_chunk_t *out=calloc(1,sizeof(*out));
+    size_t length=16u+4u*DC_CHUNK_CELLS*sizeof(uint32_t)+8u;
+    uint8_t *bytes=calloc(length,1u);ASSERT_TRUE(chunk&&out&&bytes);
+    memcpy(bytes,"BLP1",4u);bytes[4]=1u;bytes[8]=(uint8_t)DC_CHUNK_CELLS;
+    bytes[9]=(uint8_t)(DC_CHUNK_CELLS>>8u);
+    const uint32_t at=17u,stock=2345u;
+    size_t offset=16u+at*sizeof(uint32_t);
+    for(uint32_t k=0u;k<4u;k++) bytes[offset+k]=(uint8_t)(stock>>(8u*k));
+    uint64_t hash=UINT64_C(14695981039346656037);
+    for(size_t i=0;i<length-8u;i++) {hash^=bytes[i];hash*=UINT64_C(1099511628211);}
+    for(uint32_t i=0;i<8u;i++) bytes[length-8u+i]=(uint8_t)(hash>>(8u*i));
+    out->oil_excess[at]=99.f;out->slime_excess[at]=99.f;
+    ASSERT_TRUE(fr_bulk_phase_chunk_decode(chunk,bytes,length,out));
+    ASSERT_INT_EQ(out->oil_fp[at],stock);
+    ASSERT_EQ(out->oil_excess[at],0.f);ASSERT_EQ(out->slime_excess[at],0.f);
+    free(bytes);free(out);free(chunk);PASS();
 }
 static void test_bulk_packet_corruption_and_truncation_are_transactional(void) {
     dc_chunk_t *chunk=calloc(1,sizeof(*chunk));fr_bulk_phase_chunk_t *source=calloc(1,sizeof(*source));
@@ -142,6 +161,7 @@ int main(void) {
     RUN(test_moving_solid_retains_displaced_top_phase_and_restores_it);
     RUN(test_sealed_capacity_collapse_keeps_each_phase_finite);
     RUN(test_bulk_packet_roundtrip_and_rejects_overfull_water_pair);
+    RUN(test_legacy_bulk_packet_loads_with_ambient_phase_heat);
     RUN(test_bulk_packet_corruption_and_truncation_are_transactional);
     RUN(test_bulk_packet_rejects_retained_volume_larger_than_stock);
     RUN(test_bulk_packet_reserves_oil_and_slime_heat_channels);

@@ -40,6 +40,8 @@ bool fr_bulk_phase_set_capacity(const fr_bulk_cell_t *source,uint32_t capacity_f
 typedef struct {
     uint32_t oil_fp[DC_CHUNK_CELLS],slime_fp[DC_CHUNK_CELLS];
     uint32_t oil_retained_fp[DC_CHUNK_CELLS],slime_retained_fp[DC_CHUNK_CELLS];
+    /** Per-phase thermal energy relative to the ambient-temperature baseline. */
+    float oil_excess[DC_CHUNK_CELLS],slime_excess[DC_CHUNK_CELLS];
 } fr_bulk_phase_chunk_t;
 
 /** Size of the fixed versioned chunk packet. */
