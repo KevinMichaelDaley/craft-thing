@@ -71,6 +71,16 @@ static void test_empty_phase_resample_clears_all_sample_mass(void) {
     }
     PASS();
 }
+static void test_symmetric_deformation_distinguishes_shear_from_rotation(void) {
+    const float shear[4]={0.f,10.f,0.f,0.f};
+    const float rotation[4]={0.f,-10.f,10.f,0.f};
+    float shear_rate=-1.f,rotation_rate=-1.f;
+    ASSERT_TRUE(fr_bulk_rheology_shear_rate(shear,&shear_rate));
+    ASSERT_TRUE(fr_bulk_rheology_shear_rate(rotation,&rotation_rate));
+    ASSERT_EQ(shear_rate,10.f);
+    ASSERT_EQ(rotation_rate,0.f);
+    PASS();
+}
 int main(void) {
     RUN(test_small_load_does_not_yield_cold_sludge);
     RUN(test_larger_load_yields_and_hot_sludge_softens);
@@ -79,5 +89,6 @@ int main(void) {
     RUN(test_quadrature_mass_reconciles_after_flux_and_resample);
     RUN(test_quadrature_rejects_invalid_volume_transactionally);
     RUN(test_empty_phase_resample_clears_all_sample_mass);
+    RUN(test_symmetric_deformation_distinguishes_shear_from_rotation);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail>0?1:0;
 }

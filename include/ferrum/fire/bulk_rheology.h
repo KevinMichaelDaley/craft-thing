@@ -11,6 +11,10 @@
 bool fr_bulk_rheology_mobility(const fr_reactive_profile_t *profile,
     float temperature_K,float stress,float shear_rate,float *out);
 
+/** Engineering shear rate from the symmetric part of a row-major 2D
+ * velocity-gradient sample. Rigid rotation contributes no shear. */
+bool fr_bulk_rheology_shear_rate(const float gradient[4],float *out);
+
 enum { FR_BULK_RHEOLOGY_MAX_QUADRATURE = 4 };
 typedef struct {
     uint32_t volume_fp;
