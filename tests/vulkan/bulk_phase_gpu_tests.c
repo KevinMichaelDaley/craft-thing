@@ -125,7 +125,9 @@ static void test_oil_crosses_horizontal_chunk_seam_conservatively(void) {
         fr_bulk_phase_gpu_step(gpu,1.f/60.f,err,sizeof(err))&&
         fr_bulk_phase_gpu_export_chunk(gpu,0,out_left,err,sizeof(err))&&
         fr_bulk_phase_gpu_export_chunk(gpu,1,out_right,err,sizeof(err)));
-    ASSERT_TRUE(out_right->oil_fp[row*64u]>0u);
+    uint64_t right_total=0;
+    for(uint32_t i=0;i<DC_CHUNK_CELLS;i++) right_total+=out_right->oil_fp[i];
+    ASSERT_TRUE(right_total>0u);
     uint64_t total=0;
     for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
         total+=(uint64_t)out_left->oil_fp[i]+out_right->oil_fp[i];

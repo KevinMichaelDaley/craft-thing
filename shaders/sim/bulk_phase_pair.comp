@@ -5,7 +5,7 @@ layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=3,std430) readonly buffer Occupancy {uint occupancy[];};
 layout(set=0,binding=37,std430) buffer Bulk {uint bulk[];};
 layout(push_constant) uniform Params {
-    uint width,height,parity;
+    uint width,height,parity,axis;
     float seconds,gravity,water_density,oil_density,slime_density;
 } params;
 const uint FULL=65536u;
@@ -31,19 +31,30 @@ void main() {
     uint index=gl_GlobalInvocationID.x;
     if(index>=params.width*params.height) return;
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));
-    if((uint(p.y)&1u)!=params.parity||p.y+1>=int(params.height)) return;
-    ivec2 q=p+ivec2(0,1);uint top_page=page_at(p),bottom_page=page_at(q);
+    uint coordinate=params.axis==0u?uint(p.y):uint(p.x);
+    if((coordinate&1u)!=params.parity) return;
+    ivec2 q=p+(params.axis==0u?ivec2(0,1):ivec2(1,0));
+    if(q.x>=int(params.width)||q.y>=int(params.height)) return;
+    uint top_page=page_at(p),bottom_page=page_at(q);
     if(top_page==0u||bottom_page==0u) return;
     uint top_at=atlas_at(p,top_page),bottom_at=atlas_at(q,bottom_page);
     if(!permeable(cells[top_at].x&65535u)||!permeable(cells[bottom_at].x&65535u)) return;
     uint world_size=params.width*params.height;
-    uint face_open=FULL-min(FULL,occupancy[4u*world_size+index]);
+    uint face_open=FULL-min(FULL,occupancy[(params.axis==0u?4u:3u)*world_size+index]);
     if(face_open==0u) return;
-    uint bottom_capacity=FULL-min(FULL,occupancy[2u*world_size+index+params.width]);
+    uint bottom_index=uint(q.y)*params.width+uint(q.x);
     uint top[3],bottom[3];
     top[0]=cells[top_at].y;bottom[0]=cells[bottom_at].y;
     top[1]=bulk_at(top_at,1u);bottom[1]=bulk_at(bottom_at,1u);
     top[2]=bulk_at(top_at,2u);bottom[2]=bulk_at(bottom_at,2u);
+    if(params.axis==1u&&used(bottom)>used(top)) {
+        uint swap_at=top_at;top_at=bottom_at;bottom_at=swap_at;
+        bottom_index=index;
+        for(uint phase=0u;phase<3u;phase++) {
+            uint swap_volume=top[phase];top[phase]=bottom[phase];bottom[phase]=swap_volume;
+        }
+    }
+    uint bottom_capacity=FULL-min(FULL,occupancy[2u*world_size+bottom_index]);
     float density[3]=float[3](params.water_density,params.oil_density,params.slime_density);
     bool changed=false;
     for(uint pass=0u;pass<3u;pass++) {
@@ -55,7 +66,7 @@ void main() {
                    (density[other]==density[phase]&&other>phase)) rank++;
             if(rank==pass) heavy=phase;
         }
-        if(top[heavy]==0u) continue;
+        if(top[heavy]==0u||(params.axis==1u&&heavy==0u)) continue;
         uint light=3u;float light_density=0.;
         for(uint phase=0u;phase<3u;phase++)
             if(bottom[phase]>0u&&density[phase]<density[heavy]&&
@@ -63,7 +74,9 @@ void main() {
         uint free_bottom=used(bottom)<bottom_capacity?bottom_capacity-used(bottom):0u;
         if(free_bottom==0u&&light==3u) continue;
         float opposing=light==3u?0.:light_density;
-        float buoyancy=max(0.,params.gravity*(density[heavy]-opposing)/density[heavy]);
+        float buoyancy=params.axis==0u?
+            max(0.,params.gravity*(density[heavy]-opposing)/density[heavy]):
+            params.gravity*float(used(top)-used(bottom))/float(FULL);
         float speed=sqrt(2.*buoyancy);
         uint allowance=uint(floor(min(float(FULL),speed*params.seconds*float(face_open))));
         uint swappable=light==3u?0u:bottom[light];

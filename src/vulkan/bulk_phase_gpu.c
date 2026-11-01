@@ -69,10 +69,10 @@ void dc_gpu_record_bulk_phase(dc_gpu_t *gpu,float seconds) {
     vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->bulk_phase_pipeline);
     vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout,0,1,&gpu->descriptor,0,NULL);
-    struct {uint32_t width,height,parity;float seconds,gravity,water,oil,slime;} push={
-        gpu->width,gpu->height,0,seconds,900.f,water->density,oil->density,slime->density};
-    for(uint32_t parity=0;parity<2u;parity++) {
-        push.parity=parity;
+    struct {uint32_t width,height,parity,axis;float seconds,gravity,water,oil,slime;} push={
+        gpu->width,gpu->height,0,0,seconds,900.f,water->density,oil->density,slime->density};
+    for(uint32_t axis=0;axis<2u;axis++) for(uint32_t parity=0;parity<2u;parity++) {
+        push.parity=parity;push.axis=axis;
         vkCmdPushConstants(gpu->command,gpu->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,
             0,sizeof(push),&push);
         vkCmdDispatch(gpu->command,(gpu->width*gpu->height+63u)/64u,1,1);
