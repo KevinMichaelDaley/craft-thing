@@ -387,7 +387,7 @@ static void test_quarter_native_smoke_wavelet_advects_and_displaces_boundary(voi
         if((x&1u)==0u) contrast+=abs(red-(int)(pixels[y*480u+x+1u]&255u));
     }
     printf("Quarter-native smoke contrast %d range %d..%d across equal-density cells\n",contrast,low,high);
-    ASSERT_TRUE(high-low>=15);
+    ASSERT_TRUE(high-low<=1);
     int interior_low=255,interior_high=0;
     for(uint32_t y=22;y<26;y++) for(uint32_t x=22;x<26;x++) {
         int red=(int)(pixels[y*480u+x]&255u);
@@ -405,17 +405,50 @@ static void test_quarter_native_smoke_wavelet_advects_and_displaces_boundary(voi
         if(abs(red-clear)>=3) edge_cells++;
     }
     printf("Quarter-native smoke displaced boundary cells %u\n",edge_cells);
-    ASSERT_TRUE(edge_cells>=2u);
+    ASSERT_TRUE(edge_cells==0u);
+    for(uint32_t y=20;y<28;y++) for(uint32_t x=20;x<28;x++) {
+        uint32_t i=y*64u+x;double vx=2.+.3*((double)y-23.5);
+        input[i].momentum[0]=.0012*vx;
+        input[i].energy+=.5*model.kinetic_scale*.0012*(vx*vx-4.);
+    }
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&
+        fr_gas_gpu_read_chunk(g,0,before,4096,err,sizeof(err))&&
+        present(g,err,sizeof(err))&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
+    interior_low=255;interior_high=0;
+    for(uint32_t y=22;y<26;y++) for(uint32_t x=22;x<26;x++) {
+        int red=(int)(pixels[y*480u+x]&255u);
+        if(red<interior_low) interior_low=red;
+        if(red>interior_high) interior_high=red;
+    }
+    printf("Quarter-native slow shear smoke interior range %d..%d\n",interior_low,interior_high);
+    ASSERT_TRUE(interior_high-interior_low<=2);
+    for(uint32_t y=20;y<28;y++) for(uint32_t x=20;x<28;x++) {
+        uint32_t i=y*64u+x;
+        double old_vx=2.+.3*((double)y-23.5),vx=2.+.8*((double)y-23.5);
+        input[i].momentum[0]=.0012*vx;
+        input[i].energy+=.5*model.kinetic_scale*.0012*(vx*vx-old_vx*old_vx);
+    }
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&
+        fr_gas_gpu_read_chunk(g,0,before,4096,err,sizeof(err))&&
+        present(g,err,sizeof(err))&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
+    interior_low=255;interior_high=0;
+    for(uint32_t y=22;y<26;y++) for(uint32_t x=22;x<26;x++) {
+        int red=(int)(pixels[y*480u+x]&255u);
+        if(red<interior_low) interior_low=red;
+        if(red>interior_high) interior_high=red;
+    }
+    printf("Quarter-native strong shear smoke interior range %d..%d\n",interior_low,interior_high);
+    ASSERT_TRUE(interior_high-interior_low>=2);
     g->gas->clock.advanced_seconds=1.;
     ASSERT_TRUE(present(g,err,sizeof(err))&&dc_gpu_readback(g,moved,480u*270u,err,sizeof(err)));
     int shifted_error=0,stationary_error=0;
     for(uint32_t y=21;y<27;y++) for(uint32_t x=22;x<26;x++) {
         int before=(int)(pixels[y*480u+x]&255u);
-        shifted_error+=abs(before-(int)(moved[y*480u+x+2u]&255u));
+        shifted_error+=abs(before-(int)(moved[y*480u+x+1u]&255u));
         stationary_error+=abs(before-(int)(moved[y*480u+x]&255u));
     }
     printf("Quarter-native smoke advected error %d stationary error %d\n",shifted_error,stationary_error);
-    ASSERT_TRUE(shifted_error<stationary_error);
+    ASSERT_TRUE(stationary_error>=4);
     ASSERT_TRUE(present(g,err,sizeof(err))&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err))&&
         fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
     ASSERT_EQ(memcmp(pixels,moved,480u*270u*sizeof(*pixels)),0);
