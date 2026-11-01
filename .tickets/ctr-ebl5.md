@@ -71,3 +71,11 @@ Aggregate-buffer checkpoint verified: source persistence RED failed extra-build 
 **2026-10-23T14:51:56Z**
 
 USER STEERING: propagated lighting is now gated behind --lighting and disabled by default for scene gameplay. User explicitly defers further lighting performance work for now. Keep directional-buffer implementation and explicit renderer correctness/performance tests; do not claim original <30ms target met. Default scene uses authored material colors and skips fr_lighting_record; F8 remains an explicit runtime toggle.
+
+**2026-11-01T16:53:44Z**
+
+Native DISPLAY=:1 X11 Vulkan 480x270 quarter-native bonfire with --lighting after ctlo-h9of fire-source integration: 1000 complete frames mean 63.733ms worst 67.250ms; application 30ms budget exits nonzero. DC_FRAME_TIMINGS maximum RSS 536572 KiB. A compact-scan fire-marker experiment still measured 62.993ms mean / 68.495ms worst, so scan width alone did not address the full lighting cost; the experiment was reverted. Disabled-lighting controls measured 18.445/21.473ms and 18.734/24.640ms mean/worst. Captures: build/bonfire_lit_h9of.bmp and build/bonfire_measurements_6rthqN/autonomous_1.bmp. Native Wayland socket was unavailable; Xephyr was reserved for short display tests.
+
+**2026-11-01T17:05:03Z**
+
+Correction and clean final-code measurement: DC_FRAME_TIMINGS per-frame diagnostics inflated the unlit control to 45.258ms, so diagnostic timings alone are unsuitable for comparison. A clean final-code native X11 Vulkan 480x270 run with --lighting and no DC_FRAME_TIMINGS completed 1000 frames at mean 64.175ms, worst 68.328ms, failed the 30ms gate, with four paused pixels identical; capture build/bonfire_lit_h9of_final.bmp. Clean unlit 1000-frame controls remain 18.445/21.473ms and 18.734/24.640ms mean/worst. Diagnostic RSS peak unlit 534144KiB, lit 536572KiB (~2428KiB delta). Optional lighting performance remains here; fire feature keeps lighting opt-in.
