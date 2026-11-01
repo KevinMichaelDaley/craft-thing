@@ -128,6 +128,34 @@ static void test_oiled_wood_ignites_before_dry_control_without_spending_film(voi
     ASSERT_EQ(oil_after.state.coating_oil_fuel_fp,oil.coating_oil_fuel_fp);
     free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_pending_shock_heats_wood_before_gpu_ignition(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    const uint32_t cold_at=20u*64u+20u,shock_at=20u*64u+30u;
+    chunk->cells[cold_at]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
+    chunk->cells[shock_at]=chunk->cells[cold_at];
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t cold,shocked;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,0,500,2905,&cold,err,sizeof(err)));
+    cold.ignition_threshold=.01f;
+    shocked=cold;shocked.parcel_id_low=shocked.origin_id_low=2906;
+    shocked.pending_shock_energy=450.f;
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,cold_at,&cold,err,sizeof(err))&&
+        fr_gpu_reactive_seed_cell(g,0,shock_at,&shocked,err,sizeof(err)));
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&
+        fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&
+        fr_combustion_gpu_enable(g,err,sizeof(err))&&
+        fr_combustion_gpu_step(g,.03f,err,sizeof(err)));
+    fr_reactive_record_t cold_after,shock_after;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,cold_at,&cold_after,&found,err,sizeof(err))&&found);
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,shock_at,&shock_after,&found,err,sizeof(err))&&found);
+    ASSERT_EQ(cold_after.state.fuel_mass_fp,cold.fuel_mass_fp);
+    ASSERT_EQ(shock_after.state.pending_shock_energy,0.f);
+    ASSERT_TRUE(shock_after.state.fuel_mass_fp<shocked.fuel_mass_fp);
+    free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_spent_terrain_becomes_loose_saved_ash_without_losing_mass(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     uint32_t at=20u*64u+20u;
@@ -283,6 +311,10 @@ int main(int argc,char **argv) {
         RUN(test_oiled_wood_ignites_before_dry_control_without_spending_film);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
     }
+    if(argc==2&&strcmp(argv[1],"--shock")==0) {
+        RUN(test_pending_shock_heats_wood_before_gpu_ignition);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
     if(argc==2&&strcmp(argv[1],"--ash")==0) {
         RUN(test_spent_terrain_becomes_loose_saved_ash_without_losing_mass);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
@@ -332,6 +364,7 @@ int main(int argc,char **argv) {
     RUN(test_sparse_owner_combustion_uses_the_live_gas_bank);
     RUN(test_dry_leaf_tinder_uses_the_existing_finite_material_profile);
     RUN(test_oiled_wood_ignites_before_dry_control_without_spending_film);
+    RUN(test_pending_shock_heats_wood_before_gpu_ignition);
     RUN(test_retained_char_can_finish_burning_on_the_gpu);
     RUN(test_spent_terrain_becomes_loose_saved_ash_without_losing_mass);
     RUN(test_flame_emission_requires_local_transported_hot_fuel_and_oxygen);
