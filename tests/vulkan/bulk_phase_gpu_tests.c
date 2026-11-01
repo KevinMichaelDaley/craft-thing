@@ -20,6 +20,7 @@ static void test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot(void
     chunk->cells[17].fluid_mass=30000;
     phase->oil_fp[17]=20000;phase->slime_fp[17]=15536;
     phase->oil_retained_fp[17]=1234;phase->slime_retained_fp[17]=4321;
+    phase->oil_excess[17]=10.f;phase->slime_excess[17]=-3.f;
     ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
         dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
         dc_gpu_set_page(gpu,0,0,0,err,sizeof(err)));
@@ -36,6 +37,11 @@ static void test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot(void
         fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
     ASSERT_INT_EQ(out->oil_retained_fp[17],1234);
     phase->oil_retained_fp[17]=1234u;
+    phase->oil_excess[17]=NAN;
+    ASSERT_TRUE(!fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,phase,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
+    ASSERT_EQ(out->oil_excess[17],10.f);
+    phase->oil_excess[17]=10.f;
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
         fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
     ASSERT_INT_EQ(out->oil_fp[17],0);ASSERT_INT_EQ(out->slime_fp[17],0);
