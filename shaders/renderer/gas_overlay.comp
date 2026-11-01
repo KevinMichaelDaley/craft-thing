@@ -81,6 +81,12 @@ vec4 smoke_visual_sample(vec2 p,float opacity,float density) {
     vec4 b=mix(smoke_visual_at(low+ivec2(0,1),opacity,density),smoke_visual_at(low+ivec2(1,1),opacity,density),t.x);
     return mix(a,b,t.y);
 }
+float smoke_edge_weight(float original_depth,float displaced_depth) {
+    /* A large relative change marks the plume boundary. Inside uniform smoke,
+     * the original optical depth dominates and only the soft detail remains. */
+    float change=abs(displaced_depth-original_depth)/max(max(displaced_depth,original_depth),.25);
+    return smoothstep(FR_SMOKE_EDGE_START,FR_SMOKE_EDGE_FULL,change);
+}
 void main() {
     uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
     if(index>=params.width*params.height) return;
@@ -122,9 +128,7 @@ void main() {
         float speed=length(velocity),strength=FR_SMOKE_WARP_CELLS*speed/(speed+FR_SMOKE_WARP_SPEED);
         vec4 original=smoke_visual_gas(s,opacity,density);
         vec4 warped=smoke_visual_sample(vec2(x,y)-strength*curl,opacity,density);
-        float difference=abs(warped.x-original.x)/max(max(warped.x,original.x),.25);
-        float edge=smoothstep(FR_SMOKE_EDGE_START,FR_SMOKE_EDGE_FULL,difference);
-        vec4 smoke=mix(original,warped,edge);
+        vec4 smoke=mix(original,warped,smoke_edge_weight(original.x,warped.x));
         if(smoke.x<=0.) return;
         float detail=max(FR_SMOKE_DETAIL_MIN,1.+FR_SMOKE_DETAIL_GAIN*speed/(speed+FR_SMOKE_DETAIL_SPEED)*
             smoke_wavelet(material*FR_SMOKE_DETAIL_SCALE));
