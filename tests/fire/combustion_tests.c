@@ -59,6 +59,26 @@ static void test_seeded_ignition_ensemble_matches_integrated_hazard(void) {
     ASSERT_TRUE(fabs((double)ignited-expected)<100.);
     PASS();
 }
+static void test_pending_shock_becomes_heat_before_wood_ignition(void) {
+    char err[256]={0};fr_reactive_state_t cold,shocked,out;
+    fr_combustion_products_t products;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,0,500,2904,
+        &cold,err,sizeof(err)));
+    cold.ignition_threshold=.01f;shocked=cold;shocked.pending_shock_energy=450.f;
+    double initial=fr_reactive_state_energy(&shocked)+shocked.pending_shock_energy;
+    ASSERT_TRUE(fr_combustion_reference(&shocked,65536,
+        FR_COMBUSTION_AMBIENT_OXYGEN,1,0.f,&out,&products,err,sizeof(err)));
+    ASSERT_EQ(out.pending_shock_energy,0.f);
+    ASSERT_TRUE(fabs(fr_reactive_state_energy(&out)-initial)<1e-6);
+    shocked=out;
+    ASSERT_TRUE(fr_combustion_reference(&shocked,65536,
+        FR_COMBUSTION_AMBIENT_OXYGEN,1,.03f,&out,&products,err,sizeof(err)));
+    ASSERT_TRUE(products.fuel_fp>0);
+    ASSERT_TRUE(fr_combustion_reference(&cold,65536,
+        FR_COMBUSTION_AMBIENT_OXYGEN,1,.03f,&out,&products,err,sizeof(err)));
+    ASSERT_EQ(products.fuel_fp,0);
+    PASS();
+}
 static void test_finite_oil_film_accelerates_wood_ignition_without_spending_it(void) {
     char err[256]={0};fr_reactive_state_t dry,oiled,dry_after,oil_after;
     fr_combustion_products_t dry_products,oil_products;
@@ -250,6 +270,7 @@ int main(void) {
     RUN(test_starved_wet_and_buried_do_not_burn);
     RUN(test_ignition_hazard_survives_equal_time_scheduling);
     RUN(test_seeded_ignition_ensemble_matches_integrated_hazard);
+    RUN(test_pending_shock_becomes_heat_before_wood_ignition);
     RUN(test_finite_oil_film_accelerates_wood_ignition_without_spending_it);
     RUN(test_energy_ledger_and_invalid_transaction);
     RUN(test_competing_parcels_cannot_overdraw_oxygen);
