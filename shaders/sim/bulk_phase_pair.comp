@@ -5,6 +5,7 @@ layout(local_size_x=64) in;
 layout(set=0,binding=1,std430) buffer Cells {uvec2 cells[];};
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=3,std430) readonly buffer Occupancy {uint occupancy[];};
+layout(set=0,binding=10,std430) readonly buffer FaceVelocity {vec2 face_velocity[];};
 layout(set=0,binding=37,std430) buffer Bulk {uint bulk[];};
 layout(push_constant) uniform Params {
     uint width,height,parity,axis;
@@ -56,10 +57,14 @@ void main() {
     top[2]=bulk_at(top_at,2u);bottom[2]=bulk_at(bottom_at,2u);
     uint top_capacity=FULL-min(FULL,occupancy[2u*world_size+top_index]);
     uint bottom_capacity=FULL-min(FULL,occupancy[2u*world_size+bottom_index]);
-    bool reverse=params.axis==0u?
+    float water_flow=params.axis==0u?face_velocity[index].y:face_velocity[index].x;
+    bool reverse_by_fill=params.axis==0u?
         (used(bottom)>bottom_capacity&&used(top)<top_capacity):
         (used(bottom)>bottom_capacity&&used(top)<=top_capacity)||
         (used(bottom)<=bottom_capacity&&used(bottom)>used(top));
+    bool reverse_by_drag=water_flow<0.&&bottom[0]>0u&&used(top)<top_capacity;
+    bool forward_by_drag=water_flow>0.&&top[0]>0u&&used(bottom)<bottom_capacity;
+    bool reverse=reverse_by_drag||(!forward_by_drag&&reverse_by_fill);
     if(reverse) {
         uint swap_at=top_at;top_at=bottom_at;bottom_at=swap_at;
         uint swap_index=top_index;top_index=bottom_index;bottom_index=swap_index;
@@ -93,9 +98,12 @@ void main() {
         if(free_bottom==0u&&light==3u) continue;
         float opposing=light==3u?0.:light_density;
         float buoyancy=params.axis==0u?
-            max(0.,params.gravity*(density[heavy]-opposing)/density[heavy]):
+            max(0.,params.gravity*(density[heavy]-opposing)/density[heavy]*
+                (reverse?-1.:1.)):
             params.gravity*float(max(0,int(used(top))-int(used(bottom))))/float(FULL);
-        float speed=sqrt(2.*buoyancy);
+        float drag=max(0.,(reverse?-water_flow:water_flow))*
+            float(top[0])/float(max(used(top),1u));
+        float speed=sqrt(2.*buoyancy)+drag;
         uint allowance=excess>0u?min(excess,face_open):
             uint(floor(min(float(FULL),speed*params.seconds*float(face_open))));
         uint swappable=light==3u?0u:bottom[light];
