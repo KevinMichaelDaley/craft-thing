@@ -7,7 +7,7 @@
 
 #include "dungeoncraft/chunk.h"
 
-#define FR_REACTIVE_STATE_ABI 5u
+#define FR_REACTIVE_STATE_ABI 6u
 #define FR_REACTIVE_STATE_WORDS 28u
 #define FR_REACTIVE_OWNER_WORDS 6u
 enum {
@@ -26,7 +26,9 @@ enum {
  * that physical bound water once, not once in each representation. */
 typedef struct {
     uint32_t material, flags, parcel_id_low, parcel_id_high;
-    uint32_t origin_id_low, origin_id_high, identity_reserved[2];
+    uint32_t origin_id_low, origin_id_high;
+    float evaporation_fraction; /**< Sub-Q16 water flux, with no mass or energy yet transferred. */
+    uint32_t identity_reserved;
     uint32_t dry_mass_fp, fuel_mass_fp, char_mass_fp, inert_mass_fp;
     uint32_t bound_water_fp, coating_oil_fuel_fp, coating_jelly_fuel_fp;
     uint32_t core_oxidizer_fp, coating_oxidizer_fp;

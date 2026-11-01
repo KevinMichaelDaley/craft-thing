@@ -96,7 +96,7 @@ bool fr_reactive_state_valid(const fr_reactive_state_t *s,char *err,uint32_t cap
     if(!s||!fr_reactive_profile(s->material)||(s->flags&~31u)!=0||
        identity(s->parcel_id_low,s->parcel_id_high)==0||identity(s->origin_id_low,s->origin_id_high)==0)
         return error(err,cap,"Invalid reactive identity/flags");
-    if(s->identity_reserved[0]||s->identity_reserved[1])
+    if(s->evaporation_fraction!=0.f||s->identity_reserved)
         return error(err,cap,"Nonzero reactive reserved fields");
     if(!isfinite(s->reaction_fraction)||s->reaction_fraction<0||s->reaction_fraction>=1)
         return error(err,cap,"Invalid fractional reaction progress");

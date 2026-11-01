@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "ferrum/fire/material_profile.h"
@@ -63,8 +64,27 @@ static void test_overdraw_pause_and_invalid_gas_leave_inventories_safe(void) {
     ASSERT_TRUE(memcmp(&next_gas,&saved_gas,sizeof(saved_gas))==0);ASSERT_EQ(moved,saved_moved);
     PASS();
 }
+static void test_fractional_drying_progress_splits_and_roundtrips_without_new_water(void) {
+    char err[256]={0};fr_reactive_state_t parent,left,right;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,1000,350,1,&parent,err,sizeof(err)));
+    parent.evaporation_fraction=.75f;
+    ASSERT_TRUE(fr_reactive_state_valid(&parent,err,sizeof(err)));
+    ASSERT_TRUE(fr_reactive_state_split(&parent,32768,2,3,&left,&right,err,sizeof(err)));
+    ASSERT_TRUE(fabs((double)left.evaporation_fraction+right.evaporation_fraction-.75)<1e-7);
+    ASSERT_EQ(left.bound_water_fp+right.bound_water_fp,parent.bound_water_fp);
+    fr_reactive_record_t record={.owner=fr_reactive_cell_owner((dc_chunk_coord_t){-2,3},17),.state=parent},restored={0};
+    size_t size=0,written=0;ASSERT_TRUE(fr_reactive_snapshot_size(1,&size));
+    uint8_t *packet=malloc(size);ASSERT_TRUE(packet);
+    ASSERT_TRUE(fr_reactive_snapshot_encode(&record,1,4,packet,size,&written,err,sizeof(err)));
+    uint32_t count=0,required=0;uint64_t next=0;
+    ASSERT_TRUE(fr_reactive_snapshot_decode(packet,written,&restored,1,&count,&next,&required,err,sizeof(err)));
+    ASSERT_EQ(count,1u);ASSERT_EQ(next,4u);
+    ASSERT_EQ(restored.state.evaporation_fraction,parent.evaporation_fraction);
+    free(packet);PASS();
+}
 int main(void) {
     RUN(test_bound_water_enters_vapor_with_finite_mass_and_total_energy);
     RUN(test_overdraw_pause_and_invalid_gas_leave_inventories_safe);
+    RUN(test_fractional_drying_progress_splits_and_roundtrips_without_new_water);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
