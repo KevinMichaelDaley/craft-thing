@@ -117,6 +117,7 @@ bool fr_thermal_evaporate_pair(const fr_reactive_state_t *solid,const fr_gas_sta
             double debit=mass*per_kg;
             if(!fr_reactive_state_add_heat(&next_solid,-debit,err,cap)) return false;
             next_solid.bound_water_fp-=moved;
+            if(next_solid.bound_water_fp==0u) next_solid.evaporation_fraction=0.f;
             next_gas.species[FR_GAS_VAPOR]+=mass;
             next_gas.energy+=mass*model->heat_capacity_cv[FR_GAS_VAPOR]*temperature;
             if(!fr_reactive_state_valid(&next_solid,err,cap)||
