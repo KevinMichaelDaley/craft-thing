@@ -3,6 +3,7 @@
 #undef main
 
 #include "ferrum/fire/combustion_gpu.h"
+#include "ferrum/fire/bulk_phase_gpu.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/thermal.h"
 #include "ferrum/fire/thermal_gpu.h"
@@ -80,6 +81,36 @@ static void test_rotated_rigid_wood_keeps_its_drying_inventory(void) {
     ASSERT_EQ(after.state.fuel_mass_fp,wood.fuel_mass_fp);
     ASSERT_EQ(after.state.origin_id_low,wood.origin_id_low);
     free(chunk);dc_gpu_destroy(g);PASS();
+}
+static void test_rigid_contact_wets_from_finite_oil_volume(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *phase=calloc(1,sizeof(*phase));
+    fr_bulk_phase_chunk_t *after=calloc(1,sizeof(*after));
+    ASSERT_TRUE(chunk&&phase&&after);
+    for(uint32_t y=20u;y<22u;y++) for(uint32_t x=20u;x<23u;x++)
+        chunk->cells[y*64u+x].material=DC_MATERIAL_WOOD;
+    uint32_t oil_at=20u*64u+19u;phase->oil_fp[oil_at]=30000u;
+    phase->oil_excess[oil_at]=4.f;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t wood;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322u,0u,300.f,
+        501u,&wood,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,20u*64u+20u,&wood,err,sizeof(err))&&
+        dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(g,0,chunk,phase,err,sizeof(err))&&
+        fr_thermal_gpu_enable(g,err,sizeof(err)));
+    fr_reactive_record_t record;bool found=false;
+    ASSERT_TRUE(fr_thermal_gpu_step(g,.5f,err,sizeof(err))&&
+        fr_gpu_reactive_read_body(g,0x80000001u,0u,0u,&record,&found,err,sizeof(err))&&found&&
+        fr_bulk_phase_gpu_export_chunk(g,0,after,err,sizeof(err)));
+    uint32_t gained=record.state.coating_oil_fuel_fp-wood.coating_oil_fuel_fp;
+    uint32_t lost=phase->oil_fp[oil_at]-after->oil_fp[oil_at];
+    ASSERT_TRUE(gained>0u&&lost>0u);
+    ASSERT_TRUE(abs((int)gained-(int)lost)<2);
+    ASSERT_TRUE(after->oil_excess[oil_at]<phase->oil_excess[oil_at]);
+    free(after);free(phase);free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_saturated_neighbor_air_suppresses_drying(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
@@ -204,6 +235,7 @@ static void test_maintained_wet_wood_does_not_ignite_beside_dry_control(void) {
 int main(void) {
     RUN(test_wet_wood_dries_into_the_local_gas_without_losing_fuel);
     RUN(test_rotated_rigid_wood_keeps_its_drying_inventory);
+    RUN(test_rigid_contact_wets_from_finite_oil_volume);
     RUN(test_saturated_neighbor_air_suppresses_drying);
     RUN(test_equal_simulated_time_dries_within_one_water_quantum);
     RUN(test_drying_reaches_gas_across_a_chunk_seam);
