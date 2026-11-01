@@ -1,6 +1,7 @@
 #include <math.h>
 
 #include "ferrum/fire/coating.h"
+#include "ferrum/fire/material_profile.h"
 
 static bool valid_host(const fr_coating_host_t *host) {
     if(!host||host->kind<FR_COATING_TERRAIN||host->kind>FR_COATING_ACTOR)
@@ -56,8 +57,46 @@ bool fr_coating_release(const fr_coating_film_t *film,
     uint32_t phase,float temperature_K,float traction,float seconds,
     fr_coating_film_t *film_out,fr_bulk_cell_t *receiver_out,
     double *receiver_excess_out,uint32_t *released_fp) {
-    (void)film;(void)receiver;(void)receiver_excess_heat;(void)phase;
-    (void)temperature_K;(void)traction;(void)seconds;(void)film_out;
-    (void)receiver_out;(void)receiver_excess_out;(void)released_fp;
-    return false;
+    if(!film||!valid_host(&film->host)||!valid_bulk(receiver)||
+       (phase!=FR_BULK_OIL&&phase!=FR_BULK_SLIME)||
+       !isfinite(receiver_excess_heat)||!isfinite(film->excess_heat)||
+       !isfinite(temperature_K)||temperature_K<=0.f||
+       !isfinite(traction)||traction<0.f||!isfinite(seconds)||seconds<0.f||
+       !film_out||!receiver_out||!receiver_excess_out||!released_fp)
+        return false;
+    uint32_t stock=phase==FR_BULK_OIL?film->oil_fp:film->slime_fp;
+    uint32_t oil_material=DC_MATERIAL_OIL,slime_material=DC_MATERIAL_RED_SLIME_JELLY;
+    const fr_reactive_profile_t *oil=fr_reactive_profile(oil_material);
+    const fr_reactive_profile_t *slime=fr_reactive_profile(slime_material);
+    const fr_reactive_profile_t *profile=phase==FR_BULK_OIL?oil:slime;
+    if(!oil||!slime||profile->consistency<=0.f||profile->shear_exponent<=0.f||
+       (film->oil_fp==0u&&film->slime_fp==0u&&film->excess_heat!=0.))
+        return false;
+    float adhesion=temperature_K>=profile->softening_K?
+        profile->hot_adhesion:profile->cold_adhesion;
+    double drive=fmax(0.,(double)traction-adhesion)/profile->consistency;
+    double mobile=stock*fmin(1.,pow(drive,1./profile->shear_exponent)*seconds);
+    uint32_t requested=(uint32_t)fmin((double)stock,floor(mobile));
+    uint64_t occupied=0u;
+    for(uint32_t i=0u;i<FR_BULK_PHASES;i++) occupied+=receiver->volume_fp[i];
+    uint32_t room=receiver->capacity_fp-(uint32_t)occupied;
+    uint32_t released=requested<room?requested:room;
+    double oil_capacity=(double)film->oil_fp*oil->density*oil->heat_capacity;
+    double slime_capacity=(double)film->slime_fp*slime->density*slime->heat_capacity;
+    double transfer_capacity=(double)released*profile->density*profile->heat_capacity;
+    double total_capacity=oil_capacity+slime_capacity;
+    double heat=total_capacity>0.?film->excess_heat*transfer_capacity/total_capacity:0.;
+    double next_film_heat=film->excess_heat-heat;
+    double next_receiver_heat=receiver_excess_heat+heat;
+    if(!isfinite(mobile)||!isfinite(heat)||!isfinite(next_film_heat)||
+       !isfinite(next_receiver_heat)) return false;
+    fr_coating_film_t next_film=*film;
+    fr_bulk_cell_t next_receiver=*receiver;
+    if(phase==FR_BULK_OIL) next_film.oil_fp-=released;
+    else next_film.slime_fp-=released;
+    next_film.excess_heat=next_film_heat;
+    next_receiver.volume_fp[phase]+=released;
+    *film_out=next_film;*receiver_out=next_receiver;
+    *receiver_excess_out=next_receiver_heat;*released_fp=released;
+    return true;
 }
