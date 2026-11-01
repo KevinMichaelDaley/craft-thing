@@ -46,3 +46,30 @@ bool fr_bulk_phase_density_order(const float density[FR_BULK_PHASES],
     }
     memcpy(order,sorted,sizeof(sorted));return true;
 }
+
+bool fr_bulk_phase_set_capacity(const fr_bulk_cell_t *source,uint32_t capacity_fp,
+    const float density[FR_BULK_PHASES],fr_bulk_cell_t *out) {
+    uint32_t order[FR_BULK_PHASES];
+    if(!valid_cell(source)||capacity_fp>FR_BULK_CELL_FULL_FP||!out||
+       !fr_bulk_phase_density_order(density,order)) return false;
+    fr_bulk_cell_t next=*source;next.capacity_fp=capacity_fp;
+    uint64_t occupied=0;
+    for(uint32_t i=0;i<FR_BULK_PHASES;i++) occupied+=next.volume_fp[i];
+    if(occupied>capacity_fp) {
+        uint32_t excess=(uint32_t)(occupied-capacity_fp);
+        for(uint32_t i=0;i<FR_BULK_PHASES&&excess>0;i++) {
+            uint32_t phase=order[i],moved=next.volume_fp[phase]<excess?
+                next.volume_fp[phase]:excess;
+            if(UINT32_MAX-next.retained_fp[phase]<moved) return false;
+            next.volume_fp[phase]-=moved;next.retained_fp[phase]+=moved;excess-=moved;
+        }
+    } else {
+        uint32_t free_fp=capacity_fp-(uint32_t)occupied;
+        for(uint32_t i=FR_BULK_PHASES;i>0&&free_fp>0;i--) {
+            uint32_t phase=order[i-1],moved=next.retained_fp[phase]<free_fp?
+                next.retained_fp[phase]:free_fp;
+            next.retained_fp[phase]-=moved;next.volume_fp[phase]+=moved;free_fp-=moved;
+        }
+    }
+    *out=next;return true;
+}
