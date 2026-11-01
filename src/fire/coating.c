@@ -4,8 +4,6 @@
 #include "ferrum/fire/coating.h"
 #include "ferrum/fire/material_profile.h"
 
-#define FR_COATING_SOFTENING_SPAN_K 100.f
-
 static bool valid_host(const fr_coating_host_t *host) {
     if(!host||host->kind<FR_COATING_TERRAIN||host->kind>FR_COATING_ACTOR)
         return false;
