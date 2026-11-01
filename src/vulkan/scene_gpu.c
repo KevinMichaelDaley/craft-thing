@@ -281,7 +281,12 @@ bool fr_renderer_render(dc_gpu_t *g, char *err, uint32_t cap) {
 }
 bool fr_renderer_read_light(dc_gpu_t *g,uint32_t x,uint32_t y,
                             fr_renderer_light_field_t *field) {
-  return g&&g->renderer&&fr_lighting_gpu_read(g->renderer->lighting,x,y,field);
+  if(!g||!g->renderer||!field||!fr_renderer_begin(g)) return false;
+  fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,VK_PIPELINE_STAGE_2_HOST_BIT,
+      VK_ACCESS_2_HOST_READ_BIT);
+  return fr_renderer_submit(g)&&
+      fr_lighting_gpu_read(g->renderer->lighting,x,y,field);
 }
 bool fr_renderer_read_opacity(dc_gpu_t *g,uint32_t x,uint32_t y,
                               fr_occlusion_node_t *node) {

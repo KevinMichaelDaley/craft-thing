@@ -78,9 +78,11 @@ void burn_coating(Words entry,inout Gas gas,inout float admitted,
     gas.species.z+=float(exhaust)/65536.;
     gas.dynamics.x+=float(soot)/65536.;
     gas.dynamics.y+=.3*heat+removed-retained;
-    gas.visual.rgb+=vec3(.18,.16,.14)*float(exhaust+soot)/65536.;
+    gas.visual.rgb+=(mixed?vec3(.10,.20,.14):vec3(.18,.16,.14))*
+        float(exhaust+soot)/65536.;
     admitted+=heat;source_temperature=max(source_temperature,temperature);
     sources|=FR_FIRE_EMISSION_SURFACE;
+    if(mixed) sources|=FR_FIRE_EMISSION_MAGIC|(FR_GREEK_FIRE_RGB8<<8u);
     if(entry.words[s+FR_STATE_COATING_OIL]==0u||
        (mixed&&(entry.words[s+FR_STATE_COATING_JELLY]==0u||
                 entry.words[s+FR_STATE_COATING_OXIDIZER]==0u)))

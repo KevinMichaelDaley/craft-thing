@@ -30,6 +30,7 @@ build/shaders/lighting.comp.spv: shaders/renderer/lighting.comp include/ferrum/r
 build/shaders/lighting_subgroup.comp.spv: shaders/renderer/lighting.comp include/ferrum/renderer/light_transport.h
 	mkdir -p build/shaders
 	$(GLSLANG) -DFR_SUBGROUP_SCAN=1 -V --target-env vulkan1.3 $< -o $@
+build/shaders/lighting.comp.spv build/shaders/lighting_subgroup.comp.spv: include/dungeoncraft/blackbody.h
 build/lighting_gpu_tests: tests/renderer/lighting_gpu_tests.c src/vulkan/lighting_gpu.c src/vulkan/occlusion_gpu.c src/vulkan/renderer_resource.c src/vulkan/renderer_internal.h build/fluid_tests build/shaders/occlusion.comp.spv build/shaders/lighting.comp.spv build/shaders/lighting_subgroup.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/shading_tests: tests/renderer/shading_tests.c src/renderer/shading.c include/ferrum/renderer/shading.h

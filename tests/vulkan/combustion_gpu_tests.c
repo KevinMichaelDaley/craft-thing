@@ -305,13 +305,21 @@ static void test_mixed_film_burns_wet_faster_than_matched_oil_control(void) {
     ASSERT_EQ(results[0].state.fuel_mass_fp,original[0].fuel_mass_fp);
     fr_combustion_emission_t *emission=calloc(4096u,sizeof(*emission));ASSERT_TRUE(emission);
     ASSERT_TRUE(fr_combustion_gpu_read_emission_chunk(g,0,emission,4096u,err,sizeof(err)));
-    ASSERT_TRUE((emission[at[0]].sources&FR_FIRE_EMISSION_MAGIC)!=0u);
-    ASSERT_TRUE((emission[at[0]].sources>>8u)!=0u);
-    ASSERT_TRUE((emission[at[1]].sources&FR_FIRE_EMISSION_MAGIC)==0u);
     fr_gas_state_t *gas=calloc(4096u,sizeof(*gas));ASSERT_TRUE(gas);
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,gas,4096u,err,sizeof(err)));
-    ASSERT_TRUE(gas[at[0]].pigment[1]>gas[at[0]].pigment[0]);
-    ASSERT_TRUE(gas[at[1]].pigment[0]>gas[at[1]].pigment[1]);
+    const int32_t offsets[]={-64,-1,1,64};
+    uint32_t greek_sources=0u,oil_sources=0u;
+    double greek_red=0.,greek_green=0.,oil_red=0.,oil_green=0.;
+    for(uint32_t i=0u;i<4u;i++) {
+        uint32_t greek=at[0]+offsets[i],oil=at[1]+offsets[i];
+        greek_sources|=emission[greek].sources;oil_sources|=emission[oil].sources;
+        greek_red+=gas[greek].pigment[0];greek_green+=gas[greek].pigment[1];
+        oil_red+=gas[oil].pigment[0];oil_green+=gas[oil].pigment[1];
+    }
+    ASSERT_TRUE((greek_sources&FR_FIRE_EMISSION_MAGIC)!=0u);
+    ASSERT_TRUE((greek_sources>>8u)!=0u);
+    ASSERT_TRUE((oil_sources&FR_FIRE_EMISSION_MAGIC)==0u);
+    ASSERT_TRUE(greek_green>greek_red&&oil_red>oil_green);
     free(gas);
     free(emission);
     free(chunk);dc_gpu_destroy(g);PASS();

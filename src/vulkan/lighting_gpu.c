@@ -4,6 +4,7 @@
 
 #include "ferrum/renderer/light_transport.h"
 #include "ferrum/renderer/lighting_gpu.h"
+#include "thermal_gpu_state.h"
 
 _Static_assert(sizeof(fr_renderer_point_light_t) == 32,
                "Point light GPU layout must be two vec4 values");
@@ -156,7 +157,7 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
   l->gpu = g;
   l->compact_available = getenv("DC_LIGHTING_GENERAL_TRANSPORT") == NULL;
   uint32_t layout[136] = {0};
-  VkDescriptorBufferInfo buffers[9];
+  VkDescriptorBufferInfo buffers[10];
   if (!fr_occlusion_gpu_layout(c, &buffers[0], layout) ||
       !fr_occlusion_input_binding(c, &buffers[0]))
     goto fail;
@@ -236,6 +237,8 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
   buffers[2] = (VkDescriptorBufferInfo){l->sources, 0, FR_TRANSPORT_SOURCE_RECORDS * 32u};
   buffers[3] = (VkDescriptorBufferInfo){
       l->field, 0, (VkDeviceSize)l->width * l->height * FR_RENDERER_FIELD_BYTES};
+  buffers[9] = (VkDescriptorBufferInfo){g->page_buffer,0,
+      (VkDeviceSize)g->page_width*g->page_height*sizeof(uint32_t)};
   VkPhysicalDeviceSubgroupProperties subgroup = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES};
   VkPhysicalDeviceProperties2 properties = {
@@ -249,7 +252,7 @@ bool fr_lighting_gpu_create(dc_gpu_t *g, fr_occlusion_gpu_t *c,
                    !getenv("DC_LIGHTING_SHARED_SCAN");
   const char *shader = fast_scan ? "build/shaders/lighting_subgroup.comp.spv"
                                  : "build/shaders/lighting.comp.spv";
-  if (!fr_renderer_compute_init(g, &l->compute, buffers, 9, 16,
+  if (!fr_renderer_compute_init(g, &l->compute, buffers, 10, 16,
                                 shader, err, cap))
     goto fail;
   VkShaderModule module;
@@ -395,6 +398,9 @@ bool fr_lighting_gpu_generate(fr_lighting_gpu_t *l, char *err, uint32_t cap) {
 void fr_lighting_record(fr_lighting_gpu_t *l, VkBuffer indirect,
                         VkDeviceSize offset) {
   dc_gpu_t *g = l->gpu;
+  VkDeviceAddress fire=g->thermal?g->thermal->emission.address:0u;
+  memcpy((uint32_t *)l->parameter_mapped+FR_TRANSPORT_FIRE_ADDRESS_WORD,&fire,sizeof(fire));
+  bool compact=l->common_direction&&fire==0u;
   fr_renderer_barrier(
       g->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
       VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
@@ -429,7 +435,7 @@ void fr_lighting_record(fr_lighting_gpu_t *l, VkBuffer indirect,
   for (uint32_t i = 0; i < l->pass_count; i++) {
     light_pass_t pass = l->passes[i];
     vkCmdBindPipeline(g->command, VK_PIPELINE_BIND_POINT_COMPUTE,
-                      l->specialized[l->common_direction][pass.iteration][pass.phase]);
+                      l->specialized[compact][pass.iteration][pass.phase]);
     push[0] = pass.phase;
     push[1] = pass.level;
     push[2] = pass.iteration;
