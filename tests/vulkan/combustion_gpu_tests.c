@@ -375,6 +375,7 @@ static void test_fire_emission_enters_directional_light_without_point_sources(vo
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     uint32_t at=20u*64u+20u;
     chunk->cells[at]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
+    chunk->cells[at+2u]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
         dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&fr_renderer_enable(g,err,sizeof(err))&&
         fr_renderer_set_mode(g,FR_RENDERER_LIT)&&
@@ -388,8 +389,12 @@ static void test_fire_emission_enters_directional_light_without_point_sources(vo
         .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
     ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&
         fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&
-        fr_combustion_gpu_enable(g,err,sizeof(err))&&
-        fr_combustion_gpu_step(g,.1f,err,sizeof(err)));
+        fr_combustion_gpu_enable(g,err,sizeof(err)));
+    uint32_t *pixels=calloc(480u*270u,sizeof(*pixels));ASSERT_TRUE(pixels);
+    ASSERT_TRUE(dc_gpu_present_chunks(g,err,sizeof(err))&&
+        dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
+    uint32_t dark=pixels[20u*480u+22u];
+    ASSERT_TRUE(fr_combustion_gpu_step(g,.1f,err,sizeof(err)));
     fr_combustion_emission_t *emission=calloc(4096u,sizeof(*emission));ASSERT_TRUE(emission);
     ASSERT_TRUE(fr_combustion_gpu_read_emission_chunk(g,0,emission,4096u,err,sizeof(err)));
     const uint32_t neighbors[]={at-64u,at-1u,at+1u,at+64u};
@@ -413,6 +418,13 @@ static void test_fire_emission_enters_directional_light_without_point_sources(vo
         fr_gpu_reactive_read_cell(g,0,at,&wood_after,&found,err,sizeof(err))&&found);
     ASSERT_EQ(memcmp(before,after,4096u*sizeof(*before)),0);
     ASSERT_EQ(memcmp(&wood_before.state,&wood_after.state,sizeof(wood_before.state)),0);
+    ASSERT_TRUE(dc_gpu_present_chunks(g,err,sizeof(err))&&
+        dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
+    uint32_t lit=pixels[20u*480u+22u];
+    unsigned dark_sum=(dark&255u)+((dark>>8u)&255u)+((dark>>16u)&255u);
+    unsigned lit_sum=(lit&255u)+((lit>>8u)&255u)+((lit>>16u)&255u);
+    ASSERT_TRUE(lit_sum>=dark_sum+8u);
+    free(pixels);
     free(after);free(before);free(emission);free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_flame_emission_requires_local_transported_hot_fuel_and_oxygen(void) {
