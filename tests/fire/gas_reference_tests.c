@@ -90,6 +90,10 @@ static void test_zero_void_submerged_source_nucleates_by_displacing_water(void) 
         fabs(after.energy-source.energy-work)<1e-12);
     for(uint32_t i=0;i<FR_GAS_SPECIES;i++)
         ASSERT_TRUE(fabs(after.species[i]-source.species[i])<1e-12);
+    ASSERT_TRUE(fr_gas_reference_displace_liquid(&m,&source,0.,100.,0.,
+        &after,&volume,&water,&work,err,sizeof(err)));
+    ASSERT_EQ(volume,0.);ASSERT_EQ(water,0.);ASSERT_EQ(work,0.);
+    ASSERT_EQ(memcmp(&after,&source,sizeof(after)),0);
     PASS();
 }
 static void test_finite_colored_smoke_dilutes_oxygen_without_consuming_it(void) {
