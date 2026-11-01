@@ -43,3 +43,7 @@ Momentum RED 9058555/ccb827a, GREEN 9c1611e/14e8046, REFACTOR just committed: BL
 **2026-11-01T08:21:28Z**
 
 Water-phase action-reaction RED e733c6d, GREEN 638fde1, REFACTOR just committed: GPU co-cell drag conserves sampled water-face plus phase momentum, carries oil momentum with flux and deposits inelastic kinetic loss as heat using the 1 cm cell mass/velocity conversion. 18 GPU tests and full make test under persistent Xephyr :92 passed. Remaining rigid response, deformation quadrature, owner transfers, sustained displayed stress/frame budget.
+
+**2026-11-01T08:29:48Z**
+
+Momentum-guided flux RED e10eb47, mixing heat RED 7152171, GREEN 8b5c802, REFACTOR just committed: phase sample momentum biases flow in its signed direction; transferring phase mass carries corresponding momentum; inelastic merge uses reduced-mass relative kinetic energy deposited as phase heat. Moving rigid across chunk seam conserves phase volume, heat and momentum; horizontal opposite-momentum fixture conserves kinetic+thermal energy. 20 targeted GPU tests and full make test under Xephyr :92 passed. Remaining persistent deformation-guided stress, rigid action-reaction and sustained displayed frame budget.
