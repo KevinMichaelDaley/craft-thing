@@ -329,6 +329,36 @@ static void test_detached_film_activates_bulk_transport(void) {
     ASSERT_TRUE(after->oil_fp[drip_at]<released);
     free(after);free(empty);free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_spent_jelly_oxidizer_does_not_reform_fresh_bulk_slime(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *empty=calloc(1,sizeof(*empty));
+    fr_bulk_phase_chunk_t *after=calloc(1,sizeof(*after));
+    ASSERT_TRUE(chunk&&empty&&after);
+    uint32_t stone_at=20u*64u+20u;
+    chunk->cells[stone_at].material=DC_MATERIAL_STONE;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t stone;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,65536u,0u,300.f,
+        631u,&stone,err,sizeof(err)));
+    stone.coating_oxidizer_fp=52000u;
+    ASSERT_TRUE(fr_reactive_state_add_heat(&stone,
+        fr_reactive_state_energy_at_temperature(&stone,500.f)-
+        fr_reactive_state_energy(&stone),err,sizeof(err))&&
+        fr_gpu_reactive_seed_cell(g,0,stone_at,&stone,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(g,0,chunk,empty,err,sizeof(err))&&
+        fr_thermal_gpu_enable(g,err,sizeof(err))&&
+        fr_thermal_gpu_step(g,.5f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(g,0,after,err,sizeof(err)));
+    fr_reactive_record_t record;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,stone_at,&record,&found,err,sizeof(err))&&found);
+    ASSERT_EQ(after->slime_fp[stone_at+64u],0u);
+    ASSERT_EQ(record.state.coating_jelly_fuel_fp,0u);
+    ASSERT_EQ(record.state.coating_oxidizer_fp,52000u);
+    ASSERT_TRUE(fr_reactive_state_valid(&record.state,err,sizeof(err)));
+    free(after);free(empty);free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_saturated_neighbor_air_suppresses_drying(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     uint32_t at=20u*64u+20u;chunk->cells[at].material=DC_MATERIAL_WOOD;
@@ -458,6 +488,7 @@ int main(void) {
     RUN(test_hot_terrain_oil_drips_into_finite_bulk_while_cold_film_holds);
     RUN(test_moving_hot_body_piece_drips_from_its_rest_attachment);
     RUN(test_detached_film_activates_bulk_transport);
+    RUN(test_spent_jelly_oxidizer_does_not_reform_fresh_bulk_slime);
     RUN(test_saturated_neighbor_air_suppresses_drying);
     RUN(test_equal_simulated_time_dries_within_one_water_quantum);
     RUN(test_drying_reaches_gas_across_a_chunk_seam);
