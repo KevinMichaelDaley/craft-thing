@@ -21,3 +21,9 @@ Follow design/fire_smoke_reactive_materials.md. Runtime implementation must use 
 
 Pair/seam/closed-vessel tests conserve each ingredient and combined phase capacity, retain overflow and prevent two phases each occupying a free full cell. Density-derived separation, moving-rigid displacement, water drag/heat exchange and save/reload pass. No hardcoded float flag, negative volume, CPU runtime phase scan or fixed global sludge count.
 
+
+## Notes
+
+**2026-11-01T03:25:43Z**
+
+GPU bulk phase now conserves water/oil in sealed vertical exchange, moves oil/slime across horizontal chunk seams, runs in normal fused and standalone ticks, displaces oil around a rigid occupant, and records closed-vessel retained volume. CPU reference, v10 stream persistence, gas and water shared capacity, and full all/test pass. Remaining: water drag and energy exchange, phase thermal sidecars, and broader moving-rigid/seam reconciliation.
