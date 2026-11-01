@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdio.h>
+#include "dungeoncraft/coating_layout.h"
 #include "dungeoncraft/combustion_parameters.h"
 #include "dungeoncraft/char_enthalpy.h"
 #include "ferrum/fire/combustion.h"
@@ -34,16 +35,21 @@ bool fr_combustion_reference(const fr_reactive_state_t *source,double oxygen_fp,
     bool char_burn=s.fuel_mass_fp==0&&s.char_mass_fp>0;
     uint32_t fuel=char_burn?s.char_mass_fp:s.fuel_mass_fp;
     const fr_reactive_profile_t *profile=fr_reactive_profile(char_burn?DC_MATERIAL_CHAR:s.material);
-    if(profile->bound_oxidizer_fraction||s.coating_oil_fuel_fp||s.coating_jelly_fuel_fp)
-        return error(err_buf,err_cap,"Ordinary substrate reference does not admit coatings or bound oxidizer");
+    if(profile->bound_oxidizer_fraction||s.coating_jelly_fuel_fp||s.core_oxidizer_fp||
+       s.coating_oxidizer_fp||(s.coating_remainders&~FR_COATING_REM_MASK)!=0u)
+        return error(err_buf,err_cap,"Ordinary substrate reference does not admit jelly or bound oxidizer");
     float temperature;
     if(!fr_reactive_state_temperature(&s,&temperature,err_buf,err_cap)) return false;
     float saturation=profile->moisture_capacity>0&&s.dry_mass_fp?
         fminf(1,(float)s.bound_water_fp/(s.dry_mass_fp*profile->moisture_capacity)):0;
+    double oil=(double)s.coating_oil_fuel_fp+
+        (s.coating_remainders&FR_COATING_REM_MASK)/(double)FR_COATING_MASS_DEN;
     fr_reactive_exposure_t exposure={.temperature_K=temperature,.saturation=saturation,
-        .substrate_oxidation=s.oxidized_fraction,.oxygen_mass_fraction=oxygen_fraction};
+        .substrate_oxidation=s.oxidized_fraction,.oxygen_mass_fraction=oxygen_fraction,
+        .coating_coverage=s.dry_mass_fp?fminf(1.f,(float)(oil/s.dry_mass_fp)):0.f};
     fr_reactive_ignition_rates_t rates;
-    if(!fr_reactive_ignition_rates(profile,NULL,&exposure,&rates,err_buf,err_cap)) return false;
+    const fr_reactive_profile_t *oil_profile=oil>0.?fr_reactive_profile(DC_MATERIAL_OIL):NULL;
+    if(!fr_reactive_ignition_rates(profile,oil_profile,&exposure,&rates,err_buf,err_cap)) return false;
     if(s.ignition_threshold==0) s.ignition_threshold=threshold(&s);
     s.ignition_integral=fminf(1e20f,s.ignition_integral+rates.substrate*exposed_fraction*seconds);
     bool viable=fuel&&
