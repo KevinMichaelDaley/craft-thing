@@ -25,6 +25,19 @@ void main() {
             changed=true;
         }
     }
+    if(retention.x>=1.&&retention.y<=0.&&available>0.&&
+       original.geometry.x>0.&&available!=original.geometry.x&&gas_mass(original)>0.) {
+        float capacity=dot(original.species,vec4(gas_parameter(5u),gas_parameter(6u),
+            gas_parameter(7u),gas_parameter(8u)))+original.dynamics.x*gas_parameter(9u);
+        float moles=dot(original.species,vec4(gas_parameter(0u),gas_parameter(1u),
+            gas_parameter(2u),gas_parameter(3u)))+original.dynamics.x*gas_parameter(4u);
+        if(capacity>0.) {
+            float internal=gas_thermal_energy(original);
+            float work=internal*(pow(original.geometry.x/available,moles/capacity)-1.);
+            value.dynamics.y+=work;value.geometry.w+=work;
+            changed=true;
+        }
+    }
     if(available<=0.) {
         if(gas_mass(value)==0.) value.geometry.x=0.;
         value.geometry.y=0.;
