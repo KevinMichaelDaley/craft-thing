@@ -18,3 +18,9 @@ The current smoke_wavelet is a two-scale smooth hash difference evaluated in the
 
 RED GPU tests demonstrate lack of velocity-dependent band energy, stationary pattern at zero flow, plume boundary not transported by synthesized velocity, coordinate strain failure, and conservation. GREEN tests pass at quarter-native display resolution with visible nonstationary edge detail, bounded interior contrast, finite physics, paused replay identity, and frame budget. Run full make test and bonfire/smoke demos.
 
+
+## Notes
+
+**2026-11-01T04:53:16Z**
+
+Intermediate GPU wavelet coordinate/potential passes pass quarter-native motion and paused replay checks. Persistent fine-density advection remains; keep ticket open.
