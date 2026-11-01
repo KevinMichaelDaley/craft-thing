@@ -1,6 +1,6 @@
 ---
 id: ctlo-e4y6
-status: in_progress
+status: closed
 deps: [ctlo-2vcr]
 links: []
 created: 2026-10-24T22:06:19Z
@@ -75,3 +75,7 @@ Quarter-native headless native-Vulkan coating microbenchmark added at 8efc958: 4
 **2026-11-01T12:51:17Z**
 
 Acceptance coverage: actual finite-bulk oil wetting on a leaf parcel now has GPU regression proof through component extraction, leaf-bit fracture, chunk export/import and restored particle owner without any film mass or rest-identity duplication. A moving damageable body proxy with a recycled slot retains fractional oil coating and its actual generation through carving. Focused reactive cell GPU 9/9 and full make test under Xephyr :92 passed. The paths already preserved state; these tests lock the runtime behavior.
+
+**2026-11-01T13:06:23Z**
+
+Final acceptance: hot/cold profile adhesion and force-driven release are implemented for terrain and transformed body rest pieces; water adds quadratic relative-motion traction without removing film stock. Full GPU tests prove finite oil/jelly contact, exact bulk/film mass and heat handoff, below-cell drips, blocked/cold controls, mobile bulk after detachment, spent-jelly safety, rotating host identity, actual contact-wet leaf extraction/fracture/streaming, and recycled moving proxy generation. CPU reference tests cover all host kinds. Full make test under persistent Xephyr :92 passes after final water-drag refactor; focused reactive cell GPU 10/10 and thermal GPU 13/13 pass. Headless native quarter-native thermal benchmark after final shader: hot 0.668/0.560 ms vs warmed controls 0.560/0.603 ms over 20 steps each; overhead within ~0.11 ms run variation. No desktop windows spawned by benchmark. No monster AI or all-object scan added.
