@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+log=$(mktemp)
+trap 'rm -f "$log"' EXIT
+if ! DC_VK_VALIDATE=1 tools/with-vulkan ./build/bulk_phase_gpu_tests \
+    --phase-validation >"$log" 2>&1; then
+    cat "$log"
+    exit 1
+fi
+if rg -q 'Validation Error' "$log"; then
+    cat "$log"
+    exit 1
+fi
+cat "$log"

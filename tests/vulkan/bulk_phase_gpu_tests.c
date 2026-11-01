@@ -570,7 +570,12 @@ static void test_rigid_rotation_does_not_shear_thin_slime(void) {
     ASSERT_EQ(out->slime_fp[rotating],out->slime_fp[still]);
     dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
 }
-int main(void) {
+int main(int argc,char **argv) {
+    if(argc==2&&strcmp(argv[1],"--phase-validation")==0) {
+        RUN(test_dense_oil_exchanges_with_water_in_sealed_vertical_pair);
+        RUN(test_slime_flux_yields_under_load_and_softens_when_hot);
+        printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
     RUN(test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot);
     RUN(test_water_solver_respects_full_oil_cell_capacity);
     RUN(test_dense_oil_exchanges_with_water_in_sealed_vertical_pair);
