@@ -11,6 +11,7 @@ static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
     return false;
 }
+static bool ensure_pipeline(dc_gpu_t *gpu,char *err,uint32_t cap);
 bool fr_bulk_phase_gpu_import_chunk(dc_gpu_t *gpu,uint32_t slot,
     const dc_chunk_t *chunk,const fr_bulk_phase_chunk_t *phase,char *err,uint32_t cap) {
     if(!gpu||!gpu->bulk_phase_mapped||slot>=DC_GPU_CHUNK_SLOTS||!chunk||!phase)
@@ -20,7 +21,12 @@ bool fr_bulk_phase_gpu_import_chunk(dc_gpu_t *gpu,uint32_t slot,
             FR_BULK_CELL_FULL_FP) return error(err,cap,"Bulk phase exceeds shared water capacity");
     if(vkQueueWaitIdle(gpu->queue)!=VK_SUCCESS)
         return error(err,cap,"Cannot complete bulk phase chunk import");
+    bool occupied=false;
+    for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
+        if(phase->oil_fp[i]||phase->slime_fp[i]) {occupied=true;break;}
+    if(occupied&&!ensure_pipeline(gpu,err,cap)) return false;
     memcpy((fr_bulk_phase_chunk_t *)gpu->bulk_phase_mapped+slot,phase,sizeof(*phase));
+    gpu->bulk_phase_work_possible|=occupied;
     fr_gas_gpu_geometry_changed(gpu,false);
     return true;
 }
@@ -47,6 +53,34 @@ static bool ensure_pipeline(dc_gpu_t *gpu,char *err,uint32_t cap) {
     vkDestroyShaderModule(gpu->device,module,NULL);
     return result==VK_SUCCESS||error(err,cap,"Cannot create bulk phase pair pipeline");
 }
+void dc_gpu_record_bulk_phase(dc_gpu_t *gpu,float seconds) {
+    if(!gpu->bulk_phase_work_possible||!gpu->bulk_phase_pipeline||seconds<=0.f) return;
+    const fr_reactive_profile_t *water=fr_reactive_profile(DC_MATERIAL_WATER);
+    const fr_reactive_profile_t *oil=fr_reactive_profile(DC_MATERIAL_OIL);
+    const fr_reactive_profile_t *slime=fr_reactive_profile(DC_MATERIAL_RED_SLIME_JELLY);
+    VkMemoryBarrier2 barrier={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .srcAccessMask=VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        .dstStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .dstAccessMask=VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT};
+    VkDependencyInfo dependency={.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .memoryBarrierCount=1,.pMemoryBarriers=&barrier};
+    vkCmdPipelineBarrier2(gpu->command,&dependency);
+    vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->bulk_phase_pipeline);
+    vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
+        gpu->pipeline_layout,0,1,&gpu->descriptor,0,NULL);
+    struct {uint32_t width,height,parity;float seconds,gravity,water,oil,slime;} push={
+        gpu->width,gpu->height,0,seconds,900.f,water->density,oil->density,slime->density};
+    for(uint32_t parity=0;parity<2u;parity++) {
+        push.parity=parity;
+        vkCmdPushConstants(gpu->command,gpu->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,
+            0,sizeof(push),&push);
+        vkCmdDispatch(gpu->command,(gpu->width*gpu->height+63u)/64u,1,1);
+        vkCmdPipelineBarrier2(gpu->command,&dependency);
+    }
+    gpu->fluid_snapshot_valid=false;gpu->fluid_work_possible=true;
+    fr_gas_gpu_geometry_changed(gpu,false);
+}
 bool fr_bulk_phase_gpu_step(dc_gpu_t *gpu,float seconds,char *err,uint32_t cap) {
     if(!gpu||!isfinite(seconds)||seconds<0.f)
         return error(err,cap,"Invalid bulk phase interval");
@@ -69,21 +103,10 @@ bool fr_bulk_phase_gpu_step(dc_gpu_t *gpu,float seconds,char *err,uint32_t cap) 
     VkDependencyInfo dependency={.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
         .memoryBarrierCount=1,.pMemoryBarriers=&barrier};
     vkCmdPipelineBarrier2(gpu->command,&dependency);
-    vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->bulk_phase_pipeline);
-    vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
-        gpu->pipeline_layout,0,1,&gpu->descriptor,0,NULL);
-    struct {uint32_t width,height,parity;float seconds,gravity,water,oil,slime;} push={
-        gpu->width,gpu->height,0,seconds,900.f,water->density,oil->density,slime->density};
-    for(uint32_t parity=0;parity<2u;parity++) {
-        push.parity=parity;
-        vkCmdPushConstants(gpu->command,gpu->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,
-            0,sizeof(push),&push);
-        vkCmdDispatch(gpu->command,(gpu->width*gpu->height+63u)/64u,1,1);
-        barrier.srcStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-        barrier.srcAccessMask=VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
-        dependency.pMemoryBarriers=&barrier;
-        vkCmdPipelineBarrier2(gpu->command,&dependency);
-    }
+    gpu->bulk_phase_work_possible=true;
+    dc_gpu_record_bulk_phase(gpu,seconds);
+    barrier.srcStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    barrier.srcAccessMask=VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
     barrier.dstStageMask=VK_PIPELINE_STAGE_2_HOST_BIT;
     barrier.dstAccessMask=VK_ACCESS_2_HOST_READ_BIT;
     vkCmdPipelineBarrier2(gpu->command,&dependency);

@@ -117,6 +117,7 @@ void dc_gpu_record_tick_step(dc_gpu_t *gpu) {
     dc_gpu_record_tick_water_source(gpu);
     record_scheduled_rigid(gpu);
     record_scheduled_fluid(gpu);
+    dc_gpu_record_bulk_phase(gpu,(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f);
     stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                   VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     dc_gpu_record_mpm(gpu);
@@ -162,6 +163,7 @@ static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
         record_probe(gpu, 0);
     }
     record_scheduled_fluid(gpu);
+    dc_gpu_record_bulk_phase(gpu,(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f);
     if (capture) {
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
                              gpu->timestamp_pool, 2);

@@ -251,6 +251,7 @@ struct dc_gpu {
     VkPipeline fluid_aperture_pipeline;
     VkPipeline fluid_transport_pipelines[4];
     VkPipeline bulk_phase_pipeline;
+    bool bulk_phase_work_possible;
     VkPipeline fluid_displacement_pipelines[2];
     VkPipeline fluid_phase_pipelines[13];
     VkPipeline projection_phase_pipelines[7];
@@ -499,6 +500,7 @@ void dc_gpu_record_tick_water_source(dc_gpu_t *gpu);
 /** Initialize dry fluid scratch before scheduling can omit its zero work. */
 bool dc_gpu_clear_fluid_scratch(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_tick_step(dc_gpu_t *gpu);
+void dc_gpu_record_bulk_phase(dc_gpu_t *gpu, float seconds);
 bool dc_gpu_marker_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 bool dc_gpu_marker_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_marker_destroy(dc_gpu_t *gpu);
