@@ -45,6 +45,20 @@ static void test_ignition_hazard_survives_equal_time_scheduling(void) {
     ASSERT_TRUE(fabsf(a.ignition_integral-b.ignition_integral)<1e-6f);
     ASSERT_EQ(a.flags&FR_REACTIVE_FLAMING,b.flags&FR_REACTIVE_FLAMING);PASS();
 }
+static void test_seeded_ignition_ensemble_matches_integrated_hazard(void) {
+    char err[256]={0};uint32_t ignited=0u;
+    for(uint64_t id=1u;id<=4096u;id++) {
+        fr_reactive_state_t source,after;fr_combustion_products_t products;
+        ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,0,800,id,
+            &source,err,sizeof(err)));
+        ASSERT_TRUE(fr_combustion_reference(&source,65536,
+            FR_COMBUSTION_AMBIENT_OXYGEN,1,.25f,&after,&products,err,sizeof(err)));
+        ignited+=(after.flags&FR_REACTIVE_FLAMING)!=0u;
+    }
+    double expected=4096.*(1.-exp(-.25));
+    ASSERT_TRUE(fabs((double)ignited-expected)<100.);
+    PASS();
+}
 static void test_finite_oil_film_accelerates_wood_ignition_without_spending_it(void) {
     char err[256]={0};fr_reactive_state_t dry,oiled,dry_after,oil_after;
     fr_combustion_products_t dry_products,oil_products;
@@ -235,6 +249,7 @@ int main(void) {
     RUN(test_finite_oxygen_and_products);
     RUN(test_starved_wet_and_buried_do_not_burn);
     RUN(test_ignition_hazard_survives_equal_time_scheduling);
+    RUN(test_seeded_ignition_ensemble_matches_integrated_hazard);
     RUN(test_finite_oil_film_accelerates_wood_ignition_without_spending_it);
     RUN(test_energy_ledger_and_invalid_transaction);
     RUN(test_competing_parcels_cannot_overdraw_oxygen);
