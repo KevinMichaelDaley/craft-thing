@@ -86,7 +86,7 @@ void main() {
         float opposing=light==3u?0.:light_density;
         float buoyancy=params.axis==0u?
             max(0.,params.gravity*(density[heavy]-opposing)/density[heavy]):
-            params.gravity*float(used(top)-used(bottom))/float(FULL);
+            params.gravity*float(max(0,int(used(top))-int(used(bottom))))/float(FULL);
         float speed=sqrt(2.*buoyancy);
         uint allowance=excess>0u?min(excess,face_open):
             uint(floor(min(float(FULL),speed*params.seconds*float(face_open))));
