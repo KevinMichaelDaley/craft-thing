@@ -134,11 +134,39 @@ static void test_oil_crosses_horizontal_chunk_seam_conservatively(void) {
     ASSERT_EQ(total,FR_BULK_CELL_FULL_FP);
     dc_gpu_destroy(gpu);free(left);free(right);free(source);free(out_left);free(out_right);PASS();
 }
+static void test_rigid_body_displaces_oil_upward_without_loss(void) {
+    char err[256]={0};dc_gpu_t *gpu=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *bulk=calloc(1,sizeof(*bulk)),*out=calloc(1,sizeof(*out));
+    ASSERT_TRUE(chunk&&bulk&&out);
+    const uint32_t source=30u*64u+20u,target=29u*64u+20u;
+    for(uint32_t y=0;y<64u;y++) {
+        chunk->cells[y*64u+19u].material=DC_MATERIAL_STONE;
+        chunk->cells[y*64u+21u].material=DC_MATERIAL_STONE;
+    }
+    chunk->cells[31u*64u+20u].material=DC_MATERIAL_STONE;
+    bulk->oil_fp[source]=FR_BULK_CELL_FULL_FP;
+    ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+        dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(gpu,0,0,0,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,bulk,err,sizeof(err))&&
+        dc_gpu_set_rigid_solver(gpu,true));
+    dc_gpu_body_t body={.x_fp=20*(int32_t)FR_BULK_CELL_FULL_FP,
+        .y_fp=30*(int32_t)FR_BULK_CELL_FULL_FP,.width=1,.height=1,.id=200,.active=1};
+    ASSERT_TRUE(dc_gpu_spawn_body(gpu,body,err,sizeof(err))&&
+        dc_gpu_set_body_motion(gpu,200,0,0,DC_GPU_BODY_KINEMATIC,err,sizeof(err))&&
+        dc_gpu_rigid_step(gpu,err,sizeof(err))&&
+        fr_bulk_phase_gpu_step(gpu,1.f/60.f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
+    ASSERT_EQ(out->oil_fp[source],0u);
+    ASSERT_EQ(out->oil_fp[target],FR_BULK_CELL_FULL_FP);
+    dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
+}
 int main(void) {
     RUN(test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot);
     RUN(test_water_solver_respects_full_oil_cell_capacity);
     RUN(test_dense_oil_exchanges_with_water_in_sealed_vertical_pair);
     RUN(test_normal_tick_moves_imported_oil);
     RUN(test_oil_crosses_horizontal_chunk_seam_conservatively);
+    RUN(test_rigid_body_displaces_oil_upward_without_loss);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
