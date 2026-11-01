@@ -265,9 +265,42 @@ static void test_thin_oxygen_is_reserved_without_creating_heat_or_consuming_unfu
 }
 static void test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory(void) {hot_skin_budget_case(false);}
 static void test_rotated_mixed_temperature_heat_cannot_overdraw_a_cold_parcel(void) {hot_skin_budget_case(true);}
+static void test_submerged_rigid_coating_burns_from_bound_oxidizer(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    const uint32_t at=20u*64u+20u;
+    chunk->cells[at].material=DC_MATERIAL_WOOD;
+    const uint32_t neighbors[]={at-64u,at-1u,at+1u,at+64u};
+    for(uint32_t i=0u;i<4u;i++)
+        chunk->cells[neighbors[i]]=(dc_cell_t){.material=DC_MATERIAL_WATER,.fluid_mass=DC_FLUID_FULL};
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t wood;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322u,4u*65536u,800.f,
+        600100u,&wood,err,sizeof(err)));
+    wood.coating_oil_fuel_fp=32768u;wood.coating_jelly_fuel_fp=32768u;
+    wood.coating_oxidizer_fp=32768u;wood.coating_threshold=.01f;
+    wood.coating_integral=.02f;wood.flags|=FR_REACTIVE_COATING_FLAMING;
+    wood.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&wood,800.f);
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,at,&wood,err,sizeof(err))&&
+        dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err)));
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&
+        fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&
+        fr_combustion_gpu_enable(g,err,sizeof(err))&&
+        fr_combustion_gpu_step(g,.1f,err,sizeof(err)));
+    fr_reactive_record_t result;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0u,0u,&result,&found,err,sizeof(err))&&found);
+    ASSERT_TRUE(result.state.coating_oil_fuel_fp<wood.coating_oil_fuel_fp);
+    ASSERT_TRUE(result.state.coating_oxidizer_fp<wood.coating_oxidizer_fp);
+    ASSERT_EQ(result.state.fuel_mass_fp,wood.fuel_mass_fp);
+    free(chunk);dc_gpu_destroy(g);PASS();
+}
 int main(void) {
     if(getenv("DC_SHOCK_BODY_ONLY")) RUN(test_rigid_wood_settles_impact_energy_before_ignition);
     else
     if(getenv("DC_CHAR_LEDGER_ONLY")) RUN(test_small_body_char_reaction_keeps_a_finite_temperature_ledger);
-    else {RUN(test_rigid_wood_settles_impact_energy_before_ignition);RUN(test_thin_oxygen_is_reserved_without_creating_heat_or_consuming_unfunded_fuel);RUN(test_rotated_mixed_temperature_heat_cannot_overdraw_a_cold_parcel);RUN(test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory);RUN(test_radiating_flame_heats_a_surface_even_without_a_draft);RUN(test_hot_face_ignites_when_another_face_has_more_oxygen);RUN(test_diagonal_hot_gas_heats_a_body_corner);RUN(test_diagonal_oxygen_reaches_an_exposed_body_corner);RUN(test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_authored_grain);RUN(test_small_body_char_reaction_keeps_a_finite_temperature_ledger);}
+    else
+    if(getenv("DC_GREEK_BODY_ONLY")) RUN(test_submerged_rigid_coating_burns_from_bound_oxidizer);
+    else {RUN(test_submerged_rigid_coating_burns_from_bound_oxidizer);RUN(test_rigid_wood_settles_impact_energy_before_ignition);RUN(test_thin_oxygen_is_reserved_without_creating_heat_or_consuming_unfunded_fuel);RUN(test_rotated_mixed_temperature_heat_cannot_overdraw_a_cold_parcel);RUN(test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory);RUN(test_radiating_flame_heats_a_surface_even_without_a_draft);RUN(test_hot_face_ignites_when_another_face_has_more_oxygen);RUN(test_diagonal_hot_gas_heats_a_body_corner);RUN(test_diagonal_oxygen_reaches_an_exposed_body_corner);RUN(test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_authored_grain);RUN(test_small_body_char_reaction_keeps_a_finite_temperature_ledger);}
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
