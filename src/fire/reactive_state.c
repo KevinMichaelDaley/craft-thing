@@ -96,7 +96,9 @@ bool fr_reactive_state_valid(const fr_reactive_state_t *s,char *err,uint32_t cap
     if(!s||!fr_reactive_profile(s->material)||(s->flags&~31u)!=0||
        identity(s->parcel_id_low,s->parcel_id_high)==0||identity(s->origin_id_low,s->origin_id_high)==0)
         return error(err,cap,"Invalid reactive identity/flags");
-    if(s->evaporation_fraction!=0.f||s->identity_reserved)
+    if(!isfinite(s->evaporation_fraction)||s->evaporation_fraction<0.f||
+       s->evaporation_fraction>=1.f||
+       (s->bound_water_fp==0u&&s->evaporation_fraction!=0.f)||s->identity_reserved)
         return error(err,cap,"Nonzero reactive reserved fields");
     if(!isfinite(s->reaction_fraction)||s->reaction_fraction<0||s->reaction_fraction>=1)
         return error(err,cap,"Invalid fractional reaction progress");
@@ -163,6 +165,9 @@ bool fr_reactive_state_split(const fr_reactive_state_t *s,uint32_t weight,uint64
     double active=(double)first_active+second_active;
     first.reaction_fraction=active>0.?(float)(s->reaction_fraction*first_active/active):0.f;
     second.reaction_fraction=s->reaction_fraction-first.reaction_fraction;
+    first.evaporation_fraction=s->bound_water_fp>0u?
+        (float)((double)s->evaporation_fraction*first.bound_water_fp/s->bound_water_fp):0.f;
+    second.evaporation_fraction=s->evaporation_fraction-first.evaporation_fraction;
     if(!fr_reactive_state_valid(&first,err,cap)||!fr_reactive_state_valid(&second,err,cap)) return false;
     *left=first;*right=second;return true;
 }

@@ -71,6 +71,10 @@ static bool legacy_owners_valid(fr_reactive_record_t *records,uint32_t count,
         uint32_t bits=0;memcpy(&bits,&records[i].state.reaction_fraction,sizeof(bits));
         if(bits!=0u) return error(err,cap,"Reserved legacy reaction progress bits are nonzero");
     }
+    for(uint32_t i=0;version<6u&&i<count;i++) {
+        uint32_t bits=0;memcpy(&bits,&records[i].state.evaporation_fraction,sizeof(bits));
+        if(bits!=0u) return error(err,cap,"Reserved legacy evaporation progress bits are nonzero");
+    }
     /* ABI 4 stored unfunded demand. It must not become reserved oxygen. */
     for(uint32_t i=0;version<5u&&i<count;i++) records[i].state.reaction_fraction=0.f;
     return true;
