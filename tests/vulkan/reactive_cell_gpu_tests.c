@@ -64,6 +64,25 @@ static void test_cells_retain_sparse_state_and_brush_replacement_retires_it(void
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,1,&record,&found,err,sizeof(err)));ASSERT_TRUE(!found);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_cell_admission_rejects_wrong_physical_material_atomically(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
+    c->coord=(dc_chunk_coord_t){-3,5};
+    c->cells[9].material=DC_MATERIAL_WOOD;
+    ASSERT_TRUE(context(&g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,c,err,sizeof(err)));
+    fr_reactive_state_t wood,stone;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,500,1,&wood,err,sizeof(err)));
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,39322,0,500,2,&stone,err,sizeof(err)));
+    ASSERT_TRUE(!fr_gpu_reactive_seed_cell(g,0,10,&wood,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,9,&wood,err,sizeof(err)));
+    ASSERT_TRUE(!fr_gpu_reactive_seed_cell(g,0,9,&stone,err,sizeof(err)));
+    fr_reactive_record_t record;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,9,&record,&found,err,sizeof(err)));
+    ASSERT_TRUE(found&&memcmp(&record.state,&wood,sizeof(wood))==0);
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,10,&record,&found,err,sizeof(err)));
+    ASSERT_TRUE(!found);
+    free(c);dc_gpu_destroy(g);PASS();
+}
 static void test_extraction_and_next_arena_flip_keep_exact_state(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     for(uint32_t y=10;y<14;y++) for(uint32_t x=10;x<14;x++) c->cells[y*64+x].material=DC_MATERIAL_WOOD;
@@ -225,6 +244,7 @@ static void test_coal_and_char_extract_with_finite_reactive_stock(void) {
     PASS();
 }
 int main(void) {
+    RUN(test_cell_admission_rejects_wrong_physical_material_atomically);
     RUN(test_coal_and_char_extract_with_finite_reactive_stock);
     RUN(test_cells_retain_sparse_state_and_brush_replacement_retires_it);
     RUN(test_extraction_and_next_arena_flip_keep_exact_state);
