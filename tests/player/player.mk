@@ -11,6 +11,13 @@ test_beaver_assets: build/beaver_asset_tests
 	./build/beaver_asset_tests
 test_player: test_beaver_assets
 
+build/player_drive_gpu_tests: tests/player/drive_gpu_tests.c src/vulkan/player_drive_gpu.c include/ferrum/player/drive_gpu.h build/fluid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/player_drive_gpu.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+.PHONY: test_player_drive_gpu
+test_player_drive_gpu: build/player_drive_gpu_tests
+	./build/player_drive_gpu_tests
+test: test_player_drive_gpu
+
 build/beaver_atlas: tools/diagnostics/beaver_atlas.c $(BEAVER_SRC) $(PLAYER_SRC) src/assets/prop.c include/ferrum/player/beaver.h src/player/beaver_internal.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(BEAVER_SRC) $(PLAYER_SRC) src/assets/prop.c -o $@ $(shell pkg-config --libs sdl2) -lm
