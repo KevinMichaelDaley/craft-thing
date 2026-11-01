@@ -149,6 +149,13 @@ bool fr_gpu_reactive_import_chunk(dc_gpu_t *g,uint32_t slot,const dc_chunk_t *ch
     fr_reactive_chunk_t ambient={.next_id=g->reactive?g->reactive->high_id+1u:1u};
     if(!channel) channel=&ambient;
     if(!fr_reactive_chunk_valid(channel,chunk,err,cap)) return false;
+    bool coating=false;
+    for(uint32_t i=0;i<channel->count;i++) {
+        const fr_reactive_state_t *state=&channel->attachments[i].record.state;
+        coating|=state->coating_oil_fuel_fp||state->coating_jelly_fuel_fp||
+            state->coating_oxidizer_fp||state->coating_remainders;
+    }
+    if(coating&&!dc_gpu_ensure_bulk_phase_pipeline(g,err,cap)) return false;
     validated=SDL_GetTicks64();
     if(!g->reactive&&channel->count==0u&&channel->next_id==1u) return true;
     if(!fr_gpu_reactive_initialize(g,err,cap)) return false;
@@ -190,6 +197,7 @@ bool fr_gpu_reactive_import_chunk(dc_gpu_t *g,uint32_t slot,const dc_chunk_t *ch
         if(count) memcpy((uint32_t *)r->stream.mapped+HANDLE_OFFSET,handles,(size_t)count*sizeof(*handles));
         okay=dispatch(g,slot,count,3,4,err,cap);
         if(okay&&channel->next_id-1u>r->high_id) r->high_id=channel->next_id-1u;
+        if(okay) g->bulk_phase_work_possible|=coating;
     }
     free(handles);
     if(getenv("DC_REACTIVE_IMPORT_TRACE")) fprintf(stderr,

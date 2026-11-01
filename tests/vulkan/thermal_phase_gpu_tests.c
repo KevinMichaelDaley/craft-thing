@@ -320,7 +320,12 @@ static void test_detached_film_activates_bulk_transport(void) {
     ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err))&&
         fr_bulk_phase_gpu_export_chunk(g,0,after,err,sizeof(err)));
     uint64_t total=0u;for(uint32_t i=0u;i<DC_CHUNK_CELLS;i++) total+=after->oil_fp[i];
-    ASSERT_EQ(total,released);
+    fr_reactive_record_t record;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,stone_at,&record,&found,err,sizeof(err))&&found);
+    uint32_t film_rem=(record.state.coating_remainders>>FR_COATING_OIL_REM_SHIFT)&
+        FR_COATING_REM_MASK;
+    ASSERT_EQ(total+(record.state.coating_oil_fuel_fp*FR_COATING_MASS_DEN+film_rem)/
+        FR_COATING_OIL_MASS_NUM,40000u);
     ASSERT_TRUE(after->oil_fp[drip_at]<released);
     free(after);free(empty);free(chunk);dc_gpu_destroy(g);PASS();
 }

@@ -504,6 +504,7 @@ void dc_gpu_record_tick_water_source(dc_gpu_t *gpu);
 bool dc_gpu_clear_fluid_scratch(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_tick_step(dc_gpu_t *gpu);
 void dc_gpu_record_bulk_phase(dc_gpu_t *gpu, float seconds);
+bool dc_gpu_ensure_bulk_phase_pipeline(dc_gpu_t *gpu,char *err,uint32_t cap);
 bool dc_gpu_marker_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 bool dc_gpu_marker_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_marker_destroy(dc_gpu_t *gpu);

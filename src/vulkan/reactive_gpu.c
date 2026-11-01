@@ -104,6 +104,9 @@ fail:
 
 static bool admit(dc_gpu_t *g,uint32_t *handle,const fr_reactive_owner_t *owner,
     const fr_reactive_state_t *state,char *err,uint32_t cap) {
+    bool coating=state->coating_oil_fuel_fp||state->coating_jelly_fuel_fp||
+        state->coating_oxidizer_fp||state->coating_remainders;
+    if(coating&&!dc_gpu_ensure_bulk_phase_pipeline(g,err,cap)) return false;
     uint64_t id=((uint64_t)state->parcel_id_high<<32)|state->parcel_id_low;
     uint64_t origin=((uint64_t)state->origin_id_high<<32)|state->origin_id_low;
     uint32_t *existing=entry(g,handle);
@@ -119,6 +122,7 @@ static bool admit(dc_gpu_t *g,uint32_t *handle,const fr_reactive_owner_t *owner,
     handle[0]=output[0].index;handle[1]=output[0].generation;
     if(r->high_id<id) r->high_id=id;
     if(r->high_id<origin) r->high_id=origin;
+    g->bulk_phase_work_possible|=coating;
     return true;
 }
 bool fr_gpu_reactive_seed_cell(dc_gpu_t *g,uint32_t slot,uint32_t local,

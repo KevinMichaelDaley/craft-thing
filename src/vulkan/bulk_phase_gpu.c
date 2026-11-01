@@ -82,6 +82,9 @@ static bool ensure_pipeline(dc_gpu_t *gpu,char *err,uint32_t cap) {
         create_phase_pipeline(gpu,"build/shaders/bulk_phase_thermal.comp.spv",
         "Cannot create bulk phase thermal pipeline",&gpu->bulk_phase_thermal_pipeline,err,cap);
 }
+bool dc_gpu_ensure_bulk_phase_pipeline(dc_gpu_t *gpu,char *err,uint32_t cap) {
+    return gpu&&ensure_pipeline(gpu,err,cap);
+}
 void dc_gpu_record_bulk_phase(dc_gpu_t *gpu,float seconds) {
     if(!gpu->bulk_phase_work_possible||!gpu->bulk_phase_pipeline||seconds<=0.f) return;
     const fr_reactive_profile_t *water=fr_reactive_profile(DC_MATERIAL_WATER);
