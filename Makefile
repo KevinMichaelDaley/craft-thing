@@ -1814,6 +1814,13 @@ test_reactive_gpu_profiles: build/reactive_profile_gpu_tests
 build/combustion_tests: tests/fire/combustion_tests.c src/fire/combustion.c src/fire/combustion_gas.c src/fire/gas.c $(REACTIVE_STATE_SRC) include/ferrum/fire/combustion.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/combustion_tests.c src/fire/combustion.c src/fire/combustion_gas.c src/fire/gas.c $(REACTIVE_STATE_SRC) -o $@ -lm
+.PHONY: test_corrosion
+test: test_corrosion
+test_corrosion: build/corrosion_tests
+	./build/corrosion_tests
+build/corrosion_tests: tests/fire/corrosion_tests.c src/fire/corrosion.c $(REACTIVE_STATE_SRC) include/ferrum/fire/corrosion.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/corrosion_tests.c src/fire/corrosion.c $(REACTIVE_STATE_SRC) -o $@ -lm
 .PHONY: test_combustion
 test: test_combustion
 test_combustion: build/combustion_tests
