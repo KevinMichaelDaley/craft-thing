@@ -177,9 +177,9 @@ void main() {
     uint atlas=page==0u?0u:(page-1u)*4096u+(y%64u)*64u+x%64u;
     Gas s=page==0u?gas_empty():(parameters[FR_GAS_CELL_OWNER_WORD]!=0u&&(gates[atlas]&FR_GAS_CELL_OWNER_BIT)!=0u?alternate[atlas]:world[atlas]);
     uint gate=page==0u?0u:gates[atlas]&3u;
-    vec2 velocity=page==0u?vec2(0.):smoke_advect_velocity(ivec2(x,y),s);
     ivec2 cell=ivec2(x,y);
 #ifdef FR_SMOKE_COORDINATE_ONLY
+    vec2 velocity=page==0u?vec2(0.):smoke_advect_velocity(cell,s);
     if(s.species.z+s.dynamics.x<=0.&&all(equal(velocity,vec2(0.)))) {
         if(params.bank==0u) coordinates1[index]=vec2(x,y);else coordinates0[index]=vec2(x,y);
         return;
@@ -204,6 +204,7 @@ void main() {
         if(!near_smoke) return;
     }
     if(gate==0u&&oxygen_view&&s.geometry.y<=0.) return;
+    vec2 velocity=gate==0u&&!oxygen_view?smoke_advect_velocity(cell,s):vec2(0.);
     vec3 color=unpackUnorm4x8(frame[index]).rgb;
     if(s.geometry.y>0.&&oxygen_view) {
         vec4 r=vec4(uintBitsToFloat(parameters[0]),uintBitsToFloat(parameters[1]),uintBitsToFloat(parameters[2]),uintBitsToFloat(parameters[3]));
