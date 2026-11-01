@@ -316,10 +316,54 @@ void loose_ash(ivec2 position,uint at,uvec2 handle,Words entry,inout Gas gas) {
 /* Each parcel chooses one neighboring gas cell. The owning gas invocation
  * gathers face and open-corner surfaces, reserving shared oxygen locally before commit.
  * There is no field scan, atomic float race or global flame capacity. */
+void evaporate_entry(Words entry,inout Gas gas) {
+    uint s=FR_ENTRY_STATE,water=entry.words[s+12u];
+    if(water==0u) {entry.words[s+FR_STATE_EVAPORATION_FRACTION]=0u;return;}
+    float dt=uintBitsToFloat(params.seconds),capacity=solid_capacity(entry),gas_cap=gas_capacity(gas);
+    if(dt<=0.||capacity<=0.||gas_cap<=0.||gas.geometry.x<=0.||gas.geometry.y<=0.) return;
+    Words model=Words(params.model_address);
+    float vapor_R=uintBitsToFloat(model.words[3u]),vapor_cv=uintBitsToFloat(model.words[8u]);
+    float ambient_density=uintBitsToFloat(model.words[11u]);
+    if(vapor_R<=0.||vapor_cv<=0.||ambient_density<=0.) return;
+    float temperature=(uintBitsToFloat(entry.words[s+17u])+uintBitsToFloat(entry.words[s+25u])+
+        uintBitsToFloat(entry.words[s+26u]))/capacity;
+    if(temperature<=0.) return;
+    float oxygen_fraction=uintBitsToFloat(model.words[13u]);
+    float air_R=oxygen_fraction*uintBitsToFloat(model.words[0u])+
+        (1.-oxygen_fraction)*uintBitsToFloat(model.words[1u]);
+    float exponent=float(FR_THERMAL_WATER_LATENT_KJ_PER_KG)/vapor_R*
+        (1./float(FR_THERMAL_WATER_BOIL_K)-1./temperature);
+    float saturated=ambient_density*air_R*float(FR_THERMAL_AMBIENT_K)*
+        exp(exponent)*gas.geometry.x/(vapor_R*temperature);
+    float deficit=max(0.,saturated-gas.species.w);
+    float rate=float(FR_THERMAL_VAPOR_DIFFUSIVITY_M2_PER_S)/
+        float(FR_THERMAL_GAMEPLAY_FACE_METERS*FR_THERMAL_GAMEPLAY_FACE_METERS);
+    float previous=uintBitsToFloat(entry.words[s+FR_STATE_EVAPORATION_FRACTION]);
+    float requested=min(deficit*65536.,previous+deficit*65536.*rate*dt);
+    if(isnan(requested)||isinf(requested)||requested<0.) return;
+    uint whole=uint(floor(min(requested,float(min(water,16777215u)))));
+    float fraction=requested-floor(requested);
+    float offset=float(FR_THERMAL_WATER_LATENT_KJ_PER_KG)+
+        (coefficient(3u,5u)-vapor_cv-vapor_R)*float(FR_THERMAL_WATER_BOIL_K);
+    float per_kg=offset+vapor_cv*temperature;
+    float energy=uintBitsToFloat(entry.words[s+17u])+uintBitsToFloat(entry.words[s+25u])+
+        uintBitsToFloat(entry.words[s+26u]);
+    if(per_kg<=0.) return;
+    whole=uint(floor(min(float(whole),max(0.,energy-max(.000001,energy*.000001))*65536./per_kg)));
+    if(whole>0u) {
+        float mass=float(whole)/65536.;
+        entry.words[s+12u]=water-whole;
+        add_energy(entry,-mass*per_kg);
+        gas.species.w+=mass;
+        gas.dynamics.y+=mass*vapor_cv*temperature;
+    }
+    entry.words[s+FR_STATE_EVAPORATION_FRACTION]=entry.words[s+12u]>0u?floatBitsToUint(fraction):0u;
+}
 void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas,inout float admitted,inout float source_temperature,inout uint sources) {
     uint at=atlas(position);if(at==0xffffffffu||handle.y==0u||handle.x>=root[2]) return;
     Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
     if(entry.words[FR_ENTRY_GENERATION]!=handle.y||entry.words[FR_ENTRY_OWNER]!=owner) return;
+    evaporate_entry(entry,gas);
     uint s=FR_ENTRY_STATE,m=entry.words[s],wood_fuel=entry.words[s+9u];
     if((entry.words[s+13u]|entry.words[s+14u]|entry.words[s+15u]|entry.words[s+16u])!=0u) return;
     bool char_stage=wood_fuel==0u;uint fuel=char_stage?entry.words[s+10u]:wood_fuel;
