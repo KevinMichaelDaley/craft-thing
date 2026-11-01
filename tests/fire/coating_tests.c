@@ -163,6 +163,29 @@ static void test_one_quantum_fracture_stays_with_one_child(void) {
     ASSERT_EQ(left.excess_heat,0.);ASSERT_EQ(right.excess_heat,2.);PASS();
 }
 
+static void test_many_tiny_contacts_keep_exact_oil_and_jelly_mass(void) {
+    uint32_t remainder=0u,oil=0u,jelly=0u,oxidizer=0u;
+    fr_coating_species_delta_t delta={0};
+    for(uint32_t i=0u;i<10u;i++) {
+        ASSERT_TRUE(fr_coating_quantize_volume(FR_BULK_OIL,1u,remainder,&delta));
+        remainder=delta.remainder_word;oil+=delta.oil_fuel_fp;
+    }
+    ASSERT_EQ(oil,11u);ASSERT_EQ(remainder,0u);
+    for(uint32_t i=0u;i<50u;i++) {
+        ASSERT_TRUE(fr_coating_quantize_volume(FR_BULK_SLIME,1u,remainder,&delta));
+        remainder=delta.remainder_word;jelly+=delta.jelly_fuel_fp;
+        oxidizer+=delta.jelly_oxidizer_fp;
+    }
+    ASSERT_EQ(jelly,26u);ASSERT_EQ(oxidizer,39u);
+    ASSERT_EQ(remainder,0u);PASS();
+}
+
+static void test_corrupt_quantization_word_is_transactional(void) {
+    fr_coating_species_delta_t delta={.oil_fuel_fp=77u};
+    ASSERT_TRUE(!fr_coating_quantize_volume(FR_BULK_OIL,1u,0x80000000u,&delta));
+    ASSERT_EQ(delta.oil_fuel_fp,77u);PASS();
+}
+
 int main(void) {
     RUN(test_wetting_debits_mobile_oil_and_preserves_heat);
     RUN(test_retained_slime_does_not_wet_and_existing_film_accumulates);
@@ -176,6 +199,8 @@ int main(void) {
     RUN(test_fracture_splits_each_phase_and_heat_without_duplication);
     RUN(test_fracture_rejects_duplicate_child_owner_transactionally);
     RUN(test_one_quantum_fracture_stays_with_one_child);
+    RUN(test_many_tiny_contacts_keep_exact_oil_and_jelly_mass);
+    RUN(test_corrupt_quantization_word_is_transactional);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail>0?1:0;
 }

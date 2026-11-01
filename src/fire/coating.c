@@ -145,3 +145,9 @@ bool fr_coating_film_split(const fr_coating_film_t *source,
     *left=a;*right=b;
     return true;
 }
+
+bool fr_coating_quantize_volume(uint32_t phase,uint32_t volume_fp,
+    uint32_t remainder_word,fr_coating_species_delta_t *out) {
+    (void)phase;(void)volume_fp;(void)remainder_word;(void)out;
+    return false;
+}

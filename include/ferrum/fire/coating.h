@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "dungeoncraft/coating_layout.h"
 #include "ferrum/fire/bulk_phase.h"
 
 enum { FR_COATING_TERRAIN=1u, FR_COATING_RIGID=2u,
@@ -43,5 +44,14 @@ bool fr_coating_film_split(const fr_coating_film_t *source,
     uint32_t left_weight_fp,const fr_coating_host_t *left_host,
     const fr_coating_host_t *right_host,fr_coating_film_t *left,
     fr_coating_film_t *right);
+
+/** Convert one Q16 volume debit to integer species mass and retain the exact
+ * sub-Q16 remainder. The packed word belongs to the same stable parcel. */
+typedef struct {
+    uint32_t oil_fuel_fp,jelly_fuel_fp,jelly_oxidizer_fp;
+    uint32_t remainder_word;
+} fr_coating_species_delta_t;
+bool fr_coating_quantize_volume(uint32_t phase,uint32_t volume_fp,
+    uint32_t remainder_word,fr_coating_species_delta_t *out);
 
 #endif
