@@ -78,6 +78,20 @@ static void test_submerged_pocket_expands_against_water_without_losing_gas_or_li
     ASSERT_EQ(new_volume,old_volume);ASSERT_EQ(water,old_water);ASSERT_EQ(work,old_work);
     PASS();
 }
+static void test_zero_void_submerged_source_nucleates_by_displacing_water(void) {
+    char err[256]={0};fr_gas_model_t m=model();
+    m.kinetic_scale=1./512.;
+    fr_gas_state_t source=air(m,.012,500.,0.);
+    fr_gas_state_t after={0};double volume=0.,water=0.,work=0.;
+    ASSERT_TRUE(fr_gas_reference_displace_liquid(&m,&source,0.,100.,.2,
+        &after,&volume,&water,&work,err,sizeof(err)));
+    ASSERT_TRUE(volume>0.&&volume<=.2&&fabs(volume-water)<1e-12);
+    ASSERT_TRUE(work<0.&&after.energy>0.&&
+        fabs(after.energy-source.energy-work)<1e-12);
+    for(uint32_t i=0;i<FR_GAS_SPECIES;i++)
+        ASSERT_TRUE(fabs(after.species[i]-source.species[i])<1e-12);
+    PASS();
+}
 static void test_finite_colored_smoke_dilutes_oxygen_without_consuming_it(void) {
     char err[256]={0};fr_gas_model_t m=model();fr_gas_state_t target=air(m,1,293.15,0),source={0},left,mixed;
     source.species[FR_GAS_EXHAUST]=2;source.energy=2*m.heat_capacity_cv[FR_GAS_EXHAUST]*330;source.pigment[0]=2;
@@ -249,6 +263,7 @@ int main(void) {
     RUN(test_sealed_heating_stores_energy_and_raises_pressure_without_losing_oxygen);
     RUN(test_reversible_compression_and_expansion_close_mass_energy_and_boundary_work);
     RUN(test_submerged_pocket_expands_against_water_without_losing_gas_or_liquid);
+    RUN(test_zero_void_submerged_source_nucleates_by_displacing_water);
     RUN(test_finite_colored_smoke_dilutes_oxygen_without_consuming_it);
     RUN(test_stationary_pressure_balanced_contacts_do_not_diffuse_pigment_at_sound_speed);
     RUN(test_closed_pressure_release_conserves_species_energy_and_pigment_for_both_solvers);
