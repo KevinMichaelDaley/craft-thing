@@ -52,6 +52,10 @@ float water_drag_speed(float face_flow,bool reverse,uint water,uint occupied) {
     float aligned=max(0.,reverse?-face_flow:face_flow);
     return aligned*float(water)/float(max(occupied,1u));
 }
+float transverse_shear(uint axis,uint first,uint second) {
+    vec2 difference=face_velocity[first]-face_velocity[second];
+    return abs(axis==0u?difference.x:difference.y);
+}
 float rheology_mobility(uint phase,uint atlas,uint volume,float stress,float shear) {
     if(phase==0u) return 1.;
     float yield=phase==1u?params.oil_yield:params.slime_yield;
@@ -94,9 +98,7 @@ void main() {
     uint top_capacity=FULL-min(FULL,occupancy[2u*world_size+top_index]);
     uint bottom_capacity=FULL-min(FULL,occupancy[2u*world_size+bottom_index]);
     float water_flow=params.axis==0u?face_velocity[index].y:face_velocity[index].x;
-    float coarse_shear=params.axis==0u?
-        abs(face_velocity[top_index].x-face_velocity[bottom_index].x):
-        abs(face_velocity[top_index].y-face_velocity[bottom_index].y);
+    float coarse_shear=transverse_shear(params.axis,top_index,bottom_index);
     bool reverse_by_fill=params.axis==0u?
         (used(bottom)>bottom_capacity&&used(top)<top_capacity):
         (used(bottom)>bottom_capacity&&used(top)<=top_capacity)||
