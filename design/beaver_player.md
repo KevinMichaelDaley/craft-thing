@@ -133,8 +133,15 @@ all poses and facing directions. Zero is transparent; other values are the
 40x40 source index plus one. Owners use canonical rest coordinates, independently
 of the destination sprite pixel and camera/world position. Occluded source pixels
 remain canonical owners even when the current frame does not display them.
-Body extraction can trim shapes: the eventual runtime adapter must account for
-that origin when mapping source rest cells to actual body rest cells.
+`fr_beaver_pixel_owners_trimmed` applies a supplied admission rest origin and
+extent to resolve the actual BODY parcel key, while appearance stays canonical.
+It rejects out-of-part pixels transactionally. A Vulkan regression extracts a
+real wood part, seeds a wet/hot parcel at the cold fixture boundary, resolves its
+trimmed owner, moves it through the GPU drive/rigid solver, and verifies the
+entire parcel and owner remain unchanged. No per-frame seeding or CPU reaction
+solve is involved. This proves the trim binding prerequisite; full pose
+deformation, retention of hidden parcels and live exposure still need runtime
+integration before ct-xsll closes.
 
 Run `./tools/with-vulkan make test_player` for the state and asset checks.
 Run `./tools/with-vulkan make build/beaver_atlas` and

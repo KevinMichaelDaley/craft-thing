@@ -3,9 +3,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "ferrum/player/drive_gpu.h"
-#include "ferrum/player/beaver.h"
 #include "ferrum/fire/gpu.h"
+#include "ferrum/fire/material_profile.h"
+#include "ferrum/player/beaver.h"
+#include "ferrum/player/drive_gpu.h"
 #include "../../src/vulkan/runtime_body_gpu.h"
 
 static int g_pass,g_fail;
@@ -148,7 +149,8 @@ static void test_trimmed_canonical_binding_tracks_real_wet_hot_parcel_during_mot
         chunk->cells[y*64+x].material=DC_MATERIAL_WOOD;
     ASSERT_TRUE(dc_gpu_upload_chunk(g_gpu,0,chunk,g_err,sizeof(g_err)));free(chunk);
     fr_reactive_state_t state;
-    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,900,700,91,&state,g_err,sizeof(g_err)));
+    uint32_t mass=(uint32_t)lroundf(fr_reactive_profile(DC_MATERIAL_WOOD)->density*DC_FLUID_FULL);
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,mass,900,700,91,&state,g_err,sizeof(g_err)));
     state.ignition_threshold=.8f;state.ignition_integral=.4f;
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(g_gpu,0,5*64+5,&state,g_err,sizeof(g_err)));
     ASSERT_TRUE(dc_gpu_enable_automatic_components(g_gpu) && dc_gpu_rigid_step(g_gpu,g_err,sizeof(g_err)));
@@ -178,15 +180,16 @@ static void test_trimmed_canonical_binding_tracks_real_wet_hot_parcel_during_mot
 }
 
 int main(void) {
-    void (*tests[])(void)={test_real_body_drive_preserves_position_and_other_player,
-        test_jump_uses_actual_solver_support_and_consumes_support,
-        test_sequence_retries_and_invalid_batches_are_transactional,
-        test_stale_generation_and_missing_body_do_not_control_replacements,
-        test_binding_validation_and_owner_input_routing,
-        test_trimmed_canonical_binding_tracks_real_wet_hot_parcel_during_motion};
+    struct {const char *name;void (*run)(void);} tests[]={
+        {"real body movement and independent player",test_real_body_drive_preserves_position_and_other_player},
+        {"jump from actual solver support",test_jump_uses_actual_solver_support_and_consumes_support},
+        {"retry and batch validation",test_sequence_retries_and_invalid_batches_are_transactional},
+        {"stale generation and missing body",test_stale_generation_and_missing_body_do_not_control_replacements},
+        {"binding ownership validation",test_binding_validation_and_owner_input_routing},
+        {"trimmed live reactive parcel",test_trimmed_canonical_binding_tracks_real_wet_hot_parcel_during_motion}};
     for (uint32_t i=0;i<sizeof(tests)/sizeof(*tests);i++) {
         if (!fixture()) {printf("Fixture FAIL: %s\n",g_err);g_fail++;}
-        else RUN(tests[i]);
+        else {printf("RUN %s\n",tests[i].name);tests[i].run();}
         dc_gpu_destroy(g_gpu);g_gpu=NULL;
     }
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
