@@ -38,6 +38,14 @@ void bulk_heat_write(uint atlas,uint phase,float energy) {
     uint base=(atlas/4096u)*FR_BULK_CHUNK_CHANNELS*4096u+atlas%4096u;
     bulk[base+(phase+3u)*4096u]=floatBitsToUint(energy);
 }
+float bulk_momentum_at(uint atlas,uint phase,uint axis) {
+    uint base=(atlas/4096u)*FR_BULK_CHUNK_CHANNELS*4096u+atlas%4096u;
+    return uintBitsToFloat(bulk[base+(4u+phase*2u+axis)*4096u]);
+}
+void bulk_momentum_write(uint atlas,uint phase,uint axis,float momentum) {
+    uint base=(atlas/4096u)*FR_BULK_CHUNK_CHANNELS*4096u+atlas%4096u;
+    bulk[base+(4u+phase*2u+axis)*4096u]=floatBitsToUint(momentum);
+}
 bool permeable(uint material) {
     return material==0u||material==2u||material==4u||material==5u||material==6u||
         material==10u||material==13u;
@@ -186,6 +194,13 @@ void main() {
             float carried=bulk_heat_at(source,phase)*float(moved)/float(before);
             bulk_heat_write(source,phase,bulk_heat_at(source,phase)-carried);
             bulk_heat_write(target,phase,bulk_heat_at(target,phase)+carried);
+            for(uint component=0u;component<2u;component++) {
+                float momentum=bulk_momentum_at(source,phase,component);
+                float transfer=momentum*float(moved)/float(before);
+                bulk_momentum_write(source,phase,component,momentum-transfer);
+                bulk_momentum_write(target,phase,component,
+                    bulk_momentum_at(target,phase,component)+transfer);
+            }
         }
     }
     cells[top_at].y=top[0];cells[bottom_at].y=bottom[0];
