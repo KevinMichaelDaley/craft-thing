@@ -109,3 +109,12 @@ bool fr_coating_release(const fr_coating_film_t *film,
     *receiver_excess_out=next_receiver_heat;*released_fp=released;
     return true;
 }
+
+bool fr_coating_film_split(const fr_coating_film_t *source,
+    uint32_t left_weight_fp,const fr_coating_host_t *left_host,
+    const fr_coating_host_t *right_host,fr_coating_film_t *left,
+    fr_coating_film_t *right) {
+    (void)source;(void)left_weight_fp;(void)left_host;(void)right_host;
+    (void)left;(void)right;
+    return false;
+}

@@ -130,6 +130,28 @@ static void test_mixed_film_releases_phase_heat_by_thermal_capacity(void) {
     ASSERT_EQ(after.excess_heat+heat,film.excess_heat);PASS();
 }
 
+static void test_fracture_splits_each_phase_and_heat_without_duplication(void) {
+    fr_coating_film_t source=rigid_film(),left={0},right={0};
+    source.oil_fp=10001u;source.slime_fp=7001u;source.excess_heat=19.;
+    fr_coating_host_t left_host={FR_COATING_RIGID,51u,0u,9u,3u,4u};
+    fr_coating_host_t right_host={FR_COATING_RIGID,52u,0u,10u,7u,8u};
+    ASSERT_TRUE(fr_coating_film_split(&source,32768u,&left_host,&right_host,
+        &left,&right));
+    ASSERT_EQ(left.oil_fp+right.oil_fp,source.oil_fp);
+    ASSERT_EQ(left.slime_fp+right.slime_fp,source.slime_fp);
+    ASSERT_EQ(left.excess_heat+right.excess_heat,source.excess_heat);
+    ASSERT_EQ(memcmp(&left.host,&left_host,sizeof(left_host)),0);
+    ASSERT_EQ(memcmp(&right.host,&right_host,sizeof(right_host)),0);
+    ASSERT_TRUE(left.host.id_low!=right.host.id_low);PASS();
+}
+
+static void test_fracture_rejects_duplicate_child_owner_transactionally(void) {
+    fr_coating_film_t source=rigid_film(),left={.oil_fp=91u},right={.oil_fp=92u};
+    source.oil_fp=100u;fr_coating_host_t child={FR_COATING_RIGID,51u,0u,9u,3u,4u};
+    ASSERT_TRUE(!fr_coating_film_split(&source,32768u,&child,&child,&left,&right));
+    ASSERT_EQ(left.oil_fp,91u);ASSERT_EQ(right.oil_fp,92u);PASS();
+}
+
 int main(void) {
     RUN(test_wetting_debits_mobile_oil_and_preserves_heat);
     RUN(test_retained_slime_does_not_wet_and_existing_film_accumulates);
@@ -140,6 +162,8 @@ int main(void) {
     RUN(test_full_receiver_does_not_erase_dripping_film);
     RUN(test_softening_increases_drip_continuously);
     RUN(test_mixed_film_releases_phase_heat_by_thermal_capacity);
+    RUN(test_fracture_splits_each_phase_and_heat_without_duplication);
+    RUN(test_fracture_rejects_duplicate_child_owner_transactionally);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail>0?1:0;
 }

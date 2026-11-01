@@ -37,4 +37,11 @@ bool fr_coating_release(const fr_coating_film_t *film,
     fr_coating_film_t *film_out,fr_bulk_cell_t *receiver_out,
     double *receiver_excess_out,uint32_t *released_fp);
 
+/** Split a film across new stable rest-address owners after fracture. Each
+ * phase volume and extensive heat is partitioned once, without duplication. */
+bool fr_coating_film_split(const fr_coating_film_t *source,
+    uint32_t left_weight_fp,const fr_coating_host_t *left_host,
+    const fr_coating_host_t *right_host,fr_coating_film_t *left,
+    fr_coating_film_t *right);
+
 #endif
