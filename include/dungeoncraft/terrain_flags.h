@@ -7,6 +7,7 @@
 #define DC_CELL_BOND_MASK 0x3c00u
 #define DC_CELL_RELEASED_TERRAIN 0x4000u
 #define DC_CELL_BURNING_SMOKE_PASS 0x8000u
+/** Gas-only screen-space bypass for a burning solid; collision remains solid. */
 #define DC_CELL_BURNING_SMOKE_VOID 0.125
 #define DC_CELL_SMOKE_PASS_WOOD(m) ((m)==7u||(m)==8u||(m)==12u)
 #define DC_CELL_DIAGONAL_BOND_MASK 0x000fu

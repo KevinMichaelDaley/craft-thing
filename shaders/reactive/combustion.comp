@@ -610,7 +610,8 @@ void main() {
                 uint bit=DC_CELL_BURNING_SMOKE_PASS<<DC_CELL_FLAGS_SHIFT;
                 bool pass=burning(at);
                 cells[at].x=(cells[at].x&~bit)|(pass?bit:0u);
-            } else cells[at].x&=~(DC_CELL_BURNING_SMOKE_PASS<<DC_CELL_FLAGS_SHIFT);
+            } else if((cells[at].x&(DC_CELL_BURNING_SMOKE_PASS<<DC_CELL_FLAGS_SHIFT))!=0u)
+                cells[at].x&=~(DC_CELL_BURNING_SMOKE_PASS<<DC_CELL_FLAGS_SHIFT);
         }
         return;
     }
