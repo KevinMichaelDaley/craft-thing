@@ -9,6 +9,7 @@
 #include "ferrum/renderer/gpu.h"
 #include "dungeoncraft/reactive_state_layout.h"
 #include "../../src/vulkan/reactive_storage_gpu.h"
+#include "../../src/vulkan/gas_gpu_internal.h"
 
 static bool capture_body_feedback(dc_gpu_t *g,uint32_t *pixels,const char *name,char *err,uint32_t cap) {
     if(!dc_gpu_present_chunks(g,err,cap)||!dc_gpu_readback(g,pixels,480u*270u,err,cap)) return false;
@@ -49,6 +50,12 @@ static void test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_
     uint32_t *before=malloc(480u*270u*4u),*after=malloc(480u*270u*4u),*paused=malloc(480u*270u*4u);ASSERT_TRUE(before&&after&&paused);
     ASSERT_TRUE(capture_body_feedback(g,before,"before",err,sizeof(err)));
     for(uint32_t i=0;i<4;i++) ASSERT_TRUE(fr_combustion_gpu_step(g,.25f,err,sizeof(err)));
+    fr_gas_checkpoint_chunk_t *gas_snapshot=malloc(sizeof(*gas_snapshot));ASSERT_TRUE(gas_snapshot);
+    ASSERT_TRUE(fr_gas_gpu_refresh_geometry(g,err,sizeof(err))&&
+        fr_gas_gpu_export_checkpoint(g,0,gas_snapshot,err,sizeof(err)));
+    ASSERT_TRUE(gas_snapshot->cells[20u*64u+20u][12]>.05f&&
+        gas_snapshot->cells[20u*64u+20u][12]<.25f);
+    free(gas_snapshot);
     fr_reactive_record_t dry,wet,inert;bool found=false;
     ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0,0,&dry,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000002u,1,0,&inert,&found,err,sizeof(err))&&found);
