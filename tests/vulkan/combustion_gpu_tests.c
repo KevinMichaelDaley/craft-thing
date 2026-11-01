@@ -266,6 +266,43 @@ static void test_greek_corrosion_consumes_bound_stock_and_publishes_spent_gold(v
     ASSERT_EQ(record.state.origin_id_low,gold.origin_id_low);
     free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_mixed_film_burns_wet_faster_than_matched_oil_control(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    const uint32_t at[3]={20u*64u+20u,20u*64u+26u,20u*64u+32u};
+    ASSERT_TRUE(context(&g,err,sizeof(err)));
+    fr_reactive_state_t original[3];
+    for(uint32_t i=0u;i<3u;i++) {
+        chunk->cells[at[i]]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+        ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,65536u,i==1u?0u:65536u,
+            800.f,120000u+i,&original[i],err,sizeof(err)));
+        original[i].coating_oil_fuel_fp=i==0u?32768u:65536u;
+        original[i].coating_jelly_fuel_fp=i==0u?32768u:0u;
+        original[i].coating_oxidizer_fp=i==0u?32768u:0u;
+        original[i].coating_threshold=.01f;original[i].coating_integral=.02f;
+        original[i].flags|=FR_REACTIVE_COATING_FLAMING;
+        original[i].thermal_energy=(float)fr_reactive_state_energy_at_temperature(&original[i],800.f);
+    }
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    for(uint32_t i=0u;i<3u;i++)
+        ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,at[i],&original[i],err,sizeof(err)));
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&
+        fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&
+        fr_combustion_gpu_enable(g,err,sizeof(err))&&
+        fr_combustion_gpu_step(g,5.f,err,sizeof(err)));
+    fr_reactive_record_t results[3];bool found=false;
+    for(uint32_t i=0u;i<3u;i++)
+        ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at[i],&results[i],&found,err,sizeof(err))&&found);
+    uint32_t greek_used=original[0].coating_oil_fuel_fp+original[0].coating_jelly_fuel_fp-
+        results[0].state.coating_oil_fuel_fp-results[0].state.coating_jelly_fuel_fp;
+    uint32_t oil_used=original[1].coating_oil_fuel_fp-results[1].state.coating_oil_fuel_fp;
+    ASSERT_TRUE(greek_used>2u*oil_used&&oil_used>0u);
+    ASSERT_TRUE(results[0].state.coating_oxidizer_fp<original[0].coating_oxidizer_fp);
+    ASSERT_EQ(results[2].state.coating_oil_fuel_fp,original[2].coating_oil_fuel_fp);
+    ASSERT_EQ(results[0].state.fuel_mass_fp,original[0].fuel_mass_fp);
+    free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_flame_emission_requires_local_transported_hot_fuel_and_oxygen(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
@@ -380,6 +417,10 @@ int main(int argc,char **argv) {
     }
     if(argc==2&&strcmp(argv[1],"--corrosion")==0) {
         RUN(test_greek_corrosion_consumes_bound_stock_and_publishes_spent_gold);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
+    if(argc==2&&strcmp(argv[1],"--greek")==0) {
+        RUN(test_mixed_film_burns_wet_faster_than_matched_oil_control);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
     }
     if(argc==2&&strcmp(argv[1],"--roof")==0) {
