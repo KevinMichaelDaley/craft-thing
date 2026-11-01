@@ -51,6 +51,13 @@ static void test_water_solver_respects_full_oil_cell_capacity(void) {
         dc_gpu_fluid_step(gpu,err,sizeof(err))&&
         dc_gpu_download_chunk(gpu,0,after,err,sizeof(err)));
     ASSERT_INT_EQ(after->cells[destination].fluid_mass,0);
+    phase->oil_fp[destination]=40000u;
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,phase,err,sizeof(err))&&
+        dc_gpu_fluid_step(gpu,err,sizeof(err))&&
+        dc_gpu_download_chunk(gpu,0,after,err,sizeof(err)));
+    ASSERT_TRUE(after->cells[destination].fluid_mass>0u&&
+        after->cells[destination].fluid_mass<=FR_BULK_CELL_FULL_FP-40000u);
     dc_gpu_destroy(gpu);free(chunk);free(after);free(phase);PASS();
 }
 int main(void) {
