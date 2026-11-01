@@ -1971,6 +1971,7 @@ GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_factor_compac
 build/shaders/gas_audit.comp.spv: include/dungeoncraft/gas_audit_layout.h
 build/shaders/gas_conduction.comp.spv: include/dungeoncraft/combustion_parameters.h include/dungeoncraft/thermal_parameters.h include/dungeoncraft/thermal_surface.h
 build/shaders/gas_conduction.comp.spv build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: shaders/gas/conduction_physics.glsl
+build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: include/dungeoncraft/terrain_flags.h
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,pressure_restrict pressure_coarse_sor pressure_prolong)
 build/gas_acoustic_trace_gpu.o: src/vulkan/gas_acoustic_trace_gpu.c src/vulkan/gas_acoustic_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
@@ -1982,6 +1983,13 @@ build/shaders/gas_%.comp.spv: shaders/gas/%.comp $(wildcard shaders/gas/*.glsl) 
 build/shaders/gas_overlay.comp.spv: shaders/renderer/gas_overlay.comp shaders/gas/types.glsl include/dungeoncraft/gas_layout.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/shaders/gas_coordinate.comp.spv: shaders/renderer/gas_overlay.comp shaders/gas/types.glsl include/dungeoncraft/gas_layout.h
+	mkdir -p $(dir $@)
+	$(GLSLANG) -V --target-env vulkan1.3 -DFR_SMOKE_COORDINATE_ONLY=1 $< -o $@
+build/shaders/gas_potential.comp.spv: shaders/renderer/gas_overlay.comp shaders/gas/types.glsl include/dungeoncraft/gas_layout.h
+	mkdir -p $(dir $@)
+	$(GLSLANG) -V --target-env vulkan1.3 -DFR_SMOKE_POTENTIAL_ONLY=1 $< -o $@
+GAS_SHADERS += build/shaders/gas_coordinate.comp.spv build/shaders/gas_potential.comp.spv
 build/gas_gpu.o build/performance/src/vulkan/gas_gpu.o: $(GAS_SHADERS)
 test: build/thermal_precision_tests
 build/stream.o: include/ferrum/fire/thermal_checkpoint.h

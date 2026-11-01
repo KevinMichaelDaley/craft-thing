@@ -1,11 +1,11 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #include "../gas/types.glsl"
-#define FR_SMOKE_DETAIL_SCALE .5
-#define FR_SMOKE_WARP_CELLS 5.
-#define FR_SMOKE_WARP_SPEED .1
+#define FR_SMOKE_DETAIL_SCALE .125
+#define FR_SMOKE_WARP_CELLS 4.
+#define FR_SMOKE_WARP_ENERGY .5
 #define FR_SMOKE_DETAIL_GAIN .6
-#define FR_SMOKE_DETAIL_SPEED .02
+#define FR_SMOKE_DETAIL_ENERGY .25
 #define FR_SMOKE_DETAIL_MIN .5
 #define FR_SMOKE_EDGE_START .08
 #define FR_SMOKE_EDGE_FULL .5
@@ -18,6 +18,7 @@ layout(set=0,binding=4,std430) readonly buffer Gates {uint gates[];};
 layout(set=0,binding=5,std430) readonly buffer Alternate {Gas alternate[];};
 layout(set=0,binding=6,std430) buffer SmokeCoordinates0 {vec2 coordinates0[];};
 layout(set=0,binding=7,std430) buffer SmokeCoordinates1 {vec2 coordinates1[];};
+layout(set=0,binding=8,std430) buffer SmokePotential {float potentials[];};
 layout(push_constant) uniform Params {uint width,height,view_x,view_y,view_width,view_height,seconds,bank,reset;} params;
 vec2 smoke_coordinate(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return vec2(p);
@@ -48,16 +49,93 @@ float smoke_hash(ivec2 p) {
     phase^=phase>>16u;phase*=2246822519u;phase^=phase>>13u;
     return float(phase&65535u)*(2./65535.)-1.;
 }
-float smoke_smooth_noise(vec2 p) {
-    ivec2 low=ivec2(floor(p));vec2 t=fract(p);t=t*t*(3.-2.*t);
-    float a=mix(smoke_hash(low),smoke_hash(low+ivec2(1,0)),t.x);
-    float b=mix(smoke_hash(low+ivec2(0,1)),smoke_hash(low+ivec2(1,1)),t.x);
-    return mix(a,b,t.y);
+float smoke_wavelet_band(vec2 p) {
+    /* The compact radial wavelet has zero integral in 2D: integrating
+     * (1-r^2)^2(1-4r^2) over the unit disk gives zero. Random coefficients
+     * translate its band without adding a low-frequency DC component. */
+    ivec2 low=ivec2(floor(p));float value=0.;
+    for(int dy=-1;dy<=1;dy++) for(int dx=-1;dx<=1;dx++) {
+        ivec2 node=low+ivec2(dx,dy);vec2 delta=p-vec2(node);
+        float radius=dot(delta,delta);if(radius>=1.) continue;
+        float taper=1.-radius;
+        value+=smoke_hash(node)*taper*taper*(1.-4.*radius);
+    }
+    return value;
 }
 float smoke_wavelet(vec2 p) {
-    /* A local fine band minus a lower frequency band gives moving detail
-     * without anchoring a dither mask to screen cells. */
-    return clamp(smoke_smooth_noise(p)-.5*smoke_smooth_noise(p*.5),-1.,1.);
+    /* The second octave follows the -5/6 velocity-amplitude spectrum. */
+    return smoke_wavelet_band(p)+.561231*smoke_wavelet_band(p*2.);
+}
+vec2 smoke_velocity_at(ivec2 p,vec2 fallback) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return fallback;
+    Gas s=smoke_at(uint(p.x),uint(p.y));
+    float mass=dot(s.species,vec4(1.))+s.dynamics.x;
+    return mass>0.&&s.geometry.x>0.?s.dynamics.zw/mass:fallback;
+}
+vec2 smoke_advect_velocity(ivec2 p,Gas s) {
+    float mass=dot(s.species,vec4(1.))+s.dynamics.x;
+    vec2 velocity=mass>0.?s.dynamics.zw/mass:vec2(0.);
+    if(s.species.z+s.dynamics.x>0.) return velocity;
+    float nearby=0.;
+    for(uint d=0u;d<4u;d++) {
+        ivec2 q=p+(d==0u?ivec2(1,0):(d==1u?ivec2(-1,0):(d==2u?ivec2(0,1):ivec2(0,-1))));
+        if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(params.width,params.height)))) continue;
+        Gas other=smoke_at(uint(q.x),uint(q.y));float smoke=other.species.z+other.dynamics.x;
+        float other_mass=dot(other.species,vec4(1.))+other.dynamics.x;
+        if(smoke>nearby&&other_mass>0.) {nearby=smoke;velocity=other.dynamics.zw/other_mass;}
+    }
+    return velocity;
+}
+float smoke_resolved_band(ivec2 p,vec2 center) {
+    vec2 right=smoke_velocity_at(p+ivec2(1,0),center);
+    vec2 down=smoke_velocity_at(p+ivec2(0,1),center);
+    vec2 diagonal=smoke_velocity_at(p+ivec2(1,1),.5*(right+down));
+    /* Three zero-mean Haar coefficients are the last resolved velocity band.
+     * Uniform motion has no detail energy, regardless of its speed. */
+    vec2 horizontal=.25*(center-right+down-diagonal);
+    vec2 vertical=.25*(center+right-down-diagonal);
+    vec2 diagonal_band=.25*(center-right-down+diagonal);
+    return sqrt(dot(horizontal,horizontal)+dot(vertical,vertical)+
+        dot(diagonal_band,diagonal_band));
+}
+bool smoke_coordinate_scattered(ivec2 p);
+float smoke_scattering_weight(ivec2 p);
+float smoke_stream_potential(ivec2 p) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0.;
+    float resolved=smoke_resolved_band(p,smoke_velocity_at(p,vec2(0.)));
+    if(resolved<=.001) return 0.;
+    float energy=.5*resolved*resolved;
+    float scattering=smoke_scattering_weight(p);
+    if(scattering<=0.) return 0.;
+    float amplitude=FR_SMOKE_WARP_CELLS*energy/(energy+FR_SMOKE_WARP_ENERGY)*scattering;
+    return amplitude*smoke_wavelet(smoke_coordinate(p)*FR_SMOKE_DETAIL_SCALE);
+}
+vec2 smoke_wavelet_velocity(ivec2 p) {
+    /* A discrete curl keeps the added velocity divergence free even where
+     * smoke density and resolved band energy change across the plume. */
+    ivec2 down=p+ivec2(0,1),up=p-ivec2(0,1);
+    ivec2 left=p-ivec2(1,0),right=p+ivec2(1,0);
+    float d=any(greaterThanEqual(down,ivec2(params.width,params.height)))?0.:potentials[uint(down.y)*params.width+uint(down.x)];
+    float u=any(lessThan(up,ivec2(0)))?0.:potentials[uint(up.y)*params.width+uint(up.x)];
+    float l=any(lessThan(left,ivec2(0)))?0.:potentials[uint(left.y)*params.width+uint(left.x)];
+    float r=any(greaterThanEqual(right,ivec2(params.width,params.height)))?0.:potentials[uint(right.y)*params.width+uint(right.x)];
+    return .5*vec2(d-u,l-r);
+}
+bool smoke_coordinate_scattered(ivec2 p) {
+    vec2 dx=.5*(smoke_coordinate(p+ivec2(1,0))-smoke_coordinate(p-ivec2(1,0)));
+    vec2 dy=.5*(smoke_coordinate(p+ivec2(0,1))-smoke_coordinate(p-ivec2(0,1)));
+    float trace=dot(dx,dx)+dot(dy,dy),det=dx.x*dy.y-dx.y*dy.x;
+    float discriminant=sqrt(max(0.,trace*trace-4.*det*det));
+    float low=sqrt(max(0.,.5*(trace-discriminant)));
+    float high=sqrt(max(0.,.5*(trace+discriminant)));
+    return low<=.5||high>=2.;
+}
+float smoke_scattering_weight(ivec2 p) {
+    if(params.reset!=0u) return 0.;
+    vec2 dx=.5*(smoke_coordinate(p+ivec2(1,0))-smoke_coordinate(p-ivec2(1,0)));
+    vec2 dy=.5*(smoke_coordinate(p+ivec2(0,1))-smoke_coordinate(p-ivec2(0,1)));
+    float strain=max(length(dx-vec2(1,0)),length(dy-vec2(0,1)));
+    return smoothstep(.15,.9,strain);
 }
 vec4 smoke_visual_gas(Gas s,float opacity,float density) {
     float carrier=s.species.z+s.dynamics.x;
@@ -84,6 +162,7 @@ vec4 smoke_visual_sample(vec2 p,float opacity,float density) {
 float smoke_edge_weight(float original_depth,float displaced_depth) {
     /* A large relative change marks the plume boundary. Inside uniform smoke,
      * the original optical depth dominates and only the soft detail remains. */
+    if(original_depth<=0.&&displaced_depth>0.) return 1.;
     float change=abs(displaced_depth-original_depth)/max(max(displaced_depth,original_depth),.25);
     return smoothstep(FR_SMOKE_EDGE_START,FR_SMOKE_EDGE_FULL,change);
 }
@@ -91,28 +170,39 @@ void main() {
     uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
     if(index>=params.width*params.height) return;
     uint x=index%params.width,y=index/params.width;
+#ifndef FR_SMOKE_COORDINATE_ONLY
+    if(x<params.view_x||y<params.view_y||x>=params.view_x+params.view_width||y>=params.view_y+params.view_height) return;
+#endif
     uint page=pages[(y/64u)*((params.width+63u)/64u)+x/64u];
     uint atlas=page==0u?0u:(page-1u)*4096u+(y%64u)*64u+x%64u;
     Gas s=page==0u?gas_empty():(parameters[FR_GAS_CELL_OWNER_WORD]!=0u&&(gates[atlas]&FR_GAS_CELL_OWNER_BIT)!=0u?alternate[atlas]:world[atlas]);
     uint gate=page==0u?0u:gates[atlas]&3u;
-    float carrier=s.species.z+s.dynamics.x;
-    float mass=dot(s.species,vec4(1.))+s.dynamics.x;
-    vec2 velocity=mass>0.?s.dynamics.zw/mass:vec2(0.);
-    if(carrier<=0.&&page!=0u) {
-        float nearby=0.;
-        for(uint d=0u;d<4u;d++) {
-            ivec2 q=ivec2(x,y)+(d==0u?ivec2(1,0):(d==1u?ivec2(-1,0):(d==2u?ivec2(0,1):ivec2(0,-1))));
-            if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(params.width,params.height)))) continue;
-            Gas other=smoke_at(uint(q.x),uint(q.y));float smoke=other.species.z+other.dynamics.x;
-            float other_mass=dot(other.species,vec4(1.))+other.dynamics.x;
-            if(smoke>nearby&&other_mass>0.) {nearby=smoke;velocity=other.dynamics.zw/other_mass;}
-        }
+    vec2 velocity=page==0u?vec2(0.):smoke_advect_velocity(ivec2(x,y),s);
+    ivec2 cell=ivec2(x,y);
+#ifdef FR_SMOKE_COORDINATE_ONLY
+    if(s.species.z+s.dynamics.x<=0.&&all(equal(velocity,vec2(0.)))) {
+        if(params.bank==0u) coordinates1[index]=vec2(x,y);else coordinates0[index]=vec2(x,y);
+        return;
     }
     vec2 coordinate=smoke_advected_coordinate(vec2(x,y)-velocity*uintBitsToFloat(params.seconds));
+    if(params.reset==0u&&params.seconds!=0u&&smoke_coordinate_scattered(cell)) coordinate=vec2(x,y);
     if(params.bank==0u) coordinates1[index]=coordinate;else coordinates0[index]=coordinate;
-    if(x<params.view_x||y<params.view_y||x>=params.view_x+params.view_width||y>=params.view_y+params.view_height) return;
+#elif defined(FR_SMOKE_POTENTIAL_ONLY)
+    potentials[index]=smoke_stream_potential(cell);
+#else
+    vec2 coordinate=smoke_coordinate(cell);
     if(page==0u) return;
     bool oxygen_view=uintBitsToFloat(parameters[FR_GAS_VIEW_WORD])==1.;
+    if(!oxygen_view&&gate==0u&&s.species.z+s.dynamics.x<=0.) {
+        bool near_smoke=false;
+        for(uint d=0u;d<4u;d++) {
+            ivec2 q=cell+(d==0u?ivec2(1,0):(d==1u?ivec2(-1,0):(d==2u?ivec2(0,1):ivec2(0,-1))));
+            if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(params.width,params.height)))) continue;
+            Gas other=smoke_at(uint(q.x),uint(q.y));
+            near_smoke=near_smoke||other.species.z+other.dynamics.x>0.;
+        }
+        if(!near_smoke) return;
+    }
     if(gate==0u&&oxygen_view&&s.geometry.y<=0.) return;
     vec3 color=unpackUnorm4x8(frame[index]).rgb;
     if(s.geometry.y>0.&&oxygen_view) {
@@ -123,17 +213,19 @@ void main() {
     } else if(gate==0u) {
         float opacity=uintBitsToFloat(parameters[FR_GAS_OPACITY_WORD]),density=uintBitsToFloat(parameters[FR_GAS_DENSITY_WORD]);
         vec2 material=coordinate;
-        vec2 curl=.5*vec2(smoke_wavelet((material+vec2(0.,1.))*FR_SMOKE_DETAIL_SCALE)-smoke_wavelet((material-vec2(0.,1.))*FR_SMOKE_DETAIL_SCALE),
-            smoke_wavelet((material-vec2(1.,0.))*FR_SMOKE_DETAIL_SCALE)-smoke_wavelet((material+vec2(1.,0.))*FR_SMOKE_DETAIL_SCALE));
-        float speed=length(velocity),strength=FR_SMOKE_WARP_CELLS*speed/(speed+FR_SMOKE_WARP_SPEED);
+        vec2 curl=smoke_wavelet_velocity(cell);
+        float energy_band=smoke_resolved_band(cell,velocity);
         vec4 original=smoke_visual_gas(s,opacity,density);
-        vec4 warped=smoke_visual_sample(vec2(x,y)-strength*curl,opacity,density);
+        vec4 warped=dot(curl,curl)>1e-8?smoke_visual_sample(vec2(x,y)-curl,opacity,density):original;
         vec4 smoke=mix(original,warped,smoke_edge_weight(original.x,warped.x));
         if(smoke.x<=0.) return;
-        float detail=max(FR_SMOKE_DETAIL_MIN,1.+FR_SMOKE_DETAIL_GAIN*speed/(speed+FR_SMOKE_DETAIL_SPEED)*
-            smoke_wavelet(material*FR_SMOKE_DETAIL_SCALE));
+        float visual_energy=.5*energy_band*energy_band;
+        float visual_weight=visual_energy/(visual_energy+FR_SMOKE_DETAIL_ENERGY)*smoke_scattering_weight(cell);
+        float detail=visual_weight>0.?max(FR_SMOKE_DETAIL_MIN,1.+FR_SMOKE_DETAIL_GAIN*visual_weight*
+            smoke_wavelet(material*FR_SMOKE_DETAIL_SCALE)):1.;
         color=mix(color,smoke.yzw/smoke.x,1.-exp(-smoke.x*detail));
     }
     if(gate!=0u) color=vec3(.62,.32,.07);
     frame[index]=packUnorm4x8(vec4(color,1.));
+#endif
 }
