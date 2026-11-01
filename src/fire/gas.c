@@ -62,9 +62,33 @@ bool fr_gas_reference_displace_liquid(const fr_gas_model_t *m,const fr_gas_state
     double pocket_volume,double liquid_pressure,double receiving_volume,
     fr_gas_state_t *out,double *new_pocket_volume,double *displaced_liquid,
     double *boundary_work,char *err,uint32_t cap) {
-    (void)m;(void)s;(void)pocket_volume;(void)liquid_pressure;(void)receiving_volume;
-    (void)out;(void)new_pocket_volume;(void)displaced_liquid;(void)boundary_work;
-    return gas_error(err,cap,"Liquid displacement is not implemented");
+    fr_gas_thermo_t before;
+    if(!out||!new_pocket_volume||!displaced_liquid||!boundary_work||
+       !isfinite(pocket_volume)||pocket_volume<=0||pocket_volume>1||
+       !isfinite(liquid_pressure)||liquid_pressure<=0||
+       !isfinite(receiving_volume)||receiving_volume<0||
+       receiving_volume>1.-pocket_volume||
+       !fr_gas_thermodynamics(m,s,pocket_volume,&before,err,cap))
+        return gas_error(err,cap,"Invalid submerged gas pocket transaction");
+    double final_volume=pocket_volume,work=0;
+    fr_gas_state_t next=*s;
+    if(before.mass>0&&before.pressure>liquid_pressure&&receiving_volume>0) {
+        double capacity=0,moles=0;
+        for(uint32_t k=0;k<FR_GAS_SPECIES;k++) {
+            capacity+=s->species[k]*m->heat_capacity_cv[k];
+            moles+=s->species[k]*m->gas_constant[k];
+        }
+        double gamma=1.+moles/capacity;
+        double ratio=exp(log(before.pressure/liquid_pressure)/gamma);
+        if(!isfinite(ratio)||ratio<1)
+            return gas_error(err,cap,"Submerged gas equilibrium is not finite");
+        final_volume=fmin(pocket_volume+receiving_volume,pocket_volume*ratio);
+        if(!fr_gas_reference_compress(m,s,pocket_volume,final_volume,&next,&work,err,cap))
+            return false;
+    }
+    *out=next;*new_pocket_volume=final_volume;
+    *displaced_liquid=final_volume-pocket_volume;*boundary_work=work;
+    return true;
 }
 bool fr_gas_admit(const fr_gas_model_t *m,const fr_gas_state_t *s,const fr_gas_state_t *t,
     double fraction,fr_gas_state_t *so,fr_gas_state_t *to,char *err,uint32_t cap) {
