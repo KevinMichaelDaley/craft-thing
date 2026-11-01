@@ -2,7 +2,7 @@
 id: ctlo-inhv
 status: open
 deps: []
-links: [ctlo-sgja]
+links: [ctlo-sgja, ct-oc4z]
 created: 2026-10-23T16:59:33Z
 type: bug
 priority: 2

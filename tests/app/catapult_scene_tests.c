@@ -237,20 +237,31 @@ static void test_grounded_triangular_frame_and_tension_release(void) {
         projectile_flight.body.vy_fp/65536.f);
     dc_gpu_destroy(g);PASS();
 }
+#ifndef DC_CATAPULT_DISPLAY_INCLUDE
 static void test_launcher_frame_braces_span_base_to_pivot(void) {
     char err[256]={0};dc_gpu_t *g=catapult_grid();ASSERT_TRUE(g);
     dc_catapult_scene_t scene={0};
-    ASSERT_TRUE(dc_catapult_scene_build(g,false,&scene,err,sizeof(err)));
-    dc_gpu_world_body_t left,right;
-    ASSERT_TRUE(dc_gpu_read_world_body(g,FR_STRUCTURAL_BODY_ID_BASE+13u,
-        &left,err,sizeof(err)));
-    ASSERT_TRUE(dc_gpu_read_world_body(g,FR_STRUCTURAL_BODY_ID_BASE+14u,
-        &right,err,sizeof(err)));
-    ASSERT_TRUE(left.body.active&&right.body.active);
-    ASSERT_TRUE(xof(left)<72.f&&xof(right)>=72.f);
-    ASSERT_TRUE(left.body.height>=30u&&right.body.height>=30u);
+    bool built=dc_catapult_scene_build(g,false,&scene,err,sizeof(err));
+    if(!built) printf("frame braces: %s\n",err);
+    ASSERT_TRUE(built);
+    float top=96.f,bottom=0.f;
+    for(uint32_t member=13u;member<=18u;member++) {
+        dc_gpu_world_body_t brace;
+        ASSERT_TRUE(dc_gpu_read_world_body(g,FR_STRUCTURAL_BODY_ID_BASE+member,
+            &brace,err,sizeof(err)));
+        dc_gpu_body_motion_t motion;
+        ASSERT_TRUE(dc_gpu_read_body_motion(g,FR_STRUCTURAL_BODY_ID_BASE+member,
+            &motion,err,sizeof(err)));
+        ASSERT_TRUE(brace.body.active&&brace.body.width>=10u);
+        if(yof(brace)<top) top=yof(brace);
+        if(yof(brace)>bottom) bottom=yof(brace);
+        ASSERT_TRUE(member<=15u?motion.angle>-1.5707963f:
+            motion.angle<-1.5707963f);
+    }
+    ASSERT_TRUE(top<=70.f&&bottom>=88.f);
     dc_gpu_destroy(g);PASS();
 }
+#endif
 
 static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
     char err[256]={0};dc_gpu_t *g=catapult_grid();ASSERT_TRUE(g);

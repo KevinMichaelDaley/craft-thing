@@ -48,8 +48,8 @@ static fr_structural_gpu_node_t scene_node(uint32_t id, uint32_t x,
 static fr_structural_gpu_node_t scene_fractional_node(uint32_t id,
                                                        double x, double y) {
     fr_structural_gpu_node_t node = scene_node(id, (uint32_t)x, (uint32_t)y);
-    node.x_fp = (int32_t)llround((x - 64.) * 65536.);
-    node.y_fp = (int32_t)llround((y - 64.) * 65536.);
+    node.x_fp = (int32_t)llround((x - node.chunk.x * DC_CHUNK_SIDE) * 65536.);
+    node.y_fp = (int32_t)llround((y - node.chunk.y * DC_CHUNK_SIDE) * 65536.);
     return node;
 }
 
