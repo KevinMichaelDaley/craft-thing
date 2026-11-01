@@ -2,7 +2,7 @@
 id: ctr-ebl5
 status: open
 deps: []
-links: []
+links: [ct-ouu4]
 created: 2026-10-19T01:33:39Z
 type: task
 priority: 1
