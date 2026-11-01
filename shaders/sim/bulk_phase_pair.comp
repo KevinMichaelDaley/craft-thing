@@ -1,4 +1,6 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#include "../reactive/thermal_water.glsl"
 layout(local_size_x=64) in;
 layout(set=0,binding=1,std430) buffer Cells {uvec2 cells[];};
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
@@ -61,6 +63,7 @@ void main() {
             uint swap_volume=top[phase];top[phase]=bottom[phase];bottom[phase]=swap_volume;
         }
     }
+    uint top_water_before=top[0],bottom_water_before=bottom[0];
     uint excess=used(top)>top_capacity?used(top)-top_capacity:0u;
     if(excess>0u) face_open=FULL;
     if(face_open==0u) return;
@@ -100,6 +103,15 @@ void main() {
         changed=true;
     }
     if(!changed) return;
+    if(top[0]>top_water_before) {
+        uint moved=top[0]-top_water_before;
+        thermal_water_move(bottom_at,top_at,moved,bottom_water_before);
+        thermal_water_resize(bottom_at,bottom_water_before,bottom[0]);
+    } else if(bottom[0]>bottom_water_before) {
+        uint moved=bottom[0]-bottom_water_before;
+        thermal_water_move(top_at,bottom_at,moved,top_water_before);
+        thermal_water_resize(top_at,top_water_before,top[0]);
+    }
     cells[top_at].y=top[0];cells[bottom_at].y=bottom[0];
     for(uint phase=1u;phase<3u;phase++) {
         bulk_write(top_at,phase,top[phase]);bulk_write(bottom_at,phase,bottom[phase]);

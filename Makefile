@@ -660,7 +660,7 @@ build/bulk_phase_packet.o: src/fire/bulk_phase_packet.c include/ferrum/fire/bulk
 build/bulk_phase_gpu.o: src/vulkan/bulk_phase_gpu.c src/vulkan/gpu_internal.h include/ferrum/fire/bulk_phase_gpu.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-build/shaders/bulk_phase_pair.comp.spv: shaders/sim/bulk_phase_pair.comp
+build/shaders/bulk_phase_pair.comp.spv: shaders/sim/bulk_phase_pair.comp shaders/reactive/thermal_water.glsl
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/shaders/bulk_phase_retained.comp.spv: shaders/sim/bulk_phase_retained.comp
