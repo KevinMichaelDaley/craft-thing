@@ -65,12 +65,18 @@ static void test_sludge_basin_replaces_water_without_double_capacity(void) {
     fr_bulk_phase_chunk_t *phase=calloc(1,sizeof(*phase));
     ASSERT_TRUE(chunk&&phase);
     native_scene_chunk(chunk,2u*8u+4u,480u,270u);
+    phase->slime_fp[0]=123u;
     uint32_t count=native_scene_sludge(chunk,phase,480u,270u);
     ASSERT_TRUE(count>0u);
+    ASSERT_EQ(phase->slime_fp[0],0u);
     uint32_t scanned=0u;
     for(uint32_t i=0;i<DC_CHUNK_CELLS;i++) if(phase->slime_fp[i]) {
         ASSERT_EQ(phase->slime_fp[i],FR_BULK_CELL_FULL_FP);
         ASSERT_EQ(chunk->cells[i].fluid_mass,0u);
+        uint32_t x=(uint32_t)chunk->coord.x*DC_CHUNK_SIDE+i%DC_CHUNK_SIDE;
+        uint32_t y=(uint32_t)chunk->coord.y*DC_CHUNK_SIDE+i/DC_CHUNK_SIDE;
+        ASSERT_TRUE(x>=480u/3u&&x<480u*2u/3u);
+        ASSERT_TRUE(y>=270u/2u&&y<270u*3u/4u);
         scanned++;
     }
     ASSERT_EQ(scanned,count);
