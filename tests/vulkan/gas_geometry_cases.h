@@ -44,6 +44,14 @@ static void test_native_oil_volume_excludes_gas_and_routes_oxygen(void) {
     ASSERT_TRUE(out->cells[center+1u][0]>input[center+1u].species[0]);
     ASSERT_TRUE(fabs(gas_checkpoint_stock(out,FR_GAS_OXYGEN)-
         input[0].species[FR_GAS_OXYGEN]*4096.)<1e-5);
+    bulk->oil_fp[center]=FR_BULK_CELL_FULL_FP/2u;
+    ASSERT_TRUE(fr_bulk_phase_gpu_import_chunk(g,0,chunk,bulk,err,sizeof(err))&&
+        fr_gas_gpu_refresh_geometry(g,err,sizeof(err))&&
+        fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err)));
+    ASSERT_EQ(out->cells[center][12],.5f);
+    ASSERT_TRUE(out->cells[center][0]>0.f);
+    ASSERT_TRUE(fabs(gas_checkpoint_stock(out,FR_GAS_OXYGEN)-
+        input[0].species[FR_GAS_OXYGEN]*4096.)<1e-5);
     dc_gpu_destroy(g);free(chunk);free(input);free(volume);free(bulk);free(out);PASS();
 }
 static void test_native_quantized_sliver_routes_gas_to_open_neighbor(void) {
