@@ -414,7 +414,7 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
         max(oxygen,0.)/float(FR_COMBUSTION_AMBIENT_OXYGEN):0.;
     float oil_mass=float(entry.words[s+FR_STATE_COATING_OIL])+
         float(coating_remainders&FR_COATING_REM_MASK)/float(FR_COATING_MASS_DEN);
-    float coverage=min(1.,oil_mass/max(1.,float(entry.words[s+8u])));
+    float coverage=min(1.,oil_mass/max(1.,float(entry.words[s+FR_STATE_DRY_MASS])));
     rate*=1.+coverage*max(0.,coefficient(FR_COATING_OIL_MATERIAL,FR_PROFILE_OIL_HAZARD_WORD)-1.);
     float integral=min(1e20,uintBitsToFloat(entry.words[s+21u])+rate*dt);
     uint flags=entry.words[s+1u];

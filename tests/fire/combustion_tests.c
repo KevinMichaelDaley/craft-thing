@@ -60,6 +60,15 @@ static void test_finite_oil_film_accelerates_wood_ignition_without_spending_it(v
     ASSERT_TRUE(oil_products.fuel_fp>0&&oil_products.oxygen_fp>0);
     ASSERT_EQ(oil_after.coating_oil_fuel_fp,oiled.coating_oil_fuel_fp);
     ASSERT_EQ(oiled.fuel_mass_fp-oil_after.fuel_mass_fp,oil_products.fuel_fp);
+    fr_reactive_state_t half=oiled,next;
+    for(uint32_t i=0;i<2u;i++) {
+        ASSERT_TRUE(fr_combustion_reference(&half,65536,.23f,1,.05f,
+            &next,&oil_products,err,sizeof(err)));
+        half=next;
+    }
+    ASSERT_TRUE(fabsf(half.ignition_integral-oil_after.ignition_integral)<1e-6f);
+    ASSERT_EQ(half.flags&FR_REACTIVE_FLAMING,oil_after.flags&FR_REACTIVE_FLAMING);
+    ASSERT_EQ(half.coating_oil_fuel_fp,oiled.coating_oil_fuel_fp);
     PASS();
 }
 static void test_energy_ledger_and_invalid_transaction(void) {
