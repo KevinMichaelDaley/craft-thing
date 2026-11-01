@@ -28,6 +28,13 @@ bool fr_gas_thermodynamics(const fr_gas_model_t *model,const fr_gas_state_t *sta
 bool fr_gas_reference_compress(const fr_gas_model_t *model,const fr_gas_state_t *state,
     double old_volume,double new_volume,fr_gas_state_t *out,double *work,
     char *err_buf,uint32_t err_cap);
+/** Reference adiabatic pocket expansion against finite liquid pressure and
+ * available receiving volume. Displaced liquid and gas boundary work close
+ * exactly; a sealed pocket retains all gas stock. */
+bool fr_gas_reference_displace_liquid(const fr_gas_model_t *model,
+    const fr_gas_state_t *state,double pocket_volume,double liquid_pressure,
+    double receiving_volume,fr_gas_state_t *out,double *new_pocket_volume,
+    double *displaced_liquid,double *boundary_work,char *err_buf,uint32_t err_cap);
 /** Reference-atmosphere buoyancy impulse. Ambient gas has zero acceleration;
  * composition and temperature determine density at reference pressure. Work is
  * the exact kinetic energy admitted by the external gravitational field. */

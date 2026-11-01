@@ -58,6 +58,14 @@ bool fr_gas_reference_compress(const fr_gas_model_t *m,const fr_gas_state_t *s,
     if(!fr_gas_thermodynamics(m,&value,new_volume,&after,err,cap)) return false;
     *work=value.energy-s->energy;*out=value;return true;
 }
+bool fr_gas_reference_displace_liquid(const fr_gas_model_t *m,const fr_gas_state_t *s,
+    double pocket_volume,double liquid_pressure,double receiving_volume,
+    fr_gas_state_t *out,double *new_pocket_volume,double *displaced_liquid,
+    double *boundary_work,char *err,uint32_t cap) {
+    (void)m;(void)s;(void)pocket_volume;(void)liquid_pressure;(void)receiving_volume;
+    (void)out;(void)new_pocket_volume;(void)displaced_liquid;(void)boundary_work;
+    return gas_error(err,cap,"Liquid displacement is not implemented");
+}
 bool fr_gas_admit(const fr_gas_model_t *m,const fr_gas_state_t *s,const fr_gas_state_t *t,
     double fraction,fr_gas_state_t *so,fr_gas_state_t *to,char *err,uint32_t cap) {
     fr_gas_thermo_t checked;

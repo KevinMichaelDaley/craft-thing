@@ -43,6 +43,41 @@ static void test_reversible_compression_and_expansion_close_mass_energy_and_boun
     ASSERT_TRUE(fabs(expanded.energy-s.energy)<1e-10&&fabs(work+returned)<1e-10);
     ASSERT_EQ(memcmp(s.species,expanded.species,sizeof(s.species)),0);PASS();
 }
+static void test_submerged_pocket_expands_against_water_without_losing_gas_or_liquid(void) {
+    char err[256]={0};fr_gas_model_t m=model();fr_gas_state_t initial=air(m,.01,500,0),out;
+    initial.species[FR_GAS_EXHAUST]=.002;initial.energy+=.002*m.heat_capacity_cv[FR_GAS_EXHAUST]*500;
+    initial.pigment[0]=.002;
+    const double pocket=.01,target=.1;
+    fr_gas_thermo_t thermo;ASSERT_TRUE(fr_gas_thermodynamics(&m,&initial,pocket,&thermo,err,sizeof(err)));
+    double capacity=0,moles=0;
+    for(uint32_t i=0;i<FR_GAS_SPECIES;i++) {
+        capacity+=initial.species[i]*m.heat_capacity_cv[i];
+        moles+=initial.species[i]*m.gas_constant[i];
+    }
+    double gamma=1.+moles/capacity;
+    double outside=thermo.pressure*pow(pocket/target,gamma),new_volume=0,water=0,work=0;
+    ASSERT_TRUE(fr_gas_reference_displace_liquid(&m,&initial,pocket,outside,.2,
+        &out,&new_volume,&water,&work,err,sizeof(err)));
+    ASSERT_TRUE(fabs(new_volume-target)<1e-12&&fabs(water-(target-pocket))<1e-12);
+    ASSERT_TRUE(fabs(out.energy-initial.energy-work)<1e-12&&work<0);
+    ASSERT_EQ(memcmp(out.species,initial.species,sizeof(out.species)),0);
+    ASSERT_EQ(memcmp(out.pigment,initial.pigment,sizeof(out.pigment)),0);
+    fr_gas_thermo_t after;ASSERT_TRUE(fr_gas_thermodynamics(&m,&out,new_volume,&after,err,sizeof(err)));
+    ASSERT_TRUE(fabs(after.pressure-outside)/outside<1e-12);
+    ASSERT_TRUE(fr_gas_reference_displace_liquid(&m,&initial,pocket,outside,.03,
+        &out,&new_volume,&water,&work,err,sizeof(err)));
+    ASSERT_TRUE(fabs(new_volume-.04)<1e-12&&fabs(water-.03)<1e-12);
+    ASSERT_TRUE(fr_gas_reference_displace_liquid(&m,&initial,pocket,outside,0,
+        &out,&new_volume,&water,&work,err,sizeof(err)));
+    ASSERT_EQ(new_volume,pocket);ASSERT_EQ(water,0.);ASSERT_EQ(work,0.);
+    ASSERT_EQ(memcmp(&out,&initial,sizeof(out)),0);
+    fr_gas_state_t saved=out;double old_volume=new_volume,old_water=water,old_work=work;
+    ASSERT_TRUE(!fr_gas_reference_displace_liquid(&m,&initial,pocket,0,.2,
+        &out,&new_volume,&water,&work,err,sizeof(err)));
+    ASSERT_EQ(memcmp(&out,&saved,sizeof(out)),0);
+    ASSERT_EQ(new_volume,old_volume);ASSERT_EQ(water,old_water);ASSERT_EQ(work,old_work);
+    PASS();
+}
 static void test_finite_colored_smoke_dilutes_oxygen_without_consuming_it(void) {
     char err[256]={0};fr_gas_model_t m=model();fr_gas_state_t target=air(m,1,293.15,0),source={0},left,mixed;
     source.species[FR_GAS_EXHAUST]=2;source.energy=2*m.heat_capacity_cv[FR_GAS_EXHAUST]*330;source.pigment[0]=2;
@@ -213,6 +248,7 @@ static void test_buoyancy_uses_temperature_and_composition_and_records_external_
 int main(void) {
     RUN(test_sealed_heating_stores_energy_and_raises_pressure_without_losing_oxygen);
     RUN(test_reversible_compression_and_expansion_close_mass_energy_and_boundary_work);
+    RUN(test_submerged_pocket_expands_against_water_without_losing_gas_or_liquid);
     RUN(test_finite_colored_smoke_dilutes_oxygen_without_consuming_it);
     RUN(test_stationary_pressure_balanced_contacts_do_not_diffuse_pigment_at_sound_speed);
     RUN(test_closed_pressure_release_conserves_species_energy_and_pigment_for_both_solvers);
