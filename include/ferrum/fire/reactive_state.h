@@ -7,7 +7,7 @@
 
 #include "dungeoncraft/chunk.h"
 
-#define FR_REACTIVE_STATE_ABI 6u
+#define FR_REACTIVE_STATE_ABI 7u
 #define FR_REACTIVE_STATE_WORDS 28u
 #define FR_REACTIVE_OWNER_WORDS 6u
 enum {

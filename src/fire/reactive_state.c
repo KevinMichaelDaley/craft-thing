@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "dungeoncraft/char_enthalpy.h"
+#include "dungeoncraft/coating_layout.h"
 #include "dungeoncraft/reactive_state_layout.h"
 #include "ferrum/fire/material_profile.h"
 #include "ferrum/fire/reactive_state.h"
@@ -20,14 +21,21 @@ static bool error(char *err,uint32_t cap,const char *reason) {
     return false;
 }
 static uint64_t identity(uint32_t low,uint32_t high) {return (uint64_t)low|((uint64_t)high<<32);}
+static uint32_t coating_remainder(uint32_t word,uint32_t shift,uint32_t mask) {
+    return (word>>shift)&mask;
+}
 static double capacity(const fr_reactive_state_t *s) {
     const fr_reactive_profile_t *p=fr_reactive_profile(s->material);
     double core=(double)s->fuel_mass_fp+s->inert_mass_fp+s->core_oxidizer_fp;
     return (core*p->heat_capacity+
         (double)s->char_mass_fp*fr_reactive_profile(DC_MATERIAL_CHAR)->heat_capacity+
         (double)s->bound_water_fp*fr_reactive_profile(DC_MATERIAL_WATER)->heat_capacity+
-        (double)s->coating_oil_fuel_fp*fr_reactive_profile(DC_MATERIAL_OIL)->heat_capacity+
-        ((double)s->coating_jelly_fuel_fp+s->coating_oxidizer_fp)*
+        ((double)s->coating_oil_fuel_fp+coating_remainder(s->coating_remainders,
+            FR_COATING_OIL_REM_SHIFT,FR_COATING_REM_MASK)/(double)FR_COATING_MASS_DEN)*
+            fr_reactive_profile(DC_MATERIAL_OIL)->heat_capacity+
+        ((double)s->coating_jelly_fuel_fp+s->coating_oxidizer_fp+
+            coating_remainder(s->coating_remainders,FR_COATING_JELLY_REM_SHIFT,
+                FR_COATING_REM_MASK)/(double)FR_COATING_MASS_DEN)*
             fr_reactive_profile(DC_MATERIAL_RED_SLIME_JELLY)->heat_capacity)/DC_FLUID_FULL;
 }
 double fr_reactive_state_heat_capacity(const fr_reactive_state_t *s) {
@@ -100,8 +108,16 @@ bool fr_reactive_state_valid(const fr_reactive_state_t *s,char *err,uint32_t cap
        s->evaporation_fraction>=1.f||
        (s->bound_water_fp==0u&&s->evaporation_fraction!=0.f))
         return error(err,cap,"Invalid evaporation progress");
-    if(s->coating_remainders)
-        return error(err,cap,"Nonzero reactive reserved fields");
+    uint32_t oil_rem=coating_remainder(s->coating_remainders,
+        FR_COATING_OIL_REM_SHIFT,FR_COATING_REM_MASK);
+    uint32_t jelly_rem=coating_remainder(s->coating_remainders,
+        FR_COATING_JELLY_REM_SHIFT,FR_COATING_REM_MASK);
+    uint32_t fuel_rem=coating_remainder(s->coating_remainders,
+        FR_COATING_JELLY_FUEL_REM_SHIFT,FR_COATING_FUEL_REM_MASK);
+    if((s->coating_remainders&~FR_COATING_REM_USED_MASK)!=0u||
+       oil_rem>=FR_COATING_MASS_DEN||jelly_rem>=FR_COATING_MASS_DEN||
+       fuel_rem>=FR_COATING_JELLY_FUEL_DEN)
+        return error(err,cap,"Invalid coating mass remainder");
     if(!isfinite(s->reaction_fraction)||s->reaction_fraction<0||s->reaction_fraction>=1)
         return error(err,cap,"Invalid fractional reaction progress");
     float step=s->thermal_energy-nextafterf(s->thermal_energy,0.f);
@@ -135,7 +151,13 @@ uint64_t fr_reactive_state_mass_fp(const fr_reactive_state_t *s) {
     uint64_t mass=0;for(unsigned i=1;i<9;i++) mass+=values[i];return mass;
 }
 double fr_reactive_state_mass_exact_fp(const fr_reactive_state_t *s) {
-    (void)s;return 0.;
+    if(!s) return 0.;
+    uint32_t oil=coating_remainder(s->coating_remainders,
+        FR_COATING_OIL_REM_SHIFT,FR_COATING_REM_MASK);
+    uint32_t jelly=coating_remainder(s->coating_remainders,
+        FR_COATING_JELLY_REM_SHIFT,FR_COATING_REM_MASK);
+    return (double)fr_reactive_state_mass_fp(s)+
+        (double)(oil+jelly)/FR_COATING_MASS_DEN;
 }
 bool fr_reactive_state_temperature(const fr_reactive_state_t *s,float *out,char *err,uint32_t cap) {
     if(!out||!fr_reactive_state_valid(s,err,cap)) return false;
@@ -157,6 +179,17 @@ bool fr_reactive_state_split(const fr_reactive_state_t *s,uint32_t weight,uint64
         high[i]=source[i]-low[i];
     }
     memcpy(&first.dry_mass_fp,low,sizeof(low));memcpy(&second.dry_mass_fp,high,sizeof(high));
+    first.coating_remainders=0u;second.coating_remainders=0u;
+    const uint32_t shifts[]={FR_COATING_OIL_REM_SHIFT,FR_COATING_JELLY_REM_SHIFT,
+        FR_COATING_JELLY_FUEL_REM_SHIFT};
+    const uint32_t masks[]={FR_COATING_REM_MASK,FR_COATING_REM_MASK,
+        FR_COATING_FUEL_REM_MASK};
+    for(uint32_t i=0u;i<3u;i++) {
+        uint32_t rem=coating_remainder(s->coating_remainders,shifts[i],masks[i]);
+        uint32_t left_rem=(uint32_t)(((uint64_t)rem*weight)>>16);
+        first.coating_remainders|=left_rem<<shifts[i];
+        second.coating_remainders|=(rem-left_rem)<<shifts[i];
+    }
     first.parcel_id_low=(uint32_t)a;first.parcel_id_high=(uint32_t)(a>>32);
     second.parcel_id_low=(uint32_t)b;second.parcel_id_high=(uint32_t)(b>>32);
     double total=capacity(s),fraction=total>0?capacity(&first)/total:0;
