@@ -80,8 +80,21 @@ float water_drag_speed(float face_flow,bool reverse,uint water,uint occupied) {
     return aligned*float(water)/float(max(occupied,1u));
 }
 float transverse_shear(uint axis,uint first,uint second) {
-    vec2 difference=face_velocity[first]-face_velocity[second];
-    return abs(axis==0u?difference.x:difference.y);
+    vec2 difference=face_velocity[second]-face_velocity[first];
+    if(axis==0u) {
+        uint x=first%params.width;
+        if(x==0u||x+1u>=params.width) return abs(difference.x);
+        float left=0.5*(face_velocity[first-1u].y+face_velocity[second-1u].y);
+        float right=0.5*(face_velocity[first+1u].y+face_velocity[second+1u].y);
+        return abs(difference.x+0.5*(right-left));
+    }
+    uint y=first/params.width;
+    if(y==0u||y+1u>=params.height) return abs(difference.y);
+    float above=0.5*(face_velocity[first-params.width].x+
+        face_velocity[second-params.width].x);
+    float below=0.5*(face_velocity[first+params.width].x+
+        face_velocity[second+params.width].x);
+    return abs(difference.y+0.5*(below-above));
 }
 float couple_water_phase(uint atlas,uint phase,uint volume,float water_mass,
     float phase_density,uint axis,float water_speed) {
