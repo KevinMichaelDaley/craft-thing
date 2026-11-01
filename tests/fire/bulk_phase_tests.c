@@ -75,6 +75,33 @@ static void test_sealed_capacity_collapse_keeps_each_phase_finite(void) {
     for(uint32_t i=0;i<FR_BULK_PHASES;i++) ASSERT_EQ(out.retained_fp[i],source.volume_fp[i]);
     PASS();
 }
+static void test_bulk_packet_roundtrip_and_rejects_overfull_water_pair(void) {
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));fr_bulk_phase_chunk_t *source=calloc(1,sizeof(*source));
+    fr_bulk_phase_chunk_t *out=calloc(1,sizeof(*out));size_t length=fr_bulk_phase_chunk_bytes();
+    uint8_t *bytes=malloc(length);ASSERT_TRUE(chunk&&source&&out&&bytes&&length>sizeof(*source));
+    chunk->cells[17].fluid_mass=30000;source->oil_fp[17]=20000;source->slime_fp[17]=15536;
+    source->oil_retained_fp[17]=1234;source->slime_retained_fp[17]=4321;
+    ASSERT_TRUE(fr_bulk_phase_chunk_encode(chunk,source,bytes,length));
+    ASSERT_TRUE(fr_bulk_phase_chunk_decode(chunk,bytes,length,out));
+    ASSERT_EQ(memcmp(out,source,sizeof(*out)),0);
+    chunk->cells[17].fluid_mass=30001;
+    ASSERT_TRUE(!fr_bulk_phase_chunk_decode(chunk,bytes,length,out));
+    ASSERT_EQ(memcmp(out,source,sizeof(*out)),0);
+    free(bytes);free(out);free(source);free(chunk);PASS();
+}
+static void test_bulk_packet_corruption_and_truncation_are_transactional(void) {
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));fr_bulk_phase_chunk_t *source=calloc(1,sizeof(*source));
+    fr_bulk_phase_chunk_t *out=calloc(1,sizeof(*out));size_t length=fr_bulk_phase_chunk_bytes();
+    uint8_t *bytes=malloc(length);ASSERT_TRUE(chunk&&source&&out&&bytes);
+    source->slime_fp[9]=123;out->oil_fp[9]=456;
+    ASSERT_TRUE(fr_bulk_phase_chunk_encode(chunk,source,bytes,length));
+    ASSERT_TRUE(!fr_bulk_phase_chunk_decode(chunk,bytes,length-1,out));
+    ASSERT_INT_EQ(out->oil_fp[9],456);
+    bytes[length/2u]^=1u;
+    ASSERT_TRUE(!fr_bulk_phase_chunk_decode(chunk,bytes,length,out));
+    ASSERT_INT_EQ(out->oil_fp[9],456);
+    free(bytes);free(out);free(source);free(chunk);PASS();
+}
 int main(void) {
     RUN(test_pair_admits_only_shared_capacity_and_conserves_each_phase);
     RUN(test_full_vessel_retains_slime_without_double_occupancy);
@@ -83,5 +110,7 @@ int main(void) {
     RUN(test_profile_density_orders_water_oil_and_slime_without_float_flag);
     RUN(test_moving_solid_retains_displaced_top_phase_and_restores_it);
     RUN(test_sealed_capacity_collapse_keeps_each_phase_finite);
+    RUN(test_bulk_packet_roundtrip_and_rejects_overfull_water_pair);
+    RUN(test_bulk_packet_corruption_and_truncation_are_transactional);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail>0?1:0;
 }
