@@ -1,6 +1,6 @@
 ---
 id: ctlo-08fu
-status: in_progress
+status: closed
 deps: [ctlo-2q4f]
 links: []
 created: 2026-10-24T22:06:19Z
@@ -47,3 +47,7 @@ Added separate oil/slime excess-energy sidecars to the bulk chunk, BLP2 save pac
 **2026-11-01T07:30:13Z**
 
 Added RED-GREEN-REFACTOR conserved liquid thermal coupling (dca561b, 33e71e5, 7fb4c77): a dedicated GPU pass uses profile heat capacities/conductivities and exact two-capacity relaxation for contacting water/oil/slime in each loaded cell. Red water-oil test and three-phase conservation test pass; full make test under Xephyr :92 passes. Remaining moving-rigid/seam reconciliation before closure.
+
+**2026-11-01T07:41:30Z**
+
+Final RED fc5d072, GREEN 8763329, REFACTOR 725b2f9: moving kinematic rigid body crossed x63/x64 chunk seam while oil volume and excess heat stayed conserved; rejected zero-stock oil/slime heat in packets and GPU imports. Full make test under persistent Xephyr :92 passed with zero failures. Acceptance criteria now covered by pair/seam/closed-vessel, water drag, density exchange, thermal coupling, persistence, and moving-body regressions.
