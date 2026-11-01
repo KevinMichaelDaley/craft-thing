@@ -107,8 +107,10 @@ static void test_rigid_contact_wets_from_finite_oil_volume(void) {
         fr_bulk_phase_gpu_export_chunk(g,0,after,err,sizeof(err)));
     uint32_t gained=record.state.coating_oil_fuel_fp-wood.coating_oil_fuel_fp;
     uint32_t lost=phase->oil_fp[oil_at]-after->oil_fp[oil_at];
+    printf("Rigid oil coating mass %u Q16, source volume %u Q16\n",gained,lost);
     ASSERT_TRUE(gained>0u&&lost>0u);
-    ASSERT_TRUE(abs((int)gained-(int)lost)<2);
+    ASSERT_TRUE(fabs((double)gained-(double)lost*
+        fr_reactive_profile(DC_MATERIAL_OIL)->density)<2.);
     ASSERT_TRUE(after->oil_excess[oil_at]<phase->oil_excess[oil_at]);
     free(after);free(phase);free(chunk);dc_gpu_destroy(g);PASS();
 }

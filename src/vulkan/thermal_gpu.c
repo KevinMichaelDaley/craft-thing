@@ -214,13 +214,14 @@ static bool create(dc_gpu_t *g,struct fr_reactive_gpu *reactive,struct fr_therma
     ((float *)t->probe.mapped)[1]=FR_THERMAL_PROBE_CAPACITY;t->overlay=1;
     for(uint32_t i=0;i<t->profile_count;i++) memcpy((fr_reactive_profile_t *)t->profiles.mapped+i,fr_reactive_profile(i),sizeof(fr_reactive_profile_t));
     memset(t->water.mapped,0,(size_t)t->water.bytes);
-    VkDescriptorBufferInfo buffers[10]={{reactive->arena.root.buffer,0,reactive->arena.root.bytes},
+    VkDescriptorBufferInfo buffers[11]={{reactive->arena.root.buffer,0,reactive->arena.root.bytes},
         {g->page_buffer,0,VK_WHOLE_SIZE},{t->profiles.buffer,0,t->profiles.bytes},
         {t->samples.buffer,0,t->samples.bytes},{t->fluxes.buffer,0,t->fluxes.bytes},
         {t->probe.buffer,0,t->probe.bytes},{g->chunk_buffer,0,VK_WHOLE_SIZE},{t->water.buffer,0,t->water.bytes},
-        {g->runtime_bodies->root.buffer,0,g->runtime_bodies->root.bytes},{g->occupancy_buffer,0,VK_WHOLE_SIZE}};
+        {g->runtime_bodies->root.buffer,0,g->runtime_bodies->root.bytes},{g->occupancy_buffer,0,VK_WHOLE_SIZE},
+        {g->bulk_phase_buffer,0,VK_WHOLE_SIZE}};
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"thermal pipeline begin\n");
-    if(!fr_renderer_compute_init(g,&t->compute,buffers,10,32,"build/shaders/thermal.comp.spv",err,cap)) {destroy(g,t);return false;}
+    if(!fr_renderer_compute_init(g,&t->compute,buffers,11,32,"build/shaders/thermal.comp.spv",err,cap)) {destroy(g,t);return false;}
     if(!specialize_phases(g,t,err,cap)) {destroy(g,t);return false;}
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"thermal pipeline end\n");
     if(!fr_thermal_feedback_init(g,&t->feedback,buffers[3],buffers[5],err,cap)) {destroy(g,t);return false;}
