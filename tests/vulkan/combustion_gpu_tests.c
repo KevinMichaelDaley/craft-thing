@@ -7,6 +7,7 @@
 #include "ferrum/fire/combustion.h"
 #include "ferrum/fire/material_profile.h"
 #include "dungeoncraft/combustion_parameters.h"
+#include "dungeoncraft/blackbody.h"
 #include "dungeoncraft/terrain_flags.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
@@ -302,6 +303,12 @@ static void test_mixed_film_burns_wet_faster_than_matched_oil_control(void) {
     ASSERT_TRUE(results[0].state.coating_oxidizer_fp<original[0].coating_oxidizer_fp);
     ASSERT_EQ(results[2].state.coating_oil_fuel_fp,original[2].coating_oil_fuel_fp);
     ASSERT_EQ(results[0].state.fuel_mass_fp,original[0].fuel_mass_fp);
+    fr_combustion_emission_t *emission=calloc(4096u,sizeof(*emission));ASSERT_TRUE(emission);
+    ASSERT_TRUE(fr_combustion_gpu_read_emission_chunk(g,0,emission,4096u,err,sizeof(err)));
+    ASSERT_TRUE((emission[at[0]].sources&FR_FIRE_EMISSION_MAGIC)!=0u);
+    ASSERT_TRUE((emission[at[0]].sources>>8u)!=0u);
+    ASSERT_TRUE((emission[at[1]].sources&FR_FIRE_EMISSION_MAGIC)==0u);
+    free(emission);
     free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_submerged_mixed_film_uses_bound_oxidizer_without_deleting_water(void) {
@@ -375,12 +382,25 @@ static void test_fire_emission_enters_directional_light_without_point_sources(vo
     const uint32_t neighbors[]={at-64u,at-1u,at+1u,at+64u};
     float power=0.f;for(uint32_t i=0u;i<4u;i++) power+=emission[neighbors[i]].power;
     ASSERT_TRUE(power>0.f);
+    fr_gas_state_t *before=calloc(4096u,sizeof(*before)),*after=calloc(4096u,sizeof(*after));
+    ASSERT_TRUE(before&&after&&fr_gas_gpu_read_chunk(g,0,before,4096u,err,sizeof(err)));
+    fr_reactive_record_t wood_before,wood_after;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&wood_before,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
-    fr_renderer_light_field_t near,far;
+    fr_renderer_light_field_t source_field,near,far;
     ASSERT_TRUE(fr_renderer_read_light(g,21u,20u,&near)&&
+        fr_renderer_read_light(g,20u,19u,&source_field)&&
         fr_renderer_read_light(g,50u,50u,&far));
-    ASSERT_TRUE(near.l0[0]>far.l0[0]&&near.l0[0]>0.f);
-    free(emission);free(chunk);dc_gpu_destroy(g);PASS();
+    ASSERT_TRUE(source_field.l0[0]>near.l0[0]&&near.l0[0]>far.l0[0]);
+    fr_renderer_light_field_t paused;
+    ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err))&&
+        fr_renderer_read_light(g,21u,20u,&paused));
+    ASSERT_EQ(memcmp(&paused,&near,sizeof(near)),0);
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,after,4096u,err,sizeof(err))&&
+        fr_gpu_reactive_read_cell(g,0,at,&wood_after,&found,err,sizeof(err))&&found);
+    ASSERT_EQ(memcmp(before,after,4096u*sizeof(*before)),0);
+    ASSERT_EQ(memcmp(&wood_before.state,&wood_after.state,sizeof(wood_before.state)),0);
+    free(after);free(before);free(emission);free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_flame_emission_requires_local_transported_hot_fuel_and_oxygen(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
