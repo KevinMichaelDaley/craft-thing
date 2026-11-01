@@ -1,4 +1,11 @@
 REACTIVE_STATE_SRC = src/fire/reactive_state.c src/fire/reactive_snapshot.c src/fire/material_profile.c
+build/player_state_tests: tests/player/state_tests.c tests/player/state_red_stubs.c include/ferrum/player/player.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/player/state_tests.c tests/player/state_red_stubs.c -o $@ -lm
+.PHONY: test_player
+test_player: build/player_state_tests
+	./build/player_state_tests
+test: test_player
 CC ?= cc
 build/appearance_tests: tests/renderer/appearance_tests.c src/renderer/appearance.c include/ferrum/renderer/appearance.h
 	mkdir -p build
