@@ -2133,6 +2133,7 @@ build/shaders/body_combustion.comp.spv: shaders/reactive/coating_mass.glsl inclu
 build/shaders/body_combustion.comp.spv: shaders/reactive/coating_burn.glsl
 build/shaders/body_combustion.comp.spv build/shaders/structural.comp.spv: include/dungeoncraft/corrosion_parameters.h
 build/combustion_gpu_display_tests: build/shaders/combustion.comp.spv
+build/combustion_gpu_display_tests: $(RENDERER_SHADERS)
 build/combustion_gpu_display_tests: tests/vulkan/combustion_containment_cases.h
 build/combustion_gpu_display_tests: tests/vulkan/combustion_contact_cases.h
 build/combustion_gpu_display_tests: src/app/bonfire_scene.c

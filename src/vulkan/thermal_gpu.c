@@ -43,6 +43,7 @@ bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
         okay=fr_renderer_submit(g);
     }
     if(!okay) {fr_renderer_compute_destroy(g,&t->combustion);fr_renderer_compute_destroy(g,&t->body_combustion);dc_gpu_address_buffer_destroy(g,&t->emission);dc_gpu_address_buffer_destroy(g,&t->hud);dc_gpu_address_buffer_destroy(g,&t->radiation_scratch);}
+    if(okay) fr_renderer_emission_changed(g);
     return okay;
 }
 bool fr_combustion_gpu_enabled(const dc_gpu_t *g) {
@@ -100,7 +101,9 @@ bool fr_combustion_clear_emission_chunk(dc_gpu_t *g,uint32_t slot,char *err,uint
     vkCmdFillBuffer(g->command,g->thermal->emission.buffer,slot*bytes,bytes,0);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    return fr_renderer_submit(g);
+    bool okay=fr_renderer_submit(g);
+    if(okay) fr_renderer_emission_changed(g);
+    return okay;
 }
 static void record_combustion(dc_gpu_t *g,float seconds,uint32_t mode) {
     if(!g||!g->thermal||!g->thermal->combustion.pipeline||!g->gas||(mode==0u&&seconds<=0)) return;
@@ -154,7 +157,7 @@ bool fr_combustion_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     dc_gpu_record_body_ash(g,g->thermal->hud.buffer);phase(g,14,seconds);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
-    if(fr_renderer_submit(g)) return true;
+    if(fr_renderer_submit(g)) {fr_renderer_emission_changed(g);return true;}
     if(err&&cap) snprintf(err,cap,"Cannot complete terrain combustion transaction");
     return false;
 }
@@ -280,6 +283,7 @@ static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
 }
 void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
     if(!g->thermal||seconds<=0) return;
+    if(g->thermal->combustion.pipeline) fr_renderer_emission_changed(g);
     bool trace=getenv("DC_THERMAL_PHASE_TRACE")&&getenv("DC_FRAME_TIMINGS")&&g->timestamp_pool;
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,4);
     if(g->thermal->probe_active) phase(g,4,seconds);

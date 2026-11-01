@@ -279,6 +279,11 @@ void fr_renderer_record(dc_gpu_t *g) {
 bool fr_renderer_render(dc_gpu_t *g, char *err, uint32_t cap) {
   return g && g->renderer && dc_gpu_render_chunks(g, err, cap);
 }
+void fr_renderer_emission_changed(dc_gpu_t *g) {
+  if(!g||!g->renderer) return;
+  g->renderer->light_revision++;
+  fr_lighting_gpu_invalidate_sources(g->renderer->lighting);
+}
 bool fr_renderer_read_light(dc_gpu_t *g,uint32_t x,uint32_t y,
                             fr_renderer_light_field_t *field) {
   if(!g||!g->renderer||!field||!fr_renderer_begin(g)) return false;

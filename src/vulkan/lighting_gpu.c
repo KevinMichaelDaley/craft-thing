@@ -106,6 +106,9 @@ uint32_t fr_lighting_gpu_source_cells(const fr_lighting_gpu_t *l) {
 uint32_t fr_lighting_gpu_source_builds(const fr_lighting_gpu_t *l) {
   return l ? ((const uint32_t *)l->work_mapped)[2] : 0u;
 }
+void fr_lighting_gpu_invalidate_sources(fr_lighting_gpu_t *l) {
+  if(l) ((uint32_t *)l->parameter_mapped)[FR_TRANSPORT_SOURCE_REVISION]++;
+}
 void fr_lighting_gpu_destroy(fr_lighting_gpu_t *l) {
   if (!l)
     return;

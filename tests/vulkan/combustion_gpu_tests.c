@@ -1,6 +1,7 @@
 #define main combustion_fixture_main
 #include "reactive_cell_gpu_tests.c"
 #undef main
+#include <SDL.h>
 #include <math.h>
 #include <sys/stat.h>
 #include "ferrum/fire/combustion_gpu.h"
@@ -14,6 +15,14 @@
 #include "ferrum/renderer/gpu.h"
 #include "ferrum/structural/gpu.h"
 #include "../../src/vulkan/gas_gpu_state.h"
+
+static bool save_fire_frame(uint32_t *pixels,const char *path) {
+    SDL_Surface *surface=SDL_CreateRGBSurfaceWithFormatFrom(
+        pixels,480,270,32,480*4,SDL_PIXELFORMAT_ABGR8888);
+    bool okay=surface&&SDL_SaveBMP(surface,path)==0;
+    if(surface) SDL_FreeSurface(surface);
+    return okay;
+}
 
 static void terrain_combustion(bool practical,bool char_stage,uint32_t material) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
@@ -284,15 +293,30 @@ static void test_mixed_film_burns_wet_faster_than_matched_oil_control(void) {
         original[i].flags|=FR_REACTIVE_COATING_FLAMING;
         original[i].thermal_energy=(float)fr_reactive_state_energy_at_temperature(&original[i],800.f);
     }
+    chunk->cells[at[0]-128u]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(fr_renderer_enable(g,err,sizeof(err))&&
+        fr_renderer_set_mode(g,FR_RENDERER_LIT)&&
+        fr_renderer_set_sources(g,NULL,0,(fr_renderer_sun_t){0}));
     for(uint32_t i=0u;i<3u;i++)
         ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,at[i],&original[i],err,sizeof(err)));
     fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
         .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
     ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&
         fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&
-        fr_combustion_gpu_enable(g,err,sizeof(err))&&
-        fr_combustion_gpu_step(g,5.f,err,sizeof(err)));
+        fr_combustion_gpu_enable(g,err,sizeof(err)));
+    uint32_t *pixels=calloc(480u*270u,sizeof(*pixels));ASSERT_TRUE(pixels);
+    ASSERT_TRUE(dc_gpu_present_chunks(g,err,sizeof(err))&&
+        dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
+    uint32_t dark=pixels[18u*480u+20u];
+    ASSERT_TRUE(fr_combustion_gpu_step(g,5.f,err,sizeof(err))&&
+        dc_gpu_present_chunks(g,err,sizeof(err))&&
+        dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
+    uint32_t lit=pixels[18u*480u+20u];
+    ASSERT_TRUE(((lit>>8u)&255u)>=((dark>>8u)&255u)+8u);
+    ASSERT_TRUE(((lit>>8u)&255u)>(lit&255u));
+    ASSERT_TRUE(save_fire_frame(pixels,"build/greek_fire_emissive.bmp"));
+    free(pixels);
     fr_reactive_record_t results[3];bool found=false;
     for(uint32_t i=0u;i<3u;i++)
         ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at[i],&results[i],&found,err,sizeof(err))&&found);
@@ -375,7 +399,7 @@ static void test_fire_emission_enters_directional_light_without_point_sources(vo
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     uint32_t at=20u*64u+20u;
     chunk->cells[at]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
-    chunk->cells[at+2u]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+    chunk->cells[at-128u]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
         dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&fr_renderer_enable(g,err,sizeof(err))&&
         fr_renderer_set_mode(g,FR_RENDERER_LIT)&&
@@ -393,7 +417,7 @@ static void test_fire_emission_enters_directional_light_without_point_sources(vo
     uint32_t *pixels=calloc(480u*270u,sizeof(*pixels));ASSERT_TRUE(pixels);
     ASSERT_TRUE(dc_gpu_present_chunks(g,err,sizeof(err))&&
         dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
-    uint32_t dark=pixels[20u*480u+22u];
+    uint32_t dark=pixels[18u*480u+20u];
     ASSERT_TRUE(fr_combustion_gpu_step(g,.1f,err,sizeof(err)));
     fr_combustion_emission_t *emission=calloc(4096u,sizeof(*emission));ASSERT_TRUE(emission);
     ASSERT_TRUE(fr_combustion_gpu_read_emission_chunk(g,0,emission,4096u,err,sizeof(err)));
@@ -406,8 +430,10 @@ static void test_fire_emission_enters_directional_light_without_point_sources(vo
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&wood_before,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
     fr_renderer_light_field_t source_field,near,far;
+    fr_renderer_light_field_t target_field;
     ASSERT_TRUE(fr_renderer_read_light(g,21u,20u,&near)&&
         fr_renderer_read_light(g,20u,19u,&source_field)&&
+        fr_renderer_read_light(g,20u,18u,&target_field)&&
         fr_renderer_read_light(g,50u,50u,&far));
     ASSERT_TRUE(source_field.l0[0]>near.l0[0]&&near.l0[0]>far.l0[0]);
     fr_renderer_light_field_t paused;
@@ -420,10 +446,12 @@ static void test_fire_emission_enters_directional_light_without_point_sources(vo
     ASSERT_EQ(memcmp(&wood_before.state,&wood_after.state,sizeof(wood_before.state)),0);
     ASSERT_TRUE(dc_gpu_present_chunks(g,err,sizeof(err))&&
         dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
-    uint32_t lit=pixels[20u*480u+22u];
+    uint32_t lit=pixels[18u*480u+20u];
     unsigned dark_sum=(dark&255u)+((dark>>8u)&255u)+((dark>>16u)&255u);
     unsigned lit_sum=(lit&255u)+((lit>>8u)&255u)+((lit>>16u)&255u);
+    ASSERT_TRUE(target_field.l0[0]>0.f);
     ASSERT_TRUE(lit_sum>=dark_sum+8u);
+    ASSERT_TRUE(save_fire_frame(pixels,"build/ordinary_fire_emissive.bmp"));
     free(pixels);
     free(after);free(before);free(emission);free(chunk);dc_gpu_destroy(g);PASS();
 }

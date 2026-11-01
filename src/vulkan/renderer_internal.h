@@ -38,6 +38,9 @@ bool fr_lighting_field_binding(fr_lighting_gpu_t *lighting,
 bool fr_renderer_authored_bindings(dc_gpu_t *gpu, VkDescriptorBufferInfo buffers[3]);
 void fr_lighting_record(fr_lighting_gpu_t *lighting, VkBuffer indirect,
                         VkDeviceSize offset);
+void fr_lighting_gpu_invalidate_sources(fr_lighting_gpu_t *lighting);
+/** Invalidate cached directional transport after fire emission changes. */
+void fr_renderer_emission_changed(dc_gpu_t *gpu);
 /** Rebind appearance after a completed resource-growth transaction. */
 void fr_renderer_rebind_colors(dc_gpu_t *gpu);
 
