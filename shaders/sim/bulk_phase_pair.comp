@@ -74,7 +74,8 @@ float couple_water_phase(uint atlas,uint phase,uint volume,float water_mass,
     float reduced_mass=water_mass*phase_mass/(water_mass+phase_mass);
     float impulse=reduced_mass*difference;
     bulk_momentum_write(atlas,phase,component,phase_momentum+impulse);
-    float dissipation=0.5*reduced_mass*difference*difference*1e-10;
+    float dissipation=0.5*reduced_mass*difference*difference*
+        FR_BULK_KINETIC_TO_KJ;
     bulk_heat_write(atlas,phase,bulk_heat_at(atlas,phase)+dissipation);
     return water_speed-impulse/water_mass;
 }
