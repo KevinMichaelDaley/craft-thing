@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 enum { FR_BULK_WATER, FR_BULK_OIL, FR_BULK_SLIME, FR_BULK_PHASES };
+#define FR_BULK_CELL_FULL_FP 65536u
 
 /** Continuous Q16 phase inventory. Retained volume is finite stock held when
  * geometry has less free space than the occupied phases; it is not occupancy. */

@@ -4,7 +4,7 @@
 #include "ferrum/fire/bulk_phase.h"
 
 static bool valid_cell(const fr_bulk_cell_t *cell) {
-    if(!cell||cell->capacity_fp>65536u) return false;
+    if(!cell||cell->capacity_fp>FR_BULK_CELL_FULL_FP) return false;
     uint64_t occupied=0;
     for(uint32_t i=0;i<FR_BULK_PHASES;i++) occupied+=cell->volume_fp[i];
     return occupied<=cell->capacity_fp;
@@ -19,8 +19,10 @@ bool fr_bulk_phase_transfer(const fr_bulk_cell_t *source,
     uint64_t occupied=0;
     for(uint32_t i=0;i<FR_BULK_PHASES;i++) occupied+=destination->volume_fp[i];
     uint64_t stock=(uint64_t)source->volume_fp[phase]+source->retained_fp[phase];
-    uint32_t admitted=(uint32_t)fmin((double)requested_fp,
-        fmin((double)stock,(double)(destination->capacity_fp-occupied)));
+    uint32_t admitted=requested_fp;
+    if(stock<admitted) admitted=(uint32_t)stock;
+    uint32_t free_fp=destination->capacity_fp-(uint32_t)occupied;
+    if(free_fp<admitted) admitted=free_fp;
     fr_bulk_cell_t next_source=*source,next_destination=*destination;
     uint32_t from_retained=admitted<next_source.retained_fp[phase]?
         admitted:next_source.retained_fp[phase];
