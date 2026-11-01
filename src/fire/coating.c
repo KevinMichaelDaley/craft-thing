@@ -1,4 +1,5 @@
 #include <math.h>
+#include <string.h>
 
 #include "ferrum/fire/coating.h"
 #include "ferrum/fire/material_profile.h"
@@ -114,7 +115,32 @@ bool fr_coating_film_split(const fr_coating_film_t *source,
     uint32_t left_weight_fp,const fr_coating_host_t *left_host,
     const fr_coating_host_t *right_host,fr_coating_film_t *left,
     fr_coating_film_t *right) {
-    (void)source;(void)left_weight_fp;(void)left_host;(void)right_host;
-    (void)left;(void)right;
-    return false;
+    if(!source||!valid_host(&source->host)||
+       left_weight_fp==0u||left_weight_fp>=FR_BULK_CELL_FULL_FP||
+       !valid_host(left_host)||!valid_host(right_host)||
+       memcmp(left_host,right_host,sizeof(*left_host))==0||
+       !left||!right||left==right||!isfinite(source->excess_heat)||
+       (source->oil_fp==0u&&source->slime_fp==0u&&source->excess_heat!=0.))
+        return false;
+    fr_coating_film_t a=*source,b=*source;
+    a.host=*left_host;b.host=*right_host;
+    a.oil_fp=(uint32_t)((uint64_t)source->oil_fp*left_weight_fp/
+        FR_BULK_CELL_FULL_FP);
+    a.slime_fp=(uint32_t)((uint64_t)source->slime_fp*left_weight_fp/
+        FR_BULK_CELL_FULL_FP);
+    b.oil_fp=source->oil_fp-a.oil_fp;
+    b.slime_fp=source->slime_fp-a.slime_fp;
+    const fr_reactive_profile_t *oil=fr_reactive_profile(DC_MATERIAL_OIL);
+    const fr_reactive_profile_t *slime=fr_reactive_profile(DC_MATERIAL_RED_SLIME_JELLY);
+    if(!oil||!slime) return false;
+    double source_capacity=(double)source->oil_fp*oil->density*oil->heat_capacity+
+        (double)source->slime_fp*slime->density*slime->heat_capacity;
+    double left_capacity=(double)a.oil_fp*oil->density*oil->heat_capacity+
+        (double)a.slime_fp*slime->density*slime->heat_capacity;
+    a.excess_heat=source_capacity>0.?
+        source->excess_heat*left_capacity/source_capacity:0.;
+    b.excess_heat=source->excess_heat-a.excess_heat;
+    if(!isfinite(a.excess_heat)||!isfinite(b.excess_heat)) return false;
+    *left=a;*right=b;
+    return true;
 }
