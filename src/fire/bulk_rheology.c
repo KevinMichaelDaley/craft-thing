@@ -48,8 +48,10 @@ bool fr_bulk_rheology_quadrature(uint32_t volume_fp,float density,
 }
 
 bool fr_bulk_rheology_shear_rate(const float gradient[4],float *out) {
-    (void)gradient;
-    if(!out) return false;
-    *out=0.f;
+    if(!gradient||!out) return false;
+    for(uint32_t i=0u;i<4u;i++) if(!isfinite(gradient[i])) return false;
+    float shear=gradient[1]+gradient[2];
+    if(!isfinite(shear)) return false;
+    *out=fabsf(shear);
     return true;
 }
