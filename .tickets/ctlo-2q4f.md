@@ -1,6 +1,6 @@
 ---
 id: ctlo-2q4f
-status: open
+status: closed
 deps: [ctlo-ldb7]
 links: [dun-sndp, dun-i1zd, ctfs-2hu1, ctlo-18l4]
 created: 2026-10-24T22:06:18Z
@@ -91,3 +91,11 @@ Safe boundary after modular user steering: private detached-storage factory and 
 **2026-10-25T03:09:25Z**
 
 Modular handoff REFACTOR complete: full battery718 C passes, same2 ctr-ojvy authored-stage failures only, zero warnings/new regressions. Log build/reactive_safe_boundary_full_suite.log. Native BODY snapshot2/chunk4/actual level stream1 passed with28 displayed frames and core/sync validation. Broad ticket returns open, not complete. Deferred DCS2 intentional RED tests and exact checked draft are documented; no DCS8 format enabled. Next sole active visible milestone is ctfs-2hu1; add only prerequisites actually required by it.
+
+**2026-11-01T01:22:56Z**
+
+2026-10-31: Reactive CELL admission now validates the actual device cell material before publishing state. RED reproduced importing a wood parcel into air; GREEN rejects air and wrong-material replacement atomically; REFACTOR reads a single GPU cell and also checks a repainted GPU cell. Focused Vulkan reactive_cell_gpu_tests 8/8 pass. Full make test is running before completion review.
+
+**2026-11-01T01:31:52Z**
+
+2026-10-31 completion review: full tools/with-vulkan make -j8 test passed 174 test binaries with no failures or compiler warnings. Existing regressions cover extraction/carve/fracture and ash, MPM swap/halo/negative coords, generation reuse, stream/checkpoint and corrupt/newer rollback, plus growable atomic arena. New device-material admission regression passes 8/8 targeted; GPU repaint is inspected before publication. Future analytic prop admission/export is tracked by ctpf-iueo and ctlo-hjxc; bulk oil and thin coating mechanics have their own downstream tickets.
