@@ -18,6 +18,9 @@ static uint64_t packet_hash(const uint8_t *bytes,size_t count) {
     for(size_t i=0;i<count;i++) {hash^=bytes[i];hash*=UINT64_C(1099511628211);}
     return hash;
 }
+static size_t payload_offset(uint32_t channel_index,uint32_t cell_index) {
+    return BULK_HEADER_BYTES+((size_t)channel_index*DC_CHUNK_CELLS+cell_index)*sizeof(uint32_t);
+}
 static const uint32_t *channel(const fr_bulk_phase_chunk_t *phase,uint32_t index) {
     switch(index) {
     case 0: return phase->oil_fp;
@@ -47,11 +50,10 @@ bool fr_bulk_phase_chunk_encode(const dc_chunk_t *chunk,
     for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
         if(!valid_cell(chunk,i,phase->oil_fp[i],phase->slime_fp[i])) return false;
     memcpy(bytes,"BLP1",4);put32(bytes+4,1u);put32(bytes+8,DC_CHUNK_CELLS);put32(bytes+12,0u);
-    size_t offset=BULK_HEADER_BYTES;
-    for(uint32_t k=0;k<4u;k++) for(uint32_t i=0;i<DC_CHUNK_CELLS;i++,offset+=4u)
-        put32(bytes+offset,channel(phase,k)[i]);
+    for(uint32_t k=0;k<4u;k++) for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
+        put32(bytes+payload_offset(k,i),channel(phase,k)[i]);
     uint64_t hash=packet_hash(bytes,length-BULK_HASH_BYTES);
-    for(uint32_t i=0;i<BULK_HASH_BYTES;i++) bytes[offset+i]=(uint8_t)(hash>>(i*8u));
+    for(uint32_t i=0;i<BULK_HASH_BYTES;i++) bytes[length-BULK_HASH_BYTES+i]=(uint8_t)(hash>>(i*8u));
     return true;
 }
 bool fr_bulk_phase_chunk_decode(const dc_chunk_t *chunk,const uint8_t *bytes,
@@ -63,12 +65,11 @@ bool fr_bulk_phase_chunk_decode(const dc_chunk_t *chunk,const uint8_t *bytes,
     for(uint32_t i=0;i<BULK_HASH_BYTES;i++) expected|=(uint64_t)bytes[length-BULK_HASH_BYTES+i]<<(i*8u);
     if(expected!=packet_hash(bytes,length-BULK_HASH_BYTES)) return false;
     for(uint32_t i=0;i<DC_CHUNK_CELLS;i++) {
-        uint32_t oil=get32(bytes+BULK_HEADER_BYTES+i*4u);
-        uint32_t slime=get32(bytes+BULK_HEADER_BYTES+(DC_CHUNK_CELLS+i)*4u);
+        uint32_t oil=get32(bytes+payload_offset(0u,i));
+        uint32_t slime=get32(bytes+payload_offset(1u,i));
         if(!valid_cell(chunk,i,oil,slime)) return false;
     }
-    size_t offset=BULK_HEADER_BYTES;
-    for(uint32_t k=0;k<4u;k++) for(uint32_t i=0;i<DC_CHUNK_CELLS;i++,offset+=4u)
-        mutable_channel(out,k)[i]=get32(bytes+offset);
+    for(uint32_t k=0;k<4u;k++) for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
+        mutable_channel(out,k)[i]=get32(bytes+payload_offset(k,i));
     return true;
 }
