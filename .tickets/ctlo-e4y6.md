@@ -51,3 +51,7 @@ Exact coating mass RED cc03a03 and b91926c/71bfcd3, GREEN bc6dda6/0241d6e/8f5346
 **2026-11-01T11:40:33Z**
 
 Terrain contact increment f79ed35 RED, c5fd0d9 GREEN, a71319a REFACTOR: phase23 resident cell dispatch wets stable solid terrain parcels from four neighboring finite bulk oil/jelly cells, using the same atomic reserve and exact density conversion as rigid rest-piece films. Stone control gains the exact mass debited from bulk while substrate fuel remains zero. Quarter-native Xephyr focused GPU 9/9 and full make test pass. Runtime hot film drip/melt, foliage and actor proxy attachment, fracture and stream handoff remain.
+
+**2026-11-01T11:56:05Z**
+
+Runtime hot terrain release RED 53e037b, GREEN 7d01371, REFACTOR f4fa1e2: a stone film with exact Q16 oil mass at 500 K releases finite oil downward into available shared-capacity bulk, with profile-dependent softening, gravity traction, adhesion and viscosity; 300 K control holds. The reverse integer conversion preserves density mass remainders and transfers thermal excess; empty parcels skip drip work. Quarter-native Xephyr focused GPU 10/10 and full make test pass. Still needed: rigid-film release, foliage and moving actor proxy runtime cases, fracture and streaming handoff, displayed stress benchmark.
