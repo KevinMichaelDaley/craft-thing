@@ -293,6 +293,34 @@ static void test_moving_hot_body_piece_drips_from_its_rest_attachment(void) {
     ASSERT_EQ(before.state.origin_id_low,wood.origin_id_low);
     free(after);free(phase);free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_detached_film_activates_bulk_transport(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *empty=calloc(1,sizeof(*empty));
+    fr_bulk_phase_chunk_t *after=calloc(1,sizeof(*after));
+    ASSERT_TRUE(chunk&&empty&&after);
+    uint32_t stone_at=20u*64u+20u,drip_at=stone_at+64u,fall_at=stone_at+128u;
+    chunk->cells[stone_at].material=DC_MATERIAL_STONE;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t stone;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,65536u,0u,300.f,
+        621u,&stone,err,sizeof(err)));
+    stone.coating_oil_fuel_fp=44000u;
+    ASSERT_TRUE(fr_reactive_state_add_heat(&stone,
+        fr_reactive_state_energy_at_temperature(&stone,500.f)-
+        fr_reactive_state_energy(&stone),err,sizeof(err))&&
+        fr_gpu_reactive_seed_cell(g,0,stone_at,&stone,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(g,0,chunk,empty,err,sizeof(err))&&
+        fr_thermal_gpu_enable(g,err,sizeof(err))&&
+        fr_thermal_gpu_step(g,.5f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(g,0,after,err,sizeof(err)));
+    ASSERT_TRUE(after->oil_fp[drip_at]>0u);
+    ASSERT_TRUE(fr_bulk_phase_gpu_step(g,.5f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(g,0,after,err,sizeof(err)));
+    ASSERT_TRUE(after->oil_fp[fall_at]>0u);
+    free(after);free(empty);free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_saturated_neighbor_air_suppresses_drying(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     uint32_t at=20u*64u+20u;chunk->cells[at].material=DC_MATERIAL_WOOD;
@@ -421,6 +449,7 @@ int main(void) {
     RUN(test_stone_surface_wets_from_neighbor_oil_without_burning_stone);
     RUN(test_hot_terrain_oil_drips_into_finite_bulk_while_cold_film_holds);
     RUN(test_moving_hot_body_piece_drips_from_its_rest_attachment);
+    RUN(test_detached_film_activates_bulk_transport);
     RUN(test_saturated_neighbor_air_suppresses_drying);
     RUN(test_equal_simulated_time_dries_within_one_water_quantum);
     RUN(test_drying_reaches_gas_across_a_chunk_seam);
