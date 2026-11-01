@@ -45,6 +45,23 @@ static void test_ignition_hazard_survives_equal_time_scheduling(void) {
     ASSERT_TRUE(fabsf(a.ignition_integral-b.ignition_integral)<1e-6f);
     ASSERT_EQ(a.flags&FR_REACTIVE_FLAMING,b.flags&FR_REACTIVE_FLAMING);PASS();
 }
+static void test_finite_oil_film_accelerates_wood_ignition_without_spending_it(void) {
+    char err[256]={0};fr_reactive_state_t dry,oiled,dry_after,oil_after;
+    fr_combustion_products_t dry_products,oil_products;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,0,800,2901,&dry,err,sizeof(err)));
+    dry.ignition_threshold=.2f;
+    oiled=dry;oiled.coating_oil_fuel_fp=65536;
+    oiled.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&oiled,800);
+    ASSERT_TRUE(fr_combustion_reference(&dry,65536,.23f,1,.1f,
+        &dry_after,&dry_products,err,sizeof(err)));
+    ASSERT_TRUE(fr_combustion_reference(&oiled,65536,.23f,1,.1f,
+        &oil_after,&oil_products,err,sizeof(err)));
+    ASSERT_EQ(dry_products.fuel_fp,0);
+    ASSERT_TRUE(oil_products.fuel_fp>0&&oil_products.oxygen_fp>0);
+    ASSERT_EQ(oil_after.coating_oil_fuel_fp,oiled.coating_oil_fuel_fp);
+    ASSERT_EQ(oiled.fuel_mass_fp-oil_after.fuel_mass_fp,oil_products.fuel_fp);
+    PASS();
+}
 static void test_energy_ledger_and_invalid_transaction(void) {
     char err[256]={0};fr_reactive_state_t s,out;fr_combustion_products_t p;
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,0,800,31,&s,err,sizeof(err)));
@@ -209,6 +226,7 @@ int main(void) {
     RUN(test_finite_oxygen_and_products);
     RUN(test_starved_wet_and_buried_do_not_burn);
     RUN(test_ignition_hazard_survives_equal_time_scheduling);
+    RUN(test_finite_oil_film_accelerates_wood_ignition_without_spending_it);
     RUN(test_energy_ledger_and_invalid_transaction);
     RUN(test_competing_parcels_cannot_overdraw_oxygen);
     RUN(test_continuous_gas_oxygen_is_not_rounded_up_per_solid_quantum);
