@@ -2,8 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include "dungeoncraft/coating_layout.h"
 #include "ferrum/fire/gpu.h"
+#include "ferrum/fire/bulk_phase_gpu.h"
 #include "ferrum/fire/material_profile.h"
+#include "ferrum/fire/thermal_gpu.h"
 #include "../../src/vulkan/gpu_internal.h"
 #include "../../src/vulkan/runtime_body_gpu.h"
 #include "../test_window.h"
@@ -181,6 +184,65 @@ static void test_broken_leaf_keeps_composition_heat_and_history_as_a_leaf_bit(vo
     ASSERT_EQ(record.owner.key[1],0x80000001u);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
 }
+static void test_contact_wet_leaf_keeps_exact_film_through_fracture(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *phase=calloc(1,sizeof(*phase));
+    fr_bulk_phase_chunk_t *after=calloc(1,sizeof(*after));
+    ASSERT_TRUE(chunk&&phase&&after);
+    for(uint32_t x=20u;x<28u;x++) {
+        chunk->cells[20u*64u+x].material=DC_MATERIAL_LEAVES;
+        chunk->cells[21u*64u+x].material=DC_MATERIAL_WOOD;
+    }
+    uint32_t source=20u*64u+19u,target=20u*64u+20u;
+    phase->oil_fp[source]=30000u;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t leaf;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_LEAVES,13107u,0u,300.f,
+        701u,&leaf,err,sizeof(err))&&
+        fr_gpu_reactive_seed_cell(g,0,target,&leaf,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(g,0,chunk,phase,err,sizeof(err))&&
+        fr_thermal_gpu_enable(g,err,sizeof(err))&&
+        fr_thermal_gpu_step(g,.5f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(g,0,after,err,sizeof(err)));
+    fr_reactive_record_t wet;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,target,&wet,&found,err,sizeof(err))&&found);
+    uint32_t lost=phase->oil_fp[source]-after->oil_fp[source];
+    ASSERT_TRUE(lost>0u&&wet.state.coating_oil_fuel_fp>0u);
+    ASSERT_EQ(wet.state.coating_oil_fuel_fp*FR_COATING_MASS_DEN+
+        ((wet.state.coating_remainders>>FR_COATING_OIL_REM_SHIFT)&FR_COATING_REM_MASK),
+        lost*FR_COATING_OIL_MASS_NUM);
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g)&&dc_gpu_rigid_step(g,err,sizeof(err)));
+    fr_reactive_record_t attached;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0u,0u,&attached,&found,
+        err,sizeof(err))&&found&&memcmp(&attached.state,&wet.state,sizeof(wet.state))==0);
+    ASSERT_TRUE(dc_gpu_paint_material(g,23,20,1,DC_MATERIAL_AIR,err,sizeof(err))&&
+        dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+    uint32_t particle=UINT32_MAX;
+    for(uint32_t i=0u;i<DC_MPM_PARTICLES_PER_CHUNK;i++)
+        if(chunk->particles[i].mass_fp&&chunk->particles[i].id_lo==0x80000001u&&
+           chunk->particles[i].id_hi==0x80000001u) particle=i;
+    ASSERT_TRUE(particle!=UINT32_MAX);
+    fr_reactive_record_t broken;
+    ASSERT_TRUE(fr_gpu_reactive_read_particle(g,particle,&broken,&found,
+        err,sizeof(err))&&found);
+    wet.state.material=DC_MATERIAL_LEAF_DEBRIS;
+    ASSERT_TRUE(memcmp(&broken.state,&wet.state,sizeof(wet.state))==0);
+    ASSERT_EQ(broken.owner.kind,FR_REACTIVE_OWNER_PARTICLE);
+    fr_reactive_chunk_t channel={0};
+    ASSERT_TRUE(fr_gpu_reactive_export_chunk(g,0,chunk,&channel,err,sizeof(err)));
+    dc_gpu_destroy(g);g=NULL;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&
+        fr_gpu_reactive_import_chunk(g,0,chunk,&channel,err,sizeof(err))&&
+        fr_gpu_reactive_read_particle(g,particle,&broken,&found,err,sizeof(err))&&found);
+    ASSERT_TRUE(memcmp(&broken.state,&wet.state,sizeof(wet.state))==0);
+    ASSERT_EQ(broken.owner.kind,FR_REACTIVE_OWNER_PARTICLE);
+    fr_reactive_chunk_release(&channel);
+    free(after);free(phase);free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_reused_body_slot_and_carving_keep_actual_owner_generation(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     for(uint32_t y=10;y<14;y++) for(uint32_t x=10;x<14;x++) c->cells[y*64+x].material=DC_MATERIAL_WOOD;
@@ -192,6 +254,11 @@ static void test_reused_body_slot_and_carving_keep_actual_owner_generation(void)
     ASSERT_TRUE(dc_gpu_paint_material(g,11,12,4,DC_MATERIAL_AIR,err,sizeof(err))&&dc_gpu_rigid_step(g,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_paint_material(g,30,30,1,DC_MATERIAL_WOOD,err,sizeof(err)));
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,800,92,&state,err,sizeof(err)));
+    state.coating_oil_fuel_fp=1101u;
+    state.coating_remainders=1u;
+    ASSERT_TRUE(fr_reactive_state_add_heat(&state,
+        fr_reactive_state_energy_at_temperature(&state,800.f)-
+        fr_reactive_state_energy(&state),err,sizeof(err)));
     state.ignition_threshold=.9f;state.ignition_integral=.6f;
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,30*64+30,&state,err,sizeof(err))&&dc_gpu_rigid_step(g,err,sizeof(err)));
     ASSERT_EQ(dc_gpu_body_owner(g,0)->generation,2u);
@@ -270,6 +337,7 @@ int main(void) {
     RUN(test_extraction_and_next_arena_flip_keep_exact_state);
     RUN(test_mpm_pool_swaps_preserve_parcel_and_leaf_pigment);
     RUN(test_broken_leaf_keeps_composition_heat_and_history_as_a_leaf_bit);
+    RUN(test_contact_wet_leaf_keeps_exact_film_through_fracture);
     RUN(test_reused_body_slot_and_carving_keep_actual_owner_generation);
     RUN(test_live_pool_reuses_entries_instead_of_growing_with_retired_history);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
