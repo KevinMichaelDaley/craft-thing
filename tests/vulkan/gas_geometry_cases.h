@@ -155,6 +155,43 @@ static void test_dense_granular_mpm_retains_connected_pore_volume(void) {
         input[0].species[FR_GAS_OXYGEN]*4096.)<1e-5);
     dc_gpu_destroy(g);free(chunk);free(input);free(volume);free(out);PASS();
 }
+static void test_burning_wood_has_small_conservative_smoke_bypass(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_gas_state_t *input=calloc(4096,sizeof(*input)),*out=calloc(4096,sizeof(*out));
+    double *volume=calloc(4096,sizeof(*volume));
+    fr_gas_checkpoint_chunk_t *snapshot=malloc(sizeof(*snapshot));
+    ASSERT_TRUE(chunk&&input&&out&&volume&&snapshot);
+    fr_gas_model_t model=reference_model();model.kinetic_scale=1./512.;
+    for(uint32_t i=0;i<4096u;i++) chunk->cells[i].material=DC_MATERIAL_STONE;
+    uint32_t left=32u*64u+30u,wood=left+1u,right=wood+1u;
+    chunk->cells[left].material=DC_MATERIAL_AIR;
+    chunk->cells[wood].material=DC_MATERIAL_WOOD;
+    chunk->cells[wood].flags=0x8000u;
+    chunk->cells[right].material=DC_MATERIAL_AIR;
+    input[left]=reference_air(model,.0012,300,0);
+    input[left].species[FR_GAS_NITROGEN]-=.0001;
+    input[left].species[FR_GAS_SOOT]+=.0001;
+    input[left].pigment[0]=.00008;
+    input[left].energy+=.0001*(model.heat_capacity_cv[FR_GAS_SOOT]-model.heat_capacity_cv[FR_GAS_NITROGEN])*300.;
+    input[right]=reference_air(model,.0012,300,0);
+    volume[left]=volume[right]=1.;
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&
+        fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err))&&
+        fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&
+        fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&
+        fr_gas_gpu_refresh_geometry(g,err,sizeof(err))&&
+        fr_gas_gpu_export_checkpoint(g,0,snapshot,err,sizeof(err)));
+    ASSERT_TRUE(snapshot->cells[wood][12]>.05f&&snapshot->cells[wood][12]<.25f);
+    double initial=input[left].species[FR_GAS_SOOT];
+    for(uint32_t frame=0;frame<60u;frame++) ASSERT_TRUE(fr_gas_gpu_step(g,1.f/60.f,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+    ASSERT_TRUE(out[right].species[FR_GAS_SOOT]>0.);
+    ASSERT_TRUE(fabs(out[left].species[FR_GAS_SOOT]+out[wood].species[FR_GAS_SOOT]+
+        out[right].species[FR_GAS_SOOT]-initial)<1e-7);
+    dc_gpu_destroy(g);free(chunk);free(input);free(out);free(volume);free(snapshot);PASS();
+}
 static void test_native_valve_only_refresh_preserves_restored_physical_void(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_gas_state_t *input=malloc(4096*sizeof(*input));double *volume=malloc(4096*sizeof(*volume));
