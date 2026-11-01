@@ -35,6 +35,10 @@ void move_water_heat(uint source,uint target,uint source_before,uint source_afte
     thermal_water_move(source,target,moved,source_before);
     thermal_water_resize(source,source_before,source_after);
 }
+float water_drag_speed(float face_flow,bool reverse,uint water,uint occupied) {
+    float aligned=max(0.,reverse?-face_flow:face_flow);
+    return aligned*float(water)/float(max(occupied,1u));
+}
 void main() {
     uint index=gl_GlobalInvocationID.x;
     if(index>=params.width*params.height) return;
@@ -101,8 +105,7 @@ void main() {
             max(0.,params.gravity*(density[heavy]-opposing)/density[heavy]*
                 (reverse?-1.:1.)):
             params.gravity*float(max(0,int(used(top))-int(used(bottom))))/float(FULL);
-        float drag=max(0.,(reverse?-water_flow:water_flow))*
-            float(top[0])/float(max(used(top),1u));
+        float drag=water_drag_speed(water_flow,reverse,top[0],used(top));
         float speed=sqrt(2.*buoyancy)+drag;
         uint allowance=excess>0u?min(excess,face_open):
             uint(floor(min(float(FULL),speed*params.seconds*float(face_open))));
