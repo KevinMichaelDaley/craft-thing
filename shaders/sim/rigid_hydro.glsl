@@ -21,6 +21,7 @@ uint hydro_bulk_word(uint atlas,uint channel) {
         channel*4096u+atlas%4096u;
 }
 uint hydro_phase_volume(uint atlas,uint phase) {
+    /* Retained stock occupies blocked solid capacity, not free liquid space. */
     uint stock=hydro_bulk[hydro_bulk_word(atlas,phase-1u)];
     uint retained=hydro_bulk[hydro_bulk_word(atlas,phase+1u)];
     return stock>retained?stock-retained:0u;
