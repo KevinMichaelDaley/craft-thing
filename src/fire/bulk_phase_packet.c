@@ -57,6 +57,10 @@ static bool valid_cell(const dc_chunk_t *chunk,uint32_t index,uint32_t oil,uint3
     return (uint64_t)chunk->cells[index].fluid_mass+oil+slime<=FR_BULK_CELL_FULL_FP&&
         oil_retained<=oil&&slime_retained<=slime;
 }
+static bool valid_heat(uint32_t oil,uint32_t slime,float oil_excess,float slime_excess) {
+    return isfinite(oil_excess)&&isfinite(slime_excess)&&
+        (oil>0u||oil_excess==0.f)&&(slime>0u||slime_excess==0.f);
+}
 bool fr_bulk_phase_chunk_encode(const dc_chunk_t *chunk,
     const fr_bulk_phase_chunk_t *phase,uint8_t *bytes,size_t capacity) {
     size_t length=fr_bulk_phase_chunk_bytes();
@@ -64,7 +68,8 @@ bool fr_bulk_phase_chunk_encode(const dc_chunk_t *chunk,
     for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
         if(!valid_cell(chunk,i,phase->oil_fp[i],phase->slime_fp[i],
             phase->oil_retained_fp[i],phase->slime_retained_fp[i])||
-            !isfinite(phase->oil_excess[i])||!isfinite(phase->slime_excess[i])) return false;
+            !valid_heat(phase->oil_fp[i],phase->slime_fp[i],
+                phase->oil_excess[i],phase->slime_excess[i])) return false;
     memcpy(bytes,"BLP2",4);put32(bytes+4,2u);put32(bytes+8,DC_CHUNK_CELLS);put32(bytes+12,0u);
     for(uint32_t k=0;k<FR_BULK_CHUNK_CHANNELS;k++) for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
         put32(bytes+payload_offset(k,i),channel_word(phase,k,i));
@@ -96,7 +101,7 @@ bool fr_bulk_phase_chunk_decode(const dc_chunk_t *chunk,const uint8_t *bytes,
             float oil_heat=0.f,slime_heat=0.f;
             memcpy(&oil_heat,&oil_bits,sizeof(oil_heat));
             memcpy(&slime_heat,&slime_bits,sizeof(slime_heat));
-            if(!isfinite(oil_heat)||!isfinite(slime_heat)) return false;
+            if(!valid_heat(oil,slime,oil_heat,slime_heat)) return false;
         }
     }
     for(uint32_t k=0;k<(current?FR_BULK_CHUNK_CHANNELS:FR_BULK_VOLUME_CHANNELS);k++)

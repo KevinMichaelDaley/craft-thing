@@ -24,7 +24,9 @@ bool fr_bulk_phase_gpu_import_chunk(dc_gpu_t *gpu,uint32_t slot,
         if((uint64_t)chunk->cells[i].fluid_mass+phase->oil_fp[i]+phase->slime_fp[i]>
             FR_BULK_CELL_FULL_FP||phase->oil_retained_fp[i]>phase->oil_fp[i]||
             phase->slime_retained_fp[i]>phase->slime_fp[i]||
-            !isfinite(phase->oil_excess[i])||!isfinite(phase->slime_excess[i]))
+            !isfinite(phase->oil_excess[i])||!isfinite(phase->slime_excess[i])||
+            (phase->oil_fp[i]==0u&&phase->oil_excess[i]!=0.f)||
+            (phase->slime_fp[i]==0u&&phase->slime_excess[i]!=0.f))
             return error(err,cap,"Bulk phase inventory or retained volume is invalid");
     if(vkQueueWaitIdle(gpu->queue)!=VK_SUCCESS)
         return error(err,cap,"Cannot complete bulk phase chunk import");
