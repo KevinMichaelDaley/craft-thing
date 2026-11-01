@@ -20,4 +20,3 @@ Rebuild offscreen workspaces on current dynamic body storage and Vulkan device a
 ## Acceptance Criteria
 
 Offscreen simulation code is active in current build; two-screen pan, seam transfer, equal world time, cold chunk return, conservation, and native frame budget tests pass. Full make test and actual display run pass with no compile warnings.
-
