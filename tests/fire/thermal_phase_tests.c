@@ -82,9 +82,21 @@ static void test_fractional_drying_progress_splits_and_roundtrips_without_new_wa
     ASSERT_EQ(restored.state.evaporation_fraction,parent.evaporation_fraction);
     free(packet);PASS();
 }
+static void test_exhausting_bound_water_clears_only_uncommitted_progress(void) {
+    char err[256]={0};fr_gas_model_t m=model();fr_gas_state_t gas=air(&m),next_gas;
+    fr_reactive_state_t wood,next_wood;uint32_t moved=0;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,1,1000,1,&wood,err,sizeof(err)));
+    wood.evaporation_fraction=.5f;
+    ASSERT_TRUE(fr_thermal_evaporate_pair(&wood,&gas,&m,1,&next_wood,&next_gas,&moved,err,sizeof(err)));
+    ASSERT_EQ(moved,1u);ASSERT_EQ(next_wood.bound_water_fp,0u);
+    ASSERT_EQ(next_wood.evaporation_fraction,0.f);
+    ASSERT_EQ(next_wood.fuel_mass_fp,wood.fuel_mass_fp);
+    PASS();
+}
 int main(void) {
     RUN(test_bound_water_enters_vapor_with_finite_mass_and_total_energy);
     RUN(test_overdraw_pause_and_invalid_gas_leave_inventories_safe);
     RUN(test_fractional_drying_progress_splits_and_roundtrips_without_new_water);
+    RUN(test_exhausting_bound_water_clears_only_uncommitted_progress);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
