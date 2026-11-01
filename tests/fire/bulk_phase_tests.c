@@ -54,11 +54,34 @@ static void test_profile_density_orders_water_oil_and_slime_without_float_flag(v
     ASSERT_INT_EQ(order[0],FR_BULK_WATER);ASSERT_INT_EQ(order[1],FR_BULK_OIL);
     ASSERT_INT_EQ(order[2],FR_BULK_SLIME);PASS();
 }
+static void test_moving_solid_retains_displaced_top_phase_and_restores_it(void) {
+    const float density[FR_BULK_PHASES]={1.0f,1.1f,1.2f};
+    fr_bulk_cell_t source={.volume_fp={30000,20000,10000},.capacity_fp=65536},compressed={0},expanded={0};
+    ASSERT_TRUE(fr_bulk_phase_set_capacity(&source,40000,density,&compressed));
+    ASSERT_INT_EQ(compressed.capacity_fp,40000);ASSERT_EQ(occupancy(&compressed),40000u);
+    ASSERT_INT_EQ(compressed.volume_fp[FR_BULK_WATER],10000);
+    ASSERT_INT_EQ(compressed.retained_fp[FR_BULK_WATER],20000);
+    ASSERT_INT_EQ(compressed.volume_fp[FR_BULK_OIL],20000);
+    ASSERT_INT_EQ(compressed.volume_fp[FR_BULK_SLIME],10000);
+    ASSERT_TRUE(fr_bulk_phase_set_capacity(&compressed,60000,density,&expanded));
+    ASSERT_EQ(memcmp(expanded.volume_fp,source.volume_fp,sizeof(source.volume_fp)),0);
+    ASSERT_INT_EQ(expanded.retained_fp[FR_BULK_WATER],0);PASS();
+}
+static void test_sealed_capacity_collapse_keeps_each_phase_finite(void) {
+    const float density[FR_BULK_PHASES]={1.0f,1.1f,1.2f};
+    fr_bulk_cell_t source={.volume_fp={1000,2000,3000},.capacity_fp=65536},out={0};
+    ASSERT_TRUE(fr_bulk_phase_set_capacity(&source,0,density,&out));
+    ASSERT_EQ(occupancy(&out),0u);
+    for(uint32_t i=0;i<FR_BULK_PHASES;i++) ASSERT_EQ(out.retained_fp[i],source.volume_fp[i]);
+    PASS();
+}
 int main(void) {
     RUN(test_pair_admits_only_shared_capacity_and_conserves_each_phase);
     RUN(test_full_vessel_retains_slime_without_double_occupancy);
     RUN(test_retained_overflow_moves_to_a_free_neighbor_without_loss);
     RUN(test_invalid_phase_is_transactional);
     RUN(test_profile_density_orders_water_oil_and_slime_without_float_flag);
+    RUN(test_moving_solid_retains_displaced_top_phase_and_restores_it);
+    RUN(test_sealed_capacity_collapse_keeps_each_phase_finite);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail>0?1:0;
 }

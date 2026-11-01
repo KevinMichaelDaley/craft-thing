@@ -27,4 +27,9 @@ bool fr_bulk_phase_transfer(const fr_bulk_cell_t *source,
 bool fr_bulk_phase_density_order(const float density[FR_BULK_PHASES],
     uint32_t order[FR_BULK_PHASES]);
 
+/** Apply a moving solid's new free-space capacity. Displaced volume remains in
+ * retained inventory; newly exposed space restores retained volume by density. */
+bool fr_bulk_phase_set_capacity(const fr_bulk_cell_t *source,uint32_t capacity_fp,
+    const float density[FR_BULK_PHASES],fr_bulk_cell_t *out);
+
 #endif
