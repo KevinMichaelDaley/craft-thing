@@ -9,6 +9,7 @@
 #include "ferrum/assets/prop_gpu.h"
 #include "ferrum/fire/gpu.h"
 #include "ferrum/fire/gas_gpu.h"
+#include "ferrum/fire/bulk_phase_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/fire/combustion_gpu.h"
 #include "bonfire.h"
@@ -298,6 +299,9 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
                 (result.water_excess&&!fr_thermal_gpu_import_water_chunk(view->gpu,index,result.chunk,result.water_excess,err,cap)))) {
                 dc_stream_result_release(&result);return false;
             }
+            if(result.bulk&&!fr_bulk_phase_gpu_import_chunk(view->gpu,index,result.chunk,result.bulk,err,cap)) {
+                dc_stream_result_release(&result);return false;
+            }
             if(result.gas&&!fr_gas_gpu_import_checkpoint(view->gpu,index,result.gas,err,cap)) {
                 dc_stream_result_release(&result);return false;
             }
@@ -373,11 +377,16 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
             }
         }
         if(trace) {parts[4]+=SDL_GetTicks64()-stage;stage=SDL_GetTicks64();}
+        fr_bulk_phase_chunk_t *bulk=malloc(sizeof(*bulk));
+        if(!bulk||!fr_bulk_phase_gpu_export_chunk(view->gpu,i,bulk,err,cap)) {
+            free(bulk);free(gas);fr_reactive_chunk_release(&reactive);return false;
+        }
         if (!dc_chunk_table_begin_save(&view->table, i, &generation)) {
-            free(gas);fr_reactive_chunk_release(&reactive);
+            free(bulk);free(gas);fr_reactive_chunk_release(&reactive);
             return error(err, cap, "Cannot begin dirty chunk save");
         }
-        bool queued=dc_stream_request_save_gas(view->stream,&chunk,&colors,channel,liquid,gas,generation);
+        bool queued=dc_stream_request_save_bulk(view->stream,&chunk,&colors,channel,liquid,gas,bulk,generation);
+        free(bulk);
         free(gas);
         fr_reactive_chunk_release(&reactive);
         if(trace) parts[5]+=SDL_GetTicks64()-stage;
