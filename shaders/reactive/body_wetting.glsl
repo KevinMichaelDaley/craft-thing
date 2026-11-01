@@ -163,6 +163,10 @@ void terrain_phase_release_parcel(uint index) {
     uint state=FR_ENTRY_STATE;
     uint material=entry.words[state];
     if(profiles[material*FR_PROFILE_WORDS+FR_PROFILE_PHASE_WORD]>1u) return;
+    if(entry.words[state+FR_STATE_COATING_OIL]==0u&&
+       entry.words[state+FR_STATE_COATING_JELLY]==0u&&
+       entry.words[state+FR_STATE_COATING_OXIDIZER]==0u&&
+       entry.words[state+FR_STATE_COATING_REMAINDERS]==0u) return;
     uint receiver=atlas_at(index+params.width);
     if(receiver==0xffffffffu) return;
     uint receiver_material=cells[receiver].x&65535u;
