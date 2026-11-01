@@ -421,6 +421,39 @@ static void test_tangential_coarse_shear_thins_loaded_slime(void) {
         FR_BULK_CELL_FULL_FP);
     dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
 }
+static void test_phase_flux_carries_momentum_without_extra_mass(void) {
+    char err[256]={0};dc_gpu_t *gpu=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *bulk=calloc(1,sizeof(*bulk)),*out=calloc(1,sizeof(*out));
+    ASSERT_TRUE(chunk&&bulk&&out);
+    const uint32_t upper=20u*64u+30u,lower=upper+64u;
+    for(uint32_t y=19u;y<=22u;y++) for(uint32_t x=29u;x<=31u;x++)
+        if(x!=30u||y==19u||y==22u) chunk->cells[y*64u+x].material=DC_MATERIAL_STONE;
+    bulk->oil_fp[upper]=FR_BULK_CELL_FULL_FP;
+    bulk->oil_momentum_y[upper]=10.f;
+    ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+        dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(gpu,0,0,0,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,bulk,err,sizeof(err))&&
+        fr_bulk_phase_gpu_step(gpu,1.f/60.f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
+    ASSERT_TRUE(out->oil_fp[lower]>0u&&out->oil_momentum_y[lower]>0.f);
+    ASSERT_EQ((uint64_t)out->oil_fp[upper]+out->oil_fp[lower],FR_BULK_CELL_FULL_FP);
+    ASSERT_TRUE(fabsf(out->oil_momentum_y[upper]+out->oil_momentum_y[lower]-10.f)<.0001f);
+    dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
+}
+static void test_gpu_import_rejects_orphan_phase_momentum(void) {
+    char err[256]={0};dc_gpu_t *gpu=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *bulk=calloc(1,sizeof(*bulk)),*out=calloc(1,sizeof(*out));
+    ASSERT_TRUE(chunk&&bulk&&out);
+    bulk->oil_momentum_x[17]=1.f;
+    ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+        dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(gpu,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(!fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,bulk,err,sizeof(err)));
+    ASSERT_TRUE(fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
+    ASSERT_EQ(out->oil_momentum_x[17],0.f);
+    dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
+}
 int main(void) {
     RUN(test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot);
     RUN(test_water_solver_respects_full_oil_cell_capacity);
@@ -437,5 +470,7 @@ int main(void) {
     RUN(test_moving_rigid_crosses_chunk_seam_without_oil_or_heat_loss);
     RUN(test_slime_flux_yields_under_load_and_softens_when_hot);
     RUN(test_tangential_coarse_shear_thins_loaded_slime);
+    RUN(test_phase_flux_carries_momentum_without_extra_mass);
+    RUN(test_gpu_import_rejects_orphan_phase_momentum);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
