@@ -156,3 +156,77 @@ void terrain_phase_coat_parcel(uint index) {
         if(at!=0xffffffffu) coating_transfer_cell(entry,phase,at,request);
     }
 }
+void terrain_phase_release_parcel(uint index) {
+    uvec2 handle=handle_at(index);
+    if(!valid(handle)||index/params.width+1u>=params.height) return;
+    Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
+    uint state=FR_ENTRY_STATE;
+    uint material=entry.words[state];
+    if(profiles[material*FR_PROFILE_WORDS+FR_PROFILE_PHASE_WORD]>1u) return;
+    uint receiver=atlas_at(index+params.width);
+    if(receiver==0xffffffffu) return;
+    uint receiver_material=cells[receiver].x&65535u;
+    if(receiver_material!=0u&&receiver_material!=FR_PROFILE_WATER_MATERIAL) return;
+    uint base=(receiver/4096u)*FR_BULK_CHUNK_CHANNELS*4096u+receiver%4096u;
+    uint occupied=cells[receiver].y;
+    for(uint channel=0u;channel<FR_BULK_VOLUME_CHANNELS;channel++)
+        occupied+=bulk_phase_words[base+channel*4096u];
+    if(occupied>=65536u) return;
+    vec4 sampled=sample_at(index);
+    if(sampled.y<=0.) return;
+    float temperature=sampled.x/sampled.y;
+    for(uint phase=1u;phase<=2u;phase++) {
+        uint coating=phase==1u?FR_COATING_OIL_MATERIAL:FR_COATING_JELLY_MATERIAL;
+        float density=coefficient(coating,FR_PROFILE_DENSITY_WORD);
+        float capacity=coefficient(coating,FR_PROFILE_HEAT_CAPACITY_WORD);
+        float consistency=coefficient(coating,FR_PROFILE_CONSISTENCY_WORD);
+        float exponent=coefficient(coating,FR_PROFILE_SHEAR_EXPONENT_WORD);
+        if(density<=0.||capacity<=0.||consistency<=0.||exponent<=0.) continue;
+        uint old_remainder=entry.words[state+FR_STATE_COATING_REMAINDERS];
+        uint shift=phase==1u?FR_COATING_OIL_REM_SHIFT:FR_COATING_JELLY_REM_SHIFT;
+        uint mass_rem=(old_remainder>>shift)&FR_COATING_REM_MASK;
+        uint mass_num=phase==1u?FR_COATING_OIL_MASS_NUM:FR_COATING_JELLY_MASS_NUM;
+        uint old_mass=phase==1u?entry.words[state+FR_STATE_COATING_OIL]:
+            entry.words[state+FR_STATE_COATING_JELLY]+entry.words[state+FR_STATE_COATING_OXIDIZER];
+        uint stock_numerator=old_mass*FR_COATING_MASS_DEN+mass_rem;
+        uint stock_volume=stock_numerator/mass_num;
+        if(stock_volume==0u) continue;
+        float softening=coefficient(coating,FR_PROFILE_SOFTENING_WORD);
+        float blend=clamp((temperature-softening)/100.,0.,1.);
+        float adhesion=mix(coefficient(coating,FR_PROFILE_COLD_ADHESION_WORD),
+            coefficient(coating,FR_PROFILE_HOT_ADHESION_WORD),blend);
+        float traction=9.81*density*float(stock_volume)/65536.;
+        float drive=max(0.,traction-adhesion)/consistency;
+        uint requested=uint(min(float(stock_volume),floor(float(stock_volume)*
+            min(1.,pow(drive,1./exponent)*uintBitsToFloat(params.seconds)))));
+        uint released=min(requested,65536u-occupied);
+        if(released==0u) continue;
+        uint remaining_numerator=stock_numerator-released*mass_num;
+        uint next_mass=remaining_numerator/FR_COATING_MASS_DEN;
+        uint removed_mass=old_mass-next_mass;
+        uint remainder=old_remainder&~(FR_COATING_REM_MASK<<shift);
+        remainder|=(remaining_numerator%FR_COATING_MASS_DEN)<<shift;
+        if(phase==1u) entry.words[state+FR_STATE_COATING_OIL]=next_mass;
+        else {
+            uint fuel_rem=(old_remainder>>FR_COATING_JELLY_FUEL_REM_SHIFT)&
+                FR_COATING_FUEL_REM_MASK;
+            uint fuel_numerator=entry.words[state+FR_STATE_COATING_JELLY]*
+                FR_COATING_JELLY_FUEL_DEN+fuel_rem;
+            uint next_fuel_numerator=fuel_numerator-removed_mass*FR_COATING_JELLY_FUEL_NUM;
+            uint next_fuel=next_fuel_numerator/FR_COATING_JELLY_FUEL_DEN;
+            entry.words[state+FR_STATE_COATING_JELLY]=next_fuel;
+            entry.words[state+FR_STATE_COATING_OXIDIZER]=next_mass-next_fuel;
+            remainder&=~(FR_COATING_FUEL_REM_MASK<<FR_COATING_JELLY_FUEL_REM_SHIFT);
+            remainder|=(next_fuel_numerator%FR_COATING_JELLY_FUEL_DEN)<<
+                FR_COATING_JELLY_FUEL_REM_SHIFT;
+        }
+        entry.words[state+FR_STATE_COATING_REMAINDERS]=remainder;
+        bulk_phase_words[base+(phase-1u)*4096u]+=released;
+        float heat=float(released*mass_num)/float(FR_COATING_MASS_DEN*65536u)*
+            capacity;
+        add_energy(entry,-heat*temperature);
+        body_phase_heat_add(base+(phase+3u)*4096u,
+            heat*(temperature-float(FR_THERMAL_AMBIENT_K)));
+        occupied+=released;
+    }
+}
