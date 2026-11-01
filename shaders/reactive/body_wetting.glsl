@@ -167,6 +167,29 @@ float coating_parcel_temperature(Words entry) {
     float capacity=reactive_parcel_heat_capacity(entry,FR_ENTRY_STATE);
     return capacity>0.?reactive_parcel_energy(entry,FR_ENTRY_STATE)/capacity:0.;
 }
+uint coating_jelly_release_limit(Words entry,uint stock_numerator,
+    uint old_mass,uint requested) {
+    uint fuel_numerator=entry.words[FR_ENTRY_STATE+FR_STATE_COATING_JELLY]*
+        FR_COATING_JELLY_FUEL_DEN+
+        ((entry.words[FR_ENTRY_STATE+FR_STATE_COATING_REMAINDERS]>>
+            FR_COATING_JELLY_FUEL_REM_SHIFT)&FR_COATING_FUEL_REM_MASK);
+    uint low=0u,high=requested;
+    while(low<high) {
+        uint middle=(low+high+1u)/2u;
+        uint next_mass=(stock_numerator-middle*FR_COATING_JELLY_MASS_NUM)/
+            FR_COATING_MASS_DEN;
+        uint removed_mass=old_mass-next_mass;
+        bool feasible=fuel_numerator>=removed_mass*FR_COATING_JELLY_FUEL_NUM;
+        if(feasible) {
+            uint next_fuel=(fuel_numerator-removed_mass*FR_COATING_JELLY_FUEL_NUM)/
+                FR_COATING_JELLY_FUEL_DEN;
+            feasible=next_fuel<=next_mass;
+        }
+        if(feasible) low=middle;
+        else high=middle-1u;
+    }
+    return low;
+}
 void coating_release_cell(Words entry,uint receiver,float temperature,uint phase) {
     if(receiver==0xffffffffu||temperature<=0.) return;
     uint receiver_material=cells[receiver].x&65535u;
@@ -195,26 +218,8 @@ void coating_release_cell(Words entry,uint receiver,float temperature,uint phase
     float drive=max(0.,traction-adhesion)/consistency;
     uint requested=uint(min(float(stock_volume),floor(float(stock_volume)*
         min(1.,pow(drive,1./exponent)*uintBitsToFloat(params.seconds)))));
-    if(phase==2u&&requested>0u) {
-        uint fuel_numerator=entry.words[state+FR_STATE_COATING_JELLY]*
-            FR_COATING_JELLY_FUEL_DEN+
-            ((old_remainder>>FR_COATING_JELLY_FUEL_REM_SHIFT)&FR_COATING_FUEL_REM_MASK);
-        uint low=0u,high=requested;
-        while(low<high) {
-            uint middle=(low+high+1u)/2u;
-            uint next_mass=(stock_numerator-middle*mass_num)/FR_COATING_MASS_DEN;
-            uint removed_mass=old_mass-next_mass;
-            bool feasible=fuel_numerator>=removed_mass*FR_COATING_JELLY_FUEL_NUM;
-            if(feasible) {
-                uint next_fuel=(fuel_numerator-removed_mass*FR_COATING_JELLY_FUEL_NUM)/
-                    FR_COATING_JELLY_FUEL_DEN;
-                feasible=next_fuel<=next_mass;
-            }
-            if(feasible) low=middle;
-            else high=middle-1u;
-        }
-        requested=low;
-    }
+    if(phase==2u&&requested>0u)
+        requested=coating_jelly_release_limit(entry,stock_numerator,old_mass,requested);
     if(requested==0u) return;
     uint base=(receiver/4096u)*FR_BULK_CHUNK_CHANNELS*4096u+receiver%4096u;
     uint volume_at=base+(phase-1u)*4096u;
