@@ -1,6 +1,6 @@
 ---
 id: ct-8vqy
-status: open
+status: closed
 deps: []
 links: [ctfs-3u4w]
 created: 2026-10-31T22:58:42Z
@@ -18,3 +18,9 @@ The fullscreen bonfire smoke remains visually too smooth. Add small-scale plume 
 
 RED GPU regression reproduces overly smooth transported smoke. GREEN validates more spatial and temporal plume detail at game resolution while preserving mass, each gas species, total energy, and unbiased mean momentum within numerical tolerance; deterministic seed/replay; no plasma-temperature transient; fullscreen bonfire remains 8/8 dry and 0/8 wet; no extra global scan or unbounded solver iteration; benchmark and full make test pass.
 
+
+## Notes
+
+**2026-11-01T00:23:09Z**
+
+Implemented shear-driven, divergence-free subgrid gas momentum with no added energy; added advected material coordinates for band-limited smoke detail and curl displacement of the plume boundary. Quarter-native GPU regressions verify deterministic replay, gas stock and energy budget, visual motion versus stationary error, displaced edge, unchanged paused frames and unchanged gas state after rendering. Full make test passed (846 RUN cases). Final fullscreen bonfire passed 8/8 dry and 0/8 wet by 30.3s; max gas 1716.5K. Repeated 1000-frame x11 benchmark passed means 17.734/17.843ms, worst 28.226/28.727ms. Visual method follows the material-coordinate advection and local energy idea in Kim et al. 2008 Wavelet Turbulence; it is a two-band approximation, not the full paper algorithm.
