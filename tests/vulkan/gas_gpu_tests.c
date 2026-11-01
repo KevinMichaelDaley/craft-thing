@@ -585,6 +585,7 @@ int main(void) {
     RUN(test_native_checkpoint_preserves_compensation_geometry_valves_and_ownership);
     RUN(test_native_new_streamed_slot_initializes_once_without_refilling_existing_or_dormant_stock);
     RUN(test_native_geometry_carving_displacement_and_trapped_pockets_keep_finite_stock);
+    RUN(test_native_quantized_sliver_routes_gas_to_open_neighbor);
     RUN(test_native_fully_submerged_pocket_retains_stock_against_adjacent_water);
     RUN(test_native_partial_void_contraction_displaces_mixture_without_cut_cell_pressure_spikes);
     RUN(test_native_valve_only_refresh_preserves_restored_physical_void);

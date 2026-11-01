@@ -23,6 +23,27 @@ static void test_native_valve_only_refresh_preserves_restored_physical_void(void
     ASSERT_EQ(out->cells[20u*64u+20u][13],.4f);ASSERT_EQ(out->clock.physical_steps,0u);
     ASSERT_TRUE(present(g,err,sizeof(err)));dc_gpu_destroy(g);free(chunk);free(input);free(volume);free(out);PASS();
 }
+static void test_native_quantized_sliver_routes_gas_to_open_neighbor(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_gas_state_t *input=calloc(4096,sizeof(*input));double *volume=calloc(4096,sizeof(*volume));
+    fr_gas_checkpoint_chunk_t *out=malloc(sizeof(*out));ASSERT_TRUE(chunk&&input&&volume&&out);
+    fr_gas_model_t model=reference_model();model.kinetic_scale=1./512.;
+    for(uint32_t i=0;i<4096u;i++) {input[i]=reference_air(model,.0012,300,0);volume[i]=1.;}
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&
+        fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err))&&
+        fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&
+        fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
+    const uint32_t center=32u*64u+32u;
+    chunk->cells[center].fluid_mass=65535u;
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&fr_gas_gpu_refresh_geometry(g,err,sizeof(err))&&
+        fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err)));
+    ASSERT_EQ(out->cells[center][12],0.f);ASSERT_EQ(out->cells[center][0],0.f);
+    ASSERT_TRUE(fabs(gas_checkpoint_stock(out,0)-.0012*4096.*
+        input[0].species[0]/.0012)<1e-5);
+    ASSERT_TRUE(out->cells[center+1u][0]>input[center+1u].species[0]);
+    dc_gpu_destroy(g);free(chunk);free(input);free(volume);free(out);PASS();
+}
 static void test_native_geometry_carving_displacement_and_trapped_pockets_keep_finite_stock(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_gas_state_t *input=malloc(4096*sizeof(*input));double *volume=malloc(4096*sizeof(*volume));
@@ -108,7 +129,8 @@ static void test_native_fully_submerged_pocket_retains_stock_against_adjacent_wa
     ASSERT_EQ(chunk->cells[at+1u].fluid_mass,DC_FLUID_FULL/2u);
     float *water_heat=calloc(4096u,sizeof(*water_heat));ASSERT_TRUE(water_heat);
     ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(g,0,water_heat,4096,err,sizeof(err)));
-    double before_gas=gas_checkpoint_energy(out),before_water=water_heat[at]+water_heat[at+1u];
+    double before_gas=gas_checkpoint_energy(out),before_water=0.;
+    for(uint32_t i=0;i<4096u;i++) before_water+=water_heat[i];
     double before_energy=before_gas+before_water;
     double before_oxygen=gas_checkpoint_stock(out,FR_GAS_OXYGEN);
     ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err))&&
@@ -117,13 +139,15 @@ static void test_native_fully_submerged_pocket_retains_stock_against_adjacent_wa
     ASSERT_TRUE(chunk->cells[at].fluid_mass<DC_FLUID_FULL);
     ASSERT_TRUE(chunk->cells[at+1u].fluid_mass>DC_FLUID_FULL/2u);
     ASSERT_TRUE(chunk->cells[at+1u].fluid_mass<DC_FLUID_FULL);
-    ASSERT_EQ(chunk->cells[at].fluid_mass+chunk->cells[at+1u].fluid_mass,
-        DC_FLUID_FULL+DC_FLUID_FULL/2u);
+    uint64_t water_stock=0;
+    for(uint32_t i=0;i<4096u;i++) water_stock+=chunk->cells[i].fluid_mass;
+    ASSERT_EQ(water_stock,DC_FLUID_FULL+DC_FLUID_FULL/2u);
     ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(g,0,water_heat,4096,err,sizeof(err)));
-    double after_energy=gas_checkpoint_energy(out)+water_heat[at]+water_heat[at+1u];
+    double after_water=0.;for(uint32_t i=0;i<4096u;i++) after_water+=water_heat[i];
+    double after_energy=gas_checkpoint_energy(out)+after_water;
     printf("Submerged pocket energy drift %.9g kJ, water %u -> %u Q16; gas %.9g -> %.9g water %.9g -> %.9g work %.9g\n",
         after_energy-before_energy,DC_FLUID_FULL,chunk->cells[at].fluid_mass,
-        before_gas,gas_checkpoint_energy(out),before_water,water_heat[at]+water_heat[at+1u],
+        before_gas,gas_checkpoint_energy(out),before_water,after_water,
         out->cells[at][15]+out->cells[at+1u][15]);
     ASSERT_TRUE(fabs(after_energy-before_energy)<.05);
     ASSERT_TRUE(fabs(gas_checkpoint_stock(out,FR_GAS_OXYGEN)-before_oxygen)<1e-7);
@@ -141,8 +165,9 @@ static void test_native_fully_submerged_pocket_retains_stock_against_adjacent_wa
     ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err))&&
         dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
     ASSERT_TRUE(chunk->cells[at].fluid_mass<source_water);
-    ASSERT_EQ(chunk->cells[at].fluid_mass+chunk->cells[at+1u].fluid_mass,
-        DC_FLUID_FULL+DC_FLUID_FULL/2u);
+    water_stock=0;
+    for(uint32_t i=0;i<4096u;i++) water_stock+=chunk->cells[i].fluid_mass;
+    ASSERT_EQ(water_stock,DC_FLUID_FULL+DC_FLUID_FULL/2u);
     free(water_heat);free(out);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
 }
 #endif
