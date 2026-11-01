@@ -6,8 +6,9 @@ float geometry_void(uint index,uint atlas) {
         material==1u||material==6u||material==7u||material==8u||material==9u||
         material==11u||material==12u);
     if(solid) return 0.;
-    return max(0.,1.-float(min(65536u,occupancy[2u*params.width*params.height+index]))/65536.-
+    float available=max(0.,1.-float(min(65536u,occupancy[2u*params.width*params.height+index]))/65536.-
         clamp(mpm[index].w,0.,1.)-float(cells[atlas].y)/65536.);
+    return available<=1./65536.?0.:available;
 }
 vec4 geometry_metadata(uint index) {return gas_cache_candidate(index).hydro;}
 Gas geometry_candidate(uint atlas) {return gas_cell_owners()?gas_provisional(atlas):bank1[atlas];}
