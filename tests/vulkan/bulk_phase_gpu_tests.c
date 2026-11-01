@@ -29,6 +29,11 @@ static void test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot(void
         fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
     ASSERT_INT_EQ(out->oil_fp[17],20000);
     phase->oil_fp[17]--;
+    phase->oil_retained_fp[17]=20001u;
+    ASSERT_TRUE(!fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,phase,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
+    ASSERT_INT_EQ(out->oil_retained_fp[17],1234);
+    phase->oil_retained_fp[17]=1234u;
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
         fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
     ASSERT_INT_EQ(out->oil_fp[17],0);ASSERT_INT_EQ(out->slime_fp[17],0);

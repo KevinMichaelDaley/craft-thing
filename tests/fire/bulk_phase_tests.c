@@ -102,6 +102,15 @@ static void test_bulk_packet_corruption_and_truncation_are_transactional(void) {
     ASSERT_INT_EQ(out->oil_fp[9],456);
     free(bytes);free(out);free(source);free(chunk);PASS();
 }
+static void test_bulk_packet_rejects_retained_volume_larger_than_stock(void) {
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));fr_bulk_phase_chunk_t *phase=calloc(1,sizeof(*phase));
+    uint8_t *bytes=malloc(fr_bulk_phase_chunk_bytes());ASSERT_TRUE(chunk&&phase&&bytes);
+    phase->oil_fp[7]=100u;phase->oil_retained_fp[7]=101u;
+    ASSERT_TRUE(!fr_bulk_phase_chunk_encode(chunk,phase,bytes,fr_bulk_phase_chunk_bytes()));
+    phase->oil_retained_fp[7]=100u;phase->slime_fp[9]=2u;phase->slime_retained_fp[9]=3u;
+    ASSERT_TRUE(!fr_bulk_phase_chunk_encode(chunk,phase,bytes,fr_bulk_phase_chunk_bytes()));
+    free(bytes);free(phase);free(chunk);PASS();
+}
 int main(void) {
     RUN(test_pair_admits_only_shared_capacity_and_conserves_each_phase);
     RUN(test_full_vessel_retains_slime_without_double_occupancy);
@@ -112,5 +121,6 @@ int main(void) {
     RUN(test_sealed_capacity_collapse_keeps_each_phase_finite);
     RUN(test_bulk_packet_roundtrip_and_rejects_overfull_water_pair);
     RUN(test_bulk_packet_corruption_and_truncation_are_transactional);
+    RUN(test_bulk_packet_rejects_retained_volume_larger_than_stock);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail>0?1:0;
 }
