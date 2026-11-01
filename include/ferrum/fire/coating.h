@@ -29,4 +29,12 @@ bool fr_coating_contact_wet(const fr_bulk_cell_t *bulk,
     double *bulk_excess_out,fr_coating_film_t *film_out,
     uint32_t *moved_fp);
 
+/** Profile adhesion and film viscosity admit finite release under surface
+ * traction. Heat and volume enter the receiving liquid only if space permits. */
+bool fr_coating_release(const fr_coating_film_t *film,
+    const fr_bulk_cell_t *receiver,double receiver_excess_heat,
+    uint32_t phase,float temperature_K,float traction,float seconds,
+    fr_coating_film_t *film_out,fr_bulk_cell_t *receiver_out,
+    double *receiver_excess_out,uint32_t *released_fp);
+
 #endif

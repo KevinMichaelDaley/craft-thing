@@ -50,3 +50,14 @@ bool fr_coating_contact_wet(const fr_bulk_cell_t *bulk,
     *moved_fp=moved;
     return true;
 }
+
+bool fr_coating_release(const fr_coating_film_t *film,
+    const fr_bulk_cell_t *receiver,double receiver_excess_heat,
+    uint32_t phase,float temperature_K,float traction,float seconds,
+    fr_coating_film_t *film_out,fr_bulk_cell_t *receiver_out,
+    double *receiver_excess_out,uint32_t *released_fp) {
+    (void)film;(void)receiver;(void)receiver_excess_heat;(void)phase;
+    (void)temperature_K;(void)traction;(void)seconds;(void)film_out;
+    (void)receiver_out;(void)receiver_excess_out;(void)released_fp;
+    return false;
+}

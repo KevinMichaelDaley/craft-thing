@@ -80,12 +80,39 @@ static void test_water_cannot_become_combustible_coating(void) {
     ASSERT_EQ(heat,789.);ASSERT_EQ(moved,10u);PASS();
 }
 
+static void test_hot_film_drips_under_traction_while_cold_film_holds(void) {
+    fr_coating_film_t film=rigid_film(),cold={0},hot={0};
+    film.oil_fp=16000u;film.excess_heat=16.;
+    fr_bulk_cell_t receiver={.capacity_fp=65536u},cold_bulk={0},hot_bulk={0};
+    double cold_heat=0.,hot_heat=0.;uint32_t cold_moved=99u,hot_moved=0u;
+    ASSERT_TRUE(fr_coating_release(&film,&receiver,0.,FR_BULK_OIL,
+        300.f,5.f,1.f,&cold,&cold_bulk,&cold_heat,&cold_moved));
+    ASSERT_TRUE(fr_coating_release(&film,&receiver,0.,FR_BULK_OIL,
+        460.f,5.f,1.f,&hot,&hot_bulk,&hot_heat,&hot_moved));
+    ASSERT_EQ(cold_moved,0u);ASSERT_TRUE(hot_moved>0u);
+    ASSERT_EQ((uint64_t)hot.oil_fp+hot_bulk.volume_fp[FR_BULK_OIL],film.oil_fp);
+    ASSERT_TRUE(hot.excess_heat+hot_heat==film.excess_heat);PASS();
+}
+
+static void test_full_receiver_does_not_erase_dripping_film(void) {
+    fr_coating_film_t film=rigid_film(),after={0};film.slime_fp=10000u;
+    fr_bulk_cell_t receiver={.volume_fp={65536u,0u,0u},
+        .capacity_fp=65536u},bulk_after={0};
+    double heat=0.;uint32_t moved=99u;
+    ASSERT_TRUE(fr_coating_release(&film,&receiver,0.,FR_BULK_SLIME,
+        470.f,100.f,1.f,&after,&bulk_after,&heat,&moved));
+    ASSERT_EQ(moved,0u);ASSERT_EQ(after.slime_fp,film.slime_fp);
+    ASSERT_EQ(bulk_after.volume_fp[FR_BULK_WATER],65536u);PASS();
+}
+
 int main(void) {
     RUN(test_wetting_debits_mobile_oil_and_preserves_heat);
     RUN(test_retained_slime_does_not_wet_and_existing_film_accumulates);
     RUN(test_invalid_actor_identity_is_transactional);
     RUN(test_leaf_and_actor_keep_rest_addresses_across_wetting);
     RUN(test_water_cannot_become_combustible_coating);
+    RUN(test_hot_film_drips_under_traction_while_cold_film_holds);
+    RUN(test_full_receiver_does_not_erase_dripping_film);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail>0?1:0;
 }
