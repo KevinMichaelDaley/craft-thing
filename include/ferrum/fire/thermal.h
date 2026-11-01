@@ -37,4 +37,11 @@ bool fr_thermal_evaporate_pair(const fr_reactive_state_t *solid,const fr_gas_sta
 /** Vapor reference offset in kJ/kg for a gas state whose energy stores cv*T. */
 bool fr_thermal_vapor_reference_energy(const fr_gas_model_t *model,double *out,
     char *err_buf,uint32_t err_cap);
+/** Apply one accepted simulated-time Fick diffusion exchange across a wet
+ * solid/gas face. Fractional Q16 demand remains with the solid parcel. */
+bool fr_thermal_evaporation_step(const fr_reactive_state_t *solid,const fr_gas_state_t *gas,
+    const fr_gas_model_t *model,double gas_volume,double ambient_density,
+    double face_fraction,double seconds,fr_reactive_state_t *solid_out,
+    fr_gas_state_t *gas_out,uint32_t *transferred_water_fp,
+    char *err_buf,uint32_t err_cap);
 #endif

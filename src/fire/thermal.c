@@ -127,3 +127,11 @@ bool fr_thermal_evaporate_pair(const fr_reactive_state_t *solid,const fr_gas_sta
     *solid_out=next_solid;*gas_out=next_gas;*transferred_water_fp=moved;
     return true;
 }
+bool fr_thermal_evaporation_step(const fr_reactive_state_t *solid,const fr_gas_state_t *gas,
+    const fr_gas_model_t *model,double gas_volume,double ambient_density,double face_fraction,
+    double seconds,fr_reactive_state_t *solid_out,fr_gas_state_t *gas_out,
+    uint32_t *transferred_water_fp,char *err,uint32_t cap) {
+    (void)solid;(void)gas;(void)model;(void)gas_volume;(void)ambient_density;
+    (void)face_fraction;(void)seconds;(void)solid_out;(void)gas_out;(void)transferred_water_fp;
+    return error(err,cap,"Diffusive water evaporation is not implemented");
+}

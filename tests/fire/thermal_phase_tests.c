@@ -93,10 +93,36 @@ static void test_exhausting_bound_water_clears_only_uncommitted_progress(void) {
     ASSERT_EQ(next_wood.fuel_mass_fp,wood.fuel_mass_fp);
     PASS();
 }
+static void test_diffusive_drying_agrees_at_equal_time_and_stops_when_paused(void) {
+    char err[256]={0};fr_gas_model_t m=model();fr_gas_state_t initial=air(&m),coarse=initial,fine=initial;
+    fr_reactive_state_t start,a,b;uint32_t moved=0;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,131072,10000,350,1,&start,err,sizeof(err)));
+    a=b=start;
+    for(uint32_t i=0;i<60;i++) {
+        fr_reactive_state_t next;fr_gas_state_t gas;
+        ASSERT_TRUE(fr_thermal_evaporation_step(&a,&coarse,&m,1.,.0012,1.,1.,&next,&gas,&moved,err,sizeof(err)));
+        a=next;coarse=gas;
+    }
+    for(uint32_t i=0;i<600;i++) {
+        fr_reactive_state_t next;fr_gas_state_t gas;
+        ASSERT_TRUE(fr_thermal_evaporation_step(&b,&fine,&m,1.,.0012,1.,.1,&next,&gas,&moved,err,sizeof(err)));
+        b=next;fine=gas;
+    }
+    ASSERT_TRUE(a.bound_water_fp<start.bound_water_fp);
+    ASSERT_TRUE(abs((int)a.bound_water_fp-(int)b.bound_water_fp)<=3);
+    ASSERT_TRUE(fabs(coarse.species[FR_GAS_VAPOR]-
+        (start.bound_water_fp-a.bound_water_fp)/65536.)<1e-10);
+    fr_reactive_state_t paused;fr_gas_state_t paused_gas;
+    ASSERT_TRUE(fr_thermal_evaporation_step(&a,&coarse,&m,1.,.0012,1.,0.,&paused,&paused_gas,&moved,err,sizeof(err)));
+    ASSERT_EQ(moved,0u);ASSERT_TRUE(memcmp(&paused,&a,sizeof(a))==0);
+    ASSERT_TRUE(memcmp(&paused_gas,&coarse,sizeof(coarse))==0);
+    PASS();
+}
 int main(void) {
     RUN(test_bound_water_enters_vapor_with_finite_mass_and_total_energy);
     RUN(test_overdraw_pause_and_invalid_gas_leave_inventories_safe);
     RUN(test_fractional_drying_progress_splits_and_roundtrips_without_new_water);
     RUN(test_exhausting_bound_water_clears_only_uncommitted_progress);
+    RUN(test_diffusive_drying_agrees_at_equal_time_and_stops_when_paused);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
