@@ -90,6 +90,7 @@ static void test_rigid_contact_wets_from_finite_oil_volume(void) {
     for(uint32_t y=20u;y<22u;y++) for(uint32_t x=20u;x<23u;x++)
         chunk->cells[y*64u+x].material=DC_MATERIAL_WOOD;
     uint32_t oil_at=20u*64u+19u;phase->oil_fp[oil_at]=30000u;
+    chunk->cells[oil_at].fluid_mass=10000u;
     phase->oil_excess[oil_at]=4.f;
     ASSERT_TRUE(context(&g,err,sizeof(err))&&
         dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
@@ -112,6 +113,17 @@ static void test_rigid_contact_wets_from_finite_oil_volume(void) {
     ASSERT_TRUE(fabs((double)gained-(double)lost*
         fr_reactive_profile(DC_MATERIAL_OIL)->density)<2.);
     ASSERT_TRUE(after->oil_excess[oil_at]<phase->oil_excess[oil_at]);
+    dc_chunk_t *water_after=calloc(1,sizeof(*water_after));ASSERT_TRUE(water_after);
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,water_after,err,sizeof(err)));
+    ASSERT_TRUE(water_after->cells[oil_at].fluid_mass>0u);
+    ASSERT_TRUE(record.state.bound_water_fp>0u);
+    uint32_t first_coating=record.state.coating_oil_fuel_fp;
+    ASSERT_TRUE(dc_gpu_set_body_motion(g,0x80000001u,.7f,0.f,0.f,err,sizeof(err))&&
+        fr_thermal_gpu_step(g,.5f,err,sizeof(err))&&
+        fr_gpu_reactive_read_body(g,0x80000001u,0u,0u,&record,&found,err,sizeof(err))&&found);
+    ASSERT_TRUE(record.state.coating_oil_fuel_fp>=first_coating);
+    ASSERT_EQ(record.state.origin_id_low,wood.origin_id_low);
+    free(water_after);
     free(after);free(phase);free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_saturated_neighbor_air_suppresses_drying(void) {

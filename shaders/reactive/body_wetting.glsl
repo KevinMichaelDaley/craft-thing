@@ -71,7 +71,7 @@ void body_oil_coat_parcel(Body body,uint piece,uvec2 handle) {
     Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
     uint s=FR_ENTRY_STATE;
     float density=coefficient(14u,4u),capacity=coefficient(14u,5u);
-    uint held=entry.words[s+13u];
+    uint held=entry.words[s+FR_STATE_COATING_OIL];
     if(held>=65536u||density<=0.||capacity<=0.) return;
     BodyQuad quad;if(!body_pixel_quad(body,piece,quad)) return;
     vec2 origin=vec2(body.x_fp,body.y_fp)/65536.;
@@ -102,5 +102,5 @@ void body_oil_coat_parcel(Body body,uint piece,uvec2 handle) {
         heat+=excess+float(mass)/65536.*capacity*float(FR_THERMAL_AMBIENT_K);
         gained+=mass;
     }
-    if(gained>0u) {entry.words[s+13u]+=gained;add_energy(entry,heat);}
+    if(gained>0u) {entry.words[s+FR_STATE_COATING_OIL]+=gained;add_energy(entry,heat);}
 }
