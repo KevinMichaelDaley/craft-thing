@@ -572,6 +572,7 @@ int main(void) {
     RUN(test_native_stationary_heat_mixes_diagonally_in_the_optimized_path);
     RUN(test_native_vorticity_rolls_a_rising_plume_sideways_without_creating_stock);
     RUN(test_native_subgrid_smoke_gains_detail_without_stock_or_mean_impulse);
+    RUN(test_smoke_detail_moves_with_uniform_resolved_flow);
     RUN(test_quarter_native_smoke_wavelet_advects_and_displaces_boundary);
     RUN(test_transported_low_density_smoke_is_readable_on_the_dark_display);
     RUN(test_dilute_exhaust_does_not_leave_a_soot_dark_catapult_arc);

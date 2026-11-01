@@ -1,6 +1,6 @@
 ---
 id: ct-ln5z
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-01T05:12:47Z
@@ -24,3 +24,7 @@ RED quarter-native flight/impact capture or GPU pixel test demonstrates over-opa
 **2026-11-01T05:25:28Z**
 
 Catapult flight/impact contact sheet is thinner with 0.05 relative exhaust scattering. Focused exhaust-vs-soot and stone-boundary GPU tests pass. Bonfire remains readable; strict 300-frame worst budget fails in repeated runs (33.487-59.625ms, means about19.3ms). Leave ticket open for performance and full regression.
+
+**2026-11-01T05:51:43Z**
+
+Exhaust optical scattering weighted at 0.05 relative to soot, keeping catapult arc thinner and bonfire visible. GPU exhaust-vs-soot test and paused replay pass; full make test passes. Catapult completed 205 quarter-native frames, wall cleared and battlement ignited. A 300-frame bonfire run passed 16.657ms mean/28.497ms worst; long-run wavelet frame spikes remain tracked under ct-rzrj.

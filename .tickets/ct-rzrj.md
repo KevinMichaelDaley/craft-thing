@@ -32,3 +32,11 @@ Intermediate GPU wavelet coordinate/potential passes pass quarter-native motion 
 **2026-11-01T05:25:28Z**
 
 RED test found streamfunction 0.103950396 in gas touching solid wall despite unchanged stone pixels; boundary-aware potential and coordinate masking reduce it to zero, with original wavelet motion test still passing. Bonfire frame budget remains open.
+
+**2026-11-01T05:51:38Z**
+
+Persistent fine aerosol residual now advects by conservative shared-face flux from resolved gas velocity plus curl wavelet velocity. Quarter-native GPU checks show zero-sum residual (3.64e-14 to 4.71e-14), moving edge pixels, paused replay identity, and zero leakage across a stone wall. Full make test and 205-frame catapult demo pass; 300-frame bonfire 16.657ms mean/28.497ms worst. 1000-frame strict 30ms worst gate still intermittently fails (30.297ms and a 77.989ms outlier), so ticket remains in progress for budget/long-run visual review.
+
+**2026-11-01T05:52:55Z**
+
+Added directional GPU transport check: at 2 cells/sec over 0.05 sec, a seeded fine-density dipole moved right with measured upstream -0.9e-6, center 0.8e-6, downstream 0.1e-6, matching conservative upwind flux. Strict 1000-frame worst timing remains open.

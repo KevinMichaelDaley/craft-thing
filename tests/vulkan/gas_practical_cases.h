@@ -495,6 +495,47 @@ static bool read_smoke_detail(dc_gpu_t *g,float *out,char *err,uint32_t cap) {
     dc_gpu_address_buffer_destroy(g,&staging);
     return okay;
 }
+static void test_smoke_detail_moves_with_uniform_resolved_flow(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_gas_state_t *input=calloc(4096,sizeof(*input));double *volume=calloc(4096,sizeof(*volume));
+    ASSERT_TRUE(chunk&&input&&volume&&context(&g,err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_gas_model_t model=reference_model();
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err)));
+    for(uint32_t i=0u;i<4096u;i++) {
+        volume[i]=1.;input[i]=reference_air(model,.0012,300,0);
+        input[i].momentum[0]=.0012*2.;
+        input[i].energy+=.5*model.kinetic_scale*.0012*4.;
+    }
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&
+        present(g,err,sizeof(err)));
+    VkDeviceSize bytes=(VkDeviceSize)g->width*g->height*sizeof(float);
+    dc_gpu_address_buffer_t staging={0};
+    ASSERT_TRUE(dc_gpu_address_buffer_create(g,bytes,true,&staging,err,sizeof(err)));
+    float *seed=staging.mapped;
+    memset(seed,0,(size_t)bytes);
+    seed[24u*g->width+24u]=-1e-6f;
+    seed[24u*g->width+25u]=1e-6f;
+    ASSERT_TRUE(fr_renderer_begin(g));
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_HOST_BIT,
+        VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        VK_ACCESS_2_TRANSFER_READ_BIT);
+    vkCmdCopyBuffer(g->command,staging.buffer,
+        g->gas->smoke_detail[g->gas->smoke_coordinate_bank].buffer,1,
+        &(VkBufferCopy){.size=bytes});
+    ASSERT_TRUE(fr_renderer_submit(g));
+    g->gas->clock.advanced_seconds=.05;
+    ASSERT_TRUE(present(g,err,sizeof(err))&&read_smoke_detail(g,seed,err,sizeof(err)));
+    float upstream=seed[24u*g->width+24u];
+    float center=seed[24u*g->width+25u];
+    float downstream=seed[24u*g->width+26u];
+    printf("Uniform-flow fine smoke %.9g %.9g %.9g\n",upstream,center,downstream);
+    ASSERT_TRUE(upstream>-1e-6f&&upstream<-.8e-6f);
+    ASSERT_TRUE(center>.75e-6f&&center<.85e-6f);
+    ASSERT_TRUE(downstream>.08e-6f&&downstream<.12e-6f);
+    dc_gpu_address_buffer_destroy(g,&staging);
+    free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_quarter_native_smoke_wavelet_advects_and_displaces_boundary(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_gas_state_t *input=calloc(4096,sizeof(*input));double *volume=calloc(4096,sizeof(*volume));
