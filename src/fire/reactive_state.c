@@ -194,10 +194,12 @@ bool fr_reactive_state_split(const fr_reactive_state_t *s,uint32_t weight,uint64
     memcpy(&first.dry_mass_fp,low,sizeof(low));memcpy(&second.dry_mass_fp,high,sizeof(high));
     first.coating_remainders=0u;second.coating_remainders=0u;
     const uint32_t shifts[]={FR_COATING_OIL_REM_SHIFT,FR_COATING_JELLY_REM_SHIFT,
-        FR_COATING_JELLY_FUEL_REM_SHIFT};
+        FR_COATING_JELLY_FUEL_REM_SHIFT,FR_COATING_REACTION_REM_SHIFT,
+        FR_COATING_OXIDIZER_REM_SHIFT};
     const uint32_t masks[]={FR_COATING_REM_MASK,FR_COATING_REM_MASK,
-        FR_COATING_FUEL_REM_MASK};
-    for(uint32_t i=0u;i<3u;i++) {
+        FR_COATING_FUEL_REM_MASK,FR_COATING_REACTION_REM_MASK,
+        FR_COATING_OXIDIZER_REM_MASK};
+    for(uint32_t i=0u;i<5u;i++) {
         uint32_t rem=coating_remainder(s->coating_remainders,shifts[i],masks[i]);
         uint32_t left_rem=(uint32_t)(((uint64_t)rem*weight)>>16);
         first.coating_remainders|=left_rem<<shifts[i];
