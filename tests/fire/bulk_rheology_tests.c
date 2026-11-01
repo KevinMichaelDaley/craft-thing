@@ -34,6 +34,8 @@ static void test_shear_thinning_increases_motion_at_fixed_stress(void) {
 static void test_invalid_samples_are_transactional(void) {
     float result=7.f;
     ASSERT_TRUE(!fr_bulk_rheology_mobility(&jelly,293.f,NAN,1.f,&result));
+    fr_reactive_profile_t invalid=jelly;invalid.softening_K=NAN;
+    ASSERT_TRUE(!fr_bulk_rheology_mobility(&invalid,293.f,20.f,1.f,&result));
     ASSERT_EQ(result,7.f);PASS();
 }
 int main(void) {
