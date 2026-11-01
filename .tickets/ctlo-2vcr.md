@@ -47,3 +47,7 @@ Water-phase action-reaction RED e733c6d, GREEN 638fde1, REFACTOR just committed:
 **2026-11-01T08:29:48Z**
 
 Momentum-guided flux RED e10eb47, mixing heat RED 7152171, GREEN 8b5c802, REFACTOR just committed: phase sample momentum biases flow in its signed direction; transferring phase mass carries corresponding momentum; inelastic merge uses reduced-mass relative kinetic energy deposited as phase heat. Moving rigid across chunk seam conserves phase volume, heat and momentum; horizontal opposite-momentum fixture conserves kinetic+thermal energy. 20 targeted GPU tests and full make test under Xephyr :92 passed. Remaining persistent deformation-guided stress, rigid action-reaction and sustained displayed frame budget.
+
+**2026-11-01T08:36:48Z**
+
+Displayed stress benchmark RED c63111f, GREEN e7a33e1, REFACTOR just committed: optional DC_BENCH_SLUDGE fills 10720 Q16 slime cells in a central basin without double water occupancy, runs full physics/render at 480x270 quarter-native and 1920x1080 display. Normal Wayland display, 180 samples: warm sludge runs 1.937 and 1.969 ms/frame versus baseline 1.209 ms/frame; GPU fluid stage 2.126/1.765 vs baseline 0.715 ms. First cold sludge process took 13.1 s, warm second 2.15 s, indicating separate driver initialization cost. Native scene tests 4 pass and full make test under Xephyr :92 passed. Remaining rigid action-reaction and deformation sample guidance.
