@@ -9,6 +9,7 @@
 #include "dungeoncraft/generate.h"
 #include "ferrum/fire/reactive_chunk.h"
 #include "ferrum/fire/gas_checkpoint.h"
+#include "ferrum/fire/bulk_phase.h"
 
 typedef struct dc_streamer dc_streamer_t;
 
@@ -23,6 +24,7 @@ typedef struct {
     fr_reactive_chunk_t *reactive;
     float *water_excess;
     fr_gas_checkpoint_chunk_t *gas;
+    fr_bulk_phase_chunk_t *bulk;
 } dc_stream_result_t;
 
 /** Start a worker thread for procedural generation and chunk disk I/O. */
@@ -58,6 +60,11 @@ bool dc_stream_request_save_thermal(dc_streamer_t *stream,const dc_chunk_t *chun
 bool dc_stream_request_save_gas(dc_streamer_t *stream,const dc_chunk_t *chunk,
     const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
     const float *water_excess,const fr_gas_checkpoint_chunk_t *gas,uint64_t generation);
+/** Save bulk oil/slime alongside water, reactive, thermal and gas channels. */
+bool dc_stream_request_save_bulk(dc_streamer_t *stream,const dc_chunk_t *chunk,
+    const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
+    const float *water_excess,const fr_gas_checkpoint_chunk_t *gas,
+    const fr_bulk_phase_chunk_t *bulk,uint64_t generation);
 
 /** Poll one completed result without waiting for disk I/O. */
 bool dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *result);

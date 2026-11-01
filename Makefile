@@ -687,8 +687,8 @@ build/chunk_tests: tests/world/chunk_tests.c $(CHUNK_OBJ)
 build/generate_tests: tests/world/generate_tests.c $(GENERATE_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/generate_tests.c $(GENERATE_OBJ) $(CHUNK_OBJ) -o $@
 
-build/stream_tests: tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c src/fire/thermal_checkpoint.c $(REACTIVE_STATE_SRC)
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c src/fire/thermal_checkpoint.c $(REACTIVE_STATE_SRC) -o $@ -pthread -lm
+build/stream_tests: tests/world/stream_tests.c tests/world/stream_bulk_red_stub.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c src/fire/thermal_checkpoint.c $(REACTIVE_STATE_SRC)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/world/stream_tests.c tests/world/stream_bulk_red_stub.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) src/fire/reactive_chunk.c src/fire/thermal_checkpoint.c $(REACTIVE_STATE_SRC) -o $@ -pthread -lm
 
 build/dungeoncraft: src/app/structural_demo.c src/app/structural_demo.h src/app/main.c src/app/level.c src/app/level.h src/app/view_config.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)

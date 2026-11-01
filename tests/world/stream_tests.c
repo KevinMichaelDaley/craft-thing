@@ -262,6 +262,25 @@ static void test_color_chunk_roundtrip_and_corruption_rejection(void) {
     ASSERT_EQ(result.kind,DC_STREAM_FAILED);ASSERT_TRUE(!result.chunk);
     dc_stream_result_release(&result);dc_stream_destroy(stream);free(chunk);free(colors);PASS();
 }
+static void test_bulk_liquid_chunk_roundtrip_keeps_water_and_distinct_oil_slime(void) {
+    char directory[]="build/stream_bulk_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
+    dc_streamer_t *stream=dc_stream_create(directory,314,2);ASSERT_TRUE(stream);
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *bulk=calloc(1,sizeof(*bulk));ASSERT_TRUE(chunk&&bulk);
+    chunk->coord=(dc_chunk_coord_t){2,-3};chunk->cells[100].fluid_mass=30000;
+    bulk->oil_fp[100]=20000;bulk->slime_fp[100]=15536;
+    bulk->oil_retained_fp[100]=1234;bulk->slime_retained_fp[100]=4321;
+    ASSERT_TRUE(dc_stream_request_save_bulk(stream,chunk,NULL,NULL,NULL,NULL,bulk,7));
+    dc_stream_result_t result={0};ASSERT_TRUE(wait_result(stream,&result));
+    ASSERT_EQ(result.kind,DC_STREAM_SAVED);dc_stream_result_release(&result);
+    ASSERT_TRUE(dc_stream_request_load(stream,chunk->coord,8)&&wait_result(stream,&result));
+    ASSERT_EQ(result.kind,DC_STREAM_LOADED);ASSERT_TRUE(result.bulk);
+    ASSERT_INT_EQ(result.chunk->cells[100].fluid_mass,30000);
+    ASSERT_INT_EQ(result.bulk->oil_fp[100],20000);ASSERT_INT_EQ(result.bulk->slime_fp[100],15536);
+    ASSERT_INT_EQ(result.bulk->oil_retained_fp[100],1234);
+    ASSERT_INT_EQ(result.bulk->slime_retained_fp[100],4321);
+    dc_stream_result_release(&result);dc_stream_destroy(stream);free(chunk);free(bulk);PASS();
+}
 int main(void) {
     RUN(test_worker_generates_saves_and_reloads_chunk);
     RUN(test_shutdown_flushes_queued_saves);
@@ -270,6 +289,7 @@ int main(void) {
     RUN(test_legacy_chunk_loads_with_zero_velocity);
     RUN(test_version_four_grain_radius_migrates);
     RUN(test_color_chunk_roundtrip_and_corruption_rejection);
+    RUN(test_bulk_liquid_chunk_roundtrip_keeps_water_and_distinct_oil_slime);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
