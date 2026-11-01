@@ -29,6 +29,11 @@ bool permeable(uint material) {
         material==10u||material==13u;
 }
 uint used(uint volume[3]) {return volume[0]+volume[1]+volume[2];}
+void move_water_heat(uint source,uint target,uint source_before,uint source_after) {
+    uint moved=source_before-source_after;
+    thermal_water_move(source,target,moved,source_before);
+    thermal_water_resize(source,source_before,source_after);
+}
 void main() {
     uint index=gl_GlobalInvocationID.x;
     if(index>=params.width*params.height) return;
@@ -103,15 +108,10 @@ void main() {
         changed=true;
     }
     if(!changed) return;
-    if(top[0]>top_water_before) {
-        uint moved=top[0]-top_water_before;
-        thermal_water_move(bottom_at,top_at,moved,bottom_water_before);
-        thermal_water_resize(bottom_at,bottom_water_before,bottom[0]);
-    } else if(bottom[0]>bottom_water_before) {
-        uint moved=bottom[0]-bottom_water_before;
-        thermal_water_move(top_at,bottom_at,moved,top_water_before);
-        thermal_water_resize(top_at,top_water_before,top[0]);
-    }
+    if(top[0]>top_water_before)
+        move_water_heat(bottom_at,top_at,bottom_water_before,bottom[0]);
+    else if(bottom[0]>bottom_water_before)
+        move_water_heat(top_at,bottom_at,top_water_before,top[0]);
     cells[top_at].y=top[0];cells[bottom_at].y=bottom[0];
     for(uint phase=1u;phase<3u;phase++) {
         bulk_write(top_at,phase,top[phase]);bulk_write(bottom_at,phase,bottom[phase]);
