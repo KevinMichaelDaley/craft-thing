@@ -11,6 +11,9 @@ layout(set=0,binding=37,std430) buffer Bulk {uint bulk[];};
 layout(push_constant) uniform Params {
     uint width,height,parity,axis;
     float seconds,gravity,water_density,oil_density,slime_density;
+    float oil_yield,slime_yield,oil_consistency,slime_consistency;
+    float oil_exponent,slime_exponent,oil_softening,slime_softening;
+    float oil_hot_yield,slime_hot_yield,oil_capacity,slime_capacity;
 } params;
 const uint FULL=65536u;
 uint page_at(ivec2 p) {
@@ -47,6 +50,22 @@ void move_water_heat(uint source,uint target,uint source_before,uint source_afte
 float water_drag_speed(float face_flow,bool reverse,uint water,uint occupied) {
     float aligned=max(0.,reverse?-face_flow:face_flow);
     return aligned*float(water)/float(max(occupied,1u));
+}
+float rheology_mobility(uint phase,uint atlas,uint volume,float stress,float shear) {
+    if(phase==0u) return 1.;
+    float yield=phase==1u?params.oil_yield:params.slime_yield;
+    float consistency=phase==1u?params.oil_consistency:params.slime_consistency;
+    float exponent=phase==1u?params.oil_exponent:params.slime_exponent;
+    float softening=phase==1u?params.oil_softening:params.slime_softening;
+    float hot_yield=phase==1u?params.oil_hot_yield:params.slime_hot_yield;
+    float capacity=phase==1u?params.oil_capacity:params.slime_capacity;
+    float temperature=293.+bulk_heat_at(atlas,phase)/
+        max(capacity*float(volume)/float(FULL),0.000001);
+    float hot=softening>293.?clamp((temperature-293.)/(softening-293.),0.,1.):0.;
+    yield*=1.-hot*(1.-hot_yield);
+    if(stress<=yield) return 0.;
+    float viscosity=consistency*pow(max(shear,0.01),exponent-1.);
+    return clamp((stress-yield)/(stress+viscosity),0.,1.);
 }
 void main() {
     uint index=gl_GlobalInvocationID.x;
@@ -117,8 +136,19 @@ void main() {
             params.gravity*float(max(0,int(used(top))-int(used(bottom))))/float(FULL);
         float drag=water_drag_speed(water_flow,reverse,top[0],used(top));
         float speed=sqrt(2.*buoyancy)+drag;
+        float mobility=1.;
+        uint rheology_phase=heavy==0u?light:heavy;
+        if(rheology_phase<3u) {
+            uint sample_at=rheology_phase==heavy?top_at:bottom_at;
+            uint sample_volume=rheology_phase==heavy?top[heavy]:bottom[light];
+            float physical_density=density[rheology_phase];
+            float stress=physical_density*9.81*float(sample_volume)/float(FULL)+
+                abs(water_flow)*physical_density;
+            mobility=rheology_mobility(rheology_phase,sample_at,sample_volume,
+                stress,abs(water_flow));
+        }
         uint allowance=excess>0u?min(excess,face_open):
-            uint(floor(min(float(FULL),speed*params.seconds*float(face_open))));
+            uint(floor(min(float(FULL),speed*mobility*params.seconds*float(face_open))));
         uint swappable=light==3u?0u:bottom[light];
         uint moved=min(top[heavy],min(allowance,free_bottom+swappable));
         uint exchanged=min(moved,swappable);

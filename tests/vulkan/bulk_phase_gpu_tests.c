@@ -382,19 +382,19 @@ static void test_slime_flux_yields_under_load_and_softens_when_hot(void) {
     ASSERT_TRUE(chunk&&bulk&&out);
     const uint32_t cold_low=20u*64u+10u,cold_high=20u*64u+20u;
     const uint32_t hot_low=20u*64u+30u;
-    bulk->slime_fp[cold_low]=4096u;
-    bulk->slime_fp[cold_high]=32768u;
-    bulk->slime_fp[hot_low]=4096u;
-    bulk->slime_excess[hot_low]=2.5f*(4096.f/65536.f)*80.f;
+    bulk->slime_fp[cold_low]=8192u;
+    bulk->slime_fp[cold_high]=65536u;
+    bulk->slime_fp[hot_low]=8192u;
+    bulk->slime_excess[hot_low]=2.5f*(8192.f/65536.f)*80.f;
     ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
         dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
         dc_gpu_set_page(gpu,0,0,0,err,sizeof(err))&&
         fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,bulk,err,sizeof(err))&&
         fr_bulk_phase_gpu_step(gpu,1.f/60.f,err,sizeof(err))&&
         fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
-    ASSERT_EQ(out->slime_fp[cold_low],4096u);
-    ASSERT_TRUE(out->slime_fp[cold_high]<32768u);
-    ASSERT_TRUE(out->slime_fp[hot_low]<4096u);
+    ASSERT_EQ(out->slime_fp[cold_low],8192u);
+    ASSERT_TRUE(out->slime_fp[cold_high]<65536u);
+    ASSERT_TRUE(out->slime_fp[hot_low]<8192u);
     dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
 }
 int main(void) {

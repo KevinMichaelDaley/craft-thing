@@ -86,9 +86,17 @@ void dc_gpu_record_bulk_phase(dc_gpu_t *gpu,float seconds) {
     vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->bulk_phase_pipeline);
     vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout,0,1,&gpu->descriptor,0,NULL);
-    struct {uint32_t width,height,parity,axis;float seconds,gravity,water,oil,slime;} push={
+    struct {uint32_t width,height,parity,axis;
+        float seconds,gravity,water,oil,slime;
+        float oil_yield,slime_yield,oil_consistency,slime_consistency;
+        float oil_exponent,slime_exponent,oil_softening,slime_softening;
+        float oil_hot_yield,slime_hot_yield,oil_capacity,slime_capacity;} push={
         gpu->width,gpu->height,0,0,seconds,FR_BULK_GRAVITY_CELLS_PER_SECOND_SQUARED,
-        water->density,oil->density,slime->density};
+        water->density,oil->density,slime->density,
+        oil->yield_stress,slime->yield_stress,oil->consistency,slime->consistency,
+        oil->shear_exponent,slime->shear_exponent,oil->softening_K,slime->softening_K,
+        oil->hot_yield_multiplier,slime->hot_yield_multiplier,
+        oil->heat_capacity,slime->heat_capacity};
     for(uint32_t axis=0;axis<2u;axis++) for(uint32_t parity=0;parity<2u;parity++) {
         push.parity=parity;push.axis=axis;
         vkCmdPushConstants(gpu->command,gpu->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,
