@@ -18,6 +18,7 @@ layout(set=0,binding=2,std430) readonly buffer Sources {Light sources[];};
 layout(set=0,binding=3,std430) buffer Fields {PackedField fields[];};
 layout(constant_id=2) const bool SINGLE_VERTICAL=false;
 const uint BEAM_WORDS=SINGLE_VERTICAL?4u:5u;
+const uint REACH_SKY_OR_POINT=1u,REACH_FIRE=2u;
 /* RGB incoming radiance, affine transmission, and RGB vertical moments. */
 struct Beam {vec4 light;vec4 vertical;};
 /* Energy/transmission retain FP32 range. Bounded vertical direction ratios
@@ -210,7 +211,7 @@ Beam inject(ivec2 cell,uint direction) {
     vec3 z=vec3(0),energy=vec3(0);float fire_marker=0.;
     if(ITERATION<=1u) {
         Beam seed=unpack_beam(seeds[index]);energy=seed.light.rgb;z=seed.vertical.rgb;
-        fire_marker=(uint(seed.vertical.a)&2u)!=0u?2.:0.;
+        fire_marker=(uint(seed.vertical.a)&REACH_FIRE)!=0u?float(REACH_FIRE):0.;
         if(ITERATION==1u) {energy*=.5;z*=.5;}
     }
     ivec2 preceding=cell-travel(direction);float transmission=0.;
@@ -273,8 +274,9 @@ void main() {
         ivec2 cell=ivec2(global%metadata[0],global/metadata[0]);
         vec3 fire=nodes[global].known!=0u?local_fire(global):vec3(0.);
         bool lit=any(greaterThan(fire,vec3(0.)));
-        PackedBeam seed=pack_beam(Beam(vec4(fire,lit?1.:0.),vec4(0.,0.,0.,lit?2.:0.)));
-        seed.z|=uint(sky_reachable(cell))<<30u;
+        PackedBeam seed=pack_beam(Beam(vec4(fire,lit?1.:0.),
+            vec4(0.,0.,0.,lit?float(REACH_FIRE):0.)));
+        seed.z|=(sky_reachable(cell)?REACH_SKY_OR_POINT:0u)<<30u;
         seeds[global]=seed;
         return;
     }
@@ -346,7 +348,7 @@ void main() {
     if(global>=metadata[0]*metadata[1]) return;
     ivec2 cell=ivec2(global%metadata[0],global/metadata[0]);
     bool valid=nodes[global].known!=0u;
-    bool known=valid&&(seeds[global].z&0x40000000u)!=0u;
+    bool known=valid&&(seeds[global].z&(REACH_SKY_OR_POINT<<30u))!=0u;
     bool fire_reached=false;
     vec3 energy=vec3(0),mx=vec3(0),my=vec3(0),mz=vec3(0);
     for(uint d=0u;d<4u;d++) {
@@ -355,7 +357,8 @@ void main() {
         if(tile>0u) beam=compose(beam,read_total(block_offset(d,0u,line,tile-1u)));
         if(!valid) beam=Beam(vec4(0),vec4(0));
         fire_reached=fire_reached||
-            ((uint(beam.vertical.a)&2u)!=0u&&any(greaterThan(beam.light.rgb,vec3(0.))));
+            ((uint(beam.vertical.a)&REACH_FIRE)!=0u&&
+             any(greaterThan(beam.light.rgb,vec3(0.))));
 
         vec3 vertical=SINGLE_VERTICAL?beam.light.rgb*sources[metadata[3]].position_radius.w:
             clamp(beam.vertical.rgb,-beam.light.rgb,beam.light.rgb);
