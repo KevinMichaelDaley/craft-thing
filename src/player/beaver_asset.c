@@ -52,10 +52,11 @@ bool fr_beaver_source(uint32_t source,fr_beaver_source_t *out) {
 }
 
 static void beaver_frame(uint8_t *data,uint32_t *mapping,fr_player_action_t action,uint32_t frame) {
-    for (uint32_t source=1;source<=FR_BEAVER_PIXELS;source++) {
+    for (uint32_t original=0;original<FR_BEAVER_PIXELS;original++) {
         beaver_art_pixel_t art;
-        if (!beaver_art_source(source,&art)) continue;
-        int32_t x=(int32_t)((source-1)%FR_BEAVER_WIDTH),y=(int32_t)((source-1)/FR_BEAVER_WIDTH);
+        uint32_t source;
+        if (!beaver_art_frame(action==FR_PLAYER_CHEW?frame:0,original,&art,&source)) continue;
+        int32_t x=(int32_t)(original%FR_BEAVER_WIDTH),y=(int32_t)(original/FR_BEAVER_WIDTH);
         beaver_art_pose(&art,action,frame,&x,&y);
         if (x<0 || y<0 || x>=(int32_t)FR_BEAVER_WIDTH || y>=(int32_t)FR_BEAVER_HEIGHT) continue;
         uint32_t pixel=(uint32_t)y*FR_BEAVER_WIDTH+(uint32_t)x;

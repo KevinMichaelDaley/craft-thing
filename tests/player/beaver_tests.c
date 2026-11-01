@@ -61,7 +61,7 @@ static void test_every_visible_pixel_has_supported_physics_and_appearance(void) 
         }
         ASSERT_EQ(app.alpha,1.f); ASSERT_TRUE(app.normal[2]>0);
     }
-    for (uint32_t r=1;r<FR_BEAVER_REGION_COUNT;r++) ASSERT_TRUE(regions[r]>0);
+    for (uint32_t r=FR_BEAVER_FUR;r<=FR_BEAVER_TAIL;r++) ASSERT_TRUE(regions[r]>0);
     ASSERT_TRUE(holes>FR_BEAVER_PIXELS/2); PASS();
 }
 
