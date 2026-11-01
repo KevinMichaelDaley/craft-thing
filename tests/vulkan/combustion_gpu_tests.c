@@ -308,7 +308,8 @@ static void test_submerged_mixed_film_uses_bound_oxidizer_without_deleting_water
     uint32_t at=20u*64u+20u;
     chunk->cells[at]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
     const uint32_t neighbors[]={at-64u,at-1u,at+1u,at+64u};
-    for(uint32_t i=0u;i<4u;i++) chunk->cells[neighbors[i]].fluid_mass=DC_FLUID_FULL;
+    for(uint32_t i=0u;i<4u;i++)
+        chunk->cells[neighbors[i]]=(dc_cell_t){.material=DC_MATERIAL_WATER,.fluid_mass=DC_FLUID_FULL};
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
         dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     fr_reactive_state_t film;
@@ -329,9 +330,25 @@ static void test_submerged_mixed_film_uses_bound_oxidizer_without_deleting_water
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&record,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(record.state.coating_oil_fuel_fp<film.coating_oil_fuel_fp);
     ASSERT_TRUE(record.state.coating_oxidizer_fp<film.coating_oxidizer_fp);
+    fr_gas_state_t *gas=calloc(4096u,sizeof(*gas));ASSERT_TRUE(gas);
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,gas,4096u,err,sizeof(err)));
+    double products=0.;
+    for(uint32_t i=0u;i<4u;i++)
+        products+=gas[neighbors[i]].species[FR_GAS_EXHAUST]+gas[neighbors[i]].species[FR_GAS_SOOT];
+    ASSERT_TRUE(products>0.);
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
     for(uint32_t i=0u;i<4u;i++) ASSERT_EQ(chunk->cells[neighbors[i]].fluid_mass,DC_FLUID_FULL);
-    free(chunk);dc_gpu_destroy(g);PASS();
+    ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err))&&
+        fr_gas_gpu_read_chunk(g,0,gas,4096u,err,sizeof(err))&&
+        dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+    double retained=0.;uint64_t water=0u;
+    for(uint32_t i=0u;i<4096u;i++) {
+        retained+=gas[i].species[FR_GAS_EXHAUST]+gas[i].species[FR_GAS_SOOT];
+        water+=chunk->cells[i].fluid_mass;
+    }
+    ASSERT_TRUE(retained>=products-1e-6);
+    ASSERT_EQ(water,4u*(uint64_t)DC_FLUID_FULL);
+    free(gas);free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_flame_emission_requires_local_transported_hot_fuel_and_oxygen(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);

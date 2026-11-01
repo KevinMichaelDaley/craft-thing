@@ -294,7 +294,16 @@ static void test_submerged_rigid_coating_burns_from_bound_oxidizer(void) {
     ASSERT_TRUE(result.state.coating_oil_fuel_fp<wood.coating_oil_fuel_fp);
     ASSERT_TRUE(result.state.coating_oxidizer_fp<wood.coating_oxidizer_fp);
     ASSERT_EQ(result.state.fuel_mass_fp,wood.fuel_mass_fp);
-    free(chunk);dc_gpu_destroy(g);PASS();
+    fr_gas_state_t *gas=calloc(4096u,sizeof(*gas));ASSERT_TRUE(gas);
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,gas,4096u,err,sizeof(err))&&
+        dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+    double products=0.;
+    for(uint32_t i=0u;i<4u;i++) {
+        products+=gas[neighbors[i]].species[FR_GAS_EXHAUST]+gas[neighbors[i]].species[FR_GAS_SOOT];
+        ASSERT_EQ(chunk->cells[neighbors[i]].fluid_mass,DC_FLUID_FULL);
+    }
+    ASSERT_TRUE(products>0.);
+    free(gas);free(chunk);dc_gpu_destroy(g);PASS();
 }
 int main(void) {
     if(getenv("DC_SHOCK_BODY_ONLY")) RUN(test_rigid_wood_settles_impact_energy_before_ignition);

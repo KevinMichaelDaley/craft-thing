@@ -54,6 +54,10 @@ uint atlas(ivec2 p) {
 }
 const ivec2 directions[4]=ivec2[4](ivec2(0,-1),ivec2(-1,0),ivec2(1,0),ivec2(0,1));
 bool gas_cell(uint at) {return at!=0xffffffffu&&(cells[at].x&255u)==0u;}
+bool reaction_receiver(uint at) {
+    return at!=0xffffffffu&&((cells[at].x&255u)==0u||
+        (cells[at].x&255u)==FR_PROFILE_WATER_MATERIAL);
+}
 #ifdef FR_BODY_REACTIONS
 const ivec2 body_directions[8]=ivec2[8](ivec2(0,-1),ivec2(-1,0),ivec2(1,0),ivec2(0,1),
     ivec2(-1,-1),ivec2(1,-1),ivec2(-1,1),ivec2(1,1));
@@ -214,8 +218,9 @@ void contact_apply(uint i,uint at) {
 uint choose_target(ivec2 p) {
     uint chosen=0xffffffffu;float best=-1.;
     for(uint i=0u;i<4u;i++) {
-        uint at=atlas(p+directions[i]);if(!gas_cell(at)) continue;
-        Gas gas=local_gas(at);if(gas.geometry.y<=0.) continue;
+        uint at=atlas(p+directions[i]);if(!reaction_receiver(at)) continue;
+        Gas gas=local_gas(at);
+        if(gas.geometry.y<=0.&&cells[at].y==0u) continue;
         float supply=max(gas.species.x,0.);
         if(supply>best) {best=supply;chosen=at;}
     }
@@ -448,6 +453,7 @@ void corrode_entry(Words entry,uint owner,uint at,uint geometry_word,uint geomet
             min(target,float(target_units)/float(dry)):target);
     }
 }
+#include "coating_burn.glsl"
 void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,
     uint geometry_word,uint geometry_nibble,inout Gas gas,inout float admitted,
     inout float source_temperature,inout uint sources) {
@@ -456,10 +462,12 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,
     if(entry.words[FR_ENTRY_GENERATION]!=handle.y||entry.words[FR_ENTRY_OWNER]!=owner) return;
     evaporate_entry(entry,gas);
     uint s=FR_ENTRY_STATE,m=entry.words[s],wood_fuel=entry.words[s+9u];
+    burn_coating(entry,gas,admitted,source_temperature,sources);
     corrode_entry(entry,owner,at,geometry_word,geometry_nibble,gas);
     uint coating_remainders=entry.words[s+FR_STATE_COATING_REMAINDERS];
-    if(((coating_remainders&~FR_COATING_REM_MASK)|entry.words[s+14u]|
-        entry.words[s+15u]|entry.words[s+16u])!=0u) return;
+    if((entry.words[s+14u]|entry.words[s+15u]|entry.words[s+16u]|
+        ((coating_remainders>>FR_COATING_JELLY_REM_SHIFT)&FR_COATING_REM_MASK)|
+        ((coating_remainders>>FR_COATING_JELLY_FUEL_REM_SHIFT)&FR_COATING_FUEL_REM_MASK))!=0u) return;
     bool char_stage=wood_fuel==0u;uint fuel=char_stage?entry.words[s+10u]:wood_fuel;
     if(owner==2u&&char_stage&&fuel>0u) atomicAdd(hud[25],1u);
     uint profile=char_stage?12u:m;
@@ -576,13 +584,18 @@ void choose_body_target(uint index) {
     ivec2 p=body_parcel_cell(body,piece);float best=-1.;uint chosen=0xffffffffu;
     float capacity=solid_capacity(e),bulk=capacity>0.?uintBitsToFloat(e.words[s+17u])/capacity:0.;
     uint profile=e.words[s+9u]==0u&&e.words[s+10u]>0u?12u:m;
+    bool bound_film=e.words[s+FR_STATE_COATING_OIL]>0u&&
+        e.words[s+FR_STATE_COATING_JELLY]>0u&&
+        e.words[s+FR_STATE_COATING_OXIDIZER]>0u;
     float reaction_power=fr_surface_reaction_power(uintBitsToFloat(scratch.words[index*12u+6u]),0.,uintBitsToFloat(params.seconds));
     float skin=0.;
     for(uint d=0u;d<8u;d++) {
         ivec2 direction=body_directions[d];
-        ivec2 q=p+direction;uint at=atlas(q);if(!gas_cell(at)) continue;
+        ivec2 q=p+direction;uint at=atlas(q);if(!reaction_receiver(at)) continue;
         if(d>=4u&&!body_corner_reachable(p,direction)) continue;
-        Gas gas=local_gas(at);float mass=gas_mass(gas);if(mass<=0.||gas.geometry.y<=0.) continue;
+        Gas gas=local_gas(at);float mass=gas_mass(gas);
+        if(bound_film&&cells[at].y>0u&&best<0.) {best=0.;chosen=at;}
+        if(mass<=0.||gas.geometry.y<=0.) continue;
         float supply=max(gas.species.x,0.);
         if(supply>best) {best=supply;chosen=at;}
         float gas_cap=gas_capacity(gas),gas_temperature=gas_cap>0.?gas_internal(gas)/gas_cap:bulk;
@@ -653,7 +666,7 @@ void main() {
     }
     if(i>=params.width*params.height) return;
     ivec2 p=ivec2(i%params.width,i/params.width);uint at=atlas(p);
-    if(!gas_cell(at)) return;
+    if(!reaction_receiver(at)) return;
     bool near_body=false;
     for(uint face=0u;face<8u;face++) {ivec2 q=p+body_directions[face];
         if(face>=4u&&!body_corner_reachable(q,-body_directions[face])) continue;
@@ -662,7 +675,6 @@ void main() {
     if(!near_body) return;
     bool alternate=params.sparse!=0u&&(Words(params.gates_address).words[at]&8u)!=0u;
     GasField field=GasField(alternate?params.alternate_address:params.world_address);Gas gas=field.values[at];
-    if(gas.geometry.y<=0.) return;
     float admitted=0.,temperature=0.;uint sources=0u;
     for(uint face=0u;face<8u;face++) {
         ivec2 q=p+body_directions[face];
@@ -719,11 +731,11 @@ void main() {
         return;
     }
     if(params.unused.x==1u) {feedback(i,p,at);return;}
-    if(!gas_cell(at)) return;
+    if(!reaction_receiver(at)) return;
     bool alternate=params.sparse!=0u&&(Words(params.gates_address).words[at]&8u)!=0u;
     GasField field=GasField(alternate?params.alternate_address:params.world_address);Gas gas=field.values[at];
-    if(gas.geometry.y<=0.) return;
     if(params.unused.x==2u) {
+        if(gas.geometry.y<=0.) return;
         Words model=Words(params.model_address);
         vec4 cv=vec4(uintBitsToFloat(model.words[5]),uintBitsToFloat(model.words[6]),
             uintBitsToFloat(model.words[7]),uintBitsToFloat(model.words[8]));
@@ -737,7 +749,9 @@ void main() {
         }
         return;
     }
-    float admitted=oxidize_carbon(gas),temperature=gas_capacity(gas)>0.?gas_internal(gas)/gas_capacity(gas):0.;
+    float admitted=gas.geometry.y>0.?oxidize_carbon(gas):0.;
+    float temperature=gas.geometry.y>0.&&gas_capacity(gas)>0.?
+        gas_internal(gas)/gas_capacity(gas):0.;
     uint sources=admitted>0.?FR_FIRE_EMISSION_AIRBORNE:0u;
     for(uint face=0u;face<4u;face++) burn(p+directions[face],at,gas,admitted,temperature,sources);
     emission[at]=vec4(admitted/uintBitsToFloat(params.seconds),temperature,
