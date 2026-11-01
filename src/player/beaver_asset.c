@@ -136,3 +136,11 @@ bool fr_beaver_pixel_owners(uint32_t source,uint64_t identity,uint32_t body_id,u
     *reactive=(fr_reactive_owner_t){.kind=FR_REACTIVE_OWNER_BODY,.key={body_id,generation,x,y,0}};
     return true;
 }
+
+bool fr_beaver_pixel_owners_trimmed(uint32_t source,uint64_t identity,
+    uint32_t body_id,uint32_t generation,uint32_t origin_x,uint32_t origin_y,
+    uint32_t width,uint32_t height,fr_appearance_owner_t *appearance,fr_reactive_owner_t *reactive) {
+    (void)source;(void)identity;(void)body_id;(void)generation;(void)origin_x;(void)origin_y;
+    (void)width;(void)height;(void)appearance;(void)reactive;
+    return false;
+}

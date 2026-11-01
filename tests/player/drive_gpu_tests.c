@@ -1,8 +1,11 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "ferrum/player/drive_gpu.h"
+#include "ferrum/player/beaver.h"
+#include "ferrum/fire/gpu.h"
 #include "../../src/vulkan/runtime_body_gpu.h"
 
 static int g_pass,g_fail;
@@ -129,12 +132,58 @@ static void test_binding_validation_and_owner_input_routing(void) {
     fr_player_drive_gpu_destroy(drive);PASS();
 }
 
+static void test_trimmed_canonical_binding_tracks_real_wet_hot_parcel_during_motion(void) {
+    uint32_t ox=0,oy=0;bool found_region=false;
+    for (uint32_t y=1;y<37 && !found_region;y++) for (uint32_t x=1;x<37 && !found_region;x++) {
+        bool solid=true;
+        for (uint32_t dy=0;dy<3;dy++) for (uint32_t dx=0;dx<3;dx++) {
+            fr_beaver_source_t source;
+            solid=solid && fr_beaver_source((y+dy)*40+x+dx+1,&source) && source.prop_material==2;
+        }
+        if (solid) {ox=x;oy=y;found_region=true;}
+    }
+    ASSERT_TRUE(found_region);
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    for (uint32_t y=4;y<7;y++) for (uint32_t x=4;x<7;x++)
+        chunk->cells[y*64+x].material=DC_MATERIAL_WOOD;
+    ASSERT_TRUE(dc_gpu_upload_chunk(g_gpu,0,chunk,g_err,sizeof(g_err)));free(chunk);
+    fr_reactive_state_t state;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,900,700,91,&state,g_err,sizeof(g_err)));
+    state.ignition_threshold=.8f;state.ignition_integral=.4f;
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g_gpu,0,5*64+5,&state,g_err,sizeof(g_err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g_gpu) && dc_gpu_rigid_step(g_gpu,g_err,sizeof(g_err)));
+    fr_reactive_record_t before,after;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g_gpu,0x80000001u,1,1,&before,&found,g_err,sizeof(g_err)) && found);
+    uint32_t source=(oy+1)*40+ox+2;
+    fr_appearance_owner_t appearance;fr_reactive_owner_t reactive;
+    ASSERT_TRUE(fr_beaver_pixel_owners_trimmed(source,99,before.owner.key[0],before.owner.key[1],
+        ox,oy,3,3,&appearance,&reactive));
+    ASSERT_TRUE(memcmp(&reactive,&before.owner,sizeof(reactive))==0);
+    ASSERT_EQ(appearance.x,ox+1);ASSERT_EQ(appearance.y,oy+1);
+    fr_player_body_binding_t binding={99,before.owner.key[0],before.owner.key[1]};
+    fr_player_drive_gpu_t *drive=NULL;
+    ASSERT_TRUE(fr_player_drive_gpu_create(g_gpu,&binding,1,1,2,&drive,g_err,sizeof(g_err)));
+    fr_player_drive_input_t input={99,1,1,false};
+    ASSERT_TRUE(fr_player_drive_gpu_submit(drive,&input,1,g_err,sizeof(g_err)) &&
+        dc_gpu_rigid_step(g_gpu,g_err,sizeof(g_err)));
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g_gpu,reactive.key[0],reactive.key[2],reactive.key[3],
+        &after,&found,g_err,sizeof(g_err)) && found);
+    ASSERT_TRUE(memcmp(&before,&after,sizeof(before))==0);
+    fr_appearance_owner_t unchanged=appearance;fr_reactive_owner_t old=reactive;
+    ASSERT_TRUE(!fr_beaver_pixel_owners_trimmed(source,99,binding.body_id,binding.generation,
+        ox+2,oy,3,3,&appearance,&reactive));
+    ASSERT_TRUE(memcmp(&appearance,&unchanged,sizeof(appearance))==0);
+    ASSERT_TRUE(memcmp(&reactive,&old,sizeof(reactive))==0);
+    fr_player_drive_gpu_destroy(drive);PASS();
+}
+
 int main(void) {
     void (*tests[])(void)={test_real_body_drive_preserves_position_and_other_player,
         test_jump_uses_actual_solver_support_and_consumes_support,
         test_sequence_retries_and_invalid_batches_are_transactional,
         test_stale_generation_and_missing_body_do_not_control_replacements,
-        test_binding_validation_and_owner_input_routing};
+        test_binding_validation_and_owner_input_routing,
+        test_trimmed_canonical_binding_tracks_real_wet_hot_parcel_during_motion};
     for (uint32_t i=0;i<sizeof(tests)/sizeof(*tests);i++) {
         if (!fixture()) {printf("Fixture FAIL: %s\n",g_err);g_fail++;}
         else RUN(tests[i]);
