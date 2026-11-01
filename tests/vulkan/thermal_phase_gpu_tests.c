@@ -4,6 +4,7 @@
 
 #include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/bulk_phase_gpu.h"
+#include "dungeoncraft/coating_layout.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/thermal.h"
 #include "ferrum/fire/thermal_gpu.h"
@@ -112,6 +113,11 @@ static void test_rigid_contact_wets_from_finite_oil_volume(void) {
     ASSERT_TRUE(gained>0u&&lost>0u);
     ASSERT_TRUE(fabs((double)gained-(double)lost*
         fr_reactive_profile(DC_MATERIAL_OIL)->density)<2.);
+    double exact_oil=(double)gained+
+        (double)((record.state.coating_remainders>>FR_COATING_OIL_REM_SHIFT)&
+            FR_COATING_REM_MASK)/FR_COATING_MASS_DEN;
+    ASSERT_TRUE(fabs(exact_oil-(double)lost*FR_COATING_OIL_MASS_NUM/
+        FR_COATING_MASS_DEN)<1e-6);
     ASSERT_TRUE(after->oil_excess[oil_at]<phase->oil_excess[oil_at]);
     dc_chunk_t *water_after=calloc(1,sizeof(*water_after));ASSERT_TRUE(water_after);
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,water_after,err,sizeof(err)));
@@ -157,6 +163,11 @@ static void test_rigid_contact_preserves_jelly_fuel_and_oxidizer(void) {
     ASSERT_TRUE(lost>0u&&fuel>0u&&oxidizer>0u&&jelly);
     ASSERT_TRUE(fabs((double)fuel+oxidizer-(double)lost*jelly->density)<2.);
     ASSERT_TRUE(fabs((double)fuel-(double)(fuel+oxidizer)*jelly->fuel_fraction)<2.);
+    double exact_jelly=(double)fuel+oxidizer+
+        (double)((record.state.coating_remainders>>FR_COATING_JELLY_REM_SHIFT)&
+            FR_COATING_REM_MASK)/FR_COATING_MASS_DEN;
+    ASSERT_TRUE(fabs(exact_jelly-(double)lost*FR_COATING_JELLY_MASS_NUM/
+        FR_COATING_MASS_DEN)<1e-6);
     ASSERT_TRUE(after->slime_excess[at]<phase->slime_excess[at]);
     ASSERT_TRUE(record.state.coating_oil_fuel_fp>0u&&after->oil_fp[at]<phase->oil_fp[at]);
     dc_chunk_t *water_after=calloc(1,sizeof(*water_after));ASSERT_TRUE(water_after);

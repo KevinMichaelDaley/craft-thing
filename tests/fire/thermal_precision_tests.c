@@ -63,6 +63,21 @@ static void test_abi_two_migrates_zero_remainder_but_rejects_nonzero_old_reserve
     }
     free(bytes);PASS();
 }
+static void test_abi_six_rejects_future_coating_remainder_bits(void) {
+    char err[256]={0};fr_reactive_record_t record={.owner=fr_reactive_cell_owner(
+        (dc_chunk_coord_t){0,0},3)},out={0};
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322u,0u,350.f,
+        1u,&record.state,err,sizeof(err)));
+    record.state.coating_oil_fuel_fp=1u;record.state.coating_remainders=5u;
+    size_t length=0,written=0;ASSERT_TRUE(fr_reactive_snapshot_size(1u,&length));
+    uint8_t *bytes=malloc(length);ASSERT_TRUE(bytes);
+    ASSERT_TRUE(fr_reactive_snapshot_encode(&record,1u,2u,bytes,length,&written,
+        err,sizeof(err)));
+    bytes[4]=6u;rehash(bytes,length);
+    ASSERT_TRUE(!fr_reactive_snapshot_decode(bytes,length,&out,1u,
+        &(uint32_t){0},&(uint64_t){0},&(uint32_t){0},err,sizeof(err)));
+    free(bytes);PASS();
+}
 static void test_abi_four_unfunded_demand_does_not_create_reserved_oxygen(void) {
     char err[256]={0};fr_reactive_record_t record={.owner={.kind=FR_REACTIVE_OWNER_CELL,.key={0,0,0,0,3}}},out;
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,350,1,&record.state,err,sizeof(err)));
@@ -115,5 +130,6 @@ int main(void) {
     RUN(test_splits_and_snapshots_preserve_the_full_energy_expansion);
     RUN(test_invalid_heat_or_residual_leaves_state_unchanged);
     RUN(test_abi_two_migrates_zero_remainder_but_rejects_nonzero_old_reserved_bits);
+    RUN(test_abi_six_rejects_future_coating_remainder_bits);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
