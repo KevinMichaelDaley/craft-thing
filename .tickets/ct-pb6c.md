@@ -1,6 +1,6 @@
 ---
 id: ct-pb6c
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-01T02:41:28Z
@@ -18,3 +18,9 @@ The scripted quarter-native smoke-box roof carve develops a 133927 pressure peak
 
 Add RED GPU and reference tests for moving MPM cut-cell compression, open-neighbor venting, sealed-pocket energy/work, and conservation. Rework gas/MPM aperture or coupling physically; no arbitrary pressure clamp or lost stock. Scripted carved smoke box 1000-frame gas audit passes twice with finite pressure/acceleration and the displayed frame budget. Run make test.
 
+
+## Notes
+
+**2026-11-01T03:28:31Z**
+
+Claimed after ctlo-08fu checkpoint. Existing gas geometry remap keeps stock in sealed MPM-compressed voids and redistributes only to immediate positive-volume neighbors; gas density/EOS can therefore spike in tiny MPM cut cells. Need RED reference/GPU tests for open vent and sealed pressure-work, then two-way gas pressure/MPM coupling; do not clamp pressure or discard stock.
