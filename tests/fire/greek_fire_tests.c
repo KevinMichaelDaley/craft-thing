@@ -63,10 +63,40 @@ static void test_exhausted_bound_oxidizer_extinguishes_mixed_film(void) {
     ASSERT_EQ(products.oil_fp+products.jelly_fp,0u);
     PASS();
 }
+static void test_unmixed_jelly_cannot_spend_nonexistent_oil(void) {
+    char err[256]={0};fr_reactive_state_t source=coated(506u,true,false,err,sizeof(err)),after;
+    fr_coating_combustion_products_t products;
+    source.coating_oil_fuel_fp=0u;
+    ASSERT_TRUE(fr_coating_combustion_reference(&source,65536u,1.f,10.f,
+        &after,&products,err,sizeof(err)));
+    ASSERT_EQ(after.coating_oil_fuel_fp,0u);
+    ASSERT_EQ(after.coating_jelly_fuel_fp,source.coating_jelly_fuel_fp);
+    ASSERT_EQ(products.oil_fp+products.jelly_fp,0u);
+    PASS();
+}
+
+static void test_equal_time_cadences_consume_the_same_finite_mixture(void) {
+    char err[256]={0};fr_reactive_state_t source=coated(507u,true,false,err,sizeof(err));
+    fr_reactive_state_t whole,part,next;fr_coating_combustion_products_t products;
+    ASSERT_TRUE(fr_coating_combustion_reference(&source,0u,1.f,10.f,
+        &whole,&products,err,sizeof(err)));
+    part=source;
+    for(uint32_t i=0u;i<10u;i++) {
+        ASSERT_TRUE(fr_coating_combustion_reference(&part,0u,1.f,1.f,
+            &next,&products,err,sizeof(err)));
+        part=next;
+    }
+    int32_t difference=(int32_t)(whole.coating_oil_fuel_fp+whole.coating_jelly_fuel_fp)-
+        (int32_t)(part.coating_oil_fuel_fp+part.coating_jelly_fuel_fp);
+    ASSERT_TRUE(difference>=-2&&difference<=2);
+    PASS();
+}
 
 int main(void) {
     RUN(test_mixed_film_burns_underwater_with_finite_bound_stock);
     RUN(test_mixed_film_depletes_faster_than_matched_oil_while_wet_oil_douses);
     RUN(test_exhausted_bound_oxidizer_extinguishes_mixed_film);
+    RUN(test_unmixed_jelly_cannot_spend_nonexistent_oil);
+    RUN(test_equal_time_cadences_consume_the_same_finite_mixture);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
