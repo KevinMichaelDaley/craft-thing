@@ -243,6 +243,49 @@ static void test_contact_wet_leaf_keeps_exact_film_through_fracture(void) {
     fr_reactive_chunk_release(&channel);
     free(after);free(phase);free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_moving_coated_proxy_feels_water_drag_without_losing_inventory(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *empty=calloc(1,sizeof(*empty));
+    fr_bulk_phase_chunk_t *after=calloc(1,sizeof(*after));
+    ASSERT_TRUE(chunk&&empty&&after);
+    for(uint32_t y=20u;y<22u;y++) for(uint32_t x=20u;x<23u;x++)
+        chunk->cells[y*64u+x].material=DC_MATERIAL_WOOD;
+    uint32_t wet_at=22u*64u+20u,dry_at=22u*64u+22u;
+    chunk->cells[wet_at].material=DC_MATERIAL_WATER;
+    chunk->cells[wet_at].fluid_mass=10000u;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    for(uint32_t x=0u;x<=2u;x+=2u) {
+        fr_reactive_state_t wood;
+        ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322u,0u,300.f,
+            801u+x,&wood,err,sizeof(err)));
+        wood.coating_oil_fuel_fp=33000u;
+        ASSERT_TRUE(fr_reactive_state_add_heat(&wood,
+            fr_reactive_state_energy_at_temperature(&wood,300.f)-
+            fr_reactive_state_energy(&wood),err,sizeof(err))&&
+            fr_gpu_reactive_seed_cell(g,0,21u*64u+20u+x,&wood,err,sizeof(err)));
+    }
+    ASSERT_TRUE(dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(g,0,chunk,empty,err,sizeof(err))&&
+        fr_thermal_gpu_enable(g,err,sizeof(err))&&
+        dc_gpu_set_body_motion(g,0x80000001u,10.f,0.f,0.f,err,sizeof(err))&&
+        fr_thermal_gpu_step(g,.5f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(g,0,after,err,sizeof(err)));
+    fr_reactive_record_t wet,dry;bool wet_found=false,dry_found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0u,1u,&wet,&wet_found,
+        err,sizeof(err))&&
+        fr_gpu_reactive_read_body(g,0x80000001u,2u,1u,&dry,&dry_found,
+        err,sizeof(err))&&wet_found&&dry_found);
+    ASSERT_TRUE(after->oil_fp[wet_at]>0u&&wet.state.coating_oil_fuel_fp<33000u);
+    ASSERT_EQ(after->oil_fp[dry_at],0u);
+    ASSERT_EQ(dry.state.coating_oil_fuel_fp,33000u);
+    ASSERT_EQ(wet.state.coating_oil_fuel_fp*FR_COATING_MASS_DEN+
+        ((wet.state.coating_remainders>>FR_COATING_OIL_REM_SHIFT)&FR_COATING_REM_MASK)+
+        after->oil_fp[wet_at]*FR_COATING_OIL_MASS_NUM,33000u*FR_COATING_MASS_DEN);
+    ASSERT_EQ(wet.owner.key[1],dry.owner.key[1]);
+    free(after);free(empty);free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_reused_body_slot_and_carving_keep_actual_owner_generation(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     for(uint32_t y=10;y<14;y++) for(uint32_t x=10;x<14;x++) c->cells[y*64+x].material=DC_MATERIAL_WOOD;
@@ -338,6 +381,7 @@ int main(void) {
     RUN(test_mpm_pool_swaps_preserve_parcel_and_leaf_pigment);
     RUN(test_broken_leaf_keeps_composition_heat_and_history_as_a_leaf_bit);
     RUN(test_contact_wet_leaf_keeps_exact_film_through_fracture);
+    RUN(test_moving_coated_proxy_feels_water_drag_without_losing_inventory);
     RUN(test_reused_body_slot_and_carving_keep_actual_owner_generation);
     RUN(test_live_pool_reuses_entries_instead_of_growing_with_retired_history);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
