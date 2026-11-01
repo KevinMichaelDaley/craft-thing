@@ -587,6 +587,8 @@ int main(void) {
     RUN(test_native_geometry_carving_displacement_and_trapped_pockets_keep_finite_stock);
     RUN(test_native_oil_volume_excludes_gas_and_routes_oxygen);
     RUN(test_native_quantized_sliver_routes_gas_to_open_neighbor);
+    RUN(test_mpm_cut_cell_wedge_vents_stock_without_pressure_runaway);
+    RUN(test_pressurized_pocket_pushes_mobile_sand_without_losing_oxygen);
     RUN(test_native_fully_submerged_pocket_retains_stock_against_adjacent_water);
     RUN(test_native_partial_void_contraction_displaces_mixture_without_cut_cell_pressure_spikes);
     RUN(test_native_valve_only_refresh_preserves_restored_physical_void);

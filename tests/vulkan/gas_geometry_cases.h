@@ -11,6 +11,89 @@ static double gas_checkpoint_energy(const fr_gas_checkpoint_chunk_t *snapshot) {
         total+=(double)snapshot->cells[i][5]+snapshot->cells[i][11]+snapshot->cells[i][14];
     return total;
 }
+static void test_mpm_cut_cell_wedge_vents_stock_without_pressure_runaway(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_gas_state_t *input=calloc(4096,sizeof(*input)),*out=calloc(4096,sizeof(*out));
+    double *volume=calloc(4096,sizeof(*volume));
+    ASSERT_TRUE(chunk&&input&&out&&volume);
+    fr_gas_model_t model=reference_model();model.kinetic_scale=1./512.;
+    for(uint32_t i=0;i<4096u;i++) chunk->cells[i].material=DC_MATERIAL_STONE;
+    for(uint32_t x=16u;x<=30u;x++) {
+        uint32_t i=32u*64u+x;
+        chunk->cells[i].material=DC_MATERIAL_AIR;
+        volume[i]=x<=20u?1.:1./(double)(1u<<(x-19u));
+        input[i]=reference_air(model,x<=20u?.0012:.00005,300,0);
+    }
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&
+        fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err))&&
+        fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&
+        fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
+    for(uint32_t x=21u;x<=30u;x++)
+        ((float *)g->mpm_grid_mapped)[(32u*g->width+x)*4u+3u]=1.f-(float)volume[32u*64u+x];
+    fr_gas_gpu_geometry_changed(g,true);
+    double before=0.;for(uint32_t x=16u;x<=30u;x++) before+=input[32u*64u+x].species[0];
+    for(uint32_t frame=0;frame<60u;frame++) ASSERT_TRUE(fr_gas_gpu_step(g,1.f/60.f,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
+    double after=0.,peak=0.;
+    for(uint32_t x=16u;x<=30u;x++) {
+        uint32_t i=32u*64u+x;after+=out[i].species[0];
+        fr_gas_thermo_t t;
+        ASSERT_TRUE(fr_gas_thermodynamics(&model,out+i,volume[i],&t,err,sizeof(err)));
+        if(t.pressure>peak) peak=t.pressure;
+    }
+    printf("MPM wedge pressure %.9g oxygen drift %.9g\n",peak,after-before);
+    ASSERT_TRUE(fabs(after-before)<1e-7&&peak<500.);
+    dc_gpu_destroy(g);free(chunk);free(input);free(out);free(volume);PASS();
+}
+static void test_pressurized_pocket_pushes_mobile_sand_without_losing_oxygen(void) {
+    char err[256]={0};dc_gpu_t *grids[2]={0};
+    dc_chunk_t *chunks[2]={calloc(1,sizeof(dc_chunk_t)),calloc(1,sizeof(dc_chunk_t))};
+    dc_chunk_t *after=calloc(1,sizeof(*after));
+    fr_gas_state_t *input=calloc(4096,sizeof(*input)),*readback=calloc(4096,sizeof(*readback));
+    double *volume=calloc(4096,sizeof(*volume));
+    ASSERT_TRUE(chunks[0]&&chunks[1]&&after&&input&&readback&&volume);
+    fr_gas_model_t model=reference_model();model.kinetic_scale=1./512.;
+    for(uint32_t i=0;i<4096u;i++) {input[i]=reference_air(model,.0012,300,0);volume[i]=1.;}
+    const uint32_t grain=30u*64u+21u,source=30u*64u+20u;
+    for(uint32_t variant=0;variant<2u;variant++) {
+        dc_chunk_t *chunk=chunks[variant];
+        for(uint32_t x=19u;x<=23u;x++) {
+            chunk->cells[29u*64u+x].material=DC_MATERIAL_STONE;
+            chunk->cells[31u*64u+x].material=DC_MATERIAL_STONE;
+        }
+        chunk->cells[30u*64u+19u].material=DC_MATERIAL_STONE;
+        chunk->cells[grain].material=DC_MATERIAL_SAND;
+        dc_chunk_seed_particles(chunk);
+        ASSERT_TRUE(dc_gpu_create(&grids[variant],64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+            dc_gpu_upload_chunk(grids[variant],0,chunk,err,sizeof(err))&&
+            dc_gpu_set_page(grids[variant],0,0,0,err,sizeof(err))&&
+            fr_gas_gpu_enable(grids[variant],&model,.0012,300,err,sizeof(err))&&
+            fr_gas_gpu_set_pressure_policy(grids[variant],FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
+        if(variant==1u) input[source]=reference_air(model,.02,300,0);
+        ASSERT_TRUE(fr_gas_gpu_seed_chunk(grids[variant],0,input,volume,4096,err,sizeof(err)));
+    }
+    for(uint32_t frame=0;frame<30u;frame++) for(uint32_t variant=0;variant<2u;variant++)
+        ASSERT_TRUE(dc_gpu_tick_step(grids[variant],err,sizeof(err)));
+    double positions[2]={0};
+    for(uint32_t variant=0;variant<2u;variant++) {
+        ASSERT_TRUE(dc_gpu_download_chunk(grids[variant],0,after,err,sizeof(err)));
+        bool found=false;
+        for(uint32_t i=0;i<DC_MPM_PARTICLES_PER_CHUNK;i++)
+            if(after->particles[i].mass_fp&&after->particles[i].id_lo==grain+1u) {
+                positions[variant]=(double)after->particles[i].x_fp/65536.;found=true;break;
+            }
+        ASSERT_TRUE(found);
+    }
+    ASSERT_TRUE(positions[1]>positions[0]+.01);
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(grids[1],0,readback,4096,err,sizeof(err)));
+    double oxygen=0.;for(uint32_t i=0;i<4096u;i++) oxygen+=readback[i].species[0];
+    double expected=4095.*reference_air(model,.0012,300,0).species[0]+
+        reference_air(model,.02,300,0).species[0];
+    ASSERT_TRUE(fabs(oxygen-expected)<expected*.003);
+    for(uint32_t i=0;i<2u;i++) dc_gpu_destroy(grids[i]);
+    free(chunks[0]);free(chunks[1]);free(after);free(input);free(readback);free(volume);PASS();
+}
 static void test_native_valve_only_refresh_preserves_restored_physical_void(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_gas_state_t *input=malloc(4096*sizeof(*input));double *volume=malloc(4096*sizeof(*volume));
