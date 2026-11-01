@@ -126,6 +126,39 @@ static void test_rigid_contact_wets_from_finite_oil_volume(void) {
     free(water_after);
     free(after);free(phase);free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_rigid_contact_preserves_jelly_fuel_and_oxidizer(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *phase=calloc(1,sizeof(*phase));
+    fr_bulk_phase_chunk_t *after=calloc(1,sizeof(*after));
+    ASSERT_TRUE(chunk&&phase&&after);
+    for(uint32_t y=20u;y<22u;y++) for(uint32_t x=20u;x<23u;x++)
+        chunk->cells[y*64u+x].material=DC_MATERIAL_WOOD;
+    uint32_t at=20u*64u+19u;phase->slime_fp[at]=30000u;
+    phase->slime_excess[at]=3.f;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t wood;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322u,0u,300.f,
+        502u,&wood,err,sizeof(err))&&
+        fr_gpu_reactive_seed_cell(g,0,20u*64u+20u,&wood,err,sizeof(err))&&
+        dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(g,0,chunk,phase,err,sizeof(err))&&
+        fr_thermal_gpu_enable(g,err,sizeof(err))&&
+        fr_thermal_gpu_step(g,.5f,err,sizeof(err)));
+    fr_reactive_record_t record;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0u,0u,&record,&found,err,sizeof(err))&&found&&
+        fr_bulk_phase_gpu_export_chunk(g,0,after,err,sizeof(err)));
+    uint32_t lost=phase->slime_fp[at]-after->slime_fp[at];
+    uint32_t fuel=record.state.coating_jelly_fuel_fp;
+    uint32_t oxidizer=record.state.coating_oxidizer_fp;
+    const fr_reactive_profile_t *jelly=fr_reactive_profile(DC_MATERIAL_RED_SLIME_JELLY);
+    ASSERT_TRUE(lost>0u&&fuel>0u&&oxidizer>0u&&jelly);
+    ASSERT_TRUE(fabs((double)fuel+oxidizer-(double)lost*jelly->density)<2.);
+    ASSERT_TRUE(fabs((double)fuel-(double)(fuel+oxidizer)*jelly->fuel_fraction)<2.);
+    ASSERT_TRUE(after->slime_excess[at]<phase->slime_excess[at]);
+    free(after);free(phase);free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_saturated_neighbor_air_suppresses_drying(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     uint32_t at=20u*64u+20u;chunk->cells[at].material=DC_MATERIAL_WOOD;
@@ -250,6 +283,7 @@ int main(void) {
     RUN(test_wet_wood_dries_into_the_local_gas_without_losing_fuel);
     RUN(test_rotated_rigid_wood_keeps_its_drying_inventory);
     RUN(test_rigid_contact_wets_from_finite_oil_volume);
+    RUN(test_rigid_contact_preserves_jelly_fuel_and_oxidizer);
     RUN(test_saturated_neighbor_air_suppresses_drying);
     RUN(test_equal_simulated_time_dries_within_one_water_quantum);
     RUN(test_drying_reaches_gas_across_a_chunk_seam);
