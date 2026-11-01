@@ -31,3 +31,7 @@ GPU bulk phase now conserves water/oil in sealed vertical exchange, moves oil/sl
 **2026-11-01T03:35:19Z**
 
 Retained oil/slime channels are validated as subsets of authoritative phase stock in GPU imports and versioned packets; malformed but correctly checksummed restore is rejected transactionally. Full all/test passed after RED-GREEN-REFACTOR.
+
+**2026-11-01T07:01:38Z**
+
+Added RED-GREEN-REFACTOR GPU regression for water heat carried by oil/water density exchange (e9ea5f8, cc4e91a, 625e5a6). Bulk pair now transfers the water thermal sidecar in proportion to Q16 water volume; total stored water heat is conserved in the sealed vertical exchange. Full make test under Xephyr :92 passed. Remaining acceptance includes distinct oil/slime heat inventory, water-to-phase thermal exchange/drag, and broader moving-rigid/seam reconciliation; ticket stays in progress.
