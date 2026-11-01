@@ -19,7 +19,7 @@ layout(set=0,binding=28,std430) buffer FractureLabels {uint fracture_labels[];};
 layout(set=0,binding=29,std430) buffer FractureQueue {uint fracture_queue[];};
 uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 layout(push_constant) uniform Params { uint width,height,mode,body_count; uvec2 origin_x,origin_y; } params;
-const uint GRAPH_WORDS=2384u,NODES=16u,MEMBERS=400u,JOINTS=592u,ANCHORS=1616u;
+const uint GRAPH_WORDS=2320u,NODES=16u,MEMBERS=400u,JOINTS=528u,ANCHORS=1552u;
 #include "structural_load.glsl"
 shared uint label[32],next_label[32],cold[32],roots[32];
 uint base() {
@@ -74,16 +74,6 @@ bool separated(Body a,Body b) {
     }
     return true;
 }
-bool joined_members(uint stage,uint member,uint other_slot) {
-    uint a=DC_DATA(member+2u),b=DC_DATA(member+3u);
-    for(uint i=0u;i<DC_DATA(stage+1u);i++) {
-        uint other=stage+MEMBERS+i*8u;
-        if(DC_DATA(other+7u)!=other_slot) continue;
-        uint c=DC_DATA(other+2u),d=DC_DATA(other+3u);
-        return a==c||a==d||b==c||b==d;
-    }
-    return false;
-}
 #include "structural_identity.glsl"
 void transaction() {
     uint s=base(),st=graph()+GRAPH_WORDS;DC_DATA(s+2u)=0u;
@@ -99,7 +89,6 @@ void transaction() {
         }
         for(uint j=0u;j<params.body_count;j++) {
             if(j==slot || (DC_BODY(j).enabled==0u && DC_BODY(j).reserved0!=0x53545231u)) continue;
-            if(joined_members(st,m,j)) continue;
             Body other=DC_BODY(j);if(!place_pose(other)) continue;
             if(!separated(b,other)) return;
         }

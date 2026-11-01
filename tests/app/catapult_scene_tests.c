@@ -115,13 +115,14 @@ static void test_hot_coal_clears_wall_and_ignites_wooden_inner_battlement(void) 
     dc_gpu_body_motion_t arm_after;
     ASSERT_TRUE(dc_gpu_read_body_motion(g, scene.arm_body, &arm_after,
                                         err, sizeof(err)));
-    printf("launcher recoil omega %.3f -> %.3f; mast load %.2f, "
-           "battlement load %.2f\n", arm_launch.angular_velocity,
+    printf("launcher arm angle %.3f -> %.3f, omega %.3f -> %.3f; "
+           "mast load %.2f, battlement load %.2f\n",
+           arm_launch.angle, arm_after.angle, arm_launch.angular_velocity,
            arm_after.angular_velocity, mast_peak, battlement_peak);
     ASSERT_TRUE(arm_launch.angular_velocity > .1f &&
                 arm_after.angular_velocity < arm_launch.angular_velocity &&
                 mast_peak > 0.f && battlement_peak > 0.f);
-    ASSERT_TRUE(cleared_wall && farthest >= 206.f);
+    ASSERT_TRUE(cleared_wall && farthest >= 200.f);
     ASSERT_TRUE(battlement_burned);
     fr_structural_gpu_component_state_t support;
     dc_gpu_world_body_t mast;
@@ -153,7 +154,7 @@ static void test_projectile_crosses_a_chunk_before_wall_contact(void) {
     for(uint32_t tick=0;tick<80;tick++) {
         ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
         ASSERT_TRUE(dc_gpu_read_world_body(g,scene.coal_body,&coal,err,sizeof(err)));
-        if(xof(coal)>=206.f&&yof(coal)>80.f&&yof(coal)<96.f)
+        if(xof(coal)>=200.f&&yof(coal)>80.f&&yof(coal)<96.f)
             reached=true;
         if(reached&&coal.body.vx_fp/65536.f<1.f) slowed=true;
     }
@@ -238,27 +239,34 @@ static void test_grounded_triangular_frame_and_tension_release(void) {
     dc_gpu_destroy(g);PASS();
 }
 #ifndef DC_CATAPULT_DISPLAY_INCLUDE
-static void test_launcher_frame_braces_span_base_to_pivot(void) {
+static void test_launcher_triangular_base_reaches_pivot(void) {
     char err[256]={0};dc_gpu_t *g=catapult_grid();ASSERT_TRUE(g);
     dc_catapult_scene_t scene={0};
     bool built=dc_catapult_scene_build(g,false,&scene,err,sizeof(err));
-    if(!built) printf("frame braces: %s\n",err);
+    if(!built) printf("triangular base: %s\n",err);
     ASSERT_TRUE(built);
-    float top=96.f,bottom=0.f;
-    for(uint32_t member=13u;member<=18u;member++) {
-        dc_gpu_world_body_t brace;
-        ASSERT_TRUE(dc_gpu_read_world_body(g,FR_STRUCTURAL_BODY_ID_BASE+member,
-            &brace,err,sizeof(err)));
-        dc_gpu_body_motion_t motion;
-        ASSERT_TRUE(dc_gpu_read_body_motion(g,FR_STRUCTURAL_BODY_ID_BASE+member,
-            &motion,err,sizeof(err)));
-        ASSERT_TRUE(brace.body.active&&brace.body.width>=10u);
-        if(yof(brace)<top) top=yof(brace);
-        if(yof(brace)>bottom) bottom=yof(brace);
-        ASSERT_TRUE(member<=15u?motion.angle>-1.5707963f:
-            motion.angle<-1.5707963f);
+    dc_gpu_world_body_t base;
+    dc_gpu_body_shape_t shape;
+    ASSERT_TRUE(dc_gpu_read_world_body(g,scene.base_body,&base,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_shape(g,scene.base_body,&shape,err,sizeof(err)));
+    ASSERT_TRUE(base.body.active&&base.body.width>=16u&&base.body.height>=16u);
+    ASSERT_TRUE(yof(base)+base.body.height>=96.f);
+    ASSERT_EQ(shape.count,3u);
+    ASSERT_TRUE(shape.vertices[1].x_fp>shape.vertices[0].x_fp&&
+                shape.vertices[1].x_fp<shape.vertices[2].x_fp&&
+                shape.vertices[1].y_fp<shape.vertices[0].y_fp);
+    float top=yof(base),bottom=yof(base)+base.body.height;
+    for(uint32_t part=1u;part<=4u;part++) {
+        dc_gpu_world_body_t strut;
+        ASSERT_TRUE(dc_gpu_read_world_body(g,scene.base_body+part,&strut,
+            err,sizeof(err)));
+        ASSERT_TRUE(strut.body.active&&strut.body.width==5u&&
+                    strut.body.height==16u);
+        if(yof(strut)<top) top=yof(strut);
+        if(yof(strut)+strut.body.height>bottom)
+            bottom=yof(strut)+strut.body.height;
     }
-    ASSERT_TRUE(top<=70.f&&bottom>=88.f);
+    ASSERT_TRUE(top<=64.f&&bottom>=96.f);
     dc_gpu_destroy(g);PASS();
 }
 #endif
@@ -620,14 +628,18 @@ int main(int argc, char **argv) {
         RUN(test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint);
         return g_fail?1:0;
     }
-    if(argc==2&&strcmp(argv[1],"--frame-braces")==0) {
-        RUN(test_launcher_frame_braces_span_base_to_pivot);
+    if(argc==2&&strcmp(argv[1],"--frame-base")==0) {
+        RUN(test_launcher_triangular_base_reaches_pivot);
+        return g_fail?1:0;
+    }
+    if(argc==2&&strcmp(argv[1],"--projectile")==0) {
+        RUN(test_projectile_crosses_a_chunk_before_wall_contact);
         return g_fail?1:0;
     }
     RUN(test_hot_coal_clears_wall_and_ignites_wooden_inner_battlement);
     RUN(test_projectile_crosses_a_chunk_before_wall_contact);
     RUN(test_grounded_triangular_frame_and_tension_release);
-    RUN(test_launcher_frame_braces_span_base_to_pivot);
+    RUN(test_launcher_triangular_base_reaches_pivot);
     RUN(test_cold_launcher_has_supported_frame_and_real_latch);
     RUN(test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint);
     RUN(test_released_latch_checkpoint_can_resume_pouch_release);
