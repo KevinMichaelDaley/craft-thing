@@ -395,6 +395,8 @@ static void test_quarter_native_smoke_wavelet_advects_and_displaces_boundary(voi
         if(red>interior_high) interior_high=red;
     }
     printf("Quarter-native reference smoke interior range %d..%d\n",interior_low,interior_high);
+    /* Uniform translation has no resolved high-frequency energy to scatter. */
+    ASSERT_TRUE(interior_high-interior_low<=1);
     ASSERT_TRUE(interior_high-interior_low<=8);
     uint32_t edge_cells=0;for(uint32_t y=19;y<=28;y++) for(uint32_t x=19;x<=28;x++) {
         if(x!=19u&&x!=28u&&y!=19u&&y!=28u) continue;

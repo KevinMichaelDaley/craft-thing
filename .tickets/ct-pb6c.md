@@ -24,3 +24,7 @@ Add RED GPU and reference tests for moving MPM cut-cell compression, open-neighb
 **2026-11-01T03:28:31Z**
 
 Claimed after ctlo-08fu checkpoint. Existing gas geometry remap keeps stock in sealed MPM-compressed voids and redistributes only to immediate positive-volume neighbors; gas density/EOS can therefore spike in tiny MPM cut cells. Need RED reference/GPU tests for open vent and sealed pressure-work, then two-way gas pressure/MPM coupling; do not clamp pressure or discard stock.
+
+**2026-11-01T04:02:10Z**
+
+Pressure feedback and sealed-pocket work implemented; carved benchmark still fails with 10k pressure and near-zero transient temperature. Trial 0.64 granular packing cap lowered peak to 2964 but did not pass 10x ambient bound, so reverted. RED pore-volume test retained for proper coupled solution. Do not close.
