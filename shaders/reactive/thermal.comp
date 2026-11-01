@@ -170,7 +170,8 @@ void main() {
             uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y!=0u) {
                 if(active_phase()==20u) {
                     body_wet_parcel(body,piece,h);
-                    body_oil_coat_parcel(body,piece,h);
+                    body_phase_coat_parcel(body,piece,h,1u);
+                    body_phase_coat_parcel(body,piece,h,2u);
                 } else body_conduction(h.x);
             }
         }
