@@ -43,3 +43,7 @@ Added RED-GREEN-REFACTOR GPU test for velocity-based water drag on immersed oil 
 **2026-11-01T07:21:12Z**
 
 Added separate oil/slime excess-energy sidecars to the bulk chunk, BLP2 save packet with BLP1 backward decoder, strict finite import checks, and conservative GPU heat advection alongside phase volume (RED a7f4e60/ae3f36a/b986ba0, GREEN 8c8ee94, REFACTOR e4df489). Shared C/GLSL channel layout now asserts matching stride. Packet, stream, bulk GPU, and full make test pass under Xephyr :92. Remaining: direct water/oil/slime thermal exchange and broader moving-rigid/seam reconciliation.
+
+**2026-11-01T07:30:13Z**
+
+Added RED-GREEN-REFACTOR conserved liquid thermal coupling (dca561b, 33e71e5, 7fb4c77): a dedicated GPU pass uses profile heat capacities/conductivities and exact two-capacity relaxation for contacting water/oil/slime in each loaded cell. Red water-oil test and three-phase conservation test pass; full make test under Xephyr :92 passes. Remaining moving-rigid/seam reconciliation before closure.
