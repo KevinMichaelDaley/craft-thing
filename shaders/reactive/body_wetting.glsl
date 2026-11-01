@@ -67,23 +67,59 @@ void body_phase_heat_add(uint at,float energy) {
         old=observed;
     }
 }
-void body_phase_coat_parcel(Body body,uint piece,uvec2 handle,uint phase) {
-    Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
+uint coating_transfer_cell(Words entry,uint phase,uint at,uint requested) {
     uint s=FR_ENTRY_STATE;
-    uint material=phase==1u?14u:15u;
-    float density=coefficient(material,FR_PROFILE_DENSITY_WORD);
+    uint material=phase==1u?FR_COATING_OIL_MATERIAL:FR_COATING_JELLY_MATERIAL;
     float capacity=coefficient(material,FR_PROFILE_HEAT_CAPACITY_WORD);
     uint oil=entry.words[s+FR_STATE_COATING_OIL];
     uint jelly=entry.words[s+FR_STATE_COATING_JELLY];
     uint oxidizer=entry.words[s+FR_STATE_COATING_OXIDIZER];
     uint remainder=entry.words[s+FR_STATE_COATING_REMAINDERS];
     if(oil>=65536u||jelly>=65536u||oxidizer>=65536u||
-       oil+jelly+oxidizer>=65536u||density<=0.||capacity<=0.) return;
+       oil+jelly+oxidizer>=65536u||capacity<=0.) return 0u;
+    uint base=(at/4096u)*FR_BULK_CHUNK_CHANNELS*4096u+at%4096u;
+    uint volume_at=base+(phase-1u)*4096u;
+    uint available=atomicAdd(bulk_phase_words[volume_at],0u);
+    if(available==0u) return 0u;
+    uint room=65536u-oil-jelly-oxidizer;
+    uint mass_rem=phase==1u?
+        ((remainder>>FR_COATING_OIL_REM_SHIFT)&FR_COATING_REM_MASK):
+        ((remainder>>FR_COATING_JELLY_REM_SHIFT)&FR_COATING_REM_MASK);
+    uint mass_num=phase==1u?FR_COATING_OIL_MASS_NUM:FR_COATING_JELLY_MASS_NUM;
+    uint request=min(requested,(room*FR_COATING_MASS_DEN-mass_rem)/mass_num);
+    uint taken=body_phase_reserve(volume_at,request);
+    if(taken==0u) return 0u;
+    uint total=taken*mass_num+mass_rem;
+    uint mass=total/FR_COATING_MASS_DEN;
+    if(phase==1u) {
+        remainder=(remainder&~FR_COATING_REM_MASK)|(total%FR_COATING_MASS_DEN);
+        entry.words[s+FR_STATE_COATING_OIL]+=mass;
+    } else {
+        remainder=(remainder&~(FR_COATING_REM_MASK<<FR_COATING_JELLY_REM_SHIFT))|
+            ((total%FR_COATING_MASS_DEN)<<FR_COATING_JELLY_REM_SHIFT);
+        uint fuel_rem=(remainder>>FR_COATING_JELLY_FUEL_REM_SHIFT)&FR_COATING_FUEL_REM_MASK;
+        uint fuel_total=mass*FR_COATING_JELLY_FUEL_NUM+fuel_rem;
+        uint fuel=fuel_total/FR_COATING_JELLY_FUEL_DEN;
+        remainder=(remainder&~(FR_COATING_FUEL_REM_MASK<<FR_COATING_JELLY_FUEL_REM_SHIFT))|
+            ((fuel_total%FR_COATING_JELLY_FUEL_DEN)<<FR_COATING_JELLY_FUEL_REM_SHIFT);
+        entry.words[s+FR_STATE_COATING_JELLY]+=fuel;
+        entry.words[s+FR_STATE_COATING_OXIDIZER]+=mass-fuel;
+    }
+    entry.words[s+FR_STATE_COATING_REMAINDERS]=remainder;
+    uint heat_at=base+(phase+3u)*4096u;
+    float excess=uintBitsToFloat(atomicAdd(bulk_phase_words[heat_at],0u))*
+        float(taken)/float(available);
+    body_phase_heat_add(heat_at,-excess);
+    add_energy(entry,excess+float(taken*mass_num)/float(FR_COATING_MASS_DEN*65536u)*
+        capacity*float(FR_THERMAL_AMBIENT_K));
+    return taken;
+}
+void body_phase_coat_parcel(Body body,uint piece,uvec2 handle,uint phase) {
+    Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
     BodyQuad quad;if(!body_pixel_quad(body,piece,quad)) return;
     vec2 origin=vec2(body.x_fp,body.y_fp)/65536.;
     ivec2 low=ivec2(floor(origin+min(min(quad.a,quad.b),min(quad.c,quad.d))-.0001));
     ivec2 high=ivec2(floor(origin+max(max(quad.a,quad.b),max(quad.c,quad.d))+.0001));
-    uint gained=0u,gained_fuel=0u,gained_oxidizer=0u;float heat=0.;
     for(int y=low.y;y<=high.y;y++) for(int x=low.x;x<=high.x;x++) {
         ivec2 cell=ivec2(x,y);
         if(any(lessThan(cell,ivec2(0)))||any(greaterThanEqual(cell,ivec2(params.width,params.height)))) continue;
@@ -95,48 +131,27 @@ void body_phase_coat_parcel(Body body,uint piece,uvec2 handle,uint phase) {
         if(available==0u) continue;
         float contact=body_water_contact(body,piece,cell,min(1.,float(available)/65536.));
         if(contact<=0.) continue;
-        uint room=65536u-oil-jelly-oxidizer-gained;
-        if(room==0u) continue;
         uint request=uint(floor(float(FR_THERMAL_WETTING_PER_SECOND)*
             uintBitsToFloat(params.seconds)*65536.*contact/4.));
-        uint mass_rem=phase==1u?
-            ((remainder>>FR_COATING_OIL_REM_SHIFT)&FR_COATING_REM_MASK):
-            ((remainder>>FR_COATING_JELLY_REM_SHIFT)&FR_COATING_REM_MASK);
-        uint mass_num=phase==1u?FR_COATING_OIL_MASS_NUM:FR_COATING_JELLY_MASS_NUM;
-        request=min(request,(room*FR_COATING_MASS_DEN-mass_rem)/mass_num);
-        uint taken=body_phase_reserve(volume_at,request);
-        if(taken==0u) continue;
-        uint total=taken*mass_num+mass_rem;
-        uint mass=total/FR_COATING_MASS_DEN;
-        if(phase==1u) {
-            remainder=(remainder&~FR_COATING_REM_MASK)|
-                (total%FR_COATING_MASS_DEN);
-            gained_fuel+=mass;
-        } else {
-            remainder=(remainder&~(FR_COATING_REM_MASK<<FR_COATING_JELLY_REM_SHIFT))|
-                ((total%FR_COATING_MASS_DEN)<<FR_COATING_JELLY_REM_SHIFT);
-            uint fuel_rem=(remainder>>FR_COATING_JELLY_FUEL_REM_SHIFT)&FR_COATING_FUEL_REM_MASK;
-            uint fuel_total=mass*FR_COATING_JELLY_FUEL_NUM+fuel_rem;
-            uint fuel=fuel_total/FR_COATING_JELLY_FUEL_DEN;
-            remainder=(remainder&~(FR_COATING_FUEL_REM_MASK<<FR_COATING_JELLY_FUEL_REM_SHIFT))|
-                ((fuel_total%FR_COATING_JELLY_FUEL_DEN)<<FR_COATING_JELLY_FUEL_REM_SHIFT);
-            gained_fuel+=fuel;gained_oxidizer+=mass-fuel;
-        }
-        uint heat_at=base+(phase+3u)*4096u;
-        float excess=uintBitsToFloat(atomicAdd(bulk_phase_words[heat_at],0u))*
-            float(taken)/float(available);
-        body_phase_heat_add(heat_at,-excess);
-        heat+=excess+float(taken*mass_num)/float(FR_COATING_MASS_DEN*65536u)*
-            capacity*float(FR_THERMAL_AMBIENT_K);
-        gained+=mass;
+        coating_transfer_cell(entry,phase,at,request);
     }
-    if(gained>0u) {
-        entry.words[s+FR_STATE_COATING_REMAINDERS]=remainder;
-        if(phase==1u) entry.words[s+FR_STATE_COATING_OIL]+=gained_fuel;
-        else {
-            entry.words[s+FR_STATE_COATING_JELLY]+=gained_fuel;
-            entry.words[s+FR_STATE_COATING_OXIDIZER]+=gained_oxidizer;
-        }
-        add_energy(entry,heat);
+}
+void terrain_phase_coat_parcel(uint index) {
+    uvec2 handle=handle_at(index);
+    if(!valid(handle)) return;
+    Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));
+    uint material=entry.words[FR_ENTRY_STATE];
+    if(profiles[material*FR_PROFILE_WORDS+FR_PROFILE_PHASE_WORD]>1u) return;
+    ivec2 point=ivec2(index%params.width,index/params.width);
+    const ivec2 directions[4]=ivec2[4](ivec2(-1,0),ivec2(1,0),
+        ivec2(0,-1),ivec2(0,1));
+    uint request=uint(floor(float(FR_THERMAL_WETTING_PER_SECOND)*
+        uintBitsToFloat(params.seconds)*65536.));
+    for(uint phase=1u;phase<=2u;phase++) for(uint direction=0u;direction<4u;direction++) {
+        ivec2 neighbor=point+directions[direction];
+        if(any(lessThan(neighbor,ivec2(0)))||
+           any(greaterThanEqual(neighbor,ivec2(params.width,params.height)))) continue;
+        uint at=atlas_at(uint(neighbor.y)*params.width+uint(neighbor.x));
+        if(at!=0xffffffffu) coating_transfer_cell(entry,phase,at,request);
     }
 }

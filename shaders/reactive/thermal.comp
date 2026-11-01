@@ -198,7 +198,11 @@ void main() {
     if(active_phase()==21u) {uint at=atlas_at(index);
         fluxes[index+params.width*params.height]=at==0xffffffffu?vec4(0):vec4(water_energy_at(at),uintBitsToFloat(cells[at].y),0.,0.);return;}
     if(active_phase()==0u||active_phase()==23u) {
-        if(active_phase()==23u) {uint at=atlas_at(index);if(at!=0xffffffffu&&cells[at].y==0u) water_energy_set(at,0.);}
+        if(active_phase()==23u) {
+            if((params.mode&2u)!=0u) terrain_phase_coat_parcel(index);
+            uint at=atlas_at(index);
+            if(at!=0xffffffffu&&cells[at].y==0u) water_energy_set(at,0.);
+        }
         vec4 metadata;
         samples[index]=sample_with_metadata(index,metadata);samples[index+params.width*params.height]=metadata;
     }
