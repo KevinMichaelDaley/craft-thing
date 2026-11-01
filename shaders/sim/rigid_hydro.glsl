@@ -21,7 +21,9 @@ uint hydro_bulk_word(uint atlas,uint channel) {
         channel*4096u+atlas%4096u;
 }
 uint hydro_phase_volume(uint atlas,uint phase) {
-    return hydro_bulk[hydro_bulk_word(atlas,phase-1u)];
+    uint stock=hydro_bulk[hydro_bulk_word(atlas,phase-1u)];
+    uint retained=hydro_bulk[hydro_bulk_word(atlas,phase+1u)];
+    return stock>retained?stock-retained:0u;
 }
 float hydro_liquid(uint atlas,uint index,out vec2 flow,out float density) {
     float water=float(hydro_cells[atlas].y)/65536.;
@@ -34,9 +36,13 @@ float hydro_liquid(uint atlas,uint index,out vec2 flow,out float density) {
     float volume=water+oil+slime;
     float mass=water+oil*params.oil_density+slime*params.slime_density;
     vec2 momentum=water*hydro_velocity[index];
-    momentum+=vec2(uintBitsToFloat(hydro_bulk[hydro_bulk_word(atlas,6u)]),
+    uint oil_stock=hydro_bulk[hydro_bulk_word(atlas,0u)];
+    uint slime_stock=hydro_bulk[hydro_bulk_word(atlas,1u)];
+    float oil_mobile=oil_stock>0u?float(hydro_phase_volume(atlas,1u))/float(oil_stock):0.;
+    float slime_mobile=slime_stock>0u?float(hydro_phase_volume(atlas,2u))/float(slime_stock):0.;
+    momentum+=oil_mobile*vec2(uintBitsToFloat(hydro_bulk[hydro_bulk_word(atlas,6u)]),
         uintBitsToFloat(hydro_bulk[hydro_bulk_word(atlas,7u)]));
-    momentum+=vec2(uintBitsToFloat(hydro_bulk[hydro_bulk_word(atlas,8u)]),
+    momentum+=slime_mobile*vec2(uintBitsToFloat(hydro_bulk[hydro_bulk_word(atlas,8u)]),
         uintBitsToFloat(hydro_bulk[hydro_bulk_word(atlas,9u)]));
     flow=mass>0.?momentum/mass:vec2(0.);
     density=volume>0.?mass/volume:0.;
@@ -138,7 +144,7 @@ float hydro_sample(ivec2 p,out vec2 flow,out float density,out uint reaction_at)
 
 void hydro_atomic_momentum(uint word,float delta) {
     uint old=hydro_bulk[word];
-    for(uint attempt=0u;attempt<32u;attempt++) {
+    for(;;) {
         uint next=floatBitsToUint(uintBitsToFloat(old)+delta);
         uint observed=atomicCompSwap(hydro_bulk[word],old,next);
         if(observed==old) return;
