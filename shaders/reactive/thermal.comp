@@ -155,7 +155,8 @@ void body_conduction(uint index) {
 #include "radiation.glsl"
 void main() {
     uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
-    if(active_phase()==8u||active_phase()==9u||active_phase()==11u||active_phase()==14u||active_phase()==20u) {
+    if(active_phase()==8u||active_phase()==9u||active_phase()==11u||active_phase()==14u||
+       active_phase()==20u||active_phase()==24u||active_phase()==25u) {
         uint slot=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;if(slot>=BODY_CAPACITY) return;
         Body body=DC_BODY(slot);if((body.enabled|body.reserved0)==0u||!pixel_storage(body)) return;
         if(active_phase()==14u) {
@@ -175,7 +176,9 @@ void main() {
                         body_phase_coat_parcel(body,piece,h,1u);
                         body_phase_coat_parcel(body,piece,h,2u);
                     }
-                } else body_conduction(h.x);
+                } else if(active_phase()==24u||active_phase()==25u)
+                    body_phase_release_parcel(body,piece,h,active_phase()-23u);
+                else body_conduction(h.x);
             }
         }
         return;
