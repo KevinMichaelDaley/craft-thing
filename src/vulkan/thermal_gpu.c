@@ -157,9 +157,10 @@ bool fr_combustion_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     dc_gpu_record_body_ash(g,g->thermal->hud.buffer);phase(g,14,seconds);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
-    if(fr_renderer_submit(g)) {fr_renderer_emission_changed(g);return true;}
-    if(err&&cap) snprintf(err,cap,"Cannot complete terrain combustion transaction");
-    return false;
+    bool completed=fr_renderer_submit(g);
+    if(completed) fr_renderer_emission_changed(g);
+    else if(err&&cap) snprintf(err,cap,"Cannot complete terrain combustion transaction");
+    return completed;
 }
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);

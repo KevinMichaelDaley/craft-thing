@@ -280,7 +280,8 @@ bool fr_renderer_render(dc_gpu_t *g, char *err, uint32_t cap) {
   return g && g->renderer && dc_gpu_render_chunks(g, err, cap);
 }
 void fr_renderer_emission_changed(dc_gpu_t *g) {
-  if(!g||!g->renderer) return;
+  if (!g || !g->renderer) return;
+  /* Scene dirty revision and source seed revision must advance together. */
   g->renderer->light_revision++;
   fr_lighting_gpu_invalidate_sources(g->renderer->lighting);
 }
