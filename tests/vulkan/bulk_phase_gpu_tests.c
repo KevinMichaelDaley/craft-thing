@@ -342,6 +342,7 @@ static void test_moving_rigid_crosses_chunk_seam_without_oil_or_heat_loss(void) 
     const uint32_t at=30u*64u+63u;
     source->oil_fp[at]=FR_BULK_CELL_FULL_FP;
     source->oil_excess[at]=25.f;
+    source->oil_momentum_x[at]=10.f;
     ASSERT_TRUE(dc_gpu_create(&gpu,128,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
         dc_gpu_upload_chunk(gpu,0,left,err,sizeof(err))&&
         dc_gpu_upload_chunk(gpu,1,right,err,sizeof(err))&&
@@ -365,15 +366,19 @@ static void test_moving_rigid_crosses_chunk_seam_without_oil_or_heat_loss(void) 
     dc_gpu_body_t moved_body={0};
     ASSERT_TRUE(dc_gpu_read_body_id(gpu,307,&moved_body,err,sizeof(err)));
     ASSERT_EQ(moved_body.x_fp,64*(int32_t)FR_BULK_CELL_FULL_FP);
-    uint64_t oil=0u,right_oil=0u;double heat=0.;
+    uint64_t oil=0u,right_oil=0u;double heat=0.,momentum=0.,right_momentum=0.;
     for(uint32_t i=0;i<DC_CHUNK_CELLS;i++) {
         oil+=(uint64_t)out_left->oil_fp[i]+out_right->oil_fp[i];
         right_oil+=out_right->oil_fp[i];
         heat+=(double)out_left->oil_excess[i]+out_right->oil_excess[i];
+        momentum+=(double)out_left->oil_momentum_x[i]+out_right->oil_momentum_x[i];
+        right_momentum+=out_right->oil_momentum_x[i];
     }
     ASSERT_EQ(oil,FR_BULK_CELL_FULL_FP);
     ASSERT_TRUE(right_oil>0u);
     ASSERT_TRUE(fabs(heat-25.)<.001);
+    ASSERT_TRUE(right_momentum>0.);
+    ASSERT_TRUE(fabs(momentum-10.)<.001);
     dc_gpu_destroy(gpu);free(left);free(right);free(source);free(out_left);free(out_right);PASS();
 }
 static void test_slime_flux_yields_under_load_and_softens_when_hot(void) {
@@ -482,6 +487,32 @@ static void test_water_drag_exchanges_equal_opposite_phase_momentum(void) {
     ASSERT_TRUE(out->oil_excess[upper]+out->oil_excess[lower]>0.f);
     dc_gpu_destroy(gpu);free(chunk);free(after);free(bulk);free(out);PASS();
 }
+static void test_phase_momentum_biases_bulk_flux_direction(void) {
+    char err[256]={0};dc_gpu_t *gpu=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *bulk=calloc(1,sizeof(*bulk)),*out=calloc(1,sizeof(*out));
+    ASSERT_TRUE(chunk&&bulk&&out);
+    for(uint32_t x=1u;x<63u;x++) {
+        chunk->cells[19u*64u+x].material=DC_MATERIAL_STONE;
+        chunk->cells[21u*64u+x].material=DC_MATERIAL_STONE;
+    }
+    const uint32_t positive=20u*64u+16u,negative=20u*64u+48u;
+    bulk->oil_fp[positive]=FR_BULK_CELL_FULL_FP/2u;
+    bulk->oil_fp[negative]=FR_BULK_CELL_FULL_FP/2u;
+    bulk->oil_momentum_x[positive]=11.f;
+    bulk->oil_momentum_x[negative]=-11.f;
+    ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+        dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(gpu,0,0,0,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,bulk,err,sizeof(err))&&
+        fr_bulk_phase_gpu_step(gpu,1.f/60.f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
+    int32_t positive_bias=(int32_t)out->oil_fp[positive+1u]-
+        (int32_t)out->oil_fp[positive-1u];
+    int32_t negative_bias=(int32_t)out->oil_fp[negative+1u]-
+        (int32_t)out->oil_fp[negative-1u];
+    ASSERT_TRUE(positive_bias>negative_bias);
+    dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
+}
 int main(void) {
     RUN(test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot);
     RUN(test_water_solver_respects_full_oil_cell_capacity);
@@ -501,5 +532,6 @@ int main(void) {
     RUN(test_phase_flux_carries_momentum_without_extra_mass);
     RUN(test_gpu_import_rejects_orphan_phase_momentum);
     RUN(test_water_drag_exchanges_equal_opposite_phase_momentum);
+    RUN(test_phase_momentum_biases_bulk_flux_direction);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
