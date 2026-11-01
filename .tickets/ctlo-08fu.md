@@ -35,3 +35,7 @@ Retained oil/slime channels are validated as subsets of authoritative phase stoc
 **2026-11-01T07:01:38Z**
 
 Added RED-GREEN-REFACTOR GPU regression for water heat carried by oil/water density exchange (e9ea5f8, cc4e91a, 625e5a6). Bulk pair now transfers the water thermal sidecar in proportion to Q16 water volume; total stored water heat is conserved in the sealed vertical exchange. Full make test under Xephyr :92 passed. Remaining acceptance includes distinct oil/slime heat inventory, water-to-phase thermal exchange/drag, and broader moving-rigid/seam reconciliation; ticket stays in progress.
+
+**2026-11-01T07:07:00Z**
+
+Added RED-GREEN-REFACTOR GPU test for velocity-based water drag on immersed oil (3a162fa, 7f07a2b, 8457a8a). Upward water face flow now entrains mixed oil against gravity, while dry oil at the same face velocity remains below; phase volumes remain conserved. Full make test under Xephyr :92 passed. Still pending independent oil/slime thermal inventories and exchange, persistent sidecars, and broader moving-body cases.
