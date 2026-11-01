@@ -308,6 +308,11 @@ static void test_mixed_film_burns_wet_faster_than_matched_oil_control(void) {
     ASSERT_TRUE((emission[at[0]].sources&FR_FIRE_EMISSION_MAGIC)!=0u);
     ASSERT_TRUE((emission[at[0]].sources>>8u)!=0u);
     ASSERT_TRUE((emission[at[1]].sources&FR_FIRE_EMISSION_MAGIC)==0u);
+    fr_gas_state_t *gas=calloc(4096u,sizeof(*gas));ASSERT_TRUE(gas);
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,gas,4096u,err,sizeof(err)));
+    ASSERT_TRUE(gas[at[0]].pigment[1]>gas[at[0]].pigment[0]);
+    ASSERT_TRUE(gas[at[1]].pigment[0]>gas[at[1]].pigment[1]);
+    free(gas);
     free(emission);
     free(chunk);dc_gpu_destroy(g);PASS();
 }
