@@ -30,6 +30,7 @@ uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 layout(push_constant) uniform Params {
     uint width, height, mode, body_count;
     uvec2 origin_x, origin_y;
+    float oil_density, slime_density;
 }
 params;
 

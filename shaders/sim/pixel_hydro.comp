@@ -12,7 +12,10 @@ layout(set=0,binding=4,std430) buffer Storage {Body bodies[BODY_CAPACITY];uint d
 layout(set=0,binding=27,std430) buffer Activity {uint activity[];};
 layout(set=0,binding=29,std430) buffer Scratch {uint scratch[];};
 uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
-layout(push_constant) uniform Params {uint width,height,mode,body_count;uvec2 origin_x,origin_y;} params;
+layout(push_constant) uniform Params {
+    uint width,height,mode,body_count;uvec2 origin_x,origin_y;
+    float oil_density,slime_density;
+} params;
 #include "structural_load.glsl"
 #include "rigid_hydro.glsl"
 uint body_state(uint slot) {
@@ -206,13 +209,15 @@ void main() {
         vec2 center=origin+b.center,v=vec2(b.vx_fp,b.vy_fp)/65536.;precise vec3 sum=vec3(0),compensation=vec3(0);
         uint batch_begin=(force_group-DC_HYDRO_WORD(s+84u))*FORCE_BATCH;
         for(uint cell=batch_begin+lane;cell<min(cells,batch_begin+FORCE_BATCH);cell+=64u) {
-            ivec2 p=begin+ivec2(cell%width,cell/width);vec2 flow;float fraction=hydro_sample(p,flow);
+            ivec2 p=begin+ivec2(cell%width,cell/width);vec2 flow;float density;uint reaction_at;
+            float fraction=hydro_sample(p,flow,density,reaction_at);
             if(pooled) fraction=clamp(float(p.y)+1.-waterline,0.,1.);if(fraction<=0.) continue;
             vec2 query_low=vec2(p)-origin;uvec4 query=body_piece_query(b,query_low,query_low+1.);
             for(uint ordinal=0u;ordinal<query.z*query.w;ordinal++) {
                 uint piece=query_piece(b,query,ordinal);vec2 point;float volume=body_cell_volume(b,piece,p,fraction,point);if(volume<=0.) continue;
-                vec2 r=point-center,relative=flow-v-b.angular_velocity*vec2(-r.y,r.x),impulse=volume*(vec2(0,-.25)+WATER_DRAG_RATE*relative);
+                vec2 r=point-center,relative=flow-v-b.angular_velocity*vec2(-r.y,r.x),impulse=volume*(vec2(0,-.25*density)+WATER_DRAG_RATE*relative);
                 precise vec3 value=vec3(impulse,body_cross(r,impulse))-compensation;precise vec3 next=sum+value;compensation=(next-sum)-value;sum=next;
+                hydro_phase_reaction(reaction_at,impulse);
                 structural_capture(slot,BODY_CAPACITY,point,impulse);
             }
         }

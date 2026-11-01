@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "ferrum/fire/material_profile.h"
 #include "gpu_internal.h"
 #include "runtime_body_gpu.h"
 #include "revolute_gpu_internal.h"
@@ -219,10 +220,15 @@ bool dc_gpu_solver_graph_prepare(dc_gpu_t *gpu,char *err,uint32_t cap) {
 }
 static void record_pixel_hydro(dc_gpu_t *gpu) {
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
-    uint32_t push[8] = {gpu->width,  gpu->height,
+    uint32_t push[10] = {gpu->width,  gpu->height,
                         0,           dc_gpu_runtime_body_count(gpu),
                         (uint32_t)x, (uint32_t)(x >> 32),
                         (uint32_t)y, (uint32_t)(y >> 32)};
+    const fr_reactive_profile_t *oil=fr_reactive_profile(DC_MATERIAL_OIL);
+    const fr_reactive_profile_t *slime=fr_reactive_profile(DC_MATERIAL_RED_SLIME_JELLY);
+    float oil_density=oil?oil->density:1.f,slime_density=slime?slime->density:1.f;
+    memcpy(&push[8],&oil_density,sizeof(float));
+    memcpy(&push[9],&slime_density,sizeof(float));
     const uint32_t phases[] = {0, 3, 1, 2, 4};
     for (unsigned stage = 0; stage < sizeof(phases) / sizeof(*phases);
          ++stage) {
@@ -279,10 +285,15 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                       pipeline);
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
-    uint32_t push[8] = {gpu->width,  gpu->height,
+    uint32_t push[10] = {gpu->width,  gpu->height,
                         mode,        dc_gpu_runtime_body_count(gpu),
                         (uint32_t)x, (uint32_t)(x >> 32),
                         (uint32_t)y, (uint32_t)(y >> 32)};
+    const fr_reactive_profile_t *oil=fr_reactive_profile(DC_MATERIAL_OIL);
+    const fr_reactive_profile_t *slime=fr_reactive_profile(DC_MATERIAL_RED_SLIME_JELLY);
+    float oil_density=oil?oil->density:1.f,slime_density=slime?slime->density:1.f;
+    memcpy(&push[8],&oil_density,sizeof(float));
+    memcpy(&push[9],&slime_density,sizeof(float));
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     uint32_t phase = mode & SOLVER_PHASE_MASK;
