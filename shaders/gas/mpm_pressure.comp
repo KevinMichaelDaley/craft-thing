@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #define FR_GAS_LOCAL_SIZE 256
 #include "storage.glsl"
+#include "../../include/ferrum/fire/gas_constants.h"
 layout(set=0,binding=38,std430) buffer GrainForce {vec4 grain_force[];};
 layout(set=0,binding=39,std430) readonly buffer Activity {uint activity[];};
 
@@ -20,7 +21,7 @@ void main() {
         int((tile/tiles_x)*16u+gl_LocalInvocationIndex/16u));
     if(p.x>=int(params.width)||p.y>=int(params.height)) return;
     uint index=uint(p.y)*params.width+uint(p.x);
-    float solid=clamp(mpm[index].w,0.,1.);
+    float solid=min(max(mpm[index].w,0.),float(FR_GAS_GRANULAR_PACKING_FRACTION));
     if(solid==0.||mpm[index].x<=0.) {grain_force[index].zw=vec2(0.);return;}
     float center=pressure_at(p,0.);
     if(center<=0.) {grain_force[index].zw=vec2(0.);return;}

@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "../../src/vulkan/gpu_internal.h"
+#include "../test_window.h"
 
 static int g_pass, g_fail;
 static VkPresentModeKHR mode;
@@ -85,7 +86,7 @@ VkResult __wrap_vkQueueWaitIdle(VkQueue q) {
 
 static int window_cycle(void) {
     char err[256]={0}; dc_gpu_t *g=NULL;
-    if(!dc_gpu_create_window(&g,64,64,256,256,"build/shaders/pattern.comp.spv",err,sizeof(err))) {
+    if(!dc_test_create_window(&g,64,64,256,256,"build/shaders/pattern.comp.spv",err,sizeof(err))) {
         fprintf(stderr,"%s\n",err); return 1;
     }
     window_gpu=g;

@@ -4,6 +4,7 @@
 #include <string.h>
 #include <SDL.h>
 #include "dungeoncraft/gpu.h"
+#include "../test_window.h"
 
 static int g_pass,g_fail;
 static char selected_driver[64];
@@ -21,7 +22,7 @@ SDL_Window *SDLCALL __wrap_SDL_CreateWindow(const char *title,int x,int y,int w,
 }
 static bool probe_driver(void) {
     char err[256]={0};dc_gpu_t *g=NULL;selected_driver[0]=0;
-    bool created=dc_gpu_create_window(&g,8,8,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err));
+    bool created=dc_test_create_window(&g,8,8,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err));
     dc_gpu_destroy(g);
     printf("selected video driver: %s; Vulkan initialization prevented\n",selected_driver);
     return !created&&selected_driver[0]!=0;

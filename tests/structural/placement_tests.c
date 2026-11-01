@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "ferrum/structural/gpu.h"
+#include "../test_window.h"
 static int g_pass, g_fail;
 #define RUN(fn)                                                                \
     do {                                                                       \
@@ -30,7 +31,7 @@ static dc_gpu_t *grid(void) {
     const uint32_t width = 128, height = 128;
 #endif
 #ifdef DC_STRUCTURAL_PRESENTATION_TEST
-    bool ok = c && dc_gpu_create_window(&g, width, height, 640, 448,
+    bool ok = c && dc_test_create_window(&g, width, height, 640, 448,
                                         "build/shaders/pattern.comp.spv", err, sizeof(err));
     if (ok)
         ok = dc_gpu_set_viewport(g, 0, 0, 160, 112) && dc_gpu_set_display_zoom(g, 4);

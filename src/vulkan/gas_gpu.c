@@ -96,7 +96,9 @@ static void destroy(dc_gpu_t *g,struct fr_gas_gpu *t) {
     if(!t) return;
     fr_gas_acoustic_destroy(g,&t->acoustic);
     fr_renderer_compute_destroy(g,&t->initialize);fr_renderer_compute_destroy(g,&t->prepare);
-    fr_renderer_compute_destroy(g,&t->geometry_stage);fr_renderer_compute_destroy(g,&t->geometry_transfer);fr_renderer_compute_destroy(g,&t->geometry_commit);
+    fr_renderer_compute_destroy(g,&t->geometry_stage);fr_renderer_compute_destroy(g,&t->geometry_routes);
+    fr_renderer_compute_destroy(g,&t->geometry_demand);fr_renderer_compute_destroy(g,&t->geometry_transfer);
+    fr_renderer_compute_destroy(g,&t->geometry_commit);
     fr_renderer_compute_destroy(g,&t->bubble_displace);
     fr_renderer_compute_destroy(g,&t->owner_gather);
     fr_renderer_compute_destroy(g,&t->mpm_pressure);
@@ -108,6 +110,8 @@ static void destroy(dc_gpu_t *g,struct fr_gas_gpu *t) {
     for(uint32_t i=0;i<2;i++) dc_gpu_address_buffer_destroy(g,t->smoke_coordinates+i);
     dc_gpu_address_buffer_destroy(g,&t->smoke_potential);
     for(uint32_t i=0;i<2;i++) dc_gpu_address_buffer_destroy(g,t->smoke_detail+i);
+    dc_gpu_address_buffer_destroy(g,&t->geometry_paths);
+    dc_gpu_address_buffer_destroy(g,&t->geometry_demands);
     fr_renderer_compute_destroy(g,&t->gate);dc_gpu_address_buffer_destroy(g,&t->gates);
     fr_renderer_compute_destroy(g,&t->audit);dc_gpu_address_buffer_destroy(g,&t->audit_summary);
     for(uint32_t i=0;i<3;i++) dc_gpu_address_buffer_destroy(g,t->state+i);
@@ -184,7 +188,7 @@ static void bind_canonical(dc_gpu_t *g,struct fr_gas_gpu *t) {
 }
 static void record_geometry(dc_gpu_t *g,struct fr_gas_gpu *t,bool local,bool cached,float seconds) {
     uint32_t *words=t->stats.mapped;words[FR_GAS_ERROR_WORD]=0u;
-    bool force=t->geometry_dirty||t->geometry_routes_dirty;
+    bool force=t->geometry_routes_dirty;
     words[FR_GAS_ROW_NORM_BEFORE_WORD]=local&&force?1u:0u;
     uint32_t bank=(cached?t->cached_bank:0u)|(t->direct_publish?FR_GAS_GEOMETRY_DIRECT_BIT:0u)|
         (local?FR_GAS_GEOMETRY_LOCAL_BIT:0u)|(local&&cached?FR_GAS_GEOMETRY_CACHE_BIT:0u)|
@@ -194,7 +198,11 @@ static void record_geometry(dc_gpu_t *g,struct fr_gas_gpu *t,bool local,bool cac
         dispatch(g,t,&t->bubble_displace,seconds,0u);
         dispatch(g,t,&t->bubble_displace,seconds,1u);
     }
-    dispatch(g,t,&t->geometry_stage,0,bank);dispatch(g,t,&t->geometry_transfer,0,bank);dispatch(g,t,&t->geometry_commit,0,bank);
+    dispatch(g,t,&t->geometry_stage,0,bank);
+    dispatch(g,t,&t->geometry_routes,0,bank);
+    dispatch(g,t,&t->geometry_demand,0,bank);
+    dispatch(g,t,&t->geometry_transfer,0,bank);
+    dispatch(g,t,&t->geometry_commit,0,bank);
 }
 void fr_gas_gpu_record_pending_geometry(dc_gpu_t *g) {
     struct fr_gas_gpu *t=g->gas;if(!t||!t->geometry_deferred) return;
@@ -292,6 +300,8 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)g->width*g->height*4u,false,&t->smoke_potential,err,cap)) return false;
     for(uint32_t i=0;i<2;i++)
         if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)g->width*g->height*4u,false,t->smoke_detail+i,err,cap)) return false;
+    if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)g->width*g->height*8u,false,&t->geometry_paths,err,cap)||
+       !dc_gpu_address_buffer_create(g,(VkDeviceSize)g->width*g->height*4u,false,&t->geometry_demands,err,cap)) return false;
     t->smoke_coordinate_reset=true;
     float *parameters=t->parameters.mapped;
     for(uint32_t i=0;i<5;i++) {parameters[i]=(float)t->model.gas_constant[i];parameters[5+i]=(float)t->model.heat_capacity_cv[i];}
@@ -300,7 +310,7 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     parameters[FR_GAS_OPACITY_WORD]=FR_GAS_SMOKE_DISPLAY_OPACITY;
     ((uint32_t *)t->parameters.mapped)[FR_GAS_SLOT_COUNT_WORD]=DC_GPU_CHUNK_SLOTS;
     ((uint32_t *)t->parameters.mapped)[FR_GAS_CELL_OWNER_WORD]=0u;
-    VkDescriptorBufferInfo buffers[DC_GPU_DESCRIPTOR_BINDINGS+2u];
+    VkDescriptorBufferInfo buffers[DC_GPU_DESCRIPTOR_BINDINGS+4u];
     for(uint32_t i=12u;i<28u;i++) buffers[i]=(VkDescriptorBufferInfo){t->parameters.buffer,0,t->parameters.bytes};
     buffers[26]=(VkDescriptorBufferInfo){t->owner_tiles.buffer,0,t->owner_tiles.bytes};
     buffers[27]=(VkDescriptorBufferInfo){t->conduction_faces.buffer,0,t->conduction_faces.bytes};
@@ -314,6 +324,8 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     buffers[32]=(VkDescriptorBufferInfo){g->water_color_buffer,0,VK_WHOLE_SIZE};
     buffers[38]=(VkDescriptorBufferInfo){g->mpm_force_buffer,0,VK_WHOLE_SIZE};
     buffers[39]=(VkDescriptorBufferInfo){g->mpm_activity_buffer,0,VK_WHOLE_SIZE};
+    buffers[40]=(VkDescriptorBufferInfo){t->geometry_paths.buffer,0,t->geometry_paths.bytes};
+    buffers[41]=(VkDescriptorBufferInfo){t->geometry_demands.buffer,0,t->geometry_demands.bytes};
     buffers[36]=(VkDescriptorBufferInfo){g->thermal_control_buffer,0,VK_WHOLE_SIZE};
     buffers[37]=(VkDescriptorBufferInfo){g->bulk_phase_buffer,0,VK_WHOLE_SIZE};
     bool okay=fr_renderer_compute_init(g,&t->initialize,buffers,38,16,"build/shaders/gas_init.comp.spv",err,cap)&&
@@ -332,11 +344,12 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
         fr_renderer_compute_init(g,&t->mpm_pressure,buffers,40,16,
             "build/shaders/gas_mpm_pressure.comp.spv",err,cap);
     if(!okay) return false;
-    fr_renderer_compute_t *geometry[]={&t->geometry_stage,&t->geometry_transfer,&t->geometry_commit};
-    const char *names[]={"stage","transfer","commit"};
-    for(uint32_t i=0;i<3;i++) {
+    fr_renderer_compute_t *geometry[]={&t->geometry_stage,&t->geometry_routes,&t->geometry_demand,
+        &t->geometry_transfer,&t->geometry_commit};
+    const char *names[]={"stage","routes","demand","transfer","commit"};
+    for(uint32_t i=0;i<5;i++) {
         char path[96];snprintf(path,sizeof(path),"build/shaders/gas_geometry_%s.comp.spv",names[i]);
-        if(!fr_renderer_compute_init(g,geometry[i],buffers,38,16,path,err,cap)) return false;
+        if(!fr_renderer_compute_init(g,geometry[i],buffers,42,16,path,err,cap)) return false;
     }
     if(!fr_renderer_compute_init(g,&t->bubble_displace,buffers,37,16,
         "build/shaders/gas_bubble_displace.comp.spv",err,cap)) return false;

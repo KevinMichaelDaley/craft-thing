@@ -6,6 +6,7 @@
 #include <SDL.h>
 #include <time.h>
 #include "../vulkan/native_scene.h"
+#include "../test_window.h"
 
 #ifndef NATIVE_PERF_WIDTH
 #define NATIVE_PERF_WIDTH 1280
@@ -77,7 +78,7 @@ static void native_scene(unsigned load) {
     char err[256] = {0};
     dc_gpu_t *g = NULL;
     double began = seconds();
-    ASSERT_TRUE(dc_gpu_create_window(&g, WIDTH, HEIGHT, WIDTH, HEIGHT,
+    ASSERT_TRUE(dc_test_create_window(&g, WIDTH, HEIGHT, WIDTH, HEIGHT,
                                      "build/shaders/pattern.comp.spv", err,
                                      sizeof(err)));
     ASSERT_EQ(g->width, WIDTH);

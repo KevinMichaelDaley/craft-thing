@@ -1,9 +1,10 @@
 #include "dungeoncraft/gpu.h"
+#include "../test_window.h"
 #ifdef FR_REVOLUTE_PRESENTATION_TEST
 #include <SDL.h>
 #include <sys/stat.h>
 static bool pivot_window(dc_gpu_t **g,uint32_t w,uint32_t h,const char *shader,char *err,uint32_t cap) {
-    return dc_gpu_create_window(g,w,h,1280,720,shader,err,cap)&&
+    return dc_test_create_window(g,w,h,1280,720,shader,err,cap)&&
         dc_gpu_set_presentation_focus(*g,(dc_presentation_focus_t){42,30,54,42})&&
         dc_gpu_set_overlay(*g,DC_GPU_OVERLAY_RIGID_IDS);
 }

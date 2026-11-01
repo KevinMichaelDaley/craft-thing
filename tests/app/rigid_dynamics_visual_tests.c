@@ -7,6 +7,7 @@
 #include <SDL.h>
 #include "../vulkan/compound_fixture.h"
 #include "../../src/app/view_config.h"
+#include "../test_window.h"
 
 static int g_pass,g_fail;
 #define RUN(fn) do { printf("RUN  %s\n",#fn); fn(); printf("OK   %s\n",#fn); } while(0)
@@ -26,7 +27,7 @@ static bool snapshot(dc_gpu_t *g,const char *name,uint32_t *pixels,char *err) {
 }
 static void test_two_concave_bodies_fall_rotate_collide_and_settle_visibly(void) {
     char err[256]={0};dc_gpu_t *g=NULL;
-    ASSERT_TRUE(dc_gpu_create_window(&g,SIM_WIDTH,SIM_HEIGHT,1024,768,
+    ASSERT_TRUE(dc_test_create_window(&g,SIM_WIDTH,SIM_HEIGHT,1024,768,
         "build/shaders/pattern.comp.spv",err,sizeof(err)));
     dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     for(uint32_t slot=0;slot<SIM_CHUNKS_X*SIM_CHUNKS_Y;++slot) {

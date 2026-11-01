@@ -1,0 +1,14 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "geometry_common.glsl"
+void main() {
+    if((params.bank&FR_GAS_GEOMETRY_LOCAL_BIT)!=0u&&stats[FR_GAS_ROW_NORM_BEFORE_WORD]==0u) return;
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));
+    bool nearby=false;
+    for(uint d=0u;d<4u;d++)
+        nearby=nearby||(geometry_metadata_at(p+geometry_direction(d)).y>0.);
+    float volume=nearby?geometry_stable_donor_volume(p):0.;
+    float demand=volume>0.?geometry_stable_demand(p,volume):0.;
+    geometry_demands[index]=demand;
+}

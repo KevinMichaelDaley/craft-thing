@@ -6,6 +6,7 @@
 
 #include "concave_scene.h"
 #include "ferrum/renderer/texture.h"
+#include "../test_window.h"
 
 static int g_pass, g_fail;
 #define RUN(fn)                                                                \
@@ -41,7 +42,7 @@ test_two_concave_textured_bodies_with_colored_lights_sun_and_stable_pause(
     void) {
   char err[256] = {0};
   dc_gpu_t *g;
-  ASSERT_TRUE(dc_gpu_create_window(&g, 480, 270, 1920, 1080,
+  ASSERT_TRUE(dc_test_create_window(&g, 480, 270, 1920, 1080,
                                    "build/shaders/pattern.comp.spv", err,
                                    sizeof(err)));
   ASSERT_TRUE(renderer_concave_scene(g, err, sizeof(err)));

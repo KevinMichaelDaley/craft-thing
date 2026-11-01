@@ -5,6 +5,7 @@
 #include <SDL.h>
 #include <string.h>
 #include <sys/stat.h>
+#include "../test_window.h"
 
 enum { PIXEL_VIS_WIDTH = 480, PIXEL_VIS_HEIGHT = 270, PIXEL_VIS_TICKS = 180 };
 static bool pixel_snapshot(dc_gpu_t *gpu, const char *path, uint32_t *pixels,
@@ -22,7 +23,7 @@ static bool pixel_snapshot(dc_gpu_t *gpu, const char *path, uint32_t *pixels,
 static void test_two_automatic_concave_pixel_bodies_rotate_collide_and_pause_stably(void) {
     char err[256] = {0};
     dc_gpu_t *gpu = NULL;
-    ASSERT_TRUE(dc_gpu_create_window(&gpu, PIXEL_VIS_WIDTH, PIXEL_VIS_HEIGHT,
+    ASSERT_TRUE(dc_test_create_window(&gpu, PIXEL_VIS_WIDTH, PIXEL_VIS_HEIGHT,
                                      1920, 1080, "build/shaders/pattern.comp.spv",
                                      err, sizeof(err)));
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));

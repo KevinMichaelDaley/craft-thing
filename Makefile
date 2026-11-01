@@ -1960,12 +1960,12 @@ GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid_x tran
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_hybrid_x_wide_local transport_hybrid_y_wide_local)
 GAS_SHADERS += build/shaders/gas_activity_cached.comp.spv
 GAS_SHADERS += build/shaders/gas_owner_gather.comp.spv
-GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_transfer geometry_commit)
+GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_routes geometry_demand geometry_transfer geometry_commit)
 GAS_SHADERS += build/shaders/gas_bubble_displace.comp.spv
 GAS_SHADERS += build/shaders/gas_mpm_pressure.comp.spv
 build/shaders/gas_bubble_displace.comp.spv: shaders/reactive/thermal_water.glsl include/dungeoncraft/thermal_water_layout.h
-$(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_transfer geometry_commit): shaders/gas/geometry_common.glsl
-$(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_transfer geometry_commit init): shaders/gas/bulk_volume.glsl
+$(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_routes geometry_demand geometry_transfer geometry_commit): shaders/gas/geometry_common.glsl
+$(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_routes geometry_demand geometry_transfer geometry_commit init): shaders/gas/bulk_volume.glsl
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_metadata_lean pressure_rhs_lean)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_factor_compact_large transport_prefix_compact_large transport_axis_compact_large transport_explicit_large transport_hybrid_large transport_hybrid_x_large transport_hybrid_y_large)
 build/shaders/gas_audit.comp.spv: include/dungeoncraft/gas_audit_layout.h

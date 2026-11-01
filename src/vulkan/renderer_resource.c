@@ -2,7 +2,7 @@
 
 #include "renderer_internal.h"
 
-enum { FR_RENDERER_COMPUTE_MAX_BINDINGS = 40u };
+enum { FR_RENDERER_COMPUTE_MAX_BINDINGS = 42u };
 bool fr_renderer_compute_init(dc_gpu_t *g, fr_renderer_compute_t *c,
                               const VkDescriptorBufferInfo *buffers, uint32_t n,
                               uint32_t push_bytes, const char *shader,

@@ -495,6 +495,9 @@ static void test_native_subnormal_colored_stock_is_valid_and_retained_at_rest(vo
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
 }
 int main(void) {
+#ifdef FR_REACTIVE_PRESENTATION_TEST
+    RUN(test_display_context_releases_keyboard_focus);
+#endif
     if(getenv("DC_GAS_FOURIER_ONLY")) {RUN(test_native_gas_only_still_air_conducts_without_mass_transport);
         printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;}
     if(!large_cfl_device_capability(&g_large_cfl_capable)) {
@@ -587,7 +590,7 @@ int main(void) {
     RUN(test_native_practical_variable_intervals_stay_finite_without_retry_stalls);
     RUN(test_native_checkpoint_preserves_compensation_geometry_valves_and_ownership);
     RUN(test_native_new_streamed_slot_initializes_once_without_refilling_existing_or_dormant_stock);
-    RUN(test_native_geometry_carving_displacement_and_trapped_pockets_keep_finite_stock);
+    RUN(test_native_geometry_carving_and_multi_cell_displacement_keep_finite_stock);
     RUN(test_native_oil_volume_excludes_gas_and_routes_oxygen);
     RUN(test_native_quantized_sliver_routes_gas_to_open_neighbor);
     RUN(test_mpm_cut_cell_wedge_vents_stock_without_pressure_runaway);

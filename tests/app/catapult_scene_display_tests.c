@@ -4,10 +4,11 @@
 #include "dungeoncraft/gpu.h"
 #include "ferrum/renderer/gpu.h"
 #include "../../src/app/view_config.h"
+#include "../test_window.h"
 
 static bool catapult_window(dc_gpu_t **gpu, uint32_t width, uint32_t height,
                             const char *shader, char *err, uint32_t cap) {
-    return dc_gpu_create_window(gpu, width, height,
+    return dc_test_create_window(gpu, width, height,
                                 VIEW_WIDTH * WINDOW_SCALE,
                                 VIEW_HEIGHT * WINDOW_SCALE,
                                 shader, err, cap) &&

@@ -330,13 +330,14 @@ static void test_native_quantized_sliver_routes_gas_to_open_neighbor(void) {
     chunk->cells[center].fluid_mass=65535u;
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&fr_gas_gpu_refresh_geometry(g,err,sizeof(err))&&
         fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err)));
-    ASSERT_EQ(out->cells[center][12],0.f);ASSERT_EQ(out->cells[center][0],0.f);
+    ASSERT_EQ(out->cells[center][12],1.f/65536.f);
+    ASSERT_TRUE(out->cells[center][0]>0.f&&out->cells[center][0]<input[center].species[0]/65535.f);
     ASSERT_TRUE(fabs(gas_checkpoint_stock(out,0)-.0012*4096.*
         input[0].species[0]/.0012)<1e-5);
     ASSERT_TRUE(out->cells[center+1u][0]>input[center+1u].species[0]);
     dc_gpu_destroy(g);free(chunk);free(input);free(volume);free(out);PASS();
 }
-static void test_native_geometry_carving_displacement_and_trapped_pockets_keep_finite_stock(void) {
+static void test_native_geometry_carving_and_multi_cell_displacement_keep_finite_stock(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_gas_state_t *input=malloc(4096*sizeof(*input));double *volume=malloc(4096*sizeof(*volume));
     fr_gas_checkpoint_chunk_t *before=malloc(sizeof(*before)),*out=malloc(sizeof(*out));ASSERT_TRUE(chunk&&input&&volume&&before&&out);
@@ -366,19 +367,16 @@ static void test_native_geometry_carving_displacement_and_trapped_pockets_keep_f
     ASSERT_TRUE(fabs(gas_checkpoint_stock(out,0)-stock)<stock*1e-5&&fabs(gas_checkpoint_stock(out,8)-pigment)<pigment*1e-5);
     ASSERT_TRUE(dc_gpu_paint_material(g,12,12,1,DC_MATERIAL_STONE,err,sizeof(err)));fr_gas_gpu_geometry_changed(g,false);
     ASSERT_TRUE(fr_gas_gpu_refresh_geometry(g,err,sizeof(err))&&fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err)));
-    ASSERT_TRUE(out->cells[12u*64u+12u][0]>0.f&&out->cells[12u*64u+12u][12]>0.f&&out->cells[12u*64u+12u][13]==0.f);
-    float trapped_oxygen=out->cells[12u*64u+12u][0];
+    ASSERT_EQ(out->cells[12u*64u+12u][0],0.f);
+    ASSERT_EQ(out->cells[12u*64u+12u][12],0.f);
+    ASSERT_TRUE(out->cells[12u*64u+14u][0]>0.f);
     for(uint32_t i=0;i<10u;i++) ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err)));
-    ASSERT_TRUE(fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err)));ASSERT_EQ(out->cells[12u*64u+12u][0],trapped_oxygen);
-    ASSERT_TRUE(fr_gas_gpu_gate(g,12,12,1,1,0,true,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_paint_material(g,13,12,0,DC_MATERIAL_AIR,err,sizeof(err)));fr_gas_gpu_geometry_changed(g,false);
-    ASSERT_TRUE(fr_gas_gpu_refresh_geometry(g,err,sizeof(err))&&fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err)));
-    ASSERT_EQ(out->cells[12u*64u+12u][0],trapped_oxygen);
-    ASSERT_TRUE(fr_gas_gpu_gate(g,12,12,1,1,0,false,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_refresh_geometry(g,err,sizeof(err))&&fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err)));
     ASSERT_EQ(out->cells[12u*64u+12u][0],0.f);ASSERT_EQ(out->cells[12u*64u+12u][12],0.f);
     double original=gas_checkpoint_stock(before,0),final=gas_checkpoint_stock(out,0);
-    printf("Geometry oxygen drift%.9g relative%.9g; trapped pocket retained and released\n",final-original,(final-original)/original);
+    printf("Geometry oxygen drift%.9g relative%.9g; multi-cell displacement and carve\n",final-original,(final-original)/original);
     ASSERT_TRUE(fabs(final-original)<original*1e-4);
     ASSERT_EQ(out->clock.physical_steps,30u);ASSERT_TRUE(fabs(out->clock.advanced_seconds-.6)<1e-7);
     for(uint32_t i=0;i<4096u;i++) for(uint32_t k=0;k<16u;k++) ASSERT_TRUE(isfinite(out->cells[i][k]));

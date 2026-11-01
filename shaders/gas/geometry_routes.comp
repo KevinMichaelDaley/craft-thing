@@ -1,0 +1,19 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "geometry_common.glsl"
+void main() {
+    if((params.bank&FR_GAS_GEOMETRY_LOCAL_BIT)!=0u&&stats[FR_GAS_ROW_NORM_BEFORE_WORD]==0u) return;
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));
+    uint at=gas_atlas(p);
+    float route=0.,capacity=0.;
+    if(at!=0xffffffffu) {
+        vec4 metadata=geometry_metadata(index);
+        if(metadata.y>0.) {
+            Gas original=gas_world(at);
+            if(metadata.x<original.geometry.x&&gas_mass(original)>0.) route=geometry_route(p);
+            if(metadata.x>original.geometry.x) capacity=geometry_stable_capacity(p);
+        }
+    }
+    geometry_paths[index]=vec2(route,capacity);
+}

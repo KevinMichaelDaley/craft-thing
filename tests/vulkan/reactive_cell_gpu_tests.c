@@ -6,6 +6,7 @@
 #include "ferrum/fire/material_profile.h"
 #include "../../src/vulkan/gpu_internal.h"
 #include "../../src/vulkan/runtime_body_gpu.h"
+#include "../test_window.h"
 
 static int g_pass,g_fail;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
@@ -16,8 +17,8 @@ static int g_pass,g_fail;
 
 static bool context(dc_gpu_t **g,char *err,uint32_t cap) {
 #ifdef FR_REACTIVE_PRESENTATION_TEST
-    return dc_gpu_create_window(g,640,448,960,540,"build/shaders/pattern.comp.spv",err,cap)&&
-        dc_gpu_set_viewport(*g,0,0,480,270)&&dc_gpu_set_display_zoom(*g,2);
+    if(!dc_test_create_window(g,640,448,960,540,"build/shaders/pattern.comp.spv",err,cap)) return false;
+    return dc_gpu_set_viewport(*g,0,0,480,270)&&dc_gpu_set_display_zoom(*g,2);
 #else
     return dc_gpu_create(g,64,64,"build/shaders/pattern.comp.spv",err,cap);
 #endif
@@ -31,6 +32,16 @@ static bool present(dc_gpu_t *g,char *err,uint32_t cap) {
 #endif
     return true;
 }
+#ifdef FR_REACTIVE_PRESENTATION_TEST
+static void test_display_context_releases_keyboard_focus(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    ASSERT_TRUE(context(&g,err,sizeof(err)));
+    uint32_t flags=SDL_GetWindowFlags(g->window);
+    ASSERT_TRUE((flags&SDL_WINDOW_INPUT_FOCUS)==0u&&(flags&SDL_WINDOW_SHOWN)==0u);
+    ASSERT_TRUE(present(g,err,sizeof(err)));
+    dc_gpu_destroy(g);PASS();
+}
+#endif
 static void test_cells_retain_sparse_state_and_brush_replacement_retires_it(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     c->coord=(dc_chunk_coord_t){-7,12};
@@ -250,6 +261,9 @@ static void test_coal_and_char_extract_with_finite_reactive_stock(void) {
     PASS();
 }
 int main(void) {
+#ifdef FR_REACTIVE_PRESENTATION_TEST
+    RUN(test_display_context_releases_keyboard_focus);
+#endif
     RUN(test_cell_admission_rejects_wrong_physical_material_atomically);
     RUN(test_coal_and_char_extract_with_finite_reactive_stock);
     RUN(test_cells_retain_sparse_state_and_brush_replacement_retires_it);
