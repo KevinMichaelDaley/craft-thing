@@ -41,20 +41,29 @@ void main() {
     if(!permeable(cells[top_at].x&65535u)||!permeable(cells[bottom_at].x&65535u)) return;
     uint world_size=params.width*params.height;
     uint face_open=FULL-min(FULL,occupancy[(params.axis==0u?4u:3u)*world_size+index]);
-    if(face_open==0u) return;
+    uint top_index=index;
     uint bottom_index=uint(q.y)*params.width+uint(q.x);
     uint top[3],bottom[3];
     top[0]=cells[top_at].y;bottom[0]=cells[bottom_at].y;
     top[1]=bulk_at(top_at,1u);bottom[1]=bulk_at(bottom_at,1u);
     top[2]=bulk_at(top_at,2u);bottom[2]=bulk_at(bottom_at,2u);
-    if(params.axis==1u&&used(bottom)>used(top)) {
+    uint top_capacity=FULL-min(FULL,occupancy[2u*world_size+top_index]);
+    uint bottom_capacity=FULL-min(FULL,occupancy[2u*world_size+bottom_index]);
+    bool reverse=params.axis==0u?
+        (used(bottom)>bottom_capacity&&used(top)<top_capacity):
+        (used(bottom)>bottom_capacity&&used(top)<=top_capacity)||
+        (used(bottom)<=bottom_capacity&&used(bottom)>used(top));
+    if(reverse) {
         uint swap_at=top_at;top_at=bottom_at;bottom_at=swap_at;
-        bottom_index=index;
+        uint swap_index=top_index;top_index=bottom_index;bottom_index=swap_index;
+        uint swap_capacity=top_capacity;top_capacity=bottom_capacity;bottom_capacity=swap_capacity;
         for(uint phase=0u;phase<3u;phase++) {
             uint swap_volume=top[phase];top[phase]=bottom[phase];bottom[phase]=swap_volume;
         }
     }
-    uint bottom_capacity=FULL-min(FULL,occupancy[2u*world_size+bottom_index]);
+    uint excess=used(top)>top_capacity?used(top)-top_capacity:0u;
+    if(excess>0u) face_open=FULL;
+    if(face_open==0u) return;
     float density[3]=float[3](params.water_density,params.oil_density,params.slime_density);
     bool changed=false;
     for(uint pass=0u;pass<3u;pass++) {
@@ -67,7 +76,7 @@ void main() {
             if(rank==pass) heavy=phase;
         }
         if(top[heavy]==0u||(params.axis==1u&&heavy==0u)) continue;
-        if(params.axis==1u&&used(top)<=used(bottom)) break;
+        if(params.axis==1u&&used(top)<=used(bottom)&&excess==0u) break;
         uint light=3u;float light_density=0.;
         for(uint phase=0u;phase<3u;phase++)
             if(bottom[phase]>0u&&density[phase]<density[heavy]&&
@@ -79,12 +88,14 @@ void main() {
             max(0.,params.gravity*(density[heavy]-opposing)/density[heavy]):
             params.gravity*float(used(top)-used(bottom))/float(FULL);
         float speed=sqrt(2.*buoyancy);
-        uint allowance=uint(floor(min(float(FULL),speed*params.seconds*float(face_open))));
+        uint allowance=excess>0u?min(excess,face_open):
+            uint(floor(min(float(FULL),speed*params.seconds*float(face_open))));
         uint swappable=light==3u?0u:bottom[light];
         uint moved=min(top[heavy],min(allowance,free_bottom+swappable));
         uint exchanged=min(moved,swappable);
         if(moved==0u) continue;
         top[heavy]-=moved;bottom[heavy]+=moved;
+        excess-=min(excess,moved);
         if(exchanged>0u) {bottom[light]-=exchanged;top[light]+=exchanged;}
         changed=true;
     }
