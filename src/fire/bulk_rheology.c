@@ -32,3 +32,9 @@ bool fr_bulk_rheology_mobility(const fr_reactive_profile_t *profile,
     *out=result;
     return true;
 }
+
+bool fr_bulk_rheology_quadrature(uint32_t volume_fp,float density,
+    uint32_t sample_count,fr_bulk_rheology_quadrature_t *out) {
+    (void)volume_fp;(void)density;(void)sample_count;(void)out;
+    return false;
+}
