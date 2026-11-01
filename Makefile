@@ -1877,9 +1877,10 @@ build/shaders/gas_roundoff_test.comp.spv: shaders/diagnostics/gas_roundoff_test.
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/gas_reference_tests: tests/fire/gas_reference_tests.c src/fire/gas.c src/fire/gas_reference.c src/fire/gas_internal.h include/ferrum/fire/gas.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c src/fire/gas_reference.c -o $@ -lm
-build/bulk_phase_tests: tests/fire/bulk_phase_tests.c tests/fire/bulk_phase_red_stub.c include/ferrum/fire/bulk_phase.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/bulk_phase_tests.c tests/fire/bulk_phase_red_stub.c -o $@ -lm
+build/bulk_phase_tests: tests/fire/bulk_phase_tests.c src/fire/bulk_phase.c include/ferrum/fire/bulk_phase.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/bulk_phase_tests.c src/fire/bulk_phase.c -o $@ -lm
 .PHONY: test_bulk_phase
+test: test_bulk_phase
 test_bulk_phase: build/bulk_phase_tests
 	./build/bulk_phase_tests
 build/gas_implicit_tests: tests/fire/gas_implicit_tests.c src/fire/gas.c src/fire/gas_implicit_reference.c src/fire/gas_transport_reference.c src/fire/gas_internal.h include/ferrum/fire/gas.h
