@@ -460,4 +460,38 @@ static void test_native_fully_submerged_pocket_retains_stock_against_adjacent_wa
     ASSERT_EQ(water_stock,DC_FLUID_FULL+DC_FLUID_FULL/2u);
     free(water_heat);free(out);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_zero_void_submerged_source_nucleates_gpu_pocket(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_gas_state_t *input=calloc(4096,sizeof(*input));double *volume=calloc(4096,sizeof(*volume));
+    fr_gas_checkpoint_chunk_t *out=malloc(sizeof(*out));ASSERT_TRUE(chunk&&input&&volume&&out);
+    const uint32_t at=20u*64u+20u,neighbor=at+1u;
+    chunk->cells[at]=(dc_cell_t){.material=DC_MATERIAL_WATER,.fluid_mass=DC_FLUID_FULL};
+    chunk->cells[neighbor]=(dc_cell_t){.material=DC_MATERIAL_WATER,.fluid_mass=DC_FLUID_FULL/2u};
+    const uint32_t walls[]={at-1u,at-64u,at+64u};
+    for(uint32_t k=0;k<3u;k++) chunk->cells[walls[k]].material=DC_MATERIAL_STONE;
+    fr_gas_model_t model=reference_model();model.kinetic_scale=1./512.;
+    for(uint32_t i=0;i<4096u;i++) {
+        bool wall=false;for(uint32_t k=0;k<3u;k++) wall|=i==walls[k];
+        volume[i]=wall?0.:1.;input[i]=wall?(fr_gas_state_t){0}:reference_air(model,.0012,300,0);
+    }
+    volume[at]=0.;input[at]=reference_air(model,.012,500,0);
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&fr_thermal_gpu_enable(g,err,sizeof(err))&&
+        fr_thermal_gpu_seed_water(g,0,at,1.f,err,sizeof(err))&&
+        fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err))&&
+        fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&
+        fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err)));
+    double before_oxygen=gas_checkpoint_stock(out,FR_GAS_OXYGEN);
+    ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err))&&
+        dc_gpu_download_chunk(g,0,chunk,err,sizeof(err))&&
+        fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err)));
+    ASSERT_TRUE(chunk->cells[at].fluid_mass<DC_FLUID_FULL);
+    ASSERT_TRUE(chunk->cells[neighbor].fluid_mass>DC_FLUID_FULL/2u);
+    ASSERT_EQ((uint64_t)chunk->cells[at].fluid_mass+chunk->cells[neighbor].fluid_mass,
+        (uint64_t)DC_FLUID_FULL+DC_FLUID_FULL/2u);
+    ASSERT_TRUE(out->cells[at][12]>0.f);
+    ASSERT_TRUE(fabs(gas_checkpoint_stock(out,FR_GAS_OXYGEN)-before_oxygen)<1e-7);
+    free(out);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
+}
 #endif

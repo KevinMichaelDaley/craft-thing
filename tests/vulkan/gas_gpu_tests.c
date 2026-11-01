@@ -601,6 +601,7 @@ int main(void) {
     RUN(test_rigid_wake_fills_through_newly_opened_cells);
     RUN(test_burning_wood_has_small_conservative_smoke_bypass);
     RUN(test_native_fully_submerged_pocket_retains_stock_against_adjacent_water);
+    RUN(test_zero_void_submerged_source_nucleates_gpu_pocket);
     RUN(test_native_partial_void_contraction_displaces_mixture_without_cut_cell_pressure_spikes);
     RUN(test_native_valve_only_refresh_preserves_restored_physical_void);
     RUN(test_native_massless_underflow_energy_reconciles_without_erasing_tiny_colored_gas);
