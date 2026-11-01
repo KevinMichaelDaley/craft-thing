@@ -273,6 +273,8 @@ static void test_bulk_liquid_chunk_roundtrip_keeps_water_and_distinct_oil_slime(
     ASSERT_TRUE(dc_stream_request_save_bulk(stream,chunk,NULL,NULL,NULL,NULL,bulk,7));
     dc_stream_result_t result={0};ASSERT_TRUE(wait_result(stream,&result));
     ASSERT_EQ(result.kind,DC_STREAM_SAVED);dc_stream_result_release(&result);
+    bulk->oil_fp[100]=20001;
+    ASSERT_TRUE(!dc_stream_request_save_bulk(stream,chunk,NULL,NULL,NULL,NULL,bulk,9));
     ASSERT_TRUE(dc_stream_request_load(stream,chunk->coord,8)&&wait_result(stream,&result));
     ASSERT_EQ(result.kind,DC_STREAM_LOADED);ASSERT_TRUE(result.bulk);
     ASSERT_INT_EQ(result.chunk->cells[100].fluid_mass,30000);
