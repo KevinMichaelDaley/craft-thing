@@ -6,8 +6,8 @@
 
 bool fr_player_init(fr_player_t *p,uint64_t identity,const fr_player_registry_t *r,
     double *values,uint8_t *abilities,uint32_t capacity) {
-    if (!p || !identity || !r || !r->sealed || r->count>r->capacity || capacity<r->count ||
-        (r->count && (!r->definitions || !values || !abilities))) return false;
+    if (!p || !identity || !player_registry_ready(r) || capacity<r->count ||
+        (r->count && (!values || !abilities))) return false;
     for (uint32_t i=0;i<r->count;i++) {
         values[i]=r->definitions[i].initial_value;
         abilities[i]=0;

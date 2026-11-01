@@ -17,3 +17,9 @@ Before beaver-player code changes, ./tools/with-vulkan make test at b262bf6f exi
 
 Reproduce failure, explain support transition, fix under RED/GREEN/REFACTOR, and rerun catapult scene and full test suite.
 
+
+## Notes
+
+**2026-11-01T22:22:49Z**
+
+Player-foundation full-suite rerun independently reproduced the identical tests/app/catapult_scene_tests.c:343 support-state assertion, 12 passed/1 failed, make exit 2. Log build/agents/beaver-player/state-full-tests.log. Player sources are isolated CPU modules; original catapult assertions unchanged.
