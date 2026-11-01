@@ -75,14 +75,18 @@ static fr_gas_state_t unpack(const gas_packet_t *packet) {
     for(uint32_t i=0;i<3;i++) s.pigment[i]=p[8+i];
     return s;
 }
+static bool import_thermodynamics(const fr_gas_model_t *model,const fr_gas_state_t *state,
+    double volume,fr_gas_thermo_t *thermo,char *err,uint32_t cap) {
+    return fr_gas_thermodynamics(model,state,volume==0.?1.:volume,thermo,err,cap);
+}
 bool fr_gas_gpu_seed_chunk(dc_gpu_t *g,uint32_t slot,const fr_gas_state_t *states,
     const double *volumes,uint32_t count,char *err,uint32_t cap) {
     if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!states||!volumes||count!=4096u) return error(err,cap,"Invalid immutable gas import");
     gas_packet_t *packets=calloc(count,sizeof(*packets));if(!packets) return error(err,cap,"Cannot stage gas import");
     bool okay=true;
     for(uint32_t i=0;okay&&i<count;i++) {
-        fr_gas_thermo_t t;okay=volumes[i]>=0&&volumes[i]<=1&&fr_gas_thermodynamics(&g->gas->model,states+i,
-            volumes[i]==0.?1.:volumes[i],&t,err,cap);
+        fr_gas_thermo_t t;okay=volumes[i]>=0&&volumes[i]<=1&&
+            import_thermodynamics(&g->gas->model,states+i,volumes[i],&t,err,cap);
         if(!okay) break;
         float *p=packets[i].words;
         for(uint32_t k=0;k<5;k++) p[k]=(float)states[i].species[k];
@@ -90,7 +94,7 @@ bool fr_gas_gpu_seed_chunk(dc_gpu_t *g,uint32_t slot,const fr_gas_state_t *state
         p[6]=(float)states[i].momentum[0];p[7]=(float)states[i].momentum[1];
         for(uint32_t k=0;k<3;k++) p[8+k]=(float)states[i].pigment[k];
         p[12]=p[13]=(float)volumes[i];fr_gas_state_t rounded=unpack(packets+i);
-        okay=fr_gas_thermodynamics(&g->gas->model,&rounded,p[12]==0.f?1.:p[12],&t,err,cap);
+        okay=import_thermodynamics(&g->gas->model,&rounded,p[12],&t,err,cap);
     }
     if(okay) okay=vkQueueWaitIdle(g->queue)==VK_SUCCESS;
     if(okay) okay=write_chunk(g,slot,packets,err,cap);
@@ -126,7 +130,7 @@ bool fr_gas_gpu_import_checkpoint(dc_gpu_t *g,uint32_t slot,const fr_gas_checkpo
         if(p[12]<0.f||p[12]>1.f||p[13]<0.f||p[13]>1.f||(input->gates[i]&~3u)!=0u)
             return error(err,cap,"Invalid gas checkpoint geometry or face valves");
         gas_packet_t packet;memcpy(packet.words,p,sizeof(packet));fr_gas_state_t state=unpack(&packet);fr_gas_thermo_t thermo;
-        if(!fr_gas_thermodynamics(&t->model,&state,p[12]==0.f?1.:p[12],&thermo,err,cap)) return false;
+        if(!import_thermodynamics(&t->model,&state,p[12],&thermo,err,cap)) return false;
     }
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas checkpoint import");
     if(!write_chunk(g,slot,input->cells,err,cap)) return false;

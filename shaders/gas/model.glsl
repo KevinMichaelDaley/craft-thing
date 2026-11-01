@@ -35,6 +35,14 @@ Primitive gas_primitive(Gas s,out bool okay) {
         okay=okay&&gas_energy(s)==0.&&all(equal(s.dynamics.zw,vec2(0)));
         return Primitive(vec4(0),vec4(0,0,0,s.geometry.y));
     }
+    if(volume==0.) {
+        float capacity=dot(s.species,vec4(gas_parameter(5u),gas_parameter(6u),
+            gas_parameter(7u),gas_parameter(8u)))+s.dynamics.x*gas_parameter(9u);
+        float thermal=gas_energy(s)-.5*gas_parameter(FR_GAS_KINETIC_WORD)*
+            dot(s.dynamics.zw,s.dynamics.zw)/mass;
+        okay=okay&&capacity>0.&&thermal>0.&&gas_finite(thermal);
+        return gas_empty_primitive();
+    }
     okay=okay&&volume>0.&&gas_finite(volume);
     if(!okay) return gas_empty_primitive();
     float capacity=dot(s.species,vec4(gas_parameter(5u),gas_parameter(6u),gas_parameter(7u),gas_parameter(8u)))+s.dynamics.x*gas_parameter(9u);

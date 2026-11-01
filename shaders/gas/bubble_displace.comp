@@ -50,10 +50,27 @@ void displace_pair(uint source_at,uint receiver_at,uint source_index,uint receiv
     float source_internal=gas_thermal_energy(source);
     if(pending) {
         if(source_moles<=0.||source_internal<=0.||!gas_finite(source_internal)) return;
-        float equilibrium=source_moles*source_internal/
-            (opposing*gas_parameter(FR_GAS_KINETIC_WORD)*(source_capacity+source_moles));
-        if(!gas_finite(equilibrium)||equilibrium<=0.) return;
-        low=min(maximum,equilibrium);
+        if(receiver_has_gas) {
+            float receiver_internal=gas_thermal_energy(receiver);
+            for(uint iteration=0u;iteration<20u;iteration++) {
+                float trial=.5*(low+high);
+                float compressed=receiver.geometry.x-trial;
+                float receiver_work=receiver_internal*(pow(receiver.geometry.x/compressed,
+                    receiver_gamma-1.)-1.);
+                float remaining=source_internal-receiver_work;
+                float source_pressure=source_moles*remaining/
+                    (source_capacity*trial*gas_parameter(FR_GAS_KINETIC_WORD));
+                float receiver_pressure=opposing*pow(receiver.geometry.x/compressed,receiver_gamma);
+                if(remaining>0.&&gas_finite(source_pressure)&&source_pressure>receiver_pressure)
+                    low=trial;
+                else high=trial;
+            }
+        } else {
+            float equilibrium=source_moles*source_internal/
+                (opposing*gas_parameter(FR_GAS_KINETIC_WORD)*(source_capacity+source_moles));
+            if(!gas_finite(equilibrium)||equilibrium<=0.) return;
+            low=min(maximum,equilibrium);
+        }
     } else {
         for(uint iteration=0u;iteration<20u;iteration++) {
             float trial=.5*(low+high);
@@ -67,8 +84,6 @@ void displace_pair(uint source_at,uint receiver_at,uint source_index,uint receiv
     if(moved==0u) return;
     float transferred=float(moved)/float(FULL_WATER);
     float source_volume=source.geometry.x+transferred;
-    float source_work=pending?-opposing*gas_parameter(FR_GAS_KINETIC_WORD)*transferred:
-        source_internal*(pow(source.geometry.x/source_volume,source_gamma-1.)-1.);
     float receiver_work=0.;
     if(receiver_has_gas) {
         float receiver_volume=receiver.geometry.x-transferred;
@@ -78,6 +93,9 @@ void displace_pair(uint source_at,uint receiver_at,uint source_index,uint receiv
         receiver=gas_add_flux(receiver,change,1.);
         receiver.geometry.x=receiver_volume;receiver.geometry.w+=receiver_work;
     }
+    float source_work=pending?
+        (receiver_has_gas?-receiver_work:-opposing*gas_parameter(FR_GAS_KINETIC_WORD)*transferred):
+        source_internal*(pow(source.geometry.x/source_volume,source_gamma-1.)-1.);
     if(!gas_finite(source_work)||!gas_finite(receiver_work)||
         source_internal+source_work<=0.) return;
     GasFlux exchange=gas_empty_flux();exchange.dynamics.y=source_work;
