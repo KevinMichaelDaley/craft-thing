@@ -64,12 +64,38 @@ bool fr_gas_reference_displace_liquid(const fr_gas_model_t *m,const fr_gas_state
     double *boundary_work,char *err,uint32_t cap) {
     fr_gas_thermo_t before;
     if(!out||!new_pocket_volume||!displaced_liquid||!boundary_work||
-       !isfinite(pocket_volume)||pocket_volume<=0||pocket_volume>1||
+       !isfinite(pocket_volume)||pocket_volume<0||pocket_volume>1||
        !isfinite(liquid_pressure)||liquid_pressure<=0||
        !isfinite(receiving_volume)||receiving_volume<0||
        receiving_volume>1.-pocket_volume||
-       !fr_gas_thermodynamics(m,s,pocket_volume,&before,err,cap))
+       !fr_gas_thermodynamics(m,s,pocket_volume>0?pocket_volume:1.,&before,err,cap))
         return gas_error(err,cap,"Invalid submerged gas pocket transaction");
+    if(pocket_volume==0.) {
+        fr_gas_state_t next=*s;double volume=0.,work=0.;
+        if(before.mass>0.&&receiving_volume>0.) {
+            double capacity=0.,moles=0.;
+            for(uint32_t k=0;k<FR_GAS_SPECIES;k++) {
+                capacity+=s->species[k]*m->heat_capacity_cv[k];
+                moles+=s->species[k]*m->gas_constant[k];
+            }
+            if(moles>0.) {
+                double internal=capacity*before.temperature_K;
+                double balance=moles*internal/
+                    (liquid_pressure*m->kinetic_scale*(capacity+moles));
+                if(!isfinite(balance)||balance<0.)
+                    return gas_error(err,cap,"Submerged gas nucleation is not finite");
+                volume=fmin(receiving_volume,balance);
+                work=-liquid_pressure*m->kinetic_scale*volume;
+                next.energy+=work;
+                fr_gas_thermo_t checked;
+                if(volume>0.&&!fr_gas_thermodynamics(m,&next,volume,&checked,err,cap))
+                    return false;
+            }
+        }
+        *out=next;*new_pocket_volume=volume;
+        *displaced_liquid=volume;*boundary_work=work;
+        return true;
+    }
     double final_volume=pocket_volume,work=0;
     fr_gas_state_t next=*s;
     if(before.mass>0&&before.pressure>liquid_pressure&&receiving_volume>0) {

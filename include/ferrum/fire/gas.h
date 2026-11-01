@@ -29,8 +29,9 @@ bool fr_gas_reference_compress(const fr_gas_model_t *model,const fr_gas_state_t 
     double old_volume,double new_volume,fr_gas_state_t *out,double *work,
     char *err_buf,uint32_t err_cap);
 /** Reference adiabatic pocket expansion against finite liquid pressure and
- * available receiving volume. Displaced liquid and gas boundary work close
- * exactly; a sealed pocket retains all gas stock. */
+ * available receiving volume. A zero-volume source nucleates a finite cavity
+ * using its admitted internal energy and transfers pressure work to liquid.
+ * A sealed source retains its pending stock until receiving volume opens. */
 bool fr_gas_reference_displace_liquid(const fr_gas_model_t *model,
     const fr_gas_state_t *state,double pocket_volume,double liquid_pressure,
     double receiving_volume,fr_gas_state_t *out,double *new_pocket_volume,
