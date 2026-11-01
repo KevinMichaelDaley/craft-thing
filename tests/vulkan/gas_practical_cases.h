@@ -388,6 +388,14 @@ static void test_quarter_native_smoke_wavelet_advects_and_displaces_boundary(voi
     }
     printf("Quarter-native smoke contrast %d range %d..%d across equal-density cells\n",contrast,low,high);
     ASSERT_TRUE(high-low>=15);
+    int interior_low=255,interior_high=0;
+    for(uint32_t y=22;y<26;y++) for(uint32_t x=22;x<26;x++) {
+        int red=(int)(pixels[y*480u+x]&255u);
+        if(red<interior_low) interior_low=red;
+        if(red>interior_high) interior_high=red;
+    }
+    printf("Quarter-native dense smoke interior range %d..%d\n",interior_low,interior_high);
+    ASSERT_TRUE(interior_high-interior_low<=8);
     uint32_t edge_cells=0;for(uint32_t y=19;y<=28;y++) for(uint32_t x=19;x<=28;x++) {
         if(x!=19u&&x!=28u&&y!=19u&&y!=28u) continue;
         int red=(int)(pixels[y*480u+x]&255u);
