@@ -112,10 +112,28 @@ static void test_diffusive_drying_agrees_at_equal_time_and_stops_when_paused(voi
     ASSERT_TRUE(abs((int)a.bound_water_fp-(int)b.bound_water_fp)<=3);
     ASSERT_TRUE(fabs(coarse.species[FR_GAS_VAPOR]-
         (start.bound_water_fp-a.bound_water_fp)/65536.)<1e-10);
+    double offset=0;ASSERT_TRUE(fr_thermal_vapor_reference_energy(&m,&offset,err,sizeof(err)));
+    double initial_energy=fr_reactive_state_energy(&start)+initial.energy;
+    double final_energy=fr_reactive_state_energy(&a)+coarse.energy+
+        coarse.species[FR_GAS_VAPOR]*offset;
+    ASSERT_TRUE(fabs(final_energy-initial_energy)<1e-5);
+    ASSERT_EQ(a.fuel_mass_fp,start.fuel_mass_fp);
     fr_reactive_state_t paused;fr_gas_state_t paused_gas;
     ASSERT_TRUE(fr_thermal_evaporation_step(&a,&coarse,&m,1.,.0012,1.,0.,&paused,&paused_gas,&moved,err,sizeof(err)));
     ASSERT_EQ(moved,0u);ASSERT_TRUE(memcmp(&paused,&a,sizeof(a))==0);
     ASSERT_TRUE(memcmp(&paused_gas,&coarse,sizeof(coarse))==0);
+    fr_gas_state_t saturated=air(&m),no_dry_gas;
+    saturated.species[FR_GAS_VAPOR]=.01;
+    saturated.energy+=.01*m.heat_capacity_cv[FR_GAS_VAPOR]*300.;
+    fr_reactive_state_t no_dry;
+    ASSERT_TRUE(fr_thermal_evaporation_step(&start,&saturated,&m,1.,.0012,1.,1.,
+        &no_dry,&no_dry_gas,&moved,err,sizeof(err)));
+    ASSERT_EQ(moved,0u);ASSERT_EQ(no_dry.bound_water_fp,start.bound_water_fp);
+    fr_reactive_state_t saved=no_dry;fr_gas_state_t saved_gas=no_dry_gas;
+    ASSERT_TRUE(!fr_thermal_evaporation_step(&start,&saturated,&m,1.,.0012,1.,-1.,
+        &no_dry,&no_dry_gas,&moved,err,sizeof(err)));
+    ASSERT_TRUE(memcmp(&no_dry,&saved,sizeof(saved))==0);
+    ASSERT_TRUE(memcmp(&no_dry_gas,&saved_gas,sizeof(saved_gas))==0);
     PASS();
 }
 int main(void) {

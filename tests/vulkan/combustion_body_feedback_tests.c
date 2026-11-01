@@ -171,7 +171,7 @@ static void hot_skin_budget_case(bool rotated) {
     if(rotated) {
         ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,176947,0,1000,6101,&stone,err,sizeof(err))&&fr_gpu_reactive_seed_cell(g,0,cell+1u,&stone,err,sizeof(err)));
     }
-    ASSERT_TRUE(dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err))&&fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_thermal_gpu_mark_bonfire_world(g));
+    ASSERT_TRUE(dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err))&&fr_thermal_gpu_enable(g,err,sizeof(err)));
     if(rotated) ASSERT_TRUE(dc_gpu_set_body_motion(g,0x80000001u,.78539816f,0,0,err,sizeof(err))&&dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));
     fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},.heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
     ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&fr_combustion_gpu_enable(g,err,sizeof(err))&&fr_thermal_gpu_step(g,.001f,err,sizeof(err)));

@@ -28,6 +28,23 @@ static void rehash(uint8_t *bytes,size_t length) {
     for(size_t i=0;i<length;i++) if(i<32||i>=40) hash=(hash^bytes[i])*UINT64_C(1099511628211);
     for(uint32_t i=0;i<8;i++) bytes[32+i]=(uint8_t)(hash>>(8*i));
 }
+static void test_abi_five_initializes_drying_progress_and_rejects_reserved_bits(void) {
+    char err[256]={0};fr_reactive_record_t record={.owner=fr_reactive_cell_owner((dc_chunk_coord_t){-2,4},7)},out={0};
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,200,350,1,&record.state,err,sizeof(err)));
+    size_t length=0,written=0;ASSERT_TRUE(fr_reactive_snapshot_size(1,&length));
+    uint8_t *packet=malloc(length);ASSERT_TRUE(packet);
+    ASSERT_TRUE(fr_reactive_snapshot_encode(&record,1,2,packet,length,&written,err,sizeof(err)));
+    packet[4]=5;rehash(packet,length);
+    uint32_t count=0,required=0;uint64_t next=0;
+    ASSERT_TRUE(fr_reactive_snapshot_decode(packet,length,&out,1,&count,&next,&required,err,sizeof(err)));
+    ASSERT_EQ(out.state.evaporation_fraction,0.f);
+    size_t offset=40u+offsetof(fr_reactive_record_t,state)+offsetof(fr_reactive_state_t,evaporation_fraction);
+    packet[offset]=0x3fu;rehash(packet,length);
+    fr_reactive_record_t saved=out;
+    ASSERT_TRUE(!fr_reactive_snapshot_decode(packet,length,&out,1,&count,&next,&required,err,sizeof(err)));
+    ASSERT_TRUE(memcmp(&out,&saved,sizeof(out))==0);
+    free(packet);PASS();
+}
 static void test_abi_two_migrates_zero_remainder_but_rejects_nonzero_old_reserved_bits(void) {
     char err[256]={0};fr_reactive_record_t record={.owner={.kind=FR_REACTIVE_OWNER_CELL,.key={0,0,0,0,3}}},out;
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,350,1,&record.state,err,sizeof(err)));
@@ -91,6 +108,7 @@ static void test_invalid_heat_or_residual_leaves_state_unchanged(void) {
     s.thermal_energy_correction=1;ASSERT_TRUE(!fr_reactive_state_valid(&s,err,sizeof(err)));PASS();
 }
 int main(void) {
+    RUN(test_abi_five_initializes_drying_progress_and_rejects_reserved_bits);
     RUN(test_abi_four_unfunded_demand_does_not_create_reserved_oxygen);
     RUN(test_final_fuel_quantum_keeps_its_funded_oxygen_when_split);
     RUN(test_sub_ulp_heat_is_retained_and_temperature_uses_full_inventory);

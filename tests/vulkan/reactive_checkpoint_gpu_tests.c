@@ -9,6 +9,7 @@ static void test_structure_checkpoint_retains_extracted_body_state(void) {
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     fr_reactive_state_t state;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,900,700,91,&state,err,sizeof(err)));
     state.coating_oil_fuel_fp=500;state.ignition_threshold=.8f;state.ignition_integral=.4f;
+    state.evaporation_fraction=.375f;
     ASSERT_TRUE(fr_reactive_state_add_heat(&state,1e-5+1e-13,err,sizeof(err)));
     ASSERT_TRUE(state.thermal_energy_residual!=0.f&&state.thermal_energy_correction!=0.f);
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,11*64+11,&state,err,sizeof(err)));
@@ -28,6 +29,7 @@ static void test_pending_negative_checkpoint_chunk_restores_its_exact_channel(vo
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err)));
     fr_reactive_state_t state;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,900,700,91,&state,err,sizeof(err)));
     state.coating_oil_fuel_fp=500;state.ignition_threshold=.8f;state.ignition_integral=.4f;
+    state.evaporation_fraction=.625f;
     ASSERT_TRUE(fr_reactive_state_add_heat(&state,1e-5+1e-13,err,sizeof(err)));
     ASSERT_TRUE(state.thermal_energy_residual!=0.f&&state.thermal_energy_correction!=0.f);
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,0,&state,err,sizeof(err)));

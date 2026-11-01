@@ -241,6 +241,10 @@ static void test_roof_blocks_and_side_vent_routes_the_physical_flame(void) {
 #include "combustion_contact_cases.h"
 #include "combustion_oxygen_cases.h"
 int main(int argc,char **argv) {
+    if(argc==2&&strcmp(argv[1],"--roof")==0) {
+        RUN(test_roof_blocks_and_side_vent_routes_the_physical_flame);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
     if(argc==2&&strcmp(argv[1],"--oxygen")==0) {
         RUN(test_ordinary_gpu_oxygen_response_is_continuous_and_stoichiometric);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;

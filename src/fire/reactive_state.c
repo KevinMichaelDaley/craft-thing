@@ -98,7 +98,9 @@ bool fr_reactive_state_valid(const fr_reactive_state_t *s,char *err,uint32_t cap
         return error(err,cap,"Invalid reactive identity/flags");
     if(!isfinite(s->evaporation_fraction)||s->evaporation_fraction<0.f||
        s->evaporation_fraction>=1.f||
-       (s->bound_water_fp==0u&&s->evaporation_fraction!=0.f)||s->identity_reserved)
+       (s->bound_water_fp==0u&&s->evaporation_fraction!=0.f))
+        return error(err,cap,"Invalid evaporation progress");
+    if(s->identity_reserved)
         return error(err,cap,"Nonzero reactive reserved fields");
     if(!isfinite(s->reaction_fraction)||s->reaction_fraction<0||s->reaction_fraction>=1)
         return error(err,cap,"Invalid fractional reaction progress");

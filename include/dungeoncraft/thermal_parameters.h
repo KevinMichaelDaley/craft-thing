@@ -13,6 +13,9 @@
  * is one centimeter. The delivered laboratory bench keeps unit geometry. */
 #define FR_THERMAL_GAMEPLAY_FACE_METERS 0.01
 #define FR_THERMAL_2D_TRANSPORT_SCALE 1.0
+/* Saturation reference from IAPWS SR1-86 (1992); latent heat at 100 C is
+ * about 2257 kJ/kg. Vapor diffusivity in air at 298 K, 1 atm is measured
+ * around 2.14-2.60e-5 m2/s (J. Phys. Chem. A 2013, doi:10.1021/jp3083858). */
 #define FR_THERMAL_WATER_BOIL_K 373.15
 #define FR_THERMAL_WATER_LATENT_KJ_PER_KG 2257.0
 #define FR_THERMAL_VAPOR_DIFFUSIVITY_M2_PER_S 0.000025
