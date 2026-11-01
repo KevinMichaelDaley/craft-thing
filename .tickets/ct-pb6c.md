@@ -1,6 +1,6 @@
 ---
 id: ct-pb6c
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-01T02:41:28Z
@@ -28,3 +28,7 @@ Claimed after ctlo-08fu checkpoint. Existing gas geometry remap keeps stock in s
 **2026-11-01T04:02:10Z**
 
 Pressure feedback and sealed-pocket work implemented; carved benchmark still fails with 10k pressure and near-zero transient temperature. Trial 0.64 granular packing cap lowered peak to 2964 but did not pass 10x ambient bound, so reverted. RED pore-volume test retained for proper coupled solution. Do not close.
+
+**2026-11-01T06:50:52Z**
+
+RED GPU tests cover three-cell rigid sweep and wake, MPM pore volume, venting, sealed compression/work, and conservation. Geometry remap now routes gas through connected newly closed cells and fills connected new voids using cached GPU route/demand passes. Granular MPM uses 0.64 random close packing pore model consistently for gas volume and pressure force. Native quarter-resolution smoke-box benchmark passed all closed/open/carved 1000-frame runs twice; carved means 9.020/9.039 ms, worst 19.417/19.769 ms, max pressure 174.673 vs initial 51.907, finite audit. Focused Vulkan geometry tests and make test pass under persistent Xephyr :92; native benchmark used host display per user preference. RED, GREEN, REFACTOR commits 3100e11, d169a46, 4b2067d, f562c35.
