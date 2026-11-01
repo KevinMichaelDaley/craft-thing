@@ -1887,8 +1887,8 @@ build/gas_reference_tests: tests/fire/gas_reference_tests.c src/fire/gas.c src/f
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c src/fire/gas_reference.c -o $@ -lm
 build/bulk_phase_tests: tests/fire/bulk_phase_tests.c src/fire/bulk_phase.c src/fire/bulk_phase_packet.c include/ferrum/fire/bulk_phase.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/bulk_phase_tests.c src/fire/bulk_phase.c src/fire/bulk_phase_packet.c -o $@ -lm
-build/bulk_phase_gpu_tests: tests/vulkan/bulk_phase_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/bulk_phase_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/bulk_phase_gpu_tests: tests/vulkan/bulk_phase_gpu_tests.c tests/vulkan/bulk_phase_flux_red_stub.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/bulk_phase_gpu_tests.c tests/vulkan/bulk_phase_flux_red_stub.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_bulk_phase test_bulk_phase_gpu
 test: test_bulk_phase test_bulk_phase_gpu
 test_bulk_phase: build/bulk_phase_tests
