@@ -59,3 +59,7 @@ Deformation RED 4929336/a8b32a8, GREEN 6fb7b46/e4c221c, REFACTOR just committed:
 **2026-11-01T08:58:40Z**
 
 Vulkan push ABI regression: validation RED showed VUID-07987 because common layout exposed 36 bytes but bulk phase shader requires 84. RED 55e3dbe added focused validation smoke; GREEN f83a909 widened common compute range to 128 bytes; REFACTOR just committed named range and C struct size assert. Khronos validation smoke with Xephyr :92 passes 2 phase cases and zero Validation Error; normal full make test passed. Full fluid-path validation separately reports descriptor binding VUID-08600, tracked as ct-20i5.
+
+**2026-11-01T09:30:30Z**
+
+Rigid coupling RED 5c24d44, GREEN 3de2331: profile-density slime pool buoys wood at the expected density ratio and receives +5.2 normalized opposite vertical impulse; moving slime drags wood and the two momentum ledgers balance within .02. Existing water 600-tick equilibrium remains stable. Retained-stock RED aed6b04, GREEN 9333483, REFACTOR just committed: fully retained slime has no buoyancy or phase impulse; 17 buoyancy and 21 bulk GPU targeted tests pass. Full make test under Xephyr :92 passed after correcting kinematic contact versus no-body seam momentum assertions. Remaining body-loaded displayed benchmark and final integration audit.
