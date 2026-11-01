@@ -131,7 +131,41 @@ bool fr_thermal_evaporation_step(const fr_reactive_state_t *solid,const fr_gas_s
     const fr_gas_model_t *model,double gas_volume,double ambient_density,double face_fraction,
     double seconds,fr_reactive_state_t *solid_out,fr_gas_state_t *gas_out,
     uint32_t *transferred_water_fp,char *err,uint32_t cap) {
-    (void)solid;(void)gas;(void)model;(void)gas_volume;(void)ambient_density;
-    (void)face_fraction;(void)seconds;(void)solid_out;(void)gas_out;(void)transferred_water_fp;
-    return error(err,cap,"Diffusive water evaporation is not implemented");
+    if(!solid_out||!gas_out||!transferred_water_fp||!isfinite(gas_volume)||gas_volume<=0||
+       !isfinite(ambient_density)||ambient_density<=0||!isfinite(face_fraction)||
+       face_fraction<0||face_fraction>1||!isfinite(seconds)||seconds<0||
+       !fr_reactive_state_valid(solid,err,cap))
+        return error(err,cap,"Invalid diffusive evaporation transaction");
+    fr_gas_thermo_t gas_thermo;
+    if(!fr_gas_thermodynamics(model,gas,gas_volume,&gas_thermo,err,cap)) return false;
+    fr_reactive_state_t next_solid=*solid;fr_gas_state_t next_gas=*gas;
+    uint32_t moved=0;
+    if(seconds>0&&face_fraction>0&&solid->bound_water_fp>0) {
+        double vapor_R=model->gas_constant[FR_GAS_VAPOR];
+        if(vapor_R<=0) return error(err,cap,"Vapor needs a positive gas constant");
+        float temperature=0;
+        if(!fr_reactive_state_temperature(solid,&temperature,err,cap)) return false;
+        double air_R=.21*model->gas_constant[FR_GAS_OXYGEN]+
+            .79*model->gas_constant[FR_GAS_NITROGEN];
+        double exponent=(FR_THERMAL_WATER_LATENT_KJ_PER_KG/vapor_R)*
+            (1./FR_THERMAL_WATER_BOIL_K-1./temperature);
+        double saturated=ambient_density*air_R*FR_THERMAL_AMBIENT_K*
+            exp(exponent)*gas_volume/(vapor_R*temperature);
+        double deficit=fmax(0.,saturated-gas->species[FR_GAS_VAPOR]);
+        double rate=FR_THERMAL_VAPOR_DIFFUSIVITY_M2_PER_S/
+            (FR_THERMAL_GAMEPLAY_FACE_METERS*FR_THERMAL_GAMEPLAY_FACE_METERS);
+        double requested=fmin(deficit*DC_FLUID_FULL,
+            solid->evaporation_fraction+deficit*DC_FLUID_FULL*rate*face_fraction*seconds);
+        if(!isfinite(requested)||requested<0)
+            return error(err,cap,"Diffusive evaporation flux exceeds storage");
+        uint32_t whole=requested>=UINT32_MAX?UINT32_MAX:(uint32_t)floor(requested);
+        double fraction=requested-whole;
+        if(whole) {
+            if(!fr_thermal_evaporate_pair(solid,gas,model,whole,&next_solid,&next_gas,&moved,err,cap)) return false;
+        }
+        if(next_solid.bound_water_fp>0) next_solid.evaporation_fraction=(float)fraction;
+        if(!fr_reactive_state_valid(&next_solid,err,cap)) return false;
+    }
+    *solid_out=next_solid;*gas_out=next_gas;*transferred_water_fp=moved;
+    return true;
 }
