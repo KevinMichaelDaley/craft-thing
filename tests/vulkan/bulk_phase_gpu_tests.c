@@ -107,10 +107,36 @@ static void test_normal_tick_moves_imported_oil(void) {
     ASSERT_TRUE(out->oil_fp[lower]>0u);
     dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
 }
+static void test_oil_crosses_horizontal_chunk_seam_conservatively(void) {
+    char err[256]={0};dc_gpu_t *gpu=NULL;
+    dc_chunk_t *left=calloc(1,sizeof(*left)),*right=calloc(1,sizeof(*right));
+    fr_bulk_phase_chunk_t *source=calloc(1,sizeof(*source));
+    fr_bulk_phase_chunk_t *out_left=calloc(1,sizeof(*out_left)),
+        *out_right=calloc(1,sizeof(*out_right));
+    ASSERT_TRUE(left&&right&&source&&out_left&&out_right);
+    const uint32_t row=30u;
+    source->oil_fp[row*64u+63u]=FR_BULK_CELL_FULL_FP;
+    ASSERT_TRUE(dc_gpu_create(&gpu,128,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+        dc_gpu_upload_chunk(gpu,0,left,err,sizeof(err))&&
+        dc_gpu_upload_chunk(gpu,1,right,err,sizeof(err))&&
+        dc_gpu_set_page(gpu,0,0,0,err,sizeof(err))&&
+        dc_gpu_set_page(gpu,1,0,1,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(gpu,0,left,source,err,sizeof(err))&&
+        fr_bulk_phase_gpu_step(gpu,1.f/60.f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,0,out_left,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,1,out_right,err,sizeof(err)));
+    ASSERT_TRUE(out_right->oil_fp[row*64u]>0u);
+    uint64_t total=0;
+    for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
+        total+=(uint64_t)out_left->oil_fp[i]+out_right->oil_fp[i];
+    ASSERT_EQ(total,FR_BULK_CELL_FULL_FP);
+    dc_gpu_destroy(gpu);free(left);free(right);free(source);free(out_left);free(out_right);PASS();
+}
 int main(void) {
     RUN(test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot);
     RUN(test_water_solver_respects_full_oil_cell_capacity);
     RUN(test_dense_oil_exchanges_with_water_in_sealed_vertical_pair);
     RUN(test_normal_tick_moves_imported_oil);
+    RUN(test_oil_crosses_horizontal_chunk_seam_conservatively);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
