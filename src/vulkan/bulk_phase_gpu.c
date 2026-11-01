@@ -47,7 +47,8 @@ bool fr_bulk_phase_gpu_export_chunk(dc_gpu_t *gpu,uint32_t slot,
     return true;
 }
 static bool ensure_pipeline(dc_gpu_t *gpu,char *err,uint32_t cap) {
-    if(gpu->bulk_phase_pipeline&&gpu->bulk_phase_retained_pipeline) return true;
+    if(gpu->bulk_phase_pipeline&&gpu->bulk_phase_retained_pipeline&&
+       gpu->bulk_phase_thermal_pipeline) return true;
     VkShaderModule module=VK_NULL_HANDLE;
     if(!dc_gpu_load_shader_module(gpu,"build/shaders/bulk_phase_pair.comp.spv",&module,err,cap))
         return false;
@@ -65,7 +66,14 @@ static bool ensure_pipeline(dc_gpu_t *gpu,char *err,uint32_t cap) {
     result=vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,
         &gpu->bulk_phase_retained_pipeline);
     vkDestroyShaderModule(gpu->device,module,NULL);
-    return result==VK_SUCCESS||error(err,cap,"Cannot create bulk phase retained pipeline");
+    if(result!=VK_SUCCESS) return error(err,cap,"Cannot create bulk phase retained pipeline");
+    if(!dc_gpu_load_shader_module(gpu,"build/shaders/bulk_phase_thermal.comp.spv",&module,err,cap))
+        return false;
+    info.stage.module=module;
+    result=vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,
+        &gpu->bulk_phase_thermal_pipeline);
+    vkDestroyShaderModule(gpu->device,module,NULL);
+    return result==VK_SUCCESS||error(err,cap,"Cannot create bulk phase thermal pipeline");
 }
 void dc_gpu_record_bulk_phase(dc_gpu_t *gpu,float seconds) {
     if(!gpu->bulk_phase_work_possible||!gpu->bulk_phase_pipeline||seconds<=0.f) return;
@@ -98,6 +106,17 @@ void dc_gpu_record_bulk_phase(dc_gpu_t *gpu,float seconds) {
     vkCmdPushConstants(gpu->command,gpu->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,
         0,2u*sizeof(uint32_t),&push);
     vkCmdDispatch(gpu->command,(gpu->width*gpu->height+63u)/64u,1,1);
+    if(gpu->thermal) {
+        vkCmdPipelineBarrier2(gpu->command,&dependency);
+        struct {uint32_t width,height;float seconds,cw,co,cs,kw,ko,ks;} thermal={
+            gpu->width,gpu->height,seconds,water->heat_capacity,oil->heat_capacity,
+            slime->heat_capacity,water->conductivity,oil->conductivity,slime->conductivity};
+        vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
+            gpu->bulk_phase_thermal_pipeline);
+        vkCmdPushConstants(gpu->command,gpu->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,
+            0,sizeof(thermal),&thermal);
+        vkCmdDispatch(gpu->command,(gpu->width*gpu->height+63u)/64u,1,1);
+    }
     gpu->fluid_snapshot_valid=false;gpu->fluid_work_possible=true;
     fr_gas_gpu_geometry_changed(gpu,false);
 }

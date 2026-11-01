@@ -245,7 +245,7 @@ CONTACT_SHADER = build/shaders/contacts.comp.spv
 PROBE_SHADER = build/shaders/tick_probe.comp.spv
 HALO_SHADER = build/shaders/halo.comp.spv
 FLUID_SHADER = build/shaders/fluid_transport_16.comp.spv build/shaders/fluid.comp.spv build/shaders/fluid_aperture.comp.spv build/shaders/fluid_transport.comp.spv build/shaders/fluid_displacement.comp.spv
-FLUID_SHADER += build/shaders/bulk_phase_pair.comp.spv build/shaders/bulk_phase_retained.comp.spv
+FLUID_SHADER += build/shaders/bulk_phase_pair.comp.spv build/shaders/bulk_phase_retained.comp.spv build/shaders/bulk_phase_thermal.comp.spv
 $(FLUID_SHADER): shaders/sim/bulk_phase.glsl
 $(FLUID_SHADER): include/dungeoncraft/bulk_phase_layout.h
 PROJECTION_SHADER = build/shaders/projection.comp.spv build/shaders/hydro_head.comp.spv build/shaders/pressure_work.comp.spv build/shaders/pressure_stencil.comp.spv
@@ -665,6 +665,9 @@ build/shaders/bulk_phase_pair.comp.spv: shaders/sim/bulk_phase_pair.comp shaders
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/shaders/bulk_phase_retained.comp.spv: shaders/sim/bulk_phase_retained.comp
+	mkdir -p $(dir $@)
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/shaders/bulk_phase_thermal.comp.spv: shaders/sim/bulk_phase_thermal.comp shaders/reactive/thermal_water.glsl include/dungeoncraft/bulk_phase_layout.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 

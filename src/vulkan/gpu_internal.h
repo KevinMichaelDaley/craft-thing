@@ -252,6 +252,7 @@ struct dc_gpu {
     VkPipeline fluid_transport_pipelines[4];
     VkPipeline bulk_phase_pipeline;
     VkPipeline bulk_phase_retained_pipeline;
+    VkPipeline bulk_phase_thermal_pipeline;
     bool bulk_phase_work_possible;
     VkPipeline fluid_displacement_pipelines[2];
     VkPipeline fluid_phase_pipelines[13];

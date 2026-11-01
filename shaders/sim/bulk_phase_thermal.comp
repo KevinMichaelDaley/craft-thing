@@ -1,0 +1,55 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "../../include/dungeoncraft/bulk_phase_layout.h"
+#include "../reactive/thermal_water.glsl"
+layout(local_size_x=64) in;
+layout(set=0,binding=1,std430) readonly buffer Cells {uvec2 cells[];};
+layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
+layout(set=0,binding=37,std430) buffer Bulk {uint bulk[];};
+layout(push_constant) uniform Params {
+    uint width,height;
+    float seconds,water_capacity,oil_capacity,slime_capacity;
+    float water_conductivity,oil_conductivity,slime_conductivity;
+} params;
+const float FULL=65536.;
+
+void exchange(inout float a,inout float b,float capacity_a,float capacity_b,
+    float conductivity_a,float conductivity_b,float contact) {
+    if(capacity_a<=0.||capacity_b<=0.||contact<=0.||
+        conductivity_a<=0.||conductivity_b<=0.) return;
+    float conductance=2.*conductivity_a*conductivity_b/
+        (conductivity_a+conductivity_b)*contact;
+    float difference=a/capacity_a-b/capacity_b;
+    float equilibrium=difference*capacity_a*capacity_b/(capacity_a+capacity_b);
+    float rate=conductance*(1./capacity_a+1./capacity_b);
+    float transfer=equilibrium*(1.-exp(-rate*params.seconds));
+    a-=transfer;b+=transfer;
+}
+void main() {
+    uint index=gl_GlobalInvocationID.x;
+    if(index>=params.width*params.height||!thermal_water_on()) return;
+    uint x=index%params.width,y=index/params.width;
+    uint page=pages[(y/64u)*((params.width+63u)/64u)+x/64u];
+    if(page==0u) return;
+    uint at=(page-1u)*4096u+(y%64u)*64u+x%64u;
+    uint base=(page-1u)*FR_BULK_CHUNK_CHANNELS*4096u+at%4096u;
+    vec3 volume=vec3(float(cells[at].y),float(bulk[base]),
+        float(bulk[base+4096u]))/FULL;
+    if(volume.x<=0.&&(volume.y<=0.||volume.z<=0.)||
+        volume.y<=0.&&volume.z<=0.) return;
+    vec3 capacity=volume*vec3(params.water_capacity,params.oil_capacity,params.slime_capacity);
+    vec3 conductivity=vec3(params.water_conductivity,params.oil_conductivity,
+        params.slime_conductivity);
+    float water=thermal_water_at(at);
+    float oil=uintBitsToFloat(bulk[base+4u*4096u]);
+    float slime=uintBitsToFloat(bulk[base+5u*4096u]);
+    exchange(water,oil,capacity.x,capacity.y,conductivity.x,conductivity.y,
+        min(volume.x,volume.y));
+    exchange(water,slime,capacity.x,capacity.z,conductivity.x,conductivity.z,
+        min(volume.x,volume.z));
+    exchange(oil,slime,capacity.y,capacity.z,conductivity.y,conductivity.z,
+        min(volume.y,volume.z));
+    thermal_water_set(at,water);
+    bulk[base+4u*4096u]=floatBitsToUint(oil);
+    bulk[base+5u*4096u]=floatBitsToUint(slime);
+}
