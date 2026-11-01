@@ -50,8 +50,21 @@ static inline void native_scene_chunk(dc_chunk_t *chunk, uint32_t slot,
 /** Replace a central water basin with finite dense slime for displayed stress runs. */
 static inline uint32_t native_scene_sludge(dc_chunk_t *chunk,
     fr_bulk_phase_chunk_t *phase,uint32_t width,uint32_t height) {
-    (void)chunk;(void)phase;(void)width;(void)height;
-    return 0u;
+    if(!chunk||!phase) return 0u;
+    memset(phase,0,sizeof(*phase));
+    uint32_t count=0u;
+    for(uint32_t y=0u;y<DC_CHUNK_SIDE;y++) for(uint32_t x=0u;x<DC_CHUNK_SIDE;x++) {
+        uint32_t world_x=(uint32_t)chunk->coord.x*DC_CHUNK_SIDE+x;
+        uint32_t world_y=(uint32_t)chunk->coord.y*DC_CHUNK_SIDE+y;
+        uint32_t at=y*DC_CHUNK_SIDE+x;
+        if(world_x<width/3u||world_x>=width*2u/3u||
+           world_y<height/2u||world_y>=height*3u/4u||
+           chunk->cells[at].fluid_mass!=FR_BULK_CELL_FULL_FP) continue;
+        chunk->cells[at].fluid_mass=0u;
+        phase->slime_fp[at]=FR_BULK_CELL_FULL_FP;
+        count++;
+    }
+    return count;
 }
 
 #endif

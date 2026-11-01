@@ -5,6 +5,7 @@
 #include <time.h>
 
 #include "dungeoncraft/gpu.h"
+#include "ferrum/fire/bulk_phase_gpu.h"
 #ifdef DC_QUARTER_NATIVE_VIEW
 #include "../../src/app/view_config.h"
 #include "../../src/vulkan/gpu_internal.h"
@@ -95,7 +96,9 @@ int main(int argc, char **argv) {
     char err[256] = {0};
     dc_gpu_t *gpu = NULL;
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
-    if (!chunk) return 1;
+    bool sludge=getenv("DC_BENCH_SLUDGE")!=NULL;
+    fr_bulk_phase_chunk_t *phase=sludge?calloc(1,sizeof(*phase)):NULL;
+    if (!chunk || (sludge&&!phase)) {free(phase);free(chunk);return 1;}
     if (!dc_gpu_create(&gpu, width, height, "build/shaders/pattern.comp.spv",
                        err, sizeof(err))) goto fail;
 #ifdef DC_QUARTER_NATIVE_VIEW
@@ -104,14 +107,20 @@ int main(int argc, char **argv) {
 #endif
     uint32_t particles = 0;
     uint64_t water = 0;
+    uint64_t slime = 0;
     for (uint32_t slot = 0; slot < resident; ++slot) {
         native_scene_chunk(chunk, slot, width, height);
+        uint32_t slime_in_chunk=sludge?
+            native_scene_sludge(chunk,phase,width,height):0u;
+        slime+=slime_in_chunk;
         particles += chunk->particle_count;
         for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
             water += chunk->cells[i].fluid_mass;
         if (!dc_gpu_upload_chunk(gpu, slot, chunk, err, sizeof(err)) ||
             !dc_gpu_set_page(gpu, (uint32_t)chunk->coord.x, (uint32_t)chunk->coord.y, slot,
                              err, sizeof(err))) goto fail;
+        if(slime_in_chunk>0u&&
+           !fr_bulk_phase_gpu_import_chunk(gpu,slot,chunk,phase,err,sizeof(err))) goto fail;
     }
     for (uint32_t i = 0; i < 3; ++i)
         if (!dc_gpu_tick_step(gpu, err, sizeof(err))) goto fail;
@@ -142,6 +151,7 @@ int main(int argc, char **argv) {
            resident * DC_CHUNK_CELLS);
     printf("samples=%u initial_grains=%u initial_water_cells=%.2f\n",
            samples, particles, (double)water / DC_FLUID_FULL);
+    if(sludge) printf("initial_slime_cells=%" PRIu64 "\n",slime);
 #ifdef DC_QUARTER_NATIVE_VIEW
     printf("fluid_interval=%u physics_seconds=%.6f display=%ux%u\n",
            FLUID_INTERVAL, 1.0 / 60.0, VIEW_WIDTH * WINDOW_SCALE,
@@ -155,11 +165,13 @@ int main(int argc, char **argv) {
            stage_ns[0] / (1e6 * samples), stage_ns[1] / (1e6 * samples),
            stage_ns[2] / (1e6 * samples));
     dc_gpu_destroy(gpu);
+    free(phase);
     free(chunk);
     return 0;
 fail:
     fprintf(stderr, "native bench failed: %s\n", err);
     dc_gpu_destroy(gpu);
+    free(phase);
     free(chunk);
     return 1;
 }
