@@ -11,7 +11,7 @@ tags: [player, beaver]
 ---
 # Author placeholder beaver animation and persistent material pixel bindings
 
-Create recognizable beaver placeholder art with robe, hat, fur, teeth and tail, plus 6 walk, 8 chewing and 4 casting frames. Supply per-pixel material assignment and stable body/equipment identity across animation.
+Use the user-supplied assets/player/beaver/beaver_chomp.ase as the authoritative idle/chew artwork; preserve its original pixels and file. Its eight frames are NOT a single eight-frame chew loop: one-based frame 1 is idle, 2-4 are entry transition, 5-7 loop while chewing, and 8 is recovery. Replace the generated chew stand-in with this source through the supported import/export pipeline. Retain 6 walk and 4 cast frames as requested and keep the player a beaver with robe and hat. Supply per-pixel material assignments and stable body/equipment identity across animations; imported artwork still requires full material support. Test frame sequencing, held action, release/invalid-target recovery, re-entry and timing partition independence.
 
 ## Acceptance Criteria
 
