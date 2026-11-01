@@ -9,7 +9,13 @@ enum { CHEW_FRAME_MS=100, CHEW_ENTRY_MS=300, CHEW_LOOP_MS=300,
 bool fr_player_chew_tick(fr_player_t *p,bool valid,uint64_t elapsed) {
     if (!player_valid(p)) return false;
     bool active=p->intent.chew_held && p->intent.has_target && valid;
-    if (p->chew_recovering) return fr_player_advance(p,elapsed);
+    if (p->chew_recovering) {
+        uint64_t remaining=CHEW_RECOVERY_MS-p->elapsed_ms;
+        if (elapsed<remaining) return fr_player_advance(p,elapsed);
+        if (!fr_player_advance(p,remaining)) return false;
+        elapsed-=remaining;
+        if (!active) return true;
+    }
     if (active) {
         if (!fr_player_set_action(p,FR_PLAYER_CHEW,false)) return false;
     } else if (p->action==FR_PLAYER_CHEW) {
