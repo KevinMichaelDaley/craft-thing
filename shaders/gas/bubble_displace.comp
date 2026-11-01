@@ -1,0 +1,98 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#define FR_GAS_WRITABLE_CELLS 1
+#include "storage.glsl"
+#include "../reactive/thermal_water.glsl"
+layout(set=0,binding=32,std430) buffer WaterColors {vec4 water_colors[];};
+const uint FULL_WATER=65536u;
+const uint WATER_MATERIAL=3u;
+const vec3 DEFAULT_WATER_COLOR=vec3(.035,.193,.666);
+float bubble_capacity(Gas gas) {
+    return dot(gas.species,vec4(gas_parameter(5u),gas_parameter(6u),
+        gas_parameter(7u),gas_parameter(8u)))+gas.dynamics.x*gas_parameter(9u);
+}
+float bubble_moles(Gas gas) {
+    return dot(gas.species,vec4(gas_parameter(0u),gas_parameter(1u),
+        gas_parameter(2u),gas_parameter(3u)))+gas.dynamics.x*gas_parameter(4u);
+}
+
+void displace_pair(uint source_at,uint receiver_at,uint source_index,uint receiver_index) {
+    uvec2 source_cell=cells[source_at],receiver_cell=cells[receiver_at];
+    if((source_cell.x&65535u)!=WATER_MATERIAL||source_cell.y!=FULL_WATER||
+       receiver_cell.y>=FULL_WATER||(receiver_cell.x&65535u)!=WATER_MATERIAL||
+       occupancy[2u*params.width*params.height+source_index]>0u||
+       occupancy[2u*params.width*params.height+receiver_index]>0u) return;
+    Gas source=gas_world(source_at),receiver=gas_world(receiver_at);
+    if(gas_mass(source)<=0.||source.geometry.x<=0.||source.geometry.y>0.) return;
+    bool source_ok=false,receiver_ok=false;
+    float pressure=gas_primitive(source,source_ok).hydro.w;
+    float opposing=gas_mass(receiver)>0.?gas_primitive(receiver,receiver_ok).hydro.w:
+        gas_parameter(11u)*(.21*gas_parameter(0u)+.79*gas_parameter(1u))*
+        gas_parameter(12u)/gas_parameter(FR_GAS_KINETIC_WORD);
+    if(gas_mass(receiver)==0.) receiver_ok=true;
+    if(!source_ok||!receiver_ok||!gas_finite(pressure)||!gas_finite(opposing)||
+       pressure<=opposing||opposing<=0.) return;
+    float source_capacity=bubble_capacity(source);
+    if(source_capacity<=0.) return;
+    float source_gamma=1.+bubble_moles(source)/source_capacity;
+    bool receiver_has_gas=gas_mass(receiver)>0.;
+    float receiver_capacity=receiver_has_gas?bubble_capacity(receiver):0.;
+    if(receiver_has_gas&&receiver_capacity<=0.) return;
+    float receiver_gamma=receiver_has_gas?1.+bubble_moles(receiver)/receiver_capacity:1.;
+    float maximum=float(min(source_cell.y,FULL_WATER-receiver_cell.y))/float(FULL_WATER);
+    if(receiver_has_gas) maximum=min(maximum,max(0.,receiver.geometry.x-1./float(FULL_WATER)));
+    if(maximum<=0.) return;
+    float low=0.,high=maximum;
+    for(uint iteration=0u;iteration<20u;iteration++) {
+        float trial=.5*(low+high);
+        float source_pressure=pressure*pow(source.geometry.x/(source.geometry.x+trial),source_gamma);
+        float receiver_pressure=receiver_has_gas?
+            opposing*pow(receiver.geometry.x/(receiver.geometry.x-trial),receiver_gamma):opposing;
+        if(source_pressure>receiver_pressure) low=trial;else high=trial;
+    }
+    uint moved=uint(floor(low*float(FULL_WATER)));
+    if(moved==0u) return;
+    float transferred=float(moved)/float(FULL_WATER);
+    float source_volume=source.geometry.x+transferred;
+    float source_internal=gas_thermal_energy(source);
+    float source_work=source_internal*(pow(source.geometry.x/source_volume,source_gamma-1.)-1.);
+    float receiver_work=0.;
+    if(receiver_has_gas) {
+        float receiver_volume=receiver.geometry.x-transferred;
+        float receiver_internal=gas_thermal_energy(receiver);
+        receiver_work=receiver_internal*(pow(receiver.geometry.x/receiver_volume,receiver_gamma-1.)-1.);
+        GasFlux change=gas_empty_flux();change.dynamics.y=receiver_work;
+        receiver=gas_add_flux(receiver,change,1.);
+        receiver.geometry.x=receiver_volume;receiver.geometry.w+=receiver_work;
+    }
+    if(!gas_finite(source_work)||!gas_finite(receiver_work)||
+        source_internal+source_work<=0.) return;
+    GasFlux exchange=gas_empty_flux();exchange.dynamics.y=source_work;
+    source=gas_add_flux(source,exchange,1.);
+    source.geometry.x=source_volume;source.geometry.w+=source_work;
+    bool valid=false;gas_primitive(source,valid);if(!valid) return;
+    if(receiver_has_gas) {gas_primitive(receiver,valid);if(!valid) return;}
+    thermal_water_move(source_at,receiver_at,moved,source_cell.y);
+    thermal_water_resize(source_at,source_cell.y,source_cell.y-moved);
+    thermal_water_add(source_cell.y>moved?source_at:receiver_at,-source_work-receiver_work);
+    vec3 from=water_colors[source_at].w>0.?water_colors[source_at].rgb:DEFAULT_WATER_COLOR;
+    vec3 into=water_colors[receiver_at].w>0.?water_colors[receiver_at].rgb:DEFAULT_WATER_COLOR;
+    water_colors[receiver_at]=vec4((into*float(receiver_cell.y)+from*float(moved))/
+        float(receiver_cell.y+moved),1.);
+    cells[source_at].y=source_cell.y-moved;
+    cells[receiver_at].y=receiver_cell.y+moved;
+    gas_write_world(source_at,source);
+    if(receiver_has_gas) gas_write_world(receiver_at,receiver);
+    atomicOr(owner_tiles[gas_dirty_tile(source_index/params.width/8u*((params.width+7u)/8u)+
+        source_index%params.width/8u)],FR_GAS_GEOMETRY_DIRTY_TILE_BIT);
+}
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    uint x=index%params.width,y=index/params.width;
+    if(x+1u>=params.width||(x&1u)!=(params.bank&1u)) return;
+    uint left=gas_atlas(ivec2(int(x),int(y)));
+    uint right=gas_atlas(ivec2(int(x+1u),int(y)));
+    if(left==0xffffffffu||right==0xffffffffu||!gas_gate_open(ivec2(int(x),int(y)),0u)) return;
+    displace_pair(left,right,index,index+1u);
+    displace_pair(right,left,index+1u,index);
+}

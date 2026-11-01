@@ -7,7 +7,7 @@
 typedef struct {float words[FR_GAS_CELL_WORDS];} gas_packet_t;
 struct fr_gas_gpu {
     fr_renderer_compute_t initialize,prepare,transport,feedback,gate,audit,conduction;
-    fr_renderer_compute_t geometry_stage,geometry_transfer,geometry_commit;
+    fr_renderer_compute_t geometry_stage,geometry_transfer,geometry_commit,bubble_displace;
     fr_renderer_compute_t owner_gather;
     dc_gpu_address_buffer_t state[3],cache[2],parameters,stats,gates,audit_summary;
     dc_gpu_address_buffer_t checkpoint_staging;
@@ -27,6 +27,7 @@ struct fr_gas_gpu {
     bool cache_valid,direct_publish,initialization_pending,sparse_owners;
     bool tick_pending;
     bool geometry_dirty,geometry_dynamic,geometry_routes_dirty,geometry_deferred;
+    float bubble_seconds;
     VkFence completion;
     double large_step_hint;
     bool trace;

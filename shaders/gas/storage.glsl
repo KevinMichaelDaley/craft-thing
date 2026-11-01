@@ -13,7 +13,11 @@ layout(set=0,binding=4,std430) restrict buffer Cache1 {Primitive cache1[];};
 layout(set=0,binding=5,std430) readonly buffer Model {uint parameters[];};
 layout(set=0,binding=6,std430) coherent buffer Stats {uint stats[];};
 layout(set=0,binding=7,std430) readonly buffer Pages {uint pages[];};
+#ifdef FR_GAS_WRITABLE_CELLS
+layout(set=0,binding=8,std430) buffer Cells {uvec2 cells[];};
+#else
 layout(set=0,binding=8,std430) readonly buffer Cells {uvec2 cells[];};
+#endif
 layout(set=0,binding=9,std430) readonly buffer Occupancy {uint occupancy[];};
 layout(set=0,binding=10,std430) readonly buffer Mpm {vec4 mpm[];};
 #ifdef FR_GAS_WRITABLE_GATES

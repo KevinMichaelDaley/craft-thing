@@ -97,6 +97,7 @@ static void destroy(dc_gpu_t *g,struct fr_gas_gpu *t) {
     fr_gas_acoustic_destroy(g,&t->acoustic);
     fr_renderer_compute_destroy(g,&t->initialize);fr_renderer_compute_destroy(g,&t->prepare);
     fr_renderer_compute_destroy(g,&t->geometry_stage);fr_renderer_compute_destroy(g,&t->geometry_transfer);fr_renderer_compute_destroy(g,&t->geometry_commit);
+    fr_renderer_compute_destroy(g,&t->bubble_displace);
     fr_renderer_compute_destroy(g,&t->owner_gather);
     dc_gpu_address_buffer_destroy(g,&t->owner_tiles);
     fr_renderer_compute_destroy(g,&t->conduction);dc_gpu_address_buffer_destroy(g,&t->conduction_faces);
@@ -175,7 +176,7 @@ static void bind_canonical(dc_gpu_t *g,struct fr_gas_gpu *t) {
         .dstSet=sets[i],.dstBinding=0,.descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&buffer};
     vkUpdateDescriptorSets(g->device,6,writes,0,NULL);
 }
-static void record_geometry(dc_gpu_t *g,struct fr_gas_gpu *t,bool local,bool cached) {
+static void record_geometry(dc_gpu_t *g,struct fr_gas_gpu *t,bool local,bool cached,float seconds) {
     uint32_t *words=t->stats.mapped;words[FR_GAS_ERROR_WORD]=0u;
     bool force=t->geometry_dirty||t->geometry_routes_dirty;
     words[FR_GAS_ROW_NORM_BEFORE_WORD]=local&&force?1u:0u;
@@ -183,21 +184,25 @@ static void record_geometry(dc_gpu_t *g,struct fr_gas_gpu *t,bool local,bool cac
         (local?FR_GAS_GEOMETRY_LOCAL_BIT:0u)|(local&&cached?FR_GAS_GEOMETRY_CACHE_BIT:0u)|
         (local&&force?FR_GAS_GEOMETRY_FORCE_BIT:0u)|
         (t->geometry_routes_dirty&&!t->geometry_dirty&&!t->geometry_dynamic?FR_GAS_GEOMETRY_ROUTES_ONLY_BIT:0u);
+    if(seconds>0.f) {
+        dispatch(g,t,&t->bubble_displace,seconds,0u);
+        dispatch(g,t,&t->bubble_displace,seconds,1u);
+    }
     dispatch(g,t,&t->geometry_stage,0,bank);dispatch(g,t,&t->geometry_transfer,0,bank);dispatch(g,t,&t->geometry_commit,0,bank);
 }
 void fr_gas_gpu_record_pending_geometry(dc_gpu_t *g) {
     struct fr_gas_gpu *t=g->gas;if(!t||!t->geometry_deferred) return;
-    record_geometry(g,t,true,true);barrier(g);
+    record_geometry(g,t,true,true,t->bubble_seconds);barrier(g);
     vkCmdFillBuffer(g->command,t->stats.buffer,FR_GAS_RATE_WORD*4u,4u,0u);
     vkCmdFillBuffer(g->command,t->stats.buffer,FR_GAS_RATE_X_WORD*4u,8u,0u);
     t->geometry_deferred=false;
 }
-bool fr_gas_gpu_refresh_geometry(dc_gpu_t *g,char *err,uint32_t cap) {
+static bool refresh_geometry(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(!g||!g->gas) return true;
     struct fr_gas_gpu *t=g->gas;if(!t->geometry_dirty&&!t->geometry_dynamic&&!t->geometry_routes_dirty) return true;
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas geometry refresh");
     const char *option=getenv("DC_GAS_LOCAL_GEOMETRY");bool local=t->policy==FR_GAS_PRESSURE_PRACTICAL&&option&&strcmp(option,"0")!=0;
-    record_geometry(g,t,local,t->cache_valid);uint32_t *words=t->stats.mapped;
+    record_geometry(g,t,local,t->cache_valid,seconds);uint32_t *words=t->stats.mapped;
     if(!submit(g,err,cap)) return false;
     if(words[FR_GAS_ERROR_WORD]!=0u) return error(err,cap,"Gas geometry candidate is not numerically valid");
     if(words[FR_GAS_ROW_NORM_BEFORE_WORD]!=0u) {
@@ -207,6 +212,9 @@ bool fr_gas_gpu_refresh_geometry(dc_gpu_t *g,char *err,uint32_t cap) {
         t->large_step_hint=0;
     }
     t->geometry_dirty=false;t->geometry_routes_dirty=false;return true;
+}
+bool fr_gas_gpu_refresh_geometry(dc_gpu_t *g,char *err,uint32_t cap) {
+    return refresh_geometry(g,0.f,err,cap);
 }
 static bool set_direct_publish(dc_gpu_t *g,struct fr_gas_gpu *t,bool direct,char *err,uint32_t cap) {
     if(t->direct_publish==direct) return true;
@@ -283,7 +291,7 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     parameters[FR_GAS_OPACITY_WORD]=FR_GAS_SMOKE_DISPLAY_OPACITY;
     ((uint32_t *)t->parameters.mapped)[FR_GAS_SLOT_COUNT_WORD]=DC_GPU_CHUNK_SLOTS;
     ((uint32_t *)t->parameters.mapped)[FR_GAS_CELL_OWNER_WORD]=0u;
-    VkDescriptorBufferInfo buffers[28];
+    VkDescriptorBufferInfo buffers[37];
     for(uint32_t i=12u;i<28u;i++) buffers[i]=(VkDescriptorBufferInfo){t->parameters.buffer,0,t->parameters.bytes};
     buffers[26]=(VkDescriptorBufferInfo){t->owner_tiles.buffer,0,t->owner_tiles.bytes};
     buffers[27]=(VkDescriptorBufferInfo){t->conduction_faces.buffer,0,t->conduction_faces.bytes};
@@ -309,6 +317,11 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
         char path[96];snprintf(path,sizeof(path),"build/shaders/gas_geometry_%s.comp.spv",names[i]);
         if(!fr_renderer_compute_init(g,geometry[i],buffers,27,16,path,err,cap)) return false;
     }
+    for(uint32_t i=28u;i<37u;i++) buffers[i]=(VkDescriptorBufferInfo){t->parameters.buffer,0,t->parameters.bytes};
+    buffers[32]=(VkDescriptorBufferInfo){g->water_color_buffer,0,VK_WHOLE_SIZE};
+    buffers[36]=(VkDescriptorBufferInfo){g->thermal_control_buffer,0,VK_WHOLE_SIZE};
+    if(!fr_renderer_compute_init(g,&t->bubble_displace,buffers,37,16,
+        "build/shaders/gas_bubble_displace.comp.spv",err,cap)) return false;
     buffers[6]=(VkDescriptorBufferInfo){t->audit_summary.buffer,0,t->audit_summary.bytes};
     return fr_renderer_compute_init(g,&t->audit,buffers,27,16,"build/shaders/gas_audit.comp.spv",err,cap);
 }
@@ -344,9 +357,9 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     const char *fusion=getenv("DC_GAS_FUSED_GEOMETRY"),*local=getenv("DC_GAS_LOCAL_GEOMETRY");
     bool fused=fr_combustion_gpu_enabled(g)&&t->cache_valid&&t->direct_publish&&t->policy==FR_GAS_PRESSURE_PRACTICAL&&local&&strcmp(local,"0")!=0&&
         fusion&&strcmp(fusion,"0")!=0&&(t->geometry_dirty||t->geometry_dynamic||t->geometry_routes_dirty);
-    t->geometry_deferred=fused;
+    t->geometry_deferred=fused;t->bubble_seconds=seconds;
     if(fused) t->acoustic.geometry_changed=true;
-    else if(!fr_gas_gpu_refresh_geometry(g,err,cap)) return false;
+    else if(!refresh_geometry(g,seconds,err,cap)) return false;
     if(!fr_combustion_gpu_enabled(g)) {
         if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas heat diffusion");
         dispatch(g,t,&t->conduction,seconds,0u);
