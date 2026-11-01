@@ -30,6 +30,7 @@ static void test_level_save_and_load_publish_the_same_reactive_worker_channel(vo
     ASSERT_TRUE(dc_chunk_table_finish_save(&view.table,index,result.generation));dc_stream_result_release(&result);
     ASSERT_TRUE(dc_stream_request_load(view.stream,chunk->coord,generation));ASSERT_TRUE(receive(view.stream,&result));
     ASSERT_EQ(result.kind,DC_STREAM_LOADED);ASSERT_TRUE(result.reactive);ASSERT_EQ(result.reactive->count,1u);
+    ASSERT_TRUE(result.bulk);ASSERT_INT_EQ(result.bulk->oil_fp[0],0);
     ASSERT_TRUE(memcmp(&result.reactive->attachments[0].record.state,&state,sizeof(state))==0);dc_stream_result_release(&result);
     ASSERT_TRUE(fr_gpu_reactive_import_chunk(view.gpu,index,chunk,NULL,err,sizeof(err)));
     fr_reactive_record_t record;bool found=true;
