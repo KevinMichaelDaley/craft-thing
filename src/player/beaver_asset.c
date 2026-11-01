@@ -140,7 +140,14 @@ bool fr_beaver_pixel_owners(uint32_t source,uint64_t identity,uint32_t body_id,u
 bool fr_beaver_pixel_owners_trimmed(uint32_t source,uint64_t identity,
     uint32_t body_id,uint32_t generation,uint32_t origin_x,uint32_t origin_y,
     uint32_t width,uint32_t height,fr_appearance_owner_t *appearance,fr_reactive_owner_t *reactive) {
-    (void)source;(void)identity;(void)body_id;(void)generation;(void)origin_x;(void)origin_y;
-    (void)width;(void)height;(void)appearance;(void)reactive;
-    return false;
+    if (!appearance || !reactive || origin_x>=FR_BEAVER_WIDTH || origin_y>=FR_BEAVER_HEIGHT ||
+        !width || !height || width>FR_BEAVER_WIDTH-origin_x || height>FR_BEAVER_HEIGHT-origin_y)
+        return false;
+    fr_appearance_owner_t app;fr_reactive_owner_t owner;
+    if (!fr_beaver_pixel_owners(source,identity,body_id,generation,&app,&owner) ||
+        app.x<origin_x || app.y<origin_y || app.x-origin_x>=width || app.y-origin_y>=height)
+        return false;
+    owner.key[2]=app.x-origin_x;owner.key[3]=app.y-origin_y;
+    *appearance=app;*reactive=owner;
+    return true;
 }
