@@ -27,3 +27,7 @@ Pair/seam/closed-vessel tests conserve each ingredient and combined phase capaci
 **2026-11-01T03:25:43Z**
 
 GPU bulk phase now conserves water/oil in sealed vertical exchange, moves oil/slime across horizontal chunk seams, runs in normal fused and standalone ticks, displaces oil around a rigid occupant, and records closed-vessel retained volume. CPU reference, v10 stream persistence, gas and water shared capacity, and full all/test pass. Remaining: water drag and energy exchange, phase thermal sidecars, and broader moving-rigid/seam reconciliation.
+
+**2026-11-01T03:35:19Z**
+
+Retained oil/slime channels are validated as subsets of authoritative phase stock in GPU imports and versioned packets; malformed but correctly checksummed restore is rejected transactionally. Full all/test passed after RED-GREEN-REFACTOR.
