@@ -655,10 +655,10 @@ build/chunk.o: src/world/chunk.c include/dungeoncraft/chunk.h
 build/stream.o: src/world/stream.c src/world/stream_gas.h include/dungeoncraft/stream.h include/dungeoncraft/chunk.h include/ferrum/fire/gas_checkpoint.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-build/bulk_phase_packet.o: src/fire/bulk_phase_packet.c include/ferrum/fire/bulk_phase.h
+build/bulk_phase_packet.o: src/fire/bulk_phase_packet.c src/fire/bulk_phase_internal.h include/ferrum/fire/bulk_phase.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-build/bulk_phase_gpu.o: src/vulkan/bulk_phase_gpu.c src/vulkan/gpu_internal.h include/ferrum/fire/bulk_phase_gpu.h
+build/bulk_phase_gpu.o: src/vulkan/bulk_phase_gpu.c src/fire/bulk_phase_internal.h src/vulkan/gpu_internal.h include/ferrum/fire/bulk_phase_gpu.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/shaders/bulk_phase_pair.comp.spv: shaders/sim/bulk_phase_pair.comp shaders/reactive/thermal_water.glsl
