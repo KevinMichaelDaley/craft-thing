@@ -479,6 +479,7 @@ static void test_water_drag_exchanges_equal_opposite_phase_momentum(void) {
     float after_total=after->face_velocity[upper].y*.5f+
         out->oil_momentum_y[upper]+out->oil_momentum_y[lower];
     ASSERT_TRUE(fabsf(after_total-before)<.001f);
+    ASSERT_TRUE(out->oil_excess[upper]+out->oil_excess[lower]>0.f);
     dc_gpu_destroy(gpu);free(chunk);free(after);free(bulk);free(out);PASS();
 }
 int main(void) {

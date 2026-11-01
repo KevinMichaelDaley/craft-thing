@@ -7,7 +7,7 @@ layout(local_size_x=64) in;
 layout(set=0,binding=1,std430) buffer Cells {uvec2 cells[];};
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=3,std430) readonly buffer Occupancy {uint occupancy[];};
-layout(set=0,binding=10,std430) readonly buffer FaceVelocity {vec2 face_velocity[];};
+layout(set=0,binding=10,std430) buffer FaceVelocity {vec2 face_velocity[];};
 layout(set=0,binding=37,std430) buffer Bulk {uint bulk[];};
 layout(push_constant) uniform Params {
     uint width,height,parity,axis;
@@ -63,6 +63,20 @@ float water_drag_speed(float face_flow,bool reverse,uint water,uint occupied) {
 float transverse_shear(uint axis,uint first,uint second) {
     vec2 difference=face_velocity[first]-face_velocity[second];
     return abs(axis==0u?difference.x:difference.y);
+}
+float couple_water_phase(uint atlas,uint phase,uint volume,float water_mass,
+    float phase_density,uint axis,float water_speed) {
+    if(volume==0u||water_mass<=0.) return water_speed;
+    uint component=axis==0u?1u:0u;
+    float phase_mass=phase_density*float(volume)/float(FULL);
+    float phase_momentum=bulk_momentum_at(atlas,phase,component);
+    float difference=water_speed-phase_momentum/phase_mass;
+    float reduced_mass=water_mass*phase_mass/(water_mass+phase_mass);
+    float impulse=reduced_mass*difference;
+    bulk_momentum_write(atlas,phase,component,phase_momentum+impulse);
+    float dissipation=0.5*reduced_mass*difference*difference*1e-10;
+    bulk_heat_write(atlas,phase,bulk_heat_at(atlas,phase)+dissipation);
+    return water_speed-impulse/water_mass;
 }
 float rheology_mobility(uint phase,uint atlas,uint volume,float stress,float shear) {
     if(phase==0u) return 1.;
@@ -121,6 +135,15 @@ void main() {
         for(uint phase=0u;phase<3u;phase++) {
             uint swap_volume=top[phase];top[phase]=bottom[phase];bottom[phase]=swap_volume;
         }
+    }
+    if(top[0]>0u) {
+        float water_mass=params.water_density*float(top[0])/float(FULL);
+        water_flow=couple_water_phase(top_at,1u,top[1],water_mass,
+            params.oil_density,params.axis,water_flow);
+        water_flow=couple_water_phase(top_at,2u,top[2],water_mass,
+            params.slime_density,params.axis,water_flow);
+        if(params.axis==0u) face_velocity[index].y=water_flow;
+        else face_velocity[index].x=water_flow;
     }
     uvec3 top_before=uvec3(top[0],top[1],top[2]);
     uvec3 bottom_before=uvec3(bottom[0],bottom[1],bottom[2]);
