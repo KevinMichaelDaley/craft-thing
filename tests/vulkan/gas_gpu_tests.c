@@ -4,6 +4,7 @@
 #include <math.h>
 #include <sys/stat.h>
 #include "ferrum/fire/gas_gpu.h"
+#include "ferrum/fire/thermal_gpu.h"
 #include "../../src/vulkan/gas_gpu_state.h"
 #undef RUN
 #define RUN(fn) do {const char *filter=getenv("DC_GAS_TEST_FILTER");if(!filter||strstr(#fn,filter)) {printf("RUN %s\n",#fn);fn();}} while(0)
