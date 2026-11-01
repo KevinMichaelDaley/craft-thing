@@ -454,6 +454,33 @@ static void test_gpu_import_rejects_orphan_phase_momentum(void) {
     ASSERT_EQ(out->oil_momentum_x[17],0.f);
     dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
 }
+static void test_water_drag_exchanges_equal_opposite_phase_momentum(void) {
+    char err[256]={0};dc_gpu_t *gpu=NULL;
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk)),*after=calloc(1,sizeof(*after));
+    fr_bulk_phase_chunk_t *bulk=calloc(1,sizeof(*bulk)),*out=calloc(1,sizeof(*out));
+    ASSERT_TRUE(chunk&&after&&bulk&&out);
+    const uint32_t upper=20u*64u+20u,lower=upper+64u;
+    for(uint32_t y=19u;y<=22u;y++) for(uint32_t x=19u;x<=21u;x++)
+        if(x!=20u||y==19u||y==22u) chunk->cells[y*64u+x].material=DC_MATERIAL_STONE;
+    chunk->cells[lower].fluid_mass=FR_BULK_CELL_FULL_FP/2u;
+    bulk->oil_fp[lower]=FR_BULK_CELL_FULL_FP/2u;
+    chunk->face_velocity[upper].y=-40.f;
+    ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+        dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(gpu,0,0,0,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,bulk,err,sizeof(err))&&
+        fr_bulk_phase_gpu_step(gpu,1.f/60.f,err,sizeof(err))&&
+        dc_gpu_download_chunk(gpu,0,after,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
+    ASSERT_TRUE(out->oil_fp[upper]>0u);
+    ASSERT_TRUE(after->face_velocity[upper].y>-40.f);
+    ASSERT_TRUE(out->oil_momentum_y[upper]+out->oil_momentum_y[lower]<0.f);
+    float before=-40.f*.5f;
+    float after_total=after->face_velocity[upper].y*.5f+
+        out->oil_momentum_y[upper]+out->oil_momentum_y[lower];
+    ASSERT_TRUE(fabsf(after_total-before)<.001f);
+    dc_gpu_destroy(gpu);free(chunk);free(after);free(bulk);free(out);PASS();
+}
 int main(void) {
     RUN(test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot);
     RUN(test_water_solver_respects_full_oil_cell_capacity);
@@ -472,5 +499,6 @@ int main(void) {
     RUN(test_tangential_coarse_shear_thins_loaded_slime);
     RUN(test_phase_flux_carries_momentum_without_extra_mass);
     RUN(test_gpu_import_rejects_orphan_phase_momentum);
+    RUN(test_water_drag_exchanges_equal_opposite_phase_momentum);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
