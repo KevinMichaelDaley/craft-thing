@@ -18,12 +18,14 @@ float bubble_moles(Gas gas) {
 
 void displace_pair(uint source_at,uint receiver_at,uint source_index,uint receiver_index) {
     uvec2 source_cell=cells[source_at],receiver_cell=cells[receiver_at];
-    if((source_cell.x&65535u)!=WATER_MATERIAL||source_cell.y!=FULL_WATER||
-       receiver_cell.y>=FULL_WATER||(receiver_cell.x&65535u)!=WATER_MATERIAL||
+    uint receiver_material=receiver_cell.x&65535u;
+    if((source_cell.x&65535u)!=WATER_MATERIAL||source_cell.y==0u||
+       receiver_cell.y>=FULL_WATER||
+       (receiver_material!=WATER_MATERIAL&&receiver_material!=0u)||
        occupancy[2u*params.width*params.height+source_index]>0u||
        occupancy[2u*params.width*params.height+receiver_index]>0u) return;
     Gas source=gas_world(source_at),receiver=gas_world(receiver_at);
-    if(gas_mass(source)<=0.||source.geometry.x<=0.||source.geometry.y>0.) return;
+    if(gas_mass(source)<=0.||source.geometry.x<=0.) return;
     bool source_ok=false,receiver_ok=false;
     float pressure=gas_primitive(source,source_ok).hydro.w;
     float opposing=gas_mass(receiver)>0.?gas_primitive(receiver,receiver_ok).hydro.w:
@@ -83,8 +85,13 @@ void displace_pair(uint source_at,uint receiver_at,uint source_index,uint receiv
     cells[receiver_at].y=receiver_cell.y+moved;
     gas_write_world(source_at,source);
     if(receiver_has_gas) gas_write_world(receiver_at,receiver);
-    atomicOr(owner_tiles[gas_dirty_tile(source_index/params.width/8u*((params.width+7u)/8u)+
-        source_index%params.width/8u)],FR_GAS_GEOMETRY_DIRTY_TILE_BIT);
+    uint tile_width=(params.width+7u)/8u;
+    uint source_tile=(source_index/params.width/8u)*tile_width+
+        source_index%params.width/8u;
+    uint receiver_tile=(receiver_index/params.width/8u)*tile_width+
+        receiver_index%params.width/8u;
+    atomicOr(owner_tiles[gas_dirty_tile(source_tile)],FR_GAS_GEOMETRY_DIRTY_TILE_BIT);
+    atomicOr(owner_tiles[gas_dirty_tile(receiver_tile)],FR_GAS_GEOMETRY_DIRTY_TILE_BIT);
 }
 void main() {
     uint index=gas_index();if(index>=params.width*params.height) return;
