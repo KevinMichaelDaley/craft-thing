@@ -38,3 +38,7 @@ Clean pushed implementation checkpoint: code through 9e181e91 is on origin/main 
 **2026-11-01T23:28:10Z**
 
 User clarification: authoritative 8-frame artwork assets/player/beaver/beaver_chomp.ase. Frame 1 idle; 2-4 entry; 5-7 sustained chew loop; 8 recovery. Harvesting must gradually remove wood according to actual density and occupied amount, triggering structural release of unsupported wood as real rigid bodies. Only consumed wood enters inventory; detached remnants remain physical. Child criteria updated; resume worker from pushed 1a9053d0 checkpoint.
+
+**2026-11-01T23:50:50Z**
+
+Authorized continuation implemented/pushed authoritative eight-frame ASE import with explicit material/canonical maps and phased chew state machine, then actual GPU drive/support-jump backend and extraction-trim reactive binding prerequisites. Combined player tests 28/28, state+asset sanitizers 22/22, dependency tests 9/9. Normal full make attempt still fails ct-lc9o; all 141 commands from ct-il37-hidden runner executed separately: 140 pass, only stale material-15 corruption fixture fails (new ct-n81j), no timeouts. Precise progress/next implementation preserved in build/agents/beaver-player/progress.md and continuation/handoff.md. Epic intentionally remains in_progress: application admission/animated exposure and input integration, conservative gradual tree cutting plus transactional real detached-body release, spells, controller split-screen and actual end-to-end evidence remain unfinished. No inventory/removal or live beaver acceptance falsely claimed.

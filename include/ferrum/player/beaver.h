@@ -65,7 +65,9 @@ bool fr_beaver_pixel_owners(uint32_t source, uint64_t appearance_identity,
  * rest_origin_x/y are canonical canvas coordinates of that body's rest (0,0).
  * Appearance keeps canonical coordinates; reactive keys use actual body rest.
  * Reject sources outside the supplied body extent without changing outputs.
- * The caller obtains origin/extent from admission, never a frame-time readback. */
+ * Use only for bodies admitted in canonical rest-canvas coordinates; an animated
+ * frame's crop bounds are not a canonical rest origin. The caller obtains
+ * origin/extent from admission, never a frame-time readback. */
 bool fr_beaver_pixel_owners_trimmed(uint32_t source,uint64_t appearance_identity,
     uint32_t body_id,uint32_t generation,uint32_t rest_origin_x,uint32_t rest_origin_y,
     uint32_t width,uint32_t height,fr_appearance_owner_t *appearance,

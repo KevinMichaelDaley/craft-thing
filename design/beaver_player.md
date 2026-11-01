@@ -142,6 +142,9 @@ entire parcel and owner remain unchanged. No per-frame seeding or CPU reaction
 solve is involved. This proves the trim binding prerequisite; full pose
 deformation, retention of hidden parcels and live exposure still need runtime
 integration before ct-xsll closes.
+This helper requires admission in canonical rest-canvas coordinates. Cropping
+an arbitrary displayed animation frame and subtracting its bounds would bind
+the wrong parcels; that path needs the full source-map destination adapter.
 
 Run `./tools/with-vulkan make test_player` for the state and asset checks.
 Run `./tools/with-vulkan make build/beaver_atlas` and
