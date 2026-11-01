@@ -12,6 +12,7 @@
 #include "mpm_activity_layout.h"
 
 enum {
+    DC_GPU_PUSH_CONSTANT_BYTES = 128,
     DC_GPU_DESCRIPTOR_BINDINGS = 38,
     DC_GPU_STRUCTURAL_TAG = 0x53545231u,
     DC_STRUCTURAL_HEADER_WORDS = 32,

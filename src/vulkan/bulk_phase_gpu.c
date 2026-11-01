@@ -11,6 +11,15 @@
 #define FR_BULK_GRAVITY_CELLS_PER_SECOND_SQUARED 900.f
 _Static_assert(sizeof(fr_bulk_phase_chunk_t)==
     FR_BULK_CHUNK_CHANNELS*DC_CHUNK_CELLS*sizeof(uint32_t),"Bulk GPU layout mismatch");
+typedef struct {
+    uint32_t width,height,parity,axis;
+    float seconds,gravity,water,oil,slime;
+    float oil_yield,slime_yield,oil_consistency,slime_consistency;
+    float oil_exponent,slime_exponent,oil_softening,slime_softening;
+    float oil_hot_yield,slime_hot_yield,oil_capacity,slime_capacity;
+} fr_bulk_pair_push_t;
+_Static_assert(sizeof(fr_bulk_pair_push_t)<=DC_GPU_PUSH_CONSTANT_BYTES,
+    "Bulk phase push constants exceed compute pipeline layout");
 
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
@@ -89,11 +98,7 @@ void dc_gpu_record_bulk_phase(dc_gpu_t *gpu,float seconds) {
     vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->bulk_phase_pipeline);
     vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout,0,1,&gpu->descriptor,0,NULL);
-    struct {uint32_t width,height,parity,axis;
-        float seconds,gravity,water,oil,slime;
-        float oil_yield,slime_yield,oil_consistency,slime_consistency;
-        float oil_exponent,slime_exponent,oil_softening,slime_softening;
-        float oil_hot_yield,slime_hot_yield,oil_capacity,slime_capacity;} push={
+    fr_bulk_pair_push_t push={
         gpu->width,gpu->height,0,0,seconds,FR_BULK_GRAVITY_CELLS_PER_SECOND_SQUARED,
         water->density,oil->density,slime->density,
         oil->yield_stress,slime->yield_stress,oil->consistency,slime->consistency,
