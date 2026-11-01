@@ -29,10 +29,15 @@ loss. Viewport-to-world conversion belongs to the owning camera.
 ## Actions and provisional bindings
 
 Animation uses integer elapsed milliseconds. Walk loops six frames at 100 ms;
-chew plays eight frames at 80 ms; cast plays four frames at 100 ms. Chew/cast
-hold their final frame on completion until the consumer transitions or explicitly
-restarts. Setting the same action does not implicitly restart it. These timings
-are placeholder tuning, not a ruleset. Every requested frame must remain visible.
+cast plays four frames at 100 ms and holds the last frame. The authoritative
+`assets/player/beaver/beaver_chomp.ase` supplies eight unchanged 40x40 RGBA
+frames at its authored 100 ms timing. One-based frame 1 is idle; 2-4 enter;
+5-7 loop during valid held chewing; 8 recovers for 100 ms to idle on release or
+target loss. `fr_player_chew_tick` takes the current held intent and freshly
+validated wood availability/reach, and advances animation once per simulation
+step. It does not mutate wood. Repeated held ticks preserve entry/loop time;
+recovery completes before re-entry. Other animation consumers use
+`fr_player_advance`; do not advance a player twice in the same step.
 
 Keyboard: A/D movement, Space press jump, Q press fire bolt, E press targeted ice
 storm. C held is the provisional chew input. Keyboard targeting uses the mouse
@@ -93,11 +98,21 @@ children and real application acceptance pass.
 
 ## Native placeholder assets
 
-`fr_beaver_asset_build` authors deterministic standard CPRP clips into supplied
+`fr_beaver_asset_build` builds deterministic standard CPRP clips into supplied
 cold buffers. `fr_beaver_asset_size` supplies exact capacity requirements.
 The standard prop reader validates the completed compiled bytes. No new image
 format, runtime image parsing, heap allocation or global mutable sprite state is
 introduced. The manifest is `assets/player/beaver/manifest.json`.
+
+`scripts/props/beaver_import.py` uses the existing strict LibreSprite ASE reader.
+The original artwork is immutable. The checked-in `.mapping.json` sidecar gives
+explicit semantic regions and unique per-frame canonical owners, constrained
+to the same material region. Its source hash rejects unreviewed artwork changes.
+Newly revealed pixels reserve canonical rest cells; occlusion never releases
+their parcels. Fur, cyan hat/robe, and tail are covered; the artwork has no
+separately visible tooth region, so no tooth geometry or pixels are invented.
+Walk/cast use six/four provisional poses derived from the imported idle pixels.
+The generated C header is rebuilt from the ASE and sidecar before asset builds.
 
 The parallel source map retains canonical body/equipment pixel identities across
 all poses and facing directions. Zero is transparent; other values are the
@@ -111,6 +126,6 @@ Run `./tools/with-vulkan make test_player` for the state and asset checks.
 Run `./tools/with-vulkan make build/beaver_atlas` and
 `./tools/with-vulkan ./build/beaver_atlas` to export standard `.cprop` files,
 little-endian source maps, and a contact sheet in `build/beaver_assets/`.
-Rows are idle, walk, chew and cast; the sheet is an asset review, not an actual
+Rows in `contact_sheet.bmp` are idle, walk, chew and cast; the sheet is an asset review, not an actual
 application screenshot. Runtime player animation and persistent reaction
 feedback are still unimplemented acceptance criteria on `ct-xsll`.

@@ -98,11 +98,12 @@ bool fr_player_set_intent(fr_player_t *player, fr_player_intent_t intent);
 bool fr_player_clip(fr_player_action_t action, fr_player_clip_t *out);
 /** Transition resets time. Same action preserves time unless restart=true. */
 bool fr_player_set_action(fr_player_t *player, fr_player_action_t action, bool restart);
-/** Advance only animation time. Overflow-safe even for UINT64_MAX intervals. */
+/** Advance animation time, including chew entry/loop or pending recovery.
+ * Overflow-safe even for UINT64_MAX intervals. */
 bool fr_player_advance(fr_player_t *player, uint64_t elapsed_ms);
 /** Select a deterministic frame; completed one-shots hold their last frame. */
 bool fr_player_frame(const fr_player_t *player, uint32_t *out_frame);
-/** True once a non-looping clip's complete duration has elapsed. */
+/** True once a one-shot cast completes. Phased chewing never completes here. */
 bool fr_player_action_complete(const fr_player_t *player);
 
 /** Advance phased chewing from held intent and a freshly validated wood target.

@@ -5,7 +5,6 @@
 
 typedef struct {
     fr_beaver_region_t region;
-    uint32_t part;
     uint8_t color[3];
 } beaver_art_pixel_t;
 

@@ -1,28 +1,95 @@
 {
   "schema": "craft.native-beaver.v1",
-  "authoring": ["src/player/beaver_art.c", "src/player/beaver_asset.c"],
+  "authoring": [
+    "assets/player/beaver/beaver_chomp.ase",
+    "assets/player/beaver/beaver_chomp.mapping.json",
+    "scripts/props/beaver_import.py"
+  ],
   "loader": "fr_prop_asset_open (standard CPRP v1)",
   "build_api": "fr_beaver_asset_build",
   "export": "./tools/with-vulkan make build/beaver_atlas && ./tools/with-vulkan ./build/beaver_atlas",
-  "canvas": [40, 40],
+  "canvas": [
+    40,
+    40
+  ],
   "coordinates": "top-left, x-right, y-down; one sprite pixel per physical rest cell",
   "clips": {
-    "idle": {"frames": 1, "frame_ms": 100, "loop": true},
-    "walk": {"frames": 6, "frame_ms": 100, "loop": true},
-    "chew": {"frames": 8, "frame_ms": 80, "loop": false},
-    "cast": {"frames": 4, "frame_ms": 100, "loop": false}
+    "idle": {
+      "frames": 1,
+      "frame_ms": 100,
+      "loop": true
+    },
+    "walk": {
+      "frames": 6,
+      "frame_ms": 100,
+      "loop": true
+    },
+    "chew": {
+      "frames": 8,
+      "frame_ms": 100,
+      "phases_one_based": {
+        "idle": [
+          1
+        ],
+        "entry": [
+          2,
+          3,
+          4
+        ],
+        "held_loop": [
+          5,
+          6,
+          7
+        ],
+        "recovery": [
+          8
+        ]
+      },
+      "driver": "fr_player_chew_tick; valid target and held intent"
+    },
+    "cast": {
+      "frames": 4,
+      "frame_ms": 100,
+      "loop": false
+    }
   },
   "regions": {
-    "fur": {"id": 1, "prop_material": 2, "terrain_material": 7, "body_material": 2},
-    "robe": {"id": 2, "prop_material": 2, "terrain_material": 7, "body_material": 2},
-    "hat": {"id": 3, "prop_material": 2, "terrain_material": 7, "body_material": 2},
-    "tail": {"id": 4, "prop_material": 2, "terrain_material": 7, "body_material": 2},
-    "teeth": {"id": 5, "prop_material": 1, "terrain_material": 1, "body_material": 1}
+    "fur": {
+      "id": 1,
+      "prop_material": 2,
+      "terrain_material": 7,
+      "body_material": 2
+    },
+    "robe": {
+      "id": 2,
+      "prop_material": 2,
+      "terrain_material": 7,
+      "body_material": 2
+    },
+    "hat": {
+      "id": 3,
+      "prop_material": 2,
+      "terrain_material": 7,
+      "body_material": 2
+    },
+    "tail": {
+      "id": 4,
+      "prop_material": 2,
+      "terrain_material": 7,
+      "body_material": 2
+    },
+    "teeth": {
+      "id": 5,
+      "prop_material": 1,
+      "terrain_material": 1,
+      "body_material": 1
+    }
   },
   "physical_tuning": "Provisional: fur, robe, hat and tail alias the existing wettable combustible wood profile; teeth alias stone. These are explicit placeholder coefficients, not claims of measured cloth or fur properties. All 15 packed body material IDs are currently assigned; no ID is truncated or reused for a new physical substance.",
   "appearance": "Linear RGB in compiled records; independent from physical material. Alpha zero is transparent. Surface defaults remain renderer-owned (surface_mask zero).",
   "canonical_mapping": "Each frame has a parallel row-major u32 plane: zero means transparent, otherwise canonical source row*40+column+1. Exported .source.u32 files are little-endian. Frame occlusion may hide a source texel; hidden canonical parcels must remain owned, not be erased or recreated.",
   "animation_policy": "CPRP state_variants explicitly records changing silhouettes. Do not place each variant into the world as new matter. Runtime deformation/rendering must reference existing canonical material parcels through source mapping.",
   "ownership": "Each player requires a distinct actual runtime body/generation and a stable appearance identity. Share only immutable clip bytes/maps. The current owner helper assumes the body preserves canonical canvas rest coordinates; trimmed or fractured shapes require an explicit source-to-body origin mapping in the runtime adapter.",
-  "runtime_status": "Native asset authoring and headless ownership contracts only. Application animation/render bindings, material exposure at animated positions and live visual acceptance remain ct-xsll work. No playable/reaction/co-op completion claimed."
+  "runtime_status": "Native asset authoring and headless ownership contracts only. Application animation/render bindings, material exposure at animated positions and live visual acceptance remain ct-xsll work. No playable/reaction/co-op completion claimed.",
+  "artwork": "Authoritative ASE pixels preserved exactly for idle and chew. Walk/cast are provisional poses derived from imported idle. No separately visible tooth region is invented."
 }

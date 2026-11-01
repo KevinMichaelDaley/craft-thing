@@ -79,6 +79,8 @@ def main():
     doc = read(SOURCE, {'Layer 1': 'color'})
     if doc['canvas'] != [40, 40] or len(doc['frames']) != 8:
         raise ValueError('Expected eight authored 40x40 frames')
+    if any(f['duration_ms'] != 100 for f in doc['frames']):
+        raise ValueError('Review phased timing before importing changed durations')
     frames = [f['channels']['color'] for f in doc['frames']]
     if args.author_maps:
         MAP.write_text(json.dumps(author_maps(frames), separators=(',', ':'))+'\n')
