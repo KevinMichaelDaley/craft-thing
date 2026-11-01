@@ -63,3 +63,7 @@ Moving host drip RED cd7f2d5, GREEN 9f6174e, REFACTOR 31f1c2b: quarter-native GP
 **2026-11-01T12:25:26Z**
 
 Detached-film activity RED d818e66/5df128b, GREEN d97b765, REFACTOR 9e1a12b: a manually seeded hot stone film drips oil into initially empty bulk, and the normal GPU tick now transports that oil while retaining exact total bulk plus rewet film volume. Direct bulk step had already worked, but normal tick had skipped it because its activity flag and pipeline were never initialized from coating-only imports. Seeded cell/body/particle and reactive chunk imports now preflight the bulk pipeline and mark possible work when coating inventory exists. Focused quarter-native GPU 12/12 and full make test under Xephyr :92 pass. Remaining: runtime leaf/actor proxy coverage, reacted jelly release bounds, fracture/streaming proofs, native displayed coating benchmark.
+
+**2026-11-01T12:35:42Z**
+
+Spent-jelly RED 0b4fa3b, GREEN 1ce2c4d, REFACTOR current: GPU hot film release now bounds returned slime by the actual fuel and oxidizer remaining after reaction. A 52000-Q16 bound-oxidizer residue with zero jelly fuel cannot turn back into fresh red slime; no underflow or species creation. Focused quarter-native Xephyr GPU 13/13 and full make test pass. Remaining: runtime foliage/actor proxy and owner transfer proofs, water drag, native coating stress benchmark.
