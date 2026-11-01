@@ -4,9 +4,11 @@
 #define FR_SMOKE_DETAIL_SCALE .5
 #define FR_SMOKE_WARP_CELLS 5.
 #define FR_SMOKE_WARP_SPEED .1
-#define FR_SMOKE_DETAIL_GAIN 2.5
+#define FR_SMOKE_DETAIL_GAIN .6
 #define FR_SMOKE_DETAIL_SPEED .02
-#define FR_SMOKE_DETAIL_MIN .08
+#define FR_SMOKE_DETAIL_MIN .5
+#define FR_SMOKE_EDGE_START .08
+#define FR_SMOKE_EDGE_FULL .5
 layout(local_size_x=64) in;
 layout(set=0,binding=0,std430) readonly buffer World {Gas world[];};
 layout(set=0,binding=1,std430) readonly buffer Model {uint parameters[];};
@@ -57,18 +59,21 @@ float smoke_wavelet(vec2 p) {
      * without anchoring a dither mask to screen cells. */
     return clamp(smoke_smooth_noise(p)-.5*smoke_smooth_noise(p*.5),-1.,1.);
 }
+vec4 smoke_visual_gas(Gas s,float opacity,float density) {
+    float carrier=s.species.z+s.dynamics.x;
+    if(carrier<=0.||s.geometry.y<=0.) return vec4(0.);
+    float depth=smoke_optical_depth(s,opacity,density);
+    float alpha=(1.-exp(-depth))*clamp(s.geometry.y,0.,1.);
+    float effective=-log(max(1e-6,1.-alpha));
+    return vec4(effective,effective*clamp(s.visual.rgb/carrier,vec3(0.),vec3(1.)));
+}
 vec4 smoke_visual_at(ivec2 p,float opacity,float density) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return vec4(0.);
     uint x=uint(p.x),y=uint(p.y),page=pages[(y/64u)*((params.width+63u)/64u)+x/64u];
     if(page==0u) return vec4(0.);
     uint at=(page-1u)*4096u+(y%64u)*64u+x%64u;
     if((gates[at]&3u)!=0u) return vec4(0.);
-    Gas s=smoke_at(x,y);float carrier=s.species.z+s.dynamics.x;
-    if(carrier<=0.||s.geometry.y<=0.) return vec4(0.);
-    float depth=smoke_optical_depth(s,opacity,density);
-    float alpha=(1.-exp(-depth))*clamp(s.geometry.y,0.,1.);
-    float effective=-log(max(1e-6,1.-alpha));
-    return vec4(effective,effective*clamp(s.visual.rgb/carrier,vec3(0.),vec3(1.)));
+    return smoke_visual_gas(smoke_at(x,y),opacity,density);
 }
 vec4 smoke_visual_sample(vec2 p,float opacity,float density) {
     ivec2 low=ivec2(floor(p));vec2 t=fract(p);
@@ -115,7 +120,11 @@ void main() {
         vec2 curl=.5*vec2(smoke_wavelet((material+vec2(0.,1.))*FR_SMOKE_DETAIL_SCALE)-smoke_wavelet((material-vec2(0.,1.))*FR_SMOKE_DETAIL_SCALE),
             smoke_wavelet((material-vec2(1.,0.))*FR_SMOKE_DETAIL_SCALE)-smoke_wavelet((material+vec2(1.,0.))*FR_SMOKE_DETAIL_SCALE));
         float speed=length(velocity),strength=FR_SMOKE_WARP_CELLS*speed/(speed+FR_SMOKE_WARP_SPEED);
-        vec4 smoke=smoke_visual_sample(vec2(x,y)-strength*curl,opacity,density);
+        vec4 original=smoke_visual_gas(s,opacity,density);
+        vec4 warped=smoke_visual_sample(vec2(x,y)-strength*curl,opacity,density);
+        float difference=abs(warped.x-original.x)/max(max(warped.x,original.x),.25);
+        float edge=smoothstep(FR_SMOKE_EDGE_START,FR_SMOKE_EDGE_FULL,difference);
+        vec4 smoke=mix(original,warped,edge);
         if(smoke.x<=0.) return;
         float detail=max(FR_SMOKE_DETAIL_MIN,1.+FR_SMOKE_DETAIL_GAIN*speed/(speed+FR_SMOKE_DETAIL_SPEED)*
             smoke_wavelet(material*FR_SMOKE_DETAIL_SCALE));

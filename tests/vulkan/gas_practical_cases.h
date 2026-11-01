@@ -371,7 +371,7 @@ static void test_quarter_native_smoke_wavelet_advects_and_displaces_boundary(voi
     ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err)));
     for(uint32_t i=0;i<4096;i++) {volume[i]=1.;input[i]=reference_air(model,.0012,300,0);}
     for(uint32_t y=20;y<28;y++) for(uint32_t x=20;x<28;x++) {
-        uint32_t i=y*64u+x;double soot=.000006;
+        uint32_t i=y*64u+x;double soot=.000002;
         input[i].species[FR_GAS_NITROGEN]-=soot;input[i].species[FR_GAS_SOOT]+=soot;
         input[i].energy+=soot*(model.heat_capacity_cv[FR_GAS_SOOT]-model.heat_capacity_cv[FR_GAS_NITROGEN])*300.;
         input[i].pigment[0]=.18*soot;input[i].pigment[1]=.16*soot;input[i].pigment[2]=.14*soot;
@@ -394,7 +394,7 @@ static void test_quarter_native_smoke_wavelet_advects_and_displaces_boundary(voi
         if(red<interior_low) interior_low=red;
         if(red>interior_high) interior_high=red;
     }
-    printf("Quarter-native dense smoke interior range %d..%d\n",interior_low,interior_high);
+    printf("Quarter-native reference smoke interior range %d..%d\n",interior_low,interior_high);
     ASSERT_TRUE(interior_high-interior_low<=8);
     uint32_t edge_cells=0;for(uint32_t y=19;y<=28;y++) for(uint32_t x=19;x<=28;x++) {
         if(x!=19u&&x!=28u&&y!=19u&&y!=28u) continue;
@@ -418,6 +418,22 @@ static void test_quarter_native_smoke_wavelet_advects_and_displaces_boundary(voi
         fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
     ASSERT_EQ(memcmp(pixels,moved,480u*270u*sizeof(*pixels)),0);
     ASSERT_EQ(memcmp(before,after,4096*sizeof(*before)),0);
+    for(uint32_t y=20;y<28;y++) for(uint32_t x=20;x<28;x++) {
+        uint32_t i=y*64u+x;double added=.000004;
+        input[i].species[FR_GAS_NITROGEN]-=added;input[i].species[FR_GAS_SOOT]+=added;
+        input[i].energy+=added*(model.heat_capacity_cv[FR_GAS_SOOT]-model.heat_capacity_cv[FR_GAS_NITROGEN])*300.;
+        input[i].pigment[0]=.18*.000006;input[i].pigment[1]=.16*.000006;input[i].pigment[2]=.14*.000006;
+    }
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&
+        present(g,err,sizeof(err))&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err)));
+    interior_low=255;interior_high=0;
+    for(uint32_t y=22;y<26;y++) for(uint32_t x=22;x<26;x++) {
+        int red=(int)(pixels[y*480u+x]&255u);
+        if(red<interior_low) interior_low=red;
+        if(red>interior_high) interior_high=red;
+    }
+    printf("Quarter-native dense smoke interior range %d..%d\n",interior_low,interior_high);
+    ASSERT_TRUE(interior_high-interior_low<=8);
     free(after);free(before);free(moved);free(pixels);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_native_stationary_heat_mixes_diagonally_in_the_optimized_path(void) {
