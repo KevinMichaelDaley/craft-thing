@@ -23,6 +23,7 @@ static bool save_fire_frame(uint32_t *pixels,const char *path) {
     if(surface) SDL_FreeSurface(surface);
     return okay;
 }
+static int fire_pixel_green(uint32_t pixel) {return (int)((pixel>>8u)&255u);}
 
 static void terrain_combustion(bool practical,bool char_stage,uint32_t material) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
@@ -455,6 +456,77 @@ static void test_fire_emission_enters_directional_light_without_point_sources(vo
     free(pixels);
     free(after);free(before);free(emission);free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_fire_image_has_radial_falloff_range_and_no_air_rays(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    ASSERT_TRUE(chunk&&context(&g,err,sizeof(err)));
+    for(uint32_t cy=0u;cy<2u;cy++) for(uint32_t cx=0u;cx<2u;cx++) {
+        uint32_t slot=cy*2u+cx;
+        memset(chunk,0,sizeof(*chunk));chunk->coord=(dc_chunk_coord_t){cx,cy};
+        if(slot==2u) {
+            chunk->cells[32u*64u+32u]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+            chunk->cells[28u*64u+32u]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+            chunk->cells[20u*64u+44u]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+        }
+        if(slot==3u)
+            chunk->cells[32u*64u+26u]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+        ASSERT_TRUE(dc_gpu_upload_chunk(g,slot,chunk,err,sizeof(err))&&
+            dc_gpu_set_page(g,cx,cy,slot,err,sizeof(err)));
+    }
+    ASSERT_TRUE(fr_renderer_enable(g,err,sizeof(err))&&
+        fr_renderer_set_mode(g,FR_RENDERER_LIT)&&
+        fr_renderer_set_sources(g,NULL,0,(fr_renderer_sun_t){0}));
+    fr_reactive_state_t film;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,65536u,0u,800.f,
+        120200u,&film,err,sizeof(err)));
+    film.coating_oil_fuel_fp=32768u;film.coating_jelly_fuel_fp=32768u;
+    film.coating_oxidizer_fp=32768u;film.flags|=FR_REACTIVE_COATING_FLAMING;
+    film.coating_threshold=.01f;film.coating_integral=.02f;
+    film.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&film,800.f);
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,2u,32u*64u+32u,&film,err,sizeof(err)));
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&
+        fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&
+        fr_combustion_gpu_enable(g,err,sizeof(err)));
+    uint32_t *before=calloc(480u*270u,sizeof(*before));
+    uint32_t *after=calloc(480u*270u,sizeof(*after));ASSERT_TRUE(before&&after);
+    ASSERT_TRUE(dc_gpu_present_chunks(g,err,sizeof(err))&&
+        dc_gpu_readback(g,before,480u*270u,err,sizeof(err))&&
+        fr_combustion_gpu_step(g,5.f,err,sizeof(err))&&
+        dc_gpu_present_chunks(g,err,sizeof(err))&&
+        dc_gpu_readback(g,after,480u*270u,err,sizeof(err))&&
+        save_fire_frame(after,"build/fire_radial_lighting.bmp"));
+    int near=fire_pixel_green(after[92u*480u+32u])-fire_pixel_green(before[92u*480u+32u]);
+    int middle=fire_pixel_green(after[84u*480u+44u])-fire_pixel_green(before[84u*480u+44u]);
+    int outside=fire_pixel_green(after[96u*480u+90u])-fire_pixel_green(before[96u*480u+90u]);
+    int axial_air=fire_pixel_green(after[60u*480u+32u])-fire_pixel_green(before[60u*480u+32u]);
+    int diagonal_air=fire_pixel_green(after[68u*480u+60u])-fire_pixel_green(before[68u*480u+60u]);
+    ASSERT_TRUE(near>=8&&near>middle&&middle>outside);
+    ASSERT_TRUE(outside<=1);
+    ASSERT_TRUE(axial_air<=1&&diagonal_air<=1);
+    free(after);free(before);free(chunk);dc_gpu_destroy(g);PASS();
+}
+static void test_empty_air_does_not_reflect_direct_light(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    ASSERT_TRUE(chunk&&context(&g,err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&
+        fr_renderer_enable(g,err,sizeof(err))&&
+        fr_renderer_set_mode(g,FR_RENDERER_LIT)&&
+        fr_renderer_set_sources(g,NULL,0,(fr_renderer_sun_t){0}));
+    uint32_t *pixels=calloc(480u*270u,sizeof(*pixels));ASSERT_TRUE(pixels);
+    ASSERT_TRUE(dc_gpu_present_chunks(g,err,sizeof(err))&&
+        dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err))&&
+        save_fire_frame(pixels,"build/air_unlit.bmp"));
+    uint32_t dark=pixels[32u*480u+34u];
+    fr_renderer_point_light_t point={32.5f,32.5f,0,20,{1,1,1},100};
+    ASSERT_TRUE(fr_renderer_set_sources(g,&point,1,(fr_renderer_sun_t){0})&&
+        dc_gpu_present_chunks(g,err,sizeof(err))&&
+        dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err))&&
+        save_fire_frame(pixels,"build/air_point_light.bmp"));
+    ASSERT_EQ(pixels[32u*480u+34u],dark);
+    free(pixels);free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_flame_emission_requires_local_transported_hot_fuel_and_oxygen(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
@@ -583,6 +655,14 @@ int main(int argc,char **argv) {
         RUN(test_fire_emission_enters_directional_light_without_point_sources);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
     }
+    if(argc==2&&strcmp(argv[1],"--fire-radial")==0) {
+        RUN(test_fire_image_has_radial_falloff_range_and_no_air_rays);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
+    if(argc==2&&strcmp(argv[1],"--air-light")==0) {
+        RUN(test_empty_air_does_not_reflect_direct_light);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
     if(argc==2&&strcmp(argv[1],"--roof")==0) {
         RUN(test_roof_blocks_and_side_vent_routes_the_physical_flame);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
@@ -631,6 +711,8 @@ int main(int argc,char **argv) {
     RUN(test_pending_shock_heats_wood_before_gpu_ignition);
     RUN(test_retained_char_can_finish_burning_on_the_gpu);
     RUN(test_spent_terrain_becomes_loose_saved_ash_without_losing_mass);
+    if(!core) RUN(test_fire_image_has_radial_falloff_range_and_no_air_rays);
+    if(!core) RUN(test_empty_air_does_not_reflect_direct_light);
     RUN(test_flame_emission_requires_local_transported_hot_fuel_and_oxygen);
     RUN(test_flame_moves_with_real_lateral_gas_transport);
     RUN(test_roof_blocks_and_side_vent_routes_the_physical_flame);

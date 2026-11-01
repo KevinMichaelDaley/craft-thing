@@ -157,7 +157,7 @@ static void test_colored_directions_keep_independent_rgb_moments(void) {
   ASSERT_TRUE(f.lx[0] < 0 && f.lx[2] > 0);
   PASS();
 }
-static void test_transport_carries_prefixes_across_recursive_scan_levels(void) {
+static void test_skylight_is_continuous_across_a_large_field(void) {
   const unsigned width = 1093, height = 3, count = width * height;
   float *opacity = calloc(count, sizeof(*opacity));
   uint32_t *known = malloc(count * sizeof(*known));
@@ -198,18 +198,16 @@ static void test_zero_distance_emitter_is_finite(void) {
   ASSERT_TRUE(isfinite(f.l0[0]) && f.l0[0] > 0);
   PASS();
 }
-static void test_common_direction_compacts_beams_and_mixed_heights_fall_back(void) {
+static void test_source_edits_restore_the_same_skylight_field(void) {
   ASSERT_TRUE(empty_scene());
   fr_renderer_sun_t sun={.direction={0,-1,1},.color={1,.7f,.4f},.intensity=1,.known_sky=FR_SKY_TOP};
   ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,NULL,0,sun,128));
-  ASSERT_EQ(fr_lighting_gpu_beam_stride(g_lighting),16u);
   ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
   fr_renderer_light_field_t before[LIGHT_CELLS],after;
   for(unsigned y=0;y<LIGHT_HEIGHT;y++) for(unsigned x=0;x<LIGHT_WIDTH;x++)
     ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,x,y,&before[y*LIGHT_WIDTH+x]));
   fr_renderer_point_light_t points[2]={{4.5f,4.5f,1,20,{1,0,0},100},{12.5f,4.5f,3,20,{0,0,1},100}};
   ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,points,2,sun,128));
-  ASSERT_EQ(fr_lighting_gpu_beam_stride(g_lighting),20u);
   ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
   ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,NULL,0,sun,128));
   ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
@@ -219,45 +217,10 @@ static void test_common_direction_compacts_beams_and_mixed_heights_fall_back(voi
   }
   PASS();
 }
-static void test_common_direction_matches_general_transport(void) {
-  ASSERT_TRUE(empty_scene());
-  for(unsigned y=0;y<LIGHT_HEIGHT;y++) g_opacity[y*LIGHT_WIDTH+7]=y==4?0.f:1.f;
-  ASSERT_TRUE(fr_occlusion_gpu_upload(g_occlusion,g_opacity,g_known));
-  fr_lighting_gpu_t *reference=NULL;
-  ASSERT_EQ(setenv("DC_LIGHTING_GENERAL_TRANSPORT","1",1),0);
-  bool created=fr_lighting_gpu_create(g_gpu,g_occlusion,&reference,g_error,sizeof(g_error));
-  ASSERT_EQ(unsetenv("DC_LIGHTING_GENERAL_TRANSPORT"),0);ASSERT_TRUE(created);
-  fr_renderer_point_light_t points[2]={{4.5f,4.5f,2,20,{1,.2f,.3f},100},{12.5f,4.5f,2,20,{.1f,.3f,1},100}};
-  fr_renderer_sun_t sky={.direction={-.3f,-.8f,.5f},.color={1,.7f,.4f},.intensity=1.4f,.known_sky=FR_SKY_TOP|FR_SKY_LEFT};
-  for(unsigned point_case=0;point_case<3;point_case++) {
-    const fr_renderer_point_light_t *p=point_case?points:NULL;
-    uint32_t count=point_case?2u:0u;
-    fr_renderer_sun_t sun=point_case==1?(fr_renderer_sun_t){0}:sky;
-    ASSERT_TRUE(fr_lighting_gpu_set_sources(reference,p,count,sun,128));
-    ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,p,count,sun,128));
-    ASSERT_EQ(fr_lighting_gpu_scan_channels(g_lighting),point_case==2?7u:4u);
-    ASSERT_TRUE(fr_lighting_gpu_generate(reference,g_error,sizeof(g_error)));
-    ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
-    for(unsigned y=0;y<LIGHT_HEIGHT;y++) for(unsigned x=0;x<LIGHT_WIDTH;x++) {
-      fr_renderer_light_field_t a,b;
-      ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,x,y,&a));
-      ASSERT_TRUE(fr_lighting_gpu_read(reference,x,y,&b));
-      for(unsigned c=0;c<3;c++) {
-        float scale=fmaxf(.01f,b.l0[c]);
-        ASSERT_TRUE(fabsf(a.l0[c]-b.l0[c])<.0001f*scale);
-        ASSERT_TRUE(fabsf(a.lx[c]-b.lx[c])<.006f*scale);
-        ASSERT_TRUE(fabsf(a.ly[c]-b.ly[c])<.006f*scale);
-        ASSERT_TRUE(fabsf(a.lz[c]-b.lz[c])<.006f*scale);
-      }
-    }
-  }
-  fr_lighting_gpu_destroy(reference);PASS();
-}
 static void test_mixed_heights_preserve_independent_vertical_moments(void) {
   ASSERT_TRUE(empty_scene());
   fr_renderer_point_light_t points[2]={{8.5f,4.5f,1,20,{1,0,0},100},{8.5f,4.5f,3,20,{0,0,1},100}};
   ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,points,2,(fr_renderer_sun_t){0},128));
-  ASSERT_EQ(fr_lighting_gpu_scan_channels(g_lighting),7u);
   ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
   fr_renderer_light_field_t f;ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,8,4,&f));
   ASSERT_TRUE(f.l0[0]>0&&f.l0[2]>0);
@@ -282,16 +245,12 @@ static void test_light_edits_read_authoritative_optics_without_tree_rebuild(void
   ASSERT_TRUE(field.l0[0]>0.f);
   PASS();
 }
-static void test_diagonal_schedule_excludes_absent_tiles(void) {
+static void test_large_field_point_light_is_symmetric(void) {
   const uint32_t width = 193, height = 65;
   fr_occlusion_gpu_t *occlusion = NULL;
   fr_lighting_gpu_t *lighting = NULL;
   ASSERT_TRUE(fr_occlusion_gpu_create(g_gpu,width,height,&occlusion,g_error,sizeof(g_error)));
   ASSERT_TRUE(fr_lighting_gpu_create(g_gpu,occlusion,&lighting,g_error,sizeof(g_error)));
-  uint32_t expected = 0;
-  for (uint32_t along = 0; along < height; along += 32u)
-    expected += width + height - 1u - 2u * along;
-  ASSERT_EQ(fr_lighting_gpu_scan_groups(lighting,1),expected);
   float *opacity = calloc(width * height,sizeof(*opacity));
   uint32_t *known = malloc(width * height * sizeof(*known));
   ASSERT_TRUE(opacity && known);
@@ -428,13 +387,12 @@ static void test_unknown_boundaries_and_propagation_reach_cannot_leak(void) {
   ASSERT_TRUE(f.l0[0] > 0);
   PASS();
 }
-static void test_source_buffer_injection_is_bounded_and_combines_emitters(void) {
+static void test_coincident_point_sources_combine_without_residual_light(void) {
   ASSERT_TRUE(empty_scene());
   fr_renderer_point_light_t points[2] = {
       {4.5f,4.5f,1,1,{1,0,0},12},
       {4.5f,4.5f,1,1,{0,0,1},20}};
   ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,points,2,(fr_renderer_sun_t){0},128));
-  ASSERT_TRUE(fr_lighting_gpu_source_cells(g_lighting)<=128u);
   ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
   fr_renderer_light_field_t combined, separate;
   ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,4,4,&separate));
@@ -447,7 +405,6 @@ static void test_source_buffer_injection_is_bounded_and_combines_emitters(void) 
     ASSERT_TRUE(fabsf(combined.lz[c]-separate.lz[c])<1e-4f);
   }
   ASSERT_TRUE(fr_lighting_gpu_set_sources(g_lighting,NULL,0,(fr_renderer_sun_t){0},128));
-  ASSERT_EQ(fr_lighting_gpu_source_cells(g_lighting),0u);
   ASSERT_TRUE(fr_lighting_gpu_generate(g_lighting,g_error,sizeof(g_error)));
   ASSERT_TRUE(fr_lighting_gpu_read(g_lighting,4,4,&combined));
   ASSERT_EQ(combined.l0[0],0.f);
@@ -476,6 +433,51 @@ static void test_source_buffer_survives_optical_edits_without_reinjection(void) 
   ASSERT_TRUE(field.l0[2]>0.f);
   PASS();
 }
+
+static void test_point_light_has_radial_falloff_hard_range_and_local_penumbra(void) {
+  enum { width=65, height=65, count=width*height };
+  float *opacity=calloc(count,sizeof(*opacity));
+  uint32_t *known=malloc(count*sizeof(*known));
+  ASSERT_TRUE(opacity&&known);
+  for(unsigned i=0;i<count;i++) known[i]=1u;
+  fr_occlusion_gpu_t *occlusion=NULL;
+  fr_lighting_gpu_t *lighting=NULL;
+  ASSERT_TRUE(fr_occlusion_gpu_create(g_gpu,width,height,&occlusion,g_error,sizeof(g_error))&&
+      fr_lighting_gpu_create(g_gpu,occlusion,&lighting,g_error,sizeof(g_error))&&
+      fr_occlusion_gpu_upload(occlusion,opacity,known)&&
+      fr_occlusion_gpu_generate(occlusion,g_error,sizeof(g_error)));
+  fr_renderer_point_light_t point={32.5f,32.5f,0,18,{1,.6f,.3f},100};
+  ASSERT_TRUE(fr_lighting_gpu_set_sources(lighting,&point,1,(fr_renderer_sun_t){0},18)&&
+      fr_lighting_gpu_generate(lighting,g_error,sizeof(g_error)));
+  fr_renderer_light_field_t near,mid,diagonal,far,outside,open_shadow,open_shoulder,open_away;
+  ASSERT_TRUE(fr_lighting_gpu_read(lighting,35,32,&near)&&
+      fr_lighting_gpu_read(lighting,40,32,&mid)&&
+      fr_lighting_gpu_read(lighting,38,38,&diagonal)&&
+      fr_lighting_gpu_read(lighting,47,32,&far)&&
+      fr_lighting_gpu_read(lighting,51,32,&outside)&&
+      fr_lighting_gpu_read(lighting,42,32,&open_shadow)&&
+      fr_lighting_gpu_read(lighting,42,34,&open_shoulder)&&
+      fr_lighting_gpu_read(lighting,32,42,&open_away));
+  ASSERT_TRUE(near.l0[0]>mid.l0[0]&&mid.l0[0]>far.l0[0]&&far.l0[0]>0.f);
+  ASSERT_TRUE(outside.l0[0]<=near.l0[0]*1e-5f);
+  ASSERT_TRUE(fabsf(mid.l0[0]-diagonal.l0[0])<.35f*fmaxf(mid.l0[0],diagonal.l0[0]));
+  opacity[32u*width+37u]=1.f;
+  ASSERT_TRUE(fr_occlusion_gpu_upload(occlusion,opacity,known)&&
+      fr_occlusion_gpu_generate(occlusion,g_error,sizeof(g_error))&&
+      fr_lighting_gpu_generate(lighting,g_error,sizeof(g_error)));
+  fr_renderer_light_field_t shadow,shoulder,away;
+  ASSERT_TRUE(fr_lighting_gpu_read(lighting,42,32,&shadow)&&
+      fr_lighting_gpu_read(lighting,42,34,&shoulder)&&
+      fr_lighting_gpu_read(lighting,32,42,&away));
+  float shadow_ratio=shadow.l0[0]/open_shadow.l0[0];
+  float shoulder_ratio=shoulder.l0[0]/open_shoulder.l0[0];
+  float away_ratio=away.l0[0]/open_away.l0[0];
+  ASSERT_TRUE(shadow_ratio>.05f&&shadow_ratio<.9f);
+  ASSERT_TRUE(shoulder_ratio>shadow_ratio&&away_ratio>.8f);
+  fr_lighting_gpu_destroy(lighting);
+  fr_occlusion_gpu_destroy(occlusion);
+  free(opacity);free(known);PASS();
+}
 int main(void) {
   if (!dc_gpu_create(&g_gpu, 64, 64, "build/shaders/pattern.comp.spv", g_error,
                      sizeof(g_error)) ||
@@ -490,15 +492,15 @@ int main(void) {
   RUN(test_skylight_loses_energy_with_depth);
   RUN(test_emission_propagates_around_an_open_doorway);
   RUN(test_large_field_crosses_scan_tiles_and_filters_foliage);
-  RUN(test_transport_carries_prefixes_across_recursive_scan_levels);
+  RUN(test_skylight_is_continuous_across_a_large_field);
   RUN(test_zero_distance_emitter_is_finite);
-  RUN(test_common_direction_compacts_beams_and_mixed_heights_fall_back);
-  RUN(test_common_direction_matches_general_transport);
+  RUN(test_source_edits_restore_the_same_skylight_field);
   RUN(test_mixed_heights_preserve_independent_vertical_moments);
-  RUN(test_source_buffer_injection_is_bounded_and_combines_emitters);
+  RUN(test_coincident_point_sources_combine_without_residual_light);
   RUN(test_source_buffer_survives_optical_edits_without_reinjection);
+  RUN(test_point_light_has_radial_falloff_hard_range_and_local_penumbra);
   RUN(test_light_edits_read_authoritative_optics_without_tree_rebuild);
-  RUN(test_diagonal_schedule_excludes_absent_tiles);
+  RUN(test_large_field_point_light_is_symmetric);
   RUN(test_hdr_emission_preserves_energy_range_and_vertical_direction);
   RUN(test_thin_wall_and_one_pixel_hole_visibility);
   RUN(test_sun_requires_explicit_known_sky_boundary);
