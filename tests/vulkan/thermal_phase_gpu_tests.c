@@ -298,7 +298,7 @@ static void test_detached_film_activates_bulk_transport(void) {
     fr_bulk_phase_chunk_t *empty=calloc(1,sizeof(*empty));
     fr_bulk_phase_chunk_t *after=calloc(1,sizeof(*after));
     ASSERT_TRUE(chunk&&empty&&after);
-    uint32_t stone_at=20u*64u+20u,drip_at=stone_at+64u,fall_at=stone_at+128u;
+    uint32_t stone_at=20u*64u+20u,drip_at=stone_at+64u;
     chunk->cells[stone_at].material=DC_MATERIAL_STONE;
     ASSERT_TRUE(context(&g,err,sizeof(err))&&
         dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
@@ -316,9 +316,12 @@ static void test_detached_film_activates_bulk_transport(void) {
         fr_thermal_gpu_step(g,.5f,err,sizeof(err))&&
         fr_bulk_phase_gpu_export_chunk(g,0,after,err,sizeof(err)));
     ASSERT_TRUE(after->oil_fp[drip_at]>0u);
-    ASSERT_TRUE(fr_bulk_phase_gpu_step(g,.5f,err,sizeof(err))&&
+    uint32_t released=after->oil_fp[drip_at];
+    ASSERT_TRUE(dc_gpu_tick_step(g,err,sizeof(err))&&
         fr_bulk_phase_gpu_export_chunk(g,0,after,err,sizeof(err)));
-    ASSERT_TRUE(after->oil_fp[fall_at]>0u);
+    uint64_t total=0u;for(uint32_t i=0u;i<DC_CHUNK_CELLS;i++) total+=after->oil_fp[i];
+    ASSERT_EQ(total,released);
+    ASSERT_TRUE(after->oil_fp[drip_at]<released);
     free(after);free(empty);free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_saturated_neighbor_air_suppresses_drying(void) {
