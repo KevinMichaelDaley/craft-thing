@@ -60,10 +60,28 @@ static void test_partial_chunk_excludes_out_of_view_materials(void) {
     PASS();
 }
 
+static void test_sludge_basin_replaces_water_without_double_capacity(void) {
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *phase=calloc(1,sizeof(*phase));
+    ASSERT_TRUE(chunk&&phase);
+    native_scene_chunk(chunk,2u*8u+4u,480u,270u);
+    uint32_t count=native_scene_sludge(chunk,phase,480u,270u);
+    ASSERT_TRUE(count>0u);
+    uint32_t scanned=0u;
+    for(uint32_t i=0;i<DC_CHUNK_CELLS;i++) if(phase->slime_fp[i]) {
+        ASSERT_EQ(phase->slime_fp[i],FR_BULK_CELL_FULL_FP);
+        ASSERT_EQ(chunk->cells[i].fluid_mass,0u);
+        scanned++;
+    }
+    ASSERT_EQ(scanned,count);
+    free(phase);free(chunk);PASS();
+}
+
 int main(void) {
     RUN(test_native_residency_covers_partial_edge_chunks);
     RUN(test_scene_has_water_and_stable_grains_without_seam_walls);
     RUN(test_partial_chunk_excludes_out_of_view_materials);
+    RUN(test_sludge_basin_replaces_water_without_double_capacity);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

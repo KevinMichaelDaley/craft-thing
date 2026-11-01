@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "dungeoncraft/chunk.h"
+#include "ferrum/fire/bulk_phase.h"
 
 enum { NATIVE_SCENE_GRAIN_BAND_HEIGHT = 16u };
 
@@ -44,6 +45,13 @@ static inline void native_scene_chunk(dc_chunk_t *chunk, uint32_t slot,
                 cell->fluid_mass = DC_FLUID_FULL;
         }
     dc_chunk_seed_particles(chunk);
+}
+
+/** Replace a central water basin with finite dense slime for displayed stress runs. */
+static inline uint32_t native_scene_sludge(dc_chunk_t *chunk,
+    fr_bulk_phase_chunk_t *phase,uint32_t width,uint32_t height) {
+    (void)chunk;(void)phase;(void)width;(void)height;
+    return 0u;
 }
 
 #endif
