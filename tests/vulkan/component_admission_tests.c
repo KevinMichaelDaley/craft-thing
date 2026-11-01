@@ -19,9 +19,9 @@ static void test_gold_body_proxy_keeps_corrosion_residue_across_save(void) {
         dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     for(uint32_t y=0u;y<2u;y++) for(uint32_t x=0u;x<2u;x++) {
         fr_reactive_state_t gold;
-        ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_GOLD,65536u,0u,800.f,
+        ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_GOLD,1264845u,0u,800.f,
             100600u+y*2u+x,&gold,err,sizeof(err)));
-        gold.coating_jelly_fuel_fp=65536u;gold.coating_oxidizer_fp=8000u;
+        gold.coating_jelly_fuel_fp=1264845u;gold.coating_oxidizer_fp=130000u;
         gold.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&gold,800.f);
         ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,at+y*64u+x,&gold,err,sizeof(err)));
     }
