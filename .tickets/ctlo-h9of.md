@@ -1,6 +1,6 @@
 ---
 id: ctlo-h9of
-status: in_progress
+status: closed
 deps: [ctlo-8b67]
 links: [ctr-6fii, ctlo-r2ap, ctfs-dmxv]
 created: 2026-10-24T22:06:19Z
@@ -39,3 +39,7 @@ Reopened on user clarification: fire must visibly illuminate scene geometry, inc
 **2026-11-01T18:36:06Z**
 
 Replaced the entire directional scan lighting path with finite-range radial point/fire transport and local sky AO. Fire energy aggregates on the GPU in 8x8 tiles; no CPU flame list. Weighted area-emitter rays give graded local penumbra while opaque/unknown walls fully block. Empty air keeps a fixed dark background; water retains its light response. Focused renderer 19/19, rendered clear-air and Greek-fire radial cases 1/1 each. Native X11 quarter-native 1000-frame lit bonfire mean/worst 62.229/68.650ms, paused pixels identical, capture build/bonfire_h9of_radial.bmp inspected: no straight beams or air seam; user approved bonfire look. Catapult Xephyr display 2/2 passes with burning battlement and visible braced frame. Multiframe frame-budget work tracked in ct-ouu4; existing directional performance ticket ctr-ebl5 linked. Full make test pending before close.
+
+**2026-11-01T19:14:20Z**
+
+2026-11-01 final merged-main verification: full make test passed under persistent Xephyr :92; focused renderer lighting 19/19, rendered air/fire checks, catapult scene 13/13 and display 2/2 passed. Radial finite-range transport and visible emissive fire are complete. Lit 1000-frame bonfire remains 62.229ms mean / 68.650ms worst; staged multi-frame propagation and <30ms displayed budget continue on ct-ouu4.
