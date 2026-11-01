@@ -3,5 +3,6 @@
 
 #define FR_BULK_CHUNK_CHANNELS 10u
 #define FR_BULK_VOLUME_CHANNELS 4u
+#define FR_BULK_THERMAL_CHANNELS 6u
 
 #endif

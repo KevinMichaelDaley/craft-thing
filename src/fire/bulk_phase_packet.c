@@ -5,7 +5,7 @@
 
 enum { BULK_HEADER_BYTES=16u, BULK_HASH_BYTES=8u,
        BULK_LEGACY_PAYLOAD_BYTES=FR_BULK_VOLUME_CHANNELS*DC_CHUNK_CELLS*sizeof(uint32_t),
-       BULK_V2_PAYLOAD_BYTES=6u*DC_CHUNK_CELLS*sizeof(uint32_t),
+       BULK_V2_PAYLOAD_BYTES=FR_BULK_THERMAL_CHANNELS*DC_CHUNK_CELLS*sizeof(uint32_t),
        BULK_PAYLOAD_BYTES=FR_BULK_CHUNK_CHANNELS*DC_CHUNK_CELLS*sizeof(uint32_t) };
 
 static void put32(uint8_t *bytes,uint32_t value) {
@@ -130,7 +130,8 @@ bool fr_bulk_phase_chunk_decode(const dc_chunk_t *chunk,const uint8_t *bytes,
                 momentum[2],momentum[3])) return false;
         }
     }
-    uint32_t channels=current?FR_BULK_CHUNK_CHANNELS:(previous?6u:FR_BULK_VOLUME_CHANNELS);
+    uint32_t channels=current?FR_BULK_CHUNK_CHANNELS:
+        (previous?FR_BULK_THERMAL_CHANNELS:FR_BULK_VOLUME_CHANNELS);
     for(uint32_t k=0;k<channels;k++)
         for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
         set_channel_word(out,k,i,get32(bytes+payload_offset(k,i)));

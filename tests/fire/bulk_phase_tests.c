@@ -141,7 +141,7 @@ static void test_bulk_packet_rejects_retained_volume_larger_than_stock(void) {
     ASSERT_INT_EQ(out->oil_fp[7],42u);
     free(bytes);free(out);free(phase);free(chunk);PASS();
 }
-static void test_bulk_packet_reserves_oil_and_slime_heat_channels(void) {
+static void test_bulk_packet_reserves_oil_slime_heat_and_momentum_channels(void) {
     dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_bulk_phase_chunk_t *phase=calloc(1,sizeof(*phase));
     size_t expected=16u+10u*DC_CHUNK_CELLS*sizeof(uint32_t)+8u;
@@ -209,6 +209,25 @@ static void test_bulk_packet_rejects_momentum_without_phase_stock(void) {
     ASSERT_TRUE(!fr_bulk_phase_chunk_encode(chunk,phase,bytes,fr_bulk_phase_chunk_bytes()));
     free(bytes);free(phase);free(chunk);PASS();
 }
+static void test_v2_bulk_packet_restores_zero_phase_momentum(void) {
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *phase=calloc(1,sizeof(*phase)),*out=calloc(1,sizeof(*out));
+    size_t v2_length=16u+6u*DC_CHUNK_CELLS*sizeof(uint32_t)+8u;
+    uint8_t *bytes=malloc(fr_bulk_phase_chunk_bytes());
+    ASSERT_TRUE(chunk&&phase&&out&&bytes);
+    phase->oil_fp[17]=10000u;phase->oil_excess[17]=2.5f;
+    ASSERT_TRUE(fr_bulk_phase_chunk_encode(chunk,phase,bytes,fr_bulk_phase_chunk_bytes()));
+    memcpy(bytes,"BLP2",4u);bytes[4]=2u;
+    uint64_t hash=UINT64_C(14695981039346656037);
+    for(size_t i=0;i<v2_length-8u;i++) {hash^=bytes[i];hash*=UINT64_C(1099511628211);}
+    for(uint32_t i=0;i<8u;i++) bytes[v2_length-8u+i]=(uint8_t)(hash>>(8u*i));
+    out->oil_momentum_x[17]=99.f;
+    ASSERT_TRUE(fr_bulk_phase_chunk_decode(chunk,bytes,v2_length,out));
+    ASSERT_INT_EQ(out->oil_fp[17],10000u);
+    ASSERT_EQ(out->oil_excess[17],2.5f);
+    ASSERT_EQ(out->oil_momentum_x[17],0.f);
+    free(bytes);free(out);free(phase);free(chunk);PASS();
+}
 int main(void) {
     RUN(test_pair_admits_only_shared_capacity_and_conserves_each_phase);
     RUN(test_full_vessel_retains_slime_without_double_occupancy);
@@ -221,10 +240,11 @@ int main(void) {
     RUN(test_legacy_bulk_packet_loads_with_ambient_phase_heat);
     RUN(test_bulk_packet_corruption_and_truncation_are_transactional);
     RUN(test_bulk_packet_rejects_retained_volume_larger_than_stock);
-    RUN(test_bulk_packet_reserves_oil_and_slime_heat_channels);
+    RUN(test_bulk_packet_reserves_oil_slime_heat_and_momentum_channels);
     RUN(test_bulk_packet_rejects_nonfinite_phase_heat_transactionally);
     RUN(test_bulk_packet_rejects_heat_without_phase_stock);
     RUN(test_bulk_packet_persists_phase_momentum);
     RUN(test_bulk_packet_rejects_momentum_without_phase_stock);
+    RUN(test_v2_bulk_packet_restores_zero_phase_momentum);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail>0?1:0;
 }
