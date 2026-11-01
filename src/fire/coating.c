@@ -148,6 +148,31 @@ bool fr_coating_film_split(const fr_coating_film_t *source,
 
 bool fr_coating_quantize_volume(uint32_t phase,uint32_t volume_fp,
     uint32_t remainder_word,fr_coating_species_delta_t *out) {
-    (void)phase;(void)volume_fp;(void)remainder_word;(void)out;
-    return false;
+    uint32_t oil_rem=(remainder_word>>FR_COATING_OIL_REM_SHIFT)&FR_COATING_REM_MASK;
+    uint32_t jelly_rem=(remainder_word>>FR_COATING_JELLY_REM_SHIFT)&FR_COATING_REM_MASK;
+    uint32_t fuel_rem=(remainder_word>>FR_COATING_JELLY_FUEL_REM_SHIFT)&FR_COATING_FUEL_REM_MASK;
+    if((phase!=FR_BULK_OIL&&phase!=FR_BULK_SLIME)||
+       volume_fp>FR_BULK_CELL_FULL_FP||!out||
+       (remainder_word&~FR_COATING_REM_USED_MASK)!=0u||
+       oil_rem>=FR_COATING_MASS_DEN||jelly_rem>=FR_COATING_MASS_DEN||
+       fuel_rem>=FR_COATING_JELLY_FUEL_DEN) return false;
+    fr_coating_species_delta_t value={.remainder_word=remainder_word};
+    if(phase==FR_BULK_OIL) {
+        uint32_t total=volume_fp*FR_COATING_OIL_MASS_NUM+oil_rem;
+        value.oil_fuel_fp=total/FR_COATING_MASS_DEN;
+        value.remainder_word=(remainder_word&~FR_COATING_REM_MASK)|
+            (total%FR_COATING_MASS_DEN);
+    } else {
+        uint32_t total=volume_fp*FR_COATING_JELLY_MASS_NUM+jelly_rem;
+        uint32_t mass=total/FR_COATING_MASS_DEN;
+        uint32_t fuel_total=mass*FR_COATING_JELLY_FUEL_NUM+fuel_rem;
+        value.jelly_fuel_fp=fuel_total/FR_COATING_JELLY_FUEL_DEN;
+        value.jelly_oxidizer_fp=mass-value.jelly_fuel_fp;
+        value.remainder_word=(remainder_word&~(FR_COATING_REM_MASK<<FR_COATING_JELLY_REM_SHIFT))|
+            ((total%FR_COATING_MASS_DEN)<<FR_COATING_JELLY_REM_SHIFT);
+        value.remainder_word=(value.remainder_word&
+            ~(FR_COATING_FUEL_REM_MASK<<FR_COATING_JELLY_FUEL_REM_SHIFT))|
+            ((fuel_total%FR_COATING_JELLY_FUEL_DEN)<<FR_COATING_JELLY_FUEL_REM_SHIFT);
+    }
+    *out=value;return true;
 }
