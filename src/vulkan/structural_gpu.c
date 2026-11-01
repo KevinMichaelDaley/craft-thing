@@ -21,9 +21,9 @@ _Static_assert(offsetof(fr_structural_gpu_graph_t, nodes) == 16u * 4u,
                "Structural nodes offset");
 _Static_assert(offsetof(fr_structural_gpu_graph_t, members) == 400u * 4u,
                "Structural members offset");
-_Static_assert(offsetof(fr_structural_gpu_graph_t, joints) == 592u * 4u,
+_Static_assert(offsetof(fr_structural_gpu_graph_t, joints) == 528u * 4u,
                "Structural joints offset");
-_Static_assert(offsetof(fr_structural_gpu_graph_t, anchors) == 1616u * 4u,
+_Static_assert(offsetof(fr_structural_gpu_graph_t, anchors) == 1552u * 4u,
                "Structural anchors offset");
 static bool error(char *err, uint32_t cap, const char *s) {
     if (err && cap)

@@ -45,14 +45,6 @@ static fr_structural_gpu_node_t scene_node(uint32_t id, uint32_t x,
         .x_fp = (int32_t)(x % DC_CHUNK_SIDE) * 65536,
         .y_fp = (int32_t)(y % DC_CHUNK_SIDE) * 65536};
 }
-static fr_structural_gpu_node_t scene_fractional_node(uint32_t id,
-                                                       double x, double y) {
-    fr_structural_gpu_node_t node = scene_node(id, (uint32_t)x, (uint32_t)y);
-    node.x_fp = (int32_t)llround((x - node.chunk.x * DC_CHUNK_SIDE) * 65536.);
-    node.y_fp = (int32_t)llround((y - node.chunk.y * DC_CHUNK_SIDE) * 65536.);
-    return node;
-}
-
 static fr_structural_gpu_member_t scene_member(uint32_t id, uint32_t a,
                                                 uint32_t b, uint32_t material,
                                                 uint32_t depth) {
@@ -61,8 +53,8 @@ static fr_structural_gpu_member_t scene_member(uint32_t id, uint32_t a,
 }
 
 static fr_structural_gpu_graph_t support_graph(void) {
-    fr_structural_gpu_graph_t graph = {.node_count = 27, .member_count = 18,
-                                       .anchor_count = 11};
+    fr_structural_gpu_graph_t graph = {.node_count = 21, .member_count = 12,
+                                       .anchor_count = 9};
     graph.nodes[0] = scene_node(1, 72, CATAPULT_FLOOR_Y);
     graph.nodes[1] = scene_node(2, 72, 80);
     graph.nodes[2] = scene_node(3, CATAPULT_WALL_X, CATAPULT_FLOOR_Y);
@@ -71,16 +63,6 @@ static fr_structural_gpu_graph_t support_graph(void) {
     graph.nodes[4] = scene_node(5, CATAPULT_WALL_X, CATAPULT_WALL_TOP_Y);
     graph.nodes[5] = scene_node(6, 72, 64);
     graph.nodes[6] = scene_node(7, 72, 56);
-    graph.nodes[21] = scene_node(22, 64, CATAPULT_FLOOR_Y - 1u);
-    graph.nodes[22] = scene_fractional_node(23, 64. + 8. / 3.,
-                                              95. - 31. / 3.);
-    graph.nodes[23] = scene_fractional_node(24, 64. + 16. / 3.,
-                                              95. - 62. / 3.);
-    graph.nodes[24] = scene_node(25, 80, CATAPULT_FLOOR_Y - 1u);
-    graph.nodes[25] = scene_fractional_node(26, 80. - 8. / 3.,
-                                              95. - 31. / 3.);
-    graph.nodes[26] = scene_fractional_node(27, 80. - 16. / 3.,
-                                              95. - 62. / 3.);
     const uint32_t deck_x[] = {198u, 207u, 209u, 215u,
                                217u, 233u, 235u, 240u};
     for (uint32_t i = 0; i < 8u; i++)
@@ -106,12 +88,6 @@ static fr_structural_gpu_graph_t support_graph(void) {
         graph.members[9u + i] = scene_member(10u + i, 16u + i * 2u,
                                               17u + i * 2u,
                                               FR_STRUCTURAL_WOOD, 2);
-    graph.members[12] = scene_member(13, 22, 23, FR_STRUCTURAL_WOOD, 2);
-    graph.members[13] = scene_member(14, 23, 24, FR_STRUCTURAL_WOOD, 1);
-    graph.members[14] = scene_member(15, 24, 6, FR_STRUCTURAL_WOOD, 1);
-    graph.members[15] = scene_member(16, 25, 26, FR_STRUCTURAL_WOOD, 2);
-    graph.members[16] = scene_member(17, 26, 27, FR_STRUCTURAL_WOOD, 1);
-    graph.members[17] = scene_member(18, 27, 6, FR_STRUCTURAL_WOOD, 1);
     graph.anchors[0] = (fr_structural_gpu_anchor_t){
         .id = 1, .generation = 1, .node = 1, .kind = FR_JOINT_MOMENT,
         .chunk = {1, 1}, .x = 8, .y = 32, .width = 2, .height = 1,
@@ -137,15 +113,26 @@ static fr_structural_gpu_graph_t support_graph(void) {
         graph.anchors[2u + i].chunk.x = anchor_x[i] / DC_CHUNK_SIDE;
         graph.anchors[2u + i].x = anchor_x[i] % DC_CHUNK_SIDE;
     }
-    graph.anchors[9] = graph.anchors[0];
-    graph.anchors[9].id = 10;
-    graph.anchors[9].node = 22;
-    graph.anchors[9].x = 0;
-    graph.anchors[10] = graph.anchors[0];
-    graph.anchors[10].id = 11;
-    graph.anchors[10].node = 25;
-    graph.anchors[10].x = 16;
     return graph;
+}
+
+static bool frame_strut(dc_gpu_t *gpu, uint32_t id, uint32_t x, uint32_t y,
+                        bool right, char *err, uint32_t cap) {
+    dc_gpu_world_body_t body = {.chunk = {(int64_t)(x / DC_CHUNK_SIDE),
+                                             (int64_t)(y / DC_CHUNK_SIDE)},
+        .body = {.id = id, .x_fp = (int32_t)(x % DC_CHUNK_SIDE) * 65536,
+                 .y_fp = (int32_t)(y % DC_CHUNK_SIDE) * 65536,
+                 .width = 5, .height = 16, .active = 1}};
+    dc_gpu_body_shape_t shape = right ?
+        (dc_gpu_body_shape_t){.count = 4, .material = DC_GPU_BODY_WOOD,
+            .vertices = {{4 * 65536, 16 * 65536}, {0, 0},
+                         {1 * 65536, 0}, {5 * 65536, 16 * 65536}}} :
+        (dc_gpu_body_shape_t){.count = 4, .material = DC_GPU_BODY_WOOD,
+            .vertices = {{0, 16 * 65536}, {4 * 65536, 0},
+                         {5 * 65536, 0}, {1 * 65536, 16 * 65536}}};
+    return dc_gpu_spawn_convex_body(gpu, body, &shape, err, cap) &&
+           dc_gpu_set_body_motion(gpu, id, 0.f, 0.f,
+                                  DC_GPU_BODY_KINEMATIC, err, cap);
 }
 
 static bool triangular_base(dc_gpu_t *gpu, char *err, uint32_t cap) {
@@ -160,7 +147,11 @@ static bool triangular_base(dc_gpu_t *gpu, char *err, uint32_t cap) {
                       .y_fp = CATAPULT_BASE_HEIGHT * 65536}}};
     return dc_gpu_spawn_convex_body(gpu, base, &shape, err, cap) &&
            dc_gpu_set_body_motion(gpu, CATAPULT_BASE_ID, 0.f, 0.f,
-                                  DC_GPU_BODY_KINEMATIC, err, cap);
+                                  DC_GPU_BODY_KINEMATIC, err, cap) &&
+           frame_strut(gpu, CATAPULT_BASE_ID + 1u, 64, 80, false, err, cap) &&
+           frame_strut(gpu, CATAPULT_BASE_ID + 2u, 68, 64, false, err, cap) &&
+           frame_strut(gpu, CATAPULT_BASE_ID + 3u, 75, 80, true, err, cap) &&
+           frame_strut(gpu, CATAPULT_BASE_ID + 4u, 71, 64, true, err, cap);
 }
 
 static bool coal_load(dc_gpu_t *gpu, bool hot, uint32_t chunk_stride,
