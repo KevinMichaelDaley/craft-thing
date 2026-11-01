@@ -1,6 +1,6 @@
 ---
 id: ctlo-e4y6
-status: open
+status: in_progress
 deps: [ctlo-2vcr]
 links: []
 created: 2026-10-24T22:06:19Z
