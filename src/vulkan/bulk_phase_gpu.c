@@ -46,34 +46,27 @@ bool fr_bulk_phase_gpu_export_chunk(dc_gpu_t *gpu,uint32_t slot,
     memcpy(out,(const fr_bulk_phase_chunk_t *)gpu->bulk_phase_mapped+slot,sizeof(*out));
     return true;
 }
-static bool ensure_pipeline(dc_gpu_t *gpu,char *err,uint32_t cap) {
-    if(gpu->bulk_phase_pipeline&&gpu->bulk_phase_retained_pipeline&&
-       gpu->bulk_phase_thermal_pipeline) return true;
+static bool create_phase_pipeline(dc_gpu_t *gpu,const char *path,
+    const char *failure,VkPipeline *pipeline,char *err,uint32_t cap) {
+    if(*pipeline) return true;
     VkShaderModule module=VK_NULL_HANDLE;
-    if(!dc_gpu_load_shader_module(gpu,"build/shaders/bulk_phase_pair.comp.spv",&module,err,cap))
-        return false;
+    if(!dc_gpu_load_shader_module(gpu,path,&module,err,cap)) return false;
     VkComputePipelineCreateInfo info={.sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage=VK_SHADER_STAGE_COMPUTE_BIT,.module=module,.pName="main"},
         .layout=gpu->pipeline_layout};
     VkResult result=vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,
-        &gpu->bulk_phase_pipeline);
+        pipeline);
     vkDestroyShaderModule(gpu->device,module,NULL);
-    if(result!=VK_SUCCESS) return error(err,cap,"Cannot create bulk phase pair pipeline");
-    if(!dc_gpu_load_shader_module(gpu,"build/shaders/bulk_phase_retained.comp.spv",&module,err,cap))
-        return false;
-    info.stage.module=module;
-    result=vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,
-        &gpu->bulk_phase_retained_pipeline);
-    vkDestroyShaderModule(gpu->device,module,NULL);
-    if(result!=VK_SUCCESS) return error(err,cap,"Cannot create bulk phase retained pipeline");
-    if(!dc_gpu_load_shader_module(gpu,"build/shaders/bulk_phase_thermal.comp.spv",&module,err,cap))
-        return false;
-    info.stage.module=module;
-    result=vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,
-        &gpu->bulk_phase_thermal_pipeline);
-    vkDestroyShaderModule(gpu->device,module,NULL);
-    return result==VK_SUCCESS||error(err,cap,"Cannot create bulk phase thermal pipeline");
+    return result==VK_SUCCESS||error(err,cap,failure);
+}
+static bool ensure_pipeline(dc_gpu_t *gpu,char *err,uint32_t cap) {
+    return create_phase_pipeline(gpu,"build/shaders/bulk_phase_pair.comp.spv",
+        "Cannot create bulk phase pair pipeline",&gpu->bulk_phase_pipeline,err,cap)&&
+        create_phase_pipeline(gpu,"build/shaders/bulk_phase_retained.comp.spv",
+        "Cannot create bulk phase retained pipeline",&gpu->bulk_phase_retained_pipeline,err,cap)&&
+        create_phase_pipeline(gpu,"build/shaders/bulk_phase_thermal.comp.spv",
+        "Cannot create bulk phase thermal pipeline",&gpu->bulk_phase_thermal_pipeline,err,cap);
 }
 void dc_gpu_record_bulk_phase(dc_gpu_t *gpu,float seconds) {
     if(!gpu->bulk_phase_work_possible||!gpu->bulk_phase_pipeline||seconds<=0.f) return;
