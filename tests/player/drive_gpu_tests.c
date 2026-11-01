@@ -103,13 +103,15 @@ static void test_sequence_retries_and_invalid_batches_are_transactional(void) {
 
 static void test_stale_generation_and_missing_body_do_not_control_replacements(void) {
     fr_player_drive_gpu_t *drive=NULL;
+    dc_gpu_world_body_t before;
+    ASSERT_TRUE(dc_gpu_read_world_body(g_gpu,101,&before,g_err,sizeof(g_err)));
     g_bindings[0].generation++;g_bindings[1].body_id=999;
     ASSERT_TRUE(fr_player_drive_gpu_create(g_gpu,g_bindings,2,1,2,&drive,g_err,sizeof(g_err)));
     fr_player_drive_input_t input[2]={{41,1,1,true},{42,1,1,true}};
     ASSERT_TRUE(fr_player_drive_gpu_submit(drive,input,2,g_err,sizeof(g_err)));
     dc_gpu_world_body_t b;
     ASSERT_TRUE(dc_gpu_read_world_body(g_gpu,101,&b,g_err,sizeof(g_err)));
-    ASSERT_EQ(b.body.vx_fp,0); ASSERT_TRUE(b.body.vy_fp>=0);
+    ASSERT_EQ(b.body.vx_fp,before.body.vx_fp); ASSERT_EQ(b.body.vy_fp,before.body.vy_fp);
     fr_player_drive_gpu_destroy(drive);PASS();
 }
 

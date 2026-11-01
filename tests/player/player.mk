@@ -17,6 +17,10 @@ build/player_drive_gpu_tests: tests/player/drive_gpu_tests.c src/vulkan/player_d
 test_player_drive_gpu: build/player_drive_gpu_tests
 	./build/player_drive_gpu_tests
 test: test_player_drive_gpu
+build/shaders/player_drive.comp.spv: shaders/sim/player_drive.comp shaders/sim/rigid_body.glsl shaders/sim/runtime_body_storage.glsl shaders/sim/solver_body_state.glsl
+	mkdir -p build/shaders
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/player_drive_gpu_tests: build/shaders/player_drive.comp.spv
 
 build/beaver_atlas: tools/diagnostics/beaver_atlas.c $(BEAVER_SRC) $(PLAYER_SRC) src/assets/prop.c include/ferrum/player/beaver.h src/player/beaver_internal.h
 	mkdir -p build

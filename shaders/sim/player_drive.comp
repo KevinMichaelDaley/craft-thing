@@ -1,0 +1,33 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#define DC_RUNTIME_BODY_STORAGE 1
+#define DC_RUNTIME_BODY_BINDING 0
+#include "rigid_body.glsl"
+#include "solver_body_state.glsl"
+layout(local_size_x=64) in;
+layout(set=0,binding=1,std430) buffer Commands {uint commands[];};
+layout(push_constant) uniform Params {uint count;} params;
+uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
+void main() {
+    uint i=gl_GlobalInvocationID.x;
+    if (i>=params.count) return;
+    uint base=i*16u;
+    uvec2 previous=uvec2(commands[base+2u],commands[base+3u]);
+    uvec2 sequence=uvec2(commands[base+4u],commands[base+5u]);
+    if (sequence.y<previous.y || (sequence.y==previous.y && sequence.x<=previous.x)) return;
+    commands[base+2u]=sequence.x;commands[base+3u]=sequence.y;
+    uint slot=runtime_body_find(commands[base]);
+    if (slot>=BODY_CAPACITY) return;
+    BodyStorageOwner owner=DC_BODY_OWNER(runtime_body_root,slot);
+    Body body=DC_BODY(slot);
+    if (owner.state!=DC_BODY_OWNER_LIVE || owner.generation!=commands[base+1u] ||
+        owner.runtime_id!=body.id || body.enabled==0u || (body.motion_flags&1u)!=0u) return;
+    float movement=float(int(commands[base+6u]))/65536.;
+    DC_BODY(slot).vx_fp=int(round(movement*float(commands[base+8u])));
+    if (commands[base+7u]!=0u &&
+        (SOLVER_BODY_WORD(slot,19u)&1u)!=0u) {
+        DC_BODY(slot).vy_fp=-int(commands[base+9u]);
+        SOLVER_BODY_WORD(slot,19u)&=~1u;
+    }
+    DC_BODY(slot).rest_ticks=0u;
+}
