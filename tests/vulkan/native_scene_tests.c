@@ -83,11 +83,27 @@ static void test_sludge_basin_replaces_water_without_double_capacity(void) {
     free(phase);free(chunk);PASS();
 }
 
+static void test_sludge_stress_bodies_fit_inside_basin(void) {
+    uint32_t previous_x=0u;
+    for(uint32_t i=0u;i<8u;i++) {
+        uint32_t x=0u,y=0u;
+        ASSERT_TRUE(native_scene_sludge_body(i,480u,270u,&x,&y));
+        ASSERT_TRUE(x>=480u/3u&&x+4u<480u*2u/3u);
+        ASSERT_TRUE(y>=270u/2u&&y+4u<270u*3u/4u);
+        if(i>0u) ASSERT_TRUE(x>=previous_x+4u);
+        previous_x=x;
+    }
+    uint32_t x=0u,y=0u;
+    ASSERT_TRUE(!native_scene_sludge_body(8u,480u,270u,&x,&y));
+    PASS();
+}
+
 int main(void) {
     RUN(test_native_residency_covers_partial_edge_chunks);
     RUN(test_scene_has_water_and_stable_grains_without_seam_walls);
     RUN(test_partial_chunk_excludes_out_of_view_materials);
     RUN(test_sludge_basin_replaces_water_without_double_capacity);
+    RUN(test_sludge_stress_bodies_fit_inside_basin);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
