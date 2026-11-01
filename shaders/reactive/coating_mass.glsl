@@ -23,3 +23,20 @@ float coating_mass(Words entry,uint state) {
         float(entry.words[state+FR_STATE_COATING_OXIDIZER])+
         coating_oil_fraction(entry,state)+coating_jelly_fraction(entry,state))/65536.;
 }
+float reactive_parcel_energy(Words entry,uint state) {
+    return uintBitsToFloat(entry.words[state+FR_STATE_ENERGY])+
+        uintBitsToFloat(entry.words[state+FR_STATE_ENERGY_RESIDUAL])+
+        uintBitsToFloat(entry.words[state+FR_STATE_ENERGY_CORRECTION]);
+}
+float reactive_parcel_heat_capacity(Words entry,uint state) {
+    uint material=entry.words[state+FR_STATE_MATERIAL];
+    float core=float(entry.words[state+FR_STATE_FUEL_MASS])+float(entry.words[state+FR_STATE_INERT_MASS])+
+        float(entry.words[state+FR_STATE_CORE_OXIDIZER]);
+    float char_mass=float(entry.words[state+FR_STATE_CHAR_MASS]);
+    float base=(core*coefficient(material,FR_PROFILE_HEAT_CAPACITY_WORD)+
+        char_mass*coefficient(12u,FR_PROFILE_HEAT_CAPACITY_WORD)+
+        float(entry.words[state+FR_STATE_BOUND_WATER])*
+            coefficient(FR_PROFILE_WATER_MATERIAL,FR_PROFILE_HEAT_CAPACITY_WORD))/65536.+
+        coating_heat_capacity(entry,state);
+    return fr_char_mixture_secant_capacity(reactive_parcel_energy(entry,state),base,char_mass/65536.);
+}

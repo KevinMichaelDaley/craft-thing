@@ -72,11 +72,8 @@ vec4 sample_with_metadata(uint index,out vec4 metadata) {
     metadata=vec4(uintBitsToFloat(1u),uintBitsToFloat(e.words[at+12u]),uintBitsToFloat(m),
         round(float(e.words[at+8u])*coefficient(m,19u)));
     if(m>=params.unused) return vec4(0);
-    float core=float(e.words[at+9u])+float(e.words[at+11u])+float(e.words[at+15u]);
-    float base=(core*coefficient(m,5u)+float(e.words[at+10u])*coefficient(12u,5u)+
-        float(e.words[at+12u])*coefficient(3u,5u))/65536.+coating_heat_capacity(e,at);
-    float energy=uintBitsToFloat(e.words[at+17u]);
-    float capacity=fr_char_mixture_secant_capacity(energy,base,float(e.words[at+10u])/65536.);
+    float energy=reactive_parcel_energy(e,at);
+    float capacity=reactive_parcel_heat_capacity(e,at);
     float wet_capacity=float(e.words[at+8u])*coefficient(m,19u);
     return vec4(uintBitsToFloat(e.words[at+17u]),capacity,coefficient(m,6u),
         wet_capacity>0.?clamp(float(e.words[at+12u])/wet_capacity,0.,1.):0.);

@@ -164,15 +164,8 @@ bool coating_has_stock(Words entry) {
         entry.words[s+FR_STATE_COATING_REMAINDERS]!=0u;
 }
 float coating_parcel_temperature(Words entry) {
-    uint s=FR_ENTRY_STATE,m=entry.words[s];
-    float core=float(entry.words[s+9u])+float(entry.words[s+11u])+float(entry.words[s+15u]);
-    float base=(core*coefficient(m,FR_PROFILE_HEAT_CAPACITY_WORD)+
-        float(entry.words[s+10u])*coefficient(12u,FR_PROFILE_HEAT_CAPACITY_WORD)+
-        float(entry.words[s+FR_STATE_BOUND_WATER])*coefficient(FR_PROFILE_WATER_MATERIAL,FR_PROFILE_HEAT_CAPACITY_WORD))/65536.+
-        coating_heat_capacity(entry,s);
-    float energy=uintBitsToFloat(entry.words[s+FR_STATE_ENERGY])+uintBitsToFloat(entry.words[s+FR_STATE_ENERGY_RESIDUAL])+uintBitsToFloat(entry.words[s+FR_STATE_ENERGY_CORRECTION]);
-    float capacity=fr_char_mixture_secant_capacity(energy,base,float(entry.words[s+10u])/65536.);
-    return capacity>0.?energy/capacity:0.;
+    float capacity=reactive_parcel_heat_capacity(entry,FR_ENTRY_STATE);
+    return capacity>0.?reactive_parcel_energy(entry,FR_ENTRY_STATE)/capacity:0.;
 }
 void coating_release_cell(Words entry,uint receiver,float temperature,uint phase) {
     if(receiver==0xffffffffu||temperature<=0.) return;
