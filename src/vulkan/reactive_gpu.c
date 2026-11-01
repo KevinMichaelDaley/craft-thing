@@ -128,6 +128,10 @@ bool fr_gpu_reactive_seed_cell(dc_gpu_t *g,uint32_t slot,uint32_t local,
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Reactive import wait failed");
     const uint32_t *registry=dc_gpu_structural_data(g)+DC_STRUCTURAL_HEADER_WORDS+slot*8u;
     if(!registry[5]) return error(err,cap,"Reactive cell owner is not resident");
+    if(!dc_gpu_copy_chunk_state(g,slot,false,false,err,cap)) return false;
+    const dc_cell_t *cells=g->chunk_mapped;
+    if(cells[(size_t)slot*DC_CHUNK_CELLS+local].material!=state->material)
+        return error(err,cap,"Reactive cell material does not match physical owner");
     if(!fr_gpu_reactive_initialize(g,err,cap)) return false;
     if(state->material==DC_MATERIAL_LEAVES&&!fr_gpu_reactive_particle_storage(g,err,cap)) return false;
     dc_chunk_coord_t coord;memcpy(&coord,registry,sizeof(coord));
