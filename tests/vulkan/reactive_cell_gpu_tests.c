@@ -268,8 +268,11 @@ static void test_moving_coated_proxy_feels_water_drag_without_losing_inventory(v
     }
     ASSERT_TRUE(dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err))&&
         fr_bulk_phase_gpu_import_chunk(g,0,chunk,empty,err,sizeof(err))&&
-        fr_thermal_gpu_enable(g,err,sizeof(err))&&
-        dc_gpu_set_body_motion(g,0x80000001u,10.f,0.f,0.f,err,sizeof(err))&&
+        fr_thermal_gpu_enable(g,err,sizeof(err)));
+    dc_gpu_body_record_t *body=g->body_mapped;
+    ASSERT_EQ(body->body.id,0x80000001u);
+    body->body.vx_fp=10*65536;
+    ASSERT_TRUE(
         fr_thermal_gpu_step(g,.5f,err,sizeof(err))&&
         fr_bulk_phase_gpu_export_chunk(g,0,after,err,sizeof(err)));
     fr_reactive_record_t wet,dry;bool wet_found=false,dry_found=false;
