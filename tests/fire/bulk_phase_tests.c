@@ -152,6 +152,23 @@ static void test_bulk_packet_reserves_oil_and_slime_heat_channels(void) {
     ASSERT_TRUE(memcmp(bytes,"BLP2",4u)==0);
     free(bytes);free(phase);free(chunk);PASS();
 }
+static void test_bulk_packet_rejects_nonfinite_phase_heat_transactionally(void) {
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *phase=calloc(1,sizeof(*phase)),*out=calloc(1,sizeof(*out));
+    size_t length=fr_bulk_phase_chunk_bytes();uint8_t *bytes=malloc(length);
+    ASSERT_TRUE(chunk&&phase&&out&&bytes);
+    phase->oil_fp[17]=100u;phase->oil_excess[17]=3.f;
+    ASSERT_TRUE(fr_bulk_phase_chunk_encode(chunk,phase,bytes,length));
+    size_t offset=16u+(4u*DC_CHUNK_CELLS+17u)*sizeof(uint32_t);
+    bytes[offset]=0u;bytes[offset+1u]=0u;bytes[offset+2u]=0xc0u;bytes[offset+3u]=0x7fu;
+    uint64_t hash=UINT64_C(14695981039346656037);
+    for(size_t i=0;i<length-8u;i++) {hash^=bytes[i];hash*=UINT64_C(1099511628211);}
+    for(uint32_t i=0;i<8u;i++) bytes[length-8u+i]=(uint8_t)(hash>>(8u*i));
+    out->oil_fp[17]=42u;
+    ASSERT_TRUE(!fr_bulk_phase_chunk_decode(chunk,bytes,length,out));
+    ASSERT_INT_EQ(out->oil_fp[17],42u);
+    free(bytes);free(out);free(phase);free(chunk);PASS();
+}
 int main(void) {
     RUN(test_pair_admits_only_shared_capacity_and_conserves_each_phase);
     RUN(test_full_vessel_retains_slime_without_double_occupancy);
@@ -165,5 +182,6 @@ int main(void) {
     RUN(test_bulk_packet_corruption_and_truncation_are_transactional);
     RUN(test_bulk_packet_rejects_retained_volume_larger_than_stock);
     RUN(test_bulk_packet_reserves_oil_and_slime_heat_channels);
+    RUN(test_bulk_packet_rejects_nonfinite_phase_heat_transactionally);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail>0?1:0;
 }

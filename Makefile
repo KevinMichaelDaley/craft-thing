@@ -247,6 +247,7 @@ HALO_SHADER = build/shaders/halo.comp.spv
 FLUID_SHADER = build/shaders/fluid_transport_16.comp.spv build/shaders/fluid.comp.spv build/shaders/fluid_aperture.comp.spv build/shaders/fluid_transport.comp.spv build/shaders/fluid_displacement.comp.spv
 FLUID_SHADER += build/shaders/bulk_phase_pair.comp.spv build/shaders/bulk_phase_retained.comp.spv
 $(FLUID_SHADER): shaders/sim/bulk_phase.glsl
+$(FLUID_SHADER): include/dungeoncraft/bulk_phase_layout.h
 PROJECTION_SHADER = build/shaders/projection.comp.spv build/shaders/hydro_head.comp.spv build/shaders/pressure_work.comp.spv build/shaders/pressure_stencil.comp.spv
 MARKER_SHADER = build/shaders/marker.comp.spv
 SHIFT_SHADER = build/shaders/shift_velocity.comp.spv
@@ -1965,7 +1966,7 @@ GAS_SHADERS += build/shaders/gas_bubble_displace.comp.spv
 GAS_SHADERS += build/shaders/gas_mpm_pressure.comp.spv
 build/shaders/gas_bubble_displace.comp.spv: shaders/reactive/thermal_water.glsl include/dungeoncraft/thermal_water_layout.h
 $(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_routes geometry_demand geometry_transfer geometry_commit): shaders/gas/geometry_common.glsl
-$(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_routes geometry_demand geometry_transfer geometry_commit init): shaders/gas/bulk_volume.glsl
+$(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_routes geometry_demand geometry_transfer geometry_commit init): shaders/gas/bulk_volume.glsl include/dungeoncraft/bulk_phase_layout.h
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_metadata_lean pressure_rhs_lean)
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,transport_factor_compact_large transport_prefix_compact_large transport_axis_compact_large transport_explicit_large transport_hybrid_large transport_hybrid_x_large transport_hybrid_y_large)
 build/shaders/gas_audit.comp.spv: include/dungeoncraft/gas_audit_layout.h

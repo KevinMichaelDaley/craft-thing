@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "dungeoncraft/bulk_phase_layout.h"
 #include "dungeoncraft/chunk.h"
 
 enum { FR_BULK_WATER, FR_BULK_OIL, FR_BULK_SLIME, FR_BULK_PHASES };

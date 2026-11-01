@@ -8,6 +8,8 @@
 #include "gpu_internal.h"
 
 #define FR_BULK_GRAVITY_CELLS_PER_SECOND_SQUARED 900.f
+_Static_assert(sizeof(fr_bulk_phase_chunk_t)==
+    FR_BULK_CHUNK_CHANNELS*DC_CHUNK_CELLS*sizeof(uint32_t),"Bulk GPU layout mismatch");
 
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);

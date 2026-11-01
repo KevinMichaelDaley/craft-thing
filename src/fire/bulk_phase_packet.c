@@ -4,8 +4,8 @@
 #include "ferrum/fire/bulk_phase.h"
 
 enum { BULK_HEADER_BYTES=16u, BULK_HASH_BYTES=8u,
-       BULK_LEGACY_PAYLOAD_BYTES=4u*DC_CHUNK_CELLS*sizeof(uint32_t),
-       BULK_PAYLOAD_BYTES=6u*DC_CHUNK_CELLS*sizeof(uint32_t) };
+       BULK_LEGACY_PAYLOAD_BYTES=FR_BULK_VOLUME_CHANNELS*DC_CHUNK_CELLS*sizeof(uint32_t),
+       BULK_PAYLOAD_BYTES=FR_BULK_CHUNK_CHANNELS*DC_CHUNK_CELLS*sizeof(uint32_t) };
 
 static void put32(uint8_t *bytes,uint32_t value) {
     for(uint32_t i=0;i<4u;i++) bytes[i]=(uint8_t)(value>>(i*8u));
@@ -40,12 +40,12 @@ static uint32_t *mutable_channel(fr_bulk_phase_chunk_t *phase,uint32_t index) {
     }
 }
 static uint32_t channel_word(const fr_bulk_phase_chunk_t *phase,uint32_t index,uint32_t cell) {
-    if(index<4u) return channel(phase,index)[cell];
+    if(index<FR_BULK_VOLUME_CHANNELS) return channel(phase,index)[cell];
     float value=index==4u?phase->oil_excess[cell]:phase->slime_excess[cell];
     uint32_t bits=0;memcpy(&bits,&value,sizeof(bits));return bits;
 }
 static void set_channel_word(fr_bulk_phase_chunk_t *phase,uint32_t index,uint32_t cell,uint32_t bits) {
-    if(index<4u) {mutable_channel(phase,index)[cell]=bits;return;}
+    if(index<FR_BULK_VOLUME_CHANNELS) {mutable_channel(phase,index)[cell]=bits;return;}
     float value=0.f;memcpy(&value,&bits,sizeof(value));
     if(index==4u) phase->oil_excess[cell]=value;else phase->slime_excess[cell]=value;
 }
@@ -66,7 +66,7 @@ bool fr_bulk_phase_chunk_encode(const dc_chunk_t *chunk,
             phase->oil_retained_fp[i],phase->slime_retained_fp[i])||
             !isfinite(phase->oil_excess[i])||!isfinite(phase->slime_excess[i])) return false;
     memcpy(bytes,"BLP2",4);put32(bytes+4,2u);put32(bytes+8,DC_CHUNK_CELLS);put32(bytes+12,0u);
-    for(uint32_t k=0;k<6u;k++) for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
+    for(uint32_t k=0;k<FR_BULK_CHUNK_CHANNELS;k++) for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
         put32(bytes+payload_offset(k,i),channel_word(phase,k,i));
     uint64_t hash=packet_hash(bytes,length-BULK_HASH_BYTES);
     for(uint32_t i=0;i<BULK_HASH_BYTES;i++) bytes[length-BULK_HASH_BYTES+i]=(uint8_t)(hash>>(i*8u));
@@ -99,7 +99,8 @@ bool fr_bulk_phase_chunk_decode(const dc_chunk_t *chunk,const uint8_t *bytes,
             if(!isfinite(oil_heat)||!isfinite(slime_heat)) return false;
         }
     }
-    for(uint32_t k=0;k<(current?6u:4u);k++) for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
+    for(uint32_t k=0;k<(current?FR_BULK_CHUNK_CHANNELS:FR_BULK_VOLUME_CHANNELS);k++)
+        for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
         set_channel_word(out,k,i,get32(bytes+payload_offset(k,i)));
     if(legacy) {memset(out->oil_excess,0,sizeof(out->oil_excess));
         memset(out->slime_excess,0,sizeof(out->slime_excess));}

@@ -1,5 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#include "../../include/dungeoncraft/bulk_phase_layout.h"
 #include "../reactive/thermal_water.glsl"
 layout(local_size_x=64) in;
 layout(set=0,binding=1,std430) buffer Cells {uvec2 cells[];};
@@ -18,19 +19,19 @@ uint page_at(ivec2 p) {
 }
 uint atlas_at(ivec2 p,uint page) {return (page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);}
 uint bulk_at(uint atlas,uint phase) {
-    uint base=(atlas/4096u)*6u*4096u+atlas%4096u;
+    uint base=(atlas/4096u)*FR_BULK_CHUNK_CHANNELS*4096u+atlas%4096u;
     return bulk[base+(phase-1u)*4096u];
 }
 void bulk_write(uint atlas,uint phase,uint value) {
-    uint base=(atlas/4096u)*6u*4096u+atlas%4096u;
+    uint base=(atlas/4096u)*FR_BULK_CHUNK_CHANNELS*4096u+atlas%4096u;
     bulk[base+(phase-1u)*4096u]=value;
 }
 float bulk_heat_at(uint atlas,uint phase) {
-    uint base=(atlas/4096u)*6u*4096u+atlas%4096u;
+    uint base=(atlas/4096u)*FR_BULK_CHUNK_CHANNELS*4096u+atlas%4096u;
     return uintBitsToFloat(bulk[base+(phase+3u)*4096u]);
 }
 void bulk_heat_write(uint atlas,uint phase,float energy) {
-    uint base=(atlas/4096u)*6u*4096u+atlas%4096u;
+    uint base=(atlas/4096u)*FR_BULK_CHUNK_CHANNELS*4096u+atlas%4096u;
     bulk[base+(phase+3u)*4096u]=floatBitsToUint(energy);
 }
 bool permeable(uint material) {
