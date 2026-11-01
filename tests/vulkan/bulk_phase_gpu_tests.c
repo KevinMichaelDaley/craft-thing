@@ -261,6 +261,7 @@ static void test_oil_crosses_horizontal_chunk_seam_conservatively(void) {
     ASSERT_TRUE(left&&right&&source&&out_left&&out_right);
     const uint32_t row=30u;
     source->oil_fp[row*64u+63u]=FR_BULK_CELL_FULL_FP;
+    source->oil_momentum_x[row*64u+63u]=10.f;
     ASSERT_TRUE(dc_gpu_create(&gpu,128,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
         dc_gpu_upload_chunk(gpu,0,left,err,sizeof(err))&&
         dc_gpu_upload_chunk(gpu,1,right,err,sizeof(err))&&
@@ -270,9 +271,15 @@ static void test_oil_crosses_horizontal_chunk_seam_conservatively(void) {
         fr_bulk_phase_gpu_step(gpu,1.f/60.f,err,sizeof(err))&&
         fr_bulk_phase_gpu_export_chunk(gpu,0,out_left,err,sizeof(err))&&
         fr_bulk_phase_gpu_export_chunk(gpu,1,out_right,err,sizeof(err)));
-    uint64_t right_total=0;
-    for(uint32_t i=0;i<DC_CHUNK_CELLS;i++) right_total+=out_right->oil_fp[i];
+    uint64_t right_total=0;double momentum=0.,right_momentum=0.;
+    for(uint32_t i=0;i<DC_CHUNK_CELLS;i++) {
+        right_total+=out_right->oil_fp[i];
+        right_momentum+=out_right->oil_momentum_x[i];
+        momentum+=(double)out_left->oil_momentum_x[i]+out_right->oil_momentum_x[i];
+    }
     ASSERT_TRUE(right_total>0u);
+    ASSERT_TRUE(right_momentum>0.);
+    ASSERT_TRUE(fabs(momentum-10.)<.001);
     uint64_t total=0;
     for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
         total+=(uint64_t)out_left->oil_fp[i]+out_right->oil_fp[i];
@@ -366,19 +373,17 @@ static void test_moving_rigid_crosses_chunk_seam_without_oil_or_heat_loss(void) 
     dc_gpu_body_t moved_body={0};
     ASSERT_TRUE(dc_gpu_read_body_id(gpu,307,&moved_body,err,sizeof(err)));
     ASSERT_EQ(moved_body.x_fp,64*(int32_t)FR_BULK_CELL_FULL_FP);
-    uint64_t oil=0u,right_oil=0u;double heat=0.,momentum=0.,right_momentum=0.;
+    uint64_t oil=0u,right_oil=0u;double heat=0.,right_momentum=0.;
     for(uint32_t i=0;i<DC_CHUNK_CELLS;i++) {
         oil+=(uint64_t)out_left->oil_fp[i]+out_right->oil_fp[i];
         right_oil+=out_right->oil_fp[i];
         heat+=(double)out_left->oil_excess[i]+out_right->oil_excess[i];
-        momentum+=(double)out_left->oil_momentum_x[i]+out_right->oil_momentum_x[i];
         right_momentum+=out_right->oil_momentum_x[i];
     }
     ASSERT_EQ(oil,FR_BULK_CELL_FULL_FP);
     ASSERT_TRUE(right_oil>0u);
     ASSERT_TRUE(fabs(heat-25.)<.001);
     ASSERT_TRUE(right_momentum>0.);
-    ASSERT_TRUE(fabs(momentum-10.)<.001);
     dc_gpu_destroy(gpu);free(left);free(right);free(source);free(out_left);free(out_right);PASS();
 }
 static void test_slime_flux_yields_under_load_and_softens_when_hot(void) {

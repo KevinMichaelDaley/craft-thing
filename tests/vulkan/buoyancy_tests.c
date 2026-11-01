@@ -174,6 +174,34 @@ static void test_slime_flow_drags_wood_with_balanced_horizontal_momentum(void) {
     ASSERT_TRUE(fabs((after-initial)+9.6*(double)body.vx_fp/65536.)<.02);
     dc_gpu_destroy(gpu);free(chunk);free(phase);free(out);PASS();
 }
+static void test_retained_only_slime_does_not_buoy_a_body(void) {
+    char err[256]={0};dc_gpu_t *gpu=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *phase=calloc(1,sizeof(*phase)),*out=calloc(1,sizeof(*out));
+    ASSERT_TRUE(chunk&&phase&&out);
+    for(uint32_t y=30u;y<34u;y++) for(uint32_t x=20u;x<24u;x++) {
+        uint32_t at=y*64u+x;
+        phase->slime_fp[at]=FR_BULK_CELL_FULL_FP;
+        phase->slime_retained_fp[at]=FR_BULK_CELL_FULL_FP;
+    }
+    dc_gpu_body_t body={.x_fp=20<<16,.y_fp=30<<16,.width=4,.height=4,
+        .id=100,.active=1};
+    dc_gpu_body_shape_t shape={.count=4,.material=DC_GPU_BODY_WOOD,
+        .vertices={{0,0},{4<<16,0},{4<<16,4<<16},{0,4<<16}}};
+    ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+        dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(gpu,0,0,0,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,phase,err,sizeof(err))&&
+        dc_gpu_set_rigid_solver(gpu,true)&&
+        dc_gpu_spawn_convex_body(gpu,(dc_gpu_world_body_t){.body=body},
+            &shape,err,sizeof(err))&&
+        dc_gpu_set_body_origin(gpu,(dc_chunk_coord_t){0,0},err,sizeof(err))&&
+        dc_gpu_rigid_step(gpu,err,sizeof(err))&&
+        dc_gpu_read_body_id(gpu,100,&body,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
+    ASSERT_TRUE(fabsf((float)body.vy_fp/65536.f-.25f)<.002f);
+    for(uint32_t i=0u;i<DC_CHUNK_CELLS;i++) ASSERT_EQ(out->slime_momentum_y[i],0.f);
+    dc_gpu_destroy(gpu);free(chunk);free(phase);free(out);PASS();
+}
 
 static void test_partial_wood_uses_submerged_shape_volume(void) {
     char err[256];
@@ -461,6 +489,7 @@ int main(void) {
     RUN(test_submerged_wood_accelerates_from_material_density);
     RUN(test_slime_buoys_wood_and_receives_opposite_impulse);
     RUN(test_slime_flow_drags_wood_with_balanced_horizontal_momentum);
+    RUN(test_retained_only_slime_does_not_buoy_a_body);
     RUN(test_partial_wood_uses_submerged_shape_volume);
     RUN(test_submerged_stone_sinks_with_reduced_acceleration);
     RUN(test_dense_wood_sinks_from_its_material_properties);
