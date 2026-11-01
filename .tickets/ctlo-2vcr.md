@@ -39,3 +39,7 @@ GPU shear RED 2391186, GREEN 32d2765 and REFACTOR just committed: matched loaded
 **2026-11-01T08:14:36Z**
 
 Momentum RED 9058555/ccb827a, GREEN 9c1611e/14e8046, REFACTOR just committed: BLP3 stores independent phase momentum sidecars without storing mass; BLP1/BLP2 restore zero momentum. GPU flux carries momentum proportionally with conserved Q16 phase volume, orphan momentum rejects transactionally on packet/import. Targeted packet 17 and GPU 17 pass; full make test under persistent Xephyr :92 passed. Still need water/rigid action-reaction, deformational sample guidance, owner-transfer and displayed stress/frame budget.
+
+**2026-11-01T08:21:28Z**
+
+Water-phase action-reaction RED e733c6d, GREEN 638fde1, REFACTOR just committed: GPU co-cell drag conserves sampled water-face plus phase momentum, carries oil momentum with flux and deposits inelastic kinetic loss as heat using the 1 cm cell mass/velocity conversion. 18 GPU tests and full make test under persistent Xephyr :92 passed. Remaining rigid response, deformation quadrature, owner transfers, sustained displayed stress/frame budget.
