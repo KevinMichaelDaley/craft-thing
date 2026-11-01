@@ -10,6 +10,43 @@
 #include "../../src/vulkan/runtime_body_internal.h"
 #include "dungeoncraft/reactive_state_layout.h"
 #include "dungeoncraft/material_density.h"
+static void test_gold_body_proxy_keeps_corrosion_residue_across_save(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    uint32_t at=20u*64u+20u;
+    for(uint32_t y=0u;y<2u;y++) for(uint32_t x=0u;x<2u;x++)
+        chunk->cells[at+y*64u+x].material=DC_MATERIAL_GOLD;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    for(uint32_t y=0u;y<2u;y++) for(uint32_t x=0u;x<2u;x++) {
+        fr_reactive_state_t gold;
+        ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_GOLD,65536u,0u,800.f,
+            100600u+y*2u+x,&gold,err,sizeof(err)));
+        gold.coating_jelly_fuel_fp=65536u;gold.coating_oxidizer_fp=8000u;
+        gold.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&gold,800.f);
+        ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,at+y*64u+x,&gold,err,sizeof(err)));
+    }
+    ASSERT_TRUE(dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err)));
+    fr_reactive_record_t record;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0u,0u,&record,&found,err,sizeof(err))&&found);
+    ASSERT_EQ(record.state.material,DC_MATERIAL_GOLD);
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&
+        fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&
+        fr_combustion_gpu_enable(g,err,sizeof(err))&&
+        fr_combustion_gpu_step(g,2.f,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0u,0u,&record,&found,err,sizeof(err))&&found);
+    ASSERT_EQ(record.state.material,DC_MATERIAL_CORROSION_RESIDUE);
+    ASSERT_EQ(record.state.origin_id_low,100600u);
+    ASSERT_TRUE(fr_gpu_save_structure(g,"build/corrosion_body_proxy.dcs",err,sizeof(err)));
+    dc_gpu_destroy(g);g=NULL;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&
+        fr_gpu_load_structure(g,"build/corrosion_body_proxy.dcs",err,sizeof(err))&&
+        fr_gpu_reactive_read_body(g,0x80000001u,0u,0u,&record,&found,err,sizeof(err))&&found);
+    ASSERT_EQ(record.state.material,DC_MATERIAL_CORROSION_RESIDUE);
+    ASSERT_EQ(record.state.origin_id_low,100600u);
+    free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_cold_rigid_admission_retains_pose_and_reactive_ownership(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     for(uint32_t y=10;y<12;y++) for(uint32_t x=10;x<13;x++) chunk->cells[y*64+x].material=DC_MATERIAL_WOOD;
@@ -230,6 +267,7 @@ int main(int argc,char **argv) {
     else if(argc==2&&strcmp(argv[1],"--mixed-ash")==0) RUN(test_mixed_concave_burn_preserves_color_state_and_loose_ash);
     else if(argc==2&&strcmp(argv[1],"--mixed-ash-blocked")==0) RUN(test_mixed_concave_burn_retries_geometry_and_ash_together);
     else if(argc==2&&strcmp(argv[1],"--terrain-support")==0) RUN(test_burning_terrain_support_extracts_remnant_without_ash_support);
+    else if(argc==2&&strcmp(argv[1],"--corrosion-body")==0) RUN(test_gold_body_proxy_keeps_corrosion_residue_across_save);
     else if(argc==2&&strcmp(argv[1],"--stone")==0) RUN(test_constructed_stone_owns_heat_without_changing_its_collider_or_support);
     else if(argc==2&&strcmp(argv[1],"--constructed-wood")==0) RUN(test_constructed_wood_burns_to_loose_ash_after_capacity_retry);
     else if(argc==2&&strcmp(argv[1],"--burned-anchor")==0) RUN(test_burned_anchor_cannot_keep_constructed_remnant_supported);
