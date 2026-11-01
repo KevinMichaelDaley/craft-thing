@@ -391,6 +391,80 @@ static void test_transparent_exhaust_does_not_leave_a_soot_dark_catapult_arc(voi
     ASSERT_TRUE(abs(soot-clear)>=10);
     free(pixels);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_smoke_wavelet_does_not_draw_across_solid_wall(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_gas_state_t *input=calloc(4096,sizeof(*input)),*readback=calloc(4096,sizeof(*readback));
+    double *volume=calloc(4096,sizeof(*volume));
+    uint32_t *clear=malloc(480u*270u*sizeof(*clear)),*smoky=malloc(480u*270u*sizeof(*smoky));
+    ASSERT_TRUE(chunk&&input&&readback&&volume&&clear&&smoky);
+    for(uint32_t y=18u;y<=30u;y++) chunk->cells[y*64u+28u].material=DC_MATERIAL_STONE;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_gas_model_t model=reference_model();
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err)));
+    for(uint32_t i=0;i<4096u;i++) {
+        volume[i]=chunk->cells[i].material==DC_MATERIAL_STONE?0.:1.;
+        if(volume[i]>0.) input[i]=reference_air(model,.0012,300,0);
+    }
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&
+        present(g,err,sizeof(err))&&dc_gpu_readback(g,clear,480u*270u,err,sizeof(err)));
+    for(uint32_t y=20u;y<28u;y++) for(uint32_t x=20u;x<28u;x++) {
+        uint32_t i=y*64u+x;double soot=.000004,vx=2.+.8*((double)y-23.5);
+        input[i].species[FR_GAS_NITROGEN]-=soot;
+        input[i].species[FR_GAS_SOOT]+=soot;
+        input[i].energy+=soot*(model.heat_capacity_cv[FR_GAS_SOOT]-
+            model.heat_capacity_cv[FR_GAS_NITROGEN])*300.;
+        input[i].momentum[0]=.0012*vx;
+        input[i].energy+=.5*model.kinetic_scale*.0012*vx*vx;
+        input[i].pigment[0]=.18*soot;
+        input[i].pigment[1]=.16*soot;
+        input[i].pigment[2]=.14*soot;
+    }
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&
+        present(g,err,sizeof(err)));
+    g->gas->clock.advanced_seconds=1.;
+    ASSERT_TRUE(present(g,err,sizeof(err))&&dc_gpu_readback(g,smoky,480u*270u,err,sizeof(err))&&
+        fr_gas_gpu_read_chunk(g,0,readback,4096,err,sizeof(err)));
+    dc_gpu_address_buffer_t potential_readback={0};
+    ASSERT_TRUE(dc_gpu_address_buffer_create(g,26u*sizeof(float),true,
+        &potential_readback,err,sizeof(err))&&fr_renderer_begin(g));
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        VK_ACCESS_2_TRANSFER_READ_BIT);
+    VkBufferCopy copies[26];
+    for(uint32_t y=18u;y<=30u;y++) for(uint32_t side=0u;side<2u;side++) {
+        uint32_t n=(y-18u)*2u+side;
+        copies[n]=(VkBufferCopy){
+            .srcOffset=(VkDeviceSize)(y*480u+27u+side)*sizeof(float),
+            .dstOffset=(VkDeviceSize)n*sizeof(float),.size=sizeof(float)};
+    }
+    vkCmdCopyBuffer(g->command,g->gas->smoke_potential.buffer,
+        potential_readback.buffer,26u,copies);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        VK_ACCESS_2_TRANSFER_WRITE_BIT,VK_PIPELINE_STAGE_2_HOST_BIT,
+        VK_ACCESS_2_HOST_READ_BIT);
+    ASSERT_TRUE(fr_renderer_submit(g));
+    float potential_peak=0.f,adjacent_peak=0.f;
+    for(uint32_t i=0;i<13u;i++) {
+        adjacent_peak=fmaxf(adjacent_peak,
+            fabsf(((const float *)potential_readback.mapped)[i*2u]));
+        potential_peak=fmaxf(potential_peak,
+            fabsf(((const float *)potential_readback.mapped)[i*2u+1u]));
+    }
+    printf("Smoke wavelet solid-wall potential %.9g adjacent %.9g\n",
+        potential_peak,adjacent_peak);
+    ASSERT_TRUE(potential_peak<=1e-6f&&adjacent_peak<=1e-6f);
+    dc_gpu_address_buffer_destroy(g,&potential_readback);
+    uint32_t changed=0u;
+    for(uint32_t y=18u;y<=30u;y++) changed+=clear[y*480u+28u]!=smoky[y*480u+28u];
+    printf("Smoke wavelet solid-wall changed pixels %u\n",changed);
+    ASSERT_EQ(changed,0u);
+    for(uint32_t y=18u;y<=30u;y++) {
+        uint32_t i=y*64u+28u;
+        ASSERT_EQ(readback[i].species[FR_GAS_SOOT],0.);
+    }
+    free(smoky);free(clear);free(volume);free(readback);free(input);free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_quarter_native_smoke_wavelet_advects_and_displaces_boundary(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_gas_state_t *input=calloc(4096,sizeof(*input));double *volume=calloc(4096,sizeof(*volume));
