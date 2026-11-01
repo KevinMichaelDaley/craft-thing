@@ -273,7 +273,7 @@ static void test_mixed_film_burns_wet_faster_than_matched_oil_control(void) {
     fr_reactive_state_t original[3];
     for(uint32_t i=0u;i<3u;i++) {
         chunk->cells[at[i]]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
-        ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,65536u,i==1u?0u:65536u,
+        ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,65536u,i==1u?0u:4u*65536u,
             800.f,120000u+i,&original[i],err,sizeof(err)));
         original[i].coating_oil_fuel_fp=i==0u?32768u:65536u;
         original[i].coating_jelly_fuel_fp=i==0u?32768u:0u;
@@ -301,6 +301,36 @@ static void test_mixed_film_burns_wet_faster_than_matched_oil_control(void) {
     ASSERT_TRUE(results[0].state.coating_oxidizer_fp<original[0].coating_oxidizer_fp);
     ASSERT_EQ(results[2].state.coating_oil_fuel_fp,original[2].coating_oil_fuel_fp);
     ASSERT_EQ(results[0].state.fuel_mass_fp,original[0].fuel_mass_fp);
+    free(chunk);dc_gpu_destroy(g);PASS();
+}
+static void test_submerged_mixed_film_uses_bound_oxidizer_without_deleting_water(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    uint32_t at=20u*64u+20u;
+    chunk->cells[at]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
+    const uint32_t neighbors[]={at-64u,at-1u,at+1u,at+64u};
+    for(uint32_t i=0u;i<4u;i++) chunk->cells[neighbors[i]].fluid_mass=DC_FLUID_FULL;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t film;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,65536u,65536u,800.f,
+        120100u,&film,err,sizeof(err)));
+    film.coating_oil_fuel_fp=32768u;film.coating_jelly_fuel_fp=32768u;
+    film.coating_oxidizer_fp=32768u;film.flags|=FR_REACTIVE_COATING_FLAMING;
+    film.coating_threshold=.01f;film.coating_integral=.02f;
+    film.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&film,800.f);
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,at,&film,err,sizeof(err)));
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&
+        fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&
+        fr_combustion_gpu_enable(g,err,sizeof(err))&&
+        fr_combustion_gpu_step(g,.1f,err,sizeof(err)));
+    fr_reactive_record_t record;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&record,&found,err,sizeof(err))&&found);
+    ASSERT_TRUE(record.state.coating_oil_fuel_fp<film.coating_oil_fuel_fp);
+    ASSERT_TRUE(record.state.coating_oxidizer_fp<film.coating_oxidizer_fp);
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+    for(uint32_t i=0u;i<4u;i++) ASSERT_EQ(chunk->cells[neighbors[i]].fluid_mass,DC_FLUID_FULL);
     free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_flame_emission_requires_local_transported_hot_fuel_and_oxygen(void) {
@@ -421,6 +451,10 @@ int main(int argc,char **argv) {
     }
     if(argc==2&&strcmp(argv[1],"--greek")==0) {
         RUN(test_mixed_film_burns_wet_faster_than_matched_oil_control);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
+    if(argc==2&&strcmp(argv[1],"--greek-submerged")==0) {
+        RUN(test_submerged_mixed_film_uses_bound_oxidizer_without_deleting_water);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
     }
     if(argc==2&&strcmp(argv[1],"--roof")==0) {
