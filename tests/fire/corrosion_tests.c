@@ -82,11 +82,57 @@ static void test_full_conversion_makes_irreversible_residue_and_spent_ingredient
     }
     PASS();
 }
+static void test_equal_time_corrosion_and_oxidizer_cap_preserve_stock(void) {
+    char err[256]={0};fr_reactive_state_t source,whole,half,next,capped;
+    fr_corrosion_products_t products;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_GOLD,65536u,0u,800.f,4006u,
+        &source,err,sizeof(err)));
+    source.coating_jelly_fuel_fp=65536u;source.coating_oxidizer_fp=8000u;
+    source.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&source,800.f);
+    ASSERT_TRUE(fr_corrosion_reference(&source,FR_CORROSION_GREEK_FIRE,0u,0.f,1.f,.5f,
+        &whole,&products,err,sizeof(err)));
+    half=source;
+    for(uint32_t i=0u;i<2u;i++) {
+        ASSERT_TRUE(fr_corrosion_reference(&half,FR_CORROSION_GREEK_FIRE,0u,0.f,1.f,.25f,
+            &next,&products,err,sizeof(err)));
+        half=next;
+    }
+    ASSERT_EQ(whole.corroded_fraction,half.corroded_fraction);
+    ASSERT_EQ(whole.coating_oxidizer_fp,half.coating_oxidizer_fp);
+    ASSERT_EQ(fr_reactive_state_mass_fp(&whole),fr_reactive_state_mass_fp(&half));
+    source.coating_oxidizer_fp=100u;
+    ASSERT_TRUE(fr_corrosion_reference(&source,FR_CORROSION_GREEK_FIRE,0u,0.f,1.f,2.f,
+        &capped,&products,err,sizeof(err)));
+    ASSERT_EQ(products.oxidizer_fp,100u);
+    ASSERT_EQ(capped.coating_oxidizer_fp,0u);
+    ASSERT_TRUE(capped.corroded_fraction<.02f);
+    ASSERT_EQ(fr_reactive_state_mass_fp(&capped),fr_reactive_state_mass_fp(&source));
+    PASS();
+}
+
+static void test_residue_import_and_recraft_cannot_relabel_spent_lineage(void) {
+    char err[256]={0};fr_reactive_state_t source,residue,forged;
+    fr_corrosion_products_t products;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_GOLD,65536u,0u,800.f,4007u,
+        &source,err,sizeof(err)));
+    source.coating_jelly_fuel_fp=65536u;source.coating_oxidizer_fp=10000u;
+    source.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&source,800.f);
+    ASSERT_TRUE(fr_corrosion_reference(&source,FR_CORROSION_GREEK_FIRE,0u,0.f,1.f,2.f,
+        &residue,&products,err,sizeof(err)));
+    forged=residue;forged.material=DC_MATERIAL_GOLD;
+    ASSERT_TRUE(!fr_reactive_state_valid(&forged,err,sizeof(err)));
+    forged=residue;forged.corroded_fraction=0.f;
+    ASSERT_TRUE(!fr_reactive_state_valid(&forged,err,sizeof(err)));
+    ASSERT_TRUE(fr_reactive_state_valid(&residue,err,sizeof(err)));
+    PASS();
+}
 
 int main(void) {
     RUN(test_gold_greek_corrosion_uses_finite_bound_oxidizer_and_keeps_origin);
     RUN(test_ordinary_oxygen_wetness_and_gold_immunity);
     RUN(test_full_conversion_makes_irreversible_residue_and_spent_ingredient);
+    RUN(test_equal_time_corrosion_and_oxidizer_cap_preserve_stock);
+    RUN(test_residue_import_and_recraft_cannot_relabel_spent_lineage);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail?1:0;
 }
