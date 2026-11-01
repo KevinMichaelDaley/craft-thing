@@ -41,6 +41,13 @@ static void test_latest_ready_requires_enabled_feature(void) {
     ASSERT_EQ(dc_present_mode_select(modes,3,false,true),VK_PRESENT_MODE_FIFO_KHR);
     PASS();
 }
+static void test_default_uses_latest_ready_only_when_available(void) {
+    ASSERT_TRUE(dc_present_low_latency_requested(NULL,true));
+    ASSERT_TRUE(!dc_present_low_latency_requested(NULL,false));
+    ASSERT_TRUE(!dc_present_low_latency_requested("0",true));
+    ASSERT_TRUE(dc_present_low_latency_requested("1",false));
+    PASS();
+}
 
 int main(void) {
     RUN(test_default_prefers_tear_free_fifo);
@@ -48,6 +55,7 @@ int main(void) {
     RUN(test_mailbox_wins_without_tearing);
     RUN(test_low_latency_prefers_tear_free_latest_ready);
     RUN(test_latest_ready_requires_enabled_feature);
+    RUN(test_default_uses_latest_ready_only_when_available);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);
     return g_fail?1:0;
 }

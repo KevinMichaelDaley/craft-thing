@@ -3,9 +3,17 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 #include <vulkan/vulkan.h>
 
 #include "present_mode_latest_ready.h"
+
+static inline bool dc_present_low_latency_requested(const char *setting,
+                                                     bool latest_ready_available) {
+    (void)setting;
+    (void)latest_ready_available;
+    return false;
+}
 
 static inline VkPresentModeKHR dc_present_mode_select(const VkPresentModeKHR *modes,
                                                        uint32_t count,bool low_latency,
