@@ -1,4 +1,23 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+#include "../../include/dungeoncraft/body_storage_layout.h"
 layout(local_size_x=64) in;
-void main() {}
+struct Dispatch {uint x,y,z;};
+layout(buffer_reference,std430,buffer_reference_align=4) readonly buffer Templates {Dispatch commands[];};
+layout(buffer_reference,std430,buffer_reference_align=4) buffer Commands {Dispatch commands[];};
+layout(buffer_reference,std430,buffer_reference_align=8) readonly buffer Batch {BodyAllocationBatch header;};
+layout(push_constant) uniform Params {uvec2 source,destination,queue;uint count,padding;} params;
+void main() {
+    uint i=(gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x)*64u+gl_LocalInvocationID.x;
+    if(i>=params.count) return;
+    bool pending=false;
+    if(any(notEqual(params.queue,uvec2(0)))) {
+        BodyAllocationBatch batch=Batch(params.queue).header;
+        pending=batch.count>0u&&batch.committed==0u;
+    }
+    Dispatch command=Dispatch(0u,0u,0u);
+    if(pending) command=Templates(params.source).commands[i];
+    Commands(params.destination).commands[i]=command;
+}

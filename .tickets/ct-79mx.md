@@ -34,3 +34,23 @@ Found production routing gap: zero-body scenes still selected serial fluid.comp 
 **2026-10-17T07:02:07Z**
 
 Candidate GREEN now exercised by actual body-free runtime: dense native640x360 physics/display180-frame run mean11.604ms,p9517.114ms,max18.584ms,86.174FPS,cold30.788ms,offscreenfluid4.900ms. All three sustained loads also pass unchanged: see build/diagnostics/partial-fluid-native360-all.log; exact concave mean25.861ms,p9532.426ms,cold91.363ms. Two fixed60Hz steps/frame,cadence6,pressure20,scale1 retained. Full explicit synchronization validated headless battery is running before completion; ct-wuci cold14ms gates and existing fracture parallelization remain open.
+
+**2026-10-19T02:59:02Z**
+
+Current renderer baseline9482754 merged only into dedicated optimizer branch645e71b. New lit exact dense-concave native640x360/2fixed60Hz-step180frame acceptance RED:57.328ms mean,67.137p95,71.375max,cold154.579,FPS17.444; old overlay fixture bypassed renderer. Pigment transport work RED under sync validation:640x16 exact literal water0mismatches,10192sources,27168globalcolorloads/13584stores/163072outer lane-buffer-barrier participations; color fingerprint028933e7c8fc0d8e retained as oracle. CPU shared-memory budget RED1pass1fail anticipates color cache. Implement shared color cache with unchanged float mix order and conservative long-line global fallback, then measure actual displayed stages; no target completion claim.
+
+**2026-10-19T03:08:11Z**
+
+Full color-cache GPU correctnessGREEN2work+4watercolor+10literal cases and exactRGBhash028933e7c8fc0d8e, but identical180frame displayedA/B REGRESSED57.328→61.203ms mean,p9567.137→77.937,max71.375→82.007,fluid6.413→8.924ms/tick. Therefore cache is explicitly experimental specialization4 defaultfalse; normalcachebudget remains unchanged, optional colorbudget/test retained. Next narrow one-cell sync RED observed: exactwater0mismatches,RBGhashbfb12e1adda28360,20384globalloads/10192stores/163072lane-buffer-barriers. Onlylane0 writescolors in one-cell path; implement publish/read synchronization at cooperative recipient transitions while preserving global water fallback. No target completion; ownbranchwork continues.
+
+**2026-10-19T03:15:11Z**
+
+Lane-local sync targetedGREEN: one-cell2/2 preserves bfb12e1adda28360 and163072→0bufferbarriers; mixedfast/cooperative4/4 exactlymatches strongerbuffer-sync referencebothdirections (hash896f4baa302ac887 and0b326fcde3360bfe), barriers271776→108704; optionalcache2/2,watercolor4/4,literal10/10 allcore/syncclean. Actual lit180frame repeat59.646ms/p9572.339/max84.931 vsbaseline57.328/67.137/71.375 shows no clear wholeframe gain (rigid/MPM also~5-7percent slower), not performance completion. CapturedactualBMP andinspected realU+comb,4pausedimagesbyteidentical. Next GPU-uniform fastline specialization toprunegeneralrecipient controlflow; strict30ms gate unchanged.
+
+**2026-10-19T03:16:50Z**
+
+Global-fallback2113-cell literaltransport10/10 passes core+sync after narrowbarrierchange. New compiling specializedfast/general two-dispatch RED fails4841exactwatercells because specialization5isnotyetimplemented andbothpassesprocessalllines. Must classify from immutablefacevelocity (notmutablewatereligibility) sofastpasschangescannotcausegeneralsecondprocessing. Plan: subgroupmaxtravel overfullcachedline; fastspecializationprunesallmulti-cellrecipientloops andblocker scan, generalhandleslongtravel/uncachedlines. NoCPUphysicsreadback ornewdescriptorbinding. Targetframegate remainsRED.
+
+**2026-11-01T18:53:50Z**
+
+2026-11-01 integration: merged feature branch history into main integration. Kept the verified production fluid transport kernel because this ticket remains RED and the divergent cache path depends on incomplete synchronization changes. The completed body work-gate shader and GPU regression were integrated; color-cache work remains tracked by this ticket.
