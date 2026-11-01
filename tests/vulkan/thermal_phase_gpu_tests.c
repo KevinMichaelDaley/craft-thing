@@ -186,6 +186,36 @@ static void test_rigid_contact_preserves_jelly_fuel_and_oxidizer(void) {
     free(water_after);
     free(after);free(phase);free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_stone_surface_wets_from_neighbor_oil_without_burning_stone(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *phase=calloc(1,sizeof(*phase));
+    fr_bulk_phase_chunk_t *after=calloc(1,sizeof(*after));
+    ASSERT_TRUE(chunk&&phase&&after);
+    uint32_t stone_at=20u*64u+20u,oil_at=20u*64u+19u;
+    chunk->cells[stone_at].material=DC_MATERIAL_STONE;
+    phase->oil_fp[oil_at]=30000u;phase->oil_excess[oil_at]=2.f;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t stone;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,65536u,0u,300.f,
+        503u,&stone,err,sizeof(err))&&
+        fr_gpu_reactive_seed_cell(g,0,stone_at,&stone,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(g,0,chunk,phase,err,sizeof(err))&&
+        fr_thermal_gpu_enable(g,err,sizeof(err))&&
+        fr_thermal_gpu_step(g,.5f,err,sizeof(err)));
+    fr_reactive_record_t record;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,stone_at,&record,&found,err,sizeof(err))&&found&&
+        fr_bulk_phase_gpu_export_chunk(g,0,after,err,sizeof(err)));
+    uint32_t lost=phase->oil_fp[oil_at]-after->oil_fp[oil_at];
+    double attached=record.state.coating_oil_fuel_fp+
+        (double)((record.state.coating_remainders>>FR_COATING_OIL_REM_SHIFT)&
+            FR_COATING_REM_MASK)/FR_COATING_MASS_DEN;
+    ASSERT_TRUE(lost>0u&&fabs(attached-(double)lost*FR_COATING_OIL_MASS_NUM/
+        FR_COATING_MASS_DEN)<1e-6);
+    ASSERT_EQ(record.state.fuel_mass_fp,0u);
+    free(after);free(phase);free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_saturated_neighbor_air_suppresses_drying(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     uint32_t at=20u*64u+20u;chunk->cells[at].material=DC_MATERIAL_WOOD;
@@ -311,6 +341,7 @@ int main(void) {
     RUN(test_rotated_rigid_wood_keeps_its_drying_inventory);
     RUN(test_rigid_contact_wets_from_finite_oil_volume);
     RUN(test_rigid_contact_preserves_jelly_fuel_and_oxidizer);
+    RUN(test_stone_surface_wets_from_neighbor_oil_without_burning_stone);
     RUN(test_saturated_neighbor_air_suppresses_drying);
     RUN(test_equal_simulated_time_dries_within_one_water_quantum);
     RUN(test_drying_reaches_gas_across_a_chunk_seam);
