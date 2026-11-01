@@ -7,6 +7,7 @@ build/player_state_tests: tests/player/state_tests.c $(PLAYER_SRC) src/player/pl
 test_player: build/player_state_tests
 	./build/player_state_tests
 test: test_player
+include tests/player/player.mk
 CC ?= cc
 build/appearance_tests: tests/renderer/appearance_tests.c src/renderer/appearance.c include/ferrum/renderer/appearance.h
 	mkdir -p build
