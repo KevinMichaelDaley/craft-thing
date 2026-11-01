@@ -121,6 +121,34 @@ static void test_water_heat_follows_water_exchanged_with_oil(void) {
     ASSERT_TRUE(fabsf(water_heat[upper]+water_heat[lower]-100.f)<.001f);
     dc_gpu_destroy(gpu);free(chunk);free(after);free(bulk);free(water_heat);PASS();
 }
+static void test_upward_water_flow_drags_mixed_oil_without_lifting_dry_oil(void) {
+    char err[256]={0};dc_gpu_t *gpu=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *bulk=calloc(1,sizeof(*bulk)),*out=calloc(1,sizeof(*out));
+    ASSERT_TRUE(chunk&&bulk&&out);
+    const uint32_t mixed_upper=20u*64u+20u,mixed_lower=mixed_upper+64u;
+    const uint32_t dry_upper=20u*64u+24u,dry_lower=dry_upper+64u;
+    for(uint32_t y=19u;y<=22u;y++) for(uint32_t x=19u;x<=25u;x++)
+        if((x!=20u&&x!=24u)||y==19u||y==22u)
+            chunk->cells[y*64u+x].material=DC_MATERIAL_STONE;
+    chunk->cells[mixed_lower].fluid_mass=FR_BULK_CELL_FULL_FP/2u;
+    bulk->oil_fp[mixed_lower]=FR_BULK_CELL_FULL_FP/2u;
+    bulk->oil_fp[dry_lower]=FR_BULK_CELL_FULL_FP;
+    chunk->face_velocity[mixed_upper].y=-40.f;
+    chunk->face_velocity[dry_upper].y=-40.f;
+    ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+        dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(gpu,0,0,0,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,bulk,err,sizeof(err))&&
+        fr_bulk_phase_gpu_step(gpu,1.f/60.f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
+    ASSERT_TRUE(out->oil_fp[mixed_upper]>0u);
+    ASSERT_EQ(out->oil_fp[dry_upper],0u);
+    ASSERT_EQ((uint64_t)out->oil_fp[mixed_upper]+out->oil_fp[mixed_lower],
+        FR_BULK_CELL_FULL_FP/2u);
+    ASSERT_EQ((uint64_t)out->oil_fp[dry_upper]+out->oil_fp[dry_lower],
+        FR_BULK_CELL_FULL_FP);
+    dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
+}
 static void test_normal_tick_moves_imported_oil(void) {
     char err[256]={0};dc_gpu_t *gpu=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_bulk_phase_chunk_t *bulk=calloc(1,sizeof(*bulk)),*out=calloc(1,sizeof(*out));
@@ -224,6 +252,7 @@ int main(void) {
     RUN(test_water_solver_respects_full_oil_cell_capacity);
     RUN(test_dense_oil_exchanges_with_water_in_sealed_vertical_pair);
     RUN(test_water_heat_follows_water_exchanged_with_oil);
+    RUN(test_upward_water_flow_drags_mixed_oil_without_lifting_dry_oil);
     RUN(test_normal_tick_moves_imported_oil);
     RUN(test_oil_crosses_horizontal_chunk_seam_conservatively);
     RUN(test_rigid_body_displaces_oil_upward_without_loss);
