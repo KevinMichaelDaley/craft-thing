@@ -103,4 +103,9 @@ bool fr_player_frame(const fr_player_t *player, uint32_t *out_frame);
 /** True once a non-looping clip's complete duration has elapsed. */
 bool fr_player_action_complete(const fr_player_t *player);
 
+/** Advance phased chewing from held intent and a freshly validated wood target.
+ * Entry uses source frames 2-4, held chewing loops 5-7, and loss/release uses
+ * frame 8 before idle (frame 1). Repeated ticks never restart entry/recovery. */
+bool fr_player_chew_tick(fr_player_t *player, bool target_valid, uint64_t elapsed_ms);
+
 #endif

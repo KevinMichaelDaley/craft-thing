@@ -3,6 +3,11 @@
 #include "ferrum/player/player.h"
 #include "player_internal.h"
 
+bool fr_player_chew_tick(fr_player_t *p,bool valid,uint64_t elapsed) {
+    (void)p; (void)valid; (void)elapsed;
+    return false;
+}
+
 bool fr_player_clip(fr_player_action_t action,fr_player_clip_t *out) {
     static const fr_player_clip_t clips[FR_PLAYER_ACTION_COUNT]={
         [FR_PLAYER_IDLE]={1,100,true}, [FR_PLAYER_WALK]={6,100,true},

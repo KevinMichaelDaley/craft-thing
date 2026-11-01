@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -22,7 +23,7 @@ static bool build(fr_player_action_t action) {
 }
 
 static void test_standard_prop_pipeline_and_exact_clip_timing(void) {
-    const uint32_t counts[]={1,6,8,4},durations[]={100,100,80,100};
+    const uint32_t counts[]={1,6,8,4},durations[]={100,100,100,100};
     for (uint32_t a=0;a<FR_PLAYER_ACTION_COUNT;a++) {
         size_t bytes=0;uint32_t entries=0;
         ASSERT_TRUE(fr_beaver_asset_size((fr_player_action_t)a,&bytes,&entries));
@@ -146,7 +147,33 @@ static void test_asset_build_is_deterministic(void) {
     free(copy);free(mapping);PASS();
 }
 
+static void test_authoritative_rgba_pixels_and_unique_material_correspondence(void) {
+    static const uint32_t hashes[]={0x158a6745,0x906dd356,0x1d8c9342,0xd921ad04,
+        0xd63103dc,0x143252e9,0x5f0f05cc,0x49af873e};
+    for (uint32_t a=0;a<2;a++) {
+        ASSERT_TRUE(build(a?FR_PLAYER_CHEW:FR_PLAYER_IDLE));
+        for (uint32_t f=0;f<g_asset.prop.frame_count;f++) {
+            uint32_t hash=2166136261u; bool used[FR_BEAVER_PIXELS]={false};
+            for (uint32_t p=0;p<FR_BEAVER_PIXELS;p++) {
+                fr_prop_appearance_t app; ASSERT_TRUE(fr_prop_appearance(&g_asset.prop,f,p,&app));
+                for (uint32_t c=0;c<4;c++) {
+                    float linear=c==3?app.alpha:app.color[c];
+                    float value=c==3?linear:(linear<=.0031308f?12.92f*linear:1.055f*powf(linear,1.f/2.4f)-.055f);
+                    hash=(hash^(uint8_t)lroundf(value*255.f))*16777619u;
+                }
+                fr_prop_pixel_t pixel;uint32_t source;
+                ASSERT_TRUE(fr_beaver_asset_pixel(&g_asset,f,p%40,p/40,false,&pixel,&source));
+                if (source) {ASSERT_TRUE(!used[source-1]);used[source-1]=true;}
+                ASSERT_EQ(source!=0,app.alpha>0);
+            }
+            ASSERT_EQ(hash,hashes[f]);
+        }
+    }
+    PASS();
+}
+
 int main(void) {
+    RUN(test_authoritative_rgba_pixels_and_unique_material_correspondence);
     RUN(test_standard_prop_pipeline_and_exact_clip_timing);
     RUN(test_every_visible_pixel_has_supported_physics_and_appearance);
     RUN(test_each_requested_frame_has_a_distinct_pose);
