@@ -1,6 +1,6 @@
 ---
 id: ctlo-08fu
-status: open
+status: in_progress
 deps: [ctlo-2q4f]
 links: []
 created: 2026-10-24T22:06:19Z
