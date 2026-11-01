@@ -24,3 +24,7 @@ RED GPU tests demonstrate lack of velocity-dependent band energy, stationary pat
 **2026-11-01T04:53:16Z**
 
 Intermediate GPU wavelet coordinate/potential passes pass quarter-native motion and paused replay checks. Persistent fine-density advection remains; keep ticket open.
+
+**2026-11-01T05:02:14Z**
+
+1000-frame quarter-native bonfire remains just over strict 30ms worst-frame gate: 30.565-30.905ms in two untraced runs, despite ~18ms mean. Frame API trace shows occasional present waits of 12-18ms alongside ~15-17ms GPU fence. Potential-pass dead fetch removal passed GPU test but did not resolve the worst-frame gate.
