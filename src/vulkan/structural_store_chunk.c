@@ -7,7 +7,11 @@ bool dc_gpu_checkpoint_chunk_valid(const dc_chunk_t *chunk) {
         chunk->particle_count > DC_MPM_PARTICLES_PER_CHUNK)
         return false;
     for (unsigned i = 0; i < DC_CHUNK_CELLS; i++) {
-        if ((chunk->cells[i].material > DC_MATERIAL_LEAF_DEBRIS&&chunk->cells[i].material!=DC_MATERIAL_ASH) ||
+        if ((chunk->cells[i].material > DC_MATERIAL_LEAF_DEBRIS&&
+             chunk->cells[i].material!=DC_MATERIAL_ASH&&
+             chunk->cells[i].material!=DC_MATERIAL_CORROSION_RESIDUE&&
+             chunk->cells[i].material!=DC_MATERIAL_GOLD&&
+             chunk->cells[i].material!=DC_MATERIAL_MAGIC_INGREDIENT) ||
             !isfinite(chunk->face_velocity[i].x) ||
             !isfinite(chunk->face_velocity[i].y))
             return false;

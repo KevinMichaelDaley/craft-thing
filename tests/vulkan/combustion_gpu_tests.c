@@ -211,12 +211,24 @@ static void test_greek_corrosion_consumes_bound_stock_and_publishes_spent_gold(v
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     uint32_t at=20u*64u+20u;
     chunk->cells[at]=(dc_cell_t){.material=DC_MATERIAL_GOLD,.flags=DC_CELL_LOADED_TERRAIN};
+    chunk->cells[at+2u]=(dc_cell_t){.material=DC_MATERIAL_MAGIC_INGREDIENT,.flags=DC_CELL_LOADED_TERRAIN};
+    chunk->cells[at+4u]=chunk->cells[at+2u];
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     fr_reactive_state_t gold;
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_GOLD,65536u,0u,800.f,100500u,&gold,err,sizeof(err)));
     gold.coating_jelly_fuel_fp=65536u;gold.coating_oxidizer_fp=8000u;
     gold.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&gold,800.f);
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,at,&gold,err,sizeof(err)));
+    fr_reactive_state_t ingredient,control;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_MAGIC_INGREDIENT,65536u,0u,800.f,
+        100501u,&ingredient,err,sizeof(err)));
+    ingredient.coating_jelly_fuel_fp=65536u;ingredient.coating_oxidizer_fp=8000u;
+    ingredient.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&ingredient,800.f);
+    control=ingredient;control.parcel_id_low=control.origin_id_low=100502u;
+    control.coating_jelly_fuel_fp=0u;control.coating_oxidizer_fp=0u;
+    control.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&control,800.f);
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,at+2u,&ingredient,err,sizeof(err))&&
+        fr_gpu_reactive_seed_cell(g,0,at+4u,&control,err,sizeof(err)));
     fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
         .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
     ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&
@@ -234,6 +246,24 @@ static void test_greek_corrosion_consumes_bound_stock_and_publishes_spent_gold(v
     ASSERT_EQ(record.state.origin_id_low,gold.origin_id_low);
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
     ASSERT_EQ(chunk->cells[at].material,DC_MATERIAL_CORROSION_RESIDUE);
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at+2u,&record,&found,err,sizeof(err))&&found);
+    ASSERT_EQ(record.state.material,DC_MATERIAL_ASH);
+    ASSERT_EQ(record.state.fuel_mass_fp,0u);
+    ASSERT_EQ(fr_reactive_state_mass_fp(&record.state),fr_reactive_state_mass_fp(&ingredient));
+    ASSERT_EQ(chunk->cells[at+2u].material,DC_MATERIAL_ASH);
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at+4u,&record,&found,err,sizeof(err))&&found);
+    ASSERT_EQ(record.state.corroded_fraction,0.f);
+    ASSERT_EQ(record.state.material,DC_MATERIAL_MAGIC_INGREDIENT);
+    fr_reactive_chunk_t channel={0};
+    ASSERT_TRUE(fr_gpu_reactive_export_chunk(g,0,chunk,&channel,err,sizeof(err)));
+    fr_reactive_chunk_release(&channel);
+    ASSERT_TRUE(fr_gpu_save_structure(g,"build/combustion_corrosion.bin",err,sizeof(err)));
+    dc_gpu_destroy(g);g=NULL;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&fr_gpu_load_structure(g,"build/combustion_corrosion.bin",err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&record,&found,err,sizeof(err))&&found);
+    ASSERT_EQ(record.state.material,DC_MATERIAL_CORROSION_RESIDUE);
+    ASSERT_EQ(record.state.origin_id_low,gold.origin_id_low);
     free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_flame_emission_requires_local_transported_hot_fuel_and_oxygen(void) {

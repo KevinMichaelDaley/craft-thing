@@ -16,6 +16,8 @@ _Static_assert(offsetof(fr_reactive_state_t,thermal_energy_residual)==FR_STATE_E
 _Static_assert(offsetof(fr_reactive_state_t,thermal_energy_correction)==FR_STATE_ENERGY_CORRECTION*4u,"Reactive energy correction layout changed");
 _Static_assert(offsetof(fr_reactive_state_t,dry_mass_fp)==FR_STATE_MASS_FIRST*4u,"Reactive species layout changed");
 _Static_assert(offsetof(fr_reactive_state_t,pending_shock_energy)==FR_STATE_SHOCK*4u,"Reactive shock layout changed");
+_Static_assert(offsetof(fr_reactive_state_t,oxidized_fraction)==FR_STATE_OXIDIZED_FRACTION*4u,"Reactive oxidation layout changed");
+_Static_assert(offsetof(fr_reactive_state_t,corroded_fraction)==FR_STATE_CORRODED_FRACTION*4u,"Reactive corrosion layout changed");
 static bool error(char *err,uint32_t cap,const char *reason) {
     if(err&&cap) snprintf(err,cap,"%s",reason);
     return false;

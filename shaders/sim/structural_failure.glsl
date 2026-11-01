@@ -54,17 +54,18 @@ void release_member(uint member) {
 #include "structural_debris.glsl"
 #include "rigid_fragment.glsl"
 #include "pixel_fragment.glsl"
+#include "../../include/dungeoncraft/corrosion_parameters.h"
 const float WOOD_CHAR_SECTION_FACTOR=.35;
 const float WOOD_HEAT_CAPACITY=1.5;
 const float WOOD_WATER_HEAT_CAPACITY=4.18;
 const float WOOD_SOFTEN_START_K=400.0;
 const float WOOD_SOFTEN_SPAN_K=200.0;
 const float WOOD_HOT_STRENGTH_LOSS=.3;
-float member_wood_section(uint slot) {
+float member_reactive_section(uint slot) {
 #ifdef DC_RUNTIME_BODY_STORAGE
     if(slot>=BODY_CAPACITY) return 1.0;
     Body body=DC_BODY(slot);
-    if(body.material!=DC_BODY_WOOD_MATERIAL||
+    if((body.material!=DC_BODY_WOOD_MATERIAL&&body.material!=1u)||
        (body.motion_flags&DC_BODY_MOTION_THERMAL_GRID)==0u||
        !reactive_enabled()) return 1.0;
     Body grid=body_thermal_grid(body);
@@ -81,6 +82,12 @@ float member_wood_section(uint slot) {
         if(parcel.words[FR_ENTRY_OWNER]!=2u||
            parcel.words[FR_ENTRY_OWNER+1u]!=body.id||
            parcel.words[state+8u]==0u) continue;
+        if(body.material==1u) {
+            float progress=clamp(uintBitsToFloat(parcel.words[state+FR_STATE_OXIDIZED_FRACTION]),0.0,1.0);
+            section=min(section,max(FR_CORROSION_SPENT_STRENGTH,
+                1.0-(1.0-FR_CORROSION_SPENT_STRENGTH)*progress));
+            continue;
+        }
         float original=float(parcel.words[state+8u]);
         float fuel=float(parcel.words[state+9u]);
         float char_mass=float(parcel.words[state+10u]);
@@ -108,7 +115,7 @@ void damage_members() {
         uint m=g+MEMBERS+member*8u,st=member_state(member);
         if(DC_DATA(st+3u)>=2u) continue;
         uint slot=DC_DATA(m+7u);
-        float section=member_wood_section(slot);
+        float section=member_reactive_section(slot);
         float excess=max(eq_get(st+7u)/max(section,.05)-1.0,0);
         uint profile=g+29000u+DC_DATA(m+4u)*12u;
         float damage=min(1.0,max(eq_get(st+10u),1.0-section)+

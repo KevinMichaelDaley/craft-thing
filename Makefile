@@ -2118,10 +2118,11 @@ build/dungeoncraft build/controls_tests build/reactive_stream_view_display_tests
 build/shaders/thermal.comp.spv: shaders/reactive/thermal.comp shaders/reactive/address.glsl shaders/reactive/body_wetting.glsl shaders/reactive/coating_mass.glsl include/dungeoncraft/thermal_parameters.h include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/reactive_profile_layout.h include/dungeoncraft/coating_layout.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
-build/shaders/combustion.comp.spv: shaders/reactive/combustion.comp shaders/reactive/address.glsl shaders/reactive/coating_mass.glsl shaders/gas/types.glsl include/dungeoncraft/combustion_parameters.h include/dungeoncraft/thermal_parameters.h include/dungeoncraft/coating_layout.h
+build/shaders/combustion.comp.spv: shaders/reactive/combustion.comp shaders/reactive/address.glsl shaders/reactive/coating_mass.glsl shaders/gas/types.glsl include/dungeoncraft/combustion_parameters.h include/dungeoncraft/thermal_parameters.h include/dungeoncraft/coating_layout.h include/dungeoncraft/corrosion_parameters.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/shaders/body_combustion.comp.spv: shaders/reactive/coating_mass.glsl include/dungeoncraft/coating_layout.h
+build/shaders/body_combustion.comp.spv build/shaders/structural.comp.spv: include/dungeoncraft/corrosion_parameters.h
 build/combustion_gpu_display_tests: build/shaders/combustion.comp.spv
 build/combustion_gpu_display_tests: tests/vulkan/combustion_containment_cases.h
 build/combustion_gpu_display_tests: tests/vulkan/combustion_contact_cases.h
