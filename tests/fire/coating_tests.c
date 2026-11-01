@@ -54,10 +54,38 @@ static void test_invalid_actor_identity_is_transactional(void) {
     ASSERT_EQ(moved,456u);ASSERT_EQ(wetted.oil_fp,789u);PASS();
 }
 
+static void test_leaf_and_actor_keep_rest_addresses_across_wetting(void) {
+    fr_bulk_cell_t bulk={.volume_fp={0u,2000u,0u},.capacity_fp=65536u};
+    fr_coating_film_t film=rigid_film(),after={0};fr_bulk_cell_t remainder={0};
+    double heat=0.;uint32_t moved=0u;
+    const uint32_t owners[]={FR_COATING_LEAF,FR_COATING_ACTOR};
+    for(uint32_t i=0u;i<2u;i++) {
+        film.host.kind=owners[i];film.host.id_low=100u+i;
+        film.host.generation=25u+i;film.host.rest_x=7u+i;
+        ASSERT_TRUE(fr_coating_contact_wet(&bulk,0.,&film,FR_BULK_OIL,500u,
+            &remainder,&heat,&after,&moved));
+        ASSERT_EQ(moved,500u);
+        ASSERT_EQ(memcmp(&after.host,&film.host,sizeof(film.host)),0);
+    }
+    PASS();
+}
+
+static void test_water_cannot_become_combustible_coating(void) {
+    fr_bulk_cell_t bulk={.volume_fp={1000u,0u,0u},.capacity_fp=65536u};
+    fr_coating_film_t film=rigid_film(),after={.oil_fp=123u};
+    fr_bulk_cell_t remainder={.capacity_fp=456u};double heat=789.;uint32_t moved=10u;
+    ASSERT_TRUE(!fr_coating_contact_wet(&bulk,0.,&film,FR_BULK_WATER,500u,
+        &remainder,&heat,&after,&moved));
+    ASSERT_EQ(remainder.capacity_fp,456u);ASSERT_EQ(after.oil_fp,123u);
+    ASSERT_EQ(heat,789.);ASSERT_EQ(moved,10u);PASS();
+}
+
 int main(void) {
     RUN(test_wetting_debits_mobile_oil_and_preserves_heat);
     RUN(test_retained_slime_does_not_wet_and_existing_film_accumulates);
     RUN(test_invalid_actor_identity_is_transactional);
+    RUN(test_leaf_and_actor_keep_rest_addresses_across_wetting);
+    RUN(test_water_cannot_become_combustible_coating);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail>0?1:0;
 }
