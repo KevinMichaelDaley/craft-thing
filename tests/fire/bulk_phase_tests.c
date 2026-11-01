@@ -104,12 +104,23 @@ static void test_bulk_packet_corruption_and_truncation_are_transactional(void) {
 }
 static void test_bulk_packet_rejects_retained_volume_larger_than_stock(void) {
     dc_chunk_t *chunk=calloc(1,sizeof(*chunk));fr_bulk_phase_chunk_t *phase=calloc(1,sizeof(*phase));
-    uint8_t *bytes=malloc(fr_bulk_phase_chunk_bytes());ASSERT_TRUE(chunk&&phase&&bytes);
+    fr_bulk_phase_chunk_t *out=calloc(1,sizeof(*out));
+    uint8_t *bytes=malloc(fr_bulk_phase_chunk_bytes());ASSERT_TRUE(chunk&&phase&&out&&bytes);
     phase->oil_fp[7]=100u;phase->oil_retained_fp[7]=101u;
     ASSERT_TRUE(!fr_bulk_phase_chunk_encode(chunk,phase,bytes,fr_bulk_phase_chunk_bytes()));
     phase->oil_retained_fp[7]=100u;phase->slime_fp[9]=2u;phase->slime_retained_fp[9]=3u;
     ASSERT_TRUE(!fr_bulk_phase_chunk_encode(chunk,phase,bytes,fr_bulk_phase_chunk_bytes()));
-    free(bytes);free(phase);free(chunk);PASS();
+    phase->slime_retained_fp[9]=2u;
+    ASSERT_TRUE(fr_bulk_phase_chunk_encode(chunk,phase,bytes,fr_bulk_phase_chunk_bytes()));
+    size_t retained_at=16u+(2u*DC_CHUNK_CELLS+7u)*sizeof(uint32_t);
+    bytes[retained_at]=101u;
+    uint64_t hash=UINT64_C(14695981039346656037),length=fr_bulk_phase_chunk_bytes();
+    for(size_t i=0;i<length-8u;i++) {hash^=bytes[i];hash*=UINT64_C(1099511628211);}
+    for(uint32_t i=0;i<8u;i++) bytes[length-8u+i]=(uint8_t)(hash>>(8u*i));
+    out->oil_fp[7]=42u;
+    ASSERT_TRUE(!fr_bulk_phase_chunk_decode(chunk,bytes,length,out));
+    ASSERT_INT_EQ(out->oil_fp[7],42u);
+    free(bytes);free(out);free(phase);free(chunk);PASS();
 }
 int main(void) {
     RUN(test_pair_admits_only_shared_capacity_and_conserves_each_phase);
