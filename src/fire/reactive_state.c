@@ -100,7 +100,7 @@ bool fr_reactive_state_valid(const fr_reactive_state_t *s,char *err,uint32_t cap
        s->evaporation_fraction>=1.f||
        (s->bound_water_fp==0u&&s->evaporation_fraction!=0.f))
         return error(err,cap,"Invalid evaporation progress");
-    if(s->identity_reserved)
+    if(s->coating_remainders)
         return error(err,cap,"Nonzero reactive reserved fields");
     if(!isfinite(s->reaction_fraction)||s->reaction_fraction<0||s->reaction_fraction>=1)
         return error(err,cap,"Invalid fractional reaction progress");
@@ -133,6 +133,9 @@ uint64_t fr_reactive_state_mass_fp(const fr_reactive_state_t *s) {
     if(!s) return 0;
     uint32_t values[9];memcpy(values,&s->dry_mass_fp,sizeof(values));
     uint64_t mass=0;for(unsigned i=1;i<9;i++) mass+=values[i];return mass;
+}
+double fr_reactive_state_mass_exact_fp(const fr_reactive_state_t *s) {
+    (void)s;return 0.;
 }
 bool fr_reactive_state_temperature(const fr_reactive_state_t *s,float *out,char *err,uint32_t cap) {
     if(!out||!fr_reactive_state_valid(s,err,cap)) return false;

@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "dungeoncraft/leaf_material.h"
+#include "dungeoncraft/coating_layout.h"
 #include "ferrum/fire/reactive_state.h"
 
 static int g_pass,g_fail;
@@ -21,6 +22,30 @@ static void test_default_composition_preserves_exact_mass_and_temperature(void) 
     ASSERT_TRUE(fr_reactive_state_temperature(&s,&temperature,err,sizeof(err)));
     ASSERT_TRUE(fabsf(temperature-1000)<.001f);
     ASSERT_EQ(s.parcel_id_low,9u);ASSERT_EQ(s.origin_id_low,9u);PASS();
+}
+static void test_fractional_coating_mass_is_valid_and_counted(void) {
+    char err[128];fr_reactive_state_t state;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322u,0u,300.f,
+        101u,&state,err,sizeof(err)));
+    state.coating_oil_fuel_fp=1u;state.coating_jelly_fuel_fp=2u;
+    state.coating_oxidizer_fp=3u;
+    state.coating_remainders=(5u<<FR_COATING_OIL_REM_SHIFT)|
+        (4u<<FR_COATING_JELLY_REM_SHIFT)|
+        (2u<<FR_COATING_JELLY_FUEL_REM_SHIFT);
+    ASSERT_TRUE(fr_reactive_state_valid(&state,err,sizeof(err)));
+    ASSERT_TRUE(fabs(fr_reactive_state_mass_exact_fp(&state)-
+        ((double)fr_reactive_state_mass_fp(&state)+.9))<1e-9);PASS();
+}
+static void test_fracture_splits_fractional_coating_mass_once(void) {
+    char err[128];fr_reactive_state_t state,left,right;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322u,0u,300.f,
+        102u,&state,err,sizeof(err)));
+    state.coating_oil_fuel_fp=1u;state.coating_remainders=7u;
+    ASSERT_TRUE(fr_reactive_state_split(&state,32768u,103u,104u,
+        &left,&right,err,sizeof(err)));
+    ASSERT_TRUE(fabs(fr_reactive_state_mass_exact_fp(&left)+
+        fr_reactive_state_mass_exact_fp(&right)-
+        fr_reactive_state_mass_exact_fp(&state))<1e-9);PASS();
 }
 static void test_soil_moisture_and_leaf_pigment_have_different_meanings(void) {
     char err[128];fr_reactive_state_t soil,leaf;
@@ -147,6 +172,8 @@ int main(void) {
     _Static_assert(sizeof(fr_reactive_state_t)==FR_REACTIVE_STATE_WORDS*4u,"Reactive state ABI changed");
     _Static_assert(offsetof(fr_reactive_state_t,thermal_energy)==68u,"Reactive energy offset changed");
     RUN(test_default_composition_preserves_exact_mass_and_temperature);
+    RUN(test_fractional_coating_mass_is_valid_and_counted);
+    RUN(test_fracture_splits_fractional_coating_mass_once);
     RUN(test_soil_moisture_and_leaf_pigment_have_different_meanings);
     RUN(test_splits_conserve_species_energy_and_hazard_without_rerolling);
     RUN(test_failed_state_change_leaves_both_outputs_unchanged);

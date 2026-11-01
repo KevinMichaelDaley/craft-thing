@@ -28,7 +28,7 @@ typedef struct {
     uint32_t material, flags, parcel_id_low, parcel_id_high;
     uint32_t origin_id_low, origin_id_high;
     float evaporation_fraction; /**< Sub-Q16 water flux, with no mass or energy yet transferred. */
-    uint32_t identity_reserved;
+    uint32_t coating_remainders; /**< Packed fractional oil/jelly mass and jelly fuel. */
     uint32_t dry_mass_fp, fuel_mass_fp, char_mass_fp, inert_mass_fp;
     uint32_t bound_water_fp, coating_oil_fuel_fp, coating_jelly_fuel_fp;
     uint32_t core_oxidizer_fp, coating_oxidizer_fp;
@@ -83,6 +83,8 @@ double fr_reactive_state_pending_oxygen_fp(const fr_reactive_state_t *state);
 /** Sum integer species mass, excluding dry reference metadata and fractional
  * pending oxygen returned separately by fr_reactive_state_pending_oxygen_fp(). */
 uint64_t fr_reactive_state_mass_fp(const fr_reactive_state_t *state);
+/** Exact Q16 species mass including carried sub-quantum coating mass. */
+double fr_reactive_state_mass_exact_fp(const fr_reactive_state_t *state);
 /** Derive temperature from extensive energy and composition heat capacities. */
 bool fr_reactive_state_temperature(const fr_reactive_state_t *state, float *out_K,
                                     char *err_buf, uint32_t err_cap);
