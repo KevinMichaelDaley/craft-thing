@@ -39,3 +39,7 @@ Third RED-GREEN-REFACTOR increment dea1a1c, d8d154f and current refactor: determ
 **2026-11-01T10:27:59Z**
 
 Runtime oil contact RED 8876389, GREEN 041a7cb and current refactor: existing GPU body wetting dispatch atomically reserves mobile oil from the adjacent bulk cell, credits profile-density Q16 oil mass to a rest-piece reactive parcel, and transfers proportional excess plus ambient thermal energy. Quarter-native Xephyr GPU case measured body +248 Q16 mass versus bulk -225 Q16 volume (oil density 1.1), with water in the contact cell and coating retained after body rotation. Seven focused GPU tests and full make test under Xephyr :92 pass. Display validation reports only older WSI enum/structure VUIDs, with no new dispatch or descriptor VUID. Remaining slime contact, terrain/leaf/actor, film melt/drip runtime, fracture/streaming handoff.
+
+**2026-11-01T10:55:03Z**
+
+Runtime jelly contact RED 154ee51, GREEN f81c213 and current refactor: GPU per-rest-piece contact debits mobile oil and red-slime jelly from shared-capacity bulk channels, credits oil fuel plus jelly fuel/bound oxidizer at profile density, moves corresponding heat, and leaves water in the same contact cell. Bulk activity bit skips coating scans in worlds without oil/jelly. Eight focused quarter-native Xephyr thermal GPU tests and full make test under Xephyr :92 pass. Outstanding: sub-Q16 volume-to-mass conversion remainders, runtime hot film release/drips, terrain/foliage/actor attachment, fracture/streaming owner transfer and displayed coating stress budget.
