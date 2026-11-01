@@ -167,6 +167,7 @@ static void bind_fluid_mode(dc_gpu_t *gpu,uint32_t mode,bool projection) {
 }
 
 void dc_gpu_fluid_destroy(dc_gpu_t *gpu) {
+    if(gpu->bulk_phase_pipeline) vkDestroyPipeline(gpu->device,gpu->bulk_phase_pipeline,NULL);
     if(gpu->bulk_phase_mapped) vkUnmapMemory(gpu->device,gpu->bulk_phase_memory);
     if(gpu->bulk_phase_buffer) vkDestroyBuffer(gpu->device,gpu->bulk_phase_buffer,NULL);
     if(gpu->bulk_phase_memory) vkFreeMemory(gpu->device,gpu->bulk_phase_memory,NULL);

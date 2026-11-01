@@ -245,6 +245,7 @@ CONTACT_SHADER = build/shaders/contacts.comp.spv
 PROBE_SHADER = build/shaders/tick_probe.comp.spv
 HALO_SHADER = build/shaders/halo.comp.spv
 FLUID_SHADER = build/shaders/fluid_transport_16.comp.spv build/shaders/fluid.comp.spv build/shaders/fluid_aperture.comp.spv build/shaders/fluid_transport.comp.spv build/shaders/fluid_displacement.comp.spv
+FLUID_SHADER += build/shaders/bulk_phase_pair.comp.spv
 $(FLUID_SHADER): shaders/sim/bulk_phase.glsl
 PROJECTION_SHADER = build/shaders/projection.comp.spv build/shaders/hydro_head.comp.spv build/shaders/pressure_work.comp.spv build/shaders/pressure_stencil.comp.spv
 MARKER_SHADER = build/shaders/marker.comp.spv
@@ -659,6 +660,9 @@ build/bulk_phase_packet.o: src/fire/bulk_phase_packet.c include/ferrum/fire/bulk
 build/bulk_phase_gpu.o: src/vulkan/bulk_phase_gpu.c src/vulkan/gpu_internal.h include/ferrum/fire/bulk_phase_gpu.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/shaders/bulk_phase_pair.comp.spv: shaders/sim/bulk_phase_pair.comp
+	mkdir -p $(dir $@)
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 
 build/generate.o: src/world/generate.c include/dungeoncraft/generate.h include/dungeoncraft/chunk.h
 	@mkdir -p build
@@ -1887,8 +1891,8 @@ build/gas_reference_tests: tests/fire/gas_reference_tests.c src/fire/gas.c src/f
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c src/fire/gas_reference.c -o $@ -lm
 build/bulk_phase_tests: tests/fire/bulk_phase_tests.c src/fire/bulk_phase.c src/fire/bulk_phase_packet.c include/ferrum/fire/bulk_phase.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/bulk_phase_tests.c src/fire/bulk_phase.c src/fire/bulk_phase_packet.c -o $@ -lm
-build/bulk_phase_gpu_tests: tests/vulkan/bulk_phase_gpu_tests.c tests/vulkan/bulk_phase_flux_red_stub.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/bulk_phase_gpu_tests.c tests/vulkan/bulk_phase_flux_red_stub.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/bulk_phase_gpu_tests: tests/vulkan/bulk_phase_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/bulk_phase_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_bulk_phase test_bulk_phase_gpu
 test: test_bulk_phase test_bulk_phase_gpu
 test_bulk_phase: build/bulk_phase_tests
