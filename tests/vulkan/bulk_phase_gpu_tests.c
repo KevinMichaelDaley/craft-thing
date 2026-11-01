@@ -535,6 +535,15 @@ static void test_mixing_phase_flux_deposits_lost_kinetic_energy(void) {
     ASSERT_TRUE(out->oil_fp[target]>16384u);
     ASSERT_TRUE(out->oil_excess[source]+out->oil_excess[target]>0.f);
     ASSERT_EQ((uint64_t)out->oil_fp[source]+out->oil_fp[target],49152u);
+    float before_energy=.5f*(5.5f*5.5f/(1.1f*.5f)+
+        2.75f*2.75f/(1.1f*.25f))*1e-10f;
+    float source_mass=1.1f*(float)out->oil_fp[source]/65536.f;
+    float target_mass=1.1f*(float)out->oil_fp[target]/65536.f;
+    float after_energy=.5f*(out->oil_momentum_x[source]*
+        out->oil_momentum_x[source]/source_mass+
+        out->oil_momentum_x[target]*out->oil_momentum_x[target]/target_mass)*
+        1e-10f+out->oil_excess[source]+out->oil_excess[target];
+    ASSERT_TRUE(fabsf(after_energy-before_energy)<1e-11f);
     dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
 }
 int main(void) {
