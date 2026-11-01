@@ -77,12 +77,52 @@ bool fr_thermal_absorb_pair(const fr_reactive_state_t *solid,const fr_reactive_s
     *solid_out=a;*water_out=b;return true;
 }
 bool fr_thermal_vapor_reference_energy(const fr_gas_model_t *model,double *out,char *err,uint32_t cap) {
-    (void)model;(void)out;return error(err,cap,"Vapor reference energy is not implemented");
+    if(!model||!out||!isfinite(model->heat_capacity_cv[FR_GAS_VAPOR])||
+       model->heat_capacity_cv[FR_GAS_VAPOR]<=0||
+       !isfinite(model->gas_constant[FR_GAS_VAPOR])||model->gas_constant[FR_GAS_VAPOR]<0)
+        return error(err,cap,"Invalid vapor energy model");
+    const fr_reactive_profile_t *water=fr_reactive_profile(DC_MATERIAL_WATER);
+    if(!water) return error(err,cap,"Missing liquid water profile");
+    double value=FR_THERMAL_WATER_LATENT_KJ_PER_KG+
+        (water->heat_capacity-model->heat_capacity_cv[FR_GAS_VAPOR]-
+        model->gas_constant[FR_GAS_VAPOR])*FR_THERMAL_WATER_BOIL_K;
+    if(!isfinite(value)||value<=0) return error(err,cap,"Invalid vapor reference energy");
+    *out=value;return true;
 }
 bool fr_thermal_evaporate_pair(const fr_reactive_state_t *solid,const fr_gas_state_t *gas,
     const fr_gas_model_t *model,uint32_t requested_water_fp,fr_reactive_state_t *solid_out,
     fr_gas_state_t *gas_out,uint32_t *transferred_water_fp,char *err,uint32_t cap) {
-    (void)solid;(void)gas;(void)model;(void)requested_water_fp;(void)solid_out;
-    (void)gas_out;(void)transferred_water_fp;
-    return error(err,cap,"Water-to-vapor transfer is not implemented");
+    if(!solid_out||!gas_out||!transferred_water_fp||
+       !fr_reactive_state_valid(solid,err,cap))
+        return error(err,cap,"Invalid water-to-vapor transaction");
+    const fr_reactive_profile_t *profile=fr_reactive_profile(solid->material);
+    if(profile->phase!=FR_REACTIVE_SOLID)
+        return error(err,cap,"Vapor source is not a solid surface");
+    double offset=0;fr_gas_thermo_t gas_thermo;
+    if(!fr_thermal_vapor_reference_energy(model,&offset,err,cap)||
+       !fr_gas_thermodynamics(model,gas,1.,&gas_thermo,err,cap)) return false;
+    fr_reactive_state_t next_solid=*solid;fr_gas_state_t next_gas=*gas;
+    uint32_t moved=requested_water_fp<solid->bound_water_fp?
+        requested_water_fp:solid->bound_water_fp;
+    if(moved) {
+        float temperature=0;
+        if(!fr_reactive_state_temperature(solid,&temperature,err,cap)) return false;
+        double per_kg=offset+model->heat_capacity_cv[FR_GAS_VAPOR]*temperature;
+        double available=fr_reactive_state_energy(solid);
+        if(!isfinite(per_kg)||per_kg<=0) return error(err,cap,"Invalid vapor heat budget");
+        double capacity=floor(nextafter(available,0.)*DC_FLUID_FULL/per_kg);
+        if(capacity<(double)moved) moved=capacity>0?(uint32_t)capacity:0u;
+        if(moved) {
+            double mass=(double)moved/DC_FLUID_FULL;
+            double debit=mass*per_kg;
+            if(!fr_reactive_state_add_heat(&next_solid,-debit,err,cap)) return false;
+            next_solid.bound_water_fp-=moved;
+            next_gas.species[FR_GAS_VAPOR]+=mass;
+            next_gas.energy+=mass*model->heat_capacity_cv[FR_GAS_VAPOR]*temperature;
+            if(!fr_reactive_state_valid(&next_solid,err,cap)||
+               !fr_gas_thermodynamics(model,&next_gas,1.,&gas_thermo,err,cap)) return false;
+        }
+    }
+    *solid_out=next_solid;*gas_out=next_gas;*transferred_water_fp=moved;
+    return true;
 }
