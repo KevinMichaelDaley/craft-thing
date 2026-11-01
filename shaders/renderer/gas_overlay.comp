@@ -46,12 +46,14 @@ Gas smoke_at(uint x,uint y) {
     uint at=(page-1u)*4096u+(y%64u)*64u+x%64u;
     return parameters[FR_GAS_CELL_OWNER_WORD]!=0u&&(gates[at]&FR_GAS_CELL_OWNER_BIT)!=0u?alternate[at]:world[at];
 }
-float smoke_optical_depth(Gas s,float opacity,float density) {
-    float aerosol=max(s.dynamics.x,0.)+FR_SMOKE_EXHAUST_OPTICAL_WEIGHT*max(s.species.z,0.);
-    return s.geometry.x>0.?opacity*aerosol/(s.geometry.x*density):0.;
-}
 float smoke_aerosol(Gas s) {
     return max(s.dynamics.x,0.)+FR_SMOKE_EXHAUST_OPTICAL_WEIGHT*max(s.species.z,0.);
+}
+float smoke_optical_depth(Gas s,float opacity,float density) {
+    return s.geometry.x>0.?opacity*smoke_aerosol(s)/(s.geometry.x*density):0.;
+}
+void smoke_detail_store(uint index,float value) {
+    if(params.bank==0u) detail0[index]=value;else detail1[index]=value;
 }
 float smoke_detail_old(ivec2 p) {
     if(params.reset!=0u||any(lessThan(p,ivec2(0)))||
@@ -256,11 +258,11 @@ void main() {
     potentials[index]=smoke_stream_potential(cell);
 #else
     if(page==0u) {
-        if(params.bank==0u) detail0[index]=0.;else detail1[index]=0.;
+        smoke_detail_store(index,0.);
         return;
     }
     float transported_detail=smoke_advected_detail(cell,uintBitsToFloat(params.seconds));
-    if(params.bank==0u) detail0[index]=transported_detail;else detail1[index]=transported_detail;
+    smoke_detail_store(index,transported_detail);
     if(x<params.view_x||y<params.view_y||x>=params.view_x+params.view_width||y>=params.view_y+params.view_height) return;
     vec2 coordinate=smoke_coordinate(cell);
     bool oxygen_view=uintBitsToFloat(parameters[FR_GAS_VIEW_WORD])==1.;
