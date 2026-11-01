@@ -1,6 +1,6 @@
 ---
 id: ctlo-2vcr
-status: in_progress
+status: closed
 deps: [ctlo-08fu, ctlo-18l4]
 links: []
 created: 2026-10-24T22:06:19Z
@@ -63,3 +63,7 @@ Vulkan push ABI regression: validation RED showed VUID-07987 because common layo
 **2026-11-01T09:30:30Z**
 
 Rigid coupling RED 5c24d44, GREEN 3de2331: profile-density slime pool buoys wood at the expected density ratio and receives +5.2 normalized opposite vertical impulse; moving slime drags wood and the two momentum ledgers balance within .02. Existing water 600-tick equilibrium remains stable. Retained-stock RED aed6b04, GREEN 9333483, REFACTOR just committed: fully retained slime has no buoyancy or phase impulse; 17 buoyancy and 21 bulk GPU targeted tests pass. Full make test under Xephyr :92 passed after correcting kinematic contact versus no-body seam momentum assertions. Remaining body-loaded displayed benchmark and final integration audit.
+
+**2026-11-01T09:47:28Z**
+
+Final rigid/display integration: RED 5119390, GREEN 3b0e745, REFACTOR 227258a. Eight 4x4 wood bodies seeded in dry, water, and dense slime basins at quarter-native 480x270 physics / 1920x1080 Wayland display. 180-frame initial means: dry 47.281, water 48.565, slime 49.687 ms/frame. Repeated water 48.829, slime 48.062 ms/frame: phase delta within run variance. Preexisting general rigid cost exceeds 30 ms in all three; tracked by ct-vdrd. Phase-only dense slime ~1.97 ms/frame. Focused Vulkan validation on three slime-rigid tests: 3 passed, zero Validation Error. Full make test under persistent Xephyr :92 passed. Phase Q16 volume, momentum and heat ledgers, shear/deformation response, water and rigid action-reaction, seam owner transfer, and retained-only exclusion covered by reference/GPU tests. No granular two-slot gate in bulk phase path.
