@@ -35,3 +35,7 @@ Second RED-GREEN-REFACTOR increment 63dcd82, d8d8b59 and current refactor: profi
 **2026-11-01T10:13:25Z**
 
 Third RED-GREEN-REFACTOR increment dea1a1c, d8d154f and current refactor: deterministic Q16 fracture split assigns each oil/slime quantum exactly once to two distinct stable rest-address owners; heat is apportioned by phase heat capacity and conserved. Rejects duplicate child owner without touching output. Twelve focused tests and full make test under Xephyr :92 pass. Runtime GPU contact admission, combustion linkage and streaming film persistence remain.
+
+**2026-11-01T10:27:59Z**
+
+Runtime oil contact RED 8876389, GREEN 041a7cb and current refactor: existing GPU body wetting dispatch atomically reserves mobile oil from the adjacent bulk cell, credits profile-density Q16 oil mass to a rest-piece reactive parcel, and transfers proportional excess plus ambient thermal energy. Quarter-native Xephyr GPU case measured body +248 Q16 mass versus bulk -225 Q16 volume (oil density 1.1), with water in the contact cell and coating retained after body rotation. Seven focused GPU tests and full make test under Xephyr :92 pass. Display validation reports only older WSI enum/structure VUIDs, with no new dispatch or descriptor VUID. Remaining slime contact, terrain/leaf/actor, film melt/drip runtime, fracture/streaming handoff.
