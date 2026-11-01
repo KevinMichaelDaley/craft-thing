@@ -11,7 +11,7 @@ void burn_coating(Words entry,inout Gas gas,inout float admitted,
     if(oil==0u) return;
     uint jelly=entry.words[s+FR_STATE_COATING_JELLY];
     bool mixed=jelly>0u;
-    uint profile=mixed?16u:14u;
+    uint profile=mixed?FR_COATING_GREEK_MATERIAL:FR_COATING_OIL_MATERIAL;
     float capacity=solid_capacity(entry);
     if(capacity<=0.) return;
     float temperature=reactive_parcel_energy(entry,s)/capacity;
@@ -19,14 +19,14 @@ void burn_coating(Words entry,inout Gas gas,inout float admitted,
         min(1.,float(entry.words[s+FR_STATE_BOUND_WATER])/
             float(entry.words[s+FR_STATE_DRY_MASS])):0.;
     float dt=uintBitsToFloat(params.seconds);
-    float threshold=uintBitsToFloat(entry.words[s+22u]);
+    float threshold=uintBitsToFloat(entry.words[s+FR_STATE_COATING_THRESHOLD]);
     if(threshold==0.) threshold=ignition_threshold(
         entry.words[s+4u]^0x7f4a7c15u,entry.words[s+5u]);
-    float integral=uintBitsToFloat(entry.words[s+23u]);
+    float integral=uintBitsToFloat(entry.words[s+FR_STATE_COATING_INTEGRAL]);
     if(temperature>=coefficient(profile,FR_PROFILE_IGNITION_WORD))
         integral=min(1e20,integral+coefficient(profile,FR_PROFILE_HAZARD_WORD)*dt);
-    entry.words[s+22u]=floatBitsToUint(threshold);
-    entry.words[s+23u]=floatBitsToUint(integral);
+    entry.words[s+FR_STATE_COATING_THRESHOLD]=floatBitsToUint(threshold);
+    entry.words[s+FR_STATE_COATING_INTEGRAL]=floatBitsToUint(integral);
     uint stock=mixed?entry.words[s+FR_STATE_COATING_OXIDIZER]:
         uint(floor(max(0.,gas.species.x)*65536.));
     bool viable=temperature>=coefficient(profile,FR_PROFILE_IGNITION_WORD)&&
@@ -40,7 +40,8 @@ void burn_coating(Words entry,inout Gas gas,inout float admitted,
     float fuel_credit=float(coating_credit(packed,FR_COATING_REACTION_REM_SHIFT))/1024.;
     float oxygen_credit=float(coating_credit(packed,FR_COATING_OXIDIZER_REM_SHIFT))/1024.;
     float demand=coefficient(profile,FR_PROFILE_OXYGEN_DEMAND_WORD);
-    float rate=coefficient(profile,31u)*dt*(mixed?1.:(1.-wet)*(1.-wet));
+    float rate=coefficient(profile,FR_PROFILE_BURN_RATE_WORD)*dt*
+        (mixed?1.:(1.-wet)*(1.-wet));
     float requested=min(float(total)-fuel_credit,float(total)*(1.-exp(-rate)));
     float funded=min(requested,max(0.,(float(stock)+oxygen_credit)/demand-fuel_credit));
     float progress=max(0.,fuel_credit+funded);
@@ -57,19 +58,19 @@ void burn_coating(Words entry,inout Gas gas,inout float admitted,
     entry.words[s+FR_STATE_COATING_REMAINDERS]=packed;
     uint oil_used=mixed?min(oil,uint(floor(float(reacted)*float(oil)/float(total)))):reacted;
     uint jelly_used=reacted-oil_used;
-    uint ash=uint(floor(float(reacted)*coefficient(profile,15u)));
-    uint soot=uint(floor(float(reacted)*coefficient(profile,16u)));
+    uint ash=uint(floor(float(reacted)*coefficient(profile,FR_PROFILE_ASH_YIELD_WORD)));
+    uint soot=uint(floor(float(reacted)*coefficient(profile,FR_PROFILE_SOOT_YIELD_WORD)));
     uint exhaust=reacted+oxidizer-ash-soot;
     entry.words[s+FR_STATE_COATING_OIL]=oil-oil_used;
     entry.words[s+FR_STATE_COATING_JELLY]=jelly-jelly_used;
     if(mixed) entry.words[s+FR_STATE_COATING_OXIDIZER]-=oxidizer;
     else gas.species.x=max(0.,gas.species.x-float(oxidizer)/65536.);
     entry.words[s+FR_STATE_INERT_MASS]+=ash;
-    float heat=(float(oil_used)*coefficient(14u,FR_PROFILE_PRIMARY_HEAT_WORD)+
-        float(jelly_used)*coefficient(15u,FR_PROFILE_PRIMARY_HEAT_WORD)-
+    float heat=(float(oil_used)*coefficient(FR_COATING_OIL_MATERIAL,FR_PROFILE_PRIMARY_HEAT_WORD)+
+        float(jelly_used)*coefficient(FR_COATING_JELLY_MATERIAL,FR_PROFILE_PRIMARY_HEAT_WORD)-
         float(soot)*float(FR_COMBUSTION_AIRBORNE_ENERGY))/65536.;
-    float removed=(float(oil_used)*coefficient(14u,FR_PROFILE_HEAT_CAPACITY_WORD)+
-        float(jelly_used+(mixed?oxidizer:0u))*coefficient(15u,FR_PROFILE_HEAT_CAPACITY_WORD))*
+    float removed=(float(oil_used)*coefficient(FR_COATING_OIL_MATERIAL,FR_PROFILE_HEAT_CAPACITY_WORD)+
+        float(jelly_used+(mixed?oxidizer:0u))*coefficient(FR_COATING_JELLY_MATERIAL,FR_PROFILE_HEAT_CAPACITY_WORD))*
         temperature/65536.;
     float retained=float(ash)*coefficient(entry.words[s],FR_PROFILE_HEAT_CAPACITY_WORD)*
         temperature/65536.;
