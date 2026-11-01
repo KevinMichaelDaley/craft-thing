@@ -71,3 +71,7 @@ Spent-jelly RED 0b4fa3b, GREEN 1ce2c4d, REFACTOR current: GPU hot film release n
 **2026-11-01T12:41:50Z**
 
 Quarter-native headless native-Vulkan coating microbenchmark added at 8efc958: 480x270 grid, 64 seeded stone parcels, 20 measured thermal steps, alternating cold/hot film fixtures in one device without creating windows. Three native GPU runs after cold caches: active hot coating 0.625, 0.557, 0.556 ms/step versus warmed controls 0.574, 0.641, 0.501 ms/step; difference is within run variation (~0.1 ms). Oil release remained finite at 1513152 Q16 per active fixture. Earlier first-run control included shader warmup and was excluded from comparison. This is an isolated thermal microbenchmark, not a full game frame budget.
+
+**2026-11-01T12:51:17Z**
+
+Acceptance coverage: actual finite-bulk oil wetting on a leaf parcel now has GPU regression proof through component extraction, leaf-bit fracture, chunk export/import and restored particle owner without any film mass or rest-identity duplication. A moving damageable body proxy with a recycled slot retains fractional oil coating and its actual generation through carving. Focused reactive cell GPU 9/9 and full make test under Xephyr :92 passed. The paths already preserved state; these tests lock the runtime behavior.
