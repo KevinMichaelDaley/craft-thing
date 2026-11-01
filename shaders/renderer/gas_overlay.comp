@@ -1,6 +1,12 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #include "../gas/types.glsl"
+#define FR_SMOKE_DETAIL_SCALE .5
+#define FR_SMOKE_WARP_CELLS 5.
+#define FR_SMOKE_WARP_SPEED .1
+#define FR_SMOKE_DETAIL_GAIN 2.5
+#define FR_SMOKE_DETAIL_SPEED .02
+#define FR_SMOKE_DETAIL_MIN .08
 layout(local_size_x=64) in;
 layout(set=0,binding=0,std430) readonly buffer World {Gas world[];};
 layout(set=0,binding=1,std430) readonly buffer Model {uint parameters[];};
@@ -17,6 +23,8 @@ vec2 smoke_coordinate(ivec2 p) {
     return params.bank==0u?coordinates0[index]:coordinates1[index];
 }
 vec2 smoke_advected_coordinate(vec2 back) {
+    /* Keep a material coordinate field across presentations. The field follows
+     * gas motion and stays unchanged while the simulation clock is paused. */
     if(params.reset!=0u) return back;
     ivec2 lower=ivec2(floor(back));vec2 fraction=fract(back);
     vec2 a=mix(smoke_coordinate(lower),smoke_coordinate(lower+ivec2(1,0)),fraction.x);
@@ -45,6 +53,8 @@ float smoke_smooth_noise(vec2 p) {
     return mix(a,b,t.y);
 }
 float smoke_wavelet(vec2 p) {
+    /* A local fine band minus a lower frequency band gives moving detail
+     * without anchoring a dither mask to screen cells. */
     return clamp(smoke_smooth_noise(p)-.5*smoke_smooth_noise(p*.5),-1.,1.);
 }
 vec4 smoke_visual_at(ivec2 p,float opacity,float density) {
@@ -102,12 +112,13 @@ void main() {
     } else if(gate==0u) {
         float opacity=uintBitsToFloat(parameters[FR_GAS_OPACITY_WORD]),density=uintBitsToFloat(parameters[FR_GAS_DENSITY_WORD]);
         vec2 material=coordinate;
-        vec2 curl=.5*vec2(smoke_wavelet((material+vec2(0.,1.))*.5)-smoke_wavelet((material-vec2(0.,1.))*.5),
-            smoke_wavelet((material-vec2(1.,0.))*.5)-smoke_wavelet((material+vec2(1.,0.))*.5));
-        float speed=length(velocity),strength=5.*speed/(speed+.1);
+        vec2 curl=.5*vec2(smoke_wavelet((material+vec2(0.,1.))*FR_SMOKE_DETAIL_SCALE)-smoke_wavelet((material-vec2(0.,1.))*FR_SMOKE_DETAIL_SCALE),
+            smoke_wavelet((material-vec2(1.,0.))*FR_SMOKE_DETAIL_SCALE)-smoke_wavelet((material+vec2(1.,0.))*FR_SMOKE_DETAIL_SCALE));
+        float speed=length(velocity),strength=FR_SMOKE_WARP_CELLS*speed/(speed+FR_SMOKE_WARP_SPEED);
         vec4 smoke=smoke_visual_sample(vec2(x,y)-strength*curl,opacity,density);
         if(smoke.x<=0.) return;
-        float detail=max(.08,1.+2.5*speed/(speed+.02)*smoke_wavelet(material*.5));
+        float detail=max(FR_SMOKE_DETAIL_MIN,1.+FR_SMOKE_DETAIL_GAIN*speed/(speed+FR_SMOKE_DETAIL_SPEED)*
+            smoke_wavelet(material*FR_SMOKE_DETAIL_SCALE));
         color=mix(color,smoke.yzw/smoke.x,1.-exp(-smoke.x*detail));
     }
     if(gate!=0u) color=vec3(.62,.32,.07);
