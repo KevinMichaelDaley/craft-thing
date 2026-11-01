@@ -18,3 +18,9 @@ Flight and impact captures show a dark persistent coal arc. gas_overlay.comp wei
 
 RED quarter-native flight/impact capture or GPU pixel test demonstrates over-opaque exhaust-only trail. GREEN visual and GPU tests show soot-density-based opacity, controlled dilution along the projectile arc, intact gas species/energy conservation, readable bonfire and battlement flames, paused replay identity, and frame budget. Run catapult demo and full make test.
 
+
+## Notes
+
+**2026-11-01T05:25:28Z**
+
+Catapult flight/impact contact sheet is thinner with 0.05 relative exhaust scattering. Focused exhaust-vs-soot and stone-boundary GPU tests pass. Bonfire remains readable; strict 300-frame worst budget fails in repeated runs (33.487-59.625ms, means about19.3ms). Leave ticket open for performance and full regression.

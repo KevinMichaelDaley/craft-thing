@@ -360,7 +360,7 @@ static void test_transported_low_density_smoke_is_readable_on_the_dark_display(v
     ASSERT_TRUE(red_alpha>=.70f&&red_alpha<=.80f);
     free(pixels);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
 }
-static void test_transparent_exhaust_does_not_leave_a_soot_dark_catapult_arc(void) {
+static void test_dilute_exhaust_does_not_leave_a_soot_dark_catapult_arc(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_gas_state_t *input=calloc(4096,sizeof(*input));double *volume=calloc(4096,sizeof(*volume));
     uint32_t *pixels=malloc(480u*270u*sizeof(*pixels));

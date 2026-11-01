@@ -28,3 +28,7 @@ Intermediate GPU wavelet coordinate/potential passes pass quarter-native motion 
 **2026-11-01T05:02:14Z**
 
 1000-frame quarter-native bonfire remains just over strict 30ms worst-frame gate: 30.565-30.905ms in two untraced runs, despite ~18ms mean. Frame API trace shows occasional present waits of 12-18ms alongside ~15-17ms GPU fence. Potential-pass dead fetch removal passed GPU test but did not resolve the worst-frame gate.
+
+**2026-11-01T05:25:28Z**
+
+RED test found streamfunction 0.103950396 in gas touching solid wall despite unchanged stone pixels; boundary-aware potential and coordinate masking reduce it to zero, with original wavelet motion test still passing. Bonfire frame budget remains open.

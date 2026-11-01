@@ -9,7 +9,9 @@
 #define FR_SMOKE_DETAIL_MIN .5
 #define FR_SMOKE_EDGE_START .08
 #define FR_SMOKE_EDGE_FULL .5
+/* Effective scattering from unresolved condensate in transported exhaust. */
 #define FR_SMOKE_EXHAUST_OPTICAL_WEIGHT .05
+#define FR_SMOKE_CLEAR_FACE_VOID .999
 layout(local_size_x=64) in;
 layout(set=0,binding=0,std430) readonly buffer World {Gas world[];};
 layout(set=0,binding=1,std430) readonly buffer Model {uint parameters[];};
@@ -91,7 +93,7 @@ bool smoke_wavelet_open_face(ivec2 p,uint direction) {
     ivec2 q=p+(direction==0u?ivec2(1,0):direction==1u?ivec2(-1,0):
         direction==2u?ivec2(0,1):ivec2(0,-1));
     if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(params.width,params.height)))) return false;
-    if(smoke_at(uint(q.x),uint(q.y)).geometry.y<.999) return false;
+    if(smoke_at(uint(q.x),uint(q.y)).geometry.y<FR_SMOKE_CLEAR_FACE_VOID) return false;
     ivec2 low=(direction&1u)==0u?p:q;
     uint x=uint(low.x),y=uint(low.y),page=pages[(y/64u)*((params.width+63u)/64u)+x/64u];
     if(page==0u) return false;
@@ -119,7 +121,7 @@ float smoke_stream_potential(ivec2 p) {
     float energy=.5*resolved*resolved;
     float scattering=smoke_scattering_weight(p);
     if(scattering<=0.) return 0.;
-    if(smoke_at(uint(p.x),uint(p.y)).geometry.y<.999) return 0.;
+    if(smoke_at(uint(p.x),uint(p.y)).geometry.y<FR_SMOKE_CLEAR_FACE_VOID) return 0.;
     for(uint d=0u;d<4u;d++) if(!smoke_wavelet_open_face(p,d)) return 0.;
     float amplitude=FR_SMOKE_WARP_CELLS*energy/(energy+FR_SMOKE_WARP_ENERGY)*scattering;
     return amplitude*smoke_wavelet(smoke_coordinate(p)*FR_SMOKE_DETAIL_SCALE);
@@ -127,7 +129,7 @@ float smoke_stream_potential(ivec2 p) {
 vec2 smoke_wavelet_velocity(ivec2 p) {
     /* A discrete curl keeps the added velocity divergence free even where
      * smoke density and resolved band energy change across the plume. */
-    if(smoke_at(uint(p.x),uint(p.y)).geometry.y<.999) return vec2(0.);
+    if(smoke_at(uint(p.x),uint(p.y)).geometry.y<FR_SMOKE_CLEAR_FACE_VOID) return vec2(0.);
     ivec2 down=p+ivec2(0,1),up=p-ivec2(0,1);
     ivec2 left=p-ivec2(1,0),right=p+ivec2(1,0);
     float d=any(greaterThanEqual(down,ivec2(params.width,params.height)))?0.:potentials[uint(down.y)*params.width+uint(down.x)];
@@ -194,7 +196,7 @@ void main() {
     uint gate=page==0u?0u:gates[atlas]&3u;
     ivec2 cell=ivec2(x,y);
 #ifdef FR_SMOKE_COORDINATE_ONLY
-    if(s.geometry.y<.999) {
+    if(s.geometry.y<FR_SMOKE_CLEAR_FACE_VOID) {
         if(params.bank==0u) coordinates1[index]=vec2(x,y);else coordinates0[index]=vec2(x,y);
         return;
     }

@@ -574,7 +574,7 @@ int main(void) {
     RUN(test_native_subgrid_smoke_gains_detail_without_stock_or_mean_impulse);
     RUN(test_quarter_native_smoke_wavelet_advects_and_displaces_boundary);
     RUN(test_transported_low_density_smoke_is_readable_on_the_dark_display);
-    RUN(test_transparent_exhaust_does_not_leave_a_soot_dark_catapult_arc);
+    RUN(test_dilute_exhaust_does_not_leave_a_soot_dark_catapult_arc);
     RUN(test_smoke_wavelet_does_not_draw_across_solid_wall);
     RUN(test_native_quiet_air_sleeps_but_motion_heat_and_pressure_still_wake);
     RUN(test_native_practical_safe_line_matches_explicit_flux_inside_stiff_interval);
