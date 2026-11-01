@@ -13,5 +13,7 @@
  * is one centimeter. The delivered laboratory bench keeps unit geometry. */
 #define FR_THERMAL_GAMEPLAY_FACE_METERS 0.01
 #define FR_THERMAL_2D_TRANSPORT_SCALE 1.0
+#define FR_THERMAL_WATER_BOIL_K 373.15
+#define FR_THERMAL_WATER_LATENT_KJ_PER_KG 2257.0
 
 #endif

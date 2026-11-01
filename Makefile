@@ -1983,6 +1983,9 @@ build/reactive_body_snapshot_tests: tests/vulkan/reactive_body_snapshot_tests.c 
 test: build/reactive_body_snapshot_tests build/reactive_archive_tests
 build/thermal_tests: tests/fire/thermal_tests.c src/fire/thermal.c $(REACTIVE_STATE_SRC) include/ferrum/fire/thermal.h include/dungeoncraft/thermal_parameters.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/thermal.c $(REACTIVE_STATE_SRC) -o $@ -lm
+build/thermal_phase_tests: tests/fire/thermal_phase_tests.c src/fire/thermal.c src/fire/gas.c $(REACTIVE_STATE_SRC) include/ferrum/fire/thermal.h include/dungeoncraft/thermal_parameters.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/thermal.c src/fire/gas.c $(REACTIVE_STATE_SRC) -o $@ -lm
+test: build/thermal_phase_tests
 build/thermal_checkpoint_tests: tests/fire/thermal_checkpoint_tests.c src/fire/thermal_checkpoint.c $(REACTIVE_STATE_SRC) include/ferrum/fire/thermal_checkpoint.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/thermal_checkpoint.c $(REACTIVE_STATE_SRC) -o $@ -lm
 test: build/thermal_checkpoint_tests

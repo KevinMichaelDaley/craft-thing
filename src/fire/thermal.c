@@ -76,3 +76,13 @@ bool fr_thermal_absorb_pair(const fr_reactive_state_t *solid,const fr_reactive_s
     if(!fr_reactive_state_valid(&a,err,cap)||!fr_reactive_state_valid(&b,err,cap)) return false;
     *solid_out=a;*water_out=b;return true;
 }
+bool fr_thermal_vapor_reference_energy(const fr_gas_model_t *model,double *out,char *err,uint32_t cap) {
+    (void)model;(void)out;return error(err,cap,"Vapor reference energy is not implemented");
+}
+bool fr_thermal_evaporate_pair(const fr_reactive_state_t *solid,const fr_gas_state_t *gas,
+    const fr_gas_model_t *model,uint32_t requested_water_fp,fr_reactive_state_t *solid_out,
+    fr_gas_state_t *gas_out,uint32_t *transferred_water_fp,char *err,uint32_t cap) {
+    (void)solid;(void)gas;(void)model;(void)requested_water_fp;(void)solid_out;
+    (void)gas_out;(void)transferred_water_fp;
+    return error(err,cap,"Water-to-vapor transfer is not implemented");
+}

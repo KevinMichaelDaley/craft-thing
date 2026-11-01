@@ -1,6 +1,7 @@
 #ifndef FERRUM_FIRE_THERMAL_H
 #define FERRUM_FIRE_THERMAL_H
 #include "dungeoncraft/thermal_parameters.h"
+#include "ferrum/fire/gas.h"
 #include "ferrum/fire/reactive_state.h"
 
 /** Extensive energy and actual heat capacity of one physical thermal sample. */
@@ -26,5 +27,14 @@ bool fr_thermal_probe_exchange(fr_thermal_probe_t probe,fr_thermal_sample_t targ
  * retain parcel/origin/hazard history and publish only on complete success. */
 bool fr_thermal_absorb_pair(const fr_reactive_state_t *solid,const fr_reactive_state_t *water,
     float seconds,fr_reactive_state_t *solid_out,fr_reactive_state_t *water_out,
+    char *err_buf,uint32_t err_cap);
+/** Transfer a requested finite amount of bound water into gas vapor. The gas
+ * keeps its sensible energy; vapor carries a separate internal-energy offset
+ * returned by fr_thermal_vapor_reference_energy(). Outputs publish together. */
+bool fr_thermal_evaporate_pair(const fr_reactive_state_t *solid,const fr_gas_state_t *gas,
+    const fr_gas_model_t *model,uint32_t requested_water_fp,fr_reactive_state_t *solid_out,
+    fr_gas_state_t *gas_out,uint32_t *transferred_water_fp,char *err_buf,uint32_t err_cap);
+/** Vapor reference offset in kJ/kg for a gas state whose energy stores cv*T. */
+bool fr_thermal_vapor_reference_energy(const fr_gas_model_t *model,double *out,
     char *err_buf,uint32_t err_cap);
 #endif
