@@ -1,0 +1,33 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#define FR_GAS_LOCAL_SIZE 256
+#include "storage.glsl"
+layout(set=0,binding=38,std430) buffer GrainForce {vec4 grain_force[];};
+layout(set=0,binding=39,std430) readonly buffer Activity {uint activity[];};
+
+float pressure_at(ivec2 p,float fallback) {
+    uint at=gas_atlas(p);
+    if(at==0xffffffffu) return fallback;
+    Gas gas=gas_world(at);
+    bool valid=false;Primitive value=gas_primitive(gas,valid);
+    return valid&&value.metric.w>0.?value.hydro.w:fallback;
+}
+void main() {
+    uint group=gl_WorkGroupID.x+gl_WorkGroupID.y*65535u;
+    if(group>=activity[0]) return;
+    uint tiles_x=(params.width+15u)/16u,tile=activity[3u+group];
+    ivec2 p=ivec2(int((tile%tiles_x)*16u+gl_LocalInvocationIndex%16u),
+        int((tile/tiles_x)*16u+gl_LocalInvocationIndex/16u));
+    if(p.x>=int(params.width)||p.y>=int(params.height)) return;
+    uint index=uint(p.y)*params.width+uint(p.x);
+    float solid=clamp(mpm[index].w,0.,1.);
+    if(solid==0.||mpm[index].x<=0.) {grain_force[index].zw=vec2(0.);return;}
+    float center=pressure_at(p,0.);
+    if(center<=0.) {grain_force[index].zw=vec2(0.);return;}
+    float right=gas_gate_open(p,0u)?pressure_at(p+ivec2(1,0),center):center;
+    float left=gas_gate_open(p-ivec2(1,0),0u)?pressure_at(p-ivec2(1,0),center):center;
+    float down=gas_gate_open(p,1u)?pressure_at(p+ivec2(0,1),center):center;
+    float up=gas_gate_open(p-ivec2(0,1),1u)?pressure_at(p-ivec2(0,1),center):center;
+    vec2 gradient=.5*vec2(right-left,down-up);
+    grain_force[index].zw=-solid*gas_parameter(FR_GAS_KINETIC_WORD)*gradient;
+}

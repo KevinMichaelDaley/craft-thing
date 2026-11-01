@@ -1962,6 +1962,7 @@ GAS_SHADERS += build/shaders/gas_activity_cached.comp.spv
 GAS_SHADERS += build/shaders/gas_owner_gather.comp.spv
 GAS_SHADERS += $(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_transfer geometry_commit)
 GAS_SHADERS += build/shaders/gas_bubble_displace.comp.spv
+GAS_SHADERS += build/shaders/gas_mpm_pressure.comp.spv
 build/shaders/gas_bubble_displace.comp.spv: shaders/reactive/thermal_water.glsl include/dungeoncraft/thermal_water_layout.h
 $(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_transfer geometry_commit): shaders/gas/geometry_common.glsl
 $(patsubst %,build/shaders/gas_%.comp.spv,geometry_stage geometry_transfer geometry_commit init): shaders/gas/bulk_volume.glsl

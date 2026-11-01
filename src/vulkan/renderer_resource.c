@@ -2,13 +2,14 @@
 
 #include "renderer_internal.h"
 
+enum { FR_RENDERER_COMPUTE_MAX_BINDINGS = 40u };
 bool fr_renderer_compute_init(dc_gpu_t *g, fr_renderer_compute_t *c,
                               const VkDescriptorBufferInfo *buffers, uint32_t n,
                               uint32_t push_bytes, const char *shader,
                               char *err, uint32_t cap) {
-  if (!g || !c || !buffers || !n || n > DC_GPU_DESCRIPTOR_BINDINGS)
+  if (!g || !c || !buffers || !n || n > FR_RENDERER_COMPUTE_MAX_BINDINGS)
     return false;
-  VkDescriptorSetLayoutBinding bindings[DC_GPU_DESCRIPTOR_BINDINGS] = {0};
+  VkDescriptorSetLayoutBinding bindings[FR_RENDERER_COMPUTE_MAX_BINDINGS] = {0};
   for (uint32_t i = 0; i < n; i++)
     bindings[i] =
         (VkDescriptorSetLayoutBinding){i, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1,
@@ -35,7 +36,7 @@ bool fr_renderer_compute_init(dc_gpu_t *g, fr_renderer_compute_t *c,
       .pSetLayouts = &c->layout};
   if (vkAllocateDescriptorSets(g->device, &alloc, &c->descriptor) != VK_SUCCESS)
     return false;
-  VkWriteDescriptorSet writes[DC_GPU_DESCRIPTOR_BINDINGS] = {0};
+  VkWriteDescriptorSet writes[FR_RENDERER_COMPUTE_MAX_BINDINGS] = {0};
   for (uint32_t i = 0; i < n; i++)
     writes[i] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,

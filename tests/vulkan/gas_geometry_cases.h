@@ -65,11 +65,13 @@ static void test_pressurized_pocket_pushes_mobile_sand_without_losing_oxygen(voi
         chunk->cells[30u*64u+19u].material=DC_MATERIAL_STONE;
         chunk->cells[grain].material=DC_MATERIAL_SAND;
         dc_chunk_seed_particles(chunk);
-        ASSERT_TRUE(dc_gpu_create(&grids[variant],64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
-            dc_gpu_upload_chunk(grids[variant],0,chunk,err,sizeof(err))&&
-            dc_gpu_set_page(grids[variant],0,0,0,err,sizeof(err))&&
-            fr_gas_gpu_enable(grids[variant],&model,.0012,300,err,sizeof(err))&&
-            fr_gas_gpu_set_pressure_policy(grids[variant],FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_create(&grids[variant],64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_upload_chunk(grids[variant],0,chunk,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_page(grids[variant],0,0,0,err,sizeof(err)));
+        bool enabled=fr_gas_gpu_enable(grids[variant],&model,.0012,300,err,sizeof(err));
+        if(!enabled) printf("MPM pressure setup: %s\n",err);
+        ASSERT_TRUE(enabled);
+        ASSERT_TRUE(fr_gas_gpu_set_pressure_policy(grids[variant],FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
         if(variant==1u) input[source]=reference_air(model,.02,300,0);
         ASSERT_TRUE(fr_gas_gpu_seed_chunk(grids[variant],0,input,volume,4096,err,sizeof(err)));
     }
