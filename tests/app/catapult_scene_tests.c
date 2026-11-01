@@ -237,6 +237,20 @@ static void test_grounded_triangular_frame_and_tension_release(void) {
         projectile_flight.body.vy_fp/65536.f);
     dc_gpu_destroy(g);PASS();
 }
+static void test_launcher_frame_braces_span_base_to_pivot(void) {
+    char err[256]={0};dc_gpu_t *g=catapult_grid();ASSERT_TRUE(g);
+    dc_catapult_scene_t scene={0};
+    ASSERT_TRUE(dc_catapult_scene_build(g,false,&scene,err,sizeof(err)));
+    dc_gpu_world_body_t left,right;
+    ASSERT_TRUE(dc_gpu_read_world_body(g,FR_STRUCTURAL_BODY_ID_BASE+13u,
+        &left,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(g,FR_STRUCTURAL_BODY_ID_BASE+14u,
+        &right,err,sizeof(err)));
+    ASSERT_TRUE(left.body.active&&right.body.active);
+    ASSERT_TRUE(xof(left)<72.f&&xof(right)>=72.f);
+    ASSERT_TRUE(left.body.height>=30u&&right.body.height>=30u);
+    dc_gpu_destroy(g);PASS();
+}
 
 static void test_cold_launcher_has_supported_frame_and_real_latch(void) {
     char err[256]={0};dc_gpu_t *g=catapult_grid();ASSERT_TRUE(g);
@@ -595,9 +609,14 @@ int main(int argc, char **argv) {
         RUN(test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint);
         return g_fail?1:0;
     }
+    if(argc==2&&strcmp(argv[1],"--frame-braces")==0) {
+        RUN(test_launcher_frame_braces_span_base_to_pivot);
+        return g_fail?1:0;
+    }
     RUN(test_hot_coal_clears_wall_and_ignites_wooden_inner_battlement);
     RUN(test_projectile_crosses_a_chunk_before_wall_contact);
     RUN(test_grounded_triangular_frame_and_tension_release);
+    RUN(test_launcher_frame_braces_span_base_to_pivot);
     RUN(test_cold_launcher_has_supported_frame_and_real_latch);
     RUN(test_hot_coal_load_keeps_finite_fuel_and_checkpointed_joint);
     RUN(test_released_latch_checkpoint_can_resume_pouch_release);
