@@ -148,6 +148,32 @@ static void test_oil_heat_follows_oil_through_density_exchange(void) {
     ASSERT_TRUE(fabsf(out->oil_excess[upper]+out->oil_excess[lower]-100.f)<.001f);
     dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
 }
+static void test_water_and_oil_exchange_heat_without_creating_energy(void) {
+    char err[256]={0};dc_gpu_t *gpu=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *bulk=calloc(1,sizeof(*bulk)),*out=calloc(1,sizeof(*out));
+    float *water_heat=calloc(4096u,sizeof(*water_heat));
+    ASSERT_TRUE(chunk&&bulk&&out&&water_heat);
+    const uint32_t at=20u*64u+20u;
+    chunk->cells[at].fluid_mass=FR_BULK_CELL_FULL_FP/2u;
+    chunk->cells[at-1u].material=DC_MATERIAL_STONE;
+    chunk->cells[at+1u].material=DC_MATERIAL_STONE;
+    chunk->cells[at-64u].material=DC_MATERIAL_STONE;
+    chunk->cells[at+64u].material=DC_MATERIAL_STONE;
+    bulk->oil_fp[at]=FR_BULK_CELL_FULL_FP/2u;
+    ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+        dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(gpu,0,0,0,err,sizeof(err))&&
+        fr_thermal_gpu_enable(gpu,err,sizeof(err))&&
+        fr_thermal_gpu_seed_water(gpu,0,at,100.f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_import_chunk(gpu,0,chunk,bulk,err,sizeof(err))&&
+        fr_bulk_phase_gpu_step(gpu,1.f/60.f,err,sizeof(err))&&
+        fr_thermal_gpu_read_water_chunk(gpu,0,water_heat,4096u,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(gpu,0,out,err,sizeof(err)));
+    ASSERT_EQ(out->oil_fp[at],FR_BULK_CELL_FULL_FP/2u);
+    ASSERT_TRUE(out->oil_excess[at]>0.f&&water_heat[at]<100.f);
+    ASSERT_TRUE(fabsf(out->oil_excess[at]+water_heat[at]-100.f)<.001f);
+    dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);free(water_heat);PASS();
+}
 static void test_upward_water_flow_drags_mixed_oil_without_lifting_dry_oil(void) {
     char err[256]={0};dc_gpu_t *gpu=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_bulk_phase_chunk_t *bulk=calloc(1,sizeof(*bulk)),*out=calloc(1,sizeof(*out));
@@ -280,6 +306,7 @@ int main(void) {
     RUN(test_dense_oil_exchanges_with_water_in_sealed_vertical_pair);
     RUN(test_water_heat_follows_water_exchanged_with_oil);
     RUN(test_oil_heat_follows_oil_through_density_exchange);
+    RUN(test_water_and_oil_exchange_heat_without_creating_energy);
     RUN(test_upward_water_flow_drags_mixed_oil_without_lifting_dry_oil);
     RUN(test_normal_tick_moves_imported_oil);
     RUN(test_oil_crosses_horizontal_chunk_seam_conservatively);
