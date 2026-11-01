@@ -216,6 +216,45 @@ static void test_stone_surface_wets_from_neighbor_oil_without_burning_stone(void
     ASSERT_EQ(record.state.fuel_mass_fp,0u);
     free(after);free(phase);free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_hot_terrain_oil_drips_into_finite_bulk_while_cold_film_holds(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_bulk_phase_chunk_t *phase=calloc(1,sizeof(*phase));
+    fr_bulk_phase_chunk_t *after=calloc(1,sizeof(*after));
+    ASSERT_TRUE(chunk&&phase&&after);
+    uint32_t hot_at=20u*64u+20u,cold_at=20u*64u+30u;
+    chunk->cells[hot_at].material=DC_MATERIAL_STONE;
+    chunk->cells[cold_at].material=DC_MATERIAL_STONE;
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&
+        dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
+        dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    for(uint32_t control=0u;control<2u;control++) {
+        uint32_t at=control==0u?hot_at:cold_at;
+        float temperature=control==0u?500.f:300.f;
+        fr_reactive_state_t state;
+        ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,65536u,0u,300.f,
+            601u+control,&state,err,sizeof(err)));
+        state.coating_oil_fuel_fp=44000u;
+        ASSERT_TRUE(fr_reactive_state_add_heat(&state,
+            fr_reactive_state_energy_at_temperature(&state,temperature)-
+            fr_reactive_state_energy(&state),err,sizeof(err))&&
+            fr_gpu_reactive_seed_cell(g,0,at,&state,err,sizeof(err)));
+    }
+    ASSERT_TRUE(fr_bulk_phase_gpu_import_chunk(g,0,chunk,phase,err,sizeof(err))&&
+        fr_thermal_gpu_enable(g,err,sizeof(err))&&
+        fr_thermal_gpu_step(g,.5f,err,sizeof(err))&&
+        fr_bulk_phase_gpu_export_chunk(g,0,after,err,sizeof(err)));
+    fr_reactive_record_t hot,cold;bool hot_found=false,cold_found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,hot_at,&hot,&hot_found,err,sizeof(err))&&
+        fr_gpu_reactive_read_cell(g,0,cold_at,&cold,&cold_found,err,sizeof(err))&&
+        hot_found&&cold_found);
+    uint32_t released=after->oil_fp[hot_at+64u];
+    ASSERT_TRUE(released>0u&&hot.state.coating_oil_fuel_fp<44000u);
+    ASSERT_EQ(44000u-hot.state.coating_oil_fuel_fp,
+        released*FR_COATING_OIL_MASS_NUM/FR_COATING_MASS_DEN);
+    ASSERT_EQ(cold.state.coating_oil_fuel_fp,44000u);
+    ASSERT_EQ(after->oil_fp[cold_at+64u],0u);
+    free(after);free(phase);free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_saturated_neighbor_air_suppresses_drying(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     uint32_t at=20u*64u+20u;chunk->cells[at].material=DC_MATERIAL_WOOD;
@@ -342,6 +381,7 @@ int main(void) {
     RUN(test_rigid_contact_wets_from_finite_oil_volume);
     RUN(test_rigid_contact_preserves_jelly_fuel_and_oxidizer);
     RUN(test_stone_surface_wets_from_neighbor_oil_without_burning_stone);
+    RUN(test_hot_terrain_oil_drips_into_finite_bulk_while_cold_film_holds);
     RUN(test_saturated_neighbor_air_suppresses_drying);
     RUN(test_equal_simulated_time_dries_within_one_water_quantum);
     RUN(test_drying_reaches_gas_across_a_chunk_seam);
