@@ -32,6 +32,11 @@ bool fr_combustion_reference(const fr_reactive_state_t *source,double oxygen_fp,
        !fr_reactive_state_valid(source,err_buf,err_cap))
         return error(err_buf,err_cap,"Invalid ordinary combustion input");
     fr_reactive_state_t s=*source;fr_combustion_products_t p={0};
+    if(s.pending_shock_energy>0.f) {
+        float shock=s.pending_shock_energy;
+        if(!fr_reactive_state_add_heat(&s,shock,err_buf,err_cap)) return false;
+        s.pending_shock_energy=0.f;
+    }
     bool char_burn=s.fuel_mass_fp==0&&s.char_mass_fp>0;
     uint32_t fuel=char_burn?s.char_mass_fp:s.fuel_mass_fp;
     const fr_reactive_profile_t *profile=fr_reactive_profile(char_burn?DC_MATERIAL_CHAR:s.material);
