@@ -59,3 +59,7 @@ Runtime hot terrain release RED 53e037b, GREEN 7d01371, REFACTOR f4fa1e2: a ston
 **2026-11-01T12:12:14Z**
 
 Moving host drip RED cd7f2d5, GREEN 9f6174e, REFACTOR 31f1c2b: quarter-native GPU hot wood body piece retains stable rest parcel/origin while releasing density-accounted oil to the cell below its current transformed geometry. Oil and jelly use separate body dispatch phases and same-phase atomic capacity reservation, preventing concurrent pieces from overfilling a shared receiver. Shared compensated parcel energy/heat capacity helper gives terrain and body release the same temperature. Focused 11/11 and full make test under Xephyr :92 pass. Still needed: leaf and actor proxy runtime coverage, fracture/streaming owner cases, displayed coating stress benchmark.
+
+**2026-11-01T12:25:26Z**
+
+Detached-film activity RED d818e66/5df128b, GREEN d97b765, REFACTOR 9e1a12b: a manually seeded hot stone film drips oil into initially empty bulk, and the normal GPU tick now transports that oil while retaining exact total bulk plus rewet film volume. Direct bulk step had already worked, but normal tick had skipped it because its activity flag and pipeline were never initialized from coating-only imports. Seeded cell/body/particle and reactive chunk imports now preflight the bulk pipeline and mark possible work when coating inventory exists. Focused quarter-native GPU 12/12 and full make test under Xephyr :92 pass. Remaining: runtime leaf/actor proxy coverage, reacted jelly release bounds, fracture/streaming proofs, native displayed coating benchmark.
