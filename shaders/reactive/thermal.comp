@@ -106,7 +106,7 @@ float wet_energy(uint first,uint second,float amount) {
 float exchange(vec4 a,vec4 b) {
     if(a.y<=0.||b.y<=0.||a.z<=0.||b.z<=0.) return 0.;
     float difference=a.x/a.y-b.x/b.y,conductance=2.*a.z*b.z/(a.z+b.z);
-    if(params.mode==1u) conductance*=float(FR_THERMAL_GAMEPLAY_FACE_METERS);
+    if((params.mode&1u)!=0u) conductance*=float(FR_THERMAL_GAMEPLAY_FACE_METERS);
     float requested=conductance*difference*uintBitsToFloat(params.seconds);
     float bound=min(a.y,b.y)*abs(difference)/float(FR_THERMAL_NEIGHBORS);
     return sign(requested)*min(abs(requested),bound);
@@ -170,8 +170,10 @@ void main() {
             uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y!=0u) {
                 if(active_phase()==20u) {
                     body_wet_parcel(body,piece,h);
-                    body_phase_coat_parcel(body,piece,h,1u);
-                    body_phase_coat_parcel(body,piece,h,2u);
+                    if((params.mode&2u)!=0u) {
+                        body_phase_coat_parcel(body,piece,h,1u);
+                        body_phase_coat_parcel(body,piece,h,2u);
+                    }
                 } else body_conduction(h.x);
             }
         }

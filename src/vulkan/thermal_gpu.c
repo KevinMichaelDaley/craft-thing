@@ -264,7 +264,8 @@ bool fr_thermal_gpu_is_bonfire_world(const dc_gpu_t *g) {
 }
 static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
     struct fr_thermal_gpu *t=g->thermal;uint32_t bits=0;memcpy(&bits,&seconds,sizeof(bits));
-    uint32_t push[8]={g->width,g->height,mode,bits,dc_gpu_pixel_pool_word_offset(g)+DC_GPU_PIXEL_POOL_HEADER_WORDS,t->combustion.pipeline?1u:0u,t->purpose==FR_THERMAL_WORLD_BONFIRE?1u:0u,t->profile_count};
+    uint32_t push[8]={g->width,g->height,mode,bits,dc_gpu_pixel_pool_word_offset(g)+DC_GPU_PIXEL_POOL_HEADER_WORDS,t->combustion.pipeline?1u:0u,
+        (t->purpose==FR_THERMAL_WORLD_BONFIRE?1u:0u)|(g->bulk_phase_work_possible?2u:0u),t->profile_count};
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);

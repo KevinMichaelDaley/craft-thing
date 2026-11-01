@@ -134,7 +134,8 @@ static void test_rigid_contact_preserves_jelly_fuel_and_oxidizer(void) {
     for(uint32_t y=20u;y<22u;y++) for(uint32_t x=20u;x<23u;x++)
         chunk->cells[y*64u+x].material=DC_MATERIAL_WOOD;
     uint32_t at=20u*64u+19u;phase->slime_fp[at]=30000u;
-    phase->slime_excess[at]=3.f;
+    phase->slime_excess[at]=3.f;phase->oil_fp[at]=10000u;
+    phase->oil_excess[at]=2.f;chunk->cells[at].fluid_mass=10000u;
     ASSERT_TRUE(context(&g,err,sizeof(err))&&
         dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
         dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
@@ -157,6 +158,11 @@ static void test_rigid_contact_preserves_jelly_fuel_and_oxidizer(void) {
     ASSERT_TRUE(fabs((double)fuel+oxidizer-(double)lost*jelly->density)<2.);
     ASSERT_TRUE(fabs((double)fuel-(double)(fuel+oxidizer)*jelly->fuel_fraction)<2.);
     ASSERT_TRUE(after->slime_excess[at]<phase->slime_excess[at]);
+    ASSERT_TRUE(record.state.coating_oil_fuel_fp>0u&&after->oil_fp[at]<phase->oil_fp[at]);
+    dc_chunk_t *water_after=calloc(1,sizeof(*water_after));ASSERT_TRUE(water_after);
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,water_after,err,sizeof(err))&&
+        water_after->cells[at].fluid_mass>0u);
+    free(water_after);
     free(after);free(phase);free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_saturated_neighbor_air_suppresses_drying(void) {
