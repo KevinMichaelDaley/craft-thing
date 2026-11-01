@@ -67,3 +67,7 @@ Detached-film activity RED d818e66/5df128b, GREEN d97b765, REFACTOR 9e1a12b: a m
 **2026-11-01T12:35:42Z**
 
 Spent-jelly RED 0b4fa3b, GREEN 1ce2c4d, REFACTOR current: GPU hot film release now bounds returned slime by the actual fuel and oxidizer remaining after reaction. A 52000-Q16 bound-oxidizer residue with zero jelly fuel cannot turn back into fresh red slime; no underflow or species creation. Focused quarter-native Xephyr GPU 13/13 and full make test pass. Remaining: runtime foliage/actor proxy and owner transfer proofs, water drag, native coating stress benchmark.
+
+**2026-11-01T12:41:50Z**
+
+Quarter-native headless native-Vulkan coating microbenchmark added at 8efc958: 480x270 grid, 64 seeded stone parcels, 20 measured thermal steps, alternating cold/hot film fixtures in one device without creating windows. Three native GPU runs after cold caches: active hot coating 0.625, 0.557, 0.556 ms/step versus warmed controls 0.574, 0.641, 0.501 ms/step; difference is within run variation (~0.1 ms). Oil release remained finite at 1513152 Q16 per active fixture. Earlier first-run control included shader warmup and was excluded from comparison. This is an isolated thermal microbenchmark, not a full game frame budget.
