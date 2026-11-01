@@ -207,6 +207,35 @@ static void test_spent_terrain_becomes_loose_saved_ash_without_losing_mass(void)
     ASSERT_EQ(record.state.material,DC_MATERIAL_ASH);ASSERT_EQ(fr_reactive_state_mass_fp(&record.state),2000);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_greek_corrosion_consumes_bound_stock_and_publishes_spent_gold(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    uint32_t at=20u*64u+20u;
+    chunk->cells[at]=(dc_cell_t){.material=DC_MATERIAL_GOLD,.flags=DC_CELL_LOADED_TERRAIN};
+    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_reactive_state_t gold;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_GOLD,65536u,0u,800.f,100500u,&gold,err,sizeof(err)));
+    gold.coating_jelly_fuel_fp=65536u;gold.coating_oxidizer_fp=8000u;
+    gold.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&gold,800.f);
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,at,&gold,err,sizeof(err)));
+    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&
+        fr_combustion_gpu_enable(g,err,sizeof(err)));
+    ASSERT_TRUE(fr_combustion_gpu_step(g,.5f,err,sizeof(err)));
+    fr_reactive_record_t record;bool found=false;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&record,&found,err,sizeof(err))&&found);
+    ASSERT_TRUE(record.state.corroded_fraction>0.f&&record.state.corroded_fraction<1.f);
+    ASSERT_TRUE(record.state.coating_oxidizer_fp<gold.coating_oxidizer_fp);
+    ASSERT_EQ(fr_reactive_state_mass_fp(&record.state),fr_reactive_state_mass_fp(&gold));
+    ASSERT_TRUE(fr_combustion_gpu_step(g,2.f,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,at,&record,&found,err,sizeof(err))&&found);
+    ASSERT_EQ(record.state.material,DC_MATERIAL_CORROSION_RESIDUE);
+    ASSERT_TRUE((record.state.flags&FR_REACTIVE_SPENT)!=0u);
+    ASSERT_EQ(record.state.origin_id_low,gold.origin_id_low);
+    ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_EQ(chunk->cells[at].material,DC_MATERIAL_CORROSION_RESIDUE);
+    free(chunk);dc_gpu_destroy(g);PASS();
+}
 static void test_flame_emission_requires_local_transported_hot_fuel_and_oxygen(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
@@ -317,6 +346,10 @@ int main(int argc,char **argv) {
     }
     if(argc==2&&strcmp(argv[1],"--ash")==0) {
         RUN(test_spent_terrain_becomes_loose_saved_ash_without_losing_mass);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
+    if(argc==2&&strcmp(argv[1],"--corrosion")==0) {
+        RUN(test_greek_corrosion_consumes_bound_stock_and_publishes_spent_gold);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
     }
     if(argc==2&&strcmp(argv[1],"--roof")==0) {
