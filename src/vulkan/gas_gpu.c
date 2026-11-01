@@ -291,7 +291,7 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     parameters[FR_GAS_OPACITY_WORD]=FR_GAS_SMOKE_DISPLAY_OPACITY;
     ((uint32_t *)t->parameters.mapped)[FR_GAS_SLOT_COUNT_WORD]=DC_GPU_CHUNK_SLOTS;
     ((uint32_t *)t->parameters.mapped)[FR_GAS_CELL_OWNER_WORD]=0u;
-    VkDescriptorBufferInfo buffers[37];
+    VkDescriptorBufferInfo buffers[DC_GPU_DESCRIPTOR_BINDINGS];
     for(uint32_t i=12u;i<28u;i++) buffers[i]=(VkDescriptorBufferInfo){t->parameters.buffer,0,t->parameters.bytes};
     buffers[26]=(VkDescriptorBufferInfo){t->owner_tiles.buffer,0,t->owner_tiles.bytes};
     buffers[27]=(VkDescriptorBufferInfo){t->conduction_faces.buffer,0,t->conduction_faces.bytes};
@@ -301,7 +301,11 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     buffers[7]=(VkDescriptorBufferInfo){g->page_buffer,0,VK_WHOLE_SIZE};buffers[8]=(VkDescriptorBufferInfo){g->chunk_buffer,0,VK_WHOLE_SIZE};
     buffers[9]=(VkDescriptorBufferInfo){g->occupancy_buffer,0,VK_WHOLE_SIZE};buffers[10]=(VkDescriptorBufferInfo){g->mpm_grid_buffer,0,VK_WHOLE_SIZE};
     buffers[11]=(VkDescriptorBufferInfo){t->gates.buffer,0,t->gates.bytes};
-    bool okay=fr_renderer_compute_init(g,&t->initialize,buffers,27,16,"build/shaders/gas_init.comp.spv",err,cap)&&
+    for(uint32_t i=28u;i<37u;i++) buffers[i]=(VkDescriptorBufferInfo){t->parameters.buffer,0,t->parameters.bytes};
+    buffers[32]=(VkDescriptorBufferInfo){g->water_color_buffer,0,VK_WHOLE_SIZE};
+    buffers[36]=(VkDescriptorBufferInfo){g->thermal_control_buffer,0,VK_WHOLE_SIZE};
+    buffers[37]=(VkDescriptorBufferInfo){g->bulk_phase_buffer,0,VK_WHOLE_SIZE};
+    bool okay=fr_renderer_compute_init(g,&t->initialize,buffers,38,16,"build/shaders/gas_init.comp.spv",err,cap)&&
         fr_renderer_compute_init(g,&t->prepare,buffers,27,16,"build/shaders/gas_prepare.comp.spv",err,cap)&&
         fr_renderer_compute_init(g,&t->transport,buffers,27,16,"build/shaders/gas_transport.comp.spv",err,cap)&&
         fr_renderer_compute_init(g,&t->gate,buffers,27,32,"build/shaders/gas_gate.comp.spv",err,cap)&&
@@ -315,11 +319,8 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     const char *names[]={"stage","transfer","commit"};
     for(uint32_t i=0;i<3;i++) {
         char path[96];snprintf(path,sizeof(path),"build/shaders/gas_geometry_%s.comp.spv",names[i]);
-        if(!fr_renderer_compute_init(g,geometry[i],buffers,27,16,path,err,cap)) return false;
+        if(!fr_renderer_compute_init(g,geometry[i],buffers,38,16,path,err,cap)) return false;
     }
-    for(uint32_t i=28u;i<37u;i++) buffers[i]=(VkDescriptorBufferInfo){t->parameters.buffer,0,t->parameters.bytes};
-    buffers[32]=(VkDescriptorBufferInfo){g->water_color_buffer,0,VK_WHOLE_SIZE};
-    buffers[36]=(VkDescriptorBufferInfo){g->thermal_control_buffer,0,VK_WHOLE_SIZE};
     if(!fr_renderer_compute_init(g,&t->bubble_displace,buffers,37,16,
         "build/shaders/gas_bubble_displace.comp.spv",err,cap)) return false;
     buffers[6]=(VkDescriptorBufferInfo){t->audit_summary.buffer,0,t->audit_summary.bytes};
