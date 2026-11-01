@@ -39,3 +39,7 @@ Added RED-GREEN-REFACTOR GPU regression for water heat carried by oil/water dens
 **2026-11-01T07:07:00Z**
 
 Added RED-GREEN-REFACTOR GPU test for velocity-based water drag on immersed oil (3a162fa, 7f07a2b, 8457a8a). Upward water face flow now entrains mixed oil against gravity, while dry oil at the same face velocity remains below; phase volumes remain conserved. Full make test under Xephyr :92 passed. Still pending independent oil/slime thermal inventories and exchange, persistent sidecars, and broader moving-body cases.
+
+**2026-11-01T07:21:12Z**
+
+Added separate oil/slime excess-energy sidecars to the bulk chunk, BLP2 save packet with BLP1 backward decoder, strict finite import checks, and conservative GPU heat advection alongside phase volume (RED a7f4e60/ae3f36a/b986ba0, GREEN 8c8ee94, REFACTOR e4df489). Shared C/GLSL channel layout now asserts matching stride. Packet, stream, bulk GPU, and full make test pass under Xephyr :92. Remaining: direct water/oil/slime thermal exchange and broader moving-rigid/seam reconciliation.
