@@ -26,3 +26,7 @@ Playable acceptance in actual Vulkan application, not only a separate CPU mock/d
 **2026-11-01T19:30:25Z**
 
 Noninteractive implementation authorized by user. Start with ct-2p38 and proceed through dependency-ready children. Initial main branch pull was already up to date at 99f70261. Baseline full suite launched via ./tools/with-vulkan make test; log /tmp/craft-player-baseline-tests.log. Persistent worker logs under build/agents/beaver-player/.
+
+**2026-11-01T22:33:09Z**
+
+Progress: ct-2p38 closed with RED 67755ace, GREEN e959607c, REFACTOR 081ce58c (10 passing headless cases). ct-xsll native art/source-map substage implemented with RED 429e1dbd and GREEN 4bc14f32 (7 passing cases, plus 10 foundation cases, sanitizer clean). ct-xsll remains in_progress for actual GPU/render/reactive integration. All movement/spell/harvest/co-op/runtime acceptance children remain open; no epic completion claim. Untouched baseline and foundation full rerun both fail the same catapult support assertion tracked ct-lc9o. Existing default test recipe override tracked ct-il37. Details and provisional controls/material coefficients in design/beaver_player.md and assets/player/beaver/manifest.json.

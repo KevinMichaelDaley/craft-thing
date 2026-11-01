@@ -6,3 +6,7 @@ build/beaver_asset_tests: tests/player/beaver_tests.c $(BEAVER_SRC) $(PLAYER_SRC
 test_beaver_assets: build/beaver_asset_tests
 	./build/beaver_asset_tests
 test_player: test_beaver_assets
+
+build/beaver_atlas: tools/diagnostics/beaver_atlas.c $(BEAVER_SRC) $(PLAYER_SRC) src/assets/prop.c include/ferrum/player/beaver.h src/player/beaver_internal.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(BEAVER_SRC) $(PLAYER_SRC) src/assets/prop.c -o $@ $(shell pkg-config --libs sdl2) -lm

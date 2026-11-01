@@ -59,9 +59,13 @@ must not duplicate press actions. Disconnect/focus loss must clear intents.
   adapter against actual GPU body/reactive/render storage with tests before
   claiming a visible reactive player.
 - The current physical registry has wood and other world materials but no cloth
-  or fur. Distinct art regions and stable bindings alone do not establish cloth
-  singeing or fur wetting/ignition; material support must be implemented and
-  validated through the shared simulation.
+  or fur, and every four-bit body material ID is assigned. For the placeholder,
+  distinct fur/robe/hat/tail regions explicitly alias the existing wettable,
+  combustible wood profile; teeth use stone. These reversible provisional
+  coefficients preserve supported physical and reactive contracts without
+  truncating IDs or widening the body format in an unrelated change. The native
+  asset manifest records all aliases. Actual material response still needs live
+  simulation and rendering acceptance; an assigned fuel profile is not that proof.
 - `dc_level_view_t` owns one GPU world and one camera today. Split-screen must
   render multiple cameras over that same stepped world, not create independently
   simulated level views. The current editor also consumes A/D through WASD pan;
@@ -86,3 +90,27 @@ material response, real tree removal/inventory conservation, material-changing
 spells and independent simultaneous local players in split-screen. Child tickets
 remain open until their actual criteria are met; the epic stays open until all
 children and real application acceptance pass.
+
+## Native placeholder assets
+
+`fr_beaver_asset_build` authors deterministic standard CPRP clips into supplied
+cold buffers. `fr_beaver_asset_size` supplies exact capacity requirements.
+The standard prop reader validates the completed compiled bytes. No new image
+format, runtime image parsing, heap allocation or global mutable sprite state is
+introduced. The manifest is `assets/player/beaver/manifest.json`.
+
+The parallel source map retains canonical body/equipment pixel identities across
+all poses and facing directions. Zero is transparent; other values are the
+40x40 source index plus one. Owners use canonical rest coordinates, independently
+of the destination sprite pixel and camera/world position. Occluded source pixels
+remain canonical owners even when the current frame does not display them.
+Body extraction can trim shapes: the eventual runtime adapter must account for
+that origin when mapping source rest cells to actual body rest cells.
+
+Run `./tools/with-vulkan make test_player` for the state and asset checks.
+Run `./tools/with-vulkan make build/beaver_atlas` and
+`./tools/with-vulkan ./build/beaver_atlas` to export standard `.cprop` files,
+little-endian source maps, and a contact sheet in `build/beaver_assets/`.
+Rows are idle, walk, chew and cast; the sheet is an asset review, not an actual
+application screenshot. Runtime player animation and persistent reaction
+feedback are still unimplemented acceptance criteria on `ct-xsll`.

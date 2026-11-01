@@ -13,6 +13,14 @@ checks and `LIBRESPRITE=/path/to/AppRun make test_libresprite_host` for the real
 host checks. GPU prop placement and animated lighting integration remain tracked
 under `ctpe-6m89`; exported packages are not yet an interactive game import feature.
 
+The beaver player foundation and deterministic placeholder clips are available
+for integration. `./tools/with-vulkan make test_player` checks independent player
+state and the exact 6/8/4 walk/chew/cast assets. Build `build/beaver_atlas` and run
+it to export compiled props, canonical source maps and an asset contact sheet
+under `build/beaver_assets/`. See the [player integration notes](design/beaver_player.md)
+and [asset manifest](assets/player/beaver/manifest.json). Live player animation,
+movement, spells, harvesting and split-screen remain unfinished on `ct-exwr`.
+
 Dungeoncraft is an early C11/Vulkan prototype for a per-pixel material world. The current vertical slice streams procedural chunks on a worker thread, maps a bounded chunk atlas through a GPU page table, draws it with a SPIR-V compute shader, and presents it through a Vulkan swapchain. The window accepts material painting, runs up to 64 GPU rigid boxes, moves Eulerian water on fixed grid cells, and settles sand, dirt, and gravel through a GPU particle/grid MPM stage.
 
 The live frame records rigid simulation, a GPU red-black pressure projection, conservative four-phase water transport, sparse interface-marker advection and correction, granular MPM, and rendering in Vulkan submissions. Water volume stays in fixed grid cells; GPU face velocities move it. Massless inside/outside markers guide bounded equal-and-opposite transfers near settled interfaces. The renderer mixes fractional water and granular slots only within each cell, leaving material boundaries sharp; see [material rendering](design/material_rendering.md). Timestamp and buffer readback are opt-in diagnostics, while chunk state is downloaded only for streaming saves or tests. `make native` builds the 1920×1080 interactive view with 608 resident chunks and six-tick fluid staging; `make half_native` builds a 960×540 simulated view displayed at 1920×1080 with 187 resident chunks and a three-tick fluid cadence. See [native benchmark](design/native_benchmark.md), [the fluid solver plan](design/fluid_solver.md), and [the granular solver](design/mpm_solver.md).

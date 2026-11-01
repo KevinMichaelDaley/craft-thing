@@ -5,11 +5,11 @@
 enum { BEAVER_TAIL, BEAVER_LEFT_FOOT, BEAVER_RIGHT_FOOT, BEAVER_ROBE,
        BEAVER_HEAD, BEAVER_LEFT_ARM, BEAVER_RIGHT_ARM, BEAVER_JAW, BEAVER_HAT };
 
-static bool rectangle(int32_t x,int32_t y,int32_t left,int32_t top,int32_t right,int32_t bottom) {
+static bool beaver_rectangle(int32_t x,int32_t y,int32_t left,int32_t top,int32_t right,int32_t bottom) {
     return x>=left && x<=right && y>=top && y<=bottom;
 }
 
-static bool ellipse(int32_t x,int32_t y,int32_t cx,int32_t cy,int32_t rx,int32_t ry) {
+static bool beaver_ellipse(int32_t x,int32_t y,int32_t cx,int32_t cy,int32_t rx,int32_t ry) {
     int32_t dx=x-cx,dy=y-cy;
     return dx*dx*ry*ry+dy*dy*rx*rx<=rx*rx*ry*ry;
 }
@@ -18,17 +18,17 @@ bool beaver_art_source(uint32_t source,beaver_art_pixel_t *out) {
     if (!source || source>FR_BEAVER_PIXELS || !out) return false;
     int32_t x=(int32_t)((source-1)%FR_BEAVER_WIDTH),y=(int32_t)((source-1)/FR_BEAVER_WIDTH);
     beaver_art_pixel_t pixel={0};
-    if (ellipse(x,y,8,30,6,3)) pixel=(beaver_art_pixel_t){.region=FR_BEAVER_TAIL,.part=BEAVER_TAIL};
-    if (rectangle(x,y,17,33,21,35)) pixel=(beaver_art_pixel_t){.region=FR_BEAVER_FUR,.part=BEAVER_LEFT_FOOT};
-    if (rectangle(x,y,25,33,29,35)) pixel=(beaver_art_pixel_t){.region=FR_BEAVER_FUR,.part=BEAVER_RIGHT_FOOT};
+    if (beaver_ellipse(x,y,8,30,6,3)) pixel=(beaver_art_pixel_t){.region=FR_BEAVER_TAIL,.part=BEAVER_TAIL};
+    if (beaver_rectangle(x,y,17,33,21,35)) pixel=(beaver_art_pixel_t){.region=FR_BEAVER_FUR,.part=BEAVER_LEFT_FOOT};
+    if (beaver_rectangle(x,y,25,33,29,35)) pixel=(beaver_art_pixel_t){.region=FR_BEAVER_FUR,.part=BEAVER_RIGHT_FOOT};
     if (y>=22 && y<=32 && x>=17-(y-22)/4 && x<=27+(y-22)/4)
         pixel=(beaver_art_pixel_t){.region=FR_BEAVER_ROBE,.part=BEAVER_ROBE};
-    if (ellipse(x,y,24,18,6,5) || rectangle(x,y,27,18,33,21) || ellipse(x,y,19,14,2,2))
+    if (beaver_ellipse(x,y,24,18,6,5) || beaver_rectangle(x,y,27,18,33,21) || beaver_ellipse(x,y,19,14,2,2))
         pixel=(beaver_art_pixel_t){.region=FR_BEAVER_FUR,.part=BEAVER_HEAD};
-    if (rectangle(x,y,14,24,17,28)) pixel=(beaver_art_pixel_t){.region=FR_BEAVER_FUR,.part=BEAVER_LEFT_ARM};
-    if (rectangle(x,y,28,24,30,28)) pixel=(beaver_art_pixel_t){.region=FR_BEAVER_FUR,.part=BEAVER_RIGHT_ARM};
-    if (rectangle(x,y,30,22,32,24)) pixel=(beaver_art_pixel_t){.region=FR_BEAVER_TEETH,.part=BEAVER_JAW};
-    if ((y>=4 && y<=12 && x>=23-(y-4)/2 && x<=23+(y-4)/2) || rectangle(x,y,15,13,30,14))
+    if (beaver_rectangle(x,y,14,24,17,28)) pixel=(beaver_art_pixel_t){.region=FR_BEAVER_FUR,.part=BEAVER_LEFT_ARM};
+    if (beaver_rectangle(x,y,28,24,30,28)) pixel=(beaver_art_pixel_t){.region=FR_BEAVER_FUR,.part=BEAVER_RIGHT_ARM};
+    if (beaver_rectangle(x,y,30,22,32,24)) pixel=(beaver_art_pixel_t){.region=FR_BEAVER_TEETH,.part=BEAVER_JAW};
+    if ((y>=4 && y<=12 && x>=23-(y-4)/2 && x<=23+(y-4)/2) || beaver_rectangle(x,y,15,13,30,14))
         pixel=(beaver_art_pixel_t){.region=FR_BEAVER_HAT,.part=BEAVER_HAT};
     if (!pixel.region) return false;
     static const uint8_t colors[FR_BEAVER_REGION_COUNT][3]={

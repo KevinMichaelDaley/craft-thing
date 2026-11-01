@@ -4,7 +4,13 @@
 
 #include "beaver_internal.h"
 
-enum { BEAVER_PROP_HEADER=64, BEAVER_PROP_FRAME=16, BEAVER_PROP_MAP=8, BEAVER_PROP_APPEARANCE=64 };
+enum { BEAVER_PROP_HEADER=64, BEAVER_PROP_FRAME=16, BEAVER_PROP_MAP=8,
+       BEAVER_PROP_APPEARANCE=64, BEAVER_PROP_STONE=1, BEAVER_PROP_WOOD=2,
+       BEAVER_PROP_RIGID=3 };
+
+static uint32_t beaver_prop_material(fr_beaver_region_t region) {
+    return region==FR_BEAVER_TEETH?BEAVER_PROP_STONE:BEAVER_PROP_WOOD;
+}
 
 static void beaver_u32(uint8_t *bytes,uint32_t value) {
     for (uint32_t i=0;i<4;i++) bytes[i]=(uint8_t)(value>>(i*8));
@@ -41,7 +47,7 @@ bool fr_beaver_asset_size(fr_player_action_t action,size_t *bytes,uint32_t *entr
 bool fr_beaver_source(uint32_t source,fr_beaver_source_t *out) {
     beaver_art_pixel_t art;
     if (!out || !beaver_art_source(source,&art)) return false;
-    *out=(fr_beaver_source_t){art.region,art.region==FR_BEAVER_TEETH?1u:2u};
+    *out=(fr_beaver_source_t){art.region,beaver_prop_material(art.region)};
     return true;
 }
 
@@ -54,8 +60,8 @@ static void beaver_frame(uint8_t *data,uint32_t *mapping,fr_player_action_t acti
         if (x<0 || y<0 || x>=(int32_t)FR_BEAVER_WIDTH || y>=(int32_t)FR_BEAVER_HEIGHT) continue;
         uint32_t pixel=(uint32_t)y*FR_BEAVER_WIDTH+(uint32_t)x;
         uint8_t *physical=data+pixel*BEAVER_PROP_MAP;
-        physical[0]=(uint8_t)(art.region==FR_BEAVER_TEETH?1:2);
-        physical[2]=3;
+        physical[0]=(uint8_t)beaver_prop_material(art.region);
+        physical[2]=BEAVER_PROP_RIGID;
         beaver_u32(physical+4,1);
         uint8_t *appearance=data+FR_BEAVER_PIXELS*BEAVER_PROP_MAP+pixel*BEAVER_PROP_APPEARANCE;
         for (uint32_t c=0;c<3;c++) {
