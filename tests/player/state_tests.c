@@ -203,7 +203,7 @@ static void test_chew_entry_loop_release_and_reentry(void) {
     ASSERT_TRUE(fr_player_frame(p,&frame)); ASSERT_EQ(frame,7u);
     p->intent.chew_held=true;
     ASSERT_TRUE(fr_player_chew_tick(p,true,1));
-    ASSERT_EQ(p->action,FR_PLAYER_IDLE);
+    ASSERT_EQ(p->action,FR_PLAYER_CHEW);
     ASSERT_TRUE(fr_player_chew_tick(p,true,0));
     ASSERT_TRUE(fr_player_frame(p,&frame)); ASSERT_EQ(frame,1u);
     ASSERT_EQ(f.players[1].action,FR_PLAYER_IDLE); PASS();
@@ -238,10 +238,27 @@ static void test_chew_partition_independence_and_overflow(void) {
     ASSERT_EQ(f.players[0].action,FR_PLAYER_IDLE); PASS();
 }
 
+static void test_recovery_reentry_preserves_elapsed_time_across_cadences(void) {
+    fixture_t f; ASSERT_TRUE(fixture(&f));
+    for (uint32_t i=0;i<2;i++) {
+        f.players[i].intent.chew_held=true;f.players[i].intent.has_target=true;
+        ASSERT_TRUE(fr_player_chew_tick(&f.players[i],true,300));
+        ASSERT_TRUE(fr_player_chew_tick(&f.players[i],false,0));
+    }
+    ASSERT_TRUE(fr_player_chew_tick(&f.players[0],true,350));
+    for (uint32_t i=0;i<35;i++) ASSERT_TRUE(fr_player_chew_tick(&f.players[1],true,10));
+    uint32_t a,b;
+    ASSERT_TRUE(fr_player_frame(&f.players[0],&a) && fr_player_frame(&f.players[1],&b));
+    ASSERT_EQ(a,3u);ASSERT_EQ(a,b);
+    ASSERT_EQ(f.players[0].elapsed_ms,f.players[1].elapsed_ms);
+    PASS();
+}
+
 int main(void) {
     RUN(test_chew_entry_loop_release_and_reentry);
     RUN(test_chew_invalid_target_recovers_even_during_entry);
     RUN(test_chew_partition_independence_and_overflow);
+    RUN(test_recovery_reentry_preserves_elapsed_time_across_cadences);
     RUN(test_namespaced_typed_registration_and_sealing);
     RUN(test_invalid_registration_is_transactional);
     RUN(test_two_players_own_values_abilities_and_motion);
