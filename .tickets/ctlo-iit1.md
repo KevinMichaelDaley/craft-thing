@@ -2,7 +2,7 @@
 id: ctlo-iit1
 status: open
 deps: [ctlo-ldb7, ctlo-18l4]
-links: []
+links: [ctlo-8b67]
 created: 2026-10-24T22:06:19Z
 type: feature
 priority: 1

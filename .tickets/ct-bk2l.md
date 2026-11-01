@@ -2,7 +2,7 @@
 id: ct-bk2l
 status: in_progress
 deps: []
-links: []
+links: [ctlo-8b67]
 created: 2026-11-01T04:35:21Z
 type: feature
 priority: 1
