@@ -57,6 +57,9 @@ float geometry_stable_demand(ivec2 p,float donor_volume) {
 /* Retain density during boundary remapping; sealed pockets retain all stock. */
 vec2 geometry_retention(ivec2 p,Gas original,float available) {
     if(gas_mass(original)<=0.||available>=original.geometry.x) return vec2(1,0);
+    uint at=gas_atlas(p);
+    if(available<=0.&&at!=0xffffffffu&&
+        (cells[at].x&65535u)==3u&&cells[at].y>0u) return vec2(1,0);
     float route=geometry_route(p);if(route<=0.) return vec2(1,0);
     return vec2(clamp(available/original.geometry.x,0.,1.),route);
 }
