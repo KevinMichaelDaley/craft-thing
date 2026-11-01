@@ -29,6 +29,7 @@ layout(buffer_reference,std430,buffer_reference_align=4) buffer Words {uint word
 layout(buffer_reference,std430,buffer_reference_align=8) readonly buffer Handles {uvec2 values[];};
 layout(buffer_reference,std430,buffer_reference_align=16) buffer ParcelSamples {vec4 values[];};
 float coefficient(uint material,uint field) {return uintBitsToFloat(profiles[material*FR_PROFILE_WORDS+field]);}
+#include "coating_mass.glsl"
 #include "world_body.glsl"
 uint atlas_at(uint index) {
     uint x=index%params.width,y=index/params.width,page=pages[(y/64u)*((params.width+63u)/64u)+x/64u];
@@ -120,8 +121,8 @@ void body_conduction(uint index) {
         if(e.words[FR_ENTRY_OWNER]==2u&&e.words[FR_ENTRY_GENERATION]!=0u) {
             uint s=FR_ENTRY_STATE,m=e.words[s];
             float base=((float(e.words[s+9u])+float(e.words[s+11u])+float(e.words[s+15u]))*coefficient(m,5u)+
-                float(e.words[s+10u])*coefficient(12u,5u)+float(e.words[s+12u])*coefficient(3u,5u)+
-                float(e.words[s+13u])*coefficient(14u,5u)+(float(e.words[s+14u])+float(e.words[s+16u]))*coefficient(15u,5u))/65536.;
+                float(e.words[s+10u])*coefficient(12u,5u)+
+                float(e.words[s+12u])*coefficient(3u,5u))/65536.+coating_heat_capacity(e,s);
             float energy=uintBitsToFloat(e.words[s+17u])+uintBitsToFloat(e.words[s+25u])+uintBitsToFloat(e.words[s+26u]);
             float capacity=fr_char_mixture_secant_capacity(energy,base,float(e.words[s+10u])/65536.);
             value=vec4(energy,capacity,coefficient(m,6u),uintBitsToFloat(e.words[FR_ENTRY_GENERATION]));

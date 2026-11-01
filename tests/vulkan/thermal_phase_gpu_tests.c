@@ -119,6 +119,16 @@ static void test_rigid_contact_wets_from_finite_oil_volume(void) {
     ASSERT_TRUE(fabs(exact_oil-(double)lost*FR_COATING_OIL_MASS_NUM/
         FR_COATING_MASS_DEN)<1e-6);
     ASSERT_TRUE(after->oil_excess[oil_at]<phase->oil_excess[oil_at]);
+    ASSERT_TRUE(fr_thermal_gpu_step(g,.5f,err,sizeof(err))&&
+        fr_gpu_reactive_read_body(g,0x80000001u,0u,0u,&record,&found,err,sizeof(err))&&found&&
+        fr_bulk_phase_gpu_export_chunk(g,0,after,err,sizeof(err)));
+    uint32_t total_lost=phase->oil_fp[oil_at]-after->oil_fp[oil_at];
+    ASSERT_TRUE(total_lost>lost);
+    double total_mass=(double)record.state.coating_oil_fuel_fp+
+        (double)((record.state.coating_remainders>>FR_COATING_OIL_REM_SHIFT)&
+            FR_COATING_REM_MASK)/FR_COATING_MASS_DEN;
+    ASSERT_TRUE(fabs(total_mass-(double)total_lost*FR_COATING_OIL_MASS_NUM/
+        FR_COATING_MASS_DEN)<1e-6);
     dc_chunk_t *water_after=calloc(1,sizeof(*water_after));ASSERT_TRUE(water_after);
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,water_after,err,sizeof(err)));
     ASSERT_TRUE(water_after->cells[oil_at].fluid_mass>0u);

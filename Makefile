@@ -90,7 +90,7 @@ GPU_OBJ += build/reactive_checkpoint_gpu.o build/structural_store_channels.o bui
 build/reactive_arena_gpu.o: src/vulkan/reactive_arena_gpu.c src/vulkan/reactive_arena_gpu.h include/dungeoncraft/reactive_arena_layout.h include/dungeoncraft/reactive_state_layout.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/reactive_state.o build/reactive_snapshot.o build/reactive_material.o build/reactive_chunk.o
-build/reactive_state.o: src/fire/reactive_state.c include/ferrum/fire/reactive_state.h include/dungeoncraft/reactive_state_layout.h
+build/reactive_state.o: src/fire/reactive_state.c include/ferrum/fire/reactive_state.h include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/coating_layout.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/reactive_snapshot.o: src/fire/reactive_snapshot.c include/ferrum/fire/reactive_state.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
@@ -1898,7 +1898,7 @@ build/gas_reference_tests: tests/fire/gas_reference_tests.c src/fire/gas.c src/f
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/fire/gas.c src/fire/gas_reference.c -o $@ -lm
 build/bulk_phase_tests: tests/fire/bulk_phase_tests.c src/fire/bulk_phase.c src/fire/bulk_phase_packet.c include/ferrum/fire/bulk_phase.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/bulk_phase_tests.c src/fire/bulk_phase.c src/fire/bulk_phase_packet.c -o $@ -lm
-build/coating_tests: tests/fire/coating_tests.c src/fire/coating.c src/fire/material_profile.c src/fire/material_profile_data.inc include/ferrum/fire/coating.h include/ferrum/fire/bulk_phase.h
+build/coating_tests: tests/fire/coating_tests.c src/fire/coating.c src/fire/material_profile.c src/fire/material_profile_data.inc include/ferrum/fire/coating.h include/ferrum/fire/bulk_phase.h include/dungeoncraft/coating_layout.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/coating_tests.c src/fire/coating.c src/fire/material_profile.c -o $@ -lm
 .PHONY: test_coating
 test: test_coating
@@ -2106,12 +2106,13 @@ test_heat_bench: build/thermal_tests build/thermal_stream_tests build/thermal_pr
 	./build/thermal_checkpoint_display_tests
 	./build/reactive_checkpoint_display_tests
 build/dungeoncraft build/controls_tests build/reactive_stream_view_display_tests build/thermal_bench_display_tests: $(THERMAL_BENCH_SRC) src/app/thermal_bench.h
-build/shaders/thermal.comp.spv: shaders/reactive/thermal.comp shaders/reactive/address.glsl include/dungeoncraft/thermal_parameters.h include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/reactive_profile_layout.h
+build/shaders/thermal.comp.spv: shaders/reactive/thermal.comp shaders/reactive/address.glsl shaders/reactive/body_wetting.glsl shaders/reactive/coating_mass.glsl include/dungeoncraft/thermal_parameters.h include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/reactive_profile_layout.h include/dungeoncraft/coating_layout.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
-build/shaders/combustion.comp.spv: shaders/reactive/combustion.comp shaders/reactive/address.glsl shaders/gas/types.glsl include/dungeoncraft/combustion_parameters.h include/dungeoncraft/thermal_parameters.h
+build/shaders/combustion.comp.spv: shaders/reactive/combustion.comp shaders/reactive/address.glsl shaders/reactive/coating_mass.glsl shaders/gas/types.glsl include/dungeoncraft/combustion_parameters.h include/dungeoncraft/thermal_parameters.h include/dungeoncraft/coating_layout.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/shaders/body_combustion.comp.spv: shaders/reactive/coating_mass.glsl include/dungeoncraft/coating_layout.h
 build/combustion_gpu_display_tests: build/shaders/combustion.comp.spv
 build/combustion_gpu_display_tests: tests/vulkan/combustion_containment_cases.h
 build/combustion_gpu_display_tests: tests/vulkan/combustion_contact_cases.h
@@ -2172,10 +2173,11 @@ build/bonfire_plan_tests build/bonfire_scene_tests build/bonfire_display_tests b
 build/component_admission_tests build/rigid_thermal_display_tests: tests/vulkan/covered_wood_heat_cases.h
 
 # Generated material coefficients are inputs to direct-source test binaries too.
-build/bonfire_scene_tests build/combustion_tests build/component_admission_tests build/gas_stream_tests build/reactive_archive_tests build/reactive_arena_gpu_tests build/reactive_cell_gpu_tests build/reactive_chunk_tests build/reactive_material_tests build/reactive_packet_tests build/reactive_profile_gpu_tests build/reactive_state_gpu_tests build/reactive_state_tests build/reactive_stream_tests build/stream_tests build/thermal_checkpoint_tests build/thermal_phase_tests build/thermal_precision_tests build/thermal_stream_tests build/thermal_tests: src/fire/material_profile_data.inc
+build/bonfire_scene_tests build/combustion_tests build/component_admission_tests build/gas_stream_tests build/reactive_archive_tests build/reactive_arena_gpu_tests build/reactive_cell_gpu_tests build/reactive_chunk_tests build/reactive_material_tests build/reactive_packet_tests build/reactive_profile_gpu_tests build/reactive_state_gpu_tests build/reactive_state_tests build/reactive_stream_tests build/stream_tests build/thermal_checkpoint_tests build/thermal_phase_tests build/thermal_precision_tests build/thermal_stream_tests build/thermal_tests: src/fire/material_profile_data.inc include/dungeoncraft/coating_layout.h
 
 # Direct native/diagnostic source consumers share the generated fuel data.
-build/component_world_tests build/diagnostics/body_support build/diagnostics/native360_fluid_trace build/diagnostics/native360_frame_trace build/diagnostics/native360_mpm_variants build/dungeoncraft_half_native build/dungeoncraft_native build/dungeoncraft_quarter_native build/dynamic_body_capacity_tests build/level03_support_tests build/marker_slot_tests build/material_cut_buoyancy_tests build/native_360_performance_tests build/native_720_component_tests build/native_720_performance_tests build/native_bench build/pixel_dynamics_visual_tests build/pixel_performance_tests build/quarter_native_bench build/quarter_native_buoyancy_tests build/quarter_native_component_acceptance_tests build/quarter_native_component_extraction_tests build/quarter_native_component_material_tests build/quarter_native_fluid_tests build/quarter_native_rigid_solver_tests build/quarter_native_rigid_tests build/quarter_native_solver_tests build/quarter_native_structural_buckling_tests build/quarter_native_structural_equilibrium_tests build/quarter_native_structural_failure_tests build/quarter_native_structural_fracture_tests build/quarter_native_structural_impact_tests build/quarter_native_structural_particle_identity_tests build/quarter_native_structural_placement_tests build/quarter_native_structural_root_identity_tests build/quarter_native_structural_store_tests build/quarter_native_structural_streaming_tests build/quarter_native_structural_submerged_load_tests build/renderer_performance_tests build/renderer_visual_tests build/structural_bench build/structural_cadence_tests build/structural_material_visual_tests build/structural_visual_scene_tests build/structural_world_tests: src/fire/material_profile_data.inc
+build/native_720_performance_tests build/structural_visual_scene_tests: src/fire/material_profile_data.inc include/dungeoncraft/coating_layout.h
+build/component_world_tests build/diagnostics/body_support build/diagnostics/native360_fluid_trace build/diagnostics/native360_frame_trace build/diagnostics/native360_mpm_variants build/dungeoncraft_half_native build/dungeoncraft_native build/dungeoncraft_quarter_native build/dynamic_body_capacity_tests build/level03_support_tests build/marker_slot_tests build/material_cut_buoyancy_tests build/native_360_performance_tests build/native_720_component_tests build/native_bench build/pixel_dynamics_visual_tests build/pixel_performance_tests build/quarter_native_bench build/quarter_native_buoyancy_tests build/quarter_native_component_acceptance_tests build/quarter_native_component_extraction_tests build/quarter_native_component_material_tests build/quarter_native_fluid_tests build/quarter_native_rigid_solver_tests build/quarter_native_rigid_tests build/quarter_native_solver_tests build/quarter_native_structural_buckling_tests build/quarter_native_structural_equilibrium_tests build/quarter_native_structural_failure_tests build/quarter_native_structural_fracture_tests build/quarter_native_structural_impact_tests build/quarter_native_structural_particle_identity_tests build/quarter_native_structural_placement_tests build/quarter_native_structural_root_identity_tests build/quarter_native_structural_store_tests build/quarter_native_structural_streaming_tests build/quarter_native_structural_submerged_load_tests build/renderer_performance_tests build/renderer_visual_tests build/structural_bench build/structural_cadence_tests build/structural_material_visual_tests build/structural_world_tests: src/fire/material_profile_data.inc include/dungeoncraft/coating_layout.h
 
 # Shared local gas/optical helpers for both reaction owners.
 build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: shaders/reactive/flame_gas.glsl

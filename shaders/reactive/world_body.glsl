@@ -42,8 +42,8 @@ bool fr_body_sample(uint index,out vec4 node_value,out vec4 metadata) {
         uvec2 handle=fr_body_reactive_handle(body,slot,piece);if(handle.y==0u) continue;
         Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));uint s=FR_ENTRY_STATE,m=e.words[s];
         float base=((float(e.words[s+9u])+float(e.words[s+11u])+float(e.words[s+15u]))*coefficient(m,5u)+
-            float(e.words[s+10u])*coefficient(12u,5u)+float(e.words[s+12u])*coefficient(3u,5u)+
-            float(e.words[s+13u])*coefficient(14u,5u)+(float(e.words[s+14u])+float(e.words[s+16u]))*coefficient(15u,5u))/65536.;
+            float(e.words[s+10u])*coefficient(12u,5u)+
+            float(e.words[s+12u])*coefficient(3u,5u))/65536.+coating_heat_capacity(e,s);
         float energy=uintBitsToFloat(e.words[s+17u])+uintBitsToFloat(e.words[s+25u])+uintBitsToFloat(e.words[s+26u]);
         float capacity=fr_char_mixture_secant_capacity(energy,base,float(e.words[s+10u])/65536.);
         float wet_capacity=float(e.words[s+8u])*coefficient(m,19u),wet=wet_capacity>0.?clamp(float(e.words[s+12u])/wet_capacity,0.,1.):0.;

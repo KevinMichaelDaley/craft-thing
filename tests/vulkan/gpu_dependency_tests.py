@@ -88,6 +88,14 @@ class GpuDependencyTests(unittest.TestCase):
                          if "src/fire/material_profile_data.inc" not in deps)
         self.assertEqual(missing, [])
 
+    def test_coating_layout_rebuilds_every_reactive_state_source_consumer(self):
+        users = {target: deps for target, deps in self.rules.items()
+                 if "src/fire/reactive_state.c" in deps}
+        self.assertTrue(users)
+        missing = sorted(target for target, deps in users.items()
+                         if "include/dungeoncraft/coating_layout.h" not in deps)
+        self.assertEqual(missing, [])
+
     def test_display_material_object_rebuilds_when_generated_coefficients_change(self):
         target = "build/performance/src/fire/material_profile.o"
         source = "src/fire/material_profile_data.inc"

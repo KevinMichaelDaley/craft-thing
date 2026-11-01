@@ -1,10 +1,12 @@
 #include <math.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "dungeoncraft/leaf_material.h"
 #include "dungeoncraft/coating_layout.h"
+#include "ferrum/fire/material_profile.h"
 #include "ferrum/fire/reactive_state.h"
 
 static int g_pass,g_fail;
@@ -34,7 +36,12 @@ static void test_fractional_coating_mass_is_valid_and_counted(void) {
         (2u<<FR_COATING_JELLY_FUEL_REM_SHIFT);
     ASSERT_TRUE(fr_reactive_state_valid(&state,err,sizeof(err)));
     ASSERT_TRUE(fabs(fr_reactive_state_mass_exact_fp(&state)-
-        ((double)fr_reactive_state_mass_fp(&state)+.9))<1e-9);PASS();
+        ((double)fr_reactive_state_mass_fp(&state)+.9))<1e-9);
+    fr_reactive_state_t rounded=state;rounded.coating_remainders=0u;
+    double expected=(.5*fr_reactive_profile(DC_MATERIAL_OIL)->heat_capacity+
+        .4*fr_reactive_profile(DC_MATERIAL_RED_SLIME_JELLY)->heat_capacity)/65536.;
+    ASSERT_TRUE(fabs(fr_reactive_state_heat_capacity(&state)-
+        fr_reactive_state_heat_capacity(&rounded)-expected)<1e-9);PASS();
 }
 static void test_fracture_splits_fractional_coating_mass_once(void) {
     char err[128];fr_reactive_state_t state,left,right;
@@ -46,6 +53,24 @@ static void test_fracture_splits_fractional_coating_mass_once(void) {
     ASSERT_TRUE(fabs(fr_reactive_state_mass_exact_fp(&left)+
         fr_reactive_state_mass_exact_fp(&right)-
         fr_reactive_state_mass_exact_fp(&state))<1e-9);PASS();
+}
+static void test_coating_remainder_roundtrips_current_packet(void) {
+    char err[128];fr_reactive_record_t source={0},restored={0};
+    source.owner=fr_reactive_cell_owner((dc_chunk_coord_t){3,-2},7u);
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322u,0u,300.f,
+        105u,&source.state,err,sizeof(err)));
+    source.state.coating_oil_fuel_fp=1u;
+    source.state.coating_remainders=5u;
+    size_t length=0,written=0;ASSERT_TRUE(fr_reactive_snapshot_size(1u,&length));
+    uint8_t *bytes=malloc(length);ASSERT_TRUE(bytes);
+    ASSERT_TRUE(fr_reactive_snapshot_encode(&source,1u,106u,bytes,length,
+        &written,err,sizeof(err)));
+    uint32_t count=0u,required=0u;uint64_t next=0u;
+    ASSERT_TRUE(fr_reactive_snapshot_decode(bytes,length,&restored,1u,
+        &count,&next,&required,err,sizeof(err)));
+    ASSERT_EQ(restored.state.coating_remainders,5u);
+    ASSERT_TRUE(fabs(fr_reactive_state_mass_exact_fp(&restored.state)-39323.5)<1e-9);
+    free(bytes);PASS();
 }
 static void test_soil_moisture_and_leaf_pigment_have_different_meanings(void) {
     char err[128];fr_reactive_state_t soil,leaf;
@@ -174,6 +199,7 @@ int main(void) {
     RUN(test_default_composition_preserves_exact_mass_and_temperature);
     RUN(test_fractional_coating_mass_is_valid_and_counted);
     RUN(test_fracture_splits_fractional_coating_mass_once);
+    RUN(test_coating_remainder_roundtrips_current_packet);
     RUN(test_soil_moisture_and_leaf_pigment_have_different_meanings);
     RUN(test_splits_conserve_species_energy_and_hazard_without_rerolling);
     RUN(test_failed_state_change_leaves_both_outputs_unchanged);

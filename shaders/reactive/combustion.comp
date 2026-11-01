@@ -13,6 +13,9 @@
 #include "../../include/dungeoncraft/blackbody.h"
 #include "../../include/dungeoncraft/bonfire_layout.h"
 #include "../../include/dungeoncraft/terrain_flags.h"
+#include "../../include/dungeoncraft/coating_layout.h"
+#include "../../include/dungeoncraft/reactive_state_layout.h"
+#include "../../include/dungeoncraft/reactive_profile_layout.h"
 layout(local_size_x=64) in;
 layout(set=0,binding=0,std430) readonly buffer Root {uint root[];};
 layout(set=0,binding=1,std430) readonly buffer Pages {uint pages[];};
@@ -38,6 +41,7 @@ layout(buffer_reference,std430,buffer_reference_align=4) buffer Words {uint word
 layout(buffer_reference,std430,buffer_reference_align=8) buffer Handles {uvec2 values[];};
 layout(buffer_reference,std430,buffer_reference_align=16) buffer GasField {Gas values[];};
 float coefficient(uint material,uint field) {return uintBitsToFloat(profiles[material*32u+field]);}
+#include "coating_mass.glsl"
 #define DC_RUNTIME_BODY_BINDING 11
 #define FR_THERMAL_OCCUPANCY_BINDING 12
 #define FR_BODY_POOL_WORD params.body_params.x
@@ -92,9 +96,8 @@ bool solid_address(uint at,out uvec2 address) {
 float solid_capacity(Words entry) {
     uint s=FR_ENTRY_STATE,m=entry.words[s];
     float base=((float(entry.words[s+9u])+float(entry.words[s+11u])+float(entry.words[s+15u]))*coefficient(m,5u)+
-        float(entry.words[s+10u])*coefficient(12u,5u)+float(entry.words[s+12u])*coefficient(3u,5u)+
-        float(entry.words[s+13u])*coefficient(14u,5u)+
-        (float(entry.words[s+14u])+float(entry.words[s+16u]))*coefficient(15u,5u))/65536.;
+        float(entry.words[s+10u])*coefficient(12u,5u)+
+        float(entry.words[s+12u])*coefficient(3u,5u))/65536.+coating_heat_capacity(entry,s);
     float energy=uintBitsToFloat(entry.words[s+17u])+uintBitsToFloat(entry.words[s+25u])+uintBitsToFloat(entry.words[s+26u]);
     return fr_char_mixture_secant_capacity(energy,base,float(entry.words[s+10u])/65536.);
 }
@@ -366,7 +369,8 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,inout Gas gas
     if(entry.words[FR_ENTRY_GENERATION]!=handle.y||entry.words[FR_ENTRY_OWNER]!=owner) return;
     evaporate_entry(entry,gas);
     uint s=FR_ENTRY_STATE,m=entry.words[s],wood_fuel=entry.words[s+9u];
-    if((entry.words[s+13u]|entry.words[s+14u]|entry.words[s+15u]|entry.words[s+16u])!=0u) return;
+    if((entry.words[s+FR_STATE_COATING_REMAINDERS]|entry.words[s+13u]|
+        entry.words[s+14u]|entry.words[s+15u]|entry.words[s+16u])!=0u) return;
     bool char_stage=wood_fuel==0u;uint fuel=char_stage?entry.words[s+10u]:wood_fuel;
     if(owner==2u&&char_stage&&fuel>0u) atomicAdd(hud[25],1u);
     uint profile=char_stage?12u:m;
@@ -471,7 +475,8 @@ void choose_body_target(uint index) {
     uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.x!=index||h.y!=e.words[FR_ENTRY_GENERATION]) return;
     uint s=FR_ENTRY_STATE,m=e.words[s];
     if((m==7u||m==8u||m==9u||m==11u||m==12u)&&
-       (e.words[s+9u]|e.words[s+10u]|e.words[s+13u]|e.words[s+14u]|e.words[s+15u]|e.words[s+16u])==0u&&
+       (e.words[s+9u]|e.words[s+10u]|e.words[s+FR_STATE_COATING_REMAINDERS]|
+        e.words[s+13u]|e.words[s+14u]|e.words[s+15u]|e.words[s+16u])==0u&&
        (e.words[s+11u]|e.words[s+12u])!=0u) atomicOr(hud[DC_BODY_ASH_DISPATCH_WORD],1u);
     ivec2 p=body_parcel_cell(body,piece);float best=-1.;uint chosen=0xffffffffu;
     float capacity=solid_capacity(e),bulk=capacity>0.?uintBitsToFloat(e.words[s+17u])/capacity:0.;

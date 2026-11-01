@@ -6,6 +6,8 @@ float body_thermal_piece_mass(Body body,uint slot,uint piece,uint material,out b
     if(!reactive) return body_material_density(material);
     Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),h.x));float mass=0.;
     for(uint species=9u;species<=16u;species++) mass+=float(e.words[FR_ENTRY_STATE+species])/65536.;
+    mass+=coating_oil_fraction(e,FR_ENTRY_STATE)/65536.+
+        coating_jelly_fraction(e,FR_ENTRY_STATE)/65536.;
     return mass;
 }
 void body_thermal_mass(uint slot,Body body) {

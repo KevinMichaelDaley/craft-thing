@@ -1,8 +1,10 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "ferrum/fire/coating.h"
+#include "ferrum/fire/material_profile.h"
 
 static int g_pass=0,g_fail=0;
 #define RUN(fn) do {printf("RUN  %s\n",#fn);fn();printf("OK   %s\n",#fn);} while(0)
@@ -185,6 +187,18 @@ static void test_corrupt_quantization_word_is_transactional(void) {
     ASSERT_TRUE(!fr_coating_quantize_volume(FR_BULK_OIL,1u,0x80000000u,&delta));
     ASSERT_EQ(delta.oil_fuel_fp,77u);PASS();
 }
+static void test_fixed_point_conversion_matches_material_profiles(void) {
+    const fr_reactive_profile_t *oil=fr_reactive_profile(DC_MATERIAL_OIL);
+    const fr_reactive_profile_t *jelly=fr_reactive_profile(DC_MATERIAL_RED_SLIME_JELLY);
+    ASSERT_TRUE(oil&&jelly);
+    ASSERT_TRUE(fabs((double)oil->density-(double)FR_COATING_OIL_MASS_NUM/
+        FR_COATING_MASS_DEN)<1e-6);
+    ASSERT_TRUE(fabs((double)jelly->density-(double)FR_COATING_JELLY_MASS_NUM/
+        FR_COATING_MASS_DEN)<1e-6);
+    ASSERT_TRUE(fabs((double)jelly->fuel_fraction-
+        (double)FR_COATING_JELLY_FUEL_NUM/FR_COATING_JELLY_FUEL_DEN)<1e-6);
+    PASS();
+}
 
 int main(void) {
     RUN(test_wetting_debits_mobile_oil_and_preserves_heat);
@@ -201,6 +215,7 @@ int main(void) {
     RUN(test_one_quantum_fracture_stays_with_one_child);
     RUN(test_many_tiny_contacts_keep_exact_oil_and_jelly_mass);
     RUN(test_corrupt_quantization_word_is_transactional);
+    RUN(test_fixed_point_conversion_matches_material_profiles);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail>0?1:0;
 }
