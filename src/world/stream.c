@@ -22,6 +22,8 @@ typedef struct {
     uint8_t *thermal;
     size_t thermal_bytes;
     fr_gas_checkpoint_chunk_t *gas;
+    uint8_t *bulk_packet;
+    size_t bulk_bytes;
 } stream_job_t;
 
 typedef struct {
@@ -73,7 +75,8 @@ static void release_channel(fr_reactive_chunk_t *channel) {
 }
 static bool save_chunk(const dc_streamer_t *stream,const dc_chunk_t *chunk,
     const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
-    const uint8_t *thermal,size_t thermal_bytes,const fr_gas_checkpoint_chunk_t *gas) {
+    const uint8_t *thermal,size_t thermal_bytes,const fr_gas_checkpoint_chunk_t *gas,
+    const uint8_t *bulk_packet,size_t bulk_bytes) {
     dc_chunk_colors_t ambient_colors={0};
     if(reactive&&!colors) colors=&ambient_colors;
     char temporary[1024], final[1024];
@@ -87,6 +90,7 @@ static bool save_chunk(const dc_streamer_t *stream,const dc_chunk_t *chunk,
     if(reactive) header.version=7;
     if(thermal) header.version=8;
     if(gas) header.version=9;
+    if(bulk_packet) header.version=10;
     bool okay = fwrite(&header, sizeof(header), 1, file) == 1 &&
         fwrite(chunk->cells, sizeof(chunk->cells), 1, file) == 1 &&
         chunk->marker_count <= DC_MARKERS_PER_CHUNK &&
@@ -117,12 +121,18 @@ static bool save_chunk(const dc_streamer_t *stream,const dc_chunk_t *chunk,
         uint64_t length=size,hash=0;
         if(okay) okay=fwrite(&length,sizeof(length),1,file)==1&&fwrite(bytes,size,1,file)==1;
         free(bytes);
-        if(okay&&(thermal||gas)) {
+        if(okay&&(thermal||gas||bulk_packet)) {
             uint64_t liquid_length=thermal_bytes;
             okay=fwrite(&liquid_length,sizeof(liquid_length),1,file)==1&&
                 (!thermal_bytes||fwrite(thermal,thermal_bytes,1,file)==1);
         }
-        if(okay&&gas) okay=fwrite(gas,sizeof(*gas),1,file)==1;
+        if(okay&&bulk_packet) {
+            uint64_t gas_length=gas?sizeof(*gas):0u,liquid_length=bulk_bytes;
+            okay=fwrite(&gas_length,sizeof(gas_length),1,file)==1&&
+                (!gas||fwrite(gas,sizeof(*gas),1,file)==1)&&
+                fwrite(&liquid_length,sizeof(liquid_length),1,file)==1&&
+                fwrite(bulk_packet,bulk_bytes,1,file)==1;
+        } else if(okay&&gas) okay=fwrite(gas,sizeof(*gas),1,file)==1;
         long end=okay?ftell(file):-1;
         if(okay) okay=prefix_hash(file,end,&hash)&&fseek(file,end,SEEK_SET)==0&&fwrite(&hash,sizeof(hash),1,file)==1;
     }
@@ -133,7 +143,8 @@ static bool save_chunk(const dc_streamer_t *stream,const dc_chunk_t *chunk,
 }
 
 static dc_chunk_t *load_chunk(const dc_streamer_t *stream,dc_chunk_coord_t coord,
-    dc_chunk_colors_t *colors,fr_reactive_chunk_t **reactive,float **water_excess,fr_gas_checkpoint_chunk_t **gas) {
+    dc_chunk_colors_t *colors,fr_reactive_chunk_t **reactive,float **water_excess,
+    fr_gas_checkpoint_chunk_t **gas,fr_bulk_phase_chunk_t **bulk) {
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     if (!chunk) return NULL;
     chunk->coord=coord;
@@ -159,7 +170,7 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,dc_chunk_coord_t coord
     chunk_header_t header;
     bool okay = fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCC1", 4) == 0 &&
-        (header.version >= 1 && header.version <= 9) &&
+        (header.version >= 1 && header.version <= 10) &&
         header.x == coord.x && header.y == coord.y && header.seed == stream->seed &&
         fread(chunk->cells, sizeof(chunk->cells), 1, file) == 1;
     if (okay && header.version >= 2)
@@ -203,11 +214,25 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,dc_chunk_coord_t coord
         if(okay&&header.version>=8) {
             enum { LIQUID_CHUNK_BYTES=48+16+DC_CHUNK_CELLS*4 };
             okay=fread(&liquid_length,sizeof(liquid_length),1,file)==1&&
-                (liquid_length==LIQUID_CHUNK_BYTES||(header.version==9&&liquid_length==0u));
+                (liquid_length==LIQUID_CHUNK_BYTES||(header.version>=9&&liquid_length==0u));
             if(okay&&liquid_length) okay=(liquid=malloc((size_t)liquid_length))!=NULL&&fread(liquid,(size_t)liquid_length,1,file)==1;
         }
         if(okay&&header.version==9) okay=(*gas=malloc(sizeof(**gas)))!=NULL&&
             fread(*gas,sizeof(**gas),1,file)==1&&gas_checkpoint_valid(*gas);
+        if(okay&&header.version==10) {
+            uint64_t gas_length=0,bulk_length=0;uint8_t *packet=NULL;
+            okay=fread(&gas_length,sizeof(gas_length),1,file)==1&&
+                (gas_length==0u||gas_length==sizeof(**gas));
+            if(okay&&gas_length) okay=(*gas=malloc(sizeof(**gas)))!=NULL&&
+                fread(*gas,sizeof(**gas),1,file)==1&&gas_checkpoint_valid(*gas);
+            if(okay) okay=fread(&bulk_length,sizeof(bulk_length),1,file)==1&&
+                bulk_length==fr_bulk_phase_chunk_bytes();
+            if(okay) okay=(packet=malloc((size_t)bulk_length))!=NULL&&
+                fread(packet,(size_t)bulk_length,1,file)==1&&
+                (*bulk=malloc(sizeof(**bulk)))!=NULL&&
+                fr_bulk_phase_chunk_decode(chunk,packet,(size_t)bulk_length,*bulk);
+            free(packet);
+        }
         long end=okay?ftell(file):-1;uint64_t stored=0,hash=0;
         if(okay) okay=fread(&stored,sizeof(stored),1,file)==1&&fgetc(file)==EOF&&!ferror(file)&&
             prefix_hash(file,end,&hash)&&hash==stored;
@@ -223,7 +248,8 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,dc_chunk_coord_t coord
         free(bytes);free(liquid);
     }
     if (fclose(file) != 0) okay = false;
-    if (!okay) {release_channel(*reactive);*reactive=NULL;free(*water_excess);*water_excess=NULL;free(*gas);*gas=NULL;free(chunk);return NULL;}
+    if (!okay) {release_channel(*reactive);*reactive=NULL;free(*water_excess);*water_excess=NULL;
+        free(*gas);*gas=NULL;free(*bulk);*bulk=NULL;free(chunk);return NULL;}
     chunk->coord = coord;
     if (header.version < 4) dc_chunk_seed_particles(chunk);
     return chunk;
@@ -245,15 +271,17 @@ static int worker_main(void *arg) {
         dc_stream_result_t result = { .coord = job.coord, .generation = job.generation };
         if (job.kind == JOB_LOAD) {
             result.colors=calloc(1,sizeof(*result.colors));
-            result.chunk = result.colors?load_chunk(stream,job.coord,result.colors,&result.reactive,&result.water_excess,&result.gas):NULL;
+            result.chunk = result.colors?load_chunk(stream,job.coord,result.colors,&result.reactive,&result.water_excess,&result.gas,&result.bulk):NULL;
             result.kind = result.chunk ? DC_STREAM_LOADED : DC_STREAM_FAILED;
         } else {
-            result.kind = save_chunk(stream,job.chunk,job.colors,job.reactive,job.thermal,job.thermal_bytes,job.gas) ? DC_STREAM_SAVED : DC_STREAM_FAILED;
+            result.kind = save_chunk(stream,job.chunk,job.colors,job.reactive,job.thermal,job.thermal_bytes,
+                job.gas,job.bulk_packet,job.bulk_bytes) ? DC_STREAM_SAVED : DC_STREAM_FAILED;
             free(job.chunk);
             free(job.colors);
             release_channel(job.reactive);
             free(job.thermal);
             free(job.gas);
+            free(job.bulk_packet);
         }
 
         mtx_lock(&stream->mutex);
@@ -356,8 +384,14 @@ bool dc_stream_request_save_thermal(dc_streamer_t *stream,const dc_chunk_t *chun
 bool dc_stream_request_save_gas(dc_streamer_t *stream,const dc_chunk_t *chunk,
     const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
     const float *water_excess,const fr_gas_checkpoint_chunk_t *gas,uint64_t generation) {
+    return dc_stream_request_save_bulk(stream,chunk,colors,reactive,water_excess,gas,NULL,generation);
+}
+bool dc_stream_request_save_bulk(dc_streamer_t *stream,const dc_chunk_t *chunk,
+    const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
+    const float *water_excess,const fr_gas_checkpoint_chunk_t *gas,
+    const fr_bulk_phase_chunk_t *bulk,uint64_t generation) {
     fr_reactive_chunk_t empty={.next_id=1};
-    if((water_excess||gas)&&!reactive) reactive=&empty;
+    if((water_excess||gas||bulk)&&!reactive) reactive=&empty;
     if (!stream || !chunk || !generation) return false;
     if(!gas_checkpoint_valid(gas)) return false;
     if(colors && !dc_color_records_valid((const float*)colors,DC_CHUNK_CELLS*2)) return false;
@@ -381,15 +415,21 @@ bool dc_stream_request_save_gas(dc_streamer_t *stream,const dc_chunk_t *chunk,
     }
     stream_job_t job = { .kind = JOB_SAVE, .coord = chunk->coord,
         .generation = generation, .chunk = copy,.colors=color_copy,.reactive=reaction_copy };
+    if(bulk) {
+        job.bulk_bytes=fr_bulk_phase_chunk_bytes();job.bulk_packet=malloc(job.bulk_bytes);
+        if(!job.bulk_packet||!fr_bulk_phase_chunk_encode(copy,bulk,job.bulk_packet,job.bulk_bytes)) {
+            free(copy);free(color_copy);release_channel(reaction_copy);free(job.bulk_packet);return false;
+        }
+    }
     if(water_excess) {
         fr_thermal_checkpoint_t state={.source={0,FR_THERMAL_PROBE_CAPACITY},.chunk_count=1,.water_excess=(float *)water_excess};
         if(!fr_thermal_checkpoint_encode(&state,copy,1,&job.thermal,&job.thermal_bytes,NULL,0)) {
-            free(copy);free(color_copy);release_channel(reaction_copy);return false;
+            free(copy);free(color_copy);release_channel(reaction_copy);free(job.bulk_packet);return false;
         }
     }
     if(gas) {
         job.gas=malloc(sizeof(*gas));
-        if(!job.gas) {free(copy);free(color_copy);release_channel(reaction_copy);free(job.thermal);return false;}
+        if(!job.gas) {free(copy);free(color_copy);release_channel(reaction_copy);free(job.thermal);free(job.bulk_packet);return false;}
         memcpy(job.gas,gas,sizeof(*gas));
     }
     if (queue_job(stream, job)) return true;
@@ -398,6 +438,7 @@ bool dc_stream_request_save_gas(dc_streamer_t *stream,const dc_chunk_t *chunk,
     release_channel(reaction_copy);
     free(job.thermal);
     free(job.gas);
+    free(job.bulk_packet);
     return false;
 }
 
@@ -421,6 +462,7 @@ void dc_stream_result_release(dc_stream_result_t *result) {
     release_channel(result->reactive);
     free(result->water_excess);
     free(result->gas);
+    free(result->bulk);
     memset(result, 0, sizeof(*result));
 }
 
