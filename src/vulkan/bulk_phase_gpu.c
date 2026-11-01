@@ -7,6 +7,8 @@
 #include "gas_gpu_internal.h"
 #include "gpu_internal.h"
 
+#define FR_BULK_GRAVITY_CELLS_PER_SECOND_SQUARED 900.f
+
 static bool error(char *err,uint32_t cap,const char *message) {
     if(err&&cap) snprintf(err,cap,"%s",message);
     return false;
@@ -70,7 +72,8 @@ void dc_gpu_record_bulk_phase(dc_gpu_t *gpu,float seconds) {
     vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout,0,1,&gpu->descriptor,0,NULL);
     struct {uint32_t width,height,parity,axis;float seconds,gravity,water,oil,slime;} push={
-        gpu->width,gpu->height,0,0,seconds,900.f,water->density,oil->density,slime->density};
+        gpu->width,gpu->height,0,0,seconds,FR_BULK_GRAVITY_CELLS_PER_SECOND_SQUARED,
+        water->density,oil->density,slime->density};
     for(uint32_t axis=0;axis<2u;axis++) for(uint32_t parity=0;parity<2u;parity++) {
         push.parity=parity;push.axis=axis;
         vkCmdPushConstants(gpu->command,gpu->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,

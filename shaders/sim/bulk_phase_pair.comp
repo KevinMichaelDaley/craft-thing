@@ -67,6 +67,7 @@ void main() {
             if(rank==pass) heavy=phase;
         }
         if(top[heavy]==0u||(params.axis==1u&&heavy==0u)) continue;
+        if(params.axis==1u&&used(top)<=used(bottom)) break;
         uint light=3u;float light_density=0.;
         for(uint phase=0u;phase<3u;phase++)
             if(bottom[phase]>0u&&density[phase]<density[heavy]&&
