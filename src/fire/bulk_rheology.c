@@ -1,6 +1,7 @@
 #include <math.h>
 
 #include "dungeoncraft/bulk_rheology_layout.h"
+#include "ferrum/fire/bulk_phase.h"
 #include "ferrum/fire/bulk_rheology.h"
 
 bool fr_bulk_rheology_mobility(const fr_reactive_profile_t *profile,
@@ -35,6 +36,13 @@ bool fr_bulk_rheology_mobility(const fr_reactive_profile_t *profile,
 
 bool fr_bulk_rheology_quadrature(uint32_t volume_fp,float density,
     uint32_t sample_count,fr_bulk_rheology_quadrature_t *out) {
-    (void)volume_fp;(void)density;(void)sample_count;(void)out;
-    return false;
+    if(!out||volume_fp>FR_BULK_CELL_FULL_FP||!isfinite(density)||density<=0.f||
+       sample_count==0u||sample_count>FR_BULK_RHEOLOGY_MAX_QUADRATURE) return false;
+    uint32_t base=volume_fp/sample_count,remainder=volume_fp%sample_count;
+    for(uint32_t i=0;i<sample_count;i++) {
+        uint32_t weight=base+(i<remainder?1u:0u);
+        out[i].volume_fp=weight;
+        out[i].mass=density*(float)weight/(float)FR_BULK_CELL_FULL_FP;
+    }
+    return true;
 }
