@@ -94,6 +94,9 @@ void main() {
     uint top_capacity=FULL-min(FULL,occupancy[2u*world_size+top_index]);
     uint bottom_capacity=FULL-min(FULL,occupancy[2u*world_size+bottom_index]);
     float water_flow=params.axis==0u?face_velocity[index].y:face_velocity[index].x;
+    float coarse_shear=params.axis==0u?
+        abs(face_velocity[top_index].x-face_velocity[bottom_index].x):
+        abs(face_velocity[top_index].y-face_velocity[bottom_index].y);
     bool reverse_by_fill=params.axis==0u?
         (used(bottom)>bottom_capacity&&used(top)<top_capacity):
         (used(bottom)>bottom_capacity&&used(top)<=top_capacity)||
@@ -150,7 +153,7 @@ void main() {
                 float(sample_volume)/float(FULL)+
                 abs(water_flow)*physical_density;
             mobility=rheology_mobility(rheology_phase,sample_at,sample_volume,
-                stress,abs(water_flow));
+                stress,max(abs(water_flow),coarse_shear));
         }
         uint allowance=excess>0u?min(excess,face_open):
             uint(floor(min(float(FULL),speed*mobility*params.seconds*float(face_open))));
