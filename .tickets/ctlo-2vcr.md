@@ -27,3 +27,7 @@ Reference and GPU tests show load-dependent yielding, shear response and hot/col
 **2026-11-01T07:56:48Z**
 
 Initial RED-GREEN-REFACTOR increment 898e116/d6d6931, a8cec42, e9a184f: profile-driven regularized Herschel-Bulkley mobility in CPU reference and GPU bulk pair. Cold low-load slime remains at rest, loaded slime yields, hot low-load slime softens and moves; shear-thinning and invalid input reference tests pass. Full make test under persistent Xephyr :92 passed twice. Still outstanding: separate MPM quadrature samples reconciled to continuous volume ledger at gather/resample/flux, action-reaction and owner-transfer fixtures, and sustained displayed stress/frame budget. Ticket remains in_progress.
+
+**2026-11-01T07:59:48Z**
+
+Additional RED a975dff, GREEN 252016b, REFACTOR test pending: reference quadrature regenerates exact Q16 weights and derived mass from the authoritative mobile volume after flux and resampling, including zero-volume clearing; full make test under Xephyr :92 passed. Still need runtime MPM sample coupling, action-reaction, owner transfer, displayed stress and frame budget.
