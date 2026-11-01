@@ -3,6 +3,11 @@
 #include "body_address_gpu.h"
 #include "ferrum/fire/gpu.h"
 
+static inline bool fr_gpu_reactive_has_coating(const fr_reactive_state_t *state) {
+    return state->coating_oil_fuel_fp||state->coating_jelly_fuel_fp||
+        state->coating_oxidizer_fp||state->coating_remainders;
+}
+
 /** Publish the lazy root into a newly allocated body work header. */
 void fr_gpu_reactive_bind_work(dc_gpu_t *gpu,uint32_t *header);
 /** Release reactive resources after the device is idle. */

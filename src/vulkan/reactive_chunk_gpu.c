@@ -152,8 +152,7 @@ bool fr_gpu_reactive_import_chunk(dc_gpu_t *g,uint32_t slot,const dc_chunk_t *ch
     bool coating=false;
     for(uint32_t i=0;i<channel->count;i++) {
         const fr_reactive_state_t *state=&channel->attachments[i].record.state;
-        coating|=state->coating_oil_fuel_fp||state->coating_jelly_fuel_fp||
-            state->coating_oxidizer_fp||state->coating_remainders;
+        coating|=fr_gpu_reactive_has_coating(state);
     }
     if(coating&&!dc_gpu_ensure_bulk_phase_pipeline(g,err,cap)) return false;
     validated=SDL_GetTicks64();
