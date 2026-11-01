@@ -1,6 +1,6 @@
 ---
 id: ctlo-2vcr
-status: open
+status: in_progress
 deps: [ctlo-08fu, ctlo-18l4]
 links: []
 created: 2026-10-24T22:06:19Z
