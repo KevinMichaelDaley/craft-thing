@@ -556,6 +556,7 @@ static void test_quarter_native_smoke_wavelet_advects_and_displaces_boundary(voi
     }
     printf("Quarter-native smoke advected error %d stationary error %d\n",shifted_error,stationary_error);
     ASSERT_TRUE(stationary_error>=4);
+    ASSERT_TRUE(shifted_error*2<stationary_error);
     ASSERT_TRUE(present(g,err,sizeof(err))&&dc_gpu_readback(g,pixels,480u*270u,err,sizeof(err))&&
         fr_gas_gpu_read_chunk(g,0,after,4096,err,sizeof(err)));
     ASSERT_EQ(memcmp(pixels,moved,480u*270u*sizeof(*pixels)),0);
