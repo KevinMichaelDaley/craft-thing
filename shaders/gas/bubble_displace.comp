@@ -25,18 +25,20 @@ void displace_pair(uint source_at,uint receiver_at,uint source_index,uint receiv
        occupancy[2u*params.width*params.height+source_index]>0u||
        occupancy[2u*params.width*params.height+receiver_index]>0u) return;
     Gas source=gas_world(source_at),receiver=gas_world(receiver_at);
-    if(gas_mass(source)<=0.||source.geometry.x<=0.) return;
+    if(gas_mass(source)<=0.||source.geometry.x<0.) return;
+    bool pending=source.geometry.x==0.;
     bool source_ok=false,receiver_ok=false;
-    float pressure=gas_primitive(source,source_ok).hydro.w;
+    float pressure=pending?0.:gas_primitive(source,source_ok).hydro.w;
     float opposing=gas_mass(receiver)>0.?gas_primitive(receiver,receiver_ok).hydro.w:
         gas_parameter(11u)*(.21*gas_parameter(0u)+.79*gas_parameter(1u))*
         gas_parameter(12u)/gas_parameter(FR_GAS_KINETIC_WORD);
     if(gas_mass(receiver)==0.) receiver_ok=true;
-    if(!source_ok||!receiver_ok||!gas_finite(pressure)||!gas_finite(opposing)||
-       pressure<=opposing||opposing<=0.) return;
+    if((!pending&&!source_ok)||!receiver_ok||!gas_finite(pressure)||!gas_finite(opposing)||
+       (!pending&&pressure<=opposing)||opposing<=0.) return;
     float source_capacity=bubble_capacity(source);
     if(source_capacity<=0.) return;
-    float source_gamma=1.+bubble_moles(source)/source_capacity;
+    float source_moles=bubble_moles(source);
+    float source_gamma=1.+source_moles/source_capacity;
     bool receiver_has_gas=gas_mass(receiver)>0.;
     float receiver_capacity=receiver_has_gas?bubble_capacity(receiver):0.;
     if(receiver_has_gas&&receiver_capacity<=0.) return;
@@ -45,19 +47,28 @@ void displace_pair(uint source_at,uint receiver_at,uint source_index,uint receiv
     if(receiver_has_gas) maximum=min(maximum,max(0.,receiver.geometry.x-1./float(FULL_WATER)));
     if(maximum<=0.) return;
     float low=0.,high=maximum;
-    for(uint iteration=0u;iteration<20u;iteration++) {
-        float trial=.5*(low+high);
-        float source_pressure=pressure*pow(source.geometry.x/(source.geometry.x+trial),source_gamma);
-        float receiver_pressure=receiver_has_gas?
-            opposing*pow(receiver.geometry.x/(receiver.geometry.x-trial),receiver_gamma):opposing;
-        if(source_pressure>receiver_pressure) low=trial;else high=trial;
+    float source_internal=gas_thermal_energy(source);
+    if(pending) {
+        if(source_moles<=0.||source_internal<=0.||!gas_finite(source_internal)) return;
+        float equilibrium=source_moles*source_internal/
+            (opposing*gas_parameter(FR_GAS_KINETIC_WORD)*(source_capacity+source_moles));
+        if(!gas_finite(equilibrium)||equilibrium<=0.) return;
+        low=min(maximum,equilibrium);
+    } else {
+        for(uint iteration=0u;iteration<20u;iteration++) {
+            float trial=.5*(low+high);
+            float source_pressure=pressure*pow(source.geometry.x/(source.geometry.x+trial),source_gamma);
+            float receiver_pressure=receiver_has_gas?
+                opposing*pow(receiver.geometry.x/(receiver.geometry.x-trial),receiver_gamma):opposing;
+            if(source_pressure>receiver_pressure) low=trial;else high=trial;
+        }
     }
     uint moved=uint(floor(low*float(FULL_WATER)));
     if(moved==0u) return;
     float transferred=float(moved)/float(FULL_WATER);
     float source_volume=source.geometry.x+transferred;
-    float source_internal=gas_thermal_energy(source);
-    float source_work=source_internal*(pow(source.geometry.x/source_volume,source_gamma-1.)-1.);
+    float source_work=pending?-opposing*gas_parameter(FR_GAS_KINETIC_WORD)*transferred:
+        source_internal*(pow(source.geometry.x/source_volume,source_gamma-1.)-1.);
     float receiver_work=0.;
     if(receiver_has_gas) {
         float receiver_volume=receiver.geometry.x-transferred;

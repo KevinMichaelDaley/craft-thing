@@ -475,6 +475,7 @@ static void test_zero_void_submerged_source_nucleates_gpu_pocket(void) {
         volume[i]=wall?0.:1.;input[i]=wall?(fr_gas_state_t){0}:reference_air(model,.0012,300,0);
     }
     volume[at]=0.;input[at]=reference_air(model,.012,500,0);
+    volume[neighbor]=.5;input[neighbor]=(fr_gas_state_t){0};
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
         dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&fr_thermal_gpu_enable(g,err,sizeof(err))&&
         fr_thermal_gpu_seed_water(g,0,at,1.f,err,sizeof(err))&&
