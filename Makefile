@@ -2131,6 +2131,12 @@ build/coating_native_bench: tests/vulkan/coating_native_bench.c $(PERFORMANCE_OB
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 test: build/thermal_phase_gpu_display_tests
 	./build/thermal_phase_gpu_display_tests
+build/default_test_recipe_tests: tests/build/default_test_recipe_tests.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+.PHONY: test_default_recipe
+test_default_recipe: build/default_test_recipe_tests
+	./build/default_test_recipe_tests
+test: test_default_recipe
 test_ui test_quarter_native: $(THERMAL_DISPLAY_TESTS)
 test_heat_bench: build/thermal_tests build/thermal_stream_tests build/thermal_precision_tests $(THERMAL_DISPLAY_TESTS)
 	./build/thermal_tests
