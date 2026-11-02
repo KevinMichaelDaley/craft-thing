@@ -24,7 +24,8 @@ struct dc_player_session {
     SDL_GameController *controllers[FR_INPUT_DEVICES];
     int64_t device[FR_INPUT_PLAYERS];
     fr_player_drive_gpu_t *drive;
-    uint32_t count,fire,ice,offsets[FR_PLAYER_ACTION_COUNT];
+    uint32_t count,fire,ice,frame_offsets[FR_PLAYER_ACTION_COUNT][8];
+    fr_beaver_frame_layout_t layouts[FR_PLAYER_ACTION_COUNT][8];
     uint64_t sequence;
     double milliseconds;
     bool editor;
@@ -48,24 +49,31 @@ static bool players_atlas(dc_level_view_t *v,char *err,uint32_t cap) {
     for(unsigned a=0;a<FR_PLAYER_ACTION_COUNT;a++) {
         size_t bytes;uint32_t entries;
         if(!fr_beaver_asset_size((fr_player_action_t)a,&bytes,&entries)) return false;
-        s->offsets[a]=count;count+=entries;
+        count+=entries;
     }
     fr_renderer_sprite_pixel_t *pixels=calloc(count,sizeof(*pixels));
     if(!pixels) return players_error(err,cap,"Cannot stage immutable player atlas");
-    bool okay=true;
+    bool okay=true;uint32_t used=0;
     for(unsigned a=0;a<FR_PLAYER_ACTION_COUNT&&okay;a++) {
         size_t size;uint32_t entries;fr_beaver_asset_t asset;
         fr_beaver_asset_size((fr_player_action_t)a,&size,&entries);
         uint8_t *bytes=malloc(size);uint32_t *mapping=malloc((size_t)entries*4);
         okay=bytes&&mapping&&fr_beaver_asset_build((fr_player_action_t)a,bytes,size,mapping,entries,&asset,err,cap);
-        if(okay) for(uint32_t p=0;p<entries;p++) {
-            fr_prop_appearance_t appearance;uint32_t frame_pixels=asset.prop.width*asset.prop.height;
-            if(!fr_prop_appearance(&asset.prop,p/frame_pixels,p%frame_pixels,&appearance)) {okay=false;break;}
-            pixels[s->offsets[a]+p]=(fr_renderer_sprite_pixel_t){players_pack(&appearance),mapping[p]};
+        if(okay) for(uint32_t frame=0;frame<asset.prop.frame_count&&okay;frame++) {
+            fr_beaver_frame_layout_t *layout=&s->layouts[a][frame];
+            if(!fr_beaver_frame_layout(&asset,frame,layout)) {okay=false;break;}
+            s->frame_offsets[a][frame]=used;
+            for(uint32_t y=layout->y;y<layout->y+layout->height;y++)
+                for(uint32_t x=layout->x;x<layout->x+layout->width;x++) {
+                    uint32_t p=y*asset.prop.width+x;fr_prop_appearance_t appearance;
+                    if(!fr_prop_appearance(&asset.prop,frame,p,&appearance)) {okay=false;break;}
+                    uint32_t source=mapping[frame*asset.prop.width*asset.prop.height+p];
+                    pixels[used++]=(fr_renderer_sprite_pixel_t){players_pack(&appearance),source};
+                }
         }
         free(bytes);free(mapping);
     }
-    if(okay) okay=fr_renderer_sprite_atlas(v->gpu,pixels,count,err,cap);
+    if(okay) okay=fr_renderer_sprite_atlas(v->gpu,pixels,used,err,cap);
     free(pixels);return okay;
 }
 static bool players_publish(dc_level_view_t *v,char *err,uint32_t cap) {
@@ -74,12 +82,15 @@ static bool players_publish(dc_level_view_t *v,char *err,uint32_t cap) {
         uint32_t frame;fr_player_frame(&s->players[n],&frame);
         fr_player_action_t display=s->players[n].action==FR_PLAYER_WALK?FR_PLAYER_IDLE:s->players[n].action;
         if(display==FR_PLAYER_IDLE) frame=0;
-        uint32_t width=display==FR_PLAYER_CAST?80:40;
+        fr_beaver_frame_layout_t layout=s->layouts[display][frame];
+        bool flip=s->players[n].facing<0;
+        uint32_t horizontal_pad=flip?layout.canvas_width-layout.x-layout.width:layout.x;
         fr_beaver_body_t b=s->bodies[n];
         poses[n]=(fr_renderer_sprite_t){.body_id=b.binding.body_id,.generation=b.binding.generation,
-            .offset=s->offsets[display]+frame*width*40,.width=width,.height=40,
-            .flip=s->players[n].facing<0,.rest_origin_x=b.rest_origin_x,.rest_origin_y=b.rest_origin_y,
-            .origin_x=(int32_t)b.rest_origin_x+(int32_t)(width-40)/2,.origin_y=(int32_t)b.rest_origin_y};
+            .offset=s->frame_offsets[display][frame],.width=layout.width,.height=layout.height,
+            .flip=flip,.rest_origin_x=b.rest_origin_x,.rest_origin_y=b.rest_origin_y,
+            .origin_x=(int32_t)b.rest_origin_x+(int32_t)(layout.canvas_width-40)/2-(int32_t)horizontal_pad,
+            .origin_y=(int32_t)layout.foot_baseline-(int32_t)layout.y-(int32_t)b.height};
     }
     return fr_renderer_sprite_poses(v->gpu,poses,s->count,err,cap);
 }

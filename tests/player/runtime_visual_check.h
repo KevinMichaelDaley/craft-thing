@@ -45,7 +45,17 @@ static bool runtime_visual_check(dc_level_view_t *v,char *err,uint32_t cap) {
             uint32_t expected=visual_channel(alpha*color+(1-alpha)*.00886f);
             uint32_t actual=(pixels[y*VIEW_WIDTH+x]>>(c*8))&255u;
             int delta=(int)actual-(int)expected;
-            if(delta>2||delta< -2) mismatch++;
+            if(delta>2||delta< -2) {
+                if(a.alpha==0) {
+                    dc_chunk_t chunk;dc_chunk_coord_t coord;uint32_t lx,ly;
+                    dc_cell_address(x+(int64_t)status.offset_x,y+(int64_t)status.offset_y,&coord,&lx,&ly);
+                    coord.x+=status.origin.x;coord.y+=status.origin.y;
+                    if(dc_level_view_chunk(v,coord,&chunk,err,cap)&&
+                       (chunk.cells[ly*64+lx].material!=DC_MATERIAL_AIR||chunk.cells[ly*64+lx].fluid_mass)) break;
+                }
+                if(mismatch<3) fprintf(stderr,"visual mismatch %d,%d c%u actual%u expected%u src%d,%d\n",x,y,c,actual,expected,sx,sy);
+                mismatch++;
+            }
         }
         checked++;
     }

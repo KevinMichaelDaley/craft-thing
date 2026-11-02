@@ -25,7 +25,7 @@ build/player_body_gpu_tests: tests/player/body_gpu_tests.c src/player/body_gpu.c
 test_player_body_gpu: build/player_body_gpu_tests
 	./build/player_body_gpu_tests
 test: test_player_body_gpu
-build/player_runtime_tests: tests/app/player_runtime_tests.c build/dungeoncraft_quarter_native
+build/player_runtime_tests: tests/app/player_runtime_tests.c tests/player/runtime_visual_check.h build/dungeoncraft_quarter_native
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_player_runtime
 test_player_runtime: build/player_runtime_tests

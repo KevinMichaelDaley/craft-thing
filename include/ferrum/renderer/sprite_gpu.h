@@ -4,7 +4,7 @@
 #include "dungeoncraft/gpu.h"
 
 #define FR_RENDERER_SPRITES 4u
-/** Immutable texel: packed linear RGBA8 and canonical 40-column source ID+1.
+/** Immutable texel: packed linear RGBA8 and canonical 40-column pixel index+1.
  * Zero source/alpha is transparent. Physical/reactive state stays in the body. */
 typedef struct { uint32_t rgba, source; } fr_renderer_sprite_pixel_t;
 typedef struct {

@@ -9,6 +9,8 @@
 #include "renderer_internal.h"
 
 struct fr_sprite_gpu {dc_gpu_address_buffer_t channel;uint32_t pixels;};
+_Static_assert(sizeof(fr_renderer_sprite_t)==10u*sizeof(uint32_t),"Sprite pose ABI");
+_Static_assert(sizeof(fr_renderer_sprite_pixel_t)==2u*sizeof(uint32_t),"Sprite texel ABI");
 static bool sprite_error(char *err,uint32_t cap,const char *text) {
     if(err&&cap) snprintf(err,cap,"%s",text);
     return false;
