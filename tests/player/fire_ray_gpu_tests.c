@@ -9,6 +9,9 @@
 #include "../../src/vulkan/runtime_body_gpu.h"
 
 static int g_pass,g_fail;
+static unsigned g_submits;
+bool __real_fr_renderer_submit(dc_gpu_t *gpu);
+bool __wrap_fr_renderer_submit(dc_gpu_t *gpu) {g_submits++;return __real_fr_renderer_submit(gpu);}
 #define RUN(fn) do {printf("RUN %s\n",#fn);fflush(stdout);fn();} while(0)
 #define ASSERT_TRUE(x) do {if(!(x)){printf("FAIL %s:%d: %s (%s)\n",__FILE__,__LINE__,#x,err);g_fail++;return;} } while(0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -74,4 +77,12 @@ static void test_retries_and_ticks_do_not_start_another_cast(void) {
     ASSERT_TRUE(fr_fire_ray_gpu_stats(r,0,&stats));ASSERT_EQ(stats.casts,2);
     fr_fire_ray_gpu_destroy(r);dc_gpu_destroy(g);PASS();
 }
-int main(void) {RUN(test_facing_ray_heats_real_fuel_and_stops_at_stone);RUN(test_retries_and_ticks_do_not_start_another_cast);printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
+static void test_idle_ray_does_not_submit_gpu_work(void) {
+    ASSERT_TRUE(fixture(false));fr_fire_ray_gpu_t *r=NULL;
+    ASSERT_TRUE(fr_fire_ray_gpu_create(g,&binding,1,(fr_fire_ray_config_t){128,1,.1f,1400},&r,err,sizeof(err)));
+    unsigned before=g_submits;fr_fire_ray_input_t input={1,1,1,false};
+    for(unsigned n=0;n<10;n++) {input.sequence++;ASSERT_TRUE(fr_fire_ray_gpu_submit(r,&input,1,1.f/60,err,sizeof(err)));}
+    ASSERT_EQ(g_submits,before);
+    fr_fire_ray_gpu_destroy(r);dc_gpu_destroy(g);PASS();
+}
+int main(void) {RUN(test_idle_ray_does_not_submit_gpu_work);RUN(test_facing_ray_heats_real_fuel_and_stops_at_stone);RUN(test_retries_and_ticks_do_not_start_another_cast);printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
