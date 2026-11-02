@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <inttypes.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -16,6 +17,7 @@
 #include "benchmark_brush.h"
 #include "benchmark_clock.h"
 #include "level.h"
+#include "player_session.h"
 #include "prop_scene.h"
 #include "session.h"
 #include "smoke_audit.h"
@@ -1098,6 +1100,8 @@ int main(int argc, char **argv) {
     char heat_directory[]="build/heat_bench_interactive_XXXXXX";
     char smoke_directory[]="build/smoke_box_interactive_XXXXXX";
     char bonfire_directory[]="build/bonfire_interactive_XXXXXX";
+    bool play=false;
+    char play_directory[]="build/beaver_play_XXXXXX";
     char scripted_directory[] = "build/ui_input_XXXXXX";
     if (scripted_input && !mkdtemp(scripted_directory)) {
         perror("mkdtemp");
@@ -1119,6 +1123,7 @@ int main(int argc, char **argv) {
     const char *directory = scripted_input ? scripted_directory : "world_chunks";
 #endif
     for (int i = 1; i < argc; ++i) {
+        if(strcmp(argv[i],"--play")==0) {play=true;continue;}
         if (scripted_input && strcmp(argv[i], "--smoke-controls-ui") == 0)
             continue;
         if (strcmp(argv[i], "--demo-coupled") == 0) {
@@ -1165,6 +1170,13 @@ int main(int argc, char **argv) {
         fprintf(stderr, "A bounded benchmark requires an explicit --world-dir\n");
         return 1;
     }
+    if(play&&(scene_path||heat_bench||smoke_box||bonfire||demo_coupled||demo_sifting)) {
+        fprintf(stderr,"Choose --play or an authored fixture\n");return 1;
+    }
+    if(play&&!benchmark_world) {
+        if(!mkdtemp(play_directory)) {perror("mkdtemp");return 1;}
+        directory=play_directory;
+    }
     if(benchmark_gas_audit&&(!benchmark_frames||!smoke_box)) {
         fprintf(stderr,"Cold gas audit requires --smoke-box and --benchmark-frames\n");return 1;
     }
@@ -1198,10 +1210,17 @@ int main(int argc, char **argv) {
         fprintf(stderr,"DC_BENCHMARK_WATER_POUR requires visible x,y,radius (radius <=32)\n");return 1;
     }
     char err[256] = {0};
-    dc_level_view_t *view = scene_path ? dc_prop_scene_create(directory,seed,scene_path,err,sizeof(err)) :
+    uint32_t play_surface=96;
+    dc_ground_profile_t play_ground={.width=1,.soil_depth=1,.surface=&play_surface};
+    dc_level_view_t *view = play ? dc_level_view_create_ground(directory,seed,&play_ground,err,sizeof(err)) :
+        scene_path ? dc_prop_scene_create(directory,seed,scene_path,err,sizeof(err)) :
         (bonfire?dc_level_view_create_bonfire(directory,seed,err,sizeof(err)):
         (smoke_box?dc_level_view_create_smoke_box(directory,seed,err,sizeof(err)):dc_level_view_create(directory, seed, err, sizeof(err))));
     if (!view) { fprintf(stderr, "Level create: %s\n", err); return 1; }
+    if(play&&(!dc_level_view_pan_pixels(view,0,-INITIAL_CHUNK_Y*64)||
+        !dc_level_view_wait_visible(view,120000,err,sizeof(err))||!dc_players_enable(view,err,sizeof(err)))) {
+        fprintf(stderr,"Player setup: %s\n",err);dc_level_view_destroy(view,err,sizeof(err));return 1;
+    }
     if (scene_path && !dc_prop_scene_load(view,scene_path,err,sizeof(err))) {
         fprintf(stderr,"Scene load: %s\n",err);
         dc_level_view_destroy(view,err,sizeof(err));return 1;
@@ -1239,7 +1258,7 @@ int main(int argc, char **argv) {
     bool running = true;
     bool failed = false;
     bool paused = false;
-    bool spring_enabled = !(demo_coupled || demo_sifting || scene_path || heat_bench || smoke_box || bonfire);
+    bool spring_enabled = !(play || demo_coupled || demo_sifting || scene_path || heat_bench || smoke_box || bonfire);
     uint32_t heat_mode=bonfire?0u:1u;
     uint32_t bonfire_focus=0;
     uint32_t smoke_mode=0;
@@ -1287,6 +1306,10 @@ int main(int argc, char **argv) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             input_events++;
+            if(play) {
+                dc_players_ui(view,entering_seed||paused);
+                if(dc_players_event(view,&event)) continue;
+            }
             if (event.type == SDL_QUIT) running = false;
             if (entering_seed && event.type == SDL_TEXTINPUT) {
                 for (const char *p = event.text.text; *p; ++p)
@@ -1431,7 +1454,8 @@ int main(int argc, char **argv) {
         double elapsed = (double)(now - previous) / (double)SDL_GetPerformanceFrequency();
         previous = now;
         if (elapsed > 0.25) elapsed = 0.25;
-        if (running && !entering_seed &&
+        if(play) dc_players_ui(view,entering_seed||paused);
+        if (running && !entering_seed && (!play||(!paused&&!dc_players_gameplay(view))) &&
             !pan_held_keys(view, elapsed, &pan_carry_x, &pan_carry_y)) {
             snprintf(err, sizeof(err), "Cannot pan camera");
             failed = true; running = false;
@@ -1444,11 +1468,17 @@ int main(int argc, char **argv) {
             if (benchmark_frames)
                 step_seconds = dc_benchmark_step_seconds((float)elapsed,(float)tick_seconds);
             if (step_seconds > 0.25f) step_seconds = 0.25f;
-            if (!dc_level_view_step_timed(view, step_seconds, err, sizeof(err))) {
+            if(play) {
+                uint32_t ticks=single_step||benchmark_frames?1u:(uint32_t)(accumulator/tick_seconds);
+                if(ticks>15u) ticks=15u;
+                for(uint32_t n=0;n<ticks&&running;n++)
+                    if(!dc_level_view_step_timed(view,(float)tick_seconds,err,sizeof(err))) {failed=true;running=false;}
+                accumulator=fmax(0.,accumulator-ticks*tick_seconds);
+            } else if (!dc_level_view_step_timed(view, step_seconds, err, sizeof(err))) {
                 failed = true; running = false;
             }
             single_step = false;
-            accumulator = 0.0;
+            if(!play) accumulator = 0.0;
         }
         uint64_t prepare_done=benchmark_timings?SDL_GetPerformanceCounter():0;
         bool probing=false;
@@ -1460,7 +1490,7 @@ int main(int argc, char **argv) {
             if(!dc_level_view_heat_probe(view,inside?x:0u,inside?y:0u,probing)) {failed=true;running=false;}
             if(heat_setting&&scripted_frame==0u) printf("Finite benchmark ignition probe held at %u,%u\n",x,y);
         }
-        if (!probing&&!paint_held(view, material, err, sizeof(err))) {
+        if ((!play||(!paused&&!entering_seed&&!dc_players_gameplay(view)))&&!probing&&!paint_held(view, material, err, sizeof(err))) {
             failed = true; running = false;
         }
         if(running&&brush_setting&&dc_benchmark_brush_due(true,scripted_frame)&&

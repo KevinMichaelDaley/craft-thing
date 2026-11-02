@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "ferrum/fire/gpu.h"
 #include "ferrum/fire/material_profile.h"
@@ -34,7 +35,11 @@ bool fr_beaver_body_admit(dc_gpu_t *g,uint64_t identity,uint64_t transaction,
         free(chunk);free(objects);free(attachments);
         return beaver_body_error(err,cap,"Cannot stage canonical player import");
     }
-    bool okay=dc_gpu_download_chunk(g,slot,chunk,err,cap);
+    const uint32_t *registry=dc_gpu_structural_data(g)+DC_STRUCTURAL_HEADER_WORDS+slot*8u;
+    bool okay=registry[5]!=0;
+    if(okay) memcpy(&chunk->coord,registry,sizeof(chunk->coord));
+    else beaver_body_error(err,cap,"Player staging slot is not resident");
+    if(okay) okay=dc_gpu_download_chunk(g,slot,chunk,err,cap);
     for(uint32_t c=0;c<DC_CHUNK_CELLS&&okay;c++)
         if(chunk->cells[c].material||chunk->cells[c].fluid_mass) okay=beaver_body_error(err,cap,"Player staging chunk must be empty");
     uint32_t count=0,min_x=40,min_y=40,max_x=0,max_y=0;

@@ -15,8 +15,10 @@ static void test_canonical_body_admits_hidden_owners_once(void) {
     dc_gpu_t *g=NULL;char err[256]={0};
     ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
     dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    chunk->coord=(dc_chunk_coord_t){-8,11};
     ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));free(chunk);
     ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){-8,11},err,sizeof(err)));
     fr_beaver_body_t body;
     ASSERT_TRUE(fr_beaver_body_admit(g,41,71,0,(dc_chunk_coord_t){0,0},8*65536,9*65536,&body,err,sizeof(err)));
     ASSERT_EQ(body.binding.identity,41);ASSERT_TRUE(body.binding.generation);

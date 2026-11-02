@@ -15,6 +15,7 @@
 #include "bonfire.h"
 #include "level.h"
 #include "level_internal.h"
+#include "player_session.h"
 #include "thermal_bench.h"
 #include "view_config.h"
 
@@ -579,6 +580,12 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     if (ready_steps && !dc_gpu_set_tick_seconds(view->gpu,
             view->pending_seconds / (float)ready_steps))
         return error(err, cap, "Invalid elapsed simulation time");
+    if(view->players&&ready_steps) {
+        float seconds=view->pending_seconds/(float)ready_steps;
+        for(uint32_t step=0;step<ready_steps;step++)
+            if(!dc_players_step(view,seconds,err,cap)||!dc_gpu_tick_step(view->gpu,err,cap)) return false;
+        ready_steps=0;
+    }
     if (!dc_gpu_present_chunks_steps(view->gpu, ready_steps, err, cap)) return false;
     view->pending_steps = 0;
     view->pending_seconds = 0.0f;
@@ -862,6 +869,7 @@ bool dc_level_view_transfer_result(dc_level_view_t *view,
 
 bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return true;
+    dc_players_destroy(view);
     bool okay = true;
     view->closing=true;
     uint64_t save_start=SDL_GetTicks64();

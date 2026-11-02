@@ -1,6 +1,7 @@
 #include "ferrum/player/input_sdl.h"
 
 bool fr_input_sdl_defaults(fr_input_t *i,int64_t d,bool controller) {
+    if(!i) return false;
     static const struct {uint32_t control,action;float scale;} keys[]={
         {SDL_SCANCODE_A,FR_INPUT_MOVE,-1},{SDL_SCANCODE_D,FR_INPUT_MOVE,1},
         {SDL_SCANCODE_SPACE,FR_INPUT_JUMP,1},{SDL_SCANCODE_C,FR_INPUT_CHEW,1},

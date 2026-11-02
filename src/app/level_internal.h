@@ -3,6 +3,7 @@
 #include "dungeoncraft/stream.h"
 #include "level.h"
 struct dc_level_view {
+    struct dc_player_session *players;
     dc_gpu_t *gpu;
     dc_streamer_t *stream;
     dc_chunk_table_t table;

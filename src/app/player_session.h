@@ -16,7 +16,7 @@ bool dc_players_gameplay(const dc_level_view_t *view);
 /** Switch to/from UI without retaining latent held controls. */
 void dc_players_ui(dc_level_view_t *view,bool active);
 /** Consume one fixed simulation interval before the actual GPU world tick. */
-bool dc_players_step(dc_level_view_t *view,uint64_t milliseconds,char *err,uint32_t cap);
+bool dc_players_step(dc_level_view_t *view,float seconds,char *err,uint32_t cap);
 /** Copy action state for diagnostic tests; does not read GPU body state. */
 bool dc_players_status(dc_level_view_t *view,uint32_t index,fr_player_t *player,fr_beaver_body_t *body);
 /** Release controller, input and drive ownership before the level's GPU. */
