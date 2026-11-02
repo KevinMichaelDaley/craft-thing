@@ -10,7 +10,25 @@ enum { BEAVER_PROP_HEADER=64, BEAVER_PROP_FRAME=16, BEAVER_PROP_MAP=8,
 
 bool fr_beaver_frame_layout(const fr_beaver_asset_t *asset,uint32_t frame,
     fr_beaver_frame_layout_t *out) {
-    (void)asset;(void)frame;(void)out;return false;
+    uint32_t baseline;
+    if(!asset||!out||frame>=asset->prop.frame_count||
+       !beaver_art_foot_baseline(asset->action,frame,&baseline)) return false;
+    uint32_t low_x=asset->prop.width,low_y=asset->prop.height,high_x=0,high_y=0;
+    bool occupied=false;
+    for(uint32_t y=0;y<asset->prop.height;y++) for(uint32_t x=0;x<asset->prop.width;x++) {
+        fr_prop_appearance_t pixel;
+        if(!fr_prop_appearance(&asset->prop,frame,y*asset->prop.width+x,&pixel)) return false;
+        if(pixel.alpha<=0) continue;
+        occupied=true;
+        if(x<low_x) low_x=x;
+        if(y<low_y) low_y=y;
+        if(x>high_x) high_x=x;
+        if(y>high_y) high_y=y;
+    }
+    if(!occupied) return false;
+    *out=(fr_beaver_frame_layout_t){low_x,low_y,high_x-low_x+1,high_y-low_y+1,
+        asset->prop.width,asset->prop.height,baseline};
+    return true;
 }
 
 static uint32_t beaver_width(fr_player_action_t action) {

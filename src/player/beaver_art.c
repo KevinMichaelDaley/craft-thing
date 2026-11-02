@@ -3,6 +3,13 @@
 #include "beaver_internal.h"
 #include "beaver_imported.h"
 
+bool beaver_art_foot_baseline(fr_player_action_t action,uint32_t frame,uint32_t *baseline) {
+    if(!baseline||frame>=8) return false;
+    *baseline=action==FR_PLAYER_CAST?beaver_cast_contacts[frame][2]:beaver_chomp_contacts[
+        action==FR_PLAYER_CHEW?frame:0][2];
+    return true;
+}
+
 bool beaver_art_source(uint32_t source,beaver_art_pixel_t *out) {
     if (!source || source>FR_BEAVER_PIXELS || !out || !beaver_regions[0][source-1]) return false;
     *out=(beaver_art_pixel_t){.region=beaver_regions[0][source-1]};
