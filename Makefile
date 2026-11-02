@@ -295,7 +295,7 @@ build/bonfire_scene_tests: tests/app/bonfire_scene_tests.c $(THERMAL_BENCH_SRC) 
 test: test_bonfire_scene
 test_bonfire_scene: build/bonfire_scene_tests
 	./build/bonfire_scene_tests
-NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(THERMAL_BENCH_SRC) $(GPU_SRC) src/world/chunk.c src/world/stream.c src/fire/bulk_phase_packet.c src/world/generate.c
+NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/shutdown.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(THERMAL_BENCH_SRC) $(GPU_SRC) src/world/chunk.c src/world/stream.c src/fire/bulk_phase_packet.c src/world/generate.c
 PLAYER_RUNTIME_SRC = src/app/player_session.c src/app/player_clock.c src/app/smoke_profile.c src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c src/player/fire_ray_gpu.c src/player/input.c src/player/input_sdl.c src/player/control.c src/player/body_gpu.c src/vulkan/player_drive_gpu.c $(PLAYER_SRC) $(BEAVER_SRC)
 NATIVE_SRC += $(PLAYER_RUNTIME_SRC)
 build/rigid_dynamics_visual_tests: tests/app/rigid_dynamics_visual_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
@@ -991,6 +991,12 @@ build/quarter_native_component_extraction_tests: tests/vulkan/component_extracti
 
 build/component_world_tests: tests/app/component_world_tests.c Makefile src/app/level.h src/app/view_config.h $(filter-out src/app/main.c,$(NATIVE_SRC)) build/quarter_native_rigid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
+build/shutdown_tests: tests/app/shutdown_tests.c Makefile src/app/level.h src/app/shutdown.h src/app/view_config.h $(filter-out src/app/main.c,$(NATIVE_SRC)) build/quarter_native_rigid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
+.PHONY: test_shutdown
+test_shutdown: build/shutdown_tests
+	./build/shutdown_tests
+test: test_shutdown
 build/level03_support_tests: tests/app/level03_support_tests.c Makefile src/app/level.h src/app/view_config.h src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h $(CONTACT_SHADER) $(MPM_SHADER) $(SOLVER_SHADER) $(filter-out src/app/main.c,$(NATIVE_SRC)) build/quarter_native_rigid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_read_contacts
 test_ui: build/level03_support_tests
