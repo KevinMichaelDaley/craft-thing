@@ -216,33 +216,51 @@ static void test_native_buoyancy_matches_reference_and_accounts_for_external_wor
     ASSERT_TRUE(present(g,err,sizeof(err)));free(input);free(out);free(volumes);free(work);free(c);dc_gpu_destroy(g);PASS();
 }
 static void test_native_trace_buoyancy_preserves_external_work_without_underflow(void) {
-    char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
-    ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    char err[256]={0};dc_gpu_t *g=NULL;ASSERT_TRUE(context(&g,err,sizeof(err)));
+    dc_gpu_address_buffer_t input={0},output={0},model={0},stats={0};fr_renderer_compute_t compute={0};
+    ASSERT_TRUE(dc_gpu_address_buffer_create(g,64u,true,&input,err,sizeof(err))&&
+        dc_gpu_address_buffer_create(g,64u,true,&output,err,sizeof(err))&&
+        dc_gpu_address_buffer_create(g,FR_GAS_MODEL_WORDS*4u,true,&model,err,sizeof(err))&&
+        dc_gpu_address_buffer_create(g,64u,true,&stats,err,sizeof(err)));
     fr_gas_model_t m={.gas_constant={.25984,.29680,.18892,.46152,0},
         .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
-    ASSERT_TRUE(fr_gas_gpu_enable(g,&m,.0012,293.15,err,sizeof(err))&&
-        fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&
-        fr_gas_gpu_set_gravity(g,900,err,sizeof(err)));
-    fr_gas_state_t *input=calloc(4096,sizeof(*input)),*out=calloc(4096,sizeof(*out));
-    double *volumes=malloc(4096*sizeof(*volumes)),*work=malloc(4096*sizeof(*work));ASSERT_TRUE(input&&out&&volumes&&work);
-    fr_gas_state_t trace={.species={3.48591163e-27,1.33056074e-24,6.111088e-25,3.25136577e-28,1.55956014e-26},
-        .energy=6.52359471e-25,.momentum={-3.07829929e-36,8.75673549e-24},
-        .pigment={1.07345184e-25,9.54179527e-26,8.34906963e-26}};
-    for(uint32_t i=0;i<4096;i++) {input[i]=trace;volumes[i]=1;}
-    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volumes,4096,err,sizeof(err))&&
-        fr_gas_gpu_read_chunk(g,0,input,4096,err,sizeof(err)));
+    float *packet=input.mapped,*parameters=model.mapped;
+    const float species[5]={3.48591163e-27f,1.33056074e-24f,6.111088e-25f,3.25136577e-28f,1.55956014e-26f};
+    for(uint32_t i=0;i<5u;i++) {packet[i]=species[i];parameters[i]=(float)m.gas_constant[i];parameters[5u+i]=(float)m.heat_capacity_cv[i];}
+    packet[5]=6.52359471e-25f;packet[6]=-3.07829929e-36f;packet[7]=8.75673549e-24f;
+    packet[8]=1.07345184e-25f;packet[9]=9.54179527e-26f;packet[10]=8.34906963e-26f;packet[12]=packet[13]=1.f;
+    parameters[FR_GAS_KINETIC_WORD]=(float)m.kinetic_scale;
+    parameters[FR_GAS_DENSITY_WORD]=.0012f;parameters[FR_GAS_AMBIENT_WORD]=293.15f;
+    parameters[FR_GAS_OXYGEN_WORD]=.21f;parameters[FR_GAS_GRAVITY_WORD]=900.f;
+    parameters[FR_GAS_POLICY_WORD]=3.f;
+    fr_gas_state_t trace={.energy=packet[5],.momentum={packet[6],packet[7]},
+        .pigment={packet[8],packet[9],packet[10]}};
+    for(uint32_t i=0;i<5u;i++) trace.species[i]=packet[i];
     fr_gas_state_t ambient=reference_air(m,1,293.15,0),expected;double specific=0,admitted=0;
     for(uint32_t k=0;k<5;k++) specific+=ambient.species[k]*m.gas_constant[k]*293.15;
-    float seconds=1.f/60;uint32_t center=32u*64+32u;
-    ASSERT_TRUE(fr_gas_reference_buoyancy(&m,input+center,1,specific,900,seconds,&expected,&admitted,err,sizeof(err)));
-    ASSERT_TRUE(admitted>input[center].energy);
-    ASSERT_TRUE(fr_gas_gpu_step(g,seconds,err,sizeof(err))&&
-        fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err))&&fr_gas_gpu_read_work_chunk(g,0,work,4096,err,sizeof(err)));
-    printf("Trace gravity energy %.12g expected %.12g work %.12g expected %.12g\n",out[center].energy,expected.energy,work[center],admitted);
-    ASSERT_TRUE(fabs(out[center].energy-expected.energy)<expected.energy*1e-5);
-    ASSERT_TRUE(fabs(work[center]-admitted)<admitted*1e-5);
-    ASSERT_EQ(memcmp(out[center].species,input[center].species,sizeof(trace.species)),0);
-    free(input);free(out);free(volumes);free(work);free(c);dc_gpu_destroy(g);PASS();
+    float seconds=1.f/60;ASSERT_TRUE(fr_gas_reference_buoyancy(&m,&trace,1,specific,900,seconds,&expected,&admitted,err,sizeof(err)));
+    ASSERT_TRUE(admitted>trace.energy);
+    VkDescriptorBufferInfo buffers[12];for(uint32_t i=0;i<12u;i++) buffers[i]=(VkDescriptorBufferInfo){input.buffer,0,input.bytes};
+    buffers[1]=(VkDescriptorBufferInfo){output.buffer,0,output.bytes};buffers[5]=(VkDescriptorBufferInfo){model.buffer,0,model.bytes};buffers[6]=(VkDescriptorBufferInfo){stats.buffer,0,stats.bytes};
+    ASSERT_TRUE(fr_renderer_compute_init(g,&compute,buffers,12,16,"build/shaders/gas_buoyancy_test.comp.spv",err,sizeof(err))&&fr_renderer_begin(g));
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    uint32_t push[4]={1u,1u,0u,FR_GAS_PRACTICAL_BIT};memcpy(push+2,&seconds,sizeof(seconds));
+    vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,compute.pipeline);
+    vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,compute.pipeline_layout,0,1,&compute.descriptor,0,NULL);
+    vkCmdPushConstants(g->command,compute.pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
+    vkCmdDispatch(g->command,1,1,1);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
+    ASSERT_TRUE(fr_renderer_submit(g));ASSERT_EQ(((uint32_t *)stats.mapped)[FR_GAS_ERROR_WORD],0u);
+    const float *actual=output.mapped;double energy=(double)actual[5]+actual[11]+actual[14];
+    printf("Trace buoyancy energy %.12g expected %.12g work %.12g expected %.12g\n",energy,expected.energy,actual[15],admitted);
+    ASSERT_TRUE(fabs(energy-expected.energy)<expected.energy*1e-5);
+    ASSERT_TRUE(fabs(actual[15]-admitted)<admitted*1e-5);
+    ASSERT_TRUE(fabs(actual[7]-expected.momentum[1])<fabs(expected.momentum[1])*1e-5);
+    for(uint32_t i=0;i<5u;i++) ASSERT_EQ(actual[i],packet[i]);
+    fr_renderer_compute_destroy(g,&compute);
+    dc_gpu_address_buffer_destroy(g,&input);dc_gpu_address_buffer_destroy(g,&output);
+    dc_gpu_address_buffer_destroy(g,&model);dc_gpu_address_buffer_destroy(g,&stats);dc_gpu_destroy(g);PASS();
 }
 static void test_native_implicit_acoustics_match_reference_beyond_explicit_acoustic_cfl(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);

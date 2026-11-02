@@ -1,0 +1,11 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_spirv_intrinsics : require
+spirv_execution_mode(extensions=["SPV_KHR_float_controls"],capabilities=[4465],4460,32);
+#include "../gas/storage.glsl"
+void main() {
+    uint index=gas_index();if(index>=params.width*params.height) return;
+    Gas source=world[index];bool valid=false;Primitive primitive=gas_primitive(source,valid);
+    if(!valid) {atomicOr(stats[FR_GAS_ERROR_WORD],1u);return;}
+    float work=0.,impulse=0.;bank0[index]=gas_buoyancy_cached(source,primitive,uintBitsToFloat(params.seconds),work,impulse);
+}
