@@ -68,16 +68,26 @@ static bool demo_wood(dc_level_view_t *v,const dc_beaver_fire_plan_t *p,char *er
     free(objects);free(chunk);return okay;
 }
 
+static bool configure_gas(dc_level_view_t *view,char *err,uint32_t cap) {
+    dc_beaver_fire_plan_t plan;
+    if(!view||!dc_beaver_fire_plan(VIEW_WIDTH,VIEW_HEIGHT,&plan)||!dc_smoke_profile_defaults()) return demo_error(err,cap,"Invalid fire demo view or smoke profile");
+    fr_gas_model_t gas={.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    return fr_gas_gpu_enable(view->gpu,&gas,.0012f,293.15f,err,cap)&&
+        fr_gas_gpu_set_pressure_policy(view->gpu,FR_GAS_PRESSURE_PRACTICAL,err,cap)&&
+        fr_gas_gpu_set_gravity(view->gpu,900,err,cap);
+}
+
+bool dc_beaver_fire_configure(dc_level_view_t *view,char *err,uint32_t cap) {
+    return configure_gas(view,err,cap);
+}
+
 bool dc_beaver_fire_setup(dc_level_view_t *view,char *err,uint32_t cap) {
     dc_beaver_fire_plan_t plan;
     if(!view||!dc_beaver_fire_plan(VIEW_WIDTH,VIEW_HEIGHT,&plan)||!dc_smoke_profile_defaults()) return demo_error(err,cap,"Invalid fire demo view or smoke profile");
     if(!dc_players_enable_at(view,plan.player_x,plan.player_y,err,cap)) return false;
     if(!view->restored&&!demo_wood(view,&plan,err,cap)) return false;
-    fr_gas_model_t gas={.gas_constant={.25984,.29680,.18892,.46152,0},
-        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
-    if(!fr_gas_gpu_enable(view->gpu,&gas,.0012f,293.15f,err,cap)||
-       !fr_gas_gpu_set_pressure_policy(view->gpu,FR_GAS_PRESSURE_PRACTICAL,err,cap)||
-       !fr_gas_gpu_set_gravity(view->gpu,900,err,cap)) return false;
+    if(!configure_gas(view,err,cap)) return false;
     for(uint32_t slot=0;slot<view->table.capacity;slot++) {
         if(view->gas_admitted[slot]) continue;
         dc_chunk_slot_t *owner=&view->table.slots[slot];

@@ -14,6 +14,8 @@ typedef struct {
 /** Derive one shared scene plan: rightmost massive pile, unlit ambient wood,
  * player feet on the support line, and enough facing ray reach. */
 bool dc_beaver_fire_plan(uint32_t width,uint32_t height,dc_beaver_fire_plan_t *out);
+/** Configure the authoritative gas field before saved chunk admission. */
+bool dc_beaver_fire_configure(dc_level_view_t *view,char *err,uint32_t cap);
 /** Cold construct the fresh named demo and enable real gas/combustion/ray input.
  * Restored worlds preserve their existing wood, fuel and ignition histories. */
 bool dc_beaver_fire_setup(dc_level_view_t *view,char *err,uint32_t cap);

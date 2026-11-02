@@ -1224,6 +1224,7 @@ int main(int argc, char **argv) {
         (smoke_box?dc_level_view_create_smoke_box(directory,seed,err,sizeof(err)):dc_level_view_create(directory, seed, err, sizeof(err))));
     if (!view) { fprintf(stderr, "Level create: %s\n", err); return 1; }
     if(play&&(!dc_level_view_pan_pixels(view,0,-INITIAL_CHUNK_Y*64)||
+        (fire_demo&&!dc_beaver_fire_configure(view,err,sizeof(err)))||
         !dc_level_view_wait_visible(view,120000,err,sizeof(err))||
         !(fire_demo?dc_beaver_fire_setup(view,err,sizeof(err)):dc_players_enable(view,err,sizeof(err))))) {
         fprintf(stderr,"Player setup: %s\n",err);dc_level_view_destroy(view,err,sizeof(err));return 1;
