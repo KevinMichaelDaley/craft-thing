@@ -11,6 +11,7 @@
 #include "directional_storage.glsl"
 #include "../sim/leaf_color.glsl"
 #include "../../include/dungeoncraft/sprite_layout.h"
+#include "../../include/dungeoncraft/fire_ray_layout.h"
 
 layout(local_size_x=64) in;
 layout(constant_id=0) const uint SCENE_PHASE=0u;
@@ -40,6 +41,7 @@ layout(set=0,binding=13,std430) readonly buffer Fields {PackedField fields[];};
 layout(set=0,binding=14,std430) readonly buffer Configuration {uint configuration[];};
 layout(set=0,binding=15,std430) readonly buffer WaterColors {vec4 water_colors[];};
 layout(set=0,binding=16,std430) readonly buffer PlayerSprites {uint sprite_words[];};
+layout(set=0,binding=17,std430) readonly buffer FireRays {uint ray_words[];};
 layout(push_constant) uniform Params {uint width;uint height;uint registry;uint force_light;uint flags;uint mode;uint view_x;uint view_y;} params;
 shared uint group_statistics[64];
 uint group_sum(uint value) {
@@ -159,6 +161,25 @@ void sprite_surface(uvec2 cell,inout Surface surface,inout float coverage,inout 
         coverage+=alpha;opacity+=alpha;
     }
 }
+void fire_ray_surface(uvec2 cell,inout Surface surface) {
+    if(ray_words[0]!=DC_FIRE_RAY_MAGIC) return;
+    for(uint n=0u;n<min(ray_words[1],DC_FIRE_RAY_MAX);n++) {
+        uint at=DC_FIRE_RAY_HEADER+n*DC_FIRE_RAY_WORDS;
+        if(uintBitsToFloat(ray_words[at+8u])<=0.) continue;
+        int radius=int(ray_words[at+15u]),dy=int(cell.y)-int(ray_words[at+13u]);
+        int distance=(int(cell.x)-int(ray_words[at+12u]))*int(ray_words[at+18u]);
+        if(abs(dy)>radius||distance<0||uint(distance)>=ray_words[at+DC_FIRE_RAY_ENDS+uint(dy+radius)]) continue;
+        float age=uintBitsToFloat(ray_words[at+16u])-uintBitsToFloat(ray_words[at+8u]);
+        float flicker=.75+.25*sin(float(cell.x)*.83+float(dy)*2.1-age*80.);
+        float core=1.-float(abs(dy))/float(radius+1);
+        vec3 color=mix(vec3(1.,.09,.006),vec3(1.,.85,.22),core*core);
+        float alpha=.88*flicker;
+        surface.albedo.rgb=mix(surface.albedo.rgb,color,alpha);
+        surface.nx.rgb*=1.-alpha;surface.ny.rgb*=1.-alpha;
+        surface.nz.rgb=mix(surface.nz.rgb,color,alpha);
+        surface.weights.z*=1.-alpha;
+    }
+}
 Surface surface_at(uint i,out float opacity,out uint known) {
     Surface surface=Surface(vec4(0),vec4(0),vec4(0),vec4(0),vec4(0));
     uvec2 cell=uvec2(i%params.width,i/params.width);
@@ -231,6 +252,7 @@ Surface surface_at(uint i,out float opacity,out uint known) {
     surface.weights.z=max(0.,1.-surface.weights.x-surface.weights.y);
     float optical_solid=(physical.x&(DC_CELL_LOADED_TERRAIN<<DC_CELL_FLAGS_SHIFT))!=0u?1.:solid;
     opacity=clamp(body_opacity+(1.-body_coverage)*optical_solid*material_opacity(material),0.,1.);
+    fire_ray_surface(cell,surface);
     return surface;
 }
 uint pack_display(vec3 linear,bool lit) {

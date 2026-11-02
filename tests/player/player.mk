@@ -31,12 +31,16 @@ build/player_runtime_tests: tests/app/player_runtime_tests.c tests/player/runtim
 test_player_runtime: build/player_runtime_tests
 	./build/player_runtime_tests
 test: test_player_runtime
-build/player_fire_ray_gpu_tests: tests/player/fire_ray_gpu_tests.c src/player/fire_ray_gpu.c include/ferrum/player/fire_ray_gpu.h build/fluid_tests
+build/player_fire_ray_gpu_tests: tests/player/fire_ray_gpu_tests.c src/player/fire_ray_gpu.c include/ferrum/player/fire_ray_gpu.h build/fluid_tests build/shaders/player_fire_ray.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/player/fire_ray_gpu.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_player_fire_ray_gpu
 test_player_fire_ray_gpu: build/player_fire_ray_gpu_tests
 	./build/player_fire_ray_gpu_tests
 test: test_player_fire_ray_gpu
+build/shaders/player_fire_ray.comp.spv: shaders/reactive/player_fire_ray.comp include/dungeoncraft/fire_ray_layout.h $(wildcard shaders/reactive/*.glsl) $(wildcard shaders/sim/*.glsl)
+	mkdir -p build/shaders
+	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -V --target-env vulkan1.3 $< -o $@
+build/shaders/scene.comp.spv build/shaders/runtime/scene.comp.spv: include/dungeoncraft/fire_ray_layout.h
 src/player/beaver_imported.h: assets/player/beaver/beaver_cast.ase assets/player/beaver/beaver_cast.mapping.json assets/player/beaver/beaver_chomp.ase assets/player/beaver/beaver_chomp.mapping.json scripts/props/beaver_import.py scripts/props/ase_reader.py
 	python3 scripts/props/beaver_import.py
 build/beaver_asset_tests build/beaver_atlas: src/player/beaver_imported.h

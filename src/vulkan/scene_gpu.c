@@ -8,6 +8,7 @@
 #include "ferrum/renderer/texture.h"
 #include "renderer_internal.h"
 #include "runtime_body_gpu.h"
+#include "fire_ray_renderer.h"
 
 enum { SCENE_PHASES = 10, SCENE_BUFFERS = 5, SCENE_WORK_WORDS = 128 + 4096 };
 struct fr_scene_gpu {
@@ -28,6 +29,13 @@ void fr_renderer_bind_sprites(dc_gpu_t *g,const VkDescriptorBufferInfo *buffer) 
   VkWriteDescriptorSet write={.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
     .dstSet=g->renderer->compute.descriptor,.dstBinding=16,.descriptorCount=1,
     .descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=buffer};
+  vkUpdateDescriptorSets(g->device,1,&write,0,NULL);
+}
+void fr_renderer_bind_fire_ray(dc_gpu_t *g,const VkDescriptorBufferInfo *buffer) {
+  VkDescriptorBufferInfo empty={g->renderer->buffers[4],0,64};
+  VkWriteDescriptorSet write={.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+    .dstSet=g->renderer->compute.descriptor,.dstBinding=17,.descriptorCount=1,
+    .descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=buffer?buffer:&empty};
   vkUpdateDescriptorSets(g->device,1,&write,0,NULL);
 }
 
@@ -146,6 +154,7 @@ bool fr_renderer_enable(dc_gpu_t *g, char *err, uint32_t cap) {
       {g->water_color_buffer,0,(VkDeviceSize)atlas*16}};
   for(uint32_t i=16;i<33;i++) buffers[i]=(VkDescriptorBufferInfo){g->cells,0,(VkDeviceSize)grid*4};
   buffers[16]=(VkDescriptorBufferInfo){s->buffers[4],0,64};
+  buffers[17]=(VkDescriptorBufferInfo){s->buffers[4],0,64};
   VkDeviceSize terrain_colors=dc_gpu_color_terrain_bytes(),bank_colors=dc_gpu_color_bank_bytes(g);
   buffers[33]=(VkDescriptorBufferInfo){g->shape_color_buffer,0,terrain_colors};
   buffers[34]=(VkDescriptorBufferInfo){g->shape_color_buffer,g->runtime_body_consumers?0:terrain_colors,g->runtime_body_consumers?16:bank_colors};

@@ -1,0 +1,136 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+#include "../../include/dungeoncraft/fire_ray_layout.h"
+#include "../../include/dungeoncraft/reactive_state_layout.h"
+#include "../../include/dungeoncraft/reactive_profile_layout.h"
+#include "../../include/dungeoncraft/char_enthalpy.h"
+#include "../../include/dungeoncraft/coating_layout.h"
+#include "../../include/dungeoncraft/thermal_surface.h"
+#include "address.glsl"
+#include "../gas/types.glsl"
+
+layout(local_size_x=4) in;
+layout(set=0,binding=0,std430) readonly buffer Root {uint root[];};
+layout(set=0,binding=1,std430) readonly buffer Pages {uint pages[];};
+layout(set=0,binding=2,std430) readonly buffer Profiles {uint profiles[];};
+layout(set=0,binding=3,std430) readonly buffer Cells {uvec2 cells[];};
+layout(set=0,binding=6,std430) buffer Rays {uint ray[];};
+layout(push_constant) uniform Params {
+    uint width,height,pool_word,seconds;
+    uvec2 world_address,alternate_address,gates_address,model_address;
+    uint sparse,count,profile_count,unused1;
+} params;
+layout(buffer_reference,std430,buffer_reference_align=4) coherent buffer Words {uint words[];};
+layout(buffer_reference,std430,buffer_reference_align=8) readonly buffer Handles {uvec2 values[];};
+layout(buffer_reference,std430,buffer_reference_align=16) buffer GasField {Gas values[];};
+float coefficient(uint m,uint field) {return uintBitsToFloat(profiles[m*FR_PROFILE_WORDS+field]);}
+#include "coating_mass.glsl"
+#define DC_RUNTIME_BODY_BINDING 4
+#define FR_THERMAL_OCCUPANCY_BINDING 5
+#define FR_BODY_POOL_WORD params.pool_word
+#include "world_body.glsl"
+
+uint atlas(ivec2 p) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0xffffffffu;
+    uint page=pages[(uint(p.y)/64u)*((params.width+63u)/64u)+uint(p.x)/64u];
+    return page==0u?0xffffffffu:(page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);
+}
+bool parcel_valid(uvec2 h) {
+    if(h.y==0u||h.x>=root[2]) return false;
+    Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),h.x));
+    return e.words[FR_ENTRY_GENERATION]==h.y&&e.words[FR_ENTRY_OWNER]!=0u;
+}
+uvec2 ray_sample(ivec2 p,uint caster,uint cell,out uint material) {
+    material=cells[cell].x&65535u;
+    uvec2 h=Handles(uvec2(root[6],root[7])).values[cell];
+    uint slot=runtime_body_find(thermal_occupancy[uint(p.y)*params.width+uint(p.x)]);
+    if(slot>=BODY_CAPACITY||DC_BODY(slot).id==caster) return h;
+    Body body=body_thermal_grid(DC_BODY(slot));
+    if(!pixel_body(body)) {material=DC_BODY_TO_TERRAIN(body.material);return uvec2(0);}
+    vec2 low=vec2(p)-vec2(body.x_fp,body.y_fp)/65536.;
+    uvec4 query=body_piece_query(body,low,low+1.);float best=0.;
+    for(uint n=0u;n<query.z*query.w;n++) {
+        uint piece=query_piece(body,query,n);if(pixel_piece_material(body,piece)==0u) continue;
+        vec2 center;float coverage=body_cell_volume(body,piece,p,1.,center);
+        if(coverage>best) {
+            best=coverage;material=DC_BODY_TO_TERRAIN(pixel_piece_material(body,piece));
+            h=fr_body_reactive_handle(body,slot,piece);
+        }
+    }
+    return h;
+}
+void heat_parcel(uvec2 h,float temperature,float gain) {
+    if(!parcel_valid(h)) return;
+    Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),h.x));uint s=FR_ENTRY_STATE;
+    float capacity=reactive_parcel_heat_capacity(e,s),energy=reactive_parcel_energy(e,s);
+    uint at=s+FR_STATE_SHOCK,old=atomicAdd(e.words[at],0u);
+    for(;;) {
+        float previous=uintBitsToFloat(old);
+        float added=max(0.,temperature*capacity-energy-previous)*gain;
+        uint next=floatBitsToUint(previous+added),observed=atomicCompSwap(e.words[at],old,next);
+        if(observed==old) break;
+        old=observed;
+    }
+}
+void heat_air(uint at,float temperature,float gain) {
+    if((params.world_address.x|params.world_address.y)==0u) return;
+    bool alternate=params.sparse!=0u&&(Words(params.gates_address).words[at]&FR_GAS_CELL_OWNER_BIT)!=0u;
+    uvec2 address=alternate?params.alternate_address:params.world_address;
+    Gas gas=GasField(address).values[at];Words model=Words(params.model_address);
+    float capacity=dot(gas.species,vec4(uintBitsToFloat(model.words[5]),uintBitsToFloat(model.words[6]),
+        uintBitsToFloat(model.words[7]),uintBitsToFloat(model.words[8])))+gas.dynamics.x*uintBitsToFloat(model.words[9]);
+    if(capacity<=0.||gas.geometry.x<=0.) return;
+    Words field=Words(address);uint word=at*FR_GAS_CELL_WORDS+5u,old=atomicAdd(field.words[word],0u);
+    for(;;) {
+        float previous=uintBitsToFloat(old);
+        float target=temperature*capacity-gas.visual.w-gas.geometry.z;
+        uint next=floatBitsToUint(previous+max(0.,target-previous)*gain);
+        uint observed=atomicCompSwap(field.words[word],old,next);
+        if(observed==old) break;
+        old=observed;
+    }
+}
+void main() {
+    uint index=gl_GlobalInvocationID.x;if(index>=params.count) return;
+    uint at=DC_FIRE_RAY_HEADER+index*DC_FIRE_RAY_WORDS;
+    uint slot=runtime_body_find(ray[at]);
+    for(uint row=0u;row<2u*DC_FIRE_RAY_HALF_HEIGHT+1u;row++) ray[at+DC_FIRE_RAY_ENDS+row]=0u;
+    if(slot>=BODY_CAPACITY||DC_BODY_OWNER(runtime_body_root,slot).generation!=ray[at+1u]) {ray[at+8u]=0u;return;}
+    uvec2 sequence=uvec2(ray[at+2u],ray[at+3u]),last=uvec2(ray[at+6u],ray[at+7u]);
+    bool newer=sequence.y>last.y||(sequence.y==last.y&&sequence.x>last.x);
+    if(newer) {
+        ray[at+6u]=sequence.x;ray[at+7u]=sequence.y;
+        if(ray[at+4u]!=0u) {
+            ray[at+8u]=ray[at+16u];ray[at+18u]=ray[at+5u];ray[at+9u]++;
+        }
+    }
+    float remaining=uintBitsToFloat(ray[at+8u]);if(remaining<=0.) return;
+    float seconds=min(remaining,uintBitsToFloat(params.seconds)),gain=min(1.,seconds*60.);
+    float temperature=uintBitsToFloat(ray[at+17u]);Body caster=DC_BODY(slot);
+    int facing=int(ray[at+18u]);
+    ivec2 origin=ivec2(caster.x_fp,caster.y_fp)/65536+
+        ivec2(facing>0?int(caster.width)+8:-8,int(caster.height>12u?caster.height-12u:caster.height/2u));
+    ray[at+12u]=uint(origin.x);ray[at+13u]=uint(origin.y);ray[at+10u]=0u;ray[at+11u]=0u;
+    uint radius=ray[at+15u];
+    for(uint row=0u;row<2u*radius+1u;row++) {
+        for(uint step=0u;step<ray[at+14u];step++) {
+            ivec2 p=origin+ivec2(int(step)*facing,int(row)-int(radius));uint cell=atlas(p);
+            if(cell==0xffffffffu) {ray[at+11u]++;break;}
+            uint material;uvec2 h=ray_sample(p,caster.id,cell,material);
+            bool fuel=material<params.profile_count&&(profiles[material*FR_PROFILE_WORDS+FR_PROFILE_FLAGS_WORD]&FR_PROFILE_FLAG_FUEL)!=0u;
+            if(parcel_valid(h)) {
+                Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),h.x));
+                if(fuel||e.words[FR_ENTRY_STATE+FR_STATE_COATING_OIL]!=0u||e.words[FR_ENTRY_STATE+FR_STATE_COATING_JELLY]!=0u) {
+                    heat_parcel(h,temperature,gain);ray[at+10u]++;
+                }
+            }
+            if(cells[cell].y!=0u||(material!=0u&&!fuel)) {ray[at+11u]++;break;}
+            heat_air(cell,temperature,gain);
+            ray[at+DC_FIRE_RAY_ENDS+row]=step+1u;
+        }
+    }
+    remaining=max(0.,remaining-seconds);if(remaining<.000001) remaining=0.;
+    ray[at+8u]=floatBitsToUint(remaining);
+}

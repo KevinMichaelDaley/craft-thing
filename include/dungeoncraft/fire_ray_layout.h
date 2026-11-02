@@ -1,0 +1,9 @@
+#ifndef DC_FIRE_RAY_LAYOUT_H
+#define DC_FIRE_RAY_LAYOUT_H
+#define DC_FIRE_RAY_MAGIC 0x52415931u
+#define DC_FIRE_RAY_HEADER 4u
+#define DC_FIRE_RAY_WORDS 40u
+#define DC_FIRE_RAY_MAX 4u
+#define DC_FIRE_RAY_HALF_HEIGHT 4u
+#define DC_FIRE_RAY_ENDS 24u
+#endif
