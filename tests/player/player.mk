@@ -1,5 +1,5 @@
 BEAVER_SRC = src/player/beaver_art.c src/player/beaver_asset.c
-src/player/beaver_imported.h: assets/player/beaver/beaver_chomp.ase assets/player/beaver/beaver_chomp.mapping.json scripts/props/beaver_import.py scripts/props/ase_reader.py
+src/player/beaver_imported.h: assets/player/beaver/beaver_cast.ase assets/player/beaver/beaver_cast.mapping.json assets/player/beaver/beaver_chomp.ase assets/player/beaver/beaver_chomp.mapping.json scripts/props/beaver_import.py scripts/props/ase_reader.py
 	python3 scripts/props/beaver_import.py
 build/beaver_asset_tests build/beaver_atlas: src/player/beaver_imported.h
 build/beaver_asset_tests: src/fire/material_profile_data.inc include/dungeoncraft/coating_layout.h

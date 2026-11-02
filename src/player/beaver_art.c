@@ -9,11 +9,11 @@ bool beaver_art_source(uint32_t source,beaver_art_pixel_t *out) {
     return true;
 }
 
-bool beaver_art_frame(uint32_t frame,uint32_t pixel,beaver_art_pixel_t *out,uint32_t *source) {
-    if (frame>=8 || pixel>=FR_BEAVER_PIXELS || !out || !source) return false;
-    uint32_t rest=beaver_sources[frame][pixel];
+bool beaver_art_frame(fr_player_action_t action,uint32_t frame,uint32_t pixel,beaver_art_pixel_t *out,uint32_t *source) {
+    if (frame>=8 || pixel>=(action==FR_PLAYER_CAST?FR_BEAVER_MAX_PIXELS:FR_BEAVER_PIXELS) || !out || !source) return false;
+    uint32_t rest=action==FR_PLAYER_CAST?beaver_cast_sources[frame][pixel]:beaver_sources[frame][pixel];
     if (!rest || !beaver_art_source(rest,out)) return false;
-    memcpy(out->color,beaver_rgba[frame]+pixel*4,3);
+    memcpy(out->color,(action==FR_PLAYER_CAST?beaver_cast_rgba[frame]:beaver_rgba[frame])+pixel*4,4);
     *source=rest;
     return true;
 }
@@ -28,10 +28,5 @@ void beaver_art_pose(const beaver_art_pixel_t *pixel,fr_player_action_t action,
         } else if (pixel->region==FR_BEAVER_HAT || *y<24) *y+=lift[frame];
         else if (pixel->region==FR_BEAVER_TAIL) *y+=stride[frame]/2;
         else *x+=stride[frame]/2;
-    } else if (action==FR_PLAYER_CAST) {
-        static const int32_t rise[4]={0,-3,-6,-8};
-        if (pixel->region==FR_BEAVER_FUR && *y>=26 && *x>=25) {
-            *x+=(int32_t)frame;*y+=rise[frame];
-        }
     }
 }

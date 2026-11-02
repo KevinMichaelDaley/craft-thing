@@ -8,6 +8,10 @@ enum { BEAVER_PROP_HEADER=64, BEAVER_PROP_FRAME=16, BEAVER_PROP_MAP=8,
        BEAVER_PROP_APPEARANCE=64, BEAVER_PROP_STONE=1, BEAVER_PROP_WOOD=2,
        BEAVER_PROP_RIGID=3 };
 
+static uint32_t beaver_width(fr_player_action_t action) {
+    return action==FR_PLAYER_CAST?FR_BEAVER_CAST_WIDTH:FR_BEAVER_WIDTH;
+}
+
 static uint32_t beaver_prop_material(fr_beaver_region_t region) {
     return region==FR_BEAVER_TEETH?BEAVER_PROP_STONE:BEAVER_PROP_WOOD;
 }
@@ -38,7 +42,7 @@ static bool beaver_error(char *err,uint32_t cap,const char *message) {
 bool fr_beaver_asset_size(fr_player_action_t action,size_t *bytes,uint32_t *entries) {
     fr_player_clip_t clip;
     if (!bytes || !entries || !fr_player_clip(action,&clip)) return false;
-    *entries=clip.frames*FR_BEAVER_PIXELS;
+    *entries=clip.frames*beaver_width(action)*FR_BEAVER_HEIGHT;
     *bytes=BEAVER_PROP_HEADER+(size_t)clip.frames*BEAVER_PROP_FRAME+
         (size_t)*entries*(BEAVER_PROP_MAP+BEAVER_PROP_APPEARANCE);
     return true;
@@ -52,19 +56,20 @@ bool fr_beaver_source(uint32_t source,fr_beaver_source_t *out) {
 }
 
 static void beaver_frame(uint8_t *data,uint32_t *mapping,fr_player_action_t action,uint32_t frame) {
-    for (uint32_t original=0;original<FR_BEAVER_PIXELS;original++) {
+    uint32_t width=beaver_width(action),pixels=width*FR_BEAVER_HEIGHT;
+    for (uint32_t original=0;original<pixels;original++) {
         beaver_art_pixel_t art;
         uint32_t source;
-        if (!beaver_art_frame(action==FR_PLAYER_CHEW?frame:0,original,&art,&source)) continue;
-        int32_t x=(int32_t)(original%FR_BEAVER_WIDTH),y=(int32_t)(original/FR_BEAVER_WIDTH);
+        if (!beaver_art_frame(action,(action==FR_PLAYER_CHEW || action==FR_PLAYER_CAST)?frame:0,original,&art,&source)) continue;
+        int32_t x=(int32_t)(original%width),y=(int32_t)(original/width);
         beaver_art_pose(&art,action,frame,&x,&y);
-        if (x<0 || y<0 || x>=(int32_t)FR_BEAVER_WIDTH || y>=(int32_t)FR_BEAVER_HEIGHT) continue;
-        uint32_t pixel=(uint32_t)y*FR_BEAVER_WIDTH+(uint32_t)x;
+        if (x<0 || y<0 || x>=(int32_t)width || y>=(int32_t)FR_BEAVER_HEIGHT) continue;
+        uint32_t pixel=(uint32_t)y*width+(uint32_t)x;
         uint8_t *physical=data+pixel*BEAVER_PROP_MAP;
         physical[0]=(uint8_t)beaver_prop_material(art.region);
         physical[2]=BEAVER_PROP_RIGID;
         beaver_u32(physical+4,1);
-        uint8_t *appearance=data+FR_BEAVER_PIXELS*BEAVER_PROP_MAP+pixel*BEAVER_PROP_APPEARANCE;
+        uint8_t *appearance=data+pixels*BEAVER_PROP_MAP+pixel*BEAVER_PROP_APPEARANCE;
         for (uint32_t c=0;c<3;c++) {
             float srgb=art.color[c]/255.f;
             float linear=srgb<=.04045f?srgb/12.92f:powf((srgb+.055f)/1.055f,2.4f);
@@ -72,7 +77,7 @@ static void beaver_frame(uint8_t *data,uint32_t *mapping,fr_player_action_t acti
         }
         beaver_float(appearance+12,.8f);
         beaver_float(appearance+24,1.f);
-        beaver_float(appearance+48,1.f);
+        beaver_float(appearance+48,art.color[3]/255.f);
         mapping[pixel]=source;
     }
 }
@@ -85,20 +90,21 @@ bool fr_beaver_asset_build(fr_player_action_t action,uint8_t *bytes,size_t capac
         return beaver_error(err,cap,"Invalid beaver clip or insufficient caller storage");
     memset(bytes,0,size);memset(mapping,0,(size_t)entries*sizeof(*mapping));
     memcpy(bytes,"CPRP",4);beaver_u32(bytes+4,1);beaver_u32(bytes+8,(uint32_t)size);
-    beaver_u32(bytes+12,FR_BEAVER_WIDTH);beaver_u32(bytes+16,FR_BEAVER_HEIGHT);
+    beaver_u32(bytes+12,beaver_width(action));beaver_u32(bytes+16,FR_BEAVER_HEIGHT);
     beaver_u32(bytes+20,clip.frames);beaver_u32(bytes+24,1);
     beaver_u32(bytes+28,BEAVER_PROP_HEADER);
     uint32_t data_offset=BEAVER_PROP_HEADER+clip.frames*BEAVER_PROP_FRAME;
     beaver_u32(bytes+32,data_offset);beaver_u32(bytes+36,BEAVER_PROP_MAP);
     beaver_u32(bytes+40,BEAVER_PROP_APPEARANCE);memcpy(bytes+48,"beaver-sprite-v1",16);
     bytes[63]=(uint8_t)action;
-    uint32_t frame_size=FR_BEAVER_PIXELS*(BEAVER_PROP_MAP+BEAVER_PROP_APPEARANCE);
+    uint32_t pixels=beaver_width(action)*FR_BEAVER_HEIGHT;
+    uint32_t frame_size=pixels*(BEAVER_PROP_MAP+BEAVER_PROP_APPEARANCE);
     for (uint32_t f=0;f<clip.frames;f++) {
         uint8_t *table=bytes+BEAVER_PROP_HEADER+f*BEAVER_PROP_FRAME;
         beaver_u32(table,clip.frame_ms);beaver_u32(table+4,f*frame_size);
-        beaver_u32(table+8,FR_BEAVER_PIXELS*BEAVER_PROP_MAP);
-        beaver_u32(table+12,FR_BEAVER_PIXELS*BEAVER_PROP_APPEARANCE);
-        beaver_frame(bytes+data_offset+f*frame_size,mapping+f*FR_BEAVER_PIXELS,action,f);
+        beaver_u32(table+8,pixels*BEAVER_PROP_MAP);
+        beaver_u32(table+12,pixels*BEAVER_PROP_APPEARANCE);
+        beaver_frame(bytes+data_offset+f*frame_size,mapping+f*pixels,action,f);
     }
     beaver_u32(bytes+44,beaver_crc(bytes,size));
     fr_beaver_asset_t asset={.source_pixels=mapping,.source_count=entries,.action=action};
@@ -110,14 +116,15 @@ bool fr_beaver_asset_build(fr_player_action_t action,uint8_t *bytes,size_t capac
 bool fr_beaver_asset_pixel(const fr_beaver_asset_t *asset,uint32_t frame,
     uint32_t x,uint32_t y,bool flip,fr_prop_pixel_t *out,uint32_t *source) {
     if (!asset || !asset->source_pixels || !out || !source ||
-        asset->prop.width!=FR_BEAVER_WIDTH || asset->prop.height!=FR_BEAVER_HEIGHT ||
-        frame>=asset->prop.frame_count || x>=FR_BEAVER_WIDTH || y>=FR_BEAVER_HEIGHT ||
-        (uint64_t)asset->prop.frame_count*FR_BEAVER_PIXELS!=asset->source_count) return false;
-    if (flip) x=FR_BEAVER_WIDTH-1-x;
-    uint32_t pixel=y*FR_BEAVER_WIDTH+x;
+        asset->prop.width!=beaver_width(asset->action) || asset->prop.height!=FR_BEAVER_HEIGHT ||
+        frame>=asset->prop.frame_count || x>=asset->prop.width || y>=FR_BEAVER_HEIGHT ||
+        (uint64_t)asset->prop.frame_count*asset->prop.width*FR_BEAVER_HEIGHT!=asset->source_count) return false;
+    if (flip) x=asset->prop.width-1-x;
+    uint32_t pixels=asset->prop.width*FR_BEAVER_HEIGHT;
+    uint32_t pixel=y*asset->prop.width+x;
     fr_prop_pixel_t physical;
     if (!fr_prop_pixel(&asset->prop,frame,pixel,&physical)) return false;
-    uint32_t rest=asset->source_pixels[frame*FR_BEAVER_PIXELS+pixel];
+    uint32_t rest=asset->source_pixels[frame*pixels+pixel];
     fr_beaver_source_t metadata;
     if (physical.material?( !fr_beaver_source(rest,&metadata) || metadata.prop_material!=physical.material):rest!=0) return false;
     *out=physical;*source=rest;

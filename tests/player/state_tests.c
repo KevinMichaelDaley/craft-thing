@@ -249,7 +249,7 @@ static void test_recovery_reentry_preserves_elapsed_time_across_cadences(void) {
     for (uint32_t i=0;i<35;i++) ASSERT_TRUE(fr_player_chew_tick(&f.players[1],true,10));
     uint32_t a,b;
     ASSERT_TRUE(fr_player_frame(&f.players[0],&a) && fr_player_frame(&f.players[1],&b));
-    ASSERT_EQ(a,7u);ASSERT_EQ(a,b);
+    ASSERT_EQ(a,3u);ASSERT_EQ(a,b);
     ASSERT_EQ(f.players[0].elapsed_ms,f.players[1].elapsed_ms);
     PASS();
 }

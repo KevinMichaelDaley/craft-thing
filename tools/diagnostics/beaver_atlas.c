@@ -12,7 +12,7 @@
 #include "ferrum/player/beaver.h"
 
 enum { ATLAS_SCALE=4, ATLAS_COLUMNS=8,
-       ATLAS_WIDTH=FR_BEAVER_WIDTH*ATLAS_COLUMNS*ATLAS_SCALE,
+       ATLAS_WIDTH=FR_BEAVER_CAST_WIDTH*ATLAS_COLUMNS*ATLAS_SCALE,
        ATLAS_HEIGHT=FR_BEAVER_HEIGHT*FR_PLAYER_ACTION_COUNT*ATLAS_SCALE };
 
 static bool beaver_write_file(const char *path,const void *data,size_t size) {
@@ -59,13 +59,13 @@ int main(int argc,char **argv) {
                 free(encoded);
             }
         }
-        for (uint32_t f=0;okay && f<asset.prop.frame_count;f++) for (uint32_t p=0;p<FR_BEAVER_PIXELS;p++) {
+        for (uint32_t f=0;okay && f<asset.prop.frame_count;f++) for (uint32_t p=0;p<asset.prop.width*asset.prop.height;p++) {
             fr_prop_appearance_t app;
             okay=fr_prop_appearance(&asset.prop,f,p,&app);
             if (!okay || app.alpha==0) continue;
             uint32_t color=0xff000000u|beaver_channel(app.color[0])|(beaver_channel(app.color[1])<<8)|(beaver_channel(app.color[2])<<16);
-            uint32_t ax=(f*FR_BEAVER_WIDTH+p%FR_BEAVER_WIDTH)*ATLAS_SCALE;
-            uint32_t ay=(a*FR_BEAVER_HEIGHT+p/FR_BEAVER_WIDTH)*ATLAS_SCALE;
+            uint32_t ax=(f*FR_BEAVER_CAST_WIDTH+p%asset.prop.width)*ATLAS_SCALE;
+            uint32_t ay=(a*FR_BEAVER_HEIGHT+p/asset.prop.width)*ATLAS_SCALE;
             for (uint32_t y=0;y<ATLAS_SCALE;y++) for (uint32_t x=0;x<ATLAS_SCALE;x++)
                 atlas[(ay+y)*ATLAS_WIDTH+ax+x]=color;
         }

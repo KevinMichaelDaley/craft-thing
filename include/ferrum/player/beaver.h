@@ -10,12 +10,14 @@
 #include "ferrum/renderer/appearance.h"
 
 #define FR_BEAVER_WIDTH 40u
+#define FR_BEAVER_CAST_WIDTH 80u
+#define FR_BEAVER_MAX_PIXELS (FR_BEAVER_CAST_WIDTH * FR_BEAVER_HEIGHT)
 #define FR_BEAVER_HEIGHT 40u
 #define FR_BEAVER_PIXELS (FR_BEAVER_WIDTH * FR_BEAVER_HEIGHT)
 
 typedef enum {
     FR_BEAVER_EMPTY, FR_BEAVER_FUR, FR_BEAVER_ROBE, FR_BEAVER_HAT,
-    FR_BEAVER_TAIL, FR_BEAVER_TEETH, FR_BEAVER_REGION_COUNT
+    FR_BEAVER_TAIL, FR_BEAVER_TEETH, FR_BEAVER_STAFF, FR_BEAVER_REGION_COUNT
 } fr_beaver_region_t;
 
 /** Immutable source metadata, independent of a frame's position or facing.
@@ -38,7 +40,7 @@ typedef struct {
 } fr_beaver_asset_t;
 
 /** Return required compiled bytes and mapping entries for an action clip.
- * Supports idle as well as exact six/eight/four walk/chew/cast frame counts.
+ * Supports idle as well as exact six/eight/eight walk/chew/cast frame counts.
  * Invalid arguments leave outputs unchanged. */
 bool fr_beaver_asset_size(fr_player_action_t action, size_t *bytes, uint32_t *entries);
 /** Deterministically author a standard compiled clip in caller-owned buffers.
