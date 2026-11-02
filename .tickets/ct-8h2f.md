@@ -27,3 +27,7 @@ RED 10b106e8 compiles and fails 5/5 cases. GREEN 55ab2142 passes 5 input/action 
 **2026-11-02T00:35:58Z**
 
 SDL RED c737af60 compiles and fails 3/3; GREEN f5a835c3 passes 3/3. Controller instance IDs, deadzone axes, keyboard scancodes, mapping-based event consumption and lifecycle clearing share the same router. Full make test completed exit 2 at unchanged catapult support failure ct-lc9o (12 pass/1 fail), log sustained/input-full-tests.log. Actual app integration continues.
+
+**2026-11-02T01:10:35Z**
+
+Live Vulkan play path now exists (429887cc). Core input7/7 and SDL3/3 pass after explicit release rearming across focus/context and snapshots of held controls on device admission/focus gain. Cast returns idle exactly after recovery; no synthetic/demo input exists in --play. Movement retains logical WALK hook but renders only authored idle while user walk art is pending. Actual runtime test passes 60 initial no-input idle ticks, real D movement, focus clearing, intentional Q at frame6, 120 held/no-new-press ticks returning idle, plus pixel comparisons. Fire/ice gameplay effects remain pending; new fire-ray demo ct-9ieb is next priority.
