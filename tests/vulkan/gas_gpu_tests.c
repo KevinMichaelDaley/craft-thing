@@ -215,6 +215,15 @@ static void test_native_buoyancy_matches_reference_and_accounts_for_external_wor
     ASSERT_TRUE(fabs(energy_change-total_work)<1e-6);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(input);free(out);free(volumes);free(work);free(c);dc_gpu_destroy(g);PASS();
 }
+static fr_gas_model_t trace_failure_model(void) {
+    return (fr_gas_model_t){.gas_constant={.25984,.29680,.18892,.46152,0},
+        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+}
+static fr_gas_state_t trace_failure_state(void) {
+    return (fr_gas_state_t){.species={3.48591163e-27,1.33056074e-24,6.111088e-25,3.25136577e-28,1.55956014e-26},
+        .energy=6.52359471e-25,.momentum={-3.07829929e-36,8.75673549e-24},
+        .pigment={1.07345184e-25,9.54179527e-26,8.34906963e-26}};
+}
 static void test_native_trace_buoyancy_preserves_external_work_without_underflow(void) {
     char err[256]={0};dc_gpu_t *g=NULL;ASSERT_TRUE(context(&g,err,sizeof(err)));
     dc_gpu_address_buffer_t input={0},output={0},model={0},stats={0};fr_renderer_compute_t compute={0};
@@ -222,19 +231,18 @@ static void test_native_trace_buoyancy_preserves_external_work_without_underflow
         dc_gpu_address_buffer_create(g,64u,true,&output,err,sizeof(err))&&
         dc_gpu_address_buffer_create(g,FR_GAS_MODEL_WORDS*4u,true,&model,err,sizeof(err))&&
         dc_gpu_address_buffer_create(g,64u,true,&stats,err,sizeof(err)));
-    fr_gas_model_t m={.gas_constant={.25984,.29680,.18892,.46152,0},
-        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    fr_gas_model_t m=trace_failure_model();fr_gas_state_t trace=trace_failure_state();
     float *packet=input.mapped,*parameters=model.mapped;
-    const float species[5]={3.48591163e-27f,1.33056074e-24f,6.111088e-25f,3.25136577e-28f,1.55956014e-26f};
-    for(uint32_t i=0;i<5u;i++) {packet[i]=species[i];parameters[i]=(float)m.gas_constant[i];parameters[5u+i]=(float)m.heat_capacity_cv[i];}
-    packet[5]=6.52359471e-25f;packet[6]=-3.07829929e-36f;packet[7]=8.75673549e-24f;
-    packet[8]=1.07345184e-25f;packet[9]=9.54179527e-26f;packet[10]=8.34906963e-26f;packet[12]=packet[13]=1.f;
+    for(uint32_t i=0;i<5u;i++) {packet[i]=(float)trace.species[i];parameters[i]=(float)m.gas_constant[i];parameters[5u+i]=(float)m.heat_capacity_cv[i];}
+    packet[5]=(float)trace.energy;packet[6]=(float)trace.momentum[0];packet[7]=(float)trace.momentum[1];
+    for(uint32_t i=0;i<3u;i++) packet[8u+i]=(float)trace.pigment[i];
+    packet[12]=packet[13]=1.f;
     parameters[FR_GAS_KINETIC_WORD]=(float)m.kinetic_scale;
     parameters[FR_GAS_DENSITY_WORD]=.0012f;parameters[FR_GAS_AMBIENT_WORD]=293.15f;
     parameters[FR_GAS_OXYGEN_WORD]=.21f;parameters[FR_GAS_GRAVITY_WORD]=900.f;
     parameters[FR_GAS_POLICY_WORD]=3.f;
-    fr_gas_state_t trace={.energy=packet[5],.momentum={packet[6],packet[7]},
-        .pigment={packet[8],packet[9],packet[10]}};
+    trace.energy=packet[5];trace.momentum[0]=packet[6];trace.momentum[1]=packet[7];
+    for(uint32_t i=0;i<3u;i++) trace.pigment[i]=packet[8u+i];
     for(uint32_t i=0;i<5u;i++) trace.species[i]=packet[i];
     fr_gas_state_t ambient=reference_air(m,1,293.15,0),expected;double specific=0,admitted=0;
     for(uint32_t k=0;k<5;k++) specific+=ambient.species[k]*m.gas_constant[k]*293.15;
@@ -265,16 +273,13 @@ static void test_native_trace_buoyancy_preserves_external_work_without_underflow
 static void test_native_trace_practical_step_keeps_valid_energy_and_stock(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
-    fr_gas_model_t m={.gas_constant={.25984,.29680,.18892,.46152,0},
-        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
+    fr_gas_model_t m=trace_failure_model();
     ASSERT_TRUE(fr_gas_gpu_enable(g,&m,.0012,293.15,err,sizeof(err))&&
         fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&
         fr_gas_gpu_set_gravity(g,900,err,sizeof(err)));
     fr_gas_state_t *input=calloc(4096,sizeof(*input)),*out=calloc(4096,sizeof(*out));
     double *volumes=malloc(4096*sizeof(*volumes));ASSERT_TRUE(input&&out&&volumes);
-    fr_gas_state_t trace={.species={3.48591163e-27,1.33056074e-24,6.111088e-25,3.25136577e-28,1.55956014e-26},
-        .energy=6.52359471e-25,.momentum={-3.07829929e-36,8.75673549e-24},
-        .pigment={1.07345184e-25,9.54179527e-26,8.34906963e-26}};
+    fr_gas_state_t trace=trace_failure_state();
     for(uint32_t i=0;i<4096;i++) {input[i]=trace;volumes[i]=1.;}
     ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volumes,4096,err,sizeof(err))&&
         fr_gas_gpu_step(g,1.f/60,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
