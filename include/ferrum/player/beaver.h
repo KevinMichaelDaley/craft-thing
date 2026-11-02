@@ -39,6 +39,17 @@ typedef struct {
     fr_player_action_t action;
 } fr_beaver_asset_t;
 
+typedef struct {
+    uint32_t x,y,width,height,canvas_width,canvas_height;
+    uint32_t foot_baseline;
+} fr_beaver_frame_layout_t;
+
+/** Runtime crop of nonzero alpha, preserving all visible artwork. Foot baseline
+ * is an authored body contact edge in original canvas coordinates, independent
+ * of tails, staff or spell bounds. Original source pixels/maps stay immutable. */
+bool fr_beaver_frame_layout(const fr_beaver_asset_t *asset,uint32_t frame,
+    fr_beaver_frame_layout_t *out);
+
 /** Return required compiled bytes and mapping entries for an action clip.
  * Supports idle as well as exact six/eight/eight walk/chew/cast frame counts.
  * Invalid arguments leave outputs unchanged. */

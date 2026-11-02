@@ -206,7 +206,50 @@ static void test_authoritative_cast_wide_rgba_and_stable_owners(void) {
     ASSERT_TRUE(wide && partial); PASS();
 }
 
+static void test_runtime_crop_and_stable_foot_contact(void) {
+    static const uint32_t cast_feet[8]={32,33,33,33,33,32,32,32};
+    for(uint32_t a=0;a<FR_PLAYER_ACTION_COUNT;a++) {
+        ASSERT_TRUE(build((fr_player_action_t)a));
+        for(uint32_t f=0;f<g_asset.prop.frame_count;f++) {
+            fr_beaver_frame_layout_t layout;
+            ASSERT_TRUE(fr_beaver_frame_layout(&g_asset,f,&layout));
+            ASSERT_EQ(layout.canvas_width,a==FR_PLAYER_CAST?80u:40u);
+            ASSERT_EQ(layout.canvas_height,40u);
+            ASSERT_EQ(layout.foot_baseline,a==FR_PLAYER_CAST?cast_feet[f]:32u);
+            ASSERT_TRUE(layout.y+layout.height<40u);
+            ASSERT_TRUE(layout.width>0&&layout.height>0);
+            bool bottom_occupied=false;
+            for(uint32_t y=0;y<40;y++) for(uint32_t x=0;x<g_asset.prop.width;x++) {
+                fr_prop_appearance_t app;
+                ASSERT_TRUE(fr_prop_appearance(&g_asset.prop,f,y*g_asset.prop.width+x,&app));
+                if(app.alpha==0) continue;
+                ASSERT_TRUE(x>=layout.x&&x<layout.x+layout.width&&y>=layout.y&&y<layout.y+layout.height);
+                if(y==layout.y+layout.height-1) bottom_occupied=true;
+                uint32_t source=g_mapping[f*g_asset.prop.width*40+y*g_asset.prop.width+x];
+                ASSERT_TRUE(source);
+                for(uint32_t flip=0;flip<2;flip++) {
+                    int crop_x=(int)x-(int)layout.x;
+                    int mirrored=flip?(int)layout.width-1-crop_x:crop_x;
+                    int pad=flip?(int)layout.canvas_width-(int)layout.x-(int)layout.width:(int)layout.x;
+                    int origin=(int)(layout.canvas_width-40)/2-pad;
+                    int world_x=mirrored-origin;
+                    int expected=flip?(int)layout.canvas_width-1-(int)x-(int)(layout.canvas_width-40)/2:
+                        (int)x-(int)(layout.canvas_width-40)/2;
+                    ASSERT_INT_EQ(world_x,expected);
+                }
+            }
+            ASSERT_TRUE(bottom_occupied);
+            int origin_y=(int)layout.foot_baseline-(int)layout.y-40;
+            ASSERT_INT_EQ((int)layout.foot_baseline-(int)layout.y-origin_y,40);
+        }
+    }
+    fr_beaver_frame_layout_t invalid={.width=999};
+    ASSERT_TRUE(!fr_beaver_frame_layout(NULL,0,&invalid));ASSERT_EQ(invalid.width,999u);
+    PASS();
+}
+
 int main(void) {
+    RUN(test_runtime_crop_and_stable_foot_contact);
     RUN(test_authoritative_cast_wide_rgba_and_stable_owners);
     RUN(test_authoritative_rgba_pixels_and_unique_material_correspondence);
     RUN(test_standard_prop_pipeline_and_exact_clip_timing);

@@ -8,6 +8,11 @@ enum { BEAVER_PROP_HEADER=64, BEAVER_PROP_FRAME=16, BEAVER_PROP_MAP=8,
        BEAVER_PROP_APPEARANCE=64, BEAVER_PROP_STONE=1, BEAVER_PROP_WOOD=2,
        BEAVER_PROP_RIGID=3 };
 
+bool fr_beaver_frame_layout(const fr_beaver_asset_t *asset,uint32_t frame,
+    fr_beaver_frame_layout_t *out) {
+    (void)asset;(void)frame;(void)out;return false;
+}
+
 static uint32_t beaver_width(fr_player_action_t action) {
     return action==FR_PLAYER_CAST?FR_BEAVER_CAST_WIDTH:FR_BEAVER_WIDTH;
 }
