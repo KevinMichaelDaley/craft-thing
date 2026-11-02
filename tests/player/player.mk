@@ -25,6 +25,12 @@ build/player_body_gpu_tests: tests/player/body_gpu_tests.c src/player/body_gpu.c
 test_player_body_gpu: build/player_body_gpu_tests
 	./build/player_body_gpu_tests
 test: test_player_body_gpu
+build/player_runtime_tests: tests/app/player_runtime_tests.c build/dungeoncraft_quarter_native
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+.PHONY: test_player_runtime
+test_player_runtime: build/player_runtime_tests
+	./build/player_runtime_tests
+test: test_player_runtime
 src/player/beaver_imported.h: assets/player/beaver/beaver_cast.ase assets/player/beaver/beaver_cast.mapping.json assets/player/beaver/beaver_chomp.ase assets/player/beaver/beaver_chomp.mapping.json scripts/props/beaver_import.py scripts/props/ase_reader.py
 	python3 scripts/props/beaver_import.py
 build/beaver_asset_tests build/beaver_atlas: src/player/beaver_imported.h

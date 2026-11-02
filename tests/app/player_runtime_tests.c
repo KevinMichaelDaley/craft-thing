@@ -1,0 +1,35 @@
+#define _POSIX_C_SOURCE 200809L
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "../../src/app/player_session.h"
+
+static int g_pass,g_fail;
+#define RUN(fn) do {printf("RUN %s\n",#fn);fflush(stdout);fn();} while(0)
+#define ASSERT_TRUE(x) do {if(!(x)){printf("FAIL %s:%d: %s (%s)\n",__FILE__,__LINE__,#x,err);g_fail++;return;} } while(0)
+#define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
+#define ASSERT_INT_EQ(a,b) ASSERT_EQ((int)(a),(int)(b))
+#define PASS() g_pass++
+static void test_real_app_keyboard_drives_body_and_animation(void) {
+    char directory[]="build/player_runtime_XXXXXX",err[256]={0};ASSERT_TRUE(mkdtemp(directory));
+    uint32_t surface=96;dc_ground_profile_t ground={.width=1,.soil_depth=1,.surface=&surface};
+    dc_level_view_t *v=dc_level_view_create_ground(directory,314,&ground,err,sizeof(err));ASSERT_TRUE(v);
+    ASSERT_TRUE(dc_level_view_pan_pixels(v,0,128));
+    ASSERT_TRUE(dc_level_view_wait_visible(v,120000,err,sizeof(err)));
+    ASSERT_TRUE(dc_players_enable(v,err,sizeof(err)));
+    fr_player_t p;fr_beaver_body_t binding;
+    ASSERT_TRUE(dc_players_status(v,0,&p,&binding));ASSERT_EQ(p.action,FR_PLAYER_IDLE);
+    dc_gpu_world_body_t before,after;dc_gpu_body_motion_t motion;
+    ASSERT_TRUE(dc_level_view_body_state(v,binding.binding.body_id,&before,&motion,err,sizeof(err)));
+    SDL_Event e={.type=SDL_KEYDOWN};e.key.keysym.scancode=SDL_SCANCODE_D;
+    ASSERT_TRUE(dc_players_event(v,&e));
+    for(unsigned n=0;n<7;n++) ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
+    ASSERT_TRUE(dc_players_status(v,0,&p,&binding));ASSERT_EQ(p.action,FR_PLAYER_WALK);ASSERT_TRUE(p.elapsed_ms>=100);
+    ASSERT_TRUE(dc_level_view_body_state(v,binding.binding.body_id,&after,&motion,err,sizeof(err)));
+    ASSERT_TRUE(after.chunk.x>before.chunk.x||after.body.x_fp>before.body.x_fp);
+    e.type=SDL_WINDOWEVENT;e.window.event=SDL_WINDOWEVENT_FOCUS_LOST;dc_players_event(v,&e);
+    ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
+    ASSERT_TRUE(dc_players_status(v,0,&p,&binding));ASSERT_EQ(p.action,FR_PLAYER_IDLE);ASSERT_EQ(p.intent.move_x,0);
+    ASSERT_TRUE(dc_level_view_destroy(v,err,sizeof(err)));PASS();
+}
+int main(void) {RUN(test_real_app_keyboard_drives_body_and_animation);printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
