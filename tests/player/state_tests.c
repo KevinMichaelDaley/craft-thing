@@ -128,7 +128,7 @@ static void test_intents_validate_grants_and_canonical_world_targets(void) {
 
 static void test_exact_frame_counts_and_boundaries(void) {
     fixture_t f; ASSERT_TRUE(fixture(&f));
-    const uint32_t counts[]={1,6,8,4}, durations[]={100,100,100,100};
+    const uint32_t counts[]={1,6,8,8}, durations[]={100,100,100,100};
     for (uint32_t action=0;action<FR_PLAYER_ACTION_COUNT;action++) {
         fr_player_clip_t clip; ASSERT_TRUE(fr_player_clip((fr_player_action_t)action,&clip));
         ASSERT_EQ(clip.frames,counts[action]); ASSERT_EQ(clip.frame_ms,durations[action]);
@@ -170,9 +170,9 @@ static void test_large_intervals_and_partition_independence(void) {
     ASSERT_EQ(f.players[0].elapsed_ms,(50u+UINT64_MAX%600u)%600u);
     ASSERT_TRUE(fr_player_set_action(&f.players[0],FR_PLAYER_CAST,true));
     ASSERT_TRUE(fr_player_advance(&f.players[0],UINT64_MAX));
-    ASSERT_TRUE(fr_player_frame(&f.players[0],&a)); ASSERT_EQ(a,3u);
+    ASSERT_TRUE(fr_player_frame(&f.players[0],&a)); ASSERT_EQ(a,7u);
     ASSERT_TRUE(fr_player_action_complete(&f.players[0]));
-    ASSERT_TRUE(fr_player_advance(&f.players[0],UINT64_MAX)); ASSERT_EQ(f.players[0].elapsed_ms,400u); PASS();
+    ASSERT_TRUE(fr_player_advance(&f.players[0],UINT64_MAX)); ASSERT_EQ(f.players[0].elapsed_ms,800u); PASS();
 }
 
 static void test_null_and_invalid_action_inputs(void) {
@@ -249,12 +249,35 @@ static void test_recovery_reentry_preserves_elapsed_time_across_cadences(void) {
     for (uint32_t i=0;i<35;i++) ASSERT_TRUE(fr_player_chew_tick(&f.players[1],true,10));
     uint32_t a,b;
     ASSERT_TRUE(fr_player_frame(&f.players[0],&a) && fr_player_frame(&f.players[1],&b));
-    ASSERT_EQ(a,3u);ASSERT_EQ(a,b);
+    ASSERT_EQ(a,7u);ASSERT_EQ(a,b);
     ASSERT_EQ(f.players[0].elapsed_ms,f.players[1].elapsed_ms);
     PASS();
 }
 
+static void test_cast_emits_once_at_frame_six_across_skipped_samples(void) {
+    fixture_t f; ASSERT_TRUE(fixture(&f));
+    for (uint32_t i=0;i<2;i++) ASSERT_TRUE(fr_player_set_action(&f.players[i],FR_PLAYER_CAST,true));
+    ASSERT_TRUE(fr_player_advance(&f.players[0],499));
+    ASSERT_TRUE(!fr_player_take_cast_event(&f.players[0]));
+    ASSERT_TRUE(fr_player_advance(&f.players[0],1));
+    ASSERT_TRUE(fr_player_take_cast_event(&f.players[0]));
+    ASSERT_TRUE(!fr_player_take_cast_event(&f.players[0]));
+    ASSERT_TRUE(fr_player_advance(&f.players[0],UINT64_MAX));
+    ASSERT_TRUE(!fr_player_take_cast_event(&f.players[0]));
+    ASSERT_TRUE(fr_player_advance(&f.players[1],800));
+    ASSERT_TRUE(fr_player_take_cast_event(&f.players[1]));
+    ASSERT_TRUE(!fr_player_take_cast_event(&f.players[1]));
+    ASSERT_TRUE(fr_player_set_action(&f.players[1],FR_PLAYER_CAST,false));
+    ASSERT_TRUE(fr_player_advance(&f.players[1],800));
+    ASSERT_TRUE(!fr_player_take_cast_event(&f.players[1]));
+    ASSERT_TRUE(fr_player_set_action(&f.players[1],FR_PLAYER_CAST,true));
+    for (uint32_t i=0;i<50;i++) ASSERT_TRUE(fr_player_advance(&f.players[1],10));
+    ASSERT_TRUE(fr_player_take_cast_event(&f.players[1]));
+    ASSERT_TRUE(!fr_player_take_cast_event(NULL)); PASS();
+}
+
 int main(void) {
+    RUN(test_cast_emits_once_at_frame_six_across_skipped_samples);
     RUN(test_chew_entry_loop_release_and_reentry);
     RUN(test_chew_invalid_target_recovers_even_during_entry);
     RUN(test_chew_partition_independence_and_overflow);

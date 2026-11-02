@@ -13,25 +13,25 @@ static int g_pass, g_fail;
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() g_pass++
 
-static uint8_t g_bytes[1000000];
-static uint32_t g_mapping[FR_BEAVER_PIXELS*8];
+static uint8_t g_bytes[2000000];
+static uint32_t g_mapping[FR_BEAVER_PIXELS*16];
 static fr_beaver_asset_t g_asset;
 
 static bool build(fr_player_action_t action) {
     return fr_beaver_asset_build(action,g_bytes,sizeof(g_bytes),g_mapping,
-        FR_BEAVER_PIXELS*8,&g_asset,NULL,0);
+        FR_BEAVER_PIXELS*16,&g_asset,NULL,0);
 }
 
 static void test_standard_prop_pipeline_and_exact_clip_timing(void) {
-    const uint32_t counts[]={1,6,8,4},durations[]={100,100,100,100};
+    const uint32_t counts[]={1,6,8,8},durations[]={100,100,100,100};
     for (uint32_t a=0;a<FR_PLAYER_ACTION_COUNT;a++) {
         size_t bytes=0;uint32_t entries=0;
         ASSERT_TRUE(fr_beaver_asset_size((fr_player_action_t)a,&bytes,&entries));
-        ASSERT_EQ(entries,counts[a]*FR_BEAVER_PIXELS); ASSERT_TRUE(bytes<=sizeof(g_bytes));
+        ASSERT_EQ(entries,counts[a]*FR_BEAVER_PIXELS*(a==FR_PLAYER_CAST?2:1)); ASSERT_TRUE(bytes<=sizeof(g_bytes));
         ASSERT_TRUE(build((fr_player_action_t)a));
         fr_prop_asset_t reopened;
         ASSERT_TRUE(fr_prop_asset_open(&reopened,g_bytes,bytes,NULL,0));
-        ASSERT_EQ(reopened.width,FR_BEAVER_WIDTH); ASSERT_EQ(reopened.height,FR_BEAVER_HEIGHT);
+        ASSERT_EQ(reopened.width,(a==FR_PLAYER_CAST?80u:FR_BEAVER_WIDTH)); ASSERT_EQ(reopened.height,FR_BEAVER_HEIGHT);
         ASSERT_EQ(reopened.frame_count,counts[a]); ASSERT_EQ(reopened.flags,1u);
         for (uint32_t f=0;f<counts[a];f++) {
             ASSERT_EQ(fr_prop_animation_frame(&reopened,(uint64_t)f*durations[a]),f);
@@ -70,8 +70,8 @@ static void test_each_requested_frame_has_a_distinct_pose(void) {
         ASSERT_TRUE(build((fr_player_action_t)a));
         for (uint32_t f=0;f<g_asset.prop.frame_count;f++) {
             for (uint32_t previous=0;previous<f;previous++)
-                ASSERT_TRUE(memcmp(g_mapping+previous*FR_BEAVER_PIXELS,
-                    g_mapping+f*FR_BEAVER_PIXELS,FR_BEAVER_PIXELS*sizeof(*g_mapping))!=0);
+                ASSERT_TRUE(memcmp(g_mapping+previous*g_asset.prop.width*FR_BEAVER_HEIGHT,
+                    g_mapping+f*g_asset.prop.width*FR_BEAVER_HEIGHT,g_asset.prop.width*FR_BEAVER_HEIGHT*sizeof(*g_mapping))!=0);
         }
     }
     PASS();
@@ -95,8 +95,8 @@ static void test_source_owner_coordinates_survive_frames_and_player_motion(void)
     bool seen[FR_BEAVER_PIXELS]={false};uint32_t matches=0;
     for (uint32_t a=FR_PLAYER_WALK;a<FR_PLAYER_ACTION_COUNT;a++) {
         ASSERT_TRUE(build((fr_player_action_t)a));
-        for (uint32_t f=0;f<g_asset.prop.frame_count;f++) for (uint32_t p=0;p<FR_BEAVER_PIXELS;p++) {
-            uint32_t source=g_mapping[f*FR_BEAVER_PIXELS+p];if (!source) continue;
+        for (uint32_t f=0;f<g_asset.prop.frame_count;f++) for (uint32_t p=0;p<g_asset.prop.width*FR_BEAVER_HEIGHT;p++) {
+            uint32_t source=g_mapping[f*g_asset.prop.width*FR_BEAVER_HEIGHT+p];if (!source) continue;
             fr_appearance_owner_t app;fr_reactive_owner_t rx;
             ASSERT_TRUE(fr_beaver_pixel_owners(source,41,101,7,&app,&rx));
             ASSERT_TRUE(fr_reactive_owner_valid(&rx,NULL,0));
@@ -121,14 +121,14 @@ static void test_invalid_inputs_preserve_buffers_and_outputs(void) {
     ASSERT_EQ(bytes,99u);ASSERT_EQ(entries,99u);
     memset(g_bytes,0x5a,sizeof(g_bytes));g_mapping[0]=99;
     ASSERT_TRUE(!fr_beaver_asset_build(FR_PLAYER_WALK,g_bytes,1,g_mapping,
-        FR_BEAVER_PIXELS*8,&g_asset,err,sizeof(err)));
+        FR_BEAVER_PIXELS*16,&g_asset,err,sizeof(err)));
     ASSERT_EQ(g_bytes[0],0x5au); ASSERT_EQ(g_mapping[0],99u);ASSERT_TRUE(err[0]);
     ASSERT_TRUE(!fr_beaver_asset_build(FR_PLAYER_WALK,g_bytes,sizeof(g_bytes),g_mapping,1,&g_asset,NULL,0));
     ASSERT_EQ(g_bytes[0],0x5au);ASSERT_EQ(g_mapping[0],99u);
     ASSERT_TRUE(build(FR_PLAYER_CAST));
     fr_prop_pixel_t pixel={.material=99};uint32_t source=99;
-    ASSERT_TRUE(!fr_beaver_asset_pixel(&g_asset,4,0,0,false,&pixel,&source));
-    ASSERT_TRUE(!fr_beaver_asset_pixel(&g_asset,0,40,0,false,&pixel,&source));
+    ASSERT_TRUE(!fr_beaver_asset_pixel(&g_asset,8,0,0,false,&pixel,&source));
+    ASSERT_TRUE(!fr_beaver_asset_pixel(&g_asset,0,80,0,false,&pixel,&source));
     ASSERT_EQ(pixel.material,99);ASSERT_EQ(source,99u);
     fr_beaver_source_t rest;ASSERT_TRUE(!fr_beaver_source(0,&rest));
     ASSERT_TRUE(!fr_beaver_source(UINT32_MAX,&rest));
@@ -172,7 +172,42 @@ static void test_authoritative_rgba_pixels_and_unique_material_correspondence(vo
     PASS();
 }
 
+static void test_authoritative_cast_wide_rgba_and_stable_owners(void) {
+    static const uint32_t hashes[]={0x34fde37c,0x5a3c3633,0xd3e40594,0xb8a01573,
+        0x56839d2d,0x11bc53b2,0x0cca2fda,0x3247195d};
+    ASSERT_TRUE(build(FR_PLAYER_CAST));
+    ASSERT_EQ(g_asset.prop.width,80u); ASSERT_EQ(g_asset.prop.height,40u);
+    ASSERT_EQ(g_asset.prop.frame_count,8u);
+    bool wide=false,partial=false;
+    for (uint32_t f=0;f<8;f++) {
+        uint32_t hash=2166136261u; bool used[FR_BEAVER_PIXELS]={false};
+        for (uint32_t p=0;p<3200;p++) {
+            fr_prop_appearance_t app; ASSERT_TRUE(fr_prop_appearance(&g_asset.prop,f,p,&app));
+            for (uint32_t c=0;c<4;c++) {
+                float v=c==3?app.alpha:app.color[c];
+                if (c!=3) v=v<=.0031308f?12.92f*v:1.055f*powf(v,1.f/2.4f)-.055f;
+                hash=(hash^(uint8_t)lroundf(v*255.f))*16777619u;
+            }
+            fr_prop_pixel_t pixel;uint32_t source;
+            ASSERT_TRUE(fr_beaver_asset_pixel(&g_asset,f,p%80,p/80,false,&pixel,&source));
+            if (source) {
+                ASSERT_TRUE(source<=FR_BEAVER_PIXELS && !used[source-1]); used[source-1]=true;
+                fr_beaver_source_t metadata; ASSERT_TRUE(fr_beaver_source(source,&metadata));
+                ASSERT_EQ(metadata.prop_material,pixel.material);
+                fr_prop_pixel_t flipped;uint32_t mirror;
+                ASSERT_TRUE(fr_beaver_asset_pixel(&g_asset,f,79-p%80,p/80,true,&flipped,&mirror));
+                ASSERT_EQ(mirror,source);
+                wide|=p%80>=40; partial|=app.alpha<1.f;
+            }
+            ASSERT_EQ(source!=0,app.alpha>0);
+        }
+        ASSERT_EQ(hash,hashes[f]);
+    }
+    ASSERT_TRUE(wide && partial); PASS();
+}
+
 int main(void) {
+    RUN(test_authoritative_cast_wide_rgba_and_stable_owners);
     RUN(test_authoritative_rgba_pixels_and_unique_material_correspondence);
     RUN(test_standard_prop_pipeline_and_exact_clip_timing);
     RUN(test_every_visible_pixel_has_supported_physics_and_appearance);

@@ -101,6 +101,8 @@ bool fr_player_set_action(fr_player_t *player, fr_player_action_t action, bool r
 /** Advance animation time, including chew entry/loop or pending recovery.
  * Overflow-safe even for UINT64_MAX intervals. */
 bool fr_player_advance(fr_player_t *player, uint64_t elapsed_ms);
+/** Consume the pending frame-six cast event once; no event on repeated samples. */
+bool fr_player_take_cast_event(fr_player_t *player);
 /** Select a deterministic frame; completed one-shots hold their last frame. */
 bool fr_player_frame(const fr_player_t *player, uint32_t *out_frame);
 /** True once a one-shot cast completes. Phased chewing never completes here. */

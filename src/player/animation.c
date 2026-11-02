@@ -91,3 +91,5 @@ bool fr_player_action_complete(const fr_player_t *p) {
         fr_player_clip(p->action,&clip) && !clip.loop &&
         p->elapsed_ms>=(uint64_t)clip.frames*clip.frame_ms;
 }
+
+bool fr_player_take_cast_event(fr_player_t *p) { (void)p; return false; }
