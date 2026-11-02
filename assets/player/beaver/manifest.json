@@ -24,7 +24,8 @@
     "walk": {
       "frames": 6,
       "frame_ms": 100,
-      "loop": true
+      "loop": true,
+      "runtime_display": "Supplied idle pose; user-authored walk art pending. Legacy derived poses are not cycled in the live build."
     },
     "chew": {
       "frames": 8,
@@ -55,7 +56,7 @@
         80,
         40
       ],
-      "frame_ms": 100,
+      "frame_ms": 80,
       "loop": false,
       "phases_one_based": {
         "windup": [
@@ -73,7 +74,8 @@
           8
         ]
       },
-      "event": "fr_player_take_cast_event; latched once crossing 500ms, even when samples skip frame 6"
+      "event": "fr_player_take_cast_event; latched once crossing 400ms, even when samples skip frame 6; 640ms total",
+      "timing_provenance": "Explicit runtime override; original ASE timing and artwork bytes preserved."
     }
   },
   "regions": {
@@ -119,6 +121,13 @@
   "canonical_mapping": "Each frame has a parallel row-major u32 plane: zero means transparent, otherwise canonical source row*40+column+1. Exported .source.u32 files are little-endian. Frame occlusion may hide a source texel; hidden canonical parcels must remain owned, not be erased or recreated.",
   "animation_policy": "CPRP state_variants explicitly records changing silhouettes. Do not place each variant into the world as new matter. Runtime deformation/rendering must reference existing canonical material parcels through source mapping.",
   "ownership": "Each player requires a distinct actual runtime body/generation and a stable appearance identity. Share only immutable clip bytes/maps. fr_beaver_pixel_owners_trimmed applies an explicit admission rest origin/extent, preserving canonical appearance coordinates and resolving actual BODY rest coordinates. Fractured or repartitioned bodies require updated bindings from their actual admission metadata.",
-  "runtime_status": "Native assets, phased animation, GPU movement backend and extraction-trimmed reactive owner binding are tested prerequisites. Application animation/render bindings, retention/exposure of hidden parcels and live visual acceptance remain ct-xsll work. No playable/reaction/co-op completion claimed.",
+  "runtime_status": "Live keyboard/controller routing, GPU body drive, cropped animation rendering and named fire-ray demo are integrated. Canonical parcels persist; collision/exposure still use canonical rest geometry. Full animated material deformation, conservative harvesting and split-screen remain unfinished.",
+  "runtime_crop": {
+    "bounds": "Exact nonzero-alpha bounds per frame, retaining every visible effect pixel. Original CPRP source canvases remain 40x40 or 80x40; GPU atlas frames are trimmed.",
+    "contact": "Reviewed fur-paw contact, excluding tail and staff; common admitted-body support edge with explicit frame/mirror offsets.",
+    "chomp_foot_baseline_y": 32,
+    "cast_foot_baselines_y": [32, 33, 33, 33, 33, 32, 32, 32],
+    "ownership": "Cropping preserves all canonical source IDs and reactive owner keys."
+  },
   "artwork": "Authoritative chew and cast ASE pixels preserved exactly, including cast partial alpha and 80x40 canvas. Six walk poses derive from imported idle. No separately visible tooth region is invented."
 }

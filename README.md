@@ -13,13 +13,36 @@ checks and `LIBRESPRITE=/path/to/AppRun make test_libresprite_host` for the real
 host checks. GPU prop placement and animated lighting integration remain tracked
 under `ctpe-6m89`; exported packages are not yet an interactive game import feature.
 
-The beaver player foundation and deterministic placeholder clips are available
-for integration. `./tools/with-vulkan make test_player` checks independent player
-state and the exact 6/8/4 walk/chew/cast assets. Build `build/beaver_atlas` and run
-it to export compiled props, canonical source maps and an asset contact sheet
-under `build/beaver_assets/`. See the [player integration notes](design/beaver_player.md)
-and [asset manifest](assets/player/beaver/manifest.json). Live player animation,
-movement, spells, harvesting and split-screen remain unfinished on `ct-exwr`.
+Build and run the beaver fire-ray demo:
+
+```sh
+./tools/with-vulkan make -j4 beaver-fire-demo
+./tools/with-vulkan ./build/beaver_fire_demo
+```
+
+A/D moves, Space jumps, Q casts a fire ray in the facing direction, and Esc saves
+and exits. The ten-log pile at the right starts unlit in each fresh demo world.
+Use `--world-dir path` to retain and reopen a particular world. Actual material
+and gas simulation supply ignition, burning wood, heat and smoke. Air and
+combustible substrates pass the ray; noncombustible solids, water and unloaded
+cells block it. The eight casting frames use 80 ms per frame: emission at
+400 ms, recovery complete at 640 ms. A new button press is required for each cast.
+Movement currently displays the supplied idle artwork pending a walk asset.
+
+The live loop never replays missed world ticks. It admits at most one fixed
+physics tick per display; under GPU overload physical simulation runs slower
+than wall time. Animation uses actual elapsed presentation time and does not
+stretch its frame durations to compensate. The large fire scene still costs
+roughly 59–73 ms per step on the current machine; performance work is tracked
+under `ct-b42x`. The earlier 15-tick, ~300 ms backlog regression is removed.
+
+`./tools/with-vulkan make test_player` checks player state, device input, frame
+timing and assets. `make test_player_runtime test_beaver_fire_runtime` includes
+actual window/material checks; avoid running them beside an interactive game.
+See the [player integration notes](design/beaver_player.md) and
+[asset manifest](assets/player/beaver/manifest.json). General spell definitions,
+conservative tree harvesting, full pose-dependent material exposure and
+split-screen remain unfinished on `ct-exwr`.
 
 Dungeoncraft is an early C11/Vulkan prototype for a per-pixel material world. The current vertical slice streams procedural chunks on a worker thread, maps a bounded chunk atlas through a GPU page table, draws it with a SPIR-V compute shader, and presents it through a Vulkan swapchain. The window accepts material painting, runs up to 64 GPU rigid boxes, moves Eulerian water on fixed grid cells, and settles sand, dirt, and gravel through a GPU particle/grid MPM stage.
 

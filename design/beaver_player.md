@@ -41,12 +41,18 @@ finishes active casts before other actions, and latches ability/target at windup
 Rendering never emits gameplay events. Input tests cover routing and authoritative
 animation phases; actual SDL/application integration remains required.
 
-Animation uses integer elapsed milliseconds. Walk loops six frames at 100 ms;
-cast uses the authoritative eight 80x40 frames in `beaver_cast.ase` at 100 ms.
-Frames 1-5 wind up, entry to frame 6 (500 ms) latches one cast event, frames
+Animation uses integer elapsed presentation milliseconds. The logical walk hook
+remains; the live build shows supplied idle artwork until a walk asset exists.
+Cast uses the authoritative eight 80x40 frames in `beaver_cast.ase` at 80 ms.
+Frames 1-5 wind up, entry to frame 6 (400 ms) latches one cast event, frames
 7-8 recover. `fr_player_take_cast_event` consumes that event once, even after
 a step skips frame 6. Same-action held ticks do not restart; explicit restart
-begins a new cast. Completed casts hold frame 8 until the session returns to idle. The authoritative
+begins a new cast. The action controller returns to idle at 640 ms. The original
+ASE bytes/timing remain unchanged; compiled runtime timing explicitly overrides
+cast timing. `dc_players_frame_time` accumulates presentation time once per
+display; one accepted world update consumes it once. A fresh press is timed from
+its input timestamp so a prior slow frame is not charged to a new windup.
+The authoritative
 `assets/player/beaver/beaver_chomp.ase` supplies eight unchanged 40x40 RGBA
 frames at its authored 100 ms timing. One-based frame 1 is idle; 2-4 enter;
 5-7 loop during valid held chewing; 8 recovers for 100 ms to idle on release or
@@ -67,8 +73,9 @@ Monotonic 64-bit input sequences suppress retries; stale/missing bodies are
 GPU no-ops. The adapter never reads body state to CPU or edits transforms.
 Its five Vulkan tests exercise real support/movement, independent players,
 sequence retries, invalid batches and stale generations. Application spawning,
-SDL routing, fixed-step scheduling and animated material binding still need
-integration; this backend alone is not playable acceptance.
+SDL routing, fixed-step scheduling and cropped animation rendering now use this
+adapter. Collision and thermal exposure still use canonical rest geometry;
+pose-dependent deformation remains required for full material acceptance.
 
 Keyboard: A/D movement, Space press jump, Q press fire bolt, E press targeted ice
 storm. C held is the provisional chew input. Keyboard targeting uses the mouse
