@@ -22,6 +22,7 @@
 #include "player_clock.h"
 #include "prop_scene.h"
 #include "session.h"
+#include "shutdown.h"
 #include "smoke_audit.h"
 #include "structural_demo.h"
 #include "view_config.h"
@@ -1186,6 +1187,7 @@ int main(int argc, char **argv) {
     if(benchmark_gas_audit&&(!benchmark_frames||!smoke_box)) {
         fprintf(stderr,"Cold gas audit requires --smoke-box and --benchmark-frames\n");return 1;
     }
+    dc_app_install_shutdown_handlers();
     if(heat_bench&&scene_path) {fprintf(stderr,"Choose --heat-bench or --scene\n");return 1;}
     if(smoke_box&&(heat_bench||scene_path)) {fprintf(stderr,"Choose one authored fixture\n");return 1;}
     if(bonfire&&(heat_bench||smoke_box||scene_path)) {fprintf(stderr,"Choose one authored fixture\n");return 1;}
@@ -1293,6 +1295,7 @@ int main(int argc, char **argv) {
     bool benchmark_timings=benchmark_frames&&getenv("DC_FRAME_TIMINGS")!=NULL;
     while (running) {
         uint64_t frame_start = SDL_GetPerformanceCounter();
+        if (dc_app_consume_shutdown_request()) running = false;
         struct timespec input_cpu_start={0},input_cpu_end={0};uint32_t input_events=0;
         bool input_cpu_valid=benchmark_timings&&clock_gettime(CLOCK_THREAD_CPUTIME_ID,&input_cpu_start)==0;
         if (scripted_input && scripted_frame == 0) {
