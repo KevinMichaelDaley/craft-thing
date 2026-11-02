@@ -19,6 +19,12 @@ build/player_sprite_gpu_tests: tests/player/sprite_gpu_tests.c src/vulkan/sprite
 test_player_sprite_gpu: build/player_sprite_gpu_tests
 	./build/player_sprite_gpu_tests
 test: test_player_sprite_gpu
+build/player_body_gpu_tests: tests/player/body_gpu_tests.c src/player/body_gpu.c include/ferrum/player/body_gpu.h $(BEAVER_SRC) $(PLAYER_SRC) src/player/beaver_imported.h build/fluid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/player/body_gpu.c $(BEAVER_SRC) $(PLAYER_SRC) $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+.PHONY: test_player_body_gpu
+test_player_body_gpu: build/player_body_gpu_tests
+	./build/player_body_gpu_tests
+test: test_player_body_gpu
 src/player/beaver_imported.h: assets/player/beaver/beaver_cast.ase assets/player/beaver/beaver_cast.mapping.json assets/player/beaver/beaver_chomp.ase assets/player/beaver/beaver_chomp.mapping.json scripts/props/beaver_import.py scripts/props/ase_reader.py
 	python3 scripts/props/beaver_import.py
 build/beaver_asset_tests build/beaver_atlas: src/player/beaver_imported.h
