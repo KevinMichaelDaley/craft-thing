@@ -33,7 +33,7 @@ static void input_clear(fr_input_t *i,fr_input_player_t *p) {
     for (unsigned n=0;n<FR_INPUT_BINDINGS;n++) {
         fr_input_binding_t *b=&i->bindings[n];
         fr_input_device_t *d=b->used?input_device(i,b->device):NULL;
-        if (d && d->owner==p->identity) b->value=0;
+        if (d && d->owner==p->identity) {b->blocked|=b->value!=0;b->value=0;}
     }
     p->state.pressed=0;
     input_recompute(i,p);
@@ -90,10 +90,15 @@ bool fr_input_event(fr_input_t *i,int64_t id,uint32_t control,float value,bool r
     fr_input_device_t *d=input_device(i,id);
     if (!d || !isfinite(value) || value<-1 || value>1) return false;
     fr_input_player_t *p=input_player(i,d->owner);
-    if (repeat || !i->focused || p->context!=FR_INPUT_GAMEPLAY) return true;
+    if (repeat) return true;
+    bool enabled=i->focused&&p->context==FR_INPUT_GAMEPLAY;
     for (unsigned n=0;n<FR_INPUT_BINDINGS;n++) {
         fr_input_binding_t *b=&i->bindings[n];
-        if (b->used && b->device==id && b->control==control) b->value=value;
+        if (b->used && b->device==id && b->control==control) {
+            if(value==0) {b->value=0;b->blocked=false;}
+            else if(!enabled) b->blocked=true;
+            else if(!b->blocked) b->value=value;
+        }
     }
     input_recompute(i,p);return true;
 }

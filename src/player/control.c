@@ -28,6 +28,7 @@ bool fr_player_control_tick(fr_player_control_t *c,fr_player_t *p,
     if (p->action==FR_PLAYER_CAST) {
         if (!fr_player_advance(p,elapsed)) return false;
         if (fr_player_take_cast_event(p)) *event=c->cast;
+        if (fr_player_action_complete(p)) fr_player_set_action(p,FR_PLAYER_IDLE,false);
         return true;
     }
     if (p->action==FR_PLAYER_CHEW || (intent.chew_held && intent.has_target && wood))

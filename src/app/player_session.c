@@ -72,10 +72,12 @@ static bool players_publish(dc_level_view_t *v,char *err,uint32_t cap) {
     struct dc_player_session *s=v->players;fr_renderer_sprite_t poses[FR_INPUT_PLAYERS];
     for(uint32_t n=0;n<s->count;n++) {
         uint32_t frame;fr_player_frame(&s->players[n],&frame);
-        uint32_t width=s->players[n].action==FR_PLAYER_CAST?80:40;
+        fr_player_action_t display=s->players[n].action==FR_PLAYER_WALK?FR_PLAYER_IDLE:s->players[n].action;
+        if(display==FR_PLAYER_IDLE) frame=0;
+        uint32_t width=display==FR_PLAYER_CAST?80:40;
         fr_beaver_body_t b=s->bodies[n];
         poses[n]=(fr_renderer_sprite_t){.body_id=b.binding.body_id,.generation=b.binding.generation,
-            .offset=s->offsets[s->players[n].action]+frame*width*40,.width=width,.height=40,
+            .offset=s->offsets[display]+frame*width*40,.width=width,.height=40,
             .flip=s->players[n].facing<0,.rest_origin_x=b.rest_origin_x,.rest_origin_y=b.rest_origin_y,
             .origin_x=(int32_t)b.rest_origin_x+(int32_t)(width-40)/2,.origin_y=(int32_t)b.rest_origin_y};
     }

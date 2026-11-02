@@ -29,7 +29,7 @@ typedef struct {
     int64_t device;
     uint32_t control, action;
     float scale, value;
-    bool used;
+    bool used,blocked;
 } fr_input_binding_t;
 typedef struct {
     fr_input_player_t players[FR_INPUT_PLAYERS];

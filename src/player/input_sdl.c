@@ -1,5 +1,22 @@
 #include "ferrum/player/input_sdl.h"
 
+static void input_sdl_block_held(fr_input_t *i,int64_t device,bool controller) {
+    SDL_GameController *pad=controller?SDL_GameControllerFromInstanceID((SDL_JoystickID)device):NULL;
+    const uint8_t *keys=SDL_WasInit(SDL_INIT_VIDEO)?SDL_GetKeyboardState(NULL):NULL;
+    for(unsigned n=0;n<FR_INPUT_BINDINGS;n++) {
+        fr_input_binding_t *b=&i->bindings[n];
+        if(!b->used||b->device!=device) continue;
+        bool held=false;
+        if(controller&&pad) {
+            if(b->control&FR_INPUT_SDL_AXIS) {
+                int value=SDL_GameControllerGetAxis(pad,(SDL_GameControllerAxis)(b->control&~FR_INPUT_SDL_AXIS));
+                held=value>8000||value< -8000;
+            } else if(b->control<SDL_CONTROLLER_BUTTON_MAX)
+                held=SDL_GameControllerGetButton(pad,(SDL_GameControllerButton)b->control)!=0;
+        } else if(!controller&&keys&&b->control<SDL_NUM_SCANCODES) held=keys[b->control]!=0;
+        b->blocked|=held;
+    }
+}
 bool fr_input_sdl_defaults(fr_input_t *i,int64_t d,bool controller) {
     if(!i) return false;
     static const struct {uint32_t control,action;float scale;} keys[]={
@@ -23,6 +40,7 @@ bool fr_input_sdl_defaults(fr_input_t *i,int64_t d,bool controller) {
         float scale=controller?pad[n].scale:keys[n].scale;
         if (!fr_input_bind(&next,d,control,action,scale)) return false;
     }
+    input_sdl_block_held(&next,d,controller);
     *i=next;return true;
 }
 bool fr_input_sdl_event(fr_input_t *i,const SDL_Event *event) {
@@ -31,7 +49,11 @@ bool fr_input_sdl_event(fr_input_t *i,const SDL_Event *event) {
     switch (event->type) {
     case SDL_WINDOWEVENT:
         if (event->window.event==SDL_WINDOWEVENT_FOCUS_LOST) fr_input_focus(i,false);
-        else if (event->window.event==SDL_WINDOWEVENT_FOCUS_GAINED) fr_input_focus(i,true);
+        else if (event->window.event==SDL_WINDOWEVENT_FOCUS_GAINED) {
+            for(unsigned n=0;n<FR_INPUT_DEVICES;n++) if(i->devices[n].used)
+                input_sdl_block_held(i,i->devices[n].id,i->devices[n].id!=FR_INPUT_KEYBOARD_DEVICE);
+            fr_input_focus(i,true);
+        }
         return false;
     case SDL_CONTROLLERDEVICEREMOVED:
         fr_input_disconnect(i,event->cdevice.which);return false;

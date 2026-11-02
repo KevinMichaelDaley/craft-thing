@@ -8,7 +8,7 @@ test_player_input: build/player_input_tests
 test_player: test_player_input
 build/player_input_sdl_tests: tests/player/input_sdl_tests.c src/player/input_sdl.c src/player/input.c include/ferrum/player/input_sdl.h include/ferrum/player/input.h
 	mkdir -p build
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/player/input_sdl.c src/player/input.c -o $@ -lm
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/player/input_sdl.c src/player/input.c -o $@ $(shell pkg-config --libs sdl2) -lm
 .PHONY: test_player_input_sdl
 test_player_input_sdl: build/player_input_sdl_tests
 	./build/player_input_sdl_tests
