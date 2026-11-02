@@ -65,16 +65,23 @@ bool fr_fire_ray_gpu_submit(fr_fire_ray_gpu_t *r,const fr_fire_ray_input_t *i,
     for(uint32_t p=0;p<n;p++) if(i[p].identity!=r->bindings[p].identity||!i[p].sequence||
         (i[p].facing!=1&&i[p].facing!= -1)) return fire_ray_error(err,cap,"Invalid ray owner, sequence or facing");
     bool active=false,emit[DC_FIRE_RAY_MAX]={0};
+    uint64_t sequence[DC_FIRE_RAY_MAX];
+    float remaining[DC_FIRE_RAY_MAX];
+    memcpy(sequence,r->sequence,sizeof(sequence));
+    memcpy(remaining,r->remaining,sizeof(remaining));
     for(uint32_t p=0;p<n;p++) {
-        if(i[p].sequence>r->sequence[p]) {
-            r->sequence[p]=i[p].sequence;emit[p]=i[p].emit;
-            if(emit[p]) r->remaining[p]=r->duration;
+        if(i[p].sequence>sequence[p]) {
+            sequence[p]=i[p].sequence;emit[p]=i[p].emit;
+            if(emit[p]) remaining[p]=r->duration;
         }
-        active|=r->remaining[p]>0;
-        r->remaining[p]=fmaxf(0,r->remaining[p]-dt);
-        if(r->remaining[p]<.000001f) r->remaining[p]=0;
+        active|=remaining[p]>0;
+        remaining[p]=fmaxf(0,remaining[p]-dt);
+        if(remaining[p]<.000001f) remaining[p]=0;
     }
-    if(!active) return true;
+    if(!active) {
+        memcpy(r->sequence,sequence,sizeof(sequence));
+        return true;
+    }
     dc_gpu_t *g=r->gpu;
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return fire_ray_error(err,cap,"Cannot reach ray input boundary");
     uint32_t *w=r->commands.mapped;
@@ -106,6 +113,10 @@ bool fr_fire_ray_gpu_submit(fr_fire_ray_gpu_t *r,const fr_fire_ray_input_t *i,
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_HOST_READ_BIT);
     bool okay=fr_renderer_submit(g);
+    if(okay) {
+        memcpy(r->sequence,sequence,sizeof(sequence));
+        memcpy(r->remaining,remaining,sizeof(remaining));
+    }
     /* Heat adds neither gas mass nor momentum nor geometry. Practical
      * transport's advective bound remains conservative, just as after the
      * thermal reaction pass; acoustic policies need a new sound-speed bound. */
