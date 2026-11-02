@@ -24,6 +24,8 @@ static bool runtime_visual_check(dc_level_view_t *v,char *err,uint32_t cap) {
     uint32_t *pixels=malloc((size_t)VIEW_WIDTH*VIEW_HEIGHT*4);fr_beaver_asset_t asset;
     bool okay=storage&&mapping&&pixels&&fr_beaver_asset_build(display,storage,bytes,mapping,entries,&asset,err,cap)&&
         dc_level_view_pixels(v,pixels,VIEW_WIDTH*VIEW_HEIGHT,err,cap);
+    fr_beaver_frame_layout_t layout;
+    if(okay) okay=fr_beaver_frame_layout(&asset,frame,&layout);
     float bx=(float)((body.chunk.x-status.origin.x)*64)-(float)status.offset_x+body.body.x_fp/65536.f;
     float by=(float)((body.chunk.y-status.origin.y)*64)-(float)status.offset_y+body.body.y_fp/65536.f;
     uint32_t checked=0,mismatch=0;
@@ -32,7 +34,7 @@ static bool runtime_visual_check(dc_level_view_t *v,char *err,uint32_t cap) {
         int64_t world_y=(status.origin.y*64)+(int64_t)status.offset_y+y;
         if(world_y>=96) continue;
         int sx=(int)floorf(x+.5f-bx)+(int)binding.rest_origin_x+(int)(asset.prop.width-40)/2;
-        int sy=(int)floorf(y+.5f-by)+(int)binding.rest_origin_y;
+        int sy=(int)floorf(y+.5f-by)+(int)layout.foot_baseline-(int)binding.height;
         fr_prop_appearance_t a={0};
         if(sx>=0&&sy>=0&&sx<(int)asset.prop.width&&sy<40) {
             if(p.facing<0) sx=(int)asset.prop.width-1-sx;
