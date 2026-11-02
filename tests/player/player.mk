@@ -1,7 +1,7 @@
 BEAVER_SRC = src/player/beaver_art.c src/player/beaver_asset.c
-build/player_input_tests: tests/player/input_tests.c src/player/input.c $(PLAYER_SRC) include/ferrum/player/input.h
+build/player_input_tests: tests/player/input_tests.c src/player/input.c src/player/control.c $(PLAYER_SRC) include/ferrum/player/input.h
 	mkdir -p build
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/player/input.c $(PLAYER_SRC) -o $@ -lm
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/player/input.c src/player/control.c $(PLAYER_SRC) -o $@ -lm
 .PHONY: test_player_input
 test_player_input: build/player_input_tests
 	./build/player_input_tests
