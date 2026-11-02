@@ -172,7 +172,8 @@ Gas gas_buoyancy_cached(Gas s,Primitive primitive,float dt,out float admitted_wo
     admitted_impulse=impulse;
     /* Divide extensive momentum before multiplying by extensive impulse.
      * Their product can underflow for trace gas although work is representable. */
-    float work=gas_parameter(FR_GAS_KINETIC_WORD)*impulse*(s.dynamics.w/mass+.5*(impulse/mass));
+    float velocity_change=acceleration*dt;
+    float work=gas_parameter(FR_GAS_KINETIC_WORD)*impulse*(s.dynamics.w/mass+.5*velocity_change);
     admitted_work=work;
     GasFlux flux=gas_empty_flux();flux.dynamics.y=work;flux.dynamics.w=impulse;
     Gas result=gas_add_flux(s,flux,1.);result.geometry.w+=work;return result;
