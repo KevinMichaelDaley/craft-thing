@@ -47,6 +47,12 @@ build/beaver_fire_plan_tests: tests/app/beaver_fire_plan_tests.c src/app/beaver_
 test_beaver_fire_plan: build/beaver_fire_plan_tests
 	./build/beaver_fire_plan_tests
 test: test_beaver_fire_plan
+build/beaver_fire_runtime_tests: tests/app/beaver_fire_runtime_tests.c src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c build/dungeoncraft_quarter_native
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+.PHONY: test_beaver_fire_runtime
+test_beaver_fire_runtime: build/beaver_fire_runtime_tests
+	./build/beaver_fire_runtime_tests
+test: test_beaver_fire_runtime
 src/player/beaver_imported.h: assets/player/beaver/beaver_cast.ase assets/player/beaver/beaver_cast.mapping.json assets/player/beaver/beaver_chomp.ase assets/player/beaver/beaver_chomp.mapping.json scripts/props/beaver_import.py scripts/props/ase_reader.py
 	python3 scripts/props/beaver_import.py
 build/beaver_asset_tests build/beaver_atlas: src/player/beaver_imported.h
