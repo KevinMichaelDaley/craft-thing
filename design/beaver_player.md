@@ -28,6 +28,19 @@ loss. Viewport-to-world conversion belongs to the owning camera.
 
 ## Actions and provisional bindings
 
+`ct-8h2f` owns input-to-runtime integration. `fr_input_t` routes configurable
+device/control/action bindings to independent session identities. Device IDs are
+exclusive; disconnect removes their bindings. Contributions sum and clamp, so
+opposing movement cancels. Sampling consumes pressed/released edges while held
+values persist. Key repeats are ignored. Focus loss and context transitions
+clear physical contributions and targets, preventing delayed actions after UI.
+The current caller-owned capacities are four players, eight devices, 64 bindings
+and 32 logical action IDs; these are storage bounds, not RPG rules.
+`fr_player_control_tick` arbitrates fire before ice on simultaneous presses,
+finishes active casts before other actions, and latches ability/target at windup.
+Rendering never emits gameplay events. Input tests cover routing and authoritative
+animation phases; actual SDL/application integration remains required.
+
 Animation uses integer elapsed milliseconds. Walk loops six frames at 100 ms;
 cast uses the authoritative eight 80x40 frames in `beaver_cast.ase` at 100 ms.
 Frames 1-5 wind up, entry to frame 6 (500 ms) latches one cast event, frames
