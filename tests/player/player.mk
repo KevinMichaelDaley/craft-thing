@@ -1,4 +1,11 @@
 BEAVER_SRC = src/player/beaver_art.c src/player/beaver_asset.c
+build/player_input_tests: tests/player/input_tests.c src/player/input.c $(PLAYER_SRC) include/ferrum/player/input.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/player/input.c $(PLAYER_SRC) -o $@ -lm
+.PHONY: test_player_input
+test_player_input: build/player_input_tests
+	./build/player_input_tests
+test_player: test_player_input
 src/player/beaver_imported.h: assets/player/beaver/beaver_cast.ase assets/player/beaver/beaver_cast.mapping.json assets/player/beaver/beaver_chomp.ase assets/player/beaver/beaver_chomp.mapping.json scripts/props/beaver_import.py scripts/props/ase_reader.py
 	python3 scripts/props/beaver_import.py
 build/beaver_asset_tests build/beaver_atlas: src/player/beaver_imported.h
