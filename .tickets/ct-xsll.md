@@ -11,7 +11,7 @@ tags: [player, beaver]
 ---
 # Author placeholder beaver animation and persistent material pixel bindings
 
-Use the user-supplied assets/player/beaver/beaver_chomp.ase as the authoritative idle/chew artwork; preserve its original pixels and file. Its eight frames are NOT a single eight-frame chew loop: one-based frame 1 is idle, 2-4 are entry transition, 5-7 loop while chewing, and 8 is recovery. Replace the generated chew stand-in with this source through the supported import/export pipeline. Retain 6 walk and 4 cast frames as requested and keep the player a beaver with robe and hat. Supply per-pixel material assignments and stable body/equipment identity across animations; imported artwork still requires full material support. Test frame sequencing, held action, release/invalid-target recovery, re-entry and timing partition independence.
+Use the user-supplied assets/player/beaver/beaver_chomp.ase as the authoritative idle/chew artwork; preserve its original pixels and file. Its eight frames are NOT a single eight-frame chew loop: one-based frame 1 is idle, 2-4 are entry transition, 5-7 loop while chewing, and 8 is recovery. Replace the generated chew stand-in with this source through the supported import/export pipeline. Retain 6 walk and 8 authoritative cast frames as requested and keep the player a beaver with robe and hat. Supply per-pixel material assignments and stable body/equipment identity across animations; imported artwork still requires full material support. Test frame sequencing, held action, release/invalid-target recovery, re-entry and timing partition independence.
 
 ## Acceptance Criteria
 
@@ -35,3 +35,7 @@ Continuation: authoritative ASE import and phased chew prerequisite implemented.
 **2026-11-01T23:50:50Z**
 
 Final continuation checkpoint: phased authoritative artwork, recovery/re-entry cadence fix, real extraction-trim owner binding, and GPU drive prerequisites committed through e868c4ef. Final targeted checks: 14 state + 8 asset + 6 real Vulkan = 28 pass / 0 fail; state/assets ASan+UBSan pass 14/8; all 9 GPU dependency checks pass. User ASE unchanged against starting da6b32ac. Actual source contact sheet/export and precise handoff are under build/agents/beaver-player/continuation; contact sheet is not application evidence. Final ./tools/with-vulkan make -k test exits 2 solely at known ct-lc9o (12/1). Separately executed all 141 original hidden default-runner commands: 140 pass, pixel_geometry_tests alone fails 6/1 (ct-n81j), zero timeouts; aggregate runner exits 1. ct-il37 remains open. No tests disabled/weakened. This ticket remains in_progress: complete player admission, canonical hidden parcel retention, actual animated material exposure/rendering and application evidence remain. fr_beaver_pixel_owners_trimmed requires canonical-rest admission, not the crop bounds of a displayed pose.
+
+**2026-11-02T00:29:57Z**
+
+Supervisor round 1: RED dc3d963c compiled and failed state 11/4 and assets 7/2. GREEN 60f079fe now imports authoritative beaver_cast.ase unchanged: eight 80x40 RGBA frames including partial alpha, exact source hashes, explicit same-region canonical maps extending existing IDs, and latched once-only frame-six event at 500ms independent of skipped samples. State 15/15 and assets 9/9 pass. Live admission/render/input work continues; no acceptance closure.

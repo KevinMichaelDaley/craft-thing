@@ -29,7 +29,11 @@ loss. Viewport-to-world conversion belongs to the owning camera.
 ## Actions and provisional bindings
 
 Animation uses integer elapsed milliseconds. Walk loops six frames at 100 ms;
-cast plays four frames at 100 ms and holds the last frame. The authoritative
+cast uses the authoritative eight 80x40 frames in `beaver_cast.ase` at 100 ms.
+Frames 1-5 wind up, entry to frame 6 (500 ms) latches one cast event, frames
+7-8 recover. `fr_player_take_cast_event` consumes that event once, even after
+a step skips frame 6. Same-action held ticks do not restart; explicit restart
+begins a new cast. Completed casts hold frame 8 until the session returns to idle. The authoritative
 `assets/player/beaver/beaver_chomp.ase` supplies eight unchanged 40x40 RGBA
 frames at its authored 100 ms timing. One-based frame 1 is idle; 2-4 enter;
 5-7 loop during valid held chewing; 8 recovers for 100 ms to idle on release or
@@ -104,7 +108,7 @@ waits for that identified process to exit. No baseline pass is claimed before
 its result is observed.
 
 CPU ownership/asset tests are prerequisite evidence only. Rendered Vulkan
-acceptance must show movement and collision, all 6/8/4 frames, persistent local
+acceptance must show movement and collision, all 6/8/8 frames, persistent local
 material response, real tree removal/inventory conservation, material-changing
 spells and independent simultaneous local players in split-screen. Child tickets
 remain open until their actual criteria are met; the epic stays open until all
@@ -125,12 +129,15 @@ to the same material region. Its source hash rejects unreviewed artwork changes.
 Newly revealed pixels reserve canonical rest cells; occlusion never releases
 their parcels. Fur, cyan hat/robe, and tail are covered; the artwork has no
 separately visible tooth region, so no tooth geometry or pixels are invented.
-Walk/cast use six/four provisional poses derived from the imported idle pixels.
+Walk uses six provisional poses derived from imported idle pixels. Cast is
+losslessly imported at its full 80x40 extent, including authored partial alpha.
+Its explicit sidecar extends the existing 40x40 canonical rest atlas without
+changing any existing source ID; ochre staff pixels explicitly use wood.
 The generated C header is rebuilt from the ASE and sidecar before asset builds.
 
 The parallel source map retains canonical body/equipment pixel identities across
 all poses and facing directions. Zero is transparent; other values are the
-40x40 source index plus one. Owners use canonical rest coordinates, independently
+40x40 canonical rest index plus one. Owners use canonical rest coordinates, independently
 of the destination sprite pixel and camera/world position. Occluded source pixels
 remain canonical owners even when the current frame does not display them.
 `fr_beaver_pixel_owners_trimmed` applies a supplied admission rest origin and

@@ -15,5 +15,5 @@ Run acceptance against the real application and document reproducible controls, 
 
 ## Acceptance Criteria
 
-All 6/8/4 animations visible; A/D/Space/Q/E and documented chew input work. Two local players can move/cast/harvest independently in split-screen. Robe and hat singe; fur wets and ignites and keeps state across animations. Fire bolt and ice storm alter real materials. Wood inventory conservation verified. Full make test attempted, failures triaged into concrete tickets, no claims beyond actual evidence. Changes committed and pushed.
+All 6/8/8 animations visible; A/D/Space/Q/E and documented chew input work. Two local players can move/cast/harvest independently in split-screen. Robe and hat singe; fur wets and ignites and keeps state across animations. Fire bolt and ice storm alter real materials. Wood inventory conservation verified. Full make test attempted, failures triaged into concrete tickets, no claims beyond actual evidence. Changes committed and pushed.
 
