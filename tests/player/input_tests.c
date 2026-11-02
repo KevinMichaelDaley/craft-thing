@@ -85,12 +85,12 @@ static void test_controls_drive_phases_and_latched_cast(void) {
     ASSERT_TRUE(fr_player_ability_set(&p,f,true));ASSERT_TRUE(fr_player_ability_set(&p,ice,true));
     fr_input_state_t s={.pressed=BIT(FR_INPUT_FIRE)|BIT(FR_INPUT_ICE),.has_target=true,.target={.x=10,.y=11}};
     fr_player_action_event_t event;uint32_t frame;
-    ASSERT_TRUE(fr_player_control_tick(&c,&p,&s,f,ice,false,499,&event));ASSERT_EQ(event.ability,0);
+    ASSERT_TRUE(fr_player_control_tick(&c,&p,&s,f,ice,false,399,&event));ASSERT_EQ(event.ability,0);
     ASSERT_EQ(p.action,FR_PLAYER_CAST);ASSERT_TRUE(fr_player_frame(&p,&frame));ASSERT_EQ(frame,4);
     s.pressed=BIT(FR_INPUT_ICE);s.target.x=30;
-    ASSERT_TRUE(fr_player_control_tick(&c,&p,&s,f,ice,false,201,&event));ASSERT_EQ(event.ability,f);ASSERT_EQ(event.target.x,10);
+    ASSERT_TRUE(fr_player_control_tick(&c,&p,&s,f,ice,false,161,&event));ASSERT_EQ(event.ability,f);ASSERT_EQ(event.target.x,10);
     s.pressed=0;s.values[FR_INPUT_MOVE]=-1;
-    ASSERT_TRUE(fr_player_control_tick(&c,&p,&s,f,ice,false,100,&event));ASSERT_EQ(event.ability,0);
+    ASSERT_TRUE(fr_player_control_tick(&c,&p,&s,f,ice,false,80,&event));ASSERT_EQ(event.ability,0);
     ASSERT_TRUE(fr_player_control_tick(&c,&p,&s,f,ice,false,100,&event));ASSERT_EQ(p.action,FR_PLAYER_WALK);ASSERT_INT_EQ(p.facing,-1);
     s.values[FR_INPUT_MOVE]=0;s.values[FR_INPUT_CHEW]=1;
     ASSERT_TRUE(fr_player_control_tick(&c,&p,&s,f,ice,true,300,&event));ASSERT_EQ(p.action,FR_PLAYER_CHEW);

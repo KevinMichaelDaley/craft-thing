@@ -128,7 +128,7 @@ static void test_intents_validate_grants_and_canonical_world_targets(void) {
 
 static void test_exact_frame_counts_and_boundaries(void) {
     fixture_t f; ASSERT_TRUE(fixture(&f));
-    const uint32_t counts[]={1,6,8,8}, durations[]={100,100,100,100};
+    const uint32_t counts[]={1,6,8,8}, durations[]={100,100,100,80};
     for (uint32_t action=0;action<FR_PLAYER_ACTION_COUNT;action++) {
         fr_player_clip_t clip; ASSERT_TRUE(fr_player_clip((fr_player_action_t)action,&clip));
         ASSERT_EQ(clip.frames,counts[action]); ASSERT_EQ(clip.frame_ms,durations[action]);
@@ -172,7 +172,7 @@ static void test_large_intervals_and_partition_independence(void) {
     ASSERT_TRUE(fr_player_advance(&f.players[0],UINT64_MAX));
     ASSERT_TRUE(fr_player_frame(&f.players[0],&a)); ASSERT_EQ(a,7u);
     ASSERT_TRUE(fr_player_action_complete(&f.players[0]));
-    ASSERT_TRUE(fr_player_advance(&f.players[0],UINT64_MAX)); ASSERT_EQ(f.players[0].elapsed_ms,800u); PASS();
+    ASSERT_TRUE(fr_player_advance(&f.players[0],UINT64_MAX)); ASSERT_EQ(f.players[0].elapsed_ms,640u); PASS();
 }
 
 static void test_null_and_invalid_action_inputs(void) {
@@ -257,18 +257,18 @@ static void test_recovery_reentry_preserves_elapsed_time_across_cadences(void) {
 static void test_cast_emits_once_at_frame_six_across_skipped_samples(void) {
     fixture_t f; ASSERT_TRUE(fixture(&f));
     for (uint32_t i=0;i<2;i++) ASSERT_TRUE(fr_player_set_action(&f.players[i],FR_PLAYER_CAST,true));
-    ASSERT_TRUE(fr_player_advance(&f.players[0],499));
+    ASSERT_TRUE(fr_player_advance(&f.players[0],399));
     ASSERT_TRUE(!fr_player_take_cast_event(&f.players[0]));
     ASSERT_TRUE(fr_player_advance(&f.players[0],1));
     ASSERT_TRUE(fr_player_take_cast_event(&f.players[0]));
     ASSERT_TRUE(!fr_player_take_cast_event(&f.players[0]));
     ASSERT_TRUE(fr_player_advance(&f.players[0],UINT64_MAX));
     ASSERT_TRUE(!fr_player_take_cast_event(&f.players[0]));
-    ASSERT_TRUE(fr_player_advance(&f.players[1],800));
+    ASSERT_TRUE(fr_player_advance(&f.players[1],640));
     ASSERT_TRUE(fr_player_take_cast_event(&f.players[1]));
     ASSERT_TRUE(!fr_player_take_cast_event(&f.players[1]));
     ASSERT_TRUE(fr_player_set_action(&f.players[1],FR_PLAYER_CAST,false));
-    ASSERT_TRUE(fr_player_advance(&f.players[1],800));
+    ASSERT_TRUE(fr_player_advance(&f.players[1],640));
     ASSERT_TRUE(!fr_player_take_cast_event(&f.players[1]));
     ASSERT_TRUE(fr_player_set_action(&f.players[1],FR_PLAYER_CAST,true));
     for (uint32_t i=0;i<50;i++) ASSERT_TRUE(fr_player_advance(&f.players[1],10));
@@ -276,7 +276,24 @@ static void test_cast_emits_once_at_frame_six_across_skipped_samples(void) {
     ASSERT_TRUE(!fr_player_take_cast_event(NULL)); PASS();
 }
 
+static void test_cast_eighty_ms_boundaries_and_irregular_cadence(void) {
+    fixture_t f;ASSERT_TRUE(fixture(&f));
+    ASSERT_TRUE(fr_player_set_action(&f.players[0],FR_PLAYER_CAST,true));
+    ASSERT_TRUE(fr_player_set_action(&f.players[1],FR_PLAYER_CAST,true));
+    const uint32_t times[]={399,400,479,480,639,640};
+    const uint32_t frames[]={4,5,5,6,7,7};uint32_t previous=0,events=0;
+    for(unsigned n=0;n<6;n++) {
+        ASSERT_TRUE(fr_player_advance(&f.players[0],times[n]-previous));previous=times[n];
+        uint32_t actual;ASSERT_TRUE(fr_player_frame(&f.players[0],&actual));ASSERT_EQ(actual,frames[n]);
+        bool event=fr_player_take_cast_event(&f.players[0]);ASSERT_EQ(event,n==1);events+=event;
+        ASSERT_EQ(fr_player_action_complete(&f.players[0]),times[n]==640);
+    }
+    ASSERT_EQ(events,1);ASSERT_TRUE(fr_player_advance(&f.players[1],640));
+    ASSERT_TRUE(fr_player_take_cast_event(&f.players[1]));ASSERT_TRUE(!fr_player_take_cast_event(&f.players[1]));
+    ASSERT_EQ(f.players[0].elapsed_ms,f.players[1].elapsed_ms);PASS();
+}
 int main(void) {
+    RUN(test_cast_eighty_ms_boundaries_and_irregular_cadence);
     RUN(test_cast_emits_once_at_frame_six_across_skipped_samples);
     RUN(test_chew_entry_loop_release_and_reentry);
     RUN(test_chew_invalid_target_recovers_even_during_entry);

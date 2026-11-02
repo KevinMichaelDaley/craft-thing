@@ -23,7 +23,7 @@ static bool build(fr_player_action_t action) {
 }
 
 static void test_standard_prop_pipeline_and_exact_clip_timing(void) {
-    const uint32_t counts[]={1,6,8,8},durations[]={100,100,100,100};
+    const uint32_t counts[]={1,6,8,8},durations[]={100,100,100,80};
     for (uint32_t a=0;a<FR_PLAYER_ACTION_COUNT;a++) {
         size_t bytes=0;uint32_t entries=0;
         ASSERT_TRUE(fr_beaver_asset_size((fr_player_action_t)a,&bytes,&entries));
