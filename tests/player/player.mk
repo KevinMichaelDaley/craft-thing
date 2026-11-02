@@ -1,4 +1,11 @@
 BEAVER_SRC = src/player/beaver_art.c src/player/beaver_asset.c
+build/player_chew_tests: tests/player/chew_tests.c src/player/chew.c src/fire/material_profile.c include/ferrum/player/chew.h
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/player/chew.c src/fire/material_profile.c -o $@ -lm
+.PHONY: test_player_chew
+test_player_chew: build/player_chew_tests
+	./build/player_chew_tests
+test_player: test_player_chew
 build/player_fire_ray_schedule_tests: tests/player/fire_ray_schedule_tests.c src/player/fire_ray_gpu.c src/fire/gas.c
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections $< src/fire/gas.c -Wl,--gc-sections -o $@ -lm
