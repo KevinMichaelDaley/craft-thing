@@ -3,6 +3,16 @@
 #include "ferrum/player/input_sdl.h"
 
 static int g_pass,g_fail;
+static bool g_snapshot;
+static uint8_t g_keys[SDL_NUM_SCANCODES];
+Uint32 __real_SDL_WasInit(Uint32 flags);
+Uint32 __wrap_SDL_WasInit(Uint32 flags) {return g_snapshot?SDL_INIT_VIDEO:__real_SDL_WasInit(flags);}
+const Uint8 *__real_SDL_GetKeyboardState(int *count);
+const Uint8 *__wrap_SDL_GetKeyboardState(int *count) {
+    if(!g_snapshot) return __real_SDL_GetKeyboardState(count);
+    if(count) *count=SDL_NUM_SCANCODES;
+    return g_keys;
+}
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(x) do {if(!(x)){printf("FAIL %s:%d: %s\n",__FILE__,__LINE__,#x);g_fail++;return;}} while(0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -51,7 +61,20 @@ static void test_focus_and_configured_binding(void) {
     ASSERT_TRUE(fr_input_sample(&i,1,&s));ASSERT_EQ(s.values[FR_INPUT_CHEW],0);ASSERT_EQ(s.pressed,0);
     PASS();
 }
+static void test_focus_event_does_not_block_later_queued_genuine_press(void) {
+    fr_input_t i;fr_input_state_t s;fr_input_init(&i);
+    ASSERT_TRUE(fr_input_add_player(&i,1));ASSERT_TRUE(fr_input_connect(&i,-1,1));
+    ASSERT_TRUE(fr_input_sdl_defaults(&i,-1,false));
+    g_snapshot=true;g_keys[SDL_SCANCODE_Q]=1;
+    SDL_Event e={.type=SDL_WINDOWEVENT};e.window.event=SDL_WINDOWEVENT_FOCUS_GAINED;
+    fr_input_sdl_event(&i,&e);
+    e.type=SDL_KEYDOWN;e.key.keysym.scancode=SDL_SCANCODE_Q;
+    ASSERT_TRUE(fr_input_sdl_event(&i,&e));ASSERT_TRUE(fr_input_sample(&i,1,&s));
+    g_snapshot=false;g_keys[SDL_SCANCODE_Q]=0;
+    ASSERT_EQ(s.pressed,1u<<FR_INPUT_FIRE);PASS();
+}
 int main(void) {
+    RUN(test_focus_event_does_not_block_later_queued_genuine_press);
     RUN(test_keyboard_context_and_repeat);RUN(test_controller_axis_button_instance_ownership);
     RUN(test_focus_and_configured_binding);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
