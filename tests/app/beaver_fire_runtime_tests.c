@@ -50,6 +50,29 @@ static bool capture(dc_level_view_t *v,const char *name,char *err,uint32_t cap) 
     if(surface) SDL_FreeSurface(surface);
     free(pixels);return okay;
 }
+static bool snapshot_gas(dc_level_view_t *v,uint32_t *count,dc_chunk_coord_t *coords,
+    fr_gas_checkpoint_chunk_t *gas,char *err,uint32_t cap) {
+    uint32_t saved=0;
+    for(uint32_t slot=0;slot<v->table.capacity;slot++) {
+        dc_chunk_slot_t *owner=&v->table.slots[slot];
+        if(owner->state!=DC_SLOT_ACTIVE&&owner->state!=DC_SLOT_SLEEPING) continue;
+        coords[saved]=owner->coord;
+        if(!fr_gas_gpu_export_checkpoint(v->gpu,slot,gas+saved,err,cap)) return false;
+        saved++;
+    }
+    *count=saved;return true;
+}
+static bool restored_gas_exact(dc_level_view_t *v,uint32_t count,const dc_chunk_coord_t *coords,
+    const fr_gas_checkpoint_chunk_t *gas,char *err,uint32_t cap) {
+    fr_gas_checkpoint_chunk_t restored;
+    for(uint32_t n=0;n<count;n++) {
+        uint32_t slot;
+        if(!dc_chunk_table_find(&v->table,coords[n],&slot)) return false;
+        if(!fr_gas_gpu_export_checkpoint(v->gpu,slot,&restored,err,cap)) return false;
+        if(memcmp(gas+n,&restored,sizeof(restored))!=0) return false;
+    }
+    return true;
+}
 static void test_actual_demo_starts_unlit_and_button_ray_burns_real_wood(void) {
     char dir[]="build/beaver_fire_test_XXXXXX",err[256]={0};ASSERT_TRUE(mkdtemp(dir));
     dc_beaver_fire_plan_t plan;ASSERT_TRUE(dc_beaver_fire_plan(VIEW_WIDTH,VIEW_HEIGHT,&plan));
@@ -108,6 +131,28 @@ static void test_actual_demo_starts_unlit_and_button_ray_burns_real_wood(void) {
     fr_gas_gpu_audit_t gas;ASSERT_TRUE(fr_gas_gpu_audit(v->gpu,&gas,err,sizeof(err)));
     ASSERT_TRUE(gas.metrics[FR_GAS_AUDIT_SPECIES+FR_GAS_EXHAUST]>0);
     fr_player_t player;fr_beaver_body_t body;ASSERT_TRUE(dc_players_status(v,0,&player,&body));ASSERT_EQ(player.action,FR_PLAYER_IDLE);
+    uint32_t gas_count=0;
+    dc_chunk_coord_t *gas_coords=calloc(v->table.capacity,sizeof(*gas_coords));
+    fr_gas_checkpoint_chunk_t *saved_gas=calloc(v->table.capacity,sizeof(*saved_gas));
+    ASSERT_TRUE(gas_coords&&saved_gas);
+    ASSERT_TRUE(snapshot_gas(v,&gas_count,gas_coords,saved_gas,err,sizeof(err)));
+    fr_gas_gpu_clock_t saved_clock;ASSERT_TRUE(fr_gas_gpu_clock(v->gpu,&saved_clock));
+    pile_state_t saved_pile=pile_after;
+    ASSERT_TRUE(dc_level_view_destroy(v,err,sizeof(err)));
+    v=dc_level_view_create_ground(dir,314,&ground,err,sizeof(err));ASSERT_TRUE(v);
+    ASSERT_TRUE(dc_level_view_pan_pixels(v,0,-INITIAL_CHUNK_Y*64));
+    ASSERT_TRUE(dc_beaver_fire_configure(v,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_wait_visible(v,120000,err,sizeof(err)));
+    ASSERT_TRUE(dc_beaver_fire_setup(v,err,sizeof(err)));
+    ASSERT_TRUE(v->restored);
+    fr_gas_gpu_clock_t restored_clock;ASSERT_TRUE(fr_gas_gpu_clock(v->gpu,&restored_clock));
+    ASSERT_TRUE(memcmp(&saved_clock,&restored_clock,sizeof(saved_clock))==0);
+    ASSERT_TRUE(restored_gas_exact(v,gas_count,gas_coords,saved_gas,err,sizeof(err)));
+    ASSERT_TRUE(pile_state(v->gpu,&pile_after,err,sizeof(err)));
+    ASSERT_EQ(pile_after.fuel,saved_pile.fuel);ASSERT_EQ(pile_after.char_mass,saved_pile.char_mass);
+    ASSERT_EQ(pile_after.flaming,saved_pile.flaming);
+    ASSERT_TRUE(dc_players_status(v,0,&player,&body));ASSERT_EQ(player.action,FR_PLAYER_IDLE);
+    free(gas_coords);free(saved_gas);
     ASSERT_TRUE(dc_level_view_destroy(v,err,sizeof(err)));PASS();
 }
 int main(void) {RUN(test_actual_demo_starts_unlit_and_button_ray_burns_real_wood);printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
