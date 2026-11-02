@@ -138,7 +138,8 @@ bool dc_players_enable(dc_level_view_t *v,char *err,uint32_t cap) {
         fr_player_register(&s->registry,"test:fire_bolt",FR_PLAYER_ABILITY,0,&s->fire,err,cap)&&
         fr_player_register(&s->registry,"test:ice_storm",FR_PLAYER_ABILITY,0,&s->ice,err,cap)&&
         fr_player_registry_seal(&s->registry)&&players_atlas(v,err,cap)&&players_add(v,FR_INPUT_KEYBOARD_DEVICE,err,cap)&&
-        fr_thermal_gpu_enable(v->gpu,err,cap)&&dc_level_view_set_spring_enabled(v,false)&&dc_level_view_renderer_mode(v,FR_RENDERER_ALBEDO);
+        fr_thermal_gpu_enable(v->gpu,err,cap)&&fr_thermal_gpu_overlay(v->gpu,0)&&
+        dc_level_view_set_spring_enabled(v,false)&&dc_level_view_renderer_mode(v,FR_RENDERER_ALBEDO);
     if(!okay) {dc_players_destroy(v);return false;}
     for(int n=0;n<SDL_NumJoysticks();n++) players_open(s,n);
     printf("Play: A/D move, Space jump, C chew, Q fire, E ice; mouse aim. Tab editor. Controller Start joins; left stick/A/B/X/Y/right stick.\n");
