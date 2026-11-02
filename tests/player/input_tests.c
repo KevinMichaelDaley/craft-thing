@@ -100,7 +100,44 @@ static void test_controls_drive_phases_and_latched_cast(void) {
     ASSERT_TRUE(fr_player_control_tick(&c,&p,&s,f,ice,false,100,&event));ASSERT_EQ(p.action,FR_PLAYER_IDLE);
     PASS();
 }
+static void test_no_automatic_cast_and_release_rearming(void) {
+    fr_input_t i;fr_input_state_t s;fr_input_init(&i);
+    ASSERT_TRUE(fr_input_add_player(&i,1));ASSERT_TRUE(fr_input_connect(&i,-1,1));
+    ASSERT_TRUE(fr_input_bind(&i,-1,4,FR_INPUT_FIRE,1));
+    ASSERT_TRUE(fr_input_sample(&i,1,&s));ASSERT_EQ(s.pressed,0);
+    ASSERT_TRUE(fr_input_event(&i,-1,4,1,false));
+    ASSERT_TRUE(fr_input_sample(&i,1,&s));ASSERT_EQ(s.pressed,BIT(FR_INPUT_FIRE));
+    fr_input_focus(&i,false);fr_input_focus(&i,true);
+    ASSERT_TRUE(fr_input_event(&i,-1,4,1,false));
+    ASSERT_TRUE(fr_input_sample(&i,1,&s));ASSERT_EQ(s.pressed,0);
+    ASSERT_TRUE(fr_input_event(&i,-1,4,0,false));ASSERT_TRUE(fr_input_event(&i,-1,4,1,false));
+    ASSERT_TRUE(fr_input_sample(&i,1,&s));ASSERT_EQ(s.pressed,BIT(FR_INPUT_FIRE));PASS();
+}
+static void test_cast_finishes_at_idle_and_never_repeats_without_press(void) {
+    fr_player_definition_t def;fr_player_registry_t r;uint32_t fire;
+    double values[1];uint8_t abilities[1];fr_player_t p;fr_player_control_t c={0};
+    ASSERT_TRUE(fr_player_registry_init(&r,&def,1));
+    ASSERT_TRUE(fr_player_register(&r,"test:fire",FR_PLAYER_ABILITY,0,&fire,NULL,0));
+    ASSERT_TRUE(fr_player_registry_seal(&r));ASSERT_TRUE(fr_player_init(&p,1,&r,values,abilities,1));
+    ASSERT_TRUE(fr_player_ability_set(&p,fire,true));
+    fr_input_state_t s={0};fr_player_action_event_t e;
+    for(unsigned n=0;n<100;n++) {
+        ASSERT_TRUE(fr_player_control_tick(&c,&p,&s,fire,0,false,100,&e));
+        ASSERT_EQ(p.action,FR_PLAYER_IDLE);ASSERT_EQ(e.ability,0);
+    }
+    s.pressed=BIT(FR_INPUT_FIRE);s.values[FR_INPUT_FIRE]=1;
+    ASSERT_TRUE(fr_player_control_tick(&c,&p,&s,fire,0,false,500,&e));ASSERT_EQ(e.ability,fire);
+    s.pressed=0;
+    ASSERT_TRUE(fr_player_control_tick(&c,&p,&s,fire,0,false,300,&e));ASSERT_EQ(e.ability,0);ASSERT_EQ(p.action,FR_PLAYER_IDLE);
+    for(unsigned n=0;n<30;n++) {
+        ASSERT_TRUE(fr_player_control_tick(&c,&p,&s,fire,0,false,100,&e));ASSERT_EQ(e.ability,0);ASSERT_EQ(p.action,FR_PLAYER_IDLE);
+    }
+    s.pressed=BIT(FR_INPUT_FIRE);
+    ASSERT_TRUE(fr_player_control_tick(&c,&p,&s,fire,0,false,1000,&e));ASSERT_EQ(e.ability,fire);ASSERT_EQ(p.action,FR_PLAYER_IDLE);PASS();
+}
 int main(void) {
+    RUN(test_no_automatic_cast_and_release_rearming);
+    RUN(test_cast_finishes_at_idle_and_never_repeats_without_press);
     RUN(test_ownership_and_remapping);RUN(test_edges_repeat_and_multiple_sources);
     RUN(test_clearing_context_focus_disconnect);RUN(test_target_is_per_player);
     RUN(test_controls_drive_phases_and_latched_cast);
