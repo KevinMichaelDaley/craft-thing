@@ -18,6 +18,8 @@ struct fr_fire_ray_gpu {
     dc_gpu_address_buffer_t commands;
     fr_renderer_compute_t compute;
     uint32_t count;
+    float duration,remaining[DC_FIRE_RAY_MAX];
+    uint64_t sequence[DC_FIRE_RAY_MAX];
     fr_player_body_binding_t bindings[DC_FIRE_RAY_MAX];
 };
 static bool fire_ray_error(char *err,uint32_t cap,const char *text) {
@@ -38,7 +40,7 @@ bool fr_fire_ray_gpu_create(dc_gpu_t *g,const fr_player_body_binding_t *b,uint32
     }
     if(!fr_thermal_gpu_enable(g,err,cap)||!fr_renderer_enable(g,err,cap)) return false;
     fr_fire_ray_gpu_t *r=calloc(1,sizeof(*r));if(!r) return fire_ray_error(err,cap,"Cannot allocate ray adapter");
-    r->gpu=g;r->count=n;memcpy(r->bindings,b,n*sizeof(*b));
+    r->gpu=g;r->count=n;r->duration=c.duration;memcpy(r->bindings,b,n*sizeof(*b));
     VkDeviceSize bytes=(DC_FIRE_RAY_HEADER+(VkDeviceSize)n*DC_FIRE_RAY_WORDS)*4u;
     if(!dc_gpu_address_buffer_create(g,bytes,true,&r->commands,err,cap)) {free(r);return false;}
     uint32_t *w=r->commands.mapped;memset(w,0,(size_t)bytes);w[0]=DC_FIRE_RAY_MAGIC;w[1]=n;
@@ -62,12 +64,23 @@ bool fr_fire_ray_gpu_submit(fr_fire_ray_gpu_t *r,const fr_fire_ray_input_t *i,
     if(!r||!i||n!=r->count||!isfinite(dt)||dt<=0||dt>.25f) return fire_ray_error(err,cap,"Invalid ray step");
     for(uint32_t p=0;p<n;p++) if(i[p].identity!=r->bindings[p].identity||!i[p].sequence||
         (i[p].facing!=1&&i[p].facing!= -1)) return fire_ray_error(err,cap,"Invalid ray owner, sequence or facing");
+    bool active=false,emit[DC_FIRE_RAY_MAX]={0};
+    for(uint32_t p=0;p<n;p++) {
+        if(i[p].sequence>r->sequence[p]) {
+            r->sequence[p]=i[p].sequence;emit[p]=i[p].emit;
+            if(emit[p]) r->remaining[p]=r->duration;
+        }
+        active|=r->remaining[p]>0;
+        r->remaining[p]=fmaxf(0,r->remaining[p]-dt);
+        if(r->remaining[p]<.000001f) r->remaining[p]=0;
+    }
+    if(!active) return true;
     dc_gpu_t *g=r->gpu;
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return fire_ray_error(err,cap,"Cannot reach ray input boundary");
     uint32_t *w=r->commands.mapped;
     for(uint32_t p=0;p<n;p++) {
         uint32_t *c=w+DC_FIRE_RAY_HEADER+p*DC_FIRE_RAY_WORDS;
-        c[2]=(uint32_t)i[p].sequence;c[3]=(uint32_t)(i[p].sequence>>32);c[4]=i[p].emit;memcpy(c+5,&i[p].facing,4);
+        c[2]=(uint32_t)i[p].sequence;c[3]=(uint32_t)(i[p].sequence>>32);c[4]=emit[p];memcpy(c+5,&i[p].facing,4);
     }
     VkDescriptorBufferInfo root={g->reactive->arena.root.buffer,0,g->reactive->arena.root.bytes},body=dc_gpu_runtime_bodies_binding(g);
     VkWriteDescriptorSet update[2]={

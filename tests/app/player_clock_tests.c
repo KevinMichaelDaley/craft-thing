@@ -17,8 +17,8 @@ static void test_render_debt_cannot_multiply_into_fifteen_ticks(void) {
     PASS();
 }
 static void test_normal_pacing_never_replays_a_missed_tick(void) {
-    const unsigned rates[]={40,60,120};
-    for(unsigned r=0;r<3;r++) {
+    const unsigned rates[]={40,60,90,120};
+    for(unsigned r=0;r<4;r++) {
         unsigned ticks=0;double accumulator=0;
         for(unsigned n=0;n<rates[r];n++) {
             dc_player_clock_plan_t p;accumulator+=1./rates[r];
