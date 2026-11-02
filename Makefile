@@ -2129,8 +2129,10 @@ build/thermal_phase_gpu_display_tests: tests/vulkan/thermal_phase_gpu_tests.c te
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< src/fire/combustion_gas.c src/app/bonfire_scene.c src/app/bonfire_plan.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/coating_native_bench: tests/vulkan/coating_native_bench.c $(PERFORMANCE_OBJ) build/shaders/thermal.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
-test: build/thermal_phase_gpu_display_tests
+.PHONY: test_thermal_phase_gpu_display
+test_thermal_phase_gpu_display: build/thermal_phase_gpu_display_tests
 	./build/thermal_phase_gpu_display_tests
+test: test_thermal_phase_gpu_display
 build/default_test_recipe_tests: tests/build/default_test_recipe_tests.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
 .PHONY: test_default_recipe

@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 #include "../../src/app/player_session.h"
 #include "../../src/app/view_config.h"
@@ -13,6 +14,8 @@ static int g_pass,g_fail;
 #define ASSERT_INT_EQ(a,b) ASSERT_EQ((int)(a),(int)(b))
 #define PASS() g_pass++
 static bool capture(dc_level_view_t *v,const char *path,char *err,uint32_t cap) {
+    mkdir("build/agents",0777);mkdir("build/agents/beaver-player",0777);
+    mkdir("build/agents/beaver-player/sustained",0777);
     uint32_t *pixels=malloc((size_t)VIEW_WIDTH*VIEW_HEIGHT*4);
     bool okay=pixels&&dc_level_view_pixels(v,pixels,VIEW_WIDTH*VIEW_HEIGHT,err,cap);
     SDL_Surface *surface=okay?SDL_CreateRGBSurfaceWithFormatFrom(pixels,VIEW_WIDTH,VIEW_HEIGHT,32,VIEW_WIDTH*4,SDL_PIXELFORMAT_ABGR8888):NULL;

@@ -2,6 +2,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 #include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/gpu.h"
@@ -39,6 +40,8 @@ static bool pile_state(dc_gpu_t *gpu,pile_state_t *out,char *err,uint32_t cap) {
     free(records);*out=result;return true;
 }
 static bool capture(dc_level_view_t *v,const char *name,char *err,uint32_t cap) {
+    mkdir("build/agents",0777);mkdir("build/agents/beaver-player",0777);
+    mkdir("build/agents/beaver-player/sustained",0777);
     uint32_t *pixels=malloc((size_t)VIEW_WIDTH*VIEW_HEIGHT*4);
     bool okay=pixels&&dc_level_view_pixels(v,pixels,VIEW_WIDTH*VIEW_HEIGHT,err,cap);
     SDL_Surface *surface=okay?SDL_CreateRGBSurfaceWithFormatFrom(pixels,VIEW_WIDTH,VIEW_HEIGHT,32,VIEW_WIDTH*4,SDL_PIXELFORMAT_ABGR8888):NULL;

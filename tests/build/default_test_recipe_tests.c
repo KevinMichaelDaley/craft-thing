@@ -22,7 +22,7 @@ static void test_default_recipe_runs_core_and_thermal_display(void) {
     ASSERT_TRUE(core&&thermal&&!overridden);PASS();
 }
 static void test_live_player_binary_builds_its_drive_shader(void) {
-    FILE *pipe=popen("make -n build/dungeoncraft_quarter_native 2>&1","r");ASSERT_TRUE(pipe);
+    FILE *pipe=popen("make -n -B build/dungeoncraft_quarter_native 2>&1","r");ASSERT_TRUE(pipe);
     char line[4096];int shader=0;
     while(fgets(line,sizeof(line),pipe))
         if(strstr(line,"glslangValidator")&&strstr(line,"shaders/sim/player_drive.comp")) shader=1;

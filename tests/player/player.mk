@@ -109,6 +109,7 @@ build/shaders/player_drive.comp.spv: shaders/sim/player_drive.comp shaders/sim/r
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/player_drive_gpu_tests: build/shaders/player_drive.comp.spv
 build/shaders/player_drive.comp.spv: shaders/sim/rigid_storage.glsl include/dungeoncraft/body_storage_layout.h include/dungeoncraft/material_density.h include/dungeoncraft/player_drive_layout.h
+build/dungeoncraft_quarter_native: build/shaders/player_drive.comp.spv
 build/player_drive_gpu_tests: include/dungeoncraft/player_drive_layout.h src/vulkan/runtime_body_internal.h src/vulkan/runtime_body_gpu.h src/vulkan/gpu_internal.h src/vulkan/renderer_internal.h
 build/player_drive_gpu_tests: include/ferrum/player/beaver.h src/player/beaver_internal.h include/ferrum/player/player.h include/ferrum/fire/gpu.h include/ferrum/fire/material_profile.h
 
