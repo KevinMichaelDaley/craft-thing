@@ -43,5 +43,9 @@ void fr_lighting_gpu_invalidate_sources(fr_lighting_gpu_t *lighting);
 void fr_renderer_emission_changed(dc_gpu_t *gpu);
 /** Rebind appearance after a completed resource-growth transaction. */
 void fr_renderer_rebind_colors(dc_gpu_t *gpu);
+/** Bind an immutable sprite atlas plus generation-bearing pose headers. */
+void fr_renderer_bind_sprites(dc_gpu_t *gpu,const VkDescriptorBufferInfo *buffer);
+/** Release the sprite channel after the queue is idle. */
+void fr_renderer_sprites_destroy(dc_gpu_t *gpu);
 
 #endif

@@ -10,6 +10,7 @@
 #include "texture.glsl"
 #include "directional_storage.glsl"
 #include "../sim/leaf_color.glsl"
+#include "../../include/dungeoncraft/sprite_layout.h"
 
 layout(local_size_x=64) in;
 layout(constant_id=0) const uint SCENE_PHASE=0u;
@@ -38,6 +39,7 @@ layout(set=0,binding=12,std430) readonly buffer PreviousWater {uint previous_wat
 layout(set=0,binding=13,std430) readonly buffer Fields {PackedField fields[];};
 layout(set=0,binding=14,std430) readonly buffer Configuration {uint configuration[];};
 layout(set=0,binding=15,std430) readonly buffer WaterColors {vec4 water_colors[];};
+layout(set=0,binding=16,std430) readonly buffer PlayerSprites {uint sprite_words[];};
 layout(push_constant) uniform Params {uint width;uint height;uint registry;uint force_light;uint flags;uint mode;uint view_x;uint view_y;} params;
 shared uint group_statistics[64];
 uint group_sum(uint value) {
@@ -103,6 +105,60 @@ Surface unpack_surface(PackedSurface packed) {
                    vec4(r.z,g.z,b.z,0),
                    vec4(0,0,uintBitsToFloat(packed.background&0x7fffffffu),float(packed.background>>31u)));
 }
+uint sprite_count() {return sprite_words[0]==DC_SPRITE_MAGIC?min(sprite_words[1],DC_SPRITE_MAX):0u;}
+uint sprite_slot(uint at) {
+    uint slot=body_slot(sprite_words[at]);
+    if(slot>=BODY_CAPACITY) return BODY_CAPACITY;
+#ifdef DC_RUNTIME_BODY_STORAGE
+    if(DC_BODY_OWNER(runtime_body_root,slot).generation!=sprite_words[at+1u]) return BODY_CAPACITY;
+#endif
+    return DC_BODY(slot).enabled!=0u?slot:BODY_CAPACITY;
+}
+bool sprite_body(uint id) {
+    for(uint n=0u;n<sprite_count();n++) {
+        uint at=DC_SPRITE_HEADER_WORDS+n*DC_SPRITE_POSE_WORDS;
+        if(sprite_words[at]==id&&sprite_slot(at)<BODY_CAPACITY) return true;
+    }
+    return false;
+}
+void sprite_surface(uvec2 cell,inout Surface surface,inout float coverage,inout float opacity) {
+    for(uint n=0u;n<sprite_count();n++) {
+        uint at=DC_SPRITE_HEADER_WORDS+n*DC_SPRITE_POSE_WORDS,slot=sprite_slot(at);
+        if(slot>=BODY_CAPACITY) continue;
+        Body body=DC_BODY(slot);
+        vec2 local=body_local_point(body,vec2(cell)+.5-vec2(body.x_fp,body.y_fp)/65536.);
+        ivec2 p=ivec2(floor(local))+ivec2(sprite_words[at+8u],sprite_words[at+9u]);
+        uvec2 size=uvec2(sprite_words[at+3u],sprite_words[at+4u]);
+        if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(size)))) continue;
+        if(sprite_words[at+5u]!=0u) p.x=int(size.x)-1-p.x;
+        uint texel=DC_SPRITE_ATLAS_WORD+2u*(sprite_words[at+2u]+uint(p.y)*size.x+uint(p.x));
+        uint source=sprite_words[texel+1u];vec4 color=unpackUnorm4x8(sprite_words[texel]);
+        if(source==0u||color.a==0.) continue;
+        if(pixel_body(body)) {
+            ivec2 rest=ivec2((source-1u)%40u,(source-1u)/40u)-ivec2(sprite_words[at+6u],sprite_words[at+7u]);
+            uint piece=pixel_piece_at(body,rest);
+            if(pixel_piece_material(body,piece)==0u) continue;
+#ifdef DC_RUNTIME_BODY_STORAGE
+            if(reactive_enabled()) {
+                uint word=body.compound_reserved+pixel_tile_offset(body,piece/256u)+1u+(piece%256u)/8u;
+                uvec2 handle=reactive_shape_read(word-color_pool_word(),piece%8u,color_capacity());
+                if(reactive_handle_valid(handle)) {
+                    uint entry=handle.x,s=FR_ENTRY_STATE;
+                    float dry=float(reactive_entry_read(entry,s+FR_STATE_DRY_MASS));
+                    float char_mass=float(reactive_entry_read(entry,s+FR_STATE_CHAR_MASS));
+                    float water=float(reactive_entry_read(entry,s+FR_STATE_BOUND_WATER));
+                    float char_opacity=dry>0.?1.-exp(-char_mass/dry/.015):0.;
+                    float wet=dry>0.?clamp(water/dry,0.,1.):0.;
+                    color.rgb*=1.-.93*char_opacity;color.rgb*=1.-.25*wet;
+                }
+            }
+#endif
+        }
+        float alpha=color.a*(1.-coverage);
+        add_surface(surface,Appearance(vec4(color.rgb,.5),vec4(0,0,1,0)),alpha,body.angle);
+        coverage+=alpha;opacity+=alpha;
+    }
+}
 Surface surface_at(uint i,out float opacity,out uint known) {
     Surface surface=Surface(vec4(0),vec4(0),vec4(0),vec4(0),vec4(0));
     uvec2 cell=uvec2(i%params.width,i/params.width);
@@ -113,7 +169,8 @@ Surface surface_at(uint i,out float opacity,out uint known) {
     uint local=(cell.y%64u)*64u+cell.x%64u,atlas=(page-1u)*4096u+local;
     uvec2 physical=chunk_cells[atlas];uint material=physical.x&65535u;
     float body_coverage=0.,body_opacity=0.;uint id=occupancy[i],slot=id==0u?BODY_CAPACITY:body_slot(id);
-    if(slot<BODY_CAPACITY) {
+    sprite_surface(cell,surface,body_coverage,body_opacity);
+    if(slot<BODY_CAPACITY && !sprite_body(id)) {
         Body body=DC_BODY(slot);
         vec2 relative=vec2(cell)-vec2(body.x_fp,body.y_fp)/65536.;
         uvec4 query=body_piece_query(body,relative,relative+1.);

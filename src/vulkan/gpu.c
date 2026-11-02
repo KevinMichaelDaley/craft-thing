@@ -147,6 +147,7 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu->device) fr_thermal_gpu_destroy(gpu);
     if (gpu->device) fr_gas_gpu_destroy(gpu);
     if (gpu->device) fr_gpu_reactive_destroy(gpu);
+    if (gpu->device) fr_renderer_sprites_destroy(gpu);
     if (gpu->device) fr_renderer_destroy(gpu);
     if (gpu->device) dc_gpu_authored_destroy(gpu);
     if (gpu->acquire_sem) vkDestroySemaphore(gpu->device, gpu->acquire_sem, NULL);

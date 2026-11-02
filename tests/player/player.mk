@@ -14,7 +14,7 @@ test_player_input_sdl: build/player_input_sdl_tests
 	./build/player_input_sdl_tests
 test_player: test_player_input_sdl
 build/player_sprite_gpu_tests: tests/player/sprite_gpu_tests.c src/vulkan/sprite_gpu.c include/ferrum/renderer/sprite_gpu.h build/fluid_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/sprite_gpu.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_player_sprite_gpu
 test_player_sprite_gpu: build/player_sprite_gpu_tests
 	./build/player_sprite_gpu_tests

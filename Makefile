@@ -132,6 +132,9 @@ build/color_gpu.o: src/vulkan/color_gpu.c src/vulkan/gpu_internal.h include/dung
 GPU_OBJ += build/window_gpu.o
 GPU_OBJ += build/structural_gpu.o build/structural_material.o
 GPU_OBJ += build/scene_gpu.o build/renderer_resource.o build/occlusion_gpu.o build/lighting_gpu.o
+GPU_OBJ += build/sprite_gpu.o
+build/sprite_gpu.o: src/vulkan/sprite_gpu.c include/ferrum/renderer/sprite_gpu.h include/dungeoncraft/sprite_layout.h src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 RENDERER_SHADERS = build/shaders/lighting_subgroup.comp.spv build/shaders/scene.comp.spv build/shaders/occlusion.comp.spv build/shaders/lighting.comp.spv
 $(GPU_OBJ): $(RENDERER_SHADERS) src/vulkan/gpu_internal.h
 build/scene_gpu.o: src/vulkan/scene_gpu.c src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h include/ferrum/renderer/gpu.h
@@ -147,6 +150,7 @@ build/shaders/scene.comp.spv: shaders/renderer/scene.comp shaders/renderer/textu
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 
 build/shaders/scene.comp.spv: include/ferrum/renderer/light_transport.h
+build/shaders/scene.comp.spv build/shaders/runtime/scene.comp.spv: include/dungeoncraft/sprite_layout.h
 build/shaders/scene.comp.spv build/shaders/lighting.comp.spv build/shaders/lighting_subgroup.comp.spv: shaders/renderer/directional_storage.glsl
 GPU_OBJ += build/mpm_activity_gpu.o
 GPU_OBJ += build/authored_gpu.o build/authored_request.o

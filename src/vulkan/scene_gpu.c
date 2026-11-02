@@ -24,6 +24,12 @@ struct fr_scene_gpu {
   VkDeviceMemory memory[SCENE_BUFFERS];
   void *mapped[SCENE_BUFFERS];
 };
+void fr_renderer_bind_sprites(dc_gpu_t *g,const VkDescriptorBufferInfo *buffer) {
+  VkWriteDescriptorSet write={.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+    .dstSet=g->renderer->compute.descriptor,.dstBinding=16,.descriptorCount=1,
+    .descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=buffer};
+  vkUpdateDescriptorSets(g->device,1,&write,0,NULL);
+}
 
 void fr_renderer_rebind_colors(dc_gpu_t *g) {
   if(!g||!g->renderer) return;
@@ -139,6 +145,7 @@ bool fr_renderer_enable(dc_gpu_t *g, char *err, uint32_t cap) {
       {s->buffers[4], 0, sizes[4]},
       {g->water_color_buffer,0,(VkDeviceSize)atlas*16}};
   for(uint32_t i=16;i<33;i++) buffers[i]=(VkDescriptorBufferInfo){g->cells,0,(VkDeviceSize)grid*4};
+  buffers[16]=(VkDescriptorBufferInfo){s->buffers[4],0,64};
   VkDeviceSize terrain_colors=dc_gpu_color_terrain_bytes(),bank_colors=dc_gpu_color_bank_bytes(g);
   buffers[33]=(VkDescriptorBufferInfo){g->shape_color_buffer,0,terrain_colors};
   buffers[34]=(VkDescriptorBufferInfo){g->shape_color_buffer,g->runtime_body_consumers?0:terrain_colors,g->runtime_body_consumers?16:bank_colors};

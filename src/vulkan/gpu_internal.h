@@ -60,6 +60,7 @@ typedef struct {
 } dc_gpu_body_record_t;
 
 struct dc_gpu {
+    struct fr_sprite_gpu *sprites;
     struct fr_reactive_gpu *reactive;
     struct fr_revolute_gpu *revolute;
     struct fr_thermal_gpu *thermal;
@@ -298,6 +299,7 @@ struct dc_gpu {
 bool fr_renderer_active(const dc_gpu_t *gpu);
 void fr_renderer_record(dc_gpu_t *gpu);
 void fr_renderer_destroy(dc_gpu_t *gpu);
+void fr_renderer_sprites_destroy(dc_gpu_t *gpu);
 
 enum {
     DC_GPU_BROADPHASE_HEADER_WORDS = 8,
