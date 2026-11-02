@@ -7,6 +7,8 @@
 
 static int g_pass,g_fail;
 static uint32_t g_submits;
+static bool g_begin_ok,g_submit_ok;
+static VkResult g_queue_result;
 #define RUN(fn) do {printf("RUN  %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(x) do {if(!(x)) {printf("FAIL %s:%d: %s\n",__FILE__,__LINE__,#x);g_fail++;return;}} while(0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -14,7 +16,7 @@ static uint32_t g_submits;
 #define PASS() g_pass++
 
 /* Exercise the production host submission path without a Vulkan device. */
-VKAPI_ATTR VkResult VKAPI_CALL vkQueueWaitIdle(VkQueue queue) {(void)queue;return VK_SUCCESS;}
+VKAPI_ATTR VkResult VKAPI_CALL vkQueueWaitIdle(VkQueue queue) {(void)queue;return g_queue_result;}
 VKAPI_ATTR void VKAPI_CALL vkUpdateDescriptorSets(VkDevice device,uint32_t count,
     const VkWriteDescriptorSet *writes,uint32_t copies,const VkCopyDescriptorSet *copy) {
     (void)device;(void)count;(void)writes;(void)copies;(void)copy;
@@ -37,8 +39,8 @@ VKAPI_ATTR void VKAPI_CALL vkCmdDispatch(VkCommandBuffer command,uint32_t x,uint
 VkDescriptorBufferInfo dc_gpu_runtime_bodies_binding(const dc_gpu_t *gpu) {
     (void)gpu;return (VkDescriptorBufferInfo){0};
 }
-bool fr_renderer_begin(dc_gpu_t *gpu) {(void)gpu;return true;}
-bool fr_renderer_submit(dc_gpu_t *gpu) {(void)gpu;g_submits++;return true;}
+bool fr_renderer_begin(dc_gpu_t *gpu) {(void)gpu;return g_begin_ok;}
+bool fr_renderer_submit(dc_gpu_t *gpu) {(void)gpu;g_submits++;return g_submit_ok;}
 void fr_renderer_barrier(VkCommandBuffer command,VkPipelineStageFlags2 source,VkAccessFlags2 access,
     VkPipelineStageFlags2 destination,VkAccessFlags2 destination_access) {
     (void)command;(void)source;(void)access;(void)destination;(void)destination_access;
@@ -59,6 +61,7 @@ static void reset(uint32_t policy) {
     gas.policy=policy;gas.cache_valid=true;gas.acoustic.matrix_valid=true;
     ray.gpu=&gpu;ray.count=1;ray.duration=.4f;ray.commands.mapped=words;
     ray.bindings[0]=(fr_player_body_binding_t){.identity=1,.body_id=2,.generation=1};g_submits=0;
+    g_queue_result=VK_SUCCESS;g_begin_ok=true;g_submit_ok=true;
 }
 static void test_heat_preserves_advective_bound_but_changes_acoustic_bound(void) {
     fr_gas_model_t model={.gas_constant={287,297,250,461,0},
@@ -107,10 +110,44 @@ static void test_idle_cast_adapter_does_no_work_or_invalidation(void) {
     ASSERT_TRUE(gas.cache_valid&&gas.acoustic.matrix_valid);
     PASS();
 }
+static void test_failed_submission_keeps_cast_retryable(void) {
+    for(uint32_t failure=0;failure<3;failure++) {
+        reset(FR_GAS_PRESSURE_PRACTICAL);char err[256];
+        fr_fire_ray_input_t input={.identity=1,.sequence=1,.facing=1,.emit=true};
+        if(failure==0) g_queue_result=VK_ERROR_DEVICE_LOST;
+        if(failure==1) g_begin_ok=false;
+        if(failure==2) g_submit_ok=false;
+        ASSERT_TRUE(!fr_fire_ray_gpu_submit(&ray,&input,1,1.f/60,err,sizeof(err)));
+        ASSERT_EQ(ray.sequence[0],0u);
+        ASSERT_EQ(ray.remaining[0],0.f);
+        g_queue_result=VK_SUCCESS;g_begin_ok=true;g_submit_ok=true;
+        ASSERT_TRUE(fr_fire_ray_gpu_submit(&ray,&input,1,1.f/60,err,sizeof(err)));
+        ASSERT_EQ(ray.sequence[0],1u);
+        ASSERT_EQ(words[DC_FIRE_RAY_HEADER+4],1u);
+        ASSERT_TRUE(ray.remaining[0]>0);
+        ASSERT_TRUE(fr_fire_ray_gpu_submit(&ray,&input,1,1.f/60,err,sizeof(err)));
+        ASSERT_EQ(words[DC_FIRE_RAY_HEADER+4],0u);
+    }
+    PASS();
+}
+static void test_failed_active_step_preserves_remaining_duration(void) {
+    reset(FR_GAS_PRESSURE_PRACTICAL);char err[256];
+    fr_fire_ray_input_t input={.identity=1,.sequence=1,.facing=1,.emit=true};
+    ASSERT_TRUE(fr_fire_ray_gpu_submit(&ray,&input,1,1.f/60,err,sizeof(err)));
+    float before=ray.remaining[0];input.emit=false;g_begin_ok=false;
+    ASSERT_TRUE(!fr_fire_ray_gpu_submit(&ray,&input,1,1.f/60,err,sizeof(err)));
+    ASSERT_EQ(ray.remaining[0],before);
+    g_begin_ok=true;
+    ASSERT_TRUE(fr_fire_ray_gpu_submit(&ray,&input,1,1.f/60,err,sizeof(err)));
+    ASSERT_TRUE(fabsf(ray.remaining[0]-(before-1.f/60))<.000001f);
+    PASS();
+}
 int main(void) {
     RUN(test_heat_preserves_advective_bound_but_changes_acoustic_bound);
     RUN(test_practical_heat_keeps_transport_and_pressure_matrix_cache);
     RUN(test_acoustic_policies_invalidate_after_heat);
     RUN(test_idle_cast_adapter_does_no_work_or_invalidation);
+    RUN(test_failed_submission_keeps_cast_retryable);
+    RUN(test_failed_active_step_preserves_remaining_duration);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
