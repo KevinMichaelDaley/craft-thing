@@ -106,7 +106,11 @@ bool fr_fire_ray_gpu_submit(fr_fire_ray_gpu_t *r,const fr_fire_ray_input_t *i,
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_HOST_READ_BIT);
     bool okay=fr_renderer_submit(g);
-    if(okay&&g->gas) fr_gas_gpu_invalidate_cache(g);
+    /* Heat adds neither gas mass nor momentum nor geometry. Practical
+     * transport's advective bound remains conservative, just as after the
+     * thermal reaction pass; acoustic policies need a new sound-speed bound. */
+    if(okay&&g->gas&&g->gas->policy!=FR_GAS_PRESSURE_PRACTICAL)
+        fr_gas_gpu_invalidate_cache(g);
     return okay;
 }
 bool fr_fire_ray_gpu_stats(fr_fire_ray_gpu_t *r,uint32_t i,fr_fire_ray_stats_t *o) {
