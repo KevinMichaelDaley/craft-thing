@@ -296,7 +296,7 @@ test: test_bonfire_scene
 test_bonfire_scene: build/bonfire_scene_tests
 	./build/bonfire_scene_tests
 NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(THERMAL_BENCH_SRC) $(GPU_SRC) src/world/chunk.c src/world/stream.c src/fire/bulk_phase_packet.c src/world/generate.c
-PLAYER_RUNTIME_SRC = src/app/player_session.c src/player/input.c src/player/input_sdl.c src/player/control.c src/player/body_gpu.c src/vulkan/player_drive_gpu.c $(PLAYER_SRC) $(BEAVER_SRC)
+PLAYER_RUNTIME_SRC = src/app/player_session.c src/app/player_clock.c src/app/smoke_profile.c src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c src/player/fire_ray_gpu.c src/player/input.c src/player/input_sdl.c src/player/control.c src/player/body_gpu.c src/vulkan/player_drive_gpu.c $(PLAYER_SRC) $(BEAVER_SRC)
 NATIVE_SRC += $(PLAYER_RUNTIME_SRC)
 build/rigid_dynamics_visual_tests: tests/app/rigid_dynamics_visual_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)

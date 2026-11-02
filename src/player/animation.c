@@ -28,7 +28,7 @@ bool fr_player_chew_tick(fr_player_t *p,bool valid,uint64_t elapsed) {
 bool fr_player_clip(fr_player_action_t action,fr_player_clip_t *out) {
     static const fr_player_clip_t clips[FR_PLAYER_ACTION_COUNT]={
         [FR_PLAYER_IDLE]={1,100,true}, [FR_PLAYER_WALK]={6,100,true},
-        [FR_PLAYER_CHEW]={8,CHEW_FRAME_MS,false}, [FR_PLAYER_CAST]={8,100,false}
+        [FR_PLAYER_CHEW]={8,CHEW_FRAME_MS,false}, [FR_PLAYER_CAST]={8,FR_PLAYER_CAST_FRAME_MS,false}
     };
     if ((unsigned)action>=FR_PLAYER_ACTION_COUNT || !out) return false;
     *out=clips[action];
@@ -64,7 +64,8 @@ bool fr_player_advance(fr_player_t *p,uint64_t elapsed) {
         }
         return true;
     }
-    if (p->action==FR_PLAYER_CAST && p->elapsed_ms<500 && elapsed>=500-p->elapsed_ms)
+    uint64_t cast_event=(uint64_t)FR_PLAYER_CAST_EVENT_FRAME*clip.frame_ms;
+    if (p->action==FR_PLAYER_CAST && p->elapsed_ms<cast_event && elapsed>=cast_event-p->elapsed_ms)
         p->cast_event_pending=true;
     uint64_t duration=(uint64_t)clip.frames*clip.frame_ms;
     if (clip.loop) p->elapsed_ms=(p->elapsed_ms%duration+elapsed%duration)%duration;

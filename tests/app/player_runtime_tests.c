@@ -48,7 +48,7 @@ static void test_real_app_keyboard_drives_body_and_animation(void) {
     ASSERT_TRUE(dc_players_status(v,0,&p,&binding));ASSERT_EQ(p.action,FR_PLAYER_IDLE);ASSERT_EQ(p.intent.move_x,0);
     e.window.event=SDL_WINDOWEVENT_FOCUS_GAINED;dc_players_event(v,&e);
     e.type=SDL_KEYDOWN;e.key.keysym.scancode=SDL_SCANCODE_Q;ASSERT_TRUE(dc_players_event(v,&e));
-    for(unsigned n=0;n<30;n++) ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
+    for(unsigned n=0;n<24;n++) ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
     ASSERT_TRUE(dc_players_status(v,0,&p,&binding));ASSERT_EQ(p.action,FR_PLAYER_CAST);
     uint32_t frame;ASSERT_TRUE(fr_player_frame(&p,&frame));ASSERT_EQ(frame,5);
     ASSERT_TRUE(capture(v,"build/agents/beaver-player/sustained/runtime-cast.bmp",err,sizeof(err)));
@@ -56,7 +56,19 @@ static void test_real_app_keyboard_drives_body_and_animation(void) {
     for(unsigned n=0;n<120;n++) {
         ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
         ASSERT_TRUE(dc_players_status(v,0,&p,&binding));
-        if(n>=17) ASSERT_EQ(p.action,FR_PLAYER_IDLE);
+        if(n>=14) ASSERT_EQ(p.action,FR_PLAYER_IDLE);
+    }
+    e.type=SDL_KEYUP;e.key.keysym.scancode=SDL_SCANCODE_Q;ASSERT_TRUE(dc_players_event(v,&e));
+    e.type=SDL_KEYDOWN;ASSERT_TRUE(dc_players_event(v,&e));dc_players_frame_time(v,0);
+    ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
+    const uint32_t intervals[]={79,1,137,3,179,1,79,1,159,1};
+    uint32_t action_ms=0;
+    for(unsigned n=0;n<10;n++) {
+        action_ms+=intervals[n];dc_players_frame_time(v,intervals[n]/1000.);
+        ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
+        ASSERT_TRUE(dc_players_status(v,0,&p,&binding));
+        if(action_ms<640) {ASSERT_EQ(p.action,FR_PLAYER_CAST);ASSERT_EQ(p.elapsed_ms,action_ms);}
+        else ASSERT_EQ(p.action,FR_PLAYER_IDLE);
     }
     ASSERT_TRUE(dc_level_view_destroy(v,err,sizeof(err)));PASS();
 }

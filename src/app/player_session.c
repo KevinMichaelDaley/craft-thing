@@ -24,11 +24,18 @@ struct dc_player_session {
     SDL_GameController *controllers[FR_INPUT_DEVICES];
     int64_t device[FR_INPUT_PLAYERS];
     fr_player_drive_gpu_t *drive;
+    fr_fire_ray_gpu_t *ray;
+    fr_fire_ray_config_t ray_config;
+    bool ray_enabled;
+    uint32_t spawn_x,spawn_y;
     uint32_t count,fire,ice,frame_offsets[FR_PLAYER_ACTION_COUNT][8];
     fr_beaver_frame_layout_t layouts[FR_PLAYER_ACTION_COUNT][8];
     uint64_t sequence;
     double milliseconds;
-    bool editor;
+    double pending_action_ms;
+    uint64_t cast_pressed_at[FR_INPUT_PLAYERS];
+    bool presentation_clock;
+    bool editor,trace;
     char failure[256];
     fr_player_action_event_t cast_events[FR_INPUT_PLAYERS];
 };
@@ -110,7 +117,7 @@ static bool players_add(dc_level_view_t *v,int64_t device,char *err,uint32_t cap
         dc_chunk_coord_t stage={v->origin.x-1,v->origin.y-1};uint32_t slot;
         if(!dc_chunk_table_find(&v->table,stage,&slot)) return players_error(err,cap,"Player staging chunk is not resident");
         dc_chunk_coord_t spawn;uint32_t x,y;
-        dc_cell_address(64+(int64_t)n*64,40,&spawn,&x,&y);
+        dc_cell_address(s->spawn_x+(int64_t)n*64,s->spawn_y,&spawn,&x,&y);
         spawn.x+=v->origin.x;spawn.y+=v->origin.y;
         if(!fr_beaver_body_admit(v->gpu,n+1,transaction,slot,spawn,(int32_t)x*65536,(int32_t)y*65536,&s->bodies[n],err,cap)||
            !dc_chunk_table_mark_dirty(&v->table,slot)) return false;
@@ -125,6 +132,10 @@ static bool players_add(dc_level_view_t *v,int64_t device,char *err,uint32_t cap
     fr_player_drive_gpu_t *drive=NULL;
     if(!fr_player_drive_gpu_create(v->gpu,bindings,s->count,1,3,&drive,err,cap)) return false;
     fr_player_drive_gpu_destroy(s->drive);s->drive=drive;
+    if(s->ray_enabled) {
+        fr_fire_ray_gpu_destroy(s->ray);s->ray=NULL;
+        if(!fr_fire_ray_gpu_create(v->gpu,bindings,s->count,s->ray_config,&s->ray,err,cap)) return false;
+    }
     return players_publish(v,err,cap);
 }
 static void players_open(struct dc_player_session *s,int index) {
@@ -136,16 +147,17 @@ static void players_open(struct dc_player_session *s,int index) {
 void dc_players_destroy(dc_level_view_t *v) {
     if(!v||!v->players) return;
     struct dc_player_session *s=v->players;
+    fr_fire_ray_gpu_destroy(s->ray);
     fr_player_drive_gpu_destroy(s->drive);
     for(unsigned n=0;n<FR_INPUT_DEVICES;n++) if(s->controllers[n]) SDL_GameControllerClose(s->controllers[n]);
     SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);free(s);v->players=NULL;
 }
-bool dc_players_enable(dc_level_view_t *v,char *err,uint32_t cap) {
+bool dc_players_enable_at(dc_level_view_t *v,uint32_t x,uint32_t y,char *err,uint32_t cap) {
     if(!v) return false;
     if(v->players) return true;
     struct dc_player_session *s=calloc(1,sizeof(*s));
     if(!s) return players_error(err,cap,"Cannot allocate player session");
-    v->players=s;fr_input_init(&s->input);
+    v->players=s;s->spawn_x=x;s->spawn_y=y;s->trace=getenv("DC_PLAYER_INPUT_TRACE")!=NULL;fr_input_init(&s->input);
     bool okay=SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER)==0&&
         fr_player_registry_init(&s->registry,s->definitions,2)&&
         fr_player_register(&s->registry,"test:fire_bolt",FR_PLAYER_ABILITY,0,&s->fire,err,cap)&&
@@ -158,6 +170,18 @@ bool dc_players_enable(dc_level_view_t *v,char *err,uint32_t cap) {
     printf("Play: A/D move, Space jump, C chew, Q fire, E ice; mouse aim. Tab editor. Controller Start joins; left stick/A/B/X/Y/right stick.\n");
     return true;
 }
+bool dc_players_enable(dc_level_view_t *v,char *err,uint32_t cap) {
+    return dc_players_enable_at(v,64,40,err,cap);
+}
+bool dc_players_fire_ray(dc_level_view_t *v,fr_fire_ray_config_t config,char *err,uint32_t cap) {
+    if(!v||!v->players) return false;
+    struct dc_player_session *s=v->players;
+    if(s->ray_enabled) return true;
+    fr_player_body_binding_t bindings[FR_INPUT_PLAYERS];
+    for(uint32_t n=0;n<s->count;n++) bindings[n]=s->bodies[n].binding;
+    if(!fr_fire_ray_gpu_create(v->gpu,bindings,s->count,config,&s->ray,err,cap)) return false;
+    s->ray_config=config;s->ray_enabled=true;return true;
+}
 bool dc_players_gameplay(const dc_level_view_t *v) {
     return v&&v->players&&!v->players->editor&&v->players->input.players[0].context==FR_INPUT_GAMEPLAY;
 }
@@ -165,6 +189,11 @@ void dc_players_ui(dc_level_view_t *v,bool active) {
     if(!v||!v->players) return;
     struct dc_player_session *s=v->players;
     for(uint32_t n=0;n<s->count;n++) fr_input_context(&s->input,n+1,active?FR_INPUT_UI:s->editor?FR_INPUT_EDITOR:FR_INPUT_GAMEPLAY);
+}
+void dc_players_frame_time(dc_level_view_t *v,double seconds) {
+    if(!v||!v->players||!isfinite(seconds)||seconds<0) return;
+    v->players->presentation_clock=true;
+    v->players->pending_action_ms+=seconds*1000.;
 }
 bool dc_players_event(dc_level_view_t *v,const SDL_Event *e) {
     if(!v||!v->players||!e) return false;
@@ -190,13 +219,30 @@ bool dc_players_event(dc_level_view_t *v,const SDL_Event *e) {
         if(s->count<FR_INPUT_PLAYERS) players_add(v,e->cbutton.which,s->failure,sizeof(s->failure));
         return true;
     }
-    return fr_input_sdl_event(&s->input,e);
+    uint32_t before[FR_INPUT_PLAYERS];
+    for(uint32_t n=0;n<s->count;n++) before[n]=s->input.players[n].state.pressed;
+    bool handled=fr_input_sdl_event(&s->input,e);
+    uint64_t now=SDL_GetTicks64();
+    uint64_t stamp=(now&~UINT64_C(0xffffffff))|e->common.timestamp;
+    if(stamp>now) stamp=now;
+    if(!e->common.timestamp) stamp=now;
+    for(uint32_t n=0;n<s->count;n++)
+        if((s->input.players[n].state.pressed&~before[n])&((1u<<FR_INPUT_FIRE)|(1u<<FR_INPUT_ICE))) s->cast_pressed_at[n]=stamp;
+    if(s->trace&&(e->type==SDL_KEYDOWN||e->type==SDL_KEYUP)&&e->key.keysym.scancode==SDL_SCANCODE_Q) {
+        fprintf(stderr,"[player-input] Q %s repeat%u handled%d focused%d context%u pressed0x%x held%.0f\n",
+            e->type==SDL_KEYDOWN?"down":"up",e->key.repeat,handled,s->input.focused,
+            s->input.players[0].context,s->input.players[0].state.pressed,s->input.players[0].state.values[FR_INPUT_FIRE]);
+        fflush(stderr);
+    }
+    return handled;
 }
 bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
     if(!v||!v->players||!isfinite(seconds)||seconds<=0||seconds>.25f) return false;
     struct dc_player_session *s=v->players;
     if(s->failure[0]) return players_error(err,cap,s->failure);
-    s->milliseconds+=(double)seconds*1000.;uint64_t elapsed=(uint64_t)s->milliseconds;s->milliseconds-=elapsed;
+    s->milliseconds+=s->presentation_clock?s->pending_action_ms:(double)seconds*1000.;
+    s->pending_action_ms=0;
+    uint64_t elapsed=(uint64_t)s->milliseconds;s->milliseconds-=elapsed;
     fr_player_drive_input_t drive[FR_INPUT_PLAYERS];
     for(uint32_t n=0;n<s->count;n++) {
         fr_input_state_t input;fr_input_sample(&s->input,n+1,&input);
@@ -213,12 +259,31 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
         dc_cell_address((int64_t)x+v->camera_offset_x,(int64_t)y+v->camera_offset_y,&chunk,&lx,&ly);
         chunk.x+=v->origin.x;chunk.y+=v->origin.y;
         input.has_target=valid;input.target=(fr_player_point_t){chunk,(float)lx,(float)ly};
-        if(!fr_player_control_tick(&s->controls[n],&s->players[n],&input,s->fire,s->ice,false,elapsed,&s->cast_events[n])) return false;
+        fr_player_action_t old_action=s->players[n].action;
+        uint64_t action_elapsed=elapsed;
+        if(s->presentation_clock&&old_action!=FR_PLAYER_CAST&&
+           (input.pressed&((1u<<FR_INPUT_FIRE)|(1u<<FR_INPUT_ICE)))) {
+            uint64_t now=SDL_GetTicks64(),age=now>=s->cast_pressed_at[n]?now-s->cast_pressed_at[n]:0;
+            if(age<action_elapsed) action_elapsed=age;
+        }
+        if(!fr_player_control_tick(&s->controls[n],&s->players[n],&input,s->fire,s->ice,false,action_elapsed,&s->cast_events[n])) return false;
+        if(s->trace&&(old_action!=s->players[n].action||s->cast_events[n].ability)) {
+            uint32_t frame;fr_player_frame(&s->players[n],&frame);
+            fprintf(stderr,"[player-action] wall%llu player%u action%u frame%u elapsed%llu event%u facing%d ray_enabled%d\n",
+                (unsigned long long)SDL_GetTicks64(),n+1,s->players[n].action,frame+1,
+                (unsigned long long)s->players[n].elapsed_ms,s->cast_events[n].ability,s->players[n].facing,s->ray!=NULL);fflush(stderr);
+        }
         drive[n]=(fr_player_drive_input_t){n+1,s->sequence+1,s->players[n].intent.move_x,s->players[n].intent.jump_pressed};
     }
     if(s->sequence==UINT64_MAX) return players_error(err,cap,"Player command sequence exhausted");
     s->sequence++;
-    return fr_player_drive_gpu_submit(s->drive,drive,s->count,err,cap)&&players_publish(v,err,cap);
+    if(!fr_player_drive_gpu_submit(s->drive,drive,s->count,err,cap)||!players_publish(v,err,cap)) return false;
+    if(s->ray) {
+        fr_fire_ray_input_t rays[FR_INPUT_PLAYERS];
+        for(uint32_t n=0;n<s->count;n++) rays[n]=(fr_fire_ray_input_t){n+1,s->sequence,s->players[n].facing,s->cast_events[n].ability==s->fire};
+        if(!fr_fire_ray_gpu_submit(s->ray,rays,s->count,seconds,err,cap)) return false;
+    }
+    return true;
 }
 bool dc_players_status(dc_level_view_t *v,uint32_t n,fr_player_t *p,fr_beaver_body_t *b) {
     if(!v||!v->players||n>=v->players->count||!p||!b) return false;

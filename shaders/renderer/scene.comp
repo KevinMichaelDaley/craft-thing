@@ -116,18 +116,29 @@ uint sprite_slot(uint at) {
 #endif
     return DC_BODY(slot).enabled!=0u?slot:BODY_CAPACITY;
 }
+shared uint cached_sprite_slots[DC_SPRITE_MAX];
+shared Body cached_sprite_bodies[DC_SPRITE_MAX];
+void prepare_sprite_cache() {
+    uint n=gl_LocalInvocationID.x;
+    if(n<DC_SPRITE_MAX) {
+        uint slot=n<sprite_count()?sprite_slot(DC_SPRITE_HEADER_WORDS+n*DC_SPRITE_POSE_WORDS):BODY_CAPACITY;
+        cached_sprite_slots[n]=slot;
+        if(slot<BODY_CAPACITY) cached_sprite_bodies[n]=DC_BODY(slot);
+    }
+    barrier();
+}
 bool sprite_body(uint id) {
     for(uint n=0u;n<sprite_count();n++) {
         uint at=DC_SPRITE_HEADER_WORDS+n*DC_SPRITE_POSE_WORDS;
-        if(sprite_words[at]==id&&sprite_slot(at)<BODY_CAPACITY) return true;
+        if(sprite_words[at]==id&&cached_sprite_slots[n]<BODY_CAPACITY) return true;
     }
     return false;
 }
 void sprite_surface(uvec2 cell,inout Surface surface,inout float coverage,inout float opacity) {
     for(uint n=0u;n<sprite_count();n++) {
-        uint at=DC_SPRITE_HEADER_WORDS+n*DC_SPRITE_POSE_WORDS,slot=sprite_slot(at);
+        uint at=DC_SPRITE_HEADER_WORDS+n*DC_SPRITE_POSE_WORDS,slot=cached_sprite_slots[n];
         if(slot>=BODY_CAPACITY) continue;
-        Body body=DC_BODY(slot);
+        Body body=cached_sprite_bodies[n];
         vec2 local=body_local_point(body,vec2(cell)+.5-vec2(body.x_fp,body.y_fp)/65536.);
         ivec2 p=ivec2(floor(local))+ivec2(sprite_words[at+8u],sprite_words[at+9u]);
         uvec2 size=uvec2(sprite_words[at+3u],sprite_words[at+4u]);
@@ -278,6 +289,7 @@ uint refresh_palette(uint atlas) {
 }
 void main() {
     uint i=gl_GlobalInvocationID.x;
+    if(SCENE_PHASE==3u||SCENE_PHASE==6u||SCENE_PHASE==7u||SCENE_PHASE==9u) prepare_sprite_cache();
     if(SCENE_PHASE==7u) {
         if(i!=0u||params.force_light>=params.width*params.height) return;
         float opacity;uint known;surface_at(params.force_light,opacity,known);

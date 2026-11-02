@@ -16,8 +16,10 @@
 #include "dungeoncraft/chunk.h"
 #include "benchmark_brush.h"
 #include "benchmark_clock.h"
+#include "beaver_fire_demo.h"
 #include "level.h"
 #include "player_session.h"
+#include "player_clock.h"
 #include "prop_scene.h"
 #include "session.h"
 #include "smoke_audit.h"
@@ -1100,7 +1102,11 @@ int main(int argc, char **argv) {
     char heat_directory[]="build/heat_bench_interactive_XXXXXX";
     char smoke_directory[]="build/smoke_box_interactive_XXXXXX";
     char bonfire_directory[]="build/bonfire_interactive_XXXXXX";
-    bool play=false;
+#ifdef DC_BEAVER_FIRE_DEMO
+    bool play=true,fire_demo=true;
+#else
+    bool play=false,fire_demo=false;
+#endif
     char play_directory[]="build/beaver_play_XXXXXX";
     char scripted_directory[] = "build/ui_input_XXXXXX";
     if (scripted_input && !mkdtemp(scripted_directory)) {
@@ -1210,7 +1216,7 @@ int main(int argc, char **argv) {
         fprintf(stderr,"DC_BENCHMARK_WATER_POUR requires visible x,y,radius (radius <=32)\n");return 1;
     }
     char err[256] = {0};
-    uint32_t play_surface=96;
+    uint32_t play_surface=fire_demo?VIEW_HEIGHT-32:96;
     dc_ground_profile_t play_ground={.width=1,.soil_depth=1,.surface=&play_surface};
     dc_level_view_t *view = play ? dc_level_view_create_ground(directory,seed,&play_ground,err,sizeof(err)) :
         scene_path ? dc_prop_scene_create(directory,seed,scene_path,err,sizeof(err)) :
@@ -1218,7 +1224,8 @@ int main(int argc, char **argv) {
         (smoke_box?dc_level_view_create_smoke_box(directory,seed,err,sizeof(err)):dc_level_view_create(directory, seed, err, sizeof(err))));
     if (!view) { fprintf(stderr, "Level create: %s\n", err); return 1; }
     if(play&&(!dc_level_view_pan_pixels(view,0,-INITIAL_CHUNK_Y*64)||
-        !dc_level_view_wait_visible(view,120000,err,sizeof(err))||!dc_players_enable(view,err,sizeof(err)))) {
+        !dc_level_view_wait_visible(view,120000,err,sizeof(err))||
+        !(fire_demo?dc_beaver_fire_setup(view,err,sizeof(err)):dc_players_enable(view,err,sizeof(err))))) {
         fprintf(stderr,"Player setup: %s\n",err);dc_level_view_destroy(view,err,sizeof(err));return 1;
     }
     if (scene_path && !dc_prop_scene_load(view,scene_path,err,sizeof(err))) {
@@ -1453,6 +1460,7 @@ int main(int argc, char **argv) {
         uint64_t now = SDL_GetPerformanceCounter();
         double elapsed = (double)(now - previous) / (double)SDL_GetPerformanceFrequency();
         previous = now;
+        if(play) dc_players_frame_time(view,paused?0.:elapsed);
         if (elapsed > 0.25) elapsed = 0.25;
         if(play) dc_players_ui(view,entering_seed||paused);
         if (running && !entering_seed && (!play||(!paused&&!dc_players_gameplay(view))) &&
@@ -1469,11 +1477,11 @@ int main(int argc, char **argv) {
                 step_seconds = dc_benchmark_step_seconds((float)elapsed,(float)tick_seconds);
             if (step_seconds > 0.25f) step_seconds = 0.25f;
             if(play) {
-                uint32_t ticks=single_step||benchmark_frames?1u:(uint32_t)(accumulator/tick_seconds);
-                if(ticks>15u) ticks=15u;
-                for(uint32_t n=0;n<ticks&&running;n++)
+                dc_player_clock_plan_t clock={0};
+                if(!dc_player_clock_plan(accumulator,tick_seconds,single_step||benchmark_frames,&clock)) {failed=true;running=false;}
+                for(uint32_t n=0;n<clock.ticks&&running;n++)
                     if(!dc_level_view_step_timed(view,(float)tick_seconds,err,sizeof(err))) {failed=true;running=false;}
-                accumulator=fmax(0.,accumulator-ticks*tick_seconds);
+                accumulator=clock.remainder;
             } else if (!dc_level_view_step_timed(view, step_seconds, err, sizeof(err))) {
                 failed = true; running = false;
             }
@@ -1521,7 +1529,7 @@ int main(int argc, char **argv) {
         if(running&&bonfire&&!benchmark_frames&&!dc_level_view_bonfire_presentation(view,bonfire_focus,paused)) {
             fprintf(stderr,"Cannot configure bonfire presentation\n");failed=true;running=false;
         }
-        if (running && !update_demo_title(view, seed, zoom, paused, entering_seed,
+        if (running && !fire_demo && !update_demo_title(view, seed, zoom, paused, entering_seed,
                                           seed_error, seed_text, previous_title,heat_bench,heat_mode,smoke_box,smoke_mode,bonfire)) {
             snprintf(err, sizeof(err), "Cannot update world status");
             failed = true; running = false;

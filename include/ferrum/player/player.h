@@ -7,6 +7,8 @@
 #include "dungeoncraft/chunk.h"
 
 #define FR_PLAYER_KEY_CAP 64u
+#define FR_PLAYER_CAST_FRAME_MS 80u
+#define FR_PLAYER_CAST_EVENT_FRAME 5u
 
 typedef enum {
     FR_PLAYER_ATTRIBUTE = 1, FR_PLAYER_STAT, FR_PLAYER_ABILITY
@@ -93,7 +95,7 @@ bool fr_player_has_ability(const fr_player_t *player, uint32_t id);
  * publishing a complete intent. Invalid input leaves previous intent intact. */
 bool fr_player_set_intent(fr_player_t *player, fr_player_intent_t intent);
 /** Read placeholder timing: idle 1x100ms, walk 6x100ms looping,
- * chew 8 source frames at 100ms (phased), cast 8x100ms one-shot.
+ * chew 8 source frames at 100ms (phased), cast 8x80ms one-shot.
  * Invalid action leaves output intact. */
 bool fr_player_clip(fr_player_action_t action, fr_player_clip_t *out);
 /** Transition resets time. Same action preserves time unless restart=true. */

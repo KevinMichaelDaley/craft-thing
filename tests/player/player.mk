@@ -8,7 +8,7 @@ test_player_input: build/player_input_tests
 test_player: test_player_input
 build/player_input_sdl_tests: tests/player/input_sdl_tests.c src/player/input_sdl.c src/player/input.c include/ferrum/player/input_sdl.h include/ferrum/player/input.h
 	mkdir -p build
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/player/input_sdl.c src/player/input.c -o $@ $(shell pkg-config --libs sdl2) -lm
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/player/input_sdl.c src/player/input.c -o $@ $(shell pkg-config --libs sdl2) -lm -Wl,--wrap=SDL_WasInit -Wl,--wrap=SDL_GetKeyboardState
 .PHONY: test_player_input_sdl
 test_player_input_sdl: build/player_input_sdl_tests
 	./build/player_input_sdl_tests
@@ -32,7 +32,7 @@ test_player_runtime: build/player_runtime_tests
 	./build/player_runtime_tests
 test: test_player_runtime
 build/player_fire_ray_gpu_tests: tests/player/fire_ray_gpu_tests.c src/player/fire_ray_gpu.c include/ferrum/player/fire_ray_gpu.h build/fluid_tests build/shaders/player_fire_ray.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/player/fire_ray_gpu.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/player/fire_ray_gpu.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=fr_renderer_submit
 .PHONY: test_player_fire_ray_gpu
 test_player_fire_ray_gpu: build/player_fire_ray_gpu_tests
 	./build/player_fire_ray_gpu_tests
@@ -48,11 +48,30 @@ test_beaver_fire_plan: build/beaver_fire_plan_tests
 	./build/beaver_fire_plan_tests
 test: test_beaver_fire_plan
 build/beaver_fire_runtime_tests: tests/app/beaver_fire_runtime_tests.c src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c build/dungeoncraft_quarter_native
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_beaver_fire_runtime
 test_beaver_fire_runtime: build/beaver_fire_runtime_tests
 	./build/beaver_fire_runtime_tests
 test: test_beaver_fire_runtime
+build/beaver_fire_demo: build/beaver_fire_main.o build/dungeoncraft_quarter_native build/shaders/player_fire_ray.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) build/beaver_fire_main.o $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/beaver_fire_main.o: src/app/main.c src/app/beaver_fire_demo.h src/app/player_session.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DDC_BEAVER_FIRE_DEMO=1 -c $< -o $@
+.PHONY: beaver-fire-demo
+beaver-fire-demo: build/beaver_fire_demo
+build/beaver_fire_runtime_tests: build/shaders/player_fire_ray.comp.spv
+build/player_clock_tests: tests/app/player_clock_tests.c src/app/player_clock.c src/app/player_clock.h src/player/control.c src/player/input.c $(PLAYER_SRC)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/player_clock.c src/player/control.c src/player/input.c $(PLAYER_SRC) -o $@ -lm
+.PHONY: test_player_clock
+test_player_clock: build/player_clock_tests
+	./build/player_clock_tests
+test: test_player_clock
+build/smoke_profile_probe: tests/app/smoke_profile_probe.c src/app/smoke_profile.c src/app/smoke_profile.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/smoke_profile.c -o $@
+.PHONY: test_smoke_profile
+test_smoke_profile: build/smoke_profile_probe
+	python3 tests/app/smoke_profile_tests.py
+test: test_smoke_profile
 src/player/beaver_imported.h: assets/player/beaver/beaver_cast.ase assets/player/beaver/beaver_cast.mapping.json assets/player/beaver/beaver_chomp.ase assets/player/beaver/beaver_chomp.mapping.json scripts/props/beaver_import.py scripts/props/ase_reader.py
 	python3 scripts/props/beaver_import.py
 build/beaver_asset_tests build/beaver_atlas: src/player/beaver_imported.h

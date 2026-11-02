@@ -50,8 +50,9 @@ bool fr_input_sdl_event(fr_input_t *i,const SDL_Event *event) {
     case SDL_WINDOWEVENT:
         if (event->window.event==SDL_WINDOWEVENT_FOCUS_LOST) fr_input_focus(i,false);
         else if (event->window.event==SDL_WINDOWEVENT_FOCUS_GAINED) {
-            for(unsigned n=0;n<FR_INPUT_DEVICES;n++) if(i->devices[n].used)
-                input_sdl_block_held(i,i->devices[n].id,i->devices[n].id!=FR_INPUT_KEYBOARD_DEVICE);
+            /* SDL's snapshot already contains later queued key events. The
+             * ordered event stream owns rearming; focus loss retains blocks
+             * for controls that were actually held before it. */
             fr_input_focus(i,true);
         }
         return false;
