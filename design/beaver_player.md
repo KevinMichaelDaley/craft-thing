@@ -39,7 +39,7 @@ and 32 logical action IDs; these are storage bounds, not RPG rules.
 `fr_player_control_tick` arbitrates fire before ice on simultaneous presses,
 finishes active casts before other actions, and latches ability/target at windup.
 Rendering never emits gameplay events. Input tests cover routing and authoritative
-animation phases; actual SDL/application integration remains required.
+animation phases; the SDL adapter and live application now consume these actions.
 
 Animation uses integer elapsed presentation milliseconds. The logical walk hook
 remains; the live build shows supplied idle artwork until a walk asset exists.
@@ -82,7 +82,8 @@ storm. C held is the provisional chew input. Keyboard targeting uses the mouse
 world location in that player's viewport. Controller proposal: left stick moves,
 south face button jumps, west fires, north casts ice, east holds chew, right stick
 aims a bounded world target. Join/disconnect/reconnect semantics belong to
-`ct-1i55`; these bindings do not claim input is already implemented. Key repeats
+`ct-1i55`; bindings and device ownership are implemented, while split-screen
+cameras and independent viewport targeting remain outstanding. Key repeats
 must not duplicate press actions. Disconnect/focus loss must clear intents.
 
 ## Existing contracts and concrete gaps
@@ -179,4 +180,24 @@ Run `./tools/with-vulkan make build/beaver_atlas` and
 little-endian source maps, and a contact sheet in `build/beaver_assets/`.
 Rows in `contact_sheet.bmp` are idle, walk, chew and cast; the sheet is an asset review, not an actual
 application screenshot. Runtime player animation and persistent reaction
-feedback are still unimplemented acceptance criteria on `ct-xsll`.
+feedback now reference canonical reactive owners; pose-dependent physical
+deformation and exposure remain outstanding acceptance criteria on `ct-xsll`.
+
+## Localized chewing work prerequisite
+
+`fr_chew_work_advance` (`ct-c9qg`) accumulates explicitly tuned Q16 mass/second
+effort against one freshly validated tree parcel's current dry species mass.
+The caller supplies fuel + char + inert mass; `fr_reactive_state_t.dry_mass_fp`
+is reference metadata and must not substitute for current inventory. Tests use
+the shared wood/dense-wood profiles and occupied fractions, with no RPG formula.
+Only elapsed time in a valid chewing work phase belongs in this function.
+Release pauses work on the same target. Lost eligibility or changed parcel,
+generation, material or mass resets it. Saturation caps work at one bite, so
+stalls never accumulate removal of later parcels. Each player owns its budget.
+
+Readiness mutates no world and awards no inventory. The actual removal transaction
+must revalidate reach/ownership/stock, reserve inventory and structural release,
+transfer only bitten parcels and publish unsupported remnants as real bodies.
+Only its successful commit may call `fr_chew_work_committed`; failed attempts
+retain progress and stale acknowledgements cannot consume it. This prerequisite
+does not complete the GPU conservation or live chewing acceptance in `ct-unkh`.

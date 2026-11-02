@@ -4,8 +4,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/** Freshly validated, localized tree parcel. Mass comes from its authoritative
- * dry inventory, not a count of canvas pixels or an assumed RPG attribute.
+/** Freshly validated, localized tree parcel. dry_mass_fp is current fuel +
+ * char + inert inventory, not reactive dry_mass_fp reference metadata, a count
+ * of canvas pixels or an assumed RPG attribute. Reject sums above UINT32_MAX.
  * eligible includes reach, tree membership and current world availability. */
 typedef struct {
     uint64_t parcel_id;
