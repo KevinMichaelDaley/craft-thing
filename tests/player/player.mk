@@ -1,4 +1,11 @@
 BEAVER_SRC = src/player/beaver_art.c src/player/beaver_asset.c
+build/player_fire_ray_schedule_tests: tests/player/fire_ray_schedule_tests.c src/player/fire_ray_gpu.c src/fire/gas.c
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections $< src/fire/gas.c -Wl,--gc-sections -o $@ -lm
+.PHONY: test_player_fire_ray_schedule
+test_player_fire_ray_schedule: build/player_fire_ray_schedule_tests
+	./build/player_fire_ray_schedule_tests
+test_player: test_player_fire_ray_schedule
 build/player_input_tests: tests/player/input_tests.c src/player/input.c src/player/control.c $(PLAYER_SRC) include/ferrum/player/input.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/player/input.c src/player/control.c $(PLAYER_SRC) -o $@ -lm
