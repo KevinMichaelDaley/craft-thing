@@ -1,5 +1,6 @@
 BEAVER_SRC = src/player/beaver_art.c src/player/beaver_asset.c
 build/player_chew_tests: tests/player/chew_tests.c src/player/chew.c src/fire/material_profile.c include/ferrum/player/chew.h
+build/player_chew_tests: src/fire/material_profile_data.inc
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/player/chew.c src/fire/material_profile.c -o $@ -lm
 .PHONY: test_player_chew

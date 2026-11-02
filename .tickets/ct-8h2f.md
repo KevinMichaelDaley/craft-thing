@@ -35,3 +35,7 @@ Live Vulkan play path now exists (429887cc). Core input7/7 and SDL3/3 pass after
 **2026-11-02T02:00:51Z**
 
 Actual focus race reproduced and fixed: SDL global key snapshot during focus-gained included a later queued Q down, blocking that genuine press. Handler now uses ordered events and prior held release blocks. SDL regression4/4, input7/7. User live demo PID40605 received actual Q events and reached frame6; user closed it. Rebuilt80ms PID41100 logs wall11343 cast frame1 elapsed10, wall11775 frame6 elapsed440 event1, wall12059 idle. Presentation sampling (~70ms GPU frames) now drives action elapsed independently of one fixed physical tick, with timestamp clipping for new press. Boundaries399/400,479/480,639/640 pass; skipped emission retained once. Source ASE unchanged; runtime export timing80ms. No user-authored walk yet: live movement shows idle only.
+
+**2026-11-02T15:35:35Z**
+
+Build repair: the GREEN commit wiring player actions made bonfire_display_tests and thermal_bench_display_tests fail to link (undefined dc_players_step/dc_players_destroy). Fixed Makefile rules 2113/2115 to link $(filter-out main.o level.o,$(QUARTER_APP_OBJ)) so the player session stack resolves without duplicating level.c (both test TUs include level.c directly). Both binaries build and bonfire_display_tests passes 0 failures on this machine.
