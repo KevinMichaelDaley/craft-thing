@@ -47,6 +47,8 @@ bool dc_gpu_marker_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                                                 1, &info, NULL, &gpu->marker_pipeline);
     vkDestroyShaderModule(gpu->device, module, NULL);
     if (result != VK_SUCCESS) return error(err, cap, "Cannot create marker pipeline");
+    dc_gpu_name_object(gpu->device, VK_OBJECT_TYPE_PIPELINE,
+                       (uint64_t)gpu->marker_pipeline, "marker");
     return true;
 }
 

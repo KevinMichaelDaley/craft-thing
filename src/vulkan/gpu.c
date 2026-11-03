@@ -138,6 +138,36 @@ static void pipeline_cache_save(dc_gpu_t *gpu) {
     gpu->pipeline_cache=VK_NULL_HANDLE;
 }
 
+static VKAPI_ATTR VkBool32 VKAPI_CALL dc_gpu_validation_callback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+    VkDebugUtilsMessageTypeFlagsEXT types,
+    const VkDebugUtilsMessengerCallbackDataEXT *data, void *user) {
+    (void)types;
+    (void)data;
+    dc_gpu_t *gpu = user;
+    if (gpu && severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+        ++gpu->validation_errors;
+    return VK_FALSE;
+}
+
+uint32_t dc_gpu_validation_errors(const dc_gpu_t *gpu) {
+    return gpu ? gpu->validation_errors : 0u;
+}
+
+static void dc_gpu_create_validation_messenger(dc_gpu_t *gpu) {
+    PFN_vkCreateDebugUtilsMessengerEXT create =
+        (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
+            gpu->instance, "vkCreateDebugUtilsMessengerEXT");
+    if (!create) return;
+    VkDebugUtilsMessengerCreateInfoEXT messenger = {
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+        .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+        .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
+        .pfnUserCallback = dc_gpu_validation_callback,
+        .pUserData = gpu};
+    create(gpu->instance, &messenger, NULL, &gpu->validation_messenger);
+}
+
 void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu) {fr_gpu_reactive_checkpoint_clear_pending(gpu);free(gpu->checkpoint_chunks);}
     if (!gpu) return;
@@ -175,6 +205,12 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu->memory) vkFreeMemory(gpu->device, gpu->memory, NULL);
     if (gpu->device) vkDestroyDevice(gpu->device, NULL);
     if (gpu->surface) vkDestroySurfaceKHR(gpu->instance, gpu->surface, NULL);
+    if (gpu->validation_messenger) {
+        PFN_vkDestroyDebugUtilsMessengerEXT destroy =
+            (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
+                gpu->instance, "vkDestroyDebugUtilsMessengerEXT");
+        if (destroy) destroy(gpu->instance, gpu->validation_messenger, NULL);
+    }
     if (gpu->instance) vkDestroyInstance(gpu->instance, NULL);
     if (gpu->window) { SDL_DestroyWindow(gpu->window); SDL_QuitSubSystem(SDL_INIT_VIDEO); }
     free(gpu);
@@ -269,6 +305,10 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         .pushConstantRangeCount = 1, .pPushConstantRanges = &range };
     if (vkCreatePipelineLayout(gpu->device, &pipeline_layout_info, NULL, &gpu->pipeline_layout) != VK_SUCCESS)
         return error(err, cap, "Cannot create compute pipeline layout");
+    dc_gpu_name_object(gpu->device, VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+                       (uint64_t)gpu->pipeline_layout, "main_layout");
+    dc_gpu_name_object(gpu->device, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
+                       (uint64_t)gpu->set_layout, "main_set0");
     VkShaderModule shader = VK_NULL_HANDLE;
     if (!dc_gpu_load_shader_module(gpu, path, &shader, err, cap)) return false;
     VkComputePipelineCreateInfo pipeline_info = { .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
@@ -341,6 +381,11 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     }
     const char *validation = getenv("DC_VK_VALIDATE");
     const char *layer = "VK_LAYER_KHRONOS_validation";
+    const char *debug_utils_extension = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+    if (validation && validation[0] == '1' && !gpu->window) {
+        instance_info.enabledExtensionCount = 1;
+        instance_info.ppEnabledExtensionNames = &debug_utils_extension;
+    }
     if (validation && validation[0] == '1') {
         uint32_t layer_count = 0;
         vkEnumerateInstanceLayerProperties(&layer_count, NULL);
@@ -360,6 +405,7 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     if (instance_result != VK_SUCCESS) {
         error(err, cap, "Cannot create Vulkan 1.3 instance"); goto fail;
     }
+    if (validation && validation[0] == '1') dc_gpu_create_validation_messenger(gpu);
     gpu_startup_trace("Vulkan instance",started);
     if (gpu->window && !SDL_Vulkan_CreateSurface(gpu->window, gpu->instance, &gpu->surface)) {
         error(err, cap, SDL_GetError()); goto fail;

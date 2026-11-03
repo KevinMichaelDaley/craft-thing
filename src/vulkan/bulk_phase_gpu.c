@@ -72,6 +72,12 @@ static bool create_phase_pipeline(dc_gpu_t *gpu,const char *path,
     VkResult result=vkCreateComputePipelines(gpu->device,VK_NULL_HANDLE,1,&info,NULL,
         pipeline);
     vkDestroyShaderModule(gpu->device,module,NULL);
+    if(result==VK_SUCCESS) {
+        char name[96];
+        snprintf(name,sizeof(name),"bulk:%s",path);
+        dc_gpu_name_object(gpu->device,VK_OBJECT_TYPE_PIPELINE,
+            (uint64_t)*pipeline,name);
+    }
     return result==VK_SUCCESS||error(err,cap,failure);
 }
 static bool ensure_pipeline(dc_gpu_t *gpu,char *err,uint32_t cap) {

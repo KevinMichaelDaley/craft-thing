@@ -119,6 +119,9 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"fluid pipeline end %s phase%u result%d\n",load_path,phase,result);
     vkDestroyShaderModule(gpu->device, shader, NULL);
     if (result != VK_SUCCESS) return error(err, cap, "Cannot create Eulerian fluid pipeline");
+    char name[96];
+    snprintf(name, sizeof(name), "fluid:%s:phase%u", path, phase);
+    dc_gpu_name_object(gpu->device, VK_OBJECT_TYPE_PIPELINE, (uint64_t)*pipeline, name);
     return true;
 }
 

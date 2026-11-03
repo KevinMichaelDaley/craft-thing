@@ -67,6 +67,8 @@ struct dc_gpu {
     struct fr_gas_gpu *gas;
     struct dc_gpu_authored_stage *authored_stage;
     VkInstance instance;
+    VkDebugUtilsMessengerEXT validation_messenger;
+    uint32_t validation_errors;
     VkPhysicalDevice physical;
     VkDevice device;
     VkPipelineCache pipeline_cache;
@@ -545,5 +547,19 @@ float *dc_gpu_shape_colors(dc_gpu_t *gpu,uint32_t absolute_word);
 void dc_gpu_read_chunk_colors(dc_gpu_t *gpu,uint32_t slot,dc_chunk_colors_t *colors);
 void dc_gpu_write_chunk_colors(dc_gpu_t *gpu,uint32_t slot,const dc_chunk_colors_t *colors);
 void dc_gpu_record_component_baseline(dc_gpu_t *gpu);
+
+/** Tag a Vulkan object for validation-layer diagnostics; no-op without debug utils. */
+static inline void dc_gpu_name_object(VkDevice device, VkObjectType type,
+                                      uint64_t handle, const char *name) {
+    static PFN_vkSetDebugUtilsObjectNameEXT set_name;
+    if (!set_name)
+        set_name = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(
+            device, "vkSetDebugUtilsObjectNameEXT");
+    if (!set_name) return;
+    VkDebugUtilsObjectNameInfoEXT info = {
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+        .objectType = type, .objectHandle = handle, .pObjectName = name};
+    set_name(device, &info);
+}
 
 #endif

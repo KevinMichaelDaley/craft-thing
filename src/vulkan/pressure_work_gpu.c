@@ -45,6 +45,10 @@ bool dc_gpu_pressure_work_init(dc_gpu_t *g,char *err,uint32_t cap) {
         .setLayoutCount=2,.pSetLayouts=sets,.pushConstantRangeCount=1,.pPushConstantRanges=&range};
     if(vkCreatePipelineLayout(g->device,&layout,NULL,&g->pressure_pipeline_layout)!=VK_SUCCESS)
         return error(err,cap,"Cannot create pressure work pipeline layout");
+    dc_gpu_name_object(g->device,VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+        (uint64_t)g->pressure_pipeline_layout,"pressure_layout");
+    dc_gpu_name_object(g->device,VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
+        (uint64_t)g->pressure_work_set_layout,"pressure_set1");
     VkShaderModule module;
     if(!dc_gpu_load_shader_module(g,"build/shaders/pressure_work.comp.spv",&module,err,cap)) return false;
     bool okay=true;
@@ -57,6 +61,12 @@ bool dc_gpu_pressure_work_init(dc_gpu_t *g,char *err,uint32_t cap) {
                 .pSpecializationInfo=&specialization},.layout=g->pressure_pipeline_layout};
         okay=vkCreateComputePipelines(g->device,g->pipeline_cache,1,&info,NULL,
             &g->pressure_work_pipelines[phase])==VK_SUCCESS;
+        if(okay) {
+            char name[64];
+            snprintf(name,sizeof(name),"pressure_work%u",phase);
+            dc_gpu_name_object(g->device,VK_OBJECT_TYPE_PIPELINE,
+                (uint64_t)g->pressure_work_pipelines[phase],name);
+        }
     }
     vkDestroyShaderModule(g->device,module,NULL);
     return okay||error(err,cap,"Cannot create pressure work pipelines");
