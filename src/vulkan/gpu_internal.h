@@ -562,4 +562,10 @@ static inline void dc_gpu_name_object(VkDevice device, VkObjectType type,
     set_name(device, &info);
 }
 
+/** Selection score for a physical device: negative rejects the candidate,
+ * higher wins. Ties keep enumeration order so selection is deterministic. */
+int dc_gpu_device_score(const VkPhysicalDeviceProperties *properties,
+                        VkDeviceSize max_storage, VkDeviceSize required,
+                        bool compute, bool transfer, bool present);
+
 #endif

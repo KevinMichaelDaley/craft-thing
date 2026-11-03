@@ -39,3 +39,11 @@ bool dc_gpu_pick_device(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t c
     if (!gpu->physical) return error(err, cap, "No Vulkan 1.3 compute device supports this grid");
     return true;
 }
+int dc_gpu_device_score(const VkPhysicalDeviceProperties *properties,
+                        VkDeviceSize max_storage, VkDeviceSize required,
+                        bool compute, bool transfer, bool present) {
+    if (compute && transfer && present && properties->apiVersion >= VK_API_VERSION_1_3 &&
+        max_storage >= required && properties->deviceType != VK_PHYSICAL_DEVICE_TYPE_CPU)
+        return 1;
+    return -1;
+}

@@ -1952,10 +1952,12 @@ build/bulk_phase_gpu_tests: tests/vulkan/bulk_phase_gpu_tests.c $(GPU_OBJ) $(CHU
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/bulk_phase_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/fluid_binding_tests: tests/vulkan/fluid_binding_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/fluid_binding_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
-.PHONY: test_fluid_binding
-test_fluid_binding: build/fluid_binding_tests
-	./build/fluid_binding_tests
-test: test_fluid_binding
+build/device_selection_tests: tests/vulkan/device_selection_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/device_selection_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+.PHONY: test_device_selection
+test_device_selection: build/device_selection_tests
+	./build/device_selection_tests
+test: test_device_selection
 .PHONY: test_bulk_phase test_bulk_phase_gpu test_bulk_rheology
 test: test_bulk_phase test_bulk_phase_gpu test_bulk_rheology
 test_bulk_phase: build/bulk_phase_tests
