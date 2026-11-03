@@ -21,6 +21,9 @@ bool fr_gas_gpu_enable(dc_gpu_t *gpu,const fr_gas_model_t *model,
 bool fr_gas_gpu_step(dc_gpu_t *gpu,float seconds,char *err_buf,uint32_t err_cap);
 /** Configure reference-atmosphere gravity in cells per physical second squared. */
 bool fr_gas_gpu_set_gravity(dc_gpu_t *gpu,float gravity,char *err_buf,uint32_t err_cap);
+/** Configure a locked gentle horizontal crosswind target in cells per second.
+ * Zero wind preserves the exact still-air behavior and stock. */
+bool fr_gas_gpu_set_wind(dc_gpu_t *gpu,float wind,char *err_buf,uint32_t err_cap);
 /** Select a validated acoustic policy without changing stock or physical time. */
 bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *gpu,uint32_t policy,char *err_buf,uint32_t err_cap);
 /** Open/close gas-flow faces in a physical-cell rectangle. Axis0 is the right
