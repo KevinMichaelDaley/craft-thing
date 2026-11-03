@@ -2,7 +2,7 @@
 id: ctlo-ao7l
 status: open
 deps: [ctlo-ck1i, ctlo-6syy, ctlo-h9of]
-links: []
+links: [ct-e6fr]
 created: 2026-10-24T22:06:19Z
 type: feature
 priority: 1

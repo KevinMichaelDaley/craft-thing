@@ -2,7 +2,7 @@
 id: ct-e6fr
 status: open
 deps: []
-links: []
+links: [ctlo-ao7l]
 created: 2026-11-03T12:23:48Z
 type: bug
 priority: 1
