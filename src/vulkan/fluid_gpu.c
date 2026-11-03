@@ -165,8 +165,14 @@ static void bind_fluid_mode(dc_gpu_t *gpu,uint32_t mode,bool projection) {
     if(!projection&&mode==FLUID_DISPLACEMENT_MODE) pipeline=gpu->fluid_displacement_pipelines[0];
     if(!projection&&mode==FLUID_LATERAL_DISPLACEMENT_MODE) pipeline=gpu->fluid_displacement_pipelines[1];
     vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline);
-    if(projection) vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
-        gpu->pressure_pipeline_layout,1,1,&gpu->pressure_work_descriptor,0,NULL);
+    if(projection) {
+        VkDescriptorSet sets[]={gpu->descriptor,gpu->pressure_work_descriptor};
+        vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
+            gpu->pressure_pipeline_layout,0,2,sets,0,NULL);
+    } else {
+        vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
+            gpu->pipeline_layout,0,1,&gpu->descriptor,0,NULL);
+    }
 }
 
 void dc_gpu_fluid_destroy(dc_gpu_t *gpu) {
@@ -290,6 +296,8 @@ static void record_projection_begin(dc_gpu_t *gpu) {
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->hydro_head_pipeline);
+    vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
+        gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     for (uint32_t phase = 0; phase < 2; phase++) {
         push[2] = phase;
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
@@ -358,6 +366,8 @@ static void record_aperture_cache(dc_gpu_t *gpu, bool vertical, uint32_t leaves)
     uint32_t lines = vertical ? gpu->width : gpu->height;
     uint32_t push[8] = {gpu->width, gpu->height, vertical, 0, leaves};
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->fluid_aperture_pipeline);
+    vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
+        gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     aperture_dispatch(gpu, lines * ((leaves + 3u) / 4u));
     for (uint32_t nodes = leaves / 2; nodes; nodes /= 2) {
