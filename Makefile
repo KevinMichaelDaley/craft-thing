@@ -969,7 +969,6 @@ build/siege_coal_tests: tests/app/siege_coal_tests.c $(SIEGE_SCENE_SRC) $(PERFOR
 build/siege_coal_display_tests: tests/app/siege_coal_display_tests.c tests/app/siege_coal_tests.c $(SIEGE_SCENE_SRC) $(PERFORMANCE_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) tests/app/siege_coal_display_tests.c src/app/siege_scene.c src/app/smoke_profile.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_siege_coal
-test: test_siege_coal
 test_siege_coal: build/siege_coal_tests
 	./build/siege_coal_tests
 .PHONY: siege-coal-display
