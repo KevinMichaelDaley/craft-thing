@@ -1015,6 +1015,9 @@ build/quarter_native_component_extraction_tests: tests/vulkan/component_extracti
 build/component_world_tests: tests/app/component_world_tests.c Makefile src/app/level.h src/app/view_config.h $(filter-out src/app/main.c,$(NATIVE_SRC)) build/quarter_native_rigid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
 build/shutdown_tests: tests/app/shutdown_tests.c Makefile src/app/level.h src/app/shutdown.h src/app/view_config.h $(filter-out src/app/main.c,$(NATIVE_SRC)) build/quarter_native_rigid_tests
+build/shutdown_tests: src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h build/shaders/contacts.comp.spv
+build/shutdown_tests: build/shaders/structural_carve.comp.spv build/shaders/runtime/structural_carve.comp.spv
+build/shutdown_tests: src/fire/material_profile_data.inc include/dungeoncraft/coating_layout.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out src/app/main.c,$(NATIVE_SRC)) -o $@ $(LDLIBS)
 .PHONY: test_shutdown
 test_shutdown: build/shutdown_tests
@@ -1880,14 +1883,14 @@ test: test_combustion
 test_combustion: build/combustion_tests
 	./build/combustion_tests
 build/reactive_state_tests: tests/fire/reactive_state_tests.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_state.h include/ferrum/fire/material_profile.h src/fire/material_profile_data.inc
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/reactive_state_tests.c $(REACTIVE_STATE_SRC) -o $@ -lm
 build/shock_exposure_tests: tests/fire/shock_exposure_tests.c $(REACTIVE_STATE_SRC) src/fire/combustion.c include/ferrum/fire/reactive_state.h include/ferrum/fire/material_profile.h include/ferrum/fire/combustion.h src/fire/material_profile_data.inc include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/coating_layout.h include/dungeoncraft/char_enthalpy.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/shock_exposure_tests.c $(REACTIVE_STATE_SRC) src/fire/combustion.c -o $@ -lm
 .PHONY: test_shock_exposure
 test_shock_exposure: build/shock_exposure_tests
 	./build/shock_exposure_tests
 test: test_shock_exposure
-	mkdir -p build
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/reactive_state_tests.c $(REACTIVE_STATE_SRC) -o $@ -lm
 .PHONY: test_reactive_state
 test: test_reactive_state
 test_reactive_state: build/reactive_state_tests
