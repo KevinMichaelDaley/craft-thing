@@ -1857,6 +1857,12 @@ test: test_combustion
 test_combustion: build/combustion_tests
 	./build/combustion_tests
 build/reactive_state_tests: tests/fire/reactive_state_tests.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_state.h include/ferrum/fire/material_profile.h src/fire/material_profile_data.inc
+build/shock_exposure_tests: tests/fire/shock_exposure_tests.c $(REACTIVE_STATE_SRC) src/fire/combustion.c include/ferrum/fire/reactive_state.h include/ferrum/fire/material_profile.h include/ferrum/fire/combustion.h src/fire/material_profile_data.inc include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/coating_layout.h include/dungeoncraft/char_enthalpy.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/shock_exposure_tests.c $(REACTIVE_STATE_SRC) src/fire/combustion.c -o $@ -lm
+.PHONY: test_shock_exposure
+test_shock_exposure: build/shock_exposure_tests
+	./build/shock_exposure_tests
+test: test_shock_exposure
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/reactive_state_tests.c $(REACTIVE_STATE_SRC) -o $@ -lm
 .PHONY: test_reactive_state

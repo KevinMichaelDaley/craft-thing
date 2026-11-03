@@ -241,3 +241,9 @@ bool fr_reactive_owner_valid(const fr_reactive_owner_t *o,char *err,uint32_t cap
             error(err,cap,"Invalid reactive particle identity");
     return error(err,cap,"Unknown reactive owner kind");
 }
+bool fr_reactive_expose_shock(const fr_reactive_profile_t *profile,
+    const fr_reactive_state_t *state, double declared_energy,
+    fr_reactive_state_t *out, double *deposited, char *err, uint32_t cap) {
+    (void)profile;(void)state;(void)declared_energy;(void)out;(void)deposited;
+    return error(err,cap,"Shock exposure interface is not implemented");
+}

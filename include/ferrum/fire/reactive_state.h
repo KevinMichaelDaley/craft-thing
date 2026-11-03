@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "dungeoncraft/chunk.h"
+#include "ferrum/fire/material_profile.h"
 
 #define FR_REACTIVE_STATE_ABI 7u
 #define FR_REACTIVE_STATE_WORDS 28u
@@ -95,6 +96,15 @@ bool fr_reactive_state_split(const fr_reactive_state_t *source, uint32_t weight_
                               uint64_t left_id, uint64_t right_id,
                               fr_reactive_state_t *left, fr_reactive_state_t *right,
                               char *err_buf, uint32_t err_cap);
+/** Apply one electrical exposure event to a persistent parcel. The declared
+ * total energy is admitted through the material's electrical conductivity,
+ * blended with water conductivity by wetness, and held as pending shock heat
+ * until the reaction stage consumes it exactly once. Insulators receive a
+ * negligible share; the strike creates no fuel or flammability flag itself. */
+bool fr_reactive_expose_shock(const fr_reactive_profile_t *profile,
+    const fr_reactive_state_t *state, double declared_energy,
+    fr_reactive_state_t *out, double *deposited, char *err_buf,
+    uint32_t err_cap);
 /** Construct an exact world-cell owner key, including negative chunk coordinates. */
 fr_reactive_owner_t fr_reactive_cell_owner(dc_chunk_coord_t chunk, uint32_t local_cell);
 /** Validate a persistent owner key. */
