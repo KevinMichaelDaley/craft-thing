@@ -1,6 +1,6 @@
 ---
 id: ct-ujzd
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-03T17:36:20Z
@@ -22,3 +22,9 @@ Edit the Makefile region around 'test: test_shock_exposure': the recipe lines be
 
 make -n test contains zero overriding-recipe warnings; no repository-root ./test binary is produced by make test; tests/build/default_test_recipe_tests passes; tests/vulkan/gpu_dependency_tests.py reports only genuinely-missing prerequisites if any remain, with the four baseline lint failures either fixed or explicitly waived in the lint itself; the full make -i test completes and its residual failures are each attributed to an open ticket.
 
+
+## Notes
+
+**2026-11-03T18:25:21Z**
+
+Repaired: reactive_state_tests compile recipe returned to its target (no more orphaned mkdir/cc lines on the aggregated test target; no overriding-recipe warnings in make -n test; no stray ./test ELF). Root cause of the four baseline lint failures was my earlier shutdown_tests rule lacking the private prerequisites that direct-source binaries must declare; added gpu_internal.h/contact_shader_contract.h/contacts.comp.spv, both structural_carve modules, material_profile_data.inc and coating_layout.h as continuation prerequisite lines. gpu_dependency_tests 9/9 OK; default_test_recipe_tests 2/0; shutdown_tests 3/0; make test_reactive_state 13/0.
