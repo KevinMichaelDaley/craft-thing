@@ -244,6 +244,31 @@ bool fr_reactive_owner_valid(const fr_reactive_owner_t *o,char *err,uint32_t cap
 bool fr_reactive_expose_shock(const fr_reactive_profile_t *profile,
     const fr_reactive_state_t *state, double declared_energy,
     fr_reactive_state_t *out, double *deposited, char *err, uint32_t cap) {
-    (void)profile;(void)state;(void)declared_energy;(void)out;(void)deposited;
-    return error(err,cap,"Shock exposure interface is not implemented");
+    if(!profile||!state||!out||!deposited||!isfinite(declared_energy)||
+       declared_energy<0||!fr_reactive_state_valid(state,err,cap))
+        return error(err,cap,"Invalid electrical exposure");
+    *out=*state;
+    const fr_reactive_profile_t *water=fr_reactive_profile(DC_MATERIAL_WATER);
+    if(!water) return error(err,cap,"Missing water conductivity profile");
+    double conductivity=profile->electrical_conductivity;
+    double saturation=profile->moisture_capacity>0&&state->dry_mass_fp?
+        (double)state->bound_water_fp/((double)state->dry_mass_fp*
+        profile->moisture_capacity):0.;
+    if(saturation>1.) saturation=1.;
+    double effective=(1.-saturation)*conductivity+saturation*water->electrical_conductivity;
+    if(effective<0.) effective=0.;
+    double admitted=declared_energy*effective;
+    *out=*state;
+    if(admitted>0.) {
+        float share=(float)admitted;
+        if(!isfinite(share)||share<=0.f)
+            return error(err,cap,"Electrical exposure underflow");
+        out->pending_shock_energy+=share;
+        if(!fr_reactive_state_valid(out,err,cap))
+            return error(err,cap,"Electrical exposure corrupted the parcel");
+        *deposited=(double)share;
+    } else {
+        *deposited=0.;
+    }
+    return true;
 }
