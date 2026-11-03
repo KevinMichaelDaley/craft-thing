@@ -217,12 +217,6 @@ static void test_locked_siege_scene_matches_the_manifest_fixture(void) {
     ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, scene.coal_body, 4u, 4u,
                                           &coal_state, &coal_found, err,
                                           sizeof(err)) && coal_found);
-    fr_reactive_record_t alt;
-    bool alt_found = false;
-    (void)(fr_gpu_reactive_read_body(gpu, scene.coal_body, 4u, 33u, &alt,
-                                     &alt_found, err, sizeof(err)) && alt_found);
-    printf("siege coal parcel rest (4,4) found %u alt (4,33) found %u\n",
-           coal_found, alt_found);
     float coal_K = 0.f;
     ASSERT_TRUE(fr_reactive_state_temperature(&coal_state.state, &coal_K, err,
                                               sizeof(err)));
