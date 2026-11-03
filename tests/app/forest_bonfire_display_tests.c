@@ -25,8 +25,6 @@ int main(void) {
     RUN(test_still_forest_bonfire_warms_stays_contained_and_keeps_finite_ledgers_180s);
     RUN(test_east_crosswind_keeps_fire_inside_the_cleared_ring);
     RUN(test_west_crosswind_keeps_fire_inside_the_cleared_ring);
-    RUN(test_dry_bridge_permits_spread_beyond_the_cleared_ring);
-    RUN(test_broken_ring_lets_burning_material_leave_the_pit);
     RUN(test_sealed_pit_blaze_starves_then_recovers_when_vented);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;

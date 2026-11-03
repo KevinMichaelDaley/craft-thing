@@ -47,7 +47,8 @@ void main() {
             float oxygen=(fraction/gas_parameter(0u))/(fraction/gas_parameter(0u)+(1.-fraction)/gas_parameter(1u));
             float reference=(oxygen*gas_parameter(0u)+(1.-oxygen)*gas_parameter(1u))*gas_parameter(FR_GAS_AMBIENT_WORD);
             float ratio=gas_parameter(FR_GAS_KINETIC_WORD)*own.hydro.w/(own.hydro.x*reference);
-            awake=awake||(gas_parameter(FR_GAS_GRAVITY_WORD)!=0.&&abs(ratio-1.)>(practical?.001:0.00000095367431640625));
+            awake=awake||(gas_parameter(FR_GAS_GRAVITY_WORD)!=0.&&abs(ratio-1.)>(practical?.001:0.00000095367431640625))||
+                gas_parameter(FR_GAS_WIND_WORD)!=0.;
 #ifdef FR_GAS_CACHED_NEIGHBORS
             if(!awake) {
                 uint own_atlas=gas_atlas(ivec2(p)),own_gate=own_atlas==0xffffffffu?0u:gates[own_atlas];

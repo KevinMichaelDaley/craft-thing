@@ -159,24 +159,40 @@ Gas gas_practical_state(Gas value) {
 }
 Gas gas_buoyancy_cached(Gas s,Primitive primitive,float dt,out float admitted_work,out float admitted_impulse) {
     admitted_work=0.;admitted_impulse=0.;
-    float gravity=gas_parameter(FR_GAS_GRAVITY_WORD),mass=gas_mass(s);
-    if(gravity==0.||mass==0.) return s;
-    float fraction=gas_parameter(FR_GAS_OXYGEN_WORD);
-    float oxygen=(fraction/gas_parameter(0u))/(fraction/gas_parameter(0u)+(1.-fraction)/gas_parameter(1u));
-    float reference=(oxygen*gas_parameter(0u)+(1.-oxygen)*gas_parameter(1u))*gas_parameter(FR_GAS_AMBIENT_WORD);
-    float molecular=dot(s.species,vec4(gas_parameter(0u),gas_parameter(1u),gas_parameter(2u),gas_parameter(3u)))+s.dynamics.x*gas_parameter(4u);
-    float ratio=!gas_implicit_policy()?molecular*primitive.metric.y/(mass*reference):
-        gas_parameter(FR_GAS_KINETIC_WORD)*primitive.hydro.w/(primitive.hydro.x*reference);
-    float acceleration=abs(ratio-1.)<=0.00000095367431640625?0.:gravity*(1.-ratio);
-    float impulse=mass*acceleration*dt;
-    admitted_impulse=impulse;
-    /* Divide extensive momentum before multiplying by extensive impulse.
-     * Their product can underflow for trace gas although work is representable. */
-    float velocity_change=acceleration*dt;
-    float work=gas_parameter(FR_GAS_KINETIC_WORD)*impulse*(s.dynamics.w/mass+.5*velocity_change);
-    admitted_work=work;
-    GasFlux flux=gas_empty_flux();flux.dynamics.y=work;flux.dynamics.w=impulse;
-    Gas result=gas_add_flux(s,flux,1.);result.geometry.w+=work;return result;
+    float mass=gas_mass(s);
+    if(mass==0.) return s;
+    float gravity=gas_parameter(FR_GAS_GRAVITY_WORD);
+    Gas result=s;
+    if(gravity!=0.) {
+        float fraction=gas_parameter(FR_GAS_OXYGEN_WORD);
+        float oxygen=(fraction/gas_parameter(0u))/(fraction/gas_parameter(0u)+(1.-fraction)/gas_parameter(1u));
+        float reference=(oxygen*gas_parameter(0u)+(1.-oxygen)*gas_parameter(1u))*gas_parameter(FR_GAS_AMBIENT_WORD);
+        float molecular=dot(s.species,vec4(gas_parameter(0u),gas_parameter(1u),gas_parameter(2u),gas_parameter(3u)))+s.dynamics.x*gas_parameter(4u);
+        float ratio=!gas_implicit_policy()?molecular*primitive.metric.y/(mass*reference):
+            gas_parameter(FR_GAS_KINETIC_WORD)*primitive.hydro.w/(primitive.hydro.x*reference);
+        float acceleration=abs(ratio-1.)<=0.00000095367431640625?0.:gravity*(1.-ratio);
+        float impulse=mass*acceleration*dt;
+        admitted_impulse=impulse;
+        /* Divide extensive momentum before multiplying by extensive impulse.
+         * Their product can underflow for trace gas although work is representable. */
+        float velocity_change=acceleration*dt;
+        float work=gas_parameter(FR_GAS_KINETIC_WORD)*impulse*(s.dynamics.w/mass+.5*velocity_change);
+        admitted_work=work;
+        GasFlux flux=gas_empty_flux();flux.dynamics.y=work;flux.dynamics.w=impulse;
+        result=gas_add_flux(s,flux,1.);result.geometry.w+=work;
+    }
+    float wind=gas_parameter(FR_GAS_WIND_WORD);
+    if(wind!=0.) {
+        float vx=result.dynamics.z/mass;
+        float relaxation=clamp(dt*FR_GAS_WIND_RELAXATION_PER_SECOND,0.,1.);
+        float delta=wind-vx;
+        float impulse=mass*delta*relaxation;
+        float velocity_change=delta*relaxation;
+        float work=gas_parameter(FR_GAS_KINETIC_WORD)*impulse*(vx+.5*velocity_change);
+        GasFlux flux=gas_empty_flux();flux.dynamics.y=work;flux.dynamics.z=impulse;
+        result=gas_add_flux(result,flux,1.);result.geometry.w+=work;
+    }
+    return result;
 }
 Gas gas_buoyancy(Gas s,float dt,out float work,out float impulse) {
     bool okay=false;Primitive primitive=gas_primitive(s,okay);

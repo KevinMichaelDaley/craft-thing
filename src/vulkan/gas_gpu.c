@@ -534,8 +534,11 @@ bool fr_gas_gpu_set_gravity(dc_gpu_t *g,float gravity,char *err,uint32_t cap) {
     ((float *)g->gas->parameters.mapped)[FR_GAS_GRAVITY_WORD]=gravity;g->gas->acoustic.matrix_valid=false;return true;
 }
 bool fr_gas_gpu_set_wind(dc_gpu_t *g,float wind,char *err,uint32_t cap) {
-    (void)g;(void)wind;
-    return error(err,cap,"Gas crosswind control is not implemented");
+    if(!g||!g->gas||!isfinite(wind)||fabsf(wind)>240.f)
+        return error(err,cap,"Invalid gas crosswind target");
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot configure gas crosswind");
+    ((float *)g->gas->parameters.mapped)[FR_GAS_WIND_WORD]=wind;
+    g->gas->acoustic.matrix_valid=false;return true;
 }
 bool fr_gas_gpu_set_pressure_policy(dc_gpu_t *g,uint32_t policy,char *err,uint32_t cap) {
     if(!g||!g->gas||policy>FR_GAS_PRESSURE_PRACTICAL) return error(err,cap,"Invalid gas acoustic policy");

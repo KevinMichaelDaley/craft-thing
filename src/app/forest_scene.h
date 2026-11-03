@@ -30,6 +30,13 @@ typedef struct {
     uint32_t pile_body;
 } dc_forest_scene_t;
 
+/* Origin-id regions shared by the scene builder and its tests. */
+enum {
+    DC_FOREST_REGION_PILE = 0, DC_FOREST_REGION_TREE_DRY_1 = 1,
+    DC_FOREST_REGION_TREE_DRY_2 = 2, DC_FOREST_REGION_TREE_DRY_3 = 3,
+    DC_FOREST_REGION_TREE_WET = 4, DC_FOREST_REGION_BRIDGE = 5
+};
+
 /** Build the locked forest bonfire in a fully resident 640x448 world with an
  * ignited charcoal starter, painted rigid pile and fixed dry/wet forest.
  * The optional dry bridge or broken stone ring unlocks the containment. */

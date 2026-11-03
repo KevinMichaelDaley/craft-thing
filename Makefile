@@ -951,11 +951,11 @@ test_catapult_scene: build/catapult_scene_tests
 .PHONY: catapult-scene-display
 catapult-scene-display: build/catapult_scene_display_tests
 	./build/catapult_scene_display_tests
-FOREST_SCENE_SRC = src/app/forest_scene.c src/app/forest_scene.h
+FOREST_SCENE_SRC = src/app/forest_scene.c src/app/forest_scene.h src/app/smoke_profile.c src/app/smoke_profile.h
 build/forest_bonfire_tests: tests/app/forest_bonfire_tests.c $(FOREST_SCENE_SRC) $(PERFORMANCE_OBJ)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) tests/app/forest_bonfire_tests.c src/app/forest_scene.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) tests/app/forest_bonfire_tests.c src/app/forest_scene.c src/app/smoke_profile.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/forest_bonfire_display_tests: tests/app/forest_bonfire_display_tests.c tests/app/forest_bonfire_tests.c $(FOREST_SCENE_SRC) $(PERFORMANCE_OBJ)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) tests/app/forest_bonfire_display_tests.c src/app/forest_scene.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) tests/app/forest_bonfire_display_tests.c src/app/forest_scene.c src/app/smoke_profile.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_forest_bonfire
 test: test_forest_bonfire
 test_forest_bonfire: build/forest_bonfire_tests
@@ -963,6 +963,18 @@ test_forest_bonfire: build/forest_bonfire_tests
 .PHONY: forest-bonfire-display
 forest-bonfire-display: build/forest_bonfire_display_tests
 	./build/forest_bonfire_display_tests
+SIEGE_SCENE_SRC = src/app/siege_scene.c src/app/siege_scene.h src/app/smoke_profile.c src/app/smoke_profile.h
+build/siege_coal_tests: tests/app/siege_coal_tests.c $(SIEGE_SCENE_SRC) $(PERFORMANCE_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) tests/app/siege_coal_tests.c src/app/siege_scene.c src/app/smoke_profile.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/siege_coal_display_tests: tests/app/siege_coal_display_tests.c tests/app/siege_coal_tests.c $(SIEGE_SCENE_SRC) $(PERFORMANCE_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) tests/app/siege_coal_display_tests.c src/app/siege_scene.c src/app/smoke_profile.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+.PHONY: test_siege_coal
+test: test_siege_coal
+test_siege_coal: build/siege_coal_tests
+	./build/siege_coal_tests
+.PHONY: siege-coal-display
+siege-coal-display: build/siege_coal_display_tests
+	./build/siege_coal_display_tests
 test_quarter_native: build/quarter_native_component_material_tests
 build/quarter_native_component_material_tests: tests/vulkan/component_material_tests.c Makefile build/quarter_native_solver_tests $(GPU_SRC) src/world/chunk.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS)

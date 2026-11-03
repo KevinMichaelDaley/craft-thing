@@ -2,14 +2,14 @@
 #define DC_GAS_LAYOUT_H
 #include "../ferrum/fire/gas_constants.h"
 #define FR_GAS_CELL_WORDS 16u
-#define FR_GAS_MODEL_WORDS 20u
+#define FR_GAS_MODEL_WORDS 21u
 /* Exactly zero gas mass cannot carry internal energy. Bound its roundoff
  * cleanup by eight FP32 epsilons of an ambient full-cell energy reference. */
 #define FR_GAS_NEGLIGIBLE_MASS 1e-30
 #define FR_GAS_NEGLIGIBLE_ENERGY 1e-24
 #define FR_GAS_MASSLESS_ENERGY_RELATIVE 0.00000095367431640625
-#define FR_GAS_SLOT_COUNT_WORD 18u
-#define FR_GAS_CELL_OWNER_WORD 19u
+#define FR_GAS_SLOT_COUNT_WORD 19u
+#define FR_GAS_CELL_OWNER_WORD 20u
 #define FR_GAS_CELL_OWNER_BIT 8u
 #define FR_GAS_GEOMETRY_DIRTY_TILE_BIT 2u
 #define FR_GAS_LOCAL_GEOMETRY_ACTIVITY_BIT 8388608u
@@ -58,6 +58,9 @@
 #define FR_GAS_OPACITY_WORD 15u
 #define FR_GAS_POLICY_WORD 16u
 #define FR_GAS_VIEW_WORD 17u
+/* Locked gentle crosswind relaxation toward a horizontal cells/second target. */
+#define FR_GAS_WIND_WORD 18u
+#define FR_GAS_WIND_RELAXATION_PER_SECOND 0.5
 #define FR_GAS_RESIDUAL_WORD 3u
 #define FR_GAS_RATE_WORD 0u
 #define FR_GAS_ERROR_WORD 1u
