@@ -1,6 +1,6 @@
 ---
 id: ct-e6fr
-status: open
+status: in_progress
 deps: []
 links: [ctlo-ao7l]
 created: 2026-11-03T12:23:48Z
@@ -22,3 +22,9 @@ Reproduce with: ./build/forest_bonfire_tests --spread (expect spread past the cl
 
 Dry-bridge forest run shows flaming fuel beyond the cleared boundary within 180 simulated seconds; broken-ring run shows combustion gas passing through the removed wall section; siege hot-coal shot produces 10-35 percent wall fuel loss after 60 simulated seconds with a surviving load-bearing core; the admitted coal ball burns deterministically in every run; no existing containment assertion regresses.
 
+
+## Notes
+
+**2026-11-03T21:04:34Z**
+
+Root cause found and fixed (73af4228 on this ticket's repros): burn_entry gated viability on the body skin temperature alone, and cold surrounding gas drove the skin estimate below ignition, so pre-armed flaming parcels lost their flag or never sustained (power 0, stale flame flags, fuel never consumed). Two compounding fixture defects: the forest starter fire was armed inside pile body parcels whose 8-neighbor scan only finds sealed exhaust pockets (chosen-target O2 ~0.0003, HUD counters 22/23/27), and the siege shot released before vertical so the ball arced over the wall (rest x308). Fixes: reaction zone temperature = max(skin, bulk) matching the CPU reference; forest arms cell-owned pit-floor kindling beside the pile with pit air (forest_kindling rect, ignition moved to 238,206; ember 1273K in band); siege releases past vertical into a rubble pocket at the wall foot. Verified: forest suite 5/5 (still+crosswind containment, warmth, sealed/vented, dry-bridge spread beyond the ring at sim46s, broken-ring escape), --spread 2/0. Siege: the wall NOW IGNITES (flaming 0->47 cells, face 730K, char 13k, loss 0.26 percent at 60s accelerating). REMAINING for this ticket's AC, precisely measured: (1) siege wall loss 0.26 percent vs locked 10-35 percent - the burn is oxygen-throttled at the face and the front widens too slowly for the 60s window; needs either faster flame-front spread up the face or a fuel-spill/ember-scatter on impact (candidate mechanism, not implemented). (2) impact 0.150s vs locked 0.2-0.3s - the 0.3-rad release crosses the wall plane at tick 9; a slightly earlier gate (-0.35 rad) gives ~0.27s and a face hit but was not left locked pending (1). (3) ball lodges east of the rubble against the far face rather than visibly resting west. All three are quantitative, not the original propagation bug.
