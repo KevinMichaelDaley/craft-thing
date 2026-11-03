@@ -505,7 +505,12 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,
     float dt=uintBitsToFloat(params.seconds),dry=1.-wet;
     float threshold=uintBitsToFloat(entry.words[s+20u]);
     if(threshold==0.) threshold=ignition_threshold(entry.words[s+4u],entry.words[s+5u]);
-    float rate=temperature>=coefficient(profile,7u)?coefficient(profile,8u)*
+    /* The reaction zone sits at the hotter of the exposed-skin estimate and
+     * the parcel bulk: a fully heated parcel burns like the CPU reference,
+     * while a cold-interior log still needs its surface to reach ignition.
+     * Oxygen funding, fuel and wetness continue to gate every reaction. */
+    float zone=max(temperature,bulk_temperature);
+    float rate=zone>=coefficient(profile,7u)?coefficient(profile,8u)*
         (dry*dry+wet*coefficient(profile,22u))*(1.+uintBitsToFloat(entry.words[s+18u])*(coefficient(profile,20u)-1.))*
         max(oxygen,0.)/float(FR_COMBUSTION_AMBIENT_OXYGEN):0.;
     float oil_mass=float(entry.words[s+FR_STATE_COATING_OIL])+
@@ -514,7 +519,7 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,
     rate*=1.+coverage*max(0.,coefficient(FR_COATING_OIL_MATERIAL,FR_PROFILE_OIL_HAZARD_WORD)-1.);
     float integral=min(1e20,uintBitsToFloat(entry.words[s+21u])+rate*dt);
     uint flags=entry.words[s+1u];
-    bool viable=temperature>=coefficient(profile,7u)&&wet<.8;
+    bool viable=zone>=coefficient(profile,7u)&&wet<.8;
     if(!viable) flags&=~2u;else if(integral>=threshold) flags|=2u;
     entry.words[s+20u]=floatBitsToUint(threshold);entry.words[s+21u]=floatBitsToUint(integral);
     entry.words[s+1u]=flags;
@@ -522,7 +527,7 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,
     float demand=coefficient(profile,12u);
     float oxygen_fp=max(0.,gas.species.x)*65536.;
     float requested=float(entry.words[s+8u])*coefficient(profile,31u)*dt*dry*dry*(max(oxygen,0.)/float(FR_COMBUSTION_AMBIENT_OXYGEN))*
-        fr_combustion_hot_rate(temperature,coefficient(profile,7u));
+        fr_combustion_hot_rate(zone,coefficient(profile,7u));
     /* A forced char floor outruns the finite surface of a shrinking ember. */
     if(owner==2u&&!char_stage&&fuel<FR_COMBUSTION_SMALL_BODY_FUEL_FP_LIMIT)
         requested=max(requested,float(FR_COMBUSTION_SMALL_BODY_MIN_REACTION_FP_PER_SECOND)*dt);

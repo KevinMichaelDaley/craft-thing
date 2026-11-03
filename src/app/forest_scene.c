@@ -52,6 +52,11 @@ static const forest_rect_t forest_pile[] = {
     {232u, 200u, 1u, 3u, DC_MATERIAL_WOOD, 0u}};
 static const forest_rect_t forest_stick_left = {218u, 202u, 12u, 1u, DC_MATERIAL_WOOD, 0u};
 static const forest_rect_t forest_stick_right = {230u, 202u, 10u, 1u, DC_MATERIAL_WOOD, 0u};
+/* Cell-owned kindling at the pit floor: the starter fire burns here with
+ * access to pit air, like the accepted bonfire's between-log kindling, so
+ * the pile bodies ignite from an oxygen-fed flame instead of arming inside
+ * sealed body parcels. It is deliberately absent from forest_pile_object. */
+static const forest_rect_t forest_kindling = {236u, 204u, 7u, 3u, DC_MATERIAL_WOOD, 0u};
 static const forest_rect_t forest_bridge = {236u, 202u, 76u, 2u, DC_MATERIAL_WOOD,
                                             DC_CELL_LOADED_TERRAIN};
 
@@ -219,6 +224,7 @@ bool dc_forest_scene_build(dc_gpu_t *gpu, bool dry_bridge, bool broken_ring,
         forest_fill_rect(&forest_pile[rect], false, chunks);
     forest_fill_rect(&forest_stick_left, false, chunks);
     forest_fill_rect(&forest_stick_right, false, chunks);
+    forest_fill_rect(&forest_kindling, false, chunks);
     if (dry_bridge)
         /* The dry bridge lies across the ring without replacing pile cells. */
         for (uint32_t y = forest_bridge.y;
@@ -270,17 +276,19 @@ bool dc_forest_scene_build(dc_gpu_t *gpu, bool dry_bridge, bool broken_ring,
     /* Parcel ids stay above every possible encoded origin so the runtime
      * high-water mark never rejects a staged record. */
     uint64_t parcel_counter = 6ull << 58;
-    const forest_rect_t pile_regions[5] = {forest_pile[0], forest_pile[1],
+    const forest_rect_t pile_regions[6] = {forest_pile[0], forest_pile[1],
                                            forest_pile[2], forest_stick_left,
-                                           forest_stick_right};
-    const forest_rect_t *pile_pointers[5] = {&pile_regions[0], &pile_regions[1],
+                                           forest_stick_right,
+                                           forest_kindling};
+    const forest_rect_t *pile_pointers[6] = {&pile_regions[0], &pile_regions[1],
                                              &pile_regions[2], &pile_regions[3],
-                                             &pile_regions[4]};
-    uint32_t starter_share_cells = forest_starter_cells(pile_pointers, 5u);
+                                             &pile_regions[4], &pile_regions[5]};
+    uint32_t starter_share_cells = forest_starter_cells(pile_pointers, 6u);
     float starter_share = starter_share_cells
                               ? 12000.f / (float)starter_share_cells
                               : 0.f;
-    bool okay = forest_seed_region(chunks, pile_regions, 5u, DC_FOREST_REGION_PILE,
+    bool okay = forest_seed_region(chunks, pile_regions, 6u,
+                                   DC_FOREST_REGION_PILE,
                                    false, true, starter_share, &scene.pile_fuel_fp,
                                    &ignored, &scene.pile_char_fp, &scene.ember_cells,
                                    &parcel_counter, packets, err_buf, err_cap);

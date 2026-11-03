@@ -58,6 +58,13 @@ static const siege_rect_t siege_bar = {DC_SIEGE_BAR_X, DC_SIEGE_BAR_Y,
                                        DC_SIEGE_BAR_W, DC_SIEGE_BAR_H,
                                        DC_MATERIAL_WOOD,
                                        DC_CELL_LOADED_TERRAIN, 0.f};
+/* Rubble pocket at the wall foot: a restrained shot settles the burning
+ * ball against the face instead of reflecting it across the ground, so
+ * the plume can hold contact for the locked damage window. */
+static const siege_rect_t siege_rubble = {DC_SIEGE_WALL_X - 4u,
+                                          DC_SIEGE_FLOOR_Y - 25u, 4u, 25u,
+                                          DC_MATERIAL_STONE,
+                                          DC_CELL_LOADED_TERRAIN, 0.f};
 
 static bool siege_error(char *err, uint32_t cap, const char *message) {
     if (err && cap) snprintf(err, cap, "%s", message);
@@ -175,6 +182,7 @@ bool dc_siege_scene_build(dc_gpu_t *gpu, bool wet_wall, bool hot_coal,
     siege_fill_rect(&siege_posts[0], chunks);
     siege_fill_rect(&siege_posts[1], chunks);
     siege_fill_rect(&siege_bar, chunks);
+    siege_fill_rect(&siege_rubble, chunks);
     siege_rect_t arm = {DC_SIEGE_ARM_X, DC_SIEGE_ARM_Y, DC_SIEGE_ARM_W,
                         DC_SIEGE_ARM_H, DC_MATERIAL_WOOD, 0u, 0.f};
     siege_fill_rect(&arm, chunks);

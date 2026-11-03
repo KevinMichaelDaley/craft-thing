@@ -386,9 +386,14 @@ static void test_hot_coal_impact_burns_a_restrained_wall_fraction(void) {
                    (float)coal.chunk.y * 64.f + coal.body.y_fp / 65536.f,
                    coal.body.vx_fp / 65536.f, coal.body.vy_fp / 65536.f);
         }
-        /* Release just before the vertical crossing: the engine's mild
-         * in-flight gravity otherwise lets the ball graze the wall top. */
-        if (arm.angle >= -0.3f) {
+        /* Release just past the vertical crossing: the pouch then throws the
+         * ball flat and slightly downward, so the shot strikes the wall face
+         * instead of arcing over its top. DC_SIEGE_RELEASE_ANGLE tunes the
+         * gate for aiming diagnostics; the locked shot uses the default. */
+        float release_angle = 0.3f;
+        const char *tuned = getenv("DC_SIEGE_RELEASE_ANGLE");
+        if (tuned) release_angle = strtof(tuned, NULL);
+        if (arm.angle >= release_angle) {
             crossing = true;
             ASSERT_TRUE(dc_gpu_read_world_body(gpu, scene.coal_body, &coal, err,
                                                sizeof(err)));
