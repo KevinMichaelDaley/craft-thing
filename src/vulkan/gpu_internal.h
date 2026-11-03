@@ -69,6 +69,9 @@ struct dc_gpu {
     VkInstance instance;
     VkDebugUtilsMessengerEXT validation_messenger;
     uint32_t validation_errors;
+    char device_name[256];
+    uint32_t vendor_id;
+    int32_t device_type;
     VkPhysicalDevice physical;
     VkDevice device;
     VkPipelineCache pipeline_cache;

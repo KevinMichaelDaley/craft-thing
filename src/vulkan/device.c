@@ -15,7 +15,8 @@ bool dc_gpu_pick_device(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t c
     VkPhysicalDevice *devices = calloc(count, sizeof(*devices));
     if (!devices) return error(err, cap, "Out of memory listing Vulkan devices");
     VkResult result = vkEnumeratePhysicalDevices(gpu->instance, &count, devices);
-    for (uint32_t d = 0; d < count && result == VK_SUCCESS && !gpu->physical; ++d) {
+    int best_score = -1;
+    for (uint32_t d = 0; d < count && result == VK_SUCCESS; ++d) {
         VkPhysicalDeviceProperties props;
         vkGetPhysicalDeviceProperties(devices[d], &props);
         if (props.apiVersion < VK_API_VERSION_1_3 || props.limits.maxStorageBufferRange < bytes) continue;
@@ -30,7 +31,18 @@ bool dc_gpu_pick_device(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t c
             if (families[i].queueCount && (families[i].queueFlags & VK_QUEUE_COMPUTE_BIT) &&
                 (families[i].queueFlags & VK_QUEUE_TRANSFER_BIT) &&
                 (!gpu->surface || can_present)) {
-                gpu->physical = devices[d]; gpu->family = i; break;
+                int score = dc_gpu_device_score(&props, props.limits.maxStorageBufferRange,
+                                                bytes, true, true,
+                                                gpu->surface ? can_present==VK_TRUE : true);
+                if (score > best_score) {
+                    best_score = score;
+                    gpu->physical = devices[d];
+                    gpu->family = i;
+                    gpu->device_type = props.deviceType;
+                    gpu->vendor_id = props.vendorID;
+                    snprintf(gpu->device_name, sizeof(gpu->device_name), "%s", props.deviceName);
+                }
+                break;
             }
         }
         free(families);
@@ -42,8 +54,13 @@ bool dc_gpu_pick_device(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t c
 int dc_gpu_device_score(const VkPhysicalDeviceProperties *properties,
                         VkDeviceSize max_storage, VkDeviceSize required,
                         bool compute, bool transfer, bool present) {
-    if (compute && transfer && present && properties->apiVersion >= VK_API_VERSION_1_3 &&
-        max_storage >= required && properties->deviceType != VK_PHYSICAL_DEVICE_TYPE_CPU)
-        return 1;
-    return -1;
+    if (!properties || properties->apiVersion < VK_API_VERSION_1_3 ||
+        max_storage < required || !compute || !transfer || !present ||
+        properties->deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU)
+        return -1;
+    switch (properties->deviceType) {
+    case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return 3;
+    case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return 2;
+    default: return 1;
+    }
 }

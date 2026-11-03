@@ -413,6 +413,8 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     VkDeviceSize bytes = (VkDeviceSize)width * height * 4;
     VkDeviceSize atlas_bytes = (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t);
     if (!dc_gpu_pick_device(gpu, bytes > atlas_bytes ? bytes : atlas_bytes, err, cap)) goto fail;
+    printf("Vulkan device: %s (type %d vendor %04x)\n", gpu->device_name,
+           gpu->device_type, gpu->vendor_id);
     dc_gpu_body_features_t body_features;
     if (!dc_gpu_body_features_query(gpu->physical, &body_features, err, cap)) goto fail;
     const char *latency_setting=getenv("DC_LOW_LATENCY_PRESENT");
