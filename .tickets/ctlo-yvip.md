@@ -27,3 +27,7 @@ Greek material sticks/melts and continues finite reaction under water; matched f
 **2026-10-28T02:40:35Z**
 
 User order: begin only after the real catapult/constructed-wall burning-coal module, reuse that same supported launcher, then implement the oil/slime coating, finite Greek-fire chemistry/corrosion and water-dousing controls needed by this visible module.
+
+**2026-11-03T13:26:58Z**
+
+Prerequisite status: the shared siege launcher module (src/app/siege_scene.c, ctlo-ao7l) now delivers the pivoted launcher, real latch/pouch release, structural wall and wet control, and the burning-coal shot reaches the locked impact window; the wall-ignition gap and admitted-ball ignition nondeterminism are documented in ctlo-ao7l and ct-e6fr. The Greek-fire module (matched oil/Greek controls, adhesion, dousing, corrosion, delayed-launch risk ensemble) builds on that same launcher and is not started this turn; its reference chemistry exists and is tested (tests/fire/greek_fire_tests.c 5/5, corrosion_tests.c) but the siege-level integration fixtures are not implemented yet.
