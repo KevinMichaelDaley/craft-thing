@@ -330,7 +330,7 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
     int32_t ball_y = DC_SIEGE_PIVOT_Y -
                      (int32_t)lroundf(40.f * cosf(-DC_SIEGE_COCKED_ANGLE));
     if (douse_pool) {ball_x = 32; ball_y = 215;}
-    if (douse_pool)
+    if (douse_pool) {
         for (uint32_t y = 209u; y <= 220u; y++)
             for (uint32_t x = 24u; x <= 40u; x++) {
                 uint32_t tile = (y / 64u) * DC_SIEGE_TILES_X + x / 64u;
@@ -338,6 +338,15 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                 chunks[tile].cells[local].material = DC_MATERIAL_WATER;
                 chunks[tile].cells[local].fluid_mass = DC_FLUID_FULL;
             }
+        /* Coin and ingredient samples in the pool beside the load: the
+         * burning brands smear greek film onto them and their finite
+         * corrosion stock spends into spent rust. */
+        chunks[(213u / 64u) * DC_SIEGE_TILES_X + 27u / 64u]
+            .cells[(213u % 64u) * 64u + 27u % 64u].material = DC_MATERIAL_GOLD;
+        chunks[(216u / 64u) * DC_SIEGE_TILES_X + 27u / 64u]
+            .cells[(216u % 64u) * 64u + 27u % 64u].material =
+            DC_MATERIAL_MAGIC_INGREDIENT;
+    }
     uint32_t coal_cells = 0;
     for (int32_t y = ball_y - DC_SIEGE_COAL_RADIUS;
          y <= ball_y + DC_SIEGE_COAL_RADIUS; y++)
@@ -436,6 +445,22 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                     state->ignition_integral = .6f;
                 }
             }
+    /* Coin and ingredient corrosion samples: staged as reactive parcels. */
+    const siege_rect_t coin_rects[2] = {{27u, 213u, 1u, 1u, DC_MATERIAL_GOLD,
+                                         0u, 0.f},
+                                        {27u, 216u, 1u, 1u,
+                                         DC_MATERIAL_MAGIC_INGREDIENT, 0u,
+                                         0.f}};
+    if (douse_pool)
+        okay = okay && siege_stage_region(chunks, coin_rects, 2u,
+                                          DC_MATERIAL_GOLD, false, false,
+                                          &ignored, &ignored, &ignored_cells,
+                                          &parcel_counter, packets, err_buf,
+                                          err_cap) &&
+               siege_stage_region(chunks, coin_rects + 1u, 1u,
+                                  DC_MATERIAL_MAGIC_INGREDIENT, false, false,
+                                  &ignored, &ignored, &ignored_cells,
+                                  &parcel_counter, packets, err_buf, err_cap);
     uint64_t arm_fuel = 0;
     const siege_rect_t arm_rects[1] = {arm};
     okay = okay && siege_stage_region(chunks, arm_rects, 1u, DC_MATERIAL_WOOD,

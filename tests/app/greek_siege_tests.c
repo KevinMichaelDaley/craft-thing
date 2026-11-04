@@ -216,9 +216,12 @@ static void test_submerged_greek_keeps_reacting_while_oil_douses(void) {
                         pool->cells[i].fluid_mass == DC_FLUID_FULL)
                         wet++;
                 printf("greek pool chunk 30: water-full cells %u "
-                       "(cell(32,215) material %u fluid %u)\n",
+                       "(cell(32,215) material %u fluid %u) "
+                       "coin(27,213) material %u fluid %u\n",
                        wet, pool->cells[(215u % 64u) * 64u + 32u].material,
-                       pool->cells[(215u % 64u) * 64u + 32u].fluid_mass);
+                       pool->cells[(215u % 64u) * 64u + 32u].fluid_mass,
+                       pool->cells[(213u % 64u) * 64u + 27u].material,
+                       pool->cells[(213u % 64u) * 64u + 27u].fluid_mass);
             }
             free(pool);
         }
@@ -366,9 +369,12 @@ static void test_greek_depletes_matched_oil_twice_as_fast_dry(void) {
                         pool->cells[i].fluid_mass == DC_FLUID_FULL)
                         wet++;
                 printf("greek pool chunk 30: water-full cells %u "
-                       "(cell(32,215) material %u fluid %u)\n",
+                       "(cell(32,215) material %u fluid %u) "
+                       "coin(27,213) material %u fluid %u\n",
                        wet, pool->cells[(215u % 64u) * 64u + 32u].material,
-                       pool->cells[(215u % 64u) * 64u + 32u].fluid_mass);
+                       pool->cells[(215u % 64u) * 64u + 32u].fluid_mass,
+                       pool->cells[(213u % 64u) * 64u + 27u].material,
+                       pool->cells[(213u % 64u) * 64u + 27u].fluid_mass);
             }
             free(pool);
         }
@@ -512,9 +518,137 @@ static void test_prompt_launch_and_fireproof_carrier_stay_safe(void) {
     }
     PASS();
 }
+static bool greek_cell_corrosion(dc_gpu_t *gpu, uint32_t x, uint32_t y,
+                                 float *out, bool *found, char *err,
+                                 uint32_t cap) {
+    uint32_t slot = greek_tile_slot(gpu, x, y);
+    if (!slot || slot > DC_GPU_CHUNK_SLOTS) return false;
+    fr_reactive_record_t record;
+    if (!fr_gpu_reactive_read_cell(gpu, slot - 1u,
+                                   (y % 64u) * 64u + x % 64u, &record, found,
+                                   err, cap))
+        return false;
+    if (found) {
+        *out = record.state.corroded_fraction;
+        fprintf(stderr, "coin %u,%u film oil %u jelly %u ox %u corroded %.4f "
+                        "flags %x\n",
+                x, y, record.state.coating_oil_fuel_fp,
+                record.state.coating_jelly_fuel_fp,
+                record.state.coating_oxidizer_fp,
+                record.state.corroded_fraction, record.state.flags);
+    }
+    return true;
+}
+static void test_greek_burn_corrodes_coins_across_reload(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = greek_grid();
+    ASSERT_TRUE(gpu);
+    dc_siege_scene_t scene = {0};
+    ASSERT_TRUE(dc_siege_scene_build_douse_pool(gpu, DC_SIEGE_LOAD_GREEK,
+                                                &scene, err, sizeof(err)));
+    ASSERT_TRUE(greek_ticks(gpu, 1u, err, sizeof(err)));
+    ASSERT_TRUE(dc_siege_scene_ignite_load(gpu, &scene, 0.f, err, sizeof(err)));
+    float coin_before = -1.f, ingredient_before = -1.f;
+    bool found = false;
+    ASSERT_TRUE(greek_cell_corrosion(gpu, 27u, 213u, &coin_before, &found, err,
+                                     sizeof(err)) &&
+                found);
+    ASSERT_TRUE(greek_cell_corrosion(gpu, 27u, 216u, &ingredient_before,
+                                     &found, err, sizeof(err)) &&
+                found);
+    ASSERT_TRUE(greek_ticks(gpu, 30u, err, sizeof(err)));
+    float coin_after = -1.f, ingredient_after = -1.f;
+    ASSERT_TRUE(greek_cell_corrosion(gpu, 27u, 213u, &coin_after, &found, err,
+                                     sizeof(err)) &&
+                found);
+    ASSERT_TRUE(greek_cell_corrosion(gpu, 27u, 216u, &ingredient_after, &found,
+                                    err, sizeof(err)) &&
+                found);
+    printf("greek corrosion coin %.4f->%.4f ingredient %.4f->%.4f\n",
+           coin_before, coin_after, ingredient_before, ingredient_after);
+    {
+        dc_chunk_t *verify = calloc(1, sizeof(*verify));
+        fr_reactive_chunk_t records = {0};
+        uint32_t slot0 = greek_tile_slot(gpu, 27u, 213u);
+        if (dc_gpu_download_chunk(gpu, slot0 - 1u, verify, err, sizeof(err)) &&
+            fr_gpu_reactive_export_chunk(gpu, slot0 - 1u, verify, &records,
+                                         err, sizeof(err))) {
+            uint32_t gold_records = 0u;
+            for (uint32_t i = 0u; i < records.count; i++)
+                if (records.attachments[i].record.state.material ==
+                    DC_MATERIAL_GOLD) {
+                    gold_records++;
+                    fprintf(stderr,
+                            "gold record %u film %u/%u/%u corroded %.4f\n", i,
+                            records.attachments[i].record.state.coating_oil_fuel_fp,
+                            records.attachments[i].record.state.coating_jelly_fuel_fp,
+                            records.attachments[i].record.state.coating_oxidizer_fp,
+                            records.attachments[i].record.state.corroded_fraction);
+                }
+            printf("greek gold records in chunk 30: %u (records %u)\n",
+                   gold_records, records.count);
+            fr_reactive_chunk_release(&records);
+        }
+        free(verify);
+    }
+    ASSERT_TRUE(coin_after > coin_before);
+    /* Reload through the reactive chunk save path: the spent fraction is
+     * exported and reimported with the record. */
+    uint32_t slot = greek_tile_slot(gpu, 27u, 213u);
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, slot - 1u, chunk, err, sizeof(err)));
+    fr_reactive_chunk_t snapshot = {0};
+    ASSERT_TRUE(fr_gpu_reactive_export_chunk(gpu, slot - 1u, chunk, &snapshot,
+                                             err, sizeof(err)));
+    ASSERT_TRUE(snapshot.count > 0u);
+    fr_reactive_chunk_release(&snapshot);
+    ASSERT_TRUE(fr_gpu_reactive_export_chunk(gpu, slot - 1u, chunk, &snapshot,
+                                             err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_import_chunk(gpu, slot - 1u, chunk, &snapshot,
+                                             err, sizeof(err)));
+    fr_reactive_chunk_release(&snapshot);
+    free(chunk);
+    {
+        dc_chunk_t *verify = calloc(1, sizeof(*verify));
+        fr_reactive_chunk_t records = {0};
+        ASSERT_TRUE(dc_gpu_download_chunk(gpu, slot - 1u, verify, err,
+                                          sizeof(err)));
+        ASSERT_TRUE(fr_gpu_reactive_export_chunk(gpu, slot - 1u, verify,
+                                                 &records, err, sizeof(err)));
+        uint32_t gold_records = 0u;
+        for (uint32_t i = 0u; i < records.count; i++)
+            if (records.attachments[i].record.state.material ==
+                DC_MATERIAL_GOLD) {
+                gold_records++;
+                fprintf(stderr, "gold record %u film %u/%u/%u corroded %.4f\n",
+                        i, records.attachments[i].record.state.coating_oil_fuel_fp,
+                        records.attachments[i].record.state.coating_jelly_fuel_fp,
+                        records.attachments[i].record.state.coating_oxidizer_fp,
+                        records.attachments[i].record.state.corroded_fraction);
+            }
+        printf("greek gold records in chunk 30: %u (packet count %u)\n",
+               gold_records, records.count);
+        fr_reactive_chunk_release(&records);
+        free(verify);
+    }
+    float coin_reload = -1.f;
+    ASSERT_TRUE(greek_cell_corrosion(gpu, 27u, 213u, &coin_reload, &found, err,
+                                     sizeof(err)) &&
+                found);
+    printf("greek corrosion coin after reload %.4f\n", coin_reload);
+    ASSERT_TRUE(fabsf(coin_reload - coin_after) < 0.001f);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
 int main(int argc, char **argv) {
     mkdir("build/screenshots", 0777);
     greek_install_stop();
+    if (argc == 2 && strcmp(argv[1], "--corrode") == 0) {
+        RUN(test_greek_burn_corrodes_coins_across_reload);
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail ? 1 : 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--soak") == 0) {
         RUN(test_painted_water_soaks_a_wood_body);
         printf("%d passed, %d failed\n", g_pass, g_fail);

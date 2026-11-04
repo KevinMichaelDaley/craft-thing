@@ -49,7 +49,10 @@ float coefficient(uint material,uint field) {return uintBitsToFloat(profiles[mat
 #include "world_body.glsl"
 uint atlas(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0xffffffffu;
-    uint page=pages[(uint(p.y)/64u)*((params.width+63u)/64u)+uint(p.x)/64u];
+    /* The pages array strides the world tile width; the sim grid may be
+     * narrower (the siege world is 10 tiles wide on a 480-cell sim). */
+    uint page_width=params.body_params.y!=0u?params.body_params.y:(params.width+63u)/64u;
+    uint page=pages[(uint(p.y)/64u)*page_width+uint(p.x)/64u];
     return page==0u?0xffffffffu:(page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);
 }
 const ivec2 directions[4]=ivec2[4](ivec2(0,-1),ivec2(-1,0),ivec2(1,0),ivec2(0,1));
@@ -719,8 +722,17 @@ void burn_body_neighbor(ivec2 p,uint gas_at,inout Gas gas,inout float admitted,i
 }
 void apply_body_brand(ivec2 p,Words c) {
     uint cs=FR_ENTRY_STATE,cm=c.words[cs];
-    if(cm!=7u&&cm!=8u&&cm!=9u&&cm!=11u&&cm!=12u) return;
+    bool fuel_target=cm==7u||cm==8u||cm==9u||cm==11u||cm==12u;
+    bool sample_target=cm==18u||cm==19u;
+    if(!fuel_target&&!sample_target) return;
     if((c.words[cs+1u]&2u)!=0u) return;
+    if(sample_target) {
+        /* Reachability marker: the first film word counts scan visits and
+         * flag 16 marks a coat attempt through this path. */
+        if(c.words[cs+FR_STATE_COATING_OIL]==0u)
+            atomicAdd(c.words[cs+FR_STATE_COATING_OIL],1u);
+        if((c.words[cs+1u]&4u)==0u) atomicOr(c.words[cs+1u],16u);
+    }
     Words scratch=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
     for(uint d=0u;d<8u;d++) {
         ivec2 q=p+body_directions[d];
@@ -736,17 +748,46 @@ void apply_body_brand(ivec2 p,Words c) {
             if(pixel_piece_material(body,piece)==0u) continue;
             uvec2 h=fr_body_reactive_handle(body,slot,piece);
             if(h.y==0u||h.x>=root[2]) continue;
-            uint offer=atomicExchange(scratch.words[h.x*12u+7u],scratch.words[h.x*12u+7u]|0x80000000u);
-            if((offer&0x80000000u)!=0u||offer==0u) continue;
             Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),h.x));
             uint es=FR_ENTRY_STATE;
-            uint slice=offer&0x7fffffffu;
-            if(e.words[es+9u]>slice+FR_COMBUSTION_BRAND_PARCEL_FUEL_KEEP_FP) {
-                float energy_slice=uintBitsToFloat(scratch.words[h.x*12u+8u]);
-                atomicAdd(c.words[cs+9u],slice);
-                add_energy(c,energy_slice);
-                atomicAdd(e.words[es+9u],uint(0u)-slice);
-                add_energy(e,-energy_slice);
+            /* The donor must burn and carry film: the greek compound's own
+             * coating flame counts (inert cores never flag the substrate),
+             * as does a burning substrate. */
+            if((e.words[es+1u]&6u)==0u||
+               (e.words[es+13u]==0u&&e.words[es+14u]==0u)) continue;
+            if(fuel_target) {
+                /* Fuel claim: the cell pulls burning brand mass from the
+                 * donor parcel, single claim per parcel per step. */
+                uint offer=atomicExchange(scratch.words[h.x*12u+7u],scratch.words[h.x*12u+7u]|0x80000000u);
+                if((offer&0x80000000u)!=0u||offer==0u) continue;
+                uint slice=offer&0x7fffffffu;
+                if(e.words[es+9u]>slice+FR_COMBUSTION_BRAND_PARCEL_FUEL_KEEP_FP) {
+                    float energy_slice=uintBitsToFloat(scratch.words[h.x*12u+8u]);
+                    atomicAdd(c.words[cs+9u],slice);
+                    add_energy(c,energy_slice);
+                    atomicAdd(e.words[es+9u],uint(0u)-slice);
+                    add_energy(e,-energy_slice);
+                    atomicAdd(hud[31],1u);
+                }
+            } else {
+                /* Corroding samples (gold coins, magic ingredients): the
+                 * brand smears burning greek film onto them instead of
+                 * fuel, arming the finite corrosion stock their own
+                 * reaction pass spends. */
+                if((c.words[cs+1u]&4u)!=0u) continue;
+                uint take_oil=min(e.words[es+13u]/8u,4096u);
+                uint take_jelly=min(e.words[es+14u]/8u,4096u);
+                uint take_oxidizer=min(e.words[es+16u]/8u,4096u);
+                if(take_oil==0u||take_jelly==0u||take_oxidizer==0u) continue;
+                atomicAdd(c.words[cs+FR_STATE_COATING_OIL],take_oil);
+                atomicAdd(c.words[cs+FR_STATE_COATING_JELLY],take_jelly);
+                atomicAdd(c.words[cs+FR_STATE_COATING_OXIDIZER],take_oxidizer);
+                e.words[es+13u]-=take_oil;
+                e.words[es+14u]-=take_jelly;
+                e.words[es+16u]-=take_oxidizer;
+                atomicOr(c.words[cs+1u],4u);
+                add_energy(c,float(take_oil+take_jelly)*0.5);
+                add_energy(e,-float(take_oil+take_jelly)*0.5);
                 atomicAdd(hud[31],1u);
             }
             break;
@@ -781,6 +822,23 @@ void main() {
     }
     if(i>=params.width*params.height) return;
     ivec2 p=ivec2(i%params.width,i/params.width);uint at=atlas(p);
+    /* Corroding sample cells (gold coins, magic ingredients) pull greek
+     * film from burning neighbors without joining the gas reaction. */
+    if(at!=0xffffffffu&&(uint(cells[at].x&255u)==18u||uint(cells[at].x&255u)==19u)) {
+        bool near_burning=false;
+        for(uint face=0u;face<8u;face++) {ivec2 q=p+body_directions[face];
+            if(all(greaterThanEqual(q,ivec2(0)))&&all(lessThan(q,ivec2(params.width,params.height))))
+                near_burning=near_burning||thermal_occupancy[uint(q.y)*params.width+uint(q.x)]!=0u;}
+        if(!near_burning) return;
+        uvec2 sample_handle=Handles(uvec2(root[6],root[7])).values[at];
+        if(sample_handle.y!=0u) {
+            Words se=Words(reactive_entry_address(uvec2(root[4],root[5]),sample_handle.x));
+            if(se.words[FR_ENTRY_STATE+13u]==0u)
+                se.words[FR_ENTRY_STATE+13u]=7u;
+            apply_body_brand(p,se);
+        }
+        return;
+    }
     if(!reaction_receiver(at)) return;
     bool near_body=false;
     for(uint face=0u;face<8u;face++) {ivec2 q=p+body_directions[face];
