@@ -31,3 +31,7 @@ GREEN infrastructure delivered (scene src/app/siege_scene.c, tests tests/app/sie
 **2026-11-03T21:57:56Z**
 
 Wall ignition achieved via ct-e6fr (rubble pocket + lodged burning ball): flaming 0->47 cells, face 730.1K, char 13119 fp, loss 0.26 percent at 60s accelerating; footprint and wet-control clauses hold. Remaining: 10-35 percent loss needs ignition within ~5s of rest (impact fuel-spill mechanic, see ct-e6fr note) and the impact window needs a deterministic swing base. Ball-rest nondeterminism from the earlier report is resolved by the vertical-crossing release.
+
+**2026-11-04T01:38:43Z**
+
+Deterministic ignition chain verified: lodged ball ignites the wall in 5s (flaming 43 cells, face 643K, loss 0.21-0.25 percent at 60s, reproducible across runs). Wet-control and launcher-soundness clauses hold. Remaining quantitative gaps tracked on ct-e6fr: impact 0.150s vs 0.2-0.3s (needs fixed-tick release or mount offset) and loss 0.21-0.25 percent vs 10-35 percent (plume oxygen throttling - entrainment or contact-width calibration).
