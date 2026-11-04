@@ -15,6 +15,11 @@
 #define FR_COMBUSTION_SURFACE_GLOW_K 650.0
 #define FR_COMBUSTION_SURFACE_EXPOSURE 1.0
 #define FR_COMBUSTION_SMALL_BODY_MIN_REACTION_FP_PER_SECOND 16.0
+/* Contact brand transfer: a burning body parcel smears glowing fuel onto
+ * directly adjacent cell-owned fuel at this rate, moving a proportional
+ * slice of its own thermal energy with the mass. Exact, conservative. */
+#define FR_COMBUSTION_BRAND_FUEL_FP_PER_SECOND 4096.0
+#define FR_COMBUSTION_BRAND_PARCEL_FUEL_KEEP_FP 2048.0
 #define FR_COMBUSTION_SMALL_BODY_FUEL_FP_LIMIT 16384u
 #define FR_COMBUSTION_AIR_VISCOSITY 0.000018
 #define FR_COMBUSTION_AIR_CONDUCTIVITY 0.02

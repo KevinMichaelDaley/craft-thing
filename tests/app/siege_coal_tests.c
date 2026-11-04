@@ -390,7 +390,7 @@ static void test_hot_coal_impact_burns_a_restrained_wall_fraction(void) {
          * flat with a slight rise, and in-flight gravity drops it onto the
          * wall face inside the locked 0.2-0.3 s window instead of arcing
          * over the top or bouncing off the base. */
-        float release_angle = 0.0f;
+        float release_angle = 0.3f;
         const char *tuned = getenv("DC_SIEGE_RELEASE_ANGLE");
         if (tuned) release_angle = strtof(tuned, NULL);
         if (arm.angle >= release_angle) {
@@ -610,44 +610,6 @@ int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--build-only") == 0) {
         RUN(test_locked_siege_scene_matches_the_manifest_fixture);
         RUN(test_wet_siege_control_saturates_the_wall);
-        printf("%d passed, %d failed\n", g_pass, g_fail);
-        return g_fail ? 1 : 0;
-    }
-    if (argc == 2 && strcmp(argv[1], "--aim") == 0) {
-        /* Aiming diagnostic: swing, release, fly, settle; no burn window. */
-        char err[256] = {0};
-        dc_gpu_t *gpu = siege_grid();
-        dc_siege_scene_t scene = {0};
-        ASSERT_TRUE(dc_siege_scene_build(gpu, false, true, &scene, err, sizeof(err)));
-        ASSERT_TRUE(siege_ticks(gpu, 2u, err, sizeof(err)));
-        ASSERT_TRUE(dc_siege_scene_release(gpu, &scene, err, sizeof(err)));
-        dc_gpu_body_motion_t arm = {0};
-        dc_gpu_world_body_t coal = {0};
-        bool crossing = false;
-        float release_angle = 0.0f;
-        const char *tuned = getenv("DC_SIEGE_RELEASE_ANGLE");
-        if (tuned) release_angle = strtof(tuned, NULL);
-        for (uint32_t tick = 0; tick < 240u && !crossing; tick++) {
-            ASSERT_TRUE(SIEGE_STEP(gpu, err, sizeof(err)));
-            ASSERT_TRUE(dc_gpu_read_body_motion(gpu, scene.arm_body, &arm, err, sizeof(err)));
-            if (arm.angle >= release_angle) crossing = true;
-        }
-        ASSERT_TRUE(crossing);
-        ASSERT_TRUE(dc_gpu_read_world_body(gpu, scene.coal_body, &coal, err, sizeof(err)));
-        ASSERT_TRUE(dc_siege_scene_release_projectile(gpu, &scene, err, sizeof(err)));
-        for (uint32_t tick = 0; tick < 180u; tick++) {
-            ASSERT_TRUE(SIEGE_STEP(gpu, err, sizeof(err)));
-            ASSERT_TRUE(dc_gpu_read_world_body(gpu, scene.coal_body, &coal, err, sizeof(err)));
-            float x = (float)coal.chunk.x * 64.f + coal.body.x_fp / 65536.f;
-            float y = (float)coal.chunk.y * 64.f + coal.body.y_fp / 65536.f;
-            if (tick % 12u == 0u || (x > 148.f && x < 168.f))
-                printf("siege aim t%u ball %.1f %.1f vel %.2f %.2f\n", tick, x, y,
-                       coal.body.vx_fp / 65536.f, coal.body.vy_fp / 65536.f);
-        }
-        printf("siege aim rest %.1f %.1f\n",
-               (float)coal.chunk.x * 64.f + coal.body.x_fp / 65536.f,
-               (float)coal.chunk.y * 64.f + coal.body.y_fp / 65536.f);
-        dc_gpu_destroy(gpu);
         printf("%d passed, %d failed\n", g_pass, g_fail);
         return g_fail ? 1 : 0;
     }
