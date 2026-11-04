@@ -94,7 +94,7 @@ static bool greek_land_ball(dc_gpu_t *gpu, dc_siege_scene_t *scene,
     if (!dc_siege_scene_release(gpu, scene, err, cap)) return false;
     /* The launch strike lights the fuse; the swing itself stays cold and
      * deterministic. */
-    if (ignite && !dc_siege_scene_ignite_load(gpu, scene, err, cap))
+    if (ignite && !dc_siege_scene_ignite_load(gpu, scene, 0.f, err, cap))
         return false;
     dc_gpu_body_motion_t arm = {0};
     dc_gpu_world_body_t coal = {0};
@@ -144,7 +144,7 @@ static void test_greek_and_oil_stage_matched_prearmed_coating(void) {
         uint64_t film = core.state.coating_oil_fuel_fp +
                         core.state.coating_jelly_fuel_fp;
         ASSERT_EQ(film, 65536u);
-        ASSERT_TRUE(dc_siege_scene_ignite_load(gpu, &scene, err, sizeof(err)));
+        ASSERT_TRUE(dc_siege_scene_ignite_load(gpu, &scene, 0.f, err, sizeof(err)));
         ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, scene.coal_body, 4u, 4u,
                                               &core, &found, err, sizeof(err)) &&
                     found);
@@ -263,7 +263,7 @@ static void test_submerged_greek_keeps_reacting_while_oil_douses(void) {
                 printf("greek wet diag after soak: scanned-max %u soaked %u phase21 cells %u last-wet %u\n",
                        counters[30], counters[18], counters[12], counters[13]);
         }
-        bool lit = dc_siege_scene_ignite_load(gpu, &scene, err, sizeof(err));
+        bool lit = dc_siege_scene_ignite_load(gpu, &scene, 0.f, err, sizeof(err));
         if (!lit) printf("greek ignite: %s\n", err);
         ASSERT_TRUE(lit);
         uint64_t mid = 0;
@@ -415,6 +415,103 @@ static void test_painted_water_soaks_a_wood_body(void) {
     dc_gpu_destroy(gpu);
     PASS();
 }
+static void test_delayed_greek_load_ignites_the_launcher_ensemble(void) {
+    char err[256] = {0};
+    uint32_t ignited = 0u;
+    const uint32_t seeds = 16u;
+    for (uint32_t seed = 0u; seed < seeds; seed++) {
+        dc_gpu_t *gpu = greek_grid();
+        ASSERT_TRUE(gpu);
+        dc_siege_scene_t scene = {0};
+        ASSERT_TRUE(dc_siege_scene_build_risk(gpu, DC_SIEGE_LOAD_GREEK, seed,
+                                              false, &scene, err, sizeof(err)));
+        ASSERT_TRUE(greek_ticks(gpu, 2u, err, sizeof(err)));
+        ASSERT_TRUE(dc_siege_scene_ignite_load(gpu, &scene, 0.f, err, sizeof(err)));
+        /* Ten exposed dry seconds in the sling. */
+        ASSERT_TRUE(greek_ticks(gpu, 10u, err, sizeof(err)));
+        uint32_t flaming = 0u;
+        for (uint32_t py = 0u; py < 12u; py++)
+            for (uint32_t px = 0u; px < 2u; px++) {
+                fr_reactive_record_t arm_parcel;
+                bool found = false;
+                if (fr_gpu_reactive_read_body(gpu, scene.arm_body, px, py,
+                                              &arm_parcel, &found, err,
+                                              sizeof(err)) &&
+                    found &&
+                    (arm_parcel.state.flags & FR_REACTIVE_FLAMING) != 0u)
+                    flaming++;
+            }
+        if (flaming >= 3u) ignited++;
+        printf("greek risk seed %u arm flaming %u\n", seed, flaming);
+        dc_gpu_destroy(gpu);
+    }
+    printf("greek risk ensemble: %u of %u seeds ignited the launcher\n",
+           ignited, seeds);
+    ASSERT_TRUE(ignited * 4u >= seeds * 3u);
+    PASS();
+}
+static void test_prompt_launch_and_fireproof_carrier_stay_safe(void) {
+    char err[256] = {0};
+    /* Prompt launch: the fuse lights as the pouch opens; the load leaves
+     * before the carrier film can spread. */
+    {
+        dc_gpu_t *gpu = greek_grid();
+        ASSERT_TRUE(gpu);
+        dc_siege_scene_t scene = {0};
+        ASSERT_TRUE(dc_siege_scene_build_risk(gpu, DC_SIEGE_LOAD_GREEK, 7u,
+                                              false, &scene, err, sizeof(err)));
+        ASSERT_TRUE(greek_ticks(gpu, 2u, err, sizeof(err)));
+        ASSERT_TRUE(dc_siege_scene_release(gpu, &scene, err, sizeof(err)));
+        {
+            bool fuse = dc_siege_scene_ignite_load(gpu, &scene, 0.6f, err,
+                                                   sizeof(err));
+            if (!fuse) printf("greek fuse ignite: %s\n", err);
+            ASSERT_TRUE(fuse);
+        }
+        ASSERT_TRUE(greek_ticks(gpu, 10u, err, sizeof(err)));
+        uint32_t flaming = 0u;
+        uint64_t fuel = 0u;
+        for (uint32_t py = 0u; py < 12u; py++)
+            for (uint32_t px = 0u; px < 2u; px++) {
+                fr_reactive_record_t arm_parcel;
+                bool found = false;
+                if (fr_gpu_reactive_read_body(gpu, scene.arm_body, px, py,
+                                              &arm_parcel, &found, err,
+                                              sizeof(err)) &&
+                    found) {
+                    fuel += arm_parcel.state.fuel_mass_fp;
+                    if ((arm_parcel.state.flags & FR_REACTIVE_FLAMING) != 0u)
+                        flaming++;
+                }
+            }
+        printf("greek prompt-launch arm flaming %u fuel %llu\n", flaming,
+               (unsigned long long)fuel);
+        /* A launched burning load scorches the arm top, but the launcher is
+         * preserved when the scanned load-bearing wood stays mostly intact
+         * (the 24-parcel scan holds ~943k when pristine). */
+        ASSERT_TRUE(fuel >= 900000u);
+        dc_gpu_destroy(gpu);
+    }
+    /* Fireproof carrier: the stone arm holds the burning load. */
+    {
+        dc_gpu_t *gpu = greek_grid();
+        ASSERT_TRUE(gpu);
+        dc_siege_scene_t scene = {0};
+        ASSERT_TRUE(dc_siege_scene_build_risk(gpu, DC_SIEGE_LOAD_GREEK, 7u,
+                                              true, &scene, err, sizeof(err)));
+        ASSERT_TRUE(greek_ticks(gpu, 2u, err, sizeof(err)));
+        ASSERT_TRUE(dc_siege_scene_ignite_load(gpu, &scene, 0.f, err, sizeof(err)));
+        ASSERT_TRUE(greek_ticks(gpu, 10u, err, sizeof(err)));
+        dc_gpu_world_body_t arm;
+        ASSERT_TRUE(dc_gpu_read_world_body(gpu, scene.arm_body, &arm, err,
+                                           sizeof(err)));
+        printf("greek fireproof carrier survives: body %x active\n",
+               arm.body.id);
+        ASSERT_TRUE(arm.body.id != 0u);
+        dc_gpu_destroy(gpu);
+    }
+    PASS();
+}
 int main(int argc, char **argv) {
     mkdir("build/screenshots", 0777);
     greek_install_stop();
@@ -425,6 +522,12 @@ int main(int argc, char **argv) {
     }
     if (argc == 2 && strcmp(argv[1], "--stage") == 0) {
         RUN(test_greek_and_oil_stage_matched_prearmed_coating);
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--risk") == 0) {
+        RUN(test_prompt_launch_and_fireproof_carrier_stay_safe);
+        RUN(test_delayed_greek_load_ignites_the_launcher_ensemble);
         printf("%d passed, %d failed\n", g_pass, g_fail);
         return g_fail ? 1 : 0;
     }

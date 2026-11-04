@@ -54,20 +54,42 @@ bool dc_siege_scene_build_douse_pool(dc_gpu_t *gpu, dc_siege_load_t load,
                                      dc_siege_scene_t *out, char *err_buf,
                                      uint32_t err_cap);
 
-/** Light the staged oil or greek coating on the waiting projectile: the
- * fuse for prompt-launch and delayed-hold launcher-risk scenarios. */
+/** Build the launcher-risk fixture: the load waits in the pouch with the
+ * given seed folded into parcel identity, so per-seed ignition thresholds
+ * form a locked deterministic ensemble. The fireproof variant stages the
+ * carrier arm in stone. */
+bool dc_siege_scene_build_risk(dc_gpu_t *gpu, dc_siege_load_t load,
+                               uint32_t seed, bool fireproof,
+                               dc_siege_scene_t *out, char *err_buf,
+                               uint32_t err_cap);
+
+/** Light the staged oil or greek coating on the waiting projectile after
+ * fuse_seconds of burn-down (a struck fuse flares late, letting a launched
+ * load clear the carrier before it flames; zero lights it immediately). */
 bool dc_siege_scene_ignite_load(dc_gpu_t *gpu, dc_siege_scene_t *scene,
-                                char *err_buf, uint32_t err_cap);
+                                float fuse_seconds, char *err_buf,
+                                uint32_t err_cap);
 /** Build the siege with a stone-rimmed water pool east of the wall so a
  * launched load splashes down submerged; used by the dousing controls. */
 bool dc_siege_scene_build_douse_pool(dc_gpu_t *gpu, dc_siege_load_t load,
                                      dc_siege_scene_t *out, char *err_buf,
                                      uint32_t err_cap);
 
-/** Light the staged oil or greek coating on the waiting projectile: the
- * fuse for prompt-launch and delayed-hold launcher-risk scenarios. */
+/** Build the launcher-risk fixture: the load waits in the pouch with the
+ * given seed folded into parcel identity, so per-seed ignition thresholds
+ * form a locked deterministic ensemble. The fireproof variant stages the
+ * carrier arm in stone. */
+bool dc_siege_scene_build_risk(dc_gpu_t *gpu, dc_siege_load_t load,
+                               uint32_t seed, bool fireproof,
+                               dc_siege_scene_t *out, char *err_buf,
+                               uint32_t err_cap);
+
+/** Light the staged oil or greek coating on the waiting projectile after
+ * fuse_seconds of burn-down (a struck fuse flares late, letting a launched
+ * load clear the carrier before it flames; zero lights it immediately). */
 bool dc_siege_scene_ignite_load(dc_gpu_t *gpu, dc_siege_scene_t *scene,
-                                char *err_buf, uint32_t err_cap);
+                                float fuse_seconds, char *err_buf,
+                                uint32_t err_cap);
 
 /** Release the cocked arm without changing any body pose or velocity. */
 bool dc_siege_scene_release(dc_gpu_t *gpu, dc_siege_scene_t *scene,

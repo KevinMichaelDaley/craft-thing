@@ -165,6 +165,7 @@ static const uint32_t DC_SIEGE_MOUNT_ID = 0x70000001u;
 
 static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                                             dc_siege_load_t load, bool douse_pool,
+                                            uint32_t seed, bool fireproof,
                                             dc_siege_scene_t *out, char *err_buf,
                                             uint32_t err_cap);
 
@@ -178,7 +179,8 @@ bool dc_siege_scene_build(dc_gpu_t *gpu, bool wet_wall, bool hot_coal,
 }
 
 bool dc_siege_scene_ignite_load(dc_gpu_t *gpu, dc_siege_scene_t *scene,
-                                char *err_buf, uint32_t err_cap) {
+                                float fuse_seconds, char *err_buf,
+                                uint32_t err_cap) {
     if (!gpu || !scene || !scene->coal_body)
         return siege_error(err_buf, err_cap, "Missing siege load to ignite");
     for (uint32_t py = 0; py < 2u * DC_SIEGE_COAL_RADIUS + 1u; py++)
@@ -225,6 +227,14 @@ bool dc_siege_scene_ignite_load(dc_gpu_t *gpu, dc_siege_scene_t *scene,
             }
             parcel.state.flags |= FR_REACTIVE_COATING_FLAMING;
             parcel.state.coating_threshold = .5f;
+            /* The struck fuse flares late: the integral starts below zero
+             * and burns through at the film hazard rate before the flame
+             * becomes viable, so a launched load clears the carrier. */
+            /* The struck fuse flares late: the ignition threshold sits
+             * above the film integral, and the hazard burn-down at the
+             * film's 5/s rate crosses it after fuse_seconds, letting a
+             * launched load clear the carrier before it flames. */
+            parcel.state.coating_threshold = .5f + 5.0f * fuse_seconds;
             parcel.state.coating_integral = .6f;
             if (!fr_gpu_reactive_seed_body(gpu, scene->coal_body, px, py,
                                            &parcel.state, err_buf, err_cap))
@@ -257,19 +267,28 @@ static void siege_arm_coating(fr_reactive_state_t *state, dc_siege_load_t load) 
 bool dc_siege_scene_build_load(dc_gpu_t *gpu, bool wet_wall, dc_siege_load_t load,
                                dc_siege_scene_t *out, char *err_buf,
                                uint32_t err_cap) {
-    return dc_siege_scene_build_load_basin(gpu, wet_wall, load, false, out,
-                                           err_buf, err_cap);
+    return dc_siege_scene_build_load_basin(gpu, wet_wall, load, false, 0u,
+                                           false, out, err_buf, err_cap);
 }
 
 bool dc_siege_scene_build_douse_pool(dc_gpu_t *gpu, dc_siege_load_t load,
                                      dc_siege_scene_t *out, char *err_buf,
                                      uint32_t err_cap) {
-    return dc_siege_scene_build_load_basin(gpu, false, load, true, out,
-                                           err_buf, err_cap);
+    return dc_siege_scene_build_load_basin(gpu, false, load, true, 0u, false,
+                                           out, err_buf, err_cap);
+}
+
+bool dc_siege_scene_build_risk(dc_gpu_t *gpu, dc_siege_load_t load,
+                               uint32_t seed, bool fireproof,
+                               dc_siege_scene_t *out, char *err_buf,
+                               uint32_t err_cap) {
+    return dc_siege_scene_build_load_basin(gpu, false, load, false, seed,
+                                           fireproof, out, err_buf, err_cap);
 }
 
 static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                                             dc_siege_load_t load, bool douse_pool,
+                                            uint32_t seed, bool fireproof,
                                             dc_siege_scene_t *out, char *err_buf,
                                             uint32_t err_cap) {
     if (!gpu) return siege_error(err_buf, err_cap, "Missing siege GPU context");
@@ -293,7 +312,9 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
     siege_fill_rect(&siege_bar, chunks);
     siege_fill_rect(&siege_rubble, chunks);
     siege_rect_t arm = {DC_SIEGE_ARM_X, DC_SIEGE_ARM_Y, DC_SIEGE_ARM_W,
-                        DC_SIEGE_ARM_H, DC_MATERIAL_WOOD, 0u, 0.f};
+                        DC_SIEGE_ARM_H,
+                        fireproof ? DC_MATERIAL_STONE : DC_MATERIAL_WOOD,
+                        0u, 0.f};
     siege_fill_rect(&arm, chunks);
     for (uint32_t y = DC_SIEGE_ARM_Y; y < DC_SIEGE_ARM_Y + DC_SIEGE_ARM_H; y++)
         for (uint32_t x = DC_SIEGE_ARM_X; x < DC_SIEGE_ARM_X + DC_SIEGE_ARM_W; x++) {
@@ -362,7 +383,9 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
     dc_siege_scene_t scene = {0};
     uint64_t ignored = 0;
     uint32_t ignored_cells = 0;
-    uint64_t parcel_counter = 6ull << 58;
+    /* The seed folds into parcel identity, so the per-parcel ignition
+     * thresholds form a locked deterministic ensemble across seeds. */
+    uint64_t parcel_counter = (6ull << 58) + ((uint64_t)seed << 30);
     /* Wall fuel lives in constructed member parcels, not staged cells. */
     scene.wall_cells = DC_SIEGE_WALL_W * DC_SIEGE_WALL_H;
     scene.wall_fuel_fp = (uint64_t)scene.wall_cells * 39322u;
