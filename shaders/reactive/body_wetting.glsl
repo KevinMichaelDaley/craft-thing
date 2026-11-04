@@ -27,8 +27,11 @@ void body_wet_parcel(Body body,uint piece,uvec2 handle) {
     if(capacity<=float(entry.words[s+12u])) return;
     uint room=uint(capacity-float(entry.words[s+12u]));BodyQuad quad;if(!body_pixel_quad(body,piece,quad)) return;
     vec2 origin=vec2(body.x_fp,body.y_fp)/65536.;
-    ivec2 low=ivec2(floor(origin+min(min(quad.a,quad.b),min(quad.c,quad.d))-.0001));
-    ivec2 high=ivec2(floor(origin+max(max(quad.a,quad.b),max(quad.c,quad.d))+.0001));
+    /* Wetting contact includes the ring of cells around the parcel: water
+     * touching the surface soaks, so submerged loads saturate from pool
+     * water that the displaced interior cells cannot hold. */
+    ivec2 low=ivec2(floor(origin+min(min(quad.a,quad.b),min(quad.c,quad.d))-.0001))-1;
+    ivec2 high=ivec2(floor(origin+max(max(quad.a,quad.b),max(quad.c,quad.d))+.0001))+1;
     ParcelSamples cache=ParcelSamples(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
     float remainder=floatBitsToUint(cache.values[handle.x*3u].w)==handle.y?cache.values[handle.x*3u+1u].w:0.;
     uint transferred=0u;float heat=0.;

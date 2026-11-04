@@ -40,8 +40,24 @@ void burn_coating(Words entry,inout Gas gas,inout float admitted,
     float fuel_credit=float(coating_credit(packed,FR_COATING_REACTION_REM_SHIFT))/1024.;
     float oxygen_credit=float(coating_credit(packed,FR_COATING_OXIDIZER_REM_SHIFT))/1024.;
     float demand=coefficient(profile,FR_PROFILE_OXYGEN_DEMAND_WORD);
+    /* Greek fire is magical: touching water does not douse it. The film
+     * boils the water off as vapor and roars — the reaction rate grows
+     * with wetness and the steam grants heat beyond conservation. */
+    float feed_heat=0.;
+    if(mixed&&wet>0.) {
+        /* The boil is magical: the water is consumed outright rather than
+         * injected as vapor, because a submerged film would otherwise dump
+         * a cell-breaking steam spike into its one gas neighbor. */
+        uint fed=min(entry.words[s+FR_STATE_BOUND_WATER],
+            uint(floor(float(FR_GREEK_WATER_FEED_FP_PER_SECOND)*dt*wet)));
+        if(fed>0u) {
+            entry.words[s+FR_STATE_BOUND_WATER]-=fed;
+            feed_heat=float(fed)*float(FR_GREEK_WATER_FEED_HEAT_PER_FP)/65536.;
+        }
+    }
+    float roar=mixed?1.+wet*float(FR_GREEK_WATER_ROAR_WET_BONUS):1.;
     float rate=coefficient(profile,FR_PROFILE_BURN_RATE_WORD)*dt*
-        (mixed?1.:(1.-wet)*(1.-wet));
+        (mixed?roar:(1.-wet)*(1.-wet));
     float requested=min(float(total)-fuel_credit,float(total)*(1.-exp(-rate)));
     float funded=min(requested,max(0.,(float(stock)+oxygen_credit)/demand-fuel_credit));
     float progress=max(0.,fuel_credit+funded);
@@ -74,10 +90,10 @@ void burn_coating(Words entry,inout Gas gas,inout float admitted,
         temperature/65536.;
     float retained=float(ash)*coefficient(entry.words[s],FR_PROFILE_HEAT_CAPACITY_WORD)*
         temperature/65536.;
-    add_energy(entry,.7*heat-removed+retained);
+    add_energy(entry,.7*heat-removed+retained+feed_heat);
     gas.species.z+=float(exhaust)/65536.;
     gas.dynamics.x+=float(soot)/65536.;
-    gas.dynamics.y+=.3*heat+removed-retained;
+    gas.dynamics.y+=.3*heat+removed-retained+feed_heat;
     gas.visual.rgb+=(mixed?vec3(.10,.20,.14):vec3(.18,.16,.14))*
         float(exhaust+soot)/65536.;
     admitted+=heat;source_temperature=max(source_temperature,temperature);

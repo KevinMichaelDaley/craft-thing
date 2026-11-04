@@ -1986,10 +1986,12 @@ build/fluid_binding_tests: tests/vulkan/fluid_binding_tests.c $(GPU_OBJ) $(CHUNK
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/fluid_binding_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/device_selection_tests: tests/vulkan/device_selection_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/device_selection_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
-.PHONY: test_device_selection
-test_device_selection: build/device_selection_tests
-	./build/device_selection_tests
-test: test_device_selection
+build/greek_siege_tests: tests/app/greek_siege_tests.c Makefile src/app/siege_scene.h src/app/view_config.h $(SIEGE_SCENE_SRC) $(PERFORMANCE_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) tests/app/greek_siege_tests.c src/app/siege_scene.c src/app/smoke_profile.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+.PHONY: test_greek_siege
+test_greek_siege: build/greek_siege_tests
+	./build/greek_siege_tests --stage
+test: test_greek_siege
 .PHONY: test_bulk_phase test_bulk_phase_gpu test_bulk_rheology
 test: test_bulk_phase test_bulk_phase_gpu test_bulk_rheology
 test_bulk_phase: build/bulk_phase_tests

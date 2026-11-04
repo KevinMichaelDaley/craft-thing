@@ -20,6 +20,12 @@
  * slice of its own thermal energy with the mass. Exact, conservative. */
 #define FR_COMBUSTION_BRAND_FUEL_FP_PER_SECOND 4096.0
 #define FR_COMBUSTION_BRAND_PARCEL_FUEL_KEEP_FP 2048.0
+/* Greek fire is magical: water does not douse it. Contact water boils off
+ * as vapor and the reaction gains power beyond strict conservation, so a
+ * doused Greek fire grows stronger while an ordinary oil film douses. */
+#define FR_GREEK_WATER_FEED_FP_PER_SECOND 8192.0
+#define FR_GREEK_WATER_FEED_HEAT_PER_FP 0.5
+#define FR_GREEK_WATER_ROAR_WET_BONUS 2.0
 #define FR_COMBUSTION_SMALL_BODY_FUEL_FP_LIMIT 16384u
 #define FR_COMBUSTION_AIR_VISCOSITY 0.000018
 #define FR_COMBUSTION_AIR_CONDUCTIVITY 0.02

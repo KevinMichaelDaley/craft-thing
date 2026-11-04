@@ -27,11 +27,47 @@ typedef struct {
     uint32_t wall_cells, coal_cells;
 } dc_siege_scene_t;
 
+/** Projectile load staged in the pouch. Coal is the locked burning-coal
+ * shot; oil and greek stage an inert stone core with a pre-armed ordinary
+ * oil or oil/jelly/bound-oxidizer coating for the Greek-fire module. */
+typedef enum {
+    DC_SIEGE_LOAD_COAL,
+    DC_SIEGE_LOAD_OIL,
+    DC_SIEGE_LOAD_GREEK
+} dc_siege_load_t;
+
 /** Build the locked siege: fixed stone floor, 8x80 dry or saturated wood wall,
  * supported launcher frame, cocked arm, revolute pivot/latch/pouch and one
  * burning coal ball. The wet control saturates the wall at 0.95. */
 bool dc_siege_scene_build(dc_gpu_t *gpu, bool wet_wall, bool hot_coal,
                           dc_siege_scene_t *out, char *err_buf, uint32_t err_cap);
+
+/** Build the siege with an explicit projectile load (coal, ordinary oil or
+ * Greek fire). Oil and Greek loads carry matched pre-armed coating fuel on
+ * an inert stone core so coating chemistry is the only fuel difference. */
+bool dc_siege_scene_build_load(dc_gpu_t *gpu, bool wet_wall, dc_siege_load_t load,
+                               dc_siege_scene_t *out, char *err_buf,
+                               uint32_t err_cap);
+/** Build the siege with a stone-rimmed water pool east of the wall so a
+ * launched load splashes down submerged; used by the dousing controls. */
+bool dc_siege_scene_build_douse_pool(dc_gpu_t *gpu, dc_siege_load_t load,
+                                     dc_siege_scene_t *out, char *err_buf,
+                                     uint32_t err_cap);
+
+/** Light the staged oil or greek coating on the waiting projectile: the
+ * fuse for prompt-launch and delayed-hold launcher-risk scenarios. */
+bool dc_siege_scene_ignite_load(dc_gpu_t *gpu, dc_siege_scene_t *scene,
+                                char *err_buf, uint32_t err_cap);
+/** Build the siege with a stone-rimmed water pool east of the wall so a
+ * launched load splashes down submerged; used by the dousing controls. */
+bool dc_siege_scene_build_douse_pool(dc_gpu_t *gpu, dc_siege_load_t load,
+                                     dc_siege_scene_t *out, char *err_buf,
+                                     uint32_t err_cap);
+
+/** Light the staged oil or greek coating on the waiting projectile: the
+ * fuse for prompt-launch and delayed-hold launcher-risk scenarios. */
+bool dc_siege_scene_ignite_load(dc_gpu_t *gpu, dc_siege_scene_t *scene,
+                                char *err_buf, uint32_t err_cap);
 
 /** Release the cocked arm without changing any body pose or velocity. */
 bool dc_siege_scene_release(dc_gpu_t *gpu, dc_siege_scene_t *scene,
