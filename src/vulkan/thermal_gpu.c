@@ -110,6 +110,7 @@ static void record_combustion(dc_gpu_t *g,float seconds,uint32_t mode) {
     struct fr_thermal_gpu *t=g->thermal;struct fr_gas_gpu *gas=g->gas;
     uint32_t push[20]={g->width,g->height,0,gas->sparse_owners?1u:0u};memcpy(push+2,&seconds,4);
     push[16]=dc_gpu_pixel_pool_word_offset(g)+DC_GPU_PIXEL_POOL_HEADER_WORDS;
+    push[17]=g->page_width;
     VkDeviceAddress addresses[4]={gas->state[gas->direct_publish?1u:0u].address,
         gas->state[2].address,gas->gates.address,gas->parameters.address};
     memcpy(push+4,addresses,sizeof(addresses));
