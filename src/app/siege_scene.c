@@ -310,7 +310,7 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                      (int32_t)lroundf(40.f * cosf(-DC_SIEGE_COCKED_ANGLE));
     if (douse_pool) {ball_x = 32; ball_y = 215;}
     if (douse_pool)
-        for (uint32_t y = 212u; y <= 220u; y++)
+        for (uint32_t y = 209u; y <= 220u; y++)
             for (uint32_t x = 24u; x <= 40u; x++) {
                 uint32_t tile = (y / 64u) * DC_SIEGE_TILES_X + x / 64u;
                 uint32_t local = (y % 64u) * 64u + x % 64u;

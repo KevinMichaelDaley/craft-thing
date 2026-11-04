@@ -39,13 +39,17 @@ void body_wet_parcel(Body body,uint piece,uvec2 handle) {
     for(int y=low.y;y<=high.y;y++) for(int x=low.x;x<=high.x;x++) {
         ivec2 cell=ivec2(x,y);if(any(lessThan(cell,ivec2(0)))||any(greaterThanEqual(cell,ivec2(params.width,params.height)))) continue;
         uint index=uint(y)*params.width+uint(x),at=atlas_at(index);if(at==0xffffffffu) continue;
-        vec4 source=fluxes[index+params.width*params.height];uint available=floatBitsToUint(source.y);
+        /* Read the standing water straight from the atlas cell: the fluid
+         * transport runs in its own submission, so there is no race, and
+         * the staged flux bank is not populated for every wet scene. */
+        uint available=cells[at].y;
         scanned_available=max(scanned_available,min(available,1023u));if(available==0u) continue;
         float contact=body_water_contact(body,piece,cell,min(1.,float(available)/65536.));if(contact<=0.) continue;
         float exposure=remainder+uintBitsToFloat(params.seconds)*float(FR_THERMAL_WETTING_PER_SECOND)*65536.*contact/4.;
         uint requested=min(room,uint(floor(exposure)));remainder=fract(exposure);
         uint taken=body_water_reserve(at,requested);if(taken==0u) continue;
-        float excess=source.x*(float(taken)/float(available));body_water_energy_add(at,-excess);
+        float excess=water_energy_at(at)*(float(taken)/float(available));
+        body_water_energy_add(at,-excess);
         heat+=excess+float(taken)/65536.*coefficient(3u,5u)*float(FR_THERMAL_AMBIENT_K);
         room-=taken;transferred+=taken;
     }

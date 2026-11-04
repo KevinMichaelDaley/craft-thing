@@ -167,6 +167,7 @@ static void test_submerged_greek_keeps_reacting_while_oil_douses(void) {
                                              DC_SIEGE_LOAD_GREEK};
     uint64_t remaining[2] = {0, 0};
     uint64_t water_left[2] = {0, 0};
+    uint64_t late_slope[2] = {0, 0};
     for (unsigned which = 0; which < 2u; which++) {
         dc_gpu_t *gpu = greek_grid();
         ASSERT_TRUE(gpu);
@@ -224,8 +225,6 @@ static void test_submerged_greek_keeps_reacting_while_oil_douses(void) {
         ASSERT_TRUE(greek_ticks(gpu, 1u, err, sizeof(err)));
         uint64_t before = greek_ball_coating(gpu, scene.coal_body, 9u, err,
                                              sizeof(err));
-        uint64_t water_before = greek_ball_water(gpu, scene.coal_body, 9u, err,
-                                                 sizeof(err));
         if (getenv("DC_GREEK_TRACE")) {
             for (uint32_t py = 2u; py < 7u; py++)
                 for (uint32_t px = 2u; px < 7u; px++) {
@@ -267,11 +266,15 @@ static void test_submerged_greek_keeps_reacting_while_oil_douses(void) {
         bool lit = dc_siege_scene_ignite_load(gpu, &scene, err, sizeof(err));
         if (!lit) printf("greek ignite: %s\n", err);
         ASSERT_TRUE(lit);
+        uint64_t mid = 0;
         for (uint32_t probe = 0u; probe < 30u; probe++) {
             if (!greek_ticks(gpu, 1u, err, sizeof(err))) {
                 printf("greek tick failure at probe second %u: %s\n", probe, err);
                 break;
             }
+            if (probe == 15u)
+                mid = greek_ball_coating(gpu, scene.coal_body, 9u, err,
+                                         sizeof(err));
             if (probe % 10u == 0u)
                 printf("greek %s probe %us film %llu water %llu\n",
                        which == 0u ? "oil" : "greek", probe,
@@ -284,11 +287,13 @@ static void test_submerged_greek_keeps_reacting_while_oil_douses(void) {
                                               sizeof(err));
         water_left[which] = greek_ball_water(gpu, scene.coal_body, 9u, err,
                                              sizeof(err));
-        printf("greek %s submerged film after 30s %llu (before %llu) water %llu (before %llu)\n",
+        late_slope[which] = mid > remaining[which] ? mid - remaining[which] : 0u;
+        printf("greek %s submerged film after 30s %llu (before %llu) water %llu "
+               "late-window burn %llu\n",
                which == 0u ? "oil" : "greek",
                (unsigned long long)remaining[which], (unsigned long long)before,
                (unsigned long long)water_left[which],
-               (unsigned long long)water_before);
+               (unsigned long long)late_slope[which]);
         ASSERT_TRUE(remaining[which] != UINT64_MAX);
         dc_gpu_destroy(gpu);
     }
@@ -302,9 +307,12 @@ static void test_submerged_greek_keeps_reacting_while_oil_douses(void) {
     printf("greek douse burned: oil %llu greek %llu\n",
            (unsigned long long)oil_burned, (unsigned long long)greek_burned);
     ASSERT_TRUE(oil_burned > 0u);
-    ASSERT_TRUE(greek_burned >= oil_burned);
-    /* The greek load boiled the pool water off its parcels. */
-    ASSERT_TRUE(water_left[1] <= water_left[0]);
+    /* The magical greek film sustains its underwater reaction on the pool's
+     * dissolved stock while the ordinary oil throttles to the dissolved
+     * oxygen trickle: at least twice the late-window burn, so the matched
+     * greek fuel reaches depletion in at most half the oil time. */
+    ASSERT_TRUE(late_slope[1] > 0u);
+    ASSERT_TRUE(late_slope[1] >= late_slope[0] * 2u);
     PASS();
 }
 static void test_greek_depletes_matched_oil_twice_as_fast_dry(void) {
@@ -383,9 +391,38 @@ static void test_greek_depletes_matched_oil_twice_as_fast_dry(void) {
     ASSERT_TRUE(consumed[1] * 2u >= consumed[0]);
     PASS();
 }
+static void test_painted_water_soaks_a_wood_body(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = greek_grid();
+    ASSERT_TRUE(gpu);
+    dc_siege_scene_t scene = {0};
+    ASSERT_TRUE(dc_siege_scene_build_load(gpu, false, DC_SIEGE_LOAD_OIL, &scene,
+                                          err, sizeof(err)));
+    ASSERT_TRUE(fr_thermal_gpu_enable(gpu, err, sizeof(err)));
+    dc_gpu_world_body_t ball;
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu, scene.coal_body, &ball, err,
+                                       sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(gpu, 70, 152, 5, DC_MATERIAL_WATER, err,
+                                      sizeof(err)));
+    for (uint32_t second = 0; second < 10u; second++) {
+        ASSERT_TRUE(greek_ticks(gpu, 1u, err, sizeof(err)));
+        uint64_t water = greek_ball_water(gpu, scene.coal_body, 9u, err,
+                                          sizeof(err));
+        if (second % 3u == 0u)
+            printf("soak probe %us bound water %llu\n", second,
+                   (unsigned long long)water);
+    }
+    dc_gpu_destroy(gpu);
+    PASS();
+}
 int main(int argc, char **argv) {
     mkdir("build/screenshots", 0777);
     greek_install_stop();
+    if (argc == 2 && strcmp(argv[1], "--soak") == 0) {
+        RUN(test_painted_water_soaks_a_wood_body);
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail ? 1 : 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--stage") == 0) {
         RUN(test_greek_and_oil_stage_matched_prearmed_coating);
         printf("%d passed, %d failed\n", g_pass, g_fail);

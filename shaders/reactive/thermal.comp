@@ -32,11 +32,11 @@ float coefficient(uint material,uint field) {return uintBitsToFloat(profiles[mat
 #include "coating_mass.glsl"
 #include "world_body.glsl"
 uint atlas_at(uint index) {
-    uint x=index%params.width,y=index/params.width,page=pages[(y/64u)*((params.width+63u)/64u)+x/64u];
+    uint x=index%params.width,y=index/params.width,page=pages[(y/64u)*params.unused+x/64u];
     return page==0u?0xffffffffu:(page-1u)*4096u+(y%64u)*64u+x%64u;
 }
 uvec2 handle_at(uint index) {
-    uint x=index%params.width,y=index/params.width,page=pages[(y/64u)*((params.width+63u)/64u)+x/64u];
+    uint x=index%params.width,y=index/params.width,page=pages[(y/64u)*params.unused+x/64u];
     return page==0u?uvec2(0):Handles(uvec2(root[6],root[7])).values[(page-1u)*4096u+(y%64u)*64u+x%64u];
 }
 bool valid(uvec2 handle) {
