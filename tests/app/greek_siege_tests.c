@@ -18,12 +18,17 @@
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/fire/material_profile.h"
 #include "../../src/vulkan/reactive_storage_gpu.h"
+#include "../../src/vulkan/thermal_gpu_state.h"
 
 static int g_pass, g_fail;
 #include "ferrum/fire/gpu.h"
 #include "ferrum/physics/revolute_gpu.h"
 #include "ferrum/structural/gpu.h"
 
+static uint32_t greek_tile_slot(const dc_gpu_t *gpu, uint32_t x, uint32_t y) {
+    const uint32_t *pages = gpu->page_mapped;
+    return pages[(y / 64u) * gpu->page_width + x / 64u];
+}
 static volatile sig_atomic_t greek_stopped;
 static void greek_stop(int number) {(void)number;greek_stopped = 1;}
 static void greek_install_stop(void) {
@@ -181,6 +186,40 @@ static void test_submerged_greek_keeps_reacting_while_oil_douses(void) {
                                probe.state.coating_oil_fuel_fp +
                                probe.state.coating_jelly_fuel_fp)
                          : 0ull);
+            {
+                const dc_gpu_address_buffer_t *fluxes =
+                    &gpu->thermal->fluxes;
+                const uint32_t *words = fluxes->mapped;
+                uint32_t width = gpu->width;
+                uint32_t seen = 0, sentinel = 0, wet_cells = 0;
+                for (uint32_t y = 210u; y <= 221u; y++)
+                    for (uint32_t x = 22u; x <= 42u; x++) {
+                        uint32_t index = y * width + x;
+                        uint32_t available, magic;
+                        memcpy(&available, &words[(index + width) * 4u + 1u],
+                               sizeof(available));
+                        memcpy(&magic, &words[(index + width) * 4u + 3u],
+                               sizeof(magic));
+                        if ((magic & 0x7f800000u) == 0x5e000000u) sentinel++;
+                        if (available) { seen++; wet_cells = index; }
+                    }
+                printf("greek flux probe: wet flux cells %u last %u "
+                       "sentinel %u\n", seen, wet_cells, sentinel);
+            }
+            dc_chunk_t *pool = calloc(1, sizeof(*pool));
+            if (dc_gpu_download_chunk(gpu, greek_tile_slot(gpu, 32u, 215u) - 1u,
+                                      pool, err, sizeof(err))) {
+                uint32_t wet = 0;
+                for (uint32_t i = 0; i < 4096u; i++)
+                    if (pool->cells[i].material == DC_MATERIAL_WATER &&
+                        pool->cells[i].fluid_mass == DC_FLUID_FULL)
+                        wet++;
+                printf("greek pool chunk 30: water-full cells %u "
+                       "(cell(32,215) material %u fluid %u)\n",
+                       wet, pool->cells[(215u % 64u) * 64u + 32u].material,
+                       pool->cells[(215u % 64u) * 64u + 32u].fluid_mass);
+            }
+            free(pool);
         }
         ASSERT_TRUE(greek_ticks(gpu, 1u, err, sizeof(err)));
         uint64_t before = greek_ball_coating(gpu, scene.coal_body, 9u, err,
@@ -219,6 +258,12 @@ static void test_submerged_greek_keeps_reacting_while_oil_douses(void) {
         ASSERT_TRUE(dc_gpu_paint_material(gpu, soak_x, soak_y, 6u,
                                           DC_MATERIAL_WATER, err, sizeof(err)));
         ASSERT_TRUE(greek_ticks(gpu, 2u, err, sizeof(err)));
+        {
+            uint32_t counters[32] = {0};
+            if (fr_combustion_gpu_bonfire_counters(gpu, counters))
+                printf("greek wet diag after soak: scanned-max %u soaked %u phase21 cells %u last-wet %u\n",
+                       counters[30], counters[18], counters[12], counters[13]);
+        }
         bool lit = dc_siege_scene_ignite_load(gpu, &scene, err, sizeof(err));
         if (!lit) printf("greek ignite: %s\n", err);
         ASSERT_TRUE(lit);
@@ -284,6 +329,40 @@ static void test_greek_depletes_matched_oil_twice_as_fast_dry(void) {
                                probe.state.coating_oil_fuel_fp +
                                probe.state.coating_jelly_fuel_fp)
                          : 0ull);
+            {
+                const dc_gpu_address_buffer_t *fluxes =
+                    &gpu->thermal->fluxes;
+                const uint32_t *words = fluxes->mapped;
+                uint32_t width = gpu->width;
+                uint32_t seen = 0, sentinel = 0, wet_cells = 0;
+                for (uint32_t y = 210u; y <= 221u; y++)
+                    for (uint32_t x = 22u; x <= 42u; x++) {
+                        uint32_t index = y * width + x;
+                        uint32_t available, magic;
+                        memcpy(&available, &words[(index + width) * 4u + 1u],
+                               sizeof(available));
+                        memcpy(&magic, &words[(index + width) * 4u + 3u],
+                               sizeof(magic));
+                        if ((magic & 0x7f800000u) == 0x5e000000u) sentinel++;
+                        if (available) { seen++; wet_cells = index; }
+                    }
+                printf("greek flux probe: wet flux cells %u last %u "
+                       "sentinel %u\n", seen, wet_cells, sentinel);
+            }
+            dc_chunk_t *pool = calloc(1, sizeof(*pool));
+            if (dc_gpu_download_chunk(gpu, greek_tile_slot(gpu, 32u, 215u) - 1u,
+                                      pool, err, sizeof(err))) {
+                uint32_t wet = 0;
+                for (uint32_t i = 0; i < 4096u; i++)
+                    if (pool->cells[i].material == DC_MATERIAL_WATER &&
+                        pool->cells[i].fluid_mass == DC_FLUID_FULL)
+                        wet++;
+                printf("greek pool chunk 30: water-full cells %u "
+                       "(cell(32,215) material %u fluid %u)\n",
+                       wet, pool->cells[(215u % 64u) * 64u + 32u].material,
+                       pool->cells[(215u % 64u) * 64u + 32u].fluid_mass);
+            }
+            free(pool);
         }
         ASSERT_TRUE(greek_ticks(gpu, 1u, err, sizeof(err)));
         uint64_t before = greek_ball_coating(gpu, scene.coal_body, 9u, err,

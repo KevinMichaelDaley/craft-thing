@@ -205,7 +205,9 @@ void main() {
     }
     if(active_phase()==17u) {radiant_apply(index);return;}
     if(active_phase()==21u) {uint at=atlas_at(index);
-        fluxes[index+params.width*params.height]=at==0xffffffffu?vec4(0):vec4(water_energy_at(at),uintBitsToFloat(cells[at].y),0.,0.);return;}
+        fluxes[index+params.width*params.height]=at==0xffffffffu?vec4(0):vec4(water_energy_at(at),uintBitsToFloat(cells[at].y),0.,
+            uintBitsToFloat(0x5E000000u|(index&0x00ffffffu)));
+        return;}
     if(active_phase()==0u||active_phase()==23u) {
         if(active_phase()==23u) {
             if((params.mode&2u)!=0u) terrain_phase_coat_parcel(index);

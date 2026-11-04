@@ -35,10 +35,12 @@ void body_wet_parcel(Body body,uint piece,uvec2 handle) {
     ParcelSamples cache=ParcelSamples(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
     float remainder=floatBitsToUint(cache.values[handle.x*3u].w)==handle.y?cache.values[handle.x*3u+1u].w:0.;
     uint transferred=0u;float heat=0.;
+    uint scanned_available=0u;
     for(int y=low.y;y<=high.y;y++) for(int x=low.x;x<=high.x;x++) {
         ivec2 cell=ivec2(x,y);if(any(lessThan(cell,ivec2(0)))||any(greaterThanEqual(cell,ivec2(params.width,params.height)))) continue;
         uint index=uint(y)*params.width+uint(x),at=atlas_at(index);if(at==0xffffffffu) continue;
-        vec4 source=fluxes[index+params.width*params.height];uint available=floatBitsToUint(source.y);if(available==0u) continue;
+        vec4 source=fluxes[index+params.width*params.height];uint available=floatBitsToUint(source.y);
+        scanned_available=max(scanned_available,min(available,1023u));if(available==0u) continue;
         float contact=body_water_contact(body,piece,cell,min(1.,float(available)/65536.));if(contact<=0.) continue;
         float exposure=remainder+uintBitsToFloat(params.seconds)*float(FR_THERMAL_WETTING_PER_SECOND)*65536.*contact/4.;
         uint requested=min(room,uint(floor(exposure)));remainder=fract(exposure);
