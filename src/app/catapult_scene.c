@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/gas_gpu.h"
@@ -260,7 +261,11 @@ bool dc_catapult_scene_build_with_chunk_stride(dc_gpu_t *gpu, bool hot,
         .anchor_a = {4.f, 0.f}, .anchor_b = {0.f, 0.f},
         .flags = FR_REVOLUTE_SPRING | FR_REVOLUTE_LIMITS,
         .lower_angle = -1.2f, .upper_angle = 1.1f,
-        .spring_stiffness = 20000.f, .spring_rest_angle = .6f};
+        .spring_stiffness = 20000.f *
+            (getenv("DC_CATAPULT_SPRING_SCALE")
+                 ? strtof(getenv("DC_CATAPULT_SPRING_SCALE"), NULL)
+                 : 1.0f),
+        .spring_rest_angle = .6f};
     float held_angle = CATAPULT_COCKED_ANGLE - CATAPULT_FRAME_ANGLE;
     fr_revolute_joint_t latch = {.id = CATAPULT_LATCH_ID,
         .body_a = pivot.body_a, .body_b = CATAPULT_ARM_ID,

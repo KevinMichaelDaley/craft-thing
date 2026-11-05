@@ -23,7 +23,7 @@ layout(set=0,binding=7,std430) coherent buffer WaterEnergy {uint water_heat_word
 layout(set=0,binding=10,std430) coherent buffer BulkPhase {uint bulk_phase_words[];};
 float water_energy_at(uint at) {return uintBitsToFloat(water_heat_words[at]);}
 void water_energy_set(uint at,float energy) {water_heat_words[at]=floatBitsToUint(energy);}
-layout(push_constant) uniform Params {uint width,height,phase,seconds,pool_word,unused_view,mode,unused;} params;
+layout(push_constant) uniform Params {uint width,height,phase,seconds,pool_word,unused_view,mode,profile_count,page_width;} params;
 uint active_phase() {return SPECIALIZED_PHASE==0xffffffffu?params.phase:SPECIALIZED_PHASE;}
 layout(buffer_reference,std430,buffer_reference_align=4) buffer Words {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=8) readonly buffer Handles {uvec2 values[];};
@@ -32,11 +32,11 @@ float coefficient(uint material,uint field) {return uintBitsToFloat(profiles[mat
 #include "coating_mass.glsl"
 #include "world_body.glsl"
 uint atlas_at(uint index) {
-    uint x=index%params.width,y=index/params.width,page=pages[(y/64u)*params.unused+x/64u];
+    uint x=index%params.width,y=index/params.width,page=pages[(y/64u)*params.page_width+x/64u];
     return page==0u?0xffffffffu:(page-1u)*4096u+(y%64u)*64u+x%64u;
 }
 uvec2 handle_at(uint index) {
-    uint x=index%params.width,y=index/params.width,page=pages[(y/64u)*params.unused+x/64u];
+    uint x=index%params.width,y=index/params.width,page=pages[(y/64u)*params.page_width+x/64u];
     return page==0u?uvec2(0):Handles(uvec2(root[6],root[7])).values[(page-1u)*4096u+(y%64u)*64u+x%64u];
 }
 bool valid(uvec2 handle) {
@@ -80,7 +80,7 @@ vec4 sample_with_metadata(uint index,out vec4 metadata) {
     settle_shock(e);
     metadata=vec4(uintBitsToFloat(1u),uintBitsToFloat(e.words[at+12u]),uintBitsToFloat(m),
         round(float(e.words[at+8u])*coefficient(m,19u)));
-    if(m>=params.unused) return vec4(0);
+    if(m>=params.profile_count) return vec4(0);
     float energy=reactive_parcel_energy(e,at);
     float capacity=reactive_parcel_heat_capacity(e,at);
     float wet_capacity=float(e.words[at+8u])*coefficient(m,19u);

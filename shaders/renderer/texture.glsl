@@ -38,6 +38,10 @@ Appearance texture_sample(ivec2 rest,uint identity,uint material,uint style) {
     else if(material==7u || material==8u) a.color_roughness.rgb=vec3(.35,.16,.045);
     else if(material==4u) a.color_roughness.rgb=vec3(.28,.14,.05);
     else if(material==6u) a.color_roughness.rgb=vec3(.42,.39,.34);
+    else if(material==18u) a.color_roughness.rgb=vec3(.85,.66,.22);
+    else if(material==19u) a.color_roughness.rgb=vec3(.45,.38,.55);
+    else if(material==20u) a.color_roughness.rgb=vec3(.30,.32,.28);
+    else if(material==16u) a.color_roughness.rgb=vec3(.06,.32,.14);
     uint seed=texture_hash(identity);vec2 p=vec2(rest);
     float h=surface_height(p,seed,material,style),variation=.65+.7*h;
     if(style==2u && material!=7u && material!=8u)

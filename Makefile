@@ -944,6 +944,20 @@ catapult-demo-quarter-native: build/catapult_demo_quarter_native
 .PHONY: catapult-demo
 catapult-demo: build/catapult_demo
 	./build/catapult_demo
+build/greek_catapult_demo: src/app/greek_catapult_demo.c src/app/catapult_scene.c src/app/catapult_scene.h build/fluid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) src/app/greek_catapult_demo.c src/app/catapult_scene.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+.PHONY: greek-catapult-demo
+greek-catapult-demo: build/greek_catapult_demo
+	./build/greek_catapult_demo
+build/greek_siege_demo: src/app/greek_siege_demo.c src/app/siege_scene.h build/fluid_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) src/app/greek_siege_demo.c src/app/siege_scene.c src/app/smoke_profile.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+.PHONY: greek-siege-demo
+greek-siege-demo: build/greek_siege_demo
+	./build/greek_siege_demo
+.PHONY: greek-siege-demo-video
+greek-siege-demo-video: build/greek_siege_demo
+	./build/greek_siege_demo --capture
+	ffmpeg -y -framerate 60 -i build/screenshots/greek_demo_frames/frame_%05u.bmp -c:v libx264 -pix_fmt yuv420p -crf 18 build/screenshots/greek_siege_demo.mp4
 .PHONY: test_catapult_scene
 test: test_catapult_scene
 test_catapult_scene: build/catapult_scene_tests

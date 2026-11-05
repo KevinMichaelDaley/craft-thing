@@ -29,8 +29,12 @@ void burn_coating(Words entry,inout Gas gas,inout float admitted,
     entry.words[s+FR_STATE_COATING_INTEGRAL]=floatBitsToUint(integral);
     uint stock=mixed?entry.words[s+FR_STATE_COATING_OXIDIZER]:
         uint(floor(max(0.,gas.species.x)*65536.));
-    bool viable=temperature>=coefficient(profile,FR_PROFILE_IGNITION_WORD)&&
-        (mixed||wet<.8)&&stock>0u;
+    /* The magical mixed compound keeps reacting while its bound stock
+     * lasts — under water, cold, regardless — once its fuse has crossed
+     * the threshold. Ordinary oil still needs heat and stays douseable. */
+    bool lit=integral>=threshold&&stock>0u;
+    bool viable=mixed?lit:(temperature>=coefficient(profile,FR_PROFILE_IGNITION_WORD)&&
+        wet<.8&&stock>0u);
     uint flags=entry.words[s+FR_STATE_FLAGS];
     if(!viable) flags&=~4u;
     else if(integral>=threshold) flags|=4u;
@@ -91,11 +95,17 @@ void burn_coating(Words entry,inout Gas gas,inout float admitted,
     float retained=float(ash)*coefficient(entry.words[s],FR_PROFILE_HEAT_CAPACITY_WORD)*
         temperature/65536.;
     add_energy(entry,.7*heat-removed+retained+feed_heat);
-    gas.species.z+=float(exhaust)/65536.;
-    gas.dynamics.x+=float(soot)/65536.;
-    gas.dynamics.y+=.3*heat+removed-retained+feed_heat;
-    gas.visual.rgb+=(mixed?vec3(.10,.20,.14):vec3(.18,.16,.14))*
-        float(exhaust+soot)/65536.;
+    /* A submerged film burns on its bound oxidizer and the products
+     * dissolve: no gas commit into a zero-volume cell, where the finish
+     * normalization would divide by nothing. The heat still drives the
+     * substrate's corrosion stock. */
+    if(gas.geometry.y>0.) {
+        gas.species.z+=float(exhaust)/65536.;
+        gas.dynamics.x+=float(soot)/65536.;
+        gas.dynamics.y+=.3*heat+removed-retained+feed_heat;
+        gas.visual.rgb+=(mixed?vec3(.10,.20,.14):vec3(.18,.16,.14))*
+            float(exhaust+soot)/65536.;
+    }
     admitted+=heat;source_temperature=max(source_temperature,temperature);
     sources|=FR_FIRE_EMISSION_SURFACE;
     if(mixed) sources|=FR_FIRE_EMISSION_MAGIC|(FR_GREEK_FIRE_RGB8<<8u);

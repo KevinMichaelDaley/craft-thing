@@ -391,7 +391,10 @@ void corrode_entry(Words entry,uint owner,uint at,uint geometry_word,uint geomet
     float rate=0.;uint denominator=magical?
         FR_CORROSION_GREEK_OXIDIZER_DENOMINATOR:FR_CORROSION_AIR_OXIDIZER_DENOMINATOR;
     if(magical) {
-        if(temperature<FR_CORROSION_GREEK_MIN_K||entry.words[s+FR_STATE_COATING_JELLY]==0u||
+        /* The magical corrosion runs while the smeared greek film burns —
+         * under water, cold — not while the substrate itself is hot. The
+         * lit flag and the film stock bound the spend. */
+        if((entry.words[s+1u]&4u)==0u||entry.words[s+FR_STATE_COATING_JELLY]==0u||
            entry.words[s+FR_STATE_COATING_OXIDIZER]==0u) return;
         float coverage=min(1.,float(entry.words[s+FR_STATE_COATING_JELLY])/
             float(entry.words[s+FR_STATE_DRY_MASS]));
@@ -726,13 +729,6 @@ void apply_body_brand(ivec2 p,Words c) {
     bool sample_target=cm==18u||cm==19u;
     if(!fuel_target&&!sample_target) return;
     if((c.words[cs+1u]&2u)!=0u) return;
-    if(sample_target) {
-        /* Reachability marker: the first film word counts scan visits and
-         * flag 16 marks a coat attempt through this path. */
-        if(c.words[cs+FR_STATE_COATING_OIL]==0u)
-            atomicAdd(c.words[cs+FR_STATE_COATING_OIL],1u);
-        if((c.words[cs+1u]&4u)==0u) atomicOr(c.words[cs+1u],16u);
-    }
     Words scratch=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
     for(uint d=0u;d<8u;d++) {
         ivec2 q=p+body_directions[d];
@@ -773,7 +769,9 @@ void apply_body_brand(ivec2 p,Words c) {
                 /* Corroding samples (gold coins, magic ingredients): the
                  * brand smears burning greek film onto them instead of
                  * fuel, arming the finite corrosion stock their own
-                 * reaction pass spends. */
+                 * reaction pass spends. The smear strikes the sample to
+                 * the film's ignition point — the film arrives lit and
+                 * the magical compound keeps it burning under water. */
                 if((c.words[cs+1u]&4u)!=0u) continue;
                 uint take_oil=min(e.words[es+13u]/8u,4096u);
                 uint take_jelly=min(e.words[es+14u]/8u,4096u);
@@ -785,8 +783,17 @@ void apply_body_brand(ivec2 p,Words c) {
                 e.words[es+13u]-=take_oil;
                 e.words[es+14u]-=take_jelly;
                 e.words[es+16u]-=take_oxidizer;
-                atomicOr(c.words[cs+1u],4u);
-                add_energy(c,float(take_oil+take_jelly)*0.5);
+                atomicOr(c.words[cs+1u],4u|16u);
+                float capacity=solid_capacity(c);
+                if(capacity>0.) {
+                    float energy=uintBitsToFloat(c.words[cs+17u])+
+                        uintBitsToFloat(c.words[cs+25u])+
+                        uintBitsToFloat(c.words[cs+26u]);
+                    float current=energy/capacity;
+                    float strike=current<530.?530.-current:0.;
+                    add_energy(c,strike*capacity+
+                        float(take_oil+take_jelly)*0.25);
+                }
                 add_energy(e,-float(take_oil+take_jelly)*0.5);
                 atomicAdd(hud[31],1u);
             }
@@ -831,12 +838,8 @@ void main() {
                 near_burning=near_burning||thermal_occupancy[uint(q.y)*params.width+uint(q.x)]!=0u;}
         if(!near_burning) return;
         uvec2 sample_handle=Handles(uvec2(root[6],root[7])).values[at];
-        if(sample_handle.y!=0u) {
-            Words se=Words(reactive_entry_address(uvec2(root[4],root[5]),sample_handle.x));
-            if(se.words[FR_ENTRY_STATE+13u]==0u)
-                se.words[FR_ENTRY_STATE+13u]=7u;
-            apply_body_brand(p,se);
-        }
+        if(sample_handle.y!=0u)
+            apply_body_brand(p,Words(reactive_entry_address(uvec2(root[4],root[5]),sample_handle.x)));
         return;
     }
     if(!reaction_receiver(at)) return;

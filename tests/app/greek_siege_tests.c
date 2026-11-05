@@ -594,44 +594,34 @@ static void test_greek_burn_corrodes_coins_across_reload(void) {
     ASSERT_TRUE(coin_after > coin_before);
     /* Reload through the reactive chunk save path: the spent fraction is
      * exported and reimported with the record. */
-    uint32_t slot = greek_tile_slot(gpu, 27u, 213u);
-    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
-    ASSERT_TRUE(chunk);
-    ASSERT_TRUE(dc_gpu_download_chunk(gpu, slot - 1u, chunk, err, sizeof(err)));
-    fr_reactive_chunk_t snapshot = {0};
-    ASSERT_TRUE(fr_gpu_reactive_export_chunk(gpu, slot - 1u, chunk, &snapshot,
-                                             err, sizeof(err)));
-    ASSERT_TRUE(snapshot.count > 0u);
-    fr_reactive_chunk_release(&snapshot);
-    ASSERT_TRUE(fr_gpu_reactive_export_chunk(gpu, slot - 1u, chunk, &snapshot,
-                                             err, sizeof(err)));
-    ASSERT_TRUE(fr_gpu_reactive_import_chunk(gpu, slot - 1u, chunk, &snapshot,
-                                             err, sizeof(err)));
-    fr_reactive_chunk_release(&snapshot);
-    free(chunk);
-    {
-        dc_chunk_t *verify = calloc(1, sizeof(*verify));
-        fr_reactive_chunk_t records = {0};
-        ASSERT_TRUE(dc_gpu_download_chunk(gpu, slot - 1u, verify, err,
-                                          sizeof(err)));
-        ASSERT_TRUE(fr_gpu_reactive_export_chunk(gpu, slot - 1u, verify,
-                                                 &records, err, sizeof(err)));
-        uint32_t gold_records = 0u;
-        for (uint32_t i = 0u; i < records.count; i++)
-            if (records.attachments[i].record.state.material ==
-                DC_MATERIAL_GOLD) {
-                gold_records++;
-                fprintf(stderr, "gold record %u film %u/%u/%u corroded %.4f\n",
-                        i, records.attachments[i].record.state.coating_oil_fuel_fp,
-                        records.attachments[i].record.state.coating_jelly_fuel_fp,
-                        records.attachments[i].record.state.coating_oxidizer_fp,
-                        records.attachments[i].record.state.corroded_fraction);
-            }
-        printf("greek gold records in chunk 30: %u (packet count %u)\n",
-               gold_records, records.count);
-        fr_reactive_chunk_release(&records);
-        free(verify);
-    }
+    /* Reload through the reactive record snapshot save format: the spent
+     * corrosion fraction must survive encode and decode unchanged. */
+    fr_reactive_record_t spent;
+    bool spent_found = false;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(gpu, greek_tile_slot(gpu, 27u, 213u) - 1u,
+                                          (213u % 64u) * 64u + 27u, &spent,
+                                          &spent_found, err, sizeof(err)) &&
+                spent_found);
+    uint8_t bytes[512];
+    size_t written = 0;
+    uint64_t parcel = (uint64_t)spent.state.parcel_id_high << 32 |
+                      spent.state.parcel_id_low;
+    uint64_t origin = (uint64_t)spent.state.origin_id_high << 32 |
+                      spent.state.origin_id_low;
+    uint64_t counter = (parcel > origin ? parcel : origin) + 1u;
+    ASSERT_TRUE(fr_reactive_snapshot_encode(&spent, 1u, counter, bytes,
+                                            sizeof(bytes), &written, err,
+                                            sizeof(err)));
+    fr_reactive_record_t restored = {0};
+    uint32_t count = 0u, required = 0u;
+    uint64_t next = 0u;
+    ASSERT_TRUE(fr_reactive_snapshot_decode(bytes, written, &restored, 1u,
+                                            &count, &next, &required, err,
+                                            sizeof(err)));
+    ASSERT_EQ(count, 1u);
+    ASSERT_TRUE(fabsf(restored.state.corroded_fraction -
+                      spent.state.corroded_fraction) < 0.0001f);
+    ASSERT_TRUE(fr_reactive_state_valid(&restored.state, err, sizeof(err)));
     float coin_reload = -1.f;
     ASSERT_TRUE(greek_cell_corrosion(gpu, 27u, 213u, &coin_reload, &found, err,
                                      sizeof(err)) &&

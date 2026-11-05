@@ -451,7 +451,7 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                                         {27u, 216u, 1u, 1u,
                                          DC_MATERIAL_MAGIC_INGREDIENT, 0u,
                                          0.f}};
-    if (douse_pool)
+    if (douse_pool) {
         okay = okay && siege_stage_region(chunks, coin_rects, 2u,
                                           DC_MATERIAL_GOLD, false, false,
                                           &ignored, &ignored, &ignored_cells,
@@ -461,6 +461,60 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                                   DC_MATERIAL_MAGIC_INGREDIENT, false, false,
                                   &ignored, &ignored, &ignored_cells,
                                   &parcel_counter, packets, err_buf, err_cap);
+        /* The splash coats the samples: the coins carry a lit greek film
+         * from the first tick, which their own corrosion pass spends. */
+        for (uint32_t tile = 0; tile < DC_SIEGE_TILE_COUNT; tile++)
+            for (uint32_t i = 0; i < packets[tile].count; i++) {
+                fr_reactive_state_t *state =
+                    &packets[tile].attachments[i].record.state;
+                if (state->material != DC_MATERIAL_GOLD &&
+                    state->material != DC_MATERIAL_MAGIC_INGREDIENT)
+                    continue;
+                state->coating_oil_fuel_fp = 4096u;
+                state->coating_jelly_fuel_fp = 4096u;
+                state->coating_oxidizer_fp = 4096u;
+                state->coating_threshold = .5f;
+                state->coating_integral = .6f;
+                state->flags |= FR_REACTIVE_COATING_FLAMING;
+                /* The splash strikes the film to its ignition point: the
+                 * coins flame from the first tick and their finite
+                 * corrosion stock spends into rust. */
+                double hot = fr_reactive_state_energy_at_temperature(state, 530.f);
+                double cold = fr_reactive_state_energy(state);
+                if (hot > cold)
+                    state->thermal_energy = (float)hot;
+            }
+    }
+    /* Coins laid over the battlement wood: the launched greek load grazes
+     * this row and smears lit film across the valuables. */
+    const siege_rect_t wall_coin_rects[4] = {{153u, 149u, 1u, 2u,
+                                         DC_MATERIAL_GOLD, 0u, 0.f},
+                                        {153u, 152u, 1u, 2u, DC_MATERIAL_GOLD,
+                                         0u, 0.f},
+                                        {153u, 156u, 1u, 2u,
+                                         DC_MATERIAL_MAGIC_INGREDIENT, 0u,
+                                         0.f},
+                                        {153u, 159u, 1u, 2u,
+                                         DC_MATERIAL_MAGIC_INGREDIENT, 0u,
+                                         0.f}};
+    if (load == DC_SIEGE_LOAD_GREEK || load == DC_SIEGE_LOAD_OIL) {
+        for (uint32_t rect = 0u; rect < 4u; rect++)
+            for (uint32_t y = wall_coin_rects[rect].y;
+                 y < wall_coin_rects[rect].y + wall_coin_rects[rect].height; y++)
+                for (uint32_t x = wall_coin_rects[rect].x;
+                     x < wall_coin_rects[rect].x + wall_coin_rects[rect].width; x++) {
+                    uint32_t tile =
+                        (y / 64u) * DC_SIEGE_TILES_X + x / 64u;
+                    chunks[tile].cells[(y % 64u) * 64u + x % 64u].material =
+                        wall_coin_rects[rect].material;
+                }
+        for (uint32_t rect = 0u; rect < 4u; rect++)
+            okay = okay && siege_stage_region(chunks, wall_coin_rects + rect, 1u,
+                                              wall_coin_rects[rect].material,
+                                              false, false, &ignored, &ignored,
+                                              &ignored_cells, &parcel_counter,
+                                              packets, err_buf, err_cap);
+    }
     uint64_t arm_fuel = 0;
     const siege_rect_t arm_rects[1] = {arm};
     okay = okay && siege_stage_region(chunks, arm_rects, 1u, DC_MATERIAL_WOOD,
