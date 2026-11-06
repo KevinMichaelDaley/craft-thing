@@ -1,6 +1,6 @@
 ---
 id: ct-vbko
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-06T05:25:33Z
