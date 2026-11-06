@@ -429,8 +429,13 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
             for (uint32_t i = 0; i < packets[tile].count; i++) {
                 fr_reactive_state_t *state =
                     &packets[tile].attachments[i].record.state;
-                if (state->material == core_material)
-                    siege_arm_coating(state, load);
+                if (state->material != core_material) continue;
+                siege_arm_coating(state, load);
+                /* The submerged douse fixture soaks the load: a quarter
+                 * capacity of bound water engages the greek roar (and the
+                 * ordinary oil's wet throttle) from the first tick. */
+                if (douse_pool)
+                    state->bound_water_fp = state->dry_mass_fp / 4u;
             }
     if (okay && hot_coal)
         /* Pre-armed locked ignition: the burning ball is viable from its

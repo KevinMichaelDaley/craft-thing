@@ -4,10 +4,8 @@
 #include "ferrum/player/manipulation.h"
 #include "../../src/vulkan/gpu_internal.h"
 
-enum { GRAB_SCAN_FIRST = 0x80000000u, GRAB_SCAN_COUNT = 64u };
-
-static uint32_t carried_id;
-static float carry_x, carry_y;
+enum { GRAB_SCAN_FIRST = 0x80000000u, GRAB_SCAN_COUNT = 64u,
+       CARRY_HOLD_HEIGHT = 8u };
 
 static bool body_contains(const dc_gpu_world_body_t *b, float x, float y) {
     float bx = (float)b->chunk.x * 64.f + b->body.x_fp / 65536.f;
@@ -17,11 +15,11 @@ static bool body_contains(const dc_gpu_world_body_t *b, float x, float y) {
            y <= by + half_h;
 }
 
-bool fr_player_manipulation_grab(dc_gpu_t *gpu,const fr_player_manipulation_t *m,
-    float player_x,float player_y,const fr_player_point_t *reticle,
-    char *err_buf,uint32_t err_cap) {
+bool fr_player_manipulation_grab(dc_gpu_t *gpu,fr_player_carry_t *carry,
+    const fr_player_manipulation_t *m,float player_x,float player_y,
+    const fr_player_point_t *reticle,char *err_buf,uint32_t err_cap) {
     (void)err_buf;(void)err_cap;
-    if (!gpu || !m || !reticle || carried_id) return false;
+    if (!gpu || !carry || !m || !reticle || carry->body_id) return false;
     float rx = (float)reticle->chunk.x * 64.f + reticle->x;
     float ry = (float)reticle->chunk.y * 64.f + reticle->y;
     float best = 1e30f;uint32_t best_id = 0u;
@@ -41,22 +39,23 @@ bool fr_player_manipulation_grab(dc_gpu_t *gpu,const fr_player_manipulation_t *m
     dc_gpu_body_motion_t motion;
     if (!dc_gpu_read_body_motion(gpu,best_id,&motion,err_buf,err_cap)) return false;
     if ((double)motion.mass > m->carry_weight) return false;
-    carried_id = best_id;
+    carry->body_id = best_id;
     return dc_gpu_set_body_motion(gpu,best_id,motion.angle,motion.angular_velocity,
         DC_GPU_BODY_KINEMATIC|DC_GPU_BODY_LOCK_ROTATION,err_buf,err_cap);
 }
 
-bool fr_player_manipulation_carrying(dc_gpu_t *gpu,uint32_t body_id) {
-    (void)gpu;
-    return carried_id && carried_id == body_id;
+bool fr_player_manipulation_carrying(const fr_player_carry_t *carry,
+    uint32_t body_id) {
+    return carry && carry->body_id && carry->body_id == body_id;
 }
 
-bool fr_player_manipulation_tick(dc_gpu_t *gpu,float player_x,float player_y,
-    char *err_buf,uint32_t err_cap) {
+bool fr_player_manipulation_tick(dc_gpu_t *gpu,fr_player_carry_t *carry,
+    float player_x,float player_y,char *err_buf,uint32_t err_cap) {
     (void)err_buf;(void)err_cap;
-    if (!carried_id || !gpu) return true;
+    if (!carry || !carry->body_id || !gpu) return true;
+    uint32_t carried_id = carry->body_id;
     /* The carry point rides over the player's head toward the reticle side. */
-    carry_x = player_x;carry_y = player_y - 8.f;
+    float carry_x = player_x,carry_y = player_y - (float)CARRY_HOLD_HEIGHT;
     dc_gpu_body_record_t *b = dc_gpu_find_body_record(gpu,carried_id);
     if (!b) return true;
     /* Position within the body's own chunk anchor, wrapped to the chunk side. */
@@ -69,18 +68,21 @@ bool fr_player_manipulation_tick(dc_gpu_t *gpu,float player_x,float player_y,
     return true;
 }
 
-bool fr_player_manipulation_drop(dc_gpu_t *gpu,char *err_buf,uint32_t err_cap) {
+bool fr_player_manipulation_drop(dc_gpu_t *gpu,fr_player_carry_t *carry,
+    char *err_buf,uint32_t err_cap) {
     (void)err_buf;(void)err_cap;
-    if (!carried_id) return false;
+    if (!carry || !carry->body_id) return false;
+    uint32_t carried_id = carry->body_id;
     return dc_gpu_set_body_motion(gpu,carried_id,0.f,0.f,0u,err_buf,err_cap) &&
-        (carried_id = 0u,true);
+        (carry->body_id = 0u,true);
 }
 
-bool fr_player_manipulation_throw(dc_gpu_t *gpu,const fr_player_manipulation_t *m,
-    float player_x,float player_y,const fr_player_point_t *reticle,
-    char *err_buf,uint32_t err_cap) {
+bool fr_player_manipulation_throw(dc_gpu_t *gpu,fr_player_carry_t *carry,
+    const fr_player_manipulation_t *m,float player_x,float player_y,
+    const fr_player_point_t *reticle,char *err_buf,uint32_t err_cap) {
     (void)player_x;(void)player_y;
-    if (!carried_id || !m || !reticle) return false;
+    if (!carry || !carry->body_id || !m || !reticle) return false;
+    uint32_t carried_id = carry->body_id;
     float rx = (float)reticle->chunk.x * 64.f + reticle->x;
     float ry = (float)reticle->chunk.y * 64.f + reticle->y;
     dc_gpu_world_body_t carried;
@@ -102,10 +104,10 @@ bool fr_player_manipulation_throw(dc_gpu_t *gpu,const fr_player_manipulation_t *
         b->body.vx_fp = (int32_t)(dx * speed * 65536.f);
         b->body.vy_fp = (int32_t)(dy * speed * 65536.f);
     }
-    carried_id = 0u;
+    carry->body_id = 0u;
     return okay;
 }
 
-void fr_player_manipulation_reset(dc_gpu_t *gpu) {
-    (void)gpu;carried_id = 0u;
+void fr_player_manipulation_reset(fr_player_carry_t *carry) {
+    if (carry) carry->body_id = 0u;
 }

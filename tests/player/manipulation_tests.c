@@ -70,88 +70,94 @@ static fr_player_manipulation_t manipulated(double carry, double force) {
 
 static void test_grab_selects_body_at_reticle_within_reach(void) {
     ASSERT_TRUE(setup_world());
+    fr_player_carry_t carry = {0};
     uint32_t id = spawn_and_settle(PLAYER_X + RETICLE_DX, PLAYER_Y + RETICLE_DY, 4u,
                              4u);
     ASSERT_TRUE(id != 0u);
     fr_player_manipulation_t m = defaults();
     fr_player_point_t reticle = reticle_at(PLAYER_X + RETICLE_DX,
                                            PLAYER_Y + RETICLE_DY);
-    ASSERT_TRUE(fr_player_manipulation_grab(gpu, &m, PLAYER_X, PLAYER_Y,
+    ASSERT_TRUE(fr_player_manipulation_grab(gpu, &carry, &m, PLAYER_X, PLAYER_Y,
                                             &reticle, err, sizeof(err)));
-    ASSERT_TRUE(fr_player_manipulation_carrying(gpu, id));
-    fr_player_manipulation_reset(gpu);
+    ASSERT_TRUE(fr_player_manipulation_carrying(&carry, id));
+    fr_player_manipulation_reset(&carry);
     dc_gpu_destroy(gpu);
     PASS();
 }
 static void test_grab_refuses_overweight_bodies(void) {
     ASSERT_TRUE(setup_world());
+    fr_player_carry_t carry = {0};
     uint32_t id = spawn_and_settle(PLAYER_X + RETICLE_DX, PLAYER_Y + RETICLE_DY, 12u,
                              12u);
     ASSERT_TRUE(id != 0u);
     fr_player_manipulation_t m = defaults();
     fr_player_point_t reticle = reticle_at(PLAYER_X + RETICLE_DX,
                                            PLAYER_Y + RETICLE_DY);
-    ASSERT_TRUE(!fr_player_manipulation_grab(gpu, &m, PLAYER_X, PLAYER_Y,
+    ASSERT_TRUE(!fr_player_manipulation_grab(gpu, &carry, &m, PLAYER_X, PLAYER_Y,
                                              &reticle, err, sizeof(err)));
-    ASSERT_TRUE(!fr_player_manipulation_carrying(gpu, id));
-    fr_player_manipulation_reset(gpu);
+    ASSERT_TRUE(!fr_player_manipulation_carrying(&carry, id));
+    fr_player_manipulation_reset(&carry);
     dc_gpu_destroy(gpu);
     PASS();
 }
 static void test_grab_refuses_bodies_beyond_reach(void) {
     ASSERT_TRUE(setup_world());
+    fr_player_carry_t carry = {0};
     uint32_t id = spawn_and_settle(PLAYER_X + 40.f, PLAYER_Y + RETICLE_DY, 4u, 4u);
     ASSERT_TRUE(id != 0u);
     fr_player_manipulation_t m = defaults();
     fr_player_point_t reticle = reticle_at(PLAYER_X + 40.f,
                                            PLAYER_Y + RETICLE_DY);
-    ASSERT_TRUE(!fr_player_manipulation_grab(gpu, &m, PLAYER_X, PLAYER_Y,
+    ASSERT_TRUE(!fr_player_manipulation_grab(gpu, &carry, &m, PLAYER_X, PLAYER_Y,
                                              &reticle, err, sizeof(err)));
-    fr_player_manipulation_reset(gpu);
+    fr_player_manipulation_reset(&carry);
     dc_gpu_destroy(gpu);
     PASS();
 }
 static void test_carried_body_tracks_the_carry_point(void) {
     ASSERT_TRUE(setup_world());
+    fr_player_carry_t carry = {0};
     uint32_t id = spawn_and_settle(PLAYER_X + RETICLE_DX, PLAYER_Y + RETICLE_DY, 4u,
                              4u);
     ASSERT_TRUE(id != 0u);
     fr_player_manipulation_t m = defaults();
     fr_player_point_t reticle = reticle_at(PLAYER_X + RETICLE_DX,
                                            PLAYER_Y + RETICLE_DY);
-    ASSERT_TRUE(fr_player_manipulation_grab(gpu, &m, PLAYER_X, PLAYER_Y,
+    ASSERT_TRUE(fr_player_manipulation_grab(gpu, &carry, &m, PLAYER_X, PLAYER_Y,
                                             &reticle, err, sizeof(err)));
     /* Two ticks of carry: the body rides the carry point over the player. */
     for (uint32_t tick = 0u; tick < 2u; tick++)
-        ASSERT_TRUE(fr_player_manipulation_tick(gpu, PLAYER_X, PLAYER_Y - 8.f,
+        ASSERT_TRUE(fr_player_manipulation_tick(gpu, &carry, PLAYER_X, PLAYER_Y - 8.f,
                                                 err, sizeof(err)));
     dc_gpu_world_body_t body;
     ASSERT_TRUE(dc_gpu_read_world_body(gpu, id, &body, err, sizeof(err)));
     float bx = (float)body.chunk.x * 64.f + body.body.x_fp / 65536.f;
     float by = (float)body.chunk.y * 64.f + body.body.y_fp / 65536.f;
     ASSERT_TRUE(fabsf(bx - PLAYER_X) < 12.f && fabsf(by - (PLAYER_Y - 8.f)) < 12.f);
-    fr_player_manipulation_reset(gpu);
+    fr_player_manipulation_reset(&carry);
     dc_gpu_destroy(gpu);
     PASS();
 }
 static void test_drop_releases_the_carry(void) {
     ASSERT_TRUE(setup_world());
+    fr_player_carry_t carry = {0};
     uint32_t id = spawn_and_settle(PLAYER_X + RETICLE_DX, PLAYER_Y + RETICLE_DY, 4u,
                              4u);
     ASSERT_TRUE(id != 0u);
     fr_player_manipulation_t m = defaults();
     fr_player_point_t reticle = reticle_at(PLAYER_X + RETICLE_DX,
                                            PLAYER_Y + RETICLE_DY);
-    ASSERT_TRUE(fr_player_manipulation_grab(gpu, &m, PLAYER_X, PLAYER_Y,
+    ASSERT_TRUE(fr_player_manipulation_grab(gpu, &carry, &m, PLAYER_X, PLAYER_Y,
                                             &reticle, err, sizeof(err)));
-    ASSERT_TRUE(fr_player_manipulation_drop(gpu, err, sizeof(err)));
-    ASSERT_TRUE(!fr_player_manipulation_carrying(gpu, id));
-    fr_player_manipulation_reset(gpu);
+    ASSERT_TRUE(fr_player_manipulation_drop(gpu, &carry, err, sizeof(err)));
+    ASSERT_TRUE(!fr_player_manipulation_carrying(&carry, id));
+    fr_player_manipulation_reset(&carry);
     dc_gpu_destroy(gpu);
     PASS();
 }
 static void test_throw_launches_toward_the_reticle_with_force(void) {
     ASSERT_TRUE(setup_world());
+    fr_player_carry_t carry = {0};
     uint32_t id = spawn_and_settle(PLAYER_X + RETICLE_DX, PLAYER_Y + RETICLE_DY, 4u,
                              4u);
     ASSERT_TRUE(id != 0u);
@@ -160,11 +166,11 @@ static void test_throw_launches_toward_the_reticle_with_force(void) {
                                            PLAYER_Y + RETICLE_DY);
     fr_player_point_t aim = reticle_at(PLAYER_X + RETICLE_DX + 20.f,
                                        PLAYER_Y + RETICLE_DY);
-    ASSERT_TRUE(fr_player_manipulation_grab(gpu, &m, PLAYER_X, PLAYER_Y,
+    ASSERT_TRUE(fr_player_manipulation_grab(gpu, &carry, &m, PLAYER_X, PLAYER_Y,
                                             &on_body, err, sizeof(err)));
-    ASSERT_TRUE(fr_player_manipulation_throw(gpu, &m, PLAYER_X, PLAYER_Y,
+    ASSERT_TRUE(fr_player_manipulation_throw(gpu, &carry, &m, PLAYER_X, PLAYER_Y,
                                              &aim, err, sizeof(err)));
-    ASSERT_TRUE(!fr_player_manipulation_carrying(gpu, id));
+    ASSERT_TRUE(!fr_player_manipulation_carrying(&carry, id));
     dc_gpu_world_body_t world;
     ASSERT_TRUE(dc_gpu_read_world_body(gpu, id, &world, err, sizeof(err)));
     float vx = (float)world.body.vx_fp / 65536.f;
@@ -173,12 +179,13 @@ static void test_throw_launches_toward_the_reticle_with_force(void) {
     /* The throw force is the launch speed toward the reticle. */
     ASSERT_TRUE(speed > 2.5f && speed <= 3.01f);
     ASSERT_TRUE(vx > 0.f);
-    fr_player_manipulation_reset(gpu);
+    fr_player_manipulation_reset(&carry);
     dc_gpu_destroy(gpu);
     PASS();
 }
 static void test_throw_force_attribute_scales_the_launch(void) {
     ASSERT_TRUE(setup_world());
+    fr_player_carry_t carry = {0};
     ASSERT_TRUE(spawn_and_settle(PLAYER_X + RETICLE_DX, PLAYER_Y + RETICLE_DY,
                                  4u, 4u) != 0u);
     fr_player_manipulation_t strong = manipulated(60.0, 4.0);
@@ -186,24 +193,24 @@ static void test_throw_force_attribute_scales_the_launch(void) {
                                            PLAYER_Y + RETICLE_DY);
     fr_player_point_t aim = reticle_at(PLAYER_X + RETICLE_DX + 20.f,
                                        PLAYER_Y + RETICLE_DY);
-    ASSERT_TRUE(fr_player_manipulation_grab(gpu, &strong, PLAYER_X, PLAYER_Y,
+    ASSERT_TRUE(fr_player_manipulation_grab(gpu, &carry, &strong, PLAYER_X, PLAYER_Y,
                                             &on_body, err, sizeof(err)));
-    ASSERT_TRUE(fr_player_manipulation_throw(gpu, &strong, PLAYER_X, PLAYER_Y,
+    ASSERT_TRUE(fr_player_manipulation_throw(gpu, &carry, &strong, PLAYER_X, PLAYER_Y,
                                              &aim, err, sizeof(err)));
     dc_gpu_world_body_t world;
     ASSERT_TRUE(dc_gpu_read_world_body(gpu, 0x80000001u, &world, err,
                                        sizeof(err)));
     float fast = sqrtf(powf((float)world.body.vx_fp / 65536.f, 2.f) +
                        powf((float)world.body.vy_fp / 65536.f, 2.f));
-    fr_player_manipulation_reset(gpu);
+    fr_player_manipulation_reset(&carry);
     dc_gpu_destroy(gpu);
     ASSERT_TRUE(setup_world());
     ASSERT_TRUE(spawn_and_settle(PLAYER_X + RETICLE_DX, PLAYER_Y + RETICLE_DY,
                                  4u, 4u) != 0u);
     fr_player_manipulation_t weak = manipulated(60.0, 1.0);
-    ASSERT_TRUE(fr_player_manipulation_grab(gpu, &weak, PLAYER_X, PLAYER_Y,
+    ASSERT_TRUE(fr_player_manipulation_grab(gpu, &carry, &weak, PLAYER_X, PLAYER_Y,
                                             &on_body, err, sizeof(err)));
-    ASSERT_TRUE(fr_player_manipulation_throw(gpu, &weak, PLAYER_X, PLAYER_Y,
+    ASSERT_TRUE(fr_player_manipulation_throw(gpu, &carry, &weak, PLAYER_X, PLAYER_Y,
                                              &aim, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_world_body(gpu, 0x80000001u, &world, err,
                                        sizeof(err)));
@@ -211,18 +218,19 @@ static void test_throw_force_attribute_scales_the_launch(void) {
                        powf((float)world.body.vy_fp / 65536.f, 2.f));
     printf("throw speeds: strong %.2f weak %.2f\n", fast, slow);
     ASSERT_TRUE(fast > slow);
-    fr_player_manipulation_reset(gpu);
+    fr_player_manipulation_reset(&carry);
     dc_gpu_destroy(gpu);
     PASS();
 }
 static void test_grab_refuses_without_a_body_at_the_reticle(void) {
     ASSERT_TRUE(setup_world());
+    fr_player_carry_t carry = {0};
     fr_player_manipulation_t m = defaults();
     fr_player_point_t reticle = reticle_at(PLAYER_X + RETICLE_DX,
                                            PLAYER_Y + RETICLE_DY);
-    ASSERT_TRUE(!fr_player_manipulation_grab(gpu, &m, PLAYER_X, PLAYER_Y,
+    ASSERT_TRUE(!fr_player_manipulation_grab(gpu, &carry, &m, PLAYER_X, PLAYER_Y,
                                              &reticle, err, sizeof(err)));
-    fr_player_manipulation_reset(gpu);
+    fr_player_manipulation_reset(&carry);
     dc_gpu_destroy(gpu);
     PASS();
 }

@@ -5,6 +5,8 @@
 
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/player/beaver.h"
+#include "ferrum/player/hotbar.h"
+#include "ferrum/player/manipulation.h"
 #include "ferrum/renderer/sprite_gpu.h"
 #include "../vulkan/runtime_body_gpu.h"
 #include "level_internal.h"
@@ -38,6 +40,10 @@ struct dc_player_session {
     bool editor,trace;
     char failure[256];
     fr_player_action_event_t cast_events[FR_INPUT_PLAYERS];
+    fr_player_hotbar_t hotbar[FR_INPUT_PLAYERS];
+    fr_player_carry_t carry[FR_INPUT_PLAYERS];
+    fr_player_manipulation_t manipulation[FR_INPUT_PLAYERS];
+    uint32_t prev_pressed[FR_INPUT_PLAYERS];
 };
 static bool players_error(char *err,uint32_t cap,const char *text) {
     if(err&&cap) snprintf(err,cap,"%s",text);
@@ -124,6 +130,8 @@ static bool players_add(dc_level_view_t *v,int64_t device,char *err,uint32_t cap
     }
     if(!fr_player_init(&s->players[n],n+1,&s->registry,s->values[n],s->abilities[n],2)||
        !fr_player_ability_set(&s->players[n],s->fire,true)||!fr_player_ability_set(&s->players[n],s->ice,true)||
+       !fr_player_hotbar_put_spell(&s->hotbar[n],1u,s->fire)||!fr_player_hotbar_put_spell(&s->hotbar[n],2u,s->ice)||
+       !fr_player_hotbar_put_material(&s->hotbar[n],3u,1u)||
        !fr_input_add_player(&s->input,n+1)||!fr_input_connect(&s->input,device,n+1)||
        !fr_input_sdl_defaults(&s->input,device,device!=FR_INPUT_KEYBOARD_DEVICE)) return players_error(err,cap,"Cannot bind player input owner");
     s->device[n]=device;s->count++;
@@ -202,7 +210,7 @@ bool dc_players_event(dc_level_view_t *v,const SDL_Event *e) {
         if(!e->key.repeat) {s->editor=!s->editor;dc_players_ui(v,false);}
         return true;
     }
-    if(e->type==SDL_KEYDOWN&&(e->key.keysym.scancode==SDL_SCANCODE_R||e->key.keysym.scancode==SDL_SCANCODE_F2)) return true;
+    if(e->type==SDL_KEYDOWN&&e->key.keysym.scancode==SDL_SCANCODE_F2) return true;
     if(e->type==SDL_CONTROLLERDEVICEADDED) players_open(s,e->cdevice.which);
     if(e->type==SDL_CONTROLLERDEVICEREMOVED) {
         for(uint32_t n=0;n<s->count;n++) if(s->device[n]==e->cdevice.which) s->device[n]=INT64_MIN;
@@ -272,6 +280,42 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
             fprintf(stderr,"[player-action] wall%llu player%u action%u frame%u elapsed%llu event%u facing%d ray_enabled%d\n",
                 (unsigned long long)SDL_GetTicks64(),n+1,s->players[n].action,frame+1,
                 (unsigned long long)s->players[n].elapsed_ms,s->cast_events[n].ability,s->players[n].facing,s->ray!=NULL);fflush(stderr);
+        }
+        /* Manipulation and hotbar: G grab, E drop, F throw, R place, 1-8 slots. */
+        uint32_t edges=input.pressed&~s->prev_pressed[n];
+        s->prev_pressed[n]=input.pressed;
+        if(!s->manipulation[n].carry_weight)
+            s->manipulation[n]=(fr_player_manipulation_t){.carry_weight=60.0,.throw_force=4.0,.reach=24.0};
+        dc_gpu_world_body_t self;
+        if(s->bodies[n].binding.body_id&&dc_gpu_read_world_body(v->gpu,s->bodies[n].binding.body_id,&self,err,cap)) {
+            float px=(float)self.chunk.x*64.f+self.body.x_fp/65536.f;
+            float py=(float)self.chunk.y*64.f+self.body.y_fp/65536.f;
+            bool acted=false;
+            if(edges&(1u<<FR_INPUT_GRAB)) {fr_player_manipulation_grab(v->gpu,&s->carry[n],&s->manipulation[n],px,py,&input.target,err,cap);acted=true;}
+            else if(edges&(1u<<FR_INPUT_DROP)) {fr_player_manipulation_drop(v->gpu,&s->carry[n],err,cap);acted=true;}
+            else if(edges&(1u<<FR_INPUT_THROW)) {fr_player_manipulation_throw(v->gpu,&s->carry[n],&s->manipulation[n],px,py,&input.target,err,cap);acted=true;}
+            if(!acted&&!fr_player_manipulation_tick(v->gpu,&s->carry[n],px,py,err,cap)) return false;
+            if(edges&(1u<<FR_INPUT_PLACE)) {
+                fr_player_hotbar_item_t item;
+                if(input.has_target&&fr_player_hotbar_selected_item(&s->hotbar[n],&item)&&item.kind==FR_SLOT_MATERIAL) {
+                    float wx=(float)input.target.chunk.x*64.f+input.target.x;
+                    float wy=(float)input.target.chunk.y*64.f+input.target.y;
+                    float lx=wx-(float)v->origin.x*64.f-v->camera_offset_x;
+                    float ly=wy-(float)v->origin.y*64.f-v->camera_offset_y;
+                    dc_gpu_body_t block={.x_fp=(int32_t)(lx*65536.f),.y_fp=(int32_t)(ly*65536.f),
+                        .width=4,.height=4,.id=0x90000000u+n*16u+(uint32_t)(s->sequence&15u),.active=1u};
+                    if(!dc_gpu_spawn_body(v->gpu,block,err,cap)) return false;
+                }
+            }
+            for(uint32_t k=0;k<8&&edges;k++) {
+                if(!((edges>>FR_INPUT_SLOT_1>>k)&1u)) continue;
+                fr_player_hotbar_select(&s->hotbar[n],k+1u);
+                fr_player_hotbar_item_t item;
+                if(fr_player_hotbar_selected_item(&s->hotbar[n],&item)&&item.kind==FR_SLOT_SPELL&&input.has_target) {
+                    if(!fr_player_ability_set(&s->players[n],item.ability_id,true)) return false;
+                    s->cast_events[n].ability=item.ability_id;
+                }
+            }
         }
         drive[n]=(fr_player_drive_input_t){n+1,s->sequence+1,s->players[n].intent.move_x,s->players[n].intent.jump_pressed};
     }
