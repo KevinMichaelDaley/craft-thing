@@ -226,7 +226,7 @@ static bool create(dc_gpu_t *g,struct fr_reactive_gpu *reactive,struct fr_therma
         {g->runtime_bodies->root.buffer,0,g->runtime_bodies->root.bytes},{g->occupancy_buffer,0,VK_WHOLE_SIZE},
         {g->bulk_phase_buffer,0,VK_WHOLE_SIZE}};
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"thermal pipeline begin\n");
-    if(!fr_renderer_compute_init(g,&t->compute,buffers,11,32,"build/shaders/thermal.comp.spv",err,cap)) {destroy(g,t);return false;}
+    if(!fr_renderer_compute_init(g,&t->compute,buffers,11,40,"build/shaders/thermal.comp.spv",err,cap)) {destroy(g,t);return false;}
     if(!specialize_phases(g,t,err,cap)) {destroy(g,t);return false;}
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"thermal pipeline end\n");
     if(!fr_thermal_feedback_init(g,&t->feedback,buffers[3],buffers[5],err,cap)) {destroy(g,t);return false;}
