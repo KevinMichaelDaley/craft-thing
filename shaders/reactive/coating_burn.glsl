@@ -59,7 +59,12 @@ void burn_coating(Words entry,inout Gas gas,inout float admitted,
             feed_heat=float(fed)*float(FR_GREEK_WATER_FEED_HEAT_PER_FP)/65536.;
         }
     }
-    float roar=mixed?1.+wet*float(FR_GREEK_WATER_ROAR_WET_BONUS):1.;
+    /* The roar tracks the live steam production: the evaporation fraction
+     * is the water the film boiled this tick, so actively steaming film
+     * burns at up to the full roar multiplier while dry film runs at base. */
+    float steam=uintBitsToFloat(entry.words[s+FR_STATE_EVAPORATION_FRACTION]);
+    float roar=mixed?1.+min(1.,steam*8.)*float(FR_GREEK_WATER_ROAR_WET_BONUS)
+                     :(1.-wet)*(1.-wet);
     float rate=coefficient(profile,FR_PROFILE_BURN_RATE_WORD)*dt*
         (mixed?roar:(1.-wet)*(1.-wet));
     float requested=min(float(total)-fuel_credit,float(total)*(1.-exp(-rate)));
