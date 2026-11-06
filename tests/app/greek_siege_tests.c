@@ -131,8 +131,10 @@ static void test_greek_and_oil_stage_matched_prearmed_coating(void) {
         dc_gpu_t *gpu = greek_grid();
         ASSERT_TRUE(gpu);
         dc_siege_scene_t scene = {0};
-        ASSERT_TRUE(dc_siege_scene_build_load(gpu, false, loads[which], &scene,
-                                              err, sizeof(err)));
+        bool built = dc_siege_scene_build_load(gpu, false, loads[which], &scene,
+                                               err, sizeof(err));
+        if (!built) printf("greek stage build: %s\n", err);
+        ASSERT_TRUE(built);
         fr_reactive_record_t core;
         bool found = false;
         ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, scene.coal_body, 4u, 4u,
@@ -327,8 +329,10 @@ static void test_greek_depletes_matched_oil_twice_as_fast_dry(void) {
         dc_gpu_t *gpu = greek_grid();
         ASSERT_TRUE(gpu);
         dc_siege_scene_t scene = {0};
-        ASSERT_TRUE(dc_siege_scene_build_load(gpu, false, loads[which], &scene,
-                                              err, sizeof(err)));
+        bool built = dc_siege_scene_build_load(gpu, false, loads[which], &scene,
+                                               err, sizeof(err));
+        if (!built) printf("greek stage build: %s\n", err);
+        ASSERT_TRUE(built);
         {
             fr_reactive_record_t probe;
             bool found = false;

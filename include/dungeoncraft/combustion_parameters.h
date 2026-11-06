@@ -26,6 +26,10 @@
 #define FR_GREEK_WATER_FEED_FP_PER_SECOND 8192.0
 #define FR_GREEK_WATER_FEED_HEAT_PER_FP 0.5
 #define FR_GREEK_WATER_ROAR_WET_BONUS 2.0
+/* Wood rot: one exposure unit per simulated month of partial immersion;
+ * each spent stage converts this much fuel to inert rot residue. */
+#define FR_ROT_EXPOSURE_PER_SECOND (1.0/2628000.0)
+#define FR_ROT_FUEL_CONVERT_FP 1638u
 #define FR_COMBUSTION_SMALL_BODY_FUEL_FP_LIMIT 16384u
 #define FR_COMBUSTION_AIR_VISCOSITY 0.000018
 #define FR_COMBUSTION_AIR_CONDUCTIVITY 0.02

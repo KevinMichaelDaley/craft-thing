@@ -6,7 +6,7 @@
 #include "reactive_gpu_internal.h"
 #include "reactive_storage_gpu.h"
 
-enum {ROWS=DC_CHUNK_CELLS+DC_MPM_PARTICLES_PER_CHUNK,ATTACHMENT_WORDS=35,
+enum {ROWS=DC_CHUNK_CELLS+DC_MPM_PARTICLES_PER_CHUNK,ATTACHMENT_WORDS=36,
       HANDLE_OFFSET=4+ROWS*ATTACHMENT_WORDS,STREAM_WORDS=HANDLE_OFFSET+ROWS*2};
 _Static_assert(sizeof(fr_reactive_attachment_t)==ATTACHMENT_WORDS*4u,"Chunk attachment ABI changed");
 static bool error(char *err,uint32_t cap,const char *message) {

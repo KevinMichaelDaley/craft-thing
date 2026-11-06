@@ -8,8 +8,8 @@
 #include "dungeoncraft/chunk.h"
 #include "ferrum/fire/material_profile.h"
 
-#define FR_REACTIVE_STATE_ABI 7u
-#define FR_REACTIVE_STATE_WORDS 28u
+#define FR_REACTIVE_STATE_ABI 8u
+#define FR_REACTIVE_STATE_WORDS 29u
 #define FR_REACTIVE_OWNER_WORDS 6u
 enum {
     FR_REACTIVE_WATER_MIRROR = 1u,
@@ -39,6 +39,9 @@ typedef struct {
     float thermal_energy_residual; /**< Signed low-order extensive heat. */
     float thermal_energy_correction; /**< Retained residual accumulation error. */
     float reaction_fraction; /**< Oxygen-funded sub-Q16 reaction progress, ABI 5. */
+    float rot_exposure; /**< Partial-immersion rot progress, ABI 8: each 1.0
+     * spends one fuel-to-inert conversion stage. Accumulates only at the
+     * air-water interface; dry and fully saturated parcels pause. */
 } fr_reactive_state_t;
 
 enum { FR_REACTIVE_OWNER_CELL=1u, FR_REACTIVE_OWNER_BODY=2u,
@@ -96,6 +99,15 @@ bool fr_reactive_state_split(const fr_reactive_state_t *source, uint32_t weight_
                               uint64_t left_id, uint64_t right_id,
                               fr_reactive_state_t *left, fr_reactive_state_t *right,
                               char *err_buf, uint32_t err_cap);
+/** Accumulate partial-immersion rot on a wood parcel: exposure grows with
+ * the immersed share of the rot window, and each full unit converts fuel
+ * mass to inert rot residue (mass conserving). Dry (no bound water) and
+ * fully saturated parcels pause; the accelerated clock is the caller's
+ * seconds argument. Deterministic: same inputs, same state. */
+bool fr_wood_rot_reference(const fr_reactive_state_t *state,
+    float immersed_fraction,double seconds,fr_reactive_state_t *out,
+    char *err_buf,uint32_t err_cap);
+
 /** Apply one electrical exposure event to a persistent parcel. The declared
  * total energy is admitted through the material's electrical conductivity,
  * blended with water conductivity by wetness, and held as pending shock heat

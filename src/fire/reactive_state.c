@@ -8,6 +8,7 @@
 #include "dungeoncraft/coating_layout.h"
 #include "dungeoncraft/reactive_state_layout.h"
 #include "ferrum/fire/material_profile.h"
+#include "dungeoncraft/combustion_parameters.h"
 #include "ferrum/fire/reactive_state.h"
 
 _Static_assert(sizeof(fr_reactive_state_t)==FR_STATE_WORDS*4u,"Reactive state ABI changed");
@@ -151,26 +152,44 @@ bool fr_reactive_state_valid(const fr_reactive_state_t *s,char *err,uint32_t cap
     double c=capacity(s);
     if((c==0&&(s->thermal_energy!=0||s->pending_shock_energy!=0))||
        (c>0&&s->thermal_energy<=0)) return error(err,cap,"Reactive energy has no valid heat capacity");
+    if(!isfinite(s->rot_exposure)||s->rot_exposure<0.f)
+        return error(err,cap,"Invalid rot exposure");
     return true;
 }
-double fr_reactive_state_pending_oxygen_fp(const fr_reactive_state_t *s) {
-    if(!s||s->reaction_fraction<=0.f) return 0.;
-    const fr_reactive_profile_t *p=fr_reactive_profile(s->fuel_mass_fp?s->material:DC_MATERIAL_CHAR);
-    return (double)s->reaction_fraction*p->oxygen_per_fuel;
+bool fr_wood_rot_reference(const fr_reactive_state_t *state,
+    float immersed_fraction,double seconds,fr_reactive_state_t *out,
+    char *err,uint32_t cap) {
+    if(!state||!out||!isfinite(immersed_fraction)||immersed_fraction<0.f||
+       immersed_fraction>1.f||!isfinite(seconds)||seconds<0||
+       !fr_reactive_state_valid(state,err,cap))
+        return error(err,cap,"Invalid wood rot input");
+    fr_reactive_state_t next=*state;
+    const fr_reactive_profile_t *p=fr_reactive_profile(state->material);
+    if(!p) return error(err,cap,"Missing wood material profile");
+    double capacity=(double)state->dry_mass_fp*p->moisture_capacity;
+    float wet=capacity>0.?(float)((double)state->bound_water_fp/capacity):0.f;
+    /* The rot window is the air-water interface: partly wet, partly dry. */
+    bool interface=wet>0.05f&&wet<0.95f;
+    if(interface&&seconds>0.)
+        next.rot_exposure+=(float)(FR_ROT_EXPOSURE_PER_SECOND*seconds*
+            fmin(1.,(double)immersed_fraction));
+    /* Each full exposure unit converts one rot stage of fuel to inert rot
+     * residue, mass conserving: the wood weakens and its draft changes. */
+    double stages=floor(next.rot_exposure);
+    if(stages>0.&&(next.flags&FR_REACTIVE_SPENT)==0u&&next.fuel_mass_fp>0u) {
+        uint32_t convert=(uint32_t)stages*FR_ROT_FUEL_CONVERT_FP;
+        if(convert>next.fuel_mass_fp) convert=next.fuel_mass_fp;
+        next.fuel_mass_fp-=convert;
+        next.inert_mass_fp+=convert;
+        next.rot_exposure-=(float)stages;
+    }
+    if(!fr_reactive_state_valid(&next,err,cap))
+        return error(err,cap,"Wood rot corrupted the parcel");
+    *out=next;return true;
 }
 uint64_t fr_reactive_state_mass_fp(const fr_reactive_state_t *s) {
-    if(!s) return 0;
     uint32_t values[9];memcpy(values,&s->dry_mass_fp,sizeof(values));
     uint64_t mass=0;for(unsigned i=1;i<9;i++) mass+=values[i];return mass;
-}
-double fr_reactive_state_mass_exact_fp(const fr_reactive_state_t *s) {
-    if(!s) return 0.;
-    uint32_t oil=coating_remainder(s->coating_remainders,
-        FR_COATING_OIL_REM_SHIFT,FR_COATING_REM_MASK);
-    uint32_t jelly=coating_remainder(s->coating_remainders,
-        FR_COATING_JELLY_REM_SHIFT,FR_COATING_REM_MASK);
-    return (double)fr_reactive_state_mass_fp(s)+
-        (double)(oil+jelly)/FR_COATING_MASS_DEN;
 }
 bool fr_reactive_state_temperature(const fr_reactive_state_t *s,float *out,char *err,uint32_t cap) {
     if(!out||!fr_reactive_state_valid(s,err,cap)) return false;

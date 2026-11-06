@@ -13,7 +13,7 @@ layout(set=0,binding=2,std430) readonly buffer Particles {uint particles[];};
 layout(push_constant) uniform Params {uint phase,slot,count,unused;} params;
 layout(buffer_reference,std430,buffer_reference_align=4) coherent buffer Words {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=8) coherent buffer Handles {uvec2 values[];};
-const uint ROWS=12288u,RECORD=35u,HANDLES=4u+ROWS*RECORD;
+const uint ROWS=12288u,RECORD=1u+6u+FR_STATE_WORDS,HANDLES=4u+ROWS*RECORD;
 #define PACKET Words(uvec2(root[26],root[27]))
 #define MARKS Words(uvec2(root[28],root[29]))
 Words entry(uint index) {return Words(reactive_entry_address(uvec2(root[4],root[5]),index));}
