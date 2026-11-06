@@ -1899,6 +1899,12 @@ test_combustion: build/combustion_tests
 build/reactive_state_tests: tests/fire/reactive_state_tests.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_state.h include/ferrum/fire/material_profile.h src/fire/material_profile_data.inc
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/reactive_state_tests.c $(REACTIVE_STATE_SRC) -o $@ -lm
+build/manipulation_tests: tests/player/manipulation_tests.c include/ferrum/player/manipulation.h src/player/manipulation.c include/dungeoncraft/gpu.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/player/manipulation_tests.c src/player/manipulation.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+.PHONY: test_manipulation
+test_manipulation: build/manipulation_tests
+	./build/manipulation_tests
+test: test_manipulation
 build/wood_rot_tests: tests/fire/wood_rot_tests.c src/fire/reactive_state.c src/fire/material_profile.c include/ferrum/fire/reactive_state.h include/ferrum/fire/material_profile.h src/fire/material_profile_data.inc include/dungeoncraft/combustion_parameters.h include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/coating_layout.h include/dungeoncraft/char_enthalpy.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/wood_rot_tests.c src/fire/reactive_state.c src/fire/material_profile.c -o $@ -lm
 .PHONY: test_wood_rot

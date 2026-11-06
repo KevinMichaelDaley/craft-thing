@@ -565,6 +565,9 @@ static inline void dc_gpu_name_object(VkDevice device, VkObjectType type,
     set_name(device, &info);
 }
 
+/** Host body-record lookup by stable ID; NULL when absent or retired. */
+dc_gpu_body_record_t *dc_gpu_find_body_record(dc_gpu_t *gpu,uint32_t id);
+
 /** Selection score for a physical device: negative rejects the candidate,
  * higher wins. Ties keep enumeration order so selection is deterministic. */
 int dc_gpu_device_score(const VkPhysicalDeviceProperties *properties,

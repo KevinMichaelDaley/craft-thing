@@ -43,7 +43,7 @@ static bool error(char *err, uint32_t cap, const char *message) {
         snprintf(err, cap, "%s", message);
     return false;
 }
-static dc_gpu_body_record_t *find_body(dc_gpu_t *gpu, uint32_t id) {
+dc_gpu_body_record_t *dc_gpu_find_body_record(dc_gpu_t *gpu, uint32_t id) {
     if (!gpu || !id)
         return NULL;
     for (uint32_t i = 0; i < dc_gpu_body_capacity(gpu); ++i) {
@@ -71,7 +71,7 @@ bool dc_gpu_set_body_motion(dc_gpu_t *gpu, uint32_t id, float angle,
     if (!isfinite(angle) || !isfinite(omega) || fabsf(omega) > .5f ||
         (flags & ~3u) || fabsf(angle) > 1000000.f)
         return error(err, cap, "Invalid rigid motion");
-    dc_gpu_body_record_t *b = find_body(gpu, id);
+    dc_gpu_body_record_t *b = dc_gpu_find_body_record(gpu, id);
     if (!b)
         return error(err, cap, "GPU body ID not found");
     if (b->reserved[0] == DC_GPU_STRUCTURAL_TAG)
@@ -94,7 +94,7 @@ bool dc_gpu_set_body_motion(dc_gpu_t *gpu, uint32_t id, float angle,
 bool dc_gpu_read_body_motion(dc_gpu_t *gpu, uint32_t id,
                              dc_gpu_body_motion_t *motion, char *err,
                              uint32_t cap) {
-    dc_gpu_body_record_t *b = find_body(gpu, id);
+    dc_gpu_body_record_t *b = dc_gpu_find_body_record(gpu, id);
     if (!b || !motion)
         return error(err, cap, "Invalid rigid motion readback");
     *motion = (dc_gpu_body_motion_t){
