@@ -1,6 +1,6 @@
 ---
 id: ct-pozx
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-06T06:41:16Z
