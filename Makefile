@@ -296,7 +296,7 @@ test: test_bonfire_scene
 test_bonfire_scene: build/bonfire_scene_tests
 	./build/bonfire_scene_tests
 NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/shutdown.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(THERMAL_BENCH_SRC) $(GPU_SRC) src/world/chunk.c src/world/stream.c src/fire/bulk_phase_packet.c src/world/generate.c
-PLAYER_RUNTIME_SRC = src/app/player_session.c src/app/player_clock.c src/app/smoke_profile.c src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c src/player/fire_ray_gpu.c src/player/input.c src/player/input_sdl.c src/player/control.c src/player/body_gpu.c src/player/manipulation.c src/player/hotbar.c src/vulkan/player_drive_gpu.c $(PLAYER_SRC) $(BEAVER_SRC)
+PLAYER_RUNTIME_SRC = src/app/player_session.c src/app/player_clock.c src/app/smoke_profile.c src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c src/player/fire_ray_gpu.c src/player/input.c src/player/input_sdl.c src/player/control.c src/player/body_gpu.c src/player/manipulation.c src/player/hotbar.c src/player/abilities.c src/vulkan/player_drive_gpu.c $(PLAYER_SRC) $(BEAVER_SRC)
 NATIVE_SRC += $(PLAYER_RUNTIME_SRC)
 build/rigid_dynamics_visual_tests: tests/app/rigid_dynamics_visual_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
@@ -1899,6 +1899,12 @@ test_combustion: build/combustion_tests
 build/reactive_state_tests: tests/fire/reactive_state_tests.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_state.h include/ferrum/fire/material_profile.h src/fire/material_profile_data.inc
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/reactive_state_tests.c $(REACTIVE_STATE_SRC) -o $@ -lm
+build/ability_cast_tests: tests/player/ability_cast_tests.c include/ferrum/player/abilities.h src/player/abilities.c include/dungeoncraft/gpu.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/player/ability_cast_tests.c src/player/abilities.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+.PHONY: test_ability_cast
+test_ability_cast: build/ability_cast_tests
+	./build/ability_cast_tests
+test: test_ability_cast
 build/hotbar_tests: tests/player/hotbar_tests.c src/player/hotbar.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/player/hotbar_tests.c src/player/hotbar.c -o $@
 .PHONY: test_hotbar

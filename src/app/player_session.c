@@ -6,6 +6,7 @@
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/player/beaver.h"
 #include "ferrum/player/hotbar.h"
+#include "ferrum/player/abilities.h"
 #include "ferrum/player/manipulation.h"
 #include "ferrum/renderer/sprite_gpu.h"
 #include "../vulkan/runtime_body_gpu.h"
@@ -175,7 +176,7 @@ bool dc_players_enable_at(dc_level_view_t *v,uint32_t x,uint32_t y,char *err,uin
         dc_level_view_set_spring_enabled(v,false)&&dc_level_view_renderer_mode(v,FR_RENDERER_ALBEDO);
     if(!okay) {dc_players_destroy(v);return false;}
     for(int n=0;n<SDL_NumJoysticks();n++) players_open(s,n);
-    printf("Play: A/D move, Space jump, C chew, Q fire, E ice; mouse aim. Tab editor. Controller Start joins; left stick/A/B/X/Y/right stick.\n");
+    printf("Play: A/D move, Space jump, C chew; mouse aim. Q fire bolt, 1 fire ray, 2 ice storm, 3 stone block (R), G grab, E drop, F throw. Tab editor. Controller Start joins; left stick/A/B/X/Y/right stick.\n");
     return true;
 }
 bool dc_players_enable(dc_level_view_t *v,char *err,uint32_t cap) {
@@ -290,6 +291,16 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
         if(s->bodies[n].binding.body_id&&dc_gpu_read_world_body(v->gpu,s->bodies[n].binding.body_id,&self,err,cap)) {
             float px=(float)self.chunk.x*64.f+self.body.x_fp/65536.f;
             float py=(float)self.chunk.y*64.f+self.body.y_fp/65536.f;
+            /* Sandbox ability dispatch: the fire ability launches a burning
+             * bolt and the ice ability casts a bounded storm at the target.
+             * Ray-equipped demo scenes keep their beam behaviour. */
+            if(!s->ray&&s->cast_events[n].ability&&input.has_target) {
+                fr_player_point_t muzzle={self.chunk,self.body.x_fp/65536.f,self.body.y_fp/65536.f};
+                if(s->cast_events[n].ability==s->fire)
+                    fr_player_cast_fire_bolt(v->gpu,s->players[n].identity,&muzzle,&input.target,NULL,err,cap);
+                else if(s->cast_events[n].ability==s->ice)
+                    fr_player_cast_ice_storm(v->gpu,&input.target,6u,err,cap);
+            }
             bool acted=false;
             if(edges&(1u<<FR_INPUT_GRAB)) {fr_player_manipulation_grab(v->gpu,&s->carry[n],&s->manipulation[n],px,py,&input.target,err,cap);acted=true;}
             else if(edges&(1u<<FR_INPUT_DROP)) {fr_player_manipulation_drop(v->gpu,&s->carry[n],err,cap);acted=true;}
