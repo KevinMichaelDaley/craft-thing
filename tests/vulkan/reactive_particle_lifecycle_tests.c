@@ -121,7 +121,7 @@ static void test_repainting_a_vacated_cell_keeps_two_particle_lifetimes_distinct
     ASSERT_TRUE(memcmp(&before.owner,&records[0].owner,sizeof(before.owner))==0);
     ASSERT_TRUE(fr_gpu_reactive_read_particle(g,source,records+1,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(memcmp(&records[0].owner,&records[1].owner,sizeof(before.owner))!=0);
-    uint8_t bytes[312];size_t written=0;
+    uint8_t bytes[2u*sizeof(fr_reactive_record_t)+10u*sizeof(uint32_t)];size_t written=0;
     ASSERT_TRUE(fr_reactive_snapshot_encode(records,2,second+1,bytes,sizeof(bytes),&written,err,sizeof(err)));
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
 }

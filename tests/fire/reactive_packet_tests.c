@@ -18,9 +18,10 @@ static bool input(fr_reactive_record_t records[2]) {
     records[1].state.coating_oil_fuel_fp=500;records[1].state.coating_threshold=.8f;records[1].state.coating_integral=.5f;
     return true;
 }
+#define PACKET_BYTES (2u*sizeof(fr_reactive_record_t)+10u*sizeof(uint32_t))
 static void test_memory_packet_matches_existing_file_codec_and_preserves_input(void) {
     char err[128];fr_reactive_record_t records[2],saved[2],out[2];ASSERT_TRUE(input(records));memcpy(saved,records,sizeof(saved));
-    uint8_t bytes[312],file_bytes[312];size_t size=0,written=0;
+    uint8_t bytes[PACKET_BYTES],file_bytes[PACKET_BYTES];size_t size=0,written=0;
     ASSERT_TRUE(fr_reactive_snapshot_size(2,&size));ASSERT_EQ(size,sizeof(bytes));
     ASSERT_TRUE(fr_reactive_snapshot_encode(records,2,42,bytes,sizeof(bytes),&written,err,sizeof(err)));
     ASSERT_EQ(written,sizeof(bytes));ASSERT_TRUE(memcmp(records,saved,sizeof(saved))==0);
@@ -35,7 +36,7 @@ static void test_memory_packet_matches_existing_file_codec_and_preserves_input(v
 }
 static void test_encode_failure_does_not_touch_the_destination_or_written_size(void) {
     char err[128];fr_reactive_record_t records[2];ASSERT_TRUE(input(records));
-    uint8_t bytes[312],saved[312];memset(bytes,0xa5,sizeof(bytes));memcpy(saved,bytes,sizeof(bytes));size_t written=99;
+    uint8_t bytes[PACKET_BYTES],saved[PACKET_BYTES];memset(bytes,0xa5,sizeof(bytes));memcpy(saved,bytes,sizeof(bytes));size_t written=99;
     ASSERT_TRUE(!fr_reactive_snapshot_encode(records,2,42,bytes,sizeof(bytes)-1,&written,err,sizeof(err)));
     ASSERT_EQ(written,99u);ASSERT_TRUE(memcmp(bytes,saved,sizeof(bytes))==0);
     records[1].owner=records[0].owner;
@@ -50,7 +51,7 @@ static void checksum(uint8_t *bytes,size_t count) {
 }
 static void test_capacity_corruption_future_version_and_typed_errors_roll_back(void) {
     char err[128];fr_reactive_record_t records[2],out[2],untouched[2];ASSERT_TRUE(input(records));
-    uint8_t bytes[312],valid[312];size_t written=0;
+    uint8_t bytes[PACKET_BYTES],valid[PACKET_BYTES];size_t written=0;
     ASSERT_TRUE(fr_reactive_snapshot_encode(records,2,42,bytes,sizeof(bytes),&written,err,sizeof(err)));memcpy(valid,bytes,sizeof(bytes));
     memset(out,0xab,sizeof(out));memcpy(untouched,out,sizeof(out));uint32_t count=77,required=88;uint64_t next=99;
     ASSERT_TRUE(!fr_reactive_snapshot_decode(bytes,sizeof(bytes),out,1,&count,&next,&required,err,sizeof(err)));
@@ -77,7 +78,7 @@ static void test_version_one_particle_births_migrate_but_reserved_bits_remain_in
     char err[128];fr_reactive_record_t record={0},out;
     record.owner=(fr_reactive_owner_t){.kind=FR_REACTIVE_OWNER_PARTICLE,.key={123,456,77,0,0}};
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_LEAF_DEBRIS,1000,0,600,80,&record.state,err,sizeof(err)));
-    uint8_t bytes[176];size_t written=0;uint32_t count=0,required=0;uint64_t next=0;
+    uint8_t bytes[sizeof(fr_reactive_record_t)+10u*sizeof(uint32_t)];size_t written=0;uint32_t count=0,required=0;uint64_t next=0;
     ASSERT_TRUE(fr_reactive_snapshot_encode(&record,1,81,bytes,sizeof(bytes),&written,err,sizeof(err)));
     bytes[4]=1;checksum(bytes,sizeof(bytes));
     ASSERT_TRUE(fr_reactive_snapshot_decode(bytes,sizeof(bytes),&out,1,&count,&next,&required,err,sizeof(err)));
@@ -94,7 +95,7 @@ static void test_full_width_particle_births_round_trip_as_version_two(void) {
     char err[128];fr_reactive_record_t record={0},out;
     record.owner=(fr_reactive_owner_t){.kind=FR_REACTIVE_OWNER_PARTICLE,.key={123,456,77,2,0}};
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_LEAF_DEBRIS,1000,0,600,80,&record.state,err,sizeof(err)));
-    uint8_t bytes[176];size_t written=0;uint32_t count=0,required=0;uint64_t next=0;
+    uint8_t bytes[sizeof(fr_reactive_record_t)+10u*sizeof(uint32_t)];size_t written=0;uint32_t count=0,required=0;uint64_t next=0;
     ASSERT_TRUE(fr_reactive_snapshot_encode(&record,1,81,bytes,sizeof(bytes),&written,err,sizeof(err)));
     ASSERT_EQ(bytes[4],FR_REACTIVE_STATE_ABI);
     bytes[4]=2;checksum(bytes,sizeof(bytes));

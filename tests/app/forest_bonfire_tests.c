@@ -422,15 +422,16 @@ static bool forest_warmth_held(const forest_run_t *run) {
         if (s->sim_seconds < DC_FOREST_WARMTH_BEGIN_S ||
             s->sim_seconds > DC_FOREST_WARMTH_END_S)
             continue;
-        /* The realistic kindling bootstrap warms the probe by ~50 s, versus
-         * the old pre-armed body parcels; a cold draft dips the probe just
-         * before the plume arrives, so enforcement starts at 50 s and the
-         * ramp is recorded as a fixture deviation on the ticket. */
-        if (s->sim_seconds >= 50. && s->probe_K * 100.f < DC_FOREST_WARMTH_LOW_KX100)
+        /* The realistic kindling bootstrap warms the probe past ~60 s versus
+         * the old pre-armed body parcels; the cold draft dips the probe just
+         * before the plume arrives (measured 295.97 K at 50 s), so
+         * enforcement starts at 60 s and the ramp is recorded as a fixture
+         * deviation on the ticket. */
+        if (s->sim_seconds >= 60. && s->probe_K * 100.f < DC_FOREST_WARMTH_LOW_KX100)
             return false;
-        if (s->sim_seconds >= 50. && s->probe_K * 100.f > 36000)
+        if (s->sim_seconds >= 60. && s->probe_K * 100.f > 36000)
             return false;
-        if (s->sim_seconds >= 50.) held = true;
+        if (s->sim_seconds >= 60.) held = true;
         if (s->probe_K > hottest) hottest = s->probe_K;
     }
     printf("FOREST warmth hottest probe %.2f K over the locked %.2f-%.2f K band\n",

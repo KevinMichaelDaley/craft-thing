@@ -191,6 +191,22 @@ uint64_t fr_reactive_state_mass_fp(const fr_reactive_state_t *s) {
     uint32_t values[9];memcpy(values,&s->dry_mass_fp,sizeof(values));
     uint64_t mass=0;for(unsigned i=1;i<9;i++) mass+=values[i];return mass;
 }
+double fr_reactive_state_mass_exact_fp(const fr_reactive_state_t *s) {
+    if(!s) return 0;
+    return (double)fr_reactive_state_mass_fp(s)+
+        ((double)coating_remainder(s->coating_remainders,
+            FR_COATING_OIL_REM_SHIFT,FR_COATING_REM_MASK)+
+         (double)coating_remainder(s->coating_remainders,
+            FR_COATING_JELLY_REM_SHIFT,FR_COATING_REM_MASK))/
+        (double)FR_COATING_MASS_DEN;
+}
+double fr_reactive_state_pending_oxygen_fp(const fr_reactive_state_t *s) {
+    if(!s) return 0;
+    bool char_burn=s->fuel_mass_fp==0&&s->char_mass_fp>0;
+    const fr_reactive_profile_t *p=
+        fr_reactive_profile(char_burn?DC_MATERIAL_CHAR:s->material);
+    return p?(double)s->reaction_fraction*(double)p->oxygen_per_fuel:0;
+}
 bool fr_reactive_state_temperature(const fr_reactive_state_t *s,float *out,char *err,uint32_t cap) {
     if(!out||!fr_reactive_state_valid(s,err,cap)) return false;
     double c=capacity(s);

@@ -97,10 +97,12 @@ static void test_corrupt_tiled_geometry_is_rejected(void) {
     pixels[8]++;
     ASSERT_TRUE(!dc_gpu_pixel_geometry_valid(bodies, pixels, words, &density));
     pixels[8]--;
-    uint32_t original = pixels[10];
-    pixels[10] = (original & ~15u) | 15u;
+    /* Material nibble 15 is a real ash inventory now, so corruption moves to
+     * the tile header: a tile claiming row 1 of a single-row body is invalid. */
+    uint32_t original = pixels[9];
+    pixels[9] = original + 65536u;
     ASSERT_TRUE(!dc_gpu_pixel_geometry_valid(bodies, pixels, words, &density));
-    pixels[10] = original;
+    pixels[9] = original;
     bodies[0].piece_count--;
     ASSERT_TRUE(!dc_gpu_pixel_geometry_valid(bodies, pixels, words, &density));
     free(pixels);

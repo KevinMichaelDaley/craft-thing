@@ -1,5 +1,7 @@
 #define DC_PROBE_WORDS 8192
 #include "body_probe_fixture.h"
+#include "dungeoncraft/reactive_arena_layout.h"
+#include "dungeoncraft/reactive_state_layout.h"
 
 _Static_assert(PROBE_WORDS>=2048u+256u*2u,"Address probe output exceeds its fixture buffer");
 
@@ -13,7 +15,7 @@ static void test_full_width_entry_and_request_offsets_cross_32bit_boundaries(voi
         uint64_t base=UINT64_C(0xffffffa0)^((uint64_t)i<<32);
         uint32_t index=indices[(i/2u)%8u],*record=p.mapped+16u+i*4u;
         record[0]=(uint32_t)base;record[1]=(uint32_t)(base>>32);record[2]=index;record[3]=i%2u;
-        expected[i]=base+(uint64_t)index*(i%2u?168u:144u);
+        expected[i]=base+(uint64_t)index*(i%2u?FR_ARENA_REQUEST_WORDS*4u:FR_ENTRY_WORDS*4u);
     }
     ASSERT_TRUE(begin(&p));
     VkMemoryBarrier memory={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER,.srcAccessMask=VK_ACCESS_HOST_WRITE_BIT,

@@ -61,11 +61,11 @@ static void test_stale_or_occupied_handles_never_steal_or_erase_live_state(void)
     probe_t p={0};ASSERT_TRUE(initialize(&p)&&allocate_buffer(&p));
     ASSERT_TRUE(create_pipeline(&p,"build/diagnostics/reactive_state_probe.spv"));
     memset(p.mapped,0,PROBE_WORDS*4u);p.mapped[0]=2;p.mapped[1]=1;
-    p.mapped[64]=8;p.mapped[65]=1;p.mapped[100]=3;p.mapped[101]=1;
+    p.mapped[64]=8;p.mapped[65]=1;p.mapped[101]=3;p.mapped[102]=1;
     p.mapped[1024]=0;p.mapped[1025]=7; /* retired generation */
     p.mapped[1026]=1;p.mapped[1027]=3;
     uint32_t *c=p.mapped+2048;c[0]=1;c[1]=0;c[2]=1;c[3]=2;c[4]=101;c[5]=1;
-    uint32_t saved[72];memcpy(saved,p.mapped+64,sizeof(saved));
+    uint32_t saved[74];memcpy(saved,p.mapped+64,sizeof(saved));
     ASSERT_TRUE(dispatch_state(&p));ASSERT_EQ(c[9],0u);
     ASSERT_TRUE(memcmp(saved,p.mapped+64,sizeof(saved))==0);ASSERT_EQ(p.mapped[1027],3u);
     p.mapped[1025]=8; /* valid source, occupied destination must also fail */
