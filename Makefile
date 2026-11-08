@@ -13,6 +13,12 @@ build/appearance_tests: tests/renderer/appearance_tests.c src/renderer/appearanc
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/renderer/appearance_tests.c src/renderer/appearance.c -o $@ -lm
 test: build/appearance_tests
+build/presentation_split_tests: tests/renderer/presentation_split_tests.c include/dungeoncraft/presentation.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/renderer/presentation_split_tests.c -o $@
+.PHONY: test_presentation_split
+test_presentation_split: build/presentation_split_tests
+	./build/presentation_split_tests
+test: test_presentation_split
 build/presentation_focus_tests: tests/renderer/presentation_focus_tests.c include/dungeoncraft/presentation.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
 test: test_presentation_focus
@@ -1905,6 +1911,12 @@ build/ability_cast_tests: tests/player/ability_cast_tests.c include/ferrum/playe
 test_ability_cast: build/ability_cast_tests
 	./build/ability_cast_tests
 test: test_ability_cast
+build/player_split_tests: tests/app/player_split_tests.c $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+.PHONY: test_player_split
+test_player_split: build/player_split_tests
+	./build/player_split_tests
+test: test_player_split
 build/hotbar_tests: tests/player/hotbar_tests.c src/player/hotbar.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/player/hotbar_tests.c src/player/hotbar.c -o $@
 .PHONY: test_hotbar

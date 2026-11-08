@@ -528,12 +528,34 @@ bool dc_gpu_set_display_zoom(dc_gpu_t *gpu, uint32_t zoom) {
 bool dc_gpu_screen_cell(dc_gpu_t *gpu, uint32_t screen_x, uint32_t screen_y,
                         uint32_t *cell_x, uint32_t *cell_y) {
     if (!gpu || !gpu->swapchain || !cell_x || !cell_y) return false;
+    if (gpu->presentation_split_count)
+        return dc_presentation_split_pick(gpu->presentation_split,
+            gpu->presentation_split_count, screen_x, screen_y, cell_x, cell_y);
     dc_presentation_layout_t layout;
     return dc_presentation_layout(gpu->view_width,gpu->view_height,gpu->swap_extent.width,
         gpu->swap_extent.height,gpu->display_zoom,gpu->presentation_focus,&layout)&&
         dc_presentation_pick(layout,screen_x,screen_y,cell_x,cell_y);
 }
+bool dc_gpu_set_split_presentation(dc_gpu_t *gpu, uint32_t count,
+                                   const dc_presentation_focus_t *crops) {
+    if (!gpu) return false;
+    if (!count || count > 4u) {
+        gpu->presentation_split_count = 0u;
+        return count == 0u;
+    }
+    if (!crops) return false;
+    dc_presentation_layout_t layouts[4];
+    if (!dc_presentation_split_layout(gpu->view_width, gpu->view_height,
+            gpu->swap_extent.width, gpu->swap_extent.height, gpu->display_zoom,
+            crops, count, layouts))
+        return false;
+    memcpy(gpu->presentation_split, layouts, sizeof(layouts));
+    gpu->presentation_split_count = count;
+    return true;
+}
+
 bool dc_gpu_set_presentation_focus(dc_gpu_t *gpu,dc_presentation_focus_t focus) {
+    gpu->presentation_split_count = 0u;
     dc_presentation_layout_t layout;
     if(!gpu||!dc_presentation_layout(gpu->view_width,gpu->view_height,gpu->swap_extent.width,
         gpu->swap_extent.height,gpu->display_zoom,focus,&layout)) return false;

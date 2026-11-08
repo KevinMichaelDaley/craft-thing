@@ -10,6 +10,7 @@
 #include "ferrum/player/manipulation.h"
 #include "ferrum/renderer/sprite_gpu.h"
 #include "../vulkan/runtime_body_gpu.h"
+#include "../vulkan/gpu_internal.h"
 #include "level_internal.h"
 #include "player_session.h"
 #include "view_config.h"
@@ -45,7 +46,10 @@ struct dc_player_session {
     fr_player_carry_t carry[FR_INPUT_PLAYERS];
     fr_player_manipulation_t manipulation[FR_INPUT_PLAYERS];
     uint32_t prev_pressed[FR_INPUT_PLAYERS];
+    bool split;
+    uint32_t split_count;
 };
+static bool split_refresh(dc_level_view_t *v,char *err,uint32_t cap);
 static bool players_error(char *err,uint32_t cap,const char *text) {
     if(err&&cap) snprintf(err,cap,"%s",text);
     return false;
@@ -333,6 +337,7 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
     if(s->sequence==UINT64_MAX) return players_error(err,cap,"Player command sequence exhausted");
     s->sequence++;
     if(!fr_player_drive_gpu_submit(s->drive,drive,s->count,err,cap)||!players_publish(v,err,cap)) return false;
+    if(s->split&&!split_refresh(v,err,cap)) return false;
     if(s->ray) {
         fr_fire_ray_input_t rays[FR_INPUT_PLAYERS];
         for(uint32_t n=0;n<s->count;n++) rays[n]=(fr_fire_ray_input_t){n+1,s->sequence,s->players[n].facing,s->cast_events[n].ability==s->fire};
@@ -343,4 +348,57 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
 bool dc_players_status(dc_level_view_t *v,uint32_t n,fr_player_t *p,fr_beaver_body_t *b) {
     if(!v||!v->players||n>=v->players->count||!p||!b) return false;
     *p=v->players->players[n];*b=v->players->bodies[n];return true;
+}
+bool dc_players_join(dc_level_view_t *v,int64_t device,char *err,uint32_t cap) {
+    if(!v||!v->players) return players_error(err,cap,"Player session is absent");
+    struct dc_player_session *s=v->players;
+    for(uint32_t n=1;n<s->count;n++) if(s->device[n]==device) return true;
+    if(!s->count) return players_error(err,cap,"The keyboard player must enable first");
+    if(s->count>=FR_INPUT_PLAYERS) return players_error(err,cap,"Local player capacity reached");
+    uint32_t n=s->count;
+    fr_input_connect(&s->input,device,n+1);
+    fr_input_sdl_defaults(&s->input,device,false);
+    s->device[n]=(int64_t)device;
+    if(!players_add(v,device,err,cap)) {s->device[n]=INT64_MIN;return false;}
+    s->count=n+1u;
+    return true;
+}
+
+/* Recompute each viewport crop around its own beaver; presentation only,
+ * so the shared world still steps exactly once per tick. */
+static bool split_refresh(dc_level_view_t *v,char *err,uint32_t cap) {
+    struct dc_player_session *s=v->players;
+    uint32_t count=s->split_count;
+    if(!count) return true;
+    dc_presentation_focus_t crops[FR_INPUT_PLAYERS];
+    uint32_t grid_w=v->gpu->view_width,grid_h=v->gpu->view_height;
+    uint32_t view_w=count>=3u?grid_w/2u:grid_w,
+             view_h=count>=3u?grid_h/2u:grid_h;
+    uint32_t active=0u;
+    for(uint32_t n=0;n<s->count&&active<count;n++) {
+        dc_gpu_world_body_t self;
+        if(!dc_gpu_read_world_body(v->gpu,s->bodies[n].binding.body_id,&self,err,cap))
+            continue;
+        float px=(float)self.chunk.x*64.f+self.body.x_fp/65536.f-
+            (float)v->origin.x*64.f-v->camera_offset_x;
+        float py=(float)self.chunk.y*64.f+self.body.y_fp/65536.f-
+            (float)v->origin.y*64.f-v->camera_offset_y;
+        uint32_t cx=px>(float)(view_w/2u)?(uint32_t)px-view_w/2u:0u;
+        uint32_t cy=py>(float)(view_h/2u)?(uint32_t)py-view_h/2u:0u;
+        if(cx>grid_w-view_w) cx=grid_w-view_w;
+        if(cy>grid_h-view_h) cy=grid_h-view_h;
+        crops[active++]=(dc_presentation_focus_t){cx,cy,view_w,view_h};
+    }
+    if(active!=count) return players_error(err,cap,"Split screen needs every viewport player admitted");
+    return dc_gpu_set_split_presentation(v->gpu,count,crops);
+}
+
+bool dc_players_split_screen(dc_level_view_t *v,uint32_t count,char *err,uint32_t cap) {
+    if(!v||!v->players||count>FR_INPUT_PLAYERS||(count&&count<2u))
+        return players_error(err,cap,"Split screen needs two to four joined players");
+    struct dc_player_session *s=v->players;
+    s->split=count!=0u;
+    s->split_count=count;
+    if(!count) return dc_gpu_set_split_presentation(v->gpu,0u,NULL);
+    return split_refresh(v,err,cap);
 }

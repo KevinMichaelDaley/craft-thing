@@ -627,6 +627,10 @@ bool dc_level_view_move(dc_level_view_t *view, int32_t dx, int32_t dy) {
     return true;
 }
 
+dc_gpu_t *dc_level_view_gpu(dc_level_view_t *view) {
+    return view ? view->gpu : NULL;
+}
+
 bool dc_level_view_pan_pixels(dc_level_view_t *view, int32_t dx, int32_t dy) {
     if (!view || dx < -1024 || dx > 1024 || dy < -1024 || dy > 1024)
         return false;

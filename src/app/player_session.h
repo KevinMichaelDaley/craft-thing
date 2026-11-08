@@ -27,6 +27,15 @@ void dc_players_frame_time(dc_level_view_t *view,double seconds);
 bool dc_players_step(dc_level_view_t *view,float seconds,char *err,uint32_t cap);
 /** Copy action state for diagnostic tests; does not read GPU body state. */
 bool dc_players_status(dc_level_view_t *view,uint32_t index,fr_player_t *player,fr_beaver_body_t *body);
+/** Join a controller-owned seat (the first seat stays keyboard-owned).
+ * Device ids beyond SDL controller instance ids are valid input. */
+bool dc_players_join(dc_level_view_t *view, int64_t device, char *err,
+                     uint32_t cap);
+/** Present one side-by-side viewport per joined player, each following its
+ * own beaver. Count 0 restores the single focused presentation. The mouse
+ * converts through whichever band contains it. */
+bool dc_players_split_screen(dc_level_view_t *view, uint32_t count,
+                             char *err, uint32_t cap);
 /** Release controller, input and drive ownership before the level's GPU. */
 void dc_players_destroy(dc_level_view_t *view);
 

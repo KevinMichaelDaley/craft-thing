@@ -109,11 +109,17 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
     image_barrier(gpu->command, gpu->swap_images[index], VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, 0,
         VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-    dc_presentation_layout_t layout;
-    if(!dc_presentation_layout(gpu->view_width,gpu->view_height,gpu->swap_extent.width,gpu->swap_extent.height,
-        gpu->display_zoom,gpu->presentation_focus,&layout)) return error(err,cap,"Invalid presentation crop");
-    uint32_t scaled_width=layout.width*layout.scale,scaled_height=layout.height*layout.scale;
-    uint32_t left=layout.left,top=layout.top,source_x=gpu->view_x+layout.x,source_y=gpu->view_y+layout.y;
+    dc_presentation_layout_t layouts[4];
+    uint32_t band_count = gpu->presentation_split_count;
+    if (band_count)
+        memcpy(layouts, gpu->presentation_split, sizeof(layouts));
+    else {
+        if(!dc_presentation_layout(gpu->view_width,gpu->view_height,gpu->swap_extent.width,gpu->swap_extent.height,
+            gpu->display_zoom,gpu->presentation_focus,&layouts[0])) return error(err,cap,"Invalid presentation crop");
+        band_count = 1u;
+    }
+    uint32_t scaled_width=layouts[0].width*layouts[0].scale,
+             scaled_height=layouts[0].height*layouts[0].scale;
     if (scaled_width != gpu->swap_extent.width ||
         scaled_height != gpu->swap_extent.height) {
         VkClearColorValue background = { .float32 = {0.02f, 0.02f, 0.02f, 1.0f} };
@@ -125,16 +131,30 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
             VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
             VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
     }
-    VkImageBlit blit = { .srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-        .srcOffsets = { {(int32_t)source_x, (int32_t)source_y, 0},
-                        {(int32_t)(source_x + layout.width),
-                         (int32_t)(source_y + layout.height), 1} },
-        .dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-        .dstOffsets = { {(int32_t)left, (int32_t)top, 0},
-                        {(int32_t)(left + scaled_width),
-                         (int32_t)(top + scaled_height), 1} } };
-    vkCmdBlitImage(gpu->command, gpu->frame_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        gpu->swap_images[index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST);
+    for (uint32_t band = 0u; band < band_count; band++) {
+        const dc_presentation_layout_t *layout = &layouts[band];
+        uint32_t band_scaled_width = layout->width * layout->scale,
+                 band_scaled_height = layout->height * layout->scale;
+        uint32_t left = layout->left, top = layout->top,
+                 source_x = gpu->view_x + layout->x,
+                 source_y = gpu->view_y + layout->y;
+        VkImageBlit blit = { .srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
+            .srcOffsets = { {(int32_t)source_x, (int32_t)source_y, 0},
+                            {(int32_t)(source_x + layout->width),
+                             (int32_t)(source_y + layout->height), 1} },
+            .dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
+            .dstOffsets = { {(int32_t)left, (int32_t)top, 0},
+                            {(int32_t)(left + band_scaled_width),
+                             (int32_t)(top + band_scaled_height), 1} } };
+        vkCmdBlitImage(gpu->command, gpu->frame_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            gpu->swap_images[index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST);
+        if (band + 1u < band_count) {
+            image_barrier(gpu->command, gpu->swap_images[index],
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+        }
+    }
     image_barrier(gpu->command, gpu->swap_images[index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 0);

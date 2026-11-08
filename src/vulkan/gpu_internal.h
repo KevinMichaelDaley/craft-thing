@@ -6,6 +6,7 @@
 
 #include "dungeoncraft/contact_work_layout.h"
 #include "dungeoncraft/gpu.h"
+#include "dungeoncraft/presentation.h"
 #include "dungeoncraft/color.h"
 #include "ferrum/structural/gpu.h"
 #include "ferrum/fire/reactive_chunk.h"
@@ -297,6 +298,8 @@ struct dc_gpu {
     uint32_t view_x, view_y, view_width, view_height;
     uint32_t display_zoom;
     dc_presentation_focus_t presentation_focus;
+    dc_presentation_layout_t presentation_split[4];
+    uint32_t presentation_split_count;
     dc_gpu_overlay_t overlay;
     struct fr_scene_gpu *renderer;
 };
