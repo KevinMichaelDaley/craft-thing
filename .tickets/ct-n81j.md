@@ -1,6 +1,6 @@
 ---
 id: ct-n81j
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-01T23:46:30Z
@@ -17,3 +17,9 @@ Unhidden default runner in beaver continuation exposes tests/vulkan/pixel_geomet
 
 Preserve valid ash geometry and meaningful corrupt-geometry rejection coverage using an actually malformed packet; do not reject assigned material IDs or remove corruption checks. Run pixel_geometry_tests and full suite. Verify material namespace assumptions across analogous fixtures.
 
+
+## Notes
+
+**2026-11-07T20:30:55Z**
+
+Fixed in 79b1df3a: pixel_geometry_tests corrupt-tile case now corrupts the tile header (tile claiming row 1 of a single-row body) instead of material nibble 15, which is valid ash inventory. 7/0 green; full make -k test run green (203 suites). No assertion weakened.

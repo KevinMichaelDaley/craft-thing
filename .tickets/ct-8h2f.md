@@ -1,6 +1,6 @@
 ---
 id: ct-8h2f
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-02T00:31:51Z
@@ -39,3 +39,7 @@ Actual focus race reproduced and fixed: SDL global key snapshot during focus-gai
 **2026-11-02T15:35:35Z**
 
 Build repair: the GREEN commit wiring player actions made bonfire_display_tests and thermal_bench_display_tests fail to link (undefined dc_players_step/dc_players_destroy). Fixed Makefile rules 2113/2115 to link $(filter-out main.o level.o,$(QUARTER_APP_OBJ)) so the player session stack resolves without duplicating level.c (both test TUs include level.c directly). Both binaries build and bonfire_display_tests passes 0 failures on this machine.
+
+**2026-11-07T20:31:00Z**
+
+Live app integration landed and verified: input_sdl bindings (G/E/F/R + slots 1-8 with edges and repeat filtering), dc_players_step routes aim target, ability arbitration and frame-six cast events into the beaver; player_runtime_tests drives real keyboard movement/jump/cast with runtime-walk-left.bmp and runtime-cast.bmp evidence. Closing per acceptance criteria; split-screen camera join flow continues in ct-1i55.
