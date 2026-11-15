@@ -35,3 +35,7 @@ GREEN focused validation: 12/12 body-carving tests pass with Vulkan core and syn
 **2026-10-24T05:57:11Z**
 
 Corrected validation audit: DC_VK_SYNC_VALIDATE is not recognized. With DC_VK_VALIDATE=1 and VK_LAYER_ENABLES=VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT, raster1/1, coupled-grain1/1 and dynamic-runtime5/5 pass with no hazards. Full carving actual-sync run has11/12 passes: only the warm-miss timing assertion fails at3.166ms under layers (no VUID/hazards); ordinary warm-miss rerun is0.678ms and one submission. No timing threshold was relaxed. Global<30ms remains unmet.
+
+**2026-11-15T09:07:58Z**
+
+The large-body air brush gate (body_carve_tests ms<30) now measures 39-45 ms consistently on this machine, matching the 39 ms recorded on this ticket. Functional assertions (pixel count, mass conservation) all pass. The gate blocked the test: recipe chain at Makefile:780 during the ct-unkh verification run.
