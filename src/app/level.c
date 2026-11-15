@@ -631,6 +631,15 @@ dc_gpu_t *dc_level_view_gpu(dc_level_view_t *view) {
     return view ? view->gpu : NULL;
 }
 
+void dc_level_view_camera(const dc_level_view_t *view,int64_t *origin_x,
+    int64_t *origin_y,int32_t *camera_x,int32_t *camera_y) {
+    if(!view) return;
+    if(origin_x) *origin_x=view->origin.x;
+    if(origin_y) *origin_y=view->origin.y;
+    if(camera_x) *camera_x=view->camera_offset_x;
+    if(camera_y) *camera_y=view->camera_offset_y;
+}
+
 bool dc_level_view_pan_pixels(dc_level_view_t *view, int32_t dx, int32_t dy) {
     if (!view || dx < -1024 || dx > 1024 || dy < -1024 || dy > 1024)
         return false;

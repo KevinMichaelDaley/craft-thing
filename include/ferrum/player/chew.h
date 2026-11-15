@@ -4,33 +4,38 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/** Freshly validated, localized tree parcel. dry_mass_fp is current fuel +
- * char + inert inventory, not reactive dry_mass_fp reference metadata, a count
- * of canvas pixels or an assumed RPG attribute. Reject sums above UINT32_MAX.
- * eligible includes reach, tree membership and current world availability. */
-typedef struct {
-    uint64_t parcel_id;
-    uint32_t generation,material,dry_mass_fp;
-    bool eligible;
-} fr_chew_target_t;
-/** Caller-owned single-bite work. Units are Q16 dry mass times milliseconds.
- * No world mutation, parcel transfer or inventory reward occurs in this layer. */
-typedef struct {
-    fr_chew_target_t target;
-    uint64_t work;
-} fr_chew_work_t;
+#include "dungeoncraft/gpu.h"
+#include "ferrum/player/player.h"
 
-/** Advance only the time spent in a valid chewing work phase. Explicit effort
- * is Q16 dry mass per second. Release pauses partial work on the same parcel;
- * missing/ineligible/changed targets discard it. Work saturates at one bite,
- * so a stall cannot bank removal of other parcels. Ready requires fresh held
- * intent and eligibility. Invalid arguments leave both outputs unchanged. */
-bool fr_chew_work_advance(fr_chew_work_t *work,const fr_chew_target_t *target,
-    uint32_t effort_fp_per_second,uint64_t elapsed_ms,bool held,bool *ready);
-/** Acknowledge a successful world transaction for the exact ready parcel.
- * Revalidate reach/ownership and reserve inventory/structural release in that
- * transaction first. A failed world transaction must not call this function.
- * Repeated/stale acknowledgements return false without changing work. */
-bool fr_chew_work_committed(fr_chew_work_t *work,const fr_chew_target_t *target);
+/** Extensible item kinds; material-backed consumables only for now. */
+typedef enum {
+    DC_ITEM_WOOD = 1u,
+    DC_ITEM_DENSE_WOOD
+} dc_item_kind_t;
+
+/** Per-player inventory: mass in Q16 per item kind, no RPG assumptions. */
+typedef struct {
+    uint64_t mass_fp[8u];
+} fr_player_inventory_t;
+
+void fr_player_inventory_init(fr_player_inventory_t *inventory);
+uint64_t fr_player_inventory_mass(const fr_player_inventory_t *inventory,
+                                  dc_item_kind_t kind);
+
+/** Per-player chewing work state; progress carries across ticks. */
+typedef struct {
+    float progress;
+} fr_player_chew_t;
+
+/** One chewing tick at the world target. Effort is seconds * rate against
+ * the shared physical density of the reachable wood; a completed bite
+ * carves exactly one localized cell through the transactional carve
+ * pipeline (unsupported wood releases through the ordinary structural
+ * path) and credits the responsible inventory atomically. Invalid,
+ * unreachable or non-wood targets change nothing. */
+bool fr_player_chew_wood_tick(dc_gpu_t *gpu,
+                         fr_player_inventory_t *inventory,
+                         fr_player_chew_t *chew, const fr_player_point_t *target,
+                         float effort, char *err_buf, uint32_t err_cap);
 
 #endif

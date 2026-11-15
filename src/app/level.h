@@ -96,6 +96,9 @@ bool dc_level_view_wait_visible(dc_level_view_t *view, uint32_t timeout_ms,
 bool dc_level_view_move(dc_level_view_t *view, int32_t dx, int32_t dy);
 /** The level view's simulation device for presentation and diagnostics. */
 dc_gpu_t *dc_level_view_gpu(dc_level_view_t *view);
+/** Viewport placement of the streaming camera, for world-to-screen math. */
+void dc_level_view_camera(const dc_level_view_t *view,int64_t *origin_x,
+    int64_t *origin_y,int32_t *camera_x,int32_t *camera_y);
 bool dc_level_view_pan_pixels(dc_level_view_t *view, int32_t dx, int32_t dy);
 bool dc_level_view_reset_camera(dc_level_view_t *view);
 bool dc_level_view_status(dc_level_view_t *view, dc_level_view_status_t *status);

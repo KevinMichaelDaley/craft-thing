@@ -4,6 +4,7 @@
 #include <SDL.h>
 
 #include "ferrum/player/body_gpu.h"
+#include "ferrum/player/chew.h"
 #include "ferrum/player/input_sdl.h"
 #include "ferrum/player/fire_ray_gpu.h"
 #include "level.h"
@@ -31,6 +32,13 @@ bool dc_players_status(dc_level_view_t *view,uint32_t index,fr_player_t *player,
  * Device ids beyond SDL controller instance ids are valid input. */
 bool dc_players_join(dc_level_view_t *view, int64_t device, char *err,
                      uint32_t cap);
+/** Pin one player's aim at a world point (scripted demos and tests). */
+bool dc_players_aim_override(dc_level_view_t *view, uint32_t index,
+                             const fr_player_point_t *target, char *err,
+                             uint32_t cap);
+/** Copy a player's current inventory masses. */
+bool dc_players_inventory(dc_level_view_t *view, uint32_t index,
+                          fr_player_inventory_t *out);
 /** Present one side-by-side viewport per joined player, each following its
  * own beaver. Count 0 restores the single focused presentation. The mouse
  * converts through whichever band contains it. */

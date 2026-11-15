@@ -7,6 +7,7 @@
 #include "ferrum/player/beaver.h"
 #include "ferrum/player/hotbar.h"
 #include "ferrum/player/abilities.h"
+#include "ferrum/player/chew.h"
 #include "ferrum/player/manipulation.h"
 #include "ferrum/renderer/sprite_gpu.h"
 #include "../vulkan/runtime_body_gpu.h"
@@ -48,6 +49,10 @@ struct dc_player_session {
     uint32_t prev_pressed[FR_INPUT_PLAYERS];
     bool split;
     uint32_t split_count;
+    fr_player_inventory_t inventory[FR_INPUT_PLAYERS];
+    fr_player_chew_t chew_work[FR_INPUT_PLAYERS];
+    bool aim_override[FR_INPUT_PLAYERS];
+    fr_player_point_t aim_point[FR_INPUT_PLAYERS];
 };
 static bool split_refresh(dc_level_view_t *v,char *err,uint32_t cap);
 static bool players_error(char *err,uint32_t cap,const char *text) {
@@ -253,7 +258,10 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
     if(!v||!v->players||!isfinite(seconds)||seconds<=0||seconds>.25f) return false;
     struct dc_player_session *s=v->players;
     if(s->failure[0]) return players_error(err,cap,s->failure);
-    s->milliseconds+=s->presentation_clock?s->pending_action_ms:(double)seconds*1000.;
+    double chew_added=s->presentation_clock?s->pending_action_ms:(double)seconds*1000.;
+    double chew_seconds=chew_added/1000.;
+    if(chew_seconds<0||chew_seconds>1.) chew_seconds=0;
+    s->milliseconds+=chew_added;
     s->pending_action_ms=0;
     uint64_t elapsed=(uint64_t)s->milliseconds;s->milliseconds-=elapsed;
     fr_player_drive_input_t drive[FR_INPUT_PLAYERS];
@@ -272,6 +280,7 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
         dc_cell_address((int64_t)x+v->camera_offset_x,(int64_t)y+v->camera_offset_y,&chunk,&lx,&ly);
         chunk.x+=v->origin.x;chunk.y+=v->origin.y;
         input.has_target=valid;input.target=(fr_player_point_t){chunk,(float)lx,(float)ly};
+        if(s->aim_override[n]) {input.has_target=true;input.target=s->aim_point[n];}
         fr_player_action_t old_action=s->players[n].action;
         uint64_t action_elapsed=elapsed;
         if(s->presentation_clock&&old_action!=FR_PLAYER_CAST&&
@@ -295,6 +304,17 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
         if(s->bodies[n].binding.body_id&&dc_gpu_read_world_body(v->gpu,s->bodies[n].binding.body_id,&self,err,cap)) {
             float px=(float)self.chunk.x*64.f+self.body.x_fp/65536.f;
             float py=(float)self.chunk.y*64.f+self.body.y_fp/65536.f;
+            /* Chewing world wood into the player's own inventory, driven by
+             * the same deterministic player clock as the animations. */
+            if(input.values[FR_INPUT_CHEW]>0.f&&(s->aim_override[n]||input.has_target)) {
+                fr_player_point_t chew_target=s->aim_override[n]?s->aim_point[n]:input.target;
+                if(!fr_player_chew_wood_tick(v->gpu,&s->inventory[n],
+                    &s->chew_work[n],&chew_target,
+                    (float)chew_seconds*300.f,err,cap)) {
+                    fprintf(stderr,"chew failed: %s\n",err);
+                    return false;
+                }
+            }
             /* Sandbox ability dispatch: the fire ability launches a burning
              * bolt and the ice ability casts a bounded storm at the target.
              * Ray-equipped demo scenes keep their beam behaviour. */
@@ -349,6 +369,23 @@ bool dc_players_status(dc_level_view_t *v,uint32_t n,fr_player_t *p,fr_beaver_bo
     if(!v||!v->players||n>=v->players->count||!p||!b) return false;
     *p=v->players->players[n];*b=v->players->bodies[n];return true;
 }
+bool dc_players_aim_override(dc_level_view_t *v,uint32_t n,
+                             const fr_player_point_t *target,char *err,uint32_t cap) {
+    if(!v||!v->players||n>=FR_INPUT_PLAYERS||!target) return false;
+    struct dc_player_session *s=v->players;
+    if(n>=s->count) return players_error(err,cap,"Aim override needs a joined player");
+    s->aim_override[n]=true;
+    s->aim_point[n]=*target;
+    return true;
+}
+
+bool dc_players_inventory(dc_level_view_t *v,uint32_t n,
+                          fr_player_inventory_t *out) {
+    if(!v||!v->players||!out||n>=v->players->count) return false;
+    *out=v->players->inventory[n];
+    return true;
+}
+
 bool dc_players_join(dc_level_view_t *v,int64_t device,char *err,uint32_t cap) {
     if(!v||!v->players) return players_error(err,cap,"Player session is absent");
     struct dc_player_session *s=v->players;
