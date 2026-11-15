@@ -14,7 +14,8 @@ static int g_pass,g_fail;
 #define PASS() g_pass++
 static fr_chew_target_t wood(uint32_t material,double occupied,uint64_t id) {
     const fr_reactive_profile_t *p=fr_reactive_profile(material);
-    return (fr_chew_target_t){id,1,material,(uint32_t)llround(p->density*occupied*65536.),true};
+    return (fr_chew_target_t){id,1,material,
+        (uint32_t)llround(p->density*occupied*65536.),true,0u};
 }
 static void test_density_and_occupied_amount_control_required_work(void) {
     fr_chew_target_t targets[]={wood(DC_MATERIAL_WOOD,1,1),wood(DC_MATERIAL_DENSE_WOOD,1,2),wood(DC_MATERIAL_WOOD,.5,3)};

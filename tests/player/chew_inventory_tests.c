@@ -84,8 +84,8 @@ static void test_chew_credits_removed_wood_mass(void) {
                                     err, sizeof(err)));
     uint64_t wood = fr_player_inventory_mass(&inv, DC_ITEM_WOOD);
     printf("chew inventory wood %llu fp\n", (unsigned long long)wood);
-    /* 600 effort removes floor(600/(0.6*65536/300)) = 4 cells. */
-    ASSERT_TRUE(wood == 4u * (uint64_t)lround(DC_DENSITY_WOOD * 65536.));
+    /* Each completed tick banks at most one bite: two bites, two cells. */
+    ASSERT_TRUE(wood == 2u * (uint64_t)lround(DC_DENSITY_WOOD * 65536.));
     dc_chunk_t *probe = calloc(1, sizeof(*probe));
     ASSERT_TRUE(probe && dc_gpu_download_chunk(gpu, 11u, probe, err,
                                                sizeof(err)));
@@ -99,14 +99,16 @@ static void test_dense_wood_takes_longer_per_cell(void) {
     fr_player_inventory_t inv;
     fr_player_inventory_init(&inv);
     fr_player_chew_t chew = {0};
-    /* Same effort against dense wood must not complete a bite. */
+    /* One 1.0-second chewing window completes a wood bite (0.6 s at the
+     * fixed rate) but a dense pocket needs 1.2 s, so it only banks. */
     fr_player_point_t target = target_at(232.f, 214.f);
     ASSERT_TRUE(fr_player_chew_wood_tick(gpu, &inv, &chew, &target, 300.f,
                                     err, sizeof(err)));
-    ASSERT_TRUE(fr_player_chew_wood_tick(gpu, &inv, &chew, &target, 300.f,
-                                    err, sizeof(err)));
     ASSERT_EQ(fr_player_inventory_mass(&inv, DC_ITEM_WOOD), 0u);
-    ASSERT_TRUE(chew.progress > 0.f);
+    ASSERT_EQ(fr_player_inventory_mass(&inv, DC_ITEM_DENSE_WOOD), 0u);
+    /* The dense pocket banked real work toward its first bite. */
+    ASSERT_TRUE(chew.work > 0u);
+    ASSERT_EQ(chew.material, DC_MATERIAL_DENSE_WOOD);
     teardown();
     PASS();
 }
@@ -151,7 +153,8 @@ static void test_invalid_targets_never_credit(void) {
     ASSERT_TRUE(fr_player_chew_wood_tick(gpu, &inv, &chew, &stone, 300.f,
                                     err, sizeof(err)));
     ASSERT_EQ(fr_player_inventory_mass(&inv, DC_ITEM_WOOD), 0u);
-    ASSERT_EQ(chew.progress, 0.f);
+    /* Nothing banked: invalid targets are transactional no-ops. */
+    ASSERT_EQ(chew.work, 0u);
     teardown();
     PASS();
 }

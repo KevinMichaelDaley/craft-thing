@@ -87,9 +87,11 @@ static void test_chewing_credits_inventory_in_the_app(void) {
     SDL_Event e={.type=SDL_KEYDOWN};e.key.keysym.scancode=SDL_SCANCODE_C;
     ASSERT_TRUE(dc_players_event(v,&e));
     ASSERT_TRUE(capture("build/agents/beaver-player/chew/chew-start.bmp"));
-    /* One long deterministic frame completes bites immediately, before
+    /* One long deterministic frame completes a bite immediately, before
      * background streaming can regenerate the painted pillar. */
     for(unsigned n=0;n<6;n++) {
+        dc_gpu_paint_material(dc_level_view_gpu(v),pillar_x,pillar_y,3u,
+            DC_MATERIAL_WOOD,err,sizeof(err));
         dc_players_frame_time(v,0.5);
         ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
     }
