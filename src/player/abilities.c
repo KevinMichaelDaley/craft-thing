@@ -145,6 +145,28 @@ bool fr_player_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,
     if (!dc_gpu_paint_material(gpu, (uint32_t)wx, (uint32_t)wy, radius,
                                DC_MATERIAL_WATER, err_buf, err_cap))
         return false;
+    /* A hail front: dozens of small stones rain over the whole area. */
+    {
+        static uint32_t hail_id;
+        uint32_t count = radius >= 12u ? 32u : 16u;
+        for (uint32_t k = 0u; k < count; k++) {
+            float spread = ((float)(k % 13u) - 6.f) / 6.f * (float)radius;
+            float drop = (float)(k % 9u) * 2.f;
+            float hx = wx + spread;
+            float hy = wy - 24.f - drop;
+            if (hx < 1.f || hy < 1.f || hx + 2.f >= gpu->width ||
+                hy + 2.f >= gpu->height)
+                continue;
+            dc_gpu_body_t hail = {
+                .x_fp = (int32_t)(hx * 65536.f),
+                .y_fp = (int32_t)(hy * 65536.f),
+                .vx_fp = (int32_t)(spread * 0.25f * 65536.f),
+                .vy_fp = (int32_t)(3.f * 65536.f),
+                .width = 2u, .height = 2u,
+                .id = 0xC0000000u + (++hail_id), .active = 1u};
+            dc_gpu_spawn_body(gpu, hail, err_buf, err_cap);
+        }
+    }
     /* Chill every reactive parcel inside the radius on the resident slot. */
     dc_chunk_coord_t coord;
     uint32_t lx = (uint32_t)wx % 64u, ly = (uint32_t)wy % 64u;

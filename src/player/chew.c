@@ -24,7 +24,8 @@ uint64_t fr_player_inventory_mass(const fr_player_inventory_t *inventory,
 
 static dc_item_kind_t contract_wood_kind(uint16_t material) {
     return material == DC_MATERIAL_WOOD ? DC_ITEM_WOOD :
-           material == DC_MATERIAL_DENSE_WOOD ? DC_ITEM_DENSE_WOOD : 0u;
+           material == DC_MATERIAL_DENSE_WOOD ? DC_ITEM_DENSE_WOOD :
+           material == DC_MATERIAL_STONE ? DC_ITEM_STONE : 0u;
 }
 
 bool fr_chew_work_advance(fr_chew_work_t *work,const fr_chew_target_t *target,

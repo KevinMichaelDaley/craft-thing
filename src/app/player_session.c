@@ -142,6 +142,7 @@ static bool players_add(dc_level_view_t *v,int64_t device,char *err,uint32_t cap
        !fr_player_ability_set(&s->players[n],s->fire,true)||!fr_player_ability_set(&s->players[n],s->ice,true)||
        !fr_player_hotbar_put_spell(&s->hotbar[n],1u,s->fire)||!fr_player_hotbar_put_spell(&s->hotbar[n],2u,s->ice)||
        !fr_player_hotbar_put_material(&s->hotbar[n],3u,1u)||
+       !fr_player_hotbar_put_material(&s->hotbar[n],4u,7u)||
        !fr_input_add_player(&s->input,n+1)||!fr_input_connect(&s->input,device,n+1)||
        !fr_input_sdl_defaults(&s->input,device,device!=FR_INPUT_KEYBOARD_DEVICE)) return players_error(err,cap,"Cannot bind player input owner");
     s->device[n]=device;s->count++;
@@ -170,6 +171,47 @@ void dc_players_destroy(dc_level_view_t *v) {
     for(unsigned n=0;n<FR_INPUT_DEVICES;n++) if(s->controllers[n]) SDL_GameControllerClose(s->controllers[n]);
     SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);free(s);v->players=NULL;
 }
+/* Author the spawn clearing: three rooted trees for chewing and a few
+ * loose stone bodies to grab and throw, all placed relative to the
+ * beaver's own grounded position. */
+static bool play_author_content(dc_level_view_t *v,char *err,uint32_t cap) {
+    dc_gpu_t *gpu=v->gpu;
+    struct dc_player_session *s=v->players;
+    dc_gpu_world_body_t self;
+    if(!dc_gpu_read_world_body(gpu,s->bodies[0].binding.body_id,&self,err,cap))
+        return players_error(err,cap,"Spawn content needs the admitted beaver");
+    int32_t bx=(int32_t)((float)self.chunk.x*64.f+self.body.x_fp/65536.f-
+        (float)v->origin.x*64.f-v->camera_offset_x);
+    int32_t by=(int32_t)((float)self.chunk.y*64.f+self.body.y_fp/65536.f-
+        (float)v->origin.y*64.f-v->camera_offset_y);
+    int32_t feet=by+self.body.height/2;
+    /* Trees: wood trunks rooted at the ground line with leaf crowns. */
+    static const int32_t trunk_x[3]={-56,6,64};
+    static const int32_t trunk_h[3]={22,17,24};
+    for(uint32_t t=0u;t<3u;t++) {
+        int32_t x=bx+trunk_x[t];
+        if(x<2||x>=(int32_t)gpu->view_width-2) continue;
+        for(int32_t y=feet-1;y>feet-1-trunk_h[t]&&y>2;y--)
+            if(!dc_gpu_paint_material(gpu,(uint32_t)x,(uint32_t)y,0u,
+                DC_MATERIAL_WOOD,err,cap))
+                return false;
+        int32_t crown=feet-1-trunk_h[t];
+        if(crown>6&&!dc_gpu_paint_material(gpu,(uint32_t)x,(uint32_t)crown,
+            4u,DC_MATERIAL_LEAVES,err,cap))
+            return false;
+    }
+    /* Loose grabbable stones resting on the ground beside the beaver. */
+    static const int32_t stone_x[3]={-30,-8,28};
+    for(uint32_t k=0u;k<3u;k++) {
+        int32_t x=bx+stone_x[k];
+        if(x<3||x>=(int32_t)gpu->view_width-3) continue;
+        if(!dc_gpu_paint_material(gpu,(uint32_t)x,(uint32_t)(feet-3),2u,
+            DC_MATERIAL_STONE,err,cap))
+            return false;
+    }
+    return dc_gpu_admit_authored_rigid_cells(gpu,err,cap);
+}
+
 bool dc_players_enable_at(dc_level_view_t *v,uint32_t x,uint32_t y,char *err,uint32_t cap) {
     if(!v) return false;
     if(v->players) return true;
@@ -185,7 +227,8 @@ bool dc_players_enable_at(dc_level_view_t *v,uint32_t x,uint32_t y,char *err,uin
         dc_level_view_set_spring_enabled(v,false)&&dc_level_view_renderer_mode(v,FR_RENDERER_ALBEDO);
     if(!okay) {dc_players_destroy(v);return false;}
     for(int n=0;n<SDL_NumJoysticks();n++) players_open(s,n);
-    printf("Play: A/D move, Space jump, C chew; mouse aim. Q fire bolt, 1 fire ray, 2 ice storm, 3 stone block (R), G grab, E drop, F throw. Tab editor. Controller Start joins; left stick/A/B/X/Y/right stick.\n");
+    if(!play_author_content(v,err,cap)) {dc_players_destroy(v);return false;}
+    printf("Play: A/D move, Space jump, C chew wood or mine stone; Q cast selected; 1 fire bolt, 2 ice storm, 3 stone, 4 wood; R build terrain from inventory, B drop rigid block from inventory; G grab, E drop, F throw. Tab editor. Controller Start joins.\n");
     return true;
 }
 bool dc_players_enable(dc_level_view_t *v,char *err,uint32_t cap) {
@@ -358,6 +401,23 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
     s->sequence++;
     if(!fr_player_drive_gpu_submit(s->drive,drive,s->count,err,cap)||!players_publish(v,err,cap)) return false;
     if(s->split&&!split_refresh(v,err,cap)) return false;
+    /* The camera follows the keyboard player so walking never leaves the
+     * screen; panning shifts the streaming origin so chunks load in. */
+    {
+        dc_gpu_world_body_t self;
+        if(s->bodies[0].binding.body_id&&
+           dc_gpu_read_world_body(v->gpu,s->bodies[0].binding.body_id,&self,err,cap)) {
+            float wx=(float)self.chunk.x*64.f+self.body.x_fp/65536.f;
+            float wy=(float)self.chunk.y*64.f+self.body.y_fp/65536.f;
+            int32_t vx=(int32_t)(wx-(float)v->origin.x*64.f)-(int32_t)v->camera_offset_x;
+            int32_t vy=(int32_t)(wy-(float)v->origin.y*64.f)-(int32_t)v->camera_offset_y;
+            int32_t dx=vx-(int32_t)(v->gpu->view_width/2u);
+            int32_t dy=vy-(int32_t)(v->gpu->view_height/2u);
+            if(dx<-8) dx+=8; else if(dx>8) dx-=8; else dx=0;
+            if(dy<-8) dy+=8; else if(dy>8) dy-=8; else dy=0;
+            if(dx||dy) dc_level_view_pan_pixels(v,dx,dy);
+        }
+    }
     if(s->ray) {
         fr_fire_ray_input_t rays[FR_INPUT_PLAYERS];
         for(uint32_t n=0;n<s->count;n++) rays[n]=(fr_fire_ray_input_t){n+1,s->sequence,s->players[n].facing,s->cast_events[n].ability==s->fire};

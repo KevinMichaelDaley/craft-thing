@@ -76,7 +76,11 @@ static void test_invalid_arguments_are_transactional_and_nonwood_is_ineligible(v
     ASSERT_TRUE(ready);ASSERT_EQ(work.work,0u);
     ASSERT_TRUE(!fr_chew_work_advance(NULL,&target,100,100,true,&ready));
     ASSERT_TRUE(!fr_chew_work_advance(&work,&target,100,100,true,NULL));
+    /* Stone is now harvestable for building; air is the ineligible case. */
     target.material=DC_MATERIAL_STONE;
+    ASSERT_TRUE(fr_chew_work_advance(&work,&target,100,100,true,&ready));
+    ASSERT_TRUE(work.work>0u);
+    target.material=DC_MATERIAL_AIR;
     ASSERT_TRUE(fr_chew_work_advance(&work,&target,100,UINT64_MAX,true,&ready));
     ASSERT_TRUE(!ready);ASSERT_EQ(work.work,0u);
     PASS();

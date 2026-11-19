@@ -10,7 +10,8 @@
 /** Extensible item kinds; material-backed consumables only for now. */
 typedef enum {
     DC_ITEM_WOOD = 1u,
-    DC_ITEM_DENSE_WOOD
+    DC_ITEM_DENSE_WOOD,
+    DC_ITEM_STONE
 } dc_item_kind_t;
 
 /** Per-player inventory: mass in Q16 per item kind, no RPG assumptions. */

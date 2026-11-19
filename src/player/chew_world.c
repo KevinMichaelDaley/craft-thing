@@ -11,7 +11,8 @@ enum { CHEW_REACH_CELLS = 12u, CHEW_RATE_PER_SECOND_FP = 300u };
 
 static dc_item_kind_t world_wood_kind(uint16_t material) {
     return material == DC_MATERIAL_WOOD ? DC_ITEM_WOOD :
-           material == DC_MATERIAL_DENSE_WOOD ? DC_ITEM_DENSE_WOOD : 0u;
+           material == DC_MATERIAL_DENSE_WOOD ? DC_ITEM_DENSE_WOOD :
+           material == DC_MATERIAL_STONE ? DC_ITEM_STONE : 0u;
 }
 
 bool fr_player_chew_wood_tick(dc_gpu_t *gpu,
