@@ -185,22 +185,8 @@ static bool play_author_content(dc_level_view_t *v,char *err,uint32_t cap) {
     int32_t by=(int32_t)((float)self.chunk.y*64.f+self.body.y_fp/65536.f-
         (float)v->origin.y*64.f-v->camera_offset_y);
     int32_t feet=by+self.body.height/2;
-    /* Trees: wood trunks rooted at the ground line with leaf crowns. */
-    static const int32_t trunk_x[3]={-56,6,64};
-    static const int32_t trunk_h[3]={22,17,24};
-    for(uint32_t t=0u;t<3u;t++) {
-        int32_t x=bx+trunk_x[t];
-        if(x<2||x>=(int32_t)gpu->view_width-2) continue;
-        for(int32_t y=feet-1;y>feet-1-trunk_h[t]&&y>2;y--)
-            if(!dc_gpu_paint_material(gpu,(uint32_t)x,(uint32_t)y,0u,
-                DC_MATERIAL_WOOD,err,cap))
-                return false;
-        int32_t crown=feet-1-trunk_h[t];
-        if(crown>6&&!dc_gpu_paint_material(gpu,(uint32_t)x,(uint32_t)crown,
-            4u,DC_MATERIAL_LEAVES,err,cap))
-            return false;
-    }
-    /* Loose grabbable stones resting on the ground beside the beaver. */
+    /* Loose grabbable stones first: the admission converts only what is
+     * painted before it runs, keeping the trees rooted terrain. */
     static const int32_t stone_x[3]={-30,-8,28};
     for(uint32_t k=0u;k<3u;k++) {
         int32_t x=bx+stone_x[k];
@@ -209,7 +195,27 @@ static bool play_author_content(dc_level_view_t *v,char *err,uint32_t cap) {
             DC_MATERIAL_STONE,err,cap))
             return false;
     }
-    return dc_gpu_admit_authored_rigid_cells(gpu,err,cap);
+    if(!dc_gpu_admit_authored_rigid_cells(gpu,err,cap))
+        return false;
+    /* Trees: trunks rooted three cells INTO the ground so they are part
+     * of the connected terrain (disconnected painted components would be
+     * converted to rigid bodies). Chewing the trunk still releases the
+     * unsupported upper tree through the structural pipeline. */
+    static const int32_t trunk_x[3]={-56,6,64};
+    static const int32_t trunk_h[3]={22,17,24};
+    for(uint32_t t=0u;t<3u;t++) {
+        int32_t x=bx+trunk_x[t];
+        if(x<2||x>=(int32_t)gpu->view_width-2) continue;
+        for(int32_t y=feet+3;y>feet-1-trunk_h[t]&&y>2;y--)
+            if(!dc_gpu_paint_material(gpu,(uint32_t)x,(uint32_t)y,0u,
+                DC_MATERIAL_WOOD,err,cap))
+                return false;
+        int32_t crown=feet-1-trunk_h[t];
+        if(crown>6&&!dc_gpu_paint_material(gpu,(uint32_t)x,(uint32_t)crown,
+            4u,DC_MATERIAL_LEAVES,err,cap))
+            return false;
+    }
+    return true;
 }
 
 bool dc_players_enable_at(dc_level_view_t *v,uint32_t x,uint32_t y,char *err,uint32_t cap) {
