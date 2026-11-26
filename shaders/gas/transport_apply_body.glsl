@@ -1,11 +1,22 @@
 #ifndef FR_GAS_TRANSPORT_APPLY_BODY_GLSL
 #define FR_GAS_TRANSPORT_APPLY_BODY_GLSL
+float transport_balance_stock(float stock,float incoming,float outgoing) {
+    vec2 received=gas_two_sum(stock,incoming);
+    vec2 sent=gas_two_sum(received.x,-outgoing);
+    precise float residual=received.y+sent.y;
+    precise float balance=sent.x+residual;
+    return balance;
+}
 Gas transport_update_state(Gas source,GasFlux incoming,GasFlux outgoing,float trace_scale) {
     float energy_in=incoming.dynamics.y,energy_out=outgoing.dynamics.y;
     bool practical=gas_practical_policy();float old_kinetic=practical?gas_kinetic_energy(source):0.;
     if(practical) {GasFlux remove=gas_empty_flux();remove.dynamics.y=-old_kinetic;source=gas_add_flux(source,remove,1.);}
-    precise vec2 carrier=vec2(source.species.z,source.dynamics.x)*trace_scale+vec2(incoming.species.z,incoming.dynamics.x)-vec2(outgoing.species.z,outgoing.dynamics.x);
-    precise vec3 pigment=source.visual.rgb*trace_scale+incoming.pigment-outgoing.pigment;
+    vec2 carrier=vec2(
+        transport_balance_stock(source.species.z*trace_scale,incoming.species.z,outgoing.species.z),
+        transport_balance_stock(source.dynamics.x*trace_scale,incoming.dynamics.x,outgoing.dynamics.x));
+    vec3 pigment;
+    for(uint k=0u;k<3u;k++)
+        pigment[k]=transport_balance_stock(source.visual[k]*trace_scale,incoming.pigment[k],outgoing.pigment[k]);
     GasFlux net=GasFlux(incoming.species-outgoing.species,incoming.dynamics-outgoing.dynamics,vec3(0));net.dynamics.y=0.;net.species.z=0.;net.dynamics.x=0.;
     Gas value=gas_add_flux(source,net,1.);value.species.z=carrier.x/trace_scale;value.dynamics.x=carrier.y/trace_scale;value.visual.rgb=pigment/trace_scale;
     GasFlux energy=gas_empty_flux();
