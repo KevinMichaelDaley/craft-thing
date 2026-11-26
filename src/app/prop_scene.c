@@ -147,6 +147,7 @@ static bool admit_spawn_rocks(dc_level_view_t *view, char *err, uint32_t cap) {
     bool okay = true;
     for (uint32_t n = 0; n < sizeof(spawn_rocks) / sizeof(*spawn_rocks) && okay; ++n)
         okay = stage_spawn_rock(gpu, &spawn_rocks[n], n + 1u, touched, objects, err, cap);
+    /* Publish only the cell channel and keep the other chunk channels intact. */
     for (uint32_t slot = 0; slot < DC_GPU_CHUNK_SLOTS && okay; ++slot)
         if (touched[slot]) okay = dc_gpu_copy_chunk_state(gpu,slot,true,false,err,cap);
     if (okay) okay = fr_gpu_admit_rigid_objects(gpu, SPAWN_STONE_TRANSACTION,

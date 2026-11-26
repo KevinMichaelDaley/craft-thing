@@ -29,7 +29,11 @@ cells block it. The eight casting frames use 80 ms per frame: emission at
 400 ms, recovery complete at 640 ms. A new button press is required for each cast.
 Movement currently displays the supplied idle artwork pending a walk asset.
 
-In the sandbox (`./build/dungeoncraft --play`), slots 1–4 select fire, ice,
+A fresh sandbox (`./build/dungeoncraft --play`) starts in an
+[authored clearing](assets/props/spawn_tree.md). Pass the same `--world-dir` to
+keep scene edits and surviving bodies between runs.
+
+In the sandbox, slots 1–4 select fire, ice,
 stone, and wood. Press Q to cast the selected spell. The cast uses the aim
 from the start of windup and fires on frame six. With a material selected,
 R places one terrain cell and B places a 4×4 rigid block at the aim. Placement

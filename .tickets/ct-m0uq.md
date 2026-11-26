@@ -17,3 +17,9 @@ The viewport now resolves a canonical chunk-local aim, but src/app/player_sessio
 ## Acceptance Criteria
 
 Use chunk-relative or exact cell arithmetic for grab reach, carry placement, and throw direction. Cover ordinary and far signed chunk coordinates, a streamed seam, and two independent local players.
+
+## Notes
+
+**2026-11-26T09:41:19Z**
+
+The authored play clearing in ct-rrwn provides a western loose stone spanning the negative-to-zero chunk seam. The current carry update reconstructs its anchor from low chunk words, and grab searches a fixed window of 64 numeric IDs. Use the clearing as an application regression and exercise bodies outside that legacy ID window as well as independent carry ownership.
