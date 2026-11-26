@@ -5,6 +5,9 @@ struct HeatContacts {
     uint count;
     uvec2 handles[FR_HEAT_CONTACTS];
     float coverage[FR_HEAT_CONTACTS];
+#ifdef FR_BODY_REACTIONS
+    uvec2 geometry[FR_HEAT_CONTACTS];
+#endif
 };
 
 shared uint heat_pose_slots[DC_SPRITE_MAX];
@@ -56,6 +59,12 @@ bool fr_has_heat_pose(uint id) {
     return false;
 }
 
+bool fr_heat_pose_may_touch(ivec2 cell,uint ordinal) {
+    if(heat_pose_slots[ordinal]>=BODY_CAPACITY) return false;
+    vec4 bounds=heat_pose_bounds[ordinal];
+    return all(greaterThanEqual(vec2(cell),bounds.xy))&&all(lessThan(vec2(cell),bounds.zw));
+}
+
 uint fr_body_heat_owner(uint index) {
     if(fr_heat_pose_count()==0u) return thermal_occupancy[index];
     vec4 metadata=samples[index+params.width*params.height];
@@ -69,22 +78,40 @@ bool fr_body_heat_occluder(uint index) {
     return id!=0u&&!fr_has_heat_pose(id);
 }
 
-void fr_append_heat_contact(Body body,uint slot,uint piece,ivec2 cell,inout HeatContacts contacts) {
-    vec2 center;
-    float coverage=body_cell_volume(body,piece,cell,1.,center);
-    if(coverage<=0.) return;
+#ifdef FR_BODY_REACTIONS
+ivec2 fr_body_parcel_cell(Body body,uint piece) {
+    BodyQuad quad;
+    if(!body_pixel_quad(body,piece,quad)) return ivec2(-1);
+    return ivec2(floor(vec2(body.x_fp,body.y_fp)/65536.+.25*(quad.a+quad.b+quad.c+quad.d)));
+}
+#endif
+
+void fr_append_heat_contact(Body body,uint slot,uint piece,ivec2 cell,bool centered,inout HeatContacts contacts) {
+    float coverage=1.;
+#ifdef FR_BODY_REACTIONS
+    if(centered) {
+        if(any(notEqual(fr_body_parcel_cell(body,piece),cell))) return;
+    } else
+#endif
+    {
+        vec2 center;
+        coverage=body_cell_volume(body,piece,cell,1.,center);
+        if(coverage<=0.) return;
+    }
     uvec2 handle=fr_body_reactive_handle(body,slot,piece);
     if(handle.y==0u) return;
     contacts.handles[contacts.count]=handle;
     contacts.coverage[contacts.count]=coverage;
+#ifdef FR_BODY_REACTIONS
+    uint word=body.compound_reserved+pixel_tile_offset(body,piece/256u)+1u+(piece%256u)/8u;
+    contacts.geometry[contacts.count]=uvec2(word,piece%8u);
+#endif
     contacts.count++;
 }
 
-void fr_posed_heat_contacts(ivec2 cell,uint n,inout HeatContacts contacts) {
+void fr_posed_heat_contacts(ivec2 cell,uint n,bool centered,inout HeatContacts contacts) {
+    if(!fr_heat_pose_may_touch(cell,n)) return;
     uint slot=heat_pose_slots[n];
-    if(slot>=BODY_CAPACITY) return;
-    vec4 bounds=heat_pose_bounds[n];
-    if(any(lessThan(vec2(cell),bounds.xy))||any(greaterThanEqual(vec2(cell),bounds.zw))) return;
     Body body=heat_pose_bodies[n];
     ContactSprites sprites=ContactSprites(params.sprite_address);
     uint pose=fr_sprite_pose_word(n);
@@ -108,15 +135,15 @@ void fr_posed_heat_contacts(ivec2 cell,uint n,inout HeatContacts contacts) {
         if(pixel_piece_material(body,piece)==0u) continue;
         Body contact=body;
         if(fr_body_project_texel(rest,vec2(x,y)-crop,contact))
-            fr_append_heat_contact(contact,slot,piece,cell,contacts);
+            fr_append_heat_contact(contact,slot,piece,cell,centered,contacts);
     }
 }
 
-void fr_body_heat_contacts(uint index,out HeatContacts contacts) {
+void fr_body_heat_contacts(uint index,bool centered,out HeatContacts contacts) {
     contacts.count=0u;
     ivec2 cell=ivec2(index%params.width,index/params.width);
     for(uint n=0u;n<fr_heat_pose_count();n++) {
-        fr_posed_heat_contacts(cell,n,contacts);
+        fr_posed_heat_contacts(cell,n,centered,contacts);
         if(contacts.count!=0u) return;
     }
     uint id=thermal_occupancy[index];
@@ -129,13 +156,13 @@ void fr_body_heat_contacts(uint index,out HeatContacts contacts) {
     uvec4 query=body_piece_query(body,low,low+1.);
     for(uint i=0u;i<query.z*query.w;i++) {
         uint piece=query_piece(body,query,i);
-        if(pixel_piece_material(body,piece)!=0u) fr_append_heat_contact(body,slot,piece,cell,contacts);
+        if(pixel_piece_material(body,piece)!=0u) fr_append_heat_contact(body,slot,piece,cell,centered,contacts);
     }
 }
 
 bool fr_body_sample(uint index,out vec4 node_value,out vec4 metadata) {
     HeatContacts contacts;
-    fr_body_heat_contacts(index,contacts);
+    fr_body_heat_contacts(index,false,contacts);
     node_value=vec4(0);metadata=vec4(0);
     float total=0.,dominant=0.;
     for(uint i=0u;i<contacts.count;i++) {
@@ -169,7 +196,7 @@ float fr_body_heat_weight(uvec2 handle,float coverage,float heat) {
 void fr_body_deposit_radiance(uint index,float heat,float outgoing,float incoming) {
     if(heat==0.&&outgoing==0.&&incoming==0.) return;
     HeatContacts contacts;
-    fr_body_heat_contacts(index,contacts);
+    fr_body_heat_contacts(index,false,contacts);
     if(contacts.count==0u) return;
     float total=0.,heat_total=0.,weights[FR_HEAT_CONTACTS];
     for(uint i=0u;i<contacts.count;i++) {

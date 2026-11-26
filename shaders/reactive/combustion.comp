@@ -66,8 +66,30 @@ bool reaction_receiver(uint at) {
 #ifdef FR_BODY_REACTIONS
 const ivec2 body_directions[8]=ivec2[8](ivec2(0,-1),ivec2(-1,0),ivec2(1,0),ivec2(0,1),
     ivec2(-1,-1),ivec2(1,-1),ivec2(-1,1),ivec2(1,1));
+bool in_body_reaction_grid(ivec2 p) {
+    return all(greaterThanEqual(p,ivec2(0)))&&all(lessThan(p,ivec2(params.width,params.height)));
+}
+uint body_reaction_index(ivec2 p) {return uint(p.y)*params.width+uint(p.x);}
+bool body_reaction_near(ivec2 p) {
+    if(!in_body_reaction_grid(p)) return false;
+    if(thermal_occupancy[body_reaction_index(p)]!=0u) return true;
+    for(uint n=0u;n<fr_heat_pose_count();n++) {
+        if(fr_heat_pose_may_touch(p,n)) return true;
+    }
+    return false;
+}
+bool body_reaction_pose_blocks(ivec2 p) {
+    if(fr_heat_pose_count()==0u) return false;
+    return fr_has_heat_pose(fr_body_heat_owner(body_reaction_index(p)));
+}
+bool body_reaction_receiver(ivec2 p,uint at) {
+    return reaction_receiver(at)&&!body_reaction_pose_blocks(p);
+}
+bool body_reaction_air(ivec2 p) {
+    return gas_cell(atlas(p))&&!body_reaction_pose_blocks(p);
+}
 bool body_corner_reachable(ivec2 parcel,ivec2 direction) {
-    return gas_cell(atlas(parcel+ivec2(direction.x,0)))||gas_cell(atlas(parcel+ivec2(0,direction.y)));
+    return body_reaction_air(parcel+ivec2(direction.x,0))||body_reaction_air(parcel+ivec2(0,direction.y));
 }
 #endif
 uint slot_generation(uint at) {
@@ -576,25 +598,18 @@ void burn(ivec2 position,uint gas_at,inout Gas gas,inout float admitted,inout fl
     burn_entry(position,gas_at,handle,1u,0u,0u,gas,admitted,source_temperature,sources);
 }
 #ifdef FR_BODY_REACTIONS
-ivec2 body_parcel_cell(Body body,uint piece) {
-    BodyQuad quad;if(!body_pixel_quad(body,piece,quad)) return ivec2(-1);
-    return ivec2(floor(vec2(body.x_fp,body.y_fp)/65536.+.25*(quad.a+quad.b+quad.c+quad.d)));
-}
-void choose_body_target(uint index) {
-    if(index>=root[2]) return;
-    Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),index));if(e.words[FR_ENTRY_OWNER]!=2u) return;
+void choose_body_target(uint index,Body body,ivec2 p,bool exposed) {
+    Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),index));
     Words scratch=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
     uint target_word=index*12u+5u;scratch.words[target_word]=0xffffffffu;
-    uint slot=runtime_body_find(e.words[FR_ENTRY_OWNER+1u]);if(slot>=BODY_CAPACITY) return;
-    Body body=body_thermal_grid(DC_BODY(slot));if(!pixel_body(body)) return;
-    uint piece=pixel_piece_at(body,ivec2(e.words[FR_ENTRY_OWNER+3u],e.words[FR_ENTRY_OWNER+4u]));
-    uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.x!=index||h.y!=e.words[FR_ENTRY_GENERATION]) return;
+    scratch.words[index*12u+7u]=0u;
     uint s=FR_ENTRY_STATE,m=e.words[s];
     if((m==7u||m==8u||m==9u||m==11u||m==12u)&&
        (e.words[s+9u]|e.words[s+10u]|e.words[s+FR_STATE_COATING_REMAINDERS]|
         e.words[s+13u]|e.words[s+14u]|e.words[s+15u]|e.words[s+16u])==0u&&
        (e.words[s+11u]|e.words[s+12u])!=0u) atomicOr(hud[DC_BODY_ASH_DISPATCH_WORD],1u);
-    ivec2 p=body_parcel_cell(body,piece);float best=-1.;uint chosen=0xffffffffu;
+    if(!exposed) {scratch.words[index*12u+6u]=0u;return;}
+    float best=-1.;uint chosen=0xffffffffu;
     float capacity=solid_capacity(e),bulk=capacity>0.?uintBitsToFloat(e.words[s+17u])/capacity:0.;
     uint profile=e.words[s+9u]==0u&&e.words[s+10u]>0u?12u:m;
     bool bound_film=e.words[s+FR_STATE_COATING_OIL]>0u&&
@@ -604,7 +619,7 @@ void choose_body_target(uint index) {
     float skin=0.;
     for(uint d=0u;d<8u;d++) {
         ivec2 direction=body_directions[d];
-        ivec2 q=p+direction;uint at=atlas(q);if(!reaction_receiver(at)) continue;
+        ivec2 q=p+direction;uint at=atlas(q);if(!body_reaction_receiver(q,at)) continue;
         if(d>=4u&&!body_corner_reachable(p,direction)) continue;
         Gas gas=local_gas(at);float mass=gas_mass(gas);
         if(bound_film&&cells[at].y>0u&&best<0.) {best=0.;chosen=at;}
@@ -632,8 +647,7 @@ void choose_body_target(uint index) {
         if(chosen!=0xffffffffu) {atomicAdd(hud[22],1u);Gas gas=local_gas(chosen);float mass=gas_mass(gas);
             if(gas.species.x>0.) atomicAdd(hud[23],1u);
             atomicMax(hud[27],floatBitsToUint(max(gas.species.x,0.)));}
-        if(all(greaterThanEqual(p,ivec2(0)))&&all(lessThan(p,ivec2(params.width,params.height)))&&
-            thermal_occupancy[uint(p.y)*params.width+uint(p.x)]==body.id) atomicAdd(hud[24],1u);
+        if(in_body_reaction_grid(p)&&fr_body_heat_owner(body_reaction_index(p))==body.id) atomicAdd(hud[24],1u);
     }
     if(chosen==0xffffffffu) scratch.words[index*12u+6u]=0u;
     /* Contact adhesion smear: hot greek film sticks to whatever body it
@@ -680,7 +694,6 @@ void choose_body_target(uint index) {
      * cell share per tick. The receiving cell-owned fuel record claims the
      * offer single-writer in the reaction cell pass, so no two writers race
      * on the receiving entry; the donor fuel debit stays atomic. */
-    scratch.words[index*12u+7u]=0u;
     uint flags_now=e.words[s+1u];
     uint parcel_fuel=e.words[s+9u];
     if((flags_now&2u)!=0u&&bulk>=coefficient(m,7u)&&
@@ -712,17 +725,14 @@ void choose_body_target(uint index) {
     }
 }
 void burn_body_neighbor(ivec2 p,uint gas_at,inout Gas gas,inout float admitted,inout float temperature,inout uint sources) {
-    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return;
-    uint slot=runtime_body_find(thermal_occupancy[uint(p.y)*params.width+uint(p.x)]);if(slot>=BODY_CAPACITY) return;
-    Body body=body_thermal_grid(DC_BODY(slot));if(!pixel_body(body)) return;
-    vec2 low=vec2(p)-vec2(body.x_fp,body.y_fp)/65536.;uvec4 query=body_piece_query(body,low,low+1.);
+    if(!in_body_reaction_grid(p)) return;
+    HeatContacts contacts;
+    fr_body_heat_contacts(body_reaction_index(p),true,contacts);
     Words scratch=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
-    for(uint n=0u;n<query.z*query.w;n++) {
-        uint piece=query_piece(body,query,n);if(pixel_piece_material(body,piece)==0u||body_parcel_cell(body,piece)!=p) continue;
-        uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y==0u||scratch.words[h.x*12u+5u]!=gas_at) continue;
-        uint geometry_word=body.compound_reserved+pixel_tile_offset(body,piece/256u)+
-            1u+(piece%256u)/8u;
-        burn_entry(p,gas_at,h,2u,geometry_word,piece%8u,gas,admitted,temperature,sources);
+    for(uint n=0u;n<contacts.count;n++) {
+        uvec2 h=contacts.handles[n];if(scratch.words[h.x*12u+5u]!=gas_at) continue;
+        uvec2 geometry=contacts.geometry[n];
+        burn_entry(p,gas_at,h,2u,geometry.x,geometry.y,gas,admitted,temperature,sources);
     }
 }
 void apply_body_brand(ivec2 p,Words c) {
@@ -734,18 +744,11 @@ void apply_body_brand(ivec2 p,Words c) {
     Words scratch=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
     for(uint d=0u;d<8u;d++) {
         ivec2 q=p+body_directions[d];
-        if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(params.width,params.height)))) continue;
-        uint slot=runtime_body_find(thermal_occupancy[uint(q.y)*params.width+uint(q.x)]);
-        if(slot>=BODY_CAPACITY) continue;
-        Body body=body_thermal_grid(DC_BODY(slot));
-        if(!pixel_body(body)) continue;
-        vec2 low=vec2(q)-vec2(body.x_fp,body.y_fp)/65536.;
-        uvec4 query=body_piece_query(body,low,low+1.);
-        for(uint n=0u;n<query.z*query.w;n++) {
-            uint piece=query_piece(body,query,n);
-            if(pixel_piece_material(body,piece)==0u) continue;
-            uvec2 h=fr_body_reactive_handle(body,slot,piece);
-            if(h.y==0u||h.x>=root[2]) continue;
+        if(!in_body_reaction_grid(q)) continue;
+        HeatContacts contacts;
+        fr_body_heat_contacts(body_reaction_index(q),false,contacts);
+        for(uint n=0u;n<contacts.count;n++) {
+            uvec2 h=contacts.handles[n];
             Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),h.x));
             uint es=FR_ENTRY_STATE;
             /* The donor must burn and carry film: the greek compound's own
@@ -808,19 +811,25 @@ void apply_body_brand(ivec2 p,Words c) {
 void main() {
     uint i=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
 #ifdef FR_BODY_REACTIONS
+    fr_prepare_heat_poses();
     if(params.unused.x==9u) {
         uint slot=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;if(slot>=BODY_CAPACITY) return;
         Body body=body_thermal_grid(DC_BODY(slot));if((body.enabled|body.reserved0)==0u||!pixel_body(body)) return;
+        uint pose=body.enabled!=0u?fr_body_contact_pose(params.sprite_address,slot,body):0u;
         for(uint piece=gl_LocalInvocationID.x;piece<body_pieces(body);piece+=64u) {
             if(pixel_piece_material(body,piece)==0u) continue;
             uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y==0u) continue;
-            choose_body_target(h.x);
+            Body contact=body;
+            bool exposed=fr_body_project_contact(params.sprite_address,pose,piece,contact);
+            ivec2 projected=exposed?fr_body_parcel_cell(contact,piece):ivec2(-1);
+            choose_body_target(h.x,body,projected,exposed&&in_body_reaction_grid(projected));
+            if(!exposed) continue;
             Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),h.x));
             uint s=FR_ENTRY_STATE,material=entry.words[s];
             if(entry.words[FR_ENTRY_GENERATION]!=h.y||entry.words[FR_ENTRY_OWNER]!=2u||
                !DC_CELL_SMOKE_PASS_WOOD(material)||
                (entry.words[s+1u]&2u)==0u||(entry.words[s+9u]|entry.words[s+10u])==0u) continue;
-            ivec2 parcel=body_parcel_cell(body,piece);
+            ivec2 parcel=fr_body_parcel_cell(body,piece);
             uint at=atlas(parcel);
             uint index=uint(parcel.y)*params.width+uint(parcel.x);
             if(at!=0xffffffffu&&thermal_occupancy[index]==body.id&&
@@ -835,21 +844,18 @@ void main() {
      * film from burning neighbors without joining the gas reaction. */
     if(at!=0xffffffffu&&(uint(cells[at].x&255u)==18u||uint(cells[at].x&255u)==19u)) {
         bool near_burning=false;
-        for(uint face=0u;face<8u;face++) {ivec2 q=p+body_directions[face];
-            if(all(greaterThanEqual(q,ivec2(0)))&&all(lessThan(q,ivec2(params.width,params.height))))
-                near_burning=near_burning||thermal_occupancy[uint(q.y)*params.width+uint(q.x)]!=0u;}
+        for(uint face=0u;face<8u;face++) near_burning=near_burning||body_reaction_near(p+body_directions[face]);
         if(!near_burning) return;
         uvec2 sample_handle=Handles(uvec2(root[6],root[7])).values[at];
         if(sample_handle.y!=0u)
             apply_body_brand(p,Words(reactive_entry_address(uvec2(root[4],root[5]),sample_handle.x)));
         return;
     }
-    if(!reaction_receiver(at)) return;
+    if(!body_reaction_receiver(p,at)) return;
     bool near_body=false;
     for(uint face=0u;face<8u;face++) {ivec2 q=p+body_directions[face];
         if(face>=4u&&!body_corner_reachable(q,-body_directions[face])) continue;
-        if(all(greaterThanEqual(q,ivec2(0)))&&all(lessThan(q,ivec2(params.width,params.height))))
-            near_body=near_body||thermal_occupancy[uint(q.y)*params.width+uint(q.x)]!=0u;}
+        near_body=near_body||body_reaction_near(q);}
     if(!near_body) return;
     bool alternate=params.sparse!=0u&&(Words(params.gates_address).words[at]&8u)!=0u;
     GasField field=GasField(alternate?params.alternate_address:params.world_address);Gas gas=field.values[at];
