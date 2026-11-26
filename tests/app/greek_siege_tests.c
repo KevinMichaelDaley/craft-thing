@@ -163,6 +163,43 @@ static void test_greek_and_oil_stage_matched_prearmed_coating(void) {
     }
     PASS();
 }
+static void test_cold_greek_load_keeps_its_film_while_soaking(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = greek_grid();
+    dc_siege_scene_t scene = {0};
+    const uint32_t span = 2u * DC_SIEGE_COAL_RADIUS + 1u;
+    ASSERT_TRUE(gpu && dc_siege_scene_build_douse_pool(gpu, DC_SIEGE_LOAD_GREEK,
+                                                      &scene, err, sizeof(err)));
+    uint64_t before = greek_ball_coating(gpu, scene.coal_body, span, err, sizeof(err));
+    ASSERT_TRUE(before > 0u && before != UINT64_MAX);
+    ASSERT_TRUE(greek_ticks(gpu, 1u, err, sizeof(err)));
+    uint64_t after = greek_ball_coating(gpu, scene.coal_body, span, err, sizeof(err));
+    printf("Unlit Greek load in pool retained %llu of %llu Q16 film\n",
+           (unsigned long long)after, (unsigned long long)before);
+    ASSERT_EQ(after, before);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
+static void test_siege_strike_preserves_the_loads_bound_water(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = greek_grid();
+    dc_siege_scene_t scene = {0};
+    const uint32_t span = 2u * DC_SIEGE_COAL_RADIUS + 1u;
+    ASSERT_TRUE(gpu && dc_siege_scene_build_douse_pool(gpu, DC_SIEGE_LOAD_OIL,
+                                                      &scene, err, sizeof(err)));
+    ASSERT_TRUE(greek_ticks(gpu, 1u, err, sizeof(err)));
+    uint64_t before = greek_ball_water(gpu, scene.coal_body, span, err, sizeof(err));
+    ASSERT_TRUE(before > 0u && before != UINT64_MAX);
+    ASSERT_TRUE(dc_siege_scene_ignite_load(gpu, &scene, 0.f, err, sizeof(err)));
+    uint64_t after = greek_ball_water(gpu, scene.coal_body, span, err, sizeof(err));
+    printf("Strike retained %llu of %llu Q16 bound water\n",
+           (unsigned long long)after, (unsigned long long)before);
+    ASSERT_EQ(after, before);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 static void test_submerged_greek_keeps_reacting_while_oil_douses(void) {
     char err[256] = {0};
     static const dc_siege_load_t loads[2] = {DC_SIEGE_LOAD_OIL,
@@ -661,6 +698,12 @@ int main(int argc, char **argv) {
     }
     if (argc == 2 && strcmp(argv[1], "--douse") == 0) {
         RUN(test_submerged_greek_keeps_reacting_while_oil_douses);
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--douse-preflight") == 0) {
+        RUN(test_cold_greek_load_keeps_its_film_while_soaking);
+        RUN(test_siege_strike_preserves_the_loads_bound_water);
         printf("%d passed, %d failed\n", g_pass, g_fail);
         return g_fail ? 1 : 0;
     }
