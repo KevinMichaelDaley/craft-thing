@@ -44,3 +44,11 @@ The complete tick fixture now includes coupled thermal/combustion and a real woo
 **2026-11-26T20:29:20Z**
 
 The coupled whole-tick RED used 16 submissions either way. On the completed refactor, the displayed test uses 8 versus 16 submissions with identical packets and clock, consumes actual pending wood shock heat, and preserves 751.450012 of wood energy in both routes. This passed with rotating whole banks and sparse cell owners. The cold route declined fusion before recording any work. Five-second Greek and matched oil traces were identical with the setting off/on. A link-only probe of the final code counted 299 fused and one cold split tick in 300 native Greek calls; disabling fusion produced 300 split ticks with identical physical samples. The dedicated and whole suites are queued.
+
+**2026-11-26T20:41:55Z**
+
+Instrumented e136d9b3 publication prefix reproduced 16/16 coupled submissions with exact packets and heated wood. The preceding presentation trace leaves DC_FRAME_TIMINGS=0 when the option was absent. The gameplay tick treats variable presence as enabled and routes through two traced submissions even though presentation treats zero as disabled.
+
+**2026-11-26T20:48:57Z**
+
+With DC_FRAME_TIMINGS=0 the native test reproduced 16/16 submissions before the change and passed at 8/16 afterward. The untraced paths retain identical gas packets, clocks, and solar-free thermal energy. A separate enabled timing test still captured four injected slow logs and excluded them from fence wait time (0.005 ms measured).

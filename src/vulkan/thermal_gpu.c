@@ -321,7 +321,8 @@ static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
 void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
     if(!g->thermal||seconds<=0) return;
     if(g->thermal->combustion.pipeline) fr_renderer_emission_changed(g);
-    bool trace=getenv("DC_THERMAL_PHASE_TRACE")&&getenv("DC_FRAME_TIMINGS")&&g->timestamp_pool;
+    const char *timings=getenv("DC_FRAME_TIMINGS");
+    bool trace=timings&&strcmp(timings,"0")!=0&&getenv("DC_THERMAL_PHASE_TRACE")&&g->timestamp_pool;
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,4);
     if(g->thermal->probe_active) phase(g,4,seconds);
     phase(g,0,seconds);phase(g,5,seconds);phase(g,6,seconds);

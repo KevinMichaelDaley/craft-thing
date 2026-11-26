@@ -171,16 +171,20 @@ static void test_native_tick_waits_its_fence_without_draining_presentation_queue
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);dc_gpu_destroy(g);PASS();
 }
 static void test_native_fence_trace_excludes_slow_log_output(void) {
-    char err[256]={0};const char *value=getenv("DC_FRAME_TIMINGS");char *saved=value?SDL_strdup(value):NULL;
-    ASSERT_EQ(SDL_setenv("DC_FRAME_TIMINGS","1",1),0);
+    char err[256]={0};
     dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    const char *value=getenv("DC_FRAME_TIMINGS");char *saved=value?SDL_strdup(value):NULL;
+    ASSERT_TRUE(!value||saved);
+    ASSERT_EQ(SDL_setenv("DC_FRAME_TIMINGS","1",1),0);
     g_present_log_delay_count=0;g_reported_fence_peak=0.;g_delay_present_setup_log=true;
     bool okay=present(g,err,sizeof(err));g_delay_present_setup_log=false;
+    int restored=saved?SDL_setenv("DC_FRAME_TIMINGS",saved,1):unsetenv("DC_FRAME_TIMINGS");
+    SDL_free(saved);dc_gpu_destroy(g);free(c);
+    ASSERT_EQ(restored,0);
     printf("Injected slow setup logs%u, reported fence peak%.3fms\n",g_present_log_delay_count,g_reported_fence_peak);
     ASSERT_TRUE(okay&&g_present_log_delay_count==4u&&g_reported_fence_peak<80.);
-    dc_gpu_destroy(g);free(c);
-    ASSERT_EQ(SDL_setenv("DC_FRAME_TIMINGS",saved?saved:"0",1),0);SDL_free(saved);PASS();
+    PASS();
 }
 static void test_native_temporal_sor_matches_global_and_bounds_dispatches(void) {
     char err[256]={0};const char *old=getenv("DC_GAS_TEMPORAL_SOR");char *saved=old?SDL_strdup(old):NULL;
