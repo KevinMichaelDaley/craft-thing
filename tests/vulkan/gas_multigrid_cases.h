@@ -2,6 +2,7 @@
 #define GAS_MULTIGRID_CASES_H
 #include "../../src/vulkan/gas_gpu_internal.h"
 static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,uint32_t added_dispatches) {
+    enum { SEALED_ROW=50, SEALED_SAMPLE=SEALED_ROW*DC_CHUNK_SIDE+20 };
     char err[256]={0};const char *names[]={"DC_GAS_MULTIGRID",setting,"DC_GAS_FUSED_AXIS","DC_GAS_TEMPORAL_SOR"};char *saved[4];
     bool direct_first=strcmp(setting,"DC_GAS_DIRECT_FIRST_AXIS")==0,quiet_publication=strcmp(setting,"DC_GAS_ROTATE_PUBLISH")==0;
     bool cached_neighbors=strcmp(setting,"DC_GAS_CACHED_NEIGHBORS")==0;
@@ -33,6 +34,10 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         fr_gas_state_t *s=input+y*64+x;s->species[1]-=.00001;s->species[2]=.00001;
         s->energy+=.00001*(m.heat_capacity_cv[2]-m.heat_capacity_cv[1])*300;s->pigment[0]=.000005;
     }
+    if(direct_first) {
+        input[SEALED_SAMPLE].species[FR_GAS_NITROGEN]-=.00001;
+        input[SEALED_SAMPLE].species[FR_GAS_EXHAUST]=.00001;
+    }
     uint32_t work[2]={0},tiles[2]={0},widths[2]={0},transfer_barriers[2]={0},repeated[2]={0};float rates[2][3]={{0}};uint64_t copy_bytes[2]={0};
     uint32_t activity_modes[2]={0},large_sor_sizes[2]={0};
     bool zero_energy_used[2]={false,false},large_sor_used[2]={false,false};
@@ -56,6 +61,10 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
             }
             if(step==0||step==6) ASSERT_TRUE(fr_gas_gpu_gate(g,29,0,1,64,0,true,err,sizeof(err)));
             if(step==3) ASSERT_TRUE(fr_gas_gpu_gate(g,29,0,1,64,0,false,err,sizeof(err)));
+            if(direct_first&&(step==0u||step==4u)) {
+                ASSERT_TRUE(fr_gas_gpu_gate(g,0,SEALED_ROW,2u*DC_CHUNK_SIDE,1,0,true,err,sizeof(err))&&
+                    fr_gas_gpu_gate(g,0,SEALED_ROW-1u,2u*DC_CHUNK_SIDE,2,1,true,err,sizeof(err)));
+            }
             if(geometry_activity) {
                 c->cells[32u*64u+32u]=(dc_cell_t){.material=(step&1u)?DC_MATERIAL_AIR:DC_MATERIAL_STONE,.flags=(step&1u)?0u:DC_CELL_LOADED_TERRAIN};
                 ASSERT_TRUE(dc_gpu_upload_chunk_exact(g,0,c,false,err,sizeof(err)));fr_gas_gpu_geometry_changed(g,true);
@@ -127,6 +136,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         ASSERT_TRUE(widths[0]==0u&&widths[1]==requested_width&&memcmp(rates[0],rates[1],sizeof(rates[0]))==0);
     }
     if(direct_first) {
+        ASSERT_EQ(out[SEALED_SAMPLE].species[FR_GAS_EXHAUST],(double)(float)input[SEALED_SAMPLE].species[FR_GAS_EXHAUST]);
         printf("First-axis GPU copy bytes%llu vs%llu\n",(unsigned long long)copy_bytes[1],(unsigned long long)copy_bytes[0]);
         ASSERT_TRUE(copy_bytes[1]<copy_bytes[0]&&memcmp(rates[0],rates[1],sizeof(rates[0]))==0);
     }

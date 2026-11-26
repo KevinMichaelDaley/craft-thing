@@ -61,6 +61,52 @@ VKAPI_ATTR VkResult VKAPI_CALL __real_vkQueueSubmit(VkQueue queue,uint32_t count
 VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkQueueSubmit(VkQueue queue,uint32_t count,const VkSubmitInfo *submits,VkFence fence) {
     g_publication_submits++;return __real_vkQueueSubmit(queue,count,submits,fence);
 }
+static void test_native_rotated_bank_conducts_from_the_published_owner(void) {
+    enum { HOT = 32 * DC_CHUNK_SIDE + 32, COLD = HOT + 1 };
+    const char *options[]={"DC_GAS_ROTATE_PUBLISH","DC_GAS_SPARSE_OWNERS"};
+    char err[256]={0},*saved[2];
+    for(uint32_t i=0;i<2;i++) {
+        const char *value=getenv(options[i]);
+        saved[i]=value?SDL_strdup(value):NULL;
+    }
+    ASSERT_EQ(SDL_setenv(options[1],"0",1),0);
+    dc_chunk_t *c=calloc(1,sizeof(*c));
+    fr_gas_state_t *input=calloc(DC_CHUNK_CELLS,sizeof(*input));
+    fr_gas_state_t *out[2]={calloc(DC_CHUNK_CELLS,sizeof(*input)),calloc(DC_CHUNK_CELLS,sizeof(*input))};
+    double *volume=malloc(DC_CHUNK_CELLS*sizeof(*volume));
+    ASSERT_TRUE(c&&input&&out[0]&&out[1]&&volume);
+    const fr_gas_model_t model={.gas_constant={.25,.25,.25,.25,0},
+        .heat_capacity_cv={.75,.75,.75,.75,.75},.kinetic_scale=1./512.};
+    for(uint32_t i=0;i<DC_CHUNK_CELLS;i++) {
+        input[i]=reference_air(model,.0012,300.,0.);
+        volume[i]=1.;
+    }
+    input[HOT]=reference_air(model,.0004,900.,0.);
+    for(uint32_t path=0;path<2;path++) {
+        dc_gpu_t *g=NULL;
+        ASSERT_EQ(SDL_setenv(options[0],path?"1":"0",1),0);
+        ASSERT_TRUE(dc_gpu_create(&g,DC_CHUNK_SIDE,DC_CHUNK_SIDE,"build/shaders/pattern.comp.spv",err,sizeof(err))&&
+            dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&
+            fr_gas_gpu_enable(g,&model,.0012f,300.f,err,sizeof(err))&&
+            fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
+        ASSERT_EQ(g->gas->direct_publish,path!=0u);
+        ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,DC_CHUNK_CELLS,err,sizeof(err))&&
+            fr_gas_gpu_step(g,.001f,err,sizeof(err))&&
+            fr_gas_gpu_read_chunk(g,0,out[path],DC_CHUNK_CELLS,err,sizeof(err)));
+        dc_gpu_destroy(g);
+    }
+    double regular_heat=out[0][COLD].energy-input[COLD].energy;
+    double rotated_heat=out[1][COLD].energy-input[COLD].energy;
+    bool exact=memcmp(out[0],out[1],DC_CHUNK_CELLS*sizeof(*input))==0;
+    printf("Ordinary and rotated cold-cell heat %.9g vs %.9g\n",regular_heat,rotated_heat);
+    free(volume);free(out[1]);free(out[0]);free(input);free(c);
+    for(uint32_t i=0;i<2;i++) {
+        ASSERT_EQ(saved[i]?SDL_setenv(options[i],saved[i],1):unsetenv(options[i]),0);
+        SDL_free(saved[i]);
+    }
+    ASSERT_TRUE(regular_heat>1e-5&&rotated_heat>1e-5&&exact);
+    PASS();
+}
 static void test_native_publication_uses_one_submission_and_preserves_rejected_state(void) {
     char err[256]={0};const char *old=getenv("DC_GAS_ROTATE_PUBLISH");char *saved=old?SDL_strdup(old):NULL;
     ASSERT_EQ(SDL_setenv("DC_GAS_ROTATE_PUBLISH","1",1),0);

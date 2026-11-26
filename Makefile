@@ -2343,6 +2343,15 @@ build/combustion_body_feedback_tests: tests/vulkan/combustion_body_feedback_test
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/combustion_body_feedback_tests build/combustion_body_feedback_display_tests: tests/vulkan/rigid_coating_contact_cases.h tests/vulkan/submerged_coating_cases.h
 build/combustion_gpu_display_tests build/combustion_body_feedback_display_tests build/combustion_body_feedback_tests: build/diagnostics/body_storage_init.spv build/shaders/runtime_body_index.comp.spv build/shaders/runtime_body_scan.comp.spv $(RIGID_SHADER) $(SOLVER_SHADER) $(BROADPHASE_SHADER) $(CONTACT_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_COMPONENT_SHADER) $(RENDERER_SHADERS)
+build/gas_display_tests build/gas_publication_display_tests: build/diagnostics/body_storage_init.spv \
+	build/shaders/runtime_body_index.comp.spv build/shaders/runtime_body_scan.comp.spv \
+	$(RIGID_SHADER) $(SOLVER_SHADER) $(BROADPHASE_SHADER) $(CONTACT_SHADER) $(PROBE_SHADER) \
+	$(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) \
+	$(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER) $(MPM_COMPACTION_SHADER) $(RENDERER_SHADERS) \
+	build/shaders/contacts_pixel.comp.spv build/shaders/runtime/contacts_pixel.comp.spv \
+	build/shaders/mpm_commit.comp.spv build/shaders/runtime/mpm_commit.comp.spv \
+	build/shaders/mpm_stencil.comp.spv build/shaders/runtime/mpm_stencil.comp.spv \
+	build/shaders/structural.comp.spv build/shaders/authored.comp.spv build/shaders/prop_place.comp.spv
 .PHONY: test_submerged_coating
 test_submerged_coating: build/combustion_gpu_display_tests build/combustion_body_feedback_display_tests
 	./build/combustion_gpu_display_tests --greek-submerged

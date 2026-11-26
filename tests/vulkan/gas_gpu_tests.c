@@ -592,6 +592,7 @@ int main(void) {
     RUN(test_unsupported_policy_rejects_before_acoustic_setup);
     setvbuf(stdout,NULL,_IOLBF,0);
 #ifdef FR_GAS_PUBLICATION_TEST
+    RUN(test_native_rotated_bank_conducts_from_the_published_owner);
     RUN(test_native_publication_uses_one_submission_and_preserves_rejected_state);
     RUN(test_native_tick_waits_its_fence_without_draining_presentation_queue);
     RUN(test_native_temporal_sor_matches_global_and_bounds_dispatches);
