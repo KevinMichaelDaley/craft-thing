@@ -34,16 +34,16 @@ VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkQueueWaitIdle(VkQueue queue) {
     return __real_vkQueueWaitIdle(queue);
 }
 
-bool __real_dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool fluid, bool particles,
+bool __real_dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload, bool particles,
                                     char *err, uint32_t cap);
-bool __wrap_dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool fluid, bool particles,
+bool __wrap_dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload, bool particles,
                                     char *err, uint32_t cap) {
     if (reject_next_chunk_copy) {
         reject_next_chunk_copy = false;
         if (err && cap) snprintf(err, cap, "Injected launch footprint readback failure");
         return false;
     }
-    return __real_dc_gpu_copy_chunk_state(gpu, slot, fluid, particles, err, cap);
+    return __real_dc_gpu_copy_chunk_state(gpu, slot, upload, particles, err, cap);
 }
 
 static void teardown(void);

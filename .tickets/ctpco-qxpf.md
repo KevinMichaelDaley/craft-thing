@@ -24,3 +24,7 @@ Live cast rejects blocked and unloaded locations without effect or stale errors.
 **2026-11-26T22:29:22Z**
 
 RED drove the real player control and cast-frame loop. A failed bolt and a failed storm both returned successful progression and submitted the second movement command. Both ordinary refusal cases left their diagnostic in the healthy step buffer. All four new checks failed.
+
+**2026-11-26T22:34:02Z**
+
+GREEN and refactor: the real player step passes all four failure/refusal controls, retaining the original backend diagnostic and stopping before a second movement submission on failure. Rejections leave the caller error untouched and both paths consume the event once. Six footprint tests, the headless player family, tool and recipe checks, and the four ASan/UBSan player-loop cases passed. Native backend injection and visible player actions compiled and are queued.

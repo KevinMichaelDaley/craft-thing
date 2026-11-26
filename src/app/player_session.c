@@ -432,7 +432,7 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
         if(has_body) {
             const fr_player_action_event_t *cast=&s->cast_events[n];
             if(!s->ray&&cast->ability&&cast->has_target&&can_aim) {
-                char detail[256]={0};
+                char detail[sizeof(s->failure)]={0};
                 fr_player_cast_result_t result=FR_PLAYER_CAST_REFUSED;
                 if(cast->ability==s->fire)
                     result=fr_player_try_cast_body_fire_bolt(v->gpu,s->players[n].identity,&self,

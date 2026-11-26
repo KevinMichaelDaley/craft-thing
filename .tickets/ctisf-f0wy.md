@@ -1,6 +1,6 @@
 ---
 id: ctisf-f0wy
-status: in_progress
+status: closed
 deps: []
 links: [ct-vkik, ct-yctv, ctsdb-yps2]
 created: 2026-11-26T22:10:37Z
@@ -32,3 +32,7 @@ GREEN and refactor pass all five production host cases, both with the usual buil
 **2026-11-26T22:24:58Z**
 
 Native RED at 8f6fbb2f wets both an unrelated page and the target with 65,536 Q16 water, and cools the unrelated parcel from 32.959 to 9.888. The valid negative-seam control passed. The exact GREEN replay remains queued.
+
+**2026-11-26T22:34:02Z**
+
+Exact GREEN a2706980 passed both Vulkan mapping cases. The unrelated and center pages retained zero water and the decoy retained all 32.959 energy. The valid negative seam still received water and cooling. This closes the footprint fix; the separate device-brush verification is tracked in ctsdb-yps2.

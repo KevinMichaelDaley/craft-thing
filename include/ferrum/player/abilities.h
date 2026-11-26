@@ -8,9 +8,9 @@
 #include "ferrum/player/player.h"
 
 typedef enum {
-    FR_PLAYER_CAST_FAILED,
-    FR_PLAYER_CAST_REFUSED,
-    FR_PLAYER_CAST_APPLIED
+    FR_PLAYER_CAST_FAILED,  /**< Invalid input or failed backend work. */
+    FR_PLAYER_CAST_REFUSED, /**< The requested world footprint was unavailable. */
+    FR_PLAYER_CAST_APPLIED  /**< The spell applied its intended effect. */
 } fr_player_cast_result_t;
 
 /** Launch a small burning coal body from a canonical world muzzle toward
