@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate/export locked fire fixtures and capture the pre-feature live baseline."""
+"""Validate and run locked fire fixtures or capture the pre-feature live baseline."""
 import argparse
 import array
 import hashlib
@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import time
+from fractions import Fraction
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = ROOT / "assets/fixtures/fire_smoke_v1.json"
@@ -268,6 +269,85 @@ def baseline(data, source_world, output):
     return all(run["budget_pass"] for run in report["runs"])
 
 
+def observe_depletion(binary, load, soak, limit, fuel, ticks_per_second, exposure=None):
+    command = [str(binary), "--depletion-record", load, str(soak), str(limit)]
+    previous_fuel, rows, end = fuel, 0, None
+    with subprocess.Popen(command, cwd=ROOT, text=True, stdout=subprocess.PIPE) as probe:
+        try:
+            for line in probe.stdout:
+                print(line.rstrip("\n"), flush=True)
+                parts = line.split()
+                if not parts:
+                    continue
+                if parts[0] == "POOL_END":
+                    if len(parts) != 2 or end is not None or rows == 0:
+                        raise ValueError("Invalid completion marker for pool observation")
+                    end = int(parts[1])
+                if parts[0] != "POOL_SAMPLE":
+                    continue
+                if len(parts) != 10 or end is not None:
+                    raise ValueError("Invalid pool observation")
+                second, ticks = map(int, parts[1:3])
+                elapsed = float(parts[3])
+                remaining, water, wet_faces, faces, outside, mobile = map(int, parts[4:])
+                if (second != rows or second > limit or ticks != second * ticks_per_second or
+                        not math.isclose(elapsed, second, rel_tol=1e-6, abs_tol=1e-6)):
+                    raise ValueError(f"Incomplete {load} simulation interval at {rows} s")
+                if water <= 0 or faces <= 0 or wet_faces != faces:
+                    raise ValueError(f"{load} load was no longer fully submerged at {rows} s")
+                if outside or mobile:
+                    raise ValueError(f"{load} escaped fuel detected at {rows} s")
+                if rows == 0:
+                    if remaining != fuel:
+                        raise ValueError(f"{load} load did not have the matched initial fuel")
+                    if exposure is not None and exposure != (water, faces):
+                        raise ValueError("Loads did not have matched post-soak water and exposed faces")
+                    exposure = water, faces
+                elif faces != exposure[1]:
+                    raise ValueError(f"{load} load changed its exposed geometry")
+                if load == "oil" and remaining != fuel:
+                    raise ValueError(f"Submerged ordinary oil lost fuel at {rows} s")
+                if remaining < 0 or remaining > previous_fuel or previous_fuel == 0:
+                    raise ValueError(f"Invalid {load} fuel inventory at {rows} s")
+                previous_fuel = remaining
+                rows += 1
+        except ValueError:
+            probe.terminate()
+            raise
+        status = probe.wait()
+    if status:
+        raise subprocess.CalledProcessError(status, command)
+    if end is None or end != rows - 1:
+        raise ValueError(f"Missing terminal {load} simulation interval")
+    if load == "greek" and previous_fuel != 0:
+        raise ValueError(f"Greek load did not reach zero fuel within {limit} s")
+    if load == "oil" and end != limit:
+        raise ValueError(f"Did not observe the complete oil interval of {limit} s")
+    return end, exposure
+
+
+def greek_depletion(data, binary):
+    scene = data["scenes"]["greek_siege"]
+    pool = scene["standing_pool_depletion"]
+    ratio = Fraction(str(scene["maximum_oil_relative_depletion_time"]))
+    repeats = data["acceptance"]["consecutive_runs"]
+    soak = scene["submersion"]["start_seconds"]
+    tick = Fraction(*data["clock"]["rigid_tick_seconds"])
+    if not 0 < ratio <= 1 or repeats < 2 or tick.numerator != 1:
+        raise ValueError("Invalid repeated Greek depletion fixture")
+    for trial in range(1, repeats + 1):
+        print(f"Standing-pool depletion replay {trial}/{repeats}", flush=True)
+        greek, exposure = observe_depletion(binary, "greek", soak,
+            pool["maximum_greek_seconds"], pool["matched_fuel_fp"], tick.denominator)
+        # The first sampled zero is an upper bound on Greek depletion time.
+        # Positive oil stock through this interval gives a strict lower bound.
+        oil_limit = math.ceil(greek / ratio)
+        oil, _ = observe_depletion(binary, "oil", soak, oil_limit,
+            pool["matched_fuel_fp"], tick.denominator, exposure=exposure)
+        print(f"Greek depleted by {greek} s. Submerged oil retained fuel through {oil} s.",
+              flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest",type=pathlib.Path,default=DEFAULT_MANIFEST)
@@ -275,6 +355,7 @@ def main():
     parser.add_argument("--baseline-world",type=pathlib.Path)
     parser.add_argument("--emit-material-c",type=pathlib.Path)
     parser.add_argument("--check-material-c",type=pathlib.Path)
+    parser.add_argument("--greek-depletion-binary",type=pathlib.Path)
     args = parser.parse_args()
     data = validate(json.loads(args.manifest.read_text()))
     if args.emit_material_c:
@@ -290,6 +371,8 @@ def main():
             return 1
     elif args.baseline_world:
         parser.error("--baseline-world requires a fresh --output-dir")
+    if args.greek_depletion_binary:
+        greek_depletion(data, args.greek_depletion_binary.resolve())
     print("Validated locked fire/smoke fixtures",flush=True)
     return 0
 

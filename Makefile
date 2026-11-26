@@ -1864,6 +1864,7 @@ test: test_fire_fixtures
 test_fire_fixtures:
 	python3 -m py_compile tests/fire/fixture_contract_tests.py tools/diagnostics/fire_fixture.py
 	python3 tests/fire/fixture_contract_tests.py
+	python3 tests/fire/greek_depletion_fixture_tests.py
 
 build/reactive_material_tests: tests/fire/material_profile_tests.c src/fire/material_profile.c src/fire/material_profile_data.inc include/ferrum/fire/material_profile.h include/dungeoncraft/reactive_profile_layout.h include/dungeoncraft/chunk.h
 	mkdir -p build
@@ -2060,7 +2061,7 @@ build/fluid_binding_tests: tests/vulkan/fluid_binding_tests.c $(GPU_OBJ) $(CHUNK
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/fluid_binding_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/device_selection_tests: tests/vulkan/device_selection_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/device_selection_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
-build/greek_siege_tests: tests/app/greek_siege_tests.c Makefile src/app/siege_scene.h src/app/view_config.h $(SIEGE_SCENE_SRC) $(PERFORMANCE_OBJ)
+build/greek_siege_tests: tests/app/greek_siege_tests.c tests/app/greek_depletion_probe.h Makefile src/app/siege_scene.h src/app/view_config.h $(SIEGE_SCENE_SRC) $(PERFORMANCE_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) tests/app/greek_siege_tests.c src/app/siege_scene.c src/app/smoke_profile.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_greek_siege
 test_greek_siege: build/greek_siege_tests
@@ -2072,6 +2073,9 @@ test_greek_siege_locked_risk: build/greek_siege_tests
 	    fixture = json.load(open("assets/fixtures/fire_smoke_v1.json"))["scenes"]["greek_siege"]; \
 	    args = [fixture["delayed_launch_seconds"], fixture["minimum_launcher_ignitions"], *fixture["risk_seeds"]]; \
 	    subprocess.run(["./build/greek_siege_tests", "--locked-risk", *map(str, args)], check=True)'
+.PHONY: test_greek_siege_locked_depletion
+test_greek_siege_locked_depletion: build/greek_siege_tests
+	python3 tools/diagnostics/fire_fixture.py --greek-depletion-binary ./build/greek_siege_tests
 test: test_greek_siege
 .PHONY: test_bulk_phase test_bulk_phase_gpu test_bulk_rheology
 test: test_bulk_phase test_bulk_phase_gpu test_bulk_rheology

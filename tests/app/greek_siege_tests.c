@@ -730,6 +730,8 @@ static bool greek_parse_u32(const char *text, uint32_t *out) {
     return true;
 }
 
+#include "greek_depletion_probe.h"
+
 static int greek_locked_launcher_risk(int argc, char **argv) {
     uint32_t seconds, minimum;
     if (argc < 5 || !greek_parse_u32(argv[2], &seconds) || seconds == 0u ||
@@ -760,6 +762,8 @@ int main(int argc, char **argv) {
     greek_install_stop();
     if (argc >= 2 && strcmp(argv[1], "--locked-risk") == 0)
         return greek_locked_launcher_risk(argc, argv);
+    if (argc >= 2 && strcmp(argv[1], "--depletion-record") == 0)
+        return greek_depletion_record(argc, argv);
     if (argc == 2 && strcmp(argv[1], "--corrode-contact") == 0) {
         RUN(test_stationary_greek_film_corrodes_clean_pool_samples);
         printf("%d passed, %d failed\n", g_pass, g_fail);

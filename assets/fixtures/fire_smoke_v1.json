@@ -178,6 +178,7 @@
       "minimum_launcher_ignitions":48,
       "risk_seeds":[991397,991398,991399,991400,991401,991402,991403,991404,991405,991406,991407,991408,991409,991410,991411,991412,991413,991414,991415,991416,991417,991418,991419,991420,991421,991422,991423,991424,991425,991426,991427,991428,991429,991430,991431,991432,991433,991434,991435,991436,991437,991438,991439,991440,991441,991442,991443,991444,991445,991446,991447,991448,991449,991450,991451,991452,991453,991454,991455,991456,991457,991458,991459,991460],
       "maximum_oil_relative_depletion_time":0.5,
+      "standing_pool_depletion":{"matched_fuel_fp":327680,"maximum_greek_seconds":1200},
       "dousing":{"start_seconds":3,"duration_seconds":12,"volume_per_second":8},
       "submersion":{"start_seconds":3,"duration_seconds":10,"depth_cells":8},
       "phase_sources":[{"material":"greek_fire","circle":[104,146,3],"host_object":26,"fuel_mass":16,"bound_oxidizer_mass":6.857142857142857,"total_mass":22.857142857142858,"temperature_K":1000,"ignited":true}],
