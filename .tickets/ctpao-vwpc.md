@@ -17,4 +17,3 @@ SDL Start commits a new seat before split layout validation. A drawable too smal
 ## Acceptance Criteria
 
 Exercise a join when crop layout is unavailable, preserve existing gameplay and occupied seats, and allow the desired split view to recover when drawable dimensions are usable. Keep normal Start split behavior and controller reassignment.
-
