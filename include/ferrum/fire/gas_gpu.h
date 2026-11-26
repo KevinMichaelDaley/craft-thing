@@ -5,10 +5,13 @@
 #include "ferrum/fire/gas.h"
 #include "ferrum/fire/gas_checkpoint.h"
 
-typedef struct {float metrics[FR_GAS_AUDIT_WORDS];} fr_gas_gpu_audit_t;
+typedef struct {
+    float metrics[FR_GAS_AUDIT_WORDS];
+    double species[FR_GAS_SPECIES]; /**< Detailed inventory, including sealed stock. */
+} fr_gas_gpu_audit_t;
 /** Cold scalar diagnostic that a completed hybrid line reused its rate bound. */
 bool fr_gas_gpu_reused_line_rate(dc_gpu_t *gpu,bool *used);
-/** Cold GPU reduction after queue completion; reads only32 scalar diagnostics.
+/** Cold GPU reduction with deterministic host accumulation of workgroup totals.
  * Never invoked by normal simulation frames and never advances physical time. */
 bool fr_gas_gpu_audit(dc_gpu_t *gpu,fr_gas_gpu_audit_t *out,char *err_buf,uint32_t err_cap);
 enum {FR_GAS_PRESSURE_HLLC,FR_GAS_PRESSURE_IMPLICIT,FR_GAS_PRESSURE_LARGE_CFL,FR_GAS_PRESSURE_PRACTICAL};

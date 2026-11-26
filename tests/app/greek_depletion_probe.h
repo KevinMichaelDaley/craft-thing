@@ -55,8 +55,7 @@ static bool greek_pool_sample(dc_gpu_t *gpu, uint32_t body,
         gas.metrics[FR_GAS_AUDIT_INVALID] != 0.f)
         return false;
     sample.gas_products =
-        ((double)gas.metrics[FR_GAS_AUDIT_SPECIES + FR_GAS_EXHAUST] +
-         gas.metrics[FR_GAS_AUDIT_SPECIES + FR_GAS_SOOT]) * DC_FLUID_FULL;
+        (gas.species[FR_GAS_EXHAUST] + gas.species[FR_GAS_SOOT]) * DC_FLUID_FULL;
     *out = sample;
     return true;
 }

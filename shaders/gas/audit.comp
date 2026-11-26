@@ -3,13 +3,7 @@
 #include "storage.glsl"
 #include "../../include/dungeoncraft/gas_audit_layout.h"
 shared float values[64u*FR_GAS_AUDIT_WORDS];
-void audit_add(uint word,float value) {
-    uint old=atomicAdd(stats[word],0u);
-    for(;;) {
-        uint found=atomicCompSwap(stats[word],old,floatBitsToUint(uintBitsToFloat(old)+value));
-        if(found==old) return;old=found;
-    }
-}
+shared float species_residual[64u*FR_GAS_AUDIT_SPECIES_WORDS];
 void main() {
     uint lane=gl_LocalInvocationIndex,index=gas_index();float metrics[FR_GAS_AUDIT_WORDS];
     for(uint k=0u;k<FR_GAS_AUDIT_WORDS;k++) metrics[k]=0.;
@@ -64,20 +58,31 @@ void main() {
             }
         }
     }
-    for(uint k=0u;k<FR_GAS_AUDIT_WORDS;k++) values[k*64u+lane]=metrics[k];barrier();
+    for(uint k=0u;k<FR_GAS_AUDIT_WORDS;k++) values[k*64u+lane]=metrics[k];
+    for(uint k=0u;k<FR_GAS_AUDIT_SPECIES_WORDS;k++) species_residual[k*64u+lane]=0.;
+    barrier();
     for(uint stride=32u;stride>0u;stride/=2u) {
         if(lane<stride) for(uint k=0u;k<FR_GAS_AUDIT_WORDS;k++) {
-            float other=values[k*64u+lane+stride];
-            if(k==FR_GAS_AUDIT_MIN_TEMPERATURE) values[k*64u+lane]=min(values[k*64u+lane],other);
-            else if((k>=20u&&k<=22u)||k==31u) values[k*64u+lane]=max(values[k*64u+lane],other);
-            else values[k*64u+lane]+=other;
+            uint at=k*64u+lane;
+            float other=values[at+stride];
+            if(k<FR_GAS_AUDIT_SPECIES_WORDS) {
+                vec2 sum=gas_two_sum(values[at],other);
+                precise float tail=species_residual[at]+species_residual[at+stride]+sum.y;
+                vec2 combined=gas_two_sum(sum.x,tail);
+                values[at]=combined.x;
+                species_residual[at]=combined.y;
+            } else if(k==FR_GAS_AUDIT_MIN_TEMPERATURE) values[at]=min(values[at],other);
+            else if(FR_GAS_AUDIT_IS_MAX(k)) values[at]=max(values[at],other);
+            else values[at]+=other;
         }
         barrier();
     }
-    if(lane==0u) for(uint k=0u;k<FR_GAS_AUDIT_WORDS;k++) {
-        float value=values[k*64u];
-        if(k==FR_GAS_AUDIT_MIN_TEMPERATURE) atomicMin(stats[k],floatBitsToUint(value));
-        else if((k>=20u&&k<=22u)||k==31u) atomicMax(stats[k],floatBitsToUint(value));
-        else if(value!=0.) audit_add(k,value);
+    if(lane==0u) {
+        uint group=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x;
+        uint first=group*FR_GAS_AUDIT_PARTIAL_WORDS;
+        for(uint k=0u;k<FR_GAS_AUDIT_WORDS;k++)
+            stats[first+k]=floatBitsToUint(values[k*64u]);
+        for(uint k=0u;k<FR_GAS_AUDIT_SPECIES_WORDS;k++)
+            stats[first+FR_GAS_AUDIT_WORDS+k]=floatBitsToUint(species_residual[k*64u]);
     }
 }

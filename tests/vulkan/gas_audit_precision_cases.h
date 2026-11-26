@@ -47,6 +47,7 @@ static void test_cold_audit_keeps_trace_products_across_workgroups(void) {
     printf("Cold audit exhaust %.12g authoritative %.12g error %+.6f Q16\n",
            measured, authoritative, error_fp);
     ASSERT_TRUE(fabs(error_fp) <= 4.);
+    ASSERT_EQ(audit.species[FR_GAS_EXHAUST], authoritative);
     free(volume);
     free(gas);
     free(chunk);

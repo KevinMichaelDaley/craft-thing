@@ -1,3 +1,4 @@
+#include <float.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -293,8 +294,7 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*8u,mapped_work,&t->conduction_faces,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*4u,true,&t->gates,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(FR_GAS_MODEL_WORDS+DC_GPU_CHUNK_SLOTS)*4u,true,&t->parameters,err,cap)||
-       !dc_gpu_address_buffer_create(g,64,true,&t->stats,err,cap)||
-       !dc_gpu_address_buffer_create(g,FR_GAS_AUDIT_WORDS*4u,true,&t->audit_summary,err,cap)) return false;
+       !dc_gpu_address_buffer_create(g,64,true,&t->stats,err,cap)) return false;
     for(uint32_t i=0;i<2;i++)
         if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)g->width*g->height*8u,false,t->smoke_coordinates+i,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)g->width*g->height*4u,false,&t->smoke_potential,err,cap)) return false;
@@ -353,7 +353,6 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     }
     if(!fr_renderer_compute_init(g,&t->bubble_displace,buffers,37,16,
         "build/shaders/gas_bubble_displace.comp.spv",err,cap)) return false;
-    buffers[6]=(VkDescriptorBufferInfo){t->audit_summary.buffer,0,t->audit_summary.bytes};
     return fr_renderer_compute_init(g,&t->audit,buffers,27,16,"build/shaders/gas_audit.comp.spv",err,cap);
 }
 bool fr_gas_gpu_enable(dc_gpu_t *g,const fr_gas_model_t *model,float density,float temperature,char *err,uint32_t cap) {
@@ -504,15 +503,48 @@ bool fr_gas_gpu_initialize_queued(dc_gpu_t *g,char *err,uint32_t cap) {
     t->initialization_pending=false;
     fr_gas_gpu_invalidate_cache(g);t->large_step_hint=0;return true;
 }
+static bool gas_audit_buffer(dc_gpu_t *g,size_t groups,char *err,uint32_t cap) {
+    struct fr_gas_gpu *t=g->gas;
+    if(t->audit_summary.buffer) return true;
+    VkDeviceSize bytes=(VkDeviceSize)groups*FR_GAS_AUDIT_PARTIAL_WORDS*sizeof(float);
+    if(!dc_gpu_address_buffer_create(g,bytes,true,&t->audit_summary,err,cap)) return false;
+    VkDescriptorBufferInfo buffer={t->audit_summary.buffer,0,bytes};
+    VkWriteDescriptorSet write={.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet=t->audit.descriptor,.dstBinding=6u,.descriptorCount=1u,
+        .descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&buffer};
+    vkUpdateDescriptorSets(g->device,1u,&write,0u,NULL);
+    return true;
+}
+
 bool fr_gas_gpu_audit(dc_gpu_t *g,fr_gas_gpu_audit_t *out,char *err,uint32_t cap) {
+    _Static_assert(FR_GAS_AUDIT_SPECIES_WORDS==FR_GAS_SPECIES,"Gas audit species layout");
     if(!g||!g->gas||!out) return error(err,cap,"Invalid cold gas audit");
     struct fr_gas_gpu *t=g->gas;
-    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g)) return error(err,cap,"Cannot begin cold gas audit");
-    barrier(g);vkCmdFillBuffer(g->command,t->audit_summary.buffer,0,t->audit_summary.bytes,0);barrier(g);
-    vkCmdFillBuffer(g->command,t->audit_summary.buffer,FR_GAS_AUDIT_MIN_TEMPERATURE*4u,4u,0x7f7fffffu);
+    size_t groups=(size_t)t->groups_x*t->groups_y;
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot wait for cold gas audit");
+    if(!gas_audit_buffer(g,groups,err,cap)) return false;
+    if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin cold gas audit");
     dispatch(g,t,&t->audit,0,0);
     if(!submit(g,err,cap)) return false;
-    memcpy(out->metrics,t->audit_summary.mapped,sizeof(out->metrics));return true;
+
+    double totals[FR_GAS_AUDIT_WORDS]={0};
+    totals[FR_GAS_AUDIT_MIN_TEMPERATURE]=FLT_MAX;
+    const float *partial=t->audit_summary.mapped;
+    for(size_t group=0;group<groups;++group,partial+=FR_GAS_AUDIT_PARTIAL_WORDS) {
+        for(uint32_t k=0;k<FR_GAS_AUDIT_WORDS;++k) {
+            double value=partial[k];
+            if(k<FR_GAS_AUDIT_SPECIES_WORDS)
+                totals[k]+=value+partial[FR_GAS_AUDIT_WORDS+k];
+            else if(k==FR_GAS_AUDIT_MIN_TEMPERATURE)
+                totals[k]=fmin(totals[k],value);
+            else if(FR_GAS_AUDIT_IS_MAX(k))
+                totals[k]=fmax(totals[k],value);
+            else totals[k]+=value;
+        }
+    }
+    for(uint32_t k=0;k<FR_GAS_AUDIT_WORDS;++k) out->metrics[k]=(float)totals[k];
+    for(uint32_t k=0;k<FR_GAS_SPECIES;++k) out->species[k]=totals[FR_GAS_AUDIT_SPECIES+k];
+    return true;
 }
 void fr_gas_record_overlay(dc_gpu_t *g) {
     if(!g->gas) return;

@@ -574,6 +574,8 @@ static void test_native_subnormal_colored_stock_is_valid_and_retained_at_rest(vo
 int main(void) {
     if(getenv("DC_GAS_AUDIT_ONLY")) {
         RUN(test_cold_audit_keeps_trace_products_across_workgroups);
+        RUN(test_native_cold_audit_reduces_stock_and_does_not_advance_physics);
+        RUN(test_native_hot_gas_audit_weights_tiny_spikes_by_heat_capacity);
         printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
     }
 #ifdef FR_REACTIVE_PRESENTATION_TEST
