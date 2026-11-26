@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
+#include <inttypes.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,9 +68,17 @@ static bool restored_gas_exact(dc_level_view_t *v,uint32_t count,const dc_chunk_
     fr_gas_checkpoint_chunk_t restored;
     for(uint32_t n=0;n<count;n++) {
         uint32_t slot;
-        if(!dc_chunk_table_find(&v->table,coords[n],&slot)) return false;
+        if(!dc_chunk_table_find(&v->table,coords[n],&slot)) {
+            snprintf(err,cap,"Saved gas chunk (%" PRId64 ", %" PRId64 ") is not resident after reload",
+                     coords[n].x,coords[n].y);
+            return false;
+        }
         if(!fr_gas_gpu_export_checkpoint(v->gpu,slot,&restored,err,cap)) return false;
-        if(memcmp(gas+n,&restored,sizeof(restored))!=0) return false;
+        if(memcmp(gas+n,&restored,sizeof(restored))!=0) {
+            snprintf(err,cap,"Restored gas chunk (%" PRId64 ", %" PRId64 ") differs from its checkpoint",
+                     coords[n].x,coords[n].y);
+            return false;
+        }
     }
     return true;
 }

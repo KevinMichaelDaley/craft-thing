@@ -1,6 +1,6 @@
 ---
 id: ct-ztym
-status: in_progress
+status: closed
 deps: []
 links: [ct-ww6r]
 created: 2026-11-26T05:50:13Z
@@ -28,3 +28,7 @@ Reproducing run save is build/beaver_fire_test_baxGGV. Before reload the actual 
 **2026-11-26T05:51:36Z**
 
 RED confirms the generic camera follow changes the dedicated demo camera on the first physics tick. The failed save has chunk columns -4 through 8 whereas reload at the authored camera uses -1 through 8. Test the fixed authored framing together with the original full checkpoint comparison.
+
+**2026-11-26T05:54:33Z**
+
+RED reproduced first-tick framing drift. The fire demo now opts into its authored camera while ordinary play retains follow. The 330-tick window regression passed with stable camera, real ignition and bit-for-bit gas checkpoints and clock after reopening the save.

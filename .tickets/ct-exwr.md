@@ -45,4 +45,4 @@ Authorized continuation implemented/pushed authoritative eight-frame ASE import 
 
 **2026-11-26T05:47:16Z**
 
-November playtest cleanup: ct-yctv archived generic hail and fixed mapped storm cooling. ct-rrwn removed session startup scene painting and tracks the authored replacement. Remaining playtest shortcuts are tracked by ct-j34i for camera/reticles, ct-9v5t for placement/hotbar, ct-z4da for harvesting, and ct-q3hh for fire bolt ownership.
+The November playtest cleanup archived generic hail and fixed mapped storm cooling under ct-yctv. ct-rrwn removed session startup scene painting and tracks the authored replacement. Remaining playtest shortcuts are tracked by ct-j34i for camera and reticles, ct-9v5t for placement and hotbar, ct-z4da for harvesting, and ct-q3hh for fire bolt ownership.

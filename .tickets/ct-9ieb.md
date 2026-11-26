@@ -23,3 +23,7 @@ Named executable build/beaver_fire_demo and beaver-fire-demo target now integrat
 **2026-11-02T02:10:09Z**
 
 CPU-only failure-injection regression exposed consumed cast sequence/duration before successful GPU submission. RED4pass2fail -> GREEN6pass0fail. Host scheduling now staged locally and committed only on successful submission; failed queue boundary/command begin/submit keeps intent retryable, successful retry publishes once, failed active step retains remaining duration. No live executable/resources rebuilt. Full GPU/fullsuite verification remains deferred while user tests PID41100.
+
+**2026-11-26T05:54:33Z**
+
+Verified on the RTX A2000 that the demo retains the authored framing for 330 live ticks, ignites the real pile, and reloads the gas clock and all compared chunk checkpoints exactly. Camera and reload regression tracked and closed in ct-ztym. The remaining frame-budget evaluation stays with ct-b42x.

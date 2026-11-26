@@ -16,7 +16,7 @@ The 3811d47f and eab9fb47 spawn-clearing prototype paints hard-coded trees and s
 
 ## Acceptance Criteria
 
-Author stable rooted trees and loose stones using existing terrain/prop contracts. Admission is scoped to scene objects; reopening a save preserves the scene and edits. Cover streamed and negative world coordinates, scene load, harvesting and body ownership.
+Author stable rooted trees and loose stones using existing terrain/prop contracts. Scope admission to scene objects and preserve the scene and edits when reopening a save. Cover streamed and negative world coordinates, scene load, harvesting and body ownership.
 
 
 ## Notes

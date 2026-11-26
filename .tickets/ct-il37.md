@@ -23,3 +23,7 @@ Regression proves make test retains the full default run recipe and includes the
 **2026-11-02T15:35:35Z**
 
 Follow-up from restored recipe: gpu_dependency_tests flagged build/player_chew_tests (from ct-c9qg) missing src/fire/material_profile_data.inc prerequisite; fixed in tests/player/player.mk using the beaver_asset_tests pattern. Full recipe also exposed broken bonfire/thermal_bench display link rules (fixed under ct-8h2f) and needs glslangValidator+spirv-val on PATH (installed to ~/.local/bin on this machine).
+
+**2026-11-26T05:50:21Z**
+
+On November 25, test_default_recipe passed 2/2 and GPU dependency lint passed 9/9. The full make -k test run revealed the live player footprint failure fixed under ct-rrwn and the fire demo gas checkpoint failure tracked by ct-ztym. A complete rerun through test failures is pending.

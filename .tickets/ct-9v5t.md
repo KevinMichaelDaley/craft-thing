@@ -16,5 +16,5 @@ The playtest help promises inventory-backed R/B building and select-then-cast, b
 
 ## Acceptance Criteria
 
-Each controller/player owns selection and cast target. Cast once at the authored frame. Successful placement consumes exact selected material mass; rejected or retried placement changes neither inventory nor world. Document only controls exercised by runtime tests.
+Each controller/player owns selection and cast target. Cast once at the authored frame. Successful placement consumes exact selected material mass. Rejected or retried placement changes neither inventory nor world. Document only controls exercised by runtime tests.
 
