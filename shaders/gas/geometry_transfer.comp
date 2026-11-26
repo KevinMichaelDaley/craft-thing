@@ -1,6 +1,21 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #include "geometry_common.glsl"
+
+Gas geometry_receive_contracted_share(Gas recipient,Gas donor,float retention,float share) {
+    Gas kept=geometry_scale_packet(donor,retention);
+    /* Distribute the represented donor debit, including its scaling roundoff. */
+    precise vec4 species=(donor.species-kept.species)*share;
+    precise vec4 dynamics=(donor.dynamics-kept.dynamics)*share;
+    precise vec4 visual=(donor.visual-kept.visual)*share;
+    precise vec2 tail=(donor.geometry.zw-kept.geometry.zw)*share;
+    precise float energy=(dynamics.y+visual.w)+tail.x;
+    GasFlux incoming=GasFlux(species,vec4(dynamics.x,energy,dynamics.zw),visual.rgb);
+    Gas value=gas_add_flux(recipient,incoming,1.);
+    value.geometry.w+=tail.y;
+    return value;
+}
+
 void main() {
     if((params.bank&FR_GAS_GEOMETRY_LOCAL_BIT)!=0u&&stats[FR_GAS_ROW_NORM_BEFORE_WORD]==0u) return;
     uint index=gas_index();if(index>=params.width*params.height) return;
@@ -52,7 +67,7 @@ void main() {
                 if(gas_mass(donor)>0.) {
                     vec2 donor_retention=geometry_retention(q,donor,metadata.x);
                     if(donor_retention.x<1.&&donor_retention.y>0.) {
-                        value=geometry_receive_share(value,donor,donor_retention.x,
+                        value=geometry_receive_contracted_share(value,donor,donor_retention.x,
                             available/donor_retention.y);
                         changed=true;
                     }

@@ -40,3 +40,7 @@ The completed phase probe based on 56c48c9d captured 900 ticks at normal 60 Hz t
 **2026-11-26T17:30:52Z**
 
 The geometry-boundary probe passed its 60-tick preflight. Its +0.000722803 Q16 ledger total matched the prior staged and native first second. The measured split was +0.000006199 from physical preparation, +0.000842408 through gas geometry commit and -0.000125804 afterward. The long probe is running through the prior failure interval for attribution at established pool conditions.
+
+**2026-11-26T17:41:04Z**
+
+The completed geometry-boundary replay measured 900 normal ticks at seconds 131–145. Physical preparation and geometry commit each contributed exactly 0 Q16 across that interval. The following gas transport stages added 1.275294304 Q16 and crossed four at second 141. A separate closed Vulkan regression established an independent contraction defect, gaining 14 Q16 over 200 water cycles in 512 sealed channels without stepping transport. Splitting each shrinking donor’s represented debit among receivers reduced that drift to 1.5625 Q16 with both local and global geometry. All seven focused Vulkan cases and 26 gas numeric and fixture cases passed the refactor. The late pool transport gain remains open.
