@@ -8,6 +8,9 @@ bool carve_union_components(Body source,uint area) {
         if(DC_FRAGMENT_LABEL(pixel)==0u) DC_FRAGMENT_LABEL(pixel)=pixel+1u;
     memoryBarrierBuffer();barrier();
     const ivec2 edges[4]=ivec2[4](ivec2(1,0),ivec2(-1,1),ivec2(0,1),ivec2(1,1));
+#ifdef DC_CARVE_WORK_PROFILE
+    uint union_edges=0u;
+#endif
     for(uint pixel=lane;pixel<area;pixel+=DC_STRUCTURAL_LANES) {
         if((atomicAdd(DC_FRAGMENT_LABEL(pixel),0u)&LEAF_RESERVATION)!=0u) continue;
         ivec2 p=pixel_piece_cell(source,pixel);
@@ -15,10 +18,17 @@ bool carve_union_components(Body source,uint area) {
             ivec2 q=p+edges[edge];
             if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(source.width,source.height)))) continue;
             uint next=carve_neighbor_piece(source,pixel,edges[edge],q);
-            if(next!=0xffffffffu&&(atomicAdd(DC_FRAGMENT_LABEL(next),0u)&LEAF_RESERVATION)==0u)
+            if(next!=0xffffffffu&&(atomicAdd(DC_FRAGMENT_LABEL(next),0u)&LEAF_RESERVATION)==0u) {
+#ifdef DC_CARVE_WORK_PROFILE
+                union_edges++;
+#endif
                 carve_union_join(pixel,next);
+            }
         }
     }
+#ifdef DC_CARVE_WORK_PROFILE
+    atomicAdd(carve_work_profile[5],union_edges);
+#endif
     memoryBarrierBuffer();barrier();
     for(uint pixel=lane;pixel<area;pixel+=DC_STRUCTURAL_LANES)
         if((atomicAdd(DC_FRAGMENT_LABEL(pixel),0u)&LEAF_RESERVATION)==0u) {

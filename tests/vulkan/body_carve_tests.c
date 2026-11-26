@@ -240,6 +240,46 @@ static void test_air_carves_colored_body_and_splits_remaining_components(void) {
         total+=((dc_gpu_body_record_t*)g->body_mapped)[slot].body.active!=0;
     ASSERT_EQ(total,2u);dc_gpu_destroy(g);free(c);free(colors);PASS();
 }
+static void test_carve_preserves_diagonal_contact_between_full_tiles(void) {
+    char err[256]={0};dc_gpu_t *g=NULL;
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
+    for(unsigned y=16;y<32;y++) for(unsigned x=16;x<32;x++) {
+        chunk->cells[y*64u+x].material=DC_MATERIAL_WOOD;
+        chunk->cells[(y+16u)*64u+x+16u].material=DC_MATERIAL_WOOD;
+    }
+    chunk->cells[31u*64u+32u].material=DC_MATERIAL_WOOD;
+    ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(g));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,err,sizeof(err)));
+
+    dc_gpu_body_record_t *body=dc_gpu_body_record(g,0);
+    body->body.x_fp=body->local_x_fp=16<<16;
+    body->body.y_fp=body->local_y_fp=16<<16;
+    uint32_t id=body->body.id,count=0;
+    dc_gpu_body_pixel_t pixels[513];
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,id,pixels,513,&count,err,sizeof(err)));
+    ASSERT_EQ(count,513u);
+
+    ASSERT_TRUE(dc_gpu_paint_material(g,32,31,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,id,pixels,513,&count,err,sizeof(err)));
+    ASSERT_EQ(count,512u);
+
+    ASSERT_TRUE(dc_gpu_paint_material(g,31,31,0,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g,id,pixels,513,&count,err,sizeof(err)));
+    ASSERT_EQ(count,255u);
+    unsigned fragments=0,total=0;
+    for(unsigned slot=0;slot<dc_gpu_body_capacity(g);slot++) {
+        body=dc_gpu_body_record(g,slot);
+        if(!body->body.active) continue;
+        ASSERT_TRUE(dc_gpu_read_pixel_shape(g,body->body.id,pixels,513,&count,err,sizeof(err)));
+        fragments++;total+=count;
+    }
+    ASSERT_EQ(fragments,2u);ASSERT_EQ(total,511u);
+    dc_gpu_destroy(g);free(chunk);PASS();
+}
+
 static void test_air_carves_compound_wall_without_filling_its_cavity(void) {
     char err[256];dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);
     ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
@@ -486,6 +526,7 @@ int main(void) {
     RUN(test_leaf_impact_crumbles_canopy);
     RUN(test_broken_leaf_canopy_crumbles_without_losing_wood);
     RUN(test_air_carves_colored_body_and_splits_remaining_components);
+    RUN(test_carve_preserves_diagonal_contact_between_full_tiles);
     RUN(test_air_carves_compound_wall_without_filling_its_cavity);
     RUN(test_rotated_body_uses_world_brush_coordinates);
     RUN(test_air_carves_an_anchored_structural_member);

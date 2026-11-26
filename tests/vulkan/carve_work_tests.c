@@ -60,6 +60,7 @@ static void run_carve_work_case(bool material_queries) {
     vkUpdateDescriptorSets(g->device,1,&write,0,NULL);g->descriptor_revision++;
     ASSERT_TRUE(dc_gpu_paint_material(g,96,96,4,DC_MATERIAL_AIR,err,sizeof(err)));
     unsigned neighbor_checks=counts[1],directory_checks=counts[2],frontier_rounds=counts[3],packing_barriers=counts[4],count=0,after_count=0;
+    unsigned union_edges=counts[5];
     dc_gpu_body_pixel_t *before=calloc(190u*190u,sizeof(*before)),*after=calloc(190u*190u,sizeof(*after));
     ASSERT_TRUE(before&&after);
     ASSERT_TRUE(dc_gpu_read_pixel_shape(g,0x80000001u,before,190u*190u,&count,err,sizeof(err)));
@@ -94,6 +95,7 @@ static void run_carve_work_case(bool material_queries) {
     printf("neighbor directory resolutions %u for %u pixels\n",directory_checks,count);
     printf("synchronized frontier rounds %u\n",frontier_rounds);
     printf("tile packing barriers %u\n",packing_barriers);
+    printf("union edge merges %u for %u pixels\n",union_edges,count);
     vkUnmapMemory(g->device,memory);vkDestroyBuffer(g->device,buffer,NULL);vkFreeMemory(g->device,memory,NULL);
     dc_gpu_destroy(g);free(chunk);free(colors);free(before);free(after);
     if(material_queries) {ASSERT_EQ(neighbor_checks,0u);}
@@ -101,6 +103,7 @@ static void run_carve_work_case(bool material_queries) {
     ASSERT_TRUE(directory_checks<count*2u);
     ASSERT_TRUE(frontier_rounds<=32u);
     ASSERT_TRUE(packing_barriers<=32u);
+    ASSERT_TRUE(union_edges>0u&&union_edges<count);
     PASS();
 }
 static void test_carve_reuses_classification_without_neighbor_material_queries(void) {run_carve_work_case(true);}
