@@ -83,7 +83,11 @@ void burn_coating(Words entry,inout Gas gas,inout float admitted,
      * displacement belongs to the gas pressure step. */
     gas.species.z+=float(exhaust)/65536.;
     gas.dynamics.x+=float(soot)/65536.;
-    gas.dynamics.y+=.3*heat+removed-retained;
+    vec3 energy=add_compensated_energy(vec3(gas.dynamics.y,gas.visual.w,gas.geometry.z),
+        .3*heat+removed-retained);
+    gas.dynamics.y=energy.x;
+    gas.visual.w=energy.y;
+    gas.geometry.z=energy.z;
     gas.visual.rgb+=(mixed?vec3(.10,.20,.14):vec3(.18,.16,.14))*
         float(exhaust+soot)/65536.;
     admitted+=heat;source_temperature=max(source_temperature,temperature);

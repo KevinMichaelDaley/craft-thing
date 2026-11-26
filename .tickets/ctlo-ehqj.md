@@ -35,3 +35,7 @@ Spread gap FIXED (see ct-e6fr 73af4228): fire sustains from cell-owned kindling 
 **2026-11-26T12:42:19Z**
 
 The pinned full suite on 2aa02c10 reported a still-air warmth failure at tests/app/forest_bonfire_tests.c:475. The 70-second probe read 297.69 K, below 298.15 K. The pinned 2d63f902 run passed this case, reading 315.10 K at 70 seconds. The forest fixture, combustion shaders, and gas source are identical across those revisions. Reproduce the variability with the same fixture under isolated GPU load before attributing it to the sandbox changes.
+
+**2026-11-26T13:08:54Z**
+
+The subsequent pinned eedae709 wetting-branch run passed the still-air warmth assertion with a 70-second probe of 330.61 K. The opposite outcomes across unchanged forest code confirm that this check needs a repeatability investigation before it is used to distinguish sandbox revisions.

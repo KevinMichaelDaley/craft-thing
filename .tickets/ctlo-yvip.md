@@ -1,7 +1,7 @@
 ---
 id: ctlo-yvip
 status: open
-deps: [ctlo-ck1i, ctlo-6syy, ctlo-3hb8, ctlo-h9of, ctpc-wezp]
+deps: [ctlo-ck1i, ctlo-6syy, ctlo-3hb8, ctlo-h9of, ctpc-wezp, ctsl-7ay0]
 links: []
 created: 2026-10-24T22:06:19Z
 type: feature
@@ -59,3 +59,7 @@ Demo wave: build/greek_catapult_demo runs the EXISTING catapult scene (real pouc
 **2026-11-06T06:09:18Z**
 
 Full-suite order dependence found: test_submerged_greek_keeps_reacting_while_oil_douses passes standalone (--douse: oil 1646398 vs greek 1372416 burned) but fails late_slope ratio when the whole greek_siege_tests binary runs in sequence; suspect leaked global thermal/gas model config from a preceding test. --risk/--stage/--soak/--corrode all pass standalone. Next session: isolate the config leak and make suite order robust.
+
+**2026-11-26T13:27:28Z**
+
+The conservative pending-stock build completes both 30-second dousing controls. The late-rate ratio was 1.75 compared with 2.04 on 109361df. Both runs measured zero bound water on the oil load over the sampled interval. ctsl-7ay0 tracks proving matched real submersion and the existing half-time criterion.

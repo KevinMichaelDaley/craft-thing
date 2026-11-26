@@ -113,14 +113,20 @@ vec2 two_sum(float a,float b) {
     precise float sum=a+b,recovered=sum-a;
     precise float error=(a-(sum-recovered))+(b-recovered);return vec2(sum,error);
 }
-void add_energy(Words entry,float delta) {
-    vec2 first=two_sum(uintBitsToFloat(entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY]),delta);
-    vec2 second=two_sum(uintBitsToFloat(entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY_RESIDUAL]),first.y);
-    precise float last=uintBitsToFloat(entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY_CORRECTION])+second.y;
+vec3 add_compensated_energy(vec3 stored,float delta) {
+    vec2 first=two_sum(stored.x,delta),second=two_sum(stored.y,first.y);
+    precise float last=stored.z+second.y;
     vec2 middle=two_sum(second.x,last),top=two_sum(first.x,middle.x),tail=two_sum(top.y,middle.y);
-    entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY]=floatBitsToUint(top.x);
-    entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY_RESIDUAL]=floatBitsToUint(tail.x);
-    entry.words[FR_ENTRY_STATE+FR_STATE_ENERGY_CORRECTION]=floatBitsToUint(tail.y);
+    return vec3(top.x,tail);
+}
+void add_energy(Words entry,float delta) {
+    uint state=FR_ENTRY_STATE;
+    vec3 stored=uintBitsToFloat(uvec3(entry.words[state+FR_STATE_ENERGY],
+        entry.words[state+FR_STATE_ENERGY_RESIDUAL],entry.words[state+FR_STATE_ENERGY_CORRECTION]));
+    uvec3 updated=floatBitsToUint(add_compensated_energy(stored,delta));
+    entry.words[state+FR_STATE_ENERGY]=updated.x;
+    entry.words[state+FR_STATE_ENERGY_RESIDUAL]=updated.y;
+    entry.words[state+FR_STATE_ENERGY_CORRECTION]=updated.z;
 }
 bool solid_address(uint at,out uvec2 address) {
     if(at==0xffffffffu||gas_cell(at)) return false;
