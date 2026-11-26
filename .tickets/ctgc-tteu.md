@@ -68,3 +68,7 @@ The staged native axis probe aligned to the db7b54b8 locked run at +0.000722803 
 **2026-11-26T19:23:32Z**
 
 The exact 9513f4f3 locked depletion replay exited 2 at Greek second 141 after 8460 accepted steps. Chemical inventory reached +4.012883186 Q16 with 36 of 36 wet faces and zero exterior or mobile film, matching db7b54b8 at the gate. The sparse publication repair resolves a separate defect. A separately compiled Vulkan probe records the exhaust and soot balances of explicit stages and implicit fallback, including the represented incoming and outgoing face fluxes. Its comparison against the known first-second trajectory must pass before capturing the established pool.
+
+**2026-11-26T19:29:55Z**
+
+The arithmetic probe passed on 9513f4f3 at all 60 large-step ticks of the first second. It matched the locked native total +0.000722803 Q16 and reconciled the horizontal sweep exactly. The -0.000058689 horizontal change was represented-stock rounding (-0.000058082 explicit and -0.000000607 implicit), with zero signed face imbalance in both modes. The probe is capturing seconds 131–145 after native warm-up to test whether the late gain has the same source. The exact explicit-order refactor is queued for a separate locked replay after this probe.
