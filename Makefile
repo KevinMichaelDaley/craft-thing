@@ -2061,6 +2061,7 @@ build/greek_siege_tests: tests/app/greek_siege_tests.c Makefile src/app/siege_sc
 .PHONY: test_greek_siege
 test_greek_siege: build/greek_siege_tests
 	./build/greek_siege_tests --stage
+	./build/greek_siege_tests --douse-preflight
 test: test_greek_siege
 .PHONY: test_bulk_phase test_bulk_phase_gpu test_bulk_rheology
 test: test_bulk_phase test_bulk_phase_gpu test_bulk_rheology

@@ -28,7 +28,7 @@ enum {DC_SIEGE_TILES_X = 10, DC_SIEGE_TILES_Y = 7, DC_SIEGE_TILE_COUNT = 70,
       DC_SIEGE_BAR_X = 84u, DC_SIEGE_BAR_Y = 188u,
       DC_SIEGE_BAR_W = 36u, DC_SIEGE_BAR_H = 4u,
       DC_SIEGE_POOL_LEFT_X = 24u, DC_SIEGE_POOL_RIGHT_X = 40u,
-      DC_SIEGE_POOL_RIM_Y = 205u, DC_SIEGE_POOL_SURFACE_Y = 209u,
+      DC_SIEGE_POOL_RIM_Y = 195u, DC_SIEGE_POOL_SURFACE_Y = 199u,
       DC_SIEGE_POOL_LOAD_X = 32u, DC_SIEGE_POOL_LOAD_Y = 215u,
       DC_SIEGE_LOAD_FILM_FP = 65536u, DC_SIEGE_POOL_FILM_FP = 16384u,
       /* Cocked release pose; the pivot spring is calibrated, not locked. */
@@ -302,8 +302,7 @@ bool dc_siege_scene_build_corrosion_pool(dc_gpu_t *gpu, dc_siege_load_t load,
                                          dc_siege_scene_t *out, char *err_buf,
                                          uint32_t err_cap) {
     return dc_siege_scene_build_load_basin(gpu, false, load, SIEGE_BASIN_CORROSION, 0u,
-                                           false,
-                                           out, err_buf, err_cap);
+                                           false, out, err_buf, err_cap);
 }
 
 bool dc_siege_scene_build_risk(dc_gpu_t *gpu, dc_siege_load_t load,
@@ -321,8 +320,9 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                                             uint32_t err_cap) {
     if (!gpu) return siege_error(err_buf, err_cap, "Missing siege GPU context");
     const bool submerged = basin != SIEGE_BASIN_NONE;
-    bool hot_coal = load == DC_SIEGE_LOAD_COAL;
-    (void)hot_coal;
+    const bool hot_coal = load == DC_SIEGE_LOAD_COAL;
+    const uint16_t core_material = hot_coal ? DC_MATERIAL_COAL :
+        basin == SIEGE_BASIN_CORROSION ? DC_MATERIAL_WOOD : DC_MATERIAL_STONE;
     dc_chunk_t *chunks = calloc(DC_SIEGE_TILE_COUNT, sizeof(*chunks));
     dc_chunk_colors_t *colors = calloc(DC_SIEGE_TILE_COUNT, sizeof(*colors));
     fr_reactive_chunk_t *packets = calloc(DC_SIEGE_TILE_COUNT, sizeof(*packets));
@@ -383,11 +383,7 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                 continue;
             uint32_t tile = ((uint32_t)y / 64u) * DC_SIEGE_TILES_X + (uint32_t)x / 64u;
             uint32_t local = ((uint32_t)y % 64u) * 64u + (uint32_t)x % 64u;
-            uint16_t core = load == DC_SIEGE_LOAD_COAL
-                                      ? (uint16_t)DC_MATERIAL_COAL
-                                      : submerged ? (uint16_t)DC_MATERIAL_WOOD
-                                                  : (uint16_t)DC_MATERIAL_STONE;
-            chunks[tile].cells[local].material = core;
+            chunks[tile].cells[local].material = core_material;
             chunks[tile].cells[local].flags = 0u;
             /* The rigid load displaces the pool water in its own cells. */
             chunks[tile].cells[local].fluid_mass = 0u;
@@ -431,12 +427,6 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                                     95u / 100u
                               : 0u;
     bool okay = true;
-    /* The submerged douse variant uses a wood core so the pool soaks into
-     * the load; the dry pace comparison keeps inert stone cores. */
-    uint16_t core_material = load == DC_SIEGE_LOAD_COAL
-                                 ? (uint16_t)DC_MATERIAL_COAL
-                                 : submerged ? (uint16_t)DC_MATERIAL_WOOD
-                                              : (uint16_t)DC_MATERIAL_STONE;
     const siege_rect_t coal_rects[1] = {{(uint32_t)(ball_x - DC_SIEGE_COAL_RADIUS),
                                          (uint32_t)(ball_y - DC_SIEGE_COAL_RADIUS),
                                          2u * DC_SIEGE_COAL_RADIUS + 1u,
@@ -445,7 +435,7 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
     uint64_t coal_fuel = 0;
     uint32_t staged_cells = 0;
     okay = okay && siege_stage_region(chunks, coal_rects, 1u, core_material,
-                                      false, load == DC_SIEGE_LOAD_COAL,
+                                      false, hot_coal,
                                       &coal_fuel, &ignored,
                                       &staged_cells, &parcel_counter, packets,
                                       err_buf, err_cap);
@@ -685,15 +675,15 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
             .body_a = scene.arm_body, .body_b = scene.coal_body,
             .anchor_a = {0.f, -22.f}, .anchor_b = {0.f, 0.f}};
         okay = fr_gpu_revolute_add(gpu, &pivot, err_buf, err_cap) &&
-               fr_gpu_revolute_add(gpu, &latch, err_buf, err_cap) &&
-               dc_gpu_set_body_motion(gpu, scene.arm_body, DC_SIEGE_COCKED_ANGLE,
-                                      0.f, 0u, err_buf, err_cap);
+               fr_gpu_revolute_add(gpu, &latch, err_buf, err_cap);
         scene.pivot_joint = pivot.id;
         scene.latch_joint = latch.id;
         if (okay && !submerged) {
             okay = fr_gpu_revolute_add(gpu, &pouch, err_buf, err_cap);
             scene.pouch_joint = pouch.id;
         }
+        okay = okay && dc_gpu_set_body_motion(gpu, scene.arm_body,
+            DC_SIEGE_COCKED_ANGLE, 0.f, 0u, err_buf, err_cap);
     }
     if (okay && !getenv("DC_SIEGE_NO_GAS")) {
         okay = dc_smoke_profile_defaults() &&

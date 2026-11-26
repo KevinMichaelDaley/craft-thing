@@ -48,7 +48,7 @@ bool dc_siege_scene_build(dc_gpu_t *gpu, bool wet_wall, bool hot_coal,
 bool dc_siege_scene_build_load(dc_gpu_t *gpu, bool wet_wall, dc_siege_load_t load,
                                dc_siege_scene_t *out, char *err_buf,
                                uint32_t err_cap);
-/** Hold a cold load in a standing pool for a submerged dousing control. */
+/** Hold a cold oil or Greek-fire load in a standing pool for a dousing control. */
 bool dc_siege_scene_build_douse_pool(dc_gpu_t *gpu, dc_siege_load_t load,
                                      dc_siege_scene_t *out, char *err_buf,
                                      uint32_t err_cap);

@@ -119,6 +119,7 @@ static bool greek_ball_water_contact(dc_gpu_t *gpu, uint32_t body,
     if (!slot || !dc_gpu_download_chunk(gpu, slot - 1u, &chunk, err, cap))
         return false;
     static const int directions[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+    bool trace = getenv("DC_GREEK_TRACE") != NULL;
     *wet_faces = 0;
     *faces = 0;
     for (uint32_t i = 0; i < count; i++) {
@@ -132,6 +133,9 @@ static bool greek_ball_water_contact(dc_gpu_t *gpu, uint32_t body,
             if (cell->material == DC_MATERIAL_WATER &&
                 cell->fluid_mass >= DC_FLUID_FULL * 3u / 4u)
                 (*wet_faces)++;
+            else if (trace)
+                printf("Pool face (%d, %d) material %u water %u\n",
+                       origin_x + x, origin_y + y, cell->material, cell->fluid_mass);
         }
     }
     return *faces > 0u;
@@ -276,13 +280,17 @@ static void test_siege_strike_preserves_the_loads_bound_water(void) {
 }
 
 static void test_submerged_greek_keeps_reacting_while_oil_douses(void) {
+    enum {span = 2 * DC_SIEGE_COAL_RADIUS + 1, soak_seconds = 3,
+          window_seconds = 30, midpoint = window_seconds / 2};
     char err[256] = {0};
     static const dc_siege_load_t loads[2] = {DC_SIEGE_LOAD_OIL,
                                              DC_SIEGE_LOAD_GREEK};
-    uint64_t remaining[2] = {0, 0};
-    uint64_t water_left[2] = {0, 0};
+    uint64_t cold_fuel[2] = {0, 0};
+    uint64_t cold_water[2] = {0, 0};
     uint64_t late_slope[2] = {0, 0};
+    bool submerged[2] = {true, true};
     for (unsigned which = 0; which < 2u; which++) {
+        const char *name = which == 0u ? "oil" : "Greek";
         dc_gpu_t *gpu = greek_grid();
         ASSERT_TRUE(gpu);
         dc_siege_scene_t scene = {0};
@@ -290,144 +298,48 @@ static void test_submerged_greek_keeps_reacting_while_oil_douses(void) {
             gpu, loads[which], &scene, err, sizeof(err));
         if (!built_pool) printf("greek pool build: %s\n", err);
         ASSERT_TRUE(built_pool);
-        {
-            fr_reactive_record_t probe;
-            bool found = false;
-            fr_gpu_reactive_read_body(gpu, scene.coal_body, 4u, 4u, &probe,
-                                      &found, err, sizeof(err));
-            printf("greek pool ball at t0: coal_body %x found %d film %llu\n",
-                   scene.coal_body, found,
-                   found ? (unsigned long long)(
-                               probe.state.coating_oil_fuel_fp +
-                               probe.state.coating_jelly_fuel_fp)
-                         : 0ull);
-            {
-                const dc_gpu_address_buffer_t *fluxes =
-                    &gpu->thermal->fluxes;
-                const uint32_t *words = fluxes->mapped;
-                uint32_t width = gpu->width;
-                uint32_t seen = 0, sentinel = 0, wet_cells = 0;
-                for (uint32_t y = 210u; y <= 221u; y++)
-                    for (uint32_t x = 22u; x <= 42u; x++) {
-                        uint32_t index = y * width + x;
-                        uint32_t available, magic;
-                        memcpy(&available, &words[(index + width) * 4u + 1u],
-                               sizeof(available));
-                        memcpy(&magic, &words[(index + width) * 4u + 3u],
-                               sizeof(magic));
-                        if ((magic & 0x7f800000u) == 0x5e000000u) sentinel++;
-                        if (available) { seen++; wet_cells = index; }
-                    }
-                printf("greek flux probe: wet flux cells %u last %u "
-                       "sentinel %u\n", seen, wet_cells, sentinel);
-            }
-            dc_chunk_t *pool = calloc(1, sizeof(*pool));
-            if (dc_gpu_download_chunk(gpu, greek_tile_slot(gpu, 32u, 215u) - 1u,
-                                      pool, err, sizeof(err))) {
-                uint32_t wet = 0;
-                for (uint32_t i = 0; i < 4096u; i++)
-                    if (pool->cells[i].material == DC_MATERIAL_WATER &&
-                        pool->cells[i].fluid_mass == DC_FLUID_FULL)
-                        wet++;
-                printf("greek pool chunk 30: water-full cells %u "
-                       "(cell(32,215) material %u fluid %u) "
-                       "coin(27,213) material %u fluid %u\n",
-                       wet, pool->cells[(215u % 64u) * 64u + 32u].material,
-                       pool->cells[(215u % 64u) * 64u + 32u].fluid_mass,
-                       pool->cells[(213u % 64u) * 64u + 27u].material,
-                       pool->cells[(213u % 64u) * 64u + 27u].fluid_mass);
-            }
-            free(pool);
-        }
-        ASSERT_TRUE(greek_ticks(gpu, 1u, err, sizeof(err)));
-        uint64_t before = greek_ball_coating(gpu, scene.coal_body, 9u, err,
-                                             sizeof(err));
-        if (getenv("DC_GREEK_TRACE")) {
-            for (uint32_t py = 2u; py < 7u; py++)
-                for (uint32_t px = 2u; px < 7u; px++) {
-                    fr_reactive_record_t probe;
-                    bool found = false;
-                    fr_gpu_reactive_read_body(gpu, scene.coal_body, px, py,
-                                              &probe, &found, err, sizeof(err));
-                    printf("parcel %u,%u found %d material %u film %llu\n",
-                           px, py, found,
-                           found ? probe.state.material : 0u,
-                           found ? (unsigned long long)(
-                                       probe.state.coating_oil_fuel_fp +
-                                       probe.state.coating_jelly_fuel_fp)
-                                 : 0ull);
-                }
-        }
-        ASSERT_TRUE(before != UINT64_MAX && before > 0u);
-        /* The load rests in the fixture pool; flood its cells so the film
-         * soaks, then light the fuse. Ordinary oil douses; magical Greek
-         * fire boils the water off and roars. */
-        dc_gpu_world_body_t pool_ball;
-        ASSERT_TRUE(dc_gpu_read_world_body(gpu, scene.coal_body, &pool_ball,
-                                           err, sizeof(err)));
-        uint32_t soak_x =
-            (uint32_t)((float)pool_ball.chunk.x * 64.f +
-                       pool_ball.body.x_fp / 65536.f) + 4u;
-        uint32_t soak_y =
-            (uint32_t)((float)pool_ball.chunk.y * 64.f +
-                       pool_ball.body.y_fp / 65536.f) + 4u;
-        ASSERT_TRUE(dc_gpu_paint_material(gpu, soak_x, soak_y, 6u,
-                                          DC_MATERIAL_WATER, err, sizeof(err)));
-        ASSERT_TRUE(greek_ticks(gpu, 2u, err, sizeof(err)));
-        {
-            uint32_t counters[32] = {0};
-            if (fr_combustion_gpu_bonfire_counters(gpu, counters))
-                printf("greek wet diag after soak: scanned-max %u soaked %u phase21 cells %u last-wet %u\n",
-                       counters[30], counters[18], counters[12], counters[13]);
-        }
-        bool lit = dc_siege_scene_ignite_load(gpu, &scene, 0.f, err, sizeof(err));
-        if (!lit) printf("greek ignite: %s\n", err);
-        ASSERT_TRUE(lit);
-        uint64_t mid = 0;
-        for (uint32_t probe = 0u; probe < 30u; probe++) {
-            if (!greek_ticks(gpu, 1u, err, sizeof(err))) {
-                printf("greek tick failure at probe second %u: %s\n", probe, err);
-                break;
-            }
-            if (probe == 15u)
-                mid = greek_ball_coating(gpu, scene.coal_body, 9u, err,
-                                         sizeof(err));
-            if (probe % 10u == 0u)
-                printf("greek %s probe %us film %llu water %llu\n",
-                       which == 0u ? "oil" : "greek", probe,
-                       (unsigned long long)greek_ball_coating(
-                           gpu, scene.coal_body, 9u, err, sizeof(err)),
-                       (unsigned long long)greek_ball_water(
-                           gpu, scene.coal_body, 9u, err, sizeof(err)));
-        }
-        remaining[which] = greek_ball_coating(gpu, scene.coal_body, 9u, err,
+        ASSERT_TRUE(greek_ticks(gpu, soak_seconds, err, sizeof(err)));
+        cold_fuel[which] = greek_ball_coating(gpu, scene.coal_body, span, err,
                                               sizeof(err));
-        water_left[which] = greek_ball_water(gpu, scene.coal_body, 9u, err,
+        cold_water[which] = greek_ball_water(gpu, scene.coal_body, span, err,
                                              sizeof(err));
-        late_slope[which] = mid > remaining[which] ? mid - remaining[which] : 0u;
-        printf("greek %s submerged film after 30s %llu (before %llu) water %llu "
-               "late-window burn %llu\n",
-               which == 0u ? "oil" : "greek",
-               (unsigned long long)remaining[which], (unsigned long long)before,
-               (unsigned long long)water_left[which],
-               (unsigned long long)late_slope[which]);
-        ASSERT_TRUE(remaining[which] != UINT64_MAX);
+        ASSERT_TRUE(cold_fuel[which] > 0u && cold_fuel[which] != UINT64_MAX);
+        ASSERT_TRUE(cold_water[which] > 0u && cold_water[which] != UINT64_MAX);
+        uint32_t wet_faces, faces;
+        ASSERT_TRUE(greek_ball_water_contact(gpu, scene.coal_body, &wet_faces,
+                                            &faces, err, sizeof(err)));
+        ASSERT_EQ(wet_faces, faces);
+        printf("%s after %us soak: film %llu water %llu wet faces %u/%u\n",
+               name, soak_seconds, (unsigned long long)cold_fuel[which],
+               (unsigned long long)cold_water[which], wet_faces, faces);
+        ASSERT_TRUE(dc_siege_scene_ignite_load(gpu, &scene, 0.f, err, sizeof(err)));
+        uint64_t film = cold_fuel[which], mid = 0u;
+        for (uint32_t second = 1; second <= window_seconds; second++) {
+            bool advanced = greek_ticks(gpu, 1u, err, sizeof(err));
+            if (!advanced) printf("%s tick at %us failed: %s\n", name, second, err);
+            ASSERT_TRUE(advanced);
+            ASSERT_TRUE(greek_ball_water_contact(gpu, scene.coal_body, &wet_faces,
+                                                &faces, err, sizeof(err)));
+            uint64_t water = greek_ball_water(gpu, scene.coal_body, span, err,
+                                               sizeof(err));
+            film = greek_ball_coating(gpu, scene.coal_body, span, err, sizeof(err));
+            ASSERT_TRUE(film != UINT64_MAX && water != UINT64_MAX);
+            printf("%s after %us burn: film %llu water %llu wet faces %u/%u\n",
+                   name, second, (unsigned long long)film,
+                   (unsigned long long)water, wet_faces, faces);
+            if (wet_faces * 4u < faces * 3u || water == 0u)
+                submerged[which] = false;
+            if (second == midpoint) mid = film;
+        }
+        if (which == 0u) ASSERT_TRUE(film > 0u);
+        late_slope[which] = mid > film ? mid - film : 0u;
         dc_gpu_destroy(gpu);
     }
-    /* Ordinary oil under water keeps its film (doused); greek depletes. */
-    ASSERT_TRUE(remaining[0] > 0u);
-    /* Matched stock: the magical greek film consumes about twice the
-     * ordinary oil film across the submerged window. */
-    uint64_t oil_burned = 2728148u > remaining[0] ? 2728148u - remaining[0] : 0u;
-    uint64_t greek_burned =
-        3089891u > remaining[1] ? 3089891u - remaining[1] : 0u;
-    printf("greek douse burned: oil %llu greek %llu\n",
-           (unsigned long long)oil_burned, (unsigned long long)greek_burned);
-    ASSERT_TRUE(oil_burned > 0u);
-    /* The magical greek film sustains its underwater reaction on the pool's
-     * dissolved stock while the ordinary oil throttles to the dissolved
-     * oxygen trickle: at least twice the late-window burn, so the matched
-     * greek fuel reaches depletion in at most half the oil time. */
+    ASSERT_EQ(cold_fuel[1], cold_fuel[0]);
+    ASSERT_EQ(cold_water[1], cold_water[0]);
+    ASSERT_TRUE(submerged[0] && submerged[1]);
+    printf("Late-window fuel loss: oil %llu, Greek %llu\n",
+           (unsigned long long)late_slope[0], (unsigned long long)late_slope[1]);
     ASSERT_TRUE(late_slope[1] > 0u);
     ASSERT_TRUE(late_slope[1] >= late_slope[0] * 2u);
     PASS();
