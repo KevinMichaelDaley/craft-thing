@@ -1,7 +1,7 @@
 ---
 id: ctsl-7ay0
 status: in_progress
-deps: [ctpc-wezp]
+deps: [ctpc-wezp, ctpc-xa7p]
 links: []
 created: 2026-11-26T13:27:27Z
 type: bug

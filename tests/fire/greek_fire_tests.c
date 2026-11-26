@@ -92,11 +92,51 @@ static void test_equal_time_cadences_consume_the_same_finite_mixture(void) {
     PASS();
 }
 
+static void test_single_unit_reactions_keep_balanced_submerged_fuel(void) {
+    enum { steps = 60 * 120 };
+    char err[256] = {0};
+    fr_reactive_state_t state = coated(508u, true, true, err, sizeof(err));
+    state.coating_oil_fuel_fp = 32u;
+    state.coating_jelly_fuel_fp = 32u;
+    state.coating_oxidizer_fp = 32u;
+    state.thermal_energy = (float)fr_reactive_state_energy_at_temperature(&state, 800.f);
+    const uint64_t initial_mass = fr_reactive_state_mass_fp(&state);
+    const double initial_energy = fr_reactive_state_energy(&state);
+    uint64_t gas_products = 0u;
+    double exported = 0.;
+    double released = 0.;
+    for (unsigned i = 0; i < steps; ++i) {
+        fr_reactive_state_t next;
+        fr_coating_combustion_products_t products;
+        ASSERT_TRUE(fr_coating_combustion_reference(&state, 0u, 1.f, 1.f / 60.f,
+            &next, &products, err, sizeof(err)));
+        ASSERT_TRUE(products.oil_fp + products.jelly_fp <= 1u);
+        ASSERT_EQ(products.ambient_oxygen_fp, 0u);
+        gas_products += products.soot_fp + products.exhaust_fp;
+        exported += products.exported_energy;
+        released += products.released_heat;
+        state = next;
+    }
+    printf("After 120 s at 60 Hz: oil %u, jelly %u, oxidizer %u Q16\n",
+           state.coating_oil_fuel_fp, state.coating_jelly_fuel_fp,
+           state.coating_oxidizer_fp);
+    ASSERT_TRUE(state.coating_oil_fuel_fp < 16u);
+    ASSERT_TRUE(state.coating_jelly_fuel_fp < 16u);
+    ASSERT_TRUE(state.coating_oil_fuel_fp <= state.coating_jelly_fuel_fp + 1u);
+    ASSERT_TRUE(state.coating_jelly_fuel_fp <= state.coating_oil_fuel_fp + 1u);
+    ASSERT_EQ(fr_reactive_state_mass_fp(&state) + gas_products, initial_mass);
+    double energy_error = fr_reactive_state_energy(&state) + exported -
+                          initial_energy - released;
+    ASSERT_TRUE(energy_error > -1e-6 && energy_error < 1e-6);
+    PASS();
+}
+
 int main(void) {
     RUN(test_mixed_film_burns_underwater_with_finite_bound_stock);
     RUN(test_mixed_film_depletes_faster_than_matched_oil_while_wet_oil_douses);
     RUN(test_exhausted_bound_oxidizer_extinguishes_mixed_film);
     RUN(test_unmixed_jelly_cannot_spend_nonexistent_oil);
     RUN(test_equal_time_cadences_consume_the_same_finite_mixture);
+    RUN(test_single_unit_reactions_keep_balanced_submerged_fuel);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
