@@ -76,6 +76,8 @@ bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t requested_width,
         if (extent.height > caps.maxImageExtent.height) extent.height = caps.maxImageExtent.height;
     }
     gpu->swap_extent = extent;
+    gpu->swap_format = chosen.format;
+    gpu->swap_transfer_src = (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u;
     uint32_t image_count = caps.minImageCount + 1;
     if (caps.maxImageCount && image_count > caps.maxImageCount) image_count = caps.maxImageCount;
     uint32_t mode_count = 0;
@@ -96,7 +98,8 @@ bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t requested_width,
         .surface = gpu->surface, .minImageCount = image_count,
         .imageFormat = chosen.format, .imageColorSpace = chosen.colorSpace,
         .imageExtent = extent, .imageArrayLayers = 1,
-        .imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+            (gpu->swap_transfer_src ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0u),
         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .preTransform = caps.currentTransform,
         .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,

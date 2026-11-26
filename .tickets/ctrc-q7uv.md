@@ -35,3 +35,7 @@ The completed coating target passed all eight Vulkan cases. The application dous
 **2026-11-26T16:08:56Z**
 
 The pinned timed-adhesion revision c0fbf8a3 completed make test_greek_siege_locked_risk with exit 0. All 64 ordered fixture seeds from 991397 through 991460 ignited the launcher at the 10-second delay, exceeding the required 48. Prompt release and the fireproof carrier both passed. The earlier exploratory stop was superseded by this complete sweep.
+
+**2026-11-26T17:26:18Z**
+
+The terminal coating descendant 080cd1cf completed the exact fixture-defined launcher replay with exit 0. All 64 seeds ignited the launcher, above the required 48. Prompt release had zero flaming arm parcels, and the fireproof carrier survived. Both launcher cases passed.

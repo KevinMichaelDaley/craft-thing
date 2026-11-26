@@ -1,10 +1,12 @@
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 
 #include "../../src/app/player_session.h"
 #include "../../src/app/view_config.h"
+#include "../../src/vulkan/gpu_internal.h"
 
 static int g_pass,g_fail;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fflush(stdout);fn();teardown();} while(0)
@@ -14,6 +16,25 @@ static int g_pass,g_fail;
 #define PASS() g_pass++
 static char err[256];
 static dc_level_view_t *v=NULL;
+static SDL_Window *cover_window;
+static uint32_t *before_pixels, *after_pixels;
+enum { RETICLE_ARM_SAMPLE = 4, RGB_WHITE = 0x00ffffff };
+
+static bool capture_window(dc_gpu_t *gpu, uint32_t **pixels) {
+    size_t count = (size_t)gpu->swap_extent.width * gpu->swap_extent.height;
+    if (!*pixels) *pixels = malloc(count * sizeof(**pixels));
+    return *pixels && dc_gpu_capture_present(gpu, *pixels, count, err, sizeof(err));
+}
+
+static bool save_window(dc_gpu_t *gpu, uint32_t *pixels, const char *path) {
+    int width = (int)gpu->swap_extent.width, height = (int)gpu->swap_extent.height;
+    SDL_Surface *image = SDL_CreateRGBSurfaceWithFormatFrom(pixels, width, height, 32,
+        width * (int)sizeof(*pixels), SDL_PIXELFORMAT_ABGR8888);
+    if (!image) return false;
+    bool okay = SDL_SaveBMP(image, path) == 0;
+    SDL_FreeSurface(image);
+    return okay;
+}
 
 static bool setup_at(int32_t pages_west, bool follow) {
     char directory[]="build/player_split_XXXXXX";
@@ -28,6 +49,12 @@ static bool setup_at(int32_t pages_west, bool follow) {
            dc_players_enable_at(v,64,40,follow,err,sizeof(err));
 }
 static void teardown(void) {
+    if (cover_window) SDL_DestroyWindow(cover_window);
+    cover_window = NULL;
+    free(before_pixels);
+    free(after_pixels);
+    before_pixels = NULL;
+    after_pixels = NULL;
     if (v && !dc_level_view_destroy(v,err,sizeof(err))) {
         printf("FAIL closing split-screen fixture: %s\n", err);
         g_fail++;
@@ -49,6 +76,17 @@ static void test_second_seat_joins_with_its_own_beaver(void) {
         ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
     PASS();
 }
+
+static bool band_changed(const dc_gpu_t *gpu, const dc_presentation_layout_t *band) {
+    uint32_t width = band->width * band->scale;
+    for (uint32_t row = 0; row < band->height * band->scale; ++row) {
+        size_t at = (size_t)(band->top + row) * gpu->swap_extent.width + band->left;
+        if (memcmp(before_pixels + at, after_pixels + at, width * sizeof(*before_pixels)))
+            return true;
+    }
+    return false;
+}
+
 static void test_split_screen_routes_bands_to_their_players(void) {
     ASSERT_TRUE(setup_at(0,true));
     ASSERT_TRUE(dc_players_join(v,42,err,sizeof(err)));
@@ -65,32 +103,24 @@ static void test_split_screen_routes_bands_to_their_players(void) {
     ASSERT_EQ(x,left_x+1u);
     ASSERT_TRUE(dc_gpu_screen_cell(gpu,VIEW_WIDTH*WINDOW_SCALE/2u,0,&right_x,&y));
     ASSERT_TRUE(right_x>left_x);
-    /* Rendered acceptance evidence: walk the keyboard player under a real
-     * display server and grab the presented split window. */
-    if(getenv("DISPLAY")) {
-        ASSERT_TRUE(dc_level_view_set_title(v,"player-split-tests"));
-        mkdir("build/agents",0777);mkdir("build/agents/beaver-player",0777);
-        mkdir("build/agents/beaver-player/split",0777);
-        int start_grab=system("import -window root "
-            "build/agents/beaver-player/split/split-start.png 2>/dev/null");
-        ASSERT_TRUE(start_grab==0);
-        SDL_Event e={.type=SDL_KEYDOWN};e.key.keysym.scancode=SDL_SCANCODE_D;
-        ASSERT_TRUE(dc_players_event(v,&e));
-        for(unsigned n=0;n<40;n++)
-            ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
-        e.type=SDL_KEYUP;ASSERT_TRUE(dc_players_event(v,&e));
-        int grabbed=system("import -window root "
-            "build/agents/beaver-player/split/split-walk.png 2>/dev/null");
-        ASSERT_TRUE(grabbed==0);
-        struct stat st;
-        ASSERT_TRUE(stat("build/agents/beaver-player/split/split-walk.png",&st)==0&&st.st_size>1000);
-        printf("split evidence %ld bytes\n",(long)st.st_size);
-        /* The left viewport follows its player: the walk shifts its crop. */
-        int moved=system("cmp -s build/agents/beaver-player/split/split-start.png "
-            "build/agents/beaver-player/split/split-walk.png");
-        ASSERT_TRUE(moved!=0);
-        printf("viewport crop followed the walking player\n");
-    }
+    ASSERT_TRUE(dc_level_view_tick(v,err,sizeof(err)) && capture_window(gpu,&before_pixels));
+    dc_level_view_status_t before, after;
+    ASSERT_TRUE(dc_gpu_presentation_view(gpu,0,&band) && dc_level_view_status(v,&before));
+    SDL_Event e={.type=SDL_KEYDOWN};e.key.keysym.scancode=SDL_SCANCODE_D;
+    ASSERT_TRUE(dc_players_event(v,&e));
+    for (unsigned n=0;n<40;n++)
+        ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
+    e.type=SDL_KEYUP;ASSERT_TRUE(dc_players_event(v,&e));
+    ASSERT_TRUE(capture_window(gpu,&after_pixels));
+    dc_presentation_layout_t walked;
+    ASSERT_TRUE(dc_gpu_presentation_view(gpu,0,&walked) && dc_level_view_status(v,&after));
+    int64_t before_x = before.origin.x * DC_CHUNK_SIDE + before.offset_x + band.x;
+    int64_t after_x = after.origin.x * DC_CHUNK_SIDE + after.offset_x + walked.x;
+    ASSERT_TRUE(before_x != after_x && band_changed(gpu,&band));
+    mkdir("build/agents",0777);mkdir("build/agents/beaver-player",0777);
+    mkdir("build/agents/beaver-player/split",0777);
+    ASSERT_TRUE(save_window(gpu,before_pixels,"build/agents/beaver-player/split/split-start.bmp"));
+    ASSERT_TRUE(save_window(gpu,after_pixels,"build/agents/beaver-player/split/split-walk.bmp"));
     ASSERT_TRUE(dc_players_split_screen(v,0,err,sizeof(err)));
     PASS();
 }
@@ -246,52 +276,66 @@ static void test_split_camera_keeps_both_moving_players_framed_across_chunks(voi
     PASS();
 }
 
-static bool pixel_is_white(int x, int y) {
-    char command[160];
-    snprintf(command,sizeof(command),"import -window root -crop 1x1+%d+%d -depth 8 rgb:-",x,y);
-    FILE *image=popen(command,"r");
-    if(!image) return false;
-    uint8_t rgb[3];
-    size_t bytes=fread(rgb,1,sizeof(rgb),image);
-    return pclose(image)==0&&bytes==sizeof(rgb)&&
-        rgb[0]>=250&&rgb[1]>=250&&rgb[2]>=250;
+static bool read_window_pixel(const dc_gpu_t *gpu, const uint32_t *pixels,
+                              uint32_t x, uint32_t y, uint32_t *out) {
+    if (x >= gpu->swap_extent.width || y >= gpu->swap_extent.height) return false;
+    *out = pixels[(size_t)y * gpu->swap_extent.width + x];
+    return true;
+}
+
+static bool cover_player_window(SDL_Window *window) {
+    int x, y, width, height;
+    SDL_GetWindowPosition(window, &x, &y);
+    SDL_GetWindowSize(window, &width, &height);
+    cover_window = SDL_CreateWindow("Split-screen overlap fixture", x, y, width, height,
+        SDL_WINDOW_BORDERLESS | SDL_WINDOW_SHOWN | SDL_WINDOW_ALWAYS_ON_TOP);
+    if (!cover_window) return false;
+    SDL_Surface *surface = SDL_GetWindowSurface(cover_window);
+    if (!surface || SDL_FillRect(surface, NULL, SDL_MapRGB(surface->format, 0, 0, 0)) < 0 ||
+        SDL_UpdateWindowSurface(cover_window) < 0) return false;
+    SDL_RaiseWindow(cover_window);
+    return true;
 }
 
 static void test_aim_reticle_is_drawn_only_in_its_own_window_band(void) {
     ASSERT_TRUE(setup_at(0,false));
     ASSERT_TRUE(dc_players_join(v,42,err,sizeof(err)));
     ASSERT_TRUE(dc_players_split_screen(v,2,err,sizeof(err)));
-    SDL_Window *window=SDL_GetKeyboardFocus();
-    ASSERT_TRUE(window);
     dc_presentation_layout_t keyboard, controller;
     dc_gpu_t *gpu=dc_level_view_gpu(v);
+    SDL_Window *window = gpu->window;
+    ASSERT_TRUE(window && cover_player_window(window));
     ASSERT_TRUE(dc_gpu_presentation_view(gpu,0,&keyboard));
     ASSERT_TRUE(dc_gpu_presentation_view(gpu,1,&controller));
-    uint32_t aim_x=controller.x+controller.width/2u;
-    uint32_t aim_y=controller.y+controller.height/2u;
-    int marker_x=(int)(controller.left+controller.width/2u*controller.scale+controller.scale/2u);
-    int marker_y=(int)(controller.top+controller.height/2u*controller.scale+controller.scale/2u);
-    SDL_WarpMouseInWindow(window,marker_x,marker_y);
+    uint32_t marker_x=controller.left+controller.width/2u*controller.scale+controller.scale/2u;
+    uint32_t marker_y=controller.top+controller.height/2u*controller.scale+controller.scale/2u;
+    SDL_WarpMouseInWindow(cover_window,(int)marker_x,(int)marker_y);
     SDL_PumpEvents();
     ASSERT_TRUE(world_step());
     fr_player_t player;
     fr_beaver_body_t body;
     ASSERT_TRUE(dc_players_status(v,0,&player,&body)&&!player.intent.has_target);
-    if (getenv("DISPLAY")) {
-        int window_x, window_y;
-        SDL_GetWindowPosition(window,&window_x,&window_y);
-        SDL_Delay(50);
-        ASSERT_TRUE(pixel_is_white(window_x+marker_x+4,window_y+marker_y));
-        ASSERT_TRUE(aim_x>=keyboard.x&&aim_x-keyboard.x<keyboard.width);
-        ASSERT_TRUE(aim_y>=keyboard.y&&aim_y-keyboard.y<keyboard.height);
-        int other_x=(int)(keyboard.left+(aim_x-keyboard.x)*keyboard.scale+keyboard.scale/2u);
-        int other_y=(int)(keyboard.top+(aim_y-keyboard.y)*keyboard.scale+keyboard.scale/2u);
-        ASSERT_TRUE(!pixel_is_white(window_x+other_x+4,window_y+other_y));
-    }
+    ASSERT_TRUE(dc_gpu_presentation_view(gpu,0,&keyboard));
+    ASSERT_TRUE(dc_gpu_presentation_view(gpu,1,&controller));
+    uint32_t aim_x=controller.x+controller.width/2u;
+    uint32_t aim_y=controller.y+controller.height/2u;
+    ASSERT_TRUE(aim_x>=keyboard.x&&aim_x-keyboard.x<keyboard.width);
+    ASSERT_TRUE(aim_y>=keyboard.y&&aim_y-keyboard.y<keyboard.height);
+    uint32_t other_x=keyboard.left+(aim_x-keyboard.x)*keyboard.scale+keyboard.scale/2u;
+    uint32_t other_y=keyboard.top+(aim_y-keyboard.y)*keyboard.scale+keyboard.scale/2u;
+    uint32_t aim_pixel, other_pixel;
+    ASSERT_TRUE(capture_window(gpu,&before_pixels));
+    ASSERT_TRUE(read_window_pixel(gpu,before_pixels,marker_x+RETICLE_ARM_SAMPLE,marker_y,&aim_pixel));
+    ASSERT_TRUE(read_window_pixel(gpu,before_pixels,other_x+RETICLE_ARM_SAMPLE,other_y,&other_pixel));
+    ASSERT_EQ(aim_pixel & RGB_WHITE, RGB_WHITE);
+    ASSERT_TRUE((other_pixel & RGB_WHITE) != RGB_WHITE);
     const SDL_Event disconnect = {.cdevice = {.type = SDL_CONTROLLERDEVICEREMOVED, .which = 42}};
     dc_players_event(v,&disconnect);
     ASSERT_TRUE(world_step());
     ASSERT_TRUE(dc_players_status(v,1,&player,&body)&&!player.intent.has_target);
+    ASSERT_TRUE(capture_window(gpu,&after_pixels));
+    ASSERT_TRUE(read_window_pixel(gpu,after_pixels,marker_x+RETICLE_ARM_SAMPLE,marker_y,&aim_pixel));
+    ASSERT_TRUE((aim_pixel & RGB_WHITE) != RGB_WHITE);
     PASS();
 }
 
@@ -320,8 +364,13 @@ static void test_four_way_split_clamps_stick_to_its_own_crop(void) {
     ASSERT_EQ(viewport_x,crop.x+crop.width-1u);
     PASS();
 }
-int main(void) {
+int main(int argc, char **argv) {
     printf("=== Player Split Screen Tests ===\n\n");
+    if (argc == 2 && strcmp(argv[1], "--reticle") == 0) {
+        RUN(test_aim_reticle_is_drawn_only_in_its_own_window_band);
+        printf("\nResults: %d passed, %d failed\n",g_pass,g_fail);
+        return g_fail ? 1 : 0;
+    }
     RUN(test_second_seat_joins_with_its_own_beaver);
     RUN(test_split_screen_routes_bands_to_their_players);
     RUN(test_split_screen_needs_two_seats);

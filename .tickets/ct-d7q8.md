@@ -1,6 +1,6 @@
 ---
 id: ct-d7q8
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-26T10:22:07Z
@@ -28,3 +28,7 @@ The Vulkan presenter adds the reticle to the swapchain image after the viewport 
 **2026-11-26T11:38:07Z**
 
 The strict run pinned to 2d63f902 stopped with 7/8 split tests. The root-window PNGs before and after the walk were byte-identical while a separate runtime Vulkan test used the same X display. The framebuffer reticle case itself passed in that run. Further pose tests use the nested :92 display to avoid desktop overlap.
+
+**2026-11-26T17:26:18Z**
+
+RED afd4460a reproduced the missing white desktop pixel under an overlapping black SDL window. The fixture now captures the actual composed Vulkan swapchain image after viewport and reticle draws. It samples the controller band, the other band, and the original marker after controller disconnect while the second window remains open. Walking compares the rendered band and its world crop before and after movement. Both eight-case split-screen runs passed, with 1920x1080 composed frame evidence. The focused overlapping-window test also passed with explicit synchronization validation and zero Vulkan diagnostics. The full suite is queued behind the earlier pinned Vulkan runs.
