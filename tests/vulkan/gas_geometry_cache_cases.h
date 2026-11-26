@@ -38,8 +38,7 @@ static void test_native_fused_geometry_keeps_edited_stock_and_removes_completion
 }
 static void check_native_fused_physics_tick(void) {
     enum { SHOCK_CELL=20u*DC_CHUNK_SIDE+24u,SHOCK_PARCEL=2906u };
-    char err[256]={0};const char *names[]={"DC_GAS_FUSED_TICK","DC_GAS_LOCAL_GEOMETRY","DC_GAS_ROTATE_PUBLISH","DC_GAS_FUSED_GEOMETRY"};char *saved[4];
-    for(uint32_t k=0;k<4u;k++) {const char *p=getenv(names[k]);saved[k]=p?SDL_strdup(p):NULL;SDL_setenv(names[k],"1",1);}
+    char err[256]={0};
     dc_chunk_t *chunk=calloc(1,sizeof(*chunk));fr_gas_state_t *input=malloc(4096*sizeof(*input));double *volume=malloc(4096*sizeof(*volume));
     fr_gas_checkpoint_chunk_t *reference=malloc(sizeof(*reference)),*out=malloc(sizeof(*out)),*quiet=malloc(sizeof(*quiet)),*check=malloc(sizeof(*check));
     ASSERT_TRUE(chunk&&input&&volume&&reference&&out&&quiet&&check);fr_gas_model_t model=reference_model();model.kinetic_scale=1./512.;
@@ -49,7 +48,8 @@ static void check_native_fused_physics_tick(void) {
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536u,0u,500.f,SHOCK_PARCEL,&shocked,err,sizeof(err)));
     shocked.pending_shock_energy=1.5f;
     for(uint32_t path=0;path<2u;path++) {
-        SDL_setenv(names[0],path?"1":"0",1);dc_gpu_t *g=NULL;memset(chunk,0,sizeof(*chunk));
+        ASSERT_EQ(SDL_setenv("DC_GAS_FUSED_TICK",path?"1":"0",1),0);
+        dc_gpu_t *g=NULL;memset(chunk,0,sizeof(*chunk));
         for(uint32_t i=0;i<4096u;i++) {input[i]=reference_air(model,.0012,300,60);volume[i]=1.;}
         ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
         ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
@@ -57,6 +57,8 @@ static void check_native_fused_physics_tick(void) {
         chunk->coord.x=8;ASSERT_TRUE(dc_gpu_upload_chunk(g,1,chunk,err,sizeof(err))&&dc_gpu_set_page(g,8,0,1,err,sizeof(err)));
         for(uint32_t i=0;i<4096u;i++) input[i]=reference_air(model,.0012,300,.001);
         ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,1,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_export_checkpoint(g,1,quiet,err,sizeof(err)));
+        bool handled=true;
+        ASSERT_TRUE(fr_gas_gpu_try_fused_tick(g,.02f,&handled,err,sizeof(err))&&!handled);
         chunk->coord.x=0;ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err))&&dc_gpu_set_tick_seconds(g,.02f));
         chunk->cells[SHOCK_CELL]=(dc_cell_t){.material=DC_MATERIAL_WOOD,.flags=DC_CELL_LOADED_TERRAIN};
         for(uint32_t step=0;step<8u;step++) {
@@ -83,11 +85,24 @@ static void check_native_fused_physics_tick(void) {
     ASSERT_EQ(shocked_energy[1],shocked_energy[0]);ASSERT_TRUE(exact);
     ASSERT_EQ(memcmp(&reference->clock,&out->clock,sizeof(out->clock)),0);
     ASSERT_TRUE(submissions[1]==8u&&submissions[0]==16u);
-    for(uint32_t k=0;k<4u;k++) {SDL_setenv(names[k],saved[k]?saved[k]:"0",1);SDL_free(saved[k]);}
     free(chunk);free(input);free(volume);free(reference);free(out);free(quiet);free(check);PASS();
 }
 static void test_native_fused_physics_tick_keeps_packets_clock_and_removes_completion_wait(void) {
+    char err[64]={0};
+    const char *const options[]={"DC_GAS_FUSED_TICK","DC_GAS_LOCAL_GEOMETRY","DC_GAS_ROTATE_PUBLISH","DC_GAS_FUSED_GEOMETRY"};
+    char *saved[sizeof(options)/sizeof(options[0])]={0};
+    const size_t count=sizeof(saved)/sizeof(saved[0]);
+    for(size_t i=0;i<count;++i) {
+        const char *old=getenv(options[i]);saved[i]=old?SDL_strdup(old):NULL;
+        ASSERT_TRUE(!old||saved[i]);
+        ASSERT_EQ(SDL_setenv(options[i],"1",1),0);
+    }
     check_native_fused_physics_tick();
+    for(size_t i=0;i<count;++i) {
+        int restored=saved[i]?SDL_setenv(options[i],saved[i],1):unsetenv(options[i]);
+        SDL_free(saved[i]);
+        ASSERT_EQ(restored,0);
+    }
 }
 static void test_native_local_geometry_repairs_keep_quiet_owners_and_avoid_full_cache_rebuilds(void) {
     char err[256]={0};const char *names[]={"DC_GAS_LOCAL_GEOMETRY","DC_GAS_ROTATE_PUBLISH"};char *saved[2];

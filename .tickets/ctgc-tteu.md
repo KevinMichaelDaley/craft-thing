@@ -84,3 +84,7 @@ A native Vulkan RED fixture compiles and reproduces +0.082763672 Q16 of soot dri
 **2026-11-26T19:58:16Z**
 
 The RED fixture failed both explicit shaders with +0.082763672 Q16 of soot during a single accepted step. GPU packets now retain the two carrier remainders, and audit, geometric remapping, chemical products, publication, and checkpoint reads preserve them. Both explicit routes measure 0.000000000 Q16 for both species while the receiving cell gains stock. Nine focused native gas cases passed before the geometry debit refactor. The v9 and v10 files written before the layout change both load with their original fields and zero remainders. New stream tests round-trip nonzero remainders with and without bulk liquids. The locked Greek and oil replay remains required.
+
+**2026-11-26T20:29:20Z**
+
+The still-running exact 8e45829e locked replay reached Greek second 583 with all 36 faces submerged, 300 Q16 fuel left, no exterior or mobile film, and chemical drift below 0.000013 Q16. The matched oil control starts only after the Greek run reaches depletion. A separate fully coupled tick refactor produced byte-identical bounded physical samples in both Greek and oil scenes.
