@@ -18,3 +18,9 @@ A genuinely new seat still publishes its canonical body, moves the seat count an
 
 Inject drive, ray and sprite publication failures independently. The prior seats, active ray history and input remain usable, with no orphan physical body or reactive parcels. A retry admits one complete player with its intended body, bindings, appearance and inventory. Validate the live SDL/Vulkan join path.
 
+
+## Notes
+
+**2026-11-26T22:51:48Z**
+
+The controller router now stages input in src/app/player_join.c. The remaining failure window starts when a new body is admitted and lasts through drive, ray, and pose publication. Resume with native or fault-injection evidence at those boundaries, including ray history and the authored body parcel ledger.
