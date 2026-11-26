@@ -1,6 +1,6 @@
 ---
 id: ctpao-vwpc
-status: in_progress
+status: closed
 deps: []
 links: [ctcri-jd9z]
 created: 2026-11-26T23:11:09Z
@@ -27,3 +27,7 @@ The two host RED cases compiled and reproduced both failure paths. Start admitte
 **2026-11-26T23:28:25Z**
 
 GREEN and refactor passed all 16 production session cases, also under ASan/UBSan. The rejected Start layout leaves both seats usable and retries without a second Start. A later rejection removes stale bands, keeps the caller diagnostic untouched and maps controller aim through the single view before restoring its own band. Explicitly clearing the request stops retry. Five focus and five split geometry checks passed. Both native fixtures compiled and the exact displayed replays remain queued.
+
+**2026-11-26T23:51:52Z**
+
+Exact 0e7d3a04 reproduced the drawable rejection in native RED, then passed live recovery on the same simulated small logical extent. The separate two-window and controller rejoin/normal Start checks passed 2/2 each. Whole-suite verification remains queued.

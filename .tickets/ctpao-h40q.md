@@ -31,3 +31,7 @@ RED links and drives the real halo fixture with the Vulkan driver deliberately u
 **2026-11-26T23:36:34Z**
 
 The controlled loader failure now reports the actual Vulkan error on every failed case, with no false OK lines. Scalar and particle fixtures release the split-grid context before opening the reference grid and keep the downloaded endpoints for the same parity checks. Assertion exits release their active context. The executable enforces the single-live-context budget. The diagnostic, host player, tool, recipe and shader checks passed. The historical blind failure still requires the stable-memory NVIDIA recheck.
+
+**2026-11-26T23:51:52Z**
+
+The guarded NVIDIA RED reproduced overlapping-context failure. The fixed NVIDIA fixture completed all four transfers under the same one-context budget. A separate llvmpipe run also passed all four through a test-only device-selection override. The exact historical, unguarded 486563d0 replay remains queued and the original failure cause is still unconfirmed.

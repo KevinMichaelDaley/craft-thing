@@ -24,3 +24,7 @@ Use the locked starter position, radius, energy and wood footprint in the forest
 **2026-11-26T23:47:40Z**
 
 The manifest wood union contains 90 distinct cells, 37 inside its ignition disc. The portable RED case compiled and exposed the runtime ignition at (238,206) instead of (228,204). The cold Vulkan inventory RED also checks the undeclared kindling cell at (238,206) and the exact authored and starter counts.
+
+**2026-11-26T23:51:52Z**
+
+The actual NVIDIA RED confirmed undeclared material at (238,206) in the otherwise locked still scene. Host GREEN and refactor pass with radius four, 12000 energy and the center at (228,204). The default staging counts unique authored wood cells, and the native audit checks the actual pit cell, all 37 heated body parcels and their total finite energy. The displaced kindling is available only through the named historical control. Native cold audit, matched 180-second runs and spread controls remain due.

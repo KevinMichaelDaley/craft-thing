@@ -1,6 +1,14 @@
 #define main rigid_solver_fixture_main
 #include "../vulkan/rigid_solver_tests.c"
 #undef main
+#undef RUN
+
+#define RUN(fn) do { \
+    int failed = g_fail; \
+    printf("RUN  %s\n", #fn); \
+    fn(); \
+    if (g_fail == failed) printf("OK   %s\n", #fn); \
+} while (0)
 
 #include <SDL.h>
 #include <signal.h>
@@ -356,6 +364,37 @@ static void forest_print_sample(const forest_sample_t *s, const char *label) {
     fflush(stdout);
 }
 
+static bool forest_initial_starter_heat(dc_gpu_t *gpu, uint32_t *lit, double *heat,
+                                       char *err, uint32_t cap) {
+    const fr_reactive_profile_t *wood = fr_reactive_profile(DC_MATERIAL_WOOD);
+    fr_reactive_state_t ambient;
+    uint32_t mass = (uint32_t)llround(wood->density * (double)DC_FLUID_FULL);
+    if (!fr_reactive_state_default(DC_MATERIAL_WOOD, mass, 0, 293.15f, 1u,
+                                   &ambient, err, cap)) return false;
+    fr_reactive_record_t *records = NULL;
+    uint32_t count = 0;
+    uint64_t next;
+    if (!fr_gpu_reactive_export_bodies(gpu, &records, &count, &next, err, cap)) return false;
+    *lit = 0;
+    *heat = 0.;
+    bool correct_disc = true;
+    for (uint32_t i = 0; i < count; i++) {
+        const fr_reactive_state_t *state = &records[i].state;
+        uint64_t origin = (uint64_t)state->origin_id_high << 32 | state->origin_id_low;
+        if (forest_region(origin) != DC_FOREST_REGION_PILE || state->material != DC_MATERIAL_WOOD)
+            continue;
+        *heat += fr_reactive_state_energy(state) - fr_reactive_state_energy(&ambient);
+        int32_t dx = (int32_t)forest_origin_x(origin) - DC_FOREST_IGNITION_X;
+        int32_t dy = (int32_t)forest_origin_y(origin) - DC_FOREST_IGNITION_Y;
+        bool inside = dx * dx + dy * dy <= DC_FOREST_IGNITION_RADIUS * DC_FOREST_IGNITION_RADIUS;
+        bool lit_parcel = (state->flags & FR_REACTIVE_FLAMING) != 0;
+        correct_disc &= inside == lit_parcel;
+        *lit += lit_parcel;
+    }
+    free(records);
+    return correct_disc;
+}
+
 static void test_locked_forest_scene_matches_the_manifest_fixture(void) {
     char err[256] = {0};
     dc_gpu_t *gpu = forest_grid();
@@ -372,6 +411,12 @@ static void test_locked_forest_scene_matches_the_manifest_fixture(void) {
     ASSERT_EQ(floor.cells[(floor_y % 64u) * 64u + floor_x % 64u].material, DC_MATERIAL_AIR);
     ASSERT_EQ(scene.pile_cells, 90u);
     ASSERT_EQ(scene.ember_cells, 37u);
+    uint32_t lit;
+    double starter_heat;
+    ASSERT_TRUE(forest_initial_starter_heat(gpu, &lit, &starter_heat, err, sizeof(err)));
+    printf("Forest locked starter %u lit parcels, %.6f thermal energy added\n", lit, starter_heat);
+    ASSERT_EQ(lit, scene.ember_cells);
+    ASSERT_TRUE(fabs(starter_heat - DC_FOREST_IGNITION_ENERGY) < .01);
     ASSERT_TRUE(scene.pile_fuel_fp > 0u && scene.pile_char_fp > 0u);
     for (uint32_t tree = 0; tree < DC_FOREST_TREE_COUNT; tree++)
         ASSERT_TRUE(scene.tree_fuel_fp[tree] > 0u);
