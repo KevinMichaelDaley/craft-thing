@@ -2128,8 +2128,9 @@ build/gas_gpu.o: src/vulkan/gas_gpu.c src/vulkan/gas_gpu_internal.h src/vulkan/g
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/gas_audit_gpu.o: src/vulkan/gas_audit_gpu.c src/vulkan/gas_gpu_state.h src/vulkan/gas_gpu_internal.h include/ferrum/fire/gas_gpu.h include/dungeoncraft/gas_audit_layout.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-build/gas_checkpoint_gpu.o: src/vulkan/gas_checkpoint_gpu.c src/vulkan/gas_gpu_state.h include/ferrum/fire/gas_gpu.h
+build/gas_checkpoint_gpu.o: src/vulkan/gas_checkpoint_gpu.c src/vulkan/gas_gpu_state.h include/ferrum/fire/gas_gpu.h include/dungeoncraft/gas_layout.h include/ferrum/fire/gas_checkpoint.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/performance/src/vulkan/gas_checkpoint_gpu.o build/performance/src/vulkan/gas_gpu.o: include/dungeoncraft/gas_layout.h include/ferrum/fire/gas_checkpoint.h
 build/gas_feedback_gpu.o: src/vulkan/gas_feedback_gpu.c src/vulkan/gas_feedback_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/gas_model.o: src/fire/gas.c src/fire/gas_internal.h include/ferrum/fire/gas.h
@@ -2310,6 +2311,7 @@ build/shaders/combustion.comp.spv: shaders/reactive/combustion.comp shaders/reac
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/shaders/body_combustion.comp.spv: shaders/reactive/coating_mass.glsl include/dungeoncraft/coating_layout.h
 build/shaders/body_combustion.comp.spv: shaders/reactive/coating_burn.glsl
+build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: shaders/gas/types.glsl include/dungeoncraft/gas_layout.h
 build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv build/shaders/thermal.comp.spv: include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/reactive_arena_layout.h
 build/shaders/body_combustion.comp.spv: shaders/reactive/coating_contact.glsl include/dungeoncraft/combustion_parameters.h
 build/shaders/body_combustion.comp.spv: shaders/reactive/rigid_coating_contact.glsl include/dungeoncraft/reactive_arena_layout.h

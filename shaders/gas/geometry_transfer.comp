@@ -2,6 +2,11 @@
 #extension GL_GOOGLE_include_directive : require
 #include "geometry_common.glsl"
 
+vec2 geometry_stock_debit(vec2 donor,vec2 kept,float share) {
+    vec2 debit=gas_add_stock(gas_add_stock(donor,-kept.x),-kept.y);
+    return gas_scale_stock(debit,share);
+}
+
 Gas geometry_receive_contracted_share(Gas recipient,Gas donor,float retention,float share) {
     Gas kept=geometry_scale_packet(donor,retention);
     /* Distribute the represented donor debit, including its scaling roundoff. */
@@ -10,8 +15,10 @@ Gas geometry_receive_contracted_share(Gas recipient,Gas donor,float retention,fl
     precise vec4 visual=(donor.visual-kept.visual)*share;
     precise vec2 tail=(donor.geometry.zw-kept.geometry.zw)*share;
     precise float energy=(dynamics.y+visual.w)+tail.x;
-    GasFlux incoming=GasFlux(species,vec4(dynamics.x,energy,dynamics.zw),visual.rgb);
-    Gas value=gas_add_flux(recipient,incoming,1.);
+    GasFlux incoming=GasFlux(vec4(species.xy,0.,species.w),vec4(0.,energy,dynamics.zw),visual.rgb);
+    Gas value=gas_add_carrier_stocks(gas_add_flux(recipient,incoming,1.),
+        geometry_stock_debit(gas_exhaust_stock(donor),gas_exhaust_stock(kept),share),
+        geometry_stock_debit(gas_soot_stock(donor),gas_soot_stock(kept),share));
     value.geometry.w+=tail.y;
     return value;
 }
@@ -85,10 +92,12 @@ void main() {
                     uint other=gas_atlas(q);Gas donor=gas_world(other);
                     float demand=geometry_demand_cached(q);
                     float fraction=(growth*donor_volume/capacity)/(donor_volume+demand);
-                    GasFlux incoming=GasFlux(donor.species*fraction,
-                        vec4(donor.dynamics.x,gas_energy(donor),donor.dynamics.zw)*fraction,
+                    GasFlux incoming=GasFlux(vec4(donor.species.xy,0.,donor.species.w)*fraction,
+                        vec4(0.,gas_energy(donor),donor.dynamics.zw)*fraction,
                         donor.visual.rgb*fraction);
-                    value=gas_add_flux(value,incoming,1.);
+                    value=gas_add_carrier_stocks(gas_add_flux(value,incoming,1.),
+                        gas_scale_stock(gas_exhaust_stock(donor),fraction),
+                        gas_scale_stock(gas_soot_stock(donor),fraction));
                     value.geometry.w+=donor.geometry.w*fraction;changed=true;
                     break;
                 }

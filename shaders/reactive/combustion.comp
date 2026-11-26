@@ -603,7 +603,7 @@ void burn_entry(ivec2 position,uint gas_at,uvec2 handle,uint owner,
     else {entry.words[s+9u]=fuel-reacted;entry.words[s+10u]+=char_mass;}
     entry.words[s+11u]+=ash;
     add_energy(entry,.7*heat-removed+retained);
-    gas.species.z+=exhaust/65536.;gas.dynamics.x+=float(soot)/65536.;
+    gas=gas_add_carriers(gas,vec2(exhaust,soot)/65536.);
     gas.dynamics.y+=.3*heat+removed-retained;
     gas.visual.rgb+=vec3(.18,.16,.14)*(exhaust+float(soot))/65536.;
 }

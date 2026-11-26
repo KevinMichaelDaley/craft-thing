@@ -30,7 +30,8 @@ Primitive gas_primitive(Gas s,out bool okay) {
     okay=all(greaterThanEqual(s.species,vec4(0)))&&s.dynamics.x>=0.&&
         all(greaterThanEqual(s.visual.rgb,vec3(0)))&&
         all(lessThanEqual(s.visual.rgb,vec3((s.species.z+s.dynamics.x)*1.000001)))&&
-        gas_finite(mass)&&gas_finite(gas_energy(s))&&all(not(isnan(s.dynamics.zw)))&&all(not(isinf(s.dynamics.zw)));
+        gas_finite(mass)&&gas_finite(gas_energy(s))&&all(not(isnan(s.dynamics.zw)))&&all(not(isinf(s.dynamics.zw)))&&
+        all(not(isnan(s.carrier_tail)))&&all(not(isinf(s.carrier_tail)));
     if(mass==0.) {
         okay=okay&&gas_energy(s)==0.&&all(equal(s.dynamics.zw,vec2(0)));
         return Primitive(vec4(0),vec4(0,0,0,s.geometry.y));
@@ -62,16 +63,9 @@ Primitive gas_primitive(Gas s,out bool okay) {
     okay=okay&&temperature>0.&&gas_finite(temperature)&&gas_finite(pressure)&&gas_finite(sound);
     return Primitive(vec4(physical_mass/volume,s.dynamics.zw/mass,pressure),vec4(sound,temperature,physical_mass,s.geometry.y));
 }
-vec2 gas_two_sum(float a,float b) {
-    precise float sum=a+b;
-    precise float recovered=sum-a;
-    precise float error=(a-(sum-recovered))+(b-recovered);
-    return vec2(sum,error);
-}
 Gas gas_add_flux(Gas s,GasFlux flux,float dt) {
-    Gas result=s;
-    result.species+=flux.species*dt;
-    result.dynamics.x+=flux.dynamics.x*dt;
+    Gas result=gas_add_carriers(s,vec2(flux.species.z,flux.dynamics.x)*dt);
+    result.species.xyw+=flux.species.xyw*dt;
     result.dynamics.zw+=flux.dynamics.zw*dt;
     result.visual.rgb+=flux.pigment*dt;
 #ifdef FR_GAS_FORCE_IMPLICIT
@@ -116,12 +110,14 @@ Gas gas_practical_state(Gas value) {
      * Preserve geometry/work, and never remove trace pigment from normal gas. */
     if(scale>0.&&scale<float(FR_GAS_NEGLIGIBLE_MASS)&&abs(gas_energy(value))<float(FR_GAS_NEGLIGIBLE_ENERGY)&&
        all(lessThan(abs(value.dynamics.zw),vec2(float(FR_GAS_NEGLIGIBLE_ENERGY))))) {
-        value.species=vec4(0.);value.dynamics=vec4(0.);value.visual=vec4(0.);value.geometry.z=0.;
+        value.species=vec4(0.);value.dynamics=vec4(0.);value.visual=vec4(0.);value.geometry.z=0.;value.carrier_tail=vec2(0.);
         atomicOr(stats[FR_GAS_REJECT_STAGE_WORD],FR_GAS_RECONCILED_ROUNDOFF);return value;
     }
     float tolerance=max(scale*0.000003814697265625,1.17549435e-38);uint repaired=0u;
     for(uint k=0u;k<4u;k++) if(value.species[k]<0.&&value.species[k]>=-tolerance) {value.species[k]=0.;repaired|=FR_GAS_RECONCILED_ROUNDOFF;}
+    if(value.species.z==0.) value.carrier_tail.x=0.;
     if(value.dynamics.x<0.&&value.dynamics.x>=-tolerance) {value.dynamics.x=0.;repaired|=FR_GAS_RECONCILED_ROUNDOFF;}
+    if(value.dynamics.x==0.) value.carrier_tail.y=0.;
     float carrier=value.species.z+value.dynamics.x;
     for(uint k=0u;k<3u;k++) {
         if(value.visual[k]<0.&&value.visual[k]>=-tolerance) {value.visual[k]=0.;repaired|=FR_GAS_RECONCILED_ROUNDOFF;}

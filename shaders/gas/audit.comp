@@ -6,6 +6,7 @@ shared float values[64u*FR_GAS_AUDIT_WORDS];
 shared float species_residual[64u*FR_GAS_AUDIT_SPECIES_WORDS];
 void main() {
     uint lane=gl_LocalInvocationIndex,index=gas_index();float metrics[FR_GAS_AUDIT_WORDS];
+    vec2 carrier_tail=vec2(0);
     for(uint k=0u;k<FR_GAS_AUDIT_WORDS;k++) metrics[k]=0.;
     metrics[FR_GAS_AUDIT_MIN_TEMPERATURE]=3.402823466e38;
     if(index<params.width*params.height) {
@@ -15,6 +16,7 @@ void main() {
             if(!okay||!gas_finite(s.geometry.w)) metrics[FR_GAS_AUDIT_INVALID]=1.;
             else {
                 for(uint k=0u;k<4u;k++) metrics[k]=s.species[k];metrics[4]=s.dynamics.x;
+                carrier_tail=s.carrier_tail;
                 for(uint k=0u;k<3u;k++) metrics[FR_GAS_AUDIT_PIGMENT+k]=s.visual[k];
                 metrics[FR_GAS_AUDIT_ENERGY]=gas_energy(s);metrics[FR_GAS_AUDIT_WORK]=s.geometry.w;
                 metrics[FR_GAS_AUDIT_KINETIC]=gas_kinetic_energy(s);metrics[FR_GAS_AUDIT_THERMAL]=gas_thermal_energy(s);
@@ -59,7 +61,8 @@ void main() {
         }
     }
     for(uint k=0u;k<FR_GAS_AUDIT_WORDS;k++) values[k*64u+lane]=metrics[k];
-    for(uint k=0u;k<FR_GAS_AUDIT_SPECIES_WORDS;k++) species_residual[k*64u+lane]=0.;
+    for(uint k=0u;k<FR_GAS_AUDIT_SPECIES_WORDS;k++)
+        species_residual[k*64u+lane]=k==2u?carrier_tail.x:(k==4u?carrier_tail.y:0.);
     barrier();
     for(uint stride=32u;stride>0u;stride/=2u) {
         if(lane<stride) for(uint k=0u;k<FR_GAS_AUDIT_WORDS;k++) {

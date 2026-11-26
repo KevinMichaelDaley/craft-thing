@@ -58,7 +58,7 @@ build/player_fire_ray_gpu_tests: tests/player/fire_ray_gpu_tests.c src/player/fi
 test_player_fire_ray_gpu: build/player_fire_ray_gpu_tests
 	./build/player_fire_ray_gpu_tests
 test: test_player_fire_ray_gpu
-build/shaders/player_fire_ray.comp.spv: shaders/reactive/player_fire_ray.comp include/dungeoncraft/fire_ray_layout.h $(wildcard shaders/reactive/*.glsl) $(wildcard shaders/sim/*.glsl)
+build/shaders/player_fire_ray.comp.spv: shaders/reactive/player_fire_ray.comp include/dungeoncraft/fire_ray_layout.h shaders/gas/types.glsl include/dungeoncraft/gas_layout.h $(wildcard shaders/reactive/*.glsl) $(wildcard shaders/sim/*.glsl)
 	mkdir -p build/shaders
 	$(GLSLANG) -DDC_RUNTIME_BODY_STORAGE=1 -V --target-env vulkan1.3 $< -o $@
 build/shaders/scene.comp.spv build/shaders/runtime/scene.comp.spv: include/dungeoncraft/fire_ray_layout.h

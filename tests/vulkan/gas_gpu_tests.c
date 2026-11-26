@@ -229,8 +229,8 @@ static fr_gas_state_t trace_failure_state(void) {
 static void test_native_trace_buoyancy_preserves_external_work_without_underflow(void) {
     char err[256]={0};dc_gpu_t *g=NULL;ASSERT_TRUE(context(&g,err,sizeof(err)));
     dc_gpu_address_buffer_t input={0},output={0},model={0},stats={0};fr_renderer_compute_t compute={0};
-    ASSERT_TRUE(dc_gpu_address_buffer_create(g,64u,true,&input,err,sizeof(err))&&
-        dc_gpu_address_buffer_create(g,64u,true,&output,err,sizeof(err))&&
+    ASSERT_TRUE(dc_gpu_address_buffer_create(g,FR_GAS_CELL_WORDS*sizeof(float),true,&input,err,sizeof(err))&&
+        dc_gpu_address_buffer_create(g,FR_GAS_CELL_WORDS*sizeof(float),true,&output,err,sizeof(err))&&
         dc_gpu_address_buffer_create(g,FR_GAS_MODEL_WORDS*4u,true,&model,err,sizeof(err))&&
         dc_gpu_address_buffer_create(g,64u,true,&stats,err,sizeof(err)));
     fr_gas_model_t m=trace_failure_model();fr_gas_state_t trace=trace_failure_state();

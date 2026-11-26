@@ -10,7 +10,7 @@ static void test_transport_roundoff_preserves_balanced_and_trace_fluxes(void) {
     dc_gpu_t *g = NULL;
     dc_gpu_address_buffer_t input = {0}, output = {0};
     fr_renderer_compute_t compute = {0};
-    float packets[2][16] = {{0}};
+    float packets[2][FR_GAS_CELL_WORDS] = {{0}};
     /* A balanced exchange crosses an exponent boundary. A nearly empty donor retains a trace. */
     const float initial[] = {0x1.800006p0f, 1.5f};
     const float transferred[] = {.75f, 0x1p-30f};
@@ -60,11 +60,11 @@ static void test_transport_roundoff_preserves_balanced_and_trace_fluxes(void) {
 static void test_native_massless_underflow_energy_reconciles_without_erasing_tiny_colored_gas(void) {
     char err[256]={0};dc_gpu_t *g=NULL;ASSERT_TRUE(context(&g,err,sizeof(err)));
     dc_gpu_address_buffer_t input={0},output={0},model={0},stats={0};fr_renderer_compute_t compute={0};
-    ASSERT_TRUE(dc_gpu_address_buffer_create(g,10u*64u,true,&input,err,sizeof(err))&&
-        dc_gpu_address_buffer_create(g,10u*64u,true,&output,err,sizeof(err))&&
+    ASSERT_TRUE(dc_gpu_address_buffer_create(g,10u*FR_GAS_CELL_WORDS*sizeof(float),true,&input,err,sizeof(err))&&
+        dc_gpu_address_buffer_create(g,10u*FR_GAS_CELL_WORDS*sizeof(float),true,&output,err,sizeof(err))&&
         dc_gpu_address_buffer_create(g,FR_GAS_MODEL_WORDS*4u,true,&model,err,sizeof(err))&&
         dc_gpu_address_buffer_create(g,64u,true,&stats,err,sizeof(err)));
-    float (*packets)[16]=input.mapped;for(uint32_t i=0;i<10u;i++) packets[i][12]=packets[i][13]=1.f;
+    float (*packets)[FR_GAS_CELL_WORDS]=input.mapped;for(uint32_t i=0;i<10u;i++) packets[i][12]=packets[i][13]=1.f;
     packets[0][5]=1.14107925e-37f;packets[1][5]=-1.14107925e-37f;
     fr_gas_model_t m={.gas_constant={.25984,.29680,.18892,.46152,0},.heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
     fr_gas_state_t trace=reference_air(m,.0012,300,0);
@@ -94,7 +94,7 @@ static void test_native_massless_underflow_energy_reconciles_without_erasing_tin
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
     ASSERT_TRUE(fr_renderer_submit(g));uint32_t mask=((uint32_t *)stats.mapped)[0];printf("Vacuum roundoff valid mask%u expected983\n",mask);ASSERT_EQ(mask,983u);
     ASSERT_TRUE((((uint32_t *)stats.mapped)[FR_GAS_REJECT_STAGE_WORD]&FR_GAS_RECONCILED_ROUNDOFF)!=0u);
-    float (*actual)[16]=output.mapped;ASSERT_EQ(actual[9][6],0.f);ASSERT_EQ(actual[9][5],0.f);ASSERT_EQ(actual[8][0],0.f);ASSERT_EQ(actual[8][1],0.f);ASSERT_EQ(actual[8][5],0.f);ASSERT_EQ(memcmp(actual[2],packets[2],64),0);ASSERT_EQ(memcmp(actual[4],packets[4],64),0);ASSERT_EQ(memcmp(actual[7],packets[7],64),0);
+    float (*actual)[FR_GAS_CELL_WORDS]=output.mapped;ASSERT_EQ(actual[9][6],0.f);ASSERT_EQ(actual[9][5],0.f);ASSERT_EQ(actual[8][0],0.f);ASSERT_EQ(actual[8][1],0.f);ASSERT_EQ(actual[8][5],0.f);ASSERT_EQ(memcmp(actual[2],packets[2],FR_GAS_SOOT_TAIL_WORD*sizeof(float)+sizeof(float)),0);ASSERT_EQ(memcmp(actual[4],packets[4],FR_GAS_SOOT_TAIL_WORD*sizeof(float)+sizeof(float)),0);ASSERT_EQ(memcmp(actual[7],packets[7],FR_GAS_SOOT_TAIL_WORD*sizeof(float)+sizeof(float)),0);
     ASSERT_EQ(actual[3][5],packets[3][5]);ASSERT_EQ(actual[5][5],packets[5][5]);
     ASSERT_TRUE(present(g,err,sizeof(err)));fr_renderer_compute_destroy(g,&compute);
     dc_gpu_address_buffer_destroy(g,&input);dc_gpu_address_buffer_destroy(g,&output);dc_gpu_address_buffer_destroy(g,&model);dc_gpu_address_buffer_destroy(g,&stats);dc_gpu_destroy(g);PASS();

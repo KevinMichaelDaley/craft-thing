@@ -107,8 +107,11 @@ vec2 geometry_retention(ivec2 p,Gas original,float available) {
     return vec2(clamp(available/original.geometry.x,0.,1.),route);
 }
 Gas geometry_scale_packet(Gas original,float fraction) {
+    vec2 exhaust=gas_scale_stock(gas_exhaust_stock(original),fraction);
+    vec2 soot=gas_scale_stock(gas_soot_stock(original),fraction);
     original.species*=fraction;original.dynamics*=fraction;original.visual*=fraction;
-    original.geometry.zw*=fraction;return original;
+    original.geometry.zw*=fraction;
+    return gas_set_carriers(original,exhaust,soot);
 }
 void geometry_mark(uint index,bool changed) {
     if(gas_cache_owner(index)==0u) cache1[index].metric.z=changed?1.:0.;else cache0[index].metric.z=changed?1.:0.;

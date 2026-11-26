@@ -1,7 +1,9 @@
 #ifndef DC_GAS_LAYOUT_H
 #define DC_GAS_LAYOUT_H
 #include "../ferrum/fire/gas_constants.h"
-#define FR_GAS_CELL_WORDS 16u
+#define FR_GAS_CELL_WORDS 20u
+#define FR_GAS_EXHAUST_TAIL_WORD 16u
+#define FR_GAS_SOOT_TAIL_WORD 17u
 #define FR_GAS_MODEL_WORDS 21u
 /* Exactly zero gas mass cannot carry internal energy. Bound its roundoff
  * cleanup by eight FP32 epsilons of an ambient full-cell energy reference. */

@@ -89,7 +89,7 @@ static bool save_chunk(const dc_streamer_t *stream,const dc_chunk_t *chunk,
     if(colors) header.version=6;
     if(reactive) header.version=7;
     if(thermal) header.version=8;
-    if(gas) header.version=9;
+    if(gas) header.version=11;
     if(bulk_packet) header.version=10;
     bool okay = fwrite(&header, sizeof(header), 1, file) == 1 &&
         fwrite(chunk->cells, sizeof(chunk->cells), 1, file) == 1 &&
@@ -142,6 +142,11 @@ static bool save_chunk(const dc_streamer_t *stream,const dc_chunk_t *chunk,
     return okay;
 }
 
+static bool load_gas_checkpoint(FILE *file,size_t bytes,fr_gas_checkpoint_chunk_t **gas) {
+    *gas=calloc(1,sizeof(**gas));
+    return *gas&&fread(*gas,bytes,1,file)==1&&gas_checkpoint_valid(*gas);
+}
+
 static dc_chunk_t *load_chunk(const dc_streamer_t *stream,dc_chunk_coord_t coord,
     dc_chunk_colors_t *colors,fr_reactive_chunk_t **reactive,float **water_excess,
     fr_gas_checkpoint_chunk_t **gas,fr_bulk_phase_chunk_t **bulk) {
@@ -170,7 +175,7 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,dc_chunk_coord_t coord
     chunk_header_t header;
     bool okay = fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCC1", 4) == 0 &&
-        (header.version >= 1 && header.version <= 10) &&
+        (header.version >= 1 && header.version <= 11) &&
         header.x == coord.x && header.y == coord.y && header.seed == stream->seed &&
         fread(chunk->cells, sizeof(chunk->cells), 1, file) == 1;
     if (okay && header.version >= 2)
@@ -217,14 +222,13 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,dc_chunk_coord_t coord
                 (liquid_length==LIQUID_CHUNK_BYTES||(header.version>=9&&liquid_length==0u));
             if(okay&&liquid_length) okay=(liquid=malloc((size_t)liquid_length))!=NULL&&fread(liquid,(size_t)liquid_length,1,file)==1;
         }
-        if(okay&&header.version==9) okay=(*gas=malloc(sizeof(**gas)))!=NULL&&
-            fread(*gas,sizeof(**gas),1,file)==1&&gas_checkpoint_valid(*gas);
+        if(okay&&header.version==9) okay=load_gas_checkpoint(file,DC_LEGACY_GAS_CHECKPOINT_BYTES,gas);
+        if(okay&&header.version==11) okay=load_gas_checkpoint(file,sizeof(**gas),gas);
         if(okay&&header.version==10) {
             uint64_t gas_length=0,bulk_length=0;uint8_t *packet=NULL;
             okay=fread(&gas_length,sizeof(gas_length),1,file)==1&&
-                (gas_length==0u||gas_length==sizeof(**gas));
-            if(okay&&gas_length) okay=(*gas=malloc(sizeof(**gas)))!=NULL&&
-                fread(*gas,sizeof(**gas),1,file)==1&&gas_checkpoint_valid(*gas);
+                (gas_length==0u||gas_length==DC_LEGACY_GAS_CHECKPOINT_BYTES||gas_length==sizeof(**gas));
+            if(okay&&gas_length) okay=load_gas_checkpoint(file,(size_t)gas_length,gas);
             if(okay) okay=fread(&bulk_length,sizeof(bulk_length),1,file)==1&&
                 bulk_length>0u&&bulk_length<=fr_bulk_phase_chunk_bytes();
             if(okay) okay=(packet=malloc((size_t)bulk_length))!=NULL&&

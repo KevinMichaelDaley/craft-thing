@@ -42,6 +42,8 @@ static void test_gas_stream_retains_pending_products_at_zero_volume(void) {
     gas->cells[source][5] = 5.f;
     gas->cells[source][9] = .0002f;
     gas->cells[source][11] = 1e-9f;
+    gas->carrier_tail[source][0] = 0x1p-36f;
+    gas->carrier_tail[source][1] = -0x1p-38f;
     gas->gates[source] = 1u;
     ASSERT_TRUE(dc_stream_request_save_gas(stream, chunk, NULL, NULL, NULL, gas, 1));
     dc_stream_result_t result = {0};
@@ -53,6 +55,9 @@ static void test_gas_stream_retains_pending_products_at_zero_volume(void) {
     ASSERT_TRUE(result.gas && memcmp(gas, result.gas, sizeof(*gas)) == 0);
     ASSERT_EQ(result.chunk->cells[source].fluid_mass, DC_FLUID_FULL);
     dc_stream_result_release(&result);
+    gas->carrier_tail[source][0] = INFINITY;
+    ASSERT_TRUE(!dc_stream_request_save_gas(stream, chunk, NULL, NULL, NULL, gas, 3));
+    gas->carrier_tail[source][0] = 0x1p-36f;
     gas->cells[source][5] = gas->cells[source][11] = 0.f;
     ASSERT_TRUE(!dc_stream_request_save_gas(stream, chunk, NULL, NULL, NULL, gas, 3));
     dc_stream_destroy(stream);

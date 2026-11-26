@@ -118,8 +118,7 @@ void burn_coating(Words entry,inout Gas gas,inout float admitted,
     add_energy(entry,.7*heat-removed+retained);
     /* The gas owner can retain pending stock at zero free volume. Water
      * displacement belongs to the gas pressure step. */
-    gas.species.z+=float(exhaust)/65536.;
-    gas.dynamics.x+=float(soot)/65536.;
+    gas=gas_add_carriers(gas,vec2(exhaust,soot)/65536.);
     vec3 energy=add_compensated_energy(vec3(gas.dynamics.y,gas.visual.w,gas.geometry.z),
         .3*heat+removed-retained);
     gas.dynamics.y=energy.x;

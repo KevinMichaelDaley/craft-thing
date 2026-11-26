@@ -8,5 +8,7 @@ typedef struct {
     float cells[4096][16];
     uint32_t gates[4096];
     fr_gas_gpu_clock_t clock;
+    /** Low words of the exhaust and soot stocks, in that order. */
+    float carrier_tail[4096][2];
 } fr_gas_checkpoint_chunk_t;
 #endif

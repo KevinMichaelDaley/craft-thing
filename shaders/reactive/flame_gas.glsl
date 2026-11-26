@@ -29,7 +29,10 @@ float oxidize_carbon(inout Gas gas) {
     float extent=min(gas.dynamics.x*(1.-exp(-activity*uintBitsToFloat(params.seconds))),
         gas.species.x/float(FR_COMBUSTION_AIRBORNE_OXYGEN));
     float oxygen=min(gas.species.x,extent*float(FR_COMBUSTION_AIRBORNE_OXYGEN));
-    gas.dynamics.x-=extent;gas.species.x-=oxygen;gas.species.z+=extent+oxygen;
+    vec2 consumed=extent==gas.dynamics.x?gas_soot_stock(gas):vec2(extent,0.);
+    gas=gas_add_carrier_stocks(gas,consumed,-consumed);
+    gas=gas_add_carriers(gas,vec2(oxygen,0.));
+    gas.species.x-=oxygen;
     gas.dynamics.y+=extent*float(FR_COMBUSTION_AIRBORNE_ENERGY);
     return extent*float(FR_COMBUSTION_AIRBORNE_ENERGY);
 }
