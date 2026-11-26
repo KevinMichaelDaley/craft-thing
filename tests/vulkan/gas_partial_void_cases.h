@@ -40,4 +40,69 @@ static void test_native_partial_void_contraction_displaces_mixture_without_cut_c
     ASSERT_EQ(SDL_setenv("DC_GAS_LOCAL_GEOMETRY",saved?saved:"0",1),0);SDL_free(saved);
     if(g_fail==failures) PASS();
 }
+
+static void test_repeated_water_void_changes_preserve_closed_exhaust_stock(void) {
+    enum { CYCLES = 200, OPEN_VOID = 55173, CONTRACTED_VOID = 55126 };
+    const uint32_t channel_void[] = {36391, OPEN_VOID, 13894};
+    char err[256] = {0};
+    dc_gpu_t *g = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    fr_gas_state_t *input = calloc(DC_CHUNK_CELLS, sizeof(*input));
+    double *volume = calloc(DC_CHUNK_CELLS, sizeof(*volume));
+    ASSERT_TRUE(chunk && input && volume);
+    const fr_gas_model_t model = {
+        .gas_constant = {.25984, .29680, .18892, .46152, 0},
+        .heat_capacity_cv = {.65816, .74320, .65508, 1.40248, .71},
+        .kinetic_scale = 1. / 512.,
+    };
+    /* Each three-cell channel is independent, including its receiving volumes. */
+    for (uint32_t y = 0; y < DC_CHUNK_SIDE; ++y) {
+        for (uint32_t x = 0; x < DC_CHUNK_SIDE; ++x) {
+            uint32_t cell = y * DC_CHUNK_SIDE + x;
+            if ((y & 1u) || x % 4u == 3u) {
+                chunk->cells[cell].material = DC_MATERIAL_STONE;
+                continue;
+            }
+            uint32_t available = channel_void[x % 4u];
+            chunk->cells[cell] = (dc_cell_t){.material = DC_MATERIAL_WATER,
+                .fluid_mass = DC_FLUID_FULL - available};
+            volume[cell] = (double)available / DC_FLUID_FULL;
+            double exhaust = volume[cell] / 64.;
+            input[cell].species[FR_GAS_EXHAUST] = exhaust;
+            input[cell].energy = exhaust * model.heat_capacity_cv[FR_GAS_EXHAUST] * 300.;
+            input[cell].pigment[0] = exhaust / 4.;
+        }
+    }
+    fr_gas_gpu_audit_t before, after;
+    ASSERT_TRUE(dc_gpu_create(&g, DC_CHUNK_SIDE, DC_CHUNK_SIDE,
+        "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk_exact(g, 0, chunk, false, err, sizeof(err)) &&
+        dc_gpu_set_page(g, 0, 0, 0, err, sizeof(err)) &&
+        fr_gas_gpu_enable(g, &model, .0012f, 300.f, err, sizeof(err)) &&
+        fr_gas_gpu_set_pressure_policy(g, FR_GAS_PRESSURE_PRACTICAL, err, sizeof(err)) &&
+        fr_gas_gpu_seed_chunk(g, 0, input, volume, DC_CHUNK_CELLS, err, sizeof(err)) &&
+        fr_gas_gpu_refresh_geometry(g, err, sizeof(err)) &&
+        fr_gas_gpu_audit(g, &before, err, sizeof(err)));
+    for (uint32_t edit = 0; edit < 2u * CYCLES; ++edit) {
+        uint32_t available = edit % 2u ? OPEN_VOID : CONTRACTED_VOID;
+        for (uint32_t y = 0; y < DC_CHUNK_SIDE; y += 2u)
+            for (uint32_t x = 1u; x < DC_CHUNK_SIDE; x += 4u)
+                chunk->cells[y * DC_CHUNK_SIDE + x].fluid_mass = DC_FLUID_FULL - available;
+        ASSERT_TRUE(dc_gpu_upload_chunk_exact(g, 0, chunk, false, err, sizeof(err)) &&
+            fr_gas_gpu_refresh_geometry(g, err, sizeof(err)));
+    }
+    fr_gas_gpu_clock_t clock;
+    ASSERT_TRUE(fr_gas_gpu_clock(g, &clock) && fr_gas_gpu_audit(g, &after, err, sizeof(err)));
+    double drift = (after.species[FR_GAS_EXHAUST] - before.species[FR_GAS_EXHAUST]) * DC_FLUID_FULL;
+    printf("Closed geometry exhaust drift %+.9f Q16 across %u water cycles\n", drift, CYCLES);
+    dc_gpu_destroy(g);
+    free(chunk);
+    free(input);
+    free(volume);
+    ASSERT_EQ(clock.physical_steps, 0u);
+    ASSERT_EQ(before.metrics[FR_GAS_AUDIT_INVALID], 0.f);
+    ASSERT_EQ(after.metrics[FR_GAS_AUDIT_INVALID], 0.f);
+    ASSERT_TRUE(fabs(drift) <= 4.);
+    PASS();
+}
 #endif
