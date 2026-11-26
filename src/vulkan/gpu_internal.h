@@ -103,6 +103,8 @@ struct dc_gpu {
     VkImage *swap_images;
     uint32_t swap_count;
     VkExtent2D swap_extent;
+    VkFormat swap_format;
+    bool swap_transfer_src;
     VkImage frame_image;
     VkDeviceMemory frame_memory;
     VkSemaphore acquire_sem;
@@ -556,6 +558,10 @@ void dc_gpu_record_draw(dc_gpu_t *gpu,const uint32_t push[7]);
 /** Initialize the window swapchain and its image-owned synchronization. */
 bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t width, uint32_t height,
                         char *err, uint32_t cap);
+/** Present the current cell buffer and read the composed window image as packed RGBA8.
+ * The destination has one pixel per swapchain position, with red in the low byte. */
+bool dc_gpu_capture_present(dc_gpu_t *gpu, uint32_t *pixels, size_t count,
+                            char *err, uint32_t cap);
 
 void dc_gpu_record_components(dc_gpu_t *gpu, bool rigid);
 void dc_gpu_record_component_extraction(dc_gpu_t *gpu);

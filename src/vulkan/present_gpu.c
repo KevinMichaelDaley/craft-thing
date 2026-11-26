@@ -2,11 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "body_address_gpu.h"
+#include "gas_gpu_internal.h"
 #include "gpu_internal.h"
 #include "renderer_internal.h"
 #include "runtime_body_gpu.h"
 #include "thermal_gpu_internal.h"
-#include "gas_gpu_internal.h"
 
 static const uint64_t ACQUIRE_TIMEOUT_NS = 1000000000ull;
 
@@ -87,7 +88,7 @@ static void record_reticles(dc_gpu_t *gpu, VkImage destination,
         destination, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, count, blits, VK_FILTER_NEAREST);
 }
 
-static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
+static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, VkBuffer capture,
                           char *err, uint32_t cap) {
     if (!gpu || !gpu->swapchain) return error(err, cap, "GPU window is not initialized");
     const char *trace_setting=getenv("DC_FRAME_TIMINGS");
@@ -210,9 +211,26 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
         }
     }
     record_reticles(gpu, gpu->swap_images[index], layouts);
-    image_barrier(gpu->command, gpu->swap_images[index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    VkImageLayout composed_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    VkAccessFlags2 composed_access = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    if (capture) {
+        image_barrier(gpu->command, gpu->swap_images[index], composed_layout,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            composed_access, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT);
+        const VkBufferImageCopy readback = {
+            .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+            .imageExtent = {gpu->swap_extent.width, gpu->swap_extent.height, 1},
+        };
+        composed_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        composed_access = VK_ACCESS_2_TRANSFER_READ_BIT;
+        vkCmdCopyImageToBuffer(gpu->command, gpu->swap_images[index], composed_layout,
+            capture, 1, &readback);
+        fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
+    }
+    image_barrier(gpu->command, gpu->swap_images[index], composed_layout,
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-        VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 0);
+        composed_access, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 0);
     if (vkEndCommandBuffer(gpu->command) != VK_SUCCESS)
         return error(err, cap, "Cannot end present command buffer");
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
@@ -231,11 +249,11 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
     uint64_t present_begin=trace_waits?SDL_GetPerformanceCounter():0;
     result = vkQueuePresentKHR(gpu->queue, &present);
     uint64_t present_done=trace_waits?SDL_GetPerformanceCounter():0;
-    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
-        return error(err, cap, "Vulkan swapchain presentation failed");
     /* Wait for command and host-visible physics completion, not compositor display. */
     if (vkWaitForFences(gpu->device, 1, &gpu->render_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
         return error(err, cap, "Vulkan present wait failed");
+    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+        return error(err, cap, "Vulkan swapchain presentation failed");
     if (render_chunks) fr_renderer_fire_coverage_presented(gpu);
     uint64_t fence_done=trace_waits?SDL_GetPerformanceCounter():0;
     if(trace_waits) {
@@ -249,14 +267,43 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
 }
 
 bool dc_gpu_present(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    return present_frame(gpu, false, 0, err, cap);
+    return present_frame(gpu, false, 0, VK_NULL_HANDLE, err, cap);
 }
 
 bool dc_gpu_present_chunks(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    return present_frame(gpu, true, 0, err, cap);
+    return present_frame(gpu, true, 0, VK_NULL_HANDLE, err, cap);
 }
 
 bool dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
                                  char *err, uint32_t cap) {
-    return present_frame(gpu, true, steps, err, cap);
+    return present_frame(gpu, true, steps, VK_NULL_HANDLE, err, cap);
+}
+
+bool dc_gpu_capture_present(dc_gpu_t *gpu, uint32_t *pixels, size_t count,
+                            char *err, uint32_t cap) {
+    if (!gpu || !gpu->swapchain || !pixels)
+        return error(err, cap, "Window capture requires a Vulkan window and pixel buffer");
+    uint64_t pixel_count = (uint64_t)gpu->swap_extent.width * gpu->swap_extent.height;
+    if (!pixel_count || pixel_count > SIZE_MAX / sizeof(*pixels) || count < pixel_count)
+        return error(err, cap, "Window capture pixel buffer is too small");
+    bool bgra = gpu->swap_format == VK_FORMAT_B8G8R8A8_UNORM ||
+                gpu->swap_format == VK_FORMAT_B8G8R8A8_SRGB;
+    if (!gpu->swap_transfer_src || (!bgra && gpu->swap_format != VK_FORMAT_R8G8B8A8_UNORM &&
+                                           gpu->swap_format != VK_FORMAT_R8G8B8A8_SRGB))
+        return error(err, cap, "Window format cannot be captured as RGBA8");
+
+    dc_gpu_address_buffer_t staging = {0};
+    if (!dc_gpu_address_buffer_create(gpu, pixel_count * sizeof(*pixels), true, &staging, err, cap))
+        return false;
+    bool okay = present_frame(gpu, false, 0, staging.buffer, err, cap);
+    if (okay) {
+        const uint8_t *sample = staging.mapped;
+        for (size_t i = 0; i < (size_t)pixel_count; ++i, sample += 4u) {
+            uint32_t red = sample[bgra ? 2u : 0u], blue = sample[bgra ? 0u : 2u];
+            pixels[i] = red | ((uint32_t)sample[1] << 8u) | (blue << 16u) |
+                        ((uint32_t)sample[3] << 24u);
+        }
+    }
+    dc_gpu_address_buffer_destroy(gpu, &staging);
+    return okay;
 }
