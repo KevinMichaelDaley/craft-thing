@@ -234,6 +234,8 @@ static void test_greek_corrosion_consumes_bound_stock_and_publishes_spent_gold(v
     gold.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&gold,800.f);
     fr_reactive_state_t unlit=gold;
     unlit.parcel_id_low=unlit.origin_id_low=100503u;
+    /* Exercise corrosion with lit jelly and bound oxidizer without oil. */
+    gold.flags|=FR_REACTIVE_COATING_FLAMING;
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,at,&gold,err,sizeof(err)));
     fr_reactive_state_t ingredient,control;
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_MAGIC_INGREDIENT,65536u,0u,800.f,
@@ -243,6 +245,7 @@ static void test_greek_corrosion_consumes_bound_stock_and_publishes_spent_gold(v
     control=ingredient;control.parcel_id_low=control.origin_id_low=100502u;
     control.coating_jelly_fuel_fp=0u;control.coating_oxidizer_fp=0u;
     control.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&control,800.f);
+    ingredient.flags|=FR_REACTIVE_COATING_FLAMING;
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,at+2u,&ingredient,err,sizeof(err))&&
         fr_gpu_reactive_seed_cell(g,0,at+4u,&control,err,sizeof(err))&&
         fr_gpu_reactive_seed_cell(g,0,unlit_at,&unlit,err,sizeof(err)));
