@@ -17,3 +17,9 @@ Fused hybrid shaders invoke the explicit stage before assigning the private impl
 
 All standalone and fused explicit shader paths traverse line cells in physical order regardless of implicit direction. Compiled shader regression covers generic, fixed-axis and local-stage paths. Existing native transport comparisons pass.
 
+
+## Notes
+
+**2026-11-26T19:23:32Z**
+
+The compiled X-wide-local shader at 9513f4f3 calls gas_explicit_run before the first store of transport_pass. The explicit shader call-graph regression built and went RED on all 14 variants. All 14 now pass, including generic and fixed-axis fused shaders, the local-stage shaders, and standalone variants. The four existing shader-memory checks and 26 gas numeric and fixture cases passed. Native comparisons and the full suite are pending.

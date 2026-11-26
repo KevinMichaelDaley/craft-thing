@@ -47,7 +47,7 @@ void FR_GAS_PREFIX_ENTRY() {
     if(transport_work[line*length].mass.w<0.) return;
     vec2 factor=vec2(1);GasFlux value=gas_empty_flux();bool moving=false;
     for(uint cell=begin;cell<end;cell++) {
-        vec2 own_factor;GasFlux own_value;bool own_moving;cell_map(transport_point(line,cell),own_factor,own_value,own_moving);
+        vec2 own_factor;GasFlux own_value;bool own_moving;cell_map(transport_scan_point(line,cell),own_factor,own_value,own_moving);
         moving=moving||own_moving;value=transport_add(own_value,transport_scale(value,own_factor));factor*=own_factor;
     }
     uint moving_mask=subgroupOr(moving?1u:0u);
@@ -58,7 +58,7 @@ void FR_GAS_PREFIX_ENTRY() {
         /* A closed line can still have velocity. Seed axis Y even when no face moves. */
         bool preserve=transport_direct_first_axis()&&transport_direction()<0;
         for(uint cell=begin;cell<end;cell++) {
-            ivec2 p=transport_point(line,cell);
+            ivec2 p=transport_scan_point(line,cell);
             uint index=transport_position(p);
             transport_work[index].species=vec4(0);transport_work[index].dynamics=vec4(0);transport_work[index].visual=vec4(0);
             if(preserve) transport_preserve_first_axis_cell(p);
@@ -82,7 +82,7 @@ void FR_GAS_PREFIX_ENTRY() {
     }
     prefix=transport_add(exclusive_value,transport_scale(prefix,exclusive_factor));
     for(uint cell=begin;cell<end;cell++) {
-        ivec2 p=transport_point(line,cell);vec2 own_factor;GasFlux own_value;bool own_moving;cell_map(p,own_factor,own_value,own_moving);
+        ivec2 p=transport_scan_point(line,cell);vec2 own_factor;GasFlux own_value;bool own_moving;cell_map(p,own_factor,own_value,own_moving);
         prefix=transport_add(own_value,transport_scale(prefix,own_factor));
         uint index=transport_position(p);transport_work[index].species=prefix.species;
         transport_work[index].dynamics=prefix.dynamics;
@@ -94,6 +94,6 @@ void FR_GAS_PREFIX_ENTRY() {
     if((params.bank&FR_GAS_FUSED_APPLY_BIT)!=0u) {
 #endif
         memoryBarrierBuffer();barrier();
-        for(uint cell=begin;cell<end;cell++) transport_apply_cell(transport_point(line,cell));
+        for(uint cell=begin;cell<end;cell++) transport_apply_cell(transport_scan_point(line,cell));
     }
 }

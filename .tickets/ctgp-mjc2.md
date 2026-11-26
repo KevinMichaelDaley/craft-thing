@@ -22,3 +22,9 @@ Trace command batches through conduction, preparation, accepted pressure work an
 
 Keep the existing one-submission check for the supported fused route and verify exact accepted and rejected state, clock and policy transitions. Cover standalone heat diffusion as a separate physically accounted path.
 
+
+## Notes
+
+**2026-11-26T19:23:32Z**
+
+The exact 9513f4f3 Vulkan publication run also reported 40/48 submissions with exact packets for full fused ticks, versus 8/16 expected. The fused geometry comparison fails the same submission gate. Trace the geometry and full-tick count separately while preserving the matching packets.

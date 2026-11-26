@@ -64,3 +64,7 @@ Exact db7b54b8 locked depletion exited 2 at Greek second 141 after 8460 accepted
 **2026-11-26T19:10:19Z**
 
 The staged native axis probe aligned to the db7b54b8 locked run at +0.000722803 Q16 after the first second. Over seconds 131 through 145 it measured 900 large-step ticks, with +1.248927116 Q16 in the horizontal sweep and +0.026367188 Q16 in the vertical sweep. Remaining advection metadata, pressure finish and publication were zero, as were physical preparation and gas geometry over this interval. The capture matched the failed locked sample at second 141, +4.012883186 Q16. The new publication repair preserves skipped horizontal lines. Rerun the locked fixture to see whether that independently verified defect affected the pool's measured gain.
+
+**2026-11-26T19:23:32Z**
+
+The exact 9513f4f3 locked depletion replay exited 2 at Greek second 141 after 8460 accepted steps. Chemical inventory reached +4.012883186 Q16 with 36 of 36 wet faces and zero exterior or mobile film, matching db7b54b8 at the gate. The sparse publication repair resolves a separate defect. A separately compiled Vulkan probe records the exhaust and soot balances of explicit stages and implicit fallback, including the represented incoming and outgoing face fluxes. Its comparison against the known first-second trajectory must pass before capturing the established pool.

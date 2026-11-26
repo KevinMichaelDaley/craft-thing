@@ -43,7 +43,7 @@ void FR_GAS_FACTOR_ENTRY() {
     if(reused_rate&&rank==0u) atomicOr(stats[FR_GAS_ROW_NORM_AFTER_WORD],4u);
     if(!reused_rate) {
     float maximum_speed=0.;
-    for(uint cell=begin;cell<end;cell++) maximum_speed=max(maximum_speed,transport_activity_speed(transport_point(line,cell)));
+    for(uint cell=begin;cell<end;cell++) maximum_speed=max(maximum_speed,transport_activity_speed(transport_scan_point(line,cell)));
     float subgroup_speed=subgroupMax(maximum_speed);
     if(lane+1u==gl_SubgroupSize) GROUP_PEAK(gl_SubgroupID)=subgroup_speed;
     barrier();maximum_speed=0.;
@@ -53,7 +53,7 @@ void FR_GAS_FACTOR_ENTRY() {
     }
     vec4 mass=vec4(1,0,0,1),energy=mass;float peak=0.;
     for(uint cell=begin;cell<end;cell++) {
-        ivec2 p=transport_point(line,cell);vec2 lower,diagonal,upper,previous;vec4 face;coefficients(p,dt,lower,diagonal,upper,previous,face);
+        ivec2 p=transport_scan_point(line,cell);vec2 lower,diagonal,upper,previous;vec4 face;coefficients(p,dt,lower,diagonal,upper,previous,face);
         uint index=uint(p.y)*params.width+uint(p.x);
         if((params.bank&FR_GAS_STAGED_RATES_BIT)==0u) stencil[index]=face;
         uint atlas=gas_atlas(p);GasFlux value=atlas==0xffffffffu?gas_empty_flux():transport_state(transport_axis_input(atlas));
@@ -84,7 +84,7 @@ void FR_GAS_FACTOR_ENTRY() {
     mass=matrix_product(exclusive_mass,mass);energy=practical?mass:matrix_product(exclusive_energy,energy);
     vec2 prior_inverse=vec2(mass.z/mass.x,energy.z/energy.x);
     for(uint cell=begin;cell<end;cell++) {
-        ivec2 p=transport_point(line,cell);uint index=uint(p.y)*params.width+uint(p.x);
+        ivec2 p=transport_scan_point(line,cell);uint index=uint(p.y)*params.width+uint(p.x);
         TransportCell stored=transport_work[transport_position(p)];vec4 saved_mass=stored.mass;
 #ifdef FR_GAS_COMPACT_WORK
         vec4 saved_energy=saved_mass;

@@ -97,7 +97,9 @@ GasFlux transport_face_flux(ivec2 p) {
 ivec2 transport_line_point(uint line,uint cell) {
     return transport_axis()==0u?ivec2(int(cell),int(line)):ivec2(int(line),int(cell));
 }
-ivec2 transport_point(uint line,uint ordered) {
+/* Factor and prefix scans can walk the line backward. Shared explicit stocks
+ * use physical coordinates, with the same index on both sides of each face. */
+ivec2 transport_scan_point(uint line,uint ordered) {
     uint length=transport_axis()==0u?params.width:params.height;
     uint cell=transport_direction()>0?ordered:length-1u-ordered;
     return transport_line_point(line,cell);
