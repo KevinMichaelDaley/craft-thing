@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <SDL.h>
 #include "ferrum/fire/gas_gpu.h"
-#include "../../src/app/level.c"
+#include "../../src/app/level_internal.h"
 
 int main(void) {
     setvbuf(stdout,NULL,_IOLBF,0);char err[256]={0},directory[]="build/smoke_stage_probe_XXXXXX";

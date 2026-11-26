@@ -2083,11 +2083,12 @@ test_gas_numerics: build/gas_reference_tests build/gas_implicit_tests build/gas_
 	./build/gas_implicit_tests
 	./build/gas_transport_tests
 	./build/smoke_box_fixture_tests
-build/smoke_box_display_tests: tests/app/smoke_box_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level.c src/app/level_internal.h src/app/smoke_box.c src/app/smoke_level.c $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< src/app/smoke_box.c src/app/smoke_level.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
-build/diagnostics/smoke_box_frame: tools/diagnostics/smoke_box_frame.c src/app/level.c src/app/level_internal.h src/app/smoke_box.c src/app/smoke_level.c $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+SMOKE_BOX_APP_OBJ = $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ))
+build/smoke_box_display_tests: tests/app/smoke_box_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level_internal.h $(SMOKE_BOX_APP_OBJ) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(SMOKE_BOX_APP_OBJ) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/diagnostics/smoke_box_frame: tools/diagnostics/smoke_box_frame.c src/app/level_internal.h $(SMOKE_BOX_APP_OBJ) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< src/app/smoke_box.c src/app/smoke_level.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(SMOKE_BOX_APP_OBJ) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 GAS_PUBLICATION_LINK = -Wl,--wrap=vkQueueSubmit -Wl,--wrap=vkCmdDispatchIndirect -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkQueueWaitIdle -Wl,--wrap=vkCmdCopyBuffer -Wl,--wrap=vkCmdPipelineBarrier2 -Wl,--wrap=fprintf -Wl,--wrap=__fprintf_chk -Wl,--wrap=vkCmdBindPipeline
 build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_gpu_tests.c tests/vulkan/gas_checkpoint_cases.h tests/vulkan/gas_large_cfl_cases.h tests/vulkan/gas_practical_cases.h tests/vulkan/gas_publication_cases.h tests/vulkan/gas_multigrid_cases.h tests/vulkan/reactive_cell_gpu_tests.c src/fire/gas_reference.c src/fire/gas_implicit_reference.c src/fire/gas_transport_reference.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $(if $(filter build/gas_publication_display_tests,$@),-DFR_GAS_PUBLICATION_TEST,) $< src/fire/gas_reference.c src/fire/gas_implicit_reference.c src/fire/gas_transport_reference.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) $(if $(filter build/gas_publication_display_tests,$@),$(GAS_PUBLICATION_LINK),)

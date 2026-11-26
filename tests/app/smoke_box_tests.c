@@ -4,7 +4,7 @@
 #undef main
 #include <math.h>
 #include <sys/stat.h>
-#include "../../src/app/level.c"
+#include "../../src/app/level_internal.h"
 #include "ferrum/fire/gas_gpu.h"
 
 static bool smoke_budget(dc_level_view_t *view,double species[5],double *energy,double pigment[3],double *work,double *height,
