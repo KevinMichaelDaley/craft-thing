@@ -1,6 +1,6 @@
 ---
 id: ctpa-ptku
-status: open
+status: in_progress
 deps: [ctpa-zfxm]
 links: []
 created: 2026-11-26T11:02:45Z

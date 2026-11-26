@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
+#include "ferrum/fire/gpu.h"
+#include "ferrum/fire/thermal_gpu.h"
 #include "../../src/app/player_session.h"
 #include "../../src/app/view_config.h"
 #include "../player/runtime_visual_check.h"
@@ -196,11 +198,107 @@ static void test_fire_ray_mode_uses_supplied_artwork_while_moving(void) {
     PASS();
 }
 
+static bool walk_source_pixel(dc_level_view_t *v, uint32_t source, uint32_t *x, uint32_t *y,
+                              char *err, uint32_t cap) {
+    fr_player_t player;
+    fr_beaver_body_t binding;
+    dc_gpu_world_body_t body;
+    dc_gpu_body_motion_t motion;
+    dc_level_view_status_t status;
+    uint32_t frame, entries;
+    size_t size;
+    if (!dc_players_status(v, 0, &player, &binding) || player.action != FR_PLAYER_WALK ||
+        !fr_player_frame(&player, &frame) || !dc_level_view_status(v, &status) ||
+        !dc_level_view_body_state(v, binding.binding.body_id, &body, &motion, err, cap) ||
+        !fr_beaver_asset_size(FR_PLAYER_WALK, &size, &entries)) return false;
+    uint8_t *storage = malloc(size);
+    uint32_t *mapping = malloc((size_t)entries * sizeof(*mapping));
+    fr_beaver_asset_t asset;
+    fr_beaver_frame_layout_t layout;
+    bool okay = storage && mapping &&
+        fr_beaver_asset_build(FR_PLAYER_WALK, storage, size, mapping, entries, &asset, err, cap) &&
+        fr_beaver_frame_layout(&asset, frame, &layout);
+    bool found = false;
+    if (okay) for (uint32_t texel = 0; texel < FR_BEAVER_PIXELS; ++texel) {
+        if (mapping[frame * FR_BEAVER_PIXELS + texel] != source) continue;
+        uint32_t column = texel % FR_BEAVER_WIDTH;
+        if (player.facing < 0) column = FR_BEAVER_WIDTH - 1u - column;
+        int64_t sx = (body.chunk.x - status.origin.x) * DC_CHUNK_SIDE -
+            status.offset_x + body.body.x_fp / (int32_t)DC_FLUID_FULL +
+            column - binding.rest_origin_x;
+        int64_t sy = (body.chunk.y - status.origin.y) * DC_CHUNK_SIDE -
+            status.offset_y + body.body.y_fp / (int32_t)DC_FLUID_FULL +
+            texel / FR_BEAVER_WIDTH + binding.height - layout.foot_baseline;
+        if (sx >= 0 && sx < VIEW_WIDTH && sy >= 0 && sy < VIEW_HEIGHT) {
+            *x = (uint32_t)sx;
+            *y = (uint32_t)sy;
+            found = true;
+        }
+        break;
+    }
+    free(mapping);
+    free(storage);
+    return found;
+}
+
+static void test_wet_robe_darkening_follows_the_owner_across_walk_poses(void) {
+    enum { ROBE_X = 17, ROBE_Y = 20, ROBE_SOURCE = ROBE_Y * FR_BEAVER_WIDTH + ROBE_X + 1 };
+    char directory[] = "build/player_runtime_wetting_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    uint32_t surface = 96;
+    dc_ground_profile_t ground = {.width = 1, .soil_depth = 1, .surface = &surface};
+    dc_level_view_t *v = dc_level_view_create_ground(directory, 314, &ground, err, sizeof(err));
+    ASSERT_TRUE(v && dc_level_view_pan_pixels(v, 0, -INITIAL_CHUNK_Y * DC_CHUNK_SIDE) &&
+                dc_level_view_wait_visible(v, 120000, err, sizeof(err)) &&
+                dc_players_enable_at(v, 80, 24, false, err, sizeof(err)));
+    fr_beaver_source_t material;
+    ASSERT_TRUE(fr_beaver_source(ROBE_SOURCE, &material));
+    ASSERT_EQ(material.region, FR_BEAVER_ROBE);
+    SDL_Event move = {.key = {.type = SDL_KEYDOWN, .keysym.scancode = SDL_SCANCODE_D}};
+    ASSERT_TRUE(dc_players_event(v, &move));
+    dc_players_frame_time(v, .12);
+    ASSERT_TRUE(dc_players_step(v, 1.f/60.f, err, sizeof(err)) && dc_level_view_tick(v, err, sizeof(err)));
+    uint32_t wet_x, wet_y, dry_color;
+    ASSERT_TRUE(walk_source_pixel(v, ROBE_SOURCE, &wet_x, &wet_y, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pixel(v, wet_x, wet_y, &dry_color, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(v, wet_x, wet_y, 0, DC_MATERIAL_WATER, err, sizeof(err)) &&
+                fr_thermal_gpu_step(dc_level_view_gpu(v), .75f, err, sizeof(err)));
+    fr_player_t player;
+    fr_beaver_body_t body;
+    ASSERT_TRUE(dc_players_status(v, 0, &player, &body));
+    fr_reactive_record_t wet, turned;
+    bool found = false;
+    uint32_t rest_x = ROBE_X - body.rest_origin_x, rest_y = ROBE_Y - body.rest_origin_y;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(dc_level_view_gpu(v), body.binding.body_id, rest_x,
+                                          rest_y, &wet, &found, err, sizeof(err)) && found);
+    ASSERT_TRUE(wet.state.bound_water_fp > 0);
+    move.type = SDL_KEYUP;
+    ASSERT_TRUE(dc_players_event(v, &move));
+    move.key.type = SDL_KEYDOWN;
+    move.key.keysym.scancode = SDL_SCANCODE_A;
+    ASSERT_TRUE(dc_players_event(v, &move));
+    dc_players_frame_time(v, .12);
+    ASSERT_TRUE(dc_players_step(v, 1.f/60.f, err, sizeof(err)) && dc_level_view_tick(v, err, sizeof(err)));
+    uint32_t turned_x, turned_y, wet_color;
+    ASSERT_TRUE(walk_source_pixel(v, ROBE_SOURCE, &turned_x, &turned_y, err, sizeof(err)));
+    ASSERT_TRUE(turned_x != wet_x);
+    ASSERT_TRUE(dc_level_view_pixel(v, turned_x, turned_y, &wet_color, err, sizeof(err)));
+    ASSERT_TRUE(((wet_color >> 16u) & 255u) < ((dry_color >> 16u) & 255u));
+    ASSERT_TRUE(fr_gpu_reactive_read_body(dc_level_view_gpu(v), body.binding.body_id, rest_x,
+                                          rest_y, &turned, &found, err, sizeof(err)) && found);
+    ASSERT_EQ(turned.state.parcel_id_low, wet.state.parcel_id_low);
+    ASSERT_EQ(turned.state.parcel_id_high, wet.state.parcel_id_high);
+    ASSERT_EQ(turned.state.bound_water_fp, wet.state.bound_water_fp);
+    ASSERT_TRUE(dc_level_view_destroy(v, err, sizeof(err)));
+    PASS();
+}
+
 int main(void) {
     RUN(test_enabling_player_admits_only_the_player_body);
     RUN(test_editor_camera_holds_its_manual_position);
     RUN(test_real_app_keyboard_drives_body_and_animation);
     RUN(test_fire_ray_mode_uses_supplied_artwork_while_moving);
+    RUN(test_wet_robe_darkening_follows_the_owner_across_walk_poses);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
