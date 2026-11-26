@@ -452,11 +452,12 @@ static void test_painted_water_soaks_a_wood_body(void) {
     dc_gpu_destroy(gpu);
     PASS();
 }
-static void test_delayed_greek_load_ignites_the_launcher_ensemble(void) {
+static void check_delayed_greek_launcher(const uint32_t *seeds, uint32_t count,
+                                         uint32_t seconds, uint32_t minimum) {
     char err[256] = {0};
     uint32_t ignited = 0u;
-    const uint32_t seeds = 16u;
-    for (uint32_t seed = 0u; seed < seeds; seed++) {
+    for (uint32_t i = 0u; i < count; i++) {
+        uint32_t seed = seeds ? seeds[i] : i;
         dc_gpu_t *gpu = greek_grid();
         ASSERT_TRUE(gpu);
         dc_siege_scene_t scene = {0};
@@ -466,17 +467,15 @@ static void test_delayed_greek_load_ignites_the_launcher_ensemble(void) {
         ASSERT_TRUE(built);
         ASSERT_TRUE(greek_ticks(gpu, 2u, err, sizeof(err)));
         ASSERT_TRUE(dc_siege_scene_ignite_load(gpu, &scene, 0.f, err, sizeof(err)));
-        /* Ten exposed dry seconds in the sling. */
-        ASSERT_TRUE(greek_ticks(gpu, 10u, err, sizeof(err)));
+        ASSERT_TRUE(greek_ticks(gpu, seconds, err, sizeof(err)));
         uint32_t flaming = 0u;
         for (uint32_t py = 0u; py < 12u; py++)
             for (uint32_t px = 0u; px < 2u; px++) {
                 fr_reactive_record_t arm_parcel;
                 bool found = false;
-                if (fr_gpu_reactive_read_body(gpu, scene.arm_body, px, py,
-                                              &arm_parcel, &found, err,
-                                              sizeof(err)) &&
-                    found &&
+                ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, scene.arm_body, px, py,
+                                                      &arm_parcel, &found, err, sizeof(err)));
+                if (found &&
                     (arm_parcel.state.flags & FR_REACTIVE_FLAMING) != 0u)
                     flaming++;
             }
@@ -485,9 +484,13 @@ static void test_delayed_greek_load_ignites_the_launcher_ensemble(void) {
         dc_gpu_destroy(gpu);
     }
     printf("greek risk ensemble: %u of %u seeds ignited the launcher\n",
-           ignited, seeds);
-    ASSERT_TRUE(ignited * 4u >= seeds * 3u);
+           ignited, count);
+    ASSERT_TRUE(ignited >= minimum);
     PASS();
+}
+
+static void test_delayed_greek_load_ignites_the_launcher_ensemble(void) {
+    check_delayed_greek_launcher(NULL, 16u, 10u, 12u);
 }
 static void test_prompt_launch_and_fireproof_carrier_stay_safe(void) {
     char err[256] = {0};
@@ -718,9 +721,45 @@ static void test_greek_burn_corrodes_coins_across_reload(void) {
     dc_gpu_destroy(gpu);
     PASS();
 }
+static bool greek_parse_u32(const char *text, uint32_t *out) {
+    if (*text < '0' || *text > '9') return false;
+    char *end = NULL;
+    unsigned long long value = strtoull(text, &end, 10);
+    if (*end || value > UINT32_MAX) return false;
+    *out = (uint32_t)value;
+    return true;
+}
+
+static int greek_locked_launcher_risk(int argc, char **argv) {
+    uint32_t seconds, minimum;
+    if (argc < 5 || !greek_parse_u32(argv[2], &seconds) || seconds == 0u ||
+        !greek_parse_u32(argv[3], &minimum) || minimum == 0u || minimum > (uint32_t)(argc - 4)) {
+        fprintf(stderr, "Expected delay seconds, minimum ignitions, and locked seeds\n");
+        return 2;
+    }
+    uint32_t count = (uint32_t)argc - 4u;
+    uint32_t *seeds = calloc(count, sizeof(*seeds));
+    if (!seeds) return 2;
+    for (uint32_t i = 0u; i < count; i++) {
+        if (!greek_parse_u32(argv[4u + i], &seeds[i])) {
+            fprintf(stderr, "Invalid locked launcher seed %s\n", argv[4u + i]);
+            free(seeds);
+            return 2;
+        }
+    }
+    RUN(test_prompt_launch_and_fireproof_carrier_stay_safe);
+    printf("RUN  locked delayed launcher (%u seeds, require %u ignitions)\n", count, minimum);
+    check_delayed_greek_launcher(seeds, count, seconds, minimum);
+    printf("%d passed, %d failed\n", g_pass, g_fail);
+    free(seeds);
+    return g_fail ? 1 : 0;
+}
+
 int main(int argc, char **argv) {
     mkdir("build/screenshots", 0777);
     greek_install_stop();
+    if (argc >= 2 && strcmp(argv[1], "--locked-risk") == 0)
+        return greek_locked_launcher_risk(argc, argv);
     if (argc == 2 && strcmp(argv[1], "--corrode-contact") == 0) {
         RUN(test_stationary_greek_film_corrodes_clean_pool_samples);
         printf("%d passed, %d failed\n", g_pass, g_fail);

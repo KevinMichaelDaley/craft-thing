@@ -2062,6 +2062,12 @@ build/greek_siege_tests: tests/app/greek_siege_tests.c Makefile src/app/siege_sc
 test_greek_siege: build/greek_siege_tests
 	./build/greek_siege_tests --stage
 	./build/greek_siege_tests --douse-preflight
+.PHONY: test_greek_siege_locked_risk
+test_greek_siege_locked_risk: build/greek_siege_tests
+	python3 -c 'import json, subprocess; \
+	    fixture = json.load(open("assets/fixtures/fire_smoke_v1.json"))["scenes"]["greek_siege"]; \
+	    args = [fixture["delayed_launch_seconds"], fixture["minimum_launcher_ignitions"], *fixture["risk_seeds"]]; \
+	    subprocess.run(["./build/greek_siege_tests", "--locked-risk", *map(str, args)], check=True)'
 test: test_greek_siege
 .PHONY: test_bulk_phase test_bulk_phase_gpu test_bulk_rheology
 test: test_bulk_phase test_bulk_phase_gpu test_bulk_rheology

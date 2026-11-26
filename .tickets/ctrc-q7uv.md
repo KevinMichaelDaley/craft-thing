@@ -1,6 +1,6 @@
 ---
 id: ctrc-q7uv
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-26T14:48:24Z
@@ -21,3 +21,9 @@ Measure sustained contact at multiple supported cadences and preserve the finite
 ## Acceptance Criteria
 
 Locked equivalent-time body contacts transfer the same film and heat within documented Q16 precision across supported cadences. One-writer ownership, prompt release, delayed ignition, and fireproof controls stay green.
+
+## Notes
+
+**2026-11-26T15:17:10Z**
+
+RED moved 8002/3/5 Q16 oil, jelly and oxidizer in one second when called once and 32006/10/18 when called 60 times. The new elapsed-time law leaves 75 percent of the film after one continuous second. The Vulkan tests now move exactly 8002/3/5 at 1, 60 and 240 steps, with zero whole stock moved at the 1e-7-second probe. Reciprocal and competing offers preserve mass and enthalpy, and a live arena resize preserves fractional progress. Warm credits hold less than one Q16 unit per species, follow arena generations, and cold restores restart those credits at zero. Saved physical stock uses the existing format. Coating and residue checks, allocator rollback and address diagnostics passed. The launcher command now reads the parent fixture delay, threshold and all locked seeds directly.

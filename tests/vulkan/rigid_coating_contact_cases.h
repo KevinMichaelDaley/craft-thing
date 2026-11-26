@@ -159,16 +159,23 @@ static void test_rigid_coating_transfer_uses_elapsed_contact_time(void) {
     }
     for (uint32_t i = 0; i < samples; i++) {
         uint32_t donor = 2u * i;
+        const float short_step = 1e-7f;
+        const float remaining_step = (1.f - short_step) / steps[i];
         fr_reactive_state_t lit = original[donor];
         lit.flags |= FR_REACTIVE_COATING_FLAMING;
         ASSERT_TRUE(fr_gpu_reactive_seed_body(g, bodies[donor], 0, 0, &lit, err, sizeof(err)));
+        fr_reactive_record_t source, receiver;
+        bool found = false;
+        ASSERT_TRUE(fr_combustion_gpu_step(g, short_step, err, sizeof(err)));
+        ASSERT_TRUE(fr_gpu_reactive_read_body(g, bodies[donor + 1u], 0, 0, &receiver, &found, err, sizeof(err)) && found);
+        ASSERT_EQ(receiver.state.coating_oil_fuel_fp, 0u);
+        ASSERT_EQ(receiver.state.coating_jelly_fuel_fp, 0u);
+        ASSERT_EQ(receiver.state.coating_oxidizer_fp, 0u);
         for (uint32_t step = 0; step < steps[i]; step++) {
             if (i == samples - 1u && step == steps[i] / 2u)
                 ASSERT_TRUE(fr_gpu_reactive_reserve_import(g, 70u, err, sizeof(err)));
-            ASSERT_TRUE(fr_combustion_gpu_step(g, 1.f / steps[i], err, sizeof(err)));
+            ASSERT_TRUE(fr_combustion_gpu_step(g, remaining_step, err, sizeof(err)));
         }
-        fr_reactive_record_t source, receiver;
-        bool found = false;
         ASSERT_TRUE(fr_gpu_reactive_read_body(g, bodies[donor], 0, 0, &source, &found, err, sizeof(err)) && found);
         ASSERT_TRUE(fr_gpu_reactive_read_body(g, bodies[donor + 1u], 0, 0, &receiver, &found, err, sizeof(err)) && found);
         uint32_t received[3] = {receiver.state.coating_oil_fuel_fp, receiver.state.coating_jelly_fuel_fp,
