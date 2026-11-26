@@ -2,7 +2,7 @@
 id: ctgc-tteu
 status: in_progress
 deps: []
-links: [ctgeo-px2n]
+links: [ctgeo-px2n, ctgsb-juv5]
 created: 2026-11-26T16:31:27Z
 type: bug
 priority: 1
@@ -88,3 +88,7 @@ The RED fixture failed both explicit shaders with +0.082763672 Q16 of soot durin
 **2026-11-26T20:29:20Z**
 
 The still-running exact 8e45829e locked replay reached Greek second 583 with all 36 faces submerged, 300 Q16 fuel left, no exterior or mobile film, and chemical drift below 0.000013 Q16. The matched oil control starts only after the Greek run reaches depletion. A separate fully coupled tick refactor produced byte-identical bounded physical samples in both Greek and oil scenes.
+
+**2026-11-26T20:41:55Z**
+
+The first exact 8e45829e locked Greek trial reached POOL_END 816 after 48,960 accepted 60 Hz steps. It retained all 36 wet faces with zero exterior or mobile film, depleted fuel to 0 Q16 and measured +0.000012165 Q16 chemical drift. The first matched oil control is running the required 1,632-second interval. Saturated pigment decoding exposed by the full gas prefix is tracked separately in ctgsb-juv5.

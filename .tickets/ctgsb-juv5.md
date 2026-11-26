@@ -23,3 +23,7 @@ Seed fully saturated exhaust and mixed-carrier channels, return physically valid
 **2026-11-26T20:42:46Z**
 
 A native Vulkan regression compiled and failed at fr_gas_gpu_seed_chunk on physically valid fully saturated exhaust and mixed exhaust/soot channels. The unaltered full-suite prefix also failed five existing colored transport, seam, and valve cases at seed admission.
+
+**2026-11-26T20:45:16Z**
+
+A saturated channel that rounds to the nearest float above exact carrier stock now decodes to that carrier. Unsaturated pigment and raw checkpoint bytes retain their original representation. The new regression and both colored transport and both valve cases pass on NVIDIA. An invalid seed and a checkpoint one float beyond the representable saturated value remain rejected.
