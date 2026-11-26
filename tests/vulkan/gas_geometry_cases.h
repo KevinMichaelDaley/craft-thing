@@ -522,9 +522,12 @@ static void test_zero_void_sealed_source_retains_pending_stock(void) {
         volume[i]=wall?0.:1.;input[i]=wall?(fr_gas_state_t){0}:reference_air(model,.0012,300,0);
     }
     volume[at]=0.;input[at]=reference_air(model,.012,500,0);
+    input[at+2u]=reference_air(model,.0012,310,.5);
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
         dc_gpu_set_page(g,0,0,0,err,sizeof(err))&&fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err))&&
         fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&
+        fr_gas_gpu_set_gravity(g,900.f,err,sizeof(err))&&
+        fr_gas_gpu_set_wind(g,1.f,err,sizeof(err))&&
         fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&
         fr_gas_gpu_export_checkpoint(g,0,out,err,sizeof(err))&&
         fr_gas_gpu_import_checkpoint(g,0,out,err,sizeof(err))&&
@@ -535,6 +538,9 @@ static void test_zero_void_sealed_source_retains_pending_stock(void) {
     ASSERT_TRUE(fabs(out->cells[at][1]-input[at].species[1])<1e-9);
     ASSERT_TRUE(fabs((double)out->cells[at][5]+out->cells[at][11]+out->cells[at][14]-
         input[at].energy)<1e-8);
+    ASSERT_EQ(out->cells[at][6],0.f);
+    ASSERT_EQ(out->cells[at][7],0.f);
+    ASSERT_EQ(out->cells[at][15],0.f);
     free(out);free(volume);free(input);free(chunk);dc_gpu_destroy(g);PASS();
 }
 #endif
