@@ -18,3 +18,9 @@ test_player_split samples absolute desktop coordinates using SDL_GetKeyboardFocu
 
 Verify the actual rendered reticle in its owning viewport without using global keyboard focus or root-window pixel sampling for the assertion. Verify the second viewport and disconnected player remain clear, and exercise the test while another window is present.
 
+
+## Notes
+
+**2026-11-26T10:23:28Z**
+
+The Vulkan presenter adds the reticle to the swapchain image after the viewport blits. dc_level_view_pixels reads the earlier scene image, so a window-independent pixel check needs a sample after reticle composition.
