@@ -690,6 +690,7 @@ int main(void) {
     RUN(test_zero_void_submerged_source_nucleates_gpu_pocket);
     RUN(test_zero_void_sealed_source_retains_pending_stock);
     RUN(test_native_partial_void_contraction_displaces_mixture_without_cut_cell_pressure_spikes);
+    RUN(test_repeated_water_void_changes_preserve_closed_exhaust_stock);
     RUN(test_native_valve_only_refresh_preserves_restored_physical_void);
     RUN(test_native_massless_underflow_energy_reconciles_without_erasing_tiny_colored_gas);
     RUN(test_compact_practical_profile_admits_without_denorm_control);
