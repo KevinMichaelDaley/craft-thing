@@ -302,7 +302,7 @@ test: test_bonfire_scene
 test_bonfire_scene: build/bonfire_scene_tests
 	./build/bonfire_scene_tests
 NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/shutdown.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(THERMAL_BENCH_SRC) $(GPU_SRC) src/world/chunk.c src/world/stream.c src/fire/bulk_phase_packet.c src/world/generate.c
-PLAYER_RUNTIME_SRC = src/app/player_session.c src/app/player_clock.c src/app/smoke_profile.c src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c src/player/fire_ray_gpu.c src/player/input.c src/player/input_sdl.c src/player/control.c src/player/body_gpu.c src/player/manipulation.c src/player/hotbar.c src/player/abilities.c src/player/chew.c src/player/chew_world.c src/player/placement.c src/vulkan/player_drive_gpu.c $(PLAYER_SRC) $(BEAVER_SRC)
+PLAYER_RUNTIME_SRC = src/app/player_session.c src/app/player_view.c src/app/player_clock.c src/app/smoke_profile.c src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c src/player/fire_ray_gpu.c src/player/input.c src/player/input_sdl.c src/player/control.c src/player/body_gpu.c src/player/manipulation.c src/player/hotbar.c src/player/abilities.c src/player/chew.c src/player/chew_world.c src/player/placement.c src/vulkan/player_drive_gpu.c $(PLAYER_SRC) $(BEAVER_SRC)
 NATIVE_SRC += $(PLAYER_RUNTIME_SRC)
 build/rigid_dynamics_visual_tests: tests/app/rigid_dynamics_visual_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
@@ -1574,7 +1574,7 @@ build/scene_ground_tests: tests/world/scene_ground_tests.c $(GENERATE_OBJ) $(CHU
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GENERATE_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/scene_ground_tests
 build/dungeoncraft: src/app/prop_scene.c src/app/prop_scene.h
-build/dungeoncraft build/controls_tests: $(PLAYER_RUNTIME_SRC) src/player/beaver_imported.h
+build/dungeoncraft build/controls_tests: $(PLAYER_RUNTIME_SRC) src/app/player_view.h src/player/beaver_imported.h
 build/performance/src/player/beaver_art.o: src/player/beaver_imported.h
 
 # Offline authoring and preloaded prop reader checks (no Vulkan device needed).
@@ -2221,9 +2221,9 @@ build/structural_store_channels.o: src/vulkan/structural_store_channels.c src/vu
 build/gpu.o build/chunk_gpu.o build/structural_store_gpu.o: src/vulkan/reactive_checkpoint_gpu.h src/vulkan/structural_store_channels.h
 build/thermal_gpu_display_tests: tests/vulkan/thermal_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
-build/thermal_bench_display_tests: tests/app/thermal_bench_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level.c src/app/session.c src/app/player_session.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+build/thermal_bench_display_tests: tests/app/thermal_bench_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level.c $(filter-out build/performance/src/app/main.o build/performance/src/app/level.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(filter-out build/performance/src/app/main.o build/performance/src/app/level.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
-build/bonfire_display_tests: tests/app/bonfire_tests.c src/app/level.c src/app/player_session.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/combustion.comp.spv
+build/bonfire_display_tests: tests/app/bonfire_tests.c src/app/level.c $(filter-out build/performance/src/app/main.o build/performance/src/app/level.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/combustion.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(filter-out build/performance/src/app/main.o build/performance/src/app/level.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/thermal_water_display_tests: tests/vulkan/thermal_water_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)

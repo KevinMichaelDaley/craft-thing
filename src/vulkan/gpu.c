@@ -574,10 +574,10 @@ void dc_gpu_set_presentation_reticle(dc_gpu_t *gpu, uint32_t viewport,
 }
 
 bool dc_gpu_set_presentation_focus(dc_gpu_t *gpu,dc_presentation_focus_t focus) {
-    gpu->presentation_split_count = 0u;
     dc_presentation_layout_t layout;
     if(!gpu||!dc_presentation_layout(gpu->view_width,gpu->view_height,gpu->swap_extent.width,
         gpu->swap_extent.height,gpu->display_zoom,focus,&layout)) return false;
+    gpu->presentation_split_count = 0u;
     gpu->presentation_focus=focus;return true;
 }
 
