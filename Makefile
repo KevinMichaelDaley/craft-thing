@@ -1925,6 +1925,12 @@ build/player_chew_app_tests: tests/app/player_chew_tests.c $(filter-out build/pe
 test_player_chew_app: build/player_chew_app_tests
 	./build/player_chew_app_tests
 test: test_player_chew_app
+build/play_spawn_tests: tests/app/play_spawn_tests.c build/dungeoncraft_quarter_native
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+.PHONY: test_play_spawn
+test_play_spawn: build/play_spawn_tests
+	./build/play_spawn_tests
+test: test_play_spawn
 build/player_split_tests: tests/app/player_split_tests.c $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_player_split
