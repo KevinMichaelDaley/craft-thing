@@ -27,3 +27,7 @@ Exact 486563d0 make test exited 2 at Makefile:871. The same revision has an isol
 **2026-11-26T23:32:27Z**
 
 RED links and drives the real halo fixture with the Vulkan driver deliberately unavailable. It exits with four setup failures, but the assertions suppress the Vulkan error and also print four OK lines. The regression fails on the absent loader diagnostic. The linked fixture additionally enforces one live context for the next native replay.
+
+**2026-11-26T23:36:34Z**
+
+The controlled loader failure now reports the actual Vulkan error on every failed case, with no false OK lines. Scalar and particle fixtures release the split-grid context before opening the reference grid and keep the downloaded endpoints for the same parity checks. Assertion exits release their active context. The executable enforces the single-live-context budget. The diagnostic, host player, tool, recipe and shader checks passed. The historical blind failure still requires the stable-memory NVIDIA recheck.

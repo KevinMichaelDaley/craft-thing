@@ -9,7 +9,8 @@ class HaloFixtureTests(unittest.TestCase):
     def test_context_creation_failure_reports_vulkan_error(self):
         with tempfile.TemporaryDirectory() as directory:
             missing_driver = str(pathlib.Path(directory) / "missing.json")
-            env = dict(os.environ, VK_DRIVER_FILES=missing_driver, VK_ICD_FILENAMES=missing_driver)
+            env = dict(os.environ, DC_VK_VALIDATE="0", VK_DRIVER_FILES=missing_driver,
+                       VK_ICD_FILENAMES=missing_driver)
             output = subprocess.run(["./build/halo_tests"], env=env, text=True,
                                     capture_output=True, check=False)
 
