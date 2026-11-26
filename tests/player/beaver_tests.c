@@ -77,6 +77,56 @@ static void test_each_requested_frame_has_a_distinct_pose(void) {
     PASS();
 }
 
+static void test_walk_robe_stays_connected_between_rows(void) {
+    ASSERT_TRUE(build(FR_PLAYER_WALK));
+    for (uint32_t frame = 0; frame < g_asset.prop.frame_count; frame++) {
+        uint64_t previous = 0;
+        uint32_t last_row = 0;
+        for (uint32_t y = 0; y < FR_BEAVER_HEIGHT; y++) {
+            uint64_t robe = 0;
+            for (uint32_t x = 0; x < FR_BEAVER_WIDTH; x++) {
+                fr_beaver_source_t source;
+                uint32_t at = frame * FR_BEAVER_PIXELS + y * FR_BEAVER_WIDTH + x;
+                if (fr_beaver_source(g_mapping[at], &source) && source.region == FR_BEAVER_ROBE)
+                    robe |= UINT64_C(1) << x;
+            }
+            if (!robe) continue;
+            if (previous) {
+                ASSERT_EQ(y, last_row + 1);
+                ASSERT_TRUE((robe & previous) != 0);
+            }
+            previous = robe;
+            last_row = y;
+        }
+        ASSERT_TRUE(previous != 0);
+    }
+    PASS();
+}
+
+static void test_walk_paws_change_separation_without_changing_owners(void) {
+    enum { PAW_ROW = 30, NEAR_PAW_X = 18, FAR_PAW_X = 26 };
+    ASSERT_TRUE(build(FR_PLAYER_IDLE));
+    const uint32_t near_paw = g_mapping[PAW_ROW * FR_BEAVER_WIDTH + NEAR_PAW_X];
+    const uint32_t far_paw = g_mapping[PAW_ROW * FR_BEAVER_WIDTH + FAR_PAW_X];
+    ASSERT_TRUE(near_paw && far_paw && near_paw != far_paw);
+    ASSERT_TRUE(build(FR_PLAYER_WALK));
+    bool narrower = false, wider = false;
+    for (uint32_t frame = 0; frame < g_asset.prop.frame_count; frame++) {
+        uint32_t near_x = FR_BEAVER_WIDTH, far_x = FR_BEAVER_WIDTH;
+        for (uint32_t x = 0; x < FR_BEAVER_WIDTH; x++) {
+            uint32_t source = g_mapping[frame * FR_BEAVER_PIXELS + PAW_ROW * FR_BEAVER_WIDTH + x];
+            if (source == near_paw) near_x = x;
+            if (source == far_paw) far_x = x;
+        }
+        ASSERT_TRUE(near_x < far_x && far_x < FR_BEAVER_WIDTH);
+        const uint32_t separation = far_x - near_x;
+        narrower |= separation < FAR_PAW_X - NEAR_PAW_X;
+        wider |= separation > FAR_PAW_X - NEAR_PAW_X;
+    }
+    ASSERT_TRUE(narrower && wider);
+    PASS();
+}
+
 static void test_flip_preserves_material_and_canonical_pixel_identity(void) {
     ASSERT_TRUE(build(FR_PLAYER_CHEW));
     for (uint32_t f=0;f<8;f++) for (uint32_t p=0;p<FR_BEAVER_PIXELS;p++) {
@@ -255,6 +305,8 @@ int main(void) {
     RUN(test_standard_prop_pipeline_and_exact_clip_timing);
     RUN(test_every_visible_pixel_has_supported_physics_and_appearance);
     RUN(test_each_requested_frame_has_a_distinct_pose);
+    RUN(test_walk_robe_stays_connected_between_rows);
+    RUN(test_walk_paws_change_separation_without_changing_owners);
     RUN(test_flip_preserves_material_and_canonical_pixel_identity);
     RUN(test_source_owner_coordinates_survive_frames_and_player_motion);
     RUN(test_invalid_inputs_preserve_buffers_and_outputs);
