@@ -107,14 +107,14 @@ must not duplicate press actions. Disconnect/focus loss must clear intents.
   cold import helper. Neither is a gameplay animated-player API. Add the runtime
   adapter against actual GPU body/reactive/render storage with tests before
   claiming a visible reactive player.
-- The current physical registry has wood and other world materials but no cloth
-  or fur, and every four-bit body material ID is assigned. For the placeholder,
-  distinct fur/robe/hat/tail regions explicitly alias the existing wettable,
-  combustible wood profile; teeth use stone. These reversible provisional
-  coefficients preserve supported physical and reactive contracts without
-  truncating IDs or widening the body format in an unrelated change. The native
-  asset manifest records all aliases. Actual material response still needs live
-  simulation and rendering acceptance; an assigned fuel profile is not that proof.
+- Newly admitted beavers use separate reaction profiles for fur, cloth, and tail.
+  The robe and hat share the cloth profile. The packed four-bit classes still
+  define contact geometry and reference dry mass. The reaction profile belongs
+  to the persistent parcel at each canonical body texel, so the same fuel,
+  moisture, and heat follow the visible source through changes in pose and facing.
+  Checkpoints keep the profile and quantities recorded by the save, including
+  the original wood profile in older saves. See the native asset manifest for
+  the region mappings and the fire fixture manifest for the gameplay coefficients.
 - `dc_level_view_t` owns one GPU world and one camera today. Split-screen must
   render multiple cameras over that same stepped world, not create independently
   simulated level views. The current editor also consumes A/D through WASD pan;
