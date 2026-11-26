@@ -23,3 +23,7 @@ All standalone and fused explicit shader paths traverse line cells in physical o
 **2026-11-26T19:23:32Z**
 
 The compiled X-wide-local shader at 9513f4f3 calls gas_explicit_run before the first store of transport_pass. The explicit shader call-graph regression built and went RED on all 14 variants. All 14 now pass, including generic and fixed-axis fused shaders, the local-stage shaders, and standalone variants. The four existing shader-memory checks and 26 gas numeric and fixture cases passed. Native comparisons and the full suite are pending.
+
+**2026-11-26T19:28:41Z**
+
+Native gas transport checks passed on the refactor for standalone explicit, generic fused, fixed-axis fused, and fixed-axis cached local stages. Each profile passed the explicit-flux comparison, stationary diagonal transport, and the small- and large-step dormant-face conservation cases, for 16 total passes and no skips. The whole-project make test is still queued on b2710a77.

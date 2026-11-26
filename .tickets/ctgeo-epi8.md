@@ -1,6 +1,6 @@
 ---
 id: ctgeo-epi8
-status: open
+status: in_progress
 deps: []
 links: [ctsg-6060]
 created: 2026-11-26T19:23:42Z
@@ -16,3 +16,9 @@ The 9513f4f3 Vulkan publication suite stops the lazy-clear comparison at gas_mul
 ## Acceptance Criteria
 
 Restore the existing lazy and eager admission checks and the exact active, quiet, and dormant stock comparison. Retain pressure correctness, dispatch and capability gates.
+
+## Notes
+
+**2026-11-26T19:28:15Z**
+
+The helper currently configures multigrid, fused axis and temporal SOR. Neither sparse RHS nor sparse large-line mode is set by the helper. The production lazy clear requires sparse RHS, a valid existing matrix, and sparse large dispatch for large transport. Compare the fixture with these prerequisites explicitly set before changing production code.
