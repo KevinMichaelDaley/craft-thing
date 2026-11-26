@@ -1,121 +1,128 @@
 #define _POSIX_C_SOURCE 200809L
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/stat.h>
 
+#include "dungeoncraft/material_density.h"
 #include "../../src/app/player_session.h"
 #include "../../src/app/view_config.h"
-#include "../../src/vulkan/gpu_internal.h"
 
-static int g_pass,g_fail;
-#define RUN(fn) do {printf("RUN %s\n",#fn);fflush(stdout);fn();} while(0)
-#define ASSERT_TRUE(x) do {if(!(x)){printf("FAIL %s:%d: %s (%s)\n",__FILE__,__LINE__,#x,err);g_fail++;return;} } while(0)
-#define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
-#define PASS() g_pass++
+static int g_pass, g_fail;
 static char err[256];
-static dc_level_view_t *v=NULL;
+static dc_level_view_t *view;
 
-static bool capture(const char *path) {
-    mkdir("build/agents",0777);mkdir("build/agents/beaver-player",0777);
-    mkdir("build/agents/beaver-player/chew",0777);
-    uint32_t *pixels=malloc((size_t)VIEW_WIDTH*VIEW_HEIGHT*4);
-    bool okay=pixels&&dc_level_view_pixels(v,pixels,VIEW_WIDTH*VIEW_HEIGHT,err,sizeof(err));
-    SDL_Surface *surface=okay?SDL_CreateRGBSurfaceWithFormatFrom(pixels,VIEW_WIDTH,VIEW_HEIGHT,32,VIEW_WIDTH*4,SDL_PIXELFORMAT_ABGR8888):NULL;
-    okay=surface&&SDL_SaveBMP(surface,path)==0;
-    if(surface) SDL_FreeSurface(surface);
-    free(pixels);return okay;
+#define RUN(fn) do {print_run(#fn);fn();cleanup();} while (0)
+#define ASSERT_TRUE(e) do {if (!(e)) {printf("FAIL %d: %s [%s]\n",__LINE__,#e,err);g_fail++;return;}} while (0)
+#define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
+#define ASSERT_INT_EQ(a,b) ASSERT_EQ((int)(a),(int)(b))
+#define PASS() g_pass++
+
+static void print_run(const char *name) {
+    printf("RUN %s\n", name);
+    fflush(stdout);
 }
-static void test_chewing_credits_inventory_in_the_app(void) {
-    char directory[]="build/player_chew_XXXXXX";
+
+static void cleanup(void) {
+    if (view && !dc_level_view_destroy(view, err, sizeof(err))) {
+        printf("FAIL closing level: %s\n", err);
+        g_fail++;
+    }
+    view = NULL;
+}
+
+static fr_player_point_t world_point(const dc_level_view_status_t *camera,
+                                     uint32_t x, uint32_t y) {
+    dc_chunk_coord_t chunk;
+    uint32_t lx, ly;
+    dc_cell_address(x + camera->offset_x, y + camera->offset_y, &chunk, &lx, &ly);
+    return (fr_player_point_t){{camera->origin.x + chunk.x,
+                                camera->origin.y + chunk.y}, (float)lx, (float)ly};
+}
+
+static uint16_t get_material(fr_player_point_t point) {
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    if (!chunk) return UINT16_MAX;
+    bool okay = dc_level_view_chunk(view, point.chunk, chunk, err, sizeof(err));
+    uint32_t local = (uint32_t)point.y * DC_CHUNK_SIDE + (uint32_t)point.x;
+    uint16_t material = okay ? chunk->cells[local].material : UINT16_MAX;
+    free(chunk);
+    return material;
+}
+
+static bool action_step(void) {
+    dc_players_frame_time(view, .15);
+    return dc_players_step(view, 1.f / 60.f, err, sizeof(err));
+}
+
+static void test_chewing_obeys_live_player_reach_and_drives_animation(void) {
+    char directory[] = "build/player_chew_XXXXXX";
     ASSERT_TRUE(mkdtemp(directory));
-    uint32_t surface=96;
-    dc_ground_profile_t ground={.width=1,.soil_depth=1,.surface=&surface};
-    v=dc_level_view_create_ground(directory,314,&ground,err,sizeof(err));ASSERT_TRUE(v);
-    ASSERT_TRUE(dc_level_view_pan_pixels(v,0,128));
-    ASSERT_TRUE(dc_level_view_wait_visible(v,120000,err,sizeof(err)));
-    ASSERT_TRUE(dc_players_enable(v,err,sizeof(err)));
-    fr_player_t p;fr_beaver_body_t binding;
-    ASSERT_TRUE(dc_players_status(v,0,&p,&binding));
-    /* Locate the beaver in viewport pixels and raise a wood pillar nearby. */
-    dc_gpu_world_body_t self;
-    ASSERT_TRUE(dc_gpu_read_world_body(dc_level_view_gpu(v),binding.binding.body_id,&self,err,sizeof(err)));
-    int64_t origin_x,origin_y;int32_t camera_x,camera_y;
-    dc_level_view_camera(v,&origin_x,&origin_y,&camera_x,&camera_y);
-    float px=(float)self.chunk.x*64.f+self.body.x_fp/65536.f-(float)origin_x*64.f-(float)camera_x;
-    float py=(float)self.chunk.y*64.f+self.body.y_fp/65536.f-(float)origin_y*64.f-(float)camera_y;
-    uint32_t pillar_x=(uint32_t)px+20u,pillar_y=(uint32_t)py;
-    dc_gpu_t *gpu=dc_level_view_gpu(v);
-    if(pillar_x>=VIEW_WIDTH-2u) pillar_x=VIEW_WIDTH-3u;
-    if(pillar_y>=VIEW_HEIGHT-2u) pillar_y=VIEW_HEIGHT-3u;
-    ASSERT_TRUE(dc_gpu_paint_material(gpu,pillar_x,pillar_y,3u,DC_MATERIAL_WOOD,err,sizeof(err)));
-    {
-        dc_chunk_t *scan=calloc(1,sizeof(*scan));
-        for(uint32_t slot=0u;slot<64u;slot++) {
-            const uint32_t *registry=dc_gpu_structural_data(gpu)+32u+slot*8u;
-            if(!registry[5]) continue;
-            ASSERT_TRUE(dc_gpu_download_chunk(gpu,slot,scan,err,sizeof(err)));
-            unsigned wood=0u;
-            for(uint32_t c=0;c<4096u;c++)
-                if(scan->cells[c].material==DC_MATERIAL_WOOD) wood++;
-            if(wood)
-                printf("chunk %lld,%lld slot %u wood cells %u\n",
-                    (long long)scan->coord.x,(long long)scan->coord.y,slot,wood);
-        }
-        free(scan);
-    }
-    /* Pin the aim at the painted pillar's real cell: scan the resident
-     * chunks for the wood the brush just placed. */
-    fr_player_point_t aim={0};
-    {
-        dc_chunk_t *scan=calloc(1,sizeof(*scan));
-        for(uint32_t slot=0u;slot<64u&&!aim.x&&slot<64u;slot++) {
-            const uint32_t *registry=dc_gpu_structural_data(gpu)+32u+slot*8u;
-            if(!registry[5]) continue;
-            ASSERT_TRUE(dc_gpu_download_chunk(gpu,slot,scan,err,sizeof(err)));
-            for(uint32_t c=0;c<4096u&&!aim.x;c++)
-                if(scan->cells[c].material==DC_MATERIAL_WOOD) {
-                    aim.chunk=scan->coord;
-                    aim.x=(float)(c%64u);aim.y=(float)(c/64u);
-                }
-        }
-        free(scan);
-    }
-    ASSERT_TRUE(aim.x>0.f);
-    printf("aim pinned at chunk %lld,%lld cell %.0f,%.0f\n",
-        (long long)aim.chunk.x,(long long)aim.chunk.y,aim.x,aim.y);
-    ASSERT_TRUE(dc_players_aim_override(v,0,&aim,err,sizeof(err)));
-    SDL_Event e={.type=SDL_KEYDOWN};e.key.keysym.scancode=SDL_SCANCODE_C;
-    ASSERT_TRUE(dc_players_event(v,&e));
-    ASSERT_TRUE(capture("build/agents/beaver-player/chew/chew-start.bmp"));
-    /* One long deterministic frame completes a bite immediately, before
-     * background streaming can regenerate the painted pillar. */
-    for(unsigned n=0;n<6;n++) {
-        dc_gpu_paint_material(dc_level_view_gpu(v),pillar_x,pillar_y,3u,
-            DC_MATERIAL_WOOD,err,sizeof(err));
-        dc_players_frame_time(v,0.5);
-        ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
-    }
-    fr_player_inventory_t early;
-    ASSERT_TRUE(dc_players_inventory(v,0,&early));
-    printf("chew early inventory wood %llu fp\n",
-        (unsigned long long)early.mass_fp[DC_ITEM_WOOD]);
-    ASSERT_TRUE(early.mass_fp[DC_ITEM_WOOD]>0u);
-    for(unsigned n=0;n<240;n++) {
-        dc_players_frame_time(v,1./60.);
-        ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
-    }
-    e.type=SDL_KEYUP;ASSERT_TRUE(dc_players_event(v,&e));
+    uint32_t surface = 96;
+    dc_ground_profile_t ground = {.width = 1, .soil_depth = 1, .surface = &surface};
+    view = dc_level_view_create_ground(directory, 314, &ground, err, sizeof(err));
+    ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, 0, -INITIAL_CHUNK_Y * 64));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 120000, err, sizeof(err)));
+    ASSERT_TRUE(dc_players_enable_at(view, 64, 40, false, err, sizeof(err)));
+
+    const fr_player_point_t near = {{1, 0}, 9.f, 40.f};
+    const fr_player_point_t far = {{2, 0}, 9.f, 40.f};
+    dc_level_view_status_t camera;
+    ASSERT_TRUE(dc_level_view_status(view, &camera));
+    ASSERT_TRUE(dc_level_view_paint(view, 73u, 40u, 0u, DC_MATERIAL_WOOD,
+                                    err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 137u, 40u, 0u, DC_MATERIAL_WOOD,
+                                    err, sizeof(err)));
+    const fr_player_point_t nearby_cell = world_point(&camera, 73u, 40u);
+    const fr_player_point_t distant_cell = world_point(&camera, 137u, 40u);
+    ASSERT_EQ(nearby_cell.chunk.x, near.chunk.x);
+    ASSERT_EQ(distant_cell.chunk.x, far.chunk.x);
+    ASSERT_EQ(get_material(nearby_cell), DC_MATERIAL_WOOD);
+    ASSERT_EQ(get_material(distant_cell), DC_MATERIAL_WOOD);
+
+    SDL_Event key = {.type = SDL_KEYDOWN};
+    key.key.keysym.scancode = SDL_SCANCODE_C;
+    ASSERT_TRUE(dc_players_aim_override(view, 0, &distant_cell, err, sizeof(err)));
+    ASSERT_TRUE(dc_players_event(view, &key));
+    for (unsigned tick = 0; tick < 5; ++tick) ASSERT_TRUE(action_step());
+
     fr_player_inventory_t inv;
-    ASSERT_TRUE(dc_players_inventory(v,0,&inv));
-    printf("chew app inventory wood %llu fp\n",(unsigned long long)inv.mass_fp[DC_ITEM_WOOD]);
-    ASSERT_TRUE(inv.mass_fp[DC_ITEM_WOOD]>0u);
-    ASSERT_TRUE(capture("build/agents/beaver-player/chew/chew-end.bmp"));
-    dc_level_view_destroy(v,err,sizeof(err));v=NULL;
+    fr_player_t player;
+    fr_beaver_body_t body;
+    ASSERT_TRUE(dc_players_inventory(view, 0, &inv));
+    ASSERT_EQ(fr_player_inventory_mass(&inv, DC_ITEM_WOOD), 0u);
+    ASSERT_EQ(get_material(distant_cell), DC_MATERIAL_WOOD);
+    ASSERT_TRUE(dc_players_status(view, 0, &player, &body));
+    ASSERT_INT_EQ(player.action, FR_PLAYER_IDLE);
+
+    ASSERT_TRUE(dc_players_aim_override(view, 0, &nearby_cell, err, sizeof(err)));
+    ASSERT_TRUE(action_step());
+    ASSERT_TRUE(dc_players_status(view, 0, &player, &body));
+    ASSERT_INT_EQ(player.action, FR_PLAYER_CHEW);
+    ASSERT_TRUE(!player.chew_recovering);
+    ASSERT_EQ(get_material(nearby_cell), DC_MATERIAL_WOOD);
+
+    key.type = SDL_KEYUP;
+    ASSERT_TRUE(dc_players_event(view, &key));
+    ASSERT_TRUE(action_step());
+    ASSERT_TRUE(dc_players_status(view, 0, &player, &body));
+    ASSERT_INT_EQ(player.action, FR_PLAYER_IDLE);
+    ASSERT_EQ(get_material(nearby_cell), DC_MATERIAL_WOOD);
+
+    key.type = SDL_KEYDOWN;
+    ASSERT_TRUE(dc_players_event(view, &key));
+    for (unsigned tick = 0; tick < 4; ++tick) ASSERT_TRUE(action_step());
+    ASSERT_TRUE(dc_players_inventory(view, 0, &inv));
+    ASSERT_EQ(fr_player_inventory_mass(&inv, DC_ITEM_WOOD),
+              (uint64_t)lround(DC_DENSITY_WOOD * DC_FLUID_FULL));
+    ASSERT_EQ(get_material(nearby_cell), DC_MATERIAL_AIR);
+    ASSERT_EQ(get_material(distant_cell), DC_MATERIAL_WOOD);
     PASS();
 }
+
 int main(void) {
-    printf("=== Player Chew App Tests ===\n\n");
-    RUN(test_chewing_credits_inventory_in_the_app);
-    printf("\nResults: %d passed, %d failed\n",g_pass,g_fail);
-    return g_fail?1:0;
+    printf("=== Player Chew App Tests ===\n");
+    RUN(test_chewing_obeys_live_player_reach_and_drives_animation);
+    printf("\nResults: %d passed, %d failed\n", g_pass, g_fail);
+    return g_fail ? 1 : 0;
 }

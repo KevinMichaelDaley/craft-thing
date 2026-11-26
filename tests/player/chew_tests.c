@@ -96,6 +96,22 @@ static void test_mass_changes_and_other_players_cannot_share_work(void) {
     ASSERT_EQ(a.work,100u);
     PASS();
 }
+static void test_empty_mass_and_replaced_material_cannot_commit(void) {
+    fr_chew_target_t target = wood(DC_MATERIAL_WOOD, 0, 1);
+    fr_chew_work_t work = {0};
+    bool ready;
+    ASSERT_TRUE(fr_chew_work_advance(&work, &target, 100, 100, true, &ready));
+    ASSERT_TRUE(!ready && !work.armed);
+
+    target = wood(DC_MATERIAL_WOOD, 1, 2);
+    ASSERT_TRUE(fr_chew_work_advance(&work, &target, UINT32_MAX, 100, true, &ready));
+    ASSERT_TRUE(ready);
+    fr_chew_target_t replacement = target;
+    replacement.material = DC_MATERIAL_STONE;
+    ASSERT_TRUE(!fr_chew_work_committed(&work, &replacement));
+    ASSERT_TRUE(fr_chew_work_committed(&work, &target));
+    PASS();
+}
 int main(void) {
     RUN(test_density_and_occupied_amount_control_required_work);
     RUN(test_equal_elapsed_work_is_cadence_independent);
@@ -103,5 +119,6 @@ int main(void) {
     RUN(test_stall_readiness_cannot_bank_multiple_bites_or_acknowledge_twice);
     RUN(test_invalid_arguments_are_transactional_and_nonwood_is_ineligible);
     RUN(test_mass_changes_and_other_players_cannot_share_work);
+    RUN(test_empty_mass_and_replaced_material_cannot_commit);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }
