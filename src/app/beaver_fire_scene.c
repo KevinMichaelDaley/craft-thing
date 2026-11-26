@@ -94,7 +94,7 @@ bool dc_beaver_fire_setup(dc_level_view_t *view,char *err,uint32_t cap) {
     }
     if(!fr_gas_gpu_initialize_queued(view->gpu,err,cap)||!fr_combustion_gpu_enable(view->gpu,err,cap)||
        !dc_players_fire_ray(view,(fr_fire_ray_config_t){VIEW_WIDTH,4,.4f,1800},err,cap)) return false;
-    view->smoke_box=view->smoke_ready=true;
+    view->smoke_box=view->stream_ambient_gas=true;
     printf("Beaver fire ray demo: %u unlit ambient wood logs, %s | A/D move, Space jump, Q facing ray, Esc save/exit\n",
         plan.count,view->restored?"restored":"fresh");
     return dc_level_view_set_title(view,"Beaver Fire Ray | A/D move | Space jump | Q cast | Esc save and exit");

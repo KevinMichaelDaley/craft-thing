@@ -34,6 +34,8 @@ A fresh sandbox (`./build/dungeoncraft --play`) starts in an
 [authored clearing](assets/props/spawn_tree.md). Pass the same `--world-dir` to
 keep scene edits and surviving bodies between runs. Sandbox movement cycles
 through six walk poses at 100 ms per frame and mirrors them on reversal.
+Sandbox combustion draws oxygen from the simulated atmosphere. Saves retain
+each chunk's gas stock, and older saves receive ambient air when reopened.
 
 In the sandbox, slots 1–4 select fire, ice,
 stone, and wood. Press Q to cast the selected spell. The cast uses the aim

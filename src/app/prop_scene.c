@@ -180,7 +180,7 @@ dc_level_view_t *dc_play_scene_create(const char *directory, uint64_t seed,
     dc_ground_profile_t ground = {.width = 1, .soil_depth = 1, .surface = &surface};
     dc_level_view_t *view = dc_level_view_create_ground(directory, seed, &ground, err, cap);
     if (view && dc_level_view_configure_atmosphere(view, err, cap)) {
-        view->smoke_ready = true;
+        view->stream_ambient_gas = true;
         if (dc_level_view_pan_pixels(view, 0, -INITIAL_CHUNK_Y * (int32_t)DC_CHUNK_SIDE) &&
             dc_level_view_wait_visible(view, 120000u, err, cap) &&
             (dc_level_view_restored(view) || author_spawn_scene(view, err, cap)) &&

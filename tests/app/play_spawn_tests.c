@@ -192,7 +192,6 @@ static void test_play_loads_authored_trees_and_preserves_harvest_and_rocks(void)
     ASSERT_TRUE(dc_gpu_read_world_body(gpu, original[0], &west, err, sizeof(err)));
     ASSERT_EQ(west.chunk.x, -1);
 
-    ASSERT_TRUE(dc_players_enable_at(view, 64u, 40u, false, err, sizeof(err)));
     fr_player_t player;
     fr_beaver_body_t beaver;
     ASSERT_TRUE(dc_players_status(view, 0, &player, &beaver));
@@ -292,8 +291,7 @@ static void test_play_combustion_changes_fur_and_reloads_its_gas(void) {
     ASSERT_EQ(initial.state.char_mass_fp, 0u);
     ASSERT_EQ(initial.state.flags & FR_REACTIVE_FLAMING, 0u);
     fr_reactive_state_t hot = initial.state;
-    /* Use a fixed ignition draw for this short, bounded exposure. The solver
-     * still has to supply heat and oxygen before burning any fuel. */
+    /* A fixed ignition draw makes the short exposure deterministic. */
     hot.ignition_threshold = .025f;
     const double heat = fr_reactive_state_energy_at_temperature(&hot, 1150.f)
                       - fr_reactive_state_energy(&hot);
@@ -360,7 +358,7 @@ static void test_play_admits_ambient_air_when_reopening_an_older_save(void) {
     const uint32_t slot = dc_gpu_find_active_chunk(gpu, (dc_chunk_coord_t){0, 0});
     fr_gas_checkpoint_chunk_t air;
     ASSERT_TRUE(slot != UINT32_MAX && fr_gas_gpu_export_checkpoint(gpu, slot, &air, err, sizeof(err)));
-    ASSERT_TRUE(air.cells[0][0] > 0.f);
+    ASSERT_TRUE(air.cells[0][FR_GAS_OXYGEN] > 0.f);
     ASSERT_EQ(air.clock.physical_steps, 0u);
     PASS();
 }

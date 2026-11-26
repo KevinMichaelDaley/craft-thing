@@ -102,7 +102,7 @@ bool dc_level_view_setup_bonfire(dc_level_view_t *view,char *err,uint32_t cap) {
         }
         if(!fr_gas_gpu_initialize_queued(view->gpu,err,cap)) return false;
     }
-    view->smoke_box=view->smoke_ready=true;
+    view->smoke_box=view->stream_ambient_gas=true;
     return dc_level_view_set_spring_enabled(view,false)&&fr_thermal_gpu_overlay(view->gpu,0)&&
         dc_level_view_renderer_mode(view,FR_RENDERER_ALBEDO);
 }
@@ -315,7 +315,7 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
                 dc_stream_result_release(&result);return false;
             }
             view->gas_admitted[index]=result.gas!=NULL;
-            if(!result.gas&&view->smoke_ready) {
+            if(!result.gas&&view->stream_ambient_gas) {
                 if(!fr_gas_gpu_queue_ambient_chunk(view->gpu,index,err,cap)) {dc_stream_result_release(&result);return false;}
                 view->gas_admitted[index]=true;
             }
@@ -327,7 +327,7 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
                 view->save_color_stale[index]=true;
                 if(getenv("DC_SAVE_TRACE")) fprintf(stderr,"Save late load slot%u\n",index);
             }
-            if(restored||(!result.gas&&view->smoke_ready)) dc_chunk_table_mark_dirty(&view->table,index);
+            if(restored||(!result.gas&&view->stream_ambient_gas)) dc_chunk_table_mark_dirty(&view->table,index);
         } else if (!dc_chunk_table_finish_save(&view->table, index, result.generation)) {
             dc_stream_result_release(&result);
             return error(err, cap, "Cannot complete chunk save");
@@ -539,7 +539,8 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     if (view->players && view->pending_steps && !view->transfer_pending)
         dc_players_prepare_view(view);
     if (!process_results(view, err, cap)) return false;
-    if (view->smoke_ready && !fr_gas_gpu_initialize_queued(view->gpu, err, cap)) return false;
+    /* A newly loaded chunk can go straight to a sleeping save. */
+    if (view->stream_ambient_gas && !fr_gas_gpu_initialize_queued(view->gpu, err, cap)) return false;
     if (!bind_transfer_destination(view, err, cap)) return false;
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         dc_chunk_slot_t *slot = &view->table.slots[i];
