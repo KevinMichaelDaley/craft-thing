@@ -6,11 +6,17 @@
 #include "ferrum/renderer/gpu.h"
 #include "ferrum/renderer/light_transport.h"
 #include "ferrum/renderer/texture.h"
+#include "body_address_gpu.h"
 #include "renderer_internal.h"
 #include "runtime_body_gpu.h"
 #include "fire_ray_renderer.h"
 
 enum { SCENE_PHASES = 10, SCENE_BUFFERS = 5, SCENE_WORK_WORDS = 128 + 4096 };
+typedef struct {
+  float smoke_alpha, flame_emission;
+} presented_fire_sample_t;
+_Static_assert(sizeof(presented_fire_sample_t) == 8u, "Fire compositor sample layout");
+
 struct fr_scene_gpu {
   fr_renderer_mode_t mode;
   uint32_t light_revision, point_count;
@@ -24,6 +30,9 @@ struct fr_scene_gpu {
   VkBuffer buffers[SCENE_BUFFERS];
   VkDeviceMemory memory[SCENE_BUFFERS];
   void *mapped[SCENE_BUFFERS];
+  dc_gpu_address_buffer_t fire_coverage;
+  uint32_t fire_view_x, fire_view_y, fire_view_width, fire_view_height;
+  bool fire_coverage_ready;
 };
 void fr_renderer_bind_sprites(dc_gpu_t *g,const VkDescriptorBufferInfo *buffer) {
   VkWriteDescriptorSet write={.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -65,6 +74,7 @@ void fr_renderer_destroy(dc_gpu_t *g) {
   fr_renderer_compute_destroy(g, &s->compute);
   fr_lighting_gpu_destroy(s->lighting);
   fr_occlusion_gpu_destroy(s->occlusion);
+  dc_gpu_address_buffer_destroy(g, &s->fire_coverage);
   for (uint32_t b = 0; b < SCENE_BUFFERS; b++) {
     if (s->mapped[b])
       vkUnmapMemory(g->device, s->memory[b]);
@@ -294,6 +304,66 @@ void fr_renderer_record(dc_gpu_t *g) {
 }
 bool fr_renderer_render(dc_gpu_t *g, char *err, uint32_t cap) {
   return g && g->renderer && dc_gpu_render_chunks(g, err, cap);
+}
+bool fr_renderer_enable_fire_coverage(dc_gpu_t *g, char *err, uint32_t cap) {
+  if (!fr_renderer_enable(g, err, cap)) return false;
+  dc_gpu_address_buffer_t *capture = &g->renderer->fire_coverage;
+  VkDeviceSize bytes = (VkDeviceSize)g->width * g->height * sizeof(presented_fire_sample_t);
+  return capture->buffer ||
+      dc_gpu_address_buffer_create(g, bytes, true, capture, err, cap);
+}
+VkDeviceAddress fr_renderer_fire_coverage_address(const dc_gpu_t *g) {
+  return g && g->renderer ? g->renderer->fire_coverage.address : 0;
+}
+void fr_renderer_record_fire_coverage_reset(dc_gpu_t *g) {
+  if (!fr_renderer_fire_coverage_address(g)) return;
+  struct fr_scene_gpu *s = g->renderer;
+  s->fire_coverage_ready = false;
+  vkCmdFillBuffer(g->command, s->fire_coverage.buffer, 0, VK_WHOLE_SIZE, 0u);
+  fr_renderer_barrier(g->command, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+      VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+}
+void fr_renderer_record_fire_coverage_readback(dc_gpu_t *g) {
+  if (!fr_renderer_fire_coverage_address(g)) return;
+  fr_renderer_barrier(g->command,
+      VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+      VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT,
+      VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
+}
+void fr_renderer_fire_coverage_presented(dc_gpu_t *g) {
+  if (!fr_renderer_fire_coverage_address(g)) return;
+  struct fr_scene_gpu *s = g->renderer;
+  s->fire_view_x = g->view_x;
+  s->fire_view_y = g->view_y;
+  s->fire_view_width = g->view_width;
+  s->fire_view_height = g->view_height;
+  s->fire_coverage_ready = true;
+}
+bool fr_renderer_read_fire_coverage(dc_gpu_t *g, float smoke_alpha,
+                                    float flame_emission,
+                                    fr_renderer_fire_coverage_t *out) {
+  if (!g || !g->renderer || !g->renderer->fire_coverage_ready || !out ||
+      !isfinite(smoke_alpha) || smoke_alpha <= 0.f || smoke_alpha > 1.f ||
+      !isfinite(flame_emission) || flame_emission <= 0.f) return false;
+  const struct fr_scene_gpu *s = g->renderer;
+  const presented_fire_sample_t *values = s->fire_coverage.mapped;
+  fr_renderer_fire_coverage_t coverage = {
+      .viewport_pixels = s->fire_view_width * s->fire_view_height};
+  for (uint32_t y = 0; y < s->fire_view_height; ++y) {
+    const presented_fire_sample_t *row =
+        values + (size_t)(s->fire_view_y + y) * g->width + s->fire_view_x;
+    for (uint32_t x = 0; x < s->fire_view_width; ++x) {
+      if (!isfinite(row[x].smoke_alpha) || !isfinite(row[x].flame_emission)) return false;
+      bool smoke = row[x].smoke_alpha >= smoke_alpha;
+      bool flame = row[x].flame_emission >= flame_emission;
+      coverage.smoke_pixels += smoke;
+      coverage.flame_pixels += flame;
+      coverage.covered_pixels += smoke || flame;
+    }
+  }
+  *out = coverage;
+  return true;
 }
 void fr_renderer_emission_changed(dc_gpu_t *g) {
   if (!g || !g->renderer) return;

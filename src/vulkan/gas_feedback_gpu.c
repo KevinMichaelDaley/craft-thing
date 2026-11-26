@@ -1,5 +1,7 @@
 #include "gas_feedback_gpu.h"
 
+enum { GAS_FEEDBACK_COVERAGE_WORD = 9, GAS_FEEDBACK_PUSH_WORDS = 11 };
+
 bool fr_gas_feedback_init(dc_gpu_t *g,fr_renderer_compute_t *out,fr_renderer_compute_t *coordinates,
     fr_renderer_compute_t *potential,
     VkDescriptorBufferInfo world,VkDescriptorBufferInfo alternate,VkDescriptorBufferInfo model,VkDescriptorBufferInfo gates,
@@ -8,9 +10,10 @@ bool fr_gas_feedback_init(dc_gpu_t *g,fr_renderer_compute_t *out,fr_renderer_com
     char *err,uint32_t cap) {
     VkDescriptorBufferInfo buffers[11]={world,model,{g->page_buffer,0,VK_WHOLE_SIZE},{g->cells,0,VK_WHOLE_SIZE},
         gates,alternate,coordinates0,coordinates1,potential_buffer,detail0,detail1};
-    return fr_renderer_compute_init(g,coordinates,buffers,11,36,"build/shaders/gas_coordinate.comp.spv",err,cap)&&
-        fr_renderer_compute_init(g,potential,buffers,11,36,"build/shaders/gas_potential.comp.spv",err,cap)&&
-        fr_renderer_compute_init(g,out,buffers,11,36,"build/shaders/gas_overlay.comp.spv",err,cap);
+    uint32_t push_bytes=GAS_FEEDBACK_PUSH_WORDS*sizeof(uint32_t);
+    return fr_renderer_compute_init(g,coordinates,buffers,11,push_bytes,"build/shaders/gas_coordinate.comp.spv",err,cap)&&
+        fr_renderer_compute_init(g,potential,buffers,11,push_bytes,"build/shaders/gas_potential.comp.spv",err,cap)&&
+        fr_renderer_compute_init(g,out,buffers,11,push_bytes,"build/shaders/gas_overlay.comp.spv",err,cap);
 }
 void fr_gas_feedback_record(dc_gpu_t *g,const fr_renderer_compute_t *feedback,
     const fr_renderer_compute_t *coordinates,const fr_renderer_compute_t *potential,
@@ -18,8 +21,10 @@ void fr_gas_feedback_record(dc_gpu_t *g,const fr_renderer_compute_t *feedback,
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_TRANSFER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_TRANSFER_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    uint32_t push[9]={g->width,g->height,g->view_x,g->view_y,g->view_width,g->view_height,0,bank,reset?1u:0u};
+    uint32_t push[GAS_FEEDBACK_PUSH_WORDS]={g->width,g->height,g->view_x,g->view_y,g->view_width,g->view_height,0,bank,reset?1u:0u};
     memcpy(&push[6],&dt,sizeof(dt));
+    VkDeviceAddress capture=fr_renderer_fire_coverage_address(g);
+    memcpy(push+GAS_FEEDBACK_COVERAGE_WORD,&capture,sizeof(capture));
     vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,coordinates->pipeline);
     vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,coordinates->pipeline_layout,0,1,&coordinates->descriptor,0,NULL);
     vkCmdPushConstants(g->command,coordinates->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);

@@ -41,6 +41,10 @@ void fr_lighting_record(fr_lighting_gpu_t *lighting, VkBuffer indirect,
 void fr_lighting_gpu_invalidate_sources(fr_lighting_gpu_t *lighting);
 /** Invalidate cached directional transport after fire emission changes. */
 void fr_renderer_emission_changed(dc_gpu_t *gpu);
+VkDeviceAddress fr_renderer_fire_coverage_address(const dc_gpu_t *gpu);
+void fr_renderer_record_fire_coverage_reset(dc_gpu_t *gpu);
+void fr_renderer_record_fire_coverage_readback(dc_gpu_t *gpu);
+void fr_renderer_fire_coverage_presented(dc_gpu_t *gpu);
 /** Rebind appearance after a completed resource-growth transaction. */
 void fr_renderer_rebind_colors(dc_gpu_t *gpu);
 /** Bind an immutable sprite atlas plus generation-bearing pose headers. */

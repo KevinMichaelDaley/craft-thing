@@ -36,11 +36,12 @@ layout(push_constant) uniform Params {
     uint width,height,seconds,sparse;
     uvec2 world_address,alternate_address,gates_address,model_address;
     uvec4 unused;
-    uvec2 body_params,sprite_address;
+    uvec2 body_params,sprite_address,fire_coverage;
 } params;
 layout(buffer_reference,std430,buffer_reference_align=4) buffer Words {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=8) buffer Handles {uvec2 values[];};
 layout(buffer_reference,std430,buffer_reference_align=16) buffer GasField {Gas values[];};
+layout(buffer_reference,std430,buffer_reference_align=8) buffer FireCoverage {vec2 values[];};
 float coefficient(uint material,uint field) {return uintBitsToFloat(profiles[material*32u+field]);}
 #include "coating_mass.glsl"
 #define DC_RUNTIME_BODY_BINDING 11
@@ -314,7 +315,10 @@ void feedback(uint index,ivec2 p,uint at) {
     vec3 magic=unpackUnorm4x8(visual_flags>>8u).rgb;
     vec3 color=fr_blackbody_rgb(source.y,1.,(visual_flags&FR_FIRE_EMISSION_MAGIC)!=0u,magic);
     float visible=(visual_flags&FR_FIRE_EMISSION_MAGIC)!=0u?1.:fr_blackbody_visible_efficiency(source.y);
-    float alpha=1.-exp(-source.x*visible*float(FR_COMBUSTION_EMISSION_EXPOSURE));
+    float visible_emission=source.x*visible;
+    if((params.fire_coverage.x|params.fire_coverage.y)!=0u)
+        FireCoverage(params.fire_coverage).values[index].y=visible_emission;
+    float alpha=1.-exp(-visible_emission*float(FR_COMBUSTION_EMISSION_EXPOSURE));
     pixels[index]=packUnorm4x8(vec4(mix(unpackUnorm4x8(pixels[index]).rgb,color,alpha),1.));
 }
 void extinguish_thermally(uint at) {

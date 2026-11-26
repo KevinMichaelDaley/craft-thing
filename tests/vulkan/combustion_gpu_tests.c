@@ -643,7 +643,12 @@ static void test_roof_blocks_and_side_vent_routes_the_physical_flame(void) {
 #include "combustion_contact_cases.h"
 #include "combustion_oxygen_cases.h"
 #include "combustion_submerged_cases.h"
+#include "fire_coverage_cases.h"
 int main(int argc,char **argv) {
+    if(argc==2&&strcmp(argv[1],"--fire-coverage")==0) {
+        RUN(test_presented_coverage_thresholds_clip_and_count_overlap_once);
+        printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
+    }
     if(argc==2&&strcmp(argv[1],"--oiled")==0) {
         RUN(test_oiled_wood_ignites_before_dry_control_without_spending_film);
         printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;

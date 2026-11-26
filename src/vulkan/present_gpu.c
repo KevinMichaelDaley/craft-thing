@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "gpu_internal.h"
+#include "renderer_internal.h"
 #include "runtime_body_gpu.h"
 #include "thermal_gpu_internal.h"
 #include "gas_gpu_internal.h"
@@ -124,6 +125,7 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
         VkDependencyInfo dependency = { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
             .memoryBarrierCount = 1, .pMemoryBarriers = &upload };
         vkCmdPipelineBarrier2(gpu->command, &dependency);
+        fr_renderer_record_fire_coverage_reset(gpu);
         if (fr_renderer_active(gpu)) {
             fr_renderer_record(gpu);
         } else {
@@ -134,6 +136,7 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
         }
         fr_gas_record_overlay(gpu);
         fr_thermal_record_overlay(gpu);
+        fr_renderer_record_fire_coverage_readback(gpu);
     }
     VkBufferMemoryBarrier2 buffer_barrier = { .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
@@ -233,6 +236,7 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
     /* Wait for command and host-visible physics completion, not compositor display. */
     if (vkWaitForFences(gpu->device, 1, &gpu->render_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
         return error(err, cap, "Vulkan present wait failed");
+    if (render_chunks) fr_renderer_fire_coverage_presented(gpu);
     uint64_t fence_done=trace_waits?SDL_GetPerformanceCounter():0;
     if(trace_waits) {
         double scale=1000./SDL_GetPerformanceFrequency();

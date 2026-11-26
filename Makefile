@@ -143,7 +143,7 @@ build/sprite_gpu.o: src/vulkan/sprite_gpu.c include/ferrum/renderer/sprite_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 RENDERER_SHADERS = build/shaders/lighting_subgroup.comp.spv build/shaders/scene.comp.spv build/shaders/occlusion.comp.spv build/shaders/lighting.comp.spv
 $(GPU_OBJ): $(RENDERER_SHADERS) src/vulkan/gpu_internal.h
-build/scene_gpu.o: src/vulkan/scene_gpu.c src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h include/ferrum/renderer/gpu.h
+build/scene_gpu.o: src/vulkan/scene_gpu.c src/vulkan/body_address_gpu.h src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h include/ferrum/renderer/gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/renderer_resource.o: src/vulkan/renderer_resource.c src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
@@ -654,7 +654,7 @@ build/fluid_gpu.o: src/vulkan/fluid_gpu.c src/vulkan/gpu_internal.h include/dung
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-build/present_gpu.o: src/vulkan/present_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
+build/present_gpu.o: src/vulkan/present_gpu.c src/vulkan/gpu_internal.h src/vulkan/renderer_internal.h include/dungeoncraft/gpu.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
@@ -1862,9 +1862,10 @@ test_transport_options: build/transport_options_tests
 .PHONY: test_fire_fixtures
 test: test_fire_fixtures
 test_fire_fixtures:
-	python3 -m py_compile tests/fire/fixture_contract_tests.py tests/fire/greek_depletion_fixture_tests.py tools/diagnostics/fire_fixture.py
+	python3 -m py_compile tests/fire/fixture_contract_tests.py tests/fire/greek_depletion_fixture_tests.py tests/fire/greek_coverage_fixture_tests.py tools/diagnostics/fire_fixture.py
 	python3 tests/fire/fixture_contract_tests.py
 	python3 tests/fire/greek_depletion_fixture_tests.py
+	python3 tests/fire/greek_coverage_fixture_tests.py
 
 build/reactive_material_tests: tests/fire/material_profile_tests.c src/fire/material_profile.c src/fire/material_profile_data.inc include/ferrum/fire/material_profile.h include/dungeoncraft/reactive_profile_layout.h include/dungeoncraft/chunk.h
 	mkdir -p build
@@ -2061,7 +2062,7 @@ build/fluid_binding_tests: tests/vulkan/fluid_binding_tests.c $(GPU_OBJ) $(CHUNK
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/fluid_binding_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/device_selection_tests: tests/vulkan/device_selection_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/device_selection_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
-build/greek_siege_tests: tests/app/greek_siege_tests.c tests/app/greek_depletion_probe.h Makefile src/app/siege_scene.h src/app/view_config.h $(SIEGE_SCENE_SRC) $(PERFORMANCE_OBJ)
+build/greek_siege_tests: tests/app/greek_siege_tests.c tests/app/greek_depletion_probe.h tests/app/greek_coverage_probe.h Makefile src/app/siege_scene.h src/app/view_config.h $(SIEGE_SCENE_SRC) $(PERFORMANCE_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) tests/app/greek_siege_tests.c src/app/siege_scene.c src/app/smoke_profile.c $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_greek_siege
 test_greek_siege: build/greek_siege_tests
@@ -2077,6 +2078,10 @@ test_greek_siege_locked_risk: build/greek_siege_tests
 .PHONY: test_greek_siege_locked_depletion
 test_greek_siege_locked_depletion: build/greek_siege_tests
 	python3 tools/diagnostics/fire_fixture.py --greek-depletion-binary ./build/greek_siege_tests
+.PHONY: test_greek_siege_coverage
+test_greek_siege_coverage: build/greek_siege_tests build/combustion_gpu_display_tests
+	./build/combustion_gpu_display_tests --fire-coverage
+	python3 tools/diagnostics/fire_fixture.py --greek-coverage-binary ./build/greek_siege_tests
 test: test_greek_siege
 .PHONY: test_bulk_phase test_bulk_phase_gpu test_bulk_rheology
 test: test_bulk_phase test_bulk_phase_gpu test_bulk_rheology
@@ -2309,6 +2314,7 @@ build/combustion_gpu_display_tests: tests/vulkan/combustion_contact_cases.h
 build/combustion_gpu_display_tests: src/app/bonfire_scene.c
 build/combustion_gpu_display_tests: tests/vulkan/combustion_oxygen_cases.h
 build/combustion_gpu_display_tests: tests/vulkan/combustion_submerged_cases.h
+build/combustion_gpu_display_tests: tests/vulkan/fire_coverage_cases.h
 build/component_admission_tests: tests/vulkan/component_admission_tests.c tests/vulkan/body_ash_cases.h tests/vulkan/constructed_heat_cases.h $(GPU_OBJ) $(CHUNK_OBJ) $(REACTIVE_STATE_SRC) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/bonfire_mechanics_tests: tests/vulkan/bonfire_mechanics_tests.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv

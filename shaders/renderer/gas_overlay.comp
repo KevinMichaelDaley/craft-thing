@@ -1,5 +1,7 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
 #include "../gas/types.glsl"
 #define FR_SMOKE_DETAIL_SCALE .125
 #define FR_SMOKE_WARP_CELLS 4.
@@ -25,7 +27,11 @@ layout(set=0,binding=7,std430) buffer SmokeCoordinates1 {vec2 coordinates1[];};
 layout(set=0,binding=8,std430) buffer SmokePotential {float potentials[];};
 layout(set=0,binding=9,std430) buffer SmokeDetail0 {float detail0[];};
 layout(set=0,binding=10,std430) buffer SmokeDetail1 {float detail1[];};
-layout(push_constant) uniform Params {uint width,height,view_x,view_y,view_width,view_height,seconds,bank,reset;} params;
+layout(push_constant) uniform Params {
+    uint width,height,view_x,view_y,view_width,view_height,seconds,bank,reset;
+    uint fire_coverage_low,fire_coverage_high;
+} params;
+layout(buffer_reference,std430,buffer_reference_align=8) buffer FireCoverage {vec2 values[];};
 vec2 smoke_coordinate(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return vec2(p);
     uint index=uint(p.y)*params.width+uint(p.x);
@@ -304,7 +310,10 @@ void main() {
         float visual_weight=visual_energy/(visual_energy+FR_SMOKE_DETAIL_ENERGY)*smoke_scattering_weight(cell);
         float detail=visual_weight>0.?max(FR_SMOKE_DETAIL_MIN,1.+FR_SMOKE_DETAIL_GAIN*visual_weight*
             smoke_wavelet(material*FR_SMOKE_DETAIL_SCALE)):1.;
-        color=mix(color,smoke.yzw/smoke.x,1.-exp(-smoke.x*detail));
+        float alpha=1.-exp(-smoke.x*detail);
+        if((params.fire_coverage_low|params.fire_coverage_high)!=0u)
+            FireCoverage(uvec2(params.fire_coverage_low,params.fire_coverage_high)).values[index].x=alpha;
+        color=mix(color,smoke.yzw/smoke.x,alpha);
     }
     if(gate!=0u) color=vec3(.62,.32,.07);
     frame[index]=packUnorm4x8(vec4(color,1.));

@@ -30,6 +30,17 @@ bool fr_renderer_read_light(dc_gpu_t *gpu,uint32_t x,uint32_t y,
 /** Diagnostic optical query after rendering; never reads back during simulation. */
 bool fr_renderer_read_opacity(dc_gpu_t *gpu,uint32_t x,uint32_t y,
                               fr_occlusion_node_t *node);
+typedef struct {
+  uint32_t viewport_pixels, smoke_pixels, flame_pixels, covered_pixels;
+} fr_renderer_fire_coverage_t;
+
+/** Opt into collecting the smoke and flame inputs to subsequent presented frames. */
+bool fr_renderer_enable_fire_coverage(dc_gpu_t *gpu, char *err, uint32_t cap);
+/** Count the union in the last completed viewport from composited smoke alpha
+ * and visible flame emission before the exponential display exposure. */
+bool fr_renderer_read_fire_coverage(dc_gpu_t *gpu, float smoke_alpha,
+                                    float flame_emission,
+                                    fr_renderer_fire_coverage_t *out);
 /** Set a cosmetic texture preset for a terrain-namespace material without
  * changing it. */
 bool fr_renderer_set_material_style(dc_gpu_t *gpu, uint32_t material,

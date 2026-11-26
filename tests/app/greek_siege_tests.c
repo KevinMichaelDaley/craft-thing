@@ -21,6 +21,7 @@
 #include "../../src/vulkan/thermal_gpu_state.h"
 
 static int g_pass, g_fail;
+static const float greek_prompt_fuse_seconds = 0.6f;
 #include "ferrum/fire/gpu.h"
 #include "ferrum/physics/revolute_gpu.h"
 #include "ferrum/structural/gpu.h"
@@ -166,14 +167,18 @@ static void test_pool_soaks_a_stationary_oil_load(void) {
     dc_gpu_destroy(gpu);
     PASS();
 }
-static bool greek_open_pouch_at_launch(dc_gpu_t *gpu, dc_siege_scene_t *scene,
-                                      char *err, uint32_t cap) {
+typedef bool (*greek_launch_tick_fn)(dc_gpu_t *, void *, char *, uint32_t);
+
+static bool greek_advance_to_pouch_release(dc_gpu_t *gpu, dc_siege_scene_t *scene,
+                                          greek_launch_tick_fn advance, void *sample,
+                                          char *err, uint32_t cap) {
     dc_gpu_body_motion_t arm = {0};
     float release_angle = 0.3f;
     const char *tuned = getenv("DC_SIEGE_RELEASE_ANGLE");
     if (tuned) release_angle = strtof(tuned, NULL);
     for (uint32_t tick = 0; tick < 240u && !greek_stopped; tick++) {
-        if (!dc_gpu_tick_step(gpu, err, cap)) return false;
+        if (advance ? !advance(gpu, sample, err, cap) : !dc_gpu_tick_step(gpu, err, cap))
+            return false;
         if (!dc_gpu_read_body_motion(gpu, scene->arm_body, &arm, err, cap))
             return false;
         if (arm.angle >= release_angle)
@@ -181,6 +186,10 @@ static bool greek_open_pouch_at_launch(dc_gpu_t *gpu, dc_siege_scene_t *scene,
     }
     if (err && cap) snprintf(err, cap, "Arm did not reach the pouch release angle");
     return false;
+}
+static bool greek_open_pouch_at_launch(dc_gpu_t *gpu, dc_siege_scene_t *scene,
+                                      char *err, uint32_t cap) {
+    return greek_advance_to_pouch_release(gpu, scene, NULL, NULL, err, cap);
 }
 
 static bool greek_land_ball(dc_gpu_t *gpu, dc_siege_scene_t *scene,
@@ -505,7 +514,7 @@ static void test_prompt_launch_and_fireproof_carrier_stay_safe(void) {
         ASSERT_TRUE(greek_ticks(gpu, 2u, err, sizeof(err)));
         ASSERT_TRUE(dc_siege_scene_release(gpu, &scene, err, sizeof(err)));
         {
-            bool fuse = dc_siege_scene_ignite_load(gpu, &scene, 0.6f, err,
+            bool fuse = dc_siege_scene_ignite_load(gpu, &scene, greek_prompt_fuse_seconds, err,
                                                    sizeof(err));
             if (!fuse) printf("greek fuse ignite: %s\n", err);
             ASSERT_TRUE(fuse);
@@ -731,6 +740,7 @@ static bool greek_parse_u32(const char *text, uint32_t *out) {
 }
 
 #include "greek_depletion_probe.h"
+#include "greek_coverage_probe.h"
 
 static int greek_locked_launcher_risk(int argc, char **argv) {
     uint32_t seconds, minimum;
@@ -764,6 +774,8 @@ int main(int argc, char **argv) {
         return greek_locked_launcher_risk(argc, argv);
     if (argc >= 2 && strcmp(argv[1], "--depletion-record") == 0)
         return greek_depletion_record(argc, argv);
+    if (argc >= 2 && strcmp(argv[1], "--coverage-record") == 0)
+        return greek_coverage_record(argc, argv);
     if (argc == 2 && strcmp(argv[1], "--corrode-contact") == 0) {
         RUN(test_stationary_greek_film_corrodes_clean_pool_samples);
         printf("%d passed, %d failed\n", g_pass, g_fail);

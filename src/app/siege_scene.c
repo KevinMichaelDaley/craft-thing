@@ -704,7 +704,8 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                fr_gas_gpu_set_pressure_policy(gpu, FR_GAS_PRESSURE_PRACTICAL,
                                               err_buf, err_cap) &&
                fr_gas_gpu_set_gravity(gpu, 900.f, err_buf, err_cap) &&
-               fr_combustion_gpu_enable(gpu, err_buf, err_cap);
+               fr_combustion_gpu_enable(gpu, err_buf, err_cap) &&
+               fr_thermal_gpu_overlay(gpu, 0u);
     }
 #ifdef DC_SIEGE_PRESENTATION
     if (okay) {

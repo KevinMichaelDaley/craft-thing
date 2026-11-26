@@ -357,6 +357,65 @@ def greek_depletion(data, binary):
               flush=True)
 
 
+def greek_coverage(data, binary):
+    acceptance = data["acceptance"]
+    maximum = Fraction(str(acceptance["first_second_coverage_fraction_max"]))
+    step = Fraction(*data["clock"]["rigid_tick_seconds"])
+    pixels = math.prod(data["view"])
+    ticks = 1 / step
+    if not 0 < maximum <= 1 or ticks.denominator != 1:
+        raise ValueError("Invalid first-second coverage fixture")
+    seed = data["scenes"]["greek_siege"]["seed"]
+    command = [str(binary), "--coverage-record", str(seed), str(ticks),
+        str(acceptance["smoke_coverage_opacity"]),
+        str(acceptance["flame_coverage_linear_emission"])]
+    rows = peak = 0
+    release = None
+    visible_after_release = False
+    with subprocess.Popen(command, cwd=ROOT, text=True, stdout=subprocess.PIPE) as probe:
+        try:
+            for line in probe.stdout:
+                print(line.rstrip("\n"), flush=True)
+                parts = line.split()
+                if not parts:
+                    continue
+                if parts[0] == "COVERAGE_RELEASE":
+                    if len(parts) != 2 or release is not None or rows <= 1 or int(parts[1]) != rows - 1:
+                        raise ValueError("Invalid prompt pouch release")
+                    release = rows - 1
+                if parts[0] != "COVERAGE_FRAME":
+                    continue
+                if len(parts) != 8:
+                    raise ValueError("Invalid visible coverage record")
+                tick, accepted = map(int, parts[1:3])
+                elapsed = float(parts[3])
+                viewport, smoke, flame, covered = map(int, parts[4:])
+                if (tick != rows or accepted != tick or
+                        not math.isclose(elapsed, float(tick * step), rel_tol=1e-6, abs_tol=1e-6)):
+                    raise ValueError(f"Did not observe a complete simulation tick at frame {rows}")
+                if viewport != pixels:
+                    raise ValueError("Displayed shot does not use the locked viewport")
+                if (min(smoke, flame) < 0 or
+                        not max(smoke, flame) <= covered <= min(pixels, smoke + flame)):
+                    raise ValueError("Invalid smoke and flame union")
+                if covered > maximum * pixels:
+                    raise ValueError(f"Displayed fire exceeded viewport coverage at tick {tick}")
+                peak = max(peak, covered)
+                visible_after_release |= release is not None and flame > 0
+                rows += 1
+        except ValueError:
+            probe.terminate()
+            raise
+        status = probe.wait()
+    if status:
+        raise subprocess.CalledProcessError(status, command)
+    if release is None or rows != release + ticks + 1:
+        raise ValueError("Did not observe the complete first simulated second after pouch release")
+    if not visible_after_release:
+        raise ValueError("Displayed prompt shot produced no visible flame after release")
+    print(f"Peak displayed smoke and flame coverage was {peak} of {pixels} pixels", flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest",type=pathlib.Path,default=DEFAULT_MANIFEST)
@@ -365,6 +424,7 @@ def main():
     parser.add_argument("--emit-material-c",type=pathlib.Path)
     parser.add_argument("--check-material-c",type=pathlib.Path)
     parser.add_argument("--greek-depletion-binary",type=pathlib.Path)
+    parser.add_argument("--greek-coverage-binary",type=pathlib.Path)
     args = parser.parse_args()
     data = validate(json.loads(args.manifest.read_text()))
     if args.emit_material_c:
@@ -382,6 +442,8 @@ def main():
         parser.error("--baseline-world requires a fresh --output-dir")
     if args.greek_depletion_binary:
         greek_depletion(data, args.greek_depletion_binary.resolve())
+    if args.greek_coverage_binary:
+        greek_coverage(data, args.greek_coverage_binary.resolve())
     print("Validated locked fire/smoke fixtures",flush=True)
     return 0
 

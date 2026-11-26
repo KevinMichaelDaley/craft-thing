@@ -18,7 +18,8 @@
 static void phase(dc_gpu_t *g,uint32_t mode,float seconds);
 enum {
     THERMAL_SPRITE_ADDRESS_WORD = 10, THERMAL_PUSH_WORDS = 12,
-    COMBUSTION_SPRITE_ADDRESS_WORD = 18, COMBUSTION_PUSH_WORDS = 20
+    COMBUSTION_SPRITE_ADDRESS_WORD = 18, COMBUSTION_FIRE_COVERAGE_WORD = 20,
+    COMBUSTION_PUSH_WORDS = 22
 };
 bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!g||!g->thermal||!g->gas) {
@@ -120,6 +121,10 @@ static void record_combustion(dc_gpu_t *g,float seconds,uint32_t mode) {
     push[17]=g->page_width;
     VkDeviceAddress sprites=fr_renderer_sprites_address(g);
     memcpy(push+COMBUSTION_SPRITE_ADDRESS_WORD,&sprites,sizeof(sprites));
+    if(mode==1u) {
+        VkDeviceAddress capture=fr_renderer_fire_coverage_address(g);
+        memcpy(push+COMBUSTION_FIRE_COVERAGE_WORD,&capture,sizeof(capture));
+    }
     VkDeviceAddress addresses[4]={gas->state[gas->direct_publish?1u:0u].address,
         gas->state[2].address,gas->gates.address,gas->parameters.address};
     memcpy(push+4,addresses,sizeof(addresses));
