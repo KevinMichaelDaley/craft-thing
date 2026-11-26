@@ -135,53 +135,33 @@ bool fr_player_cast_fire_bolt(dc_gpu_t *gpu, uint64_t owner_id,
 
 bool fr_player_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,
                               uint32_t radius, char *err_buf, uint32_t err_cap) {
-    if (!gpu || !target || radius == 0u || radius > 32u) return false;
-    float wx = (float)target->chunk.x * 64.f + target->x;
-    float wy = (float)target->chunk.y * 64.f + target->y;
-    if (wx < radius || wy < radius || wx + radius >= gpu->width ||
-        wy + radius >= gpu->height)
-        return false;
-    /* Soak the bounded disc through the material atlas. */
-    if (!dc_gpu_paint_material(gpu, (uint32_t)wx, (uint32_t)wy, radius,
-                               DC_MATERIAL_WATER, err_buf, err_cap))
-        return false;
-    /* A hail front: dozens of small stones rain over the whole area. */
-    {
-        static uint32_t hail_id;
-        uint32_t count = radius >= 12u ? 32u : 16u;
-        for (uint32_t k = 0u; k < count; k++) {
-            float spread = ((float)(k % 13u) - 6.f) / 6.f * (float)radius;
-            float drop = (float)(k % 9u) * 2.f;
-            float hx = wx + spread;
-            float hy = wy - 24.f - drop;
-            if (hx < 1.f || hy < 1.f || hx + 2.f >= gpu->width ||
-                hy + 2.f >= gpu->height)
-                continue;
-            dc_gpu_body_t hail = {
-                .x_fp = (int32_t)(hx * 65536.f),
-                .y_fp = (int32_t)(hy * 65536.f),
-                .vx_fp = (int32_t)(spread * 0.25f * 65536.f),
-                .vy_fp = (int32_t)(3.f * 65536.f),
-                .width = 2u, .height = 2u,
-                .id = 0xC0000000u + (++hail_id), .active = 1u};
-            dc_gpu_spawn_body(gpu, hail, err_buf, err_cap);
-        }
-    }
-    /* Chill every reactive parcel inside the radius on the resident slot. */
-    dc_chunk_coord_t coord;
-    uint32_t lx = (uint32_t)wx % 64u, ly = (uint32_t)wy % 64u;
-    coord = target->chunk;
-    uint32_t slot = UINT32_MAX;
+    if (!gpu || !target || radius == 0u || radius > 32u ||
+        !(target->x >= 0.f && target->x < DC_CHUNK_SIDE &&
+          target->y >= 0.f && target->y < DC_CHUNK_SIDE))
+        return error(err_buf, err_cap, "Invalid ice storm target or radius");
+    uint32_t tile = UINT32_MAX;
     for (uint32_t candidate = 0u; candidate < DC_GPU_CHUNK_SLOTS; candidate++) {
         const uint32_t *registry =
             dc_gpu_structural_data(gpu) + DC_STRUCTURAL_HEADER_WORDS +
             candidate * 8u;
-        if (registry[5] && memcmp(registry, &coord, sizeof(coord)) == 0) {
-            slot = candidate;
+        if (registry[5] &&
+            memcmp(registry, &target->chunk, sizeof(target->chunk)) == 0) {
+            tile = gpu->slot_page[candidate];
             break;
         }
     }
-    if (slot == UINT32_MAX) return true;
+    if (tile == UINT32_MAX)
+        return error(err_buf, err_cap, "Ice storm target is outside the active pages");
+    uint32_t x = tile % gpu->page_width * DC_CHUNK_SIDE + (uint32_t)target->x;
+    uint32_t y = tile / gpu->page_width * DC_CHUNK_SIDE + (uint32_t)target->y;
+    if (x < radius || y < radius || x + radius >= gpu->width ||
+        y + radius >= gpu->height)
+        return error(err_buf, err_cap, "Ice storm extends outside the active grid");
+    if (!dc_gpu_paint_material(gpu, x, y, radius, DC_MATERIAL_WATER,
+                               err_buf, err_cap))
+        return false;
+
+    const uint32_t *pages = gpu->page_mapped;
     for (uint32_t dy = 0u; dy <= radius * 2u; dy++)
         for (uint32_t dx = 0u; dx <= radius * 2u; dx++) {
             int32_t offset_x = (int32_t)dx - (int32_t)radius;
@@ -189,15 +169,15 @@ bool fr_player_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,
             if (offset_x * offset_x + offset_y * offset_y >
                 (int32_t)(radius * radius))
                 continue;
-            int32_t cell_x = (int32_t)lx + offset_x;
-            int32_t cell_y = (int32_t)ly + offset_y;
-            if (cell_x < 0 || cell_x > 63 || cell_y < 0 || cell_y > 63)
-                continue;
+            uint32_t cell_x = x - radius + dx, cell_y = y - radius + dy;
+            uint32_t page = pages[cell_y / DC_CHUNK_SIDE * gpu->page_width +
+                                  cell_x / DC_CHUNK_SIDE];
+            if (!page) continue;
+            uint32_t cell = cell_y % DC_CHUNK_SIDE * DC_CHUNK_SIDE +
+                            cell_x % DC_CHUNK_SIDE;
             fr_reactive_record_t parcel;
             bool found = false;
-            if (!fr_gpu_reactive_read_cell(gpu, slot,
-                                           (uint32_t)cell_y * 64u +
-                                               (uint32_t)cell_x,
+            if (!fr_gpu_reactive_read_cell(gpu, page - 1u, cell,
                                            &parcel, &found, err_buf, err_cap))
                 return false;
             if (!found) continue;
@@ -207,9 +187,7 @@ bool fr_player_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,
             parcel.state.thermal_energy = (float)chilled;
             parcel.state.thermal_energy_residual = 0.f;
             parcel.state.thermal_energy_correction = 0.f;
-            if (!fr_gpu_reactive_seed_cell(gpu, slot,
-                                           (uint32_t)cell_y * 64u +
-                                               (uint32_t)cell_x,
+            if (!fr_gpu_reactive_seed_cell(gpu, page - 1u, cell,
                                            &parcel.state, err_buf, err_cap))
                 return false;
         }
