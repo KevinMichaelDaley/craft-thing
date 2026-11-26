@@ -56,3 +56,7 @@ The exact integrated c4324106 run of make test_greek_siege_locked_depletion exit
 **2026-11-26T18:12:52Z**
 
 The aligned c4324106 capture matched the locked replay at every reported second. Over 900 measured ticks, geometry and pressure-finish and commit deltas were all exactly zero. The late gain entered during advection. Two Vulkan cases reproduced a selected receiver borrowing from a donor whose advection would never publish. RED measured +5.242879987 Q16 on the small path and +6.566437760 on the large path. A symmetric face condition now requires both cells to publish advection. Both paths conserve the closed test inventory exactly. Eleven focused Vulkan checks and 26 gas numerics and fixtures passed. Two separate same-baseline publication failures are tracked by ctsg-6060. The complete locked replay remains required.
+
+**2026-11-26T18:20:19Z**
+
+Exact db7b54b8 locked depletion exited 2 at Greek second 141 after 8460 accepted steps. Stock plus gas reached +4.012883186 Q16, beyond the unchanged four-unit limit, with 36 of 36 submerged faces and no exterior or mobile fuel. The dormant-face conservation fix is independently verified on both advection paths, including renewed flow when both tiles wake, but the locked pool's late advection gain persists. A temporary Vulkan probe compiled from the same native fixture now samples horizontal and vertical transport separately, then the pressure RHS and finish. Run the one-second alignment check before the longer replay.
