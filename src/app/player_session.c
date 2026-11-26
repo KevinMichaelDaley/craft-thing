@@ -102,15 +102,16 @@ static bool players_atlas(dc_level_view_t *v,char *err,uint32_t cap) {
 static bool players_publish(dc_level_view_t *v,char *err,uint32_t cap) {
     struct dc_player_session *s=v->players;fr_renderer_sprite_t poses[FR_INPUT_PLAYERS];
     for(uint32_t n=0;n<s->count;n++) {
-        uint32_t frame;fr_player_frame(&s->players[n],&frame);
-        fr_player_action_t display=s->players[n].action==FR_PLAYER_WALK?FR_PLAYER_IDLE:s->players[n].action;
-        if(display==FR_PLAYER_IDLE) frame=0;
-        fr_beaver_frame_layout_t layout=s->layouts[display][frame];
-        bool flip=s->players[n].facing<0;
+        const fr_player_t *player=&s->players[n];
+        uint32_t frame;
+        if(!fr_player_frame(player,&frame)) return players_error(err,cap,"Cannot publish invalid player frame");
+        fr_player_action_t action=player->action;
+        fr_beaver_frame_layout_t layout=s->layouts[action][frame];
+        bool flip=player->facing<0;
         uint32_t horizontal_pad=flip?layout.canvas_width-layout.x-layout.width:layout.x;
         fr_beaver_body_t b=s->bodies[n];
         poses[n]=(fr_renderer_sprite_t){.body_id=b.binding.body_id,.generation=b.binding.generation,
-            .offset=s->frame_offsets[display][frame],.width=layout.width,.height=layout.height,
+            .offset=s->frame_offsets[action][frame],.width=layout.width,.height=layout.height,
             .flip=flip,.rest_origin_x=b.rest_origin_x,.rest_origin_y=b.rest_origin_y,
             .origin_x=(int32_t)b.rest_origin_x+(int32_t)(layout.canvas_width-40)/2-(int32_t)horizontal_pad,
             .origin_y=(int32_t)layout.foot_baseline-(int32_t)layout.y-(int32_t)b.height};
