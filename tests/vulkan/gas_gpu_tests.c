@@ -570,7 +570,12 @@ static void test_native_subnormal_colored_stock_is_valid_and_retained_at_rest(vo
     ASSERT_EQ(out[20u*64u+20u].species[FR_GAS_EXHAUST],input[20u*64u+20u].species[FR_GAS_EXHAUST]);
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
 }
+#include "gas_audit_precision_cases.h"
 int main(void) {
+    if(getenv("DC_GAS_AUDIT_ONLY")) {
+        RUN(test_cold_audit_keeps_trace_products_across_workgroups);
+        printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
+    }
 #ifdef FR_REACTIVE_PRESENTATION_TEST
     RUN(test_display_context_releases_keyboard_focus);
 #endif
@@ -661,6 +666,7 @@ int main(void) {
     RUN(test_native_quiet_air_sleeps_but_motion_heat_and_pressure_still_wake);
     RUN(test_native_practical_safe_line_matches_explicit_flux_inside_stiff_interval);
     RUN(test_native_cold_audit_reduces_stock_and_does_not_advance_physics);
+    RUN(test_cold_audit_keeps_trace_products_across_workgroups);
     RUN(test_native_hot_gas_audit_weights_tiny_spikes_by_heat_capacity);
     RUN(test_native_gas_only_still_air_conducts_without_mass_transport);
     RUN(test_native_practical_checkerboard_pressure_relaxes_conservatively);
