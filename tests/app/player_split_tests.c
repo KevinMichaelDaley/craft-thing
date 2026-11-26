@@ -222,6 +222,21 @@ static void test_split_camera_keeps_both_moving_players_framed_across_chunks(voi
                  body_x+half_width-(int32_t)camera.offset_x;
     }
     ASSERT_TRUE(abs(group_x/2-VIEW_WIDTH/2)<12);
+
+    const SDL_Event jump = {.cbutton = {.type = SDL_CONTROLLERBUTTONDOWN,
+        .which = 42, .button = SDL_CONTROLLER_BUTTON_A}};
+    ASSERT_TRUE(dc_players_event(v,&jump));
+    for (uint32_t i=0; i<5; ++i) ASSERT_TRUE(world_step());
+    dc_gpu_world_body_t airborne;
+    ASSERT_TRUE(actor_position(1,&airborne));
+    int64_t climb = (finish[1].chunk.y-airborne.chunk.y)*DC_CHUNK_SIDE*DC_FLUID_FULL+
+        finish[1].body.y_fp-airborne.body.y_fp;
+    ASSERT_TRUE(climb > 2 * DC_FLUID_FULL);
+    fr_player_point_t controller_center;
+    ASSERT_TRUE(center_target(1,&controller_center));
+    int64_t y_from_body = (controller_center.chunk.y-airborne.chunk.y)*DC_CHUNK_SIDE+
+        (int32_t)controller_center.y-airborne.body.y_fp/(int32_t)DC_FLUID_FULL;
+    ASSERT_TRUE(llabs(y_from_body-(int32_t)airborne.body.height/2)<=1);
     PASS();
 }
 
@@ -267,6 +282,36 @@ static void test_aim_reticle_is_drawn_only_in_its_own_window_band(void) {
         int other_y=(int)(keyboard.top+(aim_y-keyboard.y)*keyboard.scale+keyboard.scale/2u);
         ASSERT_TRUE(!pixel_is_white(window_x+other_x+4,window_y+other_y));
     }
+    const SDL_Event disconnect = {.cdevice = {.type = SDL_CONTROLLERDEVICEREMOVED, .which = 42}};
+    dc_players_event(v,&disconnect);
+    ASSERT_TRUE(world_step());
+    ASSERT_TRUE(dc_players_status(v,1,&player,&body)&&!player.intent.has_target);
+    PASS();
+}
+
+static void test_four_way_split_clamps_stick_to_its_own_crop(void) {
+    ASSERT_TRUE(setup_at(0,false));
+    for (int32_t device=42; device<45; ++device) {
+        const SDL_Event start = {.cbutton = {.type = SDL_CONTROLLERBUTTONDOWN,
+            .which = device, .button = SDL_CONTROLLER_BUTTON_START}};
+        ASSERT_TRUE(dc_players_event(v,&start));
+    }
+    dc_presentation_layout_t crop;
+    ASSERT_TRUE(dc_gpu_presentation_view(dc_level_view_gpu(v),3,&crop));
+    ASSERT_EQ(crop.width,VIEW_WIDTH/4u);
+    ASSERT_EQ(crop.height,VIEW_HEIGHT);
+    const SDL_Event aim = {.caxis = {.type = SDL_CONTROLLERAXISMOTION,
+        .which = 44, .axis = SDL_CONTROLLER_AXIS_RIGHTX, .value = 32767}};
+    ASSERT_TRUE(dc_players_event(v,&aim));
+    ASSERT_TRUE(dc_players_step(v,1.f/60.f,err,sizeof(err)));
+    fr_player_t player;
+    fr_beaver_body_t body;
+    ASSERT_TRUE(dc_players_status(v,3,&player,&body)&&player.intent.has_target);
+    dc_level_view_status_t camera;
+    ASSERT_TRUE(dc_level_view_status(v,&camera));
+    int64_t viewport_x = (player.intent.target.chunk.x-camera.origin.x)*DC_CHUNK_SIDE+
+        (int32_t)player.intent.target.x-(int32_t)camera.offset_x;
+    ASSERT_EQ(viewport_x,crop.x+crop.width-1u);
     PASS();
 }
 int main(void) {
@@ -278,6 +323,7 @@ int main(void) {
     RUN(test_controller_aim_uses_its_crop_in_a_far_negative_world);
     RUN(test_split_camera_keeps_both_moving_players_framed_across_chunks);
     RUN(test_aim_reticle_is_drawn_only_in_its_own_window_band);
+    RUN(test_four_way_split_clamps_stick_to_its_own_crop);
     printf("\nResults: %d passed, %d failed\n",g_pass,g_fail);
     return g_fail?1:0;
 }
