@@ -1,0 +1,17 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+layout(local_size_x=1) in;
+layout(set=0,binding=0,std430) buffer Probe {uint words[];};
+#define DC_FRAGMENT_LABEL(pixel) words[pixel]
+#include "../../shaders/sim/carve_union_links.glsl"
+
+void main() {
+    words[0]=1u;words[1]=2u;words[2]=3u;
+    uint stale_root=carve_union_root(2u);
+    carve_union_join(2u,1u);
+    words[3]=carve_union_attach_root(stale_root,0u);
+    words[4]=words[2];
+    carve_union_join(2u,0u);
+    for(uint pixel=0u;pixel<3u;pixel++) words[5u+pixel]=carve_union_root(pixel);
+}

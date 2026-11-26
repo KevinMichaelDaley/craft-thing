@@ -1,24 +1,7 @@
 /* Monotone links cannot cycle. Atomic path halving makes every edge merge
  * independent of the scheduling order, without a diameter-dependent frontier. */
 shared uint carve_root_counts[DC_STRUCTURAL_LANES];
-uint carve_union_root(uint pixel) {
-    for(;;) {
-        uint parent=atomicAdd(DC_FRAGMENT_LABEL(pixel),0u)-1u;
-        if(parent==pixel) return pixel;
-        uint grandparent=atomicAdd(DC_FRAGMENT_LABEL(parent),0u)-1u;
-        atomicMin(DC_FRAGMENT_LABEL(pixel),grandparent+1u);
-        pixel=grandparent;
-    }
-}
-void carve_union_join(uint a,uint b) {
-    for(;;) {
-        uint ra=carve_union_root(a),rb=carve_union_root(b);
-        if(ra==rb) return;
-        uint high=max(ra,rb),low=min(ra,rb);
-        uint previous=atomicMin(DC_FRAGMENT_LABEL(high),low+1u);
-        if(previous==high+1u) return;
-    }
-}
+#include "carve_union_links.glsl"
 bool carve_union_components(Body source,uint area) {
     uint lane=gl_LocalInvocationIndex;
     for(uint pixel=lane;pixel<area;pixel+=DC_STRUCTURAL_LANES)

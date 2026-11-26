@@ -1574,6 +1574,15 @@ build/diagnostics/carve_work_profile.spv: shaders/sim/structural.comp $(wildcard
 build/carve_work_tests: tests/vulkan/carve_work_tests.c tests/vulkan/body_carve_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/carve_work_profile.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkAllocateMemory -Wl,--wrap=vkQueueSubmit
 test: build/carve_work_tests
+build/diagnostics/carve_union_probe.spv: tests/vulkan/carve_union_probe.comp shaders/sim/carve_union_links.glsl
+	@mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
+build/carve_union_tests: tests/vulkan/carve_union_tests.c tools/diagnostics/vulkan_probe.c build/diagnostics/carve_union_probe.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ $(LDLIBS)
+.PHONY: test_carve_union
+test_carve_union: build/carve_union_tests
+	./build/carve_union_tests
+test: test_carve_union
 build/sequential_detachment_tests: tests/vulkan/sequential_detachment_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/sequential_detachment_tests
