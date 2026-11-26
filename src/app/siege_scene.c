@@ -320,6 +320,7 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                                             uint32_t err_cap) {
     if (!gpu) return siege_error(err_buf, err_cap, "Missing siege GPU context");
     const bool submerged = basin != SIEGE_BASIN_NONE;
+    const bool held_load = basin == SIEGE_BASIN_DOUSE;
     const bool hot_coal = load == DC_SIEGE_LOAD_COAL;
     const uint16_t core_material = hot_coal ? DC_MATERIAL_COAL :
         basin == SIEGE_BASIN_CORROSION ? DC_MATERIAL_WOOD : DC_MATERIAL_STONE;
@@ -623,7 +624,7 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
     }
     free(objects);
     objects = NULL;
-    for (uint32_t tick = 0; okay && !submerged && tick < 5u; tick++)
+    for (uint32_t tick = 0; okay && !held_load && tick < 5u; tick++)
         okay = dc_gpu_rigid_step(gpu, err_buf, err_cap);
     if (okay) {
         for (uint32_t probe = 0x80000001u; probe <= 0x80000008u; probe++) {
@@ -647,7 +648,7 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
         okay = scene.coal_body != 0u && scene.arm_body != 0u;
         if (!okay) siege_error(err_buf, err_cap, "Siege bodies were not admitted");
     }
-    if (okay && submerged) {
+    if (okay && held_load) {
         const int32_t x = ball_x - DC_SIEGE_COAL_RADIUS;
         const int32_t y = ball_y - DC_SIEGE_COAL_RADIUS;
         okay = dc_gpu_set_body_motion(gpu, scene.coal_body, 0.f, 0.f,
@@ -678,7 +679,7 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                fr_gpu_revolute_add(gpu, &latch, err_buf, err_cap);
         scene.pivot_joint = pivot.id;
         scene.latch_joint = latch.id;
-        if (okay && !submerged) {
+        if (okay && !held_load) {
             okay = fr_gpu_revolute_add(gpu, &pouch, err_buf, err_cap);
             scene.pouch_joint = pouch.id;
         }

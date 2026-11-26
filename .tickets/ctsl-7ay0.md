@@ -31,3 +31,7 @@ RED reproduced lost pre-ignition film, ignition erasing measured oil moisture, a
 **2026-11-26T13:52:45Z**
 
 Vulkan standing-pool comparison at 68b693be passed 1/1. Both porous-stone loads completed a 3 s soak with 327680 Q16 usable surface film, 56416 Q16 naturally bound water, and 36/36 wet faces. Over 30 complete post-strike seconds every face stayed wet in both cases. Oil retained all film and 63734 Q16 bound water. Greek retained 63732 Q16 bound water and consumed 99040 Q16 fuel, including 45080 in the 15–30 s window. Greek passed 15% depletion by 14 s while oil retained 100% through 30 s. This establishes the late-window guard and a measured partial-depletion milestone. Repeated locked runs to the depletion target remain required. Dry staging, three pool preflight regressions, five CPU coating tests, and three GPU conservation tests passed. The pinned full suite is queued behind its predecessor.
+
+**2026-11-26T14:01:59Z**
+
+The second matched 30-second replay passed with byte-for-byte identical telemetry. The stationary test setup stays confined to the douse case. Holding the load against the corrosion samples caused an invalid oxidizer diagnostic and missing gold record, reproduced on 69ba82e4 and tracked by ctss-cf7j. Restoring the moving load for the existing corrosion case passed with exactly the parent revision output, including the gold fraction 0.0269 after reload. All six CPU corrosion checks passed.
