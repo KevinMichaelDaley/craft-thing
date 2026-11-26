@@ -391,7 +391,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         if(t->practical&&reuse_rate&&strcmp(reuse_rate,"0")!=0) bank|=FR_GAS_REUSE_LINE_RATE_BIT;
         const char *fused_setting=getenv("DC_GAS_FUSED_APPLY");bool fused=fused_setting&&strcmp(fused_setting,"0")!=0;
         barrier(g);VkBufferCopy copy={.size=t->state_bytes};
-        if(!t->sparse_owners&&(!direct_first||!t->matrix_valid)) vkCmdCopyBuffer(g->command,t->state_bank[bank&1u],t->state_bank[(bank&1u)^1u],1,&copy);
+        if(!direct_first) vkCmdCopyBuffer(g->command,t->state_bank[bank&1u],t->state_bank[(bank&1u)^1u],1,&copy);
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,4);
         for(uint32_t axis=0;axis<2;axis++) {
             uint32_t flags=bank|(axis<<3u)|(direct_first?FR_GAS_DIRECT_FIRST_AXIS_BIT:0u),lines=axis==0?g->height:g->width;

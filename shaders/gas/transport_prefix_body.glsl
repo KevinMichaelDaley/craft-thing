@@ -56,8 +56,13 @@ void FR_GAS_PREFIX_ENTRY() {
     for(uint group=0;group<gl_NumSubgroups;group++) any_moving=any_moving||GROUP_MOVING(group)!=GROUP_MOVING_TYPE(0);
     if(!any_moving) {
         for(uint cell=begin;cell<end;cell++) {
-            uint index=transport_position(transport_point(line,cell));
+            ivec2 p=transport_point(line,cell);
+            uint index=transport_position(p);
             transport_work[index].species=vec4(0);transport_work[index].dynamics=vec4(0);transport_work[index].visual=vec4(0);
+            if(transport_direct_first_axis()&&transport_direction()<0) {
+                uint atlas=gas_atlas(p);
+                if(atlas!=0xffffffffu) gas_write_provisional(atlas,transport_axis_input(atlas));
+            }
         }
         return;
     }

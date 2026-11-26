@@ -184,12 +184,14 @@ static void bind_canonical(dc_gpu_t *g,struct fr_gas_gpu *t) {
     uint32_t at=t->direct_publish?1u:0u;
     VkDescriptorBufferInfo buffer={t->state[at].buffer,0,t->state[at].bytes};
     const VkDescriptorSet sets[]={t->initialize.descriptor,t->feedback.descriptor,t->coordinate_feedback.descriptor,
-        t->potential_feedback.descriptor,t->audit.descriptor,
-        t->geometry_stage.descriptor,t->geometry_transfer.descriptor,t->geometry_commit.descriptor};
-    VkWriteDescriptorSet writes[8];
-    for(uint32_t i=0;i<8;i++) writes[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        t->potential_feedback.descriptor,t->audit.descriptor,t->conduction.descriptor,t->mpm_pressure.descriptor,
+        t->bubble_displace.descriptor,t->geometry_stage.descriptor,t->geometry_routes.descriptor,
+        t->geometry_demand.descriptor,t->geometry_transfer.descriptor,t->geometry_commit.descriptor};
+    const uint32_t count=sizeof(sets)/sizeof(sets[0]);
+    VkWriteDescriptorSet writes[sizeof(sets)/sizeof(sets[0])];
+    for(uint32_t i=0;i<count;i++) writes[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet=sets[i],.dstBinding=0,.descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&buffer};
-    vkUpdateDescriptorSets(g->device,8,writes,0,NULL);
+    vkUpdateDescriptorSets(g->device,count,writes,0,NULL);
 }
 static void record_geometry(dc_gpu_t *g,struct fr_gas_gpu *t,bool local,bool cached,float seconds) {
     uint32_t *words=t->stats.mapped;words[FR_GAS_ERROR_WORD]=0u;
