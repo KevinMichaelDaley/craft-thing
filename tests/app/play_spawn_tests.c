@@ -234,6 +234,13 @@ static void test_play_loads_authored_trees_and_preserves_harvest_and_rocks(void)
     dc_gpu_body_motion_t motion;
     ASSERT_TRUE(dc_gpu_read_body_motion(gpu,original[0],&motion,err,sizeof(err)));
     ASSERT_TRUE(!(motion.flags & DC_GPU_BODY_KINEMATIC));
+    ASSERT_TRUE(dc_gpu_set_body_origin(gpu,gpu->body_origin,err,sizeof(err)));
+    ASSERT_TRUE(aim_at_rock(gpu,&west));
+    key.key.keysym.scancode = SDL_SCANCODE_G;
+    ASSERT_TRUE(dc_players_event(view,&key));
+    ASSERT_TRUE(dc_players_step(view,1.f/60.f,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_body_motion(gpu,original[0],&motion,err,sizeof(err)));
+    ASSERT_TRUE(motion.flags & DC_GPU_BODY_KINEMATIC);
     ASSERT_TRUE(dc_gpu_remove_body(gpu, original[1], err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)) && dc_level_view_tick(view, err, sizeof(err)));
     ASSERT_TRUE(close_world());
@@ -249,6 +256,8 @@ static void test_play_loads_authored_trees_and_preserves_harvest_and_rocks(void)
     ASSERT_EQ(restored[0], original[0]);
     ASSERT_EQ(restored[1], 0u);
     ASSERT_EQ(restored[2], original[2]);
+    ASSERT_TRUE(dc_gpu_read_body_motion(dc_level_view_gpu(view),restored[0],&motion,err,sizeof(err)));
+    ASSERT_TRUE(!(motion.flags & DC_GPU_BODY_KINEMATIC));
     ASSERT_TRUE(dc_level_view_pan_pixels(view, VIEW_WIDTH, 0));
     ASSERT_TRUE(dc_level_view_wait_visible(view, 120000u, err, sizeof(err)));
     ASSERT_EQ(dc_gpu_find_active_chunk(dc_level_view_gpu(view), (dc_chunk_coord_t){-1, 1}),

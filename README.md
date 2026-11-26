@@ -40,7 +40,8 @@ R places one terrain cell and B places a 4×4 rigid block at the aim. Placement
 uses the player's inventory and requires an empty footprint. On a controller,
 the D-pad selects the same slots in up, right, down, left order. X casts the
 selected spell. The right and left shoulders place terrain and rigid blocks
-respectively.
+respectively. Click the right stick to grab, click the left stick to throw,
+and press Back to drop. On the keyboard, use G, F and E for those actions.
 
 The live loop never replays missed world ticks. It admits at most one fixed
 physics tick per display; under GPU overload physical simulation runs slower
@@ -54,8 +55,8 @@ timing and assets. `make test_player_runtime test_beaver_fire_runtime` includes
 actual window/material checks; avoid running them beside an interactive game.
 See the [player integration notes](design/beaver_player.md) and
 [asset manifest](assets/player/beaver/manifest.json). General spell definitions,
-conservative tree harvesting, full pose-dependent material exposure and
-split-screen remain unfinished on `ct-exwr`.
+full pose-dependent material exposure and end-to-end acceptance remain under
+`ct-exwr`.
 
 Dungeoncraft is an early C11/Vulkan prototype for a per-pixel material world. The current vertical slice streams procedural chunks on a worker thread, maps a bounded chunk atlas through a GPU page table, draws it with a SPIR-V compute shader, and presents it through a Vulkan swapchain. The window accepts material painting, runs up to 64 GPU rigid boxes, moves Eulerian water on fixed grid cells, and settles sand, dirt, and gravel through a GPU particle/grid MPM stage.
 

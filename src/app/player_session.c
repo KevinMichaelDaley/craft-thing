@@ -169,10 +169,14 @@ static void players_release_carry(dc_level_view_t *v, uint32_t seat) {
     if (carry->body_id) fr_player_manipulation_drop(v->gpu, carry, NULL, 0u);
 }
 
+static void players_release_all_carries(dc_level_view_t *v) {
+    for (uint32_t n = 0; n < v->players->count; ++n) players_release_carry(v, n);
+}
+
 void dc_players_destroy(dc_level_view_t *v) {
     if(!v||!v->players) return;
     struct dc_player_session *s=v->players;
-    for (uint32_t n = 0; n < s->count; ++n) players_release_carry(v, n);
+    players_release_all_carries(v);
     fr_fire_ray_gpu_destroy(s->ray);
     fr_player_drive_gpu_destroy(s->drive);
     for(unsigned n=0;n<FR_INPUT_DEVICES;n++) if(s->controllers[n]) SDL_GameControllerClose(s->controllers[n]);
@@ -238,8 +242,7 @@ bool dc_players_event(dc_level_view_t *v,const SDL_Event *e) {
     if(e->type==SDL_KEYDOWN&&e->key.keysym.scancode==SDL_SCANCODE_TAB) {
         if(!e->key.repeat) {
             s->editor=!s->editor;
-            if (s->editor)
-                for (uint32_t n = 0; n < s->count; ++n) players_release_carry(v, n);
+            if (s->editor) players_release_all_carries(v);
             dc_players_ui(v,false);
         }
         return true;
@@ -256,7 +259,7 @@ bool dc_players_event(dc_level_view_t *v,const SDL_Event *e) {
         }
     }
     if (e->type == SDL_WINDOWEVENT && e->window.event == SDL_WINDOWEVENT_FOCUS_LOST)
-        for (uint32_t n = 0; n < s->count; ++n) players_release_carry(v, n);
+        players_release_all_carries(v);
     if(e->type==SDL_CONTROLLERBUTTONDOWN&&e->cbutton.button==SDL_CONTROLLER_BUTTON_START) {
         for(uint32_t n=0;n<s->count;n++) if(s->device[n]==e->cbutton.which) return true;
         for(uint32_t n=1;n<s->count;n++) if(s->device[n]==INT64_MIN) {
@@ -345,6 +348,25 @@ static bool players_place_item(dc_level_view_t *v, fr_player_inventory_t *invent
     return okay;
 }
 
+static bool players_manipulate(dc_level_view_t *v, uint32_t seat,
+                               const dc_gpu_world_body_t *player, const fr_input_state_t *input,
+                               char *err, uint32_t cap) {
+    if (!player->body.active) {
+        players_release_carry(v, seat);
+        return true;
+    }
+    fr_player_carry_t *carry = &v->players->carry[seat];
+    const fr_player_manipulation_t *settings = &v->players->manipulation[seat];
+    bool acted = false;
+    if (input->has_target && (input->pressed & (1u << FR_INPUT_GRAB)))
+        acted = fr_player_manipulation_grab(v->gpu, carry, settings, player, &input->target, err, cap);
+    else if (input->pressed & (1u << FR_INPUT_DROP))
+        acted = fr_player_manipulation_drop(v->gpu, carry, err, cap);
+    else if (input->has_target && (input->pressed & (1u << FR_INPUT_THROW)))
+        acted = fr_player_manipulation_throw(v->gpu, carry, settings, &input->target, err, cap);
+    return acted || fr_player_manipulation_tick(v->gpu, carry, player);
+}
+
 bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
     if(!v||!v->players||!isfinite(seconds)||seconds<=0||seconds>.25f) return false;
     struct dc_player_session *s=v->players;
@@ -391,9 +413,6 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
                 (unsigned long long)s->players[n].elapsed_ms,s->cast_events[n].ability,s->players[n].facing,s->ray!=NULL);fflush(stderr);
         }
         if(has_body) {
-            /* Sandbox ability dispatch: the fire ability launches a burning
-             * bolt and the ice ability casts a bounded storm at the target.
-             * Ray-equipped demo scenes keep their beam behaviour. */
             const fr_player_action_event_t *cast=&s->cast_events[n];
             if(!s->ray&&cast->ability&&cast->has_target&&can_aim) {
                 if(cast->ability==s->fire)
@@ -401,15 +420,7 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
                 else if(cast->ability==s->ice)
                     fr_player_cast_ice_storm(v->gpu,&cast->target,6u,err,cap);
             }
-            bool acted=false;
-            if (!self.body.active) players_release_carry(v, n);
-            else if (input.has_target && (edges & (1u << FR_INPUT_GRAB)))
-                acted=fr_player_manipulation_grab(v->gpu,&s->carry[n],&s->manipulation[n],&self,&input.target,err,cap);
-            else if (edges & (1u << FR_INPUT_DROP))
-                acted=fr_player_manipulation_drop(v->gpu,&s->carry[n],err,cap);
-            else if (input.has_target && (edges & (1u << FR_INPUT_THROW)))
-                acted=fr_player_manipulation_throw(v->gpu,&s->carry[n],&s->manipulation[n],&input.target,err,cap);
-            if (!acted && !fr_player_manipulation_tick(v->gpu,&s->carry[n],&self)) return false;
+            if (!players_manipulate(v, n, &self, &input, err, cap)) return false;
             if (!players_place_item(v, &s->inventory[n], &input, &item, err, cap))
                 return false;
         } else players_release_carry(v,n);

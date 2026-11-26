@@ -56,6 +56,7 @@ static dc_gpu_body_record_t *held_body(dc_gpu_t *gpu, fr_player_carry_t *carry) 
     dc_gpu_body_record_t *body = carry->slot < dc_gpu_body_capacity(gpu)
         ? dc_gpu_body_record(gpu, carry->slot) : NULL;
     if (body && body->body.active && body->body.id == carry->body_id &&
+        body->reserved[0] != DC_GPU_STRUCTURAL_TAG &&
         (body->motion_flags & DC_GPU_BODY_KINEMATIC) &&
         (!gpu->runtime_body_consumers ||
          live_generation(gpu, carry->slot, carry->body_id) == carry->generation))
@@ -80,9 +81,9 @@ bool fr_player_manipulation_grab(dc_gpu_t *gpu, fr_player_carry_t *carry,
             !(body->mass > 0.f && body->mass <= settings->carry_weight)) return false;
         dc_chunk_coord_t chunk = body_chunk(body);
         double dx = chunk_cells(chunk.x, player->chunk.x) +
-            (body->local_x_fp - player->body.x_fp) / (double)DC_FLUID_FULL;
+            ((double)body->local_x_fp - player->body.x_fp) / DC_FLUID_FULL;
         double dy = chunk_cells(chunk.y, player->chunk.y) +
-            (body->local_y_fp - player->body.y_fp) / (double)DC_FLUID_FULL;
+            ((double)body->local_y_fp - player->body.y_fp) / DC_FLUID_FULL;
         if (hypot(dx, dy) > settings->reach) return false;
         uint32_t generation = live_generation(gpu, slot, id);
         if (gpu->runtime_body_consumers && !generation) return false;
@@ -92,7 +93,8 @@ bool fr_player_manipulation_grab(dc_gpu_t *gpu, fr_player_carry_t *carry,
             return false;
         body->body.vx_fp = 0;
         body->body.vy_fp = 0;
-        *carry = (fr_player_carry_t){id, slot, generation, restore};
+        *carry = (fr_player_carry_t){.body_id = id, .slot = slot,
+            .generation = generation, .restore_flags = restore};
         return true;
     }
     return false;
