@@ -32,4 +32,7 @@ struct dc_level_view {
 
 /** Dispose of an unpublished level during failed construction. */
 void dc_level_view_discard(dc_level_view_t *view);
+
+/** Configure the standard ambient gas model before streaming chunk stock. */
+bool dc_level_view_configure_atmosphere(dc_level_view_t *view, char *err, uint32_t cap);
 #endif

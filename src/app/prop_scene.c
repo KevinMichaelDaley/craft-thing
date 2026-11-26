@@ -7,6 +7,7 @@
 
 #include <SDL.h>
 
+#include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/physics/authored_rigid_gpu.h"
 #include "../vulkan/gpu_internal.h"
 #include "level_internal.h"
@@ -178,11 +179,15 @@ dc_level_view_t *dc_play_scene_create(const char *directory, uint64_t seed,
     const uint32_t surface = SPAWN_GROUND;
     dc_ground_profile_t ground = {.width = 1, .soil_depth = 1, .surface = &surface};
     dc_level_view_t *view = dc_level_view_create_ground(directory, seed, &ground, err, cap);
-    if (view &&
-        dc_level_view_pan_pixels(view, 0, -INITIAL_CHUNK_Y * (int32_t)DC_CHUNK_SIDE) &&
-        dc_level_view_wait_visible(view, 120000u, err, cap) &&
-        (dc_level_view_restored(view) || author_spawn_scene(view, err, cap)) &&
-        dc_players_enable(view, err, cap)) return view;
+    if (view && dc_level_view_configure_atmosphere(view, err, cap)) {
+        view->smoke_ready = true;
+        if (dc_level_view_pan_pixels(view, 0, -INITIAL_CHUNK_Y * (int32_t)DC_CHUNK_SIDE) &&
+            dc_level_view_wait_visible(view, 120000u, err, cap) &&
+            (dc_level_view_restored(view) || author_spawn_scene(view, err, cap)) &&
+            dc_players_enable(view, err, cap) &&
+            fr_combustion_gpu_enable(view->gpu, err, cap))
+            return view;
+    }
     dc_level_view_discard(view);
     return NULL;
 }

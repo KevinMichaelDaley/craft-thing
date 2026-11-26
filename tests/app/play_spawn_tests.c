@@ -292,6 +292,9 @@ static void test_play_combustion_changes_fur_and_reloads_its_gas(void) {
     ASSERT_EQ(initial.state.char_mass_fp, 0u);
     ASSERT_EQ(initial.state.flags & FR_REACTIVE_FLAMING, 0u);
     fr_reactive_state_t hot = initial.state;
+    /* Use a fixed ignition draw for this short, bounded exposure. The solver
+     * still has to supply heat and oxygen before burning any fuel. */
+    hot.ignition_threshold = .025f;
     const double heat = fr_reactive_state_energy_at_temperature(&hot, 1150.f)
                       - fr_reactive_state_energy(&hot);
     ASSERT_TRUE(fr_reactive_state_add_heat(&hot, heat, err, sizeof(err)));
@@ -301,6 +304,11 @@ static void test_play_combustion_changes_fur_and_reloads_its_gas(void) {
     ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, body, x, y, &burned, &found, err, sizeof(err)) && found);
     ASSERT_EQ(burned.state.parcel_id_low, initial.state.parcel_id_low);
     ASSERT_EQ(burned.state.parcel_id_high, initial.state.parcel_id_high);
+    float temperature;
+    ASSERT_TRUE(fr_reactive_state_temperature(&burned.state, &temperature, err, sizeof(err)));
+    printf("Fur parcel fuel %u -> %u, char %u, %.1f K, ignition %.5f of %.5f\n",
+           initial.state.fuel_mass_fp, burned.state.fuel_mass_fp, burned.state.char_mass_fp,
+           temperature, burned.state.ignition_integral, burned.state.ignition_threshold);
     ASSERT_TRUE(burned.state.fuel_mass_fp < initial.state.fuel_mass_fp);
     ASSERT_TRUE(burned.state.char_mass_fp > 0u);
 
@@ -359,9 +367,9 @@ static void test_play_admits_ambient_air_when_reopening_an_older_save(void) {
 
 int main(void) {
     printf("=== Authored Play Spawn Tests ===\n");
-    RUN(test_play_loads_authored_trees_and_preserves_harvest_and_rocks);
     RUN(test_play_combustion_changes_fur_and_reloads_its_gas);
     RUN(test_play_admits_ambient_air_when_reopening_an_older_save);
+    RUN(test_play_loads_authored_trees_and_preserves_harvest_and_rocks);
     printf("Results: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

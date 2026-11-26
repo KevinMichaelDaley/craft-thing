@@ -20,6 +20,17 @@
 #include "view_config.h"
 
 static bool error(char *buf,uint32_t cap,const char *message);
+bool dc_level_view_configure_atmosphere(dc_level_view_t *view, char *err, uint32_t cap) {
+    const fr_gas_model_t model = {
+        .gas_constant = {.25984, .29680, .18892, .46152, 0},
+        .heat_capacity_cv = {.65816, .74320, .65508, 1.40248, .71},
+        .kinetic_scale = 1. / 512.
+    };
+    return fr_gas_gpu_enable(view->gpu, &model, .0012f, 293.15f, err, cap) &&
+           fr_gas_gpu_set_pressure_policy(view->gpu, FR_GAS_PRESSURE_PRACTICAL, err, cap) &&
+           fr_gas_gpu_set_gravity(view->gpu, 900, err, cap);
+}
+
 static void bonfire_startup_trace(const char *stage, Uint64 started) {
     if(getenv("DC_BONFIRE_STARTUP_TRACE"))
         fprintf(stderr,"Bonfire startup %s: %llums\n",stage,
@@ -77,12 +88,9 @@ bool dc_level_view_setup_bonfire(dc_level_view_t *view,char *err,uint32_t cap) {
         if(!dc_bonfire_admit(view->gpu,err,cap)) return false;
         bonfire_startup_trace("rigid admission",started);
     }
-    fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
-        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
-    if(!fr_gas_gpu_enable(view->gpu,&model,.0012f,293.15f,err,cap)) return false;
+    if(!dc_level_view_configure_atmosphere(view,err,cap)) return false;
     bonfire_startup_trace("gas enabled",started);
-    if(!fr_gas_gpu_set_pressure_policy(view->gpu,FR_GAS_PRESSURE_PRACTICAL,err,cap)||
-       !fr_gas_gpu_set_gravity(view->gpu,900,err,cap)||!fr_combustion_gpu_enable(view->gpu,err,cap)) return false;
+    if(!fr_combustion_gpu_enable(view->gpu,err,cap)) return false;
     if(view->restored) {
         if(!dc_level_view_wait_visible(view,120000,err,cap)) return false;
         for(uint32_t i=0;i<view->table.capacity;i++) if(!view->gas_admitted[i])
@@ -371,7 +379,7 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
         }
         if(trace) {parts[3]+=SDL_GetTicks64()-stage;stage=SDL_GetTicks64();}
         fr_gas_checkpoint_chunk_t *gas=NULL;
-        if(view->smoke_box) {
+        if(view->gas_admitted[i]) {
             gas=malloc(sizeof(*gas));
             if(!gas||!fr_gas_gpu_export_checkpoint(view->gpu,i,gas,err,cap)) {
                 free(gas);fr_reactive_chunk_release(&reactive);return false;
@@ -531,6 +539,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     if (view->players && view->pending_steps && !view->transfer_pending)
         dc_players_prepare_view(view);
     if (!process_results(view, err, cap)) return false;
+    if (view->smoke_ready && !fr_gas_gpu_initialize_queued(view->gpu, err, cap)) return false;
     if (!bind_transfer_destination(view, err, cap)) return false;
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         dc_chunk_slot_t *slot = &view->table.slots[i];
@@ -570,7 +579,6 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     view->pending_chunk_dx = 0;
     view->pending_chunk_dy = 0;
     view->mapped_origin = view->origin;
-    if(view->smoke_ready&&!fr_gas_gpu_initialize_queued(view->gpu,err,cap)) return false;
     dc_chunk_coord_t body_origin={view->origin.x-HALO_CHUNKS,view->origin.y-HALO_CHUNKS};
     bool ticking=all_resident&&view->pending_steps!=0u&&!view->transfer_pending;
     if(!(ticking?dc_gpu_prepare_body_origin(view->gpu,body_origin,err,cap):

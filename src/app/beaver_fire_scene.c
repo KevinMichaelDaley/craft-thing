@@ -71,11 +71,7 @@ static bool demo_wood(dc_level_view_t *v,const dc_beaver_fire_plan_t *p,char *er
 static bool configure_gas(dc_level_view_t *view,char *err,uint32_t cap) {
     dc_beaver_fire_plan_t plan;
     if(!view||!dc_beaver_fire_plan(VIEW_WIDTH,VIEW_HEIGHT,&plan)||!dc_smoke_profile_defaults()) return demo_error(err,cap,"Invalid fire demo view or smoke profile");
-    fr_gas_model_t gas={.gas_constant={.25984,.29680,.18892,.46152,0},
-        .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
-    return fr_gas_gpu_enable(view->gpu,&gas,.0012f,293.15f,err,cap)&&
-        fr_gas_gpu_set_pressure_policy(view->gpu,FR_GAS_PRESSURE_PRACTICAL,err,cap)&&
-        fr_gas_gpu_set_gravity(view->gpu,900,err,cap);
+    return dc_level_view_configure_atmosphere(view,err,cap);
 }
 
 bool dc_beaver_fire_configure(dc_level_view_t *view,char *err,uint32_t cap) {
