@@ -25,7 +25,7 @@
       "frames": 6,
       "frame_ms": 100,
       "loop": true,
-      "runtime_display": "Supplied idle pose; user-authored walk art pending. Legacy derived poses are not cycled in the live build."
+      "runtime_display": "The sandbox cycles the derived poses. The fire-ray demo displays the supplied idle pose during movement."
     },
     "chew": {
       "frames": 8,

@@ -27,12 +27,13 @@ and gas simulation supply ignition, burning wood, heat and smoke. Air and
 combustible substrates pass the ray; noncombustible solids, water and unloaded
 cells block it. The eight casting frames use 80 ms per frame: emission at
 400 ms, recovery complete at 640 ms. A new button press is required for each cast.
-Movement cycles through six walk poses at 100 ms per frame, mirrored to face
+Movement in the fire-ray demo uses the supplied idle artwork, mirrored to face
 the direction of travel.
 
 A fresh sandbox (`./build/dungeoncraft --play`) starts in an
 [authored clearing](assets/props/spawn_tree.md). Pass the same `--world-dir` to
-keep scene edits and surviving bodies between runs.
+keep scene edits and surviving bodies between runs. Sandbox movement cycles
+through six walk poses at 100 ms per frame and mirrors them on reversal.
 
 In the sandbox, slots 1–4 select fire, ice,
 stone, and wood. Press Q to cast the selected spell. The cast uses the aim

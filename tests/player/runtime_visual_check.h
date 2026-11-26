@@ -18,7 +18,8 @@ static bool runtime_visual_check(dc_level_view_t *v,fr_player_action_t action,
     dc_level_view_status_t status;
     if(!dc_players_status(v,0,&p,&binding)||
        !dc_level_view_status(v,&status)||!dc_level_view_body_state(v,binding.binding.body_id,&body,&motion,err,cap)) return false;
-    size_t bytes;uint32_t entries;fr_beaver_asset_size(action,&bytes,&entries);
+    size_t bytes;uint32_t entries;
+    if(!fr_beaver_asset_size(action,&bytes,&entries)) return false;
     uint8_t *storage=malloc(bytes);uint32_t *mapping=malloc((size_t)entries*4);
     uint32_t *pixels=malloc((size_t)VIEW_WIDTH*VIEW_HEIGHT*4);fr_beaver_asset_t asset;
     bool okay=storage&&mapping&&pixels&&fr_beaver_asset_build(action,storage,bytes,mapping,entries,&asset,err,cap)&&
