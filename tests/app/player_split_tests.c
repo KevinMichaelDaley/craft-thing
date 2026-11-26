@@ -9,6 +9,7 @@
 #include "../../src/app/view_config.h"
 #include "../../src/vulkan/gpu_internal.h"
 #include "../../src/vulkan/reactive_storage_gpu.h"
+#include "../../src/vulkan/runtime_body_gpu.h"
 
 static int g_pass,g_fail;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fflush(stdout);fn();teardown();} while(0)
@@ -22,11 +23,13 @@ static SDL_Window *cover_window;
 static uint32_t *before_pixels, *after_pixels;
 enum { RETICLE_ARM_SAMPLE = 4, RGB_WHITE = 0x00ffffff };
 static enum { JOIN_OK, JOIN_FAIL_DRIVE, JOIN_FAIL_RAY, JOIN_FAIL_SPRITES } fail_join;
+static uint32_t staged_join_body;
 
 bool __real_fr_player_drive_gpu_create(dc_gpu_t *,const fr_player_body_binding_t *,uint32_t,
     float,float,fr_player_drive_gpu_t **,char *,uint32_t);
 bool __wrap_fr_player_drive_gpu_create(dc_gpu_t *gpu,const fr_player_body_binding_t *bindings,uint32_t count,
     float speed,float jump,fr_player_drive_gpu_t **drive,char *error,uint32_t cap) {
+    if(fail_join!=JOIN_OK&&count==2u) staged_join_body=bindings[1].body_id;
     if(fail_join==JOIN_FAIL_DRIVE&&count==2u) {
         fail_join=JOIN_OK;
         snprintf(error,cap,"Injected drive preparation failure");
@@ -141,6 +144,21 @@ static void test_direct_join_rebinds_the_same_disconnected_native_beaver(void) {
     PASS();
 }
 
+static uint32_t occupied_cells(const dc_gpu_t *gpu,uint32_t body_id) {
+    const uint32_t *current=gpu->occupancy_mapped;
+    size_t count=(size_t)gpu->width*gpu->height;
+    uint32_t owned=0;
+    for(size_t cell=0;cell<count;cell++) owned+=current[cell]==body_id;
+    return owned;
+}
+
+static uint32_t live_bodies(const dc_gpu_t *gpu) {
+    uint32_t live=0;
+    for(uint32_t slot=0;slot<dc_gpu_body_capacity(gpu);slot++)
+        live+=dc_gpu_body_owner(gpu,slot)->state==DC_BODY_OWNER_LIVE;
+    return live;
+}
+
 static void test_new_player_setup_failures_preserve_the_live_seat_and_ray(void) {
     ASSERT_TRUE(setup_at(0,false));
     const fr_fire_ray_config_t config={.range=80u,.half_height=1u,.duration=.4f,.temperature_K=900.f};
@@ -160,10 +178,14 @@ static void test_new_player_setup_failures_preserve_the_live_seat_and_ray(void) 
     fr_reactive_arena_stats_t baseline,stats;
     ASSERT_TRUE(fr_reactive_arena_stats(gpu,&gpu->reactive->arena,&baseline));
     uint64_t high_id=gpu->reactive->high_id;
-    uint32_t body_count=gpu->body_count;
+    uint32_t body_count=live_bodies(gpu);
     uint32_t geometry_words=((const uint32_t *)gpu->body_mapped)[dc_gpu_pixel_pool_word_offset(gpu)+1u];
+    uint32_t original_body=s->bodies[0].binding.body_id;
+    uint32_t original_cells=occupied_cells(gpu,original_body);
+    ASSERT_TRUE(original_cells>0u);
     const SDL_Event start={.cbutton={.type=SDL_CONTROLLERBUTTONDOWN,.which=42,.button=SDL_CONTROLLER_BUTTON_START}};
     for(unsigned fault=JOIN_FAIL_DRIVE;fault<=JOIN_FAIL_SPRITES;fault++) {
+        staged_join_body=0;
         fail_join=fault;
         ASSERT_TRUE(dc_players_event(v,&start));
         ASSERT_EQ(fail_join,JOIN_OK);
@@ -176,7 +198,13 @@ static void test_new_player_setup_failures_preserve_the_live_seat_and_ray(void) 
         ASSERT_EQ(after.casts,before.casts);
         ASSERT_EQ(after.remaining,before.remaining);
         ASSERT_EQ(after.heated,before.heated);
-        ASSERT_EQ(gpu->body_count,body_count);
+        ASSERT_EQ(live_bodies(gpu),body_count);
+        ASSERT_TRUE(staged_join_body&&staged_join_body!=original_body);
+        uint32_t abandoned_cells=occupied_cells(gpu,staged_join_body);
+        printf("Join fault %u left %u cells for candidate %u before any new frame.\n",
+            fault,abandoned_cells,staged_join_body);
+        ASSERT_EQ(abandoned_cells,0u);
+        ASSERT_EQ(occupied_cells(gpu,original_body),original_cells);
         ASSERT_EQ(((const uint32_t *)gpu->body_mapped)[dc_gpu_pixel_pool_word_offset(gpu)+1u],geometry_words);
         ASSERT_TRUE(fr_reactive_arena_stats(gpu,&gpu->reactive->arena,&stats));
         ASSERT_EQ(stats.live,baseline.live);
@@ -189,7 +217,8 @@ static void test_new_player_setup_failures_preserve_the_live_seat_and_ray(void) 
     ASSERT_TRUE(fr_fire_ray_gpu_stats(s->ray,0u,&after));
     ASSERT_EQ(after.remaining,before.remaining);
     ASSERT_EQ(after.casts,1u);
-    ASSERT_EQ(gpu->body_count,body_count+1u);
+    ASSERT_EQ(live_bodies(gpu),body_count+1u);
+    ASSERT_TRUE(occupied_cells(gpu,s->bodies[1].binding.body_id)>0u);
     dc_gpu_body_pixel_t pixels[FR_BEAVER_PIXELS];
     uint32_t added=0;
     ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu,s->bodies[1].binding.body_id,pixels,FR_BEAVER_PIXELS,&added,err,sizeof(err)));

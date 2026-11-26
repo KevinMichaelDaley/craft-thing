@@ -18,3 +18,9 @@ Admitting a player writes its raster into the world before preparing drive, ray 
 
 In the SDL/Vulkan join rollback fixture, verify that the failed candidate occupies zero cells immediately after every preparation failure, without stepping the world. Keep cell occupancy for the existing player, and verify that the successful retry appears in the raster.
 
+
+## Notes
+
+**2026-11-26T23:13:24Z**
+
+The native RED fixture compiled and reported 1,023 occupied cells belonging to failed candidate 2147483650 immediately after the injected drive failure. Its live body record was already gone. The fixture deliberately checks before any world tick or another join can refresh the grid.
