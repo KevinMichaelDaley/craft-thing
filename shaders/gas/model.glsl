@@ -160,7 +160,7 @@ Gas gas_practical_state(Gas value) {
 Gas gas_buoyancy_cached(Gas s,Primitive primitive,float dt,out float admitted_work,out float admitted_impulse) {
     admitted_work=0.;admitted_impulse=0.;
     float mass=gas_mass(s);
-    if(mass==0.) return s;
+    if(mass==0.||s.geometry.x<=0.) return s;
     float gravity=gas_parameter(FR_GAS_GRAVITY_WORD);
     Gas result=s;
     if(gravity!=0.) {

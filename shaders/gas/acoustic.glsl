@@ -17,11 +17,12 @@ layout(set=0,binding=23,std430) restrict buffer Indirect {uint indirect[];};
 uint gas_tile_count() {return ((params.width+7u)/8u)*((params.height+7u)/8u);}
 vec2 gas_large_pressure_state(Gas value,float old_pressure) {
     precise float mass=(((value.species.x+value.species.y)+value.species.z)+value.species.w)+value.dynamics.x;
+    if(mass<=0.||value.geometry.x<=0.) return vec2(0);
     precise float energy=(value.dynamics.y+value.visual.w)+value.geometry.z;
     if(gas_practical_policy()) energy=gas_thermal_energy(value);
     float fraction=gas_practical_policy()?1.:1.-FR_GAS_LARGE_ENERGY_ADVECTION;
     precise float numerator=fraction*energy+gas_parameter(FR_GAS_KINETIC_WORD)*old_pressure*value.geometry.x;
-    return mass>0.?vec2(mass/value.geometry.x,numerator/mass):vec2(0);
+    return vec2(mass/value.geometry.x,numerator/mass);
 }
 float gas_pressure_relaxation(vec4 coefficients,float diagonal) {
     if(gas_practical_policy()) return 1.8;
