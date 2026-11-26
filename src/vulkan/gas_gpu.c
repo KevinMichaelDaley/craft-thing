@@ -175,6 +175,20 @@ static bool submit(dc_gpu_t *g,char *err,uint32_t cap) {
         VK_ACCESS_2_HOST_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
     return fr_gas_submit(g)||error(err,cap,"Cannot complete Vulkan gas transaction");
 }
+void fr_gas_gpu_record_grain_pressure(dc_gpu_t *g,uint32_t bank) {
+    const fr_renderer_compute_t *feedback=&g->gas->mpm_pressure;
+    barrier(g);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+        VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
+    uint32_t push[4]={g->width,g->height,0u,bank};
+    vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,feedback->pipeline);
+    vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,
+        feedback->pipeline_layout,0,1,&feedback->descriptor,0,NULL);
+    vkCmdPushConstants(g->command,feedback->pipeline_layout,
+        VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
+    vkCmdDispatchIndirect(g->command,g->mpm_activity_buffer,0);
+}
 bool fr_gas_run_audit(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin cold gas audit");
     dispatch(g,g->gas,&g->gas->audit,0,0);
@@ -420,6 +434,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
         if(!submit(g,err,cap)||!shader_ok(g,t,err,cap)) return false;
         speed=rate(t);
     }
+    bool fuse_grain_pressure=t->direct_publish&&t->policy==FR_GAS_PRESSURE_PRACTICAL;
     double remaining=seconds,hint=t->large_step_hint>0?t->large_step_hint:seconds;uint64_t accepted=0,retries=0;
     while(remaining>0) {
         if(!isfinite(speed)||speed<0) return error(err,cap,"Invalid reduced gas CFL metadata");
@@ -433,7 +448,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
             if(t->policy!=FR_GAS_PRESSURE_HLLC) {
                 double transport_rate=t->policy==FR_GAS_PRESSURE_PRACTICAL?fmax(speed,2.*FR_GAS_PRACTICAL_MIXING_RATE):speed;
                 t->acoustic.large_transport=t->policy>=FR_GAS_PRESSURE_LARGE_CFL&&(double)dt*transport_rate>FR_GAS_ADVECTIVE_COURANT;
-                if(!fr_gas_acoustic_step(g,&t->acoustic,t->groups_x,t->groups_y,dt,bank,&t->stats,err,cap)) return false;
+                if(!fr_gas_acoustic_step(g,&t->acoustic,t->groups_x,t->groups_y,dt,bank,&t->stats,fuse_grain_pressure,err,cap)) return false;
             } else {
                 if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas substep");
                 dispatch(g,t,&t->transport,dt,bank);
@@ -458,19 +473,11 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
         if(!submit(g,err,cap)) return false;
     }
     t->cached_bank=bank;t->cached_rate=speed;t->cache_valid=true;t->acoustic.geometry_changed=false;
-    if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas pressure feedback");
-    barrier(g);
-    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-        VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
-    uint32_t push[4]={g->width,g->height,0u,bank};
-    vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,t->mpm_pressure.pipeline);
-    vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,
-        t->mpm_pressure.pipeline_layout,0,1,&t->mpm_pressure.descriptor,0,NULL);
-    vkCmdPushConstants(g->command,t->mpm_pressure.pipeline_layout,
-        VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
-    vkCmdDispatchIndirect(g->command,g->mpm_activity_buffer,0);
-    if(!submit(g,err,cap)) return false;
+    if(!fuse_grain_pressure) {
+        if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas pressure feedback");
+        fr_gas_gpu_record_grain_pressure(g,bank);
+        if(!submit(g,err,cap)) return false;
+    }
     if(fused) {t->geometry_dirty=false;t->geometry_routes_dirty=false;}
     if(t->policy==FR_GAS_PRESSURE_LARGE_CFL) t->large_step_hint=hint;
     t->clock.physical_steps++;t->clock.substeps+=accepted;t->clock.advanced_seconds+=seconds;

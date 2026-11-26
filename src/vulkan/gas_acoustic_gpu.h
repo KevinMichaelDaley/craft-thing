@@ -44,7 +44,7 @@ bool fr_gas_acoustic_create(dc_gpu_t *gpu,fr_gas_acoustic_gpu_t *module,
 void fr_gas_acoustic_destroy(dc_gpu_t *gpu,fr_gas_acoustic_gpu_t *module);
 /** Complete one staged pressure/advection step, reading reduced residual only. */
 bool fr_gas_acoustic_step(dc_gpu_t *gpu,fr_gas_acoustic_gpu_t *module,uint32_t gx,uint32_t gy,
-    float seconds,uint32_t bank,dc_gpu_address_buffer_t *stats,char *err,uint32_t cap);
+    float seconds,uint32_t bank,dc_gpu_address_buffer_t *stats,bool fuse_grain_pressure,char *err,uint32_t cap);
 /** Print completed constant-size transport/setup GPU timing queries for diagnostics. */
 void fr_gas_acoustic_trace_transport(dc_gpu_t *gpu);
 /** Print completed pressure and publication GPU timing queries for diagnostics. */

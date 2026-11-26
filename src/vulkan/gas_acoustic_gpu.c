@@ -308,7 +308,7 @@ static void multigrid_cycle(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,float dt,uint32
     }
 }
 bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint32_t gy,
-    float dt,uint32_t bank,dc_gpu_address_buffer_t *stats,char *err,uint32_t cap) {
+    float dt,uint32_t bank,dc_gpu_address_buffer_t *stats,bool fuse_grain_pressure,char *err,uint32_t cap) {
     bool trace=getenv("DC_GAS_TRACE")!=NULL&&g->timestamp_bits;
     const char *direct_first_setting=getenv("DC_GAS_DIRECT_FIRST_AXIS");
     bool request_fused_axis=getenv("DC_GAS_FUSED_AXIS")!=NULL;
@@ -500,6 +500,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,tail_query);
         indirect_dispatch(g,t,&t->commit,dt,bank,48);
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,tail_query+1u);
+        if(fuse_grain_pressure) fr_gas_gpu_record_grain_pressure(g,bank&1u);
         if(!submit(g,err,cap)) return false;
         if((bank&FR_GAS_COMPARE_ROW_SETUP_BIT)!=0u) {
             uint32_t *words=stats->mapped;float values[4];memcpy(values,words+FR_GAS_ROW_DIAGONAL_BEFORE_WORD,sizeof(values));

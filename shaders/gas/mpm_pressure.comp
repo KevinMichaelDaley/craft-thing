@@ -14,6 +14,7 @@ float pressure_at(ivec2 p,float fallback) {
     return valid&&value.metric.w>0.?value.hydro.w:fallback;
 }
 void main() {
+    if(stats[FR_GAS_ERROR_WORD]!=0u) return;
     uint group=gl_WorkGroupID.x+gl_WorkGroupID.y*65535u;
     if(group>=activity[0]) return;
     uint tiles_x=(params.width+15u)/16u,tile=activity[3u+group];

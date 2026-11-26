@@ -15,6 +15,8 @@ bool fr_gas_gpu_try_fused_tick(dc_gpu_t *gpu,float seconds,bool *handled,char *e
 void fr_gas_gpu_record_pending_tick(dc_gpu_t *gpu);
 /** Append a scheduled warm geometry repair to the current gas command buffer. */
 void fr_gas_gpu_record_pending_geometry(dc_gpu_t *gpu);
+/** Record the grain pressure response from an accepted gas publication. */
+void fr_gas_gpu_record_grain_pressure(dc_gpu_t *gpu,uint32_t bank);
 /** Submit one gas command buffer and wait for its completion fence only. */
 bool fr_gas_submit(dc_gpu_t *gpu);
 /** Dispatch and wait for the gas audit after its summary buffer has been bound. */
