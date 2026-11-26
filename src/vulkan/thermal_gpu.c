@@ -210,6 +210,7 @@ static void destroy(dc_gpu_t *g,struct fr_thermal_gpu *t) {
     fr_renderer_compute_destroy(g,&t->body_combustion);
     dc_gpu_address_buffer_destroy(g,&t->profiles);dc_gpu_address_buffer_destroy(g,&t->samples);
     dc_gpu_address_buffer_destroy(g,&t->fluxes);dc_gpu_address_buffer_destroy(g,&t->probe);
+    dc_gpu_address_buffer_destroy(g,&t->inspection);
     dc_gpu_address_buffer_destroy(g,&t->water);dc_gpu_address_buffer_destroy(g,&t->emission);
     dc_gpu_address_buffer_destroy(g,&t->emission_snapshot);dc_gpu_address_buffer_destroy(g,&t->hud);
     dc_gpu_address_buffer_destroy(g,&t->radiation_scratch);free(t->pending_water);free(t);
@@ -244,8 +245,8 @@ static bool create(dc_gpu_t *g,struct fr_reactive_gpu *reactive,struct fr_therma
     t->groups_y=(groups-1u)/t->groups_x+1u;
     if(t->groups_y>props.limits.maxComputeWorkGroupCount[1]||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)t->profile_count*sizeof(fr_reactive_profile_t),true,&t->profiles,err,cap)||
-       !dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,true,&t->samples,err,cap)||
-       !dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,true,&t->fluxes,err,cap)||
+       !dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,false,&t->samples,err,cap)||
+       !dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,false,&t->fluxes,err,cap)||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*4u,true,&t->water,err,cap)||
        !dc_gpu_address_buffer_create(g,16,true,&t->probe,err,cap)) {destroy(g,t);return false;}
     ((float *)t->probe.mapped)[0]=FR_THERMAL_PROBE_CAPACITY*(FR_THERMAL_PROBE_K-FR_THERMAL_AMBIENT_K);
@@ -263,6 +264,12 @@ static bool create(dc_gpu_t *g,struct fr_reactive_gpu *reactive,struct fr_therma
     if(!specialize_phases(g,t,err,cap)) {destroy(g,t);return false;}
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"thermal pipeline end\n");
     if(!fr_thermal_feedback_init(g,&t->feedback,buffers[3],buffers[5],err,cap)) {destroy(g,t);return false;}
+    if(!fr_renderer_begin(g)) {destroy(g,t);return error(err,cap,"Cannot begin thermal grid initialization");}
+    vkCmdFillBuffer(g->command,t->samples.buffer,0,VK_WHOLE_SIZE,0u);
+    vkCmdFillBuffer(g->command,t->fluxes.buffer,0,VK_WHOLE_SIZE,0u);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    if(!fr_renderer_submit(g)) {destroy(g,t);return error(err,cap,"Cannot initialize thermal grids");}
     *out=t;return true;
 }
 static void bind_control(dc_gpu_t *g,const struct fr_thermal_gpu *t) {
@@ -372,17 +379,28 @@ bool fr_thermal_gpu_inspect(dc_gpu_t *g,uint32_t x,uint32_t y,
     fr_thermal_inspection_t *out,char *err,uint32_t cap) {
     if(!g||!g->thermal||!out||x>=g->width||y>=g->height)
         return error(err,cap,"Invalid thermal inspection point");
+    struct fr_thermal_gpu *t=g->thermal;
+    const VkDeviceSize record_bytes=4u*sizeof(uint32_t);
+    if(!t->inspection.buffer&&!dc_gpu_address_buffer_create(g,2u*record_bytes,true,&t->inspection,err,cap))
+        return false;
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g))
         return error(err,cap,"Cannot begin thermal inspection snapshot");
     phase(g,0,0);
     record_combustion(g,0,2);
     phase(g,7,0);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_READ_BIT);
+    VkDeviceSize index=y*g->width+x,count=g->width*g->height;
+    const VkBufferCopy records[]={
+        {.srcOffset=index*record_bytes,.size=record_bytes},
+        {.srcOffset=(index+count)*record_bytes,.dstOffset=record_bytes,.size=record_bytes}
+    };
+    vkCmdCopyBuffer(g->command,t->samples.buffer,t->inspection.buffer,2u,records);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
         VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
     if(!fr_renderer_submit(g)) return error(err,cap,"Cannot complete thermal inspection snapshot");
-    uint32_t index=y*g->width+x,count=g->width*g->height;
-    const float *node=(const float *)g->thermal->samples.mapped+index*4u;
-    const uint32_t *metadata=(const uint32_t *)g->thermal->samples.mapped+(index+count)*4u;
+    const float *node=t->inspection.mapped;
+    const uint32_t *metadata=(const uint32_t *)t->inspection.mapped+4u;
     fr_thermal_inspection_t value={0};
     if(node[1]>0.f) {
         value.occupied=1;value.material=metadata[2];value.heat_capacity=node[1];value.wetness=node[3];

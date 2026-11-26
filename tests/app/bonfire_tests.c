@@ -5,7 +5,6 @@
 #include "../../src/app/level.c"
 #include "../../src/vulkan/reactive_storage_gpu.h"
 #include "../../src/vulkan/gas_gpu_state.h"
-#include "../../src/vulkan/thermal_gpu_state.h"
 #include "bonfire_progress.h"
 #include "ferrum/fire/material_profile.h"
 #include <signal.h>
@@ -78,11 +77,10 @@ static void trace_hottest_gas(dc_level_view_t *view,char *err,uint32_t cap) {
         if(!fr_thermal_gpu_inspect(view->gpu,world_x+offset_x[side],world_y+offset_y[side],&solid,err,cap)) continue;
         uint32_t index=(world_y+offset_y[side])*view->gpu->width+world_x+offset_x[side];
         uint32_t count=view->gpu->width*view->gpu->height;
-        const uint32_t *meta=(const uint32_t *)view->gpu->thermal->samples.mapped+(index+count)*4u;
         const uint32_t *occupancy=view->gpu->occupancy_mapped;
         const float *mpm=view->gpu->mpm_grid_mapped;
-        printf("HOTSPOT solid%u kind%u body%u coverage%.6f mpm%.6f occupied%u material%u temperature%.1fK capacity%.9g\n",
-            side,meta[0],occupancy?occupancy[index]:0u,occupancy?(double)occupancy[2u*count+index]/65536.:0.,
+        printf("HOTSPOT solid%u body%u coverage%.6f mpm%.6f occupied%u material%u temperature%.1fK capacity%.9g\n",
+            side,occupancy?occupancy[index]:0u,occupancy?(double)occupancy[2u*count+index]/65536.:0.,
             mpm?mpm[index*4u+3u]:0.f,solid.occupied,solid.material,solid.temperature_K,solid.heat_capacity);
     }
     fflush(stdout);

@@ -18,7 +18,6 @@
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/fire/material_profile.h"
 #include "../../src/vulkan/reactive_storage_gpu.h"
-#include "../../src/vulkan/thermal_gpu_state.h"
 
 static int g_pass, g_fail;
 static const float greek_prompt_fuse_seconds = 0.6f;
@@ -380,26 +379,6 @@ static void test_greek_depletes_matched_oil_twice_as_fast_dry(void) {
                                probe.state.coating_oil_fuel_fp +
                                probe.state.coating_jelly_fuel_fp)
                          : 0ull);
-            {
-                const dc_gpu_address_buffer_t *fluxes =
-                    &gpu->thermal->fluxes;
-                const uint32_t *words = fluxes->mapped;
-                uint32_t width = gpu->width;
-                uint32_t seen = 0, sentinel = 0, wet_cells = 0;
-                for (uint32_t y = 210u; y <= 221u; y++)
-                    for (uint32_t x = 22u; x <= 42u; x++) {
-                        uint32_t index = y * width + x;
-                        uint32_t available, magic;
-                        memcpy(&available, &words[(index + width) * 4u + 1u],
-                               sizeof(available));
-                        memcpy(&magic, &words[(index + width) * 4u + 3u],
-                               sizeof(magic));
-                        if ((magic & 0x7f800000u) == 0x5e000000u) sentinel++;
-                        if (available) { seen++; wet_cells = index; }
-                    }
-                printf("greek flux probe: wet flux cells %u last %u "
-                       "sentinel %u\n", seen, wet_cells, sentinel);
-            }
             dc_chunk_t *pool = calloc(1, sizeof(*pool));
             if (dc_gpu_download_chunk(gpu, greek_tile_slot(gpu, 32u, 215u) - 1u,
                                       pool, err, sizeof(err))) {
