@@ -39,3 +39,7 @@ The pinned full suite on 2aa02c10 reported a still-air warmth failure at tests/a
 **2026-11-26T13:08:54Z**
 
 The subsequent pinned eedae709 wetting-branch run passed the still-air warmth assertion with a 70-second probe of 330.61 K. The opposite outcomes across unchanged forest code confirm that this check needs a repeatability investigation before it is used to distinguish sandbox revisions.
+
+**2026-11-26T23:36:34Z**
+
+The pinned integrated 3c94b591 full suite measured a still-air peak of 334.86 K at the warmth probe, 16.71 K above the locked ceiling. The fixture marks the case OK because forest_warmth_held starts enforcing at 60 s and allows 360 K, while the manifest requires 298.15-318.15 K over seconds 20-120. Containment and the finite ledger passed separately. Keep the locked warmth criterion open and compare exact sample series before changing the model or probe.
