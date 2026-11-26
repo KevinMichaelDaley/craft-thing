@@ -1,6 +1,6 @@
 ---
 id: ct-j34i
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-26T05:42:31Z
@@ -18,3 +18,9 @@ The 3811d47f follow block pans the world around player one while split view is a
 
 Exercise movement, chunk transitions, editor camera controls, split-screen framing and per-player targets near far and negative coordinates in the actual application.
 
+
+## Notes
+
+**2026-11-26T05:47:40Z**
+
+First stage separates editor/UI camera ownership from single-player gameplay follow and computes view-relative positions before converting from signed chunk coordinates. Split-screen viewport sizing, tracking and per-controller aim remain in scope.
