@@ -241,7 +241,7 @@ bool dc_players_fire_ray(dc_level_view_t *v,fr_fire_ray_config_t config,char *er
 bool dc_players_gameplay(const dc_level_view_t *v) {
     return v&&v->players&&!v->players->editor&&v->players->input.players[0].context==FR_INPUT_GAMEPLAY;
 }
-static void players_cancel_cast(struct dc_player_session *s,uint32_t seat) {
+static void players_cancel_windup(struct dc_player_session *s,uint32_t seat) {
     fr_player_control_cancel_cast(&s->controls[seat],&s->players[seat]);
     s->cast_pressed_at[seat]=0u;
 }
@@ -252,7 +252,7 @@ void dc_players_ui(dc_level_view_t *v,bool active) {
     fr_input_context_t context=active?FR_INPUT_UI:s->editor?FR_INPUT_EDITOR:FR_INPUT_GAMEPLAY;
     for(uint32_t n=0;n<s->count;n++) {
         fr_input_context(&s->input,n+1,context);
-        if(context!=FR_INPUT_GAMEPLAY) players_cancel_cast(s,n);
+        if(context!=FR_INPUT_GAMEPLAY) players_cancel_windup(s,n);
     }
 }
 void dc_players_frame_time(dc_level_view_t *v,double seconds) {
@@ -276,7 +276,7 @@ bool dc_players_event(dc_level_view_t *v,const SDL_Event *e) {
     if(e->type==SDL_CONTROLLERDEVICEREMOVED) {
         for(uint32_t n=0;n<s->count;n++) if(s->device[n]==e->cdevice.which) {
             players_release_carry(v, n);
-            players_cancel_cast(s,n);
+            players_cancel_windup(s,n);
             s->device[n]=INT64_MIN;
         }
         for(unsigned n=0;n<FR_INPUT_DEVICES;n++) if(s->controllers[n]&&SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(s->controllers[n]))==e->cdevice.which) {
@@ -285,7 +285,7 @@ bool dc_players_event(dc_level_view_t *v,const SDL_Event *e) {
     }
     if (e->type == SDL_WINDOWEVENT && e->window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
         players_release_all_carries(v);
-        for(uint32_t n=0;n<s->count;n++) players_cancel_cast(s,n);
+        for(uint32_t n=0;n<s->count;n++) players_cancel_windup(s,n);
     }
     if(e->type==SDL_CONTROLLERBUTTONDOWN&&e->cbutton.button==SDL_CONTROLLER_BUTTON_START) {
         for(uint32_t n=0;n<s->count;n++) if(s->device[n]==e->cbutton.which) return true;
@@ -409,7 +409,7 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
         fr_input_state_t input;fr_input_sample(&s->input,n+1,&input);
         bool owns_input=players_input_active(s,n);
         if(!owns_input) {
-            players_cancel_cast(s,n);
+            players_cancel_windup(s,n);
             input=(fr_input_state_t){0};
         }
         const uint32_t edges = input.pressed;

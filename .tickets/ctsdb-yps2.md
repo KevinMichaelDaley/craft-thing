@@ -1,6 +1,6 @@
 ---
 id: ctsdb-yps2
-status: in_progress
+status: closed
 deps: []
 links: [ct-yctv, ctisf-f0wy]
 created: 2026-11-26T22:18:11Z
@@ -28,3 +28,7 @@ RED in the production ability path: an admitted cast invoked the ordinary host b
 **2026-11-26T22:24:58Z**
 
 GREEN on the production host path: one chilled-water brush with zero parcel reads and zero legacy paint calls. Headless player, tools, shader memory, default recipe and sanitizer runs passed. Both pattern variants validate. A native compute diagnostic matched 1,024 compensated heat samples against double precision, using a 1e-10 relative bound or 2e-38 absolute for near-subnormal residuals. The full brush and rendered application checks remain queued.
+
+**2026-11-26T22:41:29Z**
+
+Exact b77bb27a passed both native storm cases under ordinary and synchronization validation runs with no reported validation hazards, and the brush-region check passed. The compensated fixture measured retained heat 9.887695423 from 32.95898475, byte-exact nonheat fields and ownership, one submission and one idle wait. Native RED measured three submissions and 118 idle waits. Both sides of the valid negative seam passed. The broader suite is queued separately.

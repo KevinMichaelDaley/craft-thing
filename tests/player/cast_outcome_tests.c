@@ -203,7 +203,7 @@ static void test_unfocused_input_cannot_start_a_ray(void) {
     PASS();
 }
 
-static void test_focus_context_change_preserves_already_emitted_recovery(void) {
+static void test_ui_transition_preserves_emitted_cast_recovery(void) {
     struct dc_player_session s;
     ASSERT_TRUE(begin_cast(&s, true));
     backend_applied = true;
@@ -230,7 +230,7 @@ int main(void) {
     RUN(test_ui_round_trip_drops_old_windup_and_allows_a_fresh_press);
     RUN(test_unbound_controller_cannot_emit_its_latched_storm);
     RUN(test_unfocused_input_cannot_start_a_ray);
-    RUN(test_focus_context_change_preserves_already_emitted_recovery);
+    RUN(test_ui_transition_preserves_emitted_cast_recovery);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

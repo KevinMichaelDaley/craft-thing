@@ -28,3 +28,7 @@ RED drove the real player control and cast-frame loop. A failed bolt and a faile
 **2026-11-26T22:34:02Z**
 
 GREEN and refactor: the real player step passes all four failure/refusal controls, retaining the original backend diagnostic and stopping before a second movement submission on failure. Rejections leave the caller error untouched and both paths consume the event once. Six footprint tests, the headless player family, tool and recipe checks, and the four ASan/UBSan player-loop cases passed. Native backend injection and visible player actions compiled and are queued.
+
+**2026-11-26T22:41:29Z**
+
+Exact f69cbd0a passed both native injected backend tests. The real launch path distinguishes an unloaded footprint from a failed readback, and a refused Vulkan storm submission preserves its diagnostic and does not wet the target. The visible player-actions regression is queued.
