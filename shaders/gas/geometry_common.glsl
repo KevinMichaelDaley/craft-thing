@@ -110,6 +110,19 @@ Gas geometry_scale_packet(Gas original,float fraction) {
     original.species*=fraction;original.dynamics*=fraction;original.visual*=fraction;
     original.geometry.zw*=fraction;return original;
 }
+Gas geometry_receive_share(Gas recipient,Gas donor,float retention,float share) {
+    Gas kept=geometry_scale_packet(donor,retention);
+    /* Distribute the represented donor debit, including its scaling roundoff. */
+    precise vec4 species=(donor.species-kept.species)*share;
+    precise vec4 dynamics=(donor.dynamics-kept.dynamics)*share;
+    precise vec4 visual=(donor.visual-kept.visual)*share;
+    precise vec2 tail=(donor.geometry.zw-kept.geometry.zw)*share;
+    precise float energy=(dynamics.y+visual.w)+tail.x;
+    GasFlux incoming=GasFlux(species,vec4(dynamics.x,energy,dynamics.zw),visual.rgb);
+    Gas value=gas_add_flux(recipient,incoming,1.);
+    value.geometry.w+=tail.y;
+    return value;
+}
 void geometry_mark(uint index,bool changed) {
     if(gas_cache_owner(index)==0u) cache1[index].metric.z=changed?1.:0.;else cache0[index].metric.z=changed?1.:0.;
 }
