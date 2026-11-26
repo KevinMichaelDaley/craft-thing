@@ -16,19 +16,19 @@ static unsigned bolt_calls, storm_calls, drive_calls;
 #define ASSERT_INT_EQ(a, b) ASSERT_EQ((int)(a), (int)(b))
 #define PASS() ++g_pass
 
-static bool mock_cast(char *err, uint32_t cap) {
+static fr_player_cast_result_t mock_cast(char *err, uint32_t cap) {
     snprintf(err, cap, "%s", backend_failed ? failure_message : blocked_message);
-    return false;
+    return backend_failed ? FR_PLAYER_CAST_FAILED : FR_PLAYER_CAST_REFUSED;
 }
 
-bool fr_player_cast_body_fire_bolt(dc_gpu_t *gpu, uint64_t owner, const dc_gpu_world_body_t *caster,
+fr_player_cast_result_t fr_player_try_cast_body_fire_bolt(dc_gpu_t *gpu, uint64_t owner, const dc_gpu_world_body_t *caster,
     const fr_player_point_t *target, uint32_t *body_id, char *err, uint32_t cap) {
     (void)gpu; (void)owner; (void)caster; (void)target; (void)body_id;
     ++bolt_calls;
     return mock_cast(err, cap);
 }
 
-bool fr_player_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,
+fr_player_cast_result_t fr_player_try_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,
     uint32_t radius, char *err, uint32_t cap) {
     (void)gpu; (void)target; (void)radius;
     ++storm_calls;

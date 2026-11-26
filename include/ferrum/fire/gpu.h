@@ -39,6 +39,16 @@ bool fr_gpu_reactive_seed_body(dc_gpu_t *gpu,uint32_t body_id,uint32_t x,uint32_
 bool fr_gpu_spawn_burning_pixels(dc_gpu_t *gpu, dc_gpu_world_body_t initial,
     const uint16_t *rows, uint32_t material, float temperature_K,
     uint32_t *body_id, char *err_buf, uint32_t err_cap);
+typedef enum {
+    FR_PIXEL_BIRTH_FAILED,
+    FR_PIXEL_BIRTH_BLOCKED,
+    FR_PIXEL_BIRTH_PLACED
+} fr_pixel_birth_result_t;
+/** Publish a burning pixel body and distinguish an unavailable footprint from
+ * an invalid input or backend failure. Only a placed result returns an ID. */
+fr_pixel_birth_result_t fr_gpu_try_spawn_burning_pixels(dc_gpu_t *gpu, dc_gpu_world_body_t initial,
+    const uint16_t *rows, uint32_t material, float temperature_K,
+    uint32_t *body_id, char *err_buf, uint32_t err_cap);
 /** Cold import for one existing loose particle in the canonical A pool. */
 bool fr_gpu_reactive_seed_particle(dc_gpu_t *gpu,uint32_t particle,
     const fr_reactive_state_t *state,char *err_buf,uint32_t err_cap);

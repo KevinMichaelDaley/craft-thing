@@ -11,9 +11,10 @@ enum { BOLT_SPEED_CELLS = 4u, BOLT_SIDE = 3u, BOLT_CLEARANCE_TICKS = 2u,
 
 _Static_assert(STORM_MAX_RADIUS < DC_CHUNK_SIDE, "Storm footprint cannot span more than one page per side");
 
-static bool error(char *err_buf,uint32_t cap,const char *text) {
+static fr_player_cast_result_t cast_diagnostic(fr_player_cast_result_t result,
+    char *err_buf, uint32_t cap, const char *text) {
     if(err_buf&&cap) snprintf(err_buf,cap,"%s",text);
-    return false;
+    return result;
 }
 
 static bool ability_point_valid(const fr_player_point_t *point) {
@@ -65,13 +66,13 @@ static bool bolt_offset_point(const fr_player_point_t *origin, double dx, double
     return true;
 }
 
-static bool bolt_emit(dc_gpu_t *gpu, const fr_player_point_t *origin,
+static fr_player_cast_result_t bolt_emit(dc_gpu_t *gpu, const fr_player_point_t *origin,
                       double vx, double vy, double travel_ticks, uint32_t *out_body,
                       char *err, uint32_t cap) {
     fr_player_point_t anchor;
     if (!bolt_offset_point(origin, vx * travel_ticks - 1., vy * travel_ticks - 1.,
                             &anchor))
-        return error(err, cap, "Fire bolt leaves the world coordinate range");
+        return cast_diagnostic(FR_PLAYER_CAST_REFUSED, err, cap, "Fire bolt leaves the world coordinate range");
 
     static const uint16_t cross[BOLT_SIDE] = {2u, 7u, 2u};
     dc_gpu_world_body_t bolt = {.chunk = anchor.chunk, .body = {
@@ -81,11 +82,12 @@ static bool bolt_emit(dc_gpu_t *gpu, const fr_player_point_t *origin,
         .vy_fp = (int32_t)lround(vy * DC_FLUID_FULL),
         .width = BOLT_SIDE, .height = BOLT_SIDE}};
     uint32_t id;
-    if (!fr_gpu_spawn_burning_pixels(gpu, bolt, cross, DC_GPU_BODY_COAL,
-                                      BOLT_TEMPERATURE_K, &id, err, cap))
-        return false;
+    fr_pixel_birth_result_t result = fr_gpu_try_spawn_burning_pixels(gpu, bolt, cross,
+        DC_GPU_BODY_COAL, BOLT_TEMPERATURE_K, &id, err, cap);
+    if (result == FR_PIXEL_BIRTH_BLOCKED) return FR_PLAYER_CAST_REFUSED;
+    if (result != FR_PIXEL_BIRTH_PLACED) return FR_PLAYER_CAST_FAILED;
     if (out_body) *out_body = id;
-    return true;
+    return FR_PLAYER_CAST_APPLIED;
 }
 
 bool fr_player_cast_fire_bolt(dc_gpu_t *gpu, uint64_t owner_id,
@@ -94,11 +96,37 @@ bool fr_player_cast_fire_bolt(dc_gpu_t *gpu, uint64_t owner_id,
                               uint32_t *out_body, char *err_buf,
                               uint32_t err_cap) {
     if (out_body) *out_body = 0u;
-    if (!gpu || !owner_id || !ability_point_valid(origin) || !ability_point_valid(target))
-        return error(err_buf, err_cap, "Invalid fire bolt aim or caster");
+    if (!gpu || !owner_id || !ability_point_valid(origin) || !ability_point_valid(target)) {
+        cast_diagnostic(FR_PLAYER_CAST_FAILED, err_buf, err_cap, "Invalid fire bolt aim or caster");
+        return false;
+    }
     double vx, vy;
     bolt_launch_velocity(origin, target, &vx, &vy);
     return bolt_emit(gpu, origin, vx, vy, BOLT_CLEARANCE_TICKS,
+                     out_body, err_buf, err_cap) == FR_PLAYER_CAST_APPLIED;
+}
+
+fr_player_cast_result_t fr_player_try_cast_body_fire_bolt(dc_gpu_t *gpu, uint64_t owner_id,
+                                   const dc_gpu_world_body_t *caster,
+                                   const fr_player_point_t *target,
+                                   uint32_t *out_body, char *err_buf, uint32_t err_cap) {
+    if (out_body) *out_body = 0u;
+    if (!gpu || !owner_id || !caster || !caster->body.active ||
+        !caster->body.width || !caster->body.height || !ability_point_valid(target))
+        return cast_diagnostic(FR_PLAYER_CAST_FAILED, err_buf, err_cap, "Invalid fire bolt aim or body caster");
+    fr_player_point_t anchor = {caster->chunk,
+        caster->body.x_fp / (float)DC_FLUID_FULL, caster->body.y_fp / (float)DC_FLUID_FULL};
+    double half_width = caster->body.width * .5, half_height = caster->body.height * .5;
+    fr_player_point_t center;
+    if (!ability_point_valid(&anchor))
+        return cast_diagnostic(FR_PLAYER_CAST_FAILED, err_buf, err_cap, "Invalid fire bolt caster position");
+    if (!bolt_offset_point(&anchor, half_width, half_height, &center))
+        return cast_diagnostic(FR_PLAYER_CAST_REFUSED, err_buf, err_cap, "Invalid fire bolt caster position");
+    double vx, vy;
+    bolt_launch_velocity(&center, target, &vx, &vy);
+    double exit_ticks = fmin(vx == 0. ? INFINITY : half_width / fabs(vx),
+                             vy == 0. ? INFINITY : half_height / fabs(vy));
+    return bolt_emit(gpu, &center, vx, vy, exit_ticks + BOLT_CLEARANCE_TICKS,
                      out_body, err_buf, err_cap);
 }
 
@@ -106,23 +134,8 @@ bool fr_player_cast_body_fire_bolt(dc_gpu_t *gpu, uint64_t owner_id,
                                    const dc_gpu_world_body_t *caster,
                                    const fr_player_point_t *target,
                                    uint32_t *out_body, char *err_buf, uint32_t err_cap) {
-    if (out_body) *out_body = 0u;
-    if (!gpu || !owner_id || !caster || !caster->body.active ||
-        !caster->body.width || !caster->body.height || !ability_point_valid(target))
-        return error(err_buf, err_cap, "Invalid fire bolt aim or body caster");
-    fr_player_point_t anchor = {caster->chunk,
-        caster->body.x_fp / (float)DC_FLUID_FULL, caster->body.y_fp / (float)DC_FLUID_FULL};
-    double half_width = caster->body.width * .5, half_height = caster->body.height * .5;
-    fr_player_point_t center;
-    if (!ability_point_valid(&anchor) ||
-        !bolt_offset_point(&anchor, half_width, half_height, &center))
-        return error(err_buf, err_cap, "Invalid fire bolt caster position");
-    double vx, vy;
-    bolt_launch_velocity(&center, target, &vx, &vy);
-    double exit_ticks = fmin(vx == 0. ? INFINITY : half_width / fabs(vx),
-                             vy == 0. ? INFINITY : half_height / fabs(vy));
-    return bolt_emit(gpu, &center, vx, vy, exit_ticks + BOLT_CLEARANCE_TICKS,
-                     out_body, err_buf, err_cap);
+    return fr_player_try_cast_body_fire_bolt(gpu, owner_id, caster, target,
+        out_body, err_buf, err_cap) == FR_PLAYER_CAST_APPLIED;
 }
 
 static bool storm_target_cell(dc_gpu_t *gpu, const fr_player_point_t *target,
@@ -172,17 +185,23 @@ static bool storm_world_pages_match(dc_gpu_t *gpu, const fr_player_point_t *targ
     return true;
 }
 
-bool fr_player_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,
+fr_player_cast_result_t fr_player_try_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,
                               uint32_t radius, char *err_buf, uint32_t err_cap) {
     if (!gpu || !ability_point_valid(target) || radius == 0u || radius > STORM_MAX_RADIUS)
-        return error(err_buf, err_cap, "Invalid ice storm target or radius");
+        return cast_diagnostic(FR_PLAYER_CAST_FAILED, err_buf, err_cap, "Invalid ice storm target or radius");
     uint32_t x, y;
     if (!storm_target_cell(gpu, target, &x, &y))
-        return error(err_buf, err_cap, "Ice storm target is outside the active pages");
+        return cast_diagnostic(FR_PLAYER_CAST_REFUSED, err_buf, err_cap, "Ice storm target is outside the active pages");
     if (x < radius || y < radius || x >= gpu->width || y >= gpu->height ||
         radius >= gpu->width - x || radius >= gpu->height - y)
-        return error(err_buf, err_cap, "Ice storm extends outside the active grid");
+        return cast_diagnostic(FR_PLAYER_CAST_REFUSED, err_buf, err_cap, "Ice storm extends outside the active grid");
     if (!storm_world_pages_match(gpu, target, x, y, radius))
-        return error(err_buf, err_cap, "Ice storm footprint has a mismatched world page");
-    return dc_gpu_paint_chilled_water(gpu, x, y, radius, err_buf, err_cap);
+        return cast_diagnostic(FR_PLAYER_CAST_REFUSED, err_buf, err_cap, "Ice storm footprint has a mismatched world page");
+    return dc_gpu_paint_chilled_water(gpu, x, y, radius, err_buf, err_cap)
+        ? FR_PLAYER_CAST_APPLIED : FR_PLAYER_CAST_FAILED;
+}
+
+bool fr_player_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,
+                              uint32_t radius, char *err_buf, uint32_t err_cap) {
+    return fr_player_try_cast_ice_storm(gpu, target, radius, err_buf, err_cap) == FR_PLAYER_CAST_APPLIED;
 }

@@ -9,6 +9,7 @@
 static int g_pass, g_fail;
 static dc_gpu_t gpu;
 static uint32_t pages[9], brush_calls, legacy_paint_calls, read_mask, brush_x, brush_y, brush_radius;
+static bool brush_failed;
 static char err[128];
 
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); free(gpu.body_mapped); gpu.body_mapped = NULL; } while (0)
@@ -23,6 +24,7 @@ static bool setup(void) {
     memset(pages, 0, sizeof(pages));
     brush_calls = legacy_paint_calls = read_mask = 0u;
     brush_x = brush_y = brush_radius = 0u;
+    brush_failed = false;
     err[0] = '\0';
     gpu = (dc_gpu_t){.width = 192u, .height = 192u, .page_width = 3u, .page_height = 3u,
         .page_mapped = pages, .runtime_pair_capacity = 1u, .runtime_contact_capacity = 1u};
@@ -47,12 +49,12 @@ bool dc_gpu_paint_material(dc_gpu_t *world, uint32_t x, uint32_t y, uint32_t rad
 
 bool dc_gpu_paint_chilled_water(dc_gpu_t *world, uint32_t x, uint32_t y, uint32_t radius,
                                 char *error, uint32_t cap) {
-    (void)error; (void)cap;
     brush_x = x;
     brush_y = y;
     brush_radius = radius;
     ++brush_calls;
-    return world == &gpu;
+    if (brush_failed && error && cap) snprintf(error, cap, "Injected brush submission failure");
+    return world == &gpu && !brush_failed;
 }
 
 bool fr_gpu_reactive_read_cell(dc_gpu_t *world, uint32_t slot, uint32_t local_cell,
@@ -136,12 +138,25 @@ static void test_footprint_cannot_cross_the_world_coordinate_limit(void) {
     PASS();
 }
 
+static void test_storm_reports_backend_failure_after_a_validated_footprint(void) {
+    ASSERT_TRUE(setup());
+    ASSERT_EQ(fr_player_try_cast_ice_storm(&gpu, &seam, 4u, err, sizeof(err)), FR_PLAYER_CAST_REFUSED);
+    ASSERT_EQ(brush_calls, 0u);
+    map(4u, 0u, seam.chunk);
+    brush_failed = true;
+    ASSERT_EQ(fr_player_try_cast_ice_storm(&gpu, &seam, 4u, err, sizeof(err)), FR_PLAYER_CAST_FAILED);
+    ASSERT_EQ(brush_calls, 1u);
+    ASSERT_EQ(strcmp(err, "Injected brush submission failure"), 0);
+    PASS();
+}
+
 int main(void) {
     RUN(test_wrong_world_page_rejects_the_entire_storm);
     RUN(test_neighbor_resident_at_the_wrong_physical_page_rejects_storm);
     RUN(test_true_negative_seam_is_applied_and_unmapped_seam_is_skipped);
     RUN(test_bad_diagonal_outside_the_disc_does_not_block_it);
     RUN(test_footprint_cannot_cross_the_world_coordinate_limit);
+    RUN(test_storm_reports_backend_failure_after_a_validated_footprint);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

@@ -240,32 +240,33 @@ enum {
     PIXEL_BIRTH_WORDS = PIXEL_BIRTH_MATERIALS + PIXEL_BIRTH_CELLS / 8
 };
 
-static bool pixel_birth_error(char *err, uint32_t cap, const char *message) {
+static fr_pixel_birth_result_t pixel_birth_diagnostic(fr_pixel_birth_result_t result,
+    char *err, uint32_t cap, const char *message) {
     if (err && cap) snprintf(err, cap, "%s", message);
-    return false;
+    return result;
 }
 
-static bool pixel_birth_footprint(dc_gpu_t *g, const dc_gpu_world_body_t *initial,
+static fr_pixel_birth_result_t pixel_birth_footprint(dc_gpu_t *g, const dc_gpu_world_body_t *initial,
     const uint16_t *rows, uint32_t *grid_x, uint32_t *grid_y,
     char *err, uint32_t cap) {
     uint32_t slot = dc_gpu_find_active_chunk(g, initial->chunk);
     if (slot == UINT32_MAX)
-        return pixel_birth_error(err, cap, "Pixel body anchor is not resident");
+        return pixel_birth_diagnostic(FR_PIXEL_BIRTH_BLOCKED, err, cap, "Pixel body anchor is not resident");
     uint32_t tile = g->slot_page[slot];
     uint32_t tx = tile % g->page_width, ty = tile / g->page_width;
     uint32_t x = tx * DC_CHUNK_SIDE + (uint32_t)(initial->body.x_fp / DC_FLUID_FULL);
     uint32_t y = ty * DC_CHUNK_SIDE + (uint32_t)(initial->body.y_fp / DC_FLUID_FULL);
     if (x >= g->width || y >= g->height || initial->body.width > g->width - x ||
         initial->body.height > g->height - y)
-        return pixel_birth_error(err, cap, "Pixel body extends outside active grid");
+        return pixel_birth_diagnostic(FR_PIXEL_BIRTH_BLOCKED, err, cap, "Pixel body extends outside active grid");
     uint32_t last_x = (x + initial->body.width - 1u) / DC_CHUNK_SIDE;
     uint32_t last_y = (y + initial->body.height - 1u) / DC_CHUNK_SIDE;
     if (g->body_origin.x > INT64_MAX - last_x ||
         g->body_origin.y > INT64_MAX - last_y ||
         g->body_origin.x + tx != initial->chunk.x ||
         g->body_origin.y + ty != initial->chunk.y)
-        return pixel_birth_error(err, cap, "Pixel body anchor does not match the physics pages");
-    if (!dc_gpu_set_body_origin(g, g->body_origin, err, cap)) return false;
+        return pixel_birth_diagnostic(FR_PIXEL_BIRTH_BLOCKED, err, cap, "Pixel body anchor does not match the physics pages");
+    if (!dc_gpu_set_body_origin(g, g->body_origin, err, cap)) return FR_PIXEL_BIRTH_FAILED;
 
     /* A one-tile shape can cover up to four streamed chunks. */
     uint32_t loaded[4], loaded_count = 0;
@@ -277,12 +278,12 @@ static bool pixel_birth_footprint(dc_gpu_t *g, const dc_gpu_world_body_t *initia
             dc_chunk_coord_t coord = {g->body_origin.x + page_x, g->body_origin.y + page_y};
             uint32_t page_slot = dc_gpu_find_active_chunk(g, coord);
             if (page_slot == UINT32_MAX || g->slot_page[page_slot] != page_y * g->page_width + page_x)
-                return pixel_birth_error(err, cap, "Pixel body crosses an unmapped chunk");
+                return pixel_birth_diagnostic(FR_PIXEL_BIRTH_BLOCKED, err, cap, "Pixel body crosses an unmapped chunk");
             uint32_t cached = 0;
             while (cached < loaded_count && loaded[cached] != page_slot) ++cached;
             if (cached == loaded_count) {
                 if (!dc_gpu_copy_chunk_state(g, page_slot, false, false, err, cap))
-                    return false;
+                    return FR_PIXEL_BIRTH_FAILED;
                 loaded[loaded_count++] = page_slot;
             }
             uint32_t local = cell_y % DC_CHUNK_SIDE * DC_CHUNK_SIDE + cell_x % DC_CHUNK_SIDE;
@@ -290,13 +291,13 @@ static bool pixel_birth_footprint(dc_gpu_t *g, const dc_gpu_world_body_t *initia
             const dc_cell_t *cell = &cells[(size_t)page_slot * DC_CHUNK_CELLS + local];
             uint32_t occupant;
             if (!dc_gpu_read_occupancy(g, cell_x, cell_y, &occupant, NULL, err, cap))
-                return false;
+                return FR_PIXEL_BIRTH_FAILED;
             if (cell->material != DC_MATERIAL_AIR || cell->fluid_mass || occupant)
-                return pixel_birth_error(err, cap, "Pixel body footprint is occupied");
+                return pixel_birth_diagnostic(FR_PIXEL_BIRTH_BLOCKED, err, cap, "Pixel body footprint is occupied");
         }
     *grid_x = x;
     *grid_y = y;
-    return true;
+    return FR_PIXEL_BIRTH_PLACED;
 }
 
 static bool pixel_birth_slot(dc_gpu_t *g, uint32_t *slot, char *err, uint32_t cap) {
@@ -319,7 +320,7 @@ static void pixel_birth_bounds(dc_gpu_body_record_t *record, uint32_t x, uint32_
     record->bounds_high[1] = record->swept_high[1] = (int32_t)(y + record->body.height);
 }
 
-bool fr_gpu_spawn_burning_pixels(dc_gpu_t *g, dc_gpu_world_body_t initial,
+fr_pixel_birth_result_t fr_gpu_try_spawn_burning_pixels(dc_gpu_t *g, dc_gpu_world_body_t initial,
     const uint16_t *rows, uint32_t material, float temperature_K,
     uint32_t *body_id, char *err, uint32_t cap) {
     if (body_id) *body_id = 0;
@@ -331,7 +332,7 @@ bool fr_gpu_spawn_burning_pixels(dc_gpu_t *g, dc_gpu_world_body_t initial,
         body.y_fp < 0 || body.y_fp >= (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL) ||
         body.x_fp % DC_FLUID_FULL || body.y_fp % DC_FLUID_FULL ||
         material == 0u || material > DC_BODY_MATERIAL_MAX)
-        return pixel_birth_error(err, cap, "Invalid burning pixel body");
+        return pixel_birth_diagnostic(FR_PIXEL_BIRTH_FAILED, err, cap, "Invalid burning pixel body");
 
     uint32_t geometry[PIXEL_BIRTH_WORDS] = {
         PIXEL_BIRTH_WORDS, 1, 1, 1, 0, 0, body.width, body.height, PIXEL_BIRTH_TILE
@@ -341,7 +342,7 @@ bool fr_gpu_spawn_burning_pixels(dc_gpu_t *g, dc_gpu_world_body_t initial,
     uint16_t texels[PIXEL_BIRTH_CELLS];
     for (uint32_t y = 0; y < body.height; ++y) {
         if (rows[y] >> body.width)
-            return pixel_birth_error(err, cap, "Pixel row exceeds its declared width");
+            return pixel_birth_diagnostic(FR_PIXEL_BIRTH_FAILED, err, cap, "Pixel row exceeds its declared width");
         columns |= rows[y];
         for (uint32_t x = 0; x < body.width; ++x) {
             if (!(rows[y] & (1u << x))) continue;
@@ -356,24 +357,25 @@ bool fr_gpu_spawn_burning_pixels(dc_gpu_t *g, dc_gpu_world_body_t initial,
     }
     if (!(columns & 1u) || !(columns & (1u << (body.width - 1u))) ||
         !rows[0] || !rows[body.height - 1u])
-        return pixel_birth_error(err, cap, "Pixel body bounds must be trimmed to occupied texels");
+        return pixel_birth_diagnostic(FR_PIXEL_BIRTH_FAILED, err, cap, "Pixel body bounds must be trimmed to occupied texels");
     uint32_t grid_x, grid_y;
-    if (!pixel_birth_footprint(g, &initial, rows, &grid_x, &grid_y, err, cap) ||
-        !fr_gpu_reactive_initialize(g, err, cap)) return false;
+    fr_pixel_birth_result_t footprint = pixel_birth_footprint(g, &initial, rows, &grid_x, &grid_y, err, cap);
+    if (footprint != FR_PIXEL_BIRTH_PLACED) return footprint;
+    if (!fr_gpu_reactive_initialize(g, err, cap)) return FR_PIXEL_BIRTH_FAILED;
     dc_gpu_refresh_body_registry(g);
     uint32_t id = dc_gpu_next_body_id(g), slot;
-    if (!id) return pixel_birth_error(err, cap, "No runtime identity for burning pixel body");
-    if (!pixel_birth_slot(g, &slot, err, cap)) return false;
+    if (!id) return pixel_birth_diagnostic(FR_PIXEL_BIRTH_FAILED, err, cap, "No runtime identity for burning pixel body");
+    if (!pixel_birth_slot(g, &slot, err, cap)) return FR_PIXEL_BIRTH_FAILED;
 
     uint32_t pool_offset = dc_gpu_pixel_pool_word_offset(g);
     uint32_t used = ((const uint32_t *)g->body_mapped)[pool_offset + 1u];
     if (used > UINT32_MAX - PIXEL_BIRTH_WORDS)
-        return pixel_birth_error(err, cap, "Pixel geometry address exceeds its range");
+        return pixel_birth_diagnostic(FR_PIXEL_BIRTH_FAILED, err, cap, "Pixel geometry address exceeds its range");
     if (!dc_gpu_runtime_geometry_reserve(g, used + PIXEL_BIRTH_WORDS, err, cap))
-        return false;
+        return FR_PIXEL_BIRTH_FAILED;
     struct fr_reactive_gpu *reactive = g->reactive;
     if (reactive->high_id >= UINT64_MAX - count)
-        return pixel_birth_error(err, cap, "Burning parcel identities exceed their range");
+        return pixel_birth_diagnostic(FR_PIXEL_BIRTH_FAILED, err, cap, "Burning parcel identities exceed their range");
     uint32_t generation = dc_gpu_body_owner(g, slot)->generation + 1u;
     double density = DC_BODY_DENSITY(material);
     uint32_t cell_mass = (uint32_t)llround(density * DC_FLUID_FULL);
@@ -387,15 +389,15 @@ bool fr_gpu_spawn_burning_pixels(dc_gpu_t *g, dc_gpu_world_body_t initial,
         fr_reactive_state_t *state = &requests[i].record.state;
         if (!fr_reactive_state_default(DC_BODY_TO_TERRAIN(material), cell_mass, 0,
                                         temperature_K, ++parcel_id, state, err, cap))
-            return false;
+            return FR_PIXEL_BIRTH_FAILED;
         if (!state->fuel_mass_fp)
-            return pixel_birth_error(err, cap, "Pixel body material has no combustible fuel");
+            return pixel_birth_diagnostic(FR_PIXEL_BIRTH_FAILED, err, cap, "Pixel body material has no combustible fuel");
         state->flags |= FR_REACTIVE_FLAMING;
         state->ignition_integral = state->ignition_threshold;
     }
     uint32_t demand;
     if (!fr_reactive_arena_apply(g, &reactive->arena, requests, count, handles, &demand, err, cap))
-        return false;
+        return FR_PIXEL_BIRTH_FAILED;
 
     /* The completed arena batch is followed by infallible publication. */
     pool_offset = dc_gpu_pixel_pool_word_offset(g);
@@ -447,5 +449,12 @@ bool fr_gpu_spawn_burning_pixels(dc_gpu_t *g, dc_gpu_world_body_t initial,
     if (g->body_count <= slot) g->body_count = slot + 1u;
     g->body_refresh_pending = true;
     *body_id = id;
-    return true;
+    return FR_PIXEL_BIRTH_PLACED;
+}
+
+bool fr_gpu_spawn_burning_pixels(dc_gpu_t *g, dc_gpu_world_body_t initial,
+    const uint16_t *rows, uint32_t material, float temperature_K,
+    uint32_t *body_id, char *err, uint32_t cap) {
+    return fr_gpu_try_spawn_burning_pixels(g, initial, rows, material, temperature_K,
+        body_id, err, cap) == FR_PIXEL_BIRTH_PLACED;
 }

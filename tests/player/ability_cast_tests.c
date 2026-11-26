@@ -13,6 +13,7 @@
 
 static int g_pass, g_fail;
 static bool count_storm_submissions;
+static bool reject_next_submit, reject_next_chunk_copy;
 static unsigned storm_submissions, storm_idle_waits;
 
 VKAPI_ATTR VkResult VKAPI_CALL __real_vkQueueSubmit(VkQueue queue, uint32_t count,
@@ -20,6 +21,10 @@ VKAPI_ATTR VkResult VKAPI_CALL __real_vkQueueSubmit(VkQueue queue, uint32_t coun
 VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkQueueSubmit(VkQueue queue, uint32_t count,
     const VkSubmitInfo *submits, VkFence fence) {
     if (count_storm_submissions) ++storm_submissions;
+    if (reject_next_submit) {
+        reject_next_submit = false;
+        return VK_ERROR_OUT_OF_HOST_MEMORY;
+    }
     return __real_vkQueueSubmit(queue, count, submits, fence);
 }
 
@@ -27,6 +32,18 @@ VKAPI_ATTR VkResult VKAPI_CALL __real_vkQueueWaitIdle(VkQueue queue);
 VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkQueueWaitIdle(VkQueue queue) {
     if (count_storm_submissions) ++storm_idle_waits;
     return __real_vkQueueWaitIdle(queue);
+}
+
+bool __real_dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool fluid, bool particles,
+                                    char *err, uint32_t cap);
+bool __wrap_dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool fluid, bool particles,
+                                    char *err, uint32_t cap) {
+    if (reject_next_chunk_copy) {
+        reject_next_chunk_copy = false;
+        if (err && cap) snprintf(err, cap, "Injected launch footprint readback failure");
+        return false;
+    }
+    return __real_dc_gpu_copy_chunk_state(gpu, slot, fluid, particles, err, cap);
 }
 
 static void teardown(void);
@@ -87,6 +104,7 @@ static fr_player_point_t point_at(float world_x, float world_y) {
 }
 
 static void teardown(void) {
+    reject_next_submit = reject_next_chunk_copy = false;
     dc_gpu_destroy(gpu);
     gpu = NULL;
 }
@@ -489,8 +507,49 @@ static void test_ice_storm_rejects_an_unrelated_chunk_in_the_footprint(void) {
     PASS();
 }
 
+static void test_body_bolt_distinguishes_unloaded_aim_and_failed_footprint_readback(void) {
+    ASSERT_TRUE(setup_world());
+    dc_gpu_world_body_t caster = {.chunk = {30, 30}, .body = {
+        .x_fp = 8 * DC_FLUID_FULL, .y_fp = 18 * DC_FLUID_FULL,
+        .width = 2u, .height = 2u, .active = 1u}};
+    fr_player_point_t target = point_at(220.f, 211.f);
+    uint32_t id = 71u, before = gpu->body_count;
+    ASSERT_EQ(fr_player_try_cast_body_fire_bolt(gpu, 7u, &caster, &target, &id, err, sizeof(err)), FR_PLAYER_CAST_REFUSED);
+    ASSERT_EQ(id, 0u);
+
+    caster.chunk = (dc_chunk_coord_t){3, 3};
+    reject_next_chunk_copy = true;
+    ASSERT_EQ(fr_player_try_cast_body_fire_bolt(gpu, 7u, &caster, &target, &id, err, sizeof(err)), FR_PLAYER_CAST_FAILED);
+    ASSERT_TRUE(!reject_next_chunk_copy);
+    ASSERT_EQ(strcmp(err, "Injected launch footprint readback failure"), 0);
+    ASSERT_EQ(id, 0u);
+    ASSERT_EQ(gpu->body_count, before);
+    PASS();
+}
+
+static void test_ice_storm_propagates_real_brush_submission_failure(void) {
+    ASSERT_TRUE(setup_world());
+    fr_player_point_t target = point_at(224.f, 202.f);
+    reject_next_submit = true;
+    ASSERT_EQ(fr_player_try_cast_ice_storm(gpu, &target, 6u, err, sizeof(err)), FR_PLAYER_CAST_FAILED);
+    ASSERT_TRUE(!reject_next_submit);
+    ASSERT_EQ(strcmp(err, "Compute submission failed"), 0);
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk && dc_gpu_download_chunk(gpu, 11u, chunk, err, sizeof(err)));
+    uint32_t remaining_water = chunk->cells[10u * 64u + 32u].fluid_mass;
+    free(chunk);
+    ASSERT_EQ(remaining_water, 0u);
+    PASS();
+}
+
 int main(int argc, char **argv) {
     printf("=== Player Ability Cast Tests ===\n\n");
+    if (argc == 2 && strcmp(argv[1], "--cast-outcomes") == 0) {
+        RUN(test_body_bolt_distinguishes_unloaded_aim_and_failed_footprint_readback);
+        RUN(test_ice_storm_propagates_real_brush_submission_failure);
+        printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
+        return g_fail > 0 ? 1 : 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--storm-mapping") == 0) {
         RUN(test_ice_storm_rejects_an_unrelated_chunk_in_the_footprint);
         RUN(test_ice_storm_tracks_streamed_pages_across_a_seam);
@@ -515,6 +574,8 @@ int main(int argc, char **argv) {
     RUN(test_ice_storm_tracks_streamed_pages_across_a_seam);
     RUN(test_ice_storm_rejects_unmapped_or_noncanonical_target);
     RUN(test_ice_storm_rejects_an_unrelated_chunk_in_the_footprint);
+    RUN(test_body_bolt_distinguishes_unloaded_aim_and_failed_footprint_readback);
+    RUN(test_ice_storm_propagates_real_brush_submission_failure);
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail > 0 ? 1 : 0;
 }
