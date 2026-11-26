@@ -1,6 +1,6 @@
 ---
 id: ctgsb-juv5
-status: in_progress
+status: closed
 deps: []
 links: [ctgc-tteu]
 created: 2026-11-26T20:40:07Z
@@ -27,3 +27,7 @@ A native Vulkan regression compiled and failed at fr_gas_gpu_seed_chunk on physi
 **2026-11-26T20:45:16Z**
 
 A saturated channel that rounds to the nearest float above exact carrier stock now decodes to that carrier. Unsaturated pigment and raw checkpoint bytes retain their original representation. The new regression and both colored transport and both valve cases pass on NVIDIA. An invalid seed and a checkpoint one float beyond the representable saturated value remain rejected.
+
+**2026-11-26T20:48:57Z**
+
+The displayed implicit gas seam test now passes too, with total pigment error 1.51043392e-7 under its original tolerance. All five baseline color admission failures have focused native passing checks.
