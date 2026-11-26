@@ -8,7 +8,7 @@
 
 static int g_pass, g_fail;
 static dc_gpu_t gpu;
-static uint32_t pages[9], brush_calls, legacy_paint_calls, read_mask;
+static uint32_t pages[9], brush_calls, legacy_paint_calls, read_mask, brush_x, brush_y, brush_radius;
 static char err[128];
 
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); free(gpu.body_mapped); gpu.body_mapped = NULL; } while (0)
@@ -22,6 +22,7 @@ static char err[128];
 static bool setup(void) {
     memset(pages, 0, sizeof(pages));
     brush_calls = legacy_paint_calls = read_mask = 0u;
+    brush_x = brush_y = brush_radius = 0u;
     err[0] = '\0';
     gpu = (dc_gpu_t){.width = 192u, .height = 192u, .page_width = 3u, .page_height = 3u,
         .page_mapped = pages, .runtime_pair_capacity = 1u, .runtime_contact_capacity = 1u};
@@ -46,7 +47,10 @@ bool dc_gpu_paint_material(dc_gpu_t *world, uint32_t x, uint32_t y, uint32_t rad
 
 bool dc_gpu_paint_chilled_water(dc_gpu_t *world, uint32_t x, uint32_t y, uint32_t radius,
                                 char *error, uint32_t cap) {
-    (void)x; (void)y; (void)radius; (void)error; (void)cap;
+    (void)error; (void)cap;
+    brush_x = x;
+    brush_y = y;
+    brush_radius = radius;
     ++brush_calls;
     return world == &gpu;
 }
@@ -96,6 +100,9 @@ static void test_true_negative_seam_is_applied_and_unmapped_seam_is_skipped(void
     printf("Mapped storm: device brushes=%u legacy brushes=%u parcel-read mask=%#x\n",
            brush_calls, legacy_paint_calls, read_mask);
     ASSERT_EQ(brush_calls, 1u);
+    ASSERT_EQ(brush_x, 127u);
+    ASSERT_EQ(brush_y, 76u);
+    ASSERT_EQ(brush_radius, 4u);
     ASSERT_EQ(legacy_paint_calls, 0u);
     ASSERT_EQ(read_mask, 0u);
     map(5u, 1u, (dc_chunk_coord_t){-19, 118});

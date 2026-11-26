@@ -24,3 +24,7 @@ One bounded native Vulkan brush applies both effects with no parcel readback or 
 **2026-11-26T22:20:16Z**
 
 RED in the production ability path: an admitted cast invoked the ordinary host brush and read parcel state on the mapped page instead of using one chilled-water brush. Two dispatch-work regressions failed and all three rejection controls passed. The native regression compiled and asserts queue work, compensated heat, and byte-exact ownership, stock and off-disc state.
+
+**2026-11-26T22:24:58Z**
+
+GREEN on the production host path: one chilled-water brush with zero parcel reads and zero legacy paint calls. Headless player, tools, shader memory, default recipe and sanitizer runs passed. Both pattern variants validate. A native compute diagnostic matched 1,024 compensated heat samples against double precision, using a 1e-10 relative bound or 2e-38 absolute for near-subnormal residuals. The full brush and rendered application checks remain queued.
