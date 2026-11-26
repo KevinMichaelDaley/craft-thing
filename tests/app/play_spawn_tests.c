@@ -5,10 +5,14 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 #include "dungeoncraft/material_density.h"
+#include "ferrum/fire/gas_gpu.h"
+#include "ferrum/fire/gpu.h"
+#include "ferrum/player/beaver.h"
 #include "ferrum/physics/authored_rigid_gpu.h"
 #include "../../src/app/player_session.h"
 #include "../../src/app/prop_scene.h"
@@ -101,12 +105,9 @@ static bool launch_play(const char *directory) {
 }
 
 static bool open_world(const char *directory) {
-    uint32_t surface = 96;
-    dc_ground_profile_t ground = {.width = 1, .soil_depth = 1, .surface = &surface};
-    view = dc_level_view_create_ground(directory, 314u, &ground, err, sizeof(err));
+    view = dc_play_scene_create(directory, 314u, err, sizeof(err));
     return view && dc_level_view_restored(view) &&
-           dc_level_view_pan_pixels(view, -(int32_t)DC_CHUNK_SIDE,
-                                     -INITIAL_CHUNK_Y * (int32_t)DC_CHUNK_SIDE) &&
+           dc_level_view_pan_pixels(view, -(int32_t)DC_CHUNK_SIDE, 0) &&
            dc_level_view_wait_visible(view, 120000u, err, sizeof(err));
 }
 
@@ -269,9 +270,98 @@ static void test_play_loads_authored_trees_and_preserves_harvest_and_rocks(void)
     PASS();
 }
 
+static void test_play_combustion_changes_fur_and_reloads_its_gas(void) {
+    enum { PAW_X = 26, PAW_Y = 30 };
+    const dc_chunk_coord_t air_chunk = {1, 0};
+    char directory[] = "build/play_reactive_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory));
+    view = dc_play_scene_create(directory, 314u, err, sizeof(err));
+    ASSERT_TRUE(view && dc_level_view_tick(view, err, sizeof(err)));
+    dc_gpu_t *gpu = dc_level_view_gpu(view);
+    fr_player_t player;
+    fr_beaver_body_t beaver;
+    ASSERT_TRUE(dc_players_status(view, 0, &player, &beaver));
+    fr_beaver_source_t fur;
+    ASSERT_TRUE(fr_beaver_source(PAW_Y * FR_BEAVER_WIDTH + PAW_X + 1u, &fur));
+    ASSERT_EQ(fur.region, FR_BEAVER_FUR);
+    const uint32_t x = PAW_X - beaver.rest_origin_x, y = PAW_Y - beaver.rest_origin_y;
+    const uint32_t body = beaver.binding.body_id;
+    fr_reactive_record_t initial, burned;
+    bool found = false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, body, x, y, &initial, &found, err, sizeof(err)) && found);
+    ASSERT_EQ(initial.state.char_mass_fp, 0u);
+    ASSERT_EQ(initial.state.flags & FR_REACTIVE_FLAMING, 0u);
+    fr_reactive_state_t hot = initial.state;
+    const double heat = fr_reactive_state_energy_at_temperature(&hot, 1150.f)
+                      - fr_reactive_state_energy(&hot);
+    ASSERT_TRUE(fr_reactive_state_add_heat(&hot, heat, err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_seed_body(gpu, body, x, y, &hot, err, sizeof(err)));
+    for (uint32_t step = 0; step < 24u; ++step)
+        ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)) && dc_level_view_tick(view, err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, body, x, y, &burned, &found, err, sizeof(err)) && found);
+    ASSERT_EQ(burned.state.parcel_id_low, initial.state.parcel_id_low);
+    ASSERT_EQ(burned.state.parcel_id_high, initial.state.parcel_id_high);
+    ASSERT_TRUE(burned.state.fuel_mass_fp < initial.state.fuel_mass_fp);
+    ASSERT_TRUE(burned.state.char_mass_fp > 0u);
+
+    const uint32_t slot = dc_gpu_find_active_chunk(gpu, air_chunk);
+    fr_gas_checkpoint_chunk_t before, after;
+    ASSERT_TRUE(slot != UINT32_MAX && fr_gas_gpu_export_checkpoint(gpu, slot, &before, err, sizeof(err)));
+    ASSERT_TRUE(before.clock.physical_steps > 0u && before.clock.advanced_seconds > 0.);
+    ASSERT_TRUE(close_world());
+    view = dc_play_scene_create(directory, 314u, err, sizeof(err));
+    ASSERT_TRUE(view && dc_level_view_restored(view));
+    gpu = dc_level_view_gpu(view);
+    ASSERT_TRUE(dc_players_status(view, 0, &player, &beaver));
+    ASSERT_EQ(beaver.binding.body_id, body);
+    fr_reactive_record_t restored;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, body, x, y, &restored, &found, err, sizeof(err)) && found);
+    ASSERT_EQ(memcmp(&burned.owner, &restored.owner, sizeof(burned.owner)), 0);
+    ASSERT_EQ(memcmp(&burned.state, &restored.state, sizeof(burned.state)), 0);
+    const uint32_t restored_slot = dc_gpu_find_active_chunk(gpu, air_chunk);
+    ASSERT_TRUE(restored_slot != UINT32_MAX &&
+                fr_gas_gpu_export_checkpoint(gpu, restored_slot, &after, err, sizeof(err)));
+    ASSERT_EQ(after.clock.physical_steps, before.clock.physical_steps);
+    ASSERT_EQ(after.clock.substeps, before.clock.substeps);
+    ASSERT_EQ(after.clock.advanced_seconds, before.clock.advanced_seconds);
+    ASSERT_EQ(memcmp(before.cells, after.cells, sizeof(before.cells)), 0);
+    ASSERT_EQ(memcmp(before.gates, after.gates, sizeof(before.gates)), 0);
+    PASS();
+}
+
+static void test_play_admits_ambient_air_when_reopening_an_older_save(void) {
+    char directory[] = "build/play_legacy_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory));
+    const uint32_t surface = 96;
+    dc_ground_profile_t ground = {.width = 1, .soil_depth = 1, .surface = &surface};
+    view = dc_level_view_create_ground(directory, 314u, &ground, err, sizeof(err));
+    ASSERT_TRUE(view &&
+                dc_level_view_pan_pixels(view, 0, -INITIAL_CHUNK_Y * (int32_t)DC_CHUNK_SIDE) &&
+                dc_level_view_wait_visible(view, 120000u, err, sizeof(err)) &&
+                dc_players_enable(view, err, sizeof(err)));
+    fr_player_t player;
+    fr_beaver_body_t original, restored;
+    ASSERT_TRUE(dc_players_status(view, 0, &player, &original));
+    ASSERT_TRUE(close_world());
+
+    view = dc_play_scene_create(directory, 314u, err, sizeof(err));
+    ASSERT_TRUE(view && dc_level_view_restored(view));
+    ASSERT_TRUE(dc_players_status(view, 0, &player, &restored));
+    ASSERT_EQ(restored.binding.body_id, original.binding.body_id);
+    dc_gpu_t *gpu = dc_level_view_gpu(view);
+    const uint32_t slot = dc_gpu_find_active_chunk(gpu, (dc_chunk_coord_t){0, 0});
+    fr_gas_checkpoint_chunk_t air;
+    ASSERT_TRUE(slot != UINT32_MAX && fr_gas_gpu_export_checkpoint(gpu, slot, &air, err, sizeof(err)));
+    ASSERT_TRUE(air.cells[0][0] > 0.f);
+    ASSERT_EQ(air.clock.physical_steps, 0u);
+    PASS();
+}
+
 int main(void) {
     printf("=== Authored Play Spawn Tests ===\n");
     RUN(test_play_loads_authored_trees_and_preserves_harvest_and_rocks);
+    RUN(test_play_combustion_changes_fur_and_reloads_its_gas);
+    RUN(test_play_admits_ambient_air_when_reopening_an_older_save);
     printf("Results: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
