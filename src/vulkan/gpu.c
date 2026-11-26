@@ -189,6 +189,8 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu->render_fence) vkDestroyFence(gpu->device, gpu->render_fence, NULL);
     if (gpu->frame_image) vkDestroyImage(gpu->device, gpu->frame_image, NULL);
     if (gpu->frame_memory) vkFreeMemory(gpu->device, gpu->frame_memory, NULL);
+    if (gpu->reticle_image) vkDestroyImage(gpu->device, gpu->reticle_image, NULL);
+    if (gpu->reticle_memory) vkFreeMemory(gpu->device, gpu->reticle_memory, NULL);
     if (gpu->swapchain) vkDestroySwapchainKHR(gpu->device, gpu->swapchain, NULL);
     free(gpu->swap_images);
     if (gpu->mapped) vkUnmapMemory(gpu->device, gpu->memory);
@@ -549,13 +551,13 @@ bool dc_gpu_screen_cell(dc_gpu_t *gpu, uint32_t screen_x, uint32_t screen_y,
 }
 bool dc_gpu_set_split_presentation(dc_gpu_t *gpu, uint32_t count,
                                    const dc_presentation_focus_t *crops) {
-    if (!gpu || count > 4u) return false;
+    if (!gpu || count > DC_PRESENTATION_VIEW_LIMIT) return false;
     if (!count) {
         gpu->presentation_split_count = 0u;
         return true;
     }
     if (!crops) return false;
-    dc_presentation_layout_t layouts[4];
+    dc_presentation_layout_t layouts[DC_PRESENTATION_VIEW_LIMIT];
     if (!dc_presentation_split_layout(gpu->view_width, gpu->view_height,
             gpu->swap_extent.width, gpu->swap_extent.height, gpu->display_zoom,
             crops, count, layouts))
@@ -563,6 +565,12 @@ bool dc_gpu_set_split_presentation(dc_gpu_t *gpu, uint32_t count,
     memcpy(gpu->presentation_split, layouts, count * sizeof(*layouts));
     gpu->presentation_split_count = count;
     return true;
+}
+
+void dc_gpu_set_presentation_reticle(dc_gpu_t *gpu, uint32_t viewport,
+                                      dc_presentation_reticle_t reticle) {
+    if (gpu && viewport < gpu->presentation_split_count)
+        gpu->presentation_reticles[viewport] = reticle;
 }
 
 bool dc_gpu_set_presentation_focus(dc_gpu_t *gpu,dc_presentation_focus_t focus) {

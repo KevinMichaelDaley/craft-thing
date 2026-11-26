@@ -477,7 +477,9 @@ bool dc_players_status(dc_level_view_t *v,uint32_t n,fr_player_t *p,fr_beaver_bo
 }
 bool dc_players_aim_override(dc_level_view_t *v,uint32_t n,
                              const fr_player_point_t *target,char *err,uint32_t cap) {
-    if(!v||!v->players||n>=FR_INPUT_PLAYERS||!target) return false;
+    if(!v||!v->players||n>=FR_INPUT_PLAYERS||!target||
+       !(target->x>=0.f&&target->x<DC_CHUNK_SIDE&&target->y>=0.f&&target->y<DC_CHUNK_SIDE))
+        return false;
     struct dc_player_session *s=v->players;
     if(n>=s->count) return players_error(err,cap,"Aim override needs a joined player");
     s->aim_override[n]=true;
@@ -519,9 +521,24 @@ static bool split_refresh(dc_level_view_t *v, uint32_t count, char *err, uint32_
 }
 
 bool dc_players_present(dc_level_view_t *v, char *err, uint32_t cap) {
-    if (!v->players || !v->players->split_count) return true;
+    if (!v || !v->players || !v->players->split_count) return true;
     if (!dc_players_gameplay(v)) return dc_gpu_set_split_presentation(v->gpu,0u,NULL);
-    return split_refresh(v,v->players->split_count,err,cap);
+    struct dc_player_session *s = v->players;
+    if (!split_refresh(v,s->split_count,err,cap)) return false;
+    for (uint32_t n = 0; n < s->split_count; ++n) {
+        fr_player_point_t target;
+        dc_presentation_reticle_t aim = {0};
+        if (players_target(v,n,&s->input.players[n].state,&target)) {
+            double x = player_view_axis(target.chunk.x,v->origin.x,
+                (int32_t)(target.x * DC_FLUID_FULL),v->camera_offset_x);
+            double y = player_view_axis(target.chunk.y,v->origin.y,
+                (int32_t)(target.y * DC_FLUID_FULL),v->camera_offset_y);
+            if (x>=0. && x<v->gpu->view_width && y>=0. && y<v->gpu->view_height)
+                aim = (dc_presentation_reticle_t){(uint32_t)x,(uint32_t)y,true};
+        }
+        dc_gpu_set_presentation_reticle(v->gpu,n,aim);
+    }
+    return true;
 }
 
 bool dc_players_split_screen(dc_level_view_t *v,uint32_t count,char *err,uint32_t cap) {

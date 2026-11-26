@@ -298,10 +298,13 @@ struct dc_gpu {
     uint32_t view_x, view_y, view_width, view_height;
     uint32_t display_zoom;
     dc_presentation_focus_t presentation_focus;
-    dc_presentation_layout_t presentation_split[4];
+    dc_presentation_layout_t presentation_split[DC_PRESENTATION_VIEW_LIMIT];
     uint32_t presentation_split_count;
     dc_gpu_overlay_t overlay;
     struct fr_scene_gpu *renderer;
+    dc_presentation_reticle_t presentation_reticles[DC_PRESENTATION_VIEW_LIMIT];
+    VkImage reticle_image;
+    VkDeviceMemory reticle_memory;
 };
 
 bool fr_renderer_active(const dc_gpu_t *gpu);

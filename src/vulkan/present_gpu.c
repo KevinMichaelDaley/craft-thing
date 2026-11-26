@@ -31,6 +31,61 @@ static void image_barrier(VkCommandBuffer command, VkImage image,
     vkCmdPipelineBarrier2(command, &dependency);
 }
 
+enum { RETICLE_ARM_COUNT = 4, RETICLE_EDGE = 7, RETICLE_GAP = 2 };
+
+static void record_reticles(dc_gpu_t *gpu, VkImage destination,
+                            const dc_presentation_layout_t *layouts) {
+    static const int32_t arms[RETICLE_ARM_COUNT][4] = {
+        {-RETICLE_EDGE, -1, -RETICLE_GAP, 1},
+        {RETICLE_GAP, -1, RETICLE_EDGE, 1},
+        {-1, -RETICLE_EDGE, 1, -RETICLE_GAP},
+        {-1, RETICLE_GAP, 1, RETICLE_EDGE}
+    };
+    VkImageBlit blits[DC_PRESENTATION_VIEW_LIMIT * RETICLE_ARM_COUNT];
+    uint32_t count = 0u;
+    for (uint32_t n = 0; n < gpu->presentation_split_count; ++n) {
+        const dc_presentation_layout_t *view = &layouts[n];
+        dc_presentation_reticle_t aim = gpu->presentation_reticles[n];
+        if (!aim.visible || aim.x < view->x || aim.x - view->x >= view->width ||
+            aim.y < view->y || aim.y - view->y >= view->height) continue;
+        int32_t left = (int32_t)view->left, top = (int32_t)view->top;
+        int32_t right = left + (int32_t)(view->width * view->scale);
+        int32_t bottom = top + (int32_t)(view->height * view->scale);
+        int32_t x = left + (int32_t)((aim.x - view->x) * view->scale + view->scale / 2u);
+        int32_t y = top + (int32_t)((aim.y - view->y) * view->scale + view->scale / 2u);
+        for (uint32_t arm = 0; arm < RETICLE_ARM_COUNT; ++arm) {
+            int32_t x0 = x + arms[arm][0], y0 = y + arms[arm][1];
+            int32_t x1 = x + arms[arm][2], y1 = y + arms[arm][3];
+            if (x0 < left) x0 = left;
+            if (y0 < top) y0 = top;
+            if (x1 > right) x1 = right;
+            if (y1 > bottom) y1 = bottom;
+            if (x0 >= x1 || y0 >= y1) continue;
+            blits[count++] = (VkImageBlit){
+                .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                .srcOffsets = {{0, 0, 0}, {1, 1, 1}},
+                .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                .dstOffsets = {{x0, y0, 0}, {x1, y1, 1}}
+            };
+        }
+    }
+    if (!count) return;
+    const VkClearColorValue white = {.float32 = {1.f, 1.f, 1.f, 1.f}};
+    const VkImageSubresourceRange color = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    const VkPipelineStageFlags2 transfer = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    const VkAccessFlags2 write = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    image_barrier(gpu->command, gpu->reticle_image, VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, 0, transfer, write);
+    vkCmdClearColorImage(gpu->command, gpu->reticle_image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &white, 1, &color);
+    image_barrier(gpu->command, gpu->reticle_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, transfer, write, transfer, VK_ACCESS_2_TRANSFER_READ_BIT);
+    image_barrier(gpu->command, destination, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, transfer, write, transfer, write);
+    vkCmdBlitImage(gpu->command, gpu->reticle_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        destination, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, count, blits, VK_FILTER_NEAREST);
+}
+
 static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
                           char *err, uint32_t cap) {
     if (!gpu || !gpu->swapchain) return error(err, cap, "GPU window is not initialized");
@@ -109,15 +164,11 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
     image_barrier(gpu->command, gpu->swap_images[index], VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, 0,
         VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-    dc_presentation_layout_t layouts[4];
-    uint32_t band_count = gpu->presentation_split_count;
-    if (band_count)
-        memcpy(layouts, gpu->presentation_split, sizeof(layouts));
-    else {
-        if(!dc_presentation_layout(gpu->view_width,gpu->view_height,gpu->swap_extent.width,gpu->swap_extent.height,
-            gpu->display_zoom,gpu->presentation_focus,&layouts[0])) return error(err,cap,"Invalid presentation crop");
-        band_count = 1u;
-    }
+    dc_presentation_layout_t layouts[DC_PRESENTATION_VIEW_LIMIT];
+    uint32_t band_count = gpu->presentation_split_count ? gpu->presentation_split_count : 1u;
+    for (uint32_t n = 0; n < band_count; ++n)
+        if (!dc_gpu_presentation_view(gpu,n,&layouts[n]))
+            return error(err,cap,"Invalid presentation crop");
     uint32_t scaled_width=layouts[0].width*layouts[0].scale,
              scaled_height=layouts[0].height*layouts[0].scale;
     if (scaled_width != gpu->swap_extent.width ||
@@ -155,6 +206,7 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps,
                 VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
         }
     }
+    record_reticles(gpu, gpu->swap_images[index], layouts);
     image_barrier(gpu->command, gpu->swap_images[index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 0);

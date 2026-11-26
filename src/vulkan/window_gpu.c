@@ -10,6 +10,37 @@ static bool error(char *buf, uint32_t cap, const char *message) {
     return false;
 }
 
+static bool create_transfer_image(dc_gpu_t *gpu, uint32_t width, uint32_t height,
+                                  VkImage *image, VkDeviceMemory *memory,
+                                  char *err, uint32_t cap) {
+    VkImageCreateInfo info = { .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D, .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .extent = { width, height, 1 }, .mipLevels = 1, .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT, .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE, .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED };
+    if (vkCreateImage(gpu->device, &info, NULL, image) != VK_SUCCESS)
+        return error(err, cap, "Cannot create presentation transfer image");
+    VkMemoryRequirements req;
+    vkGetImageMemoryRequirements(gpu->device, *image, &req);
+    VkPhysicalDeviceMemoryProperties memory_props;
+    vkGetPhysicalDeviceMemoryProperties(gpu->physical, &memory_props);
+    uint32_t type = UINT32_MAX;
+    for (uint32_t i = 0; i < memory_props.memoryTypeCount; ++i) {
+        if ((req.memoryTypeBits & (1u << i)) &&
+            (memory_props.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+            type = i; break;
+        }
+    }
+    if (type == UINT32_MAX) return error(err, cap, "No device-local image memory");
+    VkMemoryAllocateInfo alloc = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = req.size, .memoryTypeIndex = type };
+    if (vkAllocateMemory(gpu->device, &alloc, NULL, memory) != VK_SUCCESS ||
+        vkBindImageMemory(gpu->device, *image, *memory, 0) != VK_SUCCESS)
+        return error(err, cap, "Cannot allocate presentation image memory");
+    return true;
+}
+
 bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t requested_width,
                         uint32_t requested_height, char *err, uint32_t cap) {
     VkSurfaceCapabilitiesKHR caps;
@@ -82,31 +113,11 @@ bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t requested_width,
     gpu->swap_images = calloc(gpu->swap_count, sizeof(*gpu->swap_images));
     if (!gpu->swap_images) return error(err, cap, "Out of memory listing swapchain images");
     vkGetSwapchainImagesKHR(gpu->device, gpu->swapchain, &gpu->swap_count, gpu->swap_images);
-    VkImageCreateInfo image_info = { .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .imageType = VK_IMAGE_TYPE_2D, .format = VK_FORMAT_R8G8B8A8_UNORM,
-        .extent = { gpu->width, gpu->height, 1 }, .mipLevels = 1, .arrayLayers = 1,
-        .samples = VK_SAMPLE_COUNT_1_BIT, .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-        .sharingMode = VK_SHARING_MODE_EXCLUSIVE, .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED };
-    if (vkCreateImage(gpu->device, &image_info, NULL, &gpu->frame_image) != VK_SUCCESS)
-        return error(err, cap, "Cannot create cell presentation image");
-    VkMemoryRequirements req;
-    vkGetImageMemoryRequirements(gpu->device, gpu->frame_image, &req);
-    VkPhysicalDeviceMemoryProperties memory_props;
-    vkGetPhysicalDeviceMemoryProperties(gpu->physical, &memory_props);
-    uint32_t type = UINT32_MAX;
-    for (uint32_t i = 0; i < memory_props.memoryTypeCount; ++i) {
-        if ((req.memoryTypeBits & (1u << i)) &&
-            (memory_props.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
-            type = i; break;
-        }
-    }
-    if (type == UINT32_MAX) return error(err, cap, "No device-local image memory");
-    VkMemoryAllocateInfo alloc = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .allocationSize = req.size, .memoryTypeIndex = type };
-    if (vkAllocateMemory(gpu->device, &alloc, NULL, &gpu->frame_memory) != VK_SUCCESS ||
-        vkBindImageMemory(gpu->device, gpu->frame_image, gpu->frame_memory, 0) != VK_SUCCESS)
-        return error(err, cap, "Cannot allocate presentation image memory");
+    if (!create_transfer_image(gpu, gpu->width, gpu->height,
+                               &gpu->frame_image, &gpu->frame_memory, err, cap) ||
+        !create_transfer_image(gpu, 1u, 1u,
+                               &gpu->reticle_image, &gpu->reticle_memory, err, cap))
+        return false;
     VkSemaphoreCreateInfo semaphore_info = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
     if (vkCreateSemaphore(gpu->device, &semaphore_info, NULL, &gpu->acquire_sem) != VK_SUCCESS)
         return error(err, cap, "Cannot create present semaphores");

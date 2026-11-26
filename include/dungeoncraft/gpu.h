@@ -145,6 +145,9 @@ bool dc_gpu_set_split_presentation(dc_gpu_t *gpu, uint32_t count,
 /** Return the presented crop and window geometry for a viewport by index. */
 bool dc_gpu_presentation_view(const dc_gpu_t *gpu, uint32_t viewport,
                                dc_presentation_layout_t *out);
+/** Draw a reticle at a visible-grid cell inside its owning split viewport. */
+void dc_gpu_set_presentation_reticle(dc_gpu_t *gpu, uint32_t viewport,
+                                      dc_presentation_reticle_t reticle);
 /** Convert a window pixel to a visible simulation cell; false in the letterbox. */
 bool dc_gpu_screen_cell(dc_gpu_t *gpu, uint32_t screen_x, uint32_t screen_y,
                         uint32_t *cell_x, uint32_t *cell_y);

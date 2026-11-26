@@ -2,8 +2,10 @@
 #define DC_PRESENTATION_H
 #include <stdbool.h>
 #include <stdint.h>
+enum { DC_PRESENTATION_VIEW_LIMIT = 4 };
 typedef struct {uint32_t x,y,width,height;} dc_presentation_focus_t;
 typedef struct {uint32_t x,y,width,height,left,top,scale;} dc_presentation_layout_t;
+typedef struct {uint32_t x,y; bool visible;} dc_presentation_reticle_t;
 /** Select a display crop without changing the simulated or rendered grid. */
 static inline bool dc_presentation_layout(uint32_t width,uint32_t height,uint32_t window_width,
     uint32_t window_height,uint32_t zoom,dc_presentation_focus_t focus,dc_presentation_layout_t *out) {
