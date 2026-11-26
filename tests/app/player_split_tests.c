@@ -297,6 +297,87 @@ static bool cover_player_window(SDL_Window *window) {
     return true;
 }
 
+static void test_gameplay_ignores_other_window_focus_and_keys(void) {
+    ASSERT_TRUE(setup_at(0,false));
+    ASSERT_TRUE(dc_players_join(v,42,err,sizeof(err)));
+    SDL_Window *game = dc_level_view_gpu(v)->window;
+    ASSERT_TRUE(game && cover_player_window(game));
+    uint32_t owned = SDL_GetWindowID(game), other = SDL_GetWindowID(cover_window);
+    ASSERT_TRUE(owned && other && owned != other);
+
+    const SDL_Event lost_game = {.window = {.type = SDL_WINDOWEVENT, .windowID = owned,
+        .event = SDL_WINDOWEVENT_FOCUS_LOST}};
+    const SDL_Event gain_other = {.window = {.type = SDL_WINDOWEVENT, .windowID = other,
+        .event = SDL_WINDOWEVENT_FOCUS_GAINED}};
+    dc_players_event(v,&lost_game);
+    dc_players_event(v,&gain_other);
+    fr_player_t keyboard, controller;
+    fr_beaver_body_t body;
+    ASSERT_TRUE(dc_players_step(v,1.f/60.f,err,sizeof(err)));
+    ASSERT_TRUE(dc_players_status(v,1,&controller,&body) && !controller.intent.has_target);
+
+    const SDL_Event gain_game = {.window = {.type = SDL_WINDOWEVENT, .windowID = owned,
+        .event = SDL_WINDOWEVENT_FOCUS_GAINED}};
+    const SDL_Event lost_other = {.window = {.type = SDL_WINDOWEVENT, .windowID = other,
+        .event = SDL_WINDOWEVENT_FOCUS_LOST}};
+    dc_players_event(v,&gain_game);
+    dc_players_event(v,&lost_other);
+    SDL_Event key = {.key = {.type = SDL_KEYDOWN, .windowID = other,
+        .keysym.scancode = SDL_SCANCODE_D}};
+    dc_players_event(v,&key);
+    ASSERT_TRUE(dc_players_step(v,1.f/60.f,err,sizeof(err)));
+    ASSERT_TRUE(dc_players_status(v,1,&controller,&body) && controller.intent.has_target);
+    ASSERT_TRUE(dc_players_status(v,0,&keyboard,&body) && keyboard.intent.move_x == 0.f);
+    key.key.windowID = owned;
+    ASSERT_TRUE(dc_players_event(v,&key));
+    ASSERT_TRUE(dc_players_step(v,1.f/60.f,err,sizeof(err)));
+    ASSERT_TRUE(dc_players_status(v,0,&keyboard,&body) && keyboard.intent.move_x == 1.f);
+
+    key.key.keysym.scancode = SDL_SCANCODE_TAB;
+    key.key.windowID = other;
+    dc_players_event(v,&key);
+    ASSERT_TRUE(dc_players_gameplay(v));
+    key.key.windowID = owned;
+    ASSERT_TRUE(dc_players_event(v,&key) && !dc_players_gameplay(v));
+    PASS();
+}
+
+static bool point_inside_window(SDL_Window *window,int x,int y) {
+    SDL_WarpMouseInWindow(window,x,y);
+    for (uint32_t i=0; i<20u; ++i) {
+        SDL_PumpEvents();
+        int mx,my;
+        SDL_GetMouseState(&mx,&my);
+        if (SDL_GetMouseFocus()==window && mx==x && my==y) return true;
+        SDL_Delay(10u);
+    }
+    return false;
+}
+
+static void test_pointer_in_other_window_cannot_target_a_player(void) {
+    ASSERT_TRUE(setup_at(0,false));
+    ASSERT_TRUE(dc_players_join(v,42,err,sizeof(err)));
+    ASSERT_TRUE(dc_players_split_screen(v,2,err,sizeof(err)));
+    dc_gpu_t *gpu=dc_level_view_gpu(v);
+    SDL_Window *game=gpu->window;
+    dc_presentation_layout_t keyboard;
+    ASSERT_TRUE(game && dc_gpu_presentation_view(gpu,0,&keyboard));
+    int x = (int)(keyboard.left + (keyboard.width / 2u) * keyboard.scale);
+    int y = (int)(keyboard.top + (keyboard.height / 2u) * keyboard.scale);
+    ASSERT_TRUE(cover_player_window(game) && point_inside_window(cover_window,x,y));
+    ASSERT_TRUE(dc_players_step(v,1.f/60.f,err,sizeof(err)));
+    fr_player_t player;
+    fr_beaver_body_t body;
+    ASSERT_TRUE(dc_players_status(v,0,&player,&body) && !player.intent.has_target);
+    ASSERT_TRUE(dc_players_status(v,1,&player,&body) && player.intent.has_target);
+    SDL_DestroyWindow(cover_window);
+    cover_window=NULL;
+    ASSERT_TRUE(point_inside_window(game,x,y));
+    ASSERT_TRUE(dc_players_step(v,1.f/60.f,err,sizeof(err)));
+    ASSERT_TRUE(dc_players_status(v,0,&player,&body) && player.intent.has_target);
+    PASS();
+}
+
 static void test_aim_reticle_is_drawn_only_in_its_own_window_band(void) {
     ASSERT_TRUE(setup_at(0,false));
     ASSERT_TRUE(dc_players_join(v,42,err,sizeof(err)));
@@ -371,12 +452,20 @@ int main(int argc, char **argv) {
         printf("\nResults: %d passed, %d failed\n",g_pass,g_fail);
         return g_fail ? 1 : 0;
     }
+    if (argc == 2 && strcmp(argv[1], "--window-input") == 0) {
+        RUN(test_gameplay_ignores_other_window_focus_and_keys);
+        RUN(test_pointer_in_other_window_cannot_target_a_player);
+        printf("\nResults: %d passed, %d failed\n",g_pass,g_fail);
+        return g_fail ? 1 : 0;
+    }
     RUN(test_second_seat_joins_with_its_own_beaver);
     RUN(test_split_screen_routes_bands_to_their_players);
     RUN(test_split_screen_needs_two_seats);
     RUN(test_start_activates_split_and_editor_recovers_full_view);
     RUN(test_controller_aim_uses_its_crop_in_a_far_negative_world);
     RUN(test_split_camera_keeps_both_moving_players_framed_across_chunks);
+    RUN(test_gameplay_ignores_other_window_focus_and_keys);
+    RUN(test_pointer_in_other_window_cannot_target_a_player);
     RUN(test_aim_reticle_is_drawn_only_in_its_own_window_band);
     RUN(test_four_way_split_clamps_stick_to_its_own_crop);
     printf("\nResults: %d passed, %d failed\n",g_pass,g_fail);
