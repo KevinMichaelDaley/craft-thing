@@ -29,6 +29,15 @@ cells block it. The eight casting frames use 80 ms per frame: emission at
 400 ms, recovery complete at 640 ms. A new button press is required for each cast.
 Movement currently displays the supplied idle artwork pending a walk asset.
 
+In the sandbox (`./build/dungeoncraft --play`), slots 1–4 select fire, ice,
+stone, and wood. Press Q to cast the selected spell. The cast uses the aim
+from the start of windup and fires on frame six. With a material selected,
+R places one terrain cell and B places a 4×4 rigid block at the aim. Placement
+uses the player's inventory and requires an empty footprint. On a controller,
+the D-pad selects the same slots in up, right, down, left order. X casts the
+selected spell. The right and left shoulders place terrain and rigid blocks
+respectively.
+
 The live loop never replays missed world ticks. It admits at most one fixed
 physics tick per display; under GPU overload physical simulation runs slower
 than wall time. Animation uses actual elapsed presentation time and does not

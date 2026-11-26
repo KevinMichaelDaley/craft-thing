@@ -189,13 +189,19 @@ bool dc_players_enable_at(dc_level_view_t *v,uint32_t x,uint32_t y,
         dc_level_view_set_spring_enabled(v,false)&&dc_level_view_renderer_mode(v,FR_RENDERER_ALBEDO);
     if(!okay) {dc_players_destroy(v);return false;}
     for(int n=0;n<SDL_NumJoysticks();n++) players_open(s,n);
-    puts("Play keys: A/D move, Space jump, C harvest, 1-4 select fire/ice/stone/wood, Q cast, R place terrain, B place a rigid block.");
-    puts("Controller: Start joins, D-pad up/right/down/left selects slots 1-4, X casts, Y casts ice, right shoulder places terrain, left shoulder places a rigid block.");
-    puts("Place at the aim using the selected material from inventory. G grabs, E drops, F throws, and Tab opens the editor.");
     return true;
 }
 bool dc_players_enable(dc_level_view_t *v,char *err,uint32_t cap) {
-    return dc_players_enable_at(v,64,40,true,err,cap);
+    bool first = v && !v->players;
+    if (!dc_players_enable_at(v,64,40,true,err,cap)) return false;
+    if (first) {
+        puts("A/D moves, Space jumps, C harvests, and Tab opens the editor.");
+        puts("Select fire, ice, stone or wood with 1-4. Q casts the selected spell.");
+        puts("R places one terrain cell and B places a rigid block at the aim using inventory. G grabs, E drops, and F throws.");
+        puts("Controller Start joins. D-pad up/right/down/left selects slots 1-4, X casts the selected spell, and Y casts ice.");
+        puts("The right shoulder places terrain and the left shoulder places a rigid block.");
+    }
+    return true;
 }
 bool dc_players_fire_ray(dc_level_view_t *v,fr_fire_ray_config_t config,char *err,uint32_t cap) {
     if(!v||!v->players) return false;
@@ -301,6 +307,23 @@ static fr_player_hotbar_item_t players_select_item(fr_player_hotbar_t *bar,
     return item;
 }
 
+static bool players_place_item(dc_level_view_t *v, fr_player_inventory_t *inventory,
+                                const fr_input_state_t *input,
+                                const fr_player_hotbar_item_t *item,
+                                char *err, uint32_t cap) {
+    bool terrain = (input->pressed & (1u << FR_INPUT_PLACE)) != 0u;
+    bool rigid = (input->pressed & (1u << FR_INPUT_BUILD)) != 0u;
+    if (!input->has_target || item->kind != FR_SLOT_MATERIAL || !(terrain || rigid))
+        return true;
+    bool placed;
+    bool okay = fr_player_place_material(v->gpu, inventory, &input->target,
+        (uint16_t)item->material, !terrain, &placed, err, cap);
+    uint32_t slot;
+    if (placed && terrain && dc_chunk_table_find(&v->table, input->target.chunk, &slot))
+        dc_chunk_table_mark_dirty(&v->table, slot);
+    return okay;
+}
+
 bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
     if(!v||!v->players||!isfinite(seconds)||seconds<=0||seconds>.25f) return false;
     struct dc_player_session *s=v->players;
@@ -315,8 +338,8 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
         fr_player_hotbar_item_t item = players_select_item(&s->hotbar[n], edges);
         uint32_t selected_spell = s->ray ? s->fire :
             item.kind == FR_SLOT_SPELL ? item.ability_id : 0u;
-        bool cast_pressed = edges & (1u << FR_INPUT_FIRE) ? selected_spell != 0u :
-                            (edges & (1u << FR_INPUT_ICE)) != 0u;
+        bool cast_pressed = (edges & (1u << FR_INPUT_FIRE)) != 0u
+            ? selected_spell != 0u : (edges & (1u << FR_INPUT_ICE)) != 0u;
         int mx=0,my=0;uint32_t x=0,y=0;bool valid=false;
         if(n==0) {
             SDL_GetMouseState(&mx,&my);
@@ -380,17 +403,8 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
             else if(edges&(1u<<FR_INPUT_DROP)) {fr_player_manipulation_drop(v->gpu,&s->carry[n],err,cap);acted=true;}
             else if(edges&(1u<<FR_INPUT_THROW)) {fr_player_manipulation_throw(v->gpu,&s->carry[n],&s->manipulation[n],px,py,&input.target,err,cap);acted=true;}
             if(!acted&&!fr_player_manipulation_tick(v->gpu,&s->carry[n],px,py,err,cap)) return false;
-            bool terrain = (edges & (1u << FR_INPUT_PLACE)) != 0u;
-            bool block = (edges & (1u << FR_INPUT_BUILD)) != 0u;
-            if (input.has_target && item.kind == FR_SLOT_MATERIAL && (terrain || block)) {
-                bool placed;
-                bool okay = fr_player_place_material(v->gpu, &s->inventory[n],
-                    &input.target, (uint16_t)item.material, !terrain, &placed, err, cap);
-                uint32_t slot;
-                if (placed && terrain && dc_chunk_table_find(&v->table, input.target.chunk, &slot))
-                    dc_chunk_table_mark_dirty(&v->table, slot);
-                if (!okay) return false;
-            }
+            if (!players_place_item(v, &s->inventory[n], &input, &item, err, cap))
+                return false;
         }
         drive[n]=(fr_player_drive_input_t){n+1,s->sequence+1,s->players[n].intent.move_x,s->players[n].intent.jump_pressed};
     }

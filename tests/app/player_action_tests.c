@@ -158,7 +158,8 @@ static void test_empty_inventory_places_neither_terrain_nor_body(void) {
 static void test_paid_placement_is_typed_and_rejects_occupied_cells(void) {
     ASSERT_TRUE(open_fixture());
     ASSERT_TRUE(key(SDL_KEYDOWN, SDL_SCANCODE_C));
-    for (uint32_t n = 0; n < 18; ++n) {
+    const uint32_t harvested = 34;
+    for (uint32_t n = 0; n < harvested; ++n) {
         uint32_t x = 68 + n % 6, y = 40 + n / 6;
         ASSERT_TRUE(paint(x, y, DC_MATERIAL_WOOD) && aim(0, x, y));
         ASSERT_TRUE(step(.25f) && step(.25f) && step(.25f));
@@ -168,18 +169,26 @@ static void test_paid_placement_is_typed_and_rejects_occupied_cells(void) {
     uint64_t cell_mass = (uint64_t)lround(DC_DENSITY_WOOD * DC_FLUID_FULL);
     uint64_t block_mass = (uint64_t)lround(16. * DC_DENSITY_WOOD * DC_FLUID_FULL);
     ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
-    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), 18 * cell_mass);
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), harvested * cell_mass);
+    dc_cell_t cell;
+    ASSERT_TRUE(tap(SDL_SCANCODE_3) && aim(0, 171, 44));
+    ASSERT_TRUE(tap(SDL_SCANCODE_R) && step(.125f));
+    ASSERT_TRUE(read_cell(171, 44, &cell));
+    ASSERT_EQ(cell.material, DC_MATERIAL_AIR);
+    ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), harvested * cell_mass);
+
     ASSERT_TRUE(tap(SDL_SCANCODE_4) && aim(0, 171, 44));
     ASSERT_TRUE(tap(SDL_SCANCODE_R) && step(.125f));
-    dc_cell_t cell;
     ASSERT_TRUE(read_cell(171, 44, &cell));
     ASSERT_EQ(cell.material, DC_MATERIAL_WOOD);
     ASSERT_TRUE((cell.flags & DC_CELL_LOADED_TERRAIN) != 0u);
     ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
-    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), 17 * cell_mass);
+    const uint64_t after_terrain = (harvested - 1u) * cell_mass;
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), after_terrain);
     ASSERT_TRUE(tap(SDL_SCANCODE_R) && step(.125f));
     ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
-    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), 17 * cell_mass);
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), after_terrain);
 
     dc_gpu_t *gpu = dc_level_view_gpu(view);
     uint32_t expected_id = dc_gpu_next_body_id(gpu);
@@ -188,7 +197,7 @@ static void test_paid_placement_is_typed_and_rejects_occupied_cells(void) {
     ASSERT_TRUE(tap(SDL_SCANCODE_B) && step(.125f));
     ASSERT_EQ(dc_gpu_next_body_id(gpu), expected_id);
     ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
-    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), 17 * cell_mass);
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), after_terrain);
 
     ASSERT_TRUE(paint(192, 43, DC_MATERIAL_AIR));
     ASSERT_TRUE(tap(SDL_SCANCODE_B) && step(.125f));
@@ -203,13 +212,41 @@ static void test_paid_placement_is_typed_and_rejects_occupied_cells(void) {
     ASSERT_EQ(block.body.width, 4u);
     ASSERT_EQ(block.body.height, 4u);
     ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
-    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), 17 * cell_mass - block_mass);
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), after_terrain - block_mass);
 
+    uint32_t other_id = dc_gpu_next_body_id(gpu);
+    ASSERT_TRUE(other_id && other_id != expected_id);
+    ASSERT_TRUE(tap(SDL_SCANCODE_B) && step(.125f));
+    ASSERT_EQ(dc_gpu_next_body_id(gpu), other_id);
+    ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), after_terrain - block_mass);
     ASSERT_TRUE(aim(0, 192, 43) && tap(SDL_SCANCODE_R) && step(.125f));
     ASSERT_TRUE(read_cell(192, 43, &cell));
     ASSERT_EQ(cell.material, DC_MATERIAL_AIR);
     ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
-    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), 17 * cell_mass - block_mass);
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), after_terrain - block_mass);
+
+    ASSERT_TRUE(aim(0, 223, 42) && tap(SDL_SCANCODE_B) && step(.125f));
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu, other_id, &block, err, sizeof(err)));
+    ASSERT_EQ(block.chunk.x, 3);
+    ASSERT_EQ(block.body.x_fp, 31 * DC_FLUID_FULL);
+    ASSERT_TRUE(dc_gpu_read_body_shape(gpu, other_id, &shape, err, sizeof(err)));
+    ASSERT_EQ(shape.material, DC_GPU_BODY_WOOD);
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu, expected_id, &block, err, sizeof(err)));
+    ASSERT_EQ(block.chunk.x, 2);
+    ASSERT_EQ(block.body.x_fp, 63 * DC_FLUID_FULL);
+    ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), after_terrain - 2 * block_mass);
+
+    ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)) &&
+                dc_level_view_tick(view, err, sizeof(err)));
+    ASSERT_TRUE(read_cell(171, 44, &cell));
+    ASSERT_EQ(cell.material, DC_MATERIAL_WOOD);
+    ASSERT_TRUE((cell.flags & DC_CELL_LOADED_TERRAIN) != 0u);
+    dc_gpu_body_motion_t motion;
+    ASSERT_TRUE(dc_level_view_body_state(view, expected_id, &block, &motion,
+                                        err, sizeof(err)));
+    ASSERT_TRUE(fabs(motion.mass - 16. * DC_DENSITY_WOOD) < .001);
     PASS();
 }
 

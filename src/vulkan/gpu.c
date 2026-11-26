@@ -607,13 +607,14 @@ static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7],
             gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 28, push);
         uint32_t groups[2]={(gpu->width+15u)/16u,(gpu->height+15u)/16u};
-        if(push[2]==DC_PATTERN_MATERIAL_BRUSH||push[2]==DC_PATTERN_PLACE_TERRAIN)
+        if(push[2]==DC_PATTERN_MATERIAL_BRUSH||push[2]==DC_PATTERN_PLACE_TERRAIN) {
             for(unsigned axis=0;axis<2;axis++) {
-            uint64_t center=push[3u+axis],radius=push[5];
-            uint64_t low=center>radius?center-radius:0u;
-            uint64_t high=center+radius+1u;
-            if(high>push[axis]) high=push[axis];
-            groups[axis]=low<high?(uint32_t)((high-low+15u)/16u):0u;
+                uint64_t center=push[3u+axis],radius=push[5];
+                uint64_t low=center>radius?center-radius:0u;
+                uint64_t high=center+radius+1u;
+                if(high>push[axis]) high=push[axis];
+                groups[axis]=low<high?(uint32_t)((high-low+15u)/16u):0u;
+            }
         }
         vkCmdDispatch(gpu->command,groups[0],groups[1],1);
     }

@@ -18,3 +18,9 @@ The playtest help promises inventory-backed R/B building and select-then-cast, b
 
 Each controller/player owns selection and cast target. Cast once at the authored frame. Successful placement consumes exact selected material mass. Rejected or retried placement changes neither inventory nor world. Document only controls exercised by runtime tests.
 
+
+## Notes
+
+**2026-11-26T06:23:26Z**
+
+RED reproduced ignored controller selection, firing the wrong spell after selecting ice, unpaid rigid admission, and missing terrain placement. The live session now resolves the owned slot before input arbitration and dispatches the spell and target latched at windup on frame six. R places one authored terrain cell and B places a typed 4x4 convex body using a free runtime ID. Validated all four live action cases, including two paid bodies with distinct IDs, a blocked footprint with sufficient stock, a material mismatch, and the solver mass after a real tick. Input, SDL, hotbar, player runtime, split-screen, brush, rigid carve, default recipe, and dependency checks passed. Both pattern shader variants validate.
