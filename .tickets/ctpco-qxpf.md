@@ -2,7 +2,7 @@
 id: ctpco-qxpf
 status: in_progress
 deps: []
-links: [ct-yctv, ct-q3hh]
+links: [ct-yctv, ct-q3hh, ctwi-7ukj, ctcio-105w]
 created: 2026-11-26T22:27:13Z
 type: bug
 priority: 1

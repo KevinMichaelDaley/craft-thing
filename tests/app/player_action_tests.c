@@ -2,6 +2,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "dungeoncraft/material_density.h"
 #include "ferrum/fire/gpu.h"
@@ -170,6 +171,57 @@ static void test_controller_selection_and_cast_belong_to_its_seat(void) {
     PASS();
 }
 
+static void test_reconnect_cancels_only_the_disconnected_seats_cast(void) {
+    ASSERT_TRUE(open_fixture());
+    ASSERT_TRUE(dc_players_join(view, 42, err, sizeof(err)));
+    ASSERT_TRUE(aim(0, 170, 42) && aim(1, 211, 42));
+    ASSERT_TRUE(tap(SDL_SCANCODE_2) && tap(SDL_SCANCODE_Q));
+    ASSERT_TRUE(pad(42, SDL_CONTROLLER_BUTTON_Y) && step(.25f));
+    fr_player_t player;
+    fr_beaver_body_t before, rejoined;
+    ASSERT_TRUE(dc_players_status(view, 1u, &player, &before));
+    ASSERT_EQ(player.action, FR_PLAYER_CAST);
+
+    const SDL_Event disconnect = {.cdevice = {.type = SDL_CONTROLLERDEVICEREMOVED, .which = 42}};
+    dc_players_event(view, &disconnect);
+    ASSERT_TRUE(pad(43, SDL_CONTROLLER_BUTTON_START));
+    ASSERT_TRUE(step(.15625f));
+    dc_cell_t keyboard, controller;
+    ASSERT_TRUE(read_cell(170, 42, &keyboard) && read_cell(211, 42, &controller));
+    printf("Reconnected seat's old and active keyboard target water: %u/%u\n", controller.fluid_mass, keyboard.fluid_mass);
+    ASSERT_EQ(keyboard.fluid_mass, DC_FLUID_FULL);
+    ASSERT_EQ(controller.fluid_mass, 0u);
+    ASSERT_TRUE(dc_players_status(view, 1u, &player, &rejoined));
+    ASSERT_EQ(rejoined.binding.body_id, before.binding.body_id);
+    ASSERT_EQ(rejoined.binding.generation, before.binding.generation);
+    ASSERT_EQ(player.action, FR_PLAYER_IDLE);
+
+    ASSERT_TRUE(pad(43, SDL_CONTROLLER_BUTTON_Y) && step(.25f) && step(.15625f));
+    ASSERT_TRUE(read_cell(211, 42, &controller));
+    ASSERT_EQ(controller.fluid_mass, DC_FLUID_FULL);
+    PASS();
+}
+
+static void test_focus_loss_cancels_a_cast_even_when_focus_returns_before_next_tick(void) {
+    ASSERT_TRUE(open_fixture());
+    ASSERT_TRUE(aim(0, 170, 42) && tap(SDL_SCANCODE_2) && tap(SDL_SCANCODE_Q) && step(.25f));
+    SDL_Event focus = {.window = {.type = SDL_WINDOWEVENT, .event = SDL_WINDOWEVENT_FOCUS_LOST}};
+    dc_players_event(view, &focus);
+    focus.window.event = SDL_WINDOWEVENT_FOCUS_GAINED;
+    dc_players_event(view, &focus);
+
+    ASSERT_TRUE(step(.15625f));
+    dc_cell_t target;
+    ASSERT_TRUE(read_cell(170, 42, &target));
+    printf("Uncommitted focus-loss cast target water: %u\n", target.fluid_mass);
+    ASSERT_EQ(target.fluid_mass, 0u);
+
+    ASSERT_TRUE(tap(SDL_SCANCODE_Q) && step(.25f) && step(.15625f));
+    ASSERT_TRUE(read_cell(170, 42, &target));
+    ASSERT_EQ(target.fluid_mass, DC_FLUID_FULL);
+    PASS();
+}
+
 static void test_empty_inventory_places_neither_terrain_nor_body(void) {
     ASSERT_TRUE(open_fixture());
     dc_gpu_t *gpu = dc_level_view_gpu(view);
@@ -317,10 +369,18 @@ static void test_keyboard_and_controller_manipulate_separate_bodies(void) {
     PASS();
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    if (argc == 2 && strcmp(argv[1], "--cast-input-ownership") == 0) {
+        RUN(test_reconnect_cancels_only_the_disconnected_seats_cast);
+        RUN(test_focus_loss_cancels_a_cast_even_when_focus_returns_before_next_tick);
+        printf("Results: %d passed, %d failed\n", g_pass, g_fail);
+        return g_fail ? 1 : 0;
+    }
     RUN(test_selected_cast_latches_aim_and_fires_once_at_frame_six);
     RUN(test_keyboard_fire_bolt_leaves_the_live_beaver_as_a_burning_body);
     RUN(test_controller_selection_and_cast_belong_to_its_seat);
+    RUN(test_reconnect_cancels_only_the_disconnected_seats_cast);
+    RUN(test_focus_loss_cancels_a_cast_even_when_focus_returns_before_next_tick);
     RUN(test_empty_inventory_places_neither_terrain_nor_body);
     RUN(test_paid_placement_is_typed_and_rejects_occupied_cells);
     RUN(test_keyboard_and_controller_manipulate_separate_bodies);

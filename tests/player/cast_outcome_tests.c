@@ -4,8 +4,9 @@ static int g_pass, g_fail;
 static char error_buf[256];
 static const char failure_message[] = "Injected Vulkan cast execution failure";
 static const char blocked_message[] = "Fixture found a blocked cast footprint";
-static bool backend_failed;
-static unsigned bolt_calls, storm_calls, drive_calls;
+static bool backend_failed, backend_applied;
+static unsigned bolt_calls, storm_calls, drive_calls, ray_steps, ray_emits;
+static dc_level_view_t view;
 
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); } while (0)
 #define ASSERT_TRUE(expr) do { if (!(expr)) { \
@@ -17,6 +18,7 @@ static unsigned bolt_calls, storm_calls, drive_calls;
 #define PASS() ++g_pass
 
 static fr_player_cast_result_t mock_cast(char *err, uint32_t cap) {
+    if (backend_applied) return FR_PLAYER_CAST_APPLIED;
     snprintf(err, cap, "%s", backend_failed ? failure_message : blocked_message);
     return backend_failed ? FR_PLAYER_CAST_FAILED : FR_PLAYER_CAST_REFUSED;
 }
@@ -94,8 +96,10 @@ bool fr_player_harvest_tick(dc_gpu_t *gpu, fr_player_inventory_t *inventory, fr_
 
 bool fr_fire_ray_gpu_submit(fr_fire_ray_gpu_t *ray, const fr_fire_ray_input_t *inputs,
     uint32_t count, float seconds, char *err, uint32_t cap) {
-    (void)ray; (void)inputs; (void)count; (void)seconds; (void)err; (void)cap;
-    return false;
+    (void)ray; (void)seconds; (void)err; (void)cap;
+    ++ray_steps;
+    for (uint32_t n = 0; n < count; ++n) ray_emits += inputs[n].emit;
+    return true;
 }
 
 bool dc_player_view_aim(dc_level_view_t *view, uint32_t viewport, bool controller,
@@ -108,30 +112,34 @@ void dc_player_view_follow(dc_level_view_t *view, const uint32_t *ids, uint32_t 
     (void)view; (void)ids; (void)count;
 }
 
-static void check_live_cast(bool ice, bool fails) {
-    static dc_level_view_t view;
-    struct dc_player_session session = {.count = 1u, .device = {41}, .aim_override = {true},
+static bool begin_cast(struct dc_player_session *s, bool ice) {
+    *s = (struct dc_player_session){.count = 1u, .device = {41}, .aim_override = {true},
         .aim_point = {{{0, 0}, 56.f, 16.f}}, .bodies = {{.binding = {1u, 71u, 1u}, .width = 40u, .height = 40u}}};
-    view.players = &session;
+    view.players = s;
     char *err = error_buf;
     err[0] = '\0';
-    bolt_calls = storm_calls = drive_calls = 0u;
+    bolt_calls = storm_calls = drive_calls = ray_steps = ray_emits = 0u;
+    backend_failed = backend_applied = false;
+    fr_input_init(&s->input);
+    if (!fr_player_registry_init(&s->registry, s->definitions, 2u) ||
+        !fr_player_register(&s->registry, "test:fire_bolt", FR_PLAYER_ABILITY, 0, &s->fire, err, sizeof(error_buf)) ||
+        !fr_player_register(&s->registry, "test:ice_storm", FR_PLAYER_ABILITY, 0, &s->ice, err, sizeof(error_buf)) ||
+        !fr_player_registry_seal(&s->registry) ||
+        !fr_player_init(&s->players[0], 1u, &s->registry, s->values[0], s->abilities[0], 2u)) return false;
+    uint32_t spell = ice ? s->ice : s->fire;
+    return fr_player_ability_set(&s->players[0], spell, true) &&
+        fr_player_hotbar_put_spell(&s->hotbar[0], 1u, spell) &&
+        fr_input_add_player(&s->input, 1u) && fr_input_connect(&s->input, 41, 1u) &&
+        fr_input_bind(&s->input, 41, 4u, FR_INPUT_FIRE, 1.f) &&
+        fr_input_event(&s->input, 41, 4u, 1.f, false) &&
+        dc_players_step(&view, .25f, err, sizeof(error_buf));
+}
+
+static void check_live_cast(bool ice, bool fails) {
+    struct dc_player_session session;
+    char *err = error_buf;
+    ASSERT_TRUE(begin_cast(&session, ice));
     backend_failed = fails;
-    fr_input_init(&session.input);
-    ASSERT_TRUE(fr_player_registry_init(&session.registry, session.definitions, 2u));
-    ASSERT_TRUE(fr_player_register(&session.registry, "test:fire_bolt", FR_PLAYER_ABILITY, 0,
-        &session.fire, err, sizeof(error_buf)));
-    ASSERT_TRUE(fr_player_register(&session.registry, "test:ice_storm", FR_PLAYER_ABILITY, 0,
-        &session.ice, err, sizeof(error_buf)));
-    ASSERT_TRUE(fr_player_registry_seal(&session.registry));
-    ASSERT_TRUE(fr_player_init(&session.players[0], 1u, &session.registry, session.values[0], session.abilities[0], 2u));
-    uint32_t spell = ice ? session.ice : session.fire;
-    ASSERT_TRUE(fr_player_ability_set(&session.players[0], spell, true));
-    ASSERT_TRUE(fr_player_hotbar_put_spell(&session.hotbar[0], 1u, spell));
-    ASSERT_TRUE(fr_input_add_player(&session.input, 1u) && fr_input_connect(&session.input, 41, 1u));
-    ASSERT_TRUE(fr_input_bind(&session.input, 41, 4u, FR_INPUT_FIRE, 1.f));
-    ASSERT_TRUE(fr_input_event(&session.input, 41, 4u, 1.f, false));
-    ASSERT_TRUE(dc_players_step(&view, .25f, err, sizeof(error_buf)));
     ASSERT_EQ(bolt_calls + storm_calls, 0u);
 
     bool continued = dc_players_step(&view, .15625f, err, sizeof(error_buf));
@@ -153,11 +161,76 @@ static void test_storm_backend_failure_stops_the_step(void) { check_live_cast(tr
 static void test_bolt_refusal_keeps_the_step_healthy(void) { check_live_cast(false, false); }
 static void test_storm_refusal_keeps_the_step_healthy(void) { check_live_cast(true, false); }
 
+static void test_ui_round_trip_drops_old_windup_and_allows_a_fresh_press(void) {
+    struct dc_player_session s;
+    ASSERT_TRUE(begin_cast(&s, true));
+    dc_players_ui(&view, true);
+    dc_players_ui(&view, false);
+    ASSERT_TRUE(dc_players_step(&view, .15625f, error_buf, sizeof(error_buf)));
+    printf("UI round trip emitted %u old storms\n", storm_calls);
+    ASSERT_EQ(storm_calls, 0u);
+    ASSERT_EQ(s.players[0].action, FR_PLAYER_IDLE);
+
+    ASSERT_TRUE(fr_input_event(&s.input, 41, 4u, 0.f, false));
+    ASSERT_TRUE(fr_input_event(&s.input, 41, 4u, 1.f, false));
+    ASSERT_TRUE(dc_players_step(&view, .25f, error_buf, sizeof(error_buf)));
+    ASSERT_TRUE(dc_players_step(&view, .15625f, error_buf, sizeof(error_buf)));
+    ASSERT_EQ(storm_calls, 1u);
+    PASS();
+}
+
+static void test_unbound_controller_cannot_emit_its_latched_storm(void) {
+    struct dc_player_session s;
+    ASSERT_TRUE(begin_cast(&s, true));
+    ASSERT_TRUE(fr_input_disconnect(&s.input, s.device[0]));
+    s.device[0] = INT64_MIN;
+    ASSERT_TRUE(dc_players_step(&view, .15625f, error_buf, sizeof(error_buf)));
+    printf("Unbound controller emitted %u storms\n", storm_calls);
+    ASSERT_EQ(storm_calls, 0u);
+    ASSERT_EQ(s.players[0].action, FR_PLAYER_IDLE);
+    PASS();
+}
+
+static void test_unfocused_input_cannot_start_a_ray(void) {
+    struct dc_player_session s;
+    ASSERT_TRUE(begin_cast(&s, false));
+    s.ray = (fr_fire_ray_gpu_t *)&s;
+    fr_input_focus(&s.input, false);
+    ASSERT_TRUE(dc_players_step(&view, .15625f, error_buf, sizeof(error_buf)));
+    printf("Unfocused ray step emitted %u rays\n", ray_emits);
+    ASSERT_EQ(ray_steps, 1u);
+    ASSERT_EQ(ray_emits, 0u);
+    PASS();
+}
+
+static void test_focus_context_change_preserves_already_emitted_recovery(void) {
+    struct dc_player_session s;
+    ASSERT_TRUE(begin_cast(&s, true));
+    backend_applied = true;
+    ASSERT_TRUE(dc_players_step(&view, .15625f, error_buf, sizeof(error_buf)));
+    ASSERT_EQ(storm_calls, 1u);
+    ASSERT_EQ(s.players[0].action, FR_PLAYER_CAST);
+    uint64_t recovery = s.players[0].elapsed_ms;
+    dc_players_ui(&view, true);
+    dc_players_ui(&view, false);
+    ASSERT_EQ(s.players[0].elapsed_ms, recovery);
+    ASSERT_TRUE(dc_players_step(&view, .08f, error_buf, sizeof(error_buf)));
+    ASSERT_EQ(s.players[0].action, FR_PLAYER_CAST);
+    ASSERT_TRUE(dc_players_step(&view, .20f, error_buf, sizeof(error_buf)));
+    ASSERT_EQ(s.players[0].action, FR_PLAYER_IDLE);
+    ASSERT_EQ(storm_calls, 1u);
+    PASS();
+}
+
 int main(void) {
     RUN(test_bolt_backend_failure_stops_the_step);
     RUN(test_storm_backend_failure_stops_the_step);
     RUN(test_bolt_refusal_keeps_the_step_healthy);
     RUN(test_storm_refusal_keeps_the_step_healthy);
+    RUN(test_ui_round_trip_drops_old_windup_and_allows_a_fresh_press);
+    RUN(test_unbound_controller_cannot_emit_its_latched_storm);
+    RUN(test_unfocused_input_cannot_start_a_ray);
+    RUN(test_focus_context_change_preserves_already_emitted_recovery);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

@@ -2,7 +2,7 @@
 id: ctwi-7ukj
 status: closed
 deps: []
-links: []
+links: [ctpco-qxpf, ctcio-105w]
 created: 2026-11-26T17:47:20Z
 type: bug
 priority: 1
