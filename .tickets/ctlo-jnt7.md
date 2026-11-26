@@ -43,3 +43,7 @@ The large-body air brush gate (body_carve_tests ms<30) now measures 39-45 ms con
 **2026-11-26T21:43:01Z**
 
 The still-running full suite at 1d0fc902 measured 130.949 ms against the unchanged 30 ms large-body brush gate on the RTX A2000. The focused assertion reported exactly 36,051 remaining pixels and passed its mass check before the timing failure. Other Vulkan work was active, so this result needs an isolated timing comparison before attributing the latency to solver work.
+
+**2026-11-26T21:51:16Z**
+
+The 1d0fc902 make test process exited 2 after body_carve_tests reported 10 passed and two timing failures. In addition to the 130.949 ms large cut, the warm miss exceeded 3 ms while still using one GPU submission. An exact source probe with separate host recording, queue, GPU carve and GPU terrain timings compiled and is queued behind the paired thermal run. The masked work counter diagnostic is also queued.

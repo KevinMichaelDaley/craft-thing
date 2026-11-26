@@ -32,3 +32,7 @@ The native reproduction extends the existing authored tree harvest/reopen case i
 **2026-11-26T21:43:01Z**
 
 The pre-fix native suite kept the cut terrain and lost the restored Q16 balance. The save now stages dirty chunks, the body checkpoint and a validated inventory record under the same world writer. It synchronizes the staged files and publishes the committed transaction with recovery on the next open if publication stops. The two-seat fixture verifies harvest, one paid terrain placement, a save with one seat absent and a rejoin on a different controller. Four visible play cases and four filesystem/inventory cases passed, including ASan/UBSan. The extra native precommit failure fixture and broad suite are running or queued.
+
+**2026-11-26T21:51:16Z**
+
+Exact c7fa9400 passed all five native play cases and all four world save tests. The final native fixture forces a failure after staging the harvested chunk and inventory and confirms reopening still has the original tree cell and zero credit. The staged stream, thermal, gas and reactive stream tests all passed. Adjacent native action, chew, reactive stream view, fire-ray and split-screen cases passed. The exact whole make test remains queued behind the running GPU suites.
