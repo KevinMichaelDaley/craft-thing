@@ -32,6 +32,8 @@ typedef struct {
     uint32_t flags;
 } forest_rect_t;
 
+typedef struct {uint32_t x,y;} forest_ignition_t;
+
 static const forest_rect_t forest_ground[] = {
     {0u, 210u, 480u, 60u, DC_MATERIAL_STONE, DC_CELL_LOADED_TERRAIN},
     {214u, 207u, 32u, 3u, DC_MATERIAL_STONE, DC_CELL_LOADED_TERRAIN},
@@ -84,9 +86,9 @@ static uint32_t forest_pile_object(uint32_t x, uint32_t y) {
     return 0u;
 }
 
-static bool forest_ignition_cell(uint32_t x, uint32_t y) {
-    int32_t dx = (int32_t)x - DC_FOREST_IGNITION_X;
-    int32_t dy = (int32_t)y - DC_FOREST_IGNITION_Y;
+static bool forest_ignition_cell(uint32_t x, uint32_t y, const forest_ignition_t *ignition) {
+    int32_t dx = (int32_t)x - (int32_t)ignition->x;
+    int32_t dy = (int32_t)y - (int32_t)ignition->y;
     return dx * dx + dy * dy <= DC_FOREST_IGNITION_RADIUS * DC_FOREST_IGNITION_RADIUS;
 }
 
@@ -111,16 +113,16 @@ static void forest_fill_rect(const forest_rect_t *rect, bool broken_ring,
         }
 }
 
-static uint32_t forest_starter_cells(const forest_rect_t *const *rects,
-                                     uint32_t rect_count) {
+static uint32_t forest_starter_cells(const forest_rect_t *rects, uint32_t rect_count,
+                                     const forest_ignition_t *ignition) {
     uint32_t count = 0;
-    for (uint32_t y = DC_FOREST_IGNITION_Y - DC_FOREST_IGNITION_RADIUS;
-         y <= DC_FOREST_IGNITION_Y + DC_FOREST_IGNITION_RADIUS; y++)
-        for (uint32_t x = DC_FOREST_IGNITION_X - DC_FOREST_IGNITION_RADIUS;
-             x <= DC_FOREST_IGNITION_X + DC_FOREST_IGNITION_RADIUS; x++)
+    for (uint32_t y = ignition->y - DC_FOREST_IGNITION_RADIUS;
+         y <= ignition->y + DC_FOREST_IGNITION_RADIUS; y++)
+        for (uint32_t x = ignition->x - DC_FOREST_IGNITION_RADIUS;
+             x <= ignition->x + DC_FOREST_IGNITION_RADIUS; x++)
             for (uint32_t index = 0; index < rect_count; index++)
-                if (forest_in_rect(x, y, rects[index]) &&
-                    forest_ignition_cell(x, y)) {
+                if (forest_in_rect(x, y, &rects[index]) &&
+                    forest_ignition_cell(x, y, ignition)) {
                     count++;
                     break;
                 }
@@ -130,7 +132,7 @@ static uint32_t forest_starter_cells(const forest_rect_t *const *rects,
 /* Seed one origin region across a sorted union of rectangles/circles. */
 static bool forest_seed_region(const dc_chunk_t *chunks, const forest_rect_t *rects,
                                uint32_t rect_count, uint32_t region, bool wet,
-                               bool starter, float starter_share, uint64_t *fuel,
+                               const forest_ignition_t *ignition, float starter_share, uint64_t *fuel,
                                uint64_t *water_total, uint64_t *char_total,
                                uint32_t *embers, uint64_t *parcel_counter,
                                fr_reactive_chunk_t *packets, char *err, uint32_t cap) {
@@ -171,7 +173,7 @@ static bool forest_seed_region(const dc_chunk_t *chunks, const forest_rect_t *re
             state.origin_id_high = (uint32_t)(origin >> 32);
             /* Locked ignition input: the starter cells carry the ignition flag
              * and share 12000 finite energy units, not an external reservoir. */
-            if (starter && forest_ignition_cell(x, y) && starter_share > 0.) {
+            if (ignition && forest_ignition_cell(x, y, ignition) && starter_share > 0.) {
                 state.char_mass_fp = state.fuel_mass_fp;
                 state.fuel_mass_fp = 0;
                 if (!fr_reactive_state_add_heat(&state, starter_share, err, cap))
@@ -198,9 +200,14 @@ static bool forest_seed_region(const dc_chunk_t *chunks, const forest_rect_t *re
     return true;
 }
 
-bool dc_forest_scene_build(dc_gpu_t *gpu, bool dry_bridge, bool broken_ring,
-                           dc_forest_scene_t *out, char *err_buf, uint32_t err_cap) {
+bool dc_forest_scene_build_with_starter(dc_gpu_t *gpu, bool dry_bridge, bool broken_ring,
+    dc_forest_starter_t starter, dc_forest_scene_t *out, char *err_buf, uint32_t err_cap) {
     if (!gpu) return forest_error(err_buf, err_cap, "Missing forest GPU context");
+    if (starter != DC_FOREST_STARTER_LOCKED && starter != DC_FOREST_STARTER_PIT_KINDLING)
+        return forest_error(err_buf, err_cap, "Invalid forest starter");
+    const bool pit_kindling = starter == DC_FOREST_STARTER_PIT_KINDLING;
+    const forest_ignition_t ignition = pit_kindling ? (forest_ignition_t){238u,206u}
+        : (forest_ignition_t){DC_FOREST_IGNITION_X,DC_FOREST_IGNITION_Y};
     dc_chunk_t *chunks = calloc(DC_FOREST_TILE_COUNT, sizeof(*chunks));
     dc_chunk_colors_t *colors = calloc(DC_FOREST_TILE_COUNT, sizeof(*colors));
     fr_reactive_chunk_t *packets = calloc(DC_FOREST_TILE_COUNT, sizeof(*packets));
@@ -224,7 +231,7 @@ bool dc_forest_scene_build(dc_gpu_t *gpu, bool dry_bridge, bool broken_ring,
         forest_fill_rect(&forest_pile[rect], false, chunks);
     forest_fill_rect(&forest_stick_left, false, chunks);
     forest_fill_rect(&forest_stick_right, false, chunks);
-    forest_fill_rect(&forest_kindling, false, chunks);
+    if (pit_kindling) forest_fill_rect(&forest_kindling, false, chunks);
     if (dry_bridge)
         /* The dry bridge lies across the ring without replacing pile cells. */
         for (uint32_t y = forest_bridge.y;
@@ -237,12 +244,16 @@ bool dc_forest_scene_build(dc_gpu_t *gpu, bool dry_bridge, bool broken_ring,
                 cell->material = forest_bridge.material;
                 cell->flags = forest_bridge.flags;
             }
+    dc_forest_scene_t scene = {0};
     for (uint32_t tile = 0; tile < DC_FOREST_TILE_COUNT; tile++)
         for (uint32_t i = 0; i < 4096u; i++) {
             uint32_t x = chunks[tile].coord.x * 64u + i % 64u;
             uint32_t y = chunks[tile].coord.y * 64u + i / 64u;
             uint32_t pile_object = forest_pile_object(x, y);
-            if (pile_object) objects[tile * 4096u + i] = pile_object;
+            if (pile_object) {
+                objects[tile * 4096u + i] = pile_object;
+                scene.pile_cells++;
+            }
             float grain = (float)(((uint64_t)x * 3u + (uint64_t)y * 11u) & 15u) / 255.f;
             float *color = colors[tile].terrain[i];
             if (pile_object) {
@@ -270,7 +281,6 @@ bool dc_forest_scene_build(dc_gpu_t *gpu, bool dry_bridge, bool broken_ring,
             color[2] += grain;
             color[3] = 1.f;
         }
-    dc_forest_scene_t scene = {0};
     uint64_t ignored = 0;
     uint32_t ignored_cells = 0;
     /* Parcel ids stay above every possible encoded origin so the runtime
@@ -280,19 +290,16 @@ bool dc_forest_scene_build(dc_gpu_t *gpu, bool dry_bridge, bool broken_ring,
                                            forest_pile[2], forest_stick_left,
                                            forest_stick_right,
                                            forest_kindling};
-    const forest_rect_t *pile_pointers[6] = {&pile_regions[0], &pile_regions[1],
-                                             &pile_regions[2], &pile_regions[3],
-                                             &pile_regions[4], &pile_regions[5]};
-    uint32_t starter_share_cells = forest_starter_cells(pile_pointers, 6u);
+    uint32_t pile_rect_count = pit_kindling ? 6u : 5u;
+    uint32_t starter_share_cells = forest_starter_cells(pile_regions, pile_rect_count, &ignition);
     float starter_share = starter_share_cells
-                              ? 12000.f / (float)starter_share_cells
+                              ? (float)DC_FOREST_IGNITION_ENERGY / (float)starter_share_cells
                               : 0.f;
-    bool okay = forest_seed_region(chunks, pile_regions, 6u,
+    bool okay = forest_seed_region(chunks, pile_regions, pile_rect_count,
                                    DC_FOREST_REGION_PILE,
-                                   false, true, starter_share, &scene.pile_fuel_fp,
+                                   false, &ignition, starter_share, &scene.pile_fuel_fp,
                                    &ignored, &scene.pile_char_fp, &scene.ember_cells,
                                    &parcel_counter, packets, err_buf, err_cap);
-    scene.pile_cells = 64u + 6u + 12u + 10u;
     for (uint32_t tree = 0; okay && tree < DC_FOREST_TREE_COUNT; tree++) {
         uint32_t region = tree < DC_FOREST_WET_TREE
                               ? DC_FOREST_REGION_TREE_DRY_1 + tree
@@ -300,7 +307,7 @@ bool dc_forest_scene_build(dc_gpu_t *gpu, bool dry_bridge, bool broken_ring,
         bool wet = tree == DC_FOREST_WET_TREE;
         uint64_t water = 0, fuel = 0;
         okay = forest_seed_region(chunks, forest_trees[tree], 2u, region, wet,
-                                  false, 0.f, &fuel, &water, &ignored,
+                                  NULL, 0.f, &fuel, &water, &ignored,
                                   &ignored_cells, &parcel_counter, packets,
                                   err_buf, err_cap);
         scene.tree_fuel_fp[tree] += fuel;
@@ -316,7 +323,7 @@ bool dc_forest_scene_build(dc_gpu_t *gpu, bool dry_bridge, bool broken_ring,
                                                   DC_MATERIAL_WOOD,
                                                   DC_CELL_LOADED_TERRAIN}};
         okay = forest_seed_region(chunks, bridge_regions, 2u,
-                                  DC_FOREST_REGION_BRIDGE, false, false, 0.f,
+                                  DC_FOREST_REGION_BRIDGE, false, NULL, 0.f,
                                   &scene.bridge_fuel_fp, &ignored, &ignored,
                                   &ignored_cells, &parcel_counter, packets,
                                   err_buf, err_cap);
@@ -415,7 +422,13 @@ bool dc_forest_scene_build(dc_gpu_t *gpu, bool dry_bridge, bool broken_ring,
     }
 #endif
     free(colors);
-    if (!okay) return NULL;
+    if (!okay) return false;
     if (out) *out = scene;
-    return gpu;
+    return true;
+}
+
+bool dc_forest_scene_build(dc_gpu_t *gpu, bool dry_bridge, bool broken_ring,
+                           dc_forest_scene_t *out, char *err_buf, uint32_t err_cap) {
+    return dc_forest_scene_build_with_starter(gpu, dry_bridge, broken_ring,
+        DC_FOREST_STARTER_LOCKED, out, err_buf, err_cap);
 }

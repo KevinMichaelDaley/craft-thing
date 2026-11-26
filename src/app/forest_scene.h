@@ -13,8 +13,8 @@ enum {
     DC_FOREST_WARMTH_PROBE_X = 249, DC_FOREST_WARMTH_PROBE_Y = 202,
     DC_FOREST_WARMTH_LOW_KX100 = 29815, DC_FOREST_WARMTH_HIGH_KX100 = 31815,
     DC_FOREST_WARMTH_BEGIN_S = 20, DC_FOREST_WARMTH_END_S = 120,
-    DC_FOREST_IGNITION_X = 238, DC_FOREST_IGNITION_Y = 206,
-    DC_FOREST_IGNITION_RADIUS = 4,
+    DC_FOREST_IGNITION_X = 228, DC_FOREST_IGNITION_Y = 204,
+    DC_FOREST_IGNITION_RADIUS = 4, DC_FOREST_IGNITION_ENERGY = 12000,
     DC_FOREST_WET_TREE = 3, DC_FOREST_TREE_COUNT = 4,
     DC_FOREST_PIT_X = 214, DC_FOREST_PIT_Y = 199,
     DC_FOREST_PIT_W = 32, DC_FOREST_PIT_H = 11,
@@ -30,6 +30,11 @@ typedef struct {
     uint32_t pile_body;
 } dc_forest_scene_t;
 
+typedef enum {
+    DC_FOREST_STARTER_LOCKED,
+    DC_FOREST_STARTER_PIT_KINDLING
+} dc_forest_starter_t;
+
 /* Origin-id regions shared by the scene builder and its tests. */
 enum {
     DC_FOREST_REGION_PILE = 0, DC_FOREST_REGION_TREE_DRY_1 = 1,
@@ -42,5 +47,9 @@ enum {
  * The optional dry bridge or broken stone ring unlocks the containment. */
 bool dc_forest_scene_build(dc_gpu_t *gpu, bool dry_bridge, bool broken_ring,
                            dc_forest_scene_t *out, char *err_buf, uint32_t err_cap);
+/** Build a comparison with an explicit starter. The pit-kindling setup
+ * preserves the displaced starter and extra fuel used before the audit. */
+bool dc_forest_scene_build_with_starter(dc_gpu_t *gpu, bool dry_bridge, bool broken_ring,
+    dc_forest_starter_t starter, dc_forest_scene_t *out, char *err_buf, uint32_t err_cap);
 
 #endif

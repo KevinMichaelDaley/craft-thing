@@ -450,12 +450,14 @@ static bool forest_warmth_held(const forest_run_t *run) {
     return ramp_sampled && runtime_band_held;
 }
 
-static void test_still_forest_bonfire_warms_stays_contained_and_keeps_finite_ledgers_180s(void) {
+static void check_still_forest_bonfire(dc_forest_starter_t starter) {
     char err[256] = {0};
     dc_gpu_t *gpu = forest_grid();
     ASSERT_TRUE(gpu);
     dc_forest_scene_t scene = {0};
-    ASSERT_TRUE(dc_forest_scene_build(gpu, false, false, &scene, err, sizeof(err)));
+    ASSERT_TRUE(dc_forest_scene_build_with_starter(gpu, false, false, starter,
+                                                  &scene, err, sizeof(err)));
+    const char *label = starter == DC_FOREST_STARTER_LOCKED ? "still" : "still-pit-kindling";
     forest_run_t run = {.wall_bound = 900., .seconds = 180.,
                         .capture_sample = 6u,
                         .capture_path = "build/screenshots/forest_bonfire_warmth.bmp"};
@@ -464,25 +466,22 @@ static void test_still_forest_bonfire_warms_stays_contained_and_keeps_finite_led
     ASSERT_TRUE(ran);
     ASSERT_TRUE(!run.timed_out);
     ASSERT_TRUE(run.sample_count >= 18u);
-    printf("FOREST RUN still samples %u frames %llu mean %.3f ms worst %.3f ms "
+    printf("FOREST RUN %s samples %u frames %llu mean %.3f ms worst %.3f ms "
            "(informational complete-frame timing; the strict 30 ms gate belongs to ctlo-jjye)\n",
-           run.sample_count, (unsigned long long)run.frames,
+           label, run.sample_count, (unsigned long long)run.frames,
            run.frame_mean_ms, run.frame_worst_ms);
     for (uint32_t i = 0; i < run.sample_count; i++)
-        forest_print_sample(&run.samples[i], "still");
+        forest_print_sample(&run.samples[i], label);
+    bool warm = forest_warmth_held(&run);
     const forest_sample_t *first = &run.samples[0];
     const forest_sample_t *last = &run.samples[run.sample_count - 1u];
     ASSERT_TRUE(first->region_flaming[DC_FOREST_REGION_PILE] > 0u);
     ASSERT_TRUE(last->region_fuel[DC_FOREST_REGION_PILE] < scene.pile_fuel_fp);
-    /* The starter kindling burns its own char while the pile converts fresh
-     * fuel, so the net char inventory can dip below the seeded value; what
-     * must hold is a finite, nonzero char inventory with soot and exhaust
-     * produced across the run. */
+    /* The starter consumes char while the pile supplies fresh fuel. */
     ASSERT_TRUE(last->region_char[DC_FOREST_REGION_PILE] > 0u);
     ASSERT_TRUE(last->soot > first->soot && last->exhaust > first->exhaust);
     ASSERT_TRUE(last->oxygen < first->oxygen && last->oxygen > 0.);
     ASSERT_TRUE(forest_assert_contained(&run, &scene, false));
-    ASSERT_TRUE(forest_warmth_held(&run));
     double released = (last->gas_energy + last->reactive_energy + last->gas_work) -
                       (first->gas_energy + first->reactive_energy + first->gas_work);
     double headroom = (double)first->region_fuel[DC_FOREST_REGION_PILE] / 65536. *
@@ -505,7 +504,12 @@ static void test_still_forest_bonfire_warms_stays_contained_and_keeps_finite_led
                                err, sizeof(err)));
 #endif
     dc_gpu_destroy(gpu);
+    ASSERT_TRUE(warm);
     PASS();
+}
+
+static void test_still_forest_bonfire_warms_stays_contained_and_keeps_finite_ledgers_180s(void) {
+    check_still_forest_bonfire(DC_FOREST_STARTER_LOCKED);
 }
 
 static void forest_contained_scenario(const char *label, int wind, double seconds,
@@ -707,7 +711,12 @@ static void test_forest_manifest_starter_location(void) {
     ASSERT_INT_EQ(DC_FOREST_IGNITION_X, 228);
     ASSERT_INT_EQ(DC_FOREST_IGNITION_Y, 204);
     ASSERT_INT_EQ(DC_FOREST_IGNITION_RADIUS, 4);
+    ASSERT_INT_EQ(DC_FOREST_IGNITION_ENERGY, 12000);
     PASS();
+}
+
+static void test_archived_pit_kindling_control(void) {
+    check_still_forest_bonfire(DC_FOREST_STARTER_PIT_KINDLING);
 }
 
 static void test_warmth_window_includes_its_scheduled_endpoint(void) {
@@ -748,6 +757,11 @@ int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--still") == 0) {
         RUN(test_locked_forest_scene_matches_the_manifest_fixture);
         RUN(test_still_forest_bonfire_warms_stays_contained_and_keeps_finite_ledgers_180s);
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--pit-kindling-control") == 0) {
+        RUN(test_archived_pit_kindling_control);
         printf("%d passed, %d failed\n", g_pass, g_fail);
         return g_fail ? 1 : 0;
     }
