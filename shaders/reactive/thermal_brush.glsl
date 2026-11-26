@@ -3,6 +3,7 @@
 #include "../../include/dungeoncraft/reactive_profile_layout.h"
 #include "../../include/dungeoncraft/thermal_parameters.h"
 #ifdef DC_RUNTIME_BODY_STORAGE
+#include "thermal_cooling.glsl"
 layout(buffer_reference,std430,buffer_reference_align=4) readonly restrict buffer ThermalProfiles {uint words[];};
 ReactiveWords thermal_mailbox() {return ReactiveWords(uvec2(FR_GPU_ROOT.words[20],FR_GPU_ROOT.words[21]));}
 ReactiveWords thermal_free_bits() {return ReactiveWords(uvec2(FR_GPU_ROOT.words[18],FR_GPU_ROOT.words[19]));}
@@ -68,8 +69,26 @@ void thermal_brush_publish(uint index,uint slot,uint local,uvec2 prepared) {
     memoryBarrierBuffer();reactive_handle_write(index,prepared);
     atomicAdd(thermal_mailbox().words[FR_ARENA_MAIL_LIVE],1u);
 }
+void thermal_brush_chill(uint index,uint slot,uint local,uint material) {
+    if(!reactive_enabled()) return;
+    uvec2 handle=reactive_handle_read(index);
+    if(!reactive_handle_valid(handle)) return;
+    ReactiveWords entry=reactive_entry_buffer(handle.x);
+    uint owner=FR_ENTRY_OWNER,state=FR_ENTRY_STATE;
+    if(entry.words[owner]!=1u||entry.words[owner+5u]!=local||entry.words[state+FR_STATE_MATERIAL]!=material) return;
+    uint registry=structure_base()+32u+slot*8u;
+    for(uint word=0u;word<4u;word++)
+        if(entry.words[owner+1u+word]!=DC_BUFFER_DATA(registry+word)) return;
+    vec3 energy=uintBitsToFloat(uvec3(entry.words[state+FR_STATE_ENERGY],
+        entry.words[state+FR_STATE_ENERGY_RESIDUAL],entry.words[state+FR_STATE_ENERGY_CORRECTION]));
+    vec2 cooled=thermal_storm_heat(energy);
+    entry.words[state+FR_STATE_ENERGY]=floatBitsToUint(cooled.x);
+    entry.words[state+FR_STATE_ENERGY_RESIDUAL]=floatBitsToUint(cooled.y);
+    entry.words[state+FR_STATE_ENERGY_CORRECTION]=0u;
+}
 #else
 bool thermal_brush_begin(uint index,uint old_material,uint material,uvec2 point,out uvec2 prepared) {prepared=uvec2(0);return true;}
 void thermal_brush_publish(uint index,uint slot,uint local,uvec2 prepared) {}
+void thermal_brush_chill(uint index,uint slot,uint local,uint material) {}
 #endif
 #endif

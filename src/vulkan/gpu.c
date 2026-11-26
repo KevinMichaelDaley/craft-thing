@@ -9,6 +9,7 @@
 #include <SDL_vulkan.h>
 #include <vulkan/vulkan.h>
 
+#include "dungeoncraft/pattern_brush_layout.h"
 #include "body_features_gpu.h"
 #include "present_mode_latest_ready.h"
 #include "present_mode_select.h"
@@ -594,8 +595,6 @@ bool dc_gpu_set_window_title(dc_gpu_t *gpu, const char *title) {
     return true;
 }
 
-enum { DC_PATTERN_MATERIAL_BRUSH = 3u, DC_PATTERN_PLACE_TERRAIN = 5u };
-
 static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7],
                            bool carve_bodies, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
@@ -626,7 +625,8 @@ static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7],
             gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 28, push);
         uint32_t groups[2]={(gpu->width+15u)/16u,(gpu->height+15u)/16u};
-        if(push[2]==DC_PATTERN_MATERIAL_BRUSH||push[2]==DC_PATTERN_PLACE_TERRAIN) {
+        if(push[2]==DC_PATTERN_MATERIAL_BRUSH||push[2]==DC_PATTERN_PLACE_TERRAIN||
+           push[2]==DC_PATTERN_CHILLED_WATER) {
             for(unsigned axis=0;axis<2;axis++) {
                 uint64_t center=push[3u+axis],radius=push[5];
                 uint64_t low=center>radius?center-radius:0u;
@@ -722,6 +722,12 @@ bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
                            char *err, uint32_t cap) {
     return paint_material(gpu, x, y, radius, material, DC_PATTERN_MATERIAL_BRUSH,
                           material == DC_MATERIAL_AIR, NULL, err, cap);
+}
+
+bool dc_gpu_paint_chilled_water(dc_gpu_t *gpu, uint32_t x, uint32_t y, uint32_t radius,
+                                char *err, uint32_t cap) {
+    return paint_material(gpu, x, y, radius, DC_MATERIAL_WATER, DC_PATTERN_CHILLED_WATER,
+                          false, NULL, err, cap);
 }
 
 bool dc_gpu_carve_terrain_cell(dc_gpu_t *gpu, uint32_t x, uint32_t y,

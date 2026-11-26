@@ -1476,6 +1476,7 @@ test_gpu_tools: build/body_scan_recording_tests
 test_gpu_tools: build/body_scan_plan_tests
 build/gpu.o: src/vulkan/body_features_gpu.h
 $(GPU_SOURCE_BINARIES): src/vulkan/body_features_gpu.h
+build/gpu.o $(GPU_SOURCE_BINARIES): include/dungeoncraft/pattern_brush_layout.h
 test_gpu_tools: build/body_features_tests
 build/body_storage_growth_tests: tests/vulkan/body_storage_growth_tests.c src/vulkan/body_storage_gpu.c src/vulkan/body_storage_gpu.h include/dungeoncraft/body_storage_layout.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/vulkan/body_storage_gpu.c -o $@ -lvulkan -Wl,--wrap=dc_gpu_address_buffer_create -Wl,--wrap=dc_gpu_address_buffer_destroy -Wl,--wrap=vkCmdCopyBuffer -Wl,--wrap=vkCmdFillBuffer -Wl,--wrap=vkCmdUpdateBuffer -Wl,--wrap=vkCmdPipelineBarrier2 -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch
@@ -2403,6 +2404,7 @@ $(GPU_OBJ) $(PERFORMANCE_OBJ): build/shaders/thermal_overlay.comp.spv
 $(PERFORMANCE_OBJ): build/shaders/thermal.comp.spv build/shaders/reactive_chunk_state.comp.spv build/shaders/reactive_arena.comp.spv
 build/shaders/pattern.comp.spv build/shaders/runtime/pattern.comp.spv: shaders/reactive/thermal_water.glsl include/dungeoncraft/thermal_water_layout.h
 build/shaders/pattern.comp.spv build/shaders/runtime/pattern.comp.spv: shaders/reactive/thermal_brush.glsl include/dungeoncraft/thermal_parameters.h include/dungeoncraft/reactive_profile_layout.h
+build/shaders/pattern.comp.spv build/shaders/runtime/pattern.comp.spv: shaders/reactive/thermal_cooling.glsl include/dungeoncraft/pattern_brush_layout.h
 build/thermal_gpu.o build/tick_gpu.o build/present_gpu.o build/gpu.o: src/vulkan/thermal_gpu_internal.h
 build/thermal_gpu.o build/thermal_feedback_gpu.o: src/vulkan/thermal_feedback_gpu.h
 

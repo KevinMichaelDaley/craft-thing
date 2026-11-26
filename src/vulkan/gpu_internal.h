@@ -426,6 +426,9 @@ void dc_gpu_record_body_ash(dc_gpu_t *gpu,VkBuffer indirect);
 void dc_gpu_structural_track_chunk(dc_gpu_t *gpu,uint32_t slot,dc_chunk_coord_t coord);
 /** Resolve a world coordinate to its mapped chunk slot, or UINT32_MAX. */
 uint32_t dc_gpu_find_active_chunk(dc_gpu_t *gpu, dc_chunk_coord_t coord);
+/** Apply the water brush and retain 30 percent of surviving terrain parcel heat. */
+bool dc_gpu_paint_chilled_water(dc_gpu_t *gpu, uint32_t x, uint32_t y, uint32_t radius,
+                                char *err, uint32_t cap);
 /** Cut one terrain component cell, returning whether it was removed even
  * if the subsequent gas geometry refresh fails. */
 bool dc_gpu_carve_terrain_cell(dc_gpu_t *gpu, uint32_t x, uint32_t y,

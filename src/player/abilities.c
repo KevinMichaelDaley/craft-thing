@@ -6,8 +6,7 @@
 #include "../vulkan/gpu_internal.h"
 
 enum { BOLT_SPEED_CELLS = 4u, BOLT_SIDE = 3u, BOLT_CLEARANCE_TICKS = 2u,
-       STORM_MAX_RADIUS = 32u,
-       STORM_CHILL_KEEP_NUM = 3u, STORM_CHILL_KEEP_DEN = 10u };
+       STORM_MAX_RADIUS = 32u };
 #define BOLT_TEMPERATURE_K 1300.f
 
 _Static_assert(STORM_MAX_RADIUS < DC_CHUNK_SIDE, "Storm footprint cannot span more than one page per side");
@@ -185,37 +184,5 @@ bool fr_player_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,
         return error(err_buf, err_cap, "Ice storm extends outside the active grid");
     if (!storm_world_pages_match(gpu, target, x, y, radius))
         return error(err_buf, err_cap, "Ice storm footprint has a mismatched world page");
-    if (!dc_gpu_paint_material(gpu, x, y, radius, DC_MATERIAL_WATER,
-                               err_buf, err_cap))
-        return false;
-
-    const uint32_t *pages = gpu->page_mapped;
-    int32_t reach = (int32_t)radius;
-    for (int32_t dy = -reach; dy <= reach; dy++)
-        for (int32_t dx = -reach; dx <= reach; dx++) {
-            if (dx * dx + dy * dy > reach * reach) continue;
-            uint32_t cell_x = (uint32_t)((int32_t)x + dx);
-            uint32_t cell_y = (uint32_t)((int32_t)y + dy);
-            uint32_t page = pages[cell_y / DC_CHUNK_SIDE * gpu->page_width +
-                                  cell_x / DC_CHUNK_SIDE];
-            if (!page) continue;
-            uint32_t cell = cell_y % DC_CHUNK_SIDE * DC_CHUNK_SIDE +
-                            cell_x % DC_CHUNK_SIDE;
-            fr_reactive_record_t parcel;
-            bool found = false;
-            if (!fr_gpu_reactive_read_cell(gpu, page - 1u, cell,
-                                           &parcel, &found, err_buf, err_cap))
-                return false;
-            if (!found) continue;
-            double chilled = fr_reactive_state_energy(&parcel.state) *
-                             (double)STORM_CHILL_KEEP_NUM /
-                             (double)STORM_CHILL_KEEP_DEN;
-            parcel.state.thermal_energy = (float)chilled;
-            parcel.state.thermal_energy_residual = 0.f;
-            parcel.state.thermal_energy_correction = 0.f;
-            if (!fr_gpu_reactive_seed_cell(gpu, page - 1u, cell,
-                                           &parcel.state, err_buf, err_cap))
-                return false;
-        }
-    return true;
+    return dc_gpu_paint_chilled_water(gpu, x, y, radius, err_buf, err_cap);
 }

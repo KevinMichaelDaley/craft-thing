@@ -1,6 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 #define DC_RUNTIME_ROOT_READONLY 1
+#include "../../include/dungeoncraft/pattern_brush_layout.h"
 #include "../../include/dungeoncraft/terrain_flags.h"
 layout(constant_id=1) const bool DRAW_PIXEL_ONLY=false;
 layout(constant_id=2) const bool DRAW_SIMPLE=false;
@@ -215,9 +216,9 @@ uint cell_material_color(ivec2 p) {
 }
 
 void main() {
-    const uint PLACE_TERRAIN = 5u;
-    bool place_terrain = params.mode == PLACE_TERRAIN;
-    bool material_brush = params.mode == 3u || place_terrain;
+    bool place_terrain = params.mode == DC_PATTERN_PLACE_TERRAIN;
+    bool chilled_water = params.mode == DC_PATTERN_CHILLED_WATER;
+    bool material_brush = params.mode == DC_PATTERN_MATERIAL_BRUSH || place_terrain || chilled_water;
     uvec2 display_cell = gl_GlobalInvocationID.xy;
     uvec2 p = display_cell;
     if(material_brush) {
@@ -353,6 +354,7 @@ void main() {
                 }
                 if((cell.x&65535u)!=material) {terrain_colors[index]=vec4(0);reactive_forget_cell(index);}
                 thermal_brush_publish(index,slot,local_index,thermal_prepared);
+                if(chilled_water) thermal_brush_chill(index,slot,local_index,material);
                 if(DC_CELL_COMPONENT_MEMBER(cell.x)&&!DC_CELL_COMPONENT_MEMBER(material))
                     release_edited_support(ivec2(p));
                 cell.x = ((cell.x & 0xffffu)==material ? cell.x & 0xffff0000u : 0u) | material;
