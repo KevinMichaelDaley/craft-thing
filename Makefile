@@ -1948,7 +1948,7 @@ test_play_spawn: build/play_spawn_tests assets/props/spawn_tree.prop/asset.cprop
 	./build/play_spawn_tests
 test: test_play_spawn
 build/player_split_tests: tests/app/player_split_tests.c $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=fr_player_drive_gpu_create -Wl,--wrap=fr_fire_ray_gpu_prepare_emitter -Wl,--wrap=fr_renderer_sprite_prepare_poses
 .PHONY: test_player_split
 test_player_split: build/player_split_tests
 	./build/player_split_tests

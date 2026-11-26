@@ -67,14 +67,25 @@ bool fr_player_drive_gpu_submit(fr_player_drive_gpu_t *drive, const fr_player_dr
     return true;
 }
 
-bool fr_renderer_sprite_poses(dc_gpu_t *gpu, const fr_renderer_sprite_t *poses,
+bool fr_renderer_sprite_prepare_poses(dc_gpu_t *gpu, const fr_renderer_sprite_t *poses,
     uint32_t count, char *err, uint32_t cap) {
     (void)gpu; (void)poses;
     if (count == 2u && join_fault == JOIN_SPRITE_FAILS) {
         snprintf(err, cap, "%s", join_error);
         return false;
     }
+    return true;
+}
+
+void fr_renderer_sprite_commit_poses(dc_gpu_t *gpu, const fr_renderer_sprite_t *poses, uint32_t count) {
+    (void)gpu; (void)poses;
     visible_poses = count;
+}
+
+bool fr_renderer_sprite_poses(dc_gpu_t *gpu, const fr_renderer_sprite_t *poses,
+    uint32_t count, char *err, uint32_t cap) {
+    if (!fr_renderer_sprite_prepare_poses(gpu, poses, count, err, cap)) return false;
+    fr_renderer_sprite_commit_poses(gpu, poses, count);
     return true;
 }
 
@@ -147,13 +158,20 @@ dc_body_storage_owner_t *dc_gpu_body_owner(const dc_gpu_t *gpu, uint32_t slot) {
     return &saved_owner;
 }
 
-bool fr_beaver_body_admit(dc_gpu_t *gpu, uint64_t identity, uint64_t transaction, uint32_t slot,
-    dc_chunk_coord_t spawn, int32_t x, int32_t y, fr_beaver_body_t *body, char *err, uint32_t cap) {
-    (void)gpu; (void)transaction; (void)slot; (void)spawn; (void)x; (void)y; (void)err; (void)cap;
+bool fr_beaver_body_admit_prepared(dc_gpu_t *gpu, uint64_t identity, uint64_t transaction, uint32_t slot,
+    dc_chunk_coord_t spawn, int32_t x, int32_t y, fr_beaver_body_prepare_fn prepare, void *user,
+    fr_beaver_body_t *body, bool *world_consistent, char *err, uint32_t cap) {
+    (void)gpu; (void)transaction; (void)slot; (void)spawn; (void)x; (void)y;
+    *world_consistent = true;
     if (!test_admission) return false;
-    *body = (fr_beaver_body_t){.binding = {identity, 72u, 8u}, .width = 40u, .height = 40u};
+    fr_beaver_body_t candidate = {.binding = {identity, 72u, 8u}, .width = 40u, .height = 40u};
     ++candidate_bodies;
+    if (!prepare(user, &candidate, err, cap)) {
+        --candidate_bodies;
+        return false;
+    }
     ++candidate_parcels;
+    *body = candidate;
     return true;
 }
 
@@ -185,6 +203,19 @@ bool fr_fire_ray_gpu_create(dc_gpu_t *gpu, const fr_player_body_binding_t *bindi
 
 void fr_fire_ray_gpu_destroy(fr_fire_ray_gpu_t *ray) {
     retired_rays += ray == (fr_fire_ray_gpu_t *)&existing_ray;
+}
+
+bool fr_fire_ray_gpu_prepare_emitter(fr_fire_ray_gpu_t *ray, const fr_player_body_binding_t *binding,
+    char *err, uint32_t cap) {
+    if (join_fault == JOIN_RAY_FAILS) {
+        snprintf(err, cap, "%s", join_error);
+        return false;
+    }
+    return ray == (fr_fire_ray_gpu_t *)&existing_ray && binding->identity == 2u;
+}
+
+void fr_fire_ray_gpu_commit_emitter(fr_fire_ray_gpu_t *ray, const fr_player_body_binding_t *binding) {
+    (void)ray; (void)binding;
 }
 
 bool dc_gpu_set_split_presentation(dc_gpu_t *gpu, uint32_t count, const dc_presentation_focus_t *crops) {

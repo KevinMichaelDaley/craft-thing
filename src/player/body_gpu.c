@@ -22,9 +22,23 @@ static bool beaver_body_created_by(const dc_body_storage_owner_t *owner,uint64_t
         owner->source_transaction.high==(uint32_t)(transaction>>32);
 }
 
-bool fr_beaver_body_admit(dc_gpu_t *g,uint64_t identity,uint64_t transaction,
-    uint32_t slot,dc_chunk_coord_t spawn,int32_t x,int32_t y,fr_beaver_body_t *out,
+static uint32_t beaver_body_geometry_tail(dc_gpu_t *g,uint32_t slot) {
+    const dc_gpu_body_record_t *body=dc_gpu_body_record(g,slot);
+    if(!(body->piece_count&DC_GPU_PIXEL_BODY_FLAG)) return UINT32_MAX;
+    uint32_t pool_at=dc_gpu_pixel_pool_word_offset(g);
+    const uint32_t *words=g->body_mapped,*pool=words+pool_at;
+    uint64_t first=(uint64_t)pool_at+DC_GPU_PIXEL_POOL_HEADER_WORDS+
+        (uint64_t)pool[0]*dc_gpu_pixel_pool_capacity(g);
+    if(body->compound_reserved<first||body->compound_reserved>=first+pool[1]) return UINT32_MAX;
+    uint32_t offset=(uint32_t)(body->compound_reserved-first);
+    return words[body->compound_reserved]==pool[1]-offset?offset:UINT32_MAX;
+}
+
+bool fr_beaver_body_admit_prepared(dc_gpu_t *g,uint64_t identity,uint64_t transaction,
+    uint32_t slot,dc_chunk_coord_t spawn,int32_t x,int32_t y,
+    fr_beaver_body_prepare_fn prepare,void *user,fr_beaver_body_t *out,bool *world_consistent,
     char *err,uint32_t cap) {
+    if(world_consistent) *world_consistent=true;
     const int32_t chunk_extent=DC_CHUNK_SIDE*DC_FLUID_FULL;
     if(!g||!identity||!transaction||slot>=DC_GPU_CHUNK_SLOTS||!out||
        x<0||y<0||x>=chunk_extent||y>=chunk_extent)
@@ -86,6 +100,7 @@ bool fr_beaver_body_admit(dc_gpu_t *g,uint64_t identity,uint64_t transaction,
     if(okay&&bodies!=1) okay=beaver_body_error(err,cap,"Canonical player did not admit as one connected body");
     if(okay) okay=fr_gpu_pose_authored_rigid(g,result.binding.body_id,spawn,x,y,0,err,cap)&&
         dc_gpu_set_body_motion(g,result.binding.body_id,0,0,DC_GPU_BODY_LOCK_ROTATION,err,cap);
+    if(okay&&prepare) okay=prepare(user,&result,err,cap);
     for(uint32_t i=0;i<count&&okay;i++) {
         fr_reactive_owner_t *owner=&records[i].owner;
         owner->key[0]=result.binding.body_id;
@@ -95,12 +110,30 @@ bool fr_beaver_body_admit(dc_gpu_t *g,uint64_t identity,uint64_t transaction,
     }
     if(okay) okay=fr_gpu_reactive_attach_authored_body(g,body_slot,records,count,err,cap);
     if(!okay&&staged) {
+        bool restored=true;
+        uint32_t geometry_tail=UINT32_MAX;
         for(uint32_t s=0;s<dc_gpu_body_capacity(g);s++) {
             const dc_body_storage_owner_t *owner=dc_gpu_body_owner(g,s);
-            if(beaver_body_created_by(owner,transaction)) dc_gpu_remove_body(g,owner->runtime_id,NULL,0);
+            if(!beaver_body_created_by(owner,transaction)) continue;
+            uint32_t tail=beaver_body_geometry_tail(g,s);
+            if(!dc_gpu_remove_body(g,owner->runtime_id,NULL,0)) restored=false;
+            else if(tail!=UINT32_MAX) geometry_tail=tail;
         }
-        dc_gpu_upload_chunk(g,slot,chunk,NULL,0);
+        if(!dc_gpu_upload_chunk(g,slot,chunk,NULL,0)||!restored) {
+            if(world_consistent) *world_consistent=false;
+            beaver_body_error(err,cap,"Cannot restore the world after failed player admission");
+        } else if(geometry_tail!=UINT32_MAX) {
+            uint32_t *pool=(uint32_t *)g->body_mapped+dc_gpu_pixel_pool_word_offset(g);
+            pool[1]=geometry_tail;
+        }
     }
     if(okay) *out=result;
     free(chunk);free(objects);free(records);return okay;
+}
+
+bool fr_beaver_body_admit(dc_gpu_t *g,uint64_t identity,uint64_t transaction,
+    uint32_t slot,dc_chunk_coord_t spawn,int32_t x,int32_t y,fr_beaver_body_t *out,
+    char *err,uint32_t cap) {
+    return fr_beaver_body_admit_prepared(g,identity,transaction,slot,spawn,x,y,
+        NULL,NULL,out,NULL,err,cap);
 }

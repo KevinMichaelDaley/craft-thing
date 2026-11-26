@@ -18,13 +18,24 @@ struct fr_fire_ray_gpu {
     dc_gpu_address_buffer_t commands;
     fr_renderer_compute_t compute;
     uint32_t count;
-    float duration,remaining[DC_FIRE_RAY_MAX];
+    fr_fire_ray_config_t config;
+    float remaining[DC_FIRE_RAY_MAX];
     uint64_t sequence[DC_FIRE_RAY_MAX];
     fr_player_body_binding_t bindings[DC_FIRE_RAY_MAX];
 };
 static bool fire_ray_error(char *err,uint32_t cap,const char *text) {
     if(err&&cap) snprintf(err,cap,"%s",text);
     return false;
+}
+
+static void fire_ray_init_emitter(fr_fire_ray_gpu_t *ray,uint32_t index,
+                                  const fr_player_body_binding_t *binding) {
+    ray->bindings[index]=*binding;
+    uint32_t *p=(uint32_t *)ray->commands.mapped+DC_FIRE_RAY_HEADER+index*DC_FIRE_RAY_WORDS;
+    p[0]=binding->body_id;p[1]=binding->generation;
+    p[14]=ray->config.range;p[15]=ray->config.half_height;
+    memcpy(p+16,&ray->config.duration,sizeof(float));
+    memcpy(p+17,&ray->config.temperature_K,sizeof(float));
 }
 
 bool fr_fire_ray_gpu_create(dc_gpu_t *g,const fr_player_body_binding_t *b,uint32_t n,
@@ -40,15 +51,11 @@ bool fr_fire_ray_gpu_create(dc_gpu_t *g,const fr_player_body_binding_t *b,uint32
     }
     if(!fr_thermal_gpu_enable(g,err,cap)||!fr_renderer_enable(g,err,cap)) return false;
     fr_fire_ray_gpu_t *r=calloc(1,sizeof(*r));if(!r) return fire_ray_error(err,cap,"Cannot allocate ray adapter");
-    r->gpu=g;r->count=n;r->duration=c.duration;memcpy(r->bindings,b,n*sizeof(*b));
-    VkDeviceSize bytes=(DC_FIRE_RAY_HEADER+(VkDeviceSize)n*DC_FIRE_RAY_WORDS)*4u;
+    r->gpu=g;r->count=n;r->config=c;
+    VkDeviceSize bytes=(DC_FIRE_RAY_HEADER+DC_FIRE_RAY_MAX*DC_FIRE_RAY_WORDS)*sizeof(uint32_t);
     if(!dc_gpu_address_buffer_create(g,bytes,true,&r->commands,err,cap)) {free(r);return false;}
     uint32_t *w=r->commands.mapped;memset(w,0,(size_t)bytes);w[0]=DC_FIRE_RAY_MAGIC;w[1]=n;
-    for(uint32_t i=0;i<n;i++) {
-        uint32_t *p=w+DC_FIRE_RAY_HEADER+i*DC_FIRE_RAY_WORDS;
-        p[0]=b[i].body_id;p[1]=b[i].generation;p[14]=c.range;p[15]=c.half_height;
-        memcpy(p+16,&c.duration,4);memcpy(p+17,&c.temperature_K,4);
-    }
+    for(uint32_t i=0;i<n;i++) fire_ray_init_emitter(r,i,&b[i]);
     VkDescriptorBufferInfo buffers[]={
         {g->reactive->arena.root.buffer,0,g->reactive->arena.root.bytes},
         {g->page_buffer,0,VK_WHOLE_SIZE},{g->thermal->profiles.buffer,0,g->thermal->profiles.bytes},
@@ -58,6 +65,21 @@ bool fr_fire_ray_gpu_create(dc_gpu_t *g,const fr_player_body_binding_t *b,uint32
         fr_renderer_compute_destroy(g,&r->compute);dc_gpu_address_buffer_destroy(g,&r->commands);free(r);return false;
     }
     fr_renderer_bind_fire_ray(g,&buffers[6]);*o=r;return true;
+}
+
+bool fr_fire_ray_gpu_prepare_emitter(fr_fire_ray_gpu_t *r,const fr_player_body_binding_t *b,
+                                    char *err,uint32_t cap) {
+    if(!r||!b||r->count>=DC_FIRE_RAY_MAX||!b->identity||!b->body_id||!b->generation)
+        return fire_ray_error(err,cap,"Invalid additional ray emitter ownership");
+    for(uint32_t i=0;i<r->count;i++)
+        if(b->identity==r->bindings[i].identity||b->body_id==r->bindings[i].body_id)
+            return fire_ray_error(err,cap,"Duplicate ray emitter");
+    return vkQueueWaitIdle(r->gpu->queue)==VK_SUCCESS||fire_ray_error(err,cap,"Cannot reach ray emitter boundary");
+}
+
+void fr_fire_ray_gpu_commit_emitter(fr_fire_ray_gpu_t *r,const fr_player_body_binding_t *b) {
+    fire_ray_init_emitter(r,r->count,b);
+    ((uint32_t *)r->commands.mapped)[1]=++r->count;
 }
 bool fr_fire_ray_gpu_submit(fr_fire_ray_gpu_t *r,const fr_fire_ray_input_t *i,
     uint32_t n,float dt,char *err,uint32_t cap) {
@@ -72,7 +94,7 @@ bool fr_fire_ray_gpu_submit(fr_fire_ray_gpu_t *r,const fr_fire_ray_input_t *i,
     for(uint32_t p=0;p<n;p++) {
         if(i[p].sequence>sequence[p]) {
             sequence[p]=i[p].sequence;emit[p]=i[p].emit;
-            if(emit[p]) remaining[p]=r->duration;
+            if(emit[p]) remaining[p]=r->config.duration;
         }
         active|=remaining[p]>0;
         remaining[p]=fmaxf(0,remaining[p]-dt);

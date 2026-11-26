@@ -21,5 +21,10 @@ bool fr_renderer_sprite_atlas(dc_gpu_t *gpu,
  * The shader resolves current body transforms without CPU pose readback. */
 bool fr_renderer_sprite_poses(dc_gpu_t *gpu,const fr_renderer_sprite_t *poses,
     uint32_t count,char *err,uint32_t cap);
+/** Validate a candidate pose batch at a completed queue boundary. */
+bool fr_renderer_sprite_prepare_poses(dc_gpu_t *gpu,const fr_renderer_sprite_t *poses,
+    uint32_t count,char *err,uint32_t cap);
+/** Publish the prepared batch before the next render or atlas replacement. */
+void fr_renderer_sprite_commit_poses(dc_gpu_t *gpu,const fr_renderer_sprite_t *poses,uint32_t count);
 
 #endif

@@ -64,27 +64,27 @@ static bool players_atlas(dc_level_view_t *v,char *err,uint32_t cap) {
     if(okay) okay=fr_renderer_sprite_atlas(v->gpu,pixels,used,err,cap);
     free(pixels);return okay;
 }
-bool dc_player_session_publish(dc_level_view_t *v,char *err,uint32_t cap) {
+bool dc_player_session_make_pose(const struct dc_player_session *s,const fr_player_t *player,
+    const fr_beaver_body_t *b,fr_renderer_sprite_t *pose,char *err,uint32_t cap) {
+    uint32_t frame;
+    if(!fr_player_frame(player,&frame)) return players_error(err,cap,"Cannot publish invalid player frame");
+    fr_player_action_t action=player->action;
+    if(s->ray_enabled&&action==FR_PLAYER_WALK) {action=FR_PLAYER_IDLE;frame=0;}
+    fr_beaver_frame_layout_t layout=s->layouts[action][frame];
+    bool flip=player->facing<0;
+    uint32_t horizontal_pad=flip?layout.canvas_width-layout.x-layout.width:layout.x;
+    *pose=(fr_renderer_sprite_t){.body_id=b->binding.body_id,.generation=b->binding.generation,
+        .offset=s->frame_offsets[action][frame],.width=layout.width,.height=layout.height,
+        .flip=flip,.rest_origin_x=b->rest_origin_x,.rest_origin_y=b->rest_origin_y,
+        .origin_x=(int32_t)b->rest_origin_x+(int32_t)(layout.canvas_width-40)/2-(int32_t)horizontal_pad,
+        .origin_y=(int32_t)layout.foot_baseline-(int32_t)layout.y-(int32_t)b->height};
+    return true;
+}
+
+static bool players_publish(dc_level_view_t *v,char *err,uint32_t cap) {
     struct dc_player_session *s=v->players;fr_renderer_sprite_t poses[FR_INPUT_PLAYERS];
-    for(uint32_t n=0;n<s->count;n++) {
-        const fr_player_t *player=&s->players[n];
-        uint32_t frame;
-        if(!fr_player_frame(player,&frame)) return players_error(err,cap,"Cannot publish invalid player frame");
-        fr_player_action_t action=player->action;
-        if(s->ray_enabled&&action==FR_PLAYER_WALK) {
-            action=FR_PLAYER_IDLE;
-            frame=0;
-        }
-        fr_beaver_frame_layout_t layout=s->layouts[action][frame];
-        bool flip=player->facing<0;
-        uint32_t horizontal_pad=flip?layout.canvas_width-layout.x-layout.width:layout.x;
-        fr_beaver_body_t b=s->bodies[n];
-        poses[n]=(fr_renderer_sprite_t){.body_id=b.binding.body_id,.generation=b.binding.generation,
-            .offset=s->frame_offsets[action][frame],.width=layout.width,.height=layout.height,
-            .flip=flip,.rest_origin_x=b.rest_origin_x,.rest_origin_y=b.rest_origin_y,
-            .origin_x=(int32_t)b.rest_origin_x+(int32_t)(layout.canvas_width-40)/2-(int32_t)horizontal_pad,
-            .origin_y=(int32_t)layout.foot_baseline-(int32_t)layout.y-(int32_t)b.height};
-    }
+    for(uint32_t n=0;n<s->count;n++)
+        if(!dc_player_session_make_pose(s,&s->players[n],&s->bodies[n],&poses[n],err,cap)) return false;
     return fr_renderer_sprite_poses(v->gpu,poses,s->count,err,cap);
 }
 static void players_open(struct dc_player_session *s,int index) {
@@ -388,7 +388,7 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
     }
     if(s->sequence==UINT64_MAX) return players_error(err,cap,"Player command sequence exhausted");
     s->sequence++;
-    if(!fr_player_drive_gpu_submit(s->drive,drive,s->count,err,cap)||!dc_player_session_publish(v,err,cap)) return false;
+    if(!fr_player_drive_gpu_submit(s->drive,drive,s->count,err,cap)||!players_publish(v,err,cap)) return false;
     players_follow_camera(v);
     if(s->ray) {
         fr_fire_ray_input_t rays[FR_INPUT_PLAYERS];

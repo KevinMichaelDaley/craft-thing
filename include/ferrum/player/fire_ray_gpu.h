@@ -12,6 +12,11 @@ typedef struct {uint32_t casts,heated,blocked_rows;float remaining;} fr_fire_ray
  * to existing parcel/atmosphere energy, never to a cosmetic reaction solver. */
 bool fr_fire_ray_gpu_create(dc_gpu_t *gpu,const fr_player_body_binding_t *bindings,
     uint32_t count,fr_fire_ray_config_t config,fr_fire_ray_gpu_t **out,char *err,uint32_t cap);
+/** Validate an additional emitter and reach a completed queue boundary. */
+bool fr_fire_ray_gpu_prepare_emitter(fr_fire_ray_gpu_t *ray,const fr_player_body_binding_t *binding,
+                                    char *err,uint32_t cap);
+/** Append the prepared emitter while preserving existing ray commands and history. */
+void fr_fire_ray_gpu_commit_emitter(fr_fire_ray_gpu_t *ray,const fr_player_body_binding_t *binding);
 /** Advance existing rays; only emit=true with a newer nonzero sequence starts
  * one. Direction is latched at emission. Air and fuel-bearing substrates pass;
  * nonfuel solids, water and missing pages stop each traced row. */

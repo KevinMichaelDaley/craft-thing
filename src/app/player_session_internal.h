@@ -6,6 +6,7 @@
 #include "ferrum/player/beaver.h"
 #include "ferrum/player/hotbar.h"
 #include "ferrum/player/manipulation.h"
+#include "ferrum/renderer/sprite_gpu.h"
 #include "player_session.h"
 
 struct dc_player_session {
@@ -50,7 +51,8 @@ static inline bool players_error(char *err,uint32_t cap,const char *text) {
 }
 
 
-bool dc_player_session_publish(dc_level_view_t *view,char *err,uint32_t cap);
+bool dc_player_session_make_pose(const struct dc_player_session *session,const fr_player_t *player,
+    const fr_beaver_body_t *body,fr_renderer_sprite_t *pose,char *err,uint32_t cap);
 bool dc_player_session_add_keyboard(dc_level_view_t *view,char *err,uint32_t cap);
 bool dc_player_session_join_controller(dc_level_view_t *view,int64_t device,bool *backend_failed,
                                        char *err,uint32_t cap);

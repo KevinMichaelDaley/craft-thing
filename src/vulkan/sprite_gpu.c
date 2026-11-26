@@ -54,7 +54,7 @@ bool fr_renderer_sprite_atlas(dc_gpu_t *g,const fr_renderer_sprite_pixel_t *p,
     fr_renderer_sprites_destroy(g);g->sprites=next;
     return true;
 }
-bool fr_renderer_sprite_poses(dc_gpu_t *g,const fr_renderer_sprite_t *p,
+bool fr_renderer_sprite_prepare_poses(dc_gpu_t *g,const fr_renderer_sprite_t *p,
     uint32_t n,char *err,uint32_t cap) {
     if(!g||!g->sprites||n>FR_RENDERER_SPRITES||(n&&!p))
         return sprite_error(err,cap,"Invalid sprite pose batch");
@@ -66,7 +66,10 @@ bool fr_renderer_sprite_poses(dc_gpu_t *g,const fr_renderer_sprite_t *p,
         for(uint32_t j=0;j<i;j++) if(p[i].body_id==p[j].body_id)
             return sprite_error(err,cap,"Duplicate sprite body");
     }
-    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return sprite_error(err,cap,"Cannot reach sprite publication boundary");
+    return vkQueueWaitIdle(g->queue)==VK_SUCCESS||sprite_error(err,cap,"Cannot reach sprite publication boundary");
+}
+
+void fr_renderer_sprite_commit_poses(dc_gpu_t *g,const fr_renderer_sprite_t *p,uint32_t n) {
     uint32_t *w=g->sprites->channel.mapped;
     const uint32_t contact=DC_SPRITE_ATLAS_WORD+2u*g->sprites->pixels;
     for(uint32_t i=0;i<n;i++) {
@@ -81,5 +84,11 @@ bool fr_renderer_sprite_poses(dc_gpu_t *g,const fr_renderer_sprite_t *p,
         pose[DC_SPRITE_CONTACT_WORD]=reverse_at;
     }
     w[1]=n;
+}
+
+bool fr_renderer_sprite_poses(dc_gpu_t *g,const fr_renderer_sprite_t *p,
+    uint32_t n,char *err,uint32_t cap) {
+    if(!fr_renderer_sprite_prepare_poses(g,p,n,err,cap)) return false;
+    fr_renderer_sprite_commit_poses(g,p,n);
     return true;
 }

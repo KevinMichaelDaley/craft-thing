@@ -53,13 +53,14 @@ static dc_gpu_t gpu;
 static struct fr_gas_gpu gas;
 static struct fr_thermal_gpu thermal;
 static struct fr_reactive_gpu reactive;
-static uint32_t words[DC_FIRE_RAY_HEADER+DC_FIRE_RAY_WORDS];
+static uint32_t words[DC_FIRE_RAY_HEADER+DC_FIRE_RAY_MAX*DC_FIRE_RAY_WORDS];
 static fr_fire_ray_gpu_t ray;
 static void reset(uint32_t policy) {
     memset(&gpu,0,sizeof(gpu));memset(&gas,0,sizeof(gas));memset(&ray,0,sizeof(ray));
+    memset(words,0,sizeof(words));
     gpu.gas=&gas;gpu.thermal=&thermal;gpu.reactive=&reactive;
     gas.policy=policy;gas.cache_valid=true;gas.acoustic.matrix_valid=true;
-    ray.gpu=&gpu;ray.count=1;ray.duration=.4f;ray.commands.mapped=words;
+    ray.gpu=&gpu;ray.count=1;ray.config.duration=.4f;ray.commands.mapped=words;
     ray.bindings[0]=(fr_player_body_binding_t){.identity=1,.body_id=2,.generation=1};g_submits=0;
     g_queue_result=VK_SUCCESS;g_begin_ok=true;g_submit_ok=true;
 }
@@ -142,6 +143,34 @@ static void test_failed_active_step_preserves_remaining_duration(void) {
     ASSERT_TRUE(fabsf(ray.remaining[0]-(before-1.f/60))<.000001f);
     PASS();
 }
+
+static void test_appending_emitter_preserves_active_commands_and_cast_sequence(void) {
+    reset(FR_GAS_PRESSURE_PRACTICAL);char err[256];
+    const fr_player_body_binding_t added={.identity=3u,.body_id=4u,.generation=2u};
+    fr_fire_ray_input_t input[2]={{.identity=1u,.sequence=7u,.facing=1,.emit=true},
+                                  {.identity=3u,.sequence=7u,.facing=-1}};
+    ASSERT_TRUE(fr_fire_ray_gpu_submit(&ray,input,1u,1.f/60,err,sizeof(err)));
+    uint32_t before[DC_FIRE_RAY_WORDS];
+    memcpy(before,words+DC_FIRE_RAY_HEADER,sizeof(before));
+    float remaining=ray.remaining[0];
+    g_queue_result=VK_ERROR_DEVICE_LOST;
+    ASSERT_TRUE(!fr_fire_ray_gpu_prepare_emitter(&ray,&added,err,sizeof(err)));
+    g_queue_result=VK_SUCCESS;
+    ASSERT_TRUE(fr_fire_ray_gpu_prepare_emitter(&ray,&added,err,sizeof(err)));
+    ASSERT_EQ(ray.count,1u);
+    ASSERT_EQ(memcmp(before,words+DC_FIRE_RAY_HEADER,sizeof(before)),0);
+    fr_fire_ray_gpu_commit_emitter(&ray,&added);
+    ASSERT_EQ(ray.count,2u);ASSERT_EQ(words[1],2u);
+    ASSERT_EQ(ray.sequence[0],7u);ASSERT_EQ(ray.remaining[0],remaining);
+    ASSERT_EQ(memcmp(before,words+DC_FIRE_RAY_HEADER,sizeof(before)),0);
+    ASSERT_EQ(words[DC_FIRE_RAY_HEADER+DC_FIRE_RAY_WORDS],added.body_id);
+    ASSERT_EQ(words[DC_FIRE_RAY_HEADER+DC_FIRE_RAY_WORDS+1u],added.generation);
+    ASSERT_TRUE(fr_fire_ray_gpu_submit(&ray,input,2u,1.f/60,err,sizeof(err)));
+    ASSERT_EQ(words[DC_FIRE_RAY_HEADER+4u],0u);
+    ASSERT_TRUE(ray.remaining[0]<remaining&&ray.remaining[0]>0.f);
+    PASS();
+}
+
 int main(void) {
     RUN(test_heat_preserves_advective_bound_but_changes_acoustic_bound);
     RUN(test_practical_heat_keeps_transport_and_pressure_matrix_cache);
@@ -149,5 +178,6 @@ int main(void) {
     RUN(test_idle_cast_adapter_does_no_work_or_invalidation);
     RUN(test_failed_submission_keeps_cast_retryable);
     RUN(test_failed_active_step_preserves_remaining_duration);
+    RUN(test_appending_emitter_preserves_active_commands_and_cast_sequence);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }

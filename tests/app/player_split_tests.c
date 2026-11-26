@@ -4,9 +4,11 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include "../../src/app/player_session.h"
+#include "../../src/app/level_internal.h"
+#include "../../src/app/player_session_internal.h"
 #include "../../src/app/view_config.h"
 #include "../../src/vulkan/gpu_internal.h"
+#include "../../src/vulkan/reactive_storage_gpu.h"
 
 static int g_pass,g_fail;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fflush(stdout);fn();teardown();} while(0)
@@ -19,6 +21,41 @@ static dc_level_view_t *v=NULL;
 static SDL_Window *cover_window;
 static uint32_t *before_pixels, *after_pixels;
 enum { RETICLE_ARM_SAMPLE = 4, RGB_WHITE = 0x00ffffff };
+static enum { JOIN_OK, JOIN_FAIL_DRIVE, JOIN_FAIL_RAY, JOIN_FAIL_SPRITES } fail_join;
+
+bool __real_fr_player_drive_gpu_create(dc_gpu_t *,const fr_player_body_binding_t *,uint32_t,
+    float,float,fr_player_drive_gpu_t **,char *,uint32_t);
+bool __wrap_fr_player_drive_gpu_create(dc_gpu_t *gpu,const fr_player_body_binding_t *bindings,uint32_t count,
+    float speed,float jump,fr_player_drive_gpu_t **drive,char *error,uint32_t cap) {
+    if(fail_join==JOIN_FAIL_DRIVE&&count==2u) {
+        fail_join=JOIN_OK;
+        snprintf(error,cap,"Injected drive preparation failure");
+        return false;
+    }
+    return __real_fr_player_drive_gpu_create(gpu,bindings,count,speed,jump,drive,error,cap);
+}
+
+bool __real_fr_fire_ray_gpu_prepare_emitter(fr_fire_ray_gpu_t *,const fr_player_body_binding_t *,char *,uint32_t);
+bool __wrap_fr_fire_ray_gpu_prepare_emitter(fr_fire_ray_gpu_t *ray,const fr_player_body_binding_t *body,
+    char *error,uint32_t cap) {
+    if(fail_join==JOIN_FAIL_RAY) {
+        fail_join=JOIN_OK;
+        snprintf(error,cap,"Injected ray preparation failure");
+        return false;
+    }
+    return __real_fr_fire_ray_gpu_prepare_emitter(ray,body,error,cap);
+}
+
+bool __real_fr_renderer_sprite_prepare_poses(dc_gpu_t *,const fr_renderer_sprite_t *,uint32_t,char *,uint32_t);
+bool __wrap_fr_renderer_sprite_prepare_poses(dc_gpu_t *gpu,const fr_renderer_sprite_t *poses,uint32_t count,
+    char *error,uint32_t cap) {
+    if(fail_join==JOIN_FAIL_SPRITES&&count==2u) {
+        fail_join=JOIN_OK;
+        snprintf(error,cap,"Injected sprite preparation failure");
+        return false;
+    }
+    return __real_fr_renderer_sprite_prepare_poses(gpu,poses,count,error,cap);
+}
 
 static bool capture_window(dc_gpu_t *gpu, uint32_t **pixels) {
     size_t count = (size_t)gpu->swap_extent.width * gpu->swap_extent.height;
@@ -49,6 +86,7 @@ static bool setup_at(int32_t pages_west, bool follow) {
            dc_players_enable_at(v,64,40,follow,err,sizeof(err));
 }
 static void teardown(void) {
+    fail_join=JOIN_OK;
     if (cover_window) SDL_DestroyWindow(cover_window);
     cover_window = NULL;
     free(before_pixels);
@@ -100,6 +138,70 @@ static void test_direct_join_rebinds_the_same_disconnected_native_beaver(void) {
     ASSERT_TRUE(dc_players_step(v,1.f/60.f,err,sizeof(err)));
     ASSERT_TRUE(dc_players_status(v,1u,&player,&after));
     ASSERT_TRUE(player.intent.move_x>.5f);
+    PASS();
+}
+
+static void test_new_player_setup_failures_preserve_the_live_seat_and_ray(void) {
+    ASSERT_TRUE(setup_at(0,false));
+    const fr_fire_ray_config_t config={.range=80u,.half_height=1u,.duration=.4f,.temperature_K=900.f};
+    ASSERT_TRUE(dc_players_fire_ray(v,config,err,sizeof(err)));
+    struct dc_player_session *s=v->players;
+    dc_gpu_t *gpu=dc_level_view_gpu(v);
+    fr_player_drive_gpu_t *original_drive=s->drive;
+    fr_fire_ray_gpu_t *original_ray=s->ray;
+    SDL_Event cast={.key={.type=SDL_KEYDOWN,.keysym.scancode=SDL_SCANCODE_Q}};
+    ASSERT_TRUE(dc_players_event(v,&cast));
+    ASSERT_TRUE(dc_players_step(v,.25f,err,sizeof(err))&&dc_players_step(v,.15625f,err,sizeof(err)));
+    fr_fire_ray_stats_t before,after;
+    ASSERT_TRUE(fr_fire_ray_gpu_stats(original_ray,0u,&before));
+    ASSERT_EQ(before.casts,1u);
+    ASSERT_TRUE(before.remaining>0.f);
+    fr_input_t input=s->input;
+    fr_reactive_arena_stats_t baseline,stats;
+    ASSERT_TRUE(fr_reactive_arena_stats(gpu,&gpu->reactive->arena,&baseline));
+    uint64_t high_id=gpu->reactive->high_id;
+    uint32_t body_count=gpu->body_count;
+    uint32_t geometry_words=((const uint32_t *)gpu->body_mapped)[dc_gpu_pixel_pool_word_offset(gpu)+1u];
+    const SDL_Event start={.cbutton={.type=SDL_CONTROLLERBUTTONDOWN,.which=42,.button=SDL_CONTROLLER_BUTTON_START}};
+    for(unsigned fault=JOIN_FAIL_DRIVE;fault<=JOIN_FAIL_SPRITES;fault++) {
+        fail_join=fault;
+        ASSERT_TRUE(dc_players_event(v,&start));
+        ASSERT_EQ(fail_join,JOIN_OK);
+        ASSERT_EQ(s->count,1u);
+        ASSERT_EQ(s->failure[0],'\0');
+        ASSERT_EQ(s->drive,original_drive);
+        ASSERT_EQ(s->ray,original_ray);
+        ASSERT_EQ(memcmp(&s->input,&input,sizeof(input)),0);
+        ASSERT_TRUE(fr_fire_ray_gpu_stats(s->ray,0u,&after));
+        ASSERT_EQ(after.casts,before.casts);
+        ASSERT_EQ(after.remaining,before.remaining);
+        ASSERT_EQ(after.heated,before.heated);
+        ASSERT_EQ(gpu->body_count,body_count);
+        ASSERT_EQ(((const uint32_t *)gpu->body_mapped)[dc_gpu_pixel_pool_word_offset(gpu)+1u],geometry_words);
+        ASSERT_TRUE(fr_reactive_arena_stats(gpu,&gpu->reactive->arena,&stats));
+        ASSERT_EQ(stats.live,baseline.live);
+        ASSERT_EQ(gpu->reactive->high_id,high_id);
+    }
+
+    ASSERT_TRUE(dc_players_event(v,&start));
+    ASSERT_EQ(s->count,2u);
+    ASSERT_EQ(s->ray,original_ray);
+    ASSERT_TRUE(fr_fire_ray_gpu_stats(s->ray,0u,&after));
+    ASSERT_EQ(after.remaining,before.remaining);
+    ASSERT_EQ(after.casts,1u);
+    ASSERT_EQ(gpu->body_count,body_count+1u);
+    dc_gpu_body_pixel_t pixels[FR_BEAVER_PIXELS];
+    uint32_t added=0;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu,s->bodies[1].binding.body_id,pixels,FR_BEAVER_PIXELS,&added,err,sizeof(err)));
+    ASSERT_TRUE(fr_reactive_arena_stats(gpu,&gpu->reactive->arena,&stats));
+    ASSERT_EQ(stats.live,baseline.live+added);
+    ASSERT_EQ(gpu->reactive->high_id,high_id+added);
+    ASSERT_TRUE(dc_players_step(v,1.f/60.f,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
+    ASSERT_TRUE(fr_fire_ray_gpu_stats(s->ray,0u,&after));
+    ASSERT_EQ(after.casts,1u);
+    ASSERT_TRUE(after.remaining<before.remaining&&after.remaining>0.f);
+    printf("Three failed joins preserved %u live parcels. Retry admitted %u parcels and kept the active ray.\n",
+        baseline.live,added);
     PASS();
 }
 
@@ -497,7 +599,13 @@ int main(int argc, char **argv) {
         printf("\nResults: %d passed, %d failed\n",g_pass,g_fail);
         return g_fail ? 1 : 0;
     }
+    if (argc == 2 && strcmp(argv[1], "--join-rollback") == 0) {
+        RUN(test_new_player_setup_failures_preserve_the_live_seat_and_ray);
+        printf("\nResults: %d passed, %d failed\n",g_pass,g_fail);
+        return g_fail ? 1 : 0;
+    }
     RUN(test_second_seat_joins_with_its_own_beaver);
+    RUN(test_new_player_setup_failures_preserve_the_live_seat_and_ray);
     RUN(test_direct_join_rebinds_the_same_disconnected_native_beaver);
     RUN(test_split_screen_routes_bands_to_their_players);
     RUN(test_split_screen_needs_two_seats);
