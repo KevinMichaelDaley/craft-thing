@@ -20,6 +20,16 @@ Gas transport_axis_input(uint atlas) {
     if(transport_direct_first_axis()) return gas_source_at(atlas);
     return gas_provisional(atlas);
 }
+void transport_preserve_first_axis_cell(ivec2 p) {
+    uint atlas=gas_atlas(p);
+    if(atlas!=0xffffffffu) gas_write_provisional(atlas,gas_source_at(atlas));
+}
+void transport_preserve_skipped_first_axis() {
+    uint line=gl_WorkGroupID.x;
+    if(!transport_direct_first_axis()||transport_work[line*params.width].mass.w!=-1.) return;
+    for(uint cell=gl_LocalInvocationIndex;cell<params.width;cell+=FR_GAS_LOCAL_SIZE)
+        transport_preserve_first_axis_cell(ivec2(int(cell),int(line)));
+}
 /* Quiet velocity is not quiet transport when adjacent gas differs. In the
  * second split sweep inspect its input, which already includes the first sweep;
  * source velocity caches alone would miss newly reached diagonal cells. */

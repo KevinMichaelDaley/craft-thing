@@ -311,7 +311,9 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
     float dt,uint32_t bank,dc_gpu_address_buffer_t *stats,char *err,uint32_t cap) {
     bool trace=getenv("DC_GAS_TRACE")!=NULL&&g->timestamp_bits;
     const char *direct_first_setting=getenv("DC_GAS_DIRECT_FIRST_AXIS");
-    bool direct_first=t->sparse_owners||(t->practical&&getenv("DC_GAS_FUSED_AXIS")&&direct_first_setting&&strcmp(direct_first_setting,"0")!=0);
+    bool request_fused_axis=getenv("DC_GAS_FUSED_AXIS")!=NULL;
+    bool fused_axis=t->practical&&(t->compact_only||t->sparse_owners||request_fused_axis);
+    bool direct_first=t->sparse_owners||(fused_axis&&request_fused_axis&&direct_first_setting&&strcmp(direct_first_setting,"0")!=0);
     if(t->direct_first_axis!=direct_first) {t->matrix_valid=false;t->direct_first_axis=direct_first;}
     uint32_t tail_query=t->large_transport?14u:4u;
     bool matrix_large=t->large_transport||t->practical;
@@ -391,6 +393,7 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
         if(t->practical&&reuse_rate&&strcmp(reuse_rate,"0")!=0) bank|=FR_GAS_REUSE_LINE_RATE_BIT;
         const char *fused_setting=getenv("DC_GAS_FUSED_APPLY");bool fused=fused_setting&&strcmp(fused_setting,"0")!=0;
         barrier(g);VkBufferCopy copy={.size=t->state_bytes};
+        /* Direct X establishes every mapped candidate before Y reads it. */
         if(!direct_first) vkCmdCopyBuffer(g->command,t->state_bank[bank&1u],t->state_bank[(bank&1u)^1u],1,&copy);
         if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,4);
         for(uint32_t axis=0;axis<2;axis++) {
@@ -403,14 +406,14 @@ bool fr_gas_acoustic_step(dc_gpu_t *g,fr_gas_acoustic_gpu_t *t,uint32_t gx,uint3
             bool hybrid=t->practical&&t->practical_explicit.pipeline&&hybrid_setting&&strcmp(hybrid_setting,"0")!=0&&
                 (bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u;
             const char *fused_hybrid_setting=getenv("DC_GAS_FUSED_HYBRID");
-            bool fused_hybrid=hybrid&&getenv("DC_GAS_FUSED_AXIS")&&t->practical_hybrid.pipeline&&
+            bool fused_hybrid=hybrid&&request_fused_axis&&t->practical_hybrid.pipeline&&
                 fused_hybrid_setting&&strcmp(fused_hybrid_setting,"0")!=0;
             if(fused_hybrid) flags|=FR_GAS_HYBRID_LINES_BIT;
             if(!fused_hybrid&&t->practical&&t->practical_explicit.pipeline&&hybrid_setting&&strcmp(hybrid_setting,"0")!=0&&
                (bank&FR_GAS_COMPARE_ROW_SETUP_BIT)==0u) {
                 flags|=FR_GAS_HYBRID_LINES_BIT;dispatch(g,&t->practical_explicit,lines,1u,dt,flags);
             }
-            if(t->practical&&(t->compact_only||getenv("DC_GAS_FUSED_AXIS"))) {
+            if(fused_axis) {
                 const char *fixed_axis_setting=getenv("DC_GAS_FIXED_AXIS");
                 bool fixed_axis=fused_hybrid&&fixed_axis_setting&&strcmp(fixed_axis_setting,"0")!=0;
                 const fr_renderer_compute_t *hybrid=fixed_axis?&t->practical_hybrid_axis[axis]:&t->practical_hybrid;

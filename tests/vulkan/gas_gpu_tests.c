@@ -4,6 +4,7 @@
 #undef main
 #include <math.h>
 #include <sys/stat.h>
+#include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "../../src/vulkan/gas_gpu_state.h"

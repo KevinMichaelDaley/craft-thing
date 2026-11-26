@@ -60,3 +60,7 @@ The aligned c4324106 capture matched the locked replay at every reported second.
 **2026-11-26T18:20:19Z**
 
 Exact db7b54b8 locked depletion exited 2 at Greek second 141 after 8460 accepted steps. Stock plus gas reached +4.012883186 Q16, beyond the unchanged four-unit limit, with 36 of 36 submerged faces and no exterior or mobile fuel. The dormant-face conservation fix is independently verified on both advection paths, including renewed flow when both tiles wake, but the locked pool's late advection gain persists. A temporary Vulkan probe compiled from the same native fixture now samples horizontal and vertical transport separately, then the pressure RHS and finish. Run the one-second alignment check before the longer replay.
+
+**2026-11-26T19:10:19Z**
+
+The staged native axis probe aligned to the db7b54b8 locked run at +0.000722803 Q16 after the first second. Over seconds 131 through 145 it measured 900 large-step ticks, with +1.248927116 Q16 in the horizontal sweep and +0.026367188 Q16 in the vertical sweep. Remaining advection metadata, pressure finish and publication were zero, as were physical preparation and gas geometry over this interval. The capture matched the failed locked sample at second 141, +4.012883186 Q16. The new publication repair preserves skipped horizontal lines. Rerun the locked fixture to see whether that independently verified defect affected the pool's measured gain.

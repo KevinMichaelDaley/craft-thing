@@ -183,6 +183,8 @@ bool fr_gas_run_audit(dc_gpu_t *g,char *err,uint32_t cap) {
 static void bind_canonical(dc_gpu_t *g,struct fr_gas_gpu *t) {
     uint32_t at=t->direct_publish?1u:0u;
     VkDescriptorBufferInfo buffer={t->state[at].buffer,0,t->state[at].bytes};
+    /* Binding zero is the published field for these consumers. The owner
+     * gather keeps its separate staging destination. */
     const VkDescriptorSet sets[]={t->initialize.descriptor,t->feedback.descriptor,t->coordinate_feedback.descriptor,
         t->potential_feedback.descriptor,t->audit.descriptor,t->conduction.descriptor,t->mpm_pressure.descriptor,
         t->bubble_displace.descriptor,t->geometry_stage.descriptor,t->geometry_routes.descriptor,

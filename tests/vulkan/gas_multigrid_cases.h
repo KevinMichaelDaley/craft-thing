@@ -50,6 +50,8 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
         double gravity=cached_neighbors||(lean_metadata&&getenv("DC_GAS_DIAG_ZERO_GRAVITY"))?0:900;
         ASSERT_TRUE(fr_gas_gpu_enable(g,&m,.0012,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&fr_gas_gpu_set_gravity(g,gravity,err,sizeof(err)));
+        /* In coupled worlds thermal dispatches own conduction. Exercise the fused geometry path. */
+        if(geometry_activity) ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_combustion_gpu_enable(g,err,sizeof(err)));
         ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
         if(all_slots) ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,2,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,2,dormant,4096,err,sizeof(err)));
         for(uint32_t step=0;step<8;step++) {
