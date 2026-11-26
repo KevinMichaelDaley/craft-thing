@@ -27,3 +27,7 @@ The compiled X-wide-local shader at 9513f4f3 calls gas_explicit_run before the f
 **2026-11-26T19:28:41Z**
 
 Native gas transport checks passed on the refactor for standalone explicit, generic fused, fixed-axis fused, and fixed-axis cached local stages. Each profile passed the explicit-flux comparison, stationary diagonal transport, and the small- and large-step dormant-face conservation cases, for 16 total passes and no skips. The whole-project make test is still queued on b2710a77.
+
+**2026-11-26T19:33:53Z**
+
+The first matrix omitted DC_GAS_FUSED_AXIS. The rerun pinned DC_GAS_FUSED_AXIS=1 and DC_GAS_FUSED_METADATA=1 and again completed all 16 focused cases with zero failures or skips. Separate native admission comparisons confirmed generic versus fixed-axis dispatches with exact snapshots and 94 versus 94 pressure tiles with exact packets when cached local stages were enabled.
