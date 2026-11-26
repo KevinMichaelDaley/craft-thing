@@ -76,3 +76,7 @@ The arithmetic probe passed on 9513f4f3 at all 60 large-step ticks of the first 
 **2026-11-26T19:41:05Z**
 
 The 9513f4f3 late arithmetic capture matched the locked replay at second 141 (+4.012883186 Q16). Across the 900 accepted ticks of seconds 131–145, explicit horizontal stock rounding added +1.248927116 Q16. Horizontal face imbalance, horizontal implicit fallback, and the unexplained horizontal remainder each rounded to exactly 0.000000000 Q16. Vertical transport added +0.026367188 Q16. The aggregate matches the independent phase probe. Preserve the four-unit gate and the effect of small trace fluxes in the transport fix. The exact-order replay is queued separately.
+
+**2026-11-26T19:48:34Z**
+
+A native Vulkan RED fixture compiles and reproduces +0.082763672 Q16 of soot drift during one bounded explicit step through 512 fixed two-cell channels, with the same positive drift on the shared and cached-rate shaders. The receiving cell gains stock and both audits report valid packets. This isolates the stored-stock rounding without surface combustion, changing void, or pressure movement between channels.

@@ -574,6 +574,7 @@ static void test_native_subnormal_colored_stock_is_valid_and_retained_at_rest(vo
 }
 #include "gas_audit_precision_cases.h"
 #include "gas_activity_boundary_cases.h"
+#include "gas_explicit_stock_cases.h"
 int main(void) {
     if(getenv("DC_GAS_AUDIT_ONLY")) {
         RUN(test_cold_audit_keeps_trace_products_across_workgroups);
@@ -673,6 +674,7 @@ int main(void) {
     RUN(test_native_practical_safe_line_matches_explicit_flux_inside_stiff_interval);
     RUN(test_practical_small_step_preserves_exhaust_at_dormant_donor);
     RUN(test_practical_large_step_preserves_exhaust_at_dormant_donor);
+    RUN(test_explicit_line_conserves_exhaust_and_soot_when_stocks_round);
     RUN(test_native_cold_audit_reduces_stock_and_does_not_advance_physics);
     RUN(test_cold_audit_keeps_trace_products_across_workgroups);
     RUN(test_native_hot_gas_audit_weights_tiny_spikes_by_heat_capacity);
