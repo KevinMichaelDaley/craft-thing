@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 #include "ferrum/fire/greek_fire.h"
 
@@ -131,6 +132,71 @@ static void test_single_unit_reactions_keep_balanced_submerged_fuel(void) {
     PASS();
 }
 
+static void submerged_film_exhaustion(unsigned hz) {
+    enum { seconds = 160 };
+    char err[256] = {0};
+    fr_reactive_record_t film = {
+        .owner = fr_reactive_cell_owner((dc_chunk_coord_t){-2, 3}, 7u),
+        .state = coated(509u, true, true, err, sizeof(err)),
+    };
+    film.state.coating_oil_fuel_fp = 1u;
+    film.state.coating_jelly_fuel_fp = 3u;
+    film.state.coating_oxidizer_fp = 2u;
+    const float initial_temperature = hz == 240u ? 293.15f : 800.f;
+    film.state.thermal_energy =
+        (float)fr_reactive_state_energy_at_temperature(&film.state, initial_temperature);
+    const uint64_t initial_mass = fr_reactive_state_mass_fp(&film.state);
+    const double initial_energy = fr_reactive_state_energy(&film.state);
+    uint64_t gas_products = 0u;
+    double exported = 0., released = 0.;
+    for (unsigned step = 0; step < seconds * hz; ++step) {
+        fr_reactive_state_t next;
+        fr_coating_combustion_products_t products;
+        ASSERT_TRUE(fr_coating_combustion_reference(&film.state, 0u, 1.f, 1.f / hz,
+            &next, &products, err, sizeof(err)));
+        ASSERT_EQ(products.ambient_oxygen_fp, 0u);
+        gas_products += products.soot_fp + products.exhaust_fp;
+        exported += products.exported_energy;
+        released += products.released_heat;
+        film.state = next;
+        if (step == 60u * hz) {
+            fr_reactive_record_t restored;
+            uint8_t packet[40u + sizeof(film)];
+            size_t written = 0;
+            uint32_t count = 0, required = 0;
+            uint64_t next_id = 0;
+            ASSERT_TRUE(fr_reactive_snapshot_encode(&film, 1u, 510u, packet,
+                sizeof(packet), &written, err, sizeof(err)));
+            ASSERT_TRUE(fr_reactive_snapshot_decode(packet, written, &restored,
+                1u, &count, &next_id, &required, err, sizeof(err)));
+            ASSERT_EQ(count, 1u);
+            ASSERT_EQ(next_id, 510u);
+            ASSERT_EQ(memcmp(&film, &restored, sizeof(film)), 0);
+            film = restored;
+        }
+    }
+    printf("Submerged terminal film at %u Hz: oil %u, jelly %u, oxidizer %u Q16\n",
+           hz, film.state.coating_oil_fuel_fp, film.state.coating_jelly_fuel_fp,
+           film.state.coating_oxidizer_fp);
+    ASSERT_EQ(film.state.coating_oil_fuel_fp, 0u);
+    ASSERT_EQ(film.state.coating_jelly_fuel_fp, 0u);
+    ASSERT_EQ(film.state.coating_oxidizer_fp, 0u);
+    ASSERT_EQ(film.state.flags & FR_REACTIVE_COATING_FLAMING, 0u);
+    ASSERT_EQ(fr_reactive_state_mass_fp(&film.state) + gas_products, initial_mass);
+    double energy_error = fr_reactive_state_energy(&film.state) + exported -
+                          initial_energy - released;
+    ASSERT_TRUE(energy_error > -1e-6 && energy_error < 1e-6);
+    PASS();
+}
+
+static void test_submerged_film_exhaustion_at_60_hz(void) {
+    submerged_film_exhaustion(60u);
+}
+
+static void test_submerged_film_exhaustion_at_240_hz(void) {
+    submerged_film_exhaustion(240u);
+}
+
 int main(void) {
     RUN(test_mixed_film_burns_underwater_with_finite_bound_stock);
     RUN(test_mixed_film_depletes_faster_than_matched_oil_while_wet_oil_douses);
@@ -138,5 +204,7 @@ int main(void) {
     RUN(test_unmixed_jelly_cannot_spend_nonexistent_oil);
     RUN(test_equal_time_cadences_consume_the_same_finite_mixture);
     RUN(test_single_unit_reactions_keep_balanced_submerged_fuel);
+    RUN(test_submerged_film_exhaustion_at_60_hz);
+    RUN(test_submerged_film_exhaustion_at_240_hz);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }

@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <string.h>
+
+#include "dungeoncraft/coating_layout.h"
 #include "ferrum/fire/reactive_state.h"
 
 static int g_pass,g_fail;
@@ -49,6 +51,38 @@ static void checksum(uint8_t *bytes,size_t count) {
     for(size_t i=40;i<count;i++) hash=(hash^bytes[i])*UINT64_C(1099511628211);
     for(uint32_t i=0;i<8;i++) bytes[32+i]=(uint8_t)(hash>>(i*8u));
 }
+static size_t old_packet(uint8_t *bytes,uint8_t version,uint32_t count) {
+    enum { header_bytes=40u, old_record_bytes=(6u+29u)*4u };
+    for(uint32_t i=0;i<count;++i)
+        memmove(bytes+header_bytes+(size_t)i*old_record_bytes,
+            bytes+header_bytes+(size_t)i*sizeof(fr_reactive_record_t),old_record_bytes);
+    bytes[4]=version;
+    bytes[8]=29u;
+    size_t length=header_bytes+(size_t)count*old_record_bytes;
+    checksum(bytes,length);
+    return length;
+}
+static void test_abi_eight_retains_two_records_and_fractional_coating_credit(void) {
+    char err[128];fr_reactive_record_t records[2],out[2];ASSERT_TRUE(input(records));
+    records[1].state.coating_remainders=800u<<FR_COATING_REACTION_REM_SHIFT;
+    uint8_t bytes[PACKET_BYTES];size_t written=0;
+    ASSERT_TRUE(fr_reactive_snapshot_encode(records,2,42,bytes,sizeof(bytes),&written,err,sizeof(err)));
+    size_t length=old_packet(bytes,8u,2u);
+    uint32_t count=0,required=0;uint64_t next=0;
+    ASSERT_TRUE(fr_reactive_snapshot_decode(bytes,length,out,2,&count,&next,&required,err,sizeof(err)));
+    ASSERT_EQ(count,2u);ASSERT_EQ(required,2u);ASSERT_EQ(next,42u);
+    ASSERT_EQ(memcmp(out,records+1,sizeof(*out)),0);
+    ASSERT_EQ(memcmp(out+1,records,sizeof(*out)),0);
+    const char *path="build/reactive_packet_v8.frs";
+    FILE *file=fopen(path,"wb");ASSERT_TRUE(file);
+    ASSERT_EQ(fwrite(bytes,1,length,file),length);ASSERT_EQ(fclose(file),0);
+    memset(out,0,sizeof(out));
+    ASSERT_TRUE(fr_reactive_snapshot_read(path,out,2,&count,&next,&required,err,sizeof(err)));
+    ASSERT_EQ(memcmp(out,records+1,sizeof(*out)),0);
+    ASSERT_EQ(memcmp(out+1,records,sizeof(*out)),0);
+    remove(path);
+    PASS();
+}
 static void test_capacity_corruption_future_version_and_typed_errors_roll_back(void) {
     char err[128];fr_reactive_record_t records[2],out[2],untouched[2];ASSERT_TRUE(input(records));
     uint8_t bytes[PACKET_BYTES],valid[PACKET_BYTES];size_t written=0;
@@ -80,15 +114,15 @@ static void test_version_one_particle_births_migrate_but_reserved_bits_remain_in
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_LEAF_DEBRIS,1000,0,600,80,&record.state,err,sizeof(err)));
     uint8_t bytes[sizeof(fr_reactive_record_t)+10u*sizeof(uint32_t)];size_t written=0;uint32_t count=0,required=0;uint64_t next=0;
     ASSERT_TRUE(fr_reactive_snapshot_encode(&record,1,81,bytes,sizeof(bytes),&written,err,sizeof(err)));
-    bytes[4]=1;checksum(bytes,sizeof(bytes));
-    ASSERT_TRUE(fr_reactive_snapshot_decode(bytes,sizeof(bytes),&out,1,&count,&next,&required,err,sizeof(err)));
+    size_t length=old_packet(bytes,1u,1u);
+    ASSERT_TRUE(fr_reactive_snapshot_decode(bytes,length,&out,1,&count,&next,&required,err,sizeof(err)));
     ASSERT_TRUE(memcmp(&record,&out,sizeof(out))==0);ASSERT_EQ(next,81u);
     FILE *file=fopen("build/reactive_packet_v1.frs","wb");ASSERT_TRUE(file);
-    ASSERT_EQ(fwrite(bytes,1,sizeof(bytes),file),sizeof(bytes));ASSERT_EQ(fclose(file),0);
+    ASSERT_EQ(fwrite(bytes,1,length,file),length);ASSERT_EQ(fclose(file),0);
     ASSERT_TRUE(fr_reactive_snapshot_read("build/reactive_packet_v1.frs",&out,1,&count,&next,&required,err,sizeof(err)));
     ASSERT_TRUE(memcmp(&record,&out,sizeof(out))==0);
-    bytes[56]=1;checksum(bytes,sizeof(bytes));
-    ASSERT_TRUE(!fr_reactive_snapshot_decode(bytes,sizeof(bytes),&out,1,&count,&next,&required,err,sizeof(err)));
+    bytes[56]=1;checksum(bytes,length);
+    ASSERT_TRUE(!fr_reactive_snapshot_decode(bytes,length,&out,1,&count,&next,&required,err,sizeof(err)));
     remove("build/reactive_packet_v1.frs");PASS();
 }
 static void test_full_width_particle_births_round_trip_as_version_two(void) {
@@ -98,11 +132,11 @@ static void test_full_width_particle_births_round_trip_as_version_two(void) {
     uint8_t bytes[sizeof(fr_reactive_record_t)+10u*sizeof(uint32_t)];size_t written=0;uint32_t count=0,required=0;uint64_t next=0;
     ASSERT_TRUE(fr_reactive_snapshot_encode(&record,1,81,bytes,sizeof(bytes),&written,err,sizeof(err)));
     ASSERT_EQ(bytes[4],FR_REACTIVE_STATE_ABI);
-    bytes[4]=2;checksum(bytes,sizeof(bytes));
-    ASSERT_TRUE(fr_reactive_snapshot_decode(bytes,sizeof(bytes),&out,1,&count,&next,&required,err,sizeof(err)));
+    size_t length=old_packet(bytes,2u,1u);
+    ASSERT_TRUE(fr_reactive_snapshot_decode(bytes,length,&out,1,&count,&next,&required,err,sizeof(err)));
     ASSERT_TRUE(memcmp(&record,&out,sizeof(out))==0);
     FILE *file=fopen("build/reactive_packet_v2.frs","wb");ASSERT_TRUE(file);
-    ASSERT_EQ(fwrite(bytes,1,sizeof(bytes),file),sizeof(bytes));ASSERT_EQ(fclose(file),0);
+    ASSERT_EQ(fwrite(bytes,1,length,file),length);ASSERT_EQ(fclose(file),0);
     ASSERT_TRUE(fr_reactive_snapshot_read("build/reactive_packet_v2.frs",&out,1,&count,&next,&required,err,sizeof(err)));
     ASSERT_TRUE(memcmp(&record,&out,sizeof(out))==0);remove("build/reactive_packet_v2.frs");PASS();
 }
@@ -111,6 +145,7 @@ int main(void) {
     RUN(test_encode_failure_does_not_touch_the_destination_or_written_size);
     RUN(test_capacity_corruption_future_version_and_typed_errors_roll_back);
     RUN(test_empty_packet_retains_the_ambient_old_world_contract);
+    RUN(test_abi_eight_retains_two_records_and_fractional_coating_credit);
     RUN(test_version_one_particle_births_migrate_but_reserved_bits_remain_invalid);
     RUN(test_full_width_particle_births_round_trip_as_version_two);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;

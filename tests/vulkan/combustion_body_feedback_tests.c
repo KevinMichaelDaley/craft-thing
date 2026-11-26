@@ -269,7 +269,13 @@ static void test_thin_oxygen_is_reserved_without_creating_heat_or_consuming_unfu
 }
 static void test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory(void) {hot_skin_budget_case(false);}
 static void test_rotated_mixed_temperature_heat_cannot_overdraw_a_cold_parcel(void) {hot_skin_budget_case(true);}
-static void submerged_rigid_coating_case(bool single_unit) {
+typedef enum {
+    COATING_BULK_DEBIT,
+    COATING_SINGLE_UNIT,
+    COATING_TERMINAL_PAIR,
+} coating_case_t;
+
+static void submerged_rigid_coating_case(coating_case_t mode, unsigned hz) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     const uint32_t at=20u*64u+20u;
     chunk->cells[at].material=DC_MATERIAL_WOOD;
@@ -279,32 +285,46 @@ static void submerged_rigid_coating_case(bool single_unit) {
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&
         dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     fr_reactive_state_t wood;
-    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322u,4u*65536u,800.f,
+    float initial_temperature=mode==COATING_TERMINAL_PAIR?293.15f:800.f;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322u,4u*65536u,
+        initial_temperature,
         600100u,&wood,err,sizeof(err)));
-    wood.coating_oil_fuel_fp=single_unit?4u:32768u;
+    const uint32_t film_units[]={32768u,4u,1u};
+    wood.coating_oil_fuel_fp=film_units[mode];
     wood.coating_jelly_fuel_fp=wood.coating_oil_fuel_fp;
     wood.coating_oxidizer_fp=wood.coating_oil_fuel_fp;
-    if(single_unit) wood.coating_remainders=
+    if(mode!=COATING_BULK_DEBIT) wood.coating_remainders=
         FR_COATING_REACTION_REM_MASK<<FR_COATING_REACTION_REM_SHIFT;
     wood.coating_threshold=.01f;
     wood.coating_integral=.02f;wood.flags|=FR_REACTIVE_COATING_FLAMING;
-    wood.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&wood,800.f);
+    wood.thermal_energy=(float)fr_reactive_state_energy_at_temperature(&wood,initial_temperature);
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,at,&wood,err,sizeof(err))&&
         dc_gpu_admit_authored_rigid_cells(g,err,sizeof(err)));
     fr_gas_model_t model={.gas_constant={.25984,.29680,.18892,.46152,0},
         .heat_capacity_cv={.65816,.74320,.65508,1.40248,.71},.kinetic_scale=1./512.};
     ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&
         fr_gas_gpu_enable(g,&model,.0012f,293.15f,err,sizeof(err))&&
-        fr_combustion_gpu_enable(g,err,sizeof(err))&&
-        fr_combustion_gpu_step(g,single_unit?1.f/60.f:.1f,err,sizeof(err)));
+        fr_combustion_gpu_enable(g,err,sizeof(err)));
+    unsigned steps=mode==COATING_TERMINAL_PAIR?50u*hz:1u;
+    for(unsigned step=0;step<steps;++step)
+        ASSERT_TRUE(fr_combustion_gpu_step(g,1.f/hz,err,sizeof(err)));
     fr_reactive_record_t result;bool found=false;
     ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,0u,0u,&result,&found,err,sizeof(err))&&found);
-    if(single_unit) {
+    if(mode==COATING_SINGLE_UNIT) {
         printf("Single underwater reaction: oil %u, jelly %u Q16 remain\n",
             result.state.coating_oil_fuel_fp,result.state.coating_jelly_fuel_fp);
         ASSERT_EQ(result.state.coating_oil_fuel_fp,3u);
         ASSERT_EQ(result.state.coating_jelly_fuel_fp,4u);
         ASSERT_EQ(result.state.coating_oxidizer_fp,3u);
+    }
+    if(mode==COATING_TERMINAL_PAIR) {
+        printf("Vulkan terminal pair at %u Hz: oil %u, jelly %u, oxidizer %u Q16\n",
+            hz,result.state.coating_oil_fuel_fp,result.state.coating_jelly_fuel_fp,
+            result.state.coating_oxidizer_fp);
+        ASSERT_EQ(result.state.coating_oil_fuel_fp,0u);
+        ASSERT_EQ(result.state.coating_jelly_fuel_fp,0u);
+        ASSERT_EQ(result.state.coating_oxidizer_fp,0u);
+        ASSERT_EQ(result.state.flags&FR_REACTIVE_COATING_FLAMING,0u);
     }
     ASSERT_TRUE(result.state.coating_oil_fuel_fp<wood.coating_oil_fuel_fp);
     ASSERT_TRUE(result.state.coating_oxidizer_fp<wood.coating_oxidizer_fp);
@@ -343,10 +363,16 @@ static void submerged_rigid_coating_case(bool single_unit) {
     free(gas);free(chunk);dc_gpu_destroy(g);PASS();
 }
 static void test_submerged_rigid_coating_burns_from_bound_oxidizer(void) {
-    submerged_rigid_coating_case(false);
+    submerged_rigid_coating_case(COATING_BULK_DEBIT,10u);
 }
 static void test_submerged_rigid_coating_splits_one_whole_reaction_unit(void) {
-    submerged_rigid_coating_case(true);
+    submerged_rigid_coating_case(COATING_SINGLE_UNIT,60u);
+}
+static void test_submerged_rigid_coating_exhausts_at_60_hz(void) {
+    submerged_rigid_coating_case(COATING_TERMINAL_PAIR,60u);
+}
+static void test_submerged_rigid_coating_exhausts_at_120_hz(void) {
+    submerged_rigid_coating_case(COATING_TERMINAL_PAIR,120u);
 }
 static void test_sustained_coating_contact_feeds_both_corrosion_samples(void) {
     enum {size = DC_CHUNK_CELLS, x = 20, y = 20, center = y * DC_CHUNK_SIDE + x};
@@ -498,14 +524,22 @@ int main(void) {
     if(getenv("DC_GREEK_SINGLE_UNIT_ONLY"))
         RUN(test_submerged_rigid_coating_splits_one_whole_reaction_unit);
     else
+    if(getenv("DC_GREEK_TERMINAL_ONLY")) {
+        RUN(test_submerged_rigid_coating_exhausts_at_60_hz);
+        RUN(test_submerged_rigid_coating_exhausts_at_120_hz);
+    } else
     if(getenv("DC_GREEK_BODY_ONLY")) {
         RUN(test_submerged_rigid_coating_burns_from_bound_oxidizer);
         RUN(test_submerged_rigid_coating_splits_one_whole_reaction_unit);
+        RUN(test_submerged_rigid_coating_exhausts_at_60_hz);
+        RUN(test_submerged_rigid_coating_exhausts_at_120_hz);
         RUN(test_sustained_coating_contact_feeds_both_corrosion_samples);
         run_rigid_coating_contact_cases();
     } else {
         RUN(test_submerged_rigid_coating_burns_from_bound_oxidizer);
         RUN(test_submerged_rigid_coating_splits_one_whole_reaction_unit);
+        RUN(test_submerged_rigid_coating_exhausts_at_60_hz);
+        RUN(test_submerged_rigid_coating_exhausts_at_120_hz);
         RUN(test_sustained_coating_contact_feeds_both_corrosion_samples);
         run_rigid_coating_contact_cases();
         RUN(test_rigid_wood_settles_impact_energy_before_ignition);

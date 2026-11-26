@@ -28,13 +28,20 @@ static void rehash(uint8_t *bytes,size_t length) {
     for(size_t i=0;i<length;i++) if(i<32||i>=40) hash=(hash^bytes[i])*UINT64_C(1099511628211);
     for(uint32_t i=0;i<8;i++) bytes[32+i]=(uint8_t)(hash>>(8*i));
 }
+static size_t old_packet(uint8_t *bytes,uint8_t version) {
+    const size_t length=40u+(6u+29u)*4u;
+    bytes[4]=version;
+    bytes[8]=29u;
+    rehash(bytes,length);
+    return length;
+}
 static void test_abi_five_initializes_drying_progress_and_rejects_reserved_bits(void) {
     char err[256]={0};fr_reactive_record_t record={.owner=fr_reactive_cell_owner((dc_chunk_coord_t){-2,4},7)},out={0};
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,200,350,1,&record.state,err,sizeof(err)));
     size_t length=0,written=0;ASSERT_TRUE(fr_reactive_snapshot_size(1,&length));
     uint8_t *packet=malloc(length);ASSERT_TRUE(packet);
     ASSERT_TRUE(fr_reactive_snapshot_encode(&record,1,2,packet,length,&written,err,sizeof(err)));
-    packet[4]=5;rehash(packet,length);
+    length=old_packet(packet,5u);
     uint32_t count=0,required=0;uint64_t next=0;
     ASSERT_TRUE(fr_reactive_snapshot_decode(packet,length,&out,1,&count,&next,&required,err,sizeof(err)));
     ASSERT_EQ(out.state.evaporation_fraction,0.f);
@@ -50,7 +57,7 @@ static void test_abi_two_migrates_zero_remainder_but_rejects_nonzero_old_reserve
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,350,1,&record.state,err,sizeof(err)));
     size_t length=0,written=0;ASSERT_TRUE(fr_reactive_snapshot_size(1,&length));uint8_t *bytes=malloc(length);ASSERT_TRUE(bytes);
     ASSERT_TRUE(fr_reactive_snapshot_encode(&record,1,2,bytes,length,&written,err,sizeof(err)));
-    bytes[4]=2;rehash(bytes,length);uint32_t count=0,required=0;uint64_t next=0;
+    length=old_packet(bytes,2u);uint32_t count=0,required=0;uint64_t next=0;
     ASSERT_TRUE(fr_reactive_snapshot_decode(bytes,length,&out,1,&count,&next,&required,err,sizeof(err)));
     ASSERT_EQ(out.state.thermal_energy_residual,0.f);ASSERT_EQ(memcmp(&out,&record,sizeof(record)),0);
     uint32_t value=0;float residual=1e-6f;memcpy(&value,&residual,4);
@@ -73,7 +80,7 @@ static void test_abi_six_rejects_future_coating_remainder_bits(void) {
     uint8_t *bytes=malloc(length);ASSERT_TRUE(bytes);
     ASSERT_TRUE(fr_reactive_snapshot_encode(&record,1u,2u,bytes,length,&written,
         err,sizeof(err)));
-    bytes[4]=6u;rehash(bytes,length);
+    length=old_packet(bytes,6u);
     ASSERT_TRUE(!fr_reactive_snapshot_decode(bytes,length,&out,1u,
         &(uint32_t){0},&(uint64_t){0},&(uint32_t){0},err,sizeof(err)));
     free(bytes);PASS();
@@ -84,7 +91,7 @@ static void test_abi_four_unfunded_demand_does_not_create_reserved_oxygen(void) 
     record.state.reaction_fraction=.75f;size_t length=0,written=0;
     ASSERT_TRUE(fr_reactive_snapshot_size(1,&length));uint8_t *bytes=malloc(length);ASSERT_TRUE(bytes);
     ASSERT_TRUE(fr_reactive_snapshot_encode(&record,1,2,bytes,length,&written,err,sizeof(err)));
-    bytes[4]=4;rehash(bytes,length);uint32_t count=0,required=0;uint64_t next=0;
+    length=old_packet(bytes,4u);uint32_t count=0,required=0;uint64_t next=0;
     ASSERT_TRUE(fr_reactive_snapshot_decode(bytes,length,&out,1,&count,&next,&required,err,sizeof(err)));
     ASSERT_EQ(out.state.reaction_fraction,0.f);ASSERT_EQ(fr_reactive_state_pending_oxygen_fp(&out.state),0.);
     ASSERT_EQ(fr_reactive_state_energy(&out.state),fr_reactive_state_energy(&record.state));free(bytes);PASS();
