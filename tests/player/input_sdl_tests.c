@@ -73,9 +73,45 @@ static void test_focus_event_does_not_block_later_queued_genuine_press(void) {
     g_snapshot=false;g_keys[SDL_SCANCODE_Q]=0;
     ASSERT_EQ(s.pressed,1u<<FR_INPUT_FIRE);PASS();
 }
+
+static void test_controller_hotbar_and_build_bindings_are_owned(void) {
+    fr_input_t input;
+    fr_input_init(&input);
+    for (uint32_t player = 1; player <= FR_INPUT_PLAYERS; ++player) {
+        int64_t device = player == 1 ? FR_INPUT_KEYBOARD_DEVICE : (int64_t)player;
+        ASSERT_TRUE(fr_input_add_player(&input, player));
+        ASSERT_TRUE(fr_input_connect(&input, device, player));
+        ASSERT_TRUE(fr_input_sdl_defaults(&input, device, player != 1));
+    }
+    static const struct {
+        SDL_GameControllerButton button;
+        fr_input_action_t action;
+    } bindings[] = {
+        {SDL_CONTROLLER_BUTTON_DPAD_UP, FR_INPUT_SLOT_1},
+        {SDL_CONTROLLER_BUTTON_DPAD_RIGHT, FR_INPUT_SLOT_2},
+        {SDL_CONTROLLER_BUTTON_DPAD_DOWN, FR_INPUT_SLOT_3},
+        {SDL_CONTROLLER_BUTTON_DPAD_LEFT, FR_INPUT_SLOT_4},
+        {SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, FR_INPUT_PLACE},
+        {SDL_CONTROLLER_BUTTON_LEFTSHOULDER, FR_INPUT_BUILD}
+    };
+    SDL_Event event = {.type = SDL_CONTROLLERBUTTONDOWN};
+    event.cbutton.which = 4;
+    for (size_t i = 0; i < sizeof(bindings) / sizeof(bindings[0]); ++i) {
+        event.cbutton.button = bindings[i].button;
+        ASSERT_TRUE(fr_input_sdl_event(&input, &event));
+        for (uint32_t player = 1; player <= FR_INPUT_PLAYERS; ++player) {
+            fr_input_state_t state;
+            ASSERT_TRUE(fr_input_sample(&input, player, &state));
+            ASSERT_EQ(state.pressed, player == 4 ? 1u << bindings[i].action : 0u);
+        }
+    }
+    PASS();
+}
+
 int main(void) {
     RUN(test_focus_event_does_not_block_later_queued_genuine_press);
     RUN(test_keyboard_context_and_repeat);RUN(test_controller_axis_button_instance_ownership);
     RUN(test_focus_and_configured_binding);
+    RUN(test_controller_hotbar_and_build_bindings_are_owned);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
 }

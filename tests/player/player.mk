@@ -46,6 +46,12 @@ build/player_runtime_tests: tests/app/player_runtime_tests.c tests/player/runtim
 test_player_runtime: build/player_runtime_tests
 	./build/player_runtime_tests
 test: test_player_runtime
+build/player_action_tests: tests/app/player_action_tests.c build/dungeoncraft_quarter_native
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+.PHONY: test_player_actions
+test_player_actions: build/player_action_tests
+	./build/player_action_tests
+test: test_player_actions
 build/player_fire_ray_gpu_tests: tests/player/fire_ray_gpu_tests.c src/player/fire_ray_gpu.c include/ferrum/player/fire_ray_gpu.h build/fluid_tests build/shaders/player_fire_ray.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/player/fire_ray_gpu.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=fr_renderer_submit
 .PHONY: test_player_fire_ray_gpu
