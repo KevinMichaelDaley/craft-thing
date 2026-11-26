@@ -136,19 +136,12 @@ bool fr_player_cast_fire_bolt(dc_gpu_t *gpu, uint64_t owner_id,
 
 static bool storm_target_cell(dc_gpu_t *gpu, const fr_player_point_t *target,
                               uint32_t *x, uint32_t *y) {
-    for (uint32_t slot = 0u; slot < DC_GPU_CHUNK_SLOTS; slot++) {
-        uint32_t tile = gpu->slot_page[slot];
-        if (tile == UINT32_MAX) continue;
-        const uint32_t *registry = dc_gpu_structural_data(gpu) +
-            DC_STRUCTURAL_HEADER_WORDS + slot * 8u;
-        if (registry[5] &&
-            memcmp(registry, &target->chunk, sizeof(target->chunk)) == 0) {
-            *x = tile % gpu->page_width * DC_CHUNK_SIDE + (uint32_t)target->x;
-            *y = tile / gpu->page_width * DC_CHUNK_SIDE + (uint32_t)target->y;
-            return true;
-        }
-    }
-    return false;
+    uint32_t slot = dc_gpu_find_active_chunk(gpu, target->chunk);
+    if (slot == UINT32_MAX) return false;
+    uint32_t tile = gpu->slot_page[slot];
+    *x = tile % gpu->page_width * DC_CHUNK_SIDE + (uint32_t)target->x;
+    *y = tile / gpu->page_width * DC_CHUNK_SIDE + (uint32_t)target->y;
+    return true;
 }
 
 bool fr_player_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,

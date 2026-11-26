@@ -10,17 +10,17 @@ enum { HARVEST_REACH_CELLS = 12, HARVEST_PROBE_CHUNKS = 4 };
 
 typedef struct {
     fr_player_point_t point;
-    uint32_t slot, tile, local;
+    uint32_t slot, local, grid_x, grid_y;
     uint16_t material;
 } harvest_cell_t;
 
-static bool canonical_point(const fr_player_point_t *point) {
+static bool harvest_point_valid(const fr_player_point_t *point) {
     return point && point->x >= 0.f && point->x < DC_CHUNK_SIDE &&
                     point->y >= 0.f && point->y < DC_CHUNK_SIDE;
 }
 
-static bool offset_point(const fr_player_point_t *aim, int32_t dx, int32_t dy,
-                         fr_player_point_t *point) {
+static bool harvest_offset_point(const fr_player_point_t *aim, int32_t dx,
+                                  int32_t dy, fr_player_point_t *point) {
     dc_chunk_coord_t offset;
     uint32_t x, y;
     dc_cell_address((int64_t)aim->x + dx, (int64_t)aim->y + dy, &offset, &x, &y);
@@ -34,18 +34,18 @@ static bool offset_point(const fr_player_point_t *aim, int32_t dx, int32_t dy,
     return true;
 }
 
-static double chunk_distance(int64_t target, int64_t origin) {
+static double harvest_chunk_distance(int64_t target, int64_t origin) {
     return target >= origin
         ? (double)((uint64_t)target - (uint64_t)origin)
         : -(double)((uint64_t)origin - (uint64_t)target);
 }
 
-static bool within_reach(const fr_player_point_t *origin,
-                         const fr_player_point_t *point) {
-    double x = chunk_distance(point->chunk.x, origin->chunk.x) * DC_CHUNK_SIDE +
-               point->x - origin->x;
-    double y = chunk_distance(point->chunk.y, origin->chunk.y) * DC_CHUNK_SIDE +
-               point->y - origin->y;
+static bool harvest_in_reach(const fr_player_point_t *origin,
+                             const fr_player_point_t *point) {
+    double x = harvest_chunk_distance(point->chunk.x, origin->chunk.x) *
+               DC_CHUNK_SIDE + point->x - origin->x;
+    double y = harvest_chunk_distance(point->chunk.y, origin->chunk.y) *
+               DC_CHUNK_SIDE + point->y - origin->y;
     return x * x + y * y <= HARVEST_REACH_CELLS * HARVEST_REACH_CELLS;
 }
 
@@ -56,13 +56,14 @@ static bool harvest_target(dc_gpu_t *gpu, const fr_player_point_t *origin,
         {0, 0}, {0, -1}, {-1, 0}, {1, 0}, {0, 1},
         {-1, -1}, {1, -1}, {-1, 1}, {1, 1}
     };
+    /* A three-by-three probe spans at most four chunks. */
     uint32_t read_slots[HARVEST_PROBE_CHUNKS], read_count = 0u;
     if (dc_gpu_find_active_chunk(gpu, aim->chunk) == UINT32_MAX) return true;
 
     for (size_t i = 0; i < sizeof(neighbors) / sizeof(neighbors[0]); ++i) {
         fr_player_point_t point;
-        if (!offset_point(aim, neighbors[i][0], neighbors[i][1], &point) ||
-            !within_reach(origin, &point))
+        if (!harvest_offset_point(aim, neighbors[i][0], neighbors[i][1], &point) ||
+            !harvest_in_reach(origin, &point))
             continue;
         uint32_t slot = dc_gpu_find_active_chunk(gpu, point.chunk);
         if (slot == UINT32_MAX) continue;
@@ -82,7 +83,7 @@ static bool harvest_target(dc_gpu_t *gpu, const fr_player_point_t *origin,
         const dc_cell_t *cells = gpu->chunk_mapped;
         uint16_t material = cells[(size_t)slot * DC_CHUNK_CELLS + local].material;
         if (!fr_player_inventory_kind(material)) continue;
-        *cell = (harvest_cell_t){point, slot, tile, local, material};
+        *cell = (harvest_cell_t){point, slot, local, x, y, material};
         break;
     }
     return true;
@@ -127,7 +128,7 @@ bool fr_player_harvest_tick(dc_gpu_t *gpu, fr_player_inventory_t *inventory,
     bool *eligible, char *err, uint32_t cap) {
     if (!gpu || !inventory || !chew || !eligible) return false;
     *eligible = false;
-    if (!canonical_point(origin) || !canonical_point(aim)) {
+    if (!harvest_point_valid(origin) || !harvest_point_valid(aim)) {
         *chew = (fr_player_chew_t){0};
         return true;
     }
@@ -155,10 +156,9 @@ bool fr_player_harvest_tick(dc_gpu_t *gpu, fr_player_inventory_t *inventory,
     if (!held || !ready || inventory->mass_fp[kind] > UINT64_MAX - target.dry_mass_fp)
         return true;
 
-    uint32_t x = cell.tile % gpu->page_width * DC_CHUNK_SIDE + (uint32_t)cell.point.x;
-    uint32_t y = cell.tile / gpu->page_width * DC_CHUNK_SIDE + (uint32_t)cell.point.y;
     bool removed;
-    bool okay = dc_gpu_carve_terrain_cell(gpu, x, y, &removed, err, cap);
+    bool okay = dc_gpu_carve_terrain_cell(gpu, cell.grid_x, cell.grid_y,
+                                          &removed, err, cap);
     if (removed) {
         inventory->mass_fp[kind] += target.dry_mass_fp;
         fr_chew_work_committed(&chew->bank, &target);

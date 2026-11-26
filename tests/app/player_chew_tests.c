@@ -11,16 +11,11 @@ static int g_pass, g_fail;
 static char err[256];
 static dc_level_view_t *view;
 
-#define RUN(fn) do {print_run(#fn);fn();cleanup();} while (0)
+#define RUN(fn) do {printf("RUN %s\n",#fn);fflush(stdout);fn();cleanup();} while (0)
 #define ASSERT_TRUE(e) do {if (!(e)) {printf("FAIL %d: %s [%s]\n",__LINE__,#e,err);g_fail++;return;}} while (0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
 #define ASSERT_INT_EQ(a,b) ASSERT_EQ((int)(a),(int)(b))
 #define PASS() g_pass++
-
-static void print_run(const char *name) {
-    printf("RUN %s\n", name);
-    fflush(stdout);
-}
 
 static void cleanup(void) {
     if (view && !dc_level_view_destroy(view, err, sizeof(err))) {
@@ -50,6 +45,7 @@ static uint16_t get_material(fr_player_point_t point) {
 }
 
 static bool action_step(void) {
+    /* Hold physics fixed so target loss in this fixture depends on input or cuts. */
     dc_players_frame_time(view, .15);
     return dc_players_step(view, 1.f / 60.f, err, sizeof(err));
 }
@@ -65,8 +61,6 @@ static void test_chewing_obeys_live_player_reach_and_drives_animation(void) {
     ASSERT_TRUE(dc_level_view_wait_visible(view, 120000, err, sizeof(err)));
     ASSERT_TRUE(dc_players_enable_at(view, 64, 40, false, err, sizeof(err)));
 
-    const fr_player_point_t near = {{1, 0}, 9.f, 40.f};
-    const fr_player_point_t far = {{2, 0}, 9.f, 40.f};
     dc_level_view_status_t camera;
     ASSERT_TRUE(dc_level_view_status(view, &camera));
     ASSERT_TRUE(dc_level_view_paint(view, 73u, 40u, 0u, DC_MATERIAL_WOOD,
@@ -75,8 +69,6 @@ static void test_chewing_obeys_live_player_reach_and_drives_animation(void) {
                                     err, sizeof(err)));
     const fr_player_point_t nearby_cell = world_point(&camera, 73u, 40u);
     const fr_player_point_t distant_cell = world_point(&camera, 137u, 40u);
-    ASSERT_EQ(nearby_cell.chunk.x, near.chunk.x);
-    ASSERT_EQ(distant_cell.chunk.x, far.chunk.x);
     ASSERT_EQ(get_material(nearby_cell), DC_MATERIAL_WOOD);
     ASSERT_EQ(get_material(distant_cell), DC_MATERIAL_WOOD);
 

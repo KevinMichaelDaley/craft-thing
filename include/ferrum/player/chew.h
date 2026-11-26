@@ -27,8 +27,7 @@ uint64_t fr_player_inventory_mass(const fr_player_inventory_t *inventory,
 /** Map a harvestable terrain material to its inventory kind, or return zero. */
 dc_item_kind_t fr_player_inventory_kind(uint16_t material);
 
-/** One chewable localized wood pocket: identity, eligibility and the
- * occupied amount priced at the shared physical density. */
+/** Identity, eligibility and occupied dry mass for a harvestable cell. */
 typedef struct {
     uint64_t parcel_id;
     bool reachable;
@@ -52,8 +51,8 @@ typedef struct {
 
 /** Advance chewing work by effort*delta_ms against the target. A target
  * that is absent, ineligible or changed resets the bank transactionally;
- * reaching the pocket's dry mass banks exactly one bite and reports it
- * once through bite_ready without ever banking a second bite. */
+ * reaching the pocket's dry mass banks one bite. bite_ready stays true
+ * until that bite commits or the target changes. */
 bool fr_chew_work_advance(fr_chew_work_t *work,const fr_chew_target_t *target,
     uint32_t effort,uint64_t delta_ms,bool chewing,bool *bite_ready);
 
