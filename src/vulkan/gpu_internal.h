@@ -425,6 +425,11 @@ uint32_t dc_gpu_find_active_chunk(dc_gpu_t *gpu, dc_chunk_coord_t coord);
  * if the subsequent gas geometry refresh fails. */
 bool dc_gpu_carve_terrain_cell(dc_gpu_t *gpu, uint32_t x, uint32_t y,
                                bool *removed, char *err, uint32_t cap);
+/** Publish one solid terrain cell only if the resident destination is empty.
+ * placed reports publication even if the following gas refresh fails. */
+bool dc_gpu_place_terrain_cell(dc_gpu_t *gpu, uint32_t x, uint32_t y,
+                               uint16_t material, bool *placed,
+                               char *err, uint32_t cap);
 bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
                               bool seed, char *err, uint32_t cap);
 bool dc_gpu_upload_chunk_checkpoint(dc_gpu_t *gpu, uint32_t slot,

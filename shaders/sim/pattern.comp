@@ -215,9 +215,12 @@ uint cell_material_color(ivec2 p) {
 }
 
 void main() {
+    const uint PLACE_TERRAIN = 5u;
+    bool place_terrain = params.mode == PLACE_TERRAIN;
+    bool material_brush = params.mode == 3u || place_terrain;
     uvec2 display_cell = gl_GlobalInvocationID.xy;
     uvec2 p = display_cell;
-    if(params.mode==3u) {
+    if(material_brush) {
         uvec2 center=uvec2(params.brush_x,params.brush_y);
         p+=center-min(center,uvec2(params.radius));
         ivec2 delta=ivec2(p)-ivec2(center);
@@ -245,7 +248,7 @@ void main() {
         uint page_width = (params.width + 63u) / 64u;
         uint page = pages[(p.y / 64u) * page_width + p.x / 64u];
         if (page == 0u) {
-            cells[p.y * params.width + p.x] = 0xffff00ffu;
+            if (!place_terrain) cells[p.y * params.width + p.x] = 0xffff00ffu;
             return;
         }
         uint index = (page - 1u) * 4096u + (p.y % 64u) * 64u + p.x % 64u;
@@ -275,13 +278,16 @@ void main() {
         uint secondary_index = particle_index + 4096u;
         bool mud = false;
         bool wet_sand = false;
-        if (params.mode == 3u || params.mode == 4u) {
+        if (material_brush || params.mode == 4u) {
             int dx = int(p.x) - int(params.brush_x);
             int dy = int(p.y) - int(params.brush_y);
             int r = int(params.radius);
             if (dx * dx + dy * dy <= r * r) {
                 uint old_cell_word=cell.x;
                 uint old_water_mass=cell.y;
+                if (place_terrain && ((old_cell_word & 65535u) != 0u ||
+                    old_water_mass != 0u || occupancy[p.y * params.width + p.x] != 0u))
+                    return;
                 material = params.color == 3u &&
                            (material == 2u || material == 4u || material == 5u || material == 6u || material == 10u)
                            ? material : params.color == 3u ? 0u : params.color;
@@ -350,6 +356,7 @@ void main() {
                 if(DC_CELL_COMPONENT_MEMBER(cell.x)&&!DC_CELL_COMPONENT_MEMBER(material))
                     release_edited_support(ivec2(p));
                 cell.x = ((cell.x & 0xffffu)==material ? cell.x & 0xffff0000u : 0u) | material;
+                if (place_terrain) cell.x |= DC_CELL_LOADED_TERRAIN << DC_CELL_FLAGS_SHIFT;
                 if(old_cell_word!=cell.x&&(DC_CELL_COMPONENT_MEMBER(old_cell_word)||DC_CELL_COMPONENT_MEMBER(cell.x))) {
                     atomicOr(DC_BUFFER_DATA(structure_base()+STRUCTURAL_BRUSH_RESULT_WORD),2u);
                     atomicOr(DC_BUFFER_DATA(structure_base()+STRUCTURAL_COMPONENT_DIRTY_WORD),1u);
@@ -391,7 +398,7 @@ void main() {
             uint blue = 64u + 144u * fill / 256u;
             color = 0xff000000u | (blue << 16) | (green << 8) | red;
         }
-        if (params.mode == 3u && occupancy[p.y * params.width + p.x] != 0u)
+        if (material_brush && occupancy[p.y * params.width + p.x] != 0u)
             color = 0xff30c040u;
         if (params.mode == 2u && params.brush_y == 2u) {
             color = 0xff181818u;

@@ -575,6 +575,8 @@ bool dc_gpu_set_window_title(dc_gpu_t *gpu, const char *title) {
     return true;
 }
 
+enum { DC_PATTERN_MATERIAL_BRUSH = 3u, DC_PATTERN_PLACE_TERRAIN = 5u };
+
 static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7],
                            bool carve_bodies, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
@@ -605,7 +607,8 @@ static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7],
             gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 28, push);
         uint32_t groups[2]={(gpu->width+15u)/16u,(gpu->height+15u)/16u};
-        if(push[2]==3u) for(unsigned axis=0;axis<2;axis++) {
+        if(push[2]==DC_PATTERN_MATERIAL_BRUSH||push[2]==DC_PATTERN_PLACE_TERRAIN)
+            for(unsigned axis=0;axis<2;axis++) {
             uint64_t center=push[3u+axis],radius=push[5];
             uint64_t low=center>radius?center-radius:0u;
             uint64_t high=center+radius+1u;
@@ -659,12 +662,13 @@ bool dc_gpu_render_chunks(dc_gpu_t *gpu, char *err, uint32_t cap) {
 }
 
 static bool paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
-                           uint32_t radius, uint16_t material, bool carve_bodies,
+                           uint32_t radius, uint16_t material, uint32_t mode,
+                           bool carve_bodies,
                            bool *terrain_changed, char *err, uint32_t cap) {
     enum { TERRAIN_CHANGED = 2u };
     if (terrain_changed) *terrain_changed = false;
     if (!gpu) return error(err, cap, "GPU context is null");
-    uint32_t push[7] = { gpu->width, gpu->height, 3, x, y, radius, material };
+    uint32_t push[7] = { gpu->width, gpu->height, mode, x, y, radius, material };
     if(!fr_thermal_prepare_paint(gpu,x,y,radius,material,err,cap)) return false;
     dc_gpu_structural_data(gpu)[DC_STRUCTURAL_BRUSH_RESULT_WORD]=0u;
     bool okay;
@@ -676,6 +680,10 @@ static bool paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
             *terrain_changed = (state[DC_STRUCTURAL_BRUSH_RESULT_WORD] & TERRAIN_CHANGED) != 0u;
         if(state[DC_STRUCTURAL_BRUSH_RESULT_WORD]&16u)
             return error(err,cap,"Thermal brush admission exceeded its preflight reservation");
+        if(mode==DC_PATTERN_PLACE_TERRAIN) {
+            if(!(state[DC_STRUCTURAL_BRUSH_RESULT_WORD]&TERRAIN_CHANGED)) return true;
+            gpu->component_baseline_pending=true;
+        }
         gpu->body_refresh_pending|=(state[DC_STRUCTURAL_BRUSH_RESULT_WORD]&3u)!=0u;
         dc_gpu_fluid_uploads_invalidate(gpu);
         if (material == DC_MATERIAL_WATER) gpu->fluid_work_possible=true;
@@ -692,14 +700,25 @@ static bool paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
 bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
                            uint32_t radius, uint16_t material,
                            char *err, uint32_t cap) {
-    return paint_material(gpu, x, y, radius, material,
+    return paint_material(gpu, x, y, radius, material, DC_PATTERN_MATERIAL_BRUSH,
                           material == DC_MATERIAL_AIR, NULL, err, cap);
 }
 
 bool dc_gpu_carve_terrain_cell(dc_gpu_t *gpu, uint32_t x, uint32_t y,
                                bool *removed, char *err, uint32_t cap) {
-    return paint_material(gpu, x, y, 0u, DC_MATERIAL_AIR, false, removed,
-                          err, cap);
+    return paint_material(gpu, x, y, 0u, DC_MATERIAL_AIR, DC_PATTERN_MATERIAL_BRUSH,
+                          false, removed, err, cap);
+}
+
+bool dc_gpu_place_terrain_cell(dc_gpu_t *gpu, uint32_t x, uint32_t y,
+                               uint16_t material, bool *placed,
+                               char *err, uint32_t cap) {
+    if (placed) *placed = false;
+    if (!gpu || x >= gpu->width || y >= gpu->height ||
+        !DC_CELL_RIGID_CAPABLE(material))
+        return error(err, cap, "Invalid terrain cell placement");
+    return paint_material(gpu, x, y, 0u, material, DC_PATTERN_PLACE_TERRAIN,
+                          false, placed, err, cap);
 }
 
 bool dc_gpu_set_tick_water_source(dc_gpu_t *gpu, bool enabled,

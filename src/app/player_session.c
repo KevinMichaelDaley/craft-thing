@@ -9,6 +9,7 @@
 #include "ferrum/player/abilities.h"
 #include "ferrum/player/chew.h"
 #include "ferrum/player/manipulation.h"
+#include "ferrum/player/placement.h"
 #include "ferrum/renderer/sprite_gpu.h"
 #include "../vulkan/runtime_body_gpu.h"
 #include "../vulkan/gpu_internal.h"
@@ -47,7 +48,6 @@ struct dc_player_session {
     fr_player_hotbar_t hotbar[FR_INPUT_PLAYERS];
     fr_player_carry_t carry[FR_INPUT_PLAYERS];
     fr_player_manipulation_t manipulation[FR_INPUT_PLAYERS];
-    uint32_t prev_pressed[FR_INPUT_PLAYERS];
     bool split;
     uint32_t split_count;
     fr_player_inventory_t inventory[FR_INPUT_PLAYERS];
@@ -142,8 +142,8 @@ static bool players_add(dc_level_view_t *v,int64_t device,char *err,uint32_t cap
     if(!fr_player_init(&s->players[n],n+1,&s->registry,s->values[n],s->abilities[n],2)||
        !fr_player_ability_set(&s->players[n],s->fire,true)||!fr_player_ability_set(&s->players[n],s->ice,true)||
        !fr_player_hotbar_put_spell(&s->hotbar[n],1u,s->fire)||!fr_player_hotbar_put_spell(&s->hotbar[n],2u,s->ice)||
-       !fr_player_hotbar_put_material(&s->hotbar[n],3u,1u)||
-       !fr_player_hotbar_put_material(&s->hotbar[n],4u,7u)||
+       !fr_player_hotbar_put_material(&s->hotbar[n],3u,DC_MATERIAL_STONE)||
+       !fr_player_hotbar_put_material(&s->hotbar[n],4u,DC_MATERIAL_WOOD)||
        !fr_input_add_player(&s->input,n+1)||!fr_input_connect(&s->input,device,n+1)||
        !fr_input_sdl_defaults(&s->input,device,device!=FR_INPUT_KEYBOARD_DEVICE)) return players_error(err,cap,"Cannot bind player input owner");
     s->device[n]=device;s->count++;
@@ -189,7 +189,9 @@ bool dc_players_enable_at(dc_level_view_t *v,uint32_t x,uint32_t y,
         dc_level_view_set_spring_enabled(v,false)&&dc_level_view_renderer_mode(v,FR_RENDERER_ALBEDO);
     if(!okay) {dc_players_destroy(v);return false;}
     for(int n=0;n<SDL_NumJoysticks();n++) players_open(s,n);
-    printf("Play: A/D move, Space jump, C chew wood or mine stone; Q cast selected; 1 fire bolt, 2 ice storm, 3 stone, 4 wood; R build terrain from inventory, B drop rigid block from inventory; G grab, E drop, F throw. Tab editor. Controller Start joins.\n");
+    puts("Play keys: A/D move, Space jump, C harvest, 1-4 select fire/ice/stone/wood, Q cast, R place terrain, B place a rigid block.");
+    puts("Controller: Start joins, D-pad up/right/down/left selects slots 1-4, X casts, Y casts ice, right shoulder places terrain, left shoulder places a rigid block.");
+    puts("Place at the aim using the selected material from inventory. G grabs, E drops, F throws, and Tab opens the editor.");
     return true;
 }
 bool dc_players_enable(dc_level_view_t *v,char *err,uint32_t cap) {
@@ -289,6 +291,16 @@ static void players_follow_camera(dc_level_view_t *v) {
     if (dx || dy) dc_level_view_pan_pixels(v, dx, dy);
 }
 
+static fr_player_hotbar_item_t players_select_item(fr_player_hotbar_t *bar,
+                                                  uint32_t pressed) {
+    for (uint32_t slot = 0; slot < FR_PLAYER_HOTBAR_SLOTS; ++slot)
+        if (pressed & (1u << (FR_INPUT_SLOT_1 + slot)))
+            fr_player_hotbar_select(bar, slot + 1u);
+    fr_player_hotbar_item_t item = {0};
+    fr_player_hotbar_selected_item(bar, &item);
+    return item;
+}
+
 bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
     if(!v||!v->players||!isfinite(seconds)||seconds<=0||seconds>.25f) return false;
     struct dc_player_session *s=v->players;
@@ -299,6 +311,12 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
     fr_player_drive_input_t drive[FR_INPUT_PLAYERS];
     for(uint32_t n=0;n<s->count;n++) {
         fr_input_state_t input;fr_input_sample(&s->input,n+1,&input);
+        const uint32_t edges = input.pressed;
+        fr_player_hotbar_item_t item = players_select_item(&s->hotbar[n], edges);
+        uint32_t selected_spell = s->ray ? s->fire :
+            item.kind == FR_SLOT_SPELL ? item.ability_id : 0u;
+        bool cast_pressed = edges & (1u << FR_INPUT_FIRE) ? selected_spell != 0u :
+                            (edges & (1u << FR_INPUT_ICE)) != 0u;
         int mx=0,my=0;uint32_t x=0,y=0;bool valid=false;
         if(n==0) {
             SDL_GetMouseState(&mx,&my);
@@ -316,8 +334,7 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
         if(s->aim_override[n]&&can_aim) {input.has_target=true;input.target=s->aim_point[n];}
         fr_player_action_t old_action=s->players[n].action;
         uint64_t action_elapsed=elapsed;
-        if(s->presentation_clock&&old_action!=FR_PLAYER_CAST&&
-           (input.pressed&((1u<<FR_INPUT_FIRE)|(1u<<FR_INPUT_ICE)))) {
+        if(s->presentation_clock&&old_action!=FR_PLAYER_CAST&&cast_pressed) {
             uint64_t now=SDL_GetTicks64(),age=now>=s->cast_pressed_at[n]?now-s->cast_pressed_at[n]:0;
             if(age<action_elapsed) action_elapsed=age;
         }
@@ -329,23 +346,19 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
         if(chew_held||s->chew_work[n].bank.work) {
             if(has_body&&input.has_target) {
                 fr_player_point_t origin={self.chunk,self.body.x_fp/65536.f,self.body.y_fp/65536.f};
-                bool casting=old_action==FR_PLAYER_CAST||
-                    (input.pressed&((1u<<FR_INPUT_FIRE)|(1u<<FR_INPUT_ICE)));
+                bool casting=old_action==FR_PLAYER_CAST||cast_pressed;
                 if(!fr_player_harvest_tick(v->gpu,&s->inventory[n],&s->chew_work[n],
                     &origin,&input.target,chew_held&&!casting,elapsed,&harvestable,err,cap))
                     return false;
             } else s->chew_work[n]=(fr_player_chew_t){0};
         }
-        if(!fr_player_control_tick(&s->controls[n],&s->players[n],&input,s->fire,s->ice,harvestable,action_elapsed,&s->cast_events[n])) return false;
+        if(!fr_player_control_tick(&s->controls[n],&s->players[n],&input,selected_spell,s->ice,harvestable,action_elapsed,&s->cast_events[n])) return false;
         if(s->trace&&(old_action!=s->players[n].action||s->cast_events[n].ability)) {
             uint32_t frame;fr_player_frame(&s->players[n],&frame);
             fprintf(stderr,"[player-action] wall%llu player%u action%u frame%u elapsed%llu event%u facing%d ray_enabled%d\n",
                 (unsigned long long)SDL_GetTicks64(),n+1,s->players[n].action,frame+1,
                 (unsigned long long)s->players[n].elapsed_ms,s->cast_events[n].ability,s->players[n].facing,s->ray!=NULL);fflush(stderr);
         }
-        /* Manipulation and hotbar: G grab, E drop, F throw, R place, 1-8 slots. */
-        uint32_t edges=input.pressed&~s->prev_pressed[n];
-        s->prev_pressed[n]=input.pressed;
         if(!s->manipulation[n].carry_weight)
             s->manipulation[n]=(fr_player_manipulation_t){.carry_weight=60.0,.throw_force=4.0,.reach=24.0};
         if(has_body) {
@@ -354,38 +367,29 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
             /* Sandbox ability dispatch: the fire ability launches a burning
              * bolt and the ice ability casts a bounded storm at the target.
              * Ray-equipped demo scenes keep their beam behaviour. */
-            if(!s->ray&&s->cast_events[n].ability&&input.has_target) {
+            const fr_player_action_event_t *cast=&s->cast_events[n];
+            if(!s->ray&&cast->ability&&cast->has_target&&can_aim) {
                 fr_player_point_t muzzle={self.chunk,self.body.x_fp/65536.f,self.body.y_fp/65536.f};
-                if(s->cast_events[n].ability==s->fire)
-                    fr_player_cast_fire_bolt(v->gpu,s->players[n].identity,&muzzle,&input.target,NULL,err,cap);
-                else if(s->cast_events[n].ability==s->ice)
-                    fr_player_cast_ice_storm(v->gpu,&input.target,6u,err,cap);
+                if(cast->ability==s->fire)
+                    fr_player_cast_fire_bolt(v->gpu,s->players[n].identity,&muzzle,&cast->target,NULL,err,cap);
+                else if(cast->ability==s->ice)
+                    fr_player_cast_ice_storm(v->gpu,&cast->target,6u,err,cap);
             }
             bool acted=false;
             if(edges&(1u<<FR_INPUT_GRAB)) {fr_player_manipulation_grab(v->gpu,&s->carry[n],&s->manipulation[n],px,py,&input.target,err,cap);acted=true;}
             else if(edges&(1u<<FR_INPUT_DROP)) {fr_player_manipulation_drop(v->gpu,&s->carry[n],err,cap);acted=true;}
             else if(edges&(1u<<FR_INPUT_THROW)) {fr_player_manipulation_throw(v->gpu,&s->carry[n],&s->manipulation[n],px,py,&input.target,err,cap);acted=true;}
             if(!acted&&!fr_player_manipulation_tick(v->gpu,&s->carry[n],px,py,err,cap)) return false;
-            if(edges&(1u<<FR_INPUT_PLACE)) {
-                fr_player_hotbar_item_t item;
-                if(input.has_target&&fr_player_hotbar_selected_item(&s->hotbar[n],&item)&&item.kind==FR_SLOT_MATERIAL) {
-                    float wx=(float)input.target.chunk.x*64.f+input.target.x;
-                    float wy=(float)input.target.chunk.y*64.f+input.target.y;
-                    float lx=wx-(float)v->origin.x*64.f-v->camera_offset_x;
-                    float ly=wy-(float)v->origin.y*64.f-v->camera_offset_y;
-                    dc_gpu_body_t block={.x_fp=(int32_t)(lx*65536.f),.y_fp=(int32_t)(ly*65536.f),
-                        .width=4,.height=4,.id=0x90000000u+n*16u+(uint32_t)(s->sequence&15u),.active=1u};
-                    if(!dc_gpu_spawn_body(v->gpu,block,err,cap)) return false;
-                }
-            }
-            for(uint32_t k=0;k<8&&edges;k++) {
-                if(!((edges>>FR_INPUT_SLOT_1>>k)&1u)) continue;
-                fr_player_hotbar_select(&s->hotbar[n],k+1u);
-                fr_player_hotbar_item_t item;
-                if(fr_player_hotbar_selected_item(&s->hotbar[n],&item)&&item.kind==FR_SLOT_SPELL&&input.has_target) {
-                    if(!fr_player_ability_set(&s->players[n],item.ability_id,true)) return false;
-                    s->cast_events[n].ability=item.ability_id;
-                }
+            bool terrain = (edges & (1u << FR_INPUT_PLACE)) != 0u;
+            bool block = (edges & (1u << FR_INPUT_BUILD)) != 0u;
+            if (input.has_target && item.kind == FR_SLOT_MATERIAL && (terrain || block)) {
+                bool placed;
+                bool okay = fr_player_place_material(v->gpu, &s->inventory[n],
+                    &input.target, (uint16_t)item.material, !terrain, &placed, err, cap);
+                uint32_t slot;
+                if (placed && terrain && dc_chunk_table_find(&v->table, input.target.chunk, &slot))
+                    dc_chunk_table_mark_dirty(&v->table, slot);
+                if (!okay) return false;
             }
         }
         drive[n]=(fr_player_drive_input_t){n+1,s->sequence+1,s->players[n].intent.move_x,s->players[n].intent.jump_pressed};
@@ -429,13 +433,7 @@ bool dc_players_join(dc_level_view_t *v,int64_t device,char *err,uint32_t cap) {
     for(uint32_t n=1;n<s->count;n++) if(s->device[n]==device) return true;
     if(!s->count) return players_error(err,cap,"The keyboard player must enable first");
     if(s->count>=FR_INPUT_PLAYERS) return players_error(err,cap,"Local player capacity reached");
-    uint32_t n=s->count;
-    fr_input_connect(&s->input,device,n+1);
-    fr_input_sdl_defaults(&s->input,device,false);
-    s->device[n]=(int64_t)device;
-    if(!players_add(v,device,err,cap)) {s->device[n]=INT64_MIN;return false;}
-    s->count=n+1u;
-    return true;
+    return players_add(v,device,err,cap);
 }
 
 /* Recompute each viewport crop around its own beaver; presentation only,
