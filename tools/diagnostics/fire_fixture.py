@@ -269,9 +269,11 @@ def baseline(data, source_world, output):
     return all(run["budget_pass"] for run in report["runs"])
 
 
-def observe_depletion(binary, load, soak, limit, fuel, ticks_per_second, exposure=None):
+def observe_depletion(binary, load, soak, limit, fuel, ticks_per_second, mass_tolerance,
+                      exposure=None):
     command = [str(binary), "--depletion-record", load, str(soak), str(limit)]
     previous_fuel, rows, end = fuel, 0, None
+    chemical_total = 0.0
     with subprocess.Popen(command, cwd=ROOT, text=True, stdout=subprocess.PIPE) as probe:
         try:
             for line in probe.stdout:
@@ -285,11 +287,12 @@ def observe_depletion(binary, load, soak, limit, fuel, ticks_per_second, exposur
                     end = int(parts[1])
                 if parts[0] != "POOL_SAMPLE":
                     continue
-                if len(parts) != 10 or end is not None:
+                if len(parts) != 12 or end is not None:
                     raise ValueError("Invalid pool observation")
                 second, ticks = map(int, parts[1:3])
                 elapsed = float(parts[3])
-                remaining, water, wet_faces, faces, outside, mobile = map(int, parts[4:])
+                remaining, water, wet_faces, faces, outside, mobile, chemical = map(int, parts[4:11])
+                products = float(parts[11])
                 if (second != rows or second > limit or ticks != second * ticks_per_second or
                         not math.isclose(elapsed, second, rel_tol=1e-6, abs_tol=1e-6)):
                     raise ValueError(f"Incomplete {load} simulation interval at {rows} s")
@@ -297,14 +300,19 @@ def observe_depletion(binary, load, soak, limit, fuel, ticks_per_second, exposur
                     raise ValueError(f"{load} load was no longer fully submerged at {rows} s")
                 if outside or mobile:
                     raise ValueError(f"{load} escaped fuel detected at {rows} s")
+                if chemical < remaining or not math.isfinite(products) or products < 0:
+                    raise ValueError(f"Invalid {load} chemical inventory at {rows} s")
                 if rows == 0:
                     if remaining != fuel:
                         raise ValueError(f"{load} load did not have the matched initial fuel")
                     if exposure is not None and exposure != (water, faces):
                         raise ValueError("Loads did not have matched post-soak water and exposed faces")
                     exposure = water, faces
+                    chemical_total = chemical + products
                 elif faces != exposure[1]:
                     raise ValueError(f"{load} load changed its exposed geometry")
+                if abs(chemical + products - chemical_total) > mass_tolerance:
+                    raise ValueError(f"{load} chemical inventory drift at {rows} s")
                 if load == "oil" and remaining != fuel:
                     raise ValueError(f"Submerged ordinary oil lost fuel at {rows} s")
                 if remaining < 0 or remaining > previous_fuel or previous_fuel == 0:
@@ -331,6 +339,7 @@ def greek_depletion(data, binary):
     pool = scene["standing_pool_depletion"]
     ratio = Fraction(str(scene["maximum_oil_relative_depletion_time"]))
     repeats = data["acceptance"]["consecutive_runs"]
+    mass_tolerance = data["acceptance"]["mass_fixed_point_tolerance_units"]
     soak = scene["submersion"]["start_seconds"]
     tick = Fraction(*data["clock"]["rigid_tick_seconds"])
     if not 0 < ratio <= 1 or repeats < 2 or tick.numerator != 1:
@@ -338,12 +347,12 @@ def greek_depletion(data, binary):
     for trial in range(1, repeats + 1):
         print(f"Standing-pool depletion replay {trial}/{repeats}", flush=True)
         greek, exposure = observe_depletion(binary, "greek", soak,
-            pool["maximum_greek_seconds"], pool["matched_fuel_fp"], tick.denominator)
+            pool["maximum_greek_seconds"], pool["matched_fuel_fp"], tick.denominator, mass_tolerance)
         # The first sampled zero is an upper bound on Greek depletion time.
         # Positive oil stock through this interval gives a strict lower bound.
         oil_limit = math.ceil(greek / ratio)
         oil, _ = observe_depletion(binary, "oil", soak, oil_limit,
-            pool["matched_fuel_fp"], tick.denominator, exposure=exposure)
+            pool["matched_fuel_fp"], tick.denominator, mass_tolerance, exposure=exposure)
         print(f"Greek depleted by {greek} s. Submerged oil retained fuel through {oil} s.",
               flush=True)
 

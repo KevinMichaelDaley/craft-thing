@@ -7,7 +7,8 @@
 #include "ferrum/fire/bulk_phase_gpu.h"
 
 typedef struct {
-    uint64_t fuel, water, outside_fuel, mobile;
+    uint64_t fuel, water, outside_fuel, mobile, chemical_stock;
+    double gas_products;
     uint32_t wet_faces, faces;
 } greek_pool_sample_t;
 
@@ -35,6 +36,8 @@ static bool greek_pool_sample(dc_gpu_t *gpu, uint32_t body,
         if (owner == FR_REACTIVE_OWNER_BODY && entry[FR_ENTRY_OWNER + 1u] == body) {
             sample.fuel += fuel;
             sample.water += state[FR_STATE_BOUND_WATER];
+            sample.chemical_stock += fuel + state[FR_STATE_COATING_OXIDIZER] +
+                                     state[FR_STATE_INERT_MASS];
             ++attached;
         } else {
             sample.outside_fuel += fuel;
@@ -47,6 +50,13 @@ static bool greek_pool_sample(dc_gpu_t *gpu, uint32_t body,
         for (uint32_t cell = 0; cell < DC_CHUNK_CELLS; ++cell)
             sample.mobile += (uint64_t)phase.oil_fp[cell] + phase.slime_fp[cell];
     }
+    fr_gas_gpu_audit_t gas;
+    if (!fr_gas_gpu_audit(gpu, &gas, err, cap) ||
+        gas.metrics[FR_GAS_AUDIT_INVALID] != 0.f)
+        return false;
+    sample.gas_products =
+        ((double)gas.metrics[FR_GAS_AUDIT_SPECIES + FR_GAS_EXHAUST] +
+         gas.metrics[FR_GAS_AUDIT_SPECIES + FR_GAS_SOOT]) * DC_FLUID_FULL;
     *out = sample;
     return true;
 }
@@ -82,7 +92,8 @@ static int greek_depletion_record(int argc, char **argv) {
         greek_pool_sample(gpu, scene.coal_body, &wet, err, sizeof(err)) &&
         dc_siege_scene_ignite_load(gpu, &scene, 0.f, err, sizeof(err)) &&
         greek_pool_sample(gpu, scene.coal_body, &struck, err, sizeof(err)) &&
-        struck.fuel == wet.fuel && struck.water == wet.water;
+        struck.fuel == wet.fuel && struck.water == wet.water &&
+        struck.chemical_stock == wet.chemical_stock;
     if (!okay) {
         fprintf(stderr, "Incomplete pool soak or strike changed stock. %s\n", err);
         dc_gpu_destroy(gpu);
@@ -93,11 +104,12 @@ static int greek_depletion_record(int argc, char **argv) {
         fr_gas_gpu_clock_t now;
         if (!fr_gas_gpu_clock(gpu, &now)) break;
         printf("POOL_SAMPLE %u %" PRIu64 " %.9f %" PRIu64 " %" PRIu64
-               " %u %u %" PRIu64 " %" PRIu64 "\n",
+               " %u %u %" PRIu64 " %" PRIu64 " %" PRIu64 " %.9f\n",
                second, now.physical_steps - after_soak.physical_steps,
                now.advanced_seconds - after_soak.advanced_seconds,
                struck.fuel, struck.water, struck.wet_faces, struck.faces,
-               struck.outside_fuel, struck.mobile);
+               struck.outside_fuel, struck.mobile, struck.chemical_stock,
+               struck.gas_products);
         fflush(stdout);
         if (struck.fuel == 0u || second == limit) {
             printf("POOL_END %u\n", second);
