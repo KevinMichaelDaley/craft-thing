@@ -6,7 +6,7 @@ build/player_storm_footprint_tests: tests/player/storm_footprint_tests.c src/pla
 test_player_storm_footprint: build/player_storm_footprint_tests
 	./build/player_storm_footprint_tests
 test_player: test_player_storm_footprint
-build/player_cast_outcome_tests: tests/player/cast_outcome_tests.c src/app/player_session.c src/app/player_session.h src/player/control.c src/player/hotbar.c src/player/input.c src/world/chunk.c $(PLAYER_SRC)
+build/player_cast_outcome_tests: tests/player/cast_outcome_tests.c src/app/player_session.c src/app/player_session.h src/player/control.c src/player/hotbar.c src/player/input.c src/player/input_sdl.c src/world/chunk.c $(PLAYER_SRC)
 build/player_cast_outcome_tests: include/ferrum/player/abilities.h src/app/level_internal.h src/app/player_view.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections $(filter-out src/app/player_session.c,$(filter %.c,$^)) -Wl,--gc-sections -o $@ $(shell pkg-config --libs sdl2) -lm

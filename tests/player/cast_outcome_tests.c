@@ -7,6 +7,7 @@ static const char blocked_message[] = "Fixture found a blocked cast footprint";
 static bool backend_failed, backend_applied;
 static unsigned bolt_calls, storm_calls, drive_calls, ray_steps, ray_emits;
 static dc_level_view_t view;
+static dc_body_storage_owner_t saved_owner;
 
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); } while (0)
 #define ASSERT_TRUE(expr) do { if (!(expr)) { \
@@ -110,6 +111,53 @@ bool dc_player_view_aim(dc_level_view_t *view, uint32_t viewport, bool controlle
 
 void dc_player_view_follow(dc_level_view_t *view, const uint32_t *ids, uint32_t count) {
     (void)view; (void)ids; (void)count;
+}
+
+bool dc_level_view_accepts_event(const dc_level_view_t *level, const SDL_Event *event) {
+    return level == &view && event;
+}
+
+uint32_t dc_gpu_body_capacity(const dc_gpu_t *gpu) {
+    (void)gpu;
+    return saved_owner.runtime_id ? 1u : 0u;
+}
+
+dc_body_storage_owner_t *dc_gpu_body_owner(const dc_gpu_t *gpu, uint32_t slot) {
+    (void)gpu; (void)slot;
+    return &saved_owner;
+}
+
+bool fr_beaver_body_admit(dc_gpu_t *gpu, uint64_t identity, uint64_t transaction, uint32_t slot,
+    dc_chunk_coord_t spawn, int32_t x, int32_t y, fr_beaver_body_t *body, char *err, uint32_t cap) {
+    (void)gpu; (void)identity; (void)transaction; (void)slot; (void)spawn; (void)x; (void)y;
+    (void)body; (void)err; (void)cap;
+    return false;
+}
+
+bool fr_player_drive_gpu_create(dc_gpu_t *gpu, const fr_player_body_binding_t *bindings,
+    uint32_t count, float speed, float jump, fr_player_drive_gpu_t **drive, char *err, uint32_t cap) {
+    (void)gpu; (void)bindings; (void)count; (void)speed; (void)jump; (void)drive; (void)err; (void)cap;
+    return false;
+}
+
+void fr_player_drive_gpu_destroy(fr_player_drive_gpu_t *drive) { (void)drive; }
+
+bool fr_fire_ray_gpu_create(dc_gpu_t *gpu, const fr_player_body_binding_t *bindings,
+    uint32_t count, fr_fire_ray_config_t config, fr_fire_ray_gpu_t **ray, char *err, uint32_t cap) {
+    (void)gpu; (void)bindings; (void)count; (void)config; (void)ray; (void)err; (void)cap;
+    return false;
+}
+
+void fr_fire_ray_gpu_destroy(fr_fire_ray_gpu_t *ray) { (void)ray; }
+
+bool dc_gpu_set_split_presentation(dc_gpu_t *gpu, uint32_t count, const dc_presentation_focus_t *crops) {
+    (void)gpu; (void)count; (void)crops;
+    return false;
+}
+
+bool dc_player_view_split(dc_level_view_t *level, const uint32_t *ids, uint32_t count, char *err, uint32_t cap) {
+    (void)level; (void)ids; (void)count; (void)err; (void)cap;
+    return false;
 }
 
 static bool begin_cast(struct dc_player_session *s, bool ice) {
@@ -222,6 +270,83 @@ static void test_ui_transition_preserves_emitted_cast_recovery(void) {
     PASS();
 }
 
+static bool open_vacant_seat(struct dc_player_session *s) {
+    saved_owner = (dc_body_storage_owner_t){0};
+    *s = (struct dc_player_session){.count = 2u, .device = {FR_INPUT_KEYBOARD_DEVICE, INT64_MIN},
+        .bodies = {{.binding = {1u, 71u, 1u}}, {.binding = {2u, 72u, 8u}}}};
+    s->inventory[1].mass_fp[DC_ITEM_WOOD] = 39322u;
+    view.players = s;
+    error_buf[0] = '\0';
+    fr_input_init(&s->input);
+    return fr_input_add_player(&s->input, 1u) && fr_input_add_player(&s->input, 2u) &&
+        fr_input_connect(&s->input, FR_INPUT_KEYBOARD_DEVICE, 1u);
+}
+
+static void test_direct_rejoin_uses_the_vacant_owner_and_keeps_its_ui_context(void) {
+    struct dc_player_session s;
+    ASSERT_TRUE(open_vacant_seat(&s));
+    ASSERT_TRUE(fr_input_context(&s.input, 2u, FR_INPUT_UI));
+    int64_t device = INT64_C(1) << 40;
+    ASSERT_TRUE(dc_players_join(&view, device, error_buf, sizeof(error_buf)));
+    ASSERT_TRUE(dc_players_join(&view, device, error_buf, sizeof(error_buf)));
+    ASSERT_EQ(s.count, 2u);
+    ASSERT_EQ(s.device[1], device);
+    ASSERT_EQ(s.bodies[1].binding.body_id, 72u);
+    ASSERT_EQ(s.bodies[1].binding.generation, 8u);
+    ASSERT_EQ(s.inventory[1].mass_fp[DC_ITEM_WOOD], 39322u);
+    ASSERT_EQ(s.input.players[1].context, FR_INPUT_UI);
+    ASSERT_TRUE(fr_input_event(&s.input, device, SDL_CONTROLLER_BUTTON_Y, 1.f, false));
+    fr_input_state_t sample;
+    ASSERT_TRUE(fr_input_sample(&s.input, 2u, &sample));
+    ASSERT_EQ(sample.pressed, 0u);
+    PASS();
+}
+
+static void test_start_binding_failure_leaves_the_seat_vacant_and_retryable(void) {
+    struct dc_player_session s;
+    ASSERT_TRUE(open_vacant_seat(&s));
+    ASSERT_TRUE(fr_input_connect(&s.input, 99, 1u));
+    for (uint32_t n = 0; n < FR_INPUT_BINDINGS; ++n)
+        ASSERT_TRUE(fr_input_bind(&s.input, 99, 0xb000u + n, FR_INPUT_MOVE, 1.f));
+    fr_input_t before = s.input;
+    SDL_Event pad = {.cbutton = {.type = SDL_CONTROLLERBUTTONDOWN, .which = 43,
+        .button = SDL_CONTROLLER_BUTTON_START}};
+    ASSERT_TRUE(dc_players_event(&view, &pad));
+    printf("Failed Start reserved device %lld, expected vacant sentinel\n", (long long)s.device[1]);
+    ASSERT_EQ(s.device[1], INT64_MIN);
+    ASSERT_EQ(memcmp(&before, &s.input, sizeof(before)), 0);
+    ASSERT_EQ(s.failure[0], '\0');
+
+    ASSERT_TRUE(fr_input_disconnect(&s.input, 99));
+    ASSERT_TRUE(dc_players_event(&view, &pad));
+    ASSERT_EQ(s.device[1], 43);
+    pad.cbutton.button = SDL_CONTROLLER_BUTTON_Y;
+    ASSERT_TRUE(dc_players_event(&view, &pad));
+    fr_input_state_t sample;
+    ASSERT_TRUE(fr_input_sample(&s.input, 2u, &sample));
+    ASSERT_EQ(sample.pressed, 1u << FR_INPUT_ICE);
+    ASSERT_EQ(s.inventory[1].mass_fp[DC_ITEM_WOOD], 39322u);
+    PASS();
+}
+
+static void test_reserved_input_ids_never_admit_or_change_a_player(void) {
+    struct dc_player_session s;
+    ASSERT_TRUE(open_vacant_seat(&s));
+    ASSERT_TRUE(!dc_players_join(&view, INT64_MIN, error_buf, sizeof(error_buf)));
+
+    ASSERT_TRUE(begin_cast(&s, true));
+    ASSERT_TRUE(fr_input_connect(&s.input, FR_INPUT_KEYBOARD_DEVICE, 1u));
+    uint64_t transaction = DC_PLAYER_TRANSACTION_BASE + 2u;
+    saved_owner = (dc_body_storage_owner_t){.state = DC_BODY_OWNER_LIVE, .runtime_id = 72u,
+        .generation = 8u, .source_transaction = {(uint32_t)transaction, (uint32_t)(transaction >> 32u)}};
+    fr_input_t before = s.input;
+    ASSERT_TRUE(!dc_players_join(&view, FR_INPUT_KEYBOARD_DEVICE, error_buf, sizeof(error_buf)));
+    ASSERT_EQ(s.count, 1u);
+    ASSERT_EQ(s.bodies[1].binding.body_id, 0u);
+    ASSERT_EQ(memcmp(&before, &s.input, sizeof(before)), 0);
+    PASS();
+}
+
 int main(void) {
     RUN(test_bolt_backend_failure_stops_the_step);
     RUN(test_storm_backend_failure_stops_the_step);
@@ -231,6 +356,9 @@ int main(void) {
     RUN(test_unbound_controller_cannot_emit_its_latched_storm);
     RUN(test_unfocused_input_cannot_start_a_ray);
     RUN(test_ui_transition_preserves_emitted_cast_recovery);
+    RUN(test_direct_rejoin_uses_the_vacant_owner_and_keeps_its_ui_context);
+    RUN(test_start_binding_failure_leaves_the_seat_vacant_and_retryable);
+    RUN(test_reserved_input_ids_never_admit_or_change_a_player);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

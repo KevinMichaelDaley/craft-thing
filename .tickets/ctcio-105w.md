@@ -2,7 +2,7 @@
 id: ctcio-105w
 status: in_progress
 deps: []
-links: [ctpco-qxpf, ctwi-7ukj]
+links: [ctpco-qxpf, ctwi-7ukj, ct-1i55, ctcr-uh5f]
 created: 2026-11-26T22:36:30Z
 type: bug
 priority: 1

@@ -77,6 +77,32 @@ static void test_second_seat_joins_with_its_own_beaver(void) {
     PASS();
 }
 
+static void test_direct_join_rebinds_the_same_disconnected_native_beaver(void) {
+    ASSERT_TRUE(setup_at(0,false));
+    ASSERT_TRUE(dc_players_join(v,42,err,sizeof(err)));
+    fr_player_t player;
+    fr_beaver_body_t before, after;
+    ASSERT_TRUE(dc_players_status(v,1u,&player,&before));
+    const SDL_Event disconnect={.cdevice={.type=SDL_CONTROLLERDEVICEREMOVED,.which=42}};
+    dc_players_event(v,&disconnect);
+    ASSERT_TRUE(dc_players_join(v,43,err,sizeof(err)));
+    ASSERT_TRUE(dc_players_join(v,43,err,sizeof(err)));
+    ASSERT_TRUE(dc_players_status(v,1u,&player,&after));
+    ASSERT_EQ(after.binding.body_id,before.binding.body_id);
+    ASSERT_EQ(after.binding.generation,before.binding.generation);
+    ASSERT_TRUE(!dc_players_status(v,2u,&player,&after));
+
+    SDL_Event move={.caxis={.type=SDL_CONTROLLERAXISMOTION,.which=42,
+        .axis=SDL_CONTROLLER_AXIS_LEFTX,.value=28000}};
+    ASSERT_TRUE(!dc_players_event(v,&move));
+    move.caxis.which=43;
+    ASSERT_TRUE(dc_players_event(v,&move));
+    ASSERT_TRUE(dc_players_step(v,1.f/60.f,err,sizeof(err)));
+    ASSERT_TRUE(dc_players_status(v,1u,&player,&after));
+    ASSERT_TRUE(player.intent.move_x>.5f);
+    PASS();
+}
+
 static bool band_changed(const dc_gpu_t *gpu, const dc_presentation_layout_t *band) {
     uint32_t width = band->width * band->scale;
     for (uint32_t row = 0; row < band->height * band->scale; ++row) {
@@ -465,7 +491,14 @@ int main(int argc, char **argv) {
         printf("\nResults: %d passed, %d failed\n",g_pass,g_fail);
         return g_fail ? 1 : 0;
     }
+    if (argc == 2 && strcmp(argv[1], "--controller-rejoin") == 0) {
+        RUN(test_direct_join_rebinds_the_same_disconnected_native_beaver);
+        RUN(test_start_activates_split_and_editor_recovers_full_view);
+        printf("\nResults: %d passed, %d failed\n",g_pass,g_fail);
+        return g_fail ? 1 : 0;
+    }
     RUN(test_second_seat_joins_with_its_own_beaver);
+    RUN(test_direct_join_rebinds_the_same_disconnected_native_beaver);
     RUN(test_split_screen_routes_bands_to_their_players);
     RUN(test_split_screen_needs_two_seats);
     RUN(test_start_activates_split_and_editor_recovers_full_view);
