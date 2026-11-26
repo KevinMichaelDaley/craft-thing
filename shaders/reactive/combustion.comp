@@ -78,15 +78,11 @@ bool body_reaction_near(ivec2 p) {
     }
     return false;
 }
-bool body_reaction_pose_blocks(ivec2 p) {
-    if(fr_heat_pose_count()==0u) return false;
-    return fr_has_heat_pose(fr_body_heat_owner(body_reaction_index(p)));
-}
 bool body_reaction_receiver(ivec2 p,uint at) {
-    return reaction_receiver(at)&&!body_reaction_pose_blocks(p);
+    return reaction_receiver(at)&&!fr_pose_blocks_air(p);
 }
 bool body_reaction_air(ivec2 p) {
-    return gas_cell(atlas(p))&&!body_reaction_pose_blocks(p);
+    return gas_cell(atlas(p))&&!fr_pose_blocks_air(p);
 }
 bool body_corner_reachable(ivec2 parcel,ivec2 direction) {
     return body_reaction_air(parcel+ivec2(direction.x,0))||body_reaction_air(parcel+ivec2(0,direction.y));

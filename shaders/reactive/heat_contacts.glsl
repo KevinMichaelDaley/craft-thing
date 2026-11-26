@@ -65,6 +65,43 @@ bool fr_heat_pose_may_touch(ivec2 cell,uint ordinal) {
     return all(greaterThanEqual(vec2(cell),bounds.xy))&&all(lessThan(vec2(cell),bounds.zw));
 }
 
+vec2 fr_pose_grid_center(Body body,ivec2 cell,vec2 crop) {
+    return body_local_point(body,vec2(cell)+.5-vec2(body.x_fp,body.y_fp)/65536.)+crop;
+}
+
+uint fr_pose_piece_at(ContactSprites sprites,uint pose,ivec2 size,ivec2 texel,Body body,out ivec2 rest) {
+    if(any(lessThan(texel,ivec2(0)))||any(greaterThanEqual(texel,size))) return 0xffffffffu;
+    uvec2 rest_origin=uvec2(sprites.words[pose+6u],sprites.words[pose+7u]);
+    if(any(greaterThanEqual(rest_origin,uvec2(DC_SPRITE_SOURCE_SIDE)))) return 0xffffffffu;
+    if(sprites.words[pose+5u]!=0u) texel.x=size.x-1-texel.x;
+    uint offset=uint(texel.y*size.x+texel.x);
+    uint frame=DC_SPRITE_ATLAS_WORD+2u*sprites.words[pose+2u];
+    uint source=sprites.words[frame+2u*offset+1u];
+    if(source==0u||source>DC_SPRITE_SOURCE_COUNT) return 0xffffffffu;
+    uint inverse=sprites.words[pose+DC_SPRITE_CONTACT_WORD];
+    if(sprites.words[inverse+source-1u]!=offset+1u) return 0xffffffffu;
+    rest=ivec2((source-1u)%DC_SPRITE_SOURCE_SIDE,(source-1u)/DC_SPRITE_SOURCE_SIDE)-ivec2(rest_origin);
+    return pixel_piece_at(body,rest);
+}
+
+#ifdef FR_BODY_REACTIONS
+/* The displayed cell is sampled at its center. Fractional heat overlap
+ * still exchanges energy at a contact without closing its gas cell. */
+bool fr_pose_blocks_air(ivec2 cell) {
+    for(uint n=0u;n<fr_heat_pose_count();n++) {
+        if(!fr_heat_pose_may_touch(cell,n)) continue;
+        ContactSprites sprites=ContactSprites(params.sprite_address);
+        uint pose=fr_sprite_pose_word(n);
+        ivec2 size=ivec2(sprites.words[pose+3u],sprites.words[pose+4u]);
+        Body body=heat_pose_bodies[n];
+        ivec2 art=ivec2(floor(fr_pose_grid_center(body,cell,fr_sprite_pose_crop(sprites,pose))));
+        ivec2 rest;
+        if(pixel_piece_material(body,fr_pose_piece_at(sprites,pose,size,art,body,rest))!=0u) return true;
+    }
+    return false;
+}
+#endif
+
 uint fr_body_heat_owner(uint index) {
     if(fr_heat_pose_count()==0u) return thermal_occupancy[index];
     vec4 metadata=samples[index+params.width*params.height];
@@ -116,22 +153,14 @@ void fr_posed_heat_contacts(ivec2 cell,uint n,bool centered,inout HeatContacts c
     ContactSprites sprites=ContactSprites(params.sprite_address);
     uint pose=fr_sprite_pose_word(n);
     ivec2 size=ivec2(sprites.words[pose+3u],sprites.words[pose+4u]);
-    uvec2 rest_origin=uvec2(sprites.words[pose+6u],sprites.words[pose+7u]);
-    if(any(greaterThanEqual(rest_origin,uvec2(DC_SPRITE_SOURCE_SIDE)))) return;
     vec2 crop=fr_sprite_pose_crop(sprites,pose);
-    vec2 local=body_local_point(body,vec2(cell)+.5-vec2(body.x_fp,body.y_fp)/65536.)+crop;
+    vec2 local=fr_pose_grid_center(body,cell,crop);
     float extent=.5*(abs(cos(body.angle))+abs(sin(body.angle)));
     ivec2 low=clamp(ivec2(floor(local-extent)),ivec2(0),size);
     ivec2 high=clamp(ivec2(ceil(local+extent)),ivec2(0),size);
-    uint frame=DC_SPRITE_ATLAS_WORD+2u*sprites.words[pose+2u];
-    uint inverse=sprites.words[pose+DC_SPRITE_CONTACT_WORD];
     for(int y=low.y;y<high.y;y++) for(int x=low.x;x<high.x;x++) {
-        int art_x=sprites.words[pose+5u]!=0u?size.x-1-x:x;
-        uint texel=uint(y*size.x+art_x);
-        uint source=sprites.words[frame+2u*texel+1u];
-        if(source==0u||source>DC_SPRITE_SOURCE_COUNT||sprites.words[inverse+source-1u]!=texel+1u) continue;
-        ivec2 rest=ivec2((source-1u)%DC_SPRITE_SOURCE_SIDE,(source-1u)/DC_SPRITE_SOURCE_SIDE)-ivec2(rest_origin);
-        uint piece=pixel_piece_at(body,rest);
+        ivec2 rest;
+        uint piece=fr_pose_piece_at(sprites,pose,size,ivec2(x,y),body,rest);
         if(pixel_piece_material(body,piece)==0u) continue;
         Body contact=body;
         if(fr_body_project_texel(rest,vec2(x,y)-crop,contact))
