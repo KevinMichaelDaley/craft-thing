@@ -1,6 +1,6 @@
 ---
 id: ct-r84u
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-26T10:17:50Z
@@ -18,3 +18,9 @@ The Vulkan sandbox walk capture shows a transparent horizontal seam across the r
 
 All six derived walk frames retain 4-connected robe rows and their shared support baseline. The two visible lower paws change their horizontal separation during the walk without changing canonical pixel identity. Verify the live Vulkan framebuffer and retain the supplied chew/cast art exactly.
 
+
+## Notes
+
+**2026-11-26T10:21:19Z**
+
+RED 71b6af5e compiled and reproduced both the robe gap and the unchanged paw separation (10 pass, 2 fail). GREEN fc0164d1 passes all 12 asset checks. The final live Vulkan framebuffer checks all six sandbox frames and reversal, plus the original idle pose in fire-ray mode (4/4). The exported walks each retain all 422 visible idle source IDs exactly once; exact chew/cast hashes still pass. Cropped actual runtime comparison: build/agents/beaver-player/sustained/runtime-walk-review.png.

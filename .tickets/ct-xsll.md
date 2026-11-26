@@ -39,3 +39,7 @@ Final continuation checkpoint: phased authoritative artwork, recovery/re-entry c
 **2026-11-02T00:29:57Z**
 
 Supervisor round 1: RED dc3d963c compiled and failed state 11/4 and assets 7/2. GREEN 60f079fe now imports authoritative beaver_cast.ase unchanged: eight 80x40 RGBA frames including partial alpha, exact source hashes, explicit same-region canonical maps extending existing IDs, and latched once-only frame-six event at 500ms independent of skipped samples. State 15/15 and assets 9/9 pass. Live admission/render/input work continues; no acceptance closure.
+
+**2026-11-26T10:21:19Z**
+
+Removed the global idle substitution for walking. The sandbox presents the six-frame derived clip and mirrors it in the actual framebuffer. The dedicated fire-ray mode retains its authored idle-only movement policy from ct-9ieb. Fixed the visible robe seam and animated alternate paws under ct-r84u. The supplied ASE files retain exact hashes. The existing immutable atlas and canonical material parcel IDs are reused. Live wetting/singeing/combustion and pose-dependent exposure verification remain open.

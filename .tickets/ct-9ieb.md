@@ -27,3 +27,7 @@ CPU-only failure-injection regression exposed consumed cast sequence/duration be
 **2026-11-26T05:54:33Z**
 
 Verified on the RTX A2000 that the demo retains the authored framing for 330 live ticks, ignites the real pile, and reloads the gas clock and all compared chunk checkpoints exactly. Camera and reload regression tracked and closed in ct-ztym. The remaining frame-budget evaluation stays with ct-b42x.
+
+**2026-11-26T10:21:19Z**
+
+Framebuffer RED c0e3f9cc detects generated walk artwork while the fire-ray mode is active (226 channel differences); GREEN 9d74dc1b restores the supplied idle pose for movement in this mode. The same run checks all six sandbox poses and finishes 4/4. Both scenes use the same canonical player ownership.
