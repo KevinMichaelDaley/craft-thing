@@ -98,7 +98,7 @@ static void test_real_app_keyboard_drives_body_and_animation(void) {
         ASSERT_TRUE(dc_players_status(v,0,&p,&binding));ASSERT_EQ(p.action,FR_PLAYER_IDLE);
     }
     ASSERT_TRUE(capture(v,"build/agents/beaver-player/sustained/runtime-idle.bmp",err,sizeof(err)));
-    ASSERT_TRUE(runtime_visual_check(v,0u,err,sizeof(err)));
+    ASSERT_TRUE(runtime_visual_check(v,FR_PLAYER_IDLE,0u,0u,err,sizeof(err)));
     dc_gpu_world_body_t before,after;dc_gpu_body_motion_t motion;
     ASSERT_TRUE(dc_level_view_body_state(v,binding.binding.body_id,&before,&motion,err,sizeof(err)));
     SDL_Event e={.type=SDL_KEYDOWN};e.key.keysym.scancode=SDL_SCANCODE_D;
@@ -109,10 +109,10 @@ static void test_real_app_keyboard_drives_body_and_animation(void) {
     ASSERT_TRUE(dc_level_view_body_state(v,binding.binding.body_id,&after,&motion,err,sizeof(err)));
     ASSERT_TRUE(after.chunk.x>before.chunk.x||after.body.x_fp>before.body.x_fp);
     ASSERT_TRUE(capture(v,"build/agents/beaver-player/sustained/runtime-walk.bmp",err,sizeof(err)));
-    ASSERT_TRUE(runtime_visual_check(v,0u,err,sizeof(err)));
     uint32_t frame;
     ASSERT_TRUE(fr_player_frame(&p, &frame));
     ASSERT_TRUE(frame < WALK_FRAMES);
+    ASSERT_TRUE(runtime_visual_check(v,FR_PLAYER_WALK,frame,0u,err,sizeof(err)));
     uint32_t displayed_walk_frames = 1u << frame;
     const uint32_t all_walk_frames = (1u << WALK_FRAMES) - 1u;
     for (unsigned n = 0; n < WALK_LOOP_TICKS && displayed_walk_frames != all_walk_frames; n++) {
@@ -123,7 +123,7 @@ static void test_real_app_keyboard_drives_body_and_animation(void) {
         ASSERT_TRUE(fr_player_frame(&p, &frame));
         ASSERT_TRUE(frame < WALK_FRAMES);
         if (!(displayed_walk_frames & (1u << frame))) {
-            ASSERT_TRUE(runtime_visual_check(v, 0u, err, sizeof(err)));
+            ASSERT_TRUE(runtime_visual_check(v, FR_PLAYER_WALK, frame, 0u, err, sizeof(err)));
             displayed_walk_frames |= 1u << frame;
         }
     }
@@ -133,7 +133,8 @@ static void test_real_app_keyboard_drives_body_and_animation(void) {
     for(unsigned n=0;n<7;n++) ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
     ASSERT_TRUE(dc_players_status(v,0,&p,&binding));ASSERT_EQ(p.action,FR_PLAYER_WALK);ASSERT_EQ(p.facing,-1);
     ASSERT_TRUE(capture(v,"build/agents/beaver-player/sustained/runtime-walk-left.bmp",err,sizeof(err)));
-    ASSERT_TRUE(runtime_visual_check(v,0u,err,sizeof(err)));
+    ASSERT_TRUE(fr_player_frame(&p,&frame));
+    ASSERT_TRUE(runtime_visual_check(v,FR_PLAYER_WALK,frame,0u,err,sizeof(err)));
     e.type=SDL_KEYUP;e.key.keysym.scancode=SDL_SCANCODE_A;ASSERT_TRUE(dc_players_event(v,&e));
     e.type=SDL_WINDOWEVENT;e.window.event=SDL_WINDOWEVENT_FOCUS_LOST;dc_players_event(v,&e);
     ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
@@ -147,7 +148,7 @@ static void test_real_app_keyboard_drives_body_and_animation(void) {
     ASSERT_TRUE(capture(v,"build/agents/beaver-player/sustained/runtime-cast.bmp",err,sizeof(err)));
     dc_gpu_world_body_t projectile;
     ASSERT_TRUE(projectile_id&&dc_level_view_body_state(v,projectile_id,&projectile,&motion,err,sizeof(err)));
-    ASSERT_TRUE(runtime_visual_check(v,projectile_id,err,sizeof(err)));
+    ASSERT_TRUE(runtime_visual_check(v,FR_PLAYER_CAST,frame,projectile_id,err,sizeof(err)));
     for(unsigned n=0;n<120;n++) {
         ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
         ASSERT_TRUE(dc_players_status(v,0,&p,&binding));
@@ -167,10 +168,39 @@ static void test_real_app_keyboard_drives_body_and_animation(void) {
     }
     ASSERT_TRUE(dc_level_view_destroy(v,err,sizeof(err)));PASS();
 }
+
+static void test_fire_ray_mode_uses_supplied_artwork_while_moving(void) {
+    char directory[] = "build/player_runtime_ray_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    uint32_t surface = 96;
+    dc_ground_profile_t ground = {.width = 1, .soil_depth = 1, .surface = &surface};
+    dc_level_view_t *v = dc_level_view_create_ground(directory, 314, &ground, err, sizeof(err));
+    ASSERT_TRUE(v && dc_level_view_pan_pixels(v, 0, 128) &&
+                dc_level_view_wait_visible(v, 120000, err, sizeof(err)) &&
+                dc_players_enable(v, err, sizeof(err)));
+    const fr_fire_ray_config_t ray = {VIEW_WIDTH, 4, .4f, 1800};
+    ASSERT_TRUE(dc_players_fire_ray(v, ray, err, sizeof(err)));
+    for (unsigned n = 0; n < 60; n++) {
+        ASSERT_TRUE(dc_level_view_step(v, err, sizeof(err)) && dc_level_view_tick(v, err, sizeof(err)));
+    }
+    SDL_Event move = {.key = {.type = SDL_KEYDOWN, .keysym.scancode = SDL_SCANCODE_D}};
+    ASSERT_TRUE(dc_players_event(v, &move));
+    dc_players_frame_time(v, .12);
+    ASSERT_TRUE(dc_level_view_step(v, err, sizeof(err)) && dc_level_view_tick(v, err, sizeof(err)));
+    fr_player_t player;
+    fr_beaver_body_t body;
+    ASSERT_TRUE(dc_players_status(v, 0, &player, &body));
+    ASSERT_EQ(player.action, FR_PLAYER_WALK);
+    ASSERT_TRUE(runtime_visual_check(v, FR_PLAYER_IDLE, 0u, 0u, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_destroy(v, err, sizeof(err)));
+    PASS();
+}
+
 int main(void) {
     RUN(test_enabling_player_admits_only_the_player_body);
     RUN(test_editor_camera_holds_its_manual_position);
     RUN(test_real_app_keyboard_drives_body_and_animation);
+    RUN(test_fire_ray_mode_uses_supplied_artwork_while_moving);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
