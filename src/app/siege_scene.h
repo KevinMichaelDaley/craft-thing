@@ -16,6 +16,8 @@ enum {
     DC_SIEGE_ARM_X = 102, DC_SIEGE_ARM_Y = 151,
     DC_SIEGE_ARM_W = 4, DC_SIEGE_ARM_H = 36,
     DC_SIEGE_COAL_RADIUS = 4,
+    DC_SIEGE_CONTACT_SAMPLE_X = 28,
+    DC_SIEGE_CONTACT_GOLD_Y = 213, DC_SIEGE_CONTACT_INGREDIENT_Y = 217,
     DC_SIEGE_VIEW_W = 480, DC_SIEGE_VIEW_H = 270,
     DC_SIEGE_VIEWPORT_COVERAGE_MAX_PCT = 25u
 };
@@ -57,6 +59,10 @@ bool dc_siege_scene_build_douse_pool(dc_gpu_t *gpu, dc_siege_load_t load,
 bool dc_siege_scene_build_corrosion_pool(dc_gpu_t *gpu, dc_siege_load_t load,
                                          dc_siege_scene_t *out, char *err_buf,
                                          uint32_t err_cap);
+
+/** Hold a Greek-fire load against clean corrosion samples in the standing pool. */
+bool dc_siege_scene_build_contact_pool(dc_gpu_t *gpu, dc_siege_scene_t *out,
+                                      char *err_buf, uint32_t err_cap);
 
 /** Build the launcher-risk fixture: the load waits in the pouch with the
  * given seed folded into parcel identity, so per-seed ignition thresholds

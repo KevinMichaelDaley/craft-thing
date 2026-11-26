@@ -49,7 +49,8 @@ typedef struct {
 typedef enum {
     SIEGE_BASIN_NONE,
     SIEGE_BASIN_DOUSE,
-    SIEGE_BASIN_CORROSION
+    SIEGE_BASIN_CORROSION,
+    SIEGE_BASIN_CONTACT
 } siege_basin_t;
 
 static const siege_rect_t siege_floor = {0u, DC_SIEGE_FLOOR_Y, 480u, 40u,
@@ -305,6 +306,12 @@ bool dc_siege_scene_build_corrosion_pool(dc_gpu_t *gpu, dc_siege_load_t load,
                                            false, out, err_buf, err_cap);
 }
 
+bool dc_siege_scene_build_contact_pool(dc_gpu_t *gpu, dc_siege_scene_t *out,
+                                      char *err_buf, uint32_t err_cap) {
+    return dc_siege_scene_build_load_basin(gpu, false, DC_SIEGE_LOAD_GREEK,
+        SIEGE_BASIN_CONTACT, 0u, false, out, err_buf, err_cap);
+}
+
 bool dc_siege_scene_build_risk(dc_gpu_t *gpu, dc_siege_load_t load,
                                uint32_t seed, bool fireproof,
                                dc_siege_scene_t *out, char *err_buf,
@@ -320,7 +327,9 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                                             uint32_t err_cap) {
     if (!gpu) return siege_error(err_buf, err_cap, "Missing siege GPU context");
     const bool submerged = basin != SIEGE_BASIN_NONE;
-    const bool held_load = basin == SIEGE_BASIN_DOUSE;
+    const bool sustained_contact = basin == SIEGE_BASIN_CONTACT;
+    const bool held_load = basin == SIEGE_BASIN_DOUSE || sustained_contact;
+    const bool pool_samples = basin == SIEGE_BASIN_CORROSION || sustained_contact;
     const bool hot_coal = load == DC_SIEGE_LOAD_COAL;
     const uint16_t core_material = hot_coal ? DC_MATERIAL_COAL :
         basin == SIEGE_BASIN_CORROSION ? DC_MATERIAL_WOOD : DC_MATERIAL_STONE;
@@ -364,15 +373,24 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
         ball_y = DC_SIEGE_POOL_LOAD_Y;
         siege_fill_pool(chunks);
     }
-    if (basin == SIEGE_BASIN_CORROSION) {
-        /* Coin and ingredient samples in the pool beside the load: the
-         * burning brands smear greek film onto them and their finite
-         * corrosion stock spends into spent rust. */
-        chunks[(213u / 64u) * DC_SIEGE_TILES_X + 27u / 64u]
-            .cells[(213u % 64u) * 64u + 27u % 64u].material = DC_MATERIAL_GOLD;
-        chunks[(216u / 64u) * DC_SIEGE_TILES_X + 27u / 64u]
-            .cells[(216u % 64u) * 64u + 27u % 64u].material =
-            DC_MATERIAL_MAGIC_INGREDIENT;
+    const uint32_t sample_x = sustained_contact ? DC_SIEGE_CONTACT_SAMPLE_X : 27u;
+    const uint32_t sample_flags = sustained_contact ? DC_CELL_LOADED_TERRAIN : 0u;
+    const siege_rect_t coin_rects[] = {
+        {sample_x, sustained_contact ? DC_SIEGE_CONTACT_GOLD_Y : 213u,
+         1u, 1u, DC_MATERIAL_GOLD, sample_flags, 0.f},
+        {sample_x, sustained_contact ? DC_SIEGE_CONTACT_INGREDIENT_Y : 216u,
+         1u, 1u, DC_MATERIAL_MAGIC_INGREDIENT, sample_flags, 0.f},
+    };
+    if (pool_samples) {
+        for (uint32_t i = 0u; i < sizeof(coin_rects) / sizeof(coin_rects[0]); i++) {
+            const siege_rect_t *sample = &coin_rects[i];
+            siege_fill_rect(sample, chunks);
+            if (sustained_contact) {
+                uint32_t tile = (sample->y / 64u) * DC_SIEGE_TILES_X + sample->x / 64u;
+                uint32_t local = (sample->y % 64u) * 64u + sample->x % 64u;
+                chunks[tile].cells[local].fluid_mass = 0u;
+            }
+        }
     }
     uint32_t coal_cells = 0;
     for (int32_t y = ball_y - DC_SIEGE_COAL_RADIUS;
@@ -447,7 +465,7 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                 fr_reactive_state_t *state = &attachment->record.state;
                 if (state->material != core_material) continue;
                 uint32_t fuel_fp = DC_SIEGE_LOAD_FILM_FP;
-                if (basin == SIEGE_BASIN_DOUSE) {
+                if (held_load) {
                     int32_t x = chunks[tile].coord.x * DC_CHUNK_SIDE +
                                 attachment->local_index % DC_CHUNK_SIDE;
                     int32_t y = chunks[tile].coord.y * DC_CHUNK_SIDE +
@@ -471,22 +489,12 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                     state->ignition_integral = .6f;
                 }
             }
-    /* Coin and ingredient corrosion samples: staged as reactive parcels. */
-    const siege_rect_t coin_rects[2] = {{27u, 213u, 1u, 1u, DC_MATERIAL_GOLD,
-                                         0u, 0.f},
-                                        {27u, 216u, 1u, 1u,
-                                         DC_MATERIAL_MAGIC_INGREDIENT, 0u,
-                                         0.f}};
+    if (pool_samples)
+        for (uint32_t i = 0u; i < sizeof(coin_rects) / sizeof(coin_rects[0]); i++)
+            okay = okay && siege_stage_region(chunks, coin_rects + i, 1u,
+                coin_rects[i].material, false, false, &ignored, &ignored,
+                &ignored_cells, &parcel_counter, packets, err_buf, err_cap);
     if (basin == SIEGE_BASIN_CORROSION) {
-        okay = okay && siege_stage_region(chunks, coin_rects, 2u,
-                                          DC_MATERIAL_GOLD, false, false,
-                                          &ignored, &ignored, &ignored_cells,
-                                          &parcel_counter, packets, err_buf,
-                                          err_cap) &&
-               siege_stage_region(chunks, coin_rects + 1u, 1u,
-                                  DC_MATERIAL_MAGIC_INGREDIENT, false, false,
-                                  &ignored, &ignored, &ignored_cells,
-                                  &parcel_counter, packets, err_buf, err_cap);
         /* The splash coats the samples: the coins carry a lit greek film
          * from the first tick, which their own corrosion pass spends. */
         for (uint32_t tile = 0; tile < DC_SIEGE_TILE_COUNT; tile++)

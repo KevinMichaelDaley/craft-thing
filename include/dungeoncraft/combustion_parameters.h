@@ -20,6 +20,9 @@
  * slice of its own thermal energy with the mass. Exact, conservative. */
 #define FR_COMBUSTION_BRAND_FUEL_FP_PER_SECOND 4096.0
 #define FR_COMBUSTION_BRAND_PARCEL_FUEL_KEEP_FP 2048.0
+#define FR_COMBUSTION_SAMPLE_CONTACT_MODE 16u
+/* Combustion control word following the three body-ash dispatch words. */
+#define FR_COMBUSTION_SAMPLE_CONTACT_ACTIVE_WORD 187u
 /* Wood rot: one exposure unit per simulated month of partial immersion;
  * each spent stage converts this much fuel to inert rot residue. */
 #define FR_ROT_EXPOSURE_PER_SECOND (1.0/2628000.0)

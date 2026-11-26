@@ -445,6 +445,21 @@ int main(void) {
     else
     if(getenv("DC_CHAR_LEDGER_ONLY")) RUN(test_small_body_char_reaction_keeps_a_finite_temperature_ledger);
     else
-    if(getenv("DC_GREEK_BODY_ONLY")) RUN(test_submerged_rigid_coating_burns_from_bound_oxidizer);
-    else {RUN(test_submerged_rigid_coating_burns_from_bound_oxidizer);RUN(test_rigid_wood_settles_impact_energy_before_ignition);RUN(test_thin_oxygen_is_reserved_without_creating_heat_or_consuming_unfunded_fuel);RUN(test_rotated_mixed_temperature_heat_cannot_overdraw_a_cold_parcel);RUN(test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory);RUN(test_radiating_flame_heats_a_surface_even_without_a_draft);RUN(test_hot_face_ignites_when_another_face_has_more_oxygen);RUN(test_diagonal_hot_gas_heats_a_body_corner);RUN(test_diagonal_oxygen_reaches_an_exposed_body_corner);RUN(test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_authored_grain);RUN(test_small_body_char_reaction_keeps_a_finite_temperature_ledger);}
+    if(getenv("DC_GREEK_BODY_ONLY")) {
+        RUN(test_submerged_rigid_coating_burns_from_bound_oxidizer);
+        RUN(test_sustained_coating_contact_feeds_both_corrosion_samples);
+    } else {
+        RUN(test_submerged_rigid_coating_burns_from_bound_oxidizer);
+        RUN(test_sustained_coating_contact_feeds_both_corrosion_samples);
+        RUN(test_rigid_wood_settles_impact_energy_before_ignition);
+        RUN(test_thin_oxygen_is_reserved_without_creating_heat_or_consuming_unfunded_fuel);
+        RUN(test_rotated_mixed_temperature_heat_cannot_overdraw_a_cold_parcel);
+        RUN(test_hot_skin_cannot_overdraw_the_actual_body_heat_inventory);
+        RUN(test_radiating_flame_heats_a_surface_even_without_a_draft);
+        RUN(test_hot_face_ignites_when_another_face_has_more_oxygen);
+        RUN(test_diagonal_hot_gas_heats_a_body_corner);
+        RUN(test_diagonal_oxygen_reaches_an_exposed_body_corner);
+        RUN(test_body_surface_feedback_uses_real_reaction_and_preserves_unburnt_authored_grain);
+        RUN(test_small_body_char_reaction_keeps_a_finite_temperature_ledger);
+    }
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}

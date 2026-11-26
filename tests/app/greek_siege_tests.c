@@ -567,6 +567,54 @@ static bool greek_cell_corrosion(dc_gpu_t *gpu, uint32_t x, uint32_t y,
     }
     return true;
 }
+
+static void test_stationary_greek_film_corrodes_clean_pool_samples(void) {
+    const uint32_t x = DC_SIEGE_CONTACT_SAMPLE_X;
+    const uint32_t ys[] = {DC_SIEGE_CONTACT_GOLD_Y, DC_SIEGE_CONTACT_INGREDIENT_Y};
+    const uint32_t span = 2u * DC_SIEGE_COAL_RADIUS + 1u;
+    char err[256] = {0};
+    dc_gpu_t *gpu = greek_grid();
+    dc_siege_scene_t scene = {0};
+    ASSERT_TRUE(gpu && dc_siege_scene_build_contact_pool(gpu, &scene, err, sizeof(err)));
+    ASSERT_TRUE(greek_ticks(gpu, 1u, err, sizeof(err)));
+    const uint64_t admitted = greek_ball_coating(gpu, scene.coal_body, span, err, sizeof(err));
+    ASSERT_TRUE(admitted > 0u && admitted != UINT64_MAX);
+    fr_reactive_record_t samples[2];
+    uint32_t origins[2];
+    float progress[2] = {0.f, 0.f};
+    for (uint32_t second = 0u; second <= 30u; second++) {
+        if (second > 0u) ASSERT_TRUE(greek_ticks(gpu, 1u, err, sizeof(err)));
+        for (uint32_t i = 0u; i < 2u; i++) {
+            uint32_t slot = greek_tile_slot(gpu, x, ys[i]);
+            uint32_t local = (ys[i] % DC_CHUNK_SIDE) * DC_CHUNK_SIDE + x % DC_CHUNK_SIDE;
+            bool found = false;
+            ASSERT_TRUE(slot && fr_gpu_reactive_read_cell(gpu, slot - 1u, local, &samples[i],
+                                                         &found, err, sizeof(err)) && found);
+            const fr_reactive_state_t *state = &samples[i].state;
+            ASSERT_TRUE(fr_reactive_state_valid(state, err, sizeof(err)));
+            if (second == 0u) {
+                origins[i] = state->origin_id_low;
+                ASSERT_EQ(state->coating_oxidizer_fp, 0u);
+                ASSERT_EQ(state->coating_oil_fuel_fp, 0u);
+                ASSERT_EQ(state->coating_jelly_fuel_fp, 0u);
+                ASSERT_EQ(state->corroded_fraction, 0.f);
+            }
+            ASSERT_EQ(state->origin_id_low, origins[i]);
+            ASSERT_TRUE(state->corroded_fraction >= progress[i]);
+            ASSERT_TRUE((uint64_t)state->core_oxidizer_fp + state->coating_oxidizer_fp <= admitted);
+            progress[i] = state->corroded_fraction;
+        }
+        if (second == 0u)
+            ASSERT_TRUE(dc_siege_scene_ignite_load(gpu, &scene, 0.f, err, sizeof(err)));
+    }
+    printf("Persistent pool contact after 30s, gold %.6f, ingredient %.6f\n",
+           progress[0], progress[1]);
+    ASSERT_TRUE(progress[0] > 0.f);
+    ASSERT_TRUE(progress[1] > 0.f);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 static void test_greek_burn_corrodes_coins_across_reload(void) {
     char err[256] = {0};
     dc_gpu_t *gpu = greek_grid();
@@ -662,6 +710,11 @@ static void test_greek_burn_corrodes_coins_across_reload(void) {
 int main(int argc, char **argv) {
     mkdir("build/screenshots", 0777);
     greek_install_stop();
+    if (argc == 2 && strcmp(argv[1], "--corrode-contact") == 0) {
+        RUN(test_stationary_greek_film_corrodes_clean_pool_samples);
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail ? 1 : 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--corrode") == 0) {
         RUN(test_greek_burn_corrodes_coins_across_reload);
         printf("%d passed, %d failed\n", g_pass, g_fail);

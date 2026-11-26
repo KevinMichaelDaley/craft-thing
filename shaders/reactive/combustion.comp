@@ -609,11 +609,14 @@ void burn(ivec2 position,uint gas_at,inout Gas gas,inout float admitted,inout fl
     burn_entry(position,gas_at,handle,1u,0u,0u,gas,admitted,source_temperature,sources);
 }
 #ifdef FR_BODY_REACTIONS
+#include "coating_contact.glsl"
 void choose_body_target(uint index,Body body,ivec2 p,bool exposed) {
     Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),index));
     Words scratch=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
     uint target_word=index*12u+5u;scratch.words[target_word]=0xffffffffu;
     scratch.words[index*12u+7u]=0u;
+    scratch.words[index*12u+COATING_CONTACT_TARGET]=exposed?
+        choose_coating_contact(p,e):COATING_CONTACT_NONE;
     uint s=FR_ENTRY_STATE,m=e.words[s];
     if((m==7u||m==8u||m==9u||m==11u||m==12u)&&
        (e.words[s+9u]|e.words[s+10u]|e.words[s+FR_STATE_COATING_REMAINDERS]|
@@ -749,8 +752,7 @@ void burn_body_neighbor(ivec2 p,uint gas_at,inout Gas gas,inout float admitted,i
 void apply_body_brand(ivec2 p,Words c) {
     uint cs=FR_ENTRY_STATE,cm=c.words[cs];
     bool fuel_target=cm==7u||cm==8u||cm==9u||cm==11u||cm==12u;
-    bool sample_target=cm==18u||cm==19u;
-    if(!fuel_target&&!sample_target) return;
+    if(!fuel_target) return;
     if((c.words[cs+1u]&2u)!=0u) return;
     Words scratch=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
     for(uint d=0u;d<8u;d++) {
@@ -767,50 +769,17 @@ void apply_body_brand(ivec2 p,Words c) {
              * as does a burning substrate. */
             if((e.words[es+1u]&6u)==0u||
                (e.words[es+13u]==0u&&e.words[es+14u]==0u)) continue;
-            if(fuel_target) {
-                /* Fuel claim: the cell pulls burning brand mass from the
-                 * donor parcel, single claim per parcel per step. */
-                uint offer=atomicExchange(scratch.words[h.x*12u+7u],scratch.words[h.x*12u+7u]|0x80000000u);
-                if((offer&0x80000000u)!=0u||offer==0u) continue;
-                uint slice=offer&0x7fffffffu;
-                if(e.words[es+9u]>slice+FR_COMBUSTION_BRAND_PARCEL_FUEL_KEEP_FP) {
-                    float energy_slice=uintBitsToFloat(scratch.words[h.x*12u+8u]);
-                    atomicAdd(c.words[cs+9u],slice);
-                    add_energy(c,energy_slice);
-                    atomicAdd(e.words[es+9u],uint(0u)-slice);
-                    add_energy(e,-energy_slice);
-                    atomicAdd(hud[31],1u);
-                }
-            } else {
-                /* Corroding samples (gold coins, magic ingredients): the
-                 * brand smears burning greek film onto them instead of
-                 * fuel, arming the finite corrosion stock their own
-                 * reaction pass spends. The smear strikes the sample to
-                 * the film's ignition point — the film arrives lit and
-                 * the magical compound keeps it burning under water. */
-                if((c.words[cs+1u]&4u)!=0u) continue;
-                uint take_oil=min(e.words[es+13u]/8u,4096u);
-                uint take_jelly=min(e.words[es+14u]/8u,4096u);
-                uint take_oxidizer=min(e.words[es+16u]/8u,4096u);
-                if(take_oil==0u||take_jelly==0u||take_oxidizer==0u) continue;
-                atomicAdd(c.words[cs+FR_STATE_COATING_OIL],take_oil);
-                atomicAdd(c.words[cs+FR_STATE_COATING_JELLY],take_jelly);
-                atomicAdd(c.words[cs+FR_STATE_COATING_OXIDIZER],take_oxidizer);
-                e.words[es+13u]-=take_oil;
-                e.words[es+14u]-=take_jelly;
-                e.words[es+16u]-=take_oxidizer;
-                atomicOr(c.words[cs+1u],4u|16u);
-                float capacity=solid_capacity(c);
-                if(capacity>0.) {
-                    float energy=uintBitsToFloat(c.words[cs+17u])+
-                        uintBitsToFloat(c.words[cs+25u])+
-                        uintBitsToFloat(c.words[cs+26u]);
-                    float current=energy/capacity;
-                    float strike=current<530.?530.-current:0.;
-                    add_energy(c,strike*capacity+
-                        float(take_oil+take_jelly)*0.25);
-                }
-                add_energy(e,-float(take_oil+take_jelly)*0.5);
+            /* Fuel claim: the cell pulls burning brand mass from the
+             * donor parcel, single claim per parcel per step. */
+            uint offer=atomicExchange(scratch.words[h.x*12u+7u],scratch.words[h.x*12u+7u]|0x80000000u);
+            if((offer&0x80000000u)!=0u||offer==0u) continue;
+            uint slice=offer&0x7fffffffu;
+            if(e.words[es+9u]>slice+FR_COMBUSTION_BRAND_PARCEL_FUEL_KEEP_FP) {
+                float energy_slice=uintBitsToFloat(scratch.words[h.x*12u+8u]);
+                atomicAdd(c.words[cs+9u],slice);
+                add_energy(c,energy_slice);
+                atomicAdd(e.words[es+9u],uint(0u)-slice);
+                add_energy(e,-energy_slice);
                 atomicAdd(hud[31],1u);
             }
             break;
@@ -822,6 +791,8 @@ void apply_body_brand(ivec2 p,Words c) {
 void main() {
     uint i=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
 #ifdef FR_BODY_REACTIONS
+    bool sample_contact = params.unused.x == FR_COMBUSTION_SAMPLE_CONTACT_MODE;
+    if(sample_contact && hud[FR_COMBUSTION_SAMPLE_CONTACT_ACTIVE_WORD] == 0u) return;
     fr_prepare_heat_poses();
     if(params.unused.x==9u) {
         uint slot=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;if(slot>=BODY_CAPACITY) return;
@@ -829,16 +800,16 @@ void main() {
         uint pose=body.enabled!=0u?fr_body_contact_pose(params.sprite_address,slot,body):0u;
         for(uint piece=gl_LocalInvocationID.x;piece<body_pieces(body);piece+=64u) {
             if(pixel_piece_material(body,piece)==0u) continue;
-            uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y==0u) continue;
+            uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y==0u||h.x>=root[2]) continue;
+            Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),h.x));
+            if(entry.words[FR_ENTRY_GENERATION]!=h.y||entry.words[FR_ENTRY_OWNER]!=2u) continue;
             Body contact=body;
             bool exposed=fr_body_project_contact(params.sprite_address,pose,piece,contact);
             ivec2 projected=exposed?fr_body_parcel_cell(contact,piece):ivec2(-1);
             choose_body_target(h.x,body,projected,exposed&&in_body_reaction_grid(projected));
             if(!exposed) continue;
-            Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),h.x));
             uint s=FR_ENTRY_STATE,material=entry.words[s];
-            if(entry.words[FR_ENTRY_GENERATION]!=h.y||entry.words[FR_ENTRY_OWNER]!=2u||
-               !DC_CELL_SMOKE_PASS_WOOD(material)||
+            if(!DC_CELL_SMOKE_PASS_WOOD(material)||
                (entry.words[s+1u]&2u)==0u||(entry.words[s+9u]|entry.words[s+10u])==0u) continue;
             ivec2 parcel=fr_body_parcel_cell(body,piece);
             uint at=atlas(parcel);
@@ -851,15 +822,8 @@ void main() {
     }
     if(i>=params.width*params.height) return;
     ivec2 p=ivec2(i%params.width,i/params.width);uint at=atlas(p);
-    /* Corroding sample cells (gold coins, magic ingredients) pull greek
-     * film from burning neighbors without joining the gas reaction. */
-    if(at!=0xffffffffu&&(uint(cells[at].x&255u)==18u||uint(cells[at].x&255u)==19u)) {
-        bool near_burning=false;
-        for(uint face=0u;face<8u;face++) near_burning=near_burning||body_reaction_near(p+body_directions[face]);
-        if(!near_burning) return;
-        uvec2 sample_handle=Handles(uvec2(root[6],root[7])).values[at];
-        if(sample_handle.y!=0u)
-            apply_body_brand(p,Words(reactive_entry_address(uvec2(root[4],root[5]),sample_handle.x)));
+    if(sample_contact) {
+        apply_sample_coating(p,at);
         return;
     }
     if(!body_reaction_receiver(p,at)) return;
@@ -904,6 +868,7 @@ void main() {
     if(params.unused.x==3u) {
         if(i==0u) {for(uint j=22u;j<32u;j++) hud[j]=0u;
             hud[DC_BODY_ASH_DISPATCH_WORD]=0u;hud[DC_BODY_ASH_DISPATCH_WORD+1u]=1u;hud[DC_BODY_ASH_DISPATCH_WORD+2u]=1u;
+            hud[FR_COMBUSTION_SAMPLE_CONTACT_ACTIVE_WORD]=0u;
             for(uint j=8u;j<12u;j++) hud[j]=0u;for(uint j=14u;j<18u;j++) hud[j]=0u;}
         if(at!=0xffffffffu) emission[at]=vec4(0.,0.,uintBitsToFloat(slot_generation(at)),0.);
         uvec2 address;uint chosen=0xffffffffu;

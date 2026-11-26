@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "dungeoncraft/combustion_parameters.h"
 #include "dungeoncraft/thermal_water_layout.h"
 #include "ferrum/fire/material_profile.h"
 #include "ferrum/fire/combustion_gpu.h"
@@ -131,7 +132,8 @@ static void record_combustion(dc_gpu_t *g,float seconds,uint32_t mode) {
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    fr_renderer_compute_t *pipeline=mode==9u||mode==10u?&t->body_combustion:&t->combustion;
+    bool body_reaction=mode==9u||mode==10u||mode==FR_COMBUSTION_SAMPLE_CONTACT_MODE;
+    fr_renderer_compute_t *pipeline=body_reaction?&t->body_combustion:&t->combustion;
     vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline->pipeline);
     vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline->pipeline_layout,0,1,&pipeline->descriptor,0,NULL);
     vkCmdPushConstants(g->command,pipeline->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
@@ -153,6 +155,13 @@ static void record_flame_radiation(dc_gpu_t *g,float seconds) {
     record_combustion(g,seconds,15);
     phase(g,11,seconds);
 }
+static void record_reactions(dc_gpu_t *g,float seconds) {
+    record_combustion(g,seconds,3);
+    record_combustion(g,seconds,9);
+    record_combustion(g,seconds,0);
+    record_combustion(g,seconds,10);
+    record_combustion(g,seconds,FR_COMBUSTION_SAMPLE_CONTACT_MODE);
+}
 bool fr_combustion_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(!g||!g->thermal||!g->thermal->combustion.pipeline||!isfinite(seconds)||seconds<0) return false;
     if(seconds==0) return true;
@@ -161,7 +170,7 @@ bool fr_combustion_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     record_flame_radiation(g,seconds);
     record_combustion(g,seconds,4);record_combustion(g,seconds,5);
     phase(g,13,seconds);phase(g,11,seconds);
-    record_combustion(g,seconds,3);record_combustion(g,seconds,9);record_combustion(g,seconds,0);record_combustion(g,seconds,10);
+    record_reactions(g,seconds);
     record_combustion(g,seconds,12);record_combustion(g,seconds,5);
     dc_gpu_record_body_ash(g,g->thermal->hud.buffer);phase(g,14,seconds);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
@@ -318,7 +327,7 @@ void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
     record_combustion(g,seconds,4);record_combustion(g,seconds,5);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,10);
     phase(g,13,seconds);phase(g,11,seconds);
-    record_combustion(g,seconds,3);record_combustion(g,seconds,9);record_combustion(g,seconds,0);record_combustion(g,seconds,10);
+    record_reactions(g,seconds);
     record_combustion(g,seconds,12);record_combustion(g,seconds,5);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,11);
     if(g->thermal->combustion.pipeline) dc_gpu_record_body_ash(g,g->thermal->hud.buffer);
