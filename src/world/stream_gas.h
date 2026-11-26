@@ -15,7 +15,9 @@ static bool gas_checkpoint_valid(const fr_gas_checkpoint_chunk_t *gas) {
         if(p[12]<0.f||p[12]>1.f||p[13]<0.f||p[13]>1.f||(gas->gates[i]&~3u)!=0u) return false;
         double mass=(double)p[0]+p[1]+p[2]+p[3]+p[4],energy=(double)p[5]+p[11]+p[14];
         if(mass==0.) {if(energy!=0.||p[6]!=0.f||p[7]!=0.f) return false;}
-        else if(p[12]<=0.f||energy<=0.) return false;
+        /* The gas solver owns pending products even before pressure can
+         * create a void. Save that inventory with its physical volume. */
+        else if(energy<=0.) return false;
     }
     return true;
 }
