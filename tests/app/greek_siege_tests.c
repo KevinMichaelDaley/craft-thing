@@ -503,6 +503,9 @@ static void test_prompt_launch_and_fireproof_carrier_stay_safe(void) {
             ASSERT_TRUE(fuse);
         }
         ASSERT_TRUE(greek_ticks(gpu, 10u, err, sizeof(err)));
+        bool pouch_attached = true;
+        ASSERT_TRUE(fr_gpu_revolute_active(gpu, scene.pouch_joint, &pouch_attached,
+                                           err, sizeof(err)) && !pouch_attached);
         uint32_t flaming = 0u;
         uint64_t fuel = 0u;
         for (uint32_t py = 0u; py < 12u; py++)
@@ -727,6 +730,11 @@ int main(int argc, char **argv) {
     }
     if (argc == 2 && strcmp(argv[1], "--stage") == 0) {
         RUN(test_greek_and_oil_stage_matched_prearmed_coating);
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--risk-controls") == 0) {
+        RUN(test_prompt_launch_and_fireproof_carrier_stay_safe);
         printf("%d passed, %d failed\n", g_pass, g_fail);
         return g_fail ? 1 : 0;
     }
