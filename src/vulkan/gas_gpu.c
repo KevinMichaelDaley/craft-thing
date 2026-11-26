@@ -135,7 +135,7 @@ bool fr_gas_submit(dc_gpu_t *g) {
 }
 static bool tick_can_fuse(const dc_gpu_t *g) {
     const char *tick=getenv("DC_GAS_FUSED_TICK"),*geometry=getenv("DC_GAS_FUSED_GEOMETRY"),*local=getenv("DC_GAS_LOCAL_GEOMETRY");
-    return g&&g->gas&&!fr_combustion_gpu_enabled(g)&&g->gas->cache_valid&&g->gas->direct_publish&&g->gas->policy==FR_GAS_PRESSURE_PRACTICAL&&
+    return g&&g->gas&&fr_combustion_gpu_enabled(g)&&g->gas->cache_valid&&g->gas->direct_publish&&g->gas->policy==FR_GAS_PRESSURE_PRACTICAL&&
         tick&&strcmp(tick,"0")!=0&&geometry&&strcmp(geometry,"0")!=0&&local&&strcmp(local,"0")!=0;
 }
 bool fr_gas_gpu_try_fused_tick(dc_gpu_t *g,float seconds,bool *handled,char *err,uint32_t cap) {
@@ -409,7 +409,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     if(g->fluid_work_possible||g->body_count>0u) g->gas->geometry_dynamic=true;
     const char *fusion=getenv("DC_GAS_FUSED_GEOMETRY"),*local=getenv("DC_GAS_LOCAL_GEOMETRY");
     bool fused=fr_combustion_gpu_enabled(g)&&t->cache_valid&&t->direct_publish&&t->policy==FR_GAS_PRESSURE_PRACTICAL&&local&&strcmp(local,"0")!=0&&
-        fusion&&strcmp(fusion,"0")!=0&&(t->geometry_dirty||t->geometry_dynamic||t->geometry_routes_dirty);
+        fusion&&strcmp(fusion,"0")!=0&&(t->tick_pending||t->geometry_dirty||t->geometry_dynamic||t->geometry_routes_dirty);
     t->geometry_deferred=fused;t->bubble_seconds=seconds;
     if(fused) t->acoustic.geometry_changed=true;
     else if(!refresh_geometry(g,seconds,err,cap)) return false;
