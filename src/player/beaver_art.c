@@ -25,12 +25,12 @@ bool beaver_art_frame(fr_player_action_t action,uint32_t frame,uint32_t pixel,be
     return true;
 }
 
-void beaver_art_pose(const beaver_art_pixel_t *pixel,fr_player_action_t action,
-    uint32_t frame,int32_t *x,int32_t *y) {
-    if (action!=FR_PLAYER_WALK) return;
+int32_t beaver_art_walk_x(fr_beaver_region_t region,uint32_t frame,int32_t x,int32_t y) {
+    enum { SHOULDER_EDGE_Y=24, PAW_ROWS=2, PAW_GAP_X=23 };
     static const int32_t stride[6]={-2,0,2,2,0,-2};
     static const int32_t sway[6]={0,-1,-1,0,1,1};
-    if (pixel->region==FR_BEAVER_FUR && *y>=30) {
-        *x+=*x<23?stride[frame]:-stride[frame];
-    } else if (*y<24) *x+=sway[frame];
+    const int32_t paw_top=(int32_t)beaver_chomp_contacts[0][2]-PAW_ROWS;
+    if (region==FR_BEAVER_FUR && y>=paw_top)
+        return x+(x<PAW_GAP_X?stride[frame]:-stride[frame]);
+    return y<SHOULDER_EDGE_Y?x+sway[frame]:x;
 }

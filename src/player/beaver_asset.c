@@ -85,7 +85,7 @@ static void beaver_frame(uint8_t *data,uint32_t *mapping,fr_player_action_t acti
         uint32_t source;
         if (!beaver_art_frame(action,(action==FR_PLAYER_CHEW || action==FR_PLAYER_CAST)?frame:0,original,&art,&source)) continue;
         int32_t x=(int32_t)(original%width),y=(int32_t)(original/width);
-        beaver_art_pose(&art,action,frame,&x,&y);
+        if (action==FR_PLAYER_WALK) x=beaver_art_walk_x(art.region,frame,x,y);
         if (x<0 || y<0 || x>=(int32_t)width || y>=(int32_t)FR_BEAVER_HEIGHT) continue;
         uint32_t pixel=(uint32_t)y*width+(uint32_t)x;
         uint8_t *physical=data+pixel*BEAVER_PROP_MAP;

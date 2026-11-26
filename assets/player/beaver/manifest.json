@@ -25,7 +25,8 @@
       "frames": 6,
       "frame_ms": 100,
       "loop": true,
-      "runtime_display": "The sandbox cycles the derived poses. The fire-ray demo displays the supplied idle pose during movement."
+      "runtime_display": "The sandbox cycles the derived poses. The fire-ray demo displays the supplied idle pose during movement.",
+      "derivation": "Horizontal shoulder sway and alternating paw stride preserve the original pixel rows, support baseline and canonical source IDs."
     },
     "chew": {
       "frames": 8,
