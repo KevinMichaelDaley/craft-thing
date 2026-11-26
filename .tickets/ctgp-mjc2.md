@@ -32,3 +32,7 @@ The exact 9513f4f3 Vulkan publication run also reported 40/48 submissions with e
 **2026-11-26T20:12:29Z**
 
 Native Vulkan RED isolated the separate grain feedback command. A warm rotating publication used two submissions with coupled thermal and three with standalone conduction. The real grain fixture produced +0.199835166 horizontal force and preserved the sentinel on rejection, but submitted twice. The coupled fused-geometry fixture measured 16 versus 24 submissions across eight edits with exact packets, one excess submission per accepted interval. Keep its 8/16 gate.
+
+**2026-11-26T20:18:58Z**
+
+Practical direct publication now records grain pressure after the accepted gas commit and guards the dispatch on the GPU rejection word. Refactor checks passed on whole-bank rotation and sparse cell ownership: coupled warm intervals used one submission, standalone conduction used two, accepted horizontal grain force matched RED exactly at +0.199835166, and rejection preserved the sentinel force and gas state. Coupled fused geometry passed the 8/16 submission gate with exact high and low packet words. The sand displacement check passed. Whole physics tick still reports 31/39 submissions and exact packets against its 8/16 gate. The supported coupled full-tick route needs its own ordered input stages.

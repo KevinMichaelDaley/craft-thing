@@ -108,8 +108,7 @@ static void test_native_rotated_bank_conducts_from_the_published_owner(void) {
     PASS();
 }
 static void check_native_publication(bool coupled) {
-    char err[256]={0};const char *old=getenv("DC_GAS_ROTATE_PUBLISH");char *saved=old?SDL_strdup(old):NULL;
-    ASSERT_EQ(SDL_setenv("DC_GAS_ROTATE_PUBLISH","1",1),0);
+    char err[256]={0};
     dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));fr_gas_state_t *input=malloc(4096*sizeof(*input)),*out=malloc(4096*sizeof(*out));
     double *volume=malloc(4096*sizeof(*volume));ASSERT_TRUE(c&&input&&out&&volume);
     fr_gas_model_t m=reference_model();m.kinetic_scale=1./512.;
@@ -138,15 +137,22 @@ static void check_native_publication(bool coupled) {
         ASSERT_TRUE(fr_gas_gpu_set_pressure_policy(g,policies[k],err,sizeof(err))&&fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err)));
         ASSERT_TRUE(memcmp(input,out,4096*sizeof(*out))==0);
     }
-    ASSERT_TRUE(present(g,err,sizeof(err)));free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);
-    ASSERT_EQ(saved?SDL_setenv("DC_GAS_ROTATE_PUBLISH",saved,1):unsetenv("DC_GAS_ROTATE_PUBLISH"),0);
-    SDL_free(saved);PASS();
+    ASSERT_TRUE(present(g,err,sizeof(err)));free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
+}
+static void check_rotating_publication(bool coupled) {
+    char err[64]={0};
+    const char *old=getenv("DC_GAS_ROTATE_PUBLISH");char *saved=old?SDL_strdup(old):NULL;
+    ASSERT_TRUE(!old||saved);
+    ASSERT_EQ(SDL_setenv("DC_GAS_ROTATE_PUBLISH","1",1),0);
+    check_native_publication(coupled);
+    int restored=saved?SDL_setenv("DC_GAS_ROTATE_PUBLISH",saved,1):unsetenv("DC_GAS_ROTATE_PUBLISH");
+    SDL_free(saved);ASSERT_EQ(restored,0);
 }
 static void test_native_publication_uses_one_submission_and_preserves_rejected_state(void) {
-    check_native_publication(true);
+    check_rotating_publication(true);
 }
 static void test_native_publication_with_standalone_heat_uses_two_submissions(void) {
-    check_native_publication(false);
+    check_rotating_publication(false);
 }
 static void test_native_tick_waits_its_fence_without_draining_presentation_queue(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);

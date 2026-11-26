@@ -23,11 +23,15 @@ static void test_native_fused_geometry_keeps_edited_stock_and_removes_completion
             g_publication_submits=0;ASSERT_TRUE(fr_gas_gpu_step(g,.02f,err,sizeof(err)));submissions[path]+=g_publication_submits;
         }
         ASSERT_TRUE(fr_gas_gpu_export_checkpoint(g,0,path?out:reference,err,sizeof(err))&&fr_gas_gpu_export_checkpoint(g,1,check,err,sizeof(err)));
-        ASSERT_EQ(memcmp(quiet->cells,check->cells,sizeof(quiet->cells)),0);ASSERT_EQ(check->clock.physical_steps,9u);
+        ASSERT_EQ(memcmp(quiet->cells,check->cells,sizeof(quiet->cells)),0);
+        ASSERT_EQ(memcmp(quiet->carrier_tail,check->carrier_tail,sizeof(quiet->carrier_tail)),0);
+        ASSERT_EQ(check->clock.physical_steps,9u);
         ASSERT_TRUE(present(g,err,sizeof(err)));dc_gpu_destroy(g);
     }
-    printf("Fused geometry submissions%u/%u exact packet%s\n",submissions[1],submissions[0],memcmp(reference->cells,out->cells,sizeof(out->cells))==0?" yes":" no");
-    ASSERT_EQ(memcmp(reference->cells,out->cells,sizeof(out->cells)),0);ASSERT_EQ(memcmp(&reference->clock,&out->clock,sizeof(out->clock)),0);
+    bool exact=memcmp(reference->cells,out->cells,sizeof(out->cells))==0&&
+        memcmp(reference->carrier_tail,out->carrier_tail,sizeof(out->carrier_tail))==0;
+    printf("Fused geometry submissions%u/%u exact packet%s\n",submissions[1],submissions[0],exact?" yes":" no");
+    ASSERT_TRUE(exact);ASSERT_EQ(memcmp(&reference->clock,&out->clock,sizeof(out->clock)),0);
     ASSERT_TRUE(submissions[1]==8u&&submissions[0]==16u);
     for(uint32_t k=0;k<3u;k++) {SDL_setenv(names[k],saved[k]?saved[k]:"0",1);SDL_free(saved[k]);}
     free(chunk);free(input);free(volume);free(reference);free(out);free(quiet);free(check);PASS();

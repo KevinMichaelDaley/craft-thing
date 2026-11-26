@@ -177,10 +177,11 @@ static bool submit(dc_gpu_t *g,char *err,uint32_t cap) {
 }
 void fr_gas_gpu_record_grain_pressure(dc_gpu_t *g,uint32_t bank) {
     const fr_renderer_compute_t *feedback=&g->gas->mpm_pressure;
-    barrier(g);
-    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-        VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
+    fr_renderer_barrier(g->command,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT|VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
     uint32_t push[4]={g->width,g->height,0u,bank};
     vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,feedback->pipeline);
     vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -434,6 +435,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
         if(!submit(g,err,cap)||!shader_ok(g,t,err,cap)) return false;
         speed=rate(t);
     }
+    /* Direct practical gas accepts one interval and publishes into the live bank. */
     bool fuse_grain_pressure=t->direct_publish&&t->policy==FR_GAS_PRESSURE_PRACTICAL;
     double remaining=seconds,hint=t->large_step_hint>0?t->large_step_hint:seconds;uint64_t accepted=0,retries=0;
     while(remaining>0) {
