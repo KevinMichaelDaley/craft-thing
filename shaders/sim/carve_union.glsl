@@ -2,20 +2,24 @@
  * independent of the scheduling order, without a diameter-dependent frontier. */
 shared uint carve_root_counts[DC_STRUCTURAL_LANES];
 #include "carve_union_links.glsl"
+const uint CARVE_TILE_SIDE=16u;
+const uint CARVE_TILE_PIXELS=CARVE_TILE_SIDE*CARVE_TILE_SIDE;
+
 bool carve_union_components(Body source,uint area) {
     uint lane=gl_LocalInvocationIndex;
-    uint tile_count=area/256u;
+    uint tile_count=area/CARVE_TILE_PIXELS;
+    /* A tile is connected at its first pixel if every cell survived classification. */
     for(uint tile=lane;tile<tile_count;tile+=DC_STRUCTURAL_LANES) DC_FRAGMENT_QUEUE(tile)=0u;
     memoryBarrierBuffer();barrier();
     for(uint pixel=lane*4u;pixel<area;pixel+=DC_STRUCTURAL_LANES*4u) {
         if((DC_FRAGMENT_LABEL(pixel)|DC_FRAGMENT_LABEL(pixel+1u)|
             DC_FRAGMENT_LABEL(pixel+2u)|DC_FRAGMENT_LABEL(pixel+3u))!=0u)
-            atomicOr(DC_FRAGMENT_QUEUE(pixel/256u),1u);
+            atomicOr(DC_FRAGMENT_QUEUE(pixel/CARVE_TILE_PIXELS),1u);
     }
     memoryBarrierBuffer();barrier();
     for(uint pixel=lane;pixel<area;pixel+=DC_STRUCTURAL_LANES) if(DC_FRAGMENT_LABEL(pixel)==0u) {
-        uint tile=pixel/256u;
-        uint seed=DC_FRAGMENT_QUEUE(tile)==0u?tile*256u:pixel;
+        uint tile=pixel/CARVE_TILE_PIXELS;
+        uint seed=DC_FRAGMENT_QUEUE(tile)==0u?tile*CARVE_TILE_PIXELS:pixel;
         DC_FRAGMENT_LABEL(pixel)=seed+1u;
     }
     memoryBarrierBuffer();barrier();
@@ -24,22 +28,24 @@ bool carve_union_components(Body source,uint area) {
     uint union_edges=0u;
 #endif
     for(uint pixel=lane;pixel<area;pixel+=DC_STRUCTURAL_LANES) {
-        uint tile=pixel/256u;
+        uint tile=pixel/CARVE_TILE_PIXELS;
         bool full=DC_FRAGMENT_QUEUE(tile)==0u;
         if(!full&&(atomicAdd(DC_FRAGMENT_LABEL(pixel),0u)&LEAF_RESERVATION)!=0u) continue;
-        ivec2 local=ivec2(pixel%16u,(pixel%256u)/16u);
-        if(full&&local.x>0&&local.x<15&&local.y<15) continue;
-        uint seed=full?tile*256u:pixel;
+        ivec2 local=ivec2(pixel%CARVE_TILE_SIDE,(pixel%CARVE_TILE_PIXELS)/CARVE_TILE_SIDE);
+        int last=int(CARVE_TILE_SIDE)-1;
+        /* The forward edges can leave through the left, right or bottom side. */
+        if(full&&local.x>0&&local.x<last&&local.y<last) continue;
+        uint seed=full?tile*CARVE_TILE_PIXELS:pixel;
         ivec2 p=pixel_piece_cell(source,pixel);
         for(uint edge=0u;edge<4u;edge++) {
             ivec2 adjacent=local+edges[edge];
-            if(full&&all(greaterThanEqual(adjacent,ivec2(0)))&&all(lessThan(adjacent,ivec2(16)))) continue;
+            if(full&&all(greaterThanEqual(adjacent,ivec2(0)))&&all(lessThanEqual(adjacent,ivec2(last)))) continue;
             ivec2 q=p+edges[edge];
             if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,ivec2(source.width,source.height)))) continue;
             uint next=carve_neighbor_piece(source,pixel,edges[edge],q);
             if(next==0xffffffffu) continue;
-            uint next_tile=next/256u;
-            if(DC_FRAGMENT_QUEUE(next_tile)==0u) next=next_tile*256u;
+            uint next_tile=next/CARVE_TILE_PIXELS;
+            if(DC_FRAGMENT_QUEUE(next_tile)==0u) next=next_tile*CARVE_TILE_PIXELS;
             else if((atomicAdd(DC_FRAGMENT_LABEL(next),0u)&LEAF_RESERVATION)!=0u) continue;
 #ifdef DC_CARVE_WORK_PROFILE
             union_edges++;
@@ -51,11 +57,12 @@ bool carve_union_components(Body source,uint area) {
     atomicAdd(carve_work_profile[5],union_edges);
 #endif
     memoryBarrierBuffer();barrier();
+    /* Cache each full tile's root before reusing the queue for fragment ranks. */
     for(uint tile=lane;tile<tile_count;tile+=DC_STRUCTURAL_LANES)
-        DC_FRAGMENT_QUEUE(tile)=DC_FRAGMENT_QUEUE(tile)==0u?carve_union_root(tile*256u)+1u:0u;
+        DC_FRAGMENT_QUEUE(tile)=DC_FRAGMENT_QUEUE(tile)==0u?carve_union_root(tile*CARVE_TILE_PIXELS)+1u:0u;
     memoryBarrierBuffer();barrier();
     for(uint pixel=lane;pixel<area;pixel+=DC_STRUCTURAL_LANES) {
-        uint root=DC_FRAGMENT_QUEUE(pixel/256u);
+        uint root=DC_FRAGMENT_QUEUE(pixel/CARVE_TILE_PIXELS);
         if(root!=0u) atomicMin(DC_FRAGMENT_LABEL(pixel),root);
         else if((atomicAdd(DC_FRAGMENT_LABEL(pixel),0u)&LEAF_RESERVATION)==0u)
             atomicMin(DC_FRAGMENT_LABEL(pixel),carve_union_root(pixel)+1u);
