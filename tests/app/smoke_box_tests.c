@@ -130,15 +130,28 @@ static void test_native_incomplete_smoke_admission_fails_without_overwriting_sav
     ASSERT_EQ(smoke_file_hash(chunk_path),chunk_hash);ASSERT_EQ(smoke_file_hash(body_path),body_hash);PASS();
 }
 static void test_native_air_brush_opens_a_real_roof_vent_for_rising_smoke(void) {
+    enum { ROOF_CELL = 49u * DC_CHUNK_SIDE + 8u };
     char err[256]={0},directory[]="build/smoke_box_carved_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t *view=dc_level_view_create_smoke_box(directory,314,err,sizeof(err));ASSERT_TRUE(view);
     ASSERT_TRUE(dc_level_view_smoke_valve(view,0,err,sizeof(err))&&dc_level_view_smoke_valve(view,1,err,sizeof(err)));
     for(uint32_t i=0;i<120u;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
-    ASSERT_TRUE(dc_level_view_paint(view,328,49,4,DC_MATERIAL_AIR,err,sizeof(err)));
     uint32_t slot;fr_gas_checkpoint_chunk_t *snapshot=malloc(sizeof(*snapshot));ASSERT_TRUE(snapshot);
     ASSERT_TRUE(dc_chunk_table_find(&view->table,(dc_chunk_coord_t){5,-2},&slot)&&fr_gas_gpu_export_checkpoint(view->gpu,slot,snapshot,err,sizeof(err)));
-    ASSERT_EQ(snapshot->cells[49u*64u+8u][13],1.f);ASSERT_EQ(snapshot->cells[49u*64u+8u][0],0.f);
-    for(uint32_t i=0;i<60u;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
+    ASSERT_EQ(snapshot->cells[ROOF_CELL][13], 0.f);
+    ASSERT_EQ(snapshot->cells[ROOF_CELL][FR_GAS_OXYGEN], 0.f);
+    fr_gas_gpu_audit_t before, after;
+    ASSERT_TRUE(fr_gas_gpu_audit(view->gpu, &before, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view,328,49,4,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_export_checkpoint(view->gpu, slot, snapshot, err, sizeof(err)));
+    ASSERT_EQ(snapshot->cells[ROOF_CELL][13], 1.f);
+    ASSERT_TRUE(snapshot->cells[ROOF_CELL][FR_GAS_OXYGEN] > 0.f);
+    ASSERT_TRUE(fr_gas_gpu_audit(view->gpu, &after, err, sizeof(err)));
+    for (uint32_t species = 0; species < FR_GAS_SPECIES; ++species) {
+        const uint32_t metric = FR_GAS_AUDIT_SPECIES + species;
+        const float stock = before.metrics[metric];
+        ASSERT_TRUE(fabsf(after.metrics[metric] - stock) <= fmaxf(1e-9f, stock * 1e-5f));
+    }
+    for(uint32_t i=0;i<600u;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
     double escaped=0.;
     for(int64_t x=4;x<=5;x++) {
         ASSERT_TRUE(dc_chunk_table_find(&view->table,(dc_chunk_coord_t){x,-2},&slot)&&fr_gas_gpu_export_checkpoint(view->gpu,slot,snapshot,err,sizeof(err)));

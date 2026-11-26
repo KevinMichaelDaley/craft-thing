@@ -2086,6 +2086,10 @@ test_gas_numerics: build/gas_reference_tests build/gas_implicit_tests build/gas_
 SMOKE_BOX_APP_OBJ = $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ))
 build/smoke_box_display_tests: tests/app/smoke_box_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level_internal.h $(SMOKE_BOX_APP_OBJ) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(SMOKE_BOX_APP_OBJ) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+.PHONY: test_smoke_box_display
+test_smoke_box_display: build/smoke_box_display_tests tools/smoke_profile
+	bash -c 'source tools/smoke_profile && exec ./build/smoke_box_display_tests'
+test: test_smoke_box_display
 build/diagnostics/smoke_box_frame: tools/diagnostics/smoke_box_frame.c src/app/level_internal.h $(SMOKE_BOX_APP_OBJ) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(SMOKE_BOX_APP_OBJ) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
