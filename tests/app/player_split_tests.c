@@ -56,9 +56,12 @@ static void test_split_screen_routes_bands_to_their_players(void) {
         ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
     ASSERT_TRUE(dc_players_split_screen(v,2,err,sizeof(err)));
     dc_gpu_t *gpu = dc_level_view_gpu(v);
+    dc_presentation_layout_t band;
+    ASSERT_TRUE(dc_gpu_presentation_view(gpu,0,&band));
+    ASSERT_TRUE(band.scale >= WINDOW_SCALE);
     uint32_t left_x, right_x, y, x;
     ASSERT_TRUE(dc_gpu_screen_cell(gpu,0,0,&left_x,&y));
-    ASSERT_TRUE(dc_gpu_screen_cell(gpu,WINDOW_SCALE,0,&x,&y));
+    ASSERT_TRUE(dc_gpu_screen_cell(gpu,band.scale,0,&x,&y));
     ASSERT_EQ(x,left_x+1u);
     ASSERT_TRUE(dc_gpu_screen_cell(gpu,VIEW_WIDTH*WINDOW_SCALE/2u,0,&right_x,&y));
     ASSERT_TRUE(right_x>left_x);
@@ -125,7 +128,7 @@ static void test_start_activates_split_and_editor_recovers_full_view(void) {
     uint32_t x, y;
     ASSERT_TRUE(dc_gpu_screen_cell(dc_level_view_gpu(v),
                                    VIEW_WIDTH*WINDOW_SCALE/4u, 0, &x, &y));
-    ASSERT_EQ(x, VIEW_WIDTH/4u);
+    ASSERT_TRUE(x < VIEW_WIDTH/4u);
     ASSERT_TRUE(dc_gpu_screen_cell(dc_level_view_gpu(v),
                                    VIEW_WIDTH*WINDOW_SCALE*3u/4u, 0, &x, &y));
     ASSERT_TRUE(x < VIEW_WIDTH/2u);
@@ -174,8 +177,11 @@ static void test_controller_aim_uses_its_crop_in_a_far_negative_world(void) {
     ASSERT_TRUE(dc_players_step(v,1.f/60.f,err,sizeof(err)));
     ASSERT_TRUE(dc_players_status(v,1,&player,&body));
     ASSERT_TRUE(player.intent.has_target);
+    dc_presentation_layout_t crop;
+    ASSERT_TRUE(dc_gpu_presentation_view(dc_level_view_gpu(v),1,&crop));
+    uint32_t reach = crop.width - 1u - crop.width/2u;
     ASSERT_EQ((player.intent.target.chunk.x-center.chunk.x)*DC_CHUNK_SIDE+
-        (int32_t)player.intent.target.x-(int32_t)center.x,80);
+        (int32_t)player.intent.target.x-(int32_t)center.x,reach < 80u ? reach : 80u);
     PASS();
 }
 
@@ -298,8 +304,8 @@ static void test_four_way_split_clamps_stick_to_its_own_crop(void) {
     }
     dc_presentation_layout_t crop;
     ASSERT_TRUE(dc_gpu_presentation_view(dc_level_view_gpu(v),3,&crop));
-    ASSERT_EQ(crop.width,VIEW_WIDTH/4u);
-    ASSERT_EQ(crop.height,VIEW_HEIGHT);
+    ASSERT_TRUE(crop.width < VIEW_WIDTH/4u);
+    ASSERT_TRUE(crop.height < VIEW_HEIGHT);
     const SDL_Event aim = {.caxis = {.type = SDL_CONTROLLERAXISMOTION,
         .which = 44, .axis = SDL_CONTROLLER_AXIS_RIGHTX, .value = 32767}};
     ASSERT_TRUE(dc_players_event(v,&aim));

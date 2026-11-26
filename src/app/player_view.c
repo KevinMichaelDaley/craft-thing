@@ -7,7 +7,8 @@
 #include "level_internal.h"
 #include "player_view.h"
 
-enum { CAMERA_DEAD_ZONE = 8, CAMERA_MAX_PAN = 1024, STICK_AIM_REACH = 80 };
+enum { CAMERA_DEAD_ZONE = 8, CAMERA_MAX_PAN = 1024, STICK_AIM_REACH = 80,
+       SPLIT_ZOOM_NUMERATOR = 3, SPLIT_ZOOM_DENOMINATOR = 2 };
 
 static double view_axis(int64_t chunk, int64_t origin, int32_t position, uint32_t offset) {
     /* Subtract in integer space so distant chunks retain local cell precision. */
@@ -56,7 +57,12 @@ bool dc_player_view_split(dc_level_view_t *view, const uint32_t *ids,
                           uint32_t count, char *err, uint32_t cap) {
     dc_presentation_focus_t crops[DC_PRESENTATION_VIEW_LIMIT];
     uint32_t grid_width = view->gpu->view_width;
-    uint32_t crop_width = grid_width / count;
+    uint32_t grid_height = view->gpu->view_height;
+    /* Keep the band's aspect ratio and leave room to follow on both axes. */
+    uint32_t crop_width = (uint32_t)((uint64_t)grid_width * SPLIT_ZOOM_DENOMINATOR /
+                                  (count * SPLIT_ZOOM_NUMERATOR));
+    uint32_t crop_height = (uint32_t)((uint64_t)grid_height * SPLIT_ZOOM_DENOMINATOR /
+                                    SPLIT_ZOOM_NUMERATOR);
     for (uint32_t n = 0; n < count; ++n) {
         double x, y;
         if (!body_position(view, ids[n], true, &x, &y)) {
@@ -64,7 +70,8 @@ bool dc_player_view_split(dc_level_view_t *view, const uint32_t *ids,
             return false;
         }
         uint32_t left = (uint32_t)fmin(fmax(x - crop_width / 2u, 0.), grid_width - crop_width);
-        crops[n] = (dc_presentation_focus_t){left, 0u, crop_width, view->gpu->view_height};
+        uint32_t top = (uint32_t)fmin(fmax(y - crop_height / 2u, 0.), grid_height - crop_height);
+        crops[n] = (dc_presentation_focus_t){left, top, crop_width, crop_height};
     }
     if (dc_gpu_set_split_presentation(view->gpu, count, crops)) return true;
     if (err && cap) snprintf(err, cap, "Player viewports do not fit the presentation window");
