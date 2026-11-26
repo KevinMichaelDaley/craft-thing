@@ -2327,7 +2327,7 @@ build/combustion_body_feedback_display_tests: tests/vulkan/combustion_body_feedb
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/combustion_body_feedback_tests: tests/vulkan/combustion_body_feedback_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
-build/combustion_body_feedback_tests build/combustion_body_feedback_display_tests: tests/vulkan/rigid_coating_contact_cases.h
+build/combustion_body_feedback_tests build/combustion_body_feedback_display_tests: tests/vulkan/rigid_coating_contact_cases.h tests/vulkan/submerged_coating_cases.h
 build/combustion_gpu_display_tests build/combustion_body_feedback_display_tests build/combustion_body_feedback_tests: build/diagnostics/body_storage_init.spv build/shaders/runtime_body_index.comp.spv build/shaders/runtime_body_scan.comp.spv $(RIGID_SHADER) $(SOLVER_SHADER) $(BROADPHASE_SHADER) $(CONTACT_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_COMPONENT_SHADER) $(RENDERER_SHADERS)
 .PHONY: test_submerged_coating
 test_submerged_coating: build/combustion_gpu_display_tests build/combustion_body_feedback_display_tests

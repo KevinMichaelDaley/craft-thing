@@ -1,6 +1,6 @@
 ---
 id: ctrc-q7uv
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-26T14:48:24Z
@@ -31,3 +31,7 @@ RED moved 8002/3/5 Q16 oil, jelly and oxidizer in one second when called once an
 **2026-11-26T15:25:12Z**
 
 The completed coating target passed all eight Vulkan cases. The application douse preflight passed 3/3, the 30-second douse replay retained 45080/0 Q16 late-window consumption, and the clean pool corrosion replay matched gold .009047 and ingredient .565406. The exploratory launcher run passed the actual prompt release, fireproof carrier and the first two delayed seeds. It was ended to give the fixture-defined run the GPU slot. The active locked sweep uses all 64 JSON seeds, ten seconds, and 48 required ignitions. It passed the prompt and fireproof controls and seed 991397 ignited 17 arm parcels. Keep the ticket open until the locked sweep has a terminal result.
+
+**2026-11-26T16:08:56Z**
+
+The pinned timed-adhesion revision c0fbf8a3 completed make test_greek_siege_locked_risk with exit 0. All 64 ordered fixture seeds from 991397 through 991460 ignited the launcher at the 10-second delay, exceeding the required 48. Prompt release and the fireproof carrier both passed. The earlier exploratory stop was superseded by this complete sweep.

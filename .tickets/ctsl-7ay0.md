@@ -39,3 +39,7 @@ The second matched 30-second replay passed with byte-for-byte identical telemetr
 **2026-11-26T15:35:14Z**
 
 The finite mixture debit now rounds proportionally at the real simulation cadence. A distinct terminal precision bug still leaves 2 oil, 2 jelly and 7 bound oxidizer Q16 after 900 simulated seconds at 60 Hz. ctpc-9yer tracks terminal fuel settlement before the complete time comparison. The existing 30-second matched submersion guard remains in use.
+
+**2026-11-26T16:08:56Z**
+
+The terminal kinetics regression is closed. The updated 30-second pool replay completed both controls with matched starting film of 327680 Q16, matched initial bound water of 56416 Q16 and 36 of 36 wet faces. Greek retained 228620 Q16 fuel, while oil retained all 327680. The existing late-window guard passed at 45080 versus zero. The repeated comparison through actual depletion remains open.

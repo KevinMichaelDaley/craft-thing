@@ -1,6 +1,6 @@
 ---
 id: ctpc-9yer
-status: in_progress
+status: closed
 deps: [ctpc-xa7p]
 links: []
 created: 2026-11-26T15:32:41Z
@@ -22,3 +22,9 @@ Preserve subquantum reaction progress at supported cadences and settle the last 
 
 With sufficient bound oxidizer, a submerged ignited mixed film reaches zero fuel in repeated normal-cadence CPU and Vulkan runs. Verify partitioned time steps, exact finite inventory and persistence, and retain the ordinary-oil dousing control.
 
+
+## Notes
+
+**2026-11-26T16:08:56Z**
+
+RED left all four fuel units on the CPU at both 60 and 240 Hz, and left the two-unit Vulkan mixture untouched at 60 and 120 Hz. The precise persisted progress now admits the final two species together, with finite bound oxidizer and no ambient oxygen debit. Both CPU cadences and both Vulkan cadences exhausted the film and closed their mass and energy ledgers. ABI 9 reads legacy snapshot widths and their enclosing body and chunk records. An actual ABI 8 archive from 4637bb99 restored its exact body credit and chunk binding. The CPU suites, address and arena diagnostics, device ownership and checkpoint tests, and sanitizer runs passed. The 30-second matched pool retained 36 of 36 wet faces and measured late consumption of 45080 Q16 Greek fuel and zero oil fuel.
