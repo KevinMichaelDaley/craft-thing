@@ -10,7 +10,7 @@
 #include "../../src/app/level_internal.h"
 #include "../../src/app/player_session.h"
 #include "../../src/app/view_config.h"
-#include "../../src/vulkan/runtime_body_gpu.h"
+#include "../../src/vulkan/gas_gpu_internal.h"
 #include "../player/runtime_visual_check.h"
 
 static int g_pass,g_fail;
@@ -350,7 +350,8 @@ static void test_heat_probe_targets_the_visible_robe_in_a_two_player_scene(void)
 
 static void test_visible_robe_and_hat_singe_and_stay_dark_after_reversal(void) {
     enum { PARTS = 2 };
-    const uint32_t rest_canvas[PARTS][2] = {{16u, 20u}, {26u, 9u}};
+    const uint32_t rest_canvas[PARTS][2] = {{14u, 23u}, {32u, 9u}};
+    const int32_t air_side[PARTS] = {1, -1};
     const fr_beaver_region_t regions[PARTS] = {FR_BEAVER_ROBE, FR_BEAVER_HAT};
     char directory[] = "build/player_runtime_singe_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
@@ -365,10 +366,11 @@ static void test_visible_robe_and_hat_singe_and_stay_dark_after_reversal(void) {
     ASSERT_TRUE(dc_level_view_configure_atmosphere(v, err, sizeof(err)) &&
                 fr_combustion_gpu_enable(gpu, err, sizeof(err)) &&
                 dc_level_view_heat_overlay(v, 0));
-    SDL_Event move = {.key = {.type = SDL_KEYDOWN, .keysym.scancode = SDL_SCANCODE_D}};
+    SDL_Event move = {.key = {.type = SDL_KEYDOWN, .keysym.scancode = SDL_SCANCODE_A}};
     ASSERT_TRUE(dc_players_event(v, &move));
     dc_players_frame_time(v, .12);
-    ASSERT_TRUE(dc_players_step(v, 1.f/60.f, err, sizeof(err)) && dc_level_view_tick(v, err, sizeof(err)));
+    ASSERT_TRUE(dc_players_step(v, 1.f/60.f, err, sizeof(err)) && dc_level_view_tick(v, err, sizeof(err)) &&
+                fr_gas_gpu_refresh_geometry(gpu, err, sizeof(err)));
 
     dc_level_view_status_t status;
     fr_player_t player;
@@ -377,10 +379,8 @@ static void test_visible_robe_and_hat_singe_and_stay_dark_after_reversal(void) {
                 dc_players_status(v, 0, &player, &bodies[0]) &&
                 dc_players_status(v, 1, &player, &bodies[1]));
     fr_gas_state_t *gas = calloc(DC_CHUNK_CELLS, sizeof(*gas));
-    double *volume = calloc(DC_CHUNK_CELLS, sizeof(*volume));
-    ASSERT_TRUE(gas && volume);
-    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) volume[i] = 1.;
-    uint32_t slots[PARTS], sources[PARTS], original_x[PARTS], original_rgb[PARTS];
+    ASSERT_TRUE(gas);
+    uint32_t sources[PARTS], original_x[PARTS], original_rgb[PARTS];
     fr_reactive_record_t before[PARTS], control[PARTS], burned[PARTS];
     for (uint32_t part = 0; part < PARTS; ++part) {
         uint32_t sx = rest_canvas[part][0], sy = rest_canvas[part][1];
@@ -391,15 +391,14 @@ static void test_visible_robe_and_hat_singe_and_stay_dark_after_reversal(void) {
         ASSERT_TRUE(walk_source_pixel(v, sources[part], &original_x[part], &y, err, sizeof(err)) &&
                     original_x[part] > 0u &&
                     dc_level_view_pixel(v, original_x[part], y, &original_rgb[part], err, sizeof(err)));
-        const uint32_t air_x = original_x[part] + status.offset_x - 1u;
+        const uint32_t air_x = (uint32_t)((int32_t)original_x[part] + air_side[part]) + status.offset_x;
         const uint32_t air_y = y + status.offset_y;
         dc_chunk_coord_t coord = {status.origin.x + air_x / DC_CHUNK_SIDE,
                                   status.origin.y + air_y / DC_CHUNK_SIDE};
-        slots[part] = dc_gpu_find_active_chunk(gpu, coord);
-        ASSERT_TRUE(slots[part] != UINT32_MAX);
+        uint32_t slot = dc_gpu_find_active_chunk(gpu, coord);
         const uint32_t cell = air_y % DC_CHUNK_SIDE * DC_CHUNK_SIDE + air_x % DC_CHUNK_SIDE;
-        gas[cell] = (fr_gas_state_t){.species = {[FR_GAS_OXYGEN] = .02, [FR_GAS_NITROGEN] = .07},
-                                    .energy = 293.15 * (.02 * .65816 + .07 * .74320)};
+        ASSERT_TRUE(slot != UINT32_MAX && fr_gas_gpu_read_chunk(gpu, slot, gas, DC_CHUNK_CELLS, err, sizeof(err)));
+        ASSERT_TRUE(gas[cell].species[FR_GAS_OXYGEN] > 0.);
         bool found = false;
         const uint32_t x = sx - bodies[0].rest_origin_x, py = sy - bodies[0].rest_origin_y;
         ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, bodies[0].binding.body_id, x, py,
@@ -413,11 +412,9 @@ static void test_visible_robe_and_hat_singe_and_stay_dark_after_reversal(void) {
         ASSERT_TRUE(fr_reactive_state_add_heat(&hot, heat, err, sizeof(err)) &&
                     fr_gpu_reactive_seed_body(gpu, bodies[0].binding.body_id, x, py, &hot, err, sizeof(err)));
     }
-    ASSERT_EQ(slots[0], slots[1]);
-    ASSERT_TRUE(fr_gas_gpu_seed_chunk(gpu, slots[0], gas, volume, DC_CHUNK_CELLS, err, sizeof(err)));
-    free(volume);
     free(gas);
-    ASSERT_TRUE(fr_combustion_gpu_step(gpu, .75f, err, sizeof(err)));
+    for (uint32_t step = 0; step < 4u; ++step)
+        ASSERT_TRUE(fr_combustion_gpu_step(gpu, .25f, err, sizeof(err)));
     for (uint32_t part = 0; part < PARTS; ++part) {
         bool found = false;
         ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, bodies[0].binding.body_id,
@@ -429,7 +426,7 @@ static void test_visible_robe_and_hat_singe_and_stay_dark_after_reversal(void) {
     move.type = SDL_KEYUP;
     ASSERT_TRUE(dc_players_event(v, &move));
     move.key.type = SDL_KEYDOWN;
-    move.key.keysym.scancode = SDL_SCANCODE_A;
+    move.key.keysym.scancode = SDL_SCANCODE_D;
     ASSERT_TRUE(dc_players_event(v, &move));
     dc_players_frame_time(v, .12);
     ASSERT_TRUE(dc_players_step(v, 1.f/60.f, err, sizeof(err)) && dc_level_view_tick(v, err, sizeof(err)));
