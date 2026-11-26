@@ -43,3 +43,7 @@ The subsequent pinned eedae709 wetting-branch run passed the still-air warmth as
 **2026-11-26T23:36:34Z**
 
 The pinned integrated 3c94b591 full suite measured a still-air peak of 334.86 K at the warmth probe, 16.71 K above the locked ceiling. The fixture marks the case OK because forest_warmth_held starts enforcing at 60 s and allows 360 K, while the manifest requires 298.15-318.15 K over seconds 20-120. Containment and the finite ledger passed separately. Keep the locked warmth criterion open and compare exact sample series before changing the model or probe.
+
+**2026-11-26T23:41:56Z**
+
+Correction to the previous peak note: 334.86 K was the summary printed by the old evaluator. The raw nominal 120 s sample was 352.08 K. The eleven nominal samples from 20 through 120 s span 302.86–352.08 K, with six above the locked 318.15 K ceiling. The sampling-clock fix is covered independently in ctfwsc-pknt. The physical warmth criterion remains open.

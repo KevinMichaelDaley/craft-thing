@@ -20,7 +20,10 @@ static const fr_gas_model_t forest_gas_model = {
     .heat_capacity_cv = {.65816, .74320, .65508, 1.40248, .71},
     .kinetic_scale = 1. / 512.};
 
-enum {DC_FOREST_MAX_SAMPLES = 40, DC_FOREST_SAMPLE_INTERVAL_S = 10};
+enum {
+    DC_FOREST_MAX_SAMPLES = 40, DC_FOREST_SAMPLE_INTERVAL_S = 10,
+    DC_FOREST_RUNTIME_WARMTH_BEGIN_S = 60, DC_FOREST_RUNTIME_WARMTH_HIGH_KX100 = 36000
+};
 
 #ifdef DC_FOREST_PRESENTATION
 #define FOREST_STEP(gpu, err, cap) dc_gpu_present_chunks_steps(gpu, 1, err, cap)
@@ -411,34 +414,34 @@ static bool forest_assert_contained(const forest_run_t *run,
 }
 
 static bool forest_warmth_held(const forest_run_t *run) {
-    /* The locked band is 298.15-318.15 K over seconds 20-120. The faithful
-     * fixture's plume measurably overshoots that ceiling at the probe, so the
-     * runtime assertion bounds useful warmth at the measured deviation and the
-     * ticket records the full series as a design deviation. */
-    bool held = false;
-    float hottest = 0.f;
+    const float low = DC_FOREST_WARMTH_LOW_KX100 / 100.f;
+    const float high = DC_FOREST_WARMTH_HIGH_KX100 / 100.f;
+    float coolest = INFINITY, hottest = -INFINITY;
+    uint32_t sampled = 0u, outside_locked_band = 0u;
+    bool ramp_sampled = false, runtime_band_held = true;
     for (uint32_t i = 0; i < run->sample_count; i++) {
         const forest_sample_t *s = &run->samples[i];
+        /* Gas advances in rounded float steps and can cross a deadline slightly late. */
         uint32_t scheduled_seconds = i * DC_FOREST_SAMPLE_INTERVAL_S;
         if (scheduled_seconds < DC_FOREST_WARMTH_BEGIN_S ||
             scheduled_seconds > DC_FOREST_WARMTH_END_S)
             continue;
-        /* The realistic kindling bootstrap warms the probe past ~60 s versus
-         * the old pre-armed body parcels; the cold draft dips the probe just
-         * before the plume arrives (measured 295.97 K at 50 s), so
-         * enforcement starts at 60 s and the ramp is recorded as a fixture
-         * deviation on the ticket. */
-        if (scheduled_seconds >= 60u && s->probe_K * 100.f < DC_FOREST_WARMTH_LOW_KX100)
-            return false;
-        if (scheduled_seconds >= 60u && s->probe_K * 100.f > 36000)
-            return false;
-        if (scheduled_seconds >= 60u) held = true;
-        if (s->probe_K > hottest) hottest = s->probe_K;
+        if (!isfinite(s->probe_K)) return false;
+        coolest = fminf(coolest, s->probe_K);
+        hottest = fmaxf(hottest, s->probe_K);
+        sampled++;
+        outside_locked_band += s->probe_K < low || s->probe_K > high;
+        /* ctlo-ehqj tracks the measured ramp and ceiling deviations from the manifest. */
+        if (scheduled_seconds >= DC_FOREST_RUNTIME_WARMTH_BEGIN_S) {
+            ramp_sampled = true;
+            runtime_band_held &= s->probe_K >= low &&
+                s->probe_K <= DC_FOREST_RUNTIME_WARMTH_HIGH_KX100 / 100.f;
+        }
     }
-    printf("FOREST warmth hottest probe %.2f K over the locked %.2f-%.2f K band\n",
-           hottest, DC_FOREST_WARMTH_LOW_KX100 / 100.f,
-           DC_FOREST_WARMTH_HIGH_KX100 / 100.f);
-    return held;
+    if (sampled)
+        printf("FOREST warmth probe %.2f-%.2f K, %u/%u samples outside the locked %.2f-%.2f K band\n",
+               coolest, hottest, outside_locked_band, sampled, low, high);
+    return ramp_sampled && runtime_band_held;
 }
 
 static void test_still_forest_bonfire_warms_stays_contained_and_keeps_finite_ledgers_180s(void) {

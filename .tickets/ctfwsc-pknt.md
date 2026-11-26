@@ -1,6 +1,6 @@
 ---
 id: ctfwsc-pknt
-status: in_progress
+status: closed
 deps: []
 links: [ctlo-ehqj]
 created: 2026-11-26T23:38:31Z
@@ -24,3 +24,7 @@ Select observations by the scheduled sampling deadlines. Verify that nominal 120
 **2026-11-26T23:39:56Z**
 
 RED compiles and runs without opening a Vulkan context. The synthetic series uses the same rounded one-sixtieth-second steps as the real fixture. A nominal 130 s sample is ignored, but the old evaluator also drops nominal 120 s and accepts 361 K at that sample.
+
+**2026-11-26T23:41:55Z**
+
+The production fixture and its display variant compile. The synthetic regression now counts the nominal 120 s sample despite the accepted clock drifting slightly beyond 120 and still excludes nominal 130 s. It prints complete minima, maxima and the number outside the locked band. The archived integrated still-air series contains 11 nominal 20–120 s samples with 302.86–352.08 K and six above 318.15 K.
