@@ -1,6 +1,6 @@
 ---
 id: ctpao-vwpc
-status: open
+status: in_progress
 deps: []
 links: [ctcri-jd9z]
 created: 2026-11-26T23:11:09Z
@@ -17,3 +17,9 @@ SDL Start commits a new seat before split layout validation. A drawable too smal
 ## Acceptance Criteria
 
 Exercise a join when crop layout is unavailable, preserve existing gameplay and occupied seats, and allow the desired split view to recover when drawable dimensions are usable. Keep normal Start split behavior and controller reassignment.
+
+## Notes
+
+**2026-11-26T23:25:31Z**
+
+The two host RED cases compiled and reproduced both failure paths. Start admitted two seats but wrote the refused layout into the sticky error and stopped player steps. A rejected refresh of an already active layout returned failure with both stale bands still published. The native small-drawable fixture compiled.

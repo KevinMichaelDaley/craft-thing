@@ -333,6 +333,42 @@ static void test_start_activates_split_and_editor_recovers_full_view(void) {
     PASS();
 }
 
+static void test_small_drawable_preserves_join_and_recovers_split(void) {
+    ASSERT_TRUE(setup_at(0,false));
+    dc_gpu_t *gpu = dc_level_view_gpu(v);
+    VkExtent2D extent = gpu->swap_extent;
+    const SDL_Event start = {.cbutton = {.type = SDL_CONTROLLERBUTTONDOWN,
+        .which = 42, .button = SDL_CONTROLLER_BUTTON_START}};
+    const SDL_Event move = {.caxis = {.type = SDL_CONTROLLERAXISMOTION,
+        .which = 42, .axis = SDL_CONTROLLER_AXIS_LEFTX, .value = 28000}};
+    gpu->swap_extent = (VkExtent2D){VIEW_WIDTH / 2u, VIEW_HEIGHT / 2u};
+    dc_presentation_layout_t single, other;
+    bool handled = dc_players_event(v, &start);
+    bool fallback = dc_players_present(v, err, sizeof(err)) &&
+        dc_gpu_presentation_view(gpu, 0u, &single) &&
+        !dc_gpu_presentation_view(gpu, 1u, &other);
+    bool moved = dc_players_event(v, &move) && dc_players_step(v, 1.f/60.f, err, sizeof(err));
+    gpu->swap_extent = extent;
+
+    ASSERT_TRUE(handled && fallback && moved);
+    ASSERT_EQ(single.width, VIEW_WIDTH / 2u);
+    ASSERT_EQ(single.height, VIEW_HEIGHT / 2u);
+    ASSERT_EQ(single.scale, 1u);
+    ASSERT_EQ(single.x, (VIEW_WIDTH - single.width) / 2u);
+    ASSERT_EQ(single.y, (VIEW_HEIGHT - single.height) / 2u);
+    fr_player_t player;
+    fr_beaver_body_t before, after;
+    ASSERT_TRUE(dc_players_status(v, 1u, &player, &before));
+    ASSERT_TRUE(player.intent.move_x > .5f);
+    ASSERT_TRUE(dc_level_view_tick(v, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_presentation_view(gpu, 1u, &other));
+    ASSERT_TRUE(dc_players_status(v, 1u, &player, &after));
+    ASSERT_EQ(after.binding.body_id, before.binding.body_id);
+    ASSERT_EQ(after.binding.generation, before.binding.generation);
+    ASSERT_TRUE(!dc_players_status(v, 2u, &player, &after));
+    PASS();
+}
+
 static void test_controller_aim_uses_its_crop_in_a_far_negative_world(void) {
     ASSERT_TRUE(setup_at(1 << 20,false));
     ASSERT_TRUE(dc_players_join(v,42,err,sizeof(err)));
@@ -633,12 +669,18 @@ int main(int argc, char **argv) {
         printf("\nResults: %d passed, %d failed\n",g_pass,g_fail);
         return g_fail ? 1 : 0;
     }
+    if (argc == 2 && strcmp(argv[1], "--split-layout-recovery") == 0) {
+        RUN(test_small_drawable_preserves_join_and_recovers_split);
+        printf("\nResults: %d passed, %d failed\n",g_pass,g_fail);
+        return g_fail ? 1 : 0;
+    }
     RUN(test_second_seat_joins_with_its_own_beaver);
     RUN(test_new_player_setup_failures_preserve_the_live_seat_and_ray);
     RUN(test_direct_join_rebinds_the_same_disconnected_native_beaver);
     RUN(test_split_screen_routes_bands_to_their_players);
     RUN(test_split_screen_needs_two_seats);
     RUN(test_start_activates_split_and_editor_recovers_full_view);
+    RUN(test_small_drawable_preserves_join_and_recovers_split);
     RUN(test_controller_aim_uses_its_crop_in_a_far_negative_world);
     RUN(test_split_camera_keeps_both_moving_players_framed_across_chunks);
     RUN(test_gameplay_ignores_other_window_focus_and_keys);

@@ -23,6 +23,9 @@ static unsigned candidate_bodies, candidate_parcels, visible_poses, retired_driv
 static max_align_t existing_drive, next_drive, existing_ray, next_ray;
 static bool test_admission;
 static const char join_error[] = "Injected new-player setup failure";
+static const char split_error[] = "Fixture drawable cannot fit a split layout";
+static bool split_fits;
+static uint32_t displayed_bands, controller_viewport;
 
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); } while (0)
 #define ASSERT_TRUE(expr) do { if (!(expr)) { \
@@ -136,8 +139,13 @@ bool fr_fire_ray_gpu_submit(fr_fire_ray_gpu_t *ray, const fr_fire_ray_input_t *i
 
 bool dc_player_view_aim(dc_level_view_t *view, uint32_t viewport, bool controller,
     const fr_input_state_t *input, fr_player_point_t *target) {
-    (void)view; (void)viewport; (void)controller; (void)input; (void)target;
+    (void)view; (void)input; (void)target;
+    if (controller) controller_viewport = viewport;
     return false;
+}
+
+void dc_player_view_reticle(dc_level_view_t *level, uint32_t viewport, const fr_player_point_t *target) {
+    (void)level; (void)viewport; (void)target;
 }
 
 void dc_player_view_follow(dc_level_view_t *view, const uint32_t *ids, uint32_t count) {
@@ -220,12 +228,19 @@ void fr_fire_ray_gpu_commit_emitter(fr_fire_ray_gpu_t *ray, const fr_player_body
 
 bool dc_gpu_set_split_presentation(dc_gpu_t *gpu, uint32_t count, const dc_presentation_focus_t *crops) {
     (void)gpu; (void)count; (void)crops;
-    return false;
+    if (count && !split_fits) return false;
+    displayed_bands = count;
+    return true;
 }
 
 bool dc_player_view_split(dc_level_view_t *level, const uint32_t *ids, uint32_t count, char *err, uint32_t cap) {
-    (void)level; (void)ids; (void)count; (void)err; (void)cap;
-    return false;
+    (void)level; (void)ids;
+    if (!split_fits) {
+        if (err && cap) snprintf(err, cap, "%s", split_error);
+        return false;
+    }
+    displayed_bands = count;
+    return true;
 }
 
 static bool begin_cast(struct dc_player_session *s, bool ice) {
@@ -461,6 +476,60 @@ static void test_failed_drive_preparation_rolls_join_back(void) { check_join_rol
 static void test_failed_ray_preparation_rolls_join_back(void) { check_join_rolls_back(JOIN_RAY_FAILS); }
 static void test_failed_sprite_preparation_rolls_join_back(void) { check_join_rolls_back(JOIN_SPRITE_FAILS); }
 
+static bool start_second_seat(struct dc_player_session *session, dc_chunk_slot_t *slot) {
+    if (!begin_cast(session, false)) return false;
+    *slot = (dc_chunk_slot_t){.coord = {-1, -1}, .state = DC_SLOT_ACTIVE};
+    view.table = (dc_chunk_table_t){.slots = slot, .capacity = 1u};
+    saved_owner = (dc_body_storage_owner_t){0};
+    join_fault = JOIN_READY;
+    test_admission = true;
+    displayed_bands = 0u;
+    const SDL_Event start = {.cbutton = {.type = SDL_CONTROLLERBUTTONDOWN, .which = 43,
+        .button = SDL_CONTROLLER_BUTTON_START}};
+    return dc_players_event(&view, &start);
+}
+
+static void test_start_recovers_split_without_rejoining_after_layout_rejection(void) {
+    struct dc_player_session session;
+    dc_chunk_slot_t slot;
+    split_fits = false;
+    ASSERT_TRUE(start_second_seat(&session, &slot));
+    ASSERT_EQ(session.count, 2u);
+    ASSERT_EQ(displayed_bands, 0u);
+    printf("Rejected Start layout with %u seats sets failure to '%s'\n", session.count, session.failure);
+    ASSERT_TRUE(dc_players_step(&view, .05f, error_buf, sizeof(error_buf)));
+    ASSERT_TRUE(dc_players_present(&view, error_buf, sizeof(error_buf)));
+    uint32_t body = session.bodies[1].binding.body_id;
+    split_fits = true;
+    ASSERT_TRUE(dc_players_present(&view, error_buf, sizeof(error_buf)));
+    ASSERT_EQ(displayed_bands, 2u);
+    ASSERT_EQ(session.bodies[1].binding.body_id, body);
+    PASS();
+}
+
+static void test_rejected_split_refresh_falls_back_and_rebinds_aim_on_recovery(void) {
+    struct dc_player_session session;
+    dc_chunk_slot_t slot;
+    split_fits = true;
+    ASSERT_TRUE(start_second_seat(&session, &slot));
+    ASSERT_EQ(displayed_bands, 2u);
+    split_fits = false;
+    bool refreshed = dc_players_present(&view, error_buf, sizeof(error_buf));
+    printf("Rejected active layout refresh returned %d with %u bands\n", refreshed, displayed_bands);
+    ASSERT_TRUE(refreshed);
+    ASSERT_EQ(displayed_bands, 0u);
+    controller_viewport = UINT32_MAX;
+    ASSERT_TRUE(dc_players_step(&view, .05f, error_buf, sizeof(error_buf)));
+    ASSERT_EQ(controller_viewport, 0u);
+    split_fits = true;
+    ASSERT_TRUE(dc_players_present(&view, error_buf, sizeof(error_buf)));
+    ASSERT_EQ(displayed_bands, 2u);
+    ASSERT_TRUE(dc_players_step(&view, .05f, error_buf, sizeof(error_buf)));
+    ASSERT_EQ(controller_viewport, 1u);
+    ASSERT_EQ(session.device[1], 43);
+    PASS();
+}
+
 int main(void) {
     RUN(test_bolt_backend_failure_stops_the_step);
     RUN(test_storm_backend_failure_stops_the_step);
@@ -476,6 +545,8 @@ int main(void) {
     RUN(test_failed_drive_preparation_rolls_join_back);
     RUN(test_failed_ray_preparation_rolls_join_back);
     RUN(test_failed_sprite_preparation_rolls_join_back);
+    RUN(test_start_recovers_split_without_rejoining_after_layout_rejection);
+    RUN(test_rejected_split_refresh_falls_back_and_rebinds_aim_on_recovery);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
