@@ -40,8 +40,15 @@ static void test_native_checkpoint_preserves_compensation_geometry_valves_and_ow
         fr_gas_gpu_gate(g,24,0,1,64,0,true,err,sizeof(err))&&fr_gas_gpu_step(g,.02f,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_export_checkpoint(g,0,before,err,sizeof(err)));
     ASSERT_TRUE(before->cells[0][12]==.75f&&before->cells[0][13]==.75f&&before->gates[24]==1u);
+    before->cells[25][FR_GAS_EXHAUST]=0x1p-18f;
+    before->cells[25][FR_GAS_SOOT]=0x1p-19f;
+    before->carrier_tail[25][0]=0x1p-47f;
+    before->carrier_tail[25][1]=-0x1p-48f;
     ASSERT_TRUE(fr_gas_gpu_import_checkpoint(g,1,before,err,sizeof(err))&&fr_gas_gpu_export_checkpoint(g,1,after,err,sizeof(err)));
     ASSERT_EQ(memcmp(before,after,sizeof(*before)),0);
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,1,input,4096u,err,sizeof(err)));
+    ASSERT_EQ(input[25].species[FR_GAS_EXHAUST],0x1p-18+0x1p-47);
+    ASSERT_EQ(input[25].species[FR_GAS_SOOT],0x1p-19-0x1p-48);
     before->cells[4095][0]=-1.f;
     ASSERT_TRUE(!fr_gas_gpu_import_checkpoint(g,1,before,err,sizeof(err)));
     before->cells[4095][0]=after->cells[4095][0];

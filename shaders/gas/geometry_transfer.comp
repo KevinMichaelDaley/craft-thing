@@ -7,7 +7,7 @@ vec2 geometry_stock_debit(vec2 donor,vec2 kept,float share) {
     return gas_scale_stock(debit,share);
 }
 
-Gas geometry_receive_contracted_share(Gas recipient,Gas donor,float retention,float share) {
+Gas geometry_receive_debit(Gas recipient,Gas donor,float retention,float share) {
     Gas kept=geometry_scale_packet(donor,retention);
     /* Distribute the represented donor debit, including its scaling roundoff. */
     precise vec4 species=(donor.species-kept.species)*share;
@@ -74,7 +74,7 @@ void main() {
                 if(gas_mass(donor)>0.) {
                     vec2 donor_retention=geometry_retention(q,donor,metadata.x);
                     if(donor_retention.x<1.&&donor_retention.y>0.) {
-                        value=geometry_receive_contracted_share(value,donor,donor_retention.x,
+                        value=geometry_receive_debit(value,donor,donor_retention.x,
                             available/donor_retention.y);
                         changed=true;
                     }
@@ -91,14 +91,12 @@ void main() {
                 if(donor_volume>0.) {
                     uint other=gas_atlas(q);Gas donor=gas_world(other);
                     float demand=geometry_demand_cached(q);
-                    float fraction=(growth*donor_volume/capacity)/(donor_volume+demand);
-                    GasFlux incoming=GasFlux(vec4(donor.species.xy,0.,donor.species.w)*fraction,
-                        vec4(0.,gas_energy(donor),donor.dynamics.zw)*fraction,
-                        donor.visual.rgb*fraction);
-                    value=gas_add_carrier_stocks(gas_add_flux(value,incoming,1.),
-                        gas_scale_stock(gas_exhaust_stock(donor),fraction),
-                        gas_scale_stock(gas_soot_stock(donor),fraction));
-                    value.geometry.w+=donor.geometry.w*fraction;changed=true;
+                    if(demand>0.) {
+                        float retention=donor_volume/(donor_volume+demand);
+                        float share=(growth*donor_volume/capacity)/demand;
+                        value=geometry_receive_debit(value,donor,retention,share);
+                        changed=true;
+                    }
                     break;
                 }
                 if(!geometry_growth_transit(q)) break;

@@ -80,3 +80,7 @@ The 9513f4f3 late arithmetic capture matched the locked replay at second 141 (+4
 **2026-11-26T19:48:34Z**
 
 A native Vulkan RED fixture compiles and reproduces +0.082763672 Q16 of soot drift during one bounded explicit step through 512 fixed two-cell channels, with the same positive drift on the shared and cached-rate shaders. The receiving cell gains stock and both audits report valid packets. This isolates the stored-stock rounding without surface combustion, changing void, or pressure movement between channels.
+
+**2026-11-26T19:58:16Z**
+
+The RED fixture failed both explicit shaders with +0.082763672 Q16 of soot during a single accepted step. GPU packets now retain the two carrier remainders, and audit, geometric remapping, chemical products, publication, and checkpoint reads preserve them. Both explicit routes measure 0.000000000 Q16 for both species while the receiving cell gains stock. Nine focused native gas cases passed before the geometry debit refactor. The v9 and v10 files written before the layout change both load with their original fields and zero remainders. New stream tests round-trip nonzero remainders with and without bulk liquids. The locked Greek and oil replay remains required.

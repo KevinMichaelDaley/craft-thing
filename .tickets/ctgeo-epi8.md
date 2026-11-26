@@ -30,3 +30,7 @@ Correction from native tracing: sparse RHS and sparse large are enabled by defau
 **2026-11-26T19:40:24Z**
 
 The corrected displayed fixture passes both with default options and with sparse RHS and sparse large inherited as zero. It enables the two prerequisites locally and restores their prior values. It confirms lazy shader execution during the eight accepted steps, eager shader exclusion, 53 versus 53 dispatches, and bit-identical active, quiet, and dormant snapshots. The full displayed publication and whole-project suites are pending.
+
+**2026-11-26T19:58:16Z**
+
+The exact b1ea20ab displayed suite confirmed lazy clear ran and produced exact snapshots at 53 versus 53 dispatches. It completed with 93 passed, 4 failed and 10 capability skips. The remaining failures are the three fused submit counts and the subgrid momentum check, which have separate tickets. Whole-project make test remains queued.

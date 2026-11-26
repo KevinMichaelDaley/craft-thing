@@ -16,3 +16,9 @@ The 9513f4f3 displayed publication suite fails test_native_subgrid_smoke_gains_d
 ## Acceptance Criteria
 
 Reproduce in isolation, trace the net perturbation and mean force, then preserve the existing momentum, stock, energy, and visible-detail bounds.
+
+## Notes
+
+**2026-11-26T19:58:16Z**
+
+On b2710a77 the isolated subgrid check passed, with momentum changes -0.000003596 and -0.000032560. It still failed inside the complete b1ea20ab publication run. Compare fixture environment and prior-case option restoration before changing the subgrid solver.
