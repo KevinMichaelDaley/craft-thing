@@ -47,6 +47,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
     uint32_t requested_width=group_rate&&saved[1]&&strcmp(saved[1],"256")==0?256u:128u;
     for(uint32_t path=0;path<2;path++) {
         ASSERT_EQ(SDL_setenv(names[1],path?(line_group?"512":(group_rate&&requested_width==256u?"256":"1")):"0",1),0);dc_gpu_t *g=NULL;
+        bool lazy_clear_executed=false;
         ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
         double gravity=cached_neighbors||(lean_metadata&&getenv("DC_GAS_DIAG_ZERO_GRAVITY"))?0:900;
         ASSERT_TRUE(fr_gas_gpu_enable(g,&m,.0012,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&fr_gas_gpu_set_gravity(g,gravity,err,sizeof(err)));
@@ -74,7 +75,10 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
             g_pressure_dispatches=0;g_direct_dispatches=0;g_copy_bytes=0;g_transfer_scope_barriers=0;
             g_previous_compute_pipeline=VK_NULL_HANDLE;g_repeated_compute_bindings=0;
             ASSERT_TRUE(fr_gas_gpu_step(g,metadata?.04f:.02f,err,sizeof(err)));
-            if(lazy_clear&&step==1u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_lazy_clear_metadata(g,&used));ASSERT_EQ(used,path!=0u);}
+            if(lazy_clear) {
+                bool used=false;ASSERT_TRUE(fr_gas_gpu_lazy_clear_metadata(g,&used));
+                lazy_clear_executed|=used;
+            }
             if(rhs_tile_cache&&step==1u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_rhs_tile_metadata(g,&used));ASSERT_EQ(used,path!=0u);}
             if(reuse_rate&&step==0u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_reused_line_rate(g,&used));ASSERT_EQ(used,path!=0u);}
             if(cell_owners&&step==0u) {bool used=false;ASSERT_TRUE(fr_gas_gpu_sparse_owner_metadata(g,&used));ASSERT_EQ(used,path!=0u);}
@@ -82,6 +86,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
             if(cached_neighbors&&step==0u) ASSERT_TRUE(fr_gas_gpu_activity_metadata(g,activity_modes+path));
             if(zero_energy&&step==0u) ASSERT_TRUE(fr_gas_gpu_zero_energy_metadata(g,zero_energy_used+path));
         }
+        if(lazy_clear) ASSERT_EQ(lazy_clear_executed,path!=0u);
         work[path]=g_pressure_dispatches+g_direct_dispatches;
         ASSERT_TRUE(fr_gas_gpu_sor_tile_metadata(g,large_sor_used+path)&&fr_gas_gpu_sor_tile_size(g,large_sor_sizes+path));
         copy_bytes[path]=g_copy_bytes;
