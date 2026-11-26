@@ -134,6 +134,40 @@ static bool storm_target_cell(dc_gpu_t *gpu, const fr_player_point_t *target,
     return true;
 }
 
+static uint32_t storm_page_distance(uint32_t cell, uint32_t page) {
+    uint32_t low = page * DC_CHUNK_SIDE, high = low + DC_CHUNK_SIDE - 1u;
+    if (cell < low) return low - cell;
+    return cell > high ? cell - high : 0u;
+}
+
+static bool storm_world_pages_match(dc_gpu_t *gpu, const fr_player_point_t *target,
+                                    uint32_t x, uint32_t y, uint32_t radius) {
+    const uint32_t *pages = gpu->page_mapped;
+    uint32_t first_column = (x - radius) / DC_CHUNK_SIDE;
+    uint32_t last_column = (x + radius) / DC_CHUNK_SIDE;
+    uint32_t first_row = (y - radius) / DC_CHUNK_SIDE;
+    uint32_t last_row = (y + radius) / DC_CHUNK_SIDE;
+    for (uint32_t row = first_row; row <= last_row; ++row)
+        for (uint32_t column = first_column; column <= last_column; ++column) {
+            uint32_t dx = storm_page_distance(x, column), dy = storm_page_distance(y, row);
+            if (dx * dx + dy * dy > radius * radius) continue;
+            int32_t offset_x = (int32_t)column - (int32_t)(x / DC_CHUNK_SIDE);
+            int32_t offset_y = (int32_t)row - (int32_t)(y / DC_CHUNK_SIDE);
+            if ((offset_x < 0 && target->chunk.x == INT64_MIN) ||
+                (offset_x > 0 && target->chunk.x == INT64_MAX) ||
+                (offset_y < 0 && target->chunk.y == INT64_MIN) ||
+                (offset_y > 0 && target->chunk.y == INT64_MAX)) return false;
+            dc_chunk_coord_t coord = {target->chunk.x + offset_x, target->chunk.y + offset_y};
+            uint32_t physical_page = row * gpu->page_width + column;
+            uint32_t mapped = pages[physical_page];
+            uint32_t slot = dc_gpu_find_active_chunk(gpu, coord);
+            if (slot == UINT32_MAX) {
+                if (mapped != 0u) return false;
+            } else if (mapped != slot + 1u || gpu->slot_page[slot] != physical_page) return false;
+        }
+    return true;
+}
+
 bool fr_player_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,
                               uint32_t radius, char *err_buf, uint32_t err_cap) {
     if (!gpu || !target || radius == 0u || radius > STORM_MAX_RADIUS ||
@@ -143,9 +177,11 @@ bool fr_player_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,
     uint32_t x, y;
     if (!storm_target_cell(gpu, target, &x, &y))
         return error(err_buf, err_cap, "Ice storm target is outside the active pages");
-    if (x < radius || y < radius || x + radius >= gpu->width ||
-        y + radius >= gpu->height)
+    if (x < radius || y < radius || x >= gpu->width || y >= gpu->height ||
+        radius >= gpu->width - x || radius >= gpu->height - y)
         return error(err_buf, err_cap, "Ice storm extends outside the active grid");
+    if (!storm_world_pages_match(gpu, target, x, y, radius))
+        return error(err_buf, err_cap, "Ice storm footprint has a mismatched world page");
     if (!dc_gpu_paint_material(gpu, x, y, radius, DC_MATERIAL_WATER,
                                err_buf, err_cap))
         return false;
