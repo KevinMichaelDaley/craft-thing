@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "gpu_internal.h"
 #include "gas_gpu_internal.h"
@@ -209,7 +210,8 @@ bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
 }
 
 bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    if(gpu&&fr_combustion_gpu_enabled(gpu)&&getenv("DC_FRAME_TIMINGS")) {
+    const char *timings=getenv("DC_FRAME_TIMINGS");
+    if(gpu&&fr_combustion_gpu_enabled(gpu)&&timings&&strcmp(timings,"0")!=0) {
         dc_gpu_tick_capture_t capture;
         if(!tick_submit(gpu,&capture,err,cap)) return false;
         fprintf(stderr,"Reactive tick GPU rigid%.3f fluid%.3f mpm_heat%.3f ms\n",
