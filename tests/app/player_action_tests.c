@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #include "dungeoncraft/material_density.h"
+#include "ferrum/fire/gpu.h"
 #include "../../src/app/player_session.h"
 #include "../../src/app/view_config.h"
 
@@ -114,6 +115,36 @@ static void test_selected_cast_latches_aim_and_fires_once_at_frame_six(void) {
     ASSERT_TRUE(read_cell(170, 42, &first) && read_cell(202, 42, &second));
     ASSERT_EQ(first.fluid_mass, 0u);
     ASSERT_EQ(second.fluid_mass, 0u);
+    PASS();
+}
+
+static void test_keyboard_fire_bolt_leaves_the_live_beaver_as_a_burning_body(void) {
+    ASSERT_TRUE(open_fixture());
+    dc_gpu_t *gpu = dc_level_view_gpu(view);
+    fr_player_t player;
+    fr_beaver_body_t beaver;
+    ASSERT_TRUE(dc_players_status(view, 0, &player, &beaver));
+    dc_gpu_world_body_t caster, projectile;
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu, beaver.binding.body_id, &caster,
+                                       err, sizeof(err)));
+    uint32_t expected_id = dc_gpu_next_body_id(gpu);
+    ASSERT_TRUE(expected_id && aim(0, 175, 56));
+    ASSERT_TRUE(tap(SDL_SCANCODE_Q) && step(.25f) && step(.15625f));
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu, expected_id, &projectile, err, sizeof(err)));
+    int64_t delta = (projectile.chunk.x - caster.chunk.x) * DC_CHUNK_SIDE * DC_FLUID_FULL +
+                    projectile.body.x_fp - caster.body.x_fp;
+    ASSERT_TRUE(delta >= (int64_t)caster.body.width * DC_FLUID_FULL);
+    ASSERT_TRUE(projectile.body.vx_fp > 3 * (int32_t)DC_FLUID_FULL);
+    fr_reactive_record_t parcel;
+    bool found;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, expected_id, 1, 1, &parcel, &found,
+                                          err, sizeof(err)) && found);
+    ASSERT_EQ(parcel.owner.key[0], expected_id);
+    ASSERT_EQ(parcel.state.material, DC_MATERIAL_COAL);
+    ASSERT_TRUE((parcel.state.flags & FR_REACTIVE_FLAMING) != 0u);
+    uint32_t next = dc_gpu_next_body_id(gpu);
+    ASSERT_TRUE(step(.25f) && step(.25f));
+    ASSERT_EQ(dc_gpu_next_body_id(gpu), next);
     PASS();
 }
 
@@ -252,6 +283,7 @@ static void test_paid_placement_is_typed_and_rejects_occupied_cells(void) {
 
 int main(void) {
     RUN(test_selected_cast_latches_aim_and_fires_once_at_frame_six);
+    RUN(test_keyboard_fire_bolt_leaves_the_live_beaver_as_a_burning_body);
     RUN(test_controller_selection_and_cast_belong_to_its_seat);
     RUN(test_empty_inventory_places_neither_terrain_nor_body);
     RUN(test_paid_placement_is_typed_and_rejects_occupied_cells);

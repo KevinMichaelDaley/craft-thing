@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "dungeoncraft/gpu.h"
@@ -12,7 +13,7 @@
 
 static int g_pass, g_fail;
 static void teardown(void);
-#define RUN(fn) do {printf("RUN %s\n",#fn);fn();teardown();} while (0)
+#define RUN(fn) do {printf("RUN %s\n",#fn);fflush(stdout);fn();teardown();} while (0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s [%s]\n",__LINE__,#e,err);g_fail++;return;}} while (0)
 #define ASSERT_EQ(a, b) ASSERT_TRUE((a) == (b))
 #define ASSERT_INT_EQ(a, b) ASSERT_TRUE((int)(a) == (int)(b))
@@ -113,14 +114,15 @@ static void test_fire_bolt_spawns_burning_body_toward_target(void) {
 static void test_fire_bolt_ignites_wood_on_impact(void) {
     ASSERT_TRUE(setup_world());
     /* Drop the bolt straight down into the wood wall at row 30. */
-    fr_player_point_t origin = point_at(220.f, 210.f);
+    fr_player_point_t origin = point_at(220.f, 204.f);
     fr_player_point_t target = point_at(220.f, 224.f);
     uint32_t bolt = 0u;
     ASSERT_TRUE(fr_player_cast_fire_bolt(gpu, 7u, &origin,
                                          &target, &bolt, err, sizeof(err)));
     ASSERT_TRUE(bolt != 0u);
     /* Follow the bolt while it flies and report where it ends up. */
-    dc_gpu_world_body_t flight;
+    dc_gpu_world_body_t initial, flight;
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu, bolt, &initial, err, sizeof(err)));
     dc_gpu_body_record_t *rec = dc_gpu_find_body_record(gpu, bolt);
     if (rec)
         printf("bolt record visible %u enabled %u awake_word %u vx %d rest %u motion_ready %u\n",
@@ -128,6 +130,11 @@ static void test_fire_bolt_ignites_wood_on_impact(void) {
                rec->body.vx_fp, rec->rest_ticks, rec->motion_ready);
     for (uint32_t tick = 0u; tick < 12u; tick++) {
         ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+        if (tick == 0u) {
+            ASSERT_TRUE(dc_gpu_read_world_body(gpu, bolt, &flight, err, sizeof(err)));
+            ASSERT_EQ(flight.chunk.y, initial.chunk.y);
+            ASSERT_TRUE(flight.body.y_fp > initial.body.y_fp);
+        }
         if (dc_gpu_read_world_body(gpu, bolt, &flight, err, sizeof(err)))
             printf("bolt tick %u at %.1f,%.1f v %.2f,%.2f\n", tick,
                    (float)flight.chunk.x * 64.f +
@@ -185,6 +192,138 @@ static void test_fire_bolt_ignites_wood_on_impact(void) {
     }
     printf("wall hottest %.4g over ambient %.4g\n", hottest, 264.);
     ASSERT_TRUE(hottest > 264. * 1.4);
+    PASS();
+}
+
+static bool map_empty(uint32_t slot, dc_chunk_coord_t coord,
+                      uint32_t page_x, uint32_t page_y) {
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    if (!chunk) return false;
+    chunk->coord = coord;
+    bool okay = dc_gpu_upload_chunk(gpu, slot, chunk, err, sizeof(err)) &&
+                dc_gpu_set_page(gpu, page_x, page_y, slot, err, sizeof(err));
+    free(chunk);
+    return okay;
+}
+
+static uint16_t terrain_at(uint32_t slot, uint32_t x, uint32_t y) {
+    dc_chunk_t *chunk = malloc(sizeof(*chunk));
+    if (!chunk) return UINT16_MAX;
+    bool okay = dc_gpu_download_chunk(gpu, slot, chunk, err, sizeof(err));
+    uint16_t material = okay ? chunk->cells[y * DC_CHUNK_SIDE + x].material : UINT16_MAX;
+    free(chunk);
+    return material;
+}
+
+static void test_fire_bolt_owns_every_burning_texel_across_a_streamed_seam(void) {
+    ASSERT_TRUE(setup_world());
+    const dc_chunk_coord_t left = {-20, 118}, right = {-19, 118};
+    ASSERT_TRUE(map_empty(12u, left, 2u, 2u));
+    ASSERT_TRUE(map_empty(13u, right, 3u, 2u));
+    ASSERT_TRUE(dc_gpu_set_body_origin(gpu, (dc_chunk_coord_t){-22, 116},
+                                      err, sizeof(err)));
+    const fr_player_point_t origin = {left, 55.f, 16.f};
+    const fr_player_point_t target = {right, 20.f, 16.f};
+    uint32_t bolt;
+    ASSERT_TRUE(fr_player_cast_fire_bolt(gpu, 7u, &origin, &target, &bolt,
+                                         err, sizeof(err)));
+    dc_gpu_world_body_t body;
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu, bolt, &body, err, sizeof(err)));
+    ASSERT_EQ(body.chunk.x, left.x);
+    ASSERT_EQ(body.chunk.y, left.y);
+    ASSERT_EQ(body.body.x_fp, 62 * DC_FLUID_FULL);
+    ASSERT_EQ(body.body.y_fp, 15 * DC_FLUID_FULL);
+    ASSERT_EQ(body.body.vx_fp, 4 * DC_FLUID_FULL);
+    ASSERT_EQ(body.body.vy_fp, 0);
+    dc_gpu_body_pixel_t pixels[5];
+    uint32_t count;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu, bolt, pixels, 5u, &count,
+                                       err, sizeof(err)));
+    ASSERT_EQ(count, 5u);
+    uint64_t ids[5] = {0};
+    uint32_t generation = 0;
+    for (uint32_t i = 0u; i < count; ++i) {
+        ASSERT_EQ(pixels[i].material, DC_GPU_BODY_COAL);
+        fr_reactive_record_t parcel;
+        bool found;
+        ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, bolt, pixels[i].x, pixels[i].y,
+                                              &parcel, &found, err, sizeof(err)));
+        ASSERT_TRUE(found);
+        ASSERT_EQ(parcel.owner.kind, FR_REACTIVE_OWNER_BODY);
+        ASSERT_EQ(parcel.owner.key[0], bolt);
+        if (!i) generation = parcel.owner.key[1];
+        ASSERT_TRUE(generation != 0u);
+        ASSERT_EQ(parcel.owner.key[1], generation);
+        ASSERT_EQ(parcel.state.material, DC_MATERIAL_COAL);
+        ASSERT_TRUE(parcel.state.fuel_mass_fp != 0u);
+        ASSERT_TRUE((parcel.state.flags & FR_REACTIVE_FLAMING) != 0u);
+        ids[i] = ((uint64_t)parcel.state.parcel_id_high << 32) | parcel.state.parcel_id_low;
+        for (uint32_t previous = 0; previous < i; ++previous)
+            ASSERT_TRUE(ids[previous] != ids[i]);
+    }
+    ASSERT_EQ(terrain_at(12u, 63u, 16u), DC_MATERIAL_AIR);
+    ASSERT_EQ(terrain_at(13u, 0u, 16u), DC_MATERIAL_AIR);
+    PASS();
+}
+
+static void test_repeated_bolts_leave_unrelated_bodies_and_terrain_alone(void) {
+    ASSERT_TRUE(setup_world());
+    const uint32_t decoy_id = UINT32_C(0x80000001);
+    dc_gpu_world_body_t decoy = {{3, 3}, {.x_fp = 18 * DC_FLUID_FULL,
+        .y_fp = 18 * DC_FLUID_FULL, .width = 1, .height = 1, .id = decoy_id, .active = 1}};
+    ASSERT_TRUE(dc_gpu_spawn_world_body(gpu, decoy, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(gpu, 246u, 204u, 0u, DC_MATERIAL_WOOD,
+                                     err, sizeof(err)));
+    const fr_player_point_t origins[] = {point_at(200.f, 210.f), point_at(200.f, 217.f)};
+    const fr_player_point_t targets[] = {point_at(232.f, 210.f), point_at(232.f, 217.f)};
+    uint32_t first, second;
+    dc_gpu_extraction_stats_t before, after;
+    ASSERT_TRUE(dc_gpu_read_extraction_stats(gpu, &before));
+    ASSERT_TRUE(fr_player_cast_fire_bolt(gpu, 7u, &origins[0], &targets[0],
+                                         &first, err, sizeof(err)));
+    ASSERT_TRUE(fr_player_cast_fire_bolt(gpu, 8u, &origins[1], &targets[1],
+                                         &second, err, sizeof(err)));
+    ASSERT_TRUE(first && second && first != second && first != decoy_id && second != decoy_id);
+    ASSERT_TRUE(dc_gpu_read_extraction_stats(gpu, &after));
+    ASSERT_EQ(after.owned_bodies, before.owned_bodies + 2u);
+    dc_gpu_world_body_t still;
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu, decoy_id, &still, err, sizeof(err)));
+    ASSERT_EQ(still.body.vx_fp, 0);
+    ASSERT_EQ(still.body.vy_fp, 0);
+    ASSERT_EQ(terrain_at(11u, 54u, 12u), DC_MATERIAL_WOOD);
+    fr_reactive_record_t a, b;
+    bool found;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, first, 1u, 1u, &a, &found,
+                                          err, sizeof(err)) && found);
+    ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, second, 1u, 1u, &b, &found,
+                                          err, sizeof(err)) && found);
+    ASSERT_TRUE(a.state.parcel_id_low != b.state.parcel_id_low ||
+                a.state.parcel_id_high != b.state.parcel_id_high);
+    PASS();
+}
+
+static void test_fire_bolt_rejects_occupied_and_unmapped_footprints(void) {
+    ASSERT_TRUE(setup_world());
+    const fr_player_point_t origin = point_at(220.f, 214.f);
+    const fr_player_point_t target = point_at(240.f, 214.f);
+    ASSERT_TRUE(dc_gpu_paint_material(gpu, 228u, 214u, 0u, DC_MATERIAL_STONE,
+                                     err, sizeof(err)));
+    dc_gpu_extraction_stats_t before, after;
+    ASSERT_TRUE(dc_gpu_read_extraction_stats(gpu, &before));
+    uint32_t bolt = UINT32_MAX;
+    ASSERT_TRUE(!fr_player_cast_fire_bolt(gpu, 7u, &origin, &target, &bolt,
+                                          err, sizeof(err)));
+    ASSERT_EQ(bolt, 0u);
+    ASSERT_EQ(terrain_at(11u, 36u, 22u), DC_MATERIAL_STONE);
+    ASSERT_EQ(terrain_at(11u, 35u, 22u), DC_MATERIAL_AIR);
+    const fr_player_point_t edge = {{3, 3}, 62.f, 14.f};
+    const fr_player_point_t beyond = {{4, 3}, 20.f, 14.f};
+    bolt = UINT32_MAX;
+    ASSERT_TRUE(!fr_player_cast_fire_bolt(gpu, 7u, &edge, &beyond, &bolt,
+                                          err, sizeof(err)));
+    ASSERT_EQ(bolt, 0u);
+    ASSERT_TRUE(dc_gpu_read_extraction_stats(gpu, &after));
+    ASSERT_EQ(after.owned_bodies, before.owned_bodies);
     PASS();
 }
 static void test_ice_storm_chills_cells_within_radius(void) {
@@ -319,6 +458,9 @@ int main(void) {
     printf("=== Player Ability Cast Tests ===\n\n");
     RUN(test_fire_bolt_spawns_burning_body_toward_target);
     RUN(test_fire_bolt_ignites_wood_on_impact);
+    RUN(test_fire_bolt_owns_every_burning_texel_across_a_streamed_seam);
+    RUN(test_repeated_bolts_leave_unrelated_bodies_and_terrain_alone);
+    RUN(test_fire_bolt_rejects_occupied_and_unmapped_footprints);
     RUN(test_ice_storm_chills_cells_within_radius);
     RUN(test_ice_storm_bounds_its_area);
     RUN(test_ice_storm_rejects_zero_radius);
