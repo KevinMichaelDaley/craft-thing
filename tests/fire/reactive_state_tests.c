@@ -43,6 +43,27 @@ static void test_fractional_coating_mass_is_valid_and_counted(void) {
     ASSERT_TRUE(fabs(fr_reactive_state_heat_capacity(&state)-
         fr_reactive_state_heat_capacity(&rounded)-expected)<1e-9);PASS();
 }
+static void test_body_surface_profile_cannot_be_saved_as_terrain(void) {
+    char err[128];
+    fr_reactive_record_t record = {
+        .owner = {FR_REACTIVE_OWNER_BODY, {17u, 1u, 2u, 3u, 0u}}
+    };
+    ASSERT_TRUE(fr_reactive_state_default(FR_REACTIVE_BEAVER_FUR,39322u,0,293.15f,
+        9u,&record.state,err,sizeof(err)));
+    size_t size=0,written=0;
+    ASSERT_TRUE(fr_reactive_snapshot_size(1,&size));
+    uint8_t *bytes=malloc(size);
+    ASSERT_TRUE(bytes);
+    bool body=fr_reactive_snapshot_encode(&record,1,10u,bytes,size,&written,err,sizeof(err));
+    record.owner=fr_reactive_cell_owner((dc_chunk_coord_t){0,0},2u);
+    bool cell=fr_reactive_snapshot_encode(&record,1,10u,bytes,size,&written,err,sizeof(err));
+    record.owner=(fr_reactive_owner_t){FR_REACTIVE_OWNER_PARTICLE,{1u,0u,1u,0u,0u}};
+    bool particle=fr_reactive_snapshot_encode(&record,1,10u,bytes,size,&written,err,sizeof(err));
+    free(bytes);
+    ASSERT_TRUE(body);
+    ASSERT_TRUE(!cell&&!particle);
+    PASS();
+}
 static void test_fracture_splits_fractional_coating_mass_once(void) {
     char err[128];fr_reactive_state_t state,left,right;
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322u,0u,300.f,
@@ -197,6 +218,7 @@ int main(void) {
     _Static_assert(sizeof(fr_reactive_state_t)==FR_REACTIVE_STATE_WORDS*4u,"Reactive state ABI changed");
     _Static_assert(offsetof(fr_reactive_state_t,thermal_energy)==68u,"Reactive energy offset changed");
     RUN(test_default_composition_preserves_exact_mass_and_temperature);
+    RUN(test_body_surface_profile_cannot_be_saved_as_terrain);
     RUN(test_fractional_coating_mass_is_valid_and_counted);
     RUN(test_fracture_splits_fractional_coating_mass_once);
     RUN(test_coating_remainder_roundtrips_current_packet);

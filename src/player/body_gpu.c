@@ -25,8 +25,9 @@ static bool beaver_body_created_by(const dc_body_storage_owner_t *owner,uint64_t
 bool fr_beaver_body_admit(dc_gpu_t *g,uint64_t identity,uint64_t transaction,
     uint32_t slot,dc_chunk_coord_t spawn,int32_t x,int32_t y,fr_beaver_body_t *out,
     char *err,uint32_t cap) {
+    const int32_t chunk_extent=DC_CHUNK_SIDE*DC_FLUID_FULL;
     if(!g||!identity||!transaction||slot>=DC_GPU_CHUNK_SLOTS||!out||
-       x<0||y<0||x>=64*65536||y>=64*65536)
+       x<0||y<0||x>=chunk_extent||y>=chunk_extent)
         return beaver_body_error(err,cap,"Invalid cold player admission");
     for(uint32_t s=0;s<dc_gpu_body_capacity(g);s++)
         if(beaver_body_created_by(dc_gpu_body_owner(g,s),transaction))
@@ -51,7 +52,8 @@ bool fr_beaver_body_admit(dc_gpu_t *g,uint64_t identity,uint64_t transaction,
     uint64_t high=g->reactive?g->reactive->high_id:0;
     for(uint32_t source=1;source<=FR_BEAVER_PIXELS&&okay;source++) {
         fr_beaver_source_t meta;if(!fr_beaver_source(source,&meta)) continue;
-        uint32_t rx=(source-1u)%FR_BEAVER_WIDTH,ry=(source-1u)/FR_BEAVER_WIDTH,cell=ry*DC_CHUNK_SIDE+rx;
+        uint32_t rx=(source-1u)%FR_BEAVER_WIDTH,ry=(source-1u)/FR_BEAVER_WIDTH;
+        uint32_t cell=ry*DC_CHUNK_SIDE+rx;
         const fr_reactive_profile_t *profile=fr_reactive_profile(meta.reactive_material);
         if(!profile||high>=UINT64_MAX-1u) {okay=beaver_body_error(err,cap,"Invalid player material or exhausted parcel IDs");break;}
         uint32_t mass=(uint32_t)lroundf(profile->density*DC_FLUID_FULL);

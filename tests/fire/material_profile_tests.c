@@ -47,6 +47,10 @@ static void test_fur_and_textile_have_distinct_heat_and_moisture_response(void) 
     ASSERT_TRUE(fr_reactive_profile_valid(textile,err,sizeof(err)));
     ASSERT_TRUE(fr_reactive_profile_valid(tail,err,sizeof(err)));
     ASSERT_EQ(fr_reactive_profile_for_body(2u)->material,DC_MATERIAL_WOOD);
+    ASSERT_TRUE(fr_reactive_profile_matches_body(DC_MATERIAL_WOOD,2u));
+    ASSERT_TRUE(fr_reactive_profile_matches_body(fur->material,2u));
+    ASSERT_TRUE(!fr_reactive_profile_matches_body(fur->material,1u));
+    ASSERT_TRUE(!fr_reactive_profile_matches_body(DC_MATERIAL_OIL,0u));
     ASSERT_TRUE(textile->moisture_capacity>fur->moisture_capacity &&
         fur->moisture_capacity>tail->moisture_capacity);
     ASSERT_TRUE(fur->heat_capacity!=textile->heat_capacity&&fur->heat_capacity!=tail->heat_capacity);

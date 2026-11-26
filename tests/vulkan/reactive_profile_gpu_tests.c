@@ -14,7 +14,13 @@ static int g_pass,g_fail;
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() g_pass++
-enum { CASES=256,PROFILE_WORD=16,CASE_WORD=656,OUTPUT_WORD=3216 };
+enum {
+    CASES=256,
+    PROFILE_WORD=16,
+    CASE_WORD=PROFILE_WORD+FR_REACTIVE_PROFILE_COUNT*FR_PROFILE_WORDS,
+    OUTPUT_WORD=CASE_WORD+CASES*10
+};
+_Static_assert(OUTPUT_WORD+CASES*5<=DC_PROBE_WORDS,"Profile fixture buffer too small");
 
 static void cleanup(probe_t *p) {
     vkDestroyPipeline(p->device,p->pipeline,NULL);vkDestroyShaderModule(p->device,p->shader,NULL);
@@ -39,14 +45,15 @@ static void test_gpu_profiles_match_cpu_rates_and_ignore_visual_pigment(void) {
     probe_t p={0};ASSERT_TRUE(initialize(&p));ASSERT_TRUE(allocate_buffer(&p));
     ASSERT_TRUE(create_pipeline(&p,"build/diagnostics/reactive_profile_probe.spv"));
     memset(p.mapped,0,PROBE_WORDS*sizeof(uint32_t));
-    p.mapped[0]=CASES;p.mapped[1]=DC_MATERIAL_COUNT;
+    p.mapped[0]=CASES;p.mapped[1]=FR_REACTIVE_PROFILE_COUNT;
     float ambient_oxygen=.21f;memcpy(p.mapped+2,&ambient_oxygen,sizeof(ambient_oxygen));
-    for(uint32_t id=0;id<DC_MATERIAL_COUNT;id++)
-        memcpy(p.mapped+PROFILE_WORD+id*32u,fr_reactive_profile(id),sizeof(fr_reactive_profile_t));
+    p.mapped[3]=CASE_WORD;p.mapped[4]=OUTPUT_WORD;
+    for(uint32_t id=0;id<FR_REACTIVE_PROFILE_COUNT;id++)
+        memcpy(p.mapped+PROFILE_WORD+id*FR_PROFILE_WORDS,fr_reactive_profile(id),sizeof(fr_reactive_profile_t));
     fr_reactive_ignition_rates_t expected[CASES];
     char err[128];
     for(uint32_t i=0;i<CASES;i++) {
-        uint32_t material=i%DC_MATERIAL_COUNT;
+        uint32_t material=i%FR_REACTIVE_PROFILE_COUNT;
         uint32_t coat=i%3u==0?UINT32_MAX:i%3u==1?DC_MATERIAL_OIL:DC_MATERIAL_GREEK_FIRE;
         fr_reactive_exposure_t e={.temperature_K=293.15f+(float)(i%11u)*73,
             .saturation=(float)(i%5u)/4,.coating_coverage=.5f,
@@ -63,7 +70,7 @@ static void test_gpu_profiles_match_cpu_rates_and_ignore_visual_pigment(void) {
     uint32_t original[CASES*5];memcpy(original,p.mapped+OUTPUT_WORD,sizeof(original));
     unsigned layout_errors=0,rate_errors=0;
     for(uint32_t i=0;i<CASES;i++) {
-        const fr_reactive_profile_t *profile=fr_reactive_profile(i%DC_MATERIAL_COUNT);
+        const fr_reactive_profile_t *profile=fr_reactive_profile(i%FR_REACTIVE_PROFILE_COUNT);
         uint32_t *out=p.mapped+OUTPUT_WORD+i*5u;
         layout_errors+=memcmp(out,&profile->density,4)!=0;
         layout_errors+=memcmp(out+1,&profile->primary_heat,4)!=0;

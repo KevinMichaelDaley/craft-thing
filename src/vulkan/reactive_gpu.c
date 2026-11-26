@@ -189,15 +189,17 @@ static uint32_t *body_handle(dc_gpu_t *g,uint32_t id,uint32_t x,uint32_t y,
 
 bool fr_gpu_reactive_attach_authored_body(dc_gpu_t *g,uint32_t slot,
     const fr_reactive_record_t *records,uint32_t count,char *err,uint32_t cap) {
-    if(!g||!g->reactive||slot>=dc_gpu_body_capacity(g)||!records||!count||
+    if(!g||!g->runtime_body_consumers||!g->reactive||slot>=dc_gpu_body_capacity(g)||!records||!count||
        g->reactive->high_id>=UINT64_MAX-count)
         return error(err,cap,"Invalid authored body parcel birth");
+    if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS)
+        return error(err,cap,"Cannot wait for authored body parcel birth");
     const dc_gpu_body_record_t *body=dc_gpu_body_record(g,slot);
     const dc_body_storage_owner_t *owner=dc_gpu_body_owner(g,slot);
-    if(!body->body.active||body->piece_count!=(DC_GPU_PIXEL_BODY_FLAG|count)||
+    if(!body->body.active||!(body->piece_count&DC_GPU_PIXEL_BODY_FLAG)||
+       (body->piece_count&~DC_GPU_PIXEL_BODY_FLAG)!=count||
        owner->state!=DC_BODY_OWNER_LIVE||owner->runtime_id!=body->body.id||!owner->source_object||
-       (!owner->source_transaction.low&&!owner->source_transaction.high)||
-       vkQueueWaitIdle(g->queue)!=VK_SUCCESS)
+       (!owner->source_transaction.low&&!owner->source_transaction.high))
         return error(err,cap,"Authored body is unavailable for parcel birth");
     fr_reactive_arena_request_t *requests=calloc(count,sizeof(*requests));
     fr_reactive_handle_t *handles=malloc((size_t)count*sizeof(*handles));

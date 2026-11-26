@@ -82,7 +82,8 @@ bool fr_beaver_source(uint32_t source,fr_beaver_source_t *out) {
     };
     beaver_art_pixel_t art;
     if (!out || !beaver_art_source(source,&art)) return false;
-    *out=(fr_beaver_source_t){art.region,beaver_prop_material(art.region),reactive[art.region]};
+    *out=(fr_beaver_source_t){.region=art.region,.prop_material=beaver_prop_material(art.region),
+        .reactive_material=reactive[art.region]};
     return true;
 }
 

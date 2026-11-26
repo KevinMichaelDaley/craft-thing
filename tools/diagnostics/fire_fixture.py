@@ -45,6 +45,7 @@ def validate(data):
         raise ValueError("Invalid ambient oxygen normalization")
     profiles = data["materials"]
     named={p["name"]:p for p in profiles}
+    terrain={p["name"]:p for p in profiles if p["id"] < TERRAIN_MATERIAL_COUNT}
     mix=controls["oil_jelly_mix_mass_fractions"]
     if len(mix)!=2 or any(v<0 for v in mix) or abs(sum(mix)-1)>1e-8:
         raise ValueError("Invalid oil/jelly recipe proportions")
@@ -75,8 +76,8 @@ def validate(data):
     for p in profiles:
         surface = p.get("body_surface_for")
         if p["id"] >= TERRAIN_MATERIAL_COUNT:
-            host = named.get(surface)
-            if surface not in BODY_MATERIALS or host is None or host["id"] >= TERRAIN_MATERIAL_COUNT or p["density"] != host["density"]:
+            host = terrain.get(surface)
+            if surface not in BODY_MATERIALS or not host or p["density"] != host["density"]:
                 raise ValueError("A body surface needs a collision class with matching reference density")
         elif surface is not None:
             raise ValueError("Terrain material cannot declare a body-only surface")
@@ -108,7 +109,7 @@ def validate(data):
         for variant in scene.get("phase_source_variants",{}).values():
             sources+=variant
         for source in sources:
-            profile=next((p for p in profiles if p["name"]==source["material"]),None)
+            profile=terrain.get(source["material"])
             if not profile or source["host_object"] not in objects or source["total_mass"]<=0:
                 raise ValueError("Invalid phase source material, carrier or mass")
             if abs(source["fuel_mass"]-profile["fuel_fraction"]*source["total_mass"])>1e-6:
@@ -118,7 +119,7 @@ def validate(data):
         for variant in scene.get("variants", {}).values():
             shapes += variant
         for shape in shapes:
-            if shape["material"] not in names or shape["role"] not in range(5):
+            if shape["material"] not in terrain or shape["role"] not in range(5):
                 raise ValueError("Unknown material/ownership role")
             if not 0 <= shape.get("wetness", 0) <= 1:
                 raise ValueError("Invalid wetness saturation")

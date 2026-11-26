@@ -1,6 +1,6 @@
 ---
 id: ctbs-gq2r
-status: open
+status: in_progress
 deps: []
 links: [ctlo-ldb7, ct-xsll]
 created: 2026-11-26T17:59:52Z
@@ -28,3 +28,7 @@ Fur and textile equipment have explicit registered profiles with distinct, teste
 **2026-11-26T18:00:04Z**
 
 Source audit locates the aliases in assets/player/beaver/manifest.json and src/player/beaver_asset.c. src/vulkan/reactive_checkpoint_gpu.c currently rejects a stored body parcel when its material differs from the default profile for the shape nibble. Test the admission and reload contract together before changing surface coefficients.
+
+**2026-11-26T18:39:02Z**
+
+Newly admitted beavers bind registered fur, textile and tail profiles directly to the authored body's existing rest texels in one arena batch. Cloth uses one profile for both robe and hat. The packed physics IDs and dry mass are unchanged. The reactions now consult the registry, and chunk, particle and snapshot validation enforce body-only profile ownership. RED built and failed only the new profile checks. Exact Vulkan body checks passed 6/6, including compensated contact heat, water debit, reaction inventory and byte-exact moved-body checkpoint restore. The GPU profile probe matched 256 CPU cases. A 9ec69b25 checkpoint restored body 2147483649 generation 1 and wood parcel 910 byte for byte, including 39322 Q16 and compensated heat 263.838911568953. Native sandbox and full-suite acceptance are pending.

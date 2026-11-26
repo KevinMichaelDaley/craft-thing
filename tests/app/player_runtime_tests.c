@@ -275,6 +275,7 @@ static void test_wet_robe_darkening_follows_the_owner_across_walk_poses(void) {
     uint32_t rest_x = ROBE_X - body.rest_origin_x, rest_y = ROBE_Y - body.rest_origin_y;
     ASSERT_TRUE(fr_gpu_reactive_read_body(dc_level_view_gpu(v), body.binding.body_id, rest_x,
                                           rest_y, &wet, &found, err, sizeof(err)) && found);
+    ASSERT_EQ(wet.state.material, FR_REACTIVE_BEAVER_TEXTILE);
     ASSERT_TRUE(wet.state.bound_water_fp > 0);
     move.type = SDL_KEYUP;
     ASSERT_TRUE(dc_players_event(v, &move));
@@ -292,6 +293,7 @@ static void test_wet_robe_darkening_follows_the_owner_across_walk_poses(void) {
                                           rest_y, &turned, &found, err, sizeof(err)) && found);
     ASSERT_EQ(turned.state.parcel_id_low, wet.state.parcel_id_low);
     ASSERT_EQ(turned.state.parcel_id_high, wet.state.parcel_id_high);
+    ASSERT_EQ(turned.state.material, wet.state.material);
     ASSERT_EQ(turned.state.bound_water_fp, wet.state.bound_water_fp);
     ASSERT_TRUE(dc_level_view_destroy(v, err, sizeof(err)));
     PASS();

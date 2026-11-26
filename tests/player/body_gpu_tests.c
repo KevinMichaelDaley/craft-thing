@@ -354,10 +354,16 @@ static void test_visible_combustion_uses_local_oxygen_and_leaves_hidden_fuel(voi
         const fr_reactive_profile_t *profile = fr_reactive_profile(before.state.material);
         const double reserved_fp = fr_reactive_state_pending_oxygen_fp(&after.state) -
                                    fr_reactive_state_pending_oxygen_fp(&before.state);
+        double products_fp = 0.;
+        for (uint32_t cell = 0; cell < DC_CHUNK_CELLS; ++cell)
+            products_fp += (gas[cell].species[FR_GAS_EXHAUST] + gas[cell].species[FR_GAS_SOOT]) * DC_FLUID_FULL;
+        double inventory_error = (double)fr_reactive_state_mass_fp(&after.state) + products_fp -
+            (double)fr_reactive_state_mass_fp(&before.state) - (used_fp - reserved_fp);
         printf("Posed reaction %u reacted %u fuel, used %.6f oxygen, emitted %.6f power\n",
                flip, reacted, used_fp, emission[OXYGEN_CELL].power);
         ASSERT_TRUE(reacted > 0u && after.state.char_mass_fp > before.state.char_mass_fp);
         ASSERT_TRUE(fabs(used_fp - reacted * profile->oxygen_per_fuel - reserved_fp) < .001);
+        ASSERT_TRUE(fabs(inventory_error) < .001);
         ASSERT_TRUE(emission[OXYGEN_CELL].power > 0.f &&
                     (emission[OXYGEN_CELL].sources & FR_FIRE_EMISSION_SURFACE) != 0u);
         ASSERT_EQ(before.state.parcel_id_low, after.state.parcel_id_low);

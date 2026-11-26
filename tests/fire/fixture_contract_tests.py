@@ -112,6 +112,12 @@ class FireFixtureContractTests(unittest.TestCase):
         bad["scenes"]["forest_bonfire"]["primitives"][0]["rect"][0] = -1
         with self.assertRaises(ValueError): module.validate(bad)
 
+    def test_body_surface_cannot_be_used_as_fixture_terrain(self):
+        module, data = self.inputs()
+        data["scenes"]["forest_bonfire"]["primitives"][0]["material"] = "beaver_fur"
+        with self.assertRaises(ValueError):
+            module.validate(data)
+
     def test_generated_physical_profiles_match_the_locked_manifest(self):
         module, data = self.inputs()
         generated=ROOT/"src/fire/material_profile_data.inc"
