@@ -51,4 +51,4 @@ Instrumented e136d9b3 publication prefix reproduced 16/16 coupled submissions wi
 
 **2026-11-26T20:48:57Z**
 
-With DC_FRAME_TIMINGS=0 the native test reproduced 16/16 submissions before the change and passed at 8/16 afterward. The untraced paths retain identical gas packets, clocks, and solar-free thermal energy. A separate enabled timing test still captured four injected slow logs and excluded them from fence wait time (0.005 ms measured).
+With DC_FRAME_TIMINGS=0 the native test reproduced 16/16 submissions before the change and passed at 8/16 afterward. The untraced paths retain identical gas packets, clocks, and thermal energy in the heated wood. A separate enabled timing test still captured four injected slow logs and excluded them from fence wait time (0.005 ms measured).
