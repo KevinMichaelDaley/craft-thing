@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
+#include "../../src/app/level_internal.h"
 #include "../../src/app/player_session.h"
 #include "../../src/app/view_config.h"
 #include "../player/runtime_visual_check.h"
@@ -23,6 +24,26 @@ static bool capture(dc_level_view_t *v,const char *path,char *err,uint32_t cap) 
     if(surface) SDL_FreeSurface(surface);
     free(pixels);return okay;
 }
+static void test_enabling_player_admits_only_the_player_body(void) {
+    char directory[] = "build/player_runtime_scene_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    uint32_t surface = 96;
+    dc_ground_profile_t ground = {.width = 1, .soil_depth = 1, .surface = &surface};
+    dc_level_view_t *v = dc_level_view_create_ground(directory, 314, &ground,
+                                                      err, sizeof(err));
+    ASSERT_TRUE(v);
+    dc_gpu_extraction_stats_t before, after;
+    bool admitted = dc_level_view_pan_pixels(v, 0, 128) &&
+                    dc_level_view_wait_visible(v, 120000, err, sizeof(err)) &&
+                    dc_gpu_read_extraction_stats(v->gpu, &before) &&
+                    dc_players_enable(v, err, sizeof(err)) &&
+                    dc_gpu_read_extraction_stats(v->gpu, &after);
+    ASSERT_TRUE(dc_level_view_destroy(v, err, sizeof(err)));
+    ASSERT_TRUE(admitted);
+    ASSERT_EQ(after.owned_bodies, before.owned_bodies + 1u);
+    PASS();
+}
+
 static void test_real_app_keyboard_drives_body_and_animation(void) {
     char directory[]="build/player_runtime_XXXXXX",err[256]={0};ASSERT_TRUE(mkdtemp(directory));
     uint32_t surface=96;dc_ground_profile_t ground={.width=1,.soil_depth=1,.surface=&surface};
@@ -85,4 +106,9 @@ static void test_real_app_keyboard_drives_body_and_animation(void) {
     }
     ASSERT_TRUE(dc_level_view_destroy(v,err,sizeof(err)));PASS();
 }
-int main(void) {RUN(test_real_app_keyboard_drives_body_and_animation);printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;}
+int main(void) {
+    RUN(test_enabling_player_admits_only_the_player_body);
+    RUN(test_real_app_keyboard_drives_body_and_animation);
+    printf("%d passed, %d failed\n", g_pass, g_fail);
+    return g_fail ? 1 : 0;
+}
