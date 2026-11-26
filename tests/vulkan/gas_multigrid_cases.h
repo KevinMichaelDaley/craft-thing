@@ -39,6 +39,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         input[SEALED_SAMPLE].species[FR_GAS_EXHAUST]=.00001;
     }
     uint32_t work[2]={0},tiles[2]={0},widths[2]={0},transfer_barriers[2]={0},repeated[2]={0};float rates[2][3]={{0}};uint64_t copy_bytes[2]={0};
+    double sealed_exhaust[2]={0};
     uint32_t activity_modes[2]={0},large_sor_sizes[2]={0};
     bool zero_energy_used[2]={false,false},large_sor_used[2]={false,false};
     uint64_t mapped_bytes[2]={0},device_bytes[2]={0};
@@ -54,6 +55,11 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         /* In coupled worlds thermal dispatches own conduction. Exercise the fused geometry path. */
         if(geometry_activity) ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_combustion_gpu_enable(g,err,sizeof(err)));
         ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
+        if(direct_first) {
+            fr_gas_state_t *seeded=path?out:reference;
+            ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,seeded,4096,err,sizeof(err)));
+            sealed_exhaust[path]=seeded[SEALED_SAMPLE].species[FR_GAS_EXHAUST];
+        }
         if(all_slots) ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,2,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_read_chunk(g,2,dormant,4096,err,sizeof(err)));
         for(uint32_t step=0;step<8;step++) {
             if((empty_tiles||all_slots)&&step==4u) {
@@ -144,7 +150,8 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
         ASSERT_TRUE(widths[0]==0u&&widths[1]==requested_width&&memcmp(rates[0],rates[1],sizeof(rates[0]))==0);
     }
     if(direct_first) {
-        ASSERT_EQ(out[SEALED_SAMPLE].species[FR_GAS_EXHAUST],(double)(float)input[SEALED_SAMPLE].species[FR_GAS_EXHAUST]);
+        ASSERT_EQ(sealed_exhaust[0],sealed_exhaust[1]);
+        ASSERT_EQ(out[SEALED_SAMPLE].species[FR_GAS_EXHAUST],sealed_exhaust[1]);
         printf("First-axis GPU copy bytes%llu vs%llu\n",(unsigned long long)copy_bytes[1],(unsigned long long)copy_bytes[0]);
         ASSERT_TRUE(copy_bytes[1]<copy_bytes[0]&&memcmp(rates[0],rates[1],sizeof(rates[0]))==0);
     }
