@@ -392,9 +392,8 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
              * Ray-equipped demo scenes keep their beam behaviour. */
             const fr_player_action_event_t *cast=&s->cast_events[n];
             if(!s->ray&&cast->ability&&cast->has_target&&can_aim) {
-                fr_player_point_t muzzle={self.chunk,self.body.x_fp/65536.f,self.body.y_fp/65536.f};
                 if(cast->ability==s->fire)
-                    fr_player_cast_fire_bolt(v->gpu,s->players[n].identity,&muzzle,&cast->target,NULL,err,cap);
+                    fr_player_cast_body_fire_bolt(v->gpu,s->players[n].identity,&self,&cast->target,NULL,err,cap);
                 else if(cast->ability==s->ice)
                     fr_player_cast_ice_storm(v->gpu,&cast->target,6u,err,cap);
             }

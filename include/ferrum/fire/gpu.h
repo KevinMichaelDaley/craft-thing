@@ -31,6 +31,14 @@ bool fr_gpu_reactive_read_body(dc_gpu_t *gpu,uint32_t body_id,uint32_t x,uint32_
  * The parcel and owner identities must be preserved. */
 bool fr_gpu_reactive_seed_body(dc_gpu_t *gpu,uint32_t body_id,uint32_t x,uint32_t y,
     const fr_reactive_state_t *state,char *err_buf,uint32_t err_cap);
+/** Publish one burning pixel body and its reactive parcels together. The
+ * caller supplies a pixel-aligned world anchor, dimensions up to 16 by 16,
+ * initial velocity, and an occupied-bit mask for each row. material is the
+ * body material ID. The occupied footprint must be resident and clear.
+ * On failure, no body, terrain edit, or parcel is published. */
+bool fr_gpu_spawn_burning_pixels(dc_gpu_t *gpu, dc_gpu_world_body_t initial,
+    const uint16_t *rows, uint32_t material, float temperature_K,
+    uint32_t *body_id, char *err_buf, uint32_t err_cap);
 /** Cold import for one existing loose particle in the canonical A pool. */
 bool fr_gpu_reactive_seed_particle(dc_gpu_t *gpu,uint32_t particle,
     const fr_reactive_state_t *state,char *err_buf,uint32_t err_cap);

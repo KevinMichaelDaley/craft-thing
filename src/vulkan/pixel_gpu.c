@@ -1,7 +1,12 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
 #include "dungeoncraft/material_density.h"
-#include "gpu_internal.h"
+#include "ferrum/fire/gpu.h"
+#include "reactive_storage_gpu.h"
+#include "runtime_body_internal.h"
 
 bool dc_gpu_pixel_geometry_valid(const dc_gpu_body_record_t *body,
                                  const uint32_t *geometry, uint32_t words,
@@ -225,4 +230,222 @@ bool dc_gpu_read_pixel_shape(dc_gpu_t *gpu, uint32_t id,
         snprintf(err, cap,
                  "Invalid pixel shape or insufficient output capacity");
     return false;
+}
+
+enum {
+    PIXEL_BIRTH_SIDE = 16,
+    PIXEL_BIRTH_CELLS = PIXEL_BIRTH_SIDE * PIXEL_BIRTH_SIDE,
+    PIXEL_BIRTH_TILE = 9,
+    PIXEL_BIRTH_MATERIALS = PIXEL_BIRTH_TILE + 1,
+    PIXEL_BIRTH_WORDS = PIXEL_BIRTH_MATERIALS + PIXEL_BIRTH_CELLS / 8
+};
+
+static bool pixel_birth_error(char *err, uint32_t cap, const char *message) {
+    if (err && cap) snprintf(err, cap, "%s", message);
+    return false;
+}
+
+static bool pixel_birth_footprint(dc_gpu_t *g, const dc_gpu_world_body_t *initial,
+    const uint16_t *rows, uint32_t *grid_x, uint32_t *grid_y,
+    char *err, uint32_t cap) {
+    uint32_t slot = dc_gpu_find_active_chunk(g, initial->chunk);
+    if (slot == UINT32_MAX)
+        return pixel_birth_error(err, cap, "Pixel body anchor is not resident");
+    uint32_t tile = g->slot_page[slot];
+    uint32_t tx = tile % g->page_width, ty = tile / g->page_width;
+    uint32_t x = tx * DC_CHUNK_SIDE + (uint32_t)(initial->body.x_fp / DC_FLUID_FULL);
+    uint32_t y = ty * DC_CHUNK_SIDE + (uint32_t)(initial->body.y_fp / DC_FLUID_FULL);
+    if (x >= g->width || y >= g->height || initial->body.width > g->width - x ||
+        initial->body.height > g->height - y)
+        return pixel_birth_error(err, cap, "Pixel body extends outside active grid");
+    uint32_t last_x = (x + initial->body.width - 1u) / DC_CHUNK_SIDE;
+    uint32_t last_y = (y + initial->body.height - 1u) / DC_CHUNK_SIDE;
+    if (g->body_origin.x > INT64_MAX - last_x ||
+        g->body_origin.y > INT64_MAX - last_y ||
+        g->body_origin.x + tx != initial->chunk.x ||
+        g->body_origin.y + ty != initial->chunk.y)
+        return pixel_birth_error(err, cap, "Pixel body anchor does not match the physics pages");
+    if (!dc_gpu_set_body_origin(g, g->body_origin, err, cap)) return false;
+
+    /* A one-tile shape can cover up to four streamed chunks. */
+    uint32_t loaded[4], loaded_count = 0;
+    for (uint32_t py = 0; py < initial->body.height; ++py)
+        for (uint32_t px = 0; px < initial->body.width; ++px) {
+            if (!(rows[py] & (1u << px))) continue;
+            uint32_t cell_x = x + px, cell_y = y + py;
+            uint32_t page_x = cell_x / DC_CHUNK_SIDE, page_y = cell_y / DC_CHUNK_SIDE;
+            dc_chunk_coord_t coord = {g->body_origin.x + page_x, g->body_origin.y + page_y};
+            uint32_t page_slot = dc_gpu_find_active_chunk(g, coord);
+            if (page_slot == UINT32_MAX || g->slot_page[page_slot] != page_y * g->page_width + page_x)
+                return pixel_birth_error(err, cap, "Pixel body crosses an unmapped chunk");
+            uint32_t cached = 0;
+            while (cached < loaded_count && loaded[cached] != page_slot) ++cached;
+            if (cached == loaded_count) {
+                if (!dc_gpu_copy_chunk_state(g, page_slot, false, false, err, cap))
+                    return false;
+                loaded[loaded_count++] = page_slot;
+            }
+            uint32_t local = cell_y % DC_CHUNK_SIDE * DC_CHUNK_SIDE + cell_x % DC_CHUNK_SIDE;
+            const dc_cell_t *cells = g->chunk_mapped;
+            const dc_cell_t *cell = &cells[(size_t)page_slot * DC_CHUNK_CELLS + local];
+            uint32_t occupant;
+            if (!dc_gpu_read_occupancy(g, cell_x, cell_y, &occupant, NULL, err, cap))
+                return false;
+            if (cell->material != DC_MATERIAL_AIR || cell->fluid_mass || occupant)
+                return pixel_birth_error(err, cap, "Pixel body footprint is occupied");
+        }
+    *grid_x = x;
+    *grid_y = y;
+    return true;
+}
+
+static bool pixel_birth_slot(dc_gpu_t *g, uint32_t *slot, char *err, uint32_t cap) {
+    uint32_t capacity = dc_gpu_body_capacity(g);
+    for (uint32_t i = 0; i < capacity; ++i)
+        if (!g->body_ids[i] && dc_gpu_body_owner(g, i)->state == DC_BODY_OWNER_FREE &&
+            dc_gpu_body_owner(g, i)->generation != UINT32_MAX) {
+            *slot = i;
+            return true;
+        }
+    if (!dc_gpu_runtime_bodies_reserve(g, capacity + 1u, err, cap)) return false;
+    *slot = capacity;
+    return true;
+}
+
+static void pixel_birth_bounds(dc_gpu_body_record_t *record, uint32_t x, uint32_t y) {
+    record->bounds_low[0] = record->swept_low[0] = (int32_t)x;
+    record->bounds_low[1] = record->swept_low[1] = (int32_t)y;
+    record->bounds_high[0] = record->swept_high[0] = (int32_t)(x + record->body.width);
+    record->bounds_high[1] = record->swept_high[1] = (int32_t)(y + record->body.height);
+}
+
+bool fr_gpu_spawn_burning_pixels(dc_gpu_t *g, dc_gpu_world_body_t initial,
+    const uint16_t *rows, uint32_t material, float temperature_K,
+    uint32_t *body_id, char *err, uint32_t cap) {
+    if (body_id) *body_id = 0;
+    dc_gpu_body_t body = initial.body;
+    if (!g || !g->runtime_body_consumers || !rows || !body_id || body.id ||
+        !body.width || body.width > PIXEL_BIRTH_SIDE ||
+        !body.height || body.height > PIXEL_BIRTH_SIDE ||
+        body.x_fp < 0 || body.x_fp >= (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL) ||
+        body.y_fp < 0 || body.y_fp >= (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL) ||
+        body.x_fp % DC_FLUID_FULL || body.y_fp % DC_FLUID_FULL ||
+        material == 0u || material > DC_BODY_MATERIAL_MAX)
+        return pixel_birth_error(err, cap, "Invalid burning pixel body");
+
+    uint32_t geometry[PIXEL_BIRTH_WORDS] = {
+        PIXEL_BIRTH_WORDS, 1, 1, 1, 0, 0, body.width, body.height, PIXEL_BIRTH_TILE
+    };
+    uint32_t columns = 0, count = 0;
+    double sum_x = 0., sum_y = 0., second_moment = 0.;
+    uint16_t texels[PIXEL_BIRTH_CELLS];
+    for (uint32_t y = 0; y < body.height; ++y) {
+        if (rows[y] >> body.width)
+            return pixel_birth_error(err, cap, "Pixel row exceeds its declared width");
+        columns |= rows[y];
+        for (uint32_t x = 0; x < body.width; ++x) {
+            if (!(rows[y] & (1u << x))) continue;
+            uint32_t pixel = y * PIXEL_BIRTH_SIDE + x;
+            geometry[PIXEL_BIRTH_MATERIALS + pixel / 8u] |= material << ((pixel % 8u) * 4u);
+            texels[count++] = (uint16_t)pixel;
+            double cx = x + .5, cy = y + .5;
+            sum_x += cx;
+            sum_y += cy;
+            second_moment += cx * cx + cy * cy + 1. / 6.;
+        }
+    }
+    if (!(columns & 1u) || !(columns & (1u << (body.width - 1u))) ||
+        !rows[0] || !rows[body.height - 1u])
+        return pixel_birth_error(err, cap, "Pixel body bounds must be trimmed to occupied texels");
+    uint32_t grid_x, grid_y;
+    if (!pixel_birth_footprint(g, &initial, rows, &grid_x, &grid_y, err, cap) ||
+        !fr_gpu_reactive_initialize(g, err, cap)) return false;
+    dc_gpu_refresh_body_registry(g);
+    uint32_t id = dc_gpu_next_body_id(g), slot;
+    if (!id) return pixel_birth_error(err, cap, "No runtime identity for burning pixel body");
+    if (!pixel_birth_slot(g, &slot, err, cap)) return false;
+
+    uint32_t pool_offset = dc_gpu_pixel_pool_word_offset(g);
+    uint32_t used = ((const uint32_t *)g->body_mapped)[pool_offset + 1u];
+    if (used > UINT32_MAX - PIXEL_BIRTH_WORDS)
+        return pixel_birth_error(err, cap, "Pixel geometry address exceeds its range");
+    if (!dc_gpu_runtime_geometry_reserve(g, used + PIXEL_BIRTH_WORDS, err, cap))
+        return false;
+    struct fr_reactive_gpu *reactive = g->reactive;
+    if (reactive->high_id >= UINT64_MAX - count)
+        return pixel_birth_error(err, cap, "Burning parcel identities exceed their range");
+    uint32_t generation = dc_gpu_body_owner(g, slot)->generation + 1u;
+    double density = DC_BODY_DENSITY(material);
+    uint32_t cell_mass = (uint32_t)llround(density * DC_FLUID_FULL);
+    fr_reactive_arena_request_t requests[PIXEL_BIRTH_CELLS];
+    fr_reactive_handle_t handles[PIXEL_BIRTH_CELLS];
+    uint64_t parcel_id = reactive->high_id;
+    for (uint32_t i = 0; i < count; ++i) {
+        requests[i] = (fr_reactive_arena_request_t){.operation = FR_REACTIVE_ARENA_ALLOCATE,
+            .record.owner = {FR_REACTIVE_OWNER_BODY,
+                {id, generation, texels[i] % PIXEL_BIRTH_SIDE, texels[i] / PIXEL_BIRTH_SIDE, 0}}};
+        fr_reactive_state_t *state = &requests[i].record.state;
+        if (!fr_reactive_state_default(DC_BODY_TO_TERRAIN(material), cell_mass, 0,
+                                        temperature_K, ++parcel_id, state, err, cap))
+            return false;
+        if (!state->fuel_mass_fp)
+            return pixel_birth_error(err, cap, "Pixel body material has no combustible fuel");
+        state->flags |= FR_REACTIVE_FLAMING;
+        state->ignition_integral = state->ignition_threshold;
+    }
+    uint32_t demand;
+    if (!fr_reactive_arena_apply(g, &reactive->arena, requests, count, handles, &demand, err, cap))
+        return false;
+
+    /* The completed arena batch is followed by infallible publication. */
+    pool_offset = dc_gpu_pixel_pool_word_offset(g);
+    uint32_t *pool = (uint32_t *)g->body_mapped + pool_offset;
+    uint32_t bank = pool[0], capacity = dc_gpu_pixel_pool_capacity(g);
+    uint32_t offset = pool_offset + DC_GPU_PIXEL_POOL_HEADER_WORDS + bank * capacity + used;
+    memcpy((uint32_t *)g->body_mapped + offset, geometry, sizeof(geometry));
+    memset(dc_gpu_shape_colors(g, offset), 0, PIXEL_BIRTH_WORDS * 128u);
+    uint32_t allocated = ((const uint32_t *)reactive->arena.root.mapped)[12];
+    uint32_t *bindings = (uint32_t *)reactive->shapes.mapped +
+                         ((size_t)bank * allocated + used) * 16u;
+    memset(bindings, 0, PIXEL_BIRTH_WORDS * 16u * sizeof(*bindings));
+    for (uint32_t i = 0; i < count; ++i) {
+        uint32_t at = (PIXEL_BIRTH_MATERIALS * 8u + texels[i]) * 2u;
+        bindings[at] = handles[i].index;
+        bindings[at + 1u] = handles[i].generation;
+    }
+    pool[1] = used + PIXEL_BIRTH_WORDS;
+    pool[2] = capacity;
+    reactive->high_id = parcel_id;
+
+    double center_x = sum_x / count, center_y = sum_y / count;
+    float mass = (float)(density * count);
+    float inertia = (float)(density * (second_moment - (sum_x * center_x + sum_y * center_y)));
+    uint64_t chunk_x = (uint64_t)initial.chunk.x, chunk_y = (uint64_t)initial.chunk.y;
+    dc_gpu_body_record_t record = {.body = body, .visible = 1u,
+        .chunk_x = {(uint32_t)chunk_x, (uint32_t)(chunk_x >> 32)},
+        .chunk_y = {(uint32_t)chunk_y, (uint32_t)(chunk_y >> 32)},
+        .local_x_fp = body.x_fp, .local_y_fp = body.y_fp,
+        .reserved = {DC_GPU_STRUCTURAL_CONVERTED_TAG, 1u},
+        .shape.material = material, .piece_count = DC_GPU_PIXEL_BODY_FLAG | count,
+        .compound_reserved = offset, .motion_ready = 1u,
+        .center = {(float)center_x, (float)center_y}, .density = (float)density,
+        .mass = mass, .inertia = inertia, .inverse_mass = 1.f / mass,
+        .inverse_inertia = 1.f / inertia,
+        .radius = (float)hypot(fmax(center_x, body.width - center_x),
+                              fmax(center_y, body.height - center_y))};
+    record.body.id = id;
+    record.body.active = 1u;
+    record.body.x_fp = record.previous_x_fp = (int32_t)(grid_x * DC_FLUID_FULL);
+    record.body.y_fp = record.previous_y_fp = (int32_t)(grid_y * DC_FLUID_FULL);
+    pixel_birth_bounds(&record, grid_x, grid_y);
+    memset(dc_gpu_body_solver_state(g, slot), 0, 64u * sizeof(uint32_t));
+    *dc_gpu_body_owner(g, slot) = (dc_body_storage_owner_t){
+        .generation = generation, .runtime_id = id, .state = DC_BODY_OWNER_LIVE,
+        .live_index = slot};
+    *dc_gpu_body_record(g, slot) = record;
+    g->body_ids[slot] = id;
+    if (g->body_count <= slot) g->body_count = slot + 1u;
+    g->body_refresh_pending = true;
+    *body_id = id;
+    return true;
 }

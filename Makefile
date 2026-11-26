@@ -1913,7 +1913,7 @@ build/chew_inventory_tests: tests/player/chew_inventory_tests.c include/ferrum/p
 test_chew_inventory: build/chew_inventory_tests
 	./build/chew_inventory_tests
 test: test_chew_inventory
-build/ability_cast_tests: tests/player/ability_cast_tests.c include/ferrum/player/abilities.h src/player/abilities.c include/dungeoncraft/gpu.h
+build/ability_cast_tests: tests/player/ability_cast_tests.c include/ferrum/player/abilities.h src/player/abilities.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/player/ability_cast_tests.c src/player/abilities.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_ability_cast
 test_ability_cast: build/ability_cast_tests

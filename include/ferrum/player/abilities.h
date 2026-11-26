@@ -7,15 +7,18 @@
 #include "dungeoncraft/gpu.h"
 #include "ferrum/player/player.h"
 
-/** Cast a fire bolt: author a small burning coal charge at the caster,
- * admit it as a rigid body and launch it toward the target at the
- * engine's capped projectile speed. Ignition on impact flows through
- * the ordinary combustion brand path. */
+/** Launch a small burning coal body from a canonical world muzzle toward
+ * the target. A blocked or unmapped launch footprint rejects the cast. */
 bool fr_player_cast_fire_bolt(dc_gpu_t *gpu, uint64_t owner_id,
                               const fr_player_point_t *origin,
                               const fr_player_point_t *target,
                               uint32_t *out_body, char *err_buf,
                               uint32_t err_cap);
+/** Launch beyond an axis-aligned caster's bounds along its aim direction. */
+bool fr_player_cast_body_fire_bolt(dc_gpu_t *gpu, uint64_t owner_id,
+                                   const dc_gpu_world_body_t *caster,
+                                   const fr_player_point_t *target,
+                                   uint32_t *out_body, char *err_buf, uint32_t err_cap);
 
 /** Cast an area ice storm: soak the bounded disc around the target with
  * water and chill reactive cell parcels across active chunk pages.
