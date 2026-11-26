@@ -2,7 +2,7 @@
 id: ctlo-ldb7
 status: closed
 deps: [ctlo-wmy2, ctlo-ck1i]
-links: []
+links: [ctbs-gq2r, ct-xsll]
 created: 2026-10-24T22:06:18Z
 type: feature
 priority: 1

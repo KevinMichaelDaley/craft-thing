@@ -2,7 +2,7 @@
 id: ct-xsll
 status: in_progress
 deps: [ct-2p38, ctpa-ptku]
-links: []
+links: [ctlo-ldb7, ctbs-gq2r]
 created: 2026-11-01T19:29:54Z
 type: task
 priority: 1
