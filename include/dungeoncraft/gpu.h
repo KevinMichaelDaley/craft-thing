@@ -142,6 +142,9 @@ bool dc_gpu_set_presentation_focus(dc_gpu_t *gpu,dc_presentation_focus_t focus);
  * Count zero restores the single focused presentation. */
 bool dc_gpu_set_split_presentation(dc_gpu_t *gpu, uint32_t count,
                                    const dc_presentation_focus_t *crops);
+/** Return the presented crop and window geometry for a viewport by index. */
+bool dc_gpu_presentation_view(const dc_gpu_t *gpu, uint32_t viewport,
+                               dc_presentation_layout_t *out);
 /** Convert a window pixel to a visible simulation cell; false in the letterbox. */
 bool dc_gpu_screen_cell(dc_gpu_t *gpu, uint32_t screen_x, uint32_t screen_y,
                         uint32_t *cell_x, uint32_t *cell_y);

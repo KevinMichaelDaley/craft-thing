@@ -18,7 +18,8 @@
 #include "view_config.h"
 
 #define PLAYER_TRANSACTION UINT64_C(0x4245415600000000)
-enum { PLAYER_CAMERA_DEAD_ZONE = 8, PLAYER_CAMERA_MAX_PAN = 1024 };
+enum { PLAYER_CAMERA_DEAD_ZONE = 8, PLAYER_CAMERA_MAX_PAN = 1024,
+       PLAYER_AIM_REACH = 80 };
 struct dc_player_session {
     fr_input_t input;
     fr_player_registry_t registry;
@@ -48,14 +49,13 @@ struct dc_player_session {
     fr_player_hotbar_t hotbar[FR_INPUT_PLAYERS];
     fr_player_carry_t carry[FR_INPUT_PLAYERS];
     fr_player_manipulation_t manipulation[FR_INPUT_PLAYERS];
-    bool split;
     uint32_t split_count;
     fr_player_inventory_t inventory[FR_INPUT_PLAYERS];
     fr_player_chew_t chew_work[FR_INPUT_PLAYERS];
     bool aim_override[FR_INPUT_PLAYERS];
     fr_player_point_t aim_point[FR_INPUT_PLAYERS];
 };
-static bool split_refresh(dc_level_view_t *v,char *err,uint32_t cap);
+static bool split_refresh(dc_level_view_t *v, uint32_t count, char *err, uint32_t cap);
 static bool players_error(char *err,uint32_t cap,const char *text) {
     if(err&&cap) snprintf(err,cap,"%s",text);
     return false;
@@ -246,7 +246,9 @@ bool dc_players_event(dc_level_view_t *v,const SDL_Event *e) {
             fr_input_connect(&s->input,e->cbutton.which,n+1);fr_input_sdl_defaults(&s->input,e->cbutton.which,true);
             s->device[n]=e->cbutton.which;return true;
         }
-        if(s->count<FR_INPUT_PLAYERS) players_add(v,e->cbutton.which,s->failure,sizeof(s->failure));
+        if (s->count < FR_INPUT_PLAYERS &&
+            players_add(v,e->cbutton.which,s->failure,sizeof(s->failure)))
+            dc_players_split_screen(v,s->count,s->failure,sizeof(s->failure));
         return true;
     }
     uint32_t before[FR_INPUT_PLAYERS];
@@ -284,7 +286,7 @@ static int32_t player_camera_pan(double position, uint32_t extent) {
 }
 
 static void players_follow_camera(dc_level_view_t *v) {
-    if (!v->players->follow_camera || !dc_players_gameplay(v)) return;
+    if (!v->players->follow_camera || v->players->split_count || !dc_players_gameplay(v)) return;
     uint32_t id = v->players->bodies[0].binding.body_id;
     dc_gpu_world_body_t body;
     if (!id || !dc_gpu_read_world_body(v->gpu, id, &body, NULL, 0)) return;
@@ -295,6 +297,70 @@ static void players_follow_camera(dc_level_view_t *v) {
     int32_t dx = player_camera_pan(x, v->gpu->view_width);
     int32_t dy = player_camera_pan(y, v->gpu->view_height);
     if (dx || dy) dc_level_view_pan_pixels(v, dx, dy);
+}
+
+static bool players_view_center(dc_level_view_t *v, uint32_t index,
+                                double *x, double *y) {
+    dc_gpu_world_body_t body;
+    if (!dc_gpu_read_world_body(v->gpu, v->players->bodies[index].binding.body_id,
+                               &body, NULL, 0)) return false;
+    *x = player_view_axis(body.chunk.x, v->origin.x, body.body.x_fp,
+                          v->camera_offset_x) + body.body.width * .5;
+    *y = player_view_axis(body.chunk.y, v->origin.y, body.body.y_fp,
+                          v->camera_offset_y) + body.body.height * .5;
+    return true;
+}
+
+void dc_players_prepare_view(dc_level_view_t *v) {
+    struct dc_player_session *s = v->players;
+    if (!s || !s->split_count || !s->follow_camera || !dc_players_gameplay(v)) return;
+    double left = INFINITY, right = -INFINITY, top = INFINITY, bottom = -INFINITY;
+    for (uint32_t n = 0; n < s->split_count; ++n) {
+        double x, y;
+        if (!players_view_center(v, n, &x, &y)) return;
+        left = fmin(left, x);
+        right = fmax(right, x);
+        top = fmin(top, y);
+        bottom = fmax(bottom, y);
+    }
+    int32_t dx = player_camera_pan((left + right) * .5, v->gpu->view_width);
+    int32_t dy = player_camera_pan((top + bottom) * .5, v->gpu->view_height);
+    if (dx || dy) dc_level_view_pan_pixels(v, dx, dy);
+}
+
+static uint32_t players_stick_cell(uint32_t start, uint32_t size, float axis) {
+    double cell = size / 2u + round(axis * PLAYER_AIM_REACH);
+    return start + (uint32_t)fmin(fmax(cell, 0.), size - 1u);
+}
+
+static bool players_target(dc_level_view_t *v, uint32_t n, const fr_input_state_t *input,
+                           fr_player_point_t *target) {
+    struct dc_player_session *s = v->players;
+    if (!s->input.focused || s->input.players[n].context != FR_INPUT_GAMEPLAY) return false;
+    if (s->aim_override[n]) {
+        *target = s->aim_point[n];
+        return true;
+    }
+    dc_presentation_layout_t crop;
+    if (!dc_gpu_presentation_view(v->gpu, s->split_count ? n : 0u, &crop)) return false;
+    uint32_t x, y;
+    if (n) {
+        x = players_stick_cell(crop.x, crop.width, input->values[FR_INPUT_AIM_X]);
+        y = players_stick_cell(crop.y, crop.height, input->values[FR_INPUT_AIM_Y]);
+    } else {
+        int mx, my;
+        SDL_GetMouseState(&mx, &my);
+        if (mx < 0 || my < 0 || !dc_presentation_pick(crop, (uint32_t)mx, (uint32_t)my, &x, &y))
+            return false;
+    }
+    uint32_t lx, ly;
+    dc_cell_address((int64_t)x + v->camera_offset_x, (int64_t)y + v->camera_offset_y,
+                    &target->chunk, &lx, &ly);
+    target->chunk.x += v->origin.x;
+    target->chunk.y += v->origin.y;
+    target->x = (float)lx;
+    target->y = (float)ly;
+    return true;
 }
 
 static fr_player_hotbar_item_t players_select_item(fr_player_hotbar_t *bar,
@@ -340,21 +406,8 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
             item.kind == FR_SLOT_SPELL ? item.ability_id : 0u;
         bool cast_pressed = (edges & (1u << FR_INPUT_FIRE)) != 0u
             ? selected_spell != 0u : (edges & (1u << FR_INPUT_ICE)) != 0u;
-        int mx=0,my=0;uint32_t x=0,y=0;bool valid=false;
-        if(n==0) {
-            SDL_GetMouseState(&mx,&my);
-            valid=mx>=0&&my>=0&&dc_level_view_screen_cell(v,(uint32_t)mx,(uint32_t)my,&x,&y);
-        } else {
-            x=(uint32_t)((float)VIEW_WIDTH*.5f+input.values[FR_INPUT_AIM_X]*80.f);
-            y=(uint32_t)((float)VIEW_HEIGHT*.5f+input.values[FR_INPUT_AIM_Y]*80.f);valid=true;
-        }
         bool can_aim=s->input.focused&&s->input.players[n].context==FR_INPUT_GAMEPLAY;
-        valid=valid&&can_aim;
-        dc_chunk_coord_t chunk;uint32_t lx,ly;
-        dc_cell_address((int64_t)x+v->camera_offset_x,(int64_t)y+v->camera_offset_y,&chunk,&lx,&ly);
-        chunk.x+=v->origin.x;chunk.y+=v->origin.y;
-        input.has_target=valid;input.target=(fr_player_point_t){chunk,(float)lx,(float)ly};
-        if(s->aim_override[n]&&can_aim) {input.has_target=true;input.target=s->aim_point[n];}
+        input.has_target=players_target(v,n,&input,&input.target);
         fr_player_action_t old_action=s->players[n].action;
         uint64_t action_elapsed=elapsed;
         if(s->presentation_clock&&old_action!=FR_PLAYER_CAST&&cast_pressed) {
@@ -398,9 +451,9 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
                     fr_player_cast_ice_storm(v->gpu,&cast->target,6u,err,cap);
             }
             bool acted=false;
-            if(edges&(1u<<FR_INPUT_GRAB)) {fr_player_manipulation_grab(v->gpu,&s->carry[n],&s->manipulation[n],px,py,&input.target,err,cap);acted=true;}
+            if(input.has_target&&(edges&(1u<<FR_INPUT_GRAB))) {fr_player_manipulation_grab(v->gpu,&s->carry[n],&s->manipulation[n],px,py,&input.target,err,cap);acted=true;}
             else if(edges&(1u<<FR_INPUT_DROP)) {fr_player_manipulation_drop(v->gpu,&s->carry[n],err,cap);acted=true;}
-            else if(edges&(1u<<FR_INPUT_THROW)) {fr_player_manipulation_throw(v->gpu,&s->carry[n],&s->manipulation[n],px,py,&input.target,err,cap);acted=true;}
+            else if(input.has_target&&(edges&(1u<<FR_INPUT_THROW))) {fr_player_manipulation_throw(v->gpu,&s->carry[n],&s->manipulation[n],px,py,&input.target,err,cap);acted=true;}
             if(!acted&&!fr_player_manipulation_tick(v->gpu,&s->carry[n],px,py,err,cap)) return false;
             if (!players_place_item(v, &s->inventory[n], &input, &item, err, cap))
                 return false;
@@ -410,7 +463,6 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
     if(s->sequence==UINT64_MAX) return players_error(err,cap,"Player command sequence exhausted");
     s->sequence++;
     if(!fr_player_drive_gpu_submit(s->drive,drive,s->count,err,cap)||!players_publish(v,err,cap)) return false;
-    if(s->split&&!split_refresh(v,err,cap)) return false;
     players_follow_camera(v);
     if(s->ray) {
         fr_fire_ray_input_t rays[FR_INPUT_PLAYERS];
@@ -451,37 +503,33 @@ bool dc_players_join(dc_level_view_t *v,int64_t device,char *err,uint32_t cap) {
 
 /* Recompute each viewport crop around its own beaver; presentation only,
  * so the shared world still steps exactly once per tick. */
-static bool split_refresh(dc_level_view_t *v,char *err,uint32_t cap) {
-    struct dc_player_session *s=v->players;
-    uint32_t count=s->split_count;
-    if(!count) return true;
+static bool split_refresh(dc_level_view_t *v, uint32_t count, char *err, uint32_t cap) {
     dc_presentation_focus_t crops[FR_INPUT_PLAYERS];
     uint32_t grid_w=v->gpu->view_width,grid_h=v->gpu->view_height;
-    uint32_t view_w=count>=3u?grid_w/2u:grid_w,
-             view_h=count>=3u?grid_h/2u:grid_h;
-    uint32_t active=0u;
-    for(uint32_t n=0;n<s->count&&active<count;n++) {
-        dc_gpu_world_body_t self;
-        if(!dc_gpu_read_world_body(v->gpu,s->bodies[n].binding.body_id,&self,err,cap))
-            continue;
-        double px=player_view_axis(self.chunk.x,v->origin.x,self.body.x_fp,
-                                   v->camera_offset_x);
-        double py=player_view_axis(self.chunk.y,v->origin.y,self.body.y_fp,
-                                   v->camera_offset_y);
+    uint32_t view_w=grid_w/count;
+    for(uint32_t n=0;n<count;n++) {
+        double px, py;
+        if (!players_view_center(v, n, &px, &py))
+            return players_error(err,cap,"Split screen needs every viewport player admitted");
         uint32_t cx=(uint32_t)fmin(fmax(px-view_w/2u,0.0),grid_w-view_w);
-        uint32_t cy=(uint32_t)fmin(fmax(py-view_h/2u,0.0),grid_h-view_h);
-        crops[active++]=(dc_presentation_focus_t){cx,cy,view_w,view_h};
+        crops[n]=(dc_presentation_focus_t){cx,0u,view_w,grid_h};
     }
-    if(active!=count) return players_error(err,cap,"Split screen needs every viewport player admitted");
-    return dc_gpu_set_split_presentation(v->gpu,count,crops);
+    return dc_gpu_set_split_presentation(v->gpu,count,crops) ||
+        players_error(err,cap,"Player viewports do not fit the presentation window");
+}
+
+bool dc_players_present(dc_level_view_t *v, char *err, uint32_t cap) {
+    if (!v->players || !v->players->split_count) return true;
+    if (!dc_players_gameplay(v)) return dc_gpu_set_split_presentation(v->gpu,0u,NULL);
+    return split_refresh(v,v->players->split_count,err,cap);
 }
 
 bool dc_players_split_screen(dc_level_view_t *v,uint32_t count,char *err,uint32_t cap) {
-    if(!v||!v->players||count>FR_INPUT_PLAYERS||(count&&count<2u))
+    if(!v||!v->players||count>v->players->count||(count&&count<2u))
         return players_error(err,cap,"Split screen needs two to four joined players");
-    struct dc_player_session *s=v->players;
-    s->split=count!=0u;
-    s->split_count=count;
-    if(!count) return dc_gpu_set_split_presentation(v->gpu,0u,NULL);
-    return split_refresh(v,err,cap);
+    bool okay = count && dc_players_gameplay(v)
+        ? split_refresh(v,count,err,cap)
+        : dc_gpu_set_split_presentation(v->gpu,0u,NULL);
+    if (okay) v->players->split_count=count;
+    return okay;
 }

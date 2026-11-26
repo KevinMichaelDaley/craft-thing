@@ -521,6 +521,8 @@ fail:
 
 bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return error(err, cap, "Level view is null");
+    if (view->players && view->pending_steps && !view->transfer_pending)
+        dc_players_prepare_view(view);
     if (!process_results(view, err, cap)) return false;
     if (!bind_transfer_destination(view, err, cap)) return false;
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
@@ -581,11 +583,13 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
             view->pending_seconds / (float)ready_steps))
         return error(err, cap, "Invalid elapsed simulation time");
     if(view->players&&ready_steps) {
+        if (!dc_players_present(view,err,cap)) return false;
         float seconds=view->pending_seconds/(float)ready_steps;
         for(uint32_t step=0;step<ready_steps;step++)
             if(!dc_players_step(view,seconds,err,cap)||!dc_gpu_tick_step(view->gpu,err,cap)) return false;
         ready_steps=0;
     }
+    if (view->players && !dc_players_present(view,err,cap)) return false;
     if (!dc_gpu_present_chunks_steps(view->gpu, ready_steps, err, cap)) return false;
     view->pending_steps = 0;
     view->pending_seconds = 0.0f;
